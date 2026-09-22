@@ -261,9 +261,11 @@ export default function Room({ y }: { y: Yeoul }) {
   // 실루엣 좌·우도 같은 이유로 갈린다 — 앵커를 믿을 수 있으면 표, 아니면 그림에서 잰 값.
   const silLeft = byK ? fit.silLeftPerBoxW : sideEdges.left;
   const silRight = byK ? fit.silRightPerBoxW : sideEdges.right;
-  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${headSpan.toFixed(4)})`;
+  // ★ 아이 그림이 줄면(배부름 0 → 0.7배) **머리도 그만큼 내려온다.** 말풍선이 옛 머리 자리에
+  //   그대로 떠 있으면 머리 위로 한참 뜬다 — 같은 배율을 여기에도 건다(→ `st.charScale`).
+  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${(headSpan * v.st.charScale).toFixed(4)})`;
   /** 얼굴 높이(머리 옆선). 머리 옆으로 비킨 말풍선의 세로 한가운데를 여기에 맞춘다. */
-  const faceFromBottom = `calc(${LIFT} + ${CHAR_H} * ${Math.max(0, headSpan - headSideDrop).toFixed(4)})`;
+  const faceFromBottom = `calc(${LIFT} + ${CHAR_H} * ${(Math.max(0, headSpan - headSideDrop) * v.st.charScale).toFixed(4)})`;
   /** 무대와 **자리를 사기 전 아이 상자**를 재는 두 손잡이 — 말풍선이 이 둘로 자리를 정한다. */
   const stageRef = useRef<HTMLDivElement>(null);
   const charProbeRef = useRef<HTMLDivElement>(null);
@@ -390,7 +392,19 @@ export default function Room({ y }: { y: Yeoul }) {
             )}
             {/* 아이 뒤에 깔리는 것(매트). 반전 바깥이라 걸음마다 뒤집히지 않는다. */}
             <PropLayer z="below_char" scene={scene} table={table} anchors={anchors} />
-            <div style={{ width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}>
+            {/* ★ 배부름 0 이면 **그림만 0.7배**로 줄인다(정본 §게이지 · 2026-09-22 판정 J).
+                ★ 상자(`charBox`)는 그대로 둔다 — 상자를 줄이면 바닥 소품(똥)이 읽는 자(상자 폭)까지
+                  같이 줄어 방 안 물건이 통째로 작아진다. 발끝은 그대로 바닥에 두려고 아래가 축이다.
+                ★★ **배율은 제 겹을 따로 쓴다.** 아래 `yFace`·`yHop` 은 키프레임이 `transform` 을
+                  건드려서(걸음 뒤집기·뜀), 같은 칸에 인라인 `transform` 을 적으면 **애니메이션이 이긴다**
+                  (2026-09-22 실측: 0.7 을 줬는데 그림 크기가 그대로였다). */}
+            <div style={{
+              width: '100%', height: '100%', transformOrigin: 'bottom center', transition: 'transform .3s ease',
+              ...(v.st.charScale === 1 ? null : { transform: `scale(${v.st.charScale})` }),
+            }}>
+            <div style={{
+              width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play,
+            }}>
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -406,6 +420,7 @@ export default function Room({ y }: { y: Yeoul }) {
                   style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: 'yBob 4.6s ease-in-out infinite', filter: v.st.charFilter }}
                 />
               </div>
+            </div>
             </div>
             {/* 아이 앞에 얹히는 것(머리 옆 기호·손 앞 먹을 것·발치 소품). */}
             <PropLayer scene={scene} table={table} anchors={anchors} />
@@ -967,12 +982,15 @@ function Hud({ y }: { y: Yeoul }) {
         <span style={{ flex: 1 }} />
         <button
           onClick={actions.openSettings} data-part="pet-info" data-hl={v.hud.hl ? '1' : undefined}
+          data-off={v.hud.off ? '1' : undefined}
           style={{
             display: 'flex', alignItems: 'center', gap: gap.xs, flex: 'none', padding: pad.tiny,
             borderRadius: radius.pill,
             // 튜토리얼 4칸(성격)은 이 버튼 안에서 하는 일이라, 타일 대신 여기가 깜빡인다.
             border: v.hud.hl ? `2px solid ${C.accent}` : `1px solid ${C2.lineWarm}`,
             background: C2.paperWarm, animation: v.hud.hl ? 'yNudge 1.9s ease-in-out infinite' : 'none',
+            // ★ 튜토리얼이 다른 칸을 가리킬 때는 흐리게(판정 J8) — 눌리기는 하고, 누르면 이유가 뜬다.
+            opacity: v.hud.off ? 0.45 : 1,
             fontSize: fz.sm, lineHeight: 1, color: C2.muted,
           }}
         >
@@ -1035,13 +1053,18 @@ function ChatFab({ y }: { y: Yeoul }) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); actions.openChat(); }}
-      data-part="chat-fab"
+      data-part="chat-fab" data-off={v.fab.off ? '1' : undefined}
       style={{
         ...slotChip, position: 'relative',
         borderStyle: 'solid', borderWidth: v.fab.bw, borderColor: v.fab.bd,
         animation: v.fab.anim,
+        // ★ 튜토리얼 중 다른 칸이면 **흐리게 둔다**(판정 J8) — 없애면 "사라졌다" 로 읽힌다.
+        //   눌러도 대화가 안 열리고 왜 지금이 아닌지 한 줄이 뜬다(`actions.openChat` 이 막는다).
+        opacity: v.fab.off ? 0.45 : 1,
       }}
-      aria-label="대화하기"
+      // ★ `aria-disabled` 를 안 쓴다 — 이 버튼은 **눌린다**(눌러야 왜 지금이 아닌지 들린다).
+      //   참으로 두면 화면 낭독기도 자동 검사도 "못 누르는 것" 으로 읽어 버린다(메모리: ui-verify).
+      aria-label={v.fab.off ? `대화하기 · ${v.fab.why}` : '대화하기'}
     >
       <span style={{ position: 'relative', width: 24, height: 24, color: '#5A554E' }}>
         <span style={{ position: 'absolute', left: 1, top: 3, width: 22, height: 15, border: '2px solid currentColor', borderRadius: 8 }} />
@@ -1088,14 +1111,16 @@ function TutChip({ label, onTap, primary = false, ...rest }: {
 
 function MiniCard({ y }: { y: Yeoul }) {
   const m = y.v.mini;
-  const [open, setOpen] = useState(false);
+  // ★ 펼침은 **훅이 들고 있다**(2026-09-22 판정 K). 여기 두면 카드가 사라졌다 다시 뜰 때마다
+  //   접힌 채로 돌아온다 — 팝오버 한 번만 열어도 펼쳐 둔 목록이 닫혔다.
+  const open = m.open;
   const more = `yeoul-mini-more${open ? ' is-open' : ''}`;
   const canOpen = m.hasGoal || m.hasShards;
 
   return (
     <div
       className="yeoul-mini"
-      onClick={(e) => { e.stopPropagation(); if (canOpen) setOpen((v) => !v); }}
+      onClick={(e) => { e.stopPropagation(); if (canOpen) m.toggle(); }}
       data-part="mini" data-open={open ? '1' : '0'}
       style={{
         // ★ 이제 **선반 위 한 칸**이다(2026-09-20) — 구석에 따로 떠 있지 않는다. 펼침은 그대로

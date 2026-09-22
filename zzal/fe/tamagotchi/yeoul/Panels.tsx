@@ -11,6 +11,7 @@
 import { useRef, useState } from 'react';
 import { C, C2, GAEGU, MONO, gap, input as inputStyle, monoSize, radius, shadow, fz, ink, pad } from './ui';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
+import { CHAR_TEXT_MAX } from '../../lib/pet';
 
 export default function Panels({ y }: { y: Yeoul }) {
   const { v } = y;
@@ -177,7 +178,9 @@ function CharCard({ g, open, onToggle }: { g: Yeoul['v']['charGroups'][number]; 
               <button key={o.text} onClick={o.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
             ))}
           </div>
-          <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={60} placeholder={g.ph}
+          {/* ★ 한도는 **`CHAR_TEXT_MAX` 한 곳에서만** 가져온다(→ `useYeoul.onGroupText` 머리말).
+              여기 숫자를 박으면 계약·서버와 조용히 갈린다. */}
+          <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={CHAR_TEXT_MAX[g.key] ?? 200} placeholder={g.ph}
             style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
         </div>
       )}
@@ -216,7 +219,7 @@ function SettingsSheet({ y }: { y: Yeoul }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
         <span style={{ fontSize: fz.sm, color: C.faint }}>그 밖에 알려주고 싶은 것</span>
-        <input value={v.onb.extraVal} onChange={(e) => v.onb.onExtra(e.target.value)} maxLength={60}
+        <input value={v.onb.extraVal} onChange={(e) => v.onb.onExtra(e.target.value)} maxLength={CHAR_TEXT_MAX.extra}
           placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나"
           style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
       </div>

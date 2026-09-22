@@ -31,8 +31,10 @@ import { abandonGame as abandonGameOverHttp } from '../game';
 import {
   CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
   FOOD_CHARGE_MS, GAMES_PER_DAY, INTIMACY, INTIMACY_TIERS, LEFT_RIGHT, MAX_FOOD, MAX_GAUGE, MAX_TRASH, NAME_MAX_CHARS,
-  NAP, RUN, SLEEP_WINDOW, SNACK_STREAK_SICK, UNLOCK_CONDITIONS, WAKE_WINDOW, WORLD_MAX_CHARS, moodOf,
-  GIFT_SEQ, FIRST_GIFT_DAYS, TUTORIAL_FIRST_TRASH,
+  NAP, PIECE_KIND, PIECE_KINDS, PIECE_NEED, RUN, SLEEP_WINDOW, SNACK_DAILY_SICK_AT, UNLOCK_CONDITIONS,
+  WAKE_WINDOW, WORLD_MAX_CHARS, cleanLine, moodOf,
+  type PieceEventKey,
+  GIFT_SEQ, TUTORIAL_FIRST_TRASH,
 } from '../../tamagotchi/rules';
 import { BACKGROUNDS, DEFAULT_BACKGROUND, MOTIONS, SPECIAL_ADV } from '../../tamagotchi/constants';
 import { BABY_CALLS } from '../../tamagotchi/tutorial';
@@ -144,7 +146,12 @@ interface Row {
    * 조각 네 칸을 세는 하루 카운터. ★ `today` 안에 두지 않는다 — `today` 는 그대로 응답에 나가는
    * 블록이라, 내부용 숫자를 섞으면 계약에 없는 필드가 새어 나간다.
    */
-  pieceDay: { feeds: number; snacks: number; gameWins: number; cleans: number; chats: number };
+  /**
+   * 조각 판(정본 §6 1.9 · 서버 `ZzalPiece`). **하루로 끊지 않는다** — 요구량 자체가 이틀치라
+   * 밤마다 지우면 영원히 못 채운다(§16 "조각은 예외다"). 0으로 돌아가는 때는 둘뿐이다:
+   * 도장이 찍힌 칸(그 칸만 · `done` 이 막는다) · 네 칸이 다 찬 뒤 처음 맞는 기상.
+   */
+  piece: { counts: Record<PieceEventKey, number>; done: Record<string, boolean> };
   bonusPiece: boolean;
   goodDay: boolean;
   /** 다음 기상에 기분 좋은 날로 켤 것인가(잠들 때 판정 → 다음 날 기상, 해석 52). */
@@ -195,6 +202,14 @@ const demoImage = (key: string) => `images/zzal/demo/${DEMO_KEY[key] ?? 'idle'}.
 /** 부화 중 단계 문구(서버 hatch 단계와 같은 결). 목은 3초 만에 깬다. */
 const HATCH_MS = 3000;
 const HATCH_STEPS = ['이 아이의 설정자료를 그리는 중', '움직임을 하나씩 익히는 중', '거의 다 됐어요'];
+
+/** 빈 조각 판 — 네 칸 전부 안 찍힘, 모든 횟수 0. */
+function emptyPiece(): { counts: Record<PieceEventKey, number>; done: Record<string, boolean> } {
+  return {
+    counts: { FEED: 0, SNACK: 0, GAME: 0, CLEAN: 0, BATH: 0, PET: 0, CHAT: 0 },
+    done: { food: false, play: false, clean: false, bond: false },
+  };
+}
 
 const err = (status: number, code: string, message: string) => new ApiError(status, code, message);
 
@@ -364,43 +379,51 @@ export class MockPetServer implements PetSource {
         r.fullness += 1;
         r.counters.feedCount += 1;
         this.advanceTutorial(r, 'FEED');
-        r.pieceDay.feeds += 1;
-        r.today.snackStreak = 0;
+        this.countPiece(r, 'FEED');
         this.careIntimacy(r);
         break;
       case 'SNACK':
         if (r.sick) throw err(409, 'ZZAL_SICK_REFUSES', '아파서 간식은 싫대요');
         // 가득이어도 받는다 — 거절하면 "연속 5개면 배탈"(§4) 에 닿을 길이 없다. 행복만 상한에서 멈춘다.
         r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
-        // ★ 해금은 **그날 4개까지만** 센다(정본 §6 1.10: "간식 9개 — 그날 4개까지만 셈, 배탈 난
-        //   5개째부터 안 셈"). 전부 세면 빨리 열려고 배탈이 날 때까지 먹이는 쪽이 이득이 된다.
-        if (r.snacksToday < SNACK_STREAK_SICK - 1) r.counters.snackCount += 1;
-        r.snacksToday += 1;
-        r.pieceDay.snacks += 1;
-        r.today.snackStreak += 1;
-        if (r.today.snackStreak >= SNACK_STREAK_SICK) {
-          // ★ 튜토리얼 중에는 병이 없다(해석 39). 연속 카운터는 5에서 0으로 끊는다 —
-          //   안 끊으면 튜토리얼이 끝나자마자 여섯 개째에 곧바로 아프게 된다.
-          if (r.clockStartedAt !== null) this.fallSick(r, 'UPSET', now);
-          r.today.snackStreak = 0;
+        // ★★ **그날 5개째부터 배탈**이다(정본 §16 · 서버 `ZzalPet.snack()`). **"연속" 은 보지 않는다** —
+        //   옛 목은 다른 행동이 끼면 끊기는 연속 카운터를 썼고, 밥을 한 번만 끼우면 하루에 열 개도
+        //   먹일 수 있었다. 세는 자는 하루치 `today.snacks` 하나뿐이다.
+        // ★ 배탈이 나는 그 간식은 **해금에도 조각에도 안 센다**(정본 §6 1.9 · 서버 `nextSnackUpsets()`).
+        //   묻는 것이 먹이기 **전**이어야 한다 — 먹인 뒤에는 이미 숫자가 올라가 있다.
+        {
+          const upsets = r.today.snacks + 1 >= SNACK_DAILY_SICK_AT;
+          r.today.snacks += 1;
+          r.today.snackStreak = r.today.snacks;   // 옛 이름 — 같은 값을 채워 둔다(lib/pet.ts 참조)
+          r.snacksToday = r.today.snacks;
+          if (!upsets) {
+            r.counters.snackCount += 1;
+            this.countPiece(r, 'SNACK');
+          }
+          // ★ 튜토리얼 중에는 병이 없다(해석 39) — 배우는 자리가 벌 받는 자리가 되면 안 된다.
+          if (upsets && r.clockStartedAt !== null) this.fallSick(r, 'UPSET', now);
         }
         break;
       case 'PET':
         r.counters.petCount += 1;
         this.advanceTutorial(r, 'PET');
+        // ★ 쓰다듬기는 **하루 3회까지만** 조각에 센다(정본 §6). 거절이 없어 그대로 두면 연타로
+        //   교감 조각을 채울 수 있다 — 친밀도가 멈추는 선과 같은 선을 쓴다(서버도 같은 판단).
         if (r.today.pets < INTIMACY.petPerDay) {
           r.today.pets += 1;
           r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.pet);
+          this.countPiece(r, 'PET');
         }
-        r.today.snackStreak = 0;
         break;
       case 'CLEAN':
         if (r.trash <= 0) throw err(409, 'ZZAL_CARE_NOT_NEEDED', '이미 깨끗해요');
-        r.trash = 0;
+        // ★ **한 번 쓸면 하나**다(정본 §12 튜토리얼 안내 · 서버 `ZzalPet.clean()` = `trash - 1`).
+        //   목만 전부 지우고 있었다 — 흔적 4개가 한 번에 사라지면 청소 5회짜리 청결 조각이
+        //   화면에서만 훨씬 빨리 찬다. "가득" 을 맡는 것은 목욕(BATH)이다(§4 표).
+        r.trash = Math.max(0, r.trash - 1);
         r.counters.cleanCount += 1;
         this.advanceTutorial(r, 'CLEAN');
-        r.pieceDay.cleans += 1;
-        r.today.snackStreak = 0;
+        this.countPiece(r, 'CLEAN');
         this.careIntimacy(r);
         break;
       case 'BATH':
@@ -409,7 +432,7 @@ export class MockPetServer implements PetSource {
         r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
         r.today.bathDone = true;
         r.counters.bathCount += 1;
-        r.today.snackStreak = 0;
+        this.countPiece(r, 'BATH');
         this.careIntimacy(r);
         break;
       case 'MEDICINE':
@@ -490,6 +513,9 @@ export class MockPetServer implements PetSource {
     const before = this.unlockedSeqs(r);
     r.tutorialStep += 1;
     r.clockStartedAt = now;
+    // ★★ **구르기는 여기서 굽기 시작**이다(정본 §6 표 "튜토리얼 9칸을 다 끝낸 그 순간 굽기" 1.8).
+    //   첫날의 끝에 손에 잡히는 것이 없던 자리다.
+    this.queueGift(r);
     r.settledAt = now;
     r.dayBase = now;
     r.sleptAt = now;
@@ -542,13 +568,21 @@ export class MockPetServer implements PetSource {
     r.chatAnswered.add(this.slotKey(r, slot));
     r.counters.chatAnswers += 1;
     this.advanceTutorial(r, 'CHAT');
-    r.pieceDay.chats += 1;
+    this.countPiece(r, 'CHAT');
     r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.chat);
-    r.today.snackStreak = 0;
-    const { reply, reactionKey } = templateReply(r.personality, trimmed, r.memory, this.nextSeed());
-    r.memory = [...r.memory, clampChat(trimmed)].slice(-CHAT_MEMORY);
-    const open = r.motions.find((m) => m.key === reactionKey && m.unlockedAt !== null);
-    const chatReply: ChatReply = { line: reply, reactionKey: open ? reactionKey : 'shy' };
+    const { reply } = templateReply(r.personality, trimmed, r.memory, this.nextSeed());
+    const safeReply = cleanLine(reply);   // 서버 `ChatService` 도 답 대사를 같은 필터로 거른다
+    // ★ **최신이 앞**이다(서버 `findTop5...OrderByAnsweredAtDesc`). 옛 목은 오래된 것이 앞이라,
+    //   "최근 답 한 번 재언급"(§10)이 목에서는 제일 오래된 답을 꺼냈다.
+    r.memory = [clampChat(trimmed), ...r.memory].slice(0, CHAT_MEMORY);
+    // ★★ 반응 동작은 **답하기(`reply`)가 열렸으면 그것, 아직이면 `hello`** 다(서버 `ChatService.reactionKey`).
+    //   정본 §6 이 이름으로 못 박은 예외다 — "답하기는 1층에 대응 행동이 없어, 잠긴 동안 인사를 쓰고
+    //   열리면 reply 로 바꾼다." 옛 목은 대사 템플릿이 고른 키를 쓰고 잠기면 `shy` 로 바꿨는데,
+    //   화면은 **서버가 준 키를 그대로 재생**하므로 답을 했는데 쓰다듬는 자세가 나왔다(연결 감사 F6).
+    // ★ **세고 나서 고른다** — 위에서 `chatAnswers` 를 이미 올렸으므로, 네 번째 답(= 해금되는 그 답)에
+    //   `reply` 가 실린다. 앞에서 고르면 폭죽은 터지는데 옛 동작이 재생된다.
+    const replyOpen = r.motions.some((m) => m.key === 'reply' && m.unlockedAt !== null);
+    const chatReply: ChatReply = { line: safeReply, reactionKey: replyOpen ? 'reply' : 'hello' };
     r.chatLog.set(this.slotKey(r, slot), { answer: clampChat(trimmed), replyLine: chatReply.line, reactionKey: chatReply.reactionKey });
     return this.detail(r, now, this.newlyUnlocked(r, before, now), chatReply);
   }
@@ -578,22 +612,27 @@ export class MockPetServer implements PetSource {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
-    if (r.game && !r.game.finished) return this.gameState(r, now);
+    // ★★ **이어 치기는 없다**(J3 · 서버가 미완료 판 재개를 없앴다). 새로고침·재접속으로 돌아온
+    //   미완료 판은 **끝난 것(패배)** 으로 접는다. 옛 목은 여기서 치던 판을 그대로 돌려줘,
+    //   나갔다 들어오면 판이 되살아나 하루 3판이 무의미해졌다.
+    //   하루 판수는 시작할 때 이미 깎였으므로 여기서 되돌리지 않는다.
+    if (r.game && !r.game.finished) {
+      r.game.finished = true;
+      r.game.win = false;
+    }
     if (r.sleeping) throw err(409, 'ZZAL_PET_SLEEPING', '자고 있어요');
     if (r.sick) throw err(409, 'ZZAL_SICK_REFUSES', '아파서 놀 기운이 없대요');
     if (r.today.games >= GAMES_PER_DAY) throw err(409, 'ZZAL_GAME_DAILY_LIMIT', '오늘은 충분히 놀았어요');
     if (kind === 'RUN' && !this.featuresOf(r).run) throw err(409, 'ZZAL_FEATURE_LOCKED', '좌우 맞히기에서 5번 이기면 열려요');
     const before = this.unlockedSeqs(r);
     r.today.games += 1;
-    r.counters.gameStarts += 1;
     this.advanceTutorial(r, 'GAME');
-    r.today.snackStreak = 0;
     r.game = {
       gameId: this.nextGameId++, kind, round: 0, hits: 0, finished: false, win: null,
       answers: Array.from({ length: LEFT_RIGHT.rounds }, () => (this.nextSeed() % 2 === 0 ? 'LEFT' : 'RIGHT')),
     };
-    // 놀라기(13번)는 3판째 **시작**으로 열린다. 게임 응답은 PetDetail 이 아니지만
-    // 서버가 justUnlocked 를 함께 주므로("행동 응답 = 상태") 목도 같이 싣는다.
+    // ★ 시작에서 열리는 것은 이제 없다 — 놀람(15번)도 놀이 조각도 **완주**에서 센다(guess).
+    //   게임 응답은 PetDetail 이 아니지만 서버가 justUnlocked 를 함께 주므로 목도 같이 싣는다.
     return this.gameState(r, now, this.newlyUnlocked(r, before, now));
   }
 
@@ -610,13 +649,25 @@ export class MockPetServer implements PetSource {
     const round = g.round;
     if (hit) g.hits += 1;
     g.round += 1;
-    g.finished = g.round >= LEFT_RIGHT.rounds;
+    // ★★ **3승 또는 3패에서 끝난다**(서버 `ZzalGame.guess` — 2026-09-22 `1f7093f`).
+    //   3선승제라 틀린 것이 셋이면 남은 회차로 뒤집을 수 없다 — 그 자리에서 끝낸다.
+    //   다섯 회차는 그래서 **상한**이지 반드시 다 치는 수가 아니다(최단 3회차).
+    const misses = g.round - g.hits;
+    g.finished = g.hits >= LEFT_RIGHT.winAt || misses >= LEFT_RIGHT.winAt || g.round >= LEFT_RIGHT.rounds;
     let win: boolean | null = null;
     if (g.finished) {
+      // ★★ 2층 15번(놀람)의 "미니게임 4판" 은 **끝까지 친 매치**만 센다(서버 `ZzalPet.finishGame()` ·
+      //   2026-09-22 결정). 옛 목은 `start` 에서 셌고, 그러면 **시작하고 나가기를 되풀이해** 열 수 있었다.
+      //   ★ 기권·강제 종료한 판은 여기 오지 않으므로 자연히 안 세인다 — 서버와 같은 자리, 같은 이유다.
+      //   ★ 이 줄이 `newlyUnlocked` 를 부르기 **전**이어야 폭죽이 **이 응답**에 실린다(서버 주석과 같은 자).
+      r.counters.gameStarts += 1;
+      // ★★ 놀이 조각도 **완주한 매치**만 센다(서버 `GameService.guess` — 2026-09-22 결정).
+      //   시작에서 세면 기권한 판의 조각이 남고, 승리에서만 세면 "승패 무관"(정본 §6)이 깨진다.
+      //   접은 판은 이 자리에 오지 않으므로 무르는 코드(uncountPiece)가 아예 필요 없어졌다.
+      this.countPiece(r, 'GAME');
       win = g.hits >= LEFT_RIGHT.winAt;
       if (win) {
         r.counters.leftRightWins += 1;
-        r.pieceDay.gameWins += 1;
         r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
       }
     }
@@ -634,8 +685,10 @@ export class MockPetServer implements PetSource {
    * 연습방의 ✕ 가 진짜 방과 같은 말을 한다.
    *
    * ★★ **여기서 안 하는 것들이 이 함수의 본체다.**
-   *   `today.games`(하루 3판)·`counters.leftRightWins`·`pieceDay.gameWins`·`happiness` 를
+   *   `today.games`(하루 3판)·`counters.leftRightWins`·`happiness` 를
    *   **하나도 안 건드린다.** 하루 판수는 시작할 때 이미 깎였고, 접은 판은 승리가 아니다.
+   * ★ 조각도 **여기서 안 센다** — 놀이 조각과 놀람(15번)은 둘 다 `guess` 의 **완주**에서만 센다
+   *   (서버 2026-09-22 결정). 시작에서 세고 여기서 무르던 예전 방식은 더 필요 없어졌다.
    * ★ 3번 맞힌 뒤 접어도 `win` 은 false 다 — 끝까지 치지 않은 판이라서다.
    * ★ **아픔을 안 본다**(`ZZAL_SICK_REFUSES` 없음). 아픔은 '노는 것'을 막는 조건이라,
    *   아픈 동안 판이 열린 채 갇히면 나갈 길이 사라진다. 서버가 일부러 뺀 검사다.
@@ -661,11 +714,21 @@ export class MockPetServer implements PetSource {
     };
   }
 
+  /**
+   * 지금 치는 판 — **이어받을 판은 주지 않는다**(J3).
+   *
+   * ★ 돌아왔을 때 미완료 판이 남아 있으면 **그 자리에서 끝난 것(패배)** 으로 접는다. 서버가
+   *   미완료 판 재개를 없앴으므로 목도 같아야 한다 — 목만 이어 주면 연습방에서만 되는 길이 생긴다.
+   *   하루 판수는 시작할 때 이미 깎였으니 **남은 판 수만** 그대로 나간다.
+   */
   async getCurrentGame(petId: number): Promise<GameState> {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
-    return this.gameState(r, now);
+    // ★★ **여기서는 아무것도 안 고친다**(서버 `GameService.current` — `return Optional.empty()`).
+    //   조회는 읽기만 한다. 남아 있는 미완료 판은 아무것도 막지 않고, **다음 `start` 가 접는다**.
+    //   목이 여기서 접으면 GET 하나가 상태를 바꾸는 것이 되어 서버와 갈린다.
+    return this.gameState(r, now, [], true);
   }
 
   // ── 안쪽: 시계 ────────────────────────────────────────────────────────
@@ -719,9 +782,12 @@ export class MockPetServer implements PetSource {
     return at(t, SLEEP_WINDOW.to);
   }
 
-  /** 자고 있을 때 자동 기상 시각. 밤잠 = 잠든 뒤 처음 맞는 10:00, 낮잠 = +10분. */
+  /**
+   * 자고 있을 때 자동 기상 시각 — 밤잠은 잠든 뒤 처음 맞는 10:00.
+   * ★ 낮잠에는 자동 기상이 없다(정본 §16 1.4 — 튜토리얼 동안 시계가 멈춰 있다). 그래서
+   *   낮잠 갈래도 없다. 애초에 `settle` 이 시계가 멈춘 동안 곧바로 빠져나가 닿지도 않는다.
+   */
   private autoWakeAt(r: Row): number {
-    if (r.sleepKind === 'NAP') return r.sleptAt + NAP.autoWakeMs;
     const sameDay = at(r.sleptAt, WAKE_WINDOW.to);
     return r.sleptAt < sameDay ? sameDay : sameDay + DAY_MS;
   }
@@ -830,14 +896,26 @@ export class MockPetServer implements PetSource {
         && r.fullness >= 2 && r.happiness >= 2 && (MAX_TRASH - r.trash) >= 2;
       r.goodDay = false;
       r.bonusPiece = false;
-      r.today = { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 };
-      r.pieceDay = { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 };
+      r.today = { games: 0, pets: 0, careIntimacy: 0, snacks: 0, snackStreak: 0, bathDone: false, careMiss: 0 };
+      // ★★ 조각 판은 **여기서 지우지 않는다**(정본 §16 "조각은 예외다 — 하루로 끊지 않고 쌓인다").
+      //   요구량 자체가 이틀치라 밤마다 지우면 영원히 못 채운다. 되돌리는 때는 "네 칸이 다 찬 뒤
+      //   처음 맞는 기상" 하나뿐이고, 그것은 doWake 가 한다.
       r.snacksToday = 0;
-      if (r.game && !r.game.finished) r.game.finished = true;
+      // 잠들면 치던 판도 접힌다 — 접은 판은 기권과 같아 승리가 아니다.
+      if (r.game && !r.game.finished) {
+        r.game.finished = true;
+        r.game.win = false;
+      }
     }
     if (!auto) {
-      r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
-      r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.sleep);
+      // ★★ **보상은 밤잠에만**(정본 §16 · 서버 `ZzalPet.sleep()` — `if (kind == NIGHT)`).
+      //   튜토리얼 낮잠은 배우는 자리라 행복·친밀도가 붙지 않는다. 옛 목은 낮잠에도 줘서,
+      //   튜토리얼을 끝내기만 해도 행복 +1 과 친밀도가 공짜로 붙었다.
+      if (kind === 'NIGHT') {
+        r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
+        r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.sleep);
+      }
+      // 재우기·깨우기 **횟수**는 낮잠도 센다(정본 §16 "이 낮잠은 재우기·깨우기 횟수에 포함").
       r.counters.sleepWakeCount += 1;
     }
   }
@@ -854,6 +932,9 @@ export class MockPetServer implements PetSource {
       // ★ 조각 4칸은 2층 8종을 다 연 **그 뒤에 맞는 기상**에 등장한다(해석 49).
       //   기준은 "다 열린 시각"이지 "우리가 알아챈 시각"이 아니다 — 밤에 완성되면 바로 다음 아침이다.
       if (!r.piecesEnabled && r.layer2DoneAt !== null && r.layer2DoneAt < t) r.piecesEnabled = true;
+      // ★★ 조각 판이 0으로 돌아가는 **유일한 때** — 네 칸이 다 찬 뒤 처음 맞는 기상(정본 §6 1.9).
+      //   "그날은 찍힌 채로 보이고, 다음 기상에 네 칸이 모두 0" 이다(서버 `resetOnWakeIfComplete`).
+      if (r.piecesEnabled && PIECE_KINDS.every((k) => r.piece.done[k])) r.piece = emptyPiece();
       r.goodDay = r.goodDayNext;
       r.bonusPiece = r.goodDayNext;
       r.goodDayNext = false;
@@ -863,7 +944,8 @@ export class MockPetServer implements PetSource {
       this.advanceTutorial(r, 'NAP');
     }
     if (!auto) {
-      r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.wake);
+      // ★ 깨우기 친밀도도 **밤잠에만**(재우기와 같은 이유). 횟수는 낮잠도 센다.
+      if (kind === 'NIGHT') r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.wake);
       r.counters.sleepWakeCount += 1;
       // ★ 16번(일어나기)의 조건은 **손으로 깨운 밤잠**뿐이다(정본 §6 1.10 · 서버 `Kind.WAKES`).
       //   아침 자동 기상(auto)과 튜토리얼 낮잠(NAP)은 "깨우기" 라는 행동이 아니라서 빠진다.
@@ -878,13 +960,20 @@ export class MockPetServer implements PetSource {
    * 실서버와 갈라지고, 그 차이는 목에서만 도는 화면을 만든다(결정기록 C40).
    * 조건은 정본 그대로 — 함께한 날 3 이상이고 그날 케어 미스 0.
    */
-  private planNight(r: Row): void {
+  private planNight(_r: Row): void {
+    // ★ **구르기는 여기서 계획하지 않는다**(판정 F5) — 튜토리얼을 끝낸 그 순간 굽는다(`queueGift`).
+    //   옛 코드는 "함께한 날 3 + 그날 케어 미스 0" 을 여기서 봤는데, 그 조건은 정본 §6 표에서
+    //   **뒤로 넘어짐**(3층 첫 심화 행동의 선물) 것이다. 목은 3층 굽기를 아직 흉내 내지 않으므로
+    //   이 자리는 비어 있다 — 흉내 내면 실서버(PR-10)와 갈라진다(결정기록 C40).
+  }
+
+  /**
+   * 구르기를 굽기 큐에 올린다 — **튜토리얼 9칸을 다 끝낸 그 순간**이다(정본 §6 표 · 1.8).
+   * 도착은 그대로 다음 기상(`deliver`).
+   */
+  private queueGift(r: Row): void {
     const gift = r.motions.find((m) => m.seq === GIFT_SEQ);
     if (!gift || gift.advanced.status !== 'NONE') return;
-    if (r.daysTogether < FIRST_GIFT_DAYS) return;
-    // ★ 그날 케어 미스 0(정본 §16). doSleep 이 today 를 지우기 **전에** 부르므로 여기서 볼 수 있다.
-    //   이 줄이 없으면 목이 서버보다 너그러워지고, e2e 는 통과하는데 실서버에서는 선물이 안 온다.
-    if (r.today.careMiss !== 0) return;
     gift.advanced = { ...gift.advanced, status: 'QUEUED', imageKey: null, revealedAt: null, seen: false };
   }
 
@@ -897,10 +986,13 @@ export class MockPetServer implements PetSource {
     const failed = this.failNextBake;
     for (const m of r.motions) {
       if (m.advanced.status !== 'QUEUED' && m.advanced.status !== 'PRACTICING') continue;
-      // ★ 실패 경로 — 그 밤에 못 구우면 **NONE 으로 되돌리고 다음 밤에 다시** 등록된다(계약 5절).
+      // ★ 실패 경로 — 못 구우면 **곧바로 다시 굽는다**(정본 §6 1.8: "굽기 실패는 조각을 소모하지
+      //   않는다 — 같은 동작을 계속 다시 굽는다. '다음 밤' 이라는 것이 없어졌다").
+      //   옛 목은 NONE 으로 되돌려 다음 밤을 기다렸는데, 그 "다음 밤" 이 폐기된 개념이다.
+      //   사용자 화면은 "아직 연습 중이에요" 한 줄이고 서툰 판이 그대로 보인다.
       //   정상 경로만 만들어 두면 이 길은 실행된 적 없이 배포된다(메모리 verify-failure-paths).
       if (this.failNextBake) {
-        m.advanced = { status: 'NONE', imageKey: null, revealedAt: null, seen: false };
+        m.advanced = { status: 'QUEUED', imageKey: null, revealedAt: null, seen: false };
         continue;
       }
       m.advanced = {
@@ -920,20 +1012,33 @@ export class MockPetServer implements PetSource {
    * ★ 기분 좋은 날의 선물 조각은 **가장 앞의 빈 칸**을 채운 것으로 친다.
    */
   private piecesOf(r: Row): Pieces {
-    const raw = {
-      food: r.pieceDay.feeds >= 2,
-      play: r.pieceDay.snacks >= 1 && r.pieceDay.gameWins >= 1,
-      clean: r.pieceDay.cleans >= 1 && r.today.bathDone,
-      bond: r.pieceDay.chats >= 1 && r.today.pets >= 2,
-    };
-    const keys = ['food', 'play', 'clean', 'bond'] as const;
-    const filled = { ...raw };
+    const filled: Record<string, boolean> = { ...r.piece.done };
     if (r.bonusPiece) {
-      const firstEmpty = keys.find((k) => !filled[k]);
+      // 기분 좋은 날의 선물은 **아직 안 찬 것 중 앞선 칸**을 채운 것으로 친다(정본 §6 · 서버 `firstOpen()`).
+      const firstEmpty = PIECE_KINDS.find((k) => !filled[k]);
       if (firstEmpty) filled[firstEmpty] = true;
     }
-    const count = keys.filter((k) => filled[k]).length;
-    return { ...filled, count, bonus: r.bonusPiece };
+    const count = PIECE_KINDS.filter((k) => filled[k]).length;
+    return {
+      food: !!filled.food, play: !!filled.play, clean: !!filled.clean, bond: !!filled.bond,
+      count, bonus: r.bonusPiece,
+    };
+  }
+
+  /**
+   * 행동 하나를 조각에 센다(정본 §6 1.9 · 서버 `PieceService.count` + `ZzalPiece.count`).
+   *
+   * ★ **3층 전에는 아무 일도 안 한다** — 칸이 화면에 없는데 뒤에서 숫자가 쌓이면 3층이 열린 날
+   *   한 칸이 공짜로 차 있게 된다(정본 §16 "그때부터 세기 시작한다. 그 전의 돌보기는 소급하지 않는다").
+   * ★ 이미 도장이 찍힌 칸은 **다음 판까지 더 세지 않는다.** 넘친 만큼은 버린다.
+   */
+  private countPiece(r: Row, event: PieceEventKey): void {
+    if (!r.piecesEnabled) return;
+    const kind = PIECE_KIND[event];
+    if (r.piece.done[kind]) return;
+    const next = r.piece.counts[event] + 1;
+    r.piece.counts[event] = next;
+    if (next >= PIECE_NEED[event]) r.piece.done[kind] = true;
   }
 
   private pieceCount(r: Row): number {
@@ -1051,16 +1156,20 @@ export class MockPetServer implements PetSource {
       download: true, leftRight: true, run: r.counters.leftRightWins >= FEATURE_UNLOCK.runLeftRightWins,
       scenes: false, background: l2 >= FEATURE_UNLOCK.backgroundLayer2,
       // 앨범은 첫 심화 행동이 **도착**하면 열린다(계약 1.6).
-      album: r.motions.some((m) => m.advanced.status === 'OPEN'), pieces: r.piecesEnabled,
+      // ★ 앨범은 **처음부터** 열려 있다(정본 §6·§16 "앨범 = 처음부터" · 서버 2026-09-22 결정).
+      //   기본 행동 8종부터 담기므로 심화 행동을 기다릴 이유가 없다. 옛 값은 "첫 심화가 OPEN 이면" 이라
+      //   화면은 이미 열어 주는데 플래그만 늦어, 계약과 정본이 조용히 어긋나 있었다(연결 감사 J1).
+      album: true, pieces: r.piecesEnabled,
     };
   }
 
   private firstGiftOf(r: Row): FirstGift {
-    const daysLeft = Math.max(0, FIRST_GIFT_DAYS - r.daysTogether);
     const gift = r.motions.find((m) => m.seq === GIFT_SEQ);
     if (gift?.advanced.status === 'OPEN') return { status: 'OPEN', daysLeft: 0 };
     if (gift && gift.advanced.status !== 'NONE') return { status: 'BAKING', daysLeft: 0 };
-    return { status: daysLeft === 0 ? 'WAITING' : 'LOCKED', daysLeft };
+    // ★ **남은 날짜가 없다**(판정 F5) — 구르기는 날짜가 아니라 튜토리얼 완주로 열린다.
+    //   아직 안 끝냈으면 LOCKED. `daysLeft` 는 늘 0 이다.
+    return { status: r.clockStartedAt === null ? 'LOCKED' : 'WAITING', daysLeft: 0 };
   }
 
   private slotTimes(r: Row): Array<{ slot: ChatSlot; atMs: number }> {
@@ -1071,14 +1180,19 @@ export class MockPetServer implements PetSource {
     // 그 뒤에 도래할 아침·낮 부름은 태어나자마자 만료된 것이라 아예 만들지 않는다.
     //   · 정오 이후에 기상한 날 → 낮 부름(기상+7h)이 19:00 이후
     //   · 18시 이후에 부화한 날 → 아침(부화+1h)·낮(부화+7h)이 둘 다 19:00 이후
-    const daily = ([
+    // ★★ **튜토리얼 중에는 하루 부름이 없다**(서버 `ChatService` — `if (pet.isInTutorial()) return out;`).
+    //   튜토리얼 부름(BABY)이 따로 있고 시계가 멈춰 있어서다. 이 줄이 없으면, 일상 부름이 BABY 보다
+    //   앞선다는 규칙과 맞물려 **튜토리얼 부름이 영영 안 열린다**(3번 칸에서 멈춘다).
+    const inTutorial = r.clockStartedAt === null;
+    const daily = (inTutorial ? [] : [
       { slot: 'MORNING', atMs: r.dayBase + CHAT_SLOTS.MORNING.afterWakeMs },
       { slot: 'NOON', atMs: r.dayBase + CHAT_SLOTS.NOON.afterWakeMs },
     ] as Array<{ slot: ChatSlot; atMs: number }>).filter((t) => t.atMs < evening);
     return [
-      { slot: 'BABY', atMs: hatched + CHAT_SLOTS.BABY.afterHatchMs },
+      // ★ BABY 는 **시각이 아니라 순서**다(서버 `ChatService`) — 부화한 그 순간부터 있고 만료가 없다.
+      { slot: 'BABY', atMs: hatched },
       ...daily,
-      { slot: 'EVENING', atMs: evening },
+      ...(inTutorial ? [] : [{ slot: 'EVENING' as ChatSlot, atMs: evening }]),
     ];
   }
 
@@ -1099,16 +1213,22 @@ export class MockPetServer implements PetSource {
     const baby = times[0];
     if (babyAlive && baby.atMs <= now) {
       calls.push({
-        slot: 'BABY', line: templateCall('BABY', r.personality, r.daysTogether), calledAt: iso(baby.atMs),
+        slot: 'BABY', line: cleanLine(templateCall('BABY', r.personality, r.daysTogether)), calledAt: iso(baby.atMs),
         expiresAt: null, answered: answered('BABY'), ...this.answerOf(r, 'BABY'),
       });
     }
+    // ★ 마지막 부름(EVENING)의 만료는 **자동 취침 시각 23:00** 이다(서버 `ChatService` 의 nightEnd).
+    //   옛 목은 뒤가 없으면 `null`(만료 없음)로 둬서, 19시 부름이 다음 날까지 열려 있었다.
+    const nightEnd = at(r.dayBase, SLEEP_WINDOW.to);
     daily.forEach((t, i) => {
       const next = daily[i + 1] ?? times.find((x) => x.slot !== 'BABY' && x.atMs > t.atMs);
+      const until = next ? next.atMs : nightEnd;
       calls.push({
         // 기분 좋은 날은 **그날 첫 부름**만 살갑다(정본 §6). 하루 내내 들뜨면 그날의 특별함이 사라진다.
-        slot: t.slot, line: templateCall(t.slot, r.personality, r.counters.chatAnswers + r.daysTogether + i, r.goodDay && i === 0),
-        calledAt: iso(t.atMs), expiresAt: next ? iso(next.atMs) : null, answered: answered(t.slot),
+        slot: t.slot,
+        // ★ 서버가 `BanFilter.clean(...)` 으로 거르는 그 자리다 — **같은 43어간 목록**을 쓴다.
+        line: cleanLine(templateCall(t.slot, r.personality, r.counters.chatAnswers + r.daysTogether + i, r.goodDay && i === 0)),
+        calledAt: iso(t.atMs), expiresAt: iso(until), answered: answered(t.slot),
         ...this.answerOf(r, t.slot),
       });
     });
@@ -1116,9 +1236,14 @@ export class MockPetServer implements PetSource {
     if (!r.sleeping) {
       // 하루 3회 중 "지금 시각 이전의 마지막 부름" 하나만 열린다 — 앞의 것은 다음 부름 시각에 만료됐다(§16).
       const last = daily[daily.length - 1];
-      if (last && !answered(last.slot)) openSlot = last.slot;
-      // 아기 8분 부름은 튜토리얼이라 만료되지 않는다(밀린 부름은 순서대로 §12). 먼저 뜬다.
-      if (babyAlive && baby.atMs <= now && !answered('BABY')) openSlot = 'BABY';
+      // EVENING 은 23:00 에 만료된다 — 그 뒤에는 "지금 시각 이전의 마지막 부름" 이라도 닫혀 있다.
+      const lastUntil = last && last.slot === 'EVENING' ? nightEnd : Number.POSITIVE_INFINITY;
+      const dailyOpen = last && !answered(last.slot) && now < lastUntil ? last.slot : null;
+      // ★★ **일상 부름이 BABY 보다 앞**이다(서버 `ChatService.order()` — MORNING 0 · NOON 1 ·
+      //   EVENING 2 · BABY 3). 옛 목은 BABY 로 덮어써서 순서가 정반대였다. BABY 는 만료가 없어
+      //   언제든 남아 있으므로, 덮어쓰면 하루 부름이 영영 안 열린다.
+      const babyOpen = babyAlive && baby.atMs <= now && !answered('BABY') ? ('BABY' as ChatSlot) : null;
+      openSlot = dailyOpen ?? babyOpen;
     }
     const future = times.filter((t) => t.slot !== 'BABY' && t.atMs > now).sort((a, b) => a.atMs - b.atMs);
     return { openSlot, calls, memories: [...r.memory], nextAt: future[0] ? iso(future[0].atMs) : null };
@@ -1170,10 +1295,14 @@ export class MockPetServer implements PetSource {
    * 시작·잇기 응답. ★ `finished`·`win` 칸이 없다 — 서버 State 에도 없다(실서버 왕복 확인).
    * 판이 끝났는가는 친 결과(GuessResult)로만 안다.
    */
-  private gameState(r: Row, now: number, justUnlocked: number[] = []): GameState {
+  /**
+   * @param neverPlaying `current` 전용 — **판을 절대 안 돌려준다**(서버 `GameService.current`).
+   *   남아 있는 미완료 판 줄은 아무것도 막지 않고 다음 `start` 가 접는다.
+   */
+  private gameState(r: Row, now: number, justUnlocked: number[] = [], neverPlaying = false): GameState {
     void now;
     const g = r.game;
-    const playing = g !== null && !g.finished;
+    const playing = !neverPlaying && g !== null && !g.finished;
     return {
       playing, gameId: playing ? g.gameId : null, kind: playing ? g.kind : null,
       round: playing && g.kind === 'LEFT_RIGHT' ? g.round : null,
@@ -1252,8 +1381,8 @@ export class MockPetServer implements PetSource {
       zeroArmed: { fullness: false, happiness: false, trash: false },
       food: MAX_FOOD, foodAcc: 0, sick: null, dirtyAcc: 0,
       piecesEnabled: false, layer2DoneAt: null, bonusPiece: false, goodDay: false, goodDayNext: false,
-      pieceDay: { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 },
-      intimacy: 0, today: { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 },
+      piece: emptyPiece(),
+      intimacy: 0, today: { games: 0, pets: 0, careIntimacy: 0, snacks: 0, snackStreak: 0, bathDone: false, careMiss: 0 },
       counters: {
         chatAnswers: 0, sleepWakeCount: 0, bathCount: 0, gameStarts: 0, leftRightWins: 0, zeroMissDays: 0,
         feedCount: 0, petCount: 0, cleanCount: 0, shareCount: 0, napCount: 0, snackCount: 0, wakeCount: 0,
@@ -1292,6 +1421,9 @@ export class MockPetServer implements PetSource {
   private finishTutorial(r: Row, at: number): void {
     r.tutorialStep = BABY_CALLS.length;
     r.clockStartedAt = at;
+    // ★ 튜토리얼을 지난 아이는 **완주 보상(구르기)도 받은** 아이다(판정 F5). 프리셋만 예외로 두면
+    //   "튜토리얼을 끝냈는데 선물이 없는" 상태가 목에만 생긴다.
+    this.queueGift(r);
   }
 
   private seedPreset(preset: 'baby' | 'child' | 'grown' | 'layer3'): void {
