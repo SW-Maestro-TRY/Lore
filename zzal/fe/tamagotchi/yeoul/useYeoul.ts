@@ -1328,9 +1328,11 @@ export function useYeoul(live?: Live) {
       lastGuess: null,
       // 시작하면 팝오버를 내린다 — 예전엔 안 내려서 방으로 돌아가는 데 2탭이 들었다.
       popOpen: false, popClosing: false, sheet: null, toast: '',
-      plays: v.sampleMode || onServerRef.current ? v.plays : Math.max(0, v.plays - 1),
+      // ★★ **여기서 깎지 않는다**(2026-09-22 판정 2). 서버는 **첫 탭**에서야 판을 만들고
+      //   그때 하루 판수를 쓴다. 판을 열자마자 깎으면 한 판도 안 치고 ✕ 해도 「3판 남음」이
+      //   2 가 되어, 목이 서버와 다른 말을 한다(실측). 목의 차감은 `onGuess` 첫 탭에 있다.
     }));
-  }, []);
+  }, [tutorDone]);
 
   /** 매치를 접고 마당 팝오버를 다시 연다 — 거기 "좌우 맞히기" 가 곧 "한 판 더" 다. */
   const endGuess = useCallback(() => {
@@ -1392,9 +1394,9 @@ export function useYeoul(live?: Live) {
     if (v0.gPhase === 'done') { endGuess(); return; }
     // ★ 서버에 판을 만들었는가는 **이번 매치 기준**이다(판정 J3) — `live.game.playing` 은
     //   새로고침으로 되살아난 옛 판까지 참으로 만든다.
-    const played = onServerRef.current
-      ? v0.gStarted
-      : v0.gRound > 0 || v0.gPhase !== 'wait';
+    // ★ 목도 서버와 **같은 잣대**로 본다(2026-09-22) — 첫 탭에 `gStarted` 가 켜지고
+    //   그때 판수도 깎이므로, "판이 있었는가" 를 한 값으로 물을 수 있다.
+    const played = v0.gStarted;
     if (!played) { endGuess(); return; }
     setS((v) => ({ ...v, fire: {
       title: '지금 나가면 이 판은 져요',
@@ -1471,6 +1473,11 @@ export function useYeoul(live?: Live) {
 
     // ── 목(연습방·진짜 방 목) — 규칙은 서버와 **같은 값**으로 센다(5판 3승) ──
     const v0 = sRef.current;
+    // ★ 하루 판수는 **첫 탭에 깎는다** — 서버가 판을 만드는 시점과 같다(판정 2).
+    //   연습방은 안 깎는다(거긴 판수가 없는 연습 자리다). 서버 방은 서버 값을 그대로 보여 준다.
+    if (!v0.gStarted) {
+      patch({ gStarted: true, plays: v0.sampleMode ? v0.plays : Math.max(0, v0.plays - 1) });
+    }
     const hit = Math.random() < 0.5;
     const hits = v0.gHits + (hit ? 1 : 0);
     const misses = v0.gRound + 1 - hits;
