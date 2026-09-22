@@ -922,7 +922,9 @@ export function useYeoul(live?: Live) {
       : tut.room === 'chat' ? '지금은 말풍선을 눌러 답할 차례예요'
         : tut.room === 'info' ? '지금은 아이 정보에서 성격을 고를 차례예요'
           : roomName ? `지금은 ${roomName}에서 할 차례예요`
-            : '지금은 위 안내를 먼저 해 볼 차례예요';
+            // 마지막 칸(DONE)은 누를 것이 하나뿐이다 — 그 이름을 그대로 말해 준다.
+            : tut.done === 'DONE' ? '지금은 「이제 시작할게요」를 눌러 주세요'
+              : '지금은 위 안내를 먼저 해 볼 차례예요';
     return { room: tut.room, act: tut.act, note };
   }, [tut]);
   const tutLockRef = useRef<{ room: string | null; act: string | null; note: string } | null>(null);
