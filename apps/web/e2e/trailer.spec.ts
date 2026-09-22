@@ -652,4 +652,65 @@ test.describe('데스크톱', () => {
     await expect(gone.locator('[data-action="new-draft"]')).toBeVisible();
     await gone.close();
   });
+  test('★ "내 가설"에 맡긴 가설이 최신순으로 보이고, 하나를 열면 그 회차의 얼어 있는 초안으로 되살아난다', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+    await open(page, 3);
+    await pick(page, 'T2');
+    await page.fill('#trailer-title', '3화 가설');
+    await page.fill('#trailer-claim', '3화에서 세운 주장');
+    await page.click('[data-action="judge"]');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+
+    await selectChapter(page, LAST);
+    await page.fill('#trailer-title', '400화 가설');
+    await writeTheory(page);
+    await page.click('[data-action="judge"]');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+    // 400화 초안은 비우고, 3화 것은 판정이 끝났다고 치자.
+    await page.click('[data-action="new-draft"]');
+    judgeAs(lore.hypotheses[0], { ...JUDGE_T2.judgement, support: ['T2'], against: [] }, null);
+
+    await page.click('[data-part="topbar"] [data-action="saved"]');
+    const mineList = modal(page).locator('[data-part="my-hypotheses"] [data-hypothesis-id]');
+    await expect(mineList).toHaveCount(2);
+    await expect(mineList.nth(0)).toContainText('400화 가설');
+    await expect(mineList.nth(0).locator('[data-part="mine-status"]')).toHaveAttribute('data-status', 'PENDING');
+    await expect(mineList.nth(1)).toContainText('3화 가설');
+    await expect(mineList.nth(1).locator('[data-part="mine-status"]')).toHaveAttribute('data-status', 'COMPLETE');
+
+    // 3화 가설을 열면 회차가 3화로 바뀌고, 얼어 있는 초안으로 되살아나고, 판정이 그려진다.
+    await mineList.nth(1).locator('[data-action="open-hypothesis"]').click();
+    // 서버에서 전부 받은 뒤에 모달이 닫힌다 — 회차가 바뀐 것을 먼저 기다린다.
+    await expect(page.locator(SELECT)).toHaveValue('3');
+    expect(await modalIsOpen(page)).toBe(false);
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+    await expect(page.locator('#trailer-title')).toHaveValue('3화 가설');
+    await expect(page.locator('#trailer-claim')).toHaveValue('3화에서 세운 주장');
+    expect(await pickedIds(page)).toEqual(['T2']);
+    await expect(page.locator('[data-part="judge-result"] [data-part="judge-grade"]')).toHaveAttribute('data-grade', JUDGE_T2.judgement.grade);
+  });
+
+  test('로그인하지 않으면 "내 가설"의 서버 목록 자리에 로그인 단추가 나오고, 브라우저 임시 저장은 그대로 보인다. 로그인하면 목록이 온다', async ({ page, context }) => {
+    await mockLore(context);
+    await open(page, LAST);
+    await pick(page, 'T2');
+    await page.fill('#trailer-title', '임시 저장한 가설');
+    await page.click('[data-action="save"]');
+    await expect(page.locator('[data-part="toast"]')).toBeVisible();
+
+    await page.click('[data-part="topbar"] [data-action="saved"]');
+    const mineSection = modal(page).locator('[data-part="my-hypotheses"]');
+    await expect(mineSection).toContainText('로그인하면');
+    await expect(modal(page).locator('[data-part="saved-drafts"] .saved-entry')).toContainText('임시 저장한 가설');
+
+    // 로그인 단추 → 공용 로그인 창(모달은 닫힘) → 로그인 → 보관함이 다시 열리고 서버 목록(빈 것)이 온다.
+    await mineSection.locator('[data-action="login"]').click();
+    expect(await modalIsOpen(page)).toBe(false);
+    const auth = page.locator('[role="dialog"]');
+    await expect(auth).toBeVisible();
+    await auth.locator('input[type="email"]').fill('reader@example.invalid');
+    await auth.locator('input[type="password"]').fill('secret-pass-1');
+    await auth.locator('button[type="submit"]').click();
+    await expect(modal(page).locator('[data-part="my-hypotheses"]')).toContainText('아직 맡긴 가설이 없습니다');
+  });
 });

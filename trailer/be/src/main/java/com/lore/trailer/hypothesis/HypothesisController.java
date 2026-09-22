@@ -54,6 +54,18 @@ public class HypothesisController {
         return ApiResponse.ok(service.submit(userId, body));
     }
 
+    @Operation(summary = "내 가설 보관함", description = """
+            로그인한 독자가 맡긴 가설을 **최신이 앞**으로 준다. 목록에 필요한 칸만 든다 — 카드와 판정은 하나를 눌러 2-6 으로 받는다.
+            - 판정을 맡기지 않고 저장만 하는 가설은 서버에 없다(브라우저 임시 저장). 여기 오는 것은 모두 맡긴 가설이다
+            - 없으면 빈 배열""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "보관함"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "로그인 필요")})
+    @GetMapping("/my")
+    public ApiResponse<HypothesisResponses.MyList> my(@LoginUser Long userId) {
+        return ApiResponse.ok(service.my(userId));
+    }
+
     @Operation(summary = "가설 하나와 판정 되묻기", description = """
             맡긴 가설을 요청 id 로 연다. 보관함에서 하나를 열 때, 판정을 맡긴 뒤 결과를 되물을 때 부른다.
             몇 초마다 되물을지는 화면이 정한다 — 판정은 운영자가 따로 넣어서 시간이 걸린다.

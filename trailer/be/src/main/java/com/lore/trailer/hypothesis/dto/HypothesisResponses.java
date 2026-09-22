@@ -53,4 +53,39 @@ public final class HypothesisResponses {
             @Schema(description = "판정을 넣은 때(UTC). PENDING 이면 null", nullable = true)
             Instant judgedAt) {
     }
+
+    /** 보관함의 한 줄(2-7). 목록을 그리는 데 필요한 것만 — 하나를 누르면 2-6 으로 전부 받는다. */
+    @Schema(name = "TrailerHypothesisSummary", description = "보관함의 한 줄. 누르면 가설 하나(2-6)를 받는다")
+    public record Summary(
+
+            @Schema(description = "요청 id", example = "17")
+            long id,
+
+            @Schema(description = "독자가 읽은 회차 N", example = "200")
+            int chapter,
+
+            @Schema(description = "제목. 없으면 빈 글")
+            String title,
+
+            @Schema(description = "판정 상태", allowableValues = {"PENDING", "COMPLETE", "FAILED"}, example = "PENDING")
+            String judgementStatus,
+
+            @Schema(description = "맡긴 때(UTC)")
+            Instant createdAt,
+
+            @Schema(description = "판정을 넣은 때(UTC). PENDING 이면 null", nullable = true)
+            Instant judgedAt) {
+
+        public static Summary of(com.lore.trailer.hypothesis.Hypothesis h) {
+            return new Summary(h.getId(), h.getChapter(), h.getTitle(), h.getJudgementStatus(), h.getCreatedAt(), h.getJudgedAt());
+        }
+    }
+
+    /** 내 가설 보관함(2-7). 최신이 앞. */
+    @Schema(name = "TrailerHypothesisList", description = "내 가설 보관함. 최신이 앞이다")
+    public record MyList(
+
+            @Schema(description = "맡긴 가설. 없으면 빈 배열")
+            List<Summary> items) {
+    }
 }

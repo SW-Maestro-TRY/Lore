@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 로그인은 {@code asUser} 로 넣는다(JWT 필터가 넣는 것과 같은 모양).
  */
 @TrailerIntegrationTest
-@DisplayName("가설 API — 맡기기(2-5) · 하나 보기(2-6)")
+@DisplayName("가설 API — 맡기기(2-5) · 하나 보기(2-6) · 보관함(2-7)")
 class HypothesisApiIT extends TrailerItSupport {
 
     private static final String CARDS = "/api/trailer/v1/public/cards";
@@ -218,6 +218,50 @@ class HypothesisApiIT extends TrailerItSupport {
             assertThat(h.path("judgement").isNull()).isTrue();
             assertThat(h.path("presentation").isNull()).isTrue();
             assertThat(h.path("judgedAt").asText()).isNotEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("보관함(2-7) — 내 것만, 최신이 앞")
+    class MyList {
+
+        @Test
+        @DisplayName("맡긴 순서의 반대로 오고, 남의 가설은 섞이지 않고, 없으면 빈 배열이다")
+        void newestFirstAndMineOnly() throws Exception {
+            Long me = newUserId();
+            Long other = newUserId();
+            long first = data(postJson(me, HYPOTHESES, submission(1, List.of("T2")))).path("id").asLong();
+            postJson(other, HYPOTHESES, submission(400, List.of("T5")));
+            Map<String, Object> second = submission(400, List.of("T374", "T2"));
+            second.put("title", "두 번째");
+            long latest = data(postJson(me, HYPOTHESES, second)).path("id").asLong();
+
+            MvcResult result = getAs(me, HYPOTHESES + "/my");
+
+            assertThat(status(result)).isEqualTo(200);
+            JsonNode items = data(result).path("items");
+            assertThat(items.size()).isEqualTo(2);
+            assertThat(items.get(0).path("id").asLong()).isEqualTo(latest);
+            assertThat(items.get(0).path("title").asText()).isEqualTo("두 번째");
+            assertThat(items.get(0).path("chapter").asInt()).isEqualTo(400);
+            assertThat(items.get(0).path("judgementStatus").asText()).isEqualTo("PENDING");
+            assertThat(items.get(0).path("createdAt").asText()).isNotEmpty();
+            assertThat(items.get(0).path("judgedAt").isNull()).isTrue();
+            assertThat(items.get(1).path("id").asLong()).isEqualTo(first);
+            // 목록의 한 줄에는 카드가 없다 — 하나를 눌러 2-6 으로 받는다.
+            assertThat(items.get(0).has("cards")).isFalse();
+            assertThat(items.get(0).has("claim")).isFalse();
+
+            JsonNode none = data(getAs(newUserId(), HYPOTHESES + "/my")).path("items");
+            assertThat(none.isArray()).isTrue();
+            assertThat(none.size()).isZero();
+        }
+
+        @Test
+        @DisplayName("\"my\" 는 가설 번호로 읽히지 않는다 — 404 가 아니라 목록이다. 로그인 없이는 401")
+        void myIsNotAnId() throws Exception {
+            assertThat(status(getAs(newUserId(), HYPOTHESES + "/my"))).isEqualTo(200);
+            assertThat(status(getAnonymously(HYPOTHESES + "/my"))).isEqualTo(401);
         }
     }
 

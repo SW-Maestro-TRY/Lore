@@ -57,6 +57,8 @@ export const DETAIL_URL = /\/api\/trailer\/v1\/public\/cards\/(T\d+)(\?.*)?$/;
 export const HYPOTHESES_URL = /\/api\/trailer\/v1\/hypotheses$/;
 /** 가설 하나(2-6). 끝이 숫자여야 한다 — `/hypotheses/my` 는 여기 걸리지 않는다. */
 export const HYPOTHESIS_URL = /\/api\/trailer\/v1\/hypotheses\/(\d+)$/;
+/** 내 가설 보관함(2-7). */
+export const MY_HYPOTHESES_URL = /\/api\/trailer\/v1\/hypotheses\/my$/;
 /** lore 공용 로그인. 화면은 `useAuth` 로 `/users/me` 가 200 인지로 로그인을 판정하고, 로그인 창은 `/auth/login` 을 부른다. */
 export const ME_URL = /\/api\/v1\/users\/me$/;
 export const LOGIN_URL = /\/api\/v1\/auth\/login$/;
@@ -256,6 +258,14 @@ export async function mockLore(context: BrowserContext, options: LoreMockOptions
   });
   // 401 을 받은 공용 클라이언트가 토큰 갱신을 한 번 시도한다 — 갱신도 401 이어야 원래 401 이 화면에 닿는다.
   await context.route(REFRESH_URL, (route) => answer(route, fail(401, 'INVALID_REFRESH_TOKEN', '다시 로그인해 주세요')));
+  await context.route(MY_HYPOTHESES_URL, (route) => {
+    if (!state.loggedIn) return answer(route, fail(401, 'UNAUTHORIZED', '로그인이 필요합니다'));
+    // 최신이 앞. 목록의 한 줄에는 카드와 판정이 없다(2-7).
+    const items = [...state.hypotheses]
+      .sort((a, b) => b.id - a.id)
+      .map(({ id, chapter, title, judgementStatus, createdAt, judgedAt }) => ({ id, chapter, title, judgementStatus, createdAt, judgedAt }));
+    return answer(route, ok({ items }));
+  });
   await context.route(HYPOTHESIS_URL, (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     if (!state.loggedIn) return answer(route, fail(401, 'UNAUTHORIZED', '로그인이 필요합니다'));

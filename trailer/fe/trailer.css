@@ -716,6 +716,8 @@ main:has(> .trailer-page) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0
   padding: 16px 0;
   border-bottom: 1px solid var(--line);
 }
+.trailer-page .saved-section + .saved-section { margin-top: 22px; }
+.trailer-page .saved-heading { margin: 0 0 4px; font-weight: 600; letter-spacing: 0.02em; }
 .trailer-page .saved-entry strong { display: block; font-size: 14px; }
 .trailer-page .saved-entry p { font-size: 11px; color: var(--muted); margin-top: 4px; }
 .trailer-page .copy-text { white-space: pre-wrap; min-height: 250px; font-size: 13px; }
