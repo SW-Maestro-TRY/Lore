@@ -20,7 +20,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { YEOUL_ANCHORS_URL } from '../constants';
-import { C, C2, GAEGU, LV, MONO, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
+import { C, C2, GAEGU, LV, MONO, TAP_MIN, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
 import Album from './Album';
 import Panels from './Panels';
 import FeedbackSheet from '../FeedbackSheet';
@@ -959,13 +959,20 @@ function GuessPanel({ y }: { y: Yeoul }) {
         <button
           data-action="guess-quit" onClick={(e) => { e.stopPropagation(); g.quit(); }}
           aria-label="게임 나가기"
+          // ★ 누르는 자리 44px(판정 5). 절대 배치라 **자리를 안 옮기고** 단추만 키운다 —
+          //   보이는 동그라미는 26 그대로이고, 오른쪽 끝도 그대로다.
           style={{
-            position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
+            position: 'absolute', right: -9, top: '50%', transform: 'translateY(-50%)',
+            width: TAP_MIN, height: TAP_MIN, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: 'none', background: 'none', padding: 0,
+          }}
+        >
+          <span style={{
             width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot,
             fontSize: fz.sm, color: C.sub2, lineHeight: 1,
-          }}
-        >✕</button>
+          }}>✕</span>
+        </button>
       </div>
     </div>
   );
@@ -1009,11 +1016,18 @@ function Hud({ y }: { y: Yeoul }) {
         <span style={{ fontSize: fz.sm, color: C2.dim }}>·</span>
         <span style={{ fontSize: fz.md, color: '#635A52' }}>친밀도 {v.pet.bond}%</span>
         <span style={{ flex: 1 }} />
+        {/* ★ 누르는 자리 44px(2026-09-22 판정 5). **보이는 알약은 그대로 두고** 단추만 키운다 —
+            머리줄이 두꺼워지면 그만큼 무대가 낮아져 아이가 작아진다. 음수 여백이 제자리를 지킨다. */}
         <button
           onClick={actions.openSettings} data-part="pet-info" data-hl={v.hud.hl ? '1' : undefined}
           data-off={v.hud.off ? '1' : undefined}
           style={{
-            display: 'flex', alignItems: 'center', gap: gap.xs, flex: 'none', padding: pad.tiny,
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flex: 'none',
+            minHeight: TAP_MIN, margin: '-10px 0', padding: 0, border: 'none', background: 'none',
+          }}
+        >
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: gap.xs, padding: pad.tiny,
             borderRadius: radius.pill,
             // 튜토리얼 4칸(성격)은 이 버튼 안에서 하는 일이라, 타일 대신 여기가 깜빡인다.
             border: v.hud.hl ? `2px solid ${C.accent}` : `1px solid ${C2.lineWarm}`,
@@ -1021,13 +1035,13 @@ function Hud({ y }: { y: Yeoul }) {
             // ★ 튜토리얼이 다른 칸을 가리킬 때는 흐리게(판정 J8) — 눌리기는 하고, 누르면 이유가 뜬다.
             opacity: v.hud.off ? 0.45 : 1,
             fontSize: fz.sm, lineHeight: 1, color: C2.muted,
-          }}
-        >
-          <span style={{ position: 'relative', width: 13, height: 13, display: 'block' }}>
-            <span style={{ position: 'absolute', left: 0, top: 5.5, width: 13, height: 2, borderRadius: 2, background: 'currentColor' }} />
-            <span style={{ position: 'absolute', left: 5.5, top: 0, width: 2, height: 13, borderRadius: 2, background: 'currentColor', transform: 'rotate(45deg)' }} />
+          }}>
+            <span style={{ position: 'relative', width: 13, height: 13, display: 'block' }}>
+              <span style={{ position: 'absolute', left: 0, top: 5.5, width: 13, height: 2, borderRadius: 2, background: 'currentColor' }} />
+              <span style={{ position: 'absolute', left: 5.5, top: 0, width: 2, height: 13, borderRadius: 2, background: 'currentColor', transform: 'rotate(45deg)' }} />
+            </span>
+            아이 정보
           </span>
-          아이 정보
         </button>
         {/* 조각 도장은 여기 없다 — 좌측 하단 카드가 맡는다(2026-09-07 지시). */}
       </div>
@@ -1053,10 +1067,13 @@ function SampleHud({ y }: { y: Yeoul }) {
     // 띠는 무대를 그만큼 잡아먹는다 — 아이가 주인공이라 여백을 최소로 잡았다.
     <div data-part="sample-hud" style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: narrow ? gap.xs : gap.sm, padding: narrow ? '4px 14px 4px' : '8px 20px 7px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
+        {/* ★ 누르는 자리 44px(판정 5) — 알약은 그대로, 띠 높이도 그대로(음수 여백). */}
         <button
           onClick={v.sample.exit} data-part="sample-exit"
-          style={{ display: 'flex', alignItems: 'center', gap: gap.xs, padding: '5px 11px 5px 9px', borderRadius: radius.pill, border: `1px solid ${C2.lineWarm}`, background: C2.paperWarm, fontSize: fz.sm, lineHeight: 1, color: C2.muted }}
-        >‹ 정보 수정</button>
+          style={{ display: 'flex', alignItems: 'center', minHeight: TAP_MIN, margin: '-10px 0', padding: 0, border: 'none', background: 'none' }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: gap.xs, padding: '5px 11px 5px 9px', borderRadius: radius.pill, border: `1px solid ${C2.lineWarm}`, background: C2.paperWarm, fontSize: fz.sm, lineHeight: 1, color: C2.muted }}>‹ 정보 수정</span>
+        </button>
         <span style={{ flex: 1 }} />
         {/* 알은 여전히 눌러서 알 화면으로 간다. 띠 안으로 들어온 만큼 고리·후광은 걷어냈다. */}
         <button
@@ -1373,11 +1390,18 @@ function ChatBar({ y }: { y: Yeoul }) {
           }}
           style={{ flex: 1, minWidth: 0, border: 'none', background: 'none', fontSize: fz.md, color: C.ink, outline: 'none' }}
         />
-        <button onClick={actions.closeChat} style={{ width: 28, height: 28, flex: 'none', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.sm, color: C.sub2, lineHeight: 1 }} aria-label="대화 닫기">✕</button>
+        {/* ★ 누르는 자리 44px(판정 5) — 동그라미는 28 그대로 두고 단추만 키운다(줄 높이 유지). */}
+        <button
+          onClick={actions.closeChat} aria-label="대화 닫기"
+          style={{ width: TAP_MIN, height: TAP_MIN, margin: '-8px 0', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', padding: 0 }}
+        >
+          <span style={{ width: 28, height: 28, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.sm, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</span>
+        </button>
         <button
           onClick={send} disabled={!v.chat.canSend} data-action="chat-send"
           style={{
-            flex: 'none', padding: pad.chip, borderRadius: radius.pill, border: 'none',
+            // ★ 누르는 자리 44px(판정 5) — 알약이 5px 두꺼워질 뿐 모양은 그대로다.
+            flex: 'none', minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: 'none',
             background: v.chat.canSend ? C.accent : C.off, color: v.chat.canSend ? C.accentInk : C2.dim2, fontSize: fz.md,
           }}
         >보내기</button>

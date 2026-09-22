@@ -5,7 +5,7 @@
 // 액자 = 벽에서 한 칸을 누르면 크게. 열린 칸은 저장·공유, 잠긴 칸은 조건만 알려 준다.
 'use client';
 
-import { C, C2, GAEGU, gap, radius, fz, ink, paperA } from './ui';
+import { C, C2, GAEGU, TAP_MIN, gap, radius, fz, ink, paperA } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
@@ -28,7 +28,13 @@ function Wall({ y }: { y: Yeoul }) {
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, color: C.ink }}>함께한 순간</span>
         <span style={{ fontSize: fz.sm, color: C.faint }}>{w.count}</span>
         <span style={{ flex: 1 }} />
-        <button onClick={w.close} style={{ width: 28, height: 28, borderRadius: radius.pill, border: `1px solid ${ink(.16)}`, background: paperA(.9), fontSize: fz.sm, color: C.sub, lineHeight: 1 }} aria-label="닫기">✕</button>
+        {/* ★ 누르는 자리 44px(판정 5) — 동그라미는 28 그대로, 단추만 키운다. */}
+        <button
+          onClick={w.close} aria-label="닫기"
+          style={{ width: TAP_MIN, height: TAP_MIN, margin: '-8px -8px -8px 0', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', border: 'none', background: 'none', padding: 0 }}
+        >
+          <span style={{ width: 28, height: 28, borderRadius: radius.pill, border: `1px solid ${ink(.16)}`, background: paperA(.9), fontSize: fz.sm, color: C.sub, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</span>
+        </button>
       </div>
 
       <div style={{

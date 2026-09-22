@@ -24,7 +24,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF, STEPS, UPLOAD_COPY } from './constants';
 import { LandingV2Stage, LandingV2Style } from '../../LandingV2';
 import { useAuth } from '@common/auth/useAuth';
-import { C, C2, GAEGU, MONO, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
+import { C, C2, GAEGU, MONO, TAP_MIN, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import { assetUrl } from '../../lib/assets';
 import { CHAR_TEXT_MAX } from '../../lib/pet';
@@ -52,12 +52,14 @@ const BASE_STYLE = `.onb-cgrid{ display:contents; }
 /* 랜딩 v2 무대를 온보딩 칸 안에 앉힌다. 무대의 마감(.zt-v2*)은 LandingV2.tsx 한 벌 그대로 쓰고,
    여기서는 **자리 잡기만** 한다 — 남는 높이를 먹고 세로 가운데로. 셸 크롬(.zt-v2page)은 안 붙인다. */
 .onb-v2stage{ flex:1 1 auto; min-height:0; }
-/* 뒤로 — 보이는 동그라미는 28px(시안 그대로)이고, **누르는 자리만** 44x44 로 넓힌다.
-   이 화면에서 유일한 비상구라(Nielsen #3) 손가락이 빗나가면 갈 곳이 없다. */
+/* 뒤로 — 보이는 동그라미는 28px(시안 그대로)이고, **누르는 자리만** 44x44 다.
+   이 화면에서 유일한 비상구라(Nielsen #3) 손가락이 빗나가면 갈 곳이 없다.
    ★ z-index 가 필요하다 — 넓힌 자리가 머리줄 밖(아래)으로 8px 나가는데, 뒤따르는 형제인
-   .onb-scroll 이 나중에 그려져 그 8px 을 덮는다(실측: 아래·오른쪽만 안 눌렸다). */
-.onb-back{ position:relative; z-index:1; }
-.onb-back::after{ content:''; position:absolute; inset:-8px; }`;
+   .onb-scroll 이 나중에 그려져 그 8px 을 덮는다(실측: 아래·오른쪽만 안 눌렸다).
+   ★ 2026-09-22 — 옛 투명 덧자리(::after 로 inset -8px)를 걷어냈다. 손가락에는 44 였지만
+   **상자 자체는 28** 이라 자로 재면 28 이었다(검사·스캔·포커스 테두리가 전부 28 로 본다).
+   이제 단추가 진짜 44 이고, 보이는 동그라미만 28 이다. 겉모양은 한 픽셀도 안 바뀐다. */
+.onb-back{ position:relative; z-index:1; }`;
 
 /**
  * OB-10 한 화면 맞춤 — `.onb-one` 안에서만. overflow 는 auto 그대로라 넘쳐도 클리핑 없이 스크롤로
@@ -393,7 +395,12 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             여울 샘플로 가고 부화가 0/4 로 지워졌다 — 되돌릴 수 없는 지점은 되돌아가지지 않아야 한다. */}
         {o.canBack && key !== 'born' && (
           // OB-08 — 뒤로 버튼 크롬만 랜딩 line/paper/pill 톤으로. onBack·canBack·라벨은 그대로.
-          <button onClick={actions.onBack} className="onb-back" style={{ border: `1px solid ${fDots ? C.lineHard : ink(.13)}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: fz.md, color: C.sub2, lineHeight: 1, ...(fDots ? { boxShadow: `0 1px 2px ${ink(.06)}` } : null) }} aria-label="뒤로">‹</button>
+          <button
+            onClick={actions.onBack} className="onb-back" aria-label="뒤로"
+            style={{ width: TAP_MIN, height: TAP_MIN, margin: -8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', padding: 0 }}
+          >
+            <span style={{ border: `1px solid ${fDots ? C.lineHard : ink(.13)}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: fz.md, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', ...(fDots ? { boxShadow: `0 1px 2px ${ink(.06)}` } : null) }}>‹</span>
+          </button>
         )}
         <span style={{ flex: 1 }} />
         {/* OB-08 — dots 개수·활성(d.w·d.bg)은 그대로, 모서리만 pill 로 다듬는다. */}
@@ -633,7 +640,9 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: gap.md }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
                     {g.opts.map((x) => (
-                      <button key={x.text} onClick={x.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: fz.md, color: x.fg }}>{x.text}</button>
+                      // ★ 누르는 자리 44px(2026-09-22 판정 5) — 같은 화면의 다른 칩과 규칙을 맞춘다.
+                      //   겉모양은 그대로다: 알약 높이만 39 → 44 로 커진다.
+                      <button key={x.text} onClick={x.pick} style={{ minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: fz.md, color: x.fg }}>{x.text}</button>
                     ))}
                   </div>
                   {(() => {
