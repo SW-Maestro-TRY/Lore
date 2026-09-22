@@ -95,8 +95,7 @@ export interface paths {
         };
         /**
          * 카드 상세
-         * @description 카드 한 장을 번호로 연다.
-          *     게시글에 적힌 번호로 카드를 열 때 부른다.
+         * @description 카드 한 장을 번호로 연다. 게시글에 적힌 번호로 카드를 열 때 부른다.
          *     목록이 준 카드에는 상세의 칸이 다 있어서, 목록에서 여는 상세는 이 API 를 부르지 않는다.
          *
          *     회수 칸 셋은 목록과 같은 규칙으로 N 기준으로 가린다.
@@ -743,6 +742,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/nh/jobs/{id}/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 완성 알림 받을 이메일
+         * @description 빈 값을 보내면 안 받겠다는 뜻이라 적어 둔 주소를 지운다.
+         */
+        post: operations["notify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/nh/jobs/{id}/page/{no}.png": {
         parameters: {
             query?: never;
@@ -769,7 +788,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 이야기 고르기 */
+        /**
+         * 이야기 고르기
+         * @description body 를 같이 보내면 그 방향의 본문을 사람이 고친 내용으로 바꿔서 다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.
+         */
         post: operations["pick"];
         delete?: never;
         options?: never;
@@ -848,6 +870,26 @@ export interface paths {
         get: operations["sheetImage"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/photo-presign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 게스트 사진 업로드 주소 발급
+         * @description 로그인 없이 S3 에 직접 올릴 임시 주소를 받는다. 10분간 유효.
+         */
+        post: operations["photoPresign"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1455,7 +1497,7 @@ export interface paths {
          *     - **보상은 지금 나가지 않는다.** 무엇을 줄지 아직 안 정해졌고, 정해지면 설정값만
          *       바꾸면 붙는다. 화면에 "무엇을 드립니다" 라고 쓰지 말 것
          */
-        post: operations["submit"];
+        post: operations["submit_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4018,30 +4060,6 @@ export interface operations {
                 "application/json": components["schemas"]["CreateRequest"];
             };
         };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    card: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                publicId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
