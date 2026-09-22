@@ -158,7 +158,15 @@ export interface Today {
   pets: number;
   /** 돌봄 친밀도 합산(상한 30). */
   careIntimacy: number;
-  /** 다른 행동 없이 연달아 준 간식 수(5면 배탈). */
+  /**
+   * **그날 준 간식 수**(5개째부터 배탈). 서버 `PetResponses.Today.snacks` 와 같은 칸이다.
+   * ★ 정본 §16 — **"연속" 은 보지 않는다.** 사이에 다른 행동이 끼어도 그날 5개째면 배탈이다.
+   */
+  snacks: number;
+  /**
+   * @deprecated `snacks` 로 대체됐다. **서버에는 이 칸이 없다** — 연속을 세던 옛 규칙의 이름이고,
+   *   지금 담기는 값은 `snacks` 와 **같은 하루 누적치**다(이름만 옛것). 쓰는 화면이 옮겨 가면 지운다.
+   */
   snackStreak: number;
   bathDone: boolean;
 }
@@ -176,8 +184,9 @@ export interface Pieces {
   bond: boolean;
   /** 지금 채워진 칸 수(0~4). 네 칸을 직접 세지 말고 이 값을 쓴다. */
   count: number;
-  /** 네 칸을 며칠 연속 채웠나(0~2). 2가 되는 밤에 다음 심화 하나가 큐에 오른다. */
-  streak: number;
+  // ★ 연속일수(`streak`) 칸은 없다. 서버 응답(`PetResponses.Pieces`)에 그 칸이 없는데도
+  //   타입에만 적혀 있어서, 화면이 늘 `undefined` 를 읽고 조용히 아무것도 안 그렸다.
+  //   타입에 적힌 것과 오는 것이 다르면 컴파일러가 못 잡는다 — 그래서 아예 지웠다.
   /** 기분 좋은 날의 선물 조각 — 네 칸 중 **가장 앞의 빈 칸**을 채운 것으로 친다. */
   bonus: boolean;
 }
@@ -406,6 +415,17 @@ export interface PetDetail {
   leaving: Leaving | null;
   trip: Trip | null;
   tutorial: Tutorial | null;
+  /**
+   * **첫날 축하 판을 본 시각**(ISO) — 안 봤으면 `null`. 떠난 아이에게도 남는다.
+   *
+   * ★★ 왜 서버가 들고 있나 — 이 판은 "한 번만" 이 목숨인 판이다. 예전에는 탭 기억
+   *   (`sessionStorage`)으로만 막아서, **새 탭·앱 재시작·다른 기기면 또 떴다**
+   *   (2026-09-22 dev 재현). 사람 기준으로 한 번이려면 사람 편에 남는 곳은 서버뿐이다.
+   * ★ **배포 전에는 이 칸이 안 온다.** 그때는 `undefined` 라 `!= null` 이 거짓이 되고, 화면은
+   *   예전처럼 탭 기억으로만 막는다 — 없다고 깨지지 않고, 오면 저절로 서버 기준으로 올라선다.
+   * ⚠️ 손으로 적은 칸이다(위 `graduationSeen` 머리말의 걷어내는 조건과 한 짝).
+   */
+  graduationSeenAt?: string | null;
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */
@@ -426,18 +446,47 @@ export interface Drafted {
 /**
  * 캐릭터 정보. **이름 말고는 전부 선택**이다.
  *
- * ★ 그림 생성에 들어가는 것은 `note` 뿐이다 — 성격·세계관은 대사 톤에만 쓰인다.
+ * ★★ **어느 칸도 그림 생성에 안 들어간다**(정본 1.6 · 서버 `PetRequests` 기준 · 2026-09-22 정정).
+ *   옛 주석은 *"그림 생성에 들어가는 것은 `note` 뿐"* 이라고 적어 두었는데 **사실이 아니었다.**
+ *   그림은 **올린 그림 한 장**에서만 나온다 — 온보딩에서 받는 말(성격·말투·장르·세계관·그 밖에)은
+ *   전부 **대사와 말투**에만 쓰인다. 이 주석을 믿고 "그림을 바꾸려면 `note` 를 고치라" 고
+ *   안내하면 그대로 거짓말이 된다.
  */
 export interface CharacterInput {
   /** 12자 이하(정본 15장). */
   name: string;
   /** 성격. 대사 톤에 쓰인다. 선택 */
   personality?: Personality;
-  /** 세계관·설정. 100자 이하. 선택 */
+  /** 세계관·설정. **고른 칩까지 합쳐** `CHAR_TEXT_MAX.world` 자 이하. 선택 */
   world?: string;
-  /** 그 밖에 알려 주고 싶은 것. 200자 이하. 선택. ★ 이것만 그림 생성에 참고된다 */
+  /** 그 밖에 알려 주고 싶은 것. `CHAR_TEXT_MAX.extra` 자 이하. 선택. ★ **그림이 아니라 대사에 쓰인다**(위 머리말). */
   note?: string;
 }
+
+/**
+ * 캐릭터 정보 자유 입력칸의 **글자 수 상한 한 벌.**
+ *
+ * ★★ **한 곳에만 둔다.** 이 숫자는 최소 세 곳이 같이 봐야 한다 —
+ *   화면의 `maxLength`(Onboarding) · 상태에 담을 때의 자르기(useYeoul) · 서버 `@Size`.
+ *   전에는 useYeoul 이 혼자 60 으로 자르고 있어서, 화면이 100 을 열어도 **60에서 조용히 멎었다.**
+ *   갈리면 조용히 틀리는 종류라 계약(이 파일) 옆에 둔다.
+ *
+ * ★ 2026-09-22 상훈님 판정("칸 별로 알아서 해 넉넉하게") 뒤 값이며, 백엔드가 같은 날
+ *   `TONE/GENRE 32 -> 100` · `WORLD 100 -> 200` 으로 넓히는 중이다.
+ *   **그 배포 전에는 서버가 옛 한도로 거절할 수 있고, 그건 고장이 아니다.**
+ *
+ * ★ `world` 는 서버 **한 칸**에 고른 칩과 직접 쓴 말이 ` · ` 로 이어져 함께 담긴다.
+ *   그래서 입력칸 자체의 상한은 이 숫자가 아니라 **칩이 먹고 남은 자리**다(화면이 계산한다).
+ * ★ `persona` 는 아직 보내는 자리가 없다(위 `CharacterInput`). 화면에만 남아 잘릴 일이 없으므로
+ *   넉넉히 두고, 보내기 시작할 때 서버 칸과 다시 맞춘다.
+ */
+export const CHAR_TEXT_MAX: Record<string, number> = {
+  persona: 200,
+  tone: 100,
+  genre: 100,
+  world: 200,
+  extra: 200,
+};
 
 /** 부화 진행 — 알 화면이 몇 초마다 되풀이해 묻는다. */
 export interface HatchProgress {
@@ -521,6 +570,23 @@ export function draftPet(imageKey: string): Promise<Drafted> {
   return request<Drafted>(`${PET_BASE}/draft`, { method: 'POST', body: { imageKey } });
 }
 
+/**
+ * 보고 싶은 동작 한 줄 남기기.
+ *
+ * ★★ **본문 없는 응답(204)을 받는 첫 API 다.** 공통 클라이언트는 본문을 `res.text()` 로 한 번만
+ *   읽고 비어 있으면 봉투를 `null` 로 두므로(`common/fe/api/client.ts` 의 `readEnvelope`),
+ *   204 가 그대로 성공으로 흘러간다. `res.json()` 을 부르는 자리가 없어야 이게 유지된다 —
+ *   누가 그걸 넣으면 **성공한 요청이 실패로 보이고**, 화면은 안 보낸 줄 알고 한 번 더 보낸다.
+ * ★ 사람이 쓴 글은 **이 API 로만** 나간다. 행동 기록(`POST /api/v1/events`)은 허용 키 밖의 값을
+ *   조용히 버리므로, 그쪽에는 "남겼다" 는 사실만 고정된 이름으로 간다.
+ *
+ * 실패 코드 — 400 INVALID_INPUT(공백뿐이거나 60자 초과) · 401(비로그인) ·
+ * 404 ZZAL_PET_NOT_FOUND(남의 펫) · 409 ZZAL_MOTION_WISH_DAILY_LIMIT(하루 20줄).
+ */
+export function motionWish(petId: number, text: string): Promise<void> {
+  return request<void>(`${PET_BASE}/${petId}/motion-wish`, { method: 'POST', body: { text } });
+}
+
 /** 캐릭터 정보 등록 — 여기서 **격자 생성이 시작된다.** 알이 흔들리기 시작하는 자리. */
 export function setCharacter(petId: number, input: CharacterInput): Promise<PetCreated> {
   return request<PetCreated>(`${PET_BASE}/draft/${petId}/character`, { method: 'POST', body: input });
@@ -570,6 +636,37 @@ export function wake(petId: number): Promise<PetDetail> {
  */
 export function tutorialDone(petId: number): Promise<PetDetail> {
   return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/done`, { method: 'POST' });
+}
+
+/**
+ * 튜토리얼 **4칸("이 성격이 맞나요")을 넘긴다 — 아이 정보를 확인만 해도.**
+ *
+ * ★★ 성격을 **안 골라도 넘어간다**(서버 `PetService.tutorialSeen`, 2026-09-11 확정:
+ *   *"성격을 한 번도 안 고른 사람은 null 인 채 지나간다 — 그래도 된다"*). 성격을 고른 사람은
+ *   `setPersonality` 가 저장과 함께 같은 칸을 넘겨 주므로, 이 호출은 **안 고르고 확인만 한 길**이다.
+ * ★ 화면이 혼자 넘기면 안 된다 — 서버가 4칸에 남아 있으면 그다음 행동(청소)이 무시되고,
+ *   **첫 흔적이 이 칸을 넘길 때 생기므로** 바닥이 깨끗해 5칸에서 또 막힌다(서버 주석).
+ * ★ 지금 칸이 4칸이 아니면 409 `ZZAL_TUTORIAL_STEP_MISMATCH`.
+ */
+export function tutorialSeen(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/seen`, { method: 'POST' });
+}
+
+/**
+ * 첫날 축하 판을 **봤다고 남긴다**(2026-09-22 · 백엔드 확정 스펙).
+ *
+ * ★★ **본문 없이 204 이고 공통 봉투를 안 탄다.** 공통 클라이언트가 빈 본문을 `null` 로 두므로
+ *   그대로 성공으로 흘러간다(`motionWish` 와 같은 자리). **응답을 파싱하지 말 것** —
+ *   `res.json()` 류가 끼면 **성공한 요청이 실패로 뒤집힌다.**
+ * ★ **멱등**이다. 잠든·여행 중·튜토리얼 미완료여도 204 라, 거절 갈래가 사실상 `404
+ *   ZZAL_PET_NOT_FOUND` 하나뿐이다. 그래서 화면이 "보냈는지" 를 따로 기억하지 않는다 —
+ *   실패하면 다음에 또 보내면 된다(→ `useHatch.markGraduationSeen`).
+ * ⚠️ **임시로 손으로 적은 자리다.** 자동 생성 타입(`lib/api-schema.ts`)에는 아직 이 주소가 없다.
+ *   재생성본은 백엔드 `feat/zzal-game-abandon`(`b890ff2`·`f6f76dd`)에 있고, 그것이 합쳐져
+ *   `api-schema.ts` 에 `graduation-seen` 이 생기면 **이 손글씨를 걷어낸다.**
+ */
+export function graduationSeen(petId: number): Promise<void> {
+  return request<void>(`${PET_BASE}/${petId}/graduation-seen`, { method: 'POST' });
 }
 
 /** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */

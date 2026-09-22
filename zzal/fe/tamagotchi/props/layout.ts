@@ -68,6 +68,8 @@ export function poseAnchors(anchors: CharAnchors, pose: string): PoseAnchors {
 //   Hw 도 87.7 vs 117.6 으로 **똑같이 1.34배** 어긋났다(자가 아니라 그림이 작았다는 뜻).
 // 원인은 여백이다. `K_screen = 296` 은 여백이 적던 **옛 idle.webp** 로 잰 값이고,
 // v4/v6 스프라이트는 후처리가 위아래 여백을 더 넣어 같은 상자에서 실루엣이 더 작게 그려진다.
+// (정본 v02 = `demo/v7` 은 그 여백을 다시 줄여 K 239→274 로 돌아왔다. 그래도 **상자가 아니라 K 로
+//  배율을 잡는** 이 규칙은 그대로다 — 판마다 여백이 달라져도 화면 키가 안 흔들리는 것이 요점이다.)
 // 그래서 **상자 폭이 아니라 K 로 배율을 잡는다** — 그러면 캐릭터가 달라도 화면 키가 같아진다.
 
 /** 규격이 전제한 **화면에서의 실루엣 키**(px). 출처 = 소품-규격-v1.2 `reference.K_screen`. */
@@ -91,14 +93,51 @@ export interface CharFit {
    * `발끝선(LIFT) + CHAR_H×이 값` 이 곧 **머리끝 자리**다 — 말풍선을 머리 위로 띄우는 데 쓴다.
    */
   headSpanPerBoxH: number;
+  /**
+   * **모든 자세 중 가장 높은 머리끝**(머리끝→발끝 ÷ 캔버스). 자세를 안 본다.
+   *
+   * ★★ 말풍선이 **자리를 얼마나 예약할지**는 이 값으로 정한다(2026-09-22). 지금 자세의
+   *   머리 높이(`headSpanPerBoxH`)로 정하면 **누운 자세에서 머리가 낮아 말풍선이 그냥 들어가고**,
+   *   예약이 0 이 되면서 아이가 갑자기 커진다(dev 실측: 자면 365 → 478px). 크기는 화면 크기만의
+   *   함수여야 한다는 이 파일의 규칙(`tallestPerK` 머리말)과 같은 이유다.
+   * ★ 말풍선을 **어디에 그릴지**는 여전히 지금 자세(`headSpanPerBoxH`)를 본다 — 말풍선은
+   *   지금 그 머리 위에 떠야 하니까. 예약(크기)과 자리(위치)를 가른다.
+   */
+  headSpanTallestPerBoxH: number;
+  /**
+   * 이 자세 실루엣의 **왼쪽·오른쪽 가장자리 ÷ 상자 가로**(0~1). 상자에는 투명 여백이 들어 있어
+   * 상자 폭으로 "아이 옆에 얼마나 남았나" 를 재면 틀린다 — 말풍선을 머리 옆으로 비킬 때 쓴다.
+   */
+  silLeftPerBoxW: number;
+  silRightPerBoxW: number;
+  /**
+   * **선 자세(가장 키 큰 자세)의 실루엣 좌·우.** 자세를 안 본다.
+   *
+   * ★★ 옆자리가 되느냐도 **자세마다 갈리면 안 된다**(2026-09-22). 누운 자세는 실루엣이 옆으로
+   *   넓어서, 지금 자세로 재면 서 있을 때만 옆에 들어가고 누우면 못 들어가 아이가 출렁인다
+   *   (1200 실측: 서면 479.7 · 누우면 368.8).
+   * ★ **가장 넓은 자세가 아니라 선 자세**로 잡는다 — 넓은 자세 기준으로 재면 넓은 화면에서도
+   *   옆자리가 막혀 아이가 24% 작아진다(실측 479.7 → 364.4). 옆에 두는 판단의 본뜻은
+   *   "이 화면은 아이 양옆이 넉넉한가" 이고, 그 기준은 평소 서 있는 모습이다.
+   *   누운 자세에서는 말풍선이 몸에 가까워질 수 있는데, 자는 동안에는 말풍선을 아예 안 띄운다.
+   */
+  silLeftUprightPerBoxW: number;
+  silRightUprightPerBoxW: number;
+  /**
+   * 이 자세의 **머리 옆선(head_side) 높이 ÷ 캔버스 세로**. `발끝선 + 상자세로 x 이 값` 이
+   * 곧 얼굴 높이다 — 머리 옆으로 비킨 말풍선의 세로 한가운데를 여기에 맞춘다.
+   */
+  headSidePerBoxH: number;
 }
 
 /**
  * 그 아이·그 자세의 상자 비율.
  *
  * ★ 배율(= 화면 K)은 자세를 안 본다 — 웅크렸다고 아이가 작아진 게 아니다(규격 `읽는_법`).
- * ★ **세로 자리만 자세를 본다.** v6 2층 그림은 발끝이 캔버스 267px(1층은 289px)에 있어,
- *   base 로만 맞추면 2층 자세가 발끝선 위 27px 에 뜬다(실측).
+ * ★ **세로 자리만 자세를 본다.** 옛 v6 그림은 발끝이 1층 289px · 2층 267px 로 **22px 벌어져** 있어,
+ *   base 로만 맞추면 2층 자세가 발끝선 위로 떴다(실측). 정본 v02(=`demo/v7`)는 16 자세 전부
+ *   318~319px 라 이 보정이 거의 0 이지만, **자세별로 읽는 구조는 그대로 둔다** — 다음 판이 또
+ *   벌어질 수 있고, 그때 조용히 틀리는 것보다 낫다.
  * ★ `tallestPerK` 는 **모든 자세 중 가장 큰 실루엣**으로 잡는다. 자세마다 깎으면 자세를 바꿀 때
  *   아이 크기가 출렁인다 — 크기는 화면 크기만의 함수여야 한다.
  */
@@ -106,13 +145,25 @@ export function charFit(anchors: CharAnchors, pose: string): CharFit {
   const [canvasW, canvasH] = anchors.canvas;
   const p = poseAnchors(anchors, pose);
   let tallest = 0;
-  for (const q of Object.values(anchors.poses)) tallest = Math.max(tallest, q.bbox.h);
+  let headSpanTallest = 0;
+  let upright: typeof p | null = null;
+  for (const q of Object.values(anchors.poses)) {
+    tallest = Math.max(tallest, q.bbox.h);
+    const span = (q.feet.y - q.head_top.y) / canvasH;
+    if (span > headSpanTallest) { headSpanTallest = span; upright = q; }
+  }
   return {
     boxHPerK: canvasH / anchors.K,
     aspect: canvasW / canvasH,
     belowFoot: (canvasH - p.feet.y) / canvasH,
     tallestPerK: (tallest > 0 ? tallest : anchors.K) / anchors.K,
     headSpanPerBoxH: (p.feet.y - p.head_top.y) / canvasH,
+    headSpanTallestPerBoxH: headSpanTallest > 0 ? headSpanTallest : (p.feet.y - p.head_top.y) / canvasH,
+    silLeftPerBoxW: p.bbox.x / canvasW,
+    silRightPerBoxW: (p.bbox.x + p.bbox.w) / canvasW,
+    silLeftUprightPerBoxW: (upright ?? p).bbox.x / canvasW,
+    silRightUprightPerBoxW: ((upright ?? p).bbox.x + (upright ?? p).bbox.w) / canvasW,
+    headSidePerBoxH: (p.feet.y - p.head_side.y) / canvasH,
   };
 }
 

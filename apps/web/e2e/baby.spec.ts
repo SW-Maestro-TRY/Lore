@@ -34,9 +34,8 @@ test('아기 시간표 아홉 칸을 순서대로 지난다(정본 §12)', async
     expect(await call(page), key).toBe(`baby:${key}`);
     await doBabyStep(page, key);
   }
-  // 낮잠: 재우기 → 5분 뒤 깨우기(도 doBabyStep 이 함). 깬 뒤 상태
+  // 낮잠: 재우기 → **곧바로** 깨우기(doBabyStep 이 함 · 정본 §16 1.4). 깬 뒤 상태
   expect(await status(page)).not.toBe('nap');
-  await advance(page, 16 * MIN);
   // 여덟 칸을 다 밟으면 아홉째 칸(DONE)이 온다. 정본 §12 표에서 **누를 것이 "—"** 인 유일한 칸이라
   // 화면이 스스로 끝낸다 — 그 호출이 시계를 켜고, 켜진 순간이 곧 졸업이다.
   // ★ 아홉 칸을 다 한 사람에게 서버는 tutorial 블록을 null 로 준다(계약 해석 9). 그래도 종료 문구는

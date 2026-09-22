@@ -15,13 +15,13 @@
 
 import {
   answerChat, care, draftPet, setCharacter, getHatchProgress, getAlbum, getChat, getPet, listPets, markMotionSeen, setBackground,
-  setPersonality, share, sleep, tutorialDone, wake,
+  setPersonality, share, sleep, tutorialDone, graduationSeen, wake,
   type Album, type CareAction, type ChatSlot, type ChatState, type CharacterInput, type Drafted, type HatchProgress,
   type PetCreated, type PetDetail, type Personality, type Shared, type ShareKind,
 } from './pet';
 import {
-  getCurrentGame, guess, startGame,
-  type GameKind, type GameState, type GuessResult, type Side,
+  abandonGame, getCurrentGame, guess, startGame,
+  type AbandonResult, type GameKind, type GameState, type GuessResult, type Side,
 } from './game';
 
 export interface PetSource {
@@ -41,6 +41,8 @@ export interface PetSource {
   wake(petId: number): Promise<PetDetail>;
   /** 튜토리얼 마지막 칸 — 시계가 켜진다. */
   tutorialDone(petId: number): Promise<PetDetail>;
+  /** 첫날 축하 판을 봤다고 남긴다(본문 없음 · 204 · 멱등). */
+  graduationSeen(petId: number): Promise<void>;
   setPersonality(petId: number, personality: Personality, world?: string): Promise<PetDetail>;
   setBackground(petId: number, background: string): Promise<PetDetail>;
   share(petId: number, motionKey: string, kind: ShareKind): Promise<Shared>;
@@ -54,16 +56,21 @@ export interface PetSource {
 
   startGame(petId: number, kind?: GameKind): Promise<GameState>;
   guess(petId: number, gameId: number, pick: Side): Promise<GuessResult>;
+  /**
+   * 치던 판을 접는다(기권). **목도 같은 규칙을 지킨다** — 연습방의 ✕ 가 진짜 방과 다르게
+   * 굴면 연습이 거짓말이 된다.
+   */
+  abandonGame(petId: number, gameId: number): Promise<AbandonResult>;
   getCurrentGame(petId: number, signal?: AbortSignal): Promise<GameState>;
 }
 
 /** 실서버. pet.ts·game.ts 의 함수를 그대로 묶은 것이라 여기엔 규칙이 없다. */
 export const httpPetSource: PetSource = {
   kind: 'http',
-  draftPet, setCharacter, getHatchProgress, listPets, getPet, care, sleep, wake, tutorialDone, setPersonality,
+  draftPet, setCharacter, getHatchProgress, listPets, getPet, care, sleep, wake, tutorialDone, graduationSeen, setPersonality,
   setBackground, share,
   getChat, answerChat, markMotionSeen, getAlbum,
-  startGame, guess, getCurrentGame,
+  startGame, guess, abandonGame, getCurrentGame,
 };
 
 let mockSingleton: PetSource | null = null;

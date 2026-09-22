@@ -24,7 +24,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { track } from '@common/analytics';
 import { ApiError } from '../lib/api';
 import { getMyFeedback, submitFeedback, type FeedbackTag } from '../lib/feedback';
-import { C, GAEGU as Y_GAEGU, radius, sel } from './yeoul/ui';
+import { C, C2, GAEGU as Y_GAEGU, gap, radius, sel, fz, ink, pad } from './yeoul/ui';
 
 const PEN = "'Nanum Pen Script',cursive";
 const GAEGU = "'Gaegu',cursive";
@@ -264,10 +264,16 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
 
   return (
     <>
-      {/* 작은 상시 링크. 첫 판을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
+      {/* 작은 링크. 첫 판(띠)을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
           ★ 띠가 떠 있는 동안에는 안 그린다 — 같은 자리에 "한 장 남기기" 가 이미 있어서
-            같은 뜻의 손잡이가 두 줄로 겹친다(여울에서 실측). 띠를 닫으면 다시 나온다. */}
-      {!submitted && !banner && !preview && (
+            같은 뜻의 손잡이가 두 줄로 겹친다(여울에서 실측). 띠를 닫으면 다시 나온다.
+          ★★ **받은 움직임이 있을 때만 그린다**(2026-09-22 상훈님 판정 E). 예전에는 이 링크만
+            `advancedArrived` 를 안 봐서, **아무것도 못 받은 첫날 튜토리얼 1칸부터** 떠 있었다
+            (dev 실측). 띠가 "받은 움직임이 실제로 있을 때만 묻는다" 로 참는 동안 링크가 먼저
+            물어보고 있었던 셈이다. 두 손잡이가 같은 기준을 본다.
+          ★ 곁들여 얻는 것 — 이 줄이 사라지면 **무대가 24px 돌아온다**(머리줄과 무대 사이에
+            끼어 있던 16px + 여백). 아이가 커 보이던 문제의 실제 해결분이다. */}
+      {!submitted && !banner && !preview && advancedArrived && (
         <button data-action="feedback-open" onClick={openFromDex} style={T.link}>
           후기 남기기
         </button>
@@ -304,7 +310,7 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
                 <h3 style={T.h3}>받은 움직임, 어땠어요?</h3>
 
                 <span style={T.label}>별점</span>
-                <div style={{ display: 'flex', gap: 4, margin: '6px 0 16px' }}>
+                <div style={{ display: 'flex', gap: gap.xs, margin: '6px 0 16px' }}>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
                       key={n}
@@ -321,7 +327,7 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
                 <span style={T.label}>
                   이런 점은 어땠나요 <span style={T.labelHint}>(여러 개)</span>
                 </span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, margin: '8px 0 16px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm, margin: '8px 0 16px' }}>
                   {CHIPS.map((c) => (
                     <button
                       key={c.tag}
@@ -348,7 +354,7 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
 
                 {error && <p style={T.error}>{error}</p>}
 
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: gap.sm, marginTop: 12 }}>
                   <button data-action="feedback-close" onClick={close} style={T.ghost}>나중에</button>
                   {/* 별점 없이는 보낼 수 없다. 누를 수 있을 때는 aria-disabled 를 아예 붙이지
                       않는다 — "false" 를 비활성으로 읽는 도구가 있다(스크랩북의 돌봄 버튼과 같은 규칙). */}
@@ -389,23 +395,23 @@ type Tone = {
 /** 스크랩북 결 — 누런 종이 · 테이프 · 펜글씨. */
 const S: Tone = {
   banner: {
-    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+    display: 'flex', alignItems: 'center', gap: gap.sm, flexWrap: 'wrap',
     margin: '12px 0 0', padding: '10px 12px',
     background: '#FBEFA8', border: '1px solid ' + EDGE, borderRadius: 3,
     boxShadow: '2px 3px 0 rgba(58,53,43,.14)',
   } as CSSProperties,
-  bannerText: { flex: '1 1 auto', fontFamily: GAEGU, fontWeight: 700, fontSize: 16, color: INK } as CSSProperties,
+  bannerText: { flex: '1 1 auto', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.lg, color: INK } as CSSProperties,
   bannerYes: {
-    border: '1px solid ' + INK, background: PAPER, borderRadius: 3, padding: '5px 10px',
-    cursor: 'pointer', fontFamily: GAEGU, fontWeight: 700, fontSize: 14, color: INK,
+    border: '1px solid ' + INK, background: PAPER, borderRadius: 3, padding: pad.tiny,
+    cursor: 'pointer', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.md, color: INK,
   } as CSSProperties,
   bannerNo: {
     border: 'none', background: 'none', padding: '5px 4px', cursor: 'pointer',
-    fontFamily: PEN, fontSize: 16, color: SUB,
+    fontFamily: PEN, fontSize: fz.lg, color: SUB,
   } as CSSProperties,
   link: {
     border: 'none', background: 'none', padding: 0, cursor: 'pointer',
-    fontFamily: PEN, fontSize: 18, color: SUB, textDecoration: 'underline',
+    fontFamily: PEN, fontSize: fz.xl, color: SUB, textDecoration: 'underline',
     textUnderlineOffset: 3, textDecorationStyle: 'dotted',
   } as CSSProperties,
   overlay: {
@@ -431,39 +437,39 @@ const S: Tone = {
     borderLeft: '1px solid rgba(196,175,124,.5)', borderRight: '1px solid rgba(196,175,124,.5)',
     transform: 'rotate(-2deg)',
   } as CSSProperties,
-  eyebrow: { margin: '0 0 2px', fontFamily: PEN, fontSize: 20, color: RED, lineHeight: 1 } as CSSProperties,
-  h3: { margin: '0 0 14px', fontFamily: GAEGU, fontWeight: 700, fontSize: 21, color: INK } as CSSProperties,
-  thanksEyebrow: { margin: '4px 0 8px', fontFamily: PEN, fontSize: 21, color: SUB } as CSSProperties,
-  thanksBody: { margin: '0 0 16px', fontFamily: GAEGU, fontWeight: 700, fontSize: 18, color: INK, lineHeight: 1.5 } as CSSProperties,
-  label: { fontFamily: GAEGU, fontWeight: 700, fontSize: 15, color: '#5C5445' } as CSSProperties,
-  labelHint: { fontSize: 12, color: '#A79C82' } as CSSProperties,
-  counter: { alignSelf: 'flex-end', marginTop: 5, fontFamily: "'Nanum Gothic Coding',monospace", fontSize: 11, color: '#A79C82' } as CSSProperties,
+  eyebrow: { margin: '0 0 2px', fontFamily: PEN, fontSize: fz.h2, color: RED, lineHeight: 1 } as CSSProperties,
+  h3: { margin: '0 0 14px', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, color: INK } as CSSProperties,
+  thanksEyebrow: { margin: '4px 0 8px', fontFamily: PEN, fontSize: fz.h2, color: SUB } as CSSProperties,
+  thanksBody: { margin: '0 0 16px', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.xl, color: INK, lineHeight: 1.5 } as CSSProperties,
+  label: { fontFamily: GAEGU, fontWeight: 700, fontSize: fz.lg, color: '#5C5445' } as CSSProperties,
+  labelHint: { fontSize: fz.sm, color: '#A79C82' } as CSSProperties,
+  counter: { alignSelf: 'flex-end', marginTop: 5, fontFamily: "'Nanum Gothic Coding',monospace", fontSize: fz.xs, color: '#A79C82' } as CSSProperties,
   star: (on: boolean): CSSProperties => ({
     border: 'none', background: 'none', padding: '0 2px', cursor: 'pointer',
-    fontSize: 30, lineHeight: 1, color: on ? '#E0A93F' : '#DCD2B8', transition: 'color .12s',
+    fontSize: fz.h0, lineHeight: 1, color: on ? '#E0A93F' : '#DCD2B8', transition: 'color .12s',
   }),
   chip: (on: boolean): CSSProperties => ({
     minHeight: 38, padding: '0 12px', borderRadius: 3,
     border: '1px solid ' + (on ? '#A2543F' : EDGE),
     background: on ? RED : PAPER, color: on ? '#FFF8EC' : INK,
-    fontFamily: GAEGU, fontWeight: 700, fontSize: 14, cursor: 'pointer',
+    fontFamily: GAEGU, fontWeight: 700, fontSize: fz.md, cursor: 'pointer',
     boxShadow: '2px 2px 0 rgba(58,53,43,.09)',
   }),
   textarea: {
     marginTop: 8, padding: '10px 12px', border: 'none', borderBottom: '2px solid #D6CBAE',
     background: 'rgba(255,255,255,.5)', color: INK,
-    fontFamily: GAEGU, fontSize: 15, lineHeight: 1.6, resize: 'none',
+    fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.6, resize: 'none',
   } as CSSProperties,
-  error: { margin: '10px 0 0', fontSize: 13, color: RED } as CSSProperties,
+  error: { margin: '10px 0 0', fontSize: fz.md, color: RED } as CSSProperties,
   ghost: {
     flex: 1, minHeight: 48, borderRadius: 3, border: '1px solid ' + EDGE,
-    background: PAPER, color: '#5C5445', fontFamily: GAEGU, fontWeight: 700, fontSize: 16, cursor: 'pointer',
+    background: PAPER, color: '#5C5445', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.lg, cursor: 'pointer',
   } as CSSProperties,
   send: (off: boolean): CSSProperties => ({
     flex: 1, minHeight: 48, borderRadius: 3,
     border: '1px solid ' + (off ? '#DCD2B8' : '#2F2A22'),
     background: off ? 'rgba(230,224,206,.8)' : INK, color: off ? '#A79C82' : '#FFF8EC',
-    fontFamily: GAEGU, fontWeight: 700, fontSize: 16, cursor: off ? 'default' : 'pointer',
+    fontFamily: GAEGU, fontWeight: 700, fontSize: fz.lg, cursor: off ? 'default' : 'pointer',
   }),
 };
 
@@ -481,47 +487,47 @@ const S: Tone = {
  */
 const Y: Tone = {
   banner: {
-    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-    flex: 'none', margin: '0 20px 9px', padding: '10px 13px',
+    display: 'flex', alignItems: 'center', gap: gap.sm, flexWrap: 'wrap',
+    flex: 'none', margin: '0 20px 9px', padding: pad.chip,
     borderRadius: radius.md, background: C.accentSoft, border: `1px solid ${C.accentDim}`,
     animation: 'yPop .26s ease',
   },
-  bannerText: { flex: '1 1 auto', minWidth: 0, fontFamily: Y_GAEGU, fontWeight: 700, fontSize: 17, lineHeight: 1.25, color: C.ink },
+  bannerText: { flex: '1 1 auto', minWidth: 0, fontFamily: Y_GAEGU, fontWeight: 700, fontSize: fz.xl, lineHeight: 1.25, color: C.ink },
   bannerYes: {
     flex: 'none', border: 'none', background: C.accent, color: C.accentInk,
-    borderRadius: radius.pill, padding: '7px 14px', fontSize: 12.5, cursor: 'pointer',
+    borderRadius: radius.pill, padding: '7px 14px', fontSize: fz.md, cursor: 'pointer',
   },
-  bannerNo: { flex: 'none', border: 'none', background: 'none', padding: '7px 5px', fontSize: 12, color: C.faint, cursor: 'pointer' },
+  bannerNo: { flex: 'none', border: 'none', background: 'none', padding: '7px 5px', fontSize: fz.sm, color: C.faint, cursor: 'pointer' },
   // 띠를 닫은 사람이 나중에 다시 찾을 유일한 길. 방 화면에 늘 떠 있으므로 **가장 조용한 한 줄**이다.
   link: {
     alignSelf: 'flex-end', flex: 'none', margin: '0 20px 8px',
     border: 'none', background: 'none', padding: 0, cursor: 'pointer',
-    fontSize: 11.5, color: C.faint, textDecoration: 'underline',
+    fontSize: fz.sm, color: C.faint, textDecoration: 'underline',
     textUnderlineOffset: 3, textDecorationStyle: 'dotted',
   },
   overlay: {
     position: 'absolute', inset: 0, zIndex: 13,
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22,
   },
-  dim: { position: 'absolute', inset: 0, background: 'rgba(74,64,56,.52)', animation: 'yFadeIn .2s ease' },
+  dim: { position: 'absolute', inset: 0, background: ink(.52), animation: 'yFadeIn .2s ease' },
   card: {
     position: 'relative', width: '100%', maxWidth: 420, maxHeight: '88%', overflowY: 'auto',
     display: 'flex', flexDirection: 'column', boxSizing: 'border-box',
     background: C.paper, border: 'none', borderRadius: radius.xl,
-    padding: '22px 22px 20px', boxShadow: '0 12px 30px rgba(74,64,56,.2)',
+    padding: '22px 22px 20px', boxShadow: `0 12px 30px ${ink(.2)}`,
     animation: 'yPop .3s ease',
   },
   // 테이프는 스크랩북의 것이다. 여울은 종이를 붙이지 않는다 — 자리를 비워 둔다.
   tape: {},
-  eyebrow: { margin: '0 0 3px', fontFamily: Y_GAEGU, fontSize: 18, color: C.accent, lineHeight: 1 },
-  h3: { margin: '0 0 16px', fontFamily: Y_GAEGU, fontWeight: 700, fontSize: 24, lineHeight: 1.25, color: C.ink },
-  thanksEyebrow: { margin: '4px 0 8px', fontFamily: Y_GAEGU, fontSize: 18, color: C.accent },
-  thanksBody: { margin: '0 0 18px', fontFamily: Y_GAEGU, fontWeight: 700, fontSize: 20, lineHeight: 1.45, color: C.ink },
-  label: { fontSize: 11.5, color: C.faint },
-  labelHint: { fontSize: 11, color: C.faint2 },
+  eyebrow: { margin: '0 0 3px', fontFamily: Y_GAEGU, fontSize: fz.xl, color: C.accent, lineHeight: 1 },
+  h3: { margin: '0 0 16px', fontFamily: Y_GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.25, color: C.ink },
+  thanksEyebrow: { margin: '4px 0 8px', fontFamily: Y_GAEGU, fontSize: fz.xl, color: C.accent },
+  thanksBody: { margin: '0 0 18px', fontFamily: Y_GAEGU, fontWeight: 700, fontSize: fz.h2, lineHeight: 1.45, color: C.ink },
+  label: { fontSize: fz.sm, color: C.faint },
+  labelHint: { fontSize: fz.xs, color: C.faint2 },
   star: (on: boolean): CSSProperties => ({
     border: 'none', background: 'none', padding: '0 2px', cursor: 'pointer',
-    fontSize: 30, lineHeight: 1, color: on ? '#E0A93F' : C.accentDim, transition: 'color .12s',
+    fontSize: fz.h0, lineHeight: 1, color: on ? '#E0A93F' : C.accentDim, transition: 'color .12s',
   }),
   // 칩은 시안의 고름 표시(`sel`)를 그대로 쓴다 — 온보딩·아이 정보의 칩과 같은 모양이어야 한다.
   chip: (on: boolean): CSSProperties => {
@@ -529,24 +535,24 @@ const Y: Tone = {
     return {
       minHeight: 36, padding: '0 13px', borderRadius: radius.pill,
       border: `${k.bw} solid ${k.bd}`, background: k.bg, color: k.fg,
-      fontSize: 12.5, cursor: 'pointer',
+      fontSize: fz.md, cursor: 'pointer',
     };
   },
   textarea: {
-    marginTop: 8, padding: '11px 13px', borderRadius: radius.md,
+    marginTop: 8, padding: pad.card, borderRadius: radius.md,
     border: `1px solid ${C.line}`, background: C.paper, color: C.ink,
-    fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7, resize: 'none', outline: 'none',
+    fontFamily: 'inherit', fontSize: fz.md, lineHeight: 1.7, resize: 'none', outline: 'none',
   },
-  counter: { alignSelf: 'flex-end', marginTop: 6, fontSize: 11, color: C.faint2 },
-  error: { margin: '10px 0 0', fontSize: 12, lineHeight: 1.6, color: C.accent },
+  counter: { alignSelf: 'flex-end', marginTop: 6, fontSize: fz.xs, color: C.faint2 },
+  error: { margin: '10px 0 0', fontSize: fz.sm, lineHeight: 1.6, color: C.accent },
   ghost: {
     flex: 1, minHeight: 46, borderRadius: radius.md, border: `1px solid ${C.line}`,
-    background: C.slot, color: C.ink, fontSize: 13.5, cursor: 'pointer',
+    background: C.slot, color: C.ink, fontSize: fz.md, cursor: 'pointer',
   },
   send: (off: boolean): CSSProperties => ({
     flex: 1, minHeight: 46, borderRadius: radius.md, border: 'none',
-    background: off ? C.off : C.accent, color: off ? '#8B8175' : C.accentInk,
-    fontSize: 13.5, cursor: off ? 'default' : 'pointer',
+    background: off ? C.off : C.accent, color: off ? C2.dim2 : C.accentInk,
+    fontSize: fz.md, cursor: off ? 'default' : 'pointer',
     boxShadow: off ? 'none' : '0 4px 12px rgba(192,104,92,.22)',
   }),
 };

@@ -106,3 +106,65 @@ export function guess(petId: number, gameId: number, pick: Side): Promise<GuessR
 export function getCurrentGame(petId: number, signal?: AbortSignal): Promise<GameState> {
   return request<GameState>(`${base(petId)}/current`, { signal });
 }
+
+/**
+ * 기권 결과 — **한 판 친 결과(`GuessResult`)와 같은 모양**이다(서버 `AbandonResult`).
+ *
+ * ★ 모양을 맞춘 것은 화면을 위해서다. 기권도 "한 판이 끝났다" 는 같은 사건이라, 판을 닫는 코드를
+ *   화면이 하나만 두게 한다. 그래서 고를 것이 없는 `pick`·`hit` 도 자리를 비워 둔 채 남아 있다.
+ * ★ `answer` 는 **없다** — 기권한 판의 남은 답을 알려 줄 이유가 없다(이 파일 머리말의 규칙).
+ * ★ `nextRound` 도 없다. 끝난 판이라 다음이 없다.
+ *
+ * ★★ **이 타입은 임시로 손으로 적은 것이다 — 걷어낼 조건이 정해져 있다.**
+ *   까닭: 기권 주소가 **이 브랜치의 `lib/api-schema.ts` 에 아직 없다.** 그 파일은 서버 명세
+ *   (`openapi.json`)에서 **자동 생성**하는 것이라 손으로 고치면 다음 생성 때 통째로 덮인다.
+ *   재생성본은 **백엔드 브랜치 `feat/zzal-game-abandon` `2cc44b5` 에 이미 올라가 있고**,
+ *   아직 프론트 갈래로 안 넘어왔을 뿐이다(합치는 것은 백엔드 세션의 몫).
+ *
+ *   **걷어내는 조건** — `lib/api-schema.ts` 에
+ *   `'/api/zzal/v1/me/pets/{petId}/games/{gameId}/abandon'` 이 생기는 순간.
+ *   그때 이 인터페이스를 **지우고** 생성된 `components['schemas']['AbandonResult']` 로 갈아끼운다.
+ *   아래 `abandonGame()` 의 반환 타입도 함께 바꾼다.
+ */
+export interface AbandonResult {
+  gameId: number;
+  /** 접은 판의 종류. 좌우·달리기를 같은 주소로 접으므로 어느 쪽이었는지 여기서만 안다. */
+  kind: GameKind;
+  /** 접은 시점까지 진행한 회차(0부터). 달리기는 늘 0. */
+  round: number;
+  /** 늘 null — 기권에는 고른 것이 없다. `GuessResult` 와 모양을 맞추려고 남긴 자리. */
+  pick: null;
+  /** 늘 false. */
+  hit: false;
+  /** 접은 시점까지 맞힌 횟수. */
+  hits: number;
+  /** 늘 true — 접은 판은 그 자리에서 끝난다. */
+  finished: true;
+  /**
+   * 늘 false. ★ 3번 맞힌 뒤 접어도 **승리가 아니다** — 끝까지 치지 않은 판이라서다.
+   * 그래서 기분 +1·5승 카운터·두 번째 선물·놀이 조각이 **하나도 안 움직인다.**
+   */
+  win: false;
+  rounds: number;
+  winAt: number;
+  /** 하루 판수는 **시작할 때** 이미 깎였다 — 기권으로 더 깎지도, 돌려주지도 않는다. */
+  remainingToday: number;
+  /** 늘 빈 목록 — 기권으로 열리는 동작은 없다. 모양을 맞추려고 남긴 자리. */
+  justUnlocked: number[];
+  runUnlocked: boolean;
+}
+
+/**
+ * 치던 판을 접는다(기권). 좌우 맞히기·달리기 **같은 주소**다.
+ *
+ * ★ 접은 판은 **패배로 확정**되고 `current` 에도 더는 안 잡힌다. 되돌릴 수 없다.
+ * ★ 하루 한도·조각·보상·굽기 **아무것도 안 건드린다.**
+ * ★ **아픈 펫도 기권할 수 있다** — `ZZAL_SICK_REFUSES` 가 **없다**(의도된 것이다. 아픔은 '노는 것'을
+ *   막는 조건이라, 아픈 동안 판이 열린 채 갇히면 나갈 길이 사라진다). 화면도 아플 때 ✕ 를 잠그면 안 된다.
+ *
+ * 실패 코드 — ZZAL_GAME_NOT_FOUND(404) · ZZAL_GAME_FINISHED · ZZAL_PET_SLEEPING ·
+ * ZZAL_TRAVELING(409).
+ */
+export function abandonGame(petId: number, gameId: number): Promise<AbandonResult> {
+  return request<AbandonResult>(`${base(petId)}/${gameId}/abandon`, { method: 'POST' });
+}
