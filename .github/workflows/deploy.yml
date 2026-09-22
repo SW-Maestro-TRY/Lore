@@ -545,3 +545,65 @@ jobs:
             --query "Command.CommandId" --output text)
           echo "command-id: $CMD_ID"
           bash "$GITHUB_WORKSPACE/.github/workflows/ssm-wait.sh" "$CMD_ID"
+
+  # ── 배포가 실패하면 폰으로 알린다 ────────────────────────────────
+  #
+  # ★ 왜 필요한가 — 2026-09-22 dev 가 마이그레이션 번호 중복으로 기동에 실패했는데,
+  #   배포가 빨간불인 것을 아무도 몰랐다. 깃허브 Actions 탭을 들여다보는 사람이 없으면
+  #   실패는 조용하다. 운영 감시(lore-uptime)는 도메인을 밖에서 찔러 보는 것이라
+  #   "배포가 실패해서 예전 판이 계속 돌고 있는" 상태는 초록으로 보인다 — 못 잡는다.
+  #
+  # ★ 왜 prod 도 포함인가 — 그 구멍이 제일 큰 곳이 운영이다. 배포만 실패하고 옛 판이
+  #   돌면 도메인 핑은 계속 초록이고, 새 기능이 안 올라간 것을 한참 뒤에야 안다.
+  #
+  # ★ 시크릿이 없으면 조용히 건너뛴다 — `if: ${{ secrets.X != '' }}` 는 깃허브가 잡 조건에서
+  #   안 받아 주므로, env 로 받아 스텝 안에서 비었는지 본다. 시크릿을 아직 안 넣은 동안
+  #   이 잡이 빨간불을 켜면 "실패 알림" 이 도리어 거짓 실패가 된다.
+  #
+  #   넣어야 할 시크릿 (Settings → Secrets and variables → Actions)
+  #     TELEGRAM_BOT_TOKEN · TELEGRAM_CHAT_ID
+  notify_failure:
+    needs: [setup, changes, wake, dev_deploy, backend, frontend, power]
+    # 취소(cancelled)는 알리지 않는다 — 사람이 일부러 끊은 것이라 알릴 일이 아니다.
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 텔레그램으로 알리기
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # setup 자체가 실패하면 환경 이름이 비므로 브랜치로 대신 말한다.
+          ENV_NAME: ${{ needs.setup.outputs.env_name }}
+          # 어느 잡이 넘어졌는지 고르려고 결과를 통째로 받는다.
+          # (env 로 받는다 — run 안에 ${{ }} 를 바로 펴면 값에 따라 셸이 깨진다.)
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "::warning::TELEGRAM_BOT_TOKEN·TELEGRAM_CHAT_ID 가 없어 배포 실패 알림을 건너뜁니다. 레포 Settings → Secrets and variables → Actions 에 넣어 주세요."
+            exit 0
+          fi
+
+          FAILED=$(printf '%s' "$NEEDS_JSON" \
+            | jq -r '[to_entries[] | select(.value.result == "failure") | .key] | join(", ")')
+          [ -n "$FAILED" ] || FAILED="(알 수 없음)"
+          [ -n "$ENV_NAME" ] || ENV_NAME="?"
+
+          TEXT="❌ 배포 실패 · ${ENV_NAME} · ${GITHUB_REF_NAME} · ${GITHUB_SHA:0:7} · 실패 잡: ${FAILED} · ${RUN_URL}"
+          echo "$TEXT"
+
+          CODE=$(curl -sS -o /tmp/tg.out -w '%{http_code}' \
+            --max-time 20 \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${TEXT}" \
+            --data-urlencode "disable_web_page_preview=true" || echo 000)
+
+          if [ "$CODE" != "200" ]; then
+            # 알림이 못 갔다고 배포 결과를 덮어쓰지는 않는다 — 진짜 실패는 위 잡에 이미 찍혀 있다.
+            echo "::warning::텔레그램 전송 실패 (HTTP $CODE): $(head -c 300 /tmp/tg.out)"
+          else
+            echo "텔레그램 전송 완료."
+          fi
