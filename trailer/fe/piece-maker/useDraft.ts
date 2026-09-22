@@ -9,6 +9,9 @@
  * ★ 되살릴 때 카드를 빼지 않는다. 초안이 카드 전체를 담고 있어서 목록에 그 카드가 없어도 그대로 그린다
  *   (1부에서는 받은 카드에 없는 번호를 뺐다. 그대로 두면 검색하거나 "더 보기"를 누를 때마다 초안이 지워진다).
  *
+ * ★ 맡긴 초안은 얼어 있다(`hypothesisId`). 제목 · 주장 · 해석 · 순서는 바뀌지 않고, 카드를 담으면 그 카드로
+ *   새 초안을 시작한다 — 맡긴 가설은 서버(보관함)에 그대로 있다(NA decisions.md 1-23).
+ *
  * 최신 초안은 ref 에도 둔다. 초안을 바꾸는 함수가 늘 같은 함수로 남아야 탐색 패널의
  * `memo` 가 듣는다. */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -18,6 +21,7 @@ import {
   cleanDraft,
   emptyMemory,
   hasContent,
+  isFrozen,
   moveCard,
   readMemory,
   storageKey,
@@ -83,7 +87,7 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     setReady(true);
   }, [meta, store]);
 
-  /** 독자가 초안을 바꿨다. 저장하고, 받아 둔 판정을 푼다. */
+  /** 독자가 초안을 바꿨다. 저장하고, 부모에게 알린다(실패 문구를 지운다). */
   const change = useCallback(
     (next: Draft) => {
       store(next);
@@ -92,7 +96,10 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     [store],
   );
 
-  /** 독자가 회차를 바꿨다. 그 회차의 초안으로 바꾸고 받아 둔 판정을 푼다. 카드 목록은 부모가 다시 받는다. */
+  /** 얼어 있는 초안은 입력을 받지 않는다. 바꾸는 함수마다 먼저 본다. */
+  const editable = () => ledgerRef.current !== null && !isFrozen(draftRef.current);
+
+  /** 독자가 회차를 바꿨다. 그 회차의 초안으로 바꾼다. 카드 목록은 부모가 다시 받는다. */
   const selectChapter = useCallback(
     (next: number) => {
       const ledger = ledgerRef.current;
@@ -105,41 +112,71 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     [change],
   );
 
-  const setTitle = useCallback((title: string) => change({ ...draftRef.current, title }), [change]);
-  const setClaim = useCallback((claim: string) => change({ ...draftRef.current, claim }), [change]);
-
-  const setNote = useCallback(
-    (id: string, note: string) => {
-      const current = draftRef.current;
-      if (current.cards.some((card) => card.id === id)) change({ ...current, notes: { ...current.notes, [id]: note } });
+  const setTitle = useCallback(
+    (title: string) => {
+      if (editable()) change({ ...draftRef.current, title });
+    },
+    [change],
+  );
+  const setClaim = useCallback(
+    (claim: string) => {
+      if (editable()) change({ ...draftRef.current, claim });
     },
     [change],
   );
 
-  /** 카드를 담거나 뺀다. 카드 전체를 받는다 — 초안이 카드를 통째로 담는다. */
+  const setNote = useCallback(
+    (id: string, note: string) => {
+      const current = draftRef.current;
+      if (editable() && current.cards.some((card) => card.id === id)) change({ ...current, notes: { ...current.notes, [id]: note } });
+    },
+    [change],
+  );
+
+  /**
+   * 카드를 담거나 뺀다. 카드 전체를 받는다 — 초안이 카드를 통째로 담는다.
+   * 얼어 있는 초안이면 그 카드 한 장으로 새 초안을 시작하고 true 를 돌려준다(부르는 쪽이 알린다).
+   */
   const toggle = useCallback(
-    (card: Card) => {
-      if (ledgerRef.current) change(toggleCard(draftRef.current, card));
+    (card: Card): boolean => {
+      const current = chapterRef.current;
+      if (!ledgerRef.current || current === null) return false;
+      if (isFrozen(draftRef.current)) {
+        change({ ...blankDraft(current), cards: [card], notes: { [card.id]: "" } });
+        return true;
+      }
+      change(toggleCard(draftRef.current, card));
+      return false;
     },
     [change],
   );
 
   const move = useCallback(
     (id: string, direction: -1 | 1) => {
+      if (!editable()) return;
       const next = moveCard(draftRef.current, id, direction);
       if (next) change(next);
     },
     [change],
   );
 
+  /** 새 초안. 얼어 있는 초안도 비운다 — 맡긴 가설은 서버에 그대로 있다. */
   const reset = useCallback(() => {
     if (chapterRef.current !== null) change(blankDraft(chapterRef.current));
   }, [change]);
 
-  /** "내 가설"에 넣는다. 독자에게 보일 알림 글을 돌려준다. 넣을 것이 없으면 null 이다. */
+  /** 서버에 맡겼다. 초안에 요청 id 를 달아 얼린다. 부모에게 알리지 않는다 — 입력이 바뀐 것이 아니다. */
+  const markSubmitted = useCallback(
+    (hypothesisId: number) => {
+      if (ledgerRef.current) store({ ...draftRef.current, hypothesisId });
+    },
+    [store],
+  );
+
+  /** "내 가설"에 넣는다. 독자에게 보일 알림 글을 돌려준다. 넣을 것이 없거나 얼어 있으면 null 이다. */
   const save = useCallback((): string | null => {
     const current = draftRef.current;
-    if (!ledgerRef.current || !hasContent(current)) return null;
+    if (!ledgerRef.current || !hasContent(current) || isFrozen(current)) return null;
     const works = store(current, upsertSaved(memoryRef.current.saved, current));
     return works ? "내 가설에 저장했어요." : "브라우저 저장이 안 됩니다. 게시글을 복사해 보관하세요.";
   }, [store]);
@@ -159,6 +196,8 @@ export function useDraft(meta: MetaState, onChange: () => void) {
 
   return {
     draft,
+    /** 맡긴 초안인가. 입력이 잠기고 "새 가설 쓰기"만 된다. */
+    frozen: isFrozen(draft),
     saved: memory.saved,
     saveStatus,
     ready,
@@ -170,6 +209,7 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     toggle,
     move,
     reset,
+    markSubmitted,
     save,
     loadSaved,
   };

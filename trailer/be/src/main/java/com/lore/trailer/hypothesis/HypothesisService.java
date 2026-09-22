@@ -1,0 +1,194 @@
+package com.lore.trailer.hypothesis;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
+import com.lore.trailer.foreshadowing.Foreshadowing;
+import com.lore.trailer.foreshadowing.ForeshadowingRepository;
+import com.lore.trailer.foreshadowing.ForeshadowingService;
+import com.lore.trailer.foreshadowing.dto.ForeshadowingResponses;
+import com.lore.trailer.hypothesis.dto.HypothesisRequests;
+import com.lore.trailer.hypothesis.dto.HypothesisResponses;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+/**
+ * 가설 — 맡기기(2-5). 되묻기 · 보관함 · 운영자 API 는 뒤 기능에서 여기에 더한다.
+ *
+ * <p>검사는 모두 여기서 한다. 틀린 칸마다 한국어 문구를 붙여 400 {@code INVALID_INPUT} 으로 답한다.
+ * 회차는 카드 API 와 같은 코드({@code TRAILER_INVALID_CHAPTER})다. 해시 둘이 카드 표의 값과 다르면
+ * {@code TRAILER_DIGEST_MISMATCH} 다 — 표를 갈아 넣은 뒤 옛 화면이 맡기는 가설은 운영자 PC 의 judge.py 가
+ * 어차피 거절하므로, 독자가 기다리다 실패를 보는 대신 맡기는 순간에 막는다(NA decisions.md 1-30 의 제안).
+ */
+@Service
+public class HypothesisService {
+
+    static final int TITLE_MAX = 180;
+    static final int CLAIM_MAX = 6_000;
+    static final int NOTE_MAX = 4_000;
+    /** 한 가설에 담을 수 있는 카드 수. 명세에는 위 끝이 없지만 몸통 크기와 복사 횟수에 끝이 있어야 한다. */
+    static final int CARDS_MAX = 100;
+
+    private static final Pattern THREAD_ID = Pattern.compile("^T[0-9]{1,6}$");
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final TypeReference<Map<String, Object>> OBJECT = new TypeReference<>() {
+    };
+
+    private final HypothesisRepository hypotheses;
+    private final ForeshadowingRepository foreshadowings;
+    private final ForeshadowingService foreshadowingService;
+
+    public HypothesisService(HypothesisRepository hypotheses, ForeshadowingRepository foreshadowings,
+                             ForeshadowingService foreshadowingService) {
+        this.hypotheses = hypotheses;
+        this.foreshadowings = foreshadowings;
+        this.foreshadowingService = foreshadowingService;
+    }
+
+    /** 가설을 맡긴다(2-5). 담은 카드를 그 회차로 가린 값으로 복사해 두고 PENDING 으로 저장한다. */
+    @Transactional
+    public HypothesisResponses.Hypothesis submit(Long userId, HypothesisRequests.Submit body) {
+        int chapter = requireChapter(body.chapter());
+        Foreshadowing ledger = foreshadowings.findFirstByOrderByIdAsc()
+                .orElseThrow(() -> new BusinessException(ErrorCode.TRAILER_LEDGER_NOT_LOADED));
+        requireDigest(body.stateDigest(), ledger.getStateDigest(), "stateDigest");
+        requireDigest(body.cardsDigest(), ledger.getCardsDigest(), "cardsDigest");
+        String title = bounded(body.title(), "제목", TITLE_MAX);
+        String claim = required(body.claim(), "주장", CLAIM_MAX);
+        List<String> ids = requireCards(body.cards());
+        Map<String, String> notes = requireNotes(body.notes(), ids);
+
+        Hypothesis hypothesis = Hypothesis.submit(userId, chapter, title, claim,
+                ledger.getStateDigest(), ledger.getCardsDigest(), Instant.now());
+        for (int position = 0; position < ids.size(); position++) {
+            String id = ids.get(position);
+            Foreshadowing card = foreshadowings.findByThreadId(id)
+                    .filter(f -> f.isPlantedBy(chapter))
+                    .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT,
+                            "%d화 기록에 없는 카드입니다: %s".formatted(chapter, id)));
+            hypothesis.addCard(HypothesisForeshadowing.copyOf(hypothesis, card, chapter, position, notes.get(id)));
+        }
+        return toResponse(hypotheses.save(hypothesis));
+    }
+
+    /* ---- 검사 -------------------------------------------------------------------- */
+
+    /** 회차. 없거나 1보다 작거나 가장 뒤 회차를 넘으면 400 {@code TRAILER_INVALID_CHAPTER}. 표가 비었으면 503. */
+    private int requireChapter(Integer raw) {
+        if (raw == null) {
+            throw new BusinessException(ErrorCode.TRAILER_INVALID_CHAPTER, "회차가 필요합니다");
+        }
+        if (raw < 1) {
+            throw new BusinessException(ErrorCode.TRAILER_INVALID_CHAPTER, "회차는 1 이상의 숫자여야 합니다");
+        }
+        foreshadowingService.requireChapterInRange(raw);
+        return raw;
+    }
+
+    private static void requireDigest(String given, String expected, String name) {
+        if (given == null || given.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, name + "가 필요합니다");
+        }
+        if (!given.equals(expected)) {
+            throw new BusinessException(ErrorCode.TRAILER_DIGEST_MISMATCH);
+        }
+    }
+
+    /** 비어도 되는 글. 없으면 빈 글. 위 끝을 넘으면 400. */
+    private static String bounded(String value, String name, int max) {
+        String text = value == null ? "" : value;
+        if (text.length() > max) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "%s은 %,d자까지입니다".formatted(name, max));
+        }
+        return text;
+    }
+
+    /** 비면 안 되는 글. 빈칸만 있어도 400. */
+    private static String required(String value, String name, int max) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, name + "이 비어 있습니다");
+        }
+        return bounded(value, name, max);
+    }
+
+    private static List<String> requireCards(List<String> cards) {
+        if (cards == null || cards.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "카드를 하나 이상 담아야 합니다");
+        }
+        if (cards.size() > CARDS_MAX) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "카드는 %d장까지 담을 수 있습니다".formatted(CARDS_MAX));
+        }
+        Set<String> seen = new HashSet<>();
+        List<String> ids = new ArrayList<>(cards.size());
+        for (String id : cards) {
+            if (id == null || !THREAD_ID.matcher(id).matches()) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "카드 번호가 올바르지 않습니다: " + id);
+            }
+            if (!seen.add(id)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "카드가 겹칩니다: " + id);
+            }
+            ids.add(id);
+        }
+        return ids;
+    }
+
+    /** 해석. 담은 카드마다 한 칸으로 채운다(없으면 빈 글). 담지 않은 카드의 해석과 위 끝을 넘는 해석은 400. */
+    private static Map<String, String> requireNotes(Map<String, String> notes, List<String> ids) {
+        Map<String, String> filled = new LinkedHashMap<>();
+        for (String id : ids) {
+            filled.put(id, "");
+        }
+        if (notes == null) {
+            return filled;
+        }
+        for (Map.Entry<String, String> entry : notes.entrySet()) {
+            if (!filled.containsKey(entry.getKey())) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "담지 않은 카드의 해석입니다: " + entry.getKey());
+            }
+            String note = entry.getValue() == null ? "" : entry.getValue();
+            if (note.length() > NOTE_MAX) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        "해석은 %,d자까지입니다: %s".formatted(NOTE_MAX, entry.getKey()));
+            }
+            filled.put(entry.getKey(), note);
+        }
+        return filled;
+    }
+
+    /* ---- 응답 -------------------------------------------------------------------- */
+
+    static HypothesisResponses.Hypothesis toResponse(Hypothesis h) {
+        List<ForeshadowingResponses.Card> cards = new ArrayList<>();
+        Map<String, String> notes = new LinkedHashMap<>();
+        for (HypothesisForeshadowing copy : h.getCards()) {
+            cards.add(copy.toCard());
+            notes.put(copy.getThreadId(), copy.getNote());
+        }
+        return new HypothesisResponses.Hypothesis(h.getId(), h.getChapter(), h.getTitle(), h.getClaim(), cards, notes,
+                h.getJudgementStatus(), readObject(h.getJudgement()), readObject(h.getPresentation()),
+                h.getFailureMessage(), h.getCreatedAt(), h.getJudgedAt());
+    }
+
+    /** 표의 JSON 글을 응답의 객체로. 표에 넣을 때 객체였음을 확인했으므로 여기서 틀리면 서버 오류다. */
+    static Map<String, Object> readObject(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return JSON.readValue(json, OBJECT);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("표의 JSON 칸을 읽지 못했습니다", e);
+        }
+    }
+}

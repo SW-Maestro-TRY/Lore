@@ -90,8 +90,8 @@ public class ForeshadowingService {
         return ForeshadowingResponses.Card.of(card, chapter);
     }
 
-    /** 1 이상은 컨트롤러가 이미 봤다. 여기서는 가장 뒤 회차를 넘는지 본다 — 표를 봐야 아는 값이다. */
-    private void requireChapterInRange(int chapter) {
+    /** 1 이상은 부르는 쪽이 이미 봤다. 여기서는 가장 뒤 회차를 넘는지 본다 — 표를 봐야 아는 값이다. 가설 맡기기도 쓴다. */
+    public void requireChapterInRange(int chapter) {
         int max = maxChapterOrThrow();
         if (chapter > max) {
             throw new BusinessException(ErrorCode.TRAILER_INVALID_CHAPTER,

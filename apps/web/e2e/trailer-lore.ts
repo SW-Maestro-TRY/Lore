@@ -1,4 +1,5 @@
-// Trailer 검사의 가짜 lore 서버 — 카드 API 셋(`/api/trailer/v1/public/cards…`)을 브라우저 안에서 대신 답한다.
+// Trailer 검사의 가짜 lore 서버 — 카드 API 셋(`/api/trailer/v1/public/cards…`)과 가설 맡기기(`/api/trailer/v1/hypotheses`),
+// 로그인(`/api/v1/users/me` · `/api/v1/auth/login`)을 브라우저 안에서 대신 답한다.
 //
 // 왜 가짜 서버인가 — 화면 검사는 서버와 DB 없이 돌아야 한다(lore 의 zzal 검사도 목 서버다). 진짜 서버가 하는
 // 일(회차로 거르기 · 회수 칸 가리기 · 검색 · 나눠 주기)을 표본 25장 위에서 같은 규칙으로 한다. 규칙의 정본은
@@ -53,7 +54,11 @@ export const META_URL = /\/api\/trailer\/v1\/public\/cards\/meta(\?.*)?$/;
 /** 목록. `cards` 바로 뒤가 `?` 이거나 끝이어야 한다 — `/cards/meta` 와 `/cards/T12` 는 여기 걸리지 않는다. */
 export const LIST_URL = /\/api\/trailer\/v1\/public\/cards(\?.*)?$/;
 export const DETAIL_URL = /\/api\/trailer\/v1\/public\/cards\/(T\d+)(\?.*)?$/;
-export const JUDGE_URL = /\/api\/judge$/;
+export const HYPOTHESES_URL = /\/api\/trailer\/v1\/hypotheses$/;
+/** lore 공용 로그인. 화면은 `useAuth` 로 `/users/me` 가 200 인지로 로그인을 판정하고, 로그인 창은 `/auth/login` 을 부른다. */
+export const ME_URL = /\/api\/v1\/users\/me$/;
+export const LOGIN_URL = /\/api\/v1\/auth\/login$/;
+export const REFRESH_URL = /\/api\/v1\/auth\/refresh$/;
 
 /** 서버의 기본 쪽 크기. 화면이 `size` 를 보내지만 서버가 더 작게 줄 수도 있다 — 화면은 `hasNext` 만 믿어야 한다. */
 export const DEFAULT_PAGE_SIZE = 50;
@@ -163,6 +168,68 @@ export async function answer(route: Route, response: Response): Promise<void> {
   }
 }
 
+/** lore 가 주는 가설 하나(front_back_protocol.md 2-6). 카드는 맡길 때 그 회차로 가려 복사한 값이다. */
+export type LoreHypothesis = {
+  id: number;
+  chapter: number;
+  title: string;
+  claim: string;
+  cards: LoreCard[];
+  notes: Record<string, string>;
+  judgementStatus: 'PENDING' | 'COMPLETE' | 'FAILED';
+  judgement: Record<string, unknown> | null;
+  presentation: Record<string, unknown> | null;
+  failureMessage: string | null;
+  createdAt: string;
+  judgedAt: string | null;
+};
+
+/** 가짜 서버의 상태 — 로그인 여부와 맡긴 가설. 검사가 들여다보고 바꿀 수 있게 `mockLore` 가 돌려준다. */
+export type LoreState = { loggedIn: boolean; hypotheses: LoreHypothesis[] };
+
+export const ME = { userId: 7, email: 'reader@example.invalid', role: 'USER', createdAt: '2026-09-22T00:00:00Z' };
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+/** 가설 맡기기(2-5). 진짜 서버의 검사 가운데 화면 검사가 밟는 것만 옮겼다 — 로그인 · 회차 · 해시 · 주장 · 카드. 담은 카드는 그 회차의 값으로 복사한다. */
+export function submitResponse(body: unknown, fixture: Fixture, state: LoreState): Response {
+  if (!state.loggedIn) return fail(401, 'UNAUTHORIZED', '로그인이 필요합니다');
+  if (!isRecord(body)) return fail(400, 'INVALID_INPUT', '입력값이 올바르지 않습니다');
+  const chapter = body.chapter;
+  if (typeof chapter !== 'number' || !Number.isInteger(chapter) || chapter < 1 || chapter > fixture.max_chapter) return INVALID_CHAPTER;
+  if (body.stateDigest !== fixture.state_digest || body.cardsDigest !== fixture.cards_digest) {
+    return fail(400, 'TRAILER_DIGEST_MISMATCH', '화면의 장부와 서버의 장부가 다릅니다. 페이지를 새로 열어 주세요');
+  }
+  if (typeof body.claim !== 'string' || !body.claim.trim()) return fail(400, 'INVALID_INPUT', '주장이 비어 있습니다');
+  const ids = Array.isArray(body.cards) ? body.cards.filter((id): id is string => typeof id === 'string') : [];
+  if (!ids.length) return fail(400, 'INVALID_INPUT', '카드를 하나 이상 담아야 합니다');
+  const visible = visibleCards(fixture, chapter);
+  const cards: LoreCard[] = [];
+  for (const id of ids) {
+    const card = visible.find((item) => item.id === id);
+    if (!card) return fail(400, 'INVALID_INPUT', `${chapter}화 기록에 없는 카드입니다: ${id}`);
+    cards.push(toLore(card));
+  }
+  const notes: Record<string, string> = {};
+  for (const id of ids) notes[id] = isRecord(body.notes) && typeof body.notes[id] === 'string' ? body.notes[id] : '';
+  const hypothesis: LoreHypothesis = {
+    id: state.hypotheses.length + 1,
+    chapter,
+    title: typeof body.title === 'string' ? body.title : '',
+    claim: body.claim,
+    cards,
+    notes,
+    judgementStatus: 'PENDING',
+    judgement: null,
+    presentation: null,
+    failureMessage: null,
+    createdAt: new Date().toISOString(),
+    judgedAt: null,
+  };
+  state.hypotheses.push(hypothesis);
+  return ok(hypothesis);
+}
+
 export type LoreMockOptions = {
   /** 표본. 함수를 주면 요청마다 부른다 — 검사 도중 장부(해시)를 바꿀 때 쓴다. */
   fixture?: Fixture | (() => Fixture);
@@ -170,11 +237,29 @@ export type LoreMockOptions = {
   pageSize?: number;
   /** 목록 요청마다 부른다. 검사가 "무엇을 보냈나" 를 볼 때 쓴다. 응답을 늦추려면 Promise 를 돌려준다. */
   onList?: (url: URL) => void | Promise<void>;
+  /** 로그인 여부와 맡긴 가설. 안 주면 로그인하지 않은 독자에 가설 없음이다. 로그인 창에서 로그인하면 `loggedIn` 이 참이 된다. */
+  state?: LoreState;
+  /** 가설을 맡길 때마다 화면이 보낸 몸통을 준다. */
+  onSubmit?: (body: unknown) => void;
 };
 
-/** 카드 API 셋을 가로챈다. 컨텍스트에 걸어 새 페이지에도 듣게 한다. */
-export async function mockLore(context: BrowserContext, options: LoreMockOptions = {}): Promise<void> {
+/** 카드 API 셋 · 로그인 · 가설 맡기기를 가로챈다. 컨텍스트에 걸어 새 페이지에도 듣게 한다. 가짜 서버의 상태를 돌려준다. */
+export async function mockLore(context: BrowserContext, options: LoreMockOptions = {}): Promise<LoreState> {
   const fixture = (): Fixture => (typeof options.fixture === 'function' ? options.fixture() : options.fixture ?? CARDS);
+  const state: LoreState = options.state ?? { loggedIn: false, hypotheses: [] };
+  await context.route(ME_URL, (route) => answer(route, state.loggedIn ? ok(ME) : fail(401, 'UNAUTHORIZED', '로그인이 필요합니다')));
+  await context.route(LOGIN_URL, (route) => {
+    state.loggedIn = true;
+    return answer(route, ok(null));
+  });
+  // 401 을 받은 공용 클라이언트가 토큰 갱신을 한 번 시도한다 — 갱신도 401 이어야 원래 401 이 화면에 닿는다.
+  await context.route(REFRESH_URL, (route) => answer(route, fail(401, 'INVALID_REFRESH_TOKEN', '다시 로그인해 주세요')));
+  await context.route(HYPOTHESES_URL, (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const body: unknown = route.request().postDataJSON();
+    if (options.onSubmit) options.onSubmit(body);
+    return answer(route, submitResponse(body, fixture(), state));
+  });
   await context.route(META_URL, (route) => answer(route, ok(metaOf(fixture()))));
   await context.route(DETAIL_URL, (route) => {
     const url = new URL(route.request().url());
@@ -186,4 +271,5 @@ export async function mockLore(context: BrowserContext, options: LoreMockOptions
     if (options.onList) await options.onList(url);
     return answer(route, listResponse(url, fixture(), options.pageSize));
   });
+  return state;
 }
