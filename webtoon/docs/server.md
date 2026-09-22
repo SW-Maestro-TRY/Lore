@@ -1,5 +1,8 @@
 # Lore 서버 구조 · 현황 · 사용 설명서
 
+> 세 환경이 **무엇이 다른지**와 **승격할 때 dev 에서는 안 드러나는 것**은
+> `env-diff.md` 에 따로 적었습니다. 배포 전에 그쪽 7절 점검표를 보세요.
+
 ## 1. 한눈에 — 3개 환경
 
 | 환경 | 용도 | 브랜치 | 주소 | 구성 | 상태 (9/20 18:40) |
@@ -29,7 +32,7 @@
 
 사용자 → nginx(HTTPS) → 앱(도커) → 같은 박스 안의 PostgreSQL · MinIO(S3 대체). 비밀값은 박스 안 `.env` 파일. RDS·ALB·CloudFront 없음 → 비용 최소.
 
-- 이미지도 이 박스가 직접 냄(`/images/` → MinIO). 첫 기동 때 staging CloudFront 에서 공용 에셋 118개를 받아 자동으로 채움
+- 이미지도 이 박스가 직접 냄(`/images/` → MinIO). 첫 기동 때 staging CloudFront 에서 공용 에셋 127개를 받아 자동으로 채움
 - 내 노트북에서 똑같이 띄우기: `infra/dev/README.md` 대로 → `localhost:3100` · 환경값 예시는 `infra/dev/env.example`
 
 ## 3. 배포 흐름
