@@ -17,7 +17,7 @@
 //   `useFootPad` 가 그림에서 직접 잰다(못 재면 여울 기준값으로 되돌아간다).
 'use client';
 
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, C2, GAEGU, LV, MONO, TAP_MIN, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
@@ -236,6 +236,23 @@ export default function Room({ y }: { y: Yeoul }) {
   //   그래서 넓은 화면에서 아이가 공연히 줄지 않고, 좁은 화면에서도 필요 이상 줄지 않는다.
   const [bubbleHeadroom, setBubbleHeadroom] = useState(0);
   const HEADROOM = Math.max(HEAD_SAFE, bubbleHeadroom);
+  /**
+   * **첫 그림에서는 아이 키를 애니메이션하지 않는다**(2026-09-23).
+   *
+   * ★ 왜 — 아이 키는 말풍선이 자리를 얼마나 사느냐(`HEADROOM`)로 정해지고, 그 답은 마운트
+   *   직후 `Bubble` 이 실제로 재서 알려 준다. 그런데 아이 상자에 `transition: height .28s` 가
+   *   걸려 있어서, **첫 답이 오는 순간이 곧 0.28초짜리 크기 변화**가 된다 — 방에 들어가면
+   *   아이가 495 → 378 로 **주르륵 줄어드는 것이 보인다**(390x844 실측. 폭마다 74~139px).
+   *   재는 것이 틀린 게 아니라, **아직 아무것도 안 정해진 값에서 정답으로 가는 길**을
+   *   애니메이션으로 보여 준 것이 문제다.
+   * ★ 그래서 첫 페인트가 끝날 때까지만 전환을 끈다. 그 뒤(말풍선이 뜨고 지며 자리를 더 사고
+   *   덜 사는 평소의 변화)는 예전처럼 부드럽게 이어진다 — 그게 이 전환을 둔 이유다.
+   */
+  const [sizeSettled, setSizeSettled] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setSizeSettled(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
   // 화면에서의 실루엣 키. **무대의 약 60%** 를 목표로 하되, 머리끝이 무대 위로 안 넘게 남은 높이로 깎는다.
   //   `SIL` 은 가장 큰 자세의 실루엣이 화면에서 가질 높이다(무대 60%, 하한 150px, 머리 공간으로 상한).
   //   K_SCREEN = SIL ÷ (가장 큰 실루엣÷K) — 이렇게 뒤집어야 어떤 자세든 무대 밖으로 안 나간다.
@@ -286,9 +303,24 @@ export default function Room({ y }: { y: Yeoul }) {
   const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${(headSpan * v.st.charScale).toFixed(4)})`;
   /** 얼굴 높이(머리 옆선). 머리 옆으로 비킨 말풍선의 세로 한가운데를 여기에 맞춘다. */
   const faceFromBottom = `calc(${LIFT} + ${CHAR_H} * ${(Math.max(0, headSpan - headSideDrop) * v.st.charScale).toFixed(4)})`;
-  /** 무대와 **자리를 사기 전 아이 상자**를 재는 두 손잡이 — 말풍선이 이 둘로 자리를 정한다. */
-  const stageRef = useRef<HTMLDivElement>(null);
-  const charProbeRef = useRef<HTMLDivElement>(null);
+  /**
+   * 무대와 **자리를 사기 전 아이 상자**를 재는 두 손잡이 — 말풍선이 이 둘로 자리를 정한다.
+   *
+   * ★★ **`useRef` 가 아니라 콜백 ref(상태)다**(2026-09-23). 왜 — 리액트는 커밋할 때 **자식부터**
+   *   내려간다. 그래서 자식(`Bubble`)의 `useLayoutEffect` 가 도는 시점에는 **부모인 이 무대의
+   *   ref 가 아직 안 붙어 있다.** 예전에는 `Bubble` 이 `if (!stage || !probe) return` 으로 그냥
+   *   빠져나갔고, 그 한 번이 **첫 마운트 전부**였다 — `measure()` 가 한 번도 안 돌고
+   *   **ResizeObserver 도 안 달렸다.** 그래서 방에 들어간 첫 1.1초 동안 말풍선이 초기값
+   *   ("머리 위" · 양보 0) 그대로 서서 무대 밖으로 12~58px 잘렸고(360x800 44.0 · 390x640 58.4 ·
+   *   375x667 55.2 · 1200x900 12.0 실측), 창 크기를 바꿔도 안 고쳐졌다(옵저버가 없으니까).
+   *   자세가 `hello`→`base` 로 바뀌며 dep 이 흔들릴 때에야 한 번 재고 제자리로 **툭 튀었다.**
+   * ★ 콜백 ref 는 **요소가 붙는 순간 상태를 바꿔** 한 번 더 그리게 한다. 그 두 번째 그림에서
+   *   `Bubble` 은 진짜 요소를 받아 반드시 재고 옵저버를 단다. 재시도 횟수를 세거나 타이머를
+   *   놓을 필요가 없다 — 요소가 없으면 애초에 다시 그릴 일도 없다.
+   * ★ `setState` 는 함수 정체가 안 변하므로 ref 콜백이 매 그림마다 떼었다 붙지 않는다.
+   */
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
+  const [charProbeEl, setCharProbeEl] = useState<HTMLDivElement | null>(null);
 
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
@@ -321,7 +353,7 @@ export default function Room({ y }: { y: Yeoul }) {
 
       {/* ── 무대 ───────────────────────────────────────────────── */}
       <div
-        ref={stageRef}
+        ref={setStageEl}
         data-part="stage"
         onClick={actions.closePop}
         style={{
@@ -355,7 +387,7 @@ export default function Room({ y }: { y: Yeoul }) {
             말풍선이 아이를 낮추면(위 `HEADROOM`) 아이 상자가 줄어드는데, 그 줄어든 상자로 다시
             자리를 재면 값이 서로를 쫓아 출렁인다. 그래서 **자리를 사기 전 상자**를 따로 하나 둔다. */}
         <div
-          ref={charProbeRef} aria-hidden data-part="char-probe"
+          ref={setCharProbeEl} aria-hidden data-part="char-probe"
           style={{
             position: 'absolute', left: '50%', bottom: LIFT, height: CHAR_H_FREE,
             aspectRatio: CHAR_ASPECT, transform: 'translateX(-50%)',
@@ -387,7 +419,8 @@ export default function Room({ y }: { y: Yeoul }) {
             bottom: `calc(${LIFT} - ${CHAR_H} * ${BELOW_FOOT.toFixed(4)})`,
             height: CHAR_H, display: 'flex', justifyContent: 'center', zIndex: 2,
             // 말풍선이 뜰 때 아이가 소폭 낮아지는데(BUBBLE_RESERVE), 툭 튀지 않게 부드럽게 잇는다.
-            transition: 'height .28s ease, bottom .28s ease',
+            // ★ 단 **첫 그림만 빼고**(→ `sizeSettled`) — 거기선 부드러움이 곧 "아이가 줄어드는 연출"이 된다.
+            transition: sizeSettled ? 'height .28s ease, bottom .28s ease' : 'none',
             animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
           }}
         >
@@ -482,7 +515,7 @@ export default function Room({ y }: { y: Yeoul }) {
           headSpanReserve={fit.headSpanTallestPerBoxH}
           silLeft={silLeft} silRight={silRight} avoid={headSideTaken}
           headBottom={headTopFromBottom} faceBottom={faceFromBottom}
-          stageRef={stageRef} probeRef={charProbeRef} onHeadroom={setBubbleHeadroom}
+          stage={stageEl} probe={charProbeEl} onHeadroom={setBubbleHeadroom}
         />
 
         {v.hearts.show && (
@@ -576,7 +609,7 @@ function samePlace(a: BubblePlace, b: BubblePlace): boolean {
 
 function Bubble({
   show, text, play, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid,
-  headBottom, faceBottom, stageRef, probeRef, onHeadroom,
+  headBottom, faceBottom, stage, probe, onHeadroom,
 }: {
   show: boolean; text: string; play: string;
   /** 머리 옆을 이미 소품이 쓰고 있는 쪽. 옆으로 비킬 때 **이쪽은 피한다**(겹침 0). */
@@ -595,8 +628,12 @@ function Bubble({
    */
   silLeft: number; silRight: number;
   headBottom: string; faceBottom: string;
-  stageRef: React.RefObject<HTMLDivElement | null>;
-  probeRef: React.RefObject<HTMLDivElement | null>;
+  /**
+   * 무대와 기준자 **요소 그 자체**(ref 상자가 아니다 — → `Room` 의 `stageEl` 머리말).
+   * 둘이 다 붙기 전에는 `null` 이고, 붙는 순간 부모가 다시 그려 여기로 들어온다.
+   */
+  stage: HTMLDivElement | null;
+  probe: HTMLDivElement | null;
   onHeadroom: (px: number) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -608,8 +645,8 @@ function Bubble({
   const [place, setPlace] = useState<BubblePlace>({ at: 'above', w: BUBBLE_MAX_W, left: -BUBBLE_MAX_W / 2 });
 
   useLayoutEffect(() => {
-    const stage = stageRef.current;
-    const probe = probeRef.current;
+    // 아직 안 붙었으면 이번엔 잴 수 없다. **다음 그림에서 반드시 다시 온다** —
+    // 두 요소는 부모의 상태라, 붙는 순간이 곧 다시 그리는 순간이다(→ `Room` 의 `stageEl`).
     if (!stage || !probe) return undefined;
     // ★ 같은 답이면 상태를 안 건드린다 — 말풍선 자신을 관찰 대상에 넣었기 때문에(아래),
     //   매번 새 객체를 넣으면 그리기→크기변화→다시 재기가 끝없이 돈다.
@@ -710,7 +747,7 @@ function Bubble({
     if (cardRef.current) ro.observe(cardRef.current);
     if (reserveRef.current) ro.observe(reserveRef.current);
     return () => ro.disconnect();
-  }, [show, text, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid, stageRef, probeRef, onHeadroom]);
+  }, [show, text, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid, stage, probe, onHeadroom]);
 
   const tailBase: React.CSSProperties = {
     position: 'absolute', width: 11, height: 11, background: C.paper,
