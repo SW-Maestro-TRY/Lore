@@ -24,7 +24,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 가설 — 맡기기(2-5). 되묻기 · 보관함 · 운영자 API 는 뒤 기능에서 여기에 더한다.
+ * 가설 — 맡기기(2-5)와 하나 보기(2-6). 보관함 · 운영자 API 는 뒤 기능에서 여기에 더한다.
  *
  * <p>검사는 모두 여기서 한다. 틀린 칸마다 한국어 문구를 붙여 400 {@code INVALID_INPUT} 으로 답한다.
  * 회차는 카드 API 와 같은 코드({@code TRAILER_INVALID_CHAPTER})다. 해시 둘이 카드 표의 값과 다르면
@@ -80,6 +80,28 @@ public class HypothesisService {
             hypothesis.addCard(HypothesisForeshadowing.copyOf(hypothesis, card, chapter, position, notes.get(id)));
         }
         return toResponse(hypotheses.save(hypothesis));
+    }
+
+    /** 내 가설 하나(2-6). 없는 번호와 남의 가설은 같은 404 다 — 번호를 바꿔 가며 남의 가설이 있는지 알아낼 수 없게. */
+    @Transactional(readOnly = true)
+    public HypothesisResponses.Hypothesis get(Long userId, String rawId) {
+        long id = parseId(rawId);
+        Hypothesis hypothesis = hypotheses.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TRAILER_HYPOTHESIS_NOT_FOUND));
+        return toResponse(hypothesis);
+    }
+
+    /** 경로의 id. 숫자가 아니면 그런 가설이 없는 것이다(404) — 500 이 되지 않게 직접 읽는다(found.md 5-8). */
+    static long parseId(String raw) {
+        try {
+            long id = Long.parseLong(raw == null ? "" : raw.trim());
+            if (id < 1) {
+                throw new BusinessException(ErrorCode.TRAILER_HYPOTHESIS_NOT_FOUND);
+            }
+            return id;
+        } catch (NumberFormatException e) {
+            throw new BusinessException(ErrorCode.TRAILER_HYPOTHESIS_NOT_FOUND);
+        }
     }
 
     /* ---- 검사 -------------------------------------------------------------------- */

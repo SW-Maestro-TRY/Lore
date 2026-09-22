@@ -4,16 +4,17 @@
  * NarrativeAnalysis 의 판정 화면(`src/gpt_judge/web`)을 옮겼다(1부). 2부에서 카드를 lore 백엔드에서 받게 했다 —
  * 독자가 회차를 고르고, 카드는 그 회차로 거르고 가려서 50장씩 오고, 검색은 서버가 한다. 초안은 카드 전체를 담는다.
  * 3부에서 판정을 lore 에 맡긴다 — "가설 판정하기"는 로그인한 독자의 가설을 서버에 저장하고(2-5), 초안은 얼고,
- * 결과는 요청 id 로 되묻는다(2-6). 판정은 운영자가 따로 넣는다.
+ * 결과는 요청 id 로 되묻는다(2-6, `useHypothesis`). 판정은 운영자가 따로 넣는다. 판정이 가리키는 카드는 판정이 함께
+ * 실어 온 인용 카드(`cited_cards`) → 가설이 복사해 둔 카드 → 손에 있는 카드 → 카드 상세 API 순으로 찾는다(1-29 · 2-31).
  *
  * 구조: `.trailer-page` 안에 `.app`(레일과 작업 영역), 모달, 알림이 형제로 놓인다.
  * `.trailer-page` 는 원본의 `body` 자리다 — 변수와 바탕색, `data-view` 가 여기에 붙는다. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AuthModal from "@common/auth/AuthModal";
 import { useAuth } from "@common/auth/useAuth";
-import { fetchCard, type Card } from "../lib/api";
+import { fetchCard, type Card, type JudgeResult } from "../lib/api";
 import { cardIds, hasCard, type Draft } from "../lib/draft";
-import { JUDGE_TEXT } from "../lib/judgement";
+import { JUDGE_TEXT, checkJudgement, citedCards, citedIds } from "../lib/judgement";
 import { postText } from "../lib/postText";
 import { ALL_KINDS } from "../lib/search";
 import ComposePane from "./ComposePane";
@@ -27,6 +28,7 @@ import Toast, { useToast } from "./Toast";
 import TopBar from "./TopBar";
 import { useCards } from "./useCards";
 import { useDraft } from "./useDraft";
+import { useHypothesis } from "./useHypothesis";
 import { useMeta } from "./useMeta";
 import { useSubmit } from "./useSubmit";
 
@@ -49,6 +51,9 @@ export default function PieceMaker() {
   const { draft, frozen, saved, saveStatus, ready, chapter, selectChapter, setTitle, setClaim, setNote, toggle, move, reset, markSubmitted, save, loadSaved } =
     useDraft(meta, clearSubmission);
   const { cards, more, reload: reloadCards } = useCards(chapter, query, filter === ALL_KINDS ? "" : filter);
+  /** 맡긴 초안이면 그 가설을 되묻는다. 판정이 아직이면 이따금 다시 묻는다. */
+  const { state: watched, reload: reloadHypothesis } = useHypothesis(frozen ? (draft.hypothesisId ?? null) : null);
+  const hypothesis = watched.status === "ready" ? watched.hypothesis : null;
 
   /* ---- 로그인 ---------------------------------------------------------------- */
 
@@ -56,6 +61,11 @@ export default function PieceMaker() {
   const [authOpen, setAuthOpen] = useState(false);
   /** 로그인 창을 "가설 판정하기"가 열었는가. 로그인이 끝나면 곧 맡긴다. */
   const resumeSubmit = useRef(false);
+
+  // 로그인이 없어 되묻지 못했던 가설은 로그인이 되면 곧 다시 묻는다(헤더에서 로그인해도).
+  useEffect(() => {
+    if (isAuthenticated && watched.status === "unauthorized") void reloadHypothesis();
+  }, [isAuthenticated, watched.status, reloadHypothesis]);
 
   // lore 공용 헤더의 높이를 재서 CSS 변수로 넘긴다. 이 화면은 헤더 아래 남은 높이만 쓴다.
   // 헤더 높이는 화면 폭과 글꼴에 따라 달라지므로 값을 박지 않는다(zzal 의 TamagotchiScreen 과 같다).
@@ -79,15 +89,72 @@ export default function PieceMaker() {
   /* ---- 손에 있는 카드 --------------------------------------------------------- */
 
   const loaded = cards.status === "ready" ? cards.items : [];
+  /** 판정이 가리키는 카드를 찾아 둔 것. `key` 는 어느 판정의 것인지(가설 번호와 판정 시각)다. `ok` 가 거짓이면 근거를 다 찾지 못했다. */
+  const [cited, setCited] = useState<{ key: string; cards: Card[]; ok: boolean } | null>(null);
+  /** 가설이 복사해 둔 카드. 맡길 때 그 회차로 가린 값이라 목록에 없어도 그대로 그린다. */
+  const copied = hypothesis?.cards ?? [];
   /** 최신 값을 ref 에도 둔다. 탐색 패널에 넘기는 함수가 늘 같은 함수로 남아야 `memo` 가 듣는다. */
-  const hand = useRef<{ draft: Draft; loaded: Card[]; chapter: number | null; meta: typeof meta }>({ draft, loaded, chapter, meta });
-  hand.current = { draft, loaded, chapter, meta };
+  const hand = useRef<{ draft: Draft; loaded: Card[]; cited: Card[]; copied: Card[]; chapter: number | null; meta: typeof meta }>({
+    draft,
+    loaded,
+    cited: [],
+    copied,
+    chapter,
+    meta,
+  });
+  hand.current = { draft, loaded, cited: cited?.cards ?? [], copied, chapter, meta };
 
-  /** 손에 있는 카드 — 담은 카드, 받아 둔 목록 순으로 찾는다. 없으면 undefined 다. */
+  /** 손에 있는 카드 — 담은 카드, 받아 둔 목록, 판정의 인용 카드, 가설이 복사한 카드 순으로 찾는다. 없으면 undefined 다. */
   const findCard = useCallback((id: string): Card | undefined => {
-    const { draft: current, loaded: items } = hand.current;
-    return current.cards.find((card) => card.id === id) ?? items.find((card) => card.id === id);
+    const { draft: current, loaded: items, cited: referenced, copied: kept } = hand.current;
+    return (
+      current.cards.find((card) => card.id === id) ??
+      items.find((card) => card.id === id) ??
+      referenced.find((card) => card.id === id) ??
+      kept.find((card) => card.id === id)
+    );
   }, []);
+
+  /* ---- 판정 결과 ------------------------------------------------------------- */
+
+  /** 어느 판정을 그릴 차례인지. COMPLETE 이고 판정 칸이 있을 때만 값이 있다. */
+  const judgedKey =
+    hypothesis && hypothesis.judgementStatus === "COMPLETE" && hypothesis.judgement ? `${hypothesis.id}:${hypothesis.judgedAt ?? ""}` : null;
+
+  // 판정이 오면 그것이 가리키는 카드를 찾아 둔다 — 인용 카드 → 복사한 카드 → 손에 있는 카드 → 카드 상세 API.
+  // 하나라도 못 찾으면 판정을 그리지 않는다(checkJudgement). 다른 판정이 오면 다시 찾는다.
+  useEffect(() => {
+    if (!hypothesis || judgedKey === null || !hypothesis.judgement) return;
+    if (cited?.key === judgedKey) return;
+    const controller = new AbortController();
+    const judgement = hypothesis.judgement;
+    const known = [...citedCards(judgement), ...hypothesis.cards];
+    void (async () => {
+      const found: Card[] = [];
+      for (const id of citedIds(judgement)) {
+        const card =
+          known.find((item) => item.id === id) ??
+          findCard(id) ??
+          (await fetchCard(id, hypothesis.chapter, controller.signal).catch(() => null));
+        if (card) found.push(card);
+      }
+      if (controller.signal.aborted) return;
+      let ok = true;
+      try {
+        checkJudgement({ judgement, presentation: hypothesis.presentation }, (id) => found.some((card) => card.id === id));
+      } catch {
+        ok = false;
+      }
+      setCited({ key: judgedKey, cards: found, ok });
+    })();
+    return () => controller.abort();
+  }, [hypothesis, judgedKey, cited?.key, findCard]);
+
+  /** 그릴 판정. 근거 카드를 다 찾은 뒤에만 값이 있다. */
+  const result: JudgeResult | null =
+    hypothesis && judgedKey !== null && hypothesis.judgement && cited?.key === judgedKey && cited.ok
+      ? { judgement: hypothesis.judgement, presentation: hypothesis.presentation }
+      : null;
 
   /* ---- 모달 ---------------------------------------------------------------- */
 
@@ -258,13 +325,34 @@ export default function PieceMaker() {
   const maxChapter = meta.status === "ready" ? meta.meta.maxChapter : null;
   // 담은 카드의 번호. 제목이나 해석을 칠 때는 `cards` 배열이 그대로라 탐색 패널이 다시 그려지지 않는다.
   const selectedIds = useMemo(() => cardIds(draft), [draft.cards]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** 맡긴 초안의 상태 한 줄. 되묻기의 상태와 판정의 상태를 차례로 본다. */
+  function frozenText(): string {
+    switch (watched.status) {
+      case "idle":
+      case "loading":
+        return JUDGE_TEXT.checking;
+      case "unauthorized":
+        return JUDGE_TEXT.loginToSee;
+      case "missing":
+        return JUDGE_TEXT.missing;
+      case "error":
+        return JUDGE_TEXT.fetchFailed;
+      case "ready": {
+        const value = watched.hypothesis;
+        if (value.judgementStatus === "PENDING") return JUDGE_TEXT.pending;
+        if (value.judgementStatus === "FAILED") return JUDGE_TEXT.judgeFailed(value.failureMessage ?? "");
+        if (result) return JUDGE_TEXT.done;
+        return cited?.key === judgedKey ? JUDGE_TEXT.brokenResult : JUDGE_TEXT.resolving;
+      }
+    }
+  }
   const stateText =
     meta.status === "loading"
       ? "장부를 불러오는 중입니다."
       : meta.status === "error"
         ? JUDGE_TEXT.cardsFailed
         : frozen
-          ? JUDGE_TEXT.submitted
+          ? frozenText()
           : submission.status === "submitting"
             ? JUDGE_TEXT.submitting
             : submission.status === "failed"
@@ -287,7 +375,7 @@ export default function PieceMaker() {
       case "saved":
         return savedModal(saved, chapter, openSavedEntry);
       case "preview":
-        return previewModal(chapter === null || maxChapter === null ? "" : postText(draft, chapter, maxChapter, null), {
+        return previewModal(chapter === null || maxChapter === null ? "" : postText(draft, chapter, maxChapter, result), {
           onClose: closeModal,
           onCopy: () => void copyPost(),
         });
@@ -348,12 +436,14 @@ export default function PieceMaker() {
                   }
                   waiting={submission.status === "submitting"}
                   frozen={frozen}
+                  pending={hypothesis?.judgementStatus === "PENDING"}
                   stateText={stateText}
-                  result={null}
+                  result={result}
                   chapter={chapter}
                   titleOf={(id) => findCard(id)?.title}
                   onJudge={requestJudge}
                   onNew={reset}
+                  onRefresh={() => void reloadHypothesis()}
                   onOpen={openDetail}
                 />
               }

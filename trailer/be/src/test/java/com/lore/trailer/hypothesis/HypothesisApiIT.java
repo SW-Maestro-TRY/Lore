@@ -17,11 +17,11 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 가설 API 의 통합 검사. 표본 25장 위에서 맡기기(2-5)를 본다 — 저장 · 복사 · 가리기 · 검사 문구.
+ * 가설 API 의 통합 검사. 표본 25장 위에서 맡기기(2-5)와 하나 보기(2-6)를 본다 — 저장 · 복사 · 가리기 · 검사 문구 · 되묻기.
  * 로그인은 {@code asUser} 로 넣는다(JWT 필터가 넣는 것과 같은 모양).
  */
 @TrailerIntegrationTest
-@DisplayName("가설 API — 맡기기(2-5)")
+@DisplayName("가설 API — 맡기기(2-5) · 하나 보기(2-6)")
 class HypothesisApiIT extends TrailerItSupport {
 
     private static final String CARDS = "/api/trailer/v1/public/cards";
@@ -135,6 +135,90 @@ class HypothesisApiIT extends TrailerItSupport {
     private long count(String table) {
         Long n = jdbc.queryForObject("select count(*) from " + table, Long.class);
         return n == null ? 0 : n;
+    }
+
+    @Nested
+    @DisplayName("하나 보기(2-6) — 내 것만, 판정 칸은 상태대로")
+    class GetOne {
+
+        private long submitAs(Long user) throws Exception {
+            return data(postJson(user, HYPOTHESES, submission(400, List.of("T2", "T374")))).path("id").asLong();
+        }
+
+        @Test
+        @DisplayName("맡긴 직후 되물으면 맡길 때 받은 것과 같은 모양이고 PENDING 이다")
+        void getReturnsSameShapeAsSubmit() throws Exception {
+            Long user = newUserId();
+            JsonNode submitted = data(postJson(user, HYPOTHESES, submission(400, List.of("T2", "T374"))));
+
+            MvcResult result = getAs(user, HYPOTHESES + "/" + submitted.path("id").asLong());
+
+            assertThat(status(result)).isEqualTo(200);
+            assertThat(data(result)).isEqualTo(submitted);
+            assertThat(data(result).path("judgementStatus").asText()).isEqualTo("PENDING");
+        }
+
+        @Test
+        @DisplayName("★ 남의 가설과 없는 번호와 숫자 아닌 번호는 모두 같은 404 TRAILER_HYPOTHESIS_NOT_FOUND")
+        void othersAndUnknownAre404() throws Exception {
+            Long owner = newUserId();
+            Long stranger = newUserId();
+            long id = submitAs(owner);
+
+            for (String path : List.of(HYPOTHESES + "/" + id, HYPOTHESES + "/999999", HYPOTHESES + "/abc", HYPOTHESES + "/0")) {
+                MvcResult result = getAs(stranger, path);
+                assertThat(status(result)).as(path).isEqualTo(404);
+                assertThat(errorCode(result)).as(path).isEqualTo("TRAILER_HYPOTHESIS_NOT_FOUND");
+            }
+            assertThat(status(getAs(owner, HYPOTHESES + "/" + id))).isEqualTo(200);
+        }
+
+        @Test
+        @DisplayName("로그인 없이 되물으면 401")
+        void anonymousIs401() throws Exception {
+            long id = submitAs(newUserId());
+            assertThat(status(getAnonymously(HYPOTHESES + "/" + id))).isEqualTo(401);
+        }
+
+        @Test
+        @DisplayName("★ COMPLETE 이면 판정(jsonb)이 넣은 그대로 객체로 돌아오고 judgedAt 이 찍힌다 — jsonb 왕복")
+        void completeReturnsJudgementObjects() throws Exception {
+            Long user = newUserId();
+            long id = submitAs(user);
+            String judgement = "{\"grade\": \"likely\", \"reason\": \"샹크스의 약속은 장부에 두 번 나온다.\", "
+                    + "\"support\": [\"T2\", \"T374\"], \"against\": [], "
+                    + "\"cited_cards\": [{\"id\": \"T2\", \"title\": \"약속\"}]}";
+            String presentation = "{\"status\": \"complete\", \"headline\": \"약속은 이어진다\", \"sections\": [], \"details\": []}";
+            jdbc.update("update hypotheses set judgement_status = 'COMPLETE', judgement = ?::jsonb, presentation = ?::jsonb, "
+                    + "judged_at = now() where id = ?", judgement, presentation, id);
+
+            JsonNode h = data(getAs(user, HYPOTHESES + "/" + id));
+
+            assertThat(h.path("judgementStatus").asText()).isEqualTo("COMPLETE");
+            assertThat(h.path("judgement").path("grade").asText()).isEqualTo("likely");
+            assertThat(h.path("judgement").path("support").size()).isEqualTo(2);
+            assertThat(h.path("judgement").path("cited_cards").get(0).path("id").asText()).isEqualTo("T2");
+            assertThat(h.path("presentation").path("headline").asText()).isEqualTo("약속은 이어진다");
+            assertThat(h.path("judgedAt").asText()).isNotEmpty();
+            assertThat(h.path("failureMessage").isNull()).isTrue();
+        }
+
+        @Test
+        @DisplayName("FAILED 이면 실패 문구가 오고 판정 칸은 null 이다")
+        void failedReturnsMessage() throws Exception {
+            Long user = newUserId();
+            long id = submitAs(user);
+            jdbc.update("update hypotheses set judgement_status = 'FAILED', failure_message = '모델이 답하지 않았습니다', "
+                    + "judged_at = now() where id = ?", id);
+
+            JsonNode h = data(getAs(user, HYPOTHESES + "/" + id));
+
+            assertThat(h.path("judgementStatus").asText()).isEqualTo("FAILED");
+            assertThat(h.path("failureMessage").asText()).isEqualTo("모델이 답하지 않았습니다");
+            assertThat(h.path("judgement").isNull()).isTrue();
+            assertThat(h.path("presentation").isNull()).isTrue();
+            assertThat(h.path("judgedAt").asText()).isNotEmpty();
+        }
     }
 
     @Nested

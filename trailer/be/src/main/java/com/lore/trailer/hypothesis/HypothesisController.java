@@ -5,8 +5,11 @@ import com.lore.common.response.ApiResponse;
 import com.lore.trailer.hypothesis.dto.HypothesisRequests;
 import com.lore.trailer.hypothesis.dto.HypothesisResponses;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -49,5 +52,25 @@ public class HypothesisController {
     public ApiResponse<HypothesisResponses.Hypothesis> submit(@LoginUser Long userId,
                                                               @RequestBody HypothesisRequests.Submit body) {
         return ApiResponse.ok(service.submit(userId, body));
+    }
+
+    @Operation(summary = "가설 하나와 판정 되묻기", description = """
+            맡긴 가설을 요청 id 로 연다. 보관함에서 하나를 열 때, 판정을 맡긴 뒤 결과를 되물을 때 부른다.
+            몇 초마다 되물을지는 화면이 정한다 — 판정은 운영자가 따로 넣어서 시간이 걸린다.
+            - `judgementStatus` 가 `PENDING` 이면 판정 칸 셋은 null
+            - `COMPLETE` 면 `judgement`(judge.py 출력 그대로 — grade · reason · support · against · cited_cards)와
+              `presentation`(편집본. 없을 수 있음), `judgedAt`
+            - `FAILED` 면 독자에게 보일 `failureMessage`
+            - 없는 번호와 **남의 가설은 같은 404**(TRAILER_HYPOTHESIS_NOT_FOUND) — 번호를 바꿔 가며 남의 가설을 찾아낼 수 없다""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "가설 하나"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "로그인 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "없는 번호 또는 남의 가설(TRAILER_HYPOTHESIS_NOT_FOUND)")})
+    @GetMapping("/{id}")
+    public ApiResponse<HypothesisResponses.Hypothesis> get(@LoginUser Long userId,
+                                                           @Parameter(description = "요청 id. 맡길 때 받은 값", example = "17")
+                                                           @PathVariable("id") String id) {
+        return ApiResponse.ok(service.get(userId, id));
     }
 }
