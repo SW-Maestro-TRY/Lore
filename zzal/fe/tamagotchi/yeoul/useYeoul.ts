@@ -1305,6 +1305,9 @@ export function useYeoul(live?: Live) {
     const svName = PERSONA_LABEL[liveRef.current?.pet?.personality ?? ''] ?? '';
     const chosen = sRef.current.picks.persona ?? (svName ? [svName] : []);
     const persona = PERSONALITY_OF[chosen[0] ?? ''];
+    // ★ 고른 것이 없으면 보낼 것이 없다. **칸 진행과는 무관하다** — 4칸은 시트를 연 순간
+    //   이미 넘어갔다(→ `openSettings`). 이 단추는 이제 **저장만** 한다.
+    if (!persona) { flash('성격을 하나 이상 골라 주세요'); return; }
     // 다시 눌렀다 — 지난 실패 줄은 지우고 시작한다.
     patch({ saveErr: '' });
     // ★ 목(서버 없는 진짜 방)에서도 **이 칸을 밟을 수 있어야** 한다(2026-09-22) — 튜토리얼이
@@ -1312,20 +1315,8 @@ export function useYeoul(live?: Live) {
     //   남기고 칸을 넘긴다. 연습방은 여전히 저장하지 않는다(거긴 연습이다).
     if (!onServerRef.current) {
       patch({ sheet: null });
-      flash(sRef.current.sampleMode ? '연습방이라 저장되지 않아요'
-        : persona ? '기억해 뒀어요' : '확인했어요');
+      flash(sRef.current.sampleMode ? '연습방이라 저장되지 않아요' : '기억해 뒀어요');
       if (!sRef.current.sampleMode) tutorDone('PERSONALITY');
-      return;
-    }
-    // ★ 안 고른 채 눌렀다 — **확인만 해도 넘어가는 길**로 간다(서버가 그렇게 만들어 두었다).
-    //   저장할 것이 없으므로 적어 둔 세계관은 화면에 그대로 남는다(성격을 고르면 그때 같이 간다).
-    if (!persona) {
-      void (async () => {
-        const r = await liveRef.current?.tutorialSeen();
-        if (!r || !r.ok) { patch({ saveErr: saveFailLine(r?.code ?? null, r?.status, r?.message ?? null) }); return; }
-        patch({ sheet: null, saveErr: '' });
-        flash('확인했어요');
-      })();
       return;
     }
     // 세계관은 칩 여러 개 + 직접 적은 한 줄을 **서버 한 칸에** 이어 붙인다.
@@ -1914,7 +1905,26 @@ export function useYeoul(live?: Live) {
     if (tl && tl.room !== 'info') return;
     // 새로 열 때는 지난 실패 줄을 지운다 — 다시 와서 보는 사람에게 옛 경고가 남아 있으면 안 된다.
     patch({ sheet: 'settings', decoOpen: false, saveErr: '' });
-  }, [patch, flash]);
+    /**
+     * ★★ **4칸은 이 단추를 누르는 순간 넘어간다**(2026-09-22 상훈님 판정 2안).
+     *
+     * 4칸은 "고쳤는가" 가 아니라 **"확인했는가"** 를 세는 칸이다(서버 `PetService.tutorialSeen`:
+     * *"아이 정보를 확인만 해도 넘어간다"*). 그러니 **연 것이 곧 확인**이다 — 시트 안의
+     * 단추를 한 번 더 누르게 하면 "확인" 을 두 번 시키는 셈이고, 안 누르고 닫은 사람은
+     * 확인을 했는데도 4칸에 남는다.
+     * ★ 시트는 그대로 열린다. 넘어감만 즉시다.
+     * ★ 여기서만 부른다 — `tl.room === 'info'` 는 **4칸일 때만** 참이라(`room:'info'` 인 칸이
+     *   하나뿐) 시트를 다시 열어도 두 번 나가지 않는다. 서버도 지금 칸이 아니면 아무 일도
+     *   안 한다(`advanceTutorial` 이 현재 칸을 먼저 본다) — 한 겹 더 막혀 있다.
+     * ★ 실패하면 **시트 안에 말한다**(조용한 실패 금지 · 판정 6과 같은 자리).
+     */
+    if (!tl || tl.room !== 'info') return;
+    if (!onServerRef.current) { tutorDone('PERSONALITY'); return; }
+    void (async () => {
+      const r = await liveRef.current?.tutorialSeen();
+      if (!r || !r.ok) patch({ saveErr: saveFailLine(r?.code ?? null, r?.status, r?.message ?? null) });
+    })();
+  }, [patch, tutorDone]);
   const pickNeedStyle = useCallback((v: NeedStyle) => () => patch({ needStyleLocal: v }), [patch]);
   const toggleNotif = useCallback(() => setS((v) => ({ ...v, notifOn: !v.notifOn })), []);
   const toggleLeave = useCallback(() => setS((v) => ({ ...v, leaveOff: !v.leaveOff })), []);
@@ -3054,19 +3064,19 @@ export function useYeoul(live?: Live) {
         saveNote: onServer ? '' : (s.sampleMode ? '연습방이라 저장되지 않아요' : '서버가 없어 화면에만 남아요'),
         save: {
           show: onServer || !s.sampleMode,
-          /**
-           * 단추 이름. **고른 것이 있으면 저장, 없으면 확인**이다.
-           *
-           * ★ 2026-09-22 — 성격을 안 고른 채로도 눌린다(판정 2). 그때 「성격 저장하기」라고
-           *   적으면 **저장하지 않는 일을 저장한다고 말하는 것**이라 이름을 바꿔 단다.
-           *   4칸은 "확인했는가" 를 세는 칸이므로 확인도 제 일을 한 것이다.
-           */
-          label: personaShown[0] ? '성격 저장하기' : '확인했어요',
+          label: '성격 저장하기',
           tap: onSavePersona,
-          // ★ **잠그지 않는다**(판정 2) — 성격 고르기는 필수가 아니다. 안 고르고 눌러도
-          //   서버가 4칸을 넘겨 준다(`tutorialSeen`). 목도 같다.
-          off: false,
-          why: '',
+          /**
+           * 고르지 않았으면 보낼 것이 없다 — 서버가 성격을 필수로 받는다.
+           *
+           * ★★ 2026-09-22(판정 2안) — **이 잠금은 이제 아무도 막지 않는다.** 4칸은 시트를
+           *   **연 순간** 넘어가므로(→ `openSettings`), 성격을 안 고르는 사람도 튜토리얼이
+           *   막히지 않는다. 그래서 잠깐 두었던 「확인했어요」 단추는 걷어냈다 —
+           *   그 단추가 하던 일(안 고르고 시트를 닫기)은 **머리줄의 ✕** 가 이미 한다.
+           *   저장하지 않는 단추를 하나 더 두면 "내가 고른 것이 기록됐다" 로 읽힐 수 있다.
+           */
+          off: !personaShown[0],
+          why: '성격을 하나 이상 골라 주세요',
           /** 저장이 거절된 이유 한 줄. 빈 문자열이면 안 그린다(→ `saveFailLine`). */
           err: s.saveErr,
         },
