@@ -68,6 +68,13 @@ export interface CareResult {
   ok: boolean;
   /** 거절이면 화면에 띄울 한 줄. 안 보냈으면 null. */
   message: string | null;
+  /**
+   * 서버가 준 **거절 사유 코드**(`ApiError.code`). 화면이 사유별로 다른 말을 하려면
+   * 문장이 아니라 이 코드로 갈라야 한다 — 서버 문장이 바뀌어도 안 깨진다(기권 실패와 같은 방식).
+   * 코드 없는 401 이 실제로 있어서(→ `common/fe/api/client.ts`) `status` 도 같이 준다.
+   */
+  code?: string | null;
+  status?: number;
 }
 
 const GAUGE_MAX = 4;
@@ -651,13 +658,18 @@ export function useHatchState(): Live {
 
   /** 서버로 보내고 응답(=최신 상태)을 얹는 작은 틀. 성격 저장·튜토리얼 마무리가 같은 모양이라 묶었다. */
   const send = useCallback(async (call: () => Promise<PetDetail>, fallback: string): Promise<CareResult> => {
-    if (!petId) return { ok: false, message: null };
+    if (!petId) return { ok: false, message: fallback, code: 'ZZAL_PET_NOT_FOUND' };
     const seq = takeSeq();
     try {
       putPet(seq, await call());
       return { ok: true, message: null };
     } catch (e) {
-      return { ok: false, message: e instanceof Error ? e.message : fallback };
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : fallback,
+        code: e instanceof ApiError ? e.code : null,
+        status: e instanceof ApiError ? e.status : undefined,
+      };
     }
   }, [petId, takeSeq, putPet]);
 
