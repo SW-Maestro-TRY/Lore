@@ -393,12 +393,17 @@ export default function Room({ y }: { y: Yeoul }) {
             {/* 아이 뒤에 깔리는 것(매트). 반전 바깥이라 걸음마다 뒤집히지 않는다. */}
             <PropLayer z="below_char" scene={scene} table={table} anchors={anchors} />
             {/* ★ 배부름 0 이면 **그림만 0.7배**로 줄인다(정본 §게이지 · 2026-09-22 판정 J).
-                상자는 그대로 둔다 — 상자를 줄이면 바닥 소품(똥)이 읽는 자(`charBox` 폭)까지
-                같이 줄어 방 안 물건이 통째로 작아진다. 발끝은 그대로 바닥에 두려고 아래를 축으로 잡는다. */}
+                ★ 상자(`charBox`)는 그대로 둔다 — 상자를 줄이면 바닥 소품(똥)이 읽는 자(상자 폭)까지
+                  같이 줄어 방 안 물건이 통째로 작아진다. 발끝은 그대로 바닥에 두려고 아래가 축이다.
+                ★★ **배율은 제 겹을 따로 쓴다.** 아래 `yFace`·`yHop` 은 키프레임이 `transform` 을
+                  건드려서(걸음 뒤집기·뜀), 같은 칸에 인라인 `transform` 을 적으면 **애니메이션이 이긴다**
+                  (2026-09-22 실측: 0.7 을 줬는데 그림 크기가 그대로였다). */}
+            <div style={{
+              width: '100%', height: '100%', transformOrigin: 'bottom center', transition: 'transform .3s ease',
+              ...(v.st.charScale === 1 ? null : { transform: `scale(${v.st.charScale})` }),
+            }}>
             <div style={{
               width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play,
-              ...(v.st.charScale === 1 ? null : { transform: `scale(${v.st.charScale})`, transformOrigin: 'bottom center' }),
-              transition: 'transform .3s ease',
             }}>
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -415,6 +420,7 @@ export default function Room({ y }: { y: Yeoul }) {
                   style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: 'yBob 4.6s ease-in-out infinite', filter: v.st.charFilter }}
                 />
               </div>
+            </div>
             </div>
             {/* 아이 앞에 얹히는 것(머리 옆 기호·손 앞 먹을 것·발치 소품). */}
             <PropLayer scene={scene} table={table} anchors={anchors} />
