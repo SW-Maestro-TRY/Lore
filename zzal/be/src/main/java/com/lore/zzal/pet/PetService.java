@@ -407,7 +407,7 @@ public class PetService {
         if (pet.isSleeping()) {
             return;
         }
-        Instant woke = pet.getWokeAt() == null ? pet.getHatchedAt() : pet.getWokeAt();
+        Instant woke = pet.dayStartedAt();
         List<ZzalMotion> arrived = motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
                         pet.getId(), MotionStatus.OPEN).stream()
                 .filter(m -> revealedByNow(m, woke))

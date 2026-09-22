@@ -115,7 +115,7 @@ public class ChatService {
         if (pet.isInTutorial()) {
             return out;
         }
-        Instant woke = pet.getWokeAt() == null ? pet.getHatchedAt() : pet.getWokeAt();
+        Instant woke = pet.dayStartedAt();
         LocalDate day = AwakeClock.dateOf(woke);
         Instant morning = woke.plus(ZzalRules.CHAT_MORNING_AFTER_WAKE);
         Instant noon = woke.plus(ZzalRules.CHAT_NOON_AFTER_WAKE);

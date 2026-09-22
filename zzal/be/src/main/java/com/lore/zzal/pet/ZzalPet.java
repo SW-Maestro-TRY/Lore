@@ -712,6 +712,21 @@ public class ZzalPet {
         return real.plusSeconds(devClockOffsetSeconds);
     }
 
+    /**
+     * 이 펫의 <b>하루가 시작된 시각</b>(펫 시계) — 마지막 밤잠에서 깬 때. 아직 한 번도 안 자 봤으면 부화 시각.
+     *
+     * <h3>★★ 하루의 경계는 자정이 아니다</h3>
+     * 정본 16장 "하루의 경계 = 밤잠 드는 순간" — {@code today*} 카운터는 {@link #sleep} 에서 0 이 되고,
+     * 자는 동안에는 아무 행동도 할 수 없으므로 <b>사용자가 겪는 하루</b>는 이 기상부터 다음 기상까지다.
+     * 낮잠은 경계가 아니다({@code wokeAt} 은 밤잠에서 깰 때만 갱신된다).
+     *
+     * ★ 여기를 한 곳으로 모은 이유 — 같은 식이 채팅 부름·심화 공개·동작 희망에 각각 적혀 있었다.
+     *   한 곳이라도 자정으로 남으면 사용자에게는 "어떤 것은 자정에, 어떤 것은 기상에 풀린다" 로 보인다.
+     */
+    public Instant dayStartedAt() {
+        return wokeAt == null ? hatchedAt : wokeAt;
+    }
+
     /** dev — 시계를 앞으로 민다. 규칙은 한 글자도 안 바뀌고 기다림만 사라진다. */
     public void advanceDevClock(Duration by) {
         devClockOffsetSeconds += by.getSeconds();

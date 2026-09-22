@@ -687,7 +687,7 @@ public final class PetResponses {
 
         /** 다음 부름 시각 — 기상+1h / 기상+7h / 19:00 중 지금 이후 가장 가까운 것(부름 상태는 PR-4). */
         static Instant nextChatAt(ZzalPet pet, Instant now) {
-            Instant woke = pet.getWokeAt() == null ? pet.getHatchedAt() : pet.getWokeAt();
+            Instant woke = pet.dayStartedAt();
             Instant evening = AwakeClock.dateOf(woke).atTime(ZzalRules.SLEEP_WINDOW_OPENS).atZone(ZzalRules.ZONE).toInstant();
             return Stream.of(woke.plus(ZzalRules.CHAT_MORNING_AFTER_WAKE), woke.plus(ZzalRules.CHAT_NOON_AFTER_WAKE), evening)
                     .filter(t -> t.isAfter(now))
