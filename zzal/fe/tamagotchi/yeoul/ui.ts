@@ -237,5 +237,13 @@ export const KEYFRAMES = `
      떨어지지 않아 계속 펴진 채로 남는다. 폰에서 유일하게 확실한 길은 누르기다. */
 .yeoul-mini-more{display:none}
 .yeoul-mini-more.is-open{display:flex}
-@media (hover: hover){ .yeoul-mini:hover .yeoul-mini-more{display:flex} }
+/* ★★ 펴면 **요약 줄을 감춘다**(2026-09-22 판정 1). 요약 줄은 "다음에 배울 것 하나" 이고
+   목록의 첫 줄도 같은 하나라, 펴면 '손 흔들며 인사 · 대화 답하기 0/4' 가 위아래로 **두 번**
+   떴다(폭 7 · 높이 3 · 목/서버 전부에서 재현). 접힘 = 요약, 펴짐 = 목록. 한 번에 하나만 말한다. */
+.yeoul-mini-sum{display:flex}
+.yeoul-mini[data-open="1"] .yeoul-mini-sum{display:none}
+@media (hover: hover){
+  .yeoul-mini:hover .yeoul-mini-more{display:flex}
+  .yeoul-mini:hover .yeoul-mini-sum{display:none}
+}
 `;

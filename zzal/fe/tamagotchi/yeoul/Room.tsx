@@ -1186,7 +1186,9 @@ function MiniCard({ y }: { y: Yeoul }) {
       {/* ── 로드맵 ── 접히면 다음 하나만, 펴면 넷 전부 */}
       {m.hasGoal && (
         <>
-          <span data-part="mini-sum" style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm }}>
+          {/* 접혔을 때만 보이는 요약 한 줄 — 펴지면 CSS 가 감춘다(→ `ui.ts` `.yeoul-mini-sum`).
+              목록 첫 줄과 같은 내용이라, 같이 띄우면 같은 말이 두 번 뜬다. */}
+          <span className="yeoul-mini-sum" data-part="mini-sum" style={{ alignItems: 'baseline', gap: gap.sm }}>
             <span style={{ fontSize: fz.sm, color: C.ink }}>{m.name}</span>
             <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{m.cond}</span>
           </span>
