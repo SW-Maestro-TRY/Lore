@@ -33,7 +33,7 @@
 
 | 호출 | 요청 | 응답 | 거절 |
 |---|---|---|---|
-| `POST /` | `{name ≤12, note? ≤200, world? ≤100, tone? ≤32, genre? ≤32, imageKey}` | `Created{petId,name,phase,hatchStartedAt,estimatedSeconds}` | `INVALID_UPLOAD_KEY` `UPLOAD_KEY_ALREADY_USED` `ZZAL_PET_ALREADY_HATCHING` `ZZAL_PET_LIMIT_REACHED` |
+| `POST /` | `{name ≤12, note? ≤200, world? ≤200, tone? ≤100, genre? ≤100, imageKey}` | `Created{petId,name,phase,hatchStartedAt,estimatedSeconds}` | `INVALID_UPLOAD_KEY` `UPLOAD_KEY_ALREADY_USED` `ZZAL_PET_ALREADY_HATCHING` `ZZAL_PET_LIMIT_REACHED` |
 | `GET /` | | `PetDetail[]` | |
 | `GET /{id}` | | `PetDetail` | `ZZAL_PET_NOT_FOUND` |
 | `POST /{id}/release` | | `PetDetail`(phase DEAD) | `ZZAL_PET_RELEASE_NOT_ALLOWED` |
@@ -46,7 +46,19 @@
   - **수면 중·여행 중·튜토리얼 미완료에도 받는다.** 아이를 돌보는 호출이 아니라 **화면이 무엇을 이미 보여 줬는지** 적는 호출이라 거절할 이유가 없고, 기준은 서버의 진행도가 아니라 **화면이 그 판을 닫은 시점**이다. 여기서 거절하면 이미 본 축하 창이 다음 접속에 다시 뜨는데, 그 사실은 로그 어디에도 안 남고 **창으로만** 드러난다.
   - **정산(settle)을 태우지 않는다** — 축하 창을 닫는 것만으로 함께한 날이 오르거나 게이지가 흐르면 안 된다.
   - **204인 이유**는 1.9(동작 요청)와 같다. 돌려줄 것이 없고, 값은 다음 조회에 실려 온다.
-- **말투·장르**(2026-09-13 추가)는 자유 입력 32자. **대사 톤에만** 쓰고 그림 생성에는 넣지 않는다. 상한은 `ZzalRules.TONE_MAX_CHARS`·`GENRE_MAX_CHARS` 하나가 요청 검증·엔티티·DB 칸·이 표를 함께 정한다 — 갈리면 검증을 통과한 입력이 저장에서 터져 사용자에게 500 만 간다.
+- **말투·장르**(2026-09-13 추가)는 자유 입력이며 **대사 톤에만** 쓰고 그림 생성에는 넣지 않는다.
+- **온보딩 자유 입력 한도**(2026-09-22 확대) — 칸마다 넉넉하게 잡는다.
+
+  | 칸 | 상한 | 왜 |
+  |---|---|---|
+  | 이름 `name` | 12자 | 화면에 늘 붙어 다니는 이름이라 길면 잘린다(정본 15장) |
+  | 말투 `tone` | **100자**(옛 32) | 32자는 "무뚝뚝한 존댓말" 한 마디에서 끝나 설명할 자리가 없었다 |
+  | 장르 `genre` | **100자**(옛 32) | 말투와 같은 이유·같은 규칙 |
+  | 세계관 `world` | **200자**(옛 100) | **칩(고른 낱말)과 직접 쓴 글이 한 칸을 나눠 쓴다** — 칩 몇 개만 붙여도 쓸 자리가 없었다 |
+  | 그 밖에 `note` | 200자 | 그대로 |
+
+  - 상한은 `ZzalRules.NAME_MAX_CHARS`·`TONE_MAX_CHARS`·`GENRE_MAX_CHARS`·`WORLD_MAX_CHARS` **상수 하나**가 요청 검증(`@Size`)·엔티티 칸(`@Column`)·DB 칸(마이그레이션)·이 표를 함께 정한다 — 갈리면 검증을 통과한 입력이 저장에서 터져 사용자에게 400 이 아니라 500 만 간다(세계관 칸에서 실제로 났다). `ToneAndGenreLengthContractTest`·`WorldLengthContractTest` 가 네 곳을 대조한다.
+  - **넓히기만 한다** — varchar 길이를 늘리는 것은 테이블 재작성 없이 끝나고 기존 값을 한 글자도 안 건드린다. 좁히려면 이미 저장된 글을 자르는 문제를 먼저 풀어야 한다.
 
 ### 1.2 돌봄
 
@@ -91,7 +103,7 @@
 
 | 호출 | 요청 | 비고 | 거절 |
 |---|---|---|---|
-| `POST /{id}/personality` | `{personality: GENTLE\|LIVELY\|SHY\|CLINGY\|COOL, world? ≤100}` | 언제든. 온순·활발·수줍음·응석·시크(정본 16장 기본 이름) | |
+| `POST /{id}/personality` | `{personality: GENTLE\|LIVELY\|SHY\|CLINGY\|COOL, world? ≤200}` | 언제든. 온순·활발·수줍음·응석·시크(정본 16장 기본 이름) | |
 | `POST /{id}/background` | `{background}` | 프론트 배경 16종 key(`room` `window_day` …). 2층 4종 열린 뒤 | `ZZAL_FEATURE_LOCKED` |
 | `POST /{id}/share` | `{motionKey, kind: DOWNLOAD\|SHARE}` | 열린 동작 어느 것이든. 서버는 **횟수만 기록**(튜토리얼 25분의 "했다"가 되는 서버 사실). 파일 합성은 v2 워터마크 때 | `ZZAL_MOTION_NOT_OPEN` |
 
@@ -267,9 +279,9 @@
   "sceneNew": false,                     // ★ 이번 조회에서 장면이 새로 남았나 — 귀환 첫 화면을 한 번만 띄우려고
 
   "personality": null,                   // GENTLE · LIVELY · SHY · CLINGY · COOL · null(아직 안 고름)
-  "world": null,                         // 세계관 한 줄 ≤100
-  "tone": null,                          // 말투 ≤32. 대사 톤에만 쓰이고 그림에는 안 들어간다
-  "genre": null,                         // 장르 ≤32. 말투와 같은 규칙
+  "world": null,                         // 세계관 ≤200(칩+직접 쓴 글이 한 칸)
+  "tone": null,                          // 말투 ≤100. 대사 톤에만 쓰이고 그림에는 안 들어간다
+  "genre": null,                         // 장르 ≤100. 말투와 같은 규칙
   "background": "room",
   "anchorsKey": "images/zzal/pets/7/basic/2/anchors.json",  // 소품 좌표. 그림과 같은 판. 없으면 null
 

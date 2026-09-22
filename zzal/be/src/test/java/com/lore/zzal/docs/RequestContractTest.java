@@ -86,10 +86,12 @@ class RequestContractTest {
         }
 
         @Test
-        @DisplayName("★★ 세계관은 <b>부르는 곳마다 길이가 다르다</b> — 이름 지을 때 100자, 성격 화면에서 40자")
-        void worldHasTwoDifferentLimits() {
-            assertThat(accepted(new PetRequests.Character("여울", null, null, chars(100), null, null, null))).isTrue();
-            assertThat(accepted(new PetRequests.Character("여울", null, null, chars(101), null, null, null))).isFalse();
+        @DisplayName("★★ 세계관은 <b>부르는 곳이 둘인데 길이는 하나</b> — 이름 지을 때도 성격 화면에서도 같은 상수")
+        void worldHasTheSameLimitEverywhere() {
+            assertThat(accepted(new PetRequests.Character(
+                    "여울", null, null, chars(ZzalRules.WORLD_MAX_CHARS), null, null, null))).isTrue();
+            assertThat(accepted(new PetRequests.Character(
+                    "여울", null, null, chars(ZzalRules.WORLD_MAX_CHARS + 1), null, null, null))).isFalse();
 
             assertThat(accepted(new PetRequests.PersonalityChoice(
                     null, List.of(Personality.GENTLE), chars(ZzalRules.WORLD_MAX_CHARS)))).isTrue();

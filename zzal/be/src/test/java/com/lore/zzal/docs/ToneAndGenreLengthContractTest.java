@@ -41,9 +41,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("말투·장르 — 상한이 세 곳에서 같다")
 class ToneAndGenreLengthContractTest {
 
-    /** {@code ADD COLUMN tone character varying(32)} 같은 줄. */
-    private static final Pattern ADD_COLUMN =
-            Pattern.compile("ADD COLUMN\\s+%s\\s+character varying\\((\\d+)\\)", Pattern.CASE_INSENSITIVE);
+    /**
+     * 칸 길이를 정하는 줄 — <b>만들 때와 넓힐 때를 같이</b> 본다.
+     *
+     * <pre>
+     *   ADD COLUMN   tone      character varying(32)    ← 칸을 만들 때(V14)
+     *   ALTER COLUMN tone TYPE character varying(100)   ← 나중에 넓힐 때(V20260922_0200)
+     * </pre>
+     *
+     * ★ 만들 때만 보면 이 시험은 <b>조용히 옛 길이를 읽는다.</b> 한도를 넓히는 마이그레이션이
+     *   들어와도 눈에 안 들어와, 상수는 100 인데 시험은 32 를 본 채 빨간불을 내거나 —
+     *   더 나쁘게는 반대 방향으로 어긋난 스키마를 초록으로 통과시킨다.
+     */
+    private static final Pattern COLUMN_LENGTH = Pattern.compile(
+            "(?:ADD|ALTER) COLUMN\\s+%s\\s+(?:TYPE\\s+)?character varying\\((\\d+)\\)",
+            Pattern.CASE_INSENSITIVE);
 
     /**
      * 마이그레이션 판 번호. 마디가 여럿일 수 있다 — Flyway 는 파일 이름의 {@code _} 를
@@ -117,7 +129,10 @@ class ToneAndGenreLengthContractTest {
                 .collect(Collectors.toSet());
     }
 
-    /** 마이그레이션을 판 번호 순서대로 읽어 그 칸에 마지막으로 정해진 길이를 돌려준다. */
+    /**
+     * 마이그레이션을 판 번호 순서대로 읽어 그 칸에 <b>마지막으로</b> 정해진 길이를 돌려준다.
+     * 한 파일 안에서는 나타난 차례대로 읽으므로, 만든 뒤 같은 파일에서 넓혀도 나중 값이 이긴다.
+     */
     private int columnLengthInMigrations(String column) throws IOException {
         Path dir = repoRoot().resolve("apps/api/src/main/resources/db/migration");
         List<Path> ordered;
@@ -126,7 +141,7 @@ class ToneAndGenreLengthContractTest {
                     .sorted(ToneAndGenreLengthContractTest::compareVersions)
                     .toList();
         }
-        Pattern pattern = Pattern.compile(ADD_COLUMN.pattern().formatted(column), Pattern.CASE_INSENSITIVE);
+        Pattern pattern = Pattern.compile(COLUMN_LENGTH.pattern().formatted(column), Pattern.CASE_INSENSITIVE);
         int length = -1;
         for (Path file : ordered) {
             Matcher m = pattern.matcher(Files.readString(file));

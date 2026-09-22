@@ -267,23 +267,34 @@ public final class ZzalRules {
     /** 기억 — 최근 답 5개를 재언급. */
     public static final int CHAT_MEMORY = 5;
 
-    /** 세계관 한 줄 100자. 성격 그룹은 5개 고정(GENTLE·LIVELY·SHY·CLINGY·COOL). */
-    public static final int WORLD_MAX_CHARS = 100;
+    /**
+     * 세계관 <b>200자</b>. 성격 그룹은 5개 고정(GENTLE·LIVELY·SHY·CLINGY·COOL).
+     *
+     * <h3>★ 100 → 200 (2026-09-22)</h3>
+     * 이 칸만 다른 칸의 두 배인 이유는 <b>칩과 글이 한 칸을 나눠 쓰기</b> 때문이다. 화면에서 고른
+     * 낱말(칩)이 그대로 이 글에 붙어 저장되므로, 칩 몇 개를 고르고 나면 직접 쓸 자리가 얼마 안 남는다.
+     * 말투·장르는 낱말 한두 개짜리 칸이라 그런 일이 없다.
+     */
+    public static final int WORLD_MAX_CHARS = 200;
 
     /**
-     * 말투·장르 한 줄 32자.
+     * 말투·장르 한 줄 <b>100자</b>.
      *
      * <h3>★ 이 상수 하나가 네 곳을 묶는다</h3>
      * 요청 검증({@code @Size}) · 엔티티 칸 길이({@code @Column}) · DB 칸 길이(마이그레이션) · 문서.
      * 이 넷이 갈리면 <b>검증은 통과하고 저장에서 터진다</b> — 사용자에게는 "너무 깁니다" 가 아니라
      * 그냥 500 이 가고, 짧게 줄이면 되는 입력인데 앱이 고장 난 것처럼 보인다(세계관 칸에서 실제로 났다).
      *
+     * <h3>★ 32 → 100 (2026-09-22)</h3>
+     * 32자는 "무뚝뚝한 존댓말" 한 마디에서 끝나 <b>말투를 설명할 자리가 없었다</b>. 한도는 칸마다
+     * 넉넉하게 잡는다(상훈님 결정). 넓히는 방향이라 이미 저장된 글은 한 글자도 안 건드린다.
+     *
      * ★ 둘 다 <b>대사 톤에만</b> 쓴다. 그림 생성에는 들어가지 않는다.
      */
-    public static final int TONE_MAX_CHARS = 32;
+    public static final int TONE_MAX_CHARS = 100;
 
-    /** 장르 한 줄 32자. {@link #TONE_MAX_CHARS} 와 같은 이유로 한 상수다. */
-    public static final int GENRE_MAX_CHARS = 32;
+    /** 장르 한 줄 100자. {@link #TONE_MAX_CHARS} 와 같은 이유로 한 상수다. */
+    public static final int GENRE_MAX_CHARS = 100;
 
     // ── 11장 장면 ─────────────────────────────────────────────────────────
 
