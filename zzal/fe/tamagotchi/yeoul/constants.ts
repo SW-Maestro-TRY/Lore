@@ -249,15 +249,14 @@ export const TUTOR: readonly TutorStep[] = [
 export const TUTOR_MAIN: readonly TutorStep[] = [
   { at: '0분', room: null, act: null, done: 'any', text: '오늘부터 함께예요. 천천히 둘러봐도 돼요.' },
   { at: '3분', room: null, act: 'pet', done: 'pet', text: '손을 대 보세요. 쓰다듬기는 하루 세 번까지 세어 줘요.' },
-  { at: '8분', room: 'table', act: 'a', done: 'feed', text: '배가 고파요. 주방에서 밥을 주세요 · 재고는 시간이 지나면 채워져요.' },
-  { at: '15분', room: 'bath', act: 'a', done: 'clean', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요.' },
+  { at: '8분', room: 'table', act: 'a', done: 'feed', text: '배가 고파요. 주방에서 밥을 주세요 · 재고는 시간이 지나면 채워져요. 간식은 하루 네 개까지예요 — 다섯 개째는 배탈이 나요.' },
+  { at: '15분', room: 'bath', act: 'a', done: 'clean', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요. 목욕은 하루 한 번이에요.' },
   { at: '20분', room: 'play', act: 'a', done: 'game', text: '놀고 싶어요. 시작하면 오늘 세 판 중 하나예요. 중간에 나가면 그 판은 져요.' },
   { at: '25분', room: 'chat', act: null, done: 'chat', text: '하루에 세 번 불러요. 말풍선을 누르면 답할 수 있어요.' },
   { at: '40분', room: 'bed', act: 'a', done: 'sleep', text: '저녁 7시가 되면 침실에서 재워 주세요. 자는 동안 다 회복돼요.' },
-  // ★ 마지막 칸이 **남은 규칙 셋**을 받는다(2026-09-21 판정 — 8칸짜리 목에도 넣는다).
-  //   간식·목욕·약은 튜토리얼에서 한 번도 안 눌리는데 셋 다 거절이 붙어, 안 말해 주면
-  //   **처음 만나는 순간이 곧 첫 실패**가 된다(간식은 거절도 아니고 아이가 아파진다).
-  { at: '60분', room: 'album', act: 'a', done: 'album', text: '함께한 순간은 앨범 벽에 쌓여요. 열어 보세요. 간식은 하루 네 개까지예요 — 다섯 개째는 배탈이 나요. 목욕은 하루 한 번, 약은 아플 때만 줄 수 있어요.' },
+  // ★ 간식·목욕 규칙은 **그 버튼이 있는 칸**으로 옮겼다(2026-09-22 판정 F8 — 9칸짜리와 같은 규칙).
+  //   여기 남는 것은 쓰는 칸이 따로 없는 약 하나뿐이다.
+  { at: '60분', room: 'album', act: 'a', done: 'album', text: '함께한 순간은 앨범 벽에 쌓여요. 열어 보세요. 약은 아플 때만 줄 수 있어요.' },
 ];
 
 /** 앨범 18칸. `이름 · 조건` 형식이고 두 번째 값이 1 이면 이미 열린 칸이다. */
@@ -415,15 +414,19 @@ export const CHAT_REPLY = ['그 얘기 기억해 둘게요.', '오늘도 들려�
  *   table·bath·play·bed·album = 아래 타일 / chat = 오른쪽 아래 말풍선 / info = 머리줄의 '아이 정보'
  */
 export const TUTOR_SERVER: readonly TutorStep[] = [
-  { at: '1칸', room: 'table', act: 'a', done: 'FEED', text: '배가 고픈가 봐요. 주방에서 밥을 주세요.' },
+  // ★ 간식 규칙은 **밥 칸**에서 말한다(2026-09-22 판정 F8) — 간식 버튼이 바로 이 팝오버에 있고,
+  //   배탈은 거절이 아니라 **아이가 아파지는 일**이라 처음 만나기 전에 알아야 한다.
+  { at: '1칸', room: 'table', act: 'a', done: 'FEED', text: '배가 고픈가 봐요. 주방에서 밥을 주세요. 간식은 하루 네 개까지예요 — 다섯 개째는 배탈이 나요.' },
   { at: '2칸', room: null, act: 'pet', done: 'PET', text: '쓰다듬어 주세요. 아이를 톡 누르면 돼요.' },
   { at: '3칸', room: 'chat', act: null, done: 'CHAT', text: '뭐라고 말을 거네요. 오른쪽 아래 말풍선을 눌러 답해 주세요.' },
   { at: '4칸', room: 'info', act: null, done: 'PERSONALITY', text: '어떤 아이인가요. 아이 정보에서 성격을 골라 주세요.' },
-  { at: '5칸', room: 'bath', act: 'a', done: 'CLEAN', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요.' },
+  // ★ 목욕 규칙도 **욕실 칸**에서(판정 F8). 목욕 버튼이 같은 팝오버에 있다.
+  { at: '5칸', room: 'bath', act: 'a', done: 'CLEAN', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요. 목욕은 하루 한 번이에요.' },
   { at: '6칸', room: 'play', act: 'a', done: 'GAME', text: '같이 놀아 볼까요. 마당에서 좌우 맞히기를 한 판 시작해 주세요. 시작하면 오늘 세 판 중 하나예요. 중간에 나가면 그 판은 져요.' },
   { at: '7칸', room: 'album', act: 'a', done: 'SHARE', text: '이 모습 가져가실래요. 앨범 벽에서 액자를 열어 공유해 보세요.' },
   { at: '8칸', room: 'bed', act: 'a', done: 'NAP', text: '졸린가 봐요. 침실에서 재우고, 다시 깨워 주세요.' },
-  { at: '9칸', room: null, act: null, done: 'DONE', text: '이제 혼자서도 괜찮아요. 여기부터는 시간이 흐르기 시작해요. 저녁 7시가 되면 재워 주세요. 간식은 하루 네 개까지예요 — 다섯 개째는 배탈이 나요. 목욕은 하루 한 번, 약은 아플 때만 줄 수 있어요.' },
+  // ★ 간식·목욕은 각자 쓰는 칸으로 옮겼다(판정 F8). 여기 남는 것은 **그 칸이 없는 규칙** 둘뿐이다.
+  { at: '9칸', room: null, act: null, done: 'DONE', text: '이제 혼자서도 괜찮아요. 여기부터는 시간이 흐르기 시작해요. 저녁 7시가 되면 재워 주세요. 약은 아플 때만 줄 수 있어요.' },
 ];
 
 export const LEARN_GOALS = [
