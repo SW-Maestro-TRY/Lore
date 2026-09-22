@@ -982,12 +982,15 @@ function Hud({ y }: { y: Yeoul }) {
         <span style={{ flex: 1 }} />
         <button
           onClick={actions.openSettings} data-part="pet-info" data-hl={v.hud.hl ? '1' : undefined}
+          data-off={v.hud.off ? '1' : undefined}
           style={{
             display: 'flex', alignItems: 'center', gap: gap.xs, flex: 'none', padding: pad.tiny,
             borderRadius: radius.pill,
             // 튜토리얼 4칸(성격)은 이 버튼 안에서 하는 일이라, 타일 대신 여기가 깜빡인다.
             border: v.hud.hl ? `2px solid ${C.accent}` : `1px solid ${C2.lineWarm}`,
             background: C2.paperWarm, animation: v.hud.hl ? 'yNudge 1.9s ease-in-out infinite' : 'none',
+            // ★ 튜토리얼이 다른 칸을 가리킬 때는 흐리게(판정 J8) — 눌리기는 하고, 누르면 이유가 뜬다.
+            opacity: v.hud.off ? 0.45 : 1,
             fontSize: fz.sm, lineHeight: 1, color: C2.muted,
           }}
         >
