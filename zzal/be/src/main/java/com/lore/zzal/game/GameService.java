@@ -124,8 +124,11 @@ public class GameService {
                 .ifPresent(old -> old.abandon(now));
         // 15번 놀람(게임 시작 4판)·하루 3판·튜토리얼 GAME 칸이 전부 여기서 오른다
         PetService.Action a = petService.withUnlockDiff(pet, pet::startGame);
-        // ★ 놀이 조각은 <b>시작한 매치</b>로 센다(승패 무관) — 2층 15번과 같은 기준(정본 6·16장).
-        pieceService.count(pet, PieceEvent.GAME);
+        // ★★ 놀이 조각은 <b>여기서 세지 않는다</b> — 끝까지 친 매치만 센다({@link #guess}·{@link #finish}).
+        //   시작에서 세면 기권·강제 종료한 판의 조각이 그대로 남아 "기권 매치는 조각을 안 낸다"
+        //   (정본 7-A)가 무너진다. 시작만 하고 나가기를 되풀이해 조각을 채울 수 있었다(연결 감사 F7).
+        // ★ 2층 15번(놀람)은 그대로 <b>시작</b> 기준이다 — gameStarts 는 startGame() 이 올린다.
+        //   정본 7-A가 한정한 것은 조각뿐이고, 해금 조건은 건드리지 않았다.
         String answers = kind == GameKind.LEFT_RIGHT ? drawAnswers() : "";
         ZzalGame game = gameRepository.save(ZzalGame.start(userId, pet.getId(), kind, answers, now));
         return new Started(game, a.justUnlocked(), runUnlocked(pet));
@@ -160,6 +163,13 @@ public class GameService {
                 rewardService.forGameWin(pet, now);
             }
         });
+        // ★★ 놀이 조각은 <b>완주한 매치</b>만 센다 — 다섯 라운드를 다 친 그 순간, 승패는 안 본다
+        //   (정본 6·16장 "승패 무관" + 7-A "기권 매치는 조각을 안 낸다"를 함께 만족하는 자리).
+        // ★ 이 자리를 고른 이유가 곧 안전장치다 — 시작에서 세면 기권한 판의 조각이 남고,
+        //   승리에서만 세면 "승패 무관" 이 깨진다. 접은 판(abandon)은 여기 오지 않는다.
+        if (game.isFinished()) {
+            pieceService.count(pet, PieceEvent.GAME);
+        }
         // ★★ 두 번째 선물(뒤로 넘어짐)은 <b>여기</b>서 열린다 — 한 판을 다 치고 못 이긴 순간.
         //
         // ★ 한 판이 곧 3선승 시리즈(5라운드)라 한 라운드 패배는 패배가 아니다.
@@ -200,6 +210,9 @@ public class GameService {
                 rewardService.forGameWin(pet, now);
             }
         });
+        // ★ 달리기도 이 주소를 밟으면 완주다 — 30초를 못 버텨 져도 조각 하나를 센다(승패 무관).
+        //   나가서 접힌 달리기는 여기 오지 않아 자연히 빠진다.
+        pieceService.count(pet, PieceEvent.GAME);
         return new RunResult(game, game.isWin(), a.justUnlocked(), runUnlocked(pet));
     }
 
@@ -217,8 +230,10 @@ public class GameService {
      *       접는 순간 이미 3승을 쌓았더라도 마찬가지다(그 판은 끝까지 안 친 판이다).</li>
      *   <li>{@code bakeTrigger.onFirstGameLoss} — 접은 판이 패배로 세면 <b>한 판도 끝까지 안 친 사람이
      *       선물을 받고, 진 적이 없어 그 선물의 이유를 모른다.</b> {@code guess} 에 적어 둔 금지와 같다.</li>
-     *   <li>{@code pieceService.count} · {@code pet.startGame} — 하루 3판·2층 13번·놀이 조각은
-     *       <b>시작할 때 이미 셌다.</b> 접었다고 또 세지도, 돌려주지도 않는다.</li>
+     *   <li>{@code pieceService.count} — <b>놀이 조각은 완주한 매치만 센다</b>(정본 7-A). 시작할 때
+     *       세지 않았으므로 여기서 되돌릴 것도 없다. 접은 판은 조각을 한 칸도 못 낸다.</li>
+     *   <li>{@code pet.startGame} — 하루 3판·2층 15번(놀람)은 <b>시작할 때 이미 셌다.</b>
+     *       접었다고 또 세지도, 돌려주지도 않는다.</li>
      * </ul>
      *
      * <h3>★ 아픔은 여기서만 안 본다 — 빠뜨린 게 아니라 일부러다</h3>

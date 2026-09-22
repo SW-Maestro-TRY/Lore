@@ -344,22 +344,91 @@ class GameServiceTest {
                 .isEqualTo(com.lore.zzal.pet.TutorialSchedule.Step.SHARE);
     }
 
-    @Test
-    @DisplayName("놀이 조각은 시작한 매치로 센다 — 나갔다 와서 새 판을 열면 그 판도 센다")
-    void everyNewMatchCountsAPiece() {
+    // ── 놀이 조각 — 완주한 매치만 센다(정본 7-A) ──────────────────────────
+
+    /** 조각 줄을 들여다볼 수 있는 서비스로 갈아 끼우고 3층을 열어 둔다. */
+    private java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> withPieceStore() {
         java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> store = new java.util.HashMap<>();
         service = new GameService(gameRepository, petService,
                 new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
                 com.lore.zzal.PieceFixture.inMemory(store), bakeTrigger, 3);
         ReflectionTestUtils.setField(pet, "piecesEnabledAt", T0);   // 3층부터만 센다
+        return store;
+    }
 
-        service.start(USER, PET, GameKind.LEFT_RIGHT, T0);          // 새 판 — 센다
-        assertThat(store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME)).isEqualTo(1);
+    private int gamePieces(java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> store) {
+        com.lore.zzal.piece.ZzalPiece row = store.get(PET);
+        return row == null ? 0 : row.countOf(com.lore.zzal.piece.PieceEvent.GAME);
+    }
 
-        ZzalGame playing = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
-        when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.of(playing));
-        service.start(USER, PET, GameKind.LEFT_RIGHT, T0);          // 접고 새 판 — 이 판도 센다
-        assertThat(store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME)).isEqualTo(2);
+    @Test
+    @DisplayName("★★★ 놀이 조각은 시작이 아니라 완주로 센다 — 시작만 한 판은 0, 다 치면 +1(패배도)")
+    void onlyAFinishedMatchCountsAPiece() {
+        var store = withPieceStore();
+
+        ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLRR", T0);
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(game));
+        service.start(USER, PET, GameKind.LEFT_RIGHT, T0);
+        assertThat(gamePieces(store)).as("시작만으로는 안 센다").isZero();
+
+        pet.settle(T0);
+        for (char c : "RRRR".toCharArray()) {       // 네 라운드 — 아직 안 끝났다
+            service.guess(USER, PET, 1L, c, T0);
+        }
+        assertThat(game.isFinished()).isFalse();
+        assertThat(gamePieces(store)).as("마지막 라운드를 쳐야 완주다").isZero();
+
+        service.guess(USER, PET, 1L, 'R', T0);      // 다섯째 — 1승뿐이라 패배 완주
+        assertThat(game.isFinished()).isTrue();
+        assertThat(game.isWin()).isFalse();
+        assertThat(gamePieces(store)).as("져도 완주는 완주다(승패 무관)").isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("★★★ 기권한 판은 조각을 안 낸다 — 시작·기권을 되풀이해도 조각이 안 움직인다")
+    void abandonedMatchesNeverCountAPiece() {
+        var store = withPieceStore();
+
+        for (long id = 1; id <= 3; id++) {
+            ZzalGame game = service.start(USER, PET, GameKind.LEFT_RIGHT, T0).game();
+            trackUnfinished(game);
+            service.abandon(USER, PET, id, T0);
+            assertThat(game.isFinished()).isTrue();
+        }
+
+        assertThat(pet.getTodayGames()).as("하루 3판은 시작으로 다 깎였다").isEqualTo(3);
+        assertThat(pet.getGameStarts()).as("2층 15번 조건은 시작 기준이라 오른다").isEqualTo(3);
+        assertThat(gamePieces(store)).as("조각은 한 칸도 안 찬다(정본 7-A)").isZero();
+    }
+
+    @Test
+    @DisplayName("★★ 강제 종료(다음 시작이 접은 판)도 조각을 안 낸다 — 나가기를 안 눌러도 같다")
+    void aForceClosedMatchNeverCountsAPiece() {
+        var store = withPieceStore();
+
+        ZzalGame first = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
+        when(gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(anyLong())).thenReturn(Optional.of(first));
+
+        service.start(USER, PET, GameKind.LEFT_RIGHT, T0);   // 옛 판을 접고 새 판
+
+        assertThat(first.isFinished()).isTrue();
+        assertThat(gamePieces(store)).isZero();
+    }
+
+    @Test
+    @DisplayName("★★ 달리기도 끝내면 조각 +1 — 30초를 못 버텨 져도 센다")
+    void finishingTheRunCountsAPiece() {
+        var store = withPieceStore();
+        for (int i = 0; i < 5; i++) {
+            pet.winLeftRight();
+        }
+        ZzalGame run = service.start(USER, PET, GameKind.RUN, T0).game();
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(run));
+        assertThat(gamePieces(store)).as("시작만으로는 안 센다").isZero();
+
+        assertThat(service.finish(USER, PET, 1L, 1_000, T0).win()).isFalse();
+
+        assertThat(gamePieces(store)).isEqualTo(1);
     }
 
     @Test
@@ -498,15 +567,11 @@ class GameServiceTest {
     @Test
     @DisplayName("★ 하루 3판을 다 쓴 뒤의 거절은 펫도 조각도 안 건드린다")
     void dailyLimitRefusalChangesNothing() {
-        java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> store = new java.util.HashMap<>();
-        service = new GameService(gameRepository, petService,
-                new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
-                com.lore.zzal.PieceFixture.inMemory(store), bakeTrigger, 3);
-        ReflectionTestUtils.setField(pet, "piecesEnabledAt", T0);
+        var store = withPieceStore();
         for (int i = 0; i < 3; i++) {
             service.start(USER, PET, GameKind.LEFT_RIGHT, T0);
         }
-        int counted = store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME);
+        int counted = gamePieces(store);
         int starts = pet.getGameStarts();
         // ★ 아직 안 끝난 판을 하나 남겨 둔다 — 거절이 <b>이 판까지 죽이는지</b>를 봐야 한다.
         ZzalGame leftover = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LRLRL", T0);
@@ -517,7 +582,7 @@ class GameServiceTest {
 
         assertThat(pet.getTodayGames()).isEqualTo(3);
         assertThat(pet.getGameStarts()).isEqualTo(starts);
-        assertThat(store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME)).isEqualTo(counted);
+        assertThat(gamePieces(store)).isEqualTo(counted);
         assertThat(leftover.isFinished())
                 .as("한도 초과로 거절된 요청은 남아 있던 판을 접지 않는다 — 접기는 검사 뒤에 있다").isFalse();
     }
@@ -546,12 +611,8 @@ class GameServiceTest {
     @Test
     @DisplayName("★★★ 기권은 승리도 패배도 아니다 — 3승을 쌓고 접어도 행복·5승 카운터·조각·두 번째 선물이 안 움직인다")
     void abandonRewardsNothingAndCountsNoLoss() {
-        java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> store = new java.util.HashMap<>();
-        service = new GameService(gameRepository, petService,
-                new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
-                com.lore.zzal.PieceFixture.inMemory(store), bakeTrigger, 3);
-        ReflectionTestUtils.setField(pet, "piecesEnabledAt", T0);
-        service.start(USER, PET, GameKind.LEFT_RIGHT, T0);          // 시작에서 조각·하루 한 판이 깎인다
+        var store = withPieceStore();
+        service.start(USER, PET, GameKind.LEFT_RIGHT, T0);          // 시작에서 하루 한 판이 깎인다
 
         // ★ 답을 아는 판으로 바꿔 끼운다 — 세 번을 맞혀야 ZzalGame.isWin() 이 true 가 되는 자리를 밟는다
         ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLRR", T0);
@@ -562,7 +623,7 @@ class GameServiceTest {
         }
         int happiness = pet.getHappiness();
         int wins = pet.getLeftRightWins();
-        int pieces = store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME);
+        int pieces = gamePieces(store);
         int starts = pet.getGameStarts();
 
         GameService.Abandoned a = service.abandon(USER, PET, 1L, T0);
@@ -573,8 +634,9 @@ class GameServiceTest {
                 .as("끝까지 안 친 판이라 기권 응답의 win 은 늘 false").isFalse();
         assertThat(pet.getHappiness()).as("승리 보상이 없다").isEqualTo(happiness);
         assertThat(pet.getLeftRightWins()).as("5승(달리기 해금) 카운터가 안 오른다").isEqualTo(wins);
-        assertThat(store.get(PET).countOf(com.lore.zzal.piece.PieceEvent.GAME))
-                .as("놀이 조각은 시작할 때 이미 셌다").isEqualTo(pieces);
+        assertThat(gamePieces(store))
+                .as("놀이 조각은 완주한 매치만 센다 — 접은 판은 한 칸도 안 낸다").isEqualTo(pieces);
+        assertThat(pieces).as("끝까지 안 친 판이라 애초에 0 이다").isZero();
         assertThat(pet.getGameStarts()).as("2층 13번 조건도 안 오른다").isEqualTo(starts);
         assertThat(a.justUnlocked()).isEmpty();
         verify(bakeTrigger, never()).onFirstGameLoss(any(), any());
