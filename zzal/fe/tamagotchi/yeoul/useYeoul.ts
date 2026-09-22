@@ -518,6 +518,12 @@ export interface Tile {
   key: RoomKey; label: string; layers: string[];
   fg: string; tileBg: string; bw: string; bd: string; anim: string;
   badge: string; hasBadge: boolean; pick: () => void; dim: boolean;
+  /**
+   * 튜토리얼이 **다른 칸을 가리키는 동안** 잠긴다. **진짜 `disabled`** 로 내려간다
+   * (2026-09-22 상훈님 판정 — "눌러야 할 거 하나만 하이라이트, 나머지는 비활성").
+   * ★ 자는 동안 잠기는 것은 여기 안 들어온다 — 그건 눌러서 한 줄을 듣는 자리다(`dim` 만 켠다).
+   */
+  off: boolean;
 }
 export interface PopBtn {
   label: string; count: string; tap: () => void; anim: string;
@@ -943,9 +949,12 @@ export function useYeoul(live?: Live) {
    * ★★ 왜 잠그나 — 아기 시간표는 **한 번에 하나씩** 가르치는 자리다. 다른 버튼이 같이 살아 있으면
    *   순서가 흐트러지고, 서버는 그 칸에서 안 시킨 행동을 **거절**하거나 세지 않는다. 즉 눌러도
    *   아무 일이 안 나는 버튼이 여럿 있는 셈이라, 잠그지 않는 편이 오히려 고장으로 읽힌다.
-   * ★★ **다만 "고장 난 것" 으로 보이면 안 된다.** 잠긴 손잡이는 **왜 지금 못 누르는지**를 그 자리에서
-   *   말한다(아래 `note`). 사용자를 탓하지 않는다 — "아직 안 배웠어요"·"순서를 어겼어요" 가 아니라
-   *   **"지금은 ○○를 해 볼 차례예요"** 다(자캐 규범).
+   * ★★ **2026-09-22 상훈님 판정 — 말로 설명하지 않는다.** *"눌러야 할 거 하나만 하이라이트 해서
+   *   보여주고 나머지 것들은 비활성해서 누르지 않게 하자."* 그래서 이제 잠긴 손잡이는
+   *   **아무 말도 안 하고 진짜로 안 눌린다**(`disabled`). 길은 하이라이트 하나뿐이라 헤맬 일이 없고,
+   *   눌렀다 한 줄 읽고 또 누르는 왕복이 사라진다.
+   * ★ `disabled` 를 붙여도 되는 자리다 — **실제로 안 눌리므로** 속성이 사실과 맞는다.
+   *   (예전에 금지한 것은 "눌리는데 비활성으로 표시" 하던 경우다 — 메모리 `ui-verify-with-playwright`.)
    * ★ 첫 칸(`done: 'any'` — "천천히 둘러봐도 돼요")은 **안 잠근다.** 거기는 아무거나 눌러 보라는 칸이다.
    * ★ 목(8칸)·서버(9칸) **둘 다** 이 한 곳을 지난다 — 칸 목록만 다르고 규칙은 하나다.
    * ★ 원칙 7("첫 순간부터 전부 열려 있다")과 어긋나지 않는다 — 그 원칙은 **튜토리얼이 끝난 뒤**의
@@ -958,17 +967,9 @@ export function useYeoul(live?: Live) {
     //   (390 실측: 9칸에서 손잡이 0개). 마지막 칸은 누를 것이 하나뿐이라 안내만으로 충분하고,
     //   잠가서 얻는 것이 없다 — 첫 칸(`any`)을 안 잠그는 것과 같은 이유다.
     if (!tut || tut.done === 'any' || tut.done === 'DONE') return null;
-    const roomName = ROOM_KEYS.includes(tut.room as RoomKey) ? ROOM_NAME[tut.room as RoomKey] : '';
-    const note = tut.act === 'pet' ? '지금은 아이를 쓰다듬어 볼 차례예요'
-      : tut.room === 'chat' ? '지금은 말풍선을 눌러 답할 차례예요'
-        : tut.room === 'info' ? '지금은 아이 정보에서 성격을 고를 차례예요'
-          : roomName ? `지금은 ${roomName}에서 할 차례예요`
-            // 마지막 칸(DONE)은 누를 것이 하나뿐이다 — 그 이름을 그대로 말해 준다.
-            : tut.done === 'DONE' ? '지금은 「이제 시작할게요」를 눌러 주세요'
-              : '지금은 위 안내를 먼저 해 볼 차례예요';
-    return { room: tut.room, act: tut.act, note };
+    return { room: tut.room, act: tut.act };
   }, [tut]);
-  const tutLockRef = useRef<{ room: string | null; act: string | null; note: string } | null>(null);
+  const tutLockRef = useRef<{ room: string | null; act: string | null } | null>(null);
   tutLockRef.current = tutLock;
 
   /**
@@ -1128,9 +1129,10 @@ export function useYeoul(live?: Live) {
   // ★ 대화를 **열 때** 지난 판의 내 말을 비운다 — 내 말이 안 사라지게 바꿨으므로(→ `pushReply`)
   //   비우는 자리를 한 곳으로 옮긴 것이다. 한 판 안에서는 주고받은 두 줄이 그대로 남는다.
   const openChat = useCallback(() => {
-    // ★ 튜토리얼이 대화 칸을 가리킬 때만 열린다(판정 J8).
+    // ★ 튜토리얼이 대화 칸을 가리킬 때만 열린다(판정 J8 · 2026-09-22 개정).
+    //   단추가 이미 `disabled` 라 여기까지 안 온다. 와도 **말없이** 아무 일도 안 한다.
     const tl = tutLockRef.current;
-    if (tl && tl.room !== 'chat') { flash(tl.note); return; }
+    if (tl && tl.room !== 'chat') return;
     lastSel.current = Date.now();
     patch({ chatOpen: true, popOpen: false, toast: '', mine: '' });
   }, [patch, flash]);
@@ -1170,9 +1172,10 @@ export function useYeoul(live?: Live) {
   }, [later, careAct]);
 
   const onPet = useCallback(() => {
-    // ★ 튜토리얼이 쓰다듬기 칸이 아닐 때는 잠근다(판정 J8) — 한 줄만 말하고 아무 일도 안 한다.
+    // ★ 튜토리얼이 쓰다듬기 칸이 아닐 때는 잠근다(판정 J8 · 2026-09-22 개정) —
+    //   아이는 단추가 아니라 그림이라 비활성으로 표시할 수 없다. **말없이** 아무 일도 안 한다.
     const tl = tutLockRef.current;
-    if (tl && tl.act !== 'pet') { flash(tl.note); return; }
+    if (tl && tl.act !== 'pet') return;
     // ★★ 떠 있는 창은 닫되 **탭을 삼키지 않는다**(2026-09-21 판정 8). 예전에는 여기서 그냥
     //   돌아서서, 팝오버를 열어 둔 채 아이를 누르면 창만 닫히고 아무 일도 안 났다 —
     //   "한 번은 그냥 없어지는 탭" 이라는 규칙은 사용자가 세울 수 없는 규칙이다.
@@ -1246,7 +1249,10 @@ export function useYeoul(live?: Live) {
     // 청소는 v4 에서 `sweep` 이다. 아직 그 그림이 없으면 별칭이 옛 `wash` 로 받쳐 준다(constants.MOTION_ALIAS).
     if (onServerRef.current) { void serverCare('CLEAN', 'clean', '깨끗해졌어요'); return; }
     if (esRef.current.trace <= 0 && !s.sampleMode) { flash('이미 깨끗해요'); return; }
-    patch({ trace: 0 });
+    // ★★ **한 번 쓸면 하나**(서버 `ZzalPet.clean()` = `trash - 1` · 정본 §12 "한 번 쓸면 하나예요").
+    //   5차에 목 서버(`mockPetServer`)만 고치고 **여기 시연 경로가 남아 있었다** — 3202 에서
+    //   흔적 2개를 한 번에 지웠다(2026-09-22 상훈님 확인). "가득" 을 지우는 것은 목욕이다(§4 표).
+    patch({ trace: Math.max(0, s.trace - 1) });
     careAct('clean');
     flash('깨끗해졌어요');
     tutorDone('CLEAN');
@@ -1281,7 +1287,13 @@ export function useYeoul(live?: Live) {
 
   /**
    * 성격·세계관을 서버에 저장한다. **튜토리얼 4칸을 넘기는 자리**이기도 하다.
-   * 성격을 안 고르면 보낼 것이 없다 — 서버가 성격을 필수로 받는다.
+   *
+   * ★★ 2026-09-22 상훈님 판정 — **성격 고르기는 필수가 아니다.** 4칸은 "고쳤는가" 가 아니라
+   *   **"확인했는가"** 를 세는 칸이고(서버 `PetService.tutorialSeen`: *"아이 정보를 확인만 해도
+   *   넘어간다"* · *"성격을 한 번도 안 고른 사람은 null 인 채 지나간다 — 그래도 된다"*),
+   *   성격은 부화 전 캐릭터 화면에서 이미 받는다. 그래서 **안 고르고 눌러도 넘어간다** —
+   *   고른 것이 있으면 저장하는 길(`savePersonality`)로, 없으면 확인만 하는 길(`tutorialSeen`)로
+   *   간다. 둘 다 서버에서 같은 칸을 넘긴다(`advanceTutorial(PERSONALITY)`).
    *
    * ★ 화면에서는 성격을 여러 개 고를 수 있지만 **서버는 하나만 받는다**
    *   (`PersonalityChoice.personality` 는 enum 하나 · `@NotNull`). 그래서 **맨 앞(처음 고른 것)**
@@ -1293,6 +1305,8 @@ export function useYeoul(live?: Live) {
     const svName = PERSONA_LABEL[liveRef.current?.pet?.personality ?? ''] ?? '';
     const chosen = sRef.current.picks.persona ?? (svName ? [svName] : []);
     const persona = PERSONALITY_OF[chosen[0] ?? ''];
+    // ★ 고른 것이 없으면 보낼 것이 없다. **칸 진행과는 무관하다** — 4칸은 시트를 연 순간
+    //   이미 넘어갔다(→ `openSettings`). 이 단추는 이제 **저장만** 한다.
     if (!persona) { flash('성격을 하나 이상 골라 주세요'); return; }
     // 다시 눌렀다 — 지난 실패 줄은 지우고 시작한다.
     patch({ saveErr: '' });
@@ -1885,12 +1899,32 @@ export function useYeoul(live?: Live) {
   const toggleDeco = useCallback(() => setS((v) => ({ ...v, decoOpen: !v.decoOpen })), []);
   const openNotify = useCallback(() => patch({ sheet: 'notify', decoOpen: false }), [patch]);
   const openSettings = useCallback(() => {
-    // ★ 튜토리얼이 '아이 정보' 칸을 가리킬 때만 열린다(판정 J8).
+    // ★ 튜토리얼이 '아이 정보' 칸을 가리킬 때만 열린다(판정 J8 · 2026-09-22 개정).
+    //   단추가 이미 `disabled` 라 여기까지 안 온다. 와도 말없이 돌아선다.
     const tl = tutLockRef.current;
-    if (tl && tl.room !== 'info') { flash(tl.note); return; }
+    if (tl && tl.room !== 'info') return;
     // 새로 열 때는 지난 실패 줄을 지운다 — 다시 와서 보는 사람에게 옛 경고가 남아 있으면 안 된다.
     patch({ sheet: 'settings', decoOpen: false, saveErr: '' });
-  }, [patch, flash]);
+    /**
+     * ★★ **4칸은 이 단추를 누르는 순간 넘어간다**(2026-09-22 상훈님 판정 2안).
+     *
+     * 4칸은 "고쳤는가" 가 아니라 **"확인했는가"** 를 세는 칸이다(서버 `PetService.tutorialSeen`:
+     * *"아이 정보를 확인만 해도 넘어간다"*). 그러니 **연 것이 곧 확인**이다 — 시트 안의
+     * 단추를 한 번 더 누르게 하면 "확인" 을 두 번 시키는 셈이고, 안 누르고 닫은 사람은
+     * 확인을 했는데도 4칸에 남는다.
+     * ★ 시트는 그대로 열린다. 넘어감만 즉시다.
+     * ★ 여기서만 부른다 — `tl.room === 'info'` 는 **4칸일 때만** 참이라(`room:'info'` 인 칸이
+     *   하나뿐) 시트를 다시 열어도 두 번 나가지 않는다. 서버도 지금 칸이 아니면 아무 일도
+     *   안 한다(`advanceTutorial` 이 현재 칸을 먼저 본다) — 한 겹 더 막혀 있다.
+     * ★ 실패하면 **시트 안에 말한다**(조용한 실패 금지 · 판정 6과 같은 자리).
+     */
+    if (!tl || tl.room !== 'info') return;
+    if (!onServerRef.current) { tutorDone('PERSONALITY'); return; }
+    void (async () => {
+      const r = await liveRef.current?.tutorialSeen();
+      if (!r || !r.ok) patch({ saveErr: saveFailLine(r?.code ?? null, r?.status, r?.message ?? null) });
+    })();
+  }, [patch, tutorDone]);
   const pickNeedStyle = useCallback((v: NeedStyle) => () => patch({ needStyleLocal: v }), [patch]);
   const toggleNotif = useCallback(() => setS((v) => ({ ...v, notifOn: !v.notifOn })), []);
   const toggleLeave = useCallback(() => setS((v) => ({ ...v, leaveOff: !v.leaveOff })), []);
@@ -2238,11 +2272,12 @@ export function useYeoul(live?: Live) {
         // ★ **침실만은 예외다**(2026-09-10). 자는 동안 침실까지 막으면 **깨울 방법이 없어진다** —
         //   재우기가 진짜 서버 호출이 된 뒤 브라우저로 눌러 보다 걸렸다(그전에는 개발용 토글로만
         //   잠들 수 있어서 안 드러났다). 자는 아이를 깨우는 자리는 열려 있어야 한다.
-        // ★ 튜토리얼 중에는 **그 칸이 가리키는 방만** 열린다(판정 J8). 나머지는 눌러도
-        //   방이 안 열리고 **왜 지금 못 누르는지** 한 줄만 말한다(고장처럼 보이지 않게).
-        pick: asleep && k !== 'bed' ? () => flash(sleepingLine(s.petName))
-          : tutLock && tutLock.room !== k ? () => flash(tutLock.note)
-            : selRoom(k),
+        // ★ 튜토리얼 중에는 **그 칸이 가리키는 방만** 열린다(판정 J8 · 2026-09-22 개정).
+        //   나머지는 **아무 말 없이 안 눌린다**(`off` → `disabled`). 길은 하이라이트 하나뿐이다.
+        //   자는 동안 잠기는 것은 그대로 한 줄을 말한다 — 그건 튜토리얼이 아니라 상태이고,
+        //   왜 안 되는지가 화면에 안 보이기 때문이다(커튼만 보인다).
+        pick: asleep && k !== 'bed' ? () => flash(sleepingLine(s.petName)) : selRoom(k),
+        off: !!(tutLock && tutLock.room !== k),
         dim: (asleep && k !== 'bed') || !!(tutLock && tutLock.room !== k),
       };
     });
@@ -2348,7 +2383,7 @@ export function useYeoul(live?: Live) {
       bg: i < cur.on ? (locked ? ink(.28) : cur.tint) : C.line,
     }));
 
-    const pbtn = (r: Raw | null, isTutTarget: boolean, tutOff: string | false = false): PopBtn | null => {
+    const pbtn = (r: Raw | null, isTutTarget: boolean, tutOff = false): PopBtn | null => {
       if (!r) return null;
       const sickSnack = mode === 'sick' && selK === 'table' && !!r.soft;
       // 서버가 이미 아는 거절 이유. 여울 샘플 방에서는 안 건다 — 거긴 연습이라 늘 눌려야 한다.
@@ -2356,9 +2391,9 @@ export function useYeoul(live?: Live) {
       // 돌보기·재우기가 도는 동안엔 전부 잠근다 — 두 번 눌러 두 번 나가는 일을 막는다.
       const waiting = !!live?.careing || !!live?.resting;
       // ★ 튜토리얼 잠금이 **가장 앞이다**(판정 J8) — 그 칸에서 안 시킨 버튼은 다른 이유를 따지기 전에 잠긴다.
-      const why = tutOff ? tutOff
-        : locked ? lockMsg : sickSnack ? '아플 땐 간식을 안 먹어요' : pre;
-      const off = !!why || waiting;
+      //   ★ 2026-09-22 — 튜토리얼 잠금은 **이유를 안 쓴다**(상훈님 판정). 비활성만으로 말한다.
+      const why = locked ? lockMsg : sickSnack ? '아플 땐 간식을 안 먹어요' : pre;
+      const off = tutOff || !!why || waiting;
       return {
         label: r.label,
         // ★ 잠겨 있으면 남은 횟수 대신 **왜 못 누르는지**를 그 자리에 쓴다(상훈님 2026-09-10).
@@ -2370,7 +2405,7 @@ export function useYeoul(live?: Live) {
         //   색·같은 자리**에 떴다. 눌러도 되는지 아닌지가 글을 끝까지 읽어야만 갈렸다.
         //   화면이 둘을 다른 결로 그릴 수 있게 값을 나눠 준다(색만으로 가르지 않는다 — 렌즈 §5-5).
         count: unlimited ? '' : r.count,
-        off, why: waiting ? '' : why,
+        off, why: (waiting || tutOff) ? '' : why,
         tap: () => {
           lastSel.current = Date.now();
           // 잠긴 버튼은 `disabled` 라 여기까지 오지 않는다. 와도 아무 일도 안 한다.
@@ -2397,14 +2432,10 @@ export function useYeoul(live?: Live) {
         : `${({ table: '배부름', bath: '단정함', play: '기분' } as Record<string, string>)[selK]} ${cur.on}/${cur.n}`,
       // ★ 그 칸이 시키는 방의 **첫 버튼(a)** 만 열린다. 둘째 버튼(간식·목욕 같은 것)은 튜토리얼
       //   동안 늘 잠긴다 — 안내가 가리키는 것이 언제나 첫 버튼이라서다.
-      // ★ **이미 그 방에 들어와 있으면 방 이름을 다시 말하지 않는다** — "지금은 주방에서 할
-      //   차례예요" 가 주방 안에서 뜨면 어디로 가라는 말인지 알 수 없다. 그 자리에서는
-      //   **눌러야 할 버튼 이름**을 말해 준다.
-      a: pbtn(cur.a, isTutTarget, tutLock && !(tutLock.act === 'a' && tutLock.room === selK) ? tutLock.note : false),
-      b: pbtn(cur.b, false, !tutLock ? false
-        : (tutLock.act === 'a' && tutLock.room === selK)
-          ? `지금은 ${cur.a.label}${josa(cur.a.label, '을', '를')} 해 볼 차례예요`
-          : tutLock.note),
+      // ★ 2026-09-22 — 잠긴 쪽은 **아무 말도 안 하고 안 눌린다**(상훈님 판정). 눌러야 할 하나만
+      //   깜빡이고(`isTutTarget`), 나머지는 흐린 채 비활성이다.
+      a: pbtn(cur.a, isTutTarget, !!tutLock && !(tutLock.act === 'a' && tutLock.room === selK)),
+      b: pbtn(cur.b, false, !!tutLock),
       hasB: !!cur.b,
     };
 
@@ -2784,7 +2815,6 @@ export function useYeoul(live?: Live) {
         // ★ 튜토리얼이 대화 칸을 가리킬 때만 열린다(판정 J8). 잠긴 동안에도 **버튼은 그대로 보인다** —
         //   사라지면 "없어졌다" 로 읽히고, 흐려지면 "지금은 아니다" 로 읽힌다.
         off: !!tutLock && tutLock.room !== 'chat',
-        why: tutLock?.note ?? '',
       },
       /**
        * 약 단추. **아플 때만 그린다** — 계약 10절의 여섯 거절 중 "안 아픔" 은 버튼을 잠그는 대신
@@ -3036,7 +3066,15 @@ export function useYeoul(live?: Live) {
           show: onServer || !s.sampleMode,
           label: '성격 저장하기',
           tap: onSavePersona,
-          // 고르지 않았으면 보낼 것이 없다. 서버가 성격을 필수로 받는다.
+          /**
+           * 고르지 않았으면 보낼 것이 없다 — 서버가 성격을 필수로 받는다.
+           *
+           * ★★ 2026-09-22(판정 2안) — **이 잠금은 이제 아무도 막지 않는다.** 4칸은 시트를
+           *   **연 순간** 넘어가므로(→ `openSettings`), 성격을 안 고르는 사람도 튜토리얼이
+           *   막히지 않는다. 그래서 잠깐 두었던 「확인했어요」 단추는 걷어냈다 —
+           *   그 단추가 하던 일(안 고르고 시트를 닫기)은 **머리줄의 ✕** 가 이미 한다.
+           *   저장하지 않는 단추를 하나 더 두면 "내가 고른 것이 기록됐다" 로 읽힐 수 있다.
+           */
           off: !personaShown[0],
           why: '성격을 하나 이상 골라 주세요',
           /** 저장이 거절된 이유 한 줄. 빈 문자열이면 안 그린다(→ `saveFailLine`). */

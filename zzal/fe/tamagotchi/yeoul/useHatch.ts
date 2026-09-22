@@ -22,7 +22,7 @@ import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS, GUESS_HAND_PRELOAD } from './constants';
 import {
   answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
-  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, wake as wakePet,
+  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet,
   type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
   type HatchProgress, type PetDetail, type Personality,
 } from '../../lib/pet';
@@ -98,7 +98,11 @@ function optimisticOf(action: CareAction, pet: PetDetail | null): CareOptimistic
       if (!t) return null;
       return { action, ...cut, pets: Math.min(PET_PER_DAY, t.pets + 1) };
     case 'CLEAN':
-      return { action, ...cut, trash: 0 };
+      // ★★ **한 번 쓸면 하나**다(서버 `ZzalPet.clean()` = `trash - 1` · 정본 §12 튜토리얼 안내).
+      //   먼저 그리는 값이 0 이면, 흔적 2개일 때 **둘 다 사라졌다가** 서버 답이 와서 하나가
+      //   되살아난다 — 화면이 서버보다 더 많이 지우는 것처럼 보인다(2026-09-22 상훈님 확인).
+      if (!g) return null;
+      return { action, ...cut, trash: Math.max(0, g.trash - 1) };
     case 'BATH':
       if (!g) return null;
       return { action, ...cut, trash: 0, happiness: up(g.happiness), bathDone: true };
@@ -248,6 +252,11 @@ export interface Live {
    */
   finishTutorial: () => Promise<CareResult>;
   /**
+   * 튜토리얼 **4칸을 "확인했다" 로 넘긴다** — 성격을 안 골라도 된다(→ `lib/pet.tutorialSeen`).
+   * 성격을 골라 저장하는 길(`savePersonality`)도 같은 칸을 넘기므로, 둘 중 하나만 부른다.
+   */
+  tutorialSeen: () => Promise<CareResult>;
+  /**
    * 첫날 축하 판을 **봤다고 서버에 남긴다.**
    *
    * ★★ 왜 서버까지 가나 — 이 판은 "사람 기준 한 번" 이어야 한다. 탭 기억만 쓰던 동안에는
@@ -344,6 +353,7 @@ const EMPTY: Live = {
   doRest: async () => ({ ok: false, message: null }),
   savePersonality: async () => ({ ok: false, message: null }),
   finishTutorial: async () => ({ ok: false, message: null }),
+  tutorialSeen: async () => ({ ok: false, message: null }),
   markGraduationSeen: async () => {},
   sendChat: async () => ({ error: null, reply: null }),
   startPlay: async () => null,
@@ -679,6 +689,10 @@ export function useHatchState(): Live {
 
   const finishTutorial = useCallback(() => (
     send(() => tutorialDone(petId as number), '아직 배울 것이 남았어요')
+  ), [petId, send]);
+
+  const seenTutorial = useCallback(() => (
+    send(() => tutorialSeen(petId as number), '지금은 넘어갈 수 없어요')
   ), [petId, send]);
 
   /**
@@ -1059,7 +1073,7 @@ export function useHatchState(): Live {
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
     justUnlocked,
-    setChar, doCare, doRest, savePersonality, finishTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
+    setChar, doCare, doRest, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
     clearJustUnlocked, noteUnlocked,
     loadAlbum, shareMotion, sendWish, resume, reset,
   };
