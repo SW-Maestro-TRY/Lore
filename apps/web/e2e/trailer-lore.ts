@@ -55,6 +55,8 @@ export const META_URL = /\/api\/trailer\/v1\/public\/cards\/meta(\?.*)?$/;
 export const LIST_URL = /\/api\/trailer\/v1\/public\/cards(\?.*)?$/;
 export const DETAIL_URL = /\/api\/trailer\/v1\/public\/cards\/(T\d+)(\?.*)?$/;
 export const HYPOTHESES_URL = /\/api\/trailer\/v1\/hypotheses$/;
+/** 가설 하나(2-6). 끝이 숫자여야 한다 — `/hypotheses/my` 는 여기 걸리지 않는다. */
+export const HYPOTHESIS_URL = /\/api\/trailer\/v1\/hypotheses\/(\d+)$/;
 /** lore 공용 로그인. 화면은 `useAuth` 로 `/users/me` 가 200 인지로 로그인을 판정하고, 로그인 창은 `/auth/login` 을 부른다. */
 export const ME_URL = /\/api\/v1\/users\/me$/;
 export const LOGIN_URL = /\/api\/v1\/auth\/login$/;
@@ -254,6 +256,13 @@ export async function mockLore(context: BrowserContext, options: LoreMockOptions
   });
   // 401 을 받은 공용 클라이언트가 토큰 갱신을 한 번 시도한다 — 갱신도 401 이어야 원래 401 이 화면에 닿는다.
   await context.route(REFRESH_URL, (route) => answer(route, fail(401, 'INVALID_REFRESH_TOKEN', '다시 로그인해 주세요')));
+  await context.route(HYPOTHESIS_URL, (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    if (!state.loggedIn) return answer(route, fail(401, 'UNAUTHORIZED', '로그인이 필요합니다'));
+    const id = Number(HYPOTHESIS_URL.exec(new URL(route.request().url()).pathname)?.[1]);
+    const found = state.hypotheses.find((item) => item.id === id);
+    return answer(route, found ? ok(found) : fail(404, 'TRAILER_HYPOTHESIS_NOT_FOUND', '가설을 찾을 수 없습니다'));
+  });
   await context.route(HYPOTHESES_URL, (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
     const body: unknown = route.request().postDataJSON();

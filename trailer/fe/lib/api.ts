@@ -152,6 +152,8 @@ export type Judgement = {
   reason: string;
   support: string[];
   against: string[];
+  /** 인용한 카드의 열두 칸(그 회차로 가린 값). judge.py 가 붙인다(NA decisions.md 1-29). 없을 수 있다 — 그러면 담은 카드와 상세 API 로 찾는다. */
+  cited_cards?: unknown[];
 };
 
 export type PresentationSection = { title: string; text: string; source_ids: string[] };
@@ -164,15 +166,10 @@ export type Presentation = {
   details: PresentationSection[];
 };
 
-/** 화면이 그리는 판정 결과. 판정은 가설(`Hypothesis`)의 판정 칸에서 온다. */
+/** 화면이 그리는 판정 결과 — 가설(`Hypothesis`)이 COMPLETE 일 때 그 판정 칸 둘이다. */
 export type JudgeResult = {
-  status: "complete";
-  chapter: number;
-  state_digest: string;
-  cards_digest: string;
   judgement: Judgement;
-  cached: boolean;
-  presentation?: Presentation;
+  presentation: Presentation | null;
 };
 
 /* ---- 부르기 ---------------------------------------------------------------- */
@@ -310,4 +307,15 @@ export async function submitHypothesis(body: JudgeRequest, signal?: AbortSignal)
     signal,
   });
   return toHypothesis(item);
+}
+
+/** 가설 하나를 되묻는다(2-6). 없는 번호와 남의 가설은 null 이다. 로그인이 없으면 `ApiError`(401)를 그대로 던진다. */
+export async function fetchHypothesis(id: number, signal?: AbortSignal): Promise<Hypothesis | null> {
+  try {
+    const item = await request<unknown>(`${HYPOTHESES_PATH}/${id}`, { signal });
+    return toHypothesis(item);
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "TRAILER_HYPOTHESIS_NOT_FOUND") return null;
+    throw error;
+  }
 }
