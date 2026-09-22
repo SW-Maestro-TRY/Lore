@@ -59,8 +59,10 @@ export const ONB_UNITS: OnbUnit[] = [
  *   위의 OB-01~10 은 **서로 겹쳐 켤 수 있는** 변경이라 토글이 맞는데, 배치는 셋 중 하나만
  *   성립한다(한 줄이면서 동시에 접이식일 수 없다). 랜딩 `landingDev.tsx` 의 버전 선택기와 같은 꼴이다.
  *
- * ★ 기본은 `now`(지금 올라가 있는 2열 격자)다. 공개 도메인에는 선택기가 안 뜨므로,
- *   기본을 바꾸는 순간 아무도 고르지 않은 화면이 밖으로 나간다. **고르신 뒤에 기본을 옮긴다.**
+ * ★ **2026-09-22 상훈님이 안 1(한 줄)로 확정** — 기본이 `col` 이다. 공개 도메인에는 선택기가
+ *   안 뜨므로(`useDevVisible`) 손님이 보는 것은 언제나 이 기본값이다.
+ *   `now`(옛 2열 격자)와 `fold`(접이식)는 **개발용으로 남긴다** — 되돌려 보거나 나중에 얹기 위해서다.
+ *   저장 키도 v2 로 올렸다. 안 올리면 어젯밤 `now` 를 눌러 본 브라우저만 옛 화면에 남는다.
  *
  * ★ 불변식은 위와 같다 — **배치만 바꾼다.** 칩·입력칸의 핸들러·`data-part`·서버 호출·칸 이동은
  *   세 배치에서 하나도 다르지 않다. 접이식이 칸을 접는 것도 **그리느냐 마느냐**일 뿐,
@@ -68,11 +70,14 @@ export const ONB_UNITS: OnbUnit[] = [
  */
 export type CharLayout = 'now' | 'col' | 'fold';
 
+/** 아무도 안 고른 브라우저가 보는 것. 손님이 보는 화면이 곧 이 값이다. */
+export const CHAR_LAYOUT_DEFAULT: CharLayout = 'col';
+
 export const CHAR_LAYOUTS: { id: CharLayout; label: string; hint: string }[] = [
   // hint 의 숫자는 **390×844 실측**(2026-09-22). 어림값을 적으면 고르는 근거가 흐려진다.
-  { id: 'now', label: '기존', hint: '2열 격자 — 지금 올라가 있는 화면. 카드 폭 169px · 칩 28px · 스크롤 115px' },
-  { id: 'col', label: '안1 한 줄', hint: '한 줄에 한 묶음씩. 카드 폭 344px · 칩 39px · 스크롤 638px(내려 보는 대신 칸이 커짐)' },
-  { id: 'fold', label: '안2 접이식', hint: '한 칸만 펼침. 여섯 칸이 거의 한 화면 · 스크롤 73px · 접힌 줄에 고른 값이 보임' },
+  { id: 'now', label: '옛 2열', hint: '9/21 까지의 화면(되돌려 보기용). 카드 폭 169px · 칩 28px · 스크롤 137px' },
+  { id: 'col', label: '안1 한 줄 ★', hint: '확정안 · 기본값. 카드 폭 344px · 칩 39px(누르는 자리 45px) · 스크롤 498px' },
+  { id: 'fold', label: '안2 접이식', hint: '한 칸만 펼침. 여섯 칸이 거의 한 화면 · 스크롤 72px · 접힌 줄에 고른 값이 보임' },
 ];
 
 type Flags = Record<string, boolean>;
@@ -89,7 +94,7 @@ const OnbDevCtx = createContext<Ctx>({
   flags: {},
   setFlag: () => {},
   setAll: () => {},
-  charLayout: 'now',
+  charLayout: CHAR_LAYOUT_DEFAULT,
   setCharLayout: () => {},
 });
 
@@ -97,7 +102,7 @@ const OnbDevCtx = createContext<Ctx>({
 // 개발자 화면만 옛 화면으로 되돌아간다. 키를 올려 옛 값을 버린다.
 const LS_KEY = 'zzal.onboarding.devflags.v2';
 /** 배치 선택은 토글과 **따로** 저장한다 — 성격이 다른 값이라 한 통에 섞으면 둘 다 읽기 어려워진다. */
-const LS_LAYOUT_KEY = 'zzal.onboarding.charlayout.v1';
+const LS_LAYOUT_KEY = 'zzal.onboarding.charlayout.v2';
 
 const LAYOUT_IDS = CHAR_LAYOUTS.map((x) => x.id) as string[];
 
@@ -122,8 +127,8 @@ const ALL_ON: Flags = Object.fromEntries(ONB_UNITS.map((u) => [u.id, true]));
 
 export function OnbDevProvider({ children }: { children: ReactNode }) {
   const [flags, setFlags] = useState<Flags>(ALL_ON);
-  // 첫 렌더는 늘 'now' — 서버가 그린 것과 같아야 하이드레이션 경고가 안 난다(위 flags 와 같은 이유).
-  const [charLayout, setLayout] = useState<CharLayout>('now');
+  // 첫 렌더는 늘 기본값 — 서버가 그린 것과 같아야 하이드레이션 경고가 안 난다(위 flags 와 같은 이유).
+  const [charLayout, setLayout] = useState<CharLayout>(CHAR_LAYOUT_DEFAULT);
   // 첫 렌더는 늘 전부 ON(적용후) — 서버·브라우저 렌더가 갈리면 하이드레이션 경고가 나므로 useEffect 로 뒤늦게 불러온다.
   useEffect(() => {
     try {
@@ -136,7 +141,7 @@ export function OnbDevProvider({ children }: { children: ReactNode }) {
       const raw = localStorage.getItem(LS_LAYOUT_KEY);
       if (raw && LAYOUT_IDS.includes(raw)) setLayout(raw as CharLayout);
     } catch {
-      /* 읽기 실패 시 'now' — 공개 사이트와 같은 화면이다. */
+      /* 읽기 실패 시 기본값 — 공개 사이트와 같은 화면이다. */
     }
   }, []);
 
@@ -173,7 +178,7 @@ export function useOnbFlag(id: string): boolean {
 }
 
 /**
- * 지금 고른 캐릭터 칸 배치. 공개 사이트·첫 렌더는 늘 `'now'`(지금 화면).
+ * 지금 고른 캐릭터 칸 배치. 공개 사이트·첫 렌더는 늘 기본값(`col` — 안 1 한 줄).
  * Onboarding.tsx 가 이 값으로 **배치만** 갈아 끼운다.
  */
 export function useCharLayout(): CharLayout {

@@ -27,6 +27,7 @@ import { useAuth } from '@common/auth/useAuth';
 import { C, C2, GAEGU, MONO, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import { assetUrl } from '../../lib/assets';
+import { CHAR_TEXT_MAX } from '../../lib/pet';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
 import { OnbDevProvider, OnbChangeList, useOnbFlag, useCharLayout } from './onboardingDev';
@@ -167,11 +168,18 @@ const CHAR_LAYOUT_STYLE = `
 [data-charlayout="col"] .onb-note,
 [data-charlayout="fold"] .onb-note{ padding:12px 13px!important; }
 
-/* 머리줄 — 제목 옆에 붙어 4줄로 접히던 부연을 **제 줄**로 내린다(390 에서 60px → 36px). */
+/* 머리줄 — 감싸기만 켠다. 부연이 4줄로 접히던 것은 칸이 169px 이어서였고, 344px 에서는
+   제목 옆에 한 줄로 들어간다. 억지로 제 줄에 내리면 접히지도 않는데 줄만 하나 는다. */
 [data-charlayout="col"] .onb-chead,
-[data-charlayout="fold"] .onb-chead{ flex-wrap:wrap; }
-[data-charlayout="col"] [data-part="chip-note"],
-[data-charlayout="fold"] [data-part="chip-note"]{ flex-basis:100%; margin-top:1px; }
+[data-charlayout="fold"] .onb-chead{ flex-wrap:wrap; row-gap:2px; }
+
+/* 누르는 자리 44px — **보이는 알약(39px)은 그대로 두고 자리만 넓힌다**(뒤로 버튼과 같은 수법).
+   ±3px 은 칩 사이 간격 7px 의 절반이라 옆 칩과 겹치지 않는다(겹치면 가장자리를 눌렀을 때
+   엉뚱한 칩이 켜진다). 가장 좁은 칩(SF)도 44px 가 되게 min-width 를 준다. */
+[data-charlayout="col"] .onb-cgroup button:not(.onb-cfold),
+[data-charlayout="fold"] .onb-cgroup button:not(.onb-cfold){ position:relative; min-width:44px; }
+[data-charlayout="col"] .onb-cgroup button:not(.onb-cfold)::after,
+[data-charlayout="fold"] .onb-cgroup button:not(.onb-cfold)::after{ content:''; position:absolute; inset:-3px; }
 
 /* ── 안 2 만 — 접힌 칸 ── */
 [data-charlayout="fold"] .onb-cgrid{ gap:9px!important; }
@@ -183,21 +191,22 @@ const CHAR_LAYOUT_STYLE = `
 `;
 
 /**
- * 자유 입력칸의 글자 수 상한.
- *
- * ★★ **서버가 받는 만큼만 연다.** 화면만 넓혀 두면 사용자가 쓴 글이 서버에서 **말없이** 잘린다.
- *   정본 1.5 는 "자유 입력칸 각 100자" 인데, 실제 서버 한도를 세어 보니 칸마다 다르다
- *   (2026-09-22 `zzal/be` 실측):
- *     · 그 밖에(note)  → `@Size(max = 200)`            ⇒ 100 으로 연다.
- *     · 세계관(world)  → `WORLD_MAX_CHARS = 100` 인데 **고른 칩까지 합쳐** 100 이다
- *                        (`worldOf` 가 합친 뒤 slice). 칩 일곱이면 35자쯤을 칩이 먹으므로
- *                        입력칸만 100 으로 열면 그만큼이 조용히 잘린다 ⇒ **60 유지**.
- *     · 말투(tone)·장르(genre) → `TONE_MAX_CHARS`·`GENRE_MAX_CHARS` 가 **32** ⇒ 60 유지.
- *     · 성격 자유 입력 → 보내는 자리 자체가 없다(`CharacterInput`) ⇒ 60 유지.
- *   넷은 정본과 코드 중 어느 쪽을 옮길지가 판단거리라 **여기서 고치지 않고 보고**한다.
+ * 세계관 한 칸의 총량. **칩 + 직접 쓴 말**을 합친 길이다(서버 `WORLD_MAX_CHARS`).
+ * 숫자 자체는 계약 옆(`lib/pet.ts` 의 `CHAR_TEXT_MAX`)에 한 벌만 둔다.
  */
-const TEXT_MAX: Record<string, number> = { persona: 60, tone: 60, genre: 60, world: 60 };
-const EXTRA_MAX = 100;
+const WORLD_TOTAL = CHAR_TEXT_MAX.world;
+
+/** 남은 자리가 이만큼 아래로 내려오면 숫자를 보여 준다. 평소에는 줄을 하나도 더 쓰지 않는다. */
+const WORLD_WARN_AT = 20;
+
+/**
+ * 세계관 입력칸에 **아직 남은 자리**. 고른 칩이 먼저 자리를 먹고, 칩과 글 사이에 ` · ` 세 글자가 든다.
+ * `worldOf` 가 합치는 방식과 **같은 셈**이어야 한다 — 두 벌이 되면 한쪽만 고쳐져도 조용히 어긋난다.
+ */
+const worldRoom = (chips: readonly string[] | undefined) => {
+  const head = (chips ?? []).join(' · ');
+  return Math.max(0, WORLD_TOTAL - head.length - (head ? 3 : 0));
+};
 
 /**
  * **지금 서버에 저장되지 않는 칸.** 사실만 적는다 — "곧 대화에 반영돼요" 같은 말은 지킬 수
@@ -207,16 +216,25 @@ const EXTRA_MAX = 100;
  * `name`·`personality`·`world`·`note` 넷뿐이다. (서버 DTO 에는 `tone`·`genre`·`personalities`
  * 자리가 이미 있는데 **프론트가 아직 안 보낸다** — 그쪽을 여는 것은 별도 판단거리다.)
  * ★ 배치 세 가지 중 무엇을 고르든 같은 자리에 뜬다 — 묶음 카드 안이라 배치와 무관하다.
+ * ★ 칸 **전체**가 안 가는 묶음(말투·장르)은 머리줄에, 자유 입력**만** 안 가는 묶음(성격)은
+ *   그 입력칸 아래에 붙인다 — 무엇을 가리키는 말인지가 자리로 드러나야 한다.
  */
-const NOT_SAVED: Record<string, string> = {
-  persona: '적어 주신 글은 아직 저장되지 않아요.',
+const NOT_SAVED_GROUP: Record<string, string> = {
   tone: '아직 저장되지 않는 칸이에요.',
   genre: '아직 저장되지 않는 칸이에요.',
 };
+/** 자유 입력**만** 저장되지 않는 묶음 — 그 입력칸 **아래**에 붙인다(칩은 저장되므로). */
+const NOT_SAVED_TEXT: Record<string, string> = {
+  persona: '적어 주신 글은 아직 저장되지 않아요.',
+};
 
-/** 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한도가 100자다. */
+/**
+ * 세계관은 **고른 칩 전부**와 직접 쓴 말을 합쳐 보낸다. 서버 한 칸의 한도가 `WORLD_TOTAL` 이다.
+ * ★ 여기 `slice` 는 **마지막 안전장치**다 — 잘리기 전에 화면이 먼저 남은 자리를 알려 준다
+ *   (`worldRoom`). 이 둘의 셈이 갈리면 사용자는 경고 없이 글을 잃는다.
+ */
 const worldOf = (chips: readonly string[] | undefined, text: string | undefined) =>
-  [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, 100);
+  [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, WORLD_TOTAL);
 
 /**
  * 업로드 안내의 예시 그림 한 칸.
@@ -595,8 +613,17 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                       <span className="onb-cchev" data-open="1" aria-hidden style={{ borderRight: `1.5px solid ${C.sub2}`, borderBottom: `1.5px solid ${C.sub2}` }} />
                     </button>
                   )}
-                  {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다. */}
-                  <span data-part="chip-note" style={{ fontSize: fz.xs, color: C.sub2 }}>{g.note}</span>
+                  {/* 칩만 보면 하나만 고르는 줄 안다 — 여러 개가 된다는 것은 글로 말해 준다.
+                      ★ 빈 문구면 아예 안 그린다 — 빈 span 도 줄 높이를 차지해, 문구를 지워도 칸이 안 줄어든다. */}
+                  {g.note && <span data-part="chip-note" style={{ fontSize: fz.xs, color: C.sub2 }}>{g.note}</span>}
+                  {NOT_SAVED_GROUP[g.key] && (
+                    <>
+                      {/* 같은 톤의 부연 둘이 나란히 놓이면 한 문장으로 읽힌다 — 가운뎃점으로 가른다.
+                          문구 자체(`g.note`)는 손대지 않는다(다른 파일 소관). */}
+                      {g.note && <span aria-hidden style={{ fontSize: fz.xs, color: C.faint }}>·</span>}
+                      <span data-part="not-saved" style={{ fontSize: fz.xs, color: C.sub2 }}>{NOT_SAVED_GROUP[g.key]}</span>
+                    </>
+                  )}
                 </span>
                 )}
                 {!folded && (
@@ -606,12 +633,31 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                       <button key={x.text} onClick={x.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${x.bw} solid ${x.bd}`, background: x.bg, fontSize: fz.md, color: x.fg }}>{x.text}</button>
                     ))}
                   </div>
-                  <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={TEXT_MAX[g.key] ?? 60} placeholder={g.ph}
-                    style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
+                  {(() => {
+                    // 세계관만 상한이 움직인다 — 고른 칩이 같은 칸을 나눠 쓰기 때문이다.
+                    const room = g.key === 'world' ? worldRoom(s.picks.world) : (CHAR_TEXT_MAX[g.key] ?? 100);
+                    const over = g.key === 'world' && g.value.length > room;
+                    const left = room - g.value.length;
+                    return (
+                      <>
+                        <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={room} placeholder={g.ph}
+                          style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
+                        {/* ★ 칩을 **나중에** 고르면 이미 쓴 글이 남은 자리를 넘을 수 있다. 그때 잘린다는 말을
+                            안 하면 사용자는 글이 사라진 줄도 모른다. 평소(여유 있을 때)에는 한 줄도 안 쓴다. */}
+                        {g.key === 'world' && left <= WORLD_WARN_AT && (
+                          <span data-part="world-left" style={{ fontSize: fz.xs, lineHeight: 1.45, color: over ? C.accent : C.sub2 }}>
+                            {over
+                              ? `칩까지 합쳐 ${WORLD_TOTAL}자예요 · 지금 ${g.value.length - room}자를 넘었어요`
+                              : `칩까지 합쳐 ${WORLD_TOTAL}자예요 · ${left}자 남았어요`}
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                   {/* 저장되지 않는 칸은 **그 자리에서** 말해 준다. 공들여 적은 글이 말없이 사라지는 것이
                       자캐를 맡기는 사람에게는 가장 나쁜 일이다. 약속은 적지 않고 사실만 적는다. */}
-                  {NOT_SAVED[g.key] && (
-                    <span data-part="not-saved" style={{ fontSize: fz.xs, lineHeight: 1.45, color: C.sub2 }}>{NOT_SAVED[g.key]}</span>
+                  {NOT_SAVED_TEXT[g.key] && (
+                    <span data-part="not-saved" style={{ fontSize: fz.xs, lineHeight: 1.45, color: C.sub2 }}>{NOT_SAVED_TEXT[g.key]}</span>
                   )}
                 </div>
                 )}
@@ -637,8 +683,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                     <span style={{ fontSize: fz.md, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
                     <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>선택</span>
                   </span>
-                  {/* 정본 1.5 의 "각 100자". 이 칸만 서버가 200자를 받아 안전하게 열 수 있다(TEXT_MAX 머리말). */}
-                  <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={EXTRA_MAX}
+                  {/* 서버 `@Size(max = 200)` 그대로. 칩이 없어 합산할 것도 없는 유일한 칸이다. */}
+                  <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={CHAR_TEXT_MAX.extra}
                     placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요"
                     style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
                 </>
