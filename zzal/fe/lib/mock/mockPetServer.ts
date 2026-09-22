@@ -397,7 +397,10 @@ export class MockPetServer implements PetSource {
         break;
       case 'CLEAN':
         if (r.trash <= 0) throw err(409, 'ZZAL_CARE_NOT_NEEDED', '이미 깨끗해요');
-        r.trash = 0;
+        // ★ **한 번 쓸면 하나**다(정본 §12 튜토리얼 안내 · 서버 `ZzalPet.clean()` = `trash - 1`).
+        //   목만 전부 지우고 있었다 — 흔적 4개가 한 번에 사라지면 청소 5회짜리 청결 조각이
+        //   화면에서만 훨씬 빨리 찬다. "가득" 을 맡는 것은 목욕(BATH)이다(§4 표).
+        r.trash = Math.max(0, r.trash - 1);
         r.counters.cleanCount += 1;
         this.advanceTutorial(r, 'CLEAN');
         r.pieceDay.cleans += 1;
