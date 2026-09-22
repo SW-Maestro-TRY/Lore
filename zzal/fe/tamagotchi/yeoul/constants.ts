@@ -433,7 +433,10 @@ export const LEARN_GOALS = [
   { name: '손 흔들며 인사', cond: '대화 답하기', need: 4, counter: 'cChat' },
   { name: '씻기', cond: '목욕하기', need: 3, counter: 'cBath' },
   { name: '자기', cond: '재우기', need: 3, counter: 'cSleep' },
-  { name: '놀라기', cond: '좌우 맞히기', need: 3, counter: 'cGame' },
+  // ★ 놀라기 조건이 **"시작 4판" → "완주 4매치"** 로 바뀌었다(2026-09-22 백엔드 계약).
+  //   서버 경로의 안내판은 서버가 준 문구·진행도를 그대로 쓰므로 여기와 무관하다 —
+  //   이 줄은 **목(연습방·서버 없는 진짜 방)** 전용이고, 그래서 같은 뜻으로 맞춰 둔다.
+  { name: '놀라기', cond: '게임 끝까지 치기', need: 4, counter: 'cGame' },
 ] as const;
 
 /**

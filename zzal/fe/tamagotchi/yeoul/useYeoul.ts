@@ -1478,8 +1478,10 @@ export function useYeoul(live?: Live) {
     const win = finished ? hits >= GUESS_WIN_AT : null;
     // ★ 이긴 매치의 보상은 **기분 +1 하나뿐**이다(정본 §7). 친밀도는 안 올린다 —
     //   정본 8장 친밀도 목록에 게임 승리가 없는데 목만 몰래 올리고 있었다(2026-09-21 판정 12).
+    // ★ 게임 카운터는 **매치를 끝까지 쳤을 때만** 올린다(2026-09-22 계약 — "완주 4매치").
+    //   예전에는 한 판(라운드)마다 올려서, 안내판의 "게임 …" 숫자가 실제 매치 수와 달랐다.
     patch({
-      cGame: v0.cGame + 1,
+      cGame: finished ? v0.cGame + 1 : v0.cGame,
       happy: finished && win ? Math.min(4, v0.happy + 1) : v0.happy,
     });
     reveal(hit, hits, finished, win);
@@ -1875,7 +1877,7 @@ export function useYeoul(live?: Live) {
    */
   const leaveAccount = useCallback(() => setS(() => ({ ...INITIAL })), []);
   /** 개발용 — 2층 로드맵을 다 배운 것으로 만든다(= 3층 시작 = 조각 등장). */
-  const finishRoadmap = useCallback(() => patch({ cChat: 4, cBath: 3, cSleep: 3, cGame: 3 }), [patch]);
+  const finishRoadmap = useCallback(() => patch({ cChat: 4, cBath: 3, cSleep: 3, cGame: 4 }), [patch]);
   /** 개발용 — 조각 도장을 0·2·4 로 바꿔 본다. 실제로는 잠들 때 판정·리셋된다(정본). */
   const setShards = useCallback((n: number) => () => patch({ shards: n }), [patch]);
   /**
