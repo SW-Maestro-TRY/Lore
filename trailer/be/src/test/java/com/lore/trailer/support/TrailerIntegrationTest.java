@@ -17,7 +17,7 @@ import java.lang.annotation.Target;
  *
  * <h3>왜 있나</h3>
  * 카드 API 는 <b>DB 가 하는 일</b>이 핵심이다 — {@code Specification} 이 만드는 SQL, {@code LIKE} 이스케이프,
- * {@code id} 순 정렬, Flyway V23 과 엔티티의 일치({@code ddl-auto: validate}). 단위 시험으로는 한 줄도 못 밟는다.
+ * {@code id} 순 정렬, Flyway 의 trailer 마이그레이션(V20260922_0847)과 엔티티의 일치({@code ddl-auto: validate}). 단위 시험으로는 한 줄도 못 밟는다.
  * 시큐리티 규칙("GET 만 로그인 없이")도 진짜 필터 체인을 지나야 보인다.
  *
  * <h3>★ zzal 의 {@code @ZzalIntegrationTest} 를 가져다 쓰지 않는다</h3>
@@ -35,7 +35,7 @@ import java.lang.annotation.Target;
  * export LORE_TEST_DB_USERNAME=... LORE_TEST_DB_PASSWORD=...
  * ./gradlew test --tests 'com.lore.trailer.*'
  * </pre>
- * 스키마는 Flyway 가 V1 부터 전부 적용한다 — V23 도 이때 검증된다.
+ * 스키마는 Flyway 가 V1 부터 전부 적용한다 — trailer 의 V20260922_0847 도 이때 검증된다.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)

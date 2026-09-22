@@ -110,8 +110,8 @@
     - 고치는 동사: 담당자는 자원을 고치는 API를 PATCH로 짓는다. PUT은 선례가 없기 때문이다.
 - DB
     - 스키마 변경: 담당자는 엔티티를 더하거나 바꾸는 커밋에 V번호__이름.sql을 함께 넣는다. 엔티티와 DB가 다르면 서버가 뜨지 않기 때문이다.
-    - 파일 위치와 번호: 담당자는 새 SQL 파일을 apps/api/src/main/resources/db/migration에 둔다. 번호는 두 폴더를 합쳐 겹치지 않게 잡는다. 번호가 겹치면 배포가 실패하기 때문이다. 지금 비어 있는 다음
-      번호는 V23이다.
+    - 파일 위치와 번호: 담당자는 새 SQL 파일을 trailer/be/src/main/resources/db/migration에 둔다. classpath:db/migration 하나로 세 폴더가 함께 잡힌다. 번호는 날짜 번호 V<YYYYMMDD>_<HHMM>__trailer_<설명>.sql이다(common/docs/git-convention.md 9절). 순번은 두 줄기에서
+      따로 붙어 겹칠 수 있고, 겹치면 서버가 뜨지 않는다. 2026-09-22에 trailer와 zzal의 V23이 겹쳐 겪었다.
 - 프론트
     - 코드 위치: 담당자는 화면 코드를 trailer/fe에 둔다. apps/web/app/(domains)/trailer/page.tsx는 @trailer/TrailerPage를 내보내는 한 줄로 둔다.
     - 라이브러리: 담당자는 새 라이브러리를 더하지 않는다. 더하려면 공유 영역인 apps/web/package.json을 고쳐야 하기 때문이다.
