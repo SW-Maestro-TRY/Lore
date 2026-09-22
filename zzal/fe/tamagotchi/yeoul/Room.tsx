@@ -208,7 +208,16 @@ export default function Room({ y }: { y: Yeoul }) {
    * ★ 폭은 걸음(평행이동)·자세와 무관해서, 아이가 어디에 서 있든 똥이 안 따라간다.
    */
   const charBoxRef = useRef<HTMLDivElement>(null);
-  const byK = anchors.source === 'server' || v.sample.show;
+  /**
+   * 앵커표를 믿어도 되는가. **표와 그림이 같은 판일 때만** 참이다.
+   *
+   * ★ 2026-09-22 — 세 번째 경우를 더했다: **지금 화면에 걸린 그림이 여울 폴백일 때.**
+   *   고정 앵커표는 여울 정본 v02 에서 뽑은 것이라(→ `props/anchors-fixed.ts` 머리말) 그 그림에
+   *   대해서는 **표가 곧 실측**이다. 서버 없는 진짜 방(목)·그림이 깨져 여울로 버티는 자리가 여기다.
+   *   빼 두면 여울을 그려 놓고 "표를 못 믿는다" 며 실루엣을 상자 전체(0~1)로 잡아, 옆자리를
+   *   포기하고 아이를 135px 깎는다(1440 실측 499.4 → 364.0). 내 아이 그림일 때는 그대로 거짓이다.
+   */
+  const byK = anchors.source === 'server' || v.sample.show || charSrc === fallbackSrc;
 
   // ★ 말풍선 자리 — **화면 폭으로 가르지 않는다**(2026-09-20 재설계 · 안 1).
   //
@@ -258,9 +267,20 @@ export default function Room({ y }: { y: Yeoul }) {
     : Math.max(0.2, 1 - footPad - headPad);
   /** 정수리 ↔ 머리 옆선 사이(상자 세로 대비). 머리 모양의 상수라 표 값을 그대로 쓴다. */
   const headSideDrop = Math.max(0, fit.headSpanPerBoxH - fit.headSidePerBoxH);
-  // 실루엣 좌·우도 같은 이유로 갈린다 — 앵커를 믿을 수 있으면 표, 아니면 그림에서 잰 값.
-  const silLeft = byK ? fit.silLeftPerBoxW : sideEdges.left;
-  const silRight = byK ? fit.silRightPerBoxW : sideEdges.right;
+  /**
+   * 말풍선이 **옆으로 비킬 때 쓰는 단 하나의 실루엣 좌·우**(0~1).
+   *
+   * ★★ 2026-09-22 — 예전에는 자가 **둘**이었다: 들어갈 폭은 앵커표의 선 자세로 재고(`…Upright`),
+   *   그릴 자리는 지금 자세(`silLeftPerBoxW`)나 그림에서 잰 값(`sideEdges`)으로 잡았다.
+   *   두 자가 어긋난 만큼 말풍선이 그대로 **무대 밖으로 나간다.** 앵커 없는 아이(진짜 방 목)는
+   *   그림이 다른 출처(CDN)라 캔버스로 못 읽어 `sideEdges` 가 기본값 0~1 로 남는데(→ `useSpritePads`),
+   *   폭은 0.73 으로 재고 자리는 1.0 에 잡으니 **오른쪽으로 57~115px 튀어나갔다**(1100 실측).
+   *   그래서 **폭도 자리도 이 한 값으로만** 본다 — 두 기준이 영영 못 어긋난다.
+   * ★ 앵커를 믿을 수 있으면 **선 자세**로 잡는다(자세마다 갈리면 아이가 출렁인다 → `layout.ts`).
+   *   못 믿으면 상자 전체(0~1) — 가장 불리하게 잡아 옆자리를 포기할 뿐, 잘리지는 않는다.
+   */
+  const silLeft = byK ? fit.silLeftUprightPerBoxW : sideEdges.left;
+  const silRight = byK ? fit.silRightUprightPerBoxW : sideEdges.right;
   // ★ 아이 그림이 줄면(배부름 0 → 0.7배) **머리도 그만큼 내려온다.** 말풍선이 옛 머리 자리에
   //   그대로 떠 있으면 머리 위로 한참 뜬다 — 같은 배율을 여기에도 건다(→ `st.charScale`).
   const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${(headSpan * v.st.charScale).toFixed(4)})`;
@@ -460,7 +480,6 @@ export default function Room({ y }: { y: Yeoul }) {
           show={v.bub.show} text={v.bub.text} play={v.st.play}
           headSpan={headSpan} faceSpan={Math.max(0, headSpan - headSideDrop)}
           headSpanReserve={fit.headSpanTallestPerBoxH}
-          silLeftReserve={fit.silLeftUprightPerBoxW} silRightReserve={fit.silRightUprightPerBoxW}
           silLeft={silLeft} silRight={silRight} avoid={headSideTaken}
           headBottom={headTopFromBottom} faceBottom={faceFromBottom}
           stageRef={stageRef} probeRef={charProbeRef} onHeadroom={setBubbleHeadroom}
@@ -521,8 +540,9 @@ export default function Room({ y }: { y: Yeoul }) {
 //   아이와 박자가 어긋난다 — 그러면 같은 키프레임을 타도 걸음·뜀이 따로 논다.
 // ★ 자리는 세 가지고, 위에서부터 고른다(실측으로 판정 — 재설계안 E-1).
 //   1) 머리 위        : 아래끝을 머리끝 20px 위에 붙이고 위로 자란다
-//   2) 머리 옆        : 1)이 무대 위끝(+8px)을 넘길 때. 여백이 큰 쪽, 세로는 얼굴 높이
-//   3) 머리 위 + 양보 : 옆에도 자리가 없을 때만(좁고 짧은 폰) 아이를 **딱 모자란 만큼** 낮춘다
+//   2) 머리 옆        : 1)이 무대 위끝(+8px)을 넘길 때. **여백이 큰 쪽 → 모자라면 반대쪽**,
+//                       세로는 얼굴 높이. 놓기 전에 무대 안으로 한 번 더 물린다(마지막 빗장)
+//   3) 머리 위 + 양보 : **양옆 다** 자리가 없을 때만 아이를 **딱 모자란 만큼** 낮춘다
 //   어느 쪽이든 무대 밖으로 나가는 경우가 없으므로 **잘림은 0** 이다.
 
 /** 머리끝 ↔ 말풍선 아래끝. 숨쉬기(`yBob` 4px)를 늘 덮고도 남는다(예전 14px). */
@@ -555,7 +575,7 @@ function samePlace(a: BubblePlace, b: BubblePlace): boolean {
 }
 
 function Bubble({
-  show, text, play, headSpan, faceSpan, headSpanReserve, silLeft, silRight, silLeftReserve, silRightReserve, avoid,
+  show, text, play, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid,
   headBottom, faceBottom, stageRef, probeRef, onHeadroom,
 }: {
   show: boolean; text: string; play: string;
@@ -569,11 +589,10 @@ function Bubble({
    */
   headSpanReserve: number;
   /**
-   * **자리를 정할 때 쓰는 실루엣 좌·우** — 자세를 안 본다(선 자세의 폭).
-   * 지금 자세로 재면 누웠을 때만 옆자리가 막혀 아이가 출렁인다(→ `layout.ts` 머리말).
+   * 실루엣 좌·우 가장자리(상자 가로 대비). 아이 옆에 자리가 얼마나 남았는지 재고,
+   * **그 자리에 말풍선을 놓을 때도 같은 값을 쓴다** — 자가 둘이면 어긋난 만큼 무대 밖으로 나간다
+   * (→ `Room` 의 `silLeft` 정의). 자세를 안 보는 값이라 자세가 바뀌어도 자리가 안 흔들린다.
    */
-  silLeftReserve: number; silRightReserve: number;
-  /** 실루엣 좌·우 가장자리(상자 가로 대비). 아이 옆에 자리가 얼마나 남았는지 잰다. */
   silLeft: number; silRight: number;
   headBottom: string; faceBottom: string;
   stageRef: React.RefObject<HTMLDivElement | null>;
@@ -610,11 +629,10 @@ function Bubble({
       const headTopY = st.height - (lift + pb.height * Math.max(headSpan, headSpanReserve));
       const faceY = st.height - (lift + pb.height * faceSpan);
       const boxL = (st.width - pb.width) / 2;
+      // ★★ 실루엣 좌·우는 **이 한 쌍뿐이다**(2026-09-22). 폭을 재는 자와 자리를 잡는 자를 가르면
+      //   그 차이가 곧 잘림이 된다 — 실제로 진짜 방(목)에서 오른쪽으로 115px 나갔다(→ `silLeft` 정의).
       const silL = boxL + pb.width * silLeft;
       const silR = boxL + pb.width * silRight;
-      // ★ 옆자리가 되는지는 **선 자세**로 잰다 — 자세마다 갈리면 아이가 출렁인다.
-      const silLWide = boxL + pb.width * silLeftReserve;
-      const silRWide = boxL + pb.width * silRightReserve;
 
       // 1) 머리 위 — 뜀(HOP)까지 미리 갚아 둔다. 안 그러면 **뛰는 순간에만** 윗변이 잘린다.
       const aboveW = Math.min(BUBBLE_MAX_W, Math.round(st.width - 32));
@@ -632,16 +650,19 @@ function Bubble({
         return;
       }
 
-      // 2) 머리 옆 — 여백이 큰 쪽. 걸어가도 안 잘리게 진폭(WANDER)을 미리 뺀다.
-      //    ★ 다만 **소품이 이미 쓰는 쪽(`avoid`)은 건너뛴다** — 거기 두면 겹친다.
-      const gapL = silLWide - WANDER;
-      const gapR = st.width - silRWide - WANDER;
-      const wide: 'left' | 'right' = gapR >= gapL ? 'right' : 'left';
-      const other: 'left' | 'right' = wide === 'right' ? 'left' : 'right';
-      const side: 'left' | 'right' = avoid === wide ? other : wide;
-      const gap = side === 'left' ? gapL : gapR;
-      const sideW = Math.min(BUBBLE_MAX_W, Math.floor(gap - 12));
-      if (sideW >= BUBBLE_SIDE_MIN) {
+      // 2) 머리 옆 — 여백이 큰 쪽부터, **모자라면 반대쪽**, 둘 다 모자라면 3) 으로 내려간다.
+      //    ★ 소품이 이미 쓰는 쪽(`avoid`)은 아예 후보에서 뺀다 — 거기 두면 겹친다.
+      //    ★ 고르는 기준(여백)은 **무대 크기와 선 자세**만 본다 — 글자 수·자세를 안 보므로
+      //      한 매치 동안 말풍선이 좌우로 튀지 않는다.
+      const gapL = silL - WANDER;
+      const gapR = st.width - silR - WANDER;
+      const cands = (['right', 'left'] as const)
+        .filter((c) => c !== avoid)
+        .sort((a, b) => (b === 'right' ? gapR : gapL) - (a === 'right' ? gapR : gapL));
+      for (const side of cands) {
+        const gap = side === 'right' ? gapR : gapL;
+        const sideW = Math.min(BUBBLE_MAX_W, Math.floor(gap - 12));
+        if (sideW < BUBBLE_SIDE_MIN) continue;
         // 보이는 말풍선이 없으면 예약 카드로 잰다 — 자리는 같은 자로 재야 뜰 때 안 움직인다.
         const meas = card ?? res;
         meas.style.width = `${sideW}px`;
@@ -653,9 +674,17 @@ function Bubble({
           Math.max(topMin, st.height - BUBBLE_EDGE - 4 - h),
         );
         const inner = Math.round((side === 'right' ? silR - st.width / 2 : st.width / 2 - silL) + 10);
+        // ★★ 마지막 빗장 — 계산이 어디서 어긋나도 **무대 밖으로는 못 나간다**(2026-09-22).
+        //   위 `gap` 이 이미 지켜야 하는 값이지만, 자가 하나라도 틀리면 곧장 잘림으로 나타나므로
+        //   여기서 한 번 더 물린다. 걸음 진폭(WANDER)까지 남겨 **걸어가도** 안 잘린다.
+        //   좌우로 미는 일만 하므로 `side` 가 바뀌지 않는다 — 꼬리는 그대로 아이를 가리킨다.
+        const half = st.width / 2;
+        const lo = BUBBLE_EDGE + WANDER - half;
+        const hi = half - (BUBBLE_EDGE + WANDER) - sideW;
+        const want = side === 'right' ? inner : -(inner + sideW);
         put({
           at: 'side', w: sideW, side,
-          left: side === 'right' ? inner : -(inner + sideW),
+          left: hi >= lo ? Math.min(Math.max(want, lo), hi) : Math.round(-sideW / 2),
           top: Math.round(top - faceY),
           tail: Math.round(Math.min(Math.max(faceY - top, 16), Math.max(16, h - 16))),
         });
@@ -681,7 +710,7 @@ function Bubble({
     if (cardRef.current) ro.observe(cardRef.current);
     if (reserveRef.current) ro.observe(reserveRef.current);
     return () => ro.disconnect();
-  }, [show, text, headSpan, faceSpan, headSpanReserve, silLeft, silRight, silLeftReserve, silRightReserve, avoid, stageRef, probeRef, onHeadroom]);
+  }, [show, text, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid, stageRef, probeRef, onHeadroom]);
 
   const tailBase: React.CSSProperties = {
     position: 'absolute', width: 11, height: 11, background: C.paper,
