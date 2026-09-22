@@ -1344,14 +1344,12 @@ function ChatBar({ y }: { y: Yeoul }) {
       onClick={(e) => e.stopPropagation()}
       style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: gap.sm, animation: v.chat.anim }}
     >
-      {/* ★ 주고받은 **두 줄이 입력칸 바로 위에 남는다**(2026-09-20 · 재설계안 E-3).
-          예전엔 아이 말이 화면 위 말풍선(입력칸에서 470px 위)에만 있고, 내 말은 4.2초 뒤 사라져
-          한 화면에 대화가 남지 않았다. 자리·개폐·하루 3회·40자 규칙은 **하나도 안 바꿨다.** */}
-      {v.chat.hasLine && (
-        <span data-part="chat-pet" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: gap.sm, maxWidth: '86%', padding: '7px 13px', borderRadius: radius.pill, background: C.slot, border: `1px solid ${C.lineHard}` }}>
-          <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.2, color: C.ink }}>{v.chat.line}</span>
-        </span>
-      )}
+      {/* ★★ **아이 말은 무대 말풍선 하나뿐이다**(2026-09-22 상훈님 판정 2안 — *"캐릭터 위의
+          말풍선만 있으면 돼"*). 2026-09-20 에 이 자리에 두던 '아이 말' 한 줄을 걷어냈다 —
+          같은 문장이 무대와 입력칸 위에 **두 번** 떠서, 어느 쪽이 아이가 지금 하는 말인지
+          흐려졌다. 아이 말은 **아이 위에** 있어야 "아이가 나한테 말을 건다" 가 된다.
+          ★ **내가 쓴 줄은 남긴다** — 이건 아이 말이 아니라 내가 무엇을 보냈는지 확인하는
+          유일한 자리다(입력칸은 보내는 순간 비워진다). 판정은 "아이 말은 무대에만" 까지였다. */}
       {v.chat.hasMine && (
         <span data-part="chat-mine" style={{ display: 'flex', alignItems: 'center', gap: gap.sm, maxWidth: '82%', padding: '7px 13px', borderRadius: radius.pill, background: C.accentSoft, border: `1px solid ${acc(.22)}`, animation: 'yPopIn .2s cubic-bezier(.2,.9,.25,1)' }}>
           <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.2, color: '#8B3A2C' }}>{v.chat.mine}</span>

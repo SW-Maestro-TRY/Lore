@@ -2668,9 +2668,9 @@ export function useYeoul(live?: Live) {
       chat: {
         show: s.screen === 'room' && (s.chatOpen || s.chatClosing) && !s.sheet,
         anim: s.chatClosing ? 'yPopOut .17s ease forwards' : 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
+        // ★ **내가 쓴 줄만** 입력칸 위에 남는다. 아이 말은 무대 말풍선 하나뿐이다
+        //   (2026-09-22 판정 2안) — 같은 문장을 두 곳에 띄우지 않는다(→ `ChatBar`).
         hasMine: !!s.mine, mine: s.mine, draft: s.draft,
-        // 입력칸 위에 남기는 '아이 말' 한 줄. 무대 말풍선과 **같은 문장**이다(출처 하나).
-        hasLine: !!chatLine, line: chatLine ?? '',
         // 열린 부름이 없으면 적을 곳을 잠그고 **언제 다시 부르는지**만 알려 준다.
         // 이건 아이의 말이 아니라 화면의 안내라, 아이 말풍선이 아니라 입력칸에 둔다.
         can: canAnswer && !live?.chatting,
