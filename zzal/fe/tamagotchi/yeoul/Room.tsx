@@ -851,6 +851,9 @@ function Tiles({ y }: { y: Yeoul }) {
         <button
           key={r.key} data-room={r.key}
           onClick={(e) => { e.stopPropagation(); r.pick(); }}
+          // ★ 튜토리얼이 다른 칸을 가리키는 동안에는 **진짜로 안 눌린다**(2026-09-22 판정).
+          //   자는 동안 잠기는 것은 여전히 눌려서 한 줄을 말한다 — 그건 상태이지 안내가 아니다.
+          disabled={r.off}
           style={{
             position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.sm,
             padding: '11px 4px 10px', borderRadius: radius.md,
@@ -1020,7 +1023,7 @@ function Hud({ y }: { y: Yeoul }) {
             머리줄이 두꺼워지면 그만큼 무대가 낮아져 아이가 작아진다. 음수 여백이 제자리를 지킨다. */}
         <button
           onClick={actions.openSettings} data-part="pet-info" data-hl={v.hud.hl ? '1' : undefined}
-          data-off={v.hud.off ? '1' : undefined}
+          data-off={v.hud.off ? '1' : undefined} disabled={v.hud.off}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flex: 'none',
             minHeight: TAP_MIN, margin: '-10px 0', padding: 0, border: 'none', background: 'none',
@@ -1099,18 +1102,19 @@ function ChatFab({ y }: { y: Yeoul }) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); actions.openChat(); }}
-      data-part="chat-fab" data-off={v.fab.off ? '1' : undefined}
+      data-part="chat-fab" data-off={v.fab.off ? '1' : undefined} disabled={v.fab.off}
       style={{
         ...slotChip, position: 'relative',
         borderStyle: 'solid', borderWidth: v.fab.bw, borderColor: v.fab.bd,
         animation: v.fab.anim,
         // ★ 튜토리얼 중 다른 칸이면 **흐리게 둔다**(판정 J8) — 없애면 "사라졌다" 로 읽힌다.
-        //   눌러도 대화가 안 열리고 왜 지금이 아닌지 한 줄이 뜬다(`actions.openChat` 이 막는다).
         opacity: v.fab.off ? 0.45 : 1,
+        cursor: v.fab.off ? 'default' : 'pointer',
       }}
-      // ★ `aria-disabled` 를 안 쓴다 — 이 버튼은 **눌린다**(눌러야 왜 지금이 아닌지 들린다).
-      //   참으로 두면 화면 낭독기도 자동 검사도 "못 누르는 것" 으로 읽어 버린다(메모리: ui-verify).
-      aria-label={v.fab.off ? `대화하기 · ${v.fab.why}` : '대화하기'}
+      // ★★ 2026-09-22 — **`disabled` 를 붙인다.** 이제 이 단추는 튜토리얼 중 **진짜로 안 눌린다**
+      //   (상훈님 판정: "나머지는 비활성해서 누르지 않게"). 속성이 사실과 맞으므로 낭독기·자동
+      //   검사가 읽는 것도 사실이다 — 예전 금지는 "눌리는데 비활성으로 표시" 하던 경우였다.
+      aria-label="대화하기"
     >
       <span style={{ position: 'relative', width: 24, height: 24, color: '#5A554E' }}>
         <span style={{ position: 'absolute', left: 1, top: 3, width: 22, height: 15, border: '2px solid currentColor', borderRadius: 8 }} />
