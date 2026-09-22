@@ -712,12 +712,10 @@ export class MockPetServer implements PetSource {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
-    if (r.game && !r.game.finished) {
-      r.game.finished = true;
-      r.game.win = false;
-      this.uncountPiece(r, 'GAME');
-    }
-    return this.gameState(r, now);
+    // ★★ **여기서는 아무것도 안 고친다**(서버 `GameService.current` — `return Optional.empty()`).
+    //   조회는 읽기만 한다. 남아 있는 미완료 판은 아무것도 막지 않고, **다음 `start` 가 접는다**.
+    //   목이 여기서 접으면 GET 하나가 상태를 바꾸는 것이 되어 서버와 갈린다.
+    return this.gameState(r, now, [], true);
   }
 
   // ── 안쪽: 시계 ────────────────────────────────────────────────────────
@@ -1294,10 +1292,14 @@ export class MockPetServer implements PetSource {
    * 시작·잇기 응답. ★ `finished`·`win` 칸이 없다 — 서버 State 에도 없다(실서버 왕복 확인).
    * 판이 끝났는가는 친 결과(GuessResult)로만 안다.
    */
-  private gameState(r: Row, now: number, justUnlocked: number[] = []): GameState {
+  /**
+   * @param neverPlaying `current` 전용 — **판을 절대 안 돌려준다**(서버 `GameService.current`).
+   *   남아 있는 미완료 판 줄은 아무것도 막지 않고 다음 `start` 가 접는다.
+   */
+  private gameState(r: Row, now: number, justUnlocked: number[] = [], neverPlaying = false): GameState {
     void now;
     const g = r.game;
-    const playing = g !== null && !g.finished;
+    const playing = !neverPlaying && g !== null && !g.finished;
     return {
       playing, gameId: playing ? g.gameId : null, kind: playing ? g.kind : null,
       round: playing && g.kind === 'LEFT_RIGHT' ? g.round : null,
