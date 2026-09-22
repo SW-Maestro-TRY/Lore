@@ -31,6 +31,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trailer/v1/public/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 카드 목록과 검색
+         * @description 독자가 읽은 회차 N 이하에 심은 카드를 표의 id 순(= T 번호 순)으로 나눠 준다.
+         *     N화 뒤에 회수된 복선은 status=open, resolvedChapter=null, resolution=null 로 가려서 준다.
+         *
+         *     검색 규칙은 화면이 브라우저에서 찾던 것과 같다.
+         *     · search 가 T12 꼴이면 그 번호의 카드 한 장만(대소문자 무관)
+         *     · 그 밖에는 빈칸으로 나눈 단어가 모두 카드의 글(id · 제목 · 본문 · 인물 · 유형 · "12화")에 들어 있어야 한다.
+         *       소문자로 바꾸고 빈칸을 없애고 견준다. % 와 _ 는 글자 그대로 찾는다
+         *     · kind 는 유형의 한국어 이름이 똑같은 카드만. 검색어와 함께 건다
+         *
+         *     chapter 가 없거나 숫자가 아니거나 1~maxChapter 를 벗어나면 400(TRAILER_INVALID_CHAPTER).
+         *     search 가 200자 또는 단어 10개를 넘거나 page · size 가 틀리면 400(INVALID_INPUT).
+         */
+        get: operations["list_3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trailer/v1/public/cards/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 장부 정보
+         * @description 화면을 열 때 한 번 부른다. 가장 뒤 회차, 해시 둘, 유형 다섯, 권하는 인물 다섯을 준다.
+         *
+         *     카드를 50장씩 나눠 받으면 첫 쪽에 유형과 인물이 다 없고, 해시는 첫 쪽을 받기 전에 있어야
+         *     브라우저 저장 키를 만들 수 있다. 그래서 카드와 상관없는 값을 따로 준다.
+         *
+         *     카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED). 운영 DB 에 카드 SQL 을 넣기 전이다.
+         */
+        get: operations["meta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trailer/v1/public/cards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 카드 상세
+         * @description 카드 한 장을 번호로 연다. 게시글에 적힌 번호로 카드를 열 때 부른다.
+         *     목록이 준 카드에는 상세의 칸이 다 있어서, 목록에서 여는 상세는 이 API 를 부르지 않는다.
+         *
+         *     회수 칸 셋은 목록과 같은 규칙으로 N 기준으로 가린다.
+         *     모르는 번호와 N화 뒤에 심은 카드는 같은 404(TRAILER_CARD_NOT_FOUND)다 — 구분해 주면
+         *     번호를 바꿔 가며 뒤 회차의 카드가 있는지 알아낼 수 있다.
+         */
+        get: operations["detail_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -2013,6 +2093,24 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseForeshadowing: {
+            data?: components["schemas"]["Foreshadowing"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseForeshadowingMeta: {
+            data?: components["schemas"]["ForeshadowingMeta"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseForeshadowingPage: {
+            data?: components["schemas"]["ForeshadowingPage"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseGranted: {
             data?: components["schemas"]["Granted"];
             error?: components["schemas"]["ErrorBody"];
@@ -2518,6 +2616,107 @@ export interface components {
             count?: number;
             /** Format: int64 */
             nextInSeconds?: number;
+        };
+        /** @description 복선 카드 한 장. 회수 칸 셋(status · resolvedChapter · resolution)은 독자가 읽은 회차 N 기준으로 가린 값이다 */
+        Foreshadowing: {
+            /**
+             * Format: int32
+             * @description 복선을 심은 회차
+             * @example 12
+             */
+            chapter?: number;
+            /** @description 장부의 원문(영어) */
+            excerpt?: string;
+            /** @description 카드 본문 */
+            fact?: string;
+            /**
+             * @description 카드 번호. 담기·상세·판정 요청의 열쇠
+             * @example T12
+             */
+            id?: string;
+            /**
+             * @description 유형의 한국어 이름
+             * @example 약속
+             */
+            kind?: string;
+            /** @description 인물 이름. 없으면 빈 배열 */
+            people?: string[];
+            /** @description 회수 기록의 글. 미회수(또는 N화 뒤 회수)면 null */
+            resolution?: string;
+            /**
+             * Format: int32
+             * @description 회수된 회차. 미회수(또는 N화 뒤 회수)면 null
+             * @example 214
+             */
+            resolvedChapter?: number;
+            /**
+             * @description 연결된 장면의 번호. 없으면 null
+             * @example V12
+             */
+            scene?: string;
+            /** @description 장면의 글. 없으면 빈 글 */
+            sceneExcerpt?: string;
+            /**
+             * @description open 또는 resolved. N화 뒤에 회수된 복선은 open 으로 온다
+             * @enum {string}
+             */
+            status?: "open" | "resolved";
+            /** @description 카드 제목 */
+            title?: string;
+        };
+        /** @description 장부 정보. 화면을 열 때 한 번 받는다 */
+        ForeshadowingMeta: {
+            /** @description 400화 카드 파일의 sha256. 위와 같다 */
+            cardsDigest?: string;
+            /** @description 유형의 한국어 이름. 카드에 먼저 나온 순서 */
+            kinds?: string[];
+            /**
+             * Format: int32
+             * @description 고를 수 있는 가장 뒤 회차
+             * @example 400
+             */
+            maxChapter?: number;
+            /** @description 400화 장부 파일의 sha256. 브라우저 저장 키와 판정 요청에 실린다 */
+            stateDigest?: string;
+            /** @description 검색창 아래에 권하는 인물. 카드에 먼저 나온 다섯 */
+            suggestedPeople?: string[];
+        };
+        /** @description 카드 목록 한 쪽. chapter · page · size 는 요청한 값 그대로다 — 늦게 온 응답을 화면이 버리는 기준 */
+        ForeshadowingPage: {
+            /**
+             * Format: int32
+             * @description 요청한 회차 N
+             * @example 200
+             */
+            chapter?: number;
+            /**
+             * Format: int64
+             * @description N화 카드의 전체 수(검색어와 유형을 걸기 전)
+             * @example 774
+             */
+            chapterTotal?: number;
+            /** @description 다음 쪽이 있나 */
+            hasNext?: boolean;
+            /** @description 카드. 순서는 표의 id 순 = T 번호 순 */
+            items?: components["schemas"]["Foreshadowing"][];
+            /**
+             * Format: int32
+             * @description 요청한 쪽. 0부터
+             * @example 0
+             */
+            page?: number;
+            /**
+             * Format: int32
+             * @description 요청한 크기
+             * @example 50
+             */
+            size?: number;
+            /**
+             * Format: int64
+             * @description 찾은 카드의 수(검색어와 유형을 건 뒤)
+             * @example 12
+             */
+            total?: number;
         };
         Gauges: {
             /** Format: int32 */
@@ -3309,6 +3508,104 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    list_3: {
+        parameters: {
+            query: {
+                /**
+                 * @description 독자가 읽은 회차 N. 1부터 maxChapter 까지
+                 * @example 200
+                 */
+                chapter: number;
+                /**
+                 * @description 검색어. 200자 · 단어 10개까지. 비면 N화 카드 전부
+                 * @example 밀짚모자
+                 */
+                search?: string;
+                /**
+                 * @description 유형의 한국어 이름. 비면 거르지 않는다
+                 * @example 약속
+                 */
+                kind?: string;
+                /**
+                 * @description 쪽. 0부터. 기본 0
+                 * @example 0
+                 */
+                page?: number;
+                /**
+                 * @description 한 쪽의 크기. 기본 50, 최대 100
+                 * @example 50
+                 */
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseForeshadowingPage"];
+                };
+            };
+        };
+    };
+    meta: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseForeshadowingMeta"];
+                };
+            };
+        };
+    };
+    detail_1: {
+        parameters: {
+            query: {
+                /**
+                 * @description 독자가 읽은 회차 N. 1부터 maxChapter 까지
+                 * @example 200
+                 */
+                chapter: number;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description 카드 번호
+                 * @example T12
+                 */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseForeshadowing"];
                 };
             };
         };
