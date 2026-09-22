@@ -44,8 +44,14 @@ export const DROP_MS = {
  */
 export const TUTORIAL_FIRST_TRASH = 1;
 
-/** 간식 연속 5개면 배탈(병 100%). §4·§5 */
-export const SNACK_STREAK_SICK = 5;
+/**
+ * **그날 5개째 간식부터 배탈**(병 100%). §4·§16 · 서버 `ZzalRules.SNACK_DAILY_SICK_AT`.
+ *
+ * ★ 옛 이름은 `SNACK_STREAK_SICK`("연속")이었다. **연속은 보지 않는다**(정본 §16) —
+ *   옛 규칙은 사이에 밥을 한 번만 끼워도 연속이 끊겨 하루에 열 개도 먹일 수 있었다.
+ * ★ 해금·조각에 세는 상한도 이 값에서 끌어낸다(그날 4개까지). 따로 상수를 두면 한쪽만 고쳐진다.
+ */
+export const SNACK_DAILY_SICK_AT = 5;
 
 /** 목욕은 하루 1회. §4 */
 export const BATH_PER_DAY = 1;

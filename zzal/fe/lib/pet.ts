@@ -158,7 +158,15 @@ export interface Today {
   pets: number;
   /** 돌봄 친밀도 합산(상한 30). */
   careIntimacy: number;
-  /** 다른 행동 없이 연달아 준 간식 수(5면 배탈). */
+  /**
+   * **그날 준 간식 수**(5개째부터 배탈). 서버 `PetResponses.Today.snacks` 와 같은 칸이다.
+   * ★ 정본 §16 — **"연속" 은 보지 않는다.** 사이에 다른 행동이 끼어도 그날 5개째면 배탈이다.
+   */
+  snacks: number;
+  /**
+   * @deprecated `snacks` 로 대체됐다. **서버에는 이 칸이 없다** — 연속을 세던 옛 규칙의 이름이고,
+   *   지금 담기는 값은 `snacks` 와 **같은 하루 누적치**다(이름만 옛것). 쓰는 화면이 옮겨 가면 지운다.
+   */
   snackStreak: number;
   bathDone: boolean;
 }

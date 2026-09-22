@@ -31,7 +31,7 @@ import { abandonGame as abandonGameOverHttp } from '../game';
 import {
   CARE_MISS_ZERO_MS, CHAT_MEMORY, CHAT_SLOTS, CHAT_MAX_CHARS, DROP_MS, FEATURE_UNLOCK,
   FOOD_CHARGE_MS, GAMES_PER_DAY, INTIMACY, INTIMACY_TIERS, LEFT_RIGHT, MAX_FOOD, MAX_GAUGE, MAX_TRASH, NAME_MAX_CHARS,
-  NAP, RUN, SLEEP_WINDOW, SNACK_STREAK_SICK, UNLOCK_CONDITIONS, WAKE_WINDOW, WORLD_MAX_CHARS,
+  NAP, RUN, SLEEP_WINDOW, SNACK_DAILY_SICK_AT, UNLOCK_CONDITIONS, WAKE_WINDOW, WORLD_MAX_CHARS,
   cleanLine, moodOf,
   GIFT_SEQ, FIRST_GIFT_DAYS, TUTORIAL_FIRST_TRASH,
 } from '../../tamagotchi/rules';
@@ -366,24 +366,28 @@ export class MockPetServer implements PetSource {
         r.counters.feedCount += 1;
         this.advanceTutorial(r, 'FEED');
         r.pieceDay.feeds += 1;
-        r.today.snackStreak = 0;
         this.careIntimacy(r);
         break;
       case 'SNACK':
         if (r.sick) throw err(409, 'ZZAL_SICK_REFUSES', '아파서 간식은 싫대요');
         // 가득이어도 받는다 — 거절하면 "연속 5개면 배탈"(§4) 에 닿을 길이 없다. 행복만 상한에서 멈춘다.
         r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
-        // ★ 해금은 **그날 4개까지만** 센다(정본 §6 1.10: "간식 9개 — 그날 4개까지만 셈, 배탈 난
-        //   5개째부터 안 셈"). 전부 세면 빨리 열려고 배탈이 날 때까지 먹이는 쪽이 이득이 된다.
-        if (r.snacksToday < SNACK_STREAK_SICK - 1) r.counters.snackCount += 1;
-        r.snacksToday += 1;
-        r.pieceDay.snacks += 1;
-        r.today.snackStreak += 1;
-        if (r.today.snackStreak >= SNACK_STREAK_SICK) {
-          // ★ 튜토리얼 중에는 병이 없다(해석 39). 연속 카운터는 5에서 0으로 끊는다 —
-          //   안 끊으면 튜토리얼이 끝나자마자 여섯 개째에 곧바로 아프게 된다.
-          if (r.clockStartedAt !== null) this.fallSick(r, 'UPSET', now);
-          r.today.snackStreak = 0;
+        // ★★ **그날 5개째부터 배탈**이다(정본 §16 · 서버 `ZzalPet.snack()`). **"연속" 은 보지 않는다** —
+        //   옛 목은 다른 행동이 끼면 끊기는 연속 카운터를 썼고, 밥을 한 번만 끼우면 하루에 열 개도
+        //   먹일 수 있었다. 세는 자는 하루치 `today.snacks` 하나뿐이다.
+        // ★ 배탈이 나는 그 간식은 **해금에도 조각에도 안 센다**(정본 §6 1.9 · 서버 `nextSnackUpsets()`).
+        //   묻는 것이 먹이기 **전**이어야 한다 — 먹인 뒤에는 이미 숫자가 올라가 있다.
+        {
+          const upsets = r.today.snacks + 1 >= SNACK_DAILY_SICK_AT;
+          r.today.snacks += 1;
+          r.today.snackStreak = r.today.snacks;   // 옛 이름 — 같은 값을 채워 둔다(lib/pet.ts 참조)
+          r.snacksToday = r.today.snacks;
+          if (!upsets) {
+            r.counters.snackCount += 1;
+            r.pieceDay.snacks += 1;
+          }
+          // ★ 튜토리얼 중에는 병이 없다(해석 39) — 배우는 자리가 벌 받는 자리가 되면 안 된다.
+          if (upsets && r.clockStartedAt !== null) this.fallSick(r, 'UPSET', now);
         }
         break;
       case 'PET':
@@ -393,7 +397,6 @@ export class MockPetServer implements PetSource {
           r.today.pets += 1;
           r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.pet);
         }
-        r.today.snackStreak = 0;
         break;
       case 'CLEAN':
         if (r.trash <= 0) throw err(409, 'ZZAL_CARE_NOT_NEEDED', '이미 깨끗해요');
@@ -404,7 +407,6 @@ export class MockPetServer implements PetSource {
         r.counters.cleanCount += 1;
         this.advanceTutorial(r, 'CLEAN');
         r.pieceDay.cleans += 1;
-        r.today.snackStreak = 0;
         this.careIntimacy(r);
         break;
       case 'BATH':
@@ -413,7 +415,6 @@ export class MockPetServer implements PetSource {
         r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
         r.today.bathDone = true;
         r.counters.bathCount += 1;
-        r.today.snackStreak = 0;
         this.careIntimacy(r);
         break;
       case 'MEDICINE':
@@ -548,7 +549,6 @@ export class MockPetServer implements PetSource {
     this.advanceTutorial(r, 'CHAT');
     r.pieceDay.chats += 1;
     r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.chat);
-    r.today.snackStreak = 0;
     const { reply, reactionKey } = templateReply(r.personality, trimmed, r.memory, this.nextSeed());
     const safeReply = cleanLine(reply);   // 서버 `ChatService` 도 답 대사를 같은 필터로 거른다
     r.memory = [...r.memory, clampChat(trimmed)].slice(-CHAT_MEMORY);
@@ -592,7 +592,6 @@ export class MockPetServer implements PetSource {
     r.today.games += 1;
     r.counters.gameStarts += 1;
     this.advanceTutorial(r, 'GAME');
-    r.today.snackStreak = 0;
     r.game = {
       gameId: this.nextGameId++, kind, round: 0, hits: 0, finished: false, win: null,
       answers: Array.from({ length: LEFT_RIGHT.rounds }, () => (this.nextSeed() % 2 === 0 ? 'LEFT' : 'RIGHT')),
@@ -835,7 +834,7 @@ export class MockPetServer implements PetSource {
         && r.fullness >= 2 && r.happiness >= 2 && (MAX_TRASH - r.trash) >= 2;
       r.goodDay = false;
       r.bonusPiece = false;
-      r.today = { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 };
+      r.today = { games: 0, pets: 0, careIntimacy: 0, snacks: 0, snackStreak: 0, bathDone: false, careMiss: 0 };
       r.pieceDay = { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 };
       r.snacksToday = 0;
       if (r.game && !r.game.finished) r.game.finished = true;
@@ -1260,7 +1259,7 @@ export class MockPetServer implements PetSource {
       food: MAX_FOOD, foodAcc: 0, sick: null, dirtyAcc: 0,
       piecesEnabled: false, layer2DoneAt: null, bonusPiece: false, goodDay: false, goodDayNext: false,
       pieceDay: { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 },
-      intimacy: 0, today: { games: 0, pets: 0, careIntimacy: 0, snackStreak: 0, bathDone: false, careMiss: 0 },
+      intimacy: 0, today: { games: 0, pets: 0, careIntimacy: 0, snacks: 0, snackStreak: 0, bathDone: false, careMiss: 0 },
       counters: {
         chatAnswers: 0, sleepWakeCount: 0, bathCount: 0, gameStarts: 0, leftRightWins: 0, zeroMissDays: 0,
         feedCount: 0, petCount: 0, cleanCount: 0, shareCount: 0, napCount: 0, snackCount: 0, wakeCount: 0,
