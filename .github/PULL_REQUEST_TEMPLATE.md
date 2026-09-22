@@ -35,3 +35,4 @@ Closes #
 - [ ] 공유 영역(`common/` `apps/` 루트 설정)을 건드렸다면, 그 이유를 상세 내용에 적었다
 - [ ] 다른 도메인 폴더를 import 하지 않았다
 - [ ] 로컬에서 동작을 확인했다
+- [ ] DB 마이그레이션을 더했다면 날짜 번호(`V<YYYYMMDD>_<HHMM>__`)로 붙였다 — 규칙은 `common/docs/git-convention.md` 9절, 번호 중복은 PR 검사가 막는다
