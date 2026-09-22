@@ -96,6 +96,15 @@ services:
       ZZAL_GENERATION_REAL: ${ZZAL_GENERATION_REAL:-false}
       # 파이썬 후처리 실제 실행(돈 안 남). 슬림 JRE 이미지엔 numpy/scipy/PIL 이 없어 켜면 기동이 막힌다 → 기본 꺼짐.
       ZZAL_REAL_POSTPROCESS: ${ZZAL_REAL_POSTPROCESS:-false}
+      # new_harness 가 쓸 텍스트 모델 프로바이더/스토리 축 기능 스위치(llm.py·run.py).
+      # 안 주면 llm.py 기본값(gemini)으로 붙는데 dev 는 OpenAI 키만 있어서 그대로 두면
+      # 실패한다 — 비워 둬도 여기 통로만 열고, 실제 값은 .env 에서 openai 로 채운다.
+      # ★ WEBTOON_API_KEY·LORE_WEBTOON_PYTHON_BIN 등 "웹툰 만들기" 섹션 전체는
+      #   상훈의 다른 커밋(6c2f5d8c)이 만든 것이라 이 하은 전용 브랜치엔 없다.
+      #   그 커밋이 develop→staging 별도 승격을 통해 들어오면 이 자리에 합쳐진다.
+      NH_PROVIDER: ${NH_PROVIDER:-}
+      NH_STORY_AXES: ${NH_STORY_AXES:-}
+      NH_STORY_ENGINES: ${NH_STORY_ENGINES:-}
       # 메일 계정(선택). 비워도 뜨도록 빈 기본값을 준다 — 안 주면 yml 의 ${MAIL_USERNAME}
       # 플레이스홀더가 안 풀려 기동이 막힌다.
       MAIL_USERNAME: ${MAIL_USERNAME:-}
@@ -117,6 +126,11 @@ services:
         # base(노트북)엔 nginx 가 없어 Next rewrite 로 /api → app:8080 프록시를 굽는다.
         # dev EC2 는 nginx 가 /api 를 먼저 잡으므로 이 값이 쓰이지 않는다(무해).
         API_PROXY: http://app:8080
+        # NEXT_PUBLIC_* 는 next build 시점에 클라이언트 번들에 박히는 값이라, 컨테이너가
+        # 뜬 뒤 environment 로 넘기는 방식(app 서비스처럼)은 안 통한다 — build.args 로만
+        # 전달할 수 있다. 안 주면 카카오 공유 버튼이 조용히 비활성화된다(share.ts).
+        # ★ IMAGE_PROXY 는 상훈의 다른 커밋이 만든 것이라 이 하은 전용 브랜치엔 없다.
+        NEXT_PUBLIC_KAKAO_JS_KEY: ${NEXT_PUBLIC_KAKAO_JS_KEY:-}
     depends_on:
       - app
     ports:
