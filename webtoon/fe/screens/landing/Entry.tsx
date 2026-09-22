@@ -1,7 +1,6 @@
 "use client";
 
 /* 입구 — 보드 Entry.dc.html(PC) · MEntry.dc.html(폰). 카드 둘 중 하나를 고른다. */
-import { useEffect, useState } from "react";
 import "./i18n";
 import * as api from "../../lib/api";
 import { useT } from "../../lib/i18n";
@@ -10,9 +9,10 @@ import { IconUser } from "../../ui/Icons";
 import { usePhone } from "./usePhone";
 import "./Entry.css";
 
-/* 카드에 걸 표지는 **둘러보기 맨 앞 두 편**을 그대로 쓴다. 전에는 예시 작품
-   번호를 여기 적어 뒀는데, 그 작품을 빼면 오류 없이 빈칸이 됐다. 목록을 못
-   받았을 때만 아래 견본 그림으로 버틴다. */
+/* 카드 표지는 고정 예시 두 편을 지정해서 쓴다. 그림 자체가 안 나오면(작품이
+   빠지는 등) 아래 견본 그림으로 대체한다. */
+const COVER_A = api.coverUrl("20260919T153128-5f3882", 5); // 그림자 위의 장미
+const COVER_B = api.coverUrl("20260919T153345-f366ce", 1); // 가면 아래의 대리인
 const FALLBACK_A = "/static/samples/onboarding-page.jpg";
 const FALLBACK_B = "/static/samples/ex-romance-2.jpg";
 
@@ -26,18 +26,11 @@ const IconCamera = ({ size = 20 }: { size?: number }) => (
 export default function Entry({ go }: { go: Go }) {
   const t = useT();
   const phone = usePhone();
-  const [covers, setCovers] = useState<string[]>([]);
-  useEffect(() => {
-    let alive = true;
-    api.browseRuns()
-      .then((runs) => {
-        if (!alive) return;
-        setCovers(runs.slice(0, 2).map((r) => api.coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1)));
-      })
-      .catch(() => { /* 견본 그림으로 둔다 */ });
-    return () => { alive = false; };
-  }, []);
   const to = (fn: () => void) => (ev: React.MouseEvent) => { ev.preventDefault(); fn(); };
+  const onImgError = (fallback: string) => (ev: React.SyntheticEvent<HTMLImageElement>) => {
+    ev.currentTarget.onerror = null;
+    ev.currentTarget.src = fallback;
+  };
 
   return (
     <div className="wt-wrap wt-page wt-entry">
@@ -49,7 +42,7 @@ export default function Entry({ go }: { go: Go }) {
         <a href={hrefOf("create", { step: 1 })} className="wt-entry-card on" onClick={to(() => go("create", { step: 1 }))}>
           <div className="wt-entry-pic">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={covers[0] || FALLBACK_A} alt="" />
+            <img src={COVER_A} alt="" onError={onImgError(FALLBACK_A)} />
             <span className="wt-entry-tag">{t("웹툰 만들기")}</span>
           </div>
           <div className="wt-entry-body">
@@ -61,7 +54,7 @@ export default function Entry({ go }: { go: Go }) {
         <a href={hrefOf("try")} className="wt-entry-card" onClick={to(() => go("try"))}>
           <div className="wt-entry-pic">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={covers[1] || FALLBACK_B} alt="" />
+            <img src={COVER_B} alt="" onError={onImgError(FALLBACK_B)} />
             <span className="wt-entry-tag">{t("캐릭터 만들어보기")}</span>
           </div>
           <div className="wt-entry-body">
