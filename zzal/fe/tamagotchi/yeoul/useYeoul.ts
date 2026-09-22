@@ -2187,10 +2187,19 @@ export function useYeoul(live?: Live) {
     if (es.sleeping && !wasAsleep.current) {
       setS((v) => ({ ...v, sleepCover: true }));
       later('sleepCover', CYCLE_MS, () => setS((v) => ({ ...v, sleepCover: false })));
+      /**
+       * ★★ **잠이 들면 치던 판을 접는다**(2026-09-22 dev 실측). 23:00 자동 취침은 아무도 안
+       *   누른 채로 오는데, 게임판이 그대로 열려 있으면 **자는 아이 위에 "어느 손에 있을까요"** 가
+       *   떠 있고 좌·우를 눌러도 서버가 거절만 한다(상훈님 스크린샷 23:13).
+       * ★ **진 것이 아니라 접히는 것이다** — `gQuit`(기권 문구)도, 패배 표시도, 카운터도 안 건드린다.
+       *   서버도 다음 `start` 때 그 판을 접을 뿐이다. 5차에서 맞춘 "기권은 완주에 안 센다" 와 같은 결.
+       * ★ `endGuess` 를 그대로 쓴다 — 여운 타이머까지 같이 걷어 준다(따로 접으면 공개가 뒤늦게 뜬다).
+       */
+      if (sRef.current.gOn) endGuess();
     }
     if (!es.sleeping && wasAsleep.current) setS((v) => (v.sleepCover ? { ...v, sleepCover: false } : v));
     wasAsleep.current = es.sleeping;
-  }, [es.sleeping, later]);
+  }, [es.sleeping, later, endGuess]);
 
   // 대화창의 예시 문구가 2.6초마다 바뀐다.
   useEffect(() => {

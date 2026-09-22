@@ -612,6 +612,21 @@ export function useHatchState(): Live {
    * ★ 401 은 여기서 다루지 않는다 — 공통 클라이언트가 갱신을 시도하고, 그래도 안 되면
    *   로그인 창을 여는 것은 바깥의 일이다.
    */
+  /**
+   * **서버 상태를 다시 읽어 화면을 맞춘다.**
+   *
+   * ★★ 왜 필요한가(2026-09-22 dev 실측) — 시각으로 저절로 일어나는 일(23:00 자동 취침 ·
+   *   10:00 늦잠 기상 · 게이지 감소)은 **서버가 조회를 받을 때 계산**한다. 화면이 안 물어보면
+   *   **영영 모른다.** 그래서 밤 11시를 넘긴 채 열려 있던 화면은 **아이가 서 있고 게임판이 열린
+   *   그대로**였고, 버튼을 누르면 서버만 "자고 있어요" 로 거절했다(상훈님 스크린샷 23:13).
+   * ★ 실패를 삼킨다 — 한 번 못 읽은 것으로 화면을 깨지 않는다. 다음 차례에 다시 묻는다.
+   */
+  const refreshPet = useCallback(async () => {
+    if (!petId) return;
+    const seq = takeSeq();
+    try { putPet(seq, await getPet(petId)); } catch { /* 다음 차례에 다시 묻는다 */ }
+  }, [petId, takeSeq, putPet]);
+
   const doCare = useCallback(async (action: CareAction): Promise<CareResult> => {
     if (!petId) return { ok: false, message: null };
     // 도는 동안 들어온 두 번째 클릭 — **아무 말도 하지 않는다.** 잠긴 버튼이 이미 말하고 있다.
@@ -754,8 +769,13 @@ export function useHatchState(): Live {
       const seq = takeSeq();
       try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판은 시작됐다 */ }
       return null;
-    } catch (e) { return e instanceof Error ? e.message : '지금은 못 놀아요'; }
-  }, [petId, takeSeq, putPet, putGame, noteUnlocked]);
+    } catch (e) {
+      // ★ 거절이면 **펫을 다시 읽는다**(2026-09-22) — 거절의 이유가 "자고 있다" 처럼 **화면이
+      //   아직 모르는 상태**일 수 있다. 그때 다시 읽지 않으면 서버만 알고 화면은 깨어 있는 채로 남는다.
+      await refreshPet();
+      return e instanceof Error ? e.message : '지금은 못 놀아요';
+    }
+  }, [petId, takeSeq, putPet, putGame, noteUnlocked, refreshPet]);
 
   const pickSide = useCallback(async (side: Side) => {
     // ★ 상태가 아니라 ref 를 본다 — 방금 시작한 판도 여기서 바로 잡힌다.
@@ -780,12 +800,15 @@ export function useHatchState(): Live {
     } catch (e) {
       const seq = takeSeq();
       try { putGame(seq, await getCurrentGame(petId)); } catch { /* 화면은 그대로 둔다 */ }
+      // ★ 판만 다시 읽던 자리다 — **펫도 읽는다**(2026-09-22). 자는 사이에 누른 것이면
+      //   여기서 읽어야 화면이 자는 방으로 바뀐다(전에는 "자고 있어요" 한 줄만 뜨고 그대로였다).
+      await refreshPet();
       return { error: e instanceof Error ? e.message : '지금은 못 쳐요', result: null };
     } finally {
       guessingRef.current = false;
       setGuessing(false);
     }
-  }, [petId, takeSeq, putPet, putGame, noteUnlocked]);
+  }, [petId, takeSeq, putPet, putGame, noteUnlocked, refreshPet]);
 
   /**
    * 기권 — 치던 판을 접는다. **인자가 없다**(→ Live.abandonPlay).
@@ -940,6 +963,31 @@ export function useHatchState(): Live {
     const t = setInterval(look, 3000);
     return () => { alive = false; clearInterval(t); };
   }, [phase, petId, pet]);
+
+  /**
+   * **열려 있는 화면을 서버 시각에 맞춰 둔다** — 60초마다 한 번, **보일 때만.**
+   *
+   * ★★ 왜 필요한가 — 23:00 자동 취침처럼 **아무도 안 눌러도 일어나는 일**이 있다. 서버는 조회를
+   *   받을 때 그 시각을 계산해 주는데, 화면이 안 물어보면 영영 모른다(2026-09-22 실측: 23:13
+   *   화면이 깨어 있고 게임판까지 열린 채였다). 거절을 신호로 쓰는 길(→ `refreshPet`)은 **누가
+   *   눌러야** 돌고, 이 길은 **아무도 안 눌러도** 돈다. 둘 다 필요하다.
+   * ★ **왜 60초인가** — 이 화면이 시각 때문에 바뀌는 사건은 자동 취침(23:00)·늦잠 기상(10:00)·
+   *   게이지 감소(시간 단위)·부름 슬롯이고, 전부 **분 단위로도 충분히 이른** 것들이다.
+   *   60초면 최악의 지연이 1분이고 탭 하나가 시간당 60번 묻는다 — 3초(부화 지켜보기)처럼
+   *   촘촘히 돌 이유가 없고, 5분이면 자는 방으로 바뀌기까지 너무 오래 어긋난 화면을 본다.
+   * ★ **안 보이면 멈춘다**(`document.hidden`) — 탭을 접어 둔 사람이 서버를 두드릴 이유가 없다.
+   *   **다시 보이는 순간 한 번 바로 읽는다** — 밤새 열어 둔 화면이 그 한 번으로 제자리를 찾는다.
+   * ★ 부화 지켜보기(3초)와 겹치지 않는다 — 저쪽은 `ALIVE` 가 되면 멈추고, 이쪽은 그때부터 돈다.
+   */
+  useEffect(() => {
+    if (phase !== 'ALIVE' || !petId || !pet) return undefined;
+    let alive = true;
+    const look = () => { if (alive && !document.hidden) void refreshPet(); };
+    const t = setInterval(look, 60_000);
+    const onShow = () => { if (!document.hidden) look(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
+  }, [phase, petId, pet, refreshPet]);
 
   // 오늘의 부름 읽기. 아이가 살아난 뒤, 그리고 **무언가 한 뒤마다** 다시 읽는다.
   //
