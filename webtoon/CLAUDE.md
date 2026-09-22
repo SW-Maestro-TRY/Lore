@@ -167,11 +167,11 @@ worktree 안에는 프로젝트 전체가 그대로 있고, 에이전트는 그 
 # 2. 이미 쓰는 이름인지 확인하고, 겹치면 -2, -3 ... 을 붙인다
 git worktree list | grep -q "agent-<슬러그>" && 슬러그="<슬러그>-2"   # 필요할 때만
 
-# 3. haeun 브랜치 최신에서 새 브랜치+worktree를 판다
-git worktree add ../agent-<슬러그> -b agent/<슬러그> haeun
+# 3. 지금 작업 중인 feature 브랜치에서 새 브랜치+worktree를 판다
+git worktree add ../agent-<슬러그> -b agent/<슬러그> feature/<작업이름>
 
 # 예: 사용자 피드백 반영 확인 미션을 받았을 때
-git worktree add ../agent-feedback -b agent/feedback haeun
+git worktree add ../agent-feedback -b agent/feedback feature/<작업이름>
 ```
 
 ```
@@ -189,7 +189,7 @@ ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webt
   `agent/cost-tracking`) — 담당 파일이 아니라 **미션**을 이름으로 쓴다.
 - 세션 하나 = worktree 하나 = 브랜치 하나. 같은 브랜치를 두 worktree에서
   동시에 체크아웃할 수 없으니 자연히 강제된다.
-- **병합은 미션 워크트리 세션 자신이 못 한다** — `haeun` 브랜치가 이미 원본
+- **병합은 미션 워크트리 세션 자신이 못 한다** — 그 feature 브랜치가 이미 원본
   저장소 폴더(`Lore/`)에서 체크아웃돼 있어서, 같은 브랜치를 두 worktree에서
   동시에 체크아웃할 수 없기 때문이다(git이 막는다). 그래서 병합은 항상
   **원본 저장소 폴더에 있는 세션**이 실행한다.
@@ -198,7 +198,7 @@ ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webt
   "커밋은 자동, push는 항상 확인" 원칙과 같은 선). 테스트(`test_imports.py`
   ALL PASS)만 확인되면 곧장 진행한다:
   ```
-  git checkout haeun
+  git checkout feature/<작업이름>
   git merge agent/<미션명>
   ```
   - **충돌 없이 끝나면** 그 자리에서 바로 정리까지 한다:
@@ -252,9 +252,21 @@ gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않�
 `[이슈타입]/#이슈번호` (예: `feat/#14`). 이슈가 없는 잡무만 예외
 (`Chore: 내용`).
 
-**`webtoon/` · `haeun/` 작업 시** (2026-08-21부터 적용) — 위 컨벤션을 그대로
-안 쓰고 단순화합니다. 브랜치가 `haeun` 하나라 그 이름을 씁니다:
-- 브랜치는 `haeun` 하나로 통일 (이슈별로 안 나눔), `develop`에서 분기했습니다.
+**`webtoon/` · `haeun/` 작업 시** (2026-08-21부터 적용, 브랜치 규칙은
+2026-09-21에 아래와 같이 바뀜):
+- **작업 하나에 이슈 하나, 브랜치 하나, PR 하나입니다.** 일을 시작하기 전에
+  GitHub 이슈를 만들고, `feature/<작업이름>` 브랜치를 파서 그 안에서 작업한
+  뒤(예: `feature/example-content`), **`develop` 으로 PR** 을 냅니다.
+  - 전에는 브랜치를 `haeun` 하나로만 썼습니다. 작업이 여러 갈래로 늘면서
+    한 브랜치에 섞이면 무엇이 어느 작업인지 못 가리게 되어 바꿨습니다.
+  - **`haeun` 으로 머지하지 않습니다.** 팀 전체가 `피처 → develop → staging
+    → main` 으로 흐르고(`webtoon/docs/server.md`), webtoon 만 다른 길을 쓰면
+    배포 흐름에서 혼자 빠집니다.
+  - 피처 브랜치는 develop 에 머지된 뒤에도 **지우지 않습니다** — 같은
+    브랜치로 staging 에 PR 을 한 번 더 낼 수 있습니다(`server.md` 브랜치 규칙).
+  - 브랜치 이름은 `agent/…` 가 아니라 `feature/…` 입니다. 병렬 에이전트용
+    워크트리(`agent/…`)는 "미커밋 변경이 안 섞이게" 격리하는 용도이지
+    작업 단위를 나누는 이름이 아닙니다 — 둘을 섞어 쓰지 마세요.
 - 커밋 메시지는 `[#이슈번호] 설명` — 공유 저장소 컨벤션의 `Type:` 부분은
   생략합니다.
 - 한 파일이 여러 이슈에 걸치면(예: `webtoon.py`처럼 한 파일에 여러 파이프라인
@@ -286,6 +298,23 @@ gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않�
 
 한 사람이 처음부터 그렇게 만든 것처럼 읽히면 맞게 쓴 것입니다.
 
+### PR·이슈 제목은 "~한다" 로 끝내지 않습니다
+
+제목은 **명사로 끝냅니다.** 서술형("~한다", "~쓴다", "~고친다")으로 쓰지
+마세요. 목록에서 제목만 훑을 때 서술형은 길고 읽는 리듬을 끊습니다.
+
+```
+✗ [#380] 보존기간이 지난 개인정보를 실제로 파기한다
+✓ [#380] 보존기간이 지난 개인정보 파기
+
+✗ [Feat] 온보딩 FAQ를 실제 동작에 맞게 다시 쓴다
+✓ [Feat] 온보딩 FAQ를 실제 동작에 맞게 교체
+```
+
+본문은 그대로 서술형으로 씁니다 — 이 규칙은 **제목에만** 해당합니다.
+팀이 쓰고 있는 형태이기도 합니다(예: `[Fix] 자동 취침을 화면이 즉시 따르게 ·
+동작 요청 한도 문구`, `[Chore] 마이그레이션 중복 검사 · 배포 실패 알림`).
+
 **`Co-Authored-By: Claude ...` 트레일러와 `Claude-Session:` 링크는 절대
 붙이지 않습니다.** (2026-08-23 이전 문구는 반대로 "이걸로 충분하다"고
 적혀 있었는데, 정정합니다.) 커밋의 author/committer는 항상 이 저장소의
@@ -299,7 +328,7 @@ git 설정(`git config user.name`/`user.email`, 지금은 `haeun
   이슈 페이지만 열어도 그 이슈에 연결된 커밋을 바로 볼 수 있게 하는 게 목적).
   이미 그 이슈에 단 댓글이 있으면 새로 하나 더 달지 말고 기존 댓글을 최신
   커밋까지 포함하도록 수정(PATCH)합니다. **커밋 목록은 `origin/develop`이
-  아니라 `origin/haeun`(또는 그 시점의 로컬 HEAD) 기준으로 뽑습니다** — haeun
+  아니라 지금 push 한 브랜치(또는 그 시점의 로컬 HEAD) 기준으로 뽑습니다** — 피처
   브랜치는 PR이 develop에 머지되기 전에도 계속 push되므로, develop 기준으로
   뽑으면 아직 안 머지된 최신 커밋이 목록에서 빠집니다 (2026-08-21에 실제로
   이 실수를 했다가 바로 잡음).
@@ -366,6 +395,112 @@ gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
 ```
 
 
+## 그림 창고는 환경마다 다릅니다
+
+**dev 는 S3 를 안 씁니다.** 박스 안 MinIO 가 S3 흉내를 냅니다. staging·prod
+만 진짜 S3 이고, 그 앞에 CloudFront 가 붙습니다.
+
+| 환경 | 그림이 실제로 있는 곳 |
+| --- | --- |
+| 내 노트북 | `~/lore-minio/lore-dev-contents/` (아래 절 참고 — 루트 `.env` 기본값만 믿으면 안 됩니다) |
+| dev | 박스 안 MinIO (`/images/` → MinIO, nginx 가 이음) |
+| staging · prod | 각 환경의 S3 + CloudFront |
+
+그래서 **코드는 어느 버킷인지 몰라야 합니다.** 화면에 나가는 주소는 항상
+`/images/...` 로 시작하는 상대경로이고(`PageStore.url()`), 앞에 무엇이
+붙는지는 환경이 정합니다. 도메인이나 버킷 이름을 코드에 적지 마세요 —
+`lore.webtoon.cdn-base` 설정을 없앤 이유가 그것입니다(2026-09-19).
+
+그림을 넣는 코드도 같은 이유로 **버킷에 직접 올리지 말고** `PrivateArt`
+(자바)나 `upload/s3_upload.py`(파이썬)를 거쳐야 합니다. 그래야 dev 에서는
+MinIO 로, 운영에서는 S3 로 알아서 갑니다.
+
+`lore-contents-046797548177-…` 는 **옛 버킷**입니다(보관). 지금 쓰는 버킷이
+아니니 새 코드가 이 이름을 보게 하지 마세요.
+
+환경·배포·비밀값의 전체 그림은 `webtoon/docs/server.md` 에 있습니다.
+
+## 노트북에 S3 가 없을 때 그림 뜨게 하기 (2026-09-23)
+
+노트북의 그림 실물은 **`~/lore-minio/lore-dev-contents/`** 에 있습니다. DB
+(`webtoon_page.s3_key`)의 키가 그 폴더 안에 그대로 들어 있습니다. **AWS 버킷
+세 개(옛 `lore-contents-…` · staging · prod)에는 이 그림이 하나도 없습니다**
+(2026-09-23에 키 104개를 전부 대조했습니다).
+
+전에는 루트 `.env` 가 `CONTENT_S3_BUCKET` 을 옛 AWS 버킷으로 두고
+`APP_S3_ENDPOINT` 는 비워 둬서, 그냥 `./gradlew bootRun` 으로 띄우면 앱이 AWS 를
+보고 **모든 그림이 404** 가 됐습니다. 2026-09-23에 `.env` 를 로컬 창고 쪽으로
+바꿔 뒀습니다(아래 「한 번만 해 두면 되는 것」). **새로 체크아웃한 사람은 그
+설정이 없으니 이 절을 보고 직접 넣어야 합니다.**
+
+**증상** — 화면은 깨진 그림, 서버 로그에는 에러가 없습니다. 예시 작품 목록도
+글자만 나옵니다. `/api/webtoon/v1/runs/<run>/page/<n>` 은 302 를 잘 내주기
+때문에 API 만 보면 정상으로 보입니다.
+
+**AWS 로그인 문제가 아닙니다.** `aws sso login --profile lore` 를 해도 그대로
+안 뜹니다. 자격증명이 만료되면 502·500 으로 죽지만, 이 경우는 presign 주소가
+멀쩡히 나오고 그 주소를 열었을 때 `NoSuchKey` 가 옵니다.
+
+**어디를 보고 있는지 확인하는 법** — presign 주소의 호스트를 봅니다.
+
+```
+curl -sD - -o /dev/null "http://localhost:8080/api/webtoon/v1/runs/<run_id>/page/1?w=320" | grep -i location
+```
+
+`…amazonaws.com` 이면 잘못된 창고를 보는 것입니다. `localhost:9000` 이어야
+합니다.
+
+### 한 번만 해 두면 되는 것 — 루트 `.env`
+
+```
+APP_S3_ENDPOINT=http://localhost:9000
+CONTENT_S3_BUCKET=lore-dev-contents
+AWS_ACCESS_KEY_ID=lore-minio
+AWS_SECRET_ACCESS_KEY=lore-minio-secret
+```
+
+- 키 두 개는 아래 창고의 `--auth-key` 와 같은 값이면 아무거나 됩니다. 환경변수가
+  `AWS_PROFILE` 보다 먼저 읽히므로 `AWS_PROFILE=lore` 줄은 그대로 둬도 됩니다.
+- 진짜 AWS 를 봐야 할 때만 이 네 줄을 주석 처리합니다(옛 버킷 이름은 `.env` 에
+  주석으로 남겨 뒀습니다).
+
+**이 설정은 webtoon 만의 것이 아닙니다.** `app.s3.content-bucket` 은 zzal 도 같이
+쓰기 때문에, 창고를 로컬로 돌리면 zzal 그림도 같은 창고에서 찾습니다. 그래서
+2026-09-23에 zzal·comic 그림(약 130MB)을 옛 버킷에서 `~/lore-minio` 로 한 번
+내려받아 뒀습니다. **zzal 쪽 코드는 건드리지 않았습니다** — 로컬 파일만 채웠습니다.
+새로 받는 사람은 이렇게 하면 됩니다:
+
+```
+aws s3 sync s3://lore-contents-046797548177-ap-northeast-2-an/images/zzal/ \
+  ~/lore-minio/lore-dev-contents/images/zzal/
+```
+
+### 창고는 MinIO 말고 rclone 으로 띄웁니다 — 서버 띄우기 전에 매번
+
+`.env` 만 고쳐 두고 창고를 안 띄우면 그림 대신 연결 거부가 납니다.
+
+**MinIO 는 이 맥에서 안 됩니다.** brew 로 깐 것(2025-10-15, 최신)이 뜨자마자
+SIGSEGV 로 죽습니다 — go-m1cpu 가 cgo 로 CPU 정보를 읽다가 macOS 26 에서
+터집니다. upstream 저장소가 archived 라 formula 도 deprecated(2027-02-17 폐지
+예정)여서 새 빌드를 기다릴 수 없습니다. **재설치·업그레이드로 안 고쳐집니다.**
+
+대신 **`rclone serve s3`** 가 같은 자리를 채웁니다. 폴더 하나를 S3 로 열어 주고,
+presigned GET 도 업로드(PUT)도 됩니다(2026-09-23 둘 다 확인).
+
+```
+rclone serve s3 ~/lore-minio --addr 127.0.0.1:9000 \
+  --auth-key lore-minio,lore-minio-secret --force-path-style
+```
+
+- `~/lore-minio` 아래의 폴더 이름이 그대로 버킷이 됩니다(`lore-dev-contents`).
+- `--auth-key` 값은 위 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` 와 같아야 합니다.
+- 없으면 `brew install rclone`.
+
+급하게 보기만 할 거면 파일이 이미 키 경로 그대로 있어서 정적 서버로도 됩니다.
+다만 **업로드가 안 되고**(생성까지는 못 돌려 봅니다), `python3 -m http.server`
+는 한 번에 하나만 받아서 표지를 여러 장 동시에 부르는 목록 화면이 통째로
+멈추니 스레드 버전을 써야 합니다.
+
 ## 로컬에서 띄우기
 
 ```
@@ -398,3 +533,57 @@ export 방식으로 대신 씀) worktree 를 팔 때 심링크할 원본부터 �
   export WEBTOON_API_KEY=$(grep '^WEBTOON_API_KEY=' <저장소 루트>/.env | cut -d= -f2-)
   ```
   (`<저장소 루트>` 는 지금 위치가 `webtoon/ai/new_harness` 면 `../../..`.)
+
+## UI/UX 스킬 정책 (2026-09-17, quickstart v5 기반)
+
+`apps/web`(webtoon 화면을 렌더링하는 Next 셸)에 UI/UX 자동화 스킬 세트를 설치했습니다
+(`.claude/skills/` — 전부 gitignore 처리됨, 팀 레포에는 안 올라감). 이 절은 **webtoon 화면
+작업에 한정**됩니다 — zzal·trailer는 각자 담당자가 별도로 정합니다.
+
+### 1. Design Authority
+
+- **Impeccable이 우선 권위**입니다. `apps/web/PRODUCT.md`(webtoon 범위로만 작성됨)가 지속되는
+  제품 맥락이고, DESIGN.md는 아직 없습니다(`/impeccable document`로 나중에 만들 수 있음).
+- `frontend-design`·`interface-design`도 설치돼 있지만, quickstart 문서는 원래 이 둘을
+  "Impeccable과 권한이 겹쳐 설치 금지"로 권고합니다 — 이번엔 멘토링 메모를 보고 그래도
+  설치했습니다. **셋이 서로 다른 방향을 제안하면 Impeccable 판단이 이깁니다.** 화면 작업을
+  시킬 때는 어느 스킬을 쓸지 명시하는 편이 충돌을 줄입니다.
+- DESIGN.md(생기면)와 실제 코드 토큰이 다르면 어느 한쪽을 자동으로 덮어쓰지 말고 Design
+  Drift로 보고합니다.
+
+### 2. Research
+
+- `ux-researcher-designer`는 실제 사용자 evidence(인터뷰·analytics·세션 리코딩·설문)가 있을
+  때만 씁니다. **지금은 그 evidence가 없습니다** — 있는 척 가상 리서치를 만들지 않고, 필요하면
+  Hypothesis로 명시합니다.
+
+### 3. Taste Lens
+
+- `design-taste-frontend`·`redesign-existing-projects`는 검증 렌즈일 뿐, 코드를 직접 고치지
+  않습니다. 실행 단위는 `docs/ux/taste-lens.md`(webtoon 전용, 다이얼 DESIGN_VARIANCE 4 /
+  MOTION_INTENSITY 2 / VISUAL_DENSITY 5로 고정 — 대화 중 추론/상향 금지)입니다.
+- 소형 작업·Operate 화면(위저드·편집실·마이페이지)의 taste read에는 적용하지 않습니다
+  (Operate는 렌즈 §3-B~E만).
+- `/impeccable critique` 앞이나 `/impeccable polish` 뒤에 taste를 두지 않습니다.
+
+### 4. Independent Validation & 예산
+
+- 중형/대형 UI 변경은 `ux-heuristics`로 독립 평가합니다. `web-design-guidelines`는 릴리스
+  준비 단계에서만 씁니다.
+- 예산: 소형 작업 Skill 호출 0 · 중형 1(ux-heuristics) · 대형 2(+shape). 자동 수정 루프는
+  검증자 실패를 합산해 최대 3회 — 넘기면 자동 반복을 멈추고 사람에게 보여줍니다.
+- 조사·검증은 가능하면 서브에이전트로 돌리고 요약만 받습니다. 스킬 `references/`는 필요한
+  절만 읽고 전체를 열지 않습니다.
+
+### 5. 산출물 로그
+
+- `docs/ux-log/`에 기능당 통합 보고서 1개(`YYYY-MM-DD-<feature>-r<n>.md`). taste 산출물은
+  `docs/ux-log/…-taste.md` 또는 `docs/ux/hypothesis-taste-*.md`.
+- `.claude/hooks/skill-log.sh`(Skill 호출 기록)·`.claude/hooks/ux-report-guard.sh`(보고서만
+  쓰고 Skill을 안 부른 경우 되돌림)가 걸려 있습니다 — 다음 세션부터 반영됩니다.
+
+### 6. 생성 이미지 에셋
+
+- 새 화면은 기본 **code-first**로 만듭니다(이미지 컴프를 먼저 생성하지 않음 — 2026-09-17
+  확정). 제품에 들어가는 생성 이미지(마스코트·배경 등)는 PRODUCT.md의 브랜드 톤(바다 팔레트)을
+  따르고, UI 프레임이나 화면 텍스트를 이미지에 굽지 않습니다.

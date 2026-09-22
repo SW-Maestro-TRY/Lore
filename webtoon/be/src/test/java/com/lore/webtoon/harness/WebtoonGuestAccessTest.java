@@ -87,6 +87,8 @@ class WebtoonGuestAccessTest {
     @MockitoBean JwtProvider jwtProvider;
     @MockitoBean MyWebtoonService myWebtoonService;
     @MockitoBean S3Service s3Service;
+    @MockitoBean com.lore.webtoon.job.NotifySettingService notifySettingService;
+    @MockitoBean com.lore.webtoon.character.CharacterOwner characterOwner;
 
     @Test
     @DisplayName("「내」 것을 다루는 주소는 로그인이 있어야 한다")

@@ -1,0 +1,74 @@
+import { registerDict, type Dict } from "../../lib/i18n";
+
+/* 완성본 · 공유 — 화면의 한국어 원문이 키다. 서버가 만든 글(제목·오류 본문)은 여기 없다. */
+const dict: Dict = {
+  /* ---- Result ---- */
+  "작품을 열지 못했습니다": { en: "Couldn't open this work.", ja: "作品を開けませんでした", zh: "无法打开这部作品" },
+  "제목을 바꾸지 못했습니다": { en: "Couldn't change the title.", ja: "タイトルを変更できませんでした", zh: "无法修改标题" },
+  "미리보기 ({planned}장 중 앞 {count}장만 그렸습니다)": {
+    en: "Preview (only the first {count} of {planned} pages were drawn)",
+    ja: "プレビュー（{planned}ページのうち最初の{count}ページだけ描いています）",
+    zh: "预览（共 {planned} 页，只画了前 {count} 页）",
+  },
+  "{n}컷": { en: "{n} panels", ja: "{n}コマ", zh: "{n} 格" },
+  "{n}쪽": { en: "Page {n}", ja: "{n}ページ", zh: "第 {n} 页" },
+  "처음으로": { en: "Start over", ja: "最初へ", zh: "回到开始" },
+  "완성": { en: "Done", ja: "完成", zh: "完成" },
+  "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
+  "이야기": { en: "Story", ja: "ストーリー", zh: "故事" },
+  "다시 시도": { en: "Try again", ja: "もう一度", zh: "重试" },
+  "확인": { en: "OK", ja: "確認", zh: "确定" },
+  "제목": { en: "Title", ja: "タイトル", zh: "标题" },
+  "저장": { en: "Save", ja: "保存", zh: "保存" },
+  "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  "제목 고치기": { en: "Edit title", ja: "タイトルを直す", zh: "修改标题" },
+  "다음 편 만들기": { en: "Make the next episode", ja: "次の話を作る", zh: "制作下一话" },
+  "편집실": { en: "Editor", ja: "編集室", zh: "编辑室" },
+  "내려받기": { en: "Download", ja: "ダウンロード", zh: "下载" },
+  "아직 다음화 기능은 준비 중이에요!": {
+    en: "Next episodes are still in the works!",
+    ja: "次の話の機能はまだ準備中です！",
+    zh: "下一话功能还在准备中！",
+  },
+  "내려받는 파일에는 아래에 LORE 표시가 붙습니다.": {
+    en: "Downloaded files carry a small LORE mark at the bottom.",
+    ja: "ダウンロードしたファイルの下には LORE の表示が付きます。",
+    zh: "下载的文件底部会带有 LORE 标记。",
+  },
+  "내 작품이 아니면 내려받기·편집실·다음 편은 없어요. 읽고 공유하는 것만.": {
+    en: "Download, editor and next episode are only for your own works. Here you can read and share.",
+    ja: "自分の作品でない場合、ダウンロード・編集室・次の話はありません。読んで共有するだけです。",
+    zh: "不是自己的作品时，没有下载、编辑室和下一话，只能阅读和分享。",
+  },
+  "이 장 내려받기": { en: "Download this page", ja: "このページをダウンロード", zh: "下载这一页" },
+  "다음화 보기": { en: "Next episode", ja: "次の話を見る", zh: "看下一话" },
+  "맨 위로": { en: "Back to top", ja: "一番上へ", zh: "回到顶部" },
+
+  /* ---- ShareMenu ---- */
+  "공유": { en: "Share", ja: "共有", zh: "分享" },
+  "LORE 로 만든 웹툰": { en: "A webtoon made with LORE", ja: "LORE で作ったウェブトゥーン", zh: "用 LORE 制作的网络漫画" },
+  "링크를 복사했어요 — 글에 붙여 넣으세요": {
+    en: "Link copied — paste it into your post.",
+    ja: "リンクをコピーしました — 記事に貼り付けてください",
+    zh: "已复制链接 — 请粘贴到文章里",
+  },
+  "카카오톡 공유를 열지 못했어요": { en: "Couldn't open KakaoTalk sharing.", ja: "カカオトークの共有を開けませんでした", zh: "无法打开 KakaoTalk 分享" },
+  "링크를 복사했어요": { en: "Link copied.", ja: "リンクをコピーしました", zh: "已复制链接" },
+  "복사하지 못했어요 — 주소창을 그대로 쓰세요": {
+    en: "Couldn't copy — use the address bar instead.",
+    ja: "コピーできませんでした — アドレスバーのURLをお使いください",
+    zh: "无法复制 — 请直接使用地址栏",
+  },
+  "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
+  "라인": { en: "LINE", ja: "LINE", zh: "LINE" },
+  "포스타입": { en: "Postype", ja: "Postype", zh: "Postype" },
+  "링크 복사": { en: "Copy link", ja: "リンクをコピー", zh: "复制链接" },
+  "컷별로 내려받기": { en: "Download each page", ja: "コマごとにダウンロード", zh: "逐页下载" },
+  "{who}의 다른 편": { en: "Other episodes with {who}", ja: "{who}の他の話", zh: "{who}的其他话" },
+  "EP.{n}": { en: "EP.{n}", ja: "EP.{n}", zh: "EP.{n}" },
+  "만들기": { en: "Create", ja: "作る", zh: "制作" },
+  "· 파일에 LORE 표시가 붙어요": { en: "· downloads carry a LORE mark", ja: "· ファイルに LORE の表示が付きます", zh: "· 文件会带上 LORE 标记" },
+  "크게 보기": { en: "View larger", ja: "大きく見る", zh: "放大查看" },
+};
+
+registerDict(dict);

@@ -1,0 +1,41 @@
+/* 입구 — 보드 Entry.dc.html · MEntry.dc.html */
+.wt .wt-entry-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; margin: 40px 0 34px; }
+.wt .wt-entry-head h2 { font-size: 40px; }
+.wt .wt-entry-head span { font-size: 16px; }
+
+.wt .wt-entry-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: 880px; max-width: 100%; margin: 0 auto; }
+.wt .wt-entry-card {
+  text-decoration: none; color: var(--ink); display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 16px; background: #fff; border: 1px solid var(--line);
+}
+.wt .wt-entry-card:hover { color: var(--ink); border-color: var(--ink); }
+.wt .wt-entry-card.on { border: 2px solid var(--sea); }
+.wt .wt-entry-pic { position: relative; height: 380px; background: var(--water-light); overflow: hidden; flex-shrink: 0; }
+.wt .wt-entry-pic img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+.wt .wt-entry-tag {
+  position: absolute; left: 12px; top: 12px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: #fff; color: var(--sea-deep); font-weight: 600;
+}
+.wt .wt-entry-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-entry-title { display: flex; align-items: flex-start; gap: 8px; }
+.wt .wt-entry-ic { color: var(--sea-deep); flex-shrink: 0; margin-top: 2px; display: inline-flex; }
+.wt .wt-entry-title b { font-size: 17px; line-height: 1.35; }
+.wt .wt-entry-body > .muted { font-size: 13.5px; line-height: 1.55; }
+.wt .wt-entry-go { display: inline-flex; align-items: center; gap: 6px; color: var(--sea); font-size: 13px; font-weight: 700; margin-top: 6px; }
+
+@media (max-width: 767px) {
+  .wt .wt-entry { padding: 28px 16px 24px; gap: 12px; }
+  .wt .wt-entry-head { align-items: flex-start; text-align: left; gap: 12px; margin: 0 0 6px; }
+  .wt .wt-entry-head h2 { font-size: 27px; line-height: 1.25; }
+  .wt .wt-entry-head span { font-size: 13.5px; }
+  .wt .wt-entry-cards { grid-template-columns: 1fr; gap: 12px; width: 100%; }
+  .wt .wt-entry-card { flex-direction: row; align-items: stretch; }
+  .wt .wt-entry-card.on { border-color: var(--ink); }
+  .wt .wt-entry-pic { width: 120px; height: 190px; }
+  .wt .wt-entry-tag { display: none; }
+  .wt .wt-entry-body { padding: 16px 14px; justify-content: center; }
+  .wt .wt-entry-ic { display: none; }
+  .wt .wt-entry-title b { font-size: 16px; }
+  .wt .wt-entry-body > .muted { font-size: 12.5px; line-height: 1.5; }
+  .wt .wt-entry-go { font-size: 12.5px; gap: 4px; margin-top: 0; }
+}

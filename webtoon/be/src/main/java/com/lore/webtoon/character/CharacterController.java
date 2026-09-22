@@ -88,6 +88,63 @@ public class CharacterController {
         return view(made, me, who.uidsOf(me, uid));
     }
 
+    @Operation(summary = "캐릭터 만들어보기", description = """
+            뭐든 넣으면 그대로 그 세계관 웹툰의 한 컷이 된다. 사진·설명·이름·세계관 전부
+            **선택** — 아무것도 없이 보내면 「랜덤으로 만들어보기」다.
+            world 는 GET /worlds 의 key 이거나 사람이 직접 쓴 한 줄.
+
+            바로 돌려주고 뒤에서 그린다(status=drawing). GET /{id} 로 다시 읽으면
+            그림(art_url)과 카드(twist · quote · fate)가 채워진다.
+            값과 하루 몫은 「캐릭터 만들기」와 같다.""")
+    @PostMapping("/try")
+    public Map<String, Object> tryOut(
+            @RequestBody(required = false) TryRequest form,
+            @RequestHeader(value = UID_HEADER, required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        TryRequest f = form == null ? new TryRequest(null, null, null, null) : form;
+        WebtoonCharacter made = characters.tryOut(
+                me, uid, f.name(), f.description(), f.photosData(), f.world());
+        return view(made, me, who.uidsOf(me, uid));
+    }
+
+    @Operation(summary = "고를 수 있는 세계관", description = """
+            「캐릭터 만들어보기」의 세계관 목록. 하네스 프리셋 그대로다.""")
+    @GetMapping("/worlds")
+    public Map<String, Object> worlds() {
+        return Map.of("worlds", characters.worlds());
+    }
+
+    @Operation(summary = "랜덤 재료", description = """
+            「랜덤으로 만들어보기」가 입력 칸을 채울 값 한 벌 — 이름 · 설명 · 세계관.
+            AI 를 안 부르고 조합에서 뽑는다. 사람이 보고 고친 뒤 만든다.""")
+    @GetMapping("/random")
+    public Map<String, String> random() {
+        return characters.randomSeed();
+    }
+
+    @Operation(summary = "공유된 카드", description = """
+            「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.
+            내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.""")
+    @GetMapping("/{publicId}/card")
+    public Map<String, Object> card(@PathVariable String publicId) {
+        WebtoonCharacter one = characters.sharedCard(publicId);
+        Map<String, Object> m = view(one, null, List.of());
+        m.remove("mine");
+        m.remove("error");
+        return m;
+    }
+
+    @Operation(summary = "캐릭터 하나", description = """
+            그리는 중인 것을 다시 읽는 자리. 내 것과 기본 제공만 보인다.""")
+    @GetMapping("/{publicId}")
+    public Map<String, Object> one(
+            @PathVariable String publicId,
+            @RequestHeader(value = UID_HEADER, required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        List<String> uids = who.uidsOf(me, uid);
+        return view(characters.byPublicId(publicId, me, uids), me, uids);
+    }
+
     @Operation(summary = "이름·설명 고치기")
     @PatchMapping("/{publicId}")
     public Map<String, Object> rename(
@@ -125,6 +182,20 @@ public class CharacterController {
         // 있고 없고가 그 캐릭터의 주인을 바꾸지 않는다.
         m.put("mine", one.madeBy(me, uids));
         m.put("created_at", one.getCreatedAt().toString());
+        // 한 컷으로 만든 것만 카드가 있다. 없으면 칸 자체를 안 보낸다 — 화면이
+        // "card 가 있나" 로 두 종류를 가른다.
+        if (one.hasCard()) {
+            Map<String, Object> card = new LinkedHashMap<>();
+            card.put("world", one.getWorld() == null ? "" : one.getWorld());
+            card.put("world_label", one.getWorldLabel() == null ? "" : one.getWorldLabel());
+            card.put("genre", one.getGenre() == null ? "" : one.getGenre());
+            card.put("role", one.getRoleName() == null ? "" : one.getRoleName());
+            card.put("twist", one.getTwist());
+            card.put("quote", one.getQuote() == null ? "" : one.getQuote());
+            card.put("fate", one.fateLines());
+            card.put("style", one.getStyle() == null ? "" : one.getStyle());
+            m.put("card", card);
+        }
         return m;
     }
 
@@ -133,6 +204,14 @@ public class CharacterController {
     public ResponseEntity<Map<String, String>> asHarnessSpoke(BusinessException e) {
         return ResponseEntity.status(e.getErrorCode().getStatus())
                 .body(Map.of("error", e.getMessage()));
+    }
+
+    /** 「캐릭터 만들어보기」 입력. 전부 비어도 된다. */
+    public record TryRequest(String name, String description,
+                             @com.fasterxml.jackson.annotation.JsonProperty("photos_data")
+                             @com.fasterxml.jackson.annotation.JsonAlias("photosData")
+                             List<String> photosData,
+                             String world) {
     }
 
     public record CreateRequest(String name, String description,

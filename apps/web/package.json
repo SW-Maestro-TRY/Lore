@@ -4,9 +4,9 @@
   "private": true,
   "description": "Lore 프론트엔드 셸 (Next.js App Router). 실제 화면 코드는 각 도메인의 fe/ 폴더에 있다.",
   "scripts": {
-    "predev": "bash ../../webtoon/fe/sync-landing.sh",
+    "predev": "bash ../../webtoon/fe/sync-landing.sh && bash ../../common/fe/sync-landing-assets.sh",
     "dev": "next dev",
-    "prebuild": "bash ../../webtoon/fe/sync-landing.sh",
+    "prebuild": "bash ../../webtoon/fe/sync-landing.sh && bash ../../common/fe/sync-landing-assets.sh",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -24,5 +24,5 @@
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.6.0"
   },
-  "//scripts": "predev·prebuild — Webtoon 탭 화면은 haeun/landing 의 프로토타입이고, Next 는 public 밖을 서빙하지 않아 public/static 으로 복사해야 한다. 사람이 기억하는 대신 빌드가 하게 한다 (webtoon/fe/sync-landing.sh)."
+  "//scripts": "predev·prebuild — Next 는 public 밖을 서빙하지 않는데 apps/web/public/static 전체가 gitignore 돼 있어서, 그림 원본을 각 도메인 폴더에서 public/static 으로 복사해야 한다. 사람이 기억하는 대신 빌드가 하게 한다 — 웹툰 탭 화면 그림은 webtoon/fe/sync-landing.sh, 랜딩페이지(/) 그림은 common/fe/sync-landing-assets.sh."
 }
