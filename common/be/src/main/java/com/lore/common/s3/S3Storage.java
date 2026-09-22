@@ -4,13 +4,18 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 서버가 직접 파일을 올리고 받는 곳.
@@ -28,6 +33,9 @@ import java.nio.file.Path;
 public class S3Storage {
 
     private static final String CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+    /** S3 배치 삭제가 한 요청에 받는 최대 개수. */
+    private static final int BATCH = 1000;
 
     private final S3Client client;
     private final String bucket;
@@ -65,5 +73,39 @@ public class S3Storage {
                         .cacheControl(CACHE_CONTROL)
                         .build(),
                 RequestBody.fromFile(from));
+    }
+
+    /**
+     * <b>지운다.</b> 보존기간이 지난 것을 파기할 때 쓴다.
+     *
+     * ★ 한 번에 1000개씩 끊는다 — S3 의 배치 삭제가 한 요청에 1000개까지만
+     *   받는다. 그보다 많이 보내면 요청 전체가 거부되므로, 지울 것이 많을수록
+     *   조용히 아무것도 안 지워지는 쪽으로 틀어진다.
+     *
+     * ★ 없는 키를 보내도 성공으로 친다(S3 가 그렇게 답한다). 파기는 여러 번
+     *   돌 수 있어야 하고, 앞선 회차가 중간에 끊겨 절반만 지워졌더라도 다시
+     *   돌렸을 때 나머지가 지워져야 한다.
+     *
+     * @return 실제로 요청을 보낸 키 수(빈 키는 빼고 센다)
+     */
+    public int delete(List<String> keys) {
+        List<String> real = new ArrayList<>();
+        for (String k : keys) {
+            if (k != null && !k.isBlank()) {
+                real.add(k);
+            }
+        }
+        for (int from = 0; from < real.size(); from += BATCH) {
+            List<String> chunk = real.subList(from, Math.min(from + BATCH, real.size()));
+            client.deleteObjects(DeleteObjectsRequest.builder()
+                    .bucket(bucket)
+                    .delete(Delete.builder()
+                            .objects(chunk.stream()
+                                    .map(k -> ObjectIdentifier.builder().key(k).build())
+                                    .toList())
+                            .build())
+                    .build());
+        }
+        return real.size();
     }
 }
