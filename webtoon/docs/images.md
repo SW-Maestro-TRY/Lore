@@ -214,6 +214,35 @@ update webtoon_work set is_public = false where run_id = '…';
 | 입구 화면 카드 2장 | `webtoon/fe/screens/landing/Entry.tsx:12-13` | `20260903T174524-309e57`, `20260906T124144-63e2a7` |
 | 온보딩 04 「완성」 칸 | `webtoon/fe/screens/landing/Landing.tsx:38` | `20260910T132240-ae8c28` |
 
+## staging·prod 에서 그림이 깨지면 ★
+
+**로컬 문제와 원인이 다릅니다.** 로컬은 노트북 전용 설정(`IMAGE_PROXY`·
+`APP_S3_ENDPOINT`·MinIO 대체)이 문제지만, staging·prod 는 처음부터 진짜
+S3 + CloudFront 라 그 종류의 사고가 구조적으로 없습니다. 여기서 그림이
+깨진다면 다음 중 하나입니다.
+
+1. **버킷 이름이 잘못됐다** — `CONTENT_S3_BUCKET`(SSM `/lore/<env>/...`)이
+   그 환경의 진짜 버킷(`lore-contents-staging-…` / `lore-prod-contents-…`)을
+   가리키는지 확인합니다. 옛 버킷(`lore-contents-046797548177-…`)을 보고
+   있으면 새 그림이 전부 안 뜹니다.
+2. **CloudFront 캐시** — 같은 이름의 파일을 덮어써도 바로 안 바뀔 수
+   있습니다(위 4-3절). 새 파일은 새 이름(폴더 버전)으로 올리는 게 원칙이고,
+   급하면 CloudFront invalidation을 겁니다.
+3. **presign 설정이 dev 값으로 새어 들어감** — `LORE_WEBTOON_PRESIGN_LOCALLY`
+   나 `APP_S3_ENDPOINT` 가 staging·prod SSM 에 실수로 들어가면(로컬 편의
+   설정을 그대로 복사한 경우) 실제 S3 대신 존재하지 않는 주소를 보게 됩니다.
+   이 두 값은 SSM 에 **있으면 안 됩니다**(`webtoon/docs/env-diff.md` 3-4절).
+4. **IAM/버킷 정책** — 공개 그림(`images/` 접두사)에 대한 읽기 권한이
+   막혀 있으면 CloudFront 가 403/404 를 냅니다.
+
+**배포마다 자동으로 확인합니다.** `.github/workflows/deploy.yml` 의
+`verify_images` 잡이 배포 뒤 공개된 작품 하나를 골라 표지 그림이 실제로
+열리는지 확인하고, 안 열리면 배포 실패로 잡아 텔레그램으로 알립니다
+(dev 는 CloudFront 가 없어 대상에서 뺍니다). API 가 200 을 내는 것과
+그림이 실제로 열리는 것은 다른 이야기입니다 — 주소만 만들어 돌려주는
+API 는 버킷 설정이 틀려도 200 을 내기 때문에, 이 잡이 실제로 그 주소를
+열어 봅니다.
+
 ## 자주 하는 실수
 
 - `apps/web/public/static/` 에 직접 넣기 → 커밋 안 되고 다음 빌드에 사라집니다.

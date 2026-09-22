@@ -64,6 +64,7 @@ jobs:
       role_arn:   ${{ steps.map.outputs.role_arn }}
       ec2_id:     ${{ steps.map.outputs.ec2_id }}
       rds_id:     ${{ steps.map.outputs.rds_id }}
+      domain:     ${{ steps.map.outputs.domain }}
     steps:
       - id: map
         run: |
@@ -72,26 +73,29 @@ jobs:
               env_name=dev
               ssm_target='--instance-ids i-0169c150550d91895'
               role_arn='arn:aws:iam::046797548177:role/lore-github-deploy'
-              ec2_id=''; rds_id='' ;;       # 전원 사이클 안 씀 — 항상 켜 둔다
+              ec2_id=''; rds_id=''         # 전원 사이클 안 씀 — 항상 켜 둔다
+              domain='dev.lorecomic.com' ;;
             staging)   # staging — 현 인프라 재활용(1대 고정)
               env_name=staging
               ssm_target='--instance-ids i-0204d071a9c94bc08'
               # CloudFront E2DQOZKTRM3UGJ — 무효화를 걸지 않으므로 좌표만 적어 둔다
               role_arn='arn:aws:iam::046797548177:role/lore-github-deploy'
-              ec2_id='i-0204d071a9c94bc08'; rds_id='lore-staging-db' ;;
+              ec2_id='i-0204d071a9c94bc08'; rds_id='lore-staging-db'
+              domain='staging.lorecomic.com' ;;
             main)      # prod — 태그로 타깃(스케일 대비), 전용 role
               env_name=prod
               ssm_target='--targets Key=tag:Environment,Values=prod'
               # CloudFront E198BSQE3JQYCS — 위와 같다
               role_arn='arn:aws:iam::046797548177:role/lore-prod-github-deploy'
-              ec2_id=''; rds_id='' ;;       # prod 는 끄지 않는다
+              ec2_id=''; rds_id=''         # prod 는 끄지 않는다
+              domain='lorecomic.com' ;;
             *)
               echo "지원하지 않는 브랜치: $GITHUB_REF_NAME"; exit 1 ;;
           esac
           # 배포 버킷은 전 환경 공유(빌드 산출물 임시창고, env 폴더로 구분).
           # 이미지·DB 같은 실데이터는 여기 없다 — 콘텐츠 버킷·RDS 별도.
           s3_bucket='lore-deploy-046797548177-ap-northeast-2-an'
-          for kv in env_name ssm_target s3_bucket role_arn ec2_id rds_id; do
+          for kv in env_name ssm_target s3_bucket role_arn ec2_id rds_id domain; do
             echo "$kv=${!kv}" >> "$GITHUB_OUTPUT"
           done
 
@@ -566,6 +570,58 @@ jobs:
       #   그런데 "/*" 무효화는 그림 캐시까지 통째로 비워, 배포와 상관없는 /images/*
       #   를 매 배포마다 원본(S3)에서 다시 받아 오게 만든다 — 느려지고 요금만 는다.
 
+  # ── 배포 뒤 그림이 실제로 뜨는지 확인 ──────────────────────────────
+  #
+  # ★ 왜 필요한가 — S3 버킷 이름·리전, CloudFront 연결, presign 설정 중 하나만
+  #   어긋나도 API 는 200 을 내고(주소만 만들어 돌려주는 것이라) 그 주소를 실제로
+  #   열어야만 깨진 걸 안다. 배포 성공 == 화면 정상이 아니다.
+  #   (2026-09-23, 로컬에서 이미지가 안 뜨는 사고를 겪은 뒤 — 그때는 노트북
+  #   전용 설정 문제였지만, staging·prod 에서 버킷/CloudFront 설정이 어긋나면
+  #   같은 증상(깨진 그림, API 는 정상)이 사람이 눈으로 볼 때까지 안 들킨다.)
+  #
+  # ★ 특정 run_id 를 박아 두지 않는다 — 예시 작품은 언제든 정리될 수 있다
+  #   (webtoon/docs/images.md 의 "한 편 빼기"). 그 대신 "지금 공개된 작품 중
+  #   아무거나 하나" 를 API 로 물어서 쓴다 — 그래야 이 검사가 예시 작품의
+  #   수명에 안 얽매인다.
+  #
+  # ★ dev 는 CloudFront 가 없어(직결) 뺀다 — dev.lorecomic.com 은 nginx 를
+  #   거쳐 EC2 로 바로 가므로, 이 검사가 보려는 "CloudFront·콘텐츠 버킷 연결"
+  #   자체가 dev 구조에는 없다.
+  verify_images:
+    needs: [setup, wake, backend, frontend]
+    if: >-
+      always() && needs.setup.outputs.env_name != 'dev' &&
+      needs.backend.result != 'failure' && needs.frontend.result != 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 공개 작품 하나를 가져와 표지가 실제로 뜨는지 확인
+        env:
+          DOMAIN: ${{ needs.setup.outputs.domain }}
+        run: |
+          set -uo pipefail
+          BASE="https://${DOMAIN}"
+
+          RUN_JSON=$(curl -sS --max-time 20 "${BASE}/api/webtoon/v1/runs?limit=1")
+          RUN_ID=$(printf '%s' "$RUN_JSON" | jq -r '.runs[0].run_id // empty')
+          COVER_PAGE=$(printf '%s' "$RUN_JSON" | jq -r '.runs[0].cover_page // 1')
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::warning::공개된 작품이 하나도 없어 이미지 확인을 건너뜁니다 (그림 설정 자체는 못 봄)."
+            exit 0
+          fi
+
+          PAGE_URL="${BASE}/api/webtoon/v1/runs/${RUN_ID}/page/${COVER_PAGE}?w=320"
+          echo "확인 대상: $PAGE_URL (run=$RUN_ID)"
+
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -L "$PAGE_URL")
+          echo "최종 응답 코드: $CODE"
+
+          if [ "$CODE" != "200" ]; then
+            echo "::error::${DOMAIN} 에서 표지 그림이 안 열립니다 (run=${RUN_ID}, http=${CODE}). S3 버킷·CloudFront·presign 설정을 확인하세요 — webtoon/docs/env-diff.md 3-4절 참고."
+            exit 1
+          fi
+          echo "그림 정상."
+
   # ── staging 전용: 다시 재우기 예약 ───────────────────────────────
   # 배포가 끝난 시점부터 60분을 센다. 한 시간 안에 배포가 또 들어오면 예약을 새로 걸므로
   # 카운트다운도 그 시점부터 다시 시작된다.
@@ -615,7 +671,7 @@ jobs:
   #   넣어야 할 시크릿 (Settings → Secrets and variables → Actions)
   #     TELEGRAM_BOT_TOKEN · TELEGRAM_CHAT_ID
   notify_failure:
-    needs: [setup, changes, wake, dev_deploy, backend, frontend, power]
+    needs: [setup, changes, wake, dev_deploy, backend, frontend, verify_images, power]
     # 취소(cancelled)는 알리지 않는다 — 사람이 일부러 끊은 것이라 알릴 일이 아니다.
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
