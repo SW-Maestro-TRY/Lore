@@ -1059,7 +1059,9 @@ function ChatFab({ y }: { y: Yeoul }) {
         //   눌러도 대화가 안 열리고 왜 지금이 아닌지 한 줄이 뜬다(`actions.openChat` 이 막는다).
         opacity: v.fab.off ? 0.45 : 1,
       }}
-      aria-label="대화하기" aria-disabled={v.fab.off ? true : undefined}
+      // ★ `aria-disabled` 를 안 쓴다 — 이 버튼은 **눌린다**(눌러야 왜 지금이 아닌지 들린다).
+      //   참으로 두면 화면 낭독기도 자동 검사도 "못 누르는 것" 으로 읽어 버린다(메모리: ui-verify).
+      aria-label={v.fab.off ? `대화하기 · ${v.fab.why}` : '대화하기'}
     >
       <span style={{ position: 'relative', width: 24, height: 24, color: '#5A554E' }}>
         <span style={{ position: 'absolute', left: 1, top: 3, width: 22, height: 15, border: '2px solid currentColor', borderRadius: 8 }} />

@@ -2265,7 +2265,7 @@ export function useYeoul(live?: Live) {
       bg: i < cur.on ? (locked ? ink(.28) : cur.tint) : C.line,
     }));
 
-    const pbtn = (r: Raw | null, isTutTarget: boolean, tutOff = false): PopBtn | null => {
+    const pbtn = (r: Raw | null, isTutTarget: boolean, tutOff: string | false = false): PopBtn | null => {
       if (!r) return null;
       const sickSnack = mode === 'sick' && selK === 'table' && !!r.soft;
       // 서버가 이미 아는 거절 이유. 여울 샘플 방에서는 안 건다 — 거긴 연습이라 늘 눌려야 한다.
@@ -2273,7 +2273,7 @@ export function useYeoul(live?: Live) {
       // 돌보기·재우기가 도는 동안엔 전부 잠근다 — 두 번 눌러 두 번 나가는 일을 막는다.
       const waiting = !!live?.careing || !!live?.resting;
       // ★ 튜토리얼 잠금이 **가장 앞이다**(판정 J8) — 그 칸에서 안 시킨 버튼은 다른 이유를 따지기 전에 잠긴다.
-      const why = (tutOff && tutLock) ? tutLock.note
+      const why = tutOff ? tutOff
         : locked ? lockMsg : sickSnack ? '아플 땐 간식을 안 먹어요' : pre;
       const off = !!why || waiting;
       return {
@@ -2314,8 +2314,15 @@ export function useYeoul(live?: Live) {
         : `${({ table: '배부름', bath: '단정함', play: '기분' } as Record<string, string>)[selK]} ${cur.on}/${cur.n}`,
       // ★ 그 칸이 시키는 방의 **첫 버튼(a)** 만 열린다. 둘째 버튼(간식·목욕 같은 것)은 튜토리얼
       //   동안 늘 잠긴다 — 안내가 가리키는 것이 언제나 첫 버튼이라서다.
-      a: pbtn(cur.a, isTutTarget, !!tutLock && !(tutLock.act === 'a' && tutLock.room === selK)),
-      b: pbtn(cur.b, false, !!tutLock), hasB: !!cur.b,
+      // ★ **이미 그 방에 들어와 있으면 방 이름을 다시 말하지 않는다** — "지금은 주방에서 할
+      //   차례예요" 가 주방 안에서 뜨면 어디로 가라는 말인지 알 수 없다. 그 자리에서는
+      //   **눌러야 할 버튼 이름**을 말해 준다.
+      a: pbtn(cur.a, isTutTarget, tutLock && !(tutLock.act === 'a' && tutLock.room === selK) ? tutLock.note : false),
+      b: pbtn(cur.b, false, !tutLock ? false
+        : (tutLock.act === 'a' && tutLock.room === selK)
+          ? `지금은 ${cur.a.label}${josa(cur.a.label, '을', '를')} 해 볼 차례예요`
+          : tutLock.note),
+      hasB: !!cur.b,
     };
 
     // ── 무대 ──
