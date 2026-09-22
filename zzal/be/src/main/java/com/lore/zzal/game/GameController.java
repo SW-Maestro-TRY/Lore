@@ -69,7 +69,9 @@ public class GameController {
             선택한 방향을 전달하면 정답 여부를 서버가 판정한다. 응답에는 방금 진행한 회차의
             정답만 포함하며 남은 회차의 정답은 노출하지 않는다.
 
-            5회를 모두 진행하면 finished 가 true 가 되고 그때 win 이 채워진다.""")
+            ★ 3승 또는 3패가 나면 그 회차에서 finished 가 true 가 되고 win 이 채워진다 —
+            5회를 채우지 않는다(최단 3회·최장 5회). 3선승제라 셋을 맞히거나 셋을 틀리면
+            남은 회차가 결과를 바꿀 수 없다.""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "진행 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "ZZAL_GAME_NOT_FOUND"),

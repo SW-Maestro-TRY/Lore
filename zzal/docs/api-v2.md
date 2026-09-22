@@ -145,12 +145,12 @@
 | 호출 | 요청 | 비고 | 거절 |
 |---|---|---|---|
 | `POST /{id}/games` | `{kind: LEFT_RIGHT\|RUN}` | 시작. **미완료 판이 남아 있으면 그 판을 패로 접고 새 판을 연다**(이어치기 없음) | `ZZAL_GAME_DAILY_LIMIT` `ZZAL_SICK_REFUSES` `ZZAL_FEATURE_LOCKED`(RUN 잠김) `ZZAL_PET_SLEEPING` |
-| `POST /{id}/games/{gameId}/guess` | `{pick: LEFT\|RIGHT}` | 좌우 맞히기 한 판. 5판 3승. 답은 서버가 쥔다 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` |
+| `POST /{id}/games/{gameId}/guess` | `{pick: LEFT\|RIGHT}` | 좌우 맞히기 한 회차. **3선승 — 3승·3패에서 끝난다**(최장 5회). 답은 서버가 쥔다 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` |
 | `POST /{id}/games/{gameId}/finish` | `{survivedMs}` | 달리기 끝. 30,000ms 이상이면 승리. 서버는 상한(60,000)만 검증 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` |
 | `POST /{id}/games/{gameId}/abandon` | | 기권. 치던 판을 그 자리에서 접는다(패). 좌우·달리기 공통. 아픈 펫도 된다 | `ZZAL_GAME_NOT_FOUND` `ZZAL_GAME_FINISHED` `ZZAL_PET_SLEEPING` |
 | `GET /{id}/games/current` | | **`playing`은 항상 false** — 복구용이 아니다(아래 해석 27) | |
 
-- 두 게임 합쳐 **하루 3판**, 시작한 판 기준, 잠들 때 리셋. `RUN`은 좌우 맞히기 **5승** 뒤.
+- 두 게임 합쳐 **하루 3판**(= 3매치), 시작한 판 기준, 잠들 때 리셋. `RUN`은 좌우 맞히기 **5승** 뒤.
 - 승리 = 행복 +1(설정 `app.zzal.reward.game-win: HAPPINESS`).
 - 응답 `GameState{playing, gameId, kind, round, hits, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(★ `finished`·`win`은 **없다** — 판이 끝났는지는 `guess` 응답이 말한다) · `Guess{gameId, round, pick, answer, hit, hits, finished, win, nextRound, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(`win`은 끝났을 때만·`nextRound`는 안 끝났을 때만) · `RunResult{gameId, survivedMs, win, remainingToday, justUnlocked[], runUnlocked}` · `AbandonResult{gameId, kind, round, pick, hit, hits, finished, win, rounds, winAt, remainingToday, justUnlocked[], runUnlocked}`(`Guess`와 같은 모양 · `pick`은 늘 null · `finished`는 늘 true · `win`은 늘 false) — **행동 응답 = 상태**: 게임 경로 해금(**15번 놀라기 = 완주한 매치 4번**, 달리기 = 좌우 5승)이 그 응답에 실린다 — 놀라기는 그래서 `start`가 아니라 **매치를 끝낸 `guess`·`finish` 응답**의 `justUnlocked`에 실린다(2026-09-22 개정, 옛 "13번 = 3판 시작"은 폐기). `runUnlocked`는 동작이 아니라 기능이라 별도 불리언이다.
 - **「해석」27 이어치기는 없다**(2026-09-22 개정, 옛 "같은 날이면 이어 친다"는 폐기 — 정본에 규정이 없던 빈자리였다). `start`는 **미완료 판이 남아 있으면 그 자리에서 패로 접고** 새 판을 연다. 나갔다 온 사람도 새 판이라 **하루 3판이 정상 차감된다**. `GET /current`는 그래서 판을 돌려주지 않는다(`playing`은 항상 false) — 돌려주면 그 `gameId`로 `guess`를 계속 쳐 규칙이 뒷문으로 무력화된다. 주소는 남겨 두었고(없애면 화면이 404를 받는다) 응답의 `remainingToday`·`runUnlocked`는 최신 값이다.
@@ -158,7 +158,9 @@
   - 새로고침으로 `gameId`를 잃으면 그 판은 다시 진행할 수 없다. 화면은 복구를 시도하지 말고 **새 판**을 안내한다.
 - **게임 중에 나가면 그 판은 끝이다** — `abandon`이 그 자리에서 패로 확정한다. 기회는 시작 시점에 이미 깎였으므로 **더 깎지도 돌려주지도 않는다**. 한 번도 안 치고 나가면 판이 없어 차감도 없다. 승리 보상·달리기 해금·두 번째 선물·**놀이 조각·2층 15번(놀람) 조건**은 어느 것도 발생하지 않는다.
 - **「해석」56 조각과 2층 15번은 "끝까지 친 매치"로 센다**(2026-09-22 개정, 옛 "시작한 매치" 폐기). 좌우 맞히기는 **다섯 라운드를 다 친 순간**, 달리기는 **`finish`를 받은 순간** 세고 **승패는 안 본다**. 기권·강제 종료(다음 `start`가 접은 판)한 매치는 어느 쪽도 세지 않는다 — 시작으로 세던 때는 시작·나가기를 되풀이해 조각을 채우고 동작을 열 수 있었다. **하루 3판 차감만 시작 기준**으로 남는다(지는 판을 버리고 다시 시작하는 것을 막는 것이 그 상한의 목적이므로).
-- **「해석」57 한 매치는 5라운드를 모두 친 뒤에 끝난다** — 3승이 먼저 확정돼도(또는 3패가 확정돼도) **중간에 끝나지 않는다**. `guess` 응답의 `finished`는 다섯 번째 선택에서만 true가 되고 `win`은 그때 `hits >= 3`으로 정해진다. 화면이 "3승이 나면 거기서 끝"으로 그리면 서버와 어긋난다(2026-09-22 확인, 변경 없음).
+- **「해석」57 한 매치는 3승 또는 3패에서 끝난다** — 5회를 채우지 않는다(2026-09-22 개정, 옛 "다섯 번째 선택에서만 끝난다"는 폐기). 3선승제라 셋을 맞히거나 셋을 틀리면 남은 회차가 결과를 바꿀 수 없으므로 그 회차에서 `finished: true`가 되고 `win`이 채워진다(`nextRound`는 null). **최단 3회·최장 5회**이고, 2승 2패에서만 다섯째까지 간다. 목 서버(화면)는 처음부터 이 규칙이었고 서버가 거기에 맞춰졌다.
+  - 승리 보상(행복 +1)·달리기 해금 카운터·두 번째 선물(첫 패배)·놀이 조각·2층 15번은 **모두 그 회차에서** 돈다.
+  - **승리를 쌓아 둔 채 기권하는 상태는 없다** — 3승이 나면 그 자리에서 끝나므로 `abandon`은 `ZZAL_GAME_FINISHED`다. 기권 응답의 `win`이 늘 false인 것은 그대로다(끝까지 치지 않은 판이므로).
 - **아픈 동안에는 미니게임이 전면 거부다** — `start`·`guess`·`finish` 모두 `ZZAL_SICK_REFUSES`(정본 16장 "아프면 놀지 않는다"). 건강할 때 시작한 판도 병든 뒤에는 이어 칠 수 없다 — 승리 보상(행복 +1)으로 병을 스스로 푸는 길을 막는다. **`abandon`만 예외로 허용한다**(병이 열린 판을 가두면 벌이 된다).
 - 달리기 서버 검증은 정본대로 상한(60,000ms)만. "시작 뒤 경과 시간 + 2초" 검사는 보류(결정기록).
 
@@ -581,6 +583,7 @@
 
 ## 변경 기록
 
+- **2026-09-22** — 매치 종료 규칙 개정(해석 57): 좌우 맞히기는 **3승 또는 3패에서 끝난다**(옛 "5회 완주"는 폐기). 최단 3회·최장 5회.
 - **2026-09-22** — 연결 감사(정본 v1.11 대조) 결정 반영: 앨범 플래그 상시 true(해석 25) · 이어치기 폐지와 `current` 무력화(해석 27) · 조각·2층 15번을 완주 매치 기준으로(해석 56) · 매치는 5라운드 완주로 끝남을 명시(해석 57) · 심화 공개를 다음 기상까지 보류(해석 55) · 채팅 반응 키 `hello`/`reply`와 고르는 시점(해석 54) · 두 번째 선물 조건 정정(해석 53) · 동작 요청 하루 경계를 취침 기준으로(1.9) · 병 중 게임 전면 거부 명시.
 - **2026-09-22** — 졸업 축하 봤음(1.1) 추가: `POST /me/pets/{petId}/graduation-seen`(204·멱등), `PetDetail.graduationSeenAt`, `zzal_pet.graduation_seen_at`(V20260922_0100).
 - **2026-09-20** — 동작 요청(1.9) 추가: `POST /me/pets/{petId}/motion-wish`(204), `zzal_motion_wish`(V23), `ZZAL_MOTION_WISH_DAILY_LIMIT`.

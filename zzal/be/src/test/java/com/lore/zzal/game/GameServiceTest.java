@@ -144,6 +144,9 @@ class GameServiceTest {
         GameService.GuessResult last = null;
         for (char c : picks.toCharArray()) {
             last = service.guess(USER, PET, gameId, c, T0);
+            if (game.isFinished()) {
+                break;
+            }
         }
         assertThat(game.isFinished()).isTrue();
         return last;
@@ -186,14 +189,14 @@ class GameServiceTest {
     }
 
     @Test
-    @DisplayName("좌우 5판 3승이면 leftRightWins +1·행복 +1. 답은 응답에 없고 되돌려 만든다. 5승째 응답에서 runUnlocked 가 true 로")
+    @DisplayName("3승이면 leftRightWins +1·행복 +1. 답은 응답에 없고 되돌려 만든다. 5승째 응답에서 runUnlocked 가 true 로")
     void leftRightWinCounts() {
         ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLRR", T0);
         when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(game));
         pet.settle(T0);
         int happiness = pet.getHappiness();
         GameService.GuessResult last = null;
-        for (char c : "LLLLL".toCharArray()) {
+        for (char c : "LLL".toCharArray()) {           // 3승 — 여기서 끝난다
             last = service.guess(USER, PET, 1L, c, T0);
         }
         assertThat(game.isFinished()).isTrue();
@@ -207,7 +210,7 @@ class GameServiceTest {
         }
         ZzalGame fifth = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLRR", T0);
         when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(fifth));
-        for (char c : "LLLLL".toCharArray()) {
+        for (char c : "LLL".toCharArray()) {
             last = service.guess(USER, PET, 2L, c, T0);
         }
         assertThat(pet.getLeftRightWins()).isEqualTo(5);
@@ -217,7 +220,7 @@ class GameServiceTest {
     // ── 두 번째 선물(뒤로 넘어짐) — 좌우 맞히기 첫 패배 ──────────────────
 
     @Test
-    @DisplayName("★★ 한 판을 다 치고 못 이기면 그 자리에서 두 번째 선물을 굽는다")
+    @DisplayName("★★ 한 판을 끝까지 치고 못 이기면 그 자리에서 두 번째 선물을 굽는다")
     void losingAFullSeriesOpensTheSecondGift() {
         playLeftRight("LLLRR", "RRRRR");        // 5라운드 · 2승 — 못 이겼다
 
@@ -233,17 +236,96 @@ class GameServiceTest {
     }
 
     @Test
-    @DisplayName("★★ 판이 안 끝났으면 안 준다 — 네 라운드까지 다 틀려도 마지막을 쳐야 패배다")
+    @DisplayName("★★ 판이 안 끝났으면 안 준다 — 2승 2패로 네 라운드를 쳐도 아직 패배가 아니다")
     void anUnfinishedSeriesGivesNothing() {
         ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLLL", T0);
         when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(game));
         pet.settle(T0);
-        for (char c : "RRRR".toCharArray()) {
+        // 맞·맞·틀·틀 — 어느 쪽도 3 에 닿지 않았다
+        for (char c : "LLRR".toCharArray()) {
             service.guess(USER, PET, 1L, c, T0);
         }
 
         assertThat(game.isFinished()).isFalse();
+        assertThat(game.getHits()).isEqualTo(2);
+        assertThat(game.misses()).isEqualTo(2);
         verify(bakeTrigger, never()).onFirstGameLoss(any(), any());
+    }
+
+    // ── 매치 종료 규칙 — 3승 또는 3패(2026-09-22 결정) ────────────────────
+
+    @Test
+    @DisplayName("★★★ 3연승이면 세 라운드에서 끝난다 — 이긴 판을 두 번 더 누르게 하지 않는다")
+    void threeHitsEndTheMatchAtRoundThree() {
+        ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLRR", T0);
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(game));
+        pet.settle(T0);
+
+        GameService.GuessResult r1 = service.guess(USER, PET, 1L, 'L', T0);
+        GameService.GuessResult r2 = service.guess(USER, PET, 1L, 'L', T0);
+        assertThat(r1.game().isFinished()).isFalse();
+        assertThat(r2.game().isFinished()).as("2승에서는 아직 안 끝난다").isFalse();
+
+        GameService.GuessResult r3 = service.guess(USER, PET, 1L, 'L', T0);
+
+        assertThat(game.isFinished()).isTrue();
+        assertThat(game.isWin()).isTrue();
+        assertThat(game.round()).as("세 번만 쳤다").isEqualTo(3);
+        assertThat(pet.getLeftRightWins()).isEqualTo(1);
+        // 응답 계약 — finished/win 이 그 즉시, nextRound 는 null
+        com.lore.zzal.game.dto.GameResponses.Guess body =
+                com.lore.zzal.game.dto.GameResponses.Guess.of(r3, 2);
+        assertThat(body.finished()).isTrue();
+        assertThat(body.win()).isTrue();
+        assertThat(body.nextRound()).isNull();
+        // 네 번째는 칠 수 없다
+        assertThatThrownBy(() -> service.guess(USER, PET, 1L, 'R', T0))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_GAME_FINISHED);
+    }
+
+    @Test
+    @DisplayName("★★★ 3패면 세 라운드에서 끝난다 — 이미 진 판을 계속 치게 하지 않는다")
+    void threeMissesEndTheMatchAtRoundThree() {
+        ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLRR", T0);
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(game));
+        pet.settle(T0);
+
+        GameService.GuessResult last = null;
+        for (int i = 0; i < 3; i++) {
+            last = service.guess(USER, PET, 1L, 'R', T0);      // 정답은 L — 세 번 다 틀린다
+        }
+
+        assertThat(game.isFinished()).isTrue();
+        assertThat(game.isWin()).isFalse();
+        assertThat(game.round()).isEqualTo(3);
+        assertThat(game.misses()).isEqualTo(3);
+        com.lore.zzal.game.dto.GameResponses.Guess body =
+                com.lore.zzal.game.dto.GameResponses.Guess.of(last, 2);
+        assertThat(body.finished()).isTrue();
+        assertThat(body.win()).isFalse();
+        assertThat(body.nextRound()).isNull();
+        // 첫 패배 선물도 이 시점에 돈다
+        verify(bakeTrigger).onFirstGameLoss(eq(pet), any());
+    }
+
+    @Test
+    @DisplayName("★★ 2승 3패면 다섯 라운드를 다 친다 — 최장은 그대로 5회다")
+    void twoHitsAndThreeMissesRunAllFiveRounds() {
+        ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLLL", T0);
+        when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(game));
+        pet.settle(T0);
+
+        for (char c : "LLRR".toCharArray()) {
+            service.guess(USER, PET, 1L, c, T0);
+        }
+        assertThat(game.isFinished()).as("2승 2패 — 네 라운드까지는 안 끝난다").isFalse();
+
+        service.guess(USER, PET, 1L, 'R', T0);
+
+        assertThat(game.isFinished()).isTrue();
+        assertThat(game.isWin()).isFalse();
+        assertThat(game.round()).isEqualTo(5);
+        assertThat(game.getHits()).isEqualTo(2);
     }
 
     @Test
@@ -285,15 +367,24 @@ class GameServiceTest {
         verify(bakeTrigger, never()).onFirstGameLoss(any(), any());
     }
 
-    /** 좌우 한 판을 끝까지 친다. {@code answers} 가 정답, {@code picks} 가 고른 것. */
+    /**
+     * 좌우 한 판을 끝까지 친다. {@code answers} 가 정답, {@code picks} 가 고른 것.
+     *
+     * ★ 판이 끝나면 <b>멈춘다</b> — 3승·3패가 나면 그 회차에서 끝나므로(2026-09-22) 남은 글자를
+     *   그대로 치면 {@code ZZAL_GAME_FINISHED} 다. 여기서 멈추지 않으면 시험이 규칙이 아니라
+     *   글자 수를 지키게 된다.
+     */
     private void playLeftRight(String answers, String picks) {
         ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, answers, T0);
         when(gameRepository.findByIdForUpdate(any())).thenReturn(Optional.of(game));
         pet.settle(T0);
         for (char c : picks.toCharArray()) {
             service.guess(USER, PET, 1L, c, T0);
+            if (game.isFinished()) {
+                break;
+            }
         }
-        assertThat(game.isFinished()).as("다섯 라운드를 다 쳐야 한 판이 끝난다").isTrue();
+        assertThat(game.isFinished()).as("3승 또는 3패가 나야 한 판이 끝난다").isTrue();
     }
 
     @Test
@@ -400,13 +491,13 @@ class GameServiceTest {
         assertThat(gamePieces(store)).as("시작만으로는 안 센다").isZero();
 
         pet.settle(T0);
-        for (char c : "RRRR".toCharArray()) {       // 네 라운드 — 아직 안 끝났다
+        for (char c : "RLR".toCharArray()) {        // 틀·맞·틀 — 1승 2패, 아직 안 끝났다
             service.guess(USER, PET, 1L, c, T0);
         }
         assertThat(game.isFinished()).isFalse();
-        assertThat(gamePieces(store)).as("마지막 라운드를 쳐야 완주다").isZero();
+        assertThat(gamePieces(store)).as("판이 갈리기 전에는 안 센다").isZero();
 
-        service.guess(USER, PET, 1L, 'R', T0);      // 다섯째 — 1승뿐이라 패배 완주
+        service.guess(USER, PET, 1L, 'L', T0);      // 네 번째(정답 R) — 3패로 패배 완주
         assertThat(game.isFinished()).isTrue();
         assertThat(game.isWin()).isFalse();
         assertThat(gamePieces(store)).as("져도 완주는 완주다(승패 무관)").isEqualTo(1);
@@ -637,18 +728,20 @@ class GameServiceTest {
     }
 
     @Test
-    @DisplayName("★★★ 기권은 승리도 패배도 아니다 — 3승을 쌓고 접어도 행복·5승 카운터·조각·두 번째 선물이 안 움직인다")
+    @DisplayName("★★★ 기권은 승리도 패배도 아니다 — 2승을 쌓고 접어도 행복·5승 카운터·조각·두 번째 선물이 안 움직인다")
     void abandonRewardsNothingAndCountsNoLoss() {
         var store = withPieceStore();
         service.start(USER, PET, GameKind.LEFT_RIGHT, T0);          // 시작에서 하루 한 판이 깎인다
 
-        // ★ 답을 아는 판으로 바꿔 끼운다 — 세 번을 맞혀야 ZzalGame.isWin() 이 true 가 되는 자리를 밟는다
+        // ★ 답을 아는 판으로 바꿔 끼운다. ★★ 3승은 쌓을 수 없다 — 셋째를 맞히는 순간 매치가
+        //   끝나 기권이 ZZAL_GAME_FINISHED 가 된다(2026-09-22). 그래서 <b>2승에서</b> 접는다.
         ZzalGame game = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLRR", T0);
         trackUnfinished(game);
         pet.settle(T0);
-        for (char c : "LLL".toCharArray()) {
+        for (char c : "LL".toCharArray()) {
             service.guess(USER, PET, 1L, c, T0);
         }
+        assertThat(game.isFinished()).isFalse();
         int happiness = pet.getHappiness();
         int wins = pet.getLeftRightWins();
         int pieces = gamePieces(store);
@@ -656,8 +749,7 @@ class GameServiceTest {
 
         GameService.Abandoned a = service.abandon(USER, PET, 1L, T0);
 
-        assertThat(game.isWin())
-                .as("엔티티는 3승을 '이겼다'로 읽는다 — 그래서 응답이 이 값을 그대로 쓰면 안 된다").isTrue();
+        assertThat(game.isWin()).as("2승은 승리가 아니다").isFalse();
         assertThat(com.lore.zzal.game.dto.GameResponses.AbandonResult.of(a, 1).win())
                 .as("끝까지 안 친 판이라 기권 응답의 win 은 늘 false").isFalse();
         assertThat(pet.getHappiness()).as("승리 보상이 없다").isEqualTo(happiness);
@@ -684,13 +776,14 @@ class GameServiceTest {
 
         assertThat(playing.getFinishedAt()).as("끝난 시각은 덮어쓰지 않는다").isEqualTo(finishedAt);
 
-        // 다 친 판도 마찬가지다
+        // 끝까지 친 판도 마찬가지다(3승에서 끝난다)
         ZzalGame played = ZzalGame.start(USER, PET, GameKind.LEFT_RIGHT, "LLLLL", T0);
         trackUnfinished(played);
         pet.settle(T0);
-        for (char c : "LLLLL".toCharArray()) {
+        for (char c : "LLL".toCharArray()) {
             service.guess(USER, PET, 1L, c, T0);
         }
+        assertThat(played.isFinished()).isTrue();
         assertThatThrownBy(() -> service.abandon(USER, PET, 1L, T0))
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_GAME_FINISHED);
     }
