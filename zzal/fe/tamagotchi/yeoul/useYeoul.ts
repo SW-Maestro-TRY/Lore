@@ -1284,7 +1284,13 @@ export function useYeoul(live?: Live) {
 
   /**
    * 성격·세계관을 서버에 저장한다. **튜토리얼 4칸을 넘기는 자리**이기도 하다.
-   * 성격을 안 고르면 보낼 것이 없다 — 서버가 성격을 필수로 받는다.
+   *
+   * ★★ 2026-09-22 상훈님 판정 — **성격 고르기는 필수가 아니다.** 4칸은 "고쳤는가" 가 아니라
+   *   **"확인했는가"** 를 세는 칸이고(서버 `PetService.tutorialSeen`: *"아이 정보를 확인만 해도
+   *   넘어간다"* · *"성격을 한 번도 안 고른 사람은 null 인 채 지나간다 — 그래도 된다"*),
+   *   성격은 부화 전 캐릭터 화면에서 이미 받는다. 그래서 **안 고르고 눌러도 넘어간다** —
+   *   고른 것이 있으면 저장하는 길(`savePersonality`)로, 없으면 확인만 하는 길(`tutorialSeen`)로
+   *   간다. 둘 다 서버에서 같은 칸을 넘긴다(`advanceTutorial(PERSONALITY)`).
    *
    * ★ 화면에서는 성격을 여러 개 고를 수 있지만 **서버는 하나만 받는다**
    *   (`PersonalityChoice.personality` 는 enum 하나 · `@NotNull`). 그래서 **맨 앞(처음 고른 것)**
@@ -1296,7 +1302,6 @@ export function useYeoul(live?: Live) {
     const svName = PERSONA_LABEL[liveRef.current?.pet?.personality ?? ''] ?? '';
     const chosen = sRef.current.picks.persona ?? (svName ? [svName] : []);
     const persona = PERSONALITY_OF[chosen[0] ?? ''];
-    if (!persona) { flash('성격을 하나 이상 골라 주세요'); return; }
     // 다시 눌렀다 — 지난 실패 줄은 지우고 시작한다.
     patch({ saveErr: '' });
     // ★ 목(서버 없는 진짜 방)에서도 **이 칸을 밟을 수 있어야** 한다(2026-09-22) — 튜토리얼이
@@ -1304,8 +1309,20 @@ export function useYeoul(live?: Live) {
     //   남기고 칸을 넘긴다. 연습방은 여전히 저장하지 않는다(거긴 연습이다).
     if (!onServerRef.current) {
       patch({ sheet: null });
-      flash(sRef.current.sampleMode ? '연습방이라 저장되지 않아요' : '기억해 뒀어요');
+      flash(sRef.current.sampleMode ? '연습방이라 저장되지 않아요'
+        : persona ? '기억해 뒀어요' : '확인했어요');
       if (!sRef.current.sampleMode) tutorDone('PERSONALITY');
+      return;
+    }
+    // ★ 안 고른 채 눌렀다 — **확인만 해도 넘어가는 길**로 간다(서버가 그렇게 만들어 두었다).
+    //   저장할 것이 없으므로 적어 둔 세계관은 화면에 그대로 남는다(성격을 고르면 그때 같이 간다).
+    if (!persona) {
+      void (async () => {
+        const r = await liveRef.current?.tutorialSeen();
+        if (!r || !r.ok) { patch({ saveErr: saveFailLine(r?.code ?? null, r?.status, r?.message ?? null) }); return; }
+        patch({ sheet: null, saveErr: '' });
+        flash('확인했어요');
+      })();
       return;
     }
     // 세계관은 칩 여러 개 + 직접 적은 한 줄을 **서버 한 칸에** 이어 붙인다.
@@ -3034,11 +3051,19 @@ export function useYeoul(live?: Live) {
         saveNote: onServer ? '' : (s.sampleMode ? '연습방이라 저장되지 않아요' : '서버가 없어 화면에만 남아요'),
         save: {
           show: onServer || !s.sampleMode,
-          label: '성격 저장하기',
+          /**
+           * 단추 이름. **고른 것이 있으면 저장, 없으면 확인**이다.
+           *
+           * ★ 2026-09-22 — 성격을 안 고른 채로도 눌린다(판정 2). 그때 「성격 저장하기」라고
+           *   적으면 **저장하지 않는 일을 저장한다고 말하는 것**이라 이름을 바꿔 단다.
+           *   4칸은 "확인했는가" 를 세는 칸이므로 확인도 제 일을 한 것이다.
+           */
+          label: personaShown[0] ? '성격 저장하기' : '확인했어요',
           tap: onSavePersona,
-          // 고르지 않았으면 보낼 것이 없다. 서버가 성격을 필수로 받는다.
-          off: !personaShown[0],
-          why: '성격을 하나 이상 골라 주세요',
+          // ★ **잠그지 않는다**(판정 2) — 성격 고르기는 필수가 아니다. 안 고르고 눌러도
+          //   서버가 4칸을 넘겨 준다(`tutorialSeen`). 목도 같다.
+          off: false,
+          why: '',
           /** 저장이 거절된 이유 한 줄. 빈 문자열이면 안 그린다(→ `saveFailLine`). */
           err: s.saveErr,
         },

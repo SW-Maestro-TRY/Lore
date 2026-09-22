@@ -639,6 +639,20 @@ export function tutorialDone(petId: number): Promise<PetDetail> {
 }
 
 /**
+ * 튜토리얼 **4칸("이 성격이 맞나요")을 넘긴다 — 아이 정보를 확인만 해도.**
+ *
+ * ★★ 성격을 **안 골라도 넘어간다**(서버 `PetService.tutorialSeen`, 2026-09-11 확정:
+ *   *"성격을 한 번도 안 고른 사람은 null 인 채 지나간다 — 그래도 된다"*). 성격을 고른 사람은
+ *   `setPersonality` 가 저장과 함께 같은 칸을 넘겨 주므로, 이 호출은 **안 고르고 확인만 한 길**이다.
+ * ★ 화면이 혼자 넘기면 안 된다 — 서버가 4칸에 남아 있으면 그다음 행동(청소)이 무시되고,
+ *   **첫 흔적이 이 칸을 넘길 때 생기므로** 바닥이 깨끗해 5칸에서 또 막힌다(서버 주석).
+ * ★ 지금 칸이 4칸이 아니면 409 `ZZAL_TUTORIAL_STEP_MISMATCH`.
+ */
+export function tutorialSeen(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/seen`, { method: 'POST' });
+}
+
+/**
  * 첫날 축하 판을 **봤다고 남긴다**(2026-09-22 · 백엔드 확정 스펙).
  *
  * ★★ **본문 없이 204 이고 공통 봉투를 안 탄다.** 공통 클라이언트가 빈 본문을 `null` 로 두므로
