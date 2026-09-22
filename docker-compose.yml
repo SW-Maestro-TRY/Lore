@@ -70,7 +70,7 @@ services:
   # MinIO 는 빈 통으로 뜨는데 화면은 배경·소품·여울 시연·온보딩·랜딩 썸네일이 버킷에
   # 있다고 가정하고 /images/zzal/... 를 부른다 → 안 채우면 전 화면이 깨진 그림이다.
   # staging CloudFront(공개)에서 같은 키를 그대로 받아 온다 — AWS 자격이 필요 없다.
-  # 목록 = infra/dev/seed-assets.txt (118개). 실패해도 스택은 뜬다(경고만 찍고 exit 0).
+  # 목록 = infra/dev/seed-assets.txt (127개). 실패해도 스택은 뜬다(경고만 찍고 exit 0).
   seed-fetch:
     image: curlimages/curl:latest
     user: "0:0"                             # 명명 볼륨이 root 소유로 생긴다 — 기본 유저는 못 쓴다

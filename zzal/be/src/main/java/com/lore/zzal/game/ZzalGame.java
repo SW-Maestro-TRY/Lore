@@ -13,7 +13,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * 좌·우 맞히기 한 판(다섯 번 겨룬다).
+ * 좌·우 맞히기 한 판(3선승 · 최장 다섯 번 겨룬다).
  *
  * <h3>★ 정답을 서버가 쥔다</h3>
  * 화면이 다섯 번을 혼자 치고 "이겼다" 만 보내는 쪽이 왕복이 적지만, 그러면
@@ -40,7 +40,12 @@ public class ZzalGame {
     /** 한 판에 몇 번 겨루나. */
     public static final int ROUNDS = 5;
 
-    /** 몇 번 이상 맞히면 이긴 것인가. */
+    /**
+     * 몇 번 이상 맞히면 이긴 것인가 — <b>3선승제</b>다.
+     *
+     * ★ 이 값은 승리 조건이면서 <b>패배 조건</b>이기도 하다: 틀린 것이 이만큼이면 남은 회차로
+     *   뒤집을 수 없어 그 자리에서 끝난다({@link #guess}).
+     */
     public static final int WIN_AT = 3;
 
     @Id
@@ -104,7 +109,21 @@ public class ZzalGame {
         return g;
     }
 
-    /** 한 판 친다. 맞았는지 돌려준다. */
+    /**
+     * 한 판 친다. 맞았는지 돌려준다.
+     *
+     * <h3>★★ 매치는 <b>3승 또는 3패</b>에서 끝난다 — 5회를 채우지 않는다 (2026-09-22 상훈님 결정)</h3>
+     * 3선승제이므로 셋을 맞히거나 셋을 틀리면 <b>남은 회차는 결과를 바꿀 수 없다.</b> 그래서
+     * 최단 3회·최장 5회다. 옛 코드는 다섯 회를 다 채워야 끝났는데, 그러면 이미 이긴 판을
+     * 두 번 더 눌러야 하고 <b>이미 진 판을 계속 치게 된다</b> — 화면(목 서버)은 처음부터
+     * 3승·3패에서 끝냈으므로 서버가 그쪽으로 맞춰진 셈이다.
+     *
+     * ★ {@code picks.length() >= ROUNDS} 는 남겨 둔다. 지금 값(5회 3선승)에서는 다섯째에
+     *   반드시 한쪽이 3에 닿아 도달할 수 없는 줄이지만, 회차·승수를 고치는 날
+     *   (예: 6회 4선승) 끝나지 않는 판이 생기는 것을 막는 안전띠다.
+     *
+     * ★ 남은 회차의 답은 여기서도 안 읽는다 — {@code answers} 는 이번 회차 한 글자만 본다.
+     */
     public boolean guess(char pick, Instant now) {
         int round = picks.length();
         boolean hit = answers.charAt(round) == pick;
@@ -112,10 +131,15 @@ public class ZzalGame {
         if (hit) {
             hits += 1;
         }
-        if (picks.length() >= ROUNDS) {
+        if (hits >= WIN_AT || misses() >= WIN_AT || picks.length() >= ROUNDS) {
             finishedAt = now;
         }
         return hit;
+    }
+
+    /** 틀린 횟수 — 친 회차에서 맞힌 것을 뺀다(따로 저장하지 않는다). */
+    public int misses() {
+        return picks.length() - hits;
     }
 
     /** 달리기 끝 — 살아남은 시간을 적고 끝낸다. 서버는 상한만 검증한다(화면 물리). */

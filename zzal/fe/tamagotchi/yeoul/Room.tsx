@@ -20,7 +20,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
 import { YEOUL_ANCHORS_URL } from '../constants';
-import { C, C2, GAEGU, LV, MONO, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
+import { C, C2, GAEGU, LV, MONO, TAP_MIN, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
 import Album from './Album';
 import Panels from './Panels';
 import FeedbackSheet from '../FeedbackSheet';
@@ -208,7 +208,16 @@ export default function Room({ y }: { y: Yeoul }) {
    * ★ 폭은 걸음(평행이동)·자세와 무관해서, 아이가 어디에 서 있든 똥이 안 따라간다.
    */
   const charBoxRef = useRef<HTMLDivElement>(null);
-  const byK = anchors.source === 'server' || v.sample.show;
+  /**
+   * 앵커표를 믿어도 되는가. **표와 그림이 같은 판일 때만** 참이다.
+   *
+   * ★ 2026-09-22 — 세 번째 경우를 더했다: **지금 화면에 걸린 그림이 여울 폴백일 때.**
+   *   고정 앵커표는 여울 정본 v02 에서 뽑은 것이라(→ `props/anchors-fixed.ts` 머리말) 그 그림에
+   *   대해서는 **표가 곧 실측**이다. 서버 없는 진짜 방(목)·그림이 깨져 여울로 버티는 자리가 여기다.
+   *   빼 두면 여울을 그려 놓고 "표를 못 믿는다" 며 실루엣을 상자 전체(0~1)로 잡아, 옆자리를
+   *   포기하고 아이를 135px 깎는다(1440 실측 499.4 → 364.0). 내 아이 그림일 때는 그대로 거짓이다.
+   */
+  const byK = anchors.source === 'server' || v.sample.show || charSrc === fallbackSrc;
 
   // ★ 말풍선 자리 — **화면 폭으로 가르지 않는다**(2026-09-20 재설계 · 안 1).
   //
@@ -258,12 +267,25 @@ export default function Room({ y }: { y: Yeoul }) {
     : Math.max(0.2, 1 - footPad - headPad);
   /** 정수리 ↔ 머리 옆선 사이(상자 세로 대비). 머리 모양의 상수라 표 값을 그대로 쓴다. */
   const headSideDrop = Math.max(0, fit.headSpanPerBoxH - fit.headSidePerBoxH);
-  // 실루엣 좌·우도 같은 이유로 갈린다 — 앵커를 믿을 수 있으면 표, 아니면 그림에서 잰 값.
-  const silLeft = byK ? fit.silLeftPerBoxW : sideEdges.left;
-  const silRight = byK ? fit.silRightPerBoxW : sideEdges.right;
-  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${headSpan.toFixed(4)})`;
+  /**
+   * 말풍선이 **옆으로 비킬 때 쓰는 단 하나의 실루엣 좌·우**(0~1).
+   *
+   * ★★ 2026-09-22 — 예전에는 자가 **둘**이었다: 들어갈 폭은 앵커표의 선 자세로 재고(`…Upright`),
+   *   그릴 자리는 지금 자세(`silLeftPerBoxW`)나 그림에서 잰 값(`sideEdges`)으로 잡았다.
+   *   두 자가 어긋난 만큼 말풍선이 그대로 **무대 밖으로 나간다.** 앵커 없는 아이(진짜 방 목)는
+   *   그림이 다른 출처(CDN)라 캔버스로 못 읽어 `sideEdges` 가 기본값 0~1 로 남는데(→ `useSpritePads`),
+   *   폭은 0.73 으로 재고 자리는 1.0 에 잡으니 **오른쪽으로 57~115px 튀어나갔다**(1100 실측).
+   *   그래서 **폭도 자리도 이 한 값으로만** 본다 — 두 기준이 영영 못 어긋난다.
+   * ★ 앵커를 믿을 수 있으면 **선 자세**로 잡는다(자세마다 갈리면 아이가 출렁인다 → `layout.ts`).
+   *   못 믿으면 상자 전체(0~1) — 가장 불리하게 잡아 옆자리를 포기할 뿐, 잘리지는 않는다.
+   */
+  const silLeft = byK ? fit.silLeftUprightPerBoxW : sideEdges.left;
+  const silRight = byK ? fit.silRightUprightPerBoxW : sideEdges.right;
+  // ★ 아이 그림이 줄면(배부름 0 → 0.7배) **머리도 그만큼 내려온다.** 말풍선이 옛 머리 자리에
+  //   그대로 떠 있으면 머리 위로 한참 뜬다 — 같은 배율을 여기에도 건다(→ `st.charScale`).
+  const headTopFromBottom = `calc(${LIFT} + ${CHAR_H} * ${(headSpan * v.st.charScale).toFixed(4)})`;
   /** 얼굴 높이(머리 옆선). 머리 옆으로 비킨 말풍선의 세로 한가운데를 여기에 맞춘다. */
-  const faceFromBottom = `calc(${LIFT} + ${CHAR_H} * ${Math.max(0, headSpan - headSideDrop).toFixed(4)})`;
+  const faceFromBottom = `calc(${LIFT} + ${CHAR_H} * ${(Math.max(0, headSpan - headSideDrop) * v.st.charScale).toFixed(4)})`;
   /** 무대와 **자리를 사기 전 아이 상자**를 재는 두 손잡이 — 말풍선이 이 둘로 자리를 정한다. */
   const stageRef = useRef<HTMLDivElement>(null);
   const charProbeRef = useRef<HTMLDivElement>(null);
@@ -390,7 +412,19 @@ export default function Room({ y }: { y: Yeoul }) {
             )}
             {/* 아이 뒤에 깔리는 것(매트). 반전 바깥이라 걸음마다 뒤집히지 않는다. */}
             <PropLayer z="below_char" scene={scene} table={table} anchors={anchors} />
-            <div style={{ width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}>
+            {/* ★ 배부름 0 이면 **그림만 0.7배**로 줄인다(정본 §게이지 · 2026-09-22 판정 J).
+                ★ 상자(`charBox`)는 그대로 둔다 — 상자를 줄이면 바닥 소품(똥)이 읽는 자(상자 폭)까지
+                  같이 줄어 방 안 물건이 통째로 작아진다. 발끝은 그대로 바닥에 두려고 아래가 축이다.
+                ★★ **배율은 제 겹을 따로 쓴다.** 아래 `yFace`·`yHop` 은 키프레임이 `transform` 을
+                  건드려서(걸음 뒤집기·뜀), 같은 칸에 인라인 `transform` 을 적으면 **애니메이션이 이긴다**
+                  (2026-09-22 실측: 0.7 을 줬는데 그림 크기가 그대로였다). */}
+            <div style={{
+              width: '100%', height: '100%', transformOrigin: 'bottom center', transition: 'transform .3s ease',
+              ...(v.st.charScale === 1 ? null : { transform: `scale(${v.st.charScale})` }),
+            }}>
+            <div style={{
+              width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play,
+            }}>
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -406,6 +440,7 @@ export default function Room({ y }: { y: Yeoul }) {
                   style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: 'yBob 4.6s ease-in-out infinite', filter: v.st.charFilter }}
                 />
               </div>
+            </div>
             </div>
             {/* 아이 앞에 얹히는 것(머리 옆 기호·손 앞 먹을 것·발치 소품). */}
             <PropLayer scene={scene} table={table} anchors={anchors} />
@@ -444,6 +479,7 @@ export default function Room({ y }: { y: Yeoul }) {
         <Bubble
           show={v.bub.show} text={v.bub.text} play={v.st.play}
           headSpan={headSpan} faceSpan={Math.max(0, headSpan - headSideDrop)}
+          headSpanReserve={fit.headSpanTallestPerBoxH}
           silLeft={silLeft} silRight={silRight} avoid={headSideTaken}
           headBottom={headTopFromBottom} faceBottom={faceFromBottom}
           stageRef={stageRef} probeRef={charProbeRef} onHeadroom={setBubbleHeadroom}
@@ -504,8 +540,9 @@ export default function Room({ y }: { y: Yeoul }) {
 //   아이와 박자가 어긋난다 — 그러면 같은 키프레임을 타도 걸음·뜀이 따로 논다.
 // ★ 자리는 세 가지고, 위에서부터 고른다(실측으로 판정 — 재설계안 E-1).
 //   1) 머리 위        : 아래끝을 머리끝 20px 위에 붙이고 위로 자란다
-//   2) 머리 옆        : 1)이 무대 위끝(+8px)을 넘길 때. 여백이 큰 쪽, 세로는 얼굴 높이
-//   3) 머리 위 + 양보 : 옆에도 자리가 없을 때만(좁고 짧은 폰) 아이를 **딱 모자란 만큼** 낮춘다
+//   2) 머리 옆        : 1)이 무대 위끝(+8px)을 넘길 때. **여백이 큰 쪽 → 모자라면 반대쪽**,
+//                       세로는 얼굴 높이. 놓기 전에 무대 안으로 한 번 더 물린다(마지막 빗장)
+//   3) 머리 위 + 양보 : **양옆 다** 자리가 없을 때만 아이를 **딱 모자란 만큼** 낮춘다
 //   어느 쪽이든 무대 밖으로 나가는 경우가 없으므로 **잘림은 0** 이다.
 
 /** 머리끝 ↔ 말풍선 아래끝. 숨쉬기(`yBob` 4px)를 늘 덮고도 남는다(예전 14px). */
@@ -538,7 +575,7 @@ function samePlace(a: BubblePlace, b: BubblePlace): boolean {
 }
 
 function Bubble({
-  show, text, play, headSpan, faceSpan, silLeft, silRight, avoid,
+  show, text, play, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid,
   headBottom, faceBottom, stageRef, probeRef, onHeadroom,
 }: {
   show: boolean; text: string; play: string;
@@ -546,7 +583,16 @@ function Bubble({
   avoid: 'left' | 'right' | null;
   /** 발끝선 ↔ 정수리 · 발끝선 ↔ 얼굴선 (상자 세로 대비). 무대 px 로 옮기는 건 여기서 한다. */
   headSpan: number; faceSpan: number;
-  /** 실루엣 좌·우 가장자리(상자 가로 대비). 아이 옆에 자리가 얼마나 남았는지 잰다. */
+  /**
+   * **자리를 얼마나 예약할지 정할 때 쓰는 머리 높이** — 자세를 안 본다(가장 높은 머리끝).
+   * 지금 자세로 정하면 누웠을 때 예약이 0 이 되어 아이가 갑자기 커진다(→ `layout.ts` 머리말).
+   */
+  headSpanReserve: number;
+  /**
+   * 실루엣 좌·우 가장자리(상자 가로 대비). 아이 옆에 자리가 얼마나 남았는지 재고,
+   * **그 자리에 말풍선을 놓을 때도 같은 값을 쓴다** — 자가 둘이면 어긋난 만큼 무대 밖으로 나간다
+   * (→ `Room` 의 `silLeft` 정의). 자세를 안 보는 값이라 자세가 바뀌어도 자리가 안 흔들린다.
+   */
   silLeft: number; silRight: number;
   headBottom: string; faceBottom: string;
   stageRef: React.RefObject<HTMLDivElement | null>;
@@ -554,6 +600,11 @@ function Bubble({
   onHeadroom: (px: number) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  /**
+   * **늘 붙어 있는 두 줄짜리 자**(보이지 않는다). 예약 높이는 이것으로만 잰다 —
+   * 말풍선이 없을 때도, 한 줄일 때도 같은 자리를 사 두려면 재는 자가 변하면 안 된다.
+   */
+  const reserveRef = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState<BubblePlace>({ at: 'above', w: BUBBLE_MAX_W, left: -BUBBLE_MAX_W / 2 });
 
   useLayoutEffect(() => {
@@ -565,23 +616,33 @@ function Bubble({
     const put = (next: BubblePlace) => setPlace((prev) => (samePlace(prev, next) ? prev : next));
     const measure = () => {
       const card = cardRef.current;
-      if (!card) { onHeadroom(0); return; }
+      const res = reserveRef.current;
+      if (!res) return;
       const st = stage.getBoundingClientRect();
       const pb = probe.getBoundingClientRect();
       if (!st.height || !pb.height) return;
       // 기준자(`char-probe`)는 **말풍선이 자리를 사기 전** 아이 상자다 — 줄어든 상자로 다시 재면
       // 두 값이 서로를 쫓아 출렁인다. 그래서 여기서 읽는 머리·발·폭은 전부 '양보 전' 값이다.
       const lift = st.bottom - pb.bottom;
-      const headTopY = st.height - (lift + pb.height * headSpan);
+      // ★★ 예약은 **가장 높은 머리끝**으로 잰다(자세 무관). 지금 자세로 재면 누웠을 때만
+      //   말풍선이 그냥 들어가 예약이 0 이 되고, 깨는 순간 아이가 108px 튄다(2026-09-22 dev 실측).
+      const headTopY = st.height - (lift + pb.height * Math.max(headSpan, headSpanReserve));
       const faceY = st.height - (lift + pb.height * faceSpan);
       const boxL = (st.width - pb.width) / 2;
+      // ★★ 실루엣 좌·우는 **이 한 쌍뿐이다**(2026-09-22). 폭을 재는 자와 자리를 잡는 자를 가르면
+      //   그 차이가 곧 잘림이 된다 — 실제로 진짜 방(목)에서 오른쪽으로 115px 나갔다(→ `silLeft` 정의).
       const silL = boxL + pb.width * silLeft;
       const silR = boxL + pb.width * silRight;
 
       // 1) 머리 위 — 뜀(HOP)까지 미리 갚아 둔다. 안 그러면 **뛰는 순간에만** 윗변이 잘린다.
       const aboveW = Math.min(BUBBLE_MAX_W, Math.round(st.width - 32));
-      card.style.width = `${aboveW}px`;
-      const aboveH = card.offsetHeight;
+      res.style.width = `${aboveW}px`;
+      if (card) card.style.width = `${aboveW}px`;
+      // ★★ 높이는 **늘 두 줄 기준**이다(2026-09-22 상훈님 판정 C). 지금 말풍선이 한 줄이라고
+      //   덜 예약하면, 두 줄짜리 말이 오는 순간 아이가 35px 내려앉는다(dev 실측 368 → 335).
+      //   두 줄로 잡아 두면 한 줄이든 없든 자리가 같아 **흔들림이 0** 이다. 대가는 아이가 그만큼
+      //   늘 작다는 것이고, 상훈님이 그 값을 알고 고르셨다.
+      const aboveH = Math.max(res.offsetHeight, card?.offsetHeight ?? 0);
       const need = aboveH + BUBBLE_GAP + BUBBLE_EDGE + HOP;
       if (need <= headTopY) {
         put({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
@@ -589,18 +650,23 @@ function Bubble({
         return;
       }
 
-      // 2) 머리 옆 — 여백이 큰 쪽. 걸어가도 안 잘리게 진폭(WANDER)을 미리 뺀다.
-      //    ★ 다만 **소품이 이미 쓰는 쪽(`avoid`)은 건너뛴다** — 거기 두면 겹친다.
+      // 2) 머리 옆 — 여백이 큰 쪽부터, **모자라면 반대쪽**, 둘 다 모자라면 3) 으로 내려간다.
+      //    ★ 소품이 이미 쓰는 쪽(`avoid`)은 아예 후보에서 뺀다 — 거기 두면 겹친다.
+      //    ★ 고르는 기준(여백)은 **무대 크기와 선 자세**만 본다 — 글자 수·자세를 안 보므로
+      //      한 매치 동안 말풍선이 좌우로 튀지 않는다.
       const gapL = silL - WANDER;
       const gapR = st.width - silR - WANDER;
-      const wide: 'left' | 'right' = gapR >= gapL ? 'right' : 'left';
-      const other: 'left' | 'right' = wide === 'right' ? 'left' : 'right';
-      const side: 'left' | 'right' = avoid === wide ? other : wide;
-      const gap = side === 'left' ? gapL : gapR;
-      const sideW = Math.min(BUBBLE_MAX_W, Math.floor(gap - 12));
-      if (sideW >= BUBBLE_SIDE_MIN) {
-        card.style.width = `${sideW}px`;
-        const h = card.offsetHeight;
+      const cands = (['right', 'left'] as const)
+        .filter((c) => c !== avoid)
+        .sort((a, b) => (b === 'right' ? gapR : gapL) - (a === 'right' ? gapR : gapL));
+      for (const side of cands) {
+        const gap = side === 'right' ? gapR : gapL;
+        const sideW = Math.min(BUBBLE_MAX_W, Math.floor(gap - 12));
+        if (sideW < BUBBLE_SIDE_MIN) continue;
+        // 보이는 말풍선이 없으면 예약 카드로 잰다 — 자리는 같은 자로 재야 뜰 때 안 움직인다.
+        const meas = card ?? res;
+        meas.style.width = `${sideW}px`;
+        const h = meas.offsetHeight;
         // 옆자리도 같이 뛴다 — 위쪽은 HOP 만큼 더 물리고, 아래는 숨쉬기(yBob 4px)만 본다.
         const topMin = BUBBLE_EDGE + HOP;
         const top = Math.min(
@@ -608,9 +674,17 @@ function Bubble({
           Math.max(topMin, st.height - BUBBLE_EDGE - 4 - h),
         );
         const inner = Math.round((side === 'right' ? silR - st.width / 2 : st.width / 2 - silL) + 10);
+        // ★★ 마지막 빗장 — 계산이 어디서 어긋나도 **무대 밖으로는 못 나간다**(2026-09-22).
+        //   위 `gap` 이 이미 지켜야 하는 값이지만, 자가 하나라도 틀리면 곧장 잘림으로 나타나므로
+        //   여기서 한 번 더 물린다. 걸음 진폭(WANDER)까지 남겨 **걸어가도** 안 잘린다.
+        //   좌우로 미는 일만 하므로 `side` 가 바뀌지 않는다 — 꼬리는 그대로 아이를 가리킨다.
+        const half = st.width / 2;
+        const lo = BUBBLE_EDGE + WANDER - half;
+        const hi = half - (BUBBLE_EDGE + WANDER) - sideW;
+        const want = side === 'right' ? inner : -(inner + sideW);
         put({
           at: 'side', w: sideW, side,
-          left: side === 'right' ? inner : -(inner + sideW),
+          left: hi >= lo ? Math.min(Math.max(want, lo), hi) : Math.round(-sideW / 2),
           top: Math.round(top - faceY),
           tail: Math.round(Math.min(Math.max(faceY - top, 16), Math.max(16, h - 16))),
         });
@@ -619,7 +693,8 @@ function Bubble({
       }
 
       // 3) 위도 옆도 없다(좁고 짧은 폰) — 그때만 아이가 **딱 모자란 만큼** 자리를 내준다.
-      card.style.width = `${aboveW}px`;
+      res.style.width = `${aboveW}px`;
+      if (card) card.style.width = `${aboveW}px`;
       put({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
       onHeadroom(Math.ceil(need));
     };
@@ -633,8 +708,9 @@ function Bubble({
     //   두 줄(75.4px)이 되자 뛰는 순간 5.3~17px 잘렸다. 자리 계산은 늘 같은 입력에서 같은 답을
     //   내므로(폭을 재기 전에 스스로 정한다) 이 관찰이 되먹임 고리를 만들지 않는다 — `put` 참조.
     if (cardRef.current) ro.observe(cardRef.current);
+    if (reserveRef.current) ro.observe(reserveRef.current);
     return () => ro.disconnect();
-  }, [show, text, headSpan, faceSpan, silLeft, silRight, avoid, stageRef, probeRef, onHeadroom]);
+  }, [show, text, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid, stageRef, probeRef, onHeadroom]);
 
   const tailBase: React.CSSProperties = {
     position: 'absolute', width: 11, height: 11, background: C.paper,
@@ -653,34 +729,38 @@ function Bubble({
         position: 'absolute', left: 0, bottom: 0, width: 0, height: 0,
         animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: play,
       }}>
-        {/* ★★ 말이 없을 때도 **카드를 그대로 둔다**(2026-09-21 판정 8 — 상훈님 "끝 기준으로 통일").
-            왜 — 아이 크기는 말풍선이 머리 위에 들어가느냐로 정해진다. 튜토리얼 동안은 말풍선이
-            없어 아이가 크고, 끝나는 순간 말풍선이 떠서 **한 번에 100px 넘게 내려앉았다**
-            (390 에서 461.1 → 359.4px 실측). 이제 **한 줄짜리 자리를 늘 미리 사 두어서**
-            말이 있든 없든 아이가 안 움직인다. 값은 지금 「끝」과 같다.
-            ★ 안 보이는 동안에도 자리를 **재야** 하므로 `display:none` 이 아니라 `visibility` 다.
-            ★ 두 줄 말풍선은 여전히 한 번 더 내려간다 — 완전 통일(두 줄 기준 예약)은 아이가 더
-              작아져서 **일부러 안 했다**(상훈님 판정).
-            ★ `key` 로 갈라 두는 이유 — 말이 생길 때 `yPop` 이 다시 돌아야 한다(안 갈면 한 번
-              올라온 카드라 애니메이션이 안 뜬다). 카드가 새로 붙으면 아래 관찰자도 같이 다시 건다. */}
-        {(
+        {/* ★★ **두 줄짜리 자**(2026-09-22 판정 C·D). 늘 붙어 있고 절대 안 보인다.
+            왜 — 아이 크기는 "말풍선이 머리 위에 들어가느냐" 로 정해진다. 그 판단을 **지금 떠 있는
+            말풍선**으로 하면 말이 없을 때·한 줄일 때·두 줄일 때가 전부 달라져 아이가 출렁인다
+            (dev 실측 390: 없음 370.6 · 한 줄 368.0 · 두 줄 335.2 · 잠 478.2).
+            그래서 **늘 두 줄짜리 카드 하나만 자로 쓴다** — 자가 안 변하니 자리도 안 변한다.
+            ★ 안 보이는 동안에도 **재야** 하므로 `display:none` 이 아니라 `visibility:hidden` 이다.
+            ★ 대가 = 아이가 늘 두 줄만큼 작다. 상훈님이 그 값을 알고 고르셨다(판정 C 1안). */}
+        <div
+          ref={reserveRef} data-part="bubble-reserve" aria-hidden
+          style={{
+            position: 'absolute', boxSizing: 'border-box', left: place.left, width: place.w,
+            bottom: BUBBLE_GAP,
+            border: BUBBLE_LINE, borderRadius: radius.md, padding: pad.chip,
+            visibility: 'hidden', pointerEvents: 'none',
+          }}
+        >
+          {/* 빈 칸 **두 줄**. 재는 것은 글이 아니라 두 줄짜리 카드의 높이다. */}
+          <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink, whiteSpace: 'pre-line' }}>{'\u00A0\n\u00A0'}</span>
+        </div>
+        {show && (
           <div
-            key={show ? 'said' : 'reserve'}
-            ref={cardRef} data-part={show ? 'bubble' : 'bubble-reserve'} data-place={place.at}
-            aria-hidden={!show}
+            ref={cardRef} data-part="bubble" data-place={place.at}
             style={{
               position: 'absolute', boxSizing: 'border-box', left: place.left, width: place.w,
               ...(place.at === 'above' ? { bottom: BUBBLE_GAP } : { top: place.top }),
               background: C.paper, border: BUBBLE_LINE, borderRadius: radius.md,
               padding: pad.chip, boxShadow: shadow.card,
               textAlign: place.at === 'above' ? 'center' : 'left',
-              animation: show ? 'yPop .28s ease' : 'none',
-              visibility: show ? 'visible' : 'hidden',
-              pointerEvents: 'none',
+              animation: 'yPop .28s ease',
             }}
           >
-            {/* 빈 칸 한 줄(`\u00A0`) — 재는 것은 글이 아니라 **한 줄짜리 카드의 높이**다. */}
-            <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink }}>{show ? text : '\u00A0'}</span>
+            <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink }}>{text}</span>
             {/* 꼬리는 **언제나 아이를 가리킨다** — 위면 아래 한가운데, 옆이면 아이 쪽 옆면 얼굴 높이. */}
             {place.at === 'above' ? (
               <div style={{ ...tailBase, left: '50%', bottom: -6, transform: 'translateX(-50%) rotate(45deg)', borderRight: BUBBLE_LINE, borderBottom: BUBBLE_LINE }} />
@@ -771,6 +851,9 @@ function Tiles({ y }: { y: Yeoul }) {
         <button
           key={r.key} data-room={r.key}
           onClick={(e) => { e.stopPropagation(); r.pick(); }}
+          // ★ 튜토리얼이 다른 칸을 가리키는 동안에는 **진짜로 안 눌린다**(2026-09-22 판정).
+          //   자는 동안 잠기는 것은 여전히 눌려서 한 줄을 말한다 — 그건 상태이지 안내가 아니다.
+          disabled={r.off}
           style={{
             position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.sm,
             padding: '11px 4px 10px', borderRadius: radius.md,
@@ -879,13 +962,20 @@ function GuessPanel({ y }: { y: Yeoul }) {
         <button
           data-action="guess-quit" onClick={(e) => { e.stopPropagation(); g.quit(); }}
           aria-label="게임 나가기"
+          // ★ 누르는 자리 44px(판정 5). 절대 배치라 **자리를 안 옮기고** 단추만 키운다 —
+          //   보이는 동그라미는 26 그대로이고, 오른쪽 끝도 그대로다.
           style={{
-            position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
+            position: 'absolute', right: -9, top: '50%', transform: 'translateY(-50%)',
+            width: TAP_MIN, height: TAP_MIN, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: 'none', background: 'none', padding: 0,
+          }}
+        >
+          <span style={{
             width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot,
             fontSize: fz.sm, color: C.sub2, lineHeight: 1,
-          }}
-        >✕</button>
+          }}>✕</span>
+        </button>
       </div>
     </div>
   );
@@ -929,22 +1019,32 @@ function Hud({ y }: { y: Yeoul }) {
         <span style={{ fontSize: fz.sm, color: C2.dim }}>·</span>
         <span style={{ fontSize: fz.md, color: '#635A52' }}>친밀도 {v.pet.bond}%</span>
         <span style={{ flex: 1 }} />
+        {/* ★ 누르는 자리 44px(2026-09-22 판정 5). **보이는 알약은 그대로 두고** 단추만 키운다 —
+            머리줄이 두꺼워지면 그만큼 무대가 낮아져 아이가 작아진다. 음수 여백이 제자리를 지킨다. */}
         <button
           onClick={actions.openSettings} data-part="pet-info" data-hl={v.hud.hl ? '1' : undefined}
+          data-off={v.hud.off ? '1' : undefined} disabled={v.hud.off}
           style={{
-            display: 'flex', alignItems: 'center', gap: gap.xs, flex: 'none', padding: pad.tiny,
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flex: 'none',
+            minHeight: TAP_MIN, margin: '-10px 0', padding: 0, border: 'none', background: 'none',
+          }}
+        >
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: gap.xs, padding: pad.tiny,
             borderRadius: radius.pill,
             // 튜토리얼 4칸(성격)은 이 버튼 안에서 하는 일이라, 타일 대신 여기가 깜빡인다.
             border: v.hud.hl ? `2px solid ${C.accent}` : `1px solid ${C2.lineWarm}`,
             background: C2.paperWarm, animation: v.hud.hl ? 'yNudge 1.9s ease-in-out infinite' : 'none',
+            // ★ 튜토리얼이 다른 칸을 가리킬 때는 흐리게(판정 J8) — 눌리기는 하고, 누르면 이유가 뜬다.
+            opacity: v.hud.off ? 0.45 : 1,
             fontSize: fz.sm, lineHeight: 1, color: C2.muted,
-          }}
-        >
-          <span style={{ position: 'relative', width: 13, height: 13, display: 'block' }}>
-            <span style={{ position: 'absolute', left: 0, top: 5.5, width: 13, height: 2, borderRadius: 2, background: 'currentColor' }} />
-            <span style={{ position: 'absolute', left: 5.5, top: 0, width: 2, height: 13, borderRadius: 2, background: 'currentColor', transform: 'rotate(45deg)' }} />
+          }}>
+            <span style={{ position: 'relative', width: 13, height: 13, display: 'block' }}>
+              <span style={{ position: 'absolute', left: 0, top: 5.5, width: 13, height: 2, borderRadius: 2, background: 'currentColor' }} />
+              <span style={{ position: 'absolute', left: 5.5, top: 0, width: 2, height: 13, borderRadius: 2, background: 'currentColor', transform: 'rotate(45deg)' }} />
+            </span>
+            아이 정보
           </span>
-          아이 정보
         </button>
         {/* 조각 도장은 여기 없다 — 좌측 하단 카드가 맡는다(2026-09-07 지시). */}
       </div>
@@ -970,10 +1070,13 @@ function SampleHud({ y }: { y: Yeoul }) {
     // 띠는 무대를 그만큼 잡아먹는다 — 아이가 주인공이라 여백을 최소로 잡았다.
     <div data-part="sample-hud" style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: narrow ? gap.xs : gap.sm, padding: narrow ? '4px 14px 4px' : '8px 20px 7px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
+        {/* ★ 누르는 자리 44px(판정 5) — 알약은 그대로, 띠 높이도 그대로(음수 여백). */}
         <button
           onClick={v.sample.exit} data-part="sample-exit"
-          style={{ display: 'flex', alignItems: 'center', gap: gap.xs, padding: '5px 11px 5px 9px', borderRadius: radius.pill, border: `1px solid ${C2.lineWarm}`, background: C2.paperWarm, fontSize: fz.sm, lineHeight: 1, color: C2.muted }}
-        >‹ 정보 수정</button>
+          style={{ display: 'flex', alignItems: 'center', minHeight: TAP_MIN, margin: '-10px 0', padding: 0, border: 'none', background: 'none' }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: gap.xs, padding: '5px 11px 5px 9px', borderRadius: radius.pill, border: `1px solid ${C2.lineWarm}`, background: C2.paperWarm, fontSize: fz.sm, lineHeight: 1, color: C2.muted }}>‹ 정보 수정</span>
+        </button>
         <span style={{ flex: 1 }} />
         {/* 알은 여전히 눌러서 알 화면으로 간다. 띠 안으로 들어온 만큼 고리·후광은 걷어냈다. */}
         <button
@@ -999,12 +1102,18 @@ function ChatFab({ y }: { y: Yeoul }) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); actions.openChat(); }}
-      data-part="chat-fab"
+      data-part="chat-fab" data-off={v.fab.off ? '1' : undefined} disabled={v.fab.off}
       style={{
         ...slotChip, position: 'relative',
         borderStyle: 'solid', borderWidth: v.fab.bw, borderColor: v.fab.bd,
         animation: v.fab.anim,
+        // ★ 튜토리얼 중 다른 칸이면 **흐리게 둔다**(판정 J8) — 없애면 "사라졌다" 로 읽힌다.
+        opacity: v.fab.off ? 0.45 : 1,
+        cursor: v.fab.off ? 'default' : 'pointer',
       }}
+      // ★★ 2026-09-22 — **`disabled` 를 붙인다.** 이제 이 단추는 튜토리얼 중 **진짜로 안 눌린다**
+      //   (상훈님 판정: "나머지는 비활성해서 누르지 않게"). 속성이 사실과 맞으므로 낭독기·자동
+      //   검사가 읽는 것도 사실이다 — 예전 금지는 "눌리는데 비활성으로 표시" 하던 경우였다.
       aria-label="대화하기"
     >
       <span style={{ position: 'relative', width: 24, height: 24, color: '#5A554E' }}>
@@ -1052,14 +1161,16 @@ function TutChip({ label, onTap, primary = false, ...rest }: {
 
 function MiniCard({ y }: { y: Yeoul }) {
   const m = y.v.mini;
-  const [open, setOpen] = useState(false);
+  // ★ 펼침은 **훅이 들고 있다**(2026-09-22 판정 K). 여기 두면 카드가 사라졌다 다시 뜰 때마다
+  //   접힌 채로 돌아온다 — 팝오버 한 번만 열어도 펼쳐 둔 목록이 닫혔다.
+  const open = m.open;
   const more = `yeoul-mini-more${open ? ' is-open' : ''}`;
   const canOpen = m.hasGoal || m.hasShards;
 
   return (
     <div
       className="yeoul-mini"
-      onClick={(e) => { e.stopPropagation(); if (canOpen) setOpen((v) => !v); }}
+      onClick={(e) => { e.stopPropagation(); if (canOpen) m.toggle(); }}
       data-part="mini" data-open={open ? '1' : '0'}
       style={{
         // ★ 이제 **선반 위 한 칸**이다(2026-09-20) — 구석에 따로 떠 있지 않는다. 펼침은 그대로
@@ -1096,7 +1207,9 @@ function MiniCard({ y }: { y: Yeoul }) {
       {/* ── 로드맵 ── 접히면 다음 하나만, 펴면 넷 전부 */}
       {m.hasGoal && (
         <>
-          <span data-part="mini-sum" style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm }}>
+          {/* 접혔을 때만 보이는 요약 한 줄 — 펴지면 CSS 가 감춘다(→ `ui.ts` `.yeoul-mini-sum`).
+              목록 첫 줄과 같은 내용이라, 같이 띄우면 같은 말이 두 번 뜬다. */}
+          <span className="yeoul-mini-sum" data-part="mini-sum" style={{ alignItems: 'baseline', gap: gap.sm }}>
             <span style={{ fontSize: fz.sm, color: C.ink }}>{m.name}</span>
             <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{m.cond}</span>
           </span>
@@ -1254,14 +1367,12 @@ function ChatBar({ y }: { y: Yeoul }) {
       onClick={(e) => e.stopPropagation()}
       style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: gap.sm, animation: v.chat.anim }}
     >
-      {/* ★ 주고받은 **두 줄이 입력칸 바로 위에 남는다**(2026-09-20 · 재설계안 E-3).
-          예전엔 아이 말이 화면 위 말풍선(입력칸에서 470px 위)에만 있고, 내 말은 4.2초 뒤 사라져
-          한 화면에 대화가 남지 않았다. 자리·개폐·하루 3회·40자 규칙은 **하나도 안 바꿨다.** */}
-      {v.chat.hasLine && (
-        <span data-part="chat-pet" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: gap.sm, maxWidth: '86%', padding: '7px 13px', borderRadius: radius.pill, background: C.slot, border: `1px solid ${C.lineHard}` }}>
-          <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.2, color: C.ink }}>{v.chat.line}</span>
-        </span>
-      )}
+      {/* ★★ **아이 말은 무대 말풍선 하나뿐이다**(2026-09-22 상훈님 판정 2안 — *"캐릭터 위의
+          말풍선만 있으면 돼"*). 2026-09-20 에 이 자리에 두던 '아이 말' 한 줄을 걷어냈다 —
+          같은 문장이 무대와 입력칸 위에 **두 번** 떠서, 어느 쪽이 아이가 지금 하는 말인지
+          흐려졌다. 아이 말은 **아이 위에** 있어야 "아이가 나한테 말을 건다" 가 된다.
+          ★ **내가 쓴 줄은 남긴다** — 이건 아이 말이 아니라 내가 무엇을 보냈는지 확인하는
+          유일한 자리다(입력칸은 보내는 순간 비워진다). 판정은 "아이 말은 무대에만" 까지였다. */}
       {v.chat.hasMine && (
         <span data-part="chat-mine" style={{ display: 'flex', alignItems: 'center', gap: gap.sm, maxWidth: '82%', padding: '7px 13px', borderRadius: radius.pill, background: C.accentSoft, border: `1px solid ${acc(.22)}`, animation: 'yPopIn .2s cubic-bezier(.2,.9,.25,1)' }}>
           <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.2, color: '#8B3A2C' }}>{v.chat.mine}</span>
@@ -1283,11 +1394,18 @@ function ChatBar({ y }: { y: Yeoul }) {
           }}
           style={{ flex: 1, minWidth: 0, border: 'none', background: 'none', fontSize: fz.md, color: C.ink, outline: 'none' }}
         />
-        <button onClick={actions.closeChat} style={{ width: 28, height: 28, flex: 'none', borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.sm, color: C.sub2, lineHeight: 1 }} aria-label="대화 닫기">✕</button>
+        {/* ★ 누르는 자리 44px(판정 5) — 동그라미는 28 그대로 두고 단추만 키운다(줄 높이 유지). */}
+        <button
+          onClick={actions.closeChat} aria-label="대화 닫기"
+          style={{ width: TAP_MIN, height: TAP_MIN, margin: '-8px 0', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', padding: 0 }}
+        >
+          <span style={{ width: 28, height: 28, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.sm, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</span>
+        </button>
         <button
           onClick={send} disabled={!v.chat.canSend} data-action="chat-send"
           style={{
-            flex: 'none', padding: pad.chip, borderRadius: radius.pill, border: 'none',
+            // ★ 누르는 자리 44px(판정 5) — 알약이 5px 두꺼워질 뿐 모양은 그대로다.
+            flex: 'none', minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: 'none',
             background: v.chat.canSend ? C.accent : C.off, color: v.chat.canSend ? C.accentInk : C2.dim2, fontSize: fz.md,
           }}
         >보내기</button>

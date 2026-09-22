@@ -9,8 +9,9 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { C, C2, GAEGU, MONO, gap, input as inputStyle, monoSize, radius, shadow, fz, ink, pad } from './ui';
+import { C, C2, GAEGU, MONO, TAP_MIN, gap, input as inputStyle, monoSize, radius, shadow, fz, ink, pad } from './ui';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
+import { CHAR_TEXT_MAX } from '../../lib/pet';
 
 export default function Panels({ y }: { y: Yeoul }) {
   const { v } = y;
@@ -43,7 +44,14 @@ function Sheet({ y }: { y: Yeoul }) {
             <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, lineHeight: 1, color: C.ink }}>{sh.title}</span>
             <span style={{ fontSize: fz.sm, color: C.faint2 }}>{sh.sub}</span>
           </div>
-          <button onClick={actions.closeSheet} style={{ border: `1px solid ${ink(.13)}`, background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: fz.sm, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
+          {/* ★ 누르는 자리 44px(2026-09-22 판정 5) — 동그라미는 27 그대로, 단추만 키우고
+              음수 여백으로 머리줄 높이를 지킨다. */}
+          <button
+            onClick={actions.closeSheet} aria-label="닫기"
+            style={{ width: TAP_MIN, height: TAP_MIN, margin: '-8px -8px -8px 0', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', border: 'none', background: 'none', padding: 0 }}
+          >
+            <span style={{ border: `1px solid ${ink(.13)}`, background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: fz.sm, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</span>
+          </button>
         </div>
 
         {/* ★ 아래 여백이 120px 인 이유 — 시트는 화면 아래끝까지 오는데 그 위에 하단 타일(층 6)이
@@ -174,10 +182,13 @@ function CharCard({ g, open, onToggle }: { g: Yeoul['v']['charGroups'][number]; 
           <span data-part="chip-note" style={{ fontSize: fz.xs, color: C.faint }}>{g.note}</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
             {g.opts.map((o) => (
-              <button key={o.text} onClick={o.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
+              // ★ 누르는 자리 44px(판정 5) — 온보딩의 같은 칩과 같은 규칙.
+              <button key={o.text} onClick={o.pick} style={{ minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
             ))}
           </div>
-          <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={60} placeholder={g.ph}
+          {/* ★ 한도는 **`CHAR_TEXT_MAX` 한 곳에서만** 가져온다(→ `useYeoul.onGroupText` 머리말).
+              여기 숫자를 박으면 계약·서버와 조용히 갈린다. */}
+          <input value={g.value} onChange={(e) => g.onInput(e.target.value)} maxLength={CHAR_TEXT_MAX[g.key] ?? 200} placeholder={g.ph}
             style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
         </div>
       )}
@@ -216,11 +227,23 @@ function SettingsSheet({ y }: { y: Yeoul }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
         <span style={{ fontSize: fz.sm, color: C.faint }}>그 밖에 알려주고 싶은 것</span>
-        <input value={v.onb.extraVal} onChange={(e) => v.onb.onExtra(e.target.value)} maxLength={60}
+        <input value={v.onb.extraVal} onChange={(e) => v.onb.onExtra(e.target.value)} maxLength={CHAR_TEXT_MAX.extra}
           placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나"
           style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
       </div>
 
+      {/* ★★ **저장이 거절되면 여기서 말한다**(2026-09-22 판정 6). 토스트는 방 바닥에 뜨는데
+          이 시트가 그 위를 덮어, 서버가 400 으로 거절해도 화면이 한 마디도 안 했다.
+          무엇이 막혔고 어떻게 하면 되는지까지 적는다(→ `useYeoul` 의 `saveFailLine`). */}
+      {v.settings.save.err && (
+        <span
+          data-part="save-error" role="alert"
+          style={{
+            display: 'flex', gap: gap.sm, padding: '10px 12px', borderRadius: radius.sm,
+            background: C.accentSoft, fontSize: fz.sm, lineHeight: 1.6, color: C.ink,
+          }}
+        >{v.settings.save.err}</span>
+      )}
       {/* ★ 성격을 서버에 보내는 유일한 자리. 튜토리얼 4칸(PERSONALITY)도 이 버튼으로 넘어간다. */}
       {v.settings.save.show && (
         <button
@@ -239,7 +262,8 @@ function SettingsSheet({ y }: { y: Yeoul }) {
           <span style={{ fontSize: fz.sm, color: C.faint }}>{g.label}</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
             {g.opts.map((o) => (
-              <button key={o.text} onClick={o.pick} style={{ padding: pad.chip, borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
+              // ★ 누르는 자리 44px(판정 5) — 아이 정보 아래쪽 고르는 칸도 같은 규칙.
+              <button key={o.text} onClick={o.pick} style={{ minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
             ))}
           </div>
         </div>

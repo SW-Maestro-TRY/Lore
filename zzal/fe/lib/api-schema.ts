@@ -1521,8 +1521,14 @@ export interface paths {
          *     좌우 맞히기는 5회 중 3회를 맞히면 승리한다. 정답은 매치 시작 시 서버가 결정해
          *     보관하며 응답에 포함하지 않는다. 승리 시 행복 +1 을 부여한다.
          *
-         *     진행 중인 매치가 있으면 새로 생성하지 않고 해당 매치를 반환한다.
-         *     일일 3매치는 두 게임 합산이며 시작 시점에 차감하고 취침 시 초기화한다.
+         *     ★ 이어치기는 없다 — 아직 끝나지 않은 매치가 남아 있으면 그 매치를 그 자리에서
+         *     패배로 확정하고 새 매치를 연다(게임 중에 나가면 그 판은 끝이다). 접힌 매치는
+         *     승리 보상·달리기 해금·두 번째 선물·놀이 조각을 어느 것도 발생시키지 않는다.
+         *
+         *     일일 3매치는 두 게임 합산이며 시작 시점에 차감하고 취침 시 초기화한다. 나갔다
+         *     돌아온 사람도 새 매치를 시작하는 것이므로 한도가 정상 차감된다.
+         *
+         *     아픔·달리기 잠김·일일 한도로 거절되는 경우에는 남아 있던 매치를 접지 않는다.
          */
         post: operations["start"];
         delete?: never;
@@ -1540,11 +1546,13 @@ export interface paths {
         };
         /**
          * 진행 중인 매치 조회
-         * @description 새로고침 등으로 화면이 초기화된 경우 진행 중인 매치를 이어받는다.
-         *     진행 중인 매치가 없으면 playing 이 false 다.
+         * @description ★ 이 API 는 매치 복구용이 아니다 — playing 은 항상 false 다.
          *
-         *     일일 매치 수는 시작 시점에 차감하므로, 이 API 가 없으면 새로고침 시
-         *     차감된 매치를 이어서 진행할 수 없다.
+         *     게임 중에 나가면 그 판은 끝이라는 규칙이므로 되돌려 줄 매치가 없다. 새로고침으로
+         *     gameId 를 잃으면 그 매치는 다시 진행할 수 없고, 다음 시작이 그 매치를 패배로 접는다.
+         *
+         *     응답에는 오늘 남은 매치 수(remainingToday)와 달리기 해금 여부가 최신 값으로 실린다 —
+         *     화면은 이 값으로 새 매치 버튼을 그린다.
          */
         get: operations["current"];
         put?: never;
@@ -1568,8 +1576,9 @@ export interface paths {
          * 매치 기권
          * @description 진행 중인 매치를 그 자리에서 접는다. 좌우 맞히기와 달리기 모두 이 주소로 접는다.
          *
-         *     접은 매치는 패배로 확정되어 다시 진행할 수 없고 current 에도 더는 잡히지 않는다.
+         *     접은 매치는 패배로 확정되어 다시 진행할 수 없다(current 는 애초에 매치를 돌려주지 않는다).
          *     게임 중에 나가면 그 판은 끝이라는 규칙이며, 지고 있는 판을 버리고 다시 시작하는 것을 막는다.
+         *     나가기 버튼을 누르지 않고 화면을 떠난 매치도 다음 시작 때 같은 방식으로 접힌다.
          *
          *     오늘 남은 매치 수는 시작 시점에 이미 차감했으므로 기권으로 돌려주지 않는다. 승리 보상·
          *     패배 판정(두 번째 선물)·놀이 조각은 어느 것도 발생하지 않는다.
@@ -1624,9 +1633,44 @@ export interface paths {
          * @description 선택한 방향을 전달하면 정답 여부를 서버가 판정한다. 응답에는 방금 진행한 회차의
          *     정답만 포함하며 남은 회차의 정답은 노출하지 않는다.
          *
-         *     5회를 모두 진행하면 finished 가 true 가 되고 그때 win 이 채워진다.
+         *     ★ 3승 또는 3패가 나면 그 회차에서 finished 가 true 가 되고 win 이 채워진다 —
+         *     5회를 채우지 않는다(최단 3회·최장 5회). 3선승제라 셋을 맞히거나 셋을 틀리면
+         *     남은 회차가 결과를 바꿀 수 없다.
          */
         post: operations["guess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/graduation-seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 졸업 축하 봤음
+         * @description 튜토리얼 졸업(첫날 완주) 축하 창을 봤음을 기록한다. 본문이 없고 **204** 로 답한다.
+         *
+         *     화면이 sessionStorage 로 기억하면 새 탭·재시작마다 같은 축하 창이 다시 뜬다.
+         *     한 번 본 연출은 다시 나오지 않아야 하고, 그 판정은 기기가 아니라 캐릭터에 붙는다.
+         *
+         *     **같은 요청을 몇 번 보내도 결과가 같다** — 이미 봤으면 시각을 바꾸지 않고 그대로 204 다.
+         *     기록된 시각은 상태 조회 응답의 `graduationSeenAt` 으로 내려간다.
+         *
+         *     수면 중·여행 중에도 호출할 수 있다. 아이를 돌보는 호출이 아니라 화면이 무엇을 이미
+         *     보여 줬는지 적는 호출이라 거절할 이유가 없고, 여기서 거절하면 이미 본 축하 창이
+         *     다음 접속에 다시 뜬다.
+         *
+         *     서버가 보는 튜토리얼 진행이 아직 완료 전이어도 받는다 — 기준은 서버의 진행도가 아니라
+         *     화면이 그 판을 닫은 시점이다.
+         */
+        post: operations["graduationSeen"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1961,7 +2005,7 @@ export interface components {
             remainingToday?: number;
             /**
              * Format: int32
-             * @description 기권 시점까지 진행한 회차(0부터). 달리기는 항상 0
+             * @description 기권 시점까지 진행한 회차(0부터). 달리기는 항상 0. 3승·3패가 나면 매치가 끝나므로 이 값은 0~4 이며 승패는 아직 갈리지 않은 상태다
              * @example 2
              */
             round?: number;
@@ -1973,7 +2017,7 @@ export interface components {
             rounds?: number;
             /** @description 달리기 해금 여부 */
             runUnlocked?: boolean;
-            /** @description 항상 false — 기권은 패배로 확정된다. 접는 시점에 이미 정답 수가 승리 조건을 넘겼더라도 끝까지 진행하지 않은 매치이므로 승리가 아니다 */
+            /** @description 항상 false — 기권은 패배로 확정된다. 3승이 나면 그 회차에서 매치가 끝나므로 승리를 쌓아 둔 채 기권하는 상태는 애초에 없다 */
             win?: boolean;
             /**
              * Format: int32
@@ -2489,6 +2533,13 @@ export interface components {
              *     조건을 만족하면 조각 1개를 선지급한다. 심화 단계 진입 전에는 항상 false
              */
             goodDay?: boolean;
+            /**
+             * Format: date-time
+             * @description 튜토리얼 졸업 축하 창을 본 시각. 아직 안 봤으면 null.
+             *     화면은 이 값이 null 일 때만 축하 창을 띄우고, 닫을 때 POST /{petId}/graduation-seen 을 부른다.
+             *     기기가 아니라 캐릭터에 붙는 값이라 새 탭·재시작에도 같은 창이 다시 뜨지 않는다
+             */
+            graduationSeenAt?: string;
             /** Format: date-time */
             hatchStartedAt?: string;
             /** Format: date-time */
@@ -2770,7 +2821,7 @@ export interface components {
              * @enum {string}
              */
             answer?: "LEFT" | "RIGHT";
-            /** @description 5회를 모두 진행했는지 여부 */
+            /** @description 매치가 끝났는지 여부. 3승 또는 3패가 나면 5회를 채우지 않고 그 회차에서 끝난다(최단 3회·최장 5회) */
             finished?: boolean;
             /**
              * Format: int64
@@ -2819,7 +2870,7 @@ export interface components {
             rounds?: number;
             /** @description 달리기 해금 여부. 이번 승리로 5승에 도달하면 true 로 바뀐다 */
             runUnlocked?: boolean;
-            /** @description 승리 여부. 매치가 끝났을 때만 채워지며 진행 중에는 null 이다. 정답 수가 이미 승리 조건을 넘겼더라도 남은 회차를 진행할 유인을 유지하기 위해 미리 알리지 않는다 */
+            /** @description 승리 여부. 매치가 끝났을 때만 채워지며 진행 중에는 null 이다. 3승이 나는 그 회차에서 매치가 끝나므로, 진행 중에 승리가 확정돼 있는 상태는 없다 */
             win?: boolean;
             /**
              * Format: int32
@@ -5502,7 +5553,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 매치 시작 또는 진행 중인 매치 반환 */
+            /** @description 매치 시작(남아 있던 미완료 매치는 패배로 접는다) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5681,6 +5732,40 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseGuessResult"];
                 };
+            };
+        };
+    };
+    graduationSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 기록됨(본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 로그인이 필요함 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

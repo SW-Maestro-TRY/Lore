@@ -78,17 +78,20 @@ export const ACTION_SITUATION = {
   /** 목욕하기 — 1층 `bath_l1_foam`(pose `base` · `bath` 1~3) / 2층 `bath_l2_foam`(pose `wash` · `bath` 1~2).
    *  헹구는 물줄기(`bath_l1_rinse`·`bath_l2_rinse`)는 규격 pending 이라 아직 안 켠다. */
   bath: { l1: 'bath_l1_foam', l2: 'bath_l2_foam' },
-  /** 대화 답하기 — `reply_done`(pose `reply` · `bubble_note`). ⚠️ 표에 **1층 줄이 없다** — 답하기 자세 자체가 2층이다. */
-  reply: { l1: 'reply_done' },
+  /** 대화 답하기 — 2층 `reply_done`(pose `reply` · `bubble_note`).
+   *  ★★ **1층 줄이 없다** — 답하기 자세 자체가 2층이다. 예전에는 그걸 `l1` 칸에 적어 두어서
+   *  **잠겨 있어도 2층 자세가 그대로 나왔다**(2026-09-22 dev 실측). 해금이 아무 뜻도 없던 자리다.
+   *  이제 `l1: null` 로 두고, 잠겼을 때 무엇을 지을지는 `LOCKED_POSE` 가 정한다. */
+  reply: { l1: null, l2: 'reply_done' },
   /** 게임 이김 — `game_win`(pose `joy` · `win_star`). */
   game_win: { l1: 'game_win' },
   /** 게임 짐 — `game_lose`(pose `sad` · `lose_dots`). 규격 pending 이라 아직 안 뜬다. */
   game_lose: { l1: 'game_lose' },
   /** 공유·저장 직후 — `share_done`(pose `joy` · `bubble_note`). */
   share: { l1: 'share_done' },
-  /** 손으로 깨우기 — `wake_by_hand`(pose `wake_up`). **표가 `prop: null` 로 "소품 없음" 을 확정**했다
-   *  (커튼이 걷히는 것이 신호다). ⚠️ 1층 줄이 없다 — 깨어나는 자세 자체가 2층이다. */
-  wake: { l1: 'wake_by_hand' },
+  /** 손으로 깨우기 — 2층 `wake_by_hand`(pose `wake_up`). **표가 `prop: null` 로 "소품 없음" 을 확정**했다
+   *  (커튼이 걷히는 것이 신호다). ★ 답하기와 같은 이유로 `l1: null` 이다(→ `reply` 머리말). */
+  wake: { l1: null, l2: 'wake_by_hand' },
   /** 방에 들어올 때 — `enter_room`(pose `hello` · `bubble_bang`). A절 표 "방에 들어올 때 · 인사". */
   enter_room: { l1: 'enter_room' },
   /** 게임에서 좌·우를 고른 순간 — **1층은 변화 없음**(그래서 `l1: null`), 2층만 `game_choose`
@@ -101,6 +104,25 @@ export const ACTION_SITUATION = {
 } as const satisfies Record<string, { l1: string | null; l2?: string }>;
 
 export type ActionKey = keyof typeof ACTION_SITUATION;
+
+/**
+ * **2층이 잠겼을 때 대신 지을 자세**(2026-09-22 판정 I).
+ *
+ * ★★ 왜 표가 아니라 여기인가 — 표(`props/table.ts`)의 한 줄은 **자세 + 소품**을 함께 정한다.
+ *   여기 필요한 것은 **소품 없는 몸짓 하나**뿐이라, 표에 줄을 더하면 쓰지도 않을 소품 자리가
+ *   같이 생긴다. 그래서 상황(`sit`)은 `null` 로 두고 자세만 지어 준다.
+ * ★ 적혀 있지 않은 행동은 **아무것도 안 짓는다** — 게임 좌·우 고르기 1층이 그렇다(표의 "변화 없음").
+ *   ⚠️ 그 한 줄만은 **판이 도는 중에는 기본 자세로 서 있게** 두어야 한다. 예전에는 `l1: null`
+ *   이라 아무 자세도 안 켜졌고, 2층이 열리기 전에는 좌·우를 골라도 화면이 죽은 듯 보였다.
+ */
+export const LOCKED_POSE: Partial<Record<ActionKey, string>> = {
+  /** 답하기 — 아직 답하는 몸짓을 못 배웠으니 **인사**로 받는다(같은 "대답하는 결"). */
+  reply: 'hello',
+  /** 깨우기 — 일어나는 몸짓 전에는 **기본**. 커튼이 걷히는 것이 이미 신호다. */
+  wake: 'base',
+  /** 좌·우 고르기 — 놀람을 배우기 전에는 **기본으로 서 있는다**(아무것도 안 짓지 않는다). */
+  game_choose: 'base',
+};
 
 // ── 행동 연출의 박자 ───────────────────────────────────────────────────
 //
