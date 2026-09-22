@@ -89,9 +89,10 @@ public class GameService {
      * 손해가 남는다). 그래서 "새 판이 확실히 열린다" 가 확정된 뒤에만 옛 판을 접는다.
      *
      * <h3>★ 하루 3판과 튜토리얼 칸</h3>
-     * 이제 모든 {@code start} 가 새 판이라 {@code startGame()} 하나가 세 가지를 한다 —
-     * {@code todayGames}(하루 3판) · {@code gameStarts}(2층 15번 놀람) · 튜토리얼 GAME 칸.
-     * 나갔다 온 사람도 <b>새 판을 시작하므로</b> 한도가 정상 차감된다(옛 이어치기는 공짜였다).
+     * 이제 모든 {@code start} 가 새 판이라 {@code startGame()} 이 두 가지를 한다 —
+     * {@code todayGames}(하루 3판) · 튜토리얼 GAME 칸. 나갔다 온 사람도 <b>새 판을 시작하므로</b>
+     * 한도가 정상 차감된다(옛 이어치기는 공짜였다).
+     * ★ 2층 15번(놀람)과 놀이 조각은 <b>완주</b>에서 센다({@link #guess}·{@link #finish}).
      *
      * ★★ 거절이 나도 <b>정산은 되돌리지 않는다</b> — {@code PetService} 12개 메서드와 같은 규약이다(#225 리뷰 하-1).
      *   이 클래스의 네 메서드는 전부 {@code petService.awake}/{@code alive} 를 부르고, 그 안의 {@code touch()} 가
@@ -124,11 +125,10 @@ public class GameService {
                 .ifPresent(old -> old.abandon(now));
         // 15번 놀람(게임 시작 4판)·하루 3판·튜토리얼 GAME 칸이 전부 여기서 오른다
         PetService.Action a = petService.withUnlockDiff(pet, pet::startGame);
-        // ★★ 놀이 조각은 <b>여기서 세지 않는다</b> — 끝까지 친 매치만 센다({@link #guess}·{@link #finish}).
-        //   시작에서 세면 기권·강제 종료한 판의 조각이 그대로 남아 "기권 매치는 조각을 안 낸다"
-        //   (정본 7-A)가 무너진다. 시작만 하고 나가기를 되풀이해 조각을 채울 수 있었다(연결 감사 F7).
-        // ★ 2층 15번(놀람)은 그대로 <b>시작</b> 기준이다 — gameStarts 는 startGame() 이 올린다.
-        //   정본 7-A가 한정한 것은 조각뿐이고, 해금 조건은 건드리지 않았다.
+        // ★★ 놀이 조각과 2층 15번(놀람)은 <b>여기서 세지 않는다</b> — 끝까지 친 매치만 센다
+        //   ({@link #guess}·{@link #finish}). 시작에서 세면 기권·강제 종료한 판이 그대로 남아
+        //   "기권 매치는 아무것도 낳지 않는다"(정본 7-A)가 무너진다 — 시작만 하고 나가기를
+        //   되풀이해 조각을 채우고 동작을 열 수 있었다(연결 감사 F7 · 2026-09-22 결정).
         String answers = kind == GameKind.LEFT_RIGHT ? drawAnswers() : "";
         ZzalGame game = gameRepository.save(ZzalGame.start(userId, pet.getId(), kind, answers, now));
         return new Started(game, a.justUnlocked(), runUnlocked(pet));
@@ -158,6 +158,12 @@ public class GameService {
         int round = game.round();
         boolean hit = game.guess(pick, now);
         PetService.Action a = petService.withUnlockDiff(pet, () -> {
+            // ★★ 2층 15번(놀람)의 "게임 4판" 도 <b>완주한 매치</b>만 센다(2026-09-22 결정) —
+            //   조각과 같은 선이다. 이 줄이 withUnlockDiff <b>안</b>에 있어야 열리는 그 응답에
+            //   폭죽(justUnlocked)이 실린다. 밖으로 빼면 다음 조회에서야 열린 것으로 보인다.
+            if (game.isFinished()) {
+                pet.finishGame();
+            }
             if (game.isFinished() && game.isWin()) {
                 pet.winLeftRight();
                 rewardService.forGameWin(pet, now);
@@ -212,6 +218,7 @@ public class GameService {
         }
         game.finishRun(survivedMs, now);
         PetService.Action a = petService.withUnlockDiff(pet, () -> {
+            pet.finishGame();          // 2층 15번(놀람) — 달리기 완주도 한 판이다(종류 무관)
             if (game.isWin()) {
                 rewardService.forGameWin(pet, now);
             }
@@ -238,8 +245,10 @@ public class GameService {
      *       선물을 받고, 진 적이 없어 그 선물의 이유를 모른다.</b> {@code guess} 에 적어 둔 금지와 같다.</li>
      *   <li>{@code pieceService.count} — <b>놀이 조각은 완주한 매치만 센다</b>(정본 7-A). 시작할 때
      *       세지 않았으므로 여기서 되돌릴 것도 없다. 접은 판은 조각을 한 칸도 못 낸다.</li>
-     *   <li>{@code pet.startGame} — 하루 3판·2층 15번(놀람)은 <b>시작할 때 이미 셌다.</b>
-     *       접었다고 또 세지도, 돌려주지도 않는다.</li>
+     *   <li>{@code pet.finishGame} — <b>2층 15번(놀람)도 완주한 매치만 센다</b>(조각과 같은 선).
+     *       접은 판으로는 동작이 열리지 않는다.</li>
+     *   <li>{@code pet.startGame} — 하루 3판은 <b>시작할 때 이미 깎였다.</b>
+     *       접었다고 또 깎지도, 돌려주지도 않는다.</li>
      * </ul>
      *
      * <h3>★ 아픔은 여기서만 안 본다 — 빠뜨린 게 아니라 일부러다</h3>
