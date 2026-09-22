@@ -6,7 +6,6 @@ import com.lore.zzal.night.BakeTrigger;
 import com.lore.zzal.pet.PetService;
 import com.lore.zzal.piece.PieceEvent;
 import com.lore.zzal.pet.ZzalPet;
-import com.lore.zzal.pet.TutorialSchedule;
 import com.lore.zzal.pet.ZzalRules;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -74,8 +73,25 @@ public class GameService {
     }
 
     /**
-     * 새 판. 진행 중인 판이 있으면 그것을 돌려준다(두 번 눌러도 안전, 하루 횟수도 안 먹는다).
+     * 새 판. <b>이어치기는 없다</b> — 남아 있던 미완료 판은 그 자리에서 접고(패) 새 판을 연다.
      * 펫은 {@link PetService#awake} 로 잠근다 — 검사와 저장 사이에 다른 요청이 끼면 판이 둘 생긴다.
+     *
+     * <h3>★★ 왜 이어치기를 지웠나 (2026-09-22 상훈님 결정 · 정본 7-A)</h3>
+     * <b>게임은 중간에 나가면 끝이다.</b> 옛 코드는 "오늘 기상 뒤에 시작한 미완료 판이면 그것을 돌려준다" 로
+     * 나갔다 온 사람에게 같은 판을 이어 줬는데, <b>정본 어디에도 그런 규정이 없었다</b>(1.11 확인) —
+     * 나가기 버튼으로 접은 판만 재개를 금지한다고 읽었던 것이 빈자리를 그렇게 메운 것이다.
+     * 이어치기가 있으면 지고 있는 판을 새로고침으로 버리고 다시 칠 수 있어, 하루 3판이
+     * <b>이길 때까지 3판</b>이 된다 — {@link #abandon} 이 막으려던 바로 그 일이다.
+     *
+     * <h3>★ 접는 자리가 <b>검사 뒤</b>인 이유</h3>
+     * 아픔·달리기 잠김·하루 3판 초과로 거절될 요청은 <b>남의 판을 건드리지 않는다.</b> 접기를 검사 위로
+     * 올리면, 좌우 판을 치던 중에 잠긴 달리기 버튼을 한 번 누른 것만으로 치던 판이 죽는다(거절인데
+     * 손해가 남는다). 그래서 "새 판이 확실히 열린다" 가 확정된 뒤에만 옛 판을 접는다.
+     *
+     * <h3>★ 하루 3판과 튜토리얼 칸</h3>
+     * 이제 모든 {@code start} 가 새 판이라 {@code startGame()} 하나가 세 가지를 한다 —
+     * {@code todayGames}(하루 3판) · {@code gameStarts}(2층 15번 놀람) · 튜토리얼 GAME 칸.
+     * 나갔다 온 사람도 <b>새 판을 시작하므로</b> 한도가 정상 차감된다(옛 이어치기는 공짜였다).
      *
      * ★★ 거절이 나도 <b>정산은 되돌리지 않는다</b> — {@code PetService} 12개 메서드와 같은 규약이다(#225 리뷰 하-1).
      *   이 클래스의 네 메서드는 전부 {@code petService.awake}/{@code alive} 를 부르고, 그 안의 {@code touch()} 가
@@ -88,33 +104,11 @@ public class GameService {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         Instant now = pet.now(realNow);
 
-        // ★★ 아픔은 <b>이어치기에도</b> 걸린다 — 이 검사가 아래 이어치기 return 보다 아래에 있었을 때,
+        // ★★ 아픔이 맨 위다 — 이 검사가 옛 이어치기 return 보다 아래에 있었을 때,
         //   건강할 때 시작한 판을 병든 뒤에도 계속 눌러 5판을 다 치고 <b>승리 보상(행복 +1)</b>까지 받았다.
         //   그 행복이 병든 상태를 스스로 풀어 "아프면 놀지 않는다"(정본 16장)가 통째로 무력화됐다.
-        // ★ 하루 3판·달리기 해금은 아래에 그대로 둔다 — 그 둘은 <b>새 판을 시작하는 것</b>에 걸리는 조건이고,
-        //   이어치기는 이미 깎인 판을 잇는 것이라 다시 걸면 시작한 판을 못 끝낸다.
         if (pet.isSick()) {
             throw new BusinessException(ErrorCode.ZZAL_SICK_REFUSES);
-        }
-
-        Optional<ZzalGame> playing = gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId());
-        if (playing.isPresent()) {
-            ZzalGame old = playing.get();
-            // ★ 어제 판은 잇지 않는다 — 밤잠을 넘긴 미완료 판을 그대로 돌려주면 익일 첫 시작이 어제 좌우 판이 되고
-            //   달리기도 못 연다(리뷰 실측). 오늘 기상 전에 시작한 판은 접고(패) 새로 시작한다.
-            Instant woke = pet.getWokeAt() == null ? pet.getHatchedAt() : pet.getWokeAt();
-            if (!old.getStartedAt().isBefore(woke)) {
-                // ★★ 이어치기에서도 튜토리얼 6칸(GAME)은 넘어간다.
-                //   이 return 이 아래 startGame() 보다 위에 있어서, 판을 시작했다가 나갔다 온 사람은
-                //   버튼을 눌러도 칸이 안 넘어갔다(프론트 실측: 여덟 번을 불러도 GAME 에 머물렀다).
-                //   "게임 1판" 은 <b>새 판을 시작해야</b>가 아니라 <b>놀았으면 된다</b>는 뜻이다.
-                // ★ 다만 칸 넘기기만 떼어낸다 — todayGames(하루 3판)·gameStarts(2층 13번)·놀이 조각은
-                //   startGame() 안에 그대로 두어 <b>새 판을 시작할 때만</b> 오른다. 여기서 또 세면
-                //   하루 한도가 잘못 깎이고 조각이 공짜로 찬다.
-                pet.advanceTutorial(TutorialSchedule.Step.GAME);
-                return new Started(old, List.of(), runUnlocked(pet));
-            }
-            old.abandon(now);
         }
         if (kind == GameKind.RUN && pet.getLeftRightWins() < ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS) {
             throw new BusinessException(ErrorCode.ZZAL_FEATURE_LOCKED,
@@ -123,8 +117,14 @@ public class GameService {
         if (pet.getTodayGames() >= dailyLimit) {
             throw new BusinessException(ErrorCode.ZZAL_GAME_DAILY_LIMIT);
         }
-        PetService.Action a = petService.withUnlockDiff(pet, pet::startGame);   // 13번 놀라기(3판)가 여기서 열린다
-        // ★ 놀이 조각은 <b>시작한 매치</b>로 센다(승패 무관) — 2층 13번과 같은 기준(정본 6·16장).
+        // ★ 남아 있던 미완료 판을 접는다(패) — 나가기 버튼을 안 눌렀어도 마찬가지다.
+        //   보상·달리기 해금·두 번째 선물·놀이 조각은 어느 것도 타지 않는다({@code abandon} 과 같은 이유로,
+        //   여기서 <b>부르지 않는 것</b>이 규칙이다). 깎인 기회도 돌려주지 않는다 — 시작할 때 이미 깎였다.
+        gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId())
+                .ifPresent(old -> old.abandon(now));
+        // 15번 놀람(게임 시작 4판)·하루 3판·튜토리얼 GAME 칸이 전부 여기서 오른다
+        PetService.Action a = petService.withUnlockDiff(pet, pet::startGame);
+        // ★ 놀이 조각은 <b>시작한 매치</b>로 센다(승패 무관) — 2층 15번과 같은 기준(정본 6·16장).
         pieceService.count(pet, PieceEvent.GAME);
         String answers = kind == GameKind.LEFT_RIGHT ? drawAnswers() : "";
         ZzalGame game = gameRepository.save(ZzalGame.start(userId, pet.getId(), kind, answers, now));
@@ -242,11 +242,28 @@ public class GameService {
         return new Abandoned(game, List.of(), runUnlocked(pet));
     }
 
-    /** 치던 판. 새로고침 복구용. 자는 중이어도 조회는 된다. */
+    /**
+     * 진행 중인 판 — <b>이제 늘 비어 있다</b>(2026-09-22 상훈님 결정 "게임은 중간에 나가면 끝").
+     *
+     * <h3>★★ 복구용이 아니다 — 이 주소로는 판을 되찾을 수 없다</h3>
+     * 옛 구현은 미완료 판을 돌려줘 새로고침 복구에 썼다. 그것이 곧 이어치기였다 —
+     * 지고 있는 판을 새로고침으로 버리고 이길 때까지 다시 칠 수 있었다. 판을 되돌려 주는 자리를
+     * {@code start} 에서만 지우고 여기를 남겨 두면, 화면이 이 주소로 같은 판을 다시 집어
+     * <b>{@code guess} 로 계속 칠 수 있다</b> — 뒷문이 열린 채로 앞문만 닫는 셈이다.
+     *
+     * <h3>★ 그런데 왜 주소를 지우지 않나</h3>
+     * 화면이 이미 부르고 있다. 없애면 404 가 나가 "게임 탭이 고장" 으로 보인다. 그래서 주소는
+     * 남기고 <b>늘 "진행 중인 판 없음"</b>으로 답한다 — 화면은 이 답을 받아 새 판 버튼을 보이면 된다.
+     *
+     * ★ 정산({@link PetService#alive})은 그대로 돈다 — 응답에 함께 실리는 <b>오늘 남은 판수</b>가
+     *   최신이어야 하고(#리뷰), 자는 중이어도 조회 자체는 된다.
+     * ★ 아직 안 끝난 옛 판 줄은 DB 에 남을 수 있다(나간 것을 서버가 알 길이 없다). 그 줄은 아무것도
+     *   막지 않고, 다음 {@code start} 가 접는다. 조회가 남의 줄을 고치지는 않는다(GET 은 읽기만).
+     */
     @Transactional(noRollbackFor = BusinessException.class)
     public Optional<ZzalGame> current(Long userId, Long petId, Instant realNow) {
-        ZzalPet pet = petService.alive(userId, petId, realNow);
-        return gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId());
+        petService.alive(userId, petId, realNow);
+        return Optional.empty();
     }
 
     /** 오늘 더 할 수 있는 판. 정산된 펫에서 읽는다. */
