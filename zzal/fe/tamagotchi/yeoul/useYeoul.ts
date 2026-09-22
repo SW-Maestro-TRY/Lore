@@ -223,6 +223,13 @@ export interface YeoulState {
   full: number; happy: number; stock: number; trace: number; plays: number; snacks: number;
   bathUsed: boolean; pets: number; sick: boolean; sleeping: boolean; night: boolean;
   hearts: boolean; toast: string;
+  /**
+   * 선반의 「다음에 배울 것」 카드를 **펼쳤는가**.
+   *
+   * ★ 카드 안이 아니라 여기 둔다(2026-09-22 판정 K) — 카드는 팝오버·시트·대화·게임 중에
+   *   사라졌다가 다시 뜬다. 지역 상태로 두면 그때마다 **접힌 채로 되돌아간다.**
+   */
+  miniOpen: boolean;
   sheet: SheetKey | null; sheetClosing: boolean;
   playTab: 'talk' | 'guess' | 'run'; draft: string;
   /** 방금 친 좌우 맞히기 결과(서버가 준 것). 한 줄 문구를 그리는 데만 쓴다. */
@@ -356,7 +363,7 @@ const INITIAL: YeoulState = {
   day: 12, bond: 40, floorLv: 2, cChat: 0, cBath: 0, cSleep: 0, cGame: 0,
   full: 2, happy: 2, stock: 3, trace: 2, plays: 3, snacks: 0,
   bathUsed: false, pets: 1, sick: false, sleeping: false, night: false,
-  hearts: false, toast: '',
+  hearts: false, toast: '', miniOpen: false,
   sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null,
   gOn: false, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
   gMarks: [null, null, null, null, null], gQuit: false, gHappy0: 0,
@@ -1804,6 +1811,8 @@ export function useYeoul(live?: Live) {
   const toggleFloor2 = useCallback(() => setS((v) => ({ ...v, dev: { ...v.dev, floor2: !v.dev.floor2 } })), []);
   /** 개발용 — 후기 판(FeedbackSheet)을 mock 상태로 강제로 띄운다/끈다. 실서버는 안 탄다. */
   const toggleFbPreview = useCallback(() => setS((v) => ({ ...v, fbPreview: !v.fbPreview })), []);
+  /** 선반 카드 펼치기/접기. 카드가 사라졌다 다시 떠도 **편 채로 남는다**(→ `miniOpen`). */
+  const toggleMini = useCallback(() => setS((v) => ({ ...v, miniOpen: !v.miniOpen })), []);
   /** 개발용 — 튜토리얼 완주 축하 판을 다시 띄운다. */
   const showTutorEnd = useCallback(() => setS((v) => finishTutor({ ...v, tutorDone: false })), []);
   const openPlay = useCallback((tab: 'talk' | 'guess' | 'run') => () => patch({ sheet: 'play', playTab: tab, toast: '' }), [patch]);
@@ -2419,9 +2428,33 @@ export function useYeoul(live?: Live) {
     });
 
     // ── 다음에 배울 것 ──
-    const goal = LEARN_GOALS
-      .map((g) => ({ ...g, have: s[g.counter] as number }))
-      .find((g) => g.have < g.need) ?? null;
+    //
+    // ★★ **원천은 서버 도감이다**(2026-09-22 판정 K). 예전에는 프론트 상수(`LEARN_GOALS`)와
+    //   **목 카운터**(`s.cChat`·`cBath`·`cSleep`·`cGame`)로 만들었다. 그 카운터는 서버 경로에서
+    //   한 번도 안 올라서(돌보기가 전부 `serverCare` 로 빠진다) 무엇을 해도 **영원히 0** 이었고,
+    //   목록에는 **이미 열린 1층**(손 흔들며 인사 = `hello` · 자기 = `sleep`)이 "배울 것" 으로
+    //   올라와 있었으며, 숫자도 서버와 달랐다(좌우 3 ↔ 서버 4판 · '재우기' 는 서버에 없는 조건).
+    //   이제 **남은 2층만**, **서버가 준 이름·조건·진행도 그대로** 보여 준다.
+    // ★ 목(연습방·서버 없는 진짜 방)은 **같은 구조에 목 값**을 넣는다 — 규칙은 하나, 값만 갈린다.
+    const goals: { name: string; cond: string; have: number; need: number; done: boolean }[] = onServer
+      ? svMotions
+        .filter((m) => m.layer === 'BASIC_2' && !m.unlocked)
+        .map((m) => ({
+          name: m.label,
+          cond: m.hint ?? '',
+          have: m.progress?.current ?? 0,
+          need: Math.max(1, m.progress?.target ?? 1),
+          done: false,
+        }))
+      : LEARN_GOALS.map((g) => {
+        const have = s[g.counter] as number;
+        return { name: g.name, cond: g.cond, have, need: g.need, done: have >= g.need };
+      });
+    // 접혀 있을 때 보여 줄 한 줄 — **아직 못 채운 것 중 가장 가까운 것**.
+    // 서버 목록은 이미 "남은 것" 뿐이라, 진행도가 가장 앞선 줄이 곧 다음에 열릴 것이다.
+    const goal = (onServer
+      ? [...goals].sort((a, b) => (b.have / b.need) - (a.have / a.need))[0]
+      : goals.find((g) => !g.done)) ?? null;
     // ★ 연습방·진짜 방 **둘 다** 이 카드가 안내를 맡는다(2026-09-21 A-06). 예전에는 연습방만
     //   머리 띠 위의 다른 카드를 썼다 — 같은 안내가 화면마다 다른 자리에 있었다.
     const showTutMini = !!tut && !es.sleeping && !s.chatOpen;
@@ -2601,6 +2634,13 @@ export function useYeoul(live?: Live) {
         name: goal?.name ?? '',
         cond: goal ? `${goal.cond} ${Math.min(goal.have, goal.need)} / ${goal.need}` : '',
         barW: goal ? `${Math.round(Math.min(1, goal.have / goal.need) * 100)}%` : '0%',
+        /**
+         * 펼쳤는가. **훅이 들고 있다**(2026-09-22 판정 K) — 예전에는 카드 안의 지역 상태라,
+         * 팝오버·시트가 떠서 카드가 사라졌다 다시 뜨면 **늘 접힌 채로 돌아왔다.**
+         * 상훈님이 "목록이 왔다갔다" 라고 하신 것의 절반이 이것이다.
+         */
+        open: s.miniOpen,
+        toggle: toggleMini,
         // 배울 것이 남지 않았으면 조각으로 넘어간다.
         // ★ 서버가 `pieces: null` 이라고 하면 **아예 안 그린다**(백엔드 2026-09-09 지시).
         //   3층 전에는 조각이라는 개념이 없어서, 빈 도장 넷이 보이면 "내가 못 채운 것" 으로 읽힌다.
@@ -2609,11 +2649,12 @@ export function useYeoul(live?: Live) {
           label: x.label, cond: x.cond, on: i < s.shards,
         })),
         shardCount: `${Math.min(4, s.shards)} / 4`,
-        // 펼쳤을 때 보여 줄 네 목표 전부(접혀 있을 땐 `goal` 하나만 보인다).
-        goals: LEARN_GOALS.map((g) => {
-          const have = s[g.counter] as number;
-          return { name: g.name, cond: `${g.cond} ${Math.min(have, g.need)} / ${g.need}`, done: have >= g.need };
-        }),
+        // 펼쳤을 때 보여 줄 **남은 것 전부**(접혀 있을 땐 `goal` 하나만 보인다).
+        goals: goals.map((g) => ({
+          name: g.name,
+          cond: `${g.cond} ${Math.min(g.have, g.need)} / ${g.need}`.trim(),
+          done: g.done,
+        })),
       },
       ask: (() => {
         // ★ 튜토리얼이 도는 동안엔 묻지 않는다(상훈님 2026-09-09 판정 4).
@@ -2850,7 +2891,7 @@ export function useYeoul(live?: Live) {
     s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess, quitGuess,
     nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
-    pushReply, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
+    pushReply, popPostcard, popScenes, toggleDeco, toggleMini, pickWall, pickNeedStyle, pickTime, onAskDraft,
     toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash,
     tutIdx, atDone, onFinishTutorial, onSavePersona, noop, live?.resting,
   ]);

@@ -1097,14 +1097,16 @@ function TutChip({ label, onTap, primary = false, ...rest }: {
 
 function MiniCard({ y }: { y: Yeoul }) {
   const m = y.v.mini;
-  const [open, setOpen] = useState(false);
+  // ★ 펼침은 **훅이 들고 있다**(2026-09-22 판정 K). 여기 두면 카드가 사라졌다 다시 뜰 때마다
+  //   접힌 채로 돌아온다 — 팝오버 한 번만 열어도 펼쳐 둔 목록이 닫혔다.
+  const open = m.open;
   const more = `yeoul-mini-more${open ? ' is-open' : ''}`;
   const canOpen = m.hasGoal || m.hasShards;
 
   return (
     <div
       className="yeoul-mini"
-      onClick={(e) => { e.stopPropagation(); if (canOpen) setOpen((v) => !v); }}
+      onClick={(e) => { e.stopPropagation(); if (canOpen) m.toggle(); }}
       data-part="mini" data-open={open ? '1' : '0'}
       style={{
         // ★ 이제 **선반 위 한 칸**이다(2026-09-20) — 구석에 따로 떠 있지 않는다. 펼침은 그대로
