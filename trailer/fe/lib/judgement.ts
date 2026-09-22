@@ -9,12 +9,12 @@ export const GRADES: Record<Grade, string> = {
 
 /** 판정 버튼 아래에 나오는 한 줄. */
 export const JUDGE_TEXT = {
-  idle: "카드를 고르고 내 주장을 적은 뒤 판정하세요.",
-  changed: "입력이 바뀌었습니다. 다시 판정하면 수정한 내용을 대조합니다.",
-  waiting: "기존 예측 모델로 근거를 대조하고 있습니다. 잠시 기다려 주세요.",
-  done: "입력을 수정하면 이 판정은 해제됩니다.",
-  cardsFailed: "카드를 불러오지 못해 판정을 시작할 수 없습니다.",
-  failed: (reason: string) => `판정을 완료하지 못했습니다. ${reason} 입력을 유지한 채 다시 시도할 수 있습니다.`,
+  idle: "카드를 고르고 내 주장을 적은 뒤 판정을 맡기세요.",
+  submitting: "가설을 맡기는 중입니다.",
+  submitted: "판정을 맡겼습니다. 결과가 준비되면 여기에 보입니다. 맡긴 가설은 고칠 수 없고, 새 가설은 새로 쓸 수 있습니다.",
+  done: "판정이 끝났습니다. 근거를 누르면 카드의 기록을 볼 수 있습니다.",
+  cardsFailed: "카드를 불러오지 못해 판정을 맡길 수 없습니다.",
+  failed: (reason: string) => `판정을 맡기지 못했습니다. ${reason} 입력을 유지한 채 다시 시도할 수 있습니다.`,
 } as const;
 
 function sectionIsValid(section: PresentationSection | null | undefined): boolean {

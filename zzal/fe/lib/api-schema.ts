@@ -31,6 +31,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trailer/v1/hypotheses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 가설 맡기기
+         * @description 독자가 "가설 판정하기"를 누르면 부른다. 저장이 곧 맡기기다 — 서버는 줄을 넣고 `judgementStatus` 를
+         *     `PENDING` 으로 둔다. 판정은 운영자가 따로 돌려 넣는다. 화면은 응답의 `id` 로 되묻는다.
+         *     - 담은 카드는 그 회차 N 으로 가린 값으로 **복사해 둔다**. 뒤에 카드 표가 바뀌어도 이 가설의 카드는 그대로다
+         *     - 맡긴 뒤에는 제목 · 주장 · 카드 · 해석을 고칠 수 없다. 새 가설은 새로 맡긴다
+         *     - `stateDigest` · `cardsDigest` 가 카드 표의 값과 다르면 400(TRAILER_DIGEST_MISMATCH) — 페이지를 새로 열어야 한다
+         *     - 회차가 없거나 범위 밖이면 400(TRAILER_INVALID_CHAPTER). 카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED)
+         *     - 주장이 비었거나, 카드가 없거나 겹치거나 N화 기록에 없거나, 해석이 담지 않은 카드의 것이거나,
+         *       글이 위 끝(제목 180 · 주장 6,000 · 해석 4,000자)을 넘으면 400(INVALID_INPUT)에 무엇이 틀렸는지 적어 준다
+         */
+        post: operations["submit_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trailer/v1/public/cards": {
         parameters: {
             query?: never;
@@ -431,7 +458,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/webtoon/v1/characters/{publicId}": {
+    "/api/webtoon/v1/characters/random": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 랜덤 재료
+         * @description 「랜덤으로 만들어보기」가 입력 칸을 채울 값 한 벌 — 이름 · 설명 · 세계관.
+         *     AI 를 안 부르고 조합에서 뽑는다. 사람이 보고 고친 뒤 만든다.
+         */
+        get: operations["random"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/characters/try": {
         parameters: {
             query?: never;
             header?: never;
@@ -439,6 +487,56 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /**
+         * 캐릭터 만들어보기
+         * @description 뭐든 넣으면 그대로 그 세계관 웹툰의 한 컷이 된다. 사진·설명·이름·세계관 전부
+         *     **선택** — 아무것도 없이 보내면 「랜덤으로 만들어보기」다.
+         *     world 는 GET /worlds 의 key 이거나 사람이 직접 쓴 한 줄.
+         *
+         *     바로 돌려주고 뒤에서 그린다(status=drawing). GET /{id} 로 다시 읽으면
+         *     그림(art_url)과 카드(twist · quote · fate)가 채워진다.
+         *     값과 하루 몫은 「캐릭터 만들기」와 같다.
+         */
+        post: operations["tryOut"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/characters/worlds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 고를 수 있는 세계관
+         * @description 「캐릭터 만들어보기」의 세계관 목록. 하네스 프리셋 그대로다.
+         */
+        get: operations["worlds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/characters/{publicId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 캐릭터 하나
+         * @description 그리는 중인 것을 다시 읽는 자리. 내 것과 기본 제공만 보인다.
+         */
+        get: operations["one"];
         put?: never;
         post?: never;
         /**
@@ -450,6 +548,27 @@ export interface paths {
         head?: never;
         /** 이름·설명 고치기 */
         patch: operations["rename"];
+        trace?: never;
+    };
+    "/api/webtoon/v1/characters/{publicId}/card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 공유된 카드
+         * @description 「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.
+         *     내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.
+         */
+        get: operations["card"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/webtoon/v1/config": {
@@ -590,6 +709,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/my/notify-setting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 웹툰 완성 메일 — 켜져 있는가
+         * @description 행이 없으면(한 번도 안 건드렸으면) true 다 — 지금까지 계정 이메일로
+         *     항상 보냈던 것과 같은 기본값이다.
+         */
+        get: operations["notifySetting"];
+        put?: never;
+        /**
+         * 웹툰 완성 메일 — 켜고 끄기
+         * @description 웹툰이 다 만들어졌을 때 계정 이메일로 알리는 것을 켜고 끈다.
+         *     게스트로 만들 때 직접 적은 주소는 이 설정과 무관하게 그대로 간다 —
+         *     그건 그 한 번만의 명시적인 선택이다.
+         */
+        post: operations["setNotifySetting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/my/runs": {
         parameters: {
             query?: never;
@@ -696,6 +842,27 @@ export interface paths {
          *     오늘 전체 몫 · 로그인 안 한 사람의 하루 몫 · 계정 크레딧.
          */
         post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내가 만들던 것
+         * @description 아직 안 끝난 작업들(줄 서 있거나 · 그리는 중 · 사람 차례). 첫 화면의
+         *     「만들던 웹툰」 알약이 이것을 본다. 로그인 안 했으면 uid 로 가린다.
+         */
+        get: operations["mine_1"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1026,6 +1193,26 @@ export interface paths {
          * @description 구운 것이 있으면 그것. raw=1 이면 밑그림. 없으면 404.
          */
         get: operations["page"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/runs/{runId}/page/{no}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 컷 하나 내려받기
+         * @description 그 장 하나에 LORE 표시를 찍어서 준다.
+         */
+        get: operations["pageDownload"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2217,6 +2404,12 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseNotifySettingResult: {
+            data?: components["schemas"]["NotifySettingResult"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponsePresignedUpload: {
             data?: components["schemas"]["PresignedUpload"];
             error?: components["schemas"]["ErrorBody"];
@@ -2279,6 +2472,12 @@ export interface components {
         };
         ApiResponseTodayView: {
             data?: components["schemas"]["TodayView"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseTrailerHypothesis: {
+            data?: components["schemas"]["TrailerHypothesis"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -3055,6 +3254,12 @@ export interface components {
         NotifyRequest: {
             email?: string;
         };
+        NotifySettingRequest: {
+            on?: boolean;
+        };
+        NotifySettingResult: {
+            on?: boolean;
+        };
         PagesRequest: {
             pages?: components["schemas"]["Upload"][];
             runId: string;
@@ -3478,11 +3683,97 @@ export interface components {
             /** Format: int64 */
             runs?: number;
         };
+        /** @description 가설 하나. 맡기기 · 되묻기 · 판정 넣기의 응답이 모두 이 모양이다 */
+        TrailerHypothesis: {
+            /** @description 맡길 때 복사한 카드. 칸은 카드 API 의 열둘, 회수 칸은 N화로 가린 값. 순서 그대로 */
+            cards?: components["schemas"]["Foreshadowing"][];
+            /**
+             * Format: int32
+             * @description 독자가 읽은 회차 N
+             * @example 200
+             */
+            chapter?: number;
+            /** @description 독자의 주장 */
+            claim?: string;
+            /**
+             * Format: date-time
+             * @description 맡긴 때(UTC)
+             */
+            createdAt?: string;
+            /** @description 독자에게 보일 실패 문구. FAILED 일 때만 */
+            failureMessage?: string | null;
+            /**
+             * Format: int64
+             * @description 요청 id. 되묻기와 보관함의 열쇠
+             * @example 17
+             */
+            id?: number;
+            /**
+             * Format: date-time
+             * @description 판정을 넣은 때(UTC). PENDING 이면 null
+             */
+            judgedAt?: string | null;
+            /** @description 판정. judge.py 출력 그대로(grade · reason · support · against · cited_cards). COMPLETE 일 때만 */
+            judgement?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description 판정 상태
+             * @example PENDING
+             * @enum {string}
+             */
+            judgementStatus?: "PENDING" | "COMPLETE" | "FAILED";
+            /** @description 카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글) */
+            notes?: {
+                [key: string]: string;
+            };
+            /** @description 편집본. COMPLETE 이고 편집본이 있을 때만 */
+            presentation?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description 제목. 없으면 빈 글 */
+            title?: string;
+        };
+        /** @description 가설 맡기기. 저장이 곧 맡기기다 — 서버는 PENDING 으로 두고 운영자가 판정을 넣는다 */
+        TrailerHypothesisSubmit: {
+            /**
+             * @description 담은 카드의 번호. 하나 이상 100장까지. 겹치지 않음. 배열 순서가 근거의 순서
+             * @example [
+             *       "T2",
+             *       "T374"
+             *     ]
+             */
+            cards?: string[];
+            /** @description 장부 정보(cards/meta)의 cardsDigest. 위와 같다 */
+            cardsDigest?: string;
+            /**
+             * Format: int32
+             * @description 독자가 읽은 회차 N. 1부터 장부의 가장 뒤 회차까지
+             * @example 200
+             */
+            chapter?: number;
+            /** @description 독자의 주장. 6,000자까지. 비면 400 */
+            claim?: string;
+            /** @description 카드 번호마다 독자의 해석. 4,000자까지. 담은 카드의 번호만 열쇠로 온다 */
+            notes?: {
+                [key: string]: string;
+            };
+            /** @description 장부 정보(cards/meta)의 stateDigest. 카드 표의 값과 다르면 400 TRAILER_DIGEST_MISMATCH */
+            stateDigest?: string;
+            /** @description 가설 제목. 180자까지. 비어도 된다 */
+            title?: string;
+        };
         Trip: {
             /** Format: int32 */
             postcards?: number;
             /** Format: date-time */
             startedAt?: string;
+        };
+        TryRequest: {
+            description?: string;
+            name?: string;
+            photos_data?: string[];
+            world?: string;
         };
         Tutorial: {
             active?: boolean;
@@ -3559,6 +3850,57 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    submit_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrailerHypothesisSubmit"];
+            };
+        };
+        responses: {
+            /** @description 맡겼음. 저장된 가설(PENDING) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
+                };
+            };
+            /** @description 입력이 틀림(INVALID_INPUT · TRAILER_INVALID_CHAPTER · TRAILER_DIGEST_MISMATCH) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
+                };
+            };
+            /** @description 로그인 필요 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
+                };
+            };
+            /** @description 카드 표가 비어 있음(TRAILER_LEDGER_NOT_LOADED) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
                 };
             };
         };
@@ -4069,6 +4411,104 @@ export interface operations {
             };
         };
     };
+    random: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    tryOut: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Lore-Uid"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    worlds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    one: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Lore-Uid"?: string;
+            };
+            path: {
+                publicId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     remove: {
         parameters: {
             query?: never;
@@ -4111,6 +4551,30 @@ export interface operations {
                 "application/json": components["schemas"]["CreateRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    card: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                publicId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -4265,6 +4729,50 @@ export interface operations {
             };
         };
     };
+    notifySetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseNotifySettingResult"];
+                };
+            };
+        };
+    };
+    setNotifySetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifySettingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseNotifySettingResult"];
+                };
+            };
+        };
+    };
     runs: {
         parameters: {
             query?: never;
@@ -4367,6 +4875,30 @@ export interface operations {
                 "application/json": components["schemas"]["CreateRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    mine_1: {
+        parameters: {
+            query?: {
+                uid?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -4846,6 +5378,29 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    pageDownload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
             };
         };
     };

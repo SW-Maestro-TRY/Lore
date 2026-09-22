@@ -128,7 +128,13 @@ public enum ErrorCode {
     TRAILER_LEDGER_NOT_LOADED(HttpStatus.SERVICE_UNAVAILABLE, "복선 장부가 아직 준비되지 않았습니다"),
     // ★ 모르는 번호와 독자가 읽은 회차 뒤에 심은 카드를 한 코드로 답한다 — 갈라 주면 번호를 바꿔 가며
     //   뒤 회차의 카드가 있는지 알아낼 수 있다. 공통 NOT_FOUND 의 문구("주소를 찾을 수 없습니다")는 카드에 맞지 않는다.
-    TRAILER_CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "카드를 찾을 수 없습니다");
+    TRAILER_CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "카드를 찾을 수 없습니다"),
+    // 가설(trailer, 3부) — 2026-09-22. 가설 API(/api/trailer/v1/hypotheses/**, /admin/hypotheses/**)가 쓴다.
+    // ★ 없는 번호와 남의 가설을 한 코드로 답한다 — 갈라 주면 번호를 바꿔 가며 남의 가설이 있는지 알아낼 수 있다.
+    TRAILER_HYPOTHESIS_NOT_FOUND(HttpStatus.NOT_FOUND, "가설을 찾을 수 없습니다"),
+    // ★ 화면이 실은 해시 둘이 카드 표의 값과 다르다 — 카드 표를 갈아 넣은 뒤 옛 화면이 맡기는 가설은 운영자의
+    //   judge.py 가 어차피 거절하므로, 독자가 기다리다 실패를 보는 대신 맡기는 순간에 막는다(NA decisions.md 1-30).
+    TRAILER_DIGEST_MISMATCH(HttpStatus.BAD_REQUEST, "화면의 장부와 서버의 장부가 다릅니다. 페이지를 새로 열어 주세요");
 
     // 도메인별 코드는 각 담당자가 아래에 추가한다.
     // 예) ZZAL_PET_NOT_FOUND(HttpStatus.NOT_FOUND, "펫을 찾을 수 없습니다"),

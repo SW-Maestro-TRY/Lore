@@ -592,6 +592,23 @@
         },
         "type": "object"
       },
+      "ApiResponseNotifySettingResult": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/NotifySettingResult"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponsePresignedUpload": {
         "properties": {
           "data": {
@@ -766,6 +783,23 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/TodayView"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseTrailerHypothesis": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrailerHypothesis"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -2230,6 +2264,22 @@
         },
         "type": "object"
       },
+      "NotifySettingRequest": {
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "NotifySettingResult": {
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "PagesRequest": {
         "properties": {
           "pages": {
@@ -3007,6 +3057,138 @@
         },
         "type": "object"
       },
+      "TrailerHypothesis": {
+        "description": "가설 하나. 맡기기 · 되묻기 · 판정 넣기의 응답이 모두 이 모양이다",
+        "properties": {
+          "cards": {
+            "description": "맡길 때 복사한 카드. 칸은 카드 API 의 열둘, 회수 칸은 N화로 가린 값. 순서 그대로",
+            "items": {
+              "$ref": "#/components/schemas/Foreshadowing"
+            },
+            "type": "array"
+          },
+          "chapter": {
+            "description": "독자가 읽은 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "claim": {
+            "description": "독자의 주장",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "맡긴 때(UTC)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "failureMessage": {
+            "description": "독자에게 보일 실패 문구. FAILED 일 때만",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "요청 id. 되묻기와 보관함의 열쇠",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "judgedAt": {
+            "description": "판정을 넣은 때(UTC). PENDING 이면 null",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judgement": {
+            "additionalProperties": { },
+            "description": "판정. judge.py 출력 그대로(grade · reason · support · against · cited_cards). COMPLETE 일 때만",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "judgementStatus": {
+            "description": "판정 상태",
+            "enum": [
+              "PENDING",
+              "COMPLETE",
+              "FAILED"
+            ],
+            "example": "PENDING",
+            "type": "string"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글)",
+            "type": "object"
+          },
+          "presentation": {
+            "additionalProperties": { },
+            "description": "편집본. COMPLETE 이고 편집본이 있을 때만",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "제목. 없으면 빈 글",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TrailerHypothesisSubmit": {
+        "description": "가설 맡기기. 저장이 곧 맡기기다 — 서버는 PENDING 으로 두고 운영자가 판정을 넣는다",
+        "properties": {
+          "cards": {
+            "description": "담은 카드의 번호. 하나 이상 100장까지. 겹치지 않음. 배열 순서가 근거의 순서",
+            "example": [
+              "T2",
+              "T374"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cardsDigest": {
+            "description": "장부 정보(cards/meta)의 cardsDigest. 위와 같다",
+            "type": "string"
+          },
+          "chapter": {
+            "description": "독자가 읽은 회차 N. 1부터 장부의 가장 뒤 회차까지",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "claim": {
+            "description": "독자의 주장. 6,000자까지. 비면 400",
+            "type": "string"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "카드 번호마다 독자의 해석. 4,000자까지. 담은 카드의 번호만 열쇠로 온다",
+            "type": "object"
+          },
+          "stateDigest": {
+            "description": "장부 정보(cards/meta)의 stateDigest. 카드 표의 값과 다르면 400 TRAILER_DIGEST_MISMATCH",
+            "type": "string"
+          },
+          "title": {
+            "description": "가설 제목. 180자까지. 비어도 된다",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Trip": {
         "properties": {
           "postcards": {
@@ -3015,6 +3197,26 @@
           },
           "startedAt": {
             "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TryRequest": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "photos_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "world": {
             "type": "string"
           }
         },
@@ -3180,6 +3382,73 @@
         },
         "tags": [
           "email-test-controller"
+        ]
+      }
+    },
+    "/api/trailer/v1/hypotheses": {
+      "post": {
+        "description": "독자가 \"가설 판정하기\"를 누르면 부른다. 저장이 곧 맡기기다 — 서버는 줄을 넣고 `judgementStatus` 를\n`PENDING` 으로 둔다. 판정은 운영자가 따로 돌려 넣는다. 화면은 응답의 `id` 로 되묻는다.\n- 담은 카드는 그 회차 N 으로 가린 값으로 **복사해 둔다**. 뒤에 카드 표가 바뀌어도 이 가설의 카드는 그대로다\n- 맡긴 뒤에는 제목 · 주장 · 카드 · 해석을 고칠 수 없다. 새 가설은 새로 맡긴다\n- `stateDigest` · `cardsDigest` 가 카드 표의 값과 다르면 400(TRAILER_DIGEST_MISMATCH) — 페이지를 새로 열어야 한다\n- 회차가 없거나 범위 밖이면 400(TRAILER_INVALID_CHAPTER). 카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED)\n- 주장이 비었거나, 카드가 없거나 겹치거나 N화 기록에 없거나, 해석이 담지 않은 카드의 것이거나,\n  글이 위 끝(제목 180 · 주장 6,000 · 해석 4,000자)을 넘으면 400(INVALID_INPUT)에 무엇이 틀렸는지 적어 준다",
+        "operationId": "submit_2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrailerHypothesisSubmit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "맡겼음. 저장된 가설(PENDING)"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "입력이 틀림(INVALID_INPUT · TRAILER_INVALID_CHAPTER · TRAILER_DIGEST_MISMATCH)"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "503": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "카드 표가 비어 있음(TRAILER_LEDGER_NOT_LOADED)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "가설 맡기기",
+        "tags": [
+          "가설"
         ]
       }
     },
@@ -3915,6 +4184,96 @@
         ]
       }
     },
+    "/api/webtoon/v1/characters/random": {
+      "get": {
+        "description": "「랜덤으로 만들어보기」가 입력 칸을 채울 값 한 벌 — 이름 · 설명 · 세계관.\nAI 를 안 부르고 조합에서 뽑는다. 사람이 보고 고친 뒤 만든다.",
+        "operationId": "random",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "랜덤 재료",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/characters/try": {
+      "post": {
+        "description": "뭐든 넣으면 그대로 그 세계관 웹툰의 한 컷이 된다. 사진·설명·이름·세계관 전부\n**선택** — 아무것도 없이 보내면 「랜덤으로 만들어보기」다.\nworld 는 GET /worlds 의 key 이거나 사람이 직접 쓴 한 줄.\n\n바로 돌려주고 뒤에서 그린다(status=drawing). GET /{id} 로 다시 읽으면\n그림(art_url)과 카드(twist · quote · fate)가 채워진다.\n값과 하루 몫은 「캐릭터 만들기」와 같다.",
+        "operationId": "tryOut",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Lore-Uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "캐릭터 만들어보기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/characters/worlds": {
+      "get": {
+        "description": "「캐릭터 만들어보기」의 세계관 목록. 하네스 프리셋 그대로다.",
+        "operationId": "worlds",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "고를 수 있는 세계관",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/characters/{publicId}": {
       "delete": {
         "description": "그림은 S3 에 그대로 둔다 — 이 캐릭터로 이미 만든 웹툰이 그것을 보고 있다.",
@@ -3951,6 +4310,45 @@
           }
         },
         "summary": "지우기",
+        "tags": [
+          "Webtoon"
+        ]
+      },
+      "get": {
+        "description": "그리는 중인 것을 다시 읽는 자리. 내 것과 기본 제공만 보인다.",
+        "operationId": "one",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Lore-Uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "캐릭터 하나",
         "tags": [
           "Webtoon"
         ]
@@ -3999,6 +4397,39 @@
           }
         },
         "summary": "이름·설명 고치기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/characters/{publicId}/card": {
+      "get": {
+        "description": "「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.\n내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.",
+        "operationId": "card",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "공유된 카드",
         "tags": [
           "Webtoon"
         ]
@@ -4202,6 +4633,68 @@
         ]
       }
     },
+    "/api/webtoon/v1/my/notify-setting": {
+      "get": {
+        "description": "행이 없으면(한 번도 안 건드렸으면) true 다 — 지금까지 계정 이메일로\n항상 보냈던 것과 같은 기본값이다.",
+        "operationId": "notifySetting",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseNotifySettingResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "웹툰 완성 메일 — 켜져 있는가",
+        "tags": [
+          "Webtoon"
+        ]
+      },
+      "post": {
+        "description": "웹툰이 다 만들어졌을 때 계정 이메일로 알리는 것을 켜고 끈다.\n게스트로 만들 때 직접 적은 주소는 이 설정과 무관하게 그대로 간다 —\n그건 그 한 번만의 명시적인 선택이다.",
+        "operationId": "setNotifySetting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifySettingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseNotifySettingResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "웹툰 완성 메일 — 켜고 끄기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/my/runs": {
       "get": {
         "description": "내 계정에 이어진 브라우저들이 만든 작품 전부. 나만 보기로 내려 둔\n것도 포함한다 — 내 목록이라서다.\n\n모양은 둘러보기 목록(GET /api/webtoon/v1/runs)과 같다.",
@@ -4364,6 +4857,39 @@
           }
         },
         "summary": "웹툰 만들기 시작",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/mine": {
+      "get": {
+        "description": "아직 안 끝난 작업들(줄 서 있거나 · 그리는 중 · 사람 차례). 첫 화면의\n「만들던 웹툰」 알약이 이것을 본다. 로그인 안 했으면 uid 로 가린다.",
+        "operationId": "mine_1",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "내가 만들던 것",
         "tags": [
           "Webtoon"
         ]
@@ -5102,6 +5628,48 @@
           }
         },
         "summary": "완성본의 한 장",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/runs/{runId}/page/{no}/download": {
+      "get": {
+        "description": "그 장 하나에 LORE 표시를 찍어서 준다.",
+        "operationId": "pageDownload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "no",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "byte",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "컷 하나 내려받기",
         "tags": [
           "Webtoon"
         ]
@@ -7138,6 +7706,10 @@
     {
       "description": "캐릭터",
       "name": "Webtoon"
+    },
+    {
+      "description": "복선 카드로 만든 가설을 맡기고 판정을 되묻는다. 로그인 필요",
+      "name": "가설"
     },
     {
       "description": "시연·확인 전용. 운영에서는 꺼져 있어 존재하지 않는다",

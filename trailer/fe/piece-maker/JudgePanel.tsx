@@ -1,13 +1,16 @@
-/* 판정 자리 — 판정 단추, 상태 한 줄, 판정 결과. 작성 패널의 "03" 아래에 놓인다. */
+/* 판정 자리 — 맡기기 단추, 상태 한 줄, 판정 결과. 작성 패널의 "03" 아래에 놓인다.
+ * 맡긴 뒤에는 단추 대신 "맡겼음" 안내와 "새 가설 쓰기"가 놓인다 — 맡긴 가설은 고칠 수 없다(NA decisions.md 1-23). */
 import type { JudgeResult, PresentationSection } from "../lib/api";
 import { GRADES, readableJudgement } from "../lib/judgement";
 import Icon from "./Icon";
 
 type Props = {
-  /** 단추를 누를 수 있는가. 카드를 받았고, 담은 카드와 주장이 있고, 기다리는 판정이 없어야 한다. */
+  /** 단추를 누를 수 있는가. 카드를 받았고, 담은 카드와 주장이 있고, 맡기는 중이 아니어야 한다. */
   canJudge: boolean;
-  /** 판정을 기다리는 중인가. */
+  /** 맡기는 중인가. */
   waiting: boolean;
+  /** 이 초안을 이미 맡겼는가. 단추 대신 안내와 "새 가설 쓰기"를 보인다. */
+  frozen: boolean;
   /** 단추 아래의 한 줄. */
   stateText: string;
   /** 받아 둔 판정. 없으면 결과 상자를 숨긴다. */
@@ -16,6 +19,8 @@ type Props = {
   /** 근거 단추에 붙일 카드 제목. */
   titleOf: (id: string) => string | undefined;
   onJudge: () => void;
+  /** "새 가설 쓰기". 맡긴 초안을 비우고 새로 시작한다. */
+  onNew: () => void;
   onOpen: (id: string) => void;
 };
 
@@ -101,24 +106,33 @@ function JudgeResultView({ result, chapter, titleOf, onOpen }: { result: JudgeRe
   );
 }
 
-export default function JudgePanel({ canJudge, waiting, stateText, result, chapter, titleOf, onJudge, onOpen }: Props) {
+export default function JudgePanel({ canJudge, waiting, frozen, stateText, result, chapter, titleOf, onJudge, onNew, onOpen }: Props) {
   return (
     <>
       <p className="small muted" id="trailer-judge-help">
         앞으로의 전개에 대한 내 주장을 선택한 카드·해석과 기존 장부에 대조합니다. 가능성 있음·가능성 낮음·판정 보류로 구분하며, 실제
-        확률이나 정답 판정은 아닙니다.
+        확률이나 정답 판정은 아닙니다. 판정은 사람이 돌려서 시간이 걸립니다 — 맡긴 뒤에는 이 자리와 "내 가설"에서 결과를 볼 수 있습니다.
       </p>
-      <button
-        className="preview-link predict-cta"
-        data-action="judge"
-        aria-describedby="trailer-judge-help"
-        aria-controls="trailer-judge-result"
-        disabled={!canJudge}
-        onClick={onJudge}
-      >
-        <span>{waiting ? "근거 대조 중…" : "가설 판정하기"}</span>
-        <Icon name="arrow" />
-      </button>
+      {frozen ? (
+        <div className="judge-submitted" data-part="judge-submitted">
+          <button className="preview-link predict-cta" data-action="new-draft" onClick={onNew}>
+            <span>새 가설 쓰기</span>
+            <Icon name="arrow" />
+          </button>
+        </div>
+      ) : (
+        <button
+          className="preview-link predict-cta"
+          data-action="judge"
+          aria-describedby="trailer-judge-help"
+          aria-controls="trailer-judge-result"
+          disabled={!canJudge}
+          onClick={onJudge}
+        >
+          <span>{waiting ? "맡기는 중…" : "가설 판정하기"}</span>
+          <Icon name="arrow" />
+        </button>
+      )}
       <p className="small muted" role="status" style={{ marginTop: 8 }} data-part="judge-state">
         {stateText}
       </p>

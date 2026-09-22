@@ -1,5 +1,6 @@
 /* 작성 패널 — 담은 카드에 해석을 달고 주장을 적는다. 판정 자리(`judge`)는 부모가 끼운다.
- * 담은 카드는 초안이 통째로 갖고 있어 목록에 그 카드가 없어도 그대로 그린다. */
+ * 담은 카드는 초안이 통째로 갖고 있어 목록에 그 카드가 없어도 그대로 그린다.
+ * 맡긴 초안(`frozen`)은 읽기만 된다 — 글은 readOnly, 순서 · 빼기 · 저장은 disabled 다. */
 import type { ReactNode } from "react";
 import type { Card } from "../lib/api";
 import { CLAIM_MAX, NOTE_MAX, TITLE_MAX, hasContent, type Draft } from "../lib/draft";
@@ -8,6 +9,8 @@ import Icon, { ResetIcon } from "./Icon";
 type Props = {
   /** 초안을 되살렸는가. 그 전에는 입력을 막는다. */
   ready: boolean;
+  /** 맡긴 초안인가. 입력을 잠근다. */
+  frozen: boolean;
   chapter: number | null;
   draft: Draft;
   saveStatus: string;
@@ -30,6 +33,7 @@ function SelectedItem({
   index,
   last,
   note,
+  frozen,
   onNote,
   onMove,
   onRemove,
@@ -39,6 +43,7 @@ function SelectedItem({
   index: number;
   last: boolean;
   note: string;
+  frozen: boolean;
 } & Pick<Props, "onNote" | "onMove" | "onRemove" | "onOpen">) {
   const noteId = `trailer-note-${card.id}`;
   return (
@@ -52,13 +57,13 @@ function SelectedItem({
             </span>
           </div>
           <div className="row selected-tools">
-            <button className="icon-btn" data-action="move-up" disabled={index === 0} aria-label="위로" onClick={() => onMove(card.id, -1)}>
+            <button className="icon-btn" data-action="move-up" disabled={frozen || index === 0} aria-label="위로" onClick={() => onMove(card.id, -1)}>
               <Icon name="up" />
             </button>
-            <button className="icon-btn" data-action="move-down" disabled={last} aria-label="아래로" onClick={() => onMove(card.id, 1)}>
+            <button className="icon-btn" data-action="move-down" disabled={frozen || last} aria-label="아래로" onClick={() => onMove(card.id, 1)}>
               <Icon name="down" />
             </button>
-            <button className="icon-btn" data-action="remove" aria-label="근거 제거" onClick={() => onRemove(card.id)}>
+            <button className="icon-btn" data-action="remove" disabled={frozen} aria-label="근거 제거" onClick={() => onRemove(card.id)}>
               <Icon name="close" />
             </button>
           </div>
@@ -82,6 +87,7 @@ function SelectedItem({
           maxLength={NOTE_MAX}
           placeholder="내 가설과 어떤 관련이 있나요?"
           autoComplete="off"
+          readOnly={frozen}
           value={note}
           onChange={(event) => onNote(card.id, event.target.value)}
         />
@@ -101,6 +107,7 @@ function sharedPeople(draft: Draft): string[] {
 
 export default function ComposePane({
   ready,
+  frozen,
   chapter,
   draft,
   saveStatus,
@@ -121,7 +128,7 @@ export default function ComposePane({
   const filled = hasContent(draft);
 
   return (
-    <section className="compose" aria-labelledby="trailer-compose-title" data-part="compose">
+    <section className="compose" aria-labelledby="trailer-compose-title" data-part="compose" data-frozen={frozen ? "true" : "false"}>
       <div className="compose-top">
         <div className="row between">
           <div>
@@ -133,7 +140,14 @@ export default function ComposePane({
           </button>
         </div>
         <div className="row between" style={{ marginTop: 10 }}>
-          <span className="small muted">{chapter === null ? "" : `${chapter}화 누적 장부와 대조하는 가설`}</span>
+          <span className="small muted">
+            {chapter === null ? "" : `${chapter}화 누적 장부와 대조하는 가설`}
+            {frozen ? (
+              <span className="tag amber" data-part="frozen-tag" style={{ marginLeft: 8 }}>
+                판정 맡김
+              </span>
+            ) : null}
+          </span>
           <span className="saved-status" role="status" data-part="save-status">
             {saveStatus}
           </span>
@@ -157,7 +171,7 @@ export default function ComposePane({
           maxLength={TITLE_MAX}
           placeholder="어쩌면, 이건 우연이 아닐지도."
           autoComplete="off"
-          readOnly={!ready}
+          readOnly={!ready || frozen}
           value={draft.title}
           onChange={(event) => onTitle(event.target.value)}
         />
@@ -181,6 +195,7 @@ export default function ComposePane({
                   index={index}
                   last={index === count - 1}
                   note={draft.notes[card.id] || ""}
+                  frozen={frozen}
                   onNote={onNote}
                   onMove={onMove}
                   onRemove={onRemove}
@@ -218,7 +233,7 @@ export default function ComposePane({
           maxLength={CLAIM_MAX}
           placeholder="이 근거를 바탕으로 앞으로 어떤 일이 일어날지 적으세요."
           autoComplete="off"
-          readOnly={!ready}
+          readOnly={!ready || frozen}
           value={draft.claim}
           onChange={(event) => onClaim(event.target.value)}
         />
@@ -239,7 +254,7 @@ export default function ComposePane({
           <br />
           당신의 생각에서.
         </span>
-        <button className="btn" data-action="save" disabled={!filled} onClick={onSave}>
+        <button className="btn" data-action="save" disabled={!filled || frozen} onClick={onSave}>
           저장
         </button>
         <button className="btn primary" data-action="preview" disabled={!filled || !ready} onClick={onPreview}>

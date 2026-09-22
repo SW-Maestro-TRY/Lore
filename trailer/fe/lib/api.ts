@@ -8,12 +8,11 @@
  * 서버는 독자가 읽은 회차 N 이하에 심은 카드만 주고, N화 뒤에 회수된 복선은 미회수로 가려서 준다.
  * 카드를 50장씩 나눠 주고 검색도 서버가 한다. 로컬에서는 `API_PROXY=http://localhost:8080` 으로 Next 가 넘겨 준다.
  *
- * 판정은 아직 NarrativeAnalysis 의 Python 서버(`POST /api/judge`, 봉투 없음)다. lore 백엔드가 판정을
- * 요청 id 로 되묻게 되면(front_back_protocol.md 2-5~2-6) 이 파일과 `piece-maker/useJudge.ts` 를 고친다. */
+ * 가설은 lore 백엔드에 맡긴다(`POST /api/trailer/v1/hypotheses`, 명세 2-5). 로그인이 있어야 하고, 서버는 저장만 하고
+ * `PENDING` 으로 둔다 — 판정은 운영자가 따로 넣는다(NA later.md 1-2). 결과는 요청 id 로 되묻는다(2-6). */
 import { ApiError, request } from "@common/api/client";
 
 const CARDS_PATH = "/api/trailer/v1/public/cards";
-const JUDGE_PATH = "/api/judge";
 
 /** 한 번에 받는 카드 수. 서버의 기본값과 같다(최대 100). 서버가 더 적게 줄 수도 있으니 화면은 `hasNext` 만 믿는다. */
 export const PAGE_SIZE = 50;
@@ -135,6 +134,7 @@ function toCard(item: unknown): Card {
 
 /* ---- 판정 ------------------------------------------------------------------ */
 
+/** 가설 맡기기의 입력. 옛 판정 요청(screen_api.md 3-2)과 같은 칸이다 — 서버에는 camelCase 로 보낸다. */
 export type JudgeRequest = {
   chapter: number;
   title: string;
@@ -164,7 +164,7 @@ export type Presentation = {
   details: PresentationSection[];
 };
 
-/** `POST /api/judge` 의 성공 응답에서 화면이 읽는 칸. */
+/** 화면이 그리는 판정 결과. 판정은 가설(`Hypothesis`)의 판정 칸에서 온다. */
 export type JudgeResult = {
   status: "complete";
   chapter: number;
@@ -234,33 +234,80 @@ export async function fetchCard(id: string, chapter: number, signal?: AbortSigna
   }
 }
 
-/** 판정을 요청하고 끝날 때까지 기다린다. 요청한 회차·장부와 응답의 회차·장부가 같은지 확인한다.
- *  판정이 가리키는 카드가 담은 카드에 있는지는 `judgement.ts` 의 `checkJudgement` 가 본다. */
-export async function requestJudgement(body: JudgeRequest, signal?: AbortSignal): Promise<JudgeResult> {
-  const response = await fetch(JUDGE_PATH, {
+/* ---- 가설 ------------------------------------------------------------------ */
+
+const HYPOTHESES_PATH = "/api/trailer/v1/hypotheses";
+
+export type HypothesisStatus = "PENDING" | "COMPLETE" | "FAILED";
+
+/** 서버에 맡긴 가설 하나(2-6). 카드는 맡길 때 그 회차로 가려 복사한 값이다. 판정 칸 셋은 COMPLETE · FAILED 일 때만 찬다. */
+export type Hypothesis = {
+  id: number;
+  chapter: number;
+  title: string;
+  claim: string;
+  cards: Card[];
+  notes: Record<string, string>;
+  judgementStatus: HypothesisStatus;
+  judgement: Judgement | null;
+  presentation: Presentation | null;
+  failureMessage: string | null;
+  createdAt: string;
+  judgedAt: string | null;
+};
+
+const STATUSES: readonly string[] = ["PENDING", "COMPLETE", "FAILED"];
+
+/** 서버의 가설을 화면의 가설로. 모양이 다르면 오류를 던진다. 판정 칸의 안은 여기서 보지 않는다 — 그릴 때 `checkJudgement` 가 본다. */
+function toHypothesis(item: unknown): Hypothesis {
+  if (
+    !isRecord(item) ||
+    !Number.isInteger(item.id) ||
+    !Number.isInteger(item.chapter) ||
+    typeof item.title !== "string" ||
+    typeof item.claim !== "string" ||
+    !Array.isArray(item.cards) ||
+    typeof item.judgementStatus !== "string" ||
+    !STATUSES.includes(item.judgementStatus) ||
+    !isFilledString(item.createdAt)
+  ) {
+    throw new Error("가설 응답의 모양을 확인할 수 없습니다.");
+  }
+  const notes: Record<string, string> = {};
+  if (isRecord(item.notes)) {
+    for (const [id, note] of Object.entries(item.notes)) if (typeof note === "string") notes[id] = note;
+  }
+  return {
+    id: item.id as number,
+    chapter: item.chapter as number,
+    title: item.title,
+    claim: item.claim,
+    cards: item.cards.map(toCard),
+    notes,
+    judgementStatus: item.judgementStatus as HypothesisStatus,
+    judgement: isRecord(item.judgement) ? (item.judgement as unknown as Judgement) : null,
+    presentation: isRecord(item.presentation) ? (item.presentation as unknown as Presentation) : null,
+    failureMessage: typeof item.failureMessage === "string" ? item.failureMessage : null,
+    createdAt: item.createdAt,
+    judgedAt: typeof item.judgedAt === "string" ? item.judgedAt : null,
+  };
+}
+
+/** 가설을 맡긴다(2-5). 몸통은 옛 판정 요청과 같은 칸이고 이름만 camelCase 다. 로그인이 없으면 `ApiError`(401)를 그대로
+ *  던진다 — 부르는 쪽이 로그인 창을 연다. 응답은 저장된 가설(PENDING)이다. */
+export async function submitHypothesis(body: JudgeRequest, signal?: AbortSignal): Promise<Hypothesis> {
+  const item = await request<unknown>(HYPOTHESES_PATH, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: {
+      chapter: body.chapter,
+      title: body.title,
+      claim: body.claim,
+      cards: body.cards,
+      notes: body.notes,
+      stateDigest: body.state_digest,
+      cardsDigest: body.cards_digest,
+    },
     signal,
   });
-  let result: unknown;
-  try {
-    result = await response.json();
-  } catch (error) {
-    // 취소된 요청은 그대로 올린다. 그 밖에는 JSON 이 아닌 응답이다(프록시가 끊은 요청 등).
-    if (signal?.aborted) throw error;
-    throw new Error("서버 응답을 읽지 못했습니다.");
-  }
-  if (
-    !response.ok ||
-    !isRecord(result) ||
-    result.status !== "complete" ||
-    result.chapter !== body.chapter ||
-    result.state_digest !== body.state_digest ||
-    result.cards_digest !== body.cards_digest
-  ) {
-    const reason = isRecord(result) && isFilledString(result.error) ? result.error : "";
-    throw new Error(reason || "판정의 회차·장부를 확인할 수 없습니다.");
-  }
-  return result as JudgeResult;
+  return toHypothesis(item);
 }

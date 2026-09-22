@@ -2,22 +2,32 @@ package com.lore.trailer.support;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.common.user.User;
+import com.lore.common.user.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
  * Trailer 통합 시험이 공통으로 쓰는 것 — 시험 DB 확인 · 표본 25장 넣기 · HTTP 읽기.
@@ -46,6 +56,9 @@ public abstract class TrailerItSupport {
 
     @Autowired protected MockMvc mockMvc;
     @Autowired protected JdbcTemplate jdbc;
+    @Autowired protected UserRepository userRepository;
+    /** 시험용 사용자 이메일의 번호. 같은 JVM 안에서 겹치지 않게 */
+    private static final AtomicLong SEQ = new AtomicLong();
     protected final ObjectMapper json = new ObjectMapper();
 
     // ── 안전장치 ──────────────────────────────────────────────────────────
@@ -78,13 +91,57 @@ public abstract class TrailerItSupport {
         assertThat(count()).as("표본 25장").isEqualTo(25);
     }
 
+    /** 카드 표를 비우고, 가설 표 둘과 시험이 만든 사용자도 지운다 — 다음 시험이 빈 표에서 시작하게. */
     @AfterEach
-    void emptyTheTable() {
+    void emptyTheTables() {
         truncate();
+        truncateHypotheses();
+        jdbc.update("delete from users where email like 'trailer-it-%'");
     }
 
     protected void truncate() {
         jdbc.execute("TRUNCATE TABLE foreshadowings RESTART IDENTITY");
+    }
+
+    protected void truncateHypotheses() {
+        jdbc.execute("TRUNCATE TABLE hypothesis_foreshadowing, hypotheses RESTART IDENTITY CASCADE");
+    }
+
+    /* ---- 로그인한 독자 ------------------------------------------------------------ */
+
+    /** 시험용 사용자를 만든다. zzal 시험과 같은 방식(User.signUp)이다. 끝나면 지운다. */
+    protected Long newUserId() {
+        return userRepository.save(User.signUp("trailer-it-%d-%d@example.invalid"
+                .formatted(System.nanoTime(), SEQ.incrementAndGet()))).getId();
+    }
+
+    /** 운영자로 만든다. lore 의 운영자는 users.role 이 ADMIN 인 사용자다(found.md 5-13). */
+    protected void makeAdmin(Long userId) {
+        jdbc.update("update users set role = 'ADMIN' where id = ?", userId);
+    }
+
+    /** 그 사용자로 로그인한 요청. JwtAuthenticationFilter 가 넣는 것과 같은 모양(주체는 userId, 권한은 ROLE_USER). */
+    protected RequestPostProcessor asUser(Long userId) {
+        return authentication(new UsernamePasswordAuthenticationToken(
+                userId, null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+    }
+
+    protected MvcResult getAs(Long userId, String path) throws Exception {
+        return mockMvc.perform(get(path).with(asUser(userId))).andReturn();
+    }
+
+    /** JSON 몸통을 보낸다. userId 가 null 이면 로그인 없이 보낸다. body 가 String 이면 그대로(틀린 JSON 을 보낼 때). */
+    protected MvcResult postJson(Long userId, String path, Object body) throws Exception {
+        MockHttpServletRequestBuilder request = post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(body instanceof String raw ? raw : json.writeValueAsString(body));
+        if (userId != null) {
+            request.with(asUser(userId));
+        }
+        return mockMvc.perform(request).andReturn();
+    }
+
+    protected String errorMessage(MvcResult result) throws Exception {
+        return body(result).path("error").path("message").asText("");
     }
 
     protected long count() {
