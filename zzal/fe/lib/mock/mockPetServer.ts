@@ -570,13 +570,19 @@ export class MockPetServer implements PetSource {
     this.advanceTutorial(r, 'CHAT');
     this.countPiece(r, 'CHAT');
     r.intimacy = Math.min(INTIMACY.max, r.intimacy + INTIMACY.chat);
-    const { reply, reactionKey } = templateReply(r.personality, trimmed, r.memory, this.nextSeed());
+    const { reply } = templateReply(r.personality, trimmed, r.memory, this.nextSeed());
     const safeReply = cleanLine(reply);   // 서버 `ChatService` 도 답 대사를 같은 필터로 거른다
     // ★ **최신이 앞**이다(서버 `findTop5...OrderByAnsweredAtDesc`). 옛 목은 오래된 것이 앞이라,
     //   "최근 답 한 번 재언급"(§10)이 목에서는 제일 오래된 답을 꺼냈다.
     r.memory = [clampChat(trimmed), ...r.memory].slice(0, CHAT_MEMORY);
-    const open = r.motions.find((m) => m.key === reactionKey && m.unlockedAt !== null);
-    const chatReply: ChatReply = { line: safeReply, reactionKey: open ? reactionKey : 'shy' };
+    // ★★ 반응 동작은 **답하기(`reply`)가 열렸으면 그것, 아직이면 `hello`** 다(서버 `ChatService.reactionKey`).
+    //   정본 §6 이 이름으로 못 박은 예외다 — "답하기는 1층에 대응 행동이 없어, 잠긴 동안 인사를 쓰고
+    //   열리면 reply 로 바꾼다." 옛 목은 대사 템플릿이 고른 키를 쓰고 잠기면 `shy` 로 바꿨는데,
+    //   화면은 **서버가 준 키를 그대로 재생**하므로 답을 했는데 쓰다듬는 자세가 나왔다(연결 감사 F6).
+    // ★ **세고 나서 고른다** — 위에서 `chatAnswers` 를 이미 올렸으므로, 네 번째 답(= 해금되는 그 답)에
+    //   `reply` 가 실린다. 앞에서 고르면 폭죽은 터지는데 옛 동작이 재생된다.
+    const replyOpen = r.motions.some((m) => m.key === 'reply' && m.unlockedAt !== null);
+    const chatReply: ChatReply = { line: safeReply, reactionKey: replyOpen ? 'reply' : 'hello' };
     r.chatLog.set(this.slotKey(r, slot), { answer: clampChat(trimmed), replyLine: chatReply.line, reactionKey: chatReply.reactionKey });
     return this.detail(r, now, this.newlyUnlocked(r, before, now), chatReply);
   }
