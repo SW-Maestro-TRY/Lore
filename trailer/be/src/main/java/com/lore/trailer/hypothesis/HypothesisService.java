@@ -24,7 +24,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 가설 — 맡기기(2-5), 하나 보기(2-6), 보관함(2-7). 운영자 API 는 뒤 기능에서 여기에 더한다.
+ * 가설 — 맡기기(2-5), 하나 보기(2-6), 보관함(2-7), 운영자의 가져가기(2-8). 판정 넣기(2-9)는 뒤 기능에서 더한다.
  *
  * <p>검사는 모두 여기서 한다. 틀린 칸마다 한국어 문구를 붙여 400 {@code INVALID_INPUT} 으로 답한다.
  * 회차는 카드 API 와 같은 코드({@code TRAILER_INVALID_CHAPTER})다. 해시 둘이 카드 표의 값과 다르면
@@ -48,12 +48,14 @@ public class HypothesisService {
     private final HypothesisRepository hypotheses;
     private final ForeshadowingRepository foreshadowings;
     private final ForeshadowingService foreshadowingService;
+    private final TrailerAdminGuard adminGuard;
 
     public HypothesisService(HypothesisRepository hypotheses, ForeshadowingRepository foreshadowings,
-                             ForeshadowingService foreshadowingService) {
+                             ForeshadowingService foreshadowingService, TrailerAdminGuard adminGuard) {
         this.hypotheses = hypotheses;
         this.foreshadowings = foreshadowings;
         this.foreshadowingService = foreshadowingService;
+        this.adminGuard = adminGuard;
     }
 
     /** 가설을 맡긴다(2-5). 담은 카드를 그 회차로 가린 값으로 복사해 두고 PENDING 으로 저장한다. */
@@ -98,6 +100,26 @@ public class HypothesisService {
                 .map(HypothesisResponses.Summary::of)
                 .toList();
         return new HypothesisResponses.MyList(items);
+    }
+
+    /* ---- 운영자 ------------------------------------------------------------------ */
+
+    /** 운영자가 가져갈 것(2-8). PENDING 만, 오래된 것이 앞. 운영자가 아니면 403. */
+    @Transactional(readOnly = true)
+    public HypothesisResponses.PendingList pendingForOperator(Long operatorId) {
+        adminGuard.require(operatorId);
+        List<HypothesisResponses.Pending> items = new ArrayList<>();
+        for (Hypothesis h : hypotheses.pendingOldestFirst()) {
+            List<ForeshadowingResponses.Card> cards = new ArrayList<>();
+            Map<String, String> notes = new LinkedHashMap<>();
+            for (HypothesisForeshadowing copy : h.getCards()) {
+                cards.add(copy.toCard());
+                notes.put(copy.getThreadId(), copy.getNote());
+            }
+            items.add(new HypothesisResponses.Pending(h.getId(), h.getChapter(), h.getTitle(), h.getClaim(), cards, notes,
+                    h.getStateDigest(), h.getCardsDigest(), h.getCreatedAt()));
+        }
+        return new HypothesisResponses.PendingList(items);
     }
 
     /** 경로의 id. 숫자가 아니면 그런 가설이 없는 것이다(404) — 500 이 되지 않게 직접 읽는다(found.md 5-8). */

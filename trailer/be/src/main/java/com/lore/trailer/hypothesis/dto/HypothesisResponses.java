@@ -81,6 +81,46 @@ public final class HypothesisResponses {
         }
     }
 
+    /** 운영자가 가져가는 한 줄(2-8). judge.py 의 입력이 다 든다 — 독자가 맡긴 값 그대로. */
+    @Schema(name = "TrailerPendingHypothesis", description = "판정 안 된 가설 한 줄. judge.py 의 입력이 그대로 든다")
+    public record Pending(
+
+            @Schema(description = "요청 id. 판정을 넣을 때(2-9) 이 값을 싣는다", example = "17")
+            long id,
+
+            @Schema(description = "독자가 읽은 회차 N", example = "200")
+            int chapter,
+
+            @Schema(description = "제목. 없으면 빈 글")
+            String title,
+
+            @Schema(description = "독자의 주장")
+            String claim,
+
+            @Schema(description = "맡길 때 복사한 카드. 순서 그대로. judge.py 에는 id 만 넘긴다")
+            List<ForeshadowingResponses.Card> cards,
+
+            @Schema(description = "카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글)")
+            Map<String, String> notes,
+
+            @Schema(description = "맡길 때 카드 표의 stateDigest. judge.py 가 자기 파일과 견준다")
+            String stateDigest,
+
+            @Schema(description = "맡길 때 카드 표의 cardsDigest")
+            String cardsDigest,
+
+            @Schema(description = "맡긴 때(UTC). 이 순서로 온다")
+            Instant createdAt) {
+    }
+
+    /** 운영자가 가져갈 것 전부(2-8). 오래된 것이 앞. */
+    @Schema(name = "TrailerPendingHypothesisList", description = "판정 안 된 가설. 오래된 것이 앞이다")
+    public record PendingList(
+
+            @Schema(description = "판정 안 된 가설. 없으면 빈 배열")
+            List<Pending> items) {
+    }
+
     /** 내 가설 보관함(2-7). 최신이 앞. */
     @Schema(name = "TrailerHypothesisList", description = "내 가설 보관함. 최신이 앞이다")
     public record MyList(
