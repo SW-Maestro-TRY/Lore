@@ -12,7 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * 복선 카드 한 장 — 표 {@code foreshadowings}의 한 줄(V23).
+ * 복선 카드 한 장 — 표 {@code foreshadowings}의 한 줄(V20260922_0847__trailer_foreshadowings.sql).
  *
  * <h3>이 표는 서버가 쓰지 않는다</h3>
  * 줄은 NarrativeAnalysis 의 {@code src/deliver/export_cards_sql.py} 가 만든 SQL 로 통째로 들어온다.
