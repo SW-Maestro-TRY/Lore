@@ -830,6 +830,23 @@
         },
         "type": "object"
       },
+      "ApiResponseTrailerPendingHypothesisList": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrailerPendingHypothesisList"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseVisibilityResult": {
         "properties": {
           "data": {
@@ -3264,6 +3281,72 @@
         },
         "type": "object"
       },
+      "TrailerPendingHypothesis": {
+        "description": "판정 안 된 가설 한 줄. judge.py 의 입력이 그대로 든다",
+        "properties": {
+          "cards": {
+            "description": "맡길 때 복사한 카드. 순서 그대로. judge.py 에는 id 만 넘긴다",
+            "items": {
+              "$ref": "#/components/schemas/Foreshadowing"
+            },
+            "type": "array"
+          },
+          "cardsDigest": {
+            "description": "맡길 때 카드 표의 cardsDigest",
+            "type": "string"
+          },
+          "chapter": {
+            "description": "독자가 읽은 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "claim": {
+            "description": "독자의 주장",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "맡긴 때(UTC). 이 순서로 온다",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "요청 id. 판정을 넣을 때(2-9) 이 값을 싣는다",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글)",
+            "type": "object"
+          },
+          "stateDigest": {
+            "description": "맡길 때 카드 표의 stateDigest. judge.py 가 자기 파일과 견준다",
+            "type": "string"
+          },
+          "title": {
+            "description": "제목. 없으면 빈 글",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TrailerPendingHypothesisList": {
+        "description": "판정 안 된 가설. 오래된 것이 앞이다",
+        "properties": {
+          "items": {
+            "description": "판정 안 된 가설. 없으면 빈 배열",
+            "items": {
+              "$ref": "#/components/schemas/TrailerPendingHypothesis"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "Trip": {
         "properties": {
           "postcards": {
@@ -3457,6 +3540,53 @@
         },
         "tags": [
           "email-test-controller"
+        ]
+      }
+    },
+    "/api/trailer/v1/admin/hypotheses": {
+      "get": {
+        "description": "`judgementStatus` 가 `PENDING` 인 가설을 **맡긴 순서(오래된 것이 앞)**로 준다. 먼저 맡긴 독자가 먼저 판정을 받는다.\n운영자가 `judge.py` 를 돌리기 전에 부른다.\n- 한 줄에 `judge.py` 의 입력이 다 든다 — `chapter` · `claim` · `cards[]`(복사한 카드) · `notes{}` · 해시 둘\n- 해시 둘은 독자가 맡길 때의 값이다. `judge.py` 가 자기 파일과 같은 자료인지 이 값으로 본다\n- 운영자가 아니면 403(ADMIN_ONLY). 없으면 빈 배열",
+        "operationId": "pending",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerPendingHypothesisList"
+                }
+              }
+            },
+            "description": "판정 안 된 가설. 오래된 것이 앞"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerPendingHypothesisList"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerPendingHypothesisList"
+                }
+              }
+            },
+            "description": "운영자가 아님(ADMIN_ONLY)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "판정 안 된 가설 가져가기",
+        "tags": [
+          "가설 운영자"
         ]
       }
     },
@@ -7881,6 +8011,10 @@
     {
       "description": "복선 카드로 만든 가설을 맡기고 판정을 되묻는다. 로그인 필요",
       "name": "가설"
+    },
+    {
+      "description": "판정 안 된 가설을 가져가고 판정을 넣는다. 운영자(ADMIN)만",
+      "name": "가설 운영자"
     },
     {
       "description": "시연·확인 전용. 운영에서는 꺼져 있어 존재하지 않는다",

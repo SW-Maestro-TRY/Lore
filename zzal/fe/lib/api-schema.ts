@@ -31,6 +31,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trailer/v1/admin/hypotheses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 판정 안 된 가설 가져가기
+         * @description `judgementStatus` 가 `PENDING` 인 가설을 **맡긴 순서(오래된 것이 앞)**로 준다. 먼저 맡긴 독자가 먼저 판정을 받는다.
+         *     운영자가 `judge.py` 를 돌리기 전에 부른다.
+         *     - 한 줄에 `judge.py` 의 입력이 다 든다 — `chapter` · `claim` · `cards[]`(복사한 카드) · `notes{}` · 해시 둘
+         *     - 해시 둘은 독자가 맡길 때의 값이다. `judge.py` 가 자기 파일과 같은 자료인지 이 값으로 본다
+         *     - 운영자가 아니면 403(ADMIN_ONLY). 없으면 빈 배열
+         */
+        get: operations["pending"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trailer/v1/hypotheses": {
         parameters: {
             query?: never;
@@ -2536,6 +2560,12 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseTrailerPendingHypothesisList: {
+            data?: components["schemas"]["TrailerPendingHypothesisList"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseVisibilityResult: {
             data?: components["schemas"]["VisibilityResult"];
             error?: components["schemas"]["ErrorBody"];
@@ -3855,6 +3885,45 @@ export interface components {
             /** @description 제목. 없으면 빈 글 */
             title?: string;
         };
+        /** @description 판정 안 된 가설 한 줄. judge.py 의 입력이 그대로 든다 */
+        TrailerPendingHypothesis: {
+            /** @description 맡길 때 복사한 카드. 순서 그대로. judge.py 에는 id 만 넘긴다 */
+            cards?: components["schemas"]["Foreshadowing"][];
+            /** @description 맡길 때 카드 표의 cardsDigest */
+            cardsDigest?: string;
+            /**
+             * Format: int32
+             * @description 독자가 읽은 회차 N
+             * @example 200
+             */
+            chapter?: number;
+            /** @description 독자의 주장 */
+            claim?: string;
+            /**
+             * Format: date-time
+             * @description 맡긴 때(UTC). 이 순서로 온다
+             */
+            createdAt?: string;
+            /**
+             * Format: int64
+             * @description 요청 id. 판정을 넣을 때(2-9) 이 값을 싣는다
+             * @example 17
+             */
+            id?: number;
+            /** @description 카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글) */
+            notes?: {
+                [key: string]: string;
+            };
+            /** @description 맡길 때 카드 표의 stateDigest. judge.py 가 자기 파일과 견준다 */
+            stateDigest?: string;
+            /** @description 제목. 없으면 빈 글 */
+            title?: string;
+        };
+        /** @description 판정 안 된 가설. 오래된 것이 앞이다 */
+        TrailerPendingHypothesisList: {
+            /** @description 판정 안 된 가설. 없으면 빈 배열 */
+            items?: components["schemas"]["TrailerPendingHypothesis"][];
+        };
         Trip: {
             /** Format: int32 */
             postcards?: number;
@@ -3942,6 +4011,44 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    pending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 판정 안 된 가설. 오래된 것이 앞 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerPendingHypothesisList"];
+                };
+            };
+            /** @description 로그인 필요 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerPendingHypothesisList"];
+                };
+            };
+            /** @description 운영자가 아님(ADMIN_ONLY) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerPendingHypothesisList"];
                 };
             };
         };
