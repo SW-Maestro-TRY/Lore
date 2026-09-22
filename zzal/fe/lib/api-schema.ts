@@ -1553,7 +1553,9 @@ export interface paths {
          * @description 선택한 방향을 전달하면 정답 여부를 서버가 판정한다. 응답에는 방금 진행한 회차의
          *     정답만 포함하며 남은 회차의 정답은 노출하지 않는다.
          *
-         *     5회를 모두 진행하면 finished 가 true 가 되고 그때 win 이 채워진다.
+         *     ★ 3승 또는 3패가 나면 그 회차에서 finished 가 true 가 되고 win 이 채워진다 —
+         *     5회를 채우지 않는다(최단 3회·최장 5회). 3선승제라 셋을 맞히거나 셋을 틀리면
+         *     남은 회차가 결과를 바꿀 수 없다.
          */
         post: operations["guess"];
         delete?: never;
@@ -1923,7 +1925,7 @@ export interface components {
             remainingToday?: number;
             /**
              * Format: int32
-             * @description 기권 시점까지 진행한 회차(0부터). 달리기는 항상 0
+             * @description 기권 시점까지 진행한 회차(0부터). 달리기는 항상 0. 3승·3패가 나면 매치가 끝나므로 이 값은 0~4 이며 승패는 아직 갈리지 않은 상태다
              * @example 2
              */
             round?: number;
@@ -1935,7 +1937,7 @@ export interface components {
             rounds?: number;
             /** @description 달리기 해금 여부 */
             runUnlocked?: boolean;
-            /** @description 항상 false — 기권은 패배로 확정된다. 접는 시점에 이미 정답 수가 승리 조건을 넘겼더라도 끝까지 진행하지 않은 매치이므로 승리가 아니다 */
+            /** @description 항상 false — 기권은 패배로 확정된다. 3승이 나면 그 회차에서 매치가 끝나므로 승리를 쌓아 둔 채 기권하는 상태는 애초에 없다 */
             win?: boolean;
             /**
              * Format: int32
@@ -2620,7 +2622,7 @@ export interface components {
              * @enum {string}
              */
             answer?: "LEFT" | "RIGHT";
-            /** @description 5회를 모두 진행했는지 여부 */
+            /** @description 매치가 끝났는지 여부. 3승 또는 3패가 나면 5회를 채우지 않고 그 회차에서 끝난다(최단 3회·최장 5회) */
             finished?: boolean;
             /**
              * Format: int64
@@ -2669,7 +2671,7 @@ export interface components {
             rounds?: number;
             /** @description 달리기 해금 여부. 이번 승리로 5승에 도달하면 true 로 바뀐다 */
             runUnlocked?: boolean;
-            /** @description 승리 여부. 매치가 끝났을 때만 채워지며 진행 중에는 null 이다. 정답 수가 이미 승리 조건을 넘겼더라도 남은 회차를 진행할 유인을 유지하기 위해 미리 알리지 않는다 */
+            /** @description 승리 여부. 매치가 끝났을 때만 채워지며 진행 중에는 null 이다. 3승이 나는 그 회차에서 매치가 끝나므로, 진행 중에 승리가 확정돼 있는 상태는 없다 */
             win?: boolean;
             /**
              * Format: int32
