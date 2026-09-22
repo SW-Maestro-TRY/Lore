@@ -36,4 +36,24 @@ public final class HypothesisRequests {
             @Schema(description = "장부 정보(cards/meta)의 cardsDigest. 위와 같다")
             String cardsDigest) {
     }
+
+    /** 운영자가 판정을 넣는다(2-9). judge.py 의 출력을 그대로 싣는다 — 서버는 모양만 보고 안은 읽지 않는다. */
+    @Schema(name = "TrailerHypothesisJudge", description = "운영자가 판정을 넣는다. judge.py 출력을 그대로 싣는다. 이미 판정한 가설이면 덮어쓴다")
+    public record Judge(
+
+            @Schema(description = "판정한 가설의 요청 id(2-8 의 items[].id). judge.py 의 request_id 가 아니다", example = "17")
+            Long id,
+
+            @Schema(description = "COMPLETE 또는 FAILED", allowableValues = {"COMPLETE", "FAILED"}, example = "COMPLETE")
+            String judgementStatus,
+
+            @Schema(description = "judge.py 출력의 judgement(grade · reason · support · against · cited_cards). COMPLETE 면 필수", nullable = true)
+            Map<String, Object> judgement,
+
+            @Schema(description = "편집본(editor 출력). 있을 때만", nullable = true)
+            Map<String, Object> presentation,
+
+            @Schema(description = "독자에게 보일 실패 문구. FAILED 면 필수", nullable = true)
+            String failureMessage) {
+    }
 }
