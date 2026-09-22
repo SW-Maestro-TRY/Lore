@@ -108,8 +108,9 @@ export async function doBabyStep(page: Page, key: string): Promise<void> {
     }
     case 'SHARE': { await page.locator('[data-dex="base"] button').first().click(); await page.waitForTimeout(600); return; }
     case 'NAP': {
+      // ★ 재우면 **깨우기 버튼이 곧바로 켜진다**(정본 §16 1.4 — 튜토리얼 동안 시계가 멈춰 있어
+      //   분 단위 대기가 없다). 옛 판의 "5분 뒤" 는 시계가 도는 줄 알던 시절의 잔재였다.
       await press(page, 'sleep');
-      await advance(page, 5 * MIN);
       await press(page, 'sleep');
       return;
     }

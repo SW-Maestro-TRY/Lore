@@ -97,7 +97,9 @@ test('선물 강제 도착 — 가짜 검수 통과만 시키고, 도착은 규�
 test('밤 큐 돌리기 — 굽기 자리에 올려 두면 "아직 연습 중"', async ({ page }) => {
   await page.goto('/zzal?skin=scrapbook&mock=grown&clock=2026-09-05T18:00&dev=1', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-action="feed"]');
-  await expect(page.locator('[data-part="album-notes"]')).toHaveAttribute('data-practicing', '0');
+  // ★ 2026-09-22 — 튜토리얼을 지난 아이는 **이미 굽는 중**이다(정본 §6 표: 구르기는 튜토리얼
+  //   완주 그 순간 굽기). 옛 판은 "사흘째 밤" 을 기다리느라 여기서 0 이었다.
+  await expect(page.locator('[data-part="album-notes"]')).toHaveAttribute('data-practicing', '1');
 
   await page.locator('[data-dev-jump="밤 큐 돌리기"]').click();
   await page.waitForTimeout(800);

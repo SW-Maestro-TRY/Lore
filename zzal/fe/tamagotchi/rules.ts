@@ -67,8 +67,14 @@ export const SLEEP_WINDOW = { from: 19, to: 23 } as const;
 /** 깨우기 창 07:00~10:00, 10:00 자동 기상(늦잠). §2 */
 export const WAKE_WINDOW = { from: 7, to: 10 } as const;
 
-/** 아기 40분 낮잠 — 5분 뒤 깨우기 켜짐, 10분 뒤 자동 기상. §12·§16 */
-export const NAP = { wakeAfterMs: 5 * MIN, autoWakeMs: 10 * MIN } as const;
+/**
+ * 튜토리얼 낮잠(§12 8번째 칸).
+ *
+ * ★ **분 단위 대기가 없다**(정본 §16 1.4) — "재우기를 누르면 커튼이 내려오고 **깨우기 버튼이
+ *   곧바로 켜진다**. 튜토리얼 동안 시계가 멈춰 있으므로." 옛 5분 대기·10분 자동 기상은
+ *   시계가 도는 줄 알던 시절의 잔재다. 시계가 멈춰 있으니 자동 기상도 없다(깨우는 것은 사용자뿐).
+ */
+export const NAP = { wakeAfterMs: 0 } as const;
 
 /** 시각 → 빛(§11). 24시간제 경계. 자는 동안은 커튼이라 여기 없다. */
 export const LIGHT_PHASES = [
@@ -84,9 +90,15 @@ export const SCENE_REROLL_MS = 12 * MIN;
 
 // ── §10·§16 채팅 ─────────────────────────────────────────────────────────
 
-/** 부름 시각: 기상+1h / 기상+7h / 19:00 고정. 아기 8분(BABY)은 3회에 미포함. §10·§12·§16 */
+/**
+ * 부름 시각: 기상+1h / 기상+7h / 19:00 고정. §10·§12·§16
+ *
+ * ★ **BABY 는 시각이 아니라 순서다**(서버 `ChatService` 머리말) — 튜토리얼 부름이라 시계가
+ *   멈춰 있고, **만료도 없다.** 옛 `afterHatchMs: 8 * MIN`("부화 8분 뒤")은 시계가 도는 줄
+ *   알던 시절의 잔재라 지웠다. 8분을 기다려야 튜토리얼 3번 칸이 열리는 것이 아니다.
+ * ★ 만료는 **다음 부름 시각**이고, 마지막인 EVENING 은 **자동 취침 시각(23:00)** 에 만료된다.
+ */
 export const CHAT_SLOTS = {
-  BABY: { afterHatchMs: 8 * MIN },
   MORNING: { afterWakeMs: 1 * HOUR },
   NOON: { afterWakeMs: 7 * HOUR },
   EVENING: { hour: 19 },
@@ -141,8 +153,37 @@ export const RUN = { targetMs: 30_000, unlockWins: 5 } as const;
 
 // ── §6 동작 3층과 해금 ────────────────────────────────────────────────────
 
-/** 첫 심화 행동(선물) = 함께한 날 3 + 그날 케어 미스 0. §6·§16 */
+/**
+ * **뒤로 넘어짐**(3층 첫 심화 행동의 선물) = 함께한 날 3 + 그날 케어 미스 0. §6·§16
+ *
+ * ★ **구르기와 헷갈리지 말 것.** 정본 §6 표가 둘을 갈라 놓았다 —
+ *   구르기(`GIFT_SEQ`)는 **튜토리얼 9칸을 다 끝낸 그 순간** 굽는 첫날 보상이라 이 값과 무관하고,
+ *   이 숫자가 걸리는 것은 3층의 뒤로 넘어짐뿐이다. 목은 3층 굽기를 아직 흉내 내지 않는다.
+ */
 export const FIRST_GIFT_DAYS = 3;
+
+/**
+ * 조각 네 칸의 요구량(정본 §6 표 · 서버 `ZzalRules.PIECE_*`).
+ *
+ * 칸 하나는 **여러 행동 중 하나**로 채울 수 있다(정본의 "조건(또는)") — 아래 `PIECE_KIND` 가
+ * 어느 행동이 어느 칸을 올리는지 정한다. 요구량에 닿는 순간 그 칸에 도장이 찍히고,
+ * 도장이 찍힌 칸은 **판이 새로 시작될 때까지 더 세지 않는다**(정본 1.9).
+ * ★ 요구량 자체가 이틀치다 — 하루에 다 채울 수 없는 것이 정상이다(§6 "최소 이틀").
+ */
+export const PIECE_NEED = {
+  FEED: 6, SNACK: 5, GAME: 5, CLEAN: 5, BATH: 2, PET: 5, CHAT: 5,
+} as const;
+
+/** 행동 → 조각 칸(서버 `PieceEvent`). */
+export const PIECE_KIND = {
+  FEED: 'food', SNACK: 'play', GAME: 'play', CLEAN: 'clean', BATH: 'clean', PET: 'bond', CHAT: 'bond',
+} as const;
+
+export type PieceEventKey = keyof typeof PIECE_NEED;
+export type PieceKindKey = (typeof PIECE_KIND)[PieceEventKey];
+
+/** 네 칸의 순서 — 기분 좋은 날의 선물이 "앞선 빈 칸" 을 고를 때 쓰는 그 순서다(서버 `PieceKind` 선언 순). */
+export const PIECE_KINDS: readonly PieceKindKey[] = ['food', 'play', 'clean', 'bond'];
 
 /** 3층 조각은 이틀 연속 4개. §6·§16 */
 export const PIECES_STREAK = 2;
