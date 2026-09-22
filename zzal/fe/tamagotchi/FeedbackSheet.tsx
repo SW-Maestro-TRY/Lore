@@ -24,7 +24,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { track } from '@common/analytics';
 import { ApiError } from '../lib/api';
 import { getMyFeedback, submitFeedback, type FeedbackTag } from '../lib/feedback';
-import { C, C2, GAEGU as Y_GAEGU, gap, radius, sel, fz, ink, pad } from './yeoul/ui';
+import { C, C2, GAEGU as Y_GAEGU, TAP_MIN, gap, radius, sel, tapWrap, fz, ink, pad } from './yeoul/ui';
 
 const PEN = "'Nanum Pen Script',cursive";
 const GAEGU = "'Gaegu',cursive";
@@ -329,14 +329,18 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
                 </span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm, margin: '8px 0 16px' }}>
                   {CHIPS.map((c) => (
+                    // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 36px). 여기는 **알약을 키우지 않는다** —
+                    //   칩이 여섯 개라 8px 씩 키우면 판이 50px 길어져, 390x640 에서 아래 「보내기」가
+                    //   첫 화면 밖으로 밀린다(실측 600 → 650). 그래서 보이는 알약은 그대로 두고
+                    //   투명한 판만 44 로 넓힌다(`tapWrap`).
                     <button
                       key={c.tag}
                       data-action={`feedback-chip-${c.tag}`}
                       onClick={() => toggle(c.tag)}
                       aria-pressed={tags.includes(c.tag)}
-                      style={T.chip(tags.includes(c.tag))}
+                      style={tapWrap(T.chipH)}
                     >
-                      {c.label}
+                      <span style={T.chip(tags.includes(c.tag))}>{c.label}</span>
                     </button>
                   ))}
                 </div>
@@ -389,6 +393,8 @@ type Tone = {
   error: CSSProperties; ghost: CSSProperties;
   star: (on: boolean) => CSSProperties;
   chip: (on: boolean) => CSSProperties;
+  /** 칩의 **보이는 높이**(px). 누르는 판(`tapWrap`)이 이 값만큼만 자리를 차지하게 되돌린다. */
+  chipH: number;
   send: (off: boolean) => CSSProperties;
 };
 
@@ -445,17 +451,27 @@ const S: Tone = {
   labelHint: { fontSize: fz.sm, color: '#A79C82' } as CSSProperties,
   counter: { alignSelf: 'flex-end', marginTop: 5, fontFamily: "'Nanum Gothic Coding',monospace", fontSize: fz.xs, color: '#A79C82' } as CSSProperties,
   star: (on: boolean): CSSProperties => ({
+    // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 31x30). 별 단추는 **테두리도 바탕도 없어서**
+    //   판만 키우고 남는 몫을 음수 여백으로 되돌리면 **별 크기·자리가 한 픽셀도 안 변한다**
+    //   (44-6.5*2=31 · 44-7*2=30). 옆 별과 판이 13px 씩 겹치는데, 겹친 자리는 뒤에 그린 별(오른쪽)이
+    //   가져간다 — 별마다 31px 의 제 몫은 그대로다.
+    position: 'relative', boxSizing: 'border-box', minWidth: TAP_MIN, minHeight: TAP_MIN,
+    margin: '-7px -6.5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     border: 'none', background: 'none', padding: '0 2px', cursor: 'pointer',
     fontSize: fz.h0, lineHeight: 1, color: on ? '#E0A93F' : '#DCD2B8', transition: 'color .12s',
   }),
+  chipH: 38,
   chip: (on: boolean): CSSProperties => ({
+    display: 'flex', alignItems: 'center',
     minHeight: 38, padding: '0 12px', borderRadius: 3,
     border: '1px solid ' + (on ? '#A2543F' : EDGE),
     background: on ? RED : PAPER, color: on ? '#FFF8EC' : INK,
     fontFamily: GAEGU, fontWeight: 700, fontSize: fz.md, cursor: 'pointer',
     boxShadow: '2px 2px 0 rgba(58,53,43,.09)',
   }),
+  // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 390x640 에서 높이 26px 까지 눌렸다).
   textarea: {
+    minHeight: TAP_MIN, boxSizing: 'border-box',
     marginTop: 8, padding: '10px 12px', border: 'none', borderBottom: '2px solid #D6CBAE',
     background: 'rgba(255,255,255,.5)', color: INK,
     fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.6, resize: 'none',
@@ -526,19 +542,29 @@ const Y: Tone = {
   label: { fontSize: fz.sm, color: C.faint },
   labelHint: { fontSize: fz.xs, color: C.faint2 },
   star: (on: boolean): CSSProperties => ({
+    // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 31x30). 별 단추는 **테두리도 바탕도 없어서**
+    //   판만 키우고 남는 몫을 음수 여백으로 되돌리면 **별 크기·자리가 한 픽셀도 안 변한다**
+    //   (44-6.5*2=31 · 44-7*2=30). 옆 별과 판이 13px 씩 겹치는데, 겹친 자리는 뒤에 그린 별(오른쪽)이
+    //   가져간다 — 별마다 31px 의 제 몫은 그대로다.
+    position: 'relative', boxSizing: 'border-box', minWidth: TAP_MIN, minHeight: TAP_MIN,
+    margin: '-7px -6.5px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     border: 'none', background: 'none', padding: '0 2px', cursor: 'pointer',
     fontSize: fz.h0, lineHeight: 1, color: on ? '#E0A93F' : C.accentDim, transition: 'color .12s',
   }),
+  chipH: 36,
   // 칩은 시안의 고름 표시(`sel`)를 그대로 쓴다 — 온보딩·아이 정보의 칩과 같은 모양이어야 한다.
   chip: (on: boolean): CSSProperties => {
     const k = sel(on);
     return {
+      display: 'flex', alignItems: 'center',
       minHeight: 36, padding: '0 13px', borderRadius: radius.pill,
       border: `${k.bw} solid ${k.bd}`, background: k.bg, color: k.fg,
       fontSize: fz.md, cursor: 'pointer',
     };
   },
+  // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 짧은 화면에서 높이가 26px 까지 눌렸다).
   textarea: {
+    minHeight: TAP_MIN, boxSizing: 'border-box',
     marginTop: 8, padding: pad.card, borderRadius: radius.md,
     border: `1px solid ${C.line}`, background: C.paper, color: C.ink,
     fontFamily: 'inherit', fontSize: fz.md, lineHeight: 1.7, resize: 'none', outline: 'none',

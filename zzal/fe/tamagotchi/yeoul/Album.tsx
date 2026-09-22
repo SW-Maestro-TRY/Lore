@@ -77,7 +77,9 @@ function Wall({ y }: { y: Yeoul }) {
         {w.actions.map((a) => (
           <button
             key={a.label} onClick={a.tap} data-action={`album-${a.label}`}
-            style={{ minHeight: 40, padding: '10px 4px', borderRadius: radius.sm, border: `1px solid ${a.bd}`, background: a.bg, fontSize: fz.sm, color: a.fg }}
+            // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 바닥값이 40 이라 실측도 40px 이었다). 칸이 보이는 단추라
+            //   알약처럼 **바닥값만 올린다** — 아이 정보·온보딩 칩과 같은 규칙(`Panels`·`Onboarding`).
+            style={{ minHeight: TAP_MIN, padding: '10px 4px', borderRadius: radius.sm, border: `1px solid ${a.bd}`, background: a.bg, fontSize: fz.sm, color: a.fg }}
           >{a.label}</button>
         ))}
       </div>
@@ -124,9 +126,10 @@ function FrameView({ y }: { y: Yeoul }) {
         {f.locked && <span style={{ padding: '7px 14px', borderRadius: radius.pill, background: paperA(.16), fontSize: fz.sm, color: '#F3E9DC' }}>{f.cond}</span>}
         {f.open && (
           <span style={{ display: 'flex', gap: gap.sm }}>
-            <button onClick={f.save} data-action="frame-save" style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>저장</button>
+            {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 39px). */}
+            <button onClick={f.save} data-action="frame-save" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>저장</button>
             {/* 서버가 주소를 만들어 준다. 파일이 아니라 링크인 이유는 lib/pet.ts share() 머리말에. */}
-            <button onClick={f.share} data-action="frame-share" style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>공유</button>
+            <button onClick={f.share} data-action="frame-share" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>공유</button>
           </span>
         )}
       </div>

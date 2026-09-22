@@ -1118,16 +1118,21 @@ function SampleHud({ y }: { y: Yeoul }) {
         {/* 알은 여전히 눌러서 알 화면으로 간다. 띠 안으로 들어온 만큼 고리·후광은 걷어냈다. */}
         <button
           onClick={v.sample.forceHatch} data-part="sample-egg"
-          style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: '4px 11px 4px 5px', borderRadius: radius.pill, border: `1px solid ${C2.lineWarm}`, background: C2.paperWarm }}
+          // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 32px). 바로 위 '정보 수정' 과 **같은 꼴** —
+          //   단추는 투명한 판만 맡고, 보이는 알약은 안쪽 span 이 그린다. 음수 여백이 줄 높이를
+          //   예전 그대로(32px) 되돌리므로 머리 띠는 안 밀린다.
+          style={{ display: 'flex', alignItems: 'center', minHeight: TAP_MIN, margin: '-6px 0', padding: 0, border: 'none', background: 'none' }}
         >
-          <span style={{ width: 22, height: 22, borderRadius: '50%', background: v.sample.ring, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ width: 17, height: 17, borderRadius: '50%', background: C.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={EGG_IMG.idle} alt="" style={{ width: 11, height: 13, objectFit: 'contain', display: 'block', animation: v.sample.eggAnim }} />
+          <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: '4px 11px 4px 5px', borderRadius: radius.pill, border: `1px solid ${C2.lineWarm}`, background: C2.paperWarm }}>
+            <span style={{ width: 22, height: 22, borderRadius: '50%', background: v.sample.ring, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ width: 17, height: 17, borderRadius: '50%', background: C.paper, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={EGG_IMG.idle} alt="" style={{ width: 11, height: 13, objectFit: 'contain', display: 'block', animation: v.sample.eggAnim }} />
+              </span>
             </span>
+            <span style={{ fontSize: fz.sm, lineHeight: 1, color: C2.muted }}>{v.sample.eggNote}</span>
+            <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{v.sample.eggCount}</span>
           </span>
-          <span style={{ fontSize: fz.sm, lineHeight: 1, color: C2.muted }}>{v.sample.eggNote}</span>
-          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{v.sample.eggCount}</span>
         </button>
       </div>
     </div>
@@ -1177,7 +1182,8 @@ function ChatFab({ y }: { y: Yeoul }) {
  */
 /**
  * 안내 카드의 손잡이 한 칸. **셋이 같은 결이라야 한 줄로 읽힌다.**
- * ★ 터치 타깃 36px 을 지킨다 — 예전 연습방 알약은 높이 21px 이라 손가락이 자주 빗나갔다.
+ * ★ 터치 타깃은 `TAP_MIN` 이다(2026-09-23 · 예전 36 → 실측 39px). 예전 연습방 알약은 높이 21px 이라
+ *   손가락이 자주 빗나갔는데, 36 은 그 절반만 갚은 값이었다. 값은 한 곳(`ui.TAP_MIN`)에서만 정한다.
  */
 function TutChip({ label, onTap, primary = false, ...rest }: {
   label: string; onTap: () => void; primary?: boolean;
@@ -1187,7 +1193,7 @@ function TutChip({ label, onTap, primary = false, ...rest }: {
       {...rest}
       onClick={(e) => { e.stopPropagation(); onTap(); }}
       style={{
-        minHeight: 36, padding: pad.chip, borderRadius: radius.pill, fontSize: fz.md,
+        minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, fontSize: fz.md,
         border: primary ? 'none' : `1px solid ${C.lineHard}`,
         background: primary ? C.accent : C.slot,
         color: primary ? C.accentInk : C.sub,
@@ -1429,7 +1435,10 @@ function ChatBar({ y }: { y: Yeoul }) {
             if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
             send();
           }}
-          style={{ flex: 1, minWidth: 0, border: 'none', background: 'none', fontSize: fz.md, color: C.ink, outline: 'none' }}
+          // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 21px). 입력칸은 **테두리도 바탕도 없는 칸**이라
+          //   판만 키우고 남는 몫을 음수 여백으로 되돌리면 **보이는 줄 높이는 한 픽셀도 안 변한다**
+          //   (44 - 11.5*2 = 21 = 예전 높이).
+          style={{ flex: 1, minWidth: 0, minHeight: TAP_MIN, margin: '-11.5px 0', border: 'none', background: 'none', fontSize: fz.md, color: C.ink, outline: 'none' }}
         />
         {/* ★ 누르는 자리 44px(판정 5) — 동그라미는 28 그대로 두고 단추만 키운다(줄 높이 유지). */}
         <button
@@ -1519,7 +1528,9 @@ function Popover({ y, compact = false }: { y: Yeoul; compact?: boolean }) {
     <div
       data-part="pop-card"
       // ★ 짧은 화면(`compact`)은 여백·글자를 조금씩 줄여 팝오버 높이를 낮춘다(색·모양·구성은 그대로).
-      //   낮아진 만큼 발끝선 예약(`FOOT_FLOOR_SHORT`)도 낮춰 아이가 커진다. 버튼 터치 타깃은 유지한다.
+      //   낮아진 만큼 발끝선 예약(`FOOT_FLOOR_SHORT`)도 낮춰 아이가 커진다.
+      // ★★ **버튼 높이는 안 줄인다**(2026-09-23) — 이 주석이 "터치 타깃은 유지한다" 고 적어 두고도
+      //   실제로는 43px 로 줄이고 있었다. 지금은 `PopButton` 이 `TAP_MIN` 을 바닥으로 깐다.
       style={{
         position: 'relative', width: '100%',
         padding: compact ? '8px 12px' : '12px 13px', boxSizing: 'border-box', borderRadius: radius.lg,
@@ -1543,8 +1554,8 @@ function Popover({ y, compact = false }: { y: Yeoul; compact?: boolean }) {
         {/* ★ '여기서 ○○ 누르기' 안내 줄은 없앴다(2026-09-07 상훈님 지시).
             같은 말을 세 번 하고 있었다 — 위 안내 카드가 무엇을 할지 말하고, 대상 버튼이 깜빡인다.
             깜빡임(yBlink)은 남긴다. 글자 없이 가리킬 수 있는 유일한 수단이라 그것까지 없애면 못 찾는다. */}
-        {p.a && <PopButton b={p.a} compact={compact} />}
-        {p.hasB && p.b && <PopButton b={p.b} compact={compact} />}
+        {p.a && <PopButton b={p.a} />}
+        {p.hasB && p.b && <PopButton b={p.b} />}
       </span>
       <span data-part="pop-tail" style={{ position: 'absolute', left: geo ? geo.tail : '50%', bottom: -6, width: 12, height: 12, background: C.paper, borderRight: `1px solid ${C.lineSoft}`, borderBottom: `1px solid ${C.lineSoft}`, transform: 'translateX(-50%) rotate(45deg)' }} />
     </div>
@@ -1552,16 +1563,24 @@ function Popover({ y, compact = false }: { y: Yeoul; compact?: boolean }) {
   );
 }
 
-function PopButton({ b, compact = false }: { b: NonNullable<Yeoul['v']['pop']['a']>; compact?: boolean }) {
+function PopButton({ b }: { b: NonNullable<Yeoul['v']['pop']['a']> }) {
   return (
     // ★ 진짜 `disabled` 다(계약 10절 "거절될 버튼은 미리 잠가 둔다"). 회색으로만 칠하고 눌리게 두면
     //   눌러 봐야 왜 안 되는지 알 수 있고, 서버에는 나갈 필요 없던 요청이 나간다.
     //   ⚠️ `aria-disabled` 를 늘 달지 않는다 — `"false"` 도 검사 도구에 '비활성' 으로 읽힌다.
-    //   ★ 짧은 화면(`compact`)은 세로 여백만 살짝 줄인다(13→10px). 글자·터치 폭은 그대로라 여전히 잘 눌린다.
+    //   ★★ **짧은 화면 예외(`compact` 10px)를 없앴다**(2026-09-23). 바로 위 팝오버 주석이
+    //   *"버튼 터치 타깃은 유지한다"* 고 적어 두었는데 **실제로는 49 → 43px 로 줄고 있었다**
+    //   (390x640 · 375x667 · 360x640 실측). 앱에서 제일 많이 누르는 자리가 제일 작은 화면에서만
+    //   기준 미달이었던 셈이다. 없애도 되는 까닭 — 짧은 화면이 아끼려던 것은 **팝오버 전체 높이**이고,
+    //   그 몫은 바깥 여백(8/12)·줄간격·게이지 높이·칸 사이(gap)가 이미 따로 줄이고 있다.
+    //   버튼 두 개에서 되돌아오는 12px 은 발끝선 예약(`FOOT_FLOOR_SHORT`)이 흡수한다 —
+    //   **아이 키 손해는 실측 0px 이다**(390x640·375x667·360x640 에서 172.7·206.9·172.7 로 전후 동일.
+    //   팝오버 카드만 145.3 → 157.3 으로 높아졌다). 공짜로 43 → 49px 을 되찾은 셈이다.
+    //   이제 높이는 `TAP_MIN` 한 값이 정한다(여백이 아니라 **바닥값**이라 글꼴이 바뀌어도 안 무너진다).
     <button
       onClick={b.tap} data-action={b.label} disabled={b.off}
       data-off={b.off ? '1' : undefined} data-why={b.why || undefined}
-      style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: compact ? '10px 14px' : '13px 14px', borderRadius: radius.md, border: b.bd, background: b.bg, color: b.fg, textAlign: 'left', animation: b.anim, cursor: b.off ? 'default' : 'pointer' }}
+      style={{ display: 'flex', alignItems: 'center', gap: gap.sm, boxSizing: 'border-box', minHeight: TAP_MIN, padding: '13px 14px', borderRadius: radius.md, border: b.bd, background: b.bg, color: b.fg, textAlign: 'left', animation: b.anim, cursor: b.off ? 'default' : 'pointer' }}
     >
       <span style={{ fontSize: fz.lg }}>{b.label}</span>
       <span style={{ flex: 1 }} />
