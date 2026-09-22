@@ -7,6 +7,7 @@ import "./i18n";
 import Link from "next/link";
 import localFont from "next/font/local";
 import { useEffect, useState } from "react";
+import { CONTACT_CHANNEL } from "@common/links";
 import * as api from "../../lib/api";
 import { LangSwitch, useT, type T } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
@@ -350,7 +351,7 @@ export default function Landing({ go }: { go: Go }) {
         <nav>
           <Link href="/legal/terms">{t("이용약관")}</Link>
           <Link href="/legal/privacy">{t("개인정보처리방침")}</Link>
-          <span>{t("1:1 문의")}</span>
+          <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">{t("1:1 문의")}</a>
         </nav>
         <div className="wt-landing-badges">
           {/* eslint-disable-next-line @next/next/no-img-element */}
