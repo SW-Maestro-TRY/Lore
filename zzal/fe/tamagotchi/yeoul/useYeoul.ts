@@ -1199,9 +1199,12 @@ export function useYeoul(live?: Live) {
     const chosen = sRef.current.picks.persona ?? (svName ? [svName] : []);
     const persona = PERSONALITY_OF[chosen[0] ?? ''];
     if (!persona) { flash('성격을 하나 이상 골라 주세요'); return; }
-    // 세계관은 칩 여러 개 + 직접 적은 한 줄을 이어 붙인다(서버 100자 제한).
+    // 세계관은 칩 여러 개 + 직접 적은 한 줄을 **서버 한 칸에** 이어 붙인다.
+    // ★★ 자르는 길이는 `CHAR_TEXT_MAX.world` 한 곳에서만 온다(`lib/pet.ts`, 계약 옆).
+    //   2026-09-22 — 여기 `100` 이 박혀 있어, 한도를 200 으로 열어도 **방(아이 정보)에서 저장할 때
+    //   말없이 100 에서 잘렸다.** 온보딩 쪽 같은 계산과 **두 벌**이던 자리이기도 하다.
     const world = [...(sRef.current.picks.world ?? []), (sRef.current.texts.world ?? '').trim()]
-      .filter(Boolean).join(' · ').slice(0, 100);
+      .filter(Boolean).join(' · ').slice(0, CHAR_TEXT_MAX.world);
     void (async () => {
       const r = await liveRef.current?.savePersonality(persona, world || undefined);
       if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
