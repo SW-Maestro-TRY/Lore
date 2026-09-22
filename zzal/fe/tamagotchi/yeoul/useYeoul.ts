@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
-  STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
+  STEPS, TUTOR, TUTOR_ROOM, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
   WISH_COPY, WISH_MAX, UNLOCK_COPY, WISH_REPLY,
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
@@ -917,18 +917,25 @@ export function useYeoul(live?: Live) {
   // ★ 2026-09-10 — 진짜 아이는 **서버가 칸을 센다**(`tutorial.step`). 화면은 순서를 다시 판정하지 않는다.
   //   1~8칸은 부를 API 가 따로 없다 — 그 칸의 행동을 평소대로 하면 서버가 스스로 넘긴다.
   //   9칸만 `tutorial/done` 을 부르고, **그 호출이 시계를 켠다.**
-  //   목(여울 연습방·시안 미리보기)은 예전 8부름 그대로 둔다 — 서버가 없는 자리라 셀 사람이 화면뿐이다.
   const svTut = onServer ? (sv.tutorial ?? null) : null;
   /** 서버가 "지금 이 칸" 이라고 찍어 준 자리. 없으면(졸업했거나 목이면) null. */
   const svTutIdx = svTut?.steps.findIndex((x) => x.current) ?? -1;
-  const TUT: readonly TutorStep[] = s.sampleMode ? TUTOR : onServer ? TUTOR_SERVER : TUTOR_MAIN;
+  /**
+   * 지금 쓰는 칸 목록. **둘뿐이다**(2026-09-22).
+   *   연습방(`sampleMode`) = `TUTOR` — 여울과 **가지고 노는 자리**. 앞뒤로 오갈 수 있다.
+   *   진짜 방 = `TUTOR_ROOM` — **서버든 목이든 같은 아홉 칸.** 목에서 밟은 것이 곧 서버에서 밟을 것이다.
+   * ★ 예전에는 진짜 방 목이 8칸짜리 다른 목록을 써서, 서버 없는 화면으로는 진짜 튜토리얼을
+   *   확인할 수 없었다. 목록을 하나로 합치면서 그 구멍이 닫혔다.
+   */
+  const TUT: readonly TutorStep[] = s.sampleMode ? TUTOR : TUTOR_ROOM;
   const tut: TutorStep | null = onServer
-    ? (svTutIdx >= 0 ? TUTOR_SERVER[svTutIdx] ?? null : null)
+    ? (svTutIdx >= 0 ? TUTOR_ROOM[svTutIdx] ?? null : null)
     : (s.sampleMode || s.tutorOn) && s.tutor < TUT.length ? TUT[s.tutor] : null;
   /** 지금 몇 번째 칸인가(점·`3 / 9` 표시용). 서버에 붙어 있으면 서버 숫자 그대로. */
   const tutIdx = onServer ? Math.max(0, svTutIdx) : s.tutor;
   /** 마지막 칸 — 누를 것이 없어서 우리가 `tutorial/done` 을 보내야 하는 자리. */
-  const atDone = onServer && !!tut && tut.done === 'DONE';
+  /** 마지막 칸 — 누를 것이 없어서 **눌러서 끝내는** 자리. 목도 서버와 같은 칸을 쓴다. */
+  const atDone = !s.sampleMode && !!tut && tut.done === 'DONE';
 
   /**
    * **튜토리얼이 지금 시키는 것 하나**(정본 §12 "안내 버튼 외 잠금" · 2026-09-22 판정 J8).
@@ -945,7 +952,12 @@ export function useYeoul(live?: Live) {
    *   방을 말한다. `tut` 이 비는 순간 이 잠금은 통째로 사라진다.
    */
   const tutLock = useMemo(() => {
-    if (!tut || tut.done === 'any') return null;
+    // ★★ **마지막 칸(DONE)은 안 잠근다**(2026-09-22 실측). 8칸이 "재우고 다시 깨워 주세요" 라
+    //   9칸은 **아이가 잠든 채로** 오는데, 여기서 다 잠그면 침실 팝오버의 「깨우기」까지 막힌다.
+    //   그 팝오버는 자는 동안 닫히지도 않아서 안내 카드가 뒤에 가리고, 결국 **아무 데도 못 간다**
+    //   (390 실측: 9칸에서 손잡이 0개). 마지막 칸은 누를 것이 하나뿐이라 안내만으로 충분하고,
+    //   잠가서 얻는 것이 없다 — 첫 칸(`any`)을 안 잠그는 것과 같은 이유다.
+    if (!tut || tut.done === 'any' || tut.done === 'DONE') return null;
     const roomName = ROOM_KEYS.includes(tut.room as RoomKey) ? ROOM_NAME[tut.room as RoomKey] : '';
     const note = tut.act === 'pet' ? '지금은 아이를 쓰다듬어 볼 차례예요'
       : tut.room === 'chat' ? '지금은 말풍선을 눌러 답할 차례예요'
@@ -1015,18 +1027,26 @@ export function useYeoul(live?: Live) {
     }),
   });
 
+  /**
+   * 목(서버 없는 진짜 방)에서 한 칸을 넘긴다.
+   *
+   * ★ 서버에 붙어 있으면 칸은 **서버가 넘긴다.** 화면이 같이 세면 두 곳에서 판정하게 되고,
+   *   언젠가 갈리며 갈린 쪽은 아무 소리도 안 낸다(계약 5절).
+   * ★ 넘기는 열쇠말(`done`)은 **서버 것과 같은 낱말**이다(`FEED`·`PET`·`CHAT`…) — 목록이 한 벌이니
+   *   열쇠말도 한 벌이어야 한다. 마지막 칸(`DONE`)은 눌러서 끝내므로 여기서 넘기지 않는다.
+   */
   const tutorDone = useCallback((what: string) => {
-    // ★ 서버에 붙어 있으면 칸은 **서버가 넘긴다.** 화면이 같이 세면 두 곳에서 판정하게 되고,
-    //   언젠가 갈리며 갈린 쪽은 아무 소리도 안 낸다(계약 5절).
     if (onServerRef.current) return;
     setS((v) => {
       if (!v.tutorOn || v.sampleMode) return v;
-      const st = TUTOR_MAIN[v.tutor];
-      if (!st || (st.done !== what && st.done !== 'any')) return v;
+      const st = TUTOR_ROOM[v.tutor];
+      if (!st || st.done !== what) return v;
       const next = v.tutor + 1;
-      return next >= TUTOR_MAIN.length ? finishTutor(v) : { ...v, tutor: next };
+      return next >= TUTOR_ROOM.length ? finishTutor(v) : { ...v, tutor: next };
     });
   }, []);
+  /** 마지막 칸의 「이제 시작할게요」 — **목 전용**(서버는 `onFinishTutorial` 이 시계를 켠다). */
+  const finishTutorHere = useCallback(() => setS((v) => finishTutor(v)), []);
   const skipTutorStep = useCallback(() => {
     setS((v) => {
       const next = v.tutor + 1;
@@ -1091,7 +1111,7 @@ export function useYeoul(live?: Live) {
     lastSel.current = Date.now();
     // 벽을 열 때 도감을 다시 읽는다 — 그사이 밤에 배운 것이 도착해 있을 수 있다.
     if (onServerRef.current) void liveRef.current?.loadAlbum();
-    tutorDone('album');
+    tutorDone('SHARE');
     patch({ wallOpen: true, wallClosing: false, popOpen: false, sheet: null, chatOpen: false, toast: '' });
   }, [patch, tutorDone]);
   const closeWall = useCallback(() => {
@@ -1190,7 +1210,7 @@ export function useYeoul(live?: Live) {
     // 4회째부터는 하트를 안 띄운다(위 서버 경로와 같은 규칙). 목 화면도 같은 결이어야
     // 시안을 눌러 본 것과 실제가 어긋나지 않는다.
     if (counted) later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
-    tutorDone('pet');
+    tutorDone('PET');
   }, [s.chatOpen, s.popOpen, s.sampleMode, s.pets, s.bond, patch, careAct, flash, later, tutorDone]);
 
   const onRice = useCallback(() => {
@@ -1208,7 +1228,7 @@ export function useYeoul(live?: Live) {
     patch({ full: esRef.current.full + 1, stock: esRef.current.stock - 1, bond: Math.min(100, s.bond + 1) });
     careAct('feed_rice');
     flash('맛있게 먹었어요');
-    tutorDone('feed');
+    tutorDone('FEED');
   }, [s.sampleMode, s.full, s.stock, s.bond, patch, careAct, flash, tutorDone, serverCare]);
 
   const onSnack = useCallback(() => {
@@ -1229,7 +1249,7 @@ export function useYeoul(live?: Live) {
     patch({ trace: 0 });
     careAct('clean');
     flash('깨끗해졌어요');
-    tutorDone('clean');
+    tutorDone('CLEAN');
   }, [s.trace, s.sampleMode, patch, careAct, flash, tutorDone, serverCare]);
 
   const onBath = useCallback(() => {
@@ -1276,6 +1296,15 @@ export function useYeoul(live?: Live) {
     if (!persona) { flash('성격을 하나 이상 골라 주세요'); return; }
     // 다시 눌렀다 — 지난 실패 줄은 지우고 시작한다.
     patch({ saveErr: '' });
+    // ★ 목(서버 없는 진짜 방)에서도 **이 칸을 밟을 수 있어야** 한다(2026-09-22) — 튜토리얼이
+    //   서버와 같은 아홉 칸이 되었으니 4칸도 같이 넘어가야 한다. 보낼 곳이 없으므로 화면 상태에만
+    //   남기고 칸을 넘긴다. 연습방은 여전히 저장하지 않는다(거긴 연습이다).
+    if (!onServerRef.current) {
+      patch({ sheet: null });
+      flash(sRef.current.sampleMode ? '연습방이라 저장되지 않아요' : '기억해 뒀어요');
+      if (!sRef.current.sampleMode) tutorDone('PERSONALITY');
+      return;
+    }
     // 세계관은 칩 여러 개 + 직접 적은 한 줄을 **서버 한 칸에** 이어 붙인다.
     // ★★ 자르는 길이는 `CHAR_TEXT_MAX.world` 한 곳에서만 온다(`lib/pet.ts`, 계약 옆).
     //   2026-09-22 — 여기 `100` 이 박혀 있어, 한도를 200 으로 열어도 **방(아이 정보)에서 저장할 때
@@ -1290,7 +1319,7 @@ export function useYeoul(live?: Live) {
       patch({ sheet: null, saveErr: '' });
       flash('기억해 뒀어요');
     })();
-  }, [flash, patch]);
+  }, [flash, patch, tutorDone]);
 
   /** 튜토리얼 마지막 칸 — 이 호출이 시계를 켠다. */
   const onFinishTutorial = useCallback(() => {
@@ -1331,13 +1360,17 @@ export function useYeoul(live?: Live) {
     // ★ 연습방은 **시각을 안 본다**(상훈님 2026-09-13). 시연·검수용인데 저녁 7시를 기다려야 하면
     //   낮에는 자는 자세와 커튼을 확인할 길이 없다. 진짜 방(서버 경로)은 위에서 이미 갈라져 나갔고
     //   거기는 `clock.canSleep` 이 정본 규칙(19:00~23:00 재우기 · 23:00 자동)을 그대로 든다.
-    if (!esRef.current.night && !s.sampleMode) { flash('저녁 7시부터 재울 수 있어요'); return; }
+    // ★★ **튜토리얼은 시계와 논외다**(정본 1.4·1.5 · §16). 8칸이 "재우고 다시 깨워 주세요" 인데
+    //   낮에 막히면 목의 진짜 방 튜토리얼은 저녁 7시까지 **거기서 멎는다**(2026-09-22 실측:
+    //   8/9 에서 더 못 감). 서버도 튜토리얼 낮잠을 허용한다(그 낮잠이 재우기·깨우기 2회로 잡히는
+    //   것이 의도라고 정본이 못 박았다). 튜토리얼이 끝나면 그때부터 19:00 규칙이 산다.
+    if (!esRef.current.night && !s.sampleMode && !s.tutorOn) { flash('저녁 7시부터 재울 수 있어요'); return; }
     // 재우기는 행동이 아니라 상태라 `careAct` 를 안 탄다 — 잠 덮개는 여기서 직접 맞춘다.
     setS((v) => ({ ...v, dev: { ...v.dev, sleeping: null } }));
     patch({ sleeping: true, sheet: null, resolved: { ...s.resolved, bed: true }, cSleep: s.cSleep + 1 });
     flash('잘 자요');
-    tutorDone('sleep');
-  }, [s.sleeping, s.night, s.sampleMode, s.day, s.resolved, s.cSleep, s.cWake, patch, flash, careAct, tutorDone]);
+    tutorDone('NAP');
+  }, [s.sleeping, s.night, s.sampleMode, s.tutorOn, s.day, s.resolved, s.cSleep, s.cWake, patch, flash, careAct, tutorDone]);
 
   /**
    * 좌우 맞히기 **한 매치**(2026-09-20 재설계 · 안 1). 시트를 없애고 무대 위에서 아이와 마주 본다.
@@ -1354,6 +1387,10 @@ export function useYeoul(live?: Live) {
   const startGuess = useCallback(() => {
     lastSel.current = Date.now();
     const happy0 = esRef.current.happy;
+    // ★ 목의 6칸(게임)은 **넘어가는 길이 아예 없었다**(2026-09-22 발견) — 옛 8칸 목록에도 이 칸이
+    //   있었는데 아무도 `tutorDone` 을 안 불러서, 서버 없는 진짜 방 튜토리얼은 거기서 멎었다.
+    //   서버는 **판을 시작한 순간** 이 칸을 넘긴다(기권해도 넘어간다 — dev 실측). 목도 같게.
+    tutorDone('GAME');
     // 하루 판수는 **매치 단위**로 준다(정본: 판 = 한 매치). 예전 목은 한 판(라운드)마다 깎았다.
     setS((v) => (v.gOn ? v : {
       ...v,
@@ -1572,7 +1609,7 @@ export function useYeoul(live?: Live) {
       };
     });
     careAct('reply');
-    tutorDone('chat');
+    tutorDone('CHAT');
   }, [act, careAct, tutorDone, patch, flash, floor2Of, sitOf]);
   /**
    * 보내기.
@@ -2604,7 +2641,16 @@ export function useYeoul(live?: Live) {
       : goals.find((g) => !g.done)) ?? null;
     // ★ 연습방·진짜 방 **둘 다** 이 카드가 안내를 맡는다(2026-09-21 A-06). 예전에는 연습방만
     //   머리 띠 위의 다른 카드를 썼다 — 같은 안내가 화면마다 다른 자리에 있었다.
-    const showTutMini = !!tut && !es.sleeping && !s.chatOpen;
+    /**
+     * 좌측 하단 카드가 **튜토리얼의 목소리**를 낼 때.
+     *
+     * ★★ 자고 있어도 낸다(2026-09-22 실측). 8칸("재우고 다시 깨워 주세요")을 끝내면 9칸으로
+     *   넘어가는데 그때 아이는 **자고 있다** — 카드를 접으면 마지막 칸의 「이제 시작할게요」가
+     *   화면에서 사라지고, 다른 손잡이는 전부 잠겨 있어서(J8) **아무 데도 못 간다.**
+     *   자는 동안 카드를 접는 것은 "방이 조용해야 한다" 는 연출인데, 튜토리얼 중에는
+     *   그 카드가 유일한 길이라 연출보다 길이 먼저다.
+     */
+    const showTutMini = !!tut && !s.chatOpen;
 
     /**
      * 자유 입력칸이 그릴 것 한 벌. **뷰에서 만든다** — 글자마다 바뀌는 값이라
@@ -2754,7 +2800,9 @@ export function useYeoul(live?: Live) {
       // ★ 로드맵이 끝나도 카드가 사라지지 않는다(2026-09-07 상훈님 지시). 정본상 2층 8종을
       //   다 열면 3층이 시작되고 그때 조각 4칸이 등장하므로, 그 자리를 그대로 이어받는다.
       mini: {
-        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
+        // ★ 자는 동안에는 접는다 — **튜토리얼 중만 빼고**(→ `showTutMini` 머리말).
+        //   9칸은 아이가 잠든 채로 오므로, 접으면 마지막 손잡이가 화면에서 사라진다.
+        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && (!es.sleeping || showTutMini),
         isTut: showTutMini, tutText: tut?.text ?? '',
         tutStep: `${tutIdx + 1} / ${TUT.length}`,
         /**
@@ -2767,8 +2815,9 @@ export function useYeoul(live?: Live) {
           label: tutIdx === TUT.length - 1 ? '알았어요' : '다음',
           tap: nextTutor,
         },
-        /** 진짜 방(목)에서만 뜨는 한 줄. 누를 것이 아니라 **어떻게 넘어가는지**를 말해 준다. */
-        tutHint: !!tut && !s.sampleMode && !onServer ? '직접 해 보면 다음으로' : '',
+        /** 진짜 방(목)에서만 뜨는 한 줄. 누를 것이 아니라 **어떻게 넘어가는지**를 말해 준다.
+         *  ★ 마지막 칸에는 안 낸다 — 거기는 누를 버튼이 있다. */
+        tutHint: !!tut && !s.sampleMode && !onServer && !atDone ? '직접 해 보면 다음으로' : '',
         /**
          * 칸 아래 버튼.
          *
@@ -2780,9 +2829,12 @@ export function useYeoul(live?: Live) {
          *   연습은 앞뒤로 오가며 보는 자리이므로 **넘기는 손잡이는 「다음」 하나면 된다.**
          * ★ 진짜 방(목)에는 남긴다 — 거기는 「이전」·「다음」이 없어서 이것이 유일한 손잡이다.
          */
-        tutBtn: onServer
-          ? (atDone ? { show: true, label: '이제 시작할게요', tap: onFinishTutorial } : { show: false, label: '', tap: noop })
-          : { show: !s.sampleMode, label: '나중에', tap: skipTutorStep },
+        // ★★ 2026-09-22 — 진짜 방은 **목도 서버와 같은 아홉 칸**을 쓴다. 그래서 목의 '나중에' 도
+        //   뺐다: 서버에는 없는 손잡이라, 목에서 건너뛰며 연습하면 **연습이 진짜와 다른 말**을 한다.
+        //   넘기는 길은 양쪽 다 "직접 해 보기" 하나이고, 마지막 칸만 눌러서 끝낸다.
+        tutBtn: atDone
+          ? { show: true, label: '이제 시작할게요', tap: onServer ? onFinishTutorial : finishTutorHere }
+          : { show: false, label: '', tap: noop },
         hasGoal: !showTutMini && !!goal,
         name: goal?.name ?? '',
         cond: goal ? `${goal.cond} ${Math.min(goal.have, goal.need)} / ${goal.need}` : '',
@@ -2978,9 +3030,10 @@ export function useYeoul(live?: Live) {
         /** 연습방에서는 저장 버튼이 없다 — **없는 이유를 말해 준다**(A-19).
          *  예전에는 버튼만 조용히 사라져 "저장이 어디 갔지" 로 읽혔다. 사용자를 탓하지 않고
          *  여기가 연습하는 곳이라는 사실만 담담히 적는다. */
-        saveNote: onServer ? '' : '연습방이라 저장되지 않아요',
+        // ★ 진짜 방 목에서는 저장이 **화면에만** 남는다 — 그래도 4칸을 밟아야 하므로 버튼은 낸다.
+        saveNote: onServer ? '' : (s.sampleMode ? '연습방이라 저장되지 않아요' : '서버가 없어 화면에만 남아요'),
         save: {
-          show: onServer,
+          show: onServer || !s.sampleMode,
           label: '성격 저장하기',
           tap: onSavePersona,
           // 고르지 않았으면 보낼 것이 없다. 서버가 성격을 필수로 받는다.
@@ -3045,7 +3098,7 @@ export function useYeoul(live?: Live) {
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
     s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess, quitGuess,
-    nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
+    nextTutor, onAnswerCall, skipTutorStep, finishTutorHere, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, popPostcard, popScenes, toggleDeco, toggleMini, pickWall, pickNeedStyle, pickTime, onAskDraft,
     toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash,
     tutIdx, atDone, onFinishTutorial, onSavePersona, noop, live?.resting,
