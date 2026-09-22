@@ -583,7 +583,14 @@ export class MockPetServer implements PetSource {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
-    if (r.game && !r.game.finished) return this.gameState(r, now);
+    // ★★ **이어 치기는 없다**(J3 · 서버가 미완료 판 재개를 없앴다). 새로고침·재접속으로 돌아온
+    //   미완료 판은 **끝난 것(패배)** 으로 접는다. 옛 목은 여기서 치던 판을 그대로 돌려줘,
+    //   나갔다 들어오면 판이 되살아나 하루 3판이 무의미해졌다.
+    //   하루 판수는 시작할 때 이미 깎였으므로 여기서 되돌리지 않는다.
+    if (r.game && !r.game.finished) {
+      r.game.finished = true;
+      r.game.win = false;
+    }
     if (r.sleeping) throw err(409, 'ZZAL_PET_SLEEPING', '자고 있어요');
     if (r.sick) throw err(409, 'ZZAL_SICK_REFUSES', '아파서 놀 기운이 없대요');
     if (r.today.games >= GAMES_PER_DAY) throw err(409, 'ZZAL_GAME_DAILY_LIMIT', '오늘은 충분히 놀았어요');
@@ -665,10 +672,21 @@ export class MockPetServer implements PetSource {
     };
   }
 
+  /**
+   * 지금 치는 판 — **이어받을 판은 주지 않는다**(J3).
+   *
+   * ★ 돌아왔을 때 미완료 판이 남아 있으면 **그 자리에서 끝난 것(패배)** 으로 접는다. 서버가
+   *   미완료 판 재개를 없앴으므로 목도 같아야 한다 — 목만 이어 주면 연습방에서만 되는 길이 생긴다.
+   *   하루 판수는 시작할 때 이미 깎였으니 **남은 판 수만** 그대로 나간다.
+   */
   async getCurrentGame(petId: number): Promise<GameState> {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
+    if (r.game && !r.game.finished) {
+      r.game.finished = true;
+      r.game.win = false;
+    }
     return this.gameState(r, now);
   }
 
@@ -837,7 +855,11 @@ export class MockPetServer implements PetSource {
       r.today = { games: 0, pets: 0, careIntimacy: 0, snacks: 0, snackStreak: 0, bathDone: false, careMiss: 0 };
       r.pieceDay = { feeds: 0, snacks: 0, gameWins: 0, cleans: 0, chats: 0 };
       r.snacksToday = 0;
-      if (r.game && !r.game.finished) r.game.finished = true;
+      // 잠들면 치던 판도 접힌다 — 접은 판은 기권과 같아 승리가 아니다.
+      if (r.game && !r.game.finished) {
+        r.game.finished = true;
+        r.game.win = false;
+      }
     }
     if (!auto) {
       r.happiness = Math.min(MAX_GAUGE, r.happiness + 1);
