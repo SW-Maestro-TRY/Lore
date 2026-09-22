@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { EGG_IMG } from './constants';
-import { C, C2, GAEGU, MONO, gap, monoSize, radius, fz, ink } from './ui';
+import { C, C2, GAEGU, MONO, TAP_MIN, gap, monoSize, radius, fz, ink } from './ui';
 import { useLive } from './useHatch';
 import { EGG_CRACK_MS, type Yeoul } from './useYeoul';
 
@@ -83,7 +83,9 @@ export default function Egg({ y }: { y: Yeoul }) {
         {e.hasMsg && <span data-part="egg-msg" style={{ textAlign: 'center', fontSize: fz.sm, lineHeight: 1.5, color: C.faint }}>{e.msg}</span>}
         {live.error && <span data-part="egg-error" style={{ textAlign: 'center', fontSize: fz.sm, lineHeight: 1.5, color: C.accent }}>{live.error}</span>}
         <button onClick={actions.tapEgg} data-action="egg-cta" style={{ padding: 16, borderRadius: radius.md, border: 'none', background: e.ctaBg, color: e.ctaFg, fontSize: fz.lg }}>{e.cta}</button>
-        <button onClick={actions.backToSample} style={{ padding: 4, border: 'none', background: 'none', fontSize: fz.sm, color: C.faint2 }}>여울 샘플로 돌아가기</button>
+        {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 24px). 테두리도 바탕도 없는 글자 단추라
+            판만 키우고 남는 몫을 음수 여백으로 되돌린다 — 보이는 글자 자리는 그대로다(44-10*2=24). */}
+        <button onClick={actions.backToSample} style={{ minHeight: TAP_MIN, margin: '-10px 0', padding: 4, border: 'none', background: 'none', fontSize: fz.sm, color: C.faint2 }}>여울 샘플로 돌아가기</button>
       </div>
     </div>
   );

@@ -568,9 +568,10 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                 <input
                   value={s.petName} onChange={(e) => actions.onName(e.target.value)} maxLength={12} placeholder="여울"
                   data-part="pet-name" className="onb-name-input"
-                  style={{ flex: 1, minWidth: 0, padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.lg, color: C.ink, outline: 'none' }}
+                  // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 43px — 1px 모자랐다).
+                  style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', minHeight: TAP_MIN, padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.lg, color: C.ink, outline: 'none' }}
                 />
-                <button onClick={actions.randomName} style={{ flex: 'none', padding: '0 17px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.md, color: C.sub2 }}>랜덤</button>
+                <button onClick={actions.randomName} style={{ flex: 'none', minHeight: TAP_MIN, padding: '0 17px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.md, color: C.sub2 }}>랜덤</button>
               </div>
               {o.nameError && <span style={{ fontSize: fz.sm, color: C.accent }}>이름을 지어 주면 시작할 수 있어요.</span>}
               {/* 두고 간 초안을 이어붙였을 때. 그림을 다시 올리라고 하면 이미 구운 시트를 버리는
