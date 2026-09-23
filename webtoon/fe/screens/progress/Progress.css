@@ -209,9 +209,15 @@
   .wt .wt-prog-play .mascot { width: 150px; height: 150px; }
   .wt .wt-prog-mchips { display: flex; justify-content: space-between; padding: 0 4px; }
   .wt .wt-prog-mnote { display: block; }
-  .wt .wt-prog-mchips span { font-size: 11.5px; color: var(--dim); }
-  .wt .wt-prog-mchips span.cur { font-weight: 700; color: var(--ink); }
-  .wt .wt-prog-mchips span.done { color: #0f9e8a; }
+  /* 지나온 단계를 다시 보는 단추다(전에는 그냥 글자였다) — 버튼 기본
+     테두리·배경만 지우고 칩 모양은 그대로 둔다. */
+  .wt .wt-prog-mchips button {
+    font-family: inherit; font-size: 11.5px; color: var(--dim); background: none; border: 0; padding: 0;
+    cursor: pointer;
+  }
+  .wt .wt-prog-mchips button:disabled { cursor: default; opacity: 0.6; }
+  .wt .wt-prog-mchips button.cur { font-weight: 700; color: var(--ink); }
+  .wt .wt-prog-mchips button.done { color: #0f9e8a; }
   .wt .wt-prog-main { gap: 14px; }
   .wt .wt-prog-head h2 { font-size: 24px; line-height: 1.3; }
   .wt .wt-prog-head .lede { font-size: 13.5px; line-height: 1.5; }
