@@ -180,6 +180,9 @@ export default function MyPage({
           <a className="me-nav-a" href={LEGAL_LINKS.terms} target="_blank" rel="noopener noreferrer">
             이용약관
           </a>
+          <a className="me-nav-a" href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer">
+            개인정보처리방침
+          </a>
         </nav>
       </aside>
 

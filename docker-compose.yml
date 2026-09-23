@@ -70,7 +70,7 @@ services:
   # MinIO 는 빈 통으로 뜨는데 화면은 배경·소품·여울 시연·온보딩·랜딩 썸네일이 버킷에
   # 있다고 가정하고 /images/zzal/... 를 부른다 → 안 채우면 전 화면이 깨진 그림이다.
   # staging CloudFront(공개)에서 같은 키를 그대로 받아 온다 — AWS 자격이 필요 없다.
-  # 목록 = infra/dev/seed-assets.txt (118개). 실패해도 스택은 뜬다(경고만 찍고 exit 0).
+  # 목록 = infra/dev/seed-assets.txt (127개). 실패해도 스택은 뜬다(경고만 찍고 exit 0).
   seed-fetch:
     image: curlimages/curl:latest
     user: "0:0"                             # 명명 볼륨이 root 소유로 생긴다 — 기본 유저는 못 쓴다
@@ -145,6 +145,12 @@ services:
       # 하네스가 그림·이야기를 부를 때 쓰는 열쇠. 자바 프로세스 환경으로 들어가 파이썬이
       # 물려받고, llm.py 가 OPENAI_API_KEY 로 풀어 쓴다. 비우면 만들기가 그 자리에서 멈춘다.
       WEBTOON_API_KEY: ${WEBTOON_API_KEY:-}
+      # new_harness 가 쓸 텍스트 모델 프로바이더/스토리 축 기능 스위치(llm.py·run.py).
+      # 안 주면 llm.py 기본값(gemini)으로 붙는데 dev 는 OpenAI 키만 있어서 그대로 두면
+      # 실패한다 — 비워 둬도 여기 통로만 열고, 실제 값은 .env 에서 openai 로 채운다.
+      NH_PROVIDER: ${NH_PROVIDER:-}
+      NH_STORY_AXES: ${NH_STORY_AXES:-}
+      NH_STORY_ENGINES: ${NH_STORY_ENGINES:-}
       # 하네스가 다 그린 그림을 올리고 비용을 적을 때 서버에 대는 한 마디
       # (lore.webtoon.internal-token · upload/s3_upload.py). 비우면 S3 에는 올라가도
       # 주소가 DB 에 안 적힌다.
@@ -180,6 +186,10 @@ services:
         # 노트북엔 그 주소를 받아 줄 자리가 없어 전부 404 가 난다. dev EC2 는 nginx
         # location /images/ 가 먼저 잡으므로 이 값이 쓰이지 않는다(무해).
         IMAGE_PROXY: http://minio:9000/${CONTENT_BUCKET}/images
+        # NEXT_PUBLIC_* 는 next build 시점에 클라이언트 번들에 박히는 값이라, 컨테이너가
+        # 뜬 뒤 environment 로 넘기는 방식(app 서비스처럼)은 안 통한다 — build.args 로만
+        # 전달할 수 있다. 안 주면 카카오 공유 버튼이 조용히 비활성화된다(share.ts).
+        NEXT_PUBLIC_KAKAO_JS_KEY: ${NEXT_PUBLIC_KAKAO_JS_KEY:-}
     depends_on:
       - app
     ports:

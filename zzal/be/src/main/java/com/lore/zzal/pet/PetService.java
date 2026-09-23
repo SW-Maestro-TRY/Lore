@@ -376,13 +376,29 @@ public class PetService {
     }
 
     /**
-     * 아침 공개 — 검수를 통과한(OPEN) 동작을 <b>펫이 깨어 있는 첫 정산</b>에 도착시킨다(설계 규칙 "기상 첫 화면").
+     * 아침 공개 — 검수를 통과한(OPEN) 동작을 <b>그 판정 뒤에 처음 맞는 기상</b>에 도착시킨다(정본 2·16장).
      *
-     * <h3>★ 왜 시각이 아니라 "깨어 있는 첫 정산" 인가</h3>
-     * "아침 7시에 준다" 로 못 박으면 두 가지가 어긋난다 — (1) 판정이 10:00 을 넘기면 그날은 못 준다.
-     * 설계 규칙은 그 경우 <b>낮에 도착</b>하라고 한다. (2) 늦잠 자는 펫에게 자는 동안 도착하면
-     * "일어나 보니 이미 알고 있던 일" 이 된다. 그래서 <b>깨어 있는 첫 정산</b> 하나로 둘 다 만족시킨다.
-     * 자는 동안에는 아무것도 안 찍히고, 깨는 순간(사용자가 깨우든 10:00 자동이든) 그 정산에서 도착한다.
+     * <h3>★★ "다음 기상" = 사람 판정이 끝난 뒤 처음 맞는 기상 (2026-09-22 상훈님 결정)</h3>
+     * 정본 2장이 <b>"깨어 있는 중에 판정이 끝나면 그 자리에서 주지 않고 다음 기상까지 기다린다"</b>
+     * 로 못 박았다 — "자는 동안 연습해서 아침에 배워 왔다" 는 이야기를 지키기 위해서다(1.8).
+     * 굽기가 낮으로 흩어진 뒤에도 <b>공개는 그대로 아침</b>이다.
+     *
+     * <p>옛 구현은 "깨어 있는 첫 정산" 이라 <b>낮에 판정된 것을 그날 낮에</b> 줬다(연결 감사 J6).
+     * 그러면 같은 동작이 사람마다 다른 시각에 도착하고, 아침 해금 판이 "오늘 이런 걸 배워왔어요"
+     * 라고 말하는데 실은 방금 받은 것이 된다.
+     *
+     * <h3>★ 판정 시각({@code openedAt})과 기상 시각({@code wokeAt})을 견준다</h3>
+     * {@code openedAt > wokeAt} 이면 <b>마지막 기상 뒤에</b> 판정이 끝난 것이라 보류한다. 다음 밤잠에서
+     * 깨면 {@code wokeAt} 이 그 시각으로 갱신되고, 그 정산(또는 깨우기 응답)에서 도착한다.
+     * <ul>
+     *   <li>{@code wokeAt} 은 <b>밤잠</b>에서 깰 때만 갱신된다(낮잠은 아니다) — 정본의 "기상" 과 같다.</li>
+     *   <li>{@code openedAt} 이 비어 있는 옛 행은 그대로 도착시킨다 — 판정 시각을 적기 전에 통과한
+     *       행을 영영 못 오게 가두면 안 된다.</li>
+     *   <li>자는 중에는 아무것도 안 찍힌다(아래 첫 검사) — 일어나 보니 이미 알고 있던 일이 되면 안 된다.</li>
+     * </ul>
+     *
+     * ★ 2층(기본 행동) 해금은 이 규칙과 무관하다 — 조건을 채운 그 자리에서 즉시 열린다
+     *   ({@link #withUnlockDiff} 의 폭죽). 여기서 미루는 것은 <b>검수를 거치는 심화 행동</b>뿐이다.
      *
      * ★ 도착 시각({@code revealedAt})이 곧 "사용자가 볼 수 있다" 의 판정이다 — {@code advancedImageKey()} 가
      *   그 전에는 null 을 준다. 검수 대기 중인 그림이 화면에 새는 길을 여기 한 곳으로 모았다.
@@ -391,14 +407,28 @@ public class PetService {
         if (pet.isSleeping()) {
             return;
         }
+        Instant woke = pet.dayStartedAt();
         List<ZzalMotion> arrived = motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
-                pet.getId(), MotionStatus.OPEN);
+                        pet.getId(), MotionStatus.OPEN).stream()
+                .filter(m -> revealedByNow(m, woke))
+                .toList();
         arrived.forEach(m -> m.reveal(now));
         if (!arrived.isEmpty()) {
             // ★ 자연 발병은 심화 행동이 열린 뒤에만 예약된다(설계 규칙). 1·2층 기간엔 방치 발병만 있다.
             //   "받은 순간" 을 기준으로 삼는 이유 — 검수 통과 시각은 사용자가 모르는 서버 사정이다.
             pet.scheduleNaturalSickness();
         }
+    }
+
+    /**
+     * 이 동작이 <b>지금 기상에</b> 올 것인가 — 판정({@code openedAt})이 마지막 기상({@code woke})
+     * 전이거나 같으면 온다. 마지막 기상 뒤에 판정됐으면 다음 기상까지 기다린다(정본 2·16장).
+     *
+     * ★ {@code woke} 가 null 일 수 없는 자리지만(부화가 {@code wokeAt} 을 찍는다) 옛 행을 위해
+     *   부화 시각으로 대신한다 — 부르는 쪽에서 이미 채워 넘긴다.
+     */
+    private static boolean revealedByNow(ZzalMotion m, Instant woke) {
+        return m.getOpenedAt() == null || woke == null || !m.getOpenedAt().isAfter(woke);
     }
 
     /**
@@ -658,6 +688,30 @@ public class PetService {
         return withUnlockDiff(pet, () -> pet.advanceTutorial(TutorialSchedule.Step.PERSONALITY));
     }
 
+    /**
+     * 졸업 축하 창을 봤다고 적는다 — 돌려줄 것이 없어 {@code void} 다(주소는 204 로 답한다).
+     *
+     * <h3>★★ 왜 {@link #alive} 를 안 거치나 — 거절할 이유가 없다</h3>
+     * {@code alive} 는 ALIVE 가 아니면 거절하고 여행 중이면 {@code ZZAL_TRAVELING} 을 던진다.
+     * 여기서 그 문을 쓰면 <b>이미 본 축하를 저장하지 못한 채</b> 요청이 튕겨, 그 사람은 다음 접속에
+     * 축하 창을 다시 본다. 이 호출은 아이를 돌보는 것이 아니라 <b>화면이 무엇을 이미 보여 줬는지</b>
+     * 를 적는 것이라, 자고 있든 여행 중이든 적어야 맞다. 그래서 소유권만 보고 지나간다.
+     *
+     * <h3>★ 정산({@code touch})도 하지 않는다</h3>
+     * 이 호출은 아이를 만지는 것이 아니다. 여기서 정산을 태우면 <b>축하 창을 닫는 것만으로</b>
+     * 함께한 날이 오르거나 게이지가 흐른다 — 화면이 이미 조회로 정산을 마친 직후인데 한 번 더다.
+     *
+     * <h3>★ 소유권은 다른 펫 API 와 같은 자리에서 본다</h3>
+     * 잠그고 꺼내는 {@code findMine} 을 그대로 쓴다. 남의 펫이면 403 이 아니라 <b>404</b> 다 —
+     * 403 은 "그 번호의 펫이 있다" 를 알려주는 셈이라 번호를 훑을 수단이 된다.
+     * 잠금은 닫기를 연달아 눌렀을 때 두 요청이 같은 행을 각자 읽고 각자 쓰는 것을 막는다.
+     */
+    @Transactional
+    public void markGraduationSeen(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        pet.markGraduationSeen(pet.now(realNow));
+    }
+
     /** 배경 바꾸기 — 2층 4종이 열린 뒤(설계 규칙). 값은 검증하지 않는다(해석 6). */
     @Transactional(noRollbackFor = BusinessException.class)
     public Action changeBackground(Long userId, Long petId, String background, Instant realNow) {
@@ -752,7 +806,10 @@ public class PetService {
      * dev — 그 자리의 심화 행동을 가짜 그림으로 즉시 검수 통과시킨다(아침 도착 화면 확인용).
      *
      * ★ 도착까지 건너뛰지는 않는다. {@code revealedAt} 은 {@link #touch} 가 규칙대로 찍는다 —
-     *   그래야 "자는 동안에는 안 온다 / 낮에 판정되면 낮에 온다" 를 여기서 실제로 확인할 수 있다.
+     *   그래야 "자는 동안에는 안 온다 / 판정이 낮에 끝나도 다음 기상까지 기다린다" 를
+     *   여기서 실제로 확인할 수 있다.
+     * ★★ 그래서 이 주소를 부른 <b>그 자리에서는 안 온다</b>(2026-09-22 결정). 아침 도착 화면을 보려면
+     *   재우고 깨워야 한다 — dev 시계({@code /dev/clock})로 밤을 넘기면 된다.
      */
     @Transactional
     public ZzalPet forceOpen(Long userId, Long petId, int seq, Instant realNow) {
@@ -768,7 +825,7 @@ public class PetService {
                 com.lore.zzal.motion.MotionSource.API,
                 com.lore.zzal.motion.GateVerdict.REVIEW, "dev force-open", "dev");
         row.approve(now);
-        // 깨어 있으면 이 자리에서 바로 도착한다(자는 중이면 깨어난 뒤 첫 정산).
+        // 다음 기상에 도착한다 — 지금 부르는 것은 <b>이미 판정이 끝나 있던 것</b>이 있으면 그 몫이다.
         reveal(pet, now);
         return pet;
     }

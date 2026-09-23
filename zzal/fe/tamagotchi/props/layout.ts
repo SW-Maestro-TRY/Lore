@@ -94,11 +94,35 @@ export interface CharFit {
    */
   headSpanPerBoxH: number;
   /**
+   * **모든 자세 중 가장 높은 머리끝**(머리끝→발끝 ÷ 캔버스). 자세를 안 본다.
+   *
+   * ★★ 말풍선이 **자리를 얼마나 예약할지**는 이 값으로 정한다(2026-09-22). 지금 자세의
+   *   머리 높이(`headSpanPerBoxH`)로 정하면 **누운 자세에서 머리가 낮아 말풍선이 그냥 들어가고**,
+   *   예약이 0 이 되면서 아이가 갑자기 커진다(dev 실측: 자면 365 → 478px). 크기는 화면 크기만의
+   *   함수여야 한다는 이 파일의 규칙(`tallestPerK` 머리말)과 같은 이유다.
+   * ★ 말풍선을 **어디에 그릴지**는 여전히 지금 자세(`headSpanPerBoxH`)를 본다 — 말풍선은
+   *   지금 그 머리 위에 떠야 하니까. 예약(크기)과 자리(위치)를 가른다.
+   */
+  headSpanTallestPerBoxH: number;
+  /**
    * 이 자세 실루엣의 **왼쪽·오른쪽 가장자리 ÷ 상자 가로**(0~1). 상자에는 투명 여백이 들어 있어
    * 상자 폭으로 "아이 옆에 얼마나 남았나" 를 재면 틀린다 — 말풍선을 머리 옆으로 비킬 때 쓴다.
    */
   silLeftPerBoxW: number;
   silRightPerBoxW: number;
+  /**
+   * **선 자세(가장 키 큰 자세)의 실루엣 좌·우.** 자세를 안 본다.
+   *
+   * ★★ 옆자리가 되느냐도 **자세마다 갈리면 안 된다**(2026-09-22). 누운 자세는 실루엣이 옆으로
+   *   넓어서, 지금 자세로 재면 서 있을 때만 옆에 들어가고 누우면 못 들어가 아이가 출렁인다
+   *   (1200 실측: 서면 479.7 · 누우면 368.8).
+   * ★ **가장 넓은 자세가 아니라 선 자세**로 잡는다 — 넓은 자세 기준으로 재면 넓은 화면에서도
+   *   옆자리가 막혀 아이가 24% 작아진다(실측 479.7 → 364.4). 옆에 두는 판단의 본뜻은
+   *   "이 화면은 아이 양옆이 넉넉한가" 이고, 그 기준은 평소 서 있는 모습이다.
+   *   누운 자세에서는 말풍선이 몸에 가까워질 수 있는데, 자는 동안에는 말풍선을 아예 안 띄운다.
+   */
+  silLeftUprightPerBoxW: number;
+  silRightUprightPerBoxW: number;
   /**
    * 이 자세의 **머리 옆선(head_side) 높이 ÷ 캔버스 세로**. `발끝선 + 상자세로 x 이 값` 이
    * 곧 얼굴 높이다 — 머리 옆으로 비킨 말풍선의 세로 한가운데를 여기에 맞춘다.
@@ -121,15 +145,24 @@ export function charFit(anchors: CharAnchors, pose: string): CharFit {
   const [canvasW, canvasH] = anchors.canvas;
   const p = poseAnchors(anchors, pose);
   let tallest = 0;
-  for (const q of Object.values(anchors.poses)) tallest = Math.max(tallest, q.bbox.h);
+  let headSpanTallest = 0;
+  let upright: typeof p | null = null;
+  for (const q of Object.values(anchors.poses)) {
+    tallest = Math.max(tallest, q.bbox.h);
+    const span = (q.feet.y - q.head_top.y) / canvasH;
+    if (span > headSpanTallest) { headSpanTallest = span; upright = q; }
+  }
   return {
     boxHPerK: canvasH / anchors.K,
     aspect: canvasW / canvasH,
     belowFoot: (canvasH - p.feet.y) / canvasH,
     tallestPerK: (tallest > 0 ? tallest : anchors.K) / anchors.K,
     headSpanPerBoxH: (p.feet.y - p.head_top.y) / canvasH,
+    headSpanTallestPerBoxH: headSpanTallest > 0 ? headSpanTallest : (p.feet.y - p.head_top.y) / canvasH,
     silLeftPerBoxW: p.bbox.x / canvasW,
     silRightPerBoxW: (p.bbox.x + p.bbox.w) / canvasW,
+    silLeftUprightPerBoxW: (upright ?? p).bbox.x / canvasW,
+    silRightUprightPerBoxW: ((upright ?? p).bbox.x + (upright ?? p).bbox.w) / canvasW,
     headSidePerBoxH: (p.feet.y - p.head_side.y) / canvasH,
   };
 }

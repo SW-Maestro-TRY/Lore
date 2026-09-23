@@ -51,7 +51,7 @@
             "type": "integer"
           },
           "round": {
-            "description": "기권 시점까지 진행한 회차(0부터). 달리기는 항상 0",
+            "description": "기권 시점까지 진행한 회차(0부터). 달리기는 항상 0. 3승·3패가 나면 매치가 끝나므로 이 값은 0~4 이며 승패는 아직 갈리지 않은 상태다",
             "example": 2,
             "format": "int32",
             "type": "integer"
@@ -67,7 +67,7 @@
             "type": "boolean"
           },
           "win": {
-            "description": "항상 false — 기권은 패배로 확정된다. 접는 시점에 이미 정답 수가 승리 조건을 넘겼더라도 끝까지 진행하지 않은 매치이므로 승리가 아니다",
+            "description": "항상 false — 기권은 패배로 확정된다. 3승이 나면 그 회차에서 매치가 끝나므로 승리를 쌓아 둔 채 기권하는 상태는 애초에 없다",
             "type": "boolean"
           },
           "winAt": {
@@ -358,6 +358,57 @@
         },
         "type": "object"
       },
+      "ApiResponseForeshadowing": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Foreshadowing"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseForeshadowingMeta": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ForeshadowingMeta"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseForeshadowingPage": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ForeshadowingPage"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseGranted": {
         "properties": {
           "data": {
@@ -528,6 +579,23 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Me"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseNotifySettingResult": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/NotifySettingResult"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -728,6 +796,57 @@
         },
         "type": "object"
       },
+      "ApiResponseTrailerHypothesis": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrailerHypothesis"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseTrailerHypothesisList": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrailerHypothesisList"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseTrailerPendingHypothesisList": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrailerPendingHypothesisList"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseVisibilityResult": {
         "properties": {
           "data": {
@@ -894,7 +1013,7 @@
           "genre": {
             "description": "장르. 자유 입력이며 대사 톤에만 사용한다(그림에는 들어가지 않는다)",
             "example": "느와르",
-            "maxLength": 32,
+            "maxLength": 100,
             "minLength": 0,
             "type": "string"
           },
@@ -945,14 +1064,14 @@
           "tone": {
             "description": "말투. 자유 입력이며 대사 톤에만 사용한다(그림에는 들어가지 않는다)",
             "example": "무뚝뚝한 존댓말",
-            "maxLength": 32,
+            "maxLength": 100,
             "minLength": 0,
             "type": "string"
           },
           "world": {
             "description": "세계관·설정. 자유 입력이며 대사 생성에만 사용한다",
             "example": "비 오는 도시의 탐정",
-            "maxLength": 100,
+            "maxLength": 200,
             "minLength": 0,
             "type": "string"
           }
@@ -1248,6 +1367,11 @@
             "description": "직전 취침 시점에 케어 미스가 없고 게이지 3종이 모두 2 이상이었는지 여부.\n조건을 만족하면 조각 1개를 선지급한다. 심화 단계 진입 전에는 항상 false",
             "type": "boolean"
           },
+          "graduationSeenAt": {
+            "description": "튜토리얼 졸업 축하 창을 본 시각. 아직 안 봤으면 null.\n화면은 이 값이 null 일 때만 축하 창을 띄우고, 닫을 때 POST /{petId}/graduation-seen 을 부른다.\n기기가 아니라 캐릭터에 붙는 값이라 새 탭·재시작에도 같은 창이 다시 뜨지 않는다",
+            "format": "date-time",
+            "type": "string"
+          },
           "hatchStartedAt": {
             "format": "date-time",
             "type": "string"
@@ -1488,6 +1612,155 @@
         },
         "type": "object"
       },
+      "Foreshadowing": {
+        "description": "복선 카드 한 장. 회수 칸 셋(status · resolvedChapter · resolution)은 독자가 읽은 회차 N 기준으로 가린 값이다",
+        "properties": {
+          "chapter": {
+            "description": "복선을 심은 회차",
+            "example": 12,
+            "format": "int32",
+            "type": "integer"
+          },
+          "excerpt": {
+            "description": "장부의 원문(영어)",
+            "type": "string"
+          },
+          "fact": {
+            "description": "카드 본문",
+            "type": "string"
+          },
+          "id": {
+            "description": "카드 번호. 담기·상세·판정 요청의 열쇠",
+            "example": "T12",
+            "type": "string"
+          },
+          "kind": {
+            "description": "유형의 한국어 이름",
+            "example": "약속",
+            "type": "string"
+          },
+          "people": {
+            "description": "인물 이름. 없으면 빈 배열",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resolution": {
+            "description": "회수 기록의 글. 미회수(또는 N화 뒤 회수)면 null",
+            "type": "string"
+          },
+          "resolvedChapter": {
+            "description": "회수된 회차. 미회수(또는 N화 뒤 회수)면 null",
+            "example": 214,
+            "format": "int32",
+            "type": "integer"
+          },
+          "scene": {
+            "description": "연결된 장면의 번호. 없으면 null",
+            "example": "V12",
+            "type": "string"
+          },
+          "sceneExcerpt": {
+            "description": "장면의 글. 없으면 빈 글",
+            "type": "string"
+          },
+          "status": {
+            "description": "open 또는 resolved. N화 뒤에 회수된 복선은 open 으로 온다",
+            "enum": [
+              "open",
+              "resolved"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "description": "카드 제목",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ForeshadowingMeta": {
+        "description": "장부 정보. 화면을 열 때 한 번 받는다",
+        "properties": {
+          "cardsDigest": {
+            "description": "400화 카드 파일의 sha256. 위와 같다",
+            "type": "string"
+          },
+          "kinds": {
+            "description": "유형의 한국어 이름. 카드에 먼저 나온 순서",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxChapter": {
+            "description": "고를 수 있는 가장 뒤 회차",
+            "example": 400,
+            "format": "int32",
+            "type": "integer"
+          },
+          "stateDigest": {
+            "description": "400화 장부 파일의 sha256. 브라우저 저장 키와 판정 요청에 실린다",
+            "type": "string"
+          },
+          "suggestedPeople": {
+            "description": "검색창 아래에 권하는 인물. 카드에 먼저 나온 다섯",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ForeshadowingPage": {
+        "description": "카드 목록 한 쪽. chapter · page · size 는 요청한 값 그대로다 — 늦게 온 응답을 화면이 버리는 기준",
+        "properties": {
+          "chapter": {
+            "description": "요청한 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "chapterTotal": {
+            "description": "N화 카드의 전체 수(검색어와 유형을 걸기 전)",
+            "example": 774,
+            "format": "int64",
+            "type": "integer"
+          },
+          "hasNext": {
+            "description": "다음 쪽이 있나",
+            "type": "boolean"
+          },
+          "items": {
+            "description": "카드. 순서는 표의 id 순 = T 번호 순",
+            "items": {
+              "$ref": "#/components/schemas/Foreshadowing"
+            },
+            "type": "array"
+          },
+          "page": {
+            "description": "요청한 쪽. 0부터",
+            "example": 0,
+            "format": "int32",
+            "type": "integer"
+          },
+          "size": {
+            "description": "요청한 크기",
+            "example": 50,
+            "format": "int32",
+            "type": "integer"
+          },
+          "total": {
+            "description": "찾은 카드의 수(검색어와 유형을 건 뒤)",
+            "example": 12,
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "Gauges": {
         "properties": {
           "clean": {
@@ -1585,7 +1858,7 @@
             "type": "string"
           },
           "finished": {
-            "description": "5회를 모두 진행했는지 여부",
+            "description": "매치가 끝났는지 여부. 3승 또는 3패가 나면 5회를 채우지 않고 그 회차에서 끝난다(최단 3회·최장 5회)",
             "type": "boolean"
           },
           "gameId": {
@@ -1649,7 +1922,7 @@
             "type": "boolean"
           },
           "win": {
-            "description": "승리 여부. 매치가 끝났을 때만 채워지며 진행 중에는 null 이다. 정답 수가 이미 승리 조건을 넘겼더라도 남은 회차를 진행할 유인을 유지하기 위해 미리 알리지 않는다",
+            "description": "승리 여부. 매치가 끝났을 때만 채워지며 진행 중에는 null 이다. 3승이 나는 그 회차에서 매치가 끝나므로, 진행 중에 승리가 확정돼 있는 상태는 없다",
             "type": "boolean"
           },
           "winAt": {
@@ -2025,6 +2298,22 @@
         },
         "type": "object"
       },
+      "NotifySettingRequest": {
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "NotifySettingResult": {
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "PagesRequest": {
         "properties": {
           "pages": {
@@ -2127,7 +2416,7 @@
           "world": {
             "description": "세계관 한 줄. 생략할 수 있다",
             "example": "구름 위 마을에 사는 고양이",
-            "maxLength": 100,
+            "maxLength": 200,
             "minLength": 0,
             "type": "string"
           }
@@ -2802,6 +3091,306 @@
         },
         "type": "object"
       },
+      "TrailerHypothesis": {
+        "description": "가설 하나. 맡기기 · 되묻기 · 판정 넣기의 응답이 모두 이 모양이다",
+        "properties": {
+          "cards": {
+            "description": "맡길 때 복사한 카드. 칸은 카드 API 의 열둘, 회수 칸은 N화로 가린 값. 순서 그대로",
+            "items": {
+              "$ref": "#/components/schemas/Foreshadowing"
+            },
+            "type": "array"
+          },
+          "chapter": {
+            "description": "독자가 읽은 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "claim": {
+            "description": "독자의 주장",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "맡긴 때(UTC)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "failureMessage": {
+            "description": "독자에게 보일 실패 문구. FAILED 일 때만",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "요청 id. 되묻기와 보관함의 열쇠",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "judgedAt": {
+            "description": "판정을 넣은 때(UTC). PENDING 이면 null",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judgement": {
+            "additionalProperties": { },
+            "description": "판정. judge.py 출력 그대로(grade · reason · support · against · cited_cards). COMPLETE 일 때만",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "judgementStatus": {
+            "description": "판정 상태",
+            "enum": [
+              "PENDING",
+              "COMPLETE",
+              "FAILED"
+            ],
+            "example": "PENDING",
+            "type": "string"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글)",
+            "type": "object"
+          },
+          "presentation": {
+            "additionalProperties": { },
+            "description": "편집본. COMPLETE 이고 편집본이 있을 때만",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "제목. 없으면 빈 글",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TrailerHypothesisJudge": {
+        "description": "운영자가 판정을 넣는다. judge.py 출력을 그대로 싣는다. 이미 판정한 가설이면 덮어쓴다",
+        "properties": {
+          "failureMessage": {
+            "description": "독자에게 보일 실패 문구. FAILED 면 필수",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "판정한 가설의 요청 id(2-8 의 items[].id). judge.py 의 request_id 가 아니다",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "judgement": {
+            "additionalProperties": { },
+            "description": "judge.py 출력의 judgement(grade · reason · support · against · cited_cards). COMPLETE 면 필수",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "judgementStatus": {
+            "description": "COMPLETE 또는 FAILED",
+            "enum": [
+              "COMPLETE",
+              "FAILED"
+            ],
+            "example": "COMPLETE",
+            "type": "string"
+          },
+          "presentation": {
+            "additionalProperties": { },
+            "description": "편집본(editor 출력). 있을 때만",
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "TrailerHypothesisList": {
+        "description": "내 가설 보관함. 최신이 앞이다",
+        "properties": {
+          "items": {
+            "description": "맡긴 가설. 없으면 빈 배열",
+            "items": {
+              "$ref": "#/components/schemas/TrailerHypothesisSummary"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "TrailerHypothesisSubmit": {
+        "description": "가설 맡기기. 저장이 곧 맡기기다 — 서버는 PENDING 으로 두고 운영자가 판정을 넣는다",
+        "properties": {
+          "cards": {
+            "description": "담은 카드의 번호. 하나 이상 100장까지. 겹치지 않음. 배열 순서가 근거의 순서",
+            "example": [
+              "T2",
+              "T374"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cardsDigest": {
+            "description": "장부 정보(cards/meta)의 cardsDigest. 위와 같다",
+            "type": "string"
+          },
+          "chapter": {
+            "description": "독자가 읽은 회차 N. 1부터 장부의 가장 뒤 회차까지",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "claim": {
+            "description": "독자의 주장. 6,000자까지. 비면 400",
+            "type": "string"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "카드 번호마다 독자의 해석. 4,000자까지. 담은 카드의 번호만 열쇠로 온다",
+            "type": "object"
+          },
+          "stateDigest": {
+            "description": "장부 정보(cards/meta)의 stateDigest. 카드 표의 값과 다르면 400 TRAILER_DIGEST_MISMATCH",
+            "type": "string"
+          },
+          "title": {
+            "description": "가설 제목. 180자까지. 비어도 된다",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TrailerHypothesisSummary": {
+        "description": "보관함의 한 줄. 누르면 가설 하나(2-6)를 받는다",
+        "properties": {
+          "chapter": {
+            "description": "독자가 읽은 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "createdAt": {
+            "description": "맡긴 때(UTC)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "요청 id",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "judgedAt": {
+            "description": "판정을 넣은 때(UTC). PENDING 이면 null",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judgementStatus": {
+            "description": "판정 상태",
+            "enum": [
+              "PENDING",
+              "COMPLETE",
+              "FAILED"
+            ],
+            "example": "PENDING",
+            "type": "string"
+          },
+          "title": {
+            "description": "제목. 없으면 빈 글",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TrailerPendingHypothesis": {
+        "description": "판정 안 된 가설 한 줄. judge.py 의 입력이 그대로 든다",
+        "properties": {
+          "cards": {
+            "description": "맡길 때 복사한 카드. 순서 그대로. judge.py 에는 id 만 넘긴다",
+            "items": {
+              "$ref": "#/components/schemas/Foreshadowing"
+            },
+            "type": "array"
+          },
+          "cardsDigest": {
+            "description": "맡길 때 카드 표의 cardsDigest",
+            "type": "string"
+          },
+          "chapter": {
+            "description": "독자가 읽은 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "claim": {
+            "description": "독자의 주장",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "맡긴 때(UTC). 이 순서로 온다",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "요청 id. 판정을 넣을 때(2-9) 이 값을 싣는다",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글)",
+            "type": "object"
+          },
+          "stateDigest": {
+            "description": "맡길 때 카드 표의 stateDigest. judge.py 가 자기 파일과 견준다",
+            "type": "string"
+          },
+          "title": {
+            "description": "제목. 없으면 빈 글",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TrailerPendingHypothesisList": {
+        "description": "판정 안 된 가설. 오래된 것이 앞이다",
+        "properties": {
+          "items": {
+            "description": "판정 안 된 가설. 없으면 빈 배열",
+            "items": {
+              "$ref": "#/components/schemas/TrailerPendingHypothesis"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "Trip": {
         "properties": {
           "postcards": {
@@ -2810,6 +3399,26 @@
           },
           "startedAt": {
             "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TryRequest": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "photos_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "world": {
             "type": "string"
           }
         },
@@ -2975,6 +3584,433 @@
         },
         "tags": [
           "email-test-controller"
+        ]
+      }
+    },
+    "/api/trailer/v1/admin/hypotheses": {
+      "get": {
+        "description": "`judgementStatus` 가 `PENDING` 인 가설을 **맡긴 순서(오래된 것이 앞)**로 준다. 먼저 맡긴 독자가 먼저 판정을 받는다.\n운영자가 `judge.py` 를 돌리기 전에 부른다.\n- 한 줄에 `judge.py` 의 입력이 다 든다 — `chapter` · `claim` · `cards[]`(복사한 카드) · `notes{}` · 해시 둘\n- 해시 둘은 독자가 맡길 때의 값이다. `judge.py` 가 자기 파일과 같은 자료인지 이 값으로 본다\n- 운영자가 아니면 403(ADMIN_ONLY). 없으면 빈 배열",
+        "operationId": "pending",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerPendingHypothesisList"
+                }
+              }
+            },
+            "description": "판정 안 된 가설. 오래된 것이 앞"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerPendingHypothesisList"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerPendingHypothesisList"
+                }
+              }
+            },
+            "description": "운영자가 아님(ADMIN_ONLY)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "판정 안 된 가설 가져가기",
+        "tags": [
+          "가설 운영자"
+        ]
+      }
+    },
+    "/api/trailer/v1/admin/hypotheses/judge": {
+      "post": {
+        "description": "`judge.py` 가 끝난 뒤 결과를 넣는다. `id` 의 줄을 찾아 판정 칸을 채우고 `judgementStatus` 를 바꾸고 `judgedAt` 을 찍는다.\n- `COMPLETE` 면 `judgement` 필수(grade · reason · support · against — `cited_cards` 도 그대로 실린다). `presentation` 은 있을 때만\n- `FAILED` 면 `failureMessage` 필수(독자에게 보인다)\n- **이미 판정한 가설도 덮어쓴다** — 다시 돌린 결과를 넣을 수 있게\n- 몸통의 `id` 는 lore 의 요청 id 다. judge.py 의 `request_id`(입력의 해시)가 아니다\n- 없는 `id` 는 404(TRAILER_HYPOTHESIS_NOT_FOUND). 운영자가 아니면 403(ADMIN_ONLY). 모양이 틀리면 400(INVALID_INPUT)",
+        "operationId": "judge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrailerHypothesisJudge"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "판정을 넣은 가설(2-6 의 모양)"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "모양이 틀림(INVALID_INPUT)"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "403": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "운영자가 아님(ADMIN_ONLY)"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "없는 id(TRAILER_HYPOTHESIS_NOT_FOUND)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "판정 넣기",
+        "tags": [
+          "가설 운영자"
+        ]
+      }
+    },
+    "/api/trailer/v1/hypotheses": {
+      "post": {
+        "description": "독자가 \"가설 판정하기\"를 누르면 부른다. 저장이 곧 맡기기다 — 서버는 줄을 넣고 `judgementStatus` 를\n`PENDING` 으로 둔다. 판정은 운영자가 따로 돌려 넣는다. 화면은 응답의 `id` 로 되묻는다.\n- 담은 카드는 그 회차 N 으로 가린 값으로 **복사해 둔다**. 뒤에 카드 표가 바뀌어도 이 가설의 카드는 그대로다\n- 맡긴 뒤에는 제목 · 주장 · 카드 · 해석을 고칠 수 없다. 새 가설은 새로 맡긴다\n- `stateDigest` · `cardsDigest` 가 카드 표의 값과 다르면 400(TRAILER_DIGEST_MISMATCH) — 페이지를 새로 열어야 한다\n- 회차가 없거나 범위 밖이면 400(TRAILER_INVALID_CHAPTER). 카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED)\n- 주장이 비었거나, 카드가 없거나 겹치거나 N화 기록에 없거나, 해석이 담지 않은 카드의 것이거나,\n  글이 위 끝(제목 180 · 주장 6,000 · 해석 4,000자)을 넘으면 400(INVALID_INPUT)에 무엇이 틀렸는지 적어 준다",
+        "operationId": "submit_2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrailerHypothesisSubmit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "맡겼음. 저장된 가설(PENDING)"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "입력이 틀림(INVALID_INPUT · TRAILER_INVALID_CHAPTER · TRAILER_DIGEST_MISMATCH)"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "503": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "카드 표가 비어 있음(TRAILER_LEDGER_NOT_LOADED)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "가설 맡기기",
+        "tags": [
+          "가설"
+        ]
+      }
+    },
+    "/api/trailer/v1/hypotheses/my": {
+      "get": {
+        "description": "로그인한 독자가 맡긴 가설을 **최신이 앞**으로 준다. 목록에 필요한 칸만 든다 — 카드와 판정은 하나를 눌러 2-6 으로 받는다.\n- 판정을 맡기지 않고 저장만 하는 가설은 서버에 없다(브라우저 임시 저장). 여기 오는 것은 모두 맡긴 가설이다\n- 없으면 빈 배열",
+        "operationId": "my",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesisList"
+                }
+              }
+            },
+            "description": "보관함"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesisList"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "내 가설 보관함",
+        "tags": [
+          "가설"
+        ]
+      }
+    },
+    "/api/trailer/v1/hypotheses/{id}": {
+      "get": {
+        "description": "맡긴 가설을 요청 id 로 연다. 보관함에서 하나를 열 때, 판정을 맡긴 뒤 결과를 되물을 때 부른다.\n몇 초마다 되물을지는 화면이 정한다 — 판정은 운영자가 따로 넣어서 시간이 걸린다.\n- `judgementStatus` 가 `PENDING` 이면 판정 칸 셋은 null\n- `COMPLETE` 면 `judgement`(judge.py 출력 그대로 — grade · reason · support · against · cited_cards)와\n  `presentation`(편집본. 없을 수 있음), `judgedAt`\n- `FAILED` 면 독자에게 보일 `failureMessage`\n- 없는 번호와 **남의 가설은 같은 404**(TRAILER_HYPOTHESIS_NOT_FOUND) — 번호를 바꿔 가며 남의 가설을 찾아낼 수 없다",
+        "operationId": "get_1",
+        "parameters": [
+          {
+            "description": "요청 id. 맡길 때 받은 값",
+            "example": 17,
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "가설 하나"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                }
+              }
+            },
+            "description": "없는 번호 또는 남의 가설(TRAILER_HYPOTHESIS_NOT_FOUND)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "가설 하나와 판정 되묻기",
+        "tags": [
+          "가설"
+        ]
+      }
+    },
+    "/api/trailer/v1/public/cards": {
+      "get": {
+        "description": "독자가 읽은 회차 N 이하에 심은 카드를 표의 id 순(= T 번호 순)으로 나눠 준다.\nN화 뒤에 회수된 복선은 status=open, resolvedChapter=null, resolution=null 로 가려서 준다.\n\n검색 규칙은 화면이 브라우저에서 찾던 것과 같다.\n· search 가 T12 꼴이면 그 번호의 카드 한 장만(대소문자 무관)\n· 그 밖에는 빈칸으로 나눈 단어가 모두 카드의 글(id · 제목 · 본문 · 인물 · 유형 · \"12화\")에 들어 있어야 한다.\n  소문자로 바꾸고 빈칸을 없애고 견준다. % 와 _ 는 글자 그대로 찾는다\n· kind 는 유형의 한국어 이름이 똑같은 카드만. 검색어와 함께 건다\n\nchapter 가 없거나 숫자가 아니거나 1~maxChapter 를 벗어나면 400(TRAILER_INVALID_CHAPTER).\nsearch 가 200자 또는 단어 10개를 넘거나 page · size 가 틀리면 400(INVALID_INPUT).",
+        "operationId": "list_3",
+        "parameters": [
+          {
+            "description": "독자가 읽은 회차 N. 1부터 maxChapter 까지",
+            "example": 200,
+            "in": "query",
+            "name": "chapter",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "검색어. 200자 · 단어 10개까지. 비면 N화 카드 전부",
+            "example": "밀짚모자",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "유형의 한국어 이름. 비면 거르지 않는다",
+            "example": "약속",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "쪽. 0부터. 기본 0",
+            "example": 0,
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "한 쪽의 크기. 기본 50, 최대 100",
+            "example": 50,
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseForeshadowingPage"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "카드 목록과 검색",
+        "tags": [
+          "복선 카드(공개)"
+        ]
+      }
+    },
+    "/api/trailer/v1/public/cards/meta": {
+      "get": {
+        "description": "화면을 열 때 한 번 부른다. 가장 뒤 회차, 해시 둘, 유형 다섯, 권하는 인물 다섯을 준다.\n\n카드를 50장씩 나눠 받으면 첫 쪽에 유형과 인물이 다 없고, 해시는 첫 쪽을 받기 전에 있어야\n브라우저 저장 키를 만들 수 있다. 그래서 카드와 상관없는 값을 따로 준다.\n\n카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED). 운영 DB 에 카드 SQL 을 넣기 전이다.",
+        "operationId": "meta",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseForeshadowingMeta"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "장부 정보",
+        "tags": [
+          "복선 카드(공개)"
+        ]
+      }
+    },
+    "/api/trailer/v1/public/cards/{id}": {
+      "get": {
+        "description": "카드 한 장을 번호로 연다. 게시글에 적힌 번호로 카드를 열 때 부른다.\n목록이 준 카드에는 상세의 칸이 다 있어서, 목록에서 여는 상세는 이 API 를 부르지 않는다.\n\n회수 칸 셋은 목록과 같은 규칙으로 N 기준으로 가린다.\n모르는 번호와 N화 뒤에 심은 카드는 같은 404(TRAILER_CARD_NOT_FOUND)다 — 구분해 주면\n번호를 바꿔 가며 뒤 회차의 카드가 있는지 알아낼 수 있다.",
+        "operationId": "detail_1",
+        "parameters": [
+          {
+            "description": "카드 번호",
+            "example": "T12",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "독자가 읽은 회차 N. 1부터 maxChapter 까지",
+            "example": 200,
+            "in": "query",
+            "name": "chapter",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseForeshadowing"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "카드 상세",
+        "tags": [
+          "복선 카드(공개)"
         ]
       }
     },
@@ -3570,6 +4606,96 @@
         ]
       }
     },
+    "/api/webtoon/v1/characters/random": {
+      "get": {
+        "description": "「랜덤으로 만들어보기」가 입력 칸을 채울 값 한 벌 — 이름 · 설명 · 세계관.\nAI 를 안 부르고 조합에서 뽑는다. 사람이 보고 고친 뒤 만든다.",
+        "operationId": "random",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "랜덤 재료",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/characters/try": {
+      "post": {
+        "description": "뭐든 넣으면 그대로 그 세계관 웹툰의 한 컷이 된다. 사진·설명·이름·세계관 전부\n**선택** — 아무것도 없이 보내면 「랜덤으로 만들어보기」다.\nworld 는 GET /worlds 의 key 이거나 사람이 직접 쓴 한 줄.\n\n바로 돌려주고 뒤에서 그린다(status=drawing). GET /{id} 로 다시 읽으면\n그림(art_url)과 카드(twist · quote · fate)가 채워진다.\n값과 하루 몫은 「캐릭터 만들기」와 같다.",
+        "operationId": "tryOut",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Lore-Uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "캐릭터 만들어보기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/characters/worlds": {
+      "get": {
+        "description": "「캐릭터 만들어보기」의 세계관 목록. 하네스 프리셋 그대로다.",
+        "operationId": "worlds",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "고를 수 있는 세계관",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/characters/{publicId}": {
       "delete": {
         "description": "그림은 S3 에 그대로 둔다 — 이 캐릭터로 이미 만든 웹툰이 그것을 보고 있다.",
@@ -3606,6 +4732,45 @@
           }
         },
         "summary": "지우기",
+        "tags": [
+          "Webtoon"
+        ]
+      },
+      "get": {
+        "description": "그리는 중인 것을 다시 읽는 자리. 내 것과 기본 제공만 보인다.",
+        "operationId": "one",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Lore-Uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "캐릭터 하나",
         "tags": [
           "Webtoon"
         ]
@@ -3654,6 +4819,39 @@
           }
         },
         "summary": "이름·설명 고치기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/characters/{publicId}/card": {
+      "get": {
+        "description": "「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.\n내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.",
+        "operationId": "card",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "공유된 카드",
         "tags": [
           "Webtoon"
         ]
@@ -3857,6 +5055,68 @@
         ]
       }
     },
+    "/api/webtoon/v1/my/notify-setting": {
+      "get": {
+        "description": "행이 없으면(한 번도 안 건드렸으면) true 다 — 지금까지 계정 이메일로\n항상 보냈던 것과 같은 기본값이다.",
+        "operationId": "notifySetting",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseNotifySettingResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "웹툰 완성 메일 — 켜져 있는가",
+        "tags": [
+          "Webtoon"
+        ]
+      },
+      "post": {
+        "description": "웹툰이 다 만들어졌을 때 계정 이메일로 알리는 것을 켜고 끈다.\n게스트로 만들 때 직접 적은 주소는 이 설정과 무관하게 그대로 간다 —\n그건 그 한 번만의 명시적인 선택이다.",
+        "operationId": "setNotifySetting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifySettingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseNotifySettingResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "웹툰 완성 메일 — 켜고 끄기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/my/runs": {
       "get": {
         "description": "내 계정에 이어진 브라우저들이 만든 작품 전부. 나만 보기로 내려 둔\n것도 포함한다 — 내 목록이라서다.\n\n모양은 둘러보기 목록(GET /api/webtoon/v1/runs)과 같다.",
@@ -4019,6 +5279,39 @@
           }
         },
         "summary": "웹툰 만들기 시작",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/mine": {
+      "get": {
+        "description": "아직 안 끝난 작업들(줄 서 있거나 · 그리는 중 · 사람 차례). 첫 화면의\n「만들던 웹툰」 알약이 이것을 본다. 로그인 안 했으면 uid 로 가린다.",
+        "operationId": "mine_1",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "내가 만들던 것",
         "tags": [
           "Webtoon"
         ]
@@ -4757,6 +6050,48 @@
           }
         },
         "summary": "완성본의 한 장",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/runs/{runId}/page/{no}/download": {
+      "get": {
+        "description": "그 장 하나에 LORE 표시를 찍어서 준다.",
+        "operationId": "pageDownload",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "no",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "byte",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "컷 하나 내려받기",
         "tags": [
           "Webtoon"
         ]
@@ -5864,7 +7199,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/games": {
       "post": {
-        "description": "kind 로 게임 종류를 지정한다. LEFT_RIGHT(좌우 맞히기)는 처음부터 사용할 수 있고,\nRUN(달리기)은 좌우 맞히기 5승 이후 해금된다.\n\n좌우 맞히기는 5회 중 3회를 맞히면 승리한다. 정답은 매치 시작 시 서버가 결정해\n보관하며 응답에 포함하지 않는다. 승리 시 행복 +1 을 부여한다.\n\n진행 중인 매치가 있으면 새로 생성하지 않고 해당 매치를 반환한다.\n일일 3매치는 두 게임 합산이며 시작 시점에 차감하고 취침 시 초기화한다.",
+        "description": "kind 로 게임 종류를 지정한다. LEFT_RIGHT(좌우 맞히기)는 처음부터 사용할 수 있고,\nRUN(달리기)은 좌우 맞히기 5승 이후 해금된다.\n\n좌우 맞히기는 5회 중 3회를 맞히면 승리한다. 정답은 매치 시작 시 서버가 결정해\n보관하며 응답에 포함하지 않는다. 승리 시 행복 +1 을 부여한다.\n\n★ 이어치기는 없다 — 아직 끝나지 않은 매치가 남아 있으면 그 매치를 그 자리에서\n패배로 확정하고 새 매치를 연다(게임 중에 나가면 그 판은 끝이다). 접힌 매치는\n승리 보상·달리기 해금·두 번째 선물·놀이 조각을 어느 것도 발생시키지 않는다.\n\n일일 3매치는 두 게임 합산이며 시작 시점에 차감하고 취침 시 초기화한다. 나갔다\n돌아온 사람도 새 매치를 시작하는 것이므로 한도가 정상 차감된다.\n\n아픔·달리기 잠김·일일 한도로 거절되는 경우에는 남아 있던 매치를 접지 않는다.",
         "operationId": "start",
         "parameters": [
           {
@@ -5896,7 +7231,7 @@
                 }
               }
             },
-            "description": "매치 시작 또는 진행 중인 매치 반환"
+            "description": "매치 시작(남아 있던 미완료 매치는 패배로 접는다)"
           },
           "409": {
             "content": {
@@ -5922,7 +7257,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/games/current": {
       "get": {
-        "description": "새로고침 등으로 화면이 초기화된 경우 진행 중인 매치를 이어받는다.\n진행 중인 매치가 없으면 playing 이 false 다.\n\n일일 매치 수는 시작 시점에 차감하므로, 이 API 가 없으면 새로고침 시\n차감된 매치를 이어서 진행할 수 없다.",
+        "description": "★ 이 API 는 매치 복구용이 아니다 — playing 은 항상 false 다.\n\n게임 중에 나가면 그 판은 끝이라는 규칙이므로 되돌려 줄 매치가 없다. 새로고침으로\ngameId 를 잃으면 그 매치는 다시 진행할 수 없고, 다음 시작이 그 매치를 패배로 접는다.\n\n응답에는 오늘 남은 매치 수(remainingToday)와 달리기 해금 여부가 최신 값으로 실린다 —\n화면은 이 값으로 새 매치 버튼을 그린다.",
         "operationId": "current",
         "parameters": [
           {
@@ -5960,7 +7295,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/games/{gameId}/abandon": {
       "post": {
-        "description": "진행 중인 매치를 그 자리에서 접는다. 좌우 맞히기와 달리기 모두 이 주소로 접는다.\n\n접은 매치는 패배로 확정되어 다시 진행할 수 없고 current 에도 더는 잡히지 않는다.\n게임 중에 나가면 그 판은 끝이라는 규칙이며, 지고 있는 판을 버리고 다시 시작하는 것을 막는다.\n\n오늘 남은 매치 수는 시작 시점에 이미 차감했으므로 기권으로 돌려주지 않는다. 승리 보상·\n패배 판정(두 번째 선물)·놀이 조각은 어느 것도 발생하지 않는다.\n\n★ 아픈 펫도 기권할 수 있다(ZZAL_SICK_REFUSES 없음) — 아픔은 '노는 것'을 막는 조건이고\n기권은 그만두는 것이다. 여기서 막으면 병든 동안 열어 둔 매치를 닫을 길이 사라진다.",
+        "description": "진행 중인 매치를 그 자리에서 접는다. 좌우 맞히기와 달리기 모두 이 주소로 접는다.\n\n접은 매치는 패배로 확정되어 다시 진행할 수 없다(current 는 애초에 매치를 돌려주지 않는다).\n게임 중에 나가면 그 판은 끝이라는 규칙이며, 지고 있는 판을 버리고 다시 시작하는 것을 막는다.\n나가기 버튼을 누르지 않고 화면을 떠난 매치도 다음 시작 때 같은 방식으로 접힌다.\n\n오늘 남은 매치 수는 시작 시점에 이미 차감했으므로 기권으로 돌려주지 않는다. 승리 보상·\n패배 판정(두 번째 선물)·놀이 조각은 어느 것도 발생하지 않는다.\n\n★ 아픈 펫도 기권할 수 있다(ZZAL_SICK_REFUSES 없음) — 아픔은 '노는 것'을 막는 조건이고\n기권은 그만두는 것이다. 여기서 막으면 병든 동안 열어 둔 매치를 닫을 길이 사라진다.",
         "operationId": "abandon",
         "parameters": [
           {
@@ -6114,7 +7449,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/games/{gameId}/guess": {
       "post": {
-        "description": "선택한 방향을 전달하면 정답 여부를 서버가 판정한다. 응답에는 방금 진행한 회차의\n정답만 포함하며 남은 회차의 정답은 노출하지 않는다.\n\n5회를 모두 진행하면 finished 가 true 가 되고 그때 win 이 채워진다.",
+        "description": "선택한 방향을 전달하면 정답 여부를 서버가 판정한다. 응답에는 방금 진행한 회차의\n정답만 포함하며 남은 회차의 정답은 노출하지 않는다.\n\n★ 3승 또는 3패가 나면 그 회차에서 finished 가 true 가 되고 win 이 채워진다 —\n5회를 채우지 않는다(최단 3회·최장 5회). 3선승제라 셋을 맞히거나 셋을 틀리면\n남은 회차가 결과를 바꿀 수 없다.",
         "operationId": "guess",
         "parameters": [
           {
@@ -6186,6 +7521,43 @@
         "summary": "좌우 맞히기 1회 진행",
         "tags": [
           "미니게임"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/graduation-seen": {
+      "post": {
+        "description": "튜토리얼 졸업(첫날 완주) 축하 창을 봤음을 기록한다. 본문이 없고 **204** 로 답한다.\n\n화면이 sessionStorage 로 기억하면 새 탭·재시작마다 같은 축하 창이 다시 뜬다.\n한 번 본 연출은 다시 나오지 않아야 하고, 그 판정은 기기가 아니라 캐릭터에 붙는다.\n\n**같은 요청을 몇 번 보내도 결과가 같다** — 이미 봤으면 시각을 바꾸지 않고 그대로 204 다.\n기록된 시각은 상태 조회 응답의 `graduationSeenAt` 으로 내려간다.\n\n수면 중·여행 중에도 호출할 수 있다. 아이를 돌보는 호출이 아니라 화면이 무엇을 이미\n보여 줬는지 적는 호출이라 거절할 이유가 없고, 여기서 거절하면 이미 본 축하 창이\n다음 접속에 다시 뜬다.\n\n서버가 보는 튜토리얼 진행이 아직 완료 전이어도 받는다 — 기준은 서버의 진행도가 아니라\n화면이 그 판을 닫은 시점이다.",
+        "operationId": "graduationSeen",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "기록됨(본문 없음)"
+          },
+          "401": {
+            "description": "로그인이 필요함"
+          },
+          "404": {
+            "description": "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "졸업 축하 봤음",
+        "tags": [
+          "펫"
         ]
       }
     },
@@ -6758,6 +8130,14 @@
       "name": "Webtoon"
     },
     {
+      "description": "복선 카드로 만든 가설을 맡기고 판정을 되묻는다. 로그인 필요",
+      "name": "가설"
+    },
+    {
+      "description": "판정 안 된 가설을 가져가고 판정을 넣는다. 운영자(ADMIN)만",
+      "name": "가설 운영자"
+    },
+    {
       "description": "시연·확인 전용. 운영에서는 꺼져 있어 존재하지 않는다",
       "name": "개발용"
     },
@@ -6772,6 +8152,10 @@
     {
       "description": "좌우 맞히기와 달리기. 두 게임 합산 하루 3매치이며 취침 시 초기화한다",
       "name": "미니게임"
+    },
+    {
+      "description": "Trailer 탭이 카드를 받는 조회 API. 인증이 필요 없다",
+      "name": "복선 카드(공개)"
     },
     {
       "description": "내 정보 조회·탈퇴·약관 동의",

@@ -5,7 +5,7 @@
 // 액자 = 벽에서 한 칸을 누르면 크게. 열린 칸은 저장·공유, 잠긴 칸은 조건만 알려 준다.
 'use client';
 
-import { C, C2, GAEGU, gap, radius, fz, ink, paperA } from './ui';
+import { C, C2, GAEGU, TAP_MIN, gap, radius, fz, ink, paperA } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
@@ -28,7 +28,13 @@ function Wall({ y }: { y: Yeoul }) {
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, color: C.ink }}>함께한 순간</span>
         <span style={{ fontSize: fz.sm, color: C.faint }}>{w.count}</span>
         <span style={{ flex: 1 }} />
-        <button onClick={w.close} style={{ width: 28, height: 28, borderRadius: radius.pill, border: `1px solid ${ink(.16)}`, background: paperA(.9), fontSize: fz.sm, color: C.sub, lineHeight: 1 }} aria-label="닫기">✕</button>
+        {/* ★ 누르는 자리 44px(판정 5) — 동그라미는 28 그대로, 단추만 키운다. */}
+        <button
+          onClick={w.close} aria-label="닫기"
+          style={{ width: TAP_MIN, height: TAP_MIN, margin: '-8px -8px -8px 0', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', border: 'none', background: 'none', padding: 0 }}
+        >
+          <span style={{ width: 28, height: 28, borderRadius: radius.pill, border: `1px solid ${ink(.16)}`, background: paperA(.9), fontSize: fz.sm, color: C.sub, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</span>
+        </button>
       </div>
 
       <div style={{
@@ -71,7 +77,9 @@ function Wall({ y }: { y: Yeoul }) {
         {w.actions.map((a) => (
           <button
             key={a.label} onClick={a.tap} data-action={`album-${a.label}`}
-            style={{ minHeight: 40, padding: '10px 4px', borderRadius: radius.sm, border: `1px solid ${a.bd}`, background: a.bg, fontSize: fz.sm, color: a.fg }}
+            // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 바닥값이 40 이라 실측도 40px 이었다). 칸이 보이는 단추라
+            //   알약처럼 **바닥값만 올린다** — 아이 정보·온보딩 칩과 같은 규칙(`Panels`·`Onboarding`).
+            style={{ minHeight: TAP_MIN, padding: '10px 4px', borderRadius: radius.sm, border: `1px solid ${a.bd}`, background: a.bg, fontSize: fz.sm, color: a.fg }}
           >{a.label}</button>
         ))}
       </div>
@@ -118,9 +126,10 @@ function FrameView({ y }: { y: Yeoul }) {
         {f.locked && <span style={{ padding: '7px 14px', borderRadius: radius.pill, background: paperA(.16), fontSize: fz.sm, color: '#F3E9DC' }}>{f.cond}</span>}
         {f.open && (
           <span style={{ display: 'flex', gap: gap.sm }}>
-            <button onClick={f.save} data-action="frame-save" style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>저장</button>
+            {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 39px). */}
+            <button onClick={f.save} data-action="frame-save" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>저장</button>
             {/* 서버가 주소를 만들어 준다. 파일이 아니라 링크인 이유는 lib/pet.ts share() 머리말에. */}
-            <button onClick={f.share} data-action="frame-share" style={{ padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>공유</button>
+            <button onClick={f.share} data-action="frame-share" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>공유</button>
           </span>
         )}
       </div>

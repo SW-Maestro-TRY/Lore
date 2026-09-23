@@ -140,6 +140,20 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int tutorialStep;
 
+    /**
+     * 튜토리얼 졸업(첫날 완주) 축하 창을 <b>본 순간</b>. null 이면 아직 안 봤다.
+     *
+     * <h3>★ 왜 서버가 드나</h3>
+     * 화면이 {@code sessionStorage} 로 기억하던 값이다. 탭을 새로 열거나 앱을 다시 켜면 그 기억이
+     * 사라져 <b>같은 축하 창이 다시 떴다</b>. 한 번 본 연출은 다시 나오지 않아야 하고, 그 판정은
+     * 기기·탭이 아니라 <b>이 아이</b>에 붙어야 한다({@link #tutorialStep} 을 서버가 드는 것과 같은 이유다).
+     *
+     * ★ 한 번 찍히면 안 움직인다 — {@link #markGraduationSeen} 이 비어 있을 때만 채운다.
+     *   그래서 "언제 처음 봤나" 가 그대로 남고, 같은 요청을 몇 번 보내도 결과가 같다.
+     */
+    @Column
+    private Instant graduationSeenAt;
+
     // ── 시계 (설계 규칙) ─────────────────────────────────────────────
 
     /** 마지막으로 정산한 시각. 여기서 지금까지를 {@link AwakeClock} 이 자른다. */
@@ -698,6 +712,21 @@ public class ZzalPet {
         return real.plusSeconds(devClockOffsetSeconds);
     }
 
+    /**
+     * 이 펫의 <b>하루가 시작된 시각</b>(펫 시계) — 마지막 밤잠에서 깬 때. 아직 한 번도 안 자 봤으면 부화 시각.
+     *
+     * <h3>★★ 하루의 경계는 자정이 아니다</h3>
+     * 정본 16장 "하루의 경계 = 밤잠 드는 순간" — {@code today*} 카운터는 {@link #sleep} 에서 0 이 되고,
+     * 자는 동안에는 아무 행동도 할 수 없으므로 <b>사용자가 겪는 하루</b>는 이 기상부터 다음 기상까지다.
+     * 낮잠은 경계가 아니다({@code wokeAt} 은 밤잠에서 깰 때만 갱신된다).
+     *
+     * ★ 여기를 한 곳으로 모은 이유 — 같은 식이 채팅 부름·심화 공개·동작 희망에 각각 적혀 있었다.
+     *   한 곳이라도 자정으로 남으면 사용자에게는 "어떤 것은 자정에, 어떤 것은 기상에 풀린다" 로 보인다.
+     */
+    public Instant dayStartedAt() {
+        return wokeAt == null ? hatchedAt : wokeAt;
+    }
+
     /** dev — 시계를 앞으로 민다. 규칙은 한 글자도 안 바뀌고 기다림만 사라진다. */
     public void advanceDevClock(Duration by) {
         devClockOffsetSeconds += by.getSeconds();
@@ -731,6 +760,34 @@ public class ZzalPet {
 
     public int getTutorialStep() {
         return tutorialStep;
+    }
+
+    /** 졸업 축하 창을 본 순간. 아직 안 봤으면 null. */
+    public Instant getGraduationSeenAt() {
+        return graduationSeenAt;
+    }
+
+    /**
+     * 졸업 축하 창을 봤다고 적는다 — <b>처음 한 번만</b> 찍힌다.
+     *
+     * <h3>★ 같은 요청을 몇 번 보내도 결과가 같다</h3>
+     * 이미 시각이 있으면 아무것도 안 바꾼다. 닫기를 두 번 눌러도, 네트워크가 끊겨 재시도가
+     * 겹쳐도 시각이 뒤로 밀리지 않는다 — 밀리면 "언제 처음 봤나" 를 못 읽는다.
+     *
+     * <h3>★ 튜토리얼이 아직 안 끝난 것으로 보여도 막지 않는다</h3>
+     * 기준은 서버의 진행도가 아니라 <b>화면이 축하 판을 닫은 시점</b>이다. 완주 응답과 이 호출
+     * 사이에 서버가 어떻게 보이든(다른 탭에서 먼저 눌렀거나 완주 응답이 늦게 닿았거나)
+     * 사용자는 이미 축하를 봤다. 여기서 거절하면 그 사람은 축하 창을 <b>다음 접속마다 다시</b>
+     * 보게 되고, 저장이 안 됐다는 사실은 로그 어디에도 안 남은 채 창으로만 드러난다.
+     *
+     * @return 이번 호출이 실제로 찍었으면 true, 이미 봤던 것이면 false
+     */
+    public boolean markGraduationSeen(Instant now) {
+        if (graduationSeenAt != null) {
+            return false;
+        }
+        graduationSeenAt = now.truncatedTo(ChronoUnit.SECONDS);
+        return true;
     }
 
     /**
@@ -1799,12 +1856,34 @@ public class ZzalPet {
 
     // ── 미니게임·채팅 카운터 (설계 규칙) ────────────────────────────────
 
-    /** 판을 시작했다. 하루 3판(합산)·2층 13번 조건은 시작한 판 기준. */
+    /**
+     * 판을 시작했다 — <b>하루 3판</b>(합산)과 튜토리얼 GAME 칸만 여기서 움직인다.
+     *
+     * ★ 하루 3판을 시작 기준으로 세는 이유는 그대로다(정본 7장) — 끝낸 판만 세면 지고 있는 판을
+     *   버리고 새로 시작하는 것이 공짜가 되어 제한이 있으나 마나가 된다.
+     * ★★ 2층 15번(놀람)의 조건은 <b>여기가 아니다</b> — {@link #finishGame()} 로 옮겼다
+     *   (2026-09-22 결정). 시작으로 세면 시작·기권만 되풀이해 열 수 있었다.
+     */
     public void startGame() {
         todayGames += 1;
-        gameStarts += 1;
         advanceTutorial(TutorialSchedule.Step.GAME);
         afterNonSnack(null);
+    }
+
+    /**
+     * 매치를 <b>끝까지 쳤다</b>(승패 무관) — 2층 15번(놀람)의 조건 카운터.
+     *
+     * <h3>★★ 필드 이름({@code gameStarts} · 컬럼 {@code game_starts})은 옛 규칙의 흔적이다</h3>
+     * 2026-09-22 결정 전에는 <b>시작한 판</b>을 셌다. 지금 세는 것은 <b>끝까지 친 매치</b>이고,
+     * 기권·강제 종료한 매치는 여기 오지 않는다(정본 7-A를 조각과 같은 선으로 맞췄다).
+     * 이름을 안 바꾼 것은 컬럼 개명이 마이그레이션을 부르기 때문이다 — <b>이름이 아니라 이 주석과
+     * 부르는 자리가 규칙이다.</b> {@code GameService.guess}·{@code GameService.finish} 두 곳에서만 부른다.
+     *
+     * ★ 조각({@code PieceEvent.GAME})과 <b>같은 자리</b>에서 부른다. 둘이 갈리면 "조각은 안 차는데
+     *   해금은 되는" 상태가 생기고, 사용자는 어느 쪽이 규칙인지 알 수 없다.
+     */
+    public void finishGame() {
+        gameStarts += 1;
     }
 
     /** 좌우 맞히기 승리 — 달리기 해금(5승)의 재료. */
@@ -2095,6 +2174,12 @@ public class ZzalPet {
         return wakes;
     }
 
+    /**
+     * 2층 15번(놀람)의 조건 카운터 — <b>끝까지 친 매치 수</b>(2026-09-22부터).
+     *
+     * ★ 이름이 {@code Starts} 인 것은 옛 규칙의 흔적이다({@link #finishGame()} 참조).
+     *   시작한 판 수는 이제 어디에도 누적하지 않는다(하루치는 {@code todayGames}).
+     */
     public int getGameStarts() {
         return gameStarts;
     }

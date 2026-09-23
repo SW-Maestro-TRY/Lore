@@ -84,10 +84,12 @@ public final class GameResponses {
 
             @Schema(description = "현재까지 맞힌 횟수", example = "1") int hits,
 
-            @Schema(description = "5회를 모두 진행했는지 여부") boolean finished,
+            @Schema(description = "매치가 끝났는지 여부. 3승 또는 3패가 나면 5회를 채우지 않고 그 회차에서 끝난다"
+                    + "(최단 3회·최장 5회)")
+            boolean finished,
 
             @Schema(description = "승리 여부. 매치가 끝났을 때만 채워지며 진행 중에는 null 이다. "
-                    + "정답 수가 이미 승리 조건을 넘겼더라도 남은 회차를 진행할 유인을 유지하기 위해 미리 알리지 않는다")
+                    + "3승이 나는 그 회차에서 매치가 끝나므로, 진행 중에 승리가 확정돼 있는 상태는 없다")
             Boolean win,
 
             @Schema(description = "다음 회차(0부터). 매치가 끝났으면 null", example = "1") Integer nextRound,
@@ -137,7 +139,8 @@ public final class GameResponses {
 
             @Schema(description = "LEFT_RIGHT · RUN", example = "LEFT_RIGHT") String kind,
 
-            @Schema(description = "기권 시점까지 진행한 회차(0부터). 달리기는 항상 0", example = "2") int round,
+            @Schema(description = "기권 시점까지 진행한 회차(0부터). 달리기는 항상 0. 3승·3패가 나면 매치가 "
+                    + "끝나므로 이 값은 0~4 이며 승패는 아직 갈리지 않은 상태다", example = "2") int round,
 
             @Schema(description = "기권에는 선택이 없으므로 항상 null. Guess 와 같은 모양을 유지하기 위한 자리")
             Side pick,
@@ -148,8 +151,8 @@ public final class GameResponses {
 
             @Schema(description = "항상 true — 기권한 매치는 그 자리에서 끝난다") boolean finished,
 
-            @Schema(description = "항상 false — 기권은 패배로 확정된다. 접는 시점에 이미 정답 수가 "
-                    + "승리 조건을 넘겼더라도 끝까지 진행하지 않은 매치이므로 승리가 아니다") boolean win,
+            @Schema(description = "항상 false — 기권은 패배로 확정된다. 3승이 나면 그 회차에서 매치가 "
+                    + "끝나므로 승리를 쌓아 둔 채 기권하는 상태는 애초에 없다") boolean win,
 
             @Schema(description = "한 매치의 총 회차", example = "5") int rounds,
             @Schema(description = "승리에 필요한 정답 수", example = "3") int winAt,
@@ -163,8 +166,10 @@ public final class GameResponses {
 
         public static AbandonResult of(GameService.Abandoned r, int remainingToday) {
             ZzalGame game = r.game();
-            // ★ win 은 game.isWin() 이 아니라 상수 false 다. 좌우 맞히기의 isWin() 은 "3회 이상 정답" 이라
-            //   3회를 맞힌 뒤 접으면 true 가 되는데, 그 판은 끝까지 치지 않은 판이라 승리가 아니다.
+            // ★ win 은 game.isWin() 이 아니라 상수 false 다. 좌우 맞히기의 isWin() 은 "3회 이상 정답" 인데,
+            //   3승이 나면 그 회차에서 매치가 끝나므로(2026-09-22) 여기 오는 판의 isWin() 은 늘 false 다.
+            //   그래도 상수로 두는 것은 안전띠다 — 회차·승수가 바뀌어 "이긴 채 안 끝난 판" 이 생기는 날에도
+            //   기권은 승리가 아니다(끝까지 치지 않은 판이다).
             return new AbandonResult(game.getId(), game.getKind().name(), game.round(), null, false,
                     game.getHits(), true, false,
                     ZzalGame.ROUNDS, ZzalGame.WIN_AT, remainingToday, r.justUnlocked(), r.runUnlocked());

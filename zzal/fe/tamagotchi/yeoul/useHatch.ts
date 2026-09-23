@@ -22,7 +22,7 @@ import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS, GUESS_HAND_PRELOAD } from './constants';
 import {
   answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
-  motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, wake as wakePet,
+  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet,
   type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
   type HatchProgress, type PetDetail, type Personality,
 } from '../../lib/pet';
@@ -68,6 +68,13 @@ export interface CareResult {
   ok: boolean;
   /** 거절이면 화면에 띄울 한 줄. 안 보냈으면 null. */
   message: string | null;
+  /**
+   * 서버가 준 **거절 사유 코드**(`ApiError.code`). 화면이 사유별로 다른 말을 하려면
+   * 문장이 아니라 이 코드로 갈라야 한다 — 서버 문장이 바뀌어도 안 깨진다(기권 실패와 같은 방식).
+   * 코드 없는 401 이 실제로 있어서(→ `common/fe/api/client.ts`) `status` 도 같이 준다.
+   */
+  code?: string | null;
+  status?: number;
 }
 
 const GAUGE_MAX = 4;
@@ -91,7 +98,11 @@ function optimisticOf(action: CareAction, pet: PetDetail | null): CareOptimistic
       if (!t) return null;
       return { action, ...cut, pets: Math.min(PET_PER_DAY, t.pets + 1) };
     case 'CLEAN':
-      return { action, ...cut, trash: 0 };
+      // ★★ **한 번 쓸면 하나**다(서버 `ZzalPet.clean()` = `trash - 1` · 정본 §12 튜토리얼 안내).
+      //   먼저 그리는 값이 0 이면, 흔적 2개일 때 **둘 다 사라졌다가** 서버 답이 와서 하나가
+      //   되살아난다 — 화면이 서버보다 더 많이 지우는 것처럼 보인다(2026-09-22 상훈님 확인).
+      if (!g) return null;
+      return { action, ...cut, trash: Math.max(0, g.trash - 1) };
     case 'BATH':
       if (!g) return null;
       return { action, ...cut, trash: 0, happiness: up(g.happiness), bathDone: true };
@@ -241,6 +252,20 @@ export interface Live {
    */
   finishTutorial: () => Promise<CareResult>;
   /**
+   * 튜토리얼 **4칸을 "확인했다" 로 넘긴다** — 성격을 안 골라도 된다(→ `lib/pet.tutorialSeen`).
+   * 성격을 골라 저장하는 길(`savePersonality`)도 같은 칸을 넘기므로, 둘 중 하나만 부른다.
+   */
+  tutorialSeen: () => Promise<CareResult>;
+  /**
+   * 첫날 축하 판을 **봤다고 서버에 남긴다.**
+   *
+   * ★★ 왜 서버까지 가나 — 이 판은 "사람 기준 한 번" 이어야 한다. 탭 기억만 쓰던 동안에는
+   *   새 탭·앱 재시작·다른 기기에서 **또 떴다**(2026-09-22 dev 재현).
+   * ★ **던지지 않는다.** 못 남기면 다음에 한 번 더 뜰 뿐이고, 그건 판을 못 띄우는 것보다 낫다.
+   *   백엔드가 아직 이 주소를 안 열었으면 404 인데, 그때도 조용히 넘어가 예전처럼 굴러야 한다.
+   */
+  markGraduationSeen: () => Promise<void>;
+  /**
    * 오늘의 부름과 기억. **대사는 전부 여기서 온다** — 화면이 지어내지 않는다(상훈님 지시).
    * 아직 안 읽었거나 서버에 안 붙었으면 null.
    */
@@ -328,6 +353,8 @@ const EMPTY: Live = {
   doRest: async () => ({ ok: false, message: null }),
   savePersonality: async () => ({ ok: false, message: null }),
   finishTutorial: async () => ({ ok: false, message: null }),
+  tutorialSeen: async () => ({ ok: false, message: null }),
+  markGraduationSeen: async () => {},
   sendChat: async () => ({ error: null, reply: null }),
   startPlay: async () => null,
   pickSide: async () => ({ error: null, result: null }),
@@ -585,6 +612,21 @@ export function useHatchState(): Live {
    * ★ 401 은 여기서 다루지 않는다 — 공통 클라이언트가 갱신을 시도하고, 그래도 안 되면
    *   로그인 창을 여는 것은 바깥의 일이다.
    */
+  /**
+   * **서버 상태를 다시 읽어 화면을 맞춘다.**
+   *
+   * ★★ 왜 필요한가(2026-09-22 dev 실측) — 시각으로 저절로 일어나는 일(23:00 자동 취침 ·
+   *   10:00 늦잠 기상 · 게이지 감소)은 **서버가 조회를 받을 때 계산**한다. 화면이 안 물어보면
+   *   **영영 모른다.** 그래서 밤 11시를 넘긴 채 열려 있던 화면은 **아이가 서 있고 게임판이 열린
+   *   그대로**였고, 버튼을 누르면 서버만 "자고 있어요" 로 거절했다(상훈님 스크린샷 23:13).
+   * ★ 실패를 삼킨다 — 한 번 못 읽은 것으로 화면을 깨지 않는다. 다음 차례에 다시 묻는다.
+   */
+  const refreshPet = useCallback(async () => {
+    if (!petId) return;
+    const seq = takeSeq();
+    try { putPet(seq, await getPet(petId)); } catch { /* 다음 차례에 다시 묻는다 */ }
+  }, [petId, takeSeq, putPet]);
+
   const doCare = useCallback(async (action: CareAction): Promise<CareResult> => {
     if (!petId) return { ok: false, message: null };
     // 도는 동안 들어온 두 번째 클릭 — **아무 말도 하지 않는다.** 잠긴 버튼이 이미 말하고 있다.
@@ -641,13 +683,18 @@ export function useHatchState(): Live {
 
   /** 서버로 보내고 응답(=최신 상태)을 얹는 작은 틀. 성격 저장·튜토리얼 마무리가 같은 모양이라 묶었다. */
   const send = useCallback(async (call: () => Promise<PetDetail>, fallback: string): Promise<CareResult> => {
-    if (!petId) return { ok: false, message: null };
+    if (!petId) return { ok: false, message: fallback, code: 'ZZAL_PET_NOT_FOUND' };
     const seq = takeSeq();
     try {
       putPet(seq, await call());
       return { ok: true, message: null };
     } catch (e) {
-      return { ok: false, message: e instanceof Error ? e.message : fallback };
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : fallback,
+        code: e instanceof ApiError ? e.code : null,
+        status: e instanceof ApiError ? e.status : undefined,
+      };
     }
   }, [petId, takeSeq, putPet]);
 
@@ -658,6 +705,27 @@ export function useHatchState(): Live {
   const finishTutorial = useCallback(() => (
     send(() => tutorialDone(petId as number), '아직 배울 것이 남았어요')
   ), [petId, send]);
+
+  const seenTutorial = useCallback(() => (
+    send(() => tutorialSeen(petId as number), '지금은 넘어갈 수 없어요')
+  ), [petId, send]);
+
+  /**
+   * 첫날 축하 판을 봤다고 남긴다(→ Live.markGraduationSeen).
+   *
+   * ★ `send` 를 안 쓴다 — 그쪽은 실패를 화면 문구로 만들어 주는 길인데, 이 기록은 **사용자가
+   *   시킨 일이 아니라** 화면이 알아서 남기는 것이라 실패를 보여 줄 자리가 없다. 조용히 삼킨다.
+   * ★ 남긴 뒤 상태를 다시 읽어 `graduationSeenAt` 을 손에 쥔다 — 그래야 같은 세션에서
+   *   조회가 한 번 더 돌아도 판이 다시 안 뜬다.
+   */
+  const markGraduationSeen = useCallback(async () => {
+    if (!petId) return;
+    try {
+      await graduationSeen(petId);
+      const seq = takeSeq();
+      try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 기록은 남았다 */ }
+    } catch { /* 못 남겼으면 다음에 한 번 더 뜬다 — 화면은 그대로 간다 */ }
+  }, [petId, takeSeq, putPet]);
 
   /**
    * 부름에 답하기.
@@ -701,8 +769,13 @@ export function useHatchState(): Live {
       const seq = takeSeq();
       try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판은 시작됐다 */ }
       return null;
-    } catch (e) { return e instanceof Error ? e.message : '지금은 못 놀아요'; }
-  }, [petId, takeSeq, putPet, putGame, noteUnlocked]);
+    } catch (e) {
+      // ★ 거절이면 **펫을 다시 읽는다**(2026-09-22) — 거절의 이유가 "자고 있다" 처럼 **화면이
+      //   아직 모르는 상태**일 수 있다. 그때 다시 읽지 않으면 서버만 알고 화면은 깨어 있는 채로 남는다.
+      await refreshPet();
+      return e instanceof Error ? e.message : '지금은 못 놀아요';
+    }
+  }, [petId, takeSeq, putPet, putGame, noteUnlocked, refreshPet]);
 
   const pickSide = useCallback(async (side: Side) => {
     // ★ 상태가 아니라 ref 를 본다 — 방금 시작한 판도 여기서 바로 잡힌다.
@@ -727,12 +800,15 @@ export function useHatchState(): Live {
     } catch (e) {
       const seq = takeSeq();
       try { putGame(seq, await getCurrentGame(petId)); } catch { /* 화면은 그대로 둔다 */ }
+      // ★ 판만 다시 읽던 자리다 — **펫도 읽는다**(2026-09-22). 자는 사이에 누른 것이면
+      //   여기서 읽어야 화면이 자는 방으로 바뀐다(전에는 "자고 있어요" 한 줄만 뜨고 그대로였다).
+      await refreshPet();
       return { error: e instanceof Error ? e.message : '지금은 못 쳐요', result: null };
     } finally {
       guessingRef.current = false;
       setGuessing(false);
     }
-  }, [petId, takeSeq, putPet, putGame, noteUnlocked]);
+  }, [petId, takeSeq, putPet, putGame, noteUnlocked, refreshPet]);
 
   /**
    * 기권 — 치던 판을 접는다. **인자가 없다**(→ Live.abandonPlay).
@@ -888,6 +964,31 @@ export function useHatchState(): Live {
     return () => { alive = false; clearInterval(t); };
   }, [phase, petId, pet]);
 
+  /**
+   * **열려 있는 화면을 서버 시각에 맞춰 둔다** — 60초마다 한 번, **보일 때만.**
+   *
+   * ★★ 왜 필요한가 — 23:00 자동 취침처럼 **아무도 안 눌러도 일어나는 일**이 있다. 서버는 조회를
+   *   받을 때 그 시각을 계산해 주는데, 화면이 안 물어보면 영영 모른다(2026-09-22 실측: 23:13
+   *   화면이 깨어 있고 게임판까지 열린 채였다). 거절을 신호로 쓰는 길(→ `refreshPet`)은 **누가
+   *   눌러야** 돌고, 이 길은 **아무도 안 눌러도** 돈다. 둘 다 필요하다.
+   * ★ **왜 60초인가** — 이 화면이 시각 때문에 바뀌는 사건은 자동 취침(23:00)·늦잠 기상(10:00)·
+   *   게이지 감소(시간 단위)·부름 슬롯이고, 전부 **분 단위로도 충분히 이른** 것들이다.
+   *   60초면 최악의 지연이 1분이고 탭 하나가 시간당 60번 묻는다 — 3초(부화 지켜보기)처럼
+   *   촘촘히 돌 이유가 없고, 5분이면 자는 방으로 바뀌기까지 너무 오래 어긋난 화면을 본다.
+   * ★ **안 보이면 멈춘다**(`document.hidden`) — 탭을 접어 둔 사람이 서버를 두드릴 이유가 없다.
+   *   **다시 보이는 순간 한 번 바로 읽는다** — 밤새 열어 둔 화면이 그 한 번으로 제자리를 찾는다.
+   * ★ 부화 지켜보기(3초)와 겹치지 않는다 — 저쪽은 `ALIVE` 가 되면 멈추고, 이쪽은 그때부터 돈다.
+   */
+  useEffect(() => {
+    if (phase !== 'ALIVE' || !petId || !pet) return undefined;
+    let alive = true;
+    const look = () => { if (alive && !document.hidden) void refreshPet(); };
+    const t = setInterval(look, 60_000);
+    const onShow = () => { if (!document.hidden) look(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
+  }, [phase, petId, pet, refreshPet]);
+
   // 오늘의 부름 읽기. 아이가 살아난 뒤, 그리고 **무언가 한 뒤마다** 다시 읽는다.
   //
   // ⚠️ `Detail.chatSummary.openSlot` 을 못 믿는다 — 튜토리얼 부름(BABY)이 열려 있어도
@@ -1020,7 +1121,7 @@ export function useHatchState(): Live {
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
     justUnlocked,
-    setChar, doCare, doRest, savePersonality, finishTutorial, sendChat, startPlay, pickSide, abandonPlay,
+    setChar, doCare, doRest, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
     clearJustUnlocked, noteUnlocked,
     loadAlbum, shareMotion, sendWish, resume, reset,
   };

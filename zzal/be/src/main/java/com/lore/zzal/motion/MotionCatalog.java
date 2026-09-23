@@ -84,6 +84,7 @@ public class MotionCatalog {
             new MotionSpec(12, "wash", "목욕하기", MotionLayer.BASIC_2, UnlockRule.of(BATH, 3), "씻기"),
             new MotionSpec(13, "reply", "답하기", MotionLayer.BASIC_2, UnlockRule.of(CHAT_ANSWERS, 4), "답하기"),
             new MotionSpec(14, "petted", "쓰다듬 받기", MotionLayer.BASIC_2, UnlockRule.of(PET_COUNT, 4), "쓰다듬받기"),
+            // ★ 게임 4판 = <b>끝까지 친</b> 매치 4번(승패·종류 무관). 기권·강제 종료는 안 센다(2026-09-22).
             new MotionSpec(15, "startle", "놀람", MotionLayer.BASIC_2, UnlockRule.of(GAME_STARTS, 4), "놀라기"),
             new MotionSpec(16, "wake_up", "일어나기", MotionLayer.BASIC_2, UnlockRule.of(WAKES, 4), "일어나기"),
             // 선물. 카탈로그 밖 특별 1종씩. 기본 행동 없음(16장: 구르기 먼저, 뒤로 넘어짐이 두 번째).

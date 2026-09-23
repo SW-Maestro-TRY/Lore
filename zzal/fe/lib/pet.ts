@@ -16,6 +16,7 @@
 //     2층 즉시 해금(`justUnlocked`) · 아침 도착(`learnedToday`) · 기능 열림(`features`).
 
 import { request } from './api';
+import type { components, operations } from './api-schema';
 
 /** 지금 어느 단계인가. 프론트의 'none'(아직 아무도 없음)은 서버에 없다 — 그건 행이 없는 것. */
 /**
@@ -158,7 +159,15 @@ export interface Today {
   pets: number;
   /** 돌봄 친밀도 합산(상한 30). */
   careIntimacy: number;
-  /** 다른 행동 없이 연달아 준 간식 수(5면 배탈). */
+  /**
+   * **그날 준 간식 수**(5개째부터 배탈). 서버 `PetResponses.Today.snacks` 와 같은 칸이다.
+   * ★ 정본 §16 — **"연속" 은 보지 않는다.** 사이에 다른 행동이 끼어도 그날 5개째면 배탈이다.
+   */
+  snacks: number;
+  /**
+   * @deprecated `snacks` 로 대체됐다. **서버에는 이 칸이 없다** — 연속을 세던 옛 규칙의 이름이고,
+   *   지금 담기는 값은 `snacks` 와 **같은 하루 누적치**다(이름만 옛것). 쓰는 화면이 옮겨 가면 지운다.
+   */
   snackStreak: number;
   bathDone: boolean;
 }
@@ -407,6 +416,22 @@ export interface PetDetail {
   leaving: Leaving | null;
   trip: Trip | null;
   tutorial: Tutorial | null;
+  /**
+   * **첫날 축하 판을 본 시각**(ISO) — 안 봤으면 `null`. 떠난 아이에게도 남는다.
+   *
+   * ★★ 왜 서버가 들고 있나 — 이 판은 "한 번만" 이 목숨인 판이다. 예전에는 탭 기억
+   *   (`sessionStorage`)으로만 막아서, **새 탭·앱 재시작·다른 기기면 또 떴다**
+   *   (2026-09-22 dev 재현). 사람 기준으로 한 번이려면 사람 편에 남는 곳은 서버뿐이다.
+   * ★ **배포 전에는 이 칸이 안 온다.** 그때는 `undefined` 라 `!= null` 이 거짓이 되고, 화면은
+   *   예전처럼 탭 기억으로만 막는다 — 없다고 깨지지 않고, 오면 저절로 서버 기준으로 올라선다.
+   * ★ 칸의 형은 **서버 명세에서 생성한 타입**을 그대로 쓴다
+   *   (`components['schemas']['Detail']['graduationSeenAt']`). 손으로 적던 자리를 걷어낸 것이라,
+   *   서버가 이 칸의 형을 바꾸면 생성 파일이 바뀌고 여기가 따라 바뀐다.
+   * ★ 한 칸만 다시 조인다 — `| null`. 명세(OpenAPI)에 이 칸을 `nullable` 로 적을 자리가 없어
+   *   생성물은 `string | undefined` 로만 나오지만, **서버는 안 봤을 때 null 을 보낸다.**
+   *   조이지 않으면 위 `!= null` 판정이 타입상 죽은 가지로 읽힌다.
+   */
+  graduationSeenAt?: components['schemas']['Detail']['graduationSeenAt'] | null;
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */
@@ -427,18 +452,47 @@ export interface Drafted {
 /**
  * 캐릭터 정보. **이름 말고는 전부 선택**이다.
  *
- * ★ 그림 생성에 들어가는 것은 `note` 뿐이다 — 성격·세계관은 대사 톤에만 쓰인다.
+ * ★★ **어느 칸도 그림 생성에 안 들어간다**(정본 1.6 · 서버 `PetRequests` 기준 · 2026-09-22 정정).
+ *   옛 주석은 *"그림 생성에 들어가는 것은 `note` 뿐"* 이라고 적어 두었는데 **사실이 아니었다.**
+ *   그림은 **올린 그림 한 장**에서만 나온다 — 온보딩에서 받는 말(성격·말투·장르·세계관·그 밖에)은
+ *   전부 **대사와 말투**에만 쓰인다. 이 주석을 믿고 "그림을 바꾸려면 `note` 를 고치라" 고
+ *   안내하면 그대로 거짓말이 된다.
  */
 export interface CharacterInput {
   /** 12자 이하(정본 15장). */
   name: string;
   /** 성격. 대사 톤에 쓰인다. 선택 */
   personality?: Personality;
-  /** 세계관·설정. 100자 이하. 선택 */
+  /** 세계관·설정. **고른 칩까지 합쳐** `CHAR_TEXT_MAX.world` 자 이하. 선택 */
   world?: string;
-  /** 그 밖에 알려 주고 싶은 것. 200자 이하. 선택. ★ 이것만 그림 생성에 참고된다 */
+  /** 그 밖에 알려 주고 싶은 것. `CHAR_TEXT_MAX.extra` 자 이하. 선택. ★ **그림이 아니라 대사에 쓰인다**(위 머리말). */
   note?: string;
 }
+
+/**
+ * 캐릭터 정보 자유 입력칸의 **글자 수 상한 한 벌.**
+ *
+ * ★★ **한 곳에만 둔다.** 이 숫자는 최소 세 곳이 같이 봐야 한다 —
+ *   화면의 `maxLength`(Onboarding) · 상태에 담을 때의 자르기(useYeoul) · 서버 `@Size`.
+ *   전에는 useYeoul 이 혼자 60 으로 자르고 있어서, 화면이 100 을 열어도 **60에서 조용히 멎었다.**
+ *   갈리면 조용히 틀리는 종류라 계약(이 파일) 옆에 둔다.
+ *
+ * ★ 2026-09-22 상훈님 판정("칸 별로 알아서 해 넉넉하게") 뒤 값이며, 백엔드가 같은 날
+ *   `TONE/GENRE 32 -> 100` · `WORLD 100 -> 200` 으로 넓히는 중이다.
+ *   **그 배포 전에는 서버가 옛 한도로 거절할 수 있고, 그건 고장이 아니다.**
+ *
+ * ★ `world` 는 서버 **한 칸**에 고른 칩과 직접 쓴 말이 ` · ` 로 이어져 함께 담긴다.
+ *   그래서 입력칸 자체의 상한은 이 숫자가 아니라 **칩이 먹고 남은 자리**다(화면이 계산한다).
+ * ★ `persona` 는 아직 보내는 자리가 없다(위 `CharacterInput`). 화면에만 남아 잘릴 일이 없으므로
+ *   넉넉히 두고, 보내기 시작할 때 서버 칸과 다시 맞춘다.
+ */
+export const CHAR_TEXT_MAX: Record<string, number> = {
+  persona: 200,
+  tone: 100,
+  genre: 100,
+  world: 200,
+  extra: 200,
+};
 
 /** 부화 진행 — 알 화면이 몇 초마다 되풀이해 묻는다. */
 export interface HatchProgress {
@@ -588,6 +642,41 @@ export function wake(petId: number): Promise<PetDetail> {
  */
 export function tutorialDone(petId: number): Promise<PetDetail> {
   return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/done`, { method: 'POST' });
+}
+
+/**
+ * 튜토리얼 **4칸("이 성격이 맞나요")을 넘긴다 — 아이 정보를 확인만 해도.**
+ *
+ * ★★ 성격을 **안 골라도 넘어간다**(서버 `PetService.tutorialSeen`, 2026-09-11 확정:
+ *   *"성격을 한 번도 안 고른 사람은 null 인 채 지나간다 — 그래도 된다"*). 성격을 고른 사람은
+ *   `setPersonality` 가 저장과 함께 같은 칸을 넘겨 주므로, 이 호출은 **안 고르고 확인만 한 길**이다.
+ * ★ 화면이 혼자 넘기면 안 된다 — 서버가 4칸에 남아 있으면 그다음 행동(청소)이 무시되고,
+ *   **첫 흔적이 이 칸을 넘길 때 생기므로** 바닥이 깨끗해 5칸에서 또 막힌다(서버 주석).
+ * ★ 지금 칸이 4칸이 아니면 409 `ZZAL_TUTORIAL_STEP_MISMATCH`.
+ */
+export function tutorialSeen(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/seen`, { method: 'POST' });
+}
+
+/**
+ * 첫날 축하 판을 **봤다고 남긴다**(2026-09-22 · 백엔드 확정 스펙).
+ *
+ * ★★ **본문 없이 204 이고 공통 봉투를 안 탄다.** 공통 클라이언트가 빈 본문을 `null` 로 두므로
+ *   그대로 성공으로 흘러간다(`motionWish` 와 같은 자리). **응답을 파싱하지 말 것** —
+ *   `res.json()` 류가 끼면 **성공한 요청이 실패로 뒤집힌다.**
+ * ★ **멱등**이다. 잠든·여행 중·튜토리얼 미완료여도 204 라, 거절 갈래가 사실상 `404
+ *   ZZAL_PET_NOT_FOUND` 하나뿐이다. 그래서 화면이 "보냈는지" 를 따로 기억하지 않는다 —
+ *   실패하면 다음에 또 보내면 된다(→ `useHatch.markGraduationSeen`).
+ * ★ 손으로 적어 두었던 자리를 걷어냈다(백엔드 `b890ff2`·`f6f76dd` 가 합쳐져 생성 타입에
+ *   이 주소가 생겼다). 인자는 생성 타입이 쥔다 — `operations['graduationSeen']` 이 명세에서
+ *   사라지거나 이름이 바뀌면 **빌드가 먼저 깨진다.**
+ * ★ 돌려주는 것은 `void` 다. 생성 타입의 204 갈래가 `content?: never`(본문 없음)라서,
+ *   여기서 파싱할 것이 아무것도 없다는 뜻이다 — 위 ★★ 의 "응답을 파싱하지 말 것" 과 한 짝.
+ */
+export function graduationSeen(
+  petId: operations['graduationSeen']['parameters']['path']['petId'],
+): Promise<void> {
+  return request<void>(`${PET_BASE}/${petId}/graduation-seen`, { method: 'POST' });
 }
 
 /** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */
