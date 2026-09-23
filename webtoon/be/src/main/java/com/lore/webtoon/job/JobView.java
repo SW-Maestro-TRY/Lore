@@ -120,7 +120,7 @@ public record JobView(
                 styleLabel,
                 job.getStage().wire(),
                 stageIndex,
-                List.of("story", "sheet", "board", "pages"),
+                List.of("story", "sheet", "board", "pages", "bind"),
                 stageLabel,
                 now.say(),
                 job.isCheckpoints(),

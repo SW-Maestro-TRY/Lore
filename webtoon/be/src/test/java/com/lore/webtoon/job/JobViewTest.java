@@ -65,10 +65,10 @@ class JobViewTest {
     @DisplayName("걸음 이름과 순서가 파이썬 것과 같다 — 화면이 이 순서로 진행률을 그린다")
     void 걸음_순서() {
         assertThat(List.of(JobStage.values()).stream().map(JobStage::wire).toList())
-                .containsExactly("story", "sheet", "board", "pages");
+                .containsExactly("story", "sheet", "board", "pages", "bind");
         assertThat(view(job(JobStatus.RUNNING, JobStage.STORY),
                 new JobProgress.Snapshot(List.of(), "", 0, 0, 0)).stages())
-                .containsExactly("story", "sheet", "board", "pages");
+                .containsExactly("story", "sheet", "board", "pages", "bind");
     }
 
     @Test
@@ -76,22 +76,25 @@ class JobViewTest {
     void 진행률() {
         var 없음 = new JobProgress.Snapshot(List.of(), "", 0, 0, 0);
         assertThat(view(job(JobStatus.RUNNING, JobStage.STORY), 없음).pct()).isZero();
-        assertThat(view(job(JobStatus.RUNNING, JobStage.SHEET), 없음).pct()).isEqualTo(25);
-        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 없음).pct()).isEqualTo(75);
+        assertThat(view(job(JobStatus.RUNNING, JobStage.SHEET), 없음).pct()).isEqualTo(20);
+        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 없음).pct()).isEqualTo(60);
+        // bind(검수·합본)는 페이지를 다 그린 뒤에도 아직 안 끝났다는 걸 보여준다
+        // — 이게 없으면 마지막 장을 그리자마자 100%를 찍어 버린다(2026-09-23).
+        assertThat(view(job(JobStatus.RUNNING, JobStage.BIND), 없음).pct()).isEqualTo(80);
     }
 
     @Test
     @DisplayName("그리는 중이면 그 걸음 안에서도 진행률이 오른다")
     void 그리는_중_진행률() {
         var 절반 = new JobProgress.Snapshot(List.of(), "", 3, 6, 0);
-        // pages 는 네 걸음 중 마지막(3/4=75%). 그 안에서 절반이면 75 + 12.5
-        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 절반).pct()).isEqualTo(88);
+        // pages 는 다섯 걸음 중 넷째(3/5=60%). 그 안에서 절반이면 60 + 10
+        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 절반).pct()).isEqualTo(70);
     }
 
     @Test
     @DisplayName("끝나면 무조건 100 — 걸음이 어디든")
     void 끝나면_백() {
-        assertThat(view(job(JobStatus.DONE, JobStage.PAGES),
+        assertThat(view(job(JobStatus.DONE, JobStage.BIND),
                 new JobProgress.Snapshot(List.of(), "", 1, 6, 0)).pct()).isEqualTo(100);
     }
 
