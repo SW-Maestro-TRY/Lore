@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, myAccountRuns, pageDownloadUrl, pageUrl,
-  readResult, renameRun, type RunCard, type RunResult,
+  readResult, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
-import { IconCheck, IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
+import { IconChevronUp, IconDownload, IconEdit } from "../../ui/Icons";
 import { Crumb, MobileTop } from "../../ui/TopNav";
 import ShareMenu from "./ShareMenu";
 import "./i18n";
@@ -75,24 +75,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const ep = data?.episode || 1;
   const epLabel = `EP.${String(ep).padStart(2, "0")}`;
 
-  /* ---- 제목 고치기 ---- */
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [renameErr, setRenameErr] = useState("");
-  const startRename = () => { setDraft(data?.title || ""); setRenameErr(""); setEditing(true); };
-  const commitRename = async () => {
-    if (!data) return;
-    const want = draft.trim();
-    setEditing(false);
-    if (want === data.title) return;
-    try {
-      const out = await renameRun(runId, want);
-      setData({ ...data, title: out.title });
-    } catch (e) {
-      setRenameErr((e as Error).message || t("제목을 바꾸지 못했습니다"));
-    }
-  };
-
   const preview = data && data.preview && data.planned_pages > data.page_count
     ? "" : "";
   const metaPc = data
@@ -159,31 +141,12 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
         {data && (
           <div className="wt-result-body">
             <div className="wt-result-head">
-              {editing ? (
-                <form className="wt-result-rename" onSubmit={(e) => { e.preventDefault(); void commitRename(); }}>
-                  <input className="field" value={draft} autoFocus maxLength={60}
-                         aria-label={t("제목")} onChange={(e) => setDraft(e.target.value)}
-                         onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }} />
-                  <button type="submit" className="icon-btn" aria-label={t("저장")} title={t("저장")}><IconCheck size={16} /></button>
-                  <button type="button" className="icon-btn" aria-label={t("취소")} title={t("취소")}
-                          onClick={() => setEditing(false)}><IconClose size={16} /></button>
-                </form>
-              ) : (
-                <div className="wt-result-titlerow">
-                  <span className="wt-result-titlemid">
-                    <h2>{data.title}</h2>
-                    {mine && (
-                      <button type="button" className="icon-btn" aria-label={t("제목 고치기")} title={t("제목 고치기")}
-                              onClick={startRename}><IconEdit size={16} /></button>
-                    )}
-                  </span>
-                  {/* 공유는 이 작품 자체를 가리키므로 제목 줄에 둔다 — 아래 줄의
-                      편집실·내려받기는 내 작품일 때만 있는 것들이라 결이 다르다.
-                      제목은 가운데 그대로 두고 공유만 오른쪽 끝으로 보낸다. */}
-                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
-                </div>
-              )}
-              {renameErr && <span className="err">{renameErr}</span>}
+              <div className="wt-result-titlerow">
+                {/* 제목은 여기서 읽기전용이다 — 고치는 건 편집실에서만 한다
+                    (2026-09-23, 결과화면에 있던 고치기 폼을 지웠다). */}
+                <h2 className="wt-result-titlemid">{data.title}</h2>
+                <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+              </div>
               <span className="muted wt-result-meta">
                 <span className="wt-result-meta-pc">{metaPc}</span>
                 <span className="wt-result-meta-m">{metaM}</span>
