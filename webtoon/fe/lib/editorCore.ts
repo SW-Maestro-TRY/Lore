@@ -1165,8 +1165,6 @@ export function mountEditor(
       tailed ? `<span class="ib-sep"></span>` +
                tailBtn("left", "◀") + tailBtn("right", "▶") + tailBtn("none", "✕") : "",
       `<span class="ib-sep"></span>`,
-      b("front", "⬆", tr("맨 앞으로")),
-      b("dup", "⧉", tr("복제")),
       b("del", "🗑", tr("삭제"), "is-danger"),
     ].join("");
   }
@@ -1217,20 +1215,6 @@ export function mountEditor(
     },
     bigger: () => bumpSize(+2),
     smaller: () => bumpSize(-2),
-    front: () => {
-      const it = findItem(); if (!it) return;
-      const st = sc(sel.sceneNo);
-      st.items = [...st.items.filter(i => i.id !== it.id), it];
-      save(); paintItems(sel.sceneNo);
-    },
-    dup: () => {
-      const it = findItem(); if (!it) return;
-      const copy = { ...it, id: `i${++uid}`,
-                     x: Math.min(90, it.x + 5), y: Math.min(92, it.y + 5) };
-      sc(sel.sceneNo).items.push(copy);
-      sel = { sceneNo: sel.sceneNo, id: copy.id };
-      save(); paintItems(sel.sceneNo);
-    },
     del: () => {
       const it = findItem(); if (!it) return;
       const st = sc(sel.sceneNo);
