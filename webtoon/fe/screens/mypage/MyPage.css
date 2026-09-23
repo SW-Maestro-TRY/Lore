@@ -117,13 +117,13 @@
   .wt .wt-my-menu button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
   .wt .wt-my-menu button.on .dim { color: rgba(255, 255, 255, 0.75); }
   .wt .wt-my-lang { padding: 10px 14px; }
-  /* 제목과 단추가 한 줄에서 겹쳐 보인다 — 폰에서는 위아래로 나누고 단추는
-     가로로 나란히 둔다. */
+  /* 제목과 단추가 한 줄에서 겹쳐 보인다 — 폰에서는 위아래로 나눈다. */
   .wt .wt-my-head { flex-direction: column; align-items: stretch; gap: 10px; }
   .wt .wt-my-head h2 { font-size: 24px; }
   .wt .wt-my-head-sub h2 { font-size: 19px; }
-  .wt .wt-my-headacts { flex-direction: row; }
-  .wt .wt-my-headacts .btn { flex: 1 1 0; }
+  /* 가로로 나란히 두면 버튼이 길고 얇아져 보기 안 좋다 — 세로로 쌓고 폭 전체를 쓴다. */
+  .wt .wt-my-headacts { flex-direction: column; }
+  .wt .wt-my-headacts .btn { width: 100%; }
   .wt .wt-my-head-sub .btn { align-self: flex-start; }
   .wt .wt-my-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .wt .wt-my-cover img { height: 180px; border-radius: 10px; }
