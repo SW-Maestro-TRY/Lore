@@ -241,7 +241,8 @@ const dict: Dict = {
     zh: "两条路最后都会做成漫画。做好的角色会保存下来，下次可以直接做漫画。",
   },
   "캐릭터 만들어보기": { en: "Try a character", ja: "キャラクターを作ってみる", zh: "试做一个角色" },
-  "내 캐릭터로 바로 웹툰을 만들고 싶어요": { en: "I want to make a webtoon with my character right away", ja: "自分のキャラクターですぐウェブトゥーンを作りたい", zh: "我想用自己的角色直接做漫画" },
+  "바로 웹툰을 만들고 싶어요": { en: "I want to make a webtoon right away", ja: "すぐウェブトゥーンを作りたい", zh: "我想直接做漫画" },
+  "남은 무료 {n}": { en: "{n} free left", ja: "無料残り {n}", zh: "剩余免费 {n}" },
   "내가 가진 캐릭터, 최애, 이미지, 설정으로 바로 웹툰을 만들어요.": {
     en: "Start from a character you already have: a fave, an image, or a bit of lore.",
     ja: "手持ちのキャラクター、推し、画像、設定から、すぐにウェブトゥーンを作ります。",
