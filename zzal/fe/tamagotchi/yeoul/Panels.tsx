@@ -271,7 +271,9 @@ function SettingsSheet({ y }: { y: Yeoul }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
         <span style={{ fontSize: fz.sm, color: C.faint }}>떠남</span>
-        <button onClick={v.settings.toggleLeave} style={{ alignSelf: 'flex-start', padding: pad.chip, borderRadius: radius.pill, border: `${v.settings.leaveBw} solid ${v.settings.leaveBd}`, background: v.settings.leaveBg, fontSize: fz.md, color: v.settings.leaveFg }}>{v.settings.leaveLabel}</button>
+        {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 39px) — 바로 위 고르는 칩과 같은 규칙이었는데
+            이 한 칸만 빠져 있었다. */}
+        <button onClick={v.settings.toggleLeave} style={{ alignSelf: 'flex-start', minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: `${v.settings.leaveBw} solid ${v.settings.leaveBd}`, background: v.settings.leaveBg, fontSize: fz.md, color: v.settings.leaveFg }}>{v.settings.leaveLabel}</button>
         <span style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.faint2 }}>떠나도 앨범과 배운 동작은 그대로예요.</span>
       </div>
     </div>
