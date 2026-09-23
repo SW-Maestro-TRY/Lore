@@ -37,6 +37,18 @@ export default function Entry({ go }: { go: Go }) {
       .catch(() => { /* 견본 그림으로 둔다 */ });
     return () => { alive = false; };
   }, []);
+
+  /* 카드마다 남은 무료 횟수 — 왼쪽 카드는 웹툰 만들기(허용량), 오른쪽 카드는
+     캐릭터 만들기(캐릭터 목록)가 각자 다른 자원이라 API 도 둘로 나뉜다. */
+  const [createFree, setCreateFree] = useState<number | null>(null);
+  const [charFree, setCharFree] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api.readAllowance().then((a) => { if (alive) setCreateFree(a.free_left ?? null); }).catch(() => {});
+    api.listCharacters().then((r) => { if (alive) setCharFree(r.free_left ?? null); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   const to = (fn: () => void) => (ev: React.MouseEvent) => { ev.preventDefault(); fn(); };
 
   return (
@@ -51,9 +63,10 @@ export default function Entry({ go }: { go: Go }) {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={covers[0] || FALLBACK_A} alt="" />
             <span className="wt-entry-tag">{t("웹툰 만들기")}</span>
+            {createFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: createFree })}</span>}
           </div>
           <div className="wt-entry-body">
-            <div className="wt-entry-title"><span className="wt-entry-ic"><IconUser size={20} /></span><b>{t("내 캐릭터로 바로 웹툰을 만들고 싶어요")}</b></div>
+            <div className="wt-entry-title"><span className="wt-entry-ic"><IconUser size={20} /></span><b>{t("바로 웹툰을 만들고 싶어요")}</b></div>
             <span className="muted">{t("내가 가진 캐릭터, 최애, 이미지, 설정으로 바로 웹툰을 만들어요.")}</span>
           </div>
         </a>
@@ -63,6 +76,7 @@ export default function Entry({ go }: { go: Go }) {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={covers[1] || FALLBACK_B} alt="" />
             <span className="wt-entry-tag">{t("캐릭터 만들어보기")}</span>
+            {charFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: charFree })}</span>}
           </div>
           <div className="wt-entry-body">
             <div className="wt-entry-title"><span className="wt-entry-ic"><IconCamera /></span><b>{t("캐릭터를 만들어보고 싶어요")}</b></div>
