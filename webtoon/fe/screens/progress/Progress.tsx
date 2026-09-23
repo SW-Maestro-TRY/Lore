@@ -365,9 +365,16 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 </div>
               )}
 
-              <div className="wt-prog-mchips" aria-hidden="true">
+              {/* 폰에서는 위 .wt-prog-steps 가 숨어 있어(Progress.css) 이게
+                  유일한 단계 이동 수단이다 — 전에는 그냥 글자였다(aria-hidden).
+                  PC 에서 되는 "지나온 단계 다시 보기"가 폰에서 안 된다는
+                  피드백의 원인(2026-09-23). */}
+              <div className="wt-prog-mchips">
                 {STEPS.map((s, i) => (
-                  <span key={s.key} className={stepState(i)}>{stepState(i) === "done" ? "✓ " : ""}{t(s.title)}</span>
+                  <button key={s.key} type="button" className={stepState(i)}
+                          disabled={!canView(i)} onClick={() => setTab(tab === i ? null : i)}>
+                    {stepState(i) === "done" ? "✓ " : ""}{t(s.title)}
+                  </button>
                 ))}
               </div>
 
