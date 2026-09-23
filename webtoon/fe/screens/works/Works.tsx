@@ -6,7 +6,6 @@ import { useT } from "../../lib/i18n";
 import { louArt } from "../../lib/louArt";
 import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
-import { MobileTop } from "../../ui/TopNav";
 import "./i18n";
 import "./Works.css";
 
@@ -81,7 +80,6 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
 
   return (
     <div className="wt-works">
-      <MobileTop title={t("둘러보기")} />
       <div className="wt-wrap wt-page wt-works-page">
         <div className="wt-works-head">
           <div className="wt-works-title">
@@ -180,25 +178,29 @@ function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolea
           <span className="wt-works-nocover" aria-hidden="true" />
         )}
       </button>
-      <div className="wt-works-titlerow">
-        <b>{run.title || t("제목 없음")}</b>
-        {mine && authenticated && (
-          <span className="wt-works-pub">
-            <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
-                    aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
-            {pub ? t("공개") : t("비공개")}
-          </span>
-        )}
-      </div>
-      <span className="muted wt-works-sub">{sub}</span>
-      {eps.length > 0 && (
-        <div className="wt-works-eps">
-          {eps.map((n) => (
-            <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
-          ))}
+      {/* 폰에서는 표지 옆에 이 정보칸이 통째로 나란히 붙는다(가로형 리스트) —
+          PC 에서는 카드 안에서 원래대로 표지 아래 세로로 쌓인다(2026-09-23). */}
+      <div className="wt-works-info">
+        <div className="wt-works-titlerow">
+          <b>{run.title || t("제목 없음")}</b>
+          {mine && authenticated && (
+            <span className="wt-works-pub">
+              <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
+                      aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
+              {pub ? t("공개") : t("비공개")}
+            </span>
+          )}
         </div>
-      )}
-      {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
+        <span className="muted wt-works-sub">{sub}</span>
+        {eps.length > 0 && (
+          <div className="wt-works-eps">
+            {eps.map((n) => (
+              <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
+            ))}
+          </div>
+        )}
+        {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
+      </div>
     </div>
   );
 }

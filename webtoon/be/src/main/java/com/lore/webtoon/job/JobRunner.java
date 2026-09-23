@@ -557,6 +557,13 @@ public class JobRunner {
 
         drawPages(jobId, job);
 
+        /* **페이지를 다 그렸다고 100% 가 아니다.** 검수·합본·업로드가 아직
+           남았는데 `pages` 단계의 frac 은 이미 1.0 이라, 여기서 단계를 안
+           옮기면 진행률이 마지막 장을 그린 순간부터 "100%인데 안 넘어간다"
+           로 보인다(2026-09-23). */
+        job = store.running(jobId, JobStage.BIND);
+        progress.say(jobId, "루가 검수하고 있어요");
+
         /* 화 전체 검수 + critical 만 자동으로 다시 그리는 루프
            (webtoon/docs/full-review-design.md §6). **실패해도 만들기는
            성공이다** — 이미 다 그린 페이지가 있으니, 검수가 못 돌거나

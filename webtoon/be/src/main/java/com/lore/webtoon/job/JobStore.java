@@ -91,7 +91,7 @@ public class JobStore {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void done(Long id) {
         jobs.findById(id).ifPresent(job -> {
-            job.moveTo(JobStatus.DONE, JobStage.PAGES, Instant.now());
+            job.moveTo(JobStatus.DONE, JobStage.BIND, Instant.now());
             jobs.save(job);
         });
     }

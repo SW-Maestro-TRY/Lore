@@ -173,6 +173,16 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     setTab(null);
   }, [status]);
 
+  /* 그려진 장이 늘 때마다 그 자리로 스크롤한다 — 전에는 새 장이 그려져도
+     화면이 그대로라 "진짜 만들고 있는 게 맞나" 라는 의심으로 이어졌다
+     (2026-09-23). 가짜로 움직이는 게 아니라 실제로 늘어난 장 수만큼만 반응한다. */
+  const drawnRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (job?.art?.done) {
+      drawnRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [job?.art?.done]);
+
   const dirs: NhDirection[] = useMemo(() => job?.directions ?? [], [job?.directions]);
   const chosen = useMemo(
     () => (job?.pick != null ? dirs.find((d) => d.n === job.pick) : undefined),
@@ -355,9 +365,16 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 </div>
               )}
 
-              <div className="wt-prog-mchips" aria-hidden="true">
+              {/* 폰에서는 위 .wt-prog-steps 가 숨어 있어(Progress.css) 이게
+                  유일한 단계 이동 수단이다 — 전에는 그냥 글자였다(aria-hidden).
+                  PC 에서 되는 "지나온 단계 다시 보기"가 폰에서 안 된다는
+                  피드백의 원인(2026-09-23). */}
+              <div className="wt-prog-mchips">
                 {STEPS.map((s, i) => (
-                  <span key={s.key} className={stepState(i)}>{stepState(i) === "done" ? "✓ " : ""}{t(s.title)}</span>
+                  <button key={s.key} type="button" className={stepState(i)}
+                          disabled={!canView(i)} onClick={() => setTab(tab === i ? null : i)}>
+                    {stepState(i) === "done" ? "✓ " : ""}{t(s.title)}
+                  </button>
                 ))}
               </div>
 
@@ -501,13 +518,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     </div>
                   )}
                   {art && (
-                    <>
+                    <div ref={drawnRef}>
                       <div className="wt-prog-pageshead">
                         <b>{t("그려진 장")}</b>
                         <span className="dim">{t("{done} / {total}장", { done: art.done, total: art.total })}</span>
                       </div>
                       <PageGrid jobId={job.id} art={art} onZoom={setZoom} />
-                    </>
+                    </div>
                   )}
                   <div className="wt-prog-cancel">
                     {!askCancel ? (
