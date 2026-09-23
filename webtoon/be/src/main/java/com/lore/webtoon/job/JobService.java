@@ -61,7 +61,8 @@ public class JobService {
             "story", "이야기 짓기",
             "sheet", "캐릭터 시트",
             "board", "장면 나누기",
-            "pages", "페이지 그림");
+            "pages", "페이지 그림",
+            "bind", "검수 · 합본");
 
     private static final String DEFAULT_STYLE = WebtoonStyles.DEFAULT_STYLE;
 
