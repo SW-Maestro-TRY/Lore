@@ -9,7 +9,7 @@ import localFont from "next/font/local";
 import { useEffect, useState } from "react";
 import { CONTACT_CHANNEL } from "@common/links";
 import * as api from "../../lib/api";
-import { LangSwitch, useT, type T } from "../../lib/i18n";
+import { LangSwitch, useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
 import { IconDownload, IconEdit, IconPlus, IconRetry, IconShare, IconUser } from "../../ui/Icons";
 import EditorMock, { CUT_IMG, PAGE_IMG, SHEET_IMG } from "./EditorMock";
@@ -33,11 +33,16 @@ const suit = localFont({
   variable: "--font-landing-body",
 });
 
-/* 04 완성 칸의 표지. 캔버스가 쓰는 그림과 같은 파일이다(예시 작품
- * 「가면 아래의 조건」의 표지) — 실행 id 를 코드에 박아 두면 그 작품이
- * 빠질 때 조용히 빈칸이 된다. */
-/* 04 「완성」 칸의 표지. 목록 맨 앞 작품을 쓴다 — 전에는 작품 번호를 적어
-   뒀는데, 그 작품이 빠지면 조용히 빈칸이 됐다. */
+/* 04 「완성」 칸의 표지 — 항상 같은 고정 예시(「가면 아래의 조건」)를 보여준다.
+ *
+ * 2026-09-21(#355)에 여기를 "둘러보기 목록 맨 앞(runs[0])"으로 바꿨는데,
+ * `/runs`가 최신순이라 아무나 웹툰을 만들어 공개하면 그게 그대로 온보딩
+ * 04 칸 표지를 덮어써 버렸다(2026-09-23 리포트) — 온보딩은 "이렇게 나온다"는
+ * 고정 견본을 보여줘야지, 방금 만들어진 남의 작품을 보여주면 안 된다.
+ * 그래서 다시 고정 run_id로 되돌린다. 이 run은 ExampleWorks(webtoon/be)가
+ * webtoon/ai/assets/examples/에서 서버 기동 때마다 DB로 심어 두므로 빠질
+ * 일이 없지만, 혹시 몰라 못 받아오면 정적 견본 그림으로 대신한다. */
+const DONE_EXAMPLE_RUN_ID = "20260910T132240-ae8c28";
 const DONE_FALLBACK = "/static/samples/ex-romance-2.jpg";
 import { usePhone } from "./usePhone";
 import "./Landing.css";
@@ -77,19 +82,6 @@ function bold(text: string): React.ReactNode {
   return parts.map((p, i) => (i % 2 ? <b key={i}>{p}</b> : p));
 }
 
-/* lib/api.allowanceLine 과 같은 규칙 — 번역하려고 여기서 조립한다. 서버가 막은 이유(blocked)는 그대로. */
-function allowanceText(t: T, a: api.Allowance | null): string {
-  if (!a) return "";
-  if (a.blocked) return a.blocked;
-  if (!a.logged_in) {
-    if (a.free_left == null) return "";
-    return a.free_left > 0 ? t("오늘 무료 {n}편", { n: a.free_left }) : t("오늘 무료 소진 · 로그인하면 이어서");
-  }
-  // 로그인한 사람의 "한 편 {cost}크레딧 · 보유 {balance}C" 는 여기서 안 보여준다 —
-  // 헤더에 잔액이 이미 있고, 온보딩 히어로에 또 나오면 중복이다(2026-09-19 지적).
-  return "";
-}
-
 export default function Landing({ go }: { go: Go }) {
   const t = useT();
   const phone = usePhone();
@@ -111,12 +103,6 @@ export default function Landing({ go }: { go: Go }) {
     ? (job.art?.total ? t("{done} / {total}장", { done: job.art.done, total: job.art.total }) : t(job.stage_label))
     : "";
 
-  /* 허용량 딱지 */
-  const [allowance, setAllowance] = useState<api.Allowance | null>(null);
-  useEffect(() => {
-    api.readAllowance().then(setAllowance).catch(() => {});
-  }, []);
-  const allowLine = allowanceText(t, allowance);
 
   /* 예시 작품 띠 */
   const [runs, setRuns] = useState<api.RunCard[] | null>(null);
@@ -156,7 +142,6 @@ export default function Landing({ go }: { go: Go }) {
           {t("내 캐릭터가 이야기 속에서 살아 움직이는 순간.")}
         </p>
         <button type="button" className="btn btn-p wt-landing-cta" onClick={start}>{t("지금 시작하기")}</button>
-        {allowLine && <span className="wt-landing-allow">{allowLine}</span>}
       </section>
 
       {/* 예시 작품 띠 */}
@@ -241,7 +226,8 @@ export default function Landing({ go }: { go: Go }) {
           <div className="wt-landing-step">
             <div className="wt-landing-step-box">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={runs?.[0] ? api.coverUrl(runs[0].run_id, runs[0].cover_page ?? 1, runs[0].cover_episode ?? 1) : DONE_FALLBACK} alt="" />
+              <img src={api.coverUrl(DONE_EXAMPLE_RUN_ID, 1, 1)} alt=""
+                   onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = DONE_FALLBACK; }} />
               <div className="wt-landing-step-tools">
                 <IconEdit size={phone ? 14 : 18} /><IconRetry size={phone ? 14 : 18} /><IconShare size={phone ? 14 : 18} /><IconDownload size={phone ? 14 : 18} />
               </div>
