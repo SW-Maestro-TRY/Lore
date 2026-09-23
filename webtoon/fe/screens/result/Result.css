@@ -14,8 +14,6 @@
 .wt .wt-result-titlemid { grid-column: 2; display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .wt .wt-result-titlerow .wt-share { grid-column: 3; justify-self: end; }
 .wt .wt-result-head h2 { font-size: 34px; }
-.wt .wt-result-rename { display: flex; align-items: center; gap: 8px; width: min(520px, 100%); }
-.wt .wt-result-rename .field { font-size: 20px; font-weight: 800; text-align: center; }
 .wt .wt-result-meta { font-size: 15px; }
 .wt .wt-result-meta-m { display: none; }
 
@@ -87,6 +85,16 @@
 @media (max-width: 767px) {
   /* 폰은 위쪽 얇은 줄(MobileTop)이 위치를 말한다 — 빵부스러기는 숨긴다. */
   .wt .wt-result-body { gap: 14px; margin-top: 0; }
+  /* PC 는 3열 그리드(제목 가운데 · 공유 오른쪽 끝)라 폭이 좁아지면 공유
+     단추가 제목과 멀리 떨어져 화면 오른쪽 끝에 붙어 버린다 — 폰에서는
+     제목과 공유를 한 줄에 나란히 붙인다(2026-09-23). */
+  .wt .wt-result-titlerow {
+    width: 100%; display: flex; grid-template-columns: none;
+    align-items: center; justify-content: center; gap: 10px;
+  }
+  .wt .wt-result-titlemid { grid-column: auto; flex: 0 1 auto; min-width: 0; }
+  .wt .wt-result-titlemid { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wt .wt-result-titlerow .wt-share { grid-column: auto; justify-self: auto; flex-shrink: 0; }
   .wt .wt-result-head h2 { font-size: 24px; }
   .wt .wt-result-meta { font-size: 13px; }
   .wt .wt-result-meta-pc { display: none; }
