@@ -3,8 +3,10 @@ package com.lore.trailer.hypothesis;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.common.credit.CreditService;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.trailer.credit.TrailerCreditPolicy;
 import com.lore.trailer.foreshadowing.Foreshadowing;
 import com.lore.trailer.foreshadowing.ForeshadowingRepository;
 import com.lore.trailer.foreshadowing.ForeshadowingService;
@@ -30,6 +32,9 @@ import java.util.regex.Pattern;
  * 회차는 카드 API 와 같은 코드({@code TRAILER_INVALID_CHAPTER})다. 해시 둘이 카드 표의 값과 다르면
  * {@code TRAILER_DIGEST_MISMATCH} 다 — 표를 갈아 넣은 뒤 옛 화면이 맡기는 가설은 운영자 PC 의 judge.py 가
  * 어차피 거절하므로, 독자가 기다리다 실패를 보는 대신 맡기는 순간에 막는다(NA decisions.md 1-30 의 제안).
+ *
+ * <p>크레딧 — 맡길 때 판정 값({@link TrailerCreditPolicy#judgeCredits})을 깎고, 운영자가 FAILED 를 넣으면 돌려준다.
+ * 모자라면 402 {@code CREDIT_NOT_ENOUGH} 이고 저장하지 않는다. 근거와 그림은 trailer/docs/크레딧설계.md.
  */
 @Service
 public class HypothesisService {
@@ -49,13 +54,18 @@ public class HypothesisService {
     private final ForeshadowingRepository foreshadowings;
     private final ForeshadowingService foreshadowingService;
     private final TrailerAdminGuard adminGuard;
+    private final CreditService credits;
+    private final TrailerCreditPolicy creditPolicy;
 
     public HypothesisService(HypothesisRepository hypotheses, ForeshadowingRepository foreshadowings,
-                             ForeshadowingService foreshadowingService, TrailerAdminGuard adminGuard) {
+                             ForeshadowingService foreshadowingService, TrailerAdminGuard adminGuard,
+                             CreditService credits, TrailerCreditPolicy creditPolicy) {
         this.hypotheses = hypotheses;
         this.foreshadowings = foreshadowings;
         this.foreshadowingService = foreshadowingService;
         this.adminGuard = adminGuard;
+        this.credits = credits;
+        this.creditPolicy = creditPolicy;
     }
 
     /** 가설을 맡긴다(2-5). 담은 카드를 그 회차로 가린 값으로 복사해 두고 PENDING 으로 저장한다. */
@@ -81,7 +91,12 @@ public class HypothesisService {
                             "%d화 기록에 없는 카드입니다: %s".formatted(chapter, id)));
             hypothesis.addCard(HypothesisForeshadowing.copyOf(hypothesis, card, chapter, position, notes.get(id)));
         }
-        return toResponse(hypotheses.save(hypothesis));
+        Hypothesis saved = hypotheses.save(hypothesis);          // IDENTITY — 여기서 id 가 생긴다
+        // ★ 깎기는 저장 뒤 · 마지막이다. 장부 쓰기는 별도 트랜잭션(REQUIRES_NEW)이라 먼저 깎고 뒤에서 실패하면
+        //   크레딧만 잃는다. 모자라면 spend 가 402 를 던지고(장부에는 안 쓴다) 이 트랜잭션이 되돌아가 저장도 취소된다.
+        credits.spend(userId, creditPolicy.domain(), creditPolicy.judgeCredits(),
+                creditPolicy.refId(saved.getId()), "가설 판정 " + chapter + "화");
+        return toResponse(saved);
     }
 
     /** 내 가설 하나(2-6). 없는 번호와 남의 가설은 같은 404 다 — 번호를 바꿔 가며 남의 가설이 있는지 알아낼 수 없게. */
@@ -142,7 +157,15 @@ public class HypothesisService {
         switch (status) {
             case Hypothesis.COMPLETE -> hypothesis.complete(writeJudgement(body.judgement()),
                     body.presentation() == null ? null : write(body.presentation()), Instant.now());
-            case Hypothesis.FAILED -> hypothesis.fail(required(body.failureMessage(), "실패 문구", FAILURE_MESSAGE_MAX), Instant.now());
+            case Hypothesis.FAILED -> {
+                hypothesis.fail(required(body.failureMessage(), "실패 문구", FAILURE_MESSAGE_MAX), Instant.now());
+                // ★ 실패는 독자 잘못이 아니다 — 낸 크레딧을 돌려준다(크레딧설계.md 1절 4번). 상태를 먼저 DB 에 세운 뒤
+                //   돌려준다. 장부 쓰기가 별도 트랜잭션이라 순서가 바뀌면 상태 저장이 실패해도 환불만 남는다.
+                //   같은 가설에 FAILED 가 또 와도 두 번 돌려주지 않는다 — 같은 refId 의 REFUND 줄은 하나뿐(같은 문서 5절).
+                hypotheses.saveAndFlush(hypothesis);
+                credits.refund(hypothesis.getUserId(), creditPolicy.domain(),
+                        creditPolicy.refId(hypothesis.getId()), "판정하지 못해 돌려드림");
+            }
             default -> throw new BusinessException(ErrorCode.INVALID_INPUT, "judgementStatus는 COMPLETE 또는 FAILED 입니다");
         }
         return toResponse(hypothesis);

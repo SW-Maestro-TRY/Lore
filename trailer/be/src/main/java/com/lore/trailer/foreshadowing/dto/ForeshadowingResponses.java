@@ -87,7 +87,10 @@ public final class ForeshadowingResponses {
             List<String> kinds,
 
             @Schema(description = "검색창 아래에 권하는 인물. 카드에 먼저 나온 다섯")
-            List<String> suggestedPeople) {
+            List<String> suggestedPeople,
+
+            @Schema(description = "판정 1회에 깎는 크레딧. 맡길 때(2-5) 깎고 운영자가 FAILED 를 넣으면 돌려준다", example = "5")
+            int judgeCredits) {
     }
 
     /** 카드 목록 한 쪽(2-2). */

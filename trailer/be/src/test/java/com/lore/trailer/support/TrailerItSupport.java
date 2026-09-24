@@ -2,6 +2,9 @@ package com.lore.trailer.support;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.common.credit.CreditDomain;
+import com.lore.common.credit.CreditReason;
+import com.lore.common.credit.CreditService;
 import com.lore.common.user.User;
 import com.lore.common.user.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -57,6 +60,7 @@ public abstract class TrailerItSupport {
     @Autowired protected MockMvc mockMvc;
     @Autowired protected JdbcTemplate jdbc;
     @Autowired protected UserRepository userRepository;
+    @Autowired protected CreditService credits;
     /** 시험용 사용자 이메일의 번호. 같은 JVM 안에서 겹치지 않게 */
     private static final AtomicLong SEQ = new AtomicLong();
     protected final ObjectMapper json = new ObjectMapper();
@@ -91,11 +95,13 @@ public abstract class TrailerItSupport {
         assertThat(count()).as("표본 25장").isEqualTo(25);
     }
 
-    /** 카드 표를 비우고, 가설 표 둘과 시험이 만든 사용자도 지운다 — 다음 시험이 빈 표에서 시작하게. */
+    /** 카드 표를 비우고, 가설 표 둘과 시험이 만든 사용자의 크레딧 줄과 사용자도 지운다 — 다음 시험이 빈 표에서 시작하게. */
     @AfterEach
     void emptyTheTables() {
         truncate();
         truncateHypotheses();
+        // credit_event 는 users 에 FK 가 없어 사용자를 지워도 남는다. 시험 사용자 것만 골라 지운다.
+        jdbc.update("delete from credit_event where user_id in (select id from users where email like 'trailer-it-%')");
         jdbc.update("delete from users where email like 'trailer-it-%'");
     }
 
@@ -118,6 +124,29 @@ public abstract class TrailerItSupport {
     /** 운영자로 만든다. lore 의 운영자는 users.role 이 ADMIN 인 사용자다(found.md 5-13). */
     protected void makeAdmin(Long userId) {
         jdbc.update("update users set role = 'ADMIN' where id = ?", userId);
+    }
+
+    /* ---- 크레딧 ------------------------------------------------------------------ */
+
+    /**
+     * 시험용 독자에게 크레딧을 준다. 새 계정은 잔액 0 이다 — 가입 · 매일 몫은 {@code GET /api/v1/credits/me} 를 불러야
+     * 들어오고, 맡기기는 그 몫을 챙기지 않는다. 공통 장부에 REWARD · TRAILER 로 적힌다. refId 를 매번 달리해 몇 번을 줘도 다 들어간다.
+     */
+    protected void fund(Long userId, int amount) {
+        credits.grantOnce(userId, amount, CreditReason.REWARD, CreditDomain.TRAILER, "it-seed-" + SEQ.incrementAndGet());
+    }
+
+    /** 지금 잔액(장부의 합). 매일 몫을 챙기지 않는 쪽 — 맡기기가 보는 값과 같다. */
+    protected int balance(Long userId) {
+        return credits.balance(userId);
+    }
+
+    /** 그 계정의 크레딧 장부 줄 수. reason 을 주면 그 이유(SPEND · REFUND …)만 센다. */
+    protected long creditRows(Long userId, String reason) {
+        Long n = reason == null
+                ? jdbc.queryForObject("select count(*) from credit_event where user_id = ?", Long.class, userId)
+                : jdbc.queryForObject("select count(*) from credit_event where user_id = ? and reason = ?", Long.class, userId, reason);
+        return n == null ? 0 : n;
     }
 
     /** 그 사용자로 로그인한 요청. JwtAuthenticationFilter 가 넣는 것과 같은 모양(주체는 userId, 권한은 ROLE_USER). */

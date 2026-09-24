@@ -22,6 +22,8 @@ class HypothesisAdminApiIT extends TrailerItSupport {
     private static final String CARDS = "/api/trailer/v1/public/cards";
     private static final String HYPOTHESES = "/api/trailer/v1/hypotheses";
     private static final String ADMIN = "/api/trailer/v1/admin/hypotheses";
+    /** 판정 1회의 값(TrailerCreditPolicy 기본값). */
+    private static final int JUDGE_CREDITS = 5;
 
     private Map<String, Object> submission(int chapter, List<String> cards, String title) throws Exception {
         JsonNode meta = data(getAnonymously(CARDS + "/meta"));
@@ -36,7 +38,9 @@ class HypothesisAdminApiIT extends TrailerItSupport {
         return body;
     }
 
+    /** 독자에게 판정 값만큼 주고 맡긴다 — 맡기기가 곧 깎기라 잔액이 없으면 402 다. */
     private long submit(Long user, int chapter, List<String> cards, String title) throws Exception {
+        fund(user, JUDGE_CREDITS);
         MvcResult result = postJson(user, HYPOTHESES, submission(chapter, cards, title));
         assertThat(status(result)).as(result.getResponse().getContentAsString()).isEqualTo(200);
         return data(result).path("id").asLong();
@@ -76,6 +80,7 @@ class HypothesisAdminApiIT extends TrailerItSupport {
         long judged = submit(b, 400, List.of("T374"), "판정 끝난 것");
         Map<String, Object> withNote = submission(400, List.of("T2", "T374"), "셋째");
         withNote.put("notes", Map.of("T374", "약속의 모자"));
+        fund(a, JUDGE_CREDITS);
         long latest = data(postJson(a, HYPOTHESES, withNote)).path("id").asLong();
         jdbc.update("update hypotheses set judgement_status = 'COMPLETE', judgement = '{\"grade\":\"likely\"}'::jsonb, "
                 + "judged_at = now() where id = ?", judged);
@@ -170,19 +175,28 @@ class HypothesisAdminApiIT extends TrailerItSupport {
         // 대기 목록에서 빠진다.
         assertThat(data(getAs(admin, ADMIN)).path("items").size()).isZero();
         assertThat(jdbc.queryForObject("select judgement_status from hypotheses where id = ?", String.class, id)).isEqualTo("COMPLETE");
+        // COMPLETE 는 낸 크레딧을 그대로 둔다.
+        assertThat(balance(reader)).isZero();
+        assertThat(creditRows(reader, "REFUND")).isZero();
     }
 
     @Test
-    @DisplayName("FAILED 를 넣으면 실패 문구가 저장되고 판정 칸은 비어 있다. 다시 COMPLETE 로 덮어쓸 수 있다")
+    @DisplayName("★ FAILED 를 넣으면 실패 문구가 저장되고 판정 칸은 비고, 낸 크레딧이 돌아온다. 다시 COMPLETE 로 덮어써도 다시 깎지 않는다")
     void failedThenOverwrite() throws Exception {
         Long admin = newAdminId();
-        long id = submit(newUserId(), 400, List.of("T2"), "실패할 가설");
+        Long reader = newUserId();
+        long id = submit(reader, 400, List.of("T2"), "실패할 가설");
+        assertThat(balance(reader)).as("맡기며 깎였다").isZero();
 
         MvcResult failed = postJson(admin, ADMIN + "/judge", judgeBody(id, "FAILED", null, null, "모델이 답하지 않았습니다"));
         assertThat(status(failed)).isEqualTo(200);
         assertThat(data(failed).path("judgementStatus").asText()).isEqualTo("FAILED");
         assertThat(data(failed).path("failureMessage").asText()).isEqualTo("모델이 답하지 않았습니다");
         assertThat(data(failed).path("judgement").isNull()).isTrue();
+        // 실패는 독자 잘못이 아니다 — 낸 만큼 돌아온다. 장부에는 뺀 줄이 남고 반대 줄이 하나 더 적힌다.
+        assertThat(balance(reader)).isEqualTo(JUDGE_CREDITS);
+        assertThat(creditRows(reader, "SPEND")).isEqualTo(1);
+        assertThat(creditRows(reader, "REFUND")).isEqualTo(1);
 
         MvcResult redone = postJson(admin, ADMIN + "/judge",
                 judgeBody(id, "COMPLETE", judgement("insufficient", List.of(), List.of()), null, null));
@@ -190,6 +204,26 @@ class HypothesisAdminApiIT extends TrailerItSupport {
         assertThat(data(redone).path("judgementStatus").asText()).isEqualTo("COMPLETE");
         assertThat(data(redone).path("failureMessage").isNull()).isTrue();
         assertThat(data(redone).path("presentation").isNull()).isTrue();
+        // 돌려준 뒤의 COMPLETE 는 공짜다 — 같은 refId 로 다시 깎지 않는다(크레딧설계.md 1절 5번).
+        assertThat(balance(reader)).isEqualTo(JUDGE_CREDITS);
+        assertThat(creditRows(reader, "SPEND")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("★ 같은 가설에 FAILED 가 두 번 와도 한 번만 돌려준다 — judge_pending.py 를 다시 돌려도 이중 환불이 없다")
+    void failedTwiceRefundsOnce() throws Exception {
+        Long admin = newAdminId();
+        Long reader = newUserId();
+        long id = submit(reader, 400, List.of("T2"), "두 번 실패하는 가설");
+
+        for (String message : List.of("자료 판이 다릅니다", "모델이 답하지 않았습니다")) {
+            MvcResult failed = postJson(admin, ADMIN + "/judge", judgeBody(id, "FAILED", null, null, message));
+            assertThat(status(failed)).as(message).isEqualTo(200);
+            assertThat(balance(reader)).as(message).isEqualTo(JUDGE_CREDITS);
+            assertThat(creditRows(reader, "REFUND")).as(message).isEqualTo(1);
+        }
+        // 독자에게는 마지막 문구가 보인다.
+        assertThat(data(getAs(reader, HYPOTHESES + "/" + id)).path("failureMessage").asText()).isEqualTo("모델이 답하지 않았습니다");
     }
 
     @Test

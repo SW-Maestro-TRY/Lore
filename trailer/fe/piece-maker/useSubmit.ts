@@ -4,12 +4,18 @@
  * 따로 넣고 화면은 요청 id 로 되묻는다. 그래서 여기는 "맡기는 중"과 "맡기지 못함"만 든다. 맡긴 뒤의 일은 초안이 얼고
  * (`useDraft.markSubmitted`) 결과를 되묻는 쪽이 맡는다.
  *
- * ★ 로그인이 없으면 서버가 401 을 준다. 그건 실패 문구가 아니라 "로그인 창을 열 일"이라 따로 돌려준다(`"unauthorized"`). */
+ * ★ 로그인이 없으면 서버가 401 을 준다. 그건 실패 문구가 아니라 "로그인 창을 열 일"이라 따로 돌려준다(`"unauthorized"`).
+ * ★ 크레딧이 모자라면 402 다. 서버가 필요 · 보유를 문구에 실어 주고 아무것도 저장하지 않는다 — 초안은 얼리지 않고 문구만
+ *   보인다(`"insufficient"`). 독자가 입력을 고치면 지운다. */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@common/api/client";
 import { submitHypothesis, type Hypothesis, type JudgeRequest } from "../lib/api";
 
-export type SubmitState = { status: "idle" } | { status: "submitting" } | { status: "failed"; reason: string };
+export type SubmitState =
+  | { status: "idle" }
+  | { status: "submitting" }
+  | { status: "insufficient"; reason: string }
+  | { status: "failed"; reason: string };
 
 export function useSubmit() {
   const [state, setState] = useState<SubmitState>({ status: "idle" });
@@ -36,6 +42,10 @@ export function useSubmit() {
         setState({ status: "idle" });
         return "unauthorized";
       }
+      if (error instanceof ApiError && error.status === 402) {
+        setState({ status: "insufficient", reason: error.message });
+        return null;
+      }
       setState({ status: "failed", reason: error instanceof Error ? error.message : String(error) });
       return null;
     } finally {
@@ -43,9 +53,9 @@ export function useSubmit() {
     }
   }, []);
 
-  /** 실패 문구를 지운다. 독자가 입력을 고치면 부른다. */
+  /** 실패 · 부족 문구를 지운다. 독자가 입력을 고치면 부른다. */
   const clear = useCallback(() => {
-    setState((current) => (current.status === "failed" ? { status: "idle" } : current));
+    setState((current) => (current.status === "failed" || current.status === "insufficient" ? { status: "idle" } : current));
   }, []);
 
   // 화면을 떠나면 기다리던 요청을 끊는다.

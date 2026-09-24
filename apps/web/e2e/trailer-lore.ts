@@ -63,6 +63,12 @@ export const MY_HYPOTHESES_URL = /\/api\/trailer\/v1\/hypotheses\/my$/;
 export const ME_URL = /\/api\/v1\/users\/me$/;
 export const LOGIN_URL = /\/api\/v1\/auth\/login$/;
 export const REFRESH_URL = /\/api\/v1\/auth\/refresh$/;
+/** lore 공용 크레딧 잔액. 화면이 판정 단추 옆에 보이고, 맡긴 뒤와 돌려받은 뒤에 다시 읽는다. 공용 헤더도 부른다. */
+export const CREDIT_ME_URL = /\/api\/v1\/credits\/me$/;
+/** 판정 1회의 값 — 진짜 서버의 TrailerCreditPolicy 기본값. 장부 정보의 `judgeCredits` 로 화면에 간다. */
+export const JUDGE_CREDITS = 5;
+/** 새 독자의 잔액 — 공통의 매일 몫(20)만 흉내 낸다. */
+export const DEFAULT_CREDITS = 20;
 
 /** 서버의 기본 쪽 크기. 화면이 `size` 를 보내지만 서버가 더 작게 줄 수도 있다 — 화면은 `hasNext` 만 믿어야 한다. */
 export const DEFAULT_PAGE_SIZE = 50;
@@ -106,6 +112,7 @@ export function metaOf(fixture: Fixture) {
     cardsDigest: fixture.cards_digest,
     kinds: [...new Set(cards.map((card) => card.kind))],
     suggestedPeople: [...new Set(cards.flatMap((card) => card.people))].slice(0, 5),
+    judgeCredits: JUDGE_CREDITS,
   };
 }
 
@@ -188,8 +195,8 @@ export type LoreHypothesis = {
   judgedAt: string | null;
 };
 
-/** 가짜 서버의 상태 — 로그인 여부와 맡긴 가설. 검사가 들여다보고 바꿀 수 있게 `mockLore` 가 돌려준다. */
-export type LoreState = { loggedIn: boolean; hypotheses: LoreHypothesis[] };
+/** 가짜 서버의 상태 — 로그인 여부, 맡긴 가설, 크레딧 잔액. 검사가 들여다보고 바꿀 수 있게 `mockLore` 가 돌려준다. */
+export type LoreState = { loggedIn: boolean; hypotheses: LoreHypothesis[]; credits: number };
 
 export const ME = { userId: 7, email: 'reader@example.invalid', role: 'USER', createdAt: '2026-09-22T00:00:00Z' };
 
@@ -216,6 +223,10 @@ export function submitResponse(body: unknown, fixture: Fixture, state: LoreState
   }
   const notes: Record<string, string> = {};
   for (const id of ids) notes[id] = isRecord(body.notes) && typeof body.notes[id] === 'string' ? body.notes[id] : '';
+  // 맡기기가 곧 깎기다(2-5). 검사를 다 통과한 뒤 모자라면 402 — 진짜 서버도 저장을 되돌린다.
+  if (state.credits < JUDGE_CREDITS) {
+    return fail(402, 'CREDIT_NOT_ENOUGH', `크레딧이 모자랍니다 (필요 ${JUDGE_CREDITS} · 보유 ${state.credits})`);
+  }
   const hypothesis: LoreHypothesis = {
     id: state.hypotheses.length + 1,
     chapter,
@@ -231,7 +242,18 @@ export function submitResponse(body: unknown, fixture: Fixture, state: LoreState
     judgedAt: null,
   };
   state.hypotheses.push(hypothesis);
+  state.credits -= JUDGE_CREDITS;
   return ok(hypothesis);
+}
+
+/** 운영자가 FAILED 를 넣은 뒤의 모양(2-9) — 서버는 이때 낸 크레딧을 돌려준다. 판정 칸은 비고 독자에게 문구가 보인다. */
+export function failHypothesis(state: LoreState, item: LoreHypothesis, message: string): void {
+  item.judgementStatus = 'FAILED';
+  item.judgement = null;
+  item.presentation = null;
+  item.failureMessage = message;
+  item.judgedAt = new Date().toISOString();
+  state.credits += JUDGE_CREDITS;
 }
 
 export type LoreMockOptions = {
@@ -241,8 +263,9 @@ export type LoreMockOptions = {
   pageSize?: number;
   /** 목록 요청마다 부른다. 검사가 "무엇을 보냈나" 를 볼 때 쓴다. 응답을 늦추려면 Promise 를 돌려준다. */
   onList?: (url: URL) => void | Promise<void>;
-  /** 로그인 여부와 맡긴 가설. 안 주면 로그인하지 않은 독자에 가설 없음이다. 로그인 창에서 로그인하면 `loggedIn` 이 참이 된다. */
-  state?: LoreState;
+  /** 로그인 여부와 맡긴 가설. 안 주면 로그인하지 않은 독자에 가설 없음이다. 로그인 창에서 로그인하면 `loggedIn` 이 참이 된다.
+   *  `credits` 를 안 주면 매일 몫(20)이다. */
+  state?: Omit<LoreState, 'credits'> & { credits?: number };
   /** 가설을 맡길 때마다 화면이 보낸 몸통을 준다. */
   onSubmit?: (body: unknown) => void;
 };
@@ -250,7 +273,12 @@ export type LoreMockOptions = {
 /** 카드 API 셋 · 로그인 · 가설 맡기기를 가로챈다. 컨텍스트에 걸어 새 페이지에도 듣게 한다. 가짜 서버의 상태를 돌려준다. */
 export async function mockLore(context: BrowserContext, options: LoreMockOptions = {}): Promise<LoreState> {
   const fixture = (): Fixture => (typeof options.fixture === 'function' ? options.fixture() : options.fixture ?? CARDS);
-  const state: LoreState = options.state ?? { loggedIn: false, hypotheses: [] };
+  // 검사가 넘긴 객체를 그대로 쓴다(복사하지 않는다) — 검사가 그 객체를 들여다보고 바꾸기 때문이다.
+  const state = (options.state ?? { loggedIn: false, hypotheses: [] }) as LoreState;
+  if (state.credits === undefined) state.credits = DEFAULT_CREDITS;
+  await context.route(CREDIT_ME_URL, (route) =>
+    answer(route, state.loggedIn ? ok({ balance: state.credits }) : fail(401, 'UNAUTHORIZED', '로그인이 필요합니다')),
+  );
   await context.route(ME_URL, (route) => answer(route, state.loggedIn ? ok(ME) : fail(401, 'UNAUTHORIZED', '로그인이 필요합니다')));
   await context.route(LOGIN_URL, (route) => {
     state.loggedIn = true;

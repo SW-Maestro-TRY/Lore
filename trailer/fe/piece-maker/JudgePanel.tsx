@@ -2,7 +2,7 @@
  * 맡긴 뒤에는 단추 대신 "새 가설 쓰기"와, 판정을 기다리는 동안 "지금 확인"이 놓인다 — 맡긴 가설은 고칠 수 없다(NA decisions.md 1-23).
  * 결과(`result`)는 가설의 판정 칸에서 온다. 근거 단추의 제목은 부르는 쪽이 인용 카드 · 담은 카드 · 목록에서 찾아 준다. */
 import type { JudgeResult, PresentationSection } from "../lib/api";
-import { GRADES, readableJudgement } from "../lib/judgement";
+import { GRADES, JUDGE_TEXT, readableJudgement } from "../lib/judgement";
 import Icon from "./Icon";
 
 type Props = {
@@ -16,6 +16,10 @@ type Props = {
   pending: boolean;
   /** 단추 아래의 한 줄. */
   stateText: string;
+  /** 판정 1회에 깎는 크레딧. 장부 정보를 받기 전에는 null. */
+  price: number | null;
+  /** 내 크레딧. 로그인이 없거나 아직 못 읽었으면 null. */
+  balance: number | null;
   /** 받아 둔 판정. 없으면 결과 상자를 숨긴다. */
   result: JudgeResult | null;
   chapter: number | null;
@@ -109,13 +113,19 @@ function JudgeResultView({ result, chapter, titleOf, onOpen }: { result: JudgeRe
   );
 }
 
-export default function JudgePanel({ canJudge, waiting, frozen, pending, stateText, result, chapter, titleOf, onJudge, onNew, onRefresh, onOpen }: Props) {
+export default function JudgePanel({ canJudge, waiting, frozen, pending, stateText, price, balance, result, chapter, titleOf, onJudge, onNew, onRefresh, onOpen }: Props) {
   return (
     <>
       <p className="small muted" id="trailer-judge-help">
         앞으로의 전개에 대한 내 주장을 선택한 카드·해석과 기존 장부에 대조합니다. 가능성 있음·가능성 낮음·판정 보류로 구분하며, 실제
         확률이나 정답 판정은 아닙니다. 판정은 사람이 돌려서 시간이 걸립니다 — 맡긴 뒤에는 이 자리와 "내 가설"에서 결과를 볼 수 있습니다.
       </p>
+      {price !== null ? (
+        <p className="small muted" data-part="judge-credit">
+          {JUDGE_TEXT.price(price)}
+          {balance !== null ? ` · ${JUDGE_TEXT.balance(balance)}` : ""}
+        </p>
+      ) : null}
       {frozen ? (
         <div className="judge-submitted row" data-part="judge-submitted">
           <button className="preview-link predict-cta" data-action="new-draft" onClick={onNew}>

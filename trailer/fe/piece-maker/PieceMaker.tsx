@@ -31,6 +31,7 @@ import { useCards } from "./useCards";
 import { useDraft } from "./useDraft";
 import { useHypothesis } from "./useHypothesis";
 import { useMeta } from "./useMeta";
+import { useCredit } from "./useCredit";
 import { useSubmit } from "./useSubmit";
 
 const NEW_DRAFT_TOAST = "맡긴 가설은 내 가설에 두고 새 가설을 시작했어요.";
@@ -76,6 +77,8 @@ export default function PieceMaker() {
   /* ---- 로그인 ---------------------------------------------------------------- */
 
   const { isAuthenticated } = useAuth();
+  /** 내 크레딧. 로그인했을 때만 읽는다. 맡기면 깎이고 판정이 실패하면 돌아오므로 그때마다 다시 읽는다. */
+  const { balance: credit, refresh: refreshCredit } = useCredit(isAuthenticated);
   const [authOpen, setAuthOpen] = useState(false);
   /** 로그인 창을 "가설 판정하기"가 열었는가. 로그인이 끝나면 곧 맡긴다. */
   const resumeSubmit = useRef(false);
@@ -86,6 +89,12 @@ export default function PieceMaker() {
   useEffect(() => {
     if (isAuthenticated && watched.status === "unauthorized") void reloadHypothesis();
   }, [isAuthenticated, watched.status, reloadHypothesis]);
+
+  // 판정이 실패하면 서버가 낸 크레딧을 돌려준다(2-9) — 그 결과를 받으면 잔액을 다시 읽는다. 같은 실패를 두 번 읽지 않게 가설과 판정 시각으로 가른다.
+  const refundKey = hypothesis?.judgementStatus === "FAILED" ? `${hypothesis.id}:${hypothesis.judgedAt ?? ""}` : null;
+  useEffect(() => {
+    if (refundKey) refreshCredit();
+  }, [refundKey, refreshCredit]);
 
   // lore 공용 헤더의 높이를 재서 CSS 변수로 넘긴다. 이 화면은 헤더 아래 남은 높이만 쓴다.
   // 헤더 높이는 화면 폭과 글꼴에 따라 달라지므로 값을 박지 않는다(zzal 의 TamagotchiScreen 과 같다).
@@ -360,8 +369,9 @@ export default function PieceMaker() {
     if (outcome) {
       markSubmitted(outcome.id);
       showToast("판정을 맡겼어요. 결과는 준비되면 여기에 보여요.");
+      refreshCredit(); // 맡기며 깎였다
     }
-  }, [submit, markSubmitted, showToast]);
+  }, [submit, markSubmitted, showToast, refreshCredit]);
 
   function requestJudge() {
     if (!isAuthenticated) {
@@ -429,9 +439,11 @@ export default function PieceMaker() {
           ? frozenText()
           : submission.status === "submitting"
             ? JUDGE_TEXT.submitting
-            : submission.status === "failed"
-              ? JUDGE_TEXT.failed(submission.reason)
-              : JUDGE_TEXT.idle;
+            : submission.status === "insufficient"
+              ? JUDGE_TEXT.insufficient(submission.reason)
+              : submission.status === "failed"
+                ? JUDGE_TEXT.failed(submission.reason)
+                : JUDGE_TEXT.idle;
 
   function modalContent(): ModalContent | null {
     if (modal === null) return null;
@@ -513,6 +525,8 @@ export default function PieceMaker() {
                     Boolean(draft.claim.trim())
                   }
                   waiting={submission.status === "submitting"}
+                  price={meta.status === "ready" ? meta.meta.judgeCredits : null}
+                  balance={credit}
                   frozen={frozen}
                   pending={hypothesis?.judgementStatus === "PENDING"}
                   stateText={stateText}

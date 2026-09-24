@@ -39,6 +39,8 @@ public class HypothesisController {
             - 맡긴 뒤에는 제목 · 주장 · 카드 · 해석을 고칠 수 없다. 새 가설은 새로 맡긴다
             - `stateDigest` · `cardsDigest` 가 카드 표의 값과 다르면 400(TRAILER_DIGEST_MISMATCH) — 페이지를 새로 열어야 한다
             - 회차가 없거나 범위 밖이면 400(TRAILER_INVALID_CHAPTER). 카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED)
+            - **맡길 때 크레딧을 깎는다** — 값은 `GET /public/cards/meta` 의 `judgeCredits`(지금 5). 모자라면 402(CREDIT_NOT_ENOUGH)
+              에 필요 · 보유를 적어 주고 **저장하지 않는다**. 운영자가 FAILED 를 넣으면 돌려준다
             - 주장이 비었거나, 카드가 없거나 겹치거나 N화 기록에 없거나, 해석이 담지 않은 카드의 것이거나,
               글이 위 끝(제목 180 · 주장 6,000 · 해석 4,000자)을 넘으면 400(INVALID_INPUT)에 무엇이 틀렸는지 적어 준다""")
     @ApiResponses({
@@ -46,6 +48,8 @@ public class HypothesisController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
                     description = "입력이 틀림(INVALID_INPUT · TRAILER_INVALID_CHAPTER · TRAILER_DIGEST_MISMATCH)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "로그인 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402",
+                    description = "크레딧이 모자람(CREDIT_NOT_ENOUGH). 저장되지 않음"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503",
                     description = "카드 표가 비어 있음(TRAILER_LEDGER_NOT_LOADED)")})
     @PostMapping

@@ -50,6 +50,8 @@ export type Meta = {
   kinds: string[];
   /** 검색창 아래에 권하는 인물 다섯. */
   suggestedPeople: string[];
+  /** 판정 1회에 깎는 크레딧. 맡길 때 깎이고 판정이 실패하면 돌아온다. */
+  judgeCredits: number;
 };
 
 /** 목록 요청의 조건. 늦게 온 응답을 버릴 때 이 넷을 비교한다. */
@@ -184,7 +186,9 @@ export async function fetchMeta(signal?: AbortSignal): Promise<Meta> {
     !isFilledString(meta.stateDigest) ||
     !isFilledString(meta.cardsDigest) ||
     !Array.isArray(meta.kinds) ||
-    !Array.isArray(meta.suggestedPeople)
+    !Array.isArray(meta.suggestedPeople) ||
+    !Number.isInteger(meta.judgeCredits) ||
+    (meta.judgeCredits as number) < 0
   ) {
     throw new Error("장부 정보를 확인할 수 없습니다.");
   }
@@ -194,6 +198,7 @@ export async function fetchMeta(signal?: AbortSignal): Promise<Meta> {
     cardsDigest: meta.cardsDigest,
     kinds: meta.kinds.filter((kind): kind is string => typeof kind === "string"),
     suggestedPeople: meta.suggestedPeople.filter((name): name is string => typeof name === "string"),
+    judgeCredits: meta.judgeCredits as number,
   };
 }
 
