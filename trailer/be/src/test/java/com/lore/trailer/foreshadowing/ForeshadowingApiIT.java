@@ -354,6 +354,8 @@ class ForeshadowingApiIT extends TrailerItSupport {
         List<String> people = new ArrayList<>();
         meta.path("suggestedPeople").forEach(p -> people.add(p.asText()));
         assertThat(people).containsExactly("Gol D. Roger", "Shanks", "Monkey D. Luffy", "Lord of the Coast", "Benn Beckman");
+        // 판정 1회의 값. 화면이 단추 옆에 보인다(TrailerCreditPolicy 기본 5).
+        assertThat(meta.path("judgeCredits").asInt()).isEqualTo(5);
     }
 
     // ── 6. 상세 ───────────────────────────────────────────────────────────
