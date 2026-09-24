@@ -48,7 +48,7 @@ public class HypothesisAdminController {
     @Operation(summary = "판정 넣기", description = """
             `judge.py` 가 끝난 뒤 결과를 넣는다. `id` 의 줄을 찾아 판정 칸을 채우고 `judgementStatus` 를 바꾸고 `judgedAt` 을 찍는다.
             - `COMPLETE` 면 `judgement` 필수(grade · reason · support · against — `cited_cards` 도 그대로 실린다). `presentation` 은 있을 때만
-            - `FAILED` 면 `failureMessage` 필수(독자에게 보인다)
+            - `FAILED` 면 `failureMessage` 필수(독자에게 보인다). **맡길 때 깎은 크레딧을 돌려준다** — 같은 가설에 두 번 넣어도 한 번만
             - **이미 판정한 가설도 덮어쓴다** — 다시 돌린 결과를 넣을 수 있게
             - 몸통의 `id` 는 lore 의 요청 id 다. judge.py 의 `request_id`(입력의 해시)가 아니다
             - 없는 `id` 는 404(TRAILER_HYPOTHESIS_NOT_FOUND). 운영자가 아니면 403(ADMIN_ONLY). 모양이 틀리면 400(INVALID_INPUT)""")

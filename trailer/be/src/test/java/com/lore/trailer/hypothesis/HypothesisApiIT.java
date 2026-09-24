@@ -27,6 +27,8 @@ class HypothesisApiIT extends TrailerItSupport {
     private static final String CARDS = "/api/trailer/v1/public/cards";
     private static final String HYPOTHESES = "/api/trailer/v1/hypotheses";
     private static final String CLAIM = "샹크스와 루피는 다시 만난다.";
+    /** 판정 1회의 값(TrailerCreditPolicy 기본값). 장부 정보의 judgeCredits 와 같아야 한다 — submitSpendsJudgeCredits 가 본다. */
+    private static final int JUDGE_CREDITS = 5;
 
     private JsonNode meta() throws Exception {
         return data(getAnonymously(CARDS + "/meta"));
@@ -46,6 +48,13 @@ class HypothesisApiIT extends TrailerItSupport {
         return body;
     }
 
+    /** 맡길 수 있는 독자 — submits 번 맡길 만큼 크레딧을 준 새 계정. */
+    private Long newReader(int submits) {
+        Long user = newUserId();
+        fund(user, submits * JUDGE_CREDITS);
+        return user;
+    }
+
     private static List<String> ids(JsonNode cards) {
         List<String> ids = new ArrayList<>();
         cards.forEach(card -> ids.add(card.path("id").asText()));
@@ -62,7 +71,7 @@ class HypothesisApiIT extends TrailerItSupport {
     @Test
     @DisplayName("맡기면 PENDING 으로 저장되고, 담은 카드가 그 회차의 값으로 순서대로 복사된다")
     void submitStoresPendingWithCopiedCards() throws Exception {
-        Long user = newUserId();
+        Long user = newReader(1);
         Map<String, Object> body = submission(400, List.of("T374", "T2"));
         body.put("notes", Map.of("T2", "약속의 밀짚모자"));
 
@@ -102,7 +111,7 @@ class HypothesisApiIT extends TrailerItSupport {
     @Test
     @DisplayName("★ 1화 독자가 담은 T5 는 미회수로 복사된다(400화 독자에게는 66화 회수) — 복사본은 그 회차로 가린 값")
     void copiesMaskedByChapter() throws Exception {
-        Long user = newUserId();
+        Long user = newReader(2);
 
         JsonNode early = data(postJson(user, HYPOTHESES, submission(1, List.of("T5")))).path("cards").get(0);
         assertThat(early.path("status").asText()).isEqualTo("open");
@@ -132,6 +141,41 @@ class HypothesisApiIT extends TrailerItSupport {
         assertThat(count("hypotheses")).isZero();
     }
 
+    @Test
+    @DisplayName("★ 크레딧이 모자라면 402 CREDIT_NOT_ENOUGH — 필요 · 보유를 말하고, 가설도 카드 복사본도 남기지 않는다")
+    void notEnoughCreditsIs402AndSavesNothing() throws Exception {
+        Long user = newUserId();
+        fund(user, JUDGE_CREDITS - 1);
+
+        MvcResult result = postJson(user, HYPOTHESES, submission(400, List.of("T2", "T374")));
+
+        assertThat(status(result)).as(result.getResponse().getContentAsString()).isEqualTo(402);
+        assertThat(errorCode(result)).isEqualTo("CREDIT_NOT_ENOUGH");
+        assertThat(errorMessage(result)).contains("필요 " + JUDGE_CREDITS).contains("보유 " + (JUDGE_CREDITS - 1));
+        assertThat(count("hypotheses")).as("402 는 저장을 되돌린다").isZero();
+        assertThat(count("hypothesis_foreshadowing")).isZero();
+        assertThat(balance(user)).isEqualTo(JUDGE_CREDITS - 1);
+        assertThat(creditRows(user, "SPEND")).as("모자라면 장부에 아무것도 안 쓴다").isZero();
+    }
+
+    @Test
+    @DisplayName("★ 맡기면 판정 값만큼 깎이고 장부에 SPEND · TRAILER · hypothesis:<id> 한 줄이 남는다. 값은 장부 정보로 화면에 간다")
+    void submitSpendsJudgeCredits() throws Exception {
+        Long user = newUserId();
+        fund(user, JUDGE_CREDITS + 2);
+
+        long id = data(postJson(user, HYPOTHESES, submission(400, List.of("T2")))).path("id").asLong();
+
+        assertThat(balance(user)).isEqualTo(2);
+        assertThat(creditRows(user, "SPEND")).isEqualTo(1);
+        Map<String, Object> row = jdbc.queryForMap(
+                "select domain, ref_id, delta from credit_event where user_id = ? and reason = 'SPEND'", user);
+        assertThat(row.get("domain")).isEqualTo("TRAILER");
+        assertThat(row.get("ref_id")).isEqualTo("hypothesis:" + id);
+        assertThat(((Number) row.get("delta")).intValue()).isEqualTo(-JUDGE_CREDITS);
+        assertThat(meta().path("judgeCredits").asInt()).isEqualTo(JUDGE_CREDITS);
+    }
+
     private long count(String table) {
         Long n = jdbc.queryForObject("select count(*) from " + table, Long.class);
         return n == null ? 0 : n;
@@ -142,13 +186,14 @@ class HypothesisApiIT extends TrailerItSupport {
     class GetOne {
 
         private long submitAs(Long user) throws Exception {
+            fund(user, JUDGE_CREDITS);
             return data(postJson(user, HYPOTHESES, submission(400, List.of("T2", "T374")))).path("id").asLong();
         }
 
         @Test
         @DisplayName("맡긴 직후 되물으면 맡길 때 받은 것과 같은 모양이고 PENDING 이다")
         void getReturnsSameShapeAsSubmit() throws Exception {
-            Long user = newUserId();
+            Long user = newReader(1);
             JsonNode submitted = data(postJson(user, HYPOTHESES, submission(400, List.of("T2", "T374"))));
 
             MvcResult result = getAs(user, HYPOTHESES + "/" + submitted.path("id").asLong());
@@ -228,8 +273,8 @@ class HypothesisApiIT extends TrailerItSupport {
         @Test
         @DisplayName("맡긴 순서의 반대로 오고, 남의 가설은 섞이지 않고, 없으면 빈 배열이다")
         void newestFirstAndMineOnly() throws Exception {
-            Long me = newUserId();
-            Long other = newUserId();
+            Long me = newReader(2);
+            Long other = newReader(1);
             long first = data(postJson(me, HYPOTHESES, submission(1, List.of("T2")))).path("id").asLong();
             postJson(other, HYPOTHESES, submission(400, List.of("T5")));
             Map<String, Object> second = submission(400, List.of("T374", "T2"));
@@ -272,8 +317,10 @@ class HypothesisApiIT extends TrailerItSupport {
         private MvcResult submit(int chapter, List<String> cards, Consumer<Map<String, Object>> tweak) throws Exception {
             Map<String, Object> body = submission(chapter, cards);
             tweak.accept(body);
-            MvcResult result = postJson(newUserId(), HYPOTHESES, body);
+            Long user = newUserId();
+            MvcResult result = postJson(user, HYPOTHESES, body);
             assertThat(count("hypotheses")).as("저장되지 않아야 한다").isZero();
+            assertThat(creditRows(user, null)).as("검사는 깎기보다 앞이다 — 400 은 장부에 아무것도 안 적는다").isZero();
             return result;
         }
 

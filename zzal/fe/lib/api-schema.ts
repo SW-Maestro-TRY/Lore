@@ -68,7 +68,7 @@ export interface paths {
          * 판정 넣기
          * @description `judge.py` 가 끝난 뒤 결과를 넣는다. `id` 의 줄을 찾아 판정 칸을 채우고 `judgementStatus` 를 바꾸고 `judgedAt` 을 찍는다.
          *     - `COMPLETE` 면 `judgement` 필수(grade · reason · support · against — `cited_cards` 도 그대로 실린다). `presentation` 은 있을 때만
-         *     - `FAILED` 면 `failureMessage` 필수(독자에게 보인다)
+         *     - `FAILED` 면 `failureMessage` 필수(독자에게 보인다). **맡길 때 깎은 크레딧을 돌려준다** — 같은 가설에 두 번 넣어도 한 번만
          *     - **이미 판정한 가설도 덮어쓴다** — 다시 돌린 결과를 넣을 수 있게
          *     - 몸통의 `id` 는 lore 의 요청 id 다. judge.py 의 `request_id`(입력의 해시)가 아니다
          *     - 없는 `id` 는 404(TRAILER_HYPOTHESIS_NOT_FOUND). 운영자가 아니면 403(ADMIN_ONLY). 모양이 틀리면 400(INVALID_INPUT)
@@ -97,6 +97,8 @@ export interface paths {
          *     - 맡긴 뒤에는 제목 · 주장 · 카드 · 해석을 고칠 수 없다. 새 가설은 새로 맡긴다
          *     - `stateDigest` · `cardsDigest` 가 카드 표의 값과 다르면 400(TRAILER_DIGEST_MISMATCH) — 페이지를 새로 열어야 한다
          *     - 회차가 없거나 범위 밖이면 400(TRAILER_INVALID_CHAPTER). 카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED)
+         *     - **맡길 때 크레딧을 깎는다** — 값은 `GET /public/cards/meta` 의 `judgeCredits`(지금 5). 모자라면 402(CREDIT_NOT_ENOUGH)
+         *       에 필요 · 보유를 적어 주고 **저장하지 않는다**. 운영자가 FAILED 를 넣으면 돌려준다
          *     - 주장이 비었거나, 카드가 없거나 겹치거나 N화 기록에 없거나, 해석이 담지 않은 카드의 것이거나,
          *       글이 위 끝(제목 180 · 주장 6,000 · 해석 4,000자)을 넘으면 400(INVALID_INPUT)에 무엇이 틀렸는지 적어 준다
          */
@@ -3027,6 +3029,12 @@ export interface components {
         ForeshadowingMeta: {
             /** @description 400화 카드 파일의 sha256. 위와 같다 */
             cardsDigest?: string;
+            /**
+             * Format: int32
+             * @description 판정 1회에 깎는 크레딧. 맡길 때(2-5) 깎고 운영자가 FAILED 를 넣으면 돌려준다
+             * @example 5
+             */
+            judgeCredits?: number;
             /** @description 유형의 한국어 이름. 카드에 먼저 나온 순서 */
             kinds?: string[];
             /**
@@ -4196,6 +4204,15 @@ export interface operations {
             };
             /** @description 로그인 필요 */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTrailerHypothesis"];
+                };
+            };
+            /** @description 크레딧이 모자람(CREDIT_NOT_ENOUGH). 저장되지 않음 */
+            402: {
                 headers: {
                     [name: string]: unknown;
                 };

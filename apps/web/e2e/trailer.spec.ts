@@ -18,7 +18,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { collectErrors } from './helpers';
 import { ALL_KINDS, matchesCard } from '../../../trailer/fe/lib/search';
-import { CARDS, HYPOTHESES_URL, LIST_URL, answer, fail, load, mockLore, visibleCards, type Fixture, type LoreHypothesis } from './trailer-lore';
+import { CARDS, HYPOTHESES_URL, LIST_URL, answer, fail, failHypothesis, load, mockLore, visibleCards, type Fixture, type LoreHypothesis } from './trailer-lore';
 
 /** Python 서버가 실제로 준 T2 판정(400화). 3부에서는 운영자가 넣은 판정이 가설의 `judgement` · `presentation` 으로 온다. */
 type JudgeResponse = {
@@ -628,6 +628,58 @@ test.describe('데스크톱', () => {
     await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
     await expect(page.locator('[data-action="refresh"]')).toHaveCount(0);
     await expect(page.locator('[data-action="new-draft"]')).toBeVisible();
+  });
+
+  test('판정 값이 단추 옆에 보인다 — 로그인 전에는 값만, 잔액은 없다', async ({ page, context }) => {
+    await mockLore(context);
+    await open(page, LAST);
+    const credit = page.locator('[data-part="judge-credit"]');
+    await expect(credit).toContainText('판정 1회 5크레딧');
+    await expect(credit).not.toContainText('내 크레딧');
+  });
+
+  test('★ 로그인하면 내 크레딧이 보이고, 맡기면 판정 값만큼 빠진다', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+    await open(page, LAST);
+    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 20');
+    await writeTheory(page);
+    await page.click('[data-action="judge"]');
+
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 15');
+    expect(lore.credits).toBe(15);
+  });
+
+  test('★ 크레딧이 모자라면 서버 문구(필요 · 보유)가 나오고, 초안은 얼지 않고 글과 카드가 남는다', async ({ page, context }) => {
+    await mockLore(context, { state: { loggedIn: true, hypotheses: [], credits: 3 } });
+    await open(page, LAST);
+    await writeTheory(page, '모자란 채 맡기는 주장');
+    await page.click('[data-action="judge"]');
+
+    const state = page.locator('[data-part="judge-state"]');
+    await expect(state).toContainText('크레딧이 모자랍니다');
+    await expect(state).toContainText('필요 5 · 보유 3');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'false');
+    await expect(page.locator('#trailer-claim')).toHaveValue('모자란 채 맡기는 주장');
+    expect(await pickedIds(page)).toEqual(['T2', 'T374']);
+    await expect(page.locator('[data-action="judge"]')).toBeEnabled();
+    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 3');
+    // 입력을 고치면 문구가 사라진다 — 맡기지 못한 문구와 같은 규칙.
+    await page.fill('#trailer-claim', '고친 주장');
+    await expect(state).not.toContainText('크레딧이 모자랍니다');
+  });
+
+  test('★ 판정이 실패하면 낸 크레딧이 돌아온다 — "지금 확인" 뒤 잔액이 맡기기 전으로', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+    await open(page, LAST);
+    await writeTheory(page);
+    await page.click('[data-action="judge"]');
+    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 15');
+
+    failHypothesis(lore, lore.hypotheses[0], '자료 판이 다릅니다');
+    await page.click('[data-action="refresh"]');
+    await expect(page.locator('[data-part="judge-state"]')).toContainText('자료 판이 다릅니다');
+    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 20');
   });
 
   test('새 페이지는 맡긴 가설을 다시 묻는다 — 로그인이 없으면 로그인 안내, 가설이 없으면 없다는 안내', async ({ page, context }) => {

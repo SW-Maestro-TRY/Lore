@@ -2,6 +2,7 @@ package com.lore.trailer.foreshadowing;
 
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.trailer.credit.TrailerCreditPolicy;
 import com.lore.trailer.foreshadowing.dto.ForeshadowingResponses;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,9 +36,11 @@ public class ForeshadowingService {
     private static final int PEOPLE_CHUNK = 100;
 
     private final ForeshadowingRepository repository;
+    private final TrailerCreditPolicy creditPolicy;
 
-    public ForeshadowingService(ForeshadowingRepository repository) {
+    public ForeshadowingService(ForeshadowingRepository repository, TrailerCreditPolicy creditPolicy) {
         this.repository = repository;
+        this.creditPolicy = creditPolicy;
     }
 
     /** 장부 정보(2-1). 해시 둘은 아무 줄에서 읽는다 — 줄마다 같은 값이다. */
@@ -50,7 +53,8 @@ public class ForeshadowingService {
                 any.getStateDigest(),
                 any.getCardsDigest(),
                 repository.kindsInFirstSeenOrder(),
-                suggestedPeople());
+                suggestedPeople(),
+                creditPolicy.judgeCredits());
     }
 
     /**
