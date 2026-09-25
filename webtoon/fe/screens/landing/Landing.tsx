@@ -357,7 +357,15 @@ export default function Landing({ go }: { go: Go }) {
           <span><img src="/static/badges/iitp-icon.png" alt="" />{t("정보통신기획평가원(IITP)")}</span>
         </div>
         <LangSwitch className="wt-landing-lang" />
-        <span className="dim wt-landing-copy">© 2026 LORE</span>
+        {/* 실제로 파는 서비스처럼 보이려면 누가 운영하고 어디로 연락하는지가 있어야 한다(#252).
+            운영 주체는 약관 제1조의 「TRY팀」, 연락처는 약관·처리방침에 적힌 주소와 같다.
+            사업자등록번호·통신판매업 신고번호는 등록되면 여기 한 줄 더 붙인다. */}
+        <div className="dim wt-landing-biz">
+          <span>{t("운영")} TRY팀</span>
+          <span>{t("문의")} <a href="mailto:lightbluue6@gmail.com">lightbluue6@gmail.com</a></span>
+          <span>{t("AI SW MAESTRO 17기 프로젝트")}</span>
+        </div>
+        <span className="dim wt-landing-copy">© 2026 LORE · TRY팀</span>
       </footer>
     </div>
   );
