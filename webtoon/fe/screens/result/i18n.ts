@@ -3,6 +3,10 @@ import { registerDict, type Dict } from "../../lib/i18n";
 /* 완성본 · 공유 — 화면의 한국어 원문이 키다. 서버가 만든 글(제목·오류 본문)은 여기 없다. */
 const dict: Dict = {
   /* ---- Result ---- */
+  "이런 웹툰은 어때요": { en: "You might also like", ja: "こんな作品はいかが", zh: "你可能也喜欢" },
+  "찜하기": { en: "Save", ja: "お気に入りに追加", zh: "收藏" },
+  "찜 취소": { en: "Unsave", ja: "お気に入りから外す", zh: "取消收藏" },
+  "로그인하면 찜할 수 있어요": { en: "Sign in to save webtoons", ja: "ログインするとお気に入りに追加できます", zh: "登录后可收藏" },
   "작품을 열지 못했습니다": { en: "Couldn't open this work.", ja: "作品を開けませんでした", zh: "无法打开这部作品" },
   "제목을 바꾸지 못했습니다": { en: "Couldn't change the title.", ja: "タイトルを変更できませんでした", zh: "无法修改标题" },
   "미리보기 ({planned}장 중 앞 {count}장만 그렸습니다)": {

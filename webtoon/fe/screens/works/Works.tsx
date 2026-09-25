@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { browseRuns, coverUrl, isMyRun, myAccountRuns, setVisibility, type RunCard } from "../../lib/api";
+import {
+  browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, recentRuns, setVisibility, type RunCard,
+} from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { louArt } from "../../lib/louArt";
 import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
+import LikeButton from "../../ui/LikeButton";
+import RunStrip from "../../ui/RunStrip";
 import "./i18n";
 import "./Works.css";
 
@@ -16,13 +20,18 @@ import "./Works.css";
  * 구별되지 않는다(`ExampleWorks`) — 전에는 예시를 따로 받아 「예시」 배지를
  * 붙이고 숨기는 스위치를 뒀는데, 갈래가 하나가 되면서 둘 다 없앴다. 못 받으면
  * 던지므로 그때는 「못 받음」 보드다. 내 작품(이 브라우저가 만든 것, 로그인했으면
- * 계정 것도)에만 공개 스위치와 편집실이 붙는다. */
+ * 계정 것도)에만 공개 스위치와 편집실이 붙는다.
+ *
+ * 찾기·칩(장르·그림체·찜)은 전부 화면에서 거른다(#248). 목록이 작아서 서버에
+ * 묻는 것보다 받은 것을 거르는 편이 빠르고, 검색어는 서버에 남지 않는다. */
 export default function Works({ go, authenticated }: { go: Go; authenticated: boolean }) {
   const t = useT();
   const [runs, setRuns] = useState<RunCard[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
   const [accountRuns, setAccountRuns] = useState<string[]>([]);
+  /* 내가 찜한 작품 번호들 — 카드의 하트를 칠하고, 「찜」 칩이 거른다(#247). */
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let alive = true;
@@ -43,13 +52,34 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     return () => { alive = false; };
   }, [authenticated]);
 
+  useEffect(() => {
+    if (!authenticated || !runs || runs.length === 0) { setLikedIds(new Set()); return; }
+    let alive = true;
+    likedAmong(runs.map((r) => r.run_id))
+      .then((ids) => { if (alive) setLikedIds(new Set(ids)); })
+      .catch(() => { /* 하트만 안 칠해진다 */ });
+    return () => { alive = false; };
+  }, [authenticated, runs]);
+
   const mineOf = (r: RunCard) => isMyRun(r.run_id) || accountRuns.includes(r.run_id);
 
-  /* 칩: 전체 · 내 작품 · 장르들. 정렬: 최신순 ↔ 오래된순 (run_id 가 시각으로 시작한다). */
-  const [filter, setFilter] = useState<"all" | "mine" | string>("all");
+  /* 최근 본 웹툰(#247) — 브라우저에 남은 번호를 목록에서 찾아 표지 한 줄로. */
+  const recent = useMemo(() => {
+    if (!runs) return [];
+    const byId = new Map(runs.map((r) => [r.run_id, r]));
+    return recentRuns().map((id) => byId.get(id)).filter((r): r is RunCard => !!r).slice(0, 10);
+  }, [runs]);
+
+  /* 칩: 전체 · 내 작품 · 찜 · 장르들 · 그림체들. 정렬: 최신순 ↔ 오래된순 (run_id 가 시각으로 시작한다). */
+  const [filter, setFilter] = useState<"all" | "mine" | "liked" | string>("all");
   const [newest, setNewest] = useState(true);
+  const [query, setQuery] = useState("");
   const genres = useMemo(
     () => [...new Set((runs || []).map((r) => r.genre).filter(Boolean))],
+    [runs],
+  );
+  const styles = useMemo(
+    () => [...new Set((runs || []).map((r) => r.style_label).filter((s): s is string => !!s))],
     [runs],
   );
 
@@ -57,21 +87,42 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     if (!runs) return null;
     let list = runs;
     if (filter === "mine") list = list.filter(mineOf);
+    else if (filter === "liked") list = list.filter((r) => likedIds.has(r.run_id));
+    else if (filter.startsWith("style:")) list = list.filter((r) => r.style_label === filter.slice(6));
     else if (filter !== "all") list = list.filter((r) => r.genre === filter);
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter((r) =>
+        [r.title, r.character, r.genre, r.style_label, t(r.genre || ""), t(r.style_label || "")]
+          .some((s) => (s || "").toLowerCase().includes(q)));
+    }
     list = [...list].sort((a, b) => (newest ? b.run_id.localeCompare(a.run_id) : a.run_id.localeCompare(b.run_id)));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, filter, newest, accountRuns]);
+  }, [runs, filter, newest, accountRuns, likedIds, query]);
+
+  /* 검색은 결과 수만 남긴다 — 무엇을 쳤는지는 서버에 보내지 않는다(#413). */
+  useEffect(() => {
+    if (!query.trim() || !shown) return;
+    const id = setTimeout(() => track("works_search", { count: shown.length }), 800);
+    return () => clearTimeout(id);
+  }, [query, shown]);
 
   const noneAtAll = !!runs && runs.length === 0;
+  const noneMatch = !!shown && !noneAtAll && shown.length === 0;
+
+  const chip = (key: string, label: string, kind: string) => (
+    <button key={key} type="button" className={`chip${filter === key ? " on" : ""}`}
+            onClick={() => { track("works_filter", { filter: kind }); setFilter(key); }}>{label}</button>
+  );
 
   const chips = (
     <div className="wt-works-chips">
       <button type="button" className={`chip${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>{t("전체")}</button>
-      <button type="button" className={`chip${filter === "mine" ? " on" : ""}`} onClick={() => { track("works_filter", { filter: "mine" }); setFilter("mine"); }}>{t("내 작품")}</button>
-      {genres.map((g) => (
-        <button key={g} type="button" className={`chip${filter === g ? " on" : ""}`} onClick={() => { track("works_filter", { filter: "genre" }); setFilter(g); }}>{t(g)}</button>
-      ))}
+      {chip("mine", t("내 작품"), "mine")}
+      {authenticated && chip("liked", t("찜"), "liked")}
+      {genres.map((g) => chip(g, t(g), "genre"))}
+      {styles.map((s) => chip(`style:${s}`, t(s), "style"))}
       <button type="button" className="chip wt-works-sort" onClick={() => setNewest((v) => !v)}
               aria-label={newest ? t("최신순 — 누르면 오래된순") : t("오래된순 — 누르면 최신순")}>
         {newest ? t("최신순") : t("오래된순")} <IconChevronDown size={14} />
@@ -91,6 +142,16 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
             <button type="button" className="btn btn-p wt-works-create" onClick={() => go("entry")}>{t("내 웹툰 만들기")}</button>
           </div>
         </div>
+
+        {recent.length > 0 && filter === "all" && !query && (
+          <div className="wt-works-recent">
+            <RunStrip title={t("최근 본 웹툰")} runs={recent}
+                      onOpen={(r) => { track("recent_open", { run: r.run_id }); go("result", { run: r.run_id }); }} />
+          </div>
+        )}
+
+        <input className="field wt-works-search" type="search" value={query} placeholder={t("제목·캐릭터·장르로 찾기")}
+               aria-label={t("제목·캐릭터·장르로 찾기")} onChange={(e) => setQuery(e.target.value)} />
 
         {chips}
 
@@ -131,10 +192,21 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
           </div>
         )}
 
-        {shown && !noneAtAll && (
+        {noneMatch && (
+          <div className="wt-works-state wt-works-state-sm">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={louArt("empty")} alt="" style={{ width: 140 }} />
+            <h2>{filter === "liked" && !query ? t("아직 찜한 웹툰이 없어요") : t("찾는 웹툰이 없어요")}</h2>
+            <span className="muted">{filter === "liked" && !query ? t("마음에 드는 작품의 하트를 누르면 여기에 모여요.") : t("다른 말로 찾아보거나 칩을 풀어 보세요.")}</span>
+          </div>
+        )}
+
+        {shown && shown.length > 0 && (
           <div className="wt-works-grid">
             {shown.map((r) => (
-              <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated} />
+              <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated}
+                        liked={likedIds.has(r.run_id)}
+                        onLiked={(on) => setLikedIds((was) => { const next = new Set(was); if (on) next.add(r.run_id); else next.delete(r.run_id); return next; })} />
             ))}
           </div>
         )}
@@ -143,10 +215,13 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   );
 }
 
-function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolean; go: Go; authenticated: boolean }) {
+function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
+  run: RunCard; mine: boolean; go: Go; authenticated: boolean; liked: boolean; onLiked: (on: boolean) => void;
+}) {
   const t = useT();
   const eps = run.episodes || [];
   const first = eps[0] || 1;
+  const [likes, setLikes] = useState(run.likes ?? 0);
   const open = () => {
     track("works_open", { run: run.run_id, mine, where: "works" });
     go("result", { run: run.run_id });
@@ -188,6 +263,18 @@ function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolea
       <div className="wt-works-info">
         <div className="wt-works-titlerow">
           <b>{run.title || t("제목 없음")}</b>
+          <LikeButton runId={run.run_id} liked={liked} count={likes} authenticated={authenticated} small
+                      onChange={(on, n) => { setLikes(n); onLiked(on); }} />
+        </div>
+        <span className="muted wt-works-sub">{sub}</span>
+        <div className="wt-works-eprow">
+          {eps.length > 0 && (
+            <div className="wt-works-eps">
+              {eps.map((n) => (
+                <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
+              ))}
+            </div>
+          )}
           {mine && authenticated && (
             <span className="wt-works-pub">
               <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
@@ -196,14 +283,6 @@ function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolea
             </span>
           )}
         </div>
-        <span className="muted wt-works-sub">{sub}</span>
-        {eps.length > 0 && (
-          <div className="wt-works-eps">
-            {eps.map((n) => (
-              <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
-            ))}
-          </div>
-        )}
         {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
       </div>
     </div>

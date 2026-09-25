@@ -40,7 +40,7 @@ class RunServiceTest {
         jobs = mock(WebtoonJobRepository.class);
         stories = mock(StoryStore.class);
         pages = mock(PageStore.class);
-        runs = new RunService(works, jobs, stories, pages);
+        runs = new RunService(works, jobs, stories, pages, mock(com.lore.webtoon.work.RunLikeRepository.class));
     }
 
     private WebtoonWork 작품(String runId, boolean isPublic) {

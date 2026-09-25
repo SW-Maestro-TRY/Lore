@@ -261,6 +261,37 @@ export interface RunCard {
   page_count: number;
   style_label?: string;
   public?: boolean;
+  /** 찜 수(#247). 서버가 카드마다 붙인다. */
+  likes?: number;
+  /** 내가 찜했나. 찜 목록(/my/likes)에서만 서버가 붙이고, 둘러보기는 likedAmong 으로 화면이 채운다. */
+  liked?: boolean;
+}
+
+/* ---- 최근 본 웹툰 (#247) ---------------------------------------------------- */
+
+/** 이 브라우저에서 최근에 연 작품. 로그인과 무관하게 브라우저에만 남는다 — 로그인 안 한
+ *  사람도 어제 본 것을 다시 찾을 수 있어야 하고, 서버에 "무엇을 봤나"를 남기지 않는다. */
+const RECENT_KEY = "lore_recent_runs";
+const RECENT_MAX = 20;
+
+export function recentRuns(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberRecent(runId: string): void {
+  if (!runId || typeof window === "undefined") return;
+  const list = [runId, ...recentRuns().filter((x) => x !== runId)].slice(0, RECENT_MAX);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch {
+    /* 못 남겨도 읽는 것 자체는 막지 않는다 */
+  }
 }
 
 /** 둘러보기 — 공개된 작품 전부. 예시 작품도 여기 섞여 있다(DB 에 심겨 있어
@@ -323,6 +354,29 @@ export function linkThisBrowser(): Promise<{ linked: boolean }> {
 
 export function myAccountRuns(): Promise<RunCard[]> {
   return appRequest<RunCard[]>("/api/webtoon/v1/my/runs");
+}
+
+/* ---- 찜 (#247) — 전부 로그인이 필요하다 ---------------------------------------- */
+
+export interface LikeResult { runId: string; liked: boolean; likes: number }
+
+export function likeRun(runId: string): Promise<LikeResult> {
+  return appRequest<LikeResult>(`/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/like`, { method: "POST" });
+}
+
+export function unlikeRun(runId: string): Promise<LikeResult> {
+  return appRequest<LikeResult>(`/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/like`, { method: "DELETE" });
+}
+
+/** 내가 찜한 작품. 최근에 찜한 것부터. */
+export function myLikes(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/likes");
+}
+
+/** 이 목록 중 내가 찜한 작품 번호. 둘러보기 카드에 하트를 칠할 때. */
+export function likedAmong(runIds: string[]): Promise<string[]> {
+  if (runIds.length === 0) return Promise.resolve([]);
+  return appRequest<string[]>("/api/webtoon/v1/my/likes/among", { method: "POST", body: { runIds } });
 }
 
 export function setVisibility(runId: string, isPublic: boolean) {
