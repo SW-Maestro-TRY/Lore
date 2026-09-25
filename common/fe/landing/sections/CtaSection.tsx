@@ -9,9 +9,8 @@ export default function CtaSection() {
   return (
     <section className={styles.ctaSection}>
       <div className={styles.wrap}>
-        <h2 className={styles.ctaTitle}>그림은 못 그려도 캐릭터는 있으니까</h2>
         <p className={styles.ctaText}>
-          사진 한 장이면 됩니다. 로그인 없이 끝까지 만들어 볼 수 있어요.
+          사진 한 장으로 어떤 콘텐츠든 끝까지 만들어볼 수 있어요.
         </p>
         <a className={styles.ctaBtn} href="#top">
           지금 시작하기
