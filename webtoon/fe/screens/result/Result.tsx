@@ -7,7 +7,7 @@ import {
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
-import { IconChevronUp, IconDownload, IconEdit } from "../../ui/Icons";
+import { IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
 import { Crumb, MobileTop } from "../../ui/TopNav";
 import ShareMenu from "./ShareMenu";
 import "./i18n";
