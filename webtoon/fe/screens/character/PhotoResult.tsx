@@ -220,6 +220,31 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
                     {ch.share_bonus ? ` · ${t("무료 횟수 +{n}", { n: ch.share_bonus })}` : ""}
                   </span>
                 )}
+                {!shared && card && (
+                  /* 넣은 설정이 어디로 갔나(#329). 점수를 매기지 않고, 카드에 실제로 남은 값을
+                     넣은 것 옆에 놓는다. 다르면 다르다고만 말한다 — 다시 뽑기 전에 볼 근거. */
+                  <div className="card wt-ch-res-inputs">
+                    <b>{t("넣은 설정이 간 곳")}</b>
+                    <dl>
+                      <dt>{t("이름")}</dt>
+                      <dd>{ch.asked_name
+                        ? (ch.asked_name === ch.name ? ch.name : t("{a} → {b} (카드가 바꿈)", { a: ch.asked_name, b: ch.name }))
+                        : t("안 넣음 → 카드가 지음: {b}", { b: ch.name })}</dd>
+                      <dt>{t("설명")}</dt>
+                      <dd>{ch.description
+                        ? t("「{d}」→ {s}", { d: ch.description, s: [card.species, card.role].filter(Boolean).join(" · ") })
+                        : t("안 넣음 → {s}", { s: [card.species, card.role].filter(Boolean).join(" · ") })}</dd>
+                      <dt>{t("세계관")}</dt>
+                      <dd>{ch.asked_world
+                        ? (ch.asked_world === card.world || ch.asked_world === card.world_label
+                            ? t(card.world_label)
+                            : t("{a} → {b}", { a: ch.asked_world, b: t(card.world_label) }))
+                        : t("안 정함 → {b}", { b: t(card.world_label) })}</dd>
+                      <dt>{t("사진")}</dt>
+                      <dd>{ch.source === "photo" ? t("사진을 보고 외모를 읽었어요") : t("사진 없음 → 설명으로만")}</dd>
+                    </dl>
+                  </div>
+                )}
                 {card && card.fate?.length > 0 && (
                   <div className="card wt-ch-res-fate">
                     {card.fate.map((line, i) => <span key={i}>{line}</span>)}

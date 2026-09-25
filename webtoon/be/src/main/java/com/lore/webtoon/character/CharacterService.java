@@ -284,9 +284,11 @@ public class CharacterService {
         }
 
         Instant now = Instant.now(clock);
-        WebtoonCharacter saved = characters.save(WebtoonCharacter.drawing(
+        WebtoonCharacter drawing = WebtoonCharacter.drawing(
                 publicId, userId, browserUid, called.isEmpty() ? "이름 없는 캐릭터" : called,
-                description, now));
+                description, now);
+        drawing.asked(called, world);   // 넣은 것을 그대로 — 카드가 무엇을 어떻게 읽었는지 견주려고(#329)
+        WebtoonCharacter saved = characters.save(drawing);
 
         if (!free) {
             credits.charge(userId, cost, "character:" + publicId, "캐릭터 만들기");
