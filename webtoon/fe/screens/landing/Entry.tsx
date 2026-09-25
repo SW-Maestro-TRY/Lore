@@ -9,11 +9,12 @@ import { IconUser } from "../../ui/Icons";
 import { usePhone } from "./usePhone";
 import "./Entry.css";
 
-/* 왼쪽 카드는 「가면 아래의 대리인」 2쪽 첫 컷을 잘라 둔 정적 그림이다. 창고의
-   쪽 그림(w=320)을 쓰면 카드 폭(약 570px)에 늘어나 흐려진다. 오른쪽 카드는 고정 예시
-   작품의 표지를 쓰고, 그림이 안 나오면(작품이 빠지는 등) 견본 그림으로 대체한다. */
-const COVER_A = "/static/entry/webtoon-cut.jpg";
-const COVER_B = api.coverUrl("20260919T153345-f366ce", 1); // 가면 아래의 대리인
+/* 두 카드 그림은 「가면 아래의 대리인」에서 가져온 정적 그림이다(webtoon/fe/static/entry).
+   왼쪽(웹툰 만들기)은 2쪽을 말상자까지 그대로 — 실제 웹툰 한 장이 보이게 한다.
+   오른쪽(캐릭터 만들어보기)은 같은 쪽 첫 컷의 인물만 잘라 둔 것이다.
+   창고의 쪽 그림(w=320)을 쓰면 카드 폭에 늘어나 흐려져서 정적 그림으로 뒀다. */
+const COVER_A = "/static/entry/webtoon-page.jpg";
+const COVER_B = "/static/entry/character.jpg";
 const FALLBACK_A = "/static/samples/onboarding-page.jpg";
 const FALLBACK_B = "/static/samples/ex-romance-2.jpg";
 
@@ -66,7 +67,7 @@ export default function Entry({ go }: { go: Go }) {
         <a href={hrefOf("create", { step: 1 })} className="wt-entry-card on" onClick={to(() => go("create", { step: 1 }))}>
           <div className="wt-entry-pic">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={COVER_A} alt="" className="wt-entry-pic-left" onError={onImgError(FALLBACK_A)} />
+            <img src={COVER_A} alt="" onError={onImgError(FALLBACK_A)} />
             <span className="wt-entry-tag">{t("웹툰 만들기")}</span>
             {createFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: createFree })}</span>}
           </div>
@@ -79,7 +80,7 @@ export default function Entry({ go }: { go: Go }) {
         <a href={hrefOf("try")} className="wt-entry-card" onClick={to(() => go("try"))}>
           <div className="wt-entry-pic">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={COVER_B} alt="" onError={onImgError(FALLBACK_B)} />
+            <img src={COVER_B} alt="" className="wt-entry-pic-left" onError={onImgError(FALLBACK_B)} />
             <span className="wt-entry-tag">{t("캐릭터 만들어보기")}</span>
             {charFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: charFree })}</span>}
           </div>
