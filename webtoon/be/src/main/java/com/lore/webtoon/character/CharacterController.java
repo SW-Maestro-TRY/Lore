@@ -1,6 +1,7 @@
 package com.lore.webtoon.character;
 
 import com.lore.webtoon.credit.CreditGate;
+import com.lore.webtoon.Admins;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.common.exception.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,11 +50,14 @@ public class CharacterController {
     private final CharacterService characters;
     private final CharacterOwner who;
     private final ShareReward shareReward;
+    private final Admins admins;
 
-    public CharacterController(CharacterService characters, CharacterOwner who, ShareReward shareReward) {
+    public CharacterController(CharacterService characters, CharacterOwner who, ShareReward shareReward,
+                               Admins admins) {
         this.characters = characters;
         this.who = who;
         this.shareReward = shareReward;
+        this.admins = admins;
     }
 
     @Operation(summary = "고를 수 있는 캐릭터", description = """
@@ -142,7 +146,7 @@ public class CharacterController {
         Map<String, Object> m = view(one, null, List.of());
         m.remove("mine");
         m.remove("error");
-        return m;
+        return withInputs(m, one);
     }
 
     @Operation(summary = "캐릭터 하나", description = """
@@ -153,7 +157,8 @@ public class CharacterController {
             @RequestHeader(value = UID_HEADER, required = false) String uid) {
         Long me = CreditGate.currentUser();
         List<String> uids = who.uidsOf(me, uid);
-        return view(characters.byPublicId(publicId, me, uids), me, uids);
+        WebtoonCharacter one = characters.byPublicId(publicId, me, uids);
+        return withInputs(view(one, me, uids), one);
     }
 
     @Operation(summary = "이름·설명 고치기")
@@ -179,13 +184,26 @@ public class CharacterController {
         return Map.of("ok", true);
     }
 
+    /**
+     * 사람이 넣은 이름·세계관 그대로(#329). 「넣은 설정이 간 곳」 칸의 재료인데, 그 칸은
+     * 운영용이라 관리자에게만 싣는다(#428). 사람이 쓴 글이라 공유 링크로 남에게 나가서도
+     * 안 된다. 화면은 이 값이 있을 때만 칸을 그린다.
+     */
+    private Map<String, Object> withInputs(Map<String, Object> m, WebtoonCharacter one) {
+        if (admins.current()) {
+            Map<String, Object> in = new LinkedHashMap<>();
+            in.put("name", one.getAskedName() == null ? "" : one.getAskedName());
+            in.put("world", one.getAskedWorld() == null ? "" : one.getAskedWorld());
+            m.put("inputs", in);
+        }
+        return m;
+    }
+
     private Map<String, Object> view(WebtoonCharacter one, Long me, List<String> uids) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", one.getPublicId());
         m.put("name", one.getName());
         m.put("description", one.getDescription() == null ? "" : one.getDescription());
-        m.put("asked_name", one.getAskedName() == null ? "" : one.getAskedName());
-        m.put("asked_world", one.getAskedWorld() == null ? "" : one.getAskedWorld());
         m.put("art_url", characters.artUrl(one));
         m.put("source", one.getSource().name().toLowerCase());
         m.put("status", one.getStatus().name().toLowerCase());
