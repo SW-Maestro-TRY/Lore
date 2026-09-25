@@ -76,6 +76,7 @@ public class CharacterService {
     private final CharacterOwner owner;
     private final PrivateArt art;
     private final CreditGate credits;
+    private final ShareReward shareReward;
     private final Path workDir;
     private final int freePerDay;
     private final int cost;
@@ -91,18 +92,20 @@ public class CharacterService {
     @Autowired
     public CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
                             CharacterOwner owner, PrivateArt art, CreditGate credits,
+                            ShareReward shareReward,
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
                             @Value("${lore.webtoon.character.free-per-day:3}") int freePerDay,
                             @Value("${lore.webtoon.character.credit-cost:2}") int cost,
                             @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally) {
-        this(characters, maker, owner, art, credits, workDir, freePerDay, cost,
+        this(characters, maker, owner, art, credits, shareReward, workDir, freePerDay, cost,
              presignLocally, Clock.system(ZONE));
     }
 
     CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
-                     CharacterOwner owner, PrivateArt art, CreditGate credits, String workDir,
-                     int freePerDay, int cost, boolean presignLocally, Clock clock) {
+                     CharacterOwner owner, PrivateArt art, CreditGate credits, ShareReward shareReward,
+                     String workDir, int freePerDay, int cost, boolean presignLocally, Clock clock) {
         this.characters = characters;
+        this.shareReward = shareReward;
         this.maker = maker;
         this.owner = owner;
         this.art = art;
@@ -158,6 +161,11 @@ public class CharacterService {
            못 만드는 줄 안다. 이제 게스트도 브라우저로 세므로 남은 몫을 말할
            수 있다. */
         Instant since = LocalDate.now(clock).atStartOfDay(ZONE).toInstant();
+        return dailyLeft(userId, uids, since) + shareReward.unused(userId, uids);
+    }
+
+    /** 오늘 몫만. 공유로 돌려받은 것(#332)은 안 더한다. */
+    private int dailyLeft(Long userId, Collection<String> uids, Instant since) {
         return (int) Math.max(0, freePerDay - characters.madeSince(userId, uids, since));
     }
 
@@ -228,7 +236,14 @@ public class CharacterService {
         // **값은 만들기 전에 본다.** 그린 뒤에 모자라다고 하면 돈은 이미 나갔다.
         // 컨트롤러(list/freeLeft)와 같은 uid 묶음으로 센다 — 기기를 여럿 이은 사람에게
         // 화면은 "0개 남음" 인데 서버는 공짜로 만들어 주던 어긋남을 없앤다.
-        boolean free = freeLeft(userId, owner.uidsOf(userId, browserUid)) > 0;
+        List<String> uids = owner.uidsOf(userId, browserUid);
+        boolean free = freePerDay > 0
+                && dailyLeft(userId, uids, LocalDate.now(clock).atStartOfDay(ZONE).toInstant()) > 0;
+        /* 오늘 몫을 다 썼으면 공유로 돌려받은 것(#332)을 하나 쓴다. 하루 몫보다 뒤에 쓰는 이유는
+           하루 몫은 내일 새로 오지만 돌려받은 것은 안 오기 때문이다. */
+        if (!free && shareReward.useOne(userId, uids)) {
+            free = true;
+        }
         if (!free) {
             /* 게스트는 낼 크레딧이 없다 — 계정 쪽 확인은 통과해 버리므로
                여기서 따로 막는다. 없는 잔액을 보고 "모자랍니다" 라고 하면
