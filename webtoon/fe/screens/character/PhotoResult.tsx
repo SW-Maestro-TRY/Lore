@@ -7,7 +7,7 @@ import { readCharacter, readSharedCard, type Character } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { copyLink, kakaoAvailable, shareKakao, shareNative } from "../../lib/share";
-import { IconDownload, IconRetry, IconShare } from "../../ui/Icons";
+import { IconClose, IconDownload, IconRetry, IconShare } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import { LimitView } from "./Photo";
 import { isLimitError, loadDraft, runTry, lastCardId } from "./draft";
@@ -16,6 +16,8 @@ import "./i18n";
 import "./PhotoResult.css";
 
 const POLL_MS = 2500;
+/* 종이 바뀐 카드를 다 그린 뒤 설문을 띄우기까지. 그림을 먼저 볼 틈을 준다. */
+const SWAP_SURVEY_DELAY_MS = 5000;
 
 /* 자리의 무게(하네스가 굴린 값) → 카드에 붙는 딱지. 하네스 값은 화면에 그대로 내보내지 않는다 —
    목록에 없는 값이면 딱지를 안 단다. */
@@ -74,6 +76,26 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
   }, [ch, shared]);
 
   const card = ch?.card;
+
+  /* 종이 바뀐 카드(#331)는 다 그려지고 잠시 뒤 설문을 띄운다 — 카드마다 한 번만.
+     카드에 딱지를 붙이는 대신, 당황했는지를 직접 묻고 공유를 권한다. */
+  const [survey, setSurvey] = useState<"ask" | "thanks" | null>(null);
+  useEffect(() => {
+    if (shared || !ch?.card?.lucky || ch.status !== "ready") return;
+    const key = `lore_wt_swap_survey:${ch.id}`;
+    try { if (localStorage.getItem(key)) return; } catch { /* 저장소가 막혀도 띄운다 */ }
+    const cardId = ch.id;
+    const timer = setTimeout(() => {
+      try { localStorage.setItem(key, "1"); } catch { /* 무시 */ }
+      track("swap_survey_view", { character: cardId });
+      setSurvey("ask");
+    }, SWAP_SURVEY_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [ch, shared]);
+  const answerSurvey = (result: "confused" | "fine") => {
+    track("swap_survey", { character: id, result });
+    setSurvey("thanks");
+  };
   const url = typeof window === "undefined" ? "" : `${window.location.origin}/webtoon?card=${encodeURIComponent(id)}`;
   const title = card?.twist || ch?.name || t("캐릭터 카드");
 
@@ -205,13 +227,6 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
             {ch ? (
               <>
                 <h2>{card?.twist || ch.name}</h2>
-                {card?.lucky && (
-                  /* 종이 바뀐 뽑기는 당첨이라고 말해 줘야 한다(#331). 안 그러면 사진을
-                     올렸는데 개가 나온 사람은 "내 사진을 무시했나" 로 읽는다. */
-                  <span className="wt-ch-res-lucky">
-                    {t("당첨! 아주 낮은 확률로 종이 바뀐 카드예요")}
-                  </span>
-                )}
                 {card?.role && (
                   <b className="wt-ch-res-role">
                     {card.role}
@@ -311,6 +326,38 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
           <button type="button" className="btn btn-p" style={{ height: 52 }} disabled={!ready} onClick={onEpisode}>
             {t("이 캐릭터로 1화 보기")}
           </button>
+        </div>
+      )}
+
+      {survey && (
+        <div className="wt-ch-survey" onClick={() => setSurvey(null)}>
+          <div className="wt-ch-survey-box" role="dialog" aria-modal="true"
+               aria-labelledby="wt-ch-survey-title" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="icon-btn wt-ch-survey-x" aria-label={t("닫기")}
+                    onClick={() => setSurvey(null)}><IconClose size={18} /></button>
+            {survey === "ask" ? (
+              <>
+                <h2 id="wt-ch-survey-title">{t("캐릭터가 다른 종으로 나와서 당황하셨나요?")}</h2>
+                <p className="muted">{t("아주 가끔, 넣은 것과 다른 종으로 태어나는 캐릭터가 있어요.")}</p>
+                <div className="wt-ch-survey-row">
+                  <button type="button" className="btn btn-w" onClick={() => answerSurvey("confused")}>{t("당황했어요")}</button>
+                  <button type="button" className="btn btn-w" onClick={() => answerSurvey("fine")}>{t("괜찮았어요")}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 id="wt-ch-survey-title">{t("답해 주셔서 고마워요!")}</h2>
+                <p className="muted">{t("이 카드를 공유해서 친구가 링크를 열면, 무료 기회를 1번 돌려드려요.")}</p>
+                <div className="wt-ch-survey-row">
+                  <button type="button" className="btn btn-p" autoFocus
+                          onClick={() => { setSurvey(null); void onShare(); }}>
+                    <IconShare size={18} /> {t("공유")}
+                  </button>
+                  <button type="button" className="btn btn-w" onClick={() => setSurvey(null)}>{t("닫기")}</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </>
