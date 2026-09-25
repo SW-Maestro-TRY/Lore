@@ -101,6 +101,7 @@ const dict: Dict = {
   "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
   "링크 복사": { en: "Copy link", ja: "リンクをコピー", zh: "复制链接" },
   "주연": { en: "Lead", ja: "主役", zh: "主角" },
+  "당첨! 아주 낮은 확률로 종이 바뀐 카드예요": { en: "Jackpot! A rare card where the species changed", ja: "当たり！ごく低確率で種が変わったカードです", zh: "中奖！极低概率下种族发生变化的卡片" },
   "넣은 설정이 간 곳": { en: "Where your input went", ja: "入れた設定の行き先", zh: "你的设定去了哪里" },
   "사진": { en: "Photo", ja: "写真", zh: "照片" },
   "{a} → {b} (카드가 바꿈)": { en: "{a} → {b} (changed by the card)", ja: "{a} → {b}（カードが変更）", zh: "{a} → {b}（卡片改了）" },
