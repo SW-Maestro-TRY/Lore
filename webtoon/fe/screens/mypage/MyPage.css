@@ -27,6 +27,7 @@
 .wt .wt-my-head > div { display: flex; flex-direction: column; gap: 4px; }
 .wt .wt-my-head h2 { font-size: 30px; }
 .wt .wt-my-head .muted { font-size: 14px; }
+.wt .wt-my-strip { margin-top: 18px; }
 .wt .wt-my-head-sub { margin-top: 10px; }
 .wt .wt-my-head-sub h2 { font-size: 22px; }
 .wt .wt-my-head-sub .muted { font-size: 13.5px; }

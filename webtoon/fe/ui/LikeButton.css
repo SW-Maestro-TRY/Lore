@@ -1,0 +1,15 @@
+/* 찜 하트(#247). 칠해지면 색이 찬다. */
+.wt .wt-like { display: inline-flex; align-items: center; gap: 6px; position: relative; flex-shrink: 0; }
+.wt .wt-like-btn {
+  display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 8px; border-radius: 999px;
+  border: 1px solid rgba(15, 51, 63, 0.18); background: none; color: var(--ink); cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+}
+.wt .wt-like.sm .wt-like-btn { height: 26px; padding: 0 7px; font-size: 12px; }
+.wt .wt-like-btn.on { color: #d64561; border-color: #d64561; }
+.wt .wt-like-btn.on svg { fill: #d64561; }
+.wt .wt-like-btn:disabled { opacity: 0.6; cursor: progress; }
+.wt .wt-like-note {
+  position: absolute; right: 0; top: calc(100% + 6px); white-space: nowrap; font-size: 12px; padding: 6px 10px;
+  border-radius: 8px; background: var(--ink); color: #fff; z-index: 2;
+}

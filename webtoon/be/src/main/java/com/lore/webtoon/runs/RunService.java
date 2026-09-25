@@ -8,6 +8,7 @@ import com.lore.webtoon.job.WebtoonJobRepository;
 import com.lore.webtoon.job.WebtoonStyles;
 import com.lore.webtoon.story.StoryStore;
 import com.lore.webtoon.story.WebtoonStory;
+import com.lore.webtoon.work.RunLikeRepository;
 import com.lore.webtoon.work.WebtoonWork;
 import com.lore.webtoon.work.WebtoonWorkRepository;
 import org.slf4j.Logger;
@@ -58,14 +59,16 @@ public class RunService {
     private final WebtoonJobRepository jobs;
     private final StoryStore stories;
     private final PageStore pages;
+    private final RunLikeRepository likes;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public RunService(WebtoonWorkRepository works, WebtoonJobRepository jobs,
-                      StoryStore stories, PageStore pages) {
+                      StoryStore stories, PageStore pages, RunLikeRepository likes) {
         this.works = works;
         this.jobs = jobs;
         this.stories = stories;
         this.pages = pages;
+        this.likes = likes;
     }
 
     /**
@@ -143,6 +146,8 @@ public class RunService {
         card.put("cover_page", numbers.getFirst());
         card.put("page_count", numbers.size());
         card.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
+        // 찜 수(#247). 「내가 찜했나」는 로그인이 있어야 알 수 있어 부르는 쪽이 따로 붙인다.
+        card.put("likes", likes.countByRunId(runId));
         if (withPublic) {
             card.put("public", work.isPublic());
         }

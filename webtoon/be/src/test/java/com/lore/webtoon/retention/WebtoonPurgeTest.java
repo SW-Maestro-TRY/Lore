@@ -44,7 +44,7 @@ class WebtoonPurgeTest {
     }
 
     private WebtoonPurge purge(boolean hasBucket) {
-        return new WebtoonPurge(rows, storage, bucket(hasBucket));
+        return new WebtoonPurge(rows, mock(com.lore.webtoon.work.RunLikeRepository.class), storage, bucket(hasBucket));
     }
 
     private static BucketPresence bucket(boolean exists) {

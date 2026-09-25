@@ -84,6 +84,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean AfterRun afterRun;
     @MockitoBean PrivateArt privateArt;
     @MockitoBean WorkLedger workLedger;
+    @MockitoBean com.lore.webtoon.work.RunLikeService runLikeService;
     @MockitoBean JwtProvider jwtProvider;
     @MockitoBean MyWebtoonService myWebtoonService;
     @MockitoBean S3Service s3Service;

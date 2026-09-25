@@ -3,6 +3,7 @@ package com.lore.webtoon.retention;
 import com.lore.common.retention.BucketPresence;
 import com.lore.common.retention.UserDataPurge;
 import com.lore.common.s3.S3Storage;
+import com.lore.webtoon.work.RunLikeRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -37,11 +38,13 @@ import java.util.Set;
 public class WebtoonPurge implements UserDataPurge {
 
     private final WebtoonPurgeRepository rows;
+    private final RunLikeRepository likes;
     private final S3Storage storage;
     private final boolean hasBucket;
 
-    public WebtoonPurge(WebtoonPurgeRepository rows, S3Storage storage, BucketPresence bucket) {
+    public WebtoonPurge(WebtoonPurgeRepository rows, RunLikeRepository likes, S3Storage storage, BucketPresence bucket) {
         this.rows = rows;
+        this.likes = likes;
         this.storage = storage;
         this.hasBucket = bucket.exists();
     }
@@ -73,6 +76,7 @@ public class WebtoonPurge implements UserDataPurge {
             n += rows.deleteOverlays(runIds);
             n += rows.deleteRegens(runIds);
             n += rows.deleteStories(runIds);
+            n += likes.deleteByRunIds(runIds);   // 남이 내 작품에 한 찜도 작품과 함께 사라진다(#247)
             n += rows.deleteUsage(runIds);
         }
 

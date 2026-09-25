@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  browseRuns, coverUrl, episodeDownloadUrl, isMyRun, myAccountRuns, pageDownloadUrl, pageUrl,
-  readResult, type RunCard, type RunResult,
+  browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
+  readResult, rememberRecent, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
@@ -11,6 +11,8 @@ import type { Go } from "../../lib/nav";
 import { IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
 import { Crumb, MobileTop } from "../../ui/TopNav";
 import ShareMenu from "./ShareMenu";
+import RunStrip from "../../ui/RunStrip";
+import LikeButton from "../../ui/LikeButton";
 import "./i18n";
 import "./Result.css";
 
@@ -39,6 +41,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const [nextNote, setNextNote] = useState(false);
   /* 「{캐릭터}의 다른 편」 (아트보드 Done) — 같은 캐릭터로 만든 다른 작품. */
   const [siblings, setSiblings] = useState<RunCard[]>([]);
+  /* 「이런 웹툰은 어때요」(#248) — 같은 장르 최신 넷, 없으면 그냥 최신 넷. 점수 없음. */
+  const [suggested, setSuggested] = useState<RunCard[]>([]);
+  const [liked, setLiked] = useState(false);
+  const [likes, setLikes] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -51,17 +57,32 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   }, [runId, tick]);
 
   useEffect(() => {
-    const who = data?.character?.trim();
-    if (!who) { setSiblings([]); return; }
+    if (!data) return;
     let alive = true;
+    const who = data.character?.trim();
     browseRuns()
       .then((all) => {
         if (!alive) return;
-        setSiblings(all.filter((r) => r.character?.trim() === who && r.run_id !== runId).slice(0, 3));
+        setSiblings(who ? all.filter((r) => r.character?.trim() === who && r.run_id !== runId).slice(0, 3) : []);
+        const others = all.filter((r) => r.run_id !== runId).sort((a, b) => b.run_id.localeCompare(a.run_id));
+        const same = data.genre ? others.filter((r) => r.genre === data.genre) : [];
+        setSuggested((same.length >= 2 ? same : others).slice(0, 4));
+        const me = all.find((r) => r.run_id === runId);
+        setLikes(me?.likes ?? 0);
       })
       .catch(() => { /* 없으면 줄 자체를 안 그린다 */ });
     return () => { alive = false; };
-  }, [data?.character, runId]);
+  }, [data, runId]);
+
+  /* 최근 본 웹툰(#247) — 완성본을 열었으면 브라우저에 남긴다. 만든 사람이든 아니든. */
+  useEffect(() => { if (data) rememberRecent(runId); }, [data, runId]);
+
+  useEffect(() => {
+    if (!authenticated) { setLiked(false); return; }
+    let alive = true;
+    likedAmong([runId]).then((ids) => { if (alive) setLiked(ids.includes(runId)); }).catch(() => {});
+    return () => { alive = false; };
+  }, [authenticated, runId]);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -181,7 +202,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 {/* 제목은 여기서 읽기전용이다 — 고치는 건 편집실에서만 한다
                     (2026-09-23, 결과화면에 있던 고치기 폼을 지웠다). */}
                 <h2 className="wt-result-titlemid">{data.title}</h2>
-                <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+                <span className="wt-result-titleacts">
+                  <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
+                              onChange={(on, n) => { setLiked(on); setLikes(n); }} />
+                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+                </span>
               </div>
               <span className="muted wt-result-meta">
                 <span className="wt-result-meta-pc">{metaPc}</span>
@@ -260,6 +285,13 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                     {t("EP.{n}", { n: ep + 1 })}<br />{t("만들기")}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {suggested.length > 0 && (
+              <div className="wt-result-suggest">
+                <RunStrip title={t("이런 웹툰은 어때요")} runs={suggested}
+                          onOpen={(r) => { track("recommend_open", { run: r.run_id }); go("result", { run: r.run_id }); }} />
               </div>
             )}
 

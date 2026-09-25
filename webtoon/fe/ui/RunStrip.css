@@ -1,0 +1,17 @@
+/* 표지 한 줄(RunStrip). 폰에서는 가로로 넘긴다. */
+.wt .wt-strip { display: flex; flex-direction: column; gap: 10px; }
+.wt .wt-strip-title { font-size: 16px; }
+.wt .wt-strip-row { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.wt .wt-strip-row::-webkit-scrollbar { display: none; }
+.wt .wt-strip-item {
+  flex-shrink: 0; width: 120px; display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0;
+  background: none; cursor: pointer; font-family: inherit; text-align: left; color: var(--ink);
+}
+.wt .wt-strip-item img, .wt .wt-strip-nocover {
+  display: block; width: 120px; height: 170px; object-fit: cover; object-position: top; border-radius: 12px; background: var(--water-light);
+}
+.wt .wt-strip-name { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 767px) {
+  .wt .wt-strip-item { width: 96px; }
+  .wt .wt-strip-item img, .wt .wt-strip-nocover { width: 96px; height: 136px; }
+}
