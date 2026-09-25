@@ -1,6 +1,9 @@
 package com.lore.common.credit;
 
 import com.lore.common.auth.jwt.LoginUser;
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
+import com.lore.common.user.UserRepository;
 import com.lore.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
@@ -28,6 +31,9 @@ import java.util.List;
  * 차감은 만들기가 부른다. 밖에서 부를 수 있는 것은 <b>보는 것</b>뿐이다.
  *
  * 충전(결제)은 아직 없다 — #155.
+ *
+ * 지급 주소({@code POST /grant})는 <b>관리자만</b> 부른다(#408). 전에는 로그인한
+ * 누구나 금액과 refId 를 정해 불러서, refId 만 바꾸면 크레딧을 무한히 넣을 수 있었다.
  */
 @Tag(name = "크레딧", description = "잔액·사용 내역 조회")
 @RestController
@@ -89,9 +95,11 @@ import java.util.List;
 public class CreditController {
 
     private final CreditService credits;
+    private final UserRepository users;
 
-    public CreditController(CreditService credits) {
+    public CreditController(CreditService credits, UserRepository users) {
         this.credits = credits;
+        this.users = users;
     }
 
     @Operation(summary = "내 크레딧 잔액", description = """
@@ -172,15 +180,15 @@ public class CreditController {
      * 같은 값으로 몇 번을 불러도 한 번만 들어간다. 반복 보상을 주려면
      * refId 에 회차를 넣는다({@code "daily-2026-09-08"}).
      *
-     * <h2>⚠ 이 주소는 로그인한 사람이 자기 계정에 준다</h2>
+     * <h2>⚠ 관리자만 부른다</h2>
      *
-     * 그래서 <b>서비스가 서버에서 부르는 것을 기본으로 삼는다.</b> 화면이
-     * 직접 부르게 두면 "공유했다" 를 안 하고도 부를 수 있다 — 준 조건이
-     * 진짜인지는 그 조건을 아는 서버만 안다. 이 주소는 조건 판정이 화면에서
-     * 끝나는 보상(온보딩 단계 통과 등)을 위한 자리다.
+     * 금액과 refId 를 부르는 사람이 정하므로, 누구나 부를 수 있으면 refId 를
+     * 바꿔 가며 무한히 넣을 수 있다. 그래서 관리자 계정({@code User.isAdmin()})이
+     * 아니면 403 으로 막는다. 사용자에게 주는 보상은 조건을 아는 서버 코드가
+     * {@code CreditService.grantOnce} 를 바로 부른다.
      */
     @Operation(summary = "크레딧 지급 (팀 공용)", description = """
-            내 계정에 크레딧을 넣는다. 무엇에 얼마를 줄지는 서비스가 정한다.
+            내 계정에 크레딧을 넣는다. **관리자 계정만** 부를 수 있고, 아니면 403 이다.
 
             · 같은 refId 로 두 번 불러도 한 번만 들어간다 — 중복 보상이 여기서 걸린다
             · 반복 보상은 refId 에 회차를 넣는다 (daily-2026-09-08)
@@ -191,6 +199,10 @@ public class CreditController {
     @PostMapping("/grant")
     public ApiResponse<Granted> grant(@Parameter(hidden = true) @LoginUser Long userId,
                                       @Valid @RequestBody GrantRequest req) {
+        boolean admin = users.findById(userId).map(u -> u.isAdmin()).orElse(false);
+        if (!admin) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
         int given = credits.grantOnce(userId, req.amount(), CreditReason.REWARD,
                                       req.domain(), req.refId());
         return ApiResponse.ok(new Granted(given, credits.balance(userId)));
