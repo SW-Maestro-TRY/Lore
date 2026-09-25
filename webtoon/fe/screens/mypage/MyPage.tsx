@@ -54,11 +54,6 @@ registerDict({
   "둘러보기에 공개": { en: "Show in Browse", ja: "見てまわるに公開", zh: "在浏览中公开" },
   "편집실": { en: "Editor", ja: "編集室", zh: "编辑室" },
   "바꾸지 못했습니다": { en: "Couldn't change it", ja: "変更できませんでした", zh: "无法更改" },
-  "웹툰을 만들 때마다 다시 적지 않아도 돼요": {
-    en: "So you don't have to describe them again each time",
-    ja: "作るたびに書き直さなくて済みます",
-    zh: "这样每次创作就不用重写了",
-  },
   "만들기": { en: "Create", ja: "作る", zh: "制作" },
   "아직 만든 웹툰이 없어요": { en: "No webtoons yet", ja: "まだ作品がありません", zh: "还没有作品" },
   "제목 없음": { en: "Untitled", ja: "無題", zh: "无标题" },
@@ -259,7 +254,6 @@ export default function MyPage({ go }: { go: Go }) {
             <div className="wt-my-head wt-my-head-sub">
               <div>
                 <h2>{t("내 캐릭터")}</h2>
-                <span className="muted">{t("웹툰을 만들 때마다 다시 적지 않아도 돼요")}</span>
               </div>
               <button type="button" className="btn btn-w" onClick={() => go("characters")}>{t("캐릭터 탭으로")}</button>
             </div>

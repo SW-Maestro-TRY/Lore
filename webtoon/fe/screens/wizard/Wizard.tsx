@@ -427,7 +427,6 @@ export default function Wizard({
               <button type="button" className="btn btn-p" onClick={() => goStep(3)}>{t("다음")} <IconArrow size={18} /></button>
             </div>
             <div className="mfoot">
-              <span className="dim wt-wiz-mfoot-note">{t("둘 다 비워도 만들 수 있어요")}</span>
               <button type="button" className="btn btn-p" onClick={() => goStep(3)}>{t("다음")}</button>
             </div>
           </>
