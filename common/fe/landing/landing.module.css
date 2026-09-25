@@ -61,8 +61,7 @@
 .heroTitle,
 .sectionTitle,
 .sideTitle,
-.trioTitle,
-.ctaTitle {
+.trioTitle {
   font-family: var(--font-landing-title), var(--font-landing-body), var(--font-ko);
   font-weight: 700;
 }
@@ -461,12 +460,7 @@
   color: #fff;
   text-align: center;
 }
-.ctaTitle {
-  font-size: clamp(30px, 4vw, 46px);
-  color: #fff;
-}
 .ctaText {
-  margin-top: 16px;
   color: rgba(255, 255, 255, 0.72);
   font-size: 17px;
 }
