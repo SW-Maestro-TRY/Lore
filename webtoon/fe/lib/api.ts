@@ -271,6 +271,37 @@ export interface RunCard {
   page_count: number;
   style_label?: string;
   public?: boolean;
+  /** 찜 수(#247). 서버가 카드마다 붙인다. */
+  likes?: number;
+  /** 내가 찜했나. 찜 목록(/my/likes)에서만 서버가 붙이고, 둘러보기는 likedAmong 으로 화면이 채운다. */
+  liked?: boolean;
+}
+
+/* ---- 최근 본 웹툰 (#247) ---------------------------------------------------- */
+
+/** 이 브라우저에서 최근에 연 작품. 로그인과 무관하게 브라우저에만 남는다 — 로그인 안 한
+ *  사람도 어제 본 것을 다시 찾을 수 있어야 하고, 서버에 "무엇을 봤나"를 남기지 않는다. */
+const RECENT_KEY = "lore_recent_runs";
+const RECENT_MAX = 20;
+
+export function recentRuns(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberRecent(runId: string): void {
+  if (!runId || typeof window === "undefined") return;
+  const list = [runId, ...recentRuns().filter((x) => x !== runId)].slice(0, RECENT_MAX);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch {
+    /* 못 남겨도 읽는 것 자체는 막지 않는다 */
+  }
 }
 
 /** 둘러보기 — 공개된 작품 전부. 예시 작품도 여기 섞여 있다(DB 에 심겨 있어
@@ -303,6 +334,18 @@ export interface RunResult {
   page_count: number;
   planned_pages: number;
   preview: boolean;
+  /** 주인이 열 때만 온다(#329) — 만들 때 넣은 설정. */
+  inputs?: RunInputs;
+}
+
+export interface RunInputs {
+  name: string;
+  character: string;
+  genre: string;
+  story: string;
+  photo_note: string;
+  has_photo: boolean;
+  style: string;
 }
 
 export function readResult(runId: string): Promise<RunResult> {
@@ -333,6 +376,29 @@ export function linkThisBrowser(): Promise<{ linked: boolean }> {
 
 export function myAccountRuns(): Promise<RunCard[]> {
   return appRequest<RunCard[]>("/api/webtoon/v1/my/runs");
+}
+
+/* ---- 찜 (#247) — 전부 로그인이 필요하다 ---------------------------------------- */
+
+export interface LikeResult { runId: string; liked: boolean; likes: number }
+
+export function likeRun(runId: string): Promise<LikeResult> {
+  return appRequest<LikeResult>(`/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/like`, { method: "POST" });
+}
+
+export function unlikeRun(runId: string): Promise<LikeResult> {
+  return appRequest<LikeResult>(`/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/like`, { method: "DELETE" });
+}
+
+/** 내가 찜한 작품. 최근에 찜한 것부터. */
+export function myLikes(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/likes");
+}
+
+/** 이 목록 중 내가 찜한 작품 번호. 둘러보기 카드에 하트를 칠할 때. */
+export function likedAmong(runIds: string[]): Promise<string[]> {
+  if (runIds.length === 0) return Promise.resolve([]);
+  return appRequest<string[]>("/api/webtoon/v1/my/likes/among", { method: "POST", body: { runIds } });
 }
 
 /** 내 작품 지우기(#55). 그림과 행을 모두 지우며 되돌릴 수 없다. 로그인이 필요하다. */
@@ -383,6 +449,8 @@ export interface CharacterCard {
   role_tier: string;
   /** 종까지 바뀐 뽑기였나(#331). 카드에 「당첨」을 표시한다. */
   lucky: boolean;
+  /** 카드가 읽어 낸 종(사람 · 강아지 …). 넣은 것이 무엇으로 읽혔는지 보여 준다(#329). */
+  species: string;
   twist: string;
   /** 옛 카드의 대사 한 줄. 새 카드는 dialogue 가 있다. */
   quote: string;
@@ -404,6 +472,9 @@ export interface Character {
   builtin: boolean;
   mine: boolean;
   created_at: string;
+  /** 사람이 넣은 이름·세계관 그대로(#329). 안 넣었으면 빈 문자열. */
+  asked_name: string;
+  asked_world: string;
   card?: CharacterCard;
   /** 내 카드에만 온다(#332) — 공유 링크로 남이 몇 명 봤고, 무료 횟수를 몇 번 돌려받았나. */
   share_visits?: number;

@@ -202,6 +202,7 @@ public class CharacterMaker {
                 dialogue,
                 fate,
                 got.path("style").asText(""),
-                got.path("lucky").asBoolean(false));
+                got.path("lucky").asBoolean(false),
+                got.path("species").asText(""));
     }
 }

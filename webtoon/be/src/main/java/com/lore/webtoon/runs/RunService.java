@@ -8,6 +8,7 @@ import com.lore.webtoon.job.WebtoonJobRepository;
 import com.lore.webtoon.job.WebtoonStyles;
 import com.lore.webtoon.story.StoryStore;
 import com.lore.webtoon.story.WebtoonStory;
+import com.lore.webtoon.work.RunLikeRepository;
 import com.lore.webtoon.work.WebtoonWork;
 import com.lore.webtoon.work.WebtoonWorkRepository;
 import org.slf4j.Logger;
@@ -58,14 +59,16 @@ public class RunService {
     private final WebtoonJobRepository jobs;
     private final StoryStore stories;
     private final PageStore pages;
+    private final RunLikeRepository likes;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public RunService(WebtoonWorkRepository works, WebtoonJobRepository jobs,
-                      StoryStore stories, PageStore pages) {
+                      StoryStore stories, PageStore pages, RunLikeRepository likes) {
         this.works = works;
         this.jobs = jobs;
         this.stories = stories;
         this.pages = pages;
+        this.likes = likes;
     }
 
     /**
@@ -143,6 +146,8 @@ public class RunService {
         card.put("cover_page", numbers.getFirst());
         card.put("page_count", numbers.size());
         card.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
+        // 찜 수(#247). 「내가 찜했나」는 로그인이 있어야 알 수 있어 부르는 쪽이 따로 붙인다.
+        card.put("likes", likes.countByRunId(runId));
         if (withPublic) {
             card.put("public", work.isPublic());
         }
@@ -318,6 +323,40 @@ public class RunService {
     private static String captionOf(List<String> scenes, int pageNo) {
         int i = pageNo - 2;
         return i >= 0 && i < scenes.size() ? scenes.get(i) : "";
+    }
+
+    /**
+     * 만들 때 사람이 넣은 설정(#329). 완성본 옆에 「넣은 것」을 나란히 보여 주려고
+     * 꺼낸다. <b>사람이 쓴 글이 그대로 들어 있으니 주인에게만 보낸다</b> — 그 판단은
+     * 컨트롤러가 한다. 없으면 null.
+     *
+     * @return job 의 브라우저 uid(주인 판정용)와 입력 값들
+     */
+    public Inputs inputsOf(String runId) {
+        WebtoonWork work = works.findFirstByRunId(runId).orElse(null);
+        WebtoonJob job = work == null ? null : jobs.findByPublicId(work.getJobId()).orElse(null);
+        if (job == null || job.getInputJson() == null || job.getInputJson().isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode root = mapper.readTree(job.getInputJson());
+            Map<String, Object> in = new LinkedHashMap<>();
+            in.put("name", root.path("name").asText(""));
+            in.put("character", root.path("character").asText(""));
+            in.put("genre", root.path("genre").asText(""));
+            in.put("story", root.path("story").asText(""));
+            in.put("photo_note", root.path("photo_note").asText(""));
+            in.put("has_photo", root.path("photos_data").size() > 0 || root.path("photo_keys").size() > 0
+                    || !root.path("character_id").asText("").isBlank());
+            in.put("style", WebtoonStyles.labelOf(job.getStyle()));
+            return new Inputs(job.getBrowserUid(), work.getUserId(), in);
+        } catch (Exception e) {          // noqa: 넣은 것을 못 읽어도 완성본은 보여야 한다
+            log.warn("넣은 설정을 못 읽었습니다 (job={})", job.getPublicId(), e);
+            return null;
+        }
+    }
+
+    public record Inputs(String browserUid, Long userId, Map<String, Object> values) {
     }
 
     /** 이 작품의 주인공 이름. 만들 때 받은 폼에 있다. */

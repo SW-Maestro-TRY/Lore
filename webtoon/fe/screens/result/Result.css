@@ -12,9 +12,14 @@
   grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;
 }
 .wt .wt-result-titlemid { grid-column: 2; display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
-.wt .wt-result-titlerow .wt-share { grid-column: 3; justify-self: end; }
+.wt .wt-result-titlerow .wt-result-titleacts { grid-column: 3; justify-self: end; }
 .wt .wt-result-head h2 { font-size: 34px; }
 .wt .wt-result-meta { font-size: 15px; }
+.wt .wt-result-inputs { display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; margin: 4px 0 10px; }
+.wt .wt-result-inputs > b { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; }
+.wt .wt-result-inputs dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; line-height: 1.55; }
+.wt .wt-result-inputs dt { color: var(--muted); }
+.wt .wt-result-inputs dd { margin: 0; word-break: keep-all; }
 .wt .wt-result-meta-m { display: none; }
 
 .wt .wt-result-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
@@ -115,6 +120,8 @@
 .wt .wt-result-wm-m { display: none; }
 
 /* 「{캐릭터}의 다른 편」 (아트보드 Done) */
+.wt .wt-result-titleacts { display: inline-flex; align-items: center; gap: 8px; }
+.wt .wt-result-suggest { width: 720px; max-width: 100%; padding: 8px 0 24px; }
 .wt .wt-result-others { width: 720px; max-width: 100%; display: flex; flex-direction: column; gap: 12px; padding: 8px 0 24px; }
 .wt .wt-result-others > b { font-size: 16px; }
 .wt .wt-result-others-row { display: flex; gap: 12px; flex-wrap: wrap; }

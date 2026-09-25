@@ -184,6 +184,8 @@ public class CharacterController {
         m.put("id", one.getPublicId());
         m.put("name", one.getName());
         m.put("description", one.getDescription() == null ? "" : one.getDescription());
+        m.put("asked_name", one.getAskedName() == null ? "" : one.getAskedName());
+        m.put("asked_world", one.getAskedWorld() == null ? "" : one.getAskedWorld());
         m.put("art_url", characters.artUrl(one));
         m.put("source", one.getSource().name().toLowerCase());
         m.put("status", one.getStatus().name().toLowerCase());
@@ -209,6 +211,7 @@ public class CharacterController {
             card.put("role", one.getRoleName() == null ? "" : one.getRoleName());
             card.put("role_tier", one.getRoleTier() == null ? "" : one.getRoleTier());
             card.put("lucky", one.isLucky());
+            card.put("species", one.getSpecies() == null ? "" : one.getSpecies());
             card.put("twist", one.getTwist());
             card.put("quote", one.getQuote() == null ? "" : one.getQuote());
             List<Map<String, Object>> dialogue = new ArrayList<>();
