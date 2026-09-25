@@ -22,7 +22,7 @@ import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
   coverUrl, listCharacters, myAccountRuns, myBrowserRuns, readAllowance,
-  readNotifySetting, setNotifySetting, setVisibility,
+  readNotifySetting, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type RunCard,
 } from "../../lib/api";
 import type { Go } from "../../lib/nav";
@@ -43,6 +43,17 @@ registerDict({
   "내 웹툰": { en: "My webtoons", ja: "マイウェブトゥーン", zh: "我的漫画" },
   "내 캐릭터": { en: "My characters", ja: "マイキャラクター", zh: "我的角色" },
   "로그아웃": { en: "Sign out", ja: "ログアウト", zh: "退出登录" },
+  "계정 탈퇴": { en: "Delete account", ja: "退会", zh: "注销账号" },
+  "탈퇴하면 바로 로그인할 수 없게 되고, 30일이 지나면 계정·작품·캐릭터·올린 사진이 지워져요. 남은 크레딧도 함께 사라져요. 필요한 작품은 먼저 내려받아 두세요.": {
+    en: "You'll be signed out right away. After 30 days your account, webtoons, characters and uploaded photos are deleted, and any remaining credits are gone. Download anything you want to keep first.",
+    ja: "退会するとすぐにログインできなくなり、30日後にアカウント・作品・キャラクター・写真が削除されます。残りのクレジットも消えます。必要な作品は先に保存してください。",
+    zh: "注销后将立即无法登录，30天后账号、作品、角色和上传的照片会被删除，剩余点数也会一并清除。请先下载需要保留的作品。",
+  },
+  "탈퇴하기": { en: "Delete", ja: "退会する", zh: "注销" },
+  "정말 탈퇴할까요? 되돌릴 수 없어요.": { en: "Really delete your account? This can't be undone.", ja: "本当に退会しますか？元に戻せません。", zh: "确定要注销吗？此操作无法撤销。" },
+  "탈퇴": { en: "Delete account", ja: "退会", zh: "注销" },
+  "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  "탈퇴하지 못했어요. 잠시 뒤 다시 시도해 주세요.": { en: "Couldn't delete the account. Please try again shortly.", ja: "退会できませんでした。しばらくしてからもう一度お試しください。", zh: "注销失败，请稍后再试。" },
   "언어": { en: "Language", ja: "言語", zh: "语言" },
   "둘러보기": { en: "Browse", ja: "見てまわる", zh: "浏览" },
   "새 웹툰 만들기": { en: "New webtoon", ja: "新しいウェブトゥーン", zh: "新建漫画" },
@@ -134,6 +145,25 @@ export default function MyPage({ go }: { go: Go }) {
   const [notify, setNotify] = useState<boolean | null>(null);
   const [notifyBusy, setNotifyBusy] = useState(false);
   const [notifyErr, setNotifyErr] = useState("");
+
+  /* 계정 탈퇴(#405) — 두 번 눌러야 된다. 첫 번째는 자리를 확인 문구로 바꾸기만 한다.
+     서버가 받으면 토큰이 즉시 폐기되므로 화면도 바로 로그아웃으로 넘기고 첫 화면으로 보낸다.
+     signOut 은 서버 호출이 실패해도 화면을 로그아웃으로 넘기는 약속이라 여기서도 안전하다. */
+  const [withdrawMode, setWithdrawMode] = useState<"idle" | "confirm">("idle");
+  const [withdrawBusy, setWithdrawBusy] = useState(false);
+  const [withdrawErr, setWithdrawErr] = useState("");
+  const withdraw = async () => {
+    setWithdrawBusy(true);
+    setWithdrawErr("");
+    try {
+      await withdrawAccount();
+      await signOut();
+      go("landing", undefined, { replace: true });
+    } catch {
+      setWithdrawErr(t("탈퇴하지 못했어요. 잠시 뒤 다시 시도해 주세요."));
+      setWithdrawBusy(false);
+    }
+  };
   useEffect(() => {
     if (!isAuthenticated) return;
     readNotifySetting().then((r) => setNotify(r.on)).catch(() => {});
@@ -292,6 +322,27 @@ export default function MyPage({ go }: { go: Go }) {
               </div>
               {notifyErr && <span className="wt-my-err">{notifyErr}</span>}
             </div>
+            {isAuthenticated && (
+              <div className="card wt-my-setting">
+                <div className="wt-my-setting-row">
+                  <div>
+                    <b>{t("계정 탈퇴")}</b>
+                    <span className="muted">{t("탈퇴하면 바로 로그인할 수 없게 되고, 30일이 지나면 계정·작품·캐릭터·올린 사진이 지워져요. 남은 크레딧도 함께 사라져요. 필요한 작품은 먼저 내려받아 두세요.")}</span>
+                  </div>
+                  {withdrawMode === "idle" && (
+                    <button type="button" className="btn btn-w wt-my-withdraw" onClick={() => setWithdrawMode("confirm")}>{t("탈퇴하기")}</button>
+                  )}
+                </div>
+                {withdrawMode === "confirm" && (
+                  <div className="wt-my-withdraw-confirm">
+                    <span className="muted">{t("정말 탈퇴할까요? 되돌릴 수 없어요.")}</span>
+                    <button type="button" className="btn btn-p" disabled={withdrawBusy} onClick={() => void withdraw()}>{t("탈퇴")}</button>
+                    <button type="button" className="btn btn-w" disabled={withdrawBusy} onClick={() => setWithdrawMode("idle")}>{t("취소")}</button>
+                  </div>
+                )}
+                {withdrawErr && <span className="wt-my-err">{withdrawErr}</span>}
+              </div>
+            )}
           </>
         )}
       </div>
