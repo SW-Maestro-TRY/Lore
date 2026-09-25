@@ -46,6 +46,7 @@ const DONE_EXAMPLE_RUN_ID = "20260910T132240-ae8c28";
 const DONE_FALLBACK = "/static/samples/ex-romance-2.jpg";
 import { usePhone } from "./usePhone";
 import "./Landing.css";
+import { track } from "../../lib/track";
 
 /* 답의 `**…**` 는 굵게 — 언어마다 어순이 달라 문장을 조각내지 않고 표시만 남긴다. */
 const FAQ: { q: string; a: string }[] = [
@@ -117,10 +118,15 @@ export default function Landing({ go }: { go: Go }) {
     return () => { alive = false; };
   }, [tries]);
 
-  const start = () => go("entry");
+  /* 첫 화면에서 어느 단추로 들어가나 — 위쪽·아래쪽 시작 단추와 두 카드를 가른다(#413). */
+  const start = (where: string) => () => {
+    track("landing_cta", { where });
+    go("entry");
+  };
   const needTo = (i: number) => (ev: React.MouseEvent) => {
     ev.preventDefault();
     setNeed(i);
+    track("landing_cta", { where: i === 0 ? "need_create" : "need_try" });
     go(i === 0 ? "create" : "try");
   };
 
@@ -141,13 +147,13 @@ export default function Landing({ go }: { go: Go }) {
         <p className="muted">
           {t("내 캐릭터가 이야기 속에서 살아 움직이는 순간.")}
         </p>
-        <button type="button" className="btn btn-p wt-landing-cta" onClick={start}>{t("지금 시작하기")}</button>
+        <button type="button" className="btn btn-p wt-landing-cta" onClick={start("hero")}>{t("지금 시작하기")}</button>
       </section>
 
       {/* 예시 작품 띠 */}
       <section className="wt-landing-works">
         <div className="wt-landing-works-head">
-          <button type="button" className="btn btn-w btn-sm wt-landing-works-all" onClick={() => go("works")}>
+          <button type="button" className="btn btn-w btn-sm wt-landing-works-all" onClick={() => { track("landing_cta", { where: "works_all" }); go("works"); }}>
             {t("웹툰 전체 보러가기")}
           </button>
         </div>
@@ -169,7 +175,7 @@ export default function Landing({ go }: { go: Go }) {
             <div className="wt-landing-marq" style={{ animationDuration: `${Math.max(20, runs.length * 8)}s` }}>
               {marqueeList.map((r, i) => (
                 <figure key={`${r.run_id}-${i}`} className="wt-landing-fig">
-                  <a href={hrefOf("result", { run: r.run_id })} onClick={(ev) => { ev.preventDefault(); go("result", { run: r.run_id }); }}
+                  <a href={hrefOf("result", { run: r.run_id })} onClick={(ev) => { ev.preventDefault(); track("works_open", { run: r.run_id, where: "landing" }); go("result", { run: r.run_id }); }}
                      aria-hidden={i >= runs.length} tabIndex={i >= runs.length ? -1 : 0}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img className="cover wt-landing-cover" src={api.coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1)} alt={t("{title} 표지", { title: titleOf(r) })} />
@@ -308,7 +314,7 @@ export default function Landing({ go }: { go: Go }) {
       <section className="wt-landing-last">
         <div className="wt-landing-last-text">
           <h2 style={phone ? { whiteSpace: "pre-line" } : undefined}>{t(phone ? "당신의 이야기를\n기다리고 있어요" : "당신의 이야기를 기다리고 있어요")}</h2>
-          <button type="button" className="btn wt-landing-last-cta" onClick={start}>{t("만들러가기")}</button>
+          <button type="button" className="btn wt-landing-last-cta" onClick={start("bottom")}>{t("만들러가기")}</button>
         </div>
         <div className="wt-landing-last-pic">
           {/* eslint-disable-next-line @next/next/no-img-element */}

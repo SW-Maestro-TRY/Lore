@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, myAccountRuns, pageDownloadUrl, pageUrl,
   readResult, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
+import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
 import { IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
 import { Crumb, MobileTop } from "../../ui/TopNav";
@@ -81,7 +82,42 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     ? [data.character, epLabel, t(data.genre || ""), t("{n}컷", { n: data.page_count })].filter(Boolean).join(" · ") : "";
   const metaM = data ? [t(data.genre || ""), t("{n}컷", { n: data.page_count })].filter(Boolean).join(" · ") : "";
 
-  const nextEpisode = () => setNextNote(true);
+  /* 다음 편은 아직 없다. 그래도 누가 어느 버튼에서 얼마나 찾는지가 이 기능을 언제
+     만들지 정하는 근거라, 누를 때마다 남긴다(#413). */
+  const nextEpisode = (where: string) => {
+    track("next_episode_click", { where, mine, run: runId, ep, logged_in: authenticated });
+    setNextNote(true);
+  };
+
+  /* 끝까지 읽었는가 — 마지막 장이 화면에 한 번이라도 들어오면 한 번만 남긴다.
+     「다음화 보기」를 누른 사람 중 몇 명이 끝까지 보고 눌렀는지를 가른다. */
+  const endRef = useRef<HTMLDivElement>(null);
+  const readEndSent = useRef("");
+  /* ★ 「보인다」만으로 재면 안 된다. 그림이 받아지기 전에는 장마다 높이가 0 이라
+     마지막 장도 첫 화면에 걸려 있어서, 열자마자 「끝까지 읽음」이 찍힌다(로컬에서
+     실제로 그랬다). 그래서 스크롤할 때마다 마지막 장이 실제 높이를 갖고 있고 그
+     아래 끝이 화면 안에 들어왔는지를 본다. */
+  useEffect(() => {
+    if (!data || readEndSent.current === runId) return;
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const el = endRef.current;
+      if (!el || readEndSent.current === runId) return;
+      const r = el.getBoundingClientRect();
+      if (r.height > 100 && r.bottom <= window.innerHeight + 40) {
+        readEndSent.current = runId;
+        track("read_end", { run: runId, mine, ep, page: data.page_count });
+        window.removeEventListener("scroll", onScroll);
+      }
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(check); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [data, runId, mine, ep]);
 
   const toTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -157,18 +193,19 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             {mine ? (
               <>
                 <div className="wt-result-acts">
-                  <button type="button" className="btn btn-p wt-result-next-pc" onClick={nextEpisode}>{t("다음 편 만들기")}</button>
-                  <button type="button" className="btn btn-w" onClick={() => go("editor", { run: runId })}>
+                  <button type="button" className="btn btn-p wt-result-next-pc" onClick={() => nextEpisode("mine_button")}>{t("다음 편 만들기")}</button>
+                  <button type="button" className="btn btn-w" onClick={() => { track("editor_open", { run: runId, where: "result" }); go("editor", { run: runId }); }}>
                     <IconEdit size={18} /> {t("편집실")}
                   </button>
-                  <a className="btn btn-w" href={episodeDownloadUrl(runId)} download>
+                  <a className="btn btn-w" href={episodeDownloadUrl(runId)} download
+                     onClick={() => track("download_click", { run: runId, kind: "episode" })}>
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
                 </div>
                 <div className="wt-result-dlrow">
                   <label className="wt-result-perpage">
                     <input type="checkbox" checked={perPage} aria-label={t("컷별로 내려받기")}
-                           onChange={(e) => setPerPage(e.target.checked)} />
+                           onChange={(e) => { setPerPage(e.target.checked); if (e.target.checked) track("download_per_page_open", { run: runId }); }} />
                     {t("컷별로 내려받기")}
                   </label>
                   {/* 아트보드는 PC 와 폰의 문구가 다르다 — 폰은 체크 칸 옆에 짧게 붙인다. */}
@@ -188,7 +225,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                        alt={pg.caption || t("{n}쪽", { n: pg.no })} loading="lazy" />
                 );
                 return (
-                  <div key={pg.no} className="wt-result-pg"
+                  <div key={pg.no} className="wt-result-pg" ref={i === data.pages.length - 1 ? endRef : undefined}
                        style={{
                          ...(gap ? { marginBottom: `${(gap * 100).toFixed(2)}%` } : {}),
                          ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
@@ -198,7 +235,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                       {img}
                     </button>
                     {mine && perPage && (
-                      <a className="wt-result-pgdl" href={pageDownloadUrl(runId, pg.no)} download>
+                      <a className="wt-result-pgdl" href={pageDownloadUrl(runId, pg.no)} download
+                         onClick={() => track("download_click", { run: runId, kind: "page", page: pg.no })}>
                         <IconDownload size={14} /> {t("이 장 내려받기")}
                       </a>
                     )}
@@ -213,12 +251,12 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 <div className="wt-result-others-row">
                   {siblings.map((r) => (
                     <button type="button" key={r.run_id} className="wt-result-other"
-                            onClick={() => go("result", { run: r.run_id })} aria-label={titleOf(r)}>
+                            onClick={() => { track("sibling_open", { run: r.run_id }); go("result", { run: r.run_id }); }} aria-label={titleOf(r)}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1)} alt="" />
                     </button>
                   ))}
-                  <button type="button" className="wt-result-other-new" onClick={nextEpisode}>
+                  <button type="button" className="wt-result-other-new" onClick={() => nextEpisode("mine_tile")}>
                     {t("EP.{n}", { n: ep + 1 })}<br />{t("만들기")}
                   </button>
                 </div>
@@ -233,7 +271,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 <button type="button" className="btn-ghost wt-result-top" onClick={toTop}>
                   <IconChevronUp size={16} /> {t("맨 위로")}
                 </button>
-                <button type="button" className="btn btn-p wt-result-next" onClick={nextEpisode}>
+                <button type="button" className="btn btn-p wt-result-next" onClick={() => nextEpisode("other_foot")}>
                   {t("다음화 보기")}
                 </button>
               </div>
@@ -287,7 +325,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
       {data && mine && (
         <div className="mfoot">
-          <button type="button" className="btn btn-p" onClick={nextEpisode}>{t("다음 편 만들기")}</button>
+          <button type="button" className="btn btn-p" onClick={() => nextEpisode("mine_mobile")}>{t("다음 편 만들기")}</button>
         </div>
       )}
     </div>
