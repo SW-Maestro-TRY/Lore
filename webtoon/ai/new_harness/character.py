@@ -212,6 +212,23 @@ def roll_role_tier() -> str:
     return random.choices(keys, weights=[TIER_WEIGHTS[k] for k in keys], k=1)[0]
 
 
+# 빈손(설명·사진 없음)일 때 존재가 사람인지 아닌지 — 이것도 **코드가 굴린다.**
+#
+# 모델에게 "사람일 수도, 아닐 수도" 라고만 적으면, 넣은 것과 자리가 어긋나야
+# 재밌다는 원칙 쪽으로 쏠려 사람이 거의 안 나온다(2026-09-25 사용자 지적).
+# 무엇인지(어떤 사람, 어떤 동물·사물)는 여전히 모델이 정한다.
+BEING_KINDS = {
+    "사람": "이번 존재는 사람이다.",
+    "사람 아님": "이번 존재는 사람이 아니다. 무엇인지는 네가 정한다.",
+}
+BEING_KIND_WEIGHTS = {"사람": 50, "사람 아님": 50}
+
+
+def roll_being_kind() -> str:
+    keys = list(BEING_KIND_WEIGHTS)
+    return random.choices(keys, weights=[BEING_KIND_WEIGHTS[k] for k in keys], k=1)[0]
+
+
 def load_worlds() -> dict:
     try:
         return json.loads(WORLDS_FILE.read_text(encoding="utf-8")).get("presets") or {}
@@ -302,6 +319,10 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
             lines.append(world_text)
     else:
         lines += ["", "세계관: (없음 — 네가 정한다)"]
+    kind = ""
+    if not description.strip() and not photos:
+        kind = roll_being_kind()
+        lines += ["", BEING_KINDS[kind]]
     tier = tier or roll_role_tier()
     lines += ["", f"이번에 맡을 자리의 무게: {tier}", f"  {ROLE_TIERS[tier]}"]
     lines += ["", "그림체 목록:"]
@@ -317,6 +338,7 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
     metas = [meta]
     spec = parse_panel_spec(text)
     spec["role_tier"] = tier
+    spec["being_kind"] = kind
     bad = gate_panel_spec(spec)
     if bad:
         raise SystemExit("한 컷 사양이 모자랍니다 — 그림은 그리지 않습니다: " + " · ".join(bad))
@@ -381,6 +403,7 @@ def run_panel(args) -> int:
         "genre": spec["genre_word"],
         "role": spec["role"],
         "role_tier": spec.get("role_tier", ""),
+        "being_kind": spec.get("being_kind", ""),
         "twist": spec["twist"],
         "quote": spec["quote"],
         "fate": spec["fate"],
