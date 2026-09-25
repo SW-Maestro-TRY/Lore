@@ -37,6 +37,16 @@ export function myRuns(): string[] {
   }
 }
 
+/** 지운 작품을 이 브라우저의 목록에서도 뺀다 — 안 빼면 「내 작품」에 빈 카드가 남는다(#55). */
+export function forgetMyRun(runId: string): void {
+  if (!runId || typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MY_RUNS_KEY, JSON.stringify(myRuns().filter((x) => x !== runId)));
+  } catch {
+    /* 못 지워도 서버에서는 이미 없어졌다 */
+  }
+}
+
 export function rememberMyRun(runId: string): void {
   if (!runId || typeof window === "undefined") return;
   const list = myRuns().filter((x) => x !== runId);
@@ -379,6 +389,12 @@ export function likedAmong(runIds: string[]): Promise<string[]> {
   return appRequest<string[]>("/api/webtoon/v1/my/likes/among", { method: "POST", body: { runIds } });
 }
 
+/** 내 작품 지우기(#55). 그림과 행을 모두 지우며 되돌릴 수 없다. 로그인이 필요하다. */
+export function deleteRun(runId: string): Promise<{ runId: string; images: number; rows: number }> {
+  return appRequest<{ runId: string; images: number; rows: number }>(
+    `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
+}
+
 export function setVisibility(runId: string, isPublic: boolean) {
   return appRequest<{ runId: string; public: boolean }>(
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/visibility`,
@@ -441,6 +457,9 @@ export interface Character {
   mine: boolean;
   created_at: string;
   card?: CharacterCard;
+  /** 내 카드에만 온다(#332) — 공유 링크로 남이 몇 명 봤고, 무료 횟수를 몇 번 돌려받았나. */
+  share_visits?: number;
+  share_bonus?: number;
 }
 
 export interface CharacterList {

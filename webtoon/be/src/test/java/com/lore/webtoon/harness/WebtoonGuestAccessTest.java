@@ -89,6 +89,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean MyWebtoonService myWebtoonService;
     @MockitoBean S3Service s3Service;
     @MockitoBean com.lore.webtoon.job.NotifySettingService notifySettingService;
+    @MockitoBean com.lore.webtoon.work.RunDeleteService runDeleteService;
     @MockitoBean com.lore.webtoon.character.CharacterOwner characterOwner;
 
     @Test

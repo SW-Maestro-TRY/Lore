@@ -21,7 +21,7 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, listCharacters, myAccountRuns, myBrowserRuns, myLikes, readAllowance, recentRuns,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, myLikes, readAllowance, recentRuns,
   readNotifySetting, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type RunCard,
 } from "../../lib/api";
@@ -54,6 +54,9 @@ registerDict({
   "정말 탈퇴할까요? 되돌릴 수 없어요.": { en: "Really delete your account? This can't be undone.", ja: "本当に退会しますか？元に戻せません。", zh: "确定要注销吗？此操作无法撤销。" },
   "탈퇴": { en: "Delete account", ja: "退会", zh: "注销" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  "지우기": { en: "Delete", ja: "削除", zh: "删除" },
+  "정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.": { en: "Really delete? The images are removed too and this can't be undone.", ja: "本当に削除しますか？画像も消え、元に戻せません。", zh: "确定删除吗？图片也会一并删除，且无法撤销。" },
+  "지우지 못했습니다": { en: "Couldn't delete", ja: "削除できませんでした", zh: "删除失败" },
   "탈퇴하지 못했어요. 잠시 뒤 다시 시도해 주세요.": { en: "Couldn't delete the account. Please try again shortly.", ja: "退会できませんでした。しばらくしてからもう一度お試しください。", zh: "注销失败，请稍后再试。" },
   "언어": { en: "Language", ja: "言語", zh: "语言" },
   "둘러보기": { en: "Browse", ja: "見てまわる", zh: "浏览" },
@@ -298,7 +301,10 @@ export default function MyPage({ go }: { go: Go }) {
             )}
             {!runsFailed && runs.length > 0 && (
               <div className="wt-my-grid">
-                {runs.map((r) => <WorkCard key={r.run_id} run={r} go={go} />)}
+                {runs.map((r) => (
+                  <WorkCard key={r.run_id} run={r} go={go}
+                            onDeleted={() => setRuns((list) => list.filter((x) => x.run_id !== r.run_id))} />
+                ))}
               </div>
             )}
 
@@ -395,11 +401,28 @@ export default function MyPage({ go }: { go: Go }) {
 }
 
 /** 작품 한 칸 — 표지 · 제목 · 회차 · 공개 스위치 · 편집실. (둘러보기와 같은 규칙) */
-function WorkCard({ run, go }: { run: RunCard; go: Go }) {
+function WorkCard({ run, go, onDeleted }: { run: RunCard; go: Go; onDeleted: () => void }) {
   const t = useT();
   const [pub, setPub] = useState(run.public !== false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+
+  /* 지우기(#55) — 두 번 눌러야 된다. 첫 번째는 자리를 확인 문구로 바꾸기만 한다. */
+  const [confirming, setConfirming] = useState(false);
+  const remove = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await deleteRun(run.run_id);
+      forgetMyRun(run.run_id);
+      track("run_delete", { run: run.run_id, where: "mypage" });
+      onDeleted();
+    } catch (e) {
+      setErr((e as Error).message || t("지우지 못했습니다"));
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
 
   /* 서버에 먼저 보내고, 실패하면 되돌린다 — 화면만 바뀌어 있으면 다음에
      들어왔을 때 값이 달라 보인다. */
@@ -443,7 +466,17 @@ function WorkCard({ run, go }: { run: RunCard; go: Go }) {
         <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
           {t("편집실")}
         </button>
+        {!confirming && (
+          <button type="button" className="btn btn-w wt-my-del" disabled={busy} onClick={() => setConfirming(true)}>{t("지우기")}</button>
+        )}
       </div>
+      {confirming && (
+        <div className="wt-my-delconfirm">
+          <span className="muted">{t("정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.")}</span>
+          <button type="button" className="btn btn-p" disabled={busy} onClick={() => void remove()}>{t("지우기")}</button>
+          <button type="button" className="btn btn-w" disabled={busy} onClick={() => setConfirming(false)}>{t("취소")}</button>
+        </div>
+      )}
       {err && <span className="wt-my-err">{err}</span>}
     </div>
   );

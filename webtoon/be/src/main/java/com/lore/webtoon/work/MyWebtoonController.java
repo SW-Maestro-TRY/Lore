@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -45,11 +46,14 @@ public class MyWebtoonController {
     private final MyWebtoonService service;
     private final NotifySettingService notifySettings;
     private final RunLikeService likes;
+    private final RunDeleteService deleter;
 
-    public MyWebtoonController(MyWebtoonService service, NotifySettingService notifySettings, RunLikeService likes) {
+    public MyWebtoonController(MyWebtoonService service, NotifySettingService notifySettings,
+                               RunLikeService likes, RunDeleteService deleter) {
         this.service = service;
         this.notifySettings = notifySettings;
         this.likes = likes;
+        this.deleter = deleter;
     }
 
     @Operation(summary = "찜하기", description = """
@@ -132,6 +136,18 @@ public class MyWebtoonController {
     public ApiResponse<ReuploadResult> reupload(@LoginUser Long userId,
                                                 @PathVariable String runId) {
         return ApiResponse.ok(new ReuploadResult(runId, service.reupload(userId, runId)));
+    }
+
+    @Operation(summary = "내 작품 지우기", description = """
+            그림(S3)과 행(장·구운 장·얹은 것·다시 그린 기록·이야기·사용량·작품·만들기 기록)을
+            모두 지운다. 되돌릴 수 없다.
+
+            · 내 계정에 이어진 브라우저가 만든 작품만 된다 — 공개 전환과 같은 기준(아니면 403)
+            · 예시 작품은 못 지운다(403) · 없는 작품은 404
+            · 만드는 중인 작품은 먼저 「만들기 중단」을 한 뒤에 지울 수 있다(400)""")
+    @DeleteMapping("/runs/{runId}")
+    public ApiResponse<RunDeleteService.Deleted> delete(@LoginUser Long userId, @PathVariable String runId) {
+        return ApiResponse.ok(deleter.delete(userId, runId));
     }
 
     @Operation(summary = "웹툰 완성 메일 — 켜져 있는가", description = """

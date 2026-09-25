@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -47,10 +48,12 @@ public class CharacterController {
 
     private final CharacterService characters;
     private final CharacterOwner who;
+    private final ShareReward shareReward;
 
-    public CharacterController(CharacterService characters, CharacterOwner who) {
+    public CharacterController(CharacterService characters, CharacterOwner who, ShareReward shareReward) {
         this.characters = characters;
         this.who = who;
+        this.shareReward = shareReward;
     }
 
     @Operation(summary = "고를 수 있는 캐릭터", description = """
@@ -125,10 +128,17 @@ public class CharacterController {
 
     @Operation(summary = "공유된 카드", description = """
             「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.
-            내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.""")
+            내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.
+
+            남이 열면 카드 주인에게 「캐릭터 만들어보기」 무료 횟수를 돌려준다(#332) —
+            같은 사람은 한 번, 카드마다 상한까지, 주인이 자기 것을 여는 것은 안 센다.""")
     @GetMapping("/{publicId}/card")
-    public Map<String, Object> card(@PathVariable String publicId) {
+    public Map<String, Object> card(@PathVariable String publicId,
+                                    @RequestHeader(value = UID_HEADER, required = false) String uid,
+                                    HttpServletRequest request) {
         WebtoonCharacter one = characters.sharedCard(publicId);
+        Long me = CreditGate.currentUser();
+        shareReward.opened(one, uid, who.uidsOf(me, uid), me, clientIp(request));
         Map<String, Object> m = view(one, null, List.of());
         m.remove("mine");
         m.remove("error");
@@ -183,6 +193,12 @@ public class CharacterController {
         // 있고 없고가 그 캐릭터의 주인을 바꾸지 않는다.
         m.put("mine", one.madeBy(me, uids));
         m.put("created_at", one.getCreatedAt().toString());
+        if (one.madeBy(me, uids) && one.hasCard()) {
+            // 내 카드에만 — 남이 몇 명 봤고 무료 횟수를 몇 번 돌려받았나(#332).
+            ShareReward.Stats stats = shareReward.statsOf(one.getPublicId());
+            m.put("share_visits", stats.visits());
+            m.put("share_bonus", stats.rewarded());
+        }
         // 한 컷으로 만든 것만 카드가 있다. 없으면 칸 자체를 안 보낸다 — 화면이
         // "card 가 있나" 로 두 종류를 가른다.
         if (one.hasCard()) {
@@ -231,5 +247,14 @@ public class CharacterController {
                                 @com.fasterxml.jackson.annotation.JsonAlias("photosData")
                                 List<String> photosData,
                                 String style) {
+    }
+
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        String remote = request.getRemoteAddr();
+        return remote == null ? "" : remote;
     }
 }
