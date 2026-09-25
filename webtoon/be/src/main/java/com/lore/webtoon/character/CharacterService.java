@@ -430,6 +430,35 @@ public class CharacterService {
     }
 
     /**
+     * 갈래(kind)를 먼저 가중치로 굴리고 그 갈래 안에서 존재를 고른다. 존재마다 고르게
+     * 뽑으면 갈래 비율이 목록에 적힌 개수를 따라가서, 사람이 적은 목록에서는 몇 번을
+     * 눌러도 사람이 안 나왔다. 가중치가 없거나 뽑힌 갈래에 존재가 없으면 전체에서 고른다.
+     */
+    static JsonNode pickBeing(JsonNode beings, JsonNode kindWeights, java.util.Random rnd) {
+        if (kindWeights.isObject()) {
+            Map<String, List<JsonNode>> byKind = new LinkedHashMap<>();
+            for (JsonNode b : beings) {
+                byKind.computeIfAbsent(b.path("kind").asText(""), k -> new ArrayList<>()).add(b);
+            }
+            int total = 0;
+            for (String kind : byKind.keySet()) {
+                total += Math.max(0, kindWeights.path(kind).asInt(0));
+            }
+            if (total > 0) {
+                int roll = rnd.nextInt(total);
+                for (Map.Entry<String, List<JsonNode>> e : byKind.entrySet()) {
+                    roll -= Math.max(0, kindWeights.path(e.getKey()).asInt(0));
+                    if (roll < 0) {
+                        List<JsonNode> list = e.getValue();
+                        return list.get(rnd.nextInt(list.size()));
+                    }
+                }
+            }
+        }
+        return beings.get(rnd.nextInt(beings.size()));
+    }
+
+    /**
      * 「랜덤으로 만들어보기」 — 입력 칸을 채울 재료 한 벌. <b>AI 를 안 부른다.</b>
      *
      * 존재 하나 + 결 하나를 붙여 설명이 되고, 이름은 그 존재의 이름 주머니에서,
@@ -459,7 +488,7 @@ public class CharacterService {
             if (!beings.isArray() || beings.isEmpty() || !traits.isArray() || traits.isEmpty()) {
                 return out;
             }
-            JsonNode being = beings.get(rnd.nextInt(beings.size()));
+            JsonNode being = pickBeing(beings, pool.path("kind_weights"), rnd);
             String trait = traits.get(rnd.nextInt(traits.size())).asText("");
             JsonNode names = being.path("name_pool");
             String name = names.isArray() && !names.isEmpty()
