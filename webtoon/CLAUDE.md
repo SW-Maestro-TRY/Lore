@@ -67,6 +67,7 @@ webtoon/ai/
 | [images.md](docs/images.md) | 화면에 그림 넣는 법 | 정적 그림은 원본 폴더에 넣음(`apps/web/public/static/` 금지) · 예시 작품·예시 캐릭터는 부팅 때 한 번 심고 그 뒤로는 DB 가 원본 · 온보딩 목업 상수 · 둘러보기 공개 · 예시 `run_id` 하드코딩 자리 |
 | [full-review-design.md](docs/full-review-design.md) | 완성된 화 전체를 다시 읽는 검수 설계 | 장 단위 검수로 못 잡는 장거리 문제 · 판정(`fullreview.py`)과 재생성 루프(`JobRunner.runFullReviewLoop`) 구현 상태 |
 | [mentoring-followup-2026-09-19.md](docs/mentoring-followup-2026-09-19.md) | 0911 멘토링 후속 과제 진행 기록 | 과제 11개별로 한 것 → 실측 결과 → 남은 것 |
+| [safety.md](docs/safety.md) | 콘텐츠 안전 — 무엇을 막고 어디서 막나 | 금지 분류표 · 입력 글은 서버가 moderation 으로 거름(무료) · 사진·생성 글은 아직 안 봄 · 검사 서비스가 죽었을 때 기본 통과 · 사용자 문구 · 미성년 · 신고 절차 |
 | [legal/](docs/legal/) | 이용약관·개인정보처리방침 작업본 | 법률 검토 전 초안 · 판 번호는 `user_agreement.version` 과 같아야 함 · 게시본은 `게시본-뽑기.py` 로 뽑음(작업본을 화면에 직접 쓰지 않음) |
 | [backend.md](docs/backend.md) | **낡은 문서** | serve.py 프록시 시절 설명입니다. 그 구조는 2026-09-12에 지웠으니 지금 백엔드 설명으로 읽지 않습니다 |
 
