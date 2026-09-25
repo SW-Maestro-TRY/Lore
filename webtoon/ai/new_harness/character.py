@@ -32,8 +32,10 @@
 사진·설명·이름이 **전부 없어도 된다.** 세계관(--world)은 story-harness 의
 프리셋 키이거나 사람이 직접 쓴 한 줄이고, 그것도 없으면 프리셋에서 무작위로
 고른다. 결과는 위 두 갈래의 "표지 같은 그림" 이 아니라 **그 세계관 웹툰의 한
-컷**(세로 2:3, 글자 없음)과 카드 글(반전 한 줄 · 대사 · 운명 두세 줄)이다.
-글자를 안 그리는 이유는 웹툰 페이지와 같다 — 말풍선은 화면이 얹는다.
+컷**(세로 2:3, 글자 없음)과 카드 글(반전 한 줄 · 대사 두세 줄 · 운명 두세 줄)이다.
+글자를 안 그리는 이유는 웹툰 페이지와 같다 — 말풍선은 화면이 얹는다. 게다가
+이 그림은 그 캐릭터로 1화를 만들 때 참고 그림으로 그대로 들어가서(JobService 의
+charart.png), 글자를 구워 넣으면 1화 그림에 그 글자가 새어 들어간다.
 
 넣은 것은 바꾸지 않는다. 사진 속 존재가 사람이 아니면 그 종 그대로 그
 세계관의 자리를 맡는다(의인화 없음). 규칙은 `prompt/panel_prompt` 에 있다.
@@ -253,7 +255,7 @@ def parse_panel_spec(text: str) -> dict:
         "genre_word": str(obj.get("genre_word") or "").strip(),
         "role": str(obj.get("role") or "").strip(),
         "twist": str(obj.get("twist") or "").strip(),
-        "quote": str(obj.get("quote") or "").strip(),
+        "dialogue": parse_dialogue(obj.get("dialogue")),
         "fate": [str(f).strip() for f in fate if str(f or "").strip()][:3],
         "appearance_en": str(obj.get("appearance_en") or "").strip(),
         "scene_en": str(obj.get("scene_en") or "").strip(),
@@ -261,15 +263,46 @@ def parse_panel_spec(text: str) -> dict:
     }
 
 
+DIALOGUE_SIDES = ("left", "right", "center")
+
+
+def parse_dialogue(raw) -> list[dict]:
+    """말풍선 줄들. {who, mine, side, text} 만 남기고 최대 3줄."""
+    out = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        side = str(item.get("side") or "").strip().lower()
+        out.append({
+            "who": str(item.get("who") or "").strip(),
+            "mine": bool(item.get("mine")),
+            "side": side if side in DIALOGUE_SIDES else "center",
+            "text": text,
+        })
+    return out[:3]
+
+
+def dialogue_text(lines: list[dict]) -> str:
+    """옛 카드 칸(quote)에 넣을 한 덩어리 — 「누구: 말」 줄바꿈."""
+    return "\n".join(f"{ln['who']}: {ln['text']}" if ln["who"] else ln["text"] for ln in lines)
+
+
 def gate_panel_spec(spec: dict) -> list[str]:
     """그리기 전에 본다. 비면 그 자리를 모델이 평균값으로 채운다 — 반전이 없는
     한 컷은 돈만 쓰고 끝난다."""
     bad = []
-    for key in ("name", "twist", "quote", "appearance_en", "scene_en"):
+    for key in ("name", "twist", "appearance_en", "scene_en"):
         if not spec[key]:
             bad.append(f"{key} 가 비어 있습니다.")
     if len(spec["fate"]) < 2:
         bad.append("fate 가 2줄 미만입니다.")
+    if len(spec["dialogue"]) < 2:
+        bad.append("dialogue 가 2줄 미만입니다.")
+    elif not any(ln["mine"] for ln in spec["dialogue"]):
+        bad.append("dialogue 에 이 캐릭터의 줄(mine)이 없습니다.")
     for key in ("appearance_en", "scene_en"):
         if spec[key] and sheetmod.HANGUL_RE.search(spec[key]):
             bad.append(f"{key} 에 한글이 섞여 있습니다. 이미지 모델에 그대로 들어갑니다.")
@@ -331,9 +364,18 @@ def panel_prompt(spec: dict, style_text: str) -> str:
         "",
         "[SCENE]",
         f"  {spec['scene_en']}",
-        "  One main character. The character is large in the frame and the face "
-        "(or the head, if not human) reads clearly. The place and the character's "
-        "position in this world must be visible in the picture itself.",
+        "  This is one moment of a webtoon scene, drawn so that a reader can tell what "
+        "is happening from the picture alone: what the character is doing, and how "
+        "anyone else in the scene reacts.",
+        "  The subject of this panel is the character described under [CHARACTER] — "
+        "nobody else. That character is whole in the frame, the largest and most "
+        "prominent figure, and the face (or the head, if not human) reads clearly. "
+        "If the character is not a person, it must be plainly visible and "
+        "recognizable as exactly what it is — not implied by a hand, a shadow or an "
+        "edge. Anyone else the scene mentions is secondary: they may appear, but "
+        "they never take more of the frame or more attention than this character. "
+        "The place and the character's position in this world must be visible in "
+        "the picture itself.",
         "",
         "[CHARACTER]",
         f"  {spec['appearance_en']}",
@@ -382,7 +424,8 @@ def run_panel(args) -> int:
         "role": spec["role"],
         "role_tier": spec.get("role_tier", ""),
         "twist": spec["twist"],
-        "quote": spec["quote"],
+        "dialogue": spec["dialogue"],
+        "quote": dialogue_text(spec["dialogue"]),
         "fate": spec["fate"],
         "style": args.style or spec["style"],
         "source": "photo" if photos else "prompt",

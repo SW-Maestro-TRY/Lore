@@ -344,14 +344,26 @@ export function setNotifySetting(on: boolean): Promise<{ on: boolean }> {
 
 /* ---- 캐릭터 ------------------------------------------------------------------ */
 
+export interface DialogueLine {
+  who: string;
+  mine: boolean;
+  side: "left" | "right" | "center";
+  text: string;
+}
+
 /** 「캐릭터 만들어보기」로 만든 것만 갖는다 — 그 세계관 웹툰의 한 컷과 카드 글. */
 export interface CharacterCard {
   world: string;
   world_label: string;
   genre: string;
   role: string;
+  /** 자리의 무게 — 하네스가 굴린 값(중심 · 곁 · 스쳐감 · 뜬금). 옛 카드는 빈 문자열. */
+  role_tier: string;
   twist: string;
+  /** 옛 카드의 대사 한 줄. 새 카드는 dialogue 가 있다. */
   quote: string;
+  /** 한 컷 위에 얹는 말풍선 두세 줄. side 는 말하는 이가 그림에서 서 있는 쪽. */
+  dialogue?: DialogueLine[];
   fate: string[];
   /** 하네스 그림체 이름(romance_fantasy …). 1화를 같은 그림체로 그릴 때 그대로 보낸다. */
   style: string;

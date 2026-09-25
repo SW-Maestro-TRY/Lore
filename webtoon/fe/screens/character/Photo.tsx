@@ -11,7 +11,7 @@ import type { Go } from "../../lib/nav";
 import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { IconArrow, IconBack, IconClose, IconDice, IconUpload } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
-import { isLimitError, lastCardId, loadDraft, runTry, saveDraft } from "./draft";
+import { isLimitError, lastCardId, runTry, saveDraft } from "./draft";
 import "./i18n";
 import WorldCombo from "./WorldCombo";
 import "./Photo.css";
@@ -31,13 +31,6 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
 
   useEffect(() => {
     listWorlds().then((r) => setWorlds(r.worlds || [])).catch(() => setWorlds([]));
-    const d = loadDraft();
-    if (d) {
-      setName(d.name);
-      setDescription(d.description);
-      setPhoto(d.photo);
-      setWorldText(d.world);
-    }
   }, []);
 
   /* 초안의 세계관이 프리셋 키면 카드를 켠다 — 프리셋 목록이 온 뒤에야 알 수 있다. */
