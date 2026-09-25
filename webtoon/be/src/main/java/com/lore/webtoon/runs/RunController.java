@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -201,18 +202,30 @@ public class RunController {
         return Map.of("runs", found);
     }
 
-    @Operation(summary = "완성본 한 편")
+    @Operation(summary = "완성본 한 편", description = """
+            주인이 열면 만들 때 넣은 설정(inputs)이 같이 온다(#329) — 사람이 쓴 글이라 남에게는 안 준다.""")
     @GetMapping("/{runId}/result")
-    public ResponseEntity<Map<String, Object>> result(@PathVariable String runId) {
+    public ResponseEntity<Map<String, Object>> result(@PathVariable String runId,
+                                                      @RequestHeader(value = "X-Lore-Uid", required = false) String uid) {
         /* **여는 것만으로 낫게 한다.** 다 그려 놓고 올리는 데서 실패한 작품은
            여기서 404 가 된다. 그림이 디스크에 있으면 그 자리에서 적고 간다 —
            거의 매번 아무 일도 안 한다(적혀 있으면 바로 돌아온다). 다시 그리지
            않으므로 돈이 안 나간다. 자세한 것은 AfterRun#healIfMissing. */
         after.healIfMissing(runId);
         Map<String, Object> found = runs.result(runId);
-        return found == null
-                ? ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"))
-                : ResponseEntity.ok(found);
+        if (found == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
+        }
+        RunService.Inputs inputs = runs.inputsOf(runId);
+        if (inputs != null) {
+            Long me = CreditGate.currentUser();
+            boolean mine = (me != null && (me.equals(inputs.userId()) || ledger.mayChange(runId, me)))
+                    || (uid != null && !uid.isBlank() && uid.equals(inputs.browserUid()));
+            if (mine) {
+                found.put("inputs", inputs.values());
+            }
+        }
+        return ResponseEntity.ok(found);
     }
 
     /**

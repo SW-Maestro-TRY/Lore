@@ -201,6 +201,7 @@ public class CharacterMaker {
                 got.path("quote").asText(""),
                 dialogue,
                 fate,
-                got.path("style").asText(""));
+                got.path("style").asText(""),
+                got.path("species").asText(""));
     }
 }
