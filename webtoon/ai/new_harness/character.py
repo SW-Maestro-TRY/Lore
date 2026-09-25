@@ -331,9 +331,12 @@ def panel_prompt(spec: dict, style_text: str) -> str:
         "",
         "[SCENE]",
         f"  {spec['scene_en']}",
-        "  One main character. The character is large in the frame and the face "
-        "(or the head, if not human) reads clearly. The place and the character's "
-        "position in this world must be visible in the picture itself.",
+        "  The subject of this panel is the character described under [CHARACTER] — "
+        "nobody else. That character is whole in the frame, the largest and most "
+        "prominent figure, and the face (or the head, if not human) reads clearly. "
+        "Anyone else the scene mentions is secondary: they may appear, but they never "
+        "take more of the frame or more attention than this character. The place and "
+        "the character's position in this world must be visible in the picture itself.",
         "",
         "[CHARACTER]",
         f"  {spec['appearance_en']}",
