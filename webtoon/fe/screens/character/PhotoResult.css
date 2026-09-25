@@ -15,6 +15,7 @@
 .wt .wt-ch-res-side h2 { font-size: 26px; line-height: 1.35; }
 .wt .wt-ch-res-side .wt-ch-res-role { font-size: 20px; line-height: 1.4; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wt .wt-ch-res-tier { font-size: 12px; font-weight: 700; padding: 3px 10px; }
+.wt .wt-ch-res-lucky { display: inline-block; align-self: flex-start; font-size: 12.5px; font-weight: 800; padding: 5px 12px; border-radius: 999px; background: var(--gold, #d9a441); color: #fff; }
 .wt .wt-ch-res-side .wt-ch-res-who { font-size: 14px; }
 .wt .wt-ch-res-inputs { gap: 8px; padding: 14px 18px; }
 .wt .wt-ch-res-inputs > b { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; }

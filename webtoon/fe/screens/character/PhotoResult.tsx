@@ -205,6 +205,13 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
             {ch ? (
               <>
                 <h2>{card?.twist || ch.name}</h2>
+                {card?.lucky && (
+                  /* 종이 바뀐 뽑기는 당첨이라고 말해 줘야 한다(#331). 안 그러면 사진을
+                     올렸는데 개가 나온 사람은 "내 사진을 무시했나" 로 읽는다. */
+                  <span className="wt-ch-res-lucky">
+                    {t("당첨! 아주 낮은 확률로 종이 바뀐 카드예요")}
+                  </span>
+                )}
                 {card?.role && (
                   <b className="wt-ch-res-role">
                     {card.role}

@@ -120,6 +120,9 @@ public class WebtoonCharacter {
     @Column(name = "role_tier", length = 20)
     private String roleTier;
 
+    /** 종까지 바뀐 뽑기였나(#331). 카드가 "이건 낮은 확률로 당첨된 것" 이라고 말할 근거다. */
+    @Column(nullable = false)
+    private boolean lucky;
     /* 넣은 것과 나온 것을 나란히(#329). 이름은 비어 있으면 모델이 지어 name 을 덮으므로
        사람이 적은 것을 따로 둔다. 세계관은 world 에 프리셋 키만 남아 직접 적은 한 줄이
        사라진다. 종은 카드가 읽어 낸 값 — 사진·설명이 무엇으로 읽혔는지 보여 주는 근거다. */
@@ -207,6 +210,7 @@ public class WebtoonCharacter {
         this.genre = cut(card.genre(), 40);
         this.roleName = cut(card.role(), 40);
         this.roleTier = cut(card.roleTier(), 20);
+        this.lucky = card.lucky();
         this.species = cut(card.species(), 40);
         this.twist = cut(card.twist(), 300);
         this.quote = cut(card.quote(), 300);
@@ -220,7 +224,7 @@ public class WebtoonCharacter {
     /** 카드 글. 한 컷으로 만든 캐릭터만 갖는다. */
     public record Card(String world, String worldLabel, String genre, String role, String roleTier,
                        String twist, String quote, List<DialogueLine> dialogue,
-                       List<String> fate, String style, String species) {
+                       List<String> fate, String style, boolean lucky, String species) {
     }
 
     /** 말풍선 한 줄. side 는 말하는 이가 화면에서 서 있는 쪽(left · right · center). */
@@ -338,6 +342,10 @@ public class WebtoonCharacter {
 
     public String getRoleTier() {
         return roleTier;
+    }
+
+    public boolean isLucky() {
+        return lucky;
     }
 
     /** 사람이 넣은 이름·세계관을 그대로 적어 둔다. 만들 때 한 번. */
