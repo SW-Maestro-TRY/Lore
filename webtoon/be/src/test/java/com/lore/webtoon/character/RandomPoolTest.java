@@ -7,47 +7,44 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 「랜덤으로 만들어보기」가 존재를 고르는 방식. 실제 재료 파일(random_pool.json)로 굴린다.
+ * 「랜덤으로 만들어보기」 예시 목록(random_pool.json)이 칸을 채울 수 있는 모양인지 본다.
  * 스프링을 안 띄운다.
  */
 class RandomPoolTest {
 
-    private static final Path POOL = Path.of(System.getProperty("user.dir"),
-            "webtoon", "ai", "new_harness", "prompt", "random_pool.json");
+    private static final Path ROOT = Path.of(System.getProperty("user.dir"));
+    private static final Path POOL = ROOT.resolve("webtoon/ai/new_harness/prompt/random_pool.json");
+    private static final Path WORLDS = ROOT.resolve("webtoon/ai/story-harness/worlds.json");
 
     @Test
-    @DisplayName("갈래 가중치대로 굴린다 — 사람이 절반쯤 나온다")
-    void 갈래_가중치() throws Exception {
-        JsonNode pool = new ObjectMapper().readTree(Files.readString(POOL));
-        Random rnd = new Random(7);
-        Map<String, Integer> count = new HashMap<>();
-        int n = 10_000;
-        for (int i = 0; i < n; i++) {
-            JsonNode b = CharacterService.pickBeing(pool.path("beings"), pool.path("kind_weights"), rnd);
-            count.merge(b.path("kind").asText(), 1, Integer::sum);
+    @DisplayName("예시마다 이름·설명이 있고 세계관이 실제 프리셋 키다")
+    void 예시_모양() throws Exception {
+        JsonNode presets = new ObjectMapper().readTree(Files.readString(POOL)).path("presets");
+        JsonNode worlds = new ObjectMapper().readTree(Files.readString(WORLDS)).path("presets");
+        assertThat(presets.size()).isGreaterThanOrEqualTo(30);
+        for (JsonNode p : presets) {
+            assertThat(p.path("name").asText()).isNotBlank();
+            assertThat(p.path("description").asText()).isNotBlank();
+            assertThat(worlds.has(p.path("world").asText()))
+                    .as("세계관 키 %s (%s)", p.path("world").asText(), p.path("name").asText())
+                    .isTrue();
         }
-        double human = count.getOrDefault("human", 0) / (double) n;
-        int weightSum = 0;
-        for (JsonNode w : pool.path("kind_weights")) {
-            weightSum += w.asInt();
-        }
-        double expected = pool.path("kind_weights").path("human").asInt() / (double) weightSum;
-        assertThat(human).isBetween(expected - 0.03, expected + 0.03);
-        assertThat(count.keySet()).contains("human", "animal", "thing");
     }
 
     @Test
-    @DisplayName("가중치가 없으면 예전처럼 존재마다 고르게 뽑는다")
-    void 가중치_없음() throws Exception {
-        JsonNode pool = new ObjectMapper().readTree(Files.readString(POOL));
-        JsonNode b = CharacterService.pickBeing(pool.path("beings"), pool.path("없는_칸"), new Random(1));
-        assertThat(b.path("being").asText()).isNotEmpty();
+    @DisplayName("사람 예시가 40% 이상이다 — 몇 번 눌러도 사람이 안 나오던 문제")
+    void 사람_비율() throws Exception {
+        JsonNode presets = new ObjectMapper().readTree(Files.readString(POOL)).path("presets");
+        long human = 0;
+        for (JsonNode p : presets) {
+            if ("human".equals(p.path("kind").asText())) {
+                human++;
+            }
+        }
+        assertThat(human / (double) presets.size()).isGreaterThanOrEqualTo(0.4);
     }
 }
