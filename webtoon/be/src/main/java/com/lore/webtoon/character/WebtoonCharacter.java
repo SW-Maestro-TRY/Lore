@@ -120,7 +120,7 @@ public class WebtoonCharacter {
     @Column(name = "role_tier", length = 20)
     private String roleTier;
 
-    /** 종까지 바뀐 뽑기였나(#331). 카드가 "이건 낮은 확률로 당첨된 것" 이라고 말할 근거다. */
+    /** 종까지 바뀐 뽑기였나(#331). 화면이 이걸 보고 "당황하셨나요?" 설문을 띄운다. */
     @Column(nullable = false)
     private boolean lucky;
     /* 넣은 것과 나온 것을 나란히(#329). 이름은 비어 있으면 모델이 지어 name 을 덮으므로

@@ -152,6 +152,7 @@
 | `try_random_click` · `try_start` | 캐릭터 만들어보기 | `has_photo`, `has_name`, `has_desc`, `preset`(세계관을 목록에서), `random` |
 | `try_result` · `try_again` | 카드가 다 그려짐 · 다시 뽑기 | `character`, `status`: ready · error |
 | `card_share` · `card_to_webtoon` · `shared_card_try` | 카드 공유 · 이 캐릭터로 1화 · 공유 카드를 보고 「나도 만들어보기」 | `target`, `character` |
+| `swap_survey_view` · `swap_survey` | 종이 바뀐 카드(#331)의 설문 팝업이 뜸 · 답함 (다 그려지고 5초 뒤, 카드마다 한 번) | `character`, `result`: confused(당황했어요) · fine(괜찮았어요) |
 | `limit_view` | 하루 몫이 다 됨 | `kind`: character |
 | `regen_start` · `regen_result` · `regen_revert` · `bake` | 편집실 다시 그리기 · 결과 · 판 되돌리기 · 이미지로 뽑기 | `cut`, `count`(태그 수), `has_note`, `status`, `n`(판) |
 | `charge_open` | 마이페이지에서 충전 창을 엶 | `where` |
