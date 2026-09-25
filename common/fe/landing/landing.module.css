@@ -201,6 +201,40 @@
 .side:hover .sideBg img {
   transform: scale(1.04);
 }
+/* 웹툰 쪽 배경 세 장이 6초씩 번갈아 나온다. 음수 지연으로 첫 장은 처음부터 보이고,
+   앞 장이 사라지는 0.9초 동안 다음 장이 떠오른다. */
+.sideSlide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: heroSlide 18s linear infinite both;
+}
+.sideSlide:nth-child(1) {
+  animation-delay: -0.9s;
+}
+.sideSlide:nth-child(2) {
+  animation-delay: 5.1s;
+}
+.sideSlide:nth-child(3) {
+  animation-delay: 11.1s;
+}
+@keyframes heroSlide {
+  0% {
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  33.3% {
+    opacity: 1;
+  }
+  38.3% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 .sideInner {
   position: relative;
   z-index: 2;
@@ -609,6 +643,12 @@
 @media (prefers-reduced-motion: reduce) {
   .wallRow {
     animation: none;
+  }
+  .sideSlide {
+    animation: none;
+  }
+  .sideSlide:first-child {
+    opacity: 1;
   }
 }
 
