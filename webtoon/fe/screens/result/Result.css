@@ -15,6 +15,11 @@
 .wt .wt-result-titlerow .wt-result-titleacts { grid-column: 3; justify-self: end; }
 .wt .wt-result-head h2 { font-size: 34px; }
 .wt .wt-result-meta { font-size: 15px; }
+.wt .wt-result-inputs { display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; margin: 4px 0 10px; }
+.wt .wt-result-inputs > b { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; }
+.wt .wt-result-inputs dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; line-height: 1.55; }
+.wt .wt-result-inputs dt { color: var(--muted); }
+.wt .wt-result-inputs dd { margin: 0; word-break: keep-all; }
 .wt .wt-result-meta-m { display: none; }
 
 .wt .wt-result-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }

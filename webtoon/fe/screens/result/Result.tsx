@@ -215,6 +215,30 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </span>
             </div>
 
+            {mine && data.inputs && (
+              /* 넣은 설정이 어디로 갔나(#329) — 주인에게만 온다(사람이 쓴 글이라). 점수 없이,
+                 만들 때 넣은 것 옆에 완성본에 실제로 남은 값을 놓는다. */
+              <div className="card wt-result-inputs">
+                <b>{t("넣은 설정이 간 곳")}</b>
+                <dl>
+                  <dt>{t("이름")}</dt>
+                  <dd>{data.inputs.name ? t("{a} → 주인공 {b}", { a: data.inputs.name, b: data.character || data.inputs.name }) : t("안 넣음")}</dd>
+                  <dt>{t("장르")}</dt>
+                  <dd>{data.inputs.genre
+                    ? (data.inputs.genre === data.genre ? t(data.genre) : t("{a} → {b}", { a: t(data.inputs.genre), b: t(data.genre || "") }))
+                    : t("안 정함 → {b}", { b: t(data.genre || "") })}</dd>
+                  <dt>{t("그림체")}</dt>
+                  <dd>{t(data.style_label || data.inputs.style || "")}</dd>
+                  <dt>{t("캐릭터 설명")}</dt>
+                  <dd>{data.inputs.character ? t("「{d}」→ 이야기 속 {b}", { d: data.inputs.character, b: data.character || "" }) : t("안 넣음")}</dd>
+                  <dt>{t("이야기 소재")}</dt>
+                  <dd>{data.inputs.story ? t("「{d}」→ 줄거리: {b}", { d: data.inputs.story, b: data.logline || "" }) : t("안 넣음 → 줄거리: {b}", { b: data.logline || "" })}</dd>
+                  <dt>{t("사진")}</dt>
+                  <dd>{data.inputs.has_photo ? t("사진을 보고 외모를 읽었어요") : t("사진 없음 → 설명으로만")}</dd>
+                </dl>
+              </div>
+            )}
+
             {mine ? (
               <>
                 <div className="wt-result-acts">

@@ -334,6 +334,18 @@ export interface RunResult {
   page_count: number;
   planned_pages: number;
   preview: boolean;
+  /** 주인이 열 때만 온다(#329) — 만들 때 넣은 설정. */
+  inputs?: RunInputs;
+}
+
+export interface RunInputs {
+  name: string;
+  character: string;
+  genre: string;
+  story: string;
+  photo_note: string;
+  has_photo: boolean;
+  style: string;
 }
 
 export function readResult(runId: string): Promise<RunResult> {
@@ -435,6 +447,8 @@ export interface CharacterCard {
   role: string;
   /** 자리의 무게 — 하네스가 굴린 값(중심 · 곁 · 스쳐감 · 뜬금). 옛 카드는 빈 문자열. */
   role_tier: string;
+  /** 카드가 읽어 낸 종(사람 · 강아지 …). 넣은 것이 무엇으로 읽혔는지 보여 준다(#329). */
+  species: string;
   twist: string;
   /** 옛 카드의 대사 한 줄. 새 카드는 dialogue 가 있다. */
   quote: string;
@@ -456,6 +470,9 @@ export interface Character {
   builtin: boolean;
   mine: boolean;
   created_at: string;
+  /** 사람이 넣은 이름·세계관 그대로(#329). 안 넣었으면 빈 문자열. */
+  asked_name: string;
+  asked_world: string;
   card?: CharacterCard;
   /** 내 카드에만 온다(#332) — 공유 링크로 남이 몇 명 봤고, 무료 횟수를 몇 번 돌려받았나. */
   share_visits?: number;

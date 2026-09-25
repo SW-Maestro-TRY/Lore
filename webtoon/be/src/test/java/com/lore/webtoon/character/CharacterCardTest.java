@@ -66,10 +66,11 @@ class CharacterCardTest {
                         "몽이는 이 로맨스 웹툰에서, 진짜 강아지인 악역 영애예요", "몽이: 멍!",
                         List.of(new WebtoonCharacter.DialogueLine("몽이", true, "left", "멍!"),
                                 new WebtoonCharacter.DialogueLine("황태자", false, "right", "저 개는\t뭐지?")),
-                        List.of("첫 줄", " 둘째 줄 ", ""), "romance_fantasy"), at);
+                        List.of("첫 줄", " 둘째 줄 ", ""), "romance_fantasy", "강아지"), at);
 
         assertThat(one.getStatus()).isEqualTo(CharacterStatus.READY);
         assertThat(one.getArtKey()).isEqualTo("private/char/x.png");
+        assertThat(one.getSpecies()).isEqualTo("강아지");
         assertThat(one.hasCard()).isTrue();
         assertThat(one.getRoleTier()).isEqualTo("곁");
         assertThat(one.dialogueLines()).hasSize(2);
@@ -86,7 +87,7 @@ class CharacterCardTest {
         WebtoonCharacter one = WebtoonCharacter.drawing("abc", 1L, null, "x", "", at);
         one.drewPanel("k", CharacterSource.PHOTO,
                 new WebtoonCharacter.Card("", "아주아주아주아주아주아주아주아주아주긴세계관이름", "",
-                        "", "", "t", "", List.of(), List.of(), ""), at);
+                        "", "", "t", "", List.of(), List.of(), "", ""), at);
         assertThat(one.getWorldLabel()).hasSize(20);
         assertThat(one.getWorld()).isNull();
     }
