@@ -270,10 +270,10 @@ export default function Editor({ runId, go, authStatus = "loading" }:
           <h2 id="regenAskTitle">{t("다시 그리기")}</h2>
           <p className="ask-sub" id="regenAskSub" />
           <p className="ask-scene" id="regenAskScene" hidden />
-          <p className="fb-lead">{t("무엇이 마음에 안 드나요?")} <small>{t("안 골라도 됩니다")}</small></p>
+          <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
           <div className="fb-tags" id="regenAskTags" />
           <label className="wt-ed-askfield">
-            <span>{t("더 하고 싶은 말")} <small>{t("비워도 됩니다")}</small></span>
+            <span>{t("더 하고 싶은 말")}</span>
             <textarea id="regenAskText" rows={3} maxLength={500} className="field"
                       placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
           </label>
