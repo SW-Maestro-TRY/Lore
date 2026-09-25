@@ -54,8 +54,8 @@
 
 폴더: **`common/fe/assets/landing/wall/`**
 
-두 줄이 서로 다른 그림이다. 윗줄은 `webtoon-01.jpg` ~ `webtoon-21.jpg`(예시 작품
-표지 9장과 예시 캐릭터 12장을 섞은 것), 아랫줄은 `zzal-01.jpg` ~ `zzal-15.jpg`(짤
+두 줄이 서로 다른 그림이다. 윗줄은 `webtoon-01.jpg` ~ `webtoon-27.jpg`(예시 작품
+표지 9장, 예시 작품 속 컷 6장, 예시 캐릭터 12장을 섞은 것), 아랫줄은 `zzal-01.jpg` ~ `zzal-15.jpg`(짤
 캐릭터가 여러 배경에서 여러 동작을 하는 타일)이다. 코드는
 `common/fe/landing/sections/Wall.tsx`의 `WEBTOON_IMAGES` · `ZZAL_IMAGES` 배열이 그
 파일 이름을 순서대로 갖고 있다. 마우스를 올려도 멈추지 않는다.

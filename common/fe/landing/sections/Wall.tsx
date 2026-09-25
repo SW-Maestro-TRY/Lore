@@ -1,7 +1,7 @@
 // 4. 작품 벽 — 페이지 맨 아래, 마지막 CTA 다음 · 푸터 바로 위.
 // (시안 C · 2026-09-20 확정. 프로토타입: haeun/landing-concepts/c-split.html)
 //
-// 제목도 단추도 없이 그림만 두 줄로 흐른다. 윗줄은 웹툰(예시 작품 표지와 예시
+// 제목도 단추도 없이 그림만 두 줄로 흐른다. 윗줄은 웹툰(예시 작품 표지·컷과 예시
 // 캐릭터), 아랫줄은 짤(여러 배경에서 여러 동작을 하는 키우기 캐릭터)이고 반대
 // 방향으로 돈다. 두 줄이 다른 그림이라 같은 그림이 겹쳐 보이지 않는다. 마우스를
 // 올려도 멈추지 않는다. 자바스크립트가 없다 — 배열을 두 번 이어 붙여 서버에서
@@ -35,6 +35,12 @@ const WEBTOON_IMAGES: readonly string[] = [
   "webtoon-19.jpg",
   "webtoon-20.jpg",
   "webtoon-21.jpg",
+  "webtoon-22.jpg",
+  "webtoon-23.jpg",
+  "webtoon-24.jpg",
+  "webtoon-25.jpg",
+  "webtoon-26.jpg",
+  "webtoon-27.jpg",
 ];
 
 const ZZAL_IMAGES: readonly string[] = [
