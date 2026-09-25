@@ -15,7 +15,13 @@ import "./i18n";
 import "./PhotoResult.css";
 
 const POLL_MS = 2500;
-const SHORT_QUOTE = 16;
+
+/* 풍선 모양 — 웹툰 조립(strip.py 의 bubble_kind)과 같은 기준. */
+function bubbleKind(text: string): "shout" | "whisper" | "dialogue" {
+  if (text.includes("!")) return "shout";
+  if (text.trim().startsWith("(") || text.includes("…")) return "whisper";
+  return "dialogue";
+}
 
 export default function PhotoResult({ id, shared, go, authenticated }: { id: string; shared: boolean; go: Go; authenticated: boolean }) {
   const t = useT();
@@ -107,7 +113,11 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
 
   if (limited !== null) return <LimitView go={go} message={limited} authenticated={authenticated} />;
 
-  const quote = card?.quote || "";
+  /* 말풍선은 그림에 안 굽고 여기서 얹는다 — 그림이 1화의 참고 그림으로도 쓰여서
+     글자를 구우면 1화에 샌다. 옛 카드(dialogue 없음)는 quote 한 줄을 오른쪽에 하나 띄운다. */
+  const dialogue = card?.dialogue?.length
+    ? card.dialogue
+    : card?.quote ? [{ who: "", mine: true, side: "right" as const, text: card.quote }] : [];
   const ready = !!ch && ch.status === "ready" && !!ch.art_url;
 
   const art = (
@@ -117,7 +127,13 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={ch!.art_url!} alt={t("웹툰 한 컷")} />
           {card?.world_label && <span className="badge">{t(card.world_label)}</span>}
-          {quote && <div className={`wt-ch-res-bubble${quote.length <= SHORT_QUOTE ? " short" : ""}`}>{quote}</div>}
+          {dialogue.length > 0 && (
+            <div className="wt-ch-res-bubbles" aria-label={t("대사")}>
+              {dialogue.map((line, i) => (
+                <div key={i} className={`wt-ch-res-bubble ${line.side} ${bubbleKind(line.text)}`}>{line.text}</div>
+              ))}
+            </div>
+          )}
         </>
       ) : ch?.status === "error" ? (
         <div className="wt-ch-res-wait">

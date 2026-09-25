@@ -182,6 +182,15 @@ public class CharacterMaker {
                 fate.add(f.asText());
             }
         });
+        List<WebtoonCharacter.DialogueLine> dialogue = new ArrayList<>();
+        got.path("dialogue").forEach(d -> {
+            String text = d.path("text").asText("");
+            if (!text.isBlank()) {
+                dialogue.add(new WebtoonCharacter.DialogueLine(
+                        d.path("who").asText(""), d.path("mine").asBoolean(false),
+                        d.path("side").asText("center"), text));
+            }
+        });
         return new WebtoonCharacter.Card(
                 got.path("world").asText(""),
                 got.path("world_label").asText(""),
@@ -189,6 +198,7 @@ public class CharacterMaker {
                 got.path("role").asText(""),
                 twist,
                 got.path("quote").asText(""),
+                dialogue,
                 fate,
                 got.path("style").asText(""));
     }
