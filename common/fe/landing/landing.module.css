@@ -201,50 +201,10 @@
 .side:hover .sideBg img {
   transform: scale(1.04);
 }
-/* 웹툰 쪽 배경 세 장이 6초씩 번갈아 나온다. 음수 지연으로 첫 장은 처음부터 보이고,
-   앞 장이 사라지는 0.9초 동안 다음 장이 떠오른다. */
-.sideSlide {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  animation: heroSlide 18s linear infinite both;
-}
-.sideSlide:nth-child(1) {
-  animation-delay: -0.9s;
-}
-.sideSlide:nth-child(2) {
-  animation-delay: 5.1s;
-}
-.sideSlide:nth-child(3) {
-  animation-delay: 11.1s;
-}
-@keyframes heroSlide {
-  0% {
-    opacity: 0;
-  }
-  5% {
-    opacity: 1;
-  }
-  33.3% {
-    opacity: 1;
-  }
-  38.3% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 0;
-  }
-}
 .sideInner {
   position: relative;
   z-index: 2;
   max-width: 440px;
-}
-.sideNum {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  opacity: 0.8;
 }
 .sideTitle {
   margin-top: 14px;
@@ -358,9 +318,9 @@
 }
 
 /* 기본은 세 칸이 똑같이 나뉘어 사진과 제목만 보인다. 마우스를 올리거나(스크롤해서
-   가져다 대면) 클릭하면 그 칸이 가로로 넓어지고, 안에 접혀 있던 설명이 세로로도
+   가져다 대면) 그 칸이 가로로 넓어지고, 안에 접혀 있던 설명이 세로로도
    펼쳐진다 — align-items:stretch 라 옆 칸들도 그 칸 높이에 맞춰 같이 늘어난다.
-   클릭 토글(.isOpen)은 터치 기기를 위한 것 — Trio.tsx 가 상태로 관리한다. */
+   터치 기기는 hover: none 블록이 설명을 처음부터 펼쳐 둔다. */
 .trioGrid {
   margin-top: 54px;
   display: flex;
@@ -378,27 +338,25 @@
   border-radius: 24px;
   overflow: hidden;
   cursor: pointer;
+  color: inherit;
+  text-decoration: none;
   transition: flex-grow 0.42s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.3s ease, box-shadow 0.3s ease;
 }
 .trioCard:hover,
-.trioCard:focus-within,
-.trioCard.isOpen {
+.trioCard:focus-within {
   flex-grow: 2.2;
   box-shadow: 0 20px 46px rgba(15, 51, 63, 0.14);
 }
 .trioCardCharacter:hover,
-.trioCardCharacter:focus-within,
-.trioCardCharacter.isOpen {
+.trioCardCharacter:focus-within {
   border-color: var(--l-gold);
 }
 .trioCardWebtoon:hover,
-.trioCardWebtoon:focus-within,
-.trioCardWebtoon.isOpen {
+.trioCardWebtoon:focus-within {
   border-color: var(--l-ink);
 }
 .trioCardTama:hover,
-.trioCardTama:focus-within,
-.trioCardTama.isOpen {
+.trioCardTama:focus-within {
   border-color: var(--l-sea);
 }
 
@@ -406,12 +364,12 @@
    넓다). 높이를 카드 폭에 비례시키면(aspect-ratio) 카드가 넓어질수록 칸이 같이
    치솟아서 세로로 지나치게 길어진다 — 그래서 높이는 고정값으로 두고(가로로만
    넓어진다), object-fit 은 cover 대신 contain 을 써서 잘리지 않게 한다(남는
-   자리는 --l-water-light 로 채운다). */
+   자리는 카드와 같은 흰색으로 채운다). */
 .trioMedia {
   height: 200px;
   flex: none;
   overflow: hidden;
-  background: var(--l-water-light);
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -457,8 +415,7 @@
   transition: grid-template-rows 0.4s ease;
 }
 .trioCard:hover .trioMore,
-.trioCard:focus-within .trioMore,
-.trioCard.isOpen .trioMore {
+.trioCard:focus-within .trioMore {
   grid-template-rows: 1fr;
 }
 .trioMoreIn {
@@ -547,9 +504,6 @@
   animation-duration: 58s;
   animation-direction: reverse;
 }
-.wallRow:hover {
-  animation-play-state: paused;
-}
 @keyframes wallSlide {
   from {
     transform: translateX(0);
@@ -617,8 +571,7 @@
     flex: 1 1 auto;
   }
   .trioCard,
-  .trioCard:hover,
-  .trioCard.isOpen {
+  .trioCard:hover {
     flex-grow: 0;
   }
   .trioTitle {
@@ -643,12 +596,6 @@
 @media (prefers-reduced-motion: reduce) {
   .wallRow {
     animation: none;
-  }
-  .sideSlide {
-    animation: none;
-  }
-  .sideSlide:first-child {
-    opacity: 1;
   }
 }
 

@@ -62,7 +62,6 @@ const dict: Dict = {
     zh: "列表里没有就自己填 · 例如：武侠 / 浪漫奇幻",
   },
   "장르 직접 입력": { en: "Custom genre", ja: "ジャンルを入力", zh: "自定义题材" },
-  "둘 다 비워도 만들 수 있어요": { en: "You can leave both blank", ja: "両方空欄でも作れます", zh: "两项都留空也可以" },
 
   /* 장르 칩 (lib/wizardData GENRE_QUICK) */
   "로맨스 판타지": { en: "Romance fantasy", ja: "ロマンスファンタジー", zh: "浪漫奇幻" },
