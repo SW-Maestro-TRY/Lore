@@ -366,9 +366,7 @@ def panel_prompt(spec: dict, style_text: str) -> str:
         f"  {spec['scene_en']}",
         "  This is one moment of a webtoon scene, drawn so that a reader can tell what "
         "is happening from the picture alone: what the character is doing, and how "
-        "anyone else in the scene reacts. Speech balloons will be placed over the "
-        "upper part of the picture afterwards, so keep the faces and the action in "
-        "the upper two thirds of the frame and leave the very top less busy.",
+        "anyone else in the scene reacts.",
         "  The subject of this panel is the character described under [CHARACTER] — "
         "nobody else. That character is whole in the frame, the largest and most "
         "prominent figure, and the face (or the head, if not human) reads clearly. "
