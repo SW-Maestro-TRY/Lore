@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -44,13 +45,50 @@ public class MyWebtoonController {
 
     private final MyWebtoonService service;
     private final NotifySettingService notifySettings;
+    private final RunLikeService likes;
     private final RunDeleteService deleter;
 
     public MyWebtoonController(MyWebtoonService service, NotifySettingService notifySettings,
-                               RunDeleteService deleter) {
+                               RunLikeService likes, RunDeleteService deleter) {
         this.service = service;
         this.notifySettings = notifySettings;
+        this.likes = likes;
         this.deleter = deleter;
+    }
+
+    @Operation(summary = "찜하기", description = """
+            이 작품을 내 찜 목록에 넣는다. 이미 찜했으면 그대로 두고 지금 찜 수만 돌려준다 —
+            두 번 눌러도 한 번이다(#247).""")
+    @PostMapping("/runs/{runId}/like")
+    public ApiResponse<LikeResult> like(@LoginUser Long userId, @PathVariable String runId) {
+        return ApiResponse.ok(new LikeResult(runId, true, likes.like(userId, runId)));
+    }
+
+    @Operation(summary = "찜 취소", description = "찜한 적이 없어도 오류 없이 지금 찜 수를 돌려준다.")
+    @DeleteMapping("/runs/{runId}/like")
+    public ApiResponse<LikeResult> unlike(@LoginUser Long userId, @PathVariable String runId) {
+        return ApiResponse.ok(new LikeResult(runId, false, likes.unlike(userId, runId)));
+    }
+
+    @Operation(summary = "내가 찜한 웹툰", description = """
+            최근에 찜한 것부터. 모양은 둘러보기 목록과 같고 liked=true 가 붙는다.""")
+    @GetMapping("/likes")
+    public ApiResponse<List<Map<String, Object>>> likes(@LoginUser Long userId) {
+        return ApiResponse.ok(likes.likedCards(userId));
+    }
+
+    @Operation(summary = "이 목록 중 내가 찜한 것", description = """
+            둘러보기 카드에 하트를 칠하려고 부른다. 로그인 없이는 빈 목록이다.""")
+    @PostMapping("/likes/among")
+    public ApiResponse<List<String>> likedAmong(@LoginUser Long userId, @RequestBody AmongRequest request) {
+        return ApiResponse.ok(likes.likedAmong(userId, request.runIds() == null ? List.of() : request.runIds()));
+    }
+
+    /** @param likes 바뀐 뒤의 찜 수 */
+    public record LikeResult(String runId, boolean liked, long likes) {
+    }
+
+    public record AmongRequest(List<String> runIds) {
     }
 
     @Operation(summary = "이 브라우저를 내 계정에 잇기", description = """

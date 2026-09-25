@@ -21,11 +21,12 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, readAllowance,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, myLikes, readAllowance, recentRuns,
   readNotifySetting, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type RunCard,
 } from "../../lib/api";
 import type { Go } from "../../lib/nav";
+import RunStrip from "../../ui/RunStrip";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { IconUser } from "../../ui/Icons";
@@ -60,6 +61,9 @@ registerDict({
   "언어": { en: "Language", ja: "言語", zh: "语言" },
   "둘러보기": { en: "Browse", ja: "見てまわる", zh: "浏览" },
   "새 웹툰 만들기": { en: "New webtoon", ja: "新しいウェブトゥーン", zh: "新建漫画" },
+  "최근 본 웹툰": { en: "Recently read", ja: "最近読んだ作品", zh: "最近看过" },
+  "찜한 웹툰": { en: "Saved webtoons", ja: "お気に入りの作品", zh: "收藏的漫画" },
+  "아직 찜한 웹툰이 없어요. 둘러보기에서 하트를 눌러 보세요.": { en: "Nothing saved yet. Tap a heart in Browse.", ja: "まだお気に入りがありません。見て回るでハートを押してみてください。", zh: "还没有收藏。去浏览里点个爱心吧。" },
   "캐릭터 탭으로": { en: "Go to characters", ja: "キャラクタータブへ", zh: "前往角色页" },
   "{n}편": { en: "{n} episodes", ja: "{n}話", zh: "{n} 话" },
   "{n}편 · 나만 보기 {m}": { en: "{n} episodes · {m} private", ja: "{n}話 · 非公開 {m}", zh: "{n} 话 · 私密 {m}" },
@@ -111,6 +115,22 @@ export default function MyPage({ go }: { go: Go }) {
   const [creditModal, setCreditModal] = useState<"charge" | "history" | null>(null);
 
   const [allowance, setAllowance] = useState<Allowance | null>(null);
+
+  /* 최근 본 것(브라우저)과 찜한 것(계정) — #247. 최근 본 것은 둘러보기 목록에서 카드를 찾아 쓴다. */
+  const [recent, setRecent] = useState<RunCard[]>([]);
+  const [liked, setLiked] = useState<RunCard[]>([]);
+  useEffect(() => {
+    const ids = recentRuns();
+    if (ids.length === 0) { setRecent([]); return; }
+    browseRuns().then((all) => {
+      const byId = new Map(all.map((r) => [r.run_id, r]));
+      setRecent(ids.map((id) => byId.get(id)).filter((r): r is RunCard => !!r).slice(0, 10));
+    }).catch(() => setRecent([]));
+  }, []);
+  useEffect(() => {
+    if (!isAuthenticated) { setLiked([]); return; }
+    myLikes().then(setLiked).catch(() => setLiked([]));
+  }, [isAuthenticated]);
 
   /* 내 작품 — 로그인했으면 계정 것과 이 브라우저 것을 합친다(기기를 바꾸면
      둘이 다르다). run_id 로 겹치는 것을 걸러낸다. */
@@ -285,6 +305,27 @@ export default function MyPage({ go }: { go: Go }) {
                   <WorkCard key={r.run_id} run={r} go={go}
                             onDeleted={() => setRuns((list) => list.filter((x) => x.run_id !== r.run_id))} />
                 ))}
+              </div>
+            )}
+
+            {recent.length > 0 && (
+              <div className="wt-my-strip">
+                <RunStrip title={t("최근 본 웹툰")} runs={recent}
+                          onOpen={(r) => { track("recent_open", { run: r.run_id }); go("result", { run: r.run_id }); }} />
+              </div>
+            )}
+
+            {isAuthenticated && (
+              <div className="wt-my-strip">
+                {liked.length > 0 ? (
+                  <RunStrip title={t("찜한 웹툰")} runs={liked}
+                            onOpen={(r) => { track("works_open", { run: r.run_id, where: "mypage_likes" }); go("result", { run: r.run_id }); }} />
+                ) : (
+                  <div className="wt-strip">
+                    <b className="wt-strip-title">{t("찜한 웹툰")}</b>
+                    <span className="muted" style={{ fontSize: 12.5 }}>{t("아직 찜한 웹툰이 없어요. 둘러보기에서 하트를 눌러 보세요.")}</span>
+                  </div>
+                )}
               </div>
             )}
 
