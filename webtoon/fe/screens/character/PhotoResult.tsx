@@ -11,6 +11,7 @@ import { IconDownload, IconRetry, IconShare } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import { LimitView } from "./Photo";
 import { isLimitError, loadDraft, runTry, lastCardId } from "./draft";
+import { track } from "../../lib/track";
 import "./i18n";
 import "./PhotoResult.css";
 
@@ -64,15 +65,26 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
     return () => document.removeEventListener("mousedown", close);
   }, [menu]);
 
+  /* 내 카드가 다 그려졌는지(또는 실패했는지) — 한 카드에 한 번만(#413). */
+  const resultSent = useRef("");
+  useEffect(() => {
+    if (shared || !ch || ch.status === "drawing" || resultSent.current === ch.id) return;
+    resultSent.current = ch.id;
+    track("try_result", { character: ch.id, status: ch.status });
+  }, [ch, shared]);
+
   const card = ch?.card;
   const url = typeof window === "undefined" ? "" : `${window.location.origin}/webtoon?card=${encodeURIComponent(id)}`;
   const title = card?.twist || ch?.name || t("캐릭터 카드");
 
   const onShare = async () => {
-    if (await shareNative(url, title)) return;
+    const native = await shareNative(url, title);
+    track("card_share", { character: id, target: native ? "native" : "menu" });
+    if (native) return;
     setMenu((v) => !v);
   };
   const onCopy = async () => {
+    track("card_share", { character: id, target: "copy" });
     setMenu(false);
     if (await copyLink(url)) {
       setCopied(true);
@@ -80,16 +92,21 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
     }
   };
   const onKakao = async () => {
+    track("card_share", { character: id, target: "kakao" });
     setMenu(false);
     if (!(await shareKakao(url))) void onCopy();
   };
 
   /* 만들기 위저드로 보낸다. 예전에는 여기서 곧장 만들기를 시작했는데, 이야기·장르·
    * 그림체를 사용자가 한 번도 못 고르고 웹툰이 나와 버렸다. */
-  const onEpisode = () => go("create", { step: 1, character: id });
+  const onEpisode = () => {
+    track("card_to_webtoon", { character: id, logged_in: authenticated });
+    go("create", { step: 1, character: id });
+  };
 
   const onAgain = async () => {
     if (!ch) return;
+    track("try_again", { character: ch.id });
     setBusy("again");
     setActErr("");
     // 지금 보는 카드의 입력이 기준이다. 초안(sessionStorage)은 이 카드를 만든 그것일 때만 통째로 쓴다 —
@@ -102,7 +119,10 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       const c = await runTry(d);
       go("card", { id: c.id });
     } catch (e) {
-      if (isLimitError(e)) setLimited(e instanceof Error ? e.message : "");
+      if (isLimitError(e)) {
+        track("limit_view", { kind: "character", logged_in: authenticated });
+        setLimited(e instanceof Error ? e.message : "");
+      }
       else setActErr(e instanceof Error ? e.message : t("다시 뽑지 못했습니다"));
       setBusy(null);
     }
@@ -220,7 +240,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
             {shared ? (
               <div className="wt-ch-res-row">
                 {shareBtn}
-                <button type="button" className="btn btn-p" onClick={() => go("try")}>{t("나도 만들어보기")}</button>
+                <button type="button" className="btn btn-p" onClick={() => { track("shared_card_try", { character: id }); go("try"); }}>{t("나도 만들어보기")}</button>
               </div>
             ) : (
               <>

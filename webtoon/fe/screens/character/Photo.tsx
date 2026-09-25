@@ -12,6 +12,7 @@ import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { IconArrow, IconBack, IconClose, IconDice, IconUpload } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import { isLimitError, lastCardId, runTry, saveDraft } from "./draft";
+import { track } from "../../lib/track";
 import "./i18n";
 import WorldCombo from "./WorldCombo";
 import "./Photo.css";
@@ -54,7 +55,11 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  /* 랜덤으로 채운 뒤 만들었는가 — 입력이 부담인지 가르는 값(#413). */
+  const usedRandom = useRef(false);
   const onRandom = async () => {
+    usedRandom.current = true;
+    track("try_random_click");
     setBusy("random");
     setErr("");
     try {
@@ -80,11 +85,17 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
     setErr("");
     const draft = { name, description, world, photo };
     saveDraft(draft);
+    /* 쓴 글은 싣지 않는다 — 있었는지와, 세계관을 목록에서 골랐는지만. */
+    track("try_start", {
+      has_photo: !!photo, has_name: !!name.trim(), has_desc: !!description.trim(),
+      preset: !!worldKey, random: usedRandom.current, logged_in: authenticated,
+    });
     try {
       const c = await runTry(draft);
       go("card", { id: c.id }, { replace: false });
     } catch (e) {
       if (isLimitError(e)) {
+        track("limit_view", { kind: "character", logged_in: authenticated });
         setLimited(e instanceof WebtoonApiError ? e.message : "");
       } else {
         setErr(e instanceof Error ? e.message : t("캐릭터를 만들지 못했습니다"));
@@ -195,6 +206,7 @@ function untilMidnight(): string {
 
 export function LimitView({ go, message, authenticated = false }:
   { go: Go; message?: string; authenticated?: boolean }) {
+  useEffect(() => { if (!authenticated) track("login_prompt", { where: "character_limit" }); }, [authenticated]);
   const t = useT();
   const [last, setLast] = useState<Character | null>(null);
   const [perDay, setPerDay] = useState<number | null>(null);

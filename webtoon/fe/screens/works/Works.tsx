@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { browseRuns, coverUrl, isMyRun, myAccountRuns, setVisibility, type RunCard } from "../../lib/api";
 import { useT } from "../../lib/i18n";
+import { track } from "../../lib/track";
 import { louArt } from "../../lib/louArt";
 import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
@@ -67,9 +68,9 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   const chips = (
     <div className="wt-works-chips">
       <button type="button" className={`chip${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>{t("전체")}</button>
-      <button type="button" className={`chip${filter === "mine" ? " on" : ""}`} onClick={() => setFilter("mine")}>{t("내 작품")}</button>
+      <button type="button" className={`chip${filter === "mine" ? " on" : ""}`} onClick={() => { track("works_filter", { filter: "mine" }); setFilter("mine"); }}>{t("내 작품")}</button>
       {genres.map((g) => (
-        <button key={g} type="button" className={`chip${filter === g ? " on" : ""}`} onClick={() => setFilter(g)}>{t(g)}</button>
+        <button key={g} type="button" className={`chip${filter === g ? " on" : ""}`} onClick={() => { track("works_filter", { filter: "genre" }); setFilter(g); }}>{t(g)}</button>
       ))}
       <button type="button" className="chip wt-works-sort" onClick={() => setNewest((v) => !v)}
               aria-label={newest ? t("최신순 — 누르면 오래된순") : t("오래된순 — 누르면 최신순")}>
@@ -146,7 +147,10 @@ function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolea
   const t = useT();
   const eps = run.episodes || [];
   const first = eps[0] || 1;
-  const open = () => go("result", { run: run.run_id });
+  const open = () => {
+    track("works_open", { run: run.run_id, mine, where: "works" });
+    go("result", { run: run.run_id });
+  };
   const sub = [run.character, ...new Set([run.genre, run.style_label].filter((s): s is string => !!s).map((s) => t(s)))].filter(Boolean).join(" · ");
 
   /* 공개 스위치 — 서버에 먼저 보내고, 실패하면 되돌린다. */
@@ -155,6 +159,7 @@ function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolea
   const [err, setErr] = useState("");
   const flip = async () => {
     const want = !pub;
+    track("visibility_change", { run: run.run_id, result: want ? "public" : "private" });
     setPub(want);
     setBusy(true);
     setErr("");

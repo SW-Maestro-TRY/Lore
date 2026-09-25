@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useT } from "../../lib/i18n";
 import { copyLink, shareNative, SHARE_TARGETS, shareUrl, type ShareTarget } from "../../lib/share";
 import { IconShare } from "../../ui/Icons";
+import { track } from "../../lib/track";
 import "./i18n";
 
 /* 「공유」 단추 하나. 폰이 자기 공유 화면을 들고 있으면 그것을 먼저 띄우고,
@@ -36,12 +37,17 @@ export default function ShareMenu({
   const url = shareUrl(runId, episode);
   const text = title ? (character ? `${character} · ${title}` : title) : t("LORE 로 만든 웹툰");
 
+  /* 폰의 공유 화면은 사용자가 닫아도 「됐다」고 돌려준다(share.ts). 그래서 공유가
+     실제로 됐는지는 모르고, 「어디로 보내려고 눌렀나」까지만 남긴다(#413). */
   const start = async () => {
-    if (await shareNative(url, text)) return;
+    const native = await shareNative(url, text);
+    track("share_click", { run: runId, ep: episode, target: native ? "native" : "menu" });
+    if (native) return;
     setOpen((was) => !was);
   };
 
   const pick = async (tg: ShareTarget) => {
+    track("share_click", { run: runId, ep: episode, target: tg.key });
     if (tg.href) {
       window.open(tg.href(url, text), "_blank", "noopener,noreferrer");
       setOpen(false);
