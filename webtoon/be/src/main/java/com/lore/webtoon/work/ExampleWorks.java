@@ -74,7 +74,8 @@ public class ExampleWorks implements ApplicationRunner {
     private static final String CLASSPATH_DIR = "webtoon/ai/assets/examples/";
 
     /** 심은 작품의 주인 자리. 사람이 아니므로 계정도 브라우저도 없다. */
-    private static final String SEED_UID = "lore-example-seed";
+    /** 예시를 심은 브라우저 번호. 지우기(RunDeleteService)가 예시를 알아보는 표시이기도 하다. */
+    static final String SEED_UID = "lore-example-seed";
 
     private final PrivateArt art;
     private final PageStore pages;

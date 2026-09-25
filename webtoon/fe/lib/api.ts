@@ -37,6 +37,16 @@ export function myRuns(): string[] {
   }
 }
 
+/** 지운 작품을 이 브라우저의 목록에서도 뺀다 — 안 빼면 「내 작품」에 빈 카드가 남는다(#55). */
+export function forgetMyRun(runId: string): void {
+  if (!runId || typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MY_RUNS_KEY, JSON.stringify(myRuns().filter((x) => x !== runId)));
+  } catch {
+    /* 못 지워도 서버에서는 이미 없어졌다 */
+  }
+}
+
 export function rememberMyRun(runId: string): void {
   if (!runId || typeof window === "undefined") return;
   const list = myRuns().filter((x) => x !== runId);
@@ -323,6 +333,12 @@ export function linkThisBrowser(): Promise<{ linked: boolean }> {
 
 export function myAccountRuns(): Promise<RunCard[]> {
   return appRequest<RunCard[]>("/api/webtoon/v1/my/runs");
+}
+
+/** 내 작품 지우기(#55). 그림과 행을 모두 지우며 되돌릴 수 없다. 로그인이 필요하다. */
+export function deleteRun(runId: string): Promise<{ runId: string; images: number; rows: number }> {
+  return appRequest<{ runId: string; images: number; rows: number }>(
+    `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
 }
 
 export function setVisibility(runId: string, isPublic: boolean) {

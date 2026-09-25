@@ -36,6 +36,10 @@ const dict: Dict = {
   "비공개": { en: "Private", ja: "非公開", zh: "不公开" },
   "편집실": { en: "Editor", ja: "編集室", zh: "编辑室" },
   "로그인하면 공개 여부를 바꿀 수 있어요": { en: "Sign in to change who can see it", ja: "ログインすると公開設定を変えられます", zh: "登录后可更改公开设置" },
+  "지우기": { en: "Delete", ja: "削除", zh: "删除" },
+  "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  "정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.": { en: "Really delete? The images are removed too and this can't be undone.", ja: "本当に削除しますか？画像も消え、元に戻せません。", zh: "确定删除吗？图片也会一并删除，且无法撤销。" },
+  "지우지 못했습니다": { en: "Couldn't delete", ja: "削除できませんでした", zh: "删除失败" },
 };
 
 registerDict(dict);

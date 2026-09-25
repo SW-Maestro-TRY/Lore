@@ -67,3 +67,8 @@
   .wt .wt-works-state h2 { font-size: 24px; }
   .wt .wt-works-state .muted { font-size: 14px; }
 }
+
+/* 지우기(#55) */
+.wt .wt-works-del { align-self: flex-start; margin-top: 6px; }
+.wt .wt-works-delconfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.wt .wt-works-delconfirm .muted { font-size: 12px; }

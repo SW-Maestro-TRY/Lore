@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { browseRuns, coverUrl, isMyRun, myAccountRuns, setVisibility, type RunCard } from "../../lib/api";
+import { browseRuns, coverUrl, deleteRun, forgetMyRun, isMyRun, myAccountRuns, setVisibility, type RunCard } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { louArt } from "../../lib/louArt";
@@ -134,7 +134,8 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
         {shown && !noneAtAll && (
           <div className="wt-works-grid">
             {shown.map((r) => (
-              <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated} />
+              <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated}
+                        onDeleted={() => setRuns((list) => (list ? list.filter((x) => x.run_id !== r.run_id) : list))} />
             ))}
           </div>
         )}
@@ -143,13 +144,32 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   );
 }
 
-function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolean; go: Go; authenticated: boolean }) {
+function WorkCard({ run, mine, go, authenticated, onDeleted }:
+  { run: RunCard; mine: boolean; go: Go; authenticated: boolean; onDeleted: () => void }) {
   const t = useT();
   const eps = run.episodes || [];
   const first = eps[0] || 1;
   const open = () => {
     track("works_open", { run: run.run_id, mine, where: "works" });
     go("result", { run: run.run_id });
+  };
+
+  /* 지우기(#55) — 내 작품이고 로그인했을 때만. 두 번 눌러야 된다. */
+  const [confirming, setConfirming] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
+  const remove = async () => {
+    setDelBusy(true);
+    setErr("");
+    try {
+      await deleteRun(run.run_id);
+      forgetMyRun(run.run_id);
+      track("run_delete", { run: run.run_id, where: "works" });
+      onDeleted();
+    } catch (e) {
+      setErr((e as Error).message || t("지우지 못했습니다"));
+      setDelBusy(false);
+      setConfirming(false);
+    }
   };
   const sub = [run.character, ...new Set([run.genre, run.style_label].filter((s): s is string => !!s).map((s) => t(s)))].filter(Boolean).join(" · ");
 
@@ -203,6 +223,17 @@ function WorkCard({ run, mine, go, authenticated }: { run: RunCard; mine: boolea
               <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
             ))}
           </div>
+        )}
+        {mine && authenticated && (
+          confirming ? (
+            <div className="wt-works-delconfirm">
+              <span className="muted">{t("정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.")}</span>
+              <button type="button" className="btn btn-p btn-sm" disabled={delBusy} onClick={() => void remove()}>{t("지우기")}</button>
+              <button type="button" className="btn btn-w btn-sm" disabled={delBusy} onClick={() => setConfirming(false)}>{t("취소")}</button>
+            </div>
+          ) : (
+            <button type="button" className="btn btn-w btn-sm wt-works-del" disabled={delBusy} onClick={() => setConfirming(true)}>{t("지우기")}</button>
+          )
         )}
         {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
       </div>
