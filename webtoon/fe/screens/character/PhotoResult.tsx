@@ -17,6 +17,10 @@ import "./PhotoResult.css";
 
 const POLL_MS = 2500;
 
+/* 자리의 무게(하네스가 굴린 값) → 카드에 붙는 딱지. 하네스 값은 화면에 그대로 내보내지 않는다 —
+   목록에 없는 값이면 딱지를 안 단다. */
+const TIER_LABEL: Record<string, string> = { "중심": "주연", "곁": "조연", "스쳐감": "단역", "뜬금": "엑스트라" };
+
 /* 풍선 모양 — 웹툰 조립(strip.py 의 bubble_kind)과 같은 기준. */
 function bubbleKind(text: string): "shout" | "whisper" | "dialogue" {
   if (text.includes("!")) return "shout";
@@ -215,13 +219,17 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
             {ch ? (
               <>
                 <h2>{card?.twist || ch.name}</h2>
-                {card?.role && <b className="wt-ch-res-role">{card.role}</b>}
+                {card?.role && (
+                  <b className="wt-ch-res-role">
+                    {card.role}
+                    {TIER_LABEL[card.role_tier] && <span className="tag wt-ch-res-tier">{t(TIER_LABEL[card.role_tier])}</span>}
+                  </b>
+                )}
                 <span className="muted wt-ch-res-who">
                   {[ch.name, card?.genre].filter(Boolean).join(" · ")}
                 </span>
                 {card && card.fate?.length > 0 && (
                   <div className="card wt-ch-res-fate">
-                    <b>{t("운명")}</b>
                     {card.fate.map((line, i) => <span key={i}>{line}</span>)}
                   </div>
                 )}

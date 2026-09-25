@@ -116,6 +116,10 @@ public class WebtoonCharacter {
     @Column(name = "role_name", length = 40)
     private String roleName;
 
+    /** 자리의 무게 — 하네스가 굴린 값 그대로(중심 · 곁 · 스쳐감 · 뜬금). 화면이 주연·조연 같은 딱지로 옮긴다. */
+    @Column(name = "role_tier", length = 20)
+    private String roleTier;
+
     /** 반전 한 줄 — 카드의 제목이다. */
     @Column(length = 300)
     private String twist;
@@ -190,6 +194,7 @@ public class WebtoonCharacter {
         this.worldLabel = cut(card.worldLabel(), 20);
         this.genre = cut(card.genre(), 40);
         this.roleName = cut(card.role(), 40);
+        this.roleTier = cut(card.roleTier(), 20);
         this.twist = cut(card.twist(), 300);
         this.quote = cut(card.quote(), 300);
         this.dialogue = card.dialogue() == null || card.dialogue().isEmpty() ? null
@@ -200,7 +205,7 @@ public class WebtoonCharacter {
     }
 
     /** 카드 글. 한 컷으로 만든 캐릭터만 갖는다. */
-    public record Card(String world, String worldLabel, String genre, String role,
+    public record Card(String world, String worldLabel, String genre, String role, String roleTier,
                        String twist, String quote, List<DialogueLine> dialogue,
                        List<String> fate, String style) {
     }
@@ -316,6 +321,10 @@ public class WebtoonCharacter {
 
     public String getRoleName() {
         return roleName;
+    }
+
+    public String getRoleTier() {
+        return roleTier;
     }
 
     public String getTwist() {

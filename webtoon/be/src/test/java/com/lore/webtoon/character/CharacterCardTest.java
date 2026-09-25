@@ -20,7 +20,7 @@ class CharacterCardTest {
     private static final String PANEL_LINE = """
             {"out": "/x/panel.png", "name": "", "named": "몽이", "species": "강아지",
              "world": "romance_novel", "world_label": "사교계", "genre": "로맨스",
-             "role": "악역 영애", "twist": "몽이는 이 로맨스 웹툰에서, 진짜 강아지인 악역 영애예요",
+             "role": "악역 영애", "role_tier": "곁", "twist": "몽이는 이 로맨스 웹툰에서, 진짜 강아지인 악역 영애예요",
              "quote": "몽이: 멍!\\n황태자: 저 개는 뭐지?",
              "dialogue": [{"who": "몽이", "mine": true, "side": "left", "text": "멍!"},
                           {"who": "황태자", "mine": false, "side": "right", "text": "저 개는 뭐지?"}],
@@ -35,6 +35,7 @@ class CharacterCardTest {
 
         assertThat(card).isNotNull();
         assertThat(card.twist()).contains("악역 영애");
+        assertThat(card.roleTier()).isEqualTo("곁");
         assertThat(card.quote()).startsWith("몽이: 멍!");
         assertThat(card.dialogue()).hasSize(2);
         assertThat(card.dialogue().get(0).mine()).isTrue();
@@ -61,7 +62,7 @@ class CharacterCardTest {
         assertThat(one.hasCard()).isFalse();
 
         one.drewPanel("private/char/x.png", CharacterSource.PROMPT,
-                new WebtoonCharacter.Card("romance_novel", "사교계", "로맨스", "악역 영애",
+                new WebtoonCharacter.Card("romance_novel", "사교계", "로맨스", "악역 영애", "곁",
                         "몽이는 이 로맨스 웹툰에서, 진짜 강아지인 악역 영애예요", "몽이: 멍!",
                         List.of(new WebtoonCharacter.DialogueLine("몽이", true, "left", "멍!"),
                                 new WebtoonCharacter.DialogueLine("황태자", false, "right", "저 개는\t뭐지?")),
@@ -70,6 +71,7 @@ class CharacterCardTest {
         assertThat(one.getStatus()).isEqualTo(CharacterStatus.READY);
         assertThat(one.getArtKey()).isEqualTo("private/char/x.png");
         assertThat(one.hasCard()).isTrue();
+        assertThat(one.getRoleTier()).isEqualTo("곁");
         assertThat(one.dialogueLines()).hasSize(2);
         assertThat(one.dialogueLines().get(1).text()).isEqualTo("저 개는 뭐지?");
         assertThat(one.dialogueLines().get(0).mine()).isTrue();
@@ -84,7 +86,7 @@ class CharacterCardTest {
         WebtoonCharacter one = WebtoonCharacter.drawing("abc", 1L, null, "x", "", at);
         one.drewPanel("k", CharacterSource.PHOTO,
                 new WebtoonCharacter.Card("", "아주아주아주아주아주아주아주아주아주긴세계관이름", "",
-                        "", "t", "", List.of(), List.of(), ""), at);
+                        "", "", "t", "", List.of(), List.of(), ""), at);
         assertThat(one.getWorldLabel()).hasSize(20);
         assertThat(one.getWorld()).isNull();
     }

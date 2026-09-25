@@ -196,6 +196,7 @@ public class CharacterMaker {
                 got.path("world_label").asText(""),
                 got.path("genre").asText(""),
                 got.path("role").asText(""),
+                got.path("role_tier").asText(""),
                 twist,
                 got.path("quote").asText(""),
                 dialogue,
