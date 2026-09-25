@@ -325,6 +325,40 @@ public class RunService {
         return i >= 0 && i < scenes.size() ? scenes.get(i) : "";
     }
 
+    /**
+     * 만들 때 사람이 넣은 설정(#329). 완성본 옆에 「넣은 것」을 나란히 보여 주려고
+     * 꺼낸다. <b>사람이 쓴 글이 그대로 들어 있으니 주인에게만 보낸다</b> — 그 판단은
+     * 컨트롤러가 한다. 없으면 null.
+     *
+     * @return job 의 브라우저 uid(주인 판정용)와 입력 값들
+     */
+    public Inputs inputsOf(String runId) {
+        WebtoonWork work = works.findFirstByRunId(runId).orElse(null);
+        WebtoonJob job = work == null ? null : jobs.findByPublicId(work.getJobId()).orElse(null);
+        if (job == null || job.getInputJson() == null || job.getInputJson().isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode root = mapper.readTree(job.getInputJson());
+            Map<String, Object> in = new LinkedHashMap<>();
+            in.put("name", root.path("name").asText(""));
+            in.put("character", root.path("character").asText(""));
+            in.put("genre", root.path("genre").asText(""));
+            in.put("story", root.path("story").asText(""));
+            in.put("photo_note", root.path("photo_note").asText(""));
+            in.put("has_photo", root.path("photos_data").size() > 0 || root.path("photo_keys").size() > 0
+                    || !root.path("character_id").asText("").isBlank());
+            in.put("style", WebtoonStyles.labelOf(job.getStyle()));
+            return new Inputs(job.getBrowserUid(), work.getUserId(), in);
+        } catch (Exception e) {          // noqa: 넣은 것을 못 읽어도 완성본은 보여야 한다
+            log.warn("넣은 설정을 못 읽었습니다 (job={})", job.getPublicId(), e);
+            return null;
+        }
+    }
+
+    public record Inputs(String browserUid, Long userId, Map<String, Object> values) {
+    }
+
     /** 이 작품의 주인공 이름. 만들 때 받은 폼에 있다. */
     private String characterOf(WebtoonJob job) {
         if (job == null || job.getInputJson() == null || job.getInputJson().isBlank()) {
