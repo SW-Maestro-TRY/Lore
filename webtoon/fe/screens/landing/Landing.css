@@ -137,21 +137,19 @@
 .wt .wt-landing-faq details > p { padding: 0 4px 22px; font-size: 15px; line-height: 1.7; }
 
 /* 마지막 CTA */
-/* 흰 카드. 왼쪽 컷 기둥이 카드 위아래로 조금 튀어나오므로 overflow 를 열어 두고,
-   기둥은 카드 안 높이에 맞춰 폭을 잡아(270px) 위로는 안 나가고 아래로만 24px
-   나온다. 위 margin 은 이웃 구역과 겹치지 않게 넉넉히 둔다. */
+/* 카드 배경 없이 페이지 바탕 위에 컷 기둥과 글자만 놓는다. 기둥이 구역 위로 약 110px,
+   아래로 30px 나가므로 위 margin 을 넉넉히(200px) 둬서 바로 위 예시 작품 띠를 안 가린다.
+   글자는 기둥 아래쪽에 맞춰 아래로 내린다. */
 .wt .wt-landing-last {
-  position: relative; margin: 120px 48px 110px; min-height: 340px; padding: 56px 72px 56px 0;
-  background: #fff; border: 1px solid var(--line); border-radius: 32px;
-  box-shadow: 0 30px 70px rgba(15, 51, 63, .12);
-  display: flex; align-items: center; justify-content: flex-end;
+  position: relative; margin: 200px 48px 110px; min-height: 340px; padding: 120px 72px 24px 0;
+  display: flex; align-items: flex-end; justify-content: flex-end;
 }
 .wt .wt-landing-last-cuts {
-  position: absolute; left: 60px; bottom: -24px; width: 270px; transform: rotate(-4deg);
+  position: absolute; left: 60px; bottom: -30px; width: 330px; transform: rotate(-4deg);
   display: flex; flex-direction: column; gap: 14px; pointer-events: none;
 }
 .wt .wt-landing-last-cuts img { width: 100%; border-radius: 12px; box-shadow: 0 24px 50px rgba(15, 51, 63, .22); display: block; }
-.wt .wt-landing-last-cuts img:first-child { margin-top: 0; }
+.wt .wt-landing-last-cuts img:first-child { margin-top: -80px; }
 .wt .wt-landing-last-text {
   width: 55%; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 28px;
 }
@@ -228,8 +226,9 @@
   .wt .wt-landing-faq details > p { padding: 0 2px 18px; font-size: 14px; }
 
   /* 폰: 컷 기둥이 카드 위쪽 가운데에서 내려오고, 글자는 그 아래. 기둥 높이만큼 위 padding. */
-  .wt .wt-landing-last { margin: 70px 16px 40px; min-height: 0; padding: 240px 24px 36px; border-radius: 24px; flex-direction: column; align-items: stretch; }
-  .wt .wt-landing-last-cuts { left: 50%; top: -30px; bottom: auto; width: 260px; height: 250px; overflow: hidden; transform: translateX(-50%) rotate(-4deg); }
+  /* 폰: 카드가 없으니 기둥을 자르지 않고 세 장을 다 보여 준다. 기둥 높이만큼 위 padding. */
+  .wt .wt-landing-last { margin: 56px 16px 40px; min-height: 0; padding: 470px 8px 0; flex-direction: column; align-items: stretch; }
+  .wt .wt-landing-last-cuts { left: 50%; top: 0; bottom: auto; width: 250px; transform: translateX(-50%) rotate(-4deg); }
   .wt .wt-landing-last-cuts img:first-child { margin-top: 0; }
   .wt .wt-landing-last-text { width: 100%; gap: 22px; }
   .wt .wt-landing-last h2 { font-size: 28px; }
