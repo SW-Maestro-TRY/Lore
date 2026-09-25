@@ -66,8 +66,7 @@ export default function Hero() {
           <span className={styles.sideInner}>
             <h2 className={styles.sideTitle}>캐릭터 다마고치</h2>
             <p className={styles.sideText}>
-              만든 캐릭터가 화면 안에서 삽니다. 돌본 만큼 새 동작을 하나씩
-              배워 와요.
+              캐릭터가 새로운 동작을 배우며 살아 움직입니다.
             </p>
             <span className={styles.sideMore}>
               <span className={styles.sideMoreIn}>

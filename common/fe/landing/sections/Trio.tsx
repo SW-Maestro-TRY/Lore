@@ -59,7 +59,7 @@ const CARDS: readonly Card[] = [
     href: "/zzal",
     img: "/static/landing/trio-tama.webp",
     alt: "사계절을 함께 보낸 캐릭터",
-    lead: "만든 캐릭터가 화면 안에서 삽니다. 돌본 만큼 새 동작을 하나씩 배워 와요.",
+    lead: "캐릭터가 새로운 동작을 배우며 살아 움직입니다.",
     list: [
       "밥 · 목욕 · 놀이 · 잠, 하루 세 번의 부름으로 같이 지냅니다.",
       "함께한 만큼 열리는 동작이 움짤로 앨범에 쌓입니다.",
