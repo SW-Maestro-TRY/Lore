@@ -334,7 +334,7 @@ export interface RunResult {
   page_count: number;
   planned_pages: number;
   preview: boolean;
-  /** 주인이 열 때만 온다(#329) — 만들 때 넣은 설정. */
+  /** 관리자가 열 때만 온다(#329, #428) — 만들 때 넣은 설정. */
   inputs?: RunInputs;
 }
 
@@ -472,9 +472,8 @@ export interface Character {
   builtin: boolean;
   mine: boolean;
   created_at: string;
-  /** 사람이 넣은 이름·세계관 그대로(#329). 안 넣었으면 빈 문자열. */
-  asked_name: string;
-  asked_world: string;
+  /** 관리자가 열 때만 온다(#428) — 사람이 넣은 이름·세계관 그대로(#329). 안 넣었으면 빈 문자열. */
+  inputs?: { name: string; world: string };
   card?: CharacterCard;
   /** 내 카드에만 온다(#332) — 공유 링크로 남이 몇 명 봤고, 무료 횟수를 몇 번 돌려받았나. */
   share_visits?: number;

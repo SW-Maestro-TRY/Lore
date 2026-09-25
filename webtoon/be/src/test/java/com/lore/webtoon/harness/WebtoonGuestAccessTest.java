@@ -1,5 +1,6 @@
 package com.lore.webtoon.harness;
 
+import com.lore.webtoon.Admins;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PrivateArt;
 import com.lore.webtoon.credit.CreditGate;
@@ -74,6 +75,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean SpendGuard spendGuard;
     @MockitoBean GuestGate guestGate;
     @MockitoBean CreditGate creditGate;
+    @MockitoBean Admins admins;
     @MockitoBean RunService runService;
     @MockitoBean PageStore pageStore;
     @MockitoBean EpisodeExport episodeExport;

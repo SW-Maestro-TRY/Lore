@@ -215,8 +215,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </span>
             </div>
 
-            {mine && data.inputs && (
-              /* 넣은 설정이 어디로 갔나(#329) — 주인에게만 온다(사람이 쓴 글이라). 점수 없이,
+            {data.inputs && (
+              /* 넣은 설정이 어디로 갔나(#329) — 운영용이라 관리자에게만 온다(#428). 점수 없이,
                  만들 때 넣은 것 옆에 완성본에 실제로 남은 값을 놓는다. */
               <div className="card wt-result-inputs">
                 <b>{t("넣은 설정이 간 곳")}</b>

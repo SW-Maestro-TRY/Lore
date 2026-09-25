@@ -2,6 +2,7 @@ package com.lore.webtoon.runs;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.webtoon.Admins;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.job.AfterRun;
@@ -67,6 +68,7 @@ public class RunController {
     private final AfterRun after;
     private final WorkLedger ledger;
     private final CreditGate credits;
+    private final Admins admins;
     /* **경계에서는 Map 으로 주고받는다.**
      *
      * 이 앱의 HTTP 변환기는 Jackson 3(tools.jackson) 인데, 얹은 것을 다루는
@@ -79,7 +81,7 @@ public class RunController {
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
                          RegenService regen, AfterRun after, WorkLedger ledger,
-                         CreditGate credits) {
+                         CreditGate credits, Admins admins) {
         this.runs = runs;
         this.pages = pages;
         this.export = export;
@@ -90,6 +92,7 @@ public class RunController {
         this.after = after;
         this.ledger = ledger;
         this.credits = credits;
+        this.admins = admins;
     }
 
     /**
@@ -203,10 +206,9 @@ public class RunController {
     }
 
     @Operation(summary = "완성본 한 편", description = """
-            주인이 열면 만들 때 넣은 설정(inputs)이 같이 온다(#329) — 사람이 쓴 글이라 남에게는 안 준다.""")
+            관리자가 열면 만들 때 넣은 설정(inputs)이 같이 온다(#329, #428) — 운영용이고 사람이 쓴 글이라 다른 사람에게는 안 준다.""")
     @GetMapping("/{runId}/result")
-    public ResponseEntity<Map<String, Object>> result(@PathVariable String runId,
-                                                      @RequestHeader(value = "X-Lore-Uid", required = false) String uid) {
+    public ResponseEntity<Map<String, Object>> result(@PathVariable String runId) {
         /* **여는 것만으로 낫게 한다.** 다 그려 놓고 올리는 데서 실패한 작품은
            여기서 404 가 된다. 그림이 디스크에 있으면 그 자리에서 적고 간다 —
            거의 매번 아무 일도 안 한다(적혀 있으면 바로 돌아온다). 다시 그리지
@@ -216,12 +218,10 @@ public class RunController {
         if (found == null) {
             return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
         }
-        RunService.Inputs inputs = runs.inputsOf(runId);
-        if (inputs != null) {
-            Long me = CreditGate.currentUser();
-            boolean mine = (me != null && (me.equals(inputs.userId()) || ledger.mayChange(runId, me)))
-                    || (uid != null && !uid.isBlank() && uid.equals(inputs.browserUid()));
-            if (mine) {
+        /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
+        if (admins.current()) {
+            RunService.Inputs inputs = runs.inputsOf(runId);
+            if (inputs != null) {
                 found.put("inputs", inputs.values());
             }
         }
