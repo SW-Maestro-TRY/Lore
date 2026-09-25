@@ -31,8 +31,15 @@ export default function Hero() {
       <div className={styles.split}>
         <a className={`${styles.side} ${styles.sideWebtoon}`} href="/webtoon">
           <span className={styles.sideBg}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/static/landing/hero-webtoon.jpg" alt="" />
+            {[1, 2, 3].map((n) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={n}
+                className={styles.sideSlide}
+                src={`/static/landing/hero-webtoon-${n}.jpg`}
+                alt=""
+              />
+            ))}
           </span>
           <span className={styles.sideInner}>
             <span className={styles.sideNum}>/ 길게</span>
