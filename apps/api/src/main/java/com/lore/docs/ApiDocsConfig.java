@@ -143,9 +143,6 @@ public class ApiDocsConfig {
         if (HttpMethod.POST.name().equals(httpMethod) && matches(path, "/api/v1/events")) {
             return false;
         }
-        if (matches(path, "/api/test/email")) {
-            return false;
-        }
         // 나머지는 로그인 필요.
         return true;
     }

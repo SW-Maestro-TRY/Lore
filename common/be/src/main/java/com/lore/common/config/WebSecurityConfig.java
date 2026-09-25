@@ -91,9 +91,6 @@ public class WebSecurityConfig {
                         //    믿지 않고 쿠키만 신뢰(본문을 믿으면 남의 번호로 기록을 심을 수 있다).
                         .requestMatchers(HttpMethod.POST, "/api/v1/events").permitAll()
 
-                        // SMTP 테스트용 임시 API
-                        .requestMatchers("/api/test/email").permitAll()
-
                         // 나머지는 로그인 필요.
                         // ★ 관리자 주소를 여기서 role 로 가르지 않는다 — 지금 JWT 에는 role 이
                         //   없어서(모두에게 ROLE_USER 를 하드코딩) hasRole 로 잠그면 아무도 못 들어온다.
