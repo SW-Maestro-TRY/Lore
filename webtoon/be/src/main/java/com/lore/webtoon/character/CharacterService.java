@@ -9,6 +9,7 @@ import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.usage.SpendGuard;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.safety.SafetyGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,6 +77,8 @@ public class CharacterService {
     private final CharacterOwner owner;
     private final PrivateArt art;
     private final CreditGate credits;
+    /** 글 거르기(#80). 테스트용 생성자로 만들면 비어 있고, 그때는 안 거른다. */
+    private SafetyGuard safety;
     private final Path workDir;
     private final int freePerDay;
     private final int cost;
@@ -90,13 +93,14 @@ public class CharacterService {
     /* 생성자가 둘이다(아래 하나는 검사에서 시계를 갈아 끼우려고 둔 것) */
     @Autowired
     public CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
-                            CharacterOwner owner, PrivateArt art, CreditGate credits,
+                            CharacterOwner owner, PrivateArt art, CreditGate credits, SafetyGuard safety,
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
                             @Value("${lore.webtoon.character.free-per-day:3}") int freePerDay,
                             @Value("${lore.webtoon.character.credit-cost:2}") int cost,
                             @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally) {
         this(characters, maker, owner, art, credits, workDir, freePerDay, cost,
              presignLocally, Clock.system(ZONE));
+        this.safety = safety;
     }
 
     CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
@@ -205,6 +209,10 @@ public class CharacterService {
         if (userId == null && (browserUid == null || browserUid.isBlank())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "브라우저를 알 수 없어 만들 수 없습니다 — 새로고침 후 다시 시도해 주세요.");
+        }
+        // 글은 그리기 전에 거른다(#80). 사진은 아직 안 본다(safety.md).
+        if (safety != null) {
+            safety.checkText(world == null ? "character-create" : "character-try", name, description, world);
         }
         List<String> photos = (photoDataUrls == null ? List.<String>of() : photoDataUrls).stream()
                 .filter(s -> s != null && !s.isBlank())
