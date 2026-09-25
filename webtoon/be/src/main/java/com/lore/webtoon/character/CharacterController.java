@@ -191,6 +191,7 @@ public class CharacterController {
             card.put("world_label", one.getWorldLabel() == null ? "" : one.getWorldLabel());
             card.put("genre", one.getGenre() == null ? "" : one.getGenre());
             card.put("role", one.getRoleName() == null ? "" : one.getRoleName());
+            card.put("role_tier", one.getRoleTier() == null ? "" : one.getRoleTier());
             card.put("twist", one.getTwist());
             card.put("quote", one.getQuote() == null ? "" : one.getQuote());
             List<Map<String, Object>> dialogue = new ArrayList<>();
