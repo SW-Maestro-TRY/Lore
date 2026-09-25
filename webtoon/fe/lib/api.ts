@@ -403,6 +403,9 @@ export interface Character {
   mine: boolean;
   created_at: string;
   card?: CharacterCard;
+  /** 내 카드에만 온다(#332) — 공유 링크로 남이 몇 명 봤고, 무료 횟수를 몇 번 돌려받았나. */
+  share_visits?: number;
+  share_bonus?: number;
 }
 
 export interface CharacterList {
