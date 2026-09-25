@@ -20,13 +20,6 @@ const POLL_MS = 2500;
    목록에 없는 값이면 딱지를 안 단다. */
 const TIER_LABEL: Record<string, string> = { "중심": "주연", "곁": "조연", "스쳐감": "단역", "뜬금": "엑스트라" };
 
-/* 풍선 모양 — 웹툰 조립(strip.py 의 bubble_kind)과 같은 기준. */
-function bubbleKind(text: string): "shout" | "whisper" | "dialogue" {
-  if (text.includes("!")) return "shout";
-  if (text.trim().startsWith("(") || text.includes("…")) return "whisper";
-  return "dialogue";
-}
-
 export default function PhotoResult({ id, shared, go, authenticated }: { id: string; shared: boolean; go: Go; authenticated: boolean }) {
   const t = useT();
   const [ch, setCh] = useState<Character | null>(null);
@@ -117,11 +110,11 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
 
   if (limited !== null) return <LimitView go={go} message={limited} authenticated={authenticated} />;
 
-  /* 말풍선은 그림에 안 굽고 여기서 얹는다 — 그림이 1화의 참고 그림으로도 쓰여서
-     글자를 구우면 1화에 샌다. 옛 카드(dialogue 없음)는 quote 한 줄을 오른쪽에 하나 띄운다. */
+  /* 대사는 그림에 안 굽고 운명 아래 칸에 적는다 — 그림이 1화의 참고 그림으로도 쓰여서
+     글자를 구우면 1화에 샌다. 옛 카드(dialogue 없음)는 quote 한 줄을 이 캐릭터의 말로 적는다. */
   const dialogue = card?.dialogue?.length
     ? card.dialogue
-    : card?.quote ? [{ who: "", mine: true, side: "right" as const, text: card.quote }] : [];
+    : card?.quote ? [{ who: ch?.name || "", mine: true, side: "center" as const, text: card.quote }] : [];
   const ready = !!ch && ch.status === "ready" && !!ch.art_url;
 
   const art = (
@@ -131,13 +124,6 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={ch!.art_url!} alt={t("웹툰 한 컷")} />
           {card?.world_label && <span className="badge">{t(card.world_label)}</span>}
-          {dialogue.length > 0 && (
-            <div className="wt-ch-res-bubbles" aria-label={t("대사")}>
-              {dialogue.map((line, i) => (
-                <div key={i} className={`wt-ch-res-bubble ${line.side} ${bubbleKind(line.text)}`}>{line.text}</div>
-              ))}
-            </div>
-          )}
         </>
       ) : ch?.status === "error" ? (
         <div className="wt-ch-res-wait">
@@ -211,6 +197,15 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
                 {card && card.fate?.length > 0 && (
                   <div className="card wt-ch-res-fate">
                     {card.fate.map((line, i) => <span key={i}>{line}</span>)}
+                  </div>
+                )}
+                {dialogue.length > 0 && (
+                  <div className="card wt-ch-res-lines">
+                    {dialogue.map((line, i) => (
+                      <span key={i} className={line.mine ? "mine" : undefined}>
+                        {line.who && <em>{line.who}</em>}“{line.text}”
+                      </span>
+                    ))}
                   </div>
                 )}
               </>
