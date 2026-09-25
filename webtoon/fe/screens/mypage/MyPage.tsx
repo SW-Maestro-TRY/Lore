@@ -27,6 +27,7 @@ import {
 } from "../../lib/api";
 import type { Go } from "../../lib/nav";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
+import { track } from "../../lib/track";
 import { IconUser } from "../../ui/Icons";
 import { louArt } from "../../lib/louArt";
 import "./MyPage.css";
@@ -171,7 +172,7 @@ export default function MyPage({ go }: { go: Go }) {
             <span className="dim">{t("크레딧")}</span>
             <b>◈ {(credits ?? allowance?.balance ?? 0).toLocaleString()} <span>C</span></b>
             <div className="wt-my-creditacts">
-              <button type="button" className="btn btn-p btn-sm" onClick={() => setCreditModal("charge")}>{t("충전")}</button>
+              <button type="button" className="btn btn-p btn-sm" onClick={() => { track("charge_open", { where: "mypage" }); setCreditModal("charge"); }}>{t("충전")}</button>
               <button type="button" className="btn btn-w btn-sm" onClick={() => setCreditModal("history")}>{t("내역")}</button>
             </div>
           </div>
