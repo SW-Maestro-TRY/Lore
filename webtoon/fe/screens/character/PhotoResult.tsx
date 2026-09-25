@@ -16,7 +16,10 @@ import "./i18n";
 import "./PhotoResult.css";
 
 const POLL_MS = 2500;
-const SHORT_QUOTE = 16;
+
+/* 자리의 무게(하네스가 굴린 값) → 카드에 붙는 딱지. 하네스 값은 화면에 그대로 내보내지 않는다 —
+   목록에 없는 값이면 딱지를 안 단다. */
+const TIER_LABEL: Record<string, string> = { "중심": "주연", "곁": "조연", "스쳐감": "단역", "뜬금": "엑스트라" };
 
 export default function PhotoResult({ id, shared, go, authenticated }: { id: string; shared: boolean; go: Go; authenticated: boolean }) {
   const t = useT();
@@ -127,7 +130,11 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
 
   if (limited !== null) return <LimitView go={go} message={limited} authenticated={authenticated} />;
 
-  const quote = card?.quote || "";
+  /* 대사는 그림에 안 굽고 운명 아래 칸에 적는다 — 그림이 1화의 참고 그림으로도 쓰여서
+     글자를 구우면 1화에 샌다. 옛 카드(dialogue 없음)는 quote 한 줄을 이 캐릭터의 말로 적는다. */
+  const dialogue = card?.dialogue?.length
+    ? card.dialogue
+    : card?.quote ? [{ who: ch?.name || "", mine: true, side: "center" as const, text: card.quote }] : [];
   const ready = !!ch && ch.status === "ready" && !!ch.art_url;
 
   const art = (
@@ -137,7 +144,6 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={ch!.art_url!} alt={t("웹툰 한 컷")} />
           {card?.world_label && <span className="badge">{t(card.world_label)}</span>}
-          {quote && <div className={`wt-ch-res-bubble${quote.length <= SHORT_QUOTE ? " short" : ""}`}>{quote}</div>}
         </>
       ) : ch?.status === "error" ? (
         <div className="wt-ch-res-wait">
@@ -199,14 +205,27 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
             {ch ? (
               <>
                 <h2>{card?.twist || ch.name}</h2>
-                {card?.role && <b className="wt-ch-res-role">{card.role}</b>}
+                {card?.role && (
+                  <b className="wt-ch-res-role">
+                    {card.role}
+                    {TIER_LABEL[card.role_tier] && <span className="tag wt-ch-res-tier">{t(TIER_LABEL[card.role_tier])}</span>}
+                  </b>
+                )}
                 <span className="muted wt-ch-res-who">
                   {[ch.name, card?.genre].filter(Boolean).join(" · ")}
                 </span>
                 {card && card.fate?.length > 0 && (
                   <div className="card wt-ch-res-fate">
-                    <b>{t("운명")}</b>
                     {card.fate.map((line, i) => <span key={i}>{line}</span>)}
+                  </div>
+                )}
+                {dialogue.length > 0 && (
+                  <div className="card wt-ch-res-lines">
+                    {dialogue.map((line, i) => (
+                      <span key={i} className={line.mine ? "mine" : undefined}>
+                        {line.who && <em>{line.who}</em>}“{line.text}”
+                      </span>
+                    ))}
                   </div>
                 )}
               </>
