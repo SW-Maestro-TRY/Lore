@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -192,6 +193,16 @@ public class CharacterController {
             card.put("role", one.getRoleName() == null ? "" : one.getRoleName());
             card.put("twist", one.getTwist());
             card.put("quote", one.getQuote() == null ? "" : one.getQuote());
+            List<Map<String, Object>> dialogue = new ArrayList<>();
+            for (WebtoonCharacter.DialogueLine line : one.dialogueLines()) {
+                Map<String, Object> l = new LinkedHashMap<>();
+                l.put("who", line.who());
+                l.put("mine", line.mine());
+                l.put("side", line.side());
+                l.put("text", line.text());
+                dialogue.add(l);
+            }
+            card.put("dialogue", dialogue);
             card.put("fate", one.fateLines());
             card.put("style", one.getStyle() == null ? "" : one.getStyle());
             m.put("card", card);
