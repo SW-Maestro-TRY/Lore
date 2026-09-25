@@ -228,6 +228,9 @@ const dict: Dict = {
   "이용약관": { en: "Terms of Service", ja: "利用規約", zh: "服务条款" },
   "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },
   "1:1 문의": { en: "Contact us", ja: "お問い合わせ", zh: "联系我们" },
+  "운영": { en: "Operated by", ja: "運営", zh: "运营" },
+  "문의": { en: "Contact", ja: "連絡先", zh: "联系" },
+  "AI SW MAESTRO 17기 프로젝트": { en: "An AI SW MAESTRO (17th) project", ja: "AI SW MAESTRO 17期プロジェクト", zh: "AI SW MAESTRO 第17期项目" },
   "과학기술정보통신부": { en: "Ministry of Science and ICT", ja: "科学技術情報通信部", zh: "科学技术信息通信部" },
   "정보통신기획평가원(IITP)": { en: "Institute of Information & Communications Technology Planning & Evaluation (IITP)", ja: "情報通信企画評価院(IITP)", zh: "信息通信规划评价院(IITP)" },
 
