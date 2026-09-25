@@ -211,8 +211,13 @@ update webtoon_work set is_public = false where run_id = '…';
 
 | 자리 | 파일:줄 | 지금 값 |
 | --- | --- | --- |
-| 입구 화면 카드 2장 | `webtoon/fe/screens/landing/Entry.tsx:12-13` | `20260903T174524-309e57`, `20260906T124144-63e2a7` |
 | 온보딩 04 「완성」 칸 | `webtoon/fe/screens/landing/Landing.tsx:38` | `20260910T132240-ae8c28` |
+
+입구 화면 카드 두 장은 작품 번호가 아니라 정적 그림을 쓴다
+(`webtoon/fe/static/entry/`). 왼쪽 「바로 웹툰을 만들고 싶어요」는
+`webtoon-page.jpg`(「가면 아래의 대리인」 2쪽, 말상자까지 그대로), 오른쪽
+「캐릭터를 만들어보고 싶어요」는 `character.jpg`(같은 쪽 첫 컷의 인물만 잘라 둔 것)다.
+바꾸려면 같은 이름으로 덮어쓴다.
 
 ## 자주 하는 실수
 

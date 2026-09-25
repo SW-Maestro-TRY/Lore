@@ -10,10 +10,12 @@ import { IconUser } from "../../ui/Icons";
 import { usePhone } from "./usePhone";
 import "./Entry.css";
 
-/* 카드 표지는 고정 예시 두 편을 지정해서 쓴다. 그림 자체가 안 나오면(작품이
-   빠지는 등) 아래 견본 그림으로 대체한다. */
-const COVER_A = api.coverUrl("20260919T153128-5f3882", 5); // 그림자 위의 장미
-const COVER_B = api.coverUrl("20260919T153345-f366ce", 1); // 가면 아래의 대리인
+/* 두 카드 그림은 「가면 아래의 대리인」에서 가져온 정적 그림이다(webtoon/fe/static/entry).
+   왼쪽(웹툰 만들기)은 2쪽을 말상자까지 그대로 — 실제 웹툰 한 장이 보이게 한다.
+   오른쪽(캐릭터 만들어보기)은 같은 쪽 첫 컷의 인물만 잘라 둔 것이다.
+   창고의 쪽 그림(w=320)을 쓰면 카드 폭에 늘어나 흐려져서 정적 그림으로 뒀다. */
+const COVER_A = "/static/entry/webtoon-page.jpg";
+const COVER_B = "/static/entry/character.jpg";
 const FALLBACK_A = "/static/samples/onboarding-page.jpg";
 const FALLBACK_B = "/static/samples/ex-romance-2.jpg";
 
@@ -67,7 +69,7 @@ export default function Entry({ go }: { go: Go }) {
         <a href={hrefOf("try")} className="wt-entry-card" onClick={to(() => go("try"))}>
           <div className="wt-entry-pic">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={COVER_B} alt="" onError={onImgError(FALLBACK_B)} />
+            <img src={COVER_B} alt="" className="wt-entry-pic-left" onError={onImgError(FALLBACK_B)} />
             <span className="wt-entry-tag">{t("캐릭터 만들어보기")}</span>
             {charFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: charFree })}</span>}
           </div>
