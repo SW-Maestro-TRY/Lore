@@ -214,6 +214,12 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
                 <span className="muted wt-ch-res-who">
                   {[ch.name, card?.genre].filter(Boolean).join(" · ")}
                 </span>
+                {!shared && ch.share_visits != null && ch.share_visits > 0 && (
+                  <span className="muted wt-ch-res-share">
+                    {t("공유 링크로 {n}명이 봤어요", { n: ch.share_visits })}
+                    {ch.share_bonus ? ` · ${t("무료 횟수 +{n}", { n: ch.share_bonus })}` : ""}
+                  </span>
+                )}
                 {card && card.fate?.length > 0 && (
                   <div className="card wt-ch-res-fate">
                     {card.fate.map((line, i) => <span key={i}>{line}</span>)}

@@ -9,6 +9,8 @@ const dict: Dict = {
   "캐릭터 카드": { en: "Character card", ja: "キャラクターカード", zh: "角色卡" },
   "웹툰": { en: "Webtoon", ja: "ウェブトゥーン", zh: "网络漫画" },
   "웹툰 한 컷": { en: "One panel", ja: "ウェブトゥーン一コマ", zh: "漫画一格" },
+  "공유 링크로 {n}명이 봤어요": { en: "{n} people opened your shared link", ja: "共有リンクから{n}人が見ました", zh: "有{n}人通过分享链接查看" },
+  "무료 횟수 +{n}": { en: "+{n} free tries", ja: "無料回数 +{n}", zh: "免费次数 +{n}" },
   "1화": { en: "Episode 1", ja: "第1話", zh: "第1话" },
   "내 캐릭터": { en: "My characters", ja: "マイキャラクター", zh: "我的角色" },
   "처음으로": { en: "Start over", ja: "最初へ", zh: "回到开始" },
