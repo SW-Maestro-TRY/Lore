@@ -342,6 +342,12 @@ export function setNotifySetting(on: boolean): Promise<{ on: boolean }> {
   return appRequest<{ on: boolean }>("/api/webtoon/v1/my/notify-setting", { method: "POST", body: { on } });
 }
 
+/** 계정 탈퇴(#405). 서버는 표시만 남기고 30일 뒤에 지운다(처리방침 제4조). 토큰은 즉시 폐기되므로
+ *  부른 뒤에는 화면도 로그아웃 상태로 넘어가야 한다. 공용 API 라 주소만 여기서 안다. */
+export function withdrawAccount(): Promise<void> {
+  return appRequest<void>("/api/v1/users/me", { method: "DELETE" });
+}
+
 /* ---- 캐릭터 ------------------------------------------------------------------ */
 
 /** 「캐릭터 만들어보기」로 만든 것만 갖는다 — 그 세계관 웹툰의 한 컷과 카드 글. */
