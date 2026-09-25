@@ -11,7 +11,7 @@ import { CONTACT_CHANNEL } from "@common/links";
 import * as api from "../../lib/api";
 import { LangSwitch, useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
-import { IconDownload, IconEdit, IconPlus, IconRetry, IconShare, IconUser } from "../../ui/Icons";
+import { IconArrow, IconDownload, IconEdit, IconPlus, IconRetry, IconShare, IconUser } from "../../ui/Icons";
 import EditorMock, { CUT_IMG, PAGE_IMG, SHEET_IMG } from "./EditorMock";
 
 /* 글꼴 시험 (2026-09-19, 온보딩 화면에만) — 제목은 Gmarket Sans, 나머지는
@@ -310,15 +310,18 @@ export default function Landing({ go }: { go: Go }) {
         </div>
       </section>
 
-      {/* 마지막 CTA */}
+      {/* 마지막 CTA — 흰 카드 밖으로 실제 웹툰 컷 세 장이 기울어져 튀어나온다.
+          단추는 맨 위 「지금 시작하기」와 같은 규격(btn-p). */}
       <section className="wt-landing-last">
+        <div className="wt-landing-last-cuts" aria-hidden="true">
+          {[1, 2, 3].map((n) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={n} src={`/static/last/cut-${n}.jpg`} alt="" />
+          ))}
+        </div>
         <div className="wt-landing-last-text">
           <h2 style={phone ? { whiteSpace: "pre-line" } : undefined}>{t(phone ? "당신의 이야기를\n기다리고 있어요" : "당신의 이야기를 기다리고 있어요")}</h2>
-          <button type="button" className="btn wt-landing-last-cta" onClick={start("bottom")}>{t("만들러가기")}</button>
-        </div>
-        <div className="wt-landing-last-pic">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/static/samples/ex-romance-2.jpg" alt="" />
+          <button type="button" className="btn btn-p wt-landing-last-cta" onClick={start("bottom")}>{t("만들러가기")} <IconArrow size={18} /></button>
         </div>
       </section>
 

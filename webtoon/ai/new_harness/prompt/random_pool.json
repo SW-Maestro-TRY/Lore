@@ -1,50 +1,370 @@
 {
   "_note": [
-    "「랜덤으로 만들어보기」가 입력 칸(설명 · 이름 · 세계관)을 채울 때 뽑는 재료.",
-    "AI 를 안 부른다 — 조합이라 값이 싸고 즉시 나온다. 존재(beings) 하나 + 결(traits) 하나를",
-    "붙여 설명이 되고, 이름은 그 존재의 name_pool 에서, 세계관은 story-harness/worlds.json 의",
-    "프리셋 키 중 하나(worlds 가 비어 있으면 아무거나)에서 뽑는다.",
-    "늘리거나 줄이는 것은 이 파일만 고치면 된다 — beings 20 × traits 10 = 조합 200 (2026-09-19).",
-    "worlds 를 적어 두면 그 존재에 어울리는 세계관만 뽑고, 안 적으면 전부에서 뽑는다.",
-    "trait 의 {name} 은 뽑힌 이름으로, {being} 은 존재 이름으로 바뀐다."
+    "「랜덤으로 만들어보기」가 칸에 채워 주는 예시 캐릭터 목록이다. AI 를 부르지 않고 이 중 하나를 고르게 뽑는다.",
+    "지금은 손으로 쓴 목데이터다(2026-09-25). 사람 30 · 동물 18 · 사물 12 로 사람이 절반쯤 나온다.",
+    "설명은 한 줄 소개가 아니라 '이 캐릭터로 무슨 일이 벌어질까' 가 떠오르는 모순·비밀·약점을 하나씩 품게 썼다.",
+    "world 는 story-harness/worlds.json 의 presets 키다. 늘리거나 줄이려면 이 목록만 고치면 된다. kind 는 사람이 읽기 위한 표시이고 코드는 쓰지 않는다."
   ],
-  "beings": [
-    {"being": "갈색 곱슬털의 작은 푸들", "kind": "animal", "name_pool": ["몽이", "두부", "보리", "콩이"]},
-    {"being": "살이 오른 치즈색 고양이", "kind": "animal", "name_pool": ["치즈", "호두", "나비", "감자"]},
-    {"being": "목에 방울을 단 흰 토끼", "kind": "animal", "name_pool": ["설기", "모찌", "달이"]},
-    {"being": "한쪽 귀가 접힌 검은 강아지", "kind": "animal", "name_pool": ["까미", "초코", "밤이"]},
-    {"being": "빨간 볏이 큰 수탉", "kind": "animal", "name_pool": ["꼬꼬", "장군", "홍시"]},
-    {"being": "손바닥만 한 햄스터", "kind": "animal", "name_pool": ["땅콩", "쪼꼬", "밀크"]},
-    {"being": "물에 젖은 회색 비둘기", "kind": "animal", "name_pool": ["구구", "먹구", "삼식"]},
-    {"being": "다리가 짧은 웰시코기", "kind": "animal", "name_pool": ["식빵", "단추", "하루"]},
-    {"being": "야근에 찌든 30대 회사원", "kind": "human", "name_pool": ["김대리", "박주임", "이과장"]},
-    {"being": "편의점 야간 알바생", "kind": "human", "name_pool": ["지호", "수아", "도윤"]},
-    {"being": "은퇴한 70대 태권도 관장", "kind": "human", "name_pool": ["관장님", "강철수", "박만복"]},
-    {"being": "재수 삼수째인 수험생", "kind": "human", "name_pool": ["민재", "예린", "현우"]},
-    {"being": "동네 반찬가게 사장님", "kind": "human", "name_pool": ["순자", "미경", "복순"]},
-    {"being": "SNS 팔로워 12명인 인플루언서 지망생", "kind": "human", "name_pool": ["하늘", "채원", "유진"]},
-    {"being": "말수가 적은 택배 기사", "kind": "human", "name_pool": ["성진", "동혁", "재민"]},
-    {"being": "초등학교 급식 조리사", "kind": "human", "name_pool": ["영희", "정숙", "혜란"]},
-    {"being": "낡은 청소 로봇", "kind": "thing", "name_pool": ["삐삐", "로보", "청소기"]},
-    {"being": "먼지 쌓인 곰 인형", "kind": "thing", "name_pool": ["테디", "곰순", "푸우"]},
-    {"being": "다 마신 캔커피", "kind": "thing", "name_pool": ["캔디", "레쓰", "맥심"]},
-    {"being": "물을 너무 많이 준 선인장 화분", "kind": "thing", "name_pool": ["가시", "초록", "선이"]}
-  ],
-  "traits": [
-    "겁이 많은데 결정적인 순간엔 제일 먼저 뛰어든다",
-    "말끝마다 한숨을 쉬지만 부탁을 거절한 적이 없다",
-    "자기가 주인공인 줄 알고 산다",
-    "먹을 것 앞에서는 의리도 원칙도 없다",
-    "칭찬을 들으면 얼굴이 빨개져서 도망간다",
-    "규칙을 어기는 사람을 못 참는데 본인은 늘 지각한다",
-    "누가 울면 같이 운다",
-    "아무 데서나 잘 잔다",
-    "화가 나면 오히려 조용해진다",
-    "쓸데없는 것을 잘 기억하고 중요한 것은 늘 잊는다"
-  ],
-  "formats": [
-    "{being}. {trait}.",
-    "{being}인데, {trait}.",
-    "{being}. 이름은 {name}. {trait}."
+  "presets": [
+    {
+      "name": "오봉",
+      "description": "중국집 배달 20년 차. 짜장면이 불기 전에 도착하는 게 인생의 유일한 원칙인데, 오늘 배달 간 집이 마왕성이었다.",
+      "world": "fantasy_continent",
+      "kind": "human"
+    },
+    {
+      "name": "김대리",
+      "description": "회사에서는 존재감 제로인 대리. 퇴근하면 동네 고양이들 사이에서 '큰 집사님'으로 통하는 조직의 2인자다.",
+      "world": "hero_city",
+      "kind": "human"
+    },
+    {
+      "name": "말순",
+      "description": "동네 목욕탕 카운터 할머니. 때수건 하나로 조폭 셋을 정리한 전설이 있지만 본인은 절대 인정 안 한다.",
+      "world": "action_contract",
+      "kind": "human"
+    },
+    {
+      "name": "하람",
+      "description": "전생을 다섯 번 기억하는 고등학생. 문제는 다섯 번 다 같은 사람한테 차였다는 것.",
+      "world": "romance_novel",
+      "kind": "human"
+    },
+    {
+      "name": "준",
+      "description": "세계 최강 헌터인데 고소공포증이 있다. 게이트가 옥상에 열리면 무조건 결근한다.",
+      "world": "hunter_gate",
+      "kind": "human"
+    },
+    {
+      "name": "피오나",
+      "description": "악역 영애로 빙의했는데 원작을 안 읽었다. 스포일러 대신 눈치로 살아남는 중.",
+      "world": "romance_novel",
+      "kind": "human"
+    },
+    {
+      "name": "도치",
+      "description": "좀비 사태 3년 차에도 매일 아침 출근 도장을 찍는 공무원. 민원 창구는 오늘도 열려 있다.",
+      "world": "post_disaster",
+      "kind": "human"
+    },
+    {
+      "name": "세라",
+      "description": "아이돌 데뷔조 센터. 무대 위에선 완벽한데 무대 밖에선 매일 신발을 짝짝이로 신고 나온다.",
+      "world": "idol_agency",
+      "kind": "human"
+    },
+    {
+      "name": "백선생",
+      "description": "마법학교 요리 과목 교수. 학생들은 모르지만 급식에 몰래 행운 마법을 한 숟갈씩 넣는다.",
+      "world": "academy_magic",
+      "kind": "human"
+    },
+    {
+      "name": "모건",
+      "description": "탐정인데 범인 얼굴을 못 외운다. 대신 신발 뒤축 닳은 모양은 한 번 보면 절대 안 잊는다.",
+      "world": "thriller_record",
+      "kind": "human"
+    },
+    {
+      "name": "두식",
+      "description": "은퇴한 악당. 지금은 히어로 지망생들 과외를 하며 '너희 필살기는 너무 뻔해'라고 잔소리한다.",
+      "world": "hero_city",
+      "kind": "human"
+    },
+    {
+      "name": "나린",
+      "description": "고양이 말을 알아듣는 수의사. 환자들의 뒷담화 때문에 요즘 인간관계가 피곤하다.",
+      "world": "hero_city",
+      "kind": "human"
+    },
+    {
+      "name": "가을",
+      "description": "세상에서 제일 운 나쁜 복권 판매원. 자기가 판 복권만 매주 1등이 된다.",
+      "world": "thriller_record",
+      "kind": "human"
+    },
+    {
+      "name": "레온",
+      "description": "황제의 대역 배우. 진짜 황제보다 황제 연기를 잘해서 이제 아무도 원본을 찾지 않는다.",
+      "world": "romance_novel",
+      "kind": "human"
+    },
+    {
+      "name": "찬희",
+      "description": "편의점 알바생인데 손님이 전부 이세계에서 넘어온 모험가들이다. 포인트 적립 설명이 제일 힘들다.",
+      "world": "fantasy_continent",
+      "kind": "human"
+    },
+    {
+      "name": "유라",
+      "description": "스턴트 대역 전문 배우. 얼굴은 한 번도 화면에 안 나왔지만 액션 장면의 절반은 그녀 거다.",
+      "world": "action_contract",
+      "kind": "human"
+    },
+    {
+      "name": "강철",
+      "description": "보디가드 경력 15년. 의뢰인은 늘 지켰는데 자기 화분은 번번이 말려 죽인다.",
+      "world": "action_contract",
+      "kind": "human"
+    },
+    {
+      "name": "해솔",
+      "description": "가이드 능력이 너무 강해서 옆에만 있으면 센티넬들이 다 잠들어 버린다. 회의 때마다 곤란하다.",
+      "world": "sentinel_center",
+      "kind": "human"
+    },
+    {
+      "name": "오라버니",
+      "description": "자칭 대륙 최고의 음유시인. 노래는 형편없는데 그가 부르는 노래마다 실제로 이뤄진다.",
+      "world": "fantasy_continent",
+      "kind": "human"
+    },
+    {
+      "name": "민트",
+      "description": "초능력은 딱 하나, 3초 뒤 미래를 본다. 로또엔 못 쓰고 떨어지는 컵 잡는 데만 쓴다.",
+      "world": "hero_city",
+      "kind": "human"
+    },
+    {
+      "name": "선우",
+      "description": "좀비가 된 줄도 모르고 1년째 출근 중인 회사원. 동료들이 아무도 말을 안 해 준다.",
+      "world": "post_disaster",
+      "kind": "human"
+    },
+    {
+      "name": "아델",
+      "description": "마녀 사냥꾼 가문의 막내인데 본인이 마녀다. 가족 식사 자리가 매번 첩보전이다.",
+      "world": "academy_magic",
+      "kind": "human"
+    },
+    {
+      "name": "정숙",
+      "description": "100살 먹은 무림 고수 할머니. 요즘은 손주 숙제 봐 주다가 내공을 쓴다.",
+      "world": "action_contract",
+      "kind": "human"
+    },
+    {
+      "name": "케이",
+      "description": "천재 해커인데 비밀번호를 늘 포스트잇에 적어 모니터에 붙여 둔다.",
+      "world": "thriller_record",
+      "kind": "human"
+    },
+    {
+      "name": "루미",
+      "description": "연습생 시절 라이벌과 한 팀으로 데뷔했다. 무대 위에선 절친, 숙소에선 냉장고 반찬 전쟁 중.",
+      "world": "idol_agency",
+      "kind": "human"
+    },
+    {
+      "name": "태오",
+      "description": "왕국 최연소 기사단장. 칼은 잘 쓰는데 말을 못 타서 늘 걸어서 출정한다.",
+      "world": "fantasy_continent",
+      "kind": "human"
+    },
+    {
+      "name": "은비",
+      "description": "동네 사진관 사장. 그녀가 찍은 증명사진 속 사람은 딱 하루 동안 운이 좋아진다.",
+      "world": "thriller_record",
+      "kind": "human"
+    },
+    {
+      "name": "지오",
+      "description": "게이트 앞 포장마차 주인. 헌터들이 들어가기 전에 먹는 떡볶이 맛으로 생존율을 점친다.",
+      "world": "hunter_gate",
+      "kind": "human"
+    },
+    {
+      "name": "비올레",
+      "description": "약혼자에게 파혼당한 날 드레스 입은 채로 기사단 입단 시험을 봤다. 수석이었다.",
+      "world": "romance_novel",
+      "kind": "human"
+    },
+    {
+      "name": "봉구",
+      "description": "아파트 반상회 회장. 동네의 모든 비밀은 그의 회의록 한 권에 적혀 있다.",
+      "world": "thriller_record",
+      "kind": "human"
+    },
+    {
+      "name": "몽이",
+      "description": "곱슬털 푸들인데 자기가 늑대인 줄 안다. 보름달만 뜨면 베란다에서 진지하게 운다.",
+      "world": "romance_novel",
+      "kind": "animal"
+    },
+    {
+      "name": "치즈",
+      "description": "편의점 앞을 지키는 뚱냥이. 새벽 손님들의 고민을 들어 주고 츄르로 상담료를 받는다.",
+      "world": "hero_city",
+      "kind": "animal"
+    },
+    {
+      "name": "사장님",
+      "description": "동네 빵집의 진짜 사장인 비둘기. 인간 사장은 그냥 월급 받는 직원이다.",
+      "world": "hero_city",
+      "kind": "animal"
+    },
+    {
+      "name": "쫀득",
+      "description": "떡집에 사는 햄스터. 새로 나온 떡은 무조건 제일 먼저 맛보고 볼주머니로 평점을 매긴다.",
+      "world": "post_disaster",
+      "kind": "animal"
+    },
+    {
+      "name": "각하",
+      "description": "왕궁 연못의 늙은 잉어. 역대 왕 여섯 명의 비밀을 알지만 말할 입이 없다.",
+      "world": "romance_novel",
+      "kind": "animal"
+    },
+    {
+      "name": "번개",
+      "description": "경마장에서 은퇴한 뒤 유치원 소풍 전용 말이 됐다. 아이들 앞에서만 다시 달린다.",
+      "world": "action_contract",
+      "kind": "animal"
+    },
+    {
+      "name": "레이디",
+      "description": "파티에만 나타나는 공작새. 누구보다 화려하지만 사실 수줍음이 많아 늘 구석에 서 있다.",
+      "world": "idol_agency",
+      "kind": "animal"
+    },
+    {
+      "name": "팬더",
+      "description": "동물원에서 제일 게으른 판다. 사람들이 모르는 사이 밤마다 동물원 치안을 지킨다.",
+      "world": "hero_city",
+      "kind": "animal"
+    },
+    {
+      "name": "꽥",
+      "description": "공원 호수의 오리 대장. 빵 부스러기 분배를 두고 매일 협상 테이블을 연다.",
+      "world": "action_contract",
+      "kind": "animal"
+    },
+    {
+      "name": "밤톨",
+      "description": "도토리를 숨긴 곳을 전부 잊어버리는 다람쥐. 덕분에 숲 하나를 혼자 심었다.",
+      "world": "fantasy_continent",
+      "kind": "animal"
+    },
+    {
+      "name": "박사",
+      "description": "마법학교 연구실의 부엉이. 학생 과제를 몰래 채점하는데 점수가 교수보다 짜다.",
+      "world": "academy_magic",
+      "kind": "animal"
+    },
+    {
+      "name": "솜사탕",
+      "description": "양털 깎는 날마다 사라지는 양. 다음 날 꼭 새 털옷을 입고 돌아온다.",
+      "world": "fantasy_continent",
+      "kind": "animal"
+    },
+    {
+      "name": "해피",
+      "description": "유기견 보호소 출신 시바견. 한 번 버려진 적이 있어서 누군가 울면 제일 먼저 옆에 앉는다.",
+      "world": "post_disaster",
+      "kind": "animal"
+    },
+    {
+      "name": "집사",
+      "description": "고양이인데 집사 역할을 한다. 주인이 늦게 들어오면 문 앞에서 팔짱 끼고 기다린다.",
+      "world": "thriller_record",
+      "kind": "animal"
+    },
+    {
+      "name": "거북장군",
+      "description": "용궁에서 사표 내고 뭍으로 올라온 거북이. 느리지만 퇴사 사유는 빨리 말한다.",
+      "world": "fantasy_continent",
+      "kind": "animal"
+    },
+    {
+      "name": "나비",
+      "description": "길고양이 무리의 정보통. 골목에서 벌어진 일은 이 고양이 모르게 일어나지 않는다.",
+      "world": "thriller_record",
+      "kind": "animal"
+    },
+    {
+      "name": "초코",
+      "description": "산책 중 아무 사람이나 따라가는 리트리버. 그렇게 따라간 사람들이 전부 연인이 됐다.",
+      "world": "romance_novel",
+      "kind": "animal"
+    },
+    {
+      "name": "문어박사",
+      "description": "수족관 탈출 전적 12회의 문어. 이번엔 탈출 대신 수족관을 인수하기로 했다.",
+      "world": "hero_city",
+      "kind": "animal"
+    },
+    {
+      "name": "선이",
+      "description": "방 구석 선인장. 가시는 사나운데 물 주는 사람에게만 몰래 꽃을 피운다.",
+      "world": "fantasy_continent",
+      "kind": "thing"
+    },
+    {
+      "name": "딸깍",
+      "description": "할머니 댁 벽시계. 가족 중 누가 거짓말을 하면 초침이 한 칸 멈춘다.",
+      "world": "thriller_record",
+      "kind": "thing"
+    },
+    {
+      "name": "폭신",
+      "description": "주인이 크면서 다락방에 올라간 곰 인형. 오늘 밤, 다락방 인형들이 반란을 모의 중이다.",
+      "world": "post_disaster",
+      "kind": "thing"
+    },
+    {
+      "name": "빈",
+      "description": "주인을 잃은 파란 우산. 비 오는 날마다 버스 정류장에서 같은 사람을 기다린다.",
+      "world": "romance_novel",
+      "kind": "thing"
+    },
+    {
+      "name": "로보",
+      "description": "고장 난 로봇청소기. 청소는 못 하는데 집 안의 비밀 통로를 전부 찾아냈다.",
+      "world": "hero_city",
+      "kind": "thing"
+    },
+    {
+      "name": "신발",
+      "description": "짝을 잃은 운동화 한 짝. 세탁기 너머 어딘가에 있을 반쪽을 찾아 모험을 떠난다.",
+      "world": "fantasy_continent",
+      "kind": "thing"
+    },
+    {
+      "name": "마이크",
+      "description": "폐업한 노래방 마이크. 마지막 손님이 부르다 만 노래의 결말을 알고 싶어 한다.",
+      "world": "idol_agency",
+      "kind": "thing"
+    },
+    {
+      "name": "등불",
+      "description": "폐허 속에 혼자 켜진 가로등. 길 잃은 사람한테만 불빛을 비춰 준다.",
+      "world": "post_disaster",
+      "kind": "thing"
+    },
+    {
+      "name": "자판기",
+      "description": "학교 복도 자판기. 시험 기간엔 우는 학생에게만 음료를 하나 더 떨어뜨린다.",
+      "world": "academy_magic",
+      "kind": "thing"
+    },
+    {
+      "name": "냉장고",
+      "description": "자취방 냉장고. 주인이 굶을까 봐 반찬을 몰래 오래 신선하게 지켜 준다.",
+      "world": "hero_city",
+      "kind": "thing"
+    },
+    {
+      "name": "양말",
+      "description": "월요일 아침마다 한 짝씩 사라지는 양말. 사실 사라진 양말들은 따로 나라를 세웠다.",
+      "world": "fantasy_continent",
+      "kind": "thing"
+    },
+    {
+      "name": "체스말",
+      "description": "천 년 동안 같은 판에 서 있던 흑색 기사. 드디어 한 칸 움직일 차례가 왔다.",
+      "world": "action_contract",
+      "kind": "thing"
+    }
   ]
 }
