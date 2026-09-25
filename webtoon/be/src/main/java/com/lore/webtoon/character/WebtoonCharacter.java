@@ -120,6 +120,10 @@ public class WebtoonCharacter {
     @Column(name = "role_tier", length = 20)
     private String roleTier;
 
+    /** 종까지 바뀐 뽑기였나(#331). 카드가 "이건 낮은 확률로 당첨된 것" 이라고 말할 근거다. */
+    @Column(nullable = false)
+    private boolean lucky;
+
     /** 반전 한 줄 — 카드의 제목이다. */
     @Column(length = 300)
     private String twist;
@@ -195,6 +199,7 @@ public class WebtoonCharacter {
         this.genre = cut(card.genre(), 40);
         this.roleName = cut(card.role(), 40);
         this.roleTier = cut(card.roleTier(), 20);
+        this.lucky = card.lucky();
         this.twist = cut(card.twist(), 300);
         this.quote = cut(card.quote(), 300);
         this.dialogue = card.dialogue() == null || card.dialogue().isEmpty() ? null
@@ -207,7 +212,7 @@ public class WebtoonCharacter {
     /** 카드 글. 한 컷으로 만든 캐릭터만 갖는다. */
     public record Card(String world, String worldLabel, String genre, String role, String roleTier,
                        String twist, String quote, List<DialogueLine> dialogue,
-                       List<String> fate, String style) {
+                       List<String> fate, String style, boolean lucky) {
     }
 
     /** 말풍선 한 줄. side 는 말하는 이가 화면에서 서 있는 쪽(left · right · center). */
@@ -325,6 +330,10 @@ public class WebtoonCharacter {
 
     public String getRoleTier() {
         return roleTier;
+    }
+
+    public boolean isLucky() {
+        return lucky;
     }
 
     public String getTwist() {

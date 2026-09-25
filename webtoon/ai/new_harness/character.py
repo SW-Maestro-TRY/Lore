@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 from pathlib import Path
@@ -208,6 +209,20 @@ ROLE_TIERS = {
 # 결과를 보면서 조절한다. 지금 값은 첫 어림이다.
 TIER_WEIGHTS = {"중심": 25, "곁": 35, "스쳐감": 30, "뜬금": 10}
 
+# 종까지 바뀌는 뽑기(#331). 기본은 넣은 종을 그대로 두는 것이고(원칙 1), 이것은
+# 그 위에 얹는 아주 드문 한 방이다 — "내가 로맨스 판타지에서 개라고?". 자리의
+# 무게와는 따로 굴린다. 너무 낮으면 아무도 못 봐서 광고에 쓸 수 없고, 너무 높으면
+# "넣은 그대로" 라는 약속이 깨진다. 결과를 보면서 조절한다.
+# 시험할 때는 NH_SPECIES_SWAP=1 (항상) · 0 (절대) 로 고정할 수 있다.
+SPECIES_SWAP_RATE = 0.03
+
+
+def roll_species_swap() -> bool:
+    forced = os.environ.get("NH_SPECIES_SWAP", "").strip()
+    if forced in ("0", "1"):
+        return forced == "1"
+    return random.random() < SPECIES_SWAP_RATE
+
 
 def roll_role_tier() -> str:
     keys = list(TIER_WEIGHTS)
@@ -316,7 +331,7 @@ def gate_panel_spec(spec: dict) -> list[str]:
 
 def panel_spec_of(name: str, description: str, photos: list[Path],
                   world_label: str, world_text: str,
-                  tier: str | None = None) -> tuple[dict, dict]:
+                  tier: str | None = None, lucky: bool | None = None) -> tuple[dict, dict]:
     lines = ["# 이번 입력", ""]
     lines.append(f"이름: {name.strip()}" if name.strip()
                  else "이름: (없음 — 네가 짓는다)")
@@ -337,6 +352,16 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
         lines += ["", "세계관: (없음 — 네가 정한다)"]
     tier = tier or roll_role_tier()
     lines += ["", f"이번에 맡을 자리의 무게: {tier}", f"  {ROLE_TIERS[tier]}"]
+    lucky = roll_species_swap() if lucky is None else lucky
+    if lucky:
+        # 원칙 1(넣은 것을 바꾸지 않는다)의 유일한 예외. 종은 바꾸되 인상은 남긴다 —
+        # 사진이 아무 의미 없어지면 "내 캐릭터" 라는 느낌이 사라진다.
+        lines += ["", "★ 이번 한 번은 특별하다: 종이 바뀐다.",
+                  "  넣은 존재의 종을 이 세계관에 어울리는 **다른 종**으로 바꾼다(사람이면 동물이나 다른 존재로, "
+                  "동물이면 사람이나 다른 동물로). 이것은 원칙 1의 예외이며 이번에만 적용한다.",
+                  "  다만 사진·설명의 인상은 그대로 남긴다 — 검은 긴 머리면 검은 털, 웃는 얼굴이면 그런 표정, "
+                  "옷차림의 색과 분위기도 옮긴다. 보는 사람이 「이건 내 캐릭터가 종만 바뀐 것」이라고 알아볼 수 있어야 한다.",
+                  "  species 에는 바뀐 뒤의 종을 적는다."]
     lines += ["", "그림체 목록:"]
     lines += [f"  - {k}: {v}" for k, v in PANEL_STYLES.items()]
     prompt = load_prompt("panel_prompt") + "\n\n---\n\n" + "\n".join(lines)
@@ -350,6 +375,7 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
     metas = [meta]
     spec = parse_panel_spec(text)
     spec["role_tier"] = tier
+    spec["lucky"] = bool(lucky)
     bad = gate_panel_spec(spec)
     if bad:
         raise SystemExit("한 컷 사양이 모자랍니다 — 그림은 그리지 않습니다: " + " · ".join(bad))
@@ -423,6 +449,7 @@ def run_panel(args) -> int:
         "genre": spec["genre_word"],
         "role": spec["role"],
         "role_tier": spec.get("role_tier", ""),
+        "lucky": bool(spec.get("lucky", False)),
         "twist": spec["twist"],
         "dialogue": spec["dialogue"],
         "quote": dialogue_text(spec["dialogue"]),

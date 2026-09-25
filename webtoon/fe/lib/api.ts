@@ -365,6 +365,8 @@ export interface CharacterCard {
   role: string;
   /** 자리의 무게 — 하네스가 굴린 값(중심 · 곁 · 스쳐감 · 뜬금). 옛 카드는 빈 문자열. */
   role_tier: string;
+  /** 종까지 바뀐 뽑기였나(#331). 카드에 「당첨」을 표시한다. */
+  lucky: boolean;
   twist: string;
   /** 옛 카드의 대사 한 줄. 새 카드는 dialogue 가 있다. */
   quote: string;

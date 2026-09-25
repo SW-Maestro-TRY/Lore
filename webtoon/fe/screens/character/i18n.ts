@@ -99,6 +99,7 @@ const dict: Dict = {
   "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
   "링크 복사": { en: "Copy link", ja: "リンクをコピー", zh: "复制链接" },
   "주연": { en: "Lead", ja: "主役", zh: "主角" },
+  "당첨! 아주 낮은 확률로 종이 바뀐 카드예요": { en: "Jackpot! A rare card where the species changed", ja: "当たり！ごく低確率で種が変わったカードです", zh: "中奖！极低概率下种族发生变化的卡片" },
   "조연": { en: "Supporting", ja: "脇役", zh: "配角" },
   "단역": { en: "Bit part", ja: "端役", zh: "龙套" },
   "엑스트라": { en: "Extra", ja: "エキストラ", zh: "群演" },
