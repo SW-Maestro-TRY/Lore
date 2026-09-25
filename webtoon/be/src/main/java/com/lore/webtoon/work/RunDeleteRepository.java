@@ -47,10 +47,6 @@ public interface RunDeleteRepository extends JpaRepository<WebtoonJob, Long> {
     @Query("delete from WebtoonStory s where s.runId = :runId")
     int deleteStories(@Param("runId") String runId);
 
-    @Modifying
-    @Query("delete from UsageRecord u where u.runId = :runId")
-    int deleteUsage(@Param("runId") String runId);
-
     /* ---- 작품과 만들기 기록 ------------------------------------------ */
 
     @Modifying
