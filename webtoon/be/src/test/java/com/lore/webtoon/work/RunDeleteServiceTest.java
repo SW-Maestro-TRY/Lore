@@ -111,14 +111,16 @@ class RunDeleteServiceTest {
         when(rows.deletePages("r1")).thenReturn(2);
         when(rows.deleteWorks("r1")).thenReturn(1);
         when(rows.deleteJobs("r1")).thenReturn(1);
+        when(rows.deleteLikes("r1")).thenReturn(2);
 
         RunDeleteService.Deleted out = service.delete(7L, "r1");
 
         assertThat(out.images()).isEqualTo(3);
-        assertThat(out.rows()).isEqualTo(4);
+        assertThat(out.rows()).isEqualTo(6);   // 장 2 · 찜 2 · 작품 1 · 만들기 기록 1
         InOrder order = inOrder(storage, rows);
         order.verify(storage).delete(List.of("k1", "k2", "k3"));
         order.verify(rows).deletePages("r1");
+        order.verify(rows).deleteLikes("r1");
         order.verify(rows).deleteWorks("r1");
         order.verify(rows).deleteJobs("r1");
     }

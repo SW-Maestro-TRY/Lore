@@ -29,7 +29,7 @@ import type { Go } from "../../lib/nav";
 import RunStrip from "../../ui/RunStrip";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
-import { IconTrash, IconUser } from "../../ui/Icons";
+import { IconUser } from "../../ui/Icons";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
 import "./MyPage.css";
@@ -57,7 +57,6 @@ registerDict({
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   "지우기": { en: "Delete", ja: "削除", zh: "删除" },
   "휴지통": { en: "Trash", ja: "ゴミ箱", zh: "回收站" },
-  "휴지통 열기": { en: "Open trash", ja: "ゴミ箱を開く", zh: "打开回收站" },
   "휴지통으로 옮길까요?": { en: "Move to trash?", ja: "ゴミ箱に移しますか？", zh: "移到回收站吗？" },
   "{n}일 안에는 휴지통에서 되살릴 수 있어요.": { en: "You can restore it from the trash within {n} days.", ja: "{n}日以内ならゴミ箱から元に戻せます。", zh: "{n} 天内可以从回收站恢复。" },
   "휴지통이 비어 있어요.": { en: "The trash is empty.", ja: "ゴミ箱は空です。", zh: "回收站是空的。" },
@@ -76,8 +75,6 @@ registerDict({
   "찜한 웹툰": { en: "Saved webtoons", ja: "お気に入りの作品", zh: "收藏的漫画" },
   "아직 찜한 웹툰이 없어요. 둘러보기에서 하트를 눌러 보세요.": { en: "Nothing saved yet. Tap a heart in Browse.", ja: "まだお気に入りがありません。見て回るでハートを押してみてください。", zh: "还没有收藏。去浏览里点个爱心吧。" },
   "캐릭터 탭으로": { en: "Go to characters", ja: "キャラクタータブへ", zh: "前往角色页" },
-  "{n}편": { en: "{n} episodes", ja: "{n}話", zh: "{n} 话" },
-  "{n}편 · 나만 보기 {m}": { en: "{n} episodes · {m} private", ja: "{n}話 · 非公開 {m}", zh: "{n} 话 · 私密 {m}" },
   "{n}화": { en: "EP.{n}", ja: "第{n}話", zh: "第{n}话" },
   "공개": { en: "Public", ja: "公開", zh: "公开" },
   "비공개": { en: "Private", ja: "非公開", zh: "私密" },
@@ -237,8 +234,7 @@ export default function MyPage({ go }: { go: Go }) {
     }
   };
 
-  const hidden = runs.filter((r) => r.public === false).length;
-
+  
   return (
     <div className="wt-wrap wt-page wt-my">
       <aside className="wt-my-rail">
@@ -283,6 +279,13 @@ export default function MyPage({ go }: { go: Go }) {
           )}
           <a href={LEGAL_LINKS.terms} target="_blank" rel="noopener noreferrer">{t("이용약관")}</a>
           <a href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer">{t("개인정보처리방침")}</a>
+          {/* 휴지통(#157) — 지운 웹툰은 창으로 따로 연다. 지우기가 로그인해야 되니 휴지통도 그때만. */}
+          {isAuthenticated && (
+            <button type="button" className="wt-my-trashmenu"
+                    onClick={() => { void loadTrash(); setTrashOpen(true); track("trash_open", { where: "mypage" }); }}>
+              {t("휴지통")} <span className="dim">{trash.length}</span>
+            </button>
+          )}
         </div>
 
         <div className="card wt-my-lang">
@@ -292,27 +295,29 @@ export default function MyPage({ go }: { go: Go }) {
       </aside>
 
       <div className="wt-my-main">
+            {trashOpen && (
+              <Dialog title={t("휴지통")} wide onClose={() => setTrashOpen(false)}
+                      sub={t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}>
+                {trash.length === 0 ? (
+                  <p className="wt-my-trashempty muted">{t("휴지통이 비어 있어요.")}</p>
+                ) : (
+                  <div className="wt-my-trash">
+                    {trash.map((r) => (
+                      <TrashRow key={r.run_id} run={r}
+                                onRestored={() => { void loadRuns(); void loadTrash(); }} />
+                    ))}
+                  </div>
+                )}
+                <div className="wt-dialog-actions">
+                  <button type="button" className="btn btn-w" onClick={() => setTrashOpen(false)}>{t("닫기")}</button>
+                </div>
+              </Dialog>
+            )}
         {tab === "works" && (
           <>
             <div className="wt-my-head">
               <div>
-                <div className="wt-my-titlerow">
-                  <h2>{t("내 웹툰")}</h2>
-                  {/* 휴지통(#157) — 목록은 창으로 따로 연다. 지우기가 로그인해야 되니 휴지통도 그때만. */}
-                  {isAuthenticated && (
-                    <button type="button" className="icon-btn wt-my-trashbtn" aria-label={t("휴지통 열기")}
-                            title={t("휴지통")}
-                            onClick={() => { void loadTrash(); setTrashOpen(true); track("trash_open", { where: "mypage" }); }}>
-                      <IconTrash size={17} />
-                      {trash.length > 0 && <span className="wt-my-trashcount">{trash.length}</span>}
-                    </button>
-                  )}
-                </div>
-                <span className="muted">
-                  {hidden > 0
-                    ? t("{n}편 · 나만 보기 {m}", { n: runs.length, m: hidden })
-                    : t("{n}편", { n: runs.length })}
-                </span>
+                <h2>{t("내 웹툰")}</h2>
               </div>
               <div className="wt-my-headacts">
                 <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
@@ -350,24 +355,6 @@ export default function MyPage({ go }: { go: Go }) {
               </div>
             )}
 
-            {trashOpen && (
-              <Dialog title={t("휴지통")} wide onClose={() => setTrashOpen(false)}
-                      sub={t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}>
-                {trash.length === 0 ? (
-                  <p className="wt-my-trashempty muted">{t("휴지통이 비어 있어요.")}</p>
-                ) : (
-                  <div className="wt-my-trash">
-                    {trash.map((r) => (
-                      <TrashRow key={r.run_id} run={r}
-                                onRestored={() => { void loadRuns(); void loadTrash(); }} />
-                    ))}
-                  </div>
-                )}
-                <div className="wt-dialog-actions">
-                  <button type="button" className="btn btn-w" onClick={() => setTrashOpen(false)}>{t("닫기")}</button>
-                </div>
-              </Dialog>
-            )}
 
             {recent.length > 0 && (
               <div className="wt-my-strip">

@@ -43,6 +43,11 @@ public interface RunDeleteRepository extends JpaRepository<WebtoonJob, Long> {
     @Query("delete from PageRegen r where r.runId = :runId")
     int deleteRegens(@Param("runId") String runId);
 
+    /** 이 작품에 눌린 찜. 작품이 사라지면 남은 찜은 누구의 찜 목록에도 안 뜨는 빈 줄이다. */
+    @Modifying
+    @Query("delete from RunLike l where l.runId = :runId")
+    int deleteLikes(@Param("runId") String runId);
+
     @Modifying
     @Query("delete from WebtoonStory s where s.runId = :runId")
     int deleteStories(@Param("runId") String runId);
