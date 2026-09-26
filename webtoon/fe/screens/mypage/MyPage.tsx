@@ -270,6 +270,11 @@ export default function MyPage({ go }: { go: Go }) {
               <button type="button" className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
                 {t("설정")}
               </button>
+              {/* 휴지통(#157) — 지운 웹툰은 창으로 따로 연다. */}
+              <button type="button" className="wt-my-trashmenu"
+                      onClick={() => { void loadTrash(); setTrashOpen(true); track("trash_open", { where: "mypage" }); }}>
+                {t("휴지통")} <span className="dim">{trash.length}</span>
+              </button>
             </>
           )}
           <small>{t("계정")}</small>
@@ -279,13 +284,6 @@ export default function MyPage({ go }: { go: Go }) {
           )}
           <a href={LEGAL_LINKS.terms} target="_blank" rel="noopener noreferrer">{t("이용약관")}</a>
           <a href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer">{t("개인정보처리방침")}</a>
-          {/* 휴지통(#157) — 지운 웹툰은 창으로 따로 연다. 지우기가 로그인해야 되니 휴지통도 그때만. */}
-          {isAuthenticated && (
-            <button type="button" className="wt-my-trashmenu"
-                    onClick={() => { void loadTrash(); setTrashOpen(true); track("trash_open", { where: "mypage" }); }}>
-              {t("휴지통")} <span className="dim">{trash.length}</span>
-            </button>
-          )}
         </div>
 
         <div className="card wt-my-lang">
