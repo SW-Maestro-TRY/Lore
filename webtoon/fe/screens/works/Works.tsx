@@ -138,7 +138,6 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
         <div className="wt-works-head">
           <div className="wt-works-title">
             <h2>{t("다른 사람들의 웹툰")}</h2>
-            <span className="muted">{t("표지를 누르면 그대로 읽을 수 있어요.")}</span>
           </div>
           <div className="wt-works-headacts">
             <button type="button" className="btn btn-p wt-works-create" onClick={() => go("entry")}>{t("내 웹툰 만들기")}</button>
