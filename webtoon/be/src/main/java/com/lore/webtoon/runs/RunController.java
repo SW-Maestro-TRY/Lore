@@ -268,11 +268,9 @@ public class RunController {
         if (png == null) {
             return ResponseEntity.notFound().build();
         }
-        /* 받는 파일 이름은 작품 번호다. 제목을 쓰면 한글·따옴표가 섞여 브라우저마다
-           다르게 저장되고, 같은 작품을 두 번 받으면 이름이 겹친다. */
+        // 받는 파일 이름은 LORE_제목_1화.png — 옛 브라우저에는 작품 번호(DownloadName).
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + runId + ".png\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
@@ -284,6 +282,11 @@ public class RunController {
 
     private JsonNode asNode(Map<String, Object> body) {
         return body == null ? null : mapper.valueToTree(body);
+    }
+
+    private static String titleOf(Map<String, Object> meta) {
+        Object t = meta.get("title");
+        return t == null ? "" : String.valueOf(t);
     }
 
     /** 띠 오른쪽에 적을 한 줄 — 파이썬의 {@code episode_caption} 과 같은 모양. */
@@ -418,8 +421,7 @@ public class RunController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + runId + "-" + no + ".png\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
