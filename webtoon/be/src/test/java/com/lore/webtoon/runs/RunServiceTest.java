@@ -59,7 +59,7 @@ class RunServiceTest {
         when(story.getTitle()).thenReturn("얼음 왕자의 계약");
         when(story.displayTitle()).thenReturn("얼음 왕자의 계약");
         when(story.getGenre()).thenReturn("로맨스 판타지");
-        when(story.getPlot()).thenReturn("계약으로 시작된 관계가 진심이 된다");
+        when(story.displayPlot()).thenReturn("계약으로 시작된 관계가 진심이 된다");
         when(stories.chosenOf(runId)).thenReturn(Optional.of(story));
         return work;
     }
