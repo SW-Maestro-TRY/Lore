@@ -53,6 +53,14 @@ class SpendGuardTest {
     }
 
     @Test
+    @DisplayName("캐릭터는 돈만 본다 — 웹툰 편수가 다 차도 만들 수 있고, 돈이 다 차면 막는다(#444)")
+    void 캐릭터는_돈만_본다() {
+        assertThat(guard(30, 0, 30, 40_000).whyBlockedByMoney()).isNull();
+        assertThat(guard(0, 39_999, 30, 40_000).whyBlockedByMoney()).isNull();
+        assertThat(guard(0, 40_000, 30, 40_000).whyBlockedByMoney()).isNotNull();
+    }
+
+    @Test
     @DisplayName("둘 중 하나만 차도 막는다 — 편수는 적은데 비싼 편이 몰릴 수 있다")
     void 둘_중_하나만_차도_막는다() {
         assertThat(guard(3, 40_000, 30, 40_000).whyBlocked()).isNotNull();

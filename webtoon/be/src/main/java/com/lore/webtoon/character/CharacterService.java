@@ -7,6 +7,7 @@ import com.lore.webtoon.art.PrivateArt;
 import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.usage.SpendGuard;
+import com.lore.webtoon.usage.UsageService;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.webtoon.safety.SafetyGuard;
@@ -40,6 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Stream;
 
 /**
  * 캐릭터를 만들고 고르는 일.
@@ -85,6 +87,19 @@ public class CharacterService {
     private final int cost;
     /** 로컬에서만 켠다 — 서명 주소로 준다. PageStore 와 같은 값. */
     private final boolean presignLocally;
+    /** 호출·원가를 쌓는 곳(#444). 테스트용 생성자로 만들면 비어 있고, 그때는 안 쌓는다. */
+    private UsageService usage;
+    /** 하루 돈 상한(#444). 테스트용 생성자로 만들면 비어 있고, 그때는 안 막는다. */
+    private SpendGuard spend;
+    /**
+     * 그린 뒤 작업 폴더를 남기는가.
+     *
+     * 로컬은 남긴다 — 무엇을 넣고 무엇을 불러 얼마가 나갔는지(input.json · meta.json ·
+     * 프롬프트 · 그림)를 폴더에서 바로 본다. 배포 서버는 그림이 S3 에, 호출과 원가가
+     * DB 에 있으니 서버 디스크에 쌓을 이유가 없다(#157 과 같은 원칙).
+     * 판단은 {@link #keepsFiles} 참고. 테스트용 생성자는 언제나 남긴다(안 지운다).
+     */
+    private boolean keepFiles = true;
     private final Clock clock;
     /* 한 줄로 세운다 — 그림 호출을 한꺼번에 여러 개 띄우면 값이 몰려 나간다. */
     private final ExecutorService line =
@@ -99,10 +114,52 @@ public class CharacterService {
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
                             @Value("${lore.webtoon.character.free-per-day:3}") int freePerDay,
                             @Value("${lore.webtoon.character.credit-cost:2}") int cost,
-                            @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally) {
+                            @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally,
+                            UsageService usage, SpendGuard spend,
+                            @Value("${app.s3.content-bucket:}") String bucket,
+                            @Value("${app.s3.endpoint:}") String endpoint,
+                            @Value("${lore.webtoon.character.keep-files:}") String keepFiles) {
         this(characters, maker, owner, art, credits, shareReward, workDir, freePerDay, cost,
              presignLocally, Clock.system(ZONE));
         this.safety = safety;
+        this.usage = usage;
+        this.spend = spend;
+        this.keepFiles = keepsFiles(bucket, endpoint, keepFiles);
+        log.info("캐릭터 작업 폴더: {}", this.keepFiles
+                ? "남깁니다(로컬)" : "원가를 DB 에 적은 뒤 치웁니다(배포)");
+    }
+
+    /**
+     * 작업 폴더를 남길지. 설정이 있으면 그대로, 없으면 로컬인지로 정한다.
+     *
+     * 로컬 판단은 #157(작품 폴더, {@code RunFiles})과 같다 — 버킷이 없거나 창고 주소가
+     * 이 기계(localhost · 127.0.0.1)면 로컬이다. 노트북에서 MinIO 를 붙여 띄우면 버킷이
+     * 생기므로 버킷만 보면 틀린다.
+     */
+    static boolean keepsFiles(String bucket, String endpoint, String keepFiles) {
+        if (keepFiles != null && !keepFiles.isBlank()) {
+            return Boolean.parseBoolean(keepFiles.trim());
+        }
+        if (bucket == null || bucket.isBlank()) {
+            return true;
+        }
+        if (endpoint == null || endpoint.isBlank()) {
+            return false;
+        }
+        try {
+            String host = java.net.URI.create(endpoint.trim()).getHost();
+            return host != null && (host.equals("localhost") || host.equals("127.0.0.1")
+                    || host.equals("::1") || host.equals("[::1]"));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    /** 하루 돈 상한에 걸려 캐릭터를 못 만든다. 컨트롤러가 429 로 돌려준다(웹툰 만들기와 같은 응답). */
+    public static class SpendCapped extends RuntimeException {
+        public SpendCapped(String why) {
+            super(why);
+        }
     }
 
     CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
@@ -240,6 +297,14 @@ public class CharacterService {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR,
                     "지금은 캐릭터를 만들 수 없습니다");
         }
+        /* **하루 돈 상한도 본다(#444).** 캐릭터도 글·그림을 부른다 — 전에는 그 값이
+           어디에도 안 적혀서 상한이 캐릭터를 못 셌다. 편수 상한은 웹툰 몫이라 안 본다. */
+        if (spend != null) {
+            String capped = spend.whyBlockedByMoney();
+            if (capped != null) {
+                throw new SpendCapped(capped);
+            }
+        }
 
         // **값은 만들기 전에 본다.** 그린 뒤에 모자라다고 하면 돈은 이미 나갔다.
         // 컨트롤러(list/freeLeft)와 같은 uid 묶음으로 센다 — 기기를 여럿 이은 사람에게
@@ -324,11 +389,14 @@ public class CharacterService {
     private void draw(Long id, String name, String description, List<Path> photos,
                       String style, String world, Path dir) {
         Path drawn = dir.resolve(world == null ? "art.png" : "panel.png");
+        boolean drew = false;
+        String key = null;
         try {
             CharacterMaker.Made made = world == null
                     ? maker.make(name, description, photos, style, drawn)
                     : maker.makePanel(name, description, photos, world, drawn);
-            String key = uploadArt(made.art());
+            drew = true;
+            key = uploadArt(made.art());
             // 사람이 이름을 안 적었으면 사양이 지어 준 것을 쓴다.
             finish(id, key, made.source(), null,
                     name.isBlank() ? made.named() : null, made.card());
@@ -339,6 +407,50 @@ public class CharacterService {
             // **어떻게 끝나든 올린 사진은 지운다.** 외모를 글로 적는 데만 쓰고,
             // 그 뒤로는 다시 안 쓴다. 사람 얼굴을 서버에 둘 이유가 없다.
             photos.forEach(this::dropPhoto);
+            // **실패해도 적는다** — 그림에서 죽어도 앞서 부른 글 값은 나갔다(#444).
+            recordCost(dir);
+            tidy(dir, drew, key);
+        }
+    }
+
+    /** 이 캐릭터를 만들며 부른 호출들을 원가 장부로. 하네스가 폴더에 남긴 meta.json 을 읽는다. */
+    private void recordCost(Path dir) {
+        if (usage == null) {
+            return;
+        }
+        String runId = UsageService.CHARACTER_PREFIX + dir.getFileName();
+        try {
+            int saved = usage.ingestMetaFile(runId, dir.resolve("meta.json"));
+            if (saved < 0) {
+                log.warn("캐릭터 비용 기록이 없습니다 ({})", runId);
+            } else {
+                log.info("캐릭터 비용을 적었습니다 ({}, {}건)", runId, saved);
+            }
+        } catch (IOException | RuntimeException e) {
+            log.error("캐릭터 비용을 적지 못했습니다 ({})", runId, e);
+        }
+    }
+
+    /**
+     * 배포 서버에서는 작업 폴더를 치운다. 그림은 S3 에, 호출·원가는 DB 에 있다.
+     *
+     * <b>그렸는데 못 올린 것은 남긴다</b> — 그때는 서버에 있는 파일이 유일한 사본이다
+     * (uploadArt 의 "파일은 남아 있다"). 로컬은 언제나 남긴다.
+     */
+    private void tidy(Path dir, boolean drew, String key) {
+        if (keepFiles || (drew && (key == null || key.isBlank()))) {
+            return;
+        }
+        try (Stream<Path> all = Files.walk(dir)) {
+            all.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    log.warn("캐릭터 작업 폴더를 다 못 치웠습니다 ({})", p, e);
+                }
+            });
+        } catch (IOException e) {
+            log.warn("캐릭터 작업 폴더를 못 치웠습니다 ({})", dir, e);
         }
     }
 

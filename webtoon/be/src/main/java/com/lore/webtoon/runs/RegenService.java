@@ -68,10 +68,12 @@ public class RegenService {
     private final PageUploader uploader;
     private final JobRunner runner;
     private final RunFiles files;
+    /** 다시 그리기도 그림 값이 나간다 — 원가 장부에 적는다(#444). */
+    private final com.lore.webtoon.job.AfterRun after;
 
     public RegenService(PageRegenRepository regens, PageStore pages, BakeService bakery,
                         HarnessProcess harness, PageUploader uploader, JobRunner runner,
-                        RunFiles files) {
+                        RunFiles files, com.lore.webtoon.job.AfterRun after) {
         this.regens = regens;
         this.pages = pages;
         this.bakery = bakery;
@@ -79,6 +81,7 @@ public class RegenService {
         this.uploader = uploader;
         this.runner = runner;
         this.files = files;
+        this.after = after;
     }
 
     /**
@@ -247,6 +250,11 @@ public class RegenService {
             /* 다시 그리기는 취소 대상이 아니라 번호를 안 준다 — 작업이 아니라
                편집실에서 한 장을 고치는 일이고, 멈추는 길이 따로 없다. */
             int code = harness.run(null, args, env, line -> { });
+            /* **그 자리에서 적는다(#444).** run.py 는 다시 그린 호출도 작품의 meta.json 에
+               덧붙이는데, 여기서 아무도 안 읽어서 편집실 다시 그리기 값이 장부에서 빠졌다.
+               실패해도 나간 값은 나갔다 — 성공 여부를 보기 전에 적는다. 겹치는 줄은
+               (작품, 몇 번째)로 걸러진다. */
+            after.cost(runId);
             if (code != 0 || !Files.isRegularFile(dest)) {
                 fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
                 return;

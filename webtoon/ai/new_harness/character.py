@@ -64,6 +64,7 @@ sys.path.insert(0, str(HERE))
 import imagegen                                      # noqa: E402
 import imageprompt                                   # noqa: E402
 import llm                                           # noqa: E402
+import runmeta                                       # noqa: E402
 import sheet as sheetmod                             # noqa: E402
 
 
@@ -76,7 +77,68 @@ def load_prompt(name: str) -> str:
     return (HERE / "prompt" / name).read_text(encoding="utf-8")
 
 
-def spec_of(name: str, description: str, photos: list[Path]) -> dict:
+# ---- 기록 (#444) ------------------------------------------------------------
+#
+# 웹툰 만들기(run.py)는 호출마다 meta.json 에 한 줄씩 적고, 자바가 그걸 읽어
+# webtoon_usage 에 올린다(AfterRun.cost). 캐릭터는 그 기록이 없어서 나간 돈이
+# 어디에도 안 남았다(2026-09-26 dev: 캐릭터 18개, 원가 0건).
+#
+# 같은 모양으로 **그림을 둘 폴더(--out 의 폴더)** 에 적는다. 자바는 그 폴더의
+# meta.json 을 run.py 것과 같은 코드로 읽는다. **호출이 끝날 때마다 바로**
+# 적는다 — 그림에서 죽어도 앞서 나간 글 값은 남아야 한다.
+
+def record(run_dir: Path, call_meta: dict) -> None:
+    runmeta.append_call(run_dir, call_meta)
+    cost = call_meta.get("cost") or {}
+    tag = "실패 " if call_meta.get("error") else ""
+    log(f"  {tag}{call_meta.get('stage')}  {call_meta.get('provider')}:{call_meta.get('model')}"
+        f"  {cost.get('total_krw', 0)}원"
+        + (f"  — {call_meta['error']}" if call_meta.get("error") else ""))
+
+
+def record_error(run_dir: Path, stage: str, provider: str, model: str, exc: BaseException) -> None:
+    """실패한 호출도 같은 자리에 남긴다 — 비용 0, 사유만. run.py 의 record_error 와 같다."""
+    record(run_dir, {
+        "stage": stage, "provider": provider, "model": model,
+        "usage": None, "stop": None,
+        "cost": {"input": 0.0, "output": 0.0, "cache_read": 0.0,
+                 "cache_write": 0.0, "total": 0.0, "total_krw": 0},
+        "error": f"{type(exc).__name__}: {exc}",
+    })
+
+
+def text_backend(stage: str = "SHEET") -> tuple[str, str]:
+    provider = llm.provider_for(stage)
+    return provider, llm.model_for(stage, provider)
+
+
+def paint_recorded(run_dir: Path, stage: str, prompt: str, out: Path, **kw) -> dict:
+    """imagegen.paint 를 부르고 그 자리에서 적는다. 실패도 적고 다시 던진다."""
+    try:
+        art_meta = imagegen.paint(stage, prompt, out, **kw)
+    except BaseException as exc:
+        provider, model, _ = imagegen.backend_for(stage)
+        record_error(run_dir, stage, provider, model, exc)
+        raise
+    record(run_dir, art_meta)
+    return art_meta
+
+
+def write_input(run_dir: Path, args, photos: list[Path]) -> None:
+    """무엇을 넣었는지. 사진은 **내용이 아니라 장수만** 남긴다 — 사진은 쓰고 나면 지운다."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "input.json").write_text(json.dumps({
+        "name": args.name,
+        "description": args.description,
+        "photos": len(photos),
+        "style": args.style,
+        "panel": bool(args.panel),
+        "world": args.world if args.panel else None,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def spec_of(name: str, description: str, photos: list[Path],
+            run_dir: Path | None = None) -> dict:
     """외모를 글로 적는다. 사진이 있으면 읽고, 없으면 설명만 본다.
 
     사진이 여러 장이면 같은 사람의 다른 각도·표정으로 보고 하나의 외모로
@@ -105,7 +167,14 @@ def spec_of(name: str, description: str, photos: list[Path]) -> dict:
     call = llm.Call("SHEET")
     log(f"[캐릭터] {call.describe()} 로 외모를 적습니다…")
     images = llm.load_images([str(p) for p in photos]) if photos else None
-    text, meta = call(prompt, images=images, temperature=0.4)
+    try:
+        text, meta = call(prompt, images=images, temperature=0.4)
+    except BaseException as exc:
+        if run_dir is not None:
+            record_error(run_dir, "SHEET", call.provider, call.model, exc)
+        raise
+    if run_dir is not None:
+        record(run_dir, meta)
     spec = sheetmod.parse_spec(text)
     bad = sheetmod.gate_spec(spec)
     if bad:
@@ -331,7 +400,8 @@ def gate_panel_spec(spec: dict) -> list[str]:
 
 def panel_spec_of(name: str, description: str, photos: list[Path],
                   world_label: str, world_text: str,
-                  tier: str | None = None, lucky: bool | None = None) -> tuple[dict, dict]:
+                  tier: str | None = None, lucky: bool | None = None,
+                  run_dir: Path | None = None) -> tuple[dict, dict]:
     lines = ["# 이번 입력", ""]
     lines.append(f"이름: {name.strip()}" if name.strip()
                  else "이름: (없음 — 네가 짓는다)")
@@ -371,7 +441,15 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
     images = llm.load_images([str(p) for p in photos]) if photos else None
     # 한 번만 묻는다. 예전에는 사양이 모자라면 한 번 더 물었는데, 글 값이 매번
     # 두 배로 나갔다. 모자라면 그 자리에서 멈춘다 — 그림 값은 나가지 않는다.
-    text, meta = call(prompt, images=images, temperature=0.8)
+    try:
+        text, meta = call(prompt, images=images, temperature=0.8)
+    except BaseException as exc:
+        if run_dir is not None:
+            record_error(run_dir, "SHEET", call.provider, call.model, exc)
+        raise
+    # 사양이 모자라 여기서 멈춰도 글 값은 나갔다 — 문 앞에서 먼저 적는다.
+    if run_dir is not None:
+        record(run_dir, meta)
     metas = [meta]
     spec = parse_panel_spec(text)
     spec["role_tier"] = tier
@@ -423,11 +501,13 @@ def run_panel(args) -> int:
     for missing in set(args.photo) - set(photos):
         log(f"[한 컷] 사진이 없습니다: {missing} — 빼고 그립니다")
 
+    run_dir = args.out.parent
+    write_input(run_dir, args, photos)
     world_key, world_label, world_text = resolve_world(args.world)
     if world_label:
         log(f"[한 컷] 세계관: {world_label}" + (f" ({world_key})" if world_key else ""))
     spec, spec_metas = panel_spec_of(args.name, args.description, photos,
-                                     world_label, world_text)
+                                     world_label, world_text, run_dir=run_dir)
     style_text = imageprompt.load_style(args.style or spec["style"])
     prompt = panel_prompt(spec, style_text)
 
@@ -436,7 +516,7 @@ def run_panel(args) -> int:
     log(f"[한 컷] 그리는 중… ({spec['style']}) {spec['twist']}")
     # **세로 2:3 으로 그린다** — 웹툰 페이지와 같은 캔버스(imagegen.PAGE_KIND).
     # 카드에 웹툰 한 컷처럼 걸리는 그림이라 정사각 초상이 아니다.
-    art_meta = imagegen.paint("SHEET_IMAGE", prompt, args.out, kind=imagegen.PAGE_KIND)
+    art_meta = paint_recorded(run_dir, "SHEET_IMAGE", prompt, args.out, kind=imagegen.PAGE_KIND)
     log(f"  -> {args.out}")
 
     result = {
@@ -488,7 +568,9 @@ def main() -> int:
     for missing in set(args.photo) - set(photos):
         log(f"[캐릭터] 사진이 없습니다: {missing} — 빼고 그립니다")
 
-    spec, spec_meta = spec_of(args.name, args.description, photos)
+    run_dir = args.out.parent
+    write_input(run_dir, args, photos)
+    spec, spec_meta = spec_of(args.name, args.description, photos, run_dir=run_dir)
 
     # **그림체는 이름이 아니라 문구를 넘긴다.** 받은 값이 그대로 STYLE 칸에
     # 실린다 — 이름을 넘기면 "romance" 다섯 글자가 그림체 설명 전부가 되고,
@@ -498,14 +580,26 @@ def main() -> int:
     prompt = portrait_prompt(spec, style_text)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    (args.out.parent / "art_prompt.txt").write_text(prompt, encoding="utf-8")
     log("[캐릭터] 그리는 중…")
     # **정사각으로 그린다.** 세로로 긴 웹툰 페이지 비율(2:3)로 그렸더니 카드에
     # 걸린 그림이 지나치게 길쭉했다. 캐릭터 한 장은 얼굴과 상반신이 보이면
     # 되는 것이라 정사각이 알맞다("details" 칸이 이미 1024x1024 다).
-    art_meta = imagegen.paint("SHEET_IMAGE", prompt, args.out, kind="details")
+    art_meta = paint_recorded(run_dir, "SHEET_IMAGE", prompt, args.out, kind="details")
     log(f"  -> {args.out}")
 
     # 부르는 쪽이 읽을 한 줄. 비용은 두 호출을 합쳐서 낸다.
+    # 같은 것을 폴더에도 남긴다(run 폴더의 결과 JSON 과 같은 자리) — 한 컷은 panel.json.
+    result = {
+        "out": str(args.out),
+        "named": (spec.get("name") or "").strip(),
+        "name": args.name,
+        "source": "photo" if photos else "prompt",
+        "spec": spec,
+        "calls": [spec_meta, art_meta],
+    }
+    (args.out.parent / "character.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({
         "out": str(args.out),
         # 사람이 이름을 안 적었으면 사양이 지은 것을 돌려준다.

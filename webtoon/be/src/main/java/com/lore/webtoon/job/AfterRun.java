@@ -4,8 +4,6 @@ import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PageUploader;
 import com.lore.webtoon.usage.UsageService;
 import com.lore.webtoon.work.WorkLedger;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -13,11 +11,8 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.List;
 
 /**
  * 다 그린 뒤에 남길 것 — 비용과 그림.
@@ -64,7 +59,6 @@ public class AfterRun {
     private static final java.util.List<JobStatus> UNFINISHED = java.util.List.of(
             JobStatus.QUEUED, JobStatus.RUNNING,
             JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK);
-    private final ObjectMapper mapper = new ObjectMapper();
 
     public AfterRun(UsageService usage, PageUploader uploader, PageStore pages,
                     WebtoonJobRepository jobs, WorkLedger works, HarnessProcess harness,
@@ -226,29 +220,12 @@ public class AfterRun {
             return;
         }
         Path meta = runsDir.resolve(runId).resolve("meta.json");
-        if (!Files.isRegularFile(meta)) {
-            log.warn("비용 기록이 없습니다 (run={})", runId);
-            return;
-        }
         try {
-            JsonNode calls = mapper.readTree(meta.toFile()).path("calls");
-            List<UsageService.Call> out = new ArrayList<>();
-            for (JsonNode one : calls) {
-                JsonNode used = one.path("usage");
-                JsonNode cost = one.path("cost");
-                out.add(new UsageService.Call(
-                        one.path("stage").asText(""),
-                        one.path("provider").asText(""),
-                        one.path("model").asText(""),
-                        used.path("input").asLong(0),
-                        used.path("output").asLong(0),
-                        cost.path("total").asDouble(0),
-                        cost.path("total_krw").asLong(0),
-                        cost.path("cost_basis").asText(null),
-                        one.path("error").asText(null),
-                        at(one.path("at").asDouble(0))));
+            int saved = usage.ingestMetaFile(runId, meta);
+            if (saved < 0) {
+                log.warn("비용 기록이 없습니다 (run={})", runId);
+                return;
             }
-            int saved = usage.ingest(runId, out);
             log.info("비용을 적었습니다 (run={}, {}건)", runId, saved);
         } catch (IOException | RuntimeException e) {
             log.error("비용을 적지 못했습니다 (run={})", runId, e);
@@ -288,12 +265,5 @@ public class AfterRun {
          * 본체인데 거꾸로였다. 운영에서 두 편을 만들고 폴더를 열어 보고서야
          * 알았다: episode.png 11.5MB 가 그대로 있었다. */
         files.sweepUploaded(runId);
-    }
-
-    /** 하네스가 적는 에포크 초 -> 시각. 없으면 지금으로 둔다. */
-    private static Instant at(double epochSeconds) {
-        return epochSeconds > 0
-                ? Instant.ofEpochMilli(Math.round(epochSeconds * 1000))
-                : Instant.now();
     }
 }
