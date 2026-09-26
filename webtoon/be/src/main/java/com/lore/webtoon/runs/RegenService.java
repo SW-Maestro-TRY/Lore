@@ -184,11 +184,17 @@ public class RegenService {
         }
         try {
             Path dest = pageFile(runId, pageNo);
+            /* 올린 뒤 서버 사본을 치웠으면 지금 그림이 디스크에 없어서, 아래
+               archive 가 아무것도 안 남긴다 — 되돌리기 전 판이 사라진다. */
+            files.restore(runId, pageNo);
             archive(runId, pageNo);      // 되돌리기 전 그림도 판본으로
             Files.createDirectories(dest.getParent());
             Files.copy(from, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             reupload(runId);
             bakery.invalidate(runId, pageNo);
+            /* 여기서는 서버 사본을 안 치운다. 되돌리기는 다시 그리기 줄 밖에서 돌아서,
+               같은 작품의 다른 장을 그리는 중이면 그쪽이 참조하는 그림을 지우게 된다.
+               남은 사본은 다음 다시 그리기가 끝날 때 같이 치워진다. */
             return versionsOf(runId, pageNo);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
@@ -247,6 +253,9 @@ public class RegenService {
             }
             reupload(runId);
             bakery.invalidate(runId, no);
+            /* 올렸으면 되살린 참조 그림과 새 그림을 서버에서 다시 치운다. 안 치우면
+               다시 그릴 때마다 원본이 서버에 쌓인다(로컬은 RunFiles 가 안 지운다). */
+            files.sweepUploaded(runId);
             move(id, RegenStatus.DONE);
         } catch (Exception e) {
             log.error("다시 그리지 못했습니다 (run={}, 장={})", runId, no, e);
