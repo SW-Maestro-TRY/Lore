@@ -207,8 +207,9 @@ def seeded_input_block(char: dict) -> str:
                       "", world]
         lines += genre_lore_section(genre)
     lines += ["", "## 사용자가 적은 이야기 — 이 웹툰의 중심", "",
-              f"> {user_story(char)}", "",
-              "위의 세계관·전개 문법이 이 이야기와 부딪히면 이 이야기가 이긴다."]
+              f"> {user_story(char)}"]
+    if genre:
+        lines += ["", "위의 세계관·전개 문법이 이 이야기와 부딪히면 이 이야기가 이긴다."]
     return "\n".join(lines) + "\n"
 
 
