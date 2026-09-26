@@ -120,7 +120,10 @@ SEVERITY = ("critical", "major", "minor")
 SCORES = ("shift", "stakes", "place", "react", "open")
 SCORE_LABEL = {"shift": "변한다", "stakes": "커진다", "place": "놓인다",
                "react": "어긋난다", "open": "안 닫힌다"}
-KINDS = ("인과", "지식", "신규", "연속성", "인물", "한장", "마무리")
+# `줄거리` 는 사람이 줄거리를 직접 적었을 때만 나온다(#457) — 적힌 것과
+# 부딪히거나 적힌 것이 뒷전이 된 후보. critical 이면 `verdict` 가 「주의」가 되어
+# 서버의 자동 고르기(`JobRunner.autoPick`)가 그 후보를 거른다.
+KINDS = ("인과", "지식", "신규", "연속성", "인물", "한장", "마무리", "줄거리")
 
 # `ending` 에서 "비었다" 를 뜻하는 값. 모델이 프롬프트가 시킨 대로 적으면
 # 이 낱말들이 온다 — 코드가 이것을 보고 직접 문제를 세운다(아래 _ending).
@@ -210,6 +213,11 @@ def character_block(char: dict | None) -> str:
     for k, v in (char.get("fields") or {}).items():
         if _text(v):
             lines.append(f"- {k}: {_text(v)}")
+    # 사람이 「어떤 이야기를 볼까요?」에 적은 것 — 있을 때만 붙는다(#457).
+    # 없으면 이 칸이 아예 없어서, 프롬프트의 「사용자가 적은 이야기」 절이
+    # 볼 것이 없고 예전 판정과 같다.
+    if _text(char.get("story")):
+        lines += ["", "사용자가 적은 이야기:", f"> {_text(char['story'])}"]
     return "\n".join(lines)
 
 
