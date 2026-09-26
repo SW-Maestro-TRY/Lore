@@ -561,8 +561,9 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
           <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
             {t("편집실")}
           </button>
-          <button type="button" className="icon-btn wt-card-del" aria-label={t("지우기")} title={t("지우기")}
-                  disabled={busy} onClick={() => setConfirming(true)}><IconTrash size={15} /></button>
+          <button type="button" className="btn btn-w wt-my-edit" disabled={busy} onClick={() => setConfirming(true)}>
+            {t("지우기")}
+          </button>
         </span>
       </div>
       {confirming && (
