@@ -4,7 +4,6 @@
 .wt .wt-works-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
 .wt .wt-works-title { display: flex; flex-direction: column; gap: 6px; }
 .wt .wt-works-title h2 { font-size: 34px; }
-.wt .wt-works-title .muted { font-size: 15px; }
 .wt .wt-works-headacts { display: flex; gap: 10px; align-items: center; }
 .wt .wt-works-extoggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 500; cursor: pointer; }
 .wt .wt-works-extoggle input { accent-color: var(--ink); width: 16px; height: 16px; margin: 0; }
@@ -50,11 +49,10 @@
   .wt .wt-works-page { gap: 12px; }
   /* 위에 따로 있던 "둘러보기" 머리띠(MobileTop)를 없애고, 대신 이 제목 줄
      하나에 "다른 사람들의 웹툰"(왼쪽)과 "내 웹툰 만들기"(오른쪽)를 같은
-     줄에 둔다 — 부제(표지를 누르면…)는 폰에서는 뺀다(2026-09-23). */
+     줄에 둔다(2026-09-23). */
   .wt .wt-works-head { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
   .wt .wt-works-title { gap: 0; }
   .wt .wt-works-title h2 { font-size: 19px; }
-  .wt .wt-works-title .muted { display: none; }
   .wt .wt-works-headacts { justify-content: flex-end; }
   .wt .wt-works-extoggle { font-size: 12.5px; gap: 6px; }
   .wt .wt-works-create { height: 36px; font-size: 12.5px; padding: 0 14px; }
