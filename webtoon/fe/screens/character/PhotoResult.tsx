@@ -100,7 +100,9 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
   const title = card?.twist || ch?.name || t("캐릭터 카드");
 
   const onShare = async () => {
-    const native = await shareNative(url, title);
+    /* 폰 공유 글 — 카드 문장 한 줄 뒤에 무엇을 하는 곳인지와 가 보라는 말을 붙인다. 링크 미리보기
+       (apps/web 의 /webtoon 메타데이터)의 설명 줄과 같은 말이다. */
+    const native = await shareNative(url, t("{title} - AI 캐릭터 & 웹툰 생성 서비스, Lore. 나도 만들러 가기 -->", { title }));
     track("card_share", { character: id, target: native ? "native" : "menu" });
     if (native) return;
     setMenu((v) => !v);
