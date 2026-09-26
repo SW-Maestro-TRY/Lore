@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -147,6 +148,36 @@ public class CharacterController {
         m.remove("mine");
         m.remove("error");
         return withInputs(m, one);
+    }
+
+    @Operation(summary = "공유 카드 미리보기", description = """
+            링크를 붙였을 때 뜨는 미리보기(og 태그)용 — 카드 문장·이름·세계관과 그림 주소.
+            화면 서버(apps/web 의 /webtoon 메타데이터)가 부른다. <b>방문 보상을 세지 않는다</b> —
+            위 /card 를 부르면 화면 서버가 "남이 연 것" 으로 잡혀 주인에게 무료 횟수가 잘못 돌아간다.""")
+    @GetMapping("/{publicId}/card/preview")
+    public Map<String, Object> cardPreview(@PathVariable String publicId) {
+        WebtoonCharacter one = characters.sharedCard(publicId);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("twist", one.getTwist() == null ? "" : one.getTwist());
+        m.put("name", one.getName());
+        m.put("world_label", one.getWorldLabel() == null ? "" : one.getWorldLabel());
+        m.put("has_art", characters.artUrl(one) != null);
+        return m;
+    }
+
+    /**
+     * 공유 카드 그림 — 부를 때마다 지금 열리는 주소로 302 한다. 링크 미리보기의 og:image 가
+     * 이 주소를 가리킨다. 카드 그림은 비공개 자리라 {@code art_url} 이 10분짜리 서명 주소인데,
+     * 그걸 og:image 에 그대로 적으면 미리보기를 캐시한 앱에서 10분 뒤 깨진다.
+     * 완성본 표지({@code RunController.page})와 같은 방식이다.
+     */
+    @Operation(summary = "공유 카드 그림", description = "지금 열리는 그림 주소로 302. 그림이 없으면 404.")
+    @GetMapping("/{publicId}/card/art")
+    public ResponseEntity<Void> cardArt(@PathVariable String publicId) {
+        String where = characters.artUrl(characters.sharedCard(publicId));
+        return where == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.status(302).location(URI.create(where)).build();
     }
 
     @Operation(summary = "캐릭터 하나", description = """
