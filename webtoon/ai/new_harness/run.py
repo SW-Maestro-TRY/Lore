@@ -49,6 +49,7 @@ import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
 import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
+import charcard                               # noqa: E402
 import storydiff                              # noqa: E402
 import fullreview                             # noqa: E402
 import pages as pagemod                       # noqa: E402
@@ -112,6 +113,7 @@ def read_character(path: Path) -> dict:
         "photos": photos,
         "photo_note": doc.get("photo_note"),
         "story": doc.get("story"),
+        "card": doc.get("card"),
     })
 
 
@@ -119,6 +121,10 @@ def normalize(raw: dict) -> dict:
     """빈 칸은 빈 칸으로 둔다. 코드가 기본값을 채우면 작가가 준 것과 섞인다."""
     fields = {k: str(v).strip() for k, v in (raw.get("fields") or {}).items()
               if str(v or "").strip()}
+    # 고른 캐릭터 카드(#458). 장르를 따로 안 골랐으면 카드 세계의 장르를 쓴다 —
+    # 안 그러면 마법대륙 카드를 골라도 모델이 장르를 새로 정해 현대물이 나온다.
+    card = charcard.normalize(raw.get("card"))
+    genre = str(raw.get("genre") or "").strip() or charcard.default_genre(card)
     photos = []
     for p in raw.get("photos") or []:
         path = Path(p)
@@ -130,10 +136,11 @@ def normalize(raw: dict) -> dict:
         "name": str(raw.get("name") or "").strip(),
         "description": str(raw.get("description") or "").strip(),
         "fields": fields,
-        "genre": str(raw.get("genre") or "").strip(),
+        "genre": genre,
         "photos": photos,
         "photo_note": str(raw.get("photo_note") or "").strip(),
         "story": str(raw.get("story") or "").strip(),
+        "card": card,
     }
 
 
@@ -142,7 +149,8 @@ def gate_input(char: dict) -> list[str]:
     bad = []
     if not char["name"]:
         bad.append("캐릭터 이름이 없습니다 (필수).")
-    if not char["photos"] and not char["description"] and not char["fields"]:
+    if (not char["photos"] and not char["description"] and not char["fields"]
+            and not char.get("card")):
         bad.append("외관이 없습니다 — 사진이나 설명 중 하나는 있어야 합니다.")
     return bad
 
@@ -158,8 +166,14 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     else:
         lines.append("외관: (사진 없음 — 아래 설명에서 읽는다)")
 
+    card = char.get("card") or {}
+    if card:
+        lines += ["", *charcard.block(card, has_story=bool(user_story(char)))]
+
     if char["description"] or char["fields"]:
-        lines += ["", "설명:"]
+        # 카드를 골랐으면 이 설명은 카드가 되기 전에 사람이 처음 적은 것이다 —
+        # 종·세계가 카드와 다를 수 있어서(사람 → 검은여우) 이름표를 단다.
+        lines += ["", "사용자가 처음 적은 설명 (성격·분위기 참고):" if card else "설명:"]
         if char["description"]:
             lines.append(char["description"])
         for k, v in char["fields"].items():
@@ -987,6 +1001,10 @@ def scene_input_block(char: dict, direction: dict) -> str:
     lines = ["# 이번 입력", "", "[선택된 스토리]", direction.get("title", ""), ""]
     lines.append(direction.get("body") or direction.get("raw", ""))
     lines += ["", "[캐릭터]", f"{char['name']} — {char.get('description') or ''}".rstrip(" —")]
+    # 고른 카드가 있으면 종·세계·정체를 같이 준다(#458) — 원래 설명(사람 ·
+    # 대학생 …)만 보고 장면을 짜면 사람이 고른 캐릭터가 아닌 인물로 그린다.
+    if charcard.short(char.get("card") or {}):
+        lines.append(f"- 고른 캐릭터 카드: {charcard.short(char['card'])} (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
 
