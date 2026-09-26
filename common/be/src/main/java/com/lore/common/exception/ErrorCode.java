@@ -103,6 +103,15 @@ public enum ErrorCode {
     // 후기 (zzal)
     ZZAL_FEEDBACK_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 후기를 남겼어요"),
 
+    // 동작 요청 (zzal)
+    // ★ 429 가 아니라 409 다 — 이 서비스의 하루 상한은 전부 409 + 전용 코드로 답해 왔고
+    //   (부화 DAILY_CAP · 놀이 DAILY_LIMIT), 화면은 상태가 아니라 코드로 갈린다.
+    //   429 를 새로 들이면 화면에 "상태로 분기하는 길" 이 하나 더 생긴다.
+    // ★★ 문구에 <b>시각을 적지 않는다</b> — 이 상한의 하루 경계는 자정이 아니라 취침 기준
+    //   (MotionWishService 가 ZzalPet.dayStartedAt() 한 곳만 본다). 부화 상한 둘과 달리
+    //   풀리는 시각이 사람마다·날마다 다르므로, 지킬 수 있는 말만 남긴다.
+    ZZAL_MOTION_WISH_DAILY_LIMIT(HttpStatus.CONFLICT, "오늘은 충분히 남겼어요 — 자고 일어나면 다시 남길 수 있어요"),
+
     // 미니게임 (zzal)
     ZZAL_GAME_NOT_FOUND(HttpStatus.NOT_FOUND, "진행 중인 놀이가 없어요"),
     ZZAL_GAME_FINISHED(HttpStatus.CONFLICT, "이미 끝난 놀이예요"),

@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { EGG_IMG } from './constants';
-import { C, GAEGU, MONO, radius } from './ui';
+import { C, C2, GAEGU, MONO, TAP_MIN, gap, monoSize, radius, fz, ink } from './ui';
 import { useLive } from './useHatch';
 import { EGG_CRACK_MS, type Yeoul } from './useYeoul';
 
@@ -57,33 +57,35 @@ export default function Egg({ y }: { y: Yeoul }) {
     : e.isReady ? 'yShakeBig 1.35s ease-in-out infinite' : 'yWiggle 2.2s ease-in-out infinite';
 
   return (
-    <div data-part="egg" style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, padding: '18px 22px 26px', gap: 18, background: C.eggBg }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 27, lineHeight: 1.25, color: C.ink }}>{e.title}</span>
-        <span style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(74,64,56,.6)' }}>{e.sub}</span>
+    <div data-part="egg" style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, padding: '18px 22px 26px', gap: gap.xl, background: C.eggBg }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
+        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.25, color: C.ink }}>{e.title}</span>
+        <span style={{ fontSize: fz.md, lineHeight: 1.7, color: ink(.6) }}>{e.sub}</span>
       </div>
 
-      <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+      <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: gap.xl }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={img} alt="알" style={{ width: 200, maxWidth: '70%', display: 'block', animation: anim }} />
-        <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <span style={{ display: 'flex', gap: 5 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: gap.md }}>
+          <span style={{ display: 'flex', gap: gap.xs }}>
             {e.dots.map((d, i) => <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: d.bg }} />)}
           </span>
-          <span style={{ fontSize: 12, color: 'rgba(74,64,56,.55)' }}>{stage}</span>
+          <span style={{ fontSize: fz.sm, color: ink(.55) }}>{stage}</span>
           {/* 몇 단계 중 몇 번째인지 — 서버가 준 숫자 그대로다(총 단계가 넷이 아닐 수 있다). */}
-          <span style={{ font: `10px ${MONO}`, color: 'rgba(74,64,56,.38)' }}>{e.count}</span>
+          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: ink(.38) }}>{e.count}</span>
         </span>
-        {left && <span style={{ fontSize: 11.5, color: 'rgba(74,64,56,.42)' }}>{left}</span>}
+        {left && <span style={{ fontSize: fz.sm, color: ink(.42) }}>{left}</span>}
       </div>
 
-      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: gap.md }}>
         {/* ★ 안내는 **버튼 위**다(상훈님 2026-09-11). 아래에 두면 눌러도 아무 일이 없는 것처럼 보이고,
             엄지와 자판이 아래를 가리는 폰에서는 답이 가려진다. 누른 손 위쪽에 답이 뜬다. */}
-        {e.hasMsg && <span data-part="egg-msg" style={{ textAlign: 'center', fontSize: 11.5, lineHeight: 1.5, color: C.faint }}>{e.msg}</span>}
-        {live.error && <span data-part="egg-error" style={{ textAlign: 'center', fontSize: 11.5, lineHeight: 1.5, color: C.accent }}>{live.error}</span>}
-        <button onClick={actions.tapEgg} data-action="egg-cta" style={{ padding: 16, borderRadius: radius.md, border: 'none', background: e.ctaBg, color: e.ctaFg, fontSize: 15.5 }}>{e.cta}</button>
-        <button onClick={actions.backToSample} style={{ padding: 4, border: 'none', background: 'none', fontSize: 12, color: 'rgba(74,64,56,.45)' }}>여울 샘플로 돌아가기</button>
+        {e.hasMsg && <span data-part="egg-msg" style={{ textAlign: 'center', fontSize: fz.sm, lineHeight: 1.5, color: C.faint }}>{e.msg}</span>}
+        {live.error && <span data-part="egg-error" style={{ textAlign: 'center', fontSize: fz.sm, lineHeight: 1.5, color: C.accent }}>{live.error}</span>}
+        <button onClick={actions.tapEgg} data-action="egg-cta" style={{ padding: 16, borderRadius: radius.md, border: 'none', background: e.ctaBg, color: e.ctaFg, fontSize: fz.lg }}>{e.cta}</button>
+        {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 24px). 테두리도 바탕도 없는 글자 단추라
+            판만 키우고 남는 몫을 음수 여백으로 되돌린다 — 보이는 글자 자리는 그대로다(44-10*2=24). */}
+        <button onClick={actions.backToSample} style={{ minHeight: TAP_MIN, margin: '-10px 0', padding: 4, border: 'none', background: 'none', fontSize: fz.sm, color: C.faint2 }}>여울 샘플로 돌아가기</button>
       </div>
     </div>
   );

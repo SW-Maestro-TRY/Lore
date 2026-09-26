@@ -205,8 +205,11 @@ public final class ZzalRules {
      */
     public static final int PIECE_PETS = 5;
 
-    /** 두 번째 선물(뒤로 넘어짐)은 3층 심화가 이만큼 열린 뒤(정본 6·16장). */
-    public static final int SECOND_GIFT_AFTER_ADVANCED = 8;
+    // ★ 옛 SECOND_GIFT_AFTER_ADVANCED(= 8, "3층 심화 8종이 열린 뒤") 는 지웠다 —
+    //   선언 말고 참조가 한 곳도 없는 잔존 상수였다(연결 감사 J2). 두 번째 선물(뒤로 넘어짐)의
+    //   조건은 2026-09-22 상훈님 결정으로 <b>튜토리얼 뒤 좌우 맞히기 완주 패배</b>이고,
+    //   그것을 판정하는 자리는 GameService.guess 다(정본 6·16장을 그 결정으로 개정).
+    //   상수를 남겨 두면 "심화 8종" 이 아직 규칙인 것처럼 읽혀, 다음 사람이 그 값으로 코드를 짠다.
 
     /** 기분 좋은 날(3층) = 잠들 때 케어 미스 0 + 세 게이지 2칸 이상 → 다음 날 조각 1 선지급. */
     public static final int GOOD_DAY_GAUGE_AT_LEAST = 2;
@@ -267,23 +270,34 @@ public final class ZzalRules {
     /** 기억 — 최근 답 5개를 재언급. */
     public static final int CHAT_MEMORY = 5;
 
-    /** 세계관 한 줄 100자. 성격 그룹은 5개 고정(GENTLE·LIVELY·SHY·CLINGY·COOL). */
-    public static final int WORLD_MAX_CHARS = 100;
+    /**
+     * 세계관 <b>200자</b>. 성격 그룹은 5개 고정(GENTLE·LIVELY·SHY·CLINGY·COOL).
+     *
+     * <h3>★ 100 → 200 (2026-09-22)</h3>
+     * 이 칸만 다른 칸의 두 배인 이유는 <b>칩과 글이 한 칸을 나눠 쓰기</b> 때문이다. 화면에서 고른
+     * 낱말(칩)이 그대로 이 글에 붙어 저장되므로, 칩 몇 개를 고르고 나면 직접 쓸 자리가 얼마 안 남는다.
+     * 말투·장르는 낱말 한두 개짜리 칸이라 그런 일이 없다.
+     */
+    public static final int WORLD_MAX_CHARS = 200;
 
     /**
-     * 말투·장르 한 줄 32자.
+     * 말투·장르 한 줄 <b>100자</b>.
      *
      * <h3>★ 이 상수 하나가 네 곳을 묶는다</h3>
      * 요청 검증({@code @Size}) · 엔티티 칸 길이({@code @Column}) · DB 칸 길이(마이그레이션) · 문서.
      * 이 넷이 갈리면 <b>검증은 통과하고 저장에서 터진다</b> — 사용자에게는 "너무 깁니다" 가 아니라
      * 그냥 500 이 가고, 짧게 줄이면 되는 입력인데 앱이 고장 난 것처럼 보인다(세계관 칸에서 실제로 났다).
      *
+     * <h3>★ 32 → 100 (2026-09-22)</h3>
+     * 32자는 "무뚝뚝한 존댓말" 한 마디에서 끝나 <b>말투를 설명할 자리가 없었다</b>. 한도는 칸마다
+     * 넉넉하게 잡는다(상훈님 결정). 넓히는 방향이라 이미 저장된 글은 한 글자도 안 건드린다.
+     *
      * ★ 둘 다 <b>대사 톤에만</b> 쓴다. 그림 생성에는 들어가지 않는다.
      */
-    public static final int TONE_MAX_CHARS = 32;
+    public static final int TONE_MAX_CHARS = 100;
 
-    /** 장르 한 줄 32자. {@link #TONE_MAX_CHARS} 와 같은 이유로 한 상수다. */
-    public static final int GENRE_MAX_CHARS = 32;
+    /** 장르 한 줄 100자. {@link #TONE_MAX_CHARS} 와 같은 이유로 한 상수다. */
+    public static final int GENRE_MAX_CHARS = 100;
 
     // ── 11장 장면 ─────────────────────────────────────────────────────────
 
@@ -370,4 +384,25 @@ public final class ZzalRules {
      *   이름을 짓고 나면 이미 상당 부분이 지나 있다(이름 짓는 데 걸린 실측 2분 54초).
      */
     public static final Duration HATCH_ESTIMATE = Duration.ofMinutes(4);
+
+    // ── 동작 요청 ─────────────────────────────────────────────────────────
+
+    /**
+     * "이런 동작도 보고 싶어요" 한 줄의 상한 — <b>60자</b>.
+     *
+     * ★ 서비스 전체의 자유 글 상한과 같은 값이라 여기 한 상수로 둔다. 요청 검증(@Size)과
+     *   DB 칸 길이(varchar(60))가 <b>같은 숫자</b>여야 한다 — 어긋나면 검증을 지나온 글이
+     *   저장에서 터져 사용자가 400 이 아니라 500 을 본다.
+     */
+    public static final int MOTION_WISH_MAX_CHARS = 60;
+
+    /**
+     * 한 아이에게 하루에 남길 수 있는 요청 수 — <b>20</b>.
+     *
+     * ★ 막으려는 것은 사용자가 아니라 <b>눌린 채 굴러가는 화면</b>이다. 실제로 스무 개를 떠올려
+     *   적는 사람은 없고, 스무 줄이 들어왔다면 그건 사람이 아니다.
+     * ★ 하루의 경계는 다른 상한과 같은 <b>취침 기준</b>이다({@code ZzalPet.dayStartedAt()}) —
+     *   2026-09-22 결정으로 한국 시각 자정에서 옮겼다(정본 16장 "하루의 경계 = 밤잠 드는 순간").
+     */
+    public static final int MOTION_WISH_DAILY_LIMIT = 20;
 }

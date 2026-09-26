@@ -157,44 +157,48 @@ export const YEOUL_LOOP = `${CDN}/zzal/demo/loop.webp`;
  * 여울 실물은 옛 8상태(idle·eat·hungry·clean·happy·sad·pet·train)뿐이라 가장 가까운 것으로 댄다.
  */
 export const YEOUL_MOTION: Record<string, string> = {
-  // ── 확정 판정본 16종(2026-09-13 교체). 1층 v6 · 2층 v3.
-  //    ★ 옛 그림(`demo/idle.webp` 등)은 **옛 세대**라 오늘 확정한 자세가 아니다.
-  //      CDN 이 1년 불변 캐시라 덮어쓰지 못하므로 **새 경로 `demo/v6/`** 로 올렸다.
-  //      옛 파일은 그대로 두었다(다른 화면이 쓸 수 있다).
-  base: `${CDN}/zzal/demo/v6/base.webp`,
-  eat: `${CDN}/zzal/demo/v6/eat.webp`,
-  joy: `${CDN}/zzal/demo/v6/joy.webp`,
-  sad: `${CDN}/zzal/demo/v6/sad.webp`,
-  sick: `${CDN}/zzal/demo/v6/sick.webp`,
-  pet: `${CDN}/zzal/demo/v6/pet.webp`,
-  hello: `${CDN}/zzal/demo/v6/hello.webp`,
-  sleep: `${CDN}/zzal/demo/v6/sleep.webp`,
-  eat_rice: `${CDN}/zzal/demo/v6/eat_rice.webp`,
-  eat_snack: `${CDN}/zzal/demo/v6/eat_snack.webp`,
-  sweep: `${CDN}/zzal/demo/v6/sweep.webp`,
-  wash: `${CDN}/zzal/demo/v6/wash.webp`,
-  reply: `${CDN}/zzal/demo/v6/reply.webp`,
-  petted: `${CDN}/zzal/demo/v6/petted.webp`,
-  startle: `${CDN}/zzal/demo/v6/startle.webp`,
-  wake_up: `${CDN}/zzal/demo/v6/wake_up.webp`,
+  // ── 정본 v02 16종(2026-09-19 교체). **한 판에서 같이 나온 한 벌**이다 — 옛 v6 는 1층 v6 · 2층 v3 혼종이라
+  //    발끝이 1층 289 · 2층 267 로 22px 벌어져 있었고, v02 는 16 자세 전부 318~319(편차 1px)다.
+  //    ★ 옛 그림(`demo/idle.webp` 등)은 **옛 세대**라 확정한 자세가 아니다.
+  //      CDN 이 1년 불변 캐시라 같은 이름을 덮어쓰지 못하므로 **판이 바뀌면 경로를 바꾼다** — `demo/v7/`.
+  //      옛 폴더(`demo/v6/`)는 지우지 않는다(되돌리기용 · 다른 화면이 쓸 수 있다).
+  //    ★ **그림과 앵커표는 반드시 같은 판**이어야 한다. `demo/v7/anchors.json` 과
+  //      `props/anchors-fixed.ts` 의 `FIXED_ANCHORS`(K=274)가 이 v7 그림에서 나온 짝이다.
+  //      여기만 v7 로 올리고 표를 v6(K=239)로 두면 **소품만 조용히 어긋난다.**
+  base: `${CDN}/zzal/demo/v7/base.webp`,
+  eat: `${CDN}/zzal/demo/v7/eat.webp`,
+  joy: `${CDN}/zzal/demo/v7/joy.webp`,
+  sad: `${CDN}/zzal/demo/v7/sad.webp`,
+  sick: `${CDN}/zzal/demo/v7/sick.webp`,
+  pet: `${CDN}/zzal/demo/v7/pet.webp`,
+  hello: `${CDN}/zzal/demo/v7/hello.webp`,
+  sleep: `${CDN}/zzal/demo/v7/sleep.webp`,
+  eat_rice: `${CDN}/zzal/demo/v7/eat_rice.webp`,
+  eat_snack: `${CDN}/zzal/demo/v7/eat_snack.webp`,
+  sweep: `${CDN}/zzal/demo/v7/sweep.webp`,
+  wash: `${CDN}/zzal/demo/v7/wash.webp`,
+  reply: `${CDN}/zzal/demo/v7/reply.webp`,
+  petted: `${CDN}/zzal/demo/v7/petted.webp`,
+  startle: `${CDN}/zzal/demo/v7/startle.webp`,
+  wake_up: `${CDN}/zzal/demo/v7/wake_up.webp`,
 
   // ── 옛 이름은 **새 그림 중 가장 가까운 것**으로 잇는다. 서버가 아직 옛 키를 주기 때문이다.
   //    이름이 사라진 셋(`practice`·`tilt`·`wave`·`smile_idle`·`sit`)은 새 세대에 대응 자세가 없어 기본으로 간다.
-  shy: `${CDN}/zzal/demo/v6/pet.webp`,
-  call: `${CDN}/zzal/demo/v6/hello.webp`,
-  nod: `${CDN}/zzal/demo/v6/reply.webp`,
-  practice: `${CDN}/zzal/demo/v6/base.webp`,
-  tilt: `${CDN}/zzal/demo/v6/base.webp`,
-  wave: `${CDN}/zzal/demo/v6/hello.webp`,
-  smile_idle: `${CDN}/zzal/demo/v6/joy.webp`,
-  sit: `${CDN}/zzal/demo/v6/base.webp`,
+  shy: `${CDN}/zzal/demo/v7/pet.webp`,
+  call: `${CDN}/zzal/demo/v7/hello.webp`,
+  nod: `${CDN}/zzal/demo/v7/reply.webp`,
+  practice: `${CDN}/zzal/demo/v7/base.webp`,
+  tilt: `${CDN}/zzal/demo/v7/base.webp`,
+  wave: `${CDN}/zzal/demo/v7/hello.webp`,
+  smile_idle: `${CDN}/zzal/demo/v7/joy.webp`,
+  sit: `${CDN}/zzal/demo/v7/base.webp`,
   // 선물 2종은 기본 그림이 없다(심화만). 가장 가까운 것으로 버틴다.
-  roll: `${CDN}/zzal/demo/v6/joy.webp`,
-  fall_back: `${CDN}/zzal/demo/v6/sad.webp`,
+  roll: `${CDN}/zzal/demo/v7/joy.webp`,
+  fall_back: `${CDN}/zzal/demo/v7/sad.webp`,
 };
 
 /** 여울 시연용 자세별 앵커(연습방이 진짜 앵커로 돌게). 실제 아이는 서버가 주는 `anchorsKey` 를 쓴다. */
-export const YEOUL_ANCHORS_URL = `${CDN}/zzal/demo/v6/anchors.json`;
+export const YEOUL_ANCHORS_URL = `${CDN}/zzal/demo/v7/anchors.json`;
 
 
 /** 받침이 있으면 앞의 것, 없으면 뒤의 것. "쓰다듬을" / "청소를" */

@@ -10,22 +10,27 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LEARN_GOALS, LINE,
+  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
-  STEPS, TUTOR, TUTOR_MAIN, TUTOR_SERVER, SHARDS, USER_Q, WALLS,
+  STEPS, TUTOR, TUTOR_ROOM, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
+  WISH_COPY, WISH_MAX, UNLOCK_COPY, WISH_REPLY,
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
-import { ACCENT, C, LV, sel, type LvKey, type Sel } from './ui';
+import { ACCENT, C, C2, LV, sel, type LvKey, type Sel, ink, paperA } from './ui';
 import type { Live } from './useHatch';
-import type { CareAction, ChatState, Personality } from '../../lib/pet';
+import { CHAR_TEXT_MAX, type CareAction, type ChatState, type Personality } from '../../lib/pet';
+import { ApiError } from '../../lib/api';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
 import {
-  ACTION_SITUATION, CYCLE_MS, GIFT_CYCLES, SITUATION_TABLE,
+  ACTION_SITUATION, CYCLE_MS, GIFT_CYCLES, LOCKED_POSE, SITUATION_TABLE,
   cyclesOfAction, poseOfSituation, situationOfAction, stagePlanOf, type ActionKey,
 } from '../props/situations';
-import { motionAliases } from '../constants';
+import { motionAliases, YEOUL_MOTION } from '../constants';
+import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
+import { assetUrl } from '../../lib/assets';
+import { trackConversion } from '../../lib/analytics';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -33,6 +38,68 @@ import { motionAliases } from '../constants';
  * 조사 판정은 공용 `josa()` 가 이미 한다 — 여기서는 이름이 빈 경우까지 함께 막는다.
  */
 const sleepingLine = (name: string) => `${petWith(name, '이', '가')} 자고 있어요`;
+
+/**
+ * 동작 요청 실패 코드 → 화면 문구.
+ *
+ * ★ 표를 한 곳에 두는 이유는 `lib/hatchBlocked.ts` 와 같다 — 사유가 하나 늘 때 부르는 쪽마다
+ *   흩어 두면 빠뜨린 자리만 조용히 옛 문구를 낸다. 모르는 코드는 공통 문구로 떨어진다.
+ * ★ 어느 줄도 사용자를 탓하지 않는다. 하루 상한도 "많이 보냈다" 가 아니라 아이 쪽 사정으로 말한다.
+ */
+const wishFailLine = (code: string | null): string => {
+  switch (code) {
+    case 'INVALID_INPUT': return WISH_COPY.fail.tooLong;
+    case 'unauthorized': return WISH_COPY.fail.login;
+    case 'ZZAL_PET_NOT_FOUND':
+    case 'no_pet': return WISH_COPY.fail.noPet;
+    case 'ZZAL_MOTION_WISH_DAILY_LIMIT': return WISH_COPY.fail.limit;
+    default: return WISH_COPY.fail.other;
+  }
+};
+
+/**
+ * **기권**(게임판 ✕ → 「나가기」) 실패 코드 → 화면 문구.
+ *
+ * ★ 넷 다 **사용자를 탓하지 않는다.** 특히 `ZZAL_GAME_FINISHED` 는 사용자 잘못이 아니다 —
+ *   내가 나가려던 사이 판이 먼저 끝났을 뿐이라 "이미 정리된 판" 이라고만 말한다.
+ * ★ 넷 다 **화면에서는 판을 닫는다.** 기권이 안 됐다고 게임판에 가둬 두면 나갈 길이 없다.
+ * ★★ **아플 때는 거절이 없다** — 이 호출에는 `ZZAL_SICK_REFUSES` 가 없다(서버가 일부러 뺐다).
+ *   그러니 화면도 **아플 때 ✕ 를 잠그면 안 된다.**
+ */
+/**
+ * **성격·세계관을 저장하지 못했을 때** 무엇이 막혔고 어떻게 하면 되는지.
+ *
+ * ★★ 왜 있나 — 2026-09-22 실측: 세계관을 길게 적고 저장하면 서버가 400 으로 거절하는데
+ *   **화면이 한 마디도 안 했다.** 토스트는 방 바닥에 뜨는데 그때 아이 정보 시트가 그 위를
+ *   덮고 있어 보이지도 않았다. 사용자는 저장된 줄 알았다. 그래서 **시트 안, 저장 단추 옆**에
+ *   이 줄을 낸다(→ `settings.save.err`).
+ * ★ **사용자를 탓하지 않는다**(자캐 규범). 길이를 미리 못 막은 것은 화면 잘못이지 사용자
+ *   잘못이 아니다. "어떻게 하면 되는지" 까지 적는다 — "저장하지 못했어요" 만으로는 부족하다.
+ * ★ **적은 글은 그대로 둔다.** 이 줄만 뜨고 시트는 열린 채 남는다(저장 성공 때만 닫힌다).
+ * ★ 문장이 아니라 **코드로 가른다** — 서버 문장이 바뀌어도 안 깨진다(기권 실패와 같은 방식).
+ */
+const saveFailLine = (code: string | null, status: number | undefined, message: string | null): string => {
+  if (status === 401 || code === 'UNAUTHORIZED') return '로그인이 풀렸어요. 다시 로그인하면 적어 두신 글 그대로 저장할 수 있어요.';
+  switch (code) {
+    // 지금 이 자리에서 400 이 나는 유일한 길은 **세계관이 서버 한도보다 긴 것**이다.
+    case 'INVALID_INPUT': return '세계관이 서버가 받는 길이를 넘었어요. 화면이 미리 막았어야 했는데 못 막았어요 — 조금 줄이면 그대로 저장돼요.';
+    case 'FORBIDDEN': return '이 아이를 고칠 수 있는 계정이 아니에요. 로그인한 계정을 확인해 주세요.';
+    case 'ZZAL_PET_NOT_FOUND': return '아이를 찾지 못했어요. 새로 고치면 다시 이어져요 — 적어 두신 글은 그대로 있어요.';
+    case 'ZZAL_PET_NOT_ALIVE': return '지금은 이 아이의 정보를 바꿀 수 없어요. 잠시 뒤에 다시 눌러 주세요.';
+    // 모르는 사유 — 서버가 준 문장을 **그대로 보여 주고** 무엇을 하면 되는지만 덧붙인다.
+    default: return `${message || '지금은 저장하지 못했어요'} · 잠시 뒤에 다시 눌러 주세요. 적어 두신 글은 그대로 있어요.`;
+  }
+};
+
+const quitFailLine = (code: string | null): string => {
+  switch (code) {
+    case 'ZZAL_GAME_NOT_FOUND':
+    case 'ZZAL_GAME_FINISHED': return '이미 정리된 판이에요. 방으로 돌아갈게요.';
+    case 'ZZAL_PET_SLEEPING': return '자고 있어요. 깨우면 정리할게요.';
+    case 'ZZAL_TRAVELING': return '여행 중이에요. 돌아오면 정리할게요.';
+    default: return '지금은 정리하지 못했어요. 방으로 돌아갈게요.';
+  }
+};
 
 // ★ 옛 `ACT_MS = 2500`(행동 한 번의 가장 짧은 길이)은 **없앴다**(2026-09-13).
 //
@@ -49,6 +116,25 @@ const sleepingLine = (name: string) => `${petWith(name, '이', '가')} 자고 �
 /** 바퀴 타이머를 걷어낼 때 훑을 최대 바퀴 수. 표에서 가장 긴 단계 차례(4)보다 넉넉히. */
 const ACT_MAX_CYCLES = 6;
 
+// ── 좌우 맞히기의 박자 ──────────────────────────────────────────────────
+//
+// ★ **프레임 규칙(`situations.ts`)에서 일부러 떼어 냈다**(2026-09-20). 재설계안은 여운을
+//   `CYCLE_MS`(1800ms)를 재사용해 적었는데, 그 상수는 **돌보기 연출 길이**를 정하는 값이라
+//   프레임 규칙이 바뀌면 게임 박자까지 같이 흔들린다. 게임이 원하는 것은 "한 바퀴"가 아니라
+//   "결과를 읽을 시간" 이므로 **여기 숫자로 따로 적는다.** 값이 같은 것은 우연이다.
+// ★ 다만 **2층의 공개 지연만은 `CYCLE_MS` 를 그대로 쓴다** — 그건 `놀람` 움짤이 실제로 도는
+//   길이라, 프레임 규칙이 바뀌면 **같이 바뀌는 것이 맞다**(→ `onGuess` 의 `revealAfter`).
+
+/** 섞기 — 고른 뒤 공개까지. 양손은 주먹 그대로이고 입력만 잠긴다. 서버 왕복이 더 길면 그쪽이 이긴다. */
+const GUESS_SHUFFLE_MS = 250;
+/** 여운 — 결과를 읽을 시간. 끝나면 **누르지 않아도** 다음 판이 시작된다. */
+const GUESS_AFTERGLOW_MS = 1800;
+/** 매치 끝 — 결과 문장과 행복 한 칸을 같이 읽어야 해서 여운의 두 배다. */
+const GUESS_MATCH_END_MS = 3600;
+/** 정본 §7 — 한 매치 5판, 3판 먼저 맞히면 이김. **서버가 들고 있는 값과 같다**(`rounds`·`winAt`). */
+const GUESS_ROUNDS = 5;
+const GUESS_WIN_AT = 3;
+
 const petWith = (name: string, withFinal: string, withoutFinal: string) => {
   const n = name || '아이';
   return `${n}${josa(n, withFinal, withoutFinal)}`;
@@ -61,7 +147,8 @@ export type Mode = 'day' | 'night' | 'sleep' | 'sick';
  * 시트로 남는 넷. **주방·욕실·침실은 시트가 없다**(상훈님 2026-09-08 판정 12) —
  * 그 셋은 팝오버로 할 일이 다 되고, 알림에서만 열리는 큰 창을 남길 이유가 없었다.
  */
-export type SheetKey = 'play' | 'album' | 'notify' | 'settings';
+// ★ 'album' 은 2026-09-21 에 빠졌다 — 앨범은 시트가 아니라 **전체 화면(벽)** 하나로 모았다(A-14).
+export type SheetKey = 'play' | 'notify' | 'settings';
 export interface LogLine { who: 'pet' | 'me'; text: string }
 /**
  * 벽에 걸린 액자 하나.
@@ -70,10 +157,44 @@ export interface LogLine { who: 'pet' | 'me'; text: string }
  *   2층 동작 key 까지 오므로 8종으로는 못 담는다. 무엇을 그릴지는 `spriteUrl` 한 곳이 정한다.
  */
 export interface FrameData { name: string; open: boolean; cond: string; key: string }
-export interface FireAction { label: string; tap: () => void; primary: boolean }
+/**
+ * 전면 판의 버튼 하나.
+ *
+ * ★ `action` 은 **비워 둘 수 없다**(팀 규약 C25 — 버튼은 문구가 아니라 `data-action` 으로 집는다).
+ *   문구는 상훈님이 언제든 바꾸시는 자리라, 문구로 집는 검사는 디자인을 다듬을 때마다 깨진다.
+ *   필수로 둔 이유는 **새 판을 만드는 사람이 빠뜨릴 수 없게** 하기 위해서다.
+ */
+export interface FireAction { label: string; action: string; tap: () => void; primary: boolean }
 export interface Fire {
   title: string; body: string; hint?: string; tapAny?: boolean;
-  polaroid?: boolean; caption?: string; shot?: string; shotLabel?: string;
+  /**
+   * 예시 그림 한 칸(졸업 판의 구르기 미리보기).
+   *
+   * ★★ 옛 **폴라로이드 칸**(`polaroid`·`caption`·`shot`·`shotLabel`)은 **없앴다**(2026-09-21 A-09).
+   *   그 칸은 그림 대신 **빗금 친 색상자**를 그렸다 — 없는 장면을 있는 것처럼 보이게 하는 자리라,
+   *   "그림이 없으면 칸을 접는다" 는 규칙과 정면으로 어긋났다. 진짜 그림이 생기는 날에는
+   *   이 `preview` 를 쓰면 된다 — 접는 규칙이 이미 들어 있다.
+   * ★ 예시 그림은 방 안 액자와 **일부러 다른 모양**(점선 틀)이다. 액자는 "내 아이와 남긴 것" 이고
+   *   이쪽은 "남이 먼저 보여주는 예시" 라, 같은 틀로 그리면 사용자가 제 것으로 읽는다.
+   * ★ 그림 주소가 없으면 이 칸 자체를 안 만든다 — 빈 액자가 뜨는 것보다 없는 편이 낫다.
+   * ★ 주소가 **있는데도 안 열리는** 경우는 화면(`Panels.FirePreview`)이 칸을 접어서 막는다.
+   *   해금 판에서는 그게 정상 경로다(심화 그림은 도착 전까지 없다).
+   * ★ `w`·`h` 는 서버가 준 판 크기다. 주면 자리를 미리 잡아 판이 덜컥 커지지 않는다.
+   */
+  preview?: { src: string; badge: string; caption: string; w?: number; h?: number };
+  /**
+   * 자유 입력을 **어느 판에서** 보냈는지. 기록에만 쓴다(문구에는 안 나온다).
+   * 졸업 판과 해금 판이 같은 입력칸을 쓰므로, 이걸 안 남기면 어디서 온 글인지 영영 모른다.
+   */
+  wishFrom?: string;
+  /**
+   * 자유 입력칸을 이 판에 둘 것인가.
+   *
+   * ★ **값이 아니라 플래그다.** 입력은 글자마다 바뀌는데 `fire` 는 판이 뜰 때 한 번 만들어
+   *   상태에 눌러앉는 객체라, 값을 여기 담으면 타이핑이 화면에 안 보인다.
+   *   실제 값·손잡이는 뷰(`v.wish`)가 매 렌더 새로 만든다.
+   */
+  wish?: boolean;
   actions: FireAction[];
 }
 
@@ -124,15 +245,58 @@ export interface YeoulState {
   mine: string; petLine: string;
   day: number; bond: number; floorLv: number;
   cChat: number; cBath: number; cSleep: number; cGame: number;
+  /** 손으로 깨운 횟수. 2층 '일어나기' 조건(정본 §6 16번)이라 재우기(`cSleep`)와 따로 센다. */
+  cWake: number;
   full: number; happy: number; stock: number; trace: number; plays: number; snacks: number;
   bathUsed: boolean; pets: number; sick: boolean; sleeping: boolean; night: boolean;
   hearts: boolean; toast: string;
+  /** 성격·세계관 저장이 거절됐을 때 **시트 안에** 남는 한 줄. 빈 문자열이면 안 뜬다(→ `saveFailLine`). */
+  saveErr: string;
+  /**
+   * 선반의 「다음에 배울 것」 카드를 **펼쳤는가**.
+   *
+   * ★ 카드 안이 아니라 여기 둔다(2026-09-22 판정 K) — 카드는 팝오버·시트·대화·게임 중에
+   *   사라졌다가 다시 뜬다. 지역 상태로 두면 그때마다 **접힌 채로 되돌아간다.**
+   */
+  miniOpen: boolean;
   sheet: SheetKey | null; sheetClosing: boolean;
   playTab: 'talk' | 'guess' | 'run'; draft: string;
   /** 방금 친 좌우 맞히기 결과(서버가 준 것). 한 줄 문구를 그리는 데만 쓴다. */
   lastGuess: GuessResult | null;
+  /**
+   * 좌우 맞히기 **한 매치**. 시트가 아니라 **무대 위**에서 돈다(2026-09-20 안 1).
+   * 규칙은 정본 §7 그대로 — 5판 3승 · 하루 3판. 화면이 규칙을 새로 만들지 않는다.
+   *   `gOn`    매치가 도는 중인가(무대에 손·점 줄이 뜬다)
+   *   `gPhase` 대기 → 섞기 → 공개 → (여운 뒤 자동으로 다음 판) · 마지막엔 `done`
+   *   `gMarks` 판마다 맞혔나(점 다섯 칸). `null` = 아직 안 친 판
+   */
+  gOn: boolean;
+  gPhase: 'wait' | 'shuffle' | 'reveal' | 'done';
+  gRound: number; gHits: number;
+  gPick: Side | null; gHit: boolean | null;
+  gMarks: readonly (boolean | null)[];
+  /**
+   * 이 매치가 **기권으로** 끝났는가(2026-09-21 판정 3). 끝말 한 줄을 고르는 데만 쓴다 —
+   * 친 라운드까지의 성적("N / 5 맞혔어요")은 기권에 맞지 않는 말이라 다른 문장이 필요하다.
+   * 규칙은 서버가 쥔다(진 판으로 남는다) — 화면이 승패를 새로 정하지 않는다.
+   */
+  gQuit: boolean;
+  /**
+   * 이 매치에서 **서버 판을 이미 시작했는가**(2026-09-22 판정 J3).
+   *
+   * ★★ 예전에는 `live.game.playing` 으로 판단했다. 그 값은 새로고침할 때 서버의 `games/current`
+   *   에서 되살아나므로, **전에 치다 만 판을 그대로 이어 쳤다.** 상훈님 판정은 "게임은 중간에
+   *   나가면 끝" 이다 — 이어 치기가 없다. 그래서 **이번 매치에서 내가 시작했는지**만 본다.
+   */
+  gStarted: boolean;
+  /**
+   * 매치를 **시작할 때**의 기분(0~4). 끝말에서 "기분이 한 칸 올랐어요" 를 말해도 되는지
+   * 판정하는 데만 쓴다 — 기분이 이미 가득(4)이면 이겨도 안 오르는데, 그때까지 올랐다고
+   * 말하면 판정 12 에서 짚인 거짓말이 자리만 옮긴 꼴이 된다.
+   */
+  gHappy0: number;
   log: LogLine[]; memories: string[];
-  resolved: Record<string, boolean>; calls: number; guess: string | null;
+  resolved: Record<string, boolean>; calls: number;
   wallId: string;
   /**
    * 캐릭터 칸에서 고른 칩들. **한 묶음에 여러 개**를 고를 수 있다(상훈님 2026-09-11).
@@ -184,7 +348,19 @@ export interface YeoulState {
   wallOpen: boolean; wallClosing: boolean;
   frame: FrameData | null; frameClosing: boolean;
   notifOn: boolean; needStyleLocal: NeedStyle | null; unlockShown: boolean;
-  saved: number; wishes: number; cardIdx: number;
+  /**
+   * ★ `saved`(저장한 장수)는 **뺐다**(2026-09-21 상훈님) — 저장이 아직 준비 중이라 셀 것이 없다.
+   *   예전에는 아무 데도 안 담으면서 이 숫자만 올리고 "N장 저장했어요" 라고 말했다.
+   *   진짜 저장이 붙는 날 다시 세면 된다.
+   */
+  wishes: number; cardIdx: number;
+  /** 자유 입력칸에 쓰는 중인 글. 상한(`WISH_MAX`)을 넘겨 담지 않는다. */
+  wishDraft: string;
+  wishSending: boolean;
+  /** 보내고 받아진 뒤. 입력칸 자리에 "잘 들었어요" 한 줄이 대신 남는다. */
+  wishDone: boolean;
+  /** 실패 안내 한 줄. 서버 문장이 아니라 우리 표(`WISH_COPY.fail`)에서 고른 것이다. */
+  wishError: string;
   sampleMode: boolean; hatch: number; snapshot: Partial<YeoulState> | null;
   tutor: number; tutorOn: boolean;
   cracking: boolean; eggMsg: string; nameErr: boolean;
@@ -221,14 +397,16 @@ export interface YeoulState {
 const INITIAL: YeoulState = {
   screen: 'onb', step: 0, roomSel: 'table', popOpen: true, popClosing: false,
   chatOpen: false, chatClosing: false, mine: '', petLine: '',
-  day: 12, bond: 40, floorLv: 2, cChat: 0, cBath: 0, cSleep: 0, cGame: 0,
+  day: 12, bond: 40, floorLv: 2, cChat: 0, cBath: 0, cSleep: 0, cGame: 0, cWake: 0,
   full: 2, happy: 2, stock: 3, trace: 2, plays: 3, snacks: 0,
   bathUsed: false, pets: 1, sick: false, sleeping: false, night: false,
-  hearts: false, toast: '',
+  hearts: false, toast: '', miniOpen: false, saveErr: '',
   sheet: null, sheetClosing: false, playTab: 'talk', draft: '', lastGuess: null,
+  gOn: false, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
+  gMarks: [null, null, null, null, null], gQuit: false, gHappy0: 0, gStarted: false,
   log: [{ who: 'pet', text: '있잖아, 오늘은 뭐 했어요?' }],
   memories: ['빵 좋아함', '비 싫어함', '왼쪽을 잘 맞힘', '늦잠', '파란색'],
-  resolved: {}, calls: 3, guess: null,
+  resolved: {}, calls: 3,
   wallId: 'cream', picks: {}, texts: {}, user: {}, uq: 0,
   // ★ 이름은 **비워 둔다**(상훈님 판정 3). 미리 채워 두면 지우지 않고 넘긴 사람의 아이가
   //   남의 이름으로 만들어진다. 자리표시자('여울')만 보여 주고 값은 빈 칸이다.
@@ -238,7 +416,8 @@ const INITIAL: YeoulState = {
   fire: null, decoOpen: false, albumOpen: 8,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
-  saved: 0, wishes: 0, cardIdx: 0,
+  wishes: 0, cardIdx: 0,
+  wishDraft: '', wishSending: false, wishDone: false, wishError: '',
   sampleMode: false, hatch: 0, snapshot: null,
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
   hintI: 0, leaveOff: false, sleepCover: false,
@@ -288,7 +467,10 @@ function callQueueOf(s: YeoulState, m: Mode): CallItem[] {
   //   첫 부름의 방이 흔들리므로 이 순서가 곧 **강조되는 타일의 순서**이기도 하다.
   if (m === 'sick') out.push({ kind: 'call', text: '몸이 무거워요…', room: 'bath' });
   if (m === 'night' && !r.bed) out.push({ kind: 'call', text: '이제 졸려요', room: 'bed' });
-  if (s.full <= 2 && !r.table) out.push({ kind: 'call', text: '배고파요', room: 'table' });
+  // ★ 문턱을 **자세와 같은 0 칸**으로 맞췄다(2026-09-22 판정 J). 예전에는 `<= 2` 라 두 칸이나
+  //   남았는데도 "배고파요" 가 떠 있었고, 자세는 0 칸에서야 바뀌어 **말과 몸이 따로 놀았다**
+  //   (상훈님 dev 실측: 배부름 1·2 에서 말풍선만 떠 있음).
+  if (s.full <= 0 && !r.table) out.push({ kind: 'call', text: '배고파요', room: 'table' });
   if (s.trace >= 2 && !r.bath) out.push({ kind: 'call', text: '여기 좀 치워 주세요', room: 'bath' });
 
   const last = s.log[s.log.length - 1];
@@ -336,6 +518,12 @@ export interface Tile {
   key: RoomKey; label: string; layers: string[];
   fg: string; tileBg: string; bw: string; bd: string; anim: string;
   badge: string; hasBadge: boolean; pick: () => void; dim: boolean;
+  /**
+   * 튜토리얼이 **다른 칸을 가리키는 동안** 잠긴다. **진짜 `disabled`** 로 내려간다
+   * (2026-09-22 상훈님 판정 — "눌러야 할 거 하나만 하이라이트, 나머지는 비활성").
+   * ★ 자는 동안 잠기는 것은 여기 안 들어온다 — 그건 눌러서 한 줄을 듣는 자리다(`dim` 만 켠다).
+   */
+  off: boolean;
 }
 export interface PopBtn {
   label: string; count: string; tap: () => void; anim: string;
@@ -357,19 +545,32 @@ export interface Stage {
   wall: string; floor: string; frame: string; sky: string; pattern: string;
   moon: boolean; sun: boolean; curtain: boolean; sick: boolean;
   charFilter: string; play: 'running' | 'paused';
+  /**
+   * 아이 그림에만 거는 배율. 평소 1, **배부름 0 이면 0.7**(정본 §게이지 "배부름 0 = 기본 자세 0.7배").
+   *
+   * ★ 상자(레이아웃)는 안 건드리고 **그림에만** 건다 — 상자를 줄이면 바닥 소품(똥)이 읽는 자(`charBox` 폭)
+   *   까지 같이 줄어 방 안 물건이 통째로 작아진다. 말풍선 자리는 같은 배율로 따로 낮춘다.
+   */
+  charScale: number;
 }
+/**
+ * 아이 말풍선이 그릴 것. **말 한 줄이 전부다.**
+ *
+ * ★ 2026-09-21(A-05~A-08) — 튜토리얼 안내가 여기 얹혀 있었다. 연습방에서는 그 안내가 무대
+ *   **위쪽 머리 띠**의 카드로 나왔고, 진짜 방에서는 **아래 선반 카드**로 나왔다. 같은 안내인데
+ *   화면마다 자리가 달랐다(실측 — 위에서 40px 대 아래에서 125px). 이제 두 화면 모두
+ *   선반 카드(`mini`)가 맡는다. 말풍선은 아이의 말만 한다.
+ */
 export interface Bubble {
-  isTut: boolean; top: string; tutText: string;
-  show: boolean; text: string; chipLabel: string;
-  hasPrev: boolean; hasNext: boolean; hasHint: boolean; hintText: string; hasSkip: boolean;
-  dots: { w: string; bg: string }[];
-  /** '3 / 8' — 점 여덟 개 대신 쓰는 한 덩어리. 자리도 덜 먹고 읽히기도 낫다. */
-  stepText: string;
-  prev: () => void; chipTap: () => void; skipStep: () => void;
+  show: boolean; text: string;
 }
 export interface Opt extends Sel { text: string; pick: () => void }
 export interface CharGroup {
   key: string; title: string; ph: string; value: string;
+  /** 접었을 때 보이는 한 줄. 고른 칩을 그대로 읽어 준다. */
+  summary: string;
+  /** 무언가 채웠는가 — 접힌 칸의 테두리 색이 이걸 본다. */
+  done: boolean;
   /** "여러 개 고를 수 있어요" 같은 한 줄 안내. 칩 위에 작게 붙는다. */
   note: string;
   onInput: (v: string) => void; cardBd: string; cardBg: string; opts: Opt[];
@@ -579,12 +780,27 @@ export function useYeoul(live?: Live) {
    * ★ 지금 2층을 여는 길은 **연습방 스위치 하나뿐**이다(`floor2`). 진짜 아이의 해금은 서버가 쥔다 —
    *   그 값이 오면 여기만 바꿔 읽으면 된다.
    */
+  /**
+   * 이 행동의 **2층이 열렸는가.**
+   *
+   * ★★ 2026-09-22 판정 H — 예전에는 **개발 창 값만** 봤다(`s.dev.floor2`·`s.dev.unlocked`).
+   *   그래서 진짜 방에서는 서버가 아무리 열어 줘도 **2층 자세가 영영 안 나왔다.**
+   *   dev 실측: 쓰다듬 2층(`petted`)이 서버에서 `unlocked=true` 인데 화면은 1층 `pet` 을 재생.
+   *   도감(앨범)은 서버를 읽고 재생은 목을 읽어서, **한 화면에서 두 출처가 갈려 있었다.**
+   * ★ 이제 순서는 이렇다 — 개발 창(목·연습방 전용) → **서버 도감** → 닫힘.
+   *   개발 창 값은 **덮어쓰기**로만 남는다(켜면 열린 것으로 친다). 끄는 데는 안 쓴다.
+   * ★ 자세 key 는 서버 도감의 key 와 **같은 낱말**이다(`petted`·`eat_rice`·`sweep`…) —
+   *   표(`SITUATION_TABLE`)가 그 낱말로 적혀 있어 통역이 필요 없다.
+   */
   const floor2Of = useCallback((action: ActionKey) => {
     const d = sRef.current.dev;
     if (d.floor2) return true;
     const l2 = (ACTION_SITUATION[action] as { l2?: string }).l2;
     const pose = l2 ? poseOfSituation(SITUATION_TABLE, l2) : null;
-    return !!(pose && d.unlocked[pose]);
+    if (!pose) return false;
+    if (d.unlocked[pose]) return true;
+    if (!onServerRef.current) return false;
+    return !!liveRef.current?.pet?.motions?.find((m) => m.key === pose)?.unlocked;
   }, []);
   const sitOf = useCallback((action: ActionKey) => situationOfAction(action, floor2Of(action)), [floor2Of]);
 
@@ -612,8 +828,14 @@ export function useYeoul(live?: Live) {
   const careAct = useCallback((action: ActionKey) => {
     const f2 = floor2Of(action);
     const sit = situationOfAction(action, f2);
-    // ★ 표가 그 층에 줄을 안 적어 둔 행동은 **아무것도 안 짓는다**(게임 좌·우 고르기 1층 = "변화 없음").
-    if (!sit) return;
+    // ★ 표가 그 층에 줄을 안 적어 둔 행동(답하기·깨우기·좌우 고르기의 1층)은 **소품 없이 몸짓만**
+    //   짓는다(2026-09-22 판정 I). 예전에는 그 셋이 1층 줄이 없다는 이유로 **잠겨 있어도 2층
+    //   자세를 그대로 재생**하거나(답하기·깨우기) **아무 자세도 안 켜졌다**(좌우 고르기).
+    if (!sit) {
+      const fallback = LOCKED_POSE[action];
+      if (fallback) act(fallback, null, cyclesOfAction(SITUATION_TABLE, action, false));
+      return;
+    }
     // ★ 그 행동이 건드리는 칸의 개발 덮개를 걷는다 — 안 그러면 눌러도 화면이 안 바뀐다.
     const keys = RELEASE[action];
     if (keys?.length) {
@@ -635,68 +857,239 @@ export function useYeoul(live?: Live) {
     later('toast', 1700, () => setS((v) => ({ ...v, toast: '' })));
   }, [later]);
 
+  /**
+   * "이런 동작도 보고 싶어요" — 정본 §심화 행동의 수요조사 한 줄.
+   *
+   * ★★ 2026-09-20 — 예전에는 **아무 데도 안 보내면서** "기록해 뒀어요" 라고 했다. 화면이
+   *   하지 않은 일을 했다고 말하는 자리였다. 지금은 진짜로 남긴다 — 전용 서버 API 를 새로
+   *   만들 필요가 없다. 행동 기록 수집기(`POST /api/v1/events`)가 이미 열려 있고 비로그인도 받는다.
+   * ★ `trackConversion` 인 이유 — 평범한 `track` 은 5초 뒤에 묶어 보낸다. 이 판은 누르고
+   *   바로 닫고 나가는 자리라, 그 5초 안에 탭이 사라지면 정작 알고 싶은 한 줄을 잃는다.
+   * ★ props 키는 수집기 허용 목록(`ALLOWED_PROP_KEYS`) 안의 것만 쓴다 — 목록 밖 키는 조용히 버려진다.
+   */
+  const recordWish = useCallback((from: string) => {
+    void trackConversion('zzal_motion_wish', { from });
+    setS((v) => ({ ...v, wishes: v.wishes + 1, fire: null }));
+    flash('기록해 뒀어요');
+  }, [flash]);
+
+  /** 입력칸에 쓰는 중. **상한을 넘겨 담지 않는다** — 넘긴 뒤 꾸짖는 것보다 못 넘게 하는 쪽이 낫다. */
+  const onWishDraft = useCallback((t: string) => {
+    setS((v) => ({ ...v, wishDraft: t.slice(0, WISH_MAX), wishError: '' }));
+  }, []);
+
+  /**
+   * 보고 싶은 동작 한 줄 보내기.
+   *
+   * ★ 보낸 뒤 **같은 자리에서** "받았다" 고 말하고 입력칸을 접는다(`wishDone`). 토스트만 띄우고
+   *   입력칸을 남겨 두면 보낸 줄 모르고 한 번 더 보낸다.
+   * ★ 사람이 쓴 글은 전용 API 로만 간다. 행동 기록에는 **고정된 이름 한 줄**만 —
+   *   글을 실어 보내 봐야 수집기가 조용히 버린다(`common/fe/analytics.ts` 의 허용 키).
+   * ★ 실패 문구는 **코드로 고른다.** 서버 문장을 그대로 띄우면 말투의 주인이 백엔드로 넘어간다.
+   */
+  const sendWish = useCallback(() => {
+    const text = sRef.current.wishDraft.trim();
+    if (!text || sRef.current.wishSending || sRef.current.wishDone) return;
+    setS((v) => ({ ...v, wishSending: true, wishError: '' }));
+    void (async () => {
+      const r = await liveRef.current?.sendWish(text) ?? { ok: false, code: null };
+      if (r.ok) {
+        void trackConversion('motion_wish_submitted', { from: sRef.current.fire?.wishFrom ?? 'tutorial_gift' });
+        /**
+         * ★ 보낸 뒤 **답 판**으로 갈아 끼운다(2026-09-21 판정 5 · A-12). 예전에는 입력칸 자리에
+         *   한 줄만 남기고 끝이라, 보낸 사람 입장에서는 그 글이 어디로 갔는지 알 수 없었다.
+         * ★★ 문구가 **"곧 추가하겠다" 를 약속하지 않는다.** 언제 되는지 우리도 모르고,
+         *   단정하는 순간 늦어지는 분께는 그대로 거짓말이 된다. 이미 참인 것만 말한다 —
+         *   글은 진짜로 남고, 만드는 사람이 그걸 읽는다.
+         */
+        setS((v) => ({
+          ...v, wishSending: false, wishDone: true, wishDraft: '', wishError: '',
+          fire: {
+            title: WISH_REPLY.title, body: WISH_REPLY.body, hint: '', tapAny: true,
+            actions: [{
+              label: WISH_REPLY.close, action: 'wish-reply-close', primary: true,
+              tap: () => setS((w) => ({ ...w, fire: null })),
+            }],
+          },
+        }));
+        return;
+      }
+      setS((v) => ({ ...v, wishSending: false, wishError: wishFailLine(r.code) }));
+    })();
+  }, []);
+
   // ── 튜토리얼 ──
   //
   // ★ 2026-09-10 — 진짜 아이는 **서버가 칸을 센다**(`tutorial.step`). 화면은 순서를 다시 판정하지 않는다.
   //   1~8칸은 부를 API 가 따로 없다 — 그 칸의 행동을 평소대로 하면 서버가 스스로 넘긴다.
   //   9칸만 `tutorial/done` 을 부르고, **그 호출이 시계를 켠다.**
-  //   목(여울 연습방·시안 미리보기)은 예전 8부름 그대로 둔다 — 서버가 없는 자리라 셀 사람이 화면뿐이다.
   const svTut = onServer ? (sv.tutorial ?? null) : null;
   /** 서버가 "지금 이 칸" 이라고 찍어 준 자리. 없으면(졸업했거나 목이면) null. */
   const svTutIdx = svTut?.steps.findIndex((x) => x.current) ?? -1;
-  const TUT: readonly TutorStep[] = s.sampleMode ? TUTOR : onServer ? TUTOR_SERVER : TUTOR_MAIN;
+  /**
+   * 지금 쓰는 칸 목록. **둘뿐이다**(2026-09-22).
+   *   연습방(`sampleMode`) = `TUTOR` — 여울과 **가지고 노는 자리**. 앞뒤로 오갈 수 있다.
+   *   진짜 방 = `TUTOR_ROOM` — **서버든 목이든 같은 아홉 칸.** 목에서 밟은 것이 곧 서버에서 밟을 것이다.
+   * ★ 예전에는 진짜 방 목이 8칸짜리 다른 목록을 써서, 서버 없는 화면으로는 진짜 튜토리얼을
+   *   확인할 수 없었다. 목록을 하나로 합치면서 그 구멍이 닫혔다.
+   */
+  const TUT: readonly TutorStep[] = s.sampleMode ? TUTOR : TUTOR_ROOM;
   const tut: TutorStep | null = onServer
-    ? (svTutIdx >= 0 ? TUTOR_SERVER[svTutIdx] ?? null : null)
+    ? (svTutIdx >= 0 ? TUTOR_ROOM[svTutIdx] ?? null : null)
     : (s.sampleMode || s.tutorOn) && s.tutor < TUT.length ? TUT[s.tutor] : null;
   /** 지금 몇 번째 칸인가(점·`3 / 9` 표시용). 서버에 붙어 있으면 서버 숫자 그대로. */
   const tutIdx = onServer ? Math.max(0, svTutIdx) : s.tutor;
   /** 마지막 칸 — 누를 것이 없어서 우리가 `tutorial/done` 을 보내야 하는 자리. */
-  const atDone = onServer && !!tut && tut.done === 'DONE';
+  /** 마지막 칸 — 누를 것이 없어서 **눌러서 끝내는** 자리. 목도 서버와 같은 칸을 쓴다. */
+  const atDone = !s.sampleMode && !!tut && tut.done === 'DONE';
+
+  /**
+   * **튜토리얼이 지금 시키는 것 하나**(정본 §12 "안내 버튼 외 잠금" · 2026-09-22 판정 J8).
+   *
+   * ★★ 왜 잠그나 — 아기 시간표는 **한 번에 하나씩** 가르치는 자리다. 다른 버튼이 같이 살아 있으면
+   *   순서가 흐트러지고, 서버는 그 칸에서 안 시킨 행동을 **거절**하거나 세지 않는다. 즉 눌러도
+   *   아무 일이 안 나는 버튼이 여럿 있는 셈이라, 잠그지 않는 편이 오히려 고장으로 읽힌다.
+   * ★★ **2026-09-22 상훈님 판정 — 말로 설명하지 않는다.** *"눌러야 할 거 하나만 하이라이트 해서
+   *   보여주고 나머지 것들은 비활성해서 누르지 않게 하자."* 그래서 이제 잠긴 손잡이는
+   *   **아무 말도 안 하고 진짜로 안 눌린다**(`disabled`). 길은 하이라이트 하나뿐이라 헤맬 일이 없고,
+   *   눌렀다 한 줄 읽고 또 누르는 왕복이 사라진다.
+   * ★ `disabled` 를 붙여도 되는 자리다 — **실제로 안 눌리므로** 속성이 사실과 맞는다.
+   *   (예전에 금지한 것은 "눌리는데 비활성으로 표시" 하던 경우다 — 메모리 `ui-verify-with-playwright`.)
+   * ★ 첫 칸(`done: 'any'` — "천천히 둘러봐도 돼요")은 **안 잠근다.** 거기는 아무거나 눌러 보라는 칸이다.
+   * ★ 목(8칸)·서버(9칸) **둘 다** 이 한 곳을 지난다 — 칸 목록만 다르고 규칙은 하나다.
+   * ★ 원칙 7("첫 순간부터 전부 열려 있다")과 어긋나지 않는다 — 그 원칙은 **튜토리얼이 끝난 뒤**의
+   *   방을 말한다. `tut` 이 비는 순간 이 잠금은 통째로 사라진다.
+   */
+  const tutLock = useMemo(() => {
+    // ★★ **마지막 칸(DONE)은 안 잠근다**(2026-09-22 실측). 8칸이 "재우고 다시 깨워 주세요" 라
+    //   9칸은 **아이가 잠든 채로** 오는데, 여기서 다 잠그면 침실 팝오버의 「깨우기」까지 막힌다.
+    //   그 팝오버는 자는 동안 닫히지도 않아서 안내 카드가 뒤에 가리고, 결국 **아무 데도 못 간다**
+    //   (390 실측: 9칸에서 손잡이 0개). 마지막 칸은 누를 것이 하나뿐이라 안내만으로 충분하고,
+    //   잠가서 얻는 것이 없다 — 첫 칸(`any`)을 안 잠그는 것과 같은 이유다.
+    if (!tut || tut.done === 'any' || tut.done === 'DONE') return null;
+    return { room: tut.room, act: tut.act };
+  }, [tut]);
+  const tutLockRef = useRef<{ room: string | null; act: string | null } | null>(null);
+  tutLockRef.current = tutLock;
+
+  /**
+   * **칸이 넘어가는 순간, 덮고 있던 것(팝오버·대화)을 내린다**(2026-09-23 · 막다른 골목 0).
+   *
+   * ★★ 무엇이 고장이었나 — 1칸에서 「밥 주기」를 누르면 칸은 2칸(`PET`)으로 넘어가는데 **주방
+   *   팝오버가 열린 채 남았다.** 그 순간 화면에 켜진 손잡이가 **0 개**가 된다(390x844 실측):
+   *   팝오버 두 버튼은 새 칸이 안 시키는 것이라 잠기고, 타일 다섯·대화·아이 정보도 잠기고,
+   *   안내 카드는 **팝오버가 열려 있으면 안 그려진다.** 13초를 기다려도 안 풀렸다.
+   *   같은 일이 5칸(청소) 뒤, 그리고 8칸(재우기) 뒤에도 났다 — 8칸 뒤에는 마지막 칸의
+   *   「이제 시작할게요」 단추가 그 카드 안에 있어서, **튜토리얼을 끝낼 길이 사라졌다.**
+   *
+   * ★★ 고치는 길이 둘이었고 **이쪽(팝오버를 닫는다)** 을 골랐다.
+   *   (a) 팝오버가 열려 있어도 안내 카드를 그린다 — **안 된다.** 안내 카드는 발밑 선반(`Shelf`)에
+   *       앉아 있고 **그 자리를 팝오버가 그대로 쓴다**(→ `Room.tsx` 의 `Shelf` 머리말: "팝오버가
+   *       쓸 자리다"). 둘을 같이 띄우면 한 칸에 두 장이 겹쳐, 없던 겹침 규칙을 새로 만들어야 한다.
+   *   (b) 칸을 끝내면 팝오버를 내린다 — 이미 **게임 시작(`startGuess`)과 앨범 벽(`openWall`)이
+   *       쓰고 있는 방식**이다. 규칙이 "칸이 바뀌면 덮개를 걷고 다음 손잡이를 보여 준다" 하나로 모인다.
+   *       게다가 넘어간 뒤의 팝오버는 **어차피 누를 것이 하나도 없는 판**이라 남겨 둘 값이 없다.
+   *
+   * ★ **잠금 규칙은 하나도 안 바꿨다** — 하이라이트 하나 + 나머지는 진짜 `disabled`(판정 J8).
+   *   여기서 여는 것은 덮개뿐이다.
+   * ★ 칸을 **누가 세든** 낫는다 — 목(`s.tutor`)과 서버(`svTutIdx`) 중 무엇이 셌는지 안 보고
+   *   **바뀐 결과**만 보므로, 세는 곳을 고치지 않고도 두 경로가 같이 낫는다(계약 5절).
+   * ★ 시트(아이 정보)는 **안 닫는다** — 4칸이 "아이 정보에서 확인해 주세요" 라 그 시트가 곧 그 칸의
+   *   목적지다. 열자마자 닫으면 방금 연 것을 도로 덮는다.
+   * ★ 대화 칸도 **안 닫는다.** 닫으면 방금 받은 **아이 대답이 화면에서 사라진다** — 대답을 그리는
+   *   말풍선·칸이 둘 다 `s.chatOpen` 을 보기 때문이다(`chatLine`). 실측으로 확인하고 되돌렸다.
+   *   대신 3칸을 답한 직후에도 막다른 골목은 아니다: 다음 손잡이(머리줄 「아이 정보」)가
+   *   **켜진 채 하이라이트로 깜빡인다**(실측). 그리고 다음 칸에서 타일을 누르면 대화 칸은
+   *   그때 저절로 닫힌다(`selRoom`) — 안내 카드도 같이 돌아온다.
+   */
+  const tutStepKey = onServer
+    ? svTutIdx
+    : (s.sampleMode || s.tutorOn) && s.tutor < TUT.length ? s.tutor : -1;
+  const prevTutStepRef = useRef(tutStepKey);
+  useEffect(() => {
+    const prev = prevTutStepRef.current;
+    prevTutStepRef.current = tutStepKey;
+    // 튜토리얼 밖(-1)이거나 그대로면 아무것도 안 한다 — 방을 함부로 건드리지 않는다.
+    if (tutStepKey < 0 || prev === tutStepKey) return;
+    setS((v) => (v.popOpen || v.popClosing ? { ...v, popOpen: false, popClosing: false } : v));
+  }, [tutStepKey]);
 
   /**
    * 튜토리얼을 끝까지 마친 순간. 2층 해금과 **같은 전면 판**으로 한 번만 축하한다.
    *
    * ★ 정본 v1.2(2026-09-07) — **구르기 = 첫날 튜토리얼 완주 보상**으로 앞당겨졌다.
    *   (3층 첫 심화 행동 선물은 '뒤로 넘어짐' 하나로 줄었다)
-   *   정본 §심화 행동: 선물 화면에는 **다운로드 + "이런 동작도 원해요?" 수요조사**가 붙는다.
    *
-   * ★ 문구에 담는 것 셋 — 끝냈다 · 구르기를 배웠다(지금 볼 수 있다) · 내일 오면 **이 아이의**
-   *   새 동작을 하나 더 볼 수 있다. 일반적인 "새 기능" 이 아니라 눈앞의 이 아이 이야기여야 한다.
+   * ★★ 2026-09-20 — 이 판이 **사실과 다른 말을 세 가지** 하고 있어서 고쳤다. 무엇이 왜
+   *   거짓이었는지, 그리고 아직 안 붙인 자리 둘(구르기 미리보기 · 자유 입력)이 무엇인지는
+   *   문구를 쥔 `constants.ts` 의 `GRAD_COPY` 머리말에 적어 두었다.
+   *   요지만 — (1) 구르기는 이 순간 굽기가 시작될 뿐이라 앨범에 아직 없다,
+   *   (2) 밤에 새 동작을 연습하지 않는다(조건을 채운 순간 굽는 모델 + 3층 목록이 비어 있다),
+   *   (3) "구르기 저장하기" 는 저장할 그림이 없는데 저장했다고 말했다 → 버튼을 없앴다.
+   *   그림이 실제로 도착한 뒤의 저장·공유는 이미 앨범 액자가 하고 있다(`Album.tsx` 의 frame-save).
+   *
    * ★ 쓰지 않는 말 — "꼭 오세요"·"기다릴게요"·"안 오면 서운해요". 초대이지 숙제가 아니고,
    *   아이가 사용자를 원망하는 말은 자캐 커뮤니티에서 가장 싫어하는 결이다.
-   * ★ "매일 하나씩" 같이 **못 지킬 수 있는 약속도 안 쓴다** — 정본상 굽기는 실패할 수 있고
-   *   그때 화면은 "아직 연습 중이에요" 다. 그래서 "연습해 볼 참" 이라고만 말한다.
+   * ★ 지킬 수 없는 약속(날짜·시각·"매일 하나씩")도 안 쓴다 — 굽기는 실패할 수 있고,
+   *   그때 화면은 "아직 연습 중이에요" 다.
    */
+  /**
+   * 판에 적을 아이 이름. **서버가 아는 이름이 먼저다.**
+   *
+   * ★★ 2026-09-22 dev 실측 — 축하 판이 **"아이도 구르기를…"** 로 떴다. 머리줄에는 "초코" 가
+   *   제대로 있는데 판만 그랬다. 까닭은 경주다: 이 판을 여는 효과(아래 `clockStartedAt` 효과)가
+   *   **서버 이름을 목 칸에 옮겨 적는 효과(`skins/Yeoul.tsx`)보다 한 틱 먼저** 돌고, 판은 한 번
+   *   만들어지면 그 문자열을 그대로 쥐고 있어서다. 그래서 목 칸(`v.petName`)을 보면 안 되고
+   *   **그 순간 이미 손에 있는 서버 값**을 본다. 한 화면에 이름이 둘로 갈리는 일이 없어진다.
+   */
+  const petNameFor = (v: YeoulState) => (onServer ? sv?.name : '') || v.petName || '아이';
+
   const finishTutor = (v: YeoulState): YeoulState => ({
     ...v, tutor: 0, tutorOn: false,
     ...(v.tutorDone ? {} : {
       tutorDone: true, rollUnlocked: true,
+      // 자유 입력칸은 이 판에서 처음 열린다 — 앞 판의 글·오류가 남아 있으면 안 된다(→ `withFire`).
+      wishDraft: '', wishError: '', wishSending: false, wishDone: false,
       fire: {
-        title: '첫날을 함께 마쳤어요',
-        body: `${petWith(v.petName, '이', '가')} 둘러보는 법을 다 익혔어요. 기념으로 구르기를 하나 배웠고, 앨범에서 바로 볼 수 있어요.\n오늘 밤에는 새 동작을 하나 연습해 볼 참이라, 내일 오시면 ${v.petName || '아이'}의 새로운 모습을 보실 수 있어요.`,
+        title: GRAD_COPY.title,
+        body: GRAD_COPY.body(petNameFor(v)),
+        // ★ 그림이 게시되기 전에는 `GRAD_PREVIEW_SRC` 가 비어 있어 이 칸이 아예 안 생긴다.
+        //   주소가 정해지면 상수 한 줄만 채우면 되고, 여기도 화면도 안 고친다.
+        ...(GRAD_PREVIEW_SRC
+          ? { preview: { src: GRAD_PREVIEW_SRC, badge: GRAD_COPY.previewBadge, caption: GRAD_COPY.previewCaption } }
+          : {}),
         hint: '', tapAny: true,
+        // 정본이 선물 화면에 붙이라고 한 수요조사. **한 번 누르는 버튼이 아니라 자유 글**이다 —
+        // 우리가 알고 싶은 것은 "더 원한다" 가 아니라 **목록에 없는 동작이 무엇인가** 라서,
+        // 정해진 값만 받으면 그 질문에 영영 답할 수 없다.
+        wish: true, wishFrom: 'tutorial_gift',
         actions: [
-          // 정본이 선물 화면에 붙이라고 한 둘. 지금은 프론트 목이라 눌리기만 한다.
-          { label: '구르기 저장하기', tap: () => { setS((w) => ({ ...w, fire: null })); flash('앨범에 저장했어요'); }, primary: true },
-          { label: '이런 동작도 보고 싶어요', tap: () => { setS((w) => ({ ...w, wishes: w.wishes + 1, fire: null })); flash('기록해 뒀어요'); }, primary: false },
-          { label: '닫기', tap: () => setS((w) => ({ ...w, fire: null })), primary: false },
+          { label: GRAD_COPY.close, action: 'grad-close', tap: () => setS((w) => ({ ...w, fire: null })), primary: false },
         ],
       },
     }),
   });
 
+  /**
+   * 목(서버 없는 진짜 방)에서 한 칸을 넘긴다.
+   *
+   * ★ 서버에 붙어 있으면 칸은 **서버가 넘긴다.** 화면이 같이 세면 두 곳에서 판정하게 되고,
+   *   언젠가 갈리며 갈린 쪽은 아무 소리도 안 낸다(계약 5절).
+   * ★ 넘기는 열쇠말(`done`)은 **서버 것과 같은 낱말**이다(`FEED`·`PET`·`CHAT`…) — 목록이 한 벌이니
+   *   열쇠말도 한 벌이어야 한다. 마지막 칸(`DONE`)은 눌러서 끝내므로 여기서 넘기지 않는다.
+   */
   const tutorDone = useCallback((what: string) => {
-    // ★ 서버에 붙어 있으면 칸은 **서버가 넘긴다.** 화면이 같이 세면 두 곳에서 판정하게 되고,
-    //   언젠가 갈리며 갈린 쪽은 아무 소리도 안 낸다(계약 5절).
     if (onServerRef.current) return;
     setS((v) => {
       if (!v.tutorOn || v.sampleMode) return v;
-      const st = TUTOR_MAIN[v.tutor];
-      if (!st || (st.done !== what && st.done !== 'any')) return v;
+      const st = TUTOR_ROOM[v.tutor];
+      if (!st || st.done !== what) return v;
       const next = v.tutor + 1;
-      return next >= TUTOR_MAIN.length ? finishTutor(v) : { ...v, tutor: next };
+      return next >= TUTOR_ROOM.length ? finishTutor(v) : { ...v, tutor: next };
     });
   }, []);
+  /** 마지막 칸의 「이제 시작할게요」 — **목 전용**(서버는 `onFinishTutorial` 이 시계를 켠다). */
+  const finishTutorHere = useCallback(() => setS((v) => finishTutor(v)), []);
   const skipTutorStep = useCallback(() => {
     setS((v) => {
       const next = v.tutor + 1;
@@ -761,7 +1154,7 @@ export function useYeoul(live?: Live) {
     lastSel.current = Date.now();
     // 벽을 열 때 도감을 다시 읽는다 — 그사이 밤에 배운 것이 도착해 있을 수 있다.
     if (onServerRef.current) void liveRef.current?.loadAlbum();
-    tutorDone('album');
+    tutorDone('SHARE');
     patch({ wallOpen: true, wallClosing: false, popOpen: false, sheet: null, chatOpen: false, toast: '' });
   }, [patch, tutorDone]);
   const closeWall = useCallback(() => {
@@ -775,7 +1168,16 @@ export function useYeoul(live?: Live) {
   }, [patch, later]);
 
   const closeFire = useCallback(() => patch({ fire: null }), [patch]);
-  const openChat = useCallback(() => { lastSel.current = Date.now(); patch({ chatOpen: true, popOpen: false, toast: '' }); }, [patch]);
+  // ★ 대화를 **열 때** 지난 판의 내 말을 비운다 — 내 말이 안 사라지게 바꿨으므로(→ `pushReply`)
+  //   비우는 자리를 한 곳으로 옮긴 것이다. 한 판 안에서는 주고받은 두 줄이 그대로 남는다.
+  const openChat = useCallback(() => {
+    // ★ 튜토리얼이 대화 칸을 가리킬 때만 열린다(판정 J8 · 2026-09-22 개정).
+    //   단추가 이미 `disabled` 라 여기까지 안 온다. 와도 **말없이** 아무 일도 안 한다.
+    const tl = tutLockRef.current;
+    if (tl && tl.room !== 'chat') return;
+    lastSel.current = Date.now();
+    patch({ chatOpen: true, popOpen: false, toast: '', mine: '' });
+  }, [patch, flash]);
   const closeChat = useCallback(() => {
     lastSel.current = Date.now();
     patch({ chatClosing: true });
@@ -812,8 +1214,16 @@ export function useYeoul(live?: Live) {
   }, [later, careAct]);
 
   const onPet = useCallback(() => {
-    if (s.chatOpen) { patch({ chatOpen: false, draft: '' }); return; }
-    if (s.popOpen) { patch({ popOpen: false }); return; }
+    // ★ 튜토리얼이 쓰다듬기 칸이 아닐 때는 잠근다(판정 J8 · 2026-09-22 개정) —
+    //   아이는 단추가 아니라 그림이라 비활성으로 표시할 수 없다. **말없이** 아무 일도 안 한다.
+    const tl = tutLockRef.current;
+    if (tl && tl.act !== 'pet') return;
+    // ★★ 떠 있는 창은 닫되 **탭을 삼키지 않는다**(2026-09-21 판정 8). 예전에는 여기서 그냥
+    //   돌아서서, 팝오버를 열어 둔 채 아이를 누르면 창만 닫히고 아무 일도 안 났다 —
+    //   "한 번은 그냥 없어지는 탭" 이라는 규칙은 사용자가 세울 수 없는 규칙이다.
+    //   닫는 일은 그대로 하고(바깥을 눌렀으니 맞다), 쓰다듬기도 **같이** 한다.
+    if (s.chatOpen) patch({ chatOpen: false, draft: '' });
+    else if (s.popOpen) patch({ popOpen: false });
     if (esRef.current.sleeping) { flash('자고 있어요'); return; }
     if (onServerRef.current) {
       // ★ 4회째부터 — **반응 동작만 나온다.** 하트도 안 뜨고, 문구도 안 뜬다(상훈님 2026-09-10 판정).
@@ -845,7 +1255,7 @@ export function useYeoul(live?: Live) {
     // 4회째부터는 하트를 안 띄운다(위 서버 경로와 같은 규칙). 목 화면도 같은 결이어야
     // 시안을 눌러 본 것과 실제가 어긋나지 않는다.
     if (counted) later('hearts', 1100, () => setS((w) => ({ ...w, hearts: false })));
-    tutorDone('pet');
+    tutorDone('PET');
   }, [s.chatOpen, s.popOpen, s.sampleMode, s.pets, s.bond, patch, careAct, flash, later, tutorDone]);
 
   const onRice = useCallback(() => {
@@ -863,7 +1273,7 @@ export function useYeoul(live?: Live) {
     patch({ full: esRef.current.full + 1, stock: esRef.current.stock - 1, bond: Math.min(100, s.bond + 1) });
     careAct('feed_rice');
     flash('맛있게 먹었어요');
-    tutorDone('feed');
+    tutorDone('FEED');
   }, [s.sampleMode, s.full, s.stock, s.bond, patch, careAct, flash, tutorDone, serverCare]);
 
   const onSnack = useCallback(() => {
@@ -881,10 +1291,13 @@ export function useYeoul(live?: Live) {
     // 청소는 v4 에서 `sweep` 이다. 아직 그 그림이 없으면 별칭이 옛 `wash` 로 받쳐 준다(constants.MOTION_ALIAS).
     if (onServerRef.current) { void serverCare('CLEAN', 'clean', '깨끗해졌어요'); return; }
     if (esRef.current.trace <= 0 && !s.sampleMode) { flash('이미 깨끗해요'); return; }
-    patch({ trace: 0 });
+    // ★★ **한 번 쓸면 하나**(서버 `ZzalPet.clean()` = `trash - 1` · 정본 §12 "한 번 쓸면 하나예요").
+    //   5차에 목 서버(`mockPetServer`)만 고치고 **여기 시연 경로가 남아 있었다** — 3202 에서
+    //   흔적 2개를 한 번에 지웠다(2026-09-22 상훈님 확인). "가득" 을 지우는 것은 목욕이다(§4 표).
+    patch({ trace: Math.max(0, s.trace - 1) });
     careAct('clean');
     flash('깨끗해졌어요');
-    tutorDone('clean');
+    tutorDone('CLEAN');
   }, [s.trace, s.sampleMode, patch, careAct, flash, tutorDone, serverCare]);
 
   const onBath = useCallback(() => {
@@ -916,7 +1329,13 @@ export function useYeoul(live?: Live) {
 
   /**
    * 성격·세계관을 서버에 저장한다. **튜토리얼 4칸을 넘기는 자리**이기도 하다.
-   * 성격을 안 고르면 보낼 것이 없다 — 서버가 성격을 필수로 받는다.
+   *
+   * ★★ 2026-09-22 상훈님 판정 — **성격 고르기는 필수가 아니다.** 4칸은 "고쳤는가" 가 아니라
+   *   **"확인했는가"** 를 세는 칸이고(서버 `PetService.tutorialSeen`: *"아이 정보를 확인만 해도
+   *   넘어간다"* · *"성격을 한 번도 안 고른 사람은 null 인 채 지나간다 — 그래도 된다"*),
+   *   성격은 부화 전 캐릭터 화면에서 이미 받는다. 그래서 **안 고르고 눌러도 넘어간다** —
+   *   고른 것이 있으면 저장하는 길(`savePersonality`)로, 없으면 확인만 하는 길(`tutorialSeen`)로
+   *   간다. 둘 다 서버에서 같은 칸을 넘긴다(`advanceTutorial(PERSONALITY)`).
    *
    * ★ 화면에서는 성격을 여러 개 고를 수 있지만 **서버는 하나만 받는다**
    *   (`PersonalityChoice.personality` 는 enum 하나 · `@NotNull`). 그래서 **맨 앞(처음 고른 것)**
@@ -928,17 +1347,35 @@ export function useYeoul(live?: Live) {
     const svName = PERSONA_LABEL[liveRef.current?.pet?.personality ?? ''] ?? '';
     const chosen = sRef.current.picks.persona ?? (svName ? [svName] : []);
     const persona = PERSONALITY_OF[chosen[0] ?? ''];
+    // ★ 고른 것이 없으면 보낼 것이 없다. **칸 진행과는 무관하다** — 4칸은 시트를 연 순간
+    //   이미 넘어갔다(→ `openSettings`). 이 단추는 이제 **저장만** 한다.
     if (!persona) { flash('성격을 하나 이상 골라 주세요'); return; }
-    // 세계관은 칩 여러 개 + 직접 적은 한 줄을 이어 붙인다(서버 100자 제한).
+    // 다시 눌렀다 — 지난 실패 줄은 지우고 시작한다.
+    patch({ saveErr: '' });
+    // ★ 목(서버 없는 진짜 방)에서도 **이 칸을 밟을 수 있어야** 한다(2026-09-22) — 튜토리얼이
+    //   서버와 같은 아홉 칸이 되었으니 4칸도 같이 넘어가야 한다. 보낼 곳이 없으므로 화면 상태에만
+    //   남기고 칸을 넘긴다. 연습방은 여전히 저장하지 않는다(거긴 연습이다).
+    if (!onServerRef.current) {
+      patch({ sheet: null });
+      flash(sRef.current.sampleMode ? '연습방이라 저장되지 않아요' : '기억해 뒀어요');
+      if (!sRef.current.sampleMode) tutorDone('PERSONALITY');
+      return;
+    }
+    // 세계관은 칩 여러 개 + 직접 적은 한 줄을 **서버 한 칸에** 이어 붙인다.
+    // ★★ 자르는 길이는 `CHAR_TEXT_MAX.world` 한 곳에서만 온다(`lib/pet.ts`, 계약 옆).
+    //   2026-09-22 — 여기 `100` 이 박혀 있어, 한도를 200 으로 열어도 **방(아이 정보)에서 저장할 때
+    //   말없이 100 에서 잘렸다.** 온보딩 쪽 같은 계산과 **두 벌**이던 자리이기도 하다.
     const world = [...(sRef.current.picks.world ?? []), (sRef.current.texts.world ?? '').trim()]
-      .filter(Boolean).join(' · ').slice(0, 100);
+      .filter(Boolean).join(' · ').slice(0, CHAR_TEXT_MAX.world);
     void (async () => {
       const r = await liveRef.current?.savePersonality(persona, world || undefined);
-      if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
-      patch({ sheet: null });
+      // ★ 거절이면 **시트 안에** 남긴다(2026-09-22 판정 6). 토스트는 시트 밑에 깔려 안 보인다 —
+      //   실제로 그래서 400 거절이 화면에 한 마디도 안 나왔다. 시트도 안 닫고, 적은 글도 안 지운다.
+      if (!r || !r.ok) { patch({ saveErr: saveFailLine(r?.code ?? null, r?.status, r?.message ?? null) }); return; }
+      patch({ sheet: null, saveErr: '' });
       flash('기억해 뒀어요');
     })();
-  }, [flash, patch]);
+  }, [flash, patch, tutorDone]);
 
   /** 튜토리얼 마지막 칸 — 이 호출이 시계를 켠다. */
   const onFinishTutorial = useCallback(() => {
@@ -970,7 +1407,8 @@ export function useYeoul(live?: Live) {
       return;
     }
     if (esRef.current.sleeping) {
-      patch({ sleeping: false, night: false, pets: 0, bathUsed: false, plays: 3, day: s.day + 1, sheet: null });
+      // ★ 손으로 깨운 것만 센다 — 2층 '일어나기' 조건(정본 §6 16번). 이 자리가 바로 그 손이다.
+      patch({ sleeping: false, night: false, pets: 0, bathUsed: false, plays: 3, day: s.day + 1, sheet: null, cWake: s.cWake + 1 });
       careAct('wake');
       flash('잘 잤어요');
       return;
@@ -978,58 +1416,210 @@ export function useYeoul(live?: Live) {
     // ★ 연습방은 **시각을 안 본다**(상훈님 2026-09-13). 시연·검수용인데 저녁 7시를 기다려야 하면
     //   낮에는 자는 자세와 커튼을 확인할 길이 없다. 진짜 방(서버 경로)은 위에서 이미 갈라져 나갔고
     //   거기는 `clock.canSleep` 이 정본 규칙(19:00~23:00 재우기 · 23:00 자동)을 그대로 든다.
-    if (!esRef.current.night && !s.sampleMode) { flash('저녁 7시부터 재울 수 있어요'); return; }
+    // ★★ **튜토리얼은 시계와 논외다**(정본 1.4·1.5 · §16). 8칸이 "재우고 다시 깨워 주세요" 인데
+    //   낮에 막히면 목의 진짜 방 튜토리얼은 저녁 7시까지 **거기서 멎는다**(2026-09-22 실측:
+    //   8/9 에서 더 못 감). 서버도 튜토리얼 낮잠을 허용한다(그 낮잠이 재우기·깨우기 2회로 잡히는
+    //   것이 의도라고 정본이 못 박았다). 튜토리얼이 끝나면 그때부터 19:00 규칙이 산다.
+    if (!esRef.current.night && !s.sampleMode && !s.tutorOn) { flash('저녁 7시부터 재울 수 있어요'); return; }
     // 재우기는 행동이 아니라 상태라 `careAct` 를 안 탄다 — 잠 덮개는 여기서 직접 맞춘다.
     setS((v) => ({ ...v, dev: { ...v.dev, sleeping: null } }));
     patch({ sleeping: true, sheet: null, resolved: { ...s.resolved, bed: true }, cSleep: s.cSleep + 1 });
     flash('잘 자요');
-    tutorDone('sleep');
-  }, [s.sleeping, s.night, s.sampleMode, s.day, s.resolved, s.cSleep, patch, flash, careAct, tutorDone]);
+    tutorDone('NAP');
+  }, [s.sleeping, s.night, s.sampleMode, s.tutorOn, s.day, s.resolved, s.cSleep, s.cWake, patch, flash, careAct, tutorDone]);
 
   /**
-   * 좌우 맞히기 한 판.
+   * 좌우 맞히기 **한 매치**(2026-09-20 재설계 · 안 1). 시트를 없애고 무대 위에서 아이와 마주 본다.
    *
-   * ★ 서버에 붙어 있으면 **답은 서버가 쥔다.** 화면이 혼자 이겼다고 정할 수 없어서 한 판에
-   *   한 번씩 왕복하고, 그게 의도다(`lib/game.ts` 머리말). 판이 없으면 먼저 시작한다.
-   * ★ 목일 때는 어느 쪽을 골랐든 반반이다.
+   * ★ **게임 규칙은 정본 §7 그대로다** — 5판 3승 · 하루 3판 · 답은 서버가 쥔다. 바꾼 것은
+   *   *어디서·어떻게 보이나* 뿐이다. 목(연습방)에도 같은 규칙의 카운터를 넣었다(예전엔 없었다 —
+   *   판을 쳐도 "오늘 남은 판 3" 이 그대로였다).
+   * ★ 한 판의 박자: 대기(주먹 둘) → 탭 → 섞기 → 공개(손·얼굴 **동시**) → 여운 → **자동으로 다음 판**.
+   *   예전엔 결과가 난 뒤 화면이 **영구 정지**했고(18.4초 재어 확인) 두 손도 안 돌아왔다.
+   * ★ 공개를 **0초로 당긴다** — 1층은 `game_choose` 가 표에서 `null` 이라 기다리는 한 바퀴가
+   *   빈 시간이었다(결과와 아이 반응이 1.95초 어긋났다). 2층은 그 한 바퀴에 `놀람` 이 실제로
+   *   돌므로 예전처럼 한 바퀴 뒤에 결과를 붙인다.
+   */
+  const startGuess = useCallback(() => {
+    lastSel.current = Date.now();
+    const happy0 = esRef.current.happy;
+    // ★ 목의 6칸(게임)은 **넘어가는 길이 아예 없었다**(2026-09-22 발견) — 옛 8칸 목록에도 이 칸이
+    //   있었는데 아무도 `tutorDone` 을 안 불러서, 서버 없는 진짜 방 튜토리얼은 거기서 멎었다.
+    //   서버는 **판을 시작한 순간** 이 칸을 넘긴다(기권해도 넘어간다 — dev 실측). 목도 같게.
+    tutorDone('GAME');
+    // 하루 판수는 **매치 단위**로 준다(정본: 판 = 한 매치). 예전 목은 한 판(라운드)마다 깎았다.
+    setS((v) => (v.gOn ? v : {
+      ...v,
+      gOn: true, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
+      gMarks: [null, null, null, null, null], gQuit: false, gHappy0: happy0, gStarted: false,
+      lastGuess: null,
+      // 시작하면 팝오버를 내린다 — 예전엔 안 내려서 방으로 돌아가는 데 2탭이 들었다.
+      popOpen: false, popClosing: false, sheet: null, toast: '',
+      // ★★ **여기서 깎지 않는다**(2026-09-22 판정 2). 서버는 **첫 탭**에서야 판을 만들고
+      //   그때 하루 판수를 쓴다. 판을 열자마자 깎으면 한 판도 안 치고 ✕ 해도 「3판 남음」이
+      //   2 가 되어, 목이 서버와 다른 말을 한다(실측). 목의 차감은 `onGuess` 첫 탭에 있다.
+    }));
+  }, [tutorDone]);
+
+  /** 매치를 접고 마당 팝오버를 다시 연다 — 거기 "좌우 맞히기" 가 곧 "한 판 더" 다. */
+  const endGuess = useCallback(() => {
+    for (const k of ['guessAct', 'guessReveal', 'guessNext', 'guessEnd']) clearTimeout(T.current[k]);
+    // ★ 매치가 끝나도 **팝오버를 자동으로 열지 않는다**(2026-09-21 판정 12). 예전엔 결과를
+    //   읽기도 전에 「기분 N/4」 게이지가 먼저 덮어, 맞힌 횟수가 곧 기분인 것처럼 읽혔다.
+    //   한 판 더 치려면 마당 타일을 누르면 된다 — 고른 방은 그대로 마당으로 둔다.
+    setS((v) => ({ ...v, gOn: false, gPhase: 'wait', gPick: null, gHit: null, gQuit: false, gStarted: false, roomSel: 'play', popOpen: false, popClosing: false }));
+  }, []);
+
+  /**
+   * 기권이 받아들여진 뒤 — **끝난 판과 똑같은 길**을 탄다(2026-09-21 판정 3).
+   * 새 화면을 만들지 않는다: 끝말 한 줄(`gQuit`)이 바뀔 뿐, 여운 3.6초 뒤 `endGuess` 로 방에 돌아간다.
+   * ★ 표정을 새로 짓지 않는다 — 진 연출(`game_lose`)을 붙이면 나가겠다고 누른 사람에게
+   *   아이가 시무룩해 보이고, 그건 규범상 원망으로 읽힐 수 있는 자리다.
+   */
+  const quitEnd = useCallback(() => {
+    for (const k of ['guessAct', 'guessReveal', 'guessNext', 'guessEnd']) clearTimeout(T.current[k]);
+    setS((v) => ({ ...v, fire: null, gQuit: true, gPhase: 'done', gPick: null, gHit: null }));
+    later('guessNext', GUESS_MATCH_END_MS, endGuess);
+  }, [later, endGuess]);
+
+  /**
+   * 확인창의 「나가기」 — 서버에 기권을 보낸다.
+   *
+   * ★ 이름·모양은 **A·B 두 사람이 먼저 맞춰 둔 것**이다: `Live.abandonPlay(): Promise<void>` —
+   *   인자가 없고(펫·판 번호는 배관이 안다), 실패는 던진다. 화면은 잡아서 문구만 고른다.
+   * ★ 목(연습방)에는 서버가 없다. 같은 끝 연출만 태운다 — 규칙(판수·승패)은 서버의 몫이라
+   *   화면이 목에서 따로 깎지 않는다.
+   */
+  const abandonGuess = useCallback(() => {
+    if (!onServerRef.current) { quitEnd(); return; }
+    patch({ fire: null });
+    void (async () => {
+      const lv = liveRef.current;
+      if (!lv) { quitEnd(); return; }
+      try {
+        // 인자가 없다 — 펫·판 번호는 배관이 안다. 연타 자물쇠도 배관 쪽에 있다(`useHatch.abandonPlay`).
+        await lv.abandonPlay();
+        quitEnd();
+      } catch (e) {
+        flash(quitFailLine(e instanceof ApiError ? e.code : null));
+        endGuess();
+      }
+    })();
+  }, [patch, flash, endGuess, quitEnd]);
+
+  /**
+   * 게임판의 ✕ — **나가기 전에 한 번만 묻는다**(2026-09-21 판정 3).
+   *
+   * ★ 타일 탭은 이탈이 아니다 — 게임판을 접어도 판은 살아 있다. **✕ 만 기권이다.**
+   * ★ 한 판도 안 쳤으면 **판 자체가 없다**(서버는 첫 탭에서야 판을 만든다). 차감도 기권도
+   *   없으므로 묻지 않고, 서버도 부르지 않고 그냥 닫는다 — 안 일어난 일을 경고하면 거짓말이다.
+   * ★ 아파도 누를 수 있다(서버가 아픔 거절을 안 만들어 두었다 → `quitFailLine` 머리말).
+   */
+  const quitGuess = useCallback(() => {
+    const v0 = sRef.current;
+    // 이미 끝난 판이면 물어볼 것이 없다 — 남은 여운만 접고 방으로 돌아간다.
+    if (v0.gPhase === 'done') { endGuess(); return; }
+    // ★ 서버에 판을 만들었는가는 **이번 매치 기준**이다(판정 J3) — `live.game.playing` 은
+    //   새로고침으로 되살아난 옛 판까지 참으로 만든다.
+    // ★ 목도 서버와 **같은 잣대**로 본다(2026-09-22) — 첫 탭에 `gStarted` 가 켜지고
+    //   그때 판수도 깎이므로, "판이 있었는가" 를 한 값으로 물을 수 있다.
+    const played = v0.gStarted;
+    if (!played) { endGuess(); return; }
+    setS((v) => ({ ...v, fire: {
+      title: '지금 나가면 이 판은 져요',
+      body: '오늘 세 판 중 한 판을 쓴 것이 되고, 치던 판은 진 것으로 남아요.',
+      hint: '',
+      actions: [
+        { label: '계속 치기', action: 'guess-quit-cancel', tap: closeFire, primary: true },
+        { label: '나가기', action: 'guess-quit-ok', tap: abandonGuess, primary: false },
+      ],
+    } }));
+  }, [endGuess, closeFire, abandonGuess]);
+
+  /**
+   * 한 판을 친다. 대기 중일 때만 받는다(섞기·공개·여운 동안은 입력 잠금).
+   *
+   * ★ 서버에 붙어 있으면 **답은 서버가 쥔다**(`lib/game.ts` 머리말). 목일 때는 반반이다.
    */
   const onGuess = useCallback((side: Side = 'LEFT') => {
-    // ★ A절 표 "게임 좌·우 고르기" — 고른 순간 한 바퀴(2층이면 `놀람` + 머리 위 느낌표,
-    //   1층이면 표가 "변화 없음" 이라 `careAct` 가 아무것도 안 짓는다).
-    //   결과(이김·짐) 연출은 그 한 바퀴가 끝난 뒤에 이어 붙인다 — 안 그러면 목처럼 답이
-    //   즉시 오는 자리에서 **놀람이 한 프레임도 안 보이고 지나간다.**
+    if (!sRef.current.gOn || sRef.current.gPhase !== 'wait') return;
+    // 섞기 — 양손은 주먹 그대로, 입력만 잠근다. 서버 왕복이 더 길면 그쪽이 곧 섞기다.
+    patch({ gPhase: 'shuffle', gPick: side });
     careAct('game_choose');
     const pickedAt = Date.now();
-    const afterChoose = (fn: () => void) =>
-      later('guessAct', Math.max(0, CYCLE_MS - (Date.now() - pickedAt)), fn);
+    /** 공개까지의 시간. **2층만** 한 바퀴를 기다린다 — 그 바퀴에 `놀람` 이 실제로 도니까. */
+    const revealAfter = () => {
+      const span = floor2Of('game_choose') ? CYCLE_MS : GUESS_SHUFFLE_MS;
+      return Math.max(0, span - (Date.now() - pickedAt));
+    };
+
+    /** 공개 → 여운 → 다음 판(또는 매치 끝). 목·서버가 같은 길을 쓴다. */
+    const reveal = (hit: boolean, hits: number, finished: boolean, win: boolean | null) => {
+      later('guessReveal', revealAfter(), () => {
+        setS((v) => {
+          const marks = v.gMarks.slice();
+          marks[v.gRound] = hit;
+          return { ...v, gPhase: 'reveal', gHit: hit, gHits: hits, gMarks: marks };
+        });
+        careAct(hit ? 'game_win' : 'game_lose');
+        if (finished) {
+          later('guessEnd', GUESS_AFTERGLOW_MS, () => {
+            setS((v) => ({ ...v, gPhase: 'done' }));
+            later('guessNext', GUESS_MATCH_END_MS, endGuess);
+          });
+          return;
+        }
+        // ★ 여운이 끝나면 **누르지 않아도** 다음 판이 시작되고 두 손이 주먹으로 돌아온다.
+        later('guessNext', GUESS_AFTERGLOW_MS, () => setS((v) => ({
+          ...v, gPhase: 'wait', gPick: null, gHit: null, gRound: Math.min(v.gRound + 1, 4),
+        })));
+      });
+    };
+
     if (onServerRef.current) {
       void (async () => {
         const lv = liveRef.current;
-        if (!lv) return;
-        if (!lv.game?.playing) {
+        if (!lv) { patch({ gPhase: 'wait', gPick: null }); return; }
+        // ★★ **이어 치기는 없다**(2026-09-22 판정 J3 — 상훈님 "게임은 중간에 나가면 끝이야").
+        //   예전에는 `lv.game?.playing` 을 보고 **서버에 살아 있는 옛 판을 그대로 이어받았다** —
+        //   새로고침·재접속이 곧 재개였다. 이제 **이번 매치에서 내가 시작했는가**(`gStarted`)만 본다.
+        //   판을 만드는 시점은 그대로 **첫 탭**이다(한 번도 안 치고 나가면 차감이 없어야 하므로).
+        if (!sRef.current.gStarted) {
           const err = await lv.startPlay();
-          if (err) { flash(err); return; }
-          patch({ lastGuess: null });
+          if (err) { flash(err); patch({ gPhase: 'wait', gPick: null }); return; }
+          patch({ lastGuess: null, gStarted: true });
         }
         const { error, result } = await lv.pickSide(side);
-        if (error) { flash(error); return; }
-        if (!result) return;
+        if (error) { flash(error); patch({ gPhase: 'wait', gPick: null }); return; }
+        if (!result) { patch({ gPhase: 'wait', gPick: null }); return; }
         patch({ lastGuess: result });
-        afterChoose(() => careAct(result.hit ? 'game_win' : 'game_lose'));
+        reveal(result.hit, result.hits, result.finished, result.win);
       })();
       return;
     }
-    if (s.plays <= 0 && !s.sampleMode) { flash('오늘 남은 판이 없어요'); return; }
-    const win = Math.random() < 0.5;
+
+    // ── 목(연습방·진짜 방 목) — 규칙은 서버와 **같은 값**으로 센다(5판 3승) ──
+    const v0 = sRef.current;
+    // ★ 하루 판수는 **첫 탭에 깎는다** — 서버가 판을 만드는 시점과 같다(판정 2).
+    //   연습방은 안 깎는다(거긴 판수가 없는 연습 자리다). 서버 방은 서버 값을 그대로 보여 준다.
+    if (!v0.gStarted) {
+      patch({ gStarted: true, plays: v0.sampleMode ? v0.plays : Math.max(0, v0.plays - 1) });
+    }
+    const hit = Math.random() < 0.5;
+    const hits = v0.gHits + (hit ? 1 : 0);
+    const misses = v0.gRound + 1 - hits;
+    const finished = hits >= GUESS_WIN_AT || misses > GUESS_ROUNDS - GUESS_WIN_AT;
+    const win = finished ? hits >= GUESS_WIN_AT : null;
+    // ★ 이긴 매치의 보상은 **기분 +1 하나뿐**이다(정본 §7). 친밀도는 안 올린다 —
+    //   정본 8장 친밀도 목록에 게임 승리가 없는데 목만 몰래 올리고 있었다(2026-09-21 판정 12).
+    // ★ 게임 카운터는 **매치를 끝까지 쳤을 때만** 올린다(2026-09-22 계약 — "완주 4매치").
+    //   예전에는 한 판(라운드)마다 올려서, 안내판의 "게임 …" 숫자가 실제 매치 수와 달랐다.
     patch({
-      plays: s.sampleMode ? s.plays : s.plays - 1,
-      cGame: s.cGame + 1,
-      happy: win ? Math.min(4, s.happy + 1) : s.happy,
-      guess: win ? '맞았어요!' : '아쉬워요, 반대쪽이었어요',
-      bond: win ? Math.min(100, s.bond + 1) : s.bond,
+      cGame: finished ? v0.cGame + 1 : v0.cGame,
+      happy: finished && win ? Math.min(4, v0.happy + 1) : v0.happy,
     });
-    afterChoose(() => careAct(win ? 'game_win' : 'game_lose'));
-  }, [s.plays, s.sampleMode, s.cGame, s.happy, s.bond, patch, careAct, flash, later]);
+    reveal(hit, hits, finished, win);
+  }, [patch, careAct, flash, later, endGuess, floor2Of]);
   const onGuessSide = useCallback((side: Side) => () => onGuess(side), [onGuess]);
 
   // ── 대화 ──
@@ -1038,17 +1628,25 @@ export function useYeoul(live?: Live) {
     if (onServerRef.current) {
       // ★ 보내면 잠그고 기다린다(계약 10절). 아이가 돌려주는 말도, 그때 짓는 자세도 서버가 정한다.
       //   화면이 미리 답을 띄우지 않는다 — 그러면 서버 말이 왔을 때 두 번 말한 꼴이 된다.
+      // ★ 내 말은 **안 사라진다**(2026-09-20). 예전엔 4.2초 뒤 지워서, 아이 답이 오는 사이에
+      //   내가 뭐라고 했는지가 화면에서 없어졌다. 다음 부름을 열 때(`openChat`) 비운다.
       patch({ draft: '', mine: text });
-      later('mine', 4200, () => setS((w) => ({ ...w, mine: '' })));
       void (async () => {
         const r = await liveRef.current?.sendChat(text);
         if (!r) return;
         if (r.error) { flash(r.error); return; }
         // ★ 자세는 **서버가 정한다**. 그 자세가 '답하기' 일 때만 표의 `reply_done` 을 같이 켠다 —
         //   서버가 다른 자세(기쁨·놀람…)를 골랐는데 답하기 상황을 켜면 자세가 덮여 서버 뜻이 사라진다.
+        // ★★ **안전망**(2026-09-22) — 이 길은 `careAct` 를 안 거쳐서 잠금 대체(`LOCKED_POSE`)가
+        //   안 걸린다. 그래서 **아직 못 배운 답하기 자세를 서버가 보내오면 그대로 재생됐다.**
+        //   서버도 고치는 중이지만(잠겼으면 `hello` 를 준다) **두 겹으로 막는다** — 한쪽이 빠져도
+        //   화면에 못 배운 몸짓이 새지 않게. 서버가 고쳐져도 이 줄은 남겨 둘 것.
         if (r.reply?.reactionKey) {
           const key = r.reply.reactionKey;
-          act(key, motionAliases(key)[0] === 'reply' ? sitOf('reply') : null);
+          const isReply = motionAliases(key)[0] === 'reply';
+          const locked2 = isReply && !floor2Of('reply');
+          if (locked2) act(LOCKED_POSE.reply ?? 'hello', null);
+          else act(key, isReply ? sitOf('reply') : null);
         }
       })();
       return;
@@ -1066,10 +1664,9 @@ export function useYeoul(live?: Live) {
         cChat: v.cChat + 1,
       };
     });
-    later('mine', 4200, () => setS((v) => ({ ...v, mine: '' })));
     careAct('reply');
-    tutorDone('chat');
-  }, [later, act, careAct, tutorDone, patch, flash]);
+    tutorDone('CHAT');
+  }, [act, careAct, tutorDone, patch, flash, floor2Of, sitOf]);
   /**
    * 보내기.
    *
@@ -1105,7 +1702,24 @@ export function useYeoul(live?: Live) {
   }, [mode, openChat, selRoom]);
 
   // ── 앨범·엽서 ──
-  const saveShot = useCallback(() => { setS((v) => ({ ...v, saved: v.saved + 1, fire: null })); flash('앨범에 저장했어요'); }, [flash]);
+  /**
+   * 저장 — **아직 준비 중이라 안내만 한다**(2026-09-21 상훈님 "저장, 공유는 준비중이에요!").
+   *
+   * ★★ 예전에는 세는 숫자만 1 올리고 **"앨범에 저장했어요"** 라고 했다. 아무 데도 안 담으면서
+   *   담았다고 말하는 자리였고, 이어서 "앨범 칸을 누르면 다시 볼 수 있어요"·"폴라로이드 N장"
+   *   까지 같은 거짓말을 퍼뜨렸다. 셋 다 지웠다.
+   * ★ **진짜 내려받기를 여기 연결하지 않는다** — 네 자리 중 셋은 받을 그림 자체가 아직 없다.
+   * ★ 토스트가 아니라 **전면 판**인 이유 — 저장 버튼은 액자 판(zIndex 10)·전면 판(12) 위에서도
+   *   눌린다. 토스트는 그 아래(5)라 정작 눌린 자리에서는 안 보인다.
+   */
+  const saveShot = useCallback(() => {
+    setS((v) => ({ ...v, fire: {
+      title: '저장은 준비 중이에요',
+      body: '아직 만드는 중이라, 지금은 담아 드릴 수 없어요.',
+      hint: '', tapAny: true,
+      actions: [{ label: '알겠어요', action: 'save-soon-ok', tap: closeFire, primary: true }],
+    } }));
+  }, [closeFire]);
 
   /**
    * 액자 하나를 공유한다. 서버가 주소를 만들어 주고, 같은 동작을 다시 공유하면 있던 주소가 온다.
@@ -1131,37 +1745,31 @@ export function useYeoul(live?: Live) {
       }
     })();
   }, [flash, careAct]);
-  const addWish = useCallback(() => { setS((v) => ({ ...v, wishes: v.wishes + 1, fire: null })); flash('기록해 뒀어요'); }, [flash]);
+  const addWish = useCallback(() => recordWish('postcard'), [recordWish]);
 
-  const tapAlbumCell = useCallback((open: number, name: string) => () => {
-    const parts = name.split(' · ');
-    if (!open) {
-      patch({ fire: {
-        title: parts[0],
-        body: `아직 잠긴 칸이에요. ${parts[1] || '조건 미정'} 조건을 채우면 열려요.`,
-        hint: '조건은 여정마다 달라요', tapAny: true,
-        actions: [{ label: '알겠어요', tap: closeFire, primary: true }],
-      } });
-      return;
-    }
-    setS((v) => ({ ...v, fire: {
-      title: parts[0], body: `${petWith(v.petName, '과', '와')} 남긴 장면이에요.`,
-      polaroid: true, caption: `${parts[0]} — ${v.day}일째`,
-      shot: '#EBD3C7', shotLabel: '장면 이미지', hint: '',
-      actions: [{ label: '앨범에 저장', tap: saveShot, primary: true }, { label: '닫기', tap: closeFire, primary: false }],
-    } }));
-  }, [patch, closeFire, saveShot]);
+  // ★ 옛 `tapAlbumCell`(앨범 칸을 눌렀을 때의 판)은 **지웠다**(2026-09-21). 앨범이 시트에서
+  //   벽 한 장으로 합쳐질 때(A-14) 부르는 곳이 끊겼는데 함수만 남아 있었고, 그 안에 빗금
+  //   폴라로이드와 「앨범에 저장」이 들어 있어 **고칠 것 목록에 유령으로 올라왔다.**
+  //   지금 앨범 칸은 `pickFrame` 이 받아 액자를 크게 연다.
 
+  /**
+   * 아침 엽서 한 장.
+   *
+   * ★ **앨범 벽에서는 내렸다**(2026-09-21 상훈님 — 실물이 붙기 전까지). 지금 이 판을 여는 길은
+   *   이동 창의 「엽서 판」 하나뿐이다. 문구가 어떻게 보이는지는 눈으로 봐야 하므로 남긴다.
+   * ★ 빗금 색상자(가짜 폴라로이드)를 **안 그린다**(A-09) — 엽서 그림은 아직 없다. 대신 엽서에
+   *   적힌 **말 자체를 본문으로** 올린다. 그림이 생기면 `preview` 로 붙이면 된다.
+   * ★ "문구는 세 벌 중 하나로 바뀌어요" 는 **개발 메모**였다. 아이 방에 남길 말이 아니다.
+   */
   const popPostcard = useCallback(() => {
     setS((v) => {
-      const [caption, shot] = POSTCARDS[v.cardIdx % POSTCARDS.length];
+      const [caption] = POSTCARDS[v.cardIdx % POSTCARDS.length];
       return { ...v, cardIdx: v.cardIdx + 1, fire: {
-        title: '아침에 도착했어요', body: '문구는 세 벌 중 하나로 바뀌어요.',
-        polaroid: true, caption, shot, shotLabel: '아침 폴라로이드', hint: '',
+        title: '아침에 도착했어요', body: caption, hint: '',
         actions: [
-          { label: '저장', tap: saveShot, primary: true },
-          { label: '이런 동작도 보고 싶어요', tap: addWish, primary: false },
-          { label: '닫기', tap: closeFire, primary: false },
+          { label: '저장', action: 'postcard-save', tap: saveShot, primary: true },
+          { label: '이런 동작도 보고 싶어요', action: 'postcard-wish', tap: addWish, primary: false },
+          { label: '닫기', action: 'postcard-close', tap: closeFire, primary: false },
         ],
       } };
     });
@@ -1170,9 +1778,9 @@ export function useYeoul(live?: Live) {
   const popScenes = useCallback(() => {
     setS((v) => ({ ...v, fire: {
       title: '저장한 장면',
-      body: `지금까지 ${v.saved}장 저장했어요. 앨범 칸을 누르면 다시 볼 수 있어요.`,
+      body: '아직 모아 둔 장면이 없어요. 저장이 준비되면 여기에 모여요.',
       hint: '', tapAny: true,
-      actions: [{ label: '앨범으로', tap: closeFire, primary: true }],
+      actions: [{ label: '앨범으로', action: 'scenes-close', tap: closeFire, primary: true }],
     } }));
   }, [closeFire]);
 
@@ -1184,13 +1792,13 @@ export function useYeoul(live?: Live) {
         petName: v.petName, day: v.day, bond: v.bond, full: v.full, trace: v.trace, plays: v.plays,
         pets: v.pets, stock: v.stock, snacks: v.snacks, bathUsed: v.bathUsed, sick: v.sick, night: v.night,
         sleeping: v.sleeping, calls: v.calls, log: v.log, memories: v.memories, resolved: v.resolved,
-        floorLv: v.floorLv, saved: v.saved, albumOpen: v.albumOpen,
+        floorLv: v.floorLv, albumOpen: v.albumOpen,
       },
       screen: 'room', sampleMode: true, hatch: 0, tutor: 0, sheet: null, toast: '', fire: null,
       popOpen: false, chatOpen: false, uq: 0,
       petName: '여울', day: 0, bond: 12, full: 2, trace: 1, plays: 3, pets: 0, stock: 3, snacks: 0,
       bathUsed: false, sick: false, night: false, sleeping: false, calls: 3, resolved: {},
-      floorLv: 1, saved: 0, albumOpen: 2,
+      floorLv: 1, albumOpen: 2,
       log: [{ who: 'pet', text: '저는 여울이에요. 연습 상대예요.' }],
       memories: ['연습용 기억'],
     }));
@@ -1249,8 +1857,11 @@ export function useYeoul(live?: Live) {
 
   const onNext = useCallback(() => {
     const key = STEPS[s.step];
-    // 랜딩에서 무언가 하려 하면 가입·로그인부터(상훈님 9/7 결정).
-    if (key === 'landing' && !s.authed) { patch({ authOpen: true, authTab: 'signup' }); return; }
+    // ★ 2026-09-19 — **랜딩에서는 아무것도 묻지 않는다.** 전에는 첫 CTA 한 번에 가입 창이 떠서
+    //   SNS 로 처음 온 사람이 무엇을 주는 곳인지도 모른 채 계정부터 만들어야 했다.
+    //   가입은 **그림을 실제로 올리는 순간**(presign 직전)으로 미뤘다 — 자리는 `Onboarding` 의
+    //   올리기 칸이고, 그동안 고른 그림은 `useHatch.holdUpload` 가 들고 있다.
+    //   9/7 결정("가입은 칸이 아니라 모달")은 그대로다. 뜨는 **시점만** 뒤로 갔다.
     if (key === 'char') {
       if (!s.petName) {
         patch({ nameErr: true });
@@ -1265,7 +1876,7 @@ export function useYeoul(live?: Live) {
       return;
     }
     patch({ screen: 'onb', step: s.step + 1 });
-  }, [s.step, s.authed, s.petName, patch, later, enterSample]);
+  }, [s.step, s.petName, patch, later, enterSample]);
 
   const onBack = useCallback(() => setS((v) => ({ ...v, step: Math.max(0, v.step - 1) })), []);
   const onUpload = useCallback(() => patch({ uploaded: true }), [patch]);
@@ -1283,7 +1894,19 @@ export function useYeoul(live?: Live) {
     const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
     return { ...w, picks: { ...w.picks, [k]: next } };
   }), []);
-  const onGroupText = useCallback((k: string) => (t: string) => setS((w) => ({ ...w, texts: { ...w.texts, [k]: t.slice(0, 60) } })), []);
+  /**
+   * 자유 입력 한 칸에 적는다.
+   *
+   * ★★ 자르는 길이는 **`CHAR_TEXT_MAX` 한 곳에서만** 가져온다(`lib/pet.ts`, 계약 옆).
+   *   2026-09-22 — 여기가 혼자 `60` 으로 자르고 있어서, 화면이 `maxLength` 를 100·200 으로 열어도
+   *   **상태에 담길 때 60 에서 조용히 멎었다.** 세계관의 "남은 자리" 안내도 그 벽 때문에
+   *   20 밑으로 못 내려가 영영 안 떴다. 숫자를 여기 다시 박으면 같은 일이 또 난다.
+   * ★ 모르는 칸은 가장 넉넉한 값으로 받는다 — 화면이 서버보다 먼저 자르면 사용자는 **왜 잘렸는지**
+   *   알 길이 없다. 넘치면 서버가 이유를 말해 준다.
+   */
+  const onGroupText = useCallback((k: string) => (t: string) => setS((w) => ({
+    ...w, texts: { ...w.texts, [k]: t.slice(0, CHAR_TEXT_MAX[k] ?? 200) },
+  })), []);
   const pickUser = useCallback((k: string, v: string) => () => setS((w) => ({ ...w, user: { ...w.user, [k]: w.user[k] === v ? null : v } })), []);
   /**
    * 여울의 물음에 답하거나 넘긴다. 답은 `user` 에 쌓인다.
@@ -1317,7 +1940,33 @@ export function useYeoul(live?: Live) {
   const pickWall = useCallback((id: string) => () => { patch({ wallId: id }); flash('벽지를 바꿨어요'); }, [patch, flash]);
   const toggleDeco = useCallback(() => setS((v) => ({ ...v, decoOpen: !v.decoOpen })), []);
   const openNotify = useCallback(() => patch({ sheet: 'notify', decoOpen: false }), [patch]);
-  const openSettings = useCallback(() => patch({ sheet: 'settings', decoOpen: false }), [patch]);
+  const openSettings = useCallback(() => {
+    // ★ 튜토리얼이 '아이 정보' 칸을 가리킬 때만 열린다(판정 J8 · 2026-09-22 개정).
+    //   단추가 이미 `disabled` 라 여기까지 안 온다. 와도 말없이 돌아선다.
+    const tl = tutLockRef.current;
+    if (tl && tl.room !== 'info') return;
+    // 새로 열 때는 지난 실패 줄을 지운다 — 다시 와서 보는 사람에게 옛 경고가 남아 있으면 안 된다.
+    patch({ sheet: 'settings', decoOpen: false, saveErr: '' });
+    /**
+     * ★★ **4칸은 이 단추를 누르는 순간 넘어간다**(2026-09-22 상훈님 판정 2안).
+     *
+     * 4칸은 "고쳤는가" 가 아니라 **"확인했는가"** 를 세는 칸이다(서버 `PetService.tutorialSeen`:
+     * *"아이 정보를 확인만 해도 넘어간다"*). 그러니 **연 것이 곧 확인**이다 — 시트 안의
+     * 단추를 한 번 더 누르게 하면 "확인" 을 두 번 시키는 셈이고, 안 누르고 닫은 사람은
+     * 확인을 했는데도 4칸에 남는다.
+     * ★ 시트는 그대로 열린다. 넘어감만 즉시다.
+     * ★ 여기서만 부른다 — `tl.room === 'info'` 는 **4칸일 때만** 참이라(`room:'info'` 인 칸이
+     *   하나뿐) 시트를 다시 열어도 두 번 나가지 않는다. 서버도 지금 칸이 아니면 아무 일도
+     *   안 한다(`advanceTutorial` 이 현재 칸을 먼저 본다) — 한 겹 더 막혀 있다.
+     * ★ 실패하면 **시트 안에 말한다**(조용한 실패 금지 · 판정 6과 같은 자리).
+     */
+    if (!tl || tl.room !== 'info') return;
+    if (!onServerRef.current) { tutorDone('PERSONALITY'); return; }
+    void (async () => {
+      const r = await liveRef.current?.tutorialSeen();
+      if (!r || !r.ok) patch({ saveErr: saveFailLine(r?.code ?? null, r?.status, r?.message ?? null) });
+    })();
+  }, [patch, tutorDone]);
   const pickNeedStyle = useCallback((v: NeedStyle) => () => patch({ needStyleLocal: v }), [patch]);
   const toggleNotif = useCallback(() => setS((v) => ({ ...v, notifOn: !v.notifOn })), []);
   const toggleLeave = useCallback(() => setS((v) => ({ ...v, leaveOff: !v.leaveOff })), []);
@@ -1358,17 +2007,32 @@ export function useYeoul(live?: Live) {
     });
     patch({ screen: 'room', sheet: null, toast: '' });
   }, [devSet, patch]);
+  /**
+   * 개발용 — 하루를 넘긴다.
+   * ★ 예전에는 0.5초 뒤 **엽서 판**을 자동으로 띄웠다. 날짜를 넘기려고 누른 사람에게 판이
+   *   튀어나오는 자리였고, 엽서는 실물이 없어 내린 판이다(2026-09-21). 엽서를 보려면
+   *   이동 창의 「엽서 판」 을 누른다 — 칩 자체는 날짜를 넘기는 데 계속 쓴다.
+   */
   const nextDay = useCallback(() => {
     setS((v) => ({
       ...v, day: v.day + 1, full: Math.max(0, v.full - 2), trace: Math.min(4, v.trace + 2),
       plays: 3, pets: 0, bathUsed: false, calls: 3, resolved: {}, sleeping: false, night: false, sheet: null,
     }));
     flash('다음 날 아침이에요');
-    later('postcard', 500, popPostcard);
-  }, [flash, later, popPostcard]);
+  }, [flash]);
   const restart = useCallback(() => setS(() => ({ ...INITIAL })), []);
+  /**
+   * 로그아웃 — 화면을 **첫 화면(랜딩 칸)으로** 되돌린다.
+   *
+   * ★ 왜 `screen` 만 되돌리지 않는가 — 이 상태 한 벌에는 방금까지 함께 있던 아이의 흔적이
+   *   곳곳에 남는다(이름·오간 말·기억 칩·앨범·게임 결과·튜토리얼 진행·연습방 스냅샷).
+   *   화면만 랜딩으로 옮기면 그 값들이 그대로 살아 있다가, 같은 탭에서 **다음 사람이 로그인하는
+   *   순간 앞사람의 것이 그대로 보인다.** 그래서 처음 들어온 사람과 똑같은 한 벌로 통째로 되돌린다.
+   *   (서버에서 받아 둔 것은 `useHatch.reset` 이 같은 순간에 함께 버린다.)
+   */
+  const leaveAccount = useCallback(() => setS(() => ({ ...INITIAL })), []);
   /** 개발용 — 2층 로드맵을 다 배운 것으로 만든다(= 3층 시작 = 조각 등장). */
-  const finishRoadmap = useCallback(() => patch({ cChat: 4, cBath: 3, cSleep: 3, cGame: 3 }), [patch]);
+  const finishRoadmap = useCallback(() => patch({ cChat: 4, cBath: 3, cSleep: 3, cGame: 4, cWake: 4 }), [patch]);
   /** 개발용 — 조각 도장을 0·2·4 로 바꿔 본다. 실제로는 잠들 때 판정·리셋된다(정본). */
   const setShards = useCallback((n: number) => () => patch({ shards: n }), [patch]);
   /**
@@ -1383,42 +2047,178 @@ export function useYeoul(live?: Live) {
   const toggleFloor2 = useCallback(() => setS((v) => ({ ...v, dev: { ...v.dev, floor2: !v.dev.floor2 } })), []);
   /** 개발용 — 후기 판(FeedbackSheet)을 mock 상태로 강제로 띄운다/끈다. 실서버는 안 탄다. */
   const toggleFbPreview = useCallback(() => setS((v) => ({ ...v, fbPreview: !v.fbPreview })), []);
+  /** 선반 카드 펼치기/접기. 카드가 사라졌다 다시 떠도 **편 채로 남는다**(→ `miniOpen`). */
+  const toggleMini = useCallback(() => setS((v) => ({ ...v, miniOpen: !v.miniOpen })), []);
   /** 개발용 — 튜토리얼 완주 축하 판을 다시 띄운다. */
   const showTutorEnd = useCallback(() => setS((v) => finishTutor({ ...v, tutorDone: false })), []);
   const openPlay = useCallback((tab: 'talk' | 'guess' | 'run') => () => patch({ sheet: 'play', playTab: tab, toast: '' }), [patch]);
   const pickTab = useCallback((t: 'talk' | 'guess' | 'run') => () => patch({ playTab: t }), [patch]);
 
   /**
-   * 튜토리얼 졸업 — **시계가 켜진 순간** 한 번만 축하한다.
+   * 튜토리얼 졸업 — **시계가 켜진 순간, 사람 기준으로 딱 한 번** 축하한다.
    *
    * ★ 판정 기준이 `tutorial.steps` 의 DONE 칸이 **아니다.** 아홉 칸을 다 한 사람에게는
    *   서버가 `tutorial` 블록 자체를 null 로 준다(계약 해석 9). 그러면 DONE 칸을 못 찾아
    *   **가장 잘 따라온 사람만 축하를 못 받는다.** 그래서 `clock.clockStartedAt` 으로 본다 —
    *   그게 곧 졸업의 정의다(`tamagotchi/tutorial.ts` 의 `takeGrownLine` 과 같은 기준).
-   * ★ 한 번만 뜨는 것은 sessionStorage 가 맡는다. 서버에 "봤다" 를 남길 사실이 없다.
+   *
+   * ★★ **"한 번" 을 서버가 기억한다**(2026-09-22). 예전에는 탭 기억(`sessionStorage`)뿐이라
+   *   **새 탭·앱 재시작·다른 기기에서 또 떴다** — dev 에서 그대로 재현했다. 순서는 이렇다:
+   *     1) 서버가 `graduationSeenAt` 을 주면 **그것이 먼저다** — 값이 있으면 여기서 끝.
+   *     2) 탭 기억은 **보조**다. 서버 기록이 오가는 사이 같은 탭에서 두 번 뜨는 것만 막는다.
+   *     3) 판을 띄운 뒤 서버에 "봤다" 를 남긴다. 실패해도 화면은 그대로 간다(다음에 한 번 더 뜰 뿐).
+   *   ⚠️ 백엔드가 아직 이 칸을 안 줄 수 있다. 그때는 `undefined` 라 1)이 통과하고 **예전과 똑같이**
+   *   탭 기억으로만 막힌다 — 새 칸이 오면 저절로 서버 기준으로 올라선다.
    */
   useEffect(() => {
     if (!onServer || !sv?.clock?.clockStartedAt) return;
+    if (sv.graduationSeenAt != null) return;
     if (!takeGrownLine(sv.petId, sv)) return;
     setS((v) => finishTutor(v));
+    void liveRef.current?.markGraduationSeen();
     // finishTutor 는 렌더마다 새로 만들어지는 평범한 함수라 의존성에 넣지 않는다(넣으면 매 렌더 재실행).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onServer, sv]);
 
-  // 2층 해금 — 친밀도 50% 를 넘긴 순간 한 번만 축하한다(시안 componentDidUpdate).
+  /**
+   * 판을 띄우면서 **자유 입력칸을 깨끗이 비운다.**
+   *
+   * ★ 2026-09-21 실측 — 앞 판에서 난 실패 한 줄("아이를 찾지 못했어요")이 **다음 판에 그대로
+   *   남았다.** 졸업 판과 해금 판이 같은 입력칸을 쓰게 되면서 생긴 자리다. 판이 바뀌면
+   *   그 판의 입력은 처음부터다 — 보낸 적 있음(`wishDone`)까지 같이 푼다. 중복 전송은
+   *   `wishSending` 잠금과 서버의 하루 상한이 막는다.
+   */
+  const withFire = (v: YeoulState, fire: Fire | null): YeoulState =>
+    ({ ...v, fire, wishDraft: '', wishError: '', wishSending: false, wishDone: false });
+
+  /**
+   * 해금 판 한 장을 만든다 — **판은 하나, 출처는 둘**(2026-09-21 판정 5 · A-10).
+   *
+   * ★★ 해금은 두 종류이고 그림을 가져오는 칸이 서로 다르다.
+   *   - `now`   2층 기본 행동 : 돌보는 그 자리에서 열린다. `justUnlocked`(seq 목록)로 알고,
+   *             그림은 `motions[].basicImageKey` 에 **잠겨 있을 때부터** 들어 있다.
+   *   - `slept` 심화 행동·선물 : 자는 동안 되고 아침에 도착한다. `learnedToday[].imageKey` 로 알고,
+   *             그 칸은 **`revealedAt` 전에는 null** 이며 자는 동안에는 채워지지도 않는다.
+   *   ⚠️ `album.motions[].imageKey` 라는 칸은 **없다.** 그 이름으로 찾지 말 것.
+   *   두 경우를 한 칸으로 뭉치면 한쪽이 조용히 빈 화면이 된다 — 그래서 여기서만 갈라 둔다.
+   *
+   * ★ 그림이 없으면 미리보기를 **안 만든다**(빈 자리표를 두지 않는다).
+   * ★★ 옛 "그림은 아직 그리는 중이에요" 한 줄은 **뺐다**(2026-09-21 판정 11). 서버는 아침 목록에
+   *   **검수를 통과(OPEN)하고 도착 시각이 찍힌 것만** 담는다(`PetResponses`·`ZzalMotion`·`AdminService`
+   *   전수 확인). 즉 아침 판에 그림이 없는 경우가 없으므로, 그 문장은 설 자리가 없다.
+   *   여기서 그림이 안 보이면 그것은 "아직" 이 아니라 **불러오기 실패**고, 화면은 조용히 접는다.
+   */
+  const unlockFire = useCallback((
+    kind: 'now' | 'slept',
+    items: ReadonlyArray<{ label: string; src: string | null }>,
+    bodyOverride?: string,
+  ): Fire | null => {
+    if (items.length === 0) return null;
+    const c = UNLOCK_COPY[kind];
+    const names = items.map((i) => i.label).join(' · ');
+    const shot = items.find((i) => i.src);
+    return {
+      title: c.title,
+      body: bodyOverride ?? c.body(names),
+      ...(shot?.src
+        ? { preview: { src: shot.src, badge: c.previewBadge, caption: c.previewCaption(shot.label) } }
+        : {}),
+      hint: '', tapAny: true,
+      // 정본 §심화 행동의 수요조사. 졸업 판과 **같은 입력칸**이고, 보낸 자리만 다르게 기록한다.
+      wish: true, wishFrom: `unlock_${kind}`,
+      actions: [{
+        label: c.close, action: `unlock-close-${kind}`, primary: false,
+        tap: () => setS((w) => ({ ...w, fire: null })),
+      }],
+    };
+  }, []);
+
+  /**
+   * 개발용 — **해금 판을 강제로 띄운다**(2026-09-21 A-13).
+   *
+   * ★ 왜 필요한가 — 실제 해금은 `justUnlocked`(행동 응답에만 실림)·`learnedToday`(아침 도착)로만
+   *   온다. 이동 창의 `친밀도 80%` 는 덮어쓰기 겹(`s.dev.bond`)에만 쓰는데 목 트리거는 본 값
+   *   (`s.bond`)을 보므로, **눌러도 판이 안 떴다**. 판정할 화면을 눈으로 못 보는 상태였다.
+   * ★ 두 갈래를 따로 띄운다 — 즉시형과 아침형은 말도 그림 출처도 다르다. 한 버튼으로 묶으면
+   *   한쪽만 확인하고 다 봤다고 착각한다.
+   */
+  const showUnlock = useCallback((kind: 'now' | 'slept') => () => {
+    const motions = sv?.motions ?? [];
+    const pick = kind === 'now'
+      ? motions.find((x) => x.layer === 'BASIC_2') ?? motions[0]
+      : motions.find((x) => x.advanced?.imageKey);
+    const key = kind === 'now' ? pick?.basicImageKey : pick?.advanced?.imageKey;
+    // 목(연습방)에는 서버 목록이 없다. 2층 자세표의 **진짜 이름**을 쓴다 — 개발 화면과 앨범이
+    // 같은 한 벌을 쓰므로, 여기서만 '2층' 같은 가짜 이름을 지어내면 대화할 때마다 통역이 든다.
+    // 연습방의 아이는 여울 자신이라 여울 그림을 거는 것이 맞다(진짜 방에서는 위 `pick` 이 이긴다).
+    const mockKey = POSE_FLOORS[1][1][0];
+    const item = pick && key
+      ? { label: pick.label, src: assetUrl(key) }
+      : { label: POSE_LABEL[mockKey] ?? mockKey, src: YEOUL_MOTION[mockKey] ?? null };
+    // ★★ 아침 판은 **그림이 있는 것만** 띄운다(2026-09-21 판정 11). 서버는 아침 목록에 검수를
+    //   통과(OPEN)하고 도착한 것만 담으므로 **그림 없는 아침 판은 실제로 존재하지 않는다.**
+    //   그런데 이 손잡이만 그림 없는 것까지 띄워서, 상훈님이 보신 "그림은 아직 그리는 중이에요"
+    //   가 바로 여기서 나왔다 — 화면이 아니라 손잡이가 없는 상태를 만들어 낸 것이다.
+    if (kind === 'slept' && !item.src) { flash('아침 판은 그림이 도착한 동작이 있어야 떠요'); return; }
+    setS((v) => withFire({ ...v, sheet: null }, unlockFire(kind, [item])));
+  }, [sv, unlockFire, flash]);
+
+  // 2층 해금(목) — 친밀도 50% 를 넘긴 순간 한 번만 축하한다(시안 componentDidUpdate).
+  // ★ 서버에 붙어 있으면 이 길로 안 온다 — 아래 `justUnlocked` 효과가 맡는다. 두 곳이 같이
+  //   띄우면 같은 사건에 판이 두 번 뜬다.
   useEffect(() => {
+    if (onServer) return;
     if (s.bond < 50 || s.floorLv >= 3 || s.unlockShown || s.screen !== 'room') return;
     // A절 표 "해금 · 나음 · 공유" 줄의 첫째 — 기쁨 + 폭죽 한 바퀴.
     careAct('unlock');
-    setS((v) => ({
-      ...v, unlockShown: true, floorLv: 3, sheet: null,
-      fire: {
-        title: '2층이 열렸어요', body: '조각 네 칸과 달리기가 함께 열렸어요.',
-        hint: '탭하면 넘어가요', tapAny: true,
-        actions: [{ label: '방으로 돌아가기', tap: () => setS((w) => ({ ...w, fire: null })), primary: true }],
-      },
-    }));
-  }, [s.bond, s.floorLv, s.unlockShown, s.screen, careAct]);
+    // 목에는 서버 목록이 없다. 무엇이 열렸는지는 아는 대로만 말하고, 그림은 걸지 않는다
+    // (여울 그림을 걸면 "내 아이가 여울로 바뀌었나" 로 읽힌다 — 자캐 규범).
+    const fire = unlockFire('now', [{ label: '2층', src: null }], '조각 네 칸과 달리기가 함께 열렸어요.');
+    setS((v) => withFire({ ...v, unlockShown: true, floorLv: 3, sheet: null }, fire));
+  }, [onServer, s.bond, s.floorLv, s.unlockShown, s.screen, careAct, unlockFire]);
+
+  /**
+   * 2층 해금(서버·즉시형).
+   *
+   * ★★ **원본(`sv.justUnlocked`)을 보지 않는다** — 그 칸은 행동 응답 **한 번에만** 실려 오고
+   *   다음 조회가 `[]` 로 덮는다(계약 2절). 마침 그때 다른 판이 떠 있으면 판을 영영 놓쳤다.
+   *   그래서 배관이 받은 자리에서 쌓아 두고(`live.justUnlocked` · `useHatch`), 화면은 **다 보여 준 뒤**
+   *   `clearJustUnlocked()` 로 비운다. 못 띄운 채 닫아도 방이 조용해지면 그때 뜬다.
+   * ★ 그래서 "본 seq 를 따로 기억하는 자리" 도 없앴다 — 비우는 것이 곧 본 표시다. 두 벌로 두면
+   *   한쪽만 지워졌을 때 판이 다시 뜨거나 영영 안 뜬다.
+   */
+  useEffect(() => {
+    if (!onServer || s.screen !== 'room' || s.fire) return;
+    const fresh = live?.justUnlocked ?? [];
+    if (fresh.length === 0) return;
+    const motions = sv?.motions ?? [];
+    const items = fresh.map((q) => {
+      const m = motions.find((x) => x.seq === q);
+      return { label: m?.label ?? '새 동작', src: m?.basicImageKey ? assetUrl(m.basicImageKey) : null };
+    });
+    careAct('unlock');
+    setS((v) => withFire({ ...v, sheet: null }, unlockFire('now', items)));
+    live?.clearJustUnlocked();
+  }, [onServer, live, sv, s.screen, s.fire, careAct, unlockFire]);
+
+  /**
+   * 심화 행동 도착(서버·기상형) — `learnedToday` 에 남아 있는 것만.
+   *
+   * ★ 서버는 **확인(`…/motions/{seq}/seen`) 전까지** 이 목록에 남겨 둔다. 화면이 판을 닫는 것과
+   *   서버가 "봤다" 를 아는 것은 다른 일이라, 닫기만으로 목록이 비지 않는다 — 다시 들어오면
+   *   또 뜬다. 그게 맞다(아직 안 본 것으로 서버가 알고 있으므로). 확인을 보내는 것은
+   *   상태 층(`useHatch`)의 일이고 여기서 하지 않는다.
+   * ★ `imageKey` 는 도착 전에는 없다. 없으면 미리보기를 안 만든다 — 그게 정상 경로다.
+   */
+  const learnedSeen = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (!onServer || s.screen !== 'room' || s.fire) return;
+    const fresh = (sv?.learnedToday ?? []).filter((m) => !learnedSeen.current.has(m.seq));
+    if (fresh.length === 0) return;
+    fresh.forEach((m) => learnedSeen.current.add(m.seq));
+    const items = fresh.map((m) => ({ label: m.label, src: m.imageKey ? assetUrl(m.imageKey) : null }));
+    setS((v) => withFire({ ...v, sheet: null }, unlockFire('slept', items)));
+  }, [onServer, sv, s.screen, s.fire, unlockFire]);
 
   /**
    * **재운 순간 한 바퀴 덮기.** 잠은 상태(무한)라 박자를 못 타므로, 들어오는 그 한 번만 여기서 센다.
@@ -1429,10 +2229,19 @@ export function useYeoul(live?: Live) {
     if (es.sleeping && !wasAsleep.current) {
       setS((v) => ({ ...v, sleepCover: true }));
       later('sleepCover', CYCLE_MS, () => setS((v) => ({ ...v, sleepCover: false })));
+      /**
+       * ★★ **잠이 들면 치던 판을 접는다**(2026-09-22 dev 실측). 23:00 자동 취침은 아무도 안
+       *   누른 채로 오는데, 게임판이 그대로 열려 있으면 **자는 아이 위에 "어느 손에 있을까요"** 가
+       *   떠 있고 좌·우를 눌러도 서버가 거절만 한다(상훈님 스크린샷 23:13).
+       * ★ **진 것이 아니라 접히는 것이다** — `gQuit`(기권 문구)도, 패배 표시도, 카운터도 안 건드린다.
+       *   서버도 다음 `start` 때 그 판을 접을 뿐이다. 5차에서 맞춘 "기권은 완주에 안 센다" 와 같은 결.
+       * ★ `endGuess` 를 그대로 쓴다 — 여운 타이머까지 같이 걷어 준다(따로 접으면 공개가 뒤늦게 뜬다).
+       */
+      if (sRef.current.gOn) endGuess();
     }
     if (!es.sleeping && wasAsleep.current) setS((v) => (v.sleepCover ? { ...v, sleepCover: false } : v));
     wasAsleep.current = es.sleeping;
-  }, [es.sleeping, later]);
+  }, [es.sleeping, later, endGuess]);
 
   // 대화창의 예시 문구가 2.6초마다 바뀐다.
   useEffect(() => {
@@ -1504,7 +2313,7 @@ export function useYeoul(live?: Live) {
       return {
         key: k, label: ROOM_NAME[k],
         layers: [...LINE[k]],
-        fg: on ? '#FBF6EC' : l.fg,
+        fg: on ? C2.onDark : l.fg,
         tileBg: on ? C.ink : l.bg,
         bw: hl ? '2.5px' : '0',
         bd: hl ? ACCENT : 'transparent',
@@ -1514,8 +2323,13 @@ export function useYeoul(live?: Live) {
         // ★ **침실만은 예외다**(2026-09-10). 자는 동안 침실까지 막으면 **깨울 방법이 없어진다** —
         //   재우기가 진짜 서버 호출이 된 뒤 브라우저로 눌러 보다 걸렸다(그전에는 개발용 토글로만
         //   잠들 수 있어서 안 드러났다). 자는 아이를 깨우는 자리는 열려 있어야 한다.
+        // ★ 튜토리얼 중에는 **그 칸이 가리키는 방만** 열린다(판정 J8 · 2026-09-22 개정).
+        //   나머지는 **아무 말 없이 안 눌린다**(`off` → `disabled`). 길은 하이라이트 하나뿐이다.
+        //   자는 동안 잠기는 것은 그대로 한 줄을 말한다 — 그건 튜토리얼이 아니라 상태이고,
+        //   왜 안 되는지가 화면에 안 보이기 때문이다(커튼만 보인다).
         pick: asleep && k !== 'bed' ? () => flash(sleepingLine(s.petName)) : selRoom(k),
-        dim: asleep && k !== 'bed',
+        off: !!(tutLock && tutLock.room !== k),
+        dim: (asleep && k !== 'bed') || !!(tutLock && tutLock.room !== k),
       };
     });
 
@@ -1562,8 +2376,11 @@ export function useYeoul(live?: Live) {
         // ★ '대화하기' 는 뺐다(상훈님 판정 11) — 대화는 오른쪽 아래 말풍선이 맡고,
         //   마당에는 게임을 하나둘 붙일 예정이라 그 자리를 비워 둔다.
         // 오늘 남은 판은 서버가 센다(두 게임 합산 · 지금 치는 판은 빠져 있다).
-        a: { label: '좌우 맞히기', count: `${playsLeft}판 남음`, tap: openPlay('guess') },
-        b: null,
+        a: { label: '좌우 맞히기', count: `${playsLeft}판 남음`, tap: startGuess },
+        // ★ 놀이 시트의 **입구**(2026-09-21). 좌우 맞히기가 무대로 나가면서 시트가 문을 잃었는데,
+        //   시트 이름이 '놀이' 이고 마당이 놀이의 집이라 **같은 팝오버의 둘째 칸**이 가장 자연스럽다.
+        //   왼쪽 칸 = 바로 하는 놀이 · 오른쪽 칸 = 지난 말과 아직 잠긴 놀이(대화·달리기 탭).
+        b: { label: '놀이', count: '대화 · 달리기', tap: openPlay('talk') },
       },
       /**
        * 침실. **서버에 붙어 있으면 되는지 안 되는지를 서버가 정한다**(`clock.canSleep`·`canWake`).
@@ -1601,32 +2418,45 @@ export function useYeoul(live?: Live) {
       })(),
       album: {
         say: `함께한 순간이 ${albumOpen}개예요`, n: albumAll, on: albumOpen, tint: '#B08968',
-        a: { label: '벽 보기', count: `${albumOpen}개 열림`, tap: openWall },
-        b: { label: '방 꾸미기', count: `${s.floorLv > 1 ? '4' : '1'}개 열림`, tap: openSheet('album') },
+        /**
+         * ★ 2026-09-21(A-14·A-15) — 버튼 **하나**다. 예전에는 「벽 보기」·「방 꾸미기」 둘이었고,
+         *   둘째가 앨범 시트로 가는 **유일한 상시 입구**였다. 그래서 그 버튼만 지우면 시트 안의
+         *   도감 18칸·엽서·장면·저장·벽지가 통째로 도달 불가가 됐다.
+         *   시트를 없애고 그 내용을 **앨범 보기(벽) 안**으로 옮겼다 — 갈 곳이 한 군데면 헤맬 일이 없다.
+         */
+        a: { label: '앨범 보기', count: `${albumOpen}개 열림`, tap: openWall },
+        b: null,
       },
     };
     const cur = P[selK];
 
     const bar = Array.from({ length: cur.n }, (_, i) => ({
-      bg: i < cur.on ? (locked ? 'rgba(74,64,56,.28)' : cur.tint) : 'rgba(74,64,56,.12)',
+      bg: i < cur.on ? (locked ? ink(.28) : cur.tint) : C.line,
     }));
 
-    const pbtn = (r: Raw | null, isTutTarget: boolean): PopBtn | null => {
+    const pbtn = (r: Raw | null, isTutTarget: boolean, tutOff = false): PopBtn | null => {
       if (!r) return null;
       const sickSnack = mode === 'sick' && selK === 'table' && !!r.soft;
       // 서버가 이미 아는 거절 이유. 여울 샘플 방에서는 안 건다 — 거긴 연습이라 늘 눌려야 한다.
       const pre = unlimited ? '' : (r.no ?? '');
       // 돌보기·재우기가 도는 동안엔 전부 잠근다 — 두 번 눌러 두 번 나가는 일을 막는다.
       const waiting = !!live?.careing || !!live?.resting;
+      // ★ 튜토리얼 잠금이 **가장 앞이다**(판정 J8) — 그 칸에서 안 시킨 버튼은 다른 이유를 따지기 전에 잠긴다.
+      //   ★ 2026-09-22 — 튜토리얼 잠금은 **이유를 안 쓴다**(상훈님 판정). 비활성만으로 말한다.
       const why = locked ? lockMsg : sickSnack ? '아플 땐 간식을 안 먹어요' : pre;
-      const off = !!why || waiting;
+      const off = tutOff || !!why || waiting;
       return {
         label: r.label,
         // ★ 잠겨 있으면 남은 횟수 대신 **왜 못 누르는지**를 그 자리에 쓴다(상훈님 2026-09-10).
         //   '0번 남음' 은 사실이지만 이유가 아니다 — 사람은 "왜?" 를 먼저 묻는다.
         //   기다리는 중(`waiting`)은 이유를 안 쓴다. 곧 풀릴 것이라 한 줄이 깜빡이기만 한다.
-        count: unlimited ? '' : (why || r.count),
-        off, why: waiting ? '' : why,
+        //
+        // ★★ 2026-09-21(A-20) — **숫자와 거절 이유를 갈라서 넘긴다.** 예전에는 둘을 한 칸
+        //   (`count`)에 섞어 넣어서, "4번 남음" 과 "아플 땐 간식을 안 먹어요" 가 **같은 크기·같은
+        //   색·같은 자리**에 떴다. 눌러도 되는지 아닌지가 글을 끝까지 읽어야만 갈렸다.
+        //   화면이 둘을 다른 결로 그릴 수 있게 값을 나눠 준다(색만으로 가르지 않는다 — 렌즈 §5-5).
+        count: unlimited ? '' : r.count,
+        off, why: (waiting || tutOff) ? '' : why,
         tap: () => {
           lastSel.current = Date.now();
           // 잠긴 버튼은 `disabled` 라 여기까지 오지 않는다. 와도 아무 일도 안 한다.
@@ -1651,7 +2481,13 @@ export function useYeoul(live?: Live) {
       hasBar: selK !== 'bed' && selK !== 'album',
       count: selK === 'bed' || selK === 'album' ? ''
         : `${({ table: '배부름', bath: '단정함', play: '기분' } as Record<string, string>)[selK]} ${cur.on}/${cur.n}`,
-      a: pbtn(cur.a, isTutTarget), b: pbtn(cur.b, false), hasB: !!cur.b,
+      // ★ 그 칸이 시키는 방의 **첫 버튼(a)** 만 열린다. 둘째 버튼(간식·목욕 같은 것)은 튜토리얼
+      //   동안 늘 잠긴다 — 안내가 가리키는 것이 언제나 첫 버튼이라서다.
+      // ★ 2026-09-22 — 잠긴 쪽은 **아무 말도 안 하고 안 눌린다**(상훈님 판정). 눌러야 할 하나만
+      //   깜빡이고(`isTutTarget`), 나머지는 흐린 채 비활성이다.
+      a: pbtn(cur.a, isTutTarget, !!tutLock && !(tutLock.act === 'a' && tutLock.room === selK)),
+      b: pbtn(cur.b, false, !!tutLock),
+      hasB: !!cur.b,
     };
 
     // ── 무대 ──
@@ -1665,13 +2501,15 @@ export function useYeoul(live?: Live) {
       frame: C.paper,
       sky: mode === 'day' || (mode === 'sick' && !es.night) ? '#DCEBF5'
         : mode === 'night' || mode === 'sleep' || (mode === 'sick' && es.night) ? '#33406B' : '#E4E7EC',
-      pattern: 'repeating-linear-gradient(90deg,rgba(74,64,56,.035) 0 1px,transparent 1px 22px)',
+      pattern: `repeating-linear-gradient(90deg,${ink(.035)} 0 1px,transparent 1px 22px)`,
       moon: mode === 'night' || mode === 'sleep' || (mode === 'sick' && es.night),
       sun: mode === 'day' || (mode === 'sick' && !es.night),
       curtain: mode === 'sleep',
       sick: mode === 'sick',
       charFilter: mode === 'sleep' ? 'saturate(.65) brightness(.9)' : mode === 'sick' ? 'saturate(.5)' : 'none',
       play: mode === 'sleep' || mode === 'sick' ? 'paused' : 'running',
+      // 정본 §게이지 — 배부름 0 이면 기본 자세를 **0.7배**로. 자는 동안·아플 때는 그 상태가 먼저다.
+      charScale: mode !== 'sleep' && mode !== 'sick' && es.full <= 0 ? 0.7 : 1,
     };
 
     /**
@@ -1691,8 +2529,12 @@ export function useYeoul(live?: Live) {
         //   ⚠️ 대신하고 있던 동안 **땀(`sick_light`)이 영영 안 떴다** — 표의 그 줄은 자세가 `sick` 일 때만
         //   켜지는데 화면은 `sad` 를 짓고 있어서, 그리는 쪽이 자세 불일치로 조용히 걸렀다(2026-09-13 실측).
         : es.sick ? 'sick'
-          : (es.full <= 0 || es.happy <= 0) ? 'sad'
-            : s.chatOpen ? 'joy' : 'base';
+          // ★ 정본 §게이지 61줄 — **배부름 0 = 기본 자세 0.7배**(슬픈 자세가 아니다). 우선순위도
+          //   정본 그대로 **병 > 배부름 > 행복** 이라, 배가 고프면 그쪽이 먼저다(2026-09-22 판정 J).
+          //   0.7배는 아래 `st.charScale` 이 건다. 꼬르륵 소품은 상훈님 2026-09-13 지시대로 계속 끈 채다.
+          : es.full <= 0 ? 'base'
+            : es.happy <= 0 ? 'sad'
+              : s.chatOpen ? 'joy' : 'base';
 
     // ── 대화 ──
     //
@@ -1710,43 +2552,51 @@ export function useYeoul(live?: Live) {
     const chatLine = s.chatOpen
       ? (onServer ? svPetLine : (s.petLine || '오늘은 뭐 했어요?'))
       : null;
+    /**
+     * 좌우 맞히기가 **아이 말풍선으로** 말한다(2026-09-20 안 1) — 게임 전용 말 장치를 새로 만들지 않는다.
+     * ★ 사용자를 탓하는 말을 쓰지 않는다(자캐 규범) — 빗나가도 "아쉬워요" 까지다.
+     */
+    //   ★ 숫자는 **서버에 붙으면 서버 것**을 쓴다(`rounds`·`winAt`·`hits`). 목은 같은 값을 스스로 센다.
+    const gr = s.lastGuess;
+    const gHits = onServer ? (gr?.hits ?? 0) : s.gHits;
+    const gRounds = onServer ? (gr?.rounds ?? GUESS_ROUNDS) : GUESS_ROUNDS;
+    const gWinAt = onServer ? (gr?.winAt ?? GUESS_WIN_AT) : GUESS_WIN_AT;
+    const gRoundNo = (onServer ? (gr?.nextRound ?? s.gRound) : s.gRound) + 1;
+    const guessLine = !s.gOn ? ''
+      : s.gPhase === 'shuffle' ? '어느 쪽일까…'
+        : s.gPhase === 'reveal' ? (s.gHit ? '맞았어요!' : '아쉬워요, 반대쪽이었어요')
+          : s.gPhase === 'done'
+            // ★ 기권으로 끝난 판은 **성적을 말하지 않는다** — "N / 5 맞혔어요" 는 끝까지 친 판의 말이다.
+            // ★ 이겼으면 **무엇이 좋아졌는지 말한다**(판정 12) — 기분이 오른 사실이 화면 어디에도
+            //   안 적혀 있어서, 마당 게이지의 「기분 N/4」 를 맞힌 횟수로 읽는 일이 생겼다.
+            //   기분이 이미 가득이면 안 오르므로 그때는 말하지 않는다.
+            ? (s.gQuit ? '이 판은 여기까지 할게요.'
+              : gHits >= gWinAt
+                ? `${gHits} / ${gRounds} 맞혔어요. 이겼어요!${es.happy > s.gHappy0 ? ' 기분이 한 칸 올랐어요.' : ''}`
+                : `${gHits} / ${gRounds} 맞혔어요. 다음엔 이겨요.`)
+            : `${gRoundNo}번째 · 어느 손에 있을까요?`;
+
     const bub: Bubble = {
-      isTut: !!tut && s.sampleMode && !es.sleeping && !s.chatOpen,
-      top: s.sampleMode ? '96px' : '12px',
-      tutText: tut?.text ?? '',
-      // ★ 튜토리얼 중에는 부름 말풍선을 접어 둔다 — 그 자리 안내는 좌측 하단 카드가 맡는다.
+      // ★ 튜토리얼 중에는 부름 말풍선을 접어 둔다 — 그 자리 안내는 아래 선반 카드가 맡는다.
       //   다만 **대화를 열어 아이가 건넨 말이 있으면 그건 보여야 한다**. 안 그러면 서버가 준
       //   대사가 화면에 한 번도 안 나온다(2026-09-09 실측으로 그랬다).
-      show: (!tut || !!chatLine) && (!!top || !!chatLine) && !es.sleeping,
-      text: chatLine || (top?.text ?? ''),
-      chipLabel: tut ? (tutIdx === TUT.length - 1 ? '알았어요' : '다음') : '답하기',
-      hasPrev: !!tut && s.sampleMode && s.tutor > 0,
-      hasNext: !!tut && s.sampleMode,
-      hasHint: !!tut && !s.sampleMode,
-      hintText: '직접 해 보면 다음으로',
-      hasSkip: !!tut && !s.sampleMode,
-      stepText: `${tutIdx + 1} / ${TUT.length}`,
-      dots: TUT.map((_, i) => ({
-        w: tut && i === tutIdx ? '14px' : '5px',
-        bg: tut && i === tutIdx ? ACCENT : i < tutIdx ? C.accentDim : 'rgba(74,64,56,.14)',
-      })),
-      prev: prevTutor,
-      chipTap: tut ? nextTutor : onAnswerCall,
-      skipStep: skipTutorStep,
+      // 게임이 도는 동안에는 **게임이 말한다** — 부름·튜토리얼보다 앞선다(무대에 그것만 남으므로).
+      show: s.gOn ? true : ((!tut || !!chatLine) && (!!top || !!chatLine) && !es.sleeping),
+      text: s.gOn ? guessLine : (chatLine || (top?.text ?? '')),
     };
 
     // ── 시트 ──
     const sk = s.sheet;
-    const sheetTitle: readonly [string, string] = sk === 'album'
-      ? ['앨범', `${albumOpen} / ${albumAll}`]
-      : sk === 'settings'
-        ? [s.petName || '아이', '아이 정보']
-        : sk ? SHEET_TITLE[sk] : ['', ''];
+    const sheetTitle: readonly [string, string] = sk === 'settings'
+      // ★ 제목은 **기능 이름**, 부제가 아이 이름이다(A-18). 다른 시트(놀이·알림)와 같은 규칙 —
+      //   예전에는 이 시트만 거꾸로라 머리글을 읽는 법이 화면마다 달랐다.
+      ? ['아이 정보', s.petName || '아이']
+      : sk ? SHEET_TITLE[sk] : ['', ''];
     const sheet = {
       show: !!sk && s.screen === 'room',
       anim: s.sheetClosing ? 'ySheetOut .2s ease forwards' : 'ySheetIn .26s cubic-bezier(.2,.8,.2,1)',
       dimAnim: s.sheetClosing ? 'yFadeOut .2s ease forwards' : 'yFadeIn .2s ease',
-      height: sk && ['album', 'play', 'settings'].includes(sk) ? '58%' : '46%',
+      height: sk && ['play', 'settings'].includes(sk) ? '58%' : '46%',
       title: sheetTitle[0], sub: sheetTitle[1], key: sk,
     };
 
@@ -1761,10 +2611,9 @@ export function useYeoul(live?: Live) {
       //   (상훈님 2026-09-08 판정 12). 시트를 열면 그 방은 이제 막다른 길이다.
       tap: c.kind === 'chat' ? openChatFromNotify : goRoomFromNotify(c.room),
       dot: ACCENT, bg: C.paper, bd: C.line,
-    })).concat(s.saved > 0 ? [{
-      text: `폴라로이드 ${s.saved}장`, note: '앨범에 저장돼 있어요', action: '보기',
-      tap: openSheet('album'), dot: C.accentDim, bg: C.slot, bd: C.lineSoft,
-    }] : []);
+    }));
+    // ★ 옛 "폴라로이드 N장 · 앨범에 저장돼 있어요" 줄은 **지웠다**(2026-09-21) — 저장이 준비 중이라
+    //   담긴 것이 없고, 받은 것이 생기더라도 그건 앨범이 아니라 **그분 기기**에 있다.
 
     // ── 캐릭터 칸(온보딩·아이 정보 공용) ──
     // 서버가 아는 성격을 칩 이름으로. 아직 아무것도 안 고른 사람에게 **지금 값**을 보여 준다
@@ -1782,29 +2631,35 @@ export function useYeoul(live?: Live) {
       return {
         key: g.key, title: g.label.split(' · ')[0], ph: g.ph, value: noteVal,
         // 여러 개 고를 수 있다는 것은 **글로 말해 준다** — 칩만 보면 하나만 되는 줄 안다.
-        //   성격은 서버가 하나만 받으므로 어느 것이 저장되는지까지 적는다.
+        // ★★ 다만 **맨 위 한 번만** 말한다(2026-09-22 상훈님 "기존처럼 깔끔하게"). 예전에는 네 묶음이
+        //   각각 같은 줄을 달고 있어 한 화면에 **똑같은 안내가 네 번** 떴다. 규칙은 네 칸 모두 같으니
+        //   첫 칸에서 한 번 말하면 된다. 성격은 서버가 하나만 받으므로 그 사실만 뒤에 덧붙인다.
         note: g.key === 'persona'
           ? (picked.length > 1
             ? `여러 개 고를 수 있어요 · 대표는 '${picked[0]}'`
-            : '여러 개 고를 수 있어요 · 처음 고른 것이 대표예요')
-          : '여러 개 고를 수 있어요',
+            : '여러 개 고를 수 있어요 · 성격은 처음 고른 것이 대표예요')
+          : '',
         onInput: onGroupText(g.key),
         cardBd: done ? C.accentDim : C.lineSoft,
-        cardBg: done ? '#FFFBF4' : C.paper,
+        cardBg: done ? C.shell : C.paper,
         opts: g.opts.map((o) => ({ text: o, pick: pickChip(g.key, o, picked), ...sel(picked.includes(o)) })),
+        /**
+         * 접었을 때 보이는 한 줄(A-17 · 2026-09-22 상훈님 1안).
+         *
+         * ★ **고른 것을 그대로 읽어 준다** — 접힌 칸이 무엇을 담고 있는지 안 보이면 접는 것이
+         *   곧 숨기는 것이 된다.
+         * ★★ 비었을 때는 **"비어 있음"** 이다. 예전 "아직 안 골랐어요" 는 (1) '아직' 이 재촉으로
+         *   읽히고 (2) **칩만** 말해서 **적는 칸이 있다는 사실이 안 보였다** — 그래서 세계관 칸이
+         *   "없다" 로 읽혔다(2026-09-22 실측 보고). 제목 + 이 한 마디가 붙어 `세계관 비어 있음`
+         *   으로 읽히면, 거기에 들어갈 것이 있다는 사실이 접힌 채로도 보인다.
+         * ★ 네 묶음 모두 같은 규칙이고 **한 줄을 넘기지 않는다**.
+         */
+        summary: picked.length > 0
+          ? picked.join(', ') + (noteVal ? ' · 적어 둔 말 있음' : '')
+          : (noteVal ? '적어 둔 말 있음' : '비어 있음'),
+        done,
       };
     });
-
-    // ── 좌우 맞히기 한 줄 ──
-    // 결과·진행은 **서버 숫자**로 적는다. 이건 아이 대사가 아니라 화면의 말이라 여기서 만든다.
-    const gm = live?.game ?? null;
-    const gr = s.lastGuess;
-    const guessNote = live?.guessing ? '어느 쪽일까…'
-      : gr
-        ? (gr.finished
-          ? (gr.win ? `${gr.hits} / ${gr.rounds} 맞혔어요. 이겼어요!` : `${gr.hits} / ${gr.rounds} 맞혔어요. 다음엔 이겨요.`)
-          : `${gr.hit ? '맞았어요!' : '아쉬워요.'} ${gr.hits} / ${gr.winAt} · ${(gr.nextRound ?? 0) + 1}번째`)
-        : (gm?.playing ? `${(gm.round ?? 0) + 1}번째 · 어느 손에 있을까요?` : '어느 손에 있을까요?');
 
     // ── 앨범 벽 ──
     // ★ 구르기는 18칸 **밖의 선물**이다(정본 §"첫 심화 행동 동작 = 카탈로그 밖 특별 1종").
@@ -1830,8 +2685,8 @@ export function useYeoul(live?: Live) {
         label: open ? f.name : (cond || '조건 미정'),
         labelFg: open ? '#5A4A3C' : C.faint,
         bd: open ? C.frameWood : 'rgba(201,169,141,.45)',
-        bg: open ? C.paper : 'rgba(255,253,248,.5)',
-        shadow: open ? '0 4px 10px rgba(74,64,56,.18)' : 'none',
+        bg: open ? C.paper : paperA(.5),
+        shadow: open ? `0 4px 10px ${ink(.18)}` : 'none',
         opacity: open ? 1 : 0.2,
         filter: open ? 'none' : 'grayscale(.4)',
         tap: pickFrame(f),
@@ -1839,12 +2694,77 @@ export function useYeoul(live?: Live) {
     });
 
     // ── 다음에 배울 것 ──
-    const goal = LEARN_GOALS
-      .map((g) => ({ ...g, have: s[g.counter] as number }))
-      .find((g) => g.have < g.need) ?? null;
-    const showTutMini = !!tut && !s.sampleMode;
+    //
+    // ★★ **원천은 서버 도감이다**(2026-09-22 판정 K). 예전에는 프론트 상수(`LEARN_GOALS`)와
+    //   **목 카운터**(`s.cChat`·`cBath`·`cSleep`·`cGame`)로 만들었다. 그 카운터는 서버 경로에서
+    //   한 번도 안 올라서(돌보기가 전부 `serverCare` 로 빠진다) 무엇을 해도 **영원히 0** 이었고,
+    //   목록에는 **이미 열린 1층**(손 흔들며 인사 = `hello` · 자기 = `sleep`)이 "배울 것" 으로
+    //   올라와 있었으며, 숫자도 서버와 달랐다(좌우 3 ↔ 서버 4판 · '재우기' 는 서버에 없는 조건).
+    //   이제 **남은 2층만**, **서버가 준 이름·조건·진행도 그대로** 보여 준다.
+    // ★ 목(연습방·서버 없는 진짜 방)은 **같은 구조에 목 값**을 넣는다 — 규칙은 하나, 값만 갈린다.
+    const goals: { name: string; cond: string; have: number; need: number; done: boolean }[] = onServer
+      ? svMotions
+        .filter((m) => m.layer === 'BASIC_2' && !m.unlocked)
+        .map((m) => ({
+          name: m.label,
+          cond: m.hint ?? '',
+          have: m.progress?.current ?? 0,
+          need: Math.max(1, m.progress?.target ?? 1),
+          done: false,
+        }))
+      : LEARN_GOALS.map((g) => {
+        const have = s[g.counter] as number;
+        return { name: g.name, cond: g.cond, have, need: g.need, done: have >= g.need };
+      });
+    // 접혀 있을 때 보여 줄 한 줄 — **아직 못 채운 것 중 가장 가까운 것**.
+    // 서버 목록은 이미 "남은 것" 뿐이라, 진행도가 가장 앞선 줄이 곧 다음에 열릴 것이다.
+    const goal = (onServer
+      ? [...goals].sort((a, b) => (b.have / b.need) - (a.have / a.need))[0]
+      : goals.find((g) => !g.done)) ?? null;
+    // ★ 연습방·진짜 방 **둘 다** 이 카드가 안내를 맡는다(2026-09-21 A-06). 예전에는 연습방만
+    //   머리 띠 위의 다른 카드를 썼다 — 같은 안내가 화면마다 다른 자리에 있었다.
+    /**
+     * 좌측 하단 카드가 **튜토리얼의 목소리**를 낼 때.
+     *
+     * ★★ 자고 있어도 낸다(2026-09-22 실측). 8칸("재우고 다시 깨워 주세요")을 끝내면 9칸으로
+     *   넘어가는데 그때 아이는 **자고 있다** — 카드를 접으면 마지막 칸의 「이제 시작할게요」가
+     *   화면에서 사라지고, 다른 손잡이는 전부 잠겨 있어서(J8) **아무 데도 못 간다.**
+     *   자는 동안 카드를 접는 것은 "방이 조용해야 한다" 는 연출인데, 튜토리얼 중에는
+     *   그 카드가 유일한 길이라 연출보다 길이 먼저다.
+     */
+    const showTutMini = !!tut && !s.chatOpen;
+
+    /**
+     * 자유 입력칸이 그릴 것 한 벌. **뷰에서 만든다** — 글자마다 바뀌는 값이라
+     * 상태에 눌러앉는 `fire` 객체에 담으면 타이핑이 화면에 안 보인다.
+     *
+     * ★ `canSend` 가 **공백을 뗀 뒤**를 본다. 공백만 친 사람에게 버튼을 열어 주면 서버가 400 으로
+     *   거절하고, 화면은 자기가 막을 수 있었던 실패를 사용자에게 보여 주게 된다.
+     */
+    const wishText = s.wishDraft.trim();
+    const wish = {
+      label: WISH_COPY.label,
+      placeholder: WISH_COPY.placeholder,
+      done: WISH_COPY.done,
+      // ★ 이름을 따로 준다 — `...WISH_COPY` 로 펼치면 문구 `send`·`sending` 이
+      //   아래의 손잡이·불리언에 **조용히 덮인다**(버튼 글자가 빈 값이 된다).
+      sendLabel: WISH_COPY.send,
+      sendingLabel: WISH_COPY.sending,
+      value: s.wishDraft,
+      max: WISH_MAX,
+      /** "12 / 60". 넘긴 뒤 꾸짖지 않고 **못 넘게** 막으므로 이건 경고가 아니라 남은 양의 표시다. */
+      count: `${s.wishDraft.length} / ${WISH_MAX}`,
+      full: s.wishDraft.length >= WISH_MAX,
+      canSend: wishText.length > 0 && !s.wishSending && !s.wishDone,
+      sending: s.wishSending,
+      sent: s.wishDone,
+      error: s.wishError,
+      onInput: onWishDraft,
+      send: sendWish,
+    };
 
     return {
+      wish,
       lv, calls, top, mode, tut, TUT, unlimited, selK,
       tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
       /** 개발용 고정(자세·상황 고르기). 방과 이동 창이 함께 읽는다. */
@@ -1901,6 +2821,8 @@ export function useYeoul(live?: Live) {
         show: !s.sampleMode,
         // 튜토리얼 4칸은 '아이 정보' 안에서 하는 일이라, 타일이 아니라 이 버튼을 가리켜야 한다.
         hl: !!tut && tut.room === 'info',
+        // ★ 그 칸이 아니면 잠근다(판정 J8) — 눌러도 시트가 안 열리고 한 줄만 말한다.
+        off: !!tutLock && tutLock.room !== 'info',
       },
       /**
        * 머리줄. 서버가 붙으면 **이름·N일째·친밀도 셋 다 서버 값**이다.
@@ -1916,10 +2838,18 @@ export function useYeoul(live?: Live) {
       chat: {
         show: s.screen === 'room' && (s.chatOpen || s.chatClosing) && !s.sheet,
         anim: s.chatClosing ? 'yPopOut .17s ease forwards' : 'yPopIn .2s cubic-bezier(.2,.9,.25,1)',
+        // ★ **내가 쓴 줄만** 입력칸 위에 남는다. 아이 말은 무대 말풍선 하나뿐이다
+        //   (2026-09-22 판정 2안) — 같은 문장을 두 곳에 띄우지 않는다(→ `ChatBar`).
         hasMine: !!s.mine, mine: s.mine, draft: s.draft,
         // 열린 부름이 없으면 적을 곳을 잠그고 **언제 다시 부르는지**만 알려 준다.
         // 이건 아이의 말이 아니라 화면의 안내라, 아이 말풍선이 아니라 입력칸에 둔다.
         can: canAnswer && !live?.chatting,
+        /**
+         * 보낼 수 있는가 — **적은 글이 있어야 한다**(2026-09-21 판정 8).
+         * 예전엔 빈 칸으로 「보내기」를 눌러도 아무 일도 안 났다(눌리기는 하는데 조용히 버려졌다).
+         * 자유 입력칸(`WishBox`)이 이미 쓰는 방식 그대로 — 적기 전에는 버튼을 흐리게 둔다.
+         */
+        canSend: canAnswer && !live?.chatting && s.draft.trim().length > 0,
         hint: !canAnswer
           ? nextCallHint(sv?.chatSummary?.nextAt ?? null)
           : `${CHAT_HINTS[s.hintI % CHAT_HINTS.length]}처럼 · 40자까지`,
@@ -1928,11 +2858,14 @@ export function useYeoul(live?: Live) {
         // ★ 대화의 **유일한 입구**다(상훈님 2026-09-08 판정 14). 마당 팝오버에서 대화를 뺐고,
         //   아파도 눌린다 — 아플 때 말이 막히면 아이가 제일 필요한 순간에 말을 못 한다.
         //   자는 동안만 안 뜬다.
-        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping,
+        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
         dot: onServer ? !!openCall : s.calls > 0,
         bw: tut && tut.room === 'chat' ? '2.5px' : '1px',
         bd: tut && tut.room === 'chat' ? ACCENT : C.line,
         anim: tut && tut.room === 'chat' ? 'yNudge 1.9s ease-in-out infinite' : 'none',
+        // ★ 튜토리얼이 대화 칸을 가리킬 때만 열린다(판정 J8). 잠긴 동안에도 **버튼은 그대로 보인다** —
+        //   사라지면 "없어졌다" 로 읽히고, 흐려지면 "지금은 아니다" 로 읽힌다.
+        off: !!tutLock && tutLock.room !== 'chat',
       },
       /**
        * 약 단추. **아플 때만 그린다** — 계약 10절의 여섯 거절 중 "안 아픔" 은 버튼을 잠그는 대신
@@ -1940,7 +2873,7 @@ export function useYeoul(live?: Live) {
        * 돌보기가 도는 동안에는 잠근다(연타 방지).
        */
       medFab: {
-        show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping,
+        show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
         off: !!live?.careing,
       },
       // 좌측 하단 카드. 세 얼굴을 차례로 갖는다 —
@@ -1948,21 +2881,52 @@ export function useYeoul(live?: Live) {
       // ★ 로드맵이 끝나도 카드가 사라지지 않는다(2026-09-07 상훈님 지시). 정본상 2층 8종을
       //   다 열면 3층이 시작되고 그때 조각 4칸이 등장하므로, 그 자리를 그대로 이어받는다.
       mini: {
-        show: s.screen === 'room' && !s.sampleMode && !s.chatOpen && !s.popOpen && !s.sheet && !es.sleeping,
+        // ★ 자는 동안에는 접는다 — **튜토리얼 중만 빼고**(→ `showTutMini` 머리말).
+        //   9칸은 아이가 잠든 채로 오므로, 접으면 마지막 손잡이가 화면에서 사라진다.
+        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && (!es.sleeping || showTutMini),
         isTut: showTutMini, tutText: tut?.text ?? '',
         tutStep: `${tutIdx + 1} / ${TUT.length}`,
         /**
-         * 칸 아래 버튼. **서버 튜토리얼에는 '나중에' 가 없다** — 건너뛸 방법이 서버에 없어서,
-         * 눌러도 아무 일이 안 나면 고장으로 읽힌다. 마지막 칸에서만 "다 배웠어요" 를 낸다.
-         * 목(연습방·시안)은 예전처럼 건너뛸 수 있다.
+         * 연습방에서만 앞뒤로 오간다 — 연습이라 되돌아가 다시 볼 수 있어야 한다.
+         * 진짜 방에는 없다: 서버가 칸을 세므로 화면이 되감으면 두 곳에서 세게 되고 언젠가 갈린다.
          */
-        tutBtn: onServer
-          ? (atDone ? { show: true, label: '이제 시작할게요', tap: onFinishTutorial } : { show: false, label: '', tap: noop })
-          : { show: true, label: '나중에', tap: skipTutorStep },
+        tutPrev: { show: !!tut && s.sampleMode && s.tutor > 0, tap: prevTutor },
+        tutNext: {
+          show: !!tut && s.sampleMode,
+          label: tutIdx === TUT.length - 1 ? '알았어요' : '다음',
+          tap: nextTutor,
+        },
+        /** 진짜 방(목)에서만 뜨는 한 줄. 누를 것이 아니라 **어떻게 넘어가는지**를 말해 준다.
+         *  ★ 마지막 칸에는 안 낸다 — 거기는 누를 버튼이 있다. */
+        tutHint: !!tut && !s.sampleMode && !onServer && !atDone ? '직접 해 보면 다음으로' : '',
+        /**
+         * 칸 아래 버튼.
+         *
+         * ★ **서버 튜토리얼에는 '나중에' 가 없다** — 건너뛸 방법이 서버에 없어서, 눌러도 아무
+         *   일이 안 나면 고장으로 읽힌다. 마지막 칸에서만 「이제 시작할게요」를 낸다.
+         * ★★ **연습방에서도 뺐다**(2026-09-22 상훈님 판정 F). 연습방에는 이미 「이전」·「다음」이
+         *   있는데 '나중에' 가 **「다음」과 거의 같은 일**(칸 +1)을 해서 한 줄에 셋이 겹쳐 떴다.
+         *   판정 8 에서 이 버튼이 "죽은 버튼" 에서 진짜 버튼으로 살아난 결과였다.
+         *   연습은 앞뒤로 오가며 보는 자리이므로 **넘기는 손잡이는 「다음」 하나면 된다.**
+         * ★ 진짜 방(목)에는 남긴다 — 거기는 「이전」·「다음」이 없어서 이것이 유일한 손잡이다.
+         */
+        // ★★ 2026-09-22 — 진짜 방은 **목도 서버와 같은 아홉 칸**을 쓴다. 그래서 목의 '나중에' 도
+        //   뺐다: 서버에는 없는 손잡이라, 목에서 건너뛰며 연습하면 **연습이 진짜와 다른 말**을 한다.
+        //   넘기는 길은 양쪽 다 "직접 해 보기" 하나이고, 마지막 칸만 눌러서 끝낸다.
+        tutBtn: atDone
+          ? { show: true, label: '이제 시작할게요', tap: onServer ? onFinishTutorial : finishTutorHere }
+          : { show: false, label: '', tap: noop },
         hasGoal: !showTutMini && !!goal,
         name: goal?.name ?? '',
         cond: goal ? `${goal.cond} ${Math.min(goal.have, goal.need)} / ${goal.need}` : '',
         barW: goal ? `${Math.round(Math.min(1, goal.have / goal.need) * 100)}%` : '0%',
+        /**
+         * 펼쳤는가. **훅이 들고 있다**(2026-09-22 판정 K) — 예전에는 카드 안의 지역 상태라,
+         * 팝오버·시트가 떠서 카드가 사라졌다 다시 뜨면 **늘 접힌 채로 돌아왔다.**
+         * 상훈님이 "목록이 왔다갔다" 라고 하신 것의 절반이 이것이다.
+         */
+        open: s.miniOpen,
+        toggle: toggleMini,
         // 배울 것이 남지 않았으면 조각으로 넘어간다.
         // ★ 서버가 `pieces: null` 이라고 하면 **아예 안 그린다**(백엔드 2026-09-09 지시).
         //   3층 전에는 조각이라는 개념이 없어서, 빈 도장 넷이 보이면 "내가 못 채운 것" 으로 읽힌다.
@@ -1971,11 +2935,12 @@ export function useYeoul(live?: Live) {
           label: x.label, cond: x.cond, on: i < s.shards,
         })),
         shardCount: `${Math.min(4, s.shards)} / 4`,
-        // 펼쳤을 때 보여 줄 네 목표 전부(접혀 있을 땐 `goal` 하나만 보인다).
-        goals: LEARN_GOALS.map((g) => {
-          const have = s[g.counter] as number;
-          return { name: g.name, cond: `${g.cond} ${Math.min(have, g.need)} / ${g.need}`, done: have >= g.need };
-        }),
+        // 펼쳤을 때 보여 줄 **남은 것 전부**(접혀 있을 땐 `goal` 하나만 보인다).
+        goals: goals.map((g) => ({
+          name: g.name,
+          cond: `${g.cond} ${Math.min(g.have, g.need)} / ${g.need}`.trim(),
+          done: g.done,
+        })),
       },
       ask: (() => {
         // ★ 튜토리얼이 도는 동안엔 묻지 않는다(상훈님 2026-09-09 판정 4).
@@ -1984,7 +2949,7 @@ export function useYeoul(live?: Live) {
         const q = s.sampleMode && !tut && s.uq < USER_Q.length ? USER_Q[s.uq] : null;
         const draft = s.askDraft.trim();
         return {
-          show: s.screen === 'room' && !!q && !s.chatOpen && !s.sheet && !s.popOpen,
+          show: s.screen === 'room' && !!q && !s.chatOpen && !s.sheet && !s.popOpen && !s.gOn,
           // label 이 이미 여울의 말(물음표 포함)이라 손대지 않고 그대로 쓴다.
           text: q ? q.label : '', step: `${s.uq + 1} / ${USER_Q.length}`,
           // 시각이 붙은 칩은 그 시각까지 답으로 저장한다 — '아침' 만 남기면 나중에 구간을 알 수 없다.
@@ -2002,29 +2967,93 @@ export function useYeoul(live?: Live) {
           skip: askNext(null, null),
         };
       })(),
+      /**
+       * 아이를 눌러 보라는 **물결 안내**(무대 위 동그란 물결 + "톡 눌러 보세요").
+       *
+       * ★★ **`s.sampleMode` 를 빼지 말 것 — 진짜 방에서는 뜨더라도 안 보인다**(2026-09-23 실측).
+       *   빼 보고 되돌린 기록이다. 진짜 방에서 이 안내는 **아이 그림과 소품 뒤로 들어간다**:
+       *     · 물결 동그라미는 아이 그림(`img`)보다 **먼저** 그려져 아이에 가린다.
+       *     · 알약은 아이 상자 안 발치(`bottom:18`)에 있는데, 흔적(똥) 같은 `above_char` 소품이
+       *       무대에서 `z-index:3` 이고 아이(`data-part="pet"`)는 `z-index:2` 라 **알약의 3/4 가
+       *       소품 뒤로 들어간다**(390x844 실측: 알약 한가운데를 `elementFromPoint` 로 찍으면
+       *       주인이 소품 `IMG` 다. 눈으로는 "…보세요" 만 삐져나온다).
+       *   게다가 조건을 빼면 남는 것이 `(!tut || tut.act === 'pet')` 뿐이라 **튜토리얼이 끝난
+       *   평소 방에도 영영 떠 있게 된다.** 고침이 아니라 새 회귀다.
+       * ★ 진짜 방 2칸(`PET`)은 **안내 카드 글로 충분하다** — "쓰다듬어 주세요. 아이를 톡 누르면
+       *   돼요." 가 뜨고(팝오버를 칸마다 내리게 고친 덕이다 → `tutStepKey` 효과), 아이 그림은
+       *   실제로 눌린다(390x844 에서 아이 상자 388x383 · `elementFromPoint` 가 아이를 집는다 ·
+       *   눌러서 3칸으로 넘어감).
+       * ★ 진짜 방에 이 물결을 쓰려면 **무대 z 순서부터 정리**해야 한다. 그건 소품 겹침 규칙을
+       *   건드리는 일이라 따로 판정받을 자리다.
+       */
       guide: {
-        tap: s.screen === 'room' && s.sampleMode && !es.sleeping && !es.sick && !s.chatOpen && !s.sheet && !s.popOpen && (!tut || tut.act === 'pet'),
+        tap: s.screen === 'room' && s.sampleMode && !es.sleeping && !es.sick && !s.chatOpen && !s.sheet && !s.popOpen && !s.gOn && (!tut || tut.act === 'pet'),
         label: '톡 눌러 보세요',
       },
       sample: {
         show: s.sampleMode,
-        ring: `conic-gradient(${ACCENT} 0 ${hatchPct}%, rgba(74,64,56,.14) ${hatchPct}% 100%)`,
+        ring: `conic-gradient(${ACCENT} 0 ${hatchPct}%, ${C.lineHard} ${hatchPct}% 100%)`,
         eggAnim: hatchReady ? 'yCrack 1.5s ease-in-out infinite'
           : hatchN === 3 ? 'yWiggle 2.4s ease-in-out infinite' : 'yBob 2.8s ease-in-out infinite',
         eggNote: hatchReady ? '부화 완료' : '부화 중',
         eggCount: hatchText,
-        noteBg: hatchReady ? ACCENT : 'rgba(74,64,56,.82)',
+        noteBg: hatchReady ? ACCENT : ink(.82),
         haloOpacity: hatchReady ? 1 : 0,
         exit: exitSample, forceHatch: goEgg,
       },
       // 하트 개수는 **오늘 쓰다듬은 횟수**다. 서버에 붙었으면 서버가 센 값(`es.pets`)을 쓴다 —
       // 목의 `s.pets` 는 서버 모드에서 영영 0 이라 늘 ♥♡♡ 만 떴다(2026-09-10).
       hearts: { show: s.hearts, text: es.pets >= 3 ? '♥♥♥' : es.pets === 2 ? '♥♥♡' : '♥♡♡' },
+      /**
+       * 무대 위 좌우 맞히기(2026-09-20 안 1). 시트가 아니라 **아이 몸에 붙은 손**과 **발밑 점 줄**이다.
+       * ★ 손 그림 여섯 장은 이미 있던 자산 그대로다(`guess_*`). 새 그림·새 앵커를 만들지 않았다.
+       */
+      game: {
+        show: s.gOn,
+        /** 대기·섞기면 주먹, 공개·끝이면 **고른 쪽만** 펼친다(사탕이 있었나에 따라 두 장 중 하나). */
+        openSide: s.gPhase === 'reveal' || s.gPhase === 'done' ? s.gPick : null,
+        openKind: (s.gHit ? 'candy' : 'empty') as 'candy' | 'empty',
+        /** 대기 중에만 누를 수 있다 — 섞기·공개·여운에는 잠긴다. */
+        can: s.gOn && s.gPhase === 'wait' && !live?.guessing,
+        pick: (side: Side) => () => onGuess(side),
+        /**
+         * ✕ — 나가기. **아플 때도 잠그지 않는다**(서버가 아픔 거절을 안 만들어 두었다).
+         * 확인창을 띄울지·그냥 닫을지는 `quitGuess` 가 정한다(한 판도 안 쳤으면 안 묻는다).
+         */
+        quit: quitGuess,
+        /** 판 표시는 **점 다섯 칸뿐**이다(2026-09-21 상훈님 — 글줄 삭제). 규칙은 그대로 돈다.
+         *  맞힘 ● · 빗나감 ✕ · 아직 ○ — **색만으로 가르지 않는다.** */
+        marks: s.gMarks.map((m, i) => ({
+          hit: m, now: i === s.gRound && s.gPhase !== 'done',
+        })),
+      },
       toast: { show: !!s.toast, text: s.toast },
       wall: {
         show: s.screen === 'room' && (s.wallOpen || s.wallClosing),
         anim: s.wallClosing ? 'yWallDown .22s ease forwards' : 'yWallUp .3s cubic-bezier(.2,.85,.25,1)',
         count: `${albumOpen} / ${albumAll}`, close: closeWall, frames,
+        /**
+         * 앨범 안의 손잡이 줄. **개수가 늘 것을 전제로 둔다** — 엽서·여행처럼 앨범에 들어올 것이
+         * 더 있다(2026-09-21). 그래서 화면이 넉 줄을 딱 맞춰 그리지 않고 **흐르게** 그린다
+         * (`auto-fit`). 여기 한 줄을 더해도 화면은 안 고친다.
+         */
+        // ★ 「엽서」는 **내렸다**(2026-09-21 상훈님) — 실물 엽서가 붙기 전까지. 이동 창에는 남아 있다.
+        actions: ([
+          ['장면', popScenes],
+          ['저장', saveShot],
+          ['방 꾸미기', toggleDeco],
+        ] as const).map(([label, tap]) => ({
+          label, tap,
+          ...(label === '방 꾸미기' && s.decoOpen
+            ? { bg: C.accentSoft, bd: ACCENT, fg: C2.accentInk2 }
+            : { bg: C.paper, bd: C.line, fg: C.ink }),
+        })),
+        deco: s.decoOpen,
+        decoNote: s.floorLv > 1 ? '' : '2층 동작을 열면 더 고를 수 있어요',
+        walls: WALLS.map((w) => ({
+          name: w.name, color: w.wall, pick: pickWall(w.id),
+          ...(s.wallId === w.id ? { bd: ACCENT, bw: '2px' } : { bd: C.line, bw: '1px' }),
+        })),
       },
       frame: {
         show: !!s.frame,
@@ -2043,33 +3072,31 @@ export function useYeoul(live?: Live) {
       },
       bath: {
         trace: s.trace, sick: s.sick,
-        bathBg: s.bathUsed ? C.off : C.slot, bathFg: s.bathUsed ? '#8B8279' : C.ink,
+        bathBg: s.bathUsed ? C.off : C.slot, bathFg: s.bathUsed ? C2.dim : C.ink,
         bathNote: s.bathUsed ? '오늘 완료' : '오늘 1회',
-        medBg: s.sick ? '#FADCD6' : C.off, medFg: s.sick ? ACCENT : '#8B8279',
+        medBg: s.sick ? '#FADCD6' : C.off, medFg: s.sick ? ACCENT : C2.dim,
         medBd: s.sick ? '#EFBDB2' : '#DFD9D0',
       },
       play: {
-        tabs: ([['talk', '대화'], ['guess', '좌우 맞히기'], ['run', '달리기']] as const).map(([k, label]) => ({
+        // ★ 좌우 맞히기 탭을 뺐다(2026-09-20) — 그 놀이는 이제 **무대 위**에서 한다.
+        //   대화·달리기 탭은 그대로다.
+        tabs: ([['talk', '대화'], ['run', '달리기']] as const).map(([k, label]) => ({
           label, pick: pickTab(k),
-          ...(s.playTab === k ? { bg: C.ink, fg: '#FBF6EC', bd: C.ink } : { bg: C.slot, fg: C.sub2, bd: '#E3DBCD' }),
+          ...(s.playTab === k ? { bg: C.ink, fg: C2.onDark, bd: C.ink } : { bg: C.slot, fg: C.sub2, bd: '#E3DBCD' }),
         })),
-        isTalk: s.playTab === 'talk', isGuess: s.playTab === 'guess', isRun: s.playTab === 'run',
+        isTalk: s.playTab === 'talk', isRun: s.playTab === 'run',
         callsLeft: onServer ? (openCall ? 1 : 0) : s.calls,
         memCount: onServer ? (sc?.memories.length ?? 0) : s.memories.length,
         // 오늘 오간 말. 서버가 부름마다 [건넨 말 · 내가 한 답 · 돌려준 말] 셋을 들고 있다.
         log: (onServer ? serverLog(sc) : s.log).map((l) => (l.who === 'pet'
-          ? { text: l.text, align: 'flex-start', radius: '15px 15px 15px 5px', bg: '#F1EBE0', fg: C.ink }
+          ? { text: l.text, align: 'flex-start', radius: '15px 15px 15px 5px', bg: C2.paperDim, fg: C.ink }
           : { text: l.text, align: 'flex-end', radius: '15px 15px 5px 15px', bg: ACCENT, fg: C.accentInk })),
         // 빠른 답은 **내가 하는 말**이라 화면이 갖고 있어도 된다(아이 대사가 아니다).
         quick: CHAT_QUICK.map((t) => ({ text: t, pick: () => pushReply(t) })),
         draft: s.draft,
         memories: (onServer ? (sc?.memories ?? []) : s.memories).map((t) => ({ text: t })),
-        guessNote: onServer ? guessNote : (s.guess ?? '어느 손에 있을까요?'),
         // 오늘 남은 판은 **두 게임 합산**이고 지금 치는 판은 빠져 있다(서버 규칙).
         playsLeft,
-        canGuess: onServer
-          ? !live?.guessing && (live?.game?.playing || (live?.game?.remainingToday ?? 0) > 0)
-          : true,
         // ★ 달리기는 2차다. 서버가 열렸다고 해도 화면은 아직 없으므로 잠긴 채로 둔다.
         runCond: onServer
           ? '달리기는 아직 준비 중이에요. 좌우 맞히기부터 함께해요.'
@@ -2083,37 +3110,10 @@ export function useYeoul(live?: Live) {
             : s.night ? '창 밖이 어두워요. 지금 재울 수 있어요.'
               // 연습방은 시각을 안 본다 — 시각을 말하면 안 되는 줄 알고 안 누른다.
               : s.sampleMode ? '연습방이라 지금 재울 수 있어요.' : '저녁 7시부터 재울 수 있어요.',
-          bg: on ? '#DFE5F2' : C.off, fg: on ? '#3B4A6E' : '#8B8279',
+          bg: on ? '#DFE5F2' : C.off, fg: on ? '#3B4A6E' : C2.dim,
           bd: on ? '#C2CBE2' : '#DFD9D0', opacity: on ? 1 : 0.7,
         };
       })(),
-      album: {
-        cells: ALBUM.map(([name, open]) => {
-          const parts = name.split(' · ');
-          return {
-            name: parts[0], cond: open ? '열림' : (parts[1] || '조건 미정'),
-            tap: tapAlbumCell(open, name),
-            bg: open ? '#F6E7DF' : C.slotDim,
-            bd: open ? C.accentDim : C.lineHard,
-            fg: open ? '#5A3D32' : C.ink,
-            condFg: open ? '#8A6152' : C.sub2,
-            thumb: open ? '#EBD3C7' : '#E6DFD3',
-            stripe: open ? 'repeating-linear-gradient(135deg,rgba(74,64,56,.07) 0 5px,transparent 5px 12px)' : 'none',
-          };
-        }),
-        actions: ([['엽서', popPostcard], ['장면', popScenes], ['방 꾸미기', toggleDeco], ['저장', saveShot]] as const)
-          .map(([label, tap], i) => ({
-            label, tap,
-            ...(i === 2 && s.decoOpen
-              ? { bg: C.accentSoft, bd: ACCENT, fg: '#9C5145' }
-              : { bg: C.slot, bd: C.line, fg: C.ink }),
-          })),
-        deco: s.decoOpen,
-        walls: WALLS.map((w) => ({
-          name: w.name, color: w.wall, pick: pickWall(w.id),
-          ...(s.wallId === w.id ? { bd: ACCENT, bw: '2px' } : { bd: C.line, bw: '1px' }),
-        })),
-      },
       notif: { items: notifItems, empty: notifItems.length === 0, dot: s.notifOn && calls.length > 0, count: calls.length },
       settings: {
         groups: [
@@ -2121,24 +3121,39 @@ export function useYeoul(live?: Live) {
           // ★ '시간대'·'몸 상태' 줄은 **여기서 뺐다**(2026-09-13). 사용자용 시트에 개발 버튼이
           //   섞여 있었고, 같은 일을 하는 버튼이 이동 창에도 있어 **두 벌이 서로 어긋났다.**
           //   지금은 이동 창 한 곳(`setMode`·`devSet`)만이 그 둘을 바꾼다.
-          { label: '알림', opts: [{ text: s.notifOn ? '부름 알림 받는 중' : '알림 꺼짐', pick: toggleNotif, bg: s.notifOn ? C.accentSoft : C.slotDim, bd: s.notifOn ? ACCENT : C.lineHard, bw: s.notifOn ? '2px' : '1px', fg: s.notifOn ? '#9C5145' : C.sub2 }] },
+          { label: '알림', opts: [{ text: s.notifOn ? '부름 알림 받는 중' : '알림 꺼짐', pick: toggleNotif, bg: s.notifOn ? C.accentSoft : C.slotDim, bd: s.notifOn ? ACCENT : C.lineHard, bw: s.notifOn ? '2px' : '1px', fg: s.notifOn ? C2.accentInk2 : C.sub2 }] },
         ],
         /**
          * 성격 저장. **서버에 붙어 있을 때만 낸다** — 목에는 보낼 곳이 없다.
          * 튜토리얼 4칸(PERSONALITY)을 넘기는 것이 이 버튼이다.
          */
+        /** 연습방에서는 저장 버튼이 없다 — **없는 이유를 말해 준다**(A-19).
+         *  예전에는 버튼만 조용히 사라져 "저장이 어디 갔지" 로 읽혔다. 사용자를 탓하지 않고
+         *  여기가 연습하는 곳이라는 사실만 담담히 적는다. */
+        // ★ 진짜 방 목에서는 저장이 **화면에만** 남는다 — 그래도 4칸을 밟아야 하므로 버튼은 낸다.
+        saveNote: onServer ? '' : (s.sampleMode ? '연습방이라 저장되지 않아요' : '서버가 없어 화면에만 남아요'),
         save: {
-          show: onServer,
+          show: onServer || !s.sampleMode,
           label: '성격 저장하기',
           tap: onSavePersona,
-          // 고르지 않았으면 보낼 것이 없다. 서버가 성격을 필수로 받는다.
+          /**
+           * 고르지 않았으면 보낼 것이 없다 — 서버가 성격을 필수로 받는다.
+           *
+           * ★★ 2026-09-22(판정 2안) — **이 잠금은 이제 아무도 막지 않는다.** 4칸은 시트를
+           *   **연 순간** 넘어가므로(→ `openSettings`), 성격을 안 고르는 사람도 튜토리얼이
+           *   막히지 않는다. 그래서 잠깐 두었던 「확인했어요」 단추는 걷어냈다 —
+           *   그 단추가 하던 일(안 고르고 시트를 닫기)은 **머리줄의 ✕** 가 이미 한다.
+           *   저장하지 않는 단추를 하나 더 두면 "내가 고른 것이 기록됐다" 로 읽힐 수 있다.
+           */
           off: !personaShown[0],
           why: '성격을 하나 이상 골라 주세요',
+          /** 저장이 거절된 이유 한 줄. 빈 문자열이면 안 그린다(→ `saveFailLine`). */
+          err: s.saveErr,
         },
         toggleLeave,
         leaveLabel: s.leaveOff ? '떠나지 않아요' : '오래 비우면 여행을 가요',
         leaveBw: s.leaveOff ? '2px' : '1px', leaveBd: s.leaveOff ? ACCENT : C.lineHard,
-        leaveBg: s.leaveOff ? C.accentSoft : C.paper, leaveFg: s.leaveOff ? '#9C5145' : C.ink,
+        leaveBg: s.leaveOff ? C.accentSoft : C.paper, leaveFg: s.leaveOff ? C2.accentInk2 : C.ink,
       },
       egg: {
         title: s.cracking ? '지금 나오고 있어요' : (hatchReady ? '다 됐어요' : '부화 중이에요'),
@@ -2150,7 +3165,7 @@ export function useYeoul(live?: Live) {
         count: hatchText,
         cta: s.cracking ? '지금 나오고 있어요' : '지금 만나러 가기',
         ctaBg: hatchReady && !s.cracking ? ACCENT : '#DED6C9',
-        ctaFg: hatchReady && !s.cracking ? C.accentInk : '#8B8175',
+        ctaFg: hatchReady && !s.cracking ? C.accentInk : C2.dim2,
         hasMsg: !!s.eggMsg, msg: s.eggMsg,
       },
       onb: {
@@ -2158,7 +3173,7 @@ export function useYeoul(live?: Live) {
         dots: STEPS.map((_, i) => ({ w: i === s.step ? '20px' : '6px', bg: i === s.step ? ACCENT : i < s.step ? C.accentDim : '#E3DBCD' })),
         stepKey: STEPS[s.step] as StepKey,
         nameError: s.nameErr,
-        upBd: s.uploaded ? ACCENT : 'rgba(74,64,56,.18)',
+        upBd: s.uploaded ? ACCENT : ink(.18),
         upBg: s.uploaded ? C.accentSoft : C.paper,
         upLabel: s.uploaded ? '그림을 올렸어요' : '그림 올리기',
         upNote: s.uploaded ? '다시 누르면 바꿀 수 있어요' : 'PNG · JPG · 10MB까지',
@@ -2166,7 +3181,8 @@ export function useYeoul(live?: Live) {
         //   올라갔는지 모르고 `s.uploaded`(파일을 골랐다) 까지만 안다. 진짜 기준인
         //   `live.imageKey` 는 화면(Onboarding)만 볼 수 있어서 거기서 덮어쓴다.
         cta: ({
-          landing: '내 아이 데려오기',
+          // 랜딩 칸 CTA 는 랜딩 v2 와 **같은 한 벌**(constants.LANDING_COPY)이다.
+          landing: LANDING_COPY.cta,
           upload: '다음',
           user: '다 됐어요',
           char: s.petName ? '이 아이로 시작하기' : '이름부터 지어 줘요',
@@ -2189,9 +3205,9 @@ export function useYeoul(live?: Live) {
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
     s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
-    openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor,
-    nextTutor, onAnswerCall, skipTutorStep, pickChip, onGroupText, pickUser, askNext, pickTab,
-    pushReply, tapAlbumCell, popPostcard, popScenes, toggleDeco, pickWall, pickNeedStyle, pickTime, onAskDraft,
+    openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess, quitGuess,
+    nextTutor, onAnswerCall, skipTutorStep, finishTutorHere, pickChip, onGroupText, pickUser, askNext, pickTab,
+    pushReply, popPostcard, popScenes, toggleDeco, toggleMini, pickWall, pickNeedStyle, pickTime, onAskDraft,
     toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash,
     tutIdx, atDone, onFinishTutorial, onSavePersona, noop, live?.resting,
   ]);
@@ -2201,8 +3217,9 @@ export function useYeoul(live?: Live) {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
+    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
+    popPostcard,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
     backToSample: () => patch({ screen: 'room' }),
   }), [
@@ -2210,8 +3227,9 @@ export function useYeoul(live?: Live) {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview,
+    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
+    popPostcard,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
     devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
   ]);
 
