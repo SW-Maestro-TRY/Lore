@@ -82,13 +82,26 @@ function clean(props?: Props): Record<string, Value> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/**
+ * utm_source / utm_medium / utm_campaign / utm_content 를 한 줄로 접는다(#440) —
+ * 예: `instagram/paid/launch/banner-a`. 공용 기록(`common/fe/analytics.ts` readUtm)과 같은
+ * 모양이고, 광고 소재를 가르려고 utm_content 를 한 칸 더 받는다. 빈 칸도 자리를 지켜서
+ * (`instagram//launch`) 몇 번째가 무엇인지 늘 같다. 서버는 영문·숫자·`._/-` 만, 100자까지 남긴다.
+ */
+function utmLine(q: URLSearchParams): string | undefined {
+  const parts = ["utm_source", "utm_medium", "utm_campaign", "utm_content"]
+    .map((k) => (q.get(k) ?? "").trim().replace(/[^A-Za-z0-9._-]/g, ""));
+  if (parts.every((p) => p === "")) return undefined;
+  return parts.join("/").replace(/\/+$/, "").slice(0, 100);
+}
+
 /** 이번 방문에 처음 보내는 묶음에만 유입 출처를 싣는다. */
 function origin(): { source?: string; ref?: string } {
   try {
     if (sessionStorage.getItem(FIRST_SENT_KEY)) return {};
     sessionStorage.setItem(FIRST_SENT_KEY, "1");
     const q = new URLSearchParams(location.search);
-    const source = q.get("utm_source") || q.get("ref") || undefined;
+    const source = utmLine(q) || q.get("ref") || undefined;
     let ref: string | undefined;
     if (document.referrer) {
       const host = new URL(document.referrer).host;
