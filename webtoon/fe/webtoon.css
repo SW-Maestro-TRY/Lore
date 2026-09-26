@@ -40,7 +40,7 @@
 .wt img { -webkit-user-drag: none; user-select: none; }
 .wt a { color: var(--sea); }
 .wt a:hover { color: var(--sea-deep); }
-.wt h1, .wt h2, .wt h3 { font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+.wt h1, .wt h2, .wt h3 { font-weight: 800; letter-spacing: var(--ls-tight); margin: 0; }
 .wt p { margin: 0; }
 .wt button { font-family: inherit; }
 .wt input, .wt textarea, .wt select { font-family: inherit; color: inherit; }
@@ -69,13 +69,13 @@ main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
 /* ---- 글 -------------------------------------------------------------------- */
 .wt .muted { color: var(--muted); }
 .wt .dim { color: var(--dim); }
-.wt .num { font-size: 14px; font-weight: 700; color: var(--sea); letter-spacing: 0.06em; }
+.wt .num { font-size: var(--fs-md); font-weight: 700; color: var(--sea); letter-spacing: var(--ls-caps); }
 
 /* ---- 단추 ------------------------------------------------------------------ */
 .wt .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   height: 52px; padding: 0 26px; border-radius: 999px;
-  font-size: 16px; font-weight: 700; text-decoration: none;
+  font-size: var(--fs-lg); font-weight: 700; text-decoration: none;
   border: 0; cursor: pointer; white-space: nowrap;
 }
 .wt .btn:disabled { opacity: 0.45; cursor: default; }
@@ -83,10 +83,10 @@ main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
 .wt .btn-p:hover:not(:disabled) { background: var(--sea-deep); color: #fff; }
 .wt .btn-w { background: #fff; color: var(--ink); border: 1.5px solid var(--line-strong); }
 .wt .btn-w:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); }
-.wt .btn-sm { height: 42px; padding: 0 18px; font-size: 14.5px; }
+.wt .btn-sm { height: 42px; padding: 0 18px; font-size: var(--fs-md); }
 .wt .btn-ghost {
   display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 6px;
-  background: none; border: 0; cursor: pointer; font-size: 14px; color: var(--muted);
+  background: none; border: 0; cursor: pointer; font-size: var(--fs-md); color: var(--muted);
   text-decoration: none;
 }
 .wt .btn-ghost:hover { color: var(--ink); }
@@ -101,46 +101,46 @@ main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
 .wt .icon-btn:hover { border-color: var(--ink); }
 
 /* ---- 빵부스러기 (보조 헤더는 없다 — 공용 헤더 하나뿐) ------------------------ */
-.wt .crumb { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--dim); }
+.wt .crumb { display: flex; gap: 10px; align-items: center; font-size: var(--fs-sm); color: var(--dim); }
 .wt .crumb b { color: var(--ink); }
 .wt .crumb i { font-style: normal; opacity: 0.5; }
 
 /* ---- 칩 · 딱지 -------------------------------------------------------------- */
 .wt .chip {
   display: inline-flex; align-items: center; height: 42px; padding: 0 18px; border-radius: 999px;
-  border: 1.5px solid rgba(15, 51, 63, 0.16); background: #fff; font-size: 14.5px; font-weight: 600;
+  border: 1.5px solid rgba(15, 51, 63, 0.16); background: #fff; font-size: var(--fs-md); font-weight: 600;
   color: var(--ink); cursor: pointer;
 }
 .wt .chip.on { border-color: var(--ink); background: var(--ink); color: #fff; }
 .wt .tag {
   display: inline-flex; align-items: center; height: 30px; padding: 0 11px; border-radius: 999px;
-  border: 1px solid rgba(15, 51, 63, 0.16); background: #fff; font-size: 12px; color: var(--ink);
+  border: 1px solid rgba(15, 51, 63, 0.16); background: #fff; font-size: var(--fs-xs); color: var(--ink);
 }
 .wt .tag.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 .wt .ep {
   height: 26px; padding: 0 9px; border-radius: 999px; border: 1px solid rgba(15, 51, 63, 0.16);
-  font-size: 11.5px; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center;
+  font-size: var(--fs-2xs); color: var(--ink); text-decoration: none; display: inline-flex; align-items: center;
   background: #fff;
 }
 .wt .ep.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 .wt .pill {
   display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px;
-  border-radius: 999px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 700;
+  border-radius: 999px; background: var(--ink); color: #fff; font-size: var(--fs-sm); font-weight: 700;
   text-decoration: none;
 }
 .wt .pill small { font-weight: 400; opacity: 0.8; }
 .wt .badge {
-  font-size: 11px; padding: 3px 9px; border-radius: 999px; background: #fff; color: var(--sea-deep);
+  font-size: var(--fs-2xs); padding: 3px 9px; border-radius: 999px; background: #fff; color: var(--sea-deep);
   font-weight: 700;
 }
 
 /* ---- 입력 ------------------------------------------------------------------- */
-.wt label { font-size: 14px; font-weight: 700; color: var(--ink); }
+.wt label { font-size: var(--fs-md); font-weight: 700; color: var(--ink); }
 .wt .field {
   height: 50px; border: 1.5px solid var(--line-strong); border-radius: 12px; padding: 0 16px;
-  font-size: 15px; background: #fff; color: var(--ink); width: 100%;
+  font-size: var(--fs-base); background: #fff; color: var(--ink); width: 100%;
 }
-.wt textarea.field { height: auto; min-height: 110px; padding: 14px 16px; line-height: 1.6; resize: vertical; }
+.wt textarea.field { height: auto; min-height: 110px; padding: 14px 16px; line-height: var(--lh-relaxed); resize: vertical; }
 .wt .field:focus { outline: none; border-color: var(--ink); }
 .wt .field::placeholder { color: var(--dim); }
 .wt .fieldset { display: flex; flex-direction: column; gap: 6px; }
@@ -168,16 +168,16 @@ main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
   border-radius: 14px; background: #fff; text-decoration: none; color: var(--ink); cursor: pointer; text-align: left;
 }
 .wt .opt.on { border: 2px solid var(--ink); }
-.wt .opt b { font-size: 15px; }
-.wt .opt span { font-size: 13px; color: var(--muted); line-height: 1.5; }
-.wt .kv { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
-.wt .kv i { flex: 0 0 52px; font-style: normal; font-weight: 700; font-size: 12px; color: var(--dim); }
+.wt .opt b { font-size: var(--fs-base); }
+.wt .opt span { font-size: var(--fs-sm); color: var(--muted); line-height: var(--lh-normal); }
+.wt .kv { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+.wt .kv i { flex: 0 0 52px; font-style: normal; font-weight: 700; font-size: var(--fs-xs); color: var(--dim); }
 .wt .cover { display: block; object-fit: cover; object-position: top; border-radius: 12px; box-shadow: 0 10px 30px rgba(15, 51, 63, 0.14); }
 .wt .tile { position: relative; display: block; overflow: hidden; border-radius: 18px; text-decoration: none; color: #fff; background: var(--ink); }
 .wt .tile img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; opacity: 0.92; }
 .wt .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 24px; background: rgba(15, 51, 63, 0.78); display: flex; flex-direction: column; gap: 4px; }
-.wt .tile .cap b { font-size: 22px; }
-.wt .tile .cap span { font-size: 14px; color: var(--water); }
+.wt .tile .cap b { font-size: var(--fs-2xl); }
+.wt .tile .cap span { font-size: var(--fs-md); color: var(--water); }
 .wt .star { color: var(--gold); letter-spacing: 2px; }
 .wt .star .off { color: rgba(15, 51, 63, 0.18); }
 
@@ -185,21 +185,21 @@ main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
 .wt .rail { display: flex; flex-direction: column; gap: 4px; }
 .wt .rail button, .wt .rail a {
   display: flex; align-items: center; justify-content: space-between; padding: 10px 12px;
-  border-radius: 10px; font-size: 14px; color: var(--ink); text-decoration: none; background: none;
+  border-radius: 10px; font-size: var(--fs-md); color: var(--ink); text-decoration: none; background: none;
   border: 1.5px solid transparent; cursor: pointer; text-align: left; width: 100%;
 }
 .wt .rail .on { background: var(--water-light); font-weight: 700; }
-.wt .rail small { font-size: 11px; color: var(--dim); font-weight: 700; letter-spacing: 0.04em; padding: 10px 12px 2px; display: block; }
+.wt .rail small { font-size: var(--fs-2xs); color: var(--dim); font-weight: 700; letter-spacing: var(--ls-wide); padding: 10px 12px 2px; display: block; }
 .wt .lou-note {
   display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
   padding: 26px 18px; border-radius: 16px; background: #fff; border: 1px solid var(--line);
 }
 .wt .lou-note img { width: 88px; }
-.wt .lou-note b { font-size: 15px; }
-.wt .lou-note span { font-size: 13px; color: var(--muted); }
+.wt .lou-note b { font-size: var(--fs-base); }
+.wt .lou-note span { font-size: var(--fs-sm); color: var(--muted); }
 
 /* ---- 상태 · 오류 ------------------------------------------------------------ */
-.wt .err { color: #b3311a; font-size: 13.5px; }
+.wt .err { color: #b3311a; font-size: var(--fs-sm); }
 .wt .spin {
   width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(15, 51, 63, 0.18);
   border-top-color: var(--ink); animation: wt-spin 0.8s linear infinite; display: inline-block;
@@ -207,6 +207,29 @@ main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
 @keyframes wt-spin { to { transform: rotate(360deg); } }
 .wt .skeleton { background: linear-gradient(90deg, #eef4f6 25%, #f7fbfc 50%, #eef4f6 75%); background-size: 200% 100%; animation: wt-shimmer 1.4s infinite; }
 @keyframes wt-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ---- 확인 창 · 알림 ---------------------------------------------------------- */
+/* 화면 가운데 뜨는 작은 창. `.modal` 이 뒤를 덮는 막, `.modal-box` 가 흰 창이다.
+ * 창 폭·안쪽 배치만 화면별 클래스로 덮는다. */
+.wt .modal {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: rgba(15, 51, 63, 0.55); padding: 16px;
+}
+.wt .modal[hidden] { display: none; }
+.wt .modal-box {
+  position: relative; width: min(380px, 100%); max-height: 86vh; overflow: auto;
+  background: #fff; border-radius: 22px; box-shadow: 0 20px 60px rgba(15, 51, 63, 0.28);
+  padding: 24px 20px 18px; display: flex; flex-direction: column; gap: 12px;
+}
+.wt .modal-box h2 { font-size: var(--fs-lg); margin: 0; line-height: var(--lh-normal); }
+
+/* 잠깐 떴다 사라지는 한 줄 알림. 공용 헤더 바로 아래 가운데에 뜬다. */
+.wt .toast {
+  position: fixed; left: 50%; top: calc(var(--lore-header-h, 64px) + 16px); transform: translateX(-50%);
+  z-index: 90; padding: 10px 16px; border-radius: 999px; background: var(--ink); color: #fff;
+  font-size: var(--fs-sm); white-space: nowrap; box-shadow: 0 10px 30px rgba(15, 51, 63, 0.2);
+}
+.wt .toast[hidden] { display: none; }
 
 /* ---- 모바일: 바닥 고정 단추 · 위쪽 얇은 줄 ---------------------------------- */
 .wt .mtop { display: none; }
@@ -223,11 +246,11 @@ main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
     padding: 0 16px; border-bottom: 1px solid rgba(15, 51, 63, 0.08); background: #fff;
     position: sticky; top: var(--lore-header-h, 0px); z-index: 5;
   }
-  .wt .mtop b { font-size: 14px; }
+  .wt .mtop b { font-size: var(--fs-md); }
   .wt .mfoot {
     position: sticky; bottom: 0; margin-top: auto; padding: 12px 16px 22px; background: #fff;
     border-top: 1px solid rgba(15, 51, 63, 0.08); display: flex; flex-direction: column; gap: 8px; z-index: 5;
   }
   .wt .mfoot .btn { width: 100%; }
-  .wt .btn { height: 48px; font-size: 15px; }
+  .wt .btn { height: 48px; font-size: var(--fs-base); }
 }
