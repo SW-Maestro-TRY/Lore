@@ -119,6 +119,39 @@
 | E4 | 다음화를 찾는다 | `next_episode_click` `where = other_foot` |
 | E5 | 직접 만들러 간다 | `page_view` `view = entry` 가 그 뒤에 옴 |
 
+### 핵심 퍼널 — 광고에서 결제까지 (#152)
+
+광고·홍보의 효과를 한 줄로 볼 때 쓰는 퍼널입니다. 위 A·C 표에서 단계 하나씩만 뽑아
+이었습니다.
+
+**광고 클릭 → 랜딩 → 가입 → 첫 생성 → 결과 확인 → 재방문 → 결제**
+
+| 단계 | 무엇으로 세나 | 비고 |
+|---|---|---|
+| 광고 클릭 | `session_start` 중 `source` 가 있는 것 | 광고 링크는 `/webtoon` 에 UTM 을 붙여 보냅니다(#440, 아래 「유입 경로」). 광고 플랫폼의 클릭 수와 이 수의 차이가 「눌렀지만 페이지가 뜨기 전에 나간 사람」입니다 |
+| 랜딩 | `session_start` | 웹툰 화면에 실제로 들어온 사람 |
+| 가입 | `auth_done` + `users.created_at` | 깔때기 C 의 C4 와 같습니다. 가입 전용 이벤트는 없습니다 |
+| 첫 생성 | `create_started` → `webtoon_job.status = 'DONE'` | 서버가 받은 작업이 실제로 끝났는지는 작업 표로 봅니다. 이벤트의 `job` 값이 `webtoon_job.public_id` 입니다(`webtoon/fe/screens/wizard/Wizard.tsx:252`) |
+| 결과 확인 | `page_view` `view = result` | A10 |
+| 재방문 | `session_start` `kind = returning`, 또는 첫 방문과 다른 날의 `session_start` | 아래 KPI 의 재방문율은 「다른 날에 다시 왔나」로 셉니다 |
+| 결제 | **아직 셀 수 없음** | PG 가 붙지 않아 결제 자체가 없습니다(`common/fe/mypage/CreditCharge.tsx:11`, #155). 지금 있는 것은 충전 창을 연 `charge_open`(`webtoon/fe/screens/mypage/MyPage.tsx:228`)뿐입니다. PG 를 붙일 때 결제 완료 이벤트를 서버 쪽에서 남깁니다 |
+
+### 처음 정한 수집 항목과 지금 이벤트 대조 (#152)
+
+#152 에서 모으기로 한 항목이 지금 어떤 이벤트로 잡히는지 정리했습니다.
+
+| 항목 | 지금 잡는 이벤트 | 상태 |
+|---|---|---|
+| 회원가입 | `auth_done`(`webtoon/fe/WebtoonPage.tsx:196`) + `users.created_at` | 일부 — 가입 전용 이벤트는 없습니다. 로그인 창이 공용 헤더에 있어 웹툰 기록이 창 안을 못 보기 때문입니다. SQL 로 가립니다(깔때기 C) |
+| 캐릭터 생성 | `try_start` · `try_result`(`webtoon/fe/screens/character/PhotoResult.tsx:75`) | 있음 |
+| 웹툰 생성 시작 | `create_start` · `create_started`(`webtoon/fe/screens/wizard/Wizard.tsx:249,252`) | 있음 |
+| 웹툰 생성 성공·실패 | `job_status`(`webtoon/fe/screens/progress/Progress.tsx:158`), `create_failed`(`Wizard.tsx:256`) | 있음 — 정본은 `webtoon_job.status` |
+| 저장 | 없음 | 완성본은 만들면 자동으로 남아서 「저장」 동작이 따로 없습니다. 가장 가까운 것은 찜(`like_toggle`)과 편집실의 이미지로 뽑기(`bake`) |
+| 다운로드 | `download_click`(`webtoon/fe/screens/result/Result.tsx:295,333`) | 있음 — 누른 것까지만 압니다 |
+| 공유 | `share_click`(`webtoon/fe/screens/result/ShareMenu.tsx:44,50`) · `card_share` | 있음 — 누른 것까지만 압니다 |
+| 크레딧 충전 | `charge_open`(`webtoon/fe/screens/mypage/MyPage.tsx:228`) | 일부 — 충전 창을 연 것만. 실제 충전은 결제가 없어 일어나지 않습니다 |
+| 결제 | 없음 | PG 전이라 없습니다(#155) |
+
 ## 유입 경로 (UTM) — 광고·홍보 링크 규칙
 
 방문의 첫 묶음에 유입 경로가 `source` 칸으로 남습니다(`track.ts` 의 `utmLine`, #440).
@@ -191,6 +224,87 @@
 ## 자주 보는 숫자
 
 로컬 DB 는 `psql -U mint -d lore`, staging 은 `webtoon/docs/server.md` 「DB 직접 접근」.
+
+### 최소 KPI 세 개 (#152)
+
+2차 사용자 테스트(#161)와 광고(#163) 전에 먼저 보는 숫자입니다. 세 숫자 모두 사람 단위로 셉니다.
+
+| KPI | 정의 | 분모 → 분자 |
+|---|---|---|
+| 가입전환율 | 로그인 안 한 채 들어온 사람 중 그 방문에 새로 가입한 비율 | 깔때기 C 의 C1 → C4 |
+| 첫생성완료율 | 「웹툰 만들기」를 눌러 서버가 받은 사람 중 작업이 실제로 끝난 사람의 비율 | `create_started` → 그 작업의 `webtoon_job.status = 'DONE'` |
+| 재방문율(7일) | 처음 온 사람 중 첫 방문 다음 날부터 7일 안에 다른 날 다시 온 비율 | 첫 `session_start` → 1~7일 뒤의 `session_start` |
+
+**가입전환율 (최근 7일)**
+
+```sql
+with s as (
+  select uid, min(occurred_at) as entered
+  from webtoon_event
+  where name = 'session_start' and (props::jsonb->>'logged_in') = 'false'
+    and occurred_at > now() - interval '7 days'
+  group by uid
+),
+signed as (
+  select distinct e.uid
+  from webtoon_event e
+  join s on s.uid = e.uid
+  join users u on u.id = e.user_id
+  where e.name = 'auth_done' and e.occurred_at >= s.entered
+    and u.created_at between e.occurred_at - interval '10 minutes' and e.occurred_at
+)
+select (select count(*) from s)      as entered_logged_out,
+       (select count(*) from signed) as signed_up,
+       round(100.0 * (select count(*) from signed) / nullif((select count(*) from s), 0), 1) as signup_rate_pct;
+```
+
+**첫생성완료율 (최근 7일)** — 이벤트의 `job` 이 `webtoon_job.public_id` 입니다.
+
+```sql
+with started as (
+  select distinct coalesce(e.user_id::text, e.uid) as who, e.props::jsonb->>'job' as job
+  from webtoon_event e
+  where e.name = 'create_started' and e.occurred_at > now() - interval '7 days'
+),
+per_person as (
+  select s.who, bool_or(j.status = 'DONE') as finished
+  from started s
+  left join webtoon_job j on j.public_id = s.job
+  group by s.who
+)
+select count(*)                          as started_people,
+       count(*) filter (where finished)  as finished_people,
+       round(100.0 * count(*) filter (where finished) / nullif(count(*), 0), 1) as first_create_done_pct
+from per_person;
+```
+
+**재방문율(7일)** — 첫 방문이 8~37일 전인 사람만 셉니다(7일을 다 지켜본 사람만 넣으려고).
+
+```sql
+with visits as (
+  select uid, (occurred_at at time zone 'Asia/Seoul')::date as day
+  from webtoon_event
+  where name = 'session_start'
+),
+first_visit as (
+  select uid, min(day) as first_day from visits group by uid
+),
+cohort as (
+  select * from first_visit
+  where first_day between (now() at time zone 'Asia/Seoul')::date - 37
+                      and (now() at time zone 'Asia/Seoul')::date - 8
+)
+select count(*) as new_people,
+       count(*) filter (where exists (
+         select 1 from visits v
+         where v.uid = c.uid and v.day between c.first_day + 1 and c.first_day + 7)) as came_back,
+       round(100.0 * count(*) filter (where exists (
+         select 1 from visits v
+         where v.uid = c.uid and v.day between c.first_day + 1 and c.first_day + 7)) / nullif(count(*), 0), 1) as revisit_7d_pct
+from cohort c;
+```
+
+(사람을 `uid`, 즉 브라우저로 셉니다. 다른 기기로 다시 온 사람은 새 사람으로 잡혀서 재방문율이 실제보다 조금 낮게 나옵니다.)
 
 **유입 경로별 방문 · 캐릭터 카드 · 웹툰 만들기 (최근 14일, 사람 수)**
 
