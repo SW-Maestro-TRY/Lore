@@ -1,8 +1,8 @@
 # webtoon/ — LORE 웹툰 도메인
 
-이 파일은 `webtoon` 폴더에서 세션을 열 때마다 자동으로 읽힙니다.
-`haeun/CLAUDE.md` 의 작업 규칙(커밋·PR·워크트리·권한)을 그대로 따르되,
-경로와 구조만 이 도메인 기준입니다.
+이 파일은 `webtoon` 폴더에서 세션을 열 때마다 자동으로 읽힙니다. 규칙 본문은 주제별
+문서(`docs/rules/`)로 나눠 두었습니다. **아래 「언제 무엇을 읽나」 표에 해당하는 순간이
+오면 그 문서를 끝까지 읽고 나서 진행합니다.** 이 파일의 요약만 보고 판단하지 않습니다.
 
 ## 구조
 
@@ -11,579 +11,67 @@ webtoon/
   fe/    화면 (React). apps/web 의 /webtoon 라우트가 이걸 렌더링한다
   be/    API (Spring). 인증·크레딧·DB·공개여부·업로드 결과를 맡는다
   ai/    생성 파이프라인 (Python). 자바가 자식 프로세스로 부른다
+  docs/  문서. 작업 규칙은 docs/rules/
 ```
 
 ```
 webtoon/ai/
   new_harness/      지금 제품이 쓰는 이야기·그림 파이프라인
-  story-harness/    story.py(모델 호출·제미나이 시트) · samples.py(장르 샘플) 만 남은
-                     라이브러리. new_harness 가 import 해서 빌려 쓴다
-  webtoon-harness/  directing.py·scenegen.py·strip.py(레이아웃/연출) ·
-                     config.yaml(단가표) · episode.py(업로드용) · providers/
-                     (제미나이 이미지) 만 남은 라이브러리. new_harness/upload 가 빌려 쓴다
-  upload/           다 그린 그림을 S3 로 올리는 걸음 (s3_upload · overlay · runpaths)
-  assets/           기본 캐릭터 견본(samples) · 마스코트(lou)
-  work/             실행하며 쌓이는 것 (jobs · characters) + legacy-data(보관용)
+  story-harness/    new_harness 가 import 하는 파일만 남은 라이브러리 (완성본 취급)
+  webtoon-harness/  new_harness·upload 가 빌려 쓰는 연출·단가표·이미지 제공자 (완성본 취급)
+  upload/           다 그린 그림을 창고로 올리는 걸음
+  assets/           기본 캐릭터 견본(samples) · 마스코트(lou) · 예시 작품(examples)
+  work/             실행하며 쌓이는 것 (gitignore)
 ```
 
-**story-harness · webtoon-harness 는 2026-09-13에 new_harness 가 실제로 import
-하는 파일만 남기고 다 지웠습니다** (자체 CLI · README/docs · 옛 테스트 ·
-.bak 여러 세대 · 프롬프트 단계 파일 등 — new_harness 실행 경로 어디서도 안
-읽힌다는 걸 `test_imports.py`(정적 import 검사)와 실제 실행으로 확인한
-것들). 지우기 전 전체를 `haeun/webtoon-ai-backup/` 에 백업해 뒀습니다. 이
-두 폴더에 파일을 새로 추가하기 전에 — 그게 정말 new_harness 가 부르는
-것인지부터 확인하세요.
-
-한 편이 만들어지는 길:
-
-```
-apps/web (/webtoon)  →  webtoon/fe  →  webtoon/be  →  python3 run.py (webtoon/ai)
-```
-
-## DB 마이그레이션은 webtoon/be 에 새로 만들지 않습니다
-
-Flyway 마이그레이션 폴더가 지금 `apps/api/src/main/resources/db/migration`과
-`webtoon/be/src/main/resources/db/migration` **둘로 나뉘어 있는데, 둘 다 같은
-DB의 같은 `flyway_schema_history`를 공유**합니다. 번호(`V숫자`)는 두 폴더를
-합쳐서 유일해야 하는데, 각 폴더가 서로 안 보고 다음 번호를 잡다 보니 겹치는
-사고가 반복됩니다 — 이번에 `webtoon/be`의 `V12__webtoon_job_notify_email.sql`이
-`apps/api`의 `V12__world_100_chars.sql`과 겹쳐서, `develop`에 머지된 뒤 배포가
-"Found more than one migration with version 12"로 죽고 자동 롤백됐습니다
-(2026-09-14, #298 → V16로 옮겨 고침). 전에도 V11로 같은 일이 있었습니다
-(#192, PR #297 "flyway-v11-clash").
-
-**그러니 webtoon 쪽에서 새 마이그레이션이 필요하면 파일을
-`apps/api/src/main/resources/db/migration`에 만드세요** — `webtoon/be`
-쪽 폴더에 새로 추가하지 않습니다. 번호를 한 곳에서만 관리하면 겹칠 일이
-없어집니다. (이미 있는 `webtoon/be`의 `V11`·`V16` 파일은 이미 적용된
-이력이라 옮기지 않습니다 — 앞으로 만들 새 파일에만 적용되는 규칙입니다.)
-
-## 파이썬을 서버로 띄우지 않습니다
-
-옛 프로토타입 웹서버(`landing/serve.py`)는 2026-09-12에 지웠습니다. 자바가
-요청마다 파이썬을 자식 프로세스로 부르고, 끝나면 죽습니다.
-
-- **자바가 실행하는 파이썬은 넷뿐입니다** — `run.py` · `character.py` ·
-  `stitch.py`(new_harness) · `s3_upload.py`(upload). 그 밖의 파이썬을 새로
-  띄우는 구조를 만들지 마세요.
-- 파이썬 쪽에 웹서버·상태·세션을 다시 만들지 마세요. 파이썬은 프롬프트를
-  조립해 모델을 부르고 결과를 파일로 남기는 **CLI 파이프라인**이고, 그
-  바깥(인증·크레딧·DB·공개여부·업로드 결과)은 전부 자바가 합니다.
-
-## ai/ 를 고쳤을 때 어디까지 해야 반영되는가
-
-`webtoon/ai/` 를 고쳐도 **`webtoon/be` 를 다시 빌드·기동하기 전까지는 반영되지
-않습니다.** 파이썬은 jar 안에서 실행할 수 없어서, 빌드가 `webtoon/ai` 를 jar
-리소스로 담고 서버가 뜰 때 임시 폴더로 풀어(`AiHarnessResources`) 그 사본으로
-돌리기 때문입니다(`HarnessProcess`).
-
-```
-webtoon/ai/**  →  (빌드) jar 리소스  →  (기동) 임시 폴더  →  python3 run.py
-```
-
-파일만 고쳐 놓고 "반영됐다" 고 판단하면 안 됩니다 — 이미 떠 있는 서버는 기동
-시점의 사본을 계속 씁니다(2026-09-12에 실제로 이 착각을 했음).
-
-**설정도 코드 기본값에 두세요.** `.env` 는 jar 에 안 담깁니다(키가 실리면 안
-되니까). 그래서 `.env` 에만 있는 설정은 서버에서 통째로 사라집니다 — 실제로
-모델 선택이 그렇게 사라져서, 하네스가 기본값인 gemini 로 붙었다가 키가 없어
-이야기 생성이 통째로 실패했습니다. 지금은 `llm.py` 의 `DEFAULT_PROVIDER` 가
-기본값을 정합니다.
-
-## 하네스를 고칠 때 (harness-is-final)
-
-**`story-harness` / `webtoon-harness` 는 "완성본"으로 취급합니다.**
-이 두 폴더 안의 파일을 고칠 때는:
-
-1. 고치기 직전 `<파일>.bak` 백업을 남긴다.
-2. 기존 동작이 그대로 재현되게, **순수 추가**로만 고친다 (기본값 변경 금지 —
-   예: 새 게이트 함수는 새 입력 필드가 없으면 항상 통과시켜서, 예전 run 을
-   다시 돌려도 결과가 안 바뀌게 한다).
-3. 고친 뒤 `cd webtoon/ai && python3 test_imports.py` 로 `ALL PASS` 확인한다
-   (java 가 실행하는 4개 스크립트 + 그 의존 전체가 여전히 import 되는지 보는
-   정적 검사).
-
-**2026-09-13에 `test_gates.py`(story-harness) · `test_charsheet.py`
-(webtoon-harness) · `test_parse.py`(new_harness)를 전부 지웠습니다** — 셋 다
-new_harness 가 실제로 안 쓰는 옛 파이프라인(구체화·콘티·컷대본·화면 캐릭터시트
-CLI 등)까지 같이 테스트하고 있었고, 그 옛 파이프라인 자체를 지우는 김에
-테스트도 같이 정리했습니다. 지금은 `test_imports.py`(위 3.)가 유일한
-회귀 확인 도구입니다 — 동작 자체를 검증하진 않고, "실행에 필요한 파일이
-다 있는가"만 봅니다.
-
-`new_harness` · `be` · `fe` 는 제품 레이어라 이 제약이 없습니다.
-
-## 작업 권한 범위
-
-- **`webtoon/` 과 `haeun/` 안**(각 폴더와 그 하위 전부)은 파일 편집·Bash
-  명령을 **허락 없이 자유롭게** 실행합니다 (force push · reset --hard ·
-  rm -rf 같은 파괴적 명령은 제외 — 이런 건 항상 확인받습니다).
-- **그 바깥**(`comic/`, `common/`, `infra/`, `trailer/`, `apps/`, `build/`,
-  루트 파일 등)을 편집하거나 그 경로를 대상으로 하는 작업은 **항상 먼저
-  물어봅니다.**
-- `git push` 처럼 원격에 반영되는 명령은 안쪽이라도 매번 확인받습니다.
-  커밋(로컬)까지는 자동, push 는 항상 확인.
-- **실제 과금이 걸리는 실행은 항상 먼저 승인받습니다.** `run.py` 등을
-  `--dry-run` 없이 진짜로 돌려 텍스트·이미지 모델을 호출하는 것 전부
-  해당입니다. `--dry-run` 으로 되는 점검은 과금이 없으니 자유롭게 하되,
-  실제 생성으로 넘어가기 직전엔 반드시 확인받습니다.
-- 그리고 **한 번 승인받았다고 다음 것까지 승인된 것이 아닙니다** — 단계마다
-  따로 받습니다.
-
-## 병렬 에이전트 작업 (worktree)
-
-**세션이 스스로 한다 — 사용자가 미리 폴더를 파둘 필요 없다.** 새 세션이
-열렸고(대화 초반), 사용자가 파일 수정이 걸린 미션 하나를 통째로 맡겼고,
-지금 위치가 이미 `agent-*` 워크트리 안이 아니라 원본 저장소(`Lore/`)라면 —
-**조사·수정을 시작하기 전에 먼저 아래 "쓰는 법"대로 스스로 워크트리를
-판다.** 사용자에게 물어보지 않는다(이것도 webtoon 안 자유 작업 범위). 단순
-질문이나 파일을 안 고치는 조사만 하는 세션은 격리할 게 없으니 생략해도
-된다. 워크트리를 팠으면 세션 시작할 때 한 줄로 알린다 (예: "agent-feedback
-워크트리에서 작업합니다").
-
-2026-08-23에 이걸 안 지켜서 실제로 사고가 날 뻔했다 — 세션 A(이 정비 작업)와
-세션 B(그림체 추가)가 같은 폴더에서 동시에 돌면서, `config.yaml`·
-`pipeline.py`·`index.html`에 서로의 커밋 안 된 변경이 섞일 뻔했다. 다행히
-실시간으로 확인하면서 넘어갔지만, 매번 사람/에이전트가 촘촘히 확인해야만
-피할 수 있는 구조였다.
-
-### 왜 "파일별"이 아니라 "미션별"로 나누는가
-
-이 프로젝트에서 에이전트를 나누는 기준은 보통 **담당 폴더가 아니라 감사
-관점**이다 — "너는 사용자 피드백이 실제로 반영됐는지 확인하고 안 됐으면
-고쳐", "너는 그림체 구현을 확인하고 필요하면 고쳐", "너는 비용 트래킹이
-빠짐없이 되는지 확인하고 고쳐" 같은 식. 각 에이전트가 프로젝트 전체를 보고
-필요하면 어디든 고치므로, "story 담당/UI 담당"처럼 파일로 경계를 나눌 수가
-없다. 그래서 worktree를 "누가 어느 폴더를 만지는지" 나누는 용도가 아니라
-**"누구의 미커밋 변경이 누구와도 안 섞이게" 나누는 용도로만** 쓴다 — 각
-worktree 안에는 프로젝트 전체가 그대로 있고, 에이전트는 그 안에서 자유롭게
-조사·수정·테스트·커밋한다.
-
-### 쓰는 법 (세션이 스스로 실행)
-
-```
-# 1. 사용자가 준 미션에서 짧은 영문 슬러그를 스스로 뽑는다
-#    (예: "그림 생성 화풍 확인해" -> image-style, "비용 트래킹 확인해" -> cost-tracking)
-# 2. 이미 쓰는 이름인지 확인하고, 겹치면 -2, -3 ... 을 붙인다
-git worktree list | grep -q "agent-<슬러그>" && 슬러그="<슬러그>-2"   # 필요할 때만
-
-# 3. 지금 작업 중인 feature 브랜치에서 새 브랜치+worktree를 판다
-git worktree add ../agent-<슬러그> -b agent/<슬러그> feature/<작업이름>
-
-# 예: 사용자 피드백 반영 확인 미션을 받았을 때
-git worktree add ../agent-feedback -b agent/feedback feature/<작업이름>
-```
-
-```
-# 4. .env 심링크 (아래 "git이 안 보는 것" 절 참고 — 안 하면 실제 생성 때 키 없음으로 죽는다)
-ln -s "$(pwd)/webtoon/ai/story-harness/.env" agent-<슬러그>/webtoon/ai/story-harness/.env
-ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webtoon-harness/.env
-```
-
-그 다음부터 이 세션의 모든 파일 읽기·수정·Bash 작업 기준 경로는
-`../agent-<슬러그>/` 다 — 원본 저장소는 더 이상 건드리지 않는다(같은
-저장소의 다른 커밋되지 않은 상태를 볼 뿐, 실수로 거기 쓰면 다시 섞이는
-사고가 재현된다).
-
-- 브랜치명은 `agent/<미션명>` (예: `agent/feedback`, `agent/image-style`,
-  `agent/cost-tracking`) — 담당 파일이 아니라 **미션**을 이름으로 쓴다.
-- 세션 하나 = worktree 하나 = 브랜치 하나. 같은 브랜치를 두 worktree에서
-  동시에 체크아웃할 수 없으니 자연히 강제된다.
-- **병합은 미션 워크트리 세션 자신이 못 한다** — 그 feature 브랜치가 이미 원본
-  저장소 폴더(`Lore/`)에서 체크아웃돼 있어서, 같은 브랜치를 두 worktree에서
-  동시에 체크아웃할 수 없기 때문이다(git이 막는다). 그래서 병합은 항상
-  **원본 저장소 폴더에 있는 세션**이 실행한다.
-- **병합은 사용자 확인 없이 바로 한다** — 아직 `push` 전(로컬)이라 원격에
-  영향이 없고, `git reflog`로 언제든 되돌릴 수 있다 (이 프로젝트의 기존
-  "커밋은 자동, push는 항상 확인" 원칙과 같은 선). 테스트(`test_imports.py`
-  ALL PASS)만 확인되면 곧장 진행한다:
-  ```
-  git checkout feature/<작업이름>
-  git merge agent/<미션명>
-  ```
-  - **충돌 없이 끝나면** 그 자리에서 바로 정리까지 한다:
-    ```
-    git worktree remove ../agent-<미션명>
-    git branch -d agent/<미션명>
-    ```
-    **다만 `git worktree remove` 는 그 안의 `runs/`·`outputs/`·`jobs/`
-    (gitignore된 것들)를 git 이력 없이 그대로 디스크에서 지운다 — 휴지통도
-    안 거친다, 복구 불가능** (2026-09-12 실제로 겪음: 미션 세션에서 만든
-    테스트 run들과 그걸로 만든 HTML 비교 페이지가 정리 명령 한 줄에
-    통째로 사라짐). `git merge` 로 가져오는 건 커밋된 코드뿐이지 이
-    파일들이 아니다. 그러니 정리하기 **직전에** 그 워크트리 안에
-    남겨야 할 결과물(비교 페이지, 참고할 run 등)이 있는지 먼저 확인하고,
-    있으면 원본 저장소 쪽으로 복사해 둔 뒤에 지운다.
-  - **충돌이 나면 지우지 않는다.** worktree와 브랜치를 그대로 둔 채 어떤
-    파일의 어느 부분이 충돌했는지 사용자에게 보여주고 판단을 구한다 —
-    이건 worktree로도 못 없애는 유일한 지점이다(worktree가 없애는 건
-    "충돌이 나기도 전에 미커밋 상태로 섞이는" 사고이지, 진짜 의미 충돌
-    자체가 아니다). 해결되면 그때 커밋하고 위 정리 명령을 마저 실행한다.
-  - 여러 미션을 합칠 때는 하나씩 순서대로 병합한다 — 한 번에 다 합치려
-    하지 않는다.
-
-### git이 안 보는 것 (`runs/`, `outputs/`, `jobs/`, `.env`)
-
-`webtoon/ai/*/runs/`, `webtoon/ai/webtoon-harness/outputs/`, `webtoon/ai/work/`는 전부
-gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않는다 —
-새 worktree는 이 폴더들이 **비어서 시작한다.** 이건 기본적으로 안전한
-방향이다(격리가 저절로 됨, 두 에이전트가 같은 run_id 폴더에 동시에 못 씀).
-
-- **`.env`(API 키)는 매 worktree마다 심링크로 연결한다** — 읽기 전용 값이라
-  공유해도 쓰기 충돌이 안 나고, 안 하면 새 worktree에서 story.py/run.py가
-  키 없음으로 바로 죽는다:
-  ```
-  ln -s "$(pwd)/webtoon/ai/story-harness/.env" ../agent-<미션명>/webtoon/ai/story-harness/.env
-  ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" ../agent-<미션명>/webtoon/ai/webtoon-harness/.env
-  ```
-- **`runs/`·`outputs/`·`jobs/`는 심링크로 공유하지 않는다** — 공유하는 순간
-  오늘 겪은 것과 같은 동시쓰기 충돌이 git 밖에서 재현된다. 각 worktree가
-  자기 것을 새로 만들게 둔다. 기존 run을 참고해서 테스트해야 하면 필요한
-  run_id 폴더 하나만 **복사**해서 쓴다(심링크 아님).
-- 랜딩 서버(`serve.py`)를 여러 worktree에서 동시에 띄우면 포트가 겹친다 —
-  `python serve.py --port <다른 포트>`로 worktree마다 다른 포트를 쓴다.
-
-## 이슈 번호 매핑
-
-**Lore 공유 저장소** (`comic/`, `common/`, `infra/`, `webtoon/`, `trailer/`,
-`apps/`) 작업 시: `common/docs/git-convention.md`의 컨벤션을 그대로 따릅니다 —
-항상 관련 GitHub 이슈 번호를 정하고, 커밋 메시지를 `[#이슈번호] Type: 내용`
-형식으로 남깁니다 (예: `[#14] Feat: 로그인 기능 추가`). 브랜치명은
-`[이슈타입]/#이슈번호` (예: `feat/#14`). 이슈가 없는 잡무만 예외
-(`Chore: 내용`).
-
-**`webtoon/` · `haeun/` 작업 시** (2026-08-21부터 적용, 브랜치 규칙은
-2026-09-21에 아래와 같이 바뀜):
-- **작업 하나에 이슈 하나, 브랜치 하나, PR 하나입니다.** 일을 시작하기 전에
-  GitHub 이슈를 만들고, `feature/<작업이름>` 브랜치를 파서 그 안에서 작업한
-  뒤(예: `feature/example-content`), **`develop` 으로 PR** 을 냅니다.
-  - 전에는 브랜치를 `haeun` 하나로만 썼습니다. 작업이 여러 갈래로 늘면서
-    한 브랜치에 섞이면 무엇이 어느 작업인지 못 가리게 되어 바꿨습니다.
-  - **`haeun` 으로 머지하지 않습니다.** 팀 전체가 `피처 → develop → staging
-    → main` 으로 흐르고(`webtoon/docs/server.md`), webtoon 만 다른 길을 쓰면
-    배포 흐름에서 혼자 빠집니다.
-  - 피처 브랜치는 develop 에 머지된 뒤에도 **지우지 않습니다** — 같은
-    브랜치로 staging 에 PR 을 한 번 더 낼 수 있습니다(`server.md` 브랜치 규칙).
-  - 브랜치 이름은 `agent/…` 가 아니라 `feature/…` 입니다. 병렬 에이전트용
-    워크트리(`agent/…`)는 "미커밋 변경이 안 섞이게" 격리하는 용도이지
-    작업 단위를 나누는 이름이 아닙니다 — 둘을 섞어 쓰지 마세요.
-- 커밋 메시지는 `[#이슈번호] 설명` — 공유 저장소 컨벤션의 `Type:` 부분은
-  생략합니다.
-- 한 파일이 여러 이슈에 걸치면(예: `webtoon.py`처럼 한 파일에 여러 파이프라인
-  단계가 섞여 있는 경우) 이슈 번호를 전부 태그합니다
-  (`[#19][#21][#25][#26] ...`).
-- 수정 전/후를 나눠서 추적하고 싶은 파일(`.bak` 백업이 있는 경우)은 `.bak`
-  내용을 먼저 커밋해 원래 기능의 이슈에 붙이고, 지금 내용을 다음 커밋으로
-  나눠 그 수정이 해결한 이슈에 붙입니다 (예: `story.py` 원본 → `#4`, 이름
-  검증 게이트 추가분 → `#26`).
-
-### 커밋 메시지는 "기능" 수준으로 씁니다
-
-커밋 메시지는 **팀 전체가 보는 공개 기록**입니다. 읽는 사람이 알고 싶은 것은
-"제품이 무엇이 달라졌는가"이지, 그 변경이 어떤 과정을 거쳐 만들어졌는가가
-아닙니다.
-
-**쓸 것** — 무엇이 달라졌는가 / 왜 그렇게 했는가 / 어떤 대가를 택했는가:
-- 사용자에게 보이는 변화, 사용자 피드백 인용
-- 그렇게 고른 이유와 버린 대안 ("styles 의 PROPORTION 을 안 고치고 뒤에서
-  덮어쓴 이유는 …")
-- 기본값·하위호환 ("새 값은 전부 기본이 꺼짐이라 예전 run 은 안 바뀐다")
-- 알려진 한계, 아직 안 한 것
-
-**쓰지 말 것** — 작업 과정의 내부 사정:
-- 에이전트·세션·워크트리 이야기 ("다른 세션이 커밋 안 한 것을 대신 커밋한다",
-  "병렬 에이전트 A가 맡은 부분") — 저장소 밖 사정이라 6개월 뒤엔 아무 의미가
-  없고, 팀원에게는 처음부터 의미가 없습니다.
-- 누가 어느 폴더를 담당했는지, 어떤 순서로 조사했는지
-
-한 사람이 처음부터 그렇게 만든 것처럼 읽히면 맞게 쓴 것입니다.
-
-### PR·이슈 제목은 "~한다" 로 끝내지 않습니다
-
-제목은 **명사로 끝냅니다.** 서술형("~한다", "~쓴다", "~고친다")으로 쓰지
-마세요. 목록에서 제목만 훑을 때 서술형은 길고 읽는 리듬을 끊습니다.
-
-```
-✗ [#380] 보존기간이 지난 개인정보를 실제로 파기한다
-✓ [#380] 보존기간이 지난 개인정보 파기
-
-✗ [Feat] 온보딩 FAQ를 실제 동작에 맞게 다시 쓴다
-✓ [Feat] 온보딩 FAQ를 실제 동작에 맞게 교체
-```
-
-본문은 그대로 서술형으로 씁니다 — 이 규칙은 **제목에만** 해당합니다.
-팀이 쓰고 있는 형태이기도 합니다(예: `[Fix] 자동 취침을 화면이 즉시 따르게 ·
-동작 요청 한도 문구`, `[Chore] 마이그레이션 중복 검사 · 배포 실패 알림`).
-
-**`Co-Authored-By: Claude ...` 트레일러와 `Claude-Session:` 링크는 절대
-붙이지 않습니다.** (2026-08-23 이전 문구는 반대로 "이걸로 충분하다"고
-적혀 있었는데, 정정합니다.) 커밋의 author/committer는 항상 이 저장소의
-git 설정(`git config user.name`/`user.email`, 지금은 `haeun
-<haeun9634@naver.com>`) 그대로만 씁니다 — GitHub에서 "합동 커밋"처럼
-공동 작성자로 보이는 걸 원하지 않기 때문입니다. 커밋마다 author를 바꾸지
-않습니다(도구가 자동 추정한 다른 이름/이메일로 새 나가지 않게 주의).
-- push는 커밋마다 하지 않고 모아뒀다가 확인받은 뒤 한 번에 합니다.
-- **push할 때마다, 별도 요청 없이 자동으로** 이번에 새로 push된 커밋들을
-  이슈번호별로 분류해서 관련 이슈마다 댓글을 추가/갱신합니다 (사용자가 나중에
-  이슈 페이지만 열어도 그 이슈에 연결된 커밋을 바로 볼 수 있게 하는 게 목적).
-  이미 그 이슈에 단 댓글이 있으면 새로 하나 더 달지 말고 기존 댓글을 최신
-  커밋까지 포함하도록 수정(PATCH)합니다. **커밋 목록은 `origin/develop`이
-  아니라 지금 push 한 브랜치(또는 그 시점의 로컬 HEAD) 기준으로 뽑습니다** — 피처
-  브랜치는 PR이 develop에 머지되기 전에도 계속 push되므로, develop 기준으로
-  뽑으면 아직 안 머지된 최신 커밋이 목록에서 빠집니다 (2026-08-21에 실제로
-  이 실수를 했다가 바로 잡음).
-- 이슈에 관련 커밋 목록을 댓글로 남길 땐 `` [`sha`](커밋URL) `커밋 메시지` `` 형식을
-  씁니다 — sha는 마크다운 링크로 감싸 클릭하면 그 커밋으로 이동하게 하고, 커밋
-  메시지는 백틱(inline code)으로 감쌉니다. 메시지 안에 `[#18][#19]...`처럼 이슈
-  번호가 여러 개 있으면, 백틱 없이 그냥 쓸 경우 GitHub이 그 번호들을 전부
-  "이슈 전체 제목" 링크로 자동 확장해버려서 댓글이 못 알아보게 지저분해집니다
-  (실제로 겪음, 2026-08-21).
-- **GitHub 접근은 `gh` CLI를 씁니다.** (2026-08-23 정정 — 전에는 "이 저장소엔
-  `gh` CLI가 없다"고 적혀 있었는데 사실이 아니었습니다. `/opt/homebrew/bin/gh`에
-  설치돼 있고 `haeun9634`로 로그인돼 있습니다.) `gh` 토큰에는 `project` 스코프가
-  있고 `git credential fill`로 꺼내는 토큰에는 **없습니다** — 프로젝트 보드를
-  건드리려면 반드시 `gh`를 써야 합니다. 이슈 댓글처럼 repo 스코프면 되는 일은
-  둘 다 되지만, 굳이 나눌 이유가 없으니 `gh`로 통일합니다
-  (`gh api`, `gh api graphql`, `gh project ...`).
-
-### GitHub 프로젝트 보드 (`lore`)
-
-이슈 상태는 **`SW-Maestro-TRY` 조직의 `lore` 프로젝트(번호 3)** 에서 관리합니다.
-새 프로젝트를 만들지 말고 항상 이것을 씁니다.
-
-```
-gh project list --owner SW-Maestro-TRY          # lore = 3
-gh project field-list 3 --owner SW-Maestro-TRY  # Status 필드 id 확인
-```
-
-`Status` 단일선택 필드의 칸(2026-08-23 기준):
-
-| 칸 | 뜻 |
-| --- | --- |
-| `Backlog` | 아직 손 안 댐 |
-| `이번주에 할거` | 이번 주 예정 |
-| `이번주 진행중` | 지금 하는 중 (일부 구현됨) |
-| `개발된거(Done)` | 개발 완료 |
-| `In review` · `Done` | 기본 템플릿에서 남은 칸 — 이 프로젝트에서는 안 씁니다 |
-
-**정리 작업을 요청받으면 (예: "이슈 상태 정리해줘"):**
-
-1. **대상은 `haeun9634`가 만든 이슈만.** 팀원이 만든 이슈는 건드리지 않습니다
-   (`gh api ... --jq '.[] | select(.user.login=="haeun9634")'`).
-2. **체크리스트는 이슈 본문이 아니라 코드를 기준으로 판정합니다.** 이미 찍혀
-   있는 `[x]`를 믿지 말고, 실제 구현을 찾아 확인한 뒤 갱신합니다. 근거로
-   `파일:줄`을 댈 수 없으면 체크하지 않습니다.
-3. 코드로 확인할 수 없는 항목(디자인 검토, "결과 확인", 실험 정리 등)은
-   **추측해서 체크하지 않고** 그대로 둡니다.
-4. 판정 → 칸 이동:
-   - 확인 가능한 항목이 전부 구현됨 → `개발된거(Done)`
-   - 일부만 구현됨 → `이번주 진행중`
-   - 아무것도 없음 → `Backlog` 유지
-5. **이슈를 닫지는 않습니다.** 칸 이동과 체크리스트 갱신까지만 합니다
-   (닫는 것은 사람이 판단합니다).
-6. 기능이 **기본값 꺼짐**으로 들어가 있어도, 제품 레이어(`landing`)가 켜고
-   있으면 구현된 것으로 봅니다 — 그 사실을 근거에 같이 적습니다.
-
-카드 이동은 GraphQL 로 합니다 (`gh project item-edit` 도 되지만 item id 를
-따로 구해야 하는 건 같습니다):
-
-```
-gh api graphql -f query='mutation{ updateProjectV2ItemFieldValue(input:{
-  projectId:"<PVT_...>" itemId:"<PVTI_...>"
-  fieldId:"<PVTSSF_...>" value:{singleSelectOptionId:"<옵션id>"}
-}){ projectV2Item{ id } } }'
-```
-
-
-## 그림 창고는 환경마다 다릅니다
-
-**dev 는 S3 를 안 씁니다.** 박스 안 MinIO 가 S3 흉내를 냅니다. staging·prod
-만 진짜 S3 이고, 그 앞에 CloudFront 가 붙습니다.
-
-| 환경 | 그림이 실제로 있는 곳 |
-| --- | --- |
-| 내 노트북 | `~/lore-minio/lore-dev-contents/` (아래 절 참고 — 루트 `.env` 기본값만 믿으면 안 됩니다) |
-| dev | 박스 안 MinIO (`/images/` → MinIO, nginx 가 이음) |
-| staging · prod | 각 환경의 S3 + CloudFront |
-
-그래서 **코드는 어느 버킷인지 몰라야 합니다.** 화면에 나가는 주소는 항상
-`/images/...` 로 시작하는 상대경로이고(`PageStore.url()`), 앞에 무엇이
-붙는지는 환경이 정합니다. 도메인이나 버킷 이름을 코드에 적지 마세요 —
-`lore.webtoon.cdn-base` 설정을 없앤 이유가 그것입니다(2026-09-19).
-
-그림을 넣는 코드도 같은 이유로 **버킷에 직접 올리지 말고** `PrivateArt`
-(자바)나 `upload/s3_upload.py`(파이썬)를 거쳐야 합니다. 그래야 dev 에서는
-MinIO 로, 운영에서는 S3 로 알아서 갑니다.
-
-`lore-contents-046797548177-…` 는 **옛 버킷**입니다(보관). 지금 쓰는 버킷이
-아니니 새 코드가 이 이름을 보게 하지 마세요.
-
-환경·배포·비밀값의 전체 그림은 `webtoon/docs/server.md` 에 있습니다.
-
-## 노트북에 S3 가 없을 때 그림 뜨게 하기 (2026-09-23)
-
-노트북의 그림 실물은 **`~/lore-minio/lore-dev-contents/`** 에 있습니다. DB
-(`webtoon_page.s3_key`)의 키가 그 폴더 안에 그대로 들어 있습니다. **AWS 버킷
-세 개(옛 `lore-contents-…` · staging · prod)에는 이 그림이 하나도 없습니다**
-(2026-09-23에 키 104개를 전부 대조했습니다).
-
-전에는 루트 `.env` 가 `CONTENT_S3_BUCKET` 을 옛 AWS 버킷으로 두고
-`APP_S3_ENDPOINT` 는 비워 둬서, 그냥 `./gradlew bootRun` 으로 띄우면 앱이 AWS 를
-보고 **모든 그림이 404** 가 됐습니다. 2026-09-23에 `.env` 를 로컬 창고 쪽으로
-바꿔 뒀습니다(아래 「한 번만 해 두면 되는 것」). **새로 체크아웃한 사람은 그
-설정이 없으니 이 절을 보고 직접 넣어야 합니다.**
-
-**증상** — 화면은 깨진 그림, 서버 로그에는 에러가 없습니다. 예시 작품 목록도
-글자만 나옵니다. `/api/webtoon/v1/runs/<run>/page/<n>` 은 302 를 잘 내주기
-때문에 API 만 보면 정상으로 보입니다.
-
-**AWS 로그인 문제가 아닙니다.** `aws sso login --profile lore` 를 해도 그대로
-안 뜹니다. 자격증명이 만료되면 502·500 으로 죽지만, 이 경우는 presign 주소가
-멀쩡히 나오고 그 주소를 열었을 때 `NoSuchKey` 가 옵니다.
-
-**어디를 보고 있는지 확인하는 법** — presign 주소의 호스트를 봅니다.
-
-```
-curl -sD - -o /dev/null "http://localhost:8080/api/webtoon/v1/runs/<run_id>/page/1?w=320" | grep -i location
-```
-
-`…amazonaws.com` 이면 잘못된 창고를 보는 것입니다. `localhost:9000` 이어야
-합니다.
-
-### 한 번만 해 두면 되는 것 — 루트 `.env`
-
-```
-APP_S3_ENDPOINT=http://localhost:9000
-CONTENT_S3_BUCKET=lore-dev-contents
-AWS_ACCESS_KEY_ID=lore-minio
-AWS_SECRET_ACCESS_KEY=lore-minio-secret
-```
-
-- 키 두 개는 아래 창고의 `--auth-key` 와 같은 값이면 아무거나 됩니다. 환경변수가
-  `AWS_PROFILE` 보다 먼저 읽히므로 `AWS_PROFILE=lore` 줄은 그대로 둬도 됩니다.
-- 진짜 AWS 를 봐야 할 때만 이 네 줄을 주석 처리합니다(옛 버킷 이름은 `.env` 에
-  주석으로 남겨 뒀습니다).
-
-**이 설정은 webtoon 만의 것이 아닙니다.** `app.s3.content-bucket` 은 zzal 도 같이
-쓰기 때문에, 창고를 로컬로 돌리면 zzal 그림도 같은 창고에서 찾습니다. 그래서
-2026-09-23에 zzal·comic 그림(약 130MB)을 옛 버킷에서 `~/lore-minio` 로 한 번
-내려받아 뒀습니다. **zzal 쪽 코드는 건드리지 않았습니다** — 로컬 파일만 채웠습니다.
-새로 받는 사람은 이렇게 하면 됩니다:
-
-```
-aws s3 sync s3://lore-contents-046797548177-ap-northeast-2-an/images/zzal/ \
-  ~/lore-minio/lore-dev-contents/images/zzal/
-```
-
-### 창고는 MinIO 말고 rclone 으로 띄웁니다 — 서버 띄우기 전에 매번
-
-`.env` 만 고쳐 두고 창고를 안 띄우면 그림 대신 연결 거부가 납니다.
-
-**MinIO 는 이 맥에서 안 됩니다.** brew 로 깐 것(2025-10-15, 최신)이 뜨자마자
-SIGSEGV 로 죽습니다 — go-m1cpu 가 cgo 로 CPU 정보를 읽다가 macOS 26 에서
-터집니다. upstream 저장소가 archived 라 formula 도 deprecated(2027-02-17 폐지
-예정)여서 새 빌드를 기다릴 수 없습니다. **재설치·업그레이드로 안 고쳐집니다.**
-
-대신 **`rclone serve s3`** 가 같은 자리를 채웁니다. 폴더 하나를 S3 로 열어 주고,
-presigned GET 도 업로드(PUT)도 됩니다(2026-09-23 둘 다 확인).
-
-```
-rclone serve s3 ~/lore-minio --addr 127.0.0.1:9000 \
-  --auth-key lore-minio,lore-minio-secret --force-path-style
-```
-
-- `~/lore-minio` 아래의 폴더 이름이 그대로 버킷이 됩니다(`lore-dev-contents`).
-- `--auth-key` 값은 위 `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` 와 같아야 합니다.
-- 없으면 `brew install rclone`.
-
-급하게 보기만 할 거면 파일이 이미 키 경로 그대로 있어서 정적 서버로도 됩니다.
-다만 **업로드가 안 되고**(생성까지는 못 돌려 봅니다), `python3 -m http.server`
-는 한 번에 하나만 받아서 표지를 여러 장 동시에 부르는 목록 화면이 통째로
-멈추니 스레드 버전을 써야 합니다.
-
-## 로컬에서 띄우기
-
-```
-./gradlew bootRun          # 저장소 루트에서. webtoon/ai 동기화까지 자동으로 따라온다
-```
-
-- 루트 `.env` 가 bootRun 의 환경으로 주입됩니다 (`DB_USERNAME` · `AWS_PROFILE` ·
-  `WEBTOON_API_KEY` 등). 이미 셸에 있는 값이 이깁니다.
-- `AWS_PROFILE` 이 없으면 자바 SDK 가 `default` 프로파일을 찾다가 S3 관련
-  기능이 전부 실패합니다(캐릭터 목록부터 막힘).
-- 화면은 `apps/web` 개발 서버(3000), API 는 8080 입니다.
-
-### 이미지·텍스트 모델 API 키는 실제로 어디 있는가
-
-**실제 키는 저장소 루트 `.env`의 `WEBTOON_API_KEY`(OpenAI) 하나뿐입니다.**
-`webtoon/ai/{new_harness,story-harness,webtoon-harness}/.env` 는 이 체크아웃에는
-**없습니다**(`.env.example` 만 있음) — 위 "병렬 에이전트 작업" 절의 심링크
-안내는 그 파일들이 실제로 있는 걸 전제로 합니다. 없다면 먼저 만들거나(아래
-export 방식으로 대신 씀) worktree 를 팔 때 심링크할 원본부터 채워야 합니다.
-
-- **`./gradlew bootRun` 으로 돌릴 때**는 자동입니다. 루트 `.env` 의
-  `WEBTOON_API_KEY` 가 자바 프로세스 환경으로 들어가고, 자바가 파이썬을
-  자식 프로세스로 부르며 환경을 그대로 물려주고, `llm.py` 가 그 값을
-  `OPENAI_API_KEY` 로 풀어 씁니다(`llm.py` 의 `WEBTOON_API_KEY` 변환 로직).
-- **`python3 run.py` 를 터미널에서 직접 돌릴 때는 이 변환이 안 일어납니다**
-  — 셸에 `WEBTOON_API_KEY` 가 없으면 `OPENAI_API_KEY 가 없습니다` 로 바로
-  멈춥니다(2026-09-14 실측). 돌리기 전에 루트 `.env` 에서 값을 꺼내 셸에
-  얹으세요:
-  ```
-  export WEBTOON_API_KEY=$(grep '^WEBTOON_API_KEY=' <저장소 루트>/.env | cut -d= -f2-)
-  ```
-  (`<저장소 루트>` 는 지금 위치가 `webtoon/ai/new_harness` 면 `../../..`.)
-
-## UI/UX 스킬 정책 (2026-09-17, quickstart v5 기반)
-
-`apps/web`(webtoon 화면을 렌더링하는 Next 셸)에 UI/UX 자동화 스킬 세트를 설치했습니다
-(`.claude/skills/` — 전부 gitignore 처리됨, 팀 레포에는 안 올라감). 이 절은 **webtoon 화면
-작업에 한정**됩니다 — zzal·trailer는 각자 담당자가 별도로 정합니다.
-
-### 1. Design Authority
-
-- **Impeccable이 우선 권위**입니다. `apps/web/PRODUCT.md`(webtoon 범위로만 작성됨)가 지속되는
-  제품 맥락이고, DESIGN.md는 아직 없습니다(`/impeccable document`로 나중에 만들 수 있음).
-- `frontend-design`·`interface-design`도 설치돼 있지만, quickstart 문서는 원래 이 둘을
-  "Impeccable과 권한이 겹쳐 설치 금지"로 권고합니다 — 이번엔 멘토링 메모를 보고 그래도
-  설치했습니다. **셋이 서로 다른 방향을 제안하면 Impeccable 판단이 이깁니다.** 화면 작업을
-  시킬 때는 어느 스킬을 쓸지 명시하는 편이 충돌을 줄입니다.
-- DESIGN.md(생기면)와 실제 코드 토큰이 다르면 어느 한쪽을 자동으로 덮어쓰지 말고 Design
-  Drift로 보고합니다.
-
-### 2. Research
-
-- `ux-researcher-designer`는 실제 사용자 evidence(인터뷰·analytics·세션 리코딩·설문)가 있을
-  때만 씁니다. **지금은 그 evidence가 없습니다** — 있는 척 가상 리서치를 만들지 않고, 필요하면
-  Hypothesis로 명시합니다.
-
-### 3. Taste Lens
-
-- `design-taste-frontend`·`redesign-existing-projects`는 검증 렌즈일 뿐, 코드를 직접 고치지
-  않습니다. 실행 단위는 `docs/ux/taste-lens.md`(webtoon 전용, 다이얼 DESIGN_VARIANCE 4 /
-  MOTION_INTENSITY 2 / VISUAL_DENSITY 5로 고정 — 대화 중 추론/상향 금지)입니다.
-- 소형 작업·Operate 화면(위저드·편집실·마이페이지)의 taste read에는 적용하지 않습니다
-  (Operate는 렌즈 §3-B~E만).
-- `/impeccable critique` 앞이나 `/impeccable polish` 뒤에 taste를 두지 않습니다.
-
-### 4. Independent Validation & 예산
-
-- 중형/대형 UI 변경은 `ux-heuristics`로 독립 평가합니다. `web-design-guidelines`는 릴리스
-  준비 단계에서만 씁니다.
-- 예산: 소형 작업 Skill 호출 0 · 중형 1(ux-heuristics) · 대형 2(+shape). 자동 수정 루프는
-  검증자 실패를 합산해 최대 3회 — 넘기면 자동 반복을 멈추고 사람에게 보여줍니다.
-- 조사·검증은 가능하면 서브에이전트로 돌리고 요약만 받습니다. 스킬 `references/`는 필요한
-  절만 읽고 전체를 열지 않습니다.
-
-### 5. 산출물 로그
-
-- `docs/ux-log/`에 기능당 통합 보고서 1개(`YYYY-MM-DD-<feature>-r<n>.md`). taste 산출물은
-  `docs/ux-log/…-taste.md` 또는 `docs/ux/hypothesis-taste-*.md`.
-- `.claude/hooks/skill-log.sh`(Skill 호출 기록)·`.claude/hooks/ux-report-guard.sh`(보고서만
-  쓰고 Skill을 안 부른 경우 되돌림)가 걸려 있습니다 — 다음 세션부터 반영됩니다.
-
-### 6. 생성 이미지 에셋
-
-- 새 화면은 기본 **code-first**로 만듭니다(이미지 컴프를 먼저 생성하지 않음 — 2026-09-17
-  확정). 제품에 들어가는 생성 이미지(마스코트·배경 등)는 PRODUCT.md의 브랜드 톤(바다 팔레트)을
-  따르고, UI 프레임이나 화면 텍스트를 이미지에 굽지 않습니다.
+한 편이 만들어지는 길: `apps/web (/webtoon) → webtoon/fe → webtoon/be → python3 run.py (webtoon/ai)`
+
+## 꼭 지킬 것
+
+어기면 바로 사고가 나는 것만 적었습니다. 이유는 오른쪽 문서에 있습니다.
+
+1. **push · 과금 실행 · `webtoon/`·`haeun/` 바깥 수정은 매번 먼저 묻습니다.** 로컬
+   커밋은 묻지 않습니다. 한 번 승인이 다음 단계 승인이 아닙니다.
+   과금 생성은 테스트용 입력 말고, 실제 사용자에게 보여줄 웹툰을 만든다고 생각하고
+   매번 다른 그림체·이야기·매력적인 주인공으로 돌립니다. → [dev.md](docs/rules/dev.md)
+2. **화면 코드(`webtoon/fe`, `apps/web`)를 고쳤으면 커밋 전에
+   `npm run build --workspace lore-web` 를 돌립니다.** PR 검사는 웹 빌드를 안 돌려서
+   타입 오류가 머지된 뒤 dev 배포에서야 터집니다(2026-09-24, #397). → [dev.md](docs/rules/dev.md)
+3. **커밋에 `Co-Authored-By` · `Claude-Session:` 을 붙이지 않습니다.** 형식은
+   `[#이슈번호] 설명`. → [commit-pr.md](docs/rules/commit-pr.md)
+4. **작업 하나에 이슈 하나 · `feature/` 브랜치 하나 · develop 으로 PR 하나.** 이슈·PR
+   제목은 명사로 끝냅니다. → [issues.md](docs/rules/issues.md)
+5. **파일을 고치는 작업은 워크트리를 파서 합니다.** 원본 폴더에서 바로 고치지 않습니다.
+   → [worktree.md](docs/rules/worktree.md)
+6. **`webtoon/ai` 를 고쳐도 서버를 다시 빌드·기동하기 전까지는 반영되지 않습니다.**
+   → [dev.md](docs/rules/dev.md)
+7. **배포가 실패하면 Actions 를 다시 돌리기 전에 로컬에서 같은 커밋을 빌드해 봅니다.**
+   → [deploy-failure.md](docs/rules/deploy-failure.md)
+
+## 언제 무엇을 읽나 — 작업 규칙 (`docs/rules/`)
+
+| 이럴 때 | 읽을 문서 | 주요 내용 |
+| --- | --- | --- |
+| 이슈를 만들거나 정리할 때, push 뒤 이슈에 댓글 달 때 | [issues.md](docs/rules/issues.md) | 작업당 이슈 하나 · 제목은 명사형 · push 뒤 이슈별 커밋 목록 댓글(형식·기준 브랜치) · `gh` 사용 · 프로젝트 보드 `lore`(3) 칸과 정리 절차 |
+| 커밋·push·PR 직전 | [commit-pr.md](docs/rules/commit-pr.md) | `feature/` 브랜치 → develop · 머지 뒤에도 브랜치 안 지움 · `[#번호] 설명` · 기능 수준으로 쓰기 · 공동 작성자 금지 · push 는 확인 후 · PR 은 Assignee 지정, 리뷰어 지정 금지 |
+| 코드를 고치기 전 | [dev.md](docs/rules/dev.md) | 권한 범위 · 과금 승인과 쇼케이스 품질 입력 · 화면 수정 시 웹 빌드 · `webtoon/ai` 반영 경로 · 설정은 코드 기본값 · 파이썬 서버 금지 · 하네스 수정 규칙과 `test_imports.py` · 마이그레이션은 `scripts/new-migration.sh` · 그림 주소는 상대경로 |
+| 파일을 고치는 작업을 시작할 때 | [worktree.md](docs/rules/worktree.md) | 언제 파는가 · 파는 명령 · `agent/` 브랜치 합치기 · 치우기 전 gitignore 결과물 옮기기 · `runs/` 심링크 금지 · `.env` 다루기 |
+| 노트북에서 띄우거나 파이썬을 직접 돌릴 때, 로컬 그림이 안 뜰 때, 서버를 하나 더 띄울 때 | [local-run.md](docs/rules/local-run.md) | `./gradlew bootRun` · 서버를 하나 더 띄우면 DB 사본으로(StaleJobs) · API 키는 루트 `.env` 의 `WEBTOON_API_KEY` 하나 · 환경별 그림 창고 · 로컬 그림 404 증상과 `.env` 네 줄 · rclone 으로 창고 띄우기 |
+| 배포(GitHub Actions)가 실패했을 때 | [deploy-failure.md](docs/rules/deploy-failure.md) | 실패 SHA 확인 → 로컬 빌드 → 서버 build → 최신 run 하나만 재실행 · 원인을 알기 전에 하지 말 것 |
+| webtoon 화면을 설계·수정할 때 | [ui-skills.md](docs/rules/ui-skills.md) | Impeccable 우선 · 리서치 자료 없음 · taste 렌즈 고정값 · 검증 예산 · 기록 위치 · 코드 먼저 · 실제 앱에서 확인 |
+
+## 참고 문서 (`docs/`)
+
+| 문서 | 무엇에 관한 문서인가 | 주요 내용 |
+| --- | --- | --- |
+| [server.md](docs/server.md) | 서버 구조와 사용 설명서 | dev·staging·prod 세 환경의 구성과 주소 · 배포 흐름과 브랜치 규칙 · 비밀값 넣는 곳(dev 는 박스 `.env` 와 compose `environment:` 둘 다 필요) · 버킷 · 서버 로그 보기 · staging 자동 전원 · DB 직접 접근 · 비용 |
+| [env-diff.md](docs/env-diff.md) | 세 환경이 실제로 무엇이 다른가 | 대조표 · **dev 에서는 안 드러나고 승격 때 걸리는 것**(설정 주입 경로, venv 실패가 배포를 안 멈춤, 마이그레이션 순서, MinIO 의존 등) · 승격 점검표 |
+| [images.md](docs/images.md) | 화면에 그림 넣는 법 | 정적 그림은 원본 폴더에 넣음(`apps/web/public/static/` 금지) · 예시 작품·예시 캐릭터는 부팅 때 한 번 심고 그 뒤로는 DB 가 원본 · 온보딩 목업 상수 · 둘러보기 공개 · 예시 `run_id` 하드코딩 자리 |
+| [full-review-design.md](docs/full-review-design.md) | 완성된 화 전체를 다시 읽는 검수 설계 | 장 단위 검수로 못 잡는 장거리 문제 · 판정(`fullreview.py`)과 재생성 루프(`JobRunner.runFullReviewLoop`) 구현 상태 |
+| [mentoring-followup-2026-09-19.md](docs/mentoring-followup-2026-09-19.md) | 0911 멘토링 후속 과제 진행 기록 | 과제 11개별로 한 것 → 실측 결과 → 남은 것 |
+| [safety.md](docs/safety.md) | 콘텐츠 안전 — 무엇을 막고 어디서 막나 | 금지 분류표 · 입력 글은 서버가 moderation 으로 거름(무료) · 사진·생성 글은 아직 안 봄 · 검사 서비스가 죽었을 때 기본 통과 · 사용자 문구 · 미성년 · 신고 절차 |
+| [legal/](docs/legal/) | 이용약관·개인정보처리방침 작업본 | 법률 검토 전 초안 · 판 번호는 `user_agreement.version` 과 같아야 함 · 게시본은 `게시본-뽑기.py` 로 뽑음(작업본을 화면에 직접 쓰지 않음) |
+| [backend.md](docs/backend.md) | **낡은 문서** | serve.py 프록시 시절 설명입니다. 그 구조는 2026-09-12에 지웠으니 지금 백엔드 설명으로 읽지 않습니다 |
+
+`webtoon/ai/new_harness/STYLE_FINDINGS.md` — 그림체 실험 결과. 그림체를 다시 손대기
+전에 읽습니다(이미 실패한 방법이 정리돼 있음).

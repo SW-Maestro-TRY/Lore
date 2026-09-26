@@ -20,9 +20,15 @@ public interface UsageRepository extends JpaRepository<UsageRecord, Long> {
             + "where u.calledAt >= :from and u.calledAt < :to")
     long krwBetween(@Param("from") Instant from, @Param("to") Instant to);
 
-    /** 이 사이에 만든 작품 수. 상한을 "몇 편" 으로 세는 자리다. */
+    /**
+     * 이 사이에 만든 작품 수. 상한을 "몇 편" 으로 세는 자리다.
+     *
+     * <b>캐릭터 만들기(char-)는 편수에서 뺀다</b> — 돈(krwBetween)에는 들어가지만
+     * 웹툰 한 편이 아니다. 안 빼면 캐릭터를 만들 때마다 웹툰 몫이 줄어든다(#444).
+     */
     @Query("select count(distinct u.runId) from UsageRecord u "
-            + "where u.calledAt >= :from and u.calledAt < :to")
+            + "where u.calledAt >= :from and u.calledAt < :to "
+            + "and u.runId not like 'char-%'")
     long runsBetween(@Param("from") Instant from, @Param("to") Instant to);
 
     /** 무엇에 얼마나 썼는지 — [단계, 모델, 원, 건수]. 그림이 대부분이라 그것부터 보인다. */

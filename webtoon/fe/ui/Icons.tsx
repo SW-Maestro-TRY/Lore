@@ -28,6 +28,7 @@ export const IconChevronDown = (p: P) => base(p, <path d="M6 9l6 6 6-6" />);
 export const IconChevronUp = (p: P) => base(p, <path d="M6 15l6-6 6 6" />);
 export const IconPlus = (p: P) => base(p, <path d="M12 5v14M5 12h14" />);
 export const IconEdit = (p: P) => base(p, <><path d="M4 20h4l10-10-4-4L4 16v4z" /><path d="M13 7l4 4" /></>);
+export const IconHeart = (p: P) => base(p, <path d="M12 20.5s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 8a4.3 4.3 0 0 1 7.5 2.5c0 5.4-7.5 10-7.5 10z" />);
 export const IconTrash = (p: P) => base(p, <><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 13h10l1-13M9 7V4h6v3" /></>);
 export const IconMail = (p: P) => base(p, <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></>);
 export const IconPlay = (p: P) => base(p, <path d="M8 5v14l11-7z" />);

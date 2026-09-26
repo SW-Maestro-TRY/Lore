@@ -37,6 +37,16 @@ export function myRuns(): string[] {
   }
 }
 
+/** 지운 작품을 이 브라우저의 목록에서도 뺀다 — 안 빼면 「내 작품」에 빈 카드가 남는다(#55). */
+export function forgetMyRun(runId: string): void {
+  if (!runId || typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MY_RUNS_KEY, JSON.stringify(myRuns().filter((x) => x !== runId)));
+  } catch {
+    /* 못 지워도 서버에서는 이미 없어졌다 */
+  }
+}
+
 export function rememberMyRun(runId: string): void {
   if (!runId || typeof window === "undefined") return;
   const list = myRuns().filter((x) => x !== runId);
@@ -261,6 +271,37 @@ export interface RunCard {
   page_count: number;
   style_label?: string;
   public?: boolean;
+  /** 찜 수(#247). 서버가 카드마다 붙인다. */
+  likes?: number;
+  /** 내가 찜했나. 찜 목록(/my/likes)에서만 서버가 붙이고, 둘러보기는 likedAmong 으로 화면이 채운다. */
+  liked?: boolean;
+}
+
+/* ---- 최근 본 웹툰 (#247) ---------------------------------------------------- */
+
+/** 이 브라우저에서 최근에 연 작품. 로그인과 무관하게 브라우저에만 남는다 — 로그인 안 한
+ *  사람도 어제 본 것을 다시 찾을 수 있어야 하고, 서버에 "무엇을 봤나"를 남기지 않는다. */
+const RECENT_KEY = "lore_recent_runs";
+const RECENT_MAX = 20;
+
+export function recentRuns(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberRecent(runId: string): void {
+  if (!runId || typeof window === "undefined") return;
+  const list = [runId, ...recentRuns().filter((x) => x !== runId)].slice(0, RECENT_MAX);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch {
+    /* 못 남겨도 읽는 것 자체는 막지 않는다 */
+  }
 }
 
 /** 둘러보기 — 공개된 작품 전부. 예시 작품도 여기 섞여 있다(DB 에 심겨 있어
@@ -293,6 +334,18 @@ export interface RunResult {
   page_count: number;
   planned_pages: number;
   preview: boolean;
+  /** 관리자가 열 때만 온다(#329, #428) — 만들 때 넣은 설정. */
+  inputs?: RunInputs;
+}
+
+export interface RunInputs {
+  name: string;
+  character: string;
+  genre: string;
+  story: string;
+  photo_note: string;
+  has_photo: boolean;
+  style: string;
 }
 
 export function readResult(runId: string): Promise<RunResult> {
@@ -325,6 +378,52 @@ export function myAccountRuns(): Promise<RunCard[]> {
   return appRequest<RunCard[]>("/api/webtoon/v1/my/runs");
 }
 
+/* ---- 찜 (#247) — 전부 로그인이 필요하다 ---------------------------------------- */
+
+export interface LikeResult { runId: string; liked: boolean; likes: number }
+
+export function likeRun(runId: string): Promise<LikeResult> {
+  return appRequest<LikeResult>(`/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/like`, { method: "POST" });
+}
+
+export function unlikeRun(runId: string): Promise<LikeResult> {
+  return appRequest<LikeResult>(`/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/like`, { method: "DELETE" });
+}
+
+/** 내가 찜한 작품. 최근에 찜한 것부터. */
+export function myLikes(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/likes");
+}
+
+/** 이 목록 중 내가 찜한 작품 번호. 둘러보기 카드에 하트를 칠할 때. */
+export function likedAmong(runIds: string[]): Promise<string[]> {
+  if (runIds.length === 0) return Promise.resolve([]);
+  return appRequest<string[]>("/api/webtoon/v1/my/likes/among", { method: "POST", body: { runIds } });
+}
+
+/** 휴지통에 넣은 결과. purgeAt 이 지나면 그림과 행이 영구 삭제된다. */
+export interface Trashed { runId: string; deletedAt: string; purgeAt: string; keepDays: number }
+
+/** 내 작품 지우기(#55) — 바로 지우지 않고 휴지통에 넣는다(#157). 로그인이 필요하다. */
+export function deleteRun(runId: string): Promise<Trashed> {
+  return appRequest<Trashed>(
+    `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
+}
+
+/** 휴지통 카드 — 내 목록 카드에 지운 시각과 영구 삭제 시각이 붙는다. */
+export type TrashCard = RunCard & { deleted_at: string; purge_at: string; cover_url?: string | null };
+
+/** 내 휴지통. keepDays 는 휴지통에 둔 뒤 되살릴 수 있는 날 수. */
+export function myTrash(): Promise<{ keepDays: number; runs: TrashCard[] }> {
+  return appRequest<{ keepDays: number; runs: TrashCard[] }>("/api/webtoon/v1/my/trash");
+}
+
+/** 휴지통에서 되살린다. 공개였던 작품은 둘러보기에도 다시 뜬다. */
+export function restoreRun(runId: string): Promise<{ runId: string; restored: boolean }> {
+  return appRequest<{ runId: string; restored: boolean }>(
+    `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/restore`, { method: "POST" });
+}
+
 export function setVisibility(runId: string, isPublic: boolean) {
   return appRequest<{ runId: string; public: boolean }>(
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/visibility`,
@@ -342,7 +441,20 @@ export function setNotifySetting(on: boolean): Promise<{ on: boolean }> {
   return appRequest<{ on: boolean }>("/api/webtoon/v1/my/notify-setting", { method: "POST", body: { on } });
 }
 
+/** 계정 탈퇴(#405). 서버는 표시만 남기고 30일 뒤에 지운다(처리방침 제4조). 토큰은 즉시 폐기되므로
+ *  부른 뒤에는 화면도 로그아웃 상태로 넘어가야 한다. 공용 API 라 주소만 여기서 안다. */
+export function withdrawAccount(): Promise<void> {
+  return appRequest<void>("/api/v1/users/me", { method: "DELETE" });
+}
+
 /* ---- 캐릭터 ------------------------------------------------------------------ */
+
+export interface DialogueLine {
+  who: string;
+  mine: boolean;
+  side: "left" | "right" | "center";
+  text: string;
+}
 
 /** 「캐릭터 만들어보기」로 만든 것만 갖는다 — 그 세계관 웹툰의 한 컷과 카드 글. */
 export interface CharacterCard {
@@ -350,8 +462,17 @@ export interface CharacterCard {
   world_label: string;
   genre: string;
   role: string;
+  /** 자리의 무게 — 하네스가 굴린 값(중심 · 곁 · 스쳐감 · 뜬금). 옛 카드는 빈 문자열. */
+  role_tier: string;
+  /** 종까지 바뀐 뽑기였나(#331). 다 그려지면 설문 팝업을 띄운다(PhotoResult). */
+  lucky: boolean;
+  /** 카드가 읽어 낸 종(사람 · 강아지 …). 넣은 것이 무엇으로 읽혔는지 보여 준다(#329). */
+  species: string;
   twist: string;
+  /** 옛 카드의 대사 한 줄. 새 카드는 dialogue 가 있다. */
   quote: string;
+  /** 한 컷 위에 얹는 말풍선 두세 줄. side 는 말하는 이가 그림에서 서 있는 쪽. */
+  dialogue?: DialogueLine[];
   fate: string[];
   /** 하네스 그림체 이름(romance_fantasy …). 1화를 같은 그림체로 그릴 때 그대로 보낸다. */
   style: string;
@@ -368,7 +489,12 @@ export interface Character {
   builtin: boolean;
   mine: boolean;
   created_at: string;
+  /** 관리자가 열 때만 온다(#428) — 사람이 넣은 이름·세계관 그대로(#329). 안 넣었으면 빈 문자열. */
+  inputs?: { name: string; world: string };
   card?: CharacterCard;
+  /** 내 카드에만 온다(#332) — 공유 링크로 남이 몇 명 봤고, 무료 횟수를 몇 번 돌려받았나. */
+  share_visits?: number;
+  share_bonus?: number;
 }
 
 export interface CharacterList {
@@ -441,6 +567,6 @@ export interface FeedbackTag {
   label: string;
 }
 
-export function readConfig(): Promise<{ feedback_tags: Record<string, FeedbackTag[]> }> {
+export function readConfig(): Promise<{ feedback_tags: Record<string, FeedbackTag[]>; trash_keep_days?: number }> {
   return call("/config");
 }

@@ -109,6 +109,12 @@ public class WebtoonWork {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /* 휴지통에 넣은 시각(#157). 비어 있으면 살아 있는 작품이다. 이 값이 있으면
+       목록·둘러보기·결과 주소가 모두 없는 작품처럼 굴고, RunTrash 가 기간이 지난
+       것을 예전 영구 삭제로 지운다. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     protected WebtoonWork() {
     }
 
@@ -175,5 +181,21 @@ public class WebtoonWork {
 
     void setPublic(boolean value) {
         this.isPublic = value;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public boolean isTrashed() {
+        return deletedAt != null;
+    }
+
+    void trash(Instant at) {
+        this.deletedAt = at;
+    }
+
+    void untrash() {
+        this.deletedAt = null;
     }
 }

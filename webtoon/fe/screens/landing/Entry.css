@@ -12,9 +12,15 @@
 .wt .wt-entry-card.on { border: 2px solid var(--sea); }
 .wt .wt-entry-pic { position: relative; height: 380px; background: var(--water-light); overflow: hidden; flex-shrink: 0; }
 .wt .wt-entry-pic img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+/* 가로로 긴 컷 — 인물이 왼쪽에 있어서, 폰의 세로 카드에서도 얼굴이 남게 왼쪽에 붙인다. */
+.wt .wt-entry-pic img.wt-entry-pic-left { object-position: left center; }
 .wt .wt-entry-tag {
   position: absolute; left: 12px; top: 12px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
   background: #fff; color: var(--sea-deep); font-weight: 600;
+}
+.wt .wt-entry-free {
+  position: absolute; right: 12px; top: 12px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--ink); color: #fff; font-weight: 600;
 }
 .wt .wt-entry-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; }
 .wt .wt-entry-title { display: flex; align-items: flex-start; gap: 8px; }
@@ -33,6 +39,7 @@
   .wt .wt-entry-card.on { border-color: var(--ink); }
   .wt .wt-entry-pic { width: 120px; height: 190px; }
   .wt .wt-entry-tag { display: none; }
+  .wt .wt-entry-free { right: 6px; top: 6px; font-size: 10.5px; padding: 3px 7px; }
   .wt .wt-entry-body { padding: 16px 14px; justify-content: center; }
   .wt .wt-entry-ic { display: none; }
   .wt .wt-entry-title b { font-size: 16px; }

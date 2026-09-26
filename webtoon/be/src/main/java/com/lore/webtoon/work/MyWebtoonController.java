@@ -8,8 +8,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,10 +45,50 @@ public class MyWebtoonController {
 
     private final MyWebtoonService service;
     private final NotifySettingService notifySettings;
+    private final RunLikeService likes;
+    private final RunTrash trash;
 
-    public MyWebtoonController(MyWebtoonService service, NotifySettingService notifySettings) {
+    public MyWebtoonController(MyWebtoonService service, NotifySettingService notifySettings,
+                               RunLikeService likes, RunTrash trash) {
         this.service = service;
         this.notifySettings = notifySettings;
+        this.likes = likes;
+        this.trash = trash;
+    }
+
+    @Operation(summary = "찜하기", description = """
+            이 작품을 내 찜 목록에 넣는다. 이미 찜했으면 그대로 두고 지금 찜 수만 돌려준다 —
+            두 번 눌러도 한 번이다(#247).""")
+    @PostMapping("/runs/{runId}/like")
+    public ApiResponse<LikeResult> like(@LoginUser Long userId, @PathVariable String runId) {
+        return ApiResponse.ok(new LikeResult(runId, true, likes.like(userId, runId)));
+    }
+
+    @Operation(summary = "찜 취소", description = "찜한 적이 없어도 오류 없이 지금 찜 수를 돌려준다.")
+    @DeleteMapping("/runs/{runId}/like")
+    public ApiResponse<LikeResult> unlike(@LoginUser Long userId, @PathVariable String runId) {
+        return ApiResponse.ok(new LikeResult(runId, false, likes.unlike(userId, runId)));
+    }
+
+    @Operation(summary = "내가 찜한 웹툰", description = """
+            최근에 찜한 것부터. 모양은 둘러보기 목록과 같고 liked=true 가 붙는다.""")
+    @GetMapping("/likes")
+    public ApiResponse<List<Map<String, Object>>> likes(@LoginUser Long userId) {
+        return ApiResponse.ok(likes.likedCards(userId));
+    }
+
+    @Operation(summary = "이 목록 중 내가 찜한 것", description = """
+            둘러보기 카드에 하트를 칠하려고 부른다. 로그인 없이는 빈 목록이다.""")
+    @PostMapping("/likes/among")
+    public ApiResponse<List<String>> likedAmong(@LoginUser Long userId, @RequestBody AmongRequest request) {
+        return ApiResponse.ok(likes.likedAmong(userId, request.runIds() == null ? List.of() : request.runIds()));
+    }
+
+    /** @param likes 바뀐 뒤의 찜 수 */
+    public record LikeResult(String runId, boolean liked, long likes) {
+    }
+
+    public record AmongRequest(List<String> runIds) {
     }
 
     @Operation(summary = "이 브라우저를 내 계정에 잇기", description = """
@@ -94,6 +136,45 @@ public class MyWebtoonController {
     public ApiResponse<ReuploadResult> reupload(@LoginUser Long userId,
                                                 @PathVariable String runId) {
         return ApiResponse.ok(new ReuploadResult(runId, service.reupload(userId, runId)));
+    }
+
+    @Operation(summary = "내 작품 지우기 (휴지통)", description = """
+            바로 지우지 않고 휴지통에 넣는다(#157). 넣은 작품은 내 목록·둘러보기·찜 목록에서
+            빠지고, 결과·장 주소도 404 가 된다. 그림은 비공개 자리로 옮긴다.
+
+            keepDays 일(기본 30일) 안에는 POST /my/runs/{runId}/restore 로 되살릴 수 있고,
+            그 뒤에는 그림(S3)과 행이 영구 삭제된다(purgeAt).
+
+            · 내 계정에 이어진 브라우저가 만든 작품만 된다 — 공개 전환과 같은 기준(아니면 403)
+            · 예시 작품은 못 지운다(403) · 없는 작품은 404
+            · 만드는 중인 작품은 먼저 「만들기 중단」을 한 뒤에 지울 수 있다(400)
+            · 이미 휴지통에 있으면 그대로 두고 같은 값을 돌려준다""")
+    @DeleteMapping("/runs/{runId}")
+    public ApiResponse<RunTrash.Trashed> delete(@LoginUser Long userId, @PathVariable String runId) {
+        return ApiResponse.ok(trash.trash(userId, runId));
+    }
+
+    @Operation(summary = "휴지통", description = """
+            내가 지운 작품. 최근에 지운 것부터. 모양은 내 목록과 같고 deleted_at ·
+            purge_at(이 시각이 지나면 영구 삭제)이 붙는다.""")
+    @GetMapping("/trash")
+    public ApiResponse<TrashList> trashList(@LoginUser Long userId) {
+        return ApiResponse.ok(new TrashList(trash.keepDays(), trash.trashOf(userId)));
+    }
+
+    @Operation(summary = "휴지통에서 되살리기", description = """
+            내 목록으로 돌려놓는다. 공개였던 작품은 둘러보기에도 다시 뜬다.
+            휴지통에 없던 작품이면 restored=false 를 준다.""")
+    @PostMapping("/runs/{runId}/restore")
+    public ApiResponse<RestoreResult> restore(@LoginUser Long userId, @PathVariable String runId) {
+        return ApiResponse.ok(new RestoreResult(runId, trash.restore(userId, runId)));
+    }
+
+    /** @param keepDays 휴지통에 둔 뒤 되살릴 수 있는 날 수 */
+    public record TrashList(int keepDays, List<Map<String, Object>> runs) {
+    }
+
+    public record RestoreResult(String runId, boolean restored) {
     }
 
     @Operation(summary = "웹툰 완성 메일 — 켜져 있는가", description = """

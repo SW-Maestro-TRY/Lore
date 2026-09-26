@@ -46,6 +46,7 @@ class RegenServiceTest {
     private HarnessProcess harness;
     private PageUploader uploader;
     private JobRunner runner;
+    private com.lore.webtoon.job.AfterRun after;
     private RegenService service;
 
     @BeforeEach
@@ -75,8 +76,9 @@ class RegenServiceTest {
         runner = mock(JobRunner.class);
         when(runner.runDir("run-1")).thenReturn(Files.createDirectories(runsDir.resolve("run-1")));
 
+        after = mock(com.lore.webtoon.job.AfterRun.class);
         service = new RegenService(regens, pages, bakery, harness, uploader, runner,
-                mock(com.lore.webtoon.job.RunFiles.class));
+                mock(com.lore.webtoon.job.RunFiles.class), after);
     }
 
     private void 페이지파일(int no, byte[] content) throws IOException {
@@ -130,6 +132,7 @@ class RegenServiceTest {
         Path v1 = runsDir.resolve("run-1/pages/versions/page01.v1.png");
         assertThat(Files.readString(v1)).isEqualTo("옛 그림");
         verify(bakery).invalidate("run-1", 1);
+        verify(after).cost("run-1");            // 다시 그린 값도 장부에(#444)
     }
 
     @Test
@@ -147,6 +150,7 @@ class RegenServiceTest {
         // 실패해도 지금 그림은 판본으로 이미 떠 뒀다 — 그 자체는 해롭지 않다.
         assertThat(service.versionsOf("run-1", 1)).hasSize(1);
         verify(bakery, never()).invalidate(anyString(), eq(1));
+        verify(after).cost("run-1");            // 실패해도 나간 값은 적는다(#444)
     }
 
     @Test

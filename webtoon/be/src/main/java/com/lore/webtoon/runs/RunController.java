@@ -2,6 +2,7 @@ package com.lore.webtoon.runs;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.webtoon.Admins;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.job.AfterRun;
@@ -14,6 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -66,6 +68,7 @@ public class RunController {
     private final AfterRun after;
     private final WorkLedger ledger;
     private final CreditGate credits;
+    private final Admins admins;
     /* **경계에서는 Map 으로 주고받는다.**
      *
      * 이 앱의 HTTP 변환기는 Jackson 3(tools.jackson) 인데, 얹은 것을 다루는
@@ -78,7 +81,7 @@ public class RunController {
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
                          RegenService regen, AfterRun after, WorkLedger ledger,
-                         CreditGate credits) {
+                         CreditGate credits, Admins admins) {
         this.runs = runs;
         this.pages = pages;
         this.export = export;
@@ -89,6 +92,7 @@ public class RunController {
         this.after = after;
         this.ledger = ledger;
         this.credits = credits;
+        this.admins = admins;
     }
 
     /**
@@ -130,6 +134,25 @@ public class RunController {
         try {
             String got = stories.editTitle(runId, String.valueOf(body.getOrDefault("title", "")));
             return ResponseEntity.ok(Map.of("title", got));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
+        }
+    }
+
+    /**
+     * 줄거리(로그라인)를 고친다. 제목 고치기와 같은 규칙이다 — <b>빈 값으로
+     * 부르면 지운다</b>(모델이 지은 줄거리로 돌아간다). 길면 300자에서 자른다.
+     *
+     * 아직 이야기를 안 고른 작품(만드는 중)이면 404 다.
+     */
+    @Operation(summary = "줄거리 고치기", description = "logline 이 비어 있으면 원래 줄거리로 되돌린다. 300자에서 자른다.")
+    @PostMapping("/{runId}/logline")
+    public ResponseEntity<Map<String, Object>> logline(@PathVariable String runId,
+                                                        @RequestBody Map<String, Object> body) {
+        mustOwn(runId);
+        try {
+            String got = stories.editPlot(runId, String.valueOf(body.getOrDefault("logline", "")));
+            return ResponseEntity.ok(Map.of("logline", got));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
         }
@@ -201,7 +224,8 @@ public class RunController {
         return Map.of("runs", found);
     }
 
-    @Operation(summary = "완성본 한 편")
+    @Operation(summary = "완성본 한 편", description = """
+            관리자가 열면 만들 때 넣은 설정(inputs)이 같이 온다(#329, #428) — 운영용이고 사람이 쓴 글이라 다른 사람에게는 안 준다.""")
     @GetMapping("/{runId}/result")
     public ResponseEntity<Map<String, Object>> result(@PathVariable String runId) {
         /* **여는 것만으로 낫게 한다.** 다 그려 놓고 올리는 데서 실패한 작품은
@@ -210,9 +234,17 @@ public class RunController {
            않으므로 돈이 안 나간다. 자세한 것은 AfterRun#healIfMissing. */
         after.healIfMissing(runId);
         Map<String, Object> found = runs.result(runId);
-        return found == null
-                ? ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"))
-                : ResponseEntity.ok(found);
+        if (found == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
+        }
+        /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
+        if (admins.current()) {
+            RunService.Inputs inputs = runs.inputsOf(runId);
+            if (inputs != null) {
+                found.put("inputs", inputs.values());
+            }
+        }
+        return ResponseEntity.ok(found);
     }
 
     /**
@@ -255,11 +287,9 @@ public class RunController {
         if (png == null) {
             return ResponseEntity.notFound().build();
         }
-        /* 받는 파일 이름은 작품 번호다. 제목을 쓰면 한글·따옴표가 섞여 브라우저마다
-           다르게 저장되고, 같은 작품을 두 번 받으면 이름이 겹친다. */
+        // 받는 파일 이름은 LORE_제목_1화.png — 옛 브라우저에는 작품 번호(DownloadName).
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + runId + ".png\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
@@ -271,6 +301,11 @@ public class RunController {
 
     private JsonNode asNode(Map<String, Object> body) {
         return body == null ? null : mapper.valueToTree(body);
+    }
+
+    private static String titleOf(Map<String, Object> meta) {
+        Object t = meta.get("title");
+        return t == null ? "" : String.valueOf(t);
     }
 
     /** 띠 오른쪽에 적을 한 줄 — 파이썬의 {@code episode_caption} 과 같은 모양. */
@@ -375,6 +410,9 @@ public class RunController {
     public ResponseEntity<Void> page(@PathVariable String runId, @PathVariable int no,
                                      @RequestParam(defaultValue = "1080") int w,
                                      @RequestParam(required = false) String raw) {
+        if (runs.isTrashed(runId)) {
+            return ResponseEntity.notFound().build();      // 휴지통에 든 작품(#157)
+        }
         boolean wantRaw = raw != null && !raw.isBlank() && !"0".equals(raw);
         String where = wantRaw ? null : pages.urlOfKey(bakery.keyOf(runId, no));
         if (where == null) {
@@ -405,8 +443,7 @@ public class RunController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + runId + "-" + no + ".png\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }

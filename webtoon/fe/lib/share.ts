@@ -177,9 +177,10 @@ export async function copyLink(url: string): Promise<boolean> {
  * 폰이 들고 있는 공유 화면. 있으면 그것이 제일 낫다 — 그 사람이 실제로 쓰는
  * 앱 목록이 뜨고, 우리가 고른 서비스 넷보다 많다.
  *
+ * @param text 주소 앞에 붙는 글 한 덩어리(제목이든 소개 문장이든).
  * @return 실제로 공유 화면을 띄웠으면 true. 없거나 사람이 닫으면 false
  */
-export async function shareNative(url: string, title: string): Promise<boolean> {
+export async function shareNative(url: string, text: string): Promise<boolean> {
   if (typeof navigator === "undefined" || !navigator.share) {
     return false;
   }
@@ -189,8 +190,11 @@ export async function shareNative(url: string, title: string): Promise<boolean> 
      * 있었다 — 그러면 한글 제목이 주소의 일부처럼 보여(공백이 없어서) 링크를
      * 열 때 그 제목까지 run id 로 들어가 깨졌다(실측으로 확인). 줄바꿈으로 직접
      * 이어 하나의 글로 보내고, url 을 **맨 뒤**에 둔다 — 그러면 뒤에 아무것도
-     * 안 붙으므로 어떤 앱이 이어 붙이든 안전하다. */
-    await navigator.share({ title, text: `${title}\n${url}` });
+     * 안 붙으므로 어떤 앱이 이어 붙이든 안전하다.
+     *
+     * **title 도 따로 안 싣는다.** 글에 이미 같은 말이 들어 있는데 title 까지 주면
+     * 카카오톡 같은 앱이 둘을 「제목 - 제목」으로 이어 붙여 같은 문장이 두 번 나왔다. */
+    await navigator.share({ text: `${text}\n${url}` });
     return true;
   } catch (e) {
     // **닫은 것과 못 연 것을 가른다.** 사람이 닫았으면(AbortError) 그것으로

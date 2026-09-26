@@ -13,6 +13,7 @@
 // 배경 그림 바꾸는 법은 common/fe/landing/README.md 참고.
 import Link from "next/link";
 import styles from "../landing.module.css";
+import HeroWebtoonBg from "./HeroWebtoonBg";
 
 export default function Hero() {
   return (
@@ -31,15 +32,12 @@ export default function Hero() {
       <div className={styles.split}>
         <a className={`${styles.side} ${styles.sideWebtoon}`} href="/webtoon">
           <span className={styles.sideBg}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/static/landing/hero-webtoon.jpg" alt="" />
+            <HeroWebtoonBg />
           </span>
           <span className={styles.sideInner}>
-            <span className={styles.sideNum}>/ 길게</span>
             <h2 className={styles.sideTitle}>웹툰 한 화</h2>
             <p className={styles.sideText}>
-              세계관과 그림체만 고르면 표지부터 마지막 장까지 한 편이 통째로
-              나옵니다.
+              캐릭터를 넣으면 스토리를 뽑아 웹툰 1화를 생성해냅니다.
             </p>
             <span className={styles.sideMore}>
               <span className={styles.sideMoreIn}>
@@ -48,7 +46,7 @@ export default function Hero() {
                     <b>01</b> 사진 한 장으로 캐릭터 만들기
                   </li>
                   <li>
-                    <b>02</b> 세계관 · 그림체 고르기 — 이야기는 비워도 됩니다
+                    <b>02</b> 세계관 · 그림체 고르기
                   </li>
                   <li>
                     <b>03</b> 10분쯤 기다리면 1화 완성, 마음에 안 드는 컷만
@@ -66,11 +64,9 @@ export default function Hero() {
             <img src="/static/landing/hero-tama.webp" alt="" />
           </span>
           <span className={styles.sideInner}>
-            <span className={styles.sideNum}>/ 매일 조금씩</span>
             <h2 className={styles.sideTitle}>캐릭터 다마고치</h2>
             <p className={styles.sideText}>
-              만든 캐릭터가 화면 안에서 삽니다. 돌본 만큼 새 동작을 하나씩
-              배워 와요.
+              캐릭터가 새로운 동작을 배우며 살아 움직입니다.
             </p>
             <span className={styles.sideMore}>
               <span className={styles.sideMoreIn}>

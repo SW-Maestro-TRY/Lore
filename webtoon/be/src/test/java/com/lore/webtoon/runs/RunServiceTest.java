@@ -40,7 +40,7 @@ class RunServiceTest {
         jobs = mock(WebtoonJobRepository.class);
         stories = mock(StoryStore.class);
         pages = mock(PageStore.class);
-        runs = new RunService(works, jobs, stories, pages);
+        runs = new RunService(works, jobs, stories, pages, mock(com.lore.webtoon.work.RunLikeRepository.class));
     }
 
     private WebtoonWork 작품(String runId, boolean isPublic) {
@@ -59,7 +59,7 @@ class RunServiceTest {
         when(story.getTitle()).thenReturn("얼음 왕자의 계약");
         when(story.displayTitle()).thenReturn("얼음 왕자의 계약");
         when(story.getGenre()).thenReturn("로맨스 판타지");
-        when(story.getPlot()).thenReturn("계약으로 시작된 관계가 진심이 된다");
+        when(story.displayPlot()).thenReturn("계약으로 시작된 관계가 진심이 된다");
         when(stories.chosenOf(runId)).thenReturn(Optional.of(story));
         return work;
     }
@@ -220,5 +220,18 @@ class RunServiceTest {
                 .containsEntry("character", "")
                 .containsEntry("style_label", "")
                 .containsEntry("logline", "");
+    }
+
+    @Test
+    @DisplayName("휴지통에 든 작품은 결과·회차·카드가 모두 없는 작품처럼 null 이다(#157)")
+    void 휴지통_작품은_안_보인다() {
+        WebtoonWork work = 작품("run-1", true);
+        when(work.isTrashed()).thenReturn(true);
+        when(pages.pageNumbersOf("run-1")).thenReturn(List.of(1, 2));
+
+        assertThat(runs.isTrashed("run-1")).isTrue();
+        assertThat(runs.result("run-1")).isNull();
+        assertThat(runs.episode("run-1", 1)).isNull();
+        assertThat(runs.cardOf("run-1")).isNull();
     }
 }

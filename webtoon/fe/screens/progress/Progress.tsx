@@ -17,6 +17,7 @@ import {
 import { MASCOT_LINES } from "../../lib/progressData";
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
+import { track } from "../../lib/track";
 import { IconArrow, IconBack, IconChevronDown, IconChevronUp, IconClose, IconRetry, IconZoom } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import LouPlay from "./LouPlay";
@@ -151,6 +152,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const status = job?.status;
 
   useEffect(() => { if (status === "awaiting_sheet") setSheetV((v) => v + 1); }, [status]);
+  /* 화면이 본 상태가 바뀔 때마다 한 줄. 작업의 실제 성패와 걸린 시간은 서버의
+     webtoon_job 에 있다 — 여기는 「사람이 화면을 보고 있는 동안 무엇을 봤나」다. */
+  useEffect(() => {
+    if (status) track("job_status", { job: jobId, status, reason: status === "error" ? job?.refunded ?? undefined : undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, jobId]);
   useEffect(() => {
     const target = Math.max(0, Math.min(100, job?.pct ?? 0));
     if (target <= shownPctRef.current) {
@@ -173,6 +180,16 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     setTab(null);
   }, [status]);
 
+  /* 그려진 장이 늘 때마다 그 자리로 스크롤한다 — 전에는 새 장이 그려져도
+     화면이 그대로라 "진짜 만들고 있는 게 맞나" 라는 의심으로 이어졌다
+     (2026-09-23). 가짜로 움직이는 게 아니라 실제로 늘어난 장 수만큼만 반응한다. */
+  const drawnRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (job?.art?.done) {
+      drawnRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [job?.art?.done]);
+
   const dirs: NhDirection[] = useMemo(() => job?.directions ?? [], [job?.directions]);
   const chosen = useMemo(
     () => (job?.pick != null ? dirs.find((d) => d.n === job.pick) : undefined),
@@ -189,6 +206,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const confirmPick = () => {
     if (!selectedDir || !job) return;
     const edited = body.trim() !== (selectedDir.body || "").trim() ? body : undefined;
+    track("story_pick", { job: job.id, n: selectedDir.n, count: dirs.length, edited: !!edited });
     void send(() => pickDirection(job.id, selectedDir.n, edited));
   };
 
@@ -247,15 +265,27 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
   const mailTo = mailSent || job?.notice?.email || "";
   const [mailBefore, mailAfter] = t("완성되면 {email} 으로 알림을 드릴게요", { email: HOLE }).split(HOLE);
+  /* 계정 알림은 마이페이지 설정에서 끈다 — 끄는 길을 같이 알려 준다. 게스트가
+     이 작품에만 적은 주소는 그 설정과 상관없어서 안 띄운다. */
+  const offHint = job?.notice?.logged_in && (
+    <span className="dim wt-prog-mailoff">
+      <button type="button" className="linkish" onClick={() => go("mypage", { tab: "settings" })}>{t("마이페이지 설정")}</button>
+      {t("에서 끌 수 있어요!")}
+    </span>
+  );
   const mailCard = job && (
     <div className="wt-prog-mail">
       {job.notice?.email || mailSent ? (
         <>
           <label>{mailBefore}<b>{mailTo}</b>{mailAfter}</label>
           {job.minutes_left != null && <span className="dim">{t("지금 약 {n}분 남았어요.", { n: job.minutes_left })}</span>}
+          {offHint}
         </>
       ) : job.notice?.logged_in ? (
-        <label>{t("완성되면 계정 이메일로 알림을 드릴게요")}</label>
+        <>
+          <label>{t("완성되면 계정 이메일로 알림을 드릴게요")}</label>
+          {offHint}
+        </>
       ) : (
         <>
           <label htmlFor="wt-prog-em">
@@ -266,7 +296,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
             <input id="wt-prog-em" className="field" type="email" value={email} placeholder="you@example.com" aria-label={t("이메일")}
                    onChange={(e) => setEmail(e.target.value)} />
             <button type="button" className="btn btn-p" disabled={busy || !email.includes("@")}
-                    onClick={() => void send(async () => { const r = await notifyByEmail(job.id, email.trim()); setMailSent(r.email || email.trim()); })}>
+                    onClick={() => void send(async () => { track("notify_optin", { job: job.id }); const r = await notifyByEmail(job.id, email.trim()); setMailSent(r.email || email.trim()); })}>
               {t("알림 받기")}
             </button>
           </div>
@@ -276,21 +306,50 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     </div>
   );
 
-  const doCancel = () => void send(async () => { await cancelJob(jobId); stopped.current = true; go("landing"); });
+  const doCancel = () => {
+    track("job_cancel", { job: jobId, status, count: job?.art?.done ?? 0, page: job?.art?.total ?? 0 });
+    void send(async () => { await cancelJob(jobId); stopped.current = true; go("landing"); });
+  };
+
+  /* 사람이 답하는 자리들(#413). 메모·본문은 싣지 않고 있었는지만 싣는다. */
+  const approveSheet = () => {
+    if (!job) return;
+    track("sheet_decide", { job: job.id, result: "approve" });
+    void send(() => decideSheet(job.id, "approve"));
+  };
+  const retrySheet = () => {
+    if (!job) return;
+    track("sheet_decide", { job: job.id, result: "retry", has_note: !!sheetNote.trim() });
+    void send(() => decideSheet(job.id, "retry", sheetNote.trim()));
+  };
+  const retryStory = () => {
+    if (!job) return;
+    track("story_retry", { job: job.id, has_note: !!dirNote.trim() });
+    void send(() => retryDirections(job.id, dirNote.trim()));
+  };
+  /* 기다리는 동안 다른 웹툰을 보러 가는가 — 기다림을 무엇으로 채울지 정하는 근거. */
+  const browseWorks = () => {
+    track("browse_while_waiting", { job: jobId, pane, status });
+    go("works");
+  };
+  const remakeAfterFail = () => {
+    track("remake_after_fail", { job: jobId });
+    go("create", { step: 1 });
+  };
 
   /* ---- 폰 바닥 단추 ---- */
   const mfoot = (() => {
     if (!job) return null;
     if (pane === "sheet") return (
       <>
-        <button type="button" className="btn btn-p" disabled={busy} onClick={() => void send(() => decideSheet(job.id, "approve"))}>{t("이 얼굴로 갈게요")}</button>
-        <button type="button" className="btn btn-w" disabled={busy} onClick={() => void send(() => decideSheet(job.id, "retry", sheetNote.trim()))}>{t("다시 만들기")}</button>
+        <button type="button" className="btn btn-p" disabled={busy} onClick={approveSheet}>{t("이 얼굴로 갈게요")}</button>
+        <button type="button" className="btn btn-w" disabled={busy} onClick={retrySheet}>{t("다시 만들기")}</button>
       </>
     );
     if (pane === "making") return (
       <>
         <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료 · {n}번으로", { n: selected ?? "-" })}</button>
-        <button type="button" className="btn btn-w" disabled={busy} onClick={() => void send(() => retryDirections(job.id, dirNote.trim()))}>{t("후보 다시 만들기")}</button>
+        <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>{t("후보 다시 만들기")}</button>
       </>
     );
     if (pane === "confirm") return (
@@ -301,11 +360,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     );
     if (pane === "failed") return (
       <>
-        <button type="button" className="btn btn-p" onClick={() => go("create", { step: 1 })}>{t("다시 만들기")}</button>
+        <button type="button" className="btn btn-p" onClick={remakeAfterFail}>{t("다시 만들기")}</button>
         <button type="button" className="btn btn-w" onClick={() => go("landing")}>{t("홈으로 가기")}</button>
       </>
     );
-    return <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("다른 사람 웹툰 둘러보기")}</button>;
+    return <button type="button" className="btn btn-w" onClick={browseWorks}>{t("다른 사람 웹툰 둘러보기")}</button>;
   })();
 
   return (
@@ -327,7 +386,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               <h2>{t("웹툰 생성에 실패했어요")}</h2>
               {job.error && <span className="muted">{job.error}</span>}
               {refundLine && <span className="ok">{refundLine}</span>}
-              <button type="button" className="btn btn-p" onClick={() => go("create", { step: 1 })}>{t("다시 만들기")}</button>
+              <button type="button" className="btn btn-p" onClick={remakeAfterFail}>{t("다시 만들기")}</button>
               <button type="button" className="btn btn-w" onClick={() => go("landing")}>{t("홈으로 가기")}</button>
             </div>
           </div>
@@ -355,9 +414,16 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 </div>
               )}
 
-              <div className="wt-prog-mchips" aria-hidden="true">
+              {/* 폰에서는 위 .wt-prog-steps 가 숨어 있어(Progress.css) 이게
+                  유일한 단계 이동 수단이다 — 전에는 그냥 글자였다(aria-hidden).
+                  PC 에서 되는 "지나온 단계 다시 보기"가 폰에서 안 된다는
+                  피드백의 원인(2026-09-23). */}
+              <div className="wt-prog-mchips">
                 {STEPS.map((s, i) => (
-                  <span key={s.key} className={stepState(i)}>{stepState(i) === "done" ? "✓ " : ""}{t(s.title)}</span>
+                  <button key={s.key} type="button" className={stepState(i)}
+                          disabled={!canView(i)} onClick={() => setTab(tab === i ? null : i)}>
+                    {stepState(i) === "done" ? "✓ " : ""}{t(s.title)}
+                  </button>
                 ))}
               </div>
 
@@ -377,7 +443,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
               {job && (
                 <div className="wt-prog-railfoot">
-                  <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("다른 사람 웹툰 둘러보기")}</button>
+                  <button type="button" className="btn btn-w" onClick={browseWorks}>{t("다른 사람 웹툰 둘러보기")}</button>
                   {mailCard}
                 </div>
               )}
@@ -403,10 +469,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
                   </button>
                   <div className="wt-prog-acts">
-                    <button type="button" className="btn btn-p" disabled={busy} onClick={() => void send(() => decideSheet(job.id, "approve"))}>{t("이 얼굴로 갈게요")}</button>
+                    <button type="button" className="btn btn-p" disabled={busy} onClick={approveSheet}>{t("이 얼굴로 갈게요")}</button>
                     <input className="field" value={sheetNote} placeholder={t("고칠 점을 적고 다시 만들기 · 예: 머리를 더 길게")} aria-label={t("다시 만들기 메모")}
                            onChange={(e) => setSheetNote(e.target.value)} />
-                    <button type="button" className="btn btn-w" disabled={busy} onClick={() => void send(() => decideSheet(job.id, "retry", sheetNote.trim()))}>
+                    <button type="button" className="btn btn-w" disabled={busy} onClick={retrySheet}>
                       <IconRetry size={18} /> {t("다시 만들기")}
                     </button>
                   </div>
@@ -441,7 +507,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료 · {n}번으로", { n: selected ?? "-" })}</button>
                     <input className="field w300" value={dirNote} placeholder={t("바라는 방향을 적고 후보 다시 만들기")} aria-label={t("다시 만들기 메모")}
                            onChange={(e) => setDirNote(e.target.value)} />
-                    <button type="button" className="btn btn-w" disabled={busy} onClick={() => void send(() => retryDirections(job.id, dirNote.trim()))}>
+                    <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>
                       <IconRetry size={18} /> {t("후보 다시 만들기")}
                     </button>
                   </div>
@@ -470,7 +536,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <>
                   <div className="wt-prog-head wt-prog-playhead">
                     <h2>{t("기다리는 동안 루를 놀아주세요!")}</h2>
-                    <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("웹툰 보면서 기다리기")}</button>
+                    <button type="button" className="btn btn-w" onClick={browseWorks}>{t("웹툰 보면서 기다리기")}</button>
                   </div>
                   <LouPlay />
                 </>
@@ -490,7 +556,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     </div>
                   </div>
                   <div className="wt-prog-row">
-                    <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("기다리는 동안 웹툰 보기")}</button>
+                    <button type="button" className="btn btn-w" onClick={browseWorks}>{t("기다리는 동안 웹툰 보기")}</button>
                     <span className="dim" style={{ fontSize: 13 }}>{t("만들기는 서버에서 계속 돌아요. 나갔다 와도 이어집니다.")}</span>
                   </div>
                   {chosen && (
@@ -501,13 +567,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     </div>
                   )}
                   {art && (
-                    <>
+                    <div ref={drawnRef}>
                       <div className="wt-prog-pageshead">
                         <b>{t("그려진 장")}</b>
                         <span className="dim">{t("{done} / {total}장", { done: art.done, total: art.total })}</span>
                       </div>
                       <PageGrid jobId={job.id} art={art} onZoom={setZoom} />
-                    </>
+                    </div>
                   )}
                   <div className="wt-prog-cancel">
                     {!askCancel ? (

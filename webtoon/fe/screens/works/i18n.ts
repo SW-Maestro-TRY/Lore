@@ -4,7 +4,6 @@ import { registerDict, type Dict } from "../../lib/i18n";
 const dict: Dict = {
   "둘러보기": { en: "Browse", ja: "見て回る", zh: "浏览" },
   "다른 사람들의 웹툰": { en: "Webtoons by others", ja: "みんなのウェブトゥーン", zh: "大家的网络漫画" },
-  "표지를 누르면 그대로 읽을 수 있어요.": { en: "Tap a cover to start reading.", ja: "表紙を押すとそのまま読めます。", zh: "点击封面即可阅读。" },
   "내 웹툰 만들기": { en: "Make my webtoon", ja: "自分のウェブトゥーンを作る", zh: "制作我的网络漫画" },
   "전체": { en: "All", ja: "すべて", zh: "全部" },
   "내 작품": { en: "My works", ja: "自分の作品", zh: "我的作品" },
@@ -35,7 +34,18 @@ const dict: Dict = {
   "공개": { en: "Public", ja: "公開", zh: "公开" },
   "비공개": { en: "Private", ja: "非公開", zh: "不公开" },
   "편집실": { en: "Editor", ja: "編集室", zh: "编辑室" },
+  "찜": { en: "Saved", ja: "お気に入り", zh: "收藏" },
+  "찜하기": { en: "Save", ja: "お気に入りに追加", zh: "收藏" },
+  "찜 취소": { en: "Unsave", ja: "お気に入りから外す", zh: "取消收藏" },
+  "로그인하면 찜할 수 있어요": { en: "Sign in to save webtoons", ja: "ログインするとお気に入りに追加できます", zh: "登录后可收藏" },
+  "제목·캐릭터·장르로 찾기": { en: "Search title, character, genre", ja: "タイトル・キャラクター・ジャンルで探す", zh: "按标题、角色、题材查找" },
+  "찾는 웹툰이 없어요": { en: "No webtoons match", ja: "見つかりませんでした", zh: "没有匹配的漫画" },
+  "다른 말로 찾아보거나 칩을 풀어 보세요.": { en: "Try other words or clear the chips.", ja: "別の言葉で探すか、絞り込みを外してみてください。", zh: "换个词试试，或清除筛选。" },
+  "아직 찜한 웹툰이 없어요": { en: "Nothing saved yet", ja: "まだお気に入りがありません", zh: "还没有收藏的漫画" },
+  "마음에 드는 작품의 하트를 누르면 여기에 모여요.": { en: "Tap the heart on a webtoon you like and it'll show up here.", ja: "気に入った作品のハートを押すとここに集まります。", zh: "点击喜欢的作品上的爱心，它们会集中在这里。" },
+  "최근 본 웹툰": { en: "Recently read", ja: "最近読んだ作品", zh: "最近看过" },
   "로그인하면 공개 여부를 바꿀 수 있어요": { en: "Sign in to change who can see it", ja: "ログインすると公開設定を変えられます", zh: "登录后可更改公开设置" },
+  "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
 };
 
 registerDict(dict);

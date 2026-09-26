@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
-  allowanceLine, listCharacters, readAllowance, readCharacter,
+  WebtoonApiError, allowanceLine, listCharacters, readAllowance, readCharacter,
   type Allowance, type Character,
 } from "../../lib/api";
 import { startJob } from "../../lib/start";
@@ -17,6 +17,7 @@ import {
 import { STYLE_THUMB } from "../../lib/styleThumbs";
 import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { useT } from "../../lib/i18n";
+import { track } from "../../lib/track";
 import { IconArrow, IconBack, IconCheck, IconClose, IconEdit } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import "./i18n";
@@ -220,15 +221,39 @@ export default function Wizard({
   const [starting, setStarting] = useState(false);
   const [startErr, setStartErr] = useState("");
   const canStart = form.agreeIp && !blockedReason && !starting && step1Ok;
+
+  /* 마지막 걸음까지 와서 막힌 사람 — 무엇에 막혔는지가 크레딧·무료 횟수를 정할 근거다(#413). */
+  useEffect(() => {
+    if (!allow || !blockedReason) return;
+    track("create_blocked", {
+      reason: allow.blocked ? "blocked" : "free_used",
+      logged_in: !!allow.logged_in, free_left: allow.free_left ?? undefined,
+    });
+  }, [allow, blockedReason]);
+
+  /* 시작할 때 무엇을 골랐나. 글로 쓴 것(이름·설명·이야기·장르 직접 입력)은 싣지 않고
+     「있었는가」만 싣는다. */
+  const startProps = () => ({
+    quality: form.quality, style: form.style, mode: form.mode,
+    count: form.photos.length, has_photo: form.photos.length > 0,
+    character: form.characterId, has_desc: !!form.character.trim(),
+    has_note: !!form.story.trim(), preset: GENRE_QUICK.includes(form.genre),
+    cost: cost ?? undefined, free_left: allow?.free_left ?? undefined, logged_in: authenticated,
+  });
+
   const start = async () => {
     if (!canStart) return;
     setStarting(true);
     setStartErr("");
+    const props = startProps();
+    track("create_start", props);
     try {
       const id = await startJob(form, authenticated);
+      track("create_started", { ...props, job: id });
       try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* 없어도 된다 */ }
       go("running", { job: id }, { replace: true });
     } catch (e) {
+      track("create_failed", { ...props, status: e instanceof WebtoonApiError ? e.status : 0 });
       setStartErr(e instanceof Error ? e.message : t("만들기를 시작하지 못했습니다"));
       setStarting(false);
     }
@@ -427,7 +452,6 @@ export default function Wizard({
               <button type="button" className="btn btn-p" onClick={() => goStep(3)}>{t("다음")} <IconArrow size={18} /></button>
             </div>
             <div className="mfoot">
-              <span className="dim wt-wiz-mfoot-note">{t("둘 다 비워도 만들 수 있어요")}</span>
               <button type="button" className="btn btn-p" onClick={() => goStep(3)}>{t("다음")}</button>
             </div>
           </>

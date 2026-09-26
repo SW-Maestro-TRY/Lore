@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.safety.SafetyGuard;
 import com.lore.webtoon.character.CharacterOwner;
 import com.lore.webtoon.character.CharacterService;
 import com.lore.webtoon.character.WebtoonCharacter;
@@ -61,11 +62,13 @@ public class JobService {
             "story", "이야기 짓기",
             "sheet", "캐릭터 시트",
             "board", "장면 나누기",
-            "pages", "페이지 그림");
+            "pages", "페이지 그림",
+            "bind", "검수 · 합본");
 
     private static final String DEFAULT_STYLE = WebtoonStyles.DEFAULT_STYLE;
 
     private final WebtoonJobRepository jobs;
+    private final SafetyGuard safety;
     private final JobStore store;
     private final JobQueue queue;
     private final JobRunner runner;
@@ -85,9 +88,10 @@ public class JobService {
                       JobRunner runner,
                       JobProgress progress, StoryStore stories, WorkLedger works,
                       JobNotice notice, CharacterService characters, CharacterOwner owner, PrivateArt art,
-                      S3Service uploads, S3Storage storage,
+                      S3Service uploads, S3Storage storage, SafetyGuard safety,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
+        this.safety = safety;
         this.works = works;
         this.notice = notice;
         this.characters = characters;
@@ -118,6 +122,11 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "저작권 확인에 동의해야 만들 수 있습니다");
         }
+        /* 글은 만들기 전에 거른다(#80). 파이썬까지 가서 모델이 거절하면 돈은 이미 나갔고
+           사람은 "만들기가 안 된다" 로만 안다. 사진은 아직 안 본다(safety.md). */
+        safety.checkText("webtoon-create", form.name(), form.character(), form.genre(), form.story(),
+                form.photoNote(),
+                form.fields() == null ? null : String.join("\n", form.fields().values()));
         boolean known = notBlank(form.name()) || notBlank(form.character())
                 || (form.fields() != null && form.fields().values().stream().anyMatch(this::notBlank))
                 || (form.photosData() != null && !form.photosData().isEmpty());

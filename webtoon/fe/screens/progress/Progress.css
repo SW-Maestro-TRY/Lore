@@ -29,6 +29,7 @@
 /* 루와 놀기 제목 줄 — 버튼은 오른쪽에 제 크기만큼만 */
 .wt .wt-prog-playhead { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
 .wt .wt-prog-playhead .btn { flex-shrink: 0; }
+.wt .wt-prog-playhead h2 { min-width: 0; }
 
 /* 루와 놀기 — 루는 늘 position:absolute + translate(-50%,-50%)로 중심을 잡는다.
  * 끄는 동안 mascotPlay 가 style.left/top 만 px 로 바꾸는데, translate 가 항상
@@ -107,6 +108,11 @@
 .wt .wt-prog-mail label { font-size: 14px; }
 .wt .wt-prog-mail label .dim { font-weight: 400; }
 .wt .wt-prog-mail .row { display: flex; gap: 8px; }
+.wt .wt-prog-mailoff { font-size: var(--fs-xs, 12px); }
+.wt .wt-prog-mailoff .linkish {
+  background: none; border: 0; padding: 0; font: inherit; color: var(--sea); font-weight: 700;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
 .wt .wt-prog-mail .row .field { height: 42px; flex-grow: 1; min-width: 0; }
 .wt .wt-prog-mail .row .btn { height: 42px; font-size: 13.5px; }
 .wt .wt-prog-mail .dim { font-size: 12px; }
@@ -208,12 +214,22 @@
   .wt .wt-prog-play .mascot { width: 150px; height: 150px; }
   .wt .wt-prog-mchips { display: flex; justify-content: space-between; padding: 0 4px; }
   .wt .wt-prog-mnote { display: block; }
-  .wt .wt-prog-mchips span { font-size: 11.5px; color: var(--dim); }
-  .wt .wt-prog-mchips span.cur { font-weight: 700; color: var(--ink); }
-  .wt .wt-prog-mchips span.done { color: #0f9e8a; }
+  /* 지나온 단계를 다시 보는 단추다(전에는 그냥 글자였다) — 버튼 기본
+     테두리·배경만 지우고 칩 모양은 그대로 둔다. */
+  .wt .wt-prog-mchips button {
+    font-family: inherit; font-size: 11.5px; color: var(--dim); background: none; border: 0; padding: 0;
+    cursor: pointer;
+  }
+  .wt .wt-prog-mchips button:disabled { cursor: default; opacity: 0.6; }
+  .wt .wt-prog-mchips button.cur { font-weight: 700; color: var(--ink); }
+  .wt .wt-prog-mchips button.done { color: #0f9e8a; }
   .wt .wt-prog-main { gap: 14px; }
   .wt .wt-prog-head h2 { font-size: 24px; line-height: 1.3; }
   .wt .wt-prog-head .lede { font-size: 13.5px; line-height: 1.5; }
+  /* 「웹툰 보면서 기다리기」 단추가 긴 제목에 밀려 화면 밖으로 나가던 것 —
+     폰에서는 제목 아래로 내려 폭 전체를 쓴다(2026-09-23). */
+  .wt .wt-prog-playhead { flex-direction: column; align-items: stretch; gap: 10px; }
+  .wt .wt-prog-playhead .btn { width: 100%; }
   .wt .wt-prog-sheet { height: auto; border-radius: 14px; }
   .wt .wt-prog-sheet img { height: auto; }
   .wt .wt-prog-sheet .zoom { position: static; display: flex; justify-content: center; background: none; color: var(--dim); font-size: 11.5px; padding: 6px; border-radius: 0; }

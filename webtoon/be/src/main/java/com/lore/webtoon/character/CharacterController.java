@@ -1,6 +1,7 @@
 package com.lore.webtoon.character;
 
 import com.lore.webtoon.credit.CreditGate;
+import com.lore.webtoon.Admins;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.common.exception.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,7 +17,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,10 +50,15 @@ public class CharacterController {
 
     private final CharacterService characters;
     private final CharacterOwner who;
+    private final ShareReward shareReward;
+    private final Admins admins;
 
-    public CharacterController(CharacterService characters, CharacterOwner who) {
+    public CharacterController(CharacterService characters, CharacterOwner who, ShareReward shareReward,
+                               Admins admins) {
         this.characters = characters;
         this.who = who;
+        this.shareReward = shareReward;
+        this.admins = admins;
     }
 
     @Operation(summary = "고를 수 있는 캐릭터", description = """
@@ -124,14 +133,51 @@ public class CharacterController {
 
     @Operation(summary = "공유된 카드", description = """
             「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.
-            내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.""")
+            내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.
+
+            남이 열면 카드 주인에게 「캐릭터 만들어보기」 무료 횟수를 돌려준다(#332) —
+            같은 사람은 한 번, 카드마다 상한까지, 주인이 자기 것을 여는 것은 안 센다.""")
     @GetMapping("/{publicId}/card")
-    public Map<String, Object> card(@PathVariable String publicId) {
+    public Map<String, Object> card(@PathVariable String publicId,
+                                    @RequestHeader(value = UID_HEADER, required = false) String uid,
+                                    HttpServletRequest request) {
         WebtoonCharacter one = characters.sharedCard(publicId);
+        Long me = CreditGate.currentUser();
+        shareReward.opened(one, uid, who.uidsOf(me, uid), me, clientIp(request));
         Map<String, Object> m = view(one, null, List.of());
         m.remove("mine");
         m.remove("error");
+        return withInputs(m, one);
+    }
+
+    @Operation(summary = "공유 카드 미리보기", description = """
+            링크를 붙였을 때 뜨는 미리보기(og 태그)용 — 카드 문장·이름·세계관과 그림 주소.
+            화면 서버(apps/web 의 /webtoon 메타데이터)가 부른다. <b>방문 보상을 세지 않는다</b> —
+            위 /card 를 부르면 화면 서버가 "남이 연 것" 으로 잡혀 주인에게 무료 횟수가 잘못 돌아간다.""")
+    @GetMapping("/{publicId}/card/preview")
+    public Map<String, Object> cardPreview(@PathVariable String publicId) {
+        WebtoonCharacter one = characters.sharedCard(publicId);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("twist", one.getTwist() == null ? "" : one.getTwist());
+        m.put("name", one.getName());
+        m.put("world_label", one.getWorldLabel() == null ? "" : one.getWorldLabel());
+        m.put("has_art", characters.artUrl(one) != null);
         return m;
+    }
+
+    /**
+     * 공유 카드 그림 — 부를 때마다 지금 열리는 주소로 302 한다. 링크 미리보기의 og:image 가
+     * 이 주소를 가리킨다. 카드 그림은 비공개 자리라 {@code art_url} 이 10분짜리 서명 주소인데,
+     * 그걸 og:image 에 그대로 적으면 미리보기를 캐시한 앱에서 10분 뒤 깨진다.
+     * 완성본 표지({@code RunController.page})와 같은 방식이다.
+     */
+    @Operation(summary = "공유 카드 그림", description = "지금 열리는 그림 주소로 302. 그림이 없으면 404.")
+    @GetMapping("/{publicId}/card/art")
+    public ResponseEntity<Void> cardArt(@PathVariable String publicId) {
+        String where = characters.artUrl(characters.sharedCard(publicId));
+        return where == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.status(302).location(URI.create(where)).build();
     }
 
     @Operation(summary = "캐릭터 하나", description = """
@@ -142,7 +188,8 @@ public class CharacterController {
             @RequestHeader(value = UID_HEADER, required = false) String uid) {
         Long me = CreditGate.currentUser();
         List<String> uids = who.uidsOf(me, uid);
-        return view(characters.byPublicId(publicId, me, uids), me, uids);
+        WebtoonCharacter one = characters.byPublicId(publicId, me, uids);
+        return withInputs(view(one, me, uids), one);
     }
 
     @Operation(summary = "이름·설명 고치기")
@@ -168,6 +215,21 @@ public class CharacterController {
         return Map.of("ok", true);
     }
 
+    /**
+     * 사람이 넣은 이름·세계관 그대로(#329). 「넣은 설정이 간 곳」 칸의 재료인데, 그 칸은
+     * 운영용이라 관리자에게만 싣는다(#428). 사람이 쓴 글이라 공유 링크로 남에게 나가서도
+     * 안 된다. 화면은 이 값이 있을 때만 칸을 그린다.
+     */
+    private Map<String, Object> withInputs(Map<String, Object> m, WebtoonCharacter one) {
+        if (admins.current()) {
+            Map<String, Object> in = new LinkedHashMap<>();
+            in.put("name", one.getAskedName() == null ? "" : one.getAskedName());
+            in.put("world", one.getAskedWorld() == null ? "" : one.getAskedWorld());
+            m.put("inputs", in);
+        }
+        return m;
+    }
+
     private Map<String, Object> view(WebtoonCharacter one, Long me, List<String> uids) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", one.getPublicId());
@@ -182,6 +244,12 @@ public class CharacterController {
         // 있고 없고가 그 캐릭터의 주인을 바꾸지 않는다.
         m.put("mine", one.madeBy(me, uids));
         m.put("created_at", one.getCreatedAt().toString());
+        if (one.madeBy(me, uids) && one.hasCard()) {
+            // 내 카드에만 — 남이 몇 명 봤고 무료 횟수를 몇 번 돌려받았나(#332).
+            ShareReward.Stats stats = shareReward.statsOf(one.getPublicId());
+            m.put("share_visits", stats.visits());
+            m.put("share_bonus", stats.rewarded());
+        }
         // 한 컷으로 만든 것만 카드가 있다. 없으면 칸 자체를 안 보낸다 — 화면이
         // "card 가 있나" 로 두 종류를 가른다.
         if (one.hasCard()) {
@@ -190,13 +258,32 @@ public class CharacterController {
             card.put("world_label", one.getWorldLabel() == null ? "" : one.getWorldLabel());
             card.put("genre", one.getGenre() == null ? "" : one.getGenre());
             card.put("role", one.getRoleName() == null ? "" : one.getRoleName());
+            card.put("role_tier", one.getRoleTier() == null ? "" : one.getRoleTier());
+            card.put("lucky", one.isLucky());
+            card.put("species", one.getSpecies() == null ? "" : one.getSpecies());
             card.put("twist", one.getTwist());
             card.put("quote", one.getQuote() == null ? "" : one.getQuote());
+            List<Map<String, Object>> dialogue = new ArrayList<>();
+            for (WebtoonCharacter.DialogueLine line : one.dialogueLines()) {
+                Map<String, Object> l = new LinkedHashMap<>();
+                l.put("who", line.who());
+                l.put("mine", line.mine());
+                l.put("side", line.side());
+                l.put("text", line.text());
+                dialogue.add(l);
+            }
+            card.put("dialogue", dialogue);
             card.put("fate", one.fateLines());
             card.put("style", one.getStyle() == null ? "" : one.getStyle());
             m.put("card", card);
         }
         return m;
+    }
+
+    /** 하루 돈 상한(#444) — 웹툰 만들기(JobController)와 같은 429 · {"error": 사유}. */
+    @ExceptionHandler(CharacterService.SpendCapped.class)
+    public ResponseEntity<Map<String, String>> capped(CharacterService.SpendCapped e) {
+        return ResponseEntity.status(429).body(Map.of("error", e.getMessage()));
     }
 
     /** 실패도 파이썬이 주던 모양 그대로 — 화면이 사유를 읽는다. */
@@ -219,5 +306,14 @@ public class CharacterController {
                                 @com.fasterxml.jackson.annotation.JsonAlias("photosData")
                                 List<String> photosData,
                                 String style) {
+    }
+
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        String remote = request.getRemoteAddr();
+        return remote == null ? "" : remote;
     }
 }

@@ -103,6 +103,25 @@ public class SpendGuard {
     }
 
     /**
+     * 돈만 본다 — 캐릭터 만들기처럼 <b>웹툰 한 편이 아닌</b> 호출이 묻는다(#444).
+     *
+     * 편수 상한은 웹툰 몫이라 여기서 안 본다. 웹툰 30편을 채운 날에도 캐릭터는
+     * 만들 수 있어야 하지만, 하루 돈 상한을 넘겨서까지 그리면 안 된다.
+     *
+     * @return 막을 이유. 괜찮으면 {@code null}
+     */
+    @Transactional(readOnly = true)
+    public String whyBlockedByMoney() {
+        Instant from = startOfToday();
+        long krw = usage.krwBetween(from, Instant.now(clock));
+        if (dailyKrw > 0 && krw >= dailyKrw) {
+            log.warn("일일 금액 상한에 걸렸습니다 — 캐릭터 ({}/{}원)", krw, dailyKrw);
+            return "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.";
+        }
+        return null;
+    }
+
+    /**
      * 아직 안 끝난 작업이 쓸 몫.
      *
      * @param runs 몇 편

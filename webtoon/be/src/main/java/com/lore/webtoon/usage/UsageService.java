@@ -1,5 +1,7 @@
 package com.lore.webtoon.usage;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
@@ -10,10 +12,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,6 +105,74 @@ public class UsageService {
         }
         usage.saveAll(fresh);
         return fresh.size();
+    }
+
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    /**
+     * 하네스가 남긴 {@code meta.json} 을 읽어 쌓는다.
+     *
+     * 웹툰(run.py)과 캐릭터(character.py)가 <b>같은 모양</b>으로 적는다 —
+     * 호출마다 단계 · 모델 · 토큰 · 달러 · 원 · 언제. 읽는 코드를 한 곳에 두려고
+     * 여기로 모았다(전에는 {@code AfterRun.cost} 안에만 있었다).
+     *
+     * @param runId 쌓을 이름. 캐릭터는 {@code char-} 를 앞에 붙인다({@link #CHARACTER_PREFIX})
+     * @return 새로 남은 줄 수. 파일이 없으면 -1
+     */
+    public int ingestMetaFile(String runId, Path meta) throws IOException {
+        if (runId == null || runId.isBlank() || meta == null || !Files.isRegularFile(meta)) {
+            return -1;
+        }
+        JsonNode calls = mapper.readTree(meta.toFile()).path("calls");
+        List<Call> out = new ArrayList<>();
+        for (JsonNode one : calls) {
+            JsonNode used = one.path("usage");
+            JsonNode cost = one.path("cost");
+            out.add(new Call(
+                    one.path("stage").asText(""),
+                    one.path("provider").asText(""),
+                    one.path("model").asText(""),
+                    used.path("input").asLong(0),
+                    used.path("output").asLong(0),
+                    cost.path("total").asDouble(0),
+                    cost.path("total_krw").asLong(0),
+                    cost.path("cost_basis").asText(null),
+                    one.path("error").asText(null),
+                    calledAt(one.path("at"))));
+        }
+        return ingest(runId, out);
+    }
+
+    /** 캐릭터 만들기의 기록 이름 앞자리. 작품 번호(날짜-시각)와 안 겹치고, 편수에서 뺄 때 쓴다. */
+    public static final String CHARACTER_PREFIX = "char-";
+
+    /**
+     * 호출 시각. 하네스는 {@code "2026-09-26T13:20:32+09:00"} 같은 글로 적는다.
+     *
+     * 예전 읽기({@code AfterRun})는 이걸 숫자로 읽어서 늘 0 이 되었고, 그래서
+     * <b>적재한 시각</b>이 호출 시각으로 들어갔다. 숫자(epoch 초)로 적힌 옛 기록도 읽는다.
+     */
+    static Instant calledAt(JsonNode at) {
+        if (at == null || at.isMissingNode() || at.isNull()) {
+            return null;
+        }
+        if (at.isNumber()) {
+            double sec = at.asDouble(0);
+            return sec > 0 ? Instant.ofEpochMilli(Math.round(sec * 1000)) : null;
+        }
+        String text = at.asText("").trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(text).toInstant();
+        } catch (DateTimeParseException e) {
+            try {
+                return Instant.parse(text);
+            } catch (DateTimeParseException e2) {
+                return null;
+            }
+        }
     }
 
     /**

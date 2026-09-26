@@ -46,9 +46,20 @@ import java.util.stream.Stream;
  *
  * <h2>로컬에서는 안 지운다</h2>
  *
- * 버킷이 없으면({@code CONTENT_S3_BUCKET} 이 빈 값) 올라간 곳이 없으므로
- * 지우는 순간 영영 사라진다. 로컬은 만든 것을 들여다보며 작업하는 자리라
- * 원본이 그대로 있어야 한다 — 그래서 <b>S3 에 실제로 올렸을 때만</b> 치운다.
+ * 로컬은 만든 것을 들여다보며 작업하는 자리라 <b>한 편의 모든 결과(중간 산출물 ·
+ * 그림 · 끝까지 못 간 작품까지)를 폴더에 그대로 둔다</b>(#157). 배포 서버는
+ * 그림 원본을 S3 에 두고 추적은 DB 로 하므로, 서버 디스크에는 글·JSON 만 남긴다.
+ *
+ * 어느 쪽인지는 설정 없이 알아본다. 배포 서버에서 따로 적을 것이 없게 하려는
+ * 것이다(설정은 코드 기본값에 둔다 — dev.md).
+ * <ul>
+ *   <li><b>버킷이 없으면 남긴다</b> — 올라간 곳이 없으면 지우는 순간 영영 사라진다.</li>
+ *   <li><b>창고 주소가 이 기계(localhost · 127.0.0.1)면 남긴다</b> — 노트북에서
+ *       MinIO 창고를 붙여 띄운 경우다(local-run.md). 배포 서버의 창고 주소는
+ *       바깥 주소라 여기에 안 걸린다.</li>
+ *   <li>그 밖(dev·staging·prod)은 지금처럼 치운다.</li>
+ * </ul>
+ * 굳이 바꾸려면 {@code lore.webtoon.runs.keep-files}(true/false)를 적는다.
  */
 @Component
 public class RunFiles {
@@ -62,13 +73,40 @@ public class RunFiles {
     private final PageStore pages;
     private final S3Storage storage;
     private final String bucket;
+    private final boolean keep;
 
     public RunFiles(HarnessProcess harness, PageStore pages, S3Storage storage,
-                    @Value("${app.s3.content-bucket:}") String bucket) {
+                    @Value("${app.s3.content-bucket:}") String bucket,
+                    @Value("${app.s3.endpoint:}") String endpoint,
+                    @Value("${lore.webtoon.runs.keep-files:}") String keepFiles) {
         this.runsDir = harness.runsDir();
         this.pages = pages;
         this.storage = storage;
         this.bucket = bucket == null ? "" : bucket.trim();
+        this.keep = keepFiles == null || keepFiles.isBlank()
+                ? this.bucket.isEmpty() || onThisMachine(endpoint)
+                : Boolean.parseBoolean(keepFiles.trim());
+        log.info("작품 폴더: {} — {}", runsDir,
+                keep ? "결과를 모두 남깁니다(로컬)" : "S3 에 올린 그림과 끝까지 못 간 작품은 치웁니다(배포)");
+    }
+
+    /** 창고 주소가 이 기계인가. 노트북의 MinIO 가 그렇다. */
+    static boolean onThisMachine(String endpoint) {
+        if (endpoint == null || endpoint.isBlank()) {
+            return false;
+        }
+        try {
+            String host = java.net.URI.create(endpoint.trim()).getHost();
+            return host != null && (host.equals("localhost") || host.equals("127.0.0.1")
+                    || host.equals("::1") || host.equals("[::1]"));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    /** 서버 디스크에 결과를 모두 남기는가. 로컬이면 true. */
+    public boolean keepsFiles() {
+        return keep;
     }
 
     /** 올린 곳이 있는가. 없으면 서버 사본이 유일본이라 아무것도 안 지운다. */
@@ -89,7 +127,7 @@ public class RunFiles {
      * @return 비운 바이트
      */
     public long sweepUploaded(String runId) {
-        if (!uploaded() || runId == null || runId.isBlank()) {
+        if (keep || !uploaded() || runId == null || runId.isBlank()) {
             return 0;
         }
         Path d = dir(runId);
@@ -162,7 +200,7 @@ public class RunFiles {
      */
     @Scheduled(cron = "0 30 4 * * *", zone = "Asia/Seoul")
     public void sweepStale() {
-        if (!Files.isDirectory(runsDir)) {
+        if (keep || !Files.isDirectory(runsDir)) {
             return;
         }
         Instant cut = Instant.now().minus(STALE);

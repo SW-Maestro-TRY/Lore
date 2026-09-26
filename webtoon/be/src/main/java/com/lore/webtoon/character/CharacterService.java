@@ -7,8 +7,10 @@ import com.lore.webtoon.art.PrivateArt;
 import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.usage.SpendGuard;
+import com.lore.webtoon.usage.UsageService;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.safety.SafetyGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +41,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Stream;
 
 /**
  * 캐릭터를 만들고 고르는 일.
@@ -76,11 +79,27 @@ public class CharacterService {
     private final CharacterOwner owner;
     private final PrivateArt art;
     private final CreditGate credits;
+    private final ShareReward shareReward;
+    /** 글 거르기(#80). 테스트용 생성자로 만들면 비어 있고, 그때는 안 거른다. */
+    private SafetyGuard safety;
     private final Path workDir;
     private final int freePerDay;
     private final int cost;
     /** 로컬에서만 켠다 — 서명 주소로 준다. PageStore 와 같은 값. */
     private final boolean presignLocally;
+    /** 호출·원가를 쌓는 곳(#444). 테스트용 생성자로 만들면 비어 있고, 그때는 안 쌓는다. */
+    private UsageService usage;
+    /** 하루 돈 상한(#444). 테스트용 생성자로 만들면 비어 있고, 그때는 안 막는다. */
+    private SpendGuard spend;
+    /**
+     * 그린 뒤 작업 폴더를 남기는가.
+     *
+     * 로컬은 남긴다 — 무엇을 넣고 무엇을 불러 얼마가 나갔는지(input.json · meta.json ·
+     * 프롬프트 · 그림)를 폴더에서 바로 본다. 배포 서버는 그림이 S3 에, 호출과 원가가
+     * DB 에 있으니 서버 디스크에 쌓을 이유가 없다(#157 과 같은 원칙).
+     * 판단은 {@link #keepsFiles} 참고. 테스트용 생성자는 언제나 남긴다(안 지운다).
+     */
+    private boolean keepFiles = true;
     private final Clock clock;
     /* 한 줄로 세운다 — 그림 호출을 한꺼번에 여러 개 띄우면 값이 몰려 나간다. */
     private final ExecutorService line =
@@ -91,18 +110,63 @@ public class CharacterService {
     @Autowired
     public CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
                             CharacterOwner owner, PrivateArt art, CreditGate credits,
+                            ShareReward shareReward, SafetyGuard safety,
                             @Value("${lore.webtoon.character.work-dir:}") String workDir,
                             @Value("${lore.webtoon.character.free-per-day:3}") int freePerDay,
                             @Value("${lore.webtoon.character.credit-cost:2}") int cost,
-                            @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally) {
-        this(characters, maker, owner, art, credits, workDir, freePerDay, cost,
+                            @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally,
+                            UsageService usage, SpendGuard spend,
+                            @Value("${app.s3.content-bucket:}") String bucket,
+                            @Value("${app.s3.endpoint:}") String endpoint,
+                            @Value("${lore.webtoon.character.keep-files:}") String keepFiles) {
+        this(characters, maker, owner, art, credits, shareReward, workDir, freePerDay, cost,
              presignLocally, Clock.system(ZONE));
+        this.safety = safety;
+        this.usage = usage;
+        this.spend = spend;
+        this.keepFiles = keepsFiles(bucket, endpoint, keepFiles);
+        log.info("캐릭터 작업 폴더: {}", this.keepFiles
+                ? "남깁니다(로컬)" : "원가를 DB 에 적은 뒤 치웁니다(배포)");
+    }
+
+    /**
+     * 작업 폴더를 남길지. 설정이 있으면 그대로, 없으면 로컬인지로 정한다.
+     *
+     * 로컬 판단은 #157(작품 폴더, {@code RunFiles})과 같다 — 버킷이 없거나 창고 주소가
+     * 이 기계(localhost · 127.0.0.1)면 로컬이다. 노트북에서 MinIO 를 붙여 띄우면 버킷이
+     * 생기므로 버킷만 보면 틀린다.
+     */
+    static boolean keepsFiles(String bucket, String endpoint, String keepFiles) {
+        if (keepFiles != null && !keepFiles.isBlank()) {
+            return Boolean.parseBoolean(keepFiles.trim());
+        }
+        if (bucket == null || bucket.isBlank()) {
+            return true;
+        }
+        if (endpoint == null || endpoint.isBlank()) {
+            return false;
+        }
+        try {
+            String host = java.net.URI.create(endpoint.trim()).getHost();
+            return host != null && (host.equals("localhost") || host.equals("127.0.0.1")
+                    || host.equals("::1") || host.equals("[::1]"));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    /** 하루 돈 상한에 걸려 캐릭터를 못 만든다. 컨트롤러가 429 로 돌려준다(웹툰 만들기와 같은 응답). */
+    public static class SpendCapped extends RuntimeException {
+        public SpendCapped(String why) {
+            super(why);
+        }
     }
 
     CharacterService(WebtoonCharacterRepository characters, CharacterMaker maker,
-                     CharacterOwner owner, PrivateArt art, CreditGate credits, String workDir,
-                     int freePerDay, int cost, boolean presignLocally, Clock clock) {
+                     CharacterOwner owner, PrivateArt art, CreditGate credits, ShareReward shareReward,
+                     String workDir, int freePerDay, int cost, boolean presignLocally, Clock clock) {
         this.characters = characters;
+        this.shareReward = shareReward;
         this.maker = maker;
         this.owner = owner;
         this.art = art;
@@ -158,6 +222,11 @@ public class CharacterService {
            못 만드는 줄 안다. 이제 게스트도 브라우저로 세므로 남은 몫을 말할
            수 있다. */
         Instant since = LocalDate.now(clock).atStartOfDay(ZONE).toInstant();
+        return dailyLeft(userId, uids, since) + shareReward.unused(userId, uids);
+    }
+
+    /** 오늘 몫만. 공유로 돌려받은 것(#332)은 안 더한다. */
+    private int dailyLeft(Long userId, Collection<String> uids, Instant since) {
         return (int) Math.max(0, freePerDay - characters.madeSince(userId, uids, since));
     }
 
@@ -206,6 +275,10 @@ public class CharacterService {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "브라우저를 알 수 없어 만들 수 없습니다 — 새로고침 후 다시 시도해 주세요.");
         }
+        // 글은 그리기 전에 거른다(#80). 사진은 아직 안 본다(safety.md).
+        if (safety != null) {
+            safety.checkText(world == null ? "character-create" : "character-try", name, description, world);
+        }
         List<String> photos = (photoDataUrls == null ? List.<String>of() : photoDataUrls).stream()
                 .filter(s -> s != null && !s.isBlank())
                 .limit(MAX_PHOTOS)
@@ -224,11 +297,26 @@ public class CharacterService {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR,
                     "지금은 캐릭터를 만들 수 없습니다");
         }
+        /* **하루 돈 상한도 본다(#444).** 캐릭터도 글·그림을 부른다 — 전에는 그 값이
+           어디에도 안 적혀서 상한이 캐릭터를 못 셌다. 편수 상한은 웹툰 몫이라 안 본다. */
+        if (spend != null) {
+            String capped = spend.whyBlockedByMoney();
+            if (capped != null) {
+                throw new SpendCapped(capped);
+            }
+        }
 
         // **값은 만들기 전에 본다.** 그린 뒤에 모자라다고 하면 돈은 이미 나갔다.
         // 컨트롤러(list/freeLeft)와 같은 uid 묶음으로 센다 — 기기를 여럿 이은 사람에게
         // 화면은 "0개 남음" 인데 서버는 공짜로 만들어 주던 어긋남을 없앤다.
-        boolean free = freeLeft(userId, owner.uidsOf(userId, browserUid)) > 0;
+        List<String> uids = owner.uidsOf(userId, browserUid);
+        boolean free = freePerDay > 0
+                && dailyLeft(userId, uids, LocalDate.now(clock).atStartOfDay(ZONE).toInstant()) > 0;
+        /* 오늘 몫을 다 썼으면 공유로 돌려받은 것(#332)을 하나 쓴다. 하루 몫보다 뒤에 쓰는 이유는
+           하루 몫은 내일 새로 오지만 돌려받은 것은 안 오기 때문이다. */
+        if (!free && shareReward.useOne(userId, uids)) {
+            free = true;
+        }
         if (!free) {
             /* 게스트는 낼 크레딧이 없다 — 계정 쪽 확인은 통과해 버리므로
                여기서 따로 막는다. 없는 잔액을 보고 "모자랍니다" 라고 하면
@@ -261,9 +349,11 @@ public class CharacterService {
         }
 
         Instant now = Instant.now(clock);
-        WebtoonCharacter saved = characters.save(WebtoonCharacter.drawing(
+        WebtoonCharacter drawing = WebtoonCharacter.drawing(
                 publicId, userId, browserUid, called.isEmpty() ? "이름 없는 캐릭터" : called,
-                description, now));
+                description, now);
+        drawing.asked(called, world);   // 넣은 것을 그대로 — 카드가 무엇을 어떻게 읽었는지 견주려고(#329)
+        WebtoonCharacter saved = characters.save(drawing);
 
         if (!free) {
             credits.charge(userId, cost, "character:" + publicId, "캐릭터 만들기");
@@ -299,11 +389,14 @@ public class CharacterService {
     private void draw(Long id, String name, String description, List<Path> photos,
                       String style, String world, Path dir) {
         Path drawn = dir.resolve(world == null ? "art.png" : "panel.png");
+        boolean drew = false;
+        String key = null;
         try {
             CharacterMaker.Made made = world == null
                     ? maker.make(name, description, photos, style, drawn)
                     : maker.makePanel(name, description, photos, world, drawn);
-            String key = uploadArt(made.art());
+            drew = true;
+            key = uploadArt(made.art());
             // 사람이 이름을 안 적었으면 사양이 지어 준 것을 쓴다.
             finish(id, key, made.source(), null,
                     name.isBlank() ? made.named() : null, made.card());
@@ -314,6 +407,50 @@ public class CharacterService {
             // **어떻게 끝나든 올린 사진은 지운다.** 외모를 글로 적는 데만 쓰고,
             // 그 뒤로는 다시 안 쓴다. 사람 얼굴을 서버에 둘 이유가 없다.
             photos.forEach(this::dropPhoto);
+            // **실패해도 적는다** — 그림에서 죽어도 앞서 부른 글 값은 나갔다(#444).
+            recordCost(dir);
+            tidy(dir, drew, key);
+        }
+    }
+
+    /** 이 캐릭터를 만들며 부른 호출들을 원가 장부로. 하네스가 폴더에 남긴 meta.json 을 읽는다. */
+    private void recordCost(Path dir) {
+        if (usage == null) {
+            return;
+        }
+        String runId = UsageService.CHARACTER_PREFIX + dir.getFileName();
+        try {
+            int saved = usage.ingestMetaFile(runId, dir.resolve("meta.json"));
+            if (saved < 0) {
+                log.warn("캐릭터 비용 기록이 없습니다 ({})", runId);
+            } else {
+                log.info("캐릭터 비용을 적었습니다 ({}, {}건)", runId, saved);
+            }
+        } catch (IOException | RuntimeException e) {
+            log.error("캐릭터 비용을 적지 못했습니다 ({})", runId, e);
+        }
+    }
+
+    /**
+     * 배포 서버에서는 작업 폴더를 치운다. 그림은 S3 에, 호출·원가는 DB 에 있다.
+     *
+     * <b>그렸는데 못 올린 것은 남긴다</b> — 그때는 서버에 있는 파일이 유일한 사본이다
+     * (uploadArt 의 "파일은 남아 있다"). 로컬은 언제나 남긴다.
+     */
+    private void tidy(Path dir, boolean drew, String key) {
+        if (keepFiles || (drew && (key == null || key.isBlank()))) {
+            return;
+        }
+        try (Stream<Path> all = Files.walk(dir)) {
+            all.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    log.warn("캐릭터 작업 폴더를 다 못 치웠습니다 ({})", p, e);
+                }
+            });
+        } catch (IOException e) {
+            log.warn("캐릭터 작업 폴더를 못 치웠습니다 ({})", dir, e);
         }
     }
 
@@ -430,15 +567,13 @@ public class CharacterService {
     }
 
     /**
-     * 「랜덤으로 만들어보기」 — 입력 칸을 채울 재료 한 벌. <b>AI 를 안 부른다.</b>
+     * 「랜덤으로 만들어보기」 — 입력 칸을 채울 예시 캐릭터 한 벌. <b>AI 를 안 부른다.</b>
      *
-     * 존재 하나 + 결 하나를 붙여 설명이 되고, 이름은 그 존재의 이름 주머니에서,
-     * 세계관은 프리셋에서 뽑는다. 사람은 그 값을 보고 고치거나 다시 뽑거나
-     * 그대로 만든다 — 바로 생성으로 넘어가지 않는다. 재료는
-     * {@code new_harness/prompt/random_pool.json} 이라 늘리고 줄이는 것은 그
-     * 파일만 고치면 된다.
+     * {@code new_harness/prompt/random_pool.json} 의 {@code presets} 에서 하나를 고르게
+     * 뽑는다. 지금은 손으로 쓴 목데이터이고, 늘리고 줄이는 것은 그 파일만 고치면 된다.
+     * 사람은 그 값을 보고 고치거나 다시 뽑거나 그대로 만든다 — 바로 생성으로 넘어가지 않는다.
      *
-     * @return {@code {name, description, world, world_label}}. 재료를 못 읽으면 빈 값들
+     * @return {@code {name, description, world, world_label}}. 목록을 못 읽으면 빈 값들
      */
     public Map<String, String> randomSeed() {
         Map<String, String> out = new LinkedHashMap<>();
@@ -451,51 +586,23 @@ public class CharacterService {
             return out;
         }
         try {
-            JsonNode pool = new ObjectMapper().readTree(Files.readString(file));
-            java.util.Random rnd = new java.util.Random();
-            JsonNode beings = pool.path("beings");
-            JsonNode traits = pool.path("traits");
-            JsonNode formats = pool.path("formats");
-            if (!beings.isArray() || beings.isEmpty() || !traits.isArray() || traits.isEmpty()) {
+            JsonNode presets = new ObjectMapper().readTree(Files.readString(file)).path("presets");
+            if (!presets.isArray() || presets.isEmpty()) {
                 return out;
             }
-            JsonNode being = beings.get(rnd.nextInt(beings.size()));
-            String trait = traits.get(rnd.nextInt(traits.size())).asText("");
-            JsonNode names = being.path("name_pool");
-            String name = names.isArray() && !names.isEmpty()
-                    ? names.get(rnd.nextInt(names.size())).asText("") : "";
-            String format = formats.isArray() && !formats.isEmpty()
-                    ? formats.get(rnd.nextInt(formats.size())).asText("{being}. {trait}.")
-                    : "{being}. {trait}.";
-            String description = format
-                    .replace("{being}", being.path("being").asText(""))
-                    .replace("{trait}", trait)
-                    .replace("{name}", name);
-            List<Map<String, String>> worlds = worlds();
-            JsonNode allowed = being.path("worlds");
-            List<Map<String, String>> pick = new ArrayList<>();
-            if (allowed.isArray() && !allowed.isEmpty()) {
-                for (Map<String, String> w : worlds) {
-                    for (JsonNode a : allowed) {
-                        if (a.asText("").equals(w.get("key"))) {
-                            pick.add(w);
-                        }
-                    }
+            JsonNode one = presets.get(new java.util.Random().nextInt(presets.size()));
+            out.put("name", one.path("name").asText(""));
+            out.put("description", one.path("description").asText(""));
+            String world = one.path("world").asText("");
+            for (Map<String, String> w : worlds()) {
+                if (w.get("key").equals(world)) {
+                    out.put("world", world);
+                    out.put("world_label", w.get("label"));
                 }
-            }
-            if (pick.isEmpty()) {
-                pick = worlds;
-            }
-            out.put("name", name);
-            out.put("description", description);
-            if (!pick.isEmpty()) {
-                Map<String, String> w = pick.get(rnd.nextInt(pick.size()));
-                out.put("world", w.get("key"));
-                out.put("world_label", w.get("label"));
             }
             return out;
         } catch (IOException | RuntimeException e) {
-            log.warn("랜덤 재료를 못 읽었습니다 ({})", file, e);
+            log.warn("랜덤 예시를 못 읽었습니다 ({})", file, e);
             return out;
         }
     }

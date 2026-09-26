@@ -228,6 +228,9 @@ const dict: Dict = {
   "이용약관": { en: "Terms of Service", ja: "利用規約", zh: "服务条款" },
   "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },
   "1:1 문의": { en: "Contact us", ja: "お問い合わせ", zh: "联系我们" },
+  "운영": { en: "Operated by", ja: "運営", zh: "运营" },
+  "문의": { en: "Contact", ja: "連絡先", zh: "联系" },
+  "AI SW MAESTRO 17기 프로젝트": { en: "An AI SW MAESTRO (17th) project", ja: "AI SW MAESTRO 17期プロジェクト", zh: "AI SW MAESTRO 第17期项目" },
   "과학기술정보통신부": { en: "Ministry of Science and ICT", ja: "科学技術情報通信部", zh: "科学技术信息通信部" },
   "정보통신기획평가원(IITP)": { en: "Institute of Information & Communications Technology Planning & Evaluation (IITP)", ja: "情報通信企画評価院(IITP)", zh: "信息通信规划评价院(IITP)" },
 
@@ -241,7 +244,8 @@ const dict: Dict = {
     zh: "两条路最后都会做成漫画。做好的角色会保存下来，下次可以直接做漫画。",
   },
   "캐릭터 만들어보기": { en: "Try a character", ja: "キャラクターを作ってみる", zh: "试做一个角色" },
-  "내 캐릭터로 바로 웹툰을 만들고 싶어요": { en: "I want to make a webtoon with my character right away", ja: "自分のキャラクターですぐウェブトゥーンを作りたい", zh: "我想用自己的角色直接做漫画" },
+  "바로 웹툰을 만들고 싶어요": { en: "I want to make a webtoon right away", ja: "すぐウェブトゥーンを作りたい", zh: "我想直接做漫画" },
+  "남은 무료 {n}": { en: "{n} free left", ja: "無料残り {n}", zh: "剩余免费 {n}" },
   "내가 가진 캐릭터, 최애, 이미지, 설정으로 바로 웹툰을 만들어요.": {
     en: "Start from a character you already have: a fave, an image, or a bit of lore.",
     ja: "手持ちのキャラクター、推し、画像、設定から、すぐにウェブトゥーンを作ります。",

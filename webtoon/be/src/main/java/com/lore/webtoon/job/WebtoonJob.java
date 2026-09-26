@@ -231,6 +231,23 @@ public class WebtoonJob {
                 style, quality, checkpoints, inputJson, at);
     }
 
+    /**
+     * 예시 작품의 작업 줄 — <b>처음부터 끝난 것</b>으로 만든다.
+     *
+     * 예시는 실제로 도는 작업이 아니다. QUEUED 로 두면 영영 안 끝나 줄에 서
+     * 있게 되고, 모든 사람에게 「앞에 대기자 9명」이 뜨며 하루 비용 상한도 그만큼
+     * 미리 잡힌다({@code JobQueue.ahead}·{@code reserved}).
+     */
+    public static WebtoonJob seeded(String publicId, String browserUid, String style,
+                                    String inputJson, Instant at) {
+        WebtoonJob job = new WebtoonJob(publicId, null, browserUid, null,
+                style, null, false, inputJson, at);
+        job.status = JobStatus.DONE;
+        job.stage = JobStage.BIND;
+        job.finishedAt = at;
+        return job;
+    }
+
     void moveTo(JobStatus status, JobStage stage, Instant at) {
         /* **처음 돌기 시작한 때만 적는다.** 사람이 시트 앞에서 멈췄다가 다시
            가면 RUNNING 이 또 되는데, 그때 덮어쓰면 기다린 시간이 0 에 가깝게
@@ -241,14 +258,16 @@ public class WebtoonJob {
         if (status.isOver() && this.finishedAt == null) {
             this.finishedAt = at;
         }
+        /* **다 됐으면 실패 사유를 지운다.** 서버를 하나 더 띄우면 StaleJobs 가
+           다른 서버에서 아직 도는 작업을 「서버가 다시 시작되어…」로 적는데,
+           그 작업은 실제로 끝까지 가서 DONE 이 된다. 사유가 남으면 다 된 작품에
+           실패 문구가 붙는다(2026-09-26 로컬에서 봄). */
+        if (status == JobStatus.DONE) {
+            this.error = null;
+        }
         this.status = status;
         this.stage = stage;
         this.updatedAt = at;
-    }
-
-    /** 줄 설 때 앞에 몇 개 있었는지 적어 둔다. */
-    void queuedBehind(int ahead) {
-        this.queuedAhead = ahead;
     }
 
     /**

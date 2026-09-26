@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  browseRuns, coverUrl, episodeDownloadUrl, isMyRun, myAccountRuns, pageDownloadUrl, pageUrl,
-  readResult, renameRun, type RunCard, type RunResult,
+  browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
+  readResult, rememberRecent, renameRun, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
+import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
-import { IconCheck, IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
+import { IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
 import { Crumb, MobileTop } from "../../ui/TopNav";
 import ShareMenu from "./ShareMenu";
+import RunStrip from "../../ui/RunStrip";
+import LikeButton from "../../ui/LikeButton";
 import "./i18n";
 import "./Result.css";
 
@@ -38,6 +41,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const [nextNote, setNextNote] = useState(false);
   /* 「{캐릭터}의 다른 편」 (아트보드 Done) — 같은 캐릭터로 만든 다른 작품. */
   const [siblings, setSiblings] = useState<RunCard[]>([]);
+  /* 「이런 웹툰은 어때요」(#248) — 같은 장르 최신 넷, 없으면 그냥 최신 넷. 점수 없음. */
+  const [suggested, setSuggested] = useState<RunCard[]>([]);
+  const [liked, setLiked] = useState(false);
+  const [likes, setLikes] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -50,17 +57,32 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   }, [runId, tick]);
 
   useEffect(() => {
-    const who = data?.character?.trim();
-    if (!who) { setSiblings([]); return; }
+    if (!data) return;
     let alive = true;
+    const who = data.character?.trim();
     browseRuns()
       .then((all) => {
         if (!alive) return;
-        setSiblings(all.filter((r) => r.character?.trim() === who && r.run_id !== runId).slice(0, 3));
+        setSiblings(who ? all.filter((r) => r.character?.trim() === who && r.run_id !== runId).slice(0, 3) : []);
+        const others = all.filter((r) => r.run_id !== runId).sort((a, b) => b.run_id.localeCompare(a.run_id));
+        const same = data.genre ? others.filter((r) => r.genre === data.genre) : [];
+        setSuggested((same.length >= 2 ? same : others).slice(0, 4));
+        const me = all.find((r) => r.run_id === runId);
+        setLikes(me?.likes ?? 0);
       })
       .catch(() => { /* 없으면 줄 자체를 안 그린다 */ });
     return () => { alive = false; };
-  }, [data?.character, runId]);
+  }, [data, runId]);
+
+  /* 최근 본 웹툰(#247) — 완성본을 열었으면 브라우저에 남긴다. 만든 사람이든 아니든. */
+  useEffect(() => { if (data) rememberRecent(runId); }, [data, runId]);
+
+  useEffect(() => {
+    if (!authenticated) { setLiked(false); return; }
+    let alive = true;
+    likedAmong([runId]).then((ids) => { if (alive) setLiked(ids.includes(runId)); }).catch(() => {});
+    return () => { alive = false; };
+  }, [authenticated, runId]);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -72,34 +94,73 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   }, [runId, authenticated]);
 
   const mine = isMyRun(runId) || ownedByAccount;
+
+  /* 제목 고치기(#78) — 로그인한 내 작품일 때 제목 옆 연필. 편집실의 제목 고치기와 같은 주소를 쓴다.
+     Enter·바깥 누르기로 저장, Esc 로 취소. 서버가 돌려준 제목이 앞으로 보일 이름이다(비우면 원래 제목). */
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [titleErr, setTitleErr] = useState(false);
+  const titleSaving = useRef(false);
+  const saveTitle = async () => {
+    if (titleDraft === null || !data || titleSaving.current) return;
+    const want = titleDraft.trim();
+    setTitleDraft(null);
+    if (!want || want === data.title) return;
+    titleSaving.current = true;
+    try {
+      const out = await renameRun(runId, want);
+      setData((d) => (d ? { ...d, title: out.title } : d));
+      setTitleErr(false);
+    } catch {
+      setTitleErr(true);
+    } finally {
+      titleSaving.current = false;
+    }
+  };
   const ep = data?.episode || 1;
   const epLabel = `EP.${String(ep).padStart(2, "0")}`;
 
-  /* ---- 제목 고치기 ---- */
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [renameErr, setRenameErr] = useState("");
-  const startRename = () => { setDraft(data?.title || ""); setRenameErr(""); setEditing(true); };
-  const commitRename = async () => {
-    if (!data) return;
-    const want = draft.trim();
-    setEditing(false);
-    if (want === data.title) return;
-    try {
-      const out = await renameRun(runId, want);
-      setData({ ...data, title: out.title });
-    } catch (e) {
-      setRenameErr((e as Error).message || t("제목을 바꾸지 못했습니다"));
-    }
-  };
-
   const preview = data && data.preview && data.planned_pages > data.page_count
     ? "" : "";
-  const metaPc = data
-    ? [data.character, epLabel, t(data.genre || ""), t("{n}컷", { n: data.page_count })].filter(Boolean).join(" · ") : "";
-  const metaM = data ? [t(data.genre || ""), t("{n}컷", { n: data.page_count })].filter(Boolean).join(" · ") : "";
+  const tags = (r: RunResult) => [...new Set([r.genre, r.style_label].filter((s): s is string => !!s).map((s) => t(s)))];
+  const metaPc = data ? [data.character, epLabel, ...tags(data)].filter(Boolean).join(" · ") : "";
+  const metaM = data ? tags(data).filter(Boolean).join(" · ") : "";
 
-  const nextEpisode = () => setNextNote(true);
+  /* 다음 편은 아직 없다. 그래도 누가 어느 버튼에서 얼마나 찾는지가 이 기능을 언제
+     만들지 정하는 근거라, 누를 때마다 남긴다(#413). */
+  const nextEpisode = (where: string) => {
+    track("next_episode_click", { where, mine, run: runId, ep, logged_in: authenticated });
+    setNextNote(true);
+  };
+
+  /* 끝까지 읽었는가 — 마지막 장이 화면에 한 번이라도 들어오면 한 번만 남긴다.
+     「다음화 보기」를 누른 사람 중 몇 명이 끝까지 보고 눌렀는지를 가른다. */
+  const endRef = useRef<HTMLDivElement>(null);
+  const readEndSent = useRef("");
+  /* ★ 「보인다」만으로 재면 안 된다. 그림이 받아지기 전에는 장마다 높이가 0 이라
+     마지막 장도 첫 화면에 걸려 있어서, 열자마자 「끝까지 읽음」이 찍힌다(로컬에서
+     실제로 그랬다). 그래서 스크롤할 때마다 마지막 장이 실제 높이를 갖고 있고 그
+     아래 끝이 화면 안에 들어왔는지를 본다. */
+  useEffect(() => {
+    if (!data || readEndSent.current === runId) return;
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      const el = endRef.current;
+      if (!el || readEndSent.current === runId) return;
+      const r = el.getBoundingClientRect();
+      if (r.height > 100 && r.bottom <= window.innerHeight + 40) {
+        readEndSent.current = runId;
+        track("read_end", { run: runId, mine, ep, page: data.page_count });
+        window.removeEventListener("scroll", onScroll);
+      }
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(check); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [data, runId, mine, ep]);
 
   const toTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -159,31 +220,40 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
         {data && (
           <div className="wt-result-body">
             <div className="wt-result-head">
-              {editing ? (
-                <form className="wt-result-rename" onSubmit={(e) => { e.preventDefault(); void commitRename(); }}>
-                  <input className="field" value={draft} autoFocus maxLength={60}
-                         aria-label={t("제목")} onChange={(e) => setDraft(e.target.value)}
-                         onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }} />
-                  <button type="submit" className="icon-btn" aria-label={t("저장")} title={t("저장")}><IconCheck size={16} /></button>
-                  <button type="button" className="icon-btn" aria-label={t("취소")} title={t("취소")}
-                          onClick={() => setEditing(false)}><IconClose size={16} /></button>
-                </form>
-              ) : (
-                <div className="wt-result-titlerow">
-                  <span className="wt-result-titlemid">
-                    <h2>{data.title}</h2>
-                    {mine && (
-                      <button type="button" className="icon-btn" aria-label={t("제목 고치기")} title={t("제목 고치기")}
-                              onClick={startRename}><IconEdit size={16} /></button>
-                    )}
-                  </span>
-                  {/* 공유는 이 작품 자체를 가리키므로 제목 줄에 둔다 — 아래 줄의
-                      편집실·내려받기는 내 작품일 때만 있는 것들이라 결이 다르다.
-                      제목은 가운데 그대로 두고 공유만 오른쪽 끝으로 보낸다. */}
+              <div className="wt-result-titlerow">
+                {/* 2026-09-23 에 이 화면의 고치기 폼을 지웠다가, 제목 옆 연필 하나로 다시 둔다(#78).
+                    제목 글자 자체가 줄 정중앙에 오도록, 연필은 제목 옆이 아니라 좋아요·공유와
+                    함께 오른쪽 끝(wt-result-titleacts)으로 보낸다. */}
+                <h2 className="wt-result-titlemid">
+                  {titleDraft !== null ? (
+                    <input className="wt-result-titleinput" value={titleDraft} autoFocus maxLength={60}
+                           aria-label={t("제목 고치기")}
+                           onChange={(e) => setTitleDraft(e.target.value)}
+                           onBlur={() => void saveTitle()}
+                           onKeyDown={(e) => {
+                             // 한글을 조합하는 중의 Enter 는 글자 확정이다 — 그때는 저장하지 않는다.
+                             if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void saveTitle(); }
+                             else if (e.key === "Escape") setTitleDraft(null);
+                           }} />
+                  ) : (
+                    <span className="wt-result-titletext">{data.title}</span>
+                  )}
+                  {titleErr && <span className="err wt-result-titleerr">{t("저장하지 못했습니다")}</span>}
+                </h2>
+                <span className="wt-result-titleacts">
+                  {/* 제목 바꾸기는 편집실과 같은 주소라 로그인해야 된다(401) — 로그인한 주인에게만 연필. */}
+                  {mine && authenticated && titleDraft === null && (
+                    <button type="button" className="icon-btn wt-result-titleedit" aria-label={t("제목 고치기")}
+                            title={t("제목 고치기")} onClick={() => { setTitleErr(false); setTitleDraft(data.title); }}>
+                      <IconEdit size={15} />
+                    </button>
+                  )}
+                  <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
+                              onChange={(on, n) => { setLiked(on); setLikes(n); }} />
                   <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
-                </div>
-              )}
-              {renameErr && <span className="err">{renameErr}</span>}
+                </span>
+              </div>
+
               <span className="muted wt-result-meta">
                 <span className="wt-result-meta-pc">{metaPc}</span>
                 <span className="wt-result-meta-m">{metaM}</span>
@@ -191,21 +261,46 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </span>
             </div>
 
+            {data.inputs && (
+              /* 넣은 설정이 어디로 갔나(#329) — 운영용이라 관리자에게만 온다(#428). 점수 없이,
+                 만들 때 넣은 것 옆에 완성본에 실제로 남은 값을 놓는다. */
+              <div className="card wt-result-inputs">
+                <b>{t("넣은 설정이 간 곳")}</b>
+                <dl>
+                  <dt>{t("이름")}</dt>
+                  <dd>{data.inputs.name ? t("{a} → 주인공 {b}", { a: data.inputs.name, b: data.character || data.inputs.name }) : t("안 넣음")}</dd>
+                  <dt>{t("장르")}</dt>
+                  <dd>{data.inputs.genre
+                    ? (data.inputs.genre === data.genre ? t(data.genre) : t("{a} → {b}", { a: t(data.inputs.genre), b: t(data.genre || "") }))
+                    : t("안 정함 → {b}", { b: t(data.genre || "") })}</dd>
+                  <dt>{t("그림체")}</dt>
+                  <dd>{t(data.style_label || data.inputs.style || "")}</dd>
+                  <dt>{t("캐릭터 설명")}</dt>
+                  <dd>{data.inputs.character ? t("「{d}」→ 이야기 속 {b}", { d: data.inputs.character, b: data.character || "" }) : t("안 넣음")}</dd>
+                  <dt>{t("이야기 소재")}</dt>
+                  <dd>{data.inputs.story ? t("「{d}」→ 줄거리: {b}", { d: data.inputs.story, b: data.logline || "" }) : t("안 넣음 → 줄거리: {b}", { b: data.logline || "" })}</dd>
+                  <dt>{t("사진")}</dt>
+                  <dd>{data.inputs.has_photo ? t("사진을 보고 외모를 읽었어요") : t("사진 없음 → 설명으로만")}</dd>
+                </dl>
+              </div>
+            )}
+
             {mine ? (
               <>
                 <div className="wt-result-acts">
-                  <button type="button" className="btn btn-p wt-result-next-pc" onClick={nextEpisode}>{t("다음 편 만들기")}</button>
-                  <button type="button" className="btn btn-w" onClick={() => go("editor", { run: runId })}>
+                  <button type="button" className="btn btn-p wt-result-next-pc" onClick={() => nextEpisode("mine_button")}>{t("다음 편 만들기")}</button>
+                  <button type="button" className="btn btn-w" onClick={() => { track("editor_open", { run: runId, where: "result" }); go("editor", { run: runId }); }}>
                     <IconEdit size={18} /> {t("편집실")}
                   </button>
-                  <a className="btn btn-w" href={episodeDownloadUrl(runId)} download>
+                  <a className="btn btn-w" href={episodeDownloadUrl(runId)} download
+                     onClick={() => track("download_click", { run: runId, kind: "episode" })}>
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
                 </div>
                 <div className="wt-result-dlrow">
                   <label className="wt-result-perpage">
                     <input type="checkbox" checked={perPage} aria-label={t("컷별로 내려받기")}
-                           onChange={(e) => setPerPage(e.target.checked)} />
+                           onChange={(e) => { setPerPage(e.target.checked); if (e.target.checked) track("download_per_page_open", { run: runId }); }} />
                     {t("컷별로 내려받기")}
                   </label>
                   {/* 아트보드는 PC 와 폰의 문구가 다르다 — 폰은 체크 칸 옆에 짧게 붙인다. */}
@@ -225,7 +320,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                        alt={pg.caption || t("{n}쪽", { n: pg.no })} loading="lazy" />
                 );
                 return (
-                  <div key={pg.no} className="wt-result-pg"
+                  <div key={pg.no} className="wt-result-pg" ref={i === data.pages.length - 1 ? endRef : undefined}
                        style={{
                          ...(gap ? { marginBottom: `${(gap * 100).toFixed(2)}%` } : {}),
                          ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
@@ -235,7 +330,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                       {img}
                     </button>
                     {mine && perPage && (
-                      <a className="wt-result-pgdl" href={pageDownloadUrl(runId, pg.no)} download>
+                      <a className="wt-result-pgdl" href={pageDownloadUrl(runId, pg.no)} download
+                         onClick={() => track("download_click", { run: runId, kind: "page", page: pg.no })}>
                         <IconDownload size={14} /> {t("이 장 내려받기")}
                       </a>
                     )}
@@ -250,15 +346,22 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 <div className="wt-result-others-row">
                   {siblings.map((r) => (
                     <button type="button" key={r.run_id} className="wt-result-other"
-                            onClick={() => go("result", { run: r.run_id })} aria-label={titleOf(r)}>
+                            onClick={() => { track("sibling_open", { run: r.run_id }); go("result", { run: r.run_id }); }} aria-label={titleOf(r)}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1)} alt="" />
                     </button>
                   ))}
-                  <button type="button" className="wt-result-other-new" onClick={nextEpisode}>
+                  <button type="button" className="wt-result-other-new" onClick={() => nextEpisode("mine_tile")}>
                     {t("EP.{n}", { n: ep + 1 })}<br />{t("만들기")}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {suggested.length > 0 && (
+              <div className="wt-result-suggest">
+                <RunStrip title={t("이런 웹툰은 어때요")} runs={suggested}
+                          onOpen={(r) => { track("recommend_open", { run: r.run_id }); go("result", { run: r.run_id }); }} />
               </div>
             )}
 
@@ -270,7 +373,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 <button type="button" className="btn-ghost wt-result-top" onClick={toTop}>
                   <IconChevronUp size={16} /> {t("맨 위로")}
                 </button>
-                <button type="button" className="btn btn-p wt-result-next" onClick={nextEpisode}>
+                <button type="button" className="btn btn-p wt-result-next" onClick={() => nextEpisode("other_foot")}>
                   {t("다음화 보기")}
                 </button>
               </div>
@@ -283,8 +386,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       {/* 다음 편은 아직 없다. 눌렀을 때 줄 끝에 문구만 붙이면 화면 밖이라
           못 보고 다시 누르게 된다 — 가운데에 띄워 한 번에 읽히게 한다. */}
       {nextNote && (
-        <div className="wt-result-soon" onClick={() => setNextNote(false)}>
-          <div className="wt-result-soonbox" role="dialog" aria-modal="true"
+        <div className="modal" onClick={() => setNextNote(false)}>
+          <div className="modal-box wt-result-soonbox" role="dialog" aria-modal="true"
                aria-labelledby="wt-soon-title" onClick={(e) => e.stopPropagation()}>
             <h2 id="wt-soon-title">{t("아직 다음화 기능은 준비 중이에요!")}</h2>
             <button type="button" className="btn btn-p" autoFocus onClick={() => setNextNote(false)}>
@@ -324,7 +427,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
       {data && mine && (
         <div className="mfoot">
-          <button type="button" className="btn btn-p" onClick={nextEpisode}>{t("다음 편 만들기")}</button>
+          <button type="button" className="btn btn-p" onClick={() => nextEpisode("mine_mobile")}>{t("다음 편 만들기")}</button>
         </div>
       )}
     </div>

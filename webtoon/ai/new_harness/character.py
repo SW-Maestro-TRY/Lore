@@ -32,8 +32,10 @@
 사진·설명·이름이 **전부 없어도 된다.** 세계관(--world)은 story-harness 의
 프리셋 키이거나 사람이 직접 쓴 한 줄이고, 그것도 없으면 프리셋에서 무작위로
 고른다. 결과는 위 두 갈래의 "표지 같은 그림" 이 아니라 **그 세계관 웹툰의 한
-컷**(세로 2:3, 글자 없음)과 카드 글(반전 한 줄 · 대사 · 운명 두세 줄)이다.
-글자를 안 그리는 이유는 웹툰 페이지와 같다 — 말풍선은 화면이 얹는다.
+컷**(세로 2:3, 글자 없음)과 카드 글(반전 한 줄 · 대사 두세 줄 · 운명 두세 줄)이다.
+글자를 안 그리는 이유는 웹툰 페이지와 같다 — 말풍선은 화면이 얹는다. 게다가
+이 그림은 그 캐릭터로 1화를 만들 때 참고 그림으로 그대로 들어가서(JobService 의
+charart.png), 글자를 구워 넣으면 1화 그림에 그 글자가 새어 들어간다.
 
 넣은 것은 바꾸지 않는다. 사진 속 존재가 사람이 아니면 그 종 그대로 그
 세계관의 자리를 맡는다(의인화 없음). 규칙은 `prompt/panel_prompt` 에 있다.
@@ -51,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 from pathlib import Path
@@ -61,6 +64,7 @@ sys.path.insert(0, str(HERE))
 import imagegen                                      # noqa: E402
 import imageprompt                                   # noqa: E402
 import llm                                           # noqa: E402
+import runmeta                                       # noqa: E402
 import sheet as sheetmod                             # noqa: E402
 
 
@@ -73,7 +77,68 @@ def load_prompt(name: str) -> str:
     return (HERE / "prompt" / name).read_text(encoding="utf-8")
 
 
-def spec_of(name: str, description: str, photos: list[Path]) -> dict:
+# ---- 기록 (#444) ------------------------------------------------------------
+#
+# 웹툰 만들기(run.py)는 호출마다 meta.json 에 한 줄씩 적고, 자바가 그걸 읽어
+# webtoon_usage 에 올린다(AfterRun.cost). 캐릭터는 그 기록이 없어서 나간 돈이
+# 어디에도 안 남았다(2026-09-26 dev: 캐릭터 18개, 원가 0건).
+#
+# 같은 모양으로 **그림을 둘 폴더(--out 의 폴더)** 에 적는다. 자바는 그 폴더의
+# meta.json 을 run.py 것과 같은 코드로 읽는다. **호출이 끝날 때마다 바로**
+# 적는다 — 그림에서 죽어도 앞서 나간 글 값은 남아야 한다.
+
+def record(run_dir: Path, call_meta: dict) -> None:
+    runmeta.append_call(run_dir, call_meta)
+    cost = call_meta.get("cost") or {}
+    tag = "실패 " if call_meta.get("error") else ""
+    log(f"  {tag}{call_meta.get('stage')}  {call_meta.get('provider')}:{call_meta.get('model')}"
+        f"  {cost.get('total_krw', 0)}원"
+        + (f"  — {call_meta['error']}" if call_meta.get("error") else ""))
+
+
+def record_error(run_dir: Path, stage: str, provider: str, model: str, exc: BaseException) -> None:
+    """실패한 호출도 같은 자리에 남긴다 — 비용 0, 사유만. run.py 의 record_error 와 같다."""
+    record(run_dir, {
+        "stage": stage, "provider": provider, "model": model,
+        "usage": None, "stop": None,
+        "cost": {"input": 0.0, "output": 0.0, "cache_read": 0.0,
+                 "cache_write": 0.0, "total": 0.0, "total_krw": 0},
+        "error": f"{type(exc).__name__}: {exc}",
+    })
+
+
+def text_backend(stage: str = "SHEET") -> tuple[str, str]:
+    provider = llm.provider_for(stage)
+    return provider, llm.model_for(stage, provider)
+
+
+def paint_recorded(run_dir: Path, stage: str, prompt: str, out: Path, **kw) -> dict:
+    """imagegen.paint 를 부르고 그 자리에서 적는다. 실패도 적고 다시 던진다."""
+    try:
+        art_meta = imagegen.paint(stage, prompt, out, **kw)
+    except BaseException as exc:
+        provider, model, _ = imagegen.backend_for(stage)
+        record_error(run_dir, stage, provider, model, exc)
+        raise
+    record(run_dir, art_meta)
+    return art_meta
+
+
+def write_input(run_dir: Path, args, photos: list[Path]) -> None:
+    """무엇을 넣었는지. 사진은 **내용이 아니라 장수만** 남긴다 — 사진은 쓰고 나면 지운다."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "input.json").write_text(json.dumps({
+        "name": args.name,
+        "description": args.description,
+        "photos": len(photos),
+        "style": args.style,
+        "panel": bool(args.panel),
+        "world": args.world if args.panel else None,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def spec_of(name: str, description: str, photos: list[Path],
+            run_dir: Path | None = None) -> dict:
     """외모를 글로 적는다. 사진이 있으면 읽고, 없으면 설명만 본다.
 
     사진이 여러 장이면 같은 사람의 다른 각도·표정으로 보고 하나의 외모로
@@ -102,7 +167,14 @@ def spec_of(name: str, description: str, photos: list[Path]) -> dict:
     call = llm.Call("SHEET")
     log(f"[캐릭터] {call.describe()} 로 외모를 적습니다…")
     images = llm.load_images([str(p) for p in photos]) if photos else None
-    text, meta = call(prompt, images=images, temperature=0.4)
+    try:
+        text, meta = call(prompt, images=images, temperature=0.4)
+    except BaseException as exc:
+        if run_dir is not None:
+            record_error(run_dir, "SHEET", call.provider, call.model, exc)
+        raise
+    if run_dir is not None:
+        record(run_dir, meta)
     spec = sheetmod.parse_spec(text)
     bad = sheetmod.gate_spec(spec)
     if bad:
@@ -206,6 +278,20 @@ ROLE_TIERS = {
 # 결과를 보면서 조절한다. 지금 값은 첫 어림이다.
 TIER_WEIGHTS = {"중심": 25, "곁": 35, "스쳐감": 30, "뜬금": 10}
 
+# 종까지 바뀌는 뽑기(#331). 기본은 넣은 종을 그대로 두는 것이고(원칙 1), 이것은
+# 그 위에 얹는 아주 드문 한 방이다 — "내가 로맨스 판타지에서 개라고?". 자리의
+# 무게와는 따로 굴린다. 너무 낮으면 아무도 못 봐서 광고에 쓸 수 없고, 너무 높으면
+# "넣은 그대로" 라는 약속이 깨진다. 결과를 보면서 조절한다.
+# 시험할 때는 NH_SPECIES_SWAP=1 (항상) · 0 (절대) 로 고정할 수 있다.
+SPECIES_SWAP_RATE = 0.03
+
+
+def roll_species_swap() -> bool:
+    forced = os.environ.get("NH_SPECIES_SWAP", "").strip()
+    if forced in ("0", "1"):
+        return forced == "1"
+    return random.random() < SPECIES_SWAP_RATE
+
 
 def roll_role_tier() -> str:
     keys = list(TIER_WEIGHTS)
@@ -253,7 +339,7 @@ def parse_panel_spec(text: str) -> dict:
         "genre_word": str(obj.get("genre_word") or "").strip(),
         "role": str(obj.get("role") or "").strip(),
         "twist": str(obj.get("twist") or "").strip(),
-        "quote": str(obj.get("quote") or "").strip(),
+        "dialogue": parse_dialogue(obj.get("dialogue")),
         "fate": [str(f).strip() for f in fate if str(f or "").strip()][:3],
         "appearance_en": str(obj.get("appearance_en") or "").strip(),
         "scene_en": str(obj.get("scene_en") or "").strip(),
@@ -261,15 +347,46 @@ def parse_panel_spec(text: str) -> dict:
     }
 
 
+DIALOGUE_SIDES = ("left", "right", "center")
+
+
+def parse_dialogue(raw) -> list[dict]:
+    """말풍선 줄들. {who, mine, side, text} 만 남기고 최대 3줄."""
+    out = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        side = str(item.get("side") or "").strip().lower()
+        out.append({
+            "who": str(item.get("who") or "").strip(),
+            "mine": bool(item.get("mine")),
+            "side": side if side in DIALOGUE_SIDES else "center",
+            "text": text,
+        })
+    return out[:3]
+
+
+def dialogue_text(lines: list[dict]) -> str:
+    """옛 카드 칸(quote)에 넣을 한 덩어리 — 「누구: 말」 줄바꿈."""
+    return "\n".join(f"{ln['who']}: {ln['text']}" if ln["who"] else ln["text"] for ln in lines)
+
+
 def gate_panel_spec(spec: dict) -> list[str]:
     """그리기 전에 본다. 비면 그 자리를 모델이 평균값으로 채운다 — 반전이 없는
     한 컷은 돈만 쓰고 끝난다."""
     bad = []
-    for key in ("name", "twist", "quote", "appearance_en", "scene_en"):
+    for key in ("name", "twist", "appearance_en", "scene_en"):
         if not spec[key]:
             bad.append(f"{key} 가 비어 있습니다.")
     if len(spec["fate"]) < 2:
         bad.append("fate 가 2줄 미만입니다.")
+    if len(spec["dialogue"]) < 2:
+        bad.append("dialogue 가 2줄 미만입니다.")
+    elif not any(ln["mine"] for ln in spec["dialogue"]):
+        bad.append("dialogue 에 이 캐릭터의 줄(mine)이 없습니다.")
     for key in ("appearance_en", "scene_en"):
         if spec[key] and sheetmod.HANGUL_RE.search(spec[key]):
             bad.append(f"{key} 에 한글이 섞여 있습니다. 이미지 모델에 그대로 들어갑니다.")
@@ -283,7 +400,8 @@ def gate_panel_spec(spec: dict) -> list[str]:
 
 def panel_spec_of(name: str, description: str, photos: list[Path],
                   world_label: str, world_text: str,
-                  tier: str | None = None) -> tuple[dict, dict]:
+                  tier: str | None = None, lucky: bool | None = None,
+                  run_dir: Path | None = None) -> tuple[dict, dict]:
     lines = ["# 이번 입력", ""]
     lines.append(f"이름: {name.strip()}" if name.strip()
                  else "이름: (없음 — 네가 짓는다)")
@@ -304,6 +422,16 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
         lines += ["", "세계관: (없음 — 네가 정한다)"]
     tier = tier or roll_role_tier()
     lines += ["", f"이번에 맡을 자리의 무게: {tier}", f"  {ROLE_TIERS[tier]}"]
+    lucky = roll_species_swap() if lucky is None else lucky
+    if lucky:
+        # 원칙 1(넣은 것을 바꾸지 않는다)의 유일한 예외. 종은 바꾸되 인상은 남긴다 —
+        # 사진이 아무 의미 없어지면 "내 캐릭터" 라는 느낌이 사라진다.
+        lines += ["", "★ 이번 한 번은 특별하다: 종이 바뀐다.",
+                  "  넣은 존재의 종을 이 세계관에 어울리는 **다른 종**으로 바꾼다(사람이면 동물이나 다른 존재로, "
+                  "동물이면 사람이나 다른 동물로). 이것은 원칙 1의 예외이며 이번에만 적용한다.",
+                  "  다만 사진·설명의 인상은 그대로 남긴다 — 검은 긴 머리면 검은 털, 웃는 얼굴이면 그런 표정, "
+                  "옷차림의 색과 분위기도 옮긴다. 보는 사람이 「이건 내 캐릭터가 종만 바뀐 것」이라고 알아볼 수 있어야 한다.",
+                  "  species 에는 바뀐 뒤의 종을 적는다."]
     lines += ["", "그림체 목록:"]
     lines += [f"  - {k}: {v}" for k, v in PANEL_STYLES.items()]
     prompt = load_prompt("panel_prompt") + "\n\n---\n\n" + "\n".join(lines)
@@ -313,10 +441,19 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
     images = llm.load_images([str(p) for p in photos]) if photos else None
     # 한 번만 묻는다. 예전에는 사양이 모자라면 한 번 더 물었는데, 글 값이 매번
     # 두 배로 나갔다. 모자라면 그 자리에서 멈춘다 — 그림 값은 나가지 않는다.
-    text, meta = call(prompt, images=images, temperature=0.8)
+    try:
+        text, meta = call(prompt, images=images, temperature=0.8)
+    except BaseException as exc:
+        if run_dir is not None:
+            record_error(run_dir, "SHEET", call.provider, call.model, exc)
+        raise
+    # 사양이 모자라 여기서 멈춰도 글 값은 나갔다 — 문 앞에서 먼저 적는다.
+    if run_dir is not None:
+        record(run_dir, meta)
     metas = [meta]
     spec = parse_panel_spec(text)
     spec["role_tier"] = tier
+    spec["lucky"] = bool(lucky)
     bad = gate_panel_spec(spec)
     if bad:
         raise SystemExit("한 컷 사양이 모자랍니다 — 그림은 그리지 않습니다: " + " · ".join(bad))
@@ -331,9 +468,18 @@ def panel_prompt(spec: dict, style_text: str) -> str:
         "",
         "[SCENE]",
         f"  {spec['scene_en']}",
-        "  One main character. The character is large in the frame and the face "
-        "(or the head, if not human) reads clearly. The place and the character's "
-        "position in this world must be visible in the picture itself.",
+        "  This is one moment of a webtoon scene, drawn so that a reader can tell what "
+        "is happening from the picture alone: what the character is doing, and how "
+        "anyone else in the scene reacts.",
+        "  The subject of this panel is the character described under [CHARACTER] — "
+        "nobody else. That character is whole in the frame, the largest and most "
+        "prominent figure, and the face (or the head, if not human) reads clearly. "
+        "If the character is not a person, it must be plainly visible and "
+        "recognizable as exactly what it is — not implied by a hand, a shadow or an "
+        "edge. Anyone else the scene mentions is secondary: they may appear, but "
+        "they never take more of the frame or more attention than this character. "
+        "The place and the character's position in this world must be visible in "
+        "the picture itself.",
         "",
         "[CHARACTER]",
         f"  {spec['appearance_en']}",
@@ -355,11 +501,13 @@ def run_panel(args) -> int:
     for missing in set(args.photo) - set(photos):
         log(f"[한 컷] 사진이 없습니다: {missing} — 빼고 그립니다")
 
+    run_dir = args.out.parent
+    write_input(run_dir, args, photos)
     world_key, world_label, world_text = resolve_world(args.world)
     if world_label:
         log(f"[한 컷] 세계관: {world_label}" + (f" ({world_key})" if world_key else ""))
     spec, spec_metas = panel_spec_of(args.name, args.description, photos,
-                                     world_label, world_text)
+                                     world_label, world_text, run_dir=run_dir)
     style_text = imageprompt.load_style(args.style or spec["style"])
     prompt = panel_prompt(spec, style_text)
 
@@ -368,7 +516,7 @@ def run_panel(args) -> int:
     log(f"[한 컷] 그리는 중… ({spec['style']}) {spec['twist']}")
     # **세로 2:3 으로 그린다** — 웹툰 페이지와 같은 캔버스(imagegen.PAGE_KIND).
     # 카드에 웹툰 한 컷처럼 걸리는 그림이라 정사각 초상이 아니다.
-    art_meta = imagegen.paint("SHEET_IMAGE", prompt, args.out, kind=imagegen.PAGE_KIND)
+    art_meta = paint_recorded(run_dir, "SHEET_IMAGE", prompt, args.out, kind=imagegen.PAGE_KIND)
     log(f"  -> {args.out}")
 
     result = {
@@ -381,8 +529,10 @@ def run_panel(args) -> int:
         "genre": spec["genre_word"],
         "role": spec["role"],
         "role_tier": spec.get("role_tier", ""),
+        "lucky": bool(spec.get("lucky", False)),
         "twist": spec["twist"],
-        "quote": spec["quote"],
+        "dialogue": spec["dialogue"],
+        "quote": dialogue_text(spec["dialogue"]),
         "fate": spec["fate"],
         "style": args.style or spec["style"],
         "source": "photo" if photos else "prompt",
@@ -418,7 +568,9 @@ def main() -> int:
     for missing in set(args.photo) - set(photos):
         log(f"[캐릭터] 사진이 없습니다: {missing} — 빼고 그립니다")
 
-    spec, spec_meta = spec_of(args.name, args.description, photos)
+    run_dir = args.out.parent
+    write_input(run_dir, args, photos)
+    spec, spec_meta = spec_of(args.name, args.description, photos, run_dir=run_dir)
 
     # **그림체는 이름이 아니라 문구를 넘긴다.** 받은 값이 그대로 STYLE 칸에
     # 실린다 — 이름을 넘기면 "romance" 다섯 글자가 그림체 설명 전부가 되고,
@@ -428,14 +580,26 @@ def main() -> int:
     prompt = portrait_prompt(spec, style_text)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    (args.out.parent / "art_prompt.txt").write_text(prompt, encoding="utf-8")
     log("[캐릭터] 그리는 중…")
     # **정사각으로 그린다.** 세로로 긴 웹툰 페이지 비율(2:3)로 그렸더니 카드에
     # 걸린 그림이 지나치게 길쭉했다. 캐릭터 한 장은 얼굴과 상반신이 보이면
     # 되는 것이라 정사각이 알맞다("details" 칸이 이미 1024x1024 다).
-    art_meta = imagegen.paint("SHEET_IMAGE", prompt, args.out, kind="details")
+    art_meta = paint_recorded(run_dir, "SHEET_IMAGE", prompt, args.out, kind="details")
     log(f"  -> {args.out}")
 
     # 부르는 쪽이 읽을 한 줄. 비용은 두 호출을 합쳐서 낸다.
+    # 같은 것을 폴더에도 남긴다(run 폴더의 결과 JSON 과 같은 자리) — 한 컷은 panel.json.
+    result = {
+        "out": str(args.out),
+        "named": (spec.get("name") or "").strip(),
+        "name": args.name,
+        "source": "photo" if photos else "prompt",
+        "spec": spec,
+        "calls": [spec_meta, art_meta],
+    }
+    (args.out.parent / "character.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({
         "out": str(args.out),
         # 사람이 이름을 안 적었으면 사양이 지은 것을 돌려준다.

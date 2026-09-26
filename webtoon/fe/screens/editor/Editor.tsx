@@ -5,6 +5,7 @@ import { creditBalance, creditHistory, type CreditLine } from "@common/api/credi
 import { pageUrl, readAllowance, readResult, type RunResult } from "../../lib/api";
 import { mountEditor, setEditorTranslator } from "../../lib/editorCore";
 import { useLang } from "../../lib/i18n";
+import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconEdit, IconMenu } from "../../ui/Icons";
 import ShareMenu from "../result/ShareMenu";
@@ -122,6 +123,10 @@ export default function Editor({ runId, go, authStatus = "loading" }:
      게스트 브라우저 uid 는 같은 컴퓨터를 쓰는 사람끼리 겹치고 지우면 사라져서
      "고칠 권리"를 걸기에 약하다. 로그인하면 이 브라우저로 만든 작품이 그대로
      계정에 따라온다(POST /my/link). */
+  /* 로그인 문턱을 본 사람 — 그다음 auth_done 이 오는지로 「로그인까지 갔나」를 센다(#413).
+     ★ 아래 이른 return 들보다 위에 둔다. 훅은 매 렌더에 같은 순서로 불려야 한다. */
+  useEffect(() => { if (locked) track("login_prompt", { where: "editor", run: runId }); }, [locked, runId]);
+
   if (authStatus === "loading") {
     return <div className="wt-wrap wt-page wt-ed-gate" aria-busy="true" />;
   }
@@ -265,15 +270,15 @@ export default function Editor({ runId, go, authStatus = "loading" }:
       </div>
 
       {/* 다시 그리기 확인 창 — 항목(칩)은 엔진이 /config 에서 받아 채운다. */}
-      <div className="ask wt-ed-ask" id="regenAsk" hidden>
-        <div className="ask-box" role="dialog" aria-modal="true" aria-labelledby="regenAskTitle">
+      <div className="ask modal" id="regenAsk" hidden>
+        <div className="ask-box modal-box" role="dialog" aria-modal="true" aria-labelledby="regenAskTitle">
           <h2 id="regenAskTitle">{t("다시 그리기")}</h2>
           <p className="ask-sub" id="regenAskSub" />
           <p className="ask-scene" id="regenAskScene" hidden />
-          <p className="fb-lead">{t("무엇이 마음에 안 드나요?")} <small>{t("안 골라도 됩니다")}</small></p>
+          <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
           <div className="fb-tags" id="regenAskTags" />
           <label className="wt-ed-askfield">
-            <span>{t("더 하고 싶은 말")} <small>{t("비워도 됩니다")}</small></span>
+            <span>{t("더 하고 싶은 말")}</span>
             <textarea id="regenAskText" rows={3} maxLength={500} className="field"
                       placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
           </label>

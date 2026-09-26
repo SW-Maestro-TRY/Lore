@@ -19,6 +19,7 @@
  */
 
 import { louArt } from "./louArt";
+import { track } from "./track";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
@@ -576,6 +577,9 @@ export function mountEditor(
   async function realRegen(no, btn, body, veil, el) {
     const msg = $("[data-veil-msg]", veil);
     btn.disabled = true;
+    // 무엇을 고쳐 달라고 썼는지(feedback)는 싣지 않는다 — 태그 수와 글이 있었는지만(#413).
+    track("regen_start", { run: RUN_ID, cut: no, count: (body.tags || []).length,
+      has_note: !!body.feedback, result: body.textless ? "textless" : "text" });
     let job;
     try {
       const res = await fetch(
@@ -597,6 +601,9 @@ export function mountEditor(
       catch { continue; }                       // 잠깐 끊겨도 다음 번에 이어진다
       if (msg && s.note) msg.innerHTML =
         `${tr("{n}번째 장을 다시 그리는 중…", { n: no })}<br><small class="veil-what">${esc(s.note.slice(0, 90))}</small>`;
+      if (s.status === "done" || s.status === "error" || s.status === "cancelled") {
+        track("regen_result", { run: RUN_ID, cut: no, status: s.status });
+      }
       if (s.status === "done") {
         veil.remove();
         bustScene(no);
@@ -649,6 +656,7 @@ export function mountEditor(
       `<span class="ver-strip-label">${tr("지난 판 — 눌러서 바꿔 보기")}</span>
        <div class="ver-strip">${cur}${past}</div>`;
     $$(".js-revert", slot).forEach(b => b.addEventListener("click", async () => {
+      track("regen_revert", { run: RUN_ID, cut: no, n: Number(b.dataset.v) });
       b.disabled = true;
       try {
         const res = await fetch(
@@ -1165,8 +1173,6 @@ export function mountEditor(
       tailed ? `<span class="ib-sep"></span>` +
                tailBtn("left", "◀") + tailBtn("right", "▶") + tailBtn("none", "✕") : "",
       `<span class="ib-sep"></span>`,
-      b("front", "⬆", tr("맨 앞으로")),
-      b("dup", "⧉", tr("복제")),
       b("del", "🗑", tr("삭제"), "is-danger"),
     ].join("");
   }
@@ -1217,20 +1223,6 @@ export function mountEditor(
     },
     bigger: () => bumpSize(+2),
     smaller: () => bumpSize(-2),
-    front: () => {
-      const it = findItem(); if (!it) return;
-      const st = sc(sel.sceneNo);
-      st.items = [...st.items.filter(i => i.id !== it.id), it];
-      save(); paintItems(sel.sceneNo);
-    },
-    dup: () => {
-      const it = findItem(); if (!it) return;
-      const copy = { ...it, id: `i${++uid}`,
-                     x: Math.min(90, it.x + 5), y: Math.min(92, it.y + 5) };
-      sc(sel.sceneNo).items.push(copy);
-      sel = { sceneNo: sel.sceneNo, id: copy.id };
-      save(); paintItems(sel.sceneNo);
-    },
     del: () => {
       const it = findItem(); if (!it) return;
       const st = sc(sel.sceneNo);
@@ -1644,6 +1636,7 @@ export function mountEditor(
             body: JSON.stringify(overlayPayload()) });
         const out = await res.json();
         if (!res.ok) throw new Error(out.error || tr("굽지 못했습니다"));
+        track("bake", { run: RUN_ID, page: out.scenes?.length, count: out.items });
         showBaked(out);
         // 굽자마자 바로 받는다 (pullFile 머리말 참고)
         pullFile(atApi(out.url), `${RUN_ID}.png`);

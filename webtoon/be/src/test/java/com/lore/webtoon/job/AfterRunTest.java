@@ -48,7 +48,11 @@ class AfterRunTest {
 
     @BeforeEach
     void setUp() {
-        usage = mock(UsageService.class);
+        /* 진짜 UsageService 를 감싼다 — meta.json 을 읽는 코드가 거기로 옮겨 갔다(#444).
+           장부(저장소)만 가짜다. */
+        usage = org.mockito.Mockito.spy(new UsageService(
+                mock(com.lore.webtoon.usage.UsageRepository.class),
+                mock(com.lore.webtoon.usage.SpendGuard.class), "t"));
         uploader = mock(PageUploader.class);
         when(uploader.ready()).thenReturn(false);        // 여기서는 그림을 안 올린다
         pages = mock(PageStore.class);

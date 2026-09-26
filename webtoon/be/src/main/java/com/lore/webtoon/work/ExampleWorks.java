@@ -74,7 +74,8 @@ public class ExampleWorks implements ApplicationRunner {
     private static final String CLASSPATH_DIR = "webtoon/ai/assets/examples/";
 
     /** 심은 작품의 주인 자리. 사람이 아니므로 계정도 브라우저도 없다. */
-    private static final String SEED_UID = "lore-example-seed";
+    /** 예시를 심은 브라우저 번호. 지우기(RunDeleteService)가 예시를 알아보는 표시이기도 하다. */
+    static final String SEED_UID = "lore-example-seed";
 
     private final PrivateArt art;
     private final PageStore pages;
@@ -228,8 +229,8 @@ public class ExampleWorks implements ApplicationRunner {
         stories.choose(runId, 1);
 
         /* 작업 줄 — 카드에 캐릭터 이름과 그림체 이름이 뜨려면 있어야 한다.
-           예시는 실제로 돈 작업이 아니라서 상태 값은 뜻이 없다(읽는 쪽이
-           상태를 안 본다). */
+           예시는 실제로 돈 작업이 아니라서 끝난 것(DONE)으로 넣는다 —
+           QUEUED 로 넣으면 줄에 영영 서 있다(WebtoonJob.seeded). */
         String jobId = jobIdOf(runId);
         if (jobs.findByPublicId(jobId).isEmpty()) {
             Map<String, Object> input = new LinkedHashMap<>();
@@ -240,8 +241,8 @@ public class ExampleWorks implements ApplicationRunner {
             } catch (IOException e) {
                 inputJson = "{}";
             }
-            jobs.save(WebtoonJob.queued(jobId, null, SEED_UID, null,
-                    meta.path("style").asText(""), null, false, inputJson, Instant.now()));
+            jobs.save(WebtoonJob.seeded(jobId, SEED_UID,
+                    meta.path("style").asText(""), inputJson, Instant.now()));
         }
 
         ledger.started(jobId, null, SEED_UID);
