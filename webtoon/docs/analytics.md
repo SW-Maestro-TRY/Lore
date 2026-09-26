@@ -150,7 +150,7 @@
 | `editor_open` · `sibling_open` | 편집실 · 같은 캐릭터의 다른 편 | `run` |
 | `works_open` · `works_filter` · `visibility_change` | 둘러보기 | `where`, `mine`, `filter`: mine · liked · genre · style, `target`: 고른 장르·그림체의 영문 기호(예: romance_fantasy, 번역이 없으면 other), `result`: public · private |
 | `works_search` | 둘러보기 검색 (입력이 멈추고 0.8초 뒤 한 번) | `count`(보이는 작품 수). 검색어 자체는 남기지 않는다 |
-| `recent_open` · `recommend_open` | 최근 본 웹툰 · 「이런 웹툰은 어때요」에서 작품을 엶 | `run` |
+| `recent_open` · `recommend_open` | 최근 본 웹툰 · 「이런 웹툰은 어때요」에서 작품을 엶 | `run`, `where`: landing(홈의 최근 본 줄에서만 붙음) |
 | `like_toggle` | 찜 하트 | `run`, `result`: on · off · need_login(로그인 안 해서 막힘) |
 | `run_delete` | 내 웹툰 삭제 | `run`, `where`: mypage · works |
 | `try_random_click` · `try_start` | 캐릭터 만들어보기 | `has_photo`, `has_name`, `has_desc`, `preset`(세계관을 목록에서), `random` |
