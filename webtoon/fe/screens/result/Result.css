@@ -61,16 +61,7 @@
 .wt .wt-result-next { grid-column: 3; justify-self: end; }
 
 /* 「다음화 보기」를 눌렀을 때 뜨는 알림. 편집실의 확인 창과 같은 결로 맞춘다. */
-.wt .wt-result-soon {
-  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
-  background: rgba(15, 51, 63, 0.55); padding: 16px;
-}
-.wt .wt-result-soonbox {
-  width: min(360px, 100%); background: #fff; border-radius: 22px;
-  box-shadow: 0 20px 60px rgba(15, 51, 63, 0.28); padding: 24px 20px 18px;
-  display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center;
-}
-.wt .wt-result-soonbox h2 { font-size: 16px; margin: 0; line-height: 1.5; }
+.wt .wt-result-soonbox { width: min(360px, 100%); gap: 16px; align-items: center; text-align: center; }
 .wt .wt-result-soonbox .btn { min-width: 96px; }
 
 /* ---- 공유 단추와 목록 (완성본 · 편집실 공용) ---- */
@@ -85,11 +76,6 @@
   text-align: left; font-size: 14px; color: var(--ink); cursor: pointer;
 }
 .wt .wt-share-one:hover { background: var(--water-light); }
-.wt .wt-share-toast {
-  position: fixed; left: 50%; top: calc(var(--lore-header-h, 64px) + 16px); transform: translateX(-50%);
-  z-index: 90; padding: 10px 16px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 13px;
-  white-space: nowrap;
-}
 
 @media (max-width: 767px) {
   /* 폰은 위쪽 얇은 줄(MobileTop)이 위치를 말한다 — 빵부스러기는 숨긴다. */

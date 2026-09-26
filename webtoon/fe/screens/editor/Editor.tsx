@@ -270,8 +270,8 @@ export default function Editor({ runId, go, authStatus = "loading" }:
       </div>
 
       {/* 다시 그리기 확인 창 — 항목(칩)은 엔진이 /config 에서 받아 채운다. */}
-      <div className="ask wt-ed-ask" id="regenAsk" hidden>
-        <div className="ask-box" role="dialog" aria-modal="true" aria-labelledby="regenAskTitle">
+      <div className="ask modal" id="regenAsk" hidden>
+        <div className="ask-box modal-box" role="dialog" aria-modal="true" aria-labelledby="regenAskTitle">
           <h2 id="regenAskTitle">{t("다시 그리기")}</h2>
           <p className="ask-sub" id="regenAskSub" />
           <p className="ask-scene" id="regenAskScene" hidden />
