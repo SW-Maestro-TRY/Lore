@@ -102,4 +102,15 @@ class RunLikeServiceTest {
         assertThat(service.likedAmong(null, List.of("r1"))).isEmpty();
         verify(likes, never()).likedAmong(any(), any());
     }
+
+    @Test
+    @DisplayName("휴지통에 든 작품은 찜할 수 없다(404) — 목록에서 안 보이는 작품이다(#157)")
+    void 휴지통_작품은_찜_불가() {
+        WebtoonWork trashed = mock(WebtoonWork.class);
+        when(trashed.isTrashed()).thenReturn(true);
+        when(works.findFirstByRunId("t1")).thenReturn(Optional.of(trashed));
+
+        assertThatThrownBy(() -> service.like(7L, "t1"))
+                .isInstanceOf(com.lore.common.exception.BusinessException.class);
+    }
 }
