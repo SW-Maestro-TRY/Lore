@@ -18,6 +18,7 @@
  * 그래서 화면이 숨겨지면 sendBeacon 으로 남은 것을 보낸다. sendBeacon 은 머리를 못
  * 실어서 브라우저 번호(uid)를 본문에 넣는다. */
 import { BASE, getUid } from "./api";
+import { englishOf } from "./i18n";
 
 type Value = string | number | boolean;
 export type Props = Record<string, Value | null | undefined>;
@@ -43,6 +44,14 @@ let currentView: string | undefined;
 /** 지금 보고 있는 화면. 이후의 기록에 같이 실린다. */
 export function setView(view: string | undefined): void {
   currentView = view;
+}
+
+/** 화면에 보이는 한글 이름(장르·그림체 등)을 기록용 기호로. 서버는 한글이 든 값을 사람이 쓴 글일 수
+ *  있다고 보고 버리므로, 영문 번역을 소문자_밑줄로 바꿔 보낸다(「로맨스 판타지」→ romance_fantasy).
+ *  번역이 없으면 other. */
+export function labelToken(label: string): string {
+  const slug = englishOf(label).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 64);
+  return slug || "other";
 }
 
 /** 한 줄 남긴다. */
