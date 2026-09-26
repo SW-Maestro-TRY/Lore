@@ -70,6 +70,8 @@ const dict: Dict = {
   /* ---- 이메일 ---- */
   "완성되면 {email} 으로 알림을 드릴게요": { en: "We'll notify {email} when it's done", ja: "完成したら{email}にお知らせします", zh: "完成后会通知 {email}" },
   "지금 약 {n}분 남았어요.": { en: "About {n} min left.", ja: "残り約{n}分です。", zh: "还剩约 {n} 分钟。" },
+  "마이페이지 설정": { en: "My page settings", ja: "マイページの設定", zh: "我的页面设置" },
+  "에서 끌 수 있어요!": { en: " — you can turn this off there.", ja: "でオフにできます！", zh: "中可以关闭！" },
   "완성되면 계정 이메일로 알림을 드릴게요": { en: "We'll notify your account email when it's done", ja: "完成したらアカウントのメールにお知らせします", zh: "完成后会通知你的账户邮箱" },
   "이메일을 입력해 주시면 완성되면 결과물을 보여드릴게요!": { en: "Enter your email and we'll send you the result when it's done!", ja: "メールを入力すると、完成したら結果をお届けします！", zh: "填写邮箱，完成后把成品发给你！" },
   "이메일": { en: "Email", ja: "メール", zh: "邮箱" },

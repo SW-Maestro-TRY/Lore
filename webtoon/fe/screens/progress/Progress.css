@@ -108,6 +108,11 @@
 .wt .wt-prog-mail label { font-size: 14px; }
 .wt .wt-prog-mail label .dim { font-weight: 400; }
 .wt .wt-prog-mail .row { display: flex; gap: 8px; }
+.wt .wt-prog-mailoff { font-size: var(--fs-xs, 12px); }
+.wt .wt-prog-mailoff .linkish {
+  background: none; border: 0; padding: 0; font: inherit; color: var(--sea); font-weight: 700;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
 .wt .wt-prog-mail .row .field { height: 42px; flex-grow: 1; min-width: 0; }
 .wt .wt-prog-mail .row .btn { height: 42px; font-size: 13.5px; }
 .wt .wt-prog-mail .dim { font-size: 12px; }

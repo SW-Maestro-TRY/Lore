@@ -37,6 +37,35 @@
   `localhost`·`127.0.0.1` 이면 남기고, 그 밖은 치웁니다(`RunFiles`). 굳이 바꾸려면
   `LORE_WEBTOON_RUNS_KEEP_FILES=true|false` 를 적습니다.
 
+## 서버를 하나 더 띄울 때는 DB 사본으로 (2026-09-26)
+
+**로컬 DB(`lore`)를 쓰는 서버가 이미 떠 있으면, 같은 DB 로 서버를 하나 더 띄우지
+않습니다.** 확인용 서버는 DB 사본으로 띄웁니다.
+
+서버는 뜰 때 `StaleJobs.sweep()`(`webtoon/be/.../job/StaleJobs.java`)이 DB 에서
+`RUNNING` 인 작업을 전부 「서버가 다시 시작되어 끊긴 작업」으로 적습니다 — 실패로
+바꾸고, 크레딧을 돌려주고, 실패 메일을 보냅니다. 서버가 하나뿐이면 맞는 동작이지만,
+DB 를 같이 쓰는 **다른 서버가 아직 돌리고 있는 작업까지** 끊긴 것으로 적힙니다.
+2026-09-26 에 워크트리에서 확인용 서버를 띄웠다가, 다른 서버에서 과금으로 만들던
+한 편이 이렇게 실패로 적히고 크레딧 12 가 돌려졌습니다(그림은 끝까지 그려졌습니다).
+
+사본을 만들어 그리로 띄웁니다.
+
+```
+createdb -U mint lore_<이름>
+pg_dump -U mint lore | psql -q -U mint -d lore_<이름>
+
+DB_URL=jdbc:postgresql://localhost:5432/lore_<이름> DB_USERNAME=mint \
+SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS='*:missing' \
+SERVER_PORT=<다른 포트> ./gradlew bootRun --no-daemon
+```
+
+- `*:missing` 은 다른 브랜치가 원본 DB 에 먼저 넣은 마이그레이션이 이 브랜치에
+  없어서 기동이 막히는 것을 넘기려는 것입니다. 사본에만 씁니다.
+- 다 쓰면 `dropdb -U mint lore_<이름>` 으로 지웁니다.
+- 사본에서 바꾼 것은 원본에 안 갑니다. 원본에서 확인해야 하는 것이면 원래 서버를
+  내린 뒤에 합니다.
+
 ## 모델 API 키는 어디 있나
 
 **실제 키는 저장소 루트 `.env` 의 `WEBTOON_API_KEY`(OpenAI) 하나뿐입니다.**
