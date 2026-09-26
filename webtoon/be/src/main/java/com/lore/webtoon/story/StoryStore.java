@@ -137,6 +137,27 @@ public class StoryStore {
         return chosen.displayTitle();
     }
 
+    /** 줄거리(로그라인)를 고칠 때 받는 최대 길이. 칸 크기(user_plot varchar(300))와 같다. */
+    public static final int PLOT_MAX = 300;
+
+    /**
+     * 완성본의 줄거리(로그라인)를 고친다. -> 화면에 <b>앞으로</b> 보일 줄거리
+     *
+     * {@link #editTitle} 과 같은 규칙이다 — 빈 값으로 부르면 지워서 모델이 지은
+     * 줄거리로 돌아가고, 공백은 한 칸으로 줄이며, 길면 {@link #PLOT_MAX} 에서 자른다.
+     *
+     * @throws java.util.NoSuchElementException 고른 이야기가 없을 때
+     */
+    @Transactional
+    public String editPlot(String runId, String plot) {
+        WebtoonStory chosen = stories.findByRunIdAndChosenTrue(runId).orElseThrow();
+        String clean = plot == null ? "" : String.join(" ", plot.trim().split("\\s+"));
+        chosen.editPlot(clean.isBlank() ? null : clean.substring(0, Math.min(PLOT_MAX, clean.length())));
+        stories.save(chosen);
+        String shown = chosen.displayPlot();
+        return shown == null ? "" : shown;
+    }
+
     /**
      * 장면 목록. 완성본에서 그림을 누르면 뜨는 설명이 여기서 나온다.
      *

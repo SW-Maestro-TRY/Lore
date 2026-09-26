@@ -191,7 +191,7 @@ public class RunService {
                 .orElse(NO_TITLE));
         out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
-        out.put("logline", chosen.map(WebtoonStory::getPlot).orElse(""));
+        out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));
         out.put("episode", 1);
         out.put("pages", sheets);
         out.put("page_count", numbers.size());
@@ -269,7 +269,7 @@ public class RunService {
                 .orElse(NO_TITLE));
         out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
-        out.put("logline", chosen.map(WebtoonStory::getPlot).orElse(""));
+        out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));
         // 한 편짜리다 — 이어그리기가 붙으면 여기가 늘어난다(카드가 쓰는 것과 같은 값).
         out.put("episode", 1);
         out.put("episodes", List.of(1));
