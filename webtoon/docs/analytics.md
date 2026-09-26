@@ -119,6 +119,27 @@
 | E4 | 다음화를 찾는다 | `next_episode_click` `where = other_foot` |
 | E5 | 직접 만들러 간다 | `page_view` `view = entry` 가 그 뒤에 옴 |
 
+## 유입 경로 (UTM) — 광고·홍보 링크 규칙
+
+방문의 첫 묶음에 유입 경로가 `source` 칸으로 남습니다(`track.ts` 의 `utmLine`, #440).
+`utm_source/utm_medium/utm_campaign/utm_content` 를 `/` 로 접은 한 줄입니다. UTM 이 없으면
+`?ref=` 값을 씁니다. 들어오기 전 주소의 호스트는 `ref_host` 에 따로 남습니다.
+
+- **광고·홍보 링크는 `/webtoon` 으로 보냅니다.** 루트 `/` 로 보내면 유입 경로가 공용 기록
+  (`zzal_event`)에만 남고, 웹툰 화면으로 넘어온 뒤의 기록에는 남지 않습니다.
+- 값은 **영문 소문자·숫자·`-`** 로 씁니다. 한글·공백은 서버가 지웁니다.
+- 칸마다 뜻을 고정합니다.
+
+| 칸 | 뜻 | 예 |
+| --- | --- | --- |
+| `utm_source` | 어디 | `instagram` · `x` · `kakao` · `community-<이름>` |
+| `utm_medium` | 어떻게 | `paid`(유료 광고) · `social`(계정 게시물) · `post`(커뮤니티 글) |
+| `utm_campaign` | 어느 캠페인 | `launch-1010` 처럼 날짜를 붙임 |
+| `utm_content` | 어느 소재 | `banner-a` · `reels-mongi` |
+
+예: `https://lorecomic.com/webtoon?utm_source=instagram&utm_medium=paid&utm_campaign=launch-1010&utm_content=banner-a`
+→ `source` = `instagram/paid/launch-1010/banner-a`
+
 ## 이벤트 목록
 
 작업의 실제 성공·실패·걸린 시간·환불·크레딧은 이벤트로 다시 모으지 않습니다. 서버의
@@ -170,6 +191,28 @@
 ## 자주 보는 숫자
 
 로컬 DB 는 `psql -U mint -d lore`, staging 은 `webtoon/docs/server.md` 「DB 직접 접근」.
+
+**유입 경로별 방문 · 캐릭터 카드 · 웹툰 만들기 (최근 14일, 사람 수)**
+
+```sql
+with first_touch as (          -- 사람마다 처음 들어온 경로
+  select distinct on (uid) uid, source
+  from webtoon_event
+  where source is not null and occurred_at > now() - interval '14 days'
+  order by uid, occurred_at
+)
+select f.source,
+       count(distinct f.uid)                                               as visitors,
+       count(distinct e.uid) filter (where e.name = 'try_result')          as made_card,
+       count(distinct e.uid) filter (where e.name = 'create_started')      as started_webtoon,
+       count(distinct e.user_id)                                           as logged_in
+from first_touch f
+left join webtoon_event e on e.uid = f.uid and e.occurred_at > now() - interval '14 days'
+group by 1
+order by 2 desc;
+```
+
+(`source` 는 방문 첫 묶음의 줄에만 있어서, 사람마다 처음 들어온 경로를 뽑아 그 사람의 다른 줄과 잇습니다.)
 
 **다음화를 누가, 어느 단추에서, 얼마나 누르나**
 
