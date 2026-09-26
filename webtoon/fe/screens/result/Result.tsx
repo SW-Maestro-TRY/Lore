@@ -121,9 +121,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
   const preview = data && data.preview && data.planned_pages > data.page_count
     ? "" : "";
-  const metaPc = data
-    ? [data.character, epLabel, t(data.genre || ""), t("{n}컷", { n: data.page_count })].filter(Boolean).join(" · ") : "";
-  const metaM = data ? [t(data.genre || ""), t("{n}컷", { n: data.page_count })].filter(Boolean).join(" · ") : "";
+  const tags = (r: RunResult) => [...new Set([r.genre, r.style_label].filter((s): s is string => !!s).map((s) => t(s)))];
+  const metaPc = data ? [data.character, epLabel, ...tags(data)].filter(Boolean).join(" · ") : "";
+  const metaM = data ? tags(data).filter(Boolean).join(" · ") : "";
 
   /* 다음 편은 아직 없다. 그래도 누가 어느 버튼에서 얼마나 찾는지가 이 기능을 언제
      만들지 정하는 근거라, 누를 때마다 남긴다(#413). */
@@ -221,7 +221,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
           <div className="wt-result-body">
             <div className="wt-result-head">
               <div className="wt-result-titlerow">
-                {/* 2026-09-23 에 이 화면의 고치기 폼을 지웠다가, 제목 옆 연필 하나로 다시 둔다(#78). */}
+                {/* 2026-09-23 에 이 화면의 고치기 폼을 지웠다가, 제목 옆 연필 하나로 다시 둔다(#78).
+                    제목 글자 자체가 줄 정중앙에 오도록, 연필은 제목 옆이 아니라 좋아요·공유와
+                    함께 오른쪽 끝(wt-result-titleacts)으로 보낸다. */}
                 <h2 className="wt-result-titlemid">
                   {titleDraft !== null ? (
                     <input className="wt-result-titleinput" value={titleDraft} autoFocus maxLength={60}
@@ -234,25 +236,24 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                              else if (e.key === "Escape") setTitleDraft(null);
                            }} />
                   ) : (
-                    <>
-                      <span className="wt-result-titletext">{data.title}</span>
-                      {/* 제목 바꾸기는 편집실과 같은 주소라 로그인해야 된다(401) — 로그인한 주인에게만 연필. */}
-                      {mine && authenticated && (
-                        <button type="button" className="icon-btn wt-result-titleedit" aria-label={t("제목 고치기")}
-                                title={t("제목 고치기")} onClick={() => { setTitleErr(false); setTitleDraft(data.title); }}>
-                          <IconEdit size={15} />
-                        </button>
-                      )}
-                    </>
+                    <span className="wt-result-titletext">{data.title}</span>
                   )}
                   {titleErr && <span className="err wt-result-titleerr">{t("저장하지 못했습니다")}</span>}
                 </h2>
                 <span className="wt-result-titleacts">
+                  {/* 제목 바꾸기는 편집실과 같은 주소라 로그인해야 된다(401) — 로그인한 주인에게만 연필. */}
+                  {mine && authenticated && titleDraft === null && (
+                    <button type="button" className="icon-btn wt-result-titleedit" aria-label={t("제목 고치기")}
+                            title={t("제목 고치기")} onClick={() => { setTitleErr(false); setTitleDraft(data.title); }}>
+                      <IconEdit size={15} />
+                    </button>
+                  )}
                   <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
                               onChange={(on, n) => { setLiked(on); setLikes(n); }} />
                   <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
                 </span>
               </div>
+
               <span className="muted wt-result-meta">
                 <span className="wt-result-meta-pc">{metaPc}</span>
                 <span className="wt-result-meta-m">{metaM}</span>
