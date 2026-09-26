@@ -27,10 +27,17 @@ import java.util.Map;
 @ConditionalOnProperty(name = "lore.webtoon.python.direct", havingValue = "true")
 public class ConfigController {
 
+    private final com.lore.webtoon.work.RunTrash trash;
+
+    public ConfigController(com.lore.webtoon.work.RunTrash trash) {
+        this.trash = trash;
+    }
+
     @Operation(summary = "편집실 설정",
-            description = "지금은 다시 그리기 창의 feedback_tags 뿐이다.")
+            description = "다시 그리기 창의 feedback_tags 와, 지운 작품을 휴지통에서 되살릴 수 있는 날 수 trash_keep_days(#157).")
     @GetMapping(WebtoonApi.V1 + "/config")
     public Map<String, Object> config() {
-        return Map.of("feedback_tags", FeedbackTags.ALL);
+        return Map.of("feedback_tags", FeedbackTags.ALL,
+                      "trash_keep_days", trash.keepDays());
     }
 }

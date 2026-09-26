@@ -48,7 +48,7 @@ const dict: Dict = {
   "로그인하면 공개 여부를 바꿀 수 있어요": { en: "Sign in to change who can see it", ja: "ログインすると公開設定を変えられます", zh: "登录后可更改公开设置" },
   "지우기": { en: "Delete", ja: "削除", zh: "删除" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
-  "정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.": { en: "Really delete? The images are removed too and this can't be undone.", ja: "本当に削除しますか？画像も消え、元に戻せません。", zh: "确定删除吗？图片也会一并删除，且无法撤销。" },
+  "휴지통으로 옮길까요? {n}일 안에는 마이페이지에서 되살릴 수 있어요.": { en: "Move to trash? You can restore it from My page within {n} days.", ja: "ゴミ箱に移しますか？{n}日以内ならマイページで元に戻せます。", zh: "移到回收站吗？{n} 天内可以在我的页面恢复。" },
   "지우지 못했습니다": { en: "Couldn't delete", ja: "削除できませんでした", zh: "删除失败" },
 };
 
