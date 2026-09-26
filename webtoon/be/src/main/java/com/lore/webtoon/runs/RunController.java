@@ -391,6 +391,9 @@ public class RunController {
     public ResponseEntity<Void> page(@PathVariable String runId, @PathVariable int no,
                                      @RequestParam(defaultValue = "1080") int w,
                                      @RequestParam(required = false) String raw) {
+        if (runs.isTrashed(runId)) {
+            return ResponseEntity.notFound().build();      // 휴지통에 든 작품(#157)
+        }
         boolean wantRaw = raw != null && !raw.isBlank() && !"0".equals(raw);
         String where = wantRaw ? null : pages.urlOfKey(bakery.keyOf(runId, no));
         if (where == null) {

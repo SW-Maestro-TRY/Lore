@@ -221,4 +221,17 @@ class RunServiceTest {
                 .containsEntry("style_label", "")
                 .containsEntry("logline", "");
     }
+
+    @Test
+    @DisplayName("휴지통에 든 작품은 결과·회차·카드가 모두 없는 작품처럼 null 이다(#157)")
+    void 휴지통_작품은_안_보인다() {
+        WebtoonWork work = 작품("run-1", true);
+        when(work.isTrashed()).thenReturn(true);
+        when(pages.pageNumbersOf("run-1")).thenReturn(List.of(1, 2));
+
+        assertThat(runs.isTrashed("run-1")).isTrue();
+        assertThat(runs.result("run-1")).isNull();
+        assertThat(runs.episode("run-1", 1)).isNull();
+        assertThat(runs.cardOf("run-1")).isNull();
+    }
 }

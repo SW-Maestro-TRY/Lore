@@ -46,14 +46,14 @@ public class MyWebtoonController {
     private final MyWebtoonService service;
     private final NotifySettingService notifySettings;
     private final RunLikeService likes;
-    private final RunDeleteService deleter;
+    private final RunTrash trash;
 
     public MyWebtoonController(MyWebtoonService service, NotifySettingService notifySettings,
-                               RunLikeService likes, RunDeleteService deleter) {
+                               RunLikeService likes, RunTrash trash) {
         this.service = service;
         this.notifySettings = notifySettings;
         this.likes = likes;
-        this.deleter = deleter;
+        this.trash = trash;
     }
 
     @Operation(summary = "찜하기", description = """
@@ -138,16 +138,43 @@ public class MyWebtoonController {
         return ApiResponse.ok(new ReuploadResult(runId, service.reupload(userId, runId)));
     }
 
-    @Operation(summary = "내 작품 지우기", description = """
-            그림(S3)과 행(장·구운 장·얹은 것·다시 그린 기록·이야기·사용량·작품·만들기 기록)을
-            모두 지운다. 되돌릴 수 없다.
+    @Operation(summary = "내 작품 지우기 (휴지통)", description = """
+            바로 지우지 않고 휴지통에 넣는다(#157). 넣은 작품은 내 목록·둘러보기·찜 목록에서
+            빠지고, 결과·장 주소도 404 가 된다. 그림은 비공개 자리로 옮긴다.
+
+            keepDays 일(기본 30일) 안에는 POST /my/runs/{runId}/restore 로 되살릴 수 있고,
+            그 뒤에는 그림(S3)과 행이 영구 삭제된다(purgeAt).
 
             · 내 계정에 이어진 브라우저가 만든 작품만 된다 — 공개 전환과 같은 기준(아니면 403)
             · 예시 작품은 못 지운다(403) · 없는 작품은 404
-            · 만드는 중인 작품은 먼저 「만들기 중단」을 한 뒤에 지울 수 있다(400)""")
+            · 만드는 중인 작품은 먼저 「만들기 중단」을 한 뒤에 지울 수 있다(400)
+            · 이미 휴지통에 있으면 그대로 두고 같은 값을 돌려준다""")
     @DeleteMapping("/runs/{runId}")
-    public ApiResponse<RunDeleteService.Deleted> delete(@LoginUser Long userId, @PathVariable String runId) {
-        return ApiResponse.ok(deleter.delete(userId, runId));
+    public ApiResponse<RunTrash.Trashed> delete(@LoginUser Long userId, @PathVariable String runId) {
+        return ApiResponse.ok(trash.trash(userId, runId));
+    }
+
+    @Operation(summary = "휴지통", description = """
+            내가 지운 작품. 최근에 지운 것부터. 모양은 내 목록과 같고 deleted_at ·
+            purge_at(이 시각이 지나면 영구 삭제)이 붙는다.""")
+    @GetMapping("/trash")
+    public ApiResponse<TrashList> trashList(@LoginUser Long userId) {
+        return ApiResponse.ok(new TrashList(trash.keepDays(), trash.trashOf(userId)));
+    }
+
+    @Operation(summary = "휴지통에서 되살리기", description = """
+            내 목록으로 돌려놓는다. 공개였던 작품은 둘러보기에도 다시 뜬다.
+            휴지통에 없던 작품이면 restored=false 를 준다.""")
+    @PostMapping("/runs/{runId}/restore")
+    public ApiResponse<RestoreResult> restore(@LoginUser Long userId, @PathVariable String runId) {
+        return ApiResponse.ok(new RestoreResult(runId, trash.restore(userId, runId)));
+    }
+
+    /** @param keepDays 휴지통에 둔 뒤 되살릴 수 있는 날 수 */
+    public record TrashList(int keepDays, List<Map<String, Object>> runs) {
+    }
+
+    public record RestoreResult(String runId, boolean restored) {
     }
 
     @Operation(summary = "웹툰 완성 메일 — 켜져 있는가", description = """
