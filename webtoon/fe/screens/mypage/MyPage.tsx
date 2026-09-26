@@ -21,9 +21,9 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, myLikes, readAllowance, recentRuns,
-  readNotifySetting, setNotifySetting, setVisibility, withdrawAccount,
-  type Allowance, type Character, type RunCard,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, myLikes, myTrash, readAllowance, recentRuns,
+  readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
+  type Allowance, type Character, type RunCard, type TrashCard,
 } from "../../lib/api";
 import type { Go } from "../../lib/nav";
 import RunStrip from "../../ui/RunStrip";
@@ -55,7 +55,13 @@ registerDict({
   "탈퇴": { en: "Delete account", ja: "退会", zh: "注销" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   "지우기": { en: "Delete", ja: "削除", zh: "删除" },
-  "정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.": { en: "Really delete? The images are removed too and this can't be undone.", ja: "本当に削除しますか？画像も消え、元に戻せません。", zh: "确定删除吗？图片也会一并删除，且无法撤销。" },
+  "휴지통으로 옮길까요? {n}일 안에는 되살릴 수 있어요.": { en: "Move to trash? You can restore it within {n} days.", ja: "ゴミ箱に移しますか？{n}日以内なら元に戻せます。", zh: "移到回收站吗？{n} 天内可以恢复。" },
+  "휴지통": { en: "Trash", ja: "ゴミ箱", zh: "回收站" },
+  "지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.": { en: "Deleted webtoons stay here for {n} days, then are removed for good.", ja: "削除した作品は{n}日間ここに残り、その後完全に削除されます。", zh: "删除的漫画会在这里保留 {n} 天，之后永久删除。" },
+  "{n}일 뒤 영구 삭제": { en: "Deleted for good in {n} days", ja: "{n}日後に完全削除", zh: "{n} 天后永久删除" },
+  "오늘 영구 삭제": { en: "Deleted for good today", ja: "本日完全削除", zh: "今天永久删除" },
+  "되살리기": { en: "Restore", ja: "元に戻す", zh: "恢复" },
+  "되살리지 못했습니다": { en: "Couldn't restore", ja: "元に戻せませんでした", zh: "恢复失败" },
   "지우지 못했습니다": { en: "Couldn't delete", ja: "削除できませんでした", zh: "删除失败" },
   "탈퇴하지 못했어요. 잠시 뒤 다시 시도해 주세요.": { en: "Couldn't delete the account. Please try again shortly.", ja: "退会できませんでした。しばらくしてからもう一度お試しください。", zh: "注销失败，请稍后再试。" },
   "언어": { en: "Language", ja: "言語", zh: "语言" },
@@ -158,6 +164,22 @@ export default function MyPage({ go }: { go: Go }) {
   }, [isAuthenticated]);
 
   useEffect(() => { void loadRuns(); }, [loadRuns]);
+
+  /* 휴지통(#157) — 지운 작품은 영구 삭제 전까지 여기서 되살린다. 지우기가
+     로그인한 사람만 되므로 휴지통도 로그인했을 때만 읽는다. */
+  const [trash, setTrash] = useState<TrashCard[]>([]);
+  const [keepDays, setKeepDays] = useState(30);
+  const loadTrash = useCallback(async () => {
+    if (!isAuthenticated) { setTrash([]); return; }
+    try {
+      const got = await myTrash();
+      setTrash(got.runs);
+      setKeepDays(got.keepDays);
+    } catch {
+      setTrash([]);
+    }
+  }, [isAuthenticated]);
+  useEffect(() => { void loadTrash(); }, [loadTrash]);
   useEffect(() => {
     listCharacters().then((l) => setChars(l.characters.filter((c) => c.mine))).catch(() => {});
     readAllowance().then(setAllowance).catch(() => {});
@@ -302,8 +324,24 @@ export default function MyPage({ go }: { go: Go }) {
             {!runsFailed && runs.length > 0 && (
               <div className="wt-my-grid">
                 {runs.map((r) => (
-                  <WorkCard key={r.run_id} run={r} go={go}
-                            onDeleted={() => setRuns((list) => list.filter((x) => x.run_id !== r.run_id))} />
+                  <WorkCard key={r.run_id} run={r} go={go} keepDays={keepDays}
+                            onDeleted={() => {
+                              setRuns((list) => list.filter((x) => x.run_id !== r.run_id));
+                              void loadTrash();
+                            }} />
+                ))}
+              </div>
+            )}
+
+            {isAuthenticated && trash.length > 0 && (
+              <div className="wt-my-trash">
+                <div className="wt-my-trash-head">
+                  <b>{t("휴지통")}</b>
+                  <span className="muted">{t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}</span>
+                </div>
+                {trash.map((r) => (
+                  <TrashRow key={r.run_id} run={r}
+                            onRestored={() => { void loadRuns(); void loadTrash(); }} />
                 ))}
               </div>
             )}
@@ -401,7 +439,41 @@ export default function MyPage({ go }: { go: Go }) {
 }
 
 /** 작품 한 칸 — 표지 · 제목 · 회차 · 공개 스위치 · 편집실. (둘러보기와 같은 규칙) */
-function WorkCard({ run, go, onDeleted }: { run: RunCard; go: Go; onDeleted: () => void }) {
+/** 휴지통 한 줄 — 표지 · 제목 · 남은 날 · 되살리기(#157). */
+function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const left = Math.max(0, Math.ceil((new Date(run.purge_at).getTime() - Date.now()) / 86_400_000));
+
+  const restore = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await restoreRun(run.run_id);
+      track("run_restore", { run: run.run_id, where: "mypage" });
+      onRestored();
+    } catch (e) {
+      setErr((e as Error).message || t("되살리지 못했습니다"));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="wt-my-trashrow">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {run.cover_url ? <img src={run.cover_url} alt="" /> : <span className="wt-my-trashimg" aria-hidden="true" />}
+      <div className="wt-my-trashtext">
+        <b>{run.title || t("제목 없음")}</b>
+        <span className="muted">{left > 0 ? t("{n}일 뒤 영구 삭제", { n: left }) : t("오늘 영구 삭제")}</span>
+        {err && <span className="wt-my-err">{err}</span>}
+      </div>
+      <button type="button" className="btn btn-w" disabled={busy} onClick={() => void restore()}>{t("되살리기")}</button>
+    </div>
+  );
+}
+
+function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keepDays: number; onDeleted: () => void }) {
   const t = useT();
   const [pub, setPub] = useState(run.public !== false);
   const [busy, setBusy] = useState(false);
@@ -472,7 +544,7 @@ function WorkCard({ run, go, onDeleted }: { run: RunCard; go: Go; onDeleted: () 
       </div>
       {confirming && (
         <div className="wt-my-delconfirm">
-          <span className="muted">{t("정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.")}</span>
+          <span className="muted">{t("휴지통으로 옮길까요? {n}일 안에는 되살릴 수 있어요.", { n: keepDays })}</span>
           <button type="button" className="btn btn-p" disabled={busy} onClick={() => void remove()}>{t("지우기")}</button>
           <button type="button" className="btn btn-w" disabled={busy} onClick={() => setConfirming(false)}>{t("취소")}</button>
         </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, isMyRun, likedAmong, myAccountRuns, recentRuns, setVisibility,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, isMyRun, likedAmong, myAccountRuns, recentRuns, setVisibility, trashKeepDays,
   type RunCard,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
@@ -231,8 +231,13 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, onDeleted }: {
     go("result", { run: run.run_id });
   };
 
-  /* 지우기(#55) — 내 작품이고 로그인했을 때만. 두 번 눌러야 된다. */
+  /* 지우기(#55) — 내 작품이고 로그인했을 때만. 두 번 눌러야 된다. 지우면 휴지통으로
+     가고(#157), 확인 문구의 날 수는 서버 값을 읽는다. */
   const [confirming, setConfirming] = useState(false);
+  const [keepDays, setKeepDays] = useState(30);
+  useEffect(() => {
+    if (confirming) void trashKeepDays().then(setKeepDays);
+  }, [confirming]);
   const [delBusy, setDelBusy] = useState(false);
   const remove = async () => {
     setDelBusy(true);
@@ -308,7 +313,7 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, onDeleted }: {
         {mine && authenticated && (
           confirming ? (
             <div className="wt-works-delconfirm">
-              <span className="muted">{t("정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.")}</span>
+              <span className="muted">{t("휴지통으로 옮길까요? {n}일 안에는 마이페이지에서 되살릴 수 있어요.", { n: keepDays })}</span>
               <button type="button" className="btn btn-p btn-sm" disabled={delBusy} onClick={() => void remove()}>{t("지우기")}</button>
               <button type="button" className="btn btn-w btn-sm" disabled={delBusy} onClick={() => setConfirming(false)}>{t("취소")}</button>
             </div>
