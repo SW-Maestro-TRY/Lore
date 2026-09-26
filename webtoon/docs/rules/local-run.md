@@ -44,6 +44,21 @@
 
 코드는 어느 창고인지 몰라야 합니다([dev.md](dev.md) 「그림 주소와 창고」).
 
+## 캐릭터를 만들면 무엇이 어디에 남나 (#444)
+
+캐릭터 만들기(「캐릭터 만들어보기」 한 컷 포함)는 `webtoon/ai/work/characters/<캐릭터 id>/` 에서 돕니다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `input.json` | 넣은 것(이름·설명·사진 장수·그림체·세계관). 사진 내용은 안 남깁니다 — 쓰고 나면 지웁니다 |
+| `meta.json` | 호출마다 단계·모델·토큰·원가·시각. 실패한 호출도 0원과 사유로 남습니다 |
+| `art_prompt.txt` · `panel_prompt.txt` | 그림 프롬프트 |
+| `art.png` · `panel.png` | 그린 그림(S3 에는 줄인 것이 올라갑니다) |
+| `character.json` · `panel.json` | 하네스가 돌려준 결과 전체 |
+
+- 서버는 `meta.json` 을 읽어 `webtoon_usage` 에 **`char-<캐릭터 id>`** 이름으로 쌓습니다. 하루 돈 상한에는 들어가고, 하루 편수(웹툰 몫)에는 안 들어갑니다.
+- 로컬(버킷이 없거나 창고가 localhost)은 폴더를 그대로 남깁니다. 배포 서버는 원가를 DB 에 적은 뒤 폴더를 치웁니다. 굳이 바꾸려면 `lore.webtoon.character.keep-files`(true/false).
+
 ## 노트북에서 그림이 안 뜰 때 (2026-09-23)
 
 노트북의 그림 실물은 **`~/lore-minio/lore-dev-contents/`** 에 있고, DB
