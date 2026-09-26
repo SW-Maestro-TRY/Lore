@@ -317,6 +317,20 @@ def _cast_bullets(text: str) -> list[dict]:
     return out
 
 
+def _drop_trailing_rules(text: str) -> str:
+    """끝에 붙은 가로줄(`---` 등)을 걷어낸다.
+
+    방향은 다음 「## 방향」 머리까지 잘라 읽는데, 모델이 방향 사이에 가로줄을
+    넣어서 **마지막 칸(본문)의 끝에 `---` 가 딸려 들어온다.** 그 본문이 그대로
+    이야기 고르기 화면의 「직접 고쳐도 돼요」 칸과 DB(webtoon_story)로 가서,
+    사람에게 `---` 가 보였다(2026-09-26 run 20260926T132032-278bf7, 넷 중 셋).
+    """
+    lines = text.rstrip().splitlines()
+    while lines and (not lines[-1].strip() or _RULE_RE.match(lines[-1])):
+        lines.pop()
+    return "\n".join(lines).rstrip()
+
+
 def _labeled(body: str, label_re: re.Pattern, stop_res: list[re.Pattern]) -> str:
     """`label_re` 줄 다음부터, `stop_res` 중 가장 먼저 나오는 줄 전까지."""
     m = label_re.search(body)
@@ -327,7 +341,7 @@ def _labeled(body: str, label_re: re.Pattern, stop_res: list[re.Pattern]) -> str
         sm = stop_re.search(body, m.end())
         if sm and sm.start() < end:
             end = sm.start()
-    return body[m.end():end].strip()
+    return _drop_trailing_rules(body[m.end():end].strip())
 
 
 def parse_directions(md: str) -> list[dict]:
