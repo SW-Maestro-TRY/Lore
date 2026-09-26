@@ -82,7 +82,7 @@ export default function ShareMenu({
           ))}
         </span>
       )}
-      {said && <span className="wt-share-toast" role="status">{said}</span>}
+      {said && <span className="toast" role="status">{said}</span>}
     </span>
   );
 }
