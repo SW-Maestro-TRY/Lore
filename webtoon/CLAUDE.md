@@ -54,7 +54,7 @@ webtoon/ai/
 | 커밋·push·PR 직전 | [commit-pr.md](docs/rules/commit-pr.md) | `feature/` 브랜치 → develop · 머지 뒤에도 브랜치 안 지움 · `[#번호] 설명` · 기능 수준으로 쓰기 · 공동 작성자 금지 · push 는 확인 후 · PR 은 Assignee 지정, 리뷰어 지정 금지 |
 | 코드를 고치기 전 | [dev.md](docs/rules/dev.md) | 권한 범위 · 과금 승인 · 화면 수정 시 웹 빌드 · `webtoon/ai` 반영 경로 · 설정은 코드 기본값 · 파이썬 서버 금지 · 하네스 수정 규칙과 `test_imports.py` · 마이그레이션은 `scripts/new-migration.sh` · 그림 주소는 상대경로 |
 | 파일을 고치는 작업을 시작할 때 | [worktree.md](docs/rules/worktree.md) | 언제 파는가 · 파는 명령 · `agent/` 브랜치 합치기 · 치우기 전 gitignore 결과물 옮기기 · `runs/` 심링크 금지 · `.env` 다루기 |
-| 노트북에서 띄우거나 파이썬을 직접 돌릴 때, 로컬 그림이 안 뜰 때 | [local-run.md](docs/rules/local-run.md) | `./gradlew bootRun` · API 키는 루트 `.env` 의 `WEBTOON_API_KEY` 하나 · 환경별 그림 창고 · 로컬 그림 404 증상과 `.env` 네 줄 · rclone 으로 창고 띄우기 |
+| 노트북에서 띄우거나 파이썬을 직접 돌릴 때, 로컬 그림이 안 뜰 때, 서버를 하나 더 띄울 때 | [local-run.md](docs/rules/local-run.md) | `./gradlew bootRun` · 서버를 하나 더 띄우면 DB 사본으로(StaleJobs) · API 키는 루트 `.env` 의 `WEBTOON_API_KEY` 하나 · 환경별 그림 창고 · 로컬 그림 404 증상과 `.env` 네 줄 · rclone 으로 창고 띄우기 |
 | 배포(GitHub Actions)가 실패했을 때 | [deploy-failure.md](docs/rules/deploy-failure.md) | 실패 SHA 확인 → 로컬 빌드 → 서버 build → 최신 run 하나만 재실행 · 원인을 알기 전에 하지 말 것 |
 | webtoon 화면을 설계·수정할 때 | [ui-skills.md](docs/rules/ui-skills.md) | Impeccable 우선 · 리서치 자료 없음 · taste 렌즈 고정값 · 검증 예산 · 기록 위치 · 코드 먼저 · 실제 앱에서 확인 |
 

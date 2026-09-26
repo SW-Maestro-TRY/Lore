@@ -265,15 +265,27 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
   const mailTo = mailSent || job?.notice?.email || "";
   const [mailBefore, mailAfter] = t("완성되면 {email} 으로 알림을 드릴게요", { email: HOLE }).split(HOLE);
+  /* 계정 알림은 마이페이지 설정에서 끈다 — 끄는 길을 같이 알려 준다. 게스트가
+     이 작품에만 적은 주소는 그 설정과 상관없어서 안 띄운다. */
+  const offHint = job?.notice?.logged_in && (
+    <span className="dim wt-prog-mailoff">
+      <button type="button" className="linkish" onClick={() => go("mypage", { tab: "settings" })}>{t("마이페이지 설정")}</button>
+      {t("에서 끌 수 있어요!")}
+    </span>
+  );
   const mailCard = job && (
     <div className="wt-prog-mail">
       {job.notice?.email || mailSent ? (
         <>
           <label>{mailBefore}<b>{mailTo}</b>{mailAfter}</label>
           {job.minutes_left != null && <span className="dim">{t("지금 약 {n}분 남았어요.", { n: job.minutes_left })}</span>}
+          {offHint}
         </>
       ) : job.notice?.logged_in ? (
-        <label>{t("완성되면 계정 이메일로 알림을 드릴게요")}</label>
+        <>
+          <label>{t("완성되면 계정 이메일로 알림을 드릴게요")}</label>
+          {offHint}
+        </>
       ) : (
         <>
           <label htmlFor="wt-prog-em">

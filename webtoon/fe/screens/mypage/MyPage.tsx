@@ -96,14 +96,14 @@ registerDict({
   "바꾸지 못했어요": { en: "Couldn't change it", ja: "変更できませんでした", zh: "无法更改" },
 });
 
-export default function MyPage({ go }: { go: Go }) {
+export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" }) {
   const t = useT();
   const { user, isAuthenticated, signOut } = useAuth();
 
   /* 지금은 "내 웹툰"과 "설정" 딱 둘뿐이라 화면을 아예 나누지는 않고
      같은 레일 안에서 본문만 바꾼다 — 나중에 칸이 늘면 그때 공용 탭
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
-  const [tab, setTab] = useState<"works" | "settings">("works");
+  const [tab, setTab] = useState<"works" | "settings">(initialTab ?? "works");
 
   const [runs, setRuns] = useState<RunCard[]>([]);
   const [runsFailed, setRunsFailed] = useState(false);
