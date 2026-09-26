@@ -4,7 +4,6 @@ import { registerDict, type Dict } from "../../lib/i18n";
 const dict: Dict = {
   "둘러보기": { en: "Browse", ja: "見て回る", zh: "浏览" },
   "다른 사람들의 웹툰": { en: "Webtoons by others", ja: "みんなのウェブトゥーン", zh: "大家的网络漫画" },
-  "표지를 누르면 그대로 읽을 수 있어요.": { en: "Tap a cover to start reading.", ja: "表紙を押すとそのまま読めます。", zh: "点击封面即可阅读。" },
   "내 웹툰 만들기": { en: "Make my webtoon", ja: "自分のウェブトゥーンを作る", zh: "制作我的网络漫画" },
   "전체": { en: "All", ja: "すべて", zh: "全部" },
   "내 작품": { en: "My works", ja: "自分の作品", zh: "我的作品" },
