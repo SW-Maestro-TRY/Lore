@@ -21,15 +21,16 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, myLikes, readAllowance, recentRuns,
-  readNotifySetting, setNotifySetting, setVisibility, withdrawAccount,
-  type Allowance, type Character, type RunCard,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, myLikes, myTrash, readAllowance, recentRuns,
+  readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
+  type Allowance, type Character, type RunCard, type TrashCard,
 } from "../../lib/api";
 import type { Go } from "../../lib/nav";
 import RunStrip from "../../ui/RunStrip";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { IconUser } from "../../ui/Icons";
+import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
 import "./MyPage.css";
 
@@ -55,7 +56,16 @@ registerDict({
   "탈퇴": { en: "Delete account", ja: "退会", zh: "注销" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   "지우기": { en: "Delete", ja: "削除", zh: "删除" },
-  "정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.": { en: "Really delete? The images are removed too and this can't be undone.", ja: "本当に削除しますか？画像も消え、元に戻せません。", zh: "确定删除吗？图片也会一并删除，且无法撤销。" },
+  "휴지통": { en: "Trash", ja: "ゴミ箱", zh: "回收站" },
+  "휴지통으로 옮길까요?": { en: "Move to trash?", ja: "ゴミ箱に移しますか？", zh: "移到回收站吗？" },
+  "{n}일 안에는 휴지통에서 되살릴 수 있어요.": { en: "You can restore it from the trash within {n} days.", ja: "{n}日以内ならゴミ箱から元に戻せます。", zh: "{n} 天内可以从回收站恢复。" },
+  "휴지통이 비어 있어요.": { en: "The trash is empty.", ja: "ゴミ箱は空です。", zh: "回收站是空的。" },
+  "닫기": { en: "Close", ja: "閉じる", zh: "关闭" },
+  "지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.": { en: "Deleted webtoons stay here for {n} days, then are removed for good.", ja: "削除した作品は{n}日間ここに残り、その後完全に削除されます。", zh: "删除的漫画会在这里保留 {n} 天，之后永久删除。" },
+  "{n}일 뒤 영구 삭제": { en: "Deleted for good in {n} days", ja: "{n}日後に完全削除", zh: "{n} 天后永久删除" },
+  "오늘 영구 삭제": { en: "Deleted for good today", ja: "本日完全削除", zh: "今天永久删除" },
+  "되살리기": { en: "Restore", ja: "元に戻す", zh: "恢复" },
+  "되살리지 못했습니다": { en: "Couldn't restore", ja: "元に戻せませんでした", zh: "恢复失败" },
   "지우지 못했습니다": { en: "Couldn't delete", ja: "削除できませんでした", zh: "删除失败" },
   "탈퇴하지 못했어요. 잠시 뒤 다시 시도해 주세요.": { en: "Couldn't delete the account. Please try again shortly.", ja: "退会できませんでした。しばらくしてからもう一度お試しください。", zh: "注销失败，请稍后再试。" },
   "언어": { en: "Language", ja: "言語", zh: "语言" },
@@ -65,8 +75,6 @@ registerDict({
   "찜한 웹툰": { en: "Saved webtoons", ja: "お気に入りの作品", zh: "收藏的漫画" },
   "아직 찜한 웹툰이 없어요. 둘러보기에서 하트를 눌러 보세요.": { en: "Nothing saved yet. Tap a heart in Browse.", ja: "まだお気に入りがありません。見て回るでハートを押してみてください。", zh: "还没有收藏。去浏览里点个爱心吧。" },
   "캐릭터 탭으로": { en: "Go to characters", ja: "キャラクタータブへ", zh: "前往角色页" },
-  "{n}편": { en: "{n} episodes", ja: "{n}話", zh: "{n} 话" },
-  "{n}편 · 나만 보기 {m}": { en: "{n} episodes · {m} private", ja: "{n}話 · 非公開 {m}", zh: "{n} 话 · 私密 {m}" },
   "{n}화": { en: "EP.{n}", ja: "第{n}話", zh: "第{n}话" },
   "공개": { en: "Public", ja: "公開", zh: "公开" },
   "비공개": { en: "Private", ja: "非公開", zh: "私密" },
@@ -158,6 +166,23 @@ export default function MyPage({ go }: { go: Go }) {
   }, [isAuthenticated]);
 
   useEffect(() => { void loadRuns(); }, [loadRuns]);
+
+  /* 휴지통(#157) — 지운 작품은 영구 삭제 전까지 여기서 되살린다. 지우기가
+     로그인한 사람만 되므로 휴지통도 로그인했을 때만 읽는다. */
+  const [trash, setTrash] = useState<TrashCard[]>([]);
+  const [keepDays, setKeepDays] = useState(30);
+  const [trashOpen, setTrashOpen] = useState(false);
+  const loadTrash = useCallback(async () => {
+    if (!isAuthenticated) { setTrash([]); return; }
+    try {
+      const got = await myTrash();
+      setTrash(got.runs);
+      setKeepDays(got.keepDays);
+    } catch {
+      setTrash([]);
+    }
+  }, [isAuthenticated]);
+  useEffect(() => { void loadTrash(); }, [loadTrash]);
   useEffect(() => {
     listCharacters().then((l) => setChars(l.characters.filter((c) => c.mine))).catch(() => {});
     readAllowance().then(setAllowance).catch(() => {});
@@ -209,8 +234,7 @@ export default function MyPage({ go }: { go: Go }) {
     }
   };
 
-  const hidden = runs.filter((r) => r.public === false).length;
-
+  
   return (
     <div className="wt-wrap wt-page wt-my">
       <aside className="wt-my-rail">
@@ -246,6 +270,11 @@ export default function MyPage({ go }: { go: Go }) {
               <button type="button" className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
                 {t("설정")}
               </button>
+              {/* 휴지통(#157) — 지운 웹툰은 창으로 따로 연다. */}
+              <button type="button" className="wt-my-trashmenu"
+                      onClick={() => { void loadTrash(); setTrashOpen(true); track("trash_open", { where: "mypage" }); }}>
+                {t("휴지통")} <span className="dim">{trash.length}</span>
+              </button>
             </>
           )}
           <small>{t("계정")}</small>
@@ -264,16 +293,29 @@ export default function MyPage({ go }: { go: Go }) {
       </aside>
 
       <div className="wt-my-main">
+            {trashOpen && (
+              <Dialog title={t("휴지통")} wide onClose={() => setTrashOpen(false)}
+                      sub={t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}>
+                {trash.length === 0 ? (
+                  <p className="wt-my-trashempty muted">{t("휴지통이 비어 있어요.")}</p>
+                ) : (
+                  <div className="wt-my-trash">
+                    {trash.map((r) => (
+                      <TrashRow key={r.run_id} run={r}
+                                onRestored={() => { void loadRuns(); void loadTrash(); }} />
+                    ))}
+                  </div>
+                )}
+                <div className="wt-dialog-actions">
+                  <button type="button" className="btn btn-w" onClick={() => setTrashOpen(false)}>{t("닫기")}</button>
+                </div>
+              </Dialog>
+            )}
         {tab === "works" && (
           <>
             <div className="wt-my-head">
               <div>
                 <h2>{t("내 웹툰")}</h2>
-                <span className="muted">
-                  {hidden > 0
-                    ? t("{n}편 · 나만 보기 {m}", { n: runs.length, m: hidden })
-                    : t("{n}편", { n: runs.length })}
-                </span>
               </div>
               <div className="wt-my-headacts">
                 <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
@@ -302,11 +344,15 @@ export default function MyPage({ go }: { go: Go }) {
             {!runsFailed && runs.length > 0 && (
               <div className="wt-my-grid">
                 {runs.map((r) => (
-                  <WorkCard key={r.run_id} run={r} go={go}
-                            onDeleted={() => setRuns((list) => list.filter((x) => x.run_id !== r.run_id))} />
+                  <WorkCard key={r.run_id} run={r} go={go} keepDays={keepDays}
+                            onDeleted={() => {
+                              setRuns((list) => list.filter((x) => x.run_id !== r.run_id));
+                              void loadTrash();
+                            }} />
                 ))}
               </div>
             )}
+
 
             {recent.length > 0 && (
               <div className="wt-my-strip">
@@ -401,7 +447,41 @@ export default function MyPage({ go }: { go: Go }) {
 }
 
 /** 작품 한 칸 — 표지 · 제목 · 회차 · 공개 스위치 · 편집실. (둘러보기와 같은 규칙) */
-function WorkCard({ run, go, onDeleted }: { run: RunCard; go: Go; onDeleted: () => void }) {
+/** 휴지통 한 줄 — 표지 · 제목 · 남은 날 · 되살리기(#157). */
+function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const left = Math.max(0, Math.ceil((new Date(run.purge_at).getTime() - Date.now()) / 86_400_000));
+
+  const restore = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await restoreRun(run.run_id);
+      track("run_restore", { run: run.run_id, where: "mypage" });
+      onRestored();
+    } catch (e) {
+      setErr((e as Error).message || t("되살리지 못했습니다"));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="wt-my-trashrow">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {run.cover_url ? <img src={run.cover_url} alt="" /> : <span className="wt-my-trashimg" aria-hidden="true" />}
+      <div className="wt-my-trashtext">
+        <b>{run.title || t("제목 없음")}</b>
+        <span className="muted">{left > 0 ? t("{n}일 뒤 영구 삭제", { n: left }) : t("오늘 영구 삭제")}</span>
+        {err && <span className="wt-my-err">{err}</span>}
+      </div>
+      <button type="button" className="btn btn-w" disabled={busy} onClick={() => void restore()}>{t("되살리기")}</button>
+    </div>
+  );
+}
+
+function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keepDays: number; onDeleted: () => void }) {
   const t = useT();
   const [pub, setPub] = useState(run.public !== false);
   const [busy, setBusy] = useState(false);
@@ -420,7 +500,6 @@ function WorkCard({ run, go, onDeleted }: { run: RunCard; go: Go; onDeleted: () 
     } catch (e) {
       setErr((e as Error).message || t("지우지 못했습니다"));
       setBusy(false);
-      setConfirming(false);
     }
   };
 
@@ -463,19 +542,20 @@ function WorkCard({ run, go, onDeleted }: { run: RunCard; go: Go; onDeleted: () 
                   aria-label={t("둘러보기에 공개")} disabled={busy} onClick={() => void flip()}><i /></button>
           {pub ? t("공개") : t("비공개")}
         </span>
-        <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
-          {t("편집실")}
-        </button>
-        {!confirming && (
-          <button type="button" className="btn btn-w wt-my-del" disabled={busy} onClick={() => setConfirming(true)}>{t("지우기")}</button>
-        )}
+        <span className="wt-my-workacts">
+          <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
+            {t("편집실")}
+          </button>
+          <button type="button" className="btn btn-w wt-my-edit" disabled={busy} onClick={() => setConfirming(true)}>
+            {t("지우기")}
+          </button>
+        </span>
       </div>
       {confirming && (
-        <div className="wt-my-delconfirm">
-          <span className="muted">{t("정말 지울까요? 그림까지 지워지고 되돌릴 수 없어요.")}</span>
-          <button type="button" className="btn btn-p" disabled={busy} onClick={() => void remove()}>{t("지우기")}</button>
-          <button type="button" className="btn btn-w" disabled={busy} onClick={() => setConfirming(false)}>{t("취소")}</button>
-        </div>
+        <ConfirmDialog title={t("휴지통으로 옮길까요?")}
+                       sub={<><b>{run.title || t("제목 없음")}</b><br />{t("{n}일 안에는 휴지통에서 되살릴 수 있어요.", { n: keepDays })}</>}
+                       confirmLabel={t("지우기")} cancelLabel={t("취소")} busy={busy}
+                       error={err} onConfirm={() => void remove()} onClose={() => { setConfirming(false); setErr(""); }} />
       )}
       {err && <span className="wt-my-err">{err}</span>}
     </div>

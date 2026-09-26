@@ -71,6 +71,17 @@ public class RunDeleteService {
      */
     @Transactional
     public Deleted delete(Long userId, String runId) {
+        checkMayDelete(userId, runId);
+        Deleted done = purge(runId);
+        log.info("작품을 지웠습니다 (run={}, user={}, 그림 {}장, 행 {}줄)", runId, userId, done.images(), done.rows());
+        return done;
+    }
+
+    /**
+     * 이 사람이 이 작품을 지워도 되나. 안 되면 사유를 담아 던진다. 휴지통에
+     * 넣을 때({@link RunTrash#trash})도 같은 기준을 쓴다.
+     */
+    WebtoonWork checkMayDelete(Long userId, String runId) {
         WebtoonWork work = works.findFirstByRunId(runId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 작품이 없습니다"));
         if (ExampleWorks.SEED_UID.equals(work.getBrowserUid())) {
@@ -82,7 +93,16 @@ public class RunDeleteService {
         if (jobs.existsByRunIdAndStatusIn(runId, IN_PROGRESS)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "만드는 중인 작품은 먼저 중단한 뒤 지울 수 있습니다");
         }
+        return work;
+    }
 
+    /**
+     * 확인 없이 영구 삭제한다. 사람이 누르는 길은 {@link RunTrash} 로 휴지통에
+     * 넣고, 기간이 지나면 {@link RunTrash#purgeExpired} 가 이것을 부른다(#157).
+     * 주인·예시·만드는 중 확인은 휴지통에 넣을 때 이미 했다.
+     */
+    @Transactional
+    public Deleted purge(String runId) {
         // 1. 그림 먼저. 키는 행에만 있다.
         List<String> keys = new ArrayList<>(rows.pageKeys(runId));
         keys.addAll(rows.bakedKeys(runId));
@@ -97,6 +117,7 @@ public class RunDeleteService {
         n += rows.deleteBakedPages(runId);
         n += rows.deleteOverlays(runId);
         n += rows.deleteRegens(runId);
+        n += rows.deleteLikes(runId);
         n += rows.deleteStories(runId);
         // 비용 기록(webtoon_usage)은 남긴다. "오늘 얼마 나갔나" 와 상한은 지운 작품의
         // 값까지 더해야 맞고, 작품 id 만 남지 사람을 가리키는 값은 없다. 계정을 지울
@@ -104,7 +125,6 @@ public class RunDeleteService {
         n += rows.deleteWorks(runId);
         n += rows.deleteJobs(runId);
 
-        log.info("작품을 지웠습니다 (run={}, user={}, 그림 {}장, 행 {}줄)", runId, userId, images, n);
         return new Deleted(runId, images, n);
     }
 }

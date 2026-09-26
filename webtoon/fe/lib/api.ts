@@ -401,10 +401,27 @@ export function likedAmong(runIds: string[]): Promise<string[]> {
   return appRequest<string[]>("/api/webtoon/v1/my/likes/among", { method: "POST", body: { runIds } });
 }
 
-/** 내 작품 지우기(#55). 그림과 행을 모두 지우며 되돌릴 수 없다. 로그인이 필요하다. */
-export function deleteRun(runId: string): Promise<{ runId: string; images: number; rows: number }> {
-  return appRequest<{ runId: string; images: number; rows: number }>(
+/** 휴지통에 넣은 결과. purgeAt 이 지나면 그림과 행이 영구 삭제된다. */
+export interface Trashed { runId: string; deletedAt: string; purgeAt: string; keepDays: number }
+
+/** 내 작품 지우기(#55) — 바로 지우지 않고 휴지통에 넣는다(#157). 로그인이 필요하다. */
+export function deleteRun(runId: string): Promise<Trashed> {
+  return appRequest<Trashed>(
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
+}
+
+/** 휴지통 카드 — 내 목록 카드에 지운 시각과 영구 삭제 시각이 붙는다. */
+export type TrashCard = RunCard & { deleted_at: string; purge_at: string; cover_url?: string | null };
+
+/** 내 휴지통. keepDays 는 휴지통에 둔 뒤 되살릴 수 있는 날 수. */
+export function myTrash(): Promise<{ keepDays: number; runs: TrashCard[] }> {
+  return appRequest<{ keepDays: number; runs: TrashCard[] }>("/api/webtoon/v1/my/trash");
+}
+
+/** 휴지통에서 되살린다. 공개였던 작품은 둘러보기에도 다시 뜬다. */
+export function restoreRun(runId: string): Promise<{ runId: string; restored: boolean }> {
+  return appRequest<{ runId: string; restored: boolean }>(
+    `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/restore`, { method: "POST" });
 }
 
 export function setVisibility(runId: string, isPublic: boolean) {
@@ -550,6 +567,6 @@ export interface FeedbackTag {
   label: string;
 }
 
-export function readConfig(): Promise<{ feedback_tags: Record<string, FeedbackTag[]> }> {
+export function readConfig(): Promise<{ feedback_tags: Record<string, FeedbackTag[]>; trash_keep_days?: number }> {
   return call("/config");
 }
