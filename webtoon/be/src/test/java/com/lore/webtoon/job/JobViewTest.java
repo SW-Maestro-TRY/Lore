@@ -25,10 +25,14 @@ class JobViewTest {
 
     private WebtoonJob job(JobStatus status, JobStage stage) {
         // 게스트 열쇠는 로그인한 사람에게 없다 — 여기 7L 은 계정이다.
+        // moveTo 는 "지금"에 가깝게 둔다 — story·sheet·bind 는 그 걸음에
+        // 들어선 뒤 지난 시간으로 진행률을 추정하는데(JobView.timeFrac),
+        // 옛 고정 시각을 쓰면 "이미 오래 지났다"로 읽혀 아래 floor 값
+        // 검증이 흔들린다.
+        Instant createdAt = Instant.now().minusSeconds(60);
         WebtoonJob job = WebtoonJob.queued("job-1", 7L, "uid-a", null, "romance_fantasy",
-                WebtoonQuality.DEFAULT_QUALITY, true, "{}",
-                Instant.parse("2026-09-06T00:00:00Z"));
-        job.moveTo(status, stage, Instant.parse("2026-09-06T00:01:00Z"));
+                WebtoonQuality.DEFAULT_QUALITY, true, "{}", createdAt);
+        job.moveTo(status, stage, Instant.now());
         return job;
     }
 
@@ -65,10 +69,10 @@ class JobViewTest {
     @DisplayName("걸음 이름과 순서가 파이썬 것과 같다 — 화면이 이 순서로 진행률을 그린다")
     void 걸음_순서() {
         assertThat(List.of(JobStage.values()).stream().map(JobStage::wire).toList())
-                .containsExactly("story", "sheet", "board", "pages", "bind");
+                .containsExactly("story", "sheet", "pages", "bind");
         assertThat(view(job(JobStatus.RUNNING, JobStage.STORY),
                 new JobProgress.Snapshot(List.of(), "", 0, 0, 0)).stages())
-                .containsExactly("story", "sheet", "board", "pages", "bind");
+                .containsExactly("story", "sheet", "pages", "bind");
     }
 
     @Test
@@ -76,19 +80,19 @@ class JobViewTest {
     void 진행률() {
         var 없음 = new JobProgress.Snapshot(List.of(), "", 0, 0, 0);
         assertThat(view(job(JobStatus.RUNNING, JobStage.STORY), 없음).pct()).isZero();
-        assertThat(view(job(JobStatus.RUNNING, JobStage.SHEET), 없음).pct()).isEqualTo(20);
-        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 없음).pct()).isEqualTo(60);
+        assertThat(view(job(JobStatus.RUNNING, JobStage.SHEET), 없음).pct()).isEqualTo(25);
+        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 없음).pct()).isEqualTo(50);
         // bind(검수·합본)는 페이지를 다 그린 뒤에도 아직 안 끝났다는 걸 보여준다
         // — 이게 없으면 마지막 장을 그리자마자 100%를 찍어 버린다(2026-09-23).
-        assertThat(view(job(JobStatus.RUNNING, JobStage.BIND), 없음).pct()).isEqualTo(80);
+        assertThat(view(job(JobStatus.RUNNING, JobStage.BIND), 없음).pct()).isEqualTo(75);
     }
 
     @Test
     @DisplayName("그리는 중이면 그 걸음 안에서도 진행률이 오른다")
     void 그리는_중_진행률() {
         var 절반 = new JobProgress.Snapshot(List.of(), "", 3, 6, 0);
-        // pages 는 다섯 걸음 중 넷째(3/5=60%). 그 안에서 절반이면 60 + 10
-        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 절반).pct()).isEqualTo(70);
+        // pages 는 네 걸음 중 셋째(2/4=50%). 그 안에서 절반이면 50 + 12.5 -> 63(반올림)
+        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 절반).pct()).isEqualTo(63);
     }
 
     @Test

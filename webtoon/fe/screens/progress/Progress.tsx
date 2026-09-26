@@ -139,7 +139,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const [zoom, setZoom] = useState<string | null>(null);
   const [sheetNote, setSheetNote] = useState("");
   const [pickN, setPickN] = useState<number | null>(null);
-  const [open, setOpen] = useState<Record<number, boolean>>({ 1: true });
+  const [open, setOpen] = useState<Record<number, boolean>>({});
   const [dirNote, setDirNote] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [body, setBody] = useState("");
@@ -493,11 +493,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                            onClick={() => setPickN(d.n)}
                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPickN(d.n); } }}>
                         <div className="row">
-                          <b>{d.n}. {d.title} {d.genre && <span className="dim">[{d.genre}]</span>}</b>
+                          <b>{d.n}. {d.title}</b>
                           <button type="button" onClick={(e) => { e.stopPropagation(); setOpen((o) => ({ ...o, [d.n]: !o[d.n] })); }}>
                             {open[d.n] ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("펼쳐 보기")} <IconChevronDown size={13} /></>}
                           </button>
                         </div>
+                        {d.genre && <span className="dim genre">[{d.genre}]</span>}
                         <span className="muted intro">{d.intro}</span>
                         {open[d.n] && <p className="muted">{d.body}</p>}
                       </div>
@@ -612,11 +613,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     {dirs.map((d) => (
                       <div key={d.n} className={`wt-prog-dir plain${chosen?.n === d.n ? " on" : ""}`}>
                         <div className="row">
-                          <b>{d.n}. {d.title} {d.genre && <span className="dim">[{d.genre}]</span>}</b>
+                          <b>{d.n}. {d.title}</b>
                           <button type="button" onClick={() => setOpen((o) => ({ ...o, [d.n]: !o[d.n] }))}>
                             {open[d.n] ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("펼쳐 보기")} <IconChevronDown size={13} /></>}
                           </button>
                         </div>
+                        {d.genre && <span className="dim genre">[{d.genre}]</span>}
                         <span className="muted intro">{d.intro}</span>
                         {open[d.n] && <p className="muted">{d.body}</p>}
                       </div>
