@@ -30,8 +30,12 @@ import java.time.Instant;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
-    /** 지금 시행 중인 약관 판. 문서를 고치면 이 값을 올리고 재동의를 받는다. */
-    private static final String CURRENT_TERMS_VERSION = "2026-09-01";
+    /**
+     * 가입 때 동의하는 약관 판. 게시 중인 이용약관·개인정보처리방침의 「부칙」 시행일과
+     * 같은 문자열이어야 한다(`webtoon/docs/legal/` 작업본 머리말). 문서를 고치면 이 값을
+     * 올리고 재동의를 받는다.
+     */
+    private static final String CURRENT_TERMS_VERSION = "2026-10-01";
 
     private final AuthService authService;
     private final AuthCookies cookies;
