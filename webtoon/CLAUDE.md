@@ -31,7 +31,9 @@ webtoon/ai/
 어기면 바로 사고가 나는 것만 적었습니다. 이유는 오른쪽 문서에 있습니다.
 
 1. **push · 과금 실행 · `webtoon/`·`haeun/` 바깥 수정은 매번 먼저 묻습니다.** 로컬
-   커밋은 묻지 않습니다. 한 번 승인이 다음 단계 승인이 아닙니다. → [dev.md](docs/rules/dev.md)
+   커밋은 묻지 않습니다. 한 번 승인이 다음 단계 승인이 아닙니다.
+   과금 생성은 테스트용 입력 말고, 실제 사용자에게 보여줄 웹툰을 만든다고 생각하고
+   매번 다른 그림체·이야기·매력적인 주인공으로 돌립니다. → [dev.md](docs/rules/dev.md)
 2. **화면 코드(`webtoon/fe`, `apps/web`)를 고쳤으면 커밋 전에
    `npm run build --workspace lore-web` 를 돌립니다.** PR 검사는 웹 빌드를 안 돌려서
    타입 오류가 머지된 뒤 dev 배포에서야 터집니다(2026-09-24, #397). → [dev.md](docs/rules/dev.md)
@@ -52,7 +54,7 @@ webtoon/ai/
 | --- | --- | --- |
 | 이슈를 만들거나 정리할 때, push 뒤 이슈에 댓글 달 때 | [issues.md](docs/rules/issues.md) | 작업당 이슈 하나 · 제목은 명사형 · push 뒤 이슈별 커밋 목록 댓글(형식·기준 브랜치) · `gh` 사용 · 프로젝트 보드 `lore`(3) 칸과 정리 절차 |
 | 커밋·push·PR 직전 | [commit-pr.md](docs/rules/commit-pr.md) | `feature/` 브랜치 → develop · 머지 뒤에도 브랜치 안 지움 · `[#번호] 설명` · 기능 수준으로 쓰기 · 공동 작성자 금지 · push 는 확인 후 · PR 은 Assignee 지정, 리뷰어 지정 금지 |
-| 코드를 고치기 전 | [dev.md](docs/rules/dev.md) | 권한 범위 · 과금 승인 · 화면 수정 시 웹 빌드 · `webtoon/ai` 반영 경로 · 설정은 코드 기본값 · 파이썬 서버 금지 · 하네스 수정 규칙과 `test_imports.py` · 마이그레이션은 `scripts/new-migration.sh` · 그림 주소는 상대경로 |
+| 코드를 고치기 전 | [dev.md](docs/rules/dev.md) | 권한 범위 · 과금 승인과 쇼케이스 품질 입력 · 화면 수정 시 웹 빌드 · `webtoon/ai` 반영 경로 · 설정은 코드 기본값 · 파이썬 서버 금지 · 하네스 수정 규칙과 `test_imports.py` · 마이그레이션은 `scripts/new-migration.sh` · 그림 주소는 상대경로 |
 | 파일을 고치는 작업을 시작할 때 | [worktree.md](docs/rules/worktree.md) | 언제 파는가 · 파는 명령 · `agent/` 브랜치 합치기 · 치우기 전 gitignore 결과물 옮기기 · `runs/` 심링크 금지 · `.env` 다루기 |
 | 노트북에서 띄우거나 파이썬을 직접 돌릴 때, 로컬 그림이 안 뜰 때, 서버를 하나 더 띄울 때 | [local-run.md](docs/rules/local-run.md) | `./gradlew bootRun` · 서버를 하나 더 띄우면 DB 사본으로(StaleJobs) · API 키는 루트 `.env` 의 `WEBTOON_API_KEY` 하나 · 환경별 그림 창고 · 로컬 그림 404 증상과 `.env` 네 줄 · rclone 으로 창고 띄우기 |
 | 배포(GitHub Actions)가 실패했을 때 | [deploy-failure.md](docs/rules/deploy-failure.md) | 실패 SHA 확인 → 로컬 빌드 → 서버 build → 최신 run 하나만 재실행 · 원인을 알기 전에 하지 말 것 |
