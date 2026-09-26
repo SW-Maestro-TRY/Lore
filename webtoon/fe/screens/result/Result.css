@@ -13,6 +13,10 @@
 }
 .wt .wt-result-titlemid { grid-column: 2; display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
 .wt .wt-result-titlerow .wt-result-titleacts { grid-column: 3; justify-self: end; }
+.wt .wt-result-titletext { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wt .wt-result-titleedit { flex: none; width: 30px; height: 30px; color: var(--dim); }
+.wt .wt-result-titleinput { font: inherit; min-width: 0; width: min(420px, 100%); padding: 2px 8px; border: 1px solid var(--line-strong); border-radius: 8px; }
+.wt .wt-result-titleerr { font-size: 12px; font-weight: 400; flex: none; }
 .wt .wt-result-head h2 { font-size: 34px; }
 .wt .wt-result-meta { font-size: 15px; }
 .wt .wt-result-inputs { display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; margin: 4px 0 10px; }

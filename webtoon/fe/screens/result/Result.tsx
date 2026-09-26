@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
-  readResult, rememberRecent, type RunCard, type RunResult,
+  readResult, rememberRecent, renameRun, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
@@ -94,6 +94,28 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   }, [runId, authenticated]);
 
   const mine = isMyRun(runId) || ownedByAccount;
+
+  /* 제목 고치기(#78) — 로그인한 내 작품일 때 제목 옆 연필. 편집실의 제목 고치기와 같은 주소를 쓴다.
+     Enter·바깥 누르기로 저장, Esc 로 취소. 서버가 돌려준 제목이 앞으로 보일 이름이다(비우면 원래 제목). */
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [titleErr, setTitleErr] = useState(false);
+  const titleSaving = useRef(false);
+  const saveTitle = async () => {
+    if (titleDraft === null || !data || titleSaving.current) return;
+    const want = titleDraft.trim();
+    setTitleDraft(null);
+    if (!want || want === data.title) return;
+    titleSaving.current = true;
+    try {
+      const out = await renameRun(runId, want);
+      setData((d) => (d ? { ...d, title: out.title } : d));
+      setTitleErr(false);
+    } catch {
+      setTitleErr(true);
+    } finally {
+      titleSaving.current = false;
+    }
+  };
   const ep = data?.episode || 1;
   const epLabel = `EP.${String(ep).padStart(2, "0")}`;
 
@@ -199,9 +221,32 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
           <div className="wt-result-body">
             <div className="wt-result-head">
               <div className="wt-result-titlerow">
-                {/* 제목은 여기서 읽기전용이다 — 고치는 건 편집실에서만 한다
-                    (2026-09-23, 결과화면에 있던 고치기 폼을 지웠다). */}
-                <h2 className="wt-result-titlemid">{data.title}</h2>
+                {/* 2026-09-23 에 이 화면의 고치기 폼을 지웠다가, 제목 옆 연필 하나로 다시 둔다(#78). */}
+                <h2 className="wt-result-titlemid">
+                  {titleDraft !== null ? (
+                    <input className="wt-result-titleinput" value={titleDraft} autoFocus maxLength={60}
+                           aria-label={t("제목 고치기")}
+                           onChange={(e) => setTitleDraft(e.target.value)}
+                           onBlur={() => void saveTitle()}
+                           onKeyDown={(e) => {
+                             // 한글을 조합하는 중의 Enter 는 글자 확정이다 — 그때는 저장하지 않는다.
+                             if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void saveTitle(); }
+                             else if (e.key === "Escape") setTitleDraft(null);
+                           }} />
+                  ) : (
+                    <>
+                      <span className="wt-result-titletext">{data.title}</span>
+                      {/* 제목 바꾸기는 편집실과 같은 주소라 로그인해야 된다(401) — 로그인한 주인에게만 연필. */}
+                      {mine && authenticated && (
+                        <button type="button" className="icon-btn wt-result-titleedit" aria-label={t("제목 고치기")}
+                                title={t("제목 고치기")} onClick={() => { setTitleErr(false); setTitleDraft(data.title); }}>
+                          <IconEdit size={15} />
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {titleErr && <span className="err wt-result-titleerr">{t("저장하지 못했습니다")}</span>}
+                </h2>
                 <span className="wt-result-titleacts">
                   <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
                               onChange={(on, n) => { setLiked(on); setLikes(n); }} />
