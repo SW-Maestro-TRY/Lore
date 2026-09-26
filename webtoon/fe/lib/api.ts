@@ -368,11 +368,6 @@ export function renameRun(runId: string, title: string): Promise<{ title: string
   return post(`/runs/${encodeURIComponent(runId)}/title`, { title });
 }
 
-/** 줄거리(로그라인) 고치기(#78). 비우면 원래 줄거리로 돌아간다 — 서버가 돌려준 것이 앞으로 보일 줄거리다. */
-export function editLogline(runId: string, logline: string): Promise<{ logline: string }> {
-  return post(`/runs/${encodeURIComponent(runId)}/logline`, { logline });
-}
-
 /* ---- 로그인한 사람의 것 (자바가 판단, 봉투 있음) --------------------------- */
 
 export function linkThisBrowser(): Promise<{ linked: boolean }> {
