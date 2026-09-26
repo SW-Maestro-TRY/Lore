@@ -280,6 +280,12 @@ public class CharacterController {
         return m;
     }
 
+    /** 하루 돈 상한(#444) — 웹툰 만들기(JobController)와 같은 429 · {"error": 사유}. */
+    @ExceptionHandler(CharacterService.SpendCapped.class)
+    public ResponseEntity<Map<String, String>> capped(CharacterService.SpendCapped e) {
+        return ResponseEntity.status(429).body(Map.of("error", e.getMessage()));
+    }
+
     /** 실패도 파이썬이 주던 모양 그대로 — 화면이 사유를 읽는다. */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Map<String, String>> asHarnessSpoke(BusinessException e) {
