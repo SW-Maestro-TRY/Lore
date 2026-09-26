@@ -52,13 +52,20 @@
 }
 .wt .wt-my-pub { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .wt .wt-my-edit { height: 30px; font-size: 12px; padding: 0 14px; }
+.wt .wt-my-workacts { display: inline-flex; align-items: center; gap: 6px; }
 .wt .wt-my-err { font-size: 11.5px; color: var(--gold); }
 
-/* 휴지통(#157) */
-.wt .wt-my-trash { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
-.wt .wt-my-trash-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.wt .wt-my-trash-head b { font-size: 15px; }
-.wt .wt-my-trash-head .muted { font-size: 12.5px; }
+/* 휴지통(#157) — 제목 옆 아이콘, 목록은 창(ui/Dialog) 안 */
+.wt .wt-my-titlerow { display: flex; align-items: center; gap: 10px; }
+.wt .wt-my-trashbtn { position: relative; color: var(--muted); }
+.wt .wt-my-trashbtn:hover { color: var(--ink); }
+.wt .wt-my-trashcount {
+  position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 999px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.wt .wt-my-trash { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.wt .wt-my-trashempty { font-size: 13px; padding: 18px 0; text-align: center; }
 .wt .wt-my-trashrow {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px;
@@ -73,8 +80,6 @@
 .wt .wt-my-trashrow .btn { height: 32px; font-size: 12px; padding: 0 14px; flex-shrink: 0; }
 
 /* 설정 탭 */
-.wt .wt-my-delconfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.wt .wt-my-delconfirm .muted { font-size: 12px; }
 .wt .wt-my-setting { padding: 18px 20px; }
 .wt .wt-my-setting-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .wt .wt-my-setting-row > div { display: flex; flex-direction: column; gap: 6px; max-width: 480px; }

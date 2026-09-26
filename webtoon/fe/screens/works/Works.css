@@ -76,7 +76,5 @@
   .wt .wt-works-state .muted { font-size: 14px; }
 }
 
-/* 지우기(#55) */
-.wt .wt-works-del { align-self: flex-start; margin-top: 6px; }
-.wt .wt-works-delconfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-.wt .wt-works-delconfirm .muted { font-size: 12px; }
+/* 지우기(#55) — 공개 스위치 옆 작은 아이콘. 확인은 창(ui/Dialog)으로 */
+.wt .wt-works-mine { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
