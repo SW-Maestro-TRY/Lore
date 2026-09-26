@@ -19,6 +19,8 @@
 .wt .wt-result-titleerr { font-size: 12px; font-weight: 400; flex: none; }
 .wt .wt-result-head h2 { font-size: 34px; }
 .wt .wt-result-meta { font-size: 15px; }
+.wt .wt-result-plot { display: inline-flex; align-items: center; gap: 6px; max-width: 720px; margin: 2px 0 0; font-size: 14px; line-height: 1.6; color: var(--muted); word-break: keep-all; }
+.wt .wt-result-plotinput { font: inherit; font-size: 14px; line-height: 1.6; width: min(560px, 100%); padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 8px; resize: vertical; }
 .wt .wt-result-inputs { display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; margin: 4px 0 10px; }
 .wt .wt-result-inputs > b { font-size: 12px; color: var(--dim); letter-spacing: 0.04em; }
 .wt .wt-result-inputs dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; line-height: 1.55; }

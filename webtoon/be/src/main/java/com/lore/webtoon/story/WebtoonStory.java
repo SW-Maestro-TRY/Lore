@@ -98,6 +98,14 @@ public class WebtoonStory {
     @Column(name = "user_title", length = 60)
     private String userTitle;
 
+    /**
+     * 사람이 고쳐 둔 줄거리. 없으면(NULL) 위 {@link #plot}(모델이 지은 줄거리)을
+     * 그대로 쓴다. {@link #userTitle} 과 같은 규칙 — 모델이 지은 것을 덮어쓰지
+     * 않고, 비우면 원래 줄거리로 돌아간다.
+     */
+    @Column(name = "user_plot", length = 300)
+    private String userPlot;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -129,6 +137,16 @@ public class WebtoonStory {
     /** 빈 값이면 도로 비운다 — 모델이 지은 이름으로 돌아간다. */
     void editTitle(String value) {
         this.userTitle = (value == null || value.isBlank()) ? null : value.trim();
+    }
+
+    /** 빈 값이면 도로 비운다 — 모델이 지은 줄거리로 돌아간다. */
+    void editPlot(String value) {
+        this.userPlot = (value == null || value.isBlank()) ? null : value.trim();
+    }
+
+    /** 화면에 보일 줄거리. 사람이 고친 것이 있으면 그것이 이긴다. */
+    public String displayPlot() {
+        return (userPlot == null || userPlot.isBlank()) ? plot : userPlot;
     }
 
     /** 화면에 보일 제목. 사람이 고친 것이 있으면 그것이 이긴다. */

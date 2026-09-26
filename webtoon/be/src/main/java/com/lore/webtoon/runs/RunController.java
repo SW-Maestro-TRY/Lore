@@ -139,6 +139,25 @@ public class RunController {
         }
     }
 
+    /**
+     * 줄거리(로그라인)를 고친다. 제목 고치기와 같은 규칙이다 — <b>빈 값으로
+     * 부르면 지운다</b>(모델이 지은 줄거리로 돌아간다). 길면 300자에서 자른다.
+     *
+     * 아직 이야기를 안 고른 작품(만드는 중)이면 404 다.
+     */
+    @Operation(summary = "줄거리 고치기", description = "logline 이 비어 있으면 원래 줄거리로 되돌린다. 300자에서 자른다.")
+    @PostMapping("/{runId}/logline")
+    public ResponseEntity<Map<String, Object>> logline(@PathVariable String runId,
+                                                        @RequestBody Map<String, Object> body) {
+        mustOwn(runId);
+        try {
+            String got = stories.editPlot(runId, String.valueOf(body.getOrDefault("logline", "")));
+            return ResponseEntity.ok(Map.of("logline", got));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
+        }
+    }
+
     /* ---- 편집실 ----------------------------------------------------------- */
 
     /**

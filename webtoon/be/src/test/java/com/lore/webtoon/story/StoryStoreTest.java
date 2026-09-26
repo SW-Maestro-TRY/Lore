@@ -208,6 +208,48 @@ class StoryStoreTest {
     }
 
     @Test
+    @DisplayName("줄거리를 고치면 그 뒤로 그 줄거리가 뜬다 — 모델이 지은 줄거리는 안 지운다")
+    void 줄거리를_고친다() {
+        store.save("run-1", 후보넷());
+        store.choose("run-1", 2);
+
+        String got = store.editPlot("run-1", "  계약으로   시작해\n진심이 된다  ");
+
+        assertThat(got).isEqualTo("계약으로 시작해 진심이 된다");
+        assertThat(store.chosenOf("run-1")).get()
+                .extracting(WebtoonStory::displayPlot).isEqualTo("계약으로 시작해 진심이 된다");
+        assertThat(store.chosenOf("run-1")).get()
+                .extracting(WebtoonStory::getPlot).isEqualTo("줄거리 2");
+    }
+
+    @Test
+    @DisplayName("빈 값으로 고치면 모델이 지은 줄거리로 되돌아간다")
+    void 줄거리를_지우면_원래대로() {
+        store.save("run-1", 후보넷());
+        store.choose("run-1", 1);
+        store.editPlot("run-1", "내가 고친 줄거리");
+
+        assertThat(store.editPlot("run-1", "   ")).isEqualTo("줄거리 1");
+    }
+
+    @Test
+    @DisplayName("줄거리는 300자에서 자른다 — 칸 크기와 같다")
+    void 줄거리는_300자() {
+        store.save("run-1", 후보넷());
+        store.choose("run-1", 1);
+
+        assertThat(store.editPlot("run-1", "가".repeat(400))).hasSize(StoryStore.PLOT_MAX);
+    }
+
+    @Test
+    @DisplayName("아직 안 고른 작품은 줄거리를 못 고친다")
+    void 안_고르면_줄거리도_못_고친다() {
+        store.save("run-1", 후보넷());
+        assertThatThrownBy(() -> store.editPlot("run-1", "아무 줄거리"))
+                .isInstanceOf(java.util.NoSuchElementException.class);
+    }
+
+    @Test
     @DisplayName("아직 안 고른 작품은 제목을 못 고친다")
     void 안_고르면_못_고친다() {
         store.save("run-1", 후보넷());

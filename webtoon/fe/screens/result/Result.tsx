@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
-  readResult, rememberRecent, renameRun, type RunCard, type RunResult,
+  readResult, rememberRecent, renameRun, editLogline, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
@@ -114,6 +114,27 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       setTitleErr(true);
     } finally {
       titleSaving.current = false;
+    }
+  };
+  /* 줄거리 고치기(#78) — 제목과 같은 규칙. 비우고 저장하면 모델이 지은 줄거리로 돌아간다.
+     긴 글이라 textarea 로 받지만 Enter 는 저장이다 — 서버가 줄바꿈을 한 칸으로 합친다. */
+  const [plotDraft, setPlotDraft] = useState<string | null>(null);
+  const [plotErr, setPlotErr] = useState(false);
+  const plotSaving = useRef(false);
+  const savePlot = async () => {
+    if (plotDraft === null || !data || plotSaving.current) return;
+    const want = plotDraft.trim();
+    setPlotDraft(null);
+    if (want === (data.logline || "")) return;
+    plotSaving.current = true;
+    try {
+      const out = await editLogline(runId, want);
+      setData((d) => (d ? { ...d, logline: out.logline } : d));
+      setPlotErr(false);
+    } catch {
+      setPlotErr(true);
+    } finally {
+      plotSaving.current = false;
     }
   };
   const ep = data?.episode || 1;
@@ -258,6 +279,27 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 <span className="wt-result-meta-m">{metaM}</span>
                 {preview && <span className="dim"> · {preview}</span>}
               </span>
+              {plotDraft !== null ? (
+                <textarea className="wt-result-plotinput" value={plotDraft} autoFocus maxLength={300} rows={3}
+                          aria-label={t("줄거리 고치기")}
+                          onChange={(e) => setPlotDraft(e.target.value)}
+                          onBlur={() => void savePlot()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void savePlot(); }
+                            else if (e.key === "Escape") setPlotDraft(null);
+                          }} />
+              ) : (data.logline || (mine && authenticated)) ? (
+                <p className="wt-result-plot">
+                  <span>{data.logline}</span>
+                  {mine && authenticated && (
+                    <button type="button" className="icon-btn wt-result-titleedit" aria-label={t("줄거리 고치기")}
+                            title={t("줄거리 고치기")} onClick={() => { setPlotErr(false); setPlotDraft(data.logline || ""); }}>
+                      <IconEdit size={14} />
+                    </button>
+                  )}
+                  {plotErr && <span className="err wt-result-titleerr">{t("저장하지 못했습니다")}</span>}
+                </p>
+              ) : null}
             </div>
 
             {data.inputs && (
