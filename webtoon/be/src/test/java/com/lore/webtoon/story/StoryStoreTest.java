@@ -194,6 +194,15 @@ class StoryStoreTest {
     }
 
     @Test
+    @DisplayName("제목의 줄바꿈·탭도 한 칸으로 합친다")
+    void 제목의_줄바꿈과_탭을_합친다() {
+        store.save("run-1", 후보넷());
+        store.choose("run-1", 1);
+
+        assertThat(store.editTitle("run-1", "내가\n고친\t\t제목")).isEqualTo("내가 고친 제목");
+    }
+
+    @Test
     @DisplayName("빈 값으로 고치면 모델이 지은 이름으로 되돌아간다")
     void 제목을_지우면_원래대로() {
         store.save("run-1", 후보넷());
