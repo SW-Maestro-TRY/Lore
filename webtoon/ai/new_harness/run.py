@@ -49,6 +49,7 @@ import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
 import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
+import charcard                               # noqa: E402
 import storydiff                              # noqa: E402
 import fullreview                             # noqa: E402
 import pages as pagemod                       # noqa: E402
@@ -112,6 +113,7 @@ def read_character(path: Path) -> dict:
         "photos": photos,
         "photo_note": doc.get("photo_note"),
         "story": doc.get("story"),
+        "card": doc.get("card"),
     })
 
 
@@ -119,6 +121,10 @@ def normalize(raw: dict) -> dict:
     """빈 칸은 빈 칸으로 둔다. 코드가 기본값을 채우면 작가가 준 것과 섞인다."""
     fields = {k: str(v).strip() for k, v in (raw.get("fields") or {}).items()
               if str(v or "").strip()}
+    # 고른 캐릭터 카드(#458). 장르를 따로 안 골랐으면 카드 세계의 장르를 쓴다 —
+    # 안 그러면 마법대륙 카드를 골라도 모델이 장르를 새로 정해 현대물이 나온다.
+    card = charcard.normalize(raw.get("card"))
+    genre = str(raw.get("genre") or "").strip() or charcard.default_genre(card)
     photos = []
     for p in raw.get("photos") or []:
         path = Path(p)
@@ -130,10 +136,11 @@ def normalize(raw: dict) -> dict:
         "name": str(raw.get("name") or "").strip(),
         "description": str(raw.get("description") or "").strip(),
         "fields": fields,
-        "genre": str(raw.get("genre") or "").strip(),
+        "genre": genre,
         "photos": photos,
         "photo_note": str(raw.get("photo_note") or "").strip(),
         "story": str(raw.get("story") or "").strip(),
+        "card": card,
     }
 
 
@@ -142,9 +149,33 @@ def gate_input(char: dict) -> list[str]:
     bad = []
     if not char["name"]:
         bad.append("캐릭터 이름이 없습니다 (필수).")
-    if not char["photos"] and not char["description"] and not char["fields"]:
+    if (not char["photos"] and not char["description"] and not char["fields"]
+            and not char.get("card")):
         bad.append("외관이 없습니다 — 사진이나 설명 중 하나는 있어야 합니다.")
     return bad
+
+
+# 사용자가 적은 설명을 어떻게 쓰는가 — 설명이 있을 때만 그 바로 아래에 붙는다(#458).
+#
+# 모모를 「장난치는 걸 좋아한다」 한 줄로 돌렸더니, 후보 넷 중 둘이 장난 때문에
+# 사건이 터지는 이야기(장난으로 쓴 동의서가 왕실 계약서가 된다)였고, 하나는
+# 방향별 축(전문가 · 냉소)을 따라 「냉소적인 전문가」가 됐다(2026-09-27).
+# 사용자 지시: 설명에 없는 성격은 절대 붙이지 않는다. 그리고 「이름만 바꿔
+# 다른 캐릭터를 넣어도 성립하면」 그 인물이 살아 움직이는 게 아니다 — 장난치다
+# 금지 소환진을 터뜨린 후보처럼 성격이 일을 바꿔야 그 인물로 읽힌다. 다만
+# 「성격이 이야기를 만들어야 한다」를 세게 걸었더니 모델이 판 자체를 성격으로
+# 지었다(장난감 전쟁 기념관, 장난 배틀 앱). 판이 먼저 서고 성격은 그 판에서 일을
+# 바꾸는 쪽이다(사용자 판정, 2026-09-27). 0921 멘토링대로 판정 기준을 적는다.
+TRAIT_RULES = [
+    "## 이 인물의 성격은 위 설명이 전부다",
+    "",
+    "- 위 설명(과 고른 캐릭터 카드)에 없는 성격·말투·버릇·과거를 붙이지 않는다. "
+    "설명이 짧으면 짧은 대로 둔다. 빈 곳을 성격 형용사로 채우지 마라.",
+    "- 판(세계·소재·중심 사건)은 성격 없이도 그 장르에서 재미있게 서 있어야 한다. "
+    "성격 낱말로 세계·소재·제목을 짓지 마라 — 판을 성격에 맞추면 재미도 사건도 사라진다.",
+    "- 그 판에서 적힌 성격 때문에 일이 다르게 터지거나 꼬이거나 풀린다. 판정: 주인공을 "
+    "다른 인물로 바꾸면 이 판에서 벌어지는 일이 달라지는가?",
+]
 
 
 def input_block(char: dict, *, with_genre: bool = True) -> str:
@@ -158,12 +189,19 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     else:
         lines.append("외관: (사진 없음 — 아래 설명에서 읽는다)")
 
+    card = char.get("card") or {}
+    if card:
+        lines += ["", *charcard.block(card, has_story=bool(user_story(char)))]
+
     if char["description"] or char["fields"]:
-        lines += ["", "설명:"]
+        # 카드를 골랐으면 이 설명은 카드가 되기 전에 사람이 처음 적은 것이다 —
+        # 종·세계가 카드와 다를 수 있어서(사람 → 검은여우) 이름표를 단다.
+        lines += ["", "사용자가 처음 적은 설명 (성격·분위기 참고):" if card else "설명:"]
         if char["description"]:
             lines.append(char["description"])
         for k, v in char["fields"].items():
             lines.append(f"- {k}: {v}")
+        lines += ["", *TRAIT_RULES]
     else:
         lines += ["", "설명: (없음 — 네가 정한다)"]
 
@@ -599,6 +637,11 @@ def axes_enabled() -> bool:
     return str(llm.env("NH_STORY_AXES") or "1").strip().lower() in ("1", "on", "true", "yes")
 
 
+def has_character_traits(char: dict) -> bool:
+    """사용자가 성격을 정할 거리를 줬는가 — 설명 · 항목 · 고른 카드 중 하나라도."""
+    return bool(char.get("description") or char.get("fields") or char.get("card"))
+
+
 def story_variety_block(run_dir: Path, char: dict) -> str:
     """방향별 압력 — 그리고 (켜져 있으면) 이야기 변수 · 회차 구조.
 
@@ -615,7 +658,14 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     나중에 다시 켤 때 이어지고, 무엇이 뽑혔는지 비교할 수 있다.
     """
     axes, structure, fresh = samples.pick_fresh(char["genre"], runs_dir=RUNS_DIR)
-    use_axes = axes_enabled()
+    # 사용자가 캐릭터 설명(또는 카드)을 한 줄이라도 넣었으면 축·구조를 안 박는다
+    # (#458). 모모(「장난치는 걸 좋아한다」)로 같은 프롬프트를 축 켬/끔으로 돌려
+    # 보니, 켜면 축 이름과 그 값을 풀어 쓴 추상어가 소개에 새고(「외부자」, 「악의는
+    # 없지만 미묘하게 어긋난다」) 여섯 판 내내 비슷한 판(대역 공주)이 반복됐다.
+    # 끄면 두 번 다 소개가 바로 읽히고 장르가 넷으로 갈렸다(2026-09-27, 각 1~2회).
+    # 줄거리를 적은 경우는 이미 이 블록을 안 거친다(stage_story). 사진만 있을 때는
+    # 그대로 켠다. 무엇이 뽑혔는지는 axes.json 에 그대로 남긴다.
+    use_axes = axes_enabled() and not has_character_traits(char)
     axes_list = _distinct_axes(char["genre"], axes) if (axes and use_axes) else []
     structures = _distinct_structures(char["genre"], structure) if (structure and use_axes) else []
     engines = _pick_engines()
@@ -669,6 +719,9 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
         parts += ["", "이야기 변수는 인물이 어디에 서서 무엇과 부딪히는지를, 회차 "
                   "구조는 그것을 어떤 순서로 보여줄지를 정한다. 그 '어디'와 '무엇'은 "
                   "이 세계의 것이어야 한다 — 값과 세계는 따로가 아니다."]
+    parts += ["", "**값은 판과 처지에 건다. 주인공의 성격으로 옮기지 않는다.** 톤은 "
+              "이야기의 분위기이고, 주인공 위치와 모순은 주인공이 놓인 처지다. "
+              "주인공이 어떤 사람인지는 사용자가 적은 설명만 정한다."]
     for i in range(count):
         parts += ["", f"### 방향 {i + 1}", ""]
         for txt in (_engine_block(engines[i]) if i < len(engines) else "",
@@ -987,6 +1040,10 @@ def scene_input_block(char: dict, direction: dict) -> str:
     lines = ["# 이번 입력", "", "[선택된 스토리]", direction.get("title", ""), ""]
     lines.append(direction.get("body") or direction.get("raw", ""))
     lines += ["", "[캐릭터]", f"{char['name']} — {char.get('description') or ''}".rstrip(" —")]
+    # 고른 카드가 있으면 종·세계·정체를 같이 준다(#458) — 원래 설명(사람 ·
+    # 대학생 …)만 보고 장면을 짜면 사람이 고른 캐릭터가 아닌 인물로 그린다.
+    if charcard.short(char.get("card") or {}):
+        lines.append(f"- 고른 캐릭터 카드: {charcard.short(char['card'])} (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
 

@@ -90,6 +90,7 @@ import os
 from pathlib import Path
 
 import llm
+import charcard
 from llm import story
 
 HERE = Path(__file__).resolve().parent
@@ -206,8 +207,12 @@ def character_block(char: dict | None) -> str:
     lines = ["## 캐릭터 정보", ""]
     if _text(char.get("name")):
         lines.append(f"이름: {_text(char['name'])}")
+    # 고른 캐릭터 카드(#458) — 카드와 원래 설명이 다르면 카드가 그 인물이다.
+    if charcard.short(char.get("card") or {}):
+        lines.append(f"고른 캐릭터 카드: {charcard.short(char['card'])}")
     if _text(char.get("description")):
-        lines.append(f"설명: {_text(char['description'])}")
+        lines.append(f"{'사용자가 처음 적은 설명' if char.get('card') else '설명'}: "
+                     f"{_text(char['description'])}")
     if _text(char.get("genre")):
         lines.append(f"장르: {_text(char['genre'])}")
     for k, v in (char.get("fields") or {}).items():
