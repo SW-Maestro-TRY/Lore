@@ -56,6 +56,32 @@ public interface WebtoonJobRepository extends JpaRepository<WebtoonJob, Long> {
     int claimNotice(@Param("id") Long id, @Param("at") Instant at);
 
     /**
+     * 줄 선 자리 <b>한 칸만</b> 적는다.
+     *
+     * 작업을 읽어 통째로 저장하면 안 된다 — 만들기 요청이 커밋되자마자 러너가
+     * 다른 실타래에서 RUNNING·started_at 을 적는데, 그 뒤에 읽어 둔 옛 행을
+     * 통째로 저장하면 QUEUED·빈 started_at 으로 되돌아간다. 그러면 이야기
+     * 단계 내내 줄에 선 것으로 보이고 「약 N분 남았어요」가 줄지 않는다
+     * (2026-09-26 로컬에서 실제로 봄).
+     */
+    @Modifying
+    @Query("update WebtoonJob j set j.queuedAhead = :ahead where j.publicId = :publicId")
+    int rememberAhead(@Param("publicId") String publicId, @Param("ahead") int ahead);
+
+    /**
+     * 알림 주소 <b>한 칸만</b> 바꾼다. 아직 안 보냈을 때만.
+     *
+     * 사람이 주소를 적는 순간은 러너가 한창 상태를 바꾸는 중이다. 통째로
+     * 저장하면 그 사이에 바뀐 상태·단계를 옛 값으로 덮는다({@link #rememberAhead} 와 같은 이유).
+     */
+    @Modifying
+    @Query("""
+            update WebtoonJob j set j.notifyEmail = :email, j.updatedAt = :at
+            where j.id = :id and j.notifiedAt is null
+            """)
+    int setNotifyEmail(@Param("id") Long id, @Param("email") String email, @Param("at") Instant at);
+
+    /**
      * 이 사람이 만들던 것 — 아직 안 끝난 작업. 첫 화면의 「만들던 웹툰」 알약과
      * 이어 만들기가 여기를 본다. 로그인 안 했으면 브라우저 uid 로만 가린다.
      */

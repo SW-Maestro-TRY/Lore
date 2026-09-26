@@ -116,14 +116,9 @@ public class JobStore {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean notifyTo(Long id, String email) {
-        return jobs.findById(id)
-                .filter(job -> job.getNotifiedAt() == null)
-                .map(job -> {
-                    job.notifyTo(email, Instant.now());
-                    jobs.save(job);
-                    return true;
-                })
-                .orElse(false);
+        // 통째로 저장하지 않는다 — 도는 중인 작업의 상태를 옛 값으로 덮는다.
+        String clean = (email == null || email.isBlank()) ? null : email.trim();
+        return jobs.setNotifyEmail(id, clean, Instant.now()) == 1;
     }
 
     /**

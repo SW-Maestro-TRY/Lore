@@ -54,6 +54,7 @@ interface Route {
   job?: string;
   run?: string;
   id?: string;
+  tab?: "settings";
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -68,6 +69,7 @@ function routeOf(search: URLSearchParams): Route {
     job: search.get("job") || undefined,
     run,
     id: search.get("id") || undefined,
+    tab: search.get("tab") === "settings" ? ("settings" as const) : undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
@@ -220,7 +222,7 @@ function WebtoonScreens() {
       {route.view === "sharedCard" && route.id && (
         <PhotoResult id={route.id} shared go={go} authenticated={authenticated} />
       )}
-      {route.view === "mypage" && <MyPage go={go} />}
+      {route.view === "mypage" && <MyPage go={go} initialTab={route.tab} />}
     </div>
   );
 }

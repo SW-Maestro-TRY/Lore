@@ -109,10 +109,8 @@ public class JobQueue {
     /** 줄 선 자리를 작업에 적어 둔다 — 나중에 예상이 맞았는지 재려고. */
     @Transactional
     public void remember(String publicId, int ahead) {
-        jobs.findByPublicId(publicId).ifPresent(job -> {
-            job.queuedBehind(ahead);
-            jobs.save(job);
-        });
+        // 통째로 저장하지 않는다 — 러너가 적은 RUNNING 을 되돌린다(rememberAhead 참고).
+        jobs.rememberAhead(publicId, ahead);
     }
 
     /**
