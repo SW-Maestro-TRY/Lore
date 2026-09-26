@@ -142,13 +142,28 @@ def image_default(provider: str) -> str:
     return story.image_backend_ready(provider)[1]
 
 
+# 단계마다 따로 두는 기본 모델 — 설정(`<단계>_MODEL` · `NH_MODEL`)이 없을 때만 쓴다.
+#
+# **이야기 후보(STORY)는 gpt-5.1 이다(#457).** 같은 프롬프트·같은 입력으로
+# gpt-4.1 과 나란히 돌려 보니, gpt-4.1 은 후보 넷이 적힌 줄거리를 장면으로
+# 옮겨 적고 분위기만 다른 이야기가 됐고 인물도 이름·형용사 하나뿐이었다.
+# gpt-5.1 은 같은 한 줄을 서로 다른 이야기(비밀 동맹·독립·배틀·미스터리)로
+# 읽고 인물마다 매력을 줬다(2026-09-26, 두 입력 각 한 번씩). 호출당 값은
+# 약 2.5배($0.012 → $0.03)지만 run 하나에 한 번뿐이다.
+#
+# `.env` 가 아니라 코드에 두는 이유는 DEFAULT_PROVIDER 와 같다 — 서버에는
+# new_harness/.env 가 안 실린다.
+STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1"}
+
+
 def model_for(stage: str, provider: str) -> str:
     """이 단계가 쓸 모델 이름."""
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
         return model or image_default(provider)
     model, _ = _pick(stage, "MODEL", ("NH_MODEL",))
-    return model or story.default_model_for(provider)
+    return (model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider))
+            or story.default_model_for(provider))
 
 
 def load_images(paths) -> list:
