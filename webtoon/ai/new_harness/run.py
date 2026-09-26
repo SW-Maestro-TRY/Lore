@@ -91,9 +91,9 @@ def read_character(path: Path) -> dict:
     「어떤 이야기를 만들까요?」를 한 단계로 물어보고 확인 화면에서 다시
     보여준다. 물어보고 버리면 사람은 자기가 적은 것이 반영된 줄 안다.
 
-    프롬프트 원문은 **안 고친다.** 사람이 적은 것이 있을 때만 입력 블록에
-    한 문단을 더해 그 규칙을 덮는다(story_input_block) — 안 적었으면 블록이
-    아예 안 붙어서 예전 run 은 프롬프트가 한 글자도 안 바뀐다.
+    적었으면 이야기 단계가 프롬프트부터 바꾼다 — `story_prompt` 대신
+    적힌 이야기를 중심에 두는 `story_prompt_seeded` 를 쓴다
+    (`seeded_input_block` 참고). 안 적었으면 예전과 한 글자도 안 바뀐다.
     """
     if path.is_dir():
         path = path / "character.json"
@@ -173,32 +173,44 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     return "\n".join(lines) + "\n"
 
 
-def user_story_block(char: dict) -> str:
-    """사람이 「어떤 이야기를 만들까요?」에 적은 것. 안 적었으면 빈 문자열.
+def user_story(char: dict) -> str:
+    """사람이 「어떤 이야기를 볼까요?」에 적은 것. 안 적었으면 빈 문자열."""
+    return (char.get("story") or "").strip()
 
-    story_prompt 는 "줄거리는 받지 않는다" 로 시작한다. 그것을 여기서
-    덮는다 — **프롬프트 파일은 안 고치고**, 사람이 적은 것이 있을 때만 이
-    문단이 붙는다. `compose` 가 입력을 프롬프트 **뒤**에 놓으므로(모델은
-    뒤에 온 것을 더 세게 듣는다) 이 문단이 이긴다. 안 적었으면 블록이
-    아예 안 붙어서 예전 run 은 프롬프트가 한 글자도 안 바뀐다.
 
-    **후보 4개를 다 같은 이야기로 만들라는 뜻은 아니다.** 그러면 고를
-    것이 없어진다 — 출발점만 공유하고 가는 길은 갈라지게 못 박는다.
+def seeded_input_block(char: dict) -> str:
+    """사람이 줄거리를 적었을 때의 이야기 단계 입력 (#457).
+
+    예전에는 `story_prompt`(입력이 없을 때를 기준으로 쓴 프롬프트) 뒤에
+    「사람이 적은 이야기」 한 문단을 덧붙여 "줄거리는 받지 않는다" 만
+    덮었다. 그런데 그 프롬프트의 나머지 — 캐릭터를 잊고 장르 소재부터
+    떠올려 "완전히 다른 판 4개"를 고르라는 단계 — 와, 그 뒤에 "참고가
+    아니라 지시다" 로 붙는 방향별 축·구조가 그대로 살아서 적힌 이야기를
+    밀어냈다. "역대급 꼴찌가 입학했다" 에 주인공 위치 「최상위」가
+    배정되는 식이다(2026-09-26, 사용자 지적).
+
+    그래서 적은 것이 있으면 프롬프트부터 `story_prompt_seeded` 로 바꾸고,
+    여기서는 다음을 뺀다.
+      - 방향별 축·구조·엔진 — 무작위라 적힌 사실과 부딪힌다. 후보 넷의
+        차이는 적힌 것에 무엇을 더하느냐에서 나오게 한다.
+      - 장르 기준 샘플 카드 — 다른 주인공의 사건이라, 적힌 이야기 옆에
+        두면 그 소재가 섞여 든다.
+    세계관·전개 문법은 남기되 적힌 이야기 아래에 둔다. 적힌 이야기는
+    **맨 뒤**에 놓는다 — 모델은 뒤에 온 것을 더 세게 듣는다(`compose`).
     """
-    seed = (char.get("story") or "").strip()
-    if not seed:
-        return ""
-    return ("\n## 사용자가 직접 적은 이야기\n\n"
-            "앞에서 「줄거리는 받지 않는다」고 한 것은 **아무것도 안 주어졌을 "
-            "때의 규칙**이다. 아래는 이 작품을 만들어 달라고 한 사람이 직접 "
-            "적은 것이라, 여기서는 이것이 출발점이다.\n\n"
-            f"> {seed}\n\n"
-            "- **네 후보 모두 이 이야기에서 출발한다.** 하나라도 여기서 "
-            "벗어나면 사람이 적은 것을 버린 것이다.\n"
-            "- 그렇다고 넷을 같은 이야기로 만들지 마라. 출발점만 같고 **가는 "
-            "길은 서로 갈라져야** 고를 것이 생긴다.\n"
-            "- 적힌 것이 한 줄뿐이어도 그 한 줄이 1화 안에서 **실제로 일어나야** "
-            "한다. 배경 설정으로만 깔고 넘어가지 마라.\n")
+    lines = [input_block(char).rstrip("\n")]
+    genre = char["genre"]
+    if genre:
+        world = world_text_for(genre)
+        if world:
+            lines += ["", "## 이 세계의 배경 — 적힌 이야기와 부딪히지 않는 곳에서만 쓴다",
+                      "", world]
+        lines += genre_lore_section(genre)
+    lines += ["", "## 사용자가 적은 이야기 — 이 웹툰의 중심", "",
+              f"> {user_story(char)}"]
+    if genre:
+        lines += ["", "위의 세계관·전개 문법이 이 이야기와 부딪히면 이 이야기가 이긴다."]
+    return "\n".join(lines) + "\n"
 
 
 def story_input_block(char: dict, run_dir: Path | None = None) -> str:
@@ -219,17 +231,17 @@ def story_input_block(char: dict, run_dir: Path | None = None) -> str:
     block = input_block(char).rstrip("\n")
     genre = char["genre"]
     if not genre:
-        return block + "\n" + user_story_block(char)
+        return block + "\n"
     lines = [block]
     world = world_text_for(genre)
     if world:
-        lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
+        lines += ["", "## 이 세계의 배경 — 이 안에서 무엇이 벌어질지는 정해져 있지 않다", "", world]
     cards = genre_samples_for(genre, run_dir=run_dir)
     if cards:
         lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
                   "", GENRE_SAMPLE_NOTE, "", cards]
     lines += genre_lore_section(genre)
-    return "\n".join(lines) + "\n" + user_story_block(char)
+    return "\n".join(lines) + "\n"
 
 
 def load_prompt(name: str) -> str:
@@ -681,7 +693,13 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     자가 사람 눈과 맞는지 아직 확인되지 않아서, storycheck 과 달리 켜져
     있지 않다(`storydiff.enabled` 참고).
     """
-    block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
+    # 사람이 줄거리를 적었으면 그 줄거리가 중심이다 — 프롬프트도, 입력
+    # 블록도 따로 간다(seeded_input_block 참고). 안 적었으면 예전 그대로.
+    seeded = bool(user_story(char))
+    if seeded:
+        block = seeded_input_block(char).rstrip("\n")
+    else:
+        block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
     note = (note or "").strip()
     if note:
         # 다시 만들기에서 사람이 남긴 요청 — 캐릭터 설정 자체가 아니라 "이번엔
@@ -689,7 +707,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         # 여기서 따로 붙인다(캐릭터 파일을 고치면 다음 시도에도 계속 남는다).
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
                  f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
-    prompt = compose("story_prompt", block)
+    prompt = compose("story_prompt_seeded" if seeded else "story_prompt", block)
     write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
@@ -983,7 +1001,7 @@ def scene_input_block(char: dict, direction: dict) -> str:
                   "일어날 수 있는 장면으로 옮기지 마라."]
         world = world_text_for(genre)
         if world:
-            lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
+            lines += ["", "## 이 세계의 배경 — 이 안에서 무엇이 벌어질지는 정해져 있지 않다", "", world]
         cards = genre_samples_for(genre)
         if cards:
             lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
