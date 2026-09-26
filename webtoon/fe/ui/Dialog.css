@@ -1,0 +1,16 @@
+/* 가운데 확인 창 — 편집실 .ask-box · 완성본 .wt-result-soonbox 와 같은 모양 */
+.wt .wt-dialog {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: rgba(15, 51, 63, 0.55); padding: 16px;
+}
+.wt .wt-dialog-box {
+  width: min(400px, 100%); max-height: 86vh; overflow: auto; background: #fff; border-radius: 22px;
+  box-shadow: 0 20px 60px rgba(15, 51, 63, 0.28); padding: 22px 20px 18px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.wt .wt-dialog-box.wide { width: min(520px, 100%); }
+.wt .wt-dialog-box h2 { font-size: 18px; margin: 0; }
+.wt .wt-dialog-sub { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
+.wt .wt-dialog-err { color: var(--gold); font-size: 12.5px; margin: 0; }
+.wt .wt-dialog-actions { display: flex; gap: 8px; margin-top: 10px; }
+.wt .wt-dialog-actions .btn { flex: 1; height: 46px; font-size: 14px; }

@@ -42,7 +42,9 @@ public class RunLikeService {
     /** @return 찜한 뒤의 찜 수 */
     @Transactional
     public long like(Long userId, String runId) {
-        if (works.findFirstByRunId(runId).isEmpty()) {
+        /* 휴지통에 든 작품(#157)도 없는 작품으로 본다 — 목록에서 안 보이는 작품에
+           주소만 알고 찜을 더하지 못하게. 이미 눌린 찜은 되살릴 때를 위해 둔다. */
+        if (works.findFirstByRunId(runId).filter(w -> !w.isTrashed()).isEmpty()) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 작품이 없습니다");
         }
         if (likes.findByRunIdAndUserId(runId, userId).isEmpty()) {

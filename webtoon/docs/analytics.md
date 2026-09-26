@@ -173,7 +173,7 @@
 | `works_search` | 둘러보기 검색 (입력이 멈추고 0.8초 뒤 한 번) | `count`(보이는 작품 수). 검색어 자체는 남기지 않는다 |
 | `recent_open` · `recommend_open` | 최근 본 웹툰 · 「이런 웹툰은 어때요」에서 작품을 엶 | `run`, `where`: landing(홈의 최근 본 줄에서만 붙음) |
 | `like_toggle` | 찜 하트 | `run`, `result`: on · off · need_login(로그인 안 해서 막힘) |
-| `run_delete` | 내 웹툰 삭제 | `run`, `where`: mypage · works |
+| `run_delete` · `run_restore` | 내 웹툰을 휴지통으로 · 휴지통에서 되살림(#157) | `run`, `where`: mypage · works (되살리기는 mypage 뿐) |
 | `try_random_click` · `try_start` | 캐릭터 만들어보기 | `has_photo`, `has_name`, `has_desc`, `preset`(세계관을 목록에서), `random` |
 | `try_result` · `try_again` | 카드가 다 그려짐 · 다시 뽑기 | `character`, `status`: ready · error |
 | `card_share` · `card_to_webtoon` · `shared_card_try` | 카드 공유 · 이 캐릭터로 1화 · 공유 카드를 보고 「나도 만들어보기」 | `target`, `character` |

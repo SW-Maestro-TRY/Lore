@@ -124,8 +124,38 @@ public class RunService {
                 .orElse(null);
     }
 
+    /**
+     * 휴지통에 든 작품인가(#157). 들었으면 결과·회차·장 주소가 모두 없는 작품처럼
+     * 404 를 낸다 — 공유 링크로 들어온 사람에게도 지운 작품이 안 보여야 한다.
+     */
+    @Transactional(readOnly = true)
+    public boolean isTrashed(String runId) {
+        return works.findFirstByRunId(runId).map(WebtoonWork::isTrashed).orElse(false);
+    }
+
+    /** 휴지통 카드. 목록 카드와 같은 모양에 지운 시각이 붙는다. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> trashCards(List<WebtoonWork> trashed) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (WebtoonWork one : trashed) {
+            Map<String, Object> card = cardIgnoringTrash(one, true);
+            if (card != null) {
+                card.put("deleted_at", one.getDeletedAt().toString());
+                out.add(card);
+            }
+        }
+        return out;
+    }
+
     /** 카드 하나. 그림이 없으면 {@code null} — 목록에 안 올린다. */
     private Map<String, Object> card(WebtoonWork work, boolean withPublic) {
+        if (work.isTrashed()) {
+            return null;
+        }
+        return cardIgnoringTrash(work, withPublic);
+    }
+
+    private Map<String, Object> cardIgnoringTrash(WebtoonWork work, boolean withPublic) {
         String runId = work.getRunId();
         List<Integer> numbers = pages.pageNumbersOf(runId);
         if (numbers.isEmpty()) {
@@ -169,6 +199,9 @@ public class RunService {
             return null;
         }
         WebtoonWork work = works.findFirstByRunId(runId).orElse(null);
+        if (work != null && work.isTrashed()) {
+            return null;
+        }
         WebtoonJob job = work == null ? null
                 : jobs.findByPublicId(work.getJobId()).orElse(null);
         Optional<WebtoonStory> chosen = stories.chosenOf(runId);
@@ -191,7 +224,7 @@ public class RunService {
                 .orElse(NO_TITLE));
         out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
-        out.put("logline", chosen.map(WebtoonStory::getPlot).orElse(""));
+        out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));
         out.put("episode", 1);
         out.put("pages", sheets);
         out.put("page_count", numbers.size());
@@ -227,6 +260,9 @@ public class RunService {
             return null;
         }
         WebtoonWork work = works.findFirstByRunId(runId).orElse(null);
+        if (work != null && work.isTrashed()) {
+            return null;
+        }
         WebtoonJob job = work == null ? null
                 : jobs.findByPublicId(work.getJobId()).orElse(null);
         Optional<WebtoonStory> chosen = stories.chosenOf(runId);
@@ -269,7 +305,7 @@ public class RunService {
                 .orElse(NO_TITLE));
         out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
-        out.put("logline", chosen.map(WebtoonStory::getPlot).orElse(""));
+        out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));
         // 한 편짜리다 — 이어그리기가 붙으면 여기가 늘어난다(카드가 쓰는 것과 같은 값).
         out.put("episode", 1);
         out.put("episodes", List.of(1));

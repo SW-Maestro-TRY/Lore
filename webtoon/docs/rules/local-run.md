@@ -44,6 +44,28 @@ SERVER_PORT=<다른 포트> ./gradlew bootRun --no-daemon
 - 사본에서 바꾼 것은 원본에 안 갑니다. 원본에서 확인해야 하는 것이면 원래 서버를
   내린 뒤에 합니다.
 
+## 만든 결과는 어디 남나 (#157)
+
+노트북에서 만든 작품은 **한 편의 결과가 폴더에 전부 남습니다.** 나중에 열어 보며
+작업하는 자리라서입니다.
+
+| 무엇 | 어디 (저장소 루트 기준) |
+| --- | --- |
+| 작품 한 편 — 이야기·프롬프트·`meta.json`(단계별 비용)·장 그림 `pages/page01.png`·이어 붙인 `episode.png`·다시 그린 판 `pages/versions/` | `webtoon/ai/work/runs/<run_id>/` |
+| 캐릭터 카드 | `webtoon/ai/work/characters/<id>/` |
+| MinIO 창고에 올라간 사본 | `~/lore-minio/lore-dev-contents/images/webtoon/` |
+
+- 워크트리에서 띄웠으면 그 워크트리 안의 `webtoon/ai/work/` 입니다(gitignore 라
+  원본 저장소와 따로 쌓입니다. [worktree.md](worktree.md)).
+- 끝까지 못 간 작품(실패·취소)도 지우지 않습니다.
+- **배포 서버는 다릅니다.** 그림 원본은 S3 에 있고 추적은 DB 로 하므로, 올린 뒤
+  서버 사본(장 그림·`episode.png`·줄인 사본)을 치우고 글·JSON 만 남깁니다. 끝까지
+  못 간 작품 폴더는 7일 뒤 통째로 치웁니다. 다시 그리기·되돌리기 전에는 필요한
+  그림을 S3 에서 되받습니다.
+- 어느 쪽인지는 설정 없이 정해집니다: 버킷이 없거나 창고 주소(`APP_S3_ENDPOINT`)가
+  `localhost`·`127.0.0.1` 이면 남기고, 그 밖은 치웁니다(`RunFiles`). 굳이 바꾸려면
+  `LORE_WEBTOON_RUNS_KEEP_FILES=true|false` 를 적습니다.
+
 ## 모델 API 키는 어디 있나
 
 **실제 키는 저장소 루트 `.env` 의 `WEBTOON_API_KEY`(OpenAI) 하나뿐입니다.**
