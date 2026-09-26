@@ -6,7 +6,7 @@ import {
   type RunCard,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
-import { track } from "../../lib/track";
+import { labelToken, track } from "../../lib/track";
 import { louArt } from "../../lib/louArt";
 import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
@@ -112,9 +112,10 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   const noneAtAll = !!runs && runs.length === 0;
   const noneMatch = !!shown && !noneAtAll && shown.length === 0;
 
-  const chip = (key: string, label: string, kind: string) => (
+  /* `value` 는 장르·그림체 칩에서 무엇을 골랐는지 — 기록에는 영문 기호로 남긴다(labelToken). */
+  const chip = (key: string, label: string, kind: string, value?: string) => (
     <button key={key} type="button" className={`chip${filter === key ? " on" : ""}`}
-            onClick={() => { track("works_filter", { filter: kind }); setFilter(key); }}>{label}</button>
+            onClick={() => { track("works_filter", { filter: kind, target: value ? labelToken(value) : undefined }); setFilter(key); }}>{label}</button>
   );
 
   const chips = (
@@ -122,8 +123,8 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
       <button type="button" className={`chip${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>{t("전체")}</button>
       {chip("mine", t("내 작품"), "mine")}
       {authenticated && chip("liked", t("찜"), "liked")}
-      {genres.map((g) => chip(g, t(g), "genre"))}
-      {styles.map((s) => chip(`style:${s}`, t(s), "style"))}
+      {genres.map((g) => chip(g, t(g), "genre", g))}
+      {styles.map((s) => chip(`style:${s}`, t(s), "style", s))}
       <button type="button" className="chip wt-works-sort" onClick={() => setNewest((v) => !v)}
               aria-label={newest ? t("최신순 — 누르면 오래된순") : t("오래된순 — 누르면 최신순")}>
         {newest ? t("최신순") : t("오래된순")} <IconChevronDown size={14} />

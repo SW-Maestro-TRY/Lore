@@ -60,6 +60,11 @@ function lookup(lang: Lang, src: string): string {
   return src;
 }
 
+/** 영문 번역. 행동 기록(track)은 한글 값을 버리므로 화면 이름을 기호로 바꿀 때 쓴다. 없으면 원문. */
+export function englishOf(src: string): string {
+  return lookup("en", src);
+}
+
 function fill(text: string, vars?: Record<string, string | number>): string {
   if (!vars) return text;
   return text.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
