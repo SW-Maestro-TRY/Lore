@@ -385,8 +385,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       {/* 다음 편은 아직 없다. 눌렀을 때 줄 끝에 문구만 붙이면 화면 밖이라
           못 보고 다시 누르게 된다 — 가운데에 띄워 한 번에 읽히게 한다. */}
       {nextNote && (
-        <div className="wt-result-soon" onClick={() => setNextNote(false)}>
-          <div className="wt-result-soonbox" role="dialog" aria-modal="true"
+        <div className="modal" onClick={() => setNextNote(false)}>
+          <div className="modal-box wt-result-soonbox" role="dialog" aria-modal="true"
                aria-labelledby="wt-soon-title" onClick={(e) => e.stopPropagation()}>
             <h2 id="wt-soon-title">{t("아직 다음화 기능은 준비 중이에요!")}</h2>
             <button type="button" className="btn btn-p" autoFocus onClick={() => setNextNote(false)}>

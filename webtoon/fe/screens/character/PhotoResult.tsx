@@ -332,8 +332,8 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       )}
 
       {survey && (
-        <div className="wt-ch-survey" onClick={() => setSurvey(null)}>
-          <div className="wt-ch-survey-box" role="dialog" aria-modal="true"
+        <div className="modal" onClick={() => setSurvey(null)}>
+          <div className="modal-box wt-ch-survey-box" role="dialog" aria-modal="true"
                aria-labelledby="wt-ch-survey-title" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="icon-btn wt-ch-survey-x" aria-label={t("닫기")}
                     onClick={() => setSurvey(null)}><IconClose size={18} /></button>

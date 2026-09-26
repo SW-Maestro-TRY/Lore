@@ -69,11 +69,40 @@
     radial-gradient(100% 80% at 92% 4%, #ffe6d2 0%, rgba(255, 230, 210, 0) 52%),
     radial-gradient(90% 70% at 60% 100%, #ddf3f0 0%, rgba(221, 243, 240, 0) 60%), #f7f4ff;
 
-  /* 폰트. 실제 패밀리는 apps/web/app/layout.tsx 의 next/font 가 --font-* 변수로 심는다.
+  /* 폰트. 파일은 apps/web/app/layout.tsx 가 불러오는 @fontsource 패키지가 주고,
+   * 패밀리 이름은 apps/web/app/fonts.css 가 --font-* 변수로 연결한다.
    * var() 두 번째 인자는 그 변수가 없는 환경(스토리북 등)을 위한 폴백이다. */
   --font-display: var(--font-archivo, "Archivo"), system-ui, sans-serif;
   --font-ko: var(--font-noto-sans-kr, "Noto Sans KR"), system-ui, sans-serif;
   --font-mono: var(--font-ibm-plex-mono, "IBM Plex Mono"), ui-monospace, monospace;
+
+  /* 글자 크기 단계. 화면들이 이미 쓰던 px 값(웹툰 화면 CSS 기준 11~40px)을 모아
+   * 가장 가까운 단계로 묶은 것이다. 반 픽셀 값(12.5 · 13.5 · 14.5 등)은 아래 단계로
+   * 내려 붙인다 — 폭이 늘어 줄바꿈이 새로 생기는 일을 막으려고. 새 화면은 px 를
+   * 직접 쓰지 말고 이 단계에서 고른다. */
+  --fs-2xs: 11px;   /* 딱지 · 작은 머리글 */
+  --fs-xs: 12px;    /* 보조 설명 · 태그 */
+  --fs-sm: 13px;    /* 안내문 · 메타 정보 */
+  --fs-md: 14px;    /* 목록 · 작은 단추 · 라벨 */
+  --fs-base: 15px;  /* 본문 · 입력창 */
+  --fs-lg: 16px;    /* 큰 단추 · 강조 본문 */
+  --fs-xl: 18px;    /* 창 제목 · 작은 소제목 */
+  --fs-2xl: 22px;   /* 카드 제목 · 소제목 */
+  --fs-3xl: 26px;   /* 화면 제목 */
+  --fs-4xl: 32px;   /* 큰 화면 제목 */
+  --fs-5xl: 40px;   /* 랜딩 머리 문구 */
+
+  /* 행간 */
+  --lh-tight: 1.2;    /* 한 줄 제목 */
+  --lh-snug: 1.35;    /* 여러 줄 제목 · 말풍선 */
+  --lh-normal: 1.5;   /* 짧은 안내문 */
+  --lh-relaxed: 1.6;  /* 본문 · 입력창 */
+
+  /* 자간 */
+  --ls-tight: -0.02em;  /* 제목 */
+  --ls-normal: 0;
+  --ls-wide: 0.04em;    /* 작은 머리글 */
+  --ls-caps: 0.06em;    /* 숫자 · 영문 머리글 */
 
   /* 레이아웃 상수 */
   --container: 1240px;
