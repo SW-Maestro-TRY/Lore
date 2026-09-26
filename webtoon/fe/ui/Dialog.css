@@ -14,8 +14,3 @@
 .wt .wt-dialog-err { color: var(--gold); font-size: 12.5px; margin: 0; }
 .wt .wt-dialog-actions { display: flex; gap: 8px; margin-top: 10px; }
 .wt .wt-dialog-actions .btn { flex: 1; height: 46px; font-size: 14px; }
-
-/* 카드의 지우기 — 편집실 단추(30px)와 같은 높이의 작은 아이콘 (마이페이지 · 둘러보기 공용) */
-.wt .wt-card-del { width: 30px; height: 30px; color: var(--muted); flex-shrink: 0; }
-.wt .wt-card-del:hover { color: var(--ink); }
-.wt .wt-card-del:disabled { opacity: .5; cursor: progress; }
