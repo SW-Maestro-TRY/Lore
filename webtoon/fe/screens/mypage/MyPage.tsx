@@ -29,7 +29,8 @@ import type { Go } from "../../lib/nav";
 import RunStrip from "../../ui/RunStrip";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
-import { IconUser } from "../../ui/Icons";
+import { IconTrash, IconUser } from "../../ui/Icons";
+import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
 import "./MyPage.css";
 
@@ -55,8 +56,12 @@ registerDict({
   "탈퇴": { en: "Delete account", ja: "退会", zh: "注销" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   "지우기": { en: "Delete", ja: "削除", zh: "删除" },
-  "휴지통으로 옮길까요? {n}일 안에는 되살릴 수 있어요.": { en: "Move to trash? You can restore it within {n} days.", ja: "ゴミ箱に移しますか？{n}日以内なら元に戻せます。", zh: "移到回收站吗？{n} 天内可以恢复。" },
   "휴지통": { en: "Trash", ja: "ゴミ箱", zh: "回收站" },
+  "휴지통 열기": { en: "Open trash", ja: "ゴミ箱を開く", zh: "打开回收站" },
+  "휴지통으로 옮길까요?": { en: "Move to trash?", ja: "ゴミ箱に移しますか？", zh: "移到回收站吗？" },
+  "{n}일 안에는 휴지통에서 되살릴 수 있어요.": { en: "You can restore it from the trash within {n} days.", ja: "{n}日以内ならゴミ箱から元に戻せます。", zh: "{n} 天内可以从回收站恢复。" },
+  "휴지통이 비어 있어요.": { en: "The trash is empty.", ja: "ゴミ箱は空です。", zh: "回收站是空的。" },
+  "닫기": { en: "Close", ja: "閉じる", zh: "关闭" },
   "지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.": { en: "Deleted webtoons stay here for {n} days, then are removed for good.", ja: "削除した作品は{n}日間ここに残り、その後完全に削除されます。", zh: "删除的漫画会在这里保留 {n} 天，之后永久删除。" },
   "{n}일 뒤 영구 삭제": { en: "Deleted for good in {n} days", ja: "{n}日後に完全削除", zh: "{n} 天后永久删除" },
   "오늘 영구 삭제": { en: "Deleted for good today", ja: "本日完全削除", zh: "今天永久删除" },
@@ -169,6 +174,7 @@ export default function MyPage({ go }: { go: Go }) {
      로그인한 사람만 되므로 휴지통도 로그인했을 때만 읽는다. */
   const [trash, setTrash] = useState<TrashCard[]>([]);
   const [keepDays, setKeepDays] = useState(30);
+  const [trashOpen, setTrashOpen] = useState(false);
   const loadTrash = useCallback(async () => {
     if (!isAuthenticated) { setTrash([]); return; }
     try {
@@ -290,7 +296,18 @@ export default function MyPage({ go }: { go: Go }) {
           <>
             <div className="wt-my-head">
               <div>
-                <h2>{t("내 웹툰")}</h2>
+                <div className="wt-my-titlerow">
+                  <h2>{t("내 웹툰")}</h2>
+                  {/* 휴지통(#157) — 목록은 창으로 따로 연다. 지우기가 로그인해야 되니 휴지통도 그때만. */}
+                  {isAuthenticated && (
+                    <button type="button" className="icon-btn wt-my-trashbtn" aria-label={t("휴지통 열기")}
+                            title={t("휴지통")}
+                            onClick={() => { void loadTrash(); setTrashOpen(true); track("trash_open", { where: "mypage" }); }}>
+                      <IconTrash size={17} />
+                      {trash.length > 0 && <span className="wt-my-trashcount">{trash.length}</span>}
+                    </button>
+                  )}
+                </div>
                 <span className="muted">
                   {hidden > 0
                     ? t("{n}편 · 나만 보기 {m}", { n: runs.length, m: hidden })
@@ -333,17 +350,23 @@ export default function MyPage({ go }: { go: Go }) {
               </div>
             )}
 
-            {isAuthenticated && trash.length > 0 && (
-              <div className="wt-my-trash">
-                <div className="wt-my-trash-head">
-                  <b>{t("휴지통")}</b>
-                  <span className="muted">{t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}</span>
+            {trashOpen && (
+              <Dialog title={t("휴지통")} wide onClose={() => setTrashOpen(false)}
+                      sub={t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}>
+                {trash.length === 0 ? (
+                  <p className="wt-my-trashempty muted">{t("휴지통이 비어 있어요.")}</p>
+                ) : (
+                  <div className="wt-my-trash">
+                    {trash.map((r) => (
+                      <TrashRow key={r.run_id} run={r}
+                                onRestored={() => { void loadRuns(); void loadTrash(); }} />
+                    ))}
+                  </div>
+                )}
+                <div className="wt-dialog-actions">
+                  <button type="button" className="btn btn-w" onClick={() => setTrashOpen(false)}>{t("닫기")}</button>
                 </div>
-                {trash.map((r) => (
-                  <TrashRow key={r.run_id} run={r}
-                            onRestored={() => { void loadRuns(); void loadTrash(); }} />
-                ))}
-              </div>
+              </Dialog>
             )}
 
             {recent.length > 0 && (
@@ -492,7 +515,6 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
     } catch (e) {
       setErr((e as Error).message || t("지우지 못했습니다"));
       setBusy(false);
-      setConfirming(false);
     }
   };
 
@@ -535,19 +557,19 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
                   aria-label={t("둘러보기에 공개")} disabled={busy} onClick={() => void flip()}><i /></button>
           {pub ? t("공개") : t("비공개")}
         </span>
-        <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
-          {t("편집실")}
-        </button>
-        {!confirming && (
-          <button type="button" className="btn btn-w wt-my-del" disabled={busy} onClick={() => setConfirming(true)}>{t("지우기")}</button>
-        )}
+        <span className="wt-my-workacts">
+          <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
+            {t("편집실")}
+          </button>
+          <button type="button" className="icon-btn wt-card-del" aria-label={t("지우기")} title={t("지우기")}
+                  disabled={busy} onClick={() => setConfirming(true)}><IconTrash size={15} /></button>
+        </span>
       </div>
       {confirming && (
-        <div className="wt-my-delconfirm">
-          <span className="muted">{t("휴지통으로 옮길까요? {n}일 안에는 되살릴 수 있어요.", { n: keepDays })}</span>
-          <button type="button" className="btn btn-p" disabled={busy} onClick={() => void remove()}>{t("지우기")}</button>
-          <button type="button" className="btn btn-w" disabled={busy} onClick={() => setConfirming(false)}>{t("취소")}</button>
-        </div>
+        <ConfirmDialog title={t("휴지통으로 옮길까요?")}
+                       sub={<><b>{run.title || t("제목 없음")}</b><br />{t("{n}일 안에는 휴지통에서 되살릴 수 있어요.", { n: keepDays })}</>}
+                       confirmLabel={t("지우기")} cancelLabel={t("취소")} busy={busy}
+                       error={err} onConfirm={() => void remove()} onClose={() => { setConfirming(false); setErr(""); }} />
       )}
       {err && <span className="wt-my-err">{err}</span>}
     </div>
