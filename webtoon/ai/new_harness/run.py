@@ -155,6 +155,30 @@ def gate_input(char: dict) -> list[str]:
     return bad
 
 
+# 사용자가 적은 설명을 어떻게 쓰는가 — 설명이 있을 때만 그 바로 아래에 붙는다(#458).
+#
+# 모모를 「장난치는 걸 좋아한다」 한 줄로 돌렸더니, 후보 넷 중 둘이 장난 때문에
+# 사건이 터지는 이야기(장난으로 쓴 동의서가 왕실 계약서가 된다)였고, 하나는
+# 방향별 축(전문가 · 냉소)을 따라 「냉소적인 전문가」가 됐다(2026-09-27).
+# 사용자 지시: 설명에 없는 성격은 절대 붙이지 않는다. 그리고 「이름만 바꿔
+# 다른 캐릭터를 넣어도 성립하면」 그 인물이 살아 움직이는 게 아니다 — 장난치다
+# 금지 소환진을 터뜨린 후보처럼, 성격이 이야기의 문제를 만들어야 그 인물로
+# 읽힌다(사용자 판정). 0921 멘토링대로 수단(장면 수 등)이 아니라 판정 기준을 적는다.
+TRAIT_RULES = [
+    "## 이 인물의 성격은 위 설명이 전부다",
+    "",
+    "- 위 설명(과 고른 캐릭터 카드)에 없는 성격·말투·버릇·과거를 붙이지 않는다. "
+    "설명이 짧으면 짧은 대로 둔다. 빈 곳을 성격 형용사로 채우지 마라.",
+    "- 방향별 값(톤·주인공 위치·모순 등)은 이야기의 판과 처지에 건다. 그 값을 "
+    "주인공의 성격으로 옮기지 않는다.",
+    "- 설명에 적힌 성격은 이야기의 문제나 긴장을 만드는 데 쓴다 — 그 성격 때문에 "
+    "일이 벌어지거나, 놓인 자리와 어긋나서 긴장이 생기거나, 약점이 위기가 된다. "
+    "성격을 보여 주는 장면을 늘어놓는 것만으로는 안 된다.",
+    "- 판정: 주인공의 이름과 설명을 다른 인물로 바꿔 넣으면 이 이야기가 무너지는가? "
+    "무너지지 않으면 이 인물의 이야기가 아니다.",
+]
+
+
 def input_block(char: dict, *, with_genre: bool = True) -> str:
     """프롬프트 뒤에 붙는 이번 입력."""
     lines = ["# 이번 입력", "", f"캐릭터 이름: {char['name']}"]
@@ -178,6 +202,7 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
             lines.append(char["description"])
         for k, v in char["fields"].items():
             lines.append(f"- {k}: {v}")
+        lines += ["", *TRAIT_RULES]
     else:
         lines += ["", "설명: (없음 — 네가 정한다)"]
 
@@ -613,6 +638,14 @@ def axes_enabled() -> bool:
     return str(llm.env("NH_STORY_AXES") or "1").strip().lower() in ("1", "on", "true", "yes")
 
 
+TRAIT_AXIS = "주인공_모순"
+
+
+def has_character_traits(char: dict) -> bool:
+    """사용자가 성격을 정할 거리를 줬는가 — 설명 · 항목 · 고른 카드 중 하나라도."""
+    return bool(char.get("description") or char.get("fields") or char.get("card"))
+
+
 def story_variety_block(run_dir: Path, char: dict) -> str:
     """방향별 압력 — 그리고 (켜져 있으면) 이야기 변수 · 회차 구조.
 
@@ -640,6 +673,14 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
                     "엔진_사용": engines_enabled(),
                     "방향별_축": axes_list, "방향별_구조": structures,
                     "방향별_엔진": engines})
+    # 사용자가 캐릭터 설명(또는 카드)을 넣었으면 「주인공 모순」은 프롬프트에 안
+    # 박는다(#458). 이 축의 값은 처지가 아니라 속마음 — "가까워지는 것이 두려워서
+    # 먼저 멀어진다" 같은 성격 묘사 그 자체라서, "성격으로 옮기지 마라"라고 적어도
+    # 모델이 그대로 주인공의 성격으로 썼다(2026-09-27 모모 run). 사용자 지시:
+    # 설명에 없는 성격은 절대 붙이지 않는다. 설명이 없으면 모델이 성격을 정해야
+    # 하니 그대로 둔다. 무엇이 배정됐는지는 위 axes.json 에 그대로 남는다.
+    if has_character_traits(char):
+        axes_list = [{k: v for k, v in one.items() if k != TRAIT_AXIS} for one in axes_list]
     for i in range(max(len(axes_list), len(structures), len(engines))):
         bits = []
         if i < len(engines):
@@ -683,6 +724,9 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
         parts += ["", "이야기 변수는 인물이 어디에 서서 무엇과 부딪히는지를, 회차 "
                   "구조는 그것을 어떤 순서로 보여줄지를 정한다. 그 '어디'와 '무엇'은 "
                   "이 세계의 것이어야 한다 — 값과 세계는 따로가 아니다."]
+    parts += ["", "**값은 판과 처지에 건다. 주인공의 성격으로 옮기지 않는다.** 톤은 "
+              "이야기의 분위기이고, 주인공 위치와 모순은 주인공이 놓인 처지다. "
+              "주인공이 어떤 사람인지는 사용자가 적은 설명만 정한다."]
     for i in range(count):
         parts += ["", f"### 방향 {i + 1}", ""]
         for txt in (_engine_block(engines[i]) if i < len(engines) else "",
