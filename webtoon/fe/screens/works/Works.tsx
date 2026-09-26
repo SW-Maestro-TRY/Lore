@@ -2,15 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, isMyRun, likedAmong, myAccountRuns, recentRuns, setVisibility, trashKeepDays,
+  browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, recentRuns, setVisibility,
   type RunCard,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { labelToken, track } from "../../lib/track";
 import { louArt } from "../../lib/louArt";
 import type { Go } from "../../lib/nav";
-import { IconChevronDown, IconTrash } from "../../ui/Icons";
-import { ConfirmDialog } from "../../ui/Dialog";
+import { IconChevronDown } from "../../ui/Icons";
 import LikeButton from "../../ui/LikeButton";
 import RunStrip from "../../ui/RunStrip";
 import "./i18n";
@@ -209,8 +208,7 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
             {shown.map((r) => (
               <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated}
                         liked={likedIds.has(r.run_id)}
-                        onLiked={(on) => setLikedIds((was) => { const next = new Set(was); if (on) next.add(r.run_id); else next.delete(r.run_id); return next; })}
-                        onDeleted={() => setRuns((list) => (list ? list.filter((x) => x.run_id !== r.run_id) : list))} />
+                        onLiked={(on) => setLikedIds((was) => { const next = new Set(was); if (on) next.add(r.run_id); else next.delete(r.run_id); return next; })} />
             ))}
           </div>
         )}
@@ -219,9 +217,10 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   );
 }
 
-function WorkCard({ run, mine, go, authenticated, liked, onLiked, onDeleted }: {
+/* 지우기는 둘러보기에 두지 않는다 — 내 작품을 지우는 곳은 마이페이지 하나(#157). */
+function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
   run: RunCard; mine: boolean; go: Go; authenticated: boolean;
-  liked: boolean; onLiked: (on: boolean) => void; onDeleted: () => void;
+  liked: boolean; onLiked: (on: boolean) => void;
 }) {
   const t = useT();
   const eps = run.episodes || [];
@@ -232,27 +231,6 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, onDeleted }: {
     go("result", { run: run.run_id });
   };
 
-  /* 지우기(#55) — 내 작품이고 로그인했을 때만. 두 번 눌러야 된다. 지우면 휴지통으로
-     가고(#157), 확인 문구의 날 수는 서버 값을 읽는다. */
-  const [confirming, setConfirming] = useState(false);
-  const [keepDays, setKeepDays] = useState(30);
-  useEffect(() => {
-    if (confirming) void trashKeepDays().then(setKeepDays);
-  }, [confirming]);
-  const [delBusy, setDelBusy] = useState(false);
-  const remove = async () => {
-    setDelBusy(true);
-    setErr("");
-    try {
-      await deleteRun(run.run_id);
-      forgetMyRun(run.run_id);
-      track("run_delete", { run: run.run_id, where: "works" });
-      onDeleted();
-    } catch (e) {
-      setErr((e as Error).message || t("지우지 못했습니다"));
-      setDelBusy(false);
-    }
-  };
   const sub = [run.character, ...new Set([run.genre, run.style_label].filter((s): s is string => !!s).map((s) => t(s)))].filter(Boolean).join(" · ");
 
   /* 공개 스위치 — 서버에 먼저 보내고, 실패하면 되돌린다. */
@@ -303,23 +281,13 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, onDeleted }: {
             </div>
           )}
           {mine && authenticated && (
-            <span className="wt-works-mine">
-              <span className="wt-works-pub">
-                <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
-                        aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
-                {pub ? t("공개") : t("비공개")}
-              </span>
-              <button type="button" className="icon-btn wt-card-del" aria-label={t("지우기")} title={t("지우기")}
-                      disabled={delBusy} onClick={() => setConfirming(true)}><IconTrash size={15} /></button>
+            <span className="wt-works-pub">
+              <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
+                      aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
+              {pub ? t("공개") : t("비공개")}
             </span>
           )}
         </div>
-        {confirming && (
-          <ConfirmDialog title={t("휴지통으로 옮길까요?")}
-                         sub={<><b>{run.title || t("제목 없음")}</b><br />{t("{n}일 안에는 마이페이지 휴지통에서 되살릴 수 있어요.", { n: keepDays })}</>}
-                         confirmLabel={t("지우기")} cancelLabel={t("취소")} busy={delBusy}
-                         error={err} onConfirm={() => void remove()} onClose={() => { setConfirming(false); setErr(""); }} />
-        )}
         {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
       </div>
     </div>

@@ -570,14 +570,3 @@ export interface FeedbackTag {
 export function readConfig(): Promise<{ feedback_tags: Record<string, FeedbackTag[]>; trash_keep_days?: number }> {
   return call("/config");
 }
-
-/* 지우기 확인 문구의 「N일 안에 되살릴 수 있어요」 — 서버 값(#157). 한 번 읽으면 둔다. */
-let trashDays: Promise<number> | null = null;
-export function trashKeepDays(): Promise<number> {
-  if (!trashDays) {
-    trashDays = readConfig()
-      .then((c) => c.trash_keep_days ?? 30)
-      .catch(() => { trashDays = null; return 30; });
-  }
-  return trashDays;
-}
