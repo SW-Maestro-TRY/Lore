@@ -9,7 +9,8 @@ import { useT } from "../../lib/i18n";
 import { labelToken, track } from "../../lib/track";
 import { louArt } from "../../lib/louArt";
 import type { Go } from "../../lib/nav";
-import { IconChevronDown } from "../../ui/Icons";
+import { IconChevronDown, IconTrash } from "../../ui/Icons";
+import { ConfirmDialog } from "../../ui/Dialog";
 import LikeButton from "../../ui/LikeButton";
 import RunStrip from "../../ui/RunStrip";
 import "./i18n";
@@ -250,7 +251,6 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, onDeleted }: {
     } catch (e) {
       setErr((e as Error).message || t("지우지 못했습니다"));
       setDelBusy(false);
-      setConfirming(false);
     }
   };
   const sub = [run.character, ...new Set([run.genre, run.style_label].filter((s): s is string => !!s).map((s) => t(s)))].filter(Boolean).join(" · ");
@@ -303,23 +303,22 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, onDeleted }: {
             </div>
           )}
           {mine && authenticated && (
-            <span className="wt-works-pub">
-              <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
-                      aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
-              {pub ? t("공개") : t("비공개")}
+            <span className="wt-works-mine">
+              <span className="wt-works-pub">
+                <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
+                        aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
+                {pub ? t("공개") : t("비공개")}
+              </span>
+              <button type="button" className="icon-btn wt-card-del" aria-label={t("지우기")} title={t("지우기")}
+                      disabled={delBusy} onClick={() => setConfirming(true)}><IconTrash size={15} /></button>
             </span>
           )}
         </div>
-        {mine && authenticated && (
-          confirming ? (
-            <div className="wt-works-delconfirm">
-              <span className="muted">{t("휴지통으로 옮길까요? {n}일 안에는 마이페이지에서 되살릴 수 있어요.", { n: keepDays })}</span>
-              <button type="button" className="btn btn-p btn-sm" disabled={delBusy} onClick={() => void remove()}>{t("지우기")}</button>
-              <button type="button" className="btn btn-w btn-sm" disabled={delBusy} onClick={() => setConfirming(false)}>{t("취소")}</button>
-            </div>
-          ) : (
-            <button type="button" className="btn btn-w btn-sm wt-works-del" disabled={delBusy} onClick={() => setConfirming(true)}>{t("지우기")}</button>
-          )
+        {confirming && (
+          <ConfirmDialog title={t("휴지통으로 옮길까요?")}
+                         sub={<><b>{run.title || t("제목 없음")}</b><br />{t("{n}일 안에는 마이페이지 휴지통에서 되살릴 수 있어요.", { n: keepDays })}</>}
+                         confirmLabel={t("지우기")} cancelLabel={t("취소")} busy={delBusy}
+                         error={err} onConfirm={() => void remove()} onClose={() => { setConfirming(false); setErr(""); }} />
         )}
         {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
       </div>
