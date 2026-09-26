@@ -3,6 +3,7 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "최근 본 웹툰": { en: "Recently read", ja: "最近読んだ作品", zh: "最近看过" },
   /* ---- 히어로 ---- */
   "만들던 웹툰": { en: "Webtoon in progress", ja: "作りかけのウェブトゥーン", zh: "正在制作的漫画" },
   "{done} / {total}장": { en: "{done} / {total} pages", ja: "{done} / {total}枚", zh: "{done} / {total} 页" },

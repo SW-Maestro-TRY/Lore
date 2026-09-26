@@ -6,13 +6,14 @@
 import "./i18n";
 import Link from "next/link";
 import localFont from "next/font/local";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CONTACT_CHANNEL } from "@common/links";
 import * as api from "../../lib/api";
 import { LangSwitch, useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
 import { IconArrow, IconDownload, IconEdit, IconPlus, IconRetry, IconShare, IconUser } from "../../ui/Icons";
 import EditorMock, { CUT_IMG, PAGE_IMG, SHEET_IMG } from "./EditorMock";
+import RunStrip from "../../ui/RunStrip";
 
 /* 글꼴 시험 (2026-09-19, 온보딩 화면에만) — 제목은 Gmarket Sans, 나머지는
  * SUIT. 다른 화면(위자드·편집실 등)은 그대로 Noto Sans KR 이다 — 이 두 훅이
@@ -108,6 +109,12 @@ export default function Landing({ go }: { go: Go }) {
   /* 예시 작품 띠 */
   const [runs, setRuns] = useState<api.RunCard[] | null>(null);
   const [runsErr, setRunsErr] = useState("");
+  /* 이어보기(#246) — 이 브라우저에서 최근 본 작품. 둘러보기·마이페이지의 「최근 본 웹툰」 줄과 같다. */
+  const recent = useMemo(() => {
+    if (!runs) return [];
+    const byId = new Map(runs.map((r) => [r.run_id, r]));
+    return api.recentRuns().map((id) => byId.get(id)).filter((r): r is api.RunCard => !!r).slice(0, 10);
+  }, [runs]);
   const [tries, setTries] = useState(0);
   useEffect(() => {
     let alive = true;
@@ -150,8 +157,14 @@ export default function Landing({ go }: { go: Go }) {
         <button type="button" className="btn btn-p wt-landing-cta" onClick={start("hero")}>{t("지금 시작하기")}</button>
       </section>
 
-      {/* 예시 작품 띠 */}
+      {/* 예시 작품 띠 — 본 작품이 있으면 그 위에 「최근 본 웹툰」 한 줄(#246) */}
       <section className="wt-landing-works">
+        {recent.length > 0 && (
+          <div className="wt-landing-recent">
+            <RunStrip title={t("최근 본 웹툰")} runs={recent}
+                      onOpen={(r) => { track("recent_open", { run: r.run_id, where: "landing" }); go("result", { run: r.run_id }); }} />
+          </div>
+        )}
         <div className="wt-landing-works-head">
           <button type="button" className="btn btn-w btn-sm wt-landing-works-all" onClick={() => { track("landing_cta", { where: "works_all" }); go("works"); }}>
             {t("웹툰 전체 보러가기")}
