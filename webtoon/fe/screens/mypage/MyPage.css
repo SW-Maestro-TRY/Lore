@@ -55,15 +55,7 @@
 .wt .wt-my-workacts { display: inline-flex; align-items: center; gap: 6px; }
 .wt .wt-my-err { font-size: 11.5px; color: var(--gold); }
 
-/* 휴지통(#157) — 제목 옆 아이콘, 목록은 창(ui/Dialog) 안 */
-.wt .wt-my-titlerow { display: flex; align-items: center; gap: 10px; }
-.wt .wt-my-trashbtn { position: relative; color: var(--muted); }
-.wt .wt-my-trashbtn:hover { color: var(--ink); }
-.wt .wt-my-trashcount {
-  position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px;
-  border-radius: 999px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 700;
-  display: inline-flex; align-items: center; justify-content: center;
-}
+/* 휴지통(#157) — 사이드바 「휴지통」 메뉴로 여는 창(ui/Dialog) 안 */
 .wt .wt-my-trash { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .wt .wt-my-trashempty { font-size: 13px; padding: 18px 0; text-align: center; }
 .wt .wt-my-trashrow {
