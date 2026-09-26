@@ -171,8 +171,6 @@ TRAIT_RULES = [
     "",
     "- 위 설명(과 고른 캐릭터 카드)에 없는 성격·말투·버릇·과거를 붙이지 않는다. "
     "설명이 짧으면 짧은 대로 둔다. 빈 곳을 성격 형용사로 채우지 마라.",
-    "- 방향별 값(톤·주인공 위치·모순 등)은 이야기의 판과 처지에 건다. 그 값을 "
-    "주인공의 성격으로 옮기지 않는다.",
     "- 판(세계·소재·중심 사건)은 성격 없이도 그 장르에서 재미있게 서 있어야 한다. "
     "성격 낱말로 세계·소재·제목을 짓지 마라 — 판을 성격에 맞추면 재미도 사건도 사라진다.",
     "- 그 판에서 적힌 성격 때문에 일이 다르게 터지거나 꼬이거나 풀린다. 판정: 주인공을 "
@@ -639,9 +637,6 @@ def axes_enabled() -> bool:
     return str(llm.env("NH_STORY_AXES") or "1").strip().lower() in ("1", "on", "true", "yes")
 
 
-TRAIT_AXIS = "주인공_모순"
-
-
 def has_character_traits(char: dict) -> bool:
     """사용자가 성격을 정할 거리를 줬는가 — 설명 · 항목 · 고른 카드 중 하나라도."""
     return bool(char.get("description") or char.get("fields") or char.get("card"))
@@ -663,7 +658,14 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     나중에 다시 켤 때 이어지고, 무엇이 뽑혔는지 비교할 수 있다.
     """
     axes, structure, fresh = samples.pick_fresh(char["genre"], runs_dir=RUNS_DIR)
-    use_axes = axes_enabled()
+    # 사용자가 캐릭터 설명(또는 카드)을 한 줄이라도 넣었으면 축·구조를 안 박는다
+    # (#458). 모모(「장난치는 걸 좋아한다」)로 같은 프롬프트를 축 켬/끔으로 돌려
+    # 보니, 켜면 축 이름과 그 값을 풀어 쓴 추상어가 소개에 새고(「외부자」, 「악의는
+    # 없지만 미묘하게 어긋난다」) 여섯 판 내내 비슷한 판(대역 공주)이 반복됐다.
+    # 끄면 두 번 다 소개가 바로 읽히고 장르가 넷으로 갈렸다(2026-09-27, 각 1~2회).
+    # 줄거리를 적은 경우는 이미 이 블록을 안 거친다(stage_story). 사진만 있을 때는
+    # 그대로 켠다. 무엇이 뽑혔는지는 axes.json 에 그대로 남긴다.
+    use_axes = axes_enabled() and not has_character_traits(char)
     axes_list = _distinct_axes(char["genre"], axes) if (axes and use_axes) else []
     structures = _distinct_structures(char["genre"], structure) if (structure and use_axes) else []
     engines = _pick_engines()
@@ -674,14 +676,6 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
                     "엔진_사용": engines_enabled(),
                     "방향별_축": axes_list, "방향별_구조": structures,
                     "방향별_엔진": engines})
-    # 사용자가 캐릭터 설명(또는 카드)을 넣었으면 「주인공 모순」은 프롬프트에 안
-    # 박는다(#458). 이 축의 값은 처지가 아니라 속마음 — "가까워지는 것이 두려워서
-    # 먼저 멀어진다" 같은 성격 묘사 그 자체라서, "성격으로 옮기지 마라"라고 적어도
-    # 모델이 그대로 주인공의 성격으로 썼다(2026-09-27 모모 run). 사용자 지시:
-    # 설명에 없는 성격은 절대 붙이지 않는다. 설명이 없으면 모델이 성격을 정해야
-    # 하니 그대로 둔다. 무엇이 배정됐는지는 위 axes.json 에 그대로 남는다.
-    if has_character_traits(char):
-        axes_list = [{k: v for k, v in one.items() if k != TRAIT_AXIS} for one in axes_list]
     for i in range(max(len(axes_list), len(structures), len(engines))):
         bits = []
         if i < len(engines):
