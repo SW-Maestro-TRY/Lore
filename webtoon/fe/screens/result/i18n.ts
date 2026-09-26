@@ -27,7 +27,6 @@ const dict: Dict = {
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   "저장하지 못했습니다": { en: "Couldn't save.", ja: "保存できませんでした", zh: "无法保存" },
   "제목 고치기": { en: "Edit title", ja: "タイトルを直す", zh: "修改标题" },
-  "줄거리 고치기": { en: "Edit synopsis", ja: "あらすじを直す", zh: "修改剧情简介" },
   "다음 편 만들기": { en: "Make the next episode", ja: "次の話を作る", zh: "制作下一话" },
   "편집실": { en: "Editor", ja: "編集室", zh: "编辑室" },
   "내려받기": { en: "Download", ja: "ダウンロード", zh: "下载" },

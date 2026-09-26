@@ -131,7 +131,7 @@ public class StoryStore {
     @Transactional
     public String editTitle(String runId, String title) {
         WebtoonStory chosen = stories.findByRunIdAndChosenTrue(runId).orElseThrow();
-        String clean = title == null ? "" : String.join(" ", title.trim().split("\s+"));
+        String clean = title == null ? "" : String.join(" ", title.trim().split("\\s+"));
         chosen.editTitle(clean.isBlank() ? null : clean.substring(0, Math.min(60, clean.length())));
         stories.save(chosen);
         return chosen.displayTitle();
