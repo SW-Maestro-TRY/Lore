@@ -19,6 +19,8 @@ export default function LikeButton({ runId, liked, count, authenticated, onChang
   const [note, setNote] = useState("");
   const toggle = async () => {
     if (!authenticated) {
+      // 로그인 안 한 사람이 찜하려다 막힌 것도 남긴다 — 로그인할 이유가 생긴 순간이다.
+      track("like_toggle", { run: runId, result: "need_login" });
       setNote(t("로그인하면 찜할 수 있어요"));
       setTimeout(() => setNote(""), 2400);
       return;
