@@ -203,7 +203,7 @@ def seeded_input_block(char: dict) -> str:
     if genre:
         world = world_text_for(genre)
         if world:
-            lines += ["", "## 이 장르의 세계관 — 적힌 이야기와 부딪히지 않는 곳에서만 쓰는 배경",
+            lines += ["", "## 이 세계의 배경 — 적힌 이야기와 부딪히지 않는 곳에서만 쓴다",
                       "", world]
         lines += genre_lore_section(genre)
     lines += ["", "## 사용자가 적은 이야기 — 이 웹툰의 중심", "",
@@ -234,7 +234,7 @@ def story_input_block(char: dict, run_dir: Path | None = None) -> str:
     lines = [block]
     world = world_text_for(genre)
     if world:
-        lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
+        lines += ["", "## 이 세계의 배경 — 이 안에서 무엇이 벌어질지는 정해져 있지 않다", "", world]
     cards = genre_samples_for(genre, run_dir=run_dir)
     if cards:
         lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
@@ -1000,7 +1000,7 @@ def scene_input_block(char: dict, direction: dict) -> str:
                   "일어날 수 있는 장면으로 옮기지 마라."]
         world = world_text_for(genre)
         if world:
-            lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
+            lines += ["", "## 이 세계의 배경 — 이 안에서 무엇이 벌어질지는 정해져 있지 않다", "", world]
         cards = genre_samples_for(genre)
         if cards:
             lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
