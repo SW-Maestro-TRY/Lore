@@ -52,6 +52,7 @@ from pathlib import Path
 import imagegen
 import imageprompt
 import llm
+import charcard
 import pagecheck
 import pages
 import runmeta
@@ -129,6 +130,10 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
     elif char:
         who = (char.get("name") or "").strip()
         desc = (char.get("description") or "").strip()
+        # 고른 캐릭터 카드(#458)의 종·세계를 앞에 둔다 — 원래 설명만 보면
+        # 카드가 바꿔 놓은 종(사람 → 검은여우)을 놓치고 사람으로 그린다.
+        card = charcard.short(char.get("card") or {})
+        desc = f"{card}. {desc}" if card and desc else (card or desc)
         lines.append(f"{who} — {desc}" if desc else who)
         for k, v in (char.get("fields") or {}).items():
             lines.append(f"- {k}: {v}")

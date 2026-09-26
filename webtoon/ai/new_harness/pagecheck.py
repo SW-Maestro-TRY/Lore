@@ -49,6 +49,7 @@ import os
 from pathlib import Path
 
 import llm
+import charcard
 import runmeta
 from llm import story
 
@@ -170,6 +171,8 @@ def people_block(char: dict | None, cast) -> str:
     if char:
         who = _text(char.get("name"))
         desc = _text(char.get("description"))
+        card = charcard.short(char.get("card") or {})     # #458 — detailart 와 같은 한 줄
+        desc = f"{card}. {desc}" if card and desc else (card or desc)
         if who:
             lines.append(f"{who} (주인공) — {desc}" if desc else f"{who} (주인공)")
     for one in cast or []:
