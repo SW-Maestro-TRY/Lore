@@ -103,7 +103,7 @@ public record JobView(
                       String stageLabel, JobQueue.Spot spot,
                       String notifyEmail, Integer minutesLeft) {
         int stageIndex = job.getStage().order();
-        double frac = now.total() > 0 ? (double) now.done() / now.total() : 0.0;
+        double frac = now.total() > 0 ? (double) now.done() / now.total() : timeFrac(job);
         int pct = job.getStatus() == JobStatus.DONE
                 ? 100
                 : (int) Math.round((stageIndex + frac) / JobStage.count() * 100);
@@ -120,7 +120,7 @@ public record JobView(
                 styleLabel,
                 job.getStage().wire(),
                 stageIndex,
-                List.of("story", "sheet", "board", "pages", "bind"),
+                List.of("story", "sheet", "pages", "bind"),
                 stageLabel,
                 now.say(),
                 job.isCheckpoints(),
@@ -139,5 +139,27 @@ public record JobView(
         Instant until = job.getStatus().isOver() ? job.getUpdatedAt() : Instant.now();
         double seconds = (until.toEpochMilli() - job.getCreatedAt().toEpochMilli()) / 1000.0;
         return Math.round(Math.max(0, seconds) * 10) / 10.0;
+    }
+
+    /**
+     * story·sheet·bind 는 하네스를 한 번 통짜로 부르고 끝날 때까지 done/total 을
+     * 셀 지점이 없다({@code JobRunner}). 그래서 실제 세부 진행이 없는 동안 이
+     * 단계 안에서 얼마나 지났는지(초)로 진행률을 대신 채운다 — 값을 앞서 보여줄
+     * 뿐 서버가 아는 진짜 값을 넘지는 않는다(다음 단계로 못 넘어가면 이 단계
+     * 폭의 85% 에서 멈춘다). 표는 실측이 아니라 대략치다 — 표본이 쌓이면
+     * {@code JobQueue.SECONDS} 처럼 실측으로 갈아 끼운다.
+     */
+    private static final Map<JobStage, Double> ASSUMED_STAGE_SECONDS = Map.of(
+            JobStage.STORY, 50.0,
+            JobStage.SHEET, 100.0,
+            JobStage.BIND, 45.0);
+
+    private static double timeFrac(WebtoonJob job) {
+        Double assumed = ASSUMED_STAGE_SECONDS.get(job.getStage());
+        if (assumed == null) {
+            return 0.0;
+        }
+        double sinceStage = (Instant.now().toEpochMilli() - job.getUpdatedAt().toEpochMilli()) / 1000.0;
+        return Math.max(0.0, Math.min(0.85, sinceStage / assumed));
     }
 }
