@@ -56,6 +56,7 @@ import charcard
 import pagecheck
 import pages
 import runmeta
+import lang as lang_mod
 
 HERE = Path(__file__).resolve().parent
 # 작품이 쌓이는 자리.
@@ -227,7 +228,7 @@ def opens_at(scenes: list[dict], scene_no: int) -> str:
 
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
-                          has_prev: bool) -> str:
+                          has_prev: bool, lang: str = "ko") -> str:
     """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
 
     씬 하나 = 이미지 하나. 각 장면 dict 에 이미 「직전 상태」·「끝나는 상태」가
@@ -327,6 +328,7 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
                         "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
                         "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
     return (text
+            .replace("{{LANGUAGE_LINE}}", lang_mod.instruction(lang))
             .replace("{people}", character_block(char, spec, cast))
             .replace("{continuity}", con)
             .replace("{scene}", scene_instr))
@@ -351,7 +353,8 @@ def note_block(note: str) -> str:
 
 def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                   allow_no_sheet: bool = False, on_page=None,
-                  review: bool | None = None, note: str = "") -> list[dict]:
+                  review: bool | None = None, note: str = "",
+                  lang: str = "ko") -> list[dict]:
     """이어그리기 — **지금의 최종 방식.** 구체화(detail.json)·콘티(board.json)·
     컷 대본을 전부 건너뛰고, story 단계(방향 후보) 산출물만으로 그린다.
 
@@ -455,7 +458,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             # "첨부한 직전 그림" 이라고 적으면 없는 그림을 가리키게 된다.
             has_prev = page_path(run_dir, page_no - 1).exists()
             prompt = (build_continue_prompt(direction, scenes, char, spec, cast,
-                                            scene_no=n_, has_prev=has_prev)
+                                            scene_no=n_, has_prev=has_prev, lang=lang)
                       .replace("{style}", imageprompt.load_style(style)))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
