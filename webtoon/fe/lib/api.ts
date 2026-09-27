@@ -593,6 +593,8 @@ export interface SurveyStatus {
   reward: number;
   /** 다시 온 사람 안내를 띄울 차례인가 */
   prompt: boolean;
+  /** 전체 설문에 물을 질문 — 가장 최근에 완성한 작품에 맞춘 것. 완성한 작품이 없으면 빈 목록 */
+  questions: SurveyKey[];
 }
 
 export function mySurveyStatus(): Promise<SurveyStatus> {

@@ -38,4 +38,14 @@
 .wt .wt-survey-opts.multi { flex-direction: column; }
 .wt .wt-survey-opts.multi button { text-align: left; min-height: 42px; border-radius: 12px; }
 .wt .wt-survey-row dl { grid-template-columns: 140px 1fr; }
-.wt .wt-survey-done .btn { align-self: flex-start; }
+.wt .wt-survey-done .btn { height: 46px; }
+.wt .wt-survey-done > span { font-size: 13.5px; color: var(--muted); margin-bottom: -4px; }
+
+/* 보상 표시 */
+.wt .wt-reward {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 14px 16px; border-radius: 16px; background: var(--water-light); border: 1px solid var(--water);
+}
+.wt .wt-reward-amt { font-size: 30px; font-weight: 800; color: var(--sea-deep); letter-spacing: -0.5px; line-height: 1.15; }
+.wt .wt-reward-amt small { font-size: 15px; font-weight: 700; margin-left: 4px; }
+.wt .wt-reward-what { font-size: 13.5px; font-weight: 600; color: var(--ink); }
