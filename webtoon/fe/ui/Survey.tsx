@@ -14,18 +14,19 @@ import { registerDict, useT } from "../lib/i18n";
 import type { SurveyAnswers, SurveyKey, SurveyValue } from "../lib/api";
 import "./Survey.css";
 
-type Kind = "scale" | "choice" | "multi";
+type Kind = "stars" | "scale" | "choice" | "multi";
 interface Question { text: string; kind: Kind; options?: [string, string][] }
 
 const YPN: [string, string][] = [["yes", "예"], ["partly", "일부"], ["no", "아니오"]];
 
 export const SURVEY: Record<SurveyKey, Question> = {
+  S0: { text: "이 웹툰, 전체적으로 얼마나 만족하셨나요?", kind: "stars" },
   S1: { text: "다 읽고 나서 \"이거 내 캐릭터 얘기 맞네\" 싶었나요?", kind: "scale" },
   S2: { text: "첫 장면부터 마지막 장면까지 같은 캐릭터로 보였나요?", kind: "scale" },
   S3: { text: "내가 넣은 설정(이름·세계관·특징)이 그대로 들어갔나요?", kind: "choice", options: YPN },
   S4: { text: "캐릭터가 내가 생각한 성격대로 말하고 행동했나요?", kind: "scale" },
   S5: { text: "내가 적은 이야기가 웹툰에 들어갔나요?", kind: "choice", options: YPN },
-  S6: { text: "캐릭터와 상관없이, 1화 자체가 재미있었나요?", kind: "scale" },
+  S6: { text: "이야기 자체는 재미있었나요?", kind: "scale" },
   S7: { text: "이 캐릭터의 다음 이야기도 보고 싶나요?", kind: "choice", options: [["yes", "예"], ["no", "아니오"]] },
   S8: { text: "다시 만들어 볼 의향이 있으신가요?", kind: "choice", options: [["yes", "있어요"], ["maybe", "모르겠어요"], ["no", "없어요"]] },
   S10: {
@@ -48,9 +49,9 @@ const S7_WHY: [string, string][] = [
 
 /** 관리자 목록에서 기호 옆에 붙이는 짧은 이름. 「아니오」 뒤 추가 답도 여기서 이름을 받는다. */
 export const SURVEY_SHORT: Record<string, string> = {
-  S1: "내 캐릭터 얘기", S2: "같은 캐릭터", S3: "설정 그대로", S3_note: "달라진 점", S4: "성격대로",
+  S0: "만족도", S1: "내 캐릭터 얘기", S2: "같은 캐릭터", S3: "설정 그대로", S3_note: "달라진 점", S4: "성격대로",
   S5: "적은 이야기", S6: "1화 재미", S7: "다음 이야기", S7_why: "안 보고 싶은 이유", S7_note: "그 밖의 이유",
-  S8: "다시 만들 의향", S10: "원하는 기능",
+  S8: "다시 만들 의향", S10: "원하는 기능", best_note: "가장 좋았던 점", worst_note: "가장 아쉬웠던 점",
 };
 
 export const SURVEY_KEYS = Object.keys(SURVEY) as SurveyKey[];
@@ -116,6 +117,21 @@ export function SurveyQuestion({ q, answers, set }: {
     );
   }
 
+  if (def.kind === "stars") {
+    const n = typeof value === "number" ? value : 0;
+    return (
+      <fieldset className="wt-survey-q">
+        <legend>{t(def.text)}</legend>
+        <div className="wt-survey-stars" role="radiogroup">
+          {[1, 2, 3, 4, 5].map((s) => (
+            <button type="button" key={s} role="radio" aria-checked={n === s} aria-label={t("별 {n}개", { n: s })}
+                    className={s <= n ? "on" : ""} onClick={() => set(q, s)}>★</button>
+          ))}
+        </div>
+      </fieldset>
+    );
+  }
+
   const items: [SurveyValue, string][] = def.kind === "scale"
     ? [1, 2, 3, 4, 5].map((n) => [n, String(n)])
     : def.options!.map(([v, label]) => [v, t(label)]);
@@ -150,6 +166,24 @@ export function SurveyQuestion({ q, answers, set }: {
   );
 }
 
+/** 설문 끝의 빈칸 두 개 — 가장 좋았던 점 · 가장 아쉬웠던 점. 짧은 설문 · 마이페이지 설문이 같이 쓴다. */
+export function OpenNotes({ answers, set }: {
+  answers: SurveyAnswers;
+  set: (key: string, v: SurveyValue | undefined) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="wt-survey-notes">
+      {([["best_note", "가장 좋았던 점 (선택)"], ["worst_note", "가장 아쉬웠던 점 (선택)"]] as const).map(([key, label]) => (
+        <label key={key} className="wt-survey-note">
+          <b>{t(label)}</b>
+          <textarea value={String(answers[key] ?? "")} maxLength={500} onChange={(e) => set(key, e.target.value)} />
+        </label>
+      ))}
+    </div>
+  );
+}
+
 /** 관리자 목록에서 답 하나를 사람이 읽는 말로. */
 export function answerLabel(key: string, v: SurveyValue | undefined, t: (s: string) => string): string {
   if (v === undefined) return "—";
@@ -177,12 +211,16 @@ export function answeredAll(keys: SurveyKey[], answers: SurveyAnswers): boolean 
 }
 
 registerDict({
+  [SURVEY.S0.text]: { en: "Overall, how satisfied were you with this webtoon?", ja: "このウェブトゥーン、全体的にどのくらい満足しましたか？", zh: "总体来说，你对这部漫画满意吗？" },
+  "별 {n}개": { en: "{n} stars", ja: "星{n}つ", zh: "{n} 星" },
+  "가장 좋았던 점 (선택)": { en: "What you liked most (optional)", ja: "いちばん良かった点（任意）", zh: "最喜欢的地方（可选）" },
+  "가장 아쉬웠던 점 (선택)": { en: "What fell short most (optional)", ja: "いちばん残念だった点（任意）", zh: "最遗憾的地方（可选）" },
   [SURVEY.S1.text]: { en: "After reading, did it feel like \"yes, this is my character's story\"?", ja: "読み終えて「これは自分のキャラの話だ」と感じましたか？", zh: "读完后，你觉得“这就是我的角色的故事”吗？" },
   [SURVEY.S2.text]: { en: "Did the character look like the same person from the first scene to the last?", ja: "最初の場面から最後まで同じキャラに見えましたか？", zh: "从第一幕到最后一幕，看起来是同一个角色吗？" },
   [SURVEY.S3.text]: { en: "Did the settings you put in (name, world, traits) come through as-is?", ja: "入れた設定（名前・世界観・特徴）はそのまま入っていましたか？", zh: "你输入的设定（名字、世界观、特点）原样保留了吗？" },
   [SURVEY.S4.text]: { en: "Did the character speak and act like the personality you had in mind?", ja: "キャラは思っていた性格どおりに話し、行動しましたか？", zh: "角色的言行符合你设想的性格吗？" },
   [SURVEY.S5.text]: { en: "Did the story you wrote make it into the webtoon?", ja: "書いたストーリーはウェブトゥーンに入っていましたか？", zh: "你写的故事进入漫画了吗？" },
-  [SURVEY.S6.text]: { en: "Regardless of the character, was the episode itself fun?", ja: "キャラとは関係なく、1話そのものは面白かったですか？", zh: "不考虑角色，这一话本身有趣吗？" },
+  [SURVEY.S6.text]: { en: "Was the story itself fun?", ja: "ストーリー自体は面白かったですか？", zh: "故事本身有趣吗？" },
   [SURVEY.S7.text]: { en: "Would you like to see this character's next story?", ja: "このキャラの次の話も見たいですか？", zh: "想看这个角色的下一个故事吗？" },
   [SURVEY.S8.text]: { en: "Would you make another one?", ja: "また作ってみたいですか？", zh: "还想再做一个吗？" },
   [SURVEY.S10.text]: { en: "What other features would you like? Pick all that apply.", ja: "ほかにどんな機能があるといいですか？当てはまるものをすべて選んでください。", zh: "还希望有哪些功能？请全部勾选。" },

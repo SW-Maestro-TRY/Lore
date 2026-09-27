@@ -6,13 +6,16 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 사용자 검증 설문의 질문 S1~S8 · S10 과, 질문마다 받을 수 있는 답(#471).
+ * 사용자 검증 설문의 질문 S0(만족도) · S1~S8 · S10 과, 질문마다 받을 수 있는 답(#471).
  *
  * 질문의 뜻과 어느 가설을 재는지는 {@code webtoon/docs/validation.md} 「설문」 표에 있다.
  * 화면은 문구를 들고 있고, 서버는 <b>기호와 허용 값</b>만 안다 — 화면이 보낸 값이 여기
  * 없는 모양이면 받지 않는다. 그래야 집계할 때 값이 몇 가지로만 나온다.
  */
 public enum WebtoonFeedbackQuestion {
+
+    /** 이 웹툰에 전체적으로 얼마나 만족했나(별 1~5). 모든 설문에서 맨 앞에 고정. */
+    S0(Answer.SCALE),
 
     /** 다 읽고 "이거 내 캐릭터 얘기 맞네" 싶었나 — H2. 자기 것을 넣은 사람만. */
     S1(Answer.SCALE),
@@ -48,6 +51,9 @@ public enum WebtoonFeedbackQuestion {
      * </ul>
      */
     static final int MAX_NOTE = 500;
+
+    /** 모든 설문 끝의 빈칸 두 개 — 가장 좋았던 점 · 가장 아쉬웠던 점(선택, 글). */
+    static final List<String> OPEN_NOTES = List.of("best_note", "worst_note");
     static final Set<String> S7_WHY = Set.of("not_fun", "not_curious", "enough");
 
     /** 받을 수 있는 답이면 저장할 값으로, 아니면 null. */

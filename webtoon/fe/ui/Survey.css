@@ -64,3 +64,14 @@
 .wt .wt-survey-sent p { margin: 0; }
 .wt .wt-survey-sent-help { font-size: 12.5px; color: var(--muted); padding-top: 6px; border-top: 1px solid var(--line); }
 .wt .wt-survey-sent-help a { color: var(--sea-deep); font-weight: 700; }
+
+/* 만족도 별 */
+.wt .wt-survey-stars { display: flex; gap: 4px; }
+.wt .wt-survey-stars button { background: none; border: 0; padding: 0 2px; font-size: 32px; line-height: 1; cursor: pointer; color: var(--water); }
+.wt .wt-survey-stars button.on { color: #f2b632; }
+
+/* 가장 좋았던 점 · 아쉬웠던 점 */
+.wt .wt-survey-notes { display: flex; flex-direction: column; gap: 14px; }
+.wt .wt-survey-note { display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-survey-note b { font-size: 14px; color: var(--ink); }
+.wt .wt-survey-note textarea { width: 100%; min-height: 64px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; }
