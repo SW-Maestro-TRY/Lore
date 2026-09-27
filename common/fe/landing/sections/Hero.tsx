@@ -13,7 +13,7 @@
 // 배경 그림 바꾸는 법은 common/fe/landing/README.md 참고.
 import Link from "next/link";
 import styles from "../landing.module.css";
-import { currentLang, translator } from "../i18n";
+import { currentLang, translator, withLocale } from "../i18n";
 import HeroWebtoonBg from "./HeroWebtoonBg";
 
 const DICT = {
@@ -62,7 +62,8 @@ const DICT = {
 };
 
 export default async function Hero() {
-  const t = translator(await currentLang(), DICT);
+  const lang = await currentLang();
+  const t = translator(lang, DICT);
   return (
     <div className={styles.heroSection} id="top">
       <div className={styles.heroCenter}>
@@ -77,7 +78,7 @@ export default async function Hero() {
       </div>
 
       <div className={styles.split}>
-        <a className={`${styles.side} ${styles.sideWebtoon}`} href="/webtoon">
+        <a className={`${styles.side} ${styles.sideWebtoon}`} href={withLocale("/webtoon", lang)}>
           <span className={styles.sideBg}>
             <HeroWebtoonBg />
           </span>
