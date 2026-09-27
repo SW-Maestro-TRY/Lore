@@ -190,6 +190,8 @@ export interface NhCreateRequest {
   /** 화면 키(romance) 또는 하네스 이름(romance_fantasy) — 서버가 둘 다 받는다. */
   style: string;
   quality: string;
+  /** 어느 언어로 만들지 — ko · en · ja(· zh 는 서버가 ko 로 돌린다). */
+  language: string;
   photos_data: string[];
   photo_keys?: string[];
   agree_ip: boolean;
