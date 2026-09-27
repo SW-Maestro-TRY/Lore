@@ -20,6 +20,7 @@ export type SubmitState =
 export function useSubmit() {
   const [state, setState] = useState<SubmitState>({ status: "idle" });
   const pending = useRef<AbortController | null>(null);
+  const retry = useRef<{ body: string; key: string } | null>(null);
 
   /**
    * 누른 순간의 초안으로 만든 요청을 보낸다. 기다리는 요청이 있으면 다시 누른 것은 버린다(null).
@@ -27,14 +28,27 @@ export function useSubmit() {
    */
   const submit = useCallback(async (request: JudgeRequest): Promise<Hypothesis | "unauthorized" | null> => {
     if (pending.current) return null;
+    const body = JSON.stringify(request);
+    // 응답을 잃은 뒤 다시 누르거나 새로고침해도 같은 요청 키로 재시도한다.
+    if (!retry.current || retry.current.body !== body) {
+      try {
+        const stored = JSON.parse(sessionStorage.getItem("trailer:pending-submit") || "null");
+        retry.current = stored?.body === body && typeof stored.key === "string" ? stored : null;
+      } catch { /* 저장소를 못 쓰면 현재 탭의 메모리로 재시도한다. */ }
+      retry.current ??= { body, key: crypto.randomUUID() };
+      if (retry.current.body !== body) retry.current = { body, key: crypto.randomUUID() };
+    }
+    try { sessionStorage.setItem("trailer:pending-submit", JSON.stringify(retry.current)); } catch { /* 선택적 저장 */ }
     const controller = new AbortController();
     pending.current = controller;
     setState({ status: "submitting" });
     const stale = () => pending.current !== controller;
     try {
-      const hypothesis = await submitHypothesis(request, controller.signal);
+      const hypothesis = await submitHypothesis({ ...request, requestKey: retry.current.key }, controller.signal);
       if (stale()) return null;
       setState({ status: "idle" });
+      retry.current = null;
+      try { sessionStorage.removeItem("trailer:pending-submit"); } catch { /* 선택적 저장 */ }
       return hypothesis;
     } catch (error) {
       if (stale()) return null;

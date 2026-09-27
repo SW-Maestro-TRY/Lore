@@ -1,9 +1,10 @@
 /* 판정 자리 — 맡기기 단추, 상태 한 줄, 판정 결과. 작성 패널의 "03" 아래에 놓인다.
- * 맡긴 뒤에는 단추 대신 "새 가설 쓰기"와, 판정을 기다리는 동안 "지금 확인"이 놓인다 — 맡긴 가설은 고칠 수 없다(NA decisions.md 1-23).
+ * 맡긴 뒤에는 왼쪽에 판정 대기 상태, 오른쪽에 "새 가설 쓰기"를 보인다. 결과는 자동으로 갱신한다.
  * 결과(`result`)는 가설의 판정 칸에서 온다. 근거 단추의 제목은 부르는 쪽이 인용 카드 · 담은 카드 · 목록에서 찾아 준다. */
 import type { JudgeResult, PresentationSection } from "../lib/api";
-import { GRADES, JUDGE_TEXT, readableJudgement } from "../lib/judgement";
+import { GRADES, readableJudgement } from "../lib/judgement";
 import Icon from "./Icon";
+import CreditCoin from "./CreditCoin";
 
 type Props = {
   /** 단추를 누를 수 있는가. 카드를 받았고, 담은 카드와 주장이 있고, 맡기는 중이 아니어야 한다. */
@@ -12,14 +13,12 @@ type Props = {
   waiting: boolean;
   /** 이 초안을 이미 맡겼는가. 단추 대신 안내와 "새 가설 쓰기"를 보인다. */
   frozen: boolean;
-  /** 맡긴 판정을 아직 기다리는가. "지금 확인" 단추를 보인다. */
+  /** 맡긴 판정을 아직 기다리는가. 클릭할 수 없는 대기 상태를 보인다. */
   pending: boolean;
   /** 단추 아래의 한 줄. */
   stateText: string;
   /** 판정 1회에 깎는 크레딧. 장부 정보를 받기 전에는 null. */
   price: number | null;
-  /** 내 크레딧. 로그인이 없거나 아직 못 읽었으면 null. */
-  balance: number | null;
   /** 받아 둔 판정. 없으면 결과 상자를 숨긴다. */
   result: JudgeResult | null;
   chapter: number | null;
@@ -28,8 +27,6 @@ type Props = {
   onJudge: () => void;
   /** "새 가설 쓰기". 맡긴 초안을 비우고 새로 시작한다. */
   onNew: () => void;
-  /** "지금 확인". 판정을 지금 되묻는다. */
-  onRefresh: () => void;
   onOpen: (id: string) => void;
 };
 
@@ -113,30 +110,26 @@ function JudgeResultView({ result, chapter, titleOf, onOpen }: { result: JudgeRe
   );
 }
 
-export default function JudgePanel({ canJudge, waiting, frozen, pending, stateText, price, balance, result, chapter, titleOf, onJudge, onNew, onRefresh, onOpen }: Props) {
+export default function JudgePanel({ canJudge, waiting, frozen, pending, stateText, price, result, chapter, titleOf, onJudge, onNew, onOpen }: Props) {
   return (
     <>
       <p className="small muted" id="trailer-judge-help">
-        앞으로의 전개에 대한 내 주장을 선택한 카드·해석과 기존 장부에 대조합니다. 가능성 있음·가능성 낮음·판정 보류로 구분하며, 실제
-        확률이나 정답 판정은 아닙니다. 판정은 사람이 돌려서 시간이 걸립니다 — 맡긴 뒤에는 이 자리와 "내 가설"에서 결과를 볼 수 있습니다.
+        판정 결과는 ‘내 가설’에서 잠시후에 확인할 수 있어요.
+        <br />
+        가능성 있음/판정 보류/가능성 낮음으로 판정하고 이에 대한 이유를 알려드리고 있어요.
       </p>
-      {price !== null ? (
-        <p className="small muted" data-part="judge-credit">
-          {JUDGE_TEXT.price(price)}
-          {balance !== null ? ` · ${JUDGE_TEXT.balance(balance)}` : ""}
-        </p>
-      ) : null}
       {frozen ? (
-        <div className="judge-submitted row" data-part="judge-submitted">
-          <button className="preview-link predict-cta" data-action="new-draft" onClick={onNew}>
-            <span>새 가설 쓰기</span>
-            <Icon name="arrow" />
-          </button>
+        <div className="judge-submitted" data-part="judge-submitted">
           {pending ? (
-            <button className="btn quiet" data-action="refresh" onClick={onRefresh}>
-              지금 확인
-            </button>
+            <div className="judge-pending" role="status" aria-atomic="true" data-part="judge-pending">
+              <span className="judge-spinner" aria-hidden="true" />
+              <span>판정 대기 중…</span>
+            </div>
           ) : null}
+          <button className="btn" data-action="new-draft" onClick={onNew}>
+            <span>새 가설 쓰기</span>
+            <Icon name="arrow" width={16} />
+          </button>
         </div>
       ) : (
         <button
@@ -148,10 +141,12 @@ export default function JudgePanel({ canJudge, waiting, frozen, pending, stateTe
           onClick={onJudge}
         >
           <span>{waiting ? "맡기는 중…" : "가설 판정하기"}</span>
-          <Icon name="arrow" />
+          {price !== null ? (
+            <span className="judge-cost" data-part="judge-credit"><CreditCoin />{price.toLocaleString()}크레딧</span>
+          ) : null}
         </button>
       )}
-      <p className="small muted" role="status" style={{ marginTop: 8 }} data-part="judge-state">
+      <p className="small muted" role="status" style={{ marginTop: 8 }} data-part="judge-state" hidden={!stateText || pending}>
         {stateText}
       </p>
       <div id="trailer-judge-result" className="inline-preview" aria-live="polite" hidden={result === null} data-part="judge-result">

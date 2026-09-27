@@ -1,6 +1,7 @@
 package com.lore.trailer.hypothesis;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.lore.trailer.credit.TrailerCreditService;
 import com.lore.trailer.support.TrailerIntegrationTest;
 import com.lore.trailer.support.TrailerItSupport;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +24,58 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TrailerIntegrationTest
 @DisplayName("가설 API — 맡기기(2-5) · 하나 보기(2-6) · 보관함(2-7)")
 class HypothesisApiIT extends TrailerItSupport {
+
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    TrailerCreditService trailerCredits;
+
+    @Test
+    void replayedSubmissionChargesOnceEvenAfterBalanceIsSpent() throws Exception {
+        Long user = newReader(1);
+        var body = submission(400, List.of("T2"));
+        body.put("requestKey", java.util.UUID.randomUUID().toString());
+        var first = postJson(user, HYPOTHESES, body);
+        var second = postJson(user, HYPOTHESES, body);
+        assertThat(status(first)).isEqualTo(200);
+        assertThat(status(second)).isEqualTo(200);
+        assertThat(data(second).path("id")).isEqualTo(data(first).path("id"));
+        assertThat(creditRows(user, "SPEND")).isEqualTo(1);
+        assertThat(balance(user)).isZero();
+        body.put("claim", "다른 입력");
+        assertThat(status(postJson(user, HYPOTHESES, body))).isEqualTo(400);
+    }
+
+    @Test
+    void concurrentReplayHasOneHypothesisAndOneCharge() throws Exception {
+        Long user = newReader(2);
+        var body = submission(400, List.of("T2"));
+        body.put("requestKey", java.util.UUID.randomUUID().toString());
+        java.util.function.Supplier<MvcResult> send = () -> {
+            try { return postJson(user, HYPOTHESES, body); } catch (Exception e) { throw new RuntimeException(e); }
+        };
+        var a = java.util.concurrent.CompletableFuture.supplyAsync(send);
+        var b = java.util.concurrent.CompletableFuture.supplyAsync(send);
+        var first = a.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        var second = b.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(status(first)).isEqualTo(200);
+        assertThat(status(second)).isEqualTo(200);
+        assertThat(data(first).path("id")).isEqualTo(data(second).path("id"));
+        assertThat(creditRows(user, "SPEND")).isEqualTo(1);
+        assertThat(balance(user)).isEqualTo(5);
+    }
+
+    @Test
+    void cancelledTransactionDoesNotLeaveACharge() {
+        Long user = newReader(1);
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            trailerCredits.spendInCurrentTransaction(user, 5, "rollback-check", "검사");
+            tx.setRollbackOnly();
+        });
+        assertThat(balance(user)).isEqualTo(5);
+        assertThat(creditRows(user, "SPEND")).isZero();
+    }
 
     private static final String CARDS = "/api/trailer/v1/public/cards";
     private static final String HYPOTHESES = "/api/trailer/v1/hypotheses";

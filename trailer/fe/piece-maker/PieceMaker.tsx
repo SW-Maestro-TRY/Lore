@@ -16,14 +16,13 @@ import { ApiError } from "@common/api/client";
 import { fetchCard, fetchHypothesis, fetchMyHypotheses, type Card, type JudgeResult } from "../lib/api";
 import { cardIds, hasCard, type Draft } from "../lib/draft";
 import { JUDGE_TEXT, checkJudgement, citedCards, citedIds } from "../lib/judgement";
-import { postText } from "../lib/postText";
 import { ALL_KINDS } from "../lib/search";
 import ComposePane from "./ComposePane";
 import ExplorePane from "./ExplorePane";
 import JudgePanel from "./JudgePanel";
 import MobileTabs, { type View } from "./MobileTabs";
 import Modal, { type ModalContent } from "./Modal";
-import { COPY_FIELD_ID, detailModal, helpModal, previewModal, resetModal, savedModal, type MineState, type ModalState } from "./modals";
+import { detailModal, helpModal, resetModal, savedModal, type MineState, type ModalState } from "./modals";
 import RailNav from "./RailNav";
 import Toast, { useToast } from "./Toast";
 import TopBar from "./TopBar";
@@ -33,6 +32,9 @@ import { useHypothesis } from "./useHypothesis";
 import { useMeta } from "./useMeta";
 import { useCredit } from "./useCredit";
 import { useSubmit } from "./useSubmit";
+import CreditCoin from "./CreditCoin";
+import CreditLedgerView from "./CreditLedgerView";
+import SharePanel from "./SharePanel";
 
 const NEW_DRAFT_TOAST = "맡긴 가설은 내 가설에 두고 새 가설을 시작했어요.";
 
@@ -76,9 +78,10 @@ export default function PieceMaker() {
 
   /* ---- 로그인 ---------------------------------------------------------------- */
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   /** 내 크레딧. 로그인했을 때만 읽는다. 맡기면 깎이고 판정이 실패하면 돌아오므로 그때마다 다시 읽는다. */
-  const { balance: credit, refresh: refreshCredit } = useCredit(isAuthenticated);
+  const { balance: credit, status: creditStatus, refresh: refreshCredit } = useCredit(isAuthenticated, user?.userId);
+  const [creditNotice, setCreditNotice] = useState("");
   const [authOpen, setAuthOpen] = useState(false);
   /** 로그인 창을 "가설 판정하기"가 열었는가. 로그인이 끝나면 곧 맡긴다. */
   const resumeSubmit = useRef(false);
@@ -93,8 +96,13 @@ export default function PieceMaker() {
   // 판정이 실패하면 서버가 낸 크레딧을 돌려준다(2-9) — 그 결과를 받으면 잔액을 다시 읽는다. 같은 실패를 두 번 읽지 않게 가설과 판정 시각으로 가른다.
   const refundKey = hypothesis?.judgementStatus === "FAILED" ? `${hypothesis.id}:${hypothesis.judgedAt ?? ""}` : null;
   useEffect(() => {
-    if (refundKey) refreshCredit();
+    if (refundKey) {
+      refreshCredit();
+      setCreditNotice("판정 실패로 사용한 크레딧이 반환되었습니다.");
+    }
   }, [refundKey, refreshCredit]);
+
+  useEffect(() => { setCreditNotice(""); }, [user?.userId]);
 
   // lore 공용 헤더의 높이를 재서 CSS 변수로 넘긴다. 이 화면은 헤더 아래 남은 높이만 쓴다.
   // 헤더 높이는 화면 폭과 글꼴에 따라 달라지므로 값을 박지 않는다(zzal 의 TamagotchiScreen 과 같다).
@@ -247,7 +255,9 @@ export default function PieceMaker() {
   }, [openModal, loadMine]);
   const openHelp = useCallback(() => openModal({ kind: "help" }), [openModal]);
   const openReset = useCallback(() => openModal({ kind: "reset" }), [openModal]);
-  const openPreview = useCallback(() => openModal({ kind: "preview" }), [openModal]);
+  const openPreview = useCallback(() => {
+    if (result) openModal({ kind: "preview" });
+  }, [openModal, result]);
 
   /* ---- 찾기 ---------------------------------------------------------------- */
 
@@ -333,19 +343,6 @@ export default function PieceMaker() {
     setAuthOpen(true);
   }
 
-  async function copyPost() {
-    const field = document.getElementById(COPY_FIELD_ID);
-    if (!(field instanceof HTMLTextAreaElement)) return;
-    try {
-      await navigator.clipboard.writeText(field.value);
-      showToast("게시글을 복사했어요.");
-    } catch {
-      field.focus();
-      field.select();
-      showToast("선택된 글을 직접 복사해 주세요.");
-    }
-  }
-
   /* ---- 판정 맡기기 --------------------------------------------------------- */
 
   /** 누른 순간의 초안을 서버에 맡긴다. 저장되면 초안이 얼고, 로그인이 없으면 로그인 창을 연다. */
@@ -370,6 +367,7 @@ export default function PieceMaker() {
       markSubmitted(outcome.id);
       showToast("판정을 맡겼어요. 결과는 준비되면 여기에 보여요.");
       refreshCredit(); // 맡기며 깎였다
+      setCreditNotice("");
     }
   }, [submit, markSubmitted, showToast, refreshCredit]);
 
@@ -443,7 +441,7 @@ export default function PieceMaker() {
               ? JUDGE_TEXT.insufficient(submission.reason)
               : submission.status === "failed"
                 ? JUDGE_TEXT.failed(submission.reason)
-                : JUDGE_TEXT.idle;
+                : "";
 
   function modalContent(): ModalContent | null {
     if (modal === null) return null;
@@ -465,12 +463,14 @@ export default function PieceMaker() {
           onRetry: () => void loadMine(),
         });
       case "preview":
-        return previewModal(chapter === null || maxChapter === null ? "" : postText(draft, chapter, maxChapter, result), {
-          onClose: closeModal,
-          onCopy: () => void copyPost(),
-        });
+        return result ? {
+          title: "공유하기",
+          body: <SharePanel key={`${draft.hypothesisId}:${hypothesis?.judgedAt}`} draft={draft} result={result} onClose={closeModal} />,
+        } : null;
+      case "credits":
+        return { title: "크레딧 내역", body: <CreditLedgerView /> };
       case "help":
-        return helpModal(chapter, maxChapter);
+        return helpModal();
       case "reset":
         return resetModal({
           onClose: closeModal,
@@ -488,7 +488,11 @@ export default function PieceMaker() {
         <RailNav onExplore={showExplore} onSaved={openSaved} onHelp={openHelp} />
         {/* 원본은 <main> 이다. lore 의 layout 이 이미 <main> 을 씌우므로 <div> 로 바꿨다. */}
         <div className="workspace">
-          <TopBar chapter={chapter} maxChapter={maxChapter} failed={meta.status === "error"} onChapter={selectChapter} onSaved={openSaved} />
+          <TopBar chapter={chapter} maxChapter={maxChapter} failed={meta.status === "error"} onChapter={selectChapter} onSaved={openSaved}
+            credit={isAuthenticated ? <button className="credit-balance-chip" data-action="credit-history" onClick={() => openModal({ kind: "credits" })}
+              aria-label={`크레딧 내역${credit === null ? "" : `, 보유 ${credit}크레딧`}`}>
+              <CreditCoin /><span>{credit === null ? "…" : credit.toLocaleString()}<small>크레딧</small></span>
+            </button> : undefined} />
           <MobileTabs view={view} count={draft.cards.length} onView={show} />
           <div className="panes">
             <ExplorePane
@@ -515,6 +519,12 @@ export default function PieceMaker() {
               draft={draft}
               saveStatus={saveStatus}
               judge={
+                <>
+                {isAuthenticated && <div className="credit-feedback" aria-live="polite" data-part="credit-feedback">
+                  {creditStatus === "loading" ? "잔액 확인 중…" : creditStatus === "error" ? <>
+                    잔액을 확인하지 못했어요. <button className="btn quiet" onClick={refreshCredit}>다시 확인</button>
+                  </> : creditNotice ? <>{creditNotice} {credit !== null && `남은 크레딧 ${credit}`}</> : null}
+                </div>}
                 <JudgePanel
                   canJudge={
                     meta.status === "ready" &&
@@ -526,7 +536,6 @@ export default function PieceMaker() {
                   }
                   waiting={submission.status === "submitting"}
                   price={meta.status === "ready" ? meta.meta.judgeCredits : null}
-                  balance={credit}
                   frozen={frozen}
                   pending={hypothesis?.judgementStatus === "PENDING"}
                   stateText={stateText}
@@ -535,9 +544,9 @@ export default function PieceMaker() {
                   titleOf={(id) => findCard(id)?.title}
                   onJudge={requestJudge}
                   onNew={reset}
-                  onRefresh={() => void reloadHypothesis()}
                   onOpen={openDetail}
                 />
+                </>
               }
               onTitle={setTitle}
               onClaim={setClaim}
@@ -548,6 +557,7 @@ export default function PieceMaker() {
               onExplore={showExplore}
               onReset={openReset}
               onSave={saveDraft}
+              canShare={result !== null}
               onPreview={openPreview}
             />
           </div>
