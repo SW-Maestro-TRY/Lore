@@ -13,7 +13,10 @@
  * 서버가 만든 글(이야기 후보·카드의 반전·운명·대사)은 AI 가 한국어로 쓴
  * 것이라 여기서 번역하지 않는다 — 그건 생성 언어의 문제다.
  *
- * 고른 언어는 localStorage `lore_lang` 에 남고, 처음엔 브라우저 언어를 본다. */
+ * 고른 언어는 localStorage `lore_lang` 에 남는다. 처음 고르는 순서는 주소의
+ * `/ko`·`/en`·`/ja` (apps/web/middleware.ts 가 이 자리를 벗겨 내도 주소창·
+ * `location.pathname` 에는 그대로 남는다) → 저장된 값 → 브라우저 언어다. 주소에
+ * 언어가 박혀 있으면 그 값을 저장도 해서, 다음에 언어 없는 주소로 옮겨도 유지된다. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 export type Lang = "ko" | "en" | "ja" | "zh";
@@ -36,8 +39,17 @@ export function registerDict(dict: Dict): void {
 
 const KEY = "lore_lang";
 
+/** 주소 맨 앞 자리가 언어 코드면 그 값. rewrite 뒤에도 브라우저 주소창은 그대로라 통한다. */
+function urlLang(): Lang | null {
+  if (typeof window === "undefined") return null;
+  const seg = window.location.pathname.split("/")[1];
+  return LANGS.some((l) => l.key === seg) ? (seg as Lang) : null;
+}
+
 function initialLang(): Lang {
   if (typeof window === "undefined") return "ko";
+  const fromUrl = urlLang();
+  if (fromUrl) return fromUrl;
   try {
     const saved = localStorage.getItem(KEY) as Lang | null;
     if (saved && LANGS.some((l) => l.key === saved)) return saved;
@@ -85,7 +97,16 @@ export function LangProvider({ children }: { children: ReactNode }) {
      처음부터 브라우저 값을 읽으면 서버 HTML 과 달라 hydration 이 어긋난다. */
   const [lang, setLangState] = useState<Lang>("ko");
   useEffect(() => {
-    setLangState(initialLang());
+    const l = initialLang();
+    setLangState(l);
+    // 주소가 명시한 언어는 저장도 한다 — 다음에 언어 없는 주소로 옮겨도 유지되게.
+    if (urlLang()) {
+      try {
+        localStorage.setItem(KEY, l);
+      } catch {
+        /* 못 남겨도 이번 방문은 이미 반영됐다 */
+      }
+    }
   }, []);
   const setLang = useCallback((l: Lang) => {
     setLangState(l);

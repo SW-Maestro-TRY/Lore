@@ -16,7 +16,7 @@ import {
 } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
 import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
-import { useT } from "../../lib/i18n";
+import { useLang, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { IconArrow, IconBack, IconCheck, IconClose, IconEdit } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
@@ -134,6 +134,7 @@ export default function Wizard({
   step, presetCharacterId, go, authenticated,
 }: { step: number; presetCharacterId?: string; go: Go; authenticated: boolean }) {
   const t = useT();
+  const { lang } = useLang();
   const [form, setForm] = useState<WizardForm>(loadDraft);
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p }));
   useEffect(() => { saveDraft(form); }, [form]);
@@ -248,7 +249,7 @@ export default function Wizard({
     const props = startProps();
     track("create_start", props);
     try {
-      const id = await startJob(form, authenticated);
+      const id = await startJob(form, authenticated, lang);
       track("create_started", { ...props, job: id });
       try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* 없어도 된다 */ }
       go("running", { job: id }, { replace: true });

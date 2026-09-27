@@ -8,9 +8,10 @@
  * 통째로 죽으면 안 된다. */
 import { uploadDataUrls } from "@common/api/uploads";
 import { createJob, uploadDataUrlsAsGuest } from "./api";
+import type { Lang } from "./i18n";
 import type { WizardForm } from "./wizardData";
 
-export async function startJob(form: WizardForm, authenticated: boolean): Promise<string> {
+export async function startJob(form: WizardForm, authenticated: boolean, lang: Lang): Promise<string> {
   let keys: string[] | undefined;
   if (form.photos.length) {
     try {
@@ -30,6 +31,7 @@ export async function startJob(form: WizardForm, authenticated: boolean): Promis
     story: form.story.trim(),
     style: form.style,
     quality: form.quality,
+    language: lang,
     photos_data: keys ? [] : form.photos,
     photo_keys: keys,
     character_id: form.characterId,
