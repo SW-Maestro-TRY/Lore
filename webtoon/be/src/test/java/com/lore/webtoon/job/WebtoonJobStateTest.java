@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class WebtoonJobStateTest {
 
     private static WebtoonJob fresh() {
-        return WebtoonJob.queued("job-1", 1L, "uid", null, "noir", "surf", true, "{}", Instant.now());
+        return WebtoonJob.queued("job-1", 1L, "uid", null, "noir", "surf", "ko", true, "{}", Instant.now());
     }
 
     @Test

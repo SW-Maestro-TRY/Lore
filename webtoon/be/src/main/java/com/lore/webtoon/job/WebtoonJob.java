@@ -104,6 +104,16 @@ public class WebtoonJob {
     private String quality;
 
     /**
+     * 어느 언어로 만들지 — {@code run.py} 에 {@code NH_LANG} 으로 넘어간다.
+     *
+     * quality 와 같은 이유로 작업에 남긴다 — 한 장 다시 그릴 때도 같은 언어여야
+     * 한다. 옛 작업에는 값이 없어 nullable 이고, 읽는 쪽이 "ko" 로 기본값을
+     * 돌린다.
+     */
+    @Column(length = 10)
+    private String language;
+
+    /**
      * 사람이 중간에 멈춰 서서 볼 것인가.
      *
      * 거짓이면 시트도 이야기도 서버가 알아서 고르고 끝까지 간다
@@ -208,7 +218,7 @@ public class WebtoonJob {
     }
 
     private WebtoonJob(String publicId, Long userId, String browserUid, String guestKey,
-                       String style, String quality, boolean checkpoints,
+                       String style, String quality, String language, boolean checkpoints,
                        String inputJson, Instant at) {
         this.publicId = publicId;
         this.guestKey = guestKey;
@@ -216,6 +226,7 @@ public class WebtoonJob {
         this.browserUid = browserUid;
         this.style = style;
         this.quality = quality;
+        this.language = language;
         this.checkpoints = checkpoints;
         this.inputJson = inputJson;
         this.status = JobStatus.QUEUED;
@@ -226,9 +237,9 @@ public class WebtoonJob {
 
     public static WebtoonJob queued(String publicId, Long userId, String browserUid,
                                     String guestKey, String style, String quality,
-                                    boolean checkpoints, String inputJson, Instant at) {
+                                    String language, boolean checkpoints, String inputJson, Instant at) {
         return new WebtoonJob(publicId, userId, browserUid, guestKey,
-                style, quality, checkpoints, inputJson, at);
+                style, quality, language, checkpoints, inputJson, at);
     }
 
     /**
@@ -241,7 +252,7 @@ public class WebtoonJob {
     public static WebtoonJob seeded(String publicId, String browserUid, String style,
                                     String inputJson, Instant at) {
         WebtoonJob job = new WebtoonJob(publicId, null, browserUid, null,
-                style, null, false, inputJson, at);
+                style, null, null, false, inputJson, at);
         job.status = JobStatus.DONE;
         job.stage = JobStage.BIND;
         job.finishedAt = at;
@@ -354,6 +365,11 @@ public class WebtoonJob {
     /** 어느 화질로. 옛 작업은 비어 있다 — 읽는 쪽이 기본값으로 돌린다. */
     public String getQuality() {
         return quality;
+    }
+
+    /** 어느 언어로. 옛 작업은 비어 있다 — 읽는 쪽이 "ko" 로 돌린다. */
+    public String getLanguage() {
+        return language;
     }
     public boolean isCheckpoints() {
         return checkpoints;

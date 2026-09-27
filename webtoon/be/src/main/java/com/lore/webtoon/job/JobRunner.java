@@ -915,6 +915,9 @@ public class JobRunner {
            요청마다 다른 값이므로 코드 기본값으로는 못 정한다.
            안 넘어가면 하네스가 자기 기본값(medium)으로 그린다. */
         env.put("OPENAI_IMAGE_QUALITY", WebtoonQuality.harnessValue(job.getQuality()));
+        /* 어느 언어로. run.py 가 --lang 을 안 받으면 이 값을 본다(lang.py 참고).
+           옛 작업(language 컬럼이 비어 있음)은 WebtoonLanguage.normalize 가 ko 로 돌린다. */
+        env.put("NH_LANG", WebtoonLanguage.normalize(job.getLanguage()));
         // NH_RUNS_DIR 은 HarnessProcess 가 띄우는 모든 파이썬에 한자리에서 넣는다.
         return env;
     }

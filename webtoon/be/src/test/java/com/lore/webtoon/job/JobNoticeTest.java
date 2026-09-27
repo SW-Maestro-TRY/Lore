@@ -55,7 +55,7 @@ class JobNoticeTest {
 
     private WebtoonJob 작업(Long userId, String typed) {
         WebtoonJob job = WebtoonJob.queued("job-1", userId, "uid-a", null,
-                "webtoon_lock_bg", "surf", false, "{}", Instant.now());
+                "webtoon_lock_bg", "surf", "ko", false, "{}", Instant.now());
         if (typed != null) {
             job.notifyTo(typed, Instant.now());
         }
