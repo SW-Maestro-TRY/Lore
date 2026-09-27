@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 사용자 검증 설문의 질문 S1~S9 와, 질문마다 받을 수 있는 답(#471).
+ * 사용자 검증 설문의 질문 S1~S8 · S10 과, 질문마다 받을 수 있는 답(#471).
  *
  * 질문의 뜻과 어느 가설을 재는지는 {@code webtoon/docs/validation.md} 「설문」 표에 있다.
  * 화면은 문구를 들고 있고, 서버는 <b>기호와 허용 값</b>만 안다 — 화면이 보낸 값이 여기
@@ -26,12 +26,10 @@ public enum WebtoonFeedbackQuestion {
     S5(Answer.YES_PARTLY_NO),
     /** 캐릭터와 상관없이 1화 자체가 재미있었나 — H3. */
     S6(Answer.SCALE),
-    /** 이 캐릭터의 다음 이야기도 보고 싶나 — 연속성 신호. */
+    /** 이 캐릭터의 다음 이야기도 보고 싶나 — 연속성 신호. 아니오면 이유를 더 묻는다. */
     S7(Answer.YES_NO),
-    /** 다시 만들어 볼 건가 — 재사용 신호. */
+    /** 다시 만들어 볼 의향이 있나 — 재사용 신호. */
     S8(Answer.YES_MAYBE_NO),
-    /** 기대와 가장 달랐던 곳. */
-    S9(Answer.MISMATCH),
     /** 있으면 좋겠는 기능 — 모두 고르기. 다음 기능 우선순위를 정하는 데 쓴다. 전체 설문만. */
     S10(Answer.WANTS);
 
@@ -41,18 +39,28 @@ public enum WebtoonFeedbackQuestion {
         this.answer = answer;
     }
 
+    /**
+     * 「아니오」를 골랐을 때만 더 묻는 것(선택). 본 답이 그 값일 때만 받는다.
+     * <ul>
+     *   <li>{@code S3_note} — 넣은 설정이 안 들어갔다면 무엇이 달라졌나 (글)</li>
+     *   <li>{@code S7_why} — 다음 이야기가 안 궁금한 이유 (not_fun · not_curious · enough)</li>
+     *   <li>{@code S7_note} — 그 밖의 이유 (글)</li>
+     * </ul>
+     */
+    static final int MAX_NOTE = 500;
+    static final Set<String> S7_WHY = Set.of("not_fun", "not_curious", "enough");
+
     /** 받을 수 있는 답이면 저장할 값으로, 아니면 null. */
     Object accept(Object raw) {
         return raw == null ? null : answer.accept(raw);
     }
 
     enum Answer {
-        SCALE, YES_PARTLY_NO, YES_NO, YES_MAYBE_NO, MISMATCH, WANTS;
+        SCALE, YES_PARTLY_NO, YES_NO, YES_MAYBE_NO, WANTS;
 
         private static final Set<String> YPN = Set.of("yes", "partly", "no");
         private static final Set<String> YN = Set.of("yes", "no");
         private static final Set<String> YMN = Set.of("yes", "maybe", "no");
-        private static final Set<String> WHERE = Set.of("look", "persona", "story", "art", "wait", "none");
         /** 여러 캐릭터 · 다음 화 · 장면 하나로 바로 만화 · 지금으로 충분 */
         private static final Set<String> FEATURES = Set.of("multi_char", "next_episode", "scene_comic", "enough");
 
@@ -82,8 +90,7 @@ public enum WebtoonFeedbackQuestion {
             Set<String> ok = switch (this) {
                 case YES_PARTLY_NO -> YPN;
                 case YES_NO -> YN;
-                case YES_MAYBE_NO -> YMN;
-                default -> WHERE;
+                default -> YMN;
             };
             return ok.contains(s) ? s : null;
         }
