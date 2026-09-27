@@ -77,8 +77,8 @@ export default function FullSurvey({ authenticated, status, go, onClose, onRewar
       <Dialog title={t("설문 제출 완료")} onClose={onClose}>
         <div className="wt-survey-sent">
           <p>{t("소중한 의견을 보내 주셔서 감사해요!")}</p>
-          <p>{t("이번 설문 크레딧은 이미 받으셔서 추가로 드리기 어려워요.")}{"\u00a0😭"}</p>
-          <p>{t("대신 15분 인터뷰에 참여해 주시면 따로 보상을 드려요. 인터뷰를 신청하셨다면 적어 주신 이메일로 일정과 사전 질문을 보내 드릴게요.")}</p>
+          <p>{t("이번 설문 크레딧은 이미 받으셔서 추가로 드리기 어려워요.")}</p>
+          <p>{t("대신 15분 인터뷰에 참여해 주시면 따로 보상을 드려요.")}<br />{t("인터뷰를 신청하셨다면 적어 주신 이메일로 일정과 사전 질문을 보내 드릴게요.")}</p>
           <p className="wt-survey-sent-help">
             {t("처음 참여했는데 크레딧이 들어오지 않았다면")}{" "}
             <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">{t("1:1 문의하기")}</a>{t("로 알려 주세요.")}
@@ -146,11 +146,8 @@ registerDict({
   "설문 제출 완료": { en: "Survey submitted", ja: "アンケート送信完了", zh: "问卷已提交" },
   "소중한 의견을 보내 주셔서 감사해요!": { en: "Thank you for your valuable feedback!", ja: "貴重なご意見をありがとうございます！", zh: "感谢你宝贵的意见！" },
   "이번 설문 크레딧은 이미 받으셔서 추가로 드리기 어려워요.": { en: "You've already received the credits for this survey, so we can't add more.", ja: "このアンケートのクレジットはすでにお受け取り済みのため、追加でお渡しできません。", zh: "这份问卷的积分你已经领过了，无法再次发放。" },
-  "대신 15분 인터뷰에 참여해 주시면 따로 보상을 드려요. 인터뷰를 신청하셨다면 적어 주신 이메일로 일정과 사전 질문을 보내 드릴게요.": {
-    en: "Instead, join a 15-minute interview for a separate reward. If you signed up, we'll email you the schedule and questions in advance.",
-    ja: "代わりに15分のインタビューにご参加いただくと、別途特典を差し上げます。お申し込みいただいた方には、ご記入のメールに日程と事前質問をお送りします。",
-    zh: "作为替代，参加 15 分钟访谈可获得额外奖励。报名后，我们会把时间安排和问题提前发到你填写的邮箱。",
-  },
+  "대신 15분 인터뷰에 참여해 주시면 따로 보상을 드려요.": { en: "Instead, join a 15-minute interview for a separate reward.", ja: "代わりに15分のインタビューにご参加いただくと、別途特典を差し上げます。", zh: "作为替代，参加 15 分钟访谈可获得额外奖励。" },
+  "인터뷰를 신청하셨다면 적어 주신 이메일로 일정과 사전 질문을 보내 드릴게요.": { en: "If you signed up, we'll email you the schedule and questions in advance.", ja: "お申し込みいただいた方には、ご記入のメールに日程と事前質問をお送りします。", zh: "报名后，我们会把时间安排和问题提前发到你填写的邮箱。" },
   "처음 참여했는데 크레딧이 들어오지 않았다면": { en: "If this was your first time and you didn't get credits, let us know via", ja: "初めての参加でクレジットが入っていない場合は、", zh: "如果是第一次参加却没有收到积分，请通过" },
   "로 알려 주세요.": { en: ".", ja: "からお知らせください。", zh: "告诉我们。" },
   "1:1 문의하기": { en: "Contact us", ja: "1:1お問い合わせ", zh: "1:1 咨询" },
