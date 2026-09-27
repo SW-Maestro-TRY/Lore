@@ -24,3 +24,11 @@ type Dict = Record<string, Partial<Record<Exclude<Lang, "ko">, string>>>;
 export function translator(lang: Lang, dict: Dict) {
   return (src: string): string => (lang === "ko" ? src : dict[src]?.[lang] ?? src);
 }
+
+/**
+ * `/webtoon` 같은 안쪽 주소 앞에 지금 언어를 붙인다 — /en 홈에서 웹툰으로 넘어가도
+ * 언어가 안 끊기게. ko 는 접두어가 없다(middleware.ts 의 matcher 와 같은 규칙).
+ */
+export function withLocale(path: string, lang: Lang): string {
+  return lang === "ko" ? path : `/${lang}${path}`;
+}
