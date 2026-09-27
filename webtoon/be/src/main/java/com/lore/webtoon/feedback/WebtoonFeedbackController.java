@@ -45,13 +45,13 @@ public class WebtoonFeedbackController {
     }
 
     @Operation(summary = "완성 직후 설문 — 답 보내기", description = """
-            {"run": "...", "answers": {"S1": 4, "S7": "yes"}}. 이 작품에 물을 수 있는 질문과
+            {"run": "...", "answers": {"S0": 5, "S1": 4, "S7": "yes"}, "comment": "..."}. 이 작품에 물을 수 있는 질문과
             정해진 값만 저장한다. 두 번째로 보내면 저장하지 않고 saved=false.""")
     @PostMapping(WebtoonApi.V1 + "/feedback")
     public Map<String, Object> answer(
             @RequestBody ShortRequest req,
             @RequestHeader(value = "X-Lore-Uid", required = false) String uid) {
-        boolean saved = service.saveShort(req.run(), WebtoonFeedbackService.currentUser(), uid, req.answers());
+        boolean saved = service.saveShort(req.run(), WebtoonFeedbackService.currentUser(), uid, req.answers(), req.comment());
         return Map.of("saved", saved);
     }
 
@@ -90,7 +90,7 @@ public class WebtoonFeedbackController {
         return userId;
     }
 
-    public record ShortRequest(String run, Map<String, Object> answers) {
+    public record ShortRequest(String run, Map<String, Object> answers, String comment) {
     }
 
     public record FullRequest(Map<String, Object> answers, String comment, Boolean wantsInterview, String contact) {

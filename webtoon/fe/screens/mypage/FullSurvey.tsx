@@ -16,7 +16,7 @@ import { registerDict, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
 import { Dialog } from "../../ui/Dialog";
-import { answeredAll, OpenNotes, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
+import { answeredAll, FreeNote, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
 
 export default function FullSurvey({ authenticated, status, go, onClose, onRewarded }: {
   authenticated: boolean;
@@ -28,6 +28,7 @@ export default function FullSurvey({ authenticated, status, go, onClose, onRewar
 }) {
   const t = useT();
   const [answers, setAnswers] = useState<SurveyAnswers>({});
+  const [comment, setComment] = useState("");
   const [interview, setInterview] = useState(false);
   const [contact, setContact] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,7 +47,7 @@ export default function FullSurvey({ authenticated, status, go, onClose, onRewar
     setBusy(true);
     setErr("");
     try {
-      const got = await sendFullSurvey({ answers, wantsInterview: interview, contact: interview ? contact : "" });
+      const got = await sendFullSurvey({ answers, comment, wantsInterview: interview, contact: interview ? contact : "" });
       track("feedback_submit", { where: "mypage", count: questions.length, ok: got.rewarded > 0 });
       if (got.rewarded > 0) onRewarded(got.balance);
       setSent(got.rewarded);
@@ -122,13 +123,14 @@ export default function FullSurvey({ authenticated, status, go, onClose, onRewar
           <SurveyQuestion key={q} q={q} answers={answers}
                           set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
         ))}
-        <OpenNotes answers={answers} set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
-        <div className="wt-survey-interview">
+        <FreeNote value={comment} onChange={setComment} />
+        <div className="wt-survey-interview-box">
+          <b>{t("15분 인터뷰에 참여해 주실 수 있나요?")}</b>
+          <span className="muted">{t("LORE를 더 잘 만들기 위해 사용자분들의 이야기를 직접 듣고 있어요. 참여해 주시면 이메일로 인터뷰 일정과 사전 질문을 안내해 드리고, 따로 보상도 드려요.")}</span>
           <label className="wt-survey-check">
             <input type="checkbox" checked={interview} onChange={(e) => setInterview(e.target.checked)} />
-            {t("15분 인터뷰에 참여할게요")}
+            {t("인터뷰에 참여하고 싶어요")}
           </label>
-          <span className="muted">{t("체크해 주시면 인터뷰 가능한 날짜와 질문을 이메일로 미리 보내 드려요. 참여해 주시면 따로 보상도 드려요.")}</span>
           {interview && (
             <input type="text" inputMode="email" value={contact} maxLength={200} onChange={(e) => setContact(e.target.value)}
                    placeholder={t("안내를 받을 이메일")} />
@@ -161,12 +163,13 @@ registerDict({
   "확인": { en: "OK", ja: "OK", zh: "确定" },
   "보내고 {n}크레딧 받기": { en: "Send & get {n} credits", ja: "送信して{n}クレジットを受け取る", zh: "提交并领取 {n} 积分" },
   "웹툰 만들러 가기": { en: "Make a webtoon", ja: "ウェブトゥーンを作る", zh: "去做漫画" },
-  "15분 인터뷰에 참여할게요": { en: "I'll join a 15-minute interview", ja: "15分のインタビューに参加します", zh: "我愿意参加 15 分钟访谈" },
-  "체크해 주시면 인터뷰 가능한 날짜와 질문을 이메일로 미리 보내 드려요. 참여해 주시면 따로 보상도 드려요.": {
-    en: "Check this and we'll email you available dates and the questions in advance. You'll get a separate reward for joining.",
-    ja: "チェックしていただくと、候補日と質問を事前にメールでお送りします。ご参加いただくと別途特典もございます。",
-    zh: "勾选后，我们会提前通过邮件发送可选日期和问题。参加还会获得额外奖励。",
+  "15분 인터뷰에 참여해 주실 수 있나요?": { en: "Could you join a 15-minute interview?", ja: "15分のインタビューにご協力いただけますか？", zh: "能参加 15 分钟的访谈吗？" },
+  "LORE를 더 잘 만들기 위해 사용자분들의 이야기를 직접 듣고 있어요. 참여해 주시면 이메일로 인터뷰 일정과 사전 질문을 안내해 드리고, 따로 보상도 드려요.": {
+    en: "We're listening to users directly to make LORE better. If you join, we'll email you the schedule and questions in advance, with a separate reward.",
+    ja: "LOREをより良くするため、ユーザーの皆さまのお話を直接伺っています。ご参加いただければ、日程と事前質問をメールでご案内し、別途特典もお渡しします。",
+    zh: "为了把 LORE 做得更好，我们正在直接倾听用户的声音。参加的话，我们会通过邮件提前告知访谈时间和问题，并另外送上奖励。",
   },
+  "인터뷰에 참여하고 싶어요": { en: "I'd like to join the interview", ja: "インタビューに参加したいです", zh: "我想参加访谈" },
   "안내를 받을 이메일": { en: "Email for the invitation", ja: "ご案内を受け取るメール", zh: "接收通知的邮箱" },
   "보내 주셔서 고마워요!": { en: "Thank you!", ja: "ありがとうございます！", zh: "谢谢！" },
   "닫기": { en: "Close", ja: "閉じる", zh: "关闭" },

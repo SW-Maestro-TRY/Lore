@@ -12,7 +12,7 @@ import { mySurveyStatus, sendShortSurvey, surveyQuestions, type SurveyAnswers, t
 import { registerDict, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
-import { answeredAll, OpenNotes, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
+import { answeredAll, FreeNote, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
 
 const SKIPPED_KEY = "lore_survey_skipped";
 
@@ -39,6 +39,7 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
   const [answers, setAnswers] = useState<SurveyAnswers>({});
   const [state, setState] = useState<"ask" | "busy" | "done" | "gone">("gone");
   const [err, setErr] = useState("");
+  const [comment, setComment] = useState("");
   /* 보낸 뒤 — 마이페이지 설문 보상을 아직 안 받았으면 그 크레딧을 보여 준다 */
   const [reward, setReward] = useState<number | null>(null);
 
@@ -79,7 +80,7 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
     setState("busy");
     setErr("");
     try {
-      await sendShortSurvey(runId, answers);
+      await sendShortSurvey(runId, answers, comment);
       track("feedback_submit", { where: "result", run: runId, count: Object.keys(answers).length });
       if (authenticated) {
         mySurveyStatus().then((s) => { if (!s.done && s.questions.length > 0) setReward(s.reward); }).catch(() => {});
@@ -99,12 +100,11 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
 
   return (
     <div className="card wt-survey-card">
-      <h3>{t("이 웹툰, 어땠나요?")}</h3>
       {questions.map((q) => (
         <SurveyQuestion key={q} q={q} answers={answers}
                         set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
       ))}
-      <OpenNotes answers={answers} set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
+      <FreeNote value={comment} onChange={setComment} />
       {err && <p className="wt-survey-err">{err}</p>}
       <div className="wt-survey-actions">
         <button type="button" className="btn btn-w" disabled={state === "busy"} onClick={skip}>{t("건너뛰기")}</button>
@@ -116,7 +116,6 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
 }
 
 registerDict({
-  "이 웹툰, 어땠나요?": { en: "How was this webtoon?", ja: "このウェブトゥーン、どうでしたか？", zh: "这部漫画怎么样？" },
   "건너뛰기": { en: "Skip", ja: "スキップ", zh: "跳过" },
   "보내기": { en: "Send", ja: "送信", zh: "提交" },
   "답해 주셔서 고마워요!": { en: "Thanks for answering!", ja: "ご回答ありがとうございます！", zh: "感谢你的回答！" },
