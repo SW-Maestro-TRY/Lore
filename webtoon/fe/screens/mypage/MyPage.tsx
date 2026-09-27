@@ -16,7 +16,7 @@
  * 자리라 여기서 직접 붙였다(2026-09-19, 사용자 지적). */
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
-import { creditBalance } from "@common/api/credits";
+import { creditBalance, notifyCreditsChanged } from "@common/api/credits";
 import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
@@ -312,6 +312,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                           onClose={() => setSurveyOpen(false)}
                           onRewarded={(balance) => {
                             setCredits(balance);
+                            notifyCreditsChanged(balance);
                             setSurveyStatus((s) => (s ? { ...s, done: true, prompt: false } : s));
                           }} />
             )}
