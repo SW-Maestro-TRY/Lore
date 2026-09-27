@@ -27,7 +27,7 @@ export interface GoParams {
   run?: string;
   id?: string;
   /** 마이페이지에서 처음 열 칸. 진행 화면의 「설정에서 끌 수 있어요」가 설정 칸으로 바로 보낸다. */
-  tab?: "settings";
+  tab?: "settings" | "feedback";
 }
 
 export function hrefOf(view: View, p: GoParams = {}): string {

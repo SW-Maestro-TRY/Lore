@@ -2,6 +2,7 @@
 
 웹툰 화면에서 사람들이 어디까지 오고 무엇을 누르는지 남기는 기록입니다(#413).
 이벤트를 새로 달거나, 기록을 보고 숫자를 뽑을 때 읽습니다.
+이 기록으로 어떤 가설을 어떻게 판정하는지는 [validation.md](validation.md)에 있습니다.
 
 ## 구조
 
@@ -214,6 +215,9 @@
 | `limit_view` | 하루 몫이 다 됨 | `kind`: character |
 | `regen_start` · `regen_result` · `regen_revert` · `bake` | 편집실 다시 그리기 · 결과 · 판 되돌리기 · 이미지로 뽑기 | `cut`, `count`(태그 수), `has_note`, `status`, `n`(판) |
 | `charge_open` | 마이페이지에서 충전 창을 엶 | `where` |
+| `feedback_view` · `feedback_submit` · `feedback_skip` | 설문이 뜸 · 보냄 · 건너뜀 (#471, [validation.md](validation.md)). 답 자체는 `webtoon_feedback` 표에 있다 | `where`: result · mypage, `run`, `count`(문항 수), `ok`(보상을 받았나) |
+| `feedback_open` | 마이페이지 「피드백 보내기」를 엶 | `where` |
+| `feedback_prompt_view` · `feedback_prompt_click` | 다시 온 사람 안내가 뜸 · 「설문하러 가기」를 누름 | `where`(그때 보던 화면) |
 
 ### 알고 있는 한계
 
