@@ -4,7 +4,7 @@ run.py 와 detailart.py 양쪽이 쓰는데 run.py -> detailart.py 방향으로 
 불러서, 언어 이름표는 따로 이 파일에 둔다(순환 import를 피하려는 것뿐이다).
 """
 
-LANG_NAMES = {"ko": "한국어", "en": "영어"}
+LANG_NAMES = {"ko": "한국어", "en": "영어", "ja": "일본어"}
 
 
 def instruction(lang: str) -> str:
