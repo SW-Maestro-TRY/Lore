@@ -573,10 +573,10 @@ export function readConfig(): Promise<{ feedback_tags: Record<string, FeedbackTa
 
 /* ---- 사용자 검증 설문 (#471, webtoon/docs/validation.md) --------------------- */
 
-export type SurveyKey = "S1" | "S2" | "S3" | "S4" | "S5" | "S6" | "S7" | "S8" | "S10";
+export type SurveyKey = "S0" | "S1" | "S2" | "S3" | "S4" | "S5" | "S6" | "S7" | "S8" | "S10";
 export type SurveyValue = number | string | string[];
 /** 「아니오」 뒤에 더 묻는 것 — 본 답이 아니오일 때만 서버가 받는다 */
-export type SurveyFollowKey = "S3_note" | "S7_why" | "S7_note";
+export type SurveyFollowKey = "S3_note" | "S7_why" | "S7_note" | "best_note" | "worst_note";
 export type SurveyAnswers = Partial<Record<SurveyKey | SurveyFollowKey, SurveyValue>>;
 
 /** 완성 직후에 무엇을 물을지. 주인이 아니거나 이미 답했으면 빈 목록. */
