@@ -11,7 +11,7 @@
 // 그림 바꾸는 법은 common/fe/landing/README.md 참고.
 import Link from "next/link";
 import styles from "../landing.module.css";
-import { currentLang, translator } from "../i18n";
+import { currentLang, translator, withLocale } from "../i18n";
 
 type CardKey = "character" | "webtoon" | "tama";
 
@@ -158,7 +158,8 @@ function CardBody({ c, t }: { c: Card; t: (src: string) => string }) {
 }
 
 export default async function Trio() {
-  const t = translator(await currentLang(), DICT);
+  const lang = await currentLang();
+  const t = translator(lang, DICT);
   return (
     <section className={styles.trioSection}>
       <div className={styles.wrap}>
@@ -178,7 +179,7 @@ export default async function Trio() {
                 <CardBody c={c} t={t} />
               </Link>
             ) : (
-              <a key={c.key} className={cls} href={c.href}>
+              <a key={c.key} className={cls} href={withLocale(c.href, lang)}>
                 <CardBody c={c} t={t} />
               </a>
             );
