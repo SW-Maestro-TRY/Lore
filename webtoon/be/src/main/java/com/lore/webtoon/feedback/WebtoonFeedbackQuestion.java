@@ -14,7 +14,7 @@ import java.util.Set;
  */
 public enum WebtoonFeedbackQuestion {
 
-    /** 이 웹툰에 전체적으로 얼마나 만족했나(별 1~5). 모든 설문에서 맨 앞에 고정. */
+    /** LORE 서비스에 전체적으로 만족했나(1~5). 모든 설문에서 맨 앞에 고정. */
     S0(Answer.SCALE),
 
     /** 다 읽고 "이거 내 캐릭터 얘기 맞네" 싶었나 — H2. 자기 것을 넣은 사람만. */
@@ -52,8 +52,6 @@ public enum WebtoonFeedbackQuestion {
      */
     static final int MAX_NOTE = 500;
 
-    /** 모든 설문 끝의 빈칸 두 개 — 가장 좋았던 점 · 가장 아쉬웠던 점(선택, 글). */
-    static final List<String> OPEN_NOTES = List.of("best_note", "worst_note");
     static final Set<String> S7_WHY = Set.of("not_fun", "not_curious", "enough");
 
     /** 받을 수 있는 답이면 저장할 값으로, 아니면 null. */
