@@ -31,7 +31,7 @@ class WebtoonFeedbackQuestionTest {
         assertThat(WebtoonFeedbackQuestion.S3.accept("partly")).isEqualTo("partly");
         assertThat(WebtoonFeedbackQuestion.S7.accept("partly")).isNull();
         assertThat(WebtoonFeedbackQuestion.S8.accept("maybe")).isEqualTo("maybe");
-        assertThat(WebtoonFeedbackQuestion.S9.accept("일부")).isNull();
+        assertThat(WebtoonFeedbackQuestion.S8.accept("일부")).isNull();
     }
 
     @Test

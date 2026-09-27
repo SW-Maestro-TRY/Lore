@@ -163,7 +163,7 @@ public class WebtoonFeedbackService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "웹툰을 한 편 완성한 뒤에 답할 수 있어요");
         }
         Map<String, Object> answers = clean(raw, asked);
-        if (answers.size() != asked.size()) {
+        if (asked.stream().anyMatch(q -> !answers.containsKey(q.name()))) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "모든 문항에 답해 주세요");
         }
         String note = trimTo(comment, MAX_COMMENT);
@@ -226,7 +226,7 @@ public class WebtoonFeedbackService {
         boolean own = hasPhoto || hasName || hasDesc;
 
         Set<WebtoonFeedbackQuestion> applicable = EnumSet.of(WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6,
-                WebtoonFeedbackQuestion.S7, WebtoonFeedbackQuestion.S8, WebtoonFeedbackQuestion.S9);
+                WebtoonFeedbackQuestion.S7, WebtoonFeedbackQuestion.S8);
         if (own) {
             applicable.add(WebtoonFeedbackQuestion.S1);
             applicable.add(WebtoonFeedbackQuestion.S3);
@@ -243,7 +243,7 @@ public class WebtoonFeedbackService {
     private record Profile(boolean own, Set<WebtoonFeedbackQuestion> applicable) {
     }
 
-    /** 받을 수 있는 질문·값만 남긴다. 순서는 S1 → S9. */
+    /** 받을 수 있는 질문·값만 남긴다. 순서는 S1 → S10. 「아니오」 뒤에 더 묻는 것은 끝에 붙는다. */
     private static Map<String, Object> clean(Map<String, Object> raw, Set<WebtoonFeedbackQuestion> allowed) {
         Map<String, Object> out = new LinkedHashMap<>();
         if (raw == null) {
@@ -258,7 +258,27 @@ public class WebtoonFeedbackService {
                 out.put(q.name(), v);
             }
         }
+        // 「아니오」 뒤에 더 묻는 것 — 본 답이 아니오일 때만 받는다. 세는 값(out.size)에는 안 넣는다.
+        Map<String, Object> extra = new LinkedHashMap<>();
+        if ("no".equals(out.get("S3"))) {
+            putNote(extra, "S3_note", raw.get("S3_note"));
+        }
+        if ("no".equals(out.get("S7"))) {
+            Object why = raw.get("S7_why");
+            if (why instanceof String w && WebtoonFeedbackQuestion.S7_WHY.contains(w)) {
+                extra.put("S7_why", w);
+            }
+            putNote(extra, "S7_note", raw.get("S7_note"));
+        }
+        out.putAll(extra);
         return out;
+    }
+
+    private static void putNote(Map<String, Object> out, String key, Object raw) {
+        String note = raw instanceof String s ? trimTo(s, WebtoonFeedbackQuestion.MAX_NOTE) : null;
+        if (note != null) {
+            out.put(key, note);
+        }
     }
 
     /** 이 계정의 작품 중 처음 완성된 시각. */
@@ -285,7 +305,7 @@ public class WebtoonFeedbackService {
         return null;
     }
 
-    /** 전체 설문에 물을 질문 — 그 작품에 맞는 S1~S9 와 원하는 기능(S10). 작품이 없으면 빈 것. */
+    /** 전체 설문에 물을 질문 — 그 작품에 맞는 S1~S8 과 원하는 기능(S10). 작품이 없으면 빈 것. */
     private Set<WebtoonFeedbackQuestion> fullQuestions(String runId) {
         if (runId == null) {
             return EnumSet.noneOf(WebtoonFeedbackQuestion.class);
@@ -293,7 +313,7 @@ public class WebtoonFeedbackService {
         RunService.Inputs in = runs.inputsOf(runId);
         Set<WebtoonFeedbackQuestion> asked = in == null
                 ? EnumSet.of(WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6, WebtoonFeedbackQuestion.S7,
-                             WebtoonFeedbackQuestion.S8, WebtoonFeedbackQuestion.S9)
+                             WebtoonFeedbackQuestion.S8)
                 : EnumSet.copyOf(profileFrom(in).applicable());
         asked.add(WebtoonFeedbackQuestion.S10);
         return asked;

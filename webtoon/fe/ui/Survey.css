@@ -49,3 +49,18 @@
 .wt .wt-reward-amt { font-size: 30px; font-weight: 800; color: var(--sea-deep); letter-spacing: -0.5px; line-height: 1.15; }
 .wt .wt-reward-amt small { font-size: 15px; font-weight: 700; margin-left: 4px; }
 .wt .wt-reward-what { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+
+/* 「아니오」 뒤에 더 묻는 자리 */
+.wt .wt-survey-follow { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding: 12px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
+.wt .wt-survey-follow label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.wt .wt-survey-follow textarea { width: 100%; min-height: 64px; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 13.5px; background: #fff; }
+
+/* 인터뷰 신청 */
+.wt .wt-survey-interview { display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-survey-interview .muted { font-size: 12.5px; line-height: 1.55; padding-left: 26px; }
+
+/* 이미 보상을 받은 사람이 보낸 뒤 */
+.wt .wt-survey-sent { display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.6; color: var(--ink); }
+.wt .wt-survey-sent p { margin: 0; }
+.wt .wt-survey-sent-help { font-size: 12.5px; color: var(--muted); padding-top: 6px; border-top: 1px solid var(--line); }
+.wt .wt-survey-sent-help a { color: var(--sea-deep); font-weight: 700; }
