@@ -18,7 +18,7 @@ export interface CreditLine {
   id: number;
   delta: number;
   /** 코드 이름 — 화면은 문구가 아니라 이것으로 분기한다. */
-  reason: "WELCOME" | "DAILY" | "PURCHASE" | "SPEND" | "REFUND" | "ADJUST";
+  reason: "WELCOME" | "DAILY" | "PURCHASE" | "SPEND" | "REFUND" | "REWARD" | "ADJUST";
   /** 사람이 읽을 말. 서버가 준 것을 그대로 쓴다. */
   label: string;
   memo: string | null;
@@ -33,4 +33,18 @@ export function creditBalance(): Promise<CreditBalance> {
 /** 최근 내역. 잔액과 같은 자료에서 나오므로 둘이 어긋날 수 없다. */
 export function creditHistory(limit = 20): Promise<CreditLine[]> {
   return request<CreditLine[]>(`/api/v1/credits/me/events?limit=${limit}`);
+}
+
+/* ---- 잔액이 바뀌었다는 알림 ---------------------------------------------------
+ *
+ * 헤더는 로그인할 때 한 번만 잔액을 읽는다. 그 뒤에 화면 안에서 크레딧이 움직이면
+ * (보상을 받거나, 만들면서 쓰거나) 헤더는 알 길이 없어서 새로고침 전까지 옛 값이
+ * 남는다. 크레딧을 움직인 화면이 이것을 부르면 헤더가 새 값으로 바꾼다.
+ * 새 잔액을 알면 넘기고, 모르면 비워 두면 헤더가 서버에 다시 묻는다.
+ */
+export const CREDITS_CHANGED = "lore:credits-changed";
+
+export function notifyCreditsChanged(balance?: number): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<{ balance?: number }>(CREDITS_CHANGED, { detail: { balance } }));
 }

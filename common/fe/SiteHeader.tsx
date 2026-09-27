@@ -14,7 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import TabLink from "./TabLink";
 import AuthModal from "./auth/AuthModal";
 import CreditCharge from "./mypage/CreditCharge";
-import { creditBalance } from "./api/credits";
+import { CREDITS_CHANGED, creditBalance } from "./api/credits";
 import { useAuth } from "./auth/useAuth";
 import { TABS } from "./links";
 import styles from "./SiteHeader.module.css";
@@ -44,7 +44,14 @@ export default function SiteHeader() {
     creditBalance()
       .then((b) => { if (alive) setCredits(b.balance); })
       .catch(() => { /* 못 받으면 칩을 아예 안 그린다 */ });
-    return () => { alive = false; };
+    /* 다른 화면이 크레딧을 움직였다고 알리면 바꾼다(notifyCreditsChanged). */
+    const onChanged = (e: Event) => {
+      const next = (e as CustomEvent<{ balance?: number }>).detail?.balance;
+      if (typeof next === "number") { setCredits(next); return; }
+      creditBalance().then((b) => { if (alive) setCredits(b.balance); }).catch(() => {});
+    };
+    window.addEventListener(CREDITS_CHANGED, onChanged);
+    return () => { alive = false; window.removeEventListener(CREDITS_CHANGED, onChanged); };
   }, [isAuthenticated]);
   const [authOpen, setAuthOpen] = useState(false);
 
