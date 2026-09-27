@@ -1266,8 +1266,8 @@ def main(argv=None) -> int:
     p.add_argument("--photo", action="append", default=[], help="사진 (여러 번 가능)")
     p.add_argument("--desc", default="", help="설명 (선택)")
     p.add_argument("--genre", default="", help="장르 (선택)")
-    p.add_argument("--lang", default="ko", choices=sorted(lang_mod.LANG_NAMES),
-                   help="웹툰 언어 (기본 ko)")
+    p.add_argument("--lang", default=None, choices=sorted(lang_mod.LANG_NAMES),
+                   help="웹툰 언어. 안 주면 .env(NH_LANG) 를 보고, 그것도 없으면 ko")
 
     p.add_argument("--run-id",
                    help="이어서 할 run. 없는 번호를 주고 --character 를 같이 "
@@ -1323,6 +1323,9 @@ def main(argv=None) -> int:
                                               "반영할 요청 (이야기·시트 단계에서 씀)")
     p.add_argument("--plan", action="store_true", help="단계별 모델만 보여준다")
     args = p.parse_args(argv)
+    if not args.lang:
+        env_lang = (llm.env("NH_LANG") or "").strip()
+        args.lang = env_lang if env_lang in lang_mod.LANG_NAMES else "ko"
 
     if args.plan:
         rows = llm.plan()
