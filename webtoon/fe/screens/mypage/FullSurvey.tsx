@@ -16,7 +16,7 @@ import { registerDict, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
 import { Dialog } from "../../ui/Dialog";
-import { answeredAll, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
+import { answeredAll, OpenNotes, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
 
 export default function FullSurvey({ authenticated, status, go, onClose, onRewarded }: {
   authenticated: boolean;
@@ -28,7 +28,6 @@ export default function FullSurvey({ authenticated, status, go, onClose, onRewar
 }) {
   const t = useT();
   const [answers, setAnswers] = useState<SurveyAnswers>({});
-  const [comment, setComment] = useState("");
   const [interview, setInterview] = useState(false);
   const [contact, setContact] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,7 +46,7 @@ export default function FullSurvey({ authenticated, status, go, onClose, onRewar
     setBusy(true);
     setErr("");
     try {
-      const got = await sendFullSurvey({ answers, comment, wantsInterview: interview, contact: interview ? contact : "" });
+      const got = await sendFullSurvey({ answers, wantsInterview: interview, contact: interview ? contact : "" });
       track("feedback_submit", { where: "mypage", count: questions.length, ok: got.rewarded > 0 });
       if (got.rewarded > 0) onRewarded(got.balance);
       setSent(got.rewarded);
@@ -123,11 +122,7 @@ export default function FullSurvey({ authenticated, status, go, onClose, onRewar
           <SurveyQuestion key={q} q={q} answers={answers}
                           set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
         ))}
-        <label className="wt-survey-q">
-          <b>{t("더 하고 싶은 말 (선택)")}</b>
-          <textarea value={comment} maxLength={2000} onChange={(e) => setComment(e.target.value)}
-                    placeholder={t("좋았던 장면, 아쉬웠던 곳, 바라는 기능 무엇이든 적어 주세요.")} />
-        </label>
+        <OpenNotes answers={answers} set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
         <div className="wt-survey-interview">
           <label className="wt-survey-check">
             <input type="checkbox" checked={interview} onChange={(e) => setInterview(e.target.checked)} />
@@ -166,8 +161,6 @@ registerDict({
   "확인": { en: "OK", ja: "OK", zh: "确定" },
   "보내고 {n}크레딧 받기": { en: "Send & get {n} credits", ja: "送信して{n}クレジットを受け取る", zh: "提交并领取 {n} 积分" },
   "웹툰 만들러 가기": { en: "Make a webtoon", ja: "ウェブトゥーンを作る", zh: "去做漫画" },
-  "더 하고 싶은 말 (선택)": { en: "Anything else? (optional)", ja: "ほかに伝えたいこと（任意）", zh: "还想说的（可选）" },
-  "좋았던 장면, 아쉬웠던 곳, 바라는 기능 무엇이든 적어 주세요.": { en: "Scenes you liked, what fell short, features you want — anything.", ja: "良かった場面、物足りなかった点、欲しい機能など何でも。", zh: "喜欢的场景、不足之处、希望的功能，什么都可以。" },
   "15분 인터뷰에 참여할게요": { en: "I'll join a 15-minute interview", ja: "15分のインタビューに参加します", zh: "我愿意参加 15 分钟访谈" },
   "체크해 주시면 인터뷰 가능한 날짜와 질문을 이메일로 미리 보내 드려요. 참여해 주시면 따로 보상도 드려요.": {
     en: "Check this and we'll email you available dates and the questions in advance. You'll get a separate reward for joining.",

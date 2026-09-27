@@ -101,12 +101,15 @@ public class WebtoonFeedbackService {
         if (p == null || feedback.answeredShort(runId, userId, blankToNull(uid))) {
             return new ShortQuestions(List.of(), false);
         }
+        // 만족도(S0)와 핵심 질문 하나는 고정, 나머지에서 하나를 무작위로.
         WebtoonFeedbackQuestion fixed = p.own ? WebtoonFeedbackQuestion.S1 : WebtoonFeedbackQuestion.S6;
         List<WebtoonFeedbackQuestion> pool = new ArrayList<>(p.applicable);
+        pool.remove(WebtoonFeedbackQuestion.S0);
         pool.remove(fixed);
         Collections.shuffle(pool, random);
-        int extra = Math.min(pool.size(), 1 + random.nextInt(2));
+        int extra = Math.min(pool.size(), 1);
         List<String> asked = new ArrayList<>();
+        asked.add(WebtoonFeedbackQuestion.S0.name());
         asked.add(fixed.name());
         pool.subList(0, extra).forEach(q -> asked.add(q.name()));
         return new ShortQuestions(asked, p.own);
@@ -225,8 +228,8 @@ public class WebtoonFeedbackService {
         boolean hasStory = !text(v.get("story")).isBlank();
         boolean own = hasPhoto || hasName || hasDesc;
 
-        Set<WebtoonFeedbackQuestion> applicable = EnumSet.of(WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6,
-                WebtoonFeedbackQuestion.S7, WebtoonFeedbackQuestion.S8);
+        Set<WebtoonFeedbackQuestion> applicable = EnumSet.of(WebtoonFeedbackQuestion.S0, WebtoonFeedbackQuestion.S2,
+                WebtoonFeedbackQuestion.S6, WebtoonFeedbackQuestion.S7, WebtoonFeedbackQuestion.S8);
         if (own) {
             applicable.add(WebtoonFeedbackQuestion.S1);
             applicable.add(WebtoonFeedbackQuestion.S3);
@@ -270,6 +273,9 @@ public class WebtoonFeedbackService {
             }
             putNote(extra, "S7_note", raw.get("S7_note"));
         }
+        for (String key : WebtoonFeedbackQuestion.OPEN_NOTES) {
+            putNote(extra, key, raw.get(key));
+        }
         out.putAll(extra);
         return out;
     }
@@ -312,8 +318,8 @@ public class WebtoonFeedbackService {
         }
         RunService.Inputs in = runs.inputsOf(runId);
         Set<WebtoonFeedbackQuestion> asked = in == null
-                ? EnumSet.of(WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6, WebtoonFeedbackQuestion.S7,
-                             WebtoonFeedbackQuestion.S8)
+                ? EnumSet.of(WebtoonFeedbackQuestion.S0, WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6,
+                             WebtoonFeedbackQuestion.S7, WebtoonFeedbackQuestion.S8)
                 : EnumSet.copyOf(profileFrom(in).applicable());
         asked.add(WebtoonFeedbackQuestion.S10);
         return asked;

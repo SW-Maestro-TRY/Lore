@@ -12,7 +12,7 @@ import { mySurveyStatus, sendShortSurvey, surveyQuestions, type SurveyAnswers, t
 import { registerDict, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
-import { answeredAll, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
+import { answeredAll, OpenNotes, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
 
 const SKIPPED_KEY = "lore_survey_skipped";
 
@@ -104,6 +104,7 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
         <SurveyQuestion key={q} q={q} answers={answers}
                         set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
       ))}
+      <OpenNotes answers={answers} set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
       {err && <p className="wt-survey-err">{err}</p>}
       <div className="wt-survey-actions">
         <button type="button" className="btn btn-w" disabled={state === "busy"} onClick={skip}>{t("건너뛰기")}</button>
