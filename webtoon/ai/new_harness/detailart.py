@@ -124,18 +124,28 @@ def cast_of(detail: dict, run_dir: Path) -> list[dict]:
 
 
 def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> str:
-    """장면마다 **글자까지 같게** 들어가는 인물 고정 앵커."""
+    """장면마다 **글자까지 같게** 들어가는 인물 고정 앵커.
+
+    외모(시트)와 설명(사용자가 적은 원문)은 서로 다른 역할이다 — 시트가 있어도
+    설명은 같이 붙인다. 안 그러면(#475) 주인공은 시트만 쓰는 정상 경로에서
+    사용자가 적은 내용이 그림 프롬프트에 아예 도달하지 못한다.
+    """
     lines = []
-    if spec:
-        lines.append(imageprompt.sheet_line(spec))
-    elif char:
-        who = (char.get("name") or "").strip()
+    desc = ""
+    if char:
         desc = (char.get("description") or "").strip()
         # 고른 캐릭터 카드(#458)의 종·세계를 앞에 둔다 — 원래 설명만 보면
         # 카드가 바꿔 놓은 종(사람 → 검은여우)을 놓치고 사람으로 그린다.
         card = charcard.short(char.get("card") or {})
         desc = f"{card}. {desc}" if card and desc else (card or desc)
+    if spec:
+        lines.append(imageprompt.sheet_line(spec))
+        if desc:
+            lines.append(f"- 설명: {desc}")
+    elif char:
+        who = (char.get("name") or "").strip()
         lines.append(f"{who} — {desc}" if desc else who)
+    if char:
         for k, v in (char.get("fields") or {}).items():
             lines.append(f"- {k}: {v}")
     for one in cast:
@@ -145,6 +155,8 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
         return ""
     return ("## 인물 (외모는 장면이 바뀌어도 그대로다)\n"
             "주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다.\n"
+            "설명에 적힌 내용이 지금 장면 상황과 관련 있으면 그 인물의 행동·표정·대사로 "
+            "자연스럽게 드러나야 한다. 관련 없으면 억지로 끼워 넣지 않는다.\n"
             + "\n".join(lines))
 
 
@@ -291,7 +303,8 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
                 "인물의 이름·장소·상황을 나레이션·대사·시각 단서 중 하나로 "
                 "반드시 드러낸다.")
     elif last:
-        role = "이 화의 마지막 장면 — 지금 장면을 마무리하며, 다음 화가 궁금해지는 여운으로 끝낸다."
+        role = ("이 화의 마지막 장면 — 지금 장면을 마무리하며, 다음 화가 궁금해지는 "
+                 "여운으로 끝낸다. 나레이션·대사는 문장을 끝까지 맺는다.")
     else:
         role = "중간 장면 — 앞 장면에서 자연스럽게 이어받아 진행한다."
 
@@ -321,6 +334,8 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         "데서 끊는다. 더 나아가면 다음 장과 같은 순간을 두 번 그리게 된다.",
         "- 그 사이를 컷 몇 개로 어떻게 보여줄지, 무슨 대사를 넣을지는 전부 "
         "**네가 정한다.**",
+        "- 나레이션이나 대사를 쓴다면 이 페이지 안에서 문장을 끝까지 완결한다. "
+        "말줄임표나 접속사로 걸쳐 놓은 채 페이지를 끝내지 않는다.",
     ]
     scene_instr = "\n".join(lines)
     if has_prev:
