@@ -12,7 +12,7 @@ import { mySurveyStatus, sendShortSurvey, surveyQuestions, type SurveyAnswers, t
 import { registerDict, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
-import { answeredAll, RewardBadge, SurveyQuestion } from "../../ui/Survey";
+import { answeredAll, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
 
 const SKIPPED_KEY = "lore_survey_skipped";
 
@@ -101,8 +101,8 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
     <div className="card wt-survey-card">
       <h3>{t("이 웹툰, 어땠나요?")}</h3>
       {questions.map((q) => (
-        <SurveyQuestion key={q} q={q} value={answers[q]}
-                        onChange={(v) => setAnswers((a) => ({ ...a, [q]: v }))} />
+        <SurveyQuestion key={q} q={q} answers={answers}
+                        set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
       ))}
       {err && <p className="wt-survey-err">{err}</p>}
       <div className="wt-survey-actions">

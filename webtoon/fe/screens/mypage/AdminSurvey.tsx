@@ -5,9 +5,9 @@
  * 그러면 이 칸은 아무것도 그리지 않는다.
  */
 import { useEffect, useState } from "react";
-import { adminSurveyRows, type SurveyKey, type SurveyRow } from "../../lib/api";
+import { adminSurveyRows, type SurveyRow } from "../../lib/api";
 import { registerDict, useT } from "../../lib/i18n";
-import { answerLabel, SURVEY_KEYS, SURVEY_SHORT } from "../../ui/Survey";
+import { answerLabel, SURVEY_SHORT } from "../../ui/Survey";
 
 export default function AdminSurvey() {
   const t = useT();
@@ -33,8 +33,9 @@ export default function AdminSurvey() {
             {r.rewarded > 0 && <span>+{r.rewarded}C</span>}
           </header>
           <dl>
-            {SURVEY_KEYS.filter((k) => r.answers[k] !== undefined).map((k: SurveyKey) => (
-              <FragmentRow key={k} k={`${k} ${SURVEY_SHORT[k]}`} v={answerLabel(k, r.answers[k], t)} />
+            {Object.keys(SURVEY_SHORT).filter((k) => (r.answers as Record<string, unknown>)[k] !== undefined).map((k) => (
+              <FragmentRow key={k} k={`${k.replace("_", " ")} ${SURVEY_SHORT[k]}`}
+                           v={answerLabel(k, (r.answers as Record<string, never>)[k], t)} />
             ))}
           </dl>
           {r.comment && <blockquote>{r.comment}</blockquote>}
