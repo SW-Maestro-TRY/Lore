@@ -570,3 +570,55 @@ export interface FeedbackTag {
 export function readConfig(): Promise<{ feedback_tags: Record<string, FeedbackTag[]>; trash_keep_days?: number }> {
   return call("/config");
 }
+
+/* ---- 사용자 검증 설문 (#471, webtoon/docs/validation.md) --------------------- */
+
+export type SurveyKey = "S1" | "S2" | "S3" | "S4" | "S5" | "S6" | "S7" | "S8" | "S9" | "S10";
+export type SurveyValue = number | string | string[];
+export type SurveyAnswers = Partial<Record<SurveyKey, SurveyValue>>;
+
+/** 완성 직후에 무엇을 물을지. 주인이 아니거나 이미 답했으면 빈 목록. */
+export function surveyQuestions(runId: string): Promise<{ questions: SurveyKey[]; own: boolean }> {
+  return call(`/feedback/questions?run=${encodeURIComponent(runId)}`);
+}
+
+export function sendShortSurvey(runId: string, answers: SurveyAnswers): Promise<{ saved: boolean }> {
+  return post("/feedback", { run: runId, answers });
+}
+
+export interface SurveyStatus {
+  /** 전체 설문을 이미 냈나 */
+  done: boolean;
+  /** 끝까지 답하면 주는 크레딧 */
+  reward: number;
+  /** 다시 온 사람 안내를 띄울 차례인가 */
+  prompt: boolean;
+}
+
+export function mySurveyStatus(): Promise<SurveyStatus> {
+  return call("/my/feedback");
+}
+
+export function sendFullSurvey(body: {
+  answers: SurveyAnswers; comment?: string; wantsInterview?: boolean; contact?: string;
+}): Promise<{ rewarded: number; balance: number }> {
+  return post("/my/feedback", body);
+}
+
+export interface SurveyRow {
+  id: number;
+  kind: "SHORT" | "FULL";
+  run_id: string | null;
+  user_id: number | null;
+  answers: SurveyAnswers;
+  comment: string | null;
+  wants_interview: boolean;
+  contact: string | null;
+  rewarded: number;
+  created_at: string;
+}
+
+/** 관리자만. 아니면 403. */
+export function adminSurveyRows(limit = 200): Promise<SurveyRow[]> {
+  return call(`/admin/feedback?limit=${limit}`);
+}

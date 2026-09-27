@@ -13,6 +13,7 @@ import { Crumb, MobileTop } from "../../ui/TopNav";
 import ShareMenu from "./ShareMenu";
 import RunStrip from "../../ui/RunStrip";
 import LikeButton from "../../ui/LikeButton";
+import ResultSurvey from "./ResultSurvey";
 import "./i18n";
 import "./Result.css";
 
@@ -45,11 +46,14 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const [suggested, setSuggested] = useState<RunCard[]>([]);
   const [liked, setLiked] = useState(false);
   const [likes, setLikes] = useState<number | null>(null);
+  /* 끝까지 읽었나 — 읽은 뒤에만 짧은 설문(#471)을 띄운다. */
+  const [readEnd, setReadEnd] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setData(null);
     setFailed(null);
+    setReadEnd(false);
     readResult(runId)
       .then((got) => { if (alive) setData(got); })
       .catch((e: Error) => { if (alive) setFailed(e.message || t("작품을 열지 못했습니다")); });
@@ -151,6 +155,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       if (r.height > 100 && r.bottom <= window.innerHeight + 40) {
         readEndSent.current = runId;
         track("read_end", { run: runId, mine, ep, page: data.page_count });
+        setReadEnd(true);
         window.removeEventListener("scroll", onScroll);
       }
     };
@@ -339,6 +344,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 );
               })}
             </div>
+
+            {mine && readEnd && <ResultSurvey key={runId} runId={runId} authenticated={authenticated} go={go} />}
 
             {mine && siblings.length > 0 && (
               <div className="wt-result-others">
