@@ -101,7 +101,7 @@ function ExplorePane({
   const ready = cards.status === "ready" ? cards : null;
   // 장부 정보와 카드 어느 쪽이든 받지 못했으면 오류, 받는 중이면 로딩이다.
   const state = meta.status === "error" || cards.status === "error" ? "error" : meta.status === "loading" || cards.status === "loading" ? "loading" : "ready";
-  const countText = ready && chapter !== null ? `${ready.total}개 · ${chapter}화 장부` : state === "loading" ? "불러오는 중" : "0개";
+  const countText = ready && chapter !== null ? `복선 ${ready.total}개` : state === "loading" ? "불러오는 중" : "0개";
 
   return (
     <section className="explore" aria-labelledby="trailer-explore-title" data-part="explore">
@@ -199,9 +199,7 @@ function ExplorePane({
         </div>
       ) : null}
       <p className="source-note">
-        {chapter === null ? "" : `${chapter}화 `}누적 장부의 <span>{ready ? ready.chapterTotal : 0}</span>개 복선을 표시합니다.
-        <br />
-        장부에서 추출한 기록입니다. 원작의 확정 사실로 검증된 자료는 아닙니다.{" "}
+        선택한 회차까지의 복선을 보여드려요.{" "}
         <button
           data-action="help"
           style={{ padding: 0, color: "var(--green)", textDecoration: "underline" }}

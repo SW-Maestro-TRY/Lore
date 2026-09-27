@@ -10,7 +10,7 @@
 // 여기서 회차 N 으로 거르고 가려서 lore 의 응답 모양(camelCase · 봉투)으로 바꾼다.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { BrowserContext, Route } from '@playwright/test';
+import { expect, type BrowserContext, type Page, type Route } from '@playwright/test';
 import { ALL_KINDS, matchesCard } from '../../../trailer/fe/lib/search';
 
 export type RawCard = {
@@ -57,6 +57,14 @@ export const DETAIL_URL = /\/api\/trailer\/v1\/public\/cards\/(T\d+)(\?.*)?$/;
 export const HYPOTHESES_URL = /\/api\/trailer\/v1\/hypotheses$/;
 /** 가설 하나(2-6). 끝이 숫자여야 한다 — `/hypotheses/my` 는 여기 걸리지 않는다. */
 export const HYPOTHESIS_URL = /\/api\/trailer\/v1\/hypotheses\/(\d+)$/;
+
+/** 대기 화면을 확인한 뒤 호출한다. 탐색 전에 설치한 clock으로 다음 자동 조회를 기다린다. */
+export async function waitForJudgementPoll(page: Page): Promise<void> {
+  const response = page.waitForResponse(response => HYPOTHESIS_URL.test(response.url()) && response.request().method() === 'GET');
+  await page.clock.fastForward(21_000);
+  await response;
+}
+
 /** 내 가설 보관함(2-7). */
 export const MY_HYPOTHESES_URL = /\/api\/trailer\/v1\/hypotheses\/my$/;
 /** lore 공용 로그인. 화면은 `useAuth` 로 `/users/me` 가 200 인지로 로그인을 판정하고, 로그인 창은 `/auth/login` 을 부른다. */
@@ -72,6 +80,23 @@ export const DEFAULT_CREDITS = 20;
 
 /** 서버의 기본 쪽 크기. 화면이 `size` 를 보내지만 서버가 더 작게 줄 수도 있다 — 화면은 `hasNext` 만 믿어야 한다. */
 export const DEFAULT_PAGE_SIZE = 50;
+
+/** 회차 입력을 적용하고 그 회차의 카드 목록이 도착할 때까지 기다린다. */
+export async function selectChapter(page: Page, chapter: number): Promise<void> {
+  const trigger = page.locator('[data-part="chapter-trigger"]');
+  const current = page.locator('[data-part="chapter-current"]');
+  await expect(trigger).toBeEnabled();
+  if ((await current.textContent()) !== `${chapter}화까지`) {
+    await trigger.click();
+    const picker = page.getByRole('dialog', { name: '읽은 회차' });
+    await picker.getByRole('textbox', { name: '읽은 회차' }).fill(String(chapter));
+    const response = page.waitForResponse(response => LIST_URL.test(response.url()) && new URL(response.url()).searchParams.get('chapter') === String(chapter));
+    await picker.getByRole('button', { name: '적용', exact: true }).click();
+    await response;
+  }
+  await expect(current).toHaveText(`${chapter}화까지`);
+  await expect(page.locator('[data-part="results"][data-state="ready"]')).toBeVisible();
+}
 
 const threadNo = (id: string) => Number(id.slice(1));
 

@@ -6,30 +6,40 @@
 import { useCallback, useEffect, useState } from "react";
 import { creditBalance } from "@common/api/credits";
 
-export function useCredit(enabled: boolean): { balance: number | null; refresh: () => void } {
+export function useCredit(enabled: boolean, userId?: number) {
   const [balance, setBalance] = useState<number | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!enabled) {
       setBalance(null);
+      setStatus("idle");
       return;
     }
     // 늦게 온 응답을 버린다 — 로그아웃했거나 다시 읽기 시작한 뒤에 온 옛 값.
     let alive = true;
+    setStatus("loading");
+    setBalance(null);
     creditBalance()
       .then((value) => {
-        if (alive) setBalance(value.balance);
+        if (alive) { setBalance(value.balance); setStatus("ready"); }
       })
       .catch(() => {
-        if (alive) setBalance(null);
+        if (alive) { setBalance(null); setStatus("error"); }
       });
     return () => {
       alive = false;
     };
-  }, [enabled, attempt]);
+  }, [enabled, userId, attempt]);
+
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") setAttempt(n => n + 1); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
 
   /** 잔액을 다시 읽는다. 맡긴 뒤(깎임)와 판정이 실패한 뒤(돌아옴)에 부른다. */
   const refresh = useCallback(() => setAttempt((n) => n + 1), []);
-  return { balance, refresh };
+  return { balance, status, refresh };
 }

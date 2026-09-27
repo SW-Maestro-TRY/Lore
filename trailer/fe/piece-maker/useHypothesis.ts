@@ -2,7 +2,7 @@
  *
  * 판정은 운영자가 따로 넣어서 몇 분에서 몇 시간이 걸린다. 그래서 setInterval 이 아니라 "응답이 온 뒤 다시 거는
  * setTimeout" 으로 묻고(zzal 의 usePet 과 같다), 숨은 탭에서는 멈추고, 다시 보이면 곧 묻는다. 부르는 쪽이
- * `reload()` 로 지금 물을 수도 있다("지금 확인" 단추).
+ * `reload()` 로 지금 물을 수도 있다(로그인 직후의 재조회).
  *
  * 상태 다섯: 받는 중 · 받음 · 없음(404 — 다른 계정으로 맡겼거나 지워짐) · 로그인 필요(401) · 받지 못함. */
 import { useCallback, useEffect, useRef, useState } from "react";

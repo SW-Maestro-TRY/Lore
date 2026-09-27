@@ -44,6 +44,19 @@ public class Hypothesis {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "request_key", length = 36)
+    private String requestKey;
+
+    @Column(name = "request_digest", length = 64)
+    private String requestDigest;
+
+    void identifyRequest(String key, String digest) {
+        requestKey = key;
+        requestDigest = digest;
+    }
+
+    String getRequestDigest() { return requestDigest; }
+
     /** 독자가 읽었다고 고른 회차 N. judge.py 가 이 회차로 장부를 자른다. */
     @Column(nullable = false)
     private int chapter;

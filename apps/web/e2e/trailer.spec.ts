@@ -18,7 +18,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { collectErrors } from './helpers';
 import { ALL_KINDS, matchesCard } from '../../../trailer/fe/lib/search';
-import { CARDS, HYPOTHESES_URL, LIST_URL, answer, fail, failHypothesis, load, mockLore, visibleCards, type Fixture, type LoreHypothesis } from './trailer-lore';
+import { CARDS, HYPOTHESES_URL, LIST_URL, answer, fail, failHypothesis, load, mockLore, selectChapter, visibleCards, waitForJudgementPoll, type Fixture, type LoreHypothesis } from './trailer-lore';
 
 /** Python 서버가 실제로 준 T2 판정(400화). 3부에서는 운영자가 넣은 판정이 가설의 `judgement` · `presentation` 으로 온다. */
 type JudgeResponse = {
@@ -32,18 +32,9 @@ const LAST = CARDS.max_chapter;
 const ALL_CARDS = visibleCards(CARDS, LAST);
 
 const READY = '[data-part="results"][data-state="ready"]';
-const SELECT = '[data-part="chapter-select"]';
+const CHAPTER = '[data-part="chapter-current"]';
 
 const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
-
-/** 판정 기준 회차를 고른다. 목록이 그 회차로 다시 뜰 때까지 기다린다. */
-async function selectChapter(page: Page, chapter: number): Promise<void> {
-  const select = page.locator(SELECT);
-  await expect(select).toBeEnabled();
-  if ((await select.inputValue()) !== String(chapter)) await select.selectOption(String(chapter));
-  await expect(page.locator('[data-part="result-count"]')).toContainText(`${chapter}화 장부`);
-  await page.waitForSelector(READY);
-}
 
 /** 화면을 연다. 회차를 주면 그 회차로 바꾼다. 안 주면 처음 온 독자(1화) 또는 마지막에 고른 회차다. */
 async function open(page: Page, chapter?: number): Promise<void> {
@@ -91,6 +82,10 @@ test.beforeAll(async ({ browser }) => {
   await page.close();
 });
 
+test.beforeEach(async ({ page }) => {
+  await page.clock.install();
+});
+
 test.describe('폰', () => {
   test('가로로 넘치지 않고, 모바일 탭이 lore 헤더 바로 아래에 붙는다', async ({ page, context }) => {
     await mockLore(context);
@@ -99,7 +94,7 @@ test.describe('폰', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await expect(page.locator('[data-part="rail"]')).toBeHidden();
 
-    await page.evaluate(() => window.scrollTo(0, 1500));
+    await page.evaluate(() => window.scrollTo({ top: 1500, behavior: 'instant' }));
     const gap = await page.evaluate(() => {
       const header = [...document.querySelectorAll('header')].find((h) => !h.closest('.trailer-page'))!;
       const tabs = document.querySelector('[data-part="mobile-tabs"]')!;
@@ -150,11 +145,11 @@ test.describe('데스크톱', () => {
     await mockLore(context);
     await open(page);
     const firstChapter = visibleCards(CARDS, 1);
-    await expect(page.locator(SELECT)).toHaveValue('1');
-    await expect(page.locator('[data-part="topbar"]')).toContainText('1화까지 읽은 독자 기준');
+    await expect(page.locator(CHAPTER)).toHaveText('1화까지');
+    await expect(page.getByRole('button', { name: /읽은 회차/ })).toHaveAttribute('aria-expanded', 'false');
     await expect(results(page)).toHaveCount(firstChapter.length);
-    await expect(page.locator('[data-part="result-count"]')).toContainText(`${firstChapter.length}개 · 1화 장부`);
-    await expect(page.locator('[data-part="explore"] .source-note')).toContainText(`1화 누적 장부의 ${firstChapter.length}개`);
+    await expect(page.locator('[data-part="result-count"]')).toHaveText(`복선 ${firstChapter.length}개`);
+    await expect(page.locator('[data-part="explore"] .source-note')).toContainText('선택한 회차까지의 복선을 보여드려요.');
     // 뒤 회차의 카드는 목록에 없다.
     await expect(listCard(page, 'T374')).toHaveCount(0);
   });
@@ -167,7 +162,7 @@ test.describe('데스크톱', () => {
     await expect(results(page)).toHaveCount(third.length);
     await expect(listCard(page, 'T10')).toBeVisible();
     await expect(listCard(page, 'T24')).toHaveCount(0); // 4화에 심었다
-    await expect(page.locator('[data-part="topbar"]')).toContainText('3화까지 읽은 독자 기준');
+    await expect(page.locator(CHAPTER)).toHaveText('3화까지');
   });
 
   test('★ T5 는 1화 독자에게 미회수, 400화 독자에게 회수됨(66화) — 상세의 회수 칸이 회차로 가려진다', async ({ page, context }) => {
@@ -257,7 +252,9 @@ test.describe('데스크톱', () => {
       },
     });
     await open(page);
-    await page.locator(SELECT).selectOption('3');
+    await page.locator('[data-part="chapter-trigger"]').click();
+    await page.getByRole('textbox', { name: '읽은 회차' }).fill('3');
+    await page.getByRole('button', { name: '적용', exact: true }).click();
     await expect(page.locator('[data-part="results"]')).toHaveAttribute('data-state', 'loading');
     await expect(results(page)).toHaveCount(0); // 1화의 카드는 바로 버렸다
 
@@ -267,8 +264,8 @@ test.describe('데스크톱', () => {
     release();
     await page.waitForTimeout(500);
     await expect(results(page)).toHaveCount(ALL_CARDS.length);
-    await expect(page.locator('[data-part="result-count"]')).toContainText(`${LAST}화 장부`);
-    await expect(page.locator(SELECT)).toHaveValue(String(LAST));
+    await expect(page.locator('[data-part="result-count"]')).toHaveText(`복선 ${ALL_CARDS.length}개`);
+    await expect(page.locator(CHAPTER)).toHaveText(`${LAST}화까지`);
   });
 
   /* ---- 1부에서 옮긴 동작 — 400화를 골라 놓고 본다 ---------------------------------------------- */
@@ -321,7 +318,7 @@ test.describe('데스크톱', () => {
     // 장부를 모르는 동안에는 초안을 되살릴 수 없다. 그래서 글을 칠 수 없고 판정도 누를 수 없다.
     await expect(page.locator('#trailer-title')).not.toBeEditable();
     await expect(page.locator('[data-action="judge"]')).toBeDisabled();
-    await expect(page.locator(SELECT)).toBeDisabled();
+    await expect(page.locator('[data-part="chapter-trigger"]')).toBeDisabled();
 
     broken = false;
     await page.click('[data-action="reload-cards"]');
@@ -368,7 +365,7 @@ test.describe('데스크톱', () => {
     // 마지막에 고른 회차(400)로 열린다.
     const again = await context.newPage();
     await open(again);
-    await expect(again.locator(SELECT)).toHaveValue(String(LAST));
+    await expect(again.locator(CHAPTER)).toHaveText(`${LAST}화까지`);
     await expect(again.locator('#trailer-title')).toHaveValue('밀짚모자의 약속');
     await expect(again.locator('#trailer-claim')).toHaveValue('루피는 약속을 지킨다.');
     expect(await pickedIds(again)).toEqual(['T2', 'T6']);
@@ -379,7 +376,7 @@ test.describe('데스크톱', () => {
     fixture = { ...CARDS, state_digest: 'f'.repeat(64) };
     const other = await context.newPage();
     await open(other);
-    await expect(other.locator(SELECT)).toHaveValue('1');
+    await expect(other.locator(CHAPTER)).toHaveText('1화까지');
     await expect(other.locator('#trailer-title')).toHaveValue('');
     expect(await pickedIds(other)).toEqual([]);
     await other.close();
@@ -439,17 +436,22 @@ test.describe('데스크톱', () => {
     await expect(page.locator('#trailer-search')).toHaveValue(card.people[0]);
   });
 
-  test('게시글에는 제목, 주장, 카드, 해석이 들어간다', async ({ page, context }) => {
-    await mockLore(context);
+  test('판정 완료 후 공유 글에 제목·주장·판정 결과가 들어간다', async ({ page, context }) => {
+    const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
     await pick(page, 'T2');
     await page.fill('#trailer-title', '게시글 제목');
     await page.fill('#trailer-claim', '게시글에 들어갈 주장');
     await pickedCard(page, 'T2').locator('[data-part="note"]').fill('게시글에 들어갈 해석');
+    await expect(page.locator('[data-action="preview"]')).toBeDisabled();
+    await page.click('[data-action="judge"]');
+    await expect(page.locator('[data-part="judge-pending"]')).toBeVisible();
+    judgeAs(lore.hypotheses[0], { ...JUDGE_T2.judgement, cited_cards: ALL_CARDS }, JUDGE_T2.presentation ?? null);
+    await waitForJudgementPoll(page);
+    await expect(page.locator('[data-part="judge-result"]')).toBeVisible();
     await page.click('[data-action="preview"]');
     const text = await modal(page).locator('#trailer-copy-text').inputValue();
-    const t2 = ALL_CARDS.find((card) => card.id === 'T2')!;
-    for (const piece of ['게시글 제목', '게시글에 들어갈 주장', '게시글에 들어갈 해석', t2.title, 'T2', String(LAST)]) {
+    for (const piece of ['게시글 제목', '게시글에 들어갈 주장', '판정 결과: 판정 보류', String(LAST)]) {
       expect(text).toContain(piece);
     }
   });
@@ -480,10 +482,11 @@ test.describe('데스크톱', () => {
       notes: { T2: '', T374: '' },
       stateDigest: CARDS.state_digest,
       cardsDigest: CARDS.cards_digest,
+      requestKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
     });
     expect(lore.hypotheses.map((item) => [item.judgementStatus, item.cards.map((card) => card.id)])).toEqual([['PENDING', ['T2', 'T374']]]);
     // 맡긴 초안은 얼어 있다 — 글은 읽기만, 저장은 막히고, 단추는 "새 가설 쓰기"로 바뀐다. 상태 줄은 되물은 결과(PENDING)다.
-    await expect(page.locator('[data-part="judge-state"]')).toContainText('기다리는 중');
+    await expect(page.locator('[data-part="judge-pending"]')).toHaveText('판정 대기 중…');
     await expect(page.locator('#trailer-claim')).toHaveAttribute('readonly', '');
     await expect(page.locator('[data-action="judge"]')).toHaveCount(0);
     await expect(page.locator('[data-action="new-draft"]')).toBeVisible();
@@ -511,6 +514,7 @@ test.describe('데스크톱', () => {
     await expect(page.locator('#trailer-title')).toHaveValue('');
     expect(await pickedIds(page)).toEqual([]);
     await expect(page.locator('[data-action="judge"]')).toBeDisabled();
+    await expect(page.locator('[data-part="judge-pending"]')).toHaveCount(0);
     expect(lore.hypotheses).toHaveLength(1);
   });
 
@@ -563,20 +567,20 @@ test.describe('데스크톱', () => {
     await expect(listCard(page, 'T374')).toHaveCount(0);
     await page.click('[data-action="judge"]');
     await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
-    await expect(page.locator('[data-part="judge-state"]')).toContainText('기다리는 중');
+    await expect(page.locator('[data-part="judge-pending"]')).toHaveText('판정 대기 중…');
     await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
 
     // 운영자가 판정을 넣었다. 인용 카드(cited_cards)를 함께 실었다(decisions.md 1-29).
     const ids = [...new Set([...JUDGE_T2.judgement.support, ...JUDGE_T2.judgement.against])];
     judgeAs(lore.hypotheses[0], { ...JUDGE_T2.judgement, cited_cards: citedCardsFor(ids) }, JUDGE_T2.presentation ?? null);
-    await page.click('[data-action="refresh"]');
+    await waitForJudgementPoll(page);
 
     const result = page.locator('[data-part="judge-result"]');
     await expect(result).toBeVisible();
     await expect(result.locator('[data-part="judge-grade"]')).toHaveAttribute('data-grade', JUDGE_T2.judgement.grade);
     await expect(result.locator('[data-part="judge-edited"] > [data-part="judge-section"]')).toHaveCount(JUDGE_T2.presentation!.sections.length);
     await expect(page.locator('[data-part="judge-state"]')).toContainText('끝났습니다');
-    await expect(page.locator('[data-action="refresh"]')).toHaveCount(0);
+    await expect(page.locator('[data-part="judge-pending"]')).toHaveCount(0);
     // 담지 않은 T374 의 제목이 근거 단추에 붙고, 누르면 상세가 열린다 — 카드 상세 API 는 부르지 않았다.
     const t374 = ALL_CARDS.find((card) => card.id === 'T374')!;
     await expect(result.locator('[data-action="open"][data-card-id="T374"]')).toContainText(t374.title);
@@ -586,7 +590,7 @@ test.describe('데스크톱', () => {
     expect(detailCalls).toEqual([]);
     // 받은 판정은 게시글에도 들어간다.
     await page.click('[data-action="preview"]');
-    expect(await modal(page).locator('#trailer-copy-text').inputValue()).toContain(JUDGE_T2.presentation!.headline);
+    expect(await modal(page).locator('#trailer-copy-text').inputValue()).toContain(JUDGE_T2.presentation!.headline.slice(0, 80));
     expect(errors).toEqual([]);
   });
 
@@ -597,8 +601,9 @@ test.describe('데스크톱', () => {
     await page.click('[data-action="judge"]');
     await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
 
+    await expect(page.locator('[data-part="judge-pending"]')).toBeVisible();
     judgeAs(lore.hypotheses[0], { ...JUDGE_T2.judgement }, null);
-    await page.click('[data-action="refresh"]');
+    await waitForJudgementPoll(page);
     const result = page.locator('[data-part="judge-result"]');
     await expect(result.locator('[data-part="judge-reason"]')).toHaveText(JUDGE_T2.judgement.reason);
     await expect(result.locator('[data-part="judge-edited"]')).toHaveCount(0);
@@ -617,36 +622,36 @@ test.describe('데스크톱', () => {
     await open(page, LAST);
     await writeTheory(page);
     await page.click('[data-action="judge"]');
-    await expect(page.locator('[data-action="refresh"]')).toBeVisible();
+    await expect(page.locator('[data-part="judge-pending"]')).toBeVisible();
 
     const item = lore.hypotheses[0];
     item.judgementStatus = 'FAILED';
     item.failureMessage = '모델이 답하지 않았습니다';
     item.judgedAt = new Date().toISOString();
-    await page.click('[data-action="refresh"]');
+    await waitForJudgementPoll(page);
     await expect(page.locator('[data-part="judge-state"]')).toContainText('모델이 답하지 않았습니다');
     await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
-    await expect(page.locator('[data-action="refresh"]')).toHaveCount(0);
+    await expect(page.locator('[data-part="judge-pending"]')).toHaveCount(0);
     await expect(page.locator('[data-action="new-draft"]')).toBeVisible();
   });
 
-  test('판정 값이 단추 옆에 보인다 — 로그인 전에는 값만, 잔액은 없다', async ({ page, context }) => {
+  test('판정 비용이 버튼에 보인다 — 로그인 전에는 잔액이 없다', async ({ page, context }) => {
     await mockLore(context);
     await open(page, LAST);
-    const credit = page.locator('[data-part="judge-credit"]');
-    await expect(credit).toContainText('판정 1회 5크레딧');
-    await expect(credit).not.toContainText('내 크레딧');
+    const credit = page.locator('[data-action="judge"] [data-part="judge-credit"]');
+    await expect(credit).toHaveText('5크레딧');
+    await expect(page.locator('[data-action="credit-history"]')).toHaveCount(0);
   });
 
   test('★ 로그인하면 내 크레딧이 보이고, 맡기면 판정 값만큼 빠진다', async ({ page, context }) => {
     const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
-    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 20');
+    await expect(page.locator('[data-action="credit-history"]')).toContainText('20크레딧');
     await writeTheory(page);
     await page.click('[data-action="judge"]');
 
     await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
-    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 15');
+    await expect(page.locator('[data-action="credit-history"]')).toContainText('15크레딧');
     expect(lore.credits).toBe(15);
   });
 
@@ -663,23 +668,24 @@ test.describe('데스크톱', () => {
     await expect(page.locator('#trailer-claim')).toHaveValue('모자란 채 맡기는 주장');
     expect(await pickedIds(page)).toEqual(['T2', 'T374']);
     await expect(page.locator('[data-action="judge"]')).toBeEnabled();
-    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 3');
+    await expect(page.locator('[data-action="credit-history"]')).toContainText('3크레딧');
     // 입력을 고치면 문구가 사라진다 — 맡기지 못한 문구와 같은 규칙.
     await page.fill('#trailer-claim', '고친 주장');
     await expect(state).not.toContainText('크레딧이 모자랍니다');
   });
 
-  test('★ 판정이 실패하면 낸 크레딧이 돌아온다 — "지금 확인" 뒤 잔액이 맡기기 전으로', async ({ page, context }) => {
+  test('★ 판정이 실패하면 낸 크레딧이 돌아온다 — 자동 갱신 뒤 잔액이 맡기기 전으로', async ({ page, context }) => {
     const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
     await writeTheory(page);
     await page.click('[data-action="judge"]');
-    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 15');
+    await expect(page.locator('[data-action="credit-history"]')).toContainText('15크레딧');
 
+    await expect(page.locator('[data-part="judge-pending"]')).toBeVisible();
     failHypothesis(lore, lore.hypotheses[0], '자료 판이 다릅니다');
-    await page.click('[data-action="refresh"]');
+    await waitForJudgementPoll(page);
     await expect(page.locator('[data-part="judge-state"]')).toContainText('자료 판이 다릅니다');
-    await expect(page.locator('[data-part="judge-credit"]')).toContainText('내 크레딧 20');
+    await expect(page.locator('[data-action="credit-history"]')).toContainText('20크레딧');
   });
 
   test('새 페이지는 맡긴 가설을 다시 묻는다 — 로그인이 없으면 로그인 안내, 가설이 없으면 없다는 안내', async ({ page, context }) => {
@@ -733,7 +739,7 @@ test.describe('데스크톱', () => {
     // 3화 가설을 열면 회차가 3화로 바뀌고, 얼어 있는 초안으로 되살아나고, 판정이 그려진다.
     await mineList.nth(1).locator('[data-action="open-hypothesis"]').click();
     // 서버에서 전부 받은 뒤에 모달이 닫힌다 — 회차가 바뀐 것을 먼저 기다린다.
-    await expect(page.locator(SELECT)).toHaveValue('3');
+    await expect(page.locator(CHAPTER)).toHaveText('3화까지');
     expect(await modalIsOpen(page)).toBe(false);
     await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
     await expect(page.locator('#trailer-title')).toHaveValue('3화 가설');
