@@ -122,7 +122,7 @@ public class WebtoonFeedbackService {
         if (feedback.answeredShort(runId, userId, blankToNull(uid))) {
             return false;
         }
-        Map<String, Object> answers = clean(raw, p.applicable, false);
+        Map<String, Object> answers = clean(raw, p.applicable);
         if (answers.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "답이 없어요");
         }
@@ -133,7 +133,11 @@ public class WebtoonFeedbackService {
 
     /* ---- 마이페이지 --------------------------------------------------------- */
 
-    /** 전체 설문을 냈나, 보상은 얼마인가, 다시 온 사람 안내를 띄울 차례인가. */
+    /**
+     * 전체 설문을 냈나, 보상은 얼마인가, 다시 온 사람 안내를 띄울 차례인가, 무엇을 물을지.
+     * 물을 질문은 가장 최근에 완성한 작품에 넣은 것으로 정한다 — 설명을 안 적은 사람에게
+     * 「성격대로 행동했나」를 묻지 않으려고. 완성한 작품이 없으면 빈 목록이다.
+     */
     @Transactional(readOnly = true)
     public Status status(Long userId) {
         boolean done = feedback.existsByKindAndUserId(WebtoonFeedback.Kind.FULL, userId);
@@ -143,7 +147,7 @@ public class WebtoonFeedbackService {
             LocalDate today = LocalDate.now(clock.withZone(KST));
             prompt = firstDone.map(at -> today.isAfter(at.atZone(KST).toLocalDate())).orElse(false);
         }
-        return new Status(done, gate.cost(), prompt);
+        return new Status(done, gate.cost(), prompt, fullQuestions(latestDone(userId)).stream().map(Enum::name).toList());
     }
 
     /**
@@ -153,13 +157,17 @@ public class WebtoonFeedbackService {
     @Transactional
     public Full saveFull(Long userId, String uid, Map<String, Object> raw, String comment,
                          boolean wantsInterview, String contact) {
-        Map<String, Object> answers = clean(raw, EnumSet.allOf(WebtoonFeedbackQuestion.class), true);
-        if (answers.size() != WebtoonFeedbackQuestion.values().length) {
+        String runId = latestDone(userId);
+        Set<WebtoonFeedbackQuestion> asked = fullQuestions(runId);
+        if (asked.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "웹툰을 한 편 완성한 뒤에 답할 수 있어요");
+        }
+        Map<String, Object> answers = clean(raw, asked);
+        if (answers.size() != asked.size()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "모든 문항에 답해 주세요");
         }
         String note = trimTo(comment, MAX_COMMENT);
         String reach = wantsInterview ? trimTo(contact, MAX_CONTACT) : null;
-        String runId = latestRun(userId);
         WebtoonFeedback row = feedback.save(WebtoonFeedback.of(WebtoonFeedback.Kind.FULL, runId, userId,
                 blankToNull(uid), toJson(answers), note, wantsInterview, reach, Instant.now(clock)));
         int given = credits.grantOnce(userId, gate.cost(), CreditReason.REWARD, CreditDomain.WEBTOON, REWARD_REF);
@@ -205,9 +213,11 @@ public class WebtoonFeedbackService {
         }
         boolean owner = (userId != null && (userId.equals(in.userId()) || ledger.mayChange(runId, userId)))
                 || (uid != null && !uid.isBlank() && uid.equals(in.browserUid()));
-        if (!owner) {
-            return null;
-        }
+        return owner ? profileFrom(in) : null;
+    }
+
+    /** 만들 때 넣은 것으로, 이 작품에 물을 수 있는 질문을 고른다. */
+    private static Profile profileFrom(RunService.Inputs in) {
         Map<String, Object> v = in.values();
         boolean hasPhoto = Boolean.TRUE.equals(v.get("has_photo"));
         boolean hasName = !text(v.get("name")).isBlank();
@@ -234,7 +244,7 @@ public class WebtoonFeedbackService {
     }
 
     /** 받을 수 있는 질문·값만 남긴다. 순서는 S1 → S9. */
-    private static Map<String, Object> clean(Map<String, Object> raw, Set<WebtoonFeedbackQuestion> allowed, boolean allowNa) {
+    private static Map<String, Object> clean(Map<String, Object> raw, Set<WebtoonFeedbackQuestion> allowed) {
         Map<String, Object> out = new LinkedHashMap<>();
         if (raw == null) {
             return out;
@@ -243,7 +253,7 @@ public class WebtoonFeedbackService {
             if (!allowed.contains(q)) {
                 continue;
             }
-            Object v = q.accept(raw.get(q.name()), allowNa);
+            Object v = q.accept(raw.get(q.name()));
             if (v != null) {
                 out.put(q.name(), v);
             }
@@ -263,10 +273,30 @@ public class WebtoonFeedbackService {
                 .min(Instant::compareTo);
     }
 
-    /** 전체 설문을 어느 작품과 이을지 — 가장 최근 작품. 없으면 null. */
-    private String latestRun(Long userId) {
-        List<WebtoonWork> mine = works.ownedBy(userId);
-        return mine.isEmpty() ? null : mine.get(0).getRunId();
+    /** 가장 최근에 완성한 내 작품. 전체 설문은 이 작품과 잇는다. 없으면 null. */
+    private String latestDone(Long userId) {
+        for (WebtoonWork w : works.ownedBy(userId)) {          // 새 것부터
+            boolean done = w.getJobId() != null && jobs.findByPublicId(w.getJobId())
+                    .map(j -> j.getStatus() == JobStatus.DONE).orElse(false);
+            if (done) {
+                return w.getRunId();
+            }
+        }
+        return null;
+    }
+
+    /** 전체 설문에 물을 질문 — 그 작품에 맞는 S1~S9 와 원하는 기능(S10). 작품이 없으면 빈 것. */
+    private Set<WebtoonFeedbackQuestion> fullQuestions(String runId) {
+        if (runId == null) {
+            return EnumSet.noneOf(WebtoonFeedbackQuestion.class);
+        }
+        RunService.Inputs in = runs.inputsOf(runId);
+        Set<WebtoonFeedbackQuestion> asked = in == null
+                ? EnumSet.of(WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6, WebtoonFeedbackQuestion.S7,
+                             WebtoonFeedbackQuestion.S8, WebtoonFeedbackQuestion.S9)
+                : EnumSet.copyOf(profileFrom(in).applicable());
+        asked.add(WebtoonFeedbackQuestion.S10);
+        return asked;
     }
 
     private static String toJson(Map<String, Object> m) {
@@ -304,7 +334,7 @@ public class WebtoonFeedbackService {
     public record ShortQuestions(List<String> questions, boolean own) {
     }
 
-    public record Status(boolean done, int reward, boolean prompt) {
+    public record Status(boolean done, int reward, boolean prompt, List<String> questions) {
     }
 
     public record Full(int rewarded, int balance) {

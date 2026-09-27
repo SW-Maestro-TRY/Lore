@@ -18,36 +18,28 @@ class WebtoonFeedbackQuestionTest {
     @Test
     @DisplayName("점수 문항은 1~5 정수만 받는다")
     void scale() {
-        assertThat(WebtoonFeedbackQuestion.S1.accept(4, false)).isEqualTo(4);
-        assertThat(WebtoonFeedbackQuestion.S1.accept(0, false)).isNull();
-        assertThat(WebtoonFeedbackQuestion.S1.accept(6, false)).isNull();
-        assertThat(WebtoonFeedbackQuestion.S1.accept(3.5, false)).isNull();
-        assertThat(WebtoonFeedbackQuestion.S1.accept("4", false)).isNull();
+        assertThat(WebtoonFeedbackQuestion.S1.accept(4)).isEqualTo(4);
+        assertThat(WebtoonFeedbackQuestion.S1.accept(0)).isNull();
+        assertThat(WebtoonFeedbackQuestion.S1.accept(6)).isNull();
+        assertThat(WebtoonFeedbackQuestion.S1.accept(3.5)).isNull();
+        assertThat(WebtoonFeedbackQuestion.S1.accept("4")).isNull();
     }
 
     @Test
     @DisplayName("선택 문항은 정해진 기호만 받는다")
     void choice() {
-        assertThat(WebtoonFeedbackQuestion.S3.accept("partly", false)).isEqualTo("partly");
-        assertThat(WebtoonFeedbackQuestion.S7.accept("partly", false)).isNull();
-        assertThat(WebtoonFeedbackQuestion.S8.accept("maybe", false)).isEqualTo("maybe");
-        assertThat(WebtoonFeedbackQuestion.S9.accept("일부", false)).isNull();
-    }
-
-    @Test
-    @DisplayName("「해당 없음」은 전체 설문의 넣은 것이 필요한 문항에서만")
-    void notApplicable() {
-        assertThat(WebtoonFeedbackQuestion.S4.accept("na", true)).isEqualTo("na");
-        assertThat(WebtoonFeedbackQuestion.S4.accept("na", false)).isNull();
-        assertThat(WebtoonFeedbackQuestion.S6.accept("na", true)).isNull();
+        assertThat(WebtoonFeedbackQuestion.S3.accept("partly")).isEqualTo("partly");
+        assertThat(WebtoonFeedbackQuestion.S7.accept("partly")).isNull();
+        assertThat(WebtoonFeedbackQuestion.S8.accept("maybe")).isEqualTo("maybe");
+        assertThat(WebtoonFeedbackQuestion.S9.accept("일부")).isNull();
     }
 
     @Test
     @DisplayName("원하는 기능은 여러 개, 모르는 기호는 빼고 겹치면 한 번만")
     void wants() {
-        assertThat(WebtoonFeedbackQuestion.S10.accept(List.of("multi_char", "next_episode", "multi_char", "fly"), true))
+        assertThat(WebtoonFeedbackQuestion.S10.accept(List.of("multi_char", "next_episode", "multi_char", "fly")))
                 .isEqualTo(List.of("multi_char", "next_episode"));
-        assertThat(WebtoonFeedbackQuestion.S10.accept(List.of("fly"), true)).isNull();
-        assertThat(WebtoonFeedbackQuestion.S10.accept("multi_char", true)).isNull();
+        assertThat(WebtoonFeedbackQuestion.S10.accept(List.of("fly"))).isNull();
+        assertThat(WebtoonFeedbackQuestion.S10.accept("multi_char")).isNull();
     }
 }

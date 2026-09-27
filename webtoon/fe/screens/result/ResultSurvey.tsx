@@ -8,11 +8,11 @@
  * 건너뛰면 이 브라우저에서 이 작품에는 다시 안 띄운다.
  */
 import { useEffect, useState } from "react";
-import { sendShortSurvey, surveyQuestions, type SurveyAnswers, type SurveyKey } from "../../lib/api";
+import { mySurveyStatus, sendShortSurvey, surveyQuestions, type SurveyAnswers, type SurveyKey } from "../../lib/api";
 import { registerDict, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
-import { answeredAll, SurveyQuestion } from "../../ui/Survey";
+import { answeredAll, RewardBadge, SurveyQuestion } from "../../ui/Survey";
 
 const SKIPPED_KEY = "lore_survey_skipped";
 
@@ -39,6 +39,8 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
   const [answers, setAnswers] = useState<SurveyAnswers>({});
   const [state, setState] = useState<"ask" | "busy" | "done" | "gone">("gone");
   const [err, setErr] = useState("");
+  /* 보낸 뒤 — 마이페이지 설문 보상을 아직 안 받았으면 그 크레딧을 보여 준다 */
+  const [reward, setReward] = useState<number | null>(null);
 
   useEffect(() => {
     if (skipped(runId)) return;
@@ -60,10 +62,13 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
     return (
       <div className="card wt-survey-card wt-survey-done">
         <b>{t("답해 주셔서 고마워요!")}</b>
-        {authenticated && (
+        {reward !== null && (
           <>
-            <span className="muted">{t("마이페이지 「피드백 보내기」에서 조금 더 답해 주시면 웹툰 한 편을 더 만들 수 있는 크레딧을 드려요.")}</span>
-            <button type="button" className="btn btn-w btn-sm" onClick={() => go("mypage", { tab: "feedback" })}>{t("피드백 보내기")}</button>
+            <span>{t("설문을 조금만 더 하면")}</span>
+            <RewardBadge amount={reward} />
+            <button type="button" className="btn btn-p" onClick={() => go("mypage", { tab: "feedback" })}>
+              {t("{n}크레딧 받으러 가기", { n: reward })}
+            </button>
           </>
         )}
       </div>
@@ -76,6 +81,9 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
     try {
       await sendShortSurvey(runId, answers);
       track("feedback_submit", { where: "result", run: runId, count: Object.keys(answers).length });
+      if (authenticated) {
+        mySurveyStatus().then((s) => { if (!s.done && s.questions.length > 0) setReward(s.reward); }).catch(() => {});
+      }
       setState("done");
     } catch {
       setErr(t("보내지 못했어요. 잠시 뒤에 다시 눌러 주세요."));
@@ -92,7 +100,6 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
   return (
     <div className="card wt-survey-card">
       <h3>{t("이 웹툰, 어땠나요?")}</h3>
-      <p className="wt-survey-sub">{t("{n}개만 물어볼게요. 더 좋은 웹툰을 만드는 데 써요.", { n: questions.length })}</p>
       {questions.map((q) => (
         <SurveyQuestion key={q} q={q} value={answers[q]}
                         onChange={(v) => setAnswers((a) => ({ ...a, [q]: v }))} />
@@ -109,15 +116,11 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
 
 registerDict({
   "이 웹툰, 어땠나요?": { en: "How was this webtoon?", ja: "このウェブトゥーン、どうでしたか？", zh: "这部漫画怎么样？" },
-  "{n}개만 물어볼게요. 더 좋은 웹툰을 만드는 데 써요.": { en: "Just {n} quick questions — we use them to make better webtoons.", ja: "{n}つだけ聞かせてください。より良いウェブトゥーンづくりに使います。", zh: "只问 {n} 个问题，用来做出更好的漫画。" },
   "건너뛰기": { en: "Skip", ja: "スキップ", zh: "跳过" },
   "보내기": { en: "Send", ja: "送信", zh: "提交" },
   "답해 주셔서 고마워요!": { en: "Thanks for answering!", ja: "ご回答ありがとうございます！", zh: "感谢你的回答！" },
-  "마이페이지 「피드백 보내기」에서 조금 더 답해 주시면 웹툰 한 편을 더 만들 수 있는 크레딧을 드려요.": {
-    en: "Answer a few more in My Page → \"Send feedback\" and we'll give you credits for one more webtoon.",
-    ja: "マイページの「フィードバックを送る」でもう少し答えていただくと、ウェブトゥーンをもう1話作れるクレジットを差し上げます。",
-    zh: "在“我的”页面的“发送反馈”中再多回答几题，我们会送你可再做一部漫画的积分。",
-  },
   "보내지 못했어요. 잠시 뒤에 다시 눌러 주세요.": { en: "Couldn't send. Please try again in a moment.", ja: "送信できませんでした。少ししてからもう一度押してください。", zh: "发送失败，请稍后再试。" },
   "피드백 보내기": { en: "Send feedback", ja: "フィードバックを送る", zh: "发送反馈" },
+  "설문을 조금만 더 하면": { en: "A few more questions and you get", ja: "あと少し答えると", zh: "再多答几题就能获得" },
+  "{n}크레딧 받으러 가기": { en: "Get {n} credits", ja: "{n}クレジットをもらう", zh: "去领 {n} 积分" },
 });

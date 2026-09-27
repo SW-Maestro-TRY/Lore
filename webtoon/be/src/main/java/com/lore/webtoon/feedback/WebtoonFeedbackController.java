@@ -63,7 +63,7 @@ public class WebtoonFeedbackController {
     }
 
     @Operation(summary = "전체 설문 — 답 보내기", description = """
-            S1~S10 모두 필요(S1 · S3 · S4 · S5 는 "na" 가능, S10 은 여러 개를 배열로). 자유 의견은 2,000자, 연락처는
+            GET /my/feedback 의 questions 에 모두 답해야 한다(가장 최근에 완성한 작품에 맞춘 질문, S10 은 여러 개를 배열로). 자유 의견은 2,000자, 연락처는
             인터뷰를 원할 때만 200자까지. 처음 낸 계정에만 웹툰 한 편 값의 크레딧을 준다.""")
     @PostMapping(WebtoonApi.V1 + "/my/feedback")
     public WebtoonFeedbackService.Full full(
