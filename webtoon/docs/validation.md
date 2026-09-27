@@ -141,6 +141,7 @@ H2 를 다섯으로 나눈 이유: "살아 움직인다"가 약하게 나왔을 
 | S-공유 | 공유하고, 공유를 본 사람이 들어온다 | `share_click` · `card_share` → `shared_card_try` |
 | S-지불 | 돈을 낼 의향이 있다 | `charge_open`, 인터뷰 7번 |
 | S-의외성 | 종이 바뀐 카드(3%)가 당황보다 재미를 준다 | `swap_survey` 의 confused · fine, 그 뒤 `card_share` |
+| S-기능 수요 | 다음에 만들 기능 중 무엇을 가장 원하나 (여러 캐릭터 · 다음 화 · 장면 하나로 만화) | 설문 S10. 다음 화는 `next_episode_click` 과 같이 본다 |
 
 ### 다음 스프린트에서 하는 것
 
@@ -221,6 +222,7 @@ H2 를 다섯으로 나눈 이유: "살아 움직인다"가 약하게 나왔을 
 | S7 | 이 캐릭터의 다음 이야기도 보고 싶나요? | 예 · 아니오 | 모두 | S-연속성 |
 | S8 | 다시 만들어 볼 건가요? | 예 · 아마도 · 아니오 | 모두 | S-재사용 |
 | S9 | 기대와 가장 달랐던 곳은? | 캐릭터 모습 · 성격 · 이야기 · 그림 · 기다린 시간 · 없음 | 모두 | 여정 전체 |
+| S10 | 이런 기능이 있으면 좋겠나요? **모두 골라 주세요** | 여러 캐릭터 함께 넣기 · 같은 캐릭터로 다음 화 · 장면 하나만 넣으면 바로 만화로 · 지금으로 충분해요 | ② 전체 설문만 | S-기능 수요 |
 
 - 자기 것을 넣지 않은 사람(기본 캐릭터·랜덤)에게는 ①에서 S1 대신 S6 을 고정으로 묻습니다.
 - **자유 의견은 ② 에서만, 서비스 안에 받습니다.** 행동 기록은 사람이 쓴 글을 싣지 않는
@@ -292,3 +294,34 @@ UTM 칸의 뜻은 [analytics.md](analytics.md) 「유입 경로」를 따릅니�
 
 유입 경로(UTM, #440), 깔때기 A~E(#413), 최소 KPI 세 개(#448), 다음 화 버튼 클릭 수,
 「넣은 설정이 간 곳」(#424 #429), 종이 바뀐 카드 설문(#423), 한 번만 주는 크레딧 활동 보상(`CreditReason.REWARD` · `grantOnce`).
+
+## 구현 (#471)
+
+| 무엇 | 어디 |
+|---|---|
+| 질문 기호와 허용 값 | `be/.../feedback/WebtoonFeedbackQuestion.java` (화면은 `fe/ui/Survey.tsx`, 둘을 같이 고친다) |
+| 짧은 설문 질문 고르기 · 저장 · 전체 설문 · 보상 · 다시 온 사람 판정 · 관리자 목록 | `be/.../feedback/WebtoonFeedbackService.java` |
+| 주소 | `GET /feedback/questions?run=` · `POST /feedback` · `GET·POST /my/feedback` · `GET /admin/feedback` (`WebtoonFeedbackController`) |
+| 저장 표 | `webtoon_feedback` (`V20260927_1927__webtoon_feedback.sql`), 탈퇴 시 `WebtoonFeedbackPurge` 가 지운다 |
+| 완성 직후 카드 | `fe/screens/result/ResultSurvey.tsx` — 끝까지 읽은 뒤(`read_end`)에만 뜬다 |
+| 마이페이지 「피드백 보내기」 · 관리자 목록 | `fe/screens/mypage/FullSurvey.tsx` · `AdminSurvey.tsx` (관리자 목록은 설정 칸 맨 아래) |
+| 다시 온 사람 안내 | `fe/ui/RevisitPrompt.tsx` — 만드는 중 · 편집실 · 만들기 · 마이페이지에서는 안 띄운다. 브라우저당 한 번 |
+| 행동 기록 | `feedback_view` · `feedback_submit` · `feedback_skip` · `feedback_open` · `feedback_prompt_view` · `feedback_prompt_click` ([analytics.md](analytics.md)) |
+
+집계는 답 표를 그대로 읽는다. 예: 짧은 설문의 S1 분포
+
+```sql
+select answers::jsonb->>'S1' as s1, count(*)
+from webtoon_feedback where kind = 'SHORT' and answers::jsonb ? 'S1'
+group by 1 order by 1;
+```
+
+원하는 기능(S10) 수
+
+```sql
+select f, count(*)
+from webtoon_feedback, jsonb_array_elements_text(answers::jsonb->'S10') as f
+where kind = 'FULL' group by 1 order by 2 desc;
+```
+
+아직 남은 것: 개인정보처리방침 수집 항목에 "피드백 내용(자유 의견·인터뷰 연락처)"을 넣을지 결정. 게시본이 `apps/web` 에 있어 따로 확인한다.

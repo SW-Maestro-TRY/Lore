@@ -24,6 +24,7 @@ import {
   browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, myLikes, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type RunCard, type TrashCard,
+  mySurveyStatus, type SurveyStatus,
 } from "../../lib/api";
 import type { Go } from "../../lib/nav";
 import RunStrip from "../../ui/RunStrip";
@@ -32,6 +33,8 @@ import { track } from "../../lib/track";
 import { IconUser } from "../../ui/Icons";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
+import FullSurvey from "./FullSurvey";
+import AdminSurvey from "./AdminSurvey";
 import "./MyPage.css";
 
 registerDict({
@@ -104,14 +107,21 @@ registerDict({
   "바꾸지 못했어요": { en: "Couldn't change it", ja: "変更できませんでした", zh: "无法更改" },
 });
 
-export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" }) {
+export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" | "feedback" }) {
   const t = useT();
   const { user, isAuthenticated, signOut } = useAuth();
 
   /* 지금은 "내 웹툰"과 "설정" 딱 둘뿐이라 화면을 아예 나누지는 않고
      같은 레일 안에서 본문만 바꾼다 — 나중에 칸이 늘면 그때 공용 탭
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
-  const [tab, setTab] = useState<"works" | "settings">(initialTab ?? "works");
+  const [tab, setTab] = useState<"works" | "settings">(initialTab === "settings" ? "settings" : "works");
+  /* 「피드백 보내기」(#471) — 다시 온 사람 안내나 완성 직후 설문에서 tab=feedback 으로 오면 바로 연다. */
+  const [surveyOpen, setSurveyOpen] = useState(initialTab === "feedback");
+  const [surveyStatus, setSurveyStatus] = useState<SurveyStatus | null>(null);
+  useEffect(() => {
+    if (!isAuthenticated) { setSurveyStatus(null); return; }
+    mySurveyStatus().then(setSurveyStatus).catch(() => setSurveyStatus(null));
+  }, [isAuthenticated]);
 
   const [runs, setRuns] = useState<RunCard[]>([]);
   const [runsFailed, setRunsFailed] = useState(false);
@@ -279,6 +289,10 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           )}
           <small>{t("계정")}</small>
           <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">{t("1:1 문의하기")}</a>
+          <button type="button" onClick={() => { track("feedback_open", { where: "mypage" }); setSurveyOpen(true); }}>
+            {t("피드백 보내기")}
+            {surveyStatus && !surveyStatus.done && <span className="dim">+{surveyStatus.reward}C</span>}
+          </button>
           {isAuthenticated && (
             <button type="button" onClick={() => void signOut()}>{t("로그아웃")}</button>
           )}
@@ -293,6 +307,14 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
       </aside>
 
       <div className="wt-my-main">
+            {surveyOpen && (
+              <FullSurvey authenticated={isAuthenticated} status={surveyStatus}
+                          onClose={() => setSurveyOpen(false)}
+                          onRewarded={(balance) => {
+                            setCredits(balance);
+                            setSurveyStatus((s) => (s ? { ...s, done: true, prompt: false } : s));
+                          }} />
+            )}
             {trashOpen && (
               <Dialog title={t("휴지통")} wide onClose={() => setTrashOpen(false)}
                       sub={t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}>
@@ -436,6 +458,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 {withdrawErr && <span className="wt-my-err">{withdrawErr}</span>}
               </div>
             )}
+            {isAuthenticated && <AdminSurvey />}
           </>
         )}
       </div>
