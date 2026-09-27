@@ -112,12 +112,14 @@ public class WebtoonFeedbackService {
         asked.add(WebtoonFeedbackQuestion.S0.name());
         asked.add(fixed.name());
         pool.subList(0, extra).forEach(q -> asked.add(q.name()));
+        // 보여 주는 순서는 흐름대로(만족도 → 캐릭터 → 설정 → 이야기 → 재미 → 다음 화).
+        asked.sort(java.util.Comparator.comparingInt(n -> WebtoonFeedbackQuestion.valueOf(n).ordinal()));
         return new ShortQuestions(asked, p.own);
     }
 
     /** 짧은 설문 답. 같은 작품에 두 번 내면 두 번째는 저장하지 않는다. */
     @Transactional
-    public boolean saveShort(String runId, Long userId, String uid, Map<String, Object> raw) {
+    public boolean saveShort(String runId, Long userId, String uid, Map<String, Object> raw, String comment) {
         Profile p = profileOf(runId, userId, uid);
         if (p == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품에만 답할 수 있어요");
@@ -130,7 +132,7 @@ public class WebtoonFeedbackService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "답이 없어요");
         }
         feedback.save(WebtoonFeedback.of(WebtoonFeedback.Kind.SHORT, runId, userId, blankToNull(uid),
-                toJson(answers), null, false, null, Instant.now(clock)));
+                toJson(answers), trimTo(comment, MAX_COMMENT), false, null, Instant.now(clock)));
         return true;
     }
 
@@ -272,9 +274,6 @@ public class WebtoonFeedbackService {
                 extra.put("S7_why", w);
             }
             putNote(extra, "S7_note", raw.get("S7_note"));
-        }
-        for (String key : WebtoonFeedbackQuestion.OPEN_NOTES) {
-            putNote(extra, key, raw.get(key));
         }
         out.putAll(extra);
         return out;
