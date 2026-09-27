@@ -31,7 +31,7 @@ class JobViewTest {
         // 검증이 흔들린다.
         Instant createdAt = Instant.now().minusSeconds(60);
         WebtoonJob job = WebtoonJob.queued("job-1", 7L, "uid-a", null, "romance_fantasy",
-                WebtoonQuality.DEFAULT_QUALITY, true, "{}", createdAt);
+                WebtoonQuality.DEFAULT_QUALITY, "ko", true, "{}", createdAt);
         job.moveTo(status, stage, Instant.now());
         return job;
     }

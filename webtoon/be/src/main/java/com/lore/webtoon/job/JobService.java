@@ -170,8 +170,9 @@ public class JobService {
         String asked = blank(form.style());
         String style = STYLE.containsValue(asked) ? asked : STYLE.getOrDefault(asked, DEFAULT_STYLE);
         String quality = WebtoonQuality.normalize(form.quality());
+        String language = WebtoonLanguage.normalize(form.language());
         WebtoonJob job = jobs.save(WebtoonJob.queued(
-                publicId, userId, browserUid, guestKey, style, quality,
+                publicId, userId, browserUid, guestKey, style, quality, language,
                 form.checkpoints() == null || form.checkpoints(),
                 inputOf(form), Instant.now()));
 
@@ -672,7 +673,11 @@ public class JobService {
                                 String photoNote,
                                 /* 얼마나 촘촘히 그릴까 — wave · surf · swell.
                                    안 보내면 기본(파도)이다. */
-                                String quality) {
+                                String quality,
+                                /* 어느 언어로 만들까 — ko · en · ja. 안 보내면 기본(ko)이다.
+                                   webtoon/fe 가 지금 화면 언어(lib/i18n.tsx 의 lang)를 그대로
+                                   보낸다. */
+                                String language) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;

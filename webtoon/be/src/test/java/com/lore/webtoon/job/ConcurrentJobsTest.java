@@ -106,7 +106,7 @@ class ConcurrentJobsTest {
         for (Map<String, Object> one : WebtoonQuality.choices()) {
             String key = (String) one.get("key");
             WebtoonJob job = WebtoonJob.queued("j-" + key, 1L, "uid", null,
-                    "webtoon_lock_bg", key, false, "{}", java.time.Instant.now());
+                    "webtoon_lock_bg", key, "ko", false, "{}", java.time.Instant.now());
             assertThat(job.getQuality()).isEqualTo(key);
         }
         assertThat(List.of("wave", "surf", "swell")).allSatisfy(k ->
