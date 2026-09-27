@@ -10,7 +10,6 @@ export const GRADES: Record<Grade, string> = {
 
 /** 판정 버튼 아래에 나오는 한 줄. */
 export const JUDGE_TEXT = {
-  idle: "카드를 고르고 내 주장을 적은 뒤 판정을 맡기세요.",
   submitting: "가설을 맡기는 중입니다.",
   checking: "판정 상태를 확인하는 중입니다.",
   pending: "판정을 기다리는 중입니다. 사람이 돌려서 시간이 걸립니다. 페이지를 닫아도 됩니다 — 내 가설에서 다시 볼 수 있습니다.",

@@ -3905,6 +3905,8 @@ export interface components {
             notes?: {
                 [key: string]: string;
             };
+            /** @description 재시도 식별 UUID. 같은 키와 같은 입력은 한 번만 접수·차감한다 */
+            requestKey?: string | null;
             /** @description 장부 정보(cards/meta)의 stateDigest. 카드 표의 값과 다르면 400 TRAILER_DIGEST_MISMATCH */
             stateDigest?: string;
             /** @description 가설 제목. 180자까지. 비어도 된다 */

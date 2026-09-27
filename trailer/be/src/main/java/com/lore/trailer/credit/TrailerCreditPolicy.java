@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>refId 는 가설 하나가 일 하나라 {@code hypothesis:<id>} 다. 공통 장부의 유일키가 (계정, 이유, 도메인, refId)
  * 라서 이 열쇠 하나로 같은 가설을 두 번 깎지도, 두 번 돌려주지도 못한다. 도메인은 깎을 때와 돌려줄 때 같아야
- * 한다 — 다르면 낸 줄을 못 찾아 조용히 0 이 된다({@code CreditService.refund}).
+ * 한다 — TrailerCreditService는 차감과 환급 모두 {@code TRAILER}로 기록한다.
  */
 @Component
 public class TrailerCreditPolicy {

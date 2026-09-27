@@ -138,6 +138,7 @@ function toCard(item: unknown): Card {
 
 /** 가설 맡기기의 입력. 옛 판정 요청(screen_api.md 3-2)과 같은 칸이다 — 서버에는 camelCase 로 보낸다. */
 export type JudgeRequest = {
+  requestKey?: string;
   chapter: number;
   title: string;
   claim: string;
@@ -308,6 +309,7 @@ export async function submitHypothesis(body: JudgeRequest, signal?: AbortSignal)
       notes: body.notes,
       stateDigest: body.state_digest,
       cardsDigest: body.cards_digest,
+      requestKey: body.requestKey,
     },
     signal,
   });

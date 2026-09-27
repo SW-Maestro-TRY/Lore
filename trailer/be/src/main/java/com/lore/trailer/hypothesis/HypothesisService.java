@@ -3,10 +3,10 @@ package com.lore.trailer.hypothesis;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lore.common.credit.CreditService;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.trailer.credit.TrailerCreditPolicy;
+import com.lore.trailer.credit.TrailerCreditService;
 import com.lore.trailer.foreshadowing.Foreshadowing;
 import com.lore.trailer.foreshadowing.ForeshadowingRepository;
 import com.lore.trailer.foreshadowing.ForeshadowingService;
@@ -54,12 +54,12 @@ public class HypothesisService {
     private final ForeshadowingRepository foreshadowings;
     private final ForeshadowingService foreshadowingService;
     private final TrailerAdminGuard adminGuard;
-    private final CreditService credits;
+    private final TrailerCreditService credits;
     private final TrailerCreditPolicy creditPolicy;
 
     public HypothesisService(HypothesisRepository hypotheses, ForeshadowingRepository foreshadowings,
                              ForeshadowingService foreshadowingService, TrailerAdminGuard adminGuard,
-                             CreditService credits, TrailerCreditPolicy creditPolicy) {
+                             TrailerCreditService credits, TrailerCreditPolicy creditPolicy) {
         this.hypotheses = hypotheses;
         this.foreshadowings = foreshadowings;
         this.foreshadowingService = foreshadowingService;
@@ -71,6 +71,41 @@ public class HypothesisService {
     /** 가설을 맡긴다(2-5). 담은 카드를 그 회차로 가린 값으로 복사해 두고 PENDING 으로 저장한다. */
     @Transactional
     public HypothesisResponses.Hypothesis submit(Long userId, HypothesisRequests.Submit body) {
+        String key = body.requestKey();
+        if (key != null && !key.matches("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "요청 키가 올바르지 않습니다");
+        }
+        hypotheses.lockSubmittingUser(userId);
+        String digest = requestDigest(body);
+        if (key != null) {
+            var previous = hypotheses.findByUserIdAndRequestKey(userId, key);
+            if (previous.isPresent()) {
+                if (!digest.equals(previous.get().getRequestDigest())) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT, "이미 사용한 요청 키입니다");
+                }
+                return toResponse(previous.get());
+            }
+        }
+        Hypothesis hypothesis = draftSnapshot(userId, body);
+        hypothesis.identifyRequest(key, digest);
+        Hypothesis saved = hypotheses.saveAndFlush(hypothesis);
+        credits.spendInCurrentTransaction(userId, creditPolicy.judgeCredits(),
+                creditPolicy.refId(saved.getId()), "가설 판정 " + saved.getChapter() + "화");
+        return toResponse(saved);
+    }
+
+    private static String requestDigest(HypothesisRequests.Submit body) {
+        try {
+            var ordered = JSON.copy().configure(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(ordered.writeValueAsBytes(body)));
+        } catch (java.security.NoSuchAlgorithmException | JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** 접수 전 입력을 검사하고 해당 회차에서 볼 수 있는 카드 사본을 준비한다. */
+    private Hypothesis draftSnapshot(Long userId, HypothesisRequests.Submit body) {
         int chapter = requireChapter(body.chapter());
         Foreshadowing ledger = foreshadowings.findFirstByOrderByIdAsc()
                 .orElseThrow(() -> new BusinessException(ErrorCode.TRAILER_LEDGER_NOT_LOADED));
@@ -91,12 +126,7 @@ public class HypothesisService {
                             "%d화 기록에 없는 카드입니다: %s".formatted(chapter, id)));
             hypothesis.addCard(HypothesisForeshadowing.copyOf(hypothesis, card, chapter, position, notes.get(id)));
         }
-        Hypothesis saved = hypotheses.save(hypothesis);          // IDENTITY — 여기서 id 가 생긴다
-        // ★ 깎기는 저장 뒤 · 마지막이다. 장부 쓰기는 별도 트랜잭션(REQUIRES_NEW)이라 먼저 깎고 뒤에서 실패하면
-        //   크레딧만 잃는다. 모자라면 spend 가 402 를 던지고(장부에는 안 쓴다) 이 트랜잭션이 되돌아가 저장도 취소된다.
-        credits.spend(userId, creditPolicy.domain(), creditPolicy.judgeCredits(),
-                creditPolicy.refId(saved.getId()), "가설 판정 " + chapter + "화");
-        return toResponse(saved);
+        return hypothesis;
     }
 
     /** 내 가설 하나(2-6). 없는 번호와 남의 가설은 같은 404 다 — 번호를 바꿔 가며 남의 가설이 있는지 알아낼 수 없게. */
@@ -159,11 +189,9 @@ public class HypothesisService {
                     body.presentation() == null ? null : write(body.presentation()), Instant.now());
             case Hypothesis.FAILED -> {
                 hypothesis.fail(required(body.failureMessage(), "실패 문구", FAILURE_MESSAGE_MAX), Instant.now());
-                // ★ 실패는 독자 잘못이 아니다 — 낸 크레딧을 돌려준다(크레딧설계.md 1절 4번). 상태를 먼저 DB 에 세운 뒤
-                //   돌려준다. 장부 쓰기가 별도 트랜잭션이라 순서가 바뀌면 상태 저장이 실패해도 환불만 남는다.
-                //   같은 가설에 FAILED 가 또 와도 두 번 돌려주지 않는다 — 같은 refId 의 REFUND 줄은 하나뿐(같은 문서 5절).
+                // 실패 상태와 환급을 같은 트랜잭션에서 반영한다. 같은 refId의 REFUND는 한 번만 적는다.
                 hypotheses.saveAndFlush(hypothesis);
-                credits.refund(hypothesis.getUserId(), creditPolicy.domain(),
+                credits.refundInCurrentTransaction(hypothesis.getUserId(),
                         creditPolicy.refId(hypothesis.getId()), "판정하지 못해 돌려드림");
             }
             default -> throw new BusinessException(ErrorCode.INVALID_INPUT, "judgementStatus는 COMPLETE 또는 FAILED 입니다");

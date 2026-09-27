@@ -8,6 +8,12 @@ import java.util.Optional;
 
 public interface HypothesisRepository extends JpaRepository<Hypothesis, Long> {
 
+    Optional<Hypothesis> findByUserIdAndRequestKey(Long userId, String requestKey);
+
+    // FK 검사의 KEY SHARE와 충돌하지 않으면서 같은 독자의 제출을 직렬화한다.
+    @Query(value = "select id from users where id = :userId for no key update", nativeQuery = true)
+    Long lockSubmittingUser(@org.springframework.data.repository.query.Param("userId") Long userId);
+
     /** 내 가설 하나(2-6). 남의 가설은 없는 것과 같다 — 둘 다 404 다. */
     Optional<Hypothesis> findByIdAndUserId(Long id, Long userId);
 

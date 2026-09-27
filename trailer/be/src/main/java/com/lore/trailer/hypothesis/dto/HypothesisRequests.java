@@ -34,7 +34,10 @@ public final class HypothesisRequests {
             String stateDigest,
 
             @Schema(description = "장부 정보(cards/meta)의 cardsDigest. 위와 같다")
-            String cardsDigest) {
+            String cardsDigest,
+
+            @Schema(description = "재시도 식별 UUID. 같은 키와 같은 입력은 한 번만 접수·차감한다", nullable = true)
+            String requestKey) {
     }
 
     /** 운영자가 판정을 넣는다(2-9). judge.py 의 출력을 그대로 싣는다 — 서버는 모양만 보고 안은 읽지 않는다. */

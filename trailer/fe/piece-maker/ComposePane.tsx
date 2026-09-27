@@ -14,7 +14,7 @@ type Props = {
   chapter: number | null;
   draft: Draft;
   saveStatus: string;
-  /** "03 내 주장과 근거 대조하기" 아래에 놓이는 판정 자리. */
+  /** "03 나의 주장 판정 받아보기" 아래에 놓이는 판정 자리. */
   judge: ReactNode;
   onTitle: (title: string) => void;
   onClaim: (claim: string) => void;
@@ -25,6 +25,7 @@ type Props = {
   onExplore: () => void;
   onReset: () => void;
   onSave: () => void;
+  canShare: boolean;
   onPreview: () => void;
 };
 
@@ -121,6 +122,7 @@ export default function ComposePane({
   onExplore,
   onReset,
   onSave,
+  canShare,
   onPreview,
 }: Props) {
   const count = draft.cards.length;
@@ -140,15 +142,12 @@ export default function ComposePane({
           </button>
         </div>
         <div className="row between" style={{ marginTop: 10 }}>
-          <span className="small muted">
-            {chapter === null ? "" : `${chapter}화 누적 장부와 대조하는 가설`}
-            {frozen ? (
-              <span className="tag amber" data-part="frozen-tag" style={{ marginLeft: 8 }}>
-                판정 맡김
-              </span>
-            ) : null}
-          </span>
-          <span className="saved-status" role="status" data-part="save-status">
+          {frozen ? (
+            <span className="tag amber" data-part="frozen-tag">
+              판정 맡김
+            </span>
+          ) : null}
+          <span className="saved-status" role="status" data-part="save-status" style={{ marginLeft: "auto" }}>
             {saveStatus}
           </span>
         </div>
@@ -177,7 +176,7 @@ export default function ComposePane({
         />
         <div className="section-label">
           <span>
-            <span className="n">01</span>이 장면들을 보면
+            <span className="n">01</span>이 복선들을 보면
           </span>
           <span className="count" data-part="evidence-count">
             근거 {count}
@@ -222,7 +221,7 @@ export default function ComposePane({
         </div>
         <div className="section-label">
           <label htmlFor="trailer-claim">
-            <span className="n">02</span>그래서 내 생각은
+            <span className="n">02</span>그래서 나의 최종 주장은
           </label>
           <span className="tag">나의 주장</span>
         </div>
@@ -237,13 +236,9 @@ export default function ComposePane({
           value={draft.claim}
           onChange={(event) => onClaim(event.target.value)}
         />
-        <div className="guide">
-          <Icon name="info" />
-          <span>정답일 필요는 없어요. 장부의 기록과 나의 해석을 구분해서 적어보세요.</span>
-        </div>
         <div className="section-label">
           <span>
-            <span className="n">03</span>내 주장과 근거 대조하기
+            <span className="n">03</span>나의 주장 판정 받아보기
           </span>
         </div>
         {judge}
@@ -257,9 +252,9 @@ export default function ComposePane({
         <button className="btn" data-action="save" disabled={!filled || frozen} onClick={onSave}>
           저장
         </button>
-        <button className="btn primary" data-action="preview" disabled={!filled || !ready} onClick={onPreview}>
+        <button className="btn primary" data-action="preview" disabled={!canShare || !ready} onClick={onPreview} title={canShare ? undefined : "판정이 완료되면 공유할 수 있어요"}>
           <Icon name="copy" width={16} />
-          게시글로 가져가기
+          공유하기
         </button>
       </footer>
     </section>

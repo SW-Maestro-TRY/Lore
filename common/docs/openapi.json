@@ -3275,6 +3275,13 @@
             "description": "카드 번호마다 독자의 해석. 4,000자까지. 담은 카드의 번호만 열쇠로 온다",
             "type": "object"
           },
+          "requestKey": {
+            "description": "재시도 식별 UUID. 같은 키와 같은 입력은 한 번만 접수·차감한다",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "stateDigest": {
             "description": "장부 정보(cards/meta)의 stateDigest. 카드 표의 값과 다르면 400 TRAILER_DIGEST_MISMATCH",
             "type": "string"
