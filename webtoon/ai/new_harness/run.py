@@ -55,6 +55,7 @@ import fullreview                             # noqa: E402
 import pages as pagemod                       # noqa: E402
 import runmeta                                # noqa: E402
 import sheet as sheetmod                      # noqa: E402
+import lang as lang_mod                       # noqa: E402
 from llm import story                         # noqa: E402
 import samples                                # noqa: E402  (story-harness 것을 그대로 빌린다)
 from pages import SIZES                       # noqa: E402
@@ -292,9 +293,10 @@ def load_prompt(name: str) -> str:
     return text
 
 
-def compose(prompt_name: str, block: str) -> str:
+def compose(prompt_name: str, block: str, lang: str = "ko") -> str:
     """프롬프트 + 이번 입력. 입력은 **뒤**에 붙인다 — 모델은 뒤에 온 것을 더 세게 듣는다."""
-    return f"{load_prompt(prompt_name)}\n\n---\n\n{block}"
+    text = load_prompt(prompt_name).replace("{{LANGUAGE_LINE}}", lang_mod.instruction(lang))
+    return f"{text}\n\n---\n\n{block}"
 
 
 # --------------------------------------------------------------------- 파싱
@@ -733,7 +735,8 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
 
 
 def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
-                review: bool | None = None, diff: bool | None = None) -> list[dict]:
+                review: bool | None = None, diff: bool | None = None,
+                lang: str = "ko") -> list[dict]:
     """이야기 후보 4개. 다 쓰고 나서 **한 번 더 독자의 눈으로 읽는다.**
 
     review : 후보 하나하나를 검수한다(storycheck). 사람이 고르는 화면에
@@ -760,7 +763,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         # 여기서 따로 붙인다(캐릭터 파일을 고치면 다음 시도에도 계속 남는다).
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
                  f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
-    prompt = compose("story_prompt_seeded" if seeded else "story_prompt", block)
+    prompt = compose("story_prompt_seeded" if seeded else "story_prompt", block, lang=lang)
     write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
@@ -1100,9 +1103,10 @@ def parse_scenes(text: str) -> dict:
     return {"plot": plot, "scenes": scenes, "cast": cast}
 
 
-def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> dict | None:
+def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
+                 lang: str = "ko") -> dict | None:
     """선택된 방향 -> 줄거리 + 장면(직전 상태·끝나는 상태 포함). `scenes.json` 에 쓴다."""
-    prompt = compose("scene_prompt", scene_input_block(char, direction))
+    prompt = compose("scene_prompt", scene_input_block(char, direction), lang=lang)
     write_text(run_dir / "scene_prompt.txt", prompt)
     if dry_run:
         log(f"[장면] 프롬프트만 썼습니다 -> {run_dir / 'scene_prompt.txt'}")
@@ -1208,7 +1212,7 @@ def direction_of(run_dir: Path) -> dict | None:
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
-                       note: str = "") -> None:
+                       note: str = "", lang: str = "ko") -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
 
@@ -1234,11 +1238,11 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
             raise SystemExit(f"{run_dir / 'directions.json'} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
         char = json.loads((run_dir / "input.json").read_text(encoding="utf-8")) \
             if (run_dir / "input.json").exists() else None
-        stage_scenes(run_dir, char, direction, dry_run)
+        stage_scenes(run_dir, char, direction, dry_run, lang=lang)
 
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
-                                   note=note,
+                                   note=note, lang=lang,
                                    on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
@@ -1262,6 +1266,8 @@ def main(argv=None) -> int:
     p.add_argument("--photo", action="append", default=[], help="사진 (여러 번 가능)")
     p.add_argument("--desc", default="", help="설명 (선택)")
     p.add_argument("--genre", default="", help="장르 (선택)")
+    p.add_argument("--lang", default="ko", choices=sorted(lang_mod.LANG_NAMES),
+                   help="웹툰 언어 (기본 ko)")
 
     p.add_argument("--run-id",
                    help="이어서 할 run. 없는 번호를 주고 --character 를 같이 "
@@ -1389,7 +1395,8 @@ def main(argv=None) -> int:
             (run_dir / "story_review.json").unlink(missing_ok=True)
             (run_dir / "story_diff.json").unlink(missing_ok=True)
             stage_story(run_dir, char, args.dry_run, note=args.note,
-                        review=False if args.no_story_review else None)
+                        review=False if args.no_story_review else None,
+                        lang=args.lang)
         if args.story_review:
             storycheck.review_run(run_dir, dry_run=args.dry_run,
                                   on_call=lambda meta: record(run_dir, meta))
@@ -1408,17 +1415,18 @@ def main(argv=None) -> int:
             stage_sheet(run_dir, char, args.dry_run, spec_only=args.sheet_spec, note=args.note)
         if args.scenes:
             direction = picked_direction(run_dir, args.pick)
-            stage_scenes(run_dir, char, direction, args.dry_run)
+            stage_scenes(run_dir, char, direction, args.dry_run, lang=args.lang)
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
                                allow_no_sheet=args.no_sheet,
                                review=False if args.no_page_review else None,
-                               note=args.note)
+                               note=args.note, lang=args.lang)
         return 0
 
     if new_run:
         directions = stage_story(run_dir, char, args.dry_run, note=args.note,
-                                 review=False if args.no_story_review else None)
+                                 review=False if args.no_story_review else None,
+                                 lang=args.lang)
         if args.dry_run:
             return 0
         show_directions(directions)
