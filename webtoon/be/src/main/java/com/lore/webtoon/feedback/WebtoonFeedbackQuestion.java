@@ -35,30 +35,15 @@ public enum WebtoonFeedbackQuestion {
     /** 있으면 좋겠는 기능 — 모두 고르기. 다음 기능 우선순위를 정하는 데 쓴다. 전체 설문만. */
     S10(Answer.WANTS);
 
-    /** 전체 설문에서 "해당 없음" 을 고를 수 있는 질문 — 넣은 것이 없으면 답할 수 없는 것들. */
-    static final Set<WebtoonFeedbackQuestion> MAY_SKIP = Set.of(S1, S3, S4, S5);
-
-    static final String NOT_APPLICABLE = "na";
-
     private final Answer answer;
 
     WebtoonFeedbackQuestion(Answer answer) {
         this.answer = answer;
     }
 
-    /**
-     * 받을 수 있는 답이면 저장할 값으로, 아니면 null.
-     *
-     * @param allowNa 「해당 없음」을 받아도 되는가 (전체 설문의 {@link #MAY_SKIP} 만)
-     */
-    Object accept(Object raw, boolean allowNa) {
-        if (raw == null) {
-            return null;
-        }
-        if (allowNa && MAY_SKIP.contains(this) && NOT_APPLICABLE.equals(raw)) {
-            return NOT_APPLICABLE;
-        }
-        return answer.accept(raw);
+    /** 받을 수 있는 답이면 저장할 값으로, 아니면 null. */
+    Object accept(Object raw) {
+        return raw == null ? null : answer.accept(raw);
     }
 
     enum Answer {

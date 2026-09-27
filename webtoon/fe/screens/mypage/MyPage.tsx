@@ -308,7 +308,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
 
       <div className="wt-my-main">
             {surveyOpen && (
-              <FullSurvey authenticated={isAuthenticated} status={surveyStatus}
+              <FullSurvey authenticated={isAuthenticated} status={surveyStatus} go={go}
                           onClose={() => setSurveyOpen(false)}
                           onRewarded={(balance) => {
                             setCredits(balance);

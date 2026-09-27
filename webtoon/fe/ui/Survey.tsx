@@ -49,21 +49,27 @@ export const SURVEY_SHORT: Record<SurveyKey, string> = {
 
 export const SURVEY_KEYS = Object.keys(SURVEY) as SurveyKey[];
 
-/** 넣은 것이 없으면 답할 수 없는 문항 — 전체 설문에서 「해당 없음」을 고를 수 있다. */
-export const MAY_SKIP: SurveyKey[] = ["S1", "S3", "S4", "S5"];
+/** 보상 표시 — 크레딧 수와 그걸로 무엇을 할 수 있는지. 팝업 · 마이페이지 설문 · 완성 직후가 같이 쓴다. */
+export function RewardBadge({ amount }: { amount: number }) {
+  const t = useT();
+  return (
+    <div className="wt-reward">
+      <span className="wt-reward-amt">◈ {amount}<small>{t("크레딧")}</small></span>
+      <span className="wt-reward-what">{t("웹툰 1편을 더 만들 수 있어요")}</span>
+    </div>
+  );
+}
 
-export function SurveyQuestion({ q, value, onChange, allowNa }: {
+export function SurveyQuestion({ q, value, onChange }: {
   q: SurveyKey;
   value: SurveyValue | undefined;
   onChange: (v: SurveyValue) => void;
-  allowNa?: boolean;
 }) {
   const t = useT();
   const def = SURVEY[q];
   const choices: [number | string, string][] = def.kind === "scale"
     ? [1, 2, 3, 4, 5].map((n) => [n, String(n)])
     : def.options!.map(([v, label]) => [v, t(label)]);
-  if (allowNa && MAY_SKIP.includes(q)) choices.push(["na", t("해당 없음")]);
   if (def.kind === "multi") {
     const picked = Array.isArray(value) ? value : [];
     const toggle = (v: string) => {
@@ -105,7 +111,6 @@ export function SurveyQuestion({ q, value, onChange, allowNa }: {
 export function answerLabel(q: SurveyKey, v: SurveyValue | undefined, t: (s: string) => string): string {
   if (v === undefined) return "—";
   if (Array.isArray(v)) return v.map((x) => answerLabel(q, x, t)).join(", ");
-  if (v === "na") return t("해당 없음");
   if (typeof v === "number") return String(v);
   const hit = SURVEY[q].options?.find(([key]) => key === v);
   return hit ? t(hit[1]) : String(v);
@@ -138,7 +143,8 @@ registerDict({
   "그림": { en: "Art", ja: "絵", zh: "画面" },
   "기다린 시간": { en: "Waiting time", ja: "待ち時間", zh: "等待时间" },
   "없음": { en: "None", ja: "なし", zh: "没有" },
-  "해당 없음": { en: "N/A", ja: "該当なし", zh: "不适用" },
+  "크레딧": { en: "credits", ja: "クレジット", zh: "积分" },
+  "웹툰 1편을 더 만들 수 있어요": { en: "Enough for one more webtoon", ja: "ウェブトゥーンをもう1話作れます", zh: "可以再做一部漫画" },
   [SURVEY.S10.text]: { en: "Which of these features would you like? Pick all that apply.", ja: "こんな機能があったらいいですか？当てはまるものをすべて選んでください。", zh: "希望有哪些功能？请全部勾选。" },
   "웹툰에 캐릭터 여러 명 함께 넣기": { en: "Put several characters in one webtoon", ja: "1つのウェブトゥーンに複数のキャラを入れる", zh: "在一部漫画中放入多个角色" },
   "같은 캐릭터로 다음 화 이어 만들기": { en: "Make the next episode with the same character", ja: "同じキャラで次の話を続けて作る", zh: "用同一个角色接着做下一话" },
