@@ -242,7 +242,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const louTitle = !job ? "" : waiting ? t("잠깐 봐 주세요")
     : queued ? t("앞에 대기자가 많아…")
     : art ? t("{n}번째 장을 그리고 있어요", { n: Math.min(art.done + 1, art.total) })
-    : job.say || t(MASCOT_LINES[cur] || "만들고 있어요");
+    : job.say ? t(job.say) : t(MASCOT_LINES[cur] || "만들고 있어요");
   const louLine = !job ? "" : waiting
     ? (job.notice?.logged_in || job.notice?.email ? t("닫아도 괜찮아요. 다 되면 이메일로 알려드려요.") : t("닫아도 괜찮아요."))
     : queued ? t("현재 대기자 {n}명 · 약 {m}분 뒤 시작", { n: job.queue!.ahead, m: job.queue!.minutes })
@@ -384,7 +384,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               <img src={louSrc} alt="" />
               <span className="num" style={{ color: "#a13a2e" }}>{t("멈췄습니다")}</span>
               <h2>{t("웹툰 생성에 실패했어요")}</h2>
-              {job.error && <span className="muted">{job.error}</span>}
+              {job.error && <span className="muted">{t(job.error)}</span>}
               {refundLine && <span className="ok">{refundLine}</span>}
               <button type="button" className="btn btn-p" onClick={remakeAfterFail}>{t("다시 만들기")}</button>
               <button type="button" className="btn btn-w" onClick={() => go("landing")}>{t("홈으로 가기")}</button>
@@ -551,7 +551,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <div>
                       <h2>{cur === REVIEW ? t("검수하고 있어요") : art ? t("페이지를 그리고 있어요") : job.stage_label ? t(job.stage_label) : t("만들고 있어요")}</h2>
                       <span className="muted lede">
-                        {job.say}
+                        {job.say && t(job.say)}
                         {job.minutes_left != null && <> {t("약 {n}분 남았어요.", { n: job.minutes_left })}</>}
                       </span>
                     </div>

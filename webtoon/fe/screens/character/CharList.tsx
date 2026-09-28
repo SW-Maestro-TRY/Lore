@@ -136,15 +136,15 @@ function Item({ c, go, onPatch, onDrop }: { c: Character; go: Go; onPatch: (c: C
     }
   };
 
-  const line = c.card?.twist || c.description;
+  const line = t(c.card?.twist || c.description);
 
   return (
     <div className="card wt-ch-item">
       {c.status === "ready" && c.art_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={c.art_url} alt={c.name} />
+        <img src={c.art_url} alt={t(c.name)} />
       ) : c.status === "error" ? (
-        <div className="wt-ch-item-box failed">{t("못 그렸어요")}{c.error ? ` — ${c.error}` : ""}</div>
+        <div className="wt-ch-item-box failed">{t("못 그렸어요")}{c.error ? ` — ${t(c.error)}` : ""}</div>
       ) : (
         <div className="wt-ch-item-box drawing">{t("그리는 중…")}<br />{t("1분쯤 걸려요")}</div>
       )}
@@ -161,7 +161,7 @@ function Item({ c, go, onPatch, onDrop }: { c: Character; go: Go; onPatch: (c: C
         ) : (
           <>
             <b className="wt-ch-item-name">
-              {c.name}
+              {t(c.name)}
               {c.card?.world_label && <span className="badge" style={{ border: "1px solid var(--line-strong)" }}>{t(c.card.world_label)}</span>}
               <button type="button" className="icon-btn" aria-label={t("이름·설명 고치기")} onClick={() => setMode("edit")}><IconEdit size={15} /></button>
             </b>

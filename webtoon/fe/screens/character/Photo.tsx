@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   listCharacters, listWorlds, randomSeed, readCharacter, WebtoonApiError, type Character, type World,
 } from "../../lib/api";
-import { useT } from "../../lib/i18n";
+import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { IconArrow, IconBack, IconClose, IconDice, IconUpload } from "../../ui/Icons";
@@ -19,6 +19,7 @@ import "./Photo.css";
 
 export default function Photo({ go, authenticated = false }: { go: Go; authenticated?: boolean }) {
   const t = useT();
+  const { lang } = useLang();
   const [worlds, setWorlds] = useState<World[]>([]);
   const [photo, setPhoto] = useState<string | undefined>();
   const [description, setDescription] = useState("");
@@ -91,7 +92,7 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
       preset: !!worldKey, random: usedRandom.current, logged_in: authenticated,
     });
     try {
-      const c = await runTry(draft);
+      const c = await runTry(draft, lang);
       go("card", { id: c.id }, { replace: false });
     } catch (e) {
       if (isLimitError(e)) {

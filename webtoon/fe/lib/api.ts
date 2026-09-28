@@ -8,6 +8,8 @@
  * 로그인이 필요한 자리(`/my/...`)만 공용 클라이언트(`@common/api/client`)로
  * 부른다 — 그쪽은 봉투(`{success, data}`)를 벗겨 준다. */
 import { request as appRequest } from "@common/api/client";
+import { translateNow } from "./i18n";
+import "./serverI18n";   // 서버가 보내는 한국어 문구의 사전
 
 export const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
@@ -75,11 +77,16 @@ function reasonOf(body: unknown): string {
   return "";
 }
 
+/* 서버 오류 문구는 한국어로 온다. message 는 지금 화면 언어로 옮긴 것이라 그대로
+ * 보여 주면 되고, 문구로 무엇에 막혔는지 가르는 코드는 raw(서버 원문)를 본다 —
+ * 번역문으로 가르면 언어마다 판정이 달라진다. */
 export class WebtoonApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
-    super(message);
+  raw: string;
+  constructor(raw: string, status: number) {
+    super(translateNow(raw));
     this.status = status;
+    this.raw = raw;
   }
 }
 
@@ -216,7 +223,7 @@ export async function uploadDataUrlsAsGuest(dataUrls: string[]): Promise<string[
     const type = blob.type || "image/png";
     const { key, url: putUrl } = await guestPhotoPresign(type);
     const res = await fetch(putUrl, { method: "PUT", headers: { "Content-Type": type }, body: blob });
-    if (!res.ok) throw new Error(`사진을 올리지 못했습니다 (${res.status})`);
+    if (!res.ok) throw new Error(translateNow("사진을 올리지 못했습니다 ({n})", { n: res.status }));
     keys.push(key);
   }
   return keys;
@@ -541,12 +548,14 @@ export function tryCharacter(body: {
   photos_data?: string[];
   /** 프리셋 키 또는 직접 쓴 한 줄. 비우면 무작위. */
   world?: string;
+  /** 카드 글의 언어 — 화면 언어. 서버가 모르는 값(zh 등)은 ko 로 돌린다. */
+  language?: string;
 }): Promise<Character> {
   return post<Character>("/characters/try", body);
 }
 
 /** 직접 만들기(초상 한 장) — 백로그이지만 서버 길은 남아 있다. */
-export function createCharacter(body: { name: string; description: string; photos_data?: string[]; style?: string }) {
+export function createCharacter(body: { name: string; description: string; photos_data?: string[]; style?: string; language?: string }) {
   return post<Character>("/characters", body);
 }
 
