@@ -36,7 +36,6 @@
 .wt .wt-ed-overlaytoggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; cursor: pointer; }
 .wt .wt-ed-overlaytoggle input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
 .wt .wt-ed-saved { font-size: 12px; color: #0f9e8a; margin: 0; }
-.wt .wt-ed-saved[data-state="idle"]::before { content: "● 저장됨"; }
 .wt .wt-ed-saved[data-state="saving"] { color: var(--dim); }
 .wt .wt-ed-saved[data-state="fail"] { color: #b3311a; font-weight: 600; }
 .wt .wt-ed-bake, .wt .wt-ed-done { height: 40px; font-size: 13.5px; padding: 0 18px; }
@@ -206,8 +205,7 @@
 
 /* 장 사이 여백 — 끌어서 고친다 */
 .wt .wt-ed .scene-gap { position: relative; width: 100%; min-height: 34px; margin-bottom: 16px; border: 1px dashed rgba(15, 51, 63, 0.25); border-radius: 10px; background: #fff; cursor: ns-resize; touch-action: none; }
-.wt .wt-ed .scene-gap span { position: absolute; left: 12px; top: 8px; font-size: 12px; color: var(--dim); white-space: nowrap; }
-.wt .wt-ed .scene-gap span::before { content: "다음 장까지 여백 · "; }
+.wt .wt-ed .scene-gap > span { position: absolute; left: 12px; top: 8px; font-size: 12px; color: var(--dim); white-space: nowrap; }
 .wt .wt-ed .scene:has(+ .scene-gap) { margin-bottom: 6px; }
 .wt .wt-ed .scene-gap.is-dragging { transition: none; background: var(--water-light); }
 .wt .wt-ed .scene-gap:hover { background: var(--paper); }

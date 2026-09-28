@@ -20,6 +20,8 @@
  */
 
 /** 고르개에 적을 형식. HEIC 를 적어 둬야 iOS 사진첩이 흐리게 두지 않는다. */
+import { translateNow } from "./i18n";
+
 export const PHOTO_ACCEPT =
   "image/png,image/jpeg,image/webp,image/heic,image/heif,image/*";
 
@@ -31,7 +33,12 @@ const READABLE = new Set(["image/png", "image/jpeg"]);
 /** 서버가 어차피 이 폭으로 줄인다 — 더 크게 보내 봐야 버려진다. */
 const MAX_WIDTH = 1400;
 
-export class PhotoError extends Error {}
+/** 사진을 못 쓰는 까닭. 문구는 한국어 원문으로 적고, 지금 화면 언어로 옮겨 싣는다. */
+export class PhotoError extends Error {
+  constructor(message: string) {
+    super(translateNow(message));
+  }
+}
 
 export async function readPhoto(file: File): Promise<string> {
   if (READABLE.has(file.type) && file.size <= MAX_PHOTO_BYTES) {

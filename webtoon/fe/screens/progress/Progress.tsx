@@ -384,7 +384,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               <img src={louSrc} alt="" />
               <span className="num" style={{ color: "#a13a2e" }}>{t("멈췄습니다")}</span>
               <h2>{t("웹툰 생성에 실패했어요")}</h2>
-              {job.error && <span className="muted">{job.error}</span>}
+              {job.error && <span className="muted">{t(job.error)}</span>}
               {refundLine && <span className="ok">{refundLine}</span>}
               <button type="button" className="btn btn-p" onClick={remakeAfterFail}>{t("다시 만들기")}</button>
               <button type="button" className="btn btn-w" onClick={() => go("landing")}>{t("홈으로 가기")}</button>
