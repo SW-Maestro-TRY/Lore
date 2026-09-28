@@ -221,7 +221,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
         <div className="crumb"><span>{t("캐릭터")}</span><i>›</i><b>{t("웹툰 한 컷")}</b><i>›</i><span>{t("1화")}</span></div>
         <div className="wt-ch-res-body">
           {ch ? (
-            <h2 className="wt-ch-res-mtitle">{card?.twist || ch.name}</h2>
+            <h2 className="wt-ch-res-mtitle">{card?.twist || t(ch.name)}</h2>
           ) : (
             <div className="skeleton wt-ch-res-mtitle" style={{ height: 28, borderRadius: 8 }} />
           )}
@@ -229,7 +229,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
           <div className="wt-ch-res-side">
             {ch ? (
               <>
-                <h2>{card?.twist || ch.name}</h2>
+                <h2>{card?.twist || t(ch.name)}</h2>
                 {card?.role && (
                   <b className="wt-ch-res-role">
                     {card.role}
@@ -237,7 +237,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
                   </b>
                 )}
                 <span className="muted wt-ch-res-who">
-                  {[ch.name, card?.genre].filter(Boolean).join(" · ")}
+                  {[t(ch.name), card?.genre].filter(Boolean).join(" · ")}
                 </span>
                 {!shared && ch.share_visits != null && ch.share_visits > 0 && (
                   <span className="muted wt-ch-res-share">

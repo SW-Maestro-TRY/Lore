@@ -580,7 +580,7 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
         <img src={coverUrl(run.run_id, run.cover_page ?? 1, run.cover_episode ?? 1)} alt="" />
       </button>
       <b>{run.title || t("제목 없음")}</b>
-      <span className="muted">{[run.character, run.genre].filter(Boolean).join(" · ")}</span>
+      <span className="muted">{[run.character, run.genre && t(run.genre)].filter(Boolean).join(" · ")}</span>
       <div className="wt-my-eps">
         {run.episodes.map((n) => (
           <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>

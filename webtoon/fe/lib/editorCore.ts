@@ -161,8 +161,10 @@ export function mountEditor(
     el.dataset.state = stateName;
     el.textContent = stateName === "saving" ? tr("저장하는 중…")
                    : stateName === "fail" ? tr("저장하지 못했습니다 — 연결을 확인해 주세요 (이 브라우저에는 남아 있습니다)")
+                   : stateName === "idle" ? tr("● 저장됨")   // CSS content 에 두면 번역을 못 거친다
                    : "";
   }
+  paintSaved("idle");   // 처음 열었을 때의 「저장됨」 — 전에는 CSS 가 그렸다
   let pushT = null, pushing = false, pushDirty = false;
 
   /* 그림이 화면에서 몇 px 로 보이는가 — 글자 크기를 그림 해상도로 옮길 때 쓴다.
@@ -332,7 +334,7 @@ export function mountEditor(
     return `<div class="scene-gap" data-gap="${s.no}"
         style="padding-top:${(gapScale(step) * 100).toFixed(2)}%"
         title="${tr("끌어서 여백을 고칩니다 — 내려받는 파일도 이만큼 벌어집니다")}">
-        <span data-gap-label>${GAP_NAMES[step]}</span>
+        <span>${tr("다음 장까지 여백")} · <span data-gap-label>${GAP_NAMES[step]}</span></span>
         <div class="gap-steps">${GAP_NAMES.map((n, i) =>
           `<button type="button" class="gap-dot${i === step ? " is-on" : ""}"
                    data-gap-set="${i}" title="${n}"></button>`).join("")}</div>
@@ -477,7 +479,7 @@ export function mountEditor(
       b.type = "button";
       b.className = "fb-tag";
       b.dataset.tagId = t.id;
-      b.textContent = t.label;
+      b.textContent = tr(t.label);   // 서버 원문(한국어) — 화면 언어로
       b.setAttribute("aria-pressed", "false");
       b.addEventListener("click", () => b.setAttribute("aria-pressed",
         b.getAttribute("aria-pressed") === "true" ? "false" : "true"));
@@ -1415,7 +1417,7 @@ export function mountEditor(
     const sub = [
       epLabel,
       r.page_count ? tr("{n}장", { n: r.page_count }) : "",
-      r.genre || "",
+      r.genre ? tr(r.genre) : "",
     ].filter(Boolean).join(" · ");
     // 그 작품에서 **실제로 그려진 첫 회차**를 연다. 1화를 못 그리고 2화만 남은
     // run 이 있어서, 늘 1화로 보내면 열자마자 "열지 못했습니다"가 뜬다.

@@ -34,7 +34,10 @@ const registry: Dict[] = [];
 
 /** 영역의 사전을 올린다. 모듈이 읽힐 때 한 번 부르면 된다(중복은 무시). */
 export function registerDict(dict: Dict): void {
-  if (!registry.includes(dict)) registry.push(dict);
+  if (!registry.includes(dict)) {
+    registry.push(dict);
+    patterns = null;
+  }
 }
 
 const KEY = "lore_lang";
@@ -63,13 +66,60 @@ function initialLang(): Lang {
   return "ko";
 }
 
+/* 서버가 숫자를 끼워 보낸 문구(「3번째 사진을 읽지 못했습니다」)는 원문이 매번 달라
+ * 사전 키와 글자가 안 맞는다. 사전 키에 `{n}` 자리가 있으면 그 자리를 아무 글자로
+ * 보고 맞춰 본 뒤, 잡힌 값을 번역문의 같은 자리에 넣는다. 정확히 맞는 키가 없을
+ * 때만 본다. */
+type Pattern = { re: RegExp; names: string[]; entry: Dict[string] };
+let patterns: Pattern[] | null = null;
+
+function patternsOf(): Pattern[] {
+  if (patterns) return patterns;
+  const out: Pattern[] = [];
+  for (const dict of registry) {
+    for (const [src, entry] of Object.entries(dict)) {
+      if (!/\{\w+\}/.test(src)) continue;
+      const names: string[] = [];
+      const body = src.split(/(\{\w+\})/).map((part) => {
+        const m = /^\{(\w+)\}$/.exec(part);
+        if (m) {
+          names.push(m[1]);
+          return "(.+?)";
+        }
+        return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }).join("");
+      out.push({ re: new RegExp(`^${body}$`), names, entry });
+    }
+  }
+  patterns = out;
+  return out;
+}
+
 function lookup(lang: Lang, src: string): string {
   if (lang === "ko") return src;
   for (let i = registry.length - 1; i >= 0; i--) {
     const hit = registry[i][src]?.[lang];
     if (hit) return hit;
   }
+  for (const p of patternsOf()) {
+    const target = p.entry[lang];
+    if (!target) continue;
+    const m = p.re.exec(src);
+    if (!m) continue;
+    const vars: Record<string, string> = {};
+    p.names.forEach((n, i) => { vars[n] = m[i + 1]; });
+    return fill(target, vars);
+  }
   return src;
+}
+
+/* 지금 화면 언어. 훅을 못 쓰는 자리(api 의 오류 문구, DOM 을 직접 그리는 코드)가
+ * 읽는다. LangProvider 가 언어를 정하거나 바꿀 때마다 맞춰 둔다. */
+let current: Lang = "ko";
+
+/** 훅 밖에서 쓰는 t(). 서버가 보낸 한국어 문구를 지금 화면 언어로 옮길 때 쓴다. */
+export function translateNow(src: string, vars?: Record<string, string | number>): string {
+  return fill(lookup(current, src), vars);
 }
 
 /** 영문 번역. 행동 기록(track)은 한글 값을 버리므로 화면 이름을 기호로 바꿀 때 쓴다. 없으면 원문. */
@@ -98,6 +148,7 @@ export function LangProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>("ko");
   useEffect(() => {
     const l = initialLang();
+    current = l;
     setLangState(l);
     // 주소가 명시한 언어는 저장도 한다 — 다음에 언어 없는 주소로 옮겨도 유지되게.
     if (urlLang()) {
@@ -109,6 +160,7 @@ export function LangProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   const setLang = useCallback((l: Lang) => {
+    current = l;
     setLangState(l);
     try {
       localStorage.setItem(KEY, l);
