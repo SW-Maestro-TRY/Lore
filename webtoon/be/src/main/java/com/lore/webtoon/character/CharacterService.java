@@ -239,8 +239,9 @@ public class CharacterService {
      */
     @Transactional
     public WebtoonCharacter create(Long userId, String browserUid, String name,
-                                   String description, List<String> photoDataUrls, String style) {
-        return start(userId, browserUid, name, description, photoDataUrls, style, null);
+                                   String description, List<String> photoDataUrls, String style,
+                                   String language) {
+        return start(userId, browserUid, name, description, photoDataUrls, style, null, language);
     }
 
     /**
@@ -252,18 +253,20 @@ public class CharacterService {
      * 하루 몫은 같은 자리에서 같은 규칙으로 센다 — 한 장 그리는 값은 같다.
      *
      * @param world 프리셋 키이거나 사람이 직접 쓴 한 줄. 비우면 무작위
+     * @param language 카드 글의 언어(ko·en·ja). 화면 언어를 그대로 받는다 — 모르는 값이면 ko
      */
     @Transactional
     public WebtoonCharacter tryOut(Long userId, String browserUid, String name,
-                                   String description, List<String> photoDataUrls, String world) {
+                                   String description, List<String> photoDataUrls, String world,
+                                   String language) {
         return start(userId, browserUid, name, description, photoDataUrls, null,
-                     world == null ? "" : world.trim());
+                     world == null ? "" : world.trim(), language);
     }
 
     /** @param world {@code null} 이면 초상 한 장, 아니면 한 컷("" 는 세계관 무작위) */
     private WebtoonCharacter start(Long userId, String browserUid, String name,
                                    String description, List<String> photoDataUrls, String style,
-                                   String world) {
+                                   String world, String language) {
         /* **로그인은 안 시킨다.** 이 제품은 회원가입 없이 한번 써 보게 하는
            것이 목적이고, 웹툰 만들기가 이미 그렇다 — 캐릭터만 로그인을
            요구하면 "캐릭터로 웹툰 만들기" 로 가는 길이 거기서 끊긴다.
@@ -376,25 +379,26 @@ public class CharacterService {
                         @Override
                         public void afterCommit() {
                             line.submit(() -> draw(id, called, description, finalPhotos,
-                                    style, world, dir));
+                                    style, world, language, dir));
                         }
                     });
         } else {
-            line.submit(() -> draw(id, called, description, finalPhotos, style, world, dir));
+            line.submit(() -> draw(id, called, description, finalPhotos, style, world, language,
+                    dir));
         }
         return saved;
     }
 
     /** 뒤에서 그린다. 여기서 죽어도 줄이 멈추면 안 된다. */
     private void draw(Long id, String name, String description, List<Path> photos,
-                      String style, String world, Path dir) {
+                      String style, String world, String language, Path dir) {
         Path drawn = dir.resolve(world == null ? "art.png" : "panel.png");
         boolean drew = false;
         String key = null;
         try {
             CharacterMaker.Made made = world == null
-                    ? maker.make(name, description, photos, style, drawn)
-                    : maker.makePanel(name, description, photos, world, drawn);
+                    ? maker.make(name, description, photos, style, drawn, language)
+                    : maker.makePanel(name, description, photos, world, drawn, language);
             drew = true;
             key = uploadArt(made.art());
             // 사람이 이름을 안 적었으면 사양이 지어 준 것을 쓴다.
