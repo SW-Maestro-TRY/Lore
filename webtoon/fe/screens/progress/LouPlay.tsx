@@ -13,17 +13,21 @@
  * 그쪽이 찾는 id(mascotStage · mascot · mascotImg · playSay · playHint ·
  * tips · tipKind · tipText)를 그대로 놓아 주는 것뿐이다. */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { LOU_IDLE } from "../../lib/louArt";
 import { setupLou, setupTips } from "../../lib/mascotPlay";
 import { useT } from "../../lib/i18n";
 
 export default function LouPlay() {
   const t = useT();
+  // 언어를 바꿔도 루를 처음부터 다시 띄우지 않게, 번역 함수는 늘 최신 것을 가리키게 둔다.
+  const tRef = useRef(t);
+  tRef.current = t;
 
   useEffect(() => {
-    const stopLou = setupLou();
-    const stopTips = setupTips();
+    const tr = (s: string) => tRef.current(s);
+    const stopLou = setupLou(tr);
+    const stopTips = setupTips(tr);
     return () => { stopLou(); stopTips(); };
   }, []);
 
