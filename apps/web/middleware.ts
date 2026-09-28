@@ -1,4 +1,6 @@
 // /ko · /en · /ja 로 들어오면 그 언어로 홈이나 /webtoon 을 보여준다.
+// 접두어 없는 루트("/")는 lore_locale 쿠키(마이페이지에서 언어를 바꿀 때도 남긴다,
+// webtoon/fe/lib/i18n.tsx 의 setLang)가 있으면 그 언어 주소로 리다이렉트한다.
 //
 // **주소는 그대로 두고 속만 바꾼다** — NextResponse.rewrite() 는 브라우저 주소창을
 // 안 바꾼다. 그래서 webtoon/fe/lib/i18n.tsx 가 `location.pathname` 으로 언어 접두어를
@@ -22,16 +24,31 @@ function isLocale(seg: string): seg is Locale {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const [, seg, ...restSegs] = pathname.split("/");
-  if (!isLocale(seg)) return NextResponse.next();
 
-  const url = req.nextUrl.clone();
-  url.pathname = restSegs.length ? `/${restSegs.join("/")}` : "/";
+  if (isLocale(seg)) {
+    const url = req.nextUrl.clone();
+    url.pathname = restSegs.length ? `/${restSegs.join("/")}` : "/";
 
-  const res = NextResponse.rewrite(url);
-  res.cookies.set("lore_locale", seg, { path: "/", sameSite: "lax" });
-  return res;
+    const res = NextResponse.rewrite(url);
+    res.cookies.set("lore_locale", seg, { path: "/", sameSite: "lax" });
+    return res;
+  }
+
+  // 접두어 없는 루트("/")는 마이페이지에서 남겨 둔 lore_locale 쿠키가 있으면 그
+  // 언어 주소로 보낸다. 쿠키가 없으면(첫 방문) 그대로 둔다 — 기본값은
+  // app/layout.tsx 가 "ko"로 렌더한다.
+  if (pathname === "/") {
+    const saved = req.cookies.get("lore_locale")?.value;
+    if (saved && isLocale(saved)) {
+      const url = req.nextUrl.clone();
+      url.pathname = `/${saved}`;
+      return NextResponse.redirect(url);
+    }
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/ko", "/ko/webtoon", "/en", "/en/webtoon", "/ja", "/ja/webtoon"],
+  matcher: ["/", "/ko", "/ko/webtoon", "/en", "/en/webtoon", "/ja", "/ja/webtoon"],
 };

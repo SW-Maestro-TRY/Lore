@@ -167,6 +167,12 @@ export function LangProvider({ children }: { children: ReactNode }) {
     } catch {
       /* 못 남겨도 이번 방문은 바뀐다 */
     }
+    // 홈(랜딩)은 이 localStorage 를 못 읽고 lore_locale 쿠키만 본다(apps/web/middleware.ts).
+    // 여기서 같이 남겨야 마이페이지에서 바꾼 언어가 홈에도 반영된다. zh 는 홈이 아직
+    // 모르는 언어라 쿠키를 남기지 않는다 — 홈은 지금 값(ko 기본)을 그대로 쓴다.
+    if (l === "ko" || l === "en" || l === "ja") {
+      document.cookie = `lore_locale=${l}; path=/; samesite=lax`;
+    }
   }, []);
   useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : lang;
