@@ -10,6 +10,12 @@
 //
 // 정리(clearInterval·removeEventListener)를 위해 cleanup 함수를 돌려준다 —
 // 탭을 옮기면 언마운트되고 다시 들어오면 새로 mount 되기 때문이다.
+//
+// 대사와 팁은 manifest·tips.json 에 한국어 원문으로 있다. 화면에 찍기 직전에
+// 부르는 쪽이 준 번역 함수(tr)를 거친다 — 사전은 screens/progress/i18n.ts.
+
+/** 한국어 원문 -> 지금 화면 언어. 없으면 원문 그대로 돌려주면 된다. */
+export type Translate = (src: string) => string;
 
 const ART = "/static/lou/react";
 
@@ -23,7 +29,7 @@ const pick = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)]
 
 const ALT_CHANCE = 0.15;
 
-export function setupLou(): () => void {
+export function setupLou(tr: Translate = (s) => s): () => void {
   let disposed = false;
   let idleInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -42,7 +48,7 @@ export function setupLou(): () => void {
 
   function say(text: string) {
     const el = document.querySelector<HTMLElement>("#playSay");
-    if (el) el.textContent = text;
+    if (el) el.textContent = tr(text);
   }
 
   function show(kind: string, i: number) {
@@ -382,7 +388,7 @@ interface TipItem {
   text: string;
 }
 
-export function setupTips(): () => void {
+export function setupTips(tr: Translate = (s) => s): () => void {
   let disposed = false;
   let timer: ReturnType<typeof setInterval> | null = null;
   let fadeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -411,8 +417,8 @@ export function setupTips(): () => void {
 
     const paint = (it: TipItem) => {
       box.dataset.kind = it.kind || "팁";
-      kindEl.textContent = it.kind || "팁";
-      textEl.textContent = it.text;
+      kindEl.textContent = tr(it.kind || "팁");
+      textEl.textContent = tr(it.text);
     };
 
     const step = () => {
@@ -436,7 +442,7 @@ export function setupTips(): () => void {
     paint(order[0]);
     box.hidden = false;
     box.style.cursor = "pointer";
-    box.title = "눌러서 다음 팁 보기";
+    box.title = tr("눌러서 다음 팁 보기");
     clickHandler = () => {
       step();
       restart();
