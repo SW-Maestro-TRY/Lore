@@ -162,8 +162,13 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
 
 def build_cover_prompt(*, title: str, genre: str, plot: str, first: dict,
                        char: dict | None, spec: dict | None, cast: list[dict],
-                       provider: str, style: str) -> str:
-    """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 지시가 다르다."""
+                       provider: str, style: str, lang: str = "ko") -> str:
+    """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 지시가 다르다.
+
+    장면 페이지는 detail_image_prompt 의 {{LANGUAGE_LINE}} 으로 글자 언어를 받는데
+    표지는 그 파일을 안 쓴다. 그래서 여기서 따로 적는다 — 안 적으면 한국어로 된
+    지시문과 고정 블록의 「한국어 대사」를 보고 영어 제목을 한국어로 옮겨 그린다.
+    ko 는 아무것도 안 붙인다(예전 표지 프롬프트 그대로)."""
     blocks = [imageprompt.load_fixed_block(provider, style)]
     blocks.append("""\
 ## 이 그림은 표지다 (중요 — 위의 '페이지 구성'보다 이 절이 우선한다)
@@ -183,6 +188,11 @@ def build_cover_prompt(*, title: str, genre: str, plot: str, first: dict,
         blocks.append(who)
 
     lines = ["## 이 작품", f"제목(이 글자 그대로 그린다): {title}" if title else ""]
+    if lang != "ko":
+        name = lang_mod.LANG_NAMES.get(lang, lang)
+        lines.append(f"그림 안에 들어가는 글자는 제목을 포함해 전부 {name}다. 제목을 한국어나 "
+                     f"다른 언어로 옮기지 않고 위에 적힌 {name} 글자를 그대로 쓴다. "
+                     f"위 고정 지시에 「한국어」라고 적힌 글자 규정도 이 작품에서는 {name}로 읽는다.")
     if genre:
         lines.append(f"장르: {genre}")
     if plot:
@@ -466,7 +476,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         if n_ == 0:
             prompt = build_cover_prompt(title=title, genre=genre, plot=plot,
                                         first={"detail": first_detail}, char=char, spec=spec,
-                                        cast=cast, provider=provider, style=style)
+                                        cast=cast, provider=provider, style=style, lang=lang)
         else:
             # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
