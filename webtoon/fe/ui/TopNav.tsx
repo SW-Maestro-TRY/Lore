@@ -8,19 +8,21 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { IconBack } from "./Icons";
+import { useT } from "../lib/i18n";
 
 /** 폰의 얇은 줄 — 이전 · 제목 · 오른쪽(걸음 표시 등). PC 에서는 안 보인다. */
 export function MobileTop({ back, title, right }: { back?: { href: string; label?: string; onClick?: () => void }; title: string; right?: ReactNode }) {
+  const t = useT();
   return (
     <div className="mtop">
       {back ? (
         back.onClick ? (
           <button type="button" className="btn-ghost" style={{ fontSize: 13 }} onClick={back.onClick}>
-            <IconBack size={16} /> {back.label ?? "이전"}
+            <IconBack size={16} /> {back.label ?? t("이전")}
           </button>
         ) : (
           <Link href={back.href} className="btn-ghost" style={{ fontSize: 13 }}>
-            <IconBack size={16} /> {back.label ?? "이전"}
+            <IconBack size={16} /> {back.label ?? t("이전")}
           </Link>
         )
       ) : <span />}
@@ -32,8 +34,9 @@ export function MobileTop({ back, title, right }: { back?: { href: string; label
 
 /** PC 의 빵부스러기 — 「캐릭터 › 이야기 › 완성」 한 줄. 진한 것이 지금 자리. */
 export function Crumb({ items, at }: { items: string[]; at: number }) {
+  const t = useT();
   return (
-    <div className="crumb" aria-label="지금 위치">
+    <div className="crumb" aria-label={t("지금 위치")}>
       {items.map((it, i) => (
         <span key={it} style={{ display: "contents" }}>
           {i > 0 && <i>›</i>}

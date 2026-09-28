@@ -45,6 +45,7 @@ const dict: Dict = {
   "· 입구": { en: "· Start", ja: "· 入口", zh: "· 入口" },
   "· 캐릭터": { en: "· Character", ja: "· キャラクター", zh: "· 角色" },
   "· 이야기 · 장르": { en: "· Story · Genre", ja: "· ストーリー · ジャンル", zh: "· 故事 · 题材" },
+  "· 그림체": { en: "· Art style", ja: "· 画風", zh: "· 画风" },
 
   /* ---- 2 · 이야기 · 장르 ---- */
   "어떤 이야기를 볼까요?": { en: "What story would you like?", ja: "どんなストーリーにしますか？", zh: "想看什么样的故事？" },

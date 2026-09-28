@@ -173,6 +173,8 @@ const dict: Dict = {
   "내역을 불러오지 못했습니다.": { en: "Couldn't load the history.", ja: "履歴を読み込めませんでした。", zh: "无法加载记录。" },
   "불러오는 중…": { en: "Loading…", ja: "読み込み中…", zh: "加载中…" },
   "이 컷 다시 그리기 · {n}크레딧": { en: "Redraw this panel · {n} credits", ja: "このコマを描き直す · {n}クレジット", zh: "重绘这一格 · {n} 积分" },
+  "● 저장됨": { en: "● Saved", ja: "● 保存済み", zh: "● 已保存" },
+  "다음 장까지 여백": { en: "Gap before next page", ja: "次のページまでの余白", zh: "到下一页的留白" },
 };
 
 registerDict(dict);

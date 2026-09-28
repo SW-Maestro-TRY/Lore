@@ -77,7 +77,9 @@ export async function runTry(d: TryDraft, lang: Lang): Promise<Character> {
 /** 서버가 오늘 한도를 다 썼다고 했나. */
 export function isLimitError(e: unknown): boolean {
   const status = (e as { status?: number } | null)?.status;
-  const msg = (e as { message?: string } | null)?.message || "";
+  // 번역된 message 가 아니라 서버 원문(raw)으로 가른다 — 화면 언어와 상관없이 같게.
+  const msg = (e as { raw?: string; message?: string } | null)?.raw
+    || (e as { message?: string } | null)?.message || "";
   // 402 는 크레딧 부족일 수도 있다 — 서버가 「다 쓰셨어요」라고 했을 때만 한도 화면.
   return msg.includes("다 쓰셨어요") || (status === 403 && msg.includes("무료"));
 }
