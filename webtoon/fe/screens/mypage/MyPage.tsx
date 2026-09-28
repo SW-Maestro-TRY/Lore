@@ -37,6 +37,14 @@ import FullSurvey from "./FullSurvey";
 import AdminSurvey from "./AdminSurvey";
 import "./MyPage.css";
 
+/** 「1:1 문의하기」 창구 셋. 카카오톡 채널 주소는 공용(`CONTACT_CHANNEL`)이고, 인스타·X 는
+ *  이 화면에서만 쓰는 웹툰 SNS 계정이라 여기 둔다. */
+const CONTACT_LINKS: { key: string; label: string; href: string }[] = [
+  { key: "kakao", label: "카카오톡", href: CONTACT_CHANNEL },
+  { key: "instagram", label: "인스타그램", href: "https://www.instagram.com/lorecomic_/" },
+  { key: "x", label: "X", href: "https://x.com/lorecomic_" },
+];
+
 registerDict({
   "마이페이지": { en: "My page", ja: "マイページ", zh: "我的页面" },
   "로그인 안 함": { en: "Not signed in", ja: "未ログイン", zh: "未登录" },
@@ -90,6 +98,9 @@ registerDict({
   "충전": { en: "Top up", ja: "チャージ", zh: "充值" },
   "내역": { en: "History", ja: "履歴", zh: "记录" },
   "1:1 문의하기": { en: "Contact us", ja: "1:1お問い合わせ", zh: "1:1 咨询" },
+  "어디로 문의할까요?": { en: "Where would you like to reach us?", ja: "どちらにお問い合わせしますか？", zh: "想通过哪个渠道联系我们？" },
+  "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
+  "인스타그램": { en: "Instagram", ja: "インスタグラム", zh: "Instagram" },
   "이용약관": { en: "Terms of use", ja: "利用規約", zh: "使用条款" },
   "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },
   "목록을 가져오지 못했어요": { en: "Couldn't load the list", ja: "一覧を読み込めませんでした", zh: "无法加载列表" },
@@ -117,6 +128,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   const [tab, setTab] = useState<"works" | "settings">(initialTab === "settings" ? "settings" : "works");
   /* 「피드백 보내기」(#471) — 다시 온 사람 안내나 완성 직후 설문에서 tab=feedback 으로 오면 바로 연다. */
   const [surveyOpen, setSurveyOpen] = useState(initialTab === "feedback");
+  const [contactOpen, setContactOpen] = useState(false);
   const [surveyStatus, setSurveyStatus] = useState<SurveyStatus | null>(null);
   useEffect(() => {
     if (!isAuthenticated) { setSurveyStatus(null); return; }
@@ -288,7 +300,9 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             </>
           )}
           <small>{t("계정")}</small>
-          <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">{t("1:1 문의하기")}</a>
+          <button type="button" onClick={() => { track("contact_open", { where: "mypage" }); setContactOpen(true); }}>
+            {t("1:1 문의하기")}
+          </button>
           <button type="button" onClick={() => { track("feedback_open", { where: "mypage" }); setSurveyOpen(true); }}>
             {t("피드백 보내기")}
             {surveyStatus && !surveyStatus.done && <span className="dim">+{surveyStatus.reward}C</span>}
@@ -307,6 +321,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
       </aside>
 
       <div className="wt-my-main">
+            {contactOpen && (
+              <Dialog title={t("어디로 문의할까요?")} onClose={() => setContactOpen(false)}>
+                <div className="wt-my-contact">
+                  {CONTACT_LINKS.map((c) => (
+                    <a key={c.key} className="btn btn-w" href={c.href} target="_blank" rel="noopener noreferrer"
+                       onClick={() => { track("contact_pick", { where: "mypage", channel: c.key }); setContactOpen(false); }}>
+                      {t(c.label)}
+                    </a>
+                  ))}
+                </div>
+              </Dialog>
+            )}
             {surveyOpen && (
               <FullSurvey authenticated={isAuthenticated} status={surveyStatus} go={go}
                           onClose={() => setSurveyOpen(false)}

@@ -63,6 +63,10 @@
 }
 .wt .wt-my-err { font-size: 11.5px; color: var(--gold); }
 
+/* 1:1 문의 창구 선택(카카오톡·인스타그램·X) — 「1:1 문의하기」 메뉴로 여는 창(ui/Dialog) 안 */
+.wt .wt-my-contact { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.wt .wt-my-contact .btn { height: 46px; text-decoration: none; }
+
 /* 휴지통(#157) — 사이드바 「휴지통」 메뉴로 여는 창(ui/Dialog) 안 */
 .wt .wt-my-trash { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .wt .wt-my-trashempty { font-size: 13px; padding: 18px 0; text-align: center; }
