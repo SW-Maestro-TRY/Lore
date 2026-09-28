@@ -171,6 +171,9 @@ const dict: Dict = {
   "사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.": { en: "With a photo, or with a description alone.", ja: "写真からでも、説明だけでも作れます。", zh: "有照片可以，只有描述也可以。" },
   "사진으로도, 설명만으로도 만들 수 있어요.": { en: "From a photo, or a description alone.", ja: "写真からでも、説明だけでも。", zh: "用照片，或只用描述。" },
   "로그인하면 크레딧으로 이어서": { en: "Sign in to keep going with credits", ja: "ログインするとクレジットで続けられます", zh: "登录后可用积分继续" },
+
+  /* ---- 서버가 보내는 실패 한 줄 (CharacterService.draw) ---- */
+  "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.": { en: "Couldn't draw the character. Please try again.", ja: "キャラクターを描けませんでした。もう一度お試しください。", zh: "没能画出角色，请重试。" },
 };
 
 registerDict(dict);

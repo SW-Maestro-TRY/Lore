@@ -1,6 +1,7 @@
 /* 「캐릭터 만들어보기」의 입력값을 잠깐 들고 있는 자리 — 결과 화면의 「다시 뽑기」가
  * 같은 입력으로 다시 만들 수 있게 sessionStorage 에 남긴다. 탭을 닫으면 사라진다. */
 import { tryCharacter, type Character } from "../../lib/api";
+import type { Lang } from "../../lib/i18n";
 
 export const DRAFT_KEY = "lore_try_draft";
 /** 마지막으로 만든 카드의 id — 한도 소진 화면이 「이 카드로 1화」를 보일지 정한다. */
@@ -61,9 +62,9 @@ export function lastCardId(): string | null {
   }
 }
 
-/** 입력값으로 캐릭터를 만들고 마지막 카드로 기억한다. */
-export async function runTry(d: TryDraft): Promise<Character> {
-  const body: Parameters<typeof tryCharacter>[0] = {};
+/** 입력값으로 캐릭터를 만들고 마지막 카드로 기억한다. 카드 글은 지금 화면 언어로 나온다. */
+export async function runTry(d: TryDraft, lang: Lang): Promise<Character> {
+  const body: Parameters<typeof tryCharacter>[0] = { language: lang };
   if (d.name.trim()) body.name = d.name.trim();
   if (d.description.trim()) body.description = d.description.trim();
   if (d.world.trim()) body.world = d.world.trim();
