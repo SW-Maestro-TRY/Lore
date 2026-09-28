@@ -12,6 +12,7 @@ import { mySurveyStatus, sendShortSurvey, surveyQuestions, type SurveyAnswers, t
 import { registerDict, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
+import { Dialog } from "../../ui/Dialog";
 import { answeredAll, FreeNote, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
 
 const SKIPPED_KEY = "lore_survey_skipped";
@@ -61,18 +62,24 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
 
   if (state === "done") {
     return (
-      <div className="card wt-survey-card wt-survey-done">
-        <b>{t("답해 주셔서 고마워요!")}</b>
-        {reward !== null && (
-          <>
-            <span>{t("설문을 조금만 더 하면")}</span>
-            <RewardBadge amount={reward} />
+      <Dialog title={t("답해 주셔서 고마워요!")} onClose={() => setState("gone")}>
+        <div className="wt-survey-done">
+          {reward !== null && (
+            <>
+              <span>{t("설문을 조금만 더 하면")}</span>
+              <RewardBadge amount={reward} />
+            </>
+          )}
+        </div>
+        <div className="wt-dialog-actions">
+          <button type="button" className="btn btn-w" onClick={() => setState("gone")}>{t("닫기")}</button>
+          {reward !== null && (
             <button type="button" className="btn btn-p" onClick={() => go("mypage", { tab: "feedback" })}>
               {t("{n}크레딧 받으러 가기", { n: reward })}
             </button>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      </Dialog>
     );
   }
 
@@ -99,23 +106,27 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
   };
 
   return (
-    <div className="card wt-survey-card">
-      {questions.map((q) => (
-        <SurveyQuestion key={q} q={q} answers={answers}
-                        set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
-      ))}
-      <FreeNote value={comment} onChange={setComment} />
-      {err && <p className="wt-survey-err">{err}</p>}
-      <div className="wt-survey-actions">
+    <Dialog title={t("몇 가지만 여쭤볼게요")} onClose={skip} busy={state === "busy"}>
+      <div className="wt-survey-full">
+        {questions.map((q) => (
+          <SurveyQuestion key={q} q={q} answers={answers}
+                          set={(k, v) => setAnswers((a) => withAnswer(a, k, v))} />
+        ))}
+        <FreeNote value={comment} onChange={setComment} />
+      </div>
+      {err && <p className="wt-dialog-err">{err}</p>}
+      <div className="wt-dialog-actions">
         <button type="button" className="btn btn-w" disabled={state === "busy"} onClick={skip}>{t("건너뛰기")}</button>
         <button type="button" className="btn btn-p" disabled={state === "busy" || !answeredAll(questions, answers)}
                 onClick={() => void send()}>{t("보내기")}</button>
       </div>
-    </div>
+    </Dialog>
   );
 }
 
 registerDict({
+  "몇 가지만 여쭤볼게요": { en: "Just a few questions", ja: "いくつか質問させてください", zh: "想问你几个小问题" },
+  "닫기": { en: "Close", ja: "閉じる", zh: "关闭" },
   "건너뛰기": { en: "Skip", ja: "スキップ", zh: "跳过" },
   "보내기": { en: "Send", ja: "送信", zh: "提交" },
   "답해 주셔서 고마워요!": { en: "Thanks for answering!", ja: "ご回答ありがとうございます！", zh: "感谢你的回答！" },
