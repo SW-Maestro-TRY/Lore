@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@common/api/client";
 import { submitHypothesis, type Hypothesis, type JudgeRequest } from "../lib/api";
+import type { AccountRequest } from "./useAccountRequests";
 
 export type SubmitState =
   | { status: "idle" }
@@ -17,38 +18,58 @@ export type SubmitState =
   | { status: "insufficient"; reason: string }
   | { status: "failed"; reason: string };
 
+function savedRequestKey(storageKey: string, body: string): string | null {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(storageKey) || "null");
+    return stored?.body === body && typeof stored.key === "string" ? stored.key : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useSubmit() {
   const [state, setState] = useState<SubmitState>({ status: "idle" });
-  const pending = useRef<AbortController | null>(null);
-  const retry = useRef<{ body: string; key: string } | null>(null);
+  const pending = useRef<AccountRequest | null>(null);
+  const retry = useRef<{ body: string; key: string; storageKey: string } | null>(null);
 
   /**
    * 누른 순간의 초안으로 만든 요청을 보낸다. 기다리는 요청이 있으면 다시 누른 것은 버린다(null).
    * 돌려주는 것: 저장된 가설, 로그인이 필요하면 `"unauthorized"`, 그 밖의 실패는 null(상태에 문구가 든다).
    */
-  const submit = useCallback(async (request: JudgeRequest): Promise<Hypothesis | "unauthorized" | null> => {
-    if (pending.current) return null;
+  const submit = useCallback(async (request: JudgeRequest, account: AccountRequest): Promise<Hypothesis | "unauthorized" | null> => {
+    if (pending.current || !account.isCurrent()) return null;
     const body = JSON.stringify(request);
+    // 취소는 서버 접수 취소를 뜻하지 않는다. A의 재시도 키를 B의 접수로 덮거나 지우지 않는다.
+    const storageKey = typeof account.owner === "number" ? `trailer:pending-submit:${account.owner}` : "trailer:pending-submit";
     // 응답을 잃은 뒤 다시 누르거나 새로고침해도 같은 요청 키로 재시도한다.
-    if (!retry.current || retry.current.body !== body) {
-      try {
-        const stored = JSON.parse(sessionStorage.getItem("trailer:pending-submit") || "null");
-        retry.current = stored?.body === body && typeof stored.key === "string" ? stored : null;
-      } catch { /* 저장소를 못 쓰면 현재 탭의 메모리로 재시도한다. */ }
-      retry.current ??= { body, key: crypto.randomUUID() };
-      if (retry.current.body !== body) retry.current = { body, key: crypto.randomUUID() };
+    if (!retry.current || retry.current.body !== body || retry.current.storageKey !== storageKey) {
+      // 옛 공용 기록도 이번에 제출하는 본문과 같으면 요청 키를 이어 쓴다.
+      // 서버의 멱등 범위는 (인증 계정, 요청 키)라 이것으로 타인의 가설을 조회하지는 않는다.
+      const key = savedRequestKey(storageKey, body)
+        ?? (storageKey === "trailer:pending-submit" ? null : savedRequestKey("trailer:pending-submit", body));
+      retry.current = { body, key: key ?? crypto.randomUUID(), storageKey };
     }
-    try { sessionStorage.setItem("trailer:pending-submit", JSON.stringify(retry.current)); } catch { /* 선택적 저장 */ }
-    const controller = new AbortController();
-    pending.current = controller;
+    const attempt = retry.current;
+    try { sessionStorage.setItem(storageKey, JSON.stringify(attempt)); } catch { /* 선택적 저장 */ }
+    pending.current = account;
     setState({ status: "submitting" });
-    const stale = () => pending.current !== controller;
+    const stale = () => pending.current !== account || !account.isCurrent();
+    const cancel = () => {
+      if (pending.current !== account) return;
+      pending.current = null;
+      setState({ status: "idle" });
+    };
+    account.signal.addEventListener("abort", cancel, { once: true });
     try {
-      const hypothesis = await submitHypothesis({ ...request, requestKey: retry.current.key }, controller.signal);
+      const hypothesis = await submitHypothesis({ ...request, requestKey: attempt.key }, account.signal);
       if (stale()) return null;
       setState({ status: "idle" });
       retry.current = null;
-      try { sessionStorage.removeItem("trailer:pending-submit"); } catch { /* 선택적 저장 */ }
+      try {
+        for (const key of new Set([storageKey, "trailer:pending-submit"])) {
+          if (savedRequestKey(key, body) === attempt.key) sessionStorage.removeItem(key);
+        }
+      } catch { /* 선택적 저장 */ }
       return hypothesis;
     } catch (error) {
       if (stale()) return null;
@@ -63,7 +84,8 @@ export function useSubmit() {
       setState({ status: "failed", reason: error instanceof Error ? error.message : String(error) });
       return null;
     } finally {
-      if (pending.current === controller) pending.current = null;
+      account.signal.removeEventListener("abort", cancel);
+      if (pending.current === account) pending.current = null;
     }
   }, []);
 
@@ -75,7 +97,7 @@ export function useSubmit() {
   // 화면을 떠나면 기다리던 요청을 끊는다.
   useEffect(
     () => () => {
-      pending.current?.abort();
+      pending.current?.cancel();
       pending.current = null;
     },
     [],

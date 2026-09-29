@@ -77,7 +77,10 @@ function SelectedItem({
         >
           <h3>{card.title}</h3>
         </button>
-        <p className="fact">{card.fact}</p>
+        <details className="selected-record" data-part="selected-record">
+          <summary>카드 기록 보기</summary>
+          <p className="fact">{card.fact}</p>
+        </details>
       </div>
       <div className="interpret-wrap">
         <label htmlFor={noteId}>나의 해석 · 이 장면이 의미하는 건</label>

@@ -12,6 +12,10 @@
  * ★ 맡긴 초안은 얼어 있다(`hypothesisId`). 제목 · 주장 · 해석 · 순서는 바뀌지 않고, 카드를 담으면 그 카드로
  *   새 초안을 시작한다 — 맡긴 가설은 서버(보관함)에 그대로 있다(NA decisions.md 1-23).
  *
+ * ★ 얼어 있는 초안은 계정 것이다. 맡긴 계정(`submittedBy`)을 적어 두고, 로그인한 계정이 정해졌을 때 다른 계정의
+ *   자리 표시는 저장소에서 지운다. 로그인 여부를 모르거나(첫 /users/me 조회 중) 로그아웃 상태면 손대지 않는다 —
+ *   같은 사람이 로그인하면 되묻는 흐름이 그대로 살아야 한다. 초안과 임시 저장은 브라우저 것이라 그대로 둔다.
+ *
  * 최신 초안은 ref 에도 둔다. 초안을 바꾸는 함수가 늘 같은 함수로 남아야 탐색 패널의
  * `memo` 가 듣는다. */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,10 +23,13 @@ import type { Card, Hypothesis } from "../lib/api";
 import {
   CLAIM_MAX,
   TITLE_MAX,
+  acknowledgeSubmission,
   blankDraft,
   cleanDraft,
+  dropForeignPlaceholders,
   emptyMemory,
   hasContent,
+  identifySubmission,
   isFrozen,
   moveCard,
   readMemory,
@@ -34,13 +41,16 @@ import {
   type DraftMemory,
 } from "../lib/draft";
 import type { MetaState } from "./useMeta";
+import type { Viewer } from "./useAccountRequests";
 
 type Ledger = { key: string; maxChapter: number };
+
+type SubmissionTarget = { key: string; draft: Draft };
 
 const SAVED_HERE = "이 브라우저에 임시 저장됨";
 const TAB_ONLY = "현재 탭에서만 유지됩니다";
 
-export function useDraft(meta: MetaState, onChange: () => void) {
+export function useDraft(meta: MetaState, onChange: () => void, viewer: Viewer) {
   const [draft, setDraft] = useState<Draft>(() => blankDraft(0));
   const [memory, setMemory] = useState<DraftMemory>(() => emptyMemory(0));
   const [saveStatus, setSaveStatus] = useState("작성 준비");
@@ -75,6 +85,20 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     return works;
   }, []);
 
+  /** 같은 메모리에서 현재 초안도 함께 꺼낸다. 소유자 보완 전의 옛 ref 로 제거 여부를 다시 판단하지 않는다. */
+  const restoreMemory = useCallback((next: DraftMemory) => {
+    const ledger = ledgerRef.current;
+    const current = chapterRef.current;
+    if (!ledger || current === null) return;
+    const restored = next.drafts[String(current)] ?? blankDraft(current);
+    const memory = next.drafts[String(current)] ? next : { ...next, drafts: { ...next.drafts, [String(current)]: restored } };
+    memoryRef.current = memory;
+    draftRef.current = restored;
+    setMemory(memory);
+    setDraft(restored);
+    setSaveStatus(writeMemory(ledger.key, memory) ? SAVED_HERE : TAB_ONLY);
+  }, []);
+
   // 장부 정보를 받으면 저장소를 읽어 회차와 초안을 되살린다. 같은 장부를 다시 받았을 때는 쓰던 것을 그대로 둔다.
   useEffect(() => {
     if (meta.status !== "ready") return;
@@ -97,6 +121,23 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     },
     [store],
   );
+
+  // 로그인한 계정이 정해지면 다른 계정의 자리 표시를 지운다. 지금 회차가 그것이었으면 빈 초안으로 바꾼다.
+  // 계정 미확정 상태로 접수한 사본은 서버 조회가 소유자를 확인할 때까지 보존한다.
+  useEffect(() => {
+    if (!ready || typeof viewer !== "number") return;
+    const swept = dropForeignPlaceholders(memoryRef.current, viewer);
+    if (swept === memoryRef.current) return;
+    restoreMemory(swept);
+    onChangeRef.current();
+  }, [ready, viewer, restoreMemory]);
+
+  /** 이번 접수분만 확인한다. 소유자 없는 옛 저장본의 이관 정책은 여기서 바꾸지 않는다. */
+  const confirmOwner = useCallback((hypothesisId: number, owner: number, exists: boolean) => {
+    if (!Object.values(memoryRef.current.drafts).some(draft => draft.hypothesisId === hypothesisId && draft.ownerPending)) return;
+    const identified = identifySubmission(memoryRef.current, hypothesisId, exists ? owner : null);
+    restoreMemory(dropForeignPlaceholders(identified, owner));
+  }, [restoreMemory]);
 
   /** 얼어 있는 초안은 입력을 받지 않는다. 바꾸는 함수마다 먼저 본다. */
   const editable = () => ledgerRef.current !== null && !isFrozen(draftRef.current);
@@ -167,12 +208,22 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     if (chapterRef.current !== null) change(blankDraft(chapterRef.current));
   }, [change]);
 
-  /** 서버에 맡겼다. 초안에 요청 id 를 달아 얼린다. 부모에게 알리지 않는다 — 입력이 바뀐 것이 아니다. */
+  /** 접수 시작 시 장부와 초안을 고정한다. 이후 편집·회차 이동으로 바뀐 초안에 응답을 붙이지 않는다. */
+  const captureSubmission = useCallback((): SubmissionTarget | null => {
+    const ledger = ledgerRef.current;
+    return ledger ? { key: ledger.key, draft: draftRef.current } : null;
+  }, []);
+
+  /** 응답 소유자는 요청 시작 시의 계정이다. 응답 시점의 viewer 를 읽지 않는다. */
   const markSubmitted = useCallback(
-    (hypothesisId: number) => {
-      if (ledgerRef.current) store({ ...draftRef.current, hypothesisId });
+    (hypothesisId: number, owner: Viewer, target: SubmissionTarget): boolean => {
+      if (ledgerRef.current?.key !== target.key) return false;
+      const next = acknowledgeSubmission(memoryRef.current, target.draft, hypothesisId, typeof owner === "number" ? owner : undefined, Date.now());
+      if (next === memoryRef.current) return false;
+      restoreMemory(next);
+      return true;
     },
-    [store],
+    [restoreMemory],
   );
 
   /**
@@ -180,9 +231,9 @@ export function useDraft(meta: MetaState, onChange: () => void) {
    * 서버의 가설이 정본이라 초안은 자리 표시다 — 되묻기가 곧 그 id 로 상태를 받는다. 열었으면 true 다.
    */
   const loadHypothesis = useCallback(
-    (hypothesis: Hypothesis): boolean => {
+    (hypothesis: Hypothesis, owner: Viewer, expectedKey: string): boolean => {
       const ledger = ledgerRef.current;
-      if (!ledger || hypothesis.chapter < 1 || hypothesis.chapter > ledger.maxChapter) return false;
+      if (!ledger || ledger.key !== expectedKey || hypothesis.chapter < 1 || hypothesis.chapter > ledger.maxChapter) return false;
       chapterRef.current = hypothesis.chapter;
       setChapter(hypothesis.chapter);
       const notes: Record<string, string> = {};
@@ -195,6 +246,8 @@ export function useDraft(meta: MetaState, onChange: () => void) {
         notes,
         updated: 0,
         hypothesisId: hypothesis.id,
+        // 요청 시작 시 계정. 호출자는 계정 전환을 가로지른 응답을 먼저 거른다.
+        ...(typeof owner === "number" ? { submittedBy: owner } : { ownerPending: true }),
       });
       return true;
     },
@@ -237,7 +290,9 @@ export function useDraft(meta: MetaState, onChange: () => void) {
     toggle,
     move,
     reset,
+    captureSubmission,
     markSubmitted,
+    confirmOwner,
     loadHypothesis,
     save,
     loadSaved,

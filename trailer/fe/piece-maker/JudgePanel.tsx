@@ -74,13 +74,18 @@ function JudgeResultView({ result, chapter, titleOf, onOpen }: { result: JudgeRe
       </div>
       {presentation ? (
         <div className="judge-edited" data-part="judge-edited">
-          <p className="small muted judge-edition">문맥 편집본</p>
+          <p className="small muted judge-edition">판정 요약</p>
           <h3 className="judge-headline">{presentation.headline}</h3>
-          <Sections sections={presentation.sections} />
-          {presentation.details.length ? (
-            <details className="judge-detail" data-part="judge-details">
-              <summary>추가 검토</summary>
-              <Sections sections={presentation.details} />
+          {presentation.sections.length || presentation.details.length ? (
+            <details className="judge-detail" data-part="judge-reasoning">
+              <summary>자세한 판정 이유</summary>
+              <Sections sections={presentation.sections} />
+              {presentation.details.length ? (
+                <div data-part="judge-details">
+                  <h4 className="judge-details-title">추가 검토</h4>
+                  <Sections sections={presentation.details} />
+                </div>
+              ) : null}
             </details>
           ) : null}
         </div>

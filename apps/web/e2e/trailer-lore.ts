@@ -70,6 +70,7 @@ export const MY_HYPOTHESES_URL = /\/api\/trailer\/v1\/hypotheses\/my$/;
 /** lore 공용 로그인. 화면은 `useAuth` 로 `/users/me` 가 200 인지로 로그인을 판정하고, 로그인 창은 `/auth/login` 을 부른다. */
 export const ME_URL = /\/api\/v1\/users\/me$/;
 export const LOGIN_URL = /\/api\/v1\/auth\/login$/;
+export const LOGOUT_URL = /\/api\/v1\/auth\/logout$/;
 export const REFRESH_URL = /\/api\/v1\/auth\/refresh$/;
 /** lore 공용 크레딧 잔액. 화면이 판정 단추 옆에 보이고, 맡긴 뒤와 돌려받은 뒤에 다시 읽는다. 공용 헤더도 부른다. */
 export const CREDIT_ME_URL = /\/api\/v1\/credits\/me$/;
@@ -218,12 +219,24 @@ export type LoreHypothesis = {
   failureMessage: string | null;
   createdAt: string;
   judgedAt: string | null;
+  /** 맡긴 계정(가짜 서버만 아는 칸. 화면에는 주지 않는다). 없으면 기본 독자(`ME`)의 것이다. */
+  ownerId?: number;
 };
 
-/** 가짜 서버의 상태 — 로그인 여부, 맡긴 가설, 크레딧 잔액. 검사가 들여다보고 바꿀 수 있게 `mockLore` 가 돌려준다. */
-export type LoreState = { loggedIn: boolean; hypotheses: LoreHypothesis[]; credits: number };
+/** lore 공용 `/users/me` 가 주는 내 정보. */
+export type LoreAccount = { userId: number; email: string; role: string; createdAt: string };
 
-export const ME = { userId: 7, email: 'reader@example.invalid', role: 'USER', createdAt: '2026-09-22T00:00:00Z' };
+/** 가짜 서버의 상태 — 로그인 여부, 지금 계정, 맡긴 가설, 크레딧 잔액. 검사가 들여다보고 바꿀 수 있게 `mockLore` 가 돌려준다. */
+export type LoreState = { loggedIn: boolean; me: LoreAccount; hypotheses: LoreHypothesis[]; credits: number };
+
+export const ME: LoreAccount = { userId: 7, email: 'reader@example.invalid', role: 'USER', createdAt: '2026-09-22T00:00:00Z' };
+/** 같은 브라우저를 쓰는 다른 독자. 계정을 바꾸는 검사에서 `state.me` 에 넣는다. */
+export const OTHER: LoreAccount = { userId: 8, email: 'other@example.invalid', role: 'USER', createdAt: '2026-09-23T00:00:00Z' };
+
+/** 가설의 주인. 옛 검사가 심은 가설(주인 칸 없음)은 기본 독자의 것이다. */
+const ownerOf = (item: LoreHypothesis): number => item.ownerId ?? ME.userId;
+/** 화면에 주는 모양 — 가짜 서버만 아는 칸을 뺀다(2-6). */
+const publicOf = ({ ownerId: _owner, ...item }: LoreHypothesis): Omit<LoreHypothesis, 'ownerId'> => item;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
@@ -265,10 +278,11 @@ export function submitResponse(body: unknown, fixture: Fixture, state: LoreState
     failureMessage: null,
     createdAt: new Date().toISOString(),
     judgedAt: null,
+    ownerId: state.me.userId,
   };
   state.hypotheses.push(hypothesis);
   state.credits -= JUDGE_CREDITS;
-  return ok(hypothesis);
+  return ok(publicOf(hypothesis));
 }
 
 /** 운영자가 FAILED 를 넣은 뒤의 모양(2-9) — 서버는 이때 낸 크레딧을 돌려준다. 판정 칸은 비고 독자에게 문구가 보인다. */
@@ -289,8 +303,8 @@ export type LoreMockOptions = {
   /** 목록 요청마다 부른다. 검사가 "무엇을 보냈나" 를 볼 때 쓴다. 응답을 늦추려면 Promise 를 돌려준다. */
   onList?: (url: URL) => void | Promise<void>;
   /** 로그인 여부와 맡긴 가설. 안 주면 로그인하지 않은 독자에 가설 없음이다. 로그인 창에서 로그인하면 `loggedIn` 이 참이 된다.
-   *  `credits` 를 안 주면 매일 몫(20)이다. */
-  state?: Omit<LoreState, 'credits'> & { credits?: number };
+   *  `credits` 를 안 주면 매일 몫(20)이다. `me` 를 안 주면 기본 독자(`ME`)다. */
+  state?: Omit<LoreState, 'credits' | 'me'> & { credits?: number; me?: LoreAccount };
   /** 가설을 맡길 때마다 화면이 보낸 몸통을 준다. */
   onSubmit?: (body: unknown) => void;
 };
@@ -301,20 +315,27 @@ export async function mockLore(context: BrowserContext, options: LoreMockOptions
   // 검사가 넘긴 객체를 그대로 쓴다(복사하지 않는다) — 검사가 그 객체를 들여다보고 바꾸기 때문이다.
   const state = (options.state ?? { loggedIn: false, hypotheses: [] }) as LoreState;
   if (state.credits === undefined) state.credits = DEFAULT_CREDITS;
+  if (state.me === undefined) state.me = ME;
   await context.route(CREDIT_ME_URL, (route) =>
     answer(route, state.loggedIn ? ok({ balance: state.credits }) : fail(401, 'UNAUTHORIZED', '로그인이 필요합니다')),
   );
-  await context.route(ME_URL, (route) => answer(route, state.loggedIn ? ok(ME) : fail(401, 'UNAUTHORIZED', '로그인이 필요합니다')));
+  await context.route(ME_URL, (route) => answer(route, state.loggedIn ? ok(state.me) : fail(401, 'UNAUTHORIZED', '로그인이 필요합니다')));
   await context.route(LOGIN_URL, (route) => {
     state.loggedIn = true;
+    return answer(route, ok(null));
+  });
+  // 로그아웃. 진짜 서버는 이 기기의 refresh 만 폐기한다 — 여기서는 로그인 여부만 끈다.
+  await context.route(LOGOUT_URL, (route) => {
+    state.loggedIn = false;
     return answer(route, ok(null));
   });
   // 401 을 받은 공용 클라이언트가 토큰 갱신을 한 번 시도한다 — 갱신도 401 이어야 원래 401 이 화면에 닿는다.
   await context.route(REFRESH_URL, (route) => answer(route, fail(401, 'INVALID_REFRESH_TOKEN', '다시 로그인해 주세요')));
   await context.route(MY_HYPOTHESES_URL, (route) => {
     if (!state.loggedIn) return answer(route, fail(401, 'UNAUTHORIZED', '로그인이 필요합니다'));
-    // 최신이 앞. 목록의 한 줄에는 카드와 판정이 없다(2-7).
-    const items = [...state.hypotheses]
+    // 내 것만, 최신이 앞. 목록의 한 줄에는 카드와 판정이 없다(2-7).
+    const items = state.hypotheses
+      .filter((item) => ownerOf(item) === state.me.userId)
       .sort((a, b) => b.id - a.id)
       .map(({ id, chapter, title, judgementStatus, createdAt, judgedAt }) => ({ id, chapter, title, judgementStatus, createdAt, judgedAt }));
     return answer(route, ok({ items }));
@@ -323,8 +344,9 @@ export async function mockLore(context: BrowserContext, options: LoreMockOptions
     if (route.request().method() !== 'GET') return route.fallback();
     if (!state.loggedIn) return answer(route, fail(401, 'UNAUTHORIZED', '로그인이 필요합니다'));
     const id = Number(HYPOTHESIS_URL.exec(new URL(route.request().url()).pathname)?.[1]);
-    const found = state.hypotheses.find((item) => item.id === id);
-    return answer(route, found ? ok(found) : fail(404, 'TRAILER_HYPOTHESIS_NOT_FOUND', '가설을 찾을 수 없습니다'));
+    // 남의 가설과 없는 가설은 같은 404 다(2-6).
+    const found = state.hypotheses.find((item) => item.id === id && ownerOf(item) === state.me.userId);
+    return answer(route, found ? ok(publicOf(found)) : fail(404, 'TRAILER_HYPOTHESIS_NOT_FOUND', '가설을 찾을 수 없습니다'));
   });
   await context.route(HYPOTHESES_URL, (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
