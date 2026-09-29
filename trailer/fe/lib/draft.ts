@@ -7,7 +7,9 @@
  *   되면서 화면이 카드를 다 갖고 있지 않다. 되살릴 때 서버를 부르지 않고, 판정이 가리키는 카드도 담은 카드
  *   안에서 찾는다. 담은 카드는 그 회차 기준으로 가린 값이다 — 초안이 회차마다 따로라 어긋나지 않는다.
  *
- * 맡긴 초안은 요청 id(`hypothesisId`)를 달고 얼어 있다. 서버에 있는 가설이 정본이고 이 초안은 그 자리 표시다.
+ * 맡긴 초안은 요청 id(`hypothesisId`)와 맡긴 계정(`submittedBy`)을 달고 얼어 있다. 서버에 있는 가설이 정본이고
+ * 이 초안은 그 자리 표시다. 자리 표시는 계정 것이라 맡긴 계정에게만 보인다 — 같은 브라우저에 다른 계정이 들어오면
+ * 지운다(`dropForeignPlaceholders`). 초안과 임시 저장은 브라우저 것이라 그대로 둔다.
  *
  * 초안을 바꾸는 함수는 모두 새 객체를 돌려준다. 받은 초안을 고치지 않는다. */
 import type { Card } from "./api";
@@ -31,6 +33,10 @@ export type Draft = {
   updated: number;
   /** 서버에 맡긴 뒤의 요청 id. 있으면 이 초안은 얼어 있다 — 고칠 수 없고, 새 가설은 새로 쓴다(NA decisions.md 1-23). */
   hypothesisId?: number;
+  /** 맡긴 계정의 id. 얼어 있는 초안에만 있다. 없으면 새 접수본의 확인 대기(ownerPending) 또는 소유자 없는 옛 사본이다. */
+  submittedBy?: number;
+  /** 계정 확인 전 새로 접수한 사본. 새로고침 뒤에도 서버 조회로 소유자를 확인할 때까지 보존한다. */
+  ownerPending?: true;
 };
 
 /** 저장소에 넣는 값. `drafts` 의 키는 회차다. `chapter` 는 독자가 마지막에 고른 회차다. */
@@ -63,6 +69,47 @@ export function hasCard(draft: Draft, id: string): boolean {
 /** 서버에 맡긴 초안인가. 얼어 있는 초안은 입력을 받지 않는다. */
 export function isFrozen(draft: Draft): boolean {
   return draft.hypothesisId !== undefined;
+}
+
+/** 다른 계정이 맡긴 자리 표시인가. 소유자 표시가 없는 옛 자리 표시도 남의 것으로 본다 — 누구 것인지 알 수 없어서다. */
+export function isForeignPlaceholder(draft: Draft, viewerId: number): boolean {
+  return isFrozen(draft) && draft.submittedBy !== viewerId;
+}
+
+/** 다른 계정의 자리 표시를 뺀다. 회차별 초안과 임시 저장 둘 다 본다. 뺄 것이 없으면 받은 객체를 그대로 돌려준다. */
+export function dropForeignPlaceholders(memory: DraftMemory, viewerId: number): DraftMemory {
+  const foreign = (draft: Draft) => isForeignPlaceholder(draft, viewerId) && !draft.ownerPending;
+  const drafts: Record<string, Draft> = {};
+  let changed = false;
+  for (const [chapter, draft] of Object.entries(memory.drafts)) {
+    if (foreign(draft)) changed = true;
+    else drafts[chapter] = draft;
+  }
+  const saved = memory.saved.filter((entry) => !foreign(entry));
+  if (saved.length !== memory.saved.length) changed = true;
+  return changed ? { ...memory, drafts, saved } : memory;
+}
+
+/** 접수 당시 초안이 그대로 남아 있을 때만 그 초안을 잠근다. 다른 회차나 새 작성본은 바꾸지 않는다. */
+export function acknowledgeSubmission(memory: DraftMemory, target: Draft, hypothesisId: number, owner: number | undefined, updated: number): DraftMemory {
+  if (memory.drafts[String(target.chapter)] !== target) return memory;
+  const submitted: Draft = { ...target, hypothesisId, updated, ...(owner === undefined ? { ownerPending: true } : { submittedBy: owner }) };
+  return { ...memory, drafts: { ...memory.drafts, [String(target.chapter)]: submitted } };
+}
+
+/** 서버 조회가 성공하면 소유자를 확정하고, 404(owner=null)면 그 사본을 제거한다. */
+export function identifySubmission(memory: DraftMemory, hypothesisId: number, owner: number | null): DraftMemory {
+  const keep = (draft: Draft) => owner !== null || draft.hypothesisId !== hypothesisId;
+  const identify = (draft: Draft): Draft => {
+    if (draft.hypothesisId !== hypothesisId || owner === null) return draft;
+    const { ownerPending: _pending, ...verified } = draft;
+    return { ...verified, submittedBy: owner };
+  };
+  return {
+    ...memory,
+    drafts: Object.fromEntries(Object.entries(memory.drafts).filter(([, draft]) => keep(draft)).map(([chapter, draft]) => [chapter, identify(draft)])),
+    saved: memory.saved.filter(keep).map(identify),
+  };
 }
 
 const THREAD_ID = /^T\d+$/;
@@ -129,7 +176,12 @@ export function cleanDraft(raw: unknown, maxChapter: number): Draft | null {
     notes,
     updated: Number(value.updated) || 0,
     ...(typeof value.hypothesisId === "number" && Number.isInteger(value.hypothesisId) && value.hypothesisId > 0
-      ? { hypothesisId: value.hypothesisId }
+      ? {
+          hypothesisId: value.hypothesisId,
+          ...(typeof value.submittedBy === "number" && Number.isInteger(value.submittedBy) && value.submittedBy > 0
+            ? { submittedBy: value.submittedBy }
+            : value.ownerPending === true ? { ownerPending: true } : {}),
+        }
       : {}),
   };
 }

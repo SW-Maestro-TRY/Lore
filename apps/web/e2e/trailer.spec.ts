@@ -578,7 +578,12 @@ test.describe('데스크톱', () => {
     const result = page.locator('[data-part="judge-result"]');
     await expect(result).toBeVisible();
     await expect(result.locator('[data-part="judge-grade"]')).toHaveAttribute('data-grade', JUDGE_T2.judgement.grade);
-    await expect(result.locator('[data-part="judge-edited"] > [data-part="judge-section"]')).toHaveCount(JUDGE_T2.presentation!.sections.length);
+    const reasoning = result.locator('[data-part="judge-reasoning"]');
+    await expect(reasoning).not.toHaveAttribute('open');
+    await expect(reasoning.locator(':scope > [data-part="judge-section"]')).toHaveCount(JUDGE_T2.presentation!.sections.length);
+    await expect(reasoning.locator('[data-part="judge-section"]').first()).toBeHidden();
+    await reasoning.locator('summary').click();
+    await expect(reasoning.locator('[data-part="judge-section"]').first()).toBeVisible();
     await expect(page.locator('[data-part="judge-state"]')).toContainText('끝났습니다');
     await expect(page.locator('[data-part="judge-pending"]')).toHaveCount(0);
     // 담지 않은 T374 의 제목이 근거 단추에 붙고, 누르면 상세가 열린다 — 카드 상세 API 는 부르지 않았다.

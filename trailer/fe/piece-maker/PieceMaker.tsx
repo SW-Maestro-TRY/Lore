@@ -32,6 +32,7 @@ import { useHypothesis } from "./useHypothesis";
 import { useMeta } from "./useMeta";
 import { useCredit } from "./useCredit";
 import { useSubmit } from "./useSubmit";
+import { useAccountRequests, type AccountRequest } from "./useAccountRequests";
 import CreditCoin from "./CreditCoin";
 import CreditLedgerView from "./CreditLedgerView";
 import SharePanel from "./SharePanel";
@@ -51,7 +52,12 @@ export default function PieceMaker() {
   const { message, showToast } = useToast();
 
   const { state: submission, submit, clear: clearSubmission } = useSubmit();
-  // 독자가 초안을 고치면 맡기지 못한 문구를 지운다.
+  const { isAuthenticated, user, status: authStatus } = useAuth();
+  /** 초안 쪽에 알리는 "보는 사람". 로그인 여부를 아직 모르면 undefined, 로그인하지 않았으면 null, 했으면 계정 id 다. */
+  const viewer = authStatus === "authenticated" && user ? user.userId : authStatus === "anonymous" ? null : undefined;
+  const requests = useAccountRequests(viewer);
+  const { begin: beginRequest, version: accountVersion } = requests;
+  // 독자가 초안을 고치면 맡기지 못한 문구를 지운다. 다른 계정이 들어오면 앞 계정의 자리 표시를 지운다.
   const {
     draft,
     frozen,
@@ -66,19 +72,28 @@ export default function PieceMaker() {
     toggle,
     move,
     reset,
+    captureSubmission,
     markSubmitted,
+    confirmOwner,
     loadHypothesis,
     save,
     loadSaved,
-  } = useDraft(meta, clearSubmission);
+  } = useDraft(meta, clearSubmission, viewer);
   const { cards, more, reload: reloadCards } = useCards(chapter, query, filter === ALL_KINDS ? "" : filter);
   /** 맡긴 초안이면 그 가설을 되묻는다. 판정이 아직이면 이따금 다시 묻는다. */
-  const { state: watched, reload: reloadHypothesis } = useHypothesis(frozen ? (draft.hypothesisId ?? null) : null);
+  const { state: watched, reload: reloadHypothesis } = useHypothesis(frozen ? (draft.hypothesisId ?? null) : null, requests);
   const hypothesis = watched.status === "ready" ? watched.hypothesis : null;
+
+  // 현재 계정에서 새로 조회한 결과로만 미확정 접수본의 소유자를 확인한다.
+  useEffect(() => {
+    if (typeof viewer !== "number" || draft.hypothesisId === undefined) return;
+    if (watched.status === "ready" || watched.status === "missing") {
+      confirmOwner(draft.hypothesisId, viewer, watched.status === "ready");
+    }
+  }, [viewer, draft.hypothesisId, watched, confirmOwner]);
 
   /* ---- 로그인 ---------------------------------------------------------------- */
 
-  const { isAuthenticated, user } = useAuth();
   /** 내 크레딧. 로그인했을 때만 읽는다. 맡기면 깎이고 판정이 실패하면 돌아오므로 그때마다 다시 읽는다. */
   const { balance: credit, status: creditStatus, refresh: refreshCredit } = useCredit(isAuthenticated, user?.userId);
   const [creditNotice, setCreditNotice] = useState("");
@@ -237,17 +252,29 @@ export default function PieceMaker() {
   /* ---- 보관함 ---------------------------------------------------------------- */
 
   const [mine, setMine] = useState<MineState>({ status: "idle" });
+  const mineRequest = useRef<AccountRequest | null>(null);
+  const detailRequest = useRef<AccountRequest | null>(null);
+
+  useEffect(() => { setMine({ status: "idle" }); }, [accountVersion]);
 
   /** 서버의 보관함을 받는다. 401 은 로그인 단추로, 그 밖의 실패는 다시 받기 단추로 보인다. */
   const loadMine = useCallback(async () => {
+    mineRequest.current?.cancel();
+    const account = beginRequest();
+    mineRequest.current = account;
     setMine({ status: "loading" });
     try {
-      setMine({ status: "ready", items: await fetchMyHypotheses() });
+      const items = await fetchMyHypotheses(account.signal);
+      if (account.isCurrent() && mineRequest.current === account) setMine({ status: "ready", items });
     } catch (error) {
+      if (!account.isCurrent() || mineRequest.current !== account) return;
       if (error instanceof ApiError && error.isUnauthorized) setMine({ status: "unauthorized" });
       else setMine({ status: "error", reason: error instanceof Error ? error.message : String(error) });
+    } finally {
+      account.finish();
+      if (mineRequest.current === account) mineRequest.current = null;
     }
-  }, []);
+  }, [beginRequest]);
 
   const openSaved = useCallback(() => {
     openModal({ kind: "saved" });
@@ -316,14 +343,20 @@ export default function PieceMaker() {
 
   /** 보관함의 맡긴 가설 하나를 연다. 서버에서 전부 받아 그 회차의 얼어 있는 초안으로 되살린다. */
   async function openMine(id: number) {
+    const target = captureSubmission();
+    if (!target) return;
+    detailRequest.current?.cancel();
+    const account = beginRequest();
+    detailRequest.current = account;
     try {
-      const found = await fetchHypothesis(id);
+      const found = await fetchHypothesis(id, account.signal);
+      if (!account.isCurrent() || detailRequest.current !== account) return;
       if (!found) {
         showToast("가설을 찾을 수 없습니다.");
         void loadMine();
         return;
       }
-      if (!loadHypothesis(found)) {
+      if (!loadHypothesis(found, account.owner, target.key)) {
         showToast("이 장부에서는 열 수 없는 회차의 가설입니다.");
         return;
       }
@@ -331,8 +364,12 @@ export default function PieceMaker() {
       closeModal();
       show("compose");
     } catch (error) {
+      if (!account.isCurrent() || detailRequest.current !== account) return;
       if (error instanceof ApiError && error.isUnauthorized) loginForMine();
       else showToast("가설을 불러오지 못했습니다.");
+    } finally {
+      account.finish();
+      if (detailRequest.current === account) detailRequest.current = null;
     }
   }
 
@@ -347,29 +384,37 @@ export default function PieceMaker() {
 
   /** 누른 순간의 초안을 서버에 맡긴다. 저장되면 초안이 얼고, 로그인이 없으면 로그인 창을 연다. */
   const submitDraft = useCallback(async () => {
-    const { draft: current, chapter: at, meta: ledger } = hand.current;
-    if (ledger.status !== "ready" || at === null || current.hypothesisId !== undefined) return;
-    const outcome = await submit({
-      chapter: at,
-      title: current.title,
-      claim: current.claim,
-      cards: cardIds(current),
-      notes: { ...current.notes },
-      state_digest: ledger.meta.stateDigest,
-      cards_digest: ledger.meta.cardsDigest,
-    });
-    if (outcome === "unauthorized") {
-      resumeSubmit.current = true;
-      setAuthOpen(true);
-      return;
+    const { meta: ledger } = hand.current;
+    const target = captureSubmission();
+    if (ledger.status !== "ready" || !target || target.draft.hypothesisId !== undefined) return;
+    const current = target.draft;
+    const account = beginRequest();
+    try {
+      const outcome = await submit({
+        chapter: current.chapter,
+        title: current.title,
+        claim: current.claim,
+        cards: cardIds(current),
+        notes: { ...current.notes },
+        state_digest: ledger.meta.stateDigest,
+        cards_digest: ledger.meta.cardsDigest,
+      }, account);
+      if (!account.isCurrent()) return;
+      if (outcome === "unauthorized") {
+        resumeSubmit.current = true;
+        setAuthOpen(true);
+        return;
+      }
+      if (outcome) {
+        markSubmitted(outcome.id, account.owner, target);
+        showToast("판정을 맡겼어요. 내 가설에서도 확인할 수 있어요.");
+        refreshCredit(); // 맡기며 깎였다
+        setCreditNotice("");
+      }
+    } finally {
+      account.finish();
     }
-    if (outcome) {
-      markSubmitted(outcome.id);
-      showToast("판정을 맡겼어요. 결과는 준비되면 여기에 보여요.");
-      refreshCredit(); // 맡기며 깎였다
-      setCreditNotice("");
-    }
-  }, [submit, markSubmitted, showToast, refreshCredit]);
+  }, [beginRequest, captureSubmission, submit, markSubmitted, showToast, refreshCredit]);
 
   function requestJudge() {
     if (!isAuthenticated) {
