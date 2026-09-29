@@ -876,6 +876,9 @@ main:has(> .trailer-page) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0
 .trailer-page .source-path { overflow-wrap: anywhere; }
 .trailer-page .record-text { white-space: pre-wrap; }
 .trailer-page .selected-item .fact, .trailer-page .evidence p { word-break: normal; }
+.trailer-page .selected-record { margin-top: 10px; }
+.trailer-page .selected-record summary { cursor: pointer; color: var(--green); font-size: 12px; line-height: 1.7; }
+.trailer-page .selected-record summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 4px; border-radius: 2px; }
 .trailer-page .predict-cta { width: 100%; margin-top: 14px !important; }
 .trailer-page .judge-submitted { display: flex; align-items: stretch; gap: 10px; margin-top: 14px; }
 .trailer-page .judge-pending {
@@ -912,6 +915,7 @@ main:has(> .trailer-page) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0
   overflow-wrap: anywhere;
 }
 .trailer-page .judge-section { margin: 18px 0; }
+.trailer-page .judge-details-title { border-top: 1px solid var(--line); margin: 18px 0 0; padding-top: 12px; font-size: 12px; color: var(--muted); }
 .trailer-page .judge-section h4 { margin: 0 0 6px; font-size: 13px; line-height: 1.6; }
 .trailer-page .judge-section p {
   margin: 0;

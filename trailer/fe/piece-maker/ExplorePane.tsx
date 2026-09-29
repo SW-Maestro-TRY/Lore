@@ -58,7 +58,6 @@ const EvidenceCard = memo(function EvidenceCard({
           </span>
         </span>
         <h3>{card.title}</h3>
-        <p>{card.fact}</p>
       </button>
       <div className="bottom">
         <div className="people">
