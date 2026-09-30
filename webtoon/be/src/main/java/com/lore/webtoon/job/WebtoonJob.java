@@ -306,7 +306,8 @@ public class WebtoonJob {
         }
         /* 사람을 기다린 시간 — 기다리기 시작한 때를 적어 두고, 다른 상태로
            넘어갈 때 그 차이를 쌓는다. */
-        boolean waitsNow = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET;
+        boolean waitsNow = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET
+                || status == JobStatus.AWAITING_CAST;
         Instant waitedFrom = waitingSince();
         if (waitsNow && waitedFrom == null) {
             this.pausedAt = at;
@@ -512,7 +513,8 @@ public class WebtoonJob {
         if (pausedAt != null) {
             return pausedAt;
         }
-        boolean waiting = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET;
+        boolean waiting = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET
+                || status == JobStatus.AWAITING_CAST;
         return waiting ? updatedAt : null;
     }
 

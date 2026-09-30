@@ -119,6 +119,10 @@ final class JobEta {
         if (status == JobStatus.QUEUED) {
             return new Eta(work, queueWait + whole(stage, pages, s, f) + after(stage, pages, s, f), false);
         }
+        if (status == JobStatus.AWAITING_CAST) {
+            // 상대 인물을 고르는 중(#534) — 고르면 이야기부터 다시 돈다.
+            return new Eta(work, whole(JobStage.STORY, pages, s, f) + after(JobStage.STORY, pages, s, f), true);
+        }
         if (status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET) {
             // 사람을 기다리는 동안은 남은 시간을 안 적는다. 진행률에 쓸 값만 센다 —
             // 사람이 답하면 바로 다음 걸음부터 돈다.
