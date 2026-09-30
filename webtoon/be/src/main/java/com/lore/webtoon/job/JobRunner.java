@@ -981,18 +981,8 @@ public class JobRunner {
     }
 
 
-    @SuppressWarnings("unchecked")
     private List<Map<String, Object>> directionsOf(String runId) {
-        Path file = runsDir.resolve(runId).resolve("directions.json");
-        try {
-            JsonNode root = mapper.readTree(file.toFile());
-            return root.isArray()
-                    ? mapper.convertValue(root, List.class)
-                    : List.of();
-        } catch (IOException e) {
-            log.warn("이야기 후보를 못 읽었습니다 (run={})", runId, e);
-            return List.of();
-        }
+        return DirectionsFile.read(runsDir, runId);
     }
 
     /**
