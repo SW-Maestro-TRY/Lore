@@ -61,6 +61,10 @@ load_dotenv(HERE / ".env")
 if os.environ.get("WEBTOON_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
     os.environ["OPENAI_API_KEY"] = os.environ["WEBTOON_API_KEY"]
 
+# 모델 호출 추적(Logfire). LOGFIRE_TOKEN 이 있을 때만 켜지고, 없으면 아무것도 안 한다.
+import tracing  # noqa: E402
+tracing.start()
+
 import story  # noqa: E402  (위에서 .env 를 읽고 키 이름을 맞춘 뒤에 import 해야 한다)
 
 
