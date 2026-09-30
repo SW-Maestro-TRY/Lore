@@ -98,9 +98,22 @@ public class JobProgress {
      * 장면을 동시에 그리면 5쪽이 2쪽보다 먼저 끝난다. 개수만 넘기면 화면은
      * 「1~N쪽이 있다」고 읽고 아직 없는 2쪽을 불러 깨진 그림을 띄웠다(#509).
      */
+    /**
+     * {@code page} 번째 장을 <b>그리기 시작했다.</b> 남은 시간을 셀 때 이 장은 처음부터가
+     * 아니라 남은 몫만 센다 — 안 그러면 한 장이 끝날 때마다 반쯤 그린 옆 장들까지
+     * 처음부터 다시 세어 남은 시간이 4분→5분으로 늘었다(#509).
+     */
+    public void startedPage(Long jobId, int page) {
+        State state = byJob.computeIfAbsent(jobId, k -> new State());
+        synchronized (state) {
+            state.inflight.put(page, Instant.now());
+        }
+    }
+
     public void drewPage(Long jobId, int page, int total) {
         State state = byJob.computeIfAbsent(jobId, k -> new State());
         synchronized (state) {
+            state.inflight.remove(page);
             state.counted = true;
             state.drawn.add(page);
             state.done = state.drawn.size();
@@ -121,14 +134,16 @@ public class JobProgress {
         synchronized (state) {
             state.redraw = List.copyOf(pages);
             state.redrawDone = 0;
+            state.inflight.clear();
             state.phaseAt = Instant.now();
         }
     }
 
     /** 다시 그리던 장 하나가 끝났다. */
-    public void redrew(Long jobId) {
+    public void redrew(Long jobId, int page) {
         State state = byJob.computeIfAbsent(jobId, k -> new State());
         synchronized (state) {
+            state.inflight.remove(page);
             state.redrawDone++;
             state.phaseAt = Instant.now();
         }
@@ -140,6 +155,7 @@ public class JobProgress {
         synchronized (state) {
             state.redraw = List.of();
             state.redrawDone = 0;
+            state.inflight.clear();
             state.phaseAt = Instant.now();
         }
     }
@@ -155,12 +171,12 @@ public class JobProgress {
     public Snapshot of(Long jobId) {
         State state = byJob.get(jobId);
         if (state == null) {
-            return new Snapshot(List.of(), "", 0, 0, 0, List.of(), List.of(), 0, null);
+            return new Snapshot(List.of(), "", 0, 0, 0, List.of(), List.of(), 0, null, List.of());
         }
         synchronized (state) {
             return new Snapshot(new ArrayList<>(state.log), state.say, state.done, state.total,
                     state.retryPage, new ArrayList<>(state.drawn), state.redraw, state.redrawDone,
-                    state.phaseAt);
+                    state.phaseAt, new ArrayList<>(state.inflight.values()));
         }
     }
 
@@ -185,6 +201,8 @@ public class JobProgress {
         private int redrawDone;
         /** 마지막으로 무언가 끝난 때(장 하나 · 다시 그리기 시작 · 검수 시작). */
         private Instant phaseAt;
+        /** 지금 그리는 중인 장 -> 그리기 시작한 때. */
+        private final Map<Integer, Instant> inflight = new java.util.HashMap<>();
     }
 
     /**
@@ -195,14 +213,21 @@ public class JobProgress {
      * @param redraw    화 전체 검수 뒤 다시 그리는 장들. 비었으면 다시 그리는 중이 아니다
      * @param redrawDone 그중 끝난 수
      * @param phaseAt   마지막으로 무언가 끝난 때. 모르면 {@code null}
+     * @param inflight  지금 그리는 중인 장들의 시작 시각
      */
     public record Snapshot(List<String> log, String say, int done, int total, int retryPage,
                            List<Integer> drawn, List<Integer> redraw, int redrawDone,
-                           Instant phaseAt) {
+                           Instant phaseAt, List<Instant> inflight) {
 
         /** 어느 장인지·다시 그리기를 모르는 옛 모양(한 프로세스로 차례로 그릴 때와 같다). */
         public Snapshot(List<String> log, String say, int done, int total, int retryPage) {
-            this(log, say, done, total, retryPage, List.of(), List.of(), 0, null);
+            this(log, say, done, total, retryPage, List.of(), List.of(), 0, null, List.of());
+        }
+
+        /** 그리는 중인 장의 시작 시각을 모를 때. */
+        public Snapshot(List<String> log, String say, int done, int total, int retryPage,
+                        List<Integer> drawn, List<Integer> redraw, int redrawDone, Instant phaseAt) {
+            this(log, say, done, total, retryPage, drawn, redraw, redrawDone, phaseAt, List.of());
         }
     }
 }
