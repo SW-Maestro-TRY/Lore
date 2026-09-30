@@ -204,7 +204,8 @@ def scene_texts(direction: dict, scenes=()) -> list[str]:
     for one in scenes or []:
         if not isinstance(one, dict):
             continue
-        body = " ".join(x for x in (_text(one.get("what")), _text(one.get("acting"))) if x)
+        body = " ".join(x for x in (_text(one.get("what")), _text(one.get("acting")),
+                                   _text(one.get("look"))) if x)
         if body:
             out.append(body)
     return out or [x for x in (direction.get("scenes") or []) if _text(x)]

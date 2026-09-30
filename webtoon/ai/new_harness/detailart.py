@@ -154,7 +154,8 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
     if not lines:
         return ""
     return ("## 인물 (외모는 장면이 바뀌어도 그대로다)\n"
-            "주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다.\n"
+            "주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다. "
+            "장면 내용에 「시트와 다른 것」이 적혀 있으면 그 장면에서는 그것이 시트보다 먼저다.\n"
             "설명에 적힌 내용이 지금 장면 상황과 관련 있으면 그 인물의 행동·표정·대사로 "
             "자연스럽게 드러나야 한다. 관련 없으면 억지로 끼워 넣지 않는다.\n"
             + "\n".join(lines))
@@ -326,6 +327,14 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         lines += [f"[장소와 상황] {scene['where']}", ""]
     if scene.get("acting"):
         lines += [f"[인물의 행동과 표정] {scene['acting']}", ""]
+    look = (scene.get("look") or "").strip()
+    if look and look not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
+        # 시트와 달라진 겉모습(#147). 시트는 매 장 다시 붙어서, 여기 안 적으면
+        # 젖은 머리·벗은 외투·든 물건이 다음 장에서 시트로 되돌아간다. 장면
+        # 데이터 바로 옆에 둔다 — 멀리 있는 지시는 안 지켜진다(위 주석과 같다).
+        lines += [f"[이 장면에서 시트와 다른 것 — 겉모습·소지품·동행] {look}",
+                  "  시트는 기본 외형이고, 이 장면에서는 위에 적힌 차이가 시트보다 먼저다. "
+                  "여기 적히지 않은 것은 시트 그대로 그린다.", ""]
     lines += [
         (f"[이 화가 열리는 자리 — 여기서부터 그린다] {opens}" if first else
          f"[여기서부터 그린다 — 앞 장이 끝난 자리다] {opens}"),
