@@ -37,6 +37,7 @@ import PhotoResult from "./screens/character/PhotoResult";
 import CharList from "./screens/character/CharList";
 import MyPage from "./screens/mypage/MyPage";
 import RevisitPrompt from "./ui/RevisitPrompt";
+import RunningBubble from "./ui/RunningBubble";
 
 export default function WebtoonPage() {
   return (
@@ -226,6 +227,8 @@ function WebtoonScreens() {
       )}
       {route.view === "mypage" && <MyPage go={go} initialTab={route.tab} />}
       <RevisitPrompt authenticated={authenticated} view={route.view} go={go} />
+      {/* 만드는 중이면 어느 화면에서든 돌아갈 동그라미(#507) */}
+      <RunningBubble view={route.view} runId={route.run} go={go} />
     </div>
   );
 }
