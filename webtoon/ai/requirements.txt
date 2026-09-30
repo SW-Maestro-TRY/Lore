@@ -26,6 +26,12 @@ openai>=1.40            # 지금 기본값 (llm.py 의 DEFAULT_PROVIDER)
 google-genai>=1.0       # NH_PROVIDER=gemini 로 돌릴 때
 # anthropic>=0.34       # NH_PROVIDER=anthropic 을 쓸 때 주석을 푼다
 
+# --- 추적 ---------------------------------------------------------------
+# 모델 호출을 Logfire 로 보낸다 (new_harness/tracing.py). LOGFIRE_TOKEN 이
+# 있을 때만 켜지고, 없으면 설치돼 있어도 아무것도 안 보낸다. 패키지가 없어도
+# 하네스는 추적 없이 돈다.
+logfire[google-genai,requests]>=5.1
+
 # --- 업로드 -------------------------------------------------------------
 # 다 그린 작품을 S3 에 올릴 때 쓴다 (upload/s3_upload.py).
 #

@@ -65,6 +65,7 @@ import imagegen                                      # noqa: E402
 import imageprompt                                   # noqa: E402
 import lang as lang_mod                              # noqa: E402
 import llm                                           # noqa: E402
+import tracing                                       # noqa: E402
 import runmeta                                       # noqa: E402
 import sheet as sheetmod                             # noqa: E402
 
@@ -634,4 +635,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    with tracing.run_span("character.py", sys.argv[1:]):
+        code = main()
+    raise SystemExit(code)
