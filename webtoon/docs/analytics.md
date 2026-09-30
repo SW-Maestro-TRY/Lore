@@ -196,6 +196,7 @@
 | `story_retry` | 후보 다시 만들기 | `has_note` |
 | `notify_optin` | 완성 알림 메일 받기 | `job` |
 | `browse_while_waiting` | 기다리는 동안 둘러보기로 감 | `pane`, `status` |
+| `waiting_bubble_open` | 다른 화면에 뜬 만드는 중 동그라미를 누름(#507) | `job`, `status` |
 | `job_cancel` | 만들기 중단 | `status`, `count`(그린 장), `page`(전체 장) |
 | `remake_after_fail` | 실패 화면에서 다시 만들기 | `job` |
 | **`next_episode_click`** | 다음화 단추 (아직 준비 중 창이 뜸) | `where`: mine_button(PC 내 작품) · mine_mobile(폰 내 작품) · mine_tile(다른 편 줄의 EP.n 만들기) · other_foot(남의 작품 「다음화 보기」), `mine`, `run`, `ep`, `logged_in` |

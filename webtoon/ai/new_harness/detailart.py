@@ -158,7 +158,8 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
     if not lines:
         return ""
     return ("## 인물 (외모는 장면이 바뀌어도 그대로다)\n"
-            "주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다.\n"
+            "주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다. "
+            "장면 내용에 「시트와 다른 것」이 적혀 있으면 그 장면에서는 그것이 시트보다 먼저다.\n"
             "설명에 적힌 내용이 지금 장면 상황과 관련 있으면 그 인물의 행동·표정·대사로 "
             "자연스럽게 드러나야 한다. 관련 없으면 억지로 끼워 넣지 않는다.\n"
             + "\n".join(lines))
@@ -167,8 +168,8 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
 def fixed_block(fixed) -> str:
     """이 화 안에서 장마다 같아야 하는 것 — scene_prompt 의 「이 화의 고정 설정」.
 
-    장면을 동시에 그리면 옆 장을 못 보니, 그림 속 이름(간판·로고)과 옷을
-    장마다 따로 지어낸다. 모든 장(표지 포함)에 **글자까지 같은 목록**을 넣어
+    장면을 동시에 그리면 옆 장을 못 보니, 그림 속 이름(간판·로고)을 장마다
+    따로 지어낸다. 옷·소지품은 장면마다 「겉모습·소지품·동행」(look, #508)이 맡는다. 모든 장(표지 포함)에 **글자까지 같은 목록**을 넣어
     그 빈칸을 없앤다. 옛 run(이 칸이 없음)은 빈 문자열이라 프롬프트가 안 바뀐다.
     """
     lines = [str(x).strip() for x in (fixed or []) if str(x).strip()]
@@ -176,15 +177,13 @@ def fixed_block(fixed) -> str:
         return ""
     return ("## 이 화 내내 같은 것 (모든 장이 이 목록을 똑같이 받는다)\n"
             "그림 속 글자(간판·로고·명찰·옷에 새긴 글자)로 이름이 보이면 아래 이름을 "
-            "글자 그대로 쓴다(없던 간판·명찰을 새로 만들어 넣으라는 뜻은 아니다). "
-            "옷은 아래 적힌 대로 입힌다 — 캐릭터 시트의 옷과 다르면 "
-            "이 목록을 따르고, 얼굴·머리·체형은 시트를 따른다.\n"
+            "글자 그대로 쓴다(없던 간판·명찰을 새로 만들어 넣으라는 뜻은 아니다).\n"
             + "\n".join(f"- {ln}" for ln in lines))
 
 
 def build_cover_prompt(*, title: str, genre: str, intro: str,
                        char: dict | None, spec: dict | None, cast: list[dict],
-                       style: str, fixed=(), lang: str = "ko") -> str:
+                       style: str, fixed_names=(), lang: str = "ko") -> str:
     """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 프롬프트 파일부터 다르다
     (`prompt/cover_prompt`).
 
@@ -220,7 +219,7 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
     return (text
             .replace("{style}", imageprompt.load_style(style))
             .replace("{people}", character_block(char, spec, cast))
-            .replace("{fixed}", fixed_block(fixed))
+            .replace("{fixed}", fixed_block(fixed_names))
             .replace("{work}", work))
 
 
@@ -268,12 +267,25 @@ def opens_at(scenes: list[dict], scene_no: int) -> str:
     return " — ".join(x for x in (scene.get("where"), scene.get("what")) if x)
 
 
+def narration_of(scenes: list[dict], scene_no: int) -> list[str] | None:
+    """장면 `scene_no` 에 정해 둔 나레이션 글자.
+
+    None 이면 장면 단계가 정하지 않은 것(옛 scenes.json) — 예전처럼 그림 모델이
+    정한다.
+    """
+    scene = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
+    got = scene.get("narration")
+    if not isinstance(got, list):
+        return None
+    return [t for t in got if isinstance(t, str) and t.strip()]
+
+
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
-                          has_prev: bool, fixed=(), lang: str = "ko", lore: str = "") -> str:
+                          has_prev: bool, fixed_names=(), lang: str = "ko", lore: str = "") -> str:
     """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
 
-    fixed : scenes.json 의 「이 화의 고정 설정」. 인물 절 바로 뒤에 붙는다
+    fixed_names : scenes.json 의 「이 화의 고정 설정」. 인물 절 바로 뒤에 붙는다
     (`fixed_block`). 없으면(옛 run) 아무것도 안 붙는다.
 
     씬 하나 = 이미지 하나. 각 장면 dict 에 이미 「직전 상태」·「끝나는 상태」가
@@ -303,7 +315,8 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         lines += ["", "[이 장에서 그릴 장면]", (one.get("what") or "").strip(),
                   "", "앞뒤 장면은 주지 않는다. 이 한 순간만 그린다 — 화 전체를 "
                   "요약하거나 앞에서 이미 지나온 상황을 다시 설명하지 않는다."]
-        if scene_no > 1:
+        fixed = narration_of(scenes, scene_no)
+        if scene_no > 1 and fixed is None:
             # 나레이션 이어쓰기. 지금 나오는 것이 장마다 도입부로 되돌아가서,
             # 독자가 같은 설명을 네 번 읽는다(2026-09-19 전체 검수가 3·4·5
             # 페이지를 그렇게 잡았다). 무엇을 쓸지는 안 정해 준다 — 어디서부터
@@ -353,6 +366,37 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         lines += [f"[장소와 상황] {scene['where']}", ""]
     if scene.get("acting"):
         lines += [f"[인물의 행동과 표정] {scene['acting']}", ""]
+    look = (scene.get("look") or "").strip()
+    if look and look not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
+        # 시트와 달라진 겉모습(#147). 시트는 매 장 다시 붙어서, 여기 안 적으면
+        # 젖은 머리·벗은 외투·든 물건이 다음 장에서 시트로 되돌아간다. 장면
+        # 데이터 바로 옆에 둔다 — 멀리 있는 지시는 안 지켜진다(위 주석과 같다).
+        lines += [f"[이 장면에서 시트와 다른 것 — 겉모습·소지품·동행] {look}",
+                  "  시트는 기본 외형이고, 이 장면에서는 위에 적힌 차이가 시트보다 먼저다. "
+                  "여기 적히지 않은 것은 시트 그대로 그린다.", ""]
+    fixed = narration_of(scenes, scene_no)
+    if fixed:
+        # 나레이션 재료는 장면 단계(scene_prompt)에서 글 모델이 화 전체를 한 번에
+        # 읽고 쓴 것이다. 그림 모델에게 "무슨 말을 쓸지는 네가 정한다" 라고 맡기던
+        # 때는 뜻이 잡히지 않는 격언투 문장이 장마다 붙었고, 용어를 비슷한 다른
+        # 낱말로 바꿔 적었다(2026-09-30, run 20260930T220006-0ca73c — 본문의
+        # 「파혼」이 그림에서 「파문」이 됐다).
+        #
+        # **넣을지는 그림 모델이 고른다.** 글 모델이 나레이션과 대사를 다 정하게
+        # 해 봤더니 대사가 설명조가 되고 남은 상자가 격언으로 채워졌다(같은 날
+        # 2차 실험). 그래서 대사는 그림 모델에게 두고, 나레이션은 쓸 수 있는
+        # 글만 준다 — 그림·대사가 이미 전하면 빼고, 넣으면 글자 그대로.
+        # 장면 데이터 바로 옆에 둔다 — 멀리 있는 지시는 안 지켜진다.
+        # 번호·기호를 붙이지 않는다 — 「1.」 을 붙여 줬더니 상자에 번호까지 그대로
+        # 찍혔다(같은 날 page02). 한 줄이 상자 하나다.
+        lines += ["[나레이션 — 쓸 수 있는 글. 아래 한 줄이 상자 하나다]"]
+        lines += list(fixed)
+        lines += ["  상자에는 위 줄의 글자만 넣는다. 번호·기호·따옴표를 앞뒤에 붙이지 "
+                  "않는다. 각 상자는 넣어도 되고 빼도 된다. 이 페이지의 그림이나 대사가 이미 "
+                  "같은 것을 전하면 뺀다. 넣는다면 한 글자도 바꾸지 않고, 적힌 순서대로 "
+                  "위에서 아래로 놓는다. 여기 없는 나레이션 문장은 새로 만들지 않는다 — "
+                  "위 글을 다 빼도 된다. 앞의 「나레이션 상자를 최소 1개 넣는다」보다 "
+                  "이것이 먼저다.", ""]
     lines += [
         (f"[이 화가 열리는 자리 — 여기서부터 그린다] {opens}" if first else
          f"[여기서부터 그린다 — 앞 장이 끝난 자리다] {opens}"),
@@ -369,8 +413,11 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
          "말고, 거기서 곧바로 이어지는 다음 순간부터 그린다."),
         "- 「여기서 끝낸다」는 이 장의 마지막이다. 그 지점이 화면에 나오는 "
         "데서 끊는다. 더 나아가면 다음 장과 같은 순간을 두 번 그리게 된다.",
-        "- 그 사이를 컷 몇 개로 어떻게 보여줄지, 무슨 대사를 넣을지는 전부 "
-        "**네가 정한다.**",
+        ("- 그 사이를 컷 몇 개로 어떻게 보여줄지, 무슨 대사를 넣을지는 **네가 "
+         "정한다.** 나레이션은 위 「쓸 수 있는 글」 안에서만 고른다."
+         if fixed else
+         "- 그 사이를 컷 몇 개로 어떻게 보여줄지, 무슨 대사를 넣을지는 전부 "
+         "**네가 정한다.**"),
         "- 나레이션이나 대사를 쓴다면 이 페이지 안에서 문장을 끝까지 완결한다. "
         "말줄임표나 접속사로 걸쳐 놓은 채 페이지를 끝내지 않는다.",
     ]
@@ -380,7 +427,7 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
                         "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
                         "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
     people = "\n\n".join(b for b in (character_block(char, spec, cast),
-                                     fixed_block(fixed)) if b)
+                                     fixed_block(fixed_names)) if b)
     return (text
             .replace("{{LANGUAGE_LINE}}", lang_mod.instruction(lang))
             .replace("{people}", people)
@@ -522,7 +569,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     # 옛 run 은 줄거리 요약으로 대신한다.
     intro = (direction.get("intro") or scene_data.get("plot")
              or direction.get("plot") or "").strip()
-    fixed = [x for x in (scene_data.get("fixed") or []) if isinstance(x, str)]
+    fixed_names = [x for x in (scene_data.get("fixed") or []) if isinstance(x, str)]
     # 세계 재료(#502) — lore.json 이 있는 run 만. 없으면(옛 run) 프롬프트가 안 바뀐다.
     lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() else ""
 
@@ -532,7 +579,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         if n_ == 0:
             prompt = build_cover_prompt(title=title, genre=genre, intro=intro,
                                         char=char, spec=spec, cast=cast, style=style,
-                                        fixed=fixed, lang=lang)
+                                        fixed_names=fixed_names, lang=lang)
         else:
             # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
@@ -543,7 +590,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 lore_world, " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "prev", "ends"))
             )) if lore_world else ""
             prompt = (build_continue_prompt(direction, scenes, char, spec, cast,
-                                            scene_no=n_, has_prev=has_prev, fixed=fixed,
+                                            scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
                                             lang=lang, lore=lore)
                       .replace("{style}", imageprompt.load_style(style)))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더

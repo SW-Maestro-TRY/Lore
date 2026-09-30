@@ -153,6 +153,10 @@ def image_default(provider: str) -> str:
 # `.env` 가 아니라 코드에 두는 이유는 DEFAULT_PROVIDER 와 같다 — 서버에는
 # new_harness/.env 가 안 실린다.
 #
+# **장면(SCENE)도 gpt-5.1 이다(#511).** 장면 단계가 나레이션 글을 쓰고 그림
+# 모델은 그 안에서 골라 글자 그대로 넣게 바뀌어서, 이 단계의 문장이 곧 독자가
+# 읽는 문장이다. 화 하나에 한 번뿐이다.
+#
 # **화 전체 검수(FULL_REVIEW)도 gpt-5.1 이다.** gpt-4.1 전체 검수는 1장면을 네
 # 컷으로 그리고 제목도 없는 표지를 "표지를 장식한다" 로 읽고 넘겼고, 표지와
 # 2페이지가 같은 순간을 되풀이한 것도 회사 이름이 다르다는 major 하나로만
@@ -163,6 +167,7 @@ def image_default(provider: str) -> str:
 # 표지 검수(COVER_REVIEW)는 칸·글상자를 세고 제목을 옮겨 적기만 하는 일이라
 # 기본 모델(gpt-4.1) 그대로 둔다(2026-09-30 결정).
 STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
+                        ("SCENE", "openai"): "gpt-5.1",
                         ("FULL_REVIEW", "openai"): "gpt-5.1"}
 
 
