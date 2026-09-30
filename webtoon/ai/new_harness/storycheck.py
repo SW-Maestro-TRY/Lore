@@ -281,6 +281,33 @@ def build_prompt(char: dict | None, directions: list[dict]) -> str:
 
 # ------------------------------------------------------------------------ 파싱
 
+def _conflicts(one: dict, issues: list[dict]) -> list[dict]:
+    """`conflicts` 칸 -> 코드가 세운 문제 (#502).
+
+    "같은 일을 두 가지로 말한 것" 을 `issues` 에 적으라고만 해서는 안 잡혔다 —
+    실측(2026-09-30, work/lorebook-check): 소개 안의 "길을 잘못 들었는데 그 문이
+    지름길", 캐릭터 설명(데뷔조)과 후보(데뷔 7년 차)의 시점 차이가 전부 통과로
+    나갔다. 그래서 `ending` 처럼 따로 칸을 두고 채우게 한 뒤 여기서 옮긴다.
+    칸이 없으면(옛 판정) 아무것도 더하지 않는다.
+    """
+    raw = one.get("conflicts")
+    if not isinstance(raw, list):
+        return []
+    made = []
+    seen = {_text(i.get("what")) for i in issues}
+    for c in raw:
+        if not isinstance(c, dict):
+            continue
+        a, b, what = _text(c.get("a")), _text(c.get("b")), _text(c.get("what"))
+        if not (a or b) or what in seen:
+            continue
+        seen.add(what)
+        made.append({"scene": 0, "kind": "인과", "severity": "major",
+                     "what": what or "같은 일을 두 가지로 말한다",
+                     "where": " ↔ ".join(x for x in (a, b) if x)})
+    return made
+
+
 def _ending(one: dict, last_scene: int) -> tuple[dict, list[dict]]:
     """`ending` 칸 -> (읽은 값, 코드가 세운 문제).
 
@@ -441,6 +468,7 @@ def parse(text: str, expect: list[int] | None = None) -> dict:
                 last_scene = max(last_scene, _int(sc.get("id")))
         ending, forced = _ending(one, last_scene)
         issues += forced
+        issues += _conflicts(one, issues)
 
         issues.sort(key=lambda i: (SEVERITY.index(i["severity"]), i["scene"]))
         counts = {s: sum(1 for i in issues if i["severity"] == s) for s in SEVERITY}
