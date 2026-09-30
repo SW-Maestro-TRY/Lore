@@ -1,5 +1,5 @@
 /* 캐릭터 영역 사전 — 원문(한국어)이 키. Photo · PhotoResult · CharList 의 화면 글과
- * 서버 세계관 프리셋 라벨(story-harness/worlds.json). 카드의 반전·대사·운명·역할은
+ * 서버 세계관 프리셋 라벨(new_harness/worlds.json). 카드의 반전·대사·운명·역할은
  * 서버 생성물이라 여기 없다. */
 import { registerDict, type Dict } from "../../lib/i18n";
 
@@ -156,7 +156,7 @@ const dict: Dict = {
   "이 캐릭터로 웹툰": { en: "Make a webtoon", ja: "このキャラクターでウェブトゥーン", zh: "用这个角色做漫画" },
   "카드 보기": { en: "View card", ja: "カードを見る", zh: "查看卡片" },
 
-  /* ---- 세계관 프리셋 라벨 (story-harness/worlds.json · 11개) ---- */
+  /* ---- 세계관 프리셋 라벨 (new_harness/worlds.json · 11개) ---- */
   "헌터": { en: "Hunters", ja: "ハンター", zh: "猎人" },
   "마법학교": { en: "Magic school", ja: "魔法学校", zh: "魔法学校" },
   "아이돌": { en: "Idols", ja: "アイドル", zh: "偶像" },
