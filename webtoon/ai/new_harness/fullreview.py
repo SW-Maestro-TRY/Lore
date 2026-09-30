@@ -66,6 +66,7 @@ import os
 import re
 from pathlib import Path
 
+import covercheck
 import llm
 import runmeta
 from llm import story
@@ -242,6 +243,33 @@ def reset_issues(read: list[dict], fixed_narration: bool = False) -> list[dict]:
     }]
 
 
+def cover_issues(cover, title: str, checked: dict | None = None) -> list[dict]:
+    """모델이 센 `cover` -> issues. **표지인가는 코드가 정한다**(covercheck.judge).
+
+    그리는 자리의 표지 검수(covercheck)와 같은 기준을 쓴다 — 거기서 다시 그릴
+    횟수를 다 쓰고도 표지 모양이 아니었거나, 검수가 꺼져 있었던 경우를 여기서
+    한 번 더 잡는다. 잡히면 1페이지를 다시 그리게 한다(JobRunner 의 재생성
+    루프가 `--page 1` 로 부른다).
+    """
+    if checked is not None:
+        # 표지 검수가 지금 이 그림을 이미 봤다 — 그 판정을 따른다.
+        found = checked.get("issues") or []
+    elif isinstance(cover, dict):
+        found = covercheck.judge(cover, title)
+    else:
+        return []
+    if not found:
+        return []
+    return [{
+        "rank": 3, "severity": "critical", "redraw": True,
+        "pages": [1], "redraw_pages": [1],
+        "why": "1페이지가 표지 모양이 아니다 — " + " ".join(f["what"] for f in found)
+               + " 다시 그릴 때는 칸을 나누지 않은 그림 한 장에 제목만 넣는다. "
+                 "이 화의 한 장면을 옮겨 그리지 않는다.",
+        "redraw_pick_reason": "",
+    }]
+
+
 def repeat_issues(repeat, total: int) -> list[dict]:
     """모델이 센 `repeat` -> issues. **문턱은 코드가 정한다.**
 
@@ -287,7 +315,9 @@ def repeat_issues(repeat, total: int) -> list[dict]:
     return out
 
 
-def parse(text: str, fixed_narration: bool = False) -> dict:
+def parse(text: str, *, title: str = "", cover_attached: bool = True,
+          cover_checked: dict | None = None, page_count: int = 0,
+          fixed_narration: bool = False) -> dict:
     """검수 응답(JSON) -> 판정.
 
     `severity`(얼마나 심각한가)와 `redraw`(그래서 다시 그려야 하는가)는
@@ -307,6 +337,11 @@ def parse(text: str, fixed_narration: bool = False) -> dict:
         raise story.ParseFailure("검수 결과가 JSON 객체가 아닙니다.")
 
     read = []
+    # 이 화에 없는 쪽 번호. gpt-5.1 이 8장짜리 화를 22장으로 읽고(칸을 쪽으로 센
+    # 것으로 보인다) 9·18쪽을 다시 그리라고 한 적이 있다(2026-09-30, run
+    # 20260930T223006-456ff0) — 서버는 없는 쪽을 그리러 갔다. 모델이 무엇을 읽든
+    # 실제 쪽수 밖의 번호는 여기서 버린다.
+    ghosts: set[int] = set()
     for one in obj.get("read") or []:
         if not isinstance(one, dict):
             continue
@@ -318,6 +353,10 @@ def parse(text: str, fixed_narration: bool = False) -> dict:
         # 제자리걸음)를 **세어서** 판정하게 하려고 받는 자리다. 사람이
         # 나중에 판정을 되짚을 때도 이 두 줄만 훑으면 같은 말이 몇 번
         # 나왔는지가 그대로 보인다.
+        if page_count and not 1 <= page < page_count + 1:
+            # 없는 쪽이다 — 아래 `drop_ghost_pages` 가 센다.
+            ghosts.add(page)
+            continue
         read.append({"page": page, "what": _text(one.get("what")),
                      "does": _text(one.get("does")),
                      "opens": _text(one.get("opens")),
@@ -344,12 +383,29 @@ def parse(text: str, fixed_narration: bool = False) -> dict:
             "severity": severity,
             "redraw": redraw,
             "pages": _ints(one.get("pages")),
-            "redraw_pages": _ints(one.get("redraw_pages")) if redraw else [],
+            "redraw_pages": [n for n in _ints(one.get("redraw_pages"))
+                             if not page_count or 1 <= n <= page_count] if redraw else [],
             "why": _text(one.get("why")),
             "redraw_pick_reason": _text(one.get("redraw_pick_reason")) if redraw else "",
         })
     issues += repeat_issues(obj.get("repeat"), len(read))
     issues += reset_issues(read, fixed_narration)
+    if cover_attached:
+        issues += cover_issues(obj.get("cover"), title, cover_checked)
+    if page_count:
+        for one in issues:
+            bad = [n for n in one["pages"] if not 1 <= n <= page_count]
+            ghosts.update(bad)
+            one["pages"] = [n for n in one["pages"] if 1 <= n <= page_count]
+            if one["redraw"] and not one["redraw_pages"]:
+                one["redraw"] = False
+        issues = [one for one in issues if one["pages"] or not page_count]
+    if ghosts:
+        log(f"  [전체 검수] 이 화에 없는 쪽({', '.join(map(str, sorted(ghosts)))})을 적었습니다 "
+            f"— {page_count}쪽까지만 봅니다")
+    if page_count:
+        for one in issues:
+            one["redraw_pages"] = [n for n in one["redraw_pages"] if 1 <= n <= page_count]
     issues.sort(key=lambda i: (SEVERITIES.index(i["severity"]), i["rank"]))
 
     # 모델이 "이해 안 됨"이라고 스스로 적어 놓고 issues 를 빈 배열로 내는
@@ -401,6 +457,8 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
         log(f"  [전체 검수] 페이지가 {len(pages)}장이라 뒤 {cap}장만 붙입니다")
         pages = pages[-cap:]
 
+    # 앞 장을 잘라 붙였으면 첫 그림이 표지가 아니다 — 그때는 표지 판정을 안 한다.
+    cover_attached = bool(pages) and pages[0].name == "page01.png"
     images = llm.load_images(pages)
     call = llm.Call(STAGE)
     log(f"[전체 검수] {call.describe()} · 그림 {len(images)}장을 처음부터 끝까지 읽습니다…")
@@ -419,8 +477,11 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
     meta["pages"] = len(images)
     try:
         scenes = (read_json(run_dir / "scenes.json") or {}).get("scenes") or []
-        review = parse(text, fixed_narration=any(
-            isinstance(sc, dict) and sc.get("narration") is not None for sc in scenes))
+        review = parse(text, title=covercheck.title_of(run_dir), cover_attached=cover_attached,
+                       cover_checked=covercheck.latest_review(run_dir),
+                       page_count=len(pages_of(run_dir)),
+                       fixed_narration=any(isinstance(sc, dict) and sc.get("narration") is not None
+                                           for sc in scenes))
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [전체 검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")

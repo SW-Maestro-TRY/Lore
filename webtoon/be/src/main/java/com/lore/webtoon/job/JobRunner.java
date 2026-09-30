@@ -148,6 +148,11 @@ public class JobRunner {
     private final ExecutorService paint;
 
     /** 나란히 도는 수. 줄 예상이 이 값으로 나눈다({@link JobQueue}). */
+    /** 서버 전체에서 동시에 그리는 장 수 — 두 편이 그리는 중이면 이 자리를 나눠 쓴다. */
+    public int pageWorkers() {
+        return pageWorkers;
+    }
+
     public int workers() {
         return workers;
     }
@@ -253,6 +258,7 @@ public class JobRunner {
 
     /** 사람이 이야기를 골랐다(또는 서버가 골랐다). 다음 걸음으로. */
     public void resumeAfterPick(Long jobId) {
+        store.queued(jobId, JobStage.SHEET);
         line.submit(() -> {
             try {
                 sheet(jobId);
@@ -270,6 +276,7 @@ public class JobRunner {
      * ({@code --note}) — 파이썬 쪽 {@code _run_restory_phase} 와 같은 인자다.
      */
     public void retryDirections(Long jobId, String note) {
+        store.queued(jobId, JobStage.STORY);
         line.submit(() -> {
             try {
                 restory(jobId, note);
@@ -305,6 +312,8 @@ public class JobRunner {
 
     /** 사람이 시트를 확인했다. 마지막 걸음으로. */
     public void resumeAfterSheet(Long jobId) {
+        store.queued(jobId, JobStage.PAGES);
+        dropPhotos(jobId);                   // 시트가 확정됐다 — 사진을 다시 읽을 일이 없다
         line.submit(() -> {
             try {
                 pages(jobId);
@@ -325,6 +334,7 @@ public class JobRunner {
      * 안 지우면 하네스가 "이미 있다" 며 그냥 넘어간다.
      */
     public void redrawSheet(Long jobId, String note) {
+        store.queued(jobId, JobStage.SHEET);
         line.submit(() -> {
             try {
                 if (!startable(jobId)) {
@@ -530,13 +540,14 @@ public class JobRunner {
             throw new IllegalStateException("캐릭터 시트를 만들지 못했습니다");
         }
 
-        // 여기서 올린 사진을 지운다 — 화면이 그렇게 약속했다.
-        dropPhotos(jobId);
-
+        /* 시트를 확인하는 사람은 「다시 만들기」를 누를 수 있고, 다시 만들기는
+           사양을 사진부터 다시 쓴다 — 그래서 확인을 기다리는 동안은 사진을 둔다.
+           지우는 것은 시트를 확정하거나(resumeAfterSheet) 작업이 끝날 때(stop)다. */
         if (job.isCheckpoints()) {
             store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
             return;
         }
+        dropPhotos(jobId);
         pages(jobId);
     }
 
@@ -638,13 +649,15 @@ public class JobRunner {
                     return;
                 }
                 try {
+                    progress.startedPage(jobId, page);
                     int code = callHarness(jobId, job,
                             List.of("--run-id", job.getRunId(), "--detail-pages",
                                     "--page", String.valueOf(page)));
                     if (code != 0) {
                         throw new IllegalStateException(page + "번째 장을 그리지 못했습니다");
                     }
-                    progress.drew(jobId, drawn.incrementAndGet(), pages);
+                    drawn.incrementAndGet();
+                    progress.drewPage(jobId, page, pages);
                 } catch (Exception e) {         // noqa: 여기서 새면 기다리는 쪽이 영원히 기다린다
                     failed.compareAndSet(null, e);
                 }
@@ -736,6 +749,7 @@ public class JobRunner {
     private void runFullReviewLoop(Long jobId, WebtoonJob job) {
         // 페이지 -> 이 루프 안에서 다시 그린 횟수.
         Map<Integer, Integer> redrawn = new HashMap<>();
+        int pages = pageCount(job);             // 표지 1장 + 장면 수. 모르면 0
         for (int round = 1; round <= MAX_FULL_REVIEW_ROUNDS; round++) {
             if (cancelled.contains(jobId)) {
                 return;
@@ -745,6 +759,7 @@ public class JobRunner {
                바꾼다. 라운드 번호·페이지 번호처럼 매번 달라지는 값을 넣으면
                그 매칭이 깨진다. */
             progress.say(jobId, FULL_REVIEW_SAY);
+            progress.reviewing(jobId);
 
             int code;
             try {
@@ -783,7 +798,9 @@ public class JobRunner {
                 String why = issue.path("why").asText("");
                 for (JsonNode pageNode : issue.path("redraw_pages")) {
                     int page = pageNode.asInt(-1);
-                    if (page <= 0) {
+                    /* 이 화에 없는 쪽은 부르지 않는다 — 검수 모델이 8장짜리 화를 22장으로
+                       읽고 9·18쪽을 다시 그리라고 한 적이 있다(2026-09-30). */
+                    if (page <= 0 || pages > 0 && page > pages) {
                         continue;
                     }
                     int used = redrawn.getOrDefault(page, 0);
@@ -809,13 +826,38 @@ public class JobRunner {
                돌아간다(nhStage.ts 의 기본 매핑, NH_STAGE_SAY.pages 와
                한 글자도 같아야 한다). */
             progress.say(jobId, PAGES_SAY);
+            progress.redrawing(jobId, new ArrayList<>(target.keySet()));
+            /* **그림 자리 수만큼 동시에 그린다.** 한 장씩 차례로 그리던 때는 네 장이
+               걸리면 4분이 넘게 걸렸다(2026-09-30, job 48). 그림 단계에서 장면을
+               동시에 그리는 것과 같은 자리(paint)를 쓴다 — 앞 장을 참조로 못 받는
+               것도 그 단계와 같다. */
+            List<java.util.concurrent.Future<?>> waiting = new ArrayList<>();
             for (Map.Entry<Integer, String> entry : target.entrySet()) {
-                if (cancelled.contains(jobId)) {
-                    return;
-                }
                 int page = entry.getKey();
+                String why = entry.getValue();
                 redrawn.merge(page, 1, Integer::sum);
-                redrawPage(jobId, job, page, entry.getValue());
+                waiting.add(paint.submit(() -> {
+                    if (cancelled.contains(jobId)) {
+                        return;
+                    }
+                    progress.startedPage(jobId, page);
+                    redrawPage(jobId, job, page, why);
+                    progress.redrew(jobId, page);
+                }));
+            }
+            for (java.util.concurrent.Future<?> one : waiting) {
+                try {
+                    one.get();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (java.util.concurrent.ExecutionException e) {
+                    log.warn("다시 그리기가 도중에 실패했습니다 (job={})", jobId, e);
+                }
+            }
+            after.cost(job.getRunId());          // 다시 그린 장들도 값이 나갔다
+            if (cancelled.contains(jobId)) {
+                return;
             }
             // 라운드 끝 — for 가 다음 회차로 넘어가 전체 검수를 다시 돈다.
         }
@@ -839,6 +881,7 @@ public class JobRunner {
         Path png = runsDir.resolve(job.getRunId()).resolve("pages")
                 .resolve("page%02d.png".formatted(page));
         try {
+            archive(png, page);          // 지우기 전에 지난 판으로 남긴다(#514)
             Files.deleteIfExists(png);   // run.py 는 파일이 있으면 안 다시 그린다
         } catch (IOException e) {
             log.warn("{}페이지 원본을 못 지웠습니다 — 그대로 둡니다 (job={})", page, jobId, e);
@@ -847,14 +890,44 @@ public class JobRunner {
         List<String> args = List.of("--run-id", job.getRunId(), "--detail-pages",
                 "--page", String.valueOf(page), "--note", why);
         try {
+            /* 값은 여기서 안 적는다 — 여러 장을 동시에 다시 그리므로 다 끝난 뒤
+               부르는 쪽이 한 번 적는다(drawPages 와 같다). */
             int code = callHarness(jobId, job, args);
-            after.cost(job.getRunId());
             if (code != 0) {
                 log.warn("{}페이지를 다시 그리지 못했습니다 (job={})", page, jobId);
             }
         } catch (IOException | InterruptedException e) {
             log.warn("{}페이지를 다시 그리다 실패했습니다 (job={})", page, jobId, e);
         }
+    }
+
+    /**
+     * 지금 걸려 있는 장을 지난 판으로 떠 둔다(#514). 없으면 아무 일도 안 한다.
+     *
+     * 검수로 다시 그릴 때마다 이전 그림을 지웠더니 원본이 흔적 없이 사라졌다
+     * (2026-09-30). 편집실 다시 그리기({@code RegenService.archive})와 같은 자리·같은
+     * 이름({@code pages/versions/pageNN.vK.png})이라 편집실 지난 판 목록에 그대로 보인다.
+     */
+    static Path archive(Path png, int page) throws IOException {
+        if (!Files.isRegularFile(png)) {
+            return null;
+        }
+        Path dir = png.getParent().resolve("versions");
+        Files.createDirectories(dir);
+        java.util.regex.Pattern mine = java.util.regex.Pattern.compile(
+                "page%02d\\.v(\\d+)\\.png".formatted(page));
+        int next = 1;
+        try (var found = Files.list(dir)) {
+            for (Path one : found.toList()) {
+                java.util.regex.Matcher m = mine.matcher(one.getFileName().toString());
+                if (m.matches()) {
+                    next = Math.max(next, Integer.parseInt(m.group(1)) + 1);
+                }
+            }
+        }
+        Path dst = dir.resolve("page%02d.v%d.png".formatted(page, next));
+        Files.copy(png, dst);
+        return dst;
     }
 
     /** {@code full_review.json}을 읽는다. 없거나 못 읽으면 {@code null}
@@ -1119,6 +1192,7 @@ public class JobRunner {
         spentSoFar(jobId);
         Refunded back = refund(jobId);
         store.failed(jobId, why, back);
+        dropPhotos(jobId);                   // 시트 확인 중에 실패·중단된 것도 사진을 남기지 않는다
         progress.forget(jobId);
         cancelled.remove(jobId);
         /* **주소를 적어 준 사람에게 아무 말도 안 하는 것이 제일 나쁘다.**
@@ -1208,24 +1282,34 @@ public class JobRunner {
     /**
      * 사람이 올린 사진을 지운다.
      *
-     * <h2>왜 여기인가</h2>
+     * <h2>언제 지우나</h2>
      *
      * 사진은 <b>시트 사양을 쓸 때만</b> 쓰인다 — 모델이 사진을 읽고 외모를
      * 글로 적고, 그림은 그 글만 보고 그린다(run.py 의 `[시트] 그리는 중…
-     * (사진 없이 사양만)`). 사양이 나온 뒤로는 다시 안 쓰이므로, 이 걸음이
-     * 끝나는 자리가 지울 수 있는 가장 이른 자리다.
+     * (사진 없이 사양만)`). 그런데 시트 확인에서 「다시 만들기」를 누르면
+     * 사양을 지우고({@code JobService.clearSheet}) 사진부터 다시 쓴다.
+     *
+     * 예전에는 시트가 나오자마자 지워서, 사진을 올린 사람의 다시 만들기가
+     * 전부 「사진 파일이 없습니다」로 죽었다(2026-10-01 dev, #525). 그래서
+     * 사양을 다시 쓸 일이 없어지는 때에 지운다:
+     * <ul>
+     *   <li>시트 확인 없이 가는 작업 — 시트가 나오면 바로({@link #sheet})</li>
+     *   <li>시트 확인을 하는 작업 — 확정하면({@link #resumeAfterSheet})</li>
+     *   <li>어느 쪽이든 실패·중단으로 끝나면({@link #stop}, {@code StaleJobs})</li>
+     * </ul>
+     * 시트 확인에서 답 없이 떠난 작업은 그 자리에 사진이 남는다.
      *
      * <h2>왜 지우나</h2>
      *
      * 만들기 첫 걸음에 <b>"올린 사진은 캐릭터를 만드는 데만 쓰고, 시트가
-     * 나오면 서버에서 지웁니다"</b> 라고 적혀 있다. 그런데 안 지우고 있었다 —
+     * 나오면 서버에서 지웁니다"</b> 라고 적혀 있었다. 그런데 안 지우고 있었다 —
      * 다 만든 작업 폴더에 photo1.png 가 그대로 남아 있었다. 사람 얼굴이 들어올
      * 수 있는 값이고, 무엇보다 <b>안 지킬 약속을 화면에 적어 두면 안 된다.</b>
      *
      * 못 지워도 만들기는 안 멈춘다 — 그림은 이미 나오는 중이다. 대신 크게
      * 남긴다: 안 지워진 사진은 사람이 나중에 치워야 하는 일이다.
      */
-    private void dropPhotos(Long jobId) {
+    void dropPhotos(Long jobId) {
         WebtoonJob job = store.byId(jobId);
         if (job == null) {
             return;
