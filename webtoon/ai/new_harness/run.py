@@ -689,8 +689,7 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     lore_list = lorebook.reuse(run_dir, lore_world) if lore_world else []      # 실험용 재사용
     if lore_world and not lore_list:
         lore_list = lorebook.assign(lore_world, n=DIRECTIONS_PER_RUN, fill=lore_fill,
-                                    avoid=lorebook.recent_ids(lore_world, RUNS_DIR),
-                                    phase=lorebook.phase_of(lore_world, lorebook.character_text(char)))
+                                    avoid=lorebook.recent_ids(lore_world, RUNS_DIR))
     if lore_list:
         lorebook.record(run_dir, lore_world, lore_list)
 
