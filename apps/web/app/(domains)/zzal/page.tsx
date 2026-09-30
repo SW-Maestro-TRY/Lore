@@ -10,7 +10,7 @@
 // ★ 스킨은 **서버에서** 고른다. 브라우저에서 주소를 보고 고르면 서버가 그린 것과 달라져
 //   하이드레이션 경고가 뜨고, e2e 가 그 경고를 실패로 센다.
 //
-// 옛 랜딩(Hero·HowItWorks·CharacterCreator)은 /zzal/landing 에 남아 있다.
+// 옛 랜딩(Hero·HowItWorks·CharacterCreator)은 2026-10-01 에 접었다(/zzal/landing → /zzal 로 이동).
 //
 // 글꼴 — 여울 시안은 손글씨(Gaegu)와 고운돋움 두 벌을 쓴다.
 // ★ CSS 의 `@import` 로는 못 받는다. Next 가 여러 CSS 를 이어 붙이면서 @import 가 파일 맨 위를
