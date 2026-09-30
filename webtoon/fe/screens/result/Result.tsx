@@ -271,7 +271,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   )}
                   <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
                               onChange={(on, n) => { setLiked(on); setLikes(n); }} />
-                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+                  {/* 내 작품이면 공유는 아래 「내려받기」 옆에 둔다 — 남의 작품은 그 줄이 없어서 여기. */}
+                  {!mine && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
                 </span>
               </div>
 
@@ -325,6 +326,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                      }}>
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
+                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
                 </div>
                 <div className="wt-result-dlrow">
                   <label className="wt-result-perpage">
