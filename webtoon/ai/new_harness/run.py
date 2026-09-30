@@ -897,7 +897,9 @@ GENRE_SAMPLE_NOTE = (
     "아래는 이 장르가 실제로 어떤 소재·어떤 밀도로 쓰이는지 보여 주는 "
     "기준선이다. **베끼지 마라** — 같은 소재가 다시 나오면 베낀 것이 "
     "바로 보인다. 이 장르의 이야기가 무엇을 다루는지, 어느 정도로 "
-    "구체적인지만 읽고 네 캐릭터의 이야기를 써라."
+    "구체적인지만 읽고 네 캐릭터의 이야기를 써라. 다만 **첫 줄이 얼마나 큰 일을 "
+    "걸어 놓는지는 이 카드들 수준이어야 한다** — 소재는 다르게, 걸린 것의 크기는 "
+    "이만큼."
 )
 
 
@@ -1026,7 +1028,7 @@ def picked_direction(run_dir: Path, pick: int | None) -> dict:
 
 SCENE_RE = re.compile(rf"^{S}장면{S}(\d+){S}[:：]?{S}$", re.M)
 SCENE_FIELD_RE = re.compile(
-    rf"^{S}(직전 상태|장소와 상황|벌어지는 일|인물의 행동과 표정|끝나는 상태){S}[:：]{S}(.*)$")
+    rf"^{S}(직전 상태|장소와 상황|벌어지는 일|인물의 행동과 표정|겉모습·소지품·동행|끝나는 상태|나레이션){S}[:：]{S}(.*)$")
 PLOT_LABEL_RE = re.compile(rf"^{S}줄거리{S}[:：]{S}$", re.M)
 CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
 
@@ -1080,8 +1082,22 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
     return "\n".join(lines) + "\n"
 
 
+def split_narration(line: str) -> list[str]:
+    """`나레이션: 상자1 / 상자2` -> ["상자1", "상자2"]. "없음" 이면 빈 목록.
+
+    모델이 상자 하나를 따옴표로 감싸 오는 일이 있어 벗긴다 — 그림에는
+    따옴표가 대사처럼 찍힌다.
+    """
+    out = []
+    for part in (line or "").split(" / "):
+        part = part.strip().strip("\"'“”‘’「」").strip()
+        if part and part not in ("없음", "없음.", "..."):
+            out.append(part)
+    return out
+
+
 def parse_scenes(text: str) -> dict:
-    """scene_prompt 응답 -> {"plot", "scenes":[{"n","prev","where","what","acting","ends"}], "cast"}."""
+    """scene_prompt 응답 -> {"plot", "scenes":[{"n","prev","where","what","acting","look","ends","narration"}], "cast"}."""
     plot_m = PLOT_LABEL_RE.search(text)
     scene_marks = list(SCENE_RE.finditer(text))
     cast_m = CAST_LABEL_RE.search(text)
@@ -1107,7 +1123,14 @@ def parse_scenes(text: str) -> dict:
             "where": fields.get("장소와 상황", ""),
             "what": fields.get("벌어지는 일", ""),
             "acting": fields.get("인물의 행동과 표정", ""),
+            # 시트와 달라진 겉모습·소지품·동행 (#147). 옛 scenes.json 에는 없다 — 빈 값.
+            "look": fields.get("겉모습·소지품·동행", ""),
             "ends": fields.get("끝나는 상태", ""),
+            # 이 장에 쓸 수 있는 나레이션 글. 글 모델이 화 전체를 한 번에 읽고
+            # 이어지게 쓴 것이고, 그림 모델은 이 중에서 고르되 넣으면 글자 그대로
+            # 넣는다(detailart.build_continue_prompt). 칸이 **아예 없으면 None**
+            # 이다(옛 응답) — 그때는 예전처럼 그림 모델이 나레이션을 정한다.
+            "narration": (split_narration(fields["나레이션"]) if "나레이션" in fields else None),
         })
     cast = _cast_bullets(text[cast_m.end():]) if cast_m else []
     return {"plot": plot, "scenes": scenes, "cast": cast}

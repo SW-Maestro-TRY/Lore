@@ -204,7 +204,8 @@ def scene_texts(direction: dict, scenes=()) -> list[str]:
     for one in scenes or []:
         if not isinstance(one, dict):
             continue
-        body = " ".join(x for x in (_text(one.get("what")), _text(one.get("acting"))) if x)
+        body = " ".join(x for x in (_text(one.get("what")), _text(one.get("acting")),
+                                   _text(one.get("look"))) if x)
         if body:
             out.append(body)
     return out or [x for x in (direction.get("scenes") or []) if _text(x)]
@@ -302,7 +303,7 @@ def build_prompt(direction: dict, *, scene_no: int, char: dict | None = None,
 OPENS = ("이미", "처음", "없음")
 
 
-def parse(text: str, *, has_prev: bool = True) -> dict:
+def parse(text: str, *, has_prev: bool = True, fixed_narration: bool = False) -> dict:
     """검수 응답(JSON) -> 판정.
 
     `verdict` 는 모델에게 안 묻는다. **흐름과 무게에서 코드가 센다** —
@@ -339,7 +340,14 @@ def parse(text: str, *, has_prev: bool = True) -> dict:
     # 자리). 직전 그림이 없으면 견줄 것이 없어 안 센다.
     opens = _text(obj.get("opens"))
     opens = opens if opens in OPENS else ""
-    if has_prev and opens == "이미":
+    if has_prev and opens == "이미" and fixed_narration:
+        # 나레이션 글을 장면 단계에서 정해 둔 장이다. 다시 그려도 같은
+        # 글자가 찍혀서 고쳐지지 않는다 — 기록만 하고 다시 그리게 하지 않는다.
+        issues.append({
+            "kind": "되돌아감", "severity": "minor",
+            "what": "이 장 나레이션이 앞 장이 이미 말한 상황으로 되돌아가 시작한다 "
+                    "— 나레이션은 장면 글에서 정한 것이라 다시 그려도 안 바뀐다."})
+    elif has_prev and opens == "이미":
         issues.insert(0, {
             "kind": "대사", "severity": "critical",
             "what": "이 장 나레이션이 앞 장에서 이어받지 않고, 앞 장이 이미 말한 "
@@ -472,7 +480,9 @@ def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
     write_text(dest / f"page{page_no:02d}.review{suffix}.txt", text)
     meta["page"] = page_no
     try:
-        review = parse(text, has_prev=has_prev)
+        one = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
+        review = parse(text, has_prev=has_prev,
+                       fixed_narration=isinstance(one, dict) and one.get("narration") is not None)
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")

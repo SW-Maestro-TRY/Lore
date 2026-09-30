@@ -18,6 +18,7 @@ import { MASCOT_LINES } from "../../lib/progressData";
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
+import { unwatchJob, watchJob } from "../../lib/watchJob";
 import { IconArrow, IconBack, IconChevronDown, IconChevronUp, IconClose, IconRetry, IconZoom } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import LouPlay from "./LouPlay";
@@ -123,6 +124,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     const t = setInterval(() => { if (!stopped.current) void pull(); }, POLL_MS);
     return () => clearInterval(t);
   }, [pull]);
+
+  /* 이 화면을 떠나도 오른쪽 아래 동그라미가 이 작업을 따라간다(ui/RunningBubble). */
+  useEffect(() => { watchJob(jobId); }, [jobId]);
+  /* 결과를 이 화면에서 봤으면 더 지켜볼 것이 없다 — 완성은 곧 완성본으로 넘어가고, 실패는 여기 떴다. */
+  useEffect(() => {
+    if (job?.status === "done" || job?.status === "error") unwatchJob(jobId);
+  }, [job?.status, jobId]);
 
   useEffect(() => {
     if (job?.status === "done" && job.run_id) {
@@ -332,7 +340,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
   const doCancel = () => {
     track("job_cancel", { job: jobId, status, count: job?.art?.done ?? 0, page: job?.art?.total ?? 0 });
-    void send(async () => { await cancelJob(jobId); stopped.current = true; go("landing"); });
+    void send(async () => { await cancelJob(jobId); stopped.current = true; unwatchJob(jobId); go("landing"); });
   };
 
   /* 사람이 답하는 자리들(#413). 메모·본문은 싣지 않고 있었는지만 싣는다. */

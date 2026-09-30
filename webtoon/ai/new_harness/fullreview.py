@@ -192,7 +192,7 @@ STUCK_PAGES = 3
 RESET_PAGES = 2
 
 
-def reset_issues(read: list[dict]) -> list[dict]:
+def reset_issues(read: list[dict], fixed_narration: bool = False) -> list[dict]:
     """페이지마다 이야기가 도입부로 되돌아가는가. **코드가 센다.**
 
     `read` 의 `opens` 는 판정이 아니라 기억 질문의 답이다 — "이 페이지
@@ -217,6 +217,18 @@ def reset_issues(read: list[dict]) -> list[dict]:
     back = [r["page"] for r in read if _text(r.get("opens")) == "이미"]
     if len(back) < RESET_PAGES:
         return []
+    if fixed_narration:
+        # 나레이션 글을 장면 단계에서 정해 둔 run 이다(scenes.json 의
+        # `narration`). 그림을 다시 그려도 같은 글 안에서 고르니 다시 그리기로
+        # 고쳐지지 않는다 — 값만 나간다. 기록으로만 남긴다.
+        return [{
+            "rank": 2, "severity": "major", "redraw": False,
+            "pages": back, "redraw_pages": [],
+            "why": f"{len(back)}장({', '.join(map(str, back))})의 나레이션이 앞에서 "
+                   "이미 말한 상황으로 되돌아가 시작한다. 나레이션은 장면 단계에서 "
+                   "정해진 글이라 다시 그려도 안 바뀐다 — 장면 글(scene.md)을 봐야 한다.",
+            "redraw_pick_reason": "",
+        }]
     return [{
         "rank": 2, "severity": "critical", "redraw": True,
         "pages": back, "redraw_pages": back[1:] or back,
@@ -275,7 +287,7 @@ def repeat_issues(repeat, total: int) -> list[dict]:
     return out
 
 
-def parse(text: str) -> dict:
+def parse(text: str, fixed_narration: bool = False) -> dict:
     """검수 응답(JSON) -> 판정.
 
     `severity`(얼마나 심각한가)와 `redraw`(그래서 다시 그려야 하는가)는
@@ -337,7 +349,7 @@ def parse(text: str) -> dict:
             "redraw_pick_reason": _text(one.get("redraw_pick_reason")) if redraw else "",
         })
     issues += repeat_issues(obj.get("repeat"), len(read))
-    issues += reset_issues(read)
+    issues += reset_issues(read, fixed_narration)
     issues.sort(key=lambda i: (SEVERITIES.index(i["severity"]), i["rank"]))
 
     # 모델이 "이해 안 됨"이라고 스스로 적어 놓고 issues 를 빈 배열로 내는
@@ -406,7 +418,9 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
     write_text(run_dir / "full_review.txt", text)
     meta["pages"] = len(images)
     try:
-        review = parse(text)
+        scenes = (read_json(run_dir / "scenes.json") or {}).get("scenes") or []
+        review = parse(text, fixed_narration=any(
+            isinstance(sc, dict) and sc.get("narration") is not None for sc in scenes))
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [전체 검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")
