@@ -1,0 +1,96 @@
+/* 만드는 중 동그라미(#507) — body 에 바로 뜨므로 .wt 의 색 변수를 못 쓴다. 같은 값을 여기 둔다. */
+.wt-bubble {
+  --b-ink: #0f333f;
+  --b-sea: #0e8fb5;
+  --b-sea-deep: #0a5f7a;
+  --b-water: #cfe9f0;
+  --b-gold: #a1732e;
+  --b-err: #a13a2e;
+
+  position: fixed; right: 20px; bottom: 24px; z-index: 50;
+  display: flex; flex-direction: column; align-items: center;
+  font-family: var(--font-noto-sans-kr, "Noto Sans KR"), system-ui, sans-serif;
+  color: var(--b-ink);
+  -webkit-font-smoothing: antialiased;
+  animation: wt-bubble-in 0.28s ease-out both;
+}
+/* 위치(transform)는 건드리지 않는다 — 끌기가 getBoundingClientRect 로 자리를 재서, 크기·자리가 움직이면 놓는 자리가 어긋난다 */
+@keyframes wt-bubble-in { from { opacity: 0; } }
+
+.wt-bubble-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 0; border: 0; background: none; font: inherit; color: inherit;
+  cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.wt-bubble.dragging .wt-bubble-btn { cursor: grabbing; }
+.wt-bubble-btn:focus-visible { outline: none; }
+.wt-bubble-btn:focus-visible .wt-bubble-ring { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--b-sea); }
+
+.wt-bubble-ring {
+  position: relative; width: 68px; height: 68px; border-radius: 50%; background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 51, 63, 0.22), 0 2px 6px rgba(15, 51, 63, 0.10);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+.wt-bubble-btn:hover .wt-bubble-ring { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(15, 51, 63, 0.26), 0 2px 6px rgba(15, 51, 63, 0.10); }
+.wt-bubble.dragging .wt-bubble-ring { transform: scale(1.06); box-shadow: 0 18px 40px rgba(15, 51, 63, 0.30); }
+
+.wt-bubble-ring > svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.wt-bubble-ring circle { fill: none; stroke-width: 5; }
+.wt-bubble-ring .track { stroke: var(--b-water); }
+.wt-bubble-ring .fill {
+  stroke: var(--b-sea); stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s ease, stroke 0.2s ease;
+}
+.wt-bubble.asks .fill { stroke: var(--b-gold); }
+.wt-bubble.done .fill { stroke: var(--b-sea-deep); }
+.wt-bubble.failed .fill { stroke: var(--b-err); }
+
+.wt-bubble-num {
+  position: absolute; inset: 0; display: flex; align-items: baseline; justify-content: center;
+  padding-top: 22px; line-height: 1;
+  font-size: 17px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+.wt-bubble-num small { font-size: 10px; font-weight: 700; margin-left: 1px; }
+.wt-bubble.done .wt-bubble-num { color: var(--b-sea-deep); }
+.wt-bubble.failed .wt-bubble-num { color: var(--b-err); font-size: 24px; padding-top: 21px; }
+.wt-bubble.done .wt-bubble-num { align-items: center; padding-top: 0; }
+
+/* 사람이 답할 차례면 가만히 있지 않고 부른다 */
+.wt-bubble.asks .wt-bubble-ring::after,
+.wt-bubble.done .wt-bubble-ring::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid var(--b-gold); opacity: 0; animation: wt-bubble-call 1.8s ease-out infinite;
+}
+.wt-bubble.done .wt-bubble-ring::after { border-color: var(--b-sea); }
+@keyframes wt-bubble-call { 0% { opacity: 0.7; transform: scale(0.96); } 100% { opacity: 0; transform: scale(1.22); } }
+
+.wt-bubble-label {
+  max-width: 200px; padding: 4px 10px; border-radius: 999px;
+  background: var(--b-ink); color: #fff;
+  font-size: 12px; font-weight: 700; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 4px 12px rgba(15, 51, 63, 0.18);
+}
+.wt-bubble.asks .wt-bubble-label { background: var(--b-gold); }
+.wt-bubble.done .wt-bubble-label { background: var(--b-sea-deep); }
+.wt-bubble.failed .wt-bubble-label { background: var(--b-err); }
+
+.wt-bubble-x {
+  position: absolute; top: -4px; left: calc(50% + 20px);
+  width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  background: #fff; color: var(--b-ink);
+  box-shadow: 0 2px 8px rgba(15, 51, 63, 0.25);
+}
+.wt-bubble-x:hover { background: var(--b-water); }
+
+@media (max-width: 767px) {
+  /* 폰은 화면 아래에 단추 줄(.mfoot)이 붙는 화면이 있어 그 위로 띄운다 */
+  .wt-bubble { right: 14px; bottom: 96px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wt-bubble, .wt-bubble-ring, .wt-bubble-ring .fill { animation: none; transition: none; }
+  .wt-bubble-ring::after { animation: none !important; }
+}
