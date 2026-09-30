@@ -182,8 +182,12 @@ export interface NhJob {
   notice?: { logged_in: boolean; email: string | null; sent: boolean } | null;
   minutes_left?: number | null;
   pct: number;
-  art: { done: number; total: number; retry_page?: number } | null;
+  /* pages — 다 그려진 장 번호. 동시에 그리면 순서대로 안 끝나서 개수로는 어느 장인지 모른다(#509). */
+  art: { done: number; total: number; retry_page?: number; pages?: number[] } | null;
+  /* 화 전체 검수에서 걸린 장을 다시 그리는 중이면 그 장들(#509). */
+  redraw?: { pages: number[]; done: number } | null;
   log: string[];
+  /* 기계가 일한 시간(초) — 사람을 기다린 시간은 뺀다(#509). */
   elapsed: number;
 }
 

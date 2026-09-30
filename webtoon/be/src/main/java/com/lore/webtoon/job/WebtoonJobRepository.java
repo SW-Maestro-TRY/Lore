@@ -30,6 +30,9 @@ public interface WebtoonJobRepository extends JpaRepository<WebtoonJob, Long> {
     /** 지금 줄에 있는 것의 수 — 일꾼을 잡고 있거나 잡으러 갈 것들. */
     long countByStatusIn(java.util.Collection<JobStatus> statuses);
 
+    /** 지금 그림 자리를 쓰는 편 수 — 장을 그리거나 검수 뒤 다시 그리는 중인 것(#509). */
+    long countByStatusAndStageIn(JobStatus status, java.util.Collection<JobStage> stages);
+
     /**
      * 줄을 <b>선 순서대로</b>. 만든 때가 곧 줄 순서다.
      *
