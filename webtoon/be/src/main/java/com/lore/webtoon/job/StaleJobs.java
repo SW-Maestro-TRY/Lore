@@ -100,6 +100,7 @@ public class StaleJobs {
     void bury(WebtoonJob job) {
         Refunded refunded = runner.refund(job.getId());
         job.failed(WHY, refunded, Instant.now());
+        job.failure(job.getStage() == null ? null : job.getStage().name(), "server_restart", null);
         jobs.save(job);
         runner.dropPhotos(job.getId());      // 끊긴 작업도 사진을 남기지 않는다
         log.warn("끊긴 작업을 적었습니다 (job={}, 만든 때={}, 돌려줌={})",
