@@ -156,12 +156,13 @@ const dict: Dict = {
   "이 캐릭터로 웹툰": { en: "Make a webtoon", ja: "このキャラクターでウェブトゥーン", zh: "用这个角色做漫画" },
   "카드 보기": { en: "View card", ja: "カードを見る", zh: "查看卡片" },
 
-  /* ---- 세계관 프리셋 라벨 (new_harness/worlds.json · 11개) ---- */
+  /* ---- 세계관 프리셋 라벨 (new_harness/worlds.json · 12개) ---- */
   "헌터": { en: "Hunters", ja: "ハンター", zh: "猎人" },
   "마법학교": { en: "Magic school", ja: "魔法学校", zh: "魔法学校" },
   "아이돌": { en: "Idols", ja: "アイドル", zh: "偶像" },
   "아포칼립스": { en: "Apocalypse", ja: "アポカリプス", zh: "末世" },
   "히어로": { en: "Heroes", ja: "ヒーロー", zh: "英雄" },
+  "로맨스": { en: "Romance", ja: "ロマンス", zh: "爱情" },
   "로맨스 판타지": { en: "Romance fantasy", ja: "ロマンスファンタジー", zh: "浪漫奇幻" },
   "판타지": { en: "Fantasy", ja: "ファンタジー", zh: "奇幻" },
   "센티넬": { en: "Sentinels", ja: "センチネル", zh: "哨兵" },
