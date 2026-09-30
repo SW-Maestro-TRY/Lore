@@ -66,6 +66,7 @@ import os
 import re
 from pathlib import Path
 
+import covercheck
 import llm
 import runmeta
 from llm import story
@@ -230,6 +231,29 @@ def reset_issues(read: list[dict]) -> list[dict]:
     }]
 
 
+def cover_issues(cover, title: str) -> list[dict]:
+    """모델이 센 `cover` -> issues. **표지인가는 코드가 정한다**(covercheck.judge).
+
+    그리는 자리의 표지 검수(covercheck)와 같은 기준을 쓴다 — 거기서 다시 그릴
+    횟수를 다 쓰고도 표지 모양이 아니었거나, 검수가 꺼져 있었던 경우를 여기서
+    한 번 더 잡는다. 잡히면 1페이지를 다시 그리게 한다(JobRunner 의 재생성
+    루프가 `--page 1` 로 부른다).
+    """
+    if not isinstance(cover, dict):
+        return []
+    found = covercheck.judge(cover, title)
+    if not found:
+        return []
+    return [{
+        "rank": 3, "severity": "critical", "redraw": True,
+        "pages": [1], "redraw_pages": [1],
+        "why": "1페이지가 표지 모양이 아니다 — " + " ".join(f["what"] for f in found)
+               + " 다시 그릴 때는 칸을 나누지 않은 그림 한 장에 제목만 넣는다. "
+                 "이 화의 한 장면을 옮겨 그리지 않는다.",
+        "redraw_pick_reason": "",
+    }]
+
+
 def repeat_issues(repeat, total: int) -> list[dict]:
     """모델이 센 `repeat` -> issues. **문턱은 코드가 정한다.**
 
@@ -275,7 +299,7 @@ def repeat_issues(repeat, total: int) -> list[dict]:
     return out
 
 
-def parse(text: str) -> dict:
+def parse(text: str, *, title: str = "", cover_attached: bool = True) -> dict:
     """검수 응답(JSON) -> 판정.
 
     `severity`(얼마나 심각한가)와 `redraw`(그래서 다시 그려야 하는가)는
@@ -338,6 +362,8 @@ def parse(text: str) -> dict:
         })
     issues += repeat_issues(obj.get("repeat"), len(read))
     issues += reset_issues(read)
+    if cover_attached:
+        issues += cover_issues(obj.get("cover"), title)
     issues.sort(key=lambda i: (SEVERITIES.index(i["severity"]), i["rank"]))
 
     # 모델이 "이해 안 됨"이라고 스스로 적어 놓고 issues 를 빈 배열로 내는
@@ -389,6 +415,8 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
         log(f"  [전체 검수] 페이지가 {len(pages)}장이라 뒤 {cap}장만 붙입니다")
         pages = pages[-cap:]
 
+    # 앞 장을 잘라 붙였으면 첫 그림이 표지가 아니다 — 그때는 표지 판정을 안 한다.
+    cover_attached = bool(pages) and pages[0].name == "page01.png"
     images = llm.load_images(pages)
     call = llm.Call(STAGE)
     log(f"[전체 검수] {call.describe()} · 그림 {len(images)}장을 처음부터 끝까지 읽습니다…")
@@ -406,7 +434,7 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
     write_text(run_dir / "full_review.txt", text)
     meta["pages"] = len(images)
     try:
-        review = parse(text)
+        review = parse(text, title=covercheck.title_of(run_dir), cover_attached=cover_attached)
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [전체 검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")

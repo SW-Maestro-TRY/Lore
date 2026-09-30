@@ -53,6 +53,7 @@ import imagegen
 import imageprompt
 import llm
 import charcard
+import covercheck
 import pagecheck
 import pages
 import runmeta
@@ -160,48 +161,63 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
             + "\n".join(lines))
 
 
-def build_cover_prompt(*, title: str, genre: str, plot: str, first: dict,
+def fixed_block(fixed) -> str:
+    """이 화 안에서 장마다 같아야 하는 것 — scene_prompt 의 「이 화의 고정 설정」.
+
+    장면을 동시에 그리면 옆 장을 못 보니, 그림 속 이름(간판·로고)과 옷을
+    장마다 따로 지어낸다. 모든 장(표지 포함)에 **글자까지 같은 목록**을 넣어
+    그 빈칸을 없앤다. 옛 run(이 칸이 없음)은 빈 문자열이라 프롬프트가 안 바뀐다.
+    """
+    lines = [str(x).strip() for x in (fixed or []) if str(x).strip()]
+    if not lines:
+        return ""
+    return ("## 이 화 내내 같은 것 (모든 장이 이 목록을 똑같이 받는다)\n"
+            "그림 속 글자(간판·로고·명찰·옷에 새긴 글자)로 이름이 보이면 아래 이름을 "
+            "글자 그대로 쓴다. 옷은 아래 적힌 대로 입힌다 — 캐릭터 시트의 옷과 다르면 "
+            "이 목록을 따르고, 얼굴·머리·체형은 시트를 따른다.\n"
+            + "\n".join(f"- {ln}" for ln in lines))
+
+
+def build_cover_prompt(*, title: str, genre: str, intro: str,
                        char: dict | None, spec: dict | None, cast: list[dict],
-                       provider: str, style: str, lang: str = "ko") -> str:
-    """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 지시가 다르다.
+                       style: str, fixed=(), lang: str = "ko") -> str:
+    """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 프롬프트 파일부터 다르다
+    (`prompt/cover_prompt`).
+
+    예전에는 장면 페이지용 고정 블록(`image_prompt.<provider>` — "세로 웹툰
+    페이지를 그린다 · 컷을 위에서 아래로 · 대사를 말풍선에") 뒤에 "이건
+    표지다" 한 절을 덧붙이고, 1장면의 사건·대사까지 붙여 줬다. 모델은 분량이
+    큰 앞쪽을 따라 **1장면을 네 컷 페이지로 그리고 제목은 빼먹었다**
+    (2026-09-30, run 20260930T212420-43e5c0). 그래서 페이지 지시는 아예 안
+    싣고, 그림체·인물만 같은 것을 쓴다. 장면 대신 이 작품 소개(`intro`)를
+    준다 — 표지가 보여줄 것은 한 순간이 아니라 주인공의 처지다.
 
     장면 페이지는 detail_image_prompt 의 {{LANGUAGE_LINE}} 으로 글자 언어를 받는데
-    표지는 그 파일을 안 쓴다. 그래서 여기서 따로 적는다 — 안 적으면 한국어로 된
-    지시문과 고정 블록의 「한국어 대사」를 보고 영어 제목을 한국어로 옮겨 그린다.
-    ko 는 아무것도 안 붙인다(예전 표지 프롬프트 그대로)."""
-    blocks = [imageprompt.load_fixed_block(provider, style)]
-    blocks.append("""\
-## 이 그림은 표지다 (중요 — 위의 '페이지 구성'보다 이 절이 우선한다)
+    표지 제목은 여기서 따로 못 박는다 — 안 적으면 한국어 지시문을 보고 영어
+    제목을 한국어로 옮겨 그린다.
+    """
+    path = PROMPT_DIR / "cover_prompt"
+    if not path.exists():
+        raise SystemExit(f"프롬프트가 없습니다: {path}")
+    text = path.read_text(encoding="utf-8")
 
-컷을 나누지 않는다. **한 장짜리 그림 하나**를 그린다. 말풍선·나레이션 상자·
-효과음도 넣지 않는다.
-
-- 이 화를 아직 안 읽은 사람이 보고 "무슨 이야기지?" 하고 눌러 보고 싶어지는
-  그림이어야 한다.
-- 주인공이 어떤 처지에 있는 사람인지, 여기가 어떤 세계인지가 한 장에서
-  읽혀야 한다. 이 화의 특정 사건을 설명하지는 않는다.
-- 제목을 그림 안에 글자로 넣는다. 인물의 얼굴을 가리지 않는 자리에 두고,
-  아래 적힌 제목을 **글자 그대로** 쓴다.""")
-
-    who = character_block(char, spec, cast)
-    if who:
-        blocks.append(who)
-
-    lines = ["## 이 작품", f"제목(이 글자 그대로 그린다): {title}" if title else ""]
+    lines = [f"제목(이 글자 그대로 그린다): {title}" if title else ""]
     if lang != "ko":
         name = lang_mod.LANG_NAMES.get(lang, lang)
-        lines.append(f"그림 안에 들어가는 글자는 제목을 포함해 전부 {name}다. 제목을 한국어나 "
-                     f"다른 언어로 옮기지 않고 위에 적힌 {name} 글자를 그대로 쓴다. "
-                     f"위 고정 지시에 「한국어」라고 적힌 글자 규정도 이 작품에서는 {name}로 읽는다.")
+        lines.append(f"제목은 {name}다. 한국어나 다른 언어로 옮기지 않고 위에 적힌 "
+                     f"{name} 글자를 그대로 쓴다.")
     if genre:
         lines.append(f"장르: {genre}")
-    if plot:
-        lines += ["", "줄거리:", plot]
-    if first.get("detail"):
-        lines += ["", "이 화가 시작되는 자리(분위기 참고용 — 이 장면을 그대로 "
-                      "그리는 것이 아니다):", first["detail"]]
-    blocks.append("\n".join(x for x in lines if x))
-    return "\n\n".join(b for b in blocks if b) + "\n"
+    if intro:
+        lines += ["", "이 작품 소개 (이 안의 사건을 그리는 것이 아니다 — 주인공이 "
+                      "어떤 처지인지 읽어 내는 데만 쓴다):", intro]
+    work = "\n".join(x for x in lines if x is not None).strip()
+
+    return (text
+            .replace("{style}", imageprompt.load_style(style))
+            .replace("{people}", character_block(char, spec, cast))
+            .replace("{fixed}", fixed_block(fixed))
+            .replace("{work}", work))
 
 
 def page_path(run_dir: Path, page_no: int) -> Path:
@@ -250,8 +266,11 @@ def opens_at(scenes: list[dict], scene_no: int) -> str:
 
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
-                          has_prev: bool, lang: str = "ko") -> str:
+                          has_prev: bool, fixed=(), lang: str = "ko") -> str:
     """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
+
+    fixed : scenes.json 의 「이 화의 고정 설정」. 인물 절 바로 뒤에 붙는다
+    (`fixed_block`). 없으면(옛 run) 아무것도 안 붙는다.
 
     씬 하나 = 이미지 하나. 각 장면 dict 에 이미 「직전 상태」·「끝나는 상태」가
     있다(scene_prompt 가 선택된 스토리를 장면으로 쪼갤 때 같이 정해 둔다) —
@@ -352,9 +371,11 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         scene_instr += ("\n\n첨부한 직전 그림이 바로 앞 장이다 — 인물·공간·"
                         "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
                         "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
+    people = "\n\n".join(b for b in (character_block(char, spec, cast),
+                                     fixed_block(fixed)) if b)
     return (text
             .replace("{{LANGUAGE_LINE}}", lang_mod.instruction(lang))
-            .replace("{people}", character_block(char, spec, cast))
+            .replace("{people}", people)
             .replace("{continuity}", con)
             .replace("{scene}", scene_instr))
 
@@ -467,23 +488,27 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         + (f" · 검수 켜짐(다시 그리기 {tries}회)" if do_review else " · 검수 꺼짐"))
 
     title, genre = direction.get("title") or "", direction.get("genre") or ""
-    plot = scene_data.get("plot") or direction.get("plot") or ""
-    first_detail = " — ".join(x for x in (scenes[0].get("where"), scenes[0].get("what")) if x)
+    # 표지는 장면이 아니라 작품 소개로 그린다(build_cover_prompt). 소개가 없는
+    # 옛 run 은 줄거리 요약으로 대신한다.
+    intro = (direction.get("intro") or scene_data.get("plot")
+             or direction.get("plot") or "").strip()
+    fixed = [x for x in (scene_data.get("fixed") or []) if isinstance(x, str)]
 
     made = []
     for n_ in range(0, len(scenes) + 1):  # 0 = 표지, 1..len(scenes) = 씬
         page_no = n_ + 1
         if n_ == 0:
-            prompt = build_cover_prompt(title=title, genre=genre, plot=plot,
-                                        first={"detail": first_detail}, char=char, spec=spec,
-                                        cast=cast, provider=provider, style=style, lang=lang)
+            prompt = build_cover_prompt(title=title, genre=genre, intro=intro,
+                                        char=char, spec=spec, cast=cast, style=style,
+                                        fixed=fixed, lang=lang)
         else:
             # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
             # "첨부한 직전 그림" 이라고 적으면 없는 그림을 가리키게 된다.
             has_prev = page_path(run_dir, page_no - 1).exists()
             prompt = (build_continue_prompt(direction, scenes, char, spec, cast,
-                                            scene_no=n_, has_prev=has_prev, lang=lang)
+                                            scene_no=n_, has_prev=has_prev, fixed=fixed,
+                                            lang=lang)
                       .replace("{style}", imageprompt.load_style(style)))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
@@ -533,8 +558,46 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             on_page(meta)
         log(f"  -> {out}  (${meta['cost'].get('total', 0):.4f})")
 
-        # 표지는 이야기의 한 순간이 아니라 검수 대상이 아니다.
-        if not do_review or n_ == 0:
+        if not do_review:
+            continue
+        # 표지는 이야기의 한 순간이 아니라 "이어지는가" 를 볼 것이 없다. 대신
+        # 표지 모양인가(칸 하나 · 글상자 없음 · 제목 그대로)를 본다(covercheck).
+        if n_ == 0:
+            for attempt in range(tries + 1):
+                got, rmeta = covercheck.review_cover(
+                    run_dir, title, suffix="" if attempt == 0 else f".{attempt + 1}")
+                if rmeta and on_page:
+                    on_page(rmeta)
+                if not got or got["verdict"] == "통과":
+                    break
+                if attempt >= tries:
+                    log("  [표지 검수] 다시 그릴 횟수를 다 썼습니다 — 표지는 그대로 둡니다")
+                    break
+                log(f"  [표지 검수] 다시 그립니다 ({attempt + 1}/{tries})")
+                out.unlink(missing_ok=True)
+                again = prompt + "\n\n" + covercheck.redraw_block(got)
+                (dest / f"page01.redraw{attempt + 1}.txt").write_text(again, encoding="utf-8")
+                try:
+                    meta = imagegen.paint(STAGE, again, out, refs=refs,
+                                          kind=imagegen.PAGE_KIND)
+                except Exception as exc:                             # noqa: BLE001
+                    err_meta = {"stage": STAGE, "provider": provider, "model": model,
+                               "quality": quality, "page": page_no, "scene": 0,
+                               "redraw": attempt + 1,
+                               "refs": [r.name for r in refs],
+                               "cost": {"input": 0.0, "output": 0.0, "cache_read": 0.0,
+                                        "cache_write": 0.0, "total": 0.0},
+                               "error": f"{type(exc).__name__}: {exc}",
+                               "output_path": str(out)}
+                    if on_page:
+                        on_page(err_meta)
+                    log(f"  실패 [표지 다시 그리기]: {err_meta['error']}")
+                    raise
+                meta["page"], meta["scene"], meta["redraw"] = page_no, 0, attempt + 1
+                made.append(meta)
+                if on_page:
+                    on_page(meta)
+                log(f"  -> {out}  (${meta['cost'].get('total', 0):.4f})")
             continue
         # 검수에게 "앞 장이 어디까지 갔는지" 를 알려 주는 자리. scenes.json 에
         # 이미 정해져 있는 값이라, 앞 장 검수를 기다리지 않아도 되고 장면을
