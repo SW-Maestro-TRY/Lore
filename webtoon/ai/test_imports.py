@@ -46,7 +46,7 @@ ROOTS = ("new_harness", "upload", "webtoon-harness")
 # 이 검사가 먼저 걸린다 — requirements.txt 에 적으라는 뜻이다.
 THIRD_PARTY = {
     "PIL", "openai", "google", "anthropic", "yaml", "requests",
-    "boto3", "botocore",
+    "boto3", "botocore", "logfire",
 }
 
 # 안 보는 것: 백업본과 실행하며 쌓이는 것.

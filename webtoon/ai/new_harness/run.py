@@ -47,6 +47,7 @@ if str(WEBTOON_HARNESS) not in sys.path:
 import directing                              # noqa: E402  (webtoon-harness 것을 그대로 빌린다)
 import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
+import tracing                                # noqa: E402
 import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
 import charcard                               # noqa: E402
@@ -1451,4 +1452,6 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    with tracing.run_span("run.py", sys.argv[1:]):
+        code = main()
+    raise SystemExit(code)
