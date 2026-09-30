@@ -7,8 +7,8 @@
 컷은 **한 장씩 그리지 않는다.** pages.py 가 붙일 수 있는 컷을 한 페이지로 묶고,
 페이지 하나당 이미지 호출을 한 번 한다 (pageart.py).
 
-이야기는 story-harness 를 거치지 않는다. prompt/ 안의 프롬프트가 전부다.
-이미지 호출만 story-harness 것을 빌려 쓴다 (imagegen.py 참고).
+이야기는 prompt/ 안의 프롬프트가 전부다. 모델 호출과 시트 그림은 story.py 를
+거친다 (llm.py · imagegen.py 참고).
 
 사용법
   python run.py --plan                                 # 어느 단계가 어느 모델인지
@@ -17,7 +17,7 @@
   python run.py --run-id <id> --pick 2                 # 후보 고르고 콘티까지
   python run.py --run-id <id> --pick 2 --scenes        # 줄거리 없이 곧장 장면 분리 (글 1회)
   python run.py --run-id <id> --sheet                  # 캐릭터 시트
-  python run.py --run-id <id> --sheet-from ../story-harness/runs/<run>  # 시트 재사용
+  python run.py --run-id <id> --sheet-from <옛 story-harness run 폴더>  # 시트 재사용
   python run.py --run-id <id> --pages                  # 페이지 그림 (페이지당 1회 호출)
   python run.py --run-id <id> --page 3                 # 3페이지만 다시
   python run.py --name ... --photo a.png --all --pick 2   # 한 번에
@@ -47,6 +47,7 @@ if str(WEBTOON_HARNESS) not in sys.path:
 import directing                              # noqa: E402  (webtoon-harness 것을 그대로 빌린다)
 import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
+import tracing                                # noqa: E402
 import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
 import charcard                               # noqa: E402
@@ -57,7 +58,7 @@ import runmeta                                # noqa: E402
 import sheet as sheetmod                      # noqa: E402
 import lang as lang_mod                       # noqa: E402
 from llm import story                         # noqa: E402
-import samples                                # noqa: E402  (story-harness 것을 그대로 빌린다)
+import samples                                # noqa: E402
 from pages import SIZES                       # noqa: E402
 
 PROMPT_DIR = HERE / "prompt"
@@ -831,7 +832,7 @@ def choose(directions: list[dict], pick: int | None) -> dict:
         print("목록에 있는 번호를 넣으세요.")
 
 
-# 장르 문자열(자유 텍스트, 예: "헌터·게이트") -> story-harness/worlds.json
+# 장르 문자열(자유 텍스트, 예: "헌터·게이트") -> worlds.json
 # 프리셋 라벨의 키워드. 여러 개 걸리면 첫 번째로 매칭된 것을 쓴다. 장르가
 # 이 목록에 없으면(오컬트 미스터리·좀비 아포칼립스 등) 조용히 건너뛴다 —
 # 세계관 문장 없이도 지금까지처럼 돌아간다.
@@ -861,10 +862,10 @@ _WORLD_KEYWORDS = {
 
 
 def genre_lore_for(genre: str) -> str:
-    """장르에 맞는 story-harness 의 장르 템플릿(모티프·캐릭터유형·전개패턴·
+    """장르에 맞는 장르 템플릿(모티프·캐릭터유형·전개패턴·
     체크리스트)을 그대로 빌린다. 없으면 빈 문자열.
 
-    story-harness/samples/genre_template.json 의 `_preset_map` 이 "헌터·게이트"
+    samples/genre_template.json 의 `_preset_map` 이 "헌터·게이트"
     같은 한글 장르명을 이미 판타지·액션·스릴러 같은 실제 템플릿 조합으로
     라우팅해 둔 상태다(story.resolve_genre_templates). world_text_for 보다
     훨씬 구체적이라 — 던전·이세계 전이·용/드래곤 같은 실제 소재 목록과
@@ -895,7 +896,7 @@ GENRE_SAMPLE_NOTE = (
 
 
 def genre_samples_for(genre: str, run_dir: Path | None = None) -> str:
-    """장르에 맞는 story-harness 의 검수된 기준 샘플 카드. 없으면 빈 문자열.
+    """장르에 맞는 검수된 기준 샘플 카드. 없으면 빈 문자열.
 
     samples/ 에는 장르 14종마다 사람이 검수해 실제로 서비스에 나간 카드가
     6장씩 있고, `samples.guess_genre` 가 "아이돌"·"헌터·게이트" 같은 한글
@@ -976,18 +977,18 @@ def genre_lore_section(genre: str) -> list[str]:
 
 
 def world_text_for(genre: str) -> str:
-    """장르에 맞는 story-harness/worlds.json 세계관 한 문단. 없으면 빈 문자열.
+    """장르에 맞는 worlds.json 세계관 한 문단. 없으면 빈 문자열.
 
     detail_prompt 가 "장르"만 받고 구체적인 세계 규칙을 못 받아서, 구체화
     단계가 장르 특유의 소재(마나·몬스터·게이트 현상 등) 없이 아무 장르에나
     쓸 수 있는 일반적인 소재(출입증·CCTV·무전기)로 채우는 문제가 있었다
-    (2026-08-30, 사용자 지적). story-harness 가 이미 갖고 있는 프리셋
+    (2026-08-30, 사용자 지적). worlds.json 이 이미 갖고 있는 프리셋
     문장을 그대로 빌려 온다 — 새 문장을 짓지 않는다.
     """
     genre = (genre or "").strip()
     if not genre:
         return ""
-    path = llm.STORY_HARNESS / "worlds.json"
+    path = llm.HERE / "worlds.json"
     if not path.exists():
         return ""
     try:
@@ -1451,4 +1452,6 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    with tracing.run_span("run.py", sys.argv[1:]):
+        code = main()
+    raise SystemExit(code)

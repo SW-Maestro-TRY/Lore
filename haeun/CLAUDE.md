@@ -15,8 +15,7 @@ OneDrive로 동기화되는 실제 파일이라 기기(윈도우 노트북/맥�
 
 ```
 webtoon/ai/
-  new_harness/      지금 제품이 쓰는 이야기·그림 파이프라인
-  story-harness/    모델 호출 계층(llm.py)·캐릭터 시트. new_harness 가 빌려 쓴다
+  new_harness/      지금 제품이 쓰는 이야기·그림 파이프라인 (모델 호출 계층 story.py 포함)
   webtoon-harness/  이미지·연출(directing). new_harness 가 빌려 쓴다
   upload/           다 그린 그림을 S3 로 올리는 걸음 (s3_upload · overlay · runpaths)
   assets/           기본 캐릭터 견본(samples) · 마스코트(lou)
@@ -34,16 +33,15 @@ haeun/ 에 남은 것은 실험·문서·자료입니다:
 
 ## 지켜야 할 규칙
 
-**story-harness / webtoon-harness 는 "완성본"으로 취급합니다 (harness-is-final).**
-이 두 폴더 안의 파일을 고칠 때는:
+**webtoon-harness 는 "완성본"으로 취급합니다 (harness-is-final).**
+(예전 story-harness 는 2026-09-30 #494 에서 new_harness 로 합쳐 없앴습니다.)
+이 폴더 안의 파일을 고칠 때는:
 1. 고치기 직전 `<파일>.bak` 백업을 남긴다 (기존 `run.py.bak` 등과 같은 방식).
 2. 기존 동작이 그대로 재현되게, **순수 추가**로만 고친다 (기본값 변경 금지 —
    예: 새 게이트 함수는 새 입력 필드가 없으면 항상 통과시켜서, 예전 run을 다시
    돌려도 결과가 안 바뀌게 한다).
-3. 고친 뒤 반드시 테스트를 돌려 `ALL PASS` 확인한다:
-   - `cd webtoon/ai/story-harness && python test_gates.py`
-   - `cd webtoon/ai/webtoon-harness && python test_charsheet.py`
-   (둘 다 pytest 아님 — 그냥 스크립트, 마지막 줄에 ALL PASS 또는 FAILED: ... 가 찍힘)
+3. 고친 뒤 `cd webtoon/ai && python3 test_imports.py` 가 `ALL PASS` 인지 확인한다
+   (webtoon/docs/rules/dev.md 「하네스를 고칠 때」).
 
 `webtoon/ai/landing/` 은 제품 레이어라 이 제약이 없습니다. 다만 배포되는 화면이라
 아래 "landing 을 고치기 전에" 를 먼저 보세요.
@@ -165,7 +163,6 @@ git worktree add ../agent-feedback -b agent/feedback haeun
 
 ```
 # 4. .env 심링크 (아래 "git이 안 보는 것" 절 참고 — 안 하면 실제 생성 때 키 없음으로 죽는다)
-ln -s "$(pwd)/webtoon/ai/story-harness/.env" agent-<슬러그>/webtoon/ai/story-harness/.env
 ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" agent-<슬러그>/webtoon/ai/webtoon-harness/.env
 ```
 
@@ -227,7 +224,6 @@ gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않�
   공유해도 쓰기 충돌이 안 나고, 안 하면 새 worktree에서 story.py/run.py가
   키 없음으로 바로 죽는다:
   ```
-  ln -s "$(pwd)/webtoon/ai/story-harness/.env" ../agent-<미션명>/webtoon/ai/story-harness/.env
   ln -s "$(pwd)/webtoon/ai/webtoon-harness/.env" ../agent-<미션명>/webtoon/ai/webtoon-harness/.env
   ```
 - **`runs/`·`outputs/`·`jobs/`는 심링크로 공유하지 않는다** — 공유하는 순간
