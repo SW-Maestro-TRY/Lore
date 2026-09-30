@@ -230,12 +230,14 @@ public class JobService {
     @Transactional(readOnly = true)
     public JobView view(String publicId) {
         WebtoonJob job = store.byPublicId(publicId);
-        return JobView.of(job, progress.of(job.getId()),
+        JobProgress.Snapshot now = progress.of(job.getId());
+        JobQueue.Spot spot = queue.spotOf(job);
+        return JobView.of(job, now,
                 store.directionsOf(job.getId()),
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
-                queue.spotOf(job),
-                notice.addressOf(job), queue.minutesLeft(job));
+                spot,
+                notice.addressOf(job), queue.etaOf(job, now, spot));
     }
 
     /**

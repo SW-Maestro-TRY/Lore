@@ -102,15 +102,16 @@ class ConcurrentJobsTest {
     @Test
     @DisplayName("화질 셋 다 예상 시간이 있다")
     void 화질마다_예상이_있다() {
-        JobQueue queue = new JobQueue(mock(WebtoonJobRepository.class), newRunner(2));
         for (Map<String, Object> one : WebtoonQuality.choices()) {
             String key = (String) one.get("key");
             WebtoonJob job = WebtoonJob.queued("j-" + key, 1L, "uid", null,
                     "webtoon_lock_bg", key, "ko", false, "{}", java.time.Instant.now());
             assertThat(job.getQuality()).isEqualTo(key);
+            // 줄에 막 선 편의 남은 시간이 0 이면 「곧 끝나요」라고 거짓말한다(JobEta).
+            assertThat(JobEta.of(job, new JobProgress.Snapshot(List.of(), "", 0, 0, 0), 3, 0,
+                    java.time.Instant.now()).left()).isPositive();
         }
         assertThat(List.of("wave", "surf", "swell")).allSatisfy(k ->
                 assertThat(WebtoonQuality.harnessValue(k)).isNotBlank());
-        assertThat(queue).isNotNull();
     }
 }

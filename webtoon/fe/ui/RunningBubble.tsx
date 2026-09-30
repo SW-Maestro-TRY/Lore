@@ -132,6 +132,10 @@ export default function RunningBubble({ view, runId, go }: { view: View; runId?:
     : status === "awaiting_sheet" ? t("캐릭터를 확인해 주세요")
     : status === "awaiting_pick" ? t("이야기를 골라 주세요")
     : status === "queued" || (job.queue && job.queue.ahead > 0) ? t("순서를 기다리는 중")
+    /* 검수 걸음에도 「그린 장 7/7」이 남아 있어서 그걸로 고르면 검수 중에 「페이지 7 / 7장」이
+       뜬다(#509, 진행 화면과 같은 이유). 걸음을 먼저 본다. */
+    : job.stage === "bind" ? (job.redraw && job.redraw.pages.length > 0
+        ? t("검수에서 걸린 장을 다시 그리는 중") : t("검수하고 있어요"))
     : art ? t("페이지 {done} / {total}장", { done: art.done, total: art.total })
     : job.stage_label ? t(job.stage_label) : t("만들고 있어요");
   const kind = done ? "done" : failed ? "failed" : asks ? "asks" : "running";
@@ -223,6 +227,8 @@ registerDict({
   "순서를 기다리는 중": { en: "Waiting in line", ja: "順番待ち", zh: "排队中" },
   "페이지 {done} / {total}장": { en: "Page {done} / {total}", ja: "ページ {done} / {total}枚", zh: "第 {done} / {total} 页" },
   "만들고 있어요": { en: "Creating", ja: "作成中", zh: "制作中" },
+  "검수하고 있어요": { en: "Reviewing it", ja: "検査中です", zh: "正在检查" },
+  "검수에서 걸린 장을 다시 그리는 중": { en: "Redrawing flagged pages", ja: "引っかかったページを描き直し中", zh: "正在重画未通过的页面" },
   "완성본 보러 가기": { en: "See the finished webtoon", ja: "完成版を見る", zh: "查看成品" },
   "만드는 화면으로 돌아가기": { en: "Back to progress", ja: "作成画面に戻る", zh: "返回制作页面" },
   "만드는 화면으로 돌아가기 · {pct}%": { en: "Back to progress · {pct}%", ja: "作成画面に戻る · {pct}%", zh: "返回制作页面 · {pct}%" },
