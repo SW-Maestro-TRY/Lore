@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """캐릭터 시트 — 사양(JSON) 검사와 이미지 프롬프트, 그리고 실제 그리기.
 
-이미지 호출 자체는 story-harness/story.py 의 make_sheet_painter 를 그대로 쓴다
+이미지 호출 자체는 story.py 의 make_sheet_painter 를 그대로 쓴다
 (컷을 그리는 코드와 같은 경로다). 여기서 새로 짜는 것은 **무엇을 그릴지**뿐이다.
 
 story.py 의 시트와 다른 점은 하나, 소지품(props) 영역이 있다는 것이다. 그래서

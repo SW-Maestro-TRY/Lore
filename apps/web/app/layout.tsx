@@ -7,6 +7,7 @@
 // 공용 헤더(SiteHeader)는 여기가 아니라 랜딩(LandingPage)과 app/(domains)/layout.tsx 가 각자 붙인다.
 // 랜딩은 헤더 아래 자체 푸터까지 갖는 한 장짜리 화면이라 구성이 달라서다.
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 // 폰트는 npm 패키지(@fontsource)에서 온다. next/font/google 은 next build 도중
 // Google Fonts 에서 파일을 받는데, dev 서버에서 그 요청이 자주 끊겨 배포가 복불복으로
 // 실패했다 — 한국어 폰트가 글자 범위별로 백 수십 조각이라 하나만 못 받아도 빌드가 죽는다.
@@ -26,13 +27,22 @@ export const metadata: Metadata = {
     "사진 한 장에서 캐릭터를 뽑고, 그 캐릭터로 4컷 · 예고편 · 웹툰까지 이어서 만듭니다.",
 };
 
-export default function RootLayout({
+// middleware.ts 가 /ko·/en·/ja 로 들어온 요청에 남기는 값. 언어 접두어가 없는 주소(예:
+// /zzal·/trailer)는 지난 방문의 값이 남아 있을 수 있다 — 화면 내용은 그 도메인 것 그대로고
+// <html lang> 만 한 박자 늦게 따라오는 정도라 지금은 그대로 둔다.
+async function locale(): Promise<string> {
+  const store = await cookies();
+  const v = store.get("lore_locale")?.value;
+  return v === "en" || v === "ja" ? v : "ko";
+}
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
+    <html lang={await locale()}>
       <body>{children}</body>
     </html>
   );

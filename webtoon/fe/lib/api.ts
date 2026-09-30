@@ -8,6 +8,8 @@
  * 로그인이 필요한 자리(`/my/...`)만 공용 클라이언트(`@common/api/client`)로
  * 부른다 — 그쪽은 봉투(`{success, data}`)를 벗겨 준다. */
 import { request as appRequest } from "@common/api/client";
+import { translateNow } from "./i18n";
+import "./serverI18n";   // 서버가 보내는 한국어 문구의 사전
 
 export const BASE = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
@@ -75,11 +77,16 @@ function reasonOf(body: unknown): string {
   return "";
 }
 
+/* 서버 오류 문구는 한국어로 온다. message 는 지금 화면 언어로 옮긴 것이라 그대로
+ * 보여 주면 되고, 문구로 무엇에 막혔는지 가르는 코드는 raw(서버 원문)를 본다 —
+ * 번역문으로 가르면 언어마다 판정이 달라진다. */
 export class WebtoonApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
-    super(message);
+  raw: string;
+  constructor(raw: string, status: number) {
+    super(translateNow(raw));
     this.status = status;
+    this.raw = raw;
   }
 }
 
@@ -175,8 +182,12 @@ export interface NhJob {
   notice?: { logged_in: boolean; email: string | null; sent: boolean } | null;
   minutes_left?: number | null;
   pct: number;
-  art: { done: number; total: number; retry_page?: number } | null;
+  /* pages — 다 그려진 장 번호. 동시에 그리면 순서대로 안 끝나서 개수로는 어느 장인지 모른다(#509). */
+  art: { done: number; total: number; retry_page?: number; pages?: number[] } | null;
+  /* 화 전체 검수에서 걸린 장을 다시 그리는 중이면 그 장들(#509). */
+  redraw?: { pages: number[]; done: number } | null;
   log: string[];
+  /* 기계가 일한 시간(초) — 사람을 기다린 시간은 뺀다(#509). */
   elapsed: number;
 }
 
@@ -190,6 +201,8 @@ export interface NhCreateRequest {
   /** 화면 키(romance) 또는 하네스 이름(romance_fantasy) — 서버가 둘 다 받는다. */
   style: string;
   quality: string;
+  /** 어느 언어로 만들지 — ko · en · ja(· zh 는 서버가 ko 로 돌린다). */
+  language: string;
   photos_data: string[];
   photo_keys?: string[];
   agree_ip: boolean;
@@ -214,7 +227,7 @@ export async function uploadDataUrlsAsGuest(dataUrls: string[]): Promise<string[
     const type = blob.type || "image/png";
     const { key, url: putUrl } = await guestPhotoPresign(type);
     const res = await fetch(putUrl, { method: "PUT", headers: { "Content-Type": type }, body: blob });
-    if (!res.ok) throw new Error(`사진을 올리지 못했습니다 (${res.status})`);
+    if (!res.ok) throw new Error(translateNow("사진을 올리지 못했습니다 ({n})", { n: res.status }));
     keys.push(key);
   }
   return keys;
@@ -539,12 +552,14 @@ export function tryCharacter(body: {
   photos_data?: string[];
   /** 프리셋 키 또는 직접 쓴 한 줄. 비우면 무작위. */
   world?: string;
+  /** 카드 글의 언어 — 화면 언어. 서버가 모르는 값(zh 등)은 ko 로 돌린다. */
+  language?: string;
 }): Promise<Character> {
   return post<Character>("/characters/try", body);
 }
 
 /** 직접 만들기(초상 한 장) — 백로그이지만 서버 길은 남아 있다. */
-export function createCharacter(body: { name: string; description: string; photos_data?: string[]; style?: string }) {
+export function createCharacter(body: { name: string; description: string; photos_data?: string[]; style?: string; language?: string }) {
   return post<Character>("/characters", body);
 }
 
@@ -569,4 +584,60 @@ export interface FeedbackTag {
 
 export function readConfig(): Promise<{ feedback_tags: Record<string, FeedbackTag[]>; trash_keep_days?: number }> {
   return call("/config");
+}
+
+/* ---- 사용자 검증 설문 (#471, webtoon/docs/validation.md) --------------------- */
+
+export type SurveyKey = "S0" | "S1" | "S2" | "S3" | "S4" | "S5" | "S6" | "S7" | "S8" | "S10";
+export type SurveyValue = number | string | string[];
+/** 「아니오」 뒤에 더 묻는 것 — 본 답이 아니오일 때만 서버가 받는다 */
+export type SurveyFollowKey = "S3_note" | "S7_why" | "S7_note";
+export type SurveyAnswers = Partial<Record<SurveyKey | SurveyFollowKey, SurveyValue>>;
+
+/** 완성 직후에 무엇을 물을지. 주인이 아니거나 이미 답했으면 빈 목록. */
+export function surveyQuestions(runId: string): Promise<{ questions: SurveyKey[]; own: boolean }> {
+  return call(`/feedback/questions?run=${encodeURIComponent(runId)}`);
+}
+
+export function sendShortSurvey(runId: string, answers: SurveyAnswers, comment = ""): Promise<{ saved: boolean }> {
+  return post("/feedback", { run: runId, answers, comment });
+}
+
+export interface SurveyStatus {
+  /** 전체 설문을 이미 냈나 */
+  done: boolean;
+  /** 끝까지 답하면 주는 크레딧 */
+  reward: number;
+  /** 다시 온 사람 안내를 띄울 차례인가 */
+  prompt: boolean;
+  /** 전체 설문에 물을 질문 — 가장 최근에 완성한 작품에 맞춘 것. 완성한 작품이 없으면 빈 목록 */
+  questions: SurveyKey[];
+}
+
+export function mySurveyStatus(): Promise<SurveyStatus> {
+  return call("/my/feedback");
+}
+
+export function sendFullSurvey(body: {
+  answers: SurveyAnswers; comment?: string; wantsInterview?: boolean; contact?: string;
+}): Promise<{ rewarded: number; balance: number }> {
+  return post("/my/feedback", body);
+}
+
+export interface SurveyRow {
+  id: number;
+  kind: "SHORT" | "FULL";
+  run_id: string | null;
+  user_id: number | null;
+  answers: SurveyAnswers;
+  comment: string | null;
+  wants_interview: boolean;
+  contact: string | null;
+  rewarded: number;
+  created_at: string;
+}
+
+/** 관리자만. 아니면 403. */
+export function adminSurveyRows(limit = 200): Promise<SurveyRow[]> {
+  return call(`/admin/feedback?limit=${limit}`);
 }

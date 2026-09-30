@@ -13,6 +13,7 @@ import { Crumb, MobileTop } from "../../ui/TopNav";
 import ShareMenu from "./ShareMenu";
 import RunStrip from "../../ui/RunStrip";
 import LikeButton from "../../ui/LikeButton";
+import ResultSurvey from "./ResultSurvey";
 import "./i18n";
 import "./Result.css";
 
@@ -45,11 +46,14 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const [suggested, setSuggested] = useState<RunCard[]>([]);
   const [liked, setLiked] = useState(false);
   const [likes, setLikes] = useState<number | null>(null);
+  /* 끝까지 읽었나 — 읽은 뒤에만 짧은 설문(#471)을 띄운다. */
+  const [readEnd, setReadEnd] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setData(null);
     setFailed(null);
+    setReadEnd(false);
     readResult(runId)
       .then((got) => { if (alive) setData(got); })
       .catch((e: Error) => { if (alive) setFailed(e.message || t("작품을 열지 못했습니다")); });
@@ -151,6 +155,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       if (r.height > 100 && r.bottom <= window.innerHeight + 40) {
         readEndSent.current = runId;
         track("read_end", { run: runId, mine, ep, page: data.page_count });
+        setReadEnd(true);
         window.removeEventListener("scroll", onScroll);
       }
     };
@@ -161,6 +166,22 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       if (frame) cancelAnimationFrame(frame);
     };
   }, [data, runId, mine, ep]);
+
+  /* 「컷별로 내려받기」를 켜고 메인 내려받기를 누르면, 합친 파일 대신 장마다
+     따로 내려받는다. 한꺼번에 열면 브라우저가 일부를 막아서 간격을 둔다. */
+  const downloadEachPage = () => {
+    if (!data) return;
+    data.pages.forEach((pg, i) => {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = pageDownloadUrl(runId, pg.no);
+        a.download = `${runId}-${pg.no}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }, i * 350);
+    });
+  };
 
   const toTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -293,7 +314,15 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                     <IconEdit size={18} /> {t("편집실")}
                   </button>
                   <a className="btn btn-w" href={episodeDownloadUrl(runId)} download
-                     onClick={() => track("download_click", { run: runId, kind: "episode" })}>
+                     onClick={(e) => {
+                       if (perPage) {
+                         e.preventDefault();
+                         downloadEachPage();
+                         track("download_click", { run: runId, kind: "page_all" });
+                       } else {
+                         track("download_click", { run: runId, kind: "episode" });
+                       }
+                     }}>
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
                 </div>
@@ -339,6 +368,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 );
               })}
             </div>
+
+            {mine && readEnd && <ResultSurvey key={runId} runId={runId} authenticated={authenticated} go={go} />}
 
             {mine && siblings.length > 0 && (
               <div className="wt-result-others">

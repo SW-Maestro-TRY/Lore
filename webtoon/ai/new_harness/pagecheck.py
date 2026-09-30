@@ -49,6 +49,7 @@ import os
 from pathlib import Path
 
 import llm
+import charcard
 import runmeta
 from llm import story
 
@@ -76,7 +77,10 @@ KINDS = ("장면구현", "연속성", "제자리", "건너뜀", "되돌아감", 
          # 세로 스크롤인데 컷이 가로로 납작한 것. **경고만** 한다 —
          # 프롬프트가 critical 로 못 올리게 막아 두었다(다시 그려도 같은
          # 캔버스라 같은 결과가 나오기 쉽다).
-         "세로형", "웹툰연출")
+         "세로형", "웹툰연출",
+         # #475 — 인물 설명이 장면과 관련 있는데 안 드러남 / 나레이션 문장
+         # 미완결. 둘 다 major 로만 오도록 프롬프트가 막아 두었다.
+         "인물설명", "나레이션완결")
 FLOWS = ("이어짐", "제자리", "건너뜀", "되돌아감")
 
 # 다시 그리게 만드는 흐름. `이어짐` 만 통과다 — 나머지 셋은 독자가 그 장에서
@@ -159,19 +163,44 @@ def max_redraw() -> int:
 
 # -------------------------------------------------------------------- 프롬프트
 
-def people_block(char: dict | None, cast) -> str:
+def spec_lines(spec: dict | None) -> list[str]:
+    """시트 사양(sheet_spec.json) -> 글. 그림은 안 붙이고 글만 준다(#519).
+
+    시트 그림을 셋째 그림으로 붙이면 모델이 무엇을 검수 대상으로 보는지
+    흐려진다. 글로 주면 "머리색·눈색·고정 요소가 그림과 같은가" 를 기준으로
+    삼을 수 있다."""
+    if not spec or not (spec.get("appearance_en") or spec.get("design_details")):
+        return []
+    lines = ["시트 사양 (이 인물의 고정 외형 — 그림이 이것과 다르면 인물 문제다):"]
+    if spec.get("appearance_en"):
+        lines.append(f"  - 외형: {spec['appearance_en']}")
+    details = spec.get("design_details") or []
+    if details:
+        lines.append("  - 고정 요소: " + " / ".join(details))
+    palette = spec.get("color_palette") or {}
+    colors = " / ".join(f"{k} {v}" for k, v in palette.items() if v)
+    if colors:
+        lines.append(f"  - 색: {colors}")
+    return lines
+
+
+def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
     """인물 — "다른 사람이 되었다" 를 판정할 기준.
 
-    캐릭터 시트는 안 붙인다. 이 호출에 붙는 그림은 **직전 장과 지금 장**
+    캐릭터 시트 **그림**은 안 붙인다. 이 호출에 붙는 그림은 **직전 장과 지금 장**
     둘뿐이고, 셋째 장을 더하면 모델이 무엇을 검수 대상으로 보는지 흐려진다.
-    같은 사람인지는 두 그림을 견주면 알 수 있다.
+    같은 사람인지는 두 그림을 견주면 알 수 있다. 대신 시트 **사양 글**은 준다
+    (#519) — 두 그림이 서로 같아도 둘 다 시트와 다르면 잡을 기준이 없었다.
     """
     lines = []
     if char:
         who = _text(char.get("name"))
         desc = _text(char.get("description"))
+        card = charcard.short(char.get("card") or {})     # #458 — detailart 와 같은 한 줄
+        desc = f"{card}. {desc}" if card and desc else (card or desc)
         if who:
             lines.append(f"{who} (주인공) — {desc}" if desc else f"{who} (주인공)")
+    lines += spec_lines(spec)
     for one in cast or []:
         if isinstance(one, dict) and _text(one.get("name")):
             lines.append(f"{one['name']} — {_text(one.get('appearance'))}")
@@ -198,7 +227,8 @@ def scene_texts(direction: dict, scenes=()) -> list[str]:
     for one in scenes or []:
         if not isinstance(one, dict):
             continue
-        body = " ".join(x for x in (_text(one.get("what")), _text(one.get("acting"))) if x)
+        body = " ".join(x for x in (_text(one.get("what")), _text(one.get("acting")),
+                                   _text(one.get("look"))) if x)
         if body:
             out.append(body)
     return out or [x for x in (direction.get("scenes") or []) if _text(x)]
@@ -277,13 +307,13 @@ def scene_block(direction: dict, scene_no: int, total: int, scenes=()) -> str:
 
 def build_prompt(direction: dict, *, scene_no: int, char: dict | None = None,
                  cast=(), has_prev: bool = True, prev_is_cover: bool = False,
-                 next_from: str = "", scenes=()) -> str:
+                 next_from: str = "", scenes=(), spec: dict | None = None) -> str:
     path = PROMPT_DIR / "page_review_prompt"
     if not path.exists():
         raise SystemExit(f"프롬프트가 없습니다: {path}")
     total = len(scene_texts(direction, scenes))
     return (path.read_text(encoding="utf-8")
-            .replace("{people}", people_block(char, cast))
+            .replace("{people}", people_block(char, cast, spec))
             .replace("{story}", story_block(direction, scene_no, scenes))
             .replace("{prev}", prev_block(direction, scene_no, has_prev=has_prev,
                                           prev_is_cover=prev_is_cover,
@@ -296,7 +326,7 @@ def build_prompt(direction: dict, *, scene_no: int, char: dict | None = None,
 OPENS = ("이미", "처음", "없음")
 
 
-def parse(text: str, *, has_prev: bool = True) -> dict:
+def parse(text: str, *, has_prev: bool = True, fixed_narration: bool = False) -> dict:
     """검수 응답(JSON) -> 판정.
 
     `verdict` 는 모델에게 안 묻는다. **흐름과 무게에서 코드가 센다** —
@@ -333,7 +363,14 @@ def parse(text: str, *, has_prev: bool = True) -> dict:
     # 자리). 직전 그림이 없으면 견줄 것이 없어 안 센다.
     opens = _text(obj.get("opens"))
     opens = opens if opens in OPENS else ""
-    if has_prev and opens == "이미":
+    if has_prev and opens == "이미" and fixed_narration:
+        # 나레이션 글을 장면 단계에서 정해 둔 장이다. 다시 그려도 같은
+        # 글자가 찍혀서 고쳐지지 않는다 — 기록만 하고 다시 그리게 하지 않는다.
+        issues.append({
+            "kind": "되돌아감", "severity": "minor",
+            "what": "이 장 나레이션이 앞 장이 이미 말한 상황으로 되돌아가 시작한다 "
+                    "— 나레이션은 장면 글에서 정한 것이라 다시 그려도 안 바뀐다."})
+    elif has_prev and opens == "이미":
         issues.insert(0, {
             "kind": "대사", "severity": "critical",
             "what": "이 장 나레이션이 앞 장에서 이어받지 않고, 앞 장이 이미 말한 "
@@ -428,7 +465,8 @@ def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
     prev = dest / f"page{page_no - 1:02d}.png"
     has_prev = page_no > 1 and prev.exists()
 
-    prompt = build_prompt(direction, scene_no=scene_no, char=char, cast=cast,
+    spec = read_json(run_dir / "sheet_spec.json")
+    prompt = build_prompt(direction, scene_no=scene_no, char=char, cast=cast, spec=spec,
                           has_prev=has_prev, prev_is_cover=prev_is_cover,
                           next_from=next_from, scenes=scenes)
     write_text(dest / f"page{page_no:02d}.review{suffix}_prompt.txt", prompt)
@@ -466,7 +504,9 @@ def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
     write_text(dest / f"page{page_no:02d}.review{suffix}.txt", text)
     meta["page"] = page_no
     try:
-        review = parse(text, has_prev=has_prev)
+        one = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
+        review = parse(text, has_prev=has_prev,
+                       fixed_narration=isinstance(one, dict) and one.get("narration") is not None)
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")

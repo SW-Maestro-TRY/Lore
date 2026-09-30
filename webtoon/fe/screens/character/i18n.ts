@@ -1,5 +1,5 @@
 /* 캐릭터 영역 사전 — 원문(한국어)이 키. Photo · PhotoResult · CharList 의 화면 글과
- * 서버 세계관 프리셋 라벨(story-harness/worlds.json). 카드의 반전·대사·운명·역할은
+ * 서버 세계관 프리셋 라벨(new_harness/worlds.json). 카드의 반전·대사·운명·역할은
  * 서버 생성물이라 여기 없다. */
 import { registerDict, type Dict } from "../../lib/i18n";
 
@@ -156,7 +156,7 @@ const dict: Dict = {
   "이 캐릭터로 웹툰": { en: "Make a webtoon", ja: "このキャラクターでウェブトゥーン", zh: "用这个角色做漫画" },
   "카드 보기": { en: "View card", ja: "カードを見る", zh: "查看卡片" },
 
-  /* ---- 세계관 프리셋 라벨 (story-harness/worlds.json · 11개) ---- */
+  /* ---- 세계관 프리셋 라벨 (new_harness/worlds.json · 11개) ---- */
   "헌터": { en: "Hunters", ja: "ハンター", zh: "猎人" },
   "마법학교": { en: "Magic school", ja: "魔法学校", zh: "魔法学校" },
   "아이돌": { en: "Idols", ja: "アイドル", zh: "偶像" },
@@ -171,6 +171,9 @@ const dict: Dict = {
   "사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.": { en: "With a photo, or with a description alone.", ja: "写真からでも、説明だけでも作れます。", zh: "有照片可以，只有描述也可以。" },
   "사진으로도, 설명만으로도 만들 수 있어요.": { en: "From a photo, or a description alone.", ja: "写真からでも、説明だけでも。", zh: "用照片，或只用描述。" },
   "로그인하면 크레딧으로 이어서": { en: "Sign in to keep going with credits", ja: "ログインするとクレジットで続けられます", zh: "登录后可用积分继续" },
+
+  /* ---- 서버가 보내는 실패 한 줄 (CharacterService.draw) ---- */
+  "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.": { en: "Couldn't draw the character. Please try again.", ja: "キャラクターを描けませんでした。もう一度お試しください。", zh: "没能画出角色，请重试。" },
 };
 
 registerDict(dict);

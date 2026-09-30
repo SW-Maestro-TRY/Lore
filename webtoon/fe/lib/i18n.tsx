@@ -13,7 +13,10 @@
  * 서버가 만든 글(이야기 후보·카드의 반전·운명·대사)은 AI 가 한국어로 쓴
  * 것이라 여기서 번역하지 않는다 — 그건 생성 언어의 문제다.
  *
- * 고른 언어는 localStorage `lore_lang` 에 남고, 처음엔 브라우저 언어를 본다. */
+ * 고른 언어는 localStorage `lore_lang` 에 남는다. 처음 고르는 순서는 주소의
+ * `/ko`·`/en`·`/ja` (apps/web/middleware.ts 가 이 자리를 벗겨 내도 주소창·
+ * `location.pathname` 에는 그대로 남는다) → 저장된 값 → 브라우저 언어다. 주소에
+ * 언어가 박혀 있으면 그 값을 저장도 해서, 다음에 언어 없는 주소로 옮겨도 유지된다. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 export type Lang = "ko" | "en" | "ja" | "zh";
@@ -31,13 +34,25 @@ const registry: Dict[] = [];
 
 /** 영역의 사전을 올린다. 모듈이 읽힐 때 한 번 부르면 된다(중복은 무시). */
 export function registerDict(dict: Dict): void {
-  if (!registry.includes(dict)) registry.push(dict);
+  if (!registry.includes(dict)) {
+    registry.push(dict);
+    patterns = null;
+  }
 }
 
 const KEY = "lore_lang";
 
+/** 주소 맨 앞 자리가 언어 코드면 그 값. rewrite 뒤에도 브라우저 주소창은 그대로라 통한다. */
+function urlLang(): Lang | null {
+  if (typeof window === "undefined") return null;
+  const seg = window.location.pathname.split("/")[1];
+  return LANGS.some((l) => l.key === seg) ? (seg as Lang) : null;
+}
+
 function initialLang(): Lang {
   if (typeof window === "undefined") return "ko";
+  const fromUrl = urlLang();
+  if (fromUrl) return fromUrl;
   try {
     const saved = localStorage.getItem(KEY) as Lang | null;
     if (saved && LANGS.some((l) => l.key === saved)) return saved;
@@ -51,13 +66,60 @@ function initialLang(): Lang {
   return "ko";
 }
 
+/* 서버가 숫자를 끼워 보낸 문구(「3번째 사진을 읽지 못했습니다」)는 원문이 매번 달라
+ * 사전 키와 글자가 안 맞는다. 사전 키에 `{n}` 자리가 있으면 그 자리를 아무 글자로
+ * 보고 맞춰 본 뒤, 잡힌 값을 번역문의 같은 자리에 넣는다. 정확히 맞는 키가 없을
+ * 때만 본다. */
+type Pattern = { re: RegExp; names: string[]; entry: Dict[string] };
+let patterns: Pattern[] | null = null;
+
+function patternsOf(): Pattern[] {
+  if (patterns) return patterns;
+  const out: Pattern[] = [];
+  for (const dict of registry) {
+    for (const [src, entry] of Object.entries(dict)) {
+      if (!/\{\w+\}/.test(src)) continue;
+      const names: string[] = [];
+      const body = src.split(/(\{\w+\})/).map((part) => {
+        const m = /^\{(\w+)\}$/.exec(part);
+        if (m) {
+          names.push(m[1]);
+          return "(.+?)";
+        }
+        return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }).join("");
+      out.push({ re: new RegExp(`^${body}$`), names, entry });
+    }
+  }
+  patterns = out;
+  return out;
+}
+
 function lookup(lang: Lang, src: string): string {
   if (lang === "ko") return src;
   for (let i = registry.length - 1; i >= 0; i--) {
     const hit = registry[i][src]?.[lang];
     if (hit) return hit;
   }
+  for (const p of patternsOf()) {
+    const target = p.entry[lang];
+    if (!target) continue;
+    const m = p.re.exec(src);
+    if (!m) continue;
+    const vars: Record<string, string> = {};
+    p.names.forEach((n, i) => { vars[n] = m[i + 1]; });
+    return fill(target, vars);
+  }
   return src;
+}
+
+/* 지금 화면 언어. 훅을 못 쓰는 자리(api 의 오류 문구, DOM 을 직접 그리는 코드)가
+ * 읽는다. LangProvider 가 언어를 정하거나 바꿀 때마다 맞춰 둔다. */
+let current: Lang = "ko";
+
+/** 훅 밖에서 쓰는 t(). 서버가 보낸 한국어 문구를 지금 화면 언어로 옮길 때 쓴다. */
+export function translateNow(src: string, vars?: Record<string, string | number>): string {
+  return fill(lookup(current, src), vars);
 }
 
 /** 영문 번역. 행동 기록(track)은 한글 값을 버리므로 화면 이름을 기호로 바꿀 때 쓴다. 없으면 원문. */
@@ -85,14 +147,31 @@ export function LangProvider({ children }: { children: ReactNode }) {
      처음부터 브라우저 값을 읽으면 서버 HTML 과 달라 hydration 이 어긋난다. */
   const [lang, setLangState] = useState<Lang>("ko");
   useEffect(() => {
-    setLangState(initialLang());
+    const l = initialLang();
+    current = l;
+    setLangState(l);
+    // 주소가 명시한 언어는 저장도 한다 — 다음에 언어 없는 주소로 옮겨도 유지되게.
+    if (urlLang()) {
+      try {
+        localStorage.setItem(KEY, l);
+      } catch {
+        /* 못 남겨도 이번 방문은 이미 반영됐다 */
+      }
+    }
   }, []);
   const setLang = useCallback((l: Lang) => {
+    current = l;
     setLangState(l);
     try {
       localStorage.setItem(KEY, l);
     } catch {
       /* 못 남겨도 이번 방문은 바뀐다 */
+    }
+    // 홈(랜딩)은 이 localStorage 를 못 읽고 lore_locale 쿠키만 본다(apps/web/middleware.ts).
+    // 여기서 같이 남겨야 마이페이지에서 바꾼 언어가 홈에도 반영된다. zh 는 홈이 아직
+    // 모르는 언어라 쿠키를 남기지 않는다 — 홈은 지금 값(ko 기본)을 그대로 쓴다.
+    if (l === "ko" || l === "en" || l === "ja") {
+      document.cookie = `lore_locale=${l}; path=/; samesite=lax`;
     }
   }, []);
   useEffect(() => {

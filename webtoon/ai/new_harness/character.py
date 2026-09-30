@@ -29,7 +29,7 @@
     python character.py --panel --world romance_novel --out /어디/panel.png \
         [--name 몽이] [--description "..."] [--photo a.png]
 
-사진·설명·이름이 **전부 없어도 된다.** 세계관(--world)은 story-harness 의
+사진·설명·이름이 **전부 없어도 된다.** 세계관(--world)은 worlds.json 의
 프리셋 키이거나 사람이 직접 쓴 한 줄이고, 그것도 없으면 프리셋에서 무작위로
 고른다. 결과는 위 두 갈래의 "표지 같은 그림" 이 아니라 **그 세계관 웹툰의 한
 컷**(세로 2:3, 글자 없음)과 카드 글(반전 한 줄 · 대사 두세 줄 · 운명 두세 줄)이다.
@@ -63,7 +63,9 @@ sys.path.insert(0, str(HERE))
 
 import imagegen                                      # noqa: E402
 import imageprompt                                   # noqa: E402
+import lang as lang_mod                              # noqa: E402
 import llm                                           # noqa: E402
+import tracing                                       # noqa: E402
 import runmeta                                       # noqa: E402
 import sheet as sheetmod                             # noqa: E402
 
@@ -134,11 +136,12 @@ def write_input(run_dir: Path, args, photos: list[Path]) -> None:
         "style": args.style,
         "panel": bool(args.panel),
         "world": args.world if args.panel else None,
+        "lang": args.lang,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def spec_of(name: str, description: str, photos: list[Path],
-            run_dir: Path | None = None) -> dict:
+            run_dir: Path | None = None, lang: str = "ko") -> dict:
     """외모를 글로 적는다. 사진이 있으면 읽고, 없으면 설명만 본다.
 
     사진이 여러 장이면 같은 사람의 다른 각도·표정으로 보고 하나의 외모로
@@ -149,7 +152,8 @@ def spec_of(name: str, description: str, photos: list[Path],
     if name.strip():
         lines.append(f"캐릭터 이름: {name.strip()}")
     else:
-        lines.append("캐릭터 이름: (없음 — 설명에 어울리는 한국어 이름을 네가 짓는다)")
+        word = lang_mod.LANG_NAMES.get(lang, "한국어")
+        lines.append(f"캐릭터 이름: (없음 — 설명에 어울리는 {word} 이름을 네가 짓는다)")
     if description.strip():
         lines += ["", "캐릭터 설명:", description.strip()]
     if photos:
@@ -233,7 +237,7 @@ def portrait_prompt(spec: dict, style_text: str) -> str:
 
 # ---- 한 컷 (--panel) --------------------------------------------------------
 
-WORLDS_FILE = HERE.parent / "story-harness" / "worlds.json"
+WORLDS_FILE = HERE / "worlds.json"
 
 # 그림체 후보. 사양을 쓰는 모델이 세계관을 보고 하나 고른다 — 세계관을 사람이
 # 직접 쓸 수 있어서 코드의 고정 표로는 다 못 잇는다. 여기 적는 한 줄은
@@ -322,7 +326,7 @@ def resolve_world(world: str) -> tuple[str, str, str]:
     return "", "", ""
 
 
-def parse_panel_spec(text: str) -> dict:
+def parse_panel_spec(text: str, lang: str = "ko") -> dict:
     from llm import story
     obj = story.extract_json(text)
     if not isinstance(obj, dict):
@@ -332,8 +336,10 @@ def parse_panel_spec(text: str) -> dict:
         fate = [fate]
     style = str(obj.get("style") or "").strip()
     return {
+        "lang": lang,
         "name": str(obj.get("name") or "").strip(),
-        "species": str(obj.get("species") or "사람").strip() or "사람",
+        # 빈 species 를 「사람」으로 채우는 것은 한국어 카드만 — 다른 언어 카드에 한글이 뜬다.
+        "species": str(obj.get("species") or "").strip() or ("사람" if lang == "ko" else ""),
         "species_en": str(obj.get("species_en") or "").strip(),
         "world_label": str(obj.get("world_label") or "").strip(),
         "genre_word": str(obj.get("genre_word") or "").strip(),
@@ -374,6 +380,15 @@ def dialogue_text(lines: list[dict]) -> str:
     return "\n".join(f"{ln['who']}: {ln['text']}" if ln["who"] else ln["text"] for ln in lines)
 
 
+def is_person(spec: dict) -> bool:
+    """사람인가. 한국어 카드는 species 가 「사람」인지로 본다(예전 그대로). 다른 언어면
+    species 가 그 언어로 적히므로 species_en 이 비었는지로 본다 — 프롬프트가 사람일
+    때만 비우라고 한다(lang.card_instruction)."""
+    if spec.get("lang", "ko") == "ko":
+        return spec["species"] == "사람"
+    return not spec["species_en"]
+
+
 def gate_panel_spec(spec: dict) -> list[str]:
     """그리기 전에 본다. 비면 그 자리를 모델이 평균값으로 채운다 — 반전이 없는
     한 컷은 돈만 쓰고 끝난다."""
@@ -390,7 +405,7 @@ def gate_panel_spec(spec: dict) -> list[str]:
     for key in ("appearance_en", "scene_en"):
         if spec[key] and sheetmod.HANGUL_RE.search(spec[key]):
             bad.append(f"{key} 에 한글이 섞여 있습니다. 이미지 모델에 그대로 들어갑니다.")
-    if spec["species"] != "사람":
+    if not is_person(spec):
         if not spec["species_en"]:
             bad.append("species 가 사람이 아닌데 species_en 이 없습니다.")
         elif spec["species_en"].lower() not in spec["appearance_en"].lower():
@@ -401,7 +416,7 @@ def gate_panel_spec(spec: dict) -> list[str]:
 def panel_spec_of(name: str, description: str, photos: list[Path],
                   world_label: str, world_text: str,
                   tier: str | None = None, lucky: bool | None = None,
-                  run_dir: Path | None = None) -> tuple[dict, dict]:
+                  run_dir: Path | None = None, lang: str = "ko") -> tuple[dict, dict]:
     lines = ["# 이번 입력", ""]
     lines.append(f"이름: {name.strip()}" if name.strip()
                  else "이름: (없음 — 네가 짓는다)")
@@ -435,6 +450,10 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
     lines += ["", "그림체 목록:"]
     lines += [f"  - {k}: {v}" for k, v in PANEL_STYLES.items()]
     prompt = load_prompt("panel_prompt") + "\n\n---\n\n" + "\n".join(lines)
+    # 카드 글의 언어. ko 면 아무것도 안 붙인다 — 예전 프롬프트와 글자 하나 안 다르다.
+    card_lang = lang_mod.card_instruction(lang)
+    if card_lang:
+        prompt += "\n\n---\n\n" + card_lang
 
     call = llm.Call("SHEET")
     log(f"[한 컷] {call.describe()} 로 사양을 적습니다…")
@@ -451,7 +470,7 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
     if run_dir is not None:
         record(run_dir, meta)
     metas = [meta]
-    spec = parse_panel_spec(text)
+    spec = parse_panel_spec(text, lang)
     spec["role_tier"] = tier
     spec["lucky"] = bool(lucky)
     bad = gate_panel_spec(spec)
@@ -484,7 +503,7 @@ def panel_prompt(spec: dict, style_text: str) -> str:
         "[CHARACTER]",
         f"  {spec['appearance_en']}",
     ]
-    if spec["species"] != "사람" and spec["species_en"]:
+    if not is_person(spec) and spec["species_en"]:
         sp = spec["species_en"]
         parts += [
             f"  This character is a real {sp}, drawn as a {sp} with its actual body and "
@@ -507,7 +526,8 @@ def run_panel(args) -> int:
     if world_label:
         log(f"[한 컷] 세계관: {world_label}" + (f" ({world_key})" if world_key else ""))
     spec, spec_metas = panel_spec_of(args.name, args.description, photos,
-                                     world_label, world_text, run_dir=run_dir)
+                                     world_label, world_text, run_dir=run_dir,
+                                     lang=args.lang)
     style_text = imageprompt.load_style(args.style or spec["style"])
     prompt = panel_prompt(spec, style_text)
 
@@ -557,8 +577,10 @@ def main() -> int:
     ap.add_argument("--panel", action="store_true",
                     help="「캐릭터 만들어보기」 — 그 세계관 웹툰의 한 컷과 카드 글")
     ap.add_argument("--world", default="",
-                    help="--panel 일 때 세계관: story-harness 프리셋 키 또는 직접 쓴 한 줄. "
+                    help="--panel 일 때 세계관: worlds.json 프리셋 키 또는 직접 쓴 한 줄. "
                          "비우면 프리셋에서 무작위")
+    ap.add_argument("--lang", default="ko", choices=sorted(lang_mod.LANG_NAMES),
+                    help="카드 글·지어 주는 이름의 언어(run.py --lang 과 같은 코드). 기본 ko")
     args = ap.parse_args()
 
     if args.panel:
@@ -570,7 +592,8 @@ def main() -> int:
 
     run_dir = args.out.parent
     write_input(run_dir, args, photos)
-    spec, spec_meta = spec_of(args.name, args.description, photos, run_dir=run_dir)
+    spec, spec_meta = spec_of(args.name, args.description, photos, run_dir=run_dir,
+                              lang=args.lang)
 
     # **그림체는 이름이 아니라 문구를 넘긴다.** 받은 값이 그대로 STYLE 칸에
     # 실린다 — 이름을 넘기면 "romance" 다섯 글자가 그림체 설명 전부가 되고,
@@ -612,4 +635,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    with tracing.run_span("character.py", sys.argv[1:]):
+        code = main()
+    raise SystemExit(code)

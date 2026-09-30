@@ -3,6 +3,7 @@ package com.lore.webtoon.character;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.job.AiHarnessResources;
+import com.lore.webtoon.job.WebtoonLanguage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,10 +60,9 @@ public class CharacterMaker {
         return harnessDir.resolve("prompt").resolve("random_pool.json");
     }
 
-    /** 세계관 프리셋 파일. new_harness 옆에 story-harness 가 같이 풀려 있다. */
+    /** 세계관 프리셋 파일. new_harness 안에 있다. */
     public Path worldsFile() {
-        return harnessDir.getParent() == null ? null
-                : harnessDir.getParent().resolve("story-harness").resolve("worlds.json");
+        return harnessDir.resolve("worlds.json");
     }
 
     /**
@@ -82,9 +82,9 @@ public class CharacterMaker {
      *              각도·표정). 비어 있으면 이름·설명만으로 — <b>그 길이 이
      *              기능의 핵심이다</b>(자캐 그림이 없는 사람)
      */
-    public Made make(String name, String description, List<Path> photos, String style, Path out)
-            throws IOException, InterruptedException {
-        return run(name, description, photos, style, out, null);
+    public Made make(String name, String description, List<Path> photos, String style, Path out,
+                     String language) throws IOException, InterruptedException {
+        return run(name, description, photos, style, out, null, language);
     }
 
     /**
@@ -94,18 +94,22 @@ public class CharacterMaker {
      * 직접 쓴 한 줄이고, 비우면 하네스가 프리셋에서 무작위로 고른다. 규칙은
      * 전부 하네스({@code character.py --panel} · {@code prompt/panel_prompt})에
      * 있다 — 자바는 넘기고 받기만 한다.
+     *
+     * @param language 카드 글(반전·대사·운명)과 지어 주는 이름의 언어. 웹툰 만들기와
+     *                 같은 코드({@link WebtoonLanguage})
      */
     public Made makePanel(String name, String description, List<Path> photos, String world,
-                          Path out) throws IOException, InterruptedException {
-        return run(name, description, photos, null, out, world == null ? "" : world);
+                          Path out, String language) throws IOException, InterruptedException {
+        return run(name, description, photos, null, out, world == null ? "" : world, language);
     }
 
     private Made run(String name, String description, List<Path> photos, String style, Path out,
-                     String world) throws IOException, InterruptedException {
+                     String world, String language) throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>(List.of(
                 python, "-u", "character.py",
                 "--name", name == null ? "" : name,
                 "--description", description == null ? "" : description,
+                "--lang", WebtoonLanguage.normalize(language),
                 "--out", out.toString()));
         for (Path photo : photos) {
             cmd.add("--photo");

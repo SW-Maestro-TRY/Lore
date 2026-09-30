@@ -17,7 +17,6 @@ webtoon/
 ```
 webtoon/ai/
   new_harness/      지금 제품이 쓰는 이야기·그림 파이프라인
-  story-harness/    new_harness 가 import 하는 파일만 남은 라이브러리 (완성본 취급)
   webtoon-harness/  new_harness·upload 가 빌려 쓰는 연출·단가표·이미지 제공자 (완성본 취급)
   upload/           다 그린 그림을 창고로 올리는 걸음
   assets/           기본 캐릭터 견본(samples) · 마스코트(lou) · 예시 작품(examples)
@@ -69,6 +68,8 @@ webtoon/ai/
 | [images.md](docs/images.md) | 화면에 그림 넣는 법 | 정적 그림은 원본 폴더에 넣음(`apps/web/public/static/` 금지) · 예시 작품·예시 캐릭터는 부팅 때 한 번 심고 그 뒤로는 DB 가 원본 · 온보딩 목업 상수 · 둘러보기 공개 · 예시 `run_id` 하드코딩 자리 |
 | [full-review-design.md](docs/full-review-design.md) | 완성된 화 전체를 다시 읽는 검수 설계 | 장 단위 검수로 못 잡는 장거리 문제 · 판정(`fullreview.py`)과 재생성 루프(`JobRunner.runFullReviewLoop`) 구현 상태 |
 | [mentoring-followup-2026-09-19.md](docs/mentoring-followup-2026-09-19.md) | 0911 멘토링 후속 과제 진행 기록 | 과제 11개별로 한 것 → 실측 결과 → 남은 것 |
+| [brand/](docs/brand/README.md) | 서비스를 뭐라고 소개하나 | 한 줄 정의·가치·핵심 경험 · 메인 타겟과 유입 타겟 · 문제 인식 · 문장 층위와 소개서 순서 · 지금 되는 기능과 실측 시간. 소개서·랜딩·광고 문구를 쓸 때 먼저 읽음 |
+| [validation.md](docs/validation.md) | 사용자 검증 설계 | 이번 스프린트 가설(H1~H4)과 판단 기준 · 사용자 여정 단계별로 세는 이벤트와 물어볼 것 · 완성 직후 설문(S1~S6)과 인터뷰 질문 · 메시지별 UTM 링크 규칙 · 결과별 다음 행동. 사용자를 받기 전과 결과를 판정할 때 읽음 |
 | [safety.md](docs/safety.md) | 콘텐츠 안전 — 무엇을 막고 어디서 막나 | 금지 분류표 · 입력 글은 서버가 moderation 으로 거름(무료) · 사진·생성 글은 아직 안 봄 · 검사 서비스가 죽었을 때 기본 통과 · 사용자 문구 · 미성년 · 신고 절차 |
 | [legal/](docs/legal/) | 이용약관·개인정보처리방침 작업본 | 법률 검토 전 초안 · 판 번호는 `user_agreement.version` 과 같아야 함 · 게시본은 `게시본-뽑기.py` 로 뽑음(작업본을 화면에 직접 쓰지 않음) |
 | [backend.md](docs/backend.md) | **낡은 문서** | serve.py 프록시 시절 설명입니다. 그 구조는 2026-09-12에 지웠으니 지금 백엔드 설명으로 읽지 않습니다 |

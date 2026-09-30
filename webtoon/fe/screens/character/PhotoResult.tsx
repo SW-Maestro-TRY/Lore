@@ -4,7 +4,7 @@
  * 그림에는 글자가 없다 — 세계관 딱지와 말풍선은 화면이 얹는다. */
 import { useEffect, useRef, useState } from "react";
 import { readCharacter, readSharedCard, type Character } from "../../lib/api";
-import { useT } from "../../lib/i18n";
+import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { copyLink, kakaoAvailable, shareKakao, shareNative } from "../../lib/share";
 import { IconClose, IconDownload, IconRetry, IconShare } from "../../ui/Icons";
@@ -25,6 +25,7 @@ const TIER_LABEL: Record<string, string> = { "중심": "주연", "곁": "조연"
 
 export default function PhotoResult({ id, shared, go, authenticated }: { id: string; shared: boolean; go: Go; authenticated: boolean }) {
   const t = useT();
+  const { lang } = useLang();
   const [ch, setCh] = useState<Character | null>(null);
   const [loadErr, setLoadErr] = useState("");
   const [saved, setSaved] = useState(false);
@@ -140,7 +141,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       ? draft
       : { name: ch.name, description: ch.description, world: card?.world || "", photo: draft?.photo };
     try {
-      const c = await runTry(d);
+      const c = await runTry(d, lang);
       go("card", { id: c.id });
     } catch (e) {
       if (isLimitError(e)) {
@@ -171,7 +172,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
         </>
       ) : ch?.status === "error" ? (
         <div className="wt-ch-res-wait">
-          <span className="err">{ch.error || t("못 그렸어요")}</span>
+          <span className="err">{ch.error ? t(ch.error) : t("못 그렸어요")}</span>
           {!shared && (
             <button type="button" className="btn btn-w btn-sm" disabled={busy !== null} onClick={() => void onAgain()}>
               <IconRetry size={16} /> {t("다시 뽑기")}
@@ -220,7 +221,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
         <div className="crumb"><span>{t("캐릭터")}</span><i>›</i><b>{t("웹툰 한 컷")}</b><i>›</i><span>{t("1화")}</span></div>
         <div className="wt-ch-res-body">
           {ch ? (
-            <h2 className="wt-ch-res-mtitle">{card?.twist || ch.name}</h2>
+            <h2 className="wt-ch-res-mtitle">{card?.twist || t(ch.name)}</h2>
           ) : (
             <div className="skeleton wt-ch-res-mtitle" style={{ height: 28, borderRadius: 8 }} />
           )}
@@ -228,7 +229,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
           <div className="wt-ch-res-side">
             {ch ? (
               <>
-                <h2>{card?.twist || ch.name}</h2>
+                <h2>{card?.twist || t(ch.name)}</h2>
                 {card?.role && (
                   <b className="wt-ch-res-role">
                     {card.role}
@@ -236,7 +237,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
                   </b>
                 )}
                 <span className="muted wt-ch-res-who">
-                  {[ch.name, card?.genre].filter(Boolean).join(" · ")}
+                  {[t(ch.name), card?.genre].filter(Boolean).join(" · ")}
                 </span>
                 {!shared && ch.share_visits != null && ch.share_visits > 0 && (
                   <span className="muted wt-ch-res-share">

@@ -49,8 +49,9 @@
 
 ## 이야기를 굴리는 다섯 (2026-09-12 추가)
 
-여기에 점수 다섯이 더 붙는다 — `shift`(변한다) · `stakes`(커진다) ·
-`place`(놓인다) · `react`(어긋난다) · `open`(안 닫힌다). `story_prompt` 의
+여기에 점수 여섯이 더 붙는다 — `shift`(변한다) · `stakes`(커진다) ·
+`place`(놓인다) · `react`(어긋난다) · `open`(안 닫힌다) · `agency`(주인공이 바꾼다,
+#515 — 판을 바꾼 행동을 주인공이 했는가). `story_prompt` 의
 「이야기는 문제가 달라지는 것이다」와 일대일이라, 만들 때 요구한 것을 볼 때도
 그대로 쓴다.
 
@@ -90,6 +91,7 @@ import os
 from pathlib import Path
 
 import llm
+import charcard
 from llm import story
 
 HERE = Path(__file__).resolve().parent
@@ -117,10 +119,13 @@ SEVERITY = ("critical", "major", "minor")
 # **아무것도 막지 않는다.** 재미는 취향이라 셀 수 없지만 재미가 나오는 자리가
 # 비어 있는지는 셀 수 있어서, 그것만 세어 기록에 남긴다. 사람이 고르는 화면에
 # 붙여 보고, 이 점수가 사람 눈과 맞는지 확인된 뒤에 반려를 붙일 자리다.
-SCORES = ("shift", "stakes", "place", "react", "open")
+SCORES = ("shift", "stakes", "place", "react", "open", "agency")
 SCORE_LABEL = {"shift": "변한다", "stakes": "커진다", "place": "놓인다",
-               "react": "어긋난다", "open": "안 닫힌다"}
-KINDS = ("인과", "지식", "신규", "연속성", "인물", "한장", "마무리")
+               "react": "어긋난다", "open": "안 닫힌다", "agency": "주인공이 바꾼다"}
+# `줄거리` 는 사람이 줄거리를 직접 적었을 때만 나온다(#457) — 적힌 것과
+# 부딪히거나 적힌 것이 뒷전이 된 후보. critical 이면 `verdict` 가 「주의」가 되어
+# 서버의 자동 고르기(`JobRunner.autoPick`)가 그 후보를 거른다.
+KINDS = ("인과", "지식", "신규", "연속성", "인물", "한장", "마무리", "줄거리")
 
 # `ending` 에서 "비었다" 를 뜻하는 값. 모델이 프롬프트가 시킨 대로 적으면
 # 이 낱말들이 온다 — 코드가 이것을 보고 직접 문제를 세운다(아래 _ending).
@@ -203,13 +208,22 @@ def character_block(char: dict | None) -> str:
     lines = ["## 캐릭터 정보", ""]
     if _text(char.get("name")):
         lines.append(f"이름: {_text(char['name'])}")
+    # 고른 캐릭터 카드(#458) — 카드와 원래 설명이 다르면 카드가 그 인물이다.
+    if charcard.short(char.get("card") or {}):
+        lines.append(f"고른 캐릭터 카드: {charcard.short(char['card'])}")
     if _text(char.get("description")):
-        lines.append(f"설명: {_text(char['description'])}")
+        lines.append(f"{'사용자가 처음 적은 설명' if char.get('card') else '설명'}: "
+                     f"{_text(char['description'])}")
     if _text(char.get("genre")):
         lines.append(f"장르: {_text(char['genre'])}")
     for k, v in (char.get("fields") or {}).items():
         if _text(v):
             lines.append(f"- {k}: {_text(v)}")
+    # 사람이 「어떤 이야기를 볼까요?」에 적은 것 — 있을 때만 붙는다(#457).
+    # 없으면 이 칸이 아예 없어서, 프롬프트의 「사용자가 적은 이야기」 절이
+    # 볼 것이 없고 예전 판정과 같다.
+    if _text(char.get("story")):
+        lines += ["", "사용자가 적은 이야기:", f"> {_text(char['story'])}"]
     return "\n".join(lines)
 
 
@@ -267,6 +281,33 @@ def build_prompt(char: dict | None, directions: list[dict]) -> str:
 
 
 # ------------------------------------------------------------------------ 파싱
+
+def _conflicts(one: dict, issues: list[dict]) -> list[dict]:
+    """`conflicts` 칸 -> 코드가 세운 문제 (#502).
+
+    "같은 일을 두 가지로 말한 것" 을 `issues` 에 적으라고만 해서는 안 잡혔다 —
+    실측(2026-09-30, work/lorebook-check): 소개 안의 "길을 잘못 들었는데 그 문이
+    지름길", 캐릭터 설명(데뷔조)과 후보(데뷔 7년 차)의 시점 차이가 전부 통과로
+    나갔다. 그래서 `ending` 처럼 따로 칸을 두고 채우게 한 뒤 여기서 옮긴다.
+    칸이 없으면(옛 판정) 아무것도 더하지 않는다.
+    """
+    raw = one.get("conflicts")
+    if not isinstance(raw, list):
+        return []
+    made = []
+    seen = {_text(i.get("what")) for i in issues}
+    for c in raw:
+        if not isinstance(c, dict):
+            continue
+        a, b, what = _text(c.get("a")), _text(c.get("b")), _text(c.get("what"))
+        if not (a or b) or what in seen:
+            continue
+        seen.add(what)
+        made.append({"scene": 0, "kind": "인과", "severity": "major",
+                     "what": what or "같은 일을 두 가지로 말한다",
+                     "where": " ↔ ".join(x for x in (a, b) if x)})
+    return made
+
 
 def _ending(one: dict, last_scene: int) -> tuple[dict, list[dict]]:
     """`ending` 칸 -> (읽은 값, 코드가 세운 문제).
@@ -428,6 +469,7 @@ def parse(text: str, expect: list[int] | None = None) -> dict:
                 last_scene = max(last_scene, _int(sc.get("id")))
         ending, forced = _ending(one, last_scene)
         issues += forced
+        issues += _conflicts(one, issues)
 
         issues.sort(key=lambda i: (SEVERITY.index(i["severity"]), i["scene"]))
         counts = {s: sum(1 for i in issues if i["severity"] == s) for s in SEVERITY}

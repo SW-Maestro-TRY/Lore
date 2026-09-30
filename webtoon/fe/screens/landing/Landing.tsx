@@ -179,7 +179,7 @@ export default function Landing({ go }: { go: Go }) {
                      aria-hidden={i >= runs.length} tabIndex={i >= runs.length ? -1 : 0}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img className="cover wt-landing-cover" src={api.coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1)} alt={t("{title} 표지", { title: titleOf(r) })} />
-                    <figcaption><b>{titleOf(r)}</b><span className="dim">{r.genre}</span></figcaption>
+                    <figcaption><b>{titleOf(r)}</b><span className="dim">{t(r.genre)}</span></figcaption>
                   </a>
                 </figure>
               ))}
@@ -361,11 +361,11 @@ export default function Landing({ go }: { go: Go }) {
             운영 주체는 약관 제1조의 「TRY팀」, 연락처는 약관·처리방침에 적힌 주소와 같다.
             사업자등록번호·통신판매업 신고번호는 등록되면 여기 한 줄 더 붙인다. */}
         <div className="dim wt-landing-biz">
-          <span>{t("운영")} TRY팀</span>
+          <span>{t("운영")} {t("TRY팀")}</span>
           <span>{t("문의")} <a href="mailto:lightbluue6@gmail.com">lightbluue6@gmail.com</a></span>
           <span>{t("AI SW MAESTRO 17기 프로젝트")}</span>
         </div>
-        <span className="dim wt-landing-copy">© 2026 LORE · TRY팀</span>
+        <span className="dim wt-landing-copy">{t("© 2026 LORE · TRY팀")}</span>
       </footer>
     </div>
   );

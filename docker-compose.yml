@@ -96,6 +96,9 @@ services:
       ZZAL_GENERATION_REAL: ${ZZAL_GENERATION_REAL:-false}
       # 파이썬 후처리 실제 실행(돈 안 남). 슬림 JRE 이미지엔 numpy/scipy/PIL 이 없어 켜면 기동이 막힌다 → 기본 꺼짐.
       ZZAL_REAL_POSTPROCESS: ${ZZAL_REAL_POSTPROCESS:-false}
+      # 하네스 모델 호출 추적(Logfire, webtoon/ai/new_harness/tracing.py). 파이썬이 물려받는다.
+      # 비우면 추적이 꺼진 채로 똑같이 돈다. 켜면 캐릭터 설명·사진이 프롬프트째 Logfire 로 나간다.
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
       # new_harness 가 쓸 텍스트 모델 프로바이더/스토리 축 기능 스위치(llm.py·run.py).
       # 안 주면 llm.py 기본값(gemini)으로 붙는데 dev 는 OpenAI 키만 있어서 그대로 두면
       # 실패한다 — 비워 둬도 여기 통로만 열고, 실제 값은 .env 에서 openai 로 채운다.
@@ -116,6 +119,12 @@ services:
       MANAGEMENT_HEALTH_MAIL_ENABLED: "false"
     ports:
       - "8080:8080"
+    volumes:
+      # 웹툰 생성 파이프라인의 작업 폴더(run · characters · jobs). 배포는 컨테이너를 새로
+      # 만들어서(deploy-dev.sh 의 up --build) 볼륨이 없으면 배포마다 통째로 사라진다 —
+      # 이야기를 고르던 작업이 배포 뒤에 이어 갈 파일을 잃는다(#500·#503). 그림 원본은
+      # S3 에 올린 뒤 RunFiles 가 치우고 글·JSON 만 남는다.
+      - webtoonwork:/app/webtoon/ai/work
 
   # ── 프론트엔드 (Next.js standalone) ──────────────────────────────
   web:
@@ -139,3 +148,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  webtoonwork:     # 웹툰 생성 작업 폴더(app 의 /app/webtoon/ai/work) — 배포해도 남는다

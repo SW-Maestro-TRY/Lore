@@ -93,7 +93,8 @@ public class CharacterController {
             @RequestHeader(value = UID_HEADER, required = false) String uid) {
         Long me = CreditGate.currentUser();
         WebtoonCharacter made = characters.create(
-                me, uid, form.name(), form.description(), form.photosData(), form.style());
+                me, uid, form.name(), form.description(), form.photosData(), form.style(),
+                form.language());
         return view(made, me, who.uidsOf(me, uid));
     }
 
@@ -110,9 +111,9 @@ public class CharacterController {
             @RequestBody(required = false) TryRequest form,
             @RequestHeader(value = UID_HEADER, required = false) String uid) {
         Long me = CreditGate.currentUser();
-        TryRequest f = form == null ? new TryRequest(null, null, null, null) : form;
+        TryRequest f = form == null ? new TryRequest(null, null, null, null, null) : form;
         WebtoonCharacter made = characters.tryOut(
-                me, uid, f.name(), f.description(), f.photosData(), f.world());
+                me, uid, f.name(), f.description(), f.photosData(), f.world(), f.language());
         return view(made, me, who.uidsOf(me, uid));
     }
 
@@ -293,19 +294,19 @@ public class CharacterController {
                 .body(Map.of("error", e.getMessage()));
     }
 
-    /** 「캐릭터 만들어보기」 입력. 전부 비어도 된다. */
+    /** 「캐릭터 만들어보기」 입력. 전부 비어도 된다. language 는 화면 언어(ko·en·ja) — 안 오면 ko. */
     public record TryRequest(String name, String description,
                              @com.fasterxml.jackson.annotation.JsonProperty("photos_data")
                              @com.fasterxml.jackson.annotation.JsonAlias("photosData")
                              List<String> photosData,
-                             String world) {
+                             String world, String language) {
     }
 
     public record CreateRequest(String name, String description,
                                 @com.fasterxml.jackson.annotation.JsonProperty("photos_data")
                                 @com.fasterxml.jackson.annotation.JsonAlias("photosData")
                                 List<String> photosData,
-                                String style) {
+                                String style, String language) {
     }
 
     private static String clientIp(HttpServletRequest request) {

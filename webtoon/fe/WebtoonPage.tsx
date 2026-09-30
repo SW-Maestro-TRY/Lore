@@ -36,6 +36,8 @@ import Photo from "./screens/character/Photo";
 import PhotoResult from "./screens/character/PhotoResult";
 import CharList from "./screens/character/CharList";
 import MyPage from "./screens/mypage/MyPage";
+import RevisitPrompt from "./ui/RevisitPrompt";
+import RunningBubble from "./ui/RunningBubble";
 
 export default function WebtoonPage() {
   return (
@@ -54,7 +56,7 @@ interface Route {
   job?: string;
   run?: string;
   id?: string;
-  tab?: "settings";
+  tab?: "settings" | "feedback";
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -69,7 +71,8 @@ function routeOf(search: URLSearchParams): Route {
     job: search.get("job") || undefined,
     run,
     id: search.get("id") || undefined,
-    tab: search.get("tab") === "settings" ? ("settings" as const) : undefined,
+    tab: search.get("tab") === "settings" ? ("settings" as const)
+      : search.get("tab") === "feedback" ? ("feedback" as const) : undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
@@ -223,6 +226,9 @@ function WebtoonScreens() {
         <PhotoResult id={route.id} shared go={go} authenticated={authenticated} />
       )}
       {route.view === "mypage" && <MyPage go={go} initialTab={route.tab} />}
+      <RevisitPrompt authenticated={authenticated} view={route.view} go={go} />
+      {/* 만드는 중이면 어느 화면에서든 돌아갈 동그라미(#507) */}
+      <RunningBubble view={route.view} runId={route.run} go={go} />
     </div>
   );
 }

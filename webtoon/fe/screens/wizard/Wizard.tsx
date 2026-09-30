@@ -16,7 +16,7 @@ import {
 } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
 import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
-import { useT } from "../../lib/i18n";
+import { useLang, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { IconArrow, IconBack, IconCheck, IconClose, IconEdit } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
@@ -134,6 +134,7 @@ export default function Wizard({
   step, presetCharacterId, go, authenticated,
 }: { step: number; presetCharacterId?: string; go: Go; authenticated: boolean }) {
   const t = useT();
+  const { lang } = useLang();
   const [form, setForm] = useState<WizardForm>(loadDraft);
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p }));
   useEffect(() => { saveDraft(form); }, [form]);
@@ -160,7 +161,8 @@ export default function Wizard({
         setPresetChar(c);
         if (form.characterId !== c.id) patch({
           characterId: c.id, characterArt: c.art_url || undefined, photos: [],
-          name: c.name, character: c.description || "",
+          // 기본 캐릭터는 이름·설명이 한국어 원문이라 화면 언어로 옮겨 채운다(사람이 만든 것은 그대로).
+          name: c.builtin ? t(c.name) : c.name, character: (c.builtin ? t(c.description || "") : c.description) || "",
         });
       })
       .catch(() => {
@@ -179,7 +181,7 @@ export default function Wizard({
 
   const pickChar = (c: Character) => patch({
     characterId: c.id, characterArt: c.art_url || undefined, photos: [],
-    name: c.name, character: c.description || "",
+    name: c.builtin ? t(c.name) : c.name, character: (c.builtin ? t(c.description || "") : c.description) || "",
   });
   const unpick = () => {
     patch({ characterId: undefined, characterArt: undefined });
@@ -248,7 +250,7 @@ export default function Wizard({
     const props = startProps();
     track("create_start", props);
     try {
-      const id = await startJob(form, authenticated);
+      const id = await startJob(form, authenticated, lang);
       track("create_started", { ...props, job: id });
       try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* 없어도 된다 */ }
       go("running", { job: id }, { replace: true });
@@ -310,10 +312,10 @@ export default function Wizard({
                         <img src={picked.art_url || ""} alt={picked.name} />
                         <div className="info">
                           <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                            <b style={{ fontSize: 16 }}>{picked.name}</b>
+                            <b style={{ fontSize: 16 }}>{t(picked.name)}</b>
                             {picked.card?.world_label && <span className="dim" style={{ fontSize: 12 }}>{picked.card.world_label}</span>}
                           </div>
-                          <span className="muted" style={{ fontSize: 13 }}>{picked.card?.twist || picked.description}</span>
+                          <span className="muted" style={{ fontSize: 13 }}>{t(picked.card?.twist || picked.description)}</span>
                         </div>
                       </div>
                       <button type="button" className="btn btn-w" onClick={() => go("create", { step: 1 })}>{t("다른 캐릭터 고르기")}</button>
@@ -341,10 +343,10 @@ export default function Wizard({
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={c.art_url || ""} alt="" />
                             <div className="row">
-                              <b>{c.name}</b>
-                              {c.card?.world_label && <span className="dim">{c.card.world_label}</span>}
+                              <b>{t(c.name)}</b>
+                              {c.card?.world_label && <span className="dim">{t(c.card.world_label)}</span>}
                             </div>
-                            <span className="muted">{c.card?.twist || c.description}</span>
+                            <span className="muted">{t(c.card?.twist || c.description)}</span>
                           </div>
                         );
                       })}
@@ -374,8 +376,8 @@ export default function Wizard({
                                 {on && <CheckMark />}
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={c.art_url || ""} alt="" />
-                                <div className="row"><b>{c.name}</b><span className="dim">{t("둘러보기용")}</span></div>
-                                <span className="muted">{c.card?.twist || c.description}</span>
+                                <div className="row"><b>{t(c.name)}</b><span className="dim">{t("둘러보기용")}</span></div>
+                                <span className="muted">{t(c.card?.twist || c.description)}</span>
                               </div>
                             );
                           })}
@@ -549,7 +551,7 @@ export default function Wizard({
                     <li>{t("LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.")}</li>
                   </ul>
                 </details>
-                {blockedReason && <div className="wt-wiz-block">{blockedReason}</div>}
+                {blockedReason && <div className="wt-wiz-block">{t(blockedReason)}</div>}
                 {startErr && <span className="err">{startErr}</span>}
                 <button type="button" className="btn btn-p" disabled={!canStart} onClick={() => void start()}>
                   {starting ? <><span className="spin" /> {t("시작하는 중")}</> : t("웹툰 만들기")}

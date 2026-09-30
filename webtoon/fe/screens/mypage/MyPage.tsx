@@ -16,7 +16,7 @@
  * 자리라 여기서 직접 붙였다(2026-09-19, 사용자 지적). */
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
-import { creditBalance } from "@common/api/credits";
+import { creditBalance, notifyCreditsChanged } from "@common/api/credits";
 import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
@@ -24,6 +24,7 @@ import {
   browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, myLikes, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type RunCard, type TrashCard,
+  mySurveyStatus, type SurveyStatus,
 } from "../../lib/api";
 import type { Go } from "../../lib/nav";
 import RunStrip from "../../ui/RunStrip";
@@ -32,7 +33,17 @@ import { track } from "../../lib/track";
 import { IconUser } from "../../ui/Icons";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
+import FullSurvey from "./FullSurvey";
+import AdminSurvey from "./AdminSurvey";
 import "./MyPage.css";
+
+/** 「1:1 문의하기」 창구 셋. 카카오톡 채널 주소는 공용(`CONTACT_CHANNEL`)이고, 인스타·X 는
+ *  이 화면에서만 쓰는 웹툰 SNS 계정이라 여기 둔다. */
+const CONTACT_LINKS: { key: string; label: string; href: string }[] = [
+  { key: "kakao", label: "카카오톡", href: CONTACT_CHANNEL },
+  { key: "instagram", label: "인스타그램", href: "https://www.instagram.com/lorecomic_/" },
+  { key: "x", label: "X", href: "https://x.com/lorecomic_" },
+];
 
 registerDict({
   "마이페이지": { en: "My page", ja: "マイページ", zh: "我的页面" },
@@ -87,6 +98,9 @@ registerDict({
   "충전": { en: "Top up", ja: "チャージ", zh: "充值" },
   "내역": { en: "History", ja: "履歴", zh: "记录" },
   "1:1 문의하기": { en: "Contact us", ja: "1:1お問い合わせ", zh: "1:1 咨询" },
+  "어디로 문의할까요?": { en: "Where would you like to reach us?", ja: "どちらにお問い合わせしますか？", zh: "想通过哪个渠道联系我们？" },
+  "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
+  "인스타그램": { en: "Instagram", ja: "インスタグラム", zh: "Instagram" },
   "이용약관": { en: "Terms of use", ja: "利用規約", zh: "使用条款" },
   "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },
   "목록을 가져오지 못했어요": { en: "Couldn't load the list", ja: "一覧を読み込めませんでした", zh: "无法加载列表" },
@@ -104,14 +118,22 @@ registerDict({
   "바꾸지 못했어요": { en: "Couldn't change it", ja: "変更できませんでした", zh: "无法更改" },
 });
 
-export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" }) {
+export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" | "feedback" }) {
   const t = useT();
   const { user, isAuthenticated, signOut } = useAuth();
 
   /* 지금은 "내 웹툰"과 "설정" 딱 둘뿐이라 화면을 아예 나누지는 않고
      같은 레일 안에서 본문만 바꾼다 — 나중에 칸이 늘면 그때 공용 탭
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
-  const [tab, setTab] = useState<"works" | "settings">(initialTab ?? "works");
+  const [tab, setTab] = useState<"works" | "settings">(initialTab === "settings" ? "settings" : "works");
+  /* 「피드백 보내기」(#471) — 다시 온 사람 안내나 완성 직후 설문에서 tab=feedback 으로 오면 바로 연다. */
+  const [surveyOpen, setSurveyOpen] = useState(initialTab === "feedback");
+  const [contactOpen, setContactOpen] = useState(false);
+  const [surveyStatus, setSurveyStatus] = useState<SurveyStatus | null>(null);
+  useEffect(() => {
+    if (!isAuthenticated) { setSurveyStatus(null); return; }
+    mySurveyStatus().then(setSurveyStatus).catch(() => setSurveyStatus(null));
+  }, [isAuthenticated]);
 
   const [runs, setRuns] = useState<RunCard[]>([]);
   const [runsFailed, setRunsFailed] = useState(false);
@@ -278,7 +300,13 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             </>
           )}
           <small>{t("계정")}</small>
-          <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">{t("1:1 문의하기")}</a>
+          <button type="button" onClick={() => { track("contact_open", { where: "mypage" }); setContactOpen(true); }}>
+            {t("1:1 문의하기")}
+          </button>
+          <button type="button" onClick={() => { track("feedback_open", { where: "mypage" }); setSurveyOpen(true); }}>
+            {t("피드백 보내기")}
+            {surveyStatus && !surveyStatus.done && <span className="dim">+{surveyStatus.reward}C</span>}
+          </button>
           {isAuthenticated && (
             <button type="button" onClick={() => void signOut()}>{t("로그아웃")}</button>
           )}
@@ -293,6 +321,27 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
       </aside>
 
       <div className="wt-my-main">
+            {contactOpen && (
+              <Dialog title={t("어디로 문의할까요?")} onClose={() => setContactOpen(false)}>
+                <div className="wt-my-contact">
+                  {CONTACT_LINKS.map((c) => (
+                    <a key={c.key} className="btn btn-w" href={c.href} target="_blank" rel="noopener noreferrer"
+                       onClick={() => { track("contact_pick", { where: "mypage", channel: c.key }); setContactOpen(false); }}>
+                      {t(c.label)}
+                    </a>
+                  ))}
+                </div>
+              </Dialog>
+            )}
+            {surveyOpen && (
+              <FullSurvey authenticated={isAuthenticated} status={surveyStatus} go={go}
+                          onClose={() => setSurveyOpen(false)}
+                          onRewarded={(balance) => {
+                            setCredits(balance);
+                            notifyCreditsChanged(balance);
+                            setSurveyStatus((s) => (s ? { ...s, done: true, prompt: false } : s));
+                          }} />
+            )}
             {trashOpen && (
               <Dialog title={t("휴지통")} wide onClose={() => setTrashOpen(false)}
                       sub={t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}>
@@ -436,6 +485,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 {withdrawErr && <span className="wt-my-err">{withdrawErr}</span>}
               </div>
             )}
+            {isAuthenticated && <AdminSurvey />}
           </>
         )}
       </div>
@@ -530,7 +580,7 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
         <img src={coverUrl(run.run_id, run.cover_page ?? 1, run.cover_episode ?? 1)} alt="" />
       </button>
       <b>{run.title || t("제목 없음")}</b>
-      <span className="muted">{[run.character, run.genre].filter(Boolean).join(" · ")}</span>
+      <span className="muted">{[run.character, run.genre && t(run.genre)].filter(Boolean).join(" · ")}</span>
       <div className="wt-my-eps">
         {run.episodes.map((n) => (
           <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>

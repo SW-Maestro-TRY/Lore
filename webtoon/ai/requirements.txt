@@ -2,7 +2,7 @@
 #
 # **이 파일 하나로 끝나야 한다.** 배포는 이것만 S3 로 올려서 서버에서 설치한다
 # (.github/workflows/deploy.yml → webtoon/be/setup-python.sh). 서버에는 저장소가
-# 없고 이 파일만 내려받아 `pip install -r` 로 쓰므로, `-r story-harness/...`
+# 없고 이 파일만 내려받아 `pip install -r` 로 쓰므로, `-r new_harness/...`
 # 처럼 형제 파일을 가리키면 그 자리에서 "그런 파일 없음" 으로 깨진다.
 # 그래서 하위 하네스가 쓰는 것까지 여기에 펼쳐 적는다.
 #
@@ -25,6 +25,12 @@ Pillow>=10.0
 openai>=1.40            # 지금 기본값 (llm.py 의 DEFAULT_PROVIDER)
 google-genai>=1.0       # NH_PROVIDER=gemini 로 돌릴 때
 # anthropic>=0.34       # NH_PROVIDER=anthropic 을 쓸 때 주석을 푼다
+
+# --- 추적 ---------------------------------------------------------------
+# 모델 호출을 Logfire 로 보낸다 (new_harness/tracing.py). LOGFIRE_TOKEN 이
+# 있을 때만 켜지고, 없으면 설치돼 있어도 아무것도 안 보낸다. 패키지가 없어도
+# 하네스는 추적 없이 돈다.
+logfire[google-genai,requests]>=5.1
 
 # --- 업로드 -------------------------------------------------------------
 # 다 그린 작품을 S3 에 올릴 때 쓴다 (upload/s3_upload.py).
