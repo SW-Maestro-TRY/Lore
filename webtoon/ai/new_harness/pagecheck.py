@@ -163,12 +163,34 @@ def max_redraw() -> int:
 
 # -------------------------------------------------------------------- 프롬프트
 
-def people_block(char: dict | None, cast) -> str:
+def spec_lines(spec: dict | None) -> list[str]:
+    """시트 사양(sheet_spec.json) -> 글. 그림은 안 붙이고 글만 준다(#519).
+
+    시트 그림을 셋째 그림으로 붙이면 모델이 무엇을 검수 대상으로 보는지
+    흐려진다. 글로 주면 "머리색·눈색·고정 요소가 그림과 같은가" 를 기준으로
+    삼을 수 있다."""
+    if not spec or not (spec.get("appearance_en") or spec.get("design_details")):
+        return []
+    lines = ["시트 사양 (이 인물의 고정 외형 — 그림이 이것과 다르면 인물 문제다):"]
+    if spec.get("appearance_en"):
+        lines.append(f"  - 외형: {spec['appearance_en']}")
+    details = spec.get("design_details") or []
+    if details:
+        lines.append("  - 고정 요소: " + " / ".join(details))
+    palette = spec.get("color_palette") or {}
+    colors = " / ".join(f"{k} {v}" for k, v in palette.items() if v)
+    if colors:
+        lines.append(f"  - 색: {colors}")
+    return lines
+
+
+def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
     """인물 — "다른 사람이 되었다" 를 판정할 기준.
 
-    캐릭터 시트는 안 붙인다. 이 호출에 붙는 그림은 **직전 장과 지금 장**
+    캐릭터 시트 **그림**은 안 붙인다. 이 호출에 붙는 그림은 **직전 장과 지금 장**
     둘뿐이고, 셋째 장을 더하면 모델이 무엇을 검수 대상으로 보는지 흐려진다.
-    같은 사람인지는 두 그림을 견주면 알 수 있다.
+    같은 사람인지는 두 그림을 견주면 알 수 있다. 대신 시트 **사양 글**은 준다
+    (#519) — 두 그림이 서로 같아도 둘 다 시트와 다르면 잡을 기준이 없었다.
     """
     lines = []
     if char:
@@ -178,6 +200,7 @@ def people_block(char: dict | None, cast) -> str:
         desc = f"{card}. {desc}" if card and desc else (card or desc)
         if who:
             lines.append(f"{who} (주인공) — {desc}" if desc else f"{who} (주인공)")
+    lines += spec_lines(spec)
     for one in cast or []:
         if isinstance(one, dict) and _text(one.get("name")):
             lines.append(f"{one['name']} — {_text(one.get('appearance'))}")
@@ -284,13 +307,13 @@ def scene_block(direction: dict, scene_no: int, total: int, scenes=()) -> str:
 
 def build_prompt(direction: dict, *, scene_no: int, char: dict | None = None,
                  cast=(), has_prev: bool = True, prev_is_cover: bool = False,
-                 next_from: str = "", scenes=()) -> str:
+                 next_from: str = "", scenes=(), spec: dict | None = None) -> str:
     path = PROMPT_DIR / "page_review_prompt"
     if not path.exists():
         raise SystemExit(f"프롬프트가 없습니다: {path}")
     total = len(scene_texts(direction, scenes))
     return (path.read_text(encoding="utf-8")
-            .replace("{people}", people_block(char, cast))
+            .replace("{people}", people_block(char, cast, spec))
             .replace("{story}", story_block(direction, scene_no, scenes))
             .replace("{prev}", prev_block(direction, scene_no, has_prev=has_prev,
                                           prev_is_cover=prev_is_cover,
@@ -442,7 +465,8 @@ def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
     prev = dest / f"page{page_no - 1:02d}.png"
     has_prev = page_no > 1 and prev.exists()
 
-    prompt = build_prompt(direction, scene_no=scene_no, char=char, cast=cast,
+    spec = read_json(run_dir / "sheet_spec.json")
+    prompt = build_prompt(direction, scene_no=scene_no, char=char, cast=cast, spec=spec,
                           has_prev=has_prev, prev_is_cover=prev_is_cover,
                           next_from=next_from, scenes=scenes)
     write_text(dest / f"page{page_no:02d}.review{suffix}_prompt.txt", prompt)

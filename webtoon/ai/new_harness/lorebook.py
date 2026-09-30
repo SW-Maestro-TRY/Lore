@@ -133,7 +133,7 @@ def recent_ids(world: str, runs_dir, limit: int = AVOID_RECENT) -> set:
 
 
 def assign(world: str, n: int = 4, per: int = PER_DIRECTION, fill: int | None = None,
-           avoid=None, rng=None) -> list[list[dict]]:
+           avoid=None, rng=None, fixed: bool = False) -> list[list[dict]]:
     """방향 n개 중 fill개에 재료를 per개씩. 나머지 방향은 [] (재료 없이 간다).
 
     fill 이 None 이면 n개 전부다. **어느 방향이 재료를 받는지는 무작위다** —
@@ -152,7 +152,8 @@ def assign(world: str, n: int = 4, per: int = PER_DIRECTION, fill: int | None = 
     rng.shuffle(fresh)
     rng.shuffle(stale)
     ordered = fresh + stale
-    slots = sorted(rng.sample(range(n), fill)) if fill else []
+    # fixed 면 앞에서부터(1·2). 보여 줄 순서는 run.shuffle_directions 가 섞는다.
+    slots = (list(range(fill)) if fixed else sorted(rng.sample(range(n), fill))) if fill else []
     out: list[list[dict]] = [[] for _ in range(n)]
     cursor = 0
     for i in slots:
@@ -214,6 +215,9 @@ STORY_HEAD = (
     "것이다. 재료는 판과 처지에 건다 — 주인공의 성격으로 옮기지 않는다.\n"
     "재료가 안 적힌 방향은 재료 없이 쓴다 — 사용자가 적은 것만으로 판을 세운다. "
     "다른 방향의 재료를 가져오지 않는다.\n"
+    "**사용자가 적은 것이 재료보다 먼저다.** 설명·카드에 적힌 자리·시점·종·세계·처지·"
+    "오늘 벌어진 일과 안 맞는 재료는 버린다. 재료가 그것을 밀어내고 1화의 사건이 되면 "
+    "사용자가 고른 캐릭터의 이야기가 아니다.\n"
     "넷은 서로 다른 재미여야 한다 — 걸린 것과 뒤집히는 방식이 다르면 재료에 닿는 "
     "길도 저절로 갈린다. 재료는 그 뒤집힘의 재료가 되어야지, 지나가는 구경거리로 "
     "쓰이면 안 된다."
