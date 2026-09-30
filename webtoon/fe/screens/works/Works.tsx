@@ -12,6 +12,10 @@ import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
 import LikeButton from "../../ui/LikeButton";
 import RunStrip from "../../ui/RunStrip";
+import { STYLE_INFO } from "../../lib/wizardData";
+import FilterCombo from "./FilterCombo";
+import { GENRE_ORDER, genreBucket } from "./genreBucket";
+import "../wizard/i18n";
 import "./i18n";
 import "./Works.css";
 
@@ -23,7 +27,7 @@ import "./Works.css";
  * 던지므로 그때는 「못 받음」 보드다. 내 작품(이 브라우저가 만든 것, 로그인했으면
  * 계정 것도)에만 공개 스위치와 편집실이 붙는다.
  *
- * 찾기·칩(장르·그림체·찜)은 전부 화면에서 거른다(#248). 목록이 작아서 서버에
+ * 찾기·칩(찜)·그림체 칸·장르 칸은 전부 화면에서 거른다(#248). 목록이 작아서 서버에
  * 묻는 것보다 받은 것을 거르는 편이 빠르고, 검색어는 서버에 남지 않는다. */
 export default function Works({ go, authenticated }: { go: Go; authenticated: boolean }) {
   const t = useT();
@@ -71,36 +75,66 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     return recentRuns().map((id) => byId.get(id)).filter((r): r is RunCard => !!r).slice(0, 10);
   }, [runs]);
 
-  /* 칩: 전체 · 내 작품 · 찜 · 장르들 · 그림체들. 정렬: 최신순 ↔ 오래된순 (run_id 가 시각으로 시작한다). */
-  const [filter, setFilter] = useState<"all" | "mine" | "liked" | string>("all");
+  /* 칩: 전체 · 내 작품 · 찜. 그 옆에 그림체 칸 · 장르 칸 — 셋은 겹쳐 걸린다.
+     전에는 장르·그림체도 칩으로 늘어놨는데, 장르가 작품마다 모델이 적은 글이라
+     작품 수만큼 칩이 생기고 영어도 섞였다. 장르는 genreBucket 으로 묶는다.
+     정렬: 최신순 ↔ 오래된순 (run_id 가 시각으로 시작한다). */
+  const [filter, setFilter] = useState<"all" | "mine" | "liked">("all");
+  const [style, setStyle] = useState("");
+  const [genre, setGenre] = useState("");
   const [newest, setNewest] = useState(true);
   const [query, setQuery] = useState("");
-  const genres = useMemo(
-    () => [...new Set((runs || []).map((r) => r.genre).filter(Boolean))],
-    [runs],
-  );
-  const styles = useMemo(
-    () => [...new Set((runs || []).map((r) => r.style_label).filter((s): s is string => !!s))],
-    [runs],
-  );
 
-  const shown = useMemo(() => {
+  /* 칩과 검색어까지 건 목록 — 두 칸은 여기서 서로를 건다. */
+  const base = useMemo(() => {
     if (!runs) return null;
     let list = runs;
     if (filter === "mine") list = list.filter(mineOf);
     else if (filter === "liked") list = list.filter((r) => likedIds.has(r.run_id));
-    else if (filter.startsWith("style:")) list = list.filter((r) => r.style_label === filter.slice(6));
-    else if (filter !== "all") list = list.filter((r) => r.genre === filter);
     const q = query.trim().toLowerCase();
     if (q) {
       list = list.filter((r) =>
-        [r.title, r.character, r.genre, r.style_label, t(r.genre || ""), t(r.style_label || "")]
+        [r.title, r.character, r.genre, r.style_label, t(r.genre || ""), t(r.style_label || ""), t(genreBucket(r.genre))]
           .some((s) => (s || "").toLowerCase().includes(q)));
     }
-    list = [...list].sort((a, b) => (newest ? b.run_id.localeCompare(a.run_id) : a.run_id.localeCompare(b.run_id)));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, filter, newest, accountRuns, likedIds, query]);
+  }, [runs, filter, accountRuns, likedIds, query, t]);
+
+  /* 칸의 목록 — 지금 걸린 나머지 조건 안에서 작품이 있는 갈래만, 작품 수와 함께.
+     그래서 목록의 숫자가 고르면 나올 작품 수와 같다. 고른 것은 0 이 돼도 남긴다
+     (그래야 칸에서 보이고 풀 수 있다). 그림체는 만들기 화면 순서를 먼저, 거기 없는
+     것(예전 그림체)은 뒤에. */
+  const styleOptions = useMemo(() => {
+    const n = new Map<string, number>();
+    if (style) n.set(style, 0);
+    for (const r of base || []) {
+      if (!r.style_label || (genre && genreBucket(r.genre) !== genre)) continue;
+      n.set(r.style_label, (n.get(r.style_label) || 0) + 1);
+    }
+    const order = STYLE_INFO.map(([, label]) => label);
+    return [...n.keys()]
+      .sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99))
+      .map((s) => ({ key: s, label: t(s), count: n.get(s) || 0 }));
+  }, [base, style, genre, t]);
+  const genreOptions = useMemo(() => {
+    const n = new Map<string, number>();
+    if (genre) n.set(genre, 0);
+    for (const r of base || []) {
+      const g = genreBucket(r.genre);
+      if (!g || (style && r.style_label !== style)) continue;
+      n.set(g, (n.get(g) || 0) + 1);
+    }
+    return GENRE_ORDER.filter((g) => n.has(g)).map((g) => ({ key: g, label: t(g), count: n.get(g) || 0 }));
+  }, [base, style, genre, t]);
+
+  const shown = useMemo(() => {
+    if (!base) return null;
+    let list = base;
+    if (style) list = list.filter((r) => r.style_label === style);
+    if (genre) list = list.filter((r) => genreBucket(r.genre) === genre);
+    return [...list].sort((a, b) => (newest ? b.run_id.localeCompare(a.run_id) : a.run_id.localeCompare(b.run_id)));
+  }, [base, style, genre, newest]);
 
   /* 검색은 결과 수만 남긴다 — 무엇을 쳤는지는 서버에 보내지 않는다(#413). */
   useEffect(() => {
@@ -112,19 +146,21 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   const noneAtAll = !!runs && runs.length === 0;
   const noneMatch = !!shown && !noneAtAll && shown.length === 0;
 
-  /* `value` 는 장르·그림체 칩에서 무엇을 골랐는지 — 기록에는 영문 기호로 남긴다(labelToken). */
-  const chip = (key: string, label: string, kind: string, value?: string) => (
+  const chip = (key: "mine" | "liked", label: string) => (
     <button key={key} type="button" className={`chip${filter === key ? " on" : ""}`}
-            onClick={() => { track("works_filter", { filter: kind, target: value ? labelToken(value) : undefined }); setFilter(key); }}>{label}</button>
+            onClick={() => { track("works_filter", { filter: key }); setFilter(key); }}>{label}</button>
   );
+  /* 칸에서 고른 것은 기록에 영문 기호로 남긴다(labelToken). 푼 것은 남기지 않는다. */
+  const pick = (kind: "style" | "genre", set: (v: string) => void) => (v: string) => {
+    if (v) track("works_filter", { filter: kind, target: labelToken(v) });
+    set(v);
+  };
 
   const chips = (
     <div className="wt-works-chips">
       <button type="button" className={`chip${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>{t("전체")}</button>
-      {chip("mine", t("내 작품"), "mine")}
-      {authenticated && chip("liked", t("찜"), "liked")}
-      {genres.map((g) => chip(g, t(g), "genre", g))}
-      {styles.map((s) => chip(`style:${s}`, t(s), "style", s))}
+      {chip("mine", t("내 작품"))}
+      {authenticated && chip("liked", t("찜"))}
       <button type="button" className="chip wt-works-sort" onClick={() => setNewest((v) => !v)}
               aria-label={newest ? t("최신순 — 누르면 오래된순") : t("오래된순 — 누르면 최신순")}>
         {newest ? t("최신순") : t("오래된순")} <IconChevronDown size={14} />
@@ -144,15 +180,21 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
           </div>
         </div>
 
-        {recent.length > 0 && filter === "all" && !query && (
+        {recent.length > 0 && filter === "all" && !style && !genre && !query && (
           <div className="wt-works-recent">
             <RunStrip title={t("최근 본 웹툰")} runs={recent}
                       onOpen={(r) => { track("recent_open", { run: r.run_id }); go("result", { run: r.run_id }); }} />
           </div>
         )}
 
-        <input className="field wt-works-search" type="search" value={query} placeholder={t("제목·캐릭터·장르로 찾기")}
-               aria-label={t("제목·캐릭터·장르로 찾기")} onChange={(e) => setQuery(e.target.value)} />
+        <div className="wt-works-finds">
+          <input className="field wt-works-search" type="search" value={query} placeholder={t("제목·캐릭터·장르로 찾기")}
+                 aria-label={t("제목·캐릭터·장르로 찾기")} onChange={(e) => setQuery(e.target.value)} />
+          <FilterCombo id="wt-works-style" name={t("그림체")} all={t("그림체 전체")}
+                       options={styleOptions} value={style} onChange={pick("style", setStyle)} />
+          <FilterCombo id="wt-works-genre" name={t("장르")} all={t("장르 전체")}
+                       options={genreOptions} value={genre} onChange={pick("genre", setGenre)} />
+        </div>
 
         {chips}
 
@@ -198,7 +240,7 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={louArt("empty")} alt="" style={{ width: 140 }} />
             <h2>{filter === "liked" && !query ? t("아직 찜한 웹툰이 없어요") : t("찾는 웹툰이 없어요")}</h2>
-            <span className="muted">{filter === "liked" && !query ? t("마음에 드는 작품의 하트를 누르면 여기에 모여요.") : t("다른 말로 찾아보거나 칩을 풀어 보세요.")}</span>
+            <span className="muted">{filter === "liked" && !query ? t("마음에 드는 작품의 하트를 누르면 여기에 모여요.") : t("다른 말로 찾아보거나 고른 조건을 풀어 보세요.")}</span>
           </div>
         )}
 
