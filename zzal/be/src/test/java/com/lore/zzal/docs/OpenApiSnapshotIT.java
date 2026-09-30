@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
@@ -45,7 +46,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * <b>프론트 CI</b> 가 빨개진다. 어느 쪽도 조용히 넘어가지 않는다.
  *
  * <h3>★★ 이 시험은 zzal 만이 아니라 API 전체를 본다</h3>
- * 스냅샷은 {@code /api/**} 전부(webtoon · trailer · common 포함)를 덮는다. 그래서 <b>다른 도메인이
+ * 스냅샷은 {@code /api/**} 전부(webtoon · piece-maker · common 포함)를 덮는다. 그래서 <b>다른 도메인이
  * 자기 API 를 바꿔도 여기가 빨개진다.</b> 그건 고장이 아니라 이 시험이 하는 일이다 — 바꾼 사람이
  * 스냅샷을 갱신하면 된다(아래 갱신법).
  *
@@ -147,6 +148,58 @@ class OpenApiSnapshotIT {
     }
 
     // ── 명세 받아오기 ──────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("공통 이벤트의 path와 Webtoon 이벤트의 view가 서로 다른 스키마에 남는다")
+    void eventSchemasDoNotOverwriteEachOther() throws Exception {
+        JsonNode document = fetchApiDocs();
+        JsonNode schemas = document.path("components").path("schemas");
+        assertThat(requestSchemaRef(document, "/api/v1/events", "post"))
+                .isEqualTo("#/components/schemas/CommonEventBatch");
+        assertThat(requestSchemaRef(document, "/api/webtoon/v1/events", "post"))
+                .isEqualTo("#/components/schemas/WebtoonEventBatch");
+
+        JsonNode commonBatch = schemas.path("CommonEventBatch");
+        JsonNode webtoonBatch = schemas.path("WebtoonEventBatch");
+        assertThat(propertyNames(commonBatch)).containsExactlyInAnyOrder("referrer", "source", "events");
+        assertThat(commonBatch.path("required").toString()).contains("events");
+        assertThat(propertyNames(webtoonBatch)).containsExactlyInAnyOrder("uid", "source", "ref", "events");
+        assertThat(commonBatch.path("properties").path("events").path("items").path("$ref").asText())
+                .isEqualTo("#/components/schemas/CommonEvent");
+        assertThat(webtoonBatch.path("properties").path("events").path("items").path("$ref").asText())
+                .isEqualTo("#/components/schemas/WebtoonEvent");
+        assertThat(propertyNames(schemas.path("CommonEvent"))).containsExactlyInAnyOrder("name", "ts", "path", "props");
+        assertThat(propertyNames(schemas.path("WebtoonEvent"))).containsExactlyInAnyOrder("name", "ts", "view", "props");
+    }
+
+    @Test
+    @DisplayName("캐릭터 생성·수정 입력과 웹툰 생성 입력의 문서 스키마가 섞이지 않는다")
+    void characterAndJobCreateSchemasDoNotOverwriteEachOther() throws Exception {
+        JsonNode document = fetchApiDocs();
+        JsonNode schemas = document.path("components").path("schemas");
+        assertThat(requestSchemaRef(document, "/api/webtoon/v1/characters", "post"))
+                .isEqualTo("#/components/schemas/WebtoonCharacterCreateRequest");
+        assertThat(requestSchemaRef(document, "/api/webtoon/v1/characters/{publicId}", "patch"))
+                .isEqualTo("#/components/schemas/WebtoonCharacterCreateRequest");
+        assertThat(requestSchemaRef(document, "/api/webtoon/v1/nh/create", "post"))
+                .isEqualTo("#/components/schemas/WebtoonJobCreateRequest");
+        assertThat(propertyNames(schemas.path("WebtoonCharacterCreateRequest")))
+                .containsExactlyInAnyOrder("name", "description", "photos_data", "style", "language");
+        assertThat(propertyNames(schemas.path("WebtoonJobCreateRequest")))
+                .contains("character", "story", "agree_ip", "photo_keys")
+                .doesNotContain("description");
+    }
+
+    private static String requestSchemaRef(JsonNode document, String path, String method) {
+        return document.path("paths").path(path).path(method).path("requestBody")
+                .path("content").path("application/json").path("schema").path("$ref").asText();
+    }
+
+    private static Set<String> propertyNames(JsonNode schema) {
+        Set<String> names = new TreeSet<>();
+        schema.path("properties").fieldNames().forEachRemaining(names::add);
+        return names;
+    }
 
     private JsonNode fetchApiDocs() throws Exception {
         var response = mockMvc.perform(get(apiDocsPath)).andReturn().getResponse();

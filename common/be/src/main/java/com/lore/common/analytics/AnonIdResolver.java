@@ -36,7 +36,7 @@ public class AnonIdResolver {
      * 쿠키 이름.
      *
      * ★ zzal_ 접두어를 안 붙였다 — 로그인·가입 이벤트는 zzal 이 아니라 공통 화면(AuthModal)에서
-     *   나오고, 앞으로 webtoon·trailer 도 같은 번호를 쓴다. 표 이름(zzal_event)은 이미
+     *   나오고, 앞으로 webtoon·piece-maker 도 같은 번호를 쓴다. 표 이름(zzal_event)은 이미
      *   그렇게 만들어져 있지만, 쿠키는 브라우저에 오래 남는 것이라 지금 이름을 맞춰 둔다.
      */
     public static final String COOKIE = "lore_anon_id";

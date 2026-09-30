@@ -222,7 +222,7 @@ class OpenApiSecurityIT {
         if (method.equals("GET") && path.startsWith("/api/zzal/v1/public/")) {
             return false;                                   // 랜딩·공유 보기(조회만)
         }
-        if (method.equals("GET") && path.startsWith("/api/trailer/v1/public/")) {
+        if (method.equals("GET") && path.startsWith("/api/piece-maker/v1/public/")) {
             return false;                                   // 복선 카드 보기
         }
         if (path.startsWith("/api/zzal/v1/agent/")) {

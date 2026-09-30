@@ -1,6 +1,6 @@
 // 가입·로그인 창을 **여울의 결로 감싸는 겉옷**.
 //
-// ★★ 왜 창 자체를 안 고치나 — `common/fe/auth/AuthModal.tsx` 는 trailer·webtoon 과 같이 쓰는
+// ★★ 왜 창 자체를 안 고치나 — `common/fe/auth/AuthModal.tsx` 는 piece-maker·webtoon 과 같이 쓰는
 //   공통 부품이다. 거기를 손대면 팀원 화면이 같이 바뀐다. 그래서 zzal 이 열었을 때만 켜지는
 //   **덮어쓰기 한 겹**으로 해결한다(2026-09-21 G-4 1안).
 //

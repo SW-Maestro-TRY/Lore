@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 };
 
 // middleware.ts 가 /ko·/en·/ja 로 들어온 요청에 남기는 값. 언어 접두어가 없는 주소(예:
-// /zzal·/trailer)는 지난 방문의 값이 남아 있을 수 있다 — 화면 내용은 그 도메인 것 그대로고
+// /zzal·/piece-maker)는 지난 방문의 값이 남아 있을 수 있다 — 화면 내용은 그 도메인 것 그대로고
 // <html lang> 만 한 박자 늦게 따라오는 정도라 지금은 그대로 둔다.
 async function locale(): Promise<string> {
   const store = await cookies();

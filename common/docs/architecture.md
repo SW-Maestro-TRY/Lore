@@ -9,7 +9,7 @@
 ```
 
 - 실행되는 프로세스는 **웹 1개 + API 서버 1개**. (멘토링에서 정한 "API 서버는 공통 하나" 원칙)
-- 코드는 도메인(webtoon / zzal / trailer)별 폴더로 나뉘어 있지만, 빌드/실행 시 하나로 합쳐진다.
+- 코드는 도메인(webtoon / zzal / piece-maker)별 폴더로 나뉘어 있지만, 빌드/실행 시 하나로 합쳐진다.
 
 ## 폴더 조직 방식: domain-first
 
@@ -62,7 +62,7 @@ sourceSets {
                 'common/be/src/main/java',
                 'webtoon/be/src/main/java',
                 'zzal/be/src/main/java',
-                'trailer/be/src/main/java',
+                'piece-maker/be/src/main/java',
                 'apps/api/src/main/java'
             ]
         }
@@ -92,7 +92,7 @@ apps/api  ──▶  common
                  ▲
     webtoon ─────┤
       zzal ─────┤
-    trailer ─────┘
+    piece-maker ─────┘
 ```
 
 - 도메인 코드는 `common` 만 참조한다. **도메인끼리는 서로 import 하지 않는다.**

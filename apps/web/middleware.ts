@@ -9,7 +9,7 @@
 //
 // **딱 두 자리만 받는다** — 홈("/")과 /webtoon(webtoon/fe 의 React 화면). /webtoon/works
 // 같은 나머지 자리는 아직 haeun/landing 의 정적 프로토타입이라(webtoon/CLAUDE.md,
-// next.config.mjs 의 rewrites 참고) 언어 접두어를 받을 준비가 안 됐고, trailer·zzal 은
+// next.config.mjs 의 rewrites 참고) 언어 접두어를 받을 준비가 안 됐고, piece-maker·zzal 은
 // 이번 작업 범위 밖이다. matcher 를 이 목록으로 좁혀서 다른 주소는 이 파일이 아예
 // 실행되지 않는다.
 import { NextResponse, type NextRequest } from "next/server";

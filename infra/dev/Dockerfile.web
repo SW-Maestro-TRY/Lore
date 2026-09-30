@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
 # Lore 프론트엔드(Next.js) 개발용 이미지 — standalone 출력.
-# 컨텍스트는 레포 루트다: npm workspaces 이고 화면 코드가 도메인 fe/(common·webtoon·zzal·trailer)에
+# 컨텍스트는 레포 루트다: npm workspaces 이고 화면 코드가 도메인 fe/(common·webtoon·zzal·piece-maker)에
 # 흩어져 있어(tsconfig paths @zzal 등) 빌드에 레포 전체가 필요하다.
 # CI 와 같은 방식: npm ci && npm run build → .next/standalone + static + public 을 묶는다.
 
