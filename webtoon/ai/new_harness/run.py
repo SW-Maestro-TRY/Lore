@@ -1026,7 +1026,7 @@ def picked_direction(run_dir: Path, pick: int | None) -> dict:
 
 SCENE_RE = re.compile(rf"^{S}장면{S}(\d+){S}[:：]?{S}$", re.M)
 SCENE_FIELD_RE = re.compile(
-    rf"^{S}(직전 상태|장소와 상황|벌어지는 일|인물의 행동과 표정|끝나는 상태){S}[:：]{S}(.*)$")
+    rf"^{S}(직전 상태|장소와 상황|벌어지는 일|인물의 행동과 표정|겉모습·소지품·동행|끝나는 상태){S}[:：]{S}(.*)$")
 PLOT_LABEL_RE = re.compile(rf"^{S}줄거리{S}[:：]{S}$", re.M)
 CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
 
@@ -1081,7 +1081,7 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
 
 
 def parse_scenes(text: str) -> dict:
-    """scene_prompt 응답 -> {"plot", "scenes":[{"n","prev","where","what","acting","ends"}], "cast"}."""
+    """scene_prompt 응답 -> {"plot", "scenes":[{"n","prev","where","what","acting","look","ends"}], "cast"}."""
     plot_m = PLOT_LABEL_RE.search(text)
     scene_marks = list(SCENE_RE.finditer(text))
     cast_m = CAST_LABEL_RE.search(text)
@@ -1107,6 +1107,8 @@ def parse_scenes(text: str) -> dict:
             "where": fields.get("장소와 상황", ""),
             "what": fields.get("벌어지는 일", ""),
             "acting": fields.get("인물의 행동과 표정", ""),
+            # 시트와 달라진 겉모습·소지품·동행 (#147). 옛 scenes.json 에는 없다 — 빈 값.
+            "look": fields.get("겉모습·소지품·동행", ""),
             "ends": fields.get("끝나는 상태", ""),
         })
     cast = _cast_bullets(text[cast_m.end():]) if cast_m else []
