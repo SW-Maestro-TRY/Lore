@@ -2,7 +2,7 @@
 #
 # **이 파일 하나로 끝나야 한다.** 배포는 이것만 S3 로 올려서 서버에서 설치한다
 # (.github/workflows/deploy.yml → webtoon/be/setup-python.sh). 서버에는 저장소가
-# 없고 이 파일만 내려받아 `pip install -r` 로 쓰므로, `-r story-harness/...`
+# 없고 이 파일만 내려받아 `pip install -r` 로 쓰므로, `-r new_harness/...`
 # 처럼 형제 파일을 가리키면 그 자리에서 "그런 파일 없음" 으로 깨진다.
 # 그래서 하위 하네스가 쓰는 것까지 여기에 펼쳐 적는다.
 #

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """이미지 한 장을 그린다. 시트도 페이지도 여기를 지난다.
 
-실제 호출은 story-harness 의 make_sheet_painter 를 그대로 쓴다 — 컷을 그리는
+실제 호출은 story.py 의 make_sheet_painter 를 그대로 쓴다 — 컷을 그리는
 코드와 같은 경로다. 여기서 다시 구현하면 재시도·응답 파싱·참조 이미지 첨부가
 조금씩 달라지고, 그 차이가 그림 차이로 나타난다.
 

@@ -9,10 +9,10 @@
                                                      prompt/sheet_prompt
 ```
 
-이야기는 `story-harness` 를 거치지 않는다. `prompt/` 안의 프롬프트가 전부다.
-`story-harness` 에서 빌려 쓰는 것은 두 가지뿐이다 — 모델 호출 계층(`llm.py`)과
-시트 이미지 생성(`sheet.py`). 둘 다 **읽기만** 한다: `story-harness` 는 한 줄도
-고치지 않았다.
+이야기는 `prompt/` 안의 프롬프트가 전부다. 모델 호출 계층과 시트 이미지 생성은
+같은 폴더의 `story.py` 가 맡고, `llm.py` 와 `sheet.py` 가 그것을 부른다.
+(`story.py` · `samples.py` · `worlds.json` · `prices.json` · `samples/` 는 예전
+`story-harness` 폴더에 있던 것을 2026-09-30(#494)에 이리로 옮겼다.)
 
 ## 입력
 
@@ -154,12 +154,12 @@ $ python3 run.py --plan
 그림 단계는 `NH_MODEL` 대신 `NH_IMAGE_MODEL` 을 본다. 글 모델 이름을 그림
 단계가 물려받으면 그대로 죽는다.
 
-**API 키는 여기 안 적어도 된다.** `new_harness/.env` 를 먼저 읽고 그다음
-`story-harness/.env` 를 읽는데 둘 다 "이미 있는 값은 안 덮어쓴다" 라서,
-모델 선택은 여기서 하고 키는 저쪽 것을 그대로 물려받는다.
+**API 키는 여기 안 적어도 된다.** `new_harness/.env` 는 "이미 있는 값은 안
+덮어쓴다" 라서, 모델 선택은 여기서 하고 키는 셸(루트 `.env` 의
+`WEBTOON_API_KEY`)의 것을 그대로 쓴다.
 
-값 뒤에 주석을 붙이지 마라 — 주석까지 값으로 읽힌다(`story-harness/.env` 와
-같은 파서다).
+값 뒤에 주석을 붙이지 마라 — 주석까지 값으로 읽힌다(`story.py` 의 .env 파서와
+같은 규칙이다).
 
 ## 캐릭터 시트
 
@@ -306,12 +306,15 @@ texts = imageprompt.page_prompts(pgs,
   붙는다. 페이지 경계는 안 넘는다 — 다른 호출이라 앞 페이지가 뭘 그렸는지
   이 프롬프트만으로는 모르기 때문이다.
 
-**연출 지식(RAG)** 은 새로 안 만들고 story-harness/webtoon-harness 가 쓰는
+**연출 지식(RAG)** 은 새로 안 만들고 webtoon-harness 가 쓰는
 저장소(`story-harness/knowledge/directing/`, 109개 청크)를 `webtoon-harness/
 directing.py`(`resolve_notes`)로 그대로 빌린다 — 정확 태그 매칭이라 벡터
 검색은 아니다. 콘티 단계(장면 서술)와 페이지 그림 단계(그 페이지 컷의
 배경·행동·대사) 각각 자기 서술에 등장하는 태그와 겹치는 조각만 "## 연출
 참고" 절로 붙는다. 하나도 안 걸리면 그 절 자체가 안 생긴다.
+
+> 2026-09-30 확인: 이 저장소 폴더는 #250 정리 때 지워져서 지금은 없다. 그래서
+> `resolve_notes` 는 빈 문자열을 돌려주고, 프롬프트에 연출 지식이 붙지 않는다.
 
 **페이지 사이 여백·폭**도 `webtoon-harness/strip.py`의 픽셀 계산
 (`gap_px`·`width_ratio`)을 그대로 쓴다(`stitch.py`). 다만 여백 **단계**

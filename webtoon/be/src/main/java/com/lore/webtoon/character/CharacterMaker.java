@@ -60,10 +60,9 @@ public class CharacterMaker {
         return harnessDir.resolve("prompt").resolve("random_pool.json");
     }
 
-    /** 세계관 프리셋 파일. new_harness 옆에 story-harness 가 같이 풀려 있다. */
+    /** 세계관 프리셋 파일. new_harness 안에 있다. */
     public Path worldsFile() {
-        return harnessDir.getParent() == null ? null
-                : harnessDir.getParent().resolve("story-harness").resolve("worlds.json");
+        return harnessDir.resolve("worlds.json");
     }
 
     /**
