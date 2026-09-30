@@ -65,6 +65,7 @@ const dict: Dict = {
   "장르 직접 입력": { en: "Custom genre", ja: "ジャンルを入力", zh: "自定义题材" },
 
   /* 장르 칩 (lib/wizardData GENRE_QUICK) */
+  "로맨스": { en: "Romance", ja: "ロマンス", zh: "爱情" },
   "로맨스 판타지": { en: "Romance fantasy", ja: "ロマンスファンタジー", zh: "浪漫奇幻" },
   "무협": { en: "Wuxia", ja: "武侠", zh: "武侠" },
   "판타지": { en: "Fantasy", ja: "ファンタジー", zh: "奇幻" },
@@ -75,12 +76,14 @@ const dict: Dict = {
   "오메가버스": { en: "Omegaverse", ja: "オメガバース", zh: "ABO" },
   "아이돌": { en: "Idol", ja: "アイドル", zh: "偶像" },
   "스릴러": { en: "Thriller", ja: "スリラー", zh: "惊悚" },
+  "아포칼립스": { en: "Apocalypse", ja: "アポカリプス", zh: "末世" },
   "액션": { en: "Action", ja: "アクション", zh: "动作" },
   "개그": { en: "Comedy", ja: "ギャグ", zh: "搞笑" },
   "일상": { en: "Slice of life", ja: "日常", zh: "日常" },
   "히어로": { en: "Hero", ja: "ヒーロー", zh: "英雄" },
 
   /* 장르 한 줄 (lib/wizardData GENRE_NOTE) */
+  "지금 우리가 사는 도시에서 벌어지는 연애 이야기예요. 회사·학교·동네에서 시작되는 설렘과 엇갈림을 다뤄요.": { en: "A love story set in the city we live in today — the flutters and missed chances that start at work, at school or around the neighborhood.", ja: "今わたしたちが暮らす街で繰り広げられる恋愛物語です。会社·学校·近所から始まるときめきとすれ違いを描きます。", zh: "发生在我们如今生活的城市里的恋爱故事。讲述从公司、学校、街坊间开始的心动与错过。" },
   "중세풍 제국에서 펼쳐지는 연애 이야기예요. 소설 속 인물로 빙의하거나 인생을 다시 사는 회귀가 흔한 시작이에요.": { en: "A love story set in a medieval-style empire. It often begins with waking up inside a novel's character or living life over again.", ja: "中世風の帝国で繰り広げられる恋愛物語です。小説の登場人物に憑依したり、人生をやり直す回帰から始まることが多いです。", zh: "在中世纪风格帝国中展开的恋爱故事。常以穿进小说角色或重生回到过去作为开端。" },
   "무공을 익힌 고수들이 문파를 이루고 겨루는 옛 동양풍 세계 이야기예요.": { en: "A story set in an old East Asian-style world where martial arts masters form sects and compete.", ja: "武功を身につけた達人たちが門派をなして競い合う、昔の東洋風の世界の物語です。", zh: "习得武功的高手们结成门派、相互较量的古代东方风格世界故事。" },
   "검과 마법, 몬스터가 있는 다른 세계에서 벌어지는 모험 이야기예요.": { en: "An adventure in another world with swords, magic and monsters.", ja: "剣と魔法、モンスターがいる異世界で繰り広げられる冒険の物語です。", zh: "在有剑、魔法和怪物的异世界展开的冒险故事。" },
@@ -91,6 +94,7 @@ const dict: Dict = {
   "남녀 말고 알파·베타·오메가라는 두 번째 성별이 있는 세계예요. 알파와 오메가는 페로몬으로 서로에게 강하게 끌려요.": { en: "A world with a second sex beyond male and female — alpha, beta and omega. Alphas and omegas are drawn to each other through pheromones.", ja: "男女とは別に、アルファ·ベータ·オメガという第二の性がある世界です。アルファとオメガはフェロモンで強く惹かれ合います。", zh: "除了男女之外，还存在Alpha、Beta、Omega第二性别的世界。Alpha与Omega会因信息素而强烈地相互吸引。" },
   "연습생이 데뷔를 향해 경쟁하고 무대에 오르는 아이돌 업계 이야기예요.": { en: "A story about the idol industry — trainees competing to debut and make it to the stage.", ja: "練習生がデビューを目指して競い合い、ステージに立つアイドル業界の物語です。", zh: "练习生为出道而竞争、登上舞台的偶像行业故事。" },
   "누가, 왜를 쫓는 긴장감 있는 이야기예요. 위험과 반전이 핵심이에요.": { en: "A tense story chasing who did it and why. Danger and twists are at its heart.", ja: "誰が、なぜを追う緊張感のある物語です。危険とどんでん返しが核心です。", zh: "追查“是谁、为什么”的紧张故事。危险与反转是核心。" },
+  "문명이 무너진 뒤, 살아남은 사람들이 식량과 거처를 지키며 버티는 이야기예요. 다른 생존자 무리와의 만남이 사건이 돼요.": { en: "A story of survivors holding on to food and shelter after civilization has fallen. Meeting other groups of survivors is where things happen.", ja: "文明が崩れた後、生き残った人々が食料と住処を守りながら耐え抜く物語です。ほかの生存者の群れとの出会いが事件になります。", zh: "文明崩塌之后，幸存者们守着食物和住处苦苦支撑的故事。与其他幸存者群体的相遇会引发事件。" },
   "싸움과 추격이 중심인 이야기예요. 몸으로 부딪히는 장면이 볼거리예요.": { en: "A story built around fights and chases. The physical clashes are the highlight.", ja: "戦いと追跡が中心の物語です。体でぶつかり合う場面が見どころです。", zh: "以打斗和追逐为中心的故事。肉体碰撞的场面是看点。" },
   "웃기는 게 먼저인 이야기예요. 엉뚱한 상황과 반응으로 굴러가요.": { en: "A story where laughs come first. It runs on absurd situations and reactions.", ja: "笑いが最優先の物語です。とんでもない状況とリアクションで転がっていきます。", zh: "搞笑优先的故事。靠离谱的情况和反应推动。" },
   "큰 사건 없이 소소한 하루를 그리는 편안한 이야기예요.": { en: "A relaxed story about small, everyday days without big events.", ja: "大きな事件のない、ささやかな一日を描く穏やかな物語です。", zh: "没有大事件、描绘琐碎日常的轻松故事。" },
