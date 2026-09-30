@@ -22,7 +22,8 @@ for (const mobile of ['iPhone Safari UA', 'Android Chrome UA']) {
     test('downloads animated original with character/action filename', async ({ page }) => {
       const downloaded = page.waitForEvent('download');
       await page.locator('[data-action="frame-save"]').click(); const file = await downloaded;
-      expect(file.suggestedFilename()).toBe('여울_구르기.webp');
+      // WebKit(macOS)은 한글 파일명을 NFD로 돌려준다. 글자 자체를 비교하려고 NFC로 맞춘다.
+      expect(file.suggestedFilename().normalize('NFC')).toBe('여울_구르기.webp');
       expect(readFileSync((await file.path())!)).toEqual(readFileSync(source));
       await expect(page.locator('[data-part="album-file-notice"]')).toContainText('다운로드');
       expect(await page.evaluate(() => (window as unknown as { records: string[] }).records)).toEqual(['DOWNLOAD']);
@@ -60,7 +61,7 @@ for (const mobile of ['iPhone Safari UA', 'Android Chrome UA']) {
       await expect(page.locator('[data-part="frame"] img')).toHaveAttribute('src', '/zzal/pets/123/basic/base.webp');
       const downloaded = page.waitForEvent('download');
       await page.locator('[data-action="frame-save"]').click(); const file = await downloaded;
-      expect(file.suggestedFilename()).toBe('여울_기본.webp');
+      expect(file.suggestedFilename().normalize('NFC')).toBe('여울_기본.webp');
       expect(readFileSync((await file.path())!)).toEqual(readFileSync(source));
     });
     test('unarrived advanced image never downloads another pose or sample', async ({ page }) => {
