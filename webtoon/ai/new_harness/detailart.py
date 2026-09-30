@@ -250,6 +250,19 @@ def opens_at(scenes: list[dict], scene_no: int) -> str:
     return " — ".join(x for x in (scene.get("where"), scene.get("what")) if x)
 
 
+def narration_of(scenes: list[dict], scene_no: int) -> list[str] | None:
+    """장면 `scene_no` 에 정해 둔 나레이션 글자.
+
+    None 이면 장면 단계가 정하지 않은 것(옛 scenes.json) — 예전처럼 그림 모델이
+    정한다.
+    """
+    scene = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
+    got = scene.get("narration")
+    if not isinstance(got, list):
+        return None
+    return [t for t in got if isinstance(t, str) and t.strip()]
+
+
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
                           has_prev: bool, lang: str = "ko", lore: str = "") -> str:
@@ -282,7 +295,8 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         lines += ["", "[이 장에서 그릴 장면]", (one.get("what") or "").strip(),
                   "", "앞뒤 장면은 주지 않는다. 이 한 순간만 그린다 — 화 전체를 "
                   "요약하거나 앞에서 이미 지나온 상황을 다시 설명하지 않는다."]
-        if scene_no > 1:
+        fixed = narration_of(scenes, scene_no)
+        if scene_no > 1 and fixed is None:
             # 나레이션 이어쓰기. 지금 나오는 것이 장마다 도입부로 되돌아가서,
             # 독자가 같은 설명을 네 번 읽는다(2026-09-19 전체 검수가 3·4·5
             # 페이지를 그렇게 잡았다). 무엇을 쓸지는 안 정해 준다 — 어디서부터
@@ -340,6 +354,29 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         lines += [f"[이 장면에서 시트와 다른 것 — 겉모습·소지품·동행] {look}",
                   "  시트는 기본 외형이고, 이 장면에서는 위에 적힌 차이가 시트보다 먼저다. "
                   "여기 적히지 않은 것은 시트 그대로 그린다.", ""]
+    fixed = narration_of(scenes, scene_no)
+    if fixed:
+        # 나레이션 재료는 장면 단계(scene_prompt)에서 글 모델이 화 전체를 한 번에
+        # 읽고 쓴 것이다. 그림 모델에게 "무슨 말을 쓸지는 네가 정한다" 라고 맡기던
+        # 때는 뜻이 잡히지 않는 격언투 문장이 장마다 붙었고, 용어를 비슷한 다른
+        # 낱말로 바꿔 적었다(2026-09-30, run 20260930T220006-0ca73c — 본문의
+        # 「파혼」이 그림에서 「파문」이 됐다).
+        #
+        # **넣을지는 그림 모델이 고른다.** 글 모델이 나레이션과 대사를 다 정하게
+        # 해 봤더니 대사가 설명조가 되고 남은 상자가 격언으로 채워졌다(같은 날
+        # 2차 실험). 그래서 대사는 그림 모델에게 두고, 나레이션은 쓸 수 있는
+        # 글만 준다 — 그림·대사가 이미 전하면 빼고, 넣으면 글자 그대로.
+        # 장면 데이터 바로 옆에 둔다 — 멀리 있는 지시는 안 지켜진다.
+        # 번호·기호를 붙이지 않는다 — 「1.」 을 붙여 줬더니 상자에 번호까지 그대로
+        # 찍혔다(같은 날 page02). 한 줄이 상자 하나다.
+        lines += ["[나레이션 — 쓸 수 있는 글. 아래 한 줄이 상자 하나다]"]
+        lines += list(fixed)
+        lines += ["  상자에는 위 줄의 글자만 넣는다. 번호·기호·따옴표를 앞뒤에 붙이지 "
+                  "않는다. 각 상자는 넣어도 되고 빼도 된다. 이 페이지의 그림이나 대사가 이미 "
+                  "같은 것을 전하면 뺀다. 넣는다면 한 글자도 바꾸지 않고, 적힌 순서대로 "
+                  "위에서 아래로 놓는다. 여기 없는 나레이션 문장은 새로 만들지 않는다 — "
+                  "위 글을 다 빼도 된다. 앞의 「나레이션 상자를 최소 1개 넣는다」보다 "
+                  "이것이 먼저다.", ""]
     lines += [
         (f"[이 화가 열리는 자리 — 여기서부터 그린다] {opens}" if first else
          f"[여기서부터 그린다 — 앞 장이 끝난 자리다] {opens}"),
@@ -356,8 +393,11 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
          "말고, 거기서 곧바로 이어지는 다음 순간부터 그린다."),
         "- 「여기서 끝낸다」는 이 장의 마지막이다. 그 지점이 화면에 나오는 "
         "데서 끊는다. 더 나아가면 다음 장과 같은 순간을 두 번 그리게 된다.",
-        "- 그 사이를 컷 몇 개로 어떻게 보여줄지, 무슨 대사를 넣을지는 전부 "
-        "**네가 정한다.**",
+        ("- 그 사이를 컷 몇 개로 어떻게 보여줄지, 무슨 대사를 넣을지는 **네가 "
+         "정한다.** 나레이션은 위 「쓸 수 있는 글」 안에서만 고른다."
+         if fixed else
+         "- 그 사이를 컷 몇 개로 어떻게 보여줄지, 무슨 대사를 넣을지는 전부 "
+         "**네가 정한다.**"),
         "- 나레이션이나 대사를 쓴다면 이 페이지 안에서 문장을 끝까지 완결한다. "
         "말줄임표나 접속사로 걸쳐 놓은 채 페이지를 끝내지 않는다.",
     ]
