@@ -119,4 +119,17 @@ class JobEtaTest {
         assertThat(JobEta.of(job, 여덟장, 1, 0, t0).left())
                 .isGreaterThan(JobEta.of(job, 여덟장, 3, 0, t0).left());
     }
+
+    @Test
+    @DisplayName("끝난 작업에는 남은 시간을 안 적는다")
+    void 끝나면_없다() {
+        Instant t0 = Instant.parse("2026-09-30T13:00:00Z");
+        WebtoonJob job = job(t0);
+        job.moveTo(JobStatus.RUNNING, JobStage.BIND, t0.plusSeconds(500));
+        job.moveTo(JobStatus.DONE, JobStage.BIND, t0.plusSeconds(560));
+        JobEta.Eta eta = JobEta.of(job, 없음, 3, 0, t0.plusSeconds(900));
+        assertThat(eta.minutes()).isNull();
+        assertThat(eta.pct(true)).isEqualTo(100);
+        assertThat(eta.work()).isEqualTo(560);
+    }
 }
