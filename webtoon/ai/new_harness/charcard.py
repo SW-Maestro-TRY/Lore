@@ -46,7 +46,7 @@ def normalize(raw) -> dict:
 
 def _presets() -> dict:
     try:
-        path = llm.STORY_HARNESS / "worlds.json"
+        path = llm.HERE / "worlds.json"
         return json.loads(path.read_text(encoding="utf-8")).get("presets") or {}
     except Exception:                                         # noqa: BLE001
         return {}

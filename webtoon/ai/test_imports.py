@@ -40,7 +40,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 # 파이프라인이 실제로 도는 자리. 실험·보관용 폴더는 안 본다.
-ROOTS = ("new_harness", "upload", "story-harness", "webtoon-harness")
+ROOTS = ("new_harness", "upload", "webtoon-harness")
 
 # requirements.txt 가 까는 것들. 여기 없는 바깥 라이브러리를 새로 쓰기 시작하면
 # 이 검사가 먼저 걸린다 — requirements.txt 에 적으라는 뜻이다.

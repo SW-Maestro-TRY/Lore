@@ -18,7 +18,7 @@ class RandomPoolTest {
 
     private static final Path ROOT = Path.of(System.getProperty("user.dir"));
     private static final Path POOL = ROOT.resolve("webtoon/ai/new_harness/prompt/random_pool.json");
-    private static final Path WORLDS = ROOT.resolve("webtoon/ai/story-harness/worlds.json");
+    private static final Path WORLDS = ROOT.resolve("webtoon/ai/new_harness/worlds.json");
 
     @Test
     @DisplayName("예시마다 이름·설명이 있고 세계관이 실제 프리셋 키다")
