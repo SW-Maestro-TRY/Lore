@@ -58,6 +58,7 @@ import fullreview                             # noqa: E402
 import pages as pagemod                       # noqa: E402
 import runmeta                                # noqa: E402
 import sheet as sheetmod                      # noqa: E402
+import failure                                # noqa: E402
 import lang as lang_mod                       # noqa: E402
 from llm import story                         # noqa: E402
 import samples                                # noqa: E402
@@ -1163,7 +1164,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         log(f"[이야기] {call.describe()} 로 후보 4개를 만듭니다…")
         try:
             text, meta = call(prompt, images=llm.load_images(char["photos"]))
-        except Exception as exc:                                      # noqa: BLE001
+        except BaseException as exc:                                  # noqa: BLE001 — SystemExit 도 남긴다(#531)
             record_error(run_dir, "STORY", call.provider, call.model, exc)
             raise
         write_text(run_dir / "story.md", text)
@@ -1527,7 +1528,7 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     log(f"[장면] {call.describe()} 로 줄거리와 장면을 만듭니다…")
     try:
         text, meta = call(prompt)
-    except Exception as exc:                                          # noqa: BLE001
+    except BaseException as exc:                                      # noqa: BLE001 — SystemExit 도 남긴다(#531)
         record_error(run_dir, "SCENE", call.provider, call.model, exc)
         raise
     write_text(run_dir / "scene.md", text)
@@ -1543,6 +1544,43 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
 
 def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
                 spec_only: bool = False, note: str = "") -> None:
+    """캐릭터 시트 — 그림이 안전 검사에 걸리면 **한 번은 스스로 다시 그린다**(#531).
+
+    다시 그릴 때는 사양부터 다시 쓴다. 걸린 것은 대개 사진에서 옮겨 적은 옷차림
+    같은 사양 쪽이라, 그림 프롬프트만 고쳐서는 같은 사양이 또 들어간다. 두 번째도
+    걸리면 `failure.json` 에 이유를 남기고 멈춘다 — 자바가 그걸 읽어 사람에게
+    어떤 사진·설명이 문제였는지 알린다.
+    """
+    failure.clear(run_dir)
+    missing = [str(p) for p in char["photos"] if not Path(p).is_file()]
+    if missing and not dry_run:
+        failure.write(run_dir, "SHEET", "photo_missing", "사진 파일이 없습니다: " + ", ".join(missing))
+        raise SystemExit("사진 파일이 없습니다: " + ", ".join(missing))
+
+    safety = ""
+    for attempt in (1, 2):
+        try:
+            _sheet_attempt(run_dir, char, dry_run, spec_only, note, safety)
+            return
+        except BaseException as exc:                                  # noqa: BLE001
+            cats = failure.refusal_categories(exc)
+            if cats is None:
+                failure.write(run_dir, "SHEET", "error", f"{type(exc).__name__}: {exc}")
+                raise
+            if attempt == 1:
+                warn(f"[시트] 안전 검사에 걸렸습니다({', '.join(cats) or '분류 미상'}) — "
+                     "걸린 분류를 피해 사양부터 한 번 다시 씁니다")
+                for name in ("sheet.png", "sheet_spec.json"):
+                    (run_dir / name).unlink(missing_ok=True)
+                safety = failure.safety_note(cats)
+                continue
+            failure.write(run_dir, "SHEET_IMAGE", "image_safety",
+                          f"{type(exc).__name__}: {exc}", cats)
+            raise SystemExit(f"시트가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
+
+
+def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
+                   note: str, safety: str) -> None:
     photos = char["photos"]
     block = input_block(char)
     note = (note or "").strip()
@@ -1551,6 +1589,8 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
         # 여기서만 붙인다(stage_story 의 note 와 같은 이유).
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
                  f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
+    if safety:
+        block += "\n\n" + safety
     prompt = compose("sheet_prompt", block)
     write_text(run_dir / "sheet_spec_prompt.txt", prompt)
 
@@ -1566,7 +1606,7 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
         log(f"[시트] {call.describe()} 로 사양을 적습니다…")
         try:
             text, meta = call(prompt, images=llm.load_images(photos), temperature=0.4)
-        except Exception as exc:                                      # noqa: BLE001
+        except BaseException as exc:                                  # noqa: BLE001 — SystemExit 도 남긴다(#531)
             record_error(run_dir, "SHEET", call.provider, call.model, exc)
             raise
         record(run_dir, meta)
@@ -1601,7 +1641,7 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
     sheet_provider, sheet_model, _q = imagegen.backend_for("SHEET_IMAGE")
     try:
         meta = sheetmod.paint(image_prompt, out)
-    except Exception as exc:                                          # noqa: BLE001
+    except BaseException as exc:                                      # noqa: BLE001 — SystemExit 도 남긴다(#531)
         record_error(run_dir, "SHEET_IMAGE", sheet_provider, sheet_model, exc)
         raise
     record(run_dir, meta)
