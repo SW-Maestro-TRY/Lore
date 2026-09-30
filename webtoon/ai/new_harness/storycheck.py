@@ -49,8 +49,9 @@
 
 ## 이야기를 굴리는 다섯 (2026-09-12 추가)
 
-여기에 점수 다섯이 더 붙는다 — `shift`(변한다) · `stakes`(커진다) ·
-`place`(놓인다) · `react`(어긋난다) · `open`(안 닫힌다). `story_prompt` 의
+여기에 점수 여섯이 더 붙는다 — `shift`(변한다) · `stakes`(커진다) ·
+`place`(놓인다) · `react`(어긋난다) · `open`(안 닫힌다) · `agency`(주인공이 바꾼다,
+#515 — 판을 바꾼 행동을 주인공이 했는가). `story_prompt` 의
 「이야기는 문제가 달라지는 것이다」와 일대일이라, 만들 때 요구한 것을 볼 때도
 그대로 쓴다.
 
@@ -118,9 +119,9 @@ SEVERITY = ("critical", "major", "minor")
 # **아무것도 막지 않는다.** 재미는 취향이라 셀 수 없지만 재미가 나오는 자리가
 # 비어 있는지는 셀 수 있어서, 그것만 세어 기록에 남긴다. 사람이 고르는 화면에
 # 붙여 보고, 이 점수가 사람 눈과 맞는지 확인된 뒤에 반려를 붙일 자리다.
-SCORES = ("shift", "stakes", "place", "react", "open")
+SCORES = ("shift", "stakes", "place", "react", "open", "agency")
 SCORE_LABEL = {"shift": "변한다", "stakes": "커진다", "place": "놓인다",
-               "react": "어긋난다", "open": "안 닫힌다"}
+               "react": "어긋난다", "open": "안 닫힌다", "agency": "주인공이 바꾼다"}
 # `줄거리` 는 사람이 줄거리를 직접 적었을 때만 나온다(#457) — 적힌 것과
 # 부딪히거나 적힌 것이 뒷전이 된 후보. critical 이면 `verdict` 가 「주의」가 되어
 # 서버의 자동 고르기(`JobRunner.autoPick`)가 그 후보를 거른다.
