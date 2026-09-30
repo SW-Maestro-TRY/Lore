@@ -6,7 +6,10 @@ bootRun 이 그 값을 자바 환경에 넣고, 자바가 이 스크립트를 �
 물려준다.
 
 켜면 보내는 것:
-  - OpenAI SDK 호출 (글 · 시트 그림) — 프롬프트와 응답 내용 포함
+  - OpenAI SDK 호출 (글) — 프롬프트와 응답 내용 포함
+  - 그림 한 장(imagegen.paint) — 단계·제공자·모델·크기·프롬프트 전문·참조 그림·
+    걸린 시간·비용 (image_span). SDK 자동 추적은 images.generate 만 알고 우리가 쓰는
+    images.edit 은 이름만 남는 빈 span 이라, 그림은 우리가 직접 span 을 감싼다.
   - Google GenAI SDK 호출 — 프롬프트와 응답 내용 포함
   - requests 로 직접 부르는 호출 (webtoon-harness 의 그림 제공자) — 주소·상태·시간만
 
@@ -78,3 +81,23 @@ def run_span(script: str, argv: list[str]):
         run_id = argv[i + 1] if i + 1 < len(argv) else ""
     stage = " ".join(a for a in argv if a.startswith("--") and a != "--run-id") or "(기본)"
     return logfire.span("{script} {stage}", script=script, stage=stage, run_id=run_id)
+
+
+def image_span(stage: str, provider: str, model: str, quality: str, kind: str,
+               prompt: str, refs: list) -> "contextlib.AbstractContextManager":
+    """그림 한 장을 묶는 span. 켜져 있지 않으면 아무것도 안 하는 것(None 을 주는)을 준다.
+
+    imagegen.paint 가 부른다 — 시트·컷·다시 그리기가 전부 그 한 자리를 지나므로
+    OpenAI 든 Gemini 든 같은 모양으로 남는다. 부르는 쪽은 끝나고 나서
+    `span.set_attribute` 로 걸린 시간·바이트·비용을 더 단다.
+    """
+    import contextlib
+    if not _started:
+        return contextlib.nullcontext()
+    import logfire
+    return logfire.span(
+        "Image {stage} with {model}",
+        stage=stage, provider=provider, model=model, quality=quality, kind=kind,
+        prompt=prompt, prompt_chars=len(prompt),
+        refs=[getattr(r, "name", str(r)) for r in refs], ref_count=len(refs),
+    )
