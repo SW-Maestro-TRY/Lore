@@ -60,6 +60,7 @@ import covercheck
 import pagecheck
 import pages
 import runmeta
+import failure
 import lang as lang_mod
 
 HERE = Path(__file__).resolve().parent
@@ -616,24 +617,37 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         prev_img = page_path(run_dir, page_no - 1)
         refs = refs_base + ([prev_img] if page_no > 1 and prev_img.exists() else [])
         log(f"[{label}] 참조 {len(refs)}장 …")
-        try:
-            meta = imagegen.paint(STAGE, prompt, out, refs=refs, kind=imagegen.PAGE_KIND)
-        except Exception as exc:                                     # noqa: BLE001
-            # 실패해도 무엇에 얼마나 썼는지는 남겨야 나중에 비용을 정산할 수
-            # 있다 — 성공 때와 같은 모양(stage·provider·model·cost)에 error 만
-            # 더해서 on_page 로 넘긴다. 이어그리기는 직전 이미지가 있어야
-            # 다음 장을 그릴 수 있으므로, 실패하면 여기서 멈춘다.
-            err_meta = {"stage": STAGE, "provider": provider, "model": model,
-                       "quality": quality, "page": page_no, "scene": n_,
-                       "refs": [r.name for r in refs],
-                       "cost": {"input": 0.0, "output": 0.0, "cache_read": 0.0,
-                                "cache_write": 0.0, "total": 0.0},
-                       "error": f"{type(exc).__name__}: {exc}",
-                       "output_path": str(out)}
-            if on_page:
-                on_page(err_meta)
-            log(f"  실패 [{label}]: {err_meta['error']}")
-            raise
+        meta = None
+        for attempt in (1, 2):
+            try:
+                meta = imagegen.paint(STAGE, prompt, out, refs=refs, kind=imagegen.PAGE_KIND)
+                break
+            except BaseException as exc:                             # noqa: BLE001
+                # 실패해도 무엇에 얼마나 썼는지는 남겨야 나중에 비용을 정산할 수
+                # 있다 — 성공 때와 같은 모양(stage·provider·model·cost)에 error 만
+                # 더해서 on_page 로 넘긴다. 이어그리기는 직전 이미지가 있어야
+                # 다음 장을 그릴 수 있으므로, 실패하면 여기서 멈춘다.
+                err_meta = {"stage": STAGE, "provider": provider, "model": model,
+                           "quality": quality, "page": page_no, "scene": n_,
+                           "refs": [r.name for r in refs],
+                           "cost": {"input": 0.0, "output": 0.0, "cache_read": 0.0,
+                                    "cache_write": 0.0, "total": 0.0},
+                           "error": f"{type(exc).__name__}: {exc}",
+                           "output_path": str(out)}
+                if on_page:
+                    on_page(err_meta)
+                log(f"  실패 [{label}]: {err_meta['error']}")
+                cats = failure.refusal_categories(exc)
+                if cats is not None and attempt == 1:
+                    # 안전 검사는 한 번은 스스로 다시 그린다(#531) — 걸린 분류를 알려 주고.
+                    log(f"  [{label}] 안전 검사({', '.join(cats) or '분류 미상'}) — 한 번 다시 그립니다")
+                    prompt = prompt + "\n\n" + failure.safety_note(cats)
+                    continue
+                if cats is not None:
+                    failure.write(run_dir, STAGE, "image_safety", err_meta["error"], cats)
+                    raise SystemExit(f"{label}이 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
+                failure.write(run_dir, STAGE, "error", err_meta["error"])
+                raise
         meta["page"] = page_no
         meta["scene"] = n_
         made.append(meta)
@@ -664,7 +678,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 try:
                     meta = imagegen.paint(STAGE, again, out, refs=refs,
                                           kind=imagegen.PAGE_KIND)
-                except Exception as exc:                             # noqa: BLE001
+                except BaseException as exc:                             # noqa: BLE001
                     err_meta = {"stage": STAGE, "provider": provider, "model": model,
                                "quality": quality, "page": page_no, "scene": 0,
                                "redraw": attempt + 1,
@@ -676,6 +690,9 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                     if on_page:
                         on_page(err_meta)
                     log(f"  실패 [표지 다시 그리기]: {err_meta['error']}")
+                    cats = failure.refusal_categories(exc)
+                    failure.write(run_dir, STAGE, "error" if cats is None else "image_safety",
+                                  err_meta["error"], cats)
                     raise
                 meta["page"], meta["scene"], meta["redraw"] = page_no, 0, attempt + 1
                 made.append(meta)
@@ -718,7 +735,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             try:
                 meta = imagegen.paint(STAGE, again, out, refs=refs,
                                       kind=imagegen.PAGE_KIND)
-            except Exception as exc:                                 # noqa: BLE001
+            except BaseException as exc:                                 # noqa: BLE001
                 err_meta = {"stage": STAGE, "provider": provider, "model": model,
                            "quality": quality, "page": page_no, "scene": n_,
                            "redraw": attempt + 1,
@@ -730,6 +747,9 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 if on_page:
                     on_page(err_meta)
                 log(f"  실패 [{label} 다시 그리기]: {err_meta['error']}")
+                cats = failure.refusal_categories(exc)
+                failure.write(run_dir, STAGE, "error" if cats is None else "image_safety",
+                              err_meta["error"], cats)
                 raise
             meta["page"], meta["scene"], meta["redraw"] = page_no, n_, attempt + 1
             made.append(meta)

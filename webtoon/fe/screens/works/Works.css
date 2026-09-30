@@ -10,7 +10,29 @@
 .wt .wt-works-create { height: 44px; font-size: 14px; }
 
 .wt .wt-works-recent { margin-top: 18px; }
-.wt .wt-works-search { margin-top: 16px; width: 100%; max-width: 420px; height: 40px; }
+/* 찾기 줄 — 검색 칸 · 그림체 칸 · 장르 칸. 칸 목록은 아래로 겹쳐 펼쳐진다. */
+.wt .wt-works-finds { display: flex; gap: 8px; margin-top: 16px; align-items: flex-start; }
+.wt .wt-works-search { width: 100%; max-width: 420px; height: 40px; }
+.wt .wt-works-combo { position: relative; width: 200px; flex-shrink: 0; }
+.wt .wt-works-combo-box { position: relative; display: flex; align-items: center; }
+.wt .wt-works-combo-box .field { height: 40px; font-size: 14px; padding: 0 38px 0 14px; cursor: pointer; }
+.wt .wt-works-combo.has .field { border-color: var(--ink); font-weight: 700; }
+.wt .wt-works-combo-x { position: absolute; right: 4px; border: 0; background: none; color: var(--dim); }
+.wt .wt-works-combo-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20;
+  list-style: none; margin: 0; padding: 6px; background: #fff;
+  border: 1.5px solid var(--line-strong); border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(15, 51, 63, 0.12); max-height: 320px; overflow-y: auto;
+}
+.wt .wt-works-combo-one {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;
+  padding: 9px 10px; border: 0; border-radius: 8px; background: none;
+  font: inherit; font-size: 14px; color: var(--ink); text-align: left; cursor: pointer;
+}
+.wt .wt-works-combo-one.at { background: var(--water-light); }
+.wt .wt-works-combo-one.on { font-weight: 800; }
+.wt .wt-works-combo-n { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.wt .wt-works-combo-none { padding: 10px; font-size: 13.5px; color: var(--dim); }
 .wt .wt-works-chips { display: flex; gap: 8px; margin: 12px 0 16px; flex-wrap: wrap; }
 .wt .wt-works-chips .chip { height: 36px; font-size: 13px; padding: 0 14px; }
 .wt .wt-works-sort { margin-left: auto; gap: 4px; }
@@ -19,8 +41,11 @@
 .wt .wt-works-card { gap: 8px; }
 .wt .wt-works-cover {
   position: relative; display: block; padding: 0; border: 0; background: var(--water-light);
-  border-radius: 12px; overflow: hidden; cursor: pointer; width: 100%; height: 300px;
+  border-radius: 12px; overflow: hidden; cursor: pointer; width: 100%; aspect-ratio: 2 / 3;
 }
+/* 표지는 작품의 한 장을 그대로 쓰고 장은 전부 2:3 이다 — 칸도 2:3 이어야 아래가
+   안 잘린다. 높이를 px 로 못박으면 열 폭에 따라 비율이 어긋나 표지 아래 30% 가
+   잘렸다(2026-10-01). */
 .wt .wt-works-cover img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
 .wt .wt-works-nocover { display: block; width: 100%; height: 100%; }
 .wt .wt-works-badge { position: absolute; left: 10px; top: 10px; z-index: 1; }
@@ -57,7 +82,13 @@
   .wt .wt-works-extoggle { font-size: 12.5px; gap: 6px; }
   .wt .wt-works-create { height: 36px; font-size: 12.5px; padding: 0 14px; }
   .wt .wt-works-recent { margin-top: 4px; }
-  .wt .wt-works-search { margin-top: 4px; max-width: none; height: 36px; }
+  /* 폰: 검색 칸 한 줄, 그 아래 그림체 · 장르 칸 반반. */
+  .wt .wt-works-finds { margin-top: 4px; display: grid; grid-template-columns: 1fr 1fr; }
+  .wt .wt-works-search { grid-column: 1 / -1; max-width: none; height: 36px; }
+  .wt .wt-works-combo { width: auto; min-width: 0; }
+  .wt .wt-works-combo-box .field { height: 36px; font-size: 13px; }
+  .wt .wt-works-combo-list { max-height: 50vh; }
+  .wt .wt-works-combo-one { padding: 12px 10px; font-size: 15px; }
   .wt .wt-works-chips { margin: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .wt .wt-works-chips::-webkit-scrollbar { display: none; }
   .wt .wt-works-chips .chip { height: 32px; font-size: 12px; padding: 0 12px; flex-shrink: 0; }
@@ -66,7 +97,7 @@
      긴 표지 + 오른쪽에 정보가 있는 가로형 리스트 한 줄로 바꾼다 — 표지가
      잘리고 정사각형이라 안 좋다는 피드백(2026-09-23). */
   .wt .wt-works-card { flex-direction: row; align-items: stretch; gap: 12px; padding: 0; border: 0; background: none; }
-  .wt .wt-works-cover { width: 108px; height: 152px; flex-shrink: 0; border-radius: 10px; }
+  .wt .wt-works-cover { width: 108px; flex-shrink: 0; border-radius: 10px; }
   .wt .wt-works-info { display: flex; flex-direction: column; gap: 4px; justify-content: center; min-width: 0; flex-grow: 1; }
   .wt .wt-works-titlerow > b { font-size: 15px; }
   .wt .wt-works-state { padding: 30px 0 40px; }

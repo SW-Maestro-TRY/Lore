@@ -271,7 +271,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   )}
                   <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
                               onChange={(on, n) => { setLiked(on); setLikes(n); }} />
-                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+                  {/* 내 작품이면 공유는 아래 「내려받기」 옆에 둔다 — 남의 작품은 그 줄이 없어서 여기. */}
+                  {!mine && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
                 </span>
               </div>
 
@@ -325,6 +326,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                      }}>
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
+                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
                 </div>
                 <div className="wt-result-dlrow">
                   <label className="wt-result-perpage">
@@ -332,9 +334,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                            onChange={(e) => { setPerPage(e.target.checked); if (e.target.checked) track("download_per_page_open", { run: runId }); }} />
                     {t("컷별로 내려받기")}
                   </label>
-                  {/* 아트보드는 PC 와 폰의 문구가 다르다 — 폰은 체크 칸 옆에 짧게 붙인다. */}
-                  <span className="dim wt-result-wm">{t("내려받는 파일에는 아래에 LORE 표시가 붙습니다.")}</span>
-                  <span className="dim wt-result-wm-m">{t("· 파일에 LORE 표시가 붙어요")}</span>
                 </div>
               </>
             ) : null}

@@ -124,12 +124,13 @@ export default function RunningBubble({ view, runId, go }: { view: View; runId?:
   const status = job.status;
   const done = status === "done";
   const failed = status === "error";
-  const asks = status === "awaiting_sheet" || status === "awaiting_pick";
+  const asks = status === "awaiting_sheet" || status === "awaiting_pick" || status === "awaiting_cast";
   const pct = done ? 100 : Math.max(0, Math.min(100, Math.round(job.pct ?? 0)));
   const art = job.art && job.art.total > 0 ? job.art : null;
   const label = done ? t("완성됐어요!")
     : failed ? t("만들기가 멈췄어요")
     : status === "awaiting_sheet" ? t("캐릭터를 확인해 주세요")
+    : status === "awaiting_cast" ? (job.cast_kind === "confirm" ? t("인물을 확인해 주세요") : t("상대를 골라 주세요"))
     : status === "awaiting_pick" ? t("이야기를 골라 주세요")
     : status === "queued" || (job.queue && job.queue.ahead > 0) ? t("순서를 기다리는 중")
     /* 검수 걸음에도 「그린 장 7/7」이 남아 있어서 그걸로 고르면 검수 중에 「페이지 7 / 7장」이
@@ -224,6 +225,8 @@ registerDict({
   "만들기가 멈췄어요": { en: "Creation stopped", ja: "作成が止まりました", zh: "制作已中断" },
   "캐릭터를 확인해 주세요": { en: "Check your character", ja: "キャラクターを確認してください", zh: "请确认角色" },
   "이야기를 골라 주세요": { en: "Pick a story", ja: "ストーリーを選んでください", zh: "请选择故事" },
+  "상대를 골라 주세요": { en: "Pick who it's with", ja: "相手を選んでください", zh: "请选择对象" },
+  "인물을 확인해 주세요": { en: "Check the characters", ja: "登場人物を確認してください", zh: "请确认登场人物" },
   "순서를 기다리는 중": { en: "Waiting in line", ja: "順番待ち", zh: "排队中" },
   "페이지 {done} / {total}장": { en: "Page {done} / {total}", ja: "ページ {done} / {total}枚", zh: "第 {done} / {total} 页" },
   "만들고 있어요": { en: "Creating", ja: "作成中", zh: "制作中" },

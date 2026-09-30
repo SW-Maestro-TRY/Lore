@@ -268,6 +268,14 @@ public class JobController {
     public record NotifyRequest(String email) {
     }
 
+    @Operation(summary = "상대 인물 고르기",
+            description = "현대 로맨스에서 이야기 전에 상대 인물을 고른다(#534). 고르면 그 인물로 이야기 후보 넷을 짓는다.")
+    @PostMapping("/jobs/{id}/cast")
+    public Map<String, Object> pickCast(@PathVariable String id, @RequestBody CastRequest req) {
+        jobs.pickCast(id, req.n());
+        return Map.of("ok", true);
+    }
+
     @Operation(summary = "이야기 고르기",
             description = "body 를 같이 보내면 그 방향의 본문을 사람이 고친 내용으로 바꿔서 " +
                     "다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.")
@@ -396,5 +404,8 @@ public class JobController {
     }
 
     public record PickRequest(int n, String body) {
+    }
+
+    public record CastRequest(int n) {
     }
 }

@@ -217,7 +217,7 @@ public class JobService {
     @Transactional(readOnly = true)
     public List<JobView> activeOf(Long userId, Collection<String> uids) {
         return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
-                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK)).stream()
+                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST)).stream()
                 .map(job -> view(job.getPublicId()))
                 .toList();
     }
@@ -234,6 +234,9 @@ public class JobService {
         JobQueue.Spot spot = queue.spotOf(job);
         return JobView.of(job, now,
                 store.directionsOf(job.getId()),
+                job.getStatus() == JobStatus.AWAITING_CAST ? runner.castOf(job.getRunId()) : null,
+                job.getStatus() == JobStatus.AWAITING_CAST ? runner.castKind(job.getRunId()) : null,
+                job.getStatus() == JobStatus.AWAITING_CAST ? runner.personaOf(job.getRunId()) : null,
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
                 spot,
@@ -280,6 +283,23 @@ public class JobService {
      * 실제 `directions.json`의 본문을 덮어쓴 뒤에야 다음 단계로 넘어간다.
      * 비어 있거나 원래 본문과 같으면 아무것도 안 건드린다.
      */
+    /**
+     * 인물 단계에 답한다(#534). 현대 로맨스에서 새 인물 중 상대를 고르면 n(1~),
+     * 사용자가 적은 인물을 확인하고 이대로 가면 0. 그 뒤 이야기 후보 넷을 짓는다.
+     */
+    public void pickCast(String publicId, int n) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_CAST) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 인물을 고를 차례가 아닙니다");
+        }
+        List<Map<String, Object>> cast = runner.castOf(job.getRunId());
+        boolean confirm = "confirm".equals(runner.castKind(job.getRunId()));
+        if (confirm ? n != 0 : (n < 1 || n > cast.size())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 인물이 없습니다");
+        }
+        runner.resumeAfterCast(job.getId(), n);
+    }
+
     public void pick(String publicId, int n, String editedBody) {
         WebtoonJob job = store.byPublicId(publicId);
         if (job.getStatus() != JobStatus.AWAITING_PICK) {

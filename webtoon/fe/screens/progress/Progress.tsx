@@ -12,8 +12,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
-  cancelJob, decideSheet, jobPageUrl, notifyByEmail, pickDirection, readJob, retryDirections,
-  sheetImageUrl, type NhDirection, type NhJob, rememberMyRun } from "../../lib/api";
+  cancelJob, decideSheet, jobPageUrl, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
+  sheetImageUrl, type NhCast, type NhDirection, type NhJob, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
@@ -42,7 +42,7 @@ type Tab = number | "play";
 
 /** 지금 어느 걸음인가(0..3). 상태가 먼저, 서버의 stage 이름이 다음. */
 function currentStep(job: NhJob): number {
-  if (job.status === "awaiting_pick") return 0;
+  if (job.status === "awaiting_pick" || job.status === "awaiting_cast") return 0;
   if (job.status === "awaiting_sheet") return 1;
   const byStage = STAGE_INDEX[job.stage];
   if (byStage != null) return byStage;
@@ -159,6 +159,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const [zoom, setZoom] = useState<string | null>(null);
   const [sheetNote, setSheetNote] = useState("");
   const [pickN, setPickN] = useState<number | null>(null);
+  const [castN, setCastN] = useState<number | null>(null);
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const [dirNote, setDirNote] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -197,6 +198,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   }, [job?.pct]);
   useEffect(() => {
     if (status !== "awaiting_pick") { setConfirming(false); setPickN(null); }
+    if (status !== "awaiting_cast") setCastN(null);
     setTab(null);
   }, [status]);
 
@@ -227,6 +229,18 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     setBody(selectedDir.body || "");
     setConfirming(true);
   };
+  /* 인물 단계(#534) — 현대 로맨스에서 새 인물 중 상대 고르기(pick), 또는 사용자가
+     적은 인물을 확인하고 그대로 진행(confirm, 서버에는 0 번으로 보낸다). */
+  const cast: NhCast[] = useMemo(() => job?.cast ?? [], [job?.cast]);
+  const castConfirm = job?.cast_kind === "confirm";
+  const castSel = castConfirm ? 0 : castN ?? (cast.length ? 1 : null);
+  const confirmCast = () => {
+    if (!job || castSel == null) return;
+    track("cast_pick", { job: job.id, n: castSel, count: cast.length, kind: castConfirm ? "confirm" : "pick" });
+    void send(() => pickCast(job.id, castSel));
+  };
+  const castButton = castConfirm ? t("이대로 진행하기") : t("이 사람으로 갈게요");
+
   const confirmPick = () => {
     if (!selectedDir || !job) return;
     const edited = body.trim() !== (selectedDir.body || "").trim() ? body : undefined;
@@ -236,20 +250,21 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
   /* ---- 어느 오른쪽 화면을 그리나 ---- */
   const art = job?.art && job.art.total > 0 ? job.art : null;
-  const waiting = status === "awaiting_sheet" || status === "awaiting_pick";
+  const waiting = status === "awaiting_sheet" || status === "awaiting_pick" || status === "awaiting_cast";
 
   /* 아무것도 안 골랐을 때 어디가 뜨나 — 사람이 답할 차례면 그 화면, 검수
    * 중이면 검수 화면, 그 밖에는 루와 노는 자리. */
   const autoTab: Tab = waiting || cur === REVIEW ? cur : "play";
   const at: Tab = tab ?? autoTab;
 
-  type Pane = "loading" | "play" | "sheet" | "making" | "confirm" | "drawing" | "failed" | "story-view" | "sheet-view" | "pages-view";
+  type Pane = "loading" | "play" | "sheet" | "cast" | "making" | "confirm" | "drawing" | "failed" | "story-view" | "sheet-view" | "pages-view";
   let pane: Pane = "loading";
   if (job) {
     if (status === "error") pane = "failed";
     else if (at === "play") pane = "play";
     else if (at !== cur) pane = (["story-view", "sheet-view", "pages-view", "drawing"] as Pane[])[at];
     else if (status === "awaiting_sheet") pane = "sheet";
+    else if (status === "awaiting_cast") pane = "cast";
     else if (status === "awaiting_pick") pane = confirming ? "confirm" : "making";
     else pane = "drawing";
   }
@@ -378,9 +393,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         <button type="button" className="btn btn-w" disabled={busy} onClick={retrySheet}>{t("다시 만들기")}</button>
       </>
     );
+    if (pane === "cast") return (
+      <button type="button" className="btn btn-p" disabled={busy || castSel == null} onClick={confirmCast}>{castButton}</button>
+    );
     if (pane === "making") return (
       <>
-        <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료 · {n}번으로", { n: selected ?? "-" })}</button>
+        <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료")}</button>
         <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>{t("후보 다시 만들기")}</button>
       </>
     );
@@ -514,6 +532,57 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 </>
               )}
 
+              {pane === "cast" && job && (
+                <>
+                  <div className="wt-prog-head">
+                    <h2>{castConfirm ? t("이 인물들로 이야기를 지을게요") : t("누구와의 이야기로 갈까요?")}</h2>
+                  </div>
+                  {job.persona && (
+                    <div className="wt-prog-dir plain wt-prog-cast wt-prog-hero">
+                      <div className="row"><b>{t("주인공 · {name}", { name: job.persona.name })}</b></div>
+                      {job.persona.look && <span className="muted intro">{job.persona.look}</span>}
+                      {job.persona.personality && <span className="muted intro">{job.persona.personality}</span>}
+                      {job.persona.voice && <span className="muted intro">{job.persona.voice}</span>}
+                      {!!job.persona.details?.length && (
+                        <ul className="details">
+                          {job.persona.details.map((d, i) => <li key={i}>{d.detail}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                  <div className="wt-prog-dirs">
+                    {cast.map((c, i) => (
+                      <div key={c.name + i} className={`wt-prog-dir wt-prog-cast${castConfirm ? " plain" : castSel === i + 1 ? " on" : ""}`}
+                           role={castConfirm ? undefined : "button"} tabIndex={castConfirm ? undefined : 0}
+                           onClick={() => { if (!castConfirm) setCastN(i + 1); }}
+                           onKeyDown={(e) => { if (!castConfirm && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setCastN(i + 1); } }}>
+                        <div className="row">
+                          <b>{c.name}</b>
+                          {(c.tie || c.wants) && (
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setOpen((o) => ({ ...o, [-(i + 1)]: !o[-(i + 1)] })); }}>
+                              {open[-(i + 1)] ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("펼쳐 보기")} <IconChevronDown size={13} /></>}
+                            </button>
+                          )}
+                        </div>
+                        {c.look && <span className="muted intro">{c.look}</span>}
+                        {c.gap && <span className="muted intro">{c.gap}</span>}
+                        {c.line && <q className="line">{c.line}</q>}
+                        {open[-(i + 1)] && (
+                          <>
+                            {c.tie && <p className="muted">{c.tie}</p>}
+                            {c.wants && <p className="muted">{c.wants}</p>}
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="wt-prog-acts" style={{ marginTop: 2 }}>
+                    <button type="button" className="btn btn-p" disabled={busy || castSel == null} onClick={confirmCast}>{castButton}</button>
+                  </div>
+                  {actErr && <span className="err">{actErr}</span>}
+                </>
+              )}
+
               {pane === "making" && job && (
                 <>
                   <div className="wt-prog-head">
@@ -525,7 +594,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                            onClick={() => setPickN(d.n)}
                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPickN(d.n); } }}>
                         <div className="row">
-                          <b>{d.n}. {d.title}</b>
+                          <b>{d.title}</b>
                           <button type="button" onClick={(e) => { e.stopPropagation(); setOpen((o) => ({ ...o, [d.n]: !o[d.n] })); }}>
                             {open[d.n] ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("펼쳐 보기")} <IconChevronDown size={13} /></>}
                           </button>
@@ -537,7 +606,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     ))}
                   </div>
                   <div className="wt-prog-acts" style={{ marginTop: 2 }}>
-                    <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료 · {n}번으로", { n: selected ?? "-" })}</button>
+                    <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료")}</button>
                     <input className="field w300" value={dirNote} placeholder={t("바라는 방향을 적고 후보 다시 만들기")} aria-label={t("다시 만들기 메모")}
                            onChange={(e) => setDirNote(e.target.value)} />
                     <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>
@@ -553,7 +622,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               {pane === "confirm" && selectedDir && (
                 <>
                   <div className="wt-prog-head">
-                    <h2>{selectedDir.n}. {selectedDir.title} {selectedDir.genre && <span className="dim">[{selectedDir.genre}]</span>}</h2>
+                    <h2>{selectedDir.title} {selectedDir.genre && <span className="dim">[{selectedDir.genre}]</span>}</h2>
                     <span className="muted lede">{t("마음에 안 드는 부분은 직접 고쳐도 돼요.")}</span>
                   </div>
                   <textarea className="field wt-prog-bodybox" value={body} aria-label={t("이야기 본문")} onChange={(e) => setBody(e.target.value)} />
@@ -646,7 +715,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     {dirs.map((d) => (
                       <div key={d.n} className={`wt-prog-dir plain${chosen?.n === d.n ? " on" : ""}`}>
                         <div className="row">
-                          <b>{d.n}. {d.title}</b>
+                          <b>{d.title}</b>
                           <button type="button" onClick={() => setOpen((o) => ({ ...o, [d.n]: !o[d.n] }))}>
                             {open[d.n] ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("펼쳐 보기")} <IconChevronDown size={13} /></>}
                           </button>
