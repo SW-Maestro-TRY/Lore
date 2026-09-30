@@ -17,7 +17,7 @@
   python run.py --run-id <id> --pick 2                 # 후보 고르고 콘티까지
   python run.py --run-id <id> --pick 2 --scenes        # 줄거리 없이 곧장 장면 분리 (글 1회)
   python run.py --run-id <id> --sheet                  # 캐릭터 시트
-  python run.py --run-id <id> --sheet-from ../story-harness/runs/<run>  # 시트 재사용
+  python run.py --run-id <id> --sheet-from <옛 story-harness run 폴더>  # 시트 재사용
   python run.py --run-id <id> --pages                  # 페이지 그림 (페이지당 1회 호출)
   python run.py --run-id <id> --page 3                 # 3페이지만 다시
   python run.py --name ... --photo a.png --all --pick 2   # 한 번에
