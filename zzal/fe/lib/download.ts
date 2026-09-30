@@ -1,9 +1,8 @@
 // 애니메이션 원본 파일 다운로드·공유와 기존 링크 복사. 도감 카드의 [저장]·[공유] 버튼이 실제로 하는 일이 여기 있다.
 //
-// ★ 왜 서버가 필요 없는가
-//   움짤은 이미 CloudFront 로 공개 서빙되고, 그 배포가 우리 도메인(dev.lorecomic.com)을
-//   함께 서빙한다 — 즉 **같은 출처**다. 그래서 CORS 설정도, presigned GET API 도 없이
-//   브라우저가 그냥 fetch 해서 받을 수 있다. 주소 조립은 assets.ts 의 assetUrl() 이 정본이다.
+// 파일은 서버가 준 이미지 키를 assets.ts에서 URL로 바꿔 원본 그대로 읽는다.
+// 기본 /images 경로는 dev의 nginx/MinIO, staging·prod의 CloudFront/S3가
+// 같은 서비스 출처에서 서빙한다. 별도 CDN 출처로 설정하면 그 출처의 CORS 허용이 필요하다.
 //
 // ★ 워터마크는 여기서 안 넣는다(넣을 수가 없다)
 //   결과물이 **애니메이션 webp** 라, canvas 에 그려 다시 인코딩하면 첫 프레임만 남아
@@ -107,13 +106,14 @@ export type FileShareOutcome = 'shared' | 'unsupported' | 'cancelled' | 'failed'
 
 /** 원본 파일을 공유한다. 취소는 오류가 아니며 미지원 브라우저에서는 저장 후 첨부를 안내한다. */
 export async function shareImageFile(file: File): Promise<FileShareOutcome> {
+  track('zzal_dex_share', { action: 'start' });
   try {
-    if (!navigator.share || !navigator.canShare?.({ files: [file] })) return 'unsupported';
+    if (!navigator.share || !navigator.canShare?.({ files: [file] })) return shared('unsupported');
     await navigator.share({ files: [file] });
-    return 'shared';
+    return shared('shared');
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') return 'cancelled';
-    return 'failed';
+    if (error instanceof Error && error.name === 'AbortError') return shared('cancelled');
+    return shared('failed');
   }
 }
 
@@ -237,4 +237,9 @@ function copied(result: CopyResult): CopyResult {
     ...(result.code ? { code: result.code } : {}),
   });
   return result;
+}
+
+function shared(outcome: FileShareOutcome): FileShareOutcome {
+  track('zzal_dex_share', { action: outcome });
+  return outcome;
 }
