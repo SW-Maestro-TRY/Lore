@@ -64,7 +64,15 @@ public record JobView(
         Integer minutes_left,
         int pct,
         Art art,
+        /**
+         * 화 전체 검수에서 걸린 장을 <b>다시 그리는 중</b>이면 그 장들. 아니면 {@code null}.
+         *
+         * 이게 없을 때 화면은 검수 뒤 다시 그리는 몇 분 동안 「검수하고 있어요 · 7번째
+         * 장을 그리고 있어요」로 멈춰 보였다(#509).
+         */
+        Redraw redraw,
         List<String> log,
+        /** 기계가 일한 시간(초) — 줄 선 시간은 넣고, 사람을 기다린 시간은 뺀다(#509). */
         double elapsed) {
 
     /**
@@ -95,18 +103,36 @@ public record JobView(
     public record Notice(boolean logged_in, String email, boolean sent) {
     }
 
-    public record Art(int done, int total, int retry_page) {
+    /**
+     * @param pages 다 그려진 장 번호. 장면을 동시에 그리면 순서대로 안 끝나서, 개수만으로는
+     *              어느 장을 불러야 할지 모른다(#509). 차례로 그렸으면 1..done 이다.
+     */
+    public record Art(int done, int total, int retry_page, List<Integer> pages) {
+
+        public Art(int done, int total, int retry_page) {
+            this(done, total, retry_page, java.util.stream.IntStream.rangeClosed(1, done).boxed().toList());
+        }
+    }
+
+    /**
+     * @param pages 다시 그리는 장 번호
+     * @param done  그중 다 그린 수
+     */
+    public record Redraw(List<Integer> pages, int done) {
     }
 
     static JobView of(WebtoonJob job, JobProgress.Snapshot now,
                       List<Map<String, Object>> directions, String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
-                      String notifyEmail, Integer minutesLeft) {
+                      String notifyEmail, JobEta.Eta eta) {
         int stageIndex = job.getStage().order();
-        double frac = now.total() > 0 ? (double) now.done() / now.total() : timeFrac(job);
-        int pct = job.getStatus() == JobStatus.DONE
-                ? 100
-                : (int) Math.round((stageIndex + frac) / JobStage.count() * 100);
+        if (eta == null) {
+            eta = JobEta.of(job, now, 1, spot == null ? 0 : spot.seconds(), Instant.now());
+        }
+        int pct = eta.pct(job.getStatus() == JobStatus.DONE);
+        List<Integer> drawn = now.drawn().isEmpty()
+                ? java.util.stream.IntStream.rangeClosed(1, now.done()).boxed().toList()
+                : now.drawn();
 
         return new JobView(
                 job.getPublicId(),
@@ -127,39 +153,11 @@ public record JobView(
                 spot == null ? null
                         : new Queue(spot.ahead(), spot.minutes(), spot.line()),
                 new Notice(job.getUserId() != null, notifyEmail, job.getNotifiedAt() != null),
-                minutesLeft,
-                Math.max(0, Math.min(100, pct)),
-                now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage()) : null,
+                eta.minutes(),
+                pct,
+                now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage(), drawn) : null,
+                now.redraw().isEmpty() ? null : new Redraw(now.redraw(), now.redrawDone()),
                 now.log(),
-                elapsed(job));
-    }
-
-    /** 시작하고 얼마나 지났나(초). 끝난 것은 끝난 시각까지만 센다. */
-    private static double elapsed(WebtoonJob job) {
-        Instant until = job.getStatus().isOver() ? job.getUpdatedAt() : Instant.now();
-        double seconds = (until.toEpochMilli() - job.getCreatedAt().toEpochMilli()) / 1000.0;
-        return Math.round(Math.max(0, seconds) * 10) / 10.0;
-    }
-
-    /**
-     * story·sheet·bind 는 하네스를 한 번 통짜로 부르고 끝날 때까지 done/total 을
-     * 셀 지점이 없다({@code JobRunner}). 그래서 실제 세부 진행이 없는 동안 이
-     * 단계 안에서 얼마나 지났는지(초)로 진행률을 대신 채운다 — 값을 앞서 보여줄
-     * 뿐 서버가 아는 진짜 값을 넘지는 않는다(다음 단계로 못 넘어가면 이 단계
-     * 폭의 85% 에서 멈춘다). 표는 실측이 아니라 대략치다 — 표본이 쌓이면
-     * {@code JobQueue.SECONDS} 처럼 실측으로 갈아 끼운다.
-     */
-    private static final Map<JobStage, Double> ASSUMED_STAGE_SECONDS = Map.of(
-            JobStage.STORY, 50.0,
-            JobStage.SHEET, 100.0,
-            JobStage.BIND, 45.0);
-
-    private static double timeFrac(WebtoonJob job) {
-        Double assumed = ASSUMED_STAGE_SECONDS.get(job.getStage());
-        if (assumed == null) {
-            return 0.0;
-        }
-        double sinceStage = (Instant.now().toEpochMilli() - job.getUpdatedAt().toEpochMilli()) / 1000.0;
-        return Math.max(0.0, Math.min(0.85, sinceStage / assumed));
+                eta.work());
     }
 }

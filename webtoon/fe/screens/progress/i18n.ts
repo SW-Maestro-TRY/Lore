@@ -34,6 +34,10 @@ const dict: Dict = {
   "잠깐 봐 주세요": { en: "Take a look", ja: "ちょっと見てください", zh: "请看一下" },
   "앞에 대기자가 많아…": { en: "There's a line ahead…", ja: "前に待っている人が多くて…", zh: "前面排队的人有点多…" },
   "{n}번째 장을 그리고 있어요": { en: "Drawing page {n}", ja: "{n}枚目を描いています", zh: "正在画第 {n} 页" },
+  "검수에서 걸린 {pages}쪽을 다시 그리고 있어요": { en: "Redrawing page {pages} flagged in review", ja: "検収で引っかかった{pages}ページを描き直しています", zh: "正在重画检查中未通过的第 {pages} 页" },
+  "검수에서 걸린 장을 다시 그리고 있어요": { en: "Redrawing pages flagged in review", ja: "検収で引っかかったページを描き直しています", zh: "正在重画检查中未通过的页面" },
+  "거의 다 됐어요. 마무리하고 있어요.": { en: "Almost there — wrapping up.", ja: "もうすぐです。仕上げています。", zh: "快好了，正在收尾。" },
+  "지금까지 그린 장 보기 ({n}장)": { en: "See pages drawn so far ({n})", ja: "ここまで描いたページを見る（{n}枚）", zh: "查看已画好的页面（{n} 页）" },
   "루가 만들고 있어요": { en: "Lou is working on it", ja: "Louが作っています", zh: "Lou 正在制作" },
   "닫아도 괜찮아요. 다 되면 이메일로 알려드려요.": { en: "You can close this. We'll email you when it's done.", ja: "閉じても大丈夫です。できたらメールでお知らせします。", zh: "可以关闭页面。完成后会发邮件通知你。" },
   "닫아도 괜찮아요.": { en: "You can close this.", ja: "閉じても大丈夫です。", zh: "可以关闭页面。" },
@@ -144,7 +148,6 @@ const dict: Dict = {
   "전체 마감": { en: "Daily limit reached", ja: "本日分終了", zh: "今日总量已满" },
   "오늘은 여기까지예요": { en: "That's all for today", ja: "今日はここまでです", zh: "今天就到这里" },
   "오늘 만들 수 있는 전체 편수가 찼어요. 자정이 지나면 다시 만들 수 있어요.": { en: "Today's total creation limit has been reached. You can create again after midnight.", ja: "今日作れる全体の本数に達しました。深夜0時を過ぎるとまた作れます。", zh: "今天可制作的总量已满。过了午夜就可以再制作。" },
-  "완성본 미리 보기": { en: "Preview the finished pages", ja: "完成版をプレビュー", zh: "预览成品" },
 
   /* ---- 서버가 보내는 진행 한 줄 (JobRunner 의 progress.say) ---- */
   "루가 이야기를 짓고 있어요": { en: "Lou is writing the story", ja: "Louがストーリーを作っています", zh: "Lou 正在写故事" },

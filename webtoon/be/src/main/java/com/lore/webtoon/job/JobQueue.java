@@ -4,10 +4,8 @@ import com.lore.webtoon.usage.SpendGuard;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 줄 — <b>내 앞에 몇 개가 있고 얼마나 더 기다려야 하나.</b>
@@ -44,34 +42,16 @@ public class JobQueue {
 
     private final WebtoonJobRepository jobs;
 
-    /**
-     * 화질별 한 편 예상 시간(초).
-     *
-     * <h3>이 숫자는 임시다</h3>
-     *
-     * 처음에는 배포 서버에서 잰 한 편(너울 14분 39초)에서 환산해 적었다.
-     * 그런데 로컬에서 파도로 세 편을 돌려 보니 <b>실제는 5분 27초~6분 7초</b>
-     * 였다 — 적어 둔 8분 6초보다 <b>40% 짧다.</b> 표본이 다른 기계였기
-     * 때문이다(배포 서버 t3.small 대 로컬 맥). 그래서 화면에 적어 준 예상도
-     * 같은 만큼 컸다: 「약 13분」 이라 해 놓고 실제로는 9분 52초였다.
-     *
-     * <b>여기 숫자를 다시 박는 것은 답이 아니다.</b> 기계가 바뀌면 또 틀린다.
-     * {@code started_at}·{@code finished_at}·{@code quality} 가 쌓이고 있으니,
-     * 표본이 모이면 <b>DB 평균으로 갈아 끼우고 이 표를 지운다.</b> 그 전까지는
-     * 없는 것보다 낫다는 이유로만 둔다.
-     *
-     * 아래 값은 <b>로컬 실측</b>(파도 347초)과 그 비율로 맞춘 것이다.
-     */
-    private static final Map<String, Integer> SECONDS = Map.of(
-            "wave",  4 * 60 + 34,       // 파도 × (384/486)
-            "surf",  5 * 60 + 47,       // 실측 평균 347초 (3편)
-            "swell", 10 * 60 + 28);     // 파도 × (879/486)
+    /* 한 편 예상 시간 표(화질별 5분 47초 등)는 JobEta 로 옮겼다(#509) — 이제 걸음별
+       실측과 남은 장 수로 센다. */
 
     private final JobRunner runner;
+    private final JobProgress progress;
 
-    public JobQueue(WebtoonJobRepository jobs, JobRunner runner) {
+    public JobQueue(WebtoonJobRepository jobs, JobRunner runner, JobProgress progress) {
         this.jobs = jobs;
         this.runner = runner;
+        this.progress = progress;
     }
 
     /** 일꾼을 잡고 있거나 잡으러 갈 것들. */
@@ -116,6 +96,10 @@ public class JobQueue {
     /**
      * 이 작업이 지금 줄에서 어디쯤인가. 화면이 0.8초마다 읽는다.
      *
+     * <b>줄 순서는 만든 순서가 아니다.</b> 이야기를 고르거나 시트를 확인한 작업은
+     * 그때 줄 끝에 다시 선다(#509) — 일꾼은 선 순서대로 꺼내므로, 도는 것 다음에
+     * 줄에 선 때({@code updatedAt}) 순으로 센다.
+     *
      * @return 줄에 없으면(도는 중이거나 끝났거나 사람을 기다리는 중) {@code null}
      */
     @Transactional(readOnly = true)
@@ -123,8 +107,12 @@ public class JobQueue {
         if (job == null || job.getStatus() != JobStatus.QUEUED) {
             return null;                        // 이미 내 차례이거나 끝났다
         }
-        List<WebtoonJob> line = jobs.findByStatusInOrderByCreatedAtAsc(IN_LINE);
+        List<WebtoonJob> line = new java.util.ArrayList<>(jobs.findByStatusInOrderByCreatedAtAsc(IN_LINE));
+        line.sort(java.util.Comparator
+                .comparing((WebtoonJob one) -> one.getStatus() == JobStatus.RUNNING ? 0 : 1)
+                .thenComparing(WebtoonJob::getUpdatedAt));
 
+        Instant now = Instant.now();
         int ahead = 0;
         long work = 0;
         for (WebtoonJob one : line) {
@@ -132,7 +120,7 @@ public class JobQueue {
                 break;
             }
             ahead++;
-            work += remainingOf(one);
+            work += remainingOf(one, now);
         }
         /* **나란히 도는 수로 나눈다.** 앞에 둘이 있어도 둘이 같이 돌면 내
            차례는 한 편 뒤다. 안 나누면 기다리는 사람에게 실제의 두 배를
@@ -141,54 +129,37 @@ public class JobQueue {
     }
 
     /**
-     * <b>이 사람이 결과를 보기까지 앞으로 몇 분.</b> 화면이 「약 4분 남았어요」로 적는다.
+     * <b>이 사람이 지금까지 얼마나 기다렸고 앞으로 얼마나 남았나.</b>
      *
-     * 줄에 서 있으면 <b>앞사람들 + 내 한 편</b>을 같이 센다 — 줄 띠(「앞에 2명」)는
-     * "내 차례가 언제 오나" 를 말하지만, 기다리는 사람이 정말 알고 싶은 것은
-     * "언제 볼 수 있나" 다. 나갔다 올지 말지를 그 숫자로 정한다.
-     *
-     * <b>사람이 답할 차례면 안 센다({@code null}).</b> 그때 멈춰 있는 것은
-     * 우리가 아니라 그 사람이라, 남은 시간을 적으면 거짓말이 된다 —
-     * 시트 앞에서 십 분을 고민해도 「1분 남음」이 떠 있게 된다.
-     *
-     * @return 남은 분(최소 1). 끝났거나 사람 차례면 {@code null}
+     * 줄에 서 있으면 앞사람들 + 내 몫을 같이 센다 — 줄 띠(「앞에 2명」)는 "내 차례가
+     * 언제 오나" 를 말하지만, 기다리는 사람이 정말 알고 싶은 것은 "언제 볼 수
+     * 있나" 다. 사람이 답할 차례면 남은 시간을 안 적는다 — 그때 멈춰 있는 것은
+     * 우리가 아니라 그 사람이다. 계산은 {@link JobEta} 가 한다.
      */
     @Transactional(readOnly = true)
-    public Integer minutesLeft(WebtoonJob job) {
-        if (job == null || job.getStatus() == null) {
-            return null;
-        }
-        long seconds = switch (job.getStatus()) {
-            case QUEUED -> {
-                Spot spot = spotOf(job);
-                yield (spot == null ? 0 : spot.seconds()) + wholeOf(job);
-            }
-            case RUNNING -> remainingOf(job);
-            default -> -1;                  // 끝났거나(DONE·ERROR) 사람을 기다리는 중
-        };
-        return seconds < 0 ? null : (int) Math.max(1, Math.ceil(seconds / 60.0));
-    }
-
-    /** 이 화질로 한 편 만드는 데 걸리는 예상 시간(초). */
-    private long wholeOf(WebtoonJob job) {
-        return SECONDS.getOrDefault(
-                WebtoonQuality.normalize(job.getQuality()), SECONDS.get("surf"));
+    public JobEta.Eta etaOf(WebtoonJob job, JobProgress.Snapshot now, Spot spot) {
+        return JobEta.of(job, now, slotsFor(job), spot == null ? 0 : spot.seconds(), Instant.now());
     }
 
     /**
-     * 이 작업이 <b>앞으로</b> 얼마나 더 걸릴까(초).
+     * 이 작업이 쓸 수 있는 그림 자리.
      *
-     * 도는 중이면 이미 지난 만큼을 뺀다 — 14분짜리가 13분째면 1분만 남았다.
-     * 예상보다 오래 걸리고 있으면 0 이 아니라 <b>1분</b>을 준다: 곧 끝난다고
-     * 말해 놓고 안 끝나는 것보다, 조금 남았다고 말하는 편이 덜 속인다.
+     * 그림 자리({@code lore.webtoon.page-workers})는 <b>서버 전체가 나눠 쓴다.</b> 두 편이
+     * 같이 그리면 한 편이 쓰는 자리는 절반이다 — 이걸 안 넣으면 둘째 편의 남은
+     * 시간이 실제의 절반으로 적힌다.
      */
-    private long remainingOf(WebtoonJob one) {
-        long whole = wholeOf(one);
-        if (one.getStatus() != JobStatus.RUNNING || one.getStartedAt() == null) {
-            return whole;
-        }
-        long spent = Duration.between(one.getStartedAt(), Instant.now()).getSeconds();
-        return Math.max(60, whole - spent);
+    private int slotsFor(WebtoonJob job) {
+        long drawing = jobs.countByStatusAndStageIn(JobStatus.RUNNING, List.of(JobStage.PAGES, JobStage.BIND));
+        boolean mine = job.getStatus() == JobStatus.RUNNING
+                && (job.getStage() == JobStage.PAGES || job.getStage() == JobStage.BIND);
+        long sharing = Math.max(1, drawing + (mine ? 0 : 1));
+        return (int) Math.max(1, runner.pageWorkers() / sharing);
+    }
+
+    /** 앞사람 한 편이 <b>앞으로</b> 얼마나 더 걸릴까(초). 예상을 넘겼으면 마무리 몫만 센다. */
+    private long remainingOf(WebtoonJob one, Instant now) {
+        JobEta.Eta eta = JobEta.of(one, progress.of(one.getId()), slotsFor(one), 0, now);
+        return eta.left() < 0 ? JobEta.FINISH : eta.left();
     }
 
     /**
