@@ -746,6 +746,7 @@ public class JobRunner {
     private void runFullReviewLoop(Long jobId, WebtoonJob job) {
         // 페이지 -> 이 루프 안에서 다시 그린 횟수.
         Map<Integer, Integer> redrawn = new HashMap<>();
+        int pages = pageCount(job);             // 표지 1장 + 장면 수. 모르면 0
         for (int round = 1; round <= MAX_FULL_REVIEW_ROUNDS; round++) {
             if (cancelled.contains(jobId)) {
                 return;
@@ -794,7 +795,9 @@ public class JobRunner {
                 String why = issue.path("why").asText("");
                 for (JsonNode pageNode : issue.path("redraw_pages")) {
                     int page = pageNode.asInt(-1);
-                    if (page <= 0) {
+                    /* 이 화에 없는 쪽은 부르지 않는다 — 검수 모델이 8장짜리 화를 22장으로
+                       읽고 9·18쪽을 다시 그리라고 한 적이 있다(2026-09-30). */
+                    if (page <= 0 || pages > 0 && page > pages) {
                         continue;
                     }
                     int used = redrawn.getOrDefault(page, 0);
