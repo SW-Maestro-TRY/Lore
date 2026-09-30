@@ -51,6 +51,7 @@ from pathlib import Path
 
 import imagegen
 import imageprompt
+import lorebook                                  # noqa: E402
 import llm
 import charcard
 import pagecheck
@@ -250,7 +251,7 @@ def opens_at(scenes: list[dict], scene_no: int) -> str:
 
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
-                          has_prev: bool, lang: str = "ko") -> str:
+                          has_prev: bool, lang: str = "ko", lore: str = "") -> str:
     """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
 
     씬 하나 = 이미지 하나. 각 장면 dict 에 이미 「직전 상태」·「끝나는 상태」가
@@ -295,6 +296,10 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
             mark = " ← 이 장에서 그릴 자리" if i == scene_no else ""
             summary = s.get("what") or ""
             lines.append(f"{i}. {summary}{mark}")
+    if lore:
+        # 이 장면 글에 등장한 세계 재료(#502). 그림에 보이는 물건·장소가 그 세계의
+        # 것으로 그려지게 한다. 장면 글 바로 위에 두어 데이터와 떨어지지 않게 한다.
+        lines += ["", lore]
     con = "\n".join(lines)
 
     scene = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
@@ -468,6 +473,8 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
 
     title, genre = direction.get("title") or "", direction.get("genre") or ""
     plot = scene_data.get("plot") or direction.get("plot") or ""
+    # 세계 재료(#502) — lore.json 이 있는 run 만. 없으면(옛 run) 프롬프트가 안 바뀐다.
+    lore_world = (lorebook.read_record(run_dir).get("world") or "") if lorebook.enabled() else ""
     first_detail = " — ".join(x for x in (scenes[0].get("where"), scenes[0].get("what")) if x)
 
     made = []
@@ -482,8 +489,12 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
             # "첨부한 직전 그림" 이라고 적으면 없는 그림을 가리키게 된다.
             has_prev = page_path(run_dir, page_no - 1).exists()
+            one = scenes[n_ - 1]
+            lore = lorebook.page_block(lorebook.page_entries(
+                lore_world, " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "prev", "ends"))
+            )) if lore_world else ""
             prompt = (build_continue_prompt(direction, scenes, char, spec, cast,
-                                            scene_no=n_, has_prev=has_prev, lang=lang)
+                                            scene_no=n_, has_prev=has_prev, lang=lang, lore=lore)
                       .replace("{style}", imageprompt.load_style(style)))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을

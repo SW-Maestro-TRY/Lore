@@ -51,6 +51,7 @@ import tracing                                # noqa: E402
 import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
 import charcard                               # noqa: E402
+import lorebook                               # noqa: E402
 import storydiff                              # noqa: E402
 import fullreview                             # noqa: E402
 import pages as pagemod                       # noqa: E402
@@ -673,14 +674,26 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     structures = _distinct_structures(char["genre"], structure) if (structure and use_axes) else []
     engines = _pick_engines()
 
+    # 세계별 재미 재료(#502). 축·엔진과 같은 층이 아니다 — 축은 '어디에 서 있는가',
+    # 재료는 '이 세계에서 무엇이 벌어질 수 있는가'다. 사용자가 성격을 적었어도 붙는다
+    # (재료는 세계의 사실이지 성격이 아니라서, 축이 성격으로 새던 문제와 다르다).
+    # 세계를 모르면(장르도 카드도 없음) 안 붙는다 — story_prompt 가 방향마다 장르를
+    # 스스로 고르는 자리라 어느 세계의 재료를 줄지 알 수 없다.
+    lore_world = lorebook.world_key_for(char["genre"], char.get("card")) if lorebook.enabled() else ""
+    lore_list = lorebook.assign(lore_world, avoid=lorebook.recent_ids(lore_world, RUNS_DIR)) if lore_world else []
+    if lore_list:
+        lorebook.record(run_dir, lore_world, lore_list)
+
     if axes or structure or engines:
         write_json(run_dir / "axes.json",
                    {"축": axes, "구조": structure, "축_사용": use_axes,
                     "엔진_사용": engines_enabled(),
                     "방향별_축": axes_list, "방향별_구조": structures,
                     "방향별_엔진": engines})
-    for i in range(max(len(axes_list), len(structures), len(engines))):
+    for i in range(max(len(axes_list), len(structures), len(engines), len(lore_list))):
         bits = []
+        if i < len(lore_list):
+            bits.append("재료: " + "·".join(e["name"] for e in lore_list[i]))
         if i < len(engines):
             bits.append(str(engines[i].get("이름") or ""))
         if i < len(axes_list):
@@ -692,11 +705,12 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     if use_axes and (axes or structure) and not fresh:
         log("  (최근 생성물과 조합이 겹칩니다 — 고를 수 있는 폭이 좁습니다)")
 
-    count = max(len(axes_list), len(structures), len(engines))
+    count = max(len(axes_list), len(structures), len(engines), len(lore_list))
     if not count:
         return ""
     head = "## 방향별 「문제가 옮겨 가는 길」" \
            + (" · 이야기 변수 · 회차 구조" if use_axes else "") \
+           + (" · 이 세계의 재료" if lore_list else "") \
            + " — 참고가 아니라 지시다"
     parts = [
         "", head, "",
@@ -725,9 +739,12 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     parts += ["", "**값은 판과 처지에 건다. 주인공의 성격으로 옮기지 않는다.** 톤은 "
               "이야기의 분위기이고, 주인공 위치와 모순은 주인공이 놓인 처지다. "
               "주인공이 어떤 사람인지는 사용자가 적은 설명만 정한다."]
+    if lore_list:
+        parts += ["", lorebook.STORY_HEAD]
     for i in range(count):
         parts += ["", f"### 방향 {i + 1}", ""]
-        for txt in (_engine_block(engines[i]) if i < len(engines) else "",
+        for txt in (("\n".join(lorebook.story_lines(lore_list[i])) if i < len(lore_list) else ""),
+                    _engine_block(engines[i]) if i < len(engines) else "",
                     samples.axes_block(axes_list[i]) if i < len(axes_list) else "",
                     samples.structure_block(structures[i]) if i < len(structures) else ""):
             if txt:
@@ -832,33 +849,10 @@ def choose(directions: list[dict], pick: int | None) -> dict:
         print("목록에 있는 번호를 넣으세요.")
 
 
-# 장르 문자열(자유 텍스트, 예: "헌터·게이트") -> worlds.json
-# 프리셋 라벨의 키워드. 여러 개 걸리면 첫 번째로 매칭된 것을 쓴다. 장르가
-# 이 목록에 없으면(오컬트 미스터리·좀비 아포칼립스 등) 조용히 건너뛴다 —
-# 세계관 문장 없이도 지금까지처럼 돌아간다.
-# **순서가 곧 우선순위다.** 합성 장르명("게임 판타지"·"로맨스 판타지")이 넓은
-# 쪽("판타지")에 먼저 걸리면 엉뚱한 세계관이 붙으므로 좁은 쪽을 위에 둔다
-# (samples.guess_genre 의 표와 같은 이유·같은 순서).
-#
-# 예전에는 여섯 줄뿐이라 화면이 고르게 해 둔 장르 14개 중 9개(로맨스 판타지·
-# 판타지·게임 판타지·센티넬·오메가버스·스릴러·액션·개그·일상)가 세계관 문장을
-# 한 줄도 못 받았다 — 장르를 골라도 그 장르의 규칙이 프롬프트에 없었다는 뜻이다
-# (2026-09-17, 사용자 지적으로 확인).
-_WORLD_KEYWORDS = {
-    # 합성 장르 — '판타지' 보다 먼저
-    "romance_novel": ("로맨스 판타지", "로판", "빙의", "회귀", "영애"),
-    "hunter_gate": ("헌터", "게이트"),
-    "academy_magic": ("마법학교", "마법", "학원"),
-    "idol_agency": ("아이돌", "연습생"),
-    "sentinel_center": ("센티넬", "가이드버스"),
-    "omegaverse_grade": ("오메가버스", "옴버"),
-    "hero_city": ("히어로", "능력자", "빌런"),
-    "post_disaster": ("재난", "좀비", "아포칼립스"),
-    "thriller_record": ("스릴러", "서스펜스"),
-    "action_contract": ("액션", "격투"),
-    # 넓은 쪽은 맨 아래 — 위에서 아무것도 안 걸렸을 때만 쓴다
-    "fantasy_continent": ("판타지",),
-}
+# 장르 문자열 -> 세계 키 표는 lorebook.WORLD_KEYWORDS 에 있다(#502). 세계관 문단
+# (worlds.json)과 재미 재료(lorebook.json)가 같은 세계를 가리켜야 해서 한 곳에 둔다.
+# 예전에는 여섯 줄뿐이라 화면이 고르게 해 둔 장르 14개 중 9개가 세계관 문장을
+# 한 줄도 못 받았다(2026-09-17, 사용자 지적으로 확인).
 
 
 def genre_lore_for(genre: str) -> str:
@@ -995,10 +989,8 @@ def world_text_for(genre: str) -> str:
         presets = json.loads(path.read_text(encoding="utf-8")).get("presets") or {}
     except Exception:
         return ""
-    for key, keywords in _WORLD_KEYWORDS.items():
-        if any(kw in genre for kw in keywords):
-            return (presets.get(key) or {}).get("text") or ""
-    return ""
+    key = lorebook.world_key_for(genre)
+    return ((presets.get(key) or {}).get("text") or "") if key else ""
 
 
 def picked_direction(run_dir: Path, pick: int | None) -> dict:
@@ -1027,7 +1019,7 @@ PLOT_LABEL_RE = re.compile(rf"^{S}줄거리{S}[:：]{S}$", re.M)
 CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
 
 
-def scene_input_block(char: dict, direction: dict) -> str:
+def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) -> str:
     """scene_prompt 뒤에 붙는 이번 입력 — 고른 스토리 + 캐릭터 + **장르**.
 
     **장르를 여기에도 준다.** 예전에는 제목·본문·캐릭터만 넘겼는데, 장면
@@ -1068,6 +1060,11 @@ def scene_input_block(char: dict, direction: dict) -> str:
             lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
                       "", GENRE_SAMPLE_NOTE, "", cards]
         lines += genre_lore_section(genre)
+    # 이 방향이 서 있던 재료(#502). 이야기 단계에서 배정된 것 + 본문에 등장하는 것.
+    # run_dir 이 없거나 lore.json 이 없으면(옛 run) 아무것도 안 붙는다.
+    if run_dir is not None and lorebook.enabled():
+        lines += lorebook.scene_block(lorebook.scene_entries(
+            run_dir, int(direction.get("n") or 0), direction.get("body") or direction.get("raw", "")))
     return "\n".join(lines) + "\n"
 
 
@@ -1107,7 +1104,7 @@ def parse_scenes(text: str) -> dict:
 def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
                  lang: str = "ko") -> dict | None:
     """선택된 방향 -> 줄거리 + 장면(직전 상태·끝나는 상태 포함). `scenes.json` 에 쓴다."""
-    prompt = compose("scene_prompt", scene_input_block(char, direction), lang=lang)
+    prompt = compose("scene_prompt", scene_input_block(char, direction, run_dir), lang=lang)
     write_text(run_dir / "scene_prompt.txt", prompt)
     if dry_run:
         log(f"[장면] 프롬프트만 썼습니다 -> {run_dir / 'scene_prompt.txt'}")
