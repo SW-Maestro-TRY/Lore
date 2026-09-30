@@ -425,7 +425,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <img src={louSrc} alt="" />
                 <div className="txt">
                   {job ? <b>{louTitle}</b> : <b className="skeleton" style={{ width: 140, height: 18, borderRadius: 6 }} />}
-                  <div className="wt-prog-bar"><i style={{ transform: `scaleX(${Math.max(2, Math.min(100, job?.pct ?? 2)) / 100})` }} /></div>
+                  <div className="wt-prog-bar"><i style={{ transform: `scaleX(${Math.max(2, Math.min(100, shownPct)) / 100})` }} /></div>
                   {job && <span className="wt-prog-pct">{t("{pct}% · {time} 경과", { pct: shownPct, time: elapsedText })}</span>}
                   <span className="dim">{louLine}</span>
                 </div>

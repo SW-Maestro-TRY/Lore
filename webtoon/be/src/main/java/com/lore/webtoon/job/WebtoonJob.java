@@ -294,10 +294,11 @@ public class WebtoonJob {
         /* 사람을 기다린 시간 — 기다리기 시작한 때를 적어 두고, 다른 상태로
            넘어갈 때 그 차이를 쌓는다. */
         boolean waitsNow = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET;
-        if (waitsNow && this.pausedAt == null) {
+        Instant waitedFrom = waitingSince();
+        if (waitsNow && waitedFrom == null) {
             this.pausedAt = at;
-        } else if (!waitsNow && this.pausedAt != null) {
-            this.pausedSeconds += Math.max(0, Duration.between(this.pausedAt, at).getSeconds());
+        } else if (!waitsNow && waitedFrom != null) {
+            this.pausedSeconds += Math.max(0, Duration.between(waitedFrom, at).getSeconds());
             this.pausedAt = null;
         }
         /* 걸음이 바뀌었거나 멈춰 있다가 다시 돌기 시작하면 걸음 시계를 새로 켠다.
@@ -460,8 +461,24 @@ public class WebtoonJob {
 
     /** 사람을 기다린 시간(초). 지금 기다리는 중이면 지금까지 기다린 만큼도 더한다. */
     public long pausedSecondsAt(Instant now) {
-        long more = pausedAt == null ? 0 : Math.max(0, Duration.between(pausedAt, now).getSeconds());
+        Instant from = waitingSince();
+        long more = from == null ? 0 : Math.max(0, Duration.between(from, now).getSeconds());
         return pausedSeconds + more;
+    }
+
+    /**
+     * 지금 사람을 기다리고 있으면 언제부터인가. 아니면 {@code null}.
+     *
+     * 이 칸이 생기기 전(#509)부터 기다리던 작업은 {@code pausedAt} 이 비어 있다 —
+     * 그때는 마지막으로 상태가 바뀐 때부터 기다린 것으로 본다. 안 그러면 일주일
+     * 기다린 작업의 경과 시간이 「172:58:19」로 나왔다(로컬에서 봄).
+     */
+    private Instant waitingSince() {
+        if (pausedAt != null) {
+            return pausedAt;
+        }
+        boolean waiting = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET;
+        return waiting ? updatedAt : null;
     }
 
     /** 지금 걸음을 시작한 때. 옛 작업(칸이 없음)은 {@code updatedAt}. */
