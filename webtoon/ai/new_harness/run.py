@@ -680,7 +680,9 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     # 세계를 모르면(장르도 카드도 없음) 안 붙는다 — story_prompt 가 방향마다 장르를
     # 스스로 고르는 자리라 어느 세계의 재료를 줄지 알 수 없다.
     lore_world = lorebook.world_key_for(char["genre"], char.get("card")) if lorebook.enabled() else ""
-    lore_list = lorebook.assign(lore_world, avoid=lorebook.recent_ids(lore_world, RUNS_DIR)) if lore_world else []
+    lore_list = lorebook.reuse(run_dir, lore_world) if lore_world else []      # 실험용 재사용
+    if lore_world and not lore_list:
+        lore_list = lorebook.assign(lore_world, avoid=lorebook.recent_ids(lore_world, RUNS_DIR))
     if lore_list:
         lorebook.record(run_dir, lore_world, lore_list)
 
