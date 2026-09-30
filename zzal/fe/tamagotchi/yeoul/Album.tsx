@@ -5,6 +5,8 @@
 // 액자 = 벽에서 한 칸을 누르면 크게. 열린 칸은 저장·공유, 잠긴 칸은 조건만 알려 준다.
 'use client';
 
+import { useEffect, useState } from 'react';
+import { downloadImage, imageFileName, prepareImageFile, shareImageFile } from '../../lib/download';
 import { C, C2, GAEGU, TAP_MIN, gap, radius, fz, ink, paperA } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
@@ -114,7 +116,49 @@ function Wall({ y }: { y: Yeoul }) {
 function FrameView({ y }: { y: Yeoul }) {
   const f = y.v.frame;
   const live = useLive();
-  const src = spriteUrl(live, f.key);
+  // 내 아이의 해당 동작이 없으면 다른 동작/여울의 그림을 내려받지 않는다.
+  const ownSrc = live.petId && !y.s.sampleMode ? live.img(f.key) : null;
+  const src = spriteUrl(live, f.key, y.s.sampleMode);
+  const fileSrc = live.petId && !y.s.sampleMode ? ownSrc : src;
+  const fileName = imageFileName(live.pet?.name || y.s.petName, f.name);
+  const [file, setFile] = useState<File | null>(null);
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setFile(null); setNotice(f.open && !fileSrc ? '아직 그림이 준비되지 않았어요. 잠시 뒤 다시 열어 주세요.' : '');
+    if (f.open && fileSrc) {
+      void prepareImageFile(fileSrc, fileName).then((value) => {
+        if (active) setFile(value);
+      }).catch(() => {
+        if (active) setNotice('아직 그림이 준비되지 않았어요. 잠시 뒤 다시 열어 주세요.');
+      });
+    }
+    return () => { active = false; };
+  }, [fileSrc, fileName, f.open]);
+  const record = (kind: 'SHARE' | 'DOWNLOAD') => {
+    if (live.petId && !y.s.sampleMode) void live.shareMotion(f.key, kind);
+  };
+  const save = () => {
+    if (!fileSrc || busy) return;
+    setBusy(true);
+    void downloadImage(fileSrc, fileName).then((result) => {
+      if (result.outcome === 'saved') {
+        setNotice('파일 다운로드를 시작했어요. 다운로드한 파일을 확인해 주세요.');
+        record('DOWNLOAD');
+      } else setNotice('파일을 받지 못했어요. Safari나 Chrome에서 다시 눌러 주세요.');
+    }).finally(() => setBusy(false));
+  };
+  const share = () => {
+    if (!file || busy) return;
+    // 미리 읽은 File을 클릭 안에서 곧바로 넘겨 iOS의 사용자 활성화를 보존한다.
+    setBusy(true);
+    void shareImageFile(file).then((result) => {
+      if (result === 'shared') { setNotice('공유창에 파일을 전달했어요.'); record('SHARE'); }
+      else if (result === 'unsupported') setNotice('이 브라우저에서는 파일 공유를 지원하지 않아요. 저장한 뒤 앱에서 파일을 첨부해 주세요.');
+      else if (result === 'failed') setNotice('공유창을 열지 못했어요. 저장한 뒤 앱에서 파일을 첨부해 주세요.');
+    }).finally(() => setBusy(false));
+  };
   return (
     <div onClick={f.close} data-part="frame" style={{ position: 'absolute', inset: 0, zIndex: 10, background: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22, animation: 'yFadeIn .18s ease' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.lg, width: '100%', animation: f.anim }}>
@@ -123,13 +167,14 @@ function FrameView({ y }: { y: Yeoul }) {
           <img src={src} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity }} />
         </span>
         <span style={{ fontFamily: GAEGU, fontSize: fz.h2, color: C2.onDark }}>{f.name}</span>
+        {notice && <span role="status" data-part="album-file-notice" style={{ fontSize: fz.sm, color: C2.onDark, textAlign: 'center' }}>{notice}</span>}
         {f.locked && <span style={{ padding: '7px 14px', borderRadius: radius.pill, background: paperA(.16), fontSize: fz.sm, color: '#F3E9DC' }}>{f.cond}</span>}
         {f.open && (
           <span style={{ display: 'flex', gap: gap.sm }}>
             {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 39px). */}
-            <button onClick={f.save} data-action="frame-save" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>저장</button>
-            {/* 서버가 주소를 만들어 준다. 파일이 아니라 링크인 이유는 lib/pet.ts share() 머리말에. */}
-            <button onClick={f.share} data-action="frame-share" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>공유</button>
+            <button onClick={save} disabled={!fileSrc || busy} data-action="frame-save" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>저장</button>
+            {/* 미리 읽은 애니메이션 파일을 OS 공유창에 전달한다. */}
+            <button onClick={share} disabled={!file || busy} data-action="frame-share" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>{file || notice ? '공유' : '공유 준비 중…'}</button>
           </span>
         )}
       </div>

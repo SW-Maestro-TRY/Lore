@@ -76,6 +76,22 @@ class MotionWishServiceTest {
     }
 
     @Test
+    @DisplayName("부화 전에는 생성 시각부터 센다 — dev 시계를 밀어도 요청 상한을 지킨다")
+    void anUnhatchedPetCanSubmitWithoutLosingTheLimit() {
+        ZzalPet draft = ZzalPet.draft(USER, "k", WOKE);
+        ReflectionTestUtils.setField(draft, "createdAt", WOKE); // 저장된 펫의 생성 시각(JPA가 채움)
+        draft.advanceDevClock(java.time.Duration.ofDays(2));
+        ReflectionTestUtils.setField(draft, "id", PET);
+        when(pets.get(any(), any())).thenReturn(draft);
+
+        fillTheDay(kst("2026-09-05 21:00"));
+
+        assertThat(store).hasSize(ZzalRules.MOTION_WISH_DAILY_LIMIT);
+        assertThatThrownBy(() -> service.submit(USER, PET, "스물한 번째", kst("2026-09-05 21:30")))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_MOTION_WISH_DAILY_LIMIT);
+    }
+
+    @Test
     @DisplayName("★★★ 자정을 넘겨도 잠들기 전이면 같은 하루다 — 스물한 번째는 자정 뒤에도 거절")
     void midnightIsNotTheBoundary() {
         fillTheDay(kst("2026-09-05 23:50"));

@@ -1,4 +1,4 @@
-// 결과물 받기·주소 복사. 도감 카드의 [저장]·[공유] 버튼이 실제로 하는 일이 여기 있다.
+// 애니메이션 원본 파일 다운로드·공유와 기존 링크 복사. 도감 카드의 [저장]·[공유] 버튼이 실제로 하는 일이 여기 있다.
 //
 // ★ 왜 서버가 필요 없는가
 //   움짤은 이미 CloudFront 로 공개 서빙되고, 그 배포가 우리 도메인(dev.lorecomic.com)을
@@ -14,11 +14,10 @@ import { track } from './analytics';
 /**
  * 받기의 결말.
  *
- * - `saved`  파일로 받아졌다(브라우저 다운로드가 시작됐다).
- * - `opened` 못 받아서 **새 탭으로 열었다.** 사용자는 길게 눌러 직접 저장해야 한다(iOS).
+ * - `saved`  브라우저 다운로드가 시작됐다. 파일 저장 완료나 사진첩 등록은 보장하지 않는다.
  * - `failed` 아무것도 못 했다. 부르는 쪽이 반드시 무언가를 띄워야 한다.
  */
-export type DownloadOutcome = 'saved' | 'opened' | 'failed';
+export type DownloadOutcome = 'saved' | 'failed';
 
 export interface DownloadResult {
   outcome: DownloadOutcome;
@@ -45,11 +44,6 @@ const MAX_NAME = 60;
 /**
  * 그림을 파일로 받는다.
  *
- * ★★ 이 함수는 **버튼 클릭 핸들러에서 곧바로** 불러야 한다.
- *   iOS 갈래가 `window.open` 을 쓰는데, 브라우저는 "사용자가 방금 누른 것" 일 때만 새 창을
- *   허용한다. 이 함수 앞에 `await` 가 하나라도 끼면 그 자격이 사라져 팝업 차단으로 막힌다.
- *   같은 이유로 아래 iOS 분기는 **첫 await 보다 먼저** 놓여 있다. 순서를 바꾸지 말 것.
- *
  * @param url      assetUrl() 로 만든 그림 주소.
  * @param baseName 확장자를 뺀 파일 이름. 여기서 다시 걸러 쓴다.
  */
@@ -63,27 +57,8 @@ export async function downloadImage(url: string, baseName: string): Promise<Down
 
   const fileName = `${safeName(baseName)}.${extOf(url)}`;
 
-  // ── iOS ──────────────────────────────────────────────────────────────────
-  // ★ iOS 사파리는 <a download> 를 **믿을 수 없다.** 최신 사파리는 받아 주지만,
-  //   인스타·카톡 인앱 브라우저에서는 속성을 통째로 무시하고 같은 탭에서 그림을 열어 버린다.
-  //   그러면 사용자는 도감 화면을 잃고 파일도 못 받는다. 그래서 처음부터 새 탭으로 열고
-  //   "길게 눌러 저장" 을 안내한다 — 이 갈래가 없으면 아이폰에서는 그냥 안 되는 기능이다.
-  // ★ 여기서는 404 를 미리 못 가려낸다(먼저 fetch 하면 위에 적은 클릭 자격을 잃는다).
-  //   대신 새 탭에 사파리의 "파일을 찾을 수 없음" 이 뜨므로 조용히 실패하지는 않는다.
-  if (isIos()) {
-    // ★ 여기서 'noopener' 를 **넘기면 안 된다.** 그걸 주면 브라우저가 창을 잘 열고도 항상
-    //   null 을 돌려주기 때문에, 열렸는데도 "팝업이 막혔어요" 를 띄우게 된다(실측으로 걸렸다).
-    //   대신 열린 뒤에 opener 를 끊는다 — 새 탭은 우리 CDN 그림 하나뿐이라 이걸로 충분하다.
-    const opened = window.open(url, '_blank');
-    if (!opened) return done({ outcome: 'failed', code: 'popup_blocked' });
-    try {
-      opened.opener = null;
-    } catch {
-      // 다른 출처면 건드릴 수 없다. 그대로 둔다.
-    }
-    return done({ outcome: 'opened' });
-  }
-
+  // Safari·Chrome에서 원본 파일을 다운로드한다. 사진 앱에 직접 저장하지 않는다.
+  // 인앱 브라우저가 다운로드를 막을 수 있으므로 완료 안내에서도 사진첩 저장을 약속하지 않는다.
   let res: Response;
   try {
     res = await fetch(url, { credentials: 'omit' });
@@ -95,7 +70,9 @@ export async function downloadImage(url: string, baseName: string): Promise<Down
   // 부르는 쪽이 이 코드를 보고 "아직 준비되지 않았어요" 를 골라 띄운다.
   if (!res.ok) return done({ outcome: 'failed', code: `http_${res.status}` });
 
-  const blob = await res.blob();
+  let blob: Blob;
+  try { blob = await res.blob(); } catch { return done({ outcome: 'failed', code: 'network' }); }
+  if (!blob.type.startsWith('image/')) return done({ outcome: 'failed', code: 'not_image' });
   const href = URL.createObjectURL(blob);
   try {
     const a = document.createElement('a');
@@ -114,6 +91,30 @@ export async function downloadImage(url: string, baseName: string): Promise<Down
   }
 
   return done({ outcome: 'saved' });
+}
+
+/** 앨범 상세를 열 때 미리 읽는다. 공유 버튼에서는 await 없이 OS 공유창을 열 수 있다. */
+export async function prepareImageFile(url: string, baseName: string): Promise<File> {
+  if (!url) throw new Error('no_url');
+  const res = await fetch(url, { credentials: 'omit' });
+  if (!res.ok) throw new Error(`http_${res.status}`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith('image/')) throw new Error('not_image');
+  return new File([blob], `${safeName(baseName)}.${extOf(url)}`, { type: blob.type });
+}
+
+export type FileShareOutcome = 'shared' | 'unsupported' | 'cancelled' | 'failed';
+
+/** 원본 파일을 공유한다. 취소는 오류가 아니며 미지원 브라우저에서는 저장 후 첨부를 안내한다. */
+export async function shareImageFile(file: File): Promise<FileShareOutcome> {
+  try {
+    if (!navigator.share || !navigator.canShare?.({ files: [file] })) return 'unsupported';
+    await navigator.share({ files: [file] });
+    return 'shared';
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') return 'cancelled';
+    return 'failed';
+  }
 }
 
 /**
@@ -199,21 +200,6 @@ function toAbsolute(url: string): string {
   } catch {
     return url;
   }
-}
-
-/**
- * iOS 인가.
- *
- * ★ 기능 검사(`'download' in a`)로는 못 가린다 — 사파리도 속성은 **가지고 있고** 무시만 한다.
- *   그래서 예외적으로 UA 를 본다.
- * ★ iPadOS 13 부터 아이패드가 스스로를 Mac 이라고 말한다. 그래서 "맥인데 손가락으로 누른다"
- *   를 함께 본다(진짜 맥은 maxTouchPoints 가 0 이다).
- */
-function isIos(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  if (/iPad|iPhone|iPod/.test(ua)) return true;
-  return /Mac/.test(ua) && navigator.maxTouchPoints > 1;
 }
 
 /** 옛 복사 방식. 되면 true. */

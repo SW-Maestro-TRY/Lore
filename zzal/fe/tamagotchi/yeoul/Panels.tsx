@@ -389,7 +389,7 @@ function Fire({ y }: { y: Yeoul }) {
             그림이 없으면 **칸을 접는다** 가 이 판의 규칙이고(→ `FirePreview`), 진짜 그림이
             생기면 그 칸을 쓰면 된다. 자리표를 다시 만들지 말 것. */}
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.2, color: C.ink, textAlign: 'center' }}>{f.title}</span>
-        {f.preview && <FirePreview p={f.preview} />}
+        {f.preview && <FirePreview key={f.preview.src} p={f.preview} />}
         {/* ★ `pre-line` — 문구가 줄바꿈(\n)으로 두 마디를 갈라 둔 판이 있다(졸업 판). 없으면 한 덩어리로 붙는다. */}
         <span style={{ fontSize: fz.md, lineHeight: 1.7, color: ink(.62), textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
         {f.wish && <WishBox y={y} />}
