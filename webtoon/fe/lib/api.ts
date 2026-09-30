@@ -149,7 +149,31 @@ export function allowanceLine(a: Allowance | null): string {
 
 /* ---- 웹툰 만들기 ------------------------------------------------------------ */
 
-export type NhStatus = "queued" | "running" | "awaiting_sheet" | "awaiting_pick" | "done" | "error";
+export type NhStatus = "queued" | "running" | "awaiting_sheet" | "awaiting_cast" | "awaiting_pick" | "done" | "error";
+
+/** 주인공 페르소나(#534) — 사용자가 적은 캐릭터로 정의한 것. 인물 확인·고르기 화면에서 확인용으로 보여 준다. */
+export interface NhPersona {
+  name: string;
+  gender?: string;
+  look?: string;
+  personality?: string;
+  situation?: string;
+  voice?: string;
+  line?: string;
+  details?: { detail: string; source?: string }[];
+}
+
+/** 인물 단계가 세운 사람 하나(#534). awaiting_cast 에서 카드로 보여 준다. */
+export interface NhCast {
+  name: string;
+  from_input?: boolean | string;
+  look?: string;
+  gap?: string;
+  voice?: string;
+  line?: string;
+  tie?: string;
+  wants?: string;
+}
 
 export interface NhDirection {
   n: number;
@@ -170,6 +194,10 @@ export interface NhJob {
   error: string | null;
   refunded?: "credit" | "free" | "none" | null;
   directions: NhDirection[];
+  cast?: NhCast[] | null;
+  /** 인물 단계가 기다리는 것 — pick(한 명 고르기) · confirm(적은 인물 확인 후 진행). */
+  cast_kind?: "pick" | "confirm" | null;
+  persona?: NhPersona | null;
   pick: number | null;
   style: string;
   style_label: string;
@@ -244,6 +272,11 @@ export function myActiveJobs(): Promise<{ jobs: NhJob[] }> {
 
 export function decideSheet(id: string, decision: "approve" | "retry", note = "") {
   return post(`/nh/jobs/${encodeURIComponent(id)}/sheet-decision`, note ? { decision, note } : { decision });
+}
+
+/** 인물 단계의 답 — 고른 상대 번호(1~), 적은 인물을 확인하고 진행이면 0. */
+export function pickCast(id: string, n: number) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/cast`, { n });
 }
 
 export function pickDirection(id: string, n: number, editedBody?: string) {

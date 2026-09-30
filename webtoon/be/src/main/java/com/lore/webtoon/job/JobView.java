@@ -31,6 +31,12 @@ public record JobView(
            하는 말이고, 무는 쪽은 더해도 된다. */
         String refunded,
         List<Map<String, Object>> directions,
+        /** 인물 단계가 세운 인물(#534) — 인물 단계에서 기다릴 때만. 아니면 {@code null}. */
+        List<Map<String, Object>> cast,
+        /** 그때 무엇을 기다리나 — {@code pick}(한 명 고르기) · {@code confirm}(이대로 진행). */
+        String castKind,
+        /** 주인공 페르소나 — 인물 단계에서 기다릴 때만 확인용으로 보여 준다(#534). 아니면 {@code null}. */
+        Map<String, Object> persona,
         Integer pick,
         String style,
         String style_label,
@@ -122,7 +128,8 @@ public record JobView(
     }
 
     static JobView of(WebtoonJob job, JobProgress.Snapshot now,
-                      List<Map<String, Object>> directions, String styleLabel,
+                      List<Map<String, Object>> directions, List<Map<String, Object>> cast,
+                      String castKind, Map<String, Object> persona, String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
                       String notifyEmail, JobEta.Eta eta) {
         int stageIndex = job.getStage().order();
@@ -141,6 +148,9 @@ public record JobView(
                 job.getError(),
                 job.getRefunded() == null ? null : job.getRefunded().wire(),
                 directions,
+                cast,
+                castKind,
+                persona,
                 job.getPicked(),
                 job.getStyle(),
                 styleLabel,

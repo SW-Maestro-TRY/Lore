@@ -74,7 +74,7 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # 글을 쓰는 단계 / 그림을 그리는 단계. 이름이 곧 .env 의 앞자리다
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "SCENE", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
-               "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "COVER_REVIEW",
+               "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "COVER_REVIEW", "CAST", "PERSONA",
                "FULL_REVIEW")
 IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
@@ -166,7 +166,16 @@ def image_default(provider: str) -> str:
 #
 # 표지 검수(COVER_REVIEW)는 칸·글상자를 세고 제목을 옮겨 적기만 하는 일이라
 # 기본 모델(gpt-4.1) 그대로 둔다(2026-09-30 결정).
+#
+# **인물(CAST)도 gpt-5.1 이다(#532).** 이야기 후보의 인물이 라벨만 붙은 채
+# 나와서, 인물만 따로 만드는 단계를 이야기 앞에 뒀다. 이 단계의 글이 곧
+# 사용자가 반할지 말지를 정한다. 화 하나에 한 번뿐이다.
+#
+# **주인공 페르소나(PERSONA)도 gpt-5.1 이다(#534).** 사용자가 적은 캐릭터로
+# 주인공 페르소나를 정의한다. 이게 틀리면 뒤의 인물·이야기가 모두 틀린 캐릭터로 간다.
 STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
+                        ("CAST", "openai"): "gpt-5.1",
+                        ("PERSONA", "openai"): "gpt-5.1",
                         ("SCENE", "openai"): "gpt-5.1",
                         ("FULL_REVIEW", "openai"): "gpt-5.1"}
 
@@ -247,6 +256,8 @@ class Call:
 STAGE_LABEL = {
     "STORY": "이야기 후보",
     "STORY_REVIEW": "이야기 후보 검수 (고르기 전)",
+    "CAST": "주인공과 얽힐 인물 넷 (이야기 후보 전)",
+    "PERSONA": "주인공 페르소나 — 사용자가 적은 캐릭터로 정의 (인물 단계 전)",
     "DETAIL": "디테일 — 장면마다 어디서 끝나는가 (동시에 그리기 위한 이음새)",
     "CUTSCRIPT": "컷 대본",
     "REVIEW": "스토리 검수",

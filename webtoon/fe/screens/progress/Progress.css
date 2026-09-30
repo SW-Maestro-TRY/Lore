@@ -139,6 +139,11 @@
 .wt .wt-prog-dir .intro { font-size: 13.5px; line-height: 1.55; }
 .wt .wt-prog-dir p { margin: 8px 0 0; font-size: 13px; line-height: 1.6; }
 .wt .wt-prog-dir.plain { cursor: default; }
+/* 인물 카드(#534) — 이야기 카드와 같은 틀에 대표 대사 한 줄. */
+.wt .wt-prog-cast .line { font-size: 13.5px; line-height: 1.55; color: var(--ink); quotes: "“" "”"; }
+/* 주인공 페르소나(#534) — 확인용. 고르는 카드가 아니라 위에 한 장. */
+.wt .wt-prog-hero { background: var(--water-light); border-color: transparent; }
+.wt .wt-prog-hero .details { margin: 4px 0 0; padding-left: 1.1em; font-size: 13px; line-height: 1.55; color: var(--muted); display: grid; gap: 2px; }
 
 /* 본문 확인 */
 .wt textarea.wt-prog-bodybox { height: 300px; min-height: 0; padding: 16px 18px; resize: none; line-height: 1.75; font-size: 15px; }

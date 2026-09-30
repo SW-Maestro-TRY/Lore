@@ -58,7 +58,7 @@ public class AfterRun {
     /** 아직 안 끝난 작업. 이 중 하나라도 이 작품을 잡고 있으면 되살리지 않는다. */
     private static final java.util.List<JobStatus> UNFINISHED = java.util.List.of(
             JobStatus.QUEUED, JobStatus.RUNNING,
-            JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK);
+            JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST);
 
     public AfterRun(UsageService usage, PageUploader uploader, PageStore pages,
                     WebtoonJobRepository jobs, WorkLedger works, HarnessProcess harness,

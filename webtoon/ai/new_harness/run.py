@@ -30,6 +30,7 @@ import argparse
 import json
 import random
 import re
+from concurrent.futures import ThreadPoolExecutor
 import sys
 import unicodedata
 import os
@@ -787,6 +788,304 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     return "\n".join(parts)
 
 
+def cast_enabled() -> bool:
+    """이야기 전에 인물을 먼저 세우는가(#534). 기본 켜짐. 끄려면 `NH_STORY_CAST=0`."""
+    return (llm.env("NH_STORY_CAST") or "1").strip().lower() not in ("0", "off", "false", "no")
+
+
+def is_romance(char: dict) -> bool:
+    genre = (char.get("genre") or "").strip()
+    return bool(genre) and samples.guess_genre(genre) == "romance_modern"
+
+
+def cast_wait_kind(char: dict, cast: list[dict]) -> str:
+    """인물을 세운 뒤 사람을 기다리는가(#534).
+
+    - "confirm" : 사용자가 인물을 적었다(장르 무관). 세운 인물을 보여 주고
+      「이대로 진행하기」를 기다린다. 그 인물들을 모두 담아 이야기 넷을 만든다.
+    - "pick"    : 현대 로맨스인데 적은 인물이 없다. 새 인물 넷 중 상대를 한 명
+      고르기를 기다린다. 고른 사람으로 이야기 넷을 만든다.
+    - ""        : 그 밖(적은 인물 없는 다른 장르). 보여 주지 않고 바로 이야기로
+      간다 — 인물은 후보마다 쓸 재료다.
+    """
+    if not cast:
+        return ""
+    if any(from_input(c) for c in cast):
+        return "confirm"
+    return "pick" if is_romance(char) else ""
+
+
+def from_input(c: dict) -> bool:
+    """사용자가 설명·줄거리에 적은 인물인가(cast_prompt 의 from_input)."""
+    v = c.get("from_input")
+    return v is True or str(v).strip().lower() == "true"
+
+
+def picked_cast(run_dir: Path) -> dict | None:
+    """사람이(또는 서버가) 답한 것. 한 명을 골랐으면 그 인물, 「이대로 진행」이면
+    {"all": true}. 아직이면 None."""
+    path = run_dir / "cast_pick.json"
+    got = read_json(path) if path.exists() else None
+    if not isinstance(got, dict):
+        return None
+    return got if got.get("all") or str(got.get("name") or "").strip() else None
+
+
+def save_cast_pick(run_dir: Path, n: int) -> dict:
+    """cast.json 의 n 번째(1부터) 인물을 고른 것으로 적는다. 0 이면 「이대로 진행」."""
+    path = run_dir / "cast.json"
+    cast = read_json(path) if path.exists() else []
+    if not isinstance(cast, list) or not cast or not 0 <= n <= len(cast):
+        raise SystemExit(f"고를 인물이 없습니다: {n}번 (cast.json 에 {len(cast or [])}명)")
+    chosen = {"all": True} if n == 0 else {**cast[n - 1], "n": n}
+    write_json(run_dir / "cast_pick.json", chosen)
+    what = "이대로 진행" if n == 0 else f"{n}번 {chosen.get('name')}"
+    log(f"[인물] {what} -> {run_dir / 'cast_pick.json'}")
+    return chosen
+
+
+def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> dict | None:
+    """주인공 페르소나 — 사용자가 적은 캐릭터로 정의한다(#534).
+
+    사용자에게 확인받는 용도다(0921 멘토링: 페르소나는 유저에게 입력받거나
+    확인받아야 한다). 인물 확인·고르기 화면에 주인공 카드로 나간다. 생성(인물·
+    이야기·장면)에는 넣지 않는다 — stage_story 주석 참고. 적힌 것이 뼈대이고,
+    드러나는 모습은 근거가 입력에 글자 그대로 있을 때만 남긴다(persona_prompt).
+
+    다시 지을 때는 있던 것을 그대로 쓴다. 실패하면 없이 간다(예전처럼).
+    """
+    path = run_dir / "persona.json"
+    if path.exists():
+        old = read_json(path)
+        if isinstance(old, dict) and str(old.get("name") or "").strip():
+            return old
+    lines = [input_block(char).rstrip("\n")]
+    story_text = user_story(char)
+    if story_text:
+        lines += ["", "사용자가 적은 이야기:", story_text]
+    prompt = compose("persona_prompt", "\n".join(lines) + "\n", lang=lang)
+    write_text(run_dir / "persona_prompt.txt", prompt)
+    if dry_run:
+        log(f"[페르소나] 프롬프트만 썼습니다 -> {run_dir / 'persona_prompt.txt'}")
+        return None
+    call = llm.Call("PERSONA")
+    log(f"[페르소나] {call.describe()} 로 주인공 페르소나를 정리합니다…")
+    try:
+        text, meta = call(prompt, images=llm.load_images(char.get("photos") or []))
+    except Exception as exc:                                          # noqa: BLE001
+        record_error(run_dir, "PERSONA", call.provider, call.model, exc)
+        warn(f"주인공 페르소나를 못 만들었습니다 — 없이 갑니다 ({exc})")
+        return None
+    write_text(run_dir / "persona_raw.txt", text)
+    record(run_dir, meta)
+    try:
+        obj = story.extract_json(text)
+    except Exception as exc:                                          # noqa: BLE001
+        warn(f"페르소나 응답을 못 읽었습니다 — 없이 갑니다 ({exc})")
+        return None
+    if not isinstance(obj, dict) or not str(obj.get("name") or "").strip():
+        return None
+    # 드러나는 모습은 근거가 입력에 글자 그대로 있을 때만 남긴다 — 근거 없이 붙은
+    # 것은 「왜 이런 설정이 붙었지」가 된다(2026-10-01 사용자 지적).
+    kept, dropped = persona_details(obj.get("details"), persona_source_text(char))
+    obj["details"] = kept
+    if dropped:
+        obj["dropped_details"] = dropped
+        log(f"[페르소나] 근거가 입력에 없어 뺀 모습 {len(dropped)}개: "
+            + " / ".join(d.get("detail", "") for d in dropped))
+    write_json(path, obj)
+    return obj
+
+
+def persona_source_text(char: dict) -> str:
+    """페르소나 근거를 찾아볼 입력 원문 — 설명·카드·사용자가 적은 이야기."""
+    parts = [str(char.get("description") or ""), user_story(char) or ""]
+    card = char.get("card")
+    if isinstance(card, dict):
+        parts += [str(v) for v in card.values() if isinstance(v, (str, list))]
+    return "\n".join(parts)
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"[\s「」『』\"'“”‘’.,!?…·]", "", text or "")
+
+
+def persona_details(raw, source: str) -> tuple[list[dict], list[dict]]:
+    """근거(source)가 입력에 글자 그대로 있는 모습만 남긴다. (남긴 것, 뺀 것)."""
+    hay = _squash(source)
+    kept, dropped = [], []
+    for d in raw or []:
+        if not isinstance(d, dict) or not str(d.get("detail") or "").strip():
+            continue
+        quote = _squash(str(d.get("source") or ""))
+        (kept if quote and quote in hay else dropped).append(
+            {"detail": str(d["detail"]).strip(), "source": str(d.get("source") or "").strip()})
+    return kept, dropped
+
+
+def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> list[dict]:
+    """주인공과 얽힐 인물을 세운다(#532·#534).
+
+    이야기 한 호출 안에서 판·사건·반전·주인공·세계 재료를 다 챙기면서 인물까지
+    매력 있게 만들라고 했더니, 인물은 「택배 기사 김윤호」 같은 라벨로만 나왔다
+    (2026-10-01, 서윤재 입력 여러 회). 그래서 인물만 보는 호출을 따로 둔다 —
+    이 단계는 오직 매력(생김새·인상·갭·말투·주인공과의 얽힘·원하는 것)만 본다.
+
+    사용자가 인물을 적었으면 그 사람들(많아야 넷)의 페르소나를, 안 적었으면
+    새 인물 넷을 세운다(cast_prompt).
+
+    실패해도 이야기는 만든다 — 인물 없이 예전처럼 간다. 원문은 파싱 전에 남긴다.
+    """
+    lines = [input_block(char).rstrip("\n")]
+    story_text = user_story(char)
+    if story_text:
+        # 줄거리에 적힌 인물도 새로 만들지 않고 페르소나를 세운다.
+        lines += ["", "사용자가 적은 이야기:", story_text]
+    genre = (char.get("genre") or "").strip()
+    world = world_text_for(genre) if genre else ""
+    if world:
+        lines += ["", "## 이 세계의 배경", "", world]
+    prompt = compose("cast_prompt", "\n".join(lines) + "\n", lang=lang)
+    write_text(run_dir / "cast_prompt.txt", prompt)
+    if dry_run:
+        log(f"[인물] 프롬프트만 썼습니다 -> {run_dir / 'cast_prompt.txt'}")
+        return []
+    call = llm.Call("CAST")
+    log(f"[인물] {call.describe()} 로 주인공과 얽힐 인물을 세웁니다…")
+    try:
+        # 사진을 같이 준다 — 주인공의 성별을 보고 로맨스 상대를 정한다(cast_prompt).
+        text, meta = call(prompt, images=llm.load_images(char.get("photos") or []))
+    except Exception as exc:                                          # noqa: BLE001
+        record_error(run_dir, "CAST", call.provider, call.model, exc)
+        warn(f"인물을 못 만들었습니다 — 인물 없이 이야기로 갑니다 ({exc})")
+        return []
+    write_text(run_dir / "cast_raw.txt", text)
+    record(run_dir, meta)
+    try:
+        obj = story.extract_json(text)
+        cast = [c for c in (obj.get("cast") or []) if isinstance(c, dict)
+                and str(c.get("name") or "").strip()]
+    except Exception as exc:                                          # noqa: BLE001
+        warn(f"인물 응답을 못 읽었습니다 — 인물 없이 이야기로 갑니다 ({exc})")
+        return []
+    # 같은 사람이 두 번 나오면 하나만 둔다 — 보여 주는 화면에 같은 카드가 겹친다.
+    seen: set[str] = set()
+    cast = [c for c in cast if not (str(c.get("name")).strip() in seen
+                                    or seen.add(str(c.get("name")).strip()))][:4]
+    if any(from_input(c) for c in cast):
+        # 사용자가 인물을 적었으면 그 사람들만 — 모델이 더한 인물은 뺀다. 더한
+        # 인물이 적힌 관계를 흔드는 자리로 쓰였다(2026-10-01 서연화 입력).
+        extra = [c["name"] for c in cast if not from_input(c)]
+        if extra:
+            log(f"[인물] 사용자가 적은 인물만 남깁니다 — 뺀 인물: {', '.join(extra)}")
+        cast = [c for c in cast if from_input(c)]
+    if len(cast) != 4 and not any(from_input(c) for c in cast):
+        warn(f"인물을 {len(cast)}명만 읽었습니다 (새로 만들 때는 4명이어야 합니다).")
+    write_json(run_dir / "cast.json", cast)
+    return cast
+
+
+CAST_FIELDS = (("look", "생김새·인상"), ("gap", "갭"), ("voice", "말투"),
+               ("line", "대표 대사"), ("tie", "주인공과의 얽힘"), ("wants", "원하거나 숨기는 것"))
+
+
+def _cast_lines(c: dict) -> list[str]:
+    out = []
+    for key, label in CAST_FIELDS:
+        v = str(c.get(key) or "").strip()
+        if v:
+            out.append(f"- {label}: {v}")
+    return out
+
+
+def chosen_cast_block(c: dict) -> str:
+    """이야기 입력에 붙는 「상대 인물 — 사용자가 골랐다」(현대 로맨스, #534)."""
+    return "\n".join(["", "## 상대 인물 — 사용자가 골랐다",
+                      "네 후보 모두 이 사람이 주인공과 가장 크게 얽히는 상대다. 사용자는 이 사람을 "
+                      "보고 골랐다. 넷은 이 사람과 벌어지는 **서로 다른 이야기**다 — 판과 사건이 "
+                      "겹치지 않게 한다. 이름·생김새·갭·말투·얽힘을 바꾸지 말고, 이 사람의 매력이 "
+                      "드러나도록 판과 사건을 짠다. 소개에도 이 사람이 이름과 인상과 함께 나온다.",
+                      "", f"상대: {str(c.get('name')).strip()}", *_cast_lines(c)])
+
+
+def ensemble_cast_block(cast: list[dict]) -> str:
+    """이야기 입력에 붙는 「이야기의 인물들」 — 사용자가 인물을 적었을 때(#534)."""
+    out = ["", "## 이야기의 인물들 — 이미 정해졌다",
+           "사용자가 적은 인물이다. 네 후보 모두 이 사람들로 짠다. "
+           "새 인물로 바꾸지 않고, 이름·생김새·갭·말투·얽힘을 바꾸지 않는다. "
+           "모두가 1화에 나올 필요는 없다 — 1화에 필요한 사람만 나오게 하되, 나오는 사람은 "
+           "매력이 드러나게 한다. 네 후보는 이 사람들 사이에서 벌어지는 서로 다른 이야기다."]
+    for c in cast:
+        out += ["", str(c.get("name")).strip(), *_cast_lines(c)]
+    return "\n".join(out)
+
+
+def cast_block(cast: list[dict]) -> str:
+    """이야기 입력에 붙는 「후보마다 상대 인물」."""
+    if not cast:
+        return ""
+    out = ["", "## 후보마다 인물 재료",
+           "방향 n 에 쓸 수 있는 인물 n 이다. 재료일 뿐이다 — 꼭 사건의 중심일 필요도, 이름이나 "
+           "설정을 그대로 쓸 필요도 없다. 이야기에 맞게 바꾸거나 다른 인물을 세워도 된다. 다만 "
+           "이야기에 나오는 인물은 이만큼 매력이 있어야 한다."]
+    for i, c in enumerate(cast, 1):
+        out += ["", f"인물 {i}: {str(c.get('name')).strip()}", *_cast_lines(c)]
+    return "\n".join(out)
+
+
+def story_split() -> int:
+    """이야기 후보를 몇 호출에 나눠 만드는가. 기본 1(한 번에 넷). `NH_STORY_SPLIT=2` 면 둘씩(#532 실험)."""
+    return 2 if (llm.env("NH_STORY_SPLIT") or "").strip() == "2" else 1
+
+
+def _story_in_two(run_dir: Path, char: dict, prompt: str, cast: list[dict]) -> list[dict]:
+    """방향 1·2 와 3·4 를 두 호출로 동시에 만든다(#532 실험).
+
+    한 호출에 넷을 다 쓰게 하면 인물 단계에서 만든 인물이 이야기로 넘어오며 라벨로
+    줄었다 — 한 호출이 챙길 후보를 둘로 줄이면 후보 하나에 쓸 몫이 두 배가 된다.
+    두 호출은 서로를 모르므로, 다른 쪽이 맡은 인물 이름만 알려 판이 겹치지 않게 한다.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    names = [str(c.get("name") or "").strip() for c in cast]
+
+    def part(a: int, b: int, c: int, d: int) -> str:
+        other = ", ".join(f"방향 {k}은 {names[k-1]}" for k in (c, d) if k - 1 < len(names))
+        return (prompt + "\n\n## 이번 호출에서 만들 것\n"
+                f"이번 호출은 **방향 {a}와 방향 {b} 두 개만** 만든다. 번호도 그대로 "
+                f"「## 방향 {a} — 제목」「## 방향 {b} — 제목」으로 쓴다. 위에서 「4개」「넷」이라고 "
+                "한 곳은 이번 호출에서는 이 두 개를 가리킨다. 나머지 두 방향은 다른 호출이 "
+                f"만든다({other}이 상대다) — 그 둘과 판이 겹치지 않게 한다. 넷에 나눠 쓸 몫을 "
+                "이 두 후보에 다 쓴다 — 특히 받은 상대 인물의 인상과 말이 소개와 본문에 살아 있게 한다.\n")
+
+    jobs = [((1, 2), part(1, 2, 3, 4)), ((3, 4), part(3, 4, 1, 2))]
+    for i, (_, pr) in enumerate(jobs, 1):
+        write_text(run_dir / f"story_prompt_part{i}.txt", pr)
+
+    def run_one(i: int, pr: str):
+        call = llm.Call("STORY")
+        log(f"[이야기 {i}/2] {call.describe()} 로 후보 2개를 만듭니다…")
+        try:
+            return call(pr, images=llm.load_images(char["photos"]))
+        except Exception as exc:                                      # noqa: BLE001
+            record_error(run_dir, "STORY", call.provider, call.model, exc)
+            raise
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futs = [pool.submit(run_one, i, pr) for i, (_, pr) in enumerate(jobs, 1)]
+        results = [f.result() for f in futs]
+    out, texts = [], []
+    for i, ((want, _), (text, meta)) in enumerate(zip(jobs, results), 1):
+        write_text(run_dir / f"story_part{i}.md", text)
+        record(run_dir, meta)
+        texts.append(text)
+        got = [d for d in parse_directions(text) if d.get("n") in want]
+        if len(got) != 2:
+            warn(f"이야기 {i}/2 에서 방향을 {len(got)}개만 읽었습니다(방향 {want}).")
+        out += got
+    write_text(run_dir / "story.md", "\n\n".join(texts))
+    return sorted(out, key=lambda d: d.get("n") or 0)
+
+
 def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
                 review: bool | None = None, diff: bool | None = None,
                 lang: str = "ko") -> list[dict]:
@@ -809,6 +1108,41 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         block = seeded_input_block(char).rstrip("\n")
     else:
         block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
+    # 인물을 먼저 뽑고 거기에 사건을 붙인다(#532·#534). 줄거리를 적은 경우도
+    # 같다 — 그때는 줄거리·설명에 적힌 인물의 페르소나를 세운다(cast_prompt).
+    cast: list[dict] = []
+    if cast_enabled():
+        # **주인공 페르소나는 사용자에게 보여 주기만 한다(#534).** 생성에는 넣지 않는다 —
+        # 이야기에 넣었더니 페르소나를 보여 주는 쪽으로 가서 판이 작아졌고(2026-10-01
+        # 서연화 있음·없음 비교, 사용자 판정 「없는 게 훨씬 낫다」), 장면에 넣어도 더해
+        # 주는 게 작았다. 멘토링(0921) 대로 페르소나는 사용자에게 확인받는 자리에서
+        # 보여 준다(인물 확인·고르기 화면). 서로 기다릴 이유가 없어 인물과 동시에 부른다.
+        # 다시 지을 때는 이미 세운 인물을 그대로 쓴다 — 사람이 본 카드가 바뀌면 안 된다.
+        old = read_json(run_dir / "cast.json") if (run_dir / "cast.json").exists() else None
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            persona_job = pool.submit(stage_persona, run_dir, char, dry_run, lang)
+            made = old if isinstance(old, list) and old else stage_cast(run_dir, char, dry_run, lang=lang)
+            persona_job.result()
+        kind = cast_wait_kind(char, made)
+        answer = picked_cast(run_dir)
+        if kind and not answer:
+            # 사람을 기다린다 — 서버는 cast.json 이 있고 directions.json 이 없는 것을
+            # 보고 「인물 확인」으로 넘어간다(JobRunner). 답을 받으면 `--cast-pick N`
+            # (0 = 이대로 진행)으로 다시 부른다.
+            (run_dir / "directions.json").unlink(missing_ok=True)
+            write_json(run_dir / "cast_wait.json", {"kind": kind})
+            log(f"[인물] {'상대를 고를' if kind == 'pick' else '인물을 확인할'} 때까지 멈춥니다 "
+                f"-> {run_dir / 'cast.json'}")
+            return []
+        if kind == "confirm":
+            block += "\n" + ensemble_cast_block(made)
+        elif kind == "pick":
+            cast = [answer] * 4
+            block += "\n" + chosen_cast_block(answer)
+        elif made:
+            # 다른 장르 — 보여 주지 않고 후보마다 재료로 붙인다(방향 n 은 인물 n).
+            cast = [made[i % len(made)] for i in range(4)]
+            block += "\n" + cast_block(cast)
     note = (note or "").strip()
     if note:
         # 다시 만들기에서 사람이 남긴 요청 — 캐릭터 설정 자체가 아니라 "이번엔
@@ -822,17 +1156,24 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
         return []
 
-    call = llm.Call("STORY")
-    log(f"[이야기] {call.describe()} 로 후보 4개를 만듭니다…")
-    try:
-        text, meta = call(prompt, images=llm.load_images(char["photos"]))
-    except Exception as exc:                                          # noqa: BLE001
-        record_error(run_dir, "STORY", call.provider, call.model, exc)
-        raise
-    write_text(run_dir / "story.md", text)
-    record(run_dir, meta)
-
-    directions = shuffle_directions(parse_directions(text))
+    if cast and story_split() == 2:
+        directions = _story_in_two(run_dir, char, prompt, cast)
+    else:
+        call = llm.Call("STORY")
+        log(f"[이야기] {call.describe()} 로 후보 4개를 만듭니다…")
+        try:
+            text, meta = call(prompt, images=llm.load_images(char["photos"]))
+        except Exception as exc:                                      # noqa: BLE001
+            record_error(run_dir, "STORY", call.provider, call.model, exc)
+            raise
+        write_text(run_dir / "story.md", text)
+        record(run_dir, meta)
+        directions = parse_directions(text)
+    directions = shuffle_directions(directions)
+    for d in directions:
+        n = d.get("n")
+        if cast and isinstance(n, int) and n > 0:
+            d["lead"] = cast[(n - 1) % len(cast)]   # 이 후보의 상대 인물(#532)
     if len(directions) != 4:
         warn(f"방향을 {len(directions)}개만 읽었습니다 (4개여야 합니다). "
              f"원문은 {run_dir / 'story.md'} 에 그대로 있습니다.")
@@ -1368,6 +1709,9 @@ def main(argv=None) -> int:
                    help="다른 단계를 안 돌리고 pick.json 만 남긴다 — 이어그리기 "
                         "흐름은 구체화가 없어서, 방향을 고른 뒤 검수 화면으로 "
                         "가기 전에 이걸로 pick 만 기록한다 (호출 0회)")
+    p.add_argument("--cast-pick", type=int,
+                   help="인물 단계의 답(#534). 현대 로맨스는 고른 상대 번호(1~4), "
+                        "사용자가 인물을 적었으면 0(이대로 진행). 그 뒤 이야기 후보 4개를 만든다")
     p.add_argument("--restory", action="store_true",
                    help="기존 run 에서 이야기 후보 4개를 다시 만든다 (방향 고르기 "
                         "화면에서 '다시 만들기' — --note 와 같이 쓸 수 있다)")
@@ -1458,8 +1802,10 @@ def main(argv=None) -> int:
     if (args.story_review or args.story_diff or args.full_review
             or args.sheet or args.sheet_spec or args.detail_pages
             or args.page or args.sheet_from or args.pick_save or args.restory
-            or args.scenes):
-        if args.restory:
+            or args.scenes or args.cast_pick is not None):
+        if args.cast_pick is not None:
+            save_cast_pick(run_dir, args.cast_pick)
+        if args.restory or args.cast_pick is not None:
             # 방향 후보를 다시 만든다 — 이전 pick.json 은 더 이상 유효하지
             # 않다(방향 번호가 새로 나온 4개와 안 맞을 수 있다), 지운다.
             (run_dir / "pick.json").unlink(missing_ok=True)
