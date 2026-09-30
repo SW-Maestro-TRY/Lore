@@ -200,7 +200,7 @@ export default function Landing({ go }: { go: Go }) {
                   <div className="wt-landing-step-input">{t("세라핀")}</div>
                 </div>
                 <div className="wt-landing-step-chips">
-                  {["로맨스", "판타지", "액션", "일상", "스릴러"].map((g, i) => (
+                  {["로맨스", "판타지", "무협", "일상", "스릴러"].map((g, i) => (
                     <span key={g} className={i === 0 ? "on" : ""}>{t(g)}</span>
                   ))}
                 </div>
