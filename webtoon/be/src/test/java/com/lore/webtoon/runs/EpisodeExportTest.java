@@ -26,15 +26,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 내려받는 파일에 <b>LORE 띠가 실제로 붙는가</b>.
+ * 내려받는 파일에 <b>LORECOMIC 도장이 실제로 찍히는가</b>.
  *
  * 이 검사가 지키는 것은 유입 경로다. 만든 사람이 결과물을 SNS 에 올릴 때
  * 어디서 만든 것인지가 안 남으면, 퍼질수록 우리는 아무것도 못 얻는다.
- * 띠는 <b>조용히 빈 채로 나가기 쉬운</b> 종류의 기능이라(글꼴이 없거나, 루
+ * 도장은 <b>조용히 안 찍히기 쉬운</b> 종류의 기능이라(글꼴이 없거나, 루
  * 그림을 못 읽거나) 그림에서 직접 확인한다.
  *
- * 눈으로 볼 때는 {@code LORE_BAND_IN=<그림>} · {@code LORE_BAND_OUT=<저장할 png>}
- * 환경변수를 주고 돌린다 — 실제 장으로 띠를 만들어 저장한다.
+ * 눈으로 볼 때는 {@code LORE_STAMP_IN=<그림>} · {@code LORE_STAMP_OUT=<저장할 png>}
+ * 환경변수를 주고 돌린다 — 실제 장에 도장을 찍어 저장한다.
  */
 class EpisodeExportTest {
 
@@ -94,72 +94,85 @@ class EpisodeExportTest {
     }
 
     @Test
-    @DisplayName("낱장을 잇고 그 아래에 브랜드 띠를 덧댄다")
-    void 이어_붙이고_띠를_단다() throws IOException {
+    @DisplayName("낱장을 잇는다 — 띠를 덧대지 않으니 높이는 장의 합 그대로")
+    void 이어_붙인다() throws IOException {
         sheet(1, 800, 500, Color.WHITE);
         sheet(2, 800, 400, Color.WHITE);
 
         BufferedImage out = exported();
 
         assertThat(out.getWidth()).isEqualTo(800);
-        // 그림 900 + 띠. 띠는 폭의 11.5% 이되 88~240 사이다.
-        assertThat(out.getHeight()).isEqualTo(900 + 92);
-        // 그림과 띠 사이의 가는 선 — 띠가 작품의 일부로 안 읽히게 두는 경계다.
-        assertThat(new Color(out.getRGB(400, 900))).isEqualTo(new Color(161, 198, 187));
+        assertThat(out.getHeight()).isEqualTo(900);
     }
 
     @Test
-    @DisplayName("띠 안에 루와 글자가 찍힌다 — 리소스를 못 찾으면 빈 띠만 나간다")
-    void 띠에_루와_글자() throws IOException {
-        sheet(1, 800, 500, Color.WHITE);
-
-        BufferedImage out = exported();
-
-        // 띠(500 아래)에 종이색이 아닌 픽셀이 충분히 있어야 한다. 글자만 있으면
-        // 수백, 루까지 있으면 수천이다.
-        assertThat(inked(out, 502, 0xFFFDF7)).as("띠에 찍힌 픽셀").isGreaterThan(2000);
-    }
-
-    @Test
-    @DisplayName("장 위에는 아무것도 찍지 않는다 — 표시는 아래 띠 하나뿐이다")
-    void 장은_그대로() throws IOException {
+    @DisplayName("장마다 오른쪽 아래에 도장을 찍는다 — 한 장만 잘라 가도 딸려 가야 한다")
+    void 장마다_찍는다() throws IOException {
         sheet(1, 800, 500, Color.WHITE);
         sheet(2, 800, 500, Color.WHITE);
 
         BufferedImage out = exported();
 
-        assertThat(painted(out, 0, 0, 800, 1000, 0xFFFFFF)).as("장 위 표시").isFalse();
+        // 두 장 각자의 오른쪽 아래(폭의 17% 남짓)에 루와 글자가 찍혀 있어야 한다.
+        assertThat(inked(out, 600, 350, 800, 500, 0xFFFFFF)).as("첫 장 도장").isGreaterThan(1500);
+        assertThat(inked(out, 600, 850, 800, 1000, 0xFFFFFF)).as("둘째 장 도장").isGreaterThan(1500);
+        // 왼쪽 위는 깨끗하다 — 도장은 구석에만.
+        assertThat(inked(out, 0, 0, 600, 350, 0xFFFFFF)).as("첫 장 나머지").isZero();
     }
 
     @Test
-    @DisplayName("좁은 그림에도 띠가 붙는다")
-    void 좁은_그림() throws IOException {
+    @DisplayName("어두운 장에서도 보인다 — 흰 글자에 짙은 테두리")
+    void 어두운_장에서도() throws IOException {
+        sheet(1, 800, 500, Color.BLACK);
+
+        BufferedImage out = exported();
+
+        assertThat(inked(out, 600, 350, 800, 500, 0x000000)).as("어두운 장 도장").isGreaterThan(1500);
+    }
+
+    @Test
+    @DisplayName("컷 하나만 받아도 같은 도장이 찍힌다")
+    void 컷_하나() throws IOException {
+        sheet(1, 800, 500, Color.WHITE);
+
+        byte[] png = export.pagePng("run-1", 1);
+        assertThat(png).isNotNull();
+        BufferedImage out = ImageIO.read(new ByteArrayInputStream(png));
+
+        assertThat(out.getWidth()).isEqualTo(800);
+        assertThat(out.getHeight()).isEqualTo(500);
+        assertThat(inked(out, 600, 350, 800, 500, 0xFFFFFF)).isGreaterThan(1500);
+    }
+
+    @Test
+    @DisplayName("좁은 장에도 찍힌다")
+    void 좁은_장() throws IOException {
         sheet(1, 320, 200, Color.WHITE);
 
         BufferedImage out = exported();
 
-        assertThat(out.getWidth()).isEqualTo(320);
-        assertThat(inked(out, 202, 0xFFFDF7)).isGreaterThan(500);
+        assertThat(inked(out, 200, 100, 320, 200, 0xFFFFFF)).isGreaterThan(300);
     }
 
     @Test
-    @DisplayName("환경변수를 주면 실제 장으로 띠를 만들어 저장한다 (눈으로 보는 용도)")
+    @DisplayName("환경변수를 주면 실제 장에 도장을 찍어 저장한다 (눈으로 보는 용도)")
     void 눈으로_보기() throws IOException {
-        String in = System.getenv("LORE_BAND_IN"), to = System.getenv("LORE_BAND_OUT");
+        String in = System.getenv("LORE_STAMP_IN"), to = System.getenv("LORE_STAMP_OUT");
         if (in == null || to == null) {
             return;
         }
         BufferedImage page = ImageIO.read(Path.of(in).toFile());
-        BufferedImage out = export.withBand(page);
+        BufferedImage out = EpisodeExport.stitch(java.util.List.of(page));
+        export.stampEachSheet(out, java.util.List.of(page));
         Files.createDirectories(Path.of(to).toAbsolutePath().getParent());
         ImageIO.write(out, "png", Path.of(to).toFile());
     }
 
-    /** `fromY` 아래에서 배경(`bg`)이 아닌 픽셀 수. */
-    private static int inked(BufferedImage img, int fromY, int bg) {
+    /** 이 상자 안에서 배경(`bg`)이 아닌 픽셀 수. */
+    private static int inked(BufferedImage img, int x0, int y0, int x1, int y1, int bg) {
         int n = 0;
-        for (int y = fromY; y < img.getHeight(); y++) {
-            for (int x = 0; x < img.getWidth(); x++) {
+        for (int y = y0; y < Math.min(y1, img.getHeight()); y++) {
+            for (int x = x0; x < Math.min(x1, img.getWidth()); x++) {
                 if ((img.getRGB(x, y) & 0xFFFFFF) != (bg & 0xFFFFFF)) {
                     n++;
                 }

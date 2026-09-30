@@ -35,11 +35,6 @@ const dict: Dict = {
     ja: "次の話の機能はまだ準備中です！",
     zh: "下一话功能还在准备中！",
   },
-  "내려받는 파일에는 아래에 LORE 표시가 붙습니다.": {
-    en: "Downloaded files carry a small LORE mark at the bottom.",
-    ja: "ダウンロードしたファイルの下には LORE の表示が付きます。",
-    zh: "下载的文件底部会带有 LORE 标记。",
-  },
   "내 작품이 아니면 내려받기·편집실·다음 편은 없어요. 읽고 공유하는 것만.": {
     en: "Download, editor and next episode are only for your own works. Here you can read and share.",
     ja: "自分の作品でない場合、ダウンロード・編集室・次の話はありません。読んで共有するだけです。",
@@ -88,7 +83,6 @@ const dict: Dict = {
   "{who}의 다른 편": { en: "Other episodes with {who}", ja: "{who}の他の話", zh: "{who}的其他话" },
   "EP.{n}": { en: "EP.{n}", ja: "EP.{n}", zh: "EP.{n}" },
   "만들기": { en: "Create", ja: "作る", zh: "制作" },
-  "· 파일에 LORE 표시가 붙어요": { en: "· downloads carry a LORE mark", ja: "· ファイルに LORE の表示が付きます", zh: "· 文件会带上 LORE 标记" },
   "크게 보기": { en: "View larger", ja: "大きく見る", zh: "放大查看" },
 };
 
