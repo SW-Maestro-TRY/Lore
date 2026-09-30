@@ -334,9 +334,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                            onChange={(e) => { setPerPage(e.target.checked); if (e.target.checked) track("download_per_page_open", { run: runId }); }} />
                     {t("컷별로 내려받기")}
                   </label>
-                  {/* 아트보드는 PC 와 폰의 문구가 다르다 — 폰은 체크 칸 옆에 짧게 붙인다. */}
-                  <span className="dim wt-result-wm">{t("내려받는 파일에는 아래에 LORE 표시가 붙습니다.")}</span>
-                  <span className="dim wt-result-wm-m">{t("· 파일에 LORE 표시가 붙어요")}</span>
                 </div>
               </>
             ) : null}
