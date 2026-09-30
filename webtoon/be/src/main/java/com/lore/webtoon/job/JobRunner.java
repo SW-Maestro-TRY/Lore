@@ -1036,15 +1036,7 @@ public class JobRunner {
         List<Integer> passed = new ArrayList<>();
         Path review = runsDir.resolve(runId).resolve("story_review.json");
         try {
-            JsonNode root = mapper.readTree(review.toFile());
-            for (JsonNode one : root.isArray() ? root : mapper.createArrayNode()) {
-                if ("통과".equals(one.path("verdict").asText())) {
-                    int n = one.path("n").asInt(0);
-                    if (n > 0) {
-                        passed.add(n);
-                    }
-                }
-            }
+            passed.addAll(passedCandidates(mapper.readTree(review.toFile())));
         } catch (IOException e) {
             log.debug("이야기 검수 결과가 없습니다 (run={}) — 전부에서 고릅니다", runId);
         }
@@ -1054,6 +1046,32 @@ public class JobRunner {
             }
         }
         return passed.get((int) (Math.random() * passed.size()));
+    }
+
+    /**
+     * {@code story_review.json} 에서 「통과」한 후보 번호.
+     *
+     * <b>하네스는 이 파일을 {@code {"candidates": [...]}} 로 쓴다</b>
+     * ({@code storycheck.py} 의 {@code parse}). 예전에는 최상위를 배열로만
+     * 읽어서, 늘 빈 목록이 되고 검수가 「주의」를 낸 후보까지 전부에서
+     * 골랐다(#517). 최상위가 배열인 것도 계속 받는다.
+     */
+    static List<Integer> passedCandidates(JsonNode root) {
+        JsonNode list = root == null ? null
+                : root.isArray() ? root : root.path("candidates");
+        List<Integer> passed = new ArrayList<>();
+        if (list == null || !list.isArray()) {
+            return passed;
+        }
+        for (JsonNode one : list) {
+            if ("통과".equals(one.path("verdict").asText())) {
+                int n = one.path("n").asInt(0);
+                if (n > 0) {
+                    passed.add(n);
+                }
+            }
+        }
+        return passed;
     }
 
     /**
