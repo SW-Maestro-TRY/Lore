@@ -101,6 +101,38 @@ def entries_for(world: str) -> list[dict]:
     return list(load().get(world) or [])
 
 
+def phases_for(world: str) -> dict:
+    """{시점 이름: [낱말]} — lorebook.json 의 `_phases`. 없으면 {}."""
+    try:
+        doc = json.loads(BOOK.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    table = (doc.get("_phases") or {}).get(world) or {}
+    return {k: [w for w in v if w] for k, v in table.items() if isinstance(v, list)}
+
+
+def phase_of(world: str, text: str) -> str:
+    """캐릭터 글(설명·카드·항목)에서 시점을 읽는다. 여러 시점에 걸리면 먼저 나온
+    낱말의 시점, 하나도 안 걸리면 '' (어느 시점 재료든 준다)."""
+    text = text or ""
+    best, pos = "", None
+    for name, words in phases_for(world).items():
+        for w in words:
+            i = text.find(w)
+            if i >= 0 and (pos is None or i < pos):
+                best, pos = name, i
+    return best
+
+
+def character_text(char: dict) -> str:
+    """시점을 읽을 캐릭터 글 — 설명 + 항목 값 + 카드의 자리·정체."""
+    card = char.get("card") or {}
+    bits = [char.get("description") or "",
+            *[str(v) for v in (char.get("fields") or {}).values()],
+            card.get("twist") or "", card.get("role") or "", card.get("role_tier") or ""]
+    return " ".join(b for b in bits if b)
+
+
 def by_id(world: str, ids) -> list[dict]:
     table = {e["id"]: e for e in entries_for(world)}
     return [table[i] for i in ids or [] if i in table]
@@ -133,31 +165,47 @@ def recent_ids(world: str, runs_dir, limit: int = AVOID_RECENT) -> set:
 
 
 def assign(world: str, n: int = 4, per: int = PER_DIRECTION, fill: int | None = None,
-           avoid=None, rng=None) -> list[list[dict]]:
+           avoid=None, rng=None, phase: str = "") -> list[list[dict]]:
     """방향 n개 중 fill개에 재료를 per개씩. 나머지 방향은 [] (재료 없이 간다).
 
     fill 이 None 이면 n개 전부다. **어느 방향이 재료를 받는지는 무작위다** —
     앞 두 개로 고정하면 사람이 보는 후보 순서에서 규칙이 읽힌다.
-    방향끼리 재료가 겹치지 않게, 최근에 쓴 것은 뒤로 미룬다. 재료가 모자라면
-    (세계당 8개 이상 두라고 한 이유) 있는 만큼만 채운다. 하나도 없으면 [].
+
+    방향마다 **전환 재료(kind=전환) 하나를 먼저** 넣고 나머지를 다른 재료로
+    채운다 — 장애물형 재료만 받은 방향은 판이 못 뒤집혔다(H1 실측). 전환
+    재료가 모자라면 있는 만큼만 그렇게 하고 나머지 방향은 일반 재료로 간다.
+
+    phase 가 있으면 다른 시점의 재료는 뺀다(phase 가 없는 재료는 남는다).
+    방향끼리 재료가 겹치지 않게, 최근에 쓴 것은 뒤로 미룬다. 하나도 없으면 [].
     """
     pool = entries_for(world)
+    if phase:
+        pool = [e for e in pool if not e.get("phase") or e.get("phase") == phase]
     if not pool:
         return []
     rng = rng or random.Random()
     fill = n if fill is None else max(0, min(fill, n))
     avoid = set(avoid or ())
-    fresh = [e for e in pool if e["id"] not in avoid]
-    stale = [e for e in pool if e["id"] in avoid]
-    rng.shuffle(fresh)
-    rng.shuffle(stale)
-    ordered = fresh + stale
+
+    def ordered(items):
+        fresh = [e for e in items if e["id"] not in avoid]
+        stale = [e for e in items if e["id"] in avoid]
+        rng.shuffle(fresh)
+        rng.shuffle(stale)
+        return fresh + stale
+
+    flips = ordered([e for e in pool if e.get("kind") == "전환"])
+    rest = ordered([e for e in pool if e.get("kind") != "전환"])
     slots = sorted(rng.sample(range(n), fill)) if fill else []
     out: list[list[dict]] = [[] for _ in range(n)]
-    cursor = 0
     for i in slots:
-        picked = ordered[cursor:cursor + per]
-        cursor += per
+        picked = []
+        if flips:
+            picked.append(flips.pop(0))
+        while len(picked) < per and rest:
+            picked.append(rest.pop(0))
+        while len(picked) < per and flips:          # 일반 재료가 바닥나면 전환으로 채운다
+            picked.append(flips.pop(0))
         if not picked:
             break
         out[i] = picked
@@ -222,7 +270,12 @@ STORY_HEAD = (
 
 def story_lines(entries: list[dict]) -> list[str]:
     """방향 하나에 붙는 줄들. story_variety_block 의 '### 방향 N' 아래에 들어간다."""
-    return [f"[이 세계의 재료] {e['name']} — {e['text']}" for e in entries]
+    out = []
+    for e in entries:
+        tag = "[이 세계의 재료 — 삶이 뒤집히는 자리]" if e.get("kind") == "전환" else "[이 세계의 재료]"
+        when = f" (시점: {e['phase']})" if e.get("phase") else ""
+        out.append(f"{tag} {e['name']}{when} — {e['text']}")
+    return out
 
 
 # ------------------------------------------------------------ 장면·그림 단계
