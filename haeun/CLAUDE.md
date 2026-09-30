@@ -245,7 +245,7 @@ gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않�
   에 흔한 git/python/npm 명령을 자동 허용으로 등록해 뒀습니다 (force push ·
   reset --hard · rm -rf 같은 파괴적 명령은 제외 — 이런 건 항상 확인받습니다).
 - **`haeun/` 과 `webtoon/` 바깥**(Lore 저장소의 `comic/`, `common/`, `infra/`,
-  `trailer/`, `apps/`, `build/`, 루트 파일 등)을 편집하거나 그 경로를 대상으로
+  `piece-maker/`, `apps/`, `build/`, 루트 파일 등)을 편집하거나 그 경로를 대상으로
   하는 작업은 **항상 먼저 물어봅니다.** 자동 허용 목록에 일부러 안 넣었습니다.
   (참고: Bash 권한 규칙은 명령어 문자열 접두사로만 매칭돼서 "haeun 안에서만"을
   기계적으로 강제할 수는 없습니다 — 이 경계는 결국 매 세션 이 문서를 읽고
@@ -265,7 +265,7 @@ gitignore돼 있어서 `git worktree add`가 자동으로 복사해 주지 않�
 
 ## 이슈 번호 매핑
 
-**Lore 공유 저장소** (`comic/`, `common/`, `infra/`, `webtoon/`, `trailer/`,
+**Lore 공유 저장소** (`comic/`, `common/`, `infra/`, `webtoon/`, `piece-maker/`,
 `apps/`) 작업 시: `common/docs/git-convention.md`의 컨벤션을 그대로 따릅니다 —
 항상 관련 GitHub 이슈 번호를 정하고, 커밋 메시지를 `[#이슈번호] Type: 내용`
 형식으로 남깁니다 (예: `[#14] Feat: 로그인 기능 추가`). 브랜치명은

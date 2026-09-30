@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 마이그레이션 번호 검사 — 같은 번호 두 개가 머지되는 것을 PR 에서 막는다.
 #
-# ★ 왜 필요한가 — 2026-09-22 dev 가 이 사고로 멈췄다. trailer 가 `V23__foreshadowings.sql` 을,
+# ★ 왜 필요한가 — 2026-09-22 dev 가 이 사고로 멈췄다. piece-maker 가 `V23__foreshadowings.sql` 을,
 #   zzal 이 `V23__zzal_motion_wish.sql` 을 각자 붙였는데 둘 다 classpath `db/migration` 한 곳으로
 #   합쳐진다. Flyway 가 기동 때 "Found more than one migration with version 23" 으로 멈추고
 #   API 가 안 뜬다. 폴더가 셋이라 사람 눈에는 안 겹쳐 보이는 것이 함정이다.
@@ -16,7 +16,7 @@
 # ★ 왜 (c) 가 경고인가 — 순번도 겹치지만 않으면 당장은 돈다. 여기서 막으면 급한 수정이 멈춘다.
 #   막는 것은 (a)·(b) 뿐이고, (c) 는 "다음엔 날짜 번호로" 라고 알려 주는 자리다.
 #
-# 새 파일을 만들 때는 `./scripts/new-migration.sh <zzal|webtoon|trailer> <설명>` 이 이름을 대신 짓는다.
+# 새 파일을 만들 때는 `./scripts/new-migration.sh <zzal|webtoon|piece-maker> <설명>` 이 이름을 대신 짓는다.
 #
 # 쓰는 법
 #   ./scripts/check-migrations.sh                    # 중복·형식만 (a·b)
@@ -29,7 +29,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # 그래서 폴더가 달라도 번호는 하나의 이름공간이다.
 DIRS=(
   "apps/api/src/main/resources/db/migration"
-  "trailer/be/src/main/resources/db/migration"
+  "piece-maker/be/src/main/resources/db/migration"
   "webtoon/be/src/main/resources/db/migration"
 )
 
@@ -73,7 +73,7 @@ for d in "${DIRS[@]}"; do
     # (b) 이름 형식
     if [[ ! "$base" =~ $NAME_RE ]]; then
       echo "$rel: 이름 형식이 규칙과 다릅니다 — V<날짜8>_<시각4~6>__<소문자설명>.sql (git-convention.md 9절)"
-      echo "      ↳ 새로 만들 때는 ./scripts/new-migration.sh <zzal|webtoon|trailer> <설명> 을 쓰면 이름이 자동으로 붙습니다."
+      echo "      ↳ 새로 만들 때는 ./scripts/new-migration.sh <zzal|webtoon|piece-maker> <설명> 을 쓰면 이름이 자동으로 붙습니다."
       annotate error "$rel" "마이그레이션 이름 형식이 규칙과 다릅니다"
       fail_count=$((fail_count + 1))
       continue                       # 형식이 깨진 파일은 번호를 못 믿으니 중복 검사에서 뺀다

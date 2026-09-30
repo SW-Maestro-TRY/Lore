@@ -7,7 +7,7 @@
 
 - **`webtoon/` 과 `haeun/` 안**(하위 전부)은 파일 편집·Bash 명령을 허락 없이 합니다.
   force push · reset --hard · rm -rf 같은 파괴적 명령은 예외로, 항상 확인받습니다.
-- **그 바깥**(`comic/` · `common/` · `infra/` · `trailer/` · `apps/` · `build/` · 루트
+- **그 바깥**(`comic/` · `common/` · `infra/` · `piece-maker/` · `apps/` · `build/` · 루트
   파일 등)을 고치거나 그 경로를 대상으로 하는 작업은 **항상 먼저 물어봅니다.**
   허락받고 고쳤으면 커밋과 PR 에 어디를 왜 고쳤는지 남깁니다([commit-pr.md](commit-pr.md)).
 - `git push` 처럼 원격에 반영되는 명령은 안쪽이라도 매번 확인받습니다.

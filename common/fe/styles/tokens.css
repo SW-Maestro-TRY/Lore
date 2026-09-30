@@ -20,20 +20,20 @@
   /* 탭 액센트 */
   --accent-webtoon: #5b2be8;
   --accent-zzal: #ff6b45;
-  --accent-trailer: #1c7866;
+  --accent-piece-maker: #1c7866;
   --accent-zzal-hover: #ff835f;
   /* 연한 면 위에서 액센트 글자를 읽히게 하는 진한 변형 */
   --accent-zzal-deep: #c2451f;
   /* 같은 채도의 보더 (탭 카드 / 프리뷰 셀) */
   --border-zzal: rgba(255, 107, 69, 0.22);
-  --border-trailer: rgba(28, 120, 102, 0.2);
+  --border-piece-maker: rgba(28, 120, 102, 0.2);
 
   /* 연한 색면 (탭 카드 배경). -strong 은 hover 와 콜라주 슬롯에 쓴다. */
   --tint-webtoon: #ede6ff;
   --tint-zzal: #fff2e4;
-  --tint-trailer: #eaf6f3;
+  --tint-piece-maker: #eaf6f3;
   --tint-zzal-strong: #ffe2ce;
-  --tint-trailer-strong: #dcefea;
+  --tint-piece-maker-strong: #dcefea;
 
   /* 카드 안쪽 흰 면. */
   --card: #ffffff;
@@ -46,7 +46,7 @@
   /* 이미지 플레이스홀더 사선 패턴. */
   --hatch-webtoon: rgba(91, 43, 232, 0.1);
   --hatch-zzal: rgba(255, 107, 69, 0.14);
-  --hatch-trailer: rgba(28, 120, 102, 0.12);
+  --hatch-piece-maker: rgba(28, 120, 102, 0.12);
 
   /* primary 버튼: ink 배경 / 흰 글자 */
   --btn-primary-bg: #17121f;

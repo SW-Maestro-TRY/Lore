@@ -41,7 +41,7 @@ public class S3Service {
      *
      * 새 도메인이 생기면 여기에 추가한다(팀 공용이므로 변경 시 공유 필요).
      */
-    static final Set<String> ALLOWED_DOMAINS = Set.of("zzal", "webtoon", "trailer", "common");
+    static final Set<String> ALLOWED_DOMAINS = Set.of("zzal", "webtoon", "piece-maker", "common");
 
     private final S3Presigner presigner;
     private final UploadTicketRepository ticketRepository;
@@ -74,7 +74,7 @@ public class S3Service {
      * 서버가 그 순간을 못 본다. 나중에 "이 키로 만들어 주세요" 가 왔을 때 대조할 근거가 필요하다.
      *
      * @param userId      발급받는 사람
-     * @param domain      키 경로 구분용 폴더(zzal/webtoon/trailer 등)
+     * @param domain      키 경로 구분용 폴더(zzal/webtoon/piece-maker 등)
      * @param contentType 업로드할 파일의 MIME 타입(image/png 등)
      * @return 발급된 S3 key 와 presigned URL
      */

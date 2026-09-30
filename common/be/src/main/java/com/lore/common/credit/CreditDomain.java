@@ -10,7 +10,7 @@ public enum CreditDomain {
 
     WEBTOON("웹툰"),
     ZZAL("짤"),
-    TRAILER("예고편");
+    PIECE_MAKER("Piece Maker");
 
     private final String label;
 
