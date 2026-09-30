@@ -62,6 +62,24 @@ public class JobStore {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    /**
+     * 사람이 답했고 <b>다시 줄에 섰다</b> — 일꾼이 비면 {@code stage} 부터 돈다.
+     *
+     * 예전에는 이야기를 고르거나 시트를 확인해도 일꾼을 잡을 때까지
+     * {@code AWAITING_*} 로 남아 있었다. 그러면 두 자리가 다 찼을 때 그 사람은
+     * 앞에 몇 명인지도 남은 시간도 못 보고, 다른 사람의 대기 계산에서도
+     * 빠졌다(#509).
+     */
+    public void queued(Long id, JobStage stage) {
+        jobs.findById(id).ifPresent(job -> {
+            if (job.getStatus().isOver()) {
+                return;
+            }
+            job.moveTo(JobStatus.QUEUED, stage, Instant.now());
+            jobs.save(job);
+        });
+    }
+
     public void awaiting(Long id, JobStatus status, JobStage stage) {
         jobs.findById(id).ifPresent(job -> {
             job.moveTo(status, stage, Instant.now());
