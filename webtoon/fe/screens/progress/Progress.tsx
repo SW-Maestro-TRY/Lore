@@ -398,7 +398,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     );
     if (pane === "making") return (
       <>
-        <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료 · {n}번으로", { n: selected ?? "-" })}</button>
+        <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료")}</button>
         <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>{t("후보 다시 만들기")}</button>
       </>
     );
@@ -594,7 +594,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                            onClick={() => setPickN(d.n)}
                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPickN(d.n); } }}>
                         <div className="row">
-                          <b>{d.n}. {d.title}</b>
+                          <b>{d.title}</b>
                           <button type="button" onClick={(e) => { e.stopPropagation(); setOpen((o) => ({ ...o, [d.n]: !o[d.n] })); }}>
                             {open[d.n] ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("펼쳐 보기")} <IconChevronDown size={13} /></>}
                           </button>
@@ -606,7 +606,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     ))}
                   </div>
                   <div className="wt-prog-acts" style={{ marginTop: 2 }}>
-                    <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료 · {n}번으로", { n: selected ?? "-" })}</button>
+                    <button type="button" className="btn btn-p" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료")}</button>
                     <input className="field w300" value={dirNote} placeholder={t("바라는 방향을 적고 후보 다시 만들기")} aria-label={t("다시 만들기 메모")}
                            onChange={(e) => setDirNote(e.target.value)} />
                     <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>
@@ -622,7 +622,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               {pane === "confirm" && selectedDir && (
                 <>
                   <div className="wt-prog-head">
-                    <h2>{selectedDir.n}. {selectedDir.title} {selectedDir.genre && <span className="dim">[{selectedDir.genre}]</span>}</h2>
+                    <h2>{selectedDir.title} {selectedDir.genre && <span className="dim">[{selectedDir.genre}]</span>}</h2>
                     <span className="muted lede">{t("마음에 안 드는 부분은 직접 고쳐도 돼요.")}</span>
                   </div>
                   <textarea className="field wt-prog-bodybox" value={body} aria-label={t("이야기 본문")} onChange={(e) => setBody(e.target.value)} />
@@ -715,7 +715,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     {dirs.map((d) => (
                       <div key={d.n} className={`wt-prog-dir plain${chosen?.n === d.n ? " on" : ""}`}>
                         <div className="row">
-                          <b>{d.n}. {d.title}</b>
+                          <b>{d.title}</b>
                           <button type="button" onClick={() => setOpen((o) => ({ ...o, [d.n]: !o[d.n] }))}>
                             {open[d.n] ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("펼쳐 보기")} <IconChevronDown size={13} /></>}
                           </button>

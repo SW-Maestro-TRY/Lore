@@ -85,7 +85,7 @@ const dict: Dict = {
   /* ---- 단추 ---- */
   "이 얼굴로 갈게요": { en: "Go with this face", ja: "この顔で進める", zh: "就用这张脸" },
   "다시 만들기": { en: "Redo", ja: "作り直す", zh: "重新生成" },
-  "선택 완료 · {n}번으로": { en: "Choose · go with #{n}", ja: "選択完了 · {n}番で", zh: "选好了 · 用第 {n} 个" },
+  "선택 완료": { en: "Choose this story", ja: "選択完了", zh: "选好了" },
   "후보 다시 만들기": { en: "Regenerate options", ja: "候補を作り直す", zh: "重新生成候选" },
   "이대로 진행하기": { en: "Continue as is", ja: "このまま進める", zh: "就这样继续" },
   "다른 이야기 보기": { en: "See other stories", ja: "別のストーリーを見る", zh: "看其他故事" },
