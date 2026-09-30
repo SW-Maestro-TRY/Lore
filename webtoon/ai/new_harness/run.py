@@ -1031,6 +1031,10 @@ SCENE_FIELD_RE = re.compile(
     rf"^{S}(직전 상태|장소와 상황|벌어지는 일|인물의 행동과 표정|겉모습·소지품·동행|끝나는 상태|나레이션){S}[:：]{S}(.*)$")
 PLOT_LABEL_RE = re.compile(rf"^{S}줄거리{S}[:：]{S}$", re.M)
 CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
+# 이 화 안에서 장마다 같아야 하는 것(단체·장소 이름, 인물이 입는 옷).
+# 장면을 동시에 그리면 장마다 따로 지어내서 회사 이름·옷이 장마다 바뀌었다
+# (2026-09-30, run 20260930T212420-43e5c0 — 표지는 LUNAR, 2페이지는 NEST).
+FIXED_LABEL_RE = re.compile(rf"^{S}이 화의 고정 설정{S}[:：]{S}$", re.M)
 
 
 def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) -> str:
@@ -1097,20 +1101,30 @@ def split_narration(line: str) -> list[str]:
 
 
 def parse_scenes(text: str) -> dict:
+<<<<<<< HEAD
     """scene_prompt 응답 -> {"plot", "scenes":[{"n","prev","where","what","acting","look","ends","narration"}], "cast"}."""
+=======
+    """scene_prompt 응답 -> {"plot", "scenes":[{"n","prev","where","what","acting","ends"}],
+    "cast", "fixed"}. `fixed` 는 「이 화의 고정 설정」 줄 목록이다(옛 응답에는 없어서 빈 목록)."""
+>>>>>>> 0296a282 ([#506] 표지 전용 프롬프트·표지 검수·화 고정 설정 추가)
     plot_m = PLOT_LABEL_RE.search(text)
     scene_marks = list(SCENE_RE.finditer(text))
     cast_m = CAST_LABEL_RE.search(text)
+    fixed_m = FIXED_LABEL_RE.search(text)
+    # 장면 뒤에 오는 절들. 장면·절 본문은 자기 다음에 오는 절의 머리에서 끝난다.
+    labels = [m.start() for m in (cast_m, fixed_m) if m]
     plot = ""
     if plot_m:
         end = scene_marks[0].start() if scene_marks else len(text)
         plot = text[plot_m.end():end].strip()
 
+    def section_end(start: int, end: int) -> int:
+        return min([p for p in labels if start < p < end] + [end])
+
     scenes = []
     for i, m in enumerate(scene_marks):
         end = scene_marks[i + 1].start() if i + 1 < len(scene_marks) else len(text)
-        if cast_m and cast_m.start() < end and cast_m.start() > m.start():
-            end = cast_m.start()
+        end = section_end(m.start(), end)
         body = text[m.end():end]
         fields = {}
         for line in body.splitlines():
@@ -1132,8 +1146,12 @@ def parse_scenes(text: str) -> dict:
             # 이다(옛 응답) — 그때는 예전처럼 그림 모델이 나레이션을 정한다.
             "narration": (split_narration(fields["나레이션"]) if "나레이션" in fields else None),
         })
-    cast = _cast_bullets(text[cast_m.end():]) if cast_m else []
-    return {"plot": plot, "scenes": scenes, "cast": cast}
+    cast = (_cast_bullets(text[cast_m.end():section_end(cast_m.start(), len(text))])
+            if cast_m else [])
+    fixed = ([ln for ln in _bullets(text[fixed_m.end():section_end(fixed_m.start(), len(text))])
+              if ln.strip(" .") not in ("없음", "")]
+             if fixed_m else [])
+    return {"plot": plot, "scenes": scenes, "cast": cast, "fixed": fixed}
 
 
 def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,

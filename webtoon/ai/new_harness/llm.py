@@ -74,7 +74,8 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # 글을 쓰는 단계 / 그림을 그리는 단계. 이름이 곧 .env 의 앞자리다
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "SCENE", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
-               "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "FULL_REVIEW")
+               "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "COVER_REVIEW",
+               "FULL_REVIEW")
 IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
@@ -152,11 +153,22 @@ def image_default(provider: str) -> str:
 # `.env` 가 아니라 코드에 두는 이유는 DEFAULT_PROVIDER 와 같다 — 서버에는
 # new_harness/.env 가 안 실린다.
 #
+<<<<<<< HEAD
 # **장면(SCENE)도 gpt-5.1 이다(#511).** 장면 단계가 나레이션 글을 쓰고 그림
 # 모델은 그 안에서 골라 글자 그대로 넣게 바뀌어서, 이 단계의 문장이 곧 독자가
 # 읽는 문장이다. 화 하나에 한 번뿐이다.
 STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
                         ("SCENE", "openai"): "gpt-5.1"}
+=======
+# **화 전체 검수(FULL_REVIEW)·표지 검수(COVER_REVIEW)도 gpt-5.1 이다.** gpt-4.1
+# 전체 검수는 1장면을 네 컷으로 그리고 제목도 없는 표지를 "표지를 장식한다"
+# 로 읽고 넘겼고, 표지와 2페이지가 같은 순간을 되풀이한 것도 회사 이름이
+# 다르다는 major 하나로만 잡았다(2026-09-30, run 20260930T212420-43e5c0).
+# 둘 다 화 하나에 한두 번뿐이라 값이 올라도 편당 차이는 작다.
+STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
+                        ("FULL_REVIEW", "openai"): "gpt-5.1",
+                        ("COVER_REVIEW", "openai"): "gpt-5.1"}
+>>>>>>> 0296a282 ([#506] 표지 전용 프롬프트·표지 검수·화 고정 설정 추가)
 
 
 def model_for(stage: str, provider: str) -> str:
@@ -245,6 +257,7 @@ STAGE_LABEL = {
     "SHEET_IMAGE": "시트 그림",
     "PAGE_IMAGE": "페이지 그림",
     "PAGE_REVIEW": "그림 검수 (장마다)",
+    "COVER_REVIEW": "표지 검수 (칸 하나 · 글상자 없음 · 제목 그대로)",
     "FULL_REVIEW": "화 전체 검수 (다 그린 뒤 처음부터 끝까지)",
 }
 
