@@ -123,6 +123,31 @@ def redraw_block(review: dict) -> str:
     return "\n".join(lines)
 
 
+def latest_review(run_dir: Path) -> dict | None:
+    """지금 있는 표지 그림을 **그린 뒤에** 나온 표지 검수 판정. 없으면 None.
+
+    화 전체 검수가 표지를 다시 판정하지 않고 이것을 따르게 하려는 것이다 —
+    같은 그림을 두 검수가 따로 세면 결과가 갈린다. 실제로 표지 검수는 통과를
+    냈는데 화 전체 검수가 옷의 명찰을 글상자로 세어 1페이지를 세 번 더
+    그리게 했다(2026-09-30, run 20260930T214233-674528).
+    """
+    dest = run_dir / PAGE_DIR
+    cover = dest / "page01.png"
+    if not cover.exists():
+        return None
+    drawn = cover.stat().st_mtime
+    fresh = [p for p in dest.glob("page01.review*.json")
+             if not p.name.endswith("_prompt.json") and p.stat().st_mtime >= drawn]
+    if not fresh:
+        return None
+    latest = max(fresh, key=lambda p: p.stat().st_mtime)
+    try:
+        got = json.loads(latest.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return got if isinstance(got, dict) and got.get("verdict") else None
+
+
 def title_of(run_dir: Path) -> str:
     """이 run 에서 고른 방향의 제목."""
     def read(name):
