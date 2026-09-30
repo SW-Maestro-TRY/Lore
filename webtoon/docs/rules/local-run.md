@@ -69,7 +69,7 @@ SERVER_PORT=<다른 포트> ./gradlew bootRun --no-daemon
 ## 모델 API 키는 어디 있나
 
 **실제 키는 저장소 루트 `.env` 의 `WEBTOON_API_KEY`(OpenAI) 하나뿐입니다.**
-`webtoon/ai/{new_harness,story-harness,webtoon-harness}/.env` 는 없고 `.env.example`
+`webtoon/ai/{new_harness,webtoon-harness}/.env` 는 없고 `.env.example`
 만 있습니다.
 
 - **`./gradlew bootRun` 으로 돌릴 때는 자동입니다.** 루트 `.env` 의 값이 자바 환경으로

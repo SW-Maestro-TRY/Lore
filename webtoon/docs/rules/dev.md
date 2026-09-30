@@ -93,12 +93,16 @@ webtoon/ai/**  →  (빌드) jar 리소스  →  (기동) 임시 폴더  →  py
 
 ### 하네스를 고칠 때 (harness-is-final)
 
-`story-harness` · `webtoon-harness` 는 **완성본**으로 취급합니다. 2026-09-13에
-new_harness 가 실제로 import 하는 파일만 남기고 다 지웠고, 지우기 전 전체를
-`haeun/webtoon-ai-backup/` 에 백업했습니다. 이 두 폴더에 파일을 새로 추가하기 전에,
-그게 정말 new_harness 가 부르는 것인지부터 확인합니다.
+`webtoon-harness` 는 **완성본**으로 취급합니다. 2026-09-13에 new_harness 가 실제로
+import 하는 파일만 남기고 다 지웠고, 지우기 전 전체를 `haeun/webtoon-ai-backup/` 에
+백업했습니다. 이 폴더에 파일을 새로 추가하기 전에, 그게 정말 new_harness 가 부르는
+것인지부터 확인합니다.
 
-두 폴더 안의 파일을 고칠 때는:
+예전의 `story-harness` 는 2026-09-30(#494)에 없앴습니다. new_harness 가 쓰던
+모델 호출 계층(`story.py`)과 데이터(`worlds.json` · `prices.json` · `samples/` ·
+`samples.py`)는 `new_harness/` 로 옮겨서, 이제 제품 레이어로 다룹니다.
+
+이 폴더 안의 파일을 고칠 때는:
 
 1. 고치기 직전 `<파일>.bak` 백업을 남깁니다.
 2. 기존 동작이 그대로 재현되게 **순수 추가**로만 고칩니다. 기본값을 바꾸지 않습니다

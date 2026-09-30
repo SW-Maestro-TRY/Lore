@@ -543,7 +543,7 @@ public class CharacterService {
     }
 
     /**
-     * 고를 수 있는 세계관 — 하네스의 프리셋({@code story-harness/worlds.json})을
+     * 고를 수 있는 세계관 — 하네스의 프리셋({@code new_harness/worlds.json})을
      * 그대로 내준다. 자바가 목록을 한 벌 더 갖지 않는다: 프리셋을 더하면 여기도
      * 같이 늘어야 하는데, 두 벌이면 반드시 어긋난다.
      *
