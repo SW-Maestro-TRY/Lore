@@ -132,4 +132,19 @@ class JobEtaTest {
         assertThat(eta.pct(true)).isEqualTo(100);
         assertThat(eta.work()).isEqualTo(560);
     }
+
+    @Test
+    @DisplayName("멈춘 때가 안 적힌 옛 작업도 기다린 시간을 기계 시간에 넣지 않는다")
+    void 옛_작업() throws Exception {
+        Instant t0 = Instant.parse("2026-09-23T08:00:00Z");
+        WebtoonJob job = job(t0);
+        job.moveTo(JobStatus.RUNNING, JobStage.STORY, t0);
+        job.moveTo(JobStatus.AWAITING_PICK, JobStage.STORY, t0.plusSeconds(80));
+        // 칸이 생기기 전 행처럼 멈춘 때를 비운다.
+        var f = WebtoonJob.class.getDeclaredField("pausedAt");
+        f.setAccessible(true);
+        f.set(job, null);
+
+        assertThat(JobEta.work(job, t0.plusSeconds(7 * 24 * 3600))).isEqualTo(80);
+    }
 }
