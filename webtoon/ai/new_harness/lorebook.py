@@ -132,32 +132,36 @@ def recent_ids(world: str, runs_dir, limit: int = AVOID_RECENT) -> set:
     return out
 
 
-def assign(world: str, n: int = 4, per: int = PER_DIRECTION,
+def assign(world: str, n: int = 4, per: int = PER_DIRECTION, fill: int | None = None,
            avoid=None, rng=None) -> list[list[dict]]:
-    """방향 n개에 재료를 per개씩. 방향끼리 겹치지 않게, 최근에 쓴 것은 뒤로.
+    """방향 n개 중 fill개에 재료를 per개씩. 나머지 방향은 [] (재료 없이 간다).
 
-    재료가 모자라면(세계당 8개 이상 두라고 한 이유) 있는 만큼만 채운다. 하나도
-    없으면 []. 순서를 섞어서 사람이 보는 후보 순서에서 규칙을 읽어 낼 수 없게 한다.
+    fill 이 None 이면 n개 전부다. **어느 방향이 재료를 받는지는 무작위다** —
+    앞 두 개로 고정하면 사람이 보는 후보 순서에서 규칙이 읽힌다.
+    방향끼리 재료가 겹치지 않게, 최근에 쓴 것은 뒤로 미룬다. 재료가 모자라면
+    (세계당 8개 이상 두라고 한 이유) 있는 만큼만 채운다. 하나도 없으면 [].
     """
     pool = entries_for(world)
     if not pool:
         return []
     rng = rng or random.Random()
+    fill = n if fill is None else max(0, min(fill, n))
     avoid = set(avoid or ())
     fresh = [e for e in pool if e["id"] not in avoid]
     stale = [e for e in pool if e["id"] in avoid]
     rng.shuffle(fresh)
     rng.shuffle(stale)
     ordered = fresh + stale
-    out: list[list[dict]] = []
+    slots = sorted(rng.sample(range(n), fill)) if fill else []
+    out: list[list[dict]] = [[] for _ in range(n)]
     cursor = 0
-    for _ in range(n):
+    for i in slots:
         picked = ordered[cursor:cursor + per]
         cursor += per
         if not picked:
             break
-        out.append(picked)
-    return out
+        out[i] = picked
+    return out if any(out) else []
 
 
 def record(run_dir: Path, world: str, assigned: list[list[dict]]) -> None:
@@ -181,7 +185,8 @@ def reuse(run_dir: Path, world: str) -> list[list[dict]]:
     data = read_record(run_dir)
     if not world or data.get("world") != world:
         return []
-    return [by_id(world, ids) for ids in data.get("directions") or [] if ids]
+    lists = data.get("directions") or []
+    return [by_id(world, ids) for ids in lists] if any(lists) else []
 
 
 def for_direction(run_dir: Path, n: int) -> tuple[str, list[dict]]:
@@ -206,7 +211,9 @@ STORY_HEAD = (
     "가는 이유가 되게 해라 — 한 사건에서 다음 사건으로 이어지는 길이지, 나란히 "
     "놓인 두 장면이 아니다. 방향 N 의 재료는 N 번 것만 쓴다.\n"
     "재료의 이름을 지우고 읽었을 때 어느 세계에서나 가능한 이야기면 재료를 안 쓴 "
-    "것이다. 재료는 판과 처지에 건다 — 주인공의 성격으로 옮기지 않는다."
+    "것이다. 재료는 판과 처지에 건다 — 주인공의 성격으로 옮기지 않는다.\n"
+    "재료가 안 적힌 방향은 재료 없이 쓴다 — 사용자가 적은 것만으로 판을 세운다. "
+    "다른 방향의 재료를 가져오지 않는다."
 )
 
 
@@ -238,7 +245,10 @@ def scan(world: str, text: str, exclude=(), limit: int = SCENE_LIMIT) -> list[di
 def scene_entries(run_dir: Path, n: int, body: str) -> list[dict]:
     """장면 단계에 붙일 재료 — 고른 방향에 배정된 것 + 본문에 등장하는 것."""
     world, picked = for_direction(run_dir, n)
-    if not world:
+    if not world or not picked:
+        # 재료 없이 간 방향(사용자가 적은 것만으로 판을 세운 방향)에는 본문에
+        # 낱말이 걸려도 안 붙인다 — 이야기 단계에서 안 준 것을 뒤에서 주면
+        # 그 방향은 재료 없이 간 것이 아니게 된다.
         return []
     more = scan(world, body, exclude=[e["id"] for e in picked],
                 limit=max(0, SCENE_LIMIT - len(picked)))
@@ -254,6 +264,12 @@ def scene_block(entries: list[dict]) -> list[str]:
              "장면을 따로 만들지 않는다 — 규칙은 누군가 그것에 걸리는 순간에 드러난다."]
     lines += [f"- {e['name']} — {e['text']}" for e in entries]
     return lines
+
+
+def page_world(run_dir: Path, n: int) -> str:
+    """그림 단계가 재료를 붙일 세계 키. 고른 방향이 재료 없이 간 방향이면 ''."""
+    world, picked = for_direction(run_dir, n)
+    return world if picked else ""
 
 
 def page_entries(world: str, text: str, limit: int = PAGE_LIMIT) -> list[dict]:

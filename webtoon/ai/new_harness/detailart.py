@@ -474,7 +474,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     title, genre = direction.get("title") or "", direction.get("genre") or ""
     plot = scene_data.get("plot") or direction.get("plot") or ""
     # 세계 재료(#502) — lore.json 이 있는 run 만. 없으면(옛 run) 프롬프트가 안 바뀐다.
-    lore_world = (lorebook.read_record(run_dir).get("world") or "") if lorebook.enabled() else ""
+    lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() else ""
     first_detail = " — ".join(x for x in (scenes[0].get("where"), scenes[0].get("what")) if x)
 
     made = []
