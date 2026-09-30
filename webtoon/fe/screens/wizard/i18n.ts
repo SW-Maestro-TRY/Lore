@@ -65,6 +65,7 @@ const dict: Dict = {
   "장르 직접 입력": { en: "Custom genre", ja: "ジャンルを入力", zh: "自定义题材" },
 
   /* 장르 칩 (lib/wizardData GENRE_QUICK) */
+  "로맨스": { en: "Romance", ja: "ロマンス", zh: "爱情" },
   "로맨스 판타지": { en: "Romance fantasy", ja: "ロマンスファンタジー", zh: "浪漫奇幻" },
   "무협": { en: "Wuxia", ja: "武侠", zh: "武侠" },
   "판타지": { en: "Fantasy", ja: "ファンタジー", zh: "奇幻" },
@@ -81,6 +82,7 @@ const dict: Dict = {
   "히어로": { en: "Hero", ja: "ヒーロー", zh: "英雄" },
 
   /* 장르 한 줄 (lib/wizardData GENRE_NOTE) */
+  "지금 우리가 사는 도시에서 벌어지는 연애 이야기예요. 회사·학교·동네에서 시작되는 설렘과 엇갈림을 다뤄요.": { en: "A love story set in the city we live in today — the flutters and missed chances that start at work, at school or around the neighborhood.", ja: "今わたしたちが暮らす街で繰り広げられる恋愛物語です。会社·学校·近所から始まるときめきとすれ違いを描きます。", zh: "发生在我们如今生活的城市里的恋爱故事。讲述从公司、学校、街坊间开始的心动与错过。" },
   "중세풍 제국에서 펼쳐지는 연애 이야기예요. 소설 속 인물로 빙의하거나 인생을 다시 사는 회귀가 흔한 시작이에요.": { en: "A love story set in a medieval-style empire. It often begins with waking up inside a novel's character or living life over again.", ja: "中世風の帝国で繰り広げられる恋愛物語です。小説の登場人物に憑依したり、人生をやり直す回帰から始まることが多いです。", zh: "在中世纪风格帝国中展开的恋爱故事。常以穿进小说角色或重生回到过去作为开端。" },
   "무공을 익힌 고수들이 문파를 이루고 겨루는 옛 동양풍 세계 이야기예요.": { en: "A story set in an old East Asian-style world where martial arts masters form sects and compete.", ja: "武功を身につけた達人たちが門派をなして競い合う、昔の東洋風の世界の物語です。", zh: "习得武功的高手们结成门派、相互较量的古代东方风格世界故事。" },
   "검과 마법, 몬스터가 있는 다른 세계에서 벌어지는 모험 이야기예요.": { en: "An adventure in another world with swords, magic and monsters.", ja: "剣と魔法、モンスターがいる異世界で繰り広げられる冒険の物語です。", zh: "在有剑、魔法和怪物的异世界展开的冒险故事。" },
