@@ -170,6 +170,15 @@ def gate_input(char: dict) -> list[str]:
 # 지었다(장난감 전쟁 기념관, 장난 배틀 앱). 판이 먼저 서고 성격은 그 판에서 일을
 # 바꾸는 쪽이다(사용자 판정, 2026-09-27). 0921 멘토링대로 판정 기준을 적는다.
 TRAIT_RULES = [
+    "## 사용자가 적은 것이 최우선이다",
+    "",
+    "- 위 설명(과 고른 캐릭터 카드)에 적힌 것 — 자리, 시점, 종, 세계, 처지, 오늘 벌어진 "
+    "일 — 은 이 프롬프트의 다른 어떤 것(세계 재료·기준 샘플·이야기 변수·전개 문법)보다 "
+    "먼저다. 그것과 안 맞는 재료나 샘플은 그쪽을 버린다. 적힌 시점(예: 아직 어떤 자리에 "
+    "오기 전)을 뒤로 밀거나, 적힌 처지를 다른 처지로 바꾸지 않는다.",
+    "- 설명에 이미 뒤집히는 순간이나 오늘 벌어진 일이 적혀 있으면 그것이 1화의 판이다. "
+    "다른 것으로 갈아 끼우지 않는다. 재료는 그 판 위에서 벌어진다.",
+    "",
     "## 이 인물의 성격은 위 설명이 전부다",
     "",
     "- 위 설명(과 고른 캐릭터 카드)에 없는 성격·말투·버릇·과거를 붙이지 않는다. "
@@ -396,6 +405,15 @@ def _labeled(body: str, label_re: re.Pattern, stop_res: list[re.Pattern]) -> str
         if sm and sm.start() < end:
             end = sm.start()
     return _drop_trailing_rules(body[m.end():end].strip())
+
+
+def shuffle_directions(directions: list[dict], rng=None) -> list[dict]:
+    """사람에게 보여 줄 순서를 섞는다. 번호 `n` 은 그대로다 — 고르기(--pick)·검수·
+    lore.json 은 전부 `n` 으로 찾는다. 재료 받는 방향이 1·2 로 고정돼서, 순서대로
+    보여 주면 앞 둘만 세계 재료가 있는 것이 사람 눈에 규칙으로 읽힌다."""
+    out = list(directions)
+    (rng or random).shuffle(out)
+    return out
 
 
 def parse_directions(md: str) -> list[dict]:
@@ -686,10 +704,13 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     # 받는다 — 나머지 둘은 적힌 것만으로 판을 세운다. 사진만 있으면 넷 다 받는다
     # (사용자 결정, 2026-09-30). 어느 둘인지는 무작위다.
     lore_fill = DIRECTIONS_PER_RUN if not has_character_traits(char) else LORE_FILL_WITH_INPUT
+    # 재료 받는 방향은 **앞에서부터 고정**(1·2)이고, 사람에게 보여 줄 때 순서를
+    # 섞는다(shuffle_directions) — 무작위 배정은 어느 방향이 재료 없이 갔는지 사람도
+    # 모르게 했고, 재료 없는 방향이 남의 재료를 가져다 쓰는 것을 견주기도 어려웠다.
     lore_list = lorebook.reuse(run_dir, lore_world) if lore_world else []      # 실험용 재사용
     if lore_world and not lore_list:
         lore_list = lorebook.assign(lore_world, n=DIRECTIONS_PER_RUN, fill=lore_fill,
-                                    avoid=lorebook.recent_ids(lore_world, RUNS_DIR))
+                                    avoid=lorebook.recent_ids(lore_world, RUNS_DIR), fixed=True)
     if lore_list:
         lorebook.record(run_dir, lore_world, lore_list)
 
@@ -809,7 +830,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     write_text(run_dir / "story.md", text)
     record(run_dir, meta)
 
-    directions = parse_directions(text)
+    directions = shuffle_directions(parse_directions(text))
     if len(directions) != 4:
         warn(f"방향을 {len(directions)}개만 읽었습니다 (4개여야 합니다). "
              f"원문은 {run_dir / 'story.md'} 에 그대로 있습니다.")
