@@ -168,8 +168,8 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
 def fixed_block(fixed) -> str:
     """이 화 안에서 장마다 같아야 하는 것 — scene_prompt 의 「이 화의 고정 설정」.
 
-    장면을 동시에 그리면 옆 장을 못 보니, 그림 속 이름(간판·로고)과 옷을
-    장마다 따로 지어낸다. 모든 장(표지 포함)에 **글자까지 같은 목록**을 넣어
+    장면을 동시에 그리면 옆 장을 못 보니, 그림 속 이름(간판·로고)을 장마다
+    따로 지어낸다. 옷·소지품은 장면마다 「겉모습·소지품·동행」(look, #508)이 맡는다. 모든 장(표지 포함)에 **글자까지 같은 목록**을 넣어
     그 빈칸을 없앤다. 옛 run(이 칸이 없음)은 빈 문자열이라 프롬프트가 안 바뀐다.
     """
     lines = [str(x).strip() for x in (fixed or []) if str(x).strip()]
@@ -177,15 +177,13 @@ def fixed_block(fixed) -> str:
         return ""
     return ("## 이 화 내내 같은 것 (모든 장이 이 목록을 똑같이 받는다)\n"
             "그림 속 글자(간판·로고·명찰·옷에 새긴 글자)로 이름이 보이면 아래 이름을 "
-            "글자 그대로 쓴다(없던 간판·명찰을 새로 만들어 넣으라는 뜻은 아니다). "
-            "옷은 아래 적힌 대로 입힌다 — 캐릭터 시트의 옷과 다르면 "
-            "이 목록을 따르고, 얼굴·머리·체형은 시트를 따른다.\n"
+            "글자 그대로 쓴다(없던 간판·명찰을 새로 만들어 넣으라는 뜻은 아니다).\n"
             + "\n".join(f"- {ln}" for ln in lines))
 
 
 def build_cover_prompt(*, title: str, genre: str, intro: str,
                        char: dict | None, spec: dict | None, cast: list[dict],
-                       style: str, fixed=(), lang: str = "ko") -> str:
+                       style: str, fixed_names=(), lang: str = "ko") -> str:
     """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 프롬프트 파일부터 다르다
     (`prompt/cover_prompt`).
 
@@ -221,7 +219,7 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
     return (text
             .replace("{style}", imageprompt.load_style(style))
             .replace("{people}", character_block(char, spec, cast))
-            .replace("{fixed}", fixed_block(fixed))
+            .replace("{fixed}", fixed_block(fixed_names))
             .replace("{work}", work))
 
 
@@ -284,14 +282,10 @@ def narration_of(scenes: list[dict], scene_no: int) -> list[str] | None:
 
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
-<<<<<<< HEAD
-                          has_prev: bool, lang: str = "ko", lore: str = "") -> str:
-=======
-                          has_prev: bool, fixed=(), lang: str = "ko") -> str:
->>>>>>> 0296a282 ([#506] 표지 전용 프롬프트·표지 검수·화 고정 설정 추가)
+                          has_prev: bool, fixed_names=(), lang: str = "ko", lore: str = "") -> str:
     """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
 
-    fixed : scenes.json 의 「이 화의 고정 설정」. 인물 절 바로 뒤에 붙는다
+    fixed_names : scenes.json 의 「이 화의 고정 설정」. 인물 절 바로 뒤에 붙는다
     (`fixed_block`). 없으면(옛 run) 아무것도 안 붙는다.
 
     씬 하나 = 이미지 하나. 각 장면 dict 에 이미 「직전 상태」·「끝나는 상태」가
@@ -433,7 +427,7 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
                         "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
                         "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
     people = "\n\n".join(b for b in (character_block(char, spec, cast),
-                                     fixed_block(fixed)) if b)
+                                     fixed_block(fixed_names)) if b)
     return (text
             .replace("{{LANGUAGE_LINE}}", lang_mod.instruction(lang))
             .replace("{people}", people)
@@ -571,18 +565,13 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         + (f" · 검수 켜짐(다시 그리기 {tries}회)" if do_review else " · 검수 꺼짐"))
 
     title, genre = direction.get("title") or "", direction.get("genre") or ""
-<<<<<<< HEAD
-    plot = scene_data.get("plot") or direction.get("plot") or ""
-    # 세계 재료(#502) — lore.json 이 있는 run 만. 없으면(옛 run) 프롬프트가 안 바뀐다.
-    lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() else ""
-    first_detail = " — ".join(x for x in (scenes[0].get("where"), scenes[0].get("what")) if x)
-=======
     # 표지는 장면이 아니라 작품 소개로 그린다(build_cover_prompt). 소개가 없는
     # 옛 run 은 줄거리 요약으로 대신한다.
     intro = (direction.get("intro") or scene_data.get("plot")
              or direction.get("plot") or "").strip()
-    fixed = [x for x in (scene_data.get("fixed") or []) if isinstance(x, str)]
->>>>>>> 0296a282 ([#506] 표지 전용 프롬프트·표지 검수·화 고정 설정 추가)
+    fixed_names = [x for x in (scene_data.get("fixed") or []) if isinstance(x, str)]
+    # 세계 재료(#502) — lore.json 이 있는 run 만. 없으면(옛 run) 프롬프트가 안 바뀐다.
+    lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() else ""
 
     made = []
     for n_ in range(0, len(scenes) + 1):  # 0 = 표지, 1..len(scenes) = 씬
@@ -590,7 +579,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         if n_ == 0:
             prompt = build_cover_prompt(title=title, genre=genre, intro=intro,
                                         char=char, spec=spec, cast=cast, style=style,
-                                        fixed=fixed, lang=lang)
+                                        fixed_names=fixed_names, lang=lang)
         else:
             # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
@@ -601,12 +590,8 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 lore_world, " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "prev", "ends"))
             )) if lore_world else ""
             prompt = (build_continue_prompt(direction, scenes, char, spec, cast,
-<<<<<<< HEAD
-                                            scene_no=n_, has_prev=has_prev, lang=lang, lore=lore)
-=======
-                                            scene_no=n_, has_prev=has_prev, fixed=fixed,
-                                            lang=lang)
->>>>>>> 0296a282 ([#506] 표지 전용 프롬프트·표지 검수·화 고정 설정 추가)
+                                            scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
+                                            lang=lang, lore=lore)
                       .replace("{style}", imageprompt.load_style(style)))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
