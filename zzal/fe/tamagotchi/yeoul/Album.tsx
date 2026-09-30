@@ -6,10 +6,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { assetUrl } from '../../lib/assets';
 import { downloadImage, imageFileName, prepareImageFile, shareImageFile } from '../../lib/download';
 import { C, C2, GAEGU, TAP_MIN, gap, radius, fz, ink, paperA } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
+
+/** 앨범에서는 서버가 준 심화 원본이 먼저다. 다른 자세/샘플로 대체해서 저장하지 않는다. */
+function albumImageUrl(live: ReturnType<typeof useLive>, key: string): string | null {
+  const motion = live.pet?.motions?.find((m) => m.key === key);
+  const imageKey = motion?.advanced.status === 'OPEN' && motion.advanced.imageKey
+    ? motion.advanced.imageKey : motion?.basicImageKey;
+  return imageKey ? assetUrl(imageKey) : null;
+}
 
 export default function Album({ y }: { y: Yeoul }) {
   const { v } = y;
@@ -57,7 +66,7 @@ function Wall({ y }: { y: Yeoul }) {
               style={{ position: 'relative', width: '100%', height: 0, padding: '0 0 133%', boxSizing: 'content-box', border: `5px solid ${f.bd}`, borderRadius: radius.frame, background: f.bg, boxShadow: f.shadow, overflow: 'hidden' }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={spriteUrl(live, f.key)} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity, filter: f.filter }} />
+              <img src={(!y.s.sampleMode && albumImageUrl(live, f.key)) || spriteUrl(live, f.key, y.s.sampleMode)} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity, filter: f.filter }} />
             </button>
             <span style={{ fontSize: fz.xs, lineHeight: 1.35, textAlign: 'center', color: f.labelFg }}>{f.label}</span>
           </span>
@@ -117,8 +126,8 @@ function FrameView({ y }: { y: Yeoul }) {
   const f = y.v.frame;
   const live = useLive();
   // 내 아이의 해당 동작이 없으면 다른 동작/여울의 그림을 내려받지 않는다.
-  const ownSrc = live.petId && !y.s.sampleMode ? live.img(f.key) : null;
-  const src = spriteUrl(live, f.key, y.s.sampleMode);
+  const ownSrc = live.petId && !y.s.sampleMode ? albumImageUrl(live, f.key) : null;
+  const src = ownSrc || spriteUrl(live, f.key, y.s.sampleMode);
   const fileSrc = live.petId && !y.s.sampleMode ? ownSrc : src;
   const fileName = imageFileName(live.pet?.name || y.s.petName, f.name);
   const [file, setFile] = useState<File | null>(null);
