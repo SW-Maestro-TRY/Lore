@@ -147,4 +147,28 @@ class JobEtaTest {
 
         assertThat(JobEta.work(job, t0.plusSeconds(7 * 24 * 3600))).isEqualTo(80);
     }
+
+    @Test
+    @DisplayName("장 하나가 끝나고 다음 장이 시작돼도 남은 시간이 늘지 않는다")
+    void 장이_끝나도_안_늘어난다() {
+        Instant t0 = Instant.parse("2026-09-30T13:00:00Z");
+        long per = JobEta.PAGE;
+        // 8장을 세 자리로. 셋이 t0 에 같이 시작했다.
+        long before = JobEta.drawLeft(8, List.of(t0, t0, t0), 3, per, 50, t0.plusSeconds(50));
+        // 52초에 하나가 끝나고 넷째 장이 바로 시작했다.
+        long after = JobEta.drawLeft(7, List.of(t0, t0, t0.plusSeconds(52)), 3, per, 0,
+                t0.plusSeconds(52));
+        assertThat(after).isLessThanOrEqualTo(before);
+        // 예전 방식(남은 장 ÷ 자리 × 한 장 − 마지막 변화 뒤 지난 시간)은 여기서 늘었다.
+        long old = (7 + 2) / 3 * per - 0;
+        assertThat(old).isGreaterThan(before);
+    }
+
+    @Test
+    @DisplayName("그리는 중인 장만 남았으면 그중 가장 늦게 끝나는 것까지다")
+    void 마지막_장들() {
+        Instant t0 = Instant.parse("2026-09-30T13:00:00Z");
+        long left = JobEta.drawLeft(2, List.of(t0, t0.plusSeconds(30)), 3, 70, 0, t0.plusSeconds(40));
+        assertThat(left).isEqualTo(60);
+    }
 }

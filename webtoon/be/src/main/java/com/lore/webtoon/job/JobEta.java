@@ -147,14 +147,14 @@ final class JobEta {
                     overdue = false;
                 } else {
                     int rest = Math.max(0, now.total() - now.done());
-                    here = waves(rest, s) * Math.round(PAGE * f) - sincePhase;
+                    here = drawLeft(rest, now.inflight(), s, Math.round(PAGE * f), sincePhase, at);
                     overdue = here <= 0;
                 }
             }
             default -> {                                        // BIND
                 int rest = Math.max(0, now.redraw().size() - now.redrawDone());
                 if (rest > 0) {
-                    here = waves(rest, s) * Math.round(REDRAW * f) - sincePhase;
+                    here = drawLeft(rest, now.inflight(), s, Math.round(REDRAW * f), sincePhase, at);
                     // 다시 그린 뒤엔 검수를 한 번 더 돈다.
                     here = Math.max(0, here) + REVIEW + FINISH;
                     overdue = false;
@@ -200,6 +200,49 @@ final class JobEta {
             }
         }
         return sum;
+    }
+
+    /**
+     * 남은 장 {@code rest} 개를 다 그리기까지 몇 초인가.
+     *
+     * <b>그리는 중인 장은 남은 몫만 센다.</b> 「남은 장 ÷ 자리 × 한 장」으로만 세면 한 장이
+     * 끝나는 순간 반쯤 그린 옆 장들까지 처음부터 다시 세어서, 남은 시간이 4분→5분으로
+     * 늘었다(2026-09-30). 그래서 자리마다 언제 비는지를 두고, 아직 시작 안 한 장을
+     * 먼저 비는 자리부터 차례로 넣어 마지막 자리가 비는 때를 센다.
+     *
+     * 시작 시각을 모르면(한 프로세스로 차례로 그리는 경우) 예전처럼 센다.
+     */
+    static long drawLeft(int rest, java.util.List<Instant> inflight, int slots, long per,
+                         long sincePhase, Instant at) {
+        if (rest <= 0) {
+            return 0;
+        }
+        if (inflight == null || inflight.isEmpty()) {
+            return waves(rest, slots) * per - sincePhase;
+        }
+        java.util.PriorityQueue<Long> free = new java.util.PriorityQueue<>();
+        for (Instant started : inflight) {
+            // 예상보다 오래 걸리는 장도 곧 끝난다고만 본다 — 0 이면 「끝났다」가 된다.
+            free.add(Math.max(10, per - seconds(started, at)));
+        }
+        for (int i = inflight.size(); i < slots; i++) {
+            free.add(0L);                               // 놀고 있는 자리
+        }
+        long last = free.stream().mapToLong(Long::longValue).max().orElse(0);
+        int notStarted = Math.max(0, rest - inflight.size());
+        for (int i = 0; i < notStarted; i++) {
+            long ends = free.poll() + per;
+            free.add(ends);
+            last = Math.max(last, ends);
+        }
+        // 그리는 중인 장만 남았으면 그중 가장 늦게 끝나는 것까지다.
+        if (notStarted == 0) {
+            last = 0;
+            for (Instant started : inflight) {
+                last = Math.max(last, Math.max(10, per - seconds(started, at)));
+            }
+        }
+        return last;
     }
 
     /** 장 n 개를 자리 s 개로 그리면 몇 차례인가. */

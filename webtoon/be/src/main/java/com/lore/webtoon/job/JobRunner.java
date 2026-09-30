@@ -647,6 +647,7 @@ public class JobRunner {
                     return;
                 }
                 try {
+                    progress.startedPage(jobId, page);
                     int code = callHarness(jobId, job,
                             List.of("--run-id", job.getRunId(), "--detail-pages",
                                     "--page", String.valueOf(page)));
@@ -837,8 +838,9 @@ public class JobRunner {
                     if (cancelled.contains(jobId)) {
                         return;
                     }
+                    progress.startedPage(jobId, page);
                     redrawPage(jobId, job, page, why);
-                    progress.redrew(jobId);
+                    progress.redrew(jobId, page);
                 }));
             }
             for (java.util.concurrent.Future<?> one : waiting) {
