@@ -26,12 +26,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 내려받는 파일에 <b>LORE 표시가 실제로 붙는가</b>.
+ * 내려받는 파일에 <b>LORE 띠가 실제로 붙는가</b>.
  *
  * 이 검사가 지키는 것은 유입 경로다. 만든 사람이 결과물을 SNS 에 올릴 때
  * 어디서 만든 것인지가 안 남으면, 퍼질수록 우리는 아무것도 못 얻는다.
- * 표시는 <b>조용히 안 붙기 쉬운</b> 종류의 기능이라(글꼴이 없거나, 그림을
- * 못 읽거나, 색이 배경과 같거나) 그림에서 직접 확인한다.
+ * 띠는 <b>조용히 빈 채로 나가기 쉬운</b> 종류의 기능이라(글꼴이 없거나, 루
+ * 그림을 못 읽거나) 그림에서 직접 확인한다.
+ *
+ * 눈으로 볼 때는 {@code LORE_BAND_IN=<그림>} · {@code LORE_BAND_OUT=<저장할 png>}
+ * 환경변수를 주고 돌린다 — 실제 장으로 띠를 만들어 저장한다.
  */
 class EpisodeExportTest {
 
@@ -73,7 +76,7 @@ class EpisodeExportTest {
     }
 
     private BufferedImage exported() throws IOException {
-        byte[] png = export.png("run-1", "이올 · 1화");
+        byte[] png = export.png("run-1");
         assertThat(png).isNotNull();
         return ImageIO.read(new ByteArrayInputStream(png));
     }
@@ -99,37 +102,70 @@ class EpisodeExportTest {
         BufferedImage out = exported();
 
         assertThat(out.getWidth()).isEqualTo(800);
-        // 그림 900 + 띠. 띠는 폭의 8.5% 이되 64~190 사이다.
-        assertThat(out.getHeight()).isEqualTo(900 + 68);
+        // 그림 900 + 띠. 띠는 폭의 11.5% 이되 88~240 사이다.
+        assertThat(out.getHeight()).isEqualTo(900 + 92);
         // 그림과 띠 사이의 가는 선 — 띠가 작품의 일부로 안 읽히게 두는 경계다.
         assertThat(new Color(out.getRGB(400, 900))).isEqualTo(new Color(161, 198, 187));
     }
 
     @Test
-    @DisplayName("장마다 표시를 찍는다 — 한 장만 잘라 가도 딸려 가야 한다")
-    void 장마다_찍는다() throws IOException {
+    @DisplayName("띠 안에 루와 글자가 찍힌다 — 리소스를 못 찾으면 빈 띠만 나간다")
+    void 띠에_루와_글자() throws IOException {
+        sheet(1, 800, 500, Color.WHITE);
+
+        BufferedImage out = exported();
+
+        // 띠(500 아래)에 종이색이 아닌 픽셀이 충분히 있어야 한다. 글자만 있으면
+        // 수백, 루까지 있으면 수천이다.
+        assertThat(inked(out, 502, 0xFFFDF7)).as("띠에 찍힌 픽셀").isGreaterThan(2000);
+    }
+
+    @Test
+    @DisplayName("장 위에는 아무것도 찍지 않는다 — 표시는 아래 띠 하나뿐이다")
+    void 장은_그대로() throws IOException {
         sheet(1, 800, 500, Color.WHITE);
         sheet(2, 800, 500, Color.WHITE);
 
         BufferedImage out = exported();
 
-        // 두 장 각자의 오른쪽 아래에 무언가 찍혀 있어야 한다.
-        assertThat(painted(out, 600, 400, 790, 495, 0xFFFFFF))
-                .as("첫 장 표시").isTrue();
-        assertThat(painted(out, 600, 900, 790, 995, 0xFFFFFF))
-                .as("둘째 장 표시").isTrue();
+        assertThat(painted(out, 0, 0, 800, 1000, 0xFFFFFF)).as("장 위 표시").isFalse();
     }
 
     @Test
-    @DisplayName("어두운 그림 위에서도 표시가 보인다 — 밑을 보고 색을 뒤집는다")
-    void 어두운_그림에서도_보인다() throws IOException {
-        sheet(1, 800, 500, Color.BLACK);
+    @DisplayName("좁은 그림에도 띠가 붙는다")
+    void 좁은_그림() throws IOException {
+        sheet(1, 320, 200, Color.WHITE);
 
         BufferedImage out = exported();
 
-        // 검은 바탕에 검은 글자로 찍으면 사실상 안 붙은 것과 같다.
-        assertThat(painted(out, 600, 400, 790, 495, 0x000000))
-                .as("어두운 장 표시").isTrue();
+        assertThat(out.getWidth()).isEqualTo(320);
+        assertThat(inked(out, 202, 0xFFFDF7)).isGreaterThan(500);
+    }
+
+    @Test
+    @DisplayName("환경변수를 주면 실제 장으로 띠를 만들어 저장한다 (눈으로 보는 용도)")
+    void 눈으로_보기() throws IOException {
+        String in = System.getenv("LORE_BAND_IN"), to = System.getenv("LORE_BAND_OUT");
+        if (in == null || to == null) {
+            return;
+        }
+        BufferedImage page = ImageIO.read(Path.of(in).toFile());
+        BufferedImage out = export.withBand(page);
+        Files.createDirectories(Path.of(to).toAbsolutePath().getParent());
+        ImageIO.write(out, "png", Path.of(to).toFile());
+    }
+
+    /** `fromY` 아래에서 배경(`bg`)이 아닌 픽셀 수. */
+    private static int inked(BufferedImage img, int fromY, int bg) {
+        int n = 0;
+        for (int y = fromY; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                if ((img.getRGB(x, y) & 0xFFFFFF) != (bg & 0xFFFFFF)) {
+                    n++;
+                }
+            }
+        }
+        return n;
     }
 
     @Test
@@ -150,6 +186,6 @@ class EpisodeExportTest {
     @DisplayName("그림이 없으면 파일도 없다 — 부르는 쪽이 404 를 낸다")
     void 그림이_없으면() {
         when(pages.keysOf(anyString())).thenReturn(new LinkedHashMap<>());
-        assertThat(export.png("run-1", "이올 · 1화")).isNull();
+        assertThat(export.png("run-1")).isNull();
     }
 }

@@ -283,7 +283,7 @@ public class RunController {
         if (meta == null) {
             return ResponseEntity.notFound().build();
         }
-        byte[] png = export.png(runId, captionOf(meta));
+        byte[] png = export.png(runId);
         if (png == null) {
             return ResponseEntity.notFound().build();
         }
@@ -306,13 +306,6 @@ public class RunController {
     private static String titleOf(Map<String, Object> meta) {
         Object t = meta.get("title");
         return t == null ? "" : String.valueOf(t);
-    }
-
-    /** 띠 오른쪽에 적을 한 줄 — 파이썬의 {@code episode_caption} 과 같은 모양. */
-    private static String captionOf(Map<String, Object> meta) {
-        Object name = meta.get("character");
-        String who = name == null ? "" : String.valueOf(name).trim();
-        return who.isEmpty() ? "1화" : who + " · 1화";
     }
 
     /* ---- 다시 그리기 ------------------------------------------------------- */
@@ -438,7 +431,7 @@ public class RunController {
         if (meta == null) {
             return ResponseEntity.notFound().build();
         }
-        byte[] png = export.pagePng(runId, no, captionOf(meta));
+        byte[] png = export.pagePng(runId, no);
         if (png == null) {
             return ResponseEntity.notFound().build();
         }
