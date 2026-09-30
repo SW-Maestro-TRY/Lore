@@ -2143,25 +2143,37 @@ export function useYeoul(live?: Live) {
    *   한쪽만 확인하고 다 봤다고 착각한다.
    */
   const showUnlock = useCallback((kind: 'now' | 'slept') => () => {
-    const motions = sv?.motions ?? [];
-    const pick = kind === 'now'
-      ? motions.find((x) => x.layer === 'BASIC_2') ?? motions[0]
-      : motions.find((x) => x.advanced?.imageKey);
-    const key = kind === 'now' ? pick?.basicImageKey : pick?.advanced?.imageKey;
-    // 목(연습방)에는 서버 목록이 없다. 2층 자세표의 **진짜 이름**을 쓴다 — 개발 화면과 앨범이
-    // 같은 한 벌을 쓰므로, 여기서만 '2층' 같은 가짜 이름을 지어내면 대화할 때마다 통역이 든다.
-    // 연습방의 아이는 여울 자신이라 여울 그림을 거는 것이 맞다(진짜 방에서는 위 `pick` 이 이긴다).
+    // ★★ 진짜 방(서버 펫)에서는 **그 아이의 그림만** 건다(2026-10-01). 예전에는 대상 칸이 비면
+    //   여울 그림으로 채워서, 여울이 아닌 아이(예: 렌고쿠)의 해금 판에 **여울이 새 동작으로** 떴다.
+    //   그림이 없으면 미리보기를 접는다(`FirePreview` 규칙) — 다른 아이 그림으로 메우지 않는다.
+    if (onServer) {
+      const motions = sv?.motions ?? [];
+      if (kind === 'now') {
+        // 2층 8종 가운데 **실제로 다음에 열릴 칸**(아직 잠긴 첫 칸)이 대상이다. 다 열렸으면 첫 칸.
+        const floor2 = motions.filter((x) => x.layer === 'BASIC_2');
+        const pick = floor2.find((x) => !x.unlocked) ?? floor2[0];
+        if (!pick) { flash('이 아이의 2층 동작 목록이 아직 없어요'); return; }
+        const item = { label: pick.label, src: pick.basicImageKey ? assetUrl(pick.basicImageKey) : null };
+        setS((v) => withFire({ ...v, sheet: null }, unlockFire('now', [item])));
+        return;
+      }
+      // 아침 판은 **도착한(OPEN) 심화 그림이 있는 칸**만 — 서버가 아침 목록에 담는 기준과 같다.
+      const pick = motions.find((x) => x.advanced?.status === 'OPEN' && x.advanced.imageKey);
+      if (!pick?.advanced.imageKey) { flash('아침 판은 그림이 도착한 동작이 있어야 떠요'); return; }
+      const item = { label: pick.label, src: assetUrl(pick.advanced.imageKey) };
+      setS((v) => withFire({ ...v, sheet: null }, unlockFire('slept', [item])));
+      return;
+    }
+    // 목(연습방)에는 서버 목록이 없고 **아이가 곧 여울**이라 여울 그림을 거는 것이 맞다.
+    // 2층 자세표의 **진짜 이름**을 쓴다 — 개발 화면과 앨범이 같은 한 벌을 쓰므로, 여기서만
+    // '2층' 같은 가짜 이름을 지어내면 대화할 때마다 통역이 든다.
     const mockKey = POSE_FLOORS[1][1][0];
-    const item = pick && key
-      ? { label: pick.label, src: assetUrl(key) }
-      : { label: POSE_LABEL[mockKey] ?? mockKey, src: YEOUL_MOTION[mockKey] ?? null };
+    const item = { label: POSE_LABEL[mockKey] ?? mockKey, src: YEOUL_MOTION[mockKey] ?? null };
     // ★★ 아침 판은 **그림이 있는 것만** 띄운다(2026-09-21 판정 11). 서버는 아침 목록에 검수를
     //   통과(OPEN)하고 도착한 것만 담으므로 **그림 없는 아침 판은 실제로 존재하지 않는다.**
-    //   그런데 이 손잡이만 그림 없는 것까지 띄워서, 상훈님이 보신 "그림은 아직 그리는 중이에요"
-    //   가 바로 여기서 나왔다 — 화면이 아니라 손잡이가 없는 상태를 만들어 낸 것이다.
     if (kind === 'slept' && !item.src) { flash('아침 판은 그림이 도착한 동작이 있어야 떠요'); return; }
     setS((v) => withFire({ ...v, sheet: null }, unlockFire(kind, [item])));
-  }, [sv, unlockFire, flash]);
+  }, [onServer, sv, unlockFire, flash]);
 
   // 2층 해금(목) — 친밀도 50% 를 넘긴 순간 한 번만 축하한다(시안 componentDidUpdate).
   // ★ 서버에 붙어 있으면 이 길로 안 온다 — 아래 `justUnlocked` 효과가 맡는다. 두 곳이 같이
