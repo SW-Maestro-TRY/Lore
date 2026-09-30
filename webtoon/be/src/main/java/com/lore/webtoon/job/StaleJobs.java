@@ -61,7 +61,12 @@ public class StaleJobs {
 
     @PostConstruct
     public void sweep() {
-        List<WebtoonJob> ghosts = jobs.findByStatusOrderByIdAsc(JobStatus.RUNNING);
+        /* 줄에 서 있던 것(QUEUED)도 같다 — 줄은 이 서버의 메모리에만 있어서,
+           다시 뜨면 그 작업을 꺼내 돌릴 일꾼이 없다. 이야기를 고른 뒤·시트를
+           확인한 뒤에도 QUEUED 로 줄을 서게 되면서(#509) 이 자리가 늘었다. */
+        List<WebtoonJob> ghosts = new java.util.ArrayList<>(
+                jobs.findByStatusOrderByIdAsc(JobStatus.RUNNING));
+        ghosts.addAll(jobs.findByStatusOrderByIdAsc(JobStatus.QUEUED));
         if (ghosts.isEmpty()) {
             return;
         }

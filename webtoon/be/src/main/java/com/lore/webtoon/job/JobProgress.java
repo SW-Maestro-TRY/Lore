@@ -2,6 +2,7 @@ package com.lore.webtoon.job;
 
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -87,6 +88,59 @@ public class JobProgress {
             state.done = done;
             state.total = total;
             state.retryPage = 0;
+            state.phaseAt = Instant.now();
+        }
+    }
+
+    /**
+     * {@code page} 번째 장이 다 그려졌다. 몇 장째인지와 <b>어느 장인지</b>를 같이 센다.
+     *
+     * 장면을 동시에 그리면 5쪽이 2쪽보다 먼저 끝난다. 개수만 넘기면 화면은
+     * 「1~N쪽이 있다」고 읽고 아직 없는 2쪽을 불러 깨진 그림을 띄웠다(#509).
+     */
+    public void drewPage(Long jobId, int page, int total) {
+        State state = byJob.computeIfAbsent(jobId, k -> new State());
+        synchronized (state) {
+            state.counted = true;
+            state.drawn.add(page);
+            state.done = state.drawn.size();
+            state.total = total;
+            state.retryPage = 0;
+            state.phaseAt = Instant.now();
+        }
+    }
+
+    /**
+     * 화 전체 검수가 걸린 장들을 <b>다시 그리기 시작한다.</b>
+     *
+     * 이게 없을 때는 검수 뒤 다시 그리는 몇 분 동안 화면이 「검수하고 있어요 ·
+     * 7번째 장을 그리고 있어요」로 멈춰 있었다(#509).
+     */
+    public void redrawing(Long jobId, List<Integer> pages) {
+        State state = byJob.computeIfAbsent(jobId, k -> new State());
+        synchronized (state) {
+            state.redraw = List.copyOf(pages);
+            state.redrawDone = 0;
+            state.phaseAt = Instant.now();
+        }
+    }
+
+    /** 다시 그리던 장 하나가 끝났다. */
+    public void redrew(Long jobId) {
+        State state = byJob.computeIfAbsent(jobId, k -> new State());
+        synchronized (state) {
+            state.redrawDone++;
+            state.phaseAt = Instant.now();
+        }
+    }
+
+    /** 화 전체 검수를 (다시) 돌린다 — 다시 그리던 것은 끝났다. */
+    public void reviewing(Long jobId) {
+        State state = byJob.computeIfAbsent(jobId, k -> new State());
+        synchronized (state) {
+            state.redraw = List.of();
+            state.redrawDone = 0;
+            state.phaseAt = Instant.now();
         }
     }
 
@@ -101,11 +155,12 @@ public class JobProgress {
     public Snapshot of(Long jobId) {
         State state = byJob.get(jobId);
         if (state == null) {
-            return new Snapshot(List.of(), "", 0, 0, 0);
+            return new Snapshot(List.of(), "", 0, 0, 0, List.of(), List.of(), 0, null);
         }
         synchronized (state) {
             return new Snapshot(new ArrayList<>(state.log), state.say, state.done, state.total,
-                    state.retryPage);
+                    state.retryPage, new ArrayList<>(state.drawn), state.redraw, state.redrawDone,
+                    state.phaseAt);
         }
     }
 
@@ -123,13 +178,31 @@ public class JobProgress {
         private int retryPage;
         /** 몇 장 그렸는지를 자바가 세고 있는가(장면을 동시에 그리는 중). */
         private boolean counted;
+        /** 다 그려진 장 번호. 동시에 그리면 순서대로 안 끝난다. */
+        private final java.util.TreeSet<Integer> drawn = new java.util.TreeSet<>();
+        /** 화 전체 검수 뒤 지금 다시 그리는 장들. 비었으면 다시 그리는 중이 아니다. */
+        private List<Integer> redraw = List.of();
+        private int redrawDone;
+        /** 마지막으로 무언가 끝난 때(장 하나 · 다시 그리기 시작 · 검수 시작). */
+        private Instant phaseAt;
     }
 
     /**
      * @param done      지금까지 그린 장
      * @param total     그릴 장 (0 이면 아직 모른다)
      * @param retryPage 지금 걸려서 다시 그리는 중인 장 번호. 0 이면 없다.
+     * @param drawn     다 그려진 장 번호(오름차순). 한 프로세스로 차례로 그렸으면 비어 있다
+     * @param redraw    화 전체 검수 뒤 다시 그리는 장들. 비었으면 다시 그리는 중이 아니다
+     * @param redrawDone 그중 끝난 수
+     * @param phaseAt   마지막으로 무언가 끝난 때. 모르면 {@code null}
      */
-    public record Snapshot(List<String> log, String say, int done, int total, int retryPage) {
+    public record Snapshot(List<String> log, String say, int done, int total, int retryPage,
+                           List<Integer> drawn, List<Integer> redraw, int redrawDone,
+                           Instant phaseAt) {
+
+        /** 어느 장인지·다시 그리기를 모르는 옛 모양(한 프로세스로 차례로 그릴 때와 같다). */
+        public Snapshot(List<String> log, String say, int done, int total, int retryPage) {
+            this(log, say, done, total, retryPage, List.of(), List.of(), 0, null);
+        }
     }
 }

@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -174,6 +175,27 @@ public class WebtoonJob {
     private Instant finishedAt;
 
     /**
+     * 사람을 기다린 시간(초) — 이야기를 고르거나 시트를 확인하느라 멈춘 동안.
+     *
+     * 진행 화면의 경과 시간과 남은 시간은 <b>기계가 일한 시간</b>으로 센다.
+     * 이걸 안 빼면 사람이 이야기를 2분 고르는 동안 남은 시간이 2분 줄어서,
+     * 그림을 그리기 시작할 즈음엔 「약 1분 남음」이 떠 있었다(#509).
+     */
+    @Column(name = "paused_seconds", nullable = false)
+    private long pausedSeconds;
+
+    /** 지금 사람을 기다리는 중이면 멈춘 때. 아니면 {@code null}. */
+    @Column(name = "paused_at")
+    private Instant pausedAt;
+
+    /**
+     * 지금 걸음을 시작한 때. {@code updatedAt} 은 알림 주소 같은 걸음과
+     * 상관없는 쓰기에도 바뀌어서 걸음 안에서 얼마나 지났는지를 못 잰다.
+     */
+    @Column(name = "stage_at")
+    private Instant stageAt;
+
+    /**
      * 줄 설 때 <b>앞에 몇 개</b> 있었나. 화면에 「앞에 3명」이라고 적은 그 숫자다.
      *
      * 나중에 이 값과 실제로 기다린 시간을 맞춰 보면 <b>우리가 적어 준 예상이
@@ -268,6 +290,22 @@ public class WebtoonJob {
         }
         if (status.isOver() && this.finishedAt == null) {
             this.finishedAt = at;
+        }
+        /* 사람을 기다린 시간 — 기다리기 시작한 때를 적어 두고, 다른 상태로
+           넘어갈 때 그 차이를 쌓는다. */
+        boolean waitsNow = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET;
+        if (waitsNow && this.pausedAt == null) {
+            this.pausedAt = at;
+        } else if (!waitsNow && this.pausedAt != null) {
+            this.pausedSeconds += Math.max(0, Duration.between(this.pausedAt, at).getSeconds());
+            this.pausedAt = null;
+        }
+        /* 걸음이 바뀌었거나 멈춰 있다가 다시 돌기 시작하면 걸음 시계를 새로 켠다.
+           같은 걸음 안에서 RUNNING 을 다시 적는 것(시트 다시 그리기 등)도 그 걸음을
+           새로 시작하는 것이다. */
+        if (stage != this.stage || status == JobStatus.RUNNING && this.status != JobStatus.RUNNING
+                || this.stageAt == null) {
+            this.stageAt = at;
         }
         /* **다 됐으면 실패 사유를 지운다.** 서버를 하나 더 띄우면 StaleJobs 가
            다른 서버에서 아직 도는 작업을 「서버가 다시 시작되어…」로 적는데,
@@ -418,6 +456,17 @@ public class WebtoonJob {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    /** 사람을 기다린 시간(초). 지금 기다리는 중이면 지금까지 기다린 만큼도 더한다. */
+    public long pausedSecondsAt(Instant now) {
+        long more = pausedAt == null ? 0 : Math.max(0, Duration.between(pausedAt, now).getSeconds());
+        return pausedSeconds + more;
+    }
+
+    /** 지금 걸음을 시작한 때. 옛 작업(칸이 없음)은 {@code updatedAt}. */
+    public Instant getStageAt() {
+        return stageAt != null ? stageAt : updatedAt;
     }
 
     public Instant getUpdatedAt() {

@@ -92,9 +92,21 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const shownPctRef = useRef(0);
   shownPctRef.current = shownPct;
 
+  /* 경과 시계 — 서버가 준 「기계가 일한 시간」에서 받은 뒤 흐른 만큼을 더해 1초마다
+     다시 그린다. 3초 폴링 사이에도 멈추지 않고, 새로 받으면 서버 값에 다시 맞춘다.
+     사람이 답할 차례에는 서버 값이 멈춰 있으므로 시계도 멈춘다(#509). */
+  const clockBase = useRef<{ elapsed: number; at: number; ticking: boolean } | null>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const pull = useCallback(async () => {
     try {
       const got = await readJob(jobId);
+      clockBase.current = { elapsed: got.elapsed ?? 0, at: Date.now(),
+                            ticking: got.status === "queued" || got.status === "running" };
       setJob(got);
       setMisses(0);
       setLoadErr("");
@@ -160,10 +172,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   }, [status, jobId]);
   useEffect(() => {
     const target = Math.max(0, Math.min(100, job?.pct ?? 0));
-    if (target <= shownPctRef.current) {
-      setShownPct(target);
-      return;
-    }
+    /* 뒤로는 안 간다 — 검수에서 걸린 장이 생기면 남은 일이 늘어 서버 값이 잠깐
+       내려갈 수 있는데, 게이지가 줄면 "뭔가 잘못됐나" 로 읽힌다(#509). 그동안은
+       경과 시계와 문구가 움직이는 것을 보여 준다. */
+    if (target <= shownPctRef.current) return;
     const id = setInterval(() => {
       setShownPct((p) => {
         if (p >= target) {
@@ -189,6 +201,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       drawnRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [job?.art?.done]);
+
+  const clock = clockBase.current;
+  const elapsedSec = clock ? Math.floor(clock.elapsed + (clock.ticking ? (Date.now() - clock.at) / 1000 : 0)) : 0;
+  const elapsedText = fmtClock(elapsedSec);
 
   const dirs: NhDirection[] = useMemo(() => job?.directions ?? [], [job?.directions]);
   const chosen = useMemo(
@@ -239,16 +255,24 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     [status, waiting, job?.stage],
   );
   const queued = !!job?.queue && job.queue.ahead > 0;
+  /* 제목은 지금 걸음을 그대로 말한다 — 검수 걸음인데 「7번째 장을 그리고 있어요」가
+     뜨던 것을 고쳤다(#509). 그린 장 수는 검수 걸음에도 남아 있어서 그걸로 고르면 안 된다. */
+  const redraw = job?.redraw && job.redraw.pages.length > 0 ? job.redraw : null;
+  const redrawText = redraw ? t("검수에서 걸린 {pages}쪽을 다시 그리고 있어요", { pages: redraw.pages.join("·") }) : "";
   const louTitle = !job ? "" : waiting ? t("잠깐 봐 주세요")
     : queued ? t("앞에 대기자가 많아…")
-    : art ? t("{n}번째 장을 그리고 있어요", { n: Math.min(art.done + 1, art.total) })
+    : redraw ? redrawText
+    : cur === REVIEW ? (job.say ? t(job.say) : t("검수하고 있어요"))
+    : art ? t("{n}번째 장을 그리고 있어요", { n: nextPage(art) })
     : job.say ? t(job.say) : t(MASCOT_LINES[cur] || "만들고 있어요");
+  /* 남은 시간을 모르면(예상을 넘겼으면) 「1분」이라고 하지 않는다. */
+  const finishing = !!job && status === "running" && job.minutes_left == null;
+  const leftText = !job ? "" : job.minutes_left != null ? t("약 {n}분 남았어요.", { n: job.minutes_left })
+    : finishing ? t("거의 다 됐어요. 마무리하고 있어요.") : "";
   const louLine = !job ? "" : waiting
     ? (job.notice?.logged_in || job.notice?.email ? t("닫아도 괜찮아요. 다 되면 이메일로 알려드려요.") : t("닫아도 괜찮아요."))
     : queued ? t("현재 대기자 {n}명 · 약 {m}분 뒤 시작", { n: job.queue!.ahead, m: job.queue!.minutes })
-    : job.minutes_left != null
-      ? t("약 {n}분 남았어요.", { n: job.minutes_left })
-      : "";
+    : leftText;
 
   const refundLine = job?.refunded === "credit" ? t("사용된 크레딧은 자동으로 환불되었어요.")
     : job?.refunded === "free" ? t("사용한 무료 생성 횟수는 자동으로 복구되었어요.") : "";
@@ -402,7 +426,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <div className="txt">
                   {job ? <b>{louTitle}</b> : <b className="skeleton" style={{ width: 140, height: 18, borderRadius: 6 }} />}
                   <div className="wt-prog-bar"><i style={{ transform: `scaleX(${Math.max(2, Math.min(100, job?.pct ?? 2)) / 100})` }} /></div>
-                  {job && <span className="wt-prog-pct">{shownPct}%</span>}
+                  {job && <span className="wt-prog-pct">{t("{pct}% · {time} 경과", { pct: shownPct, time: elapsedText })}</span>}
                   <span className="dim">{louLine}</span>
                 </div>
               </button>
@@ -549,10 +573,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img className="stagelou" src={louStage(job.stage)} alt="" />
                     <div>
-                      <h2>{cur === REVIEW ? t("검수하고 있어요") : art ? t("페이지를 그리고 있어요") : job.stage_label ? t(job.stage_label) : t("만들고 있어요")}</h2>
+                      <h2>{redraw ? t("검수에서 걸린 장을 다시 그리고 있어요") : cur === REVIEW ? t("검수하고 있어요") : art ? t("페이지를 그리고 있어요") : job.stage_label ? t(job.stage_label) : t("만들고 있어요")}</h2>
                       <span className="muted lede">
-                        {job.say && t(job.say)}
-                        {job.minutes_left != null && <> {t("약 {n}분 남았어요.", { n: job.minutes_left })}</>}
+                        {redraw ? redrawText : job.say && t(job.say)}
+                        {leftText && <> {leftText}</>}
                       </span>
                     </div>
                   </div>
@@ -573,7 +597,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                         <b>{t("그려진 장")}</b>
                         <span className="dim">{t("{done} / {total}장", { done: art.done, total: art.total })}</span>
                       </div>
-                      <PageGrid jobId={job.id} art={art} onZoom={setZoom} />
+                      <PageGrid jobId={job.id} art={art} redraw={redraw} onZoom={setZoom} />
                     </div>
                   )}
                   <div className="wt-prog-cancel">
@@ -590,12 +614,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       </div>
                     )}
                   </div>
-                  {/* 아트보드 Drawing 의 「완성본 미리 보기」 — 다 그려지기 전에도
-                      지금까지 나온 것을 완성본 화면에서 볼 수 있다. */}
-                  {job.run_id && (
+                  {/* 지금까지 그린 장을 이 화면에서 본다. 예전 「완성본 미리 보기」는 완성본
+                      화면으로 보냈는데, 완성본은 다 올린 뒤에야 생겨서 만드는 중에는
+                      「그런 작품이 없습니다」가 떴다(#509). */}
+                  {art && art.done > 0 && (
                     <button type="button" className="btn btn-w btn-sm wt-prog-peek"
-                            onClick={() => go("result", { run: job.run_id! })}>
-                      {t("완성본 미리 보기")}
+                            onClick={() => drawnRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                      {t("지금까지 그린 장 보기 ({n}장)", { n: art.done })}
                     </button>
                   )}
                   {actErr && <span className="err">{actErr}</span>}
@@ -642,7 +667,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <b>{t("그려진 장")}</b>
                     <span className="dim">{t("{done} / {total}장", { done: art.done, total: art.total })}</span>
                   </div>
-                  <PageGrid jobId={job.id} art={art} onZoom={setZoom} />
+                  <PageGrid jobId={job.id} art={art} redraw={redraw} onZoom={setZoom} />
                 </>
               )}
             </div>
@@ -664,11 +689,17 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 }
 
 /* 그려진 장 — PC 는 완성본과 같은 폭의 세로 줄, 폰은 3열 격자. 다 안 그려진 자리는 빈 칸. */
-function PageGrid({ jobId, art, onZoom }: { jobId: string; art: { done: number; total: number; retry_page?: number }; onZoom: (u: string) => void }) {
+function PageGrid({ jobId, art, redraw, onZoom }: {
+  jobId: string;
+  art: { done: number; total: number; retry_page?: number; pages?: number[] };
+  redraw: { pages: number[]; done: number } | null;
+  onZoom: (u: string) => void;
+}) {
   const t = useT();
-  const done = Array.from({ length: art.done }, (_, i) => i + 1);
-  const rest = Math.max(0, art.total - art.done);
-  const slotText = art.retry_page ? t("{n}번째 장이 걸려서 다시 그리고 있어요", { n: art.retry_page }) : `${art.done} / ${art.total}`;
+  /* 실제로 그려진 장 번호 — 동시에 그리면 5쪽이 2쪽보다 먼저 끝난다(#509). */
+  const done = art.pages && art.pages.length ? art.pages : Array.from({ length: art.done }, (_, i) => i + 1);
+  const rest = Math.max(0, art.total - done.length);
+  const slotText = art.retry_page ? t("{n}번째 장이 걸려서 다시 그리고 있어요", { n: art.retry_page }) : `${done.length} / ${art.total}`;
   return (
     <>
       <div className="wt-prog-mgrid">
@@ -689,4 +720,20 @@ function PageGrid({ jobId, art, onZoom }: { jobId: string; art: { done: number; 
       </div>
     </>
   );
+}
+
+/** 아직 안 그려진 가장 앞 장 번호. 다 그렸으면 마지막 장. */
+function nextPage(art: { done: number; total: number; pages?: number[] }): number {
+  const have = new Set(art.pages && art.pages.length ? art.pages : Array.from({ length: art.done }, (_, i) => i + 1));
+  for (let n = 1; n <= art.total; n++) if (!have.has(n)) return n;
+  return art.total;
+}
+
+/** 초 -> 「03:42」, 한 시간을 넘으면 「1:03:42」. */
+function fmtClock(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s % 60)}` : `${pad(m)}:${pad(s % 60)}`;
 }
