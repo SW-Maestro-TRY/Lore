@@ -326,8 +326,8 @@ export interface Live {
   album: Album | null;
   /** 앨범을 (다시) 읽는다. 벽을 열 때 부른다. */
   loadAlbum: () => Promise<void>;
-  /** 동작 하나를 공유한다. 같은 동작을 다시 공유하면 있던 링크가 그대로 온다. */
-  shareMotion: (motionKey: string) => Promise<{ error: string | null; url: string | null }>;
+  /** 앨범 파일 다운로드·공유 사실을 서버에 남기고 최신 상태를 받는다. */
+  shareMotion: (motionKey: string, kind?: 'SHARE' | 'DOWNLOAD') => Promise<{ error: string | null; url: string | null }>;
   /**
    * 보고 싶은 동작 한 줄을 남긴다.
    *
@@ -868,11 +868,11 @@ export function useHatchState(): Live {
     }
   }, [petId]);
 
-  const shareMotion = useCallback(async (motionKey: string) => {
+  const shareMotion = useCallback(async (motionKey: string, kind: 'SHARE' | 'DOWNLOAD' = 'SHARE') => {
     if (!petId) return { error: null, url: null };
     try {
       const seq = takeSeq();
-      const r = await share(petId, motionKey, 'SHARE');
+      const r = await share(petId, motionKey, kind);
       putPet(seq, r.pet);
       return { error: null, url: r.url };
     } catch (e) {

@@ -99,7 +99,7 @@ class SheetPhotoTest {
 
         runner.cancel(1L);
 
-        verify(store, times(1)).failed(any(), any(), any());
+        verify(store, times(1)).failed(any(), any(), any(), any());
         assertThat(photo).doesNotExist();
     }
 

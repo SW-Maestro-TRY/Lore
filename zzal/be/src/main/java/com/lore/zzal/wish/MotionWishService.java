@@ -83,6 +83,12 @@ public class MotionWishService {
      * ★ 운영에서는 오프셋이 0 이라 {@code dayStartedAt()} 과 같은 값이다.
      */
     private static Instant dayStart(ZzalPet pet, Instant now) {
-        return now.minus(Duration.between(pet.dayStartedAt(), pet.now(now)));
+        Instant startedAt = pet.dayStartedAt();
+        // 부화 전에도 소유한 펫에 요청을 남길 수 있다. 아직 기상·부화 시각이 없으면
+        // 실제 생성 시각부터 센다. 매 요청의 now 를 쓰면 앞선 요청이 집계에서 빠진다.
+        if (startedAt == null) {
+            return pet.getCreatedAt();
+        }
+        return now.minus(Duration.between(startedAt, pet.now(now)));
     }
 }

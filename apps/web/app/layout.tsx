@@ -21,7 +21,11 @@ import "./fonts.css";
 import "@common/styles/tokens.css";
 import "./globals.css";
 
+// metadataBase — 각 페이지가 openGraph.url·canonical 을 상대 주소로 적어도 크롤러가 절대 주소로
+// 읽게 하는 기준. 제목·설명·이미지의 기본값은 여기 두지 않는다(웹툰 공유 페이지처럼 자기
+// metadata 를 가진 화면이 홈 값을 물려받아 덮이지 않게).
 export const metadata: Metadata = {
+  metadataBase: new URL("https://lorecomic.com"),
   title: "Lore — 우리만의 캐릭터로 노는 만화 플랫폼",
   description:
     "사진 한 장에서 캐릭터를 뽑고, 그 캐릭터로 4컷 · 예고편 · 웹툰까지 이어서 만듭니다.",

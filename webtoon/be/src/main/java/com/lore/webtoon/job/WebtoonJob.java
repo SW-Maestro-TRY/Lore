@@ -154,6 +154,19 @@ public class WebtoonJob {
     private Refunded refunded;
 
     /**
+     * 실패를 개발자가 다시 찾아볼 수 있게 남기는 셋(#531). {@link #error} 는 사람에게
+     * 보여 줄 한 줄이고, 이쪽은 무엇이 실제로 터졌는지다. 잘 끝났으면 비어 있다.
+     */
+    @Column(name = "fail_stage", length = 30)
+    private String failStage;
+
+    @Column(name = "fail_code", length = 30)
+    private String failCode;
+
+    @Column(name = "fail_detail", columnDefinition = "text")
+    private String failDetail;
+
+    /**
      * <b>줄에서 빠져나와 실제로 돌기 시작한 때.</b>
      *
      * 만든 때({@code createdAt})와의 차이가 <b>기다린 시간</b>이다. 이걸 안
@@ -340,6 +353,28 @@ public class WebtoonJob {
         this.error = why == null ? null : why.substring(0, Math.min(why.length(), 300));
         this.refunded = refunded;
         this.updatedAt = at;
+    }
+
+    void failure(String stage, String code, String detail) {
+        this.failStage = cut(stage, 30);
+        this.failCode = cut(code, 30);
+        this.failDetail = detail;
+    }
+
+    private static String cut(String v, int max) {
+        return v == null ? null : v.substring(0, Math.min(v.length(), max));
+    }
+
+    public String getFailStage() {
+        return failStage;
+    }
+
+    public String getFailCode() {
+        return failCode;
+    }
+
+    public String getFailDetail() {
+        return failDetail;
     }
 
     void learnRun(String runId, Instant at) {
