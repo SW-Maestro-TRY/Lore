@@ -108,7 +108,8 @@ final class JobEta {
         long work = work(job, at);
         JobStatus status = job.getStatus();
         if (status == JobStatus.DONE || status == JobStatus.ERROR) {
-            return new Eta(work, 0, false);
+            // 끝났다 — 남은 시간을 적을 것이 없다(0 으로 두면 「약 1분」으로 올려 적힌다).
+            return new Eta(work, -1, false);
         }
         double f = QUALITY.getOrDefault(WebtoonQuality.normalize(job.getQuality()), 1.0);
         int s = Math.max(1, slots);
