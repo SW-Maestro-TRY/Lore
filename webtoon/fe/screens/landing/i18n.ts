@@ -29,7 +29,7 @@ const dict: Dict = {
   "세라핀": { en: "Seraphine", ja: "セラフィン", zh: "塞拉芬" },
   "로맨스": { en: "Romance", ja: "ロマンス", zh: "爱情" },
   "판타지": { en: "Fantasy", ja: "ファンタジー", zh: "奇幻" },
-  "액션": { en: "Action", ja: "アクション", zh: "动作" },
+  "무협": { en: "Wuxia", ja: "武侠", zh: "武侠" },
   "일상": { en: "Slice of life", ja: "日常", zh: "日常" },
   "스릴러": { en: "Thriller", ja: "スリラー", zh: "惊悚" },
   "웹툰 만들기": { en: "Make a webtoon", ja: "ウェブトゥーンを作る", zh: "制作漫画" },
