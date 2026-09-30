@@ -313,6 +313,7 @@ public class JobRunner {
     /** 사람이 시트를 확인했다. 마지막 걸음으로. */
     public void resumeAfterSheet(Long jobId) {
         store.queued(jobId, JobStage.PAGES);
+        dropPhotos(jobId);                   // 시트가 확정됐다 — 사진을 다시 읽을 일이 없다
         line.submit(() -> {
             try {
                 pages(jobId);
@@ -539,13 +540,14 @@ public class JobRunner {
             throw new IllegalStateException("캐릭터 시트를 만들지 못했습니다");
         }
 
-        // 여기서 올린 사진을 지운다 — 화면이 그렇게 약속했다.
-        dropPhotos(jobId);
-
+        /* 시트를 확인하는 사람은 「다시 만들기」를 누를 수 있고, 다시 만들기는
+           사양을 사진부터 다시 쓴다 — 그래서 확인을 기다리는 동안은 사진을 둔다.
+           지우는 것은 시트를 확정하거나(resumeAfterSheet) 작업이 끝날 때(stop)다. */
         if (job.isCheckpoints()) {
             store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
             return;
         }
+        dropPhotos(jobId);
         pages(jobId);
     }
 
@@ -1190,6 +1192,7 @@ public class JobRunner {
         spentSoFar(jobId);
         Refunded back = refund(jobId);
         store.failed(jobId, why, back);
+        dropPhotos(jobId);                   // 시트 확인 중에 실패·중단된 것도 사진을 남기지 않는다
         progress.forget(jobId);
         cancelled.remove(jobId);
         /* **주소를 적어 준 사람에게 아무 말도 안 하는 것이 제일 나쁘다.**
@@ -1279,24 +1282,34 @@ public class JobRunner {
     /**
      * 사람이 올린 사진을 지운다.
      *
-     * <h2>왜 여기인가</h2>
+     * <h2>언제 지우나</h2>
      *
      * 사진은 <b>시트 사양을 쓸 때만</b> 쓰인다 — 모델이 사진을 읽고 외모를
      * 글로 적고, 그림은 그 글만 보고 그린다(run.py 의 `[시트] 그리는 중…
-     * (사진 없이 사양만)`). 사양이 나온 뒤로는 다시 안 쓰이므로, 이 걸음이
-     * 끝나는 자리가 지울 수 있는 가장 이른 자리다.
+     * (사진 없이 사양만)`). 그런데 시트 확인에서 「다시 만들기」를 누르면
+     * 사양을 지우고({@code JobService.clearSheet}) 사진부터 다시 쓴다.
+     *
+     * 예전에는 시트가 나오자마자 지워서, 사진을 올린 사람의 다시 만들기가
+     * 전부 「사진 파일이 없습니다」로 죽었다(2026-10-01 dev, #525). 그래서
+     * 사양을 다시 쓸 일이 없어지는 때에 지운다:
+     * <ul>
+     *   <li>시트 확인 없이 가는 작업 — 시트가 나오면 바로({@link #sheet})</li>
+     *   <li>시트 확인을 하는 작업 — 확정하면({@link #resumeAfterSheet})</li>
+     *   <li>어느 쪽이든 실패·중단으로 끝나면({@link #stop}, {@code StaleJobs})</li>
+     * </ul>
+     * 시트 확인에서 답 없이 떠난 작업은 그 자리에 사진이 남는다.
      *
      * <h2>왜 지우나</h2>
      *
      * 만들기 첫 걸음에 <b>"올린 사진은 캐릭터를 만드는 데만 쓰고, 시트가
-     * 나오면 서버에서 지웁니다"</b> 라고 적혀 있다. 그런데 안 지우고 있었다 —
+     * 나오면 서버에서 지웁니다"</b> 라고 적혀 있었다. 그런데 안 지우고 있었다 —
      * 다 만든 작업 폴더에 photo1.png 가 그대로 남아 있었다. 사람 얼굴이 들어올
      * 수 있는 값이고, 무엇보다 <b>안 지킬 약속을 화면에 적어 두면 안 된다.</b>
      *
      * 못 지워도 만들기는 안 멈춘다 — 그림은 이미 나오는 중이다. 대신 크게
      * 남긴다: 안 지워진 사진은 사람이 나중에 치워야 하는 일이다.
      */
-    private void dropPhotos(Long jobId) {
+    void dropPhotos(Long jobId) {
         WebtoonJob job = store.byId(jobId);
         if (job == null) {
             return;
