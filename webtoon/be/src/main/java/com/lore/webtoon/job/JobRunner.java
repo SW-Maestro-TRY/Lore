@@ -459,6 +459,23 @@ public class JobRunner {
         writeStyle(runId, job.getStyle());
         writeQuality(runId, job.getQuality());
 
+        /* **인물 단계에서 사람을 기다린다(#534).** 하네스가 인물(cast.json)만
+           세우고 이야기 후보(directions.json)는 안 만든 채 멈추면 그 차례다 —
+           현대 로맨스에서 상대 고르기, 또는 사용자가 적은 인물 확인.
+           「빠르게 결과부터」면 서버가 답한다(고르기는 1번, 확인은 그대로). */
+        if (waitsForCast(runId)) {
+            if (job.isCheckpoints()) {
+                store.awaiting(jobId, JobStatus.AWAITING_CAST, JobStage.STORY);
+                return;                             // 사람이 답할 때까지 멈춘다
+            }
+            castPicked(jobId, defaultCastAnswer(runId));
+            return;
+        }
+        afterStory(jobId, job, runId);
+    }
+
+    /** 이야기 후보가 나온 뒤 — DB 에 담고, 사람이 고르거나 서버가 고른다. */
+    private void afterStory(Long jobId, WebtoonJob job, String runId) throws Exception {
         List<Map<String, Object>> directions = directionsOf(runId);
         if (directions.isEmpty()) {
             throw new IllegalStateException("이야기 후보를 하나도 못 읽었습니다");
@@ -477,6 +494,94 @@ public class JobRunner {
         store.pick(jobId, picked);
         stories.choose(runId, picked);
         sheet(jobId);
+    }
+
+    /** 하네스가 인물만 만들고 멈췄는가 — cast.json 은 있고 directions.json 은 없다. */
+    private boolean waitsForCast(String runId) {
+        Path dir = runDir(runId);
+        return Files.isRegularFile(dir.resolve("cast.json"))
+                && !Files.isRegularFile(dir.resolve("directions.json"));
+    }
+
+    /**
+     * 인물 단계가 무엇을 기다리나 — {@code "pick"}(현대 로맨스, 한 명 고르기) 또는
+     * {@code "confirm"}(사용자가 적은 인물, 이대로 진행). 모르면 {@code "pick"}.
+     */
+    public String castKind(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return "pick";
+        }
+        try {
+            Map<String, Object> got = mapper.readValue(runDir(runId).resolve("cast_wait.json").toFile(),
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+            return "confirm".equals(got.get("kind")) ? "confirm" : "pick";
+        } catch (IOException e) {
+            return "pick";
+        }
+    }
+
+    /** 사람이 답하지 않을 때의 답 — 고르기는 1번, 확인은 그대로 진행(0). */
+    public int defaultCastAnswer(String runId) {
+        return "confirm".equals(castKind(runId)) ? 0 : 1;
+    }
+
+    /**
+     * 주인공 페르소나(persona.json) — 인물 확인·고르기 화면에 주인공 카드로 보여 준다(#534).
+     * 생성에는 쓰지 않는다. 없거나 못 읽으면 {@code null}.
+     */
+    public Map<String, Object> personaOf(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return null;
+        }
+        try {
+            return mapper.readValue(runDir(runId).resolve("persona.json").toFile(),
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** 세운 인물(cast.json). 화면이 카드로 보여 준다. 없거나 못 읽으면 빈 목록. */
+    public List<Map<String, Object>> castOf(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return List.of();
+        }
+        Path file = runDir(runId).resolve("cast.json");
+        try {
+            return mapper.readValue(file.toFile(),
+                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() { });
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
+    /** 사람이 인물 단계에 답했다(#534) — n 번 상대를 골랐거나(1~), 이대로 진행(0). */
+    public void resumeAfterCast(Long jobId, int n) {
+        store.queued(jobId, JobStage.STORY);
+        line.submit(() -> {
+            try {
+                if (!startable(jobId)) {
+                    return;         // 줄에서 기다리는 동안 그만뒀다
+                }
+                castPicked(jobId, n);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
+    }
+
+    private void castPicked(Long jobId, int n) throws Exception {
+        WebtoonJob job = store.running(jobId, JobStage.STORY);
+        progress.say(jobId, n == 0 ? "루가 이 인물들로 이야기를 짓고 있어요"
+                : "루가 고른 인물로 이야기를 짓고 있어요");
+        int code = callHarness(jobId, job, List.of(
+                "--run-id", job.getRunId(), "--cast-pick", String.valueOf(n)));
+        after.cost(job.getRunId());
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw new IllegalStateException("고른 인물로 이야기 후보를 만들지 못했습니다");
+        }
+        afterStory(jobId, job, job.getRunId());
     }
 
     /**

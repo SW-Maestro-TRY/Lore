@@ -110,6 +110,12 @@ const dict: Dict = {
   "다시 만들기 메모": { en: "Redo note", ja: "作り直しメモ", zh: "重做备注" },
 
   /* ---- 이야기 고르기 ---- */
+  "누구와의 이야기로 갈까요?": { en: "Whose story should it be?", ja: "誰との物語にしますか？", zh: "要和谁的故事？" },
+  "주인공 · {name}": { en: "Lead · {name}", ja: "主人公 · {name}", zh: "主角 · {name}" },
+  "이 인물들로 이야기를 지을게요": { en: "We'll write the story with these characters", ja: "この登場人物でストーリーを作ります", zh: "就用这些人物来写故事" },
+  "루가 이 인물들로 이야기를 짓고 있어요": { en: "Lou is writing stories with these characters", ja: "ルーがこの登場人物でストーリーを作っています", zh: "Lou 正在用这些人物写故事" },
+  "이 사람으로 갈게요": { en: "Go with this person", ja: "この人にします", zh: "就选这个人" },
+  "루가 고른 인물로 이야기를 짓고 있어요": { en: "Lou is writing stories with the person you picked", ja: "ルーが選んだ人物でストーリーを作っています", zh: "Lou 正在用你选的人物写故事" },
   "어느 이야기로 갈까요?": { en: "Which story should we go with?", ja: "どのストーリーにしますか？", zh: "选哪个故事？" },
   "넷 중 하나를 고르면 그 뒤로는 안 멈춰요. 고른 이야기는 다음 화면에서 본문을 직접 고칠 수 있어요.": { en: "Pick one of the four and it won't stop again. You can edit the chosen story's text on the next screen.", ja: "4つから1つ選ぶと、その後は止まりません。選んだストーリーは次の画面で本文を直接直せます。", zh: "四选一之后就不会再停。所选故事可在下一屏直接修改正文。" },
   "바라는 방향을 적고 후보 다시 만들기": { en: "Note the direction you want and regenerate", ja: "望む方向を書いて候補を作り直す", zh: "写下想要的方向并重新生成候选" },

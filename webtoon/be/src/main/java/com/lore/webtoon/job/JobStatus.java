@@ -23,6 +23,9 @@ public enum JobStatus {
     /** 이야기 넷 중 하나를 사람이 고를 차례. */
     AWAITING_PICK("awaiting_pick"),
 
+    /** 현대 로맨스 — 이야기 전에 상대 인물을 고르기를 기다린다(#534). */
+    AWAITING_CAST("awaiting_cast"),
+
     DONE("done"),
     ERROR("error");
 

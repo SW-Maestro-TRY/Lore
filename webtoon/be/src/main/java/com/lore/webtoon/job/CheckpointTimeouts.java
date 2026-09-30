@@ -91,6 +91,11 @@ public class CheckpointTimeouts {
                 autoPick(job.getId());
             }
         }
+        for (WebtoonJob job : jobs.findByStatusOrderByIdAsc(JobStatus.AWAITING_CAST)) {
+            if (job.getUpdatedAt().isBefore(cutoff)) {
+                autoPickCast(job.getId());
+            }
+        }
         for (WebtoonJob job : jobs.findByStatusOrderByIdAsc(JobStatus.AWAITING_SHEET)) {
             if (job.getUpdatedAt().isBefore(cutoff)) {
                 autoApproveSheet(job.getId());
@@ -118,6 +123,22 @@ public class CheckpointTimeouts {
                     timeout.toSeconds(), n, job.getPublicId());
         } catch (RuntimeException e) {      // noqa: 하나 실패해도 다음 스윕에서 다시 본다
             log.error("이야기를 대신 고르지 못했습니다 (job={})", job.getPublicId(), e);
+        }
+    }
+
+    /** 인물 단계에 답이 없다(#534) — 고르기는 1번, 확인은 그대로. 「빠르게 결과부터」와 같은 규칙. */
+    void autoPickCast(Long jobId) {
+        WebtoonJob job = jobs.findById(jobId).orElse(null);
+        if (job == null || job.getStatus() != JobStatus.AWAITING_CAST) {
+            return;
+        }
+        try {
+            int n = runner.defaultCastAnswer(job.getRunId());
+            runner.resumeAfterCast(job.getId(), n);
+            log.info("{}초 안에 인물 단계에 답이 없어서 대신 넘겼습니다 ({}번, job={})",
+                    timeout.toSeconds(), n, job.getPublicId());
+        } catch (RuntimeException e) {      // noqa: 하나 실패해도 다음 스윕에서 다시 본다
+            log.error("인물을 대신 고르지 못했습니다 (job={})", job.getPublicId(), e);
         }
     }
 
