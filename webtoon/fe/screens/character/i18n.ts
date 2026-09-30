@@ -156,7 +156,7 @@ const dict: Dict = {
   "이 캐릭터로 웹툰": { en: "Make a webtoon", ja: "このキャラクターでウェブトゥーン", zh: "用这个角色做漫画" },
   "카드 보기": { en: "View card", ja: "カードを見る", zh: "查看卡片" },
 
-  /* ---- 세계관 프리셋 라벨 (new_harness/worlds.json · 12개) ---- */
+  /* ---- 세계관 프리셋 라벨 (new_harness/worlds.json · 14개) ---- */
   "헌터": { en: "Hunters", ja: "ハンター", zh: "猎人" },
   "마법학교": { en: "Magic school", ja: "魔法学校", zh: "魔法学校" },
   "아이돌": { en: "Idols", ja: "アイドル", zh: "偶像" },
@@ -169,6 +169,8 @@ const dict: Dict = {
   "오메가버스": { en: "Omegaverse", ja: "オメガバース", zh: "Omegaverse" },
   "스릴러": { en: "Thriller", ja: "スリラー", zh: "惊悚" },
   "액션": { en: "Action", ja: "アクション", zh: "动作" },
+  "무협": { en: "Wuxia", ja: "武侠", zh: "武侠" },
+  "게임 판타지": { en: "Game fantasy", ja: "ゲームファンタジー", zh: "游戏奇幻" },
   "사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.": { en: "With a photo, or with a description alone.", ja: "写真からでも、説明だけでも作れます。", zh: "有照片可以，只有描述也可以。" },
   "사진으로도, 설명만으로도 만들 수 있어요.": { en: "From a photo, or a description alone.", ja: "写真からでも、説明だけでも。", zh: "用照片，或只用描述。" },
   "로그인하면 크레딧으로 이어서": { en: "Sign in to keep going with credits", ja: "ログインするとクレジットで続けられます", zh: "登录后可用积分继续" },
