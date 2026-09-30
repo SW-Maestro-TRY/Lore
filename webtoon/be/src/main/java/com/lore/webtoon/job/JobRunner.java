@@ -307,7 +307,7 @@ public class JobRunner {
             log.info("만들기를 멈춥니다 (job={})", jobId);
             return;
         }
-        stop(jobId, CANCELLED);
+        stop(jobId, CANCELLED, new JobFailure(stageOf(jobId), "cancelled", List.of(), null));
     }
 
     /** 사람이 시트를 확인했다. 마지막 걸음으로. */
@@ -353,7 +353,7 @@ public class JobRunner {
                 after.cost(job.getRunId());      // 다시 그리는 것도 값이 나간다
                 stopIfCancelled(jobId);
                 if (code != 0) {
-                    throw new IllegalStateException("캐릭터 시트를 다시 만들지 못했습니다");
+                    throw harnessFailed(job.getRunId(), "캐릭터 시트를 다시 만들지 못했습니다");
                 }
                 store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
             } catch (Exception e) {
@@ -450,7 +450,7 @@ public class JobRunner {
         after.cost(runId);
         stopIfCancelled(jobId);
         if (code != 0) {
-            throw new IllegalStateException("이야기 후보를 만들지 못했습니다");
+            throw harnessFailed(runId, "이야기 후보를 만들지 못했습니다");
         }
 
         store.learnRun(jobId, runId);
@@ -499,7 +499,7 @@ public class JobRunner {
         after.cost(job.getRunId());          // 다시 짓는 것도 값이 나간다
         stopIfCancelled(jobId);
         if (code != 0) {
-            throw new IllegalStateException("이야기 후보를 다시 만들지 못했습니다");
+            throw harnessFailed(job.getRunId(), "이야기 후보를 다시 만들지 못했습니다");
         }
 
         List<Map<String, Object>> directions = directionsOf(job.getRunId());
@@ -530,14 +530,14 @@ public class JobRunner {
                 List.of("--run-id", job.getRunId(),
                         "--pick", String.valueOf(job.getPicked()), "--pick-save"));
         if (picked != 0) {
-            throw new IllegalStateException("고른 이야기를 저장하지 못했습니다");
+            throw harnessFailed(job.getRunId(), "고른 이야기를 저장하지 못했습니다");
         }
 
         int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--sheet"));
         after.cost(job.getRunId());          // 시트는 그림이다 — 죽어도 값은 나갔다
         stopIfCancelled(jobId);
         if (code != 0) {
-            throw new IllegalStateException("캐릭터 시트를 만들지 못했습니다");
+            throw harnessFailed(job.getRunId(), "캐릭터 시트를 만들지 못했습니다");
         }
 
         /* 시트를 확인하는 사람은 「다시 만들기」를 누를 수 있고, 다시 만들기는
@@ -582,7 +582,7 @@ public class JobRunner {
         runFullReviewLoop(jobId, job);
 
         if (harness.stitch(job.getRunId(), env(job), line -> progress.line(jobId, line)) != 0) {
-            throw new IllegalStateException("이어 붙이기가 실패했습니다");
+            throw harnessFailed(job.getRunId(), "이어 붙이기가 실패했습니다");
         }
 
         /* **"다 됐다" 고 하기 전에 그림부터 S3 에 올리고 적는다.**
@@ -654,7 +654,7 @@ public class JobRunner {
                             List.of("--run-id", job.getRunId(), "--detail-pages",
                                     "--page", String.valueOf(page)));
                     if (code != 0) {
-                        throw new IllegalStateException(page + "번째 장을 그리지 못했습니다");
+                        throw harnessFailed(job.getRunId(), page + "번째 장을 그리지 못했습니다");
                     }
                     drawn.incrementAndGet();
                     progress.drewPage(jobId, page, pages);
@@ -685,7 +685,7 @@ public class JobRunner {
         after.cost(job.getRunId());
         stopIfCancelled(jobId);
         if (code != 0) {
-            throw new IllegalStateException("그림을 만들지 못했습니다");
+            throw harnessFailed(job.getRunId(), "그림을 만들지 못했습니다");
         }
     }
 
@@ -707,7 +707,7 @@ public class JobRunner {
         after.cost(job.getRunId());
         stopIfCancelled(jobId);
         if (code != 0) {
-            throw new IllegalStateException("장면을 나누지 못했습니다");
+            throw harnessFailed(job.getRunId(), "장면을 나누지 못했습니다");
         }
     }
 
@@ -1168,11 +1168,55 @@ public class JobRunner {
     private void fail(Long jobId, Exception e) {
         if (e instanceof Cancelled) {
             log.info("사람이 만들기를 그만뒀습니다 (job={})", jobId);
-            stop(jobId, CANCELLED);
+            stop(jobId, CANCELLED, new JobFailure(stageOf(jobId), "cancelled", List.of(), null));
             return;
         }
-        log.error("만들기가 실패했습니다 (job={})", jobId, e);
-        stop(jobId, humanReason(e));
+        JobFailure why = e instanceof HarnessFailed hf && hf.failure != null
+                ? hf.failure
+                : new JobFailure(stageOf(jobId), "error", List.of(), e.getClass().getName() + ": " + e.getMessage());
+        why = why.withTail(tailOf(jobId));
+        log.error("만들기가 실패했습니다 (job={}, 걸음={}, 종류={}, 분류={})",
+                jobId, why.stage(), why.code(), why.categories(), e);
+        stop(jobId, humanReason(e), why);
+    }
+
+    /**
+     * 하네스가 0 이 아닌 코드로 끝났다 — 그 걸음이 남긴 이유({@code failure.json})가 있으면
+     * 사람에게 할 말을 거기서 고른다. 없으면 어디서 멈췄는지({@code where})만 말한다.
+     */
+    private HarnessFailed harnessFailed(String runId, String where) {
+        JobFailure found = runId == null ? null
+                : JobFailure.read(runsDir.resolve(runId)).orElse(null);
+        return new HarnessFailed(found == null ? where : found.humanMessage(where), found);
+    }
+
+    /** 하네스가 실패하며 남긴 이유를 싣고 가는 예외. 메시지는 사람에게 보여 줄 문장이다. */
+    static final class HarnessFailed extends IllegalStateException {
+        final transient JobFailure failure;
+
+        HarnessFailed(String message, JobFailure failure) {
+            super(message);
+            this.failure = failure;
+        }
+    }
+
+    /** 지금 걸음 이름. 작업을 못 찾으면 비워 둔다. */
+    private String stageOf(Long jobId) {
+        WebtoonJob job = store.byId(jobId);
+        return job == null || job.getStage() == null ? null : job.getStage().name();
+    }
+
+    /**
+     * 하네스 출력 끝부분 — 진행 기록은 메모리에만 있고 {@link #stop} 이 지우므로, 지우기 전에
+     * 떠서 DB 에 남긴다. 전에는 서버가 다시 뜨면 실패 직전 출력이 영영 사라졌다.
+     */
+    private List<String> tailOf(Long jobId) {
+        try {
+            List<String> all = progress.of(jobId).log();
+            return all.size() <= 30 ? all : all.subList(all.size() - 30, all.size());
+        } catch (RuntimeException e) {          // noqa: 기록을 못 떠도 실패 처리는 계속한다
+            return List.of();
+        }
     }
 
     /**
@@ -1183,7 +1227,7 @@ public class JobRunner {
      * 하루 몫이 두 번 돌아온다 — {@code GuestGate.refundKey} 는 부를 때마다
      * 하나씩 돌려주기 때문이다.
      */
-    private void stop(Long jobId, String why) {
+    private void stop(Long jobId, String why, JobFailure failure) {
         WebtoonJob job = store.byId(jobId);
         if (job == null || job.getStatus().isOver()) {
             cancelled.remove(jobId);
@@ -1191,7 +1235,7 @@ public class JobRunner {
         }
         spentSoFar(jobId);
         Refunded back = refund(jobId);
-        store.failed(jobId, why, back);
+        store.failed(jobId, why, back, failure);
         dropPhotos(jobId);                   // 시트 확인 중에 실패·중단된 것도 사진을 남기지 않는다
         progress.forget(jobId);
         cancelled.remove(jobId);

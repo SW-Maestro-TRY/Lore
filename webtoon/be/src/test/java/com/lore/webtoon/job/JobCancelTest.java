@@ -65,7 +65,7 @@ class JobCancelTest {
 
         runner.cancel(1L);
 
-        verify(store).failed(eq(1L), eq(JobRunner.CANCELLED), any());
+        verify(store).failed(eq(1L), eq(JobRunner.CANCELLED), any(), any());
     }
 
     @Test
@@ -76,7 +76,7 @@ class JobCancelTest {
 
         runner.cancel(1L);
 
-        verify(store).failed(1L, JobRunner.CANCELLED, Refunded.CREDIT);
+        verify(store).failed(eq(1L), eq(JobRunner.CANCELLED), eq(Refunded.CREDIT), any());
     }
 
     @Test
@@ -86,7 +86,7 @@ class JobCancelTest {
 
         runner.cancel(1L);
 
-        verify(store, never()).failed(any(), anyString(), any());
+        verify(store, never()).failed(any(), anyString(), any(), any());
         verify(credits, never()).refund(any(), anyString());
         verify(guests, never()).refundKey(anyString());
     }
@@ -101,7 +101,7 @@ class JobCancelTest {
         when(job.getStatus()).thenReturn(JobStatus.ERROR);
         runner.cancel(1L);
 
-        verify(store).failed(eq(1L), eq(JobRunner.CANCELLED), any());
+        verify(store).failed(eq(1L), eq(JobRunner.CANCELLED), any(), any());
         verify(credits).refund(any(), anyString());
     }
 
@@ -112,6 +112,6 @@ class JobCancelTest {
 
         runner.cancel(1L);
 
-        verify(store, never()).failed(any(), anyString(), any());
+        verify(store, never()).failed(any(), anyString(), any(), any());
     }
 }
