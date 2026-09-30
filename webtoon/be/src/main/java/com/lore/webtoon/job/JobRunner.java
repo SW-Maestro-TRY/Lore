@@ -877,6 +877,7 @@ public class JobRunner {
         Path png = runsDir.resolve(job.getRunId()).resolve("pages")
                 .resolve("page%02d.png".formatted(page));
         try {
+            archive(png, page);          // 지우기 전에 지난 판으로 남긴다(#514)
             Files.deleteIfExists(png);   // run.py 는 파일이 있으면 안 다시 그린다
         } catch (IOException e) {
             log.warn("{}페이지 원본을 못 지웠습니다 — 그대로 둡니다 (job={})", page, jobId, e);
@@ -894,6 +895,35 @@ public class JobRunner {
         } catch (IOException | InterruptedException e) {
             log.warn("{}페이지를 다시 그리다 실패했습니다 (job={})", page, jobId, e);
         }
+    }
+
+    /**
+     * 지금 걸려 있는 장을 지난 판으로 떠 둔다(#514). 없으면 아무 일도 안 한다.
+     *
+     * 검수로 다시 그릴 때마다 이전 그림을 지웠더니 원본이 흔적 없이 사라졌다
+     * (2026-09-30). 편집실 다시 그리기({@code RegenService.archive})와 같은 자리·같은
+     * 이름({@code pages/versions/pageNN.vK.png})이라 편집실 지난 판 목록에 그대로 보인다.
+     */
+    static Path archive(Path png, int page) throws IOException {
+        if (!Files.isRegularFile(png)) {
+            return null;
+        }
+        Path dir = png.getParent().resolve("versions");
+        Files.createDirectories(dir);
+        java.util.regex.Pattern mine = java.util.regex.Pattern.compile(
+                "page%02d\\.v(\\d+)\\.png".formatted(page));
+        int next = 1;
+        try (var found = Files.list(dir)) {
+            for (Path one : found.toList()) {
+                java.util.regex.Matcher m = mine.matcher(one.getFileName().toString());
+                if (m.matches()) {
+                    next = Math.max(next, Integer.parseInt(m.group(1)) + 1);
+                }
+            }
+        }
+        Path dst = dir.resolve("page%02d.v%d.png".formatted(page, next));
+        Files.copy(png, dst);
+        return dst;
     }
 
     /** {@code full_review.json}을 읽는다. 없거나 못 읽으면 {@code null}
