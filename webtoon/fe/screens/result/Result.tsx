@@ -167,6 +167,22 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     };
   }, [data, runId, mine, ep]);
 
+  /* 「컷별로 내려받기」를 켜고 메인 내려받기를 누르면, 합친 파일 대신 장마다
+     따로 내려받는다. 한꺼번에 열면 브라우저가 일부를 막아서 간격을 둔다. */
+  const downloadEachPage = () => {
+    if (!data) return;
+    data.pages.forEach((pg, i) => {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = pageDownloadUrl(runId, pg.no);
+        a.download = `${runId}-${pg.no}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }, i * 350);
+    });
+  };
+
   const toTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
   useEffect(() => {
@@ -298,7 +314,15 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                     <IconEdit size={18} /> {t("편집실")}
                   </button>
                   <a className="btn btn-w" href={episodeDownloadUrl(runId)} download
-                     onClick={() => track("download_click", { run: runId, kind: "episode" })}>
+                     onClick={(e) => {
+                       if (perPage) {
+                         e.preventDefault();
+                         downloadEachPage();
+                         track("download_click", { run: runId, kind: "page_all" });
+                       } else {
+                         track("download_click", { run: runId, kind: "episode" });
+                       }
+                     }}>
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
                 </div>
