@@ -101,6 +101,7 @@ public class StaleJobs {
         Refunded refunded = runner.refund(job.getId());
         job.failed(WHY, refunded, Instant.now());
         jobs.save(job);
+        runner.dropPhotos(job.getId());      // 끊긴 작업도 사진을 남기지 않는다
         log.warn("끊긴 작업을 적었습니다 (job={}, 만든 때={}, 돌려줌={})",
                 job.getPublicId(), job.getCreatedAt(), refunded);
     }
