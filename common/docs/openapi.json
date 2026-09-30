@@ -195,6 +195,17 @@
         },
         "type": "object"
       },
+      "AmongRequest": {
+        "properties": {
+          "runIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "Answer": {
         "description": "대화 응답 요청. 슬롯당 1회, 최대 40자",
         "properties": {
@@ -477,6 +488,23 @@
         },
         "type": "object"
       },
+      "ApiResponseLikeResult": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LikeResult"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseLinkResult": {
         "properties": {
           "data": {
@@ -575,6 +603,26 @@
         },
         "type": "object"
       },
+      "ApiResponseListString": {
+        "properties": {
+          "data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseMe": {
         "properties": {
           "data": {
@@ -596,6 +644,57 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/NotifySettingResult"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponsePieceMakerHypothesis": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PieceMakerHypothesis"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponsePieceMakerHypothesisList": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PieceMakerHypothesisList"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponsePieceMakerPendingHypothesisList": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PieceMakerPendingHypothesisList"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -647,6 +746,23 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Public"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseRestoreResult": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/RestoreResult"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -796,10 +912,10 @@
         },
         "type": "object"
       },
-      "ApiResponseTrailerHypothesis": {
+      "ApiResponseTrashList": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/TrailerHypothesis"
+            "$ref": "#/components/schemas/TrashList"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -813,27 +929,10 @@
         },
         "type": "object"
       },
-      "ApiResponseTrailerHypothesisList": {
+      "ApiResponseTrashed": {
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/TrailerHypothesisList"
-          },
-          "error": {
-            "$ref": "#/components/schemas/ErrorBody"
-          },
-          "message": {
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "ApiResponseTrailerPendingHypothesisList": {
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/TrailerPendingHypothesisList"
+            "$ref": "#/components/schemas/Trashed"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -918,31 +1017,6 @@
             "type": "integer"
           }
         },
-        "type": "object"
-      },
-      "Batch": {
-        "properties": {
-          "events": {
-            "items": {
-              "$ref": "#/components/schemas/Event"
-            },
-            "minItems": 1,
-            "type": "array"
-          },
-          "referrer": {
-            "description": "어디서 들어왔는지. 쿼리스트링은 서버가 잘라 버린다",
-            "example": "https://www.google.com/search",
-            "type": "string"
-          },
-          "source": {
-            "description": "유입 출처(utm_source/medium/campaign 을 접은 것)",
-            "example": "instagram/social/launch",
-            "type": "string"
-          }
-        },
-        "required": [
-          "events"
-        ],
         "type": "object"
       },
       "Call": {
@@ -1194,60 +1268,58 @@
         },
         "type": "object"
       },
-      "CreateRequest": {
+      "CommonEvent": {
         "properties": {
-          "agree_ip": {
-            "type": "boolean"
-          },
-          "character": {
+          "name": {
+            "description": "이벤트 이름",
+            "example": "zzal_upload_abandoned",
             "type": "string"
           },
-          "character_id": {
+          "path": {
+            "description": "일어난 화면 경로",
+            "example": "/zzal",
             "type": "string"
           },
-          "checkpoints": {
-            "type": "boolean"
-          },
-          "fields": {
-            "additionalProperties": {
-              "type": "string"
+          "props": {
+            "additionalProperties": { },
+            "description": "곁들이는 값. 허용된 키만 저장된다",
+            "example": {
+              "reason": "limit"
             },
             "type": "object"
           },
-          "genre": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "photo_keys": {
+          "ts": {
+            "description": "화면에서 일어난 시각(epoch ms)",
+            "example": 1757000000000,
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CommonEventBatch": {
+        "properties": {
+          "events": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/CommonEvent"
             },
+            "minItems": 1,
             "type": "array"
           },
-          "photo_note": {
+          "referrer": {
+            "description": "어디서 들어왔는지. 쿼리스트링은 서버가 잘라 버린다",
+            "example": "https://www.google.com/search",
             "type": "string"
           },
-          "photos_data": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "quality": {
-            "type": "string"
-          },
-          "story": {
-            "type": "string"
-          },
-          "style": {
-            "type": "string"
-          },
-          "uid": {
+          "source": {
+            "description": "유입 출처(utm_source/medium/campaign 을 접은 것)",
+            "example": "instagram/social/launch",
             "type": "string"
           }
         },
+        "required": [
+          "events"
+        ],
         "type": "object"
       },
       "Created": {
@@ -1516,35 +1588,6 @@
         },
         "type": "object"
       },
-      "Event": {
-        "properties": {
-          "name": {
-            "description": "이벤트 이름",
-            "example": "zzal_upload_abandoned",
-            "type": "string"
-          },
-          "path": {
-            "description": "일어난 화면 경로",
-            "example": "/zzal",
-            "type": "string"
-          },
-          "props": {
-            "additionalProperties": { },
-            "description": "곁들이는 값. 허용된 키만 저장된다",
-            "example": {
-              "reason": "limit"
-            },
-            "type": "object"
-          },
-          "ts": {
-            "description": "화면에서 일어난 시각(epoch ms)",
-            "example": 1757000000000,
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
       "Features": {
         "properties": {
           "album": {
@@ -1767,6 +1810,37 @@
         },
         "type": "object"
       },
+      "Full": {
+        "properties": {
+          "balance": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rewarded": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "FullRequest": {
+        "properties": {
+          "answers": {
+            "additionalProperties": { },
+            "type": "object"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "contact": {
+            "type": "string"
+          },
+          "wantsInterview": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "Gauges": {
         "properties": {
           "clean": {
@@ -1802,7 +1876,7 @@
               "COMMON",
               "WEBTOON",
               "ZZAL",
-              "TRAILER"
+              "PIECE_MAKER"
             ],
             "example": "ZZAL",
             "type": "string"
@@ -2152,6 +2226,21 @@
         },
         "type": "object"
       },
+      "LikeResult": {
+        "properties": {
+          "liked": {
+            "type": "boolean"
+          },
+          "likes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "runId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "LinkRequest": {
         "properties": {
           "uid": {
@@ -2449,6 +2538,313 @@
         },
         "type": "object"
       },
+      "PieceMakerHypothesis": {
+        "description": "가설 하나. 맡기기 · 되묻기 · 판정 넣기의 응답이 모두 이 모양이다",
+        "properties": {
+          "cards": {
+            "description": "맡길 때 복사한 카드. 칸은 카드 API 의 열둘, 회수 칸은 N화로 가린 값. 순서 그대로",
+            "items": {
+              "$ref": "#/components/schemas/Foreshadowing"
+            },
+            "type": "array"
+          },
+          "chapter": {
+            "description": "독자가 읽은 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "claim": {
+            "description": "독자의 주장",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "맡긴 때(UTC)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "failureMessage": {
+            "description": "독자에게 보일 실패 문구. FAILED 일 때만",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "요청 id. 되묻기와 보관함의 열쇠",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "judgedAt": {
+            "description": "판정을 넣은 때(UTC). PENDING 이면 null",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judgement": {
+            "additionalProperties": { },
+            "description": "판정. judge.py 출력 그대로(grade · reason · support · against · cited_cards). COMPLETE 일 때만",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "judgementStatus": {
+            "description": "판정 상태",
+            "enum": [
+              "PENDING",
+              "COMPLETE",
+              "FAILED"
+            ],
+            "example": "PENDING",
+            "type": "string"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글)",
+            "type": "object"
+          },
+          "presentation": {
+            "additionalProperties": { },
+            "description": "편집본. COMPLETE 이고 편집본이 있을 때만",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "제목. 없으면 빈 글",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerHypothesisJudge": {
+        "description": "운영자가 판정을 넣는다. judge.py 출력을 그대로 싣는다. 이미 판정한 가설이면 덮어쓴다",
+        "properties": {
+          "failureMessage": {
+            "description": "독자에게 보일 실패 문구. FAILED 면 필수",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "description": "판정한 가설의 요청 id(2-8 의 items[].id). judge.py 의 request_id 가 아니다",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "judgement": {
+            "additionalProperties": { },
+            "description": "judge.py 출력의 judgement(grade · reason · support · against · cited_cards). COMPLETE 면 필수",
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "judgementStatus": {
+            "description": "COMPLETE 또는 FAILED",
+            "enum": [
+              "COMPLETE",
+              "FAILED"
+            ],
+            "example": "COMPLETE",
+            "type": "string"
+          },
+          "presentation": {
+            "additionalProperties": { },
+            "description": "편집본(editor 출력). 있을 때만",
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerHypothesisList": {
+        "description": "내 가설 보관함. 최신이 앞이다",
+        "properties": {
+          "items": {
+            "description": "맡긴 가설. 없으면 빈 배열",
+            "items": {
+              "$ref": "#/components/schemas/PieceMakerHypothesisSummary"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerHypothesisSubmit": {
+        "description": "가설 맡기기. 저장이 곧 맡기기다 — 서버는 PENDING 으로 두고 운영자가 판정을 넣는다",
+        "properties": {
+          "cards": {
+            "description": "담은 카드의 번호. 하나 이상 100장까지. 겹치지 않음. 배열 순서가 근거의 순서",
+            "example": [
+              "T2",
+              "T374"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cardsDigest": {
+            "description": "장부 정보(cards/meta)의 cardsDigest. 위와 같다",
+            "type": "string"
+          },
+          "chapter": {
+            "description": "독자가 읽은 회차 N. 1부터 장부의 가장 뒤 회차까지",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "claim": {
+            "description": "독자의 주장. 6,000자까지. 비면 400",
+            "type": "string"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "카드 번호마다 독자의 해석. 4,000자까지. 담은 카드의 번호만 열쇠로 온다",
+            "type": "object"
+          },
+          "requestKey": {
+            "description": "재시도 식별 UUID. 같은 키와 같은 입력은 한 번만 접수·차감한다",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stateDigest": {
+            "description": "장부 정보(cards/meta)의 stateDigest. 카드 표의 값과 다르면 400 PIECE_MAKER_DIGEST_MISMATCH",
+            "type": "string"
+          },
+          "title": {
+            "description": "가설 제목. 180자까지. 비어도 된다",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerHypothesisSummary": {
+        "description": "보관함의 한 줄. 누르면 가설 하나(2-6)를 받는다",
+        "properties": {
+          "chapter": {
+            "description": "독자가 읽은 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "createdAt": {
+            "description": "맡긴 때(UTC)",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "요청 id",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "judgedAt": {
+            "description": "판정을 넣은 때(UTC). PENDING 이면 null",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "judgementStatus": {
+            "description": "판정 상태",
+            "enum": [
+              "PENDING",
+              "COMPLETE",
+              "FAILED"
+            ],
+            "example": "PENDING",
+            "type": "string"
+          },
+          "title": {
+            "description": "제목. 없으면 빈 글",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerPendingHypothesis": {
+        "description": "판정 안 된 가설 한 줄. judge.py 의 입력이 그대로 든다",
+        "properties": {
+          "cards": {
+            "description": "맡길 때 복사한 카드. 순서 그대로. judge.py 에는 id 만 넘긴다",
+            "items": {
+              "$ref": "#/components/schemas/Foreshadowing"
+            },
+            "type": "array"
+          },
+          "cardsDigest": {
+            "description": "맡길 때 카드 표의 cardsDigest",
+            "type": "string"
+          },
+          "chapter": {
+            "description": "독자가 읽은 회차 N",
+            "example": 200,
+            "format": "int32",
+            "type": "integer"
+          },
+          "claim": {
+            "description": "독자의 주장",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "맡긴 때(UTC). 이 순서로 온다",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "요청 id. 판정을 넣을 때(2-9) 이 값을 싣는다",
+            "example": 17,
+            "format": "int64",
+            "type": "integer"
+          },
+          "notes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글)",
+            "type": "object"
+          },
+          "stateDigest": {
+            "description": "맡길 때 카드 표의 stateDigest. judge.py 가 자기 파일과 견준다",
+            "type": "string"
+          },
+          "title": {
+            "description": "제목. 없으면 빈 글",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerPendingHypothesisList": {
+        "description": "판정 안 된 가설. 오래된 것이 앞이다",
+        "properties": {
+          "items": {
+            "description": "판정 안 된 가설. 없으면 빈 배열",
+            "items": {
+              "$ref": "#/components/schemas/PieceMakerPendingHypothesis"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "Pieces": {
         "properties": {
           "bond": {
@@ -2513,7 +2909,7 @@
             "type": "string"
           },
           "domain": {
-            "description": "키 폴더. zzal · webtoon · trailer · common 만 허용",
+            "description": "키 폴더. zzal · webtoon · piece-maker · common 만 허용",
             "example": "zzal",
             "minLength": 1,
             "type": "string"
@@ -2621,6 +3017,17 @@
             "type": "string"
           },
           "reactionKey": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RestoreResult": {
+        "properties": {
+          "restored": {
+            "type": "boolean"
+          },
+          "runId": {
             "type": "string"
           }
         },
@@ -2783,6 +3190,35 @@
         },
         "type": "object"
       },
+      "ShortQuestions": {
+        "properties": {
+          "own": {
+            "type": "boolean"
+          },
+          "questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ShortRequest": {
+        "properties": {
+          "answers": {
+            "additionalProperties": { },
+            "type": "object"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "run": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Sick": {
         "properties": {
           "kind": {
@@ -2847,7 +3283,7 @@
               "COMMON",
               "WEBTOON",
               "ZZAL",
-              "TRAILER"
+              "PIECE_MAKER"
             ],
             "example": "ZZAL",
             "type": "string"
@@ -3001,6 +3437,27 @@
         },
         "type": "object"
       },
+      "Status": {
+        "properties": {
+          "done": {
+            "type": "boolean"
+          },
+          "prompt": {
+            "type": "boolean"
+          },
+          "questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reward": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "Submit": {
         "description": "후기 — 별점은 필수, 칩과 자유 글은 선택",
         "properties": {
@@ -3097,309 +3554,38 @@
         },
         "type": "object"
       },
-      "TrailerHypothesis": {
-        "description": "가설 하나. 맡기기 · 되묻기 · 판정 넣기의 응답이 모두 이 모양이다",
+      "TrashList": {
         "properties": {
-          "cards": {
-            "description": "맡길 때 복사한 카드. 칸은 카드 API 의 열둘, 회수 칸은 N화로 가린 값. 순서 그대로",
-            "items": {
-              "$ref": "#/components/schemas/Foreshadowing"
-            },
-            "type": "array"
-          },
-          "chapter": {
-            "description": "독자가 읽은 회차 N",
-            "example": 200,
+          "keepDays": {
             "format": "int32",
             "type": "integer"
           },
-          "claim": {
-            "description": "독자의 주장",
-            "type": "string"
-          },
-          "createdAt": {
-            "description": "맡긴 때(UTC)",
-            "format": "date-time",
-            "type": "string"
-          },
-          "failureMessage": {
-            "description": "독자에게 보일 실패 문구. FAILED 일 때만",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "description": "요청 id. 되묻기와 보관함의 열쇠",
-            "example": 17,
-            "format": "int64",
-            "type": "integer"
-          },
-          "judgedAt": {
-            "description": "판정을 넣은 때(UTC). PENDING 이면 null",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "judgement": {
-            "additionalProperties": { },
-            "description": "판정. judge.py 출력 그대로(grade · reason · support · against · cited_cards). COMPLETE 일 때만",
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "judgementStatus": {
-            "description": "판정 상태",
-            "enum": [
-              "PENDING",
-              "COMPLETE",
-              "FAILED"
-            ],
-            "example": "PENDING",
-            "type": "string"
-          },
-          "notes": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글)",
-            "type": "object"
-          },
-          "presentation": {
-            "additionalProperties": { },
-            "description": "편집본. COMPLETE 이고 편집본이 있을 때만",
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "title": {
-            "description": "제목. 없으면 빈 글",
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "TrailerHypothesisJudge": {
-        "description": "운영자가 판정을 넣는다. judge.py 출력을 그대로 싣는다. 이미 판정한 가설이면 덮어쓴다",
-        "properties": {
-          "failureMessage": {
-            "description": "독자에게 보일 실패 문구. FAILED 면 필수",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "description": "판정한 가설의 요청 id(2-8 의 items[].id). judge.py 의 request_id 가 아니다",
-            "example": 17,
-            "format": "int64",
-            "type": "integer"
-          },
-          "judgement": {
-            "additionalProperties": { },
-            "description": "judge.py 출력의 judgement(grade · reason · support · against · cited_cards). COMPLETE 면 필수",
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "judgementStatus": {
-            "description": "COMPLETE 또는 FAILED",
-            "enum": [
-              "COMPLETE",
-              "FAILED"
-            ],
-            "example": "COMPLETE",
-            "type": "string"
-          },
-          "presentation": {
-            "additionalProperties": { },
-            "description": "편집본(editor 출력). 있을 때만",
-            "type": [
-              "object",
-              "null"
-            ]
-          }
-        },
-        "type": "object"
-      },
-      "TrailerHypothesisList": {
-        "description": "내 가설 보관함. 최신이 앞이다",
-        "properties": {
-          "items": {
-            "description": "맡긴 가설. 없으면 빈 배열",
+          "runs": {
             "items": {
-              "$ref": "#/components/schemas/TrailerHypothesisSummary"
+              "additionalProperties": { },
+              "type": "object"
             },
             "type": "array"
           }
         },
         "type": "object"
       },
-      "TrailerHypothesisSubmit": {
-        "description": "가설 맡기기. 저장이 곧 맡기기다 — 서버는 PENDING 으로 두고 운영자가 판정을 넣는다",
+      "Trashed": {
         "properties": {
-          "cards": {
-            "description": "담은 카드의 번호. 하나 이상 100장까지. 겹치지 않음. 배열 순서가 근거의 순서",
-            "example": [
-              "T2",
-              "T374"
-            ],
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "cardsDigest": {
-            "description": "장부 정보(cards/meta)의 cardsDigest. 위와 같다",
+          "deletedAt": {
+            "format": "date-time",
             "type": "string"
           },
-          "chapter": {
-            "description": "독자가 읽은 회차 N. 1부터 장부의 가장 뒤 회차까지",
-            "example": 200,
+          "keepDays": {
             "format": "int32",
             "type": "integer"
           },
-          "claim": {
-            "description": "독자의 주장. 6,000자까지. 비면 400",
-            "type": "string"
-          },
-          "notes": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "카드 번호마다 독자의 해석. 4,000자까지. 담은 카드의 번호만 열쇠로 온다",
-            "type": "object"
-          },
-          "requestKey": {
-            "description": "재시도 식별 UUID. 같은 키와 같은 입력은 한 번만 접수·차감한다",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "stateDigest": {
-            "description": "장부 정보(cards/meta)의 stateDigest. 카드 표의 값과 다르면 400 TRAILER_DIGEST_MISMATCH",
-            "type": "string"
-          },
-          "title": {
-            "description": "가설 제목. 180자까지. 비어도 된다",
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "TrailerHypothesisSummary": {
-        "description": "보관함의 한 줄. 누르면 가설 하나(2-6)를 받는다",
-        "properties": {
-          "chapter": {
-            "description": "독자가 읽은 회차 N",
-            "example": 200,
-            "format": "int32",
-            "type": "integer"
-          },
-          "createdAt": {
-            "description": "맡긴 때(UTC)",
+          "purgeAt": {
             "format": "date-time",
             "type": "string"
           },
-          "id": {
-            "description": "요청 id",
-            "example": 17,
-            "format": "int64",
-            "type": "integer"
-          },
-          "judgedAt": {
-            "description": "판정을 넣은 때(UTC). PENDING 이면 null",
-            "format": "date-time",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "judgementStatus": {
-            "description": "판정 상태",
-            "enum": [
-              "PENDING",
-              "COMPLETE",
-              "FAILED"
-            ],
-            "example": "PENDING",
+          "runId": {
             "type": "string"
-          },
-          "title": {
-            "description": "제목. 없으면 빈 글",
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "TrailerPendingHypothesis": {
-        "description": "판정 안 된 가설 한 줄. judge.py 의 입력이 그대로 든다",
-        "properties": {
-          "cards": {
-            "description": "맡길 때 복사한 카드. 순서 그대로. judge.py 에는 id 만 넘긴다",
-            "items": {
-              "$ref": "#/components/schemas/Foreshadowing"
-            },
-            "type": "array"
-          },
-          "cardsDigest": {
-            "description": "맡길 때 카드 표의 cardsDigest",
-            "type": "string"
-          },
-          "chapter": {
-            "description": "독자가 읽은 회차 N",
-            "example": 200,
-            "format": "int32",
-            "type": "integer"
-          },
-          "claim": {
-            "description": "독자의 주장",
-            "type": "string"
-          },
-          "createdAt": {
-            "description": "맡긴 때(UTC). 이 순서로 온다",
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "description": "요청 id. 판정을 넣을 때(2-9) 이 값을 싣는다",
-            "example": 17,
-            "format": "int64",
-            "type": "integer"
-          },
-          "notes": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "카드 번호마다 독자의 해석. 담은 카드마다 한 칸(없으면 빈 글)",
-            "type": "object"
-          },
-          "stateDigest": {
-            "description": "맡길 때 카드 표의 stateDigest. judge.py 가 자기 파일과 견준다",
-            "type": "string"
-          },
-          "title": {
-            "description": "제목. 없으면 빈 글",
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "TrailerPendingHypothesisList": {
-        "description": "판정 안 된 가설. 오래된 것이 앞이다",
-        "properties": {
-          "items": {
-            "description": "판정 안 된 가설. 없으면 빈 배열",
-            "items": {
-              "$ref": "#/components/schemas/TrailerPendingHypothesis"
-            },
-            "type": "array"
           }
         },
         "type": "object"
@@ -3420,6 +3606,9 @@
       "TryRequest": {
         "properties": {
           "description": {
+            "type": "string"
+          },
+          "language": {
             "type": "string"
           },
           "name": {
@@ -3528,6 +3717,127 @@
         },
         "type": "object"
       },
+      "WebtoonCharacterCreateRequest": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "photos_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "style": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "WebtoonEvent": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "props": {
+            "additionalProperties": { },
+            "type": "object"
+          },
+          "ts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "view": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "WebtoonEventBatch": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/WebtoonEvent"
+            },
+            "type": "array"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "WebtoonJobCreateRequest": {
+        "properties": {
+          "agree_ip": {
+            "type": "boolean"
+          },
+          "character": {
+            "type": "string"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "checkpoints": {
+            "type": "boolean"
+          },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "genre": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "photo_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "photo_note": {
+            "type": "string"
+          },
+          "photos_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "quality": {
+            "type": "string"
+          },
+          "story": {
+            "type": "string"
+          },
+          "style": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ZzalToday": {
         "description": "오늘 한 일 — 자정에 0 으로 돌아간다",
         "properties": {
@@ -3564,43 +3874,13 @@
     }
   },
   "info": {
-    "description": "Lore 창작 플랫폼 API 문서 (zzal / webtoon / trailer)",
+    "description": "Lore 창작 플랫폼 API 문서 (zzal / webtoon / piece-maker)",
     "title": "Lore API",
     "version": "v0.0.1"
   },
   "openapi": "3.1.0",
   "paths": {
-    "/api/test/email": {
-      "get": {
-        "operationId": "sendTestEmail",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "to",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "*/*": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "tags": [
-          "email-test-controller"
-        ]
-      }
-    },
-    "/api/trailer/v1/admin/hypotheses": {
+    "/api/piece-maker/v1/admin/hypotheses": {
       "get": {
         "description": "`judgementStatus` 가 `PENDING` 인 가설을 **맡긴 순서(오래된 것이 앞)**로 준다. 먼저 맡긴 독자가 먼저 판정을 받는다.\n운영자가 `judge.py` 를 돌리기 전에 부른다.\n- 한 줄에 `judge.py` 의 입력이 다 든다 — `chapter` · `claim` · `cards[]`(복사한 카드) · `notes{}` · 해시 둘\n- 해시 둘은 독자가 맡길 때의 값이다. `judge.py` 가 자기 파일과 같은 자료인지 이 값으로 본다\n- 운영자가 아니면 403(ADMIN_ONLY). 없으면 빈 배열",
         "operationId": "pending",
@@ -3609,7 +3889,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerPendingHypothesisList"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerPendingHypothesisList"
                 }
               }
             },
@@ -3619,7 +3899,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerPendingHypothesisList"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerPendingHypothesisList"
                 }
               }
             },
@@ -3629,7 +3909,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerPendingHypothesisList"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerPendingHypothesisList"
                 }
               }
             },
@@ -3647,15 +3927,15 @@
         ]
       }
     },
-    "/api/trailer/v1/admin/hypotheses/judge": {
+    "/api/piece-maker/v1/admin/hypotheses/judge": {
       "post": {
-        "description": "`judge.py` 가 끝난 뒤 결과를 넣는다. `id` 의 줄을 찾아 판정 칸을 채우고 `judgementStatus` 를 바꾸고 `judgedAt` 을 찍는다.\n- `COMPLETE` 면 `judgement` 필수(grade · reason · support · against — `cited_cards` 도 그대로 실린다). `presentation` 은 있을 때만\n- `FAILED` 면 `failureMessage` 필수(독자에게 보인다). **맡길 때 깎은 크레딧을 돌려준다** — 같은 가설에 두 번 넣어도 한 번만\n- **이미 판정한 가설도 덮어쓴다** — 다시 돌린 결과를 넣을 수 있게\n- 몸통의 `id` 는 lore 의 요청 id 다. judge.py 의 `request_id`(입력의 해시)가 아니다\n- 없는 `id` 는 404(TRAILER_HYPOTHESIS_NOT_FOUND). 운영자가 아니면 403(ADMIN_ONLY). 모양이 틀리면 400(INVALID_INPUT)",
+        "description": "`judge.py` 가 끝난 뒤 결과를 넣는다. `id` 의 줄을 찾아 판정 칸을 채우고 `judgementStatus` 를 바꾸고 `judgedAt` 을 찍는다.\n- `COMPLETE` 면 `judgement` 필수(grade · reason · support · against — `cited_cards` 도 그대로 실린다). `presentation` 은 있을 때만\n- `FAILED` 면 `failureMessage` 필수(독자에게 보인다). **맡길 때 깎은 크레딧을 돌려준다** — 같은 가설에 두 번 넣어도 한 번만\n- **이미 판정한 가설도 덮어쓴다** — 다시 돌린 결과를 넣을 수 있게\n- 몸통의 `id` 는 lore 의 요청 id 다. judge.py 의 `request_id`(입력의 해시)가 아니다\n- 없는 `id` 는 404(PIECE_MAKER_HYPOTHESIS_NOT_FOUND). 운영자가 아니면 403(ADMIN_ONLY). 모양이 틀리면 400(INVALID_INPUT)",
         "operationId": "judge",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TrailerHypothesisJudge"
+                "$ref": "#/components/schemas/PieceMakerHypothesisJudge"
               }
             }
           },
@@ -3666,7 +3946,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
@@ -3676,7 +3956,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
@@ -3686,7 +3966,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
@@ -3696,7 +3976,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
@@ -3706,11 +3986,11 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
-            "description": "없는 id(TRAILER_HYPOTHESIS_NOT_FOUND)"
+            "description": "없는 id(PIECE_MAKER_HYPOTHESIS_NOT_FOUND)"
           }
         },
         "security": [
@@ -3724,15 +4004,15 @@
         ]
       }
     },
-    "/api/trailer/v1/hypotheses": {
+    "/api/piece-maker/v1/hypotheses": {
       "post": {
-        "description": "독자가 \"가설 판정하기\"를 누르면 부른다. 저장이 곧 맡기기다 — 서버는 줄을 넣고 `judgementStatus` 를\n`PENDING` 으로 둔다. 판정은 운영자가 따로 돌려 넣는다. 화면은 응답의 `id` 로 되묻는다.\n- 담은 카드는 그 회차 N 으로 가린 값으로 **복사해 둔다**. 뒤에 카드 표가 바뀌어도 이 가설의 카드는 그대로다\n- 맡긴 뒤에는 제목 · 주장 · 카드 · 해석을 고칠 수 없다. 새 가설은 새로 맡긴다\n- `stateDigest` · `cardsDigest` 가 카드 표의 값과 다르면 400(TRAILER_DIGEST_MISMATCH) — 페이지를 새로 열어야 한다\n- 회차가 없거나 범위 밖이면 400(TRAILER_INVALID_CHAPTER). 카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED)\n- **맡길 때 크레딧을 깎는다** — 값은 `GET /public/cards/meta` 의 `judgeCredits`(지금 5). 모자라면 402(CREDIT_NOT_ENOUGH)\n  에 필요 · 보유를 적어 주고 **저장하지 않는다**. 운영자가 FAILED 를 넣으면 돌려준다\n- 주장이 비었거나, 카드가 없거나 겹치거나 N화 기록에 없거나, 해석이 담지 않은 카드의 것이거나,\n  글이 위 끝(제목 180 · 주장 6,000 · 해석 4,000자)을 넘으면 400(INVALID_INPUT)에 무엇이 틀렸는지 적어 준다",
+        "description": "독자가 \"가설 판정하기\"를 누르면 부른다. 저장이 곧 맡기기다 — 서버는 줄을 넣고 `judgementStatus` 를\n`PENDING` 으로 둔다. 판정은 운영자가 따로 돌려 넣는다. 화면은 응답의 `id` 로 되묻는다.\n- 담은 카드는 그 회차 N 으로 가린 값으로 **복사해 둔다**. 뒤에 카드 표가 바뀌어도 이 가설의 카드는 그대로다\n- 맡긴 뒤에는 제목 · 주장 · 카드 · 해석을 고칠 수 없다. 새 가설은 새로 맡긴다\n- `stateDigest` · `cardsDigest` 가 카드 표의 값과 다르면 400(PIECE_MAKER_DIGEST_MISMATCH) — 페이지를 새로 열어야 한다\n- 회차가 없거나 범위 밖이면 400(PIECE_MAKER_INVALID_CHAPTER). 카드 표가 비어 있으면 503(PIECE_MAKER_LEDGER_NOT_LOADED)\n- **맡길 때 크레딧을 깎는다** — 값은 `GET /public/cards/meta` 의 `judgeCredits`(지금 5). 모자라면 402(CREDIT_NOT_ENOUGH)\n  에 필요 · 보유를 적어 주고 **저장하지 않는다**. 운영자가 FAILED 를 넣으면 돌려준다\n- 주장이 비었거나, 카드가 없거나 겹치거나 N화 기록에 없거나, 해석이 담지 않은 카드의 것이거나,\n  글이 위 끝(제목 180 · 주장 6,000 · 해석 4,000자)을 넘으면 400(INVALID_INPUT)에 무엇이 틀렸는지 적어 준다",
         "operationId": "submit_2",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TrailerHypothesisSubmit"
+                "$ref": "#/components/schemas/PieceMakerHypothesisSubmit"
               }
             }
           },
@@ -3743,7 +4023,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
@@ -3753,17 +4033,17 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
-            "description": "입력이 틀림(INVALID_INPUT · TRAILER_INVALID_CHAPTER · TRAILER_DIGEST_MISMATCH)"
+            "description": "입력이 틀림(INVALID_INPUT · PIECE_MAKER_INVALID_CHAPTER · PIECE_MAKER_DIGEST_MISMATCH)"
           },
           "401": {
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
@@ -3773,7 +4053,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
@@ -3783,11 +4063,11 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
-            "description": "카드 표가 비어 있음(TRAILER_LEDGER_NOT_LOADED)"
+            "description": "카드 표가 비어 있음(PIECE_MAKER_LEDGER_NOT_LOADED)"
           }
         },
         "security": [
@@ -3801,7 +4081,7 @@
         ]
       }
     },
-    "/api/trailer/v1/hypotheses/my": {
+    "/api/piece-maker/v1/hypotheses/my": {
       "get": {
         "description": "로그인한 독자가 맡긴 가설을 **최신이 앞**으로 준다. 목록에 필요한 칸만 든다 — 카드와 판정은 하나를 눌러 2-6 으로 받는다.\n- 판정을 맡기지 않고 저장만 하는 가설은 서버에 없다(브라우저 임시 저장). 여기 오는 것은 모두 맡긴 가설이다\n- 없으면 빈 배열",
         "operationId": "my",
@@ -3810,7 +4090,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesisList"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesisList"
                 }
               }
             },
@@ -3820,7 +4100,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesisList"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesisList"
                 }
               }
             },
@@ -3838,9 +4118,9 @@
         ]
       }
     },
-    "/api/trailer/v1/hypotheses/{id}": {
+    "/api/piece-maker/v1/hypotheses/{id}": {
       "get": {
-        "description": "맡긴 가설을 요청 id 로 연다. 보관함에서 하나를 열 때, 판정을 맡긴 뒤 결과를 되물을 때 부른다.\n몇 초마다 되물을지는 화면이 정한다 — 판정은 운영자가 따로 넣어서 시간이 걸린다.\n- `judgementStatus` 가 `PENDING` 이면 판정 칸 셋은 null\n- `COMPLETE` 면 `judgement`(judge.py 출력 그대로 — grade · reason · support · against · cited_cards)와\n  `presentation`(편집본. 없을 수 있음), `judgedAt`\n- `FAILED` 면 독자에게 보일 `failureMessage`\n- 없는 번호와 **남의 가설은 같은 404**(TRAILER_HYPOTHESIS_NOT_FOUND) — 번호를 바꿔 가며 남의 가설을 찾아낼 수 없다",
+        "description": "맡긴 가설을 요청 id 로 연다. 보관함에서 하나를 열 때, 판정을 맡긴 뒤 결과를 되물을 때 부른다.\n몇 초마다 되물을지는 화면이 정한다 — 판정은 운영자가 따로 넣어서 시간이 걸린다.\n- `judgementStatus` 가 `PENDING` 이면 판정 칸 셋은 null\n- `COMPLETE` 면 `judgement`(judge.py 출력 그대로 — grade · reason · support · against · cited_cards)와\n  `presentation`(편집본. 없을 수 있음), `judgedAt`\n- `FAILED` 면 독자에게 보일 `failureMessage`\n- 없는 번호와 **남의 가설은 같은 404**(PIECE_MAKER_HYPOTHESIS_NOT_FOUND) — 번호를 바꿔 가며 남의 가설을 찾아낼 수 없다",
         "operationId": "get_1",
         "parameters": [
           {
@@ -3859,7 +4139,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
@@ -3869,7 +4149,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
@@ -3879,11 +4159,11 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseTrailerHypothesis"
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerHypothesis"
                 }
               }
             },
-            "description": "없는 번호 또는 남의 가설(TRAILER_HYPOTHESIS_NOT_FOUND)"
+            "description": "없는 번호 또는 남의 가설(PIECE_MAKER_HYPOTHESIS_NOT_FOUND)"
           }
         },
         "security": [
@@ -3897,9 +4177,9 @@
         ]
       }
     },
-    "/api/trailer/v1/public/cards": {
+    "/api/piece-maker/v1/public/cards": {
       "get": {
-        "description": "독자가 읽은 회차 N 이하에 심은 카드를 표의 id 순(= T 번호 순)으로 나눠 준다.\nN화 뒤에 회수된 복선은 status=open, resolvedChapter=null, resolution=null 로 가려서 준다.\n\n검색 규칙은 화면이 브라우저에서 찾던 것과 같다.\n· search 가 T12 꼴이면 그 번호의 카드 한 장만(대소문자 무관)\n· 그 밖에는 빈칸으로 나눈 단어가 모두 카드의 글(id · 제목 · 본문 · 인물 · 유형 · \"12화\")에 들어 있어야 한다.\n  소문자로 바꾸고 빈칸을 없애고 견준다. % 와 _ 는 글자 그대로 찾는다\n· kind 는 유형의 한국어 이름이 똑같은 카드만. 검색어와 함께 건다\n\nchapter 가 없거나 숫자가 아니거나 1~maxChapter 를 벗어나면 400(TRAILER_INVALID_CHAPTER).\nsearch 가 200자 또는 단어 10개를 넘거나 page · size 가 틀리면 400(INVALID_INPUT).",
+        "description": "독자가 읽은 회차 N 이하에 심은 카드를 표의 id 순(= T 번호 순)으로 나눠 준다.\nN화 뒤에 회수된 복선은 status=open, resolvedChapter=null, resolution=null 로 가려서 준다.\n\n검색 규칙은 화면이 브라우저에서 찾던 것과 같다.\n· search 가 T12 꼴이면 그 번호의 카드 한 장만(대소문자 무관)\n· 그 밖에는 빈칸으로 나눈 단어가 모두 카드의 글(id · 제목 · 본문 · 인물 · 유형 · \"12화\")에 들어 있어야 한다.\n  소문자로 바꾸고 빈칸을 없애고 견준다. % 와 _ 는 글자 그대로 찾는다\n· kind 는 유형의 한국어 이름이 똑같은 카드만. 검색어와 함께 건다\n\nchapter 가 없거나 숫자가 아니거나 1~maxChapter 를 벗어나면 400(PIECE_MAKER_INVALID_CHAPTER).\nsearch 가 200자 또는 단어 10개를 넘거나 page · size 가 틀리면 400(INVALID_INPUT).",
         "operationId": "list_3",
         "parameters": [
           {
@@ -3971,9 +4251,9 @@
         ]
       }
     },
-    "/api/trailer/v1/public/cards/meta": {
+    "/api/piece-maker/v1/public/cards/meta": {
       "get": {
-        "description": "화면을 열 때 한 번 부른다. 가장 뒤 회차, 해시 둘, 유형 다섯, 권하는 인물 다섯을 준다.\n\n카드를 50장씩 나눠 받으면 첫 쪽에 유형과 인물이 다 없고, 해시는 첫 쪽을 받기 전에 있어야\n브라우저 저장 키를 만들 수 있다. 그래서 카드와 상관없는 값을 따로 준다.\n\n카드 표가 비어 있으면 503(TRAILER_LEDGER_NOT_LOADED). 운영 DB 에 카드 SQL 을 넣기 전이다.",
+        "description": "화면을 열 때 한 번 부른다. 가장 뒤 회차, 해시 둘, 유형 다섯, 권하는 인물 다섯을 준다.\n\n카드를 50장씩 나눠 받으면 첫 쪽에 유형과 인물이 다 없고, 해시는 첫 쪽을 받기 전에 있어야\n브라우저 저장 키를 만들 수 있다. 그래서 카드와 상관없는 값을 따로 준다.\n\n카드 표가 비어 있으면 503(PIECE_MAKER_LEDGER_NOT_LOADED). 운영 DB 에 카드 SQL 을 넣기 전이다.",
         "operationId": "meta",
         "responses": {
           "200": {
@@ -3993,9 +4273,9 @@
         ]
       }
     },
-    "/api/trailer/v1/public/cards/{id}": {
+    "/api/piece-maker/v1/public/cards/{id}": {
       "get": {
-        "description": "카드 한 장을 번호로 연다. 게시글에 적힌 번호로 카드를 열 때 부른다.\n목록이 준 카드에는 상세의 칸이 다 있어서, 목록에서 여는 상세는 이 API 를 부르지 않는다.\n\n회수 칸 셋은 목록과 같은 규칙으로 N 기준으로 가린다.\n모르는 번호와 N화 뒤에 심은 카드는 같은 404(TRAILER_CARD_NOT_FOUND)다 — 구분해 주면\n번호를 바꿔 가며 뒤 회차의 카드가 있는지 알아낼 수 있다.",
+        "description": "카드 한 장을 번호로 연다. 게시글에 적힌 번호로 카드를 열 때 부른다.\n목록이 준 카드에는 상세의 칸이 다 있어서, 목록에서 여는 상세는 이 API 를 부르지 않는다.\n\n회수 칸 셋은 목록과 같은 규칙으로 N 기준으로 가린다.\n모르는 번호와 N화 뒤에 심은 카드는 같은 404(PIECE_MAKER_CARD_NOT_FOUND)다 — 구분해 주면\n번호를 바꿔 가며 뒤 회차의 카드가 있는지 알아낼 수 있다.",
         "operationId": "detail_1",
         "parameters": [
           {
@@ -4225,7 +4505,7 @@
     },
     "/api/v1/credits/grant": {
       "post": {
-        "description": "내 계정에 크레딧을 넣는다. 무엇에 얼마를 줄지는 서비스가 정한다.\n\n· 같은 refId 로 두 번 불러도 한 번만 들어간다 — 중복 보상이 여기서 걸린다\n· 반복 보상은 refId 에 회차를 넣는다 (daily-2026-09-08)\n· 어느 서비스에서 준 것인지(domain)가 내역에 남는다\n\n조건 판정이 서버에서 끝나는 보상은 이 주소를 거치지 말고\nCreditService.grantOnce 를 서버 코드에서 바로 부른다.",
+        "description": "내 계정에 크레딧을 넣는다. **관리자 계정만** 부를 수 있고, 아니면 403 이다.\n\n· 같은 refId 로 두 번 불러도 한 번만 들어간다 — 중복 보상이 여기서 걸린다\n· 반복 보상은 refId 에 회차를 넣는다 (daily-2026-09-08)\n· 어느 서비스에서 준 것인지(domain)가 내역에 남는다\n\n조건 판정이 서버에서 끝나는 보상은 이 주소를 거치지 말고\nCreditService.grantOnce 를 서버 코드에서 바로 부른다.",
         "operationId": "grant",
         "requestBody": {
           "content": {
@@ -4366,7 +4646,7 @@
     "/api/v1/events": {
       "post": {
         "description": "화면에서 모은 이벤트를 묶음으로 받는다. 로그인 없이도 받는다.\n\n★ 익명 번호는 본문으로 받지 않는다. 쿠키(lore_anon_id)만 신뢰하고,\n  쿠키가 없으면 이 응답에서 새로 발급한다(별도 발급 API 를 두면 왕복이 한 번 늘어\n  첫 이벤트를 놓친다).\n\n★ props 는 허용된 키만 저장된다. 나머지는 조용히 버려진다.\n  referrer 의 쿼리스트링, User-Agent 원문, IP 는 저장하지 않는다.\n\n응답은 항상 202 다 — 기록이 실패해도 화면은 계속 돌아야 한다.",
-        "operationId": "collect",
+        "operationId": "collect_1",
         "parameters": [
           {
             "in": "header",
@@ -4381,7 +4661,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Batch"
+                "$ref": "#/components/schemas/CommonEventBatch"
               }
             }
           },
@@ -4555,6 +4835,44 @@
         ]
       }
     },
+    "/api/webtoon/v1/admin/feedback": {
+      "get": {
+        "description": "관리자 계정만. 새 것부터 limit 개(최대 500).",
+        "operationId": "latest",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": { },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "설문 답 모아 보기 (관리자)",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/characters": {
       "get": {
         "description": "내가 만든 것과 기본 제공. 로그인 안 했으면 기본 제공만 나온다.\n남이 만든 것은 여기 안 섞인다(#259).",
@@ -4604,7 +4922,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateRequest"
+                "$ref": "#/components/schemas/WebtoonCharacterCreateRequest"
               }
             }
           },
@@ -4822,7 +5140,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateRequest"
+                "$ref": "#/components/schemas/WebtoonCharacterCreateRequest"
               }
             }
           },
@@ -4849,13 +5167,21 @@
     },
     "/api/webtoon/v1/characters/{publicId}/card": {
       "get": {
-        "description": "「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.\n내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.",
+        "description": "「캐릭터 만들어보기」 카드의 공유 링크가 여는 자리. 로그인·주인 확인 없음.\n내 것인지(mine)는 안 준다 — 보는 사람이 누구든 같은 카드다.\n\n남이 열면 카드 주인에게 「캐릭터 만들어보기」 무료 횟수를 돌려준다(#332) —\n같은 사람은 한 번, 카드마다 상한까지, 주인이 자기 것을 여는 것은 안 센다.",
         "operationId": "card",
         "parameters": [
           {
             "in": "path",
             "name": "publicId",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Lore-Uid",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -4880,9 +5206,67 @@
         ]
       }
     },
+    "/api/webtoon/v1/characters/{publicId}/card/art": {
+      "get": {
+        "description": "지금 열리는 그림 주소로 302. 그림이 없으면 404.",
+        "operationId": "cardArt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "공유 카드 그림",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/characters/{publicId}/card/preview": {
+      "get": {
+        "description": "링크를 붙였을 때 뜨는 미리보기(og 태그)용 — 카드 문장·이름·세계관과 그림 주소.\n화면 서버(apps/web 의 /webtoon 메타데이터)가 부른다. <b>방문 보상을 세지 않는다</b> —\n위 /card 를 부르면 화면 서버가 \"남이 연 것\" 으로 잡혀 주인에게 무료 횟수가 잘못 돌아간다.",
+        "operationId": "cardPreview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "공유 카드 미리보기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/config": {
       "get": {
-        "description": "지금은 다시 그리기 창의 feedback_tags 뿐이다.",
+        "description": "다시 그리기 창의 feedback_tags 와, 지운 작품을 휴지통에서 되살릴 수 있는 날 수 trash_keep_days(#157).",
         "operationId": "config",
         "responses": {
           "200": {
@@ -4898,6 +5282,139 @@
           }
         },
         "summary": "편집실 설정",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/events": {
+      "post": {
+        "description": "화면이 모아 둔 행동을 한 번에 보낸다. 로그인 없이 부른다.\n\n· 한 번에 50줄까지, 한 브라우저가 1분에 120번까지. 넘치면 조용히 버린다\n· props 는 서버가 허용한 키만, 값은 짧은 기호·숫자·참거짓만 남는다\n· 사람이 쓴 글(이름·설명·메모·본문·이메일)은 보내지 않는다\n· 페이지를 떠날 때(sendBeacon)는 머리를 못 실으므로 uid 를 본문에 넣는다",
+        "operationId": "collect",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Lore-Uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "User-Agent",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebtoonEventBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "행동 기록 보내기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/feedback": {
+      "post": {
+        "description": "{\"run\": \"...\", \"answers\": {\"S0\": 5, \"S1\": 4, \"S7\": \"yes\"}, \"comment\": \"...\"}. 이 작품에 물을 수 있는 질문과\n정해진 값만 저장한다. 두 번째로 보내면 저장하지 않고 saved=false.",
+        "operationId": "answer_1",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Lore-Uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShortRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "완성 직후 설문 — 답 보내기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/feedback/questions": {
+      "get": {
+        "description": "작품 주인에게만, 한 작품에 한 번. 이미 답했거나 주인이 아니면 빈 목록.\n핵심 질문 하나(자기 것을 넣었으면 S1, 아니면 S6)에 나머지 중 1~2개를 무작위로 더한다.",
+        "operationId": "questions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Lore-Uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortQuestions"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "완성 직후 설문 — 무엇을 물을지",
         "tags": [
           "Webtoon"
         ]
@@ -5041,6 +5558,142 @@
         ]
       }
     },
+    "/api/webtoon/v1/my/feedback": {
+      "get": {
+        "description": "prompt=true 이면 한 편 이상 완성하고 다른 날 다시 온 사람이다. 화면이 한 번 띄운다.",
+        "operationId": "status",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "전체 설문 — 냈는지 · 보상 · 안내를 띄울 차례인지",
+        "tags": [
+          "Webtoon"
+        ]
+      },
+      "post": {
+        "description": "GET /my/feedback 의 questions 에 모두 답해야 한다(가장 최근에 완성한 작품에 맞춘 질문, S10 은 여러 개를 배열로). 자유 의견은 2,000자, 연락처는\n인터뷰를 원할 때만 200자까지. 처음 낸 계정에만 웹툰 한 편 값의 크레딧을 준다.",
+        "operationId": "full",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Lore-Uid",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FullRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Full"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "전체 설문 — 답 보내기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/my/likes": {
+      "get": {
+        "description": "최근에 찜한 것부터. 모양은 둘러보기 목록과 같고 liked=true 가 붙는다.",
+        "operationId": "likes",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseListMapStringObject"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "내가 찜한 웹툰",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/my/likes/among": {
+      "post": {
+        "description": "둘러보기 카드에 하트를 칠하려고 부른다. 로그인 없이는 빈 목록이다.",
+        "operationId": "likedAmong",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AmongRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseListString"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "이 목록 중 내가 찜한 것",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/my/link": {
       "post": {
         "description": "로그인할 때마다 부른다. 기기를 바꾸면 브라우저 uid 가 새로 생기므로\n한 번만 잇는 것으로는 두 번째 기기가 안 붙는다.\n\n이미 이어져 있으면 아무 일도 안 하고 linked=false 를 준다.",
@@ -5167,6 +5820,152 @@
         ]
       }
     },
+    "/api/webtoon/v1/my/runs/{runId}": {
+      "delete": {
+        "description": "바로 지우지 않고 휴지통에 넣는다(#157). 넣은 작품은 내 목록·둘러보기·찜 목록에서\n빠지고, 결과·장 주소도 404 가 된다. 그림은 비공개 자리로 옮긴다.\n\nkeepDays 일(기본 30일) 안에는 POST /my/runs/{runId}/restore 로 되살릴 수 있고,\n그 뒤에는 그림(S3)과 행이 영구 삭제된다(purgeAt).\n\n· 내 계정에 이어진 브라우저가 만든 작품만 된다 — 공개 전환과 같은 기준(아니면 403)\n· 예시 작품은 못 지운다(403) · 없는 작품은 404\n· 만드는 중인 작품은 먼저 「만들기 중단」을 한 뒤에 지울 수 있다(400)\n· 이미 휴지통에 있으면 그대로 두고 같은 값을 돌려준다",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrashed"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "내 작품 지우기 (휴지통)",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/my/runs/{runId}/like": {
+      "delete": {
+        "description": "찜한 적이 없어도 오류 없이 지금 찜 수를 돌려준다.",
+        "operationId": "unlike",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseLikeResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "찜 취소",
+        "tags": [
+          "Webtoon"
+        ]
+      },
+      "post": {
+        "description": "이 작품을 내 찜 목록에 넣는다. 이미 찜했으면 그대로 두고 지금 찜 수만 돌려준다 —\n두 번 눌러도 한 번이다(#247).",
+        "operationId": "like",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseLikeResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "찜하기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/my/runs/{runId}/restore": {
+      "post": {
+        "description": "내 목록으로 돌려놓는다. 공개였던 작품은 둘러보기에도 다시 뜬다.\n휴지통에 없던 작품이면 restored=false 를 준다.",
+        "operationId": "restore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseRestoreResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "휴지통에서 되살리기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/my/runs/{runId}/reupload": {
       "post": {
         "description": "다 그려졌는데 결과 화면이 비어 있는 작품을 살린다.\n\n**다시 그리지 않는다.** 이미 그려져 있는 그림을 S3 에 올리고 DB 에\n적기만 하므로 돈이 안 나간다. 여러 번 불러도 되고, 이미 적힌 장은\n건너뛴다(recorded=0 이면 이미 다 있었다는 뜻).\n\n내 계정에 이어진 브라우저가 만든 작품만 된다 — 공개 전환과 같은 기준.",
@@ -5251,6 +6050,33 @@
         ]
       }
     },
+    "/api/webtoon/v1/my/trash": {
+      "get": {
+        "description": "내가 지운 작품. 최근에 지운 것부터. 모양은 내 목록과 같고 deleted_at ·\npurge_at(이 시각이 지나면 영구 삭제)이 붙는다.",
+        "operationId": "trashList",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTrashList"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "휴지통",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/nh/allowance": {
       "get": {
         "description": "게스트면 남은 무료 편수, 로그인했으면 크레딧 값과 잔액.",
@@ -5282,7 +6108,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateRequest"
+                "$ref": "#/components/schemas/WebtoonJobCreateRequest"
               }
             }
           },
@@ -5734,7 +6560,7 @@
     "/api/webtoon/v1/regens/{id}": {
       "get": {
         "description": "2초 간격으로 물으면 된다.",
-        "operationId": "status",
+        "operationId": "status_1",
         "parameters": [
           {
             "in": "path",
@@ -5934,6 +6760,50 @@
         ]
       }
     },
+    "/api/webtoon/v1/runs/{runId}/logline": {
+      "post": {
+        "description": "logline 이 비어 있으면 원래 줄거리로 되돌린다. 300자에서 자른다.",
+        "operationId": "logline",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": { },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "줄거리 고치기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/runs/{runId}/overlay": {
       "get": {
         "operationId": "overlay",
@@ -6122,6 +6992,7 @@
     },
     "/api/webtoon/v1/runs/{runId}/result": {
       "get": {
+        "description": "관리자가 열면 만들 때 넣은 설정(inputs)이 같이 온다(#329, #428) — 운영용이고 사람이 쓴 글이라 다른 사람에게는 안 준다.",
         "operationId": "result",
         "parameters": [
           {
@@ -8153,6 +9024,14 @@
       "name": "Webtoon"
     },
     {
+      "description": "설문 · 피드백",
+      "name": "Webtoon"
+    },
+    {
+      "description": "행동 기록",
+      "name": "Webtoon"
+    },
+    {
       "description": "복선 카드로 만든 가설을 맡기고 판정을 되묻는다. 로그인 필요",
       "name": "가설"
     },
@@ -8177,7 +9056,7 @@
       "name": "미니게임"
     },
     {
-      "description": "Trailer 탭이 카드를 받는 조회 API. 인증이 필요 없다",
+      "description": "Piece Maker 탭이 카드를 받는 조회 API. 인증이 필요 없다",
       "name": "복선 카드(공개)"
     },
     {

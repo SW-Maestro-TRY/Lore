@@ -21,7 +21,7 @@
       "@common/*": ["../../common/fe/*"],
       "@webtoon/*": ["../../webtoon/fe/*"],
       "@zzal/*": ["../../zzal/fe/*"],
-      "@trailer/*": ["../../trailer/fe/*"]
+      "@piece-maker/*": ["../../piece-maker/fe/*"]
     }
   },
   // 각 도메인의 fe/ 는 apps/web 바깥에 있으므로 명시적으로 포함시켜야 타입 체크가 걸린다.
@@ -36,8 +36,8 @@
     "../../webtoon/fe/**/*.tsx",
     "../../zzal/fe/**/*.ts",
     "../../zzal/fe/**/*.tsx",
-    "../../trailer/fe/**/*.ts",
-    "../../trailer/fe/**/*.tsx"
+    "../../piece-maker/fe/**/*.ts",
+    "../../piece-maker/fe/**/*.tsx"
   ],
   "exclude": ["node_modules"]
 }

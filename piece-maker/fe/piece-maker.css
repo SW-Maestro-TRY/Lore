@@ -1,0 +1,463 @@
+/* Piece Maker · SD 작업실. 제품 동작은 유지하고 PieceMaker 화면 안에서만 표현한다.
+ * 공용 인증창은 body 포털이므로 인증 탭이 있는 dialog만 별도로 좁혀 스타일한다. */
+main:has(> .piece-maker-page) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
+
+.piece-maker-page,
+body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tablist"][aria-label="로그인 또는 회원가입"]) {
+  --canvas: #fff9ed;
+  --paper: #fffef8;
+  --ink: #2e3535;
+  --muted: #68706c;
+  --line: #cabfa5;
+  --primary: #b6382e;
+  --primary-hover: #9d2f27;
+  --tint: #ffe4c8;
+  --hero: #fff3d6;
+  --yellow: #f8d768;
+  --disabled: #ddd8c7;
+  --sea: #3a706c;
+  --radius: 14px;
+  --control-radius: 8px;
+  --shadow: 0 3px 0 var(--ink);
+  --font: var(--font-ko, 'Noto Sans KR', sans-serif);
+  --heading-font: 'Jua', var(--font);
+  /* 기존 부품의 인라인 색 참조를 SD 팔레트에 잇는다. */
+  --green: var(--primary);
+  --green-soft: var(--hero);
+  --amber: var(--primary);
+  --amber-soft: var(--yellow);
+  --warm: var(--hero);
+  --white: var(--paper);
+  color: var(--ink);
+  font: 14px/1.65 var(--font);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  color-scheme: light;
+}
+.piece-maker-page { background: var(--canvas); }
+.piece-maker-page, .piece-maker-page * { box-sizing: border-box; }
+.piece-maker-page :is(button, input, select, textarea) { font: inherit; color: inherit; }
+.piece-maker-page button { cursor: pointer; border: 0; background: none; }
+.piece-maker-page :is(button, input, textarea, select, a) { transition: border-color .14s, background-color .14s, color .14s; }
+.piece-maker-page :is(button, input, textarea, select, a, summary):focus-visible {
+  outline: 3px solid var(--sea);
+  outline-offset: 3px;
+}
+.piece-maker-page svg {
+  width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6;
+  stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; vertical-align: middle;
+}
+.piece-maker-page :is(h1, h2, h3, p) { margin: 0; }
+.piece-maker-page :is(h1, h2, h3) { font-family: var(--heading-font); font-weight: 400; letter-spacing: 0; }
+.piece-maker-page :is(h1, h2) { font-size: 26px; line-height: 34px; }
+.piece-maker-page h3 { font-size: 19px; line-height: 27px; }
+.piece-maker-page :is(small, .small) { font-size: 12px; }
+.piece-maker-page .muted { color: var(--muted); }
+.piece-maker-page .eyebrow { font-size: 12px; line-height: 20px; font-weight: 700; color: var(--primary); }
+.piece-maker-page .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.piece-maker-page .between { justify-content: space-between; }
+.piece-maker-page .btn {
+  display: inline-flex; justify-content: center; align-items: center; gap: 8px;
+  min-height: 44px; padding: 8px 14px; border: 1.5px solid var(--ink);
+  border-radius: var(--control-radius); background: var(--paper);
+  font-weight: 700; font-size: 13px; line-height: 20px; text-decoration: none;
+}
+.piece-maker-page .btn:hover:not(:disabled) { background: var(--yellow); }
+.piece-maker-page .btn.primary { background: var(--primary); color: var(--paper); }
+.piece-maker-page .btn.primary:hover:not(:disabled) { background: var(--primary-hover); }
+.piece-maker-page .btn.quiet { background: var(--paper); }
+.piece-maker-page .btn.quiet:hover:not(:disabled) { background: var(--yellow); }
+.piece-maker-page .icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; flex-shrink: 0; border: 1.5px solid var(--ink);
+  border-radius: var(--control-radius); color: var(--ink); background: var(--paper);
+}
+.piece-maker-page .icon-btn:hover:not(:disabled) { background: var(--yellow); }
+.piece-maker-page .tag {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px; line-height: 20px;
+  padding: 5px 8px; border-radius: var(--control-radius); background: var(--hero);
+  color: var(--ink); font-weight: 700;
+}
+.piece-maker-page .tag.amber { background: var(--yellow); }
+.piece-maker-page .field {
+  width: 100%; min-height: 44px; border: 1.5px solid var(--line);
+  border-radius: var(--control-radius); background: var(--paper); padding: 11px 12px; resize: vertical;
+}
+.piece-maker-page .field::placeholder { color: var(--muted); opacity: 1; }
+.piece-maker-page :is(.field, .interpret-wrap textarea)[readonly] { background: var(--disabled); color: var(--muted); }
+.piece-maker-page .label { display: block; font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+.piece-maker-page .empty {
+  border: 1.5px solid var(--line); border-radius: var(--radius); text-align: center;
+  padding: 24px 16px; background: var(--canvas);
+}
+.piece-maker-page .empty p { margin-top: 8px; font-size: 14px; color: var(--muted); }
+.piece-maker-page .empty .btn { margin-top: 16px; }
+.piece-maker-page [hidden] { display: none !important; }
+
+/* 상단 안내와 두 작업 영역. 목록과 작성 본문은 각각 스크롤한다. */
+.piece-maker-page .app { height: calc(100dvh - var(--piece-maker-header-h, 0px)); padding: 0 24px 24px; }
+.piece-maker-page .workspace {
+  max-width: 1248px; height: 100%; margin: 0 auto; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.piece-maker-page .topbar {
+  min-height: 68px; display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-shrink: 0;
+}
+.piece-maker-page .wordmark { font-family: var(--heading-font); font-weight: 400; font-size: 26px; line-height: 34px; white-space: nowrap; }
+.piece-maker-page .brand-divider, .piece-maker-page .brand-subtitle { display: none; }
+.piece-maker-page .top-actions { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.piece-maker-page .sd-hero {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  min-height: 176px; flex: 0 0 auto; padding: 24px;
+  border: 1.5px solid var(--ink); border-radius: var(--radius);
+  background: var(--hero); box-shadow: var(--shadow);
+}
+.piece-maker-page .sd-hero-copy { min-width: 0; display: grid; gap: 8px; }
+.piece-maker-page .sd-hero-copy p { font-size: 14px; line-height: 23px; }
+.piece-maker-page .sd-hero-copy .sd-hero-eyebrow { font-size: 13px; line-height: 20px; font-weight: 700; color: var(--primary); }
+.piece-maker-page .sd-hero-art { display: block; width: 264px; height: 120px; flex: 0 0 264px; object-fit: contain; }
+.piece-maker-page .mobile-tabs { display: none; }
+.piece-maker-page .panes {
+  display: grid; grid-template-columns: minmax(0, 710fr) minmax(0, 514fr); gap: 24px;
+  min-height: 0; flex: 1;
+}
+.piece-maker-page .explore, .piece-maker-page .compose { min-width: 0; min-height: 0; }
+.piece-maker-page :is(.cards, .paper, dialog) { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.piece-maker-page .explore { display: flex; flex-direction: column; }
+.piece-maker-page .explore > :not(.cards) { flex-shrink: 0; }
+.piece-maker-page .intro { margin-bottom: 12px; }
+.piece-maker-page .intro .eyebrow { margin-bottom: 4px; }
+.piece-maker-page .intro p { color: var(--muted); margin-top: 6px; font-size: 13px; }
+.piece-maker-page .searchbox {
+  display: flex; align-items: center; gap: 12px; background: var(--paper);
+  border: 1.5px solid var(--line); border-radius: var(--control-radius); padding: 4px 8px 4px 12px;
+}
+.piece-maker-page .searchbox > svg { color: var(--muted); }
+.piece-maker-page .searchbox input {
+  width: 100%; min-width: 0; border: 0; background: transparent; height: 38px; font-size: 14px;
+}
+.piece-maker-page .searchbox input::placeholder { color: var(--muted); opacity: 1; }
+.piece-maker-page .searchbox input:focus-visible { outline: none; }
+.piece-maker-page .searchbox:has(input:focus-visible) { outline: 3px solid var(--sea); outline-offset: 2px; }
+.piece-maker-page .searchbox .icon-btn { width: 36px; height: 36px; border-color: transparent; }
+.piece-maker-page .suggestions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.piece-maker-page .suggestions .chip {
+  min-height: 36px; padding: 6px 10px; border: 1.5px solid var(--ink); border-radius: var(--control-radius);
+  background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 700;
+}
+.piece-maker-page .suggestions .chip:hover { background: var(--yellow); }
+.piece-maker-page .results-head { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+.piece-maker-page .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.piece-maker-page .filter {
+  min-height: 36px; padding: 6px 10px; border: 1.5px solid var(--ink); border-radius: var(--control-radius);
+  font-size: 12px; font-weight: 700; color: var(--ink); background: var(--paper); white-space: nowrap;
+}
+.piece-maker-page .filter:hover, .piece-maker-page .filter[aria-pressed=true] { background: var(--yellow); }
+.piece-maker-page .result-count { font-size: 13px; color: var(--muted); font-weight: 700; }
+.piece-maker-page .cards { display: grid; gap: 16px; align-content: start; min-height: 0; flex: 1; overflow: auto; padding: 2px 6px 6px 2px; }
+.piece-maker-page .evidence {
+  background: var(--paper); border: 1.5px solid var(--ink); border-radius: var(--radius);
+  padding: 16px; position: relative; box-shadow: var(--shadow);
+}
+.piece-maker-page .evidence.selected { border-color: var(--sea); background: var(--hero); }
+.piece-maker-page .evidence .open-card { text-align: left; padding: 0; width: 100%; display: block; border-radius: 4px; }
+.piece-maker-page .evidence h3 { font-size: 19px; line-height: 27px; margin: 8px 0; }
+.piece-maker-page .evidence p { font-size: 14px; color: var(--ink); line-height: 23px; }
+.piece-maker-page .evidence .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.piece-maker-page .chapter-tag { font-size: 12px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+.piece-maker-page .dot { width: 3px; height: 3px; background: var(--muted); border-radius: 50%; }
+.piece-maker-page .evidence .bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 12px; }
+.piece-maker-page .card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.piece-maker-page .card-actions .btn { min-height: 40px; }
+.piece-maker-page .people { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.piece-maker-page .person { font-weight: 700; }
+.piece-maker-page .add-btn {
+  font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink);
+  border-radius: var(--control-radius); padding: 8px 12px; min-height: 40px; background: var(--yellow);
+  white-space: nowrap; display: flex; align-items: center; gap: 6px;
+}
+.piece-maker-page .add-btn svg { width: 16px; height: 16px; }
+.piece-maker-page .add-btn:hover { background: var(--tint); }
+.piece-maker-page .add-btn[aria-pressed=true] { background: var(--hero); border-color: var(--sea); color: var(--sea); }
+.piece-maker-page .load-more { display: flex; justify-content: center; padding-top: 12px; }
+.piece-maker-page .source-note { font-size: 11px; color: var(--muted); line-height: 1.8; margin-top: 12px; }
+.piece-maker-page .no-result { padding: 32px 20px; text-align: center; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--radius); }
+.piece-maker-page .no-result p { margin: 8px 0 18px; color: var(--muted); font-size: 14px; }
+
+/* 가설 본문은 접거나 생략하지 않는다. 판정의 추가 검토·원문만 details를 사용한다. */
+.piece-maker-page .compose {
+  background: var(--paper); border: 1.5px solid var(--ink); border-radius: var(--radius);
+  display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow);
+}
+.piece-maker-page .compose-top { padding: 20px 20px 12px; flex-shrink: 0; }
+.piece-maker-page .compose-top .eyebrow { margin-bottom: 4px; }
+.piece-maker-page .compose-top h2 { font-size: 26px; line-height: 34px; }
+.piece-maker-page .compose-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.piece-maker-page .compose-heading .count { padding: 5px 8px; border-radius: var(--control-radius); background: var(--yellow); font-size: 12px; line-height: 20px; font-weight: 700; }
+.piece-maker-page .compose-top > .row:first-child { align-items: flex-start; }
+.piece-maker-page .compose-top [data-action="reset"] { flex-shrink: 0; }
+.piece-maker-page .compose-status { flex-wrap: wrap; margin-top: 12px; }
+.piece-maker-page .saved-status { font-size: 12px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
+.piece-maker-page .saved-status:before { content: ''; width: 5px; height: 5px; flex-shrink: 0; background: var(--sea); border-radius: 50%; }
+.piece-maker-page .paper { min-height: 0; flex: 1; overflow: auto; padding: 0 20px 20px; }
+.piece-maker-page .submitted-judgement { margin-bottom: 24px; }
+.piece-maker-page .paper-topline { font-size: 11px; color: var(--muted); padding-bottom: 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; }
+.piece-maker-page .paper-topline .ink-line { width: 28px; height: 3px; background: var(--primary); margin-top: 7px; }
+.piece-maker-page .title-label { margin-top: 16px; }
+.piece-maker-page .title-input { font-size: 14px; font-weight: 400; line-height: 23px; min-height: 70px; }
+.piece-maker-page .section-label { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 20px 0 12px; font-family: var(--heading-font); font-size: 19px; line-height: 27px; }
+.piece-maker-page .section-label .n { color: var(--primary); margin-right: 7px; }
+.piece-maker-page .section-label .count { padding: 5px 8px; border-radius: var(--control-radius); background: var(--yellow); color: var(--ink); font: 700 12px/20px var(--font); }
+.piece-maker-page .empty .hint-action { min-height: 40px; padding: 8px 14px; border: 1.5px solid var(--ink); border-radius: var(--control-radius); background: var(--yellow); font-size: 13px; font-weight: 700; margin-top: 14px; }
+.piece-maker-page .guide { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--muted); margin-top: 14px; }
+.piece-maker-page .guide svg { width: 16px; height: 16px; margin-top: 2px; }
+.piece-maker-page .selected-list { display: grid; gap: 16px; }
+.piece-maker-page .selected-item { border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--canvas); overflow: hidden; }
+.piece-maker-page .selected-main { padding: 16px; }
+.piece-maker-page .selected-main > .row { flex-wrap: wrap; }
+.piece-maker-page .selected-item h3 { font-size: 19px; line-height: 27px; }
+.piece-maker-page .seq { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; background: var(--yellow); color: var(--ink); font-size: 12px; font-weight: 700; border-radius: var(--control-radius); }
+.piece-maker-page .selected-tools { gap: 4px; flex-shrink: 0; margin-left: auto; }
+.piece-maker-page .selected-tools .icon-btn { width: 32px; height: 36px; }
+.piece-maker-page .selected-tools svg { width: 16px; height: 16px; }
+.piece-maker-page .selected-item .fact { font-size: 14px; color: var(--ink); line-height: 23px; margin-top: 8px; }
+.piece-maker-page .selected-item .fact, .piece-maker-page .evidence p { word-break: normal; }
+.piece-maker-page .interpret-wrap { padding: 0 16px 16px; }
+.piece-maker-page .interpret-wrap label { font-size: 12px; font-weight: 700; color: var(--ink); display: block; margin-bottom: 8px; }
+.piece-maker-page .interpret-wrap textarea { display: block; font-size: 14px; line-height: 23px; width: 100%; padding: 12px; resize: vertical; min-height: 90px; border: 1.5px solid var(--line); border-radius: var(--control-radius); background: var(--paper); }
+.piece-maker-page .interpret-wrap textarea::placeholder { color: var(--muted); opacity: 1; }
+.piece-maker-page .connection { margin-top: 16px; padding: 16px; background: var(--hero); border: 1.5px solid var(--line); border-radius: var(--radius); font-size: 13px; color: var(--ink); }
+.piece-maker-page .connection strong { display: block; margin-bottom: 4px; color: var(--sea); }
+.piece-maker-page .conclusion { min-height: 100px; font-size: 14px; line-height: 23px; }
+.piece-maker-page .preview-link { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 16px; font-size: 13px; font-weight: 700; }
+.piece-maker-page .preview-link svg { width: 16px; height: 16px; }
+.piece-maker-page .inline-preview { margin-top: 16px; padding: 16px; border-radius: var(--radius); background: var(--paper); border: 1.5px solid var(--line); white-space: pre-wrap; font-size: 14px; line-height: 23px; max-height: 240px; overflow: auto; }
+.piece-maker-page .compose-footer { margin-top: auto; background: var(--paper); border-top: 1px solid var(--line); padding: 16px 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+.piece-maker-page .compose-footer > .btn { flex: 1; }
+.piece-maker-page .compose-footer .footer-note { display: none; }
+
+/* 판정 대기·결과·크레딧 */
+.piece-maker-page .predict-cta { width: 100%; min-height: 44px; border: 1.5px solid var(--ink); border-radius: var(--control-radius); background: var(--primary); padding: 10px 12px; color: var(--paper); }
+.piece-maker-page .predict-cta:hover:not(:disabled) { background: var(--primary-hover); }
+.piece-maker-page .predict-cta .small { color: inherit; }
+.piece-maker-page #piece-maker-judge-result { max-height: none; white-space: normal; border-color: var(--ink); }
+.piece-maker-page .judge-reason { white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 14px; }
+.piece-maker-page .judge-links { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 16px; }
+.piece-maker-page .judge-link { font-size: 12px; min-height: 40px; padding: 8px; text-align: left; }
+.piece-maker-page .judge-footnote { border-top: 1px solid var(--line); padding-top: 12px; }
+.piece-maker-page .source-path { overflow-wrap: anywhere; }
+.piece-maker-page .record-text { white-space: pre-wrap; }
+.piece-maker-page .judge-submitted { display: flex; align-items: stretch; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.piece-maker-page .judge-pending { display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: var(--control-radius); background: var(--hero); color: var(--ink); font-size: 13px; }
+.piece-maker-page .judge-submitted [data-action="new-draft"] { margin-left: auto; min-height: 44px; font-size: 13px; }
+.piece-maker-page .judge-spinner { width: 14px; height: 14px; flex: 0 0 14px; border: 2px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: piece-maker-judge-spin 1s linear infinite; }
+@keyframes piece-maker-judge-spin { to { transform: rotate(360deg); } }
+.piece-maker-page .record-status { font-size: 12px; font-weight: 700; color: var(--muted); }
+.piece-maker-page .judge-edited { margin: 16px 0 24px; }
+.piece-maker-page .judge-edition { margin-bottom: 6px; color: var(--sea); }
+.piece-maker-page .judge-headline { margin-bottom: 20px; font-size: 19px; line-height: 27px; overflow-wrap: anywhere; }
+.piece-maker-page .judge-section { margin: 18px 0; }
+.piece-maker-page .judge-section h4 { margin: 0 0 8px; font-family: var(--heading-font); font-size: 19px; font-weight: 400; line-height: 27px; }
+.piece-maker-page .judge-section p { margin: 0; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
+.piece-maker-page .judge-detail { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 12px; }
+.piece-maker-page .judge-detail summary { cursor: pointer; font-size: 13px; font-weight: 700; line-height: 1.7; }
+.piece-maker-page .judge-original .judge-reason { margin-top: 12px; }
+.piece-maker-page .judge-editor-notice { margin: 14px 0 6px; }
+.piece-maker-page [data-part="judge-grade"] { padding: 5px 8px; border-radius: var(--control-radius); background: var(--yellow); font-size: 13px; }
+.piece-maker-page svg.credit-coin { width: 28px; height: 28px; flex: 0 0 28px; }
+.piece-maker-page .credit-balance-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 12px; border: 1.5px solid var(--ink); border-radius: var(--control-radius); background: var(--yellow); color: var(--ink); font-variant-numeric: tabular-nums; }
+.piece-maker-page .credit-balance-chip span { font-weight: 700; font-size: 14px; }
+.piece-maker-page .credit-balance-chip small { margin-left: 5px; font-size: 12px; }
+.piece-maker-page .credit-balance-chip:hover { background: var(--tint); }
+.piece-maker-page .judge-cost { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.piece-maker-page .judge-cost svg.credit-coin { width: 24px; height: 24px; flex-basis: 24px; }
+.piece-maker-page .credit-feedback { color: var(--sea); font-size: 13px; }
+.piece-maker-page .credit-feedback:empty { display: none; }
+.piece-maker-page .piece-maker-credit-history { margin: 0; padding: 0; list-style: none; }
+.piece-maker-page .piece-maker-credit-history li { display: flex; justify-content: space-between; gap: 16px; align-items: center; border-bottom: 1px solid var(--line); padding: 16px 0; }
+.piece-maker-page .piece-maker-credit-history small { display: block; color: var(--muted); font-size: 12px; }
+.piece-maker-page .credit-spent { color: var(--primary); }
+
+/* 회차 입력 */
+.piece-maker-page .chapter-picker { position: relative; flex-shrink: 0; }
+.piece-maker-page .chapter-control { display: flex; align-items: center; gap: 8px; background: var(--paper); border: 1.5px solid var(--ink); padding: 8px 12px; border-radius: var(--control-radius); font-size: 13px; min-height: 44px; }
+.piece-maker-page .chapter-control:hover:not(:disabled), .piece-maker-page .chapter-control[aria-expanded="true"] { background: var(--yellow); }
+.piece-maker-page .chapter-popover { position: absolute; top: calc(100% + 8px); right: 0; z-index: 10; width: 300px; max-width: calc(100vw - 40px); padding: 20px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--paper); box-shadow: var(--shadow); }
+.piece-maker-page .chapter-popover label { font-size: 13px; font-weight: 700; }
+.piece-maker-page .chapter-entry { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+.piece-maker-page .chapter-input-wrap { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.piece-maker-page .chapter-input-wrap input { width: 100%; min-width: 0; min-height: 44px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: var(--control-radius); background: var(--paper); font-size: 16px; }
+.piece-maker-page .chapter-input-wrap input[aria-invalid="true"] { border-color: var(--primary); }
+.piece-maker-page .chapter-entry .btn { flex-shrink: 0; }
+.piece-maker-page .chapter-error { margin-top: 8px; color: var(--primary); font-size: 12px; }
+
+/* 상세·보관함·도움말·초기화 */
+.piece-maker-page dialog { border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--paper); color: var(--ink); padding: 0; width: min(640px, calc(100vw - 40px)); max-height: calc(100dvh - 40px); box-shadow: var(--shadow); overflow: auto; }
+.piece-maker-page dialog::backdrop { background: #2e353585; }
+.piece-maker-page .dialog-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 24px 24px 16px; border-bottom: 1px solid var(--line); }
+.piece-maker-page .dialog-head h2 { font-size: 26px; line-height: 34px; }
+.piece-maker-page .dialog-body { padding: 24px; }
+.piece-maker-page .dialog-body .row { flex-wrap: wrap; }
+.piece-maker-page .dialog-body .fact-box { padding: 16px; border: 1.5px solid var(--line); background: var(--canvas); border-radius: var(--control-radius); margin: 12px 0 18px; line-height: 1.85; }
+.piece-maker-page .dialog-body details { font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; margin-top: 20px; color: var(--muted); }
+.piece-maker-page .dialog-body summary { cursor: pointer; }
+.piece-maker-page .dialog-body details p { margin-top: 10px; word-break: normal; }
+.piece-maker-page .dialog-body .source-path { font-family: monospace; font-size: 12px; }
+.piece-maker-page .dialog-foot { padding: 16px 24px; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--line); }
+.piece-maker-page .saved-entry { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.piece-maker-page .saved-entry > div { min-width: 0; }
+.piece-maker-page .saved-entry > .btn { flex-shrink: 0; }
+.piece-maker-page .saved-section + .saved-section { margin-top: 24px; }
+.piece-maker-page .saved-heading { margin-bottom: 8px; font: 700 13px/20px var(--font); }
+.piece-maker-page .saved-entry strong { display: block; font-size: 14px; }
+.piece-maker-page .saved-entry p { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.piece-maker-page .copy-text { white-space: pre-wrap; min-height: 250px; font-size: 14px; }
+.piece-maker-page .help-steps { display: grid; gap: 20px; }
+.piece-maker-page .help-steps p { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.piece-maker-page .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 12px 16px; border-radius: var(--control-radius); border: 1.5px solid var(--ink); font-size: 13px; z-index: 80; max-width: calc(100vw - 32px); display: flex; align-items: center; gap: 12px; }
+.piece-maker-page .toast:not([hidden]) { animation: piece-maker-notice .14s ease-out; }
+@keyframes piece-maker-notice { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* 공유 */
+.piece-maker-page dialog:has(.share-panel) { width: min(1100px, calc(100vw - 40px)); }
+.piece-maker-page .share-intro { margin-bottom: 20px; color: var(--muted); font-size: 14px; }
+.piece-maker-page .share-layout { display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.piece-maker-page .share-box { min-width: 0; border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--canvas); padding: 20px; }
+.piece-maker-page .share-box h3 { display: flex; gap: 8px; align-items: center; font-size: 19px; margin-bottom: 16px; }
+.piece-maker-page .share-step { display: inline-grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--control-radius); background: var(--yellow); color: var(--ink); font: 700 12px/20px var(--font); }
+.piece-maker-page .share-result-image { display: block; width: 100%; max-width: 360px; height: auto; margin: 0 auto; box-shadow: var(--shadow); }
+.piece-maker-page .share-image-placeholder { aspect-ratio: 4 / 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border: 1.5px solid var(--line); border-radius: var(--control-radius); background: var(--paper); font-size: 14px; color: var(--muted); }
+.piece-maker-page .share-image-meta { text-align: center; font-size: 12px; color: var(--muted); margin: 16px 0 12px; }
+.piece-maker-page .share-full { width: 100%; }
+.piece-maker-page .share-controls { display: grid; gap: 20px; min-width: 0; }
+.piece-maker-page .share-caption { min-height: 245px; font-size: 14px; line-height: 1.85; background: var(--paper); }
+.piece-maker-page .share-text-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; }
+.piece-maker-page .share-channel-help { color: var(--muted); font-size: 13px; line-height: 1.8; margin-bottom: 16px; }
+.piece-maker-page .share-channels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.piece-maker-page .share-channel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px 4px; border: 1.5px solid var(--ink); border-radius: var(--control-radius); color: var(--ink); background: var(--paper); text-decoration: none; font-size: 12px; }
+.piece-maker-page .share-channel:hover { background: var(--yellow); }
+.piece-maker-page .share-channel > svg { width: 25px; height: 25px; color: var(--primary); }
+.piece-maker-page .share-channel-mark { display: block; font-size: 27px; font-weight: 800; line-height: 27px; height: 27px; }
+.piece-maker-page .share-channel-mark.facebook { color: #1877f2; }
+.piece-maker-page .share-channel-mark.x { font-size: 23px; }
+.piece-maker-page [data-action=native-share] { margin-top: 16px; }
+.piece-maker-page .share-hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 12px; }
+.piece-maker-page .share-notice { min-height: 24px; color: var(--sea); font-size: 13px; margin-top: 16px; }
+.piece-maker-page .share-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 12px; }
+
+/* 비활성은 불투명도를 낮추지 않아 글자 대비를 유지한다. */
+.piece-maker-page button:disabled { cursor: default; background: var(--disabled); border-color: var(--line); color: var(--muted); opacity: 1; }
+.piece-maker-page .btn:disabled, .piece-maker-page .predict-cta:disabled { background: var(--disabled); border-color: var(--ink); color: var(--muted); }
+.piece-maker-page .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* AuthModal은 body 포털이다. PieceMaker가 열린 동안 인증 탭을 가진 창에만 적용한다. */
+body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tablist"][aria-label="로그인 또는 회원가입"]) {
+  --bg: var(--paper); --card: var(--paper); --card-border: var(--ink);
+  --border: var(--line); --border-strong: var(--ink); --text: var(--ink);
+  --text-muted: var(--muted); --text-subtle: var(--muted); --surface-2: var(--hero);
+  --surface-hover: var(--yellow); --accent-zzal-deep: var(--sea); --accent-zzal: var(--sea);
+  --accent-webtoon: var(--sea); --danger: var(--primary); --danger-tint: var(--tint);
+  --btn-primary-bg: var(--primary); --btn-primary-fg: var(--paper); --font-display: var(--heading-font);
+  max-width: 520px; background: var(--paper); border: 1.5px solid var(--ink);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="로그인 또는 회원가입"]) h2 { font: 400 26px/34px var(--heading-font); }
+body:has(.piece-maker-page) [role="dialog"] > [role="tablist"][aria-label="로그인 또는 회원가입"] { gap: 8px; padding: 0; background: transparent; border-radius: 0; }
+body:has(.piece-maker-page) [role="tablist"][aria-label="로그인 또는 회원가입"] [role="tab"] { min-height: 44px; border: 1.5px solid var(--ink); border-radius: var(--control-radius); background: var(--paper); color: var(--ink); }
+body:has(.piece-maker-page) [role="tablist"][aria-label="로그인 또는 회원가입"] [aria-selected="true"] { background: var(--yellow); }
+body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="로그인 또는 회원가입"]) :is(input[type="email"], input[type="password"]) { min-height: 44px; font-size: 16px; border: 1.5px solid var(--line); border-radius: var(--control-radius); }
+body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="로그인 또는 회원가입"]) button[type="submit"] { min-height: 44px; border: 1.5px solid var(--ink); border-radius: var(--control-radius); }
+body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="로그인 또는 회원가입"]) button[aria-label="닫기"] { border: 1.5px solid var(--ink); border-radius: var(--control-radius); width: 40px; height: 40px; }
+
+@media (max-width: 1100px) {
+  .piece-maker-page .topbar { flex-wrap: wrap; gap: 8px; padding-top: 12px; }
+  .piece-maker-page .top-actions { gap: 6px; }
+  .piece-maker-page .top-actions > .btn { padding-inline: 10px; }
+  .piece-maker-page .panes { gap: 20px; }
+  .piece-maker-page .compose-top { padding: 16px 16px 12px; }
+  .piece-maker-page .paper { padding-inline: 16px; }
+  .piece-maker-page .compose-footer { padding: 16px; }
+}
+
+/* 작은 노트북에서는 안내보다 카드와 작성 공간을 우선한다. */
+@media (min-width: 901px) and (max-height: 800px) {
+  .piece-maker-page .sd-hero { min-height: 128px; padding: 16px 24px; }
+  .piece-maker-page .sd-hero-description { display: none; }
+  .piece-maker-page .sd-hero-art { height: 88px; }
+  .piece-maker-page .sd-hero-copy h1 { font-size: 24px; line-height: 30px; }
+}
+
+@media (max-width: 900px) {
+  .piece-maker-page .app { height: auto; min-height: calc(100dvh - var(--piece-maker-header-h, 0px)); padding: 0 20px 24px; }
+  .piece-maker-page .workspace { gap: 16px; }
+  .piece-maker-page .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px 8px; padding-top: 16px; }
+  .piece-maker-page .topbar > .row:first-child { grid-column: 1 / -1; grid-row: 1; justify-self: start; }
+  .piece-maker-page .wordmark { font-size: 26px; }
+  .piece-maker-page .top-actions { display: contents; }
+  .piece-maker-page .credit-balance-chip { grid-column: 1 / -1; grid-row: 1; justify-self: end; padding: 6px 8px; }
+  .piece-maker-page .credit-balance-chip svg.credit-coin { width: 18px; height: 18px; }
+  .piece-maker-page :is([data-action="credit-login"], [data-action="credit-auth-retry"]) small { display: block; margin: 0; font-size: 10px; line-height: 14px; }
+  .piece-maker-page .chapter-picker { grid-column: 1; grid-row: 2; justify-self: start; }
+  .piece-maker-page .chapter-control { padding: 8px; gap: 5px; font-size: 12px; }
+  .piece-maker-page .chapter-control > svg { display: none; }
+  .piece-maker-page .chapter-popover { left: 0; right: auto; }
+  .piece-maker-page .top-actions > [data-action="saved"] { grid-column: 2; grid-row: 2; }
+  .piece-maker-page .top-actions > [data-action="help"] { grid-column: 3; grid-row: 2; }
+  .piece-maker-page .top-actions > .btn { padding: 8px; font-size: 12px; gap: 4px; }
+  .piece-maker-page .top-actions > .btn svg { display: none; }
+  .piece-maker-page .sd-hero { min-height: 156px; padding: 16px; gap: 8px; }
+  .piece-maker-page .sd-hero-copy { flex: 1; }
+  .piece-maker-page .sd-hero-copy .sd-hero-eyebrow { font-size: 11px; }
+  .piece-maker-page .sd-hero-copy h1 { font-size: 24px; line-height: 31px; }
+  .piece-maker-page .sd-hero-description { display: none; }
+  .piece-maker-page .sd-hero-art { width: 100px; height: 110px; flex-basis: 100px; }
+  .piece-maker-page[data-view="compose"] .sd-hero { display: none; }
+  .piece-maker-page .mobile-tabs { display: flex; position: sticky; top: var(--piece-maker-header-h, 0px); z-index: 5; padding: 8px 0; margin-block: -8px; background: var(--canvas); gap: 8px; }
+  .piece-maker-page .mobile-tabs button { flex: 1; min-height: 44px; padding: 8px; border: 1.5px solid var(--ink); border-radius: var(--control-radius); font-weight: 700; font-size: 13px; color: var(--ink); background: var(--paper); }
+  .piece-maker-page .mobile-tabs button[aria-pressed=true] { background: var(--yellow); }
+  .piece-maker-page .panes { display: block; }
+  .piece-maker-page .explore, .piece-maker-page .compose, .piece-maker-page .paper, .piece-maker-page .cards { overflow: visible; }
+  .piece-maker-page .cards { flex: none; padding: 2px 0 6px; }
+  .piece-maker-page .compose { min-height: calc(100dvh - 220px - var(--piece-maker-header-h, 0px)); scroll-margin-top: calc(var(--piece-maker-header-h, 0px) + 60px); }
+  .piece-maker-page .paper { flex: 0 0 auto; padding: 0 20px 20px; }
+  .piece-maker-page .compose-top { padding: 20px 20px 12px; }
+  .piece-maker-page[data-view="explore"] .compose { display: none; }
+  .piece-maker-page[data-view="compose"] .explore { display: none; }
+  .piece-maker-page .compose-footer { position: sticky; bottom: 0; padding: 16px 20px; padding-bottom: max(16px, env(safe-area-inset-bottom)); z-index: 4; border-radius: 0 0 var(--radius) var(--radius); }
+  .piece-maker-page .suggestions .chip, .piece-maker-page .filter { min-height: 40px; }
+  .piece-maker-page .searchbox input, .piece-maker-page .field, .piece-maker-page .interpret-wrap textarea { font-size: 16px; }
+  .piece-maker-page .icon-btn { width: 44px; height: 44px; }
+  .piece-maker-page .searchbox .icon-btn { width: 40px; height: 40px; }
+  .piece-maker-page .evidence .add-btn { min-height: 44px; }
+  .piece-maker-page .selected-tools .icon-btn { width: 40px; height: 44px; }
+  .piece-maker-page .toast { bottom: 90px; min-width: 240px; }
+  .piece-maker-page .dialog-head, .piece-maker-page .dialog-body { padding: 20px; }
+  .piece-maker-page .dialog-foot { padding: 16px 20px; }
+}
+@media (max-width: 740px) {
+  .piece-maker-page .share-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .piece-maker-page .share-box { padding: 16px; }
+  .piece-maker-page .share-channel { font-size: 11px; }
+  .piece-maker-page dialog:has(.share-panel) .dialog-body { padding: 16px; }
+}
+@media (max-width: 380px) {
+  .piece-maker-page .app { padding-inline: 16px; }
+  .piece-maker-page .topbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .piece-maker-page .topbar > .row:first-child { grid-column: 1; }
+  .piece-maker-page .wordmark { font-size: 23px; }
+  .piece-maker-page .credit-balance-chip { grid-column: 2; }
+  .piece-maker-page .chapter-picker { grid-column: 1 / -1; }
+  .piece-maker-page .top-actions > [data-action="saved"] { grid-column: 1; grid-row: 3; }
+  .piece-maker-page .top-actions > [data-action="help"] { grid-column: 2; grid-row: 3; }
+  .piece-maker-page .sd-hero-art { width: 80px; flex-basis: 80px; }
+  .piece-maker-page .sd-hero-copy h1 { font-size: 22px; line-height: 29px; }
+  .piece-maker-page .selected-main, .piece-maker-page .interpret-wrap { padding-inline: 12px; }
+  .piece-maker-page .share-channels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .piece-maker-page .saved-entry { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .piece-maker-page, .piece-maker-page *, .piece-maker-page *::before, .piece-maker-page *::after {
+    transition: none !important; animation: none !important; scroll-behavior: auto !important;
+  }
+}

@@ -10,13 +10,13 @@
 #
 # 쓰는 법
 #   ./scripts/new-migration.sh zzal     motion_wish
-#   ./scripts/new-migration.sh trailer  foreshadowings
+#   ./scripts/new-migration.sh piece-maker  foreshadowings
 #   ./scripts/new-migration.sh webtoon  notify_setting
 #
 #   서비스 → 폴더
 #     zzal    → apps/api/src/main/resources/db/migration
 #     webtoon → webtoon/be/src/main/resources/db/migration
-#     trailer → trailer/be/src/main/resources/db/migration
+#     piece-maker → piece-maker/be/src/main/resources/db/migration
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -43,9 +43,9 @@ DESC="$2"
 case "$SERVICE" in
   zzal)    DIR="apps/api/src/main/resources/db/migration" ;;
   webtoon) DIR="webtoon/be/src/main/resources/db/migration" ;;
-  trailer) DIR="trailer/be/src/main/resources/db/migration" ;;
+  piece-maker) DIR="piece-maker/be/src/main/resources/db/migration" ;;
   *)
-    echo "모르는 서비스: '$SERVICE' — zzal · webtoon · trailer 중 하나여야 합니다." >&2
+    echo "모르는 서비스: '$SERVICE' — zzal · webtoon · piece-maker 중 하나여야 합니다." >&2
     exit 2 ;;
 esac
 
@@ -61,10 +61,11 @@ if ! [[ "$DESC" =~ ^[a-z0-9_]+$ ]]; then
   exit 2
 fi
 
-# 서비스 접두를 이미 적었으면 두 번 붙이지 않는다 (trailer + trailer_foreshadowings).
+# 서비스 접두를 이미 적었으면 두 번 붙이지 않는다 (piece-maker + piece_maker_foreshadowings).
+SERVICE_SLUG="${SERVICE//-/_}"
 SLUG="$DESC"
-if [ "${DESC#"${SERVICE}"_}" = "$DESC" ]; then
-  SLUG="${SERVICE}_${DESC}"
+if [ "${DESC#"${SERVICE_SLUG}"_}" = "$DESC" ]; then
+  SLUG="${SERVICE_SLUG}_${DESC}"
 fi
 
 # ── 이름 짓기 ────────────────────────────────────────────────
@@ -74,7 +75,7 @@ fi
 ALL_DIRS=(
   "apps/api/src/main/resources/db/migration"
   "webtoon/be/src/main/resources/db/migration"
-  "trailer/be/src/main/resources/db/migration"
+  "piece-maker/be/src/main/resources/db/migration"
 )
 
 version_taken() {  # version_taken <번호>
