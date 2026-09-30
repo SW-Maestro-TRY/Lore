@@ -122,8 +122,16 @@ public class JobStore {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void failed(Long id, String why, Refunded refunded) {
+        failed(id, why, refunded, null);
+    }
+
+    /** 실패로 적으면서 개발자용 기록(어느 걸음 · 무슨 종류 · 원문)도 같이 남긴다(#531). */
+    public void failed(Long id, String why, Refunded refunded, JobFailure failure) {
         jobs.findById(id).ifPresent(job -> {
             job.failed(why, refunded, Instant.now());
+            if (failure != null) {
+                job.failure(failure.stage(), failure.code(), failure.detail());
+            }
             jobs.save(job);
         });
         directions.remove(id);
