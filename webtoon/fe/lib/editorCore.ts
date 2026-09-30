@@ -644,7 +644,7 @@ export function mountEditor(
     if (!versions || !versions.length) { slot.innerHTML = ""; return; }
     const cur = `
       <span class="ver-thumb is-current" title="${tr("지금 걸린 그림")}">
-        <img src="${API}/runs/${encodeURIComponent(RUN_ID)}/page/${no}?raw=1&w=160${epq('&')}&t=${sceneBust[no] || 0}"
+        <img src="${API}/runs/${encodeURIComponent(RUN_ID)}/page/${no}?raw=1&w=320${epq('&')}&t=${sceneBust[no] || 0}"
              alt="${tr("지금 그림")}" loading="lazy">
         <span class="ver-label">${tr("지금")}</span>
       </span>`;
