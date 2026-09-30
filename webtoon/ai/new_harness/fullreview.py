@@ -231,7 +231,7 @@ def reset_issues(read: list[dict]) -> list[dict]:
     }]
 
 
-def cover_issues(cover, title: str) -> list[dict]:
+def cover_issues(cover, title: str, checked: dict | None = None) -> list[dict]:
     """모델이 센 `cover` -> issues. **표지인가는 코드가 정한다**(covercheck.judge).
 
     그리는 자리의 표지 검수(covercheck)와 같은 기준을 쓴다 — 거기서 다시 그릴
@@ -239,9 +239,13 @@ def cover_issues(cover, title: str) -> list[dict]:
     한 번 더 잡는다. 잡히면 1페이지를 다시 그리게 한다(JobRunner 의 재생성
     루프가 `--page 1` 로 부른다).
     """
-    if not isinstance(cover, dict):
+    if checked is not None:
+        # 표지 검수가 지금 이 그림을 이미 봤다 — 그 판정을 따른다.
+        found = checked.get("issues") or []
+    elif isinstance(cover, dict):
+        found = covercheck.judge(cover, title)
+    else:
         return []
-    found = covercheck.judge(cover, title)
     if not found:
         return []
     return [{
@@ -299,7 +303,8 @@ def repeat_issues(repeat, total: int) -> list[dict]:
     return out
 
 
-def parse(text: str, *, title: str = "", cover_attached: bool = True) -> dict:
+def parse(text: str, *, title: str = "", cover_attached: bool = True,
+          cover_checked: dict | None = None) -> dict:
     """검수 응답(JSON) -> 판정.
 
     `severity`(얼마나 심각한가)와 `redraw`(그래서 다시 그려야 하는가)는
@@ -363,7 +368,7 @@ def parse(text: str, *, title: str = "", cover_attached: bool = True) -> dict:
     issues += repeat_issues(obj.get("repeat"), len(read))
     issues += reset_issues(read)
     if cover_attached:
-        issues += cover_issues(obj.get("cover"), title)
+        issues += cover_issues(obj.get("cover"), title, cover_checked)
     issues.sort(key=lambda i: (SEVERITIES.index(i["severity"]), i["rank"]))
 
     # 모델이 "이해 안 됨"이라고 스스로 적어 놓고 issues 를 빈 배열로 내는
@@ -434,7 +439,8 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
     write_text(run_dir / "full_review.txt", text)
     meta["pages"] = len(images)
     try:
-        review = parse(text, title=covercheck.title_of(run_dir), cover_attached=cover_attached)
+        review = parse(text, title=covercheck.title_of(run_dir), cover_attached=cover_attached,
+                       cover_checked=covercheck.latest_review(run_dir))
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [전체 검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")
