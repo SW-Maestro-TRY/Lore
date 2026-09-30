@@ -47,6 +47,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shutil
 from pathlib import Path
 
 import imagegen
@@ -386,6 +388,28 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
             .replace("{scene}", scene_instr))
 
 
+def archive_page(run_dir: Path, page_no: int) -> Path | None:
+    """지금 걸려 있는 장을 **지우기 전에** 지난 판으로 떠 둔다(#514).
+
+    검수가 다시 그리라고 할 때마다 이전 그림을 지웠더니, 표지 1차 그림과 4쪽의
+    원본·첫 다시 그림이 흔적 없이 사라졌다(2026-09-30, run 20260930T223006-456ff0).
+    편집실의 다시 그리기(`RegenService.archive`)와 같은 자리·같은 이름
+    (`pages/versions/pageNN.vK.png`)에 남겨서 편집실 지난 판 목록에 그대로 보인다.
+    """
+    src = page_path(run_dir, page_no)
+    if not src.exists():
+        return None
+    vdir = run_dir / PAGE_DIR / "versions"
+    vdir.mkdir(parents=True, exist_ok=True)
+    have = [int(m.group(1)) for m in
+            (re.fullmatch(rf"page{page_no:02d}\.v(\d+)\.png", f.name) for f in vdir.iterdir())
+            if m]
+    dst = vdir / f"page{page_no:02d}.v{max(have, default=0) + 1}.png"
+    shutil.copy2(src, dst)
+    log(f"  [지난 판] {src.name} -> versions/{dst.name}")
+    return dst
+
+
 def note_block(note: str) -> str:
     """편집실에서 사람이 적은 것 -> 그림 프롬프트 뒤에 붙는 문단.
 
@@ -586,6 +610,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                     log("  [표지 검수] 다시 그릴 횟수를 다 썼습니다 — 표지는 그대로 둡니다")
                     break
                 log(f"  [표지 검수] 다시 그립니다 ({attempt + 1}/{tries})")
+                archive_page(run_dir, page_no)
                 out.unlink(missing_ok=True)
                 again = prompt + "\n\n" + covercheck.redraw_block(got)
                 (dest / f"page01.redraw{attempt + 1}.txt").write_text(again, encoding="utf-8")
@@ -638,6 +663,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 log(f"  [검수] 다시 그릴 횟수를 다 썼습니다 — 이 장은 그대로 둡니다")
                 break
             log(f"  [검수] 다시 그립니다 ({attempt + 1}/{tries})")
+            archive_page(run_dir, page_no)
             out.unlink(missing_ok=True)
             again = prompt + "\n\n" + pagecheck.redraw_block(got)
             (dest / f"page{page_no:02d}.redraw{attempt + 1}.txt").write_text(
