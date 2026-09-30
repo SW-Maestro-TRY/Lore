@@ -509,6 +509,8 @@ def read_input(run_dir: Path) -> dict:
 
 
 DIRECTIONS_PER_RUN = 4
+# 사용자가 적은 것이 있을 때 재료(lorebook)를 받는 방향 수. 없으면 넷 다 받는다.
+LORE_FILL_WITH_INPUT = 2
 
 
 def _distinct_structures(genre: str, first: dict, n: int = DIRECTIONS_PER_RUN) -> list[dict]:
@@ -680,9 +682,14 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     # 세계를 모르면(장르도 카드도 없음) 안 붙는다 — story_prompt 가 방향마다 장르를
     # 스스로 고르는 자리라 어느 세계의 재료를 줄지 알 수 없다.
     lore_world = lorebook.world_key_for(char["genre"], char.get("card")) if lorebook.enabled() else ""
+    # 사용자가 적은 것(설명·항목·고른 카드)이 있으면 방향 넷 중 **둘만** 재료를
+    # 받는다 — 나머지 둘은 적힌 것만으로 판을 세운다. 사진만 있으면 넷 다 받는다
+    # (사용자 결정, 2026-09-30). 어느 둘인지는 무작위다.
+    lore_fill = DIRECTIONS_PER_RUN if not has_character_traits(char) else LORE_FILL_WITH_INPUT
     lore_list = lorebook.reuse(run_dir, lore_world) if lore_world else []      # 실험용 재사용
     if lore_world and not lore_list:
-        lore_list = lorebook.assign(lore_world, avoid=lorebook.recent_ids(lore_world, RUNS_DIR))
+        lore_list = lorebook.assign(lore_world, n=DIRECTIONS_PER_RUN, fill=lore_fill,
+                                    avoid=lorebook.recent_ids(lore_world, RUNS_DIR))
     if lore_list:
         lorebook.record(run_dir, lore_world, lore_list)
 
@@ -694,7 +701,7 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
                     "방향별_엔진": engines})
     for i in range(max(len(axes_list), len(structures), len(engines), len(lore_list))):
         bits = []
-        if i < len(lore_list):
+        if i < len(lore_list) and lore_list[i]:
             bits.append("재료: " + "·".join(e["name"] for e in lore_list[i]))
         if i < len(engines):
             bits.append(str(engines[i].get("이름") or ""))
@@ -744,13 +751,16 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     if lore_list:
         parts += ["", lorebook.STORY_HEAD]
     for i in range(count):
+        blocks = [txt for txt in (
+            ("\n".join(lorebook.story_lines(lore_list[i])) if i < len(lore_list) else ""),
+            _engine_block(engines[i]) if i < len(engines) else "",
+            samples.axes_block(axes_list[i]) if i < len(axes_list) else "",
+            samples.structure_block(structures[i]) if i < len(structures) else "") if txt]
+        if not blocks:
+            continue                       # 값이 하나도 없는 방향 — 빈 절을 안 만든다
         parts += ["", f"### 방향 {i + 1}", ""]
-        for txt in (("\n".join(lorebook.story_lines(lore_list[i])) if i < len(lore_list) else ""),
-                    _engine_block(engines[i]) if i < len(engines) else "",
-                    samples.axes_block(axes_list[i]) if i < len(axes_list) else "",
-                    samples.structure_block(structures[i]) if i < len(structures) else ""):
-            if txt:
-                parts += [txt, ""]
+        for txt in blocks:
+            parts += [txt, ""]
     return "\n".join(parts)
 
 
