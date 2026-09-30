@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """단계마다 다른 모델을 부를 수 있는 텍스트 호출 계층.
 
-프로바이더 구현(OpenAI·Gemini·Anthropic)은 story-harness/story.py 것을 그대로
+프로바이더 구현(OpenAI·Gemini·Anthropic)은 같은 폴더의 story.py 것을 그대로
 빌려 쓴다. 여기서 다시 짜면 재시도·이미지 첨부·토큰 집계가 조금씩 달라지고,
 그 차이가 결과 차이로 나타난다.
 
@@ -9,7 +9,7 @@
 
     <STAGE>_PROVIDER / <STAGE>_MODEL   (단계별)
       -> NH_PROVIDER / NH_MODEL        (이 하네스 전체 기본)
-      -> PROVIDER                      (story-harness 와 같은 기본)
+      -> PROVIDER                      (story.py 의 기본)
 
 단계 이름은 STORY · BOARD · SHEET 다. 예를 들어 이야기만 GPT 로 뽑고 콘티는
 Gemini 로 두려면 .env 에 이렇게 적는다:
@@ -22,13 +22,11 @@ Gemini 로 두려면 .env 에 이렇게 적는다:
 from __future__ import annotations
 
 import os
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STORY_HARNESS = HERE.parent / "story-harness"
 
 
 def load_dotenv(path: Path) -> None:
@@ -50,9 +48,8 @@ def load_dotenv(path: Path) -> None:
             os.environ.setdefault(key, value)
 
 
-# new_harness/.env 를 story-harness/.env 보다 **먼저** 읽는다. 둘 다
-# setdefault 라 먼저 읽힌 쪽이 이긴다 — 모델 선택은 여기서 하고, API 키는
-# 이미 있는 story-harness/.env 것을 그대로 물려받는다.
+# new_harness/.env 를 먼저 읽는다. story.py 도 import 될 때 같은 파일을 읽지만
+# setdefault 라 먼저 읽힌 쪽이 이기고, 이미 있는 환경변수는 덮어쓰지 않는다.
 load_dotenv(HERE / ".env")
 
 # 운영 서버(EC2)는 Parameter Store 에서 키 하나(WEBTOON_API_KEY)만 받는다
@@ -64,10 +61,11 @@ load_dotenv(HERE / ".env")
 if os.environ.get("WEBTOON_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
     os.environ["OPENAI_API_KEY"] = os.environ["WEBTOON_API_KEY"]
 
-if str(STORY_HARNESS) not in sys.path:
-    sys.path.insert(0, str(STORY_HARNESS))
+# 모델 호출 추적(Logfire). LOGFIRE_TOKEN 이 있을 때만 켜지고, 없으면 아무것도 안 한다.
+import tracing  # noqa: E402
+tracing.start()
 
-import story  # noqa: E402  (sys.path 를 세운 뒤에야 import 할 수 있다)
+import story  # noqa: E402  (위에서 .env 를 읽고 키 이름을 맞춘 뒤에 import 해야 한다)
 
 
 PROVIDERS = tuple(story.PROVIDERS)          # gemini / openai / anthropic

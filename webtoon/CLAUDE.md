@@ -17,7 +17,6 @@ webtoon/
 ```
 webtoon/ai/
   new_harness/      지금 제품이 쓰는 이야기·그림 파이프라인
-  story-harness/    new_harness 가 import 하는 파일만 남은 라이브러리 (완성본 취급)
   webtoon-harness/  new_harness·upload 가 빌려 쓰는 연출·단가표·이미지 제공자 (완성본 취급)
   upload/           다 그린 그림을 창고로 올리는 걸음
   assets/           기본 캐릭터 견본(samples) · 마스코트(lou) · 예시 작품(examples)

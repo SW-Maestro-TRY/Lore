@@ -29,7 +29,7 @@
     python character.py --panel --world romance_novel --out /어디/panel.png \
         [--name 몽이] [--description "..."] [--photo a.png]
 
-사진·설명·이름이 **전부 없어도 된다.** 세계관(--world)은 story-harness 의
+사진·설명·이름이 **전부 없어도 된다.** 세계관(--world)은 worlds.json 의
 프리셋 키이거나 사람이 직접 쓴 한 줄이고, 그것도 없으면 프리셋에서 무작위로
 고른다. 결과는 위 두 갈래의 "표지 같은 그림" 이 아니라 **그 세계관 웹툰의 한
 컷**(세로 2:3, 글자 없음)과 카드 글(반전 한 줄 · 대사 두세 줄 · 운명 두세 줄)이다.
@@ -65,6 +65,7 @@ import imagegen                                      # noqa: E402
 import imageprompt                                   # noqa: E402
 import lang as lang_mod                              # noqa: E402
 import llm                                           # noqa: E402
+import tracing                                       # noqa: E402
 import runmeta                                       # noqa: E402
 import sheet as sheetmod                             # noqa: E402
 
@@ -236,7 +237,7 @@ def portrait_prompt(spec: dict, style_text: str) -> str:
 
 # ---- 한 컷 (--panel) --------------------------------------------------------
 
-WORLDS_FILE = HERE.parent / "story-harness" / "worlds.json"
+WORLDS_FILE = HERE / "worlds.json"
 
 # 그림체 후보. 사양을 쓰는 모델이 세계관을 보고 하나 고른다 — 세계관을 사람이
 # 직접 쓸 수 있어서 코드의 고정 표로는 다 못 잇는다. 여기 적는 한 줄은
@@ -576,7 +577,7 @@ def main() -> int:
     ap.add_argument("--panel", action="store_true",
                     help="「캐릭터 만들어보기」 — 그 세계관 웹툰의 한 컷과 카드 글")
     ap.add_argument("--world", default="",
-                    help="--panel 일 때 세계관: story-harness 프리셋 키 또는 직접 쓴 한 줄. "
+                    help="--panel 일 때 세계관: worlds.json 프리셋 키 또는 직접 쓴 한 줄. "
                          "비우면 프리셋에서 무작위")
     ap.add_argument("--lang", default="ko", choices=sorted(lang_mod.LANG_NAMES),
                     help="카드 글·지어 주는 이름의 언어(run.py --lang 과 같은 코드). 기본 ko")
@@ -634,4 +635,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    with tracing.run_span("character.py", sys.argv[1:]):
+        code = main()
+    raise SystemExit(code)

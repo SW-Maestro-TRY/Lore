@@ -100,7 +100,7 @@ public class WebtoonCharacter {
      * 1화 보기」·「내 캐릭터에 저장」이 전부 이 줄 하나를 가리키면 되기 때문이다.
      */
 
-    /** 세계관 — story-harness 프리셋 키. 사람이 직접 썼으면 비어 있다. */
+    /** 세계관 — worlds.json 프리셋 키. 사람이 직접 썼으면 비어 있다. */
     @Column(length = 80)
     private String world;
 

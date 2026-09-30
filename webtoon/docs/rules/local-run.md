@@ -69,7 +69,7 @@ SERVER_PORT=<다른 포트> ./gradlew bootRun --no-daemon
 ## 모델 API 키는 어디 있나
 
 **실제 키는 저장소 루트 `.env` 의 `WEBTOON_API_KEY`(OpenAI) 하나뿐입니다.**
-`webtoon/ai/{new_harness,story-harness,webtoon-harness}/.env` 는 없고 `.env.example`
+`webtoon/ai/{new_harness,webtoon-harness}/.env` 는 없고 `.env.example`
 만 있습니다.
 
 - **`./gradlew bootRun` 으로 돌릴 때는 자동입니다.** 루트 `.env` 의 값이 자바 환경으로
@@ -84,6 +84,19 @@ SERVER_PORT=<다른 포트> ./gradlew bootRun --no-daemon
   ```
 
   실제 모델을 부르는 실행은 매번 먼저 승인받습니다([dev.md](dev.md)).
+
+## 모델 호출을 Logfire 로 보기 (#496)
+
+생성 파이프라인의 모델 호출(프롬프트·응답·시간·실패)을 [Logfire](https://pydantic.dev/logfire)
+에서 run 단위로 볼 수 있습니다. `new_harness/tracing.py` 가 맡습니다.
+
+- 저장소 루트 `.env` 에 `LOGFIRE_TOKEN=<Logfire 프로젝트의 write token>` 을 넣으면
+  켜집니다. 없으면 아무것도 안 보내고 지금과 똑같이 돕니다.
+- 서버가 부르는 파이썬(`lore.webtoon.python.bin`, 기본 `python3`)에 `logfire` 가
+  깔려 있어야 합니다(`pip install -r webtoon/ai/requirements.txt`). 없으면 경고 한 줄만
+  남기고 추적 없이 돕니다.
+- **켜면 사용자가 적은 캐릭터 설명과 사진이 프롬프트째로 Logfire 로 나갑니다.** 지금은
+  로컬에서만 씁니다. 서버(dev·staging·prod)에 켤지는 개인정보 처리방침과 함께 정합니다.
 
 ## 그림 창고는 환경마다 다르다
 
