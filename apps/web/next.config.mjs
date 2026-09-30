@@ -54,6 +54,8 @@ const nextConfig = {
   //   /jjal 은 '짤'의 다른 로마자 표기다. 둘 다 실제로 쓰이므로 한쪽으로 모은다.
   async redirects() {
     return [
+      // 서비스 이름 변경 전 북마크도 현재 화면으로 보낸다. 이후 경로와 쿼리는 유지한다.
+      { source: '/trailer/:path*', destination: '/piece-maker/:path*', permanent: true },
       { source: '/comic', destination: '/zzal', permanent: true },
       { source: '/jjal',  destination: '/zzal', permanent: true },
       // 옛 zzal 랜딩(Hero·HowItWorks·CharacterCreator)은 2026-10-01 에 접었다. 남은 링크는 현재 화면으로.

@@ -20,7 +20,7 @@ export interface PresignedUpload {
 }
 
 /** 키 폴더. 서버가 이 넷만 받는다. */
-export type UploadDomain = "webtoon" | "zzal" | "trailer" | "common";
+export type UploadDomain = "webtoon" | "zzal" | "piece-maker" | "common";
 
 /** 올릴 자리를 받는다. */
 export function presign(domain: UploadDomain, contentType: string) {
