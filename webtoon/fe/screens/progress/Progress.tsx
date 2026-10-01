@@ -631,7 +631,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     if (pane === "story-check") return (
       <>
         <button type="button" className="btn btn-p" disabled={busy} onClick={confirmStory}>{t("이대로 장면 나누기")}</button>
-        <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>{t("이야기 다시 만들기")}</button>
+        <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>{t("1화 다시 만들기")}</button>
       </>
     );
     if (pane === "making") return (
@@ -1048,19 +1048,19 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                    장면 나누기로 보내거나 메모를 적어 다시 만들게 한다. */
                 <>
                   <div className="wt-prog-head">
-                    <h2>{t("이야기를 확인해 주세요")}</h2>
+                    <h2>{t("1화를 확인해 주세요")}</h2>
                     <span className="muted lede">{t("AI가 적은 내용을 1화 이야기로 다듬었어요.")}</span>
                     <span className="muted lede">{t("원하는 내용이 있다면 자유롭게 수정해 주세요.")}</span>
                   </div>
                   <div className="wt-prog-acts wt-prog-sceneacts">
                     <button type="button" className="btn btn-p" disabled={busy} onClick={confirmStory}>{t("이대로 장면 나누기")} <IconArrow size={18} /></button>
-                    <input className="field w300" value={dirNote} placeholder={t("바라는 점을 적고 이야기 다시 만들기")} aria-label={t("다시 만들기 메모")}
+                    <input className="field w300" value={dirNote} placeholder={t("바라는 점을 적고 1화 다시 만들기")} aria-label={t("다시 만들기 메모")}
                            onChange={(e) => setDirNote(e.target.value)} />
                     <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>
-                      <IconRetry size={18} /> {t("이야기 다시 만들기")}
+                      <IconRetry size={18} /> {t("1화 다시 만들기")}
                     </button>
                   </div>
-                  <input className="field wt-prog-mnote" value={dirNote} placeholder={t("바라는 점을 적고 이야기 다시 만들기")} aria-label={t("다시 만들기 메모")}
+                  <input className="field wt-prog-mnote" value={dirNote} placeholder={t("바라는 점을 적고 1화 다시 만들기")} aria-label={t("다시 만들기 메모")}
                          onChange={(e) => setDirNote(e.target.value)} />
                   <div className="wt-prog-scene wt-prog-story wt-prog-storycheck">
                     <input className="field title" value={storyDraft.title} aria-label={t("제목")} placeholder={t("제목")}
@@ -1072,7 +1072,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   {actErr && <span className="err">{actErr}</span>}
                   {(job.persona || cast.length > 0) && (
                     <>
-                      <div className="wt-prog-pageshead"><b>{t("LORE 가 읽어낸 인물")}</b></div>
+                      <div className="wt-prog-pageshead"><b>{t("루가 읽어낸 인물")}</b></div>
                       <div className="wt-prog-dirs">
                         {job.persona && (
                           <div className="wt-prog-dir plain wt-prog-cast wt-prog-hero">
@@ -1095,16 +1095,16 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 </>
               )}
               {pane === "story-view" && job && ownJob && job.story && (
-                /* own 길(#548) — 1화 이야기와 LORE 가 읽어낸 인물. 장면 확인 동안은 이야기를 고칠 수 있다. */
+                /* own 길(#548) — 1화 이야기와 루가 읽어낸 인물. 장면 확인 동안은 이야기를 고칠 수 있다. */
                 <>
                   <div className="wt-prog-head">
-                    <h2>{t("이야기")}</h2>
+                    <h2>{t("1화 생성하기")}</h2>
                   </div>
                   {/* own 길 — 적은 내용을 다듬은 이야기. 고치면 장면과 같이 저장된다. */}
                   {job.story && (
                     <div className="wt-prog-scene wt-prog-story">
                       <div className="row">
-                        <b>{t("이야기")}</b>
+                        <b>{t("1화")}</b>
                         {status === "awaiting_scenes" && <button type="button" onClick={() => setStoryOpen((v) => !v)}>
                           {storyOpen ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("고치기")} <IconChevronDown size={13} /></>}
                         </button>}
@@ -1125,7 +1125,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
                   {(job.persona || cast.length > 0) && (
                     <>
-                      <div className="wt-prog-pageshead"><b>{t("LORE 가 읽어낸 인물")}</b></div>
+                      <div className="wt-prog-pageshead"><b>{t("루가 읽어낸 인물")}</b></div>
                       <div className="wt-prog-dirs">
                         {job.persona && (
                           <div className="wt-prog-dir plain wt-prog-cast wt-prog-hero">

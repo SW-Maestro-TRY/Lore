@@ -16,6 +16,10 @@ const dict: Dict = {
   "크게 보기": { en: "View larger", ja: "拡大表示", zh: "放大查看" },
 
   /* ---- 왼쪽 줄 단계 ---- */
+  "1화": { en: "Episode 1", ja: "第1話", zh: "第 1 话" },
+  "1화를 확인해 주세요": { en: "Check episode 1", ja: "第1話を確認してください", zh: "请确认第 1 话" },
+  "1화 다시 만들기": { en: "Rewrite episode 1", ja: "第1話を作り直す", zh: "重新生成第 1 话" },
+  "바라는 점을 적고 1화 다시 만들기": { en: "Add a note and rewrite episode 1", ja: "要望を書いて第1話を作り直す", zh: "写下要求后重新生成第 1 话" },
   "1화 생성하기": { en: "Writing episode 1", ja: "第1話を作る", zh: "生成第 1 话" },
   "1화 이야기와 인물을 씁니다": { en: "Writes the episode-1 story and characters", ja: "第1話のストーリーと登場人物を書きます", zh: "编写第 1 话的故事和人物" },
   "캐릭터 그리기": { en: "Drawing the character", ja: "キャラクターを描く", zh: "绘制角色" },
@@ -283,7 +287,7 @@ const dict: Dict = {
   "설정": { en: "Settings", ja: "設定", zh: "设定" },
   "촘촘함": { en: "Detail", ja: "描き込み", zh: "精细度" },
   "제목": { en: "Title", ja: "タイトル", zh: "标题" },
-  "LORE 가 읽어낸 인물": { en: "Characters LORE read from your content", ja: "LORE が読み取った人物", zh: "LORE 读出的人物" },
+  "루가 읽어낸 인물": { en: "Characters LOU read from your content", ja: "ルーが読み取った人物", zh: "LOU 读出的人物" },
   "캐릭터 시트": { en: "Character sheet", ja: "キャラクターシート", zh: "角色设定图" },
   "내 내용": { en: "My content", ja: "自分の内容", zh: "我的内容" },
 };
