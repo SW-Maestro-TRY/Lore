@@ -27,3 +27,15 @@ LORE 하네스와 프롬프트(PR #566 판)는 그대로 두고, 글 모델과 �
 키는 저장소 루트 `.env` 의 `OPENROUTER_API_KEY` 를 읽는다.
 
 `비교.html` 에는 성인 수위의 글과 그림이 들어 있다.
+
+## 백로그 — OpenAI 그림 거절 시 Grok 으로 넘기기 (2026-10-01, 미착수)
+
+OpenAI gpt-image-2 가 안전 검사로 거절한 장을 Grok Imagine 으로 다시 그리는 장치. 넣을 자리는
+`webtoon/ai/new_harness/detailart.py` 의 안전 검사 재시도(#531, 696~704줄)와 `run.py` 의 시트 단계.
+걸리는 것:
+
+- Grok 은 프롬프트 8,000자 제한 — 지금 페이지 프롬프트 약 2만 7천 자, 시트 약 2만 1천 자라 짧은 판이 따로 필요.
+- 하네스의 그림 제공자는 gemini·openai 뿐(`story.py:666`) — OpenRouter 그림 API 를 새로 붙여야 함.
+- 거절된 장만 그림체가 바뀐다. 한글 말풍선을 제대로 쓰는지 모른다.
+- Grok 도 「가린 노출」까지만 그린다 — 넘겨서 살아나는 건 「OpenAI 거절 · Grok 허용」 구간뿐.
+- 순서 결정 남음: 거절 즉시 Grok / OpenAI 에서 수위 낮춰 한 번 더 그린 뒤 Grok.
