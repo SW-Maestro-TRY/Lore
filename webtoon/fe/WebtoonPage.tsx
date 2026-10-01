@@ -66,7 +66,8 @@ function routeOf(search: URLSearchParams): Route {
   const view = search.get("view");
   const run = search.get("run") || undefined;
   const card = search.get("card") || undefined;
-  const step = Math.min(4, Math.max(1, Number(search.get("step") || 1) || 1));
+  /* 아이디어부터 길은 다섯 걸음(캐릭터 · 시작 · 이야기 · 그림체 · 방식), 내 내용 길은 넷 — 위자드가 길에 맞게 다시 자른다(#548). */
+  const step = Math.min(5, Math.max(1, Number(search.get("step") || 1) || 1));
   const base = {
     step,
     character: search.get("character") || undefined,
