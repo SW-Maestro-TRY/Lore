@@ -1044,7 +1044,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                                 <span className="wt-prog-vers">
                                   <span className="tag">{t("다시 뽑음")}</span>
                                   <button type="button" aria-label={t("이전 판")} disabled={at === 0} onClick={() => setSceneVer((o) => ({ ...o, [s.n]: at - 1 }))}><IconChevronLeft size={16} /></button>
-                                  <span className="num">{shown.ver === 1 ? t("처음 판") : t("다시 뽑은 판 {n}", { n: shown.ver - 1 })}{!old && <em>{t("지금")}</em>}</span>
+                                  <span className="num">{at + 1} / {vers}{!old && <em>{t("지금")}</em>}</span>
                                   <button type="button" aria-label={t("다음 판")} disabled={at === vers - 1} onClick={() => setSceneVer((o) => ({ ...o, [s.n]: at + 1 }))}><IconChevronRight size={16} /></button>
                                 </span>
                               )}

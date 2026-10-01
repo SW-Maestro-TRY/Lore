@@ -35,8 +35,6 @@ const dict: Dict = {
   "다시 뽑음": { en: "Redrawn", ja: "引き直し", zh: "已重抽" },
   "이전 판": { en: "Previous version", ja: "前の版", zh: "上一版" },
   "다음 판": { en: "Next version", ja: "次の版", zh: "下一版" },
-  "처음 판": { en: "Original", ja: "最初の版", zh: "初版" },
-  "다시 뽑은 판 {n}": { en: "Redraw {n}", ja: "引き直し {n}", zh: "重抽 {n}" },
   "지금": { en: "current", ja: "現在", zh: "当前" },
   "지금 판이 아니에요": { en: "This isn't the current version", ja: "現在の版ではありません", zh: "这不是当前版本" },
   "이 판으로 되돌리기": { en: "Restore this version", ja: "この版に戻す", zh: "恢复为此版本" },
