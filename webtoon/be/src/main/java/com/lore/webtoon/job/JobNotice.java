@@ -5,6 +5,7 @@ import com.lore.common.user.User;
 import com.lore.common.user.UserRepository;
 import com.lore.webtoon.story.StoryStore;
 import com.lore.webtoon.story.WebtoonStory;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -64,6 +65,7 @@ public class JobNotice {
     private final EmailService mail;
     private final NotifySettingService settings;
     private final String site;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public JobNotice(JobStore store, UserRepository users, StoryStore stories,
                      EmailService mail, NotifySettingService settings,
@@ -124,21 +126,9 @@ public class JobNotice {
                 return;                     // 받을 사람이 없거나, 이미 보냈다
             }
             String title = titleOf(job.getRunId());
-            mail.send(to,
-                    "[LORE] 「" + title + "」 웹툰이 다 만들어졌어요",
-                    """
-                    안녕하세요, 루예요.
-
-                    부탁하신 웹툰 「%s」 이(가) 다 만들어졌어요.
-                    아래 주소에서 바로 볼 수 있어요.
-
-                    %s
-
-                    이 링크는 기기가 달라도 열려요 — 다른 기기에서 만드셨어도
-                    여기로 들어오시면 그 작품이 그대로 있어요.
-
-                    — LORE
-                    """.formatted(title, resultLink(job.getRunId())));
+            NoticeMail.Body body = NoticeMail.finished(title, genreOf(job.getRunId()), nameOf(job),
+                    resultLink(job.getRunId()), site);
+            mail.sendHtml(to, "[LORE] 「" + title + "」 웹툰이 다 만들어졌어요", body.text(), body.html());
             log.info("완성 알림을 보냈습니다 (job={}, run={})", jobId, job.getRunId());
         } catch (Exception e) {             // noqa: 메일이 만들기를 깨면 안 된다
             log.error("완성 알림을 못 보냈습니다 (job={})", jobId, e);
@@ -162,29 +152,10 @@ public class JobNotice {
             if (to == null || !store.claimNotice(jobId)) {
                 return;
             }
-            String refundLine = back == Refunded.CREDIT
-                    ? "사용된 크레딧은 자동으로 환불했어요."
-                    : back == Refunded.FREE
-                    ? "사용한 무료 생성 횟수는 자동으로 복구했어요."
-                    : "";
-            mail.send(to,
-                    "[LORE] 웹툰을 다 만들지 못했어요",
-                    """
-                    안녕하세요, 루예요.
-
-                    부탁하신 웹툰을 만들다가 멈췄어요.
-                    %s
-
-                    %s
-                    다시 시도해 주시면 처음부터 새로 그려 드려요.
-
-                    %s/webtoon
-
-                    — LORE
-                    """.formatted(
-                            why == null || why.isBlank() ? "" : "사유: " + why,
-                            refundLine, site));
-            log.info("실패 알림을 보냈습니다 (job={})", jobId);
+            /* 사유(why)는 메일에 안 적는다 — 내부 문구라 받는 사람에게는 뜻이 없다. 로그에는 남는다. */
+            NoticeMail.Body body = NoticeMail.failed(chosenTitleOf(job.getRunId()), back, site + "/webtoon", site);
+            mail.sendHtml(to, "[LORE] 웹툰을 다 만들지 못했어요", body.text(), body.html());
+            log.info("실패 알림을 보냈습니다 (job={}, why={})", jobId, why);
         } catch (Exception e) {             // noqa: 실패를 적는 길에서 또 죽으면 안 된다
             log.error("실패 알림을 못 보냈습니다 (job={})", jobId, e);
         }
@@ -199,6 +170,34 @@ public class JobNotice {
                 .map(WebtoonStory::displayTitle)
                 .filter(s -> !s.isBlank())
                 .orElse("내 웹툰");
+    }
+
+    /** 고른 이야기의 제목. 아직 못 정했으면 빈 값 — 실패 메일은 그때 「웹툰」이라고만 쓴다. */
+    private String chosenTitleOf(String runId) {
+        if (runId == null) {
+            return "";
+        }
+        return stories.chosenOf(runId).map(WebtoonStory::displayTitle).orElse("");
+    }
+
+    private String genreOf(String runId) {
+        if (runId == null) {
+            return "";
+        }
+        return stories.chosenOf(runId).map(WebtoonStory::getGenre).orElse("");
+    }
+
+    /** 만들 때 적은 캐릭터 이름. 못 읽으면 빈 값 — 그 줄만 빠진다. */
+    private String nameOf(WebtoonJob job) {
+        String json = job.getInputJson();
+        if (json == null || json.isBlank()) {
+            return "";
+        }
+        try {
+            return mapper.readTree(json).path("name").asText("");
+        } catch (Exception e) {             // noqa: 이름 하나 때문에 메일이 안 가면 안 된다
+            return "";
+        }
     }
 
     /** 결과 화면 주소. <b>게스트가 자기 작품으로 돌아오는 유일한 길이다.</b> */
