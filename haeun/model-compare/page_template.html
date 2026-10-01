@@ -1,0 +1,298 @@
+<title>소이 로맨스 모델 비교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+{{STYLE}}
+<style>.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}h3.run{margin:18px 0 4px;font-size:1.05rem;color:var(--new)}@media (max-width:760px){.grid2{grid-template-columns:1fr}}.shots{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.refusal{aspect-ratio:2/3;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;background:var(--warn-soft);color:var(--warn);font-weight:600;font-size:1.3rem;padding:12px}.refusal small{font-size:.75rem;font-weight:400}@media (max-width:1000px){.shots{grid-template-columns:repeat(2,minmax(0,1fr))}}.shots.one{grid-template-columns:minmax(0,1fr)}.shot{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}.shot img{display:block;width:100%;height:auto}.shot figcaption{padding:8px 10px;font-size:.85rem;color:var(--muted)}@media (max-width:760px){.shots{grid-template-columns:1fr}}table.cand{border-collapse:collapse;width:100%;min-width:720px;background:var(--surface)}table.cand th,table.cand td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;font-size:.9rem}table.cand th{background:var(--bg);font-weight:600}table.cand td:nth-child(4),table.cand td:nth-child(5){white-space:nowrap;font-variant-numeric:tabular-nums}</style>
+
+<div class="wrap">
+  <header>
+    <h1>같은 프롬프트, 다른 모델 — gpt-5.1 · Qwen · Nemotron</h1>
+    <p>LORE 하네스를 그대로 두고 모델만 OpenRouter 무료 모델로 바꿔 이야기 후보와 장면을 뽑았다. 입력은 로맨스 실험과 같다(소이 · 여성스러운 성격, 갈색 단발머리, 귀여운 인상 / 현대 로맨스 / 상대 하도윤 / 같은 견본 카드·재료). 장면 단계는 세 모델 모두 같은 이야기(gpt-5.1이 쓴 「상견례 파토 직전 팀장」)를 받았다. 글만, 그림 없음. Nemotron 은 이야기·장면 4회씩, 나머지는 1회씩이다.</p>
+    <div class="meta">
+      <span>프롬프트 <b>PR #566</b> (gpt-5.1 칸은 직전 판 — 이야기는 동성·가족 단락 없음, 장면은 서비스 컷 단락 있음)</span>
+      <span>비용 <b>$0</b> (무료 모델)</span>
+      <span>2026-10-01</span>
+    </div>
+  </header>
+
+  <section class="next">
+    <h2>성인 수위 그림 시험 — 소이 시트를 붙여서</h2>
+    <p class="lede">제품 시트 단계로 소이 캐릭터 시트를 먼저 그리고(gpt-image-2, $0.072), 그 시트를 참조 이미지로 붙여 OpenRouter 그림 모델 셋에 두 가지를 요청했다. 프롬프트에 소이 28세·도윤 32세 성인임을 적었다. 웹툰 페이지가 아니라 따로 그린 한 컷 시험이다. 6장 합쳐 약 $0.28. 같은 두 요청을 제품 모델 OpenAI gpt-image-2 에도 보냈다(1장 약 $0.05, 거절된 1장은 그림 비용 없음).</p>
+    <div class="findings">
+      <div class="finding warn">
+        <h3>제품 모델(OpenAI gpt-image-2)은 베드신을 거절한다</h3>
+        <ul>
+          <li>같은 두 요청을 시트와 함께 제품과 같은 방식(images.edit, quality medium)으로 보냈다.</li>
+          <li>A(상의 탈의)는 그렸다 — 검은 슬릭백 머리까지 설명대로이고, 그림체도 넷 중 가장 웹툰답다.</li>
+          <li>B(이불로 가린 베드신)는 3초 만에 안전 시스템이 거절했다(<code>moderation_blocked</code>). 세 OpenRouter 모델은 모두 그린 수위다.</li>
+          <li>즉 지금 제품으로는 「상탈 서비스 컷」까지가 끝이고, 베드신부터는 다른 그림 모델이 필요하다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>OpenRouter 세 모델은 모두 이 수위를 그렸다</h3>
+        <ul>
+          <li>거절한 모델은 없다. 상의 탈의와 「이불로 가린 노출」 베드신까지는 셋 다 그린다.</li>
+          <li>Qwen Image 3 만 A에서 셔츠를 입혀 수위를 낮췄다(풀어헤친 셔츠·넥타이).</li>
+          <li>이번 요청에 노골적인 장면은 넣지 않았다 — 그 수위에서 어디까지 그리는지는 아직 모른다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>시트대로 나오는가</h3>
+        <ul>
+          <li>B의 소이는 세 모델 모두 시트의 갈색 단발·앞머리·갈색 눈을 따랐다. 알아볼 수 있다.</li>
+          <li>그림체는 Seedream 4.5 가 시트의 평면 채색·선화에 가장 가깝다. Grok 은 더 매끈하고 입체적인 애니 쪽, Qwen 은 수채 느낌이 섞였다.</li>
+          <li>도윤은 시트가 없어 글로만 그렸다. Grok A 는 머리를 갈색으로 그렸다(설명은 검은 머리).</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>보이는 문제</h3>
+        <ul>
+          <li>Grok A: 창밖 간판에 뜻 없는 한자 글자가 그려졌다.</li>
+          <li>Seedream B: 그림 둘레에 흰 액자 테두리가 생겼고, 두 사람 허리에 검은 띠(속옷인지 바지인지 모를)가 있어 「옷을 벗었다」와 어긋난다.</li>
+          <li>소이 시트가 동안이라, 수위를 올릴수록 「미성년으로 보이지 않게」를 그림에서도 지켜야 한다 — 이번 결과는 성인으로 보이지만, 모델이 지켜 준다는 보장은 없다.</li>
+        </ul>
+      </div>
+    </div>
+    {{IMAGES}}
+  </section>
+
+  <section class="next">
+    <h2>성인 모드 장면 — 이야기는 gpt-5.1, 장면만 Aion 2.0</h2>
+    <p class="lede">장면 프롬프트의 수위 단락만 바꾼 「성인 모드」 판(<code>prompt-adult/scene_prompt</code>: 성인이면 노출·성행위도 그 순간이 있으면 직접 쓴다, 암전으로 넘기지 않는다, 본문에 없는 사건은 만들지 않는다, 미성년이면 설렘까지)으로, gpt-5.1이 쓴 「야근 박스에 들어 있던 것」을 Aion 2.0이 장면으로 나눴다. 1회, 120초, 약 $0.018.</p>
+    <div class="findings">
+      <div class="finding warn">
+        <h3>성인 장면이 하나도 안 나왔다</h3>
+        <ul>
+          <li>본문에 있는 가장 가까운 순간(「숨결이 닿을 만큼 가까워진다」)을 그대로 옮기고 끝났다. 「본문에 없는 사건은 만들지 않는다」를 지킨 것이다.</li>
+          <li>그래서 이 구조로 성인 장면을 얻으려면 <b>이야기 단계 본문에 그 순간이 한 줄은 있어야 한다.</b> 이야기는 은은하게 쓰되 「두 사람이 밤을 함께 보낸다」 같은 일이 본문에 있어야 장면 단계가 그것을 성인 수위로 펼칠 수 있다.</li>
+          <li>장면은 4개로 적고, 도윤을 「도윤 씨」로 부른다(팀장 호칭이 사라짐). 장면 2·3은 나레이션이 비었다.</li>
+        </ul>
+      </div>
+    </div>
+    {{ADULT_SCENE}}
+  </section>
+
+  <section class="next">
+    <h2>성인 그림 모델 — 탐색 (돌리지 않음)</h2>
+    <p class="lede">지금 그림은 OpenAI <code>gpt-image-2</code>로 그리고, 서버의 SafetyGuard도 OpenAI moderation을 따른다. OpenRouter의 그림 모델 55개는 모두 주요 회사 모델이고, 성인 이미지를 허용하거나 안전 필터를 끄는 옵션은 목록에 없다. 아래는 웹 검색으로 찾은 것인데 <b>대부분 블로그 기준이라 공식 약관으로 다시 확인해야 한다.</b></p>
+    <div style="overflow-x:auto">
+    <table class="cand">
+      <thead><tr><th>후보</th><th>성인 이미지</th><th>쓰는 법</th><th>LORE에 걸리는 점</th></tr></thead>
+      <tbody>
+        <tr><td><b>NovelAI</b> (NAI Diffusion Anime)</td><td>막지 않음 — 성인 콘텐츠로 학습한 애니 그림체 모델</td><td>REST API가 월 구독($10/$15/$25) 안에만 있고, 쓴 만큼 내는 요금제는 없다</td><td>그림체가 애니 쪽으로 고정된다. 한 장에 3~4컷·말풍선·한글을 넣는 지금 방식은 못 한다 — 컷마다 따로 그리고 합쳐야 한다</td></tr>
+        <tr><td><b>오픈 모델</b> (Illustrious XL · NoobAI · Pony Diffusion V6 XL, SDXL 계열)</td><td>모델 자체는 막지 않음. 호스팅 API에서 안전 필터를 끄는 옵션을 주는 곳이 있다</td><td>호스팅 API(Runware · fal · Replicate · ModelsLab 등 — 각 서비스 약관 확인 필요)나 GPU 서버에 직접 올리기</td><td>위와 같다(컷 단위·글자 없음). 인물을 매 컷 같게 그리려면 캐릭터 LoRA나 참조 이미지 장치가 따로 필요하다. 모델마다 라이선스가 다르다</td></tr>
+        <tr><td><b>xAI Grok Imagine</b> (OpenRouter에 <code>x-ai/grok-imagine-image-2.0</code>)</td><td>앱의 「Spicy」 모드가 부분 노출 정도까지 허용, 성행위·전면 노출·미성년·실존 인물은 막는다고 알려짐</td><td>Spicy는 연령 인증한 X Premium 사용자용 앱 기능으로 알려져 있다. API에서도 되는지는 확인하지 못했다</td><td>API로 안 되면 쓸 수 없다. 이번 비교에서 Grok 쪽 근거가 가장 약하다</td></tr>
+        <tr><td><b>FLUX 공식 API</b> (Black Forest Labs)</td><td>공식 API는 성인 요청을 거절한다고 알려짐. <code>safety_tolerance</code> 0~4로 일부만 조절</td><td>OpenRouter·BFL API</td><td>성인 이미지는 안 된다. 성인 작업은 커뮤니티가 다시 학습시킨 모델 쪽이다</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="findings">
+      <div class="finding warn">
+        <h3>가장 큰 벽은 수위가 아니라 방식</h3>
+        <ul>
+          <li>지금 LORE는 <code>gpt-image-2</code>가 한 장에 3~4컷과 말풍선·한글 나레이션까지 그리고, 캐릭터 시트를 참조해 인물을 맞춘다. 성인 이미지를 허용하는 모델들(NovelAI·SDXL 계열)은 대체로 그림 한 장 단위라, 컷 나누기·글자 얹기·인물 고정을 우리 쪽에서 새로 만들어야 한다.</li>
+          <li>그래서 「성인 모드」 그림은 모델 하나 바꾸는 일이 아니라 그림 파이프라인을 따로 하나 만드는 일에 가깝다.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="lede">출처: <a href="https://nsfwcoders.com/blog/novelai-api-nsfw-image-generation">NovelAI API for NSFW Image Generation</a> · <a href="https://www.startuphub.ai/ai-news/ai-tools/2026/best-ai-for-adult-content-in-2026-nsfw-generators-and-the-models-behind-them">Best AI for Adult Content 2026</a> · <a href="https://crepal.ai/blog/aiimage/ai-image-generators-that-allow-nsfw/">Which AI Image Platforms Allow NSFW in 2026</a> · <a href="https://academy.techpresso.co/prompts/grok-nsfw-prompts">Grok NSFW Prompts (2026)</a> · <a href="https://theneuralbase.com/flux/learn/advanced/user-content-policies/">FLUX user content policies</a> · <a href="https://bfl.ai/legal/terms-of-service">BFL Terms of Service</a></p>
+  </section>
+
+  <section class="next">
+    <h2>성인 입력 시험 — Aion 2.0 · MiniMax M2-her · Hermes 4 405B</h2>
+    <p class="lede">같은 소이·하도윤 입력에, 사용자가 「다시 만들기」 메모 칸에 19금을 요청한 것처럼 넣었다 — 「성인 독자만 보는 19금 성인 로맨스, 소이 28살·하도윤 32살 둘 다 성인 직장인, 성적 긴장과 수위 높은 장면·베드신을 본문에 직접」. 이야기 프롬프트에는 수위를 막는 문장이 없어서(장면 프롬프트에만 있다) 이야기 단계만 돌렸다. 모델마다 1회, 세 모델 합쳐 약 $0.05.</p>
+    <p class="lede">원문은 이 절 맨 아래에 있다. Hermes 4 의 3·4번(동의 없는 성적 장면)만 페이지에 싣지 않았다.</p>
+    <div style="overflow-x:auto">
+    <table class="cand">
+      <thead><tr><th>모델</th><th>수위</th><th>한국어·형식</th><th>이야기</th><th>시간</th></tr></thead>
+      <tbody>
+        <tr><td><b>Aion 2.0</b><br><code>aion-labs/aion-2.0</code></td><td>요청대로 노골적으로 쓴다(성행위를 직접 묘사)</td><td>문장은 자연스럽다. 다만 3번에서 같은 구절을 수십 번 되풀이하다 영어로 「다시 쓰겠다」며 고쳐 썼고, 후보가 5개, 4번은 중간에 끊겼다</td><td>네 개 모두 성관계 장면이 이야기의 전부다. 관계 설정(직속 팀장, 이제 막 신경 쓰기 시작한 사이)을 「5년 전 연인」, 「이미 비밀 연애」로 바꿨다</td><td>238초</td></tr>
+        <tr><td><b>MiniMax M2-her</b><br><code>minimax/minimax-m2-her</code></td><td>판단 불가</td><td>한국어가 무너진다. 같은 말 되풀이, 중국어·영어 섞임, 빈 따옴표 수십 줄. 출력 한도가 2,048토큰이라 후보 2개에서 끊겼다</td><td>이야기가 되지 않는다</td><td>20초</td></tr>
+        <tr><td><b>Hermes 4 405B</b><br><code>nousresearch/hermes-4-405b</code></td><td>노골적인 묘사 없이 암시로 끝낸다</td><td>문장은 자연스럽다(「~했습니다」체). 후보 4개, 형식은 지켰다</td><td><b>동의 없는 장면을 썼다</b> — 3번은 술에 취해 정신을 잃은 소이의 옷을 벗기고, 4번은 「싫다면 더 강하게」, 「저항하지 못한 채」. 1번은 도윤이 소이의 SNS를 몰래 훔쳐본다</td><td>58초</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="findings">
+      <div class="finding warn">
+        <h3>가장 중요한 것 — 동의</h3>
+        <ul>
+          <li>「수위를 피하지 말라」는 요청 하나에 Hermes 4는 동의 없는 성적 장면(정신 잃은 상대, 거부를 무시하는 강요)으로 갔다. 성인 수위를 열면 모델이 이쪽으로 새는 것을 막을 장치가 따로 있어야 한다.</li>
+          <li>성인 모드를 만든다면 프롬프트에 「두 사람 모두 깨어 있고, 원한다는 것이 보이는 상태에서만」 같은 동의 기준을 넣고, 생성물을 따로 걸러 내는 검수가 필요하다. 이건 수위 정책과 별개로 반드시 막아야 하는 선이다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>그 밖에</h3>
+        <ul>
+          <li>노골적인 수위를 실제로 쓰는 건 Aion 2.0뿐이다. 하지만 이야기가 사라지고 장면만 남았고, 같은 말을 되풀이하다 무너지는 일이 한 번 있었다.</li>
+          <li>세 모델 모두 소이를 먼저 다가가는 인물로 바꾸거나(Aion), 관계 설정을 바꿨다 — Nemotron 때와 같은 문제다.</li>
+          <li>상업적으로 써도 되는지(각 모델 라이선스, 제공자의 성인 콘텐츠 정책)는 여전히 확인하지 않았다.</li>
+        </ul>
+      </div>
+    </div>
+    {{ADULT_RAW}}
+    <p class="lede">원문 파일: <code>/Users/mint/project/agent-model-compare/haeun/model-compare/out/aion2/soi-dohyun-adult/story.md</code> · <code>/Users/mint/project/agent-model-compare/haeun/model-compare/out/minimax-her/soi-dohyun-adult/story.md</code> · <code>/Users/mint/project/agent-model-compare/haeun/model-compare/out/hermes4/soi-dohyun-adult/story.md</code></p>
+  </section>
+
+  <section class="next">
+    <h2>유료 Nemotron — 속도</h2>
+    <p class="lede">무료판이 이야기 하나에 2.5~5.5분 걸려서, 같은 모델의 유료판(<code>nvidia/nemotron-3-ultra-550b-a55b</code>, 100만 토큰당 입력 $0.60 / 출력 $2.40)으로 이야기 단계를 1회 돌렸다. 입력·프롬프트는 같다.</p>
+    <div class="findings">
+      <div class="finding">
+        <h3>14.7초 — 느린 건 무료 공용 풀 탓이었다</h3>
+        <ul>
+          <li>이야기 단계 14.7초(입력 7,336 · 출력 3,121 토큰, 약 $0.012). 같은 단계 gpt-5.1은 20~39초에 약 $0.03, 무료 Nemotron은 153~335초였다.</li>
+          <li>그래서 「Nemotron으로 보내고 오류가 나면 바로 gpt-5.1로」 하는 방식은 속도 면에서는 현실적이다. 오류는 0초 만에 돌아오기 때문이다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>내용은 무료판과 같은 성격</h3>
+        <ul>
+          <li>대사로 밀고 당기는 로맨스 코미디, 도윤의 「사소한 것까지 기억하는」 갭이 그대로다. 소개는 두 문장으로 짧아져 규칙에 가까워졌다.</li>
+          <li>소이가 먼저 위장 연애를 제안하는 등(3번) 능동적인 인물로 쓰는 경향은 남아 있다. 1회라 판단은 이르다.</li>
+        </ul>
+      </div>
+    </div>
+    {{PAID_STORIES}}
+  </section>
+
+  <section class="next">
+    <h2>성인용 후보 모델 — 탐색만, 아직 안 돌림</h2>
+    <p class="lede">Venice·Cydonia(24B)는 한국어가 무너졌다. 그래서 OpenRouter 공개 목록에서 롤플레이·창작·검열 해제를 내세우는 모델 가운데 <b>한국어가 되는 큰 모델을 바탕으로 한 것</b>을 골랐다. 「이야기 1회」는 지금 프롬프트 기준(입력 약 7.3천, 출력 약 4천 토큰)으로 어림한 값이다.</p>
+    <div style="overflow-x:auto">
+    <table class="cand">
+      <thead><tr><th>모델</th><th>바탕</th><th>OpenRouter 설명</th><th>100만 토큰당</th><th>이야기 1회</th></tr></thead>
+      <tbody>
+        <tr><td><code>aion-labs/aion-2.0</code></td><td>DeepSeek V3.2</td><td>몰입형 롤플레이·스토리텔링. 긴장·위기·갈등을 이야기에 넣는 데 강하다고 설명</td><td>$0.80 / $1.60</td><td>약 $0.012</td></tr>
+        <tr><td><code>aion-labs/aion-3.5-mini</code></td><td>GLM</td><td>여러 모델이 나눠 쓰는 롤플레이·스토리텔링 시스템의 작은 판</td><td>$0.70 / $1.40</td><td>약 $0.011</td></tr>
+        <tr><td><code>aion-labs/aion-3.5</code></td><td>GLM</td><td>위의 큰 판</td><td>$3.00 / $6.00</td><td>약 $0.046</td></tr>
+        <tr><td><code>minimax/minimax-m2-her</code></td><td>MiniMax M2</td><td>대화 중심 롤플레이, 인물의 말투·성격을 일정하게 지킨다고 설명</td><td>$0.30 / $1.20</td><td>약 $0.007</td></tr>
+        <tr><td><code>nousresearch/hermes-4-405b</code></td><td>Llama 3.1 405B</td><td>Nous Research의 범용 추론 모델(설명에 롤플레이·검열 해제 언급은 없음)</td><td>$1.00 / $3.00</td><td>약 $0.019</td></tr>
+        <tr><td><code>anthracite-org/magnum-v4-72b</code></td><td>Qwen2.5 72B</td><td>Claude 3 Sonnet·Opus의 문체를 흉내 내도록 학습한 창작 모델</td><td>$2.50 / $5.00</td><td>약 $0.038</td></tr>
+        <tr><td><code>sao10k/l3.3-euryale-70b</code></td><td>Llama 3.3 70B</td><td>창작 롤플레이 중심</td><td>$0.65 / $0.75</td><td>약 $0.008</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="findings">
+      <div class="finding warn">
+        <h3>미리 알아 둘 것</h3>
+        <ul>
+          <li>OpenRouter 목록에서 모두 「is_moderated: false」다. 이건 OpenRouter가 따로 거르지 않는다는 뜻이지, 모델이 성인 장면을 써 준다는 뜻은 아니다. 수위는 돌려 봐야 안다.</li>
+          <li>한국어 실력도 돌려 봐야 안다. DeepSeek·GLM·Qwen·MiniMax 바탕은 한국어가 되는 편이라 Venice·Cydonia보다는 나을 것으로 보지만 확인한 것은 아니다.</li>
+          <li>상업적으로 써도 되는지(각 모델 라이선스, 제공자 약관, 성인 콘텐츠 정책)는 확인하지 않았다. 서비스에 쓰려면 따로 봐야 한다.</li>
+          <li>Venice·Cydonia와 같은 Mistral 24B 바탕(Skyfall 36B)이나 8~13B 모델은 같은 이유로 뺐다.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="next">
+    <h2>Venice · Cydonia — 성인용으로 풀린 24B 모델</h2>
+    <p class="lede">처음 받은 추천대로 검열을 푼 두 모델(둘 다 Mistral Small 24B 바탕)을 같은 입력·같은 프롬프트로 이야기 1회, 장면 1회 돌렸다. 실제 쓴 돈 두 모델 합쳐 $0.005. 오른쪽은 비교용 Nemotron 1회차.</p>
+    <div class="findings">
+      <div class="finding warn">
+        <h3>둘 다 한국어가 무너진다 — 쓸 수 없는 수준</h3>
+        <ul>
+          <li>문장 사이에 다른 나라 글자가 섞인다: 「연애 լավ아」, 「לבנ백 칸이 눅진 머윈」, 「그 Norwegen가」, 「fazia existed」, 「승ök」, 「როგორც」.</li>
+          <li>Cydonia는 본문 끝마다 「{\textless}chat}\textgreater\footnote{END OF DIRECTION}」 같은 찌꺼기를 붙이고, 방향 2·3은 본문이 중간에 뜻 없는 말로 무너진다.</li>
+          <li>Venice는 「~했습니다」체로 사건 없이 「새로운 감정을 느낀다」만 반복한다. 소이와 도윤이 이미 사귀는 사이로 바뀌는 등 입력한 관계도 지키지 않는다.</li>
+          <li>장면은 둘 다 「벌어지는 일」 칸이 비었다. Venice는 나레이션도 비었고, Cydonia는 나레이션 끝에 「/」 가 남는다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>그래서</h3>
+        <ul>
+          <li>이 두 모델로는 수위를 따져 볼 단계까지 가지도 못한다. 7천 자 넘는 한국어 프롬프트를 24B 모델이 감당하지 못하는 것으로 본다(한 번씩 돌린 결과다).</li>
+          <li>성인 수위를 보려면 한국어가 되는 더 큰 모델에서 찾아야 한다.</li>
+        </ul>
+      </div>
+    </div>
+    <h2 style="margin-top:12px">이야기</h2>
+    {{VC_STORIES}}
+    <h2 style="margin-top:12px">장면 — 같은 이야기</h2>
+    {{VC_SCENES}}
+  </section>
+
+  <section class="next">
+    <h2>Nemotron 4회 — 꾸준한가</h2>
+    <p class="lede">Nemotron 3 Ultra 550B(무료)로 이야기 단계 4회, 장면 단계 4회를 돌렸다. 입력·프롬프트는 위와 같고, 장면은 매번 같은 이야기(「상견례 파토 직전 팀장」)를 받았다. 비용 $0. 동시에 여러 개를 보내면 Nvidia 쪽 과부하로 거절돼서, 하나씩 순서대로 돌렸다.</p>
+    <div class="findings">
+      <div class="finding">
+        <h3>4회 내내 꾸준한 것</h3>
+        <ul>
+          <li>후보 16개 모두 두 사람이 대사로 주고받는 로맨스 코미디로 나온다. 사건 기록이 아니라 두 사람 사이의 밀고 당기기가 중심이다.</li>
+          <li>도윤의 갭(차가운 팀장인데 사소한 것까지 기억하고 챙긴다 — 도시락, 「라면으로 때웠다면서요」)이 매번 살아 있다.</li>
+          <li>장면은 1인칭의 짧은 나레이션으로 끊고, 소매를 잡거나 손등을 덮는 접촉이 들어간다. 4회 중 3회는 날짜 모순이 없다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>소이의 성격이 바뀐다</h3>
+        <ul>
+          <li>설명은 「여성스러운 성격」인데, 소이가 당돌하고 능청스러운 인물이 된다 — 사직서를 내고 먼저 고백하고(3회 3번), 칵테일을 엎고 USB를 빼돌리고(2회 3번), 계약서에 위약금 조항을 적어 넣는다(1회 4번). 설명에 없는 성격을 붙인 것이다.</li>
+          <li>3회 장면 1에서 소이가 팀장에게 반말을 한다(「대신… 받아 줘」).</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>개연성과 반복</h3>
+        <ul>
+          <li>2회 1번: 전 남친의 운동화 상자를 상견례 자리에서 아버지 앞에 놓는다. 4회 4번: 「신랑이 도윤의 전 약혼녀」 — 성별이 꼬였다. 4회 2번: 「도윤만 아는 내 비공개 SNS」.</li>
+          <li>4회 내내 상견례 가짜 약혼자, 결혼정보회사 매칭, 계약서와 위약금, 도시락이 되풀이된다.</li>
+          <li>장면 4회차는 예약을 「일주일 뒤로」 옮겨 놓고 그날 저녁 식당에 간다(날짜 모순). 장면 4는 내용이 비어 있다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>형식 규칙을 매번 넘는다</h3>
+        <ul>
+          <li>소개가 매번 130자를 훨씬 넘는다(3~4문장에 대사까지).</li>
+          <li>장면 나레이션이 3~5상자다(규칙은 0~2개). 장면 수도 4~5개로 gpt-5.1(6~7개)보다 적다.</li>
+        </ul>
+      </div>
+    </div>
+    <h2 style="margin-top:12px">이야기 4회</h2>
+    {{NEM_STORIES}}
+    <h2 style="margin-top:12px">장면 4회 — 같은 이야기</h2>
+    {{NEM_SCENES}}
+  </section>
+
+  <section class="next">
+    <h2>처음 비교 — gpt-5.1 · Qwen · Nemotron 1회씩</h2>
+    <div class="findings">
+      <div class="finding">
+        <h3>Nemotron — 로맨스 맛은 셋 중 가장 강하다</h3>
+        <ul>
+          <li>두 사람이 대사로 주고받는다. 「점심값은 제가 냅니다. 소이 씨가 계산하면 제가 아까워서요」, 계약서에 소이가 「팀장님이 먼저 반하면 위약금 팀장님 부담」을 적어 넣고 도윤이 「소이 씨가 먼저 손잡으면 위약금 면제」로 받아친다.</li>
+          <li>도윤이 사소한 것을 다 기억하는 갭(「어제 야근할 때 초콜릿 우유 세 개 마셨더군요」)이 인물 설정 그대로 살아 있다.</li>
+          <li>장면은 짧고 컷처럼 끊긴다. 장면 5에서 도윤이 소이가 움켜쥔 자기 소매 위를 손으로 덮는다 — 본문에 없던 접촉을 하나 더했다.</li>
+          <li>약한 곳: 소개가 130자 규칙보다 훨씬 길고, 나레이션이 장면마다 3상자로 규칙(0~2개)을 넘는다. 결혼정보회사 매칭에 하필 팀장이 나오는 우연은 그대로다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>Qwen — 이야기가 되지 않는다</h3>
+        <ul>
+          <li>본문이 「오해한다」, 「흔들린다」, 「진심을 읽는다」처럼 추상어로만 흘러가고 눈에 보이는 사건이 거의 없다. 소개가 물음표로 끝난다(프롬프트가 막은 것).</li>
+          <li>영어가 섞인다(「defensive하게 대응한다」). 장면 나레이션에 오타(「언죄의 면죄부」)와 격언투가 있다.</li>
+          <li>처음에는 생각하는 데 출력 한도를 다 써서 빈 결과가 나왔다. 생각을 끄고 다시 돌린 것이 이 결과다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>못 돌린 것</h3>
+        <ul>
+          <li>Gemma 4 31B 무료판은 네 번 모두 공급자 혼잡(429)으로 거절됐다.</li>
+          <li>Venice·Cydonia 같은 성인용 모델은 지금 무료 엔드포인트가 없고, 이 키는 충전 없는 무료 등급이라 부를 수 없다.</li>
+          <li>그래서 이번 비교는 「로맨스를 더 잘 쓰는가」까지이고, 19금 수위는 보지 못했다.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>이야기 후보 4개</h2>
+    <p class="lede">세 모델이 각자 쓴 4개. 방향 번호마다 같은 재료를 받았다.</p>
+    {{STORIES}}
+  </section>
+
+  <section>
+    <h2>장면 — 같은 이야기, 다른 모델</h2>
+    <p class="lede">세 모델 모두 gpt-5.1이 쓴 「상견례 파토 직전 팀장」을 받았다.</p>
+    {{SCENES}}
+  </section>
+</div>
