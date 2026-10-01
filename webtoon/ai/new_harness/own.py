@@ -139,7 +139,8 @@ def cast_lines(cast: list[dict]) -> list[str]:
     if not cast:
         return out + ["(주인공 말고는 없다)"]
     for c in cast:
-        out += ["", str(c.get("name")).strip(), *R._cast_lines(c)]
+        role = str(c.get("role") or "").strip()
+        out += ["", str(c.get("name")).strip() + (f" ({role})" if role else ""), *R._cast_lines(c)]
     return out
 
 
@@ -200,7 +201,7 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
     call = llm.Call("CAST")
     log(f"[인물] {call.describe()} 로 적은 내용의 인물을 읽어냅니다…")
     try:
-        text, meta = call(prompt)
+        text, meta = call(prompt, images=llm.load_images(char.get("photos") or []))
     except BaseException as exc:                                      # noqa: BLE001
         R.record_error(run_dir, "CAST", call.provider, call.model, exc)
         warn(f"인물을 못 읽어냈습니다 — 인물 없이 갑니다 ({exc})")
