@@ -48,10 +48,22 @@ final class NoticeMail {
     private NoticeMail() {
     }
 
+    /** 완성 메일 머리 모양. 두 가지를 번갈아 쓴다 — 고르는 것은 {@link JobNotice}. */
+    enum Look {
+        /** 민트 바탕 — 왼쪽 표지, 오른쪽 문구와 루. */
+        MINT,
+        /** 베이지 바탕 — 위에 문구와 루, 아래로 표지 윗부분을 넓게. */
+        BEIGE
+    }
+
+    static final String SERVICE = "개인 IP 창작 서비스, LORE";
+
     /**
      * 다 만들어졌다. 장르나 캐릭터 이름이 비면 그 줄만 뺀다 — 빈 「」 를 보내지 않는다.
+     *
+     * @param cover 표지(1장) 그림의 전체 주소
      */
-    static Body finished(String title, String genre, String name, String link, String site) {
+    static Body finished(String title, String genre, String name, String link, String cover, Look look, String site) {
         String t = "「" + title + "」";
         String g = genre == null ? "" : genre.trim();
         String n = name == null ? "" : name.trim();
@@ -85,7 +97,8 @@ final class NoticeMail {
         }
         html.append(button("웹툰 보러가기 →", link));
         html.append(p("루와 함께,<br>당신의 캐릭터로 새로운 이야기를 만들어보세요. ✨"));
-        return new Body(text.toString(), page(html.toString(), site));
+        String head = look == Look.BEIGE ? beigeHead(cover, site) : mintHead(cover, site);
+        return new Body(text.toString(), page(head, html.toString(), site));
     }
 
     /**
@@ -121,7 +134,7 @@ final class NoticeMail {
         html.append(p(lead.toString()));
         html.append(button("다시 시도하기 →", link));
         html.append(p("이번에는 루가 더 잘 만들어볼게요. ✨"));
-        return new Body(text.toString(), page(html.toString(), site));
+        return new Body(text.toString(), page(failHead(site), html.toString(), site));
     }
 
     /* ---- 아래 공통 ---------------------------------------------------------- */
@@ -135,7 +148,60 @@ final class NoticeMail {
                 + "© 2026 LORE. All rights reserved.\n";
     }
 
-    private static String page(String body, String site) {
+    /* ---- 머리 ---------------------------------------------------------------
+       메일 앱에서 겹치기·그라데이션·배경 그림은 깨지므로 표와 그림만 쓴다. 루 그림은
+       화면과 같은 /static/lou/ 에서 부른다. */
+
+    private static final String FONT = "font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;";
+
+    private static String mintHead(String cover, String site) {
+        return "<tr><td style=\"padding:0;\">"
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#d9ebe5;"
+                + "border-radius:16px 16px 0 0;\"><tr>"
+                + "<td width=\"200\" style=\"padding:32px 0 32px 32px;vertical-align:top;\">"
+                + "<img src=\"" + esc(cover) + "\" width=\"168\" height=\"252\" alt=\"\" style=\"display:block;border:0;"
+                + "width:168px;height:252px;border-radius:12px;\"></td>"
+                + "<td style=\"padding:36px 28px 20px 24px;vertical-align:top;" + FONT + "color:" + INK + ";\">"
+                + "<div style=\"font-size:12px;font-weight:700;letter-spacing:.08em;color:#3f7d6d;\">LORE</div>"
+                + "<div style=\"font-size:24px;font-weight:800;line-height:1.35;margin-top:10px;\">내 캐릭터를<br>살아 움직이게.</div>"
+                + "<div style=\"font-size:13px;color:#3f6a60;margin-top:8px;\">" + esc(SERVICE) + "</div>"
+                + "<img src=\"" + esc(site + "/static/lou/hero-whale1.png") + "\" width=\"210\" alt=\"루\" style=\"display:block;"
+                + "border:0;width:210px;height:auto;margin-top:22px;\"></td>"
+                + "</tr></table></td></tr>";
+    }
+
+    private static String beigeHead(String cover, String site) {
+        return "<tr><td style=\"padding:0;\">"
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5e7d3;"
+                + "border-radius:16px 16px 0 0;\"><tr>"
+                + "<td style=\"padding:28px 0 18px 32px;vertical-align:middle;" + FONT + "color:" + INK + ";\">"
+                + "<div style=\"font-size:22px;font-weight:800;line-height:1.35;\">내 캐릭터를<br>살아 움직이게.</div>"
+                + "<div style=\"font-size:13px;color:#7a6650;margin-top:6px;\">" + esc(SERVICE) + "</div></td>"
+                + "<td width=\"230\" align=\"right\" style=\"padding:18px 24px 10px 0;vertical-align:middle;\">"
+                + "<img src=\"" + esc(site + "/static/lou/hero-whale1.png") + "\" width=\"200\" alt=\"루\" style=\"display:block;"
+                + "border:0;width:200px;height:auto;\"></td></tr>"
+                + "<tr><td colspan=\"2\" style=\"padding:0 32px 32px;\">"
+                // 표지 윗부분만 — 높이를 자르지 못하는 메일 앱에서는 표지 전체가 나온다.
+                + "<div style=\"height:240px;overflow:hidden;border-radius:12px;\">"
+                + "<img src=\"" + esc(cover) + "\" width=\"536\" alt=\"\" style=\"display:block;border:0;width:100%;height:auto;\">"
+                + "</div></td></tr></table></td></tr>";
+    }
+
+    private static String failHead(String site) {
+        return "<tr><td style=\"padding:0;\">"
+                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#e4ece9;"
+                + "border-radius:16px 16px 0 0;\"><tr>"
+                + "<td width=\"250\" style=\"padding:30px 0 26px 28px;vertical-align:middle;\">"
+                + "<img src=\"" + esc(site + "/static/lou/art/error-2.png") + "\" width=\"220\" alt=\"루\" style=\"display:block;"
+                + "border:0;width:220px;height:auto;\"></td>"
+                + "<td style=\"padding:30px 28px 26px 16px;vertical-align:middle;" + FONT + "color:" + INK + ";\">"
+                + "<div style=\"font-size:12px;font-weight:700;letter-spacing:.08em;color:#3f7d6d;\">LORE</div>"
+                + "<div style=\"font-size:22px;font-weight:800;line-height:1.35;margin-top:10px;\">이번엔 루가<br>완성하지 못했어요.</div>"
+                + "<div style=\"font-size:13px;color:#3f6a60;margin-top:8px;\">" + esc(SERVICE) + "</div></td>"
+                + "</tr></table></td></tr>";
+    }
+
+    private static String page(String head, String body, String site) {
         String logo = site + "/static/badges/asm-icon.png";
         return "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\">"
                 + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>"
@@ -144,7 +210,8 @@ final class NoticeMail {
                 + "<tr><td align=\"center\" style=\"padding:32px 16px;\">"
                 + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:560px;"
                 + "background:#ffffff;border:1px solid " + LINE + ";border-radius:16px;\">"
-                + "<tr><td style=\"padding:36px 32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',"
+                + head
+                + "<tr><td style=\"padding:32px 32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',"
                 + "'Malgun Gothic',sans-serif;color:" + INK + ";font-size:15px;line-height:1.7;\">"
                 + body
                 + "</td></tr>"

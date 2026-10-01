@@ -9,11 +9,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class NoticeMailTest {
 
     private static final String SITE = "https://lorecomic.com";
+    private static final String COVER = SITE + "/api/webtoon/v1/runs/r1/page/1";
 
     @Test
     @DisplayName("완성 메일 — 제목·장르·캐릭터·링크가 두 본문에 다 들어간다")
     void 완성_메일() {
-        NoticeMail.Body b = NoticeMail.finished("봉인의 기억", "판타지", "루다", SITE + "/webtoon?run=r1", SITE);
+        NoticeMail.Body b = NoticeMail.finished("봉인의 기억", "판타지", "루다", SITE + "/webtoon?run=r1", COVER, NoticeMail.Look.MINT, SITE);
 
         assertThat(b.text()).contains("기다리던 웹툰 「봉인의 기억」이 완성되었어요.")
                 .contains("판타지 이야기를 담은 「봉인의 기억」")
@@ -25,9 +26,26 @@ class NoticeMailTest {
     }
 
     @Test
+    @DisplayName("완성 메일 머리는 두 모양 다 표지·루·문구를 싣고, 실패 메일은 시무룩한 루")
+    void 머리_모양() {
+        for (NoticeMail.Look look : NoticeMail.Look.values()) {
+            String html = NoticeMail.finished("바다", "", "", SITE, COVER, look, SITE).html();
+            assertThat(html).as(look.name()).contains("src=\"" + COVER + "\"")
+                    .contains(SITE + "/static/lou/hero-whale1.png")
+                    .contains("살아 움직이게.").contains(NoticeMail.SERVICE);
+        }
+        assertThat(NoticeMail.finished("바다", "", "", SITE, COVER, NoticeMail.Look.MINT, SITE).html())
+                .contains("#d9ebe5");
+        assertThat(NoticeMail.finished("바다", "", "", SITE, COVER, NoticeMail.Look.BEIGE, SITE).html())
+                .contains("#f5e7d3");
+        assertThat(NoticeMail.failed("바다", Refunded.CREDIT, SITE, SITE).html())
+                .contains(SITE + "/static/lou/art/error-2.png").contains("이번엔 루가");
+    }
+
+    @Test
     @DisplayName("장르·캐릭터 이름이 비면 그 줄을 뺀다 — 빈 「」 를 보내지 않는다")
     void 빈_줄은_뺀다() {
-        NoticeMail.Body b = NoticeMail.finished("바다", "", " ", SITE + "/webtoon", SITE);
+        NoticeMail.Body b = NoticeMail.finished("바다", "", " ", SITE + "/webtoon", COVER, NoticeMail.Look.BEIGE, SITE);
 
         assertThat(b.text()).contains("「바다」가 완성되었어요.")
                 .doesNotContain("이야기를 담은")
@@ -37,7 +55,7 @@ class NoticeMailTest {
     @Test
     @DisplayName("바닥글은 주소만 — 사업자 정보는 싣지 않는다")
     void 바닥글() {
-        NoticeMail.Body b = NoticeMail.finished("바다", "", "", SITE, SITE);
+        NoticeMail.Body b = NoticeMail.finished("바다", "", "", SITE, COVER, NoticeMail.Look.MINT, SITE);
 
         assertThat(b.text()).contains(NoticeMail.ADDRESS).contains("AI·SW마에스트로 17기")
                 .doesNotContain("사업자");
@@ -59,7 +77,7 @@ class NoticeMailTest {
     @Test
     @DisplayName("이름에 든 꺾쇠·따옴표는 HTML 로 새지 않는다")
     void 이스케이프() {
-        NoticeMail.Body b = NoticeMail.finished("<b>제목</b>", "", "\"루\"", SITE, SITE);
+        NoticeMail.Body b = NoticeMail.finished("<b>제목</b>", "", "\"루\"", SITE, COVER, NoticeMail.Look.MINT, SITE);
 
         assertThat(b.html()).doesNotContain("<b>제목</b>").contains("&lt;b&gt;제목&lt;/b&gt;")
                 .contains("&quot;루&quot;");
