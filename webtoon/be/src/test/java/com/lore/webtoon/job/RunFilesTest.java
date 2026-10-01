@@ -56,7 +56,10 @@ class RunFilesTest {
     private RunFiles files(String bucket, String endpoint, String keepFiles) {
         HarnessProcess harness = mock(HarnessProcess.class);
         when(harness.runsDir()).thenReturn(runs);
-        return new RunFiles(harness, pages, storage, bucket, endpoint, keepFiles);
+        // 사람이 답할 차례인 작품은 안 치운다(#548) — 여기 검사에서는 그런 작업이 없다.
+        WebtoonJobRepository jobs = mock(WebtoonJobRepository.class);
+        when(jobs.findByStatusInOrderByCreatedAtAsc(any())).thenReturn(java.util.List.of());
+        return new RunFiles(harness, pages, storage, jobs, bucket, endpoint, keepFiles);
     }
 
     /** 다 그려진 작품 하나를 디스크에 만든다. */
