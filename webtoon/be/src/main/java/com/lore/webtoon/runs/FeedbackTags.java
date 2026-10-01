@@ -62,6 +62,25 @@ final class FeedbackTags {
         return out;
     }
 
+    /**
+     * 고른 항목 번호들을 그리는 프롬프트에 넣을 문장으로(#548). 모르는 번호는 버린다.
+     * 화면이 보여 주는 말 그대로 — 「사용자가 고른 문제」로 하네스 메모 앞에 붙는다.
+     */
+    static String sceneNote(List<?> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return "";
+        }
+        List<String> labels = new java.util.ArrayList<>();
+        for (Object id : ids) {
+            for (Map<String, String> tag : ALL.get("scene")) {
+                if (tag.get("id").equals(String.valueOf(id)) && !"etc".equals(tag.get("id"))) {
+                    labels.add(tag.get("label"));
+                }
+            }
+        }
+        return labels.isEmpty() ? "" : "사용자가 고른 문제: " + String.join(" · ", labels);
+    }
+
     /** {id, label, id, label, ...} 짝을 표로. */
     private static List<Map<String, String>> tags(String... idLabel) {
         List<Map<String, String>> out = new java.util.ArrayList<>();

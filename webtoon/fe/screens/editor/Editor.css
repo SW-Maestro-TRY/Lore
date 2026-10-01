@@ -21,7 +21,8 @@
 }
 .wt .wt-ed-titlerow h1:hover { background: rgba(15, 51, 63, 0.06); }
 .wt .wt-ed-titlerow h1:focus-visible, .wt .wt-ed-titlerow h1.is-editing { outline: 2px solid var(--sea); outline-offset: 2px; background: transparent; }
-.wt .wt-ed-titleedit { display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; padding: 0; font-size: 12px; color: var(--sea); cursor: pointer; flex: none; }
+.wt .wt-ed-titleedit { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; padding: 0; color: var(--ink); cursor: pointer; flex: none; }
+.wt .wt-ed-titleedit:hover { background: var(--water-light); }
 .wt .wt-ed-title #edMeta { font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wt .wt-ed-chips { display: flex; align-items: center; gap: 10px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 .wt .wt-ed .mock-badge { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--ink); background: var(--water); padding: 3px 7px; border-radius: 5px; }
@@ -90,7 +91,9 @@
 .wt .wt-ed-workslist .lou-note { padding: 14px 8px; }
 .wt .wt-ed-workslist .lou-note img { width: 72px; }
 .wt .wt-ed-workslist .lou-note p { font-size: 12px; color: var(--muted); line-height: 1.5; }
-.wt .wt-ed-pages { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding-top: 12px; }
+.wt .wt-ed-pages { display: flex; flex-direction: column; gap: 6px; }
+/* 내 작품은 왼쪽 맨 아래(#548) */
+.wt .wt-ed-works { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
 .wt .wt-ed-pagegrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .wt .wt-ed-thumb {
   position: relative; height: 56px; border-radius: 6px; background: var(--water-light); border: 1px solid rgba(15, 51, 63, 0.12);
@@ -351,3 +354,12 @@
 .wt .wt-ed-creditshort { position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60;
   display: flex; align-items: center; gap: 6px; box-shadow: 0 10px 28px rgba(15, 30, 45, .2); border-radius: 12px; }
 .wt .wt-ed-creditshort-x { width: 28px; height: 28px; border: 0; border-radius: 8px; background: #fff; cursor: pointer; font-size: 18px; color: var(--muted); }
+/* 다시 그리기 칸 — 단추 바로 아래에 열린다(#548) */
+.wt .wt-ed-regenask { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.wt .wt-ed-regenask > b { font-size: 13px; }
+.wt .wt-ed-regenask .fb-lead { margin: 0; font-size: 12.5px; color: var(--muted); }
+/* 이 장의 장면은 바로 위 「다시 그리기」 단에 이미 있다 — 칸 안에서는 다시 안 보인다 */
+.wt .wt-ed-regenask .ask-scene { display: none; }
+.wt .wt-ed-regenask textarea.field { min-height: 84px; resize: vertical; font-size: 13.5px; line-height: 1.55; padding: 10px 12px; }
+.wt .wt-ed-regenask .check-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.wt .wt-ed-regenask .ask-actions { display: flex; gap: 6px; justify-content: flex-end; }
