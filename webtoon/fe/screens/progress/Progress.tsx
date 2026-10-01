@@ -9,7 +9,6 @@
  * 뜬다. 아무것도 안 누르면 지금 해야 할 화면이 저절로 뜨고, 사람이 할 일이 없는
  * 동안에는 루와 노는 자리가 뜬다(몇 분을 기다리는 화면이라 비워 두지 않는다).
  * 폴링이 끊겨도 작업은 서버에서 계속 돈다 — 실패로 만들지 않는다. */
-import { Dialog } from "../../ui/Dialog";
 import mockReal from "./mockScenes.json";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
@@ -148,7 +147,7 @@ function PersonCard({ title, person, keys, hero, onSave }: {
         <span className="tools">
           <button type="button" aria-label={editing ? t("접기") : t("고치기")} title={editing ? t("접기") : t("고치기")}
                   onClick={() => (editing ? setEditing(false) : open())}>
-            {editing ? <IconChevronUp size={15} /> : <IconEdit size={15} />}
+            {editing ? <IconChevronUp size={18} /> : <IconEdit size={18} />}
           </button>
         </span>
       </div>
@@ -453,6 +452,16 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     await savePerson(job.id, who, fields);
     await pull();
   };
+  /* 장면 확인 — 맨 위 「이대로 웹툰 만들기」가 스크롤로 안 보이면 오른쪽 아래에 띄운다. */
+  const goTopRef = useRef<HTMLButtonElement>(null);
+  const [goFloat, setGoFloat] = useState(false);
+  useEffect(() => {
+    const el = goTopRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") { setGoFloat(false); return; }
+    const io = new IntersectionObserver(([e]) => setGoFloat(!e.isIntersecting), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  });
   const continueAll = () => {
     if (!job) return;
     track("scenes_continue", { job: job.id, edited: Object.keys(sceneDraft).length, own: ownJob });
@@ -985,9 +994,15 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       <span className={`dim wt-prog-saved${saveState === "failed" ? " err" : ""}`}>
                         {saveState === "saving" ? t("저장하는 중") : saveState === "saved" ? t("저장됨 · 방금") : saveState === "failed" ? t("저장하지 못했습니다") : ""}
                       </span>
-                      <button type="button" className="btn btn-p" disabled={busy} onClick={continueAll}>{t("이대로 웹툰 만들기")} <IconArrow size={18} /></button>
+                      <button ref={goTopRef} type="button" className="btn btn-p btn-sm" disabled={busy} onClick={continueAll}>{t("이대로 웹툰 만들기")} <IconArrow size={16} /></button>
                     </div>
                   </div>
+                  {/* 위 단추가 화면 밖으로 나가면 오른쪽 아래에 떠 있는 단추로 */}
+                  {goFloat && (
+                    <button type="button" className="btn btn-p wt-prog-gofloat" disabled={busy} onClick={continueAll}>
+                      {t("이대로 웹툰 만들기")} <IconArrow size={18} />
+                    </button>
+                  )}
 
                   <div className="wt-prog-scenes">
                     {scenes.map((s) => {
@@ -1000,26 +1015,17 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                             <span className="tools">
                               <button type="button" aria-label={editing ? t("접기") : t("고치기")} title={editing ? t("접기") : t("고치기")} disabled={!!s.busy}
                                       onClick={() => setSceneEdit((o) => ({ ...o, [s.n]: !editing }))}>
-                                {editing ? <IconChevronUp size={15} /> : <IconEdit size={15} />}
+                                {editing ? <IconChevronUp size={18} /> : <IconEdit size={18} />}
                               </button>
                               <button type="button" aria-label={t("이 장면 다시 뽑기")} title={t("이 장면 다시 뽑기")} disabled={!!s.busy}
                                       className={retry ? "on" : ""} onClick={() => openSceneRetry(s.n)}>
-                                <IconRetry size={15} />
+                                <IconRetry size={18} />
                               </button>
                             </span>
                           </div>
-                          {s.busy ? (
-                            <div className="wt-prog-sheetwait small"><span className="spin" /> {t("다시 뽑는 중")}</div>
-                          ) : editing ? (
-                            <SceneEditor text={sceneText(s)} parts={s.parts} label={t("장면 {n} / {total}", { n: s.n, total: scenes.length })}
-                                         onChange={(v) => editScene(s.n, v)} />
-                          ) : (
-                            <SceneBody s={s} />
-                          )}
                           {retry && !s.busy && (
-                            <Dialog title={t("이 장면 다시 뽑기")} sub={t("장면 {n} / {total}", { n: s.n, total: scenes.length })}
-                                    busy={busy} onClose={() => openSceneRetry(s.n)}>
                             <div className="wt-prog-sceneretry">
+                              <b>{t("이 장면 다시 뽑기")}</b>
                               <div className="chips">
                                 {SCENE_REASONS.map(([code, label]) => (
                                   <button key={code} type="button" className={`chip${retry.reasons.includes(code) ? " on" : ""}`}
@@ -1028,14 +1034,22 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                               </div>
                               <textarea className="field" value={retry.note} placeholder={t("직접 수정사항을 적어 주세요")} aria-label={t("직접 수정사항을 적어 주세요")}
                                         onChange={(e) => setSceneRetry((o) => ({ ...o, [s.n]: { ...retry, note: e.target.value } }))} />
-                              {sceneRetryErr[s.n] && <p className="wt-dialog-err">{sceneRetryErr[s.n]}</p>}
-                              <div className="wt-dialog-actions">
-                                <button type="button" className="btn btn-w" disabled={busy} onClick={() => openSceneRetry(s.n)}>{t("닫기")}</button>
-                                <button type="button" className="btn btn-p" disabled={busy} onClick={() => void sendSceneRetry(s.n)}>{t("다시 뽑기")}</button>
+                              <div className="acts">
+                                {sceneRetryErr[s.n] && <span className="err">{sceneRetryErr[s.n]}</span>}
+                                <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => openSceneRetry(s.n)}>{t("닫기")}</button>
+                                <button type="button" className="btn btn-p btn-sm" disabled={busy} onClick={() => void sendSceneRetry(s.n)}>{t("다시 뽑기")}</button>
                               </div>
                             </div>
-                            </Dialog>
                           )}
+                          {s.busy ? (
+                            <div className="wt-prog-sheetwait small"><span className="spin" /> {t("다시 뽑는 중")}</div>
+                          ) : editing ? (
+                            <SceneEditor text={sceneText(s)} parts={s.parts} label={t("장면 {n} / {total}", { n: s.n, total: scenes.length })}
+                                         onChange={(v) => editScene(s.n, v)} />
+                          ) : (
+                            <SceneBody s={s} />
+                          )}
+
                         </div>
                       );
                     })}
