@@ -93,8 +93,10 @@
 .wt .wt-ed-workslist .lou-note img { width: 72px; }
 .wt .wt-ed-workslist .lou-note p { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .wt .wt-ed-pages { display: flex; flex-direction: column; gap: 6px; }
-/* 내 작품은 왼쪽 맨 아래(#548) */
-.wt .wt-ed-works { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+/* 고른 장이 무슨 장면인지(#548) */
+.wt .wt-ed-sceneinfo { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; margin-top: 6px; border-top: 1px solid var(--line); }
+.wt .wt-ed-sceneinfo p { margin: 0; padding: 0 10px; font-size: 13px; line-height: 1.65; color: var(--ink); white-space: pre-wrap; }
+.wt .wt-ed-sceneinfo p.dim { color: var(--dim); }
 .wt .wt-ed-pagegrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .wt .wt-ed-thumb {
   position: relative; height: 56px; border-radius: 6px; background: var(--water-light); border: 1px solid rgba(15, 51, 63, 0.12);

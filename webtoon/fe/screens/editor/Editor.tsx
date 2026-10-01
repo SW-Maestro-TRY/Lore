@@ -202,10 +202,10 @@ export default function Editor({ runId, go, authStatus = "loading" }:
               )) : [1, 2, 3].map((i) => <div key={i} className="skeleton wt-ed-thumb" />)}
             </div>
           </div>
-          {/* 페이지가 위, 다른 작품으로 옮기는 「내 작품」은 맨 아래(#548) */}
-          <div className="wt-ed-works">
-            <b className="wt-ed-lefthead">{t("내 작품")}</b>
-            <div id="worksList" className="wt-ed-workslist" />
+          {/* 고른 장이 무슨 장면인지(#548) — 페이지 칸 바로 아래. 다시 그리기 칸에 있던 것을 옮겼다. */}
+          <div className="wt-ed-sceneinfo">
+            <b className="wt-ed-lefthead">{t("{n}번째 장", { n: active })}</b>
+            {activeNote ? <p>{activeNote}</p> : <p className="dim">{t("이 장의 장면 설명이 없어요")}</p>}
           </div>
         </aside>
 
@@ -242,7 +242,6 @@ export default function Editor({ runId, go, authStatus = "loading" }:
 
           <div className="wt-ed-regen">
             <b>{t("다시 그리기")}</b>
-            {activeNote && <span className="dim">{t("이 장의 장면 · {note}", { note: activeNote })}</span>}
             <button type="button" className="btn btn-p wt-ed-regenbtn" onClick={regenActive}>
               {regenCost == null
                 ? t("이 컷 다시 그리기")

@@ -37,6 +37,7 @@ const dict: Dict = {
     zh: "上 — 拖动可移动，再点一次可修改文字。",
   },
   "크레딧 사용 내역": { en: "Credit history", ja: "クレジット使用履歴", zh: "积分使用明细" },
+  "이 장의 장면 설명이 없어요": { en: "No scene description for this page", ja: "この枚の場面説明はありません", zh: "这一页没有场景说明" },
   "닫기": { en: "Close", ja: "閉じる", zh: "关闭" },
   "아직 쓴 크레딧이 없습니다.": { en: "No credits spent yet.", ja: "まだ使ったクレジットはありません。", zh: "还没有使用过积分。" },
   "다시 그리기": { en: "Redraw", ja: "描き直す", zh: "重新绘制" },
