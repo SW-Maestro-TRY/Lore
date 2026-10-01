@@ -21,7 +21,7 @@ import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { unwatchJob, watchJob } from "../../lib/watchJob";
-import { IconArrow, IconBack, IconChevronDown, IconChevronUp, IconClose, IconRetry, IconZoom } from "../../ui/Icons";
+import { IconArrow, IconBack, IconChevronDown, IconChevronUp, IconClose, IconEdit, IconRetry, IconZoom } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import LouPlay from "./LouPlay";
 import "./i18n";
@@ -42,7 +42,7 @@ const STAGE_INDEX: Record<string, number> = { story: 0, sheet: 1, board: 2, page
 const REVIEW = 3;
 
 /** 왼쪽 줄에서 고를 수 있는 자리 — 걸음 번호이거나 루와 놀기. */
-type Tab = number | "play";
+type Tab = number | "play" | "mine";
 
 /** 지금 어느 걸음인가(0..3). 상태가 먼저, 서버의 stage 이름이 다음. */
 function currentStep(job: NhJob): number {
@@ -76,10 +76,12 @@ function Crumb({ items }: { items: string[] }) {
    `mock-scenes-own`(내 내용)이면 서버를 부르지 않고 이 값을 쓴다. 실제 작업 번호와는 겹치지 않는다. */
 function mockScenesJob(id: string): NhJob {
   const own = id === "mock-scenes-own";
+  /* 실제 scenes.json 한 장면은 장소·상황 · 벌어지는 일 · 행동과 표정 · 겉모습 · 끝나는 상태가
+     한 글로 합쳐져 5~8문장이다. mock 도 그 길이로 둔다. */
   const scenes: NhScene[] = [
-    { n: 1, text: "비 오는 오후, 학교 정문. 민준이 비를 맞으며 서 있다. 서연이 뒤에서 나타나 우산을 씌운다. 민준은 당황하고 서연은 무심한 척한다.", user_text: null },
-    { n: 2, text: "둘이 우산 하나 아래 나란히 걷는다. 민준이 우산을 받아 들려 하지만 서연이 놓지 않는다.", user_text: null },
-    { n: 3, text: "버스 정류장. 비가 그친다. 서연이 우산을 접고, 민준이 내일도 비가 오면 좋겠다고 말한다.", user_text: null },
+    { n: 1, user_text: null, text: "비 오는 오후, 학교 정문 앞 보도. 하교하는 아이들이 우산을 펴고 흩어지는데 민준만 가방을 머리에 얹은 채 비를 맞으며 서 있다. 서연이 뒤에서 걸어와 아무 말 없이 우산을 민준 머리 위로 옮긴다. 민준은 놀라 돌아보고, 서연은 앞만 보며 무심한 얼굴로 서 있다. 민준은 젖은 교복에 안경에 물방울이 맺혀 있고, 서연은 짧은 단발에 교복 위에 얇은 카디건을 걸쳤다. 둘이 우산 하나 아래 어색하게 선 채로 끝난다." },
+    { n: 2, user_text: null, text: "학교 앞 골목길, 비는 여전히 내린다. 둘이 우산 하나 아래 나란히 걷는다. 민준이 우산 손잡이를 받아 들려고 손을 뻗지만 서연은 손을 놓지 않고, 둘의 손이 손잡이 위에서 잠깐 겹친다. 민준은 귀가 빨개진 채 앞만 보고, 서연은 입꼬리를 살짝 올리고도 모른 척한다. 민준의 왼쪽 어깨가 우산 밖으로 나와 젖어 간다. 골목 끝 버스 정류장 지붕이 보이는 데서 끝난다." },
+    { n: 3, user_text: null, text: "버스 정류장 아래, 빗줄기가 가늘어지다 그친다. 서연이 우산을 접어 물기를 털고, 민준은 젖은 어깨를 손으로 훑으며 하늘을 본다. 민준이 서연을 보지 않은 채 내일도 비가 오면 좋겠다고 말하고, 서연은 대답 대신 접은 우산을 민준에게 내민다. 민준은 당황해서 받을까 말까 손을 멈추고, 서연은 처음으로 민준 쪽을 똑바로 본다. 버스가 들어오는 소리가 들리는 데서 끝난다." },
   ];
   return {
     id, status: "awaiting_scenes", run_id: "mock", error: null, mode: own ? "own" : "quick",
@@ -91,7 +93,7 @@ function mockScenesJob(id: string): NhJob {
     input: {
       name: "서연", description: "짧은 단발, 늘 우산을 들고 다닌다.", genre: "로맨스", title: own ? "우산 하나" : "",
       story: own ? "비 오는 날 학교에서 서연이 민준에게 우산을 건넨다. 민준은 처음에는 거절하지만 결국 같이 우산을 쓴다." : "",
-      episode: own ? "우산을 건네는 데서 시작해서 둘이 같이 쓰고 걷는 데까지." : "", settings: own ? "민준: 서연의 옆 반. 말수가 적다." : "",
+      settings: own ? "민준: 서연의 옆 반. 말수가 적다." : "",
       style: "webtoon", quality: "surf", language: "ko", photos: 1,
     },
     sheet_ready: true,
@@ -386,11 +388,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const autoTab: Tab = waiting || cur === REVIEW ? cur : "play";
   const at: Tab = tab ?? autoTab;
 
-  type Pane = "loading" | "play" | "sheet" | "cast" | "scenes" | "making" | "confirm" | "drawing" | "failed" | "story-view" | "sheet-view" | "pages-view";
+  type Pane = "loading" | "play" | "sheet" | "cast" | "scenes" | "making" | "confirm" | "drawing" | "failed" | "story-view" | "sheet-view" | "pages-view" | "mine";
   let pane: Pane = "loading";
   if (job) {
     if (status === "error") pane = "failed";
     else if (at === "play") pane = "play";
+    else if (at === "mine") pane = "mine";
     else if (at !== cur) pane = (["story-view", "sheet-view", "pages-view", "drawing"] as Pane[])[at];
     else if (status === "awaiting_sheet") pane = "sheet";
     else if (status === "awaiting_cast") pane = "cast";
@@ -612,6 +615,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     {stepState(i) === "done" ? "✓ " : ""}{t(s.title)}
                   </button>
                 ))}
+                {status === "awaiting_scenes" && input && (
+                  <button type="button" className={at === "mine" ? "cur" : "done"} onClick={() => setTab(tab === "mine" ? null : "mine")}>{t("내가 적은 것")}</button>
+                )}
               </div>
 
               <div className="wt-prog-steps">
@@ -630,46 +636,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
               {job && (
                 <div className="wt-prog-railfoot">
-                  {/* 「내가 적은 것」(#548) — 장면 확인 동안 왼쪽 줄에 작게. 본문은 장면만 남긴다. */}
+                  {/* 「내가 적은 것」(#548) — 걸음 단추처럼 누르면 오른쪽 본문이 그 내용으로 바뀐다. */}
                   {status === "awaiting_scenes" && input && (
-                    <details className="wt-prog-mine wt-prog-mine-rail">
-                      <summary>
-                        <b>{t("내가 적은 것")}</b>
-                        <span className="dim">{t("웹툰을 만들기 전까지만 바꿀 수 있어요")}</span>
-                      </summary>
-                      <div className="wt-prog-mine-grid">
-                        <div className="kv"><span>{t("캐릭터")}</span><p>{input.name}{input.photos > 0 ? ` · ${t("사진 {n}장", { n: input.photos })}` : ""}</p></div>
-                        {input.description && <div className="kv"><span>{t("캐릭터 설명")}</span><p>{input.description}</p></div>}
-                        <div className="kv"><span>{t("장르")}</span><p>{input.genre ? t(input.genre) : t("비움")}</p></div>
-                        {input.title && <div className="kv"><span>{t("제목")}</span><p>{input.title}</p></div>}
-                        {input.story && <div className="kv wide"><span>{t("이야기")}</span><p>{input.story}</p></div>}
-                        {input.episode && <div className="kv wide"><span>{t("1화에서 보여줄 것")}</span><p>{input.episode}</p></div>}
-                        {input.settings && <div className="kv wide"><span>{t("설정")}</span><p>{input.settings}</p></div>}
-                      </div>
-                      <div className="wt-prog-pageshead"><b>{t("그림체")}</b></div>
-                      <div className="wt-prog-styles">
-                        {STYLE_INFO.map(([key, label]) => (
-                          <button key={key} type="button" className={`wt-prog-style${styleKey === key ? " on" : ""}`} disabled={optBusy}
-                                  onClick={() => { if (styleKey !== key) void changeOptions({ style: key }); }}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={STYLE_THUMB[key] || `/static/samples/ex-${key}-1.jpg`} alt="" />
-                            <b>{t(label)}</b>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="wt-prog-pageshead"><b>{t("촘촘함")}</b></div>
-                      <div className="wt-prog-qs">
-                        {QUALITY_INFO.map((q) => (
-                          <button key={q.key} type="button" className={`wt-prog-q${input.quality === q.key ? " on" : ""}`} disabled={optBusy}
-                                  onClick={() => { if (input.quality !== q.key) void changeOptions({ quality: q.key }); }}>
-                            <b>{t(q.label)}</b><span className="dim">{t(q.lede)}</span>
-                          </button>
-                        ))}
-                      </div>
-                      {optErr && <span className="err">{optErr}</span>}
-                    </details>
+                    <button type="button" className={`wt-prog-step wt-prog-minetab${at === "mine" ? " viewing" : ""}`}
+                            onClick={() => setTab(tab === "mine" ? null : "mine")}>
+                      <span className="txt"><b>{t("내가 적은 것")}</b><span className="dim">{t("웹툰을 만들기 전까지만 바꿀 수 있어요")}</span></span>
+                    </button>
                   )}
-
                   <button type="button" className="btn btn-w" onClick={browseWorks}>{t("다른 사람 웹툰 둘러보기")}</button>
                   {mailCard}
                 </div>
@@ -793,8 +766,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                         <div key={s.n} className={`wt-prog-scene${editing ? " editing" : ""}`}>
                           <div className="row">
                             <b>{t("장면 {n} / {total}", { n: s.n, total: scenes.length })}</b>
-                            <button type="button" onClick={() => setSceneEdit((o) => ({ ...o, [s.n]: !editing }))}>
-                              {editing ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("고치기")} <IconChevronDown size={13} /></>}
+                            <button type="button" aria-label={editing ? t("접기") : t("고치기")} title={editing ? t("접기") : t("고치기")}
+                                    onClick={() => setSceneEdit((o) => ({ ...o, [s.n]: !editing }))}>
+                              {editing ? <IconChevronUp size={15} /> : <IconEdit size={15} />}
                             </button>
                           </div>
                           {editing ? (
@@ -806,9 +780,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                         </div>
                       );
                     })}
-                  </div>
-                  <div className="wt-prog-acts wt-prog-sceneacts">
-                    <button type="button" className="btn btn-p" disabled={busy} onClick={continueAll}>{t("이대로 웹툰 만들기")} <IconArrow size={18} /></button>
                   </div>
                   {actErr && <span className="err">{actErr}</span>}
                 </>
@@ -936,6 +907,45 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               )}
 
               {/* ---- 지나온 단계 다시 보기 ---- */}
+              {pane === "mine" && job && input && (
+                <>
+                  <div className="wt-prog-head">
+                    <h2>{t("내가 적은 것")}</h2>
+                    <span className="muted lede">{t("웹툰을 만들기 전까지만 바꿀 수 있어요")}</span>
+                  </div>
+                  <div className="wt-prog-scene wt-prog-mine">
+                      <div className="wt-prog-mine-grid">
+                        <div className="kv"><span>{t("캐릭터")}</span><p>{input.name}{input.photos > 0 ? ` · ${t("사진 {n}장", { n: input.photos })}` : ""}</p></div>
+                        {input.description && <div className="kv"><span>{t("캐릭터 설명")}</span><p>{input.description}</p></div>}
+                        <div className="kv"><span>{t("장르")}</span><p>{input.genre ? t(input.genre) : t("비움")}</p></div>
+                        {input.title && <div className="kv"><span>{t("제목")}</span><p>{input.title}</p></div>}
+                        {input.story && <div className="kv wide"><span>{t("이야기")}</span><p>{input.story}</p></div>}
+                        {input.settings && <div className="kv wide"><span>{t("설정")}</span><p>{input.settings}</p></div>}
+                      </div>
+                      <div className="wt-prog-pageshead"><b>{t("그림체")}</b></div>
+                      <div className="wt-prog-styles">
+                        {STYLE_INFO.map(([key, label]) => (
+                          <button key={key} type="button" className={`wt-prog-style${styleKey === key ? " on" : ""}`} disabled={optBusy}
+                                  onClick={() => { if (styleKey !== key) void changeOptions({ style: key }); }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={STYLE_THUMB[key] || `/static/samples/ex-${key}-1.jpg`} alt="" />
+                            <b>{t(label)}</b>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="wt-prog-pageshead"><b>{t("촘촘함")}</b></div>
+                      <div className="wt-prog-qs">
+                        {QUALITY_INFO.map((q) => (
+                          <button key={q.key} type="button" className={`wt-prog-q${input.quality === q.key ? " on" : ""}`} disabled={optBusy}
+                                  onClick={() => { if (input.quality !== q.key) void changeOptions({ quality: q.key }); }}>
+                            <b>{t(q.label)}</b><span className="dim">{t(q.lede)}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {optErr && <span className="err">{optErr}</span>}
+                  </div>
+                </>
+              )}
               {pane === "story-view" && job && ownJob && job.story && (
                 /* own 길(#548) — 1화 이야기와 LORE 가 읽어낸 인물. 장면 확인 동안은 이야기를 고칠 수 있다. */
                 <>

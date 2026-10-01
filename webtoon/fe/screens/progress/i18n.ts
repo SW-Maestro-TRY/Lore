@@ -248,7 +248,6 @@ const dict: Dict = {
   "사진 {n}장": { en: "{n} photos", ja: "写真{n}枚", zh: "{n} 张照片" },
   "장르": { en: "Genre", ja: "ジャンル", zh: "题材" },
   "비움": { en: "Empty", ja: "なし", zh: "未填写" },
-  "1화에서 보여줄 것": { en: "What episode 1 shows", ja: "第1話で見せるもの", zh: "第 1 话要呈现的内容" },
   "설정": { en: "Settings", ja: "設定", zh: "设定" },
   "촘촘함": { en: "Detail", ja: "描き込み", zh: "精细度" },
   "그림체에 맞춰 다시 그리는 중": { en: "Redrawing to match the art style", ja: "画風に合わせて描き直しています", zh: "正在按画风重新绘制" },
