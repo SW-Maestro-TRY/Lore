@@ -20,7 +20,7 @@ interface CardPreview {
 }
 
 /** 카드 링크 미리보기의 설명 줄. 카드 문장 뒤에 붙어 "무엇을 하는 곳인지" 를 알린다. */
-const CARD_TAGLINE = "AI 캐릭터 & 웹툰 생성 서비스, Lore. 나도 만들러 가기";
+const CARD_TAGLINE = "내 캐릭터를 살아 움직이게. 개인 IP를 위한 AI 창작 서비스, LORE. 나도 만들러 가기";
 
 /** 지금 요청이 온 주소. 이 함수는 서버에서 도는 자리라 `window.location`
  *  이 없다 — 대신 요청에 실려 온 host 헤더로 지금 도메인을 알아낸다.
