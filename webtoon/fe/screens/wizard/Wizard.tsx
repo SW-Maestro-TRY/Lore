@@ -583,7 +583,7 @@ export default function Wizard({
                     </div>
                     <div className="fieldset wt-wiz-ownf">
                       <label htmlFor="wt-wiz-own-story">{t("이야기")} <span className="wt-wiz-req">{t("필수")}</span></label>
-                      <span className="muted lede">{t("짧은 아이디어부터 자세한 시나리오까지 자유롭게 적어 주세요.")} {t("대사·장면·연출을 적으면 그대로 반영돼요.")}</span>
+                      <span className="muted lede">{t("짧은 아이디어부터 자세한 시나리오까지 자유롭게 적어 주세요.")}</span>
                       <div className="wt-wiz-tawrap">
                         <textarea id="wt-wiz-own-story" className="field wt-wiz-ownbox" value={form.story} maxLength={OWN_STORY_MAX}
                                   placeholder={t("내가 만들고 싶은 이야기를 적어 주세요")}
