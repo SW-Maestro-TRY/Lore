@@ -98,26 +98,40 @@ export function mergeAnchors(raw: unknown, fixed: CharAnchors = FIXED_ANCHORS): 
   if (!poses || typeof poses !== 'object') return null;
 
   const merged: Record<string, PoseAnchors> = { ...fixed.poses };
-  let taken = 0;
+  // ★ 서버에서 읽힌 자세를 따로 적는다 — 1층이 빠진 파일(펫 5·8·9)에서 여울 고정표로 메운 자세가
+  //   "서버 값" 으로 읽혀, 남의 발끝·머리끝으로 아이를 세우던 문제가 있었다(→ Room `byK`).
+  const taken: string[] = [];
   for (const [k, v] of Object.entries(poses as Record<string, unknown>)) {
     const p = pose(v);
-    if (p) { merged[k] = p; taken += 1; }
+    if (p) { merged[k] = p; taken.push(k); }
   }
   // 한 칸도 못 읽었으면 받은 것이 아니다 — 폴백으로 돌린다.
-  if (taken === 0) return null;
-
-  const canvas = Array.isArray(o.canvas) && o.canvas.length === 2
-    ? [num(o.canvas[0]) ?? fixed.canvas[0], num(o.canvas[1]) ?? fixed.canvas[1]] as [number, number]
-    : fixed.canvas;
+  if (taken.length === 0) return null;
 
   return {
     char: typeof o.char === 'string' ? o.char : fixed.char,
     // K·Hw 는 0 이나 음수가 오면 크기가 통째로 무너지므로 **양수일 때만** 받는다.
     K: (num(o.K) ?? 0) > 0 ? (num(o.K) as number) : fixed.K,
     Hw: (num(o.Hw) ?? 0) > 0 ? (num(o.Hw) as number) : fixed.Hw,
-    canvas,
+    canvas: parseCanvas(o.canvas, fixed.canvas),
     poses: merged,
+    serverPoses: taken,
   };
+}
+
+/**
+ * 캔버스 [가로, 세로]. `[w, h]` 배열과 `{ w, h }` 객체를 둘 다 받는다.
+ *
+ * ★ 후처리가 실제로 내는 모양은 **객체**다. 배열만 받던 때는 서버 값이 늘 버려지고 고정값(312x349)이
+ *   쓰였다 — 2층 캔버스가 386 처럼 다른 아이에서 비율이 조용히 틀렸다.
+ * ★ 양수가 아닌 칸은 고정값이 지킨다(0 이면 비율이 무너진다).
+ */
+export function parseCanvas(v: unknown, fallback: [number, number]): [number, number] {
+  let w: number | null = null;
+  let h: number | null = null;
+  if (Array.isArray(v) && v.length === 2) { w = num(v[0]); h = num(v[1]); }
+  else if (v && typeof v === 'object') { const c = v as Record<string, unknown>; w = num(c.w); h = num(c.h); }
+  return [w !== null && w > 0 ? w : fallback[0], h !== null && h > 0 ? h : fallback[1]];
 }
 
 /** 앵커 파일 주소. 서버가 준 키(`images/...`)도 절대 주소도 그대로 받는다. */
