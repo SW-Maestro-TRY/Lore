@@ -250,6 +250,26 @@ public class JobService {
                 .toList();
     }
 
+    /**
+     * 만드는 중 카드(#548) — 마이페이지가 작업마다 캐릭터 이름과 마지막으로 손댄 때를 같이 보여 준다.
+     * {@link #activeOf} 와 같은 순서로 {id, name, created_at, updated_at}.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> activeCardsOf(Long userId, Collection<String> uids) {
+        return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
+                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST,
+                        JobStatus.AWAITING_SCENES)).stream()
+                .map(job -> {
+                    Map<String, Object> one = new LinkedHashMap<>();
+                    one.put("id", job.getPublicId());
+                    one.put("name", str(inputOf(job).get("name")));
+                    one.put("created_at", job.getCreatedAt() == null ? null : job.getCreatedAt().toString());
+                    one.put("updated_at", job.getUpdatedAt() == null ? null : job.getUpdatedAt().toString());
+                    return one;
+                })
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public String runOf(String publicId) {
         return store.byPublicId(publicId).getRunId();

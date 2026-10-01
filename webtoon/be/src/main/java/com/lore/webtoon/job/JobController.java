@@ -227,7 +227,8 @@ public class JobController {
     @GetMapping("/jobs/mine")
     public Map<String, Object> mine(@RequestParam(required = false) String uid) {
         Long me = CreditGate.currentUser();
-        return Map.of("jobs", jobs.activeOf(me, owner.uidsOf(me, uid)));
+        var uids = owner.uidsOf(me, uid);
+        return Map.of("jobs", jobs.activeOf(me, uids), "cards", jobs.activeCardsOf(me, uids));
     }
 
     @Operation(summary = "진행 상황", description = """

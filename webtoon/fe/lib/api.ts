@@ -320,8 +320,9 @@ export function readJob(id: string): Promise<NhJob> {
 }
 
 /** 내가 만들던 것들 — 아직 안 끝난 작업. 첫 화면의 「만들던 웹툰」 알약. */
-export function myActiveJobs(): Promise<{ jobs: NhJob[] }> {
-  return call<{ jobs: NhJob[] }>(`/nh/jobs/mine?uid=${encodeURIComponent(getUid())}`);
+export interface NhActiveCard { id: string; name: string; created_at: string | null; updated_at: string | null }
+export function myActiveJobs(): Promise<{ jobs: NhJob[]; cards?: NhActiveCard[] }> {
+  return call<{ jobs: NhJob[]; cards?: NhActiveCard[] }>(`/nh/jobs/mine?uid=${encodeURIComponent(getUid())}`);
 }
 
 export function decideSheet(id: string, decision: "approve" | "retry", note = "") {

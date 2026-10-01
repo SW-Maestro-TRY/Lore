@@ -165,8 +165,20 @@
 }
 
 /* 만드는 중(#548) — 멈춰 있는 작업으로 돌아가는 줄 */
-.wt .wt-my-active { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 20px; padding: 14px 16px; border-radius: 14px; background: var(--water-light); }
-.wt .wt-my-active-title { font-size: 14px; }
-.wt .wt-my-active-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; }
-.wt .wt-my-active-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wt .wt-my-active-row .btn { flex-shrink: 0; }
+/* 만드는 중(#548) — 완성된 웹툰 카드와 같은 틀, 그림 위에 상태 딱지 */
+.wt .wt-my-drafts { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 28px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.wt .wt-my-drafts-head { display: flex; align-items: baseline; gap: 8px; }
+.wt .wt-my-drafts-head b { font-size: 16px; }
+.wt .wt-my-drafts-head .dim { font-size: 13px; font-weight: 700; }
+.wt .wt-my-draftcover { position: relative; }
+.wt .wt-my-draftcover img { object-fit: contain; object-position: center; background: #f6f7f9; }
+.wt .wt-my-draftcover img.lou { object-fit: contain; padding: 40px; box-sizing: border-box; background: var(--water-light); }
+.wt .wt-my-draftchip { position: absolute; left: 10px; top: 10px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, .92); color: var(--ink); border: 1px solid var(--line); }
+.wt .wt-my-draftchip.wait { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-my-draft > b.dim { font-weight: 600; }
+.wt .wt-my-draft { display: flex; flex-direction: column; }
+.wt .wt-my-draft > .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt .wt-my-draftgo { width: 100%; margin-top: auto; }
+.wt .wt-my-draft > .muted + .wt-my-draftgo, .wt .wt-my-draft > b + .wt-my-draftgo { margin-top: auto; }
+.wt .wt-my-draft > .muted { margin-bottom: 10px; }

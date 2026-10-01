@@ -21,7 +21,7 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, myLikes, myTrash, readAllowance, recentRuns,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, type NhActiveCard, myLikes, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
   mySurveyStatus, type SurveyStatus,
@@ -193,8 +193,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   /* 만드는 중(#548) — 아직 안 끝난 작업. 장면 확인처럼 사람이 누를 때까지 멈춰 있는 작업을
      며칠 뒤에도 여기서 찾아 「이어서 만들기」로 돌아간다. */
   const [active, setActive] = useState<NhJob[]>([]);
+  const [activeCards, setActiveCards] = useState<Record<string, NhActiveCard>>({});
   useEffect(() => {
-    myActiveJobs().then((r) => setActive(r.jobs ?? [])).catch(() => setActive([]));
+    /* 화면만 보는 자리 — 주소에 #mock-drafts 를 붙이면 서버 대신 가짜 셋을 보여 준다(#548). */
+    if (typeof window !== "undefined" && window.location.hash === "#mock-drafts") {
+      setActive(MOCK_DRAFTS.jobs);
+      setActiveCards(Object.fromEntries(MOCK_DRAFTS.cards.map((c) => [c.id, c])));
+      return;
+    }
+    myActiveJobs().then((r) => {
+      setActive(r.jobs ?? []);
+      setActiveCards(Object.fromEntries((r.cards ?? []).map((c) => [c.id, c])));
+    }).catch(() => setActive([]));
   }, []);
 
   /* 휴지통(#157) — 지운 작품은 영구 삭제 전까지 여기서 되살린다. 지우기가
@@ -381,19 +391,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             </div>
 
             {active.length > 0 && (
-              <div className="wt-my-active">
-                <b className="wt-my-active-title">{t("만드는 중")}</b>
-                {active.map((j) => {
-                  const title = activeJobTitle(j);
-                  return (
-                    <div key={j.id} className="wt-my-active-row">
-                      <span>{title ? `${title} · ${activeJobLabel(j, t)}` : activeJobLabel(j, t)}</span>
-                      <button type="button" className="btn btn-p btn-sm" onClick={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }}>
-                        {t("이어서 만들기")}
-                      </button>
-                    </div>
-                  );
-                })}
+              /* 만드는 중(#548) — 완성된 웹툰과 같은 카드 모양, 그 위에 따로 한 줄 */
+              <div className="wt-my-drafts">
+                <div className="wt-my-drafts-head">
+                  <b>{t("만드는 중")}</b>
+                  <span className="dim">{active.length}</span>
+                </div>
+                <div className="wt-my-grid">
+                  {active.map((j) => (
+                    <DraftCard key={j.id} job={j} card={activeCards[j.id]}
+                               onOpen={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }} />
+                  ))}
+                </div>
               </div>
             )}
 
@@ -554,6 +563,60 @@ function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void 
       <button type="button" className="btn btn-w" disabled={busy} onClick={() => void restore()}>{t("되살리기")}</button>
     </div>
   );
+}
+
+
+/* 「만드는 중」 화면 확인용 가짜 작업 셋 — 장면 확인 · 그리는 중 · 이야기 고르기. */
+const MOCK_DRAFTS: { jobs: NhJob[]; cards: NhActiveCard[] } = (() => {
+  const ago = (min: number) => new Date(Date.now() - min * 60000).toISOString();
+  const base = { run_id: "mock", error: null, directions: [], pick: null, style: "", style_label: "", stage: "pages",
+    stage_index: 2, stages: [], stage_label: "", say: "", checkpoints: true, queue: null, notice: null,
+    minutes_left: null, pct: 0, art: null, redraw: null, log: [], elapsed: 0, sheet_ready: false } as unknown as NhJob;
+  return {
+    jobs: [
+      { ...base, id: "mock-a", status: "awaiting_scenes", mode: "own", story: { title: "아이들을 지키는 자", body: "" } } as NhJob,
+      { ...base, id: "mock-b", status: "running", mode: "own", story: { title: "비 오는 날의 우산", body: "" }, art: { done: 3, total: 6, retry_page: 0, pages: [1, 2, 3] } } as NhJob,
+      { ...base, id: "mock-c", status: "awaiting_pick", mode: "quick", stage: "story" } as NhJob,
+    ],
+    cards: [
+      { id: "mock-a", name: "Isolde Verlaine", created_at: ago(180), updated_at: ago(12) },
+      { id: "mock-b", name: "서연화", created_at: ago(90), updated_at: ago(2) },
+      { id: "mock-c", name: "몽이", created_at: ago(3000), updated_at: ago(2900) },
+    ],
+  };
+})();
+
+/* 만드는 중 카드(#548) — 시트가 있으면 시트, 없으면 루. 상태는 그림 위 작은 딱지로,
+   사람이 답할 차례면 진하게. 아래에 캐릭터 · 길 · 마지막으로 손댄 때. */
+function DraftCard({ job, card, onOpen }: { job: NhJob; card?: NhActiveCard; onOpen: () => void }) {
+  const t = useT();
+  const title = activeJobTitle(job);
+  const waiting = job.status.startsWith("awaiting_");
+  const meta = [card?.name, job.mode === "own" ? t("내 내용으로") : t("아이디어부터"), ago(card?.updated_at, t)].filter(Boolean).join(" · ");
+  return (
+    <div className="card wt-my-work wt-my-draft">
+      <button type="button" className="wt-my-cover wt-my-draftcover" onClick={onOpen} aria-label={title || t("제목 짓기 전")}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={job.sheet_ready ? sheetImageUrl(job.id) : louArt("generating")} alt="" className={job.sheet_ready ? "" : "lou"} />
+        <span className={`wt-my-draftchip${waiting ? " wait" : ""}`}>
+          {job.status === "running" && job.art?.total ? t("그리는 중 · {label}", { label: activeJobLabel(job, t) }) : activeJobLabel(job, t)}
+        </span>
+      </button>
+      <b className={title ? "" : "dim"}>{title || t("제목 짓기 전")}</b>
+      {meta && <span className="muted">{meta}</span>}
+      <button type="button" className="btn btn-p btn-sm wt-my-draftgo" onClick={onOpen}>{t("이어서 만들기")}</button>
+    </div>
+  );
+}
+
+/** 「방금 · n분 전 · n시간 전 · n일 전」 */
+function ago(iso: string | null | undefined, t: (s: string, p?: Record<string, string | number>) => string): string {
+  if (!iso) return "";
+  const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 1) return t("방금");
+  if (min < 60) return t("{n}분 전", { n: min });
+  if (min < 60 * 24) return t("{n}시간 전", { n: Math.floor(min / 60) });
+  return t("{n}일 전", { n: Math.floor(min / 1440) });
 }
 
 function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keepDays: number; onDeleted: () => void }) {

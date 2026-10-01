@@ -35,4 +35,12 @@ registerDict({
   "{done} / {total}장": { en: "{done} / {total} pages", ja: "{done} / {total}枚", zh: "{done} / {total} 页" },
   "만드는 중": { en: "In progress", ja: "作成中", zh: "制作中" },
   "이어서 만들기": { en: "Continue", ja: "続きを作る", zh: "继续制作" },
+  "제목 짓기 전": { en: "Untitled yet", ja: "タイトル未定", zh: "尚未命名" },
+  "내 내용으로": { en: "My own story", ja: "自分の内容で", zh: "用我的内容" },
+  "아이디어부터": { en: "From an idea", ja: "アイデアから", zh: "从创意开始" },
+  "그리는 중 · {label}": { en: "Drawing · {label}", ja: "描画中 · {label}", zh: "绘制中 · {label}" },
+  "방금": { en: "just now", ja: "たった今", zh: "刚刚" },
+  "{n}분 전": { en: "{n}m ago", ja: "{n}分前", zh: "{n} 分钟前" },
+  "{n}시간 전": { en: "{n}h ago", ja: "{n}時間前", zh: "{n} 小时前" },
+  "{n}일 전": { en: "{n}d ago", ja: "{n}日前", zh: "{n} 天前" },
 });
