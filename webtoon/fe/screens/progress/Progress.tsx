@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
   cancelJob, continueScenes, decideSheet, jobPageUrl, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
-  castSheetImageUrl, readAllowance, requestCastSheet, restoreSheet, retryScene, saveScenes, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
+  castSheetImageUrl, readAllowance, requestCastSheet, restoreSheet, retryScene, saveScenes, savePerson, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
 import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizardData";
 import { louArt, louStage } from "../../lib/louArt";
@@ -112,6 +112,68 @@ function SceneEditor({ text, parts, label, onChange }: {
                     onChange={(v) => onChange(joinParts(split.map((o, j) => (j === i ? { ...o, text: v } : o))))} />
         </div>
       ))}
+    </div>
+  );
+}
+
+
+/* 인물 카드(#548) — 읽을 때는 칸만, 연필을 누르면 칸마다 글 칸(소제목은 그대로). */
+const HERO_KEYS: [string, string][] = [["look", "생김새"], ["personality", "성격"], ["voice", "말투"], ["line", "대표 대사"]];
+const CAST_KEYS: [string, string][] = [["name", "이름"], ["role", "역할"], ["look", "생김새"], ["tie", "주인공과의 관계"],
+  ["gap", "갭"], ["voice", "말투"], ["line", "대표 대사"]];
+
+function PersonCard({ title, person, keys, hero, onSave }: {
+  title: string; person: Record<string, unknown>; keys: [string, string][]; hero?: boolean;
+  onSave: (fields: Record<string, string>) => Promise<void>;
+}) {
+  const t = useT();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const val = (k: string) => String(person[k] ?? "");
+  const open = () => { setDraft(Object.fromEntries(keys.map(([k]) => [k, val(k)]))); setErr(""); setEditing(true); };
+  const save = async () => {
+    const changed = Object.fromEntries(Object.entries(draft).filter(([k, v]) => v !== val(k)));
+    if (!Object.keys(changed).length) { setEditing(false); return; }
+    setBusy(true); setErr("");
+    try { await onSave(changed); setEditing(false); }
+    catch (e) { setErr(e instanceof Error ? e.message : t("저장하지 못했어요")); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className={`wt-prog-dir plain wt-prog-cast${hero ? " wt-prog-hero" : ""}${editing ? " editing" : ""}`}>
+      <div className="row">
+        <b>{title}</b>
+        <span className="tools">
+          <button type="button" aria-label={editing ? t("접기") : t("고치기")} title={editing ? t("접기") : t("고치기")}
+                  onClick={() => (editing ? setEditing(false) : open())}>
+            {editing ? <IconChevronUp size={15} /> : <IconEdit size={15} />}
+          </button>
+        </span>
+      </div>
+      {editing ? (
+        <div className="wt-prog-parts editing">
+          {keys.map(([k, label]) => (
+            <div key={k} className="part">
+              <span>{t(label)}</span>
+              <GrowArea value={draft[k] ?? ""} label={`${title} · ${t(label)}`} onChange={(v) => setDraft((d) => ({ ...d, [k]: v }))} />
+            </div>
+          ))}
+          {err && <span className="err">{err}</span>}
+          <div className="acts">
+            <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => setEditing(false)}>{t("취소")}</button>
+            <button type="button" className="btn btn-p btn-sm" disabled={busy} onClick={() => void save()}>{t("저장")}</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {keys.filter(([k]) => k !== "name" && k !== "role" && k !== "line" && val(k)).map(([k]) => (
+            <span key={k} className="muted intro">{val(k)}</span>
+          ))}
+          {val("line") && <q className="line">{val("line")}</q>}
+        </>
+      )}
     </div>
   );
 }
@@ -374,6 +436,21 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   }, [sceneDraft, storyDraft, status, flushSave]);
   const editScene = (n: number, text: string) => { dirtyRef.current = true; setSaveState("idle"); setSceneDraft((d) => ({ ...d, [n]: text })); };
   const editStory = (p: Partial<{ title: string; body: string }>) => { dirtyRef.current = true; setSaveState("idle"); setStoryDraft((s) => ({ ...s, ...p })); };
+  /* 인물 카드 고치기(#548) — 저장하면 서버가 persona.json·cast.json 을 고치고 다시 읽어 온다. */
+  const savePersonCard = async (who: string, fields: Record<string, string>) => {
+    if (!job) return;
+    track("person_edit", { job: job.id, who });
+    if (isMock) {
+      setJob((j) => {
+        if (!j) return j;
+        if (who === "hero") return { ...j, persona: j.persona ? { ...j.persona, ...fields } : j.persona };
+        return { ...j, cast: (j.cast ?? []).map((c, i) => (String(i) === who ? { ...c, ...fields } : c)) };
+      });
+      return;
+    }
+    await savePerson(job.id, who, fields);
+    await pull();
+  };
   const continueAll = () => {
     if (!job) return;
     track("scenes_continue", { job: job.id, edited: Object.keys(sceneDraft).length, own: ownJob });
@@ -1138,23 +1215,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       <div className="wt-prog-pageshead"><b>{t("루가 읽어낸 인물")}</b></div>
                       <div className="wt-prog-dirs">
                         {job.persona && (
-                          <div className="wt-prog-dir plain wt-prog-cast wt-prog-hero">
-                            <div className="row"><b>{t("주인공 · {name}", { name: job.persona.name })}</b></div>
-                            {job.persona.look && <span className="muted intro">{job.persona.look}</span>}
-                            {job.persona.personality && <span className="muted intro">{job.persona.personality}</span>}
-                            {job.persona.voice && <span className="muted intro">{job.persona.voice}</span>}
-                            {job.persona.line && <q className="line">{job.persona.line}</q>}
-                          </div>
+                          <PersonCard hero title={t("주인공 · {name}", { name: job.persona.name })} person={job.persona as unknown as Record<string, unknown>}
+                                      keys={HERO_KEYS} onSave={(f) => savePersonCard("hero", f)} />
                         )}
                         {cast.map((c, i) => (
-                          <div key={c.name + i} className="wt-prog-dir plain wt-prog-cast">
-                            <div className="row"><b>{c.name}</b></div>
-                            {c.look && <span className="muted intro">{c.look}</span>}
-                            {c.tie && <span className="muted intro">{c.tie}</span>}
-                            {c.gap && <span className="muted intro">{c.gap}</span>}
-                            {c.voice && <span className="muted intro">{c.voice}</span>}
-                            {c.line && <q className="line">{c.line}</q>}
-                          </div>
+                          <PersonCard key={c.name + i} title={c.role ? `${c.name} · ${c.role}` : c.name} person={c as unknown as Record<string, unknown>}
+                                      keys={CAST_KEYS} onSave={(f) => savePersonCard(String(i), f)} />
                         ))}
                       </div>
                     </>
@@ -1195,23 +1261,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       <div className="wt-prog-pageshead"><b>{t("루가 읽어낸 인물")}</b></div>
                       <div className="wt-prog-dirs">
                         {job.persona && (
-                          <div className="wt-prog-dir plain wt-prog-cast wt-prog-hero">
-                            <div className="row"><b>{t("주인공 · {name}", { name: job.persona.name })}</b></div>
-                            {job.persona.look && <span className="muted intro">{job.persona.look}</span>}
-                            {job.persona.personality && <span className="muted intro">{job.persona.personality}</span>}
-                            {job.persona.voice && <span className="muted intro">{job.persona.voice}</span>}
-                            {job.persona.line && <q className="line">{job.persona.line}</q>}
-                          </div>
+                          <PersonCard hero title={t("주인공 · {name}", { name: job.persona.name })} person={job.persona as unknown as Record<string, unknown>}
+                                      keys={HERO_KEYS} onSave={(f) => savePersonCard("hero", f)} />
                         )}
                         {cast.map((c, i) => (
-                          <div key={c.name + i} className="wt-prog-dir plain wt-prog-cast">
-                            <div className="row"><b>{c.name}</b></div>
-                            {c.look && <span className="muted intro">{c.look}</span>}
-                            {c.tie && <span className="muted intro">{c.tie}</span>}
-                            {c.gap && <span className="muted intro">{c.gap}</span>}
-                            {c.voice && <span className="muted intro">{c.voice}</span>}
-                            {c.line && <q className="line">{c.line}</q>}
-                          </div>
+                          <PersonCard key={c.name + i} title={c.role ? `${c.name} · ${c.role}` : c.name} person={c as unknown as Record<string, unknown>}
+                                      keys={CAST_KEYS} onSave={(f) => savePersonCard(String(i), f)} />
                         ))}
                       </div>
                     </>
