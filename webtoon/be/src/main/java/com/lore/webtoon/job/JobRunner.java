@@ -929,7 +929,7 @@ public class JobRunner {
      * 장면 하나만 다시 짓는다(#548). 멈춤({@code AWAITING_SCENES})은 그대로고, 끝나면 그 장면의
      * 글만 바뀐다. 이유 코드는 하네스 {@code own.RESCENE_REASONS} 의 열쇠다.
      */
-    public void rescene(Long jobId, int n, List<String> reasons, String note) {
+    public void rescene(Long jobId, int n, List<String> reasons, String note, Runnable onFail) {
         java.util.Set<Integer> mine = rescening.computeIfAbsent(jobId, k -> ConcurrentHashMap.newKeySet());
         if (!mine.add(n)) {
             throw new IllegalStateException("그 장면은 이미 다시 짓는 중입니다");
@@ -951,9 +951,11 @@ public class JobRunner {
                 if (code != 0) {
                     log.warn("장면 하나를 다시 짓지 못했습니다 (job={}, n={})", jobId, n);
                     progress.say(jobId, n + "번 장면을 다시 짓지 못했어요 — 전처럼 두었어요");
+                    onFail.run();
                 }
             } catch (Exception e) {
                 log.warn("장면 하나를 다시 짓다 실패했습니다 (job={}, n={})", jobId, n, e);
+                onFail.run();
             } finally {
                 mine.remove(n);
             }
@@ -1024,6 +1026,20 @@ public class JobRunner {
             ((ObjectNode) scenes.get(at + 1)).put("prev", chosen.path("ends").asText());
         }
         mapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), root);
+    }
+
+    /** 이 장면을 지금까지 몇 번 다시 뽑았나(#548) — 판 목록 길이. 되돌려도 줄지 않는다. */
+    public int sceneRedraws(String runId, int n) {
+        try {
+            for (JsonNode s : mapper.readTree(runDir(runId).resolve("scenes.json").toFile()).path("scenes")) {
+                if (s.path("n").asInt() == n) {
+                    return s.path("history").size();
+                }
+            }
+        } catch (IOException e) {
+            return 0;
+        }
+        return 0;
     }
 
     /** 이 장면을 지금 다시 짓고 있나. */

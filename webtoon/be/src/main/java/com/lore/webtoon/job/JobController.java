@@ -333,9 +333,21 @@ public class JobController {
     @PostMapping("/jobs/{id}/scenes/{n}/retry")
     public Map<String, Object> retryScene(@PathVariable String id, @PathVariable int n,
                                           @RequestBody(required = false) RetrySceneRequest body) {
-        jobs.retryScene(id, n, body == null ? null : body.reasons(), body == null ? null : body.note(),
-                CreditGate.currentUser());
-        return Map.of("ok", true);
+        Long me = CreditGate.currentUser();
+        /* 장면마다 첫 번째는 무료, 같은 장면을 또 뽑으면 1크레딧(#548). 먼저 받고, 못 지으면 돌려준다. */
+        int cost = me == null ? 0 : jobs.resceneCost(id, n);
+        String ref = id + ":rescene:" + n + ":" + System.currentTimeMillis();
+        Runnable refund = cost > 0 ? () -> credits.refund(me, ref) : () -> { };
+        if (cost > 0) {
+            credits.charge(me, cost, ref, "장면 다시 뽑기 · " + n + "번");
+        }
+        try {
+            jobs.retryScene(id, n, body == null ? null : body.reasons(), body == null ? null : body.note(), me, refund);
+        } catch (RuntimeException e) {
+            refund.run();
+            throw e;
+        }
+        return Map.of("ok", true, "cost", cost);
     }
 
     @Operation(summary = "장면 이전 판으로 되돌리기",

@@ -598,7 +598,13 @@ public class JobService {
      * 장면 하나만 다시 짓기(#548). 로그인한 사람만. 멈춤은 그대로고, 돌아가는 동안 그 장면은
      * {@code busy} 다. 전체 다시 나누기({@link #retryScenes})와 따로다.
      */
-    public void retryScene(String publicId, int n, List<String> reasons, String note, Long userId) {
+    /** 장면마다 첫 다시 뽑기는 무료, 그다음부터 1크레딧(#548). 이번 다시 뽑기에 드는 크레딧. */
+    public int resceneCost(String publicId, int n) {
+        WebtoonJob job = store.byPublicId(publicId);
+        return runner.sceneRedraws(job.getRunId(), n) >= 1 ? 1 : 0;
+    }
+
+    public void retryScene(String publicId, int n, List<String> reasons, String note, Long userId, Runnable onFail) {
         WebtoonJob job = store.byPublicId(publicId);
         if (userId == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "로그인하면 장면을 다시 지을 수 있어요");
@@ -614,7 +620,7 @@ public class JobService {
                 : reasons.stream().filter(r -> r != null && RESCENE_REASONS.contains(r.trim())).map(String::trim).toList();
         safety.checkText("webtoon-scenes", note);
         try {
-            runner.rescene(job.getId(), n, picked, note == null ? "" : note.trim());
+            runner.rescene(job.getId(), n, picked, note == null ? "" : note.trim(), onFail);
         } catch (IllegalStateException e) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
         }
