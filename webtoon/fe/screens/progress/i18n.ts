@@ -39,6 +39,8 @@ const dict: Dict = {
   "지금 판이 아니에요": { en: "This isn't the current version", ja: "現在の版ではありません", zh: "这不是当前版本" },
   "이 판으로 되돌리기": { en: "Restore this version", ja: "この版に戻す", zh: "恢复为此版本" },
   "되돌리지 못했어요": { en: "Couldn't restore", ja: "戻せませんでした", zh: "未能恢复" },
+  "다시 뽑기 · 1크레딧": { en: "Redraw · 1 credit", ja: "引き直す · 1クレジット", zh: "重抽 · 1 积分" },
+  "다시 뽑기 · 무료": { en: "Redraw · free", ja: "引き直す · 無料", zh: "重抽 · 免费" },
   "1화 생성하기": { en: "Writing episode 1", ja: "第1話を作る", zh: "生成第 1 话" },
   "1화 이야기와 인물을 씁니다": { en: "Writes the episode-1 story and characters", ja: "第1話のストーリーと登場人物を書きます", zh: "编写第 1 话的故事和人物" },
   "캐릭터 그리기": { en: "Drawing the character", ja: "キャラクターを描く", zh: "绘制角色" },
