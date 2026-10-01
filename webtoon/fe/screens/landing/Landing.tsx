@@ -11,6 +11,7 @@ import { CONTACT_CHANNEL } from "@common/links";
 import * as api from "../../lib/api";
 import { LangSwitch, useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
+import { activeJobLabel } from "../../lib/jobLabel";
 import { IconArrow, IconDownload, IconEdit, IconPlus, IconRetry, IconShare, IconUser } from "../../ui/Icons";
 import EditorMock, { CUT_IMG, PAGE_IMG, SHEET_IMG } from "./EditorMock";
 
@@ -100,9 +101,7 @@ export default function Landing({ go }: { go: Go }) {
   useEffect(() => {
     api.myActiveJobs().then((r) => setJob(r.jobs?.[0] ?? null)).catch(() => {});
   }, []);
-  const jobLabel = job
-    ? (job.art?.total ? t("{done} / {total}장", { done: job.art.done, total: job.art.total }) : t(job.stage_label))
-    : "";
+  const jobLabel = job ? activeJobLabel(job, t) : "";
 
 
   /* 예시 작품 띠 */

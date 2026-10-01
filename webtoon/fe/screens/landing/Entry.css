@@ -6,6 +6,10 @@
 /* 카드 전체에 그림을 흰 바탕 위 55% 로 깔고(.wt-entry-bg) 그 위 가운데에 글을 크게
    올린다. PC·폰 같은 모양이고 폰은 높이만 줄인다. */
 .wt .wt-entry-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: 880px; max-width: 100%; margin: 0 auto; }
+/* 카드 셋(#548) — 웹툰 만들기 둘 + 캐릭터 만들어보기. 폭 1184 안에서 셋이 나란히. */
+.wt .wt-entry-cards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+.wt .wt-entry-cards.three .wt-entry-pic { height: 300px; }
+.wt .wt-entry-cards.three .wt-entry-body .err { font-size: 12.5px; }
 .wt .wt-entry-card {
   position: relative; isolation: isolate; height: 460px; overflow: hidden;
   text-decoration: none; color: var(--ink); display: flex; flex-direction: column;
