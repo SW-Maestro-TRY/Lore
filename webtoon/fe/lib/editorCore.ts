@@ -30,6 +30,9 @@ type Tr = (s: string, v?: Record<string, string | number>) => string;
 const fillVars = (s: string, v?: Record<string, string | number>) =>
   v ? s.replace(/\{(\w+)\}/g, (m, k) => (k in v ? String(v[k]) : m)) : s;
 let tr: Tr = fillVars;
+/** 편집실에서 크레딧이 모자랄 때 화면에 알리는 사건 이름 — detail 은 서버 원문. */
+export const CREDIT_SHORT_EVENT = "lore:editor-credit-short";
+
 export function setEditorTranslator(fn: Tr | null): void {
   tr = fn || fillVars;
 }
@@ -589,6 +592,12 @@ export function mountEditor(
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body) });
       job = await res.json();
+      if (res.status === 402) {
+        /* 크레딧 부족 — 알림 글 대신 화면(Editor.tsx)이 「크레딧 잔액이 부족해요 · 충전하기」를 띄운다(#548). */
+        veil.remove(); btn.disabled = false;
+        window.dispatchEvent(new CustomEvent(CREDIT_SHORT_EVENT, { detail: job.error || job.message || "" }));
+        return;
+      }
       if (!res.ok) throw new Error(job.error || tr("시작하지 못했습니다"));
     } catch (err) {
       veil.remove(); btn.disabled = false;
