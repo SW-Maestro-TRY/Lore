@@ -1,0 +1,376 @@
+<title>소이 로맨스 박자 비교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* 두 칸 대조: 왼쪽 기준선, 오른쪽 새 판. 같은 줄은 같은 자리(후보 n · 장면 n). 폰에서는 위아래로 쌓인다 */
+:root {
+  --bg: #faf7f7; --surface: #ffffff; --fg: #2a2326; --muted: #6f6468; --line: #e6dfe1;
+  --base: #4f6272; --base-soft: #e7edf2; --new: #a33a5b; --new-soft: #f7e6ec; --warn: #9a5b00; --warn-soft: #fff1d6; --a: #6b5a2a; --a-soft: #f1ead6; --add: #2f7a4f; --add-soft: #e3f3e8; --del: #b23a3a; --del-soft: #f8e4e4;
+  --display: "Noto Serif KR", "Apple SD Gothic Neo", serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #1b1719; --surface: #252022; --fg: #ece5e8; --muted: #a89ba0; --line: #3a3235;
+  --base: #9fb6c9; --base-soft: #263039; --new: #f08aa9; --new-soft: #3d2530; --warn: #f0b45a; --warn-soft: #3a2e1a; --a: #d9c27a; --a-soft: #332c18; --add: #6fcf97; --add-soft: #1f3a2a; --del: #f08080; --del-soft: #3e2222; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #1b1719; --surface: #252022; --fg: #ece5e8; --muted: #a89ba0; --line: #3a3235;
+  --base: #9fb6c9; --base-soft: #263039; --new: #f08aa9; --new-soft: #3d2530; --warn: #f0b45a; --warn-soft: #3a2e1a; --a: #d9c27a; --a-soft: #332c18; --add: #6fcf97; --add-soft: #1f3a2a; --del: #f08080; --del-soft: #3e2222; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 15px/1.7 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 80px; display: grid; gap: 40px; }
+h1, h2 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: 1.9rem; line-height: 1.3; }
+h2 { font-size: 1.35rem; }
+header p, .lede { color: var(--muted); max-width: 68ch; margin: 8px 0 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 14px; font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meta b { color: var(--fg); font-weight: 600; }
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.finding { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; min-width: 0; }
+.finding h3 { margin: 0 0 8px; font-size: 1rem; }
+.finding ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; }
+.finding.warn { border-color: var(--warn); background: var(--warn-soft); }
+section { display: grid; gap: 14px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pair.three { grid-template-columns: repeat(3, 1fr); }
+.tag.a { color: var(--a); background: var(--a-soft); }
+.cell { min-width: 0; display: grid; gap: 6px; align-content: start; }
+.tag { justify-self: start; font-size: .72rem; font-weight: 600; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; }
+.tag.base { color: var(--base); background: var(--base-soft); }
+.tag.new { color: var(--new); background: var(--new-soft); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-width: 0; }
+.card.dropped { border-color: var(--warn); }
+.card h4 { margin: 0 0 8px; font-size: .98rem; font-weight: 600; }
+.card p { margin: 0; }
+.intro { color: var(--fg); }
+details { margin-top: 10px; color: var(--muted); }
+summary { cursor: pointer; font-size: .85rem; font-weight: 500; }
+details p { margin-top: 6px; color: var(--fg); }
+dl { margin: 0; display: grid; gap: 4px; }
+dt { font-size: .75rem; font-weight: 600; color: var(--muted); letter-spacing: .03em; margin-top: 8px; }
+dd { margin: 0; }
+.next { background: var(--surface); border: 1px solid var(--new); border-radius: 12px; padding: 20px; }
+.diff { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.diff summary { padding: 8px 12px; background: var(--bg); font-family: ui-monospace, Menlo, monospace; color: var(--fg); }
+.hunk { overflow-x: auto; border-top: 1px solid var(--line); padding-block: 6px; }
+.ln { white-space: pre-wrap; font-size: .86rem; line-height: 1.6; padding-inline: 12px 8px; border-left: 3px solid transparent; }
+.ln.ctx { color: var(--muted); }
+.ln.add { background: var(--add-soft); border-left-color: var(--add); }
+.ln.del { background: var(--del-soft); border-left-color: var(--del); text-decoration: line-through; text-decoration-color: var(--del); color: var(--muted); }
+.ask { background: var(--new-soft); border-radius: 8px; padding: 14px 16px; }
+.ask h3 { margin: 0 0 6px; font-size: 1rem; }
+.ask ul { margin: 0 0 6px; padding-left: 1.1em; }
+.ask p { margin: 0; color: var(--muted); font-size: .9rem; }
+.flag { font-size: .85rem; color: var(--warn); background: var(--warn-soft); padding: 6px 10px; border-radius: 6px; margin-bottom: 6px !important; }
+@media (max-width: 960px) { .pair.three { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .pair { grid-template-columns: 1fr; } .wrap { padding-inline: 16px; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>소이 · 현대 로맨스 — 기준선과 새 판</h1>
+    <p>같은 인물, 같은 상대(하도윤), 같은 견본 카드로 이야기 프롬프트와 장면 프롬프트만 바꿔 돌렸다. 장면 단계는 두 쪽 모두 같은 이야기(새 판 4번 「상견례 알바 생겼습니다」)를 받았다. 글만 썼고 그림은 그리지 않았다.</p>
+    <div class="meta">
+      <span>입력 <b>소이 · 여성스러운 성격, 갈색 단발머리, 귀여운 인상</b></span>
+      <span>모델 <b>gpt-5.1</b></span>
+      <span>기준선 <b>develop 2583e550 (#558)</b></span>
+      <span>호출 6회 <b>$0.247</b></span>
+      <span>2026-10-01</span>
+    </div>
+  </header>
+
+  <section class="next">
+    <h2>장면 · 초안 2.5 — 초안 2에 두 문장만</h2>
+    <p class="lede">초안 2에 「본문에 적힌 사실(언제·어디서·누가)도 장면에서 그대로 쓴다」와 「인물이 하는 일마다 왜 그러는지를 독자가 그 앞 장면들에서 알 수 있어야 한다」 두 문장만 더했다(약 80자). 같은 이야기로 2회($0.151), 두 번 다 장면 7개 모두 읽혔다. 왼쪽은 비교용 초안 2.</p>
+    <div class="findings">
+      <div class="finding">
+        <h3>날짜 모순 — 2회 모두 없음</h3>
+        <ul>
+          <li>1회: 「오늘 7시」 예약을 「8시로만 변경」, 그날 저녁 그 식당으로 간다.</li>
+          <li>2회: 「오늘 저녁 7시, 하도윤님 성함으로」 바꾸고 그날 저녁 간다. 초안 2처럼 날을 옮기지 않았다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>같이 가는 이유 — 2회 모두 있음, 다만 얇다</h3>
+        <ul>
+          <li>1회: 「퇴근 후, 두 사람은 직접 식당에 가서 사정을 설명하기로 한다」. 2회: 「당장은 취소 말고, 우리 퇴근하고 같이 가서 얘기하자」.</li>
+          <li>둘 다 「직접 설명하러 간다」는 한 줄이다. 도윤이 왜 취소 대신 자기 이름으로 바꿨는지는 여전히 없다 — 이야기 본문부터 빈 자리.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>서비스 컷 — 1회만</h3>
+        <ul>
+          <li>1회: 장면 3, 소이의 눈으로 도윤의 옆모습·넥타이·굳은 턱선·목덜미, 무릎 위에서 깍지 낀 두 손.</li>
+          <li>2회: 반대로 도윤의 눈으로 소이를 본다(가로등 아래 흔들리는 단발, 커진 눈). 상대를 주인공의 눈으로 보는 컷은 없다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>그 밖에</h3>
+        <ul>
+          <li>2회에서 소이가 도윤을 「도윤 선배」라고 부른다 — 직속 팀장 설정과 어긋난다(A 장면에서도 나왔던 것).</li>
+          <li>식당 이름이 「○○한정식」으로 비어 있다(두 번 다).</li>
+          <li>장면 끝 정리 문장은 여전하다: 「취소 전화를 대신하러 온 게 아니라, 이미 잡힌 상견례 자리를 마주 보러 왔다」.</li>
+        </ul>
+      </div>
+    </div>
+    {{SC7}}
+  </section>
+
+  <section class="next">
+    <h2>장면 · 초안 3 — 모순과 개연성</h2>
+    <p class="lede">초안 2에 「본문에 적힌 사실은 바꾸지 않는다」, 「덧붙인 것은 실제로 그럴 법해야 한다」, 「다 쓴 뒤 점검」을 더했다. 같은 이야기로 1회($0.073), 장면 6개 모두 읽혔다. 왼쪽 A, 가운데 초안 2, 오른쪽 초안 3.</p>
+    <div class="findings">
+      <div class="finding">
+        <h3>고쳐진 것</h3>
+        <ul>
+          <li>날짜 모순이 없어졌다. 상견례는 끝까지 「오늘 저녁」이고, 예약은 7시에서 8시로 시간만 미룬다 — 본문 그대로다.</li>
+          <li>도윤이 왜 같이 가는지 이유가 한 줄 생겼다(장면 3: 「어차피 제 이름으로 예약됐으니까, 같이 가는 게 맞죠」).</li>
+          <li>서비스 컷이 더 분명해졌다(장면 3: 신호등 앞, 넥타이를 느슨히 푸는 손, 옆얼굴 윤곽과 손등의 힘줄).</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>그래도 그럴 법하지 않은 것</h3>
+        <ul>
+          <li>장면 1: 소이가 회사에서 붙잡고 있는 보고서가 「상견례 제안서」다. 상견례가 업무 자료가 됐다.</li>
+          <li>장면 4: 직원이 도윤에게 「부모님은 벌써 들어가 계세요」라고 한다 — 와 있는 건 소이의 부모다.</li>
+          <li>장면 5: 행거에 「양가 부모로 보이는 코트」가 걸려 있는데 방에는 소이 부모만 있다.</li>
+          <li>도윤이 왜 예약을 취소하지 않고 자기 이름으로 바꿨는지는 소이가 묻지만(장면 2) 끝까지 답이 없다. 이건 이야기 본문부터 비어 있던 자리다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>나레이션이 다시 정리투로</h3>
+        <ul>
+          <li>「예약표 위의 이름처럼, 이 방에는 이미 정해 둔 자리가 있었다」, 「팀장과 팀원이 아니라, 상견례 자리로 가는 두 사람처럼」. 초안 2보다 늘었다.</li>
+        </ul>
+      </div>
+    </div>
+    {{SC6}}
+  </section>
+
+  <section class="next">
+    <h2>장면 · 초안 2 — 나레이션과 서비스 컷을 고친 판</h2>
+    <p class="lede">같은 이야기(A 2회차 1번 「상견례 파토 직전 팀장」)를 고친 초안 2에 넣었다(오른쪽, 1회 $0.073). 가운데는 초안 1, 왼쪽은 A 장면 프롬프트. 장면 7개 모두 읽혔다.</p>
+    <div class="findings">
+      <div class="finding">
+        <h3>된 것</h3>
+        <ul>
+          <li>나레이션이 장면마다 상자 하나로 줄고 대부분 사실을 알려 준다(「오늘 저녁, 소이는 부모가 정해 둔 사람과 첫 상견례를 할 예정이었다」).</li>
+          <li>서비스 컷이 생겼다. 장면 6: 소이의 눈으로 보는 도윤의 뒷모습 — 셔츠 등선, 깊이 숙인 허리 각도, 바지 옆선에 붙은 긴 손가락. 장면 2는 반대로 도윤의 시선이 소이의 흐트러진 앞머리·젖은 속눈썹을 따라간다.</li>
+          <li>둘 사이 묘사가 장면마다 있다: 소매를 살짝 잡았다 놓기, 걸음을 늦춰 어깨 높이를 맞추기.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>새로 생긴 문제</h3>
+        <ul>
+          <li>장면 3에서 예약을 「다음 주 토요일」로 옮기는데, 같은 날 저녁 부모가 그 식당에 와 있다. 본문은 「시간만 미룬다」였다 — 장면 단계가 본문을 바꿔 모순이 생겼다.</li>
+          <li>대사에 「○○씨」 자리표시가 그대로 들어갔다(장면 2·3). 그림에 그대로 찍힌다.</li>
+          <li>「첫 컷」, 「클로즈업」, 「말풍선」처럼 컷을 나눠 지시하기 시작했다. 서비스 컷 문장의 「컷」이 장면 전체로 번진 것으로 보인다 — 원래는 그림이 컷을 정한다.</li>
+          <li>장면 6에 본문에 없는 이름표 소동(「신랑측 ○○ 부모석」)을 지어 넣었다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>아직 남은 것</h3>
+        <ul>
+          <li>장면 끝 정리 문장이 줄었지만 남아 있다: 「깨러 온 건지, 대신 설명을 하러 온 건지 자신들도 모른 채」, 「이름이 뒤섞인 자리로 바뀌어 있었다」.</li>
+        </ul>
+      </div>
+    </div>
+    {{SC5}}
+  </section>
+
+  <section class="next">
+    <h2>장면 · A 장면 프롬프트와 로맨스 초안</h2>
+    <p class="lede">A 2회차의 1번 「상견례 파토 직전 팀장」 하나를 A 장면 프롬프트(왼쪽)와 A에 [로맨스일 때] 절을 더한 초안(오른쪽)에 넣었다. 이야기 프롬프트는 둘 다 A. 호출 2회 $0.122. 두 쪽 다 장면이 빠짐없이 읽혔다(7개 · 6개).</p>
+    <div class="findings">
+      <div class="finding warn">
+        <h3>나레이션이 격언투다 — 두 쪽 다</h3>
+        <ul>
+          <li>초안: 「그 자리로부터 도망치지 말자는 제안이기도 했다」, 「내일은 회사가 상견례장이 될 거라는 말이, 네 사람 사이에 새로운 약속처럼 박혀 버렸다」.</li>
+          <li>A: 「섞여 버린 건, 식당 예약뿐 아니라 두 사람의 이름이었다」, 「상견례는 끝났지만, 대신 다른 약속이 생겼다」.</li>
+          <li>장면마다 상자 둘이고, 감정을 대신 말하는 문장도 남아 있다. 초안의 금지 문장이 안 먹었다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>초안 — 본문은 지켰고, 둘 사이 묘사는 조금 늘었다</h3>
+        <ul>
+          <li>본문에 없는 사건·접촉을 만들지 않았다. 「본문은 그대로다」는 지켜졌다.</li>
+          <li>장면 2: 소이가 의자를 끌어당겨 입술을 가까이 대고 속삭이고, 도윤의 눈이 소이의 얼굴·떨리는 손·입까지 차례로 내려간다. 장면 3: 소이가 숨도 못 쉬고 도윤의 입술만 본다. 장면 4: 도윤이 보폭을 맞추고, 소이는 눈을 마주치지 않으려 한다.</li>
+          <li>도윤을 계속 「팀장」으로 부른다. A는 장면 1·7에서 「같은 팀 선배」로 바꿔 불러 인물 설정과 어긋났다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>초안에서 안 된 것</h3>
+        <ul>
+          <li>「상대를 주인공의 눈으로 보는 컷」이 없다. 장면 4의 「평소보다 더 단정하게 보이고」 한 줄뿐, 그림이 도윤에게 머무는 장면은 없다.</li>
+          <li>두 사람이 주고받는 대사가 거의 없어서 「떠보고 받아치는」 대사 규칙은 확인할 자리가 없었다.</li>
+          <li>이야기 단계의 비약(도윤이 왜 「인사드리러 왔습니다」라고 하는지)은 장면에서도 그대로다. A 장면 7은 도윤이 「그냥 취소만 하는 건 아니다 싶었다」고 이유를 한 줄 붙였고, 초안은 붙이지 않았다.</li>
+        </ul>
+      </div>
+    </div>
+    {{SC4}}
+  </section>
+
+  <section class="next">
+    <h2>A 이야기 프롬프트 · 두 번째</h2>
+    <p class="lede">A 기준으로 다시 시작하면서 이야기 단계를 한 번 더 돌렸다(오른쪽, $0.029). 왼쪽은 A·C·D 비교 때의 A. 프롬프트·입력·견본 카드·재료 모두 같다. 장면 단계는 아직 안 돌렸다 — 이 중 하나를 골라 A 장면 프롬프트와 로맨스 초안에 넣을 예정.</p>
+    <div class="findings">
+      <div class="finding warn">
+        <h3>2회차는 1회차보다 튄다</h3>
+        <ul>
+          <li>1번: 도윤이 상견례 자리에 들어가 「인사드리러 왔습니다」라고 하는데 왜 그러는지 없다. 소개는 「전 연인」, 본문은 약혼으로 서로 다르다.</li>
+          <li>2번: 팀장이 주말에 결혼정보회사 매니저이면서 회원이기도 하다. 「제가 책임질게요」의 이유가 없다.</li>
+          <li>3번: 도윤이 왜 전 남친을 자기 팀으로 데려오는지 없다. 4번: 남의 커플 사진을 왜 자기 서랍에 잠그는지 없다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>그래서 지금 말할 수 있는 것</h3>
+        <ul>
+          <li>A도 돌릴 때마다 들쭉날쭉하다. A·C·D를 1회씩 견준 것만으로 어느 판이 낫다고 말하기는 이르다.</li>
+          <li>네 판·여섯 번 돌린 결과에서 튀는 자리는 대부분 「팀장 하도윤」이 재료(상견례·결혼정보회사·과 CC·두고 간 짐)의 자리에 억지로 들어가는 곳이다. 재료를 뺀 3차는 이런 자리가 적었다. 아직 원인으로 확인한 것은 아니다.</li>
+        </ul>
+      </div>
+    </div>
+    {{AA}}
+  </section>
+
+  <section class="next">
+    <h2>A · C · D — 오늘 develop 로맨스 수정 전후와 지금 실험판</h2>
+    <p class="lede">A는 오늘 로맨스 수정 전(<code>2dea7e53</code> 직전), C는 #558 머지본(로맨스 + 로맨스 판타지, 지금 develop), D는 지금 실험판(이해·인과 우선 + 관계 박자). 셋 다 같은 입력(소이, 상대 하도윤, 같은 견본 카드, 같은 재료, gpt-5.1)이고 이야기 단계만이다. A는 이번에 새로 1회 돌렸고($0.033), C와 D는 2차 결과를 그대로 썼다. 방향 번호마다 같은 재료를 받아서 같은 줄끼리 견줄 수 있다. 판마다 1회씩이라 우연일 수 있다.</p>
+    <div class="findings">
+      <div class="finding">
+        <h3>A가 가장 덜 튄다</h3>
+        <ul>
+          <li>1번: 소이가 상견례를 취소하고 싶다고 흘리고 손이 떨리자 도윤이 대신 전화한다. 일마다 앞에 이유가 있고 장면이 그려진다.</li>
+          <li>3번: 받은 선물을 돌려주는 박스, 4번: 야간 대학 같은 조. 우연이 크긴 해도 무슨 일이 왜 일어났는지 따라가진다.</li>
+          <li>약한 곳: 2번은 결혼정보회사 첫 매칭이 하필 과 CC였던 팀장이라는 겹친 우연, 3번은 소문을 싫어하는 도윤이 왜 박스를 회의실에 두는지가 없다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>C는 넷 다 비약 (1차·2차 두 번 다)</h3>
+        <ul>
+          <li>전 약혼자가 다시 상견례 신랑 후보, 팀장이 결정사 매니저, 누가 보냈는지 모를 짐 상자, 이유 없는 「사내 소개팅 1호」 공지.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>D는 넷 중 둘</h3>
+        <ul>
+          <li>2·4번은 읽히지만 1번(언니 대신 상견례)과 3번(회사로 온 남의 짐)은 C처럼 튄다. 문체도 「~합니다」로 바뀌었다.</li>
+        </ul>
+      </div>
+    </div>
+    {{ACD}}
+  </section>
+
+  <section class="next">
+    <h2>3차 · 재료를 뺐을 때</h2>
+    <p class="lede">새 판 프롬프트 그대로, 세계 재료(상견례·두고 간 짐·결혼정보회사 등급·과 CC)만 껐다. 왼쪽은 같은 새 판에 재료가 있던 2차, 오른쪽이 3차. 입력과 견본 카드는 같다. 호출 1회 $0.033. 기준선은 돌리지 않았다.</p>
+    <div class="findings">
+      <div class="finding">
+        <h3>엉뚱한 설정이 사라졌다</h3>
+        <ul>
+          <li>넷 다 하도윤의 원래 설정(직속 팀장, 소이의 SNS, 라면 대사, 숨긴 사내 연애 소문)에서 판이 선다. 「언니 대신 상견례」, 「회사로 온 남의 짐」 같은 끼워 맞춘 설정이 없다.</li>
+          <li>1번(사적인 메모를 팀장에게 잘못 보냄)과 2번(비밀 계정의 팔로워 1명)은 순서대로 따라가지고, 도윤이 업무를 핑계로 다가가는 인물 설정과도 맞는다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>대신 넷이 비슷해지고, 이유가 약한 데가 있다</h3>
+        <ul>
+          <li>3번과 4번이 거의 같은 이야기다. 둘 다 클라이언트 앞에서 연인인 척하고, 「실제 커플이라 다르네요」라는 같은 대사가 나온다.</li>
+          <li>3번: 사내 연애 소문을 막으려고 계약 연애를 한다는 건 앞뒤가 반대다. 4번: 제목은 「전 여친 역할」인데 본문은 연인 역할이고, 클라이언트가 왜 팀장의 연애에 관심을 갖는지 없다.</li>
+          <li>「여성스러운」이 성격이 아니라 소재가 됐다(「여성스러운 감성」 캠페인, 「여성스러운 취미」). 성격 낱말로 판을 짓지 말라는 규칙을 어긴 것이다.</li>
+          <li>「~합니다」체가 3차에도 이어진다.</li>
+        </ul>
+      </div>
+    </div>
+    {{STORIES3}}
+  </section>
+
+  <section class="next">
+    <h2>2차 · 이야기 후보 4개</h2>
+    <p class="lede">새 판 이야기 프롬프트 맨 앞에 「읽으면 상황이 그려지고 이해되는가」와 「인물이 왜 그러는지 알 수 있는가」를 두고, 1차에 넣었던 「1화 끝에 두 사람 사이가 달라져야」는 뺐다. 기준선은 그대로 한 번 더 돌렸다. 입력은 1차와 같다(소이, 상대 하도윤, 같은 견본 카드 3장). 호출 2회 $0.066.</p>
+    <div class="findings">
+      <div class="finding">
+        <h3>새 판 — 넷 중 둘이 읽힌다</h3>
+        <ul>
+          <li>2번(전 약혼자가 후원사 상석에): 모욕 → 소이가 제안 철회 → 도윤이 책임을 떠안음, 일마다 앞에 이유가 있다.</li>
+          <li>4번(과 CC를 숨긴 팀장): 동기 결혼식 사진이 퍼짐 → 소이가 먼저 어떻게 말할지 묻는다. 순서대로 따라가진다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>새 판 — 나머지 둘은 여전히 안 된다</h3>
+        <ul>
+          <li>1번: 「언니 상견례에 대신 나간다」는 설정부터 말이 안 되고, 소개는 회사 로비에서 알아봤다는데 본문은 호텔에서 알아본다.</li>
+          <li>3번: 친구 집에서 바뀐 상자가 왜 도윤 이름으로 회사에 왔는지 없다. 소개의 「회사 배송 아이」는 뜻이 안 잡힌다.</li>
+          <li>소개와 본문이 1차와 달리 「~합니다」체로 바뀌었다. 바뀐 이유는 아직 모른다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>기준선 — 2차도 넷 다 비약</h3>
+        <ul>
+          <li>1번: 전 약혼자가 왜 다시 상견례 신랑 후보인지 없다. 2번: 팀장이 왜 결혼정보회사 매니저인지 없다.</li>
+          <li>3번: 대학 때 짐 상자를 누가 왜 지금 보냈는지 없다. 4번: 회사가 왜 둘을 「사내 소개팅 1호」로 공지하는지 없다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>두 쪽 다 같은 것</h3>
+        <ul>
+          <li>재료 넷(상견례·두고 간 짐·결혼정보회사 등급·과 CC)이 1차와 똑같이 넷 모두에 하나씩 들어갔다. 재료가 없어야 할 3·4번도 가져다 쓴다.</li>
+          <li>새 판 2번 끝 「더 이상 단순한 상사로만 볼 수 없게 됩니다」처럼 마음을 설명하며 끝나는 문장이 남아 있다.</li>
+        </ul>
+      </div>
+    </div>
+    {{STORIES2}}
+  </section>
+
+  <section>
+    <h2>1차 결과에서 본 것</h2>
+    <div class="findings">
+      <div class="finding warn">
+        <h3>새 판의 가장 가까운 장면이 사라졌다</h3>
+        <ul>
+          <li>모델이 라벨을 「장면 6: (가장 가까워지는 신체적 접촉 장면)」으로 써서 파서가 장면 6을 버렸다. 실제 run 이면 그 장은 그려지지 않는다.</li>
+          <li>프롬프트의 「장면 하나를 통째로 받는다」를 라벨에 표시하라는 뜻으로 읽은 것으로 보인다. 프롬프트에 라벨 뒤에 아무것도 붙이지 말라고 적거나, 파서가 괄호를 받아 주거나 해야 한다.</li>
+        </ul>
+      </div>
+      <div class="finding warn">
+        <h3>기준선도 이야기가 말이 안 된다</h3>
+        <ul>
+          <li>2번: 소개받기로 한 남자 대신 도윤이 왜 나왔는지 없고, 「직원용 화면」이 누구 화면인지 모르며, 처음 마주친 직후 「우리 만나는 거 비밀로 하죠」로 건너뛴다.</li>
+          <li>1번: 약혼자라고 거짓말한 직원에게 팀장이 왜 저녁을 제안하는지 이유가 없다. 넷 모두 이런 비약이 있다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>이야기 후보</h3>
+        <ul>
+          <li>새 판은 사건 도중 도윤의 반응이 더 자주 보인다(뒤돌아봄, 숨결이 닿는 거리, 테이블 밑 손). 다만 기준선도 2·4번에는 이미 있어서 차이는 생각보다 작다.</li>
+          <li>새 판은 이야기가 더 꼬였다. 1번은 소이가 누구와 상견례를 하는지 흐리고, 2번은 소개와 본문에서 소이의 자리(고객/매니저)가 다르다. 기준선 쪽이 한 번에 읽힌다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>장면 (같은 이야기)</h3>
+        <ul>
+          <li>새 판에서 서비스 컷 지시가 먹었다. 장면 3은 의자를 빼 주며 귓가에 속삭이는 거리, 장면 5는 소이의 시선이 도윤의 목선·셔츠 깃·손목을 따라간다.</li>
+          <li>기준선은 손을 포개는 장면 하나에 긴장이 몰리고, 나머지 장면에서 도윤은 당황한 표정뿐이다.</li>
+        </ul>
+      </div>
+      <div class="finding">
+        <h3>둘 다 안 된 것</h3>
+        <ul>
+          <li>나레이션이 장면마다 상자 둘이고, 감정을 대신 말한다(「두려워지기 시작했다」). 새 판의 금지 문장도 안 지켜졌다.</li>
+          <li>도윤이 같은 회사 팀장이라는 설정이 장면에서 흐려진다(기준선 「낮에 함께 일했던 그 남자」, 새 판 「결혼식장에서 스쳐 지나간 남자」).</li>
+          <li>인물 단계가 상대 후보에 여성(정리나)을 섞었다. a996ac94 커밋 메모에 적힌 그대로다.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>1차 · 이야기 후보 4개</h2>
+    <p class="lede">두 쪽은 같은 순서로 뽑힌 것이 아니라 각자 4개다. 같은 줄이라고 같은 이야기는 아니다.</p>
+    {{STORIES}}
+  </section>
+
+  <section>
+    <h2>1차 · 장면 — 같은 이야기, 다른 장면 프롬프트</h2>
+    <p class="lede">「상견례 알바 생겼습니다」 하나를 두 장면 프롬프트에 넣었다. 장면마다 벌어지는 일, 인물의 행동과 표정, 나레이션만 옮겼다.</p>
+    {{SCENES}}
+  </section>
+</div>
