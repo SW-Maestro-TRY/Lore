@@ -169,7 +169,6 @@ const dict: Dict = {
   "어떤 내용을 만들고 싶나요?": { en: "What would you like to make?", ja: "どんな内容を作りたいですか？", zh: "想做什么样的内容？" },
   "예: 비 오는 날 학교에서 우산을 건네는 이야기": { en: "e.g. Handing over an umbrella at school on a rainy day", ja: "例：雨の日に学校で傘を渡す話", zh: "例：雨天在学校递伞的故事" },
   "짧은 아이디어부터 자세한 시나리오까지 자유롭게 적어 주세요.": { en: "Anything from a short idea to a full scenario — write it your way.", ja: "短いアイデアから詳しいシナリオまで、自由に書いてください。", zh: "从简短的灵感到详细的剧本，随意写就好。" },
-  "대사·장면·연출을 적으면 그대로 반영돼요.": { en: "Lines, scenes and staging you write are kept as is.", ja: "セリフ・場面・演出を書けば、そのまま反映されます。", zh: "写下的台词、场景和分镜会原样保留。" },
   "제목": { en: "Title", ja: "タイトル", zh: "标题" },
   "안 적으면 AI 가 짓습니다": { en: "Leave it blank and AI will name it", ja: "空欄なら AI が付けます", zh: "留空则由 AI 命名" },
   "설정 더 적기": { en: "Add more settings", ja: "設定をもっと書く", zh: "补充设定" },
