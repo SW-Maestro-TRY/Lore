@@ -50,13 +50,28 @@ def settings_block(char: dict) -> list[str]:
     return ["", "## 사용자가 더 적은 설정 — 적힌 것이다, 바꾸지 않는다", "", text]
 
 
+def episode_text(char: dict) -> str:
+    """「1화에서 보여줄 것」 — 적은 내용 가운데 이번 화에 넣을 부분. 없으면 빈 문자열."""
+    return str(char.get("episode") or "").strip()
+
+
 def content_block(char: dict) -> list[str]:
-    """사용자가 적은 내용. 프롬프트 **맨 뒤**에 둔다 — 모델은 뒤에 온 것을 더 세게 듣는다."""
+    """사용자가 적은 내용. 프롬프트 **맨 뒤**에 둔다 — 모델은 뒤에 온 것을 더 세게 듣는다.
+
+    둘이 올 수 있다. 「이야기 전체」(설정·사연·앞뒤가 다 들어 있을 수 있다)와
+    「1화에서 보여줄 것」(이번 화에 넣을 부분). 1화 범위가 따로 적혀 있으면 그것을
+    가장 뒤에 둔다 — 이번 화의 본문·장면은 그 범위만 다루고, 나머지는 배경이다.
+    """
     lines = ["", "## 사용자가 적은 내용 — 이 웹툰의 중심", ""]
     title = str(char.get("title") or "").strip()
     if title:
         lines += [f"제목: {title}", ""]
-    lines.append(R.user_story(char))
+    episode = episode_text(char)
+    if episode:
+        lines += ["[이야기 전체 — 배경과 전제. 1화에 다 넣지 않는다]", R.user_story(char), "",
+                  "[1화에서 보여줄 것 — 이번 화는 이 범위만 다룬다]", episode]
+    else:
+        lines.append(R.user_story(char))
     return lines
 
 
