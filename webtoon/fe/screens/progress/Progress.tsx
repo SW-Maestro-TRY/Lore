@@ -14,14 +14,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
   cancelJob, continueScenes, decideSheet, jobPageUrl, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
-  castSheetImageUrl, readAllowance, requestCastSheet, restoreSheet, retryScene, saveScenes, savePerson, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
+  castSheetImageUrl, readAllowance, requestCastSheet, restoreScene, restoreSheet, retryScene, saveScenes, savePerson, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
 import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizardData";
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { unwatchJob, watchJob } from "../../lib/watchJob";
-import { IconArrow, IconBack, IconChevronDown, IconChevronUp, IconClose, IconEdit, IconRetry, IconZoom } from "../../ui/Icons";
+import { IconArrow, IconBack, IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconClose, IconEdit, IconRetry, IconZoom } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import LouPlay from "./LouPlay";
 import "./i18n";
@@ -453,6 +453,30 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     await savePerson(job.id, who, fields);
     await pull();
   };
+  /* 장면 판(#548) — 장면마다 지금 보는 판 번호(0 = 가장 오래된 것). 없으면 지금 판. */
+  const [sceneVer, setSceneVer] = useState<Record<number, number>>({});
+  const restoreSceneVer = async (n: number, v: number) => {
+    if (!job) return;
+    track("scene_restore", { job: job.id, n, v });
+    setActErr("");
+    try {
+      if (isMock) {
+        setJob((j) => j ? { ...j, scenes: (j.scenes ?? []).map((sc) => {
+          if (sc.n !== n || !sc.history?.length) return sc;
+          const hist = [...sc.history];
+          const [pick] = hist.splice(v - 1, 1);
+          return { ...sc, text: pick.text, parts: pick.parts, user_text: null, history: [...hist, { text: sc.text, parts: sc.parts }] };
+        }) } : j);
+      } else {
+        await restoreScene(job.id, n, v);
+        await pull();
+      }
+      setSceneDraft((d) => { const next = { ...d }; delete next[n]; return next; });
+      setSceneVer((o) => { const next = { ...o }; delete next[n]; return next; });
+    } catch (e) {
+      setActErr(e instanceof Error ? e.message : t("되돌리지 못했어요"));
+    }
+  };
   const continueAll = () => {
     if (!job) return;
     track("scenes_continue", { job: job.id, edited: Object.keys(sceneDraft).length, own: ownJob });
@@ -487,7 +511,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       if (isMock) {
         setJob((j) => j ? { ...j, scenes: (j.scenes ?? []).map((s) => (s.n === n ? { ...s, busy: true } : s)) } : j);
         setTimeout(() => setJob((j) => j ? { ...j, scenes: (j.scenes ?? []).map((s) => (s.n === n
-          ? { ...s, busy: false, user_text: null, parts: s.parts?.map((p, i) => (i === 0 ? { ...p, text: `(다시 뽑음) ${p.text}` } : p)) } : s)) } : j), 2500);
+          ? { ...s, busy: false, user_text: null, history: [...(s.history ?? []), { text: s.text, parts: s.parts }],
+              parts: s.parts?.map((p, i) => (i === 0 ? { ...p, text: `${p.text} 비가 그치고 해가 든다.` } : p)) } : s)) } : j), 2500);
       } else {
         await retryScene(job.id, n, { reasons: r.reasons, note: r.note.trim() });
         stopped.current = false;
@@ -495,6 +520,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       }
       setSceneDraft((d) => { const next = { ...d }; delete next[n]; return next; });
       setSceneEdit((o) => ({ ...o, [n]: false }));
+      setSceneVer((o) => { const next = { ...o }; delete next[n]; return next; });
       setSceneRetry((o) => { const next = { ...o }; delete next[n]; return next; });
     } catch (e) {
       setSceneRetryErr((er) => ({ ...er, [n]: e instanceof Error ? e.message : t("보내지 못했습니다") }));
@@ -994,13 +1020,27 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
                   <div className="wt-prog-scenes">
                     {scenes.map((s) => {
-                      const editing = !!sceneEdit[s.n] && !s.busy;
-                      const retry = sceneRetry[s.n];
+                      const vers = (s.history?.length ?? 0) + 1;
+                      const at = Math.min(sceneVer[s.n] ?? vers - 1, vers - 1);
+                      const old = at < vers - 1 ? s.history![at] : null;     // 이전 판을 보는 중
+                      const editing = !!sceneEdit[s.n] && !s.busy && !old;
+                      const retry = old ? undefined : sceneRetry[s.n];
                       return (
                         <div key={s.n} className={`wt-prog-scene${editing ? " editing" : ""}${s.busy ? " busy" : ""}`}>
                           <div className="row">
-                            <b>{t("장면 {n} / {total}", { n: s.n, total: scenes.length })}</b>
-                            <span className="tools">
+                            <span className="wt-prog-scenehead">
+                              <b>{t("장면 {n} / {total}", { n: s.n, total: scenes.length })}</b>
+                              {vers > 1 && !s.busy && (
+                                /* 다시 뽑은 장면 — 판을 넘겨 보고 되돌린다(#548) */
+                                <span className="wt-prog-vers">
+                                  <span className="tag">{t("다시 뽑음")}</span>
+                                  <button type="button" aria-label={t("이전 판")} disabled={at === 0} onClick={() => setSceneVer((o) => ({ ...o, [s.n]: at - 1 }))}><IconChevronLeft size={16} /></button>
+                                  <span className="num">{t("{a} / {b}판", { a: at + 1, b: vers })}</span>
+                                  <button type="button" aria-label={t("다음 판")} disabled={at === vers - 1} onClick={() => setSceneVer((o) => ({ ...o, [s.n]: at + 1 }))}><IconChevronRight size={16} /></button>
+                                </span>
+                              )}
+                            </span>
+                            {!old && <span className="tools">
                               {editing ? (
                                 /* 고친 글은 바로 저장된다 — 그래서 「저장」이 아니라 「완료」 */
                                 <button type="button" className="wt-prog-done" onClick={() => setSceneEdit((o) => ({ ...o, [s.n]: false }))}>{t("완료")}</button>
@@ -1014,7 +1054,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                                       className={retry ? "on" : ""} onClick={() => openSceneRetry(s.n)}>
                                 <IconRetry size={18} />
                               </button>
-                            </span>
+                            </span>}
                           </div>
                           {retry && !s.busy && (
                             <div className="wt-prog-sceneretry">
@@ -1034,7 +1074,15 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                               </div>
                             </div>
                           )}
-                          {s.busy ? (
+                          {old ? (
+                            <>
+                              <div className="wt-prog-oldver">
+                                <span>{t("이전 판을 보고 있어요")}</span>
+                                <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => void restoreSceneVer(s.n, at + 1)}>{t("이 판으로 되돌리기")}</button>
+                              </div>
+                              <div className="wt-prog-oldver-body"><SceneBody s={{ ...s, user_text: null, parts: old.parts, text: old.text }} /></div>
+                            </>
+                          ) : s.busy ? (
                             /* 다시 뽑는 동안 — 지금 글은 흐리게 두고 위에 한 줄로 알린다 */
                             <>
                               <div className="wt-prog-rebusy"><span className="spin" /> {t("다시 뽑는 중")}</div>

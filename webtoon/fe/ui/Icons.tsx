@@ -25,6 +25,8 @@ export const IconUser = (p: P) => base(p, <><circle cx="12" cy="8" r="4" /><path
 export const IconDice = (p: P) => base(p, <><rect x="4" y="4" width="16" height="16" rx="3" /><circle cx="9" cy="9" r="1.2" fill="currentColor" /><circle cx="15" cy="15" r="1.2" fill="currentColor" /><circle cx="15" cy="9" r="1.2" fill="currentColor" /><circle cx="9" cy="15" r="1.2" fill="currentColor" /></>);
 export const IconCheck = (p: P) => base(p, <path d="M5 12l5 5L20 7" />);
 export const IconChevronDown = (p: P) => base(p, <path d="M6 9l6 6 6-6" />);
+export const IconChevronLeft = (p: P) => base(p, <path d="M15 6l-6 6 6 6" />);
+export const IconChevronRight = (p: P) => base(p, <path d="M9 6l6 6-6 6" />);
 export const IconChevronUp = (p: P) => base(p, <path d="M6 15l6-6 6 6" />);
 export const IconPlus = (p: P) => base(p, <path d="M12 5v14M5 12h14" />);
 export const IconEdit = (p: P) => base(p, <><path d="M4 20h4l10-10-4-4L4 16v4z" /><path d="M13 7l4 4" /></>);

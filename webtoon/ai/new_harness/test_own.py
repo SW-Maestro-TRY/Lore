@@ -83,6 +83,9 @@ def test_rescene_replaces_only_that_scene(monkeypatch=None):
     assert scenes[1]["where"] == "새 장소" and scenes[1]["prev"] == "1끝"   # 앞 장면이 끝난 자리에서
     assert scenes[2]["prev"] == "새 끝"                                     # 뒤 장면은 새 끝에서
     assert "user_text" not in scenes[1]
+    # 이전 판은 history 에 남는다(#548)
+    assert [h["where"] for h in scenes[1]["history"]] == ["2장소"]
+    assert "history" not in scenes[1]["history"][0]
 
 
 if __name__ == "__main__":

@@ -338,6 +338,18 @@ public class JobController {
         return Map.of("ok", true);
     }
 
+    @Operation(summary = "장면 이전 판으로 되돌리기",
+            description = "다시 뽑기 전의 판 v(1부터, 오래된 것부터)로 되돌린다(#548). 지금 판은 판 목록 끝에 남는다.")
+    @PostMapping("/jobs/{id}/scenes/{n}/restore")
+    public Map<String, Object> restoreScene(@PathVariable String id, @PathVariable int n,
+                                            @RequestBody RestoreSceneRequest body) {
+        jobs.restoreScene(id, n, body == null ? 0 : body.v());
+        return Map.of("ok", true);
+    }
+
+    public record RestoreSceneRequest(int v) {
+    }
+
     public record RetrySceneRequest(List<String> reasons, String note) {
     }
 
