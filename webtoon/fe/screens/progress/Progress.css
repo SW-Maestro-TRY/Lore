@@ -388,7 +388,7 @@
 .wt .wt-prog-vers .tag { font-size: 12px; font-weight: 700; color: var(--ink); padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); margin-right: 2px; }
 .wt .wt-prog-scene .row .wt-prog-vers button { width: 26px; height: 26px; padding: 0; justify-content: center; border-radius: 8px; color: var(--ink); }
 .wt .wt-prog-scene .row .wt-prog-vers button:disabled { opacity: .3; }
-.wt .wt-prog-vers .num { min-width: 84px; text-align: center; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.wt .wt-prog-vers .num { min-width: 52px; font-variant-numeric: tabular-nums; text-align: center; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
 .wt .wt-prog-vers .num em { font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: var(--ink); border-radius: 999px; padding: 1px 6px; }
 .wt .wt-prog-oldver { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .wt .wt-prog-oldver-body { opacity: .55; }
