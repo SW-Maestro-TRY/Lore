@@ -111,6 +111,9 @@ public class JobService {
                 ? "webtoon/ai/work/jobs" : jobsDir).toAbsolutePath().normalize();
     }
 
+    /** 「만들고 싶은 내용」 상한(#548). 단편 소설 한 편 분량. 화면 `wizardData.OWN_STORY_MAX` 와 같다. */
+    static final int OWN_STORY_MAX = 20_000;
+
     /**
      * 만들기를 받는다.
      *
@@ -139,6 +142,10 @@ public class JobService {
         if (own && !notBlank(form.story())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "만들고 싶은 내용을 적어 주세요 — 짧은 아이디어 한 줄도 괜찮아요.");
+        }
+        if (form.story() != null && form.story().length() > OWN_STORY_MAX) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "내용이 너무 길어요. " + OWN_STORY_MAX + "자까지 적을 수 있어요.");
         }
         if (checkpoints && userId == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
