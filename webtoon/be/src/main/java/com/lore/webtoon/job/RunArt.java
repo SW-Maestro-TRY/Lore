@@ -56,6 +56,71 @@ public class RunArt {
         return exists(dir(runId).resolve("sheet.png"));
     }
 
+    /* ---- 시트 판 보관(#548) ----
+     *
+     * 다시 그리면 옛 시트가 사라졌다(run 20261001T134352-9819d2, 13:43 시트가 13:49 다시 그리기에
+     * 덮임). 장 그림의 pages/versions/ 처럼 지우지 않고 sheet.v1.png, sheet.v2.png … 로 둔다.
+     * 사양(sheet_spec.json)도 같은 번호로 같이 둔다 — 그림만 되살리고 사양이 다르면 장 그림이
+     * 다른 사람을 그린다. 판 번호는 보관한 순서다. 지금 시트는 번호가 없다(sheet.png). */
+
+    /** 보관해 둔 시트 판 수. 지금 시트는 세지 않는다. */
+    public int sheetVersions(String runId) {
+        Path d = dir(runId);
+        if (!Files.isDirectory(d)) {
+            return 0;
+        }
+        try (var found = Files.list(d)) {
+            return (int) found.map(p -> p.getFileName().toString())
+                    .filter(n -> n.matches("sheet\\.v\\d+\\.png")).count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    /** 보관한 판의 그림. 없으면 {@code null}. */
+    public Path sheetVersion(String runId, int v) {
+        return v < 1 ? null : exists(dir(runId).resolve("sheet.v" + v + ".png"));
+    }
+
+    /**
+     * 지금 시트를 다음 번호로 옮겨 둔다(그림과 사양). 시트가 없으면 아무것도 안 한다.
+     * 옮긴 뒤 {@code sheet.png} 는 없다 — 하네스가 「이미 있다」며 안 그리는 것을 막는다.
+     *
+     * @return 옮긴 판 번호. 시트가 없었으면 0.
+     */
+    public int archiveSheet(String runId) throws IOException {
+        Path d = dir(runId);
+        Path png = d.resolve("sheet.png");
+        if (!Files.isRegularFile(png)) {
+            return 0;
+        }
+        int v = sheetVersions(runId) + 1;
+        Files.move(png, d.resolve("sheet.v" + v + ".png"));
+        Path spec = d.resolve("sheet_spec.json");
+        if (Files.isRegularFile(spec)) {
+            Files.move(spec, d.resolve("sheet_spec.v" + v + ".json"));
+        }
+        return v;
+    }
+
+    /**
+     * 보관한 판을 지금 시트로 되돌린다. 지금 시트는 먼저 보관한다(잃는 판이 없다).
+     * 보관한 판 파일은 그대로 둔다 — 번호는 바뀌지 않는다.
+     */
+    public void restoreSheet(String runId, int v) throws IOException {
+        Path d = dir(runId);
+        Path png = d.resolve("sheet.v" + v + ".png");
+        if (!Files.isRegularFile(png)) {
+            throw new IOException("그런 판이 없습니다: " + v);
+        }
+        archiveSheet(runId);
+        Files.copy(png, d.resolve("sheet.png"));
+        Path spec = d.resolve("sheet_spec.v" + v + ".json");
+        if (Files.isRegularFile(spec)) {
+            Files.copy(spec, d.resolve("sheet_spec.json"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
     /**
      * 조연 시트(#548). 하네스가 {@code sheets/<이름>.png} 로 떨어뜨린다 — 이름의 경로 구분자만
      * 밑줄로 바꾼다(하네스 {@code own.sheet_file_name} 과 같은 규칙). 아직 안 그렸으면 없다.
