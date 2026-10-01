@@ -24,12 +24,13 @@ import "./i18n";
 import "./Wizard.css";
 
 const DRAFT_KEY = "lore_wizard_draft";
-const CRUMB = ["캐릭터", "이야기 · 장르", "그림체", "방식", "만들기", "완성"];
-const M_TITLE = ["캐릭터", "이야기 · 장르", "그림체", "방식"];
-/* 「만들고 싶은 내용이 있어요」 길(#548) — 캐릭터 → 내 내용 → 그림체. 방식 걸음이 없다
-   (항상 확인하고 만든다). 만들기 시작은 그림체 걸음에서 한다. */
-const CRUMB_OWN = ["캐릭터", "내 내용", "그림체", "만들기", "완성"];
-const M_TITLE_OWN = ["캐릭터", "내 내용", "그림체"];
+/* 걸음(#548): 1 캐릭터 → 2 어떻게 시작할까(길 고르기) → 3 이야기·장르 / 내 내용 → 4 그림체
+   → 5 방식(아이디어부터만). 「만들고 싶은 내용이 있어요」 길은 항상 확인하고 만들어서 방식
+   걸음이 없고, 만들기 시작은 그림체 걸음에서 한다. */
+const CRUMB = ["캐릭터", "시작", "이야기 · 장르", "그림체", "방식", "만들기", "완성"];
+const M_TITLE = ["캐릭터", "시작", "이야기 · 장르", "그림체", "방식"];
+const CRUMB_OWN = ["캐릭터", "시작", "내 내용", "그림체", "만들기", "완성"];
+const M_TITLE_OWN = ["캐릭터", "시작", "내 내용", "그림체"];
 
 function loadDraft(): WizardForm {
   const base = emptyWizardForm();
@@ -148,7 +149,7 @@ export default function Wizard({
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p }));
   useEffect(() => { saveDraft(form); }, [form]);
   const own = form.create === "own";
-  const step = own ? Math.min(rawStep, 3) : rawStep;
+  const step = own ? Math.min(rawStep, 4) : Math.min(rawStep, 5);
   const crumb = own ? CRUMB_OWN : CRUMB;
   const mTitle = own ? M_TITLE_OWN : M_TITLE;
 
@@ -235,15 +236,13 @@ export default function Wizard({
       return;
     }
     setCreateNote("");
-    if (form.create !== c) {
-      patch({ create: c });
-      go("create", { step: 2, character: presetCharacterId, mode: c === "own" ? "own" : undefined }, { replace: true });
-    }
+    if (form.create !== c) patch({ create: c });
+    go("create", { step: 3, character: presetCharacterId, mode: c === "own" ? "own" : undefined });
   };
 
   /* ---- 4걸음 (own 길은 3걸음에서 시작한다) ---- */
   const [allow, setAllow] = useState<Allowance | null>(null);
-  const lastStep = own ? 3 : 4;
+  const lastStep = own ? 4 : 5;
   useEffect(() => { if (step === lastStep) readAllowance().then(setAllow).catch(() => setAllow(null)); }, [step, lastStep]);
   const creditsOf = (key: WizardQuality) => {
     const q = allow?.qualities?.find((x) => x.key === key);
@@ -354,9 +353,7 @@ export default function Wizard({
           <span className="dim">{t("이야기")}</span>
           <span>{storyShown ? (own && storyShown.length > 80 ? `${storyShown.slice(0, 80)}…` : storyShown) : t("비움")}</span>
         </div>
-        {own && form.episode.trim() && (
-          <div className="kvr"><span className="dim">{t("1화에서 보여줄 것")}</span><span>{form.episode.trim().length > 80 ? `${form.episode.trim().slice(0, 80)}…` : form.episode.trim()}</span></div>
-        )}
+
         <div className="kvr"><span className="dim">{t("장르")}</span><span>{form.genre.trim() ? t(form.genre.trim()) : t("비움")}</span></div>
         <div className="kvr"><span className="dim">{t("그림체")}</span><span>{styleLabel ? t(styleLabel) : "—"}</span></div>
         <div className="kvr"><span className="dim">{t("촘촘함")}</span><span>{t(quality.label)} · {qualityTime}</span></div>
@@ -546,12 +543,14 @@ export default function Wizard({
           </>
         )}
 
-        {/* ================= 2 · 이야기 — 어느 길로 갈지 여기서 고른다(#548) ================= */}
+        {/* ================= 2 · 어떻게 시작할까 — 길 고르기(#548) ================= */}
         {step === 2 && (
           <>
             <div className="wt-wiz-body gap48">
-              <div className={`wt-wiz-story wt-wiz-story-1col${own ? " wt-wiz-own" : ""}`}>
-                {/* 아이디어부터 / 만들고 싶은 내용이 있어요. 고른 쪽에 따라 아래 칸이 바뀐다. */}
+              <div className="wt-wiz-story wt-wiz-story-1col">
+                <div className="wt-wiz-head">
+                  <h2>{t("어떻게 시작할까요?")}</h2>
+                </div>
                 <div className="wt-wiz-modes wt-wiz-create">
                   <button type="button" className={`wt-wiz-mode${!own ? " on" : ""}`} onClick={() => pickCreate("quick")}>
                     <b>{t("아이디어부터 시작할게요")}</b><span className="muted">{t("캐릭터를 바탕으로 AI 가 스토리를 만들어드려요.")}</span>
@@ -561,7 +560,19 @@ export default function Wizard({
                   </button>
                 </div>
                 {createNote && <span className="err">{createNote}</span>}
+              </div>
+            </div>
+            <div className="wt-wiz-foot">
+              <button type="button" className="btn btn-w" onClick={() => goStep(1)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 캐릭터")}</span></button>
+            </div>
+          </>
+        )}
 
+        {/* ================= 3 · 이야기 · 장르 / 내 내용 ================= */}
+        {step === 3 && (
+          <>
+            <div className="wt-wiz-body gap48">
+              <div className={`wt-wiz-story wt-wiz-story-1col${own ? " wt-wiz-own" : ""}`}>
                 {own ? (
                   <>
                     <div className="wt-wiz-head">
@@ -569,22 +580,12 @@ export default function Wizard({
                     </div>
                     <div className="fieldset wt-wiz-ownf">
                       <label htmlFor="wt-wiz-own-story">{t("이야기")} <span className="wt-wiz-req">{t("필수")}</span></label>
-                      <span className="muted lede">{t("짧은 아이디어부터 자세한 시나리오까지 자유롭게. 설정·사연·앞뒤 이야기도 여기에.")}</span>
+                      <span className="muted lede">{t("짧은 아이디어부터 자세한 시나리오까지 자유롭게 적어 주세요.")} {t("대사·장면·연출을 적으면 그대로 반영돼요.")}</span>
                       <div className="wt-wiz-tawrap">
                         <textarea id="wt-wiz-own-story" className="field wt-wiz-ownbox" value={form.story} maxLength={OWN_STORY_MAX}
                                   placeholder={t("내가 만들고 싶은 이야기를 적어 주세요")}
                                   onChange={(e) => patch({ story: e.target.value.slice(0, OWN_STORY_MAX) })} />
                         <span className="dim wt-wiz-count">{form.story.length} / {OWN_STORY_MAX}</span>
-                      </div>
-                    </div>
-                    <div className="fieldset wt-wiz-ownf">
-                      <label htmlFor="wt-wiz-own-ep">{t("1화에서 보여줄 것")} <span className="dim wt-wiz-opt">{t("선택")}</span></label>
-                      <span className="muted lede">{t("비워 두면 이야기 앞부분부터 1화로 만들어요.")} {t("대사·장면·연출을 적으면 그대로 반영돼요.")}</span>
-                      <div className="wt-wiz-tawrap">
-                        <textarea id="wt-wiz-own-ep" className="field wt-wiz-epbox" value={form.episode} maxLength={OWN_STORY_MAX}
-                                  placeholder={t("이번 화에서는 어디까지 보여 줄까요?")}
-                                  onChange={(e) => patch({ episode: e.target.value.slice(0, OWN_STORY_MAX) })} />
-                        <span className="dim wt-wiz-count">{form.episode.length} / {OWN_STORY_MAX}</span>
                       </div>
                     </div>
                     <div className="wt-wiz-ownrow">
@@ -648,17 +649,17 @@ export default function Wizard({
               </div>
             </div>
             <div className="wt-wiz-foot">
-              <button type="button" className="btn btn-w" onClick={() => goStep(1)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 캐릭터")}</span></button>
-              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => goStep(3)}>{t("다음")} <IconArrow size={18} /></button>
+              <button type="button" className="btn btn-w" onClick={() => goStep(2)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 시작")}</span></button>
+              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => goStep(4)}>{t("다음")} <IconArrow size={18} /></button>
             </div>
             <div className="mfoot">
-              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => goStep(3)}>{t("다음")}</button>
+              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => goStep(4)}>{t("다음")}</button>
             </div>
           </>
         )}
 
-        {/* ================= 3 · 그림체 ================= */}
-        {step === 3 && (
+        {/* ================= 4 · 그림체 ================= */}
+        {step === 4 && (
           <>
             <div className="wt-wiz-stylehead">
               <div className="wt-wiz-head">
@@ -689,7 +690,7 @@ export default function Wizard({
                   {sidePanel}
                 </div>
                 <div className="wt-wiz-foot plain" style={{ justifyContent: "flex-start", paddingTop: 16 }}>
-                  <button type="button" className="btn btn-w" onClick={() => goStep(2)}>
+                  <button type="button" className="btn btn-w" onClick={() => goStep(3)}>
                     <IconBack size={16} /> {t("이전")} <span className="dim">{t("· 내 내용")}</span>
                   </button>
                 </div>
@@ -698,19 +699,19 @@ export default function Wizard({
             ) : (
               <>
                 <div className="wt-wiz-foot">
-                  <button type="button" className="btn btn-w" onClick={() => goStep(2)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 이야기 · 장르")}</span></button>
-                  <button type="button" className="btn btn-p" onClick={() => goStep(4)}>{t("다음")} <IconArrow size={18} /></button>
+                  <button type="button" className="btn btn-w" onClick={() => goStep(3)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 이야기 · 장르")}</span></button>
+                  <button type="button" className="btn btn-p" onClick={() => goStep(5)}>{t("다음")} <IconArrow size={18} /></button>
                 </div>
                 <div className="mfoot">
-                  <button type="button" className="btn btn-p" onClick={() => goStep(4)}>{t("다음")}</button>
+                  <button type="button" className="btn btn-p" onClick={() => goStep(5)}>{t("다음")}</button>
                 </div>
               </>
             )}
           </>
         )}
 
-        {/* ================= 4 · 방식 ================= */}
-        {step === 4 && !own && (
+        {/* ================= 5 · 방식 ================= */}
+        {step === 5 && !own && (
           <>
             <div className="wt-wiz-body gap48" style={{ marginTop: 14 }}>
               <div className="wt-wiz-opts">
@@ -737,7 +738,7 @@ export default function Wizard({
               {sidePanel}
             </div>
             <div className="wt-wiz-foot plain" style={{ justifyContent: "flex-start", paddingTop: 16 }}>
-              <button type="button" className="btn btn-w" onClick={() => goStep(3)}>
+              <button type="button" className="btn btn-w" onClick={() => goStep(4)}>
                 <IconBack size={16} /> {t("이전")} <span className="dim">{t("· 그림체")}</span>
               </button>
             </div>
