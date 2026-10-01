@@ -378,5 +378,3 @@
 .wt .wt-prog-scene .row .tools button[aria-label]:hover, .wt .wt-prog-cast .row .tools button:hover { background: var(--bg-2, #f4f6f8); }
 .wt .wt-prog-scene .row .tools button[aria-label].on, .wt .wt-prog-scene .row .tools button[aria-label].on:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
 .wt .wt-prog-scene .row { align-items: center; }
-/* 맨 위 「이대로 웹툰 만들기」는 작게 — 내려가면 떠 있는 단추가 받는다 */
-.wt .wt-prog-sceneacts .btn-p.btn-sm { height: 40px; font-size: 14px; padding: 0 16px; }
