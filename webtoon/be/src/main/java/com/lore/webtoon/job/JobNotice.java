@@ -3,6 +3,7 @@ package com.lore.webtoon.job;
 import com.lore.common.email.EmailService;
 import com.lore.common.user.User;
 import com.lore.common.user.UserRepository;
+import com.lore.webtoon.WebtoonApi;
 import com.lore.webtoon.story.StoryStore;
 import com.lore.webtoon.story.WebtoonStory;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 /**
@@ -126,8 +128,10 @@ public class JobNotice {
                 return;                     // 받을 사람이 없거나, 이미 보냈다
             }
             String title = titleOf(job.getRunId());
+            /* 머리 모양은 둘 중 하나를 무작위로 — 같은 사람이 여러 편을 받아도 매번 같은 메일로 안 보이게. */
+            NoticeMail.Look look = ThreadLocalRandom.current().nextBoolean() ? NoticeMail.Look.MINT : NoticeMail.Look.BEIGE;
             NoticeMail.Body body = NoticeMail.finished(title, genreOf(job.getRunId()), nameOf(job),
-                    resultLink(job.getRunId()), site);
+                    resultLink(job.getRunId()), coverOf(job.getRunId()), look, site);
             mail.sendHtml(to, "[LORE] 「" + title + "」 웹툰이 다 만들어졌어요", body.text(), body.html());
             log.info("완성 알림을 보냈습니다 (job={}, run={})", jobId, job.getRunId());
         } catch (Exception e) {             // noqa: 메일이 만들기를 깨면 안 된다
@@ -198,6 +202,14 @@ public class JobNotice {
         } catch (Exception e) {             // noqa: 이름 하나 때문에 메일이 안 가면 안 된다
             return "";
         }
+    }
+
+    /**
+     * 표지(1장) 그림 주소. 그림 자리를 직접 적지 않고 서버 주소를 적는다 — 서버가 열 때마다
+     * 그때의 그림 자리로 넘겨 주므로(RunController#page), 며칠 뒤에 메일을 열어도 그림이 뜬다.
+     */
+    private String coverOf(String runId) {
+        return site + WebtoonApi.V1 + "/runs/" + runId + "/page/1";
     }
 
     /** 결과 화면 주소. <b>게스트가 자기 작품으로 돌아오는 유일한 길이다.</b> */
