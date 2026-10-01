@@ -9,11 +9,12 @@
  * 뜬다. 아무것도 안 누르면 지금 해야 할 화면이 저절로 뜨고, 사람이 할 일이 없는
  * 동안에는 루와 노는 자리가 뜬다(몇 분을 기다리는 화면이라 비워 두지 않는다).
  * 폴링이 끊겨도 작업은 서버에서 계속 돈다 — 실패로 만들지 않는다. */
+import mockReal from "./mockScenes.json";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
   cancelJob, continueScenes, decideSheet, jobPageUrl, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
-  patchOptions, retryScenes, saveScenes, sheetImageUrl, type NhCast, type NhDirection, type NhJob, type NhScene, rememberMyRun } from "../../lib/api";
+  patchOptions, retryScenes, saveScenes, sheetImageUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
 import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
@@ -76,24 +77,23 @@ function Crumb({ items }: { items: string[] }) {
    `mock-scenes-own`(내 내용)이면 서버를 부르지 않고 이 값을 쓴다. 실제 작업 번호와는 겹치지 않는다. */
 function mockScenesJob(id: string): NhJob {
   const own = id === "mock-scenes-own";
-  /* 실제 scenes.json 한 장면은 장소·상황 · 벌어지는 일 · 행동과 표정 · 겉모습 · 끝나는 상태가
-     한 글로 합쳐져 5~8문장이다. mock 도 그 길이로 둔다. */
-  const scenes: NhScene[] = [
-    { n: 1, user_text: null, text: "비 오는 오후, 학교 정문 앞 보도. 하교하는 아이들이 우산을 펴고 흩어지는데 민준만 가방을 머리에 얹은 채 비를 맞으며 서 있다. 서연이 뒤에서 걸어와 아무 말 없이 우산을 민준 머리 위로 옮긴다. 민준은 놀라 돌아보고, 서연은 앞만 보며 무심한 얼굴로 서 있다. 민준은 젖은 교복에 안경에 물방울이 맺혀 있고, 서연은 짧은 단발에 교복 위에 얇은 카디건을 걸쳤다. 둘이 우산 하나 아래 어색하게 선 채로 끝난다." },
-    { n: 2, user_text: null, text: "학교 앞 골목길, 비는 여전히 내린다. 둘이 우산 하나 아래 나란히 걷는다. 민준이 우산 손잡이를 받아 들려고 손을 뻗지만 서연은 손을 놓지 않고, 둘의 손이 손잡이 위에서 잠깐 겹친다. 민준은 귀가 빨개진 채 앞만 보고, 서연은 입꼬리를 살짝 올리고도 모른 척한다. 민준의 왼쪽 어깨가 우산 밖으로 나와 젖어 간다. 골목 끝 버스 정류장 지붕이 보이는 데서 끝난다." },
-    { n: 3, user_text: null, text: "버스 정류장 아래, 빗줄기가 가늘어지다 그친다. 서연이 우산을 접어 물기를 털고, 민준은 젖은 어깨를 손으로 훑으며 하늘을 본다. 민준이 서연을 보지 않은 채 내일도 비가 오면 좋겠다고 말하고, 서연은 대답 대신 접은 우산을 민준에게 내민다. 민준은 당황해서 받을까 말까 손을 멈추고, 서연은 처음으로 민준 쪽을 똑바로 본다. 버스가 들어오는 소리가 들리는 데서 끝난다." },
-  ];
+  /* 실제 작품(2026-10-01 서연화 · 「상견례는 아직 이르지만」)의 scenes.json·본문·인물을 서버와
+     같은 규칙으로 합친 것(mockScenes.json). 장면 하나가 1,100~1,300자다 — 가짜 짧은 글로 보면
+     실제와 차이가 너무 커서 실물로 둔다. */
+  const real = mockReal as { story: { title: string; body: string }; scenes: NhScene[]; cast: NhCast[]; persona: NhPersona };
+  const story = "비 오는 날 학교에서 서연화가 강민수에게 우산을 건넨다. 민수는 처음에는 거절하지만 결국 같이 우산을 쓴다.";
   return {
     id, status: "awaiting_scenes", run_id: "mock", error: null, mode: own ? "own" : "quick",
-    directions: [{ n: 1, title: "우산 하나", genre: "로맨스", intro: "", body: "", plot: "", scenes: [] }], pick: 1,
-    scenes,
-    story: own ? { title: "우산 하나", body: "비 오는 날 학교에서 서연이 민준에게 우산을 건넨다. 민준은 처음에는 거절하지만 결국 같이 우산을 쓴다." } : null,
-    cast: [{ name: "민준", from_input: true, look: "젖은 교복에 안경, 키가 크고 말수가 적다.", gap: "무뚝뚝해 보이지만 먼저 말을 꺼내는 쪽이다.", line: "내일도 비 오면 좋겠다." }],
-    persona: { name: "서연", look: "짧은 단발, 늘 우산을 들고 다닌다.", personality: "무심한 척하지만 먼저 챙긴다." },
+    directions: [{ n: 1, title: real.story.title, genre: "현대 로맨스", intro: "", body: real.story.body, plot: "", scenes: [] }], pick: 1,
+    scenes: real.scenes,
+    story: own ? real.story : null,
+    cast: real.cast,
+    persona: real.persona,
     input: {
-      name: "서연", description: "짧은 단발, 늘 우산을 들고 다닌다.", genre: "로맨스", title: own ? "우산 하나" : "",
-      story: own ? "비 오는 날 학교에서 서연이 민준에게 우산을 건넨다. 민준은 처음에는 거절하지만 결국 같이 우산을 쓴다." : "",
-      settings: own ? "민준: 서연의 옆 반. 말수가 적다." : "",
+      name: "서연화", description: "27살 출판사 편집자. 교정지 앞에서는 누구보다 냉정하다. 서연화는 강민수에게만 얼굴이 빨개진다.",
+      genre: "현대 로맨스", title: own ? real.story.title : "",
+      story: own ? story : "",
+      settings: own ? "강민수: 연화가 맡은 신인 작가." : "",
       style: "webtoon", quality: "surf", language: "ko", photos: 1,
     },
     sheet_ready: true,
@@ -638,9 +638,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <div className="wt-prog-railfoot">
                   {/* 「내가 적은 것」(#548) — 걸음 단추처럼 누르면 오른쪽 본문이 그 내용으로 바뀐다. */}
                   {status === "awaiting_scenes" && input && (
-                    <button type="button" className={`wt-prog-step wt-prog-minetab${at === "mine" ? " viewing" : ""}`}
-                            onClick={() => setTab(tab === "mine" ? null : "mine")}>
-                      <span className="txt"><b>{t("내가 적은 것")}</b><span className="dim">{t("웹툰을 만들기 전까지만 바꿀 수 있어요")}</span></span>
+                    <button type="button" className={`wt-prog-minetab${at === "mine" ? " viewing" : ""}`}
+                            onClick={() => setTab(tab === "mine" ? null : "mine")} aria-pressed={at === "mine"}>
+                      <span className="ic"><IconEdit size={16} /></span>
+                      <span className="txt"><b>{t("내가 적은 것 보기·고치기")}</b><span className="dim">{t("그림체·촘촘함은 웹툰을 만들기 전까지 바꿀 수 있어요")}</span></span>
+                      <span className="go"><IconChevronDown size={14} /></span>
                     </button>
                   )}
                   <button type="button" className="btn btn-w" onClick={browseWorks}>{t("다른 사람 웹툰 둘러보기")}</button>
