@@ -86,6 +86,7 @@ def test_rescene_replaces_only_that_scene(monkeypatch=None):
     # 이전 판은 history 에 남는다(#548)
     assert [h["where"] for h in scenes[1]["history"]] == ["2장소"]
     assert "history" not in scenes[1]["history"][0]
+    assert scenes[1]["history"][0]["ver"] == 1 and scenes[1]["ver"] == 2
 
 
 if __name__ == "__main__":
