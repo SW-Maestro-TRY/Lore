@@ -398,6 +398,29 @@ public class JobController {
      * 없이 그림 자체를 준다. 아직 안 그린 것은 404 다 — 화면은 그 자리를
      * 비워 두고 다음에 다시 묻는다.
      */
+    @Operation(summary = "조연 시트 뽑기 (크레딧 1)",
+            description = "인물 단계가 세운 다른 인물을 글 생김새만으로 시트로 그린다(#548). 장면 확인·이야기 고르기·시트 확인 자리에서만. "
+                    + "그린 뒤로는 장 그림이 참조로 받아 그 인물이 장마다 같은 사람으로 나온다. 못 그리면 크레딧을 돌려준다.")
+    @PostMapping("/jobs/{id}/cast-sheet")
+    public Map<String, Object> castSheet(@PathVariable String id, @RequestBody CastSheetRequest body) {
+        Long me = CreditGate.currentUser();
+        String name = body == null || body.name() == null ? "" : body.name().trim();
+        String ref = id + ":cast-sheet:" + name;
+        jobs.castSheet(id, name, me, () -> credits.refund(me, ref));
+        credits.charge(me, 1, ref, "조연 시트 · " + name);
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "조연 시트 그림")
+    @GetMapping(value = "/jobs/{id}/cast-sheet/{name}.png", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> castSheetImage(@PathVariable String id, @PathVariable String name) throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.castSheet(runId, name);
+        return src == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(Files.readAllBytes(src));
+    }
+
     @Operation(summary = "만드는 중인 캐릭터 시트")
     @GetMapping(value = "/jobs/{id}/sheet.png", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> sheetImage(@PathVariable String id) throws IOException {
@@ -449,5 +472,8 @@ public class JobController {
     }
 
     public record CastRequest(int n) {
+    }
+
+    public record CastSheetRequest(String name) {
     }
 }

@@ -43,6 +43,8 @@ public record JobView(
         Map<String, Object> story,
         /** 시트 그림이 있나 — 이야기 고르기·장면 확인 화면이 시트를 같이 보여 준다(#548). */
         boolean sheet_ready,
+        /** 조연 시트(#548) — {name, ready}. 그리는 중이면 ready=false. 장면 확인 자리에서만. 아니면 {@code null}. */
+        List<Map<String, Object>> cast_sheets,
         /** 어느 길인가(#548): quick | own. */
         String mode,
         /**
@@ -144,7 +146,7 @@ public record JobView(
                       List<Map<String, Object>> directions, List<Map<String, Object>> cast,
                       String castKind, Map<String, Object> persona,
                       List<Map<String, Object>> scenes, Map<String, Object> story, boolean sheetReady,
-                      Map<String, Object> input,
+                      List<Map<String, Object>> castSheets, Map<String, Object> input,
                       String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
                       String notifyEmail, JobEta.Eta eta) {
@@ -170,6 +172,7 @@ public record JobView(
                 scenes,
                 story,
                 sheetReady,
+                castSheets,
                 job.getMode(),
                 input,
                 job.getPicked(),

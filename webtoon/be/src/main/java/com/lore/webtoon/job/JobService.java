@@ -79,6 +79,7 @@ public class JobService {
     private final CharacterService characters;
     private final CharacterOwner owner;
     private final PrivateArt art;
+    private final WebtoonCastSheetRepository castSheets;
     private final S3Service uploads;
     private final S3Storage storage;
     private final Path jobsDir;
@@ -89,7 +90,9 @@ public class JobService {
                       JobProgress progress, StoryStore stories, WorkLedger works,
                       JobNotice notice, CharacterService characters, CharacterOwner owner, PrivateArt art,
                       S3Service uploads, S3Storage storage, SafetyGuard safety,
+                      WebtoonCastSheetRepository castSheets,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
+        this.castSheets = castSheets;
         this.jobs = jobs;
         this.safety = safety;
         this.works = works;
@@ -258,6 +261,7 @@ public class JobService {
                 job.getStatus() == JobStatus.AWAITING_SCENES ? runner.scenesOf(job.getRunId()) : null,
                 job.getStatus() == JobStatus.AWAITING_SCENES && job.isOwn() ? runner.storyOf(job.getRunId()) : null,
                 runner.sheetReady(job.getRunId()),
+                job.getStatus() == JobStatus.AWAITING_SCENES ? castSheetsOf(job) : null,
                 job.getStatus() == JobStatus.AWAITING_SCENES ? inputOf(job) : null,
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
@@ -309,6 +313,73 @@ public class JobService {
      * 인물 단계에 답한다(#534). 현대 로맨스에서 새 인물 중 상대를 고르면 n(1~),
      * 사용자가 적은 인물을 확인하고 이대로 가면 0. 그 뒤 이야기 후보 넷을 짓는다.
      */
+    /** 조연 시트를 뽑을 수 있는 자리인가(#548) — 인물 단계가 끝나 cast.json 이 있는 멈춤들. */
+    private static final java.util.Set<JobStatus> CAST_SHEET_OK = java.util.Set.of(
+            JobStatus.AWAITING_SCENES, JobStatus.AWAITING_PICK, JobStatus.AWAITING_SHEET);
+
+    /**
+     * 조연 시트 한 장(#548). 크레딧은 부르는 쪽(컨트롤러)이 먼저 받고, 못 그리면 {@code onFail} 로
+     * 돌려준다. 그리는 동안 작업 상태는 그대로다 — 끝나면 그림을 창고에 올리고 줄을 남긴다.
+     */
+    public void castSheet(String publicId, String name, Long userId, Runnable onFail) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "로그인하면 조연 시트를 뽑을 수 있어요");
+        }
+        if (!CAST_SHEET_OK.contains(job.getStatus())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금은 조연 시트를 뽑을 수 없습니다");
+        }
+        String who = name == null ? "" : name.trim();
+        boolean known = runner.castOf(job.getRunId()).stream()
+                .map(c -> String.valueOf(c.get("name")).trim())
+                .anyMatch(n -> n.equals(who) || n.split(" ")[0].equals(who));
+        if (who.isEmpty() || !known) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 인물이 없습니다");
+        }
+        if (castSheets.existsByJobIdAndName(publicId, who)
+                || runner.castSheetsPending(job.getId()).contains(who)
+                || runner.castSheetsDrawn(job.getRunId()).stream().anyMatch(d -> d.equals(who) || d.split(" ")[0].equals(who))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이미 뽑은 인물입니다");
+        }
+        Long jobId = job.getId();
+        java.util.concurrent.Future<Path> drawn = runner.drawCastSheet(jobId, who);
+        runner.afterCastSheet(drawn, () -> {
+            try {
+                Path png = drawn.get();
+                String key = art.upload(Files.readAllBytes(png), "image/png", false);
+                castSheets.save(new WebtoonCastSheet(publicId, who, key, Instant.now()));
+            } catch (Exception e) {              // noqa: 올리기·적기 실패 — 그림은 폴더에 남아 있다
+                log.warn("조연 시트를 창고에 못 올렸습니다 (job={}, name={})", publicId, who, e);
+                castSheets.save(new WebtoonCastSheet(publicId, who, null, Instant.now()));
+            }
+        }, () -> {
+            log.warn("조연 시트를 그리지 못해 크레딧을 돌려줍니다 (job={}, name={})", publicId, who);
+            onFail.run();
+        });
+    }
+
+    /** 조연 시트 목록(#548) — 그려진 것은 ready=true, 그리는 중은 false. */
+    List<Map<String, Object>> castSheetsOf(WebtoonJob job) {
+        java.util.LinkedHashMap<String, Boolean> seen = new java.util.LinkedHashMap<>();
+        for (String name : runner.castSheetsDrawn(job.getRunId())) {
+            seen.put(name, true);
+        }
+        for (WebtoonCastSheet row : castSheets.findByJobIdOrderByCreatedAtAsc(job.getPublicId())) {
+            seen.putIfAbsent(row.getName(), true);
+        }
+        for (String name : runner.castSheetsPending(job.getId())) {
+            seen.put(name, false);
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        seen.forEach((name, ready) -> {
+            Map<String, Object> one = new LinkedHashMap<>();
+            one.put("name", name);
+            one.put("ready", ready);
+            out.add(one);
+        });
+        return out;
+    }
+
     public void pickCast(String publicId, int n) {
         WebtoonJob job = store.byPublicId(publicId);
         if (job.getStatus() != JobStatus.AWAITING_CAST) {
