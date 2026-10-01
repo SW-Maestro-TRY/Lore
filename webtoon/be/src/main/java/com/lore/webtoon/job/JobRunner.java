@@ -304,12 +304,23 @@ public class JobRunner {
      * ({@code --note}) — 파이썬 쪽 {@code _run_restory_phase} 와 같은 인자다.
      */
     public void retryDirections(Long jobId, String note) {
+        WebtoonJob before = store.byId(jobId);
+        JobStatus was = before.getStatus();
+        /* own 길(#548)은 장면 확인에서도 「1화 다시 만들기」를 누를 수 있다. 다시 짓다 실패하면
+           작품을 실패로 끝내지 않고 누르기 전 자리로 돌려놓는다 — 이미 고친 장면·시트가 있다. */
+        boolean keep = before.isOwn() && (was == JobStatus.AWAITING_PICK || was == JobStatus.AWAITING_SCENES);
         store.queued(jobId, JobStage.STORY);
         line.submit(() -> {
             try {
                 restory(jobId, note);
             } catch (Exception e) {
-                fail(jobId, e);
+                if (!keep) {
+                    fail(jobId, e);
+                    return;
+                }
+                log.warn("1화를 다시 만들지 못해 전 자리로 돌려놓습니다 (job={})", jobId, e);
+                progress.say(jobId, "1화를 다시 만들지 못했어요 — 전처럼 두었어요");
+                store.awaiting(jobId, was, was == JobStatus.AWAITING_SCENES ? JobStage.PAGES : JobStage.STORY);
             }
         });
     }

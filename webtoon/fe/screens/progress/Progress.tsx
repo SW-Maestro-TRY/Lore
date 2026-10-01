@@ -384,6 +384,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const [sceneEdit, setSceneEdit] = useState<Record<number, boolean>>({});
   const [storyDraft, setStoryDraft] = useState({ title: "", body: "" });
   const [storyOpen, setStoryOpen] = useState(false);
+  const [storyRetryOpen, setStoryRetryOpen] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const dirtyRef = useRef(false);
   useEffect(() => {
@@ -1313,10 +1314,35 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <div className="wt-prog-scene wt-prog-story">
                       <div className="row">
                         <b>{t("1화")}</b>
-                        {status === "awaiting_scenes" && <button type="button" onClick={() => setStoryOpen((v) => !v)}>
-                          {storyOpen ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("고치기")} <IconChevronDown size={13} /></>}
-                        </button>}
+                        {status === "awaiting_scenes" && (
+                          /* 장면 카드와 같은 연필(고치기) · 둥근 화살표(1화 다시 만들기) */
+                          <span className="tools">
+                            {storyOpen ? (
+                              <button type="button" className="wt-prog-done" onClick={() => setStoryOpen(false)}>{t("완료")}</button>
+                            ) : (
+                              <button type="button" aria-label={t("고치기")} title={t("고치기")} onClick={() => { setStoryOpen(true); setStoryRetryOpen(false); }}>
+                                <IconEdit size={18} />
+                              </button>
+                            )}
+                            <button type="button" aria-label={t("1화 다시 만들기")} title={t("1화 다시 만들기")} className={storyRetryOpen ? "on" : ""}
+                                    onClick={() => { setStoryRetryOpen((v) => !v); setStoryOpen(false); }}>
+                              <IconRetry size={18} />
+                            </button>
+                          </span>
+                        )}
                       </div>
+                      {storyRetryOpen && status === "awaiting_scenes" && (
+                        <div className="wt-prog-sceneretry">
+                          <b>{t("1화 다시 만들기")}</b>
+                          <span className="muted">{t("1화를 다시 만들면 장면도 새 1화로 다시 나눠요.")}</span>
+                          <textarea className="field" value={dirNote} placeholder={t("바라는 점을 적어 주세요")} aria-label={t("바라는 점을 적어 주세요")}
+                                    onChange={(e) => setDirNote(e.target.value)} />
+                          <div className="acts">
+                            <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => setStoryRetryOpen(false)}>{t("닫기")}</button>
+                            <button type="button" className="btn btn-p btn-sm" disabled={busy} onClick={() => { setStoryRetryOpen(false); retryStory(); }}>{t("1화 다시 만들기")}</button>
+                          </div>
+                        </div>
+                      )}
                       {storyOpen ? (
                         <>
                           <input className="field" value={storyDraft.title} aria-label={t("제목")} onChange={(e) => editStory({ title: e.target.value })} />
