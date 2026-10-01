@@ -36,7 +36,7 @@ export const SURVEY: Record<SurveyKey, Question> = {
       ["multi_char", "웹툰에 캐릭터 여러 명 함께 넣기"],
       ["next_episode", "같은 캐릭터로 다음 화 이어 만들기"],
       ["scene_comic", "1화가 아니라 장면 하나만 넣으면 바로 만화로"],
-      ["my_style", "내가 넣은 그림체 그대로 웹툰 만들기"],
+      ["cut_image", "컷마다 그림을 한 장씩 따로 그리기"],
       ["script_cut_edit", "대사·컷 구성을 내가 직접 설계하기"],
       ["trailer_share", "완성한 웹툰을 짧은 영상으로 만들어 SNS에 공유하기"],
       ["character_lend", "내 캐릭터를 공개해서 다른 사람이 그 캐릭터로 새 이야기 만들기"],
@@ -168,12 +168,17 @@ export function FreeNote({ value, onChange }: { value: string; onChange: (v: str
   );
 }
 
+/** 설문에서 뺀 S10 후보. 예전에 받은 답을 관리자 목록에서 읽을 수 있게 이름만 남긴다. */
+const S10_RETIRED: [string, string][] = [["my_style", "내가 넣은 그림체 그대로 웹툰 만들기"]];
+
 /** 관리자 목록에서 답 하나를 사람이 읽는 말로. */
 export function answerLabel(key: string, v: SurveyValue | undefined, t: (s: string) => string): string {
   if (v === undefined) return "—";
   if (Array.isArray(v)) return v.map((x) => answerLabel(key, x, t)).join(", ");
   if (typeof v === "number") return String(v);
-  const options = key === "S7_why" ? S7_WHY : (SURVEY as Record<string, Question>)[key]?.options;
+  const options = key === "S7_why" ? S7_WHY
+    : key === "S10" ? [...SURVEY.S10.options!, ...S10_RETIRED]
+    : (SURVEY as Record<string, Question>)[key]?.options;
   const hit = options?.find(([k]) => k === v);
   return hit ? t(hit[1]) : String(v);
 }
@@ -221,6 +226,7 @@ registerDict({
   "웹툰에 캐릭터 여러 명 함께 넣기": { en: "Put several characters in one webtoon", ja: "1つのウェブトゥーンに複数のキャラを入れる", zh: "在一部漫画中放入多个角色" },
   "같은 캐릭터로 다음 화 이어 만들기": { en: "Make the next episode with the same character", ja: "同じキャラで次の話を続けて作る", zh: "用同一个角色接着做下一话" },
   "1화가 아니라 장면 하나만 넣으면 바로 만화로": { en: "Turn a single scene into a comic right away, not a whole episode", ja: "1話ではなく、場面ひとつを入れるだけですぐ漫画に", zh: "不做整话，只输入一个场景就直接变成漫画" },
+  "컷마다 그림을 한 장씩 따로 그리기": { en: "Draw each panel as its own separate image", ja: "コマごとに絵を1枚ずつ別々に描く", zh: "每个分格单独画成一张图" },
   "내가 넣은 그림체 그대로 웹툰 만들기": { en: "Make the webtoon in the exact art style I provide", ja: "自分が入れた絵柄そのままでウェブトゥーンを作る", zh: "完全按我提供的画风来做漫画" },
   "대사·컷 구성을 내가 직접 설계하기": { en: "Design the dialogue and panel layout myself", ja: "セリフ・コマ構成を自分で設計する", zh: "自己设计台词和分镜构成" },
   "완성한 웹툰을 짧은 영상으로 만들어 SNS에 공유하기": { en: "Turn the finished webtoon into a short video to share on social media", ja: "完成したウェブトゥーンを短い動画にしてSNSで共有する", zh: "把完成的漫画做成短视频分享到社交媒体" },
