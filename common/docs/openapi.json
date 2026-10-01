@@ -657,6 +657,23 @@
         },
         "type": "object"
       },
+      "ApiResponsePieceMakerFeedback": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PieceMakerFeedback"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponsePieceMakerHypothesis": {
         "properties": {
           "data": {
@@ -2538,6 +2555,57 @@
         },
         "type": "object"
       },
+      "PieceMakerFeedback": {
+        "description": "저장된 피드백 하나",
+        "properties": {
+          "body": {
+            "description": "본문. 앞뒤 빈칸을 뗀 글",
+            "type": "string"
+          },
+          "createdAt": {
+            "description": "받은 시각(UTC)",
+            "example": "2026-10-01T09:43:00Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "피드백 id",
+            "example": 3,
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "description": "종류",
+            "enum": [
+              "ERROR_REPORT",
+              "JUDGEMENT_REVIEW"
+            ],
+            "example": "JUDGEMENT_REVIEW",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerFeedbackCreate": {
+        "description": "피드백 보내기. 로그인 없이도 보낼 수 있다",
+        "properties": {
+          "body": {
+            "description": "본문. 2,000자까지. 비면 400",
+            "example": "인용한 카드가 제 가설과 맞지 않았어요",
+            "type": "string"
+          },
+          "kind": {
+            "description": "종류. ERROR_REPORT(오류 신고) 또는 JUDGEMENT_REVIEW(판정 후기)",
+            "enum": [
+              "ERROR_REPORT",
+              "JUDGEMENT_REVIEW"
+            ],
+            "example": "JUDGEMENT_REVIEW",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PieceMakerHypothesis": {
         "description": "가설 하나. 맡기기 · 되묻기 · 판정 넣기의 응답이 모두 이 모양이다",
         "properties": {
@@ -4314,6 +4382,48 @@
         "summary": "카드 상세",
         "tags": [
           "복선 카드(공개)"
+        ]
+      }
+    },
+    "/api/piece-maker/v1/public/feedback": {
+      "post": {
+        "description": "독자가 오류를 신고하거나 판정 후기를 남길 때 부른다. 로그인 없이도 보낼 수 있다.\n- `kind` 는 `ERROR_REPORT`(오류 신고) 또는 `JUDGEMENT_REVIEW`(판정 후기). 다른 값이면 400(INVALID_INPUT)\n- `body` 는 앞뒤 빈칸을 뗀 뒤 1자 이상 2,000자까지. 비었거나 넘으면 400(INVALID_INPUT)\n- 로그인한 상태로 보내면 누가 보냈는지 함께 적는다. 응답에는 보낸 사람을 싣지 않는다\n- 보낸 뒤에는 고칠 수 없다. 서버는 받았다는 뜻으로 저장된 줄을 돌려준다",
+        "operationId": "create_2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PieceMakerFeedbackCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerFeedback"
+                }
+              }
+            },
+            "description": "저장됨"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerFeedback"
+                }
+              }
+            },
+            "description": "입력이 틀림(INVALID_INPUT) — kind 가 둘 중 하나가 아니거나 body 가 비었거나 2,000자를 넘음"
+          }
+        },
+        "summary": "피드백 보내기",
+        "tags": [
+          "피드백"
         ]
       }
     },
@@ -9086,6 +9196,10 @@
     {
       "description": "캐릭터 생성·조회·돌보기·취침·성격·배경·공유",
       "name": "펫"
+    },
+    {
+      "description": "오류 신고와 판정 후기를 받는다. 로그인 없이도 보낼 수 있다",
+      "name": "피드백"
     },
     {
       "description": "사용자 행동 수집 (팀 공용, 로그인 불필요)",

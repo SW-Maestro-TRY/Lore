@@ -127,6 +127,9 @@ public class ApiDocsConfig {
         if (HttpMethod.GET.name().equals(httpMethod) && matches(path, "/api/piece-maker/v1/public/**")) {
             return false;                                   // 복선 카드 조회(piece-maker) — 조회만 열려 있다
         }
+        if (HttpMethod.POST.name().equals(httpMethod) && matches(path, "/api/piece-maker/v1/public/feedback")) {
+            return false;                                   // 피드백(오류 신고 · 판정 후기) — 로그인 전에도 받는다
+        }
         // 맥미니(codex 러너) 전용 문 — 사람 로그인이 아니라 전용 열쇠(X-Zzal-Agent-Key)로 지킨다.
         // 쿠키 자물쇠를 그리면 "로그인하면 부를 수 있다" 는 거짓말이 된다.
         if (matches(path, "/api/zzal/v1/agent/**")) {

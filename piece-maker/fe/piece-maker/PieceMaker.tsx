@@ -14,9 +14,19 @@ import AuthModal from "@common/auth/AuthModal";
 import { useAuth } from "@common/auth/useAuth";
 import { ApiError } from "@common/api/client";
 import { fetchCard, fetchHypothesis, fetchMyHypotheses, type Card, type JudgeResult } from "../lib/api";
-import { cardIds, hasCard, type Draft } from "../lib/draft";
+import { cardIds, hasCard, isFrozen, type Draft } from "../lib/draft";
 import { JUDGE_TEXT, checkJudgement, citedCards, citedIds } from "../lib/judgement";
 import { ALL_KINDS } from "../lib/search";
+import {
+  trackCard,
+  trackCompose,
+  trackDraftAbandoned,
+  trackFeedbackOpened,
+  trackResultAction,
+  trackResultViewed,
+  trackSubmitBlocked,
+  type CardFrom,
+} from "../lib/track";
 import ComposePane from "./ComposePane";
 import ExplorePane from "./ExplorePane";
 import JudgePanel from "./JudgePanel";
@@ -36,6 +46,7 @@ import { useAccountRequests, type AccountRequest } from "./useAccountRequests";
 import CreditCoin from "./CreditCoin";
 import CreditLedgerView from "./CreditLedgerView";
 import SharePanel from "./SharePanel";
+import FeedbackPanel from "./FeedbackPanel";
 
 const NEW_DRAFT_TOAST = "맡긴 가설은 내 가설에 두고 새 가설을 시작했어요.";
 
@@ -48,6 +59,7 @@ export default function PieceMaker() {
   /** 모달을 연 요소. 닫을 때 포커스를 돌려준다. */
   const trigger = useRef<Element | null>(null);
   const modalOpen = useRef(false);
+  const activeModal = useRef<ModalState | null>(null);
   const { meta, reload: reloadMeta } = useMeta();
   const { message, showToast } = useToast();
 
@@ -156,6 +168,18 @@ export default function PieceMaker() {
   });
   hand.current = { draft, loaded, cited: cited?.cards ?? [], copied, chapter, meta };
 
+  // 맡기지 않은 초안을 두고 떠나는지 남긴다. 떠나는 순간의 기록은 공통 수집기가 beacon 으로 내보낸다.
+  useEffect(() => {
+    const onLeave = () => {
+      const current = hand.current.draft;
+      if (isFrozen(current)) return;
+      const hasNote = Boolean(current.title.trim() || current.claim.trim() || Object.values(current.notes).some((note) => note.trim()));
+      if (current.cards.length > 0 || hasNote) trackDraftAbandoned(current.cards.length, hasNote);
+    };
+    window.addEventListener("pagehide", onLeave);
+    return () => window.removeEventListener("pagehide", onLeave);
+  }, []);
+
   /** 손에 있는 카드 — 담은 카드, 받아 둔 목록, 판정의 인용 카드, 가설이 복사한 카드 순으로 찾는다. 없으면 undefined 다. */
   const findCard = useCallback((id: string): Card | undefined => {
     const { draft: current, loaded: items, cited: referenced, copied: kept } = hand.current;
@@ -208,17 +232,31 @@ export default function PieceMaker() {
       ? { judgement: hypothesis.judgement, presentation: hypothesis.presentation }
       : null;
 
+  // 판정 결과가 화면에 나온 때를 남긴다. 서버는 판정 시각만 알고 독자가 봤는지는 모른다.
+  const shown = hypothesis?.judgementStatus === "FAILED" ? "FAILED" : result ? "COMPLETE" : null;
+  const shownId = hypothesis?.id;
+  useEffect(() => {
+    if (shown && shownId !== undefined) trackResultViewed(shownId, shown);
+  }, [shown, shownId]);
+
+  /** 맡긴 가설을 두고 새 가설을 시작했다. 그때 화면에 나와 있던 판정 상태를 함께 남긴다(결과가 나오기 전이면 PENDING). */
+  const shownNow = useRef(shown);
+  shownNow.current = shown;
+  const trackNewDraft = useCallback(() => trackResultAction("new_draft", shownNow.current ?? "PENDING"), []);
+
   /* ---- 모달 ---------------------------------------------------------------- */
 
   const openModal = useCallback((next: ModalState) => {
     // 모달 안에서 다른 모달로 넘어갈 때는 처음 연 요소를 그대로 기억한다.
     if (!modalOpen.current) trigger.current = document.activeElement;
     modalOpen.current = true;
+    activeModal.current = next;
     setModal(next);
   }, []);
 
   const closeModal = useCallback(() => {
     modalOpen.current = false;
+    activeModal.current = null;
     setModal(null);
   }, []);
 
@@ -232,7 +270,8 @@ export default function PieceMaker() {
 
   /** 카드 상세. 손에 있는 카드는 바로 열고, 없는 카드는 서버에 한 장을 묻는다(게시글의 번호로 열 때). */
   const openDetail = useCallback(
-    (id: string) => {
+    (id: string, from: CardFrom = "list") => {
+      trackCard("detail", from);
       const card = findCard(id);
       if (card) {
         openModal({ kind: "detail", card });
@@ -249,6 +288,8 @@ export default function PieceMaker() {
     },
     [findCard, openModal, showToast],
   );
+  const openFromCompose = useCallback((id: string) => openDetail(id, "compose"), [openDetail]);
+  const openFromResult = useCallback((id: string) => openDetail(id, "result"), [openDetail]);
   /* ---- 보관함 ---------------------------------------------------------------- */
 
   const [mine, setMine] = useState<MineState>({ status: "idle" });
@@ -281,9 +322,15 @@ export default function PieceMaker() {
     void loadMine();
   }, [openModal, loadMine]);
   const openHelp = useCallback(() => openModal({ kind: "help" }), [openModal]);
+  const openFeedback = useCallback(() => {
+    trackFeedbackOpened(shown ? "result" : "home");
+    openModal({ kind: "feedback" });
+  }, [openModal, shown]);
   const openReset = useCallback(() => openModal({ kind: "reset" }), [openModal]);
   const openPreview = useCallback(() => {
-    if (result) openModal({ kind: "preview" });
+    if (!result) return;
+    trackResultAction("share_open");
+    openModal({ kind: "preview" });
   }, [openModal, result]);
 
   /* ---- 찾기 ---------------------------------------------------------------- */
@@ -314,20 +361,38 @@ export default function PieceMaker() {
 
   /** 카드를 담거나 뺀다. 맡긴 초안이면 그 카드로 새 초안이 시작된다 — 그때는 알린다. */
   const toggleCard = useCallback(
-    (card: Card) => {
-      if (toggle(card)) showToast(NEW_DRAFT_TOAST);
+    (card: Card, from: CardFrom = "list") => {
+      const before = hand.current.draft;
+      const adding = isFrozen(before) || !hasCard(before, card.id);
+      if (toggle(card)) {
+        showToast(NEW_DRAFT_TOAST);
+        trackNewDraft();
+      }
+      trackCard(adding ? "add" : "remove", from);
+      if (adding) trackCompose("first_card");
     },
-    [toggle, showToast],
+    [toggle, showToast, trackNewDraft],
   );
 
   /** 작성 패널의 "근거 제거". 담은 카드에서 그 번호를 찾아 뺀다. */
   const removeCard = useCallback(
     (id: string) => {
       const card = hand.current.draft.cards.find((item) => item.id === id);
-      if (card) toggleCard(card);
+      if (card) toggleCard(card, "compose");
     },
     [toggleCard],
   );
+
+  // 제목 · 해석 · 주장을 처음 칠 때 한 번 남긴다(가설 만들기의 둘째 단계). 글은 보내지 않는다.
+  const typeTitle = useCallback((title: string) => { trackCompose("first_input"); setTitle(title); }, [setTitle]);
+  const typeClaim = useCallback((claim: string) => { trackCompose("first_input"); setClaim(claim); }, [setClaim]);
+  const typeNote = useCallback((id: string, note: string) => { trackCompose("first_input"); setNote(id, note); }, [setNote]);
+
+  /** 판정 칸의 "새 가설 쓰기". 맡긴 가설은 서버에 두고 빈 초안으로 시작한다. */
+  const startNew = useCallback(() => {
+    trackNewDraft();
+    reset();
+  }, [reset, trackNewDraft]);
 
   function saveDraft() {
     const notice = save();
@@ -417,7 +482,9 @@ export default function PieceMaker() {
   }, [beginRequest, captureSubmission, submit, markSubmitted, showToast, refreshCredit]);
 
   function requestJudge() {
+    trackCompose("submit");
     if (!isAuthenticated) {
+      trackSubmitBlocked("login");
       // 로그인 뒤에 이어서 맡긴다. 독자가 다시 누르지 않게.
       resumeSubmit.current = true;
       setAuthOpen(true);
@@ -496,7 +563,7 @@ export default function PieceMaker() {
           onClose: closeModal,
           // 모달에서 담거나 빼면 모달을 닫는다. 목록에서 담을 때는 포커스를 건드리지 않는다.
           onToggle: (card) => {
-            toggleCard(card);
+            toggleCard(card, "detail");
             closeModal();
           },
           onPerson: searchPerson,
@@ -514,12 +581,23 @@ export default function PieceMaker() {
         } : null;
       case "credits":
         return { title: "크레딧 내역", body: <CreditLedgerView /> };
+      case "feedback":
+        return {
+          title: "피드백 보내기",
+          body: <FeedbackPanel loggedIn={isAuthenticated} onClose={closeModal} onSent={() => {
+            // 닫거나 다른 창을 연 뒤 도착한 응답이 새 창을 닫지 않게 한다.
+            if (activeModal.current !== modal) return;
+            showToast("피드백을 보냈어요. 의견을 남겨주셔서 감사합니다.");
+            closeModal();
+          }} />,
+        };
       case "help":
         return helpModal();
       case "reset":
         return resetModal({
           onClose: closeModal,
           onConfirm: () => {
+            if (frozen) trackNewDraft();
             reset();
             closeModal();
           },
@@ -532,7 +610,7 @@ export default function PieceMaker() {
       <div className="app">
         {/* 원본은 <main> 이다. lore 의 layout 이 이미 <main> 을 씌우므로 <div> 로 바꿨다. */}
         <div className="workspace">
-          <TopBar chapter={chapter} maxChapter={maxChapter} failed={meta.status === "error"} onChapter={selectChapter} onSaved={openSaved} onHelp={openHelp}
+          <TopBar chapter={chapter} maxChapter={maxChapter} failed={meta.status === "error"} onChapter={selectChapter} onSaved={openSaved} onHelp={openHelp} onFeedback={openFeedback}
             credit={isAuthenticated ? <button className="credit-balance-chip" data-action="credit-history" onClick={() => openModal({ kind: "credits" })}
               aria-label={`크레딧 내역${credit === null ? "" : `, 보유 ${credit}크레딧`}`}>
               <CreditCoin /><span>{credit === null ? creditStatus === "error" ? "확인 필요" : "…" : credit.toLocaleString()}<small>크레딧</small></span>
@@ -596,17 +674,17 @@ export default function PieceMaker() {
                   chapter={chapter}
                   titleOf={(id) => findCard(id)?.title}
                   onJudge={requestJudge}
-                  onNew={reset}
-                  onOpen={openDetail}
+                  onNew={startNew}
+                  onOpen={openFromResult}
                 />
                 </>
               }
-              onTitle={setTitle}
-              onClaim={setClaim}
-              onNote={setNote}
+              onTitle={typeTitle}
+              onClaim={typeClaim}
+              onNote={typeNote}
               onMove={move}
               onRemove={removeCard}
-              onOpen={openDetail}
+              onOpen={openFromCompose}
               onExplore={showExplore}
               onReset={openReset}
               onSave={saveDraft}

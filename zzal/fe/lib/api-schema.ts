@@ -221,6 +221,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/piece-maker/v1/public/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 피드백 보내기
+         * @description 독자가 오류를 신고하거나 판정 후기를 남길 때 부른다. 로그인 없이도 보낼 수 있다.
+         *     - `kind` 는 `ERROR_REPORT`(오류 신고) 또는 `JUDGEMENT_REVIEW`(판정 후기). 다른 값이면 400(INVALID_INPUT)
+         *     - `body` 는 앞뒤 빈칸을 뗀 뒤 1자 이상 2,000자까지. 비었거나 넘으면 400(INVALID_INPUT)
+         *     - 로그인한 상태로 보내면 누가 보냈는지 함께 적는다. 응답에는 보낸 사람을 싣지 않는다
+         *     - 보낸 뒤에는 고칠 수 없다. 서버는 받았다는 뜻으로 저장된 줄을 돌려준다
+         */
+        post: operations["create_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -2824,6 +2848,12 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponsePieceMakerFeedback: {
+            data?: components["schemas"]["PieceMakerFeedback"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponsePieceMakerHypothesis: {
             data?: components["schemas"]["PieceMakerHypothesis"];
             error?: components["schemas"]["ErrorBody"];
@@ -3778,6 +3808,43 @@ export interface components {
             body?: string;
             /** Format: int32 */
             n?: number;
+        };
+        /** @description 저장된 피드백 하나 */
+        PieceMakerFeedback: {
+            /** @description 본문. 앞뒤 빈칸을 뗀 글 */
+            body?: string;
+            /**
+             * Format: date-time
+             * @description 받은 시각(UTC)
+             * @example 2026-10-01T09:43:00Z
+             */
+            createdAt?: string;
+            /**
+             * Format: int64
+             * @description 피드백 id
+             * @example 3
+             */
+            id?: number;
+            /**
+             * @description 종류
+             * @example JUDGEMENT_REVIEW
+             * @enum {string}
+             */
+            kind?: "ERROR_REPORT" | "JUDGEMENT_REVIEW";
+        };
+        /** @description 피드백 보내기. 로그인 없이도 보낼 수 있다 */
+        PieceMakerFeedbackCreate: {
+            /**
+             * @description 본문. 2,000자까지. 비면 400
+             * @example 인용한 카드가 제 가설과 맞지 않았어요
+             */
+            body?: string;
+            /**
+             * @description 종류. ERROR_REPORT(오류 신고) 또는 JUDGEMENT_REVIEW(판정 후기)
+             * @example JUDGEMENT_REVIEW
+             * @enum {string}
+             */
+            kind?: "ERROR_REPORT" | "JUDGEMENT_REVIEW";
         };
         /** @description 가설 하나. 맡기기 · 되묻기 · 판정 넣기의 응답이 모두 이 모양이다 */
         PieceMakerHypothesis: {
@@ -4793,6 +4860,39 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseForeshadowing"];
+                };
+            };
+        };
+    };
+    create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PieceMakerFeedbackCreate"];
+            };
+        };
+        responses: {
+            /** @description 저장됨 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerFeedback"];
+                };
+            };
+            /** @description 입력이 틀림(INVALID_INPUT) — kind 가 둘 중 하나가 아니거나 body 가 비었거나 2,000자를 넘음 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerFeedback"];
                 };
             };
         };
