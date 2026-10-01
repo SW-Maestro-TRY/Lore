@@ -148,8 +148,11 @@ class ConcurrentRequestsIT extends ZzalItSupport {
     // ══ M-12(라). 같은 펫에 게임 시작 둘 ════════════════════════════════
 
     @Test
-    @DisplayName("★★ 놀이 시작을 동시에 두 번 눌러도 판은 하나 — 두 판이 생기면 하루 횟수가 두 번 깎인다")
-    void startingTwiceAtOnceMakesOneGame() {
+    @DisplayName("★★ 놀이 시작을 동시에 두 번 누르면 앞 판은 기권(패)으로 접히고 새 판이 열린다 — 하루 횟수는 두 번 깎인다")
+    void startingTwiceAtOnceAbandonsFirstAndStartsSecond() {
+        // 현재 규칙: 게임은 중간에 나가면 끝이고 이어 치기는 없다(ef07cc68 · 2026-09-22 판정 J3
+        // "중간에 나가면 끝"). 새 시작은 남아 있던 미완료 판을 접고 새 판을 연다. 동시에 두 번 눌러도
+        // 펫 행 잠금으로 차례대로 처리되어 같은 결과가 된다(2026-10-01 결정: 이 동작을 그대로 둔다).
         Long userId = newUserId();
         Long petId = playablePet(userId);
         Instant now = Instant.now();
@@ -158,10 +161,17 @@ class ConcurrentRequestsIT extends ZzalItSupport {
                 () -> gameService.start(userId, petId, GameKind.LEFT_RIGHT, now),
                 () -> gameService.start(userId, petId, GameKind.LEFT_RIGHT, now));
 
-        assertThat(errorIn(results)).isNull();
-        List<ZzalGame> rows = games.findAll().stream().filter(g -> g.getPetId().equals(petId)).toList();
-        assertThat(rows).as("게임 행이 둘이면 같은 사람이 하루치를 두 번 잃는다").hasSize(1);
-        assertThat(petRepository.findById(petId).orElseThrow().getTodayGames()).isEqualTo(1);
+        assertThat(errorIn(results)).as("둘 다 정상 시작으로 처리된다").isNull();
+        List<ZzalGame> rows = games.findAll().stream()
+                .filter(g -> g.getPetId().equals(petId))
+                .sorted(java.util.Comparator.comparing(ZzalGame::getId))
+                .toList();
+        assertThat(rows).as("판은 둘 — 앞 판은 접히고 뒤 판이 열린다").hasSize(2);
+        assertThat(rows.get(0).isFinished()).as("앞 판은 기권으로 끝났다").isTrue();
+        assertThat(rows.get(0).isWin()).as("기권한 판은 패배다").isFalse();
+        assertThat(rows.get(1).isFinished()).as("뒤 판은 진행 중이다").isFalse();
+        assertThat(petRepository.findById(petId).orElseThrow().getTodayGames())
+                .as("시작할 때마다 하루 횟수가 깎인다").isEqualTo(2);
     }
 
     // ══ M-12(나). 같은 판에 치기 둘 ═════════════════════════════════════
