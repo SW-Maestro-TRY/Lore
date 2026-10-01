@@ -10,6 +10,7 @@
 // v1(수치설계-3안-0824)에서 지운 것: 훈련(TRAIN_PRICE·HAPPY_BONUS·trainGain), 5칸 게이지, 시연 배속(DEMO/REAL),
 // 잠 길이표. 정본 §6 "훈련 행동 없음".
 
+import { CHAR_TEXT_MAX } from '../lib/pet';
 import type { Mood, Personality, PetDetail } from '../lib/pet';
 
 const MIN = 60_000;
@@ -43,8 +44,14 @@ export const DROP_MS = {
  */
 export const TUTORIAL_FIRST_TRASH = 1;
 
-/** 간식 연속 5개면 배탈(병 100%). §4·§5 */
-export const SNACK_STREAK_SICK = 5;
+/**
+ * **그날 5개째 간식부터 배탈**(병 100%). §4·§16 · 서버 `ZzalRules.SNACK_DAILY_SICK_AT`.
+ *
+ * ★ 옛 이름은 `SNACK_STREAK_SICK`("연속")이었다. **연속은 보지 않는다**(정본 §16) —
+ *   옛 규칙은 사이에 밥을 한 번만 끼워도 연속이 끊겨 하루에 열 개도 먹일 수 있었다.
+ * ★ 해금·조각에 세는 상한도 이 값에서 끌어낸다(그날 4개까지). 따로 상수를 두면 한쪽만 고쳐진다.
+ */
+export const SNACK_DAILY_SICK_AT = 5;
 
 /** 목욕은 하루 1회. §4 */
 export const BATH_PER_DAY = 1;
@@ -60,8 +67,14 @@ export const SLEEP_WINDOW = { from: 19, to: 23 } as const;
 /** 깨우기 창 07:00~10:00, 10:00 자동 기상(늦잠). §2 */
 export const WAKE_WINDOW = { from: 7, to: 10 } as const;
 
-/** 아기 40분 낮잠 — 5분 뒤 깨우기 켜짐, 10분 뒤 자동 기상. §12·§16 */
-export const NAP = { wakeAfterMs: 5 * MIN, autoWakeMs: 10 * MIN } as const;
+/**
+ * 튜토리얼 낮잠(§12 8번째 칸).
+ *
+ * ★ **분 단위 대기가 없다**(정본 §16 1.4) — "재우기를 누르면 커튼이 내려오고 **깨우기 버튼이
+ *   곧바로 켜진다**. 튜토리얼 동안 시계가 멈춰 있으므로." 옛 5분 대기·10분 자동 기상은
+ *   시계가 도는 줄 알던 시절의 잔재다. 시계가 멈춰 있으니 자동 기상도 없다(깨우는 것은 사용자뿐).
+ */
+export const NAP = { wakeAfterMs: 0 } as const;
 
 /** 시각 → 빛(§11). 24시간제 경계. 자는 동안은 커튼이라 여기 없다. */
 export const LIGHT_PHASES = [
@@ -77,9 +90,15 @@ export const SCENE_REROLL_MS = 12 * MIN;
 
 // ── §10·§16 채팅 ─────────────────────────────────────────────────────────
 
-/** 부름 시각: 기상+1h / 기상+7h / 19:00 고정. 아기 8분(BABY)은 3회에 미포함. §10·§12·§16 */
+/**
+ * 부름 시각: 기상+1h / 기상+7h / 19:00 고정. §10·§12·§16
+ *
+ * ★ **BABY 는 시각이 아니라 순서다**(서버 `ChatService` 머리말) — 튜토리얼 부름이라 시계가
+ *   멈춰 있고, **만료도 없다.** 옛 `afterHatchMs: 8 * MIN`("부화 8분 뒤")은 시계가 도는 줄
+ *   알던 시절의 잔재라 지웠다. 8분을 기다려야 튜토리얼 3번 칸이 열리는 것이 아니다.
+ * ★ 만료는 **다음 부름 시각**이고, 마지막인 EVENING 은 **자동 취침 시각(23:00)** 에 만료된다.
+ */
 export const CHAT_SLOTS = {
-  BABY: { afterHatchMs: 8 * MIN },
   MORNING: { afterWakeMs: 1 * HOUR },
   NOON: { afterWakeMs: 7 * HOUR },
   EVENING: { hour: 19 },
@@ -88,8 +107,16 @@ export const CHAT_SLOTS = {
 /** 자유 입력 40자. §10 */
 export const CHAT_MAX_CHARS = 40;
 
-/** 세계관 한 줄 40자. §16 */
-export const WORLD_MAX_CHARS = 40;
+/**
+ * 세계관 한 칸의 한도. **고른 칩과 직접 쓴 말을 합친 길이**다(서버도 한 칸에 합쳐 담는다).
+ *
+ * ★★ **숫자를 여기 박지 않는다.** 이 한도는 최소 네 곳이 같이 봐야 한다 —
+ *   서버 `@Size`/`ZzalRules` · 이 파일 · 화면 `maxLength` · 목 서버.
+ *   2026-09-22 에 정확히 그 때문에 막혔다: 서버가 100 으로 올라간 뒤에도 **여기가 40 에 멈춰
+ *   있었고**, 목 서버가 이 값을 그대로 읽어 41자부터 400 으로 거절했다. 화면만 넓혀 봐야
+ *   연습방에서 같은 벽에 부딪힌다. 그래서 계약 옆(`lib/pet.ts` 의 `CHAR_TEXT_MAX`) 한 곳만 본다.
+ */
+export const WORLD_MAX_CHARS = CHAR_TEXT_MAX.world;
 
 /** 기억 = 최근 답 5개. §10 */
 export const CHAT_MEMORY = 5;
@@ -126,8 +153,37 @@ export const RUN = { targetMs: 30_000, unlockWins: 5 } as const;
 
 // ── §6 동작 3층과 해금 ────────────────────────────────────────────────────
 
-/** 첫 심화 행동(선물) = 함께한 날 3 + 그날 케어 미스 0. §6·§16 */
+/**
+ * **뒤로 넘어짐**(3층 첫 심화 행동의 선물) = 함께한 날 3 + 그날 케어 미스 0. §6·§16
+ *
+ * ★ **구르기와 헷갈리지 말 것.** 정본 §6 표가 둘을 갈라 놓았다 —
+ *   구르기(`GIFT_SEQ`)는 **튜토리얼 9칸을 다 끝낸 그 순간** 굽는 첫날 보상이라 이 값과 무관하고,
+ *   이 숫자가 걸리는 것은 3층의 뒤로 넘어짐뿐이다. 목은 3층 굽기를 아직 흉내 내지 않는다.
+ */
 export const FIRST_GIFT_DAYS = 3;
+
+/**
+ * 조각 네 칸의 요구량(정본 §6 표 · 서버 `ZzalRules.PIECE_*`).
+ *
+ * 칸 하나는 **여러 행동 중 하나**로 채울 수 있다(정본의 "조건(또는)") — 아래 `PIECE_KIND` 가
+ * 어느 행동이 어느 칸을 올리는지 정한다. 요구량에 닿는 순간 그 칸에 도장이 찍히고,
+ * 도장이 찍힌 칸은 **판이 새로 시작될 때까지 더 세지 않는다**(정본 1.9).
+ * ★ 요구량 자체가 이틀치다 — 하루에 다 채울 수 없는 것이 정상이다(§6 "최소 이틀").
+ */
+export const PIECE_NEED = {
+  FEED: 6, SNACK: 5, GAME: 5, CLEAN: 5, BATH: 2, PET: 5, CHAT: 5,
+} as const;
+
+/** 행동 → 조각 칸(서버 `PieceEvent`). */
+export const PIECE_KIND = {
+  FEED: 'food', SNACK: 'play', GAME: 'play', CLEAN: 'clean', BATH: 'clean', PET: 'bond', CHAT: 'bond',
+} as const;
+
+export type PieceEventKey = keyof typeof PIECE_NEED;
+export type PieceKindKey = (typeof PIECE_KIND)[PieceEventKey];
+
+/** 네 칸의 순서 — 기분 좋은 날의 선물이 "앞선 빈 칸" 을 고를 때 쓰는 그 순서다(서버 `PieceKind` 선언 순). */
+export const PIECE_KINDS: readonly PieceKindKey[] = ['food', 'play', 'clean', 'bond'];
 
 /** 3층 조각은 이틀 연속 4개. §6·§16 */
 export const PIECES_STREAK = 2;
@@ -248,3 +304,52 @@ export const PERSONALITIES: readonly Personality[] = ['GENTLE', 'LIVELY', 'SHY',
 
 /** 이름 12자(§15). */
 export const NAME_MAX_CHARS = 12;
+
+
+// ── §0 원칙 6 · §16 원망 금지 ─────────────────────────────────────────────
+
+/**
+ * 원망·비난·죄책감 유발 어간 — **서버 `BanFilter.DENY` 와 같은 목록**(43개, 2026-09-22 대조).
+ *
+ * ★★ 이것은 취향이 아니라 **자캐 커뮤니티 규범**이다 — 캐릭터가 사용자를 원망하는 말은
+ *   자캐 주인에게 침해로 읽힌다(정본 §0 원칙 6). 그래서 템플릿을 믿지 않고 **출력 직전에 한 번 더**
+ *   거른다. 목록이 서버보다 성기면 서버에서 걸리는 말이 목·연습방에서는 그대로 화면에 나온다.
+ *   실제로 그랬다 — 프론트에는 정규식 11개뿐이라 **서버가 잡는 32어간이 안 걸렸다.**
+ * ★ 어미 변형까지 잡도록 **어간**으로 적고, 대조 전에 정규화해 띄어쓰기·문장부호를 지운다
+ *   (점으로 잘라 쓴 "왜.안.왔.어" 도 같이 잡힌다). **사용자 입력은 거르지 않는다** — 사용자 말은 자유다.
+ * ★ 이 목록을 손볼 때는 **서버 `BanFilter.java` 와 함께** 손본다. 한쪽만 고치면 조용히 갈린다.
+ */
+export const DENY_STEMS: readonly string[] = [
+  // 안 옴·늦음
+  '왜안왔', '왜안와', '왜안오', '안오셨', '안오는줄', '안와줬', '안오면', '또안왔', '왜이렇게늦', '늦게왔',
+  // 두고 감·혼자·외로움
+  '나를두고', '날두고', '저를두고', '혼자뒀', '혼자두', '혼자있', '외로', '어디갔', '어디가셨',
+  // 버림·잊음
+  '버렸', '버리', '잊었', '잊어버', '잊으',
+  // 원망·실망·탓
+  '미워', '원망', '실망', '네탓', '너때문', '당신때문', '무시했', '무시하', '신경도안', '관심도없', '관심없',
+  // 기다림을 앞세움
+  '기다리게', '기다렸', '기다렸는데',
+  // 약속·배신·섭섭
+  '약속어', '어겼', '배신', '섭섭', '서운',
+];
+
+/** 걸렸을 때 대신 나가는 말 — 서버 `BanFilter.SAFE_LINE`. 아무도 탓하지 않는다. */
+export const SAFE_LINE = '…♪';
+
+/** 대조 전 정규화 — NFKC 뒤 한글·영숫자만 남긴다(서버 `BanFilter.normalize` 와 같은 자). */
+function normalizeLine(line: string): string {
+  return line.normalize('NFKC').replace(/[^가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9]/g, '');
+}
+
+/** 이 줄에 원망이 섞였나(서버 `BanFilter.isBanned`). */
+export function isBannedLine(line: string | null | undefined): boolean {
+  if (!line) return false;
+  const tight = normalizeLine(line);
+  return DENY_STEMS.some((stem) => tight.includes(stem));
+}
+
+/** 출력 직전 — 걸리면 안전한 한 줄로(서버 `BanFilter.clean`). */
+export function cleanLine(line: string): string {
+  return isBannedLine(line) ? SAFE_LINE : line;
+}

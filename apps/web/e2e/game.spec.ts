@@ -25,11 +25,16 @@ async function playOne(page: Page): Promise<number> {
   await page.waitForTimeout(500);
   let popped = await dismissCelebrations(page);
   await page.waitForSelector('[data-action="game-left"]');
+  // ★★ **다섯 회차를 다 친다고 가정하지 않는다**(2026-09-22 서버 `1f7093f`) — 매치는
+  //   **3승 또는 3패에서 그 자리에서 끝난다.** 다섯은 상한이고 최단은 세 회차다.
+  //   옛 판은 5번을 무조건 눌러서, 세 회차에 끝난 날 남은 두 번이 사라진 버튼을 두드렸다.
   for (let i = 0; i < 5; i++) {
     // ★ 매 판마다 폭죽을 확인하고 닫는다. 시작 직후 한 번만 닫으면, 응답이 늦게 온 날
     //   판이 도중에 올라와 다음 클릭을 가로챈다(전체 스펙을 함께 돌릴 때 실제로 났다).
     popped += await dismissCelebrations(page);
-    await page.locator('[data-action="game-left"]').click();
+    const btn = page.locator('[data-action="game-left"]');
+    if (!(await btn.count())) break;   // 판이 이미 끝났다(3승 또는 3패)
+    await btn.click();
     await page.waitForTimeout(150);
   }
   await page.waitForTimeout(500);

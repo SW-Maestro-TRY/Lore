@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -319,6 +320,33 @@ public class PetController {
     public ApiResponse<PetResponses.Detail> tutorialDone(@LoginUser Long userId, @PathVariable Long petId) {
         Instant real = Instant.now();
         return ApiResponse.ok(detail(petService.tutorialDone(userId, petId, real), real));
+    }
+
+    @Operation(summary = "졸업 축하 봤음", description = """
+            튜토리얼 졸업(첫날 완주) 축하 창을 봤음을 기록한다. 본문이 없고 **204** 로 답한다.
+
+            화면이 sessionStorage 로 기억하면 새 탭·재시작마다 같은 축하 창이 다시 뜬다.
+            한 번 본 연출은 다시 나오지 않아야 하고, 그 판정은 기기가 아니라 캐릭터에 붙는다.
+
+            **같은 요청을 몇 번 보내도 결과가 같다** — 이미 봤으면 시각을 바꾸지 않고 그대로 204 다.
+            기록된 시각은 상태 조회 응답의 `graduationSeenAt` 으로 내려간다.
+
+            수면 중·여행 중에도 호출할 수 있다. 아이를 돌보는 호출이 아니라 화면이 무엇을 이미
+            보여 줬는지 적는 호출이라 거절할 이유가 없고, 여기서 거절하면 이미 본 축하 창이
+            다음 접속에 다시 뜬다.
+
+            서버가 보는 튜토리얼 진행이 아직 완료 전이어도 받는다 — 기준은 서버의 진행도가 아니라
+            화면이 그 판을 닫은 시점이다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "기록됨(본문 없음)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "로그인이 필요함"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)")})
+    @PostMapping("/{petId}/graduation-seen")
+    public ResponseEntity<Void> graduationSeen(@LoginUser Long userId, @PathVariable Long petId) {
+        petService.markGraduationSeen(userId, petId, Instant.now());
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "공유 링크 발급", description = """

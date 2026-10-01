@@ -3,6 +3,8 @@
 // ★ 3층이 열리기 전에는 **아예 안 그린다.** 서버가 `pieces` 를 null 로 주는 것이 곧 "아직 없다" 이고,
 //   빈 칸 넷을 미리 보여 주면 "왜 안 채워지지" 라는 질문만 남긴다(잠긴 동작과 다르다 — 저건 목표가 보이지만
 //   이건 아직 존재하지 않는 놀이다).
+// ★ "N일 연속" 표시는 **없앴다**(2026-09-20). 서버 응답에 연속일수 칸이 없어 한 번도 뜬 적이 없고,
+//   타입에만 적혀 있어 컴파일러도 못 잡는 죽은 코드였다. 되살릴 계획이 서면 그때 서버 칸부터 만든다.
 // ★ 판정은 **잠들 때만** 한다(계약 해석 48). 그래서 낮 동안 칸이 차는 것은 "오늘 여기까지 했다" 는 표시일 뿐,
 //   그 자리에서 무엇이 일어나지는 않는다. 문구가 그 사실과 어긋나지 않게 쓴다.
 'use client';
@@ -32,19 +34,12 @@ export default function PiecesRow({ pieces, goodDay }: PiecesRowProps) {
     <div
       data-part="pieces"
       data-count={pieces.count}
-      data-streak={pieces.streak}
       data-bonus={pieces.bonus ? '1' : '0'}
       data-good-day={goodDay ? '1' : '0'}
       style={{ display: 'flex', flexDirection: 'column', gap: 7 }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: PEN, fontSize: 18, color: SUB }}>오늘의 조각 {pieces.count} / 4</span>
-        {/* 이틀 연속이 되는 밤에 다음 심화 하나가 큐에 오른다 — 그 사실만 말하고 날짜는 약속하지 않는다. */}
-        {pieces.streak > 0 && (
-          <span data-note="streak" style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 13, color: '#8C7A4B' }}>
-            {pieces.streak}일 연속
-          </span>
-        )}
         {goodDay && (
           <span data-note="good-day" style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: 13, color: '#7C9463' }}>
             기분 좋은 날 · 조각 하나 미리 받았어요

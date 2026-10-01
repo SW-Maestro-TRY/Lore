@@ -95,9 +95,13 @@ export const SITUATION_TABLE: readonly SituationRow[] = [
   /** 간식 주기 — 막대사탕이 그림 안에 있다 */
   { id: "feed_snack_l2", pose: "eat_snack", prop: null, anchor: null, layer: "char", priority: null, status: "confirmed" },
   /** 청소하기 — 빗자루는 그림 안. 먼지는 2단계까지만(기본값) */
-  { id: "clean_l2", pose: "sweep", prop: "dust", anchor: "screen_bottom", layer: "screen", priority: null, status: "default", stages: [1, 2] },
+  // ★ 2026-09-20 상훈님 결정 — 1층과 같은 3단계 12프레임. 먼지 3단계 그림(`dust_3`)은 이미 있다.
+  //   ⚠️ 계약본 `소품-상황표-v1.json` 은 아직 `[1, 2]` 다. 부서장이 그 JSON 도 같이 올려야 한다.
+  { id: "clean_l2", pose: "sweep", prop: "dust", anchor: "screen_bottom", layer: "screen", priority: null, status: "default", stages: [1, 2, 3] },
   /** 목욕하기 — 욕조·흰 가운은 그림 안. 거품은 2단계까지 */
-  { id: "bath_l2_foam", pose: "wash", prop: "bath", anchor: "screen_bottom", layer: "screen", priority: null, status: "confirmed", stages: [1, 2] },
+  // ★ 2026-09-20 상훈님 결정 — 1층과 같은 3단계 12프레임. 거품 3단계 그림(`bath_3`)은 이미 있다.
+  //   ⚠️ 계약본 JSON 은 아직 `[1, 2]` 다(위 `clean_l2` 와 같은 사정).
+  { id: "bath_l2_foam", pose: "wash", prop: "bath", anchor: "screen_bottom", layer: "screen", priority: null, status: "confirmed", stages: [1, 2, 3] },
   /** 헹구는 물줄기 */
   { id: "bath_l2_rinse", pose: "wash", prop: "shower", anchor: "screen_full", layer: "screen", priority: null, status: "pending" },
   /** 대화에 답한 뒤 */

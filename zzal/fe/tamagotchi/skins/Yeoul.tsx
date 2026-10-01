@@ -20,9 +20,10 @@ import AuthModal from '@common/auth/AuthModal';
 import { useAuth } from '@common/auth/useAuth';
 import Egg from '../yeoul/Egg';
 import Onboarding from '../yeoul/Onboarding';
+import AuthSkin from '../yeoul/authSkin';
 import Room from '../yeoul/Room';
 import { STEPS, WEB_KEYS } from '../yeoul/constants';
-import { C, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, radius } from '../yeoul/ui';
+import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radius, fz, ink, pad } from '../yeoul/ui';
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import { useDevVisible } from '../useDevVisible';
@@ -59,17 +60,21 @@ export default function Yeoul(_props: SkinProps) {
    */
   // ★ 로그아웃하면 다시 물어봐야 한다(2026-09-10). 전에는 한 번 켜면 그 마운트에서 영영 꺼지지 않아,
   //   같은 탭에서 계정을 바꾸면 **앞사람의 아이가 그대로 남아 보였다.** 로그인 상태가 꺼질 때 되돌린다.
+  // ★ 2026-09-20 — 되돌리는 김에 **화면도 첫 칸(랜딩)으로** 돌린다. 전에는 서버에서 받은 것만
+  //   버리고 화면은 있던 자리에 그대로 서 있어서, 방에서 로그아웃하면 **남의 아이 방이 그대로
+  //   떠 있었다**(게이지·이름·오간 말이 목 값으로 슬쩍 바뀐 채). 로그아웃은 "나가기" 라서
+  //   첫 화면으로 돌아가는 것이 사람이 기대하는 결과다.
   const asked = useRef(false);
-  const { resume, reset } = live;
-  const { patch } = actions;
+  const { resume, reset, resumeUpload, discardUpload } = live;
+  const { leaveAccount } = actions;
   useEffect(() => {
     if (isAuthenticated) return;
     if (!asked.current) return;
     asked.current = false;
     reset();
-    // 이름도 함께 지운다 — 안 지우면 로그아웃한 화면에 **앞사람 아이의 이름**이 그대로 남는다.
-    patch({ petName: '' });
-  }, [isAuthenticated, reset, patch]);
+    // 이름·오간 말·게임 결과까지 통째로 첫 상태로. 무엇을 지우는지는 `useYeoul.leaveAccount` 에.
+    leaveAccount();
+  }, [isAuthenticated, reset, leaveAccount]);
   /**
    * ★ 화면을 옮기는 것도 **지금 세대의 답일 때만** 한다(2026-09-10).
    *   `asked` 를 되돌리는 것은 *다음* 로그인이 다시 묻게 할 뿐, **이미 날아간 요청**은 못 막는다.
@@ -85,11 +90,17 @@ export default function Yeoul(_props: SkinProps) {
     const mine = era.current;
     void resume().then((r) => {
       if (mine !== era.current) return;   // 그사이 로그인 상태가 바뀌었다 — 남의 답이다
-      if (r === 'draft') goStep(STEPS.indexOf('char'));
-      else if (r === 'hatching') goEgg();
-      else if (r === 'alive') enterRoom();
+      // ★ 2026-09-19 — **들고 있던 그림은 여기서만 올린다.** 올리기 칸에서 가입 창이 뜨는 동안
+      //   파일을 손에 들고 있는데(`holdUpload`), 로그인되자마자 화면이 혼자 올려 버리면
+      //   바로 이 조회와 경주가 된다 — 두고 간 초안이 있는 사람은 초안이 둘이 되고, 굽는 중이면
+      //   `ZZAL_PET_ALREADY_HATCHING` 에 막힌다. 그래서 **답을 보고 나서** 가른다.
+      if (r === 'draft') { discardUpload(); goStep(STEPS.indexOf('char')); }
+      else if (r === 'hatching') { discardUpload(); goEgg(); }
+      else if (r === 'alive') { discardUpload(); enterRoom(); }
+      // 이어갈 아이가 없다 = 방금 가입한 사람. 멈춰 세워 둔 그 그림을 이제 올린다.
+      else void resumeUpload();
     });
-  }, [isAuthenticated, resume, goStep, goEgg, enterRoom]);
+  }, [isAuthenticated, resume, goStep, goEgg, enterRoom, resumeUpload, discardUpload]);
 
   /**
    * 서버가 아는 이름을 목에도 넣어 둔다.
@@ -125,9 +136,9 @@ export default function Yeoul(_props: SkinProps) {
         //   가운데 밝은 셸이 "일부러 방 가운데 둔 카드"로 명확히 읽힌다(수평선은 카드 안 무대와
         //   대략 맞춘 52% — 카드가 그림자로 떠 있어 픽셀 단위로 안 맞아도 어색하지 않다).
         background: `
-          repeating-linear-gradient(90deg, rgba(74,64,56,.03) 0 1px, transparent 1px 22px),
-          radial-gradient(130% 78% at 50% 112%, rgba(74,64,56,.16), rgba(74,64,56,0) 46%),
-          linear-gradient(180deg, #FBEFE2 0%, #FBEFE2 50%, #EFDFCC 55%, #E9D6BF 100%)`,
+          repeating-linear-gradient(90deg, ${ink(.03)} 0 1px, transparent 1px 22px),
+          radial-gradient(130% 78% at 50% 112%, ${ink(.16)}, ${ink(0)} 46%),
+          linear-gradient(180deg, ${C.bornBg} 0%, ${C.bornBg} 50%, #EFDFCC 55%, #E9D6BF 100%)`,
         color: C.ink, fontFamily: SANS, WebkitFontSmoothing: 'antialiased',
       }}
     >
@@ -143,7 +154,7 @@ export default function Yeoul(_props: SkinProps) {
           // ★ 방 배경 위에서 셸이 **떠 있는 카드**로 읽히게 그림자를 키웠다(2026-09-16).
           //   폰(width=100%)에서는 좌우 가장자리가 화면 밖이라 이 그림자가 안 보이고,
           //   넓은 화면에서만 카드가 살짝 떠 보인다 — 좌우 빈 베이지가 사라진다.
-          boxShadow: '0 0 0 1px rgba(74,64,56,.04), 0 22px 60px rgba(74,64,56,.20)',
+          boxShadow: `0 0 0 1px ${ink(.04)}, 0 22px 60px ${ink(.20)}`,
           display: 'flex', flexDirection: 'column',
         }}
       >
@@ -159,6 +170,11 @@ export default function Yeoul(_props: SkinProps) {
           //   로그인도 안 한 채 올리기 칸으로 넘어간다 — 실측으로 그랬다(2026-09-09).
           onSuccess={(how) => { if (how === 'login') actions.passAuth(how); }}
         />
+        {/* ★ 공통 가입 창을 **여울의 결로 감싸는 겉옷**(2026-09-21 A-01~A-04).
+            창 자체는 안 고친다 — trailer·webtoon 과 같이 쓰는 공통 부품이라 팀원 화면이 같이 바뀐다.
+            겉옷이 하는 일: 머리에 "그림 받았어요" 한 줄 + 고른 그림 · 색·서체를 여울 변수로 덮기
+            · 셸을 넘던 높이를 안으로 들이기. 자세한 사연은 `yeoul/authSkin.tsx` 머리말에. */}
+        <AuthSkin open={s.authOpen} thumb={live.previewUrl} pending={live.pendingUpload} />
       </div>
       </LiveProvider>
 
@@ -177,7 +193,7 @@ function RoomWait() {
       data-part="room-wait"
       style={{
         flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', gap: 13, background: C.shell,
+        alignItems: 'center', justifyContent: 'center', gap: gap.lg, background: C.shell,
       }}
     >
       <span style={{
@@ -185,7 +201,7 @@ function RoomWait() {
         border: `2px solid ${C.line}`, borderTopColor: C.accentDim,
         animation: 'ySpin .9s linear infinite',
       }} />
-      <span style={{ fontSize: 12, color: C.faint }}>방을 여는 중이에요</span>
+      <span style={{ fontSize: fz.sm, color: C.faint }}>방을 여는 중이에요</span>
     </div>
   );
 }
@@ -386,6 +402,17 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         //   안 그려져 이 길로만 화면을 볼 수 있다. 방 화면일 때 켜야 보인다(FeedbackSheet 은 방 안에 산다).
         { label: '후기 미리보기', id: 'fb-preview', on: v.fbPreview, pick: actions.toggleFbPreview,
           title: room ? undefined : '방(연습방·진짜 방)으로 들어가야 판이 보입니다' },
+        // ★ 해금 판은 **두 갈래**다(즉시·아침). 실제로는 서버 응답으로만 오는 판이라 이 손잡이가
+        //   없으면 눈으로 확인할 길이 없다. 갈래를 묶지 않는다 — 말도 그림 출처도 다르다.
+        { label: '해금 판(즉시)', id: 'fire-unlock-now', on: false, pick: actions.showUnlock('now'),
+          title: '2층 기본 행동이 그 자리에서 열린 판 (motions[].basicImageKey)' },
+        { label: '해금 판(아침)', id: 'fire-unlock-slept', on: false, pick: actions.showUnlock('slept'),
+          title: '자는 동안 배워 아침에 도착한 판 (learnedToday[].imageKey)' },
+        // ★ 엽서는 **앨범 벽에서 내렸다**(2026-09-21 상훈님 — 실물이 붙기 전까지). 그래도 문구가
+        //   어떻게 보이는지는 눈으로 봐야 하므로 여기 하나만 남긴다. 「다음 날」이 몰래 띄우던
+        //   길은 없앴다 — 날짜를 넘기려고 누른 사람에게 판이 튀어나오던 자리였다.
+        { label: '엽서 판', id: 'fire-postcard', on: false, pick: actions.popPostcard,
+          title: '아침 엽서 판 (앨범 벽에서는 내려간 판)' },
         { label: '가입 모달', on: s.authOpen, pick: actions.openAuth('signup') },
         { label: '로드맵 완료', on: s.cChat >= 4 && s.cBath >= 3 && s.cSleep >= 3 && s.cGame >= 3, pick: actions.finishRoadmap },
         { label: '다음 날', on: false, pick: actions.nextDay },
@@ -404,7 +431,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
           // 오른쪽 가장자리 가운데 — 타일도 헤더도 안 가리는 유일한 빈자리다.
           position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', zIndex: 30,
           padding: '9px 4px', borderRadius: '8px 0 0 8px', border: `1px solid ${C.line}`, borderRight: 'none',
-          background: 'rgba(255,251,244,.86)', font: `10px ${MONO}`, color: C.sub,
+          background: 'rgba(255,251,244,.86)', font: `${monoSize.xs}px ${MONO}`, color: C.sub,
           writingMode: 'vertical-rl', letterSpacing: '.08em',
         }}
       >이동</button>
@@ -416,35 +443,35 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       data-part="dev"
       style={{
         position: 'absolute', right: 10, bottom: 10, zIndex: 30, width: 'min(414px,calc(100% - 20px))',
-        maxHeight: '70%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 9,
-        padding: '11px 13px', borderRadius: radius.lg,
-        background: 'rgba(255,251,244,.96)', border: `1px solid ${C.line}`, boxShadow: '0 8px 24px rgba(74,64,56,.18)',
+        maxHeight: '70%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: gap.md,
+        padding: pad.card, borderRadius: radius.lg,
+        background: 'rgba(255,251,244,.96)', border: `1px solid ${C.line}`, boxShadow: `0 8px 24px ${ink(.18)}`,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ font: `10.5px ${MONO}`, color: C.sub, lineHeight: 1.35 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
+        <span style={{ font: `${monoSize.sm}px ${MONO}`, color: C.sub, lineHeight: 1.35 }}>
           여기 버튼은 <b>화면만</b> 바꿉니다 · 규칙(재고·흔적·시각)에 안 막힙니다
           <br />실제로 돌보는 것은 아래 방 버튼입니다
         </span>
         <span style={{ flex: 1 }} />
-        <button onClick={() => setOpen(false)} style={{ width: 24, height: 24, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: 11, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
+        <button onClick={() => setOpen(false)} style={{ width: 24, height: 24, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.xs, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
       </div>
 
       {rows.map((g) => (
-        <div key={g.n} style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: 86, flex: 'none', paddingTop: 3 }}>
+        <div key={g.n} style={{ display: 'flex', alignItems: 'flex-start', gap: gap.md }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm, width: 86, flex: 'none', paddingTop: 3 }}>
             <span style={{
               width: 18, height: 18, flex: 'none', borderRadius: '50%',
               background: g.items.some((i) => i.on) ? C.accent : '#E3DBCD',
-              color: g.items.some((i) => i.on) ? '#FFF6F2' : C.sub,
-              font: `10px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: g.items.some((i) => i.on) ? C.accentInk : C.sub,
+              font: `${monoSize.xs}px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>{g.n}</span>
             <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-              <span style={{ fontSize: 11.5, color: C.sub }}>{g.label}</span>
-              {g.note && <span style={{ font: `9px ${MONO}`, color: C.faint }}>{g.note}</span>}
+              <span style={{ fontSize: fz.sm, color: C.sub }}>{g.label}</span>
+              {g.note && <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint }}>{g.note}</span>}
             </span>
           </span>
-          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
             {g.items.map((i) => {
               const t = chipTone(i.on);
               return (
@@ -452,7 +479,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
                   // 확정이 아닌 상황은 눌러도 소품이 안 뜬다 — 고장이 아니라 결정 대기라는 뜻으로 흐리게 둔다.
                   title={i.title ?? (i.dim ? '아직 확정 전(decide·pending) — 눌러도 소품은 안 뜹니다' : undefined)}
                   style={{
-                    border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11,
+                    border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: pad.tiny, fontSize: fz.xs,
                     background: t.bg, color: t.fg, opacity: i.dim && !i.on ? 0.5 : 1,
                   }}
                 >{i.label}</button>
@@ -467,16 +494,16 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       {/* ★ 기본 8종 중 서버가 그림을 안 준 것. **방에 들어온 시점에 비어 있어야 한다.**
           지금 가짜 생성은 6종만 만들어서 sick·call 이 늘 뜬다 — 정상적인 경고다. */}
       {missingBasics.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 9px', borderRadius: radius.sm, background: C.accentSoft }}>
-          <span style={{ font: `10px ${MONO}`, color: C.accent }}>기본 8종 중 그림 없음</span>
-          <span style={{ font: `10px ${MONO}`, color: C.accent }}>{missingBasics.join(' · ')}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: pad.tiny, borderRadius: radius.sm, background: C.accentSoft }}>
+          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>기본 8종 중 그림 없음</span>
+          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>{missingBasics.join(' · ')}</span>
         </div>
       )}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingTop: 2 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: gap.sm, paddingTop: 2 }}>
         {WEB_KEYS.map(([k, text]) => (
-          <span key={k} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: C.sub }}>
-            <span style={{ padding: '3px 7px', borderRadius: 7, border: '1px solid rgba(74,64,56,.18)', background: C.paper, font: `10.5px ${MONO}`, color: C.ink }}>{k}</span>
+          <span key={k} style={{ display: 'flex', alignItems: 'center', gap: gap.sm, fontSize: fz.sm, color: C.sub }}>
+            <span style={{ padding: '3px 7px', borderRadius: radius.xs, border: `1px solid ${ink(.18)}`, background: C.paper, font: `${monoSize.sm}px ${MONO}`, color: C.ink }}>{k}</span>
             {text}
           </span>
         ))}
@@ -526,22 +553,22 @@ function DevServerRow({ live }: { live: Live }) {
   };
 
   return (
-    <div data-part="dev-server" style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingTop: 4, borderTop: `1px dashed ${C.lineHard}` }}>
+    <div data-part="dev-server" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, paddingTop: 4, borderTop: `1px dashed ${C.lineHard}` }}>
       <button
         data-jump="server:toggle" onClick={() => setOpen((x) => !x)}
-        style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'none', padding: 0 }}
+        style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: gap.sm, border: 'none', background: 'none', padding: 0 }}
       >
-        <span style={{ font: `10.5px ${MONO}`, color: C.sub }}>{open ? '▾' : '▸'} 서버(dev) — 여기만 진짜 서버를 부릅니다</span>
+        <span style={{ font: `${monoSize.sm}px ${MONO}`, color: C.sub }}>{open ? '▾' : '▸'} 서버(dev) — 여기만 진짜 서버를 부릅니다</span>
       </button>
       {open && (
         <>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-            <span style={{ width: 86, flex: 'none', fontSize: 11.5, color: C.sub, paddingTop: 4 }}>시계</span>
-            <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: gap.md }}>
+            <span style={{ width: 86, flex: 'none', fontSize: fz.sm, color: C.sub, paddingTop: 4 }}>시계</span>
+            <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
               {CLOCK_JUMPS.map((j) => (
                 <button key={j.label} data-jump={`clock:${j.label}`} disabled={busy} onClick={() => void run(j)}
                   style={{
-                    border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: '5px 10px', fontSize: 11,
+                    border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: pad.tiny, fontSize: fz.xs,
                     background: C.slot, color: C.ink, opacity: busy ? 0.5 : 1,
                   }}
                 >{j.label}</button>
@@ -549,14 +576,14 @@ function DevServerRow({ live }: { live: Live }) {
             </div>
           </div>
           {/* ⚠️ 아직 못 하는 것 — 지어내지 않고 무엇이 없는지 적어 둔다. */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-            <span style={{ width: 86, flex: 'none', fontSize: 11.5, color: C.sub, paddingTop: 2 }}>해금 카운터</span>
-            <span style={{ flex: 1, font: `10px ${MONO}`, color: C.faint, lineHeight: 1.5 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: gap.md }}>
+            <span style={{ width: 86, flex: 'none', fontSize: fz.sm, color: C.sub, paddingTop: 2 }}>해금 카운터</span>
+            <span style={{ flex: 1, font: `${monoSize.xs}px ${MONO}`, color: C.faint, lineHeight: 1.5 }}>
               서버 주소 없음 — 밥·간식·청소·목욕·채팅답·쓰다듬·게임시작·깨우기 횟수를 올릴 dev 주소가
               아직 없습니다. 2층 해금은 위 <b>2층 해금</b> 줄로 화면에서만 열어 보세요.
             </span>
           </div>
-          {note && <span data-dev-note style={{ font: `10px ${MONO}`, color: C.accent }}>{note}</span>}
+          {note && <span data-dev-note style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>{note}</span>}
         </>
       )}
     </div>
