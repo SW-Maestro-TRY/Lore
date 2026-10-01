@@ -117,7 +117,7 @@ const dict: Dict = {
   "일상툰 감성": { en: "Slice-of-life", ja: "日常マンガ風", zh: "日常漫风" },
   "흔들리는 연필선, 종이 결, 바랜 파스텔.": { en: "Wobbly pencil lines, paper grain, faded pastels.", ja: "揺れる鉛筆線、紙の質感、色あせたパステル。", zh: "颤动的铅笔线、纸张纹理、褪色的粉彩。" },
   "게임 원화": { en: "Game concept art", ja: "ゲーム原画", zh: "游戏原画" },
-  "섬세한 선화에 은은하게 빛나는 채색.": { en: "Delicate linework with a soft glowing finish.", ja: "繊細な線画にほのかに光る彩色。", zh: "细腻的线稿配上柔和发光的上色。" },
+  "또렷한 선과 셀 채색, 밝은 색, 캐릭터 중심.": { en: "Crisp lines and cel shading, bright colors, character-first.", ja: "くっきりした線とセル塗り、明るい色、キャラクター中心。", zh: "清晰的线条与赛璐璐上色、明亮的色彩、以角色为中心。" },
 
   /* ---- 4 · 방식 ---- */
   "얼마나 촘촘히 그릴까요?": { en: "How detailed should it be?", ja: "どれくらい細かく描きますか？", zh: "画得多精细？" },
