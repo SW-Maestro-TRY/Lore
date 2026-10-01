@@ -74,7 +74,8 @@
   width: 260px; flex: none; border-right: 1px solid rgba(15, 51, 63, 0.08); padding: 16px 12px;
   display: flex; flex-direction: column; gap: 6px; background: #fff;
   position: sticky; top: calc(var(--lore-header-h, 0px) + 64px); align-self: flex-start;
-  max-height: calc(100vh - var(--lore-header-h, 0px) - 64px); overflow: auto;
+  /* 화면 높이만큼 세워 둔다 — 그래야 「내 작품」이 왼쪽 맨 아래에 붙는다(#548). */
+  height: calc(100vh - var(--lore-header-h, 0px) - 64px); overflow: auto;
 }
 .wt .wt-ed-lefthead { font-size: 12px; color: var(--dim); padding: 0 10px 6px; display: block; }
 .wt .wt-ed-workslist { display: flex; flex-direction: column; gap: 2px; }
@@ -107,14 +108,15 @@
 /* 무대 폭. 아트보드는 1280 프레임이라 가운데가 520이었는데, 실제 화면은 그보다
  * 훨씬 넓어서 그대로 두면 양옆이 600px 넘게 논다. 얹은 것의 좌표가 전부 %라
  * (editorCore 의 left/top/width) 넓혀도 말풍선이 그림을 따라간다. */
-.wt .wt-ed-eptabs { width: min(100%, 860px); display: flex; gap: 6px; }
+.wt .wt-ed-eptabs { width: min(100%, 640px); display: flex; gap: 6px; }
 .wt .wt-ed-eptabs[hidden] { display: none; }
 .wt .wt-ed .ep-tab {
   display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
   border: 1.5px solid rgba(15, 51, 63, 0.16); background: #fff; color: var(--ink); cursor: pointer; font-family: inherit;
 }
 .wt .wt-ed .ep-tab[aria-current="true"] { background: var(--ink); border-color: var(--ink); color: #fff; cursor: default; }
-.wt .wt-ed-scenes { width: min(100%, 860px); display: flex; flex-direction: column; }
+/* 페이지는 웹툰을 실제로 읽는 폭에 가깝게 — 860 은 한 장이 화면을 다 덮었다(#548) */
+.wt .wt-ed-scenes { width: min(100%, 640px); display: flex; flex-direction: column; }
 .wt .wt-ed-footnote { font-size: 12px; color: var(--dim); text-align: center; margin-top: 12px; }
 .wt .wt-ed-stage > .lou-note { margin-top: 40px; max-width: 360px; }
 
@@ -304,7 +306,7 @@
   .wt .wt-ed-title { flex-basis: 100%; order: 1; }
   .wt .wt-ed-chips { order: 2; flex-basis: 100%; justify-content: flex-start; }
   .wt .wt-ed-body { flex-direction: column; }
-  .wt .wt-ed-left { width: auto; position: static; max-height: none; border-right: 0; border-bottom: 1px solid rgba(15, 51, 63, 0.08); }
+  .wt .wt-ed-left { width: auto; position: static; max-height: none; height: auto; border-right: 0; border-bottom: 1px solid rgba(15, 51, 63, 0.08); }
   .wt .wt-ed-body.works-off .wt-ed-left { display: none; }
   .wt .wt-ed-pages { margin-top: 8px; }
   .wt .wt-ed-pagegrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
