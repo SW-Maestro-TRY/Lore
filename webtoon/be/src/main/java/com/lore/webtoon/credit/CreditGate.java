@@ -101,9 +101,20 @@ public class CreditGate {
         }
         int have = credits.balance(userId);
         if (have < need) {
-            return "크레딧이 모자랍니다 (필요 " + need + " · 보유 " + have + ")";
+            return "크레딧 잔액이 부족해요 (필요 " + need + " · 보유 " + have + ")";
         }
         return null;
+    }
+
+    /**
+     * 모자라면 여기서 막는다(402). {@link #charge} 는 모자라도 요청을 실패시키지 않으므로,
+     * 시작하기 전에 값을 받는 일(조연 시트 · 장면 다시 뽑기 · 1화 다시 만들기)은 이걸 먼저 부른다.
+     */
+    public void requireEnough(Long userId, int need) {
+        String blocked = whyBlocked(userId, need);
+        if (blocked != null) {
+            throw new BusinessException(ErrorCode.CREDIT_NOT_ENOUGH, blocked);
+        }
     }
 
     /**

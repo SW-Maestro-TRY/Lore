@@ -1,0 +1,4 @@
+/* 크레딧 부족 한 줄 — 빨간 오류가 아니라 안내 */
+.wt .wt-credit-short { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 13.5px; }
+.wt .wt-credit-short > span { display: inline-flex; align-items: baseline; gap: 8px; }
+.wt .wt-credit-short small { font-size: 12px; color: var(--muted); }

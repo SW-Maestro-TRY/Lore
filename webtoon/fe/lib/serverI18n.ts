@@ -26,6 +26,7 @@ const dict: Dict = {
 
   /* ---- 만들기 · 크레딧 (credit/ · job/JobService) ---- */
   "크레딧이 모자랍니다 (필요 {n} · 보유 {m})": { en: "Not enough credits (need {n} · have {m})", ja: "クレジットが足りません（必要 {n} · 所持 {m}）", zh: "积分不足（需要 {n} · 持有 {m}）" },
+  "크레딧 잔액이 부족해요 (필요 {n} · 보유 {m})": { en: "Not enough credits (need {n} · have {m})", ja: "クレジット残高が足りません（必要 {n} · 所持 {m}）", zh: "积分余额不足（需要 {n} · 持有 {m}）" },
   "만들기를 시작하지 못했습니다": { en: "Couldn't start creating", ja: "作成を開始できませんでした", zh: "无法开始制作" },
   "오늘 무료로 만들 수 있는 {n}편을 다 쓰셨어요 — 로그인하시면 이어서 만들 수 있어요.": { en: "You've used today's {n} free episodes — log in to keep creating.", ja: "今日無料で作れる{n}本を使い切りました — ログインすると続けて作れます。", zh: "今天的 {n} 部免费次数已用完——登录后可以继续制作。" },
   "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.": { en: "Today's creation limit is full — please come back tomorrow.", ja: "今日作れる分がいっぱいになりました — また明日お越しください。", zh: "今天的制作名额已满——请明天再来。" },
