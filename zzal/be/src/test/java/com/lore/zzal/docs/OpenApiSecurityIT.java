@@ -225,6 +225,9 @@ class OpenApiSecurityIT {
         if (method.equals("GET") && path.startsWith("/api/piece-maker/v1/public/")) {
             return false;                                   // 복선 카드 보기
         }
+        if (method.equals("POST") && path.equals("/api/piece-maker/v1/public/feedback")) {
+            return false;                                   // 피드백(오류 신고 · 판정 후기) — 로그인 전에도 받는다
+        }
         if (path.startsWith("/api/zzal/v1/agent/")) {
             return false;                                   // 전용 열쇠(X-Zzal-Agent-Key)로 지키는 문
         }

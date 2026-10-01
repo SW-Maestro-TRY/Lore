@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@common/api/client";
 import { fetchCardPage, type Card, type CardQuery } from "../lib/api";
+import { trackSearch } from "../lib/track";
 
 /** 검색어를 보내기 전에 기다리는 시간. */
 export const SEARCH_DELAY_MS = 250;
@@ -81,6 +82,8 @@ export function useCards(chapter: number | null, query: string, kind: string): {
     fetchCardPage(request, controller.signal)
       .then((page) => {
         if (mine !== seq.current) return;
+        // 독자가 찾았을 때만 남긴다. 조건 없이 받는 첫 목록은 찾기가 아니다.
+        if (search.trim() || kind) trackSearch(Boolean(search.trim()), Boolean(kind), page.total);
         const next: CardsState = {
           status: "ready",
           items: page.items,

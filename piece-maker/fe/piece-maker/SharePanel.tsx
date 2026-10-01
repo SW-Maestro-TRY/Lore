@@ -3,6 +3,7 @@ import type { Draft } from "../lib/draft";
 import type { JudgeResult } from "../lib/api";
 import { shareCaption, shareContent, SOCIAL_CHANNELS } from "../lib/sharing";
 import { makeShareImage } from "../lib/shareImage";
+import { trackResultAction } from "../lib/track";
 import { COPY_FIELD_ID } from "./modals";
 import Icon from "./Icon";
 
@@ -44,7 +45,7 @@ export default function SharePanel({ draft, result, onClose }: Props) {
   }, [imageKey, attempt]);
 
   async function copy() {
-    try { await navigator.clipboard.writeText(caption); setCopied(true); setNotice("글을 복사했어요. SNS에서 붙여넣을 수 있어요."); }
+    try { await navigator.clipboard.writeText(caption); setCopied(true); setNotice("글을 복사했어요. SNS에서 붙여넣을 수 있어요."); trackResultAction("share_done", "copy"); }
     catch { setCopied(false); field.current?.focus(); field.current?.select(); setNotice("선택된 글을 직접 복사해 주세요."); }
   }
 
@@ -54,6 +55,7 @@ export default function SharePanel({ draft, result, onClose }: Props) {
     try {
       await navigator.share({ title: content.title, text: caption, files: [picture.file] });
       setNotice("공유 창에 전달했어요. 게시 여부는 선택한 앱에서 확인해 주세요.");
+      trackResultAction("share_done", "native");
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) setNotice("공유 창을 열지 못했어요. 이미지를 저장하고 글을 복사해 주세요.");
     } finally { locked.current = false; setSharing(false); }
@@ -68,7 +70,7 @@ export default function SharePanel({ draft, result, onClose }: Props) {
           <img className="share-result-image" data-part="share-image" src={picture.url} width={1080} height={1350}
             alt={`${content.chapter}화 기준 · ${content.title} · ${content.grade}. ${content.reason}`} />
           <p className="share-image-meta">PNG · 1080 × 1350</p>
-          <a className="btn share-full" data-action="download-image" href={picture.url} download={picture.file.name} onClick={() => setNotice("저장한 이미지를 SNS 게시물에 첨부해 주세요.")}>이미지 저장</a>
+          <a className="btn share-full" data-action="download-image" href={picture.url} download={picture.file.name} onClick={() => { setNotice("저장한 이미지를 SNS 게시물에 첨부해 주세요."); trackResultAction("share_done", "image"); }}>이미지 저장</a>
           {picture.shortened && <p className="share-hint">긴 제목·주장·판정 이유는 이미지에서 일부 생략했습니다.</p>}
         </> : <div className="share-image-placeholder" role="status">
           {picture.status === "loading" ? "이미지를 준비하는 중…" : <><p>이미지를 만들지 못했어요.</p><button className="btn" onClick={() => setAttempt(n => n + 1)}>다시 만들기</button></>}
@@ -86,7 +88,8 @@ export default function SharePanel({ draft, result, onClose }: Props) {
           <h3 id="share-sns-title"><span className="share-step">3</span>내 계정에 게시</h3>
           <p className="share-channel-help">SNS에서 저장한 이미지를 첨부하고 복사한 글을 붙여넣으세요. 글자 수 제한은 게시 화면에서 확인해 주세요.</p>
           <div className="share-channels">{SOCIAL_CHANNELS.map(channel => <a key={channel.id} className="share-channel"
-            data-channel={channel.id} href={channel.href} target="_blank" rel="noopener noreferrer" aria-label={`${channel.name} 열기`}>
+            data-channel={channel.id} href={channel.href} target="_blank" rel="noopener noreferrer" aria-label={`${channel.name} 열기`}
+            onClick={() => trackResultAction("share_done", channel.id)}>
             <ChannelIcon id={channel.id} /><span>{channel.name}</span>
           </a>)}</div>
           {picture.status === "ready" && picture.canShare && <>

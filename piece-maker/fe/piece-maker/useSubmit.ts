@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@common/api/client";
 import { submitHypothesis, type Hypothesis, type JudgeRequest } from "../lib/api";
+import { trackSubmitBlocked } from "../lib/track";
 import type { AccountRequest } from "./useAccountRequests";
 
 export type SubmitState =
@@ -87,13 +88,16 @@ export function useSubmit() {
     } catch (error) {
       if (stale()) return null;
       if (error instanceof ApiError && error.isUnauthorized) {
+        trackSubmitBlocked("login");
         setState({ status: "idle" });
         return "unauthorized";
       }
       if (error instanceof ApiError && error.status === 402) {
+        trackSubmitBlocked("credit", error.code);
         setState({ status: "insufficient", reason: error.message });
         return null;
       }
+      trackSubmitBlocked("error", error instanceof ApiError ? error.code : null);
       setState({ status: "failed", reason: error instanceof Error ? error.message : String(error) });
       return null;
     } finally {

@@ -28,6 +28,7 @@ export type ModalState =
   | { kind: "saved" }
   | { kind: "preview" }
   | { kind: "credits" }
+  | { kind: "feedback" }
   | { kind: "help" }
   | { kind: "reset" };
 
