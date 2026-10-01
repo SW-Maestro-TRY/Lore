@@ -350,12 +350,6 @@ export function retryScenes(id: string, note = "") {
   return post(`/nh/jobs/${encodeURIComponent(id)}/scenes-retry`, note ? { note } : {});
 }
 
-/** 그림체·촘촘함 바꾸기 — 웹툰을 만들기 전(장면 확인 차례)까지만. 그림체를 바꾸면 서버가 시트를 다시 그린다. */
-export function patchOptions(id: string, body: { style?: string; quality?: string }) {
-  return call<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/options`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-  });
-}
 
 export function pickDirection(id: string, n: number, editedBody?: string, editedTitle?: string) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/pick`, {
@@ -380,7 +374,7 @@ export function sheetImageUrl(jobId: string, v: number | string = ""): string {
 }
 /** v 번째 옛 시트 그림(#548). */
 export function sheetVersionUrl(jobId: string, v: number): string {
-  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet/${v}.png`;
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet-v${v}.png`;
 }
 /** v 번째 옛 시트를 현재 시트로 되돌린다(#548). */
 export function restoreSheet(id: string, v: number) {
