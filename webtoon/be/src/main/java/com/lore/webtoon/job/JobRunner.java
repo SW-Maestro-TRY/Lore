@@ -838,6 +838,7 @@ public class JobRunner {
                 Map<String, Object> one = new LinkedHashMap<>();
                 one.put("n", s.path("n").asInt());
                 one.put("text", sceneText(s));
+                one.put("parts", sceneParts(s));
                 String user = s.path("user_text").asText("");
                 one.put("user_text", user.isBlank() ? null : user);
                 out.add(one);
@@ -852,6 +853,44 @@ public class JobRunner {
      * 장면 하나를 사람이 읽는 한 글로. 칸 순서는 하네스 {@code own.SCENE_TEXT_KEYS} 와 같다
      * (장소와 상황 → 벌어지는 일 → 행동과 표정 → 겉모습 → 끝나는 상태, 그리고 나레이션).
      */
+    /** 장면을 칸별로 — 화면이 읽을 때 제목을 붙여 보여 준다(#548). {label, text} 목록. */
+    static List<Map<String, String>> sceneParts(JsonNode s) {
+        List<Map<String, String>> parts = new ArrayList<>();
+        String[][] keys = {{"where", "장소와 상황"}, {"what", "벌어지는 일"}, {"acting", "행동과 표정"},
+                           {"look", "겉모습"}, {"ends", "끝나는 상태"}};
+        for (String[] k : keys) {
+            String v = cleanSceneField(s.path(k[0]).asText(""));
+            if (!v.isEmpty()) {
+                parts.add(Map.of("label", k[1], "text", v));
+            }
+        }
+        JsonNode narration = s.path("narration");
+        if (narration.isArray() && !narration.isEmpty()) {
+            List<String> lines = new ArrayList<>();
+            narration.forEach(n -> lines.add(n.asText()));
+            parts.add(Map.of("label", "나레이션", "text", String.join(" / ", lines)));
+        }
+        return parts;
+    }
+
+    /** 「시트 그대로」·「없음」 같은 자리표는 뺀다. 「시트 그대로. 추가로 …」처럼 앞에 붙은 것도 떼어 낸다. */
+    static String cleanSceneField(String raw) {
+        String v = raw == null ? "" : raw.trim();
+        for (String mark : List.of("시트 그대로.", "시트 그대로", "없음.", "없음")) {
+            if (v.equals(mark)) {
+                return "";
+            }
+            if (v.startsWith(mark)) {
+                v = v.substring(mark.length()).trim();
+                if (v.startsWith("추가로")) {
+                    v = v.substring("추가로".length()).trim();
+                }
+                break;
+            }
+        }
+        return v;
+    }
+
     static String sceneText(JsonNode s) {
         String user = s.path("user_text").asText("");
         if (!user.isBlank()) {
@@ -859,9 +898,8 @@ public class JobRunner {
         }
         List<String> parts = new ArrayList<>();
         for (String key : List.of("where", "what", "acting", "look", "ends")) {
-            String v = s.path(key).asText("").trim();
-            if (!v.isEmpty() && !v.equals("시트 그대로") && !v.equals("시트 그대로.")
-                    && !v.equals("없음") && !v.equals("없음.")) {
+            String v = cleanSceneField(s.path(key).asText(""));
+            if (!v.isEmpty()) {
                 parts.add(v);
             }
         }
