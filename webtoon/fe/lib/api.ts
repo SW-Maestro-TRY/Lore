@@ -487,6 +487,8 @@ export interface RunResult {
   page_count: number;
   planned_pages: number;
   preview: boolean;
+  /** 둘러보기에 심어 둔 예시 작품 — 내 것이 아니어도 내려받을 수 있다. */
+  example?: boolean;
   /** 관리자가 열 때만 온다(#329, #428) — 만들 때 넣은 설정. */
   inputs?: RunInputs;
 }
