@@ -65,6 +65,11 @@ public class RunArt {
 
     /** 보관해 둔 시트 판 수. 지금 시트는 세지 않는다. */
     public int sheetVersions(String runId) {
+        /* 시작 직후 30~40초는 run_id 가 아직 비어 있는데, 그동안에도 화면이 진행 상태를 묻는다.
+           여기서 죽으면 그 요청이 전부 500 이 된다(옆의 JobRunner.sheetReady 처럼 먼저 거른다). */
+        if (runId == null || runId.isBlank()) {
+            return 0;
+        }
         Path d = dir(runId);
         if (!Files.isDirectory(d)) {
             return 0;
