@@ -9,6 +9,7 @@
  * 뜬다. 아무것도 안 누르면 지금 해야 할 화면이 저절로 뜨고, 사람이 할 일이 없는
  * 동안에는 루와 노는 자리가 뜬다(몇 분을 기다리는 화면이라 비워 두지 않는다).
  * 폴링이 끊겨도 작업은 서버에서 계속 돈다 — 실패로 만들지 않는다. */
+import { Dialog } from "../../ui/Dialog";
 import mockReal from "./mockScenes.json";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
@@ -54,11 +55,65 @@ function currentStep(job: NhJob): number {
   if (job.status === "awaiting_sheet") return 1;
   /* 장면 확인(#548) — 이야기와 시트는 끝났고 장을 그리기 직전이다. */
   if (job.status === "awaiting_scenes") return SCENES;
+  /* 장면 나누기는 서버 stage 로는 pages 로 온다. 아직 몇 장인지 모르면(art 없음) 장면을 나누는 중이다. */
+  if (job.stage === "pages" && !(job.art && job.art.total > 0)) return SCENES;
   const byStage = STAGE_INDEX[job.stage];
   if (byStage != null) return byStage;
   if (job.art && job.art.total > 0) return PAGES;
   if (job.pick == null) return 0;
   return PAGES;
+}
+
+
+/* 장면 글(#548) — 소제목마다 「소제목\n글」, 사이는 빈 줄. 고칠 때도 읽을 때와 같은 모양으로 보이게
+   한 글로 이어 저장하고, 다시 소제목별로 나눠 보여 준다. */
+type ScenePart = { label: string; text: string };
+function joinParts(parts: ScenePart[]): string {
+  return parts.map((p) => `${p.label}\n${p.text}`).join("\n\n");
+}
+/** 소제목 모양이 그대로면 나눠 주고, 사용자가 모양을 바꿔 적었으면 null(한 글로 보여 준다). */
+function splitParts(text: string, parts?: ScenePart[] | null): ScenePart[] | null {
+  if (!parts?.length) return null;
+  const labels = parts.map((p) => p.label);
+  const out: ScenePart[] = [];
+  for (const line of text.split("\n")) {
+    const at = labels.indexOf(line.trim());
+    if (at >= 0 && !out.some((o) => o.label === labels[at])) out.push({ label: labels[at], text: "" });
+    else if (out.length) out[out.length - 1].text += (out[out.length - 1].text ? "\n" : "") + line;
+    else return null;
+  }
+  return out.length ? out.map((o) => ({ ...o, text: o.text.replace(/\n+$/, "") })) : null;
+}
+
+/** 글 길이만큼 늘어나는 칸 — 고치기를 눌러도 읽던 모양·높이 그대로. */
+function GrowArea({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+  return <textarea ref={ref} className="field wt-prog-grow" rows={1} value={value} aria-label={label} onChange={(e) => onChange(e.target.value)} />;
+}
+
+function SceneEditor({ text, parts, label, onChange }: {
+  text: string; parts?: ScenePart[] | null; label: string; onChange: (v: string) => void;
+}) {
+  const t = useT();
+  const split = splitParts(text, parts);
+  if (!split) return <GrowArea value={text} label={label} onChange={onChange} />;
+  return (
+    <div className="wt-prog-parts editing">
+      {split.map((pt, i) => (
+        <div key={pt.label} className="part">
+          <span>{t(pt.label)}</span>
+          <GrowArea value={pt.text} label={`${label} · ${t(pt.label)}`}
+                    onChange={(v) => onChange(joinParts(split.map((o, j) => (j === i ? { ...o, text: v } : o))))} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function Crumb({ items }: { items: string[] }) {
@@ -273,11 +328,17 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     }
   }, [status, job?.story]);
   /* 읽을 때는 parts(라벨 붙은 문단)로, 고칠 때는 글 칸 하나로. 고친 글이 있으면 그것이 먼저다. */
-  const sceneSeed = (s: NhScene) => s.user_text ?? (s.parts?.length ? s.parts.map((p) => `${p.label}: ${p.text}`).join("\n") : s.text);
+  const sceneSeed = (s: NhScene) => s.user_text ?? (s.parts?.length ? joinParts(s.parts) : s.text);
   const sceneText = (s: NhScene) => sceneDraft[s.n] ?? sceneSeed(s);
   const SceneBody = ({ s }: { s: NhScene }) => {
     const edited = sceneDraft[s.n] ?? s.user_text;
-    if (edited != null) return <p className="muted">{edited}</p>;
+    const editedParts = edited != null ? splitParts(edited, s.parts) : null;
+    if (edited != null && !editedParts) return <p>{edited}</p>;
+    if (editedParts) return (
+      <div className="wt-prog-parts">
+        {editedParts.map((pt, i) => <div key={i} className="part"><span>{t(pt.label)}</span><p>{pt.text}</p></div>)}
+      </div>
+    );
     if (s.parts?.length) return (
       <div className="wt-prog-parts">
         {s.parts.map((pt, i) => <div key={i} className="part"><span>{t(pt.label)}</span><p>{pt.text}</p></div>)}
@@ -871,14 +932,15 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                           {s.busy ? (
                             <div className="wt-prog-sheetwait small"><span className="spin" /> {t("다시 뽑는 중")}</div>
                           ) : editing ? (
-                            <textarea className="field" value={sceneText(s)} aria-label={t("장면 {n} / {total}", { n: s.n, total: scenes.length })}
-                                      onChange={(e) => editScene(s.n, e.target.value)} />
+                            <SceneEditor text={sceneText(s)} parts={s.parts} label={t("장면 {n} / {total}", { n: s.n, total: scenes.length })}
+                                         onChange={(v) => editScene(s.n, v)} />
                           ) : (
                             <SceneBody s={s} />
                           )}
                           {retry && !s.busy && (
+                            <Dialog title={t("이 장면 다시 뽑기")} sub={t("장면 {n} / {total}", { n: s.n, total: scenes.length })}
+                                    busy={busy} onClose={() => openSceneRetry(s.n)}>
                             <div className="wt-prog-sceneretry">
-                              <b>{t("이 장면 다시 뽑기")}</b>
                               <div className="chips">
                                 {SCENE_REASONS.map(([code, label]) => (
                                   <button key={code} type="button" className={`chip${retry.reasons.includes(code) ? " on" : ""}`}
@@ -887,12 +949,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                               </div>
                               <textarea className="field" value={retry.note} placeholder={t("직접 수정사항을 적어 주세요")} aria-label={t("직접 수정사항을 적어 주세요")}
                                         onChange={(e) => setSceneRetry((o) => ({ ...o, [s.n]: { ...retry, note: e.target.value } }))} />
-                              <div className="acts">
-                                <button type="button" className="btn btn-p btn-sm" disabled={busy} onClick={() => void sendSceneRetry(s.n)}>{t("다시 뽑기")}</button>
-                                <button type="button" className="btn btn-w btn-sm" onClick={() => openSceneRetry(s.n)}>{t("닫기")}</button>
-                                {sceneRetryErr[s.n] && <span className="err">{sceneRetryErr[s.n]}</span>}
+                              {sceneRetryErr[s.n] && <p className="wt-dialog-err">{sceneRetryErr[s.n]}</p>}
+                              <div className="wt-dialog-actions">
+                                <button type="button" className="btn btn-w" disabled={busy} onClick={() => openSceneRetry(s.n)}>{t("닫기")}</button>
+                                <button type="button" className="btn btn-p" disabled={busy} onClick={() => void sendSceneRetry(s.n)}>{t("다시 뽑기")}</button>
                               </div>
                             </div>
+                            </Dialog>
                           )}
                         </div>
                       );
