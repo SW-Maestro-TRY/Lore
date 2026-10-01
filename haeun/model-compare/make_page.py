@@ -104,7 +104,17 @@ imgs = ('<div class="shots one">' + img("sheet", "소이 캐릭터 시트 (gpt-i
         + img("grok-A-service", "Grok Imagine 2.0 — 17초") + img("seedream-A-service", "Seedream 4.5 — 29초") + img("qwen-A-service", "Qwen Image 3 — 45초 (셔츠를 입혔다)") + img("openai-A-service", "OpenAI gpt-image-2 (제품 모델) — 33초") + "</div>"
         + '<h3 class="run">B. 베드신 — 이불로 가린 노출</h3><div class="shots">'
         + img("grok-B-bed", "Grok Imagine 2.0 — 13초") + img("seedream-B-bed", "Seedream 4.5 — 36초") + img("qwen-B-bed", "Qwen Image 3 — 37초") + '<figure class="shot refused"><div class="refusal">거절<br><small>Your request was rejected by the safety system<br>(moderation_blocked, 3초)</small></div><figcaption>OpenAI gpt-image-2 (제품 모델)</figcaption></figure></div>')
+refused = lambda title, why: f'<figure class="shot refused"><div class="refusal">거절<br><small>{e(why)}</small></div><figcaption>{e(title)}</figcaption></figure>'
+grok2 = ('<h3 class="run">수위 단계 — 셋 다 거절</h3><div class="shots">'
+         + refused("① 상반신 노출 베드신", "xAI blocked this request through content moderation (14초)")
+         + refused("② 성관계 암시 (결합 부위 가림)", "xAI blocked this request through content moderation (13초)")
+         + refused("③ 노골적인 성행위", "xAI blocked this request through content moderation (17초)") + "</div>"
+         + '<h3 class="run">웹툰 페이지 — 프롬프트가 너무 길다</h3><div class="shots">'
+         + refused("장면 2 페이지 (제품 프롬프트 27,693자)", "Prompt length exceeds the maximum allowed length of 8000")
+         + refused("장면 6 페이지 (제품 프롬프트 27,816자)", "Prompt length exceeds the maximum allowed length of 8000") + "</div>"
+         + '<h3 class="run">인물 고정 — 같은 소이 시트로 일상 장면</h3><div class="shots">'
+         + img("grok2-C1-subway", "출근길 지하철 — 15초") + img("grok2-C2-cafe", "점심시간 카페 — 15초") + "</div>")
 page = (HERE / "page_template.html").read_text(encoding="utf-8").replace(
-    "{{STYLE}}", (HERE / "style.part").read_text(encoding="utf-8")).replace("{{IMAGES}}", imgs).replace("{{ADULT_SCENE}}", adult_sc).replace("{{ADULT_RAW}}", adult_raw).replace("{{PAID_STORIES}}", paid_st).replace("{{VC_STORIES}}", vc_st).replace("{{VC_SCENES}}", vc_sc).replace("{{NEM_STORIES}}", nem_st).replace("{{NEM_SCENES}}", nem_sc).replace("{{STORIES}}", st).replace("{{SCENES}}", sc)
+    "{{STYLE}}", (HERE / "style.part").read_text(encoding="utf-8")).replace("{{GROK2}}", grok2).replace("{{IMAGES}}", imgs).replace("{{ADULT_SCENE}}", adult_sc).replace("{{ADULT_RAW}}", adult_raw).replace("{{PAID_STORIES}}", paid_st).replace("{{VC_STORIES}}", vc_st).replace("{{VC_SCENES}}", vc_sc).replace("{{NEM_STORIES}}", nem_st).replace("{{NEM_SCENES}}", nem_sc).replace("{{STORIES}}", st).replace("{{SCENES}}", sc)
 (HERE / "비교.html").write_text(page, encoding="utf-8")
 print(HERE / "비교.html")
