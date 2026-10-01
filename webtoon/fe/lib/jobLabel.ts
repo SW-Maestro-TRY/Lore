@@ -8,7 +8,7 @@ type Tr = (s: string, p?: Record<string, string | number>) => string;
 
 export function activeJobLabel(job: NhJob, t: Tr): string {
   switch (job.status) {
-    case "awaiting_pick": return t("이야기 고르는 중");
+    case "awaiting_pick": return job.mode === "own" ? t("이야기 확인 중") : t("이야기 고르는 중");
     case "awaiting_cast": return t("인물 확인 중");
     case "awaiting_sheet": return t("캐릭터 확인 중");
     case "awaiting_scenes": return t("장면 확인 중");
@@ -27,6 +27,7 @@ export function activeJobTitle(job: NhJob): string {
 }
 
 registerDict({
+  "이야기 확인 중": { en: "Checking the story", ja: "ストーリー確認中", zh: "正在确认故事" },
   "이야기 고르는 중": { en: "Picking a story", ja: "ストーリー選択中", zh: "正在选故事" },
   "인물 확인 중": { en: "Checking the characters", ja: "登場人物を確認中", zh: "正在确认人物" },
   "캐릭터 확인 중": { en: "Checking the character", ja: "キャラクター確認中", zh: "正在确认角色" },

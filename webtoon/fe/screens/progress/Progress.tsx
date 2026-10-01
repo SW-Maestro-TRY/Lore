@@ -4,7 +4,7 @@
  *   awaiting_sheet → 캐릭터 시트 확인 · awaiting_pick → 이야기 고르기(→ 본문 확인)
  *   queued/running → 그리는 중 · done → 완성본으로 · error → 실패
  *
- * 왼쪽 줄은 탭이다 — 맨 위 루를 누르면 「루와 놀기」, 아래 네 걸음(이야기 짓기 ·
+ * 왼쪽 줄은 탭이다 — 맨 위 루를 누르면 「루와 놀기」, 아래 네 걸음(1화 생성하기 ·
  * 캐릭터 그리기 · 페이지 그리기 · 검수하기)을 누르면 그 걸음의 결과가 오른쪽에
  * 뜬다. 아무것도 안 누르면 지금 해야 할 화면이 저절로 뜨고, 사람이 할 일이 없는
  * 동안에는 루와 노는 자리가 뜬다(몇 분을 기다리는 화면이라 비워 두지 않는다).
@@ -14,10 +14,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
   cancelJob, continueScenes, decideSheet, jobPageUrl, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
-  castSheetImageUrl, patchOptions, readAllowance, requestCastSheet, retryScenes, saveScenes, sheetImageUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, rememberMyRun } from "../../lib/api";
+  castSheetImageUrl, readAllowance, requestCastSheet, restoreSheet, retryScene, saveScenes, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
 import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizardData";
-import { STYLE_THUMB } from "../../lib/styleThumbs";
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
@@ -33,7 +32,7 @@ const CRUMB = ["캐릭터", "이야기 · 장르", "그림체", "방식", "만�
 /* 「만들고 싶은 내용이 있어요」 길(#548)은 방식 걸음이 없다. */
 const CRUMB_OWN = ["캐릭터", "내 내용", "그림체", "만들기", "완성"];
 const STEPS: { key: string; title: string; desc: string }[] = [
-  { key: "story", title: "이야기 짓기", desc: "축을 뽑고 방향 4개를 씁니다" },
+  { key: "story", title: "1화 생성하기", desc: "1화 이야기와 인물을 씁니다" },
   { key: "sheet", title: "캐릭터 그리기", desc: "앞·옆·뒤 모습과 표정을 한 장에" },
   { key: "scenes", title: "장면 나누기", desc: "이야기를 한 장씩 장면으로" },
   { key: "pages", title: "페이지 그리기", desc: "컷을 나누고 표지와 장면을 차례로" },
@@ -77,10 +76,13 @@ function Crumb({ items }: { items: string[] }) {
   );
 }
 
-/* 서버 없이 장면 확인 화면을 눌러 보는 자리(#548) — job 번호가 `mock-scenes`(아이디어부터) 또는
-   `mock-scenes-own`(내 내용)이면 서버를 부르지 않고 이 값을 쓴다. 실제 작업 번호와는 겹치지 않는다. */
+/* 서버 없이 눌러 보는 자리(#548) — job 번호가 `mock-scenes`(아이디어부터) 또는 `mock-scenes-own`
+   (내 내용)이면 장면 확인, `mock-story-own` 이면 own 길의 이야기 확인(awaiting_pick) 화면을
+   서버 없이 보여 준다. 실제 작업 번호와는 겹치지 않는다. */
+const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own"];
 function mockScenesJob(id: string): NhJob {
-  const own = id === "mock-scenes-own";
+  const own = id !== "mock-scenes";
+  const storyCheck = id === "mock-story-own";
   /* 실제 작품(2026-10-01 서연화 · 「상견례는 아직 이르지만」)의 scenes.json·본문·인물을 서버와
      같은 규칙으로 합친 것(mockScenes.json). 장면 하나가 1,100~1,300자다 — 가짜 짧은 글로 보면
      실제와 차이가 너무 커서 실물로 둔다. */
@@ -88,9 +90,10 @@ function mockScenesJob(id: string): NhJob {
     cast_sheets: { name: string; ready: boolean }[] };
   const story = "비 오는 날 학교에서 서연화가 강민수에게 우산을 건넨다. 민수는 처음에는 거절하지만 결국 같이 우산을 쓴다.";
   return {
-    id, status: "awaiting_scenes", run_id: "mock", error: null, mode: own ? "own" : "quick",
-    directions: [{ n: 1, title: real.story.title, genre: "현대 로맨스", intro: "", body: real.story.body, plot: "", scenes: [] }], pick: 1,
-    scenes: real.scenes,
+    id, status: storyCheck ? "awaiting_pick" : "awaiting_scenes", run_id: "mock", error: null, mode: own ? "own" : "quick",
+    directions: [{ n: 1, title: real.story.title, genre: "현대 로맨스", intro: "", body: real.story.body, plot: "", scenes: [] }],
+    pick: storyCheck ? null : 1,
+    scenes: storyCheck ? [] : real.scenes,
     story: own ? real.story : null,
     cast: real.cast,
     cast_sheets: real.cast_sheets,
@@ -103,8 +106,10 @@ function mockScenesJob(id: string): NhJob {
       style: "webtoon", quality: "surf", language: "ko", photos: 1,
     },
     sheet_ready: true,
-    style: "webtoon", style_label: "일반 웹툰", stage: "pages", stage_index: 2, stages: [], stage_label: "장면 확인",
-    say: "", queue: null, notice: { logged_in: true, email: null, sent: false }, minutes_left: null, pct: 40,
+    sheet_versions: 1,
+    style: "webtoon", style_label: "일반 웹툰", stage: storyCheck ? "story" : "pages", stage_index: storyCheck ? 0 : 2, stages: [],
+    stage_label: storyCheck ? "이야기 확인" : "장면 확인",
+    say: "", queue: null, notice: { logged_in: true, email: null, sent: false }, minutes_left: null, pct: storyCheck ? 25 : 40,
     art: null, redraw: null, log: [], elapsed: 95,
   };
 }
@@ -147,7 +152,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     return () => clearInterval(id);
   }, []);
 
-  const isMock = jobId.startsWith("mock-scenes");
+  const isMock = MOCK_IDS.includes(jobId);
   const pull = useCallback(async () => {
     if (isMock) {
       setJob((prev) => prev ?? mockScenesJob(jobId));
@@ -258,13 +263,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const scenes: NhScene[] = useMemo(() => job?.scenes ?? [], [job?.scenes]);
   const [sceneDraft, setSceneDraft] = useState<Record<number, string>>({});
   const [sceneEdit, setSceneEdit] = useState<Record<number, boolean>>({});
-  const [sceneNote, setSceneNote] = useState("");
   const [storyDraft, setStoryDraft] = useState({ title: "", body: "" });
   const [storyOpen, setStoryOpen] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const dirtyRef = useRef(false);
   useEffect(() => {
-    if (status === "awaiting_scenes" && job?.story && !dirtyRef.current) {
+    if ((status === "awaiting_scenes" || status === "awaiting_pick") && job?.story && !dirtyRef.current) {
       setStoryDraft({ title: job.story.title, body: job.story.body });
     }
   }, [status, job?.story]);
@@ -314,37 +318,57 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     track("scenes_continue", { job: job.id, edited: Object.keys(sceneDraft).length, own: ownJob });
     void send(async () => { await flushSave(); await continueScenes(job.id); });
   };
-  const retryAllScenes = () => {
-    if (!job) return;
-    track("scenes_retry", { job: job.id, has_note: !!sceneNote.trim() });
-    setSceneDraft({}); setSceneEdit({}); dirtyRef.current = false;
-    void send(() => retryScenes(job.id, sceneNote.trim()));
-  };
-  /* 「내가 적은 것」(#548) — 만들기에서 적은 것을 보여 주고, 그림체·촘촘함만 웹툰을 만들기 전까지
-     바꿀 수 있다. 그림체를 바꾸면 서버가 시트를 다시 그린다(sheet_ready 가 그동안 false). */
-  const input = job?.input ?? null;
-  const styleKey = input ? (STYLE_KEY_OF_HARNESS[input.style] ?? input.style) : "";
-  const [optBusy, setOptBusy] = useState(false);
-  const [optErr, setOptErr] = useState("");
-  const changeOptions = async (p: { style?: string; quality?: string }) => {
-    if (!job || optBusy) return;
-    setOptBusy(true); setOptErr("");
-    track("scenes_options", { job: job.id, style: p.style, quality: p.quality });
+  /* 장면 하나만 다시 뽑기(#548) — 카드의 둥근 화살표를 누르면 그 카드 아래에 이유 토글과
+     수정사항 칸이 열린다. 보내면 서버가 그 장면에 busy 를 켜 주고, 끝나면 새 글이 온다.
+     전체 다시 나누기는 화면에서 뺐다(서버 API 는 남아 있다). */
+  const SCENE_REASONS: [SceneRetryReason, string][] = [
+    ["awkward", "내용이 어색해요"], ["character", "캐릭터가 이상해요"], ["stranger", "뜬금없는 인물이 추가되었어요"],
+    ["offstory", "이야기와 안 맞아요"], ["pacing", "너무 길거나 급해요"],
+  ];
+  type SceneRetry = { reasons: SceneRetryReason[]; note: string };
+  const [sceneRetry, setSceneRetry] = useState<Record<number, SceneRetry>>({});
+  const [sceneRetryErr, setSceneRetryErr] = useState<Record<number, string>>({});
+  const openSceneRetry = (n: number) => setSceneRetry((o) => {
+    const next = { ...o };
+    if (next[n]) delete next[n]; else next[n] = { reasons: [], note: "" };
+    return next;
+  });
+  const toggleReason = (n: number, r: SceneRetryReason) => setSceneRetry((o) => {
+    const cur = o[n] ?? { reasons: [], note: "" };
+    const reasons = cur.reasons.includes(r) ? cur.reasons.filter((x) => x !== r) : [...cur.reasons, r];
+    return { ...o, [n]: { ...cur, reasons } };
+  });
+  const sendSceneRetry = async (n: number) => {
+    const r = sceneRetry[n];
+    if (!job || !r) return;
+    track("scene_retry", { job: job.id, n, reasons: r.reasons.join(","), has_note: !!r.note.trim() });
+    setSceneRetryErr((e) => ({ ...e, [n]: "" }));
     try {
       if (isMock) {
-        setJob((j) => j && j.input ? { ...j, input: { ...j.input, ...p }, sheet_ready: p.style ? false : j.sheet_ready } : j);
-        if (p.style) setTimeout(() => setJob((j) => (j ? { ...j, sheet_ready: true } : j)), 1500);
+        setJob((j) => j ? { ...j, scenes: (j.scenes ?? []).map((s) => (s.n === n ? { ...s, busy: true } : s)) } : j);
+        setTimeout(() => setJob((j) => j ? { ...j, scenes: (j.scenes ?? []).map((s) => (s.n === n
+          ? { ...s, busy: false, user_text: null, parts: s.parts?.map((p, i) => (i === 0 ? { ...p, text: `(다시 뽑음) ${p.text}` } : p)) } : s)) } : j), 2500);
       } else {
-        setJob(await patchOptions(job.id, p));
+        await retryScene(job.id, n, { reasons: r.reasons, note: r.note.trim() });
+        stopped.current = false;
+        await pull();
       }
+      setSceneDraft((d) => { const next = { ...d }; delete next[n]; return next; });
+      setSceneEdit((o) => ({ ...o, [n]: false }));
+      setSceneRetry((o) => { const next = { ...o }; delete next[n]; return next; });
     } catch (e) {
-      setOptErr(e instanceof Error ? e.message : t("보내지 못했습니다"));
-    } finally {
-      setOptBusy(false);
+      setSceneRetryErr((er) => ({ ...er, [n]: e instanceof Error ? e.message : t("보내지 못했습니다") }));
     }
   };
-  const sheetWaiting = job?.sheet_ready === false;
-  /* 조연 시트(#548) — 주인공 시트는 무료, 다른 인물은 한 명에 1크레딧. 장면 확인 차례에만. */
+  /* 「내가 적은 것」(#548) — 만들기에서 적은 것을 글자로만 보여 준다(바꾸는 기능은 뺐다, 2026-10-01).
+     장면 확인 차례와 own 길의 이야기 확인 차례에 보인다. */
+  const input = job?.input ?? null;
+  const styleLabel = input ? (STYLE_INFO.find(([k]) => k === (STYLE_KEY_OF_HARNESS[input.style] ?? input.style))?.[1] ?? input.style) : "";
+  const qualityLabel = input ? (QUALITY_INFO.find((q) => q.key === input.quality)?.label ?? input.quality) : "";
+  const storyCheck = ownJob && status === "awaiting_pick";
+  const mineOk = !!input && (status === "awaiting_scenes" || storyCheck);
+  /* 조연 시트(#548) — 주인공 시트는 무료, 다른 인물은 한 명에 1크레딧. 장면 확인·이야기 확인 차례에. */
+  const castOk = status === "awaiting_scenes" || storyCheck;
   const castSheets = job?.cast_sheets ?? [];
   const castSheetOf = (name: string) => castSheets.find((c) => c.name === name);
   const [castSheetV, setCastSheetV] = useState(0);
@@ -352,9 +376,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const [castErr, setCastErr] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
   useEffect(() => {
-    if (status !== "awaiting_scenes" || isMock) return;
+    if (!castOk || isMock) return;
     readAllowance().then((a) => setBalance(a.balance ?? null)).catch(() => setBalance(null));
-  }, [status, isMock]);
+  }, [castOk, isMock]);
   const castReadyCount = castSheets.filter((c) => c.ready).length;
   const castReadyRef = useRef(0);
   useEffect(() => {
@@ -378,11 +402,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     }
   };
   const noCredit = balance != null && balance < 1;
-  const sheetWasWaiting = useRef(false);
-  useEffect(() => {
-    if (sheetWasWaiting.current && !sheetWaiting) setSheetV((v) => v + 1);   // 다시 그린 시트를 새로 받는다
-    sheetWasWaiting.current = sheetWaiting;
-  }, [sheetWaiting]);
 
   /* 그려진 장이 늘 때마다 그 자리로 스크롤한다 — 전에는 새 장이 그려져도
      화면이 그대로라 "진짜 만들고 있는 게 맞나" 라는 의심으로 이어졌다
@@ -429,6 +448,15 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     track("story_pick", { job: job.id, n: selectedDir.n, count: dirs.length, edited: !!edited });
     void send(() => pickDirection(job.id, selectedDir.n, edited));
   };
+  /* own 길의 이야기 확인(#548) — 후보는 하나(n=1). 고친 제목·본문을 그대로 보내 장면 나누기로 간다. */
+  const confirmStory = () => {
+    if (!job || !job.story) return;
+    const bodyChanged = storyDraft.body.trim() !== job.story.body.trim();
+    const titleChanged = storyDraft.title.trim() !== job.story.title.trim();
+    track("story_confirm", { job: job.id, edited_body: bodyChanged, edited_title: titleChanged });
+    dirtyRef.current = false;
+    void send(() => pickDirection(job.id, 1, bodyChanged ? storyDraft.body : undefined, titleChanged ? storyDraft.title : undefined));
+  };
 
   /* ---- 어느 오른쪽 화면을 그리나 ---- */
   const art = job?.art && job.art.total > 0 ? job.art : null;
@@ -440,7 +468,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const autoTab: Tab = waiting || cur === REVIEW ? cur : "play";
   const at: Tab = tab ?? autoTab;
 
-  type Pane = "loading" | "play" | "sheet" | "cast" | "scenes" | "making" | "confirm" | "drawing" | "failed" | "story-view" | "sheet-view" | "scenes-view" | "pages-view" | "mine";
+  type Pane = "loading" | "play" | "sheet" | "cast" | "scenes" | "making" | "confirm" | "story-check" | "drawing" | "failed" | "story-view" | "sheet-view" | "scenes-view" | "pages-view" | "mine";
   let pane: Pane = "loading";
   if (job) {
     if (status === "error") pane = "failed";
@@ -450,7 +478,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     else if (status === "awaiting_sheet") pane = "sheet";
     else if (status === "awaiting_cast") pane = "cast";
     else if (status === "awaiting_scenes") pane = "scenes";
-    else if (status === "awaiting_pick") pane = confirming ? "confirm" : "making";
+    else if (status === "awaiting_pick") pane = ownJob ? "story-check" : confirming ? "confirm" : "making";
     else pane = "drawing";
   }
 
@@ -486,12 +514,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const refundLine = job?.refunded === "credit" ? t("사용된 크레딧은 자동으로 환불되었어요.")
     : job?.refunded === "free" ? t("사용한 무료 생성 횟수는 자동으로 복구되었어요.") : "";
 
-  const stepState = (i: number): "done" | "cur" | "todo" => (i < cur ? "done" : i === cur ? "cur" : "todo");
+  /* own 길의 이야기 확인(awaiting_pick)은 걸음 1 이 현재지만 캐릭터 시트는 이미 끝나 있다(#548). */
+  const stepState = (i: number): "done" | "cur" | "todo" => (i < cur || (i === 1 && storyCheck) ? "done" : i === cur ? "cur" : "todo");
   /* 아직 안 지난 걸음은 누를 것이 없다 — 검수는 검수 중일 때만 열린다. */
   const canView = (i: number) => {
     if (!job) return false;
     if (i === 0) return dirs.length > 0;
-    if (i === 1) return cur > 1 || status === "awaiting_sheet";
+    if (i === 1) return cur > 1 || status === "awaiting_sheet" || storyCheck;
     /* 장면 걸음은 장면이 하나라도 있으면 언제든 — 지금 걸음이면 장면 확인 화면으로 돌아오고,
        끝난 뒤면 읽기 전용(scenes-view). 전에는 cur > SCENES 라 장면 확인 중에 걸음 2·「내가
        적은 것」으로 갔다가 돌아오지 못했다(#548). */
@@ -559,9 +588,19 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     track("sheet_decide", { job: job.id, result: "retry", has_note: !!sheetNote.trim() });
     void send(() => decideSheet(job.id, "retry", sheetNote.trim()));
   };
+  /* 옛 시트로 되돌리기(#548) — 다시 만들 때마다 전 시트가 보관되고, 걸음 2 에서 골라 되돌린다. */
+  const [sheetPick, setSheetPick] = useState<number | null>(null);
+  const restoreOldSheet = () => {
+    if (!job || sheetPick == null) return;
+    track("sheet_restore", { job: job.id, v: sheetPick });
+    setSheetPick(null);
+    if (isMock) { setSheetV((v) => v + 1); return; }
+    void send(async () => { setJob(await restoreSheet(job.id, sheetPick)); setSheetV((v) => v + 1); });
+  };
   const retryStory = () => {
     if (!job) return;
-    track("story_retry", { job: job.id, has_note: !!dirNote.trim() });
+    track("story_retry", { job: job.id, has_note: !!dirNote.trim(), own: ownJob });
+    dirtyRef.current = false;
     void send(() => retryDirections(job.id, dirNote.trim()));
   };
   /* 기다리는 동안 다른 웹툰을 보러 가는가 — 기다림을 무엇으로 채울지 정하는 근거. */
@@ -587,9 +626,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       <button type="button" className="btn btn-p" disabled={busy || castSel == null} onClick={confirmCast}>{castButton}</button>
     );
     if (pane === "scenes") return (
+      <button type="button" className="btn btn-p" disabled={busy} onClick={continueAll}>{t("이대로 웹툰 만들기")}</button>
+    );
+    if (pane === "story-check") return (
       <>
-        <button type="button" className="btn btn-p" disabled={busy} onClick={continueAll}>{t("이대로 웹툰 만들기")}</button>
-        <button type="button" className="btn btn-w" disabled={busy} onClick={retryAllScenes}>{t("장면 다시 나누기")}</button>
+        <button type="button" className="btn btn-p" disabled={busy} onClick={confirmStory}>{t("이대로 장면 나누기")}</button>
+        <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>{t("이야기 다시 만들기")}</button>
       </>
     );
     if (pane === "making") return (
@@ -671,7 +713,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     {stepState(i) === "done" ? "✓ " : ""}{t(s.title)}
                   </button>
                 ))}
-                {status === "awaiting_scenes" && input && (
+                {mineOk && (
                   <button type="button" className={at === "mine" ? "cur" : "done"} onClick={() => setTab(tab === "mine" ? null : "mine")}>{t("내가 적은 것")}</button>
                 )}
               </div>
@@ -693,11 +735,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               {job && (
                 <div className="wt-prog-railfoot">
                   {/* 「내가 적은 것」(#548) — 걸음 단추처럼 누르면 오른쪽 본문이 그 내용으로 바뀐다. */}
-                  {status === "awaiting_scenes" && input && (
+                  {mineOk && (
                     <button type="button" className={`wt-prog-minetab${at === "mine" ? " viewing" : ""}`}
                             onClick={() => setTab(tab === "mine" ? null : "mine")} aria-pressed={at === "mine"}>
                       <span className="ic"><IconEdit size={16} /></span>
-                      <span className="txt"><b>{t("내가 적은 것 보기·고치기")}</b><span className="dim">{t("그림체·촘촘함은 웹툰을 만들기 전까지 바꿀 수 있어요")}</span></span>
+                      <span className="txt"><b>{t("내가 적은 것 보기")}</b><span className="dim">{t("캐릭터·이야기·설정을 다시 봐요")}</span></span>
                       <span className="go"><IconChevronDown size={14} /></span>
                     </button>
                   )}
@@ -793,42 +835,64 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
               {pane === "scenes" && job && (
                 <>
-                  <div className="wt-prog-head">
-                    <h2>{t("웹툰을 만들기 전에 장면을 확인해 보세요")}</h2>
-                    <span className="muted lede">{t("AI가 이야기를 장면으로 나눴어요.")}</span>
-                    <span className="muted lede">{t("원하는 내용이나 대사, 연출이 있다면 자유롭게 수정해 주세요.")}</span>
+                  <div className="wt-prog-head split">
+                    <div>
+                      <h2>{t("웹툰을 만들기 전에 장면을 확인해 보세요")}</h2>
+                      <span className="muted lede">{t("AI가 이야기를 장면으로 나눴어요.")}</span>
+                      <span className="muted lede">{t("원하는 내용이나 대사, 연출이 있다면 자유롭게 수정해 주세요.")}</span>
+                    </div>
+                    <div className="wt-prog-acts wt-prog-sceneacts">
+                      <span className={`dim wt-prog-saved${saveState === "failed" ? " err" : ""}`}>
+                        {saveState === "saving" ? t("저장하는 중") : saveState === "saved" ? t("저장됨 · 방금") : saveState === "failed" ? t("저장하지 못했습니다") : ""}
+                      </span>
+                      <button type="button" className="btn btn-p" disabled={busy} onClick={continueAll}>{t("이대로 웹툰 만들기")} <IconArrow size={18} /></button>
+                    </div>
                   </div>
-                  <div className="wt-prog-acts wt-prog-sceneacts">
-                    <button type="button" className="btn btn-p" disabled={busy} onClick={continueAll}>{t("이대로 웹툰 만들기")} <IconArrow size={18} /></button>
-                    <input className="field w300" value={sceneNote} placeholder={t("바라는 점을 적고 장면 다시 나누기")} aria-label={t("다시 만들기 메모")}
-                           onChange={(e) => setSceneNote(e.target.value)} />
-                    <button type="button" className="btn btn-w" disabled={busy} onClick={retryAllScenes}>
-                      <IconRetry size={18} /> {t("장면 다시 나누기")}
-                    </button>
-                    <span className={`dim wt-prog-saved${saveState === "failed" ? " err" : ""}`}>
-                      {saveState === "saving" ? t("저장하는 중") : saveState === "saved" ? t("저장됨 · 방금") : saveState === "failed" ? t("저장하지 못했습니다") : ""}
-                    </span>
-                  </div>
-                  <input className="field wt-prog-mnote" value={sceneNote} placeholder={t("바라는 점을 적고 장면 다시 나누기")} aria-label={t("다시 만들기 메모")}
-                         onChange={(e) => setSceneNote(e.target.value)} />
 
                   <div className="wt-prog-scenes">
                     {scenes.map((s) => {
-                      const editing = !!sceneEdit[s.n];
+                      const editing = !!sceneEdit[s.n] && !s.busy;
+                      const retry = sceneRetry[s.n];
                       return (
-                        <div key={s.n} className={`wt-prog-scene${editing ? " editing" : ""}`}>
+                        <div key={s.n} className={`wt-prog-scene${editing ? " editing" : ""}${s.busy ? " busy" : ""}`}>
                           <div className="row">
                             <b>{t("장면 {n} / {total}", { n: s.n, total: scenes.length })}</b>
-                            <button type="button" aria-label={editing ? t("접기") : t("고치기")} title={editing ? t("접기") : t("고치기")}
-                                    onClick={() => setSceneEdit((o) => ({ ...o, [s.n]: !editing }))}>
-                              {editing ? <IconChevronUp size={15} /> : <IconEdit size={15} />}
-                            </button>
+                            <span className="tools">
+                              <button type="button" aria-label={editing ? t("접기") : t("고치기")} title={editing ? t("접기") : t("고치기")} disabled={!!s.busy}
+                                      onClick={() => setSceneEdit((o) => ({ ...o, [s.n]: !editing }))}>
+                                {editing ? <IconChevronUp size={15} /> : <IconEdit size={15} />}
+                              </button>
+                              <button type="button" aria-label={t("이 장면 다시 뽑기")} title={t("이 장면 다시 뽑기")} disabled={!!s.busy}
+                                      className={retry ? "on" : ""} onClick={() => openSceneRetry(s.n)}>
+                                <IconRetry size={15} />
+                              </button>
+                            </span>
                           </div>
-                          {editing ? (
+                          {s.busy ? (
+                            <div className="wt-prog-sheetwait small"><span className="spin" /> {t("다시 뽑는 중")}</div>
+                          ) : editing ? (
                             <textarea className="field" value={sceneText(s)} aria-label={t("장면 {n} / {total}", { n: s.n, total: scenes.length })}
                                       onChange={(e) => editScene(s.n, e.target.value)} />
                           ) : (
                             <SceneBody s={s} />
+                          )}
+                          {retry && !s.busy && (
+                            <div className="wt-prog-sceneretry">
+                              <b>{t("이 장면 다시 뽑기")}</b>
+                              <div className="chips">
+                                {SCENE_REASONS.map(([code, label]) => (
+                                  <button key={code} type="button" className={`chip${retry.reasons.includes(code) ? " on" : ""}`}
+                                          aria-pressed={retry.reasons.includes(code)} onClick={() => toggleReason(s.n, code)}>{t(label)}</button>
+                                ))}
+                              </div>
+                              <textarea className="field" value={retry.note} placeholder={t("직접 수정사항을 적어 주세요")} aria-label={t("직접 수정사항을 적어 주세요")}
+                                        onChange={(e) => setSceneRetry((o) => ({ ...o, [s.n]: { ...retry, note: e.target.value } }))} />
+                              <div className="acts">
+                                <button type="button" className="btn btn-p btn-sm" disabled={busy} onClick={() => void sendSceneRetry(s.n)}>{t("다시 뽑기")}</button>
+                                <button type="button" className="btn btn-w btn-sm" onClick={() => openSceneRetry(s.n)}>{t("닫기")}</button>
+                                {sceneRetryErr[s.n] && <span className="err">{sceneRetryErr[s.n]}</span>}
+                              </div>
+                            </div>
                           )}
                         </div>
                       );
@@ -918,9 +982,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   </div>
                   {chosen && (
                     <div className="wt-prog-card">
-                      <b>{t("고른 이야기 · {title}", { title: chosen.title })}</b>
-                      <span className="muted">{chosen.intro}</span>
-                      <span className="dim">{t("이미 이 이야기로 그리는 중이라 다시 고를 수 없어요.")}</span>
+                      <b>{ownJob ? t("내 이야기 · {title}", { title: job.story?.title || chosen.title }) : t("고른 이야기 · {title}", { title: chosen.title })}</b>
+                      {!ownJob && <span className="muted">{chosen.intro}</span>}
+                      <span className="dim">{ownJob ? t("이미 그리는 중이라 바꿀 수 없어요.") : t("이미 이 이야기로 그리는 중이라 다시 고를 수 없어요.")}</span>
                     </div>
                   )}
                   {art && (
@@ -964,7 +1028,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <>
                   <div className="wt-prog-head">
                     <h2>{t("내가 적은 것")}</h2>
-                    <span className="muted lede">{t("웹툰을 만들기 전까지만 바꿀 수 있어요")}</span>
                   </div>
                   <div className="wt-prog-scene wt-prog-mine">
                       <div className="wt-prog-mine-grid">
@@ -974,29 +1037,61 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                         {input.title && <div className="kv"><span>{t("제목")}</span><p>{input.title}</p></div>}
                         {input.story && <div className="kv wide"><span>{t("이야기")}</span><p>{input.story}</p></div>}
                         {input.settings && <div className="kv wide"><span>{t("설정")}</span><p>{input.settings}</p></div>}
+                        <div className="kv"><span>{t("그림체")}</span><p>{t(styleLabel)}</p></div>
+                        <div className="kv"><span>{t("촘촘함")}</span><p>{t(qualityLabel)}</p></div>
                       </div>
-                      <div className="wt-prog-pageshead"><b>{t("그림체")}</b></div>
-                      <div className="wt-prog-styles">
-                        {STYLE_INFO.map(([key, label]) => (
-                          <button key={key} type="button" className={`wt-prog-style${styleKey === key ? " on" : ""}`} disabled={optBusy}
-                                  onClick={() => { if (styleKey !== key) void changeOptions({ style: key }); }}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={STYLE_THUMB[key] || `/static/samples/ex-${key}-1.jpg`} alt="" />
-                            <b>{t(label)}</b>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="wt-prog-pageshead"><b>{t("촘촘함")}</b></div>
-                      <div className="wt-prog-qs">
-                        {QUALITY_INFO.map((q) => (
-                          <button key={q.key} type="button" className={`wt-prog-q${input.quality === q.key ? " on" : ""}`} disabled={optBusy}
-                                  onClick={() => { if (input.quality !== q.key) void changeOptions({ quality: q.key }); }}>
-                            <b>{t(q.label)}</b><span className="dim">{t(q.lede)}</span>
-                          </button>
-                        ))}
-                      </div>
-                      {optErr && <span className="err">{optErr}</span>}
                   </div>
+                </>
+              )}
+              {pane === "story-check" && job && job.story && (
+                /* own 길의 이야기 확인(#548) — 적은 내용을 1화 이야기로 다듬은 것을 보고, 바로 고쳐서
+                   장면 나누기로 보내거나 메모를 적어 다시 만들게 한다. */
+                <>
+                  <div className="wt-prog-head">
+                    <h2>{t("이야기를 확인해 주세요")}</h2>
+                    <span className="muted lede">{t("AI가 적은 내용을 1화 이야기로 다듬었어요.")}</span>
+                    <span className="muted lede">{t("원하는 내용이 있다면 자유롭게 수정해 주세요.")}</span>
+                  </div>
+                  <div className="wt-prog-acts wt-prog-sceneacts">
+                    <button type="button" className="btn btn-p" disabled={busy} onClick={confirmStory}>{t("이대로 장면 나누기")} <IconArrow size={18} /></button>
+                    <input className="field w300" value={dirNote} placeholder={t("바라는 점을 적고 이야기 다시 만들기")} aria-label={t("다시 만들기 메모")}
+                           onChange={(e) => setDirNote(e.target.value)} />
+                    <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>
+                      <IconRetry size={18} /> {t("이야기 다시 만들기")}
+                    </button>
+                  </div>
+                  <input className="field wt-prog-mnote" value={dirNote} placeholder={t("바라는 점을 적고 이야기 다시 만들기")} aria-label={t("다시 만들기 메모")}
+                         onChange={(e) => setDirNote(e.target.value)} />
+                  <div className="wt-prog-scene wt-prog-story wt-prog-storycheck">
+                    <input className="field title" value={storyDraft.title} aria-label={t("제목")} placeholder={t("제목")}
+                           onChange={(e) => editStory({ title: e.target.value })} />
+                    <textarea className="field wt-prog-bodybox" value={storyDraft.body} aria-label={t("이야기 본문")}
+                              onChange={(e) => editStory({ body: e.target.value })} />
+                    <span className="dim count">{t("{n}자", { n: storyDraft.body.length })}</span>
+                  </div>
+                  {actErr && <span className="err">{actErr}</span>}
+                  {(job.persona || cast.length > 0) && (
+                    <>
+                      <div className="wt-prog-pageshead"><b>{t("LORE 가 읽어낸 인물")}</b></div>
+                      <div className="wt-prog-dirs">
+                        {job.persona && (
+                          <div className="wt-prog-dir plain wt-prog-cast wt-prog-hero">
+                            <div className="row"><b>{t("주인공 · {name}", { name: job.persona.name })}</b></div>
+                            {job.persona.look && <span className="muted intro">{job.persona.look}</span>}
+                            {job.persona.personality && <span className="muted intro">{job.persona.personality}</span>}
+                          </div>
+                        )}
+                        {cast.map((c, i) => (
+                          <div key={c.name + i} className="wt-prog-dir plain wt-prog-cast">
+                            <div className="row"><b>{c.name}</b></div>
+                            {c.look && <span className="muted intro">{c.look}</span>}
+                            {c.gap && <span className="muted intro">{c.gap}</span>}
+                            {c.line && <q className="line">{c.line}</q>}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </>
               )}
               {pane === "story-view" && job && ownJob && job.story && (
@@ -1004,7 +1099,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <>
                   <div className="wt-prog-head">
                     <h2>{t("이야기")}</h2>
-                    {status === "awaiting_scenes" && <span className="muted lede">{t("고치면 장면과 같이 저장돼요.")}</span>}
                   </div>
                   {/* own 길 — 적은 내용을 다듬은 이야기. 고치면 장면과 같이 저장된다. */}
                   {job.story && (
@@ -1080,27 +1174,43 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               {pane === "sheet-view" && job && (
                 <>
                   <div className="wt-prog-head"><h2>{t("캐릭터 시트")} <span className="dim wt-prog-free">{t("무료")}</span></h2></div>
-                  {sheetWaiting ? (
-                    <div className="wt-prog-sheetwait"><span className="spin" /> {t("그림체에 맞춰 다시 그리는 중")}</div>
-                  ) : (
-                    <button type="button" className="wt-prog-sheet" onClick={() => setZoom(sheetImageUrl(job.id, sheetV))}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={sheetImageUrl(job.id, sheetV)} alt={t("캐릭터 시트")} />
-                      <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
-                    </button>
+                  <button type="button" className="wt-prog-sheet" onClick={() => setZoom(sheetImageUrl(job.id, sheetV))}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={sheetImageUrl(job.id, sheetV)} alt={t("캐릭터 시트")} />
+                    <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
+                  </button>
+                  {(job.sheet_versions ?? 0) > 0 && (
+                    <div className="wt-prog-oldsheets">
+                      <b>{t("이전 시트")}</b>
+                      <div className="row">
+                        {Array.from({ length: job.sheet_versions ?? 0 }, (_, i) => i + 1).map((v) => (
+                          <button key={v} type="button" className={`thumb${sheetPick === v ? " on" : ""}`} aria-pressed={sheetPick === v}
+                                  aria-label={t("이전 시트 {v}", { v })} onClick={() => setSheetPick(sheetPick === v ? null : v)}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={sheetVersionUrl(job.id, v)} alt="" />
+                          </button>
+                        ))}
+                        <button type="button" className="btn btn-w btn-sm" disabled={busy || sheetPick == null} onClick={restoreOldSheet}>
+                          {t("이 시트로 되돌리기")}
+                        </button>
+                        {sheetPick != null && (
+                          <button type="button" className="btn btn-w btn-sm" onClick={() => setZoom(sheetVersionUrl(job.id, sheetPick))}>{t("크게 보기")}</button>
+                        )}
+                      </div>
+                    </div>
                   )}
                   {status === "awaiting_scenes" && (
                     /* 장면 확인 동안은 여기서 시트를 다시 만들 수 있다(#548). */
                     <div className="wt-prog-acts">
                       <input className="field" value={sheetNote} placeholder={t("고칠 점을 적고 다시 만들기 · 예: 머리를 더 길게")} aria-label={t("다시 만들기 메모")}
                              onChange={(e) => setSheetNote(e.target.value)} />
-                      <button type="button" className="btn btn-w" disabled={busy || sheetWaiting} onClick={retrySheet}>
+                      <button type="button" className="btn btn-w" disabled={busy} onClick={retrySheet}>
                         <IconRetry size={18} /> {t("다시 만들기")}
                       </button>
                     </div>
                   )}
                   {actErr && <span className="err">{actErr}</span>}
-                  {cast.length > 0 && (status === "awaiting_scenes" || castSheets.length > 0) && (
+                  {cast.length > 0 && (castOk || castSheets.length > 0) && (
                     <>
                       <div className="wt-prog-pageshead" style={{ marginTop: 8 }}>
                         <b>{t("다른 인물도 시트로 뽑기")}</b>
@@ -1121,7 +1231,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                                 </button>
                               ) : st ? (
                                 <div className="wt-prog-sheetwait small"><span className="spin" /> {t("그리는 중")}</div>
-                              ) : status === "awaiting_scenes" ? (
+                              ) : castOk ? (
                                 <>
                                   <button type="button" className="btn btn-w btn-sm" disabled={!!castBusy || noCredit} onClick={() => void drawCastSheet(c.name)}>
                                     {t("시트 뽑기 · 1크레딧")}

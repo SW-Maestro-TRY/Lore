@@ -162,6 +162,8 @@ export interface NhScene {
   /** AI 가 나눈 장면의 칸들(장소와 상황 / 벌어지는 일 / 행동과 표정 / 겉모습 / 끝나는 상태 / 나레이션 중 있는 것만).
    *  user_text 가 있으면 parts 는 AI 원래 것이고 text 는 user_text 다. */
   parts?: { label: string; text: string }[] | null;
+  /** 이 장면만 다시 뽑는 중(#548) — 그 카드만 「다시 뽑는 중」으로 보인다. */
+  busy?: boolean;
 }
 
 /** 주인공 페르소나(#534) — 사용자가 적은 캐릭터로 정의한 것. 인물 확인·고르기 화면에서 확인용으로 보여 준다. */
@@ -235,6 +237,8 @@ export interface NhJob {
   input?: NhJobInput | null;
   /** 시트가 다 그려졌나. 그림체를 바꾸면 다시 그리는 동안 false(#548). 없으면 그려진 것으로 본다. */
   sheet_ready?: boolean | null;
+  /** 보관된 옛 시트 수(#548). 다시 만들 때마다 전 것이 1, 2, … 로 남고 sheetVersionUrl 로 본다. */
+  sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
   cast_sheets?: { name: string; ready: boolean }[] | null;
   pick: number | null;
@@ -337,6 +341,11 @@ export function continueScenes(id: string) {
 }
 
 /** 「장면 다시 나누기」 — 메모를 적어 보내면 이번에만 반영한다. 고친 글은 버려진다. */
+/** 장면 하나만 다시 뽑기(#548) — 이유 코드는 awkward·character·stranger·offstory·pacing. */
+export type SceneRetryReason = "awkward" | "character" | "stranger" | "offstory" | "pacing";
+export function retryScene(id: string, n: number, body: { reasons: SceneRetryReason[]; note: string }) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes/${n}/retry`, body);
+}
 export function retryScenes(id: string, note = "") {
   return post(`/nh/jobs/${encodeURIComponent(id)}/scenes-retry`, note ? { note } : {});
 }
@@ -348,8 +357,10 @@ export function patchOptions(id: string, body: { style?: string; quality?: strin
   });
 }
 
-export function pickDirection(id: string, n: number, editedBody?: string) {
-  return post(`/nh/jobs/${encodeURIComponent(id)}/pick`, editedBody ? { n, body: editedBody } : { n });
+export function pickDirection(id: string, n: number, editedBody?: string, editedTitle?: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/pick`, {
+    n, ...(editedBody != null ? { body: editedBody } : {}), ...(editedTitle != null ? { title: editedTitle } : {}),
+  });
 }
 
 export function retryDirections(id: string, note = "") {
@@ -366,6 +377,14 @@ export function notifyByEmail(id: string, email: string): Promise<{ email: strin
 
 export function sheetImageUrl(jobId: string, v: number | string = ""): string {
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet.png${v ? `?v=${v}` : ""}`;
+}
+/** v 번째 옛 시트 그림(#548). */
+export function sheetVersionUrl(jobId: string, v: number): string {
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet/${v}.png`;
+}
+/** v 번째 옛 시트를 현재 시트로 되돌린다(#548). */
+export function restoreSheet(id: string, v: number) {
+  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/sheet-restore`, { v });
 }
 
 /** 조연 시트 그림(#548). */
