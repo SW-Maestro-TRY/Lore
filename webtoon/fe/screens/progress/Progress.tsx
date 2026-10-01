@@ -144,12 +144,13 @@ function PersonCard({ title, person, keys, hero, onSave }: {
     <div className={`wt-prog-dir plain wt-prog-cast${hero ? " wt-prog-hero" : ""}${editing ? " editing" : ""}`}>
       <div className="row">
         <b>{title}</b>
-        <span className="tools">
-          <button type="button" aria-label={editing ? t("접기") : t("고치기")} title={editing ? t("접기") : t("고치기")}
-                  onClick={() => (editing ? setEditing(false) : open())}>
-            {editing ? <IconChevronUp size={18} /> : <IconEdit size={18} />}
-          </button>
-        </span>
+        {!editing && (
+          <span className="tools">
+            <button type="button" aria-label={t("고치기")} title={t("고치기")} onClick={open}>
+              <IconEdit size={18} />
+            </button>
+          </span>
+        )}
       </div>
       {editing ? (
         <div className="wt-prog-parts editing">
@@ -1000,10 +1001,15 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                           <div className="row">
                             <b>{t("장면 {n} / {total}", { n: s.n, total: scenes.length })}</b>
                             <span className="tools">
-                              <button type="button" aria-label={editing ? t("접기") : t("고치기")} title={editing ? t("접기") : t("고치기")} disabled={!!s.busy}
-                                      onClick={() => setSceneEdit((o) => ({ ...o, [s.n]: !editing }))}>
-                                {editing ? <IconChevronUp size={18} /> : <IconEdit size={18} />}
-                              </button>
+                              {editing ? (
+                                /* 고친 글은 바로 저장된다 — 그래서 「저장」이 아니라 「완료」 */
+                                <button type="button" className="wt-prog-done" onClick={() => setSceneEdit((o) => ({ ...o, [s.n]: false }))}>{t("완료")}</button>
+                              ) : (
+                                <button type="button" aria-label={t("고치기")} title={t("고치기")} disabled={!!s.busy}
+                                        onClick={() => setSceneEdit((o) => ({ ...o, [s.n]: true }))}>
+                                  <IconEdit size={18} />
+                                </button>
+                              )}
                               <button type="button" aria-label={t("이 장면 다시 뽑기")} title={t("이 장면 다시 뽑기")} disabled={!!s.busy}
                                       className={retry ? "on" : ""} onClick={() => openSceneRetry(s.n)}>
                                 <IconRetry size={18} />
@@ -1029,7 +1035,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                             </div>
                           )}
                           {s.busy ? (
-                            <div className="wt-prog-sheetwait small"><span className="spin" /> {t("다시 뽑는 중")}</div>
+                            /* 다시 뽑는 동안 — 지금 글은 흐리게 두고 위에 한 줄로 알린다 */
+                            <>
+                              <div className="wt-prog-rebusy"><span className="spin" /> {t("다시 뽑는 중")}</div>
+                              <div className="wt-prog-rebusy-body"><SceneBody s={s} /></div>
+                            </>
                           ) : editing ? (
                             <SceneEditor text={sceneText(s)} parts={s.parts} label={t("장면 {n} / {total}", { n: s.n, total: scenes.length })}
                                          onChange={(v) => editScene(s.n, v)} />

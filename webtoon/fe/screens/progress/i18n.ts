@@ -31,6 +31,7 @@ const dict: Dict = {
   "저장": { en: "Save", ja: "保存", zh: "保存" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   "저장하지 못했어요": { en: "Couldn't save", ja: "保存できませんでした", zh: "未能保存" },
+  "완료": { en: "Done", ja: "完了", zh: "完成" },
   "1화 생성하기": { en: "Writing episode 1", ja: "第1話を作る", zh: "生成第 1 话" },
   "1화 이야기와 인물을 씁니다": { en: "Writes the episode-1 story and characters", ja: "第1話のストーリーと登場人物を書きます", zh: "编写第 1 话的故事和人物" },
   "캐릭터 그리기": { en: "Drawing the character", ja: "キャラクターを描く", zh: "绘制角色" },
