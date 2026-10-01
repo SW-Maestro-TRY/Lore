@@ -111,7 +111,7 @@ const dict: Dict = {
   "깔끔한 선과 셀 채색. 읽히는 속도가 기준.": { en: "Clean lines and cel shading. Built for reading speed.", ja: "すっきりした線とセル塗り。読みやすさが基準です。", zh: "干净的线条与赛璐璐上色。以阅读速度为标准。" },
   "표지 일러스트급 밀도. 보석 같은 눈, 금박, 레이스.": { en: "Cover-illustration density. Jewel-like eyes, gold leaf, lace.", ja: "表紙イラスト級の密度。宝石のような瞳、金箔、レース。", zh: "封面插画级的密度。宝石般的眼睛、金箔、蕾丝。" },
   "순정 · BL": { en: "Shoujo · BL", ja: "少女 · BL", zh: "少女 · BL" },
-  "길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃.": { en: "Long sharp eyes, screentone, flowers floating in the margins.", ja: "長く鋭い目、スクリーントーン、余白に浮かぶ花。", zh: "细长锐利的眼睛、网点、留白处的花。" },
+  "흑백 펜선과 빗금, 긴 속눈썹, 여백에 뜬 꽃.": { en: "Black-and-white pen lines and hatching, long eyelashes, flowers in the margins.", ja: "白黒のペン線と斜線、長いまつげ、余白に浮かぶ花。", zh: "黑白钢笔线与排线、长睫毛、留白处的花。" },
   "세미리얼 · 성인향": { en: "Semi-realistic · Mature", ja: "セミリアル · 大人向け", zh: "半写实 · 成人向" },
   "사실적인 인체, 얇은 선, 저채도로 차분하게.": { en: "Realistic anatomy, thin lines, calm low saturation.", ja: "リアルな人体、細い線、低彩度で落ち着いた雰囲気。", zh: "写实的人体、细线、低饱和度的沉稳感。" },
   "일상툰 감성": { en: "Slice-of-life", ja: "日常マンガ風", zh: "日常漫风" },
