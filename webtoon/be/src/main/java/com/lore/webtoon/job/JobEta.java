@@ -123,6 +123,10 @@ final class JobEta {
             // 상대 인물을 고르는 중(#534) — 고르면 이야기부터 다시 돈다.
             return new Eta(work, whole(JobStage.STORY, pages, s, f) + after(JobStage.STORY, pages, s, f), true);
         }
+        if (status == JobStatus.AWAITING_SCENES) {
+            // 장면 초안을 고치는 중(#548) — 「이대로 만들기」를 누르면 그림부터 돈다.
+            return new Eta(work, whole(JobStage.PAGES, pages, s, f) + after(JobStage.PAGES, pages, s, f), true);
+        }
         if (status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET) {
             // 사람을 기다리는 동안은 남은 시간을 안 적는다. 진행률에 쓸 값만 센다 —
             // 사람이 답하면 바로 다음 걸음부터 돈다.

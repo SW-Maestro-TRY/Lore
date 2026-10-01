@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -294,6 +295,30 @@ public class JobController {
      * 스프링이 만든 작업을 모르니 「그런 작업이 없습니다」를 냈다 — 시트
      * 주소가 어긋나 있던 것과 같은 종류의 구멍이다.
      */
+    @Operation(summary = "장면 초안 저장",
+            description = "장면 확인 자리(#548)에서 고친 장면 글을 적는다. 멈춤은 그대로. body 를 보내면 본문도 바꾼다.")
+    @PostMapping("/jobs/{id}/scenes")
+    public Map<String, Object> saveScenes(@PathVariable String id, @RequestBody ScenesRequest body) {
+        jobs.saveScenes(id, body.scenes(), body.body(), body.title());
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "이대로 웹툰 만들기", description = "장면 확인을 끝내고 그림으로 간다(#548).")
+    @PostMapping("/jobs/{id}/scenes-continue")
+    public Map<String, Object> continueScenes(@PathVariable String id) {
+        jobs.continueScenes(id);
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "장면 다시 나누기",
+            description = "본문·인물·시트는 두고 장면만 다시 나눈다(#548). note 를 보내면 이번에만 반영한다. 고친 글은 사라진다.")
+    @PostMapping("/jobs/{id}/scenes-retry")
+    public Map<String, Object> retryScenes(@PathVariable String id,
+                                           @RequestBody(required = false) NoteRequest body) {
+        jobs.retryScenes(id, body == null ? null : body.note());
+        return Map.of("ok", true);
+    }
+
     @Operation(summary = "이야기 후보 다시 짓기",
             description = "고르는 차례일 때만 된다. note 를 적어 보내면 이번에만 반영한다.")
     @PostMapping("/jobs/{id}/pick-retry")
@@ -404,6 +429,10 @@ public class JobController {
     }
 
     public record PickRequest(int n, String body) {
+    }
+
+    /** 장면 초안 저장(#548). scenes 의 각 줄은 {n, text}. body·title 은 own 길의 본문·제목(선택). */
+    public record ScenesRequest(List<Map<String, Object>> scenes, String body, String title) {
     }
 
     public record CastRequest(int n) {

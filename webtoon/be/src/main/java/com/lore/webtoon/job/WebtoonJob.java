@@ -123,6 +123,13 @@ public class WebtoonJob {
     @Column(nullable = false)
     private boolean checkpoints;
 
+    /**
+     * 어느 길로 만드나(#548). {@code quick} — 이야기가 없어 AI 가 후보를 짓는 지금 흐름.
+     * {@code own} — 사용자가 적은 내용을 그대로 장면까지 가져가는 길. 옛 줄은 전부 quick.
+     */
+    @Column(nullable = false, length = 10)
+    private String mode = "quick";
+
     /** 고른 이야기 번호. 아직 안 골랐으면 비어 있다. */
     @Column(name = "picked")
     private Integer picked;
@@ -277,6 +284,17 @@ public class WebtoonJob {
                 style, quality, language, checkpoints, inputJson, at);
     }
 
+    /** 길(mode)까지 정해서 줄에 세운다(#548). own 이면 확인 자리는 항상 있다. */
+    public static WebtoonJob queued(String publicId, Long userId, String browserUid,
+                                    String guestKey, String style, String quality,
+                                    String language, boolean checkpoints, String mode,
+                                    String inputJson, Instant at) {
+        WebtoonJob job = new WebtoonJob(publicId, userId, browserUid, guestKey,
+                style, quality, language, checkpoints, inputJson, at);
+        job.mode = "own".equalsIgnoreCase(mode) ? "own" : "quick";
+        return job;
+    }
+
     /**
      * 예시 작품의 작업 줄 — <b>처음부터 끝난 것</b>으로 만든다.
      *
@@ -307,7 +325,7 @@ public class WebtoonJob {
         /* 사람을 기다린 시간 — 기다리기 시작한 때를 적어 두고, 다른 상태로
            넘어갈 때 그 차이를 쌓는다. */
         boolean waitsNow = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET
-                || status == JobStatus.AWAITING_CAST;
+                || status == JobStatus.AWAITING_CAST || status == JobStatus.AWAITING_SCENES;
         Instant waitedFrom = waitingSince();
         if (waitsNow && waitedFrom == null) {
             this.pausedAt = at;
@@ -446,6 +464,15 @@ public class WebtoonJob {
     public String getLanguage() {
         return language;
     }
+    public String getMode() {
+        return mode == null || mode.isBlank() ? "quick" : mode;
+    }
+
+    /** 「만들고 싶은 내용이 있어요」 길인가(#548). */
+    public boolean isOwn() {
+        return "own".equals(getMode());
+    }
+
     public boolean isCheckpoints() {
         return checkpoints;
     }
@@ -514,7 +541,7 @@ public class WebtoonJob {
             return pausedAt;
         }
         boolean waiting = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET
-                || status == JobStatus.AWAITING_CAST;
+                || status == JobStatus.AWAITING_CAST || status == JobStatus.AWAITING_SCENES;
         return waiting ? updatedAt : null;
     }
 

@@ -37,6 +37,14 @@ public record JobView(
         String castKind,
         /** 주인공 페르소나 — 인물 단계에서 기다릴 때만 확인용으로 보여 준다(#534). 아니면 {@code null}. */
         Map<String, Object> persona,
+        /** 장면 초안(#548) — 장면 확인 자리에서만. {n, text, user_text}. 아니면 {@code null}. */
+        List<Map<String, Object>> scenes,
+        /** 내 내용 길에서 세운 본문(#548) — 장면 확인 자리에서만. {title, body}. 아니면 {@code null}. */
+        Map<String, Object> story,
+        /** 시트 그림이 있나 — 이야기 고르기·장면 확인 화면이 시트를 같이 보여 준다(#548). */
+        boolean sheet_ready,
+        /** 어느 길인가(#548): quick | own. */
+        String mode,
         Integer pick,
         String style,
         String style_label,
@@ -129,7 +137,9 @@ public record JobView(
 
     static JobView of(WebtoonJob job, JobProgress.Snapshot now,
                       List<Map<String, Object>> directions, List<Map<String, Object>> cast,
-                      String castKind, Map<String, Object> persona, String styleLabel,
+                      String castKind, Map<String, Object> persona,
+                      List<Map<String, Object>> scenes, Map<String, Object> story, boolean sheetReady,
+                      String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
                       String notifyEmail, JobEta.Eta eta) {
         int stageIndex = job.getStage().order();
@@ -151,6 +161,10 @@ public record JobView(
                 cast,
                 castKind,
                 persona,
+                scenes,
+                story,
+                sheetReady,
+                job.getMode(),
                 job.getPicked(),
                 job.getStyle(),
                 styleLabel,

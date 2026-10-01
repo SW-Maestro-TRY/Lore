@@ -169,6 +169,22 @@ public class JobRunner {
      */
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
 
+    /**
+     * 시트를 이야기와 <b>동시에</b> 그리는 자리(#548). 시트는 주인공 사진·설명만 쓰고
+     * 이야기와 무관해서 시작하자마자 그릴 수 있다 — 그러면 이야기를 고를 때쯤 시트가
+     * 끝나 있어 시트 확인을 고르기 화면에 같이 보여 줄 수 있고, 멈추는 자리가 하나 준다.
+     * {@link #line} 과 따로 둔다 — 줄을 차지하면 다른 편이 시작을 못 한다.
+     */
+    private final ExecutorService side = Executors.newCachedThreadPool(r -> {
+        Thread t = Thread.ofPlatform().unstarted(r);
+        t.setName("webtoon-side");
+        t.setDaemon(true);
+        return t;
+    });
+    /** 작업마다 먼저 띄운 시트 그리기. {@link #sheet} 가 기다렸다 거둔다. */
+    private final ConcurrentHashMap<Long, java.util.concurrent.Future<Integer>> sheetAhead =
+            new ConcurrentHashMap<>();
+
     /** 지금 하네스 안에 들어가 있는 작업. 취소가 이걸 보고 죽일지 정한다. */
 
     private final HarnessProcess harness;
@@ -334,6 +350,11 @@ public class JobRunner {
      * 안 지우면 하네스가 "이미 있다" 며 그냥 넘어간다.
      */
     public void redrawSheet(Long jobId, String note) {
+        redrawSheet(jobId, note, JobStatus.AWAITING_SHEET);
+    }
+
+    /** 시트를 다시 그린 뒤 {@code back} 자리로 돌아온다 — 장면 확인 자리에서 불렀으면 거기로(#548). */
+    public void redrawSheet(Long jobId, String note, JobStatus back) {
         store.queued(jobId, JobStage.SHEET);
         line.submit(() -> {
             try {
@@ -355,7 +376,8 @@ public class JobRunner {
                 if (code != 0) {
                     throw harnessFailed(job.getRunId(), "캐릭터 시트를 다시 만들지 못했습니다");
                 }
-                store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
+                store.awaiting(jobId, back,
+                        back == JobStatus.AWAITING_SCENES ? JobStage.PAGES : JobStage.SHEET);
             } catch (Exception e) {
                 fail(jobId, e);
             }
@@ -442,6 +464,25 @@ public class JobRunner {
          *
          * 이제 번호는 자바 것이다. 되찾을 일이 없으니 가릴 것도 없다. */
         String runId = newRunId();
+        if (job.isOwn()) {
+            ownStart(jobId, job, jobDir, runId);
+            return;
+        }
+        /* 시트를 지금 바로, 이야기와 나란히(#548). 같은 run 폴더에 다른 파일을 쓰므로
+           두 프로세스가 부딪히지 않는다. 이야기를 다시 지어도 시트는 그대로다. 고르기에서
+           그만두면 시트값만 버려진다 — 결정하고 받아들인 비용이다. */
+        Path character = jobDir.resolve("character.json");
+        sheetAhead.put(jobId, side.submit(() -> {
+            try {
+                int c = callHarness(jobId, job, List.of(
+                        "--run-id", runId, "--character", character.toString(), "--sheet"));
+                after.cost(runId);
+                return c;
+            } catch (Exception e) {              // noqa: sheet() 가 거둬서 다시 그린다
+                log.warn("먼저 띄운 시트 그리기가 실패했습니다 (job={}) — 고른 뒤 다시 그립니다", jobId, e);
+                return -1;
+            }
+        }));
         int code = callHarness(jobId, job, List.of(
                 "--run-id", runId,
                 "--character", jobDir.resolve("character.json").toString()));
@@ -638,22 +679,218 @@ public class JobRunner {
             throw harnessFailed(job.getRunId(), "고른 이야기를 저장하지 못했습니다");
         }
 
-        int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--sheet"));
-        after.cost(job.getRunId());          // 시트는 그림이다 — 죽어도 값은 나갔다
+        /* 먼저 띄운 시트(#548)가 있으면 그것을 기다린다. 실패했거나 없으면 여기서 그린다. */
+        java.util.concurrent.Future<Integer> ahead = sheetAhead.remove(jobId);
+        boolean ready = false;
+        if (ahead != null) {
+            try {
+                ready = ahead.get() == 0 && sheetReady(job.getRunId());
+            } catch (Exception e) {              // noqa: 아래서 다시 그린다
+                log.warn("먼저 띄운 시트를 못 거뒀습니다 (job={})", jobId, e);
+            }
+        }
         stopIfCancelled(jobId);
-        if (code != 0) {
-            throw harnessFailed(job.getRunId(), "캐릭터 시트를 만들지 못했습니다");
+        if (!ready) {
+            int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--sheet"));
+            after.cost(job.getRunId());      // 시트는 그림이다 — 죽어도 값은 나갔다
+            stopIfCancelled(jobId);
+            if (code != 0) {
+                throw harnessFailed(job.getRunId(), "캐릭터 시트를 만들지 못했습니다");
+            }
         }
 
         /* 시트를 확인하는 사람은 「다시 만들기」를 누를 수 있고, 다시 만들기는
            사양을 사진부터 다시 쓴다 — 그래서 확인을 기다리는 동안은 사진을 둔다.
            지우는 것은 시트를 확정하거나(resumeAfterSheet) 작업이 끝날 때(stop)다. */
         if (job.isCheckpoints()) {
-            store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
+            /* 「확인하고 만들기」(#548) — 시트 확인은 이야기 고르기 화면에 합쳤고, 그 대신
+               그림 전에 장면 초안을 보고 고치는 자리에서 멈춘다. 시간으로 안 넘어간다. */
+            ensureScenes(jobId, job);
+            store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
             return;
         }
         dropPhotos(jobId);
         pages(jobId);
+    }
+
+    /* ---- 「만들고 싶은 내용이 있어요」(#548) ---- */
+
+    /**
+     * own 길의 첫 걸음. 하네스 {@code --own} 한 번으로 주인공 카드·인물·본문·시트를 동시에
+     * 만들고 장면까지 나눈 뒤, 장면 확인 자리에서 멈춘다. 후보도 고르기도 없다.
+     */
+    private void ownStart(Long jobId, WebtoonJob job, Path jobDir, String runId) throws Exception {
+        progress.say(jobId, "루가 적어 주신 내용을 읽고 있어요");
+        int code = callHarness(jobId, job, List.of(
+                "--run-id", runId,
+                "--character", jobDir.resolve("character.json").toString(), "--own"));
+        after.cost(runId);
+        stopIfCancelled(jobId);
+        if (code != 0) {
+            throw harnessFailed(runId, "적어 주신 내용으로 장면을 만들지 못했습니다");
+        }
+        store.learnRun(jobId, runId);
+        works.learnedRun(job.getPublicId(), runId, job.getUserId());
+        writeStyle(runId, job.getStyle());
+        writeQuality(runId, job.getQuality());
+
+        List<Map<String, Object>> directions = directionsOf(runId);
+        if (directions.isEmpty()) {
+            throw new IllegalStateException("본문을 못 읽었습니다");
+        }
+        if (!Files.isRegularFile(runDir(runId).resolve("scenes.json"))) {
+            throw new IllegalStateException("장면을 못 읽었습니다");
+        }
+        store.directions(jobId, directions);
+        stories.save(runId, directions);
+        store.pick(jobId, 1);
+        stories.choose(runId, 1);
+        store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
+    }
+
+    /** 「이대로 웹툰 만들기」 — 장면 확인을 끝내고 그림으로. */
+    public void resumeAfterScenes(Long jobId) {
+        store.queued(jobId, JobStage.PAGES);
+        dropPhotos(jobId);                   // 시트가 확정됐다 — 사진을 다시 읽을 일이 없다
+        line.submit(() -> {
+            try {
+                pages(jobId);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
+    }
+
+    /**
+     * 고친 장면 글을 적는다 — 그 자리에서 바로(모델 호출 없음, 1~2초). 멈춤은 그대로다.
+     * 저장 형식은 하네스 {@code --own-save} 와 같다: {scenes:[{n,text}], body?}.
+     */
+    public void saveScenes(Long jobId, List<Map<String, Object>> scenes, String body, String title) {
+        WebtoonJob job = store.byId(jobId);
+        if (job == null || job.getRunId() == null) {
+            throw new IllegalStateException("작업을 찾지 못했습니다");
+        }
+        Map<String, Object> edits = new LinkedHashMap<>();
+        edits.put("scenes", scenes);
+        if (body != null && !body.isBlank()) {
+            edits.put("body", body);
+        }
+        if (title != null && !title.isBlank()) {
+            edits.put("title", title);
+        }
+        Path file = runDir(job.getRunId()).resolve("scene_edits.json");
+        try {
+            Files.writeString(file, mapper.writeValueAsString(edits));
+            int code = harness.run(jobId, List.of("--run-id", job.getRunId(), "--own-save", file.toString()),
+                    env(job), out -> progress.line(jobId, out));
+            if (code != 0) {
+                throw new IllegalStateException("장면을 저장하지 못했습니다");
+            }
+        } catch (IOException | InterruptedException e) {
+            throw new IllegalStateException("장면을 저장하지 못했습니다", e);
+        }
+    }
+
+    /** 「장면 다시 나누기」 — 본문·인물·시트는 두고 장면만 다시. 끝나면 다시 장면 확인 자리. */
+    public void rescenes(Long jobId, String note) {
+        store.queued(jobId, JobStage.PAGES);
+        line.submit(() -> {
+            try {
+                if (!startable(jobId)) {
+                    return;
+                }
+                WebtoonJob job = store.running(jobId, JobStage.PAGES);
+                progress.say(jobId, "루가 장면을 다시 나누고 있어요");
+                List<String> args = new ArrayList<>(List.of("--run-id", job.getRunId()));
+                if (job.isOwn()) {
+                    args.add("--own-rescenes");
+                    if (note != null && !note.isBlank()) {
+                        args.add("--note");
+                        args.add(note);
+                    }
+                } else {
+                    /* quick 길의 장면 나누기는 메모를 받지 않는다 — 기존 단계 그대로. */
+                    Files.deleteIfExists(runDir(job.getRunId()).resolve("scenes.json"));
+                    args.add("--scenes");
+                }
+                int code = callHarness(jobId, job, args);
+                after.cost(job.getRunId());
+                stopIfCancelled(jobId);
+                if (code != 0) {
+                    throw harnessFailed(job.getRunId(), "장면을 다시 나누지 못했습니다");
+                }
+                store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
+    }
+
+    /** 장면 초안(#548) — 화면에 보여 줄 모양. {n, text, user_text}. 없으면 빈 목록. */
+    public List<Map<String, Object>> scenesOf(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode root = mapper.readTree(runDir(runId).resolve("scenes.json").toFile());
+            List<Map<String, Object>> out = new ArrayList<>();
+            for (JsonNode s : root.path("scenes")) {
+                Map<String, Object> one = new LinkedHashMap<>();
+                one.put("n", s.path("n").asInt());
+                one.put("text", sceneText(s));
+                String user = s.path("user_text").asText("");
+                one.put("user_text", user.isBlank() ? null : user);
+                out.add(one);
+            }
+            return out;
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * 장면 하나를 사람이 읽는 한 글로. 칸 순서는 하네스 {@code own.SCENE_TEXT_KEYS} 와 같다
+     * (장소와 상황 → 벌어지는 일 → 행동과 표정 → 겉모습 → 끝나는 상태, 그리고 나레이션).
+     */
+    static String sceneText(JsonNode s) {
+        String user = s.path("user_text").asText("");
+        if (!user.isBlank()) {
+            return user.trim();
+        }
+        List<String> parts = new ArrayList<>();
+        for (String key : List.of("where", "what", "acting", "look", "ends")) {
+            String v = s.path(key).asText("").trim();
+            if (!v.isEmpty() && !v.equals("시트 그대로") && !v.equals("시트 그대로.")
+                    && !v.equals("없음") && !v.equals("없음.")) {
+                parts.add(v);
+            }
+        }
+        JsonNode narration = s.path("narration");
+        if (narration.isArray() && !narration.isEmpty()) {
+            List<String> lines = new ArrayList<>();
+            narration.forEach(n -> lines.add(n.asText()));
+            parts.add("나레이션: " + String.join(" / ", lines));
+        }
+        return String.join("\n", parts);
+    }
+
+    /** own 길의 본문(#548) — {title, body}. 없으면 {@code null}. */
+    public Map<String, Object> storyOf(String runId) {
+        List<Map<String, Object>> directions = directionsOf(runId);
+        if (directions.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> d = directions.get(0);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("title", d.get("title"));
+        out.put("body", d.get("body"));
+        return out;
+    }
+
+    /** 시트 그림이 있나 — 고르기·장면 확인 화면이 같이 보여 준다(#548). */
+    public boolean sheetReady(String runId) {
+        return runId != null && !runId.isBlank()
+                && Files.isRegularFile(runDir(runId).resolve("sheet.png"));
     }
 
     private void pages(Long jobId) throws Exception {
@@ -1159,7 +1396,7 @@ public class JobRunner {
     }
 
 
-    private List<Map<String, Object>> directionsOf(String runId) {
+    public List<Map<String, Object>> directionsOf(String runId) {
         return DirectionsFile.read(runsDir, runId);
     }
 

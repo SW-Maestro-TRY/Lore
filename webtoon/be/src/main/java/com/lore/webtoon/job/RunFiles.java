@@ -75,13 +75,17 @@ public class RunFiles {
     private final String bucket;
     private final boolean keep;
 
+    private final WebtoonJobRepository jobs;
+
     public RunFiles(HarnessProcess harness, PageStore pages, S3Storage storage,
+                    WebtoonJobRepository jobs,
                     @Value("${app.s3.content-bucket:}") String bucket,
                     @Value("${app.s3.endpoint:}") String endpoint,
                     @Value("${lore.webtoon.runs.keep-files:}") String keepFiles) {
         this.runsDir = harness.runsDir();
         this.pages = pages;
         this.storage = storage;
+        this.jobs = jobs;
         this.bucket = bucket == null ? "" : bucket.trim();
         this.keep = keepFiles == null || keepFiles.isBlank()
                 ? this.bucket.isEmpty() || onThisMachine(endpoint)
@@ -204,6 +208,16 @@ public class RunFiles {
             return;
         }
         Instant cut = Instant.now().minus(STALE);
+        /* 사람이 답할 차례인 작품은 안 치운다(#548). 장면 초안 자리는 시간으로 안 넘어가서
+           며칠이고 기다릴 수 있다 — 폴더를 치우면 돌아온 사람이 이어서 할 수 없다. */
+        java.util.Set<String> waiting = new java.util.HashSet<>();
+        for (WebtoonJob job : jobs.findByStatusInOrderByCreatedAtAsc(java.util.List.of(
+                JobStatus.AWAITING_PICK, JobStatus.AWAITING_SHEET,
+                JobStatus.AWAITING_CAST, JobStatus.AWAITING_SCENES))) {
+            if (job.getRunId() != null) {
+                waiting.add(job.getRunId());
+            }
+        }
         int gone = 0;
         long freed = 0;
         try (Stream<Path> all = Files.list(runsDir)) {
@@ -211,6 +225,9 @@ public class RunFiles {
                 try {
                     if (Files.getLastModifiedTime(d).toInstant().isAfter(cut)) {
                         continue;                       // 아직 볼 시간이 남았다
+                    }
+                    if (waiting.contains(d.getFileName().toString())) {
+                        continue;                       // 사람이 답할 차례다 — 기다린다
                     }
                     if (!pages.originalKeys(d.getFileName().toString()).isEmpty()) {
                         continue;                       // 끝까지 간 작품이다
