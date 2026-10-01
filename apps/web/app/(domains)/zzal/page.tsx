@@ -25,9 +25,9 @@ import TamagotchiScreen, { type SkinName } from '@zzal/tamagotchi/TamagotchiScre
 // ★ 주소는 절대 주소로 적는다 — 공통 레이아웃에 metadataBase 가 없어 상대 주소는 미리보기
 //   크롤러가 해석하지 못한다. 공통 설정이 생기면 상대 주소로 줄여도 된다.
 // ★ canonical 은 /zzal 하나다. `?skin=scrapbook` 같은 변형 주소가 따로 색인되지 않게 모은다.
-// 대표 이미지(og:image)는 아직 없다. 1200×630 이미지가 정해지면 openGraph.images 를 채우고
-// twitter.card 를 'summary_large_image' 로 바꾼다.
+// 대표 이미지(og:image) — public/og/zzal.jpg(1200×630). 링크 미리보기 카드에 쓰인다.
 const ZZAL_URL = 'https://lorecomic.com/zzal';
+const ZZAL_OG_IMAGE = 'https://lorecomic.com/og/zzal.jpg';
 const ZZAL_TITLE = '캐릭터 키우기 — 내가 그린 아이와 같이 지내는 다마고치 | Lore';
 const ZZAL_DESCRIPTION =
   '그림 한 장이면, 내가 그린 아이랑 같이 지낼 수 있어요. 밥 · 목욕 · 놀이 · 잠을 함께하면 새로 배운 동작이 움짤로 앨범에 쌓여요.';
@@ -43,11 +43,13 @@ export const metadata: Metadata = {
     locale: 'ko_KR',
     title: ZZAL_TITLE,
     description: ZZAL_DESCRIPTION,
+    images: [{ url: ZZAL_OG_IMAGE, width: 1200, height: 630, alt: 'LORE 로고와 마스코트 루' }],
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: ZZAL_TITLE,
     description: ZZAL_DESCRIPTION,
+    images: [ZZAL_OG_IMAGE],
   },
 };
 
