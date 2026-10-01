@@ -43,10 +43,10 @@ const dict: Dict = {
   "이름": { en: "Name", ja: "名前", zh: "名字" },
   "선택 · 비우면 지어요": { en: "optional · we'll pick one if blank", ja: "任意・空欄なら付けます", zh: "可选 · 留空则由我们起名" },
   "예: 몽이, 세라핀": { en: "e.g. Mongi, Seraphine", ja: "例：モンイ、セラフィン", zh: "例：蒙伊、瑟拉芬" },
-  "사진은 캐릭터를 그린 뒤 지워요. 남의 사진은 팬 창작 범위 안에서만.": {
-    en: "Photos are deleted once the character is drawn. Use other people's photos only for fan works.",
-    ja: "写真はキャラクターを描いた後に削除します。他人の写真はファン創作の範囲内でのみ。",
-    zh: "照片在角色绘制完成后会被删除。他人的照片仅限用于同人创作。",
+  "사진은 캐릭터를 그린 뒤 바로 서버에서 지워요!": {
+    en: "Your photo is deleted from our server right after the character is drawn!",
+    ja: "写真はキャラクターを描いたらすぐにサーバーから削除します！",
+    zh: "角色绘制完成后，照片会立即从服务器删除！",
   },
   "세계관": { en: "World", ja: "世界観", zh: "世界观" },
   "안 고르면 랜덤": { en: "random if none picked", ja: "選ばなければランダム", zh: "不选则随机" },

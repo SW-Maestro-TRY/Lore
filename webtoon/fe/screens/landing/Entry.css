@@ -3,46 +3,41 @@
 .wt .wt-entry-head h2 { font-size: 40px; }
 .wt .wt-entry-head span { font-size: 16px; }
 
+/* 카드 전체에 그림을 흰 바탕 위 55% 로 깔고(.wt-entry-bg) 그 위 가운데에 글을 크게
+   올린다. PC·폰 같은 모양이고 폰은 높이만 줄인다. */
 .wt .wt-entry-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: 880px; max-width: 100%; margin: 0 auto; }
 .wt .wt-entry-card {
-  text-decoration: none; color: var(--ink); display: flex; flex-direction: column; overflow: hidden;
+  position: relative; isolation: isolate; height: 460px; overflow: hidden;
+  text-decoration: none; color: var(--ink); display: flex; flex-direction: column;
   border-radius: 16px; background: #fff; border: 1px solid var(--line);
 }
 .wt .wt-entry-card:hover { color: var(--ink); border-color: var(--ink); }
 .wt .wt-entry-card.on { border: 2px solid var(--sea); }
-.wt .wt-entry-pic { position: relative; height: 380px; background: var(--water-light); overflow: hidden; flex-shrink: 0; }
-.wt .wt-entry-pic img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
-/* 가로로 긴 컷 — 인물이 왼쪽에 있어서, 폰의 세로 카드에서도 얼굴이 남게 왼쪽에 붙인다. */
-.wt .wt-entry-pic img.wt-entry-pic-left { object-position: left center; }
-.wt .wt-entry-tag {
-  position: absolute; left: 12px; top: 12px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
-  background: #fff; color: var(--sea-deep); font-weight: 600;
+.wt .wt-entry-bg {
+  position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%;
+  object-fit: cover; object-position: top; display: block; opacity: .55; transition: transform .4s ease, opacity .3s ease;
 }
+.wt .wt-entry-bg.wt-entry-bg-char { object-position: center 20%; }
+.wt .wt-entry-card:hover .wt-entry-bg { transform: scale(1.03); opacity: .65; }
 .wt .wt-entry-free {
-  position: absolute; right: 12px; top: 12px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  position: absolute; right: 14px; top: 14px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
   background: var(--ink); color: #fff; font-weight: 600;
 }
-.wt .wt-entry-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; }
-.wt .wt-entry-title { display: flex; align-items: flex-start; gap: 8px; }
-.wt .wt-entry-ic { color: var(--sea-deep); flex-shrink: 0; margin-top: 2px; display: inline-flex; }
-.wt .wt-entry-title b { font-size: 17px; line-height: 1.35; }
-.wt .wt-entry-body > .muted { font-size: 13.5px; line-height: 1.55; }
-.wt .wt-entry-go { display: inline-flex; align-items: center; gap: 6px; color: var(--sea); font-size: 13px; font-weight: 700; margin-top: 6px; }
+.wt .wt-entry-body { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 28px; margin: auto 0; }
+.wt .wt-entry-desc { font-size: 14px; line-height: 1.5; font-weight: 600; color: var(--ink); }
+.wt .wt-entry-big { color: var(--sea-deep); font-size: 40px; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; }
 
 @media (max-width: 767px) {
   .wt .wt-entry { padding: 28px 16px 24px; gap: 12px; }
   .wt .wt-entry-head { align-items: flex-start; text-align: left; gap: 12px; margin: 0 0 6px; }
   .wt .wt-entry-head h2 { font-size: 27px; line-height: 1.25; }
   .wt .wt-entry-head span { font-size: 13.5px; }
-  .wt .wt-entry-cards { grid-template-columns: 1fr; gap: 12px; width: 100%; }
-  .wt .wt-entry-card { flex-direction: row; align-items: stretch; }
-  .wt .wt-entry-card.on { border-color: var(--ink); }
-  .wt .wt-entry-pic { width: 120px; height: 190px; }
-  .wt .wt-entry-tag { display: none; }
-  .wt .wt-entry-free { right: 6px; top: 6px; font-size: 10.5px; padding: 3px 7px; }
-  .wt .wt-entry-body { padding: 16px 14px; justify-content: center; }
-  .wt .wt-entry-ic { display: none; }
-  .wt .wt-entry-title b { font-size: 16px; }
-  .wt .wt-entry-body > .muted { font-size: 12.5px; line-height: 1.5; }
-  .wt .wt-entry-go { font-size: 12.5px; gap: 4px; margin-top: 0; }
+  .wt .wt-entry-cards { grid-template-columns: 1fr; gap: 14px; width: 100%; }
+  .wt .wt-entry-card { height: 230px; }
+  .wt .wt-entry-card.on { border-color: var(--sea); }
+  .wt .wt-entry-free { right: 10px; top: 10px; font-size: 11px; padding: 3px 8px; }
+  .wt .wt-entry-body { padding: 18px; gap: 5px; }
+  .wt .wt-entry-big { font-size: 28px; }
+  .wt .wt-entry-desc { font-size: 12.5px; }
+  .wt .wt-entry-bg.wt-entry-bg-char { object-position: center 40%; }
 }

@@ -214,10 +214,11 @@ update webtoon_work set is_public = false where run_id = '…';
 | 온보딩 04 「완성」 칸 | `webtoon/fe/screens/landing/Landing.tsx:38` | `20260910T132240-ae8c28` |
 
 입구 화면 카드 두 장은 작품 번호가 아니라 정적 그림을 쓴다
-(`webtoon/fe/static/entry/`). 왼쪽 「바로 웹툰을 만들고 싶어요」는
-`webtoon-page.jpg`(「가면 아래의 대리인」 2쪽, 말상자까지 그대로), 오른쪽
-「캐릭터를 만들어보고 싶어요」는 `character.jpg`(같은 쪽 첫 컷의 인물만 잘라 둔 것)다.
-바꾸려면 같은 이름으로 덮어쓴다.
+(`webtoon/fe/static/entry/`). 그림은 카드 전체에 배경으로 옅게(55%) 깔린다.
+왼쪽 「웹툰 만들기」는 `webtoon-page.jpg`(「마탑의 실험용 캔」 3쪽 위 세 컷,
+말상자·말풍선까지 그대로, 1024×1225), 오른쪽 「캐릭터 만들기」는 `character.jpg`
+(캐릭터 「흑설」 카드 그림, 512×768)다. 폰 카드(높이 230px)는 왼쪽에 위 두 컷만 둔
+`webtoon-cut.jpg`(1024×970)를 따로 쓴다. 바꾸려면 같은 이름으로 덮어쓴다.
 
 ## 자주 하는 실수
 
