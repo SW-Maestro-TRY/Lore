@@ -323,6 +323,17 @@
 .wt .wt-prog-minetab .txt .dim { font-size: 11.5px; font-weight: 400; line-height: 1.4; }
 .wt .wt-prog-minetab .go { color: var(--dim); transform: rotate(-90deg); flex-shrink: 0; }
 .wt .wt-prog-minetab.viewing .go { transform: rotate(0deg); }
+/* 장면 칸들(#548) — 라벨 붙은 문단. */
+.wt .wt-prog-parts { display: grid; gap: 10px; }
+.wt .wt-prog-parts .part { display: grid; gap: 2px; }
+.wt .wt-prog-parts .part span { font-size: 12px; font-weight: 600; color: var(--sea); }
+.wt .wt-prog-parts .part p { margin: 0; font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; color: var(--ink); }
+/* 조연 시트(#548). */
+.wt .wt-prog-free { font-size: 13px; font-weight: 600; margin-left: 6px; }
+.wt .wt-prog-castsheet { gap: 8px; }
+.wt .wt-prog-castsheet .btn-sm { align-self: flex-start; }
+.wt .wt-prog-sheet.small img { max-height: 320px; object-fit: contain; }
+.wt .wt-prog-sheetwait.small { min-height: 120px; font-size: 13px; }
 .wt .wt-prog-sheetwait { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 200px; border-radius: 14px; background: var(--water-light); color: var(--muted); font-size: 14px; }
 .wt .wt-prog-story .title { font-size: 16px; font-weight: 700; }
 .wt .wt-prog-story textarea.wt-prog-bodybox { height: 220px; }

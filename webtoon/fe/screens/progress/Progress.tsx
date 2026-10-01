@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
   cancelJob, continueScenes, decideSheet, jobPageUrl, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
-  patchOptions, retryScenes, saveScenes, sheetImageUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, rememberMyRun } from "../../lib/api";
+  castSheetImageUrl, patchOptions, readAllowance, requestCastSheet, retryScenes, saveScenes, sheetImageUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
 import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
@@ -35,27 +35,31 @@ const CRUMB_OWN = ["캐릭터", "내 내용", "그림체", "만들기", "완성"
 const STEPS: { key: string; title: string; desc: string }[] = [
   { key: "story", title: "이야기 짓기", desc: "축을 뽑고 방향 4개를 씁니다" },
   { key: "sheet", title: "캐릭터 그리기", desc: "앞·옆·뒤 모습과 표정을 한 장에" },
+  { key: "scenes", title: "장면 나누기", desc: "이야기를 한 장씩 장면으로" },
   { key: "pages", title: "페이지 그리기", desc: "컷을 나누고 표지와 장면을 차례로" },
   { key: "review", title: "검수하기", desc: "그린 장을 잇고 마지막으로 살펴봅니다" },
 ];
-/* 하네스 단계 이름 → 걸음. 회차 설계(board)는 따로 세지 않고 페이지 그리기에 묶는다. */
-const STAGE_INDEX: Record<string, number> = { story: 0, sheet: 1, board: 2, pages: 2, art: 2, bind: 3 };
-const REVIEW = 3;
+/* 하네스 단계 이름 → 걸음. 회차 설계(board)는 따로 세지 않고 페이지 그리기에 묶는다.
+   장면 나누기(2, #548)는 그림 직전에 잠깐 도는 것이라 서버 stage 로는 안 오고, awaiting_scenes 로만 온다. */
+const STAGE_INDEX: Record<string, number> = { story: 0, sheet: 1, board: 3, pages: 3, art: 3, bind: 4 };
+const SCENES = 2;
+const PAGES = 3;
+const REVIEW = 4;
 
 /** 왼쪽 줄에서 고를 수 있는 자리 — 걸음 번호이거나 루와 놀기. */
 type Tab = number | "play" | "mine";
 
-/** 지금 어느 걸음인가(0..3). 상태가 먼저, 서버의 stage 이름이 다음. */
+/** 지금 어느 걸음인가(0..4). 상태가 먼저, 서버의 stage 이름이 다음. */
 function currentStep(job: NhJob): number {
   if (job.status === "awaiting_pick" || job.status === "awaiting_cast") return 0;
   if (job.status === "awaiting_sheet") return 1;
   /* 장면 확인(#548) — 이야기와 시트는 끝났고 장을 그리기 직전이다. */
-  if (job.status === "awaiting_scenes") return 2;
+  if (job.status === "awaiting_scenes") return SCENES;
   const byStage = STAGE_INDEX[job.stage];
   if (byStage != null) return byStage;
-  if (job.art && job.art.total > 0) return 2;
+  if (job.art && job.art.total > 0) return PAGES;
   if (job.pick == null) return 0;
-  return 2;
+  return PAGES;
 }
 
 function Crumb({ items }: { items: string[] }) {
@@ -80,7 +84,8 @@ function mockScenesJob(id: string): NhJob {
   /* 실제 작품(2026-10-01 서연화 · 「상견례는 아직 이르지만」)의 scenes.json·본문·인물을 서버와
      같은 규칙으로 합친 것(mockScenes.json). 장면 하나가 1,100~1,300자다 — 가짜 짧은 글로 보면
      실제와 차이가 너무 커서 실물로 둔다. */
-  const real = mockReal as { story: { title: string; body: string }; scenes: NhScene[]; cast: NhCast[]; persona: NhPersona };
+  const real = mockReal as { story: { title: string; body: string }; scenes: NhScene[]; cast: NhCast[]; persona: NhPersona;
+    cast_sheets: { name: string; ready: boolean }[] };
   const story = "비 오는 날 학교에서 서연화가 강민수에게 우산을 건넨다. 민수는 처음에는 거절하지만 결국 같이 우산을 쓴다.";
   return {
     id, status: "awaiting_scenes", run_id: "mock", error: null, mode: own ? "own" : "quick",
@@ -88,6 +93,7 @@ function mockScenesJob(id: string): NhJob {
     scenes: real.scenes,
     story: own ? real.story : null,
     cast: real.cast,
+    cast_sheets: real.cast_sheets,
     persona: real.persona,
     input: {
       name: "서연화", description: "27살 출판사 편집자. 교정지 앞에서는 누구보다 냉정하다. 서연화는 강민수에게만 얼굴이 빨개진다.",
@@ -262,10 +268,22 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       setStoryDraft({ title: job.story.title, body: job.story.body });
     }
   }, [status, job?.story]);
-  const sceneText = (s: NhScene) => sceneDraft[s.n] ?? s.user_text ?? s.text;
+  /* 읽을 때는 parts(라벨 붙은 문단)로, 고칠 때는 글 칸 하나로. 고친 글이 있으면 그것이 먼저다. */
+  const sceneSeed = (s: NhScene) => s.user_text ?? (s.parts?.length ? s.parts.map((p) => `${p.label}: ${p.text}`).join("\n") : s.text);
+  const sceneText = (s: NhScene) => sceneDraft[s.n] ?? sceneSeed(s);
+  const SceneBody = ({ s }: { s: NhScene }) => {
+    const edited = sceneDraft[s.n] ?? s.user_text;
+    if (edited != null) return <p className="muted">{edited}</p>;
+    if (s.parts?.length) return (
+      <div className="wt-prog-parts">
+        {s.parts.map((pt, i) => <div key={i} className="part"><span>{t(pt.label)}</span><p>{pt.text}</p></div>)}
+      </div>
+    );
+    return <p className="muted">{s.text}</p>;
+  };
   const savePayload = () => {
     const changed = scenes
-      .filter((s) => sceneDraft[s.n] != null && sceneDraft[s.n] !== (s.user_text ?? s.text))
+      .filter((s) => sceneDraft[s.n] != null && sceneDraft[s.n] !== sceneSeed(s))
       .map((s) => ({ n: s.n, text: sceneDraft[s.n] }));
     const storyChanged = ownJob && job?.story
       && (storyDraft.title !== job.story.title || storyDraft.body !== job.story.body);
@@ -326,6 +344,40 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     }
   };
   const sheetWaiting = job?.sheet_ready === false;
+  /* 조연 시트(#548) — 주인공 시트는 무료, 다른 인물은 한 명에 1크레딧. 장면 확인 차례에만. */
+  const castSheets = job?.cast_sheets ?? [];
+  const castSheetOf = (name: string) => castSheets.find((c) => c.name === name);
+  const [castSheetV, setCastSheetV] = useState(0);
+  const [castBusy, setCastBusy] = useState("");
+  const [castErr, setCastErr] = useState("");
+  const [balance, setBalance] = useState<number | null>(null);
+  useEffect(() => {
+    if (status !== "awaiting_scenes" || isMock) return;
+    readAllowance().then((a) => setBalance(a.balance ?? null)).catch(() => setBalance(null));
+  }, [status, isMock]);
+  const castReadyCount = castSheets.filter((c) => c.ready).length;
+  const castReadyRef = useRef(0);
+  useEffect(() => {
+    if (castReadyCount > castReadyRef.current) setCastSheetV((v) => v + 1);
+    castReadyRef.current = castReadyCount;
+  }, [castReadyCount]);
+  const drawCastSheet = async (name: string) => {
+    if (!job || castBusy) return;
+    setCastBusy(name); setCastErr("");
+    track("cast_sheet", { job: job.id, name });
+    try {
+      if (isMock) {
+        setJob((j) => j ? { ...j, cast_sheets: [...(j.cast_sheets ?? []).filter((c) => c.name !== name), { name, ready: false }] } : j);
+      } else {
+        setJob(await requestCastSheet(job.id, name));
+      }
+    } catch (e) {
+      setCastErr(e instanceof Error ? e.message : t("보내지 못했습니다"));
+    } finally {
+      setCastBusy("");
+    }
+  };
+  const noCredit = balance != null && balance < 1;
   const sheetWasWaiting = useRef(false);
   useEffect(() => {
     if (sheetWasWaiting.current && !sheetWaiting) setSheetV((v) => v + 1);   // 다시 그린 시트를 새로 받는다
@@ -388,13 +440,13 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const autoTab: Tab = waiting || cur === REVIEW ? cur : "play";
   const at: Tab = tab ?? autoTab;
 
-  type Pane = "loading" | "play" | "sheet" | "cast" | "scenes" | "making" | "confirm" | "drawing" | "failed" | "story-view" | "sheet-view" | "pages-view" | "mine";
+  type Pane = "loading" | "play" | "sheet" | "cast" | "scenes" | "making" | "confirm" | "drawing" | "failed" | "story-view" | "sheet-view" | "scenes-view" | "pages-view" | "mine";
   let pane: Pane = "loading";
   if (job) {
     if (status === "error") pane = "failed";
     else if (at === "play") pane = "play";
     else if (at === "mine") pane = "mine";
-    else if (at !== cur) pane = (["story-view", "sheet-view", "pages-view", "drawing"] as Pane[])[at];
+    else if (at !== cur) pane = (["story-view", "sheet-view", "scenes-view", "pages-view", "drawing"] as Pane[])[at];
     else if (status === "awaiting_sheet") pane = "sheet";
     else if (status === "awaiting_cast") pane = "cast";
     else if (status === "awaiting_scenes") pane = "scenes";
@@ -440,7 +492,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     if (!job) return false;
     if (i === 0) return dirs.length > 0;
     if (i === 1) return cur > 1 || status === "awaiting_sheet";
-    if (i === 2) return !!art || cur >= 2;
+    if (i === SCENES) return scenes.length > 0 && cur > SCENES;
+    if (i === PAGES) return !!art || cur >= PAGES;
     return cur === REVIEW;
   };
 
@@ -739,13 +792,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <>
                   <div className="wt-prog-head">
                     <h2>{t("웹툰을 만들기 전에 장면을 확인해 보세요")}</h2>
-                    <span className="muted lede">
-                      {ownJob
-                        ? t("내가 적은 내용을 AI 가 장면으로 나눴어요. 원하는 내용이 있다면 자유롭게 고칠 수 있어요.")
-                        : t("AI 가 이야기를 웹툰의 장면으로 나눴어요. 원하는 내용이 있다면 자유롭게 고칠 수 있어요.")}
-                      {" "}{t("고치지 않아도 돼요.")}
-                    </span>
-                    <span className="dim">{t("AI 는 이 글을 보고 그 장면을 그립니다. 컷·대사·연출을 적으면 그대로 따릅니다.")}</span>
+                    <span className="muted lede">{t("AI가 이야기를 장면으로 나눴어요.")}</span>
+                    <span className="muted lede">{t("원하는 내용이나 대사, 연출이 있다면 자유롭게 수정해 주세요.")}</span>
                   </div>
                   <div className="wt-prog-acts wt-prog-sceneacts">
                     <button type="button" className="btn btn-p" disabled={busy} onClick={continueAll}>{t("이대로 웹툰 만들기")} <IconArrow size={18} /></button>
@@ -777,7 +825,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                             <textarea className="field" value={sceneText(s)} aria-label={t("장면 {n} / {total}", { n: s.n, total: scenes.length })}
                                       onChange={(e) => editScene(s.n, e.target.value)} />
                           ) : (
-                            <p className="muted">{sceneText(s)}</p>
+                            <SceneBody s={s} />
                           )}
                         </div>
                       );
@@ -1028,7 +1076,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               )}
               {pane === "sheet-view" && job && (
                 <>
-                  <div className="wt-prog-head"><h2>{t("캐릭터 시트")}</h2></div>
+                  <div className="wt-prog-head"><h2>{t("캐릭터 시트")} <span className="dim wt-prog-free">{t("무료")}</span></h2></div>
                   {sheetWaiting ? (
                     <div className="wt-prog-sheetwait"><span className="spin" /> {t("그림체에 맞춰 다시 그리는 중")}</div>
                   ) : (
@@ -1049,6 +1097,56 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     </div>
                   )}
                   {actErr && <span className="err">{actErr}</span>}
+                  {cast.length > 0 && (status === "awaiting_scenes" || castSheets.length > 0) && (
+                    <>
+                      <div className="wt-prog-pageshead" style={{ marginTop: 8 }}>
+                        <b>{t("다른 인물도 시트로 뽑기")}</b>
+                        <span className="dim">{t("한 명에 1크레딧")}</span>
+                      </div>
+                      <div className="wt-prog-dirs">
+                        {cast.map((c, i) => {
+                          const st = castSheetOf(c.name);
+                          return (
+                            <div key={c.name + i} className="wt-prog-dir plain wt-prog-cast wt-prog-castsheet">
+                              <div className="row"><b>{c.name}</b></div>
+                              {c.look && <span className="muted intro">{c.look}</span>}
+                              {st?.ready ? (
+                                <button type="button" className="wt-prog-sheet small" onClick={() => setZoom(castSheetImageUrl(job.id, c.name, castSheetV))}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={castSheetImageUrl(job.id, c.name, castSheetV)} alt={t("{name} 시트", { name: c.name })} />
+                                  <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
+                                </button>
+                              ) : st ? (
+                                <div className="wt-prog-sheetwait small"><span className="spin" /> {t("그리는 중")}</div>
+                              ) : status === "awaiting_scenes" ? (
+                                <>
+                                  <button type="button" className="btn btn-w btn-sm" disabled={!!castBusy || noCredit} onClick={() => void drawCastSheet(c.name)}>
+                                    {t("시트 뽑기 · 1크레딧")}
+                                  </button>
+                                  {noCredit && <span className="err">{t("크레딧이 부족해요")}</span>}
+                                </>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {castErr && <span className="err">{castErr}</span>}
+                    </>
+                  )}
+                </>
+              )}
+              {pane === "scenes-view" && job && (
+                /* 걸음 3 「장면 나누기」 — 그림 중·완성 뒤에 장면을 읽기만 한다(#548). */
+                <>
+                  <div className="wt-prog-head"><h2>{t("장면 나누기")}</h2></div>
+                  <div className="wt-prog-scenes">
+                    {scenes.map((s) => (
+                      <div key={s.n} className="wt-prog-scene">
+                        <div className="row"><b>{t("장면 {n} / {total}", { n: s.n, total: scenes.length })}</b></div>
+                        <SceneBody s={s} />
+                      </div>
+                    ))}
+                  </div>
                 </>
               )}
               {pane === "pages-view" && job && art && (
