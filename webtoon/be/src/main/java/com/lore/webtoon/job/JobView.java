@@ -45,6 +45,11 @@ public record JobView(
         boolean sheet_ready,
         /** 어느 길인가(#548): quick | own. */
         String mode,
+        /**
+         * 내가 적은 것(#548) — 장면 확인 자리에서만. {name, description, genre, story, episode,
+         * settings, title, photos, style, quality, language}. 그 밖에는 {@code null}.
+         */
+        Map<String, Object> input,
         Integer pick,
         String style,
         String style_label,
@@ -139,6 +144,7 @@ public record JobView(
                       List<Map<String, Object>> directions, List<Map<String, Object>> cast,
                       String castKind, Map<String, Object> persona,
                       List<Map<String, Object>> scenes, Map<String, Object> story, boolean sheetReady,
+                      Map<String, Object> input,
                       String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
                       String notifyEmail, JobEta.Eta eta) {
@@ -165,6 +171,7 @@ public record JobView(
                 story,
                 sheetReady,
                 job.getMode(),
+                input,
                 job.getPicked(),
                 job.getStyle(),
                 styleLabel,

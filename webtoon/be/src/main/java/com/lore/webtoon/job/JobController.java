@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.http.MediaType;
@@ -317,6 +318,18 @@ public class JobController {
                                            @RequestBody(required = false) NoteRequest body) {
         jobs.retryScenes(id, body == null ? null : body.note());
         return Map.of("ok", true);
+    }
+
+    @Operation(summary = "그림체·화질 바꾸기",
+            description = "장면 확인 자리(#548)에서만 된다. 그림체가 바뀌면 시트를 그 그림체로 다시 그린다. "
+                    + "그림이 시작된 뒤에는 바꿀 수 없다.")
+    @PatchMapping("/jobs/{id}/options")
+    public Map<String, Object> options(@PathVariable String id, @RequestBody OptionsRequest body) {
+        jobs.updateOptions(id, body.style(), body.quality());
+        return Map.of("ok", true);
+    }
+
+    public record OptionsRequest(String style, String quality) {
     }
 
     @Operation(summary = "이야기 후보 다시 짓기",
