@@ -1142,13 +1142,17 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                             <div className="row"><b>{t("주인공 · {name}", { name: job.persona.name })}</b></div>
                             {job.persona.look && <span className="muted intro">{job.persona.look}</span>}
                             {job.persona.personality && <span className="muted intro">{job.persona.personality}</span>}
+                            {job.persona.voice && <span className="muted intro">{job.persona.voice}</span>}
+                            {job.persona.line && <q className="line">{job.persona.line}</q>}
                           </div>
                         )}
                         {cast.map((c, i) => (
                           <div key={c.name + i} className="wt-prog-dir plain wt-prog-cast">
                             <div className="row"><b>{c.name}</b></div>
                             {c.look && <span className="muted intro">{c.look}</span>}
+                            {c.tie && <span className="muted intro">{c.tie}</span>}
                             {c.gap && <span className="muted intro">{c.gap}</span>}
+                            {c.voice && <span className="muted intro">{c.voice}</span>}
                             {c.line && <q className="line">{c.line}</q>}
                           </div>
                         ))}
@@ -1195,13 +1199,17 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                             <div className="row"><b>{t("주인공 · {name}", { name: job.persona.name })}</b></div>
                             {job.persona.look && <span className="muted intro">{job.persona.look}</span>}
                             {job.persona.personality && <span className="muted intro">{job.persona.personality}</span>}
+                            {job.persona.voice && <span className="muted intro">{job.persona.voice}</span>}
+                            {job.persona.line && <q className="line">{job.persona.line}</q>}
                           </div>
                         )}
                         {cast.map((c, i) => (
                           <div key={c.name + i} className="wt-prog-dir plain wt-prog-cast">
                             <div className="row"><b>{c.name}</b></div>
                             {c.look && <span className="muted intro">{c.look}</span>}
+                            {c.tie && <span className="muted intro">{c.tie}</span>}
                             {c.gap && <span className="muted intro">{c.gap}</span>}
+                            {c.voice && <span className="muted intro">{c.voice}</span>}
                             {c.line && <q className="line">{c.line}</q>}
                           </div>
                         ))}
