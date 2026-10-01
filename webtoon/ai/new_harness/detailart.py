@@ -253,7 +253,7 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
                       "어떤 처지인지 읽어 내는 데만 쓴다):", intro]
     work = "\n".join(x for x in lines if x is not None).strip()
 
-    return (text
+    return (imageprompt.apply_style_sections(text, style)
             .replace("{style}", imageprompt.load_style(style))
             .replace("{people}", character_block(char, spec, cast))
             .replace("{fixed}", fixed_block(fixed_names))
@@ -644,10 +644,11 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 lore_world, " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "prev", "ends"))
             )) if lore_world else ""
             page_cast = cast_sheets_in_scene(cast_sheets, one)
-            prompt = (build_continue_prompt(direction, scenes, char, spec, cast,
-                                            scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
-                                            lang=lang, lore=lore, cast_sheet_names=page_cast)
-                      .replace("{style}", imageprompt.load_style(style)))
+            prompt = imageprompt.apply_style_sections(
+                build_continue_prompt(direction, scenes, char, spec, cast,
+                                      scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
+                                      lang=lang, lore=lore, cast_sheet_names=page_cast),
+                style).replace("{style}", imageprompt.load_style(style))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
         # 그 사람 말대로 다시 그리는 것이다.
