@@ -340,6 +340,7 @@ public class JobController {
         String ref = id + ":rescene:" + n + ":" + System.currentTimeMillis();
         Runnable refund = cost > 0 ? () -> credits.refund(me, ref) : () -> { };
         if (cost > 0) {
+            credits.requireEnough(me, cost);
             credits.charge(me, cost, ref, "장면 다시 뽑기 · " + n + "번");
         }
         try {
@@ -398,6 +399,7 @@ public class JobController {
         String ref = id + ":restory:" + System.currentTimeMillis();
         Runnable refund = cost > 0 ? () -> credits.refund(me, ref) : () -> { };
         if (cost > 0) {
+            credits.requireEnough(me, cost);
             credits.charge(me, cost, ref, "1화 다시 만들기");
         }
         try {
@@ -474,6 +476,7 @@ public class JobController {
         Long me = CreditGate.currentUser();
         String name = body == null || body.name() == null ? "" : body.name().trim();
         String ref = id + ":cast-sheet:" + name;
+        credits.requireEnough(me, 1);
         jobs.castSheet(id, name, me, () -> credits.refund(me, ref));
         credits.charge(me, 1, ref, "조연 시트 · " + name);
         return Map.of("ok", true);

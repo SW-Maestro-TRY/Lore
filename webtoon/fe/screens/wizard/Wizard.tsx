@@ -17,6 +17,7 @@ import {
 import { STYLE_THUMB } from "../../lib/styleThumbs";
 import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { useLang, useT } from "../../lib/i18n";
+import { ErrLine, errText } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { IconArrow, IconBack, IconCheck, IconClose, IconEdit } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
@@ -302,7 +303,7 @@ export default function Wizard({
       go("running", { job: id }, { replace: true });
     } catch (e) {
       track("create_failed", { ...props, status: e instanceof WebtoonApiError ? e.status : 0 });
-      setStartErr(e instanceof Error ? e.message : t("만들기를 시작하지 못했습니다"));
+      setStartErr(errText(e, t("만들기를 시작하지 못했습니다")));
       setStarting(false);
     }
   };
@@ -377,7 +378,7 @@ export default function Wizard({
       </details>
       {blockedReason && <div className="wt-wiz-block">{t(blockedReason)}</div>}
       {own && !authenticated && <div className="wt-wiz-block">{t("로그인하면 내 내용으로 만들 수 있어요")}</div>}
-      {startErr && <span className="err">{startErr}</span>}
+      <ErrLine text={startErr} />
       <button type="button" className="btn btn-p" disabled={!canStart} onClick={() => void start()}>
         {starting ? <><span className="spin" /> {t("시작하는 중")}</> : t("웹툰 만들기")}
       </button>
