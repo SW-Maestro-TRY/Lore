@@ -159,6 +159,9 @@ export interface NhScene {
   n: number;
   text: string;
   user_text: string | null;
+  /** AI 가 나눈 장면의 칸들(장소와 상황 / 벌어지는 일 / 행동과 표정 / 겉모습 / 끝나는 상태 / 나레이션 중 있는 것만).
+   *  user_text 가 있으면 parts 는 AI 원래 것이고 text 는 user_text 다. */
+  parts?: { label: string; text: string }[] | null;
 }
 
 /** 주인공 페르소나(#534) — 사용자가 적은 캐릭터로 정의한 것. 인물 확인·고르기 화면에서 확인용으로 보여 준다. */
@@ -232,6 +235,8 @@ export interface NhJob {
   input?: NhJobInput | null;
   /** 시트가 다 그려졌나. 그림체를 바꾸면 다시 그리는 동안 false(#548). 없으면 그려진 것으로 본다. */
   sheet_ready?: boolean | null;
+  /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
+  cast_sheets?: { name: string; ready: boolean }[] | null;
   pick: number | null;
   style: string;
   style_label: string;
@@ -361,6 +366,16 @@ export function notifyByEmail(id: string, email: string): Promise<{ email: strin
 
 export function sheetImageUrl(jobId: string, v: number | string = ""): string {
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet.png${v ? `?v=${v}` : ""}`;
+}
+
+/** 조연 시트 그림(#548). */
+export function castSheetImageUrl(jobId: string, name: string, v: number | string = ""): string {
+  return `${BASE}/jobs/${encodeURIComponent(jobId)}/cast-sheet/${encodeURIComponent(name)}${v ? `?v=${v}` : ""}`;
+}
+
+/** 조연 한 명의 시트를 뽑는다(1크레딧). 장면 확인 차례에만. */
+export function requestCastSheet(id: string, name: string) {
+  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/cast-sheet`, { name });
 }
 
 export function jobPageUrl(jobId: string, no: number, width = 260): string {
