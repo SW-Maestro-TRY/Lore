@@ -119,8 +119,9 @@ export interface WizardForm {
 /** 어느 길로 만드나(#548) — quick: 아이디어부터 · own: 만들고 싶은 내용이 있음. */
 export type WizardCreate = "quick" | "own";
 
-/** own 길 「내 내용」 칸의 상한. 서버 입력 글 안전 검사 상한(4,000자)과 같다. */
-export const OWN_STORY_MAX = 4000;
+/** own 길 「내 내용」 칸의 상한(#548). 단편 소설 한 편 분량. 서버 `JobService.OWN_STORY_MAX` 와 같다 —
+    안전 검사는 서버가 4,000자씩 나눠 전부 본다. */
+export const OWN_STORY_MAX = 20000;
 
 export const emptyWizardForm = (): WizardForm => ({
   photos: [],
