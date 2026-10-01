@@ -244,6 +244,17 @@ const dict: Dict = {
     zh: "两条路最后都会做成漫画。做好的角色会保存下来，下次可以直接做漫画。",
   },
   "캐릭터 만들어보기": { en: "Try a character", ja: "キャラクターを作ってみる", zh: "试做一个角色" },
+  "캐릭터 만들기": { en: "Create character", ja: "キャラクターを作る", zh: "创建角色" },
+  "캐릭터와 스토리로 웹툰 1화를 생성해보아요": {
+    en: "Turn a character and a story into episode 1 of your webtoon",
+    ja: "キャラクターとストーリーでウェブトゥーン第1話を作ってみましょう",
+    zh: "用角色和故事生成漫画第 1 话",
+  },
+  "내가 ○○에 들어간다면? 재미있는 캐릭터를 만들어보아요": {
+    en: "What if I stepped into ○○? Make a fun character",
+    ja: "もし私が○○に入ったら？楽しいキャラクターを作ってみましょう",
+    zh: "如果我走进○○会怎样？来做一个有趣的角色吧",
+  },
   "바로 웹툰을 만들고 싶어요": { en: "I want to make a webtoon right away", ja: "すぐウェブトゥーンを作りたい", zh: "我想直接做漫画" },
   "남은 무료 {n}": { en: "{n} free left", ja: "無料残り {n}", zh: "剩余免费 {n}" },
   "내가 가진 캐릭터, 최애, 이미지, 설정으로 바로 웹툰을 만들어요.": {
