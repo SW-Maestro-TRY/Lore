@@ -520,6 +520,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         await retryScene(job.id, n, { reasons: r.reasons, note: r.note.trim() });
         stopped.current = false;
         await pull();
+        readAllowance().then((a) => setBalance(a.balance ?? null)).catch(() => {});   // 두 번째부터 1크레딧
       }
       setSceneDraft((d) => { const next = { ...d }; delete next[n]; return next; });
       setSceneEdit((o) => ({ ...o, [n]: false }));
@@ -1079,7 +1080,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                               <div className="acts">
                                 {sceneRetryErr[s.n] && <span className="err">{sceneRetryErr[s.n]}</span>}
                                 <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => openSceneRetry(s.n)}>{t("닫기")}</button>
-                                <button type="button" className="btn btn-p btn-sm" disabled={busy} onClick={() => void sendSceneRetry(s.n)}>{t("다시 뽑기")}</button>
+                                {/* 장면마다 첫 번째는 무료, 같은 장면을 또 뽑으면 1크레딧(#548) */}
+                                <button type="button" className="btn btn-p btn-sm" disabled={busy || ((s.history?.length ?? 0) >= 1 && noCredit)}
+                                        onClick={() => void sendSceneRetry(s.n)}>
+                                  {(s.history?.length ?? 0) >= 1 ? t("다시 뽑기 · 1크레딧") : t("다시 뽑기 · 무료")}
+                                </button>
                               </div>
                             </div>
                           )}
