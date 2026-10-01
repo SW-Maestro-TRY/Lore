@@ -994,6 +994,15 @@ public class JobRunner {
         if (!hist.isArray() || v < 1 || v > hist.size()) {
             throw new IllegalArgumentException("그런 판이 없습니다");
         }
+        /* 번호가 없던 옛 판은 자리를 옮기기 전에 쌓인 순서로 번호를 박는다 — 옮긴 뒤엔 순서를 모른다. */
+        for (int i = 0; i < hist.size(); i++) {
+            if (!hist.get(i).has("ver")) {
+                ((ObjectNode) hist.get(i)).put("ver", i + 1);
+            }
+        }
+        if (!cur.has("ver")) {
+            cur.put("ver", hist.size() + 1);
+        }
         ArrayNode rest = mapper.createArrayNode();
         ObjectNode chosen = ((ObjectNode) hist.get(v - 1)).deepCopy();
         for (int i = 0; i < hist.size(); i++) {
@@ -1039,13 +1048,16 @@ public class JobRunner {
                 one.put("user_text", user.isBlank() ? null : user);
                 /* 다시 뽑기 전의 판들(#548) — 오래된 것부터. 화면이 넘겨 보고 되돌린다. */
                 List<Map<String, Object>> history = new ArrayList<>();
+                int i = 0;
                 for (JsonNode h : s.path("history")) {
                     Map<String, Object> old = new LinkedHashMap<>();
+                    old.put("ver", h.path("ver").asInt(++i));     // 만든 순서 번호, 처음 판이 1
                     old.put("text", sceneText(h));
                     old.put("parts", sceneParts(h));
                     history.add(old);
                 }
                 one.put("history", history);
+                one.put("ver", s.path("ver").asInt(history.size() + 1));
                 out.add(one);
             }
             return out;
