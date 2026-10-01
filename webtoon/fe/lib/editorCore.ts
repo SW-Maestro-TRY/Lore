@@ -19,6 +19,7 @@
  */
 
 import { louArt } from "./louArt";
+import { sceneShort } from "./sceneText";
 import { track } from "./track";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
@@ -408,7 +409,7 @@ export function mountEditor(
         <div class="overlay" data-overlay></div>
       </div>
 
-      ${sceneNote(s) ? `<p class="scene-note">${esc(sceneNote(s))}</p>` : ""}
+      ${sceneNote(s) ? `<p class="scene-note">${esc(sceneShort(sceneNote(s)))}</p>` : ""}
 
       <div class="scene-tools">
         <button type="button" class="btn btn-quiet btn-sm" data-act="regen">
