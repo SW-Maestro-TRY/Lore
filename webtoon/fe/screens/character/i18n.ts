@@ -99,10 +99,10 @@ const dict: Dict = {
   "링크를 복사했어요": { en: "Link copied", ja: "リンクをコピーしました", zh: "已复制链接" },
   "공유": { en: "Share", ja: "共有", zh: "分享" },
   "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
-  "{title} - AI 캐릭터 & 웹툰 생성 서비스, Lore. 나도 만들러 가기 -->": {
-    en: "{title} - Lore, an AI character & webtoon maker. Make your own -->",
-    ja: "{title} - AIキャラクター＆ウェブトゥーン生成サービス、Lore。自分も作ってみる -->",
-    zh: "{title} - AI 角色与条漫生成服务 Lore。我也去做一个 -->",
+  "{title} - 내 캐릭터를 살아 움직이게. 개인 IP를 위한 AI 창작 서비스, LORE. 나도 만들러 가기 -->": {
+    en: "{title} - Bring your character to life. LORE, an AI creation service for personal IP. Make your own -->",
+    ja: "{title} - 自分のキャラクターを生き生きと。個人IPのためのAI創作サービス、LORE。自分も作ってみる -->",
+    zh: "{title} - 让我的角色活起来。为个人 IP 打造的 AI 创作服务 LORE。我也去做一个 -->",
   },
   "링크 복사": { en: "Copy link", ja: "リンクをコピー", zh: "复制链接" },
   "주연": { en: "Lead", ja: "主役", zh: "主角" },
