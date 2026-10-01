@@ -21,11 +21,12 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myBrowserRuns, myLikes, myTrash, readAllowance, recentRuns,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, myLikes, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
-  type Allowance, type Character, type RunCard, type TrashCard,
+  type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
   mySurveyStatus, type SurveyStatus,
 } from "../../lib/api";
+import { activeJobLabel, activeJobTitle } from "../../lib/jobLabel";
 import type { Go } from "../../lib/nav";
 import RunStrip from "../../ui/RunStrip";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
@@ -188,6 +189,13 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   }, [isAuthenticated]);
 
   useEffect(() => { void loadRuns(); }, [loadRuns]);
+
+  /* 만드는 중(#548) — 아직 안 끝난 작업. 장면 확인처럼 사람이 누를 때까지 멈춰 있는 작업을
+     며칠 뒤에도 여기서 찾아 「이어서 만들기」로 돌아간다. */
+  const [active, setActive] = useState<NhJob[]>([]);
+  useEffect(() => {
+    myActiveJobs().then((r) => setActive(r.jobs ?? [])).catch(() => setActive([]));
+  }, []);
 
   /* 휴지통(#157) — 지운 작품은 영구 삭제 전까지 여기서 되살린다. 지우기가
      로그인한 사람만 되므로 휴지통도 로그인했을 때만 읽는다. */
@@ -371,6 +379,23 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 <button type="button" className="btn btn-p" onClick={() => go("entry")}>{t("새 웹툰 만들기")}</button>
               </div>
             </div>
+
+            {active.length > 0 && (
+              <div className="wt-my-active">
+                <b className="wt-my-active-title">{t("만드는 중")}</b>
+                {active.map((j) => {
+                  const title = activeJobTitle(j);
+                  return (
+                    <div key={j.id} className="wt-my-active-row">
+                      <span>{title ? `${title} · ${activeJobLabel(j, t)}` : activeJobLabel(j, t)}</span>
+                      <button type="button" className="btn btn-p btn-sm" onClick={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }}>
+                        {t("이어서 만들기")}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {runsFailed && (
               <div className="wt-my-empty">

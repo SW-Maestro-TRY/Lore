@@ -108,7 +108,19 @@ export interface WizardForm {
   quality: WizardQuality;
   mode: WizardMode;
   agreeIp: boolean;
+  /** 어느 길인가(#548). 입구에서 고른 카드가 정한다. */
+  create: WizardCreate;
+  /** own 길 — 제목(선택). 비우면 AI 가 짓는다. */
+  title: string;
+  /** own 길 — 「설정 더 적기」. 인물·세계·지킬 것을 한 칸에. 비워도 된다. */
+  settings: string;
 }
+
+/** 어느 길로 만드나(#548) — quick: 아이디어부터 · own: 만들고 싶은 내용이 있음. */
+export type WizardCreate = "quick" | "own";
+
+/** own 길 「내 내용」 칸의 상한. 서버 입력 글 안전 검사 상한(4,000자)과 같다. */
+export const OWN_STORY_MAX = 4000;
 
 export const emptyWizardForm = (): WizardForm => ({
   photos: [],
@@ -122,6 +134,9 @@ export const emptyWizardForm = (): WizardForm => ({
   quality: QUALITY_DEFAULT,
   mode: "expert",
   agreeIp: false,
+  create: "quick",
+  title: "",
+  settings: "",
 });
 
 /** 하네스 그림체 이름(캐릭터 카드의 style) → 화면 키. 카드에서 1화로 넘어갈 때
