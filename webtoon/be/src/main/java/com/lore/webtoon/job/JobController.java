@@ -303,6 +303,14 @@ public class JobController {
         return Map.of("ok", true);
     }
 
+    @Operation(summary = "인물 카드 고치기",
+            description = "own 길(#548) — who 가 hero 면 주인공, 숫자면 cast 의 그 번째(0부터). 보낸 칸만 덮는다.")
+    @PostMapping("/jobs/{id}/person")
+    public Map<String, Object> savePerson(@PathVariable String id, @RequestBody PersonRequest body) {
+        jobs.savePerson(id, body.who(), body.fields());
+        return Map.of("ok", true);
+    }
+
     @Operation(summary = "이대로 웹툰 만들기", description = "장면 확인을 끝내고 그림으로 간다(#548).")
     @PostMapping("/jobs/{id}/scenes-continue")
     public Map<String, Object> continueScenes(@PathVariable String id) {
@@ -498,5 +506,8 @@ public class JobController {
     }
 
     public record CastSheetRequest(String name) {
+    }
+
+    public record PersonRequest(String who, Map<String, Object> fields) {
     }
 }
