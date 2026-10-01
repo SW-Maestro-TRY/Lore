@@ -1077,13 +1077,24 @@ public class JobRunner {
         }
     }
 
-    /** 장면마다 한 줄(#548) — 고친 글이 있으면 그것, 없으면 「벌어지는 일」. 결과 화면·편집실이 쓴다. */
+    /**
+     * 장면마다 글 하나(#548) — 「소제목\n글」을 빈 줄로 이은 것. 편집실은 그림 밑에 「장소와 상황」만,
+     * 왼쪽에 전체를 소제목별로 보여 준다. 고친 글이 있으면 그것(이미 같은 모양이다).
+     */
     public List<String> sceneCaptions(String runId) {
         List<String> out = new ArrayList<>();
         try {
             for (JsonNode s : mapper.readTree(runDir(runId).resolve("scenes.json").toFile()).path("scenes")) {
                 String user = s.path("user_text").asText("").trim();
-                out.add(!user.isEmpty() ? user : cleanSceneField(s.path("what").asText("")));
+                if (!user.isEmpty()) {
+                    out.add(user);
+                    continue;
+                }
+                List<String> blocks = new ArrayList<>();
+                for (Map<String, String> part : sceneParts(s)) {
+                    blocks.add(part.get("label") + "\n" + part.get("text"));
+                }
+                out.add(String.join("\n\n", blocks));
             }
         } catch (IOException e) {
             return List.of();

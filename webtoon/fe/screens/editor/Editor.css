@@ -95,7 +95,7 @@
 .wt .wt-ed-pages { display: flex; flex-direction: column; gap: 6px; }
 /* 고른 장이 무슨 장면인지(#548) */
 .wt .wt-ed-sceneinfo { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; margin-top: 6px; border-top: 1px solid var(--line); }
-.wt .wt-ed-sceneinfo p { margin: 0; padding: 0 10px; font-size: 13px; line-height: 1.65; color: var(--ink); white-space: pre-wrap; }
+.wt .wt-ed-sceneinfo > p { margin: 0; padding: 0 10px; font-size: 13px; line-height: 1.65; color: var(--ink); white-space: pre-wrap; }
 .wt .wt-ed-sceneinfo p.dim { color: var(--dim); }
 .wt .wt-ed-pagegrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .wt .wt-ed-thumb {
@@ -369,4 +369,8 @@
 .wt .wt-ed-regenask .ask-actions { display: flex; gap: 6px; justify-content: flex-end; }
 /* 왼쪽 단의 다시 그리기(#548) — 제목 줄과 같은 들여쓰기 */
 .wt .wt-ed-left .wt-ed-regen { padding: 10px 10px 4px; margin-top: 6px; }
-.wt .wt-ed-left .wt-ed-sceneinfo p { max-height: 220px; overflow: auto; }
+/* 장면 전체 — 소제목별로 띄워서 읽기 쉽게(#548) */
+.wt .wt-ed-sceneparts { display: flex; flex-direction: column; gap: 14px; padding: 4px 10px 6px; }
+.wt .wt-ed-sceneparts .part { display: flex; flex-direction: column; gap: 4px; }
+.wt .wt-ed-sceneparts .part span { font-size: 11.5px; font-weight: 700; color: var(--sea); letter-spacing: .02em; }
+.wt .wt-ed-sceneparts .part p { margin: 0; font-size: 13.5px; line-height: 1.75; color: var(--ink); white-space: pre-wrap; word-break: keep-all; }
