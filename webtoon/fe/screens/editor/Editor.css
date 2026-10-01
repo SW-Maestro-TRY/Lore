@@ -71,7 +71,7 @@
 .wt .wt-ed-left {
   /* 아트보드는 220인데 거기 목록은 썸네일 없는 한 줄이었다. 여기는 썸네일과
      두 줄이라 220이면 제목이 잘린다 — 그만큼 넓힌다. */
-  width: 260px; flex: none; border-right: 1px solid rgba(15, 51, 63, 0.08); padding: 16px 12px;
+  width: var(--ed-left-w, 260px); flex: none; border-right: 1px solid rgba(15, 51, 63, 0.08); padding: 16px 12px;
   display: flex; flex-direction: column; gap: 6px; background: #fff;
   position: sticky; top: calc(var(--lore-header-h, 0px) + 64px); align-self: flex-start;
   /* 화면 높이만큼 세워 둔다 — 그래야 「내 작품」이 왼쪽 맨 아래에 붙는다(#548). */
@@ -197,6 +197,9 @@
 .wt .wt-ed .item .handle-tail.is-off { border-style: dashed; opacity: 0.55; }
 .wt .wt-ed .item.sel .handle-tail.is-off { opacity: 0.7; }
 .wt .wt-ed .stk { line-height: 1; }
+/* 루 스티커(#548) — 이모지와 같은 크기 감각으로, 높이를 글자 크기의 1.5배 */
+.wt .wt-ed .stk-lou img { display: block; height: 1.5em; width: auto; pointer-events: none; user-select: none; }
+.wt .wt-ed .dock-item .prev .stk-lou img { height: 44px; }
 .wt .wt-ed .sfx { font-weight: 900; color: #fff; letter-spacing: -0.02em; white-space: nowrap; -webkit-text-stroke: 3px #111; paint-order: stroke fill; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35); }
 
 /* 지난 판 */
@@ -226,7 +229,8 @@
 .wt .wt-ed-dockopen { display: none; }
 .wt .wt-ed .dock-scrim { display: none; }
 .wt .wt-ed-dock {
-  width: 260px; flex: none; border-left: 1px solid rgba(15, 51, 63, 0.08); padding: 16px; display: flex; flex-direction: column; gap: 14px; background: #fff;
+  overflow-x: hidden;
+  width: var(--ed-right-w, 260px); flex: none; border-left: 1px solid rgba(15, 51, 63, 0.08); padding: 16px; display: flex; flex-direction: column; gap: 14px; background: #fff;
   position: sticky; top: calc(var(--lore-header-h, 0px) + 64px); align-self: flex-start;
   max-height: calc(100vh - var(--lore-header-h, 0px) - 64px); overflow: auto;
 }
@@ -248,7 +252,9 @@
 .wt .wt-ed .dock-item:hover { border-color: var(--ink); }
 .wt .wt-ed .dock-item:active { transform: translateY(1px); }
 .wt .wt-ed .dock-item span { font-size: 12px; color: var(--ink); }
+/* 말풍선 견본(#548) — 견본 칸 크기를 고정해 꼬리·뾰족한 테두리가 이름 글자를 덮거나 잘리지 않게 */
 .wt .wt-ed .dock-item .prev { pointer-events: none; position: relative; overflow: visible; min-height: 30px; display: flex; align-items: center; justify-content: center; }
+.wt .wt-ed .dock-item .prev[data-prev-variant] { width: 78px; height: 56px; margin: 2px auto 10px; }
 .wt .wt-ed .dock-item .prev .bub { font-size: 10px; padding: 0.4em 0.6em; }
 .wt .wt-ed .dock-item .prev .bub-svg .bs > * { stroke-width: 3.4; }
 .wt .wt-ed .dock-item .prev .handle-tail { display: none; }
@@ -374,3 +380,12 @@
 .wt .wt-ed-sceneparts .part { display: flex; flex-direction: column; gap: 4px; }
 .wt .wt-ed-sceneparts .part span { font-size: 11.5px; font-weight: 700; color: var(--sea); letter-spacing: .02em; }
 .wt .wt-ed-sceneparts .part p { margin: 0; font-size: 13.5px; line-height: 1.75; color: var(--ink); white-space: pre-wrap; word-break: keep-all; }
+/* 양쪽 단 폭 조절 손잡이(#548) — 경계 위에 얇게, 잡으면 진하게 */
+.wt .wt-ed-resize { flex: none; width: 6px; margin: 0 -3px; cursor: col-resize; position: relative; z-index: 5; align-self: stretch; }
+.wt .wt-ed-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; background: transparent; transition: background .15s; }
+.wt .wt-ed-resize:hover::after, .wt .wt-ed-resize:active::after { background: var(--sea); }
+@media (max-width: 879px) { .wt .wt-ed-resize { display: none; } }
+/* 다시 그리기 팝업의 장면 글 — 소제목별로(#548) */
+.wt .wt-ed .ask-scene { display: flex; flex-direction: column; gap: 10px; max-height: 240px; overflow: auto; }
+.wt .wt-ed .ask-scene-part { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+.wt .wt-ed .ask-scene-part b { font-size: 11.5px; color: var(--sea); }

@@ -455,6 +455,19 @@ def _sticker_tile(item: dict[str, Any], scale: float):
     """이모지 스티커. 글꼴이 없으면 None — 나머지는 그대로 구워진다."""
     Image, ImageDraw, _ = _pil()
     target = max(8, int(item["size"] * 2.2 * scale))
+    text = str(item.get("text") or "")
+    if text.startswith("lou:"):
+        # 루 고래 스티커(#548) — 화면·자바(BubbleArtist)와 같은 그림을 높이 1.5em 로.
+        import re
+        name = re.sub(r"[^a-z0-9-]", "", text[4:])
+        path = Path(__file__).resolve().parent.parent / "assets" / "lou" / f"{name}.png"
+        if not name or not path.is_file():
+            return None
+        src = Image.open(path).convert("RGBA")
+        h = max(8, round(target * 1.5))
+        tile = src.resize((max(1, round(src.width * h / src.height)), h), Image.LANCZOS)
+        tile.info["off"] = (0, 0)
+        return tile
     font, drawn = _emoji_font(target)
     if font is None:
         return None
