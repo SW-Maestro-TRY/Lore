@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -282,6 +283,122 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: 
         raise
     R.record(run_dir, meta)
     log(f"  -> {out}")
+
+
+def sheet_file_name(name: str) -> str:
+    """조연 시트 파일 이름 — 경로 구분자만 바꾼다. 자바(RunArt)도 같은 규칙으로 찾는다."""
+    return re.sub(r"[\\/]", "_", (name or "").strip())
+
+
+def find_cast(run_dir: Path, name: str) -> dict | None:
+    """cast.json 에서 이름이 같은 인물. 성까지 적힌 이름은 첫 낱말로도 찾는다."""
+    want = (name or "").strip()
+    if not want:
+        return None
+    path = run_dir / "cast.json"
+    cast = R.read_json(path) if path.exists() else []
+    if not isinstance(cast, list):
+        return None
+    for c in cast:
+        n = str(c.get("name") or "").strip()
+        if n and (n == want or n.split()[0] == want or n.split()[0] == want.split()[0]):
+            return c
+    return None
+
+
+def stage_cast_sheet(run_dir: Path, name: str, dry_run: bool) -> Path | None:
+    """조연 캐릭터 시트 — 사진 없이 인물 단계가 적은 생김새만으로(#548, 크레딧 1).
+
+    주인공 시트와 같은 판형이라 장 그림이 참조로 받으면 그 조연이 장마다 같은
+    사람으로 나온다. 글 1회(CAST_SHEET) + 그림 1회(CAST_SHEET_IMAGE). 안전 검사에
+    걸리면 주인공 시트와 같이 한 번은 사양부터 다시 쓴다.
+    """
+    person = find_cast(run_dir, name)
+    if not person:
+        raise SystemExit(f"cast.json 에 그런 인물이 없습니다: {name}")
+    inp = R.read_json(run_dir / "input.json") if (run_dir / "input.json").exists() else {}
+    full = str(person.get("name") or name).strip()
+    sheets = run_dir / "sheets"
+    sheets.mkdir(parents=True, exist_ok=True)
+    stem = sheet_file_name(full)
+    out = sheets / f"{stem}.png"
+    if out.exists():
+        log(f"[조연 시트] {out} 가 이미 있습니다. 다시 뽑으려면 지우세요.")
+        return out
+    failure.clear(run_dir)
+    safety = ""
+    for attempt in (1, 2):
+        try:
+            return _cast_sheet_attempt(run_dir, person, full, stem, inp, dry_run, safety)
+        except BaseException as exc:                                  # noqa: BLE001
+            cats = failure.refusal_categories(exc)
+            if cats is None:
+                failure.write(run_dir, "CAST_SHEET", "error", f"{type(exc).__name__}: {exc}")
+                raise
+            if attempt == 1:
+                warn(f"[조연 시트] 안전 검사에 걸렸습니다({', '.join(cats) or '분류 미상'}) — 사양부터 다시 씁니다")
+                (sheets / f"{stem}.spec.json").unlink(missing_ok=True)
+                safety = failure.safety_note(cats)
+                continue
+            failure.write(run_dir, "CAST_SHEET_IMAGE", "image_safety", f"{type(exc).__name__}: {exc}", cats)
+            raise SystemExit(f"조연 시트가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
+    return None
+
+
+def _cast_sheet_attempt(run_dir: Path, person: dict, full: str, stem: str, inp: dict,
+                        dry_run: bool, safety: str) -> Path | None:
+    sheets = run_dir / "sheets"
+    lines = ["# 이번 입력", "", f"캐릭터 이름: {full}", "외관: (사진 없음 — 아래 생김새가 전부다)"]
+    for key, label in (("look", "생김새·인상"), ("gap", "갭"), ("voice", "말투")):
+        v = str(person.get(key) or "").strip()
+        if v:
+            lines.append(f"{label}: {v}")
+    genre = str((inp or {}).get("genre") or "").strip()
+    lines.append(f"장르: {genre}" if genre else "장르: (없음)")
+    block = "\n".join(lines) + "\n"
+    if safety:
+        block += "\n" + safety
+    prompt = R.compose("own/cast_sheet_prompt", block)
+    R.write_text(sheets / f"{stem}.spec_prompt.txt", prompt)
+
+    spec_path = sheets / f"{stem}.spec.json"
+    if spec_path.exists():
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    elif dry_run:
+        log(f"[조연 시트] 사양 프롬프트만 썼습니다 -> {sheets / (stem + '.spec_prompt.txt')}")
+        return None
+    else:
+        call = llm.Call("CAST_SHEET")
+        log(f"[조연 시트] {call.describe()} 로 {full} 사양을 적습니다…")
+        try:
+            text, meta = call(prompt, temperature=0.4)
+        except BaseException as exc:                                  # noqa: BLE001
+            R.record_error(run_dir, "CAST_SHEET", call.provider, call.model, exc)
+            raise
+        R.record(run_dir, meta)
+        spec = sheetmod.parse_spec(text)
+        bad = sheetmod.gate_spec(spec)
+        if bad:
+            R.write_json(sheets / f"{stem}.spec_rejected.json", spec)
+            raise SystemExit("조연 시트 사양이 모자랍니다 — 그리기 전에 멈춥니다:\n  - " + "\n  - ".join(bad))
+        R.write_json(spec_path, spec)
+
+    image_prompt = sheetmod.build_prompt(spec, from_photo=False)
+    R.write_text(sheets / f"{stem}.prompt.txt", image_prompt)
+    out = sheets / f"{stem}.png"
+    if dry_run:
+        log(f"[조연 시트] 이미지 프롬프트만 썼습니다 -> {sheets / (stem + '.prompt.txt')}")
+        return None
+    log(f"[조연 시트] {full} 그리는 중… (사양만)")
+    provider, model, _q = imagegen.backend_for("CAST_SHEET_IMAGE")
+    try:
+        meta = imagegen.paint("CAST_SHEET_IMAGE", image_prompt, out, kind=imagegen.SHEET_KIND)
+    except BaseException as exc:                                      # noqa: BLE001
+        R.record_error(run_dir, "CAST_SHEET_IMAGE", provider, model, exc)
+        raise
+    R.record(run_dir, meta)
+    log(f"  -> {out}")
+    return out
 
 
 def scenes_input(run_dir: Path, char: dict, note: str = "") -> str:

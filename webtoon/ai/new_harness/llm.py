@@ -75,8 +75,8 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "SCENE", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
                "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "COVER_REVIEW", "CAST", "PERSONA",
-               "FULL_REVIEW")
-IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE")
+               "FULL_REVIEW", "CAST_SHEET")
+IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE", "CAST_SHEET_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
 DEFAULT_MAX_TOKENS = story.env_int("NH_MAX_TOKENS", 16000)
@@ -266,6 +266,8 @@ STAGE_LABEL = {
     "BOARD": "콘티",
     "SHEET": "시트 사양",
     "SHEET_IMAGE": "시트 그림",
+    "CAST_SHEET": "조연 시트 사양 (글로 적힌 생김새만으로, 크레딧 1)",
+    "CAST_SHEET_IMAGE": "조연 시트 그림",
     "PAGE_IMAGE": "페이지 그림",
     "PAGE_REVIEW": "그림 검수 (장마다)",
     "COVER_REVIEW": "표지 검수 (칸 하나 · 글상자 없음 · 제목 그대로)",

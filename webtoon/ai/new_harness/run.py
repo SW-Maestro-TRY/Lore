@@ -1765,6 +1765,8 @@ def main(argv=None) -> int:
                         "동시에 만들고 장면까지 나눈다. 후보·고르기 없음")
     p.add_argument("--own-save", type=Path,
                    help="사용자가 고친 장면 글 파일({scenes:[{n,text}], body?}) 을 scenes.json 에 반영한다")
+    p.add_argument("--cast-sheet", metavar="이름",
+                   help="인물 단계가 세운 조연 한 명의 시트를 글 생김새만으로 그린다 — sheets/<이름>.png (#548, 크레딧 1)")
     p.add_argument("--own-rescenes", action="store_true",
                    help="본문·인물·시트는 두고 장면만 다시 나눈다 (--note 로 메모)")
     p.add_argument("--restory", action="store_true",
@@ -1850,12 +1852,14 @@ def main(argv=None) -> int:
         log(f"  사양도 함께: {'예' if got['spec'] else '아니오 (그림만)'}")
 
     # 「만들고 싶은 내용이 있어요」(#548) — 프롬프트·단계가 따로다(own.py).
-    if args.own or args.own_save or args.own_rescenes:
+    if args.own or args.own_save or args.own_rescenes or args.cast_sheet:
         import own
         if args.own:
             own.run_own(run_dir, char, args.dry_run, lang=args.lang)
         if args.own_save:
             own.save_edits(run_dir, json.loads(args.own_save.read_text(encoding="utf-8")))
+        if args.cast_sheet:
+            own.stage_cast_sheet(run_dir, args.cast_sheet, args.dry_run)
         if args.own_rescenes:
             own.rescenes(run_dir, char, args.dry_run, note=args.note, lang=args.lang)
         return 0
