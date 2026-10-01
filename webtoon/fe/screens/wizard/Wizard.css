@@ -218,3 +218,19 @@
   .wt .wt-wiz-side > .btn, .wt .wt-wiz-side .hint { display: none; }
   .wt .wt-wiz-mfoot-note { display: block; font-size: 12px; text-align: center; }
 }
+
+/* ---- 「만들고 싶은 내용이 있어요」 길(#548) — 내 내용 걸음 ---- */
+.wt .wt-wiz-own { gap: 14px; }
+.wt textarea.wt-wiz-ownbox { min-height: 300px; }
+.wt .wt-wiz-ownhint { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-size: 13.5px; line-height: 1.6; }
+.wt .wt-wiz-ownhint .dim { white-space: nowrap; font-size: 12.5px; }
+.wt .wt-wiz-ownrow { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 20px; align-items: start; }
+.wt .wt-wiz-ownrow .fieldset { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.wt .wt-wiz-ownrow .fieldset > .dim { font-size: 12.5px; }
+.wt .wt-wiz-more { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 0 16px; }
+.wt .wt-wiz-more summary { cursor: pointer; padding: 12px 0; font-weight: 600; font-size: 14px; color: var(--sea-deep); }
+.wt .wt-wiz-more textarea { margin-bottom: 14px; width: 100%; }
+@media (max-width: 767px) {
+  .wt .wt-wiz-ownrow { grid-template-columns: 1fr; gap: 14px; }
+  .wt textarea.wt-wiz-ownbox { min-height: 220px; }
+}

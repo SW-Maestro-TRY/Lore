@@ -28,6 +28,8 @@ export interface GoParams {
   id?: string;
   /** 마이페이지에서 처음 열 칸. 진행 화면의 「설정에서 끌 수 있어요」가 설정 칸으로 바로 보낸다. */
   tab?: "settings" | "feedback";
+  /** 만들기 화면이 어느 길인가(#548). own = 「만들고 싶은 내용이 있어요」. 없으면 아이디어부터. */
+  mode?: "own";
 }
 
 export function hrefOf(view: View, p: GoParams = {}): string {
@@ -44,6 +46,7 @@ export function hrefOf(view: View, p: GoParams = {}): string {
   if (p.run) q.set("run", p.run);
   if (p.id) q.set("id", p.id);
   if (p.tab) q.set("tab", p.tab);
+  if (p.mode) q.set("mode", p.mode);
   return `/webtoon?${q}`;
 }
 

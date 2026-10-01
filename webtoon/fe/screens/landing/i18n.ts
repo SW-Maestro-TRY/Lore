@@ -3,6 +3,16 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  /* ---- 입구 — 만들고 싶은 내용이 있나요?(#548) ---- */
+  "무엇을 만들고 싶나요?": { en: "What would you like to make?", ja: "何を作りたいですか？", zh: "想做什么？" },
+  "아이디어부터 시작할게요": { en: "Start from an idea", ja: "アイデアから始める", zh: "从灵感开始" },
+  "캐릭터를 바탕으로 AI 가 스토리를 만들어드려요.": { en: "AI writes a story from your character.", ja: "キャラクターをもとに AI がストーリーを作ります。", zh: "AI 会根据角色为你创作故事。" },
+  "AI 와 함께 만들기": { en: "Make it with AI", ja: "AI と一緒に作る", zh: "和 AI 一起创作" },
+  "만들고 싶은 내용이 있어요": { en: "I know what I want to make", ja: "作りたい内容がある", zh: "我已经有想做的内容" },
+  "내가 생각한 내용을 바탕으로 장면을 만들고 웹툰으로 완성해요.": { en: "Build scenes from what you have in mind and finish the webtoon.", ja: "考えた内容をもとに場面を作り、ウェブトゥーンに仕上げます。", zh: "根据你的构思生成场景，完成漫画。" },
+  "내 내용으로 시작하기": { en: "Start with my own", ja: "自分の内容で始める", zh: "用我的内容开始" },
+  "로그인하면 내 내용으로 만들 수 있어요": { en: "Sign in to make it with your own content", ja: "ログインすると自分の内容で作れます", zh: "登录后即可用自己的内容创作" },
+
   /* ---- 히어로 ---- */
   "만들던 웹툰": { en: "Webtoon in progress", ja: "作りかけのウェブトゥーン", zh: "正在制作的漫画" },
   "{done} / {total}장": { en: "{done} / {total} pages", ja: "{done} / {total}枚", zh: "{done} / {total} 页" },

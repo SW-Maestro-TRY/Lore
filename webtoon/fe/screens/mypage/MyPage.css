@@ -163,3 +163,10 @@
   .wt .wt-my-cover img { height: 180px; border-radius: 10px; }
   .wt .wt-my-char img, .wt .wt-my-char-new { width: 76px; height: 76px; }
 }
+
+/* 만드는 중(#548) — 멈춰 있는 작업으로 돌아가는 줄 */
+.wt .wt-my-active { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 20px; padding: 14px 16px; border-radius: 14px; background: var(--water-light); }
+.wt .wt-my-active-title { font-size: 14px; }
+.wt .wt-my-active-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; }
+.wt .wt-my-active-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-my-active-row .btn { flex-shrink: 0; }
