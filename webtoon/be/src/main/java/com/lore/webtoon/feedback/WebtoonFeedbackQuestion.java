@@ -65,10 +65,10 @@ public enum WebtoonFeedbackQuestion {
         private static final Set<String> YPN = Set.of("yes", "partly", "no");
         private static final Set<String> YN = Set.of("yes", "no");
         private static final Set<String> YMN = Set.of("yes", "maybe", "no");
-        /** 여러 캐릭터 · 다음 화 · 장면 하나로 바로 만화 · 내 그림체 그대로 · 대사·컷 직접 설계 ·
+        /** 여러 캐릭터 · 다음 화 · 장면 하나로 바로 만화 · 컷마다 그림 한 장 · 대사·컷 직접 설계 ·
          *  트레일러 자동 공유 · 캐릭터 빌려주기 · 커뮤니티(댓글·작가홈·인기순) · 지금으로 충분 */
         private static final Set<String> FEATURES = Set.of(
-                "multi_char", "next_episode", "scene_comic", "my_style", "script_cut_edit",
+                "multi_char", "next_episode", "scene_comic", "cut_image", "script_cut_edit",
                 "trailer_share", "character_lend", "community", "enough");
 
         Object accept(Object raw) {
