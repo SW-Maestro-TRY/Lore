@@ -285,12 +285,13 @@
 .wt .wt-prog-scene .row button:disabled { opacity: .4; cursor: default; }
 .wt .wt-prog-scene.busy { border-style: dashed; }
 /* 장면 하나 다시 뽑기 — 카드 아래 열리는 판 */
-.wt .wt-prog-sceneretry { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
-.wt .wt-prog-sceneretry > b { font-size: 14px; }
-.wt .wt-prog-sceneretry .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.wt .wt-prog-sceneretry .chip { height: 34px; padding: 0 14px; font-size: 13px; }
-.wt .wt-prog-sceneretry textarea.field { min-height: 160px; padding: 12px 14px; resize: vertical; line-height: 1.6; font-size: 14px; background: #fff; }
-.wt .wt-prog-sceneretry .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.wt .wt-prog-sceneretry { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 16px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.wt .wt-prog-sceneretry > b { font-size: 13px; font-weight: 700; color: var(--ink); }
+.wt .wt-prog-sceneretry .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt .wt-prog-sceneretry .chip { height: 32px; padding: 0 13px; font-size: 13px; background: #fff; }
+.wt .wt-prog-sceneretry .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-prog-scene .wt-prog-sceneretry textarea.field { min-height: 96px; padding: 12px 14px; resize: vertical; line-height: 1.6; font-size: 14px; background: #fff; }
+.wt .wt-prog-sceneretry .acts { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
 /* own 길 이야기 확인 — 제목·본문을 바로 고친다 */
 .wt .wt-prog-storycheck input.field.title { font-size: 17px; font-weight: 700; height: 48px; }
 .wt .wt-prog-story.wt-prog-storycheck textarea.wt-prog-bodybox { height: 480px; }
@@ -367,3 +368,15 @@
 .wt .wt-prog-cast textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; resize: none; overflow: hidden; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; border-radius: 8px; }
 .wt .wt-prog-cast .acts { display: flex; gap: 8px; justify-content: flex-end; }
 .wt .wt-prog-cast .intro.tie { margin-bottom: 12px; color: var(--ink); }
+/* 장면 확인 — 떠 있는 「이대로 웹툰 만들기」 */
+.wt .wt-prog-gofloat { position: fixed; right: 28px; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); z-index: 40; height: 52px; padding: 0 22px; font-size: 15px; box-shadow: 0 8px 24px rgba(15, 30, 45, .22); }
+@media (max-width: 767px) { .wt .wt-prog-gofloat { display: none; } }
+/* 장면·인물 카드의 고치기·다시 뽑기 단추 — 눌러 보이게 크게 */
+.wt .wt-prog-scene .row .tools { gap: 6px; }
+.wt .wt-prog-scene .row .tools button[aria-label], .wt .wt-prog-cast .row .tools button {
+  width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.wt .wt-prog-scene .row .tools button[aria-label]:hover, .wt .wt-prog-cast .row .tools button:hover { background: var(--bg-2, #f4f6f8); }
+.wt .wt-prog-scene .row .tools button[aria-label].on, .wt .wt-prog-scene .row .tools button[aria-label].on:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-prog-scene .row { align-items: center; }
+/* 맨 위 「이대로 웹툰 만들기」는 작게 — 내려가면 떠 있는 단추가 받는다 */
+.wt .wt-prog-sceneacts .btn-p.btn-sm { height: 40px; font-size: 14px; padding: 0 16px; }
