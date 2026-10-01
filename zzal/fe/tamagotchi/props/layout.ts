@@ -49,11 +49,23 @@ export interface PropBox {
 
 /** 그 자세의 앵커. 없으면 별칭으로, 그래도 없으면 `base` 로 버틴다. */
 export function poseAnchors(anchors: CharAnchors, pose: string): PoseAnchors {
+  return anchors.poses[poseKeyOf(anchors, pose)];
+}
+
+/** `poseAnchors` 가 실제로 고르는 key(별칭 → `base` 순). */
+export function poseKeyOf(anchors: CharAnchors, pose: string): string {
   for (const k of motionAliases(pose)) {
-    const p = anchors.poses[k];
-    if (p) return p;
+    if (anchors.poses[k]) return k;
   }
-  return anchors.poses.base;
+  return 'base';
+}
+
+/**
+ * 그 자세의 앵커가 **서버 파일에서 온 것인가.** 고정값(여울)으로 메운 자세면 거짓이다.
+ * ★ 별칭·`base` 대체까지 `poseAnchors` 와 같은 길로 고른 key 를 본다 — 고르는 길이 다르면 판정과 그림이 갈린다.
+ */
+export function poseFromServer(anchors: CharAnchors, pose: string): boolean {
+  return anchors.serverPoses?.includes(poseKeyOf(anchors, pose)) ?? false;
 }
 
 // ── 캐릭터 상자 — **실루엣 키로 정한다** ────────────────────────────────
