@@ -43,6 +43,8 @@ const dict: Dict = {
   "다시 뽑기 · 무료": { en: "Redraw · free", ja: "引き直す · 無料", zh: "重抽 · 免费" },
   "1화를 다시 만들면 장면도 새 1화로 다시 나눠요.": { en: "Rewriting episode 1 also re-splits the scenes.", ja: "第1話を作り直すと場面も分け直します。", zh: "重新生成第 1 话后，场景也会重新划分。" },
   "바라는 점을 적어 주세요": { en: "Tell us what you want", ja: "希望を書いてください", zh: "请写下你的要求" },
+  "1화 다시 만들기 · 1크레딧": { en: "Rewrite episode 1 · 1 credit", ja: "第1話を作り直す · 1クレジット", zh: "重新生成第 1 话 · 1 积分" },
+  "1화 다시 만들기 · 무료": { en: "Rewrite episode 1 · free", ja: "第1話を作り直す · 無料", zh: "重新生成第 1 话 · 免费" },
   "1화 생성하기": { en: "Writing episode 1", ja: "第1話を作る", zh: "生成第 1 话" },
   "1화 이야기와 인물을 씁니다": { en: "Writes the episode-1 story and characters", ja: "第1話のストーリーと登場人物を書きます", zh: "编写第 1 话的故事和人物" },
   "캐릭터 그리기": { en: "Drawing the character", ja: "キャラクターを描く", zh: "绘制角色" },

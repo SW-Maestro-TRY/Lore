@@ -573,6 +573,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     }
   };
   const noCredit = balance != null && balance < 1;
+  /* own 길의 1화 다시 만들기 — 첫 번째는 무료, 그다음부터 1크레딧(#548) */
+  const storyPaid = ownJob && (job?.story?.redraws ?? 0) >= 1;
 
   /* 그려진 장이 늘 때마다 그 자리로 스크롤한다 — 전에는 새 장이 그려져도
      화면이 그대로라 "진짜 만들고 있는 게 맞나" 라는 의심으로 이어졌다
@@ -772,7 +774,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     if (!job) return;
     track("story_retry", { job: job.id, has_note: !!dirNote.trim(), own: ownJob });
     dirtyRef.current = false;
-    void send(() => retryDirections(job.id, dirNote.trim()));
+    void send(async () => {
+      await retryDirections(job.id, dirNote.trim());
+      if (!isMock) readAllowance().then((a) => setBalance(a.balance ?? null)).catch(() => {});
+    });
   };
   /* 기다리는 동안 다른 웹툰을 보러 가는가 — 기다림을 무엇으로 채울지 정하는 근거. */
   const browseWorks = () => {
@@ -802,7 +807,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     if (pane === "story-check") return (
       <>
         <button type="button" className="btn btn-p" disabled={busy} onClick={confirmStory}>{t("이대로 장면 나누기")}</button>
-        <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>{t("1화 다시 만들기")}</button>
+        <button type="button" className="btn btn-w" disabled={busy || (storyPaid && noCredit)} onClick={retryStory}>{storyPaid ? t("1화 다시 만들기 · 1크레딧") : t("1화 다시 만들기 · 무료")}</button>
       </>
     );
     if (pane === "making") return (
@@ -1272,8 +1277,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <button type="button" className="btn btn-p" disabled={busy} onClick={confirmStory}>{t("이대로 장면 나누기")} <IconArrow size={18} /></button>
                     <input className="field w300" value={dirNote} placeholder={t("바라는 점을 적고 1화 다시 만들기")} aria-label={t("다시 만들기 메모")}
                            onChange={(e) => setDirNote(e.target.value)} />
-                    <button type="button" className="btn btn-w" disabled={busy} onClick={retryStory}>
-                      <IconRetry size={18} /> {t("1화 다시 만들기")}
+                    <button type="button" className="btn btn-w" disabled={busy || (storyPaid && noCredit)} onClick={retryStory}>
+                      <IconRetry size={18} /> {storyPaid ? t("1화 다시 만들기 · 1크레딧") : t("1화 다시 만들기 · 무료")}
                     </button>
                   </div>
                   <input className="field wt-prog-mnote" value={dirNote} placeholder={t("바라는 점을 적고 1화 다시 만들기")} aria-label={t("다시 만들기 메모")}
@@ -1339,7 +1344,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                                     onChange={(e) => setDirNote(e.target.value)} />
                           <div className="acts">
                             <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => setStoryRetryOpen(false)}>{t("닫기")}</button>
-                            <button type="button" className="btn btn-p btn-sm" disabled={busy} onClick={() => { setStoryRetryOpen(false); retryStory(); }}>{t("1화 다시 만들기")}</button>
+                            <button type="button" className="btn btn-p btn-sm" disabled={busy || (storyPaid && noCredit)} onClick={() => { setStoryRetryOpen(false); retryStory(); }}>
+                              {storyPaid ? t("1화 다시 만들기 · 1크레딧") : t("1화 다시 만들기 · 무료")}
+                            </button>
                           </div>
                         </div>
                       )}

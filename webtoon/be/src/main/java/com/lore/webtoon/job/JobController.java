@@ -392,8 +392,21 @@ public class JobController {
     @PostMapping("/jobs/{id}/pick-retry")
     public Map<String, Object> retryPick(@PathVariable String id,
                                          @RequestBody(required = false) NoteRequest body) {
-        jobs.retryPick(id, body == null ? null : body.note());
-        return Map.of("ok", true);
+        Long me = CreditGate.currentUser();
+        /* own 길의 1화 다시 만들기는 첫 번째 무료, 그다음부터 1크레딧(#548). 먼저 받고, 못 지으면 돌려준다. */
+        int cost = me == null ? 0 : jobs.restoryCost(id);
+        String ref = id + ":restory:" + System.currentTimeMillis();
+        Runnable refund = cost > 0 ? () -> credits.refund(me, ref) : () -> { };
+        if (cost > 0) {
+            credits.charge(me, cost, ref, "1화 다시 만들기");
+        }
+        try {
+            jobs.retryPick(id, body == null ? null : body.note(), refund);
+        } catch (RuntimeException e) {
+            refund.run();
+            throw e;
+        }
+        return Map.of("ok", true, "cost", cost);
     }
 
     /**

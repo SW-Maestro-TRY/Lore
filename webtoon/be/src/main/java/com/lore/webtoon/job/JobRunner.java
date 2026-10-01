@@ -304,6 +304,11 @@ public class JobRunner {
      * ({@code --note}) — 파이썬 쪽 {@code _run_restory_phase} 와 같은 인자다.
      */
     public void retryDirections(Long jobId, String note) {
+        retryDirections(jobId, note, () -> { });
+    }
+
+    /** {@code onFail} — 다시 짓지 못했을 때(받은 크레딧을 돌려줄 때) 부른다. */
+    public void retryDirections(Long jobId, String note, Runnable onFail) {
         WebtoonJob before = store.byId(jobId);
         JobStatus was = before.getStatus();
         /* own 길(#548)은 장면 확인에서도 「1화 다시 만들기」를 누를 수 있다. 다시 짓다 실패하면
@@ -314,6 +319,7 @@ public class JobRunner {
             try {
                 restory(jobId, note);
             } catch (Exception e) {
+                onFail.run();
                 if (!keep) {
                     fail(jobId, e);
                     return;
@@ -734,6 +740,7 @@ public class JobRunner {
             /* own 길(#548)은 후보가 하나고 번호는 늘 1이다 — 고른 것을 지우지 않고 바꿔 끼운다. */
             stories.replace(job.getRunId(), directions);
             stories.choose(job.getRunId(), 1);
+            countStoryRedraw(job.getRunId());
             store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
             return;
         }
@@ -1053,6 +1060,23 @@ public class JobRunner {
         return 0;
     }
 
+    /** own 길에서 1화를 몇 번 다시 만들었나(#548) — {@code story_redraws.txt}. 첫 번째는 무료다. */
+    public int storyRedraws(String runId) {
+        try {
+            return Integer.parseInt(Files.readString(runDir(runId).resolve("story_redraws.txt")).trim());
+        } catch (IOException | NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private void countStoryRedraw(String runId) {
+        try {
+            Files.writeString(runDir(runId).resolve("story_redraws.txt"), String.valueOf(storyRedraws(runId) + 1));
+        } catch (IOException e) {
+            log.warn("1화 다시 만들기 횟수를 못 적었습니다 (run={})", runId, e);
+        }
+    }
+
     /** 이 장면을 지금 다시 짓고 있나. */
     public boolean rescening(Long jobId, int n) {
         return rescening.getOrDefault(jobId, java.util.Set.of()).contains(n);
@@ -1164,6 +1188,7 @@ public class JobRunner {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("title", d.get("title"));
         out.put("body", d.get("body"));
+        out.put("redraws", storyRedraws(runId));   // 화면이 「무료 / 1크레딧」을 고른다(#548)
         return out;
     }
 
