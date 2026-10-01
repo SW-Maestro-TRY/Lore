@@ -465,7 +465,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
           if (sc.n !== n || !sc.history?.length) return sc;
           const hist = [...sc.history];
           const [pick] = hist.splice(v - 1, 1);
-          return { ...sc, text: pick.text, parts: pick.parts, user_text: null, history: [...hist, { text: sc.text, parts: sc.parts }] };
+          const curVer = sc.ver ?? sc.history.length + 1;
+          return { ...sc, text: pick.text, parts: pick.parts, user_text: null, ver: pick.ver ?? v,
+                   history: [...hist, { ver: curVer, text: sc.text, parts: sc.parts }] };
         }) } : j);
       } else {
         await restoreScene(job.id, n, v);
@@ -511,7 +513,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       if (isMock) {
         setJob((j) => j ? { ...j, scenes: (j.scenes ?? []).map((s) => (s.n === n ? { ...s, busy: true } : s)) } : j);
         setTimeout(() => setJob((j) => j ? { ...j, scenes: (j.scenes ?? []).map((s) => (s.n === n
-          ? { ...s, busy: false, user_text: null, history: [...(s.history ?? []), { text: s.text, parts: s.parts }],
+          ? { ...s, busy: false, user_text: null, ver: Math.max(s.ver ?? (s.history?.length ?? 0) + 1, ...(s.history ?? []).map((h, i) => h.ver ?? i + 1)) + 1,
+              history: [...(s.history ?? []), { ver: s.ver ?? (s.history?.length ?? 0) + 1, text: s.text, parts: s.parts }],
               parts: s.parts?.map((p, i) => (i === 0 ? { ...p, text: `${p.text} 비가 그치고 해가 든다.` } : p)) } : s)) } : j), 2500);
       } else {
         await retryScene(job.id, n, { reasons: r.reasons, note: r.note.trim() });
@@ -1020,9 +1023,15 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
                   <div className="wt-prog-scenes">
                     {scenes.map((s) => {
-                      const vers = (s.history?.length ?? 0) + 1;
-                      const at = Math.min(sceneVer[s.n] ?? vers - 1, vers - 1);
-                      const old = at < vers - 1 ? s.history![at] : null;     // 이전 판을 보는 중
+                      /* 판은 만든 순서(ver)로 줄 세운다 — 되돌려도 「처음 판」은 처음 판이다 */
+                      const hist = (s.history ?? []).map((h, i) => ({ ...h, ver: h.ver ?? i + 1, slot: i + 1 }));
+                      const curVer = s.ver ?? hist.length + 1;
+                      const line = [...hist, { ver: curVer, slot: 0, text: s.text, parts: s.parts }].sort((a, b) => a.ver - b.ver);
+                      const vers = line.length;
+                      const curAt = line.findIndex((x) => x.slot === 0);
+                      const at = Math.min(sceneVer[s.n] ?? curAt, vers - 1);
+                      const shown = line[at];
+                      const old = shown.slot ? shown : null;     // 지금 판이 아닌 판을 보는 중
                       const editing = !!sceneEdit[s.n] && !s.busy && !old;
                       const retry = old ? undefined : sceneRetry[s.n];
                       return (
@@ -1035,7 +1044,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                                 <span className="wt-prog-vers">
                                   <span className="tag">{t("다시 뽑음")}</span>
                                   <button type="button" aria-label={t("이전 판")} disabled={at === 0} onClick={() => setSceneVer((o) => ({ ...o, [s.n]: at - 1 }))}><IconChevronLeft size={16} /></button>
-                                  <span className="num">{t("{a} / {b}판", { a: at + 1, b: vers })}</span>
+                                  <span className="num">{shown.ver === 1 ? t("처음 판") : t("다시 뽑은 판 {n}", { n: shown.ver - 1 })}{!old && <em>{t("지금")}</em>}</span>
                                   <button type="button" aria-label={t("다음 판")} disabled={at === vers - 1} onClick={() => setSceneVer((o) => ({ ...o, [s.n]: at + 1 }))}><IconChevronRight size={16} /></button>
                                 </span>
                               )}
@@ -1077,8 +1086,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                           {old ? (
                             <>
                               <div className="wt-prog-oldver">
-                                <span>{t("이전 판을 보고 있어요")}</span>
-                                <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => void restoreSceneVer(s.n, at + 1)}>{t("이 판으로 되돌리기")}</button>
+                                <span>{t("지금 판이 아니에요")}</span>
+                                <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => void restoreSceneVer(s.n, old.slot)}>{t("이 판으로 되돌리기")}</button>
                               </div>
                               <div className="wt-prog-oldver-body"><SceneBody s={{ ...s, user_text: null, parts: old.parts, text: old.text }} /></div>
                             </>

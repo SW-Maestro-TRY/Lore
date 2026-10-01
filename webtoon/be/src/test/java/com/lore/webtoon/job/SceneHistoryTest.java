@@ -67,6 +67,8 @@ class SceneHistoryTest {
         assertThat(history).hasSize(1);
         assertThat(history.get(0).get("text").toString()).contains("처음 곳");
         assertThat((List<?>) view.get(0).get("history")).isEmpty();
+        assertThat(history.get(0).get("ver")).isEqualTo(1);       // 번호가 없던 판은 쌓인 순서로
+        assertThat(view.get(1).get("ver")).isEqualTo(2);
     }
 
     @Test
@@ -80,6 +82,9 @@ class SceneHistoryTest {
         assertThat(s.get(1).path("history").get(0).path("where").asText()).isEqualTo("새 곳");
         assertThat(s.get(1).path("history").get(0).has("history")).isFalse();
         assertThat(s.get(2).path("prev").asText()).isEqualTo("처음 끝");
+        // 판 이름은 글을 따라간다 — 처음 판은 1, 다시 뽑은 판은 2
+        assertThat(s.get(1).path("ver").asInt()).isEqualTo(1);
+        assertThat(s.get(1).path("history").get(0).path("ver").asInt()).isEqualTo(2);
     }
 
     @Test

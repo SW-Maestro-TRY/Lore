@@ -164,8 +164,10 @@ export interface NhScene {
   parts?: { label: string; text: string }[] | null;
   /** 이 장면만 다시 뽑는 중(#548) — 그 카드만 「다시 뽑는 중」으로 보인다. */
   busy?: boolean;
-  /** 다시 뽑기 전의 판들(#548), 오래된 것부터. */
-  history?: { text: string; parts?: { label: string; text: string }[] | null }[];
+  /** 다시 뽑기 전의 판들(#548). ver 는 만든 순서 번호(처음 판이 1) — 되돌려도 글을 따라간다. */
+  history?: { ver?: number; text: string; parts?: { label: string; text: string }[] | null }[];
+  /** 지금 판의 만든 순서 번호. */
+  ver?: number;
 }
 
 /** 주인공 페르소나(#534) — 사용자가 적은 캐릭터로 정의한 것. 인물 확인·고르기 화면에서 확인용으로 보여 준다. */
