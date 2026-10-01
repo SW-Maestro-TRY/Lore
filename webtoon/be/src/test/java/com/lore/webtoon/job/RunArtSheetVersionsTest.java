@@ -38,6 +38,13 @@ class RunArtSheetVersionsTest {
     }
 
     @Test
+    @DisplayName("run_id 가 아직 없으면 0 — 시작 직후 진행 상태 요청이 500 이 되지 않는다")
+    void run_id_가_없으면_0() {
+        assertThat(art.sheetVersions(null)).isZero();
+        assertThat(art.sheetVersions("")).isZero();
+    }
+
+    @Test
     @DisplayName("치우면 지워지지 않고 다음 번호로 남는다 — 그림과 사양 같이")
     void 치우면_판으로_남는다() throws IOException {
         assertThat(art.sheetVersions("r1")).isZero();
