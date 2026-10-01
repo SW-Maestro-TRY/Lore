@@ -227,7 +227,8 @@ public class JobController {
     @GetMapping("/jobs/mine")
     public Map<String, Object> mine(@RequestParam(required = false) String uid) {
         Long me = CreditGate.currentUser();
-        return Map.of("jobs", jobs.activeOf(me, owner.uidsOf(me, uid)));
+        var uids = owner.uidsOf(me, uid);
+        return Map.of("jobs", jobs.activeOf(me, uids), "cards", jobs.activeCardsOf(me, uids));
     }
 
     @Operation(summary = "진행 상황", description = """
@@ -333,9 +334,33 @@ public class JobController {
     @PostMapping("/jobs/{id}/scenes/{n}/retry")
     public Map<String, Object> retryScene(@PathVariable String id, @PathVariable int n,
                                           @RequestBody(required = false) RetrySceneRequest body) {
-        jobs.retryScene(id, n, body == null ? null : body.reasons(), body == null ? null : body.note(),
-                CreditGate.currentUser());
+        Long me = CreditGate.currentUser();
+        /* 장면마다 첫 번째는 무료, 같은 장면을 또 뽑으면 1크레딧(#548). 먼저 받고, 못 지으면 돌려준다. */
+        int cost = me == null ? 0 : jobs.resceneCost(id, n);
+        String ref = id + ":rescene:" + n + ":" + System.currentTimeMillis();
+        Runnable refund = cost > 0 ? () -> credits.refund(me, ref) : () -> { };
+        if (cost > 0) {
+            credits.charge(me, cost, ref, "장면 다시 뽑기 · " + n + "번");
+        }
+        try {
+            jobs.retryScene(id, n, body == null ? null : body.reasons(), body == null ? null : body.note(), me, refund);
+        } catch (RuntimeException e) {
+            refund.run();
+            throw e;
+        }
+        return Map.of("ok", true, "cost", cost);
+    }
+
+    @Operation(summary = "장면 이전 판으로 되돌리기",
+            description = "다시 뽑기 전의 판 v(1부터, 오래된 것부터)로 되돌린다(#548). 지금 판은 판 목록 끝에 남는다.")
+    @PostMapping("/jobs/{id}/scenes/{n}/restore")
+    public Map<String, Object> restoreScene(@PathVariable String id, @PathVariable int n,
+                                            @RequestBody RestoreSceneRequest body) {
+        jobs.restoreScene(id, n, body == null ? 0 : body.v());
         return Map.of("ok", true);
+    }
+
+    public record RestoreSceneRequest(int v) {
     }
 
     public record RetrySceneRequest(List<String> reasons, String note) {
@@ -367,8 +392,21 @@ public class JobController {
     @PostMapping("/jobs/{id}/pick-retry")
     public Map<String, Object> retryPick(@PathVariable String id,
                                          @RequestBody(required = false) NoteRequest body) {
-        jobs.retryPick(id, body == null ? null : body.note());
-        return Map.of("ok", true);
+        Long me = CreditGate.currentUser();
+        /* own 길의 1화 다시 만들기는 첫 번째 무료, 그다음부터 1크레딧(#548). 먼저 받고, 못 지으면 돌려준다. */
+        int cost = me == null ? 0 : jobs.restoryCost(id);
+        String ref = id + ":restory:" + System.currentTimeMillis();
+        Runnable refund = cost > 0 ? () -> credits.refund(me, ref) : () -> { };
+        if (cost > 0) {
+            credits.charge(me, cost, ref, "1화 다시 만들기");
+        }
+        try {
+            jobs.retryPick(id, body == null ? null : body.note(), refund);
+        } catch (RuntimeException e) {
+            refund.run();
+            throw e;
+        }
+        return Map.of("ok", true, "cost", cost);
     }
 
     /**

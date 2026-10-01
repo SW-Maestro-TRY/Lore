@@ -250,6 +250,26 @@ public class JobService {
                 .toList();
     }
 
+    /**
+     * 만드는 중 카드(#548) — 마이페이지가 작업마다 캐릭터 이름과 마지막으로 손댄 때를 같이 보여 준다.
+     * {@link #activeOf} 와 같은 순서로 {id, name, created_at, updated_at}.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> activeCardsOf(Long userId, Collection<String> uids) {
+        return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
+                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST,
+                        JobStatus.AWAITING_SCENES)).stream()
+                .map(job -> {
+                    Map<String, Object> one = new LinkedHashMap<>();
+                    one.put("id", job.getPublicId());
+                    one.put("name", str(inputOf(job).get("name")));
+                    one.put("created_at", job.getCreatedAt() == null ? null : job.getCreatedAt().toString());
+                    one.put("updated_at", job.getUpdatedAt() == null ? null : job.getUpdatedAt().toString());
+                    return one;
+                })
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public String runOf(String publicId) {
         return store.byPublicId(publicId).getRunId();
@@ -451,13 +471,29 @@ public class JobService {
      * 두 번 서서, 하네스가 같은 폴더를 동시에 고쳐 쓴다(파이썬 쪽
      * {@code _require} 가 막던 것과 같은 자리다).
      */
-    public void retryPick(String publicId, String note) {
+    /** own 길의 「1화 다시 만들기」는 첫 번째 무료, 그다음부터 1크레딧(#548). quick 길 후보 다시 만들기는 무료 그대로. */
+    public int restoryCost(String publicId) {
         WebtoonJob job = store.byPublicId(publicId);
-        if (job.getStatus() != JobStatus.AWAITING_PICK) {
+        return job.isOwn() && runner.storyRedraws(job.getRunId()) >= 1 ? 1 : 0;
+    }
+
+    public void retryPick(String publicId, String note) {
+        retryPick(publicId, note, () -> { });
+    }
+
+    public void retryPick(String publicId, String note, Runnable onFail) {
+        WebtoonJob job = store.byPublicId(publicId);
+        /* own 길(#548)은 장면 확인 자리에서도 1화를 다시 만들 수 있다 — 끝나면 이야기 확인으로 돌아가
+           새 1화를 보고 장면을 다시 나눈다. */
+        boolean ownScenes = job.isOwn() && job.getStatus() == JobStatus.AWAITING_SCENES;
+        if (job.getStatus() != JobStatus.AWAITING_PICK && !ownScenes) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 고를 차례가 아닙니다");
         }
+        if (ownScenes && runner.scenesOf(job.getId(), job.getRunId()).stream().anyMatch(s -> Boolean.TRUE.equals(s.get("busy")))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "장면을 다시 뽑는 중입니다");
+        }
         safety.checkText("webtoon-scenes", note);
-        runner.retryDirections(job.getId(), note == null ? "" : note.trim());
+        runner.retryDirections(job.getId(), note == null ? "" : note.trim(), onFail);
     }
 
     /**
@@ -598,7 +634,13 @@ public class JobService {
      * 장면 하나만 다시 짓기(#548). 로그인한 사람만. 멈춤은 그대로고, 돌아가는 동안 그 장면은
      * {@code busy} 다. 전체 다시 나누기({@link #retryScenes})와 따로다.
      */
-    public void retryScene(String publicId, int n, List<String> reasons, String note, Long userId) {
+    /** 장면마다 첫 다시 뽑기는 무료, 그다음부터 1크레딧(#548). 이번 다시 뽑기에 드는 크레딧. */
+    public int resceneCost(String publicId, int n) {
+        WebtoonJob job = store.byPublicId(publicId);
+        return runner.sceneRedraws(job.getRunId(), n) >= 1 ? 1 : 0;
+    }
+
+    public void retryScene(String publicId, int n, List<String> reasons, String note, Long userId, Runnable onFail) {
         WebtoonJob job = store.byPublicId(publicId);
         if (userId == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "로그인하면 장면을 다시 지을 수 있어요");
@@ -614,9 +656,27 @@ public class JobService {
                 : reasons.stream().filter(r -> r != null && RESCENE_REASONS.contains(r.trim())).map(String::trim).toList();
         safety.checkText("webtoon-scenes", note);
         try {
-            runner.rescene(job.getId(), n, picked, note == null ? "" : note.trim());
+            runner.rescene(job.getId(), n, picked, note == null ? "" : note.trim(), onFail);
         } catch (IllegalStateException e) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
+        }
+    }
+
+    /** 장면 하나를 이전 판으로 되돌린다(#548) — 장면 확인 자리에서만, 다시 짓는 중이 아닐 때. */
+    public void restoreScene(String publicId, int n, int v) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        if (runner.rescening(job.getId(), n)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이 장면을 다시 짓는 중입니다");
+        }
+        try {
+            runner.restoreScene(job.getRunId(), n, v);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("장면을 되돌리지 못했습니다", e);
         }
     }
 

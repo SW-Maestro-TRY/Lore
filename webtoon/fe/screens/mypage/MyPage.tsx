@@ -21,7 +21,7 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, myLikes, myTrash, readAllowance, recentRuns,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, type NhActiveCard, myLikes, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
   mySurveyStatus, type SurveyStatus,
@@ -55,6 +55,12 @@ registerDict({
   "재료": { en: "MATERIALS", ja: "素材", zh: "素材" },
   "계정": { en: "ACCOUNT", ja: "アカウント", zh: "账号" },
   "내 웹툰": { en: "My webtoons", ja: "マイウェブトゥーン", zh: "我的漫画" },
+  "모두 보기": { en: "See all", ja: "すべて見る", zh: "查看全部" },
+  "새 캐릭터 만들기": { en: "New character", ja: "新しいキャラクター", zh: "新建角色" },
+  "아직 만든 캐릭터가 없어요": { en: "No characters yet", ja: "まだキャラクターがいません", zh: "还没有角色" },
+  "그리는 중": { en: "Drawing", ja: "描画中", zh: "绘制中" },
+  "못 그렸어요": { en: "Failed", ja: "描けませんでした", zh: "未能绘制" },
+  "이 캐릭터로 웹툰": { en: "Make a webtoon", ja: "このキャラでウェブトゥーン", zh: "用此角色做漫画" },
   "내 캐릭터": { en: "My characters", ja: "マイキャラクター", zh: "我的角色" },
   "로그아웃": { en: "Sign out", ja: "ログアウト", zh: "退出登录" },
   "계정 탈퇴": { en: "Delete account", ja: "退会", zh: "注销账号" },
@@ -126,7 +132,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   /* 지금은 "내 웹툰"과 "설정" 딱 둘뿐이라 화면을 아예 나누지는 않고
      같은 레일 안에서 본문만 바꾼다 — 나중에 칸이 늘면 그때 공용 탭
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
-  const [tab, setTab] = useState<"works" | "settings">(initialTab === "settings" ? "settings" : "works");
+  const [tab, setTab] = useState<"works" | "chars" | "settings">(initialTab === "settings" ? "settings" : "works");
   /* 「피드백 보내기」(#471) — 다시 온 사람 안내나 완성 직후 설문에서 tab=feedback 으로 오면 바로 연다. */
   const [surveyOpen, setSurveyOpen] = useState(initialTab === "feedback");
   const [contactOpen, setContactOpen] = useState(false);
@@ -193,8 +199,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   /* 만드는 중(#548) — 아직 안 끝난 작업. 장면 확인처럼 사람이 누를 때까지 멈춰 있는 작업을
      며칠 뒤에도 여기서 찾아 「이어서 만들기」로 돌아간다. */
   const [active, setActive] = useState<NhJob[]>([]);
+  const [activeCards, setActiveCards] = useState<Record<string, NhActiveCard>>({});
   useEffect(() => {
-    myActiveJobs().then((r) => setActive(r.jobs ?? [])).catch(() => setActive([]));
+    /* 화면만 보는 자리 — 주소에 #mock-drafts 를 붙이면 서버 대신 가짜 셋을 보여 준다(#548). */
+    if (typeof window !== "undefined" && window.location.hash === "#mock-drafts") {
+      setActive(MOCK_DRAFTS.jobs);
+      setActiveCards(Object.fromEntries(MOCK_DRAFTS.cards.map((c) => [c.id, c])));
+      return;
+    }
+    myActiveJobs().then((r) => {
+      setActive(r.jobs ?? []);
+      setActiveCards(Object.fromEntries((r.cards ?? []).map((c) => [c.id, c])));
+    }).catch(() => setActive([]));
   }, []);
 
   /* 휴지통(#157) — 지운 작품은 영구 삭제 전까지 여기서 되살린다. 지우기가
@@ -291,7 +307,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             {t("내 웹툰")} <span className="dim">{runs.length}</span>
           </button>
           <small>{t("재료")}</small>
-          <button type="button" onClick={() => go("characters")}>
+          <button type="button" className={tab === "chars" ? "on" : ""} onClick={() => setTab("chars")}>
             {t("내 캐릭터")} <span className="dim">{chars.length}</span>
           </button>
           {isAuthenticated && (
@@ -380,22 +396,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               </div>
             </div>
 
-            {active.length > 0 && (
-              <div className="wt-my-active">
-                <b className="wt-my-active-title">{t("만드는 중")}</b>
-                {active.map((j) => {
-                  const title = activeJobTitle(j);
-                  return (
-                    <div key={j.id} className="wt-my-active-row">
-                      <span>{title ? `${title} · ${activeJobLabel(j, t)}` : activeJobLabel(j, t)}</span>
-                      <button type="button" className="btn btn-p btn-sm" onClick={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }}>
-                        {t("이어서 만들기")}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
             {runsFailed && (
               <div className="wt-my-empty">
@@ -428,10 +428,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             )}
 
 
-            {recent.length > 0 && (
+            {active.length > 0 && (
+              /* 만드는 중(#548) — 「최근 본 웹툰」 자리. 표지 한 줄과 같은 크기로, 눌러서 이어 만든다. */
               <div className="wt-my-strip">
-                <RunStrip title={t("최근 본 웹툰")} runs={recent}
-                          onOpen={(r) => { track("recent_open", { run: r.run_id }); go("result", { run: r.run_id }); }} />
+                <div className="wt-strip">
+                  <b className="wt-strip-title">{t("만드는 중")} <span className="dim wt-my-draftcount">{active.length}</span></b>
+                  <div className="wt-strip-row">
+                    {active.map((j) => (
+                      <DraftCard key={j.id} job={j} card={activeCards[j.id]}
+                                 onOpen={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }} />
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -453,11 +461,11 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               <div>
                 <h2>{t("내 캐릭터")}</h2>
               </div>
-              <button type="button" className="btn btn-w" onClick={() => go("characters")}>{t("캐릭터 탭으로")}</button>
+              <button type="button" className="btn btn-w" onClick={() => setTab("chars")}>{t("모두 보기")}</button>
             </div>
             <div className="wt-my-chars">
               {chars.map((c) => (
-                <button type="button" key={c.id} className="wt-my-char" onClick={() => go("characters")}>
+                <button type="button" key={c.id} className="wt-my-char" onClick={() => setTab("chars")}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={c.art_url || ""} alt="" />
                   <b>{c.name}</b>
@@ -467,6 +475,53 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 <b>+</b>{t("만들기")}
               </button>
             </div>
+          </>
+        )}
+
+        {tab === "chars" && (
+          /* 내 캐릭터(#548) — 내 웹툰처럼 마이페이지 안에서 카드로 본다. 캐릭터 탭으로 나가지 않는다. */
+          <>
+            <div className="wt-my-head">
+              <div>
+                <h2>{t("내 캐릭터")}</h2>
+              </div>
+              <div className="wt-my-headacts">
+                <button type="button" className="btn btn-p" onClick={() => go("try")}>{t("새 캐릭터 만들기")}</button>
+              </div>
+            </div>
+            {chars.length === 0 ? (
+              <div className="wt-my-empty">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={louArt("empty")} alt="" aria-hidden="true" />
+                <b>{t("아직 만든 캐릭터가 없어요")}</b>
+              </div>
+            ) : (
+              <div className="wt-my-grid">
+                {chars.map((c) => (
+                  <div key={c.id} className="card wt-my-work wt-my-charcard">
+                    <span className="wt-my-cover">
+                      {c.art_url ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={c.art_url} alt="" />
+                      ) : (
+                        <span className="wt-my-charnoimg" aria-hidden="true" />
+                      )}
+                      {c.status !== "ready" && (
+                        <span className="wt-my-draftchip">{c.status === "drawing" ? t("그리는 중") : t("못 그렸어요")}</span>
+                      )}
+                    </span>
+                    <b>{c.name}</b>
+                    <span className="muted">
+                      {[c.card?.world_label, c.card?.species, ago(c.created_at, t)].filter(Boolean).join(" · ")}
+                    </span>
+                    <div className="wt-my-workfoot">
+                      <button type="button" className="btn btn-p btn-sm grow" disabled={c.status !== "ready"}
+                              onClick={() => go("create", { step: 1, character: c.id })}>{t("이 캐릭터로 웹툰")}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
 
@@ -554,6 +609,60 @@ function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void 
       <button type="button" className="btn btn-w" disabled={busy} onClick={() => void restore()}>{t("되살리기")}</button>
     </div>
   );
+}
+
+
+/* 「만드는 중」 화면 확인용 가짜 작업 셋 — 장면 확인 · 그리는 중 · 이야기 고르기. */
+const MOCK_DRAFTS: { jobs: NhJob[]; cards: NhActiveCard[] } = (() => {
+  const ago = (min: number) => new Date(Date.now() - min * 60000).toISOString();
+  const base = { run_id: "mock", error: null, directions: [], pick: null, style: "", style_label: "", stage: "pages",
+    stage_index: 2, stages: [], stage_label: "", say: "", checkpoints: true, queue: null, notice: null,
+    minutes_left: null, pct: 0, art: null, redraw: null, log: [], elapsed: 0, sheet_ready: false } as unknown as NhJob;
+  return {
+    jobs: [
+      { ...base, id: "mock-a", status: "awaiting_scenes", mode: "own", story: { title: "아이들을 지키는 자", body: "" } } as NhJob,
+      { ...base, id: "mock-b", status: "running", mode: "own", story: { title: "비 오는 날의 우산", body: "" }, art: { done: 3, total: 6, retry_page: 0, pages: [1, 2, 3] } } as NhJob,
+      { ...base, id: "mock-c", status: "awaiting_pick", mode: "quick", stage: "story" } as NhJob,
+    ],
+    cards: [
+      { id: "mock-a", name: "Isolde Verlaine", created_at: ago(180), updated_at: ago(12) },
+      { id: "mock-b", name: "서연화", created_at: ago(90), updated_at: ago(2) },
+      { id: "mock-c", name: "몽이", created_at: ago(3000), updated_at: ago(2900) },
+    ],
+  };
+})();
+
+/* 만드는 중 카드(#548) — 시트가 있으면 시트, 없으면 루. 상태는 그림 위 작은 딱지로,
+   사람이 답할 차례면 진하게. 아래에 캐릭터 · 길 · 마지막으로 손댄 때. */
+function DraftCard({ job, card, onOpen }: { job: NhJob; card?: NhActiveCard; onOpen: () => void }) {
+  const t = useT();
+  const title = activeJobTitle(job);
+  const waiting = job.status.startsWith("awaiting_");
+  const meta = [card?.name, ago(card?.updated_at, t)].filter(Boolean).join(" · ");
+  return (
+    <button type="button" className="wt-strip-item wt-my-draft" onClick={onOpen} aria-label={`${title || t("제목 짓기 전")} · ${t("이어서 만들기")}`}>
+      <span className="wt-my-draftcover">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={job.sheet_ready ? sheetImageUrl(job.id) : louArt("generating")} alt="" className={job.sheet_ready ? "" : "lou"} />
+        <span className={`wt-my-draftchip${waiting ? " wait" : ""}`}>
+          {job.status === "running" && job.art?.total ? t("그리는 중 · {label}", { label: activeJobLabel(job, t) }) : activeJobLabel(job, t)}
+        </span>
+      </span>
+      <span className={`wt-strip-name${title ? "" : " dim"}`}>{title || t("제목 짓기 전")}</span>
+      {meta && <span className="wt-my-draftmeta">{meta}</span>}
+      <span className="wt-my-draftgo">{t("이어서 만들기")} ›</span>
+    </button>
+  );
+}
+
+/** 「방금 · n분 전 · n시간 전 · n일 전」 */
+function ago(iso: string | null | undefined, t: (s: string, p?: Record<string, string | number>) => string): string {
+  if (!iso) return "";
+  const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 1) return t("방금");
+  if (min < 60) return t("{n}분 전", { n: min });
+  if (min < 60 * 24) return t("{n}시간 전", { n: Math.floor(min / 60) });
+  return t("{n}일 전", { n: Math.floor(min / 1440) });
 }
 
 function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keepDays: number; onDeleted: () => void }) {

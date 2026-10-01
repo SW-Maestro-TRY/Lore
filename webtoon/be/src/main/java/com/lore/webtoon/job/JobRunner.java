@@ -304,12 +304,29 @@ public class JobRunner {
      * ({@code --note}) — 파이썬 쪽 {@code _run_restory_phase} 와 같은 인자다.
      */
     public void retryDirections(Long jobId, String note) {
+        retryDirections(jobId, note, () -> { });
+    }
+
+    /** {@code onFail} — 다시 짓지 못했을 때(받은 크레딧을 돌려줄 때) 부른다. */
+    public void retryDirections(Long jobId, String note, Runnable onFail) {
+        WebtoonJob before = store.byId(jobId);
+        JobStatus was = before.getStatus();
+        /* own 길(#548)은 장면 확인에서도 「1화 다시 만들기」를 누를 수 있다. 다시 짓다 실패하면
+           작품을 실패로 끝내지 않고 누르기 전 자리로 돌려놓는다 — 이미 고친 장면·시트가 있다. */
+        boolean keep = before.isOwn() && (was == JobStatus.AWAITING_PICK || was == JobStatus.AWAITING_SCENES);
         store.queued(jobId, JobStage.STORY);
         line.submit(() -> {
             try {
                 restory(jobId, note);
             } catch (Exception e) {
-                fail(jobId, e);
+                onFail.run();
+                if (!keep) {
+                    fail(jobId, e);
+                    return;
+                }
+                log.warn("1화를 다시 만들지 못해 전 자리로 돌려놓습니다 (job={})", jobId, e);
+                progress.say(jobId, "1화를 다시 만들지 못했어요 — 전처럼 두었어요");
+                store.awaiting(jobId, was, was == JobStatus.AWAITING_SCENES ? JobStage.PAGES : JobStage.STORY);
             }
         });
     }
@@ -723,6 +740,7 @@ public class JobRunner {
             /* own 길(#548)은 후보가 하나고 번호는 늘 1이다 — 고른 것을 지우지 않고 바꿔 끼운다. */
             stories.replace(job.getRunId(), directions);
             stories.choose(job.getRunId(), 1);
+            countStoryRedraw(job.getRunId());
             store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
             return;
         }
@@ -929,7 +947,7 @@ public class JobRunner {
      * 장면 하나만 다시 짓는다(#548). 멈춤({@code AWAITING_SCENES})은 그대로고, 끝나면 그 장면의
      * 글만 바뀐다. 이유 코드는 하네스 {@code own.RESCENE_REASONS} 의 열쇠다.
      */
-    public void rescene(Long jobId, int n, List<String> reasons, String note) {
+    public void rescene(Long jobId, int n, List<String> reasons, String note, Runnable onFail) {
         java.util.Set<Integer> mine = rescening.computeIfAbsent(jobId, k -> ConcurrentHashMap.newKeySet());
         if (!mine.add(n)) {
             throw new IllegalStateException("그 장면은 이미 다시 짓는 중입니다");
@@ -951,9 +969,11 @@ public class JobRunner {
                 if (code != 0) {
                     log.warn("장면 하나를 다시 짓지 못했습니다 (job={}, n={})", jobId, n);
                     progress.say(jobId, n + "번 장면을 다시 짓지 못했어요 — 전처럼 두었어요");
+                    onFail.run();
                 }
             } catch (Exception e) {
                 log.warn("장면 하나를 다시 짓다 실패했습니다 (job={}, n={})", jobId, n, e);
+                onFail.run();
             } finally {
                 mine.remove(n);
             }
@@ -968,6 +988,98 @@ public class JobRunner {
             one.put("busy", busy.contains((Integer) one.get("n")));
         }
         return out;
+    }
+
+    /**
+     * 장면 n 을 이전 판 v(1부터, 오래된 것부터)로 되돌린다(#548). 지금 판도 버리지 않고 판 목록
+     * 끝에 붙인다 — 되돌린 것을 다시 되돌릴 수 있게. 뒤 장면의 「직전 상태」는 되돌린 판의
+     * 「끝나는 상태」로 맞춘다(다시 뽑기와 같은 규칙).
+     */
+    public synchronized void restoreScene(String runId, int n, int v) throws IOException {
+        Path file = runDir(runId).resolve("scenes.json");
+        ObjectNode root = (ObjectNode) mapper.readTree(file.toFile());
+        ArrayNode scenes = (ArrayNode) root.path("scenes");
+        int at = -1;
+        for (int i = 0; i < scenes.size(); i++) {
+            if (scenes.get(i).path("n").asInt() == n) {
+                at = i;
+                break;
+            }
+        }
+        if (at < 0) {
+            throw new IllegalArgumentException("그런 장면이 없습니다");
+        }
+        ObjectNode cur = (ObjectNode) scenes.get(at);
+        JsonNode hist = cur.path("history");
+        if (!hist.isArray() || v < 1 || v > hist.size()) {
+            throw new IllegalArgumentException("그런 판이 없습니다");
+        }
+        /* 번호가 없던 옛 판은 자리를 옮기기 전에 쌓인 순서로 번호를 박는다 — 옮긴 뒤엔 순서를 모른다. */
+        for (int i = 0; i < hist.size(); i++) {
+            if (!hist.get(i).has("ver")) {
+                ((ObjectNode) hist.get(i)).put("ver", i + 1);
+            }
+        }
+        if (!cur.has("ver")) {
+            cur.put("ver", hist.size() + 1);
+        }
+        ArrayNode rest = mapper.createArrayNode();
+        ObjectNode chosen = ((ObjectNode) hist.get(v - 1)).deepCopy();
+        for (int i = 0; i < hist.size(); i++) {
+            if (i != v - 1) {
+                rest.add(hist.get(i));
+            }
+        }
+        ObjectNode now = cur.deepCopy();
+        now.remove("history");
+        rest.add(now);
+        chosen.remove("history");
+        chosen.put("n", n);
+        if (at > 0 && !scenes.get(at - 1).path("ends").asText("").isBlank()) {
+            chosen.put("prev", scenes.get(at - 1).path("ends").asText());
+        }
+        chosen.set("history", rest);
+        scenes.set(at, chosen);
+        if (at + 1 < scenes.size() && !chosen.path("ends").asText("").isBlank()) {
+            ((ObjectNode) scenes.get(at + 1)).put("prev", chosen.path("ends").asText());
+        }
+        mapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), root);
+    }
+
+    /** 이 장면을 지금까지 몇 번 다시 뽑았나(#548) — 판 목록 길이. 되돌려도 줄지 않는다. */
+    public int sceneRedraws(String runId, int n) {
+        try {
+            for (JsonNode s : mapper.readTree(runDir(runId).resolve("scenes.json").toFile()).path("scenes")) {
+                if (s.path("n").asInt() == n) {
+                    return s.path("history").size();
+                }
+            }
+        } catch (IOException e) {
+            return 0;
+        }
+        return 0;
+    }
+
+    /** own 길에서 1화를 몇 번 다시 만들었나(#548) — {@code story_redraws.txt}. 첫 번째는 무료다. */
+    public int storyRedraws(String runId) {
+        try {
+            return Integer.parseInt(Files.readString(runDir(runId).resolve("story_redraws.txt")).trim());
+        } catch (IOException | NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private void countStoryRedraw(String runId) {
+        try {
+            Files.writeString(runDir(runId).resolve("story_redraws.txt"), String.valueOf(storyRedraws(runId) + 1));
+        } catch (IOException e) {
+            log.warn("1화 다시 만들기 횟수를 못 적었습니다 (run={})", runId, e);
+        }
+    }
+
+    /** 이 장면을 지금 다시 짓고 있나. */
+    public boolean rescening(Long jobId, int n) {
+        return rescening.getOrDefault(jobId, java.util.Set.of()).contains(n);
     }
 
     /** 장면 초안(#548) — 화면에 보여 줄 모양. {n, text, parts, user_text}. 없으면 빈 목록. */
@@ -985,6 +1097,18 @@ public class JobRunner {
                 one.put("parts", sceneParts(s));
                 String user = s.path("user_text").asText("");
                 one.put("user_text", user.isBlank() ? null : user);
+                /* 다시 뽑기 전의 판들(#548) — 오래된 것부터. 화면이 넘겨 보고 되돌린다. */
+                List<Map<String, Object>> history = new ArrayList<>();
+                int i = 0;
+                for (JsonNode h : s.path("history")) {
+                    Map<String, Object> old = new LinkedHashMap<>();
+                    old.put("ver", h.path("ver").asInt(++i));     // 만든 순서 번호, 처음 판이 1
+                    old.put("text", sceneText(h));
+                    old.put("parts", sceneParts(h));
+                    history.add(old);
+                }
+                one.put("history", history);
+                one.put("ver", s.path("ver").asInt(history.size() + 1));
                 out.add(one);
             }
             return out;
@@ -1064,6 +1188,7 @@ public class JobRunner {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("title", d.get("title"));
         out.put("body", d.get("body"));
+        out.put("redraws", storyRedraws(runId));   // 화면이 「무료 / 1크레딧」을 고른다(#548)
         return out;
     }
 

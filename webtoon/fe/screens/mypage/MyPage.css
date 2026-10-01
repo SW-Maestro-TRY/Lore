@@ -165,8 +165,24 @@
 }
 
 /* 만드는 중(#548) — 멈춰 있는 작업으로 돌아가는 줄 */
-.wt .wt-my-active { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 20px; padding: 14px 16px; border-radius: 14px; background: var(--water-light); }
-.wt .wt-my-active-title { font-size: 14px; }
-.wt .wt-my-active-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; }
-.wt .wt-my-active-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wt .wt-my-active-row .btn { flex-shrink: 0; }
+/* 만드는 중(#548) — 표지 한 줄(RunStrip)과 같은 크기, 그림 위에 상태 딱지 */
+.wt .wt-my-draftcount { font-size: 13px; font-weight: 700; margin-left: 4px; }
+.wt .wt-my-draft { width: 150px; }
+.wt .wt-my-draftcover { position: relative; display: block; }
+.wt .wt-my-draftcover img { width: 150px; height: 200px; object-fit: contain; object-position: center; border-radius: 12px; background: #f6f7f9; display: block; }
+.wt .wt-my-draftcover img.lou { padding: 28px; box-sizing: border-box; background: var(--water-light); }
+.wt .wt-my-draftchip { position: absolute; left: 8px; top: 8px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, .92); color: var(--ink); border: 1px solid var(--line); }
+.wt .wt-my-draftchip.wait { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-my-draftmeta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-my-draftgo { font-size: 12px; font-weight: 700; color: var(--sea-deep); }
+@media (max-width: 767px) {
+  .wt .wt-my-draft { width: 120px; }
+  .wt .wt-my-draftcover img { width: 120px; height: 160px; }
+}
+/* 내 캐릭터 탭(#548) — 내 웹툰과 같은 카드 */
+.wt .wt-my-charcard .wt-my-cover { position: relative; cursor: default; }
+.wt .wt-my-charcard .wt-my-cover img, .wt .wt-my-charnoimg { width: 100%; height: 260px; object-fit: cover; object-position: top; border-radius: 12px; display: block; background: var(--water-light); }
+.wt .wt-my-charcard .wt-my-draftchip { position: absolute; left: 10px; top: 10px; }
+.wt .wt-my-charcard .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-my-charcard .wt-my-workfoot .grow { flex: 1; }

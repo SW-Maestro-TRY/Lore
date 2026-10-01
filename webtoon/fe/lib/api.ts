@@ -164,6 +164,10 @@ export interface NhScene {
   parts?: { label: string; text: string }[] | null;
   /** 이 장면만 다시 뽑는 중(#548) — 그 카드만 「다시 뽑는 중」으로 보인다. */
   busy?: boolean;
+  /** 다시 뽑기 전의 판들(#548). ver 는 만든 순서 번호(처음 판이 1) — 되돌려도 글을 따라간다. */
+  history?: { ver?: number; text: string; parts?: { label: string; text: string }[] | null }[];
+  /** 지금 판의 만든 순서 번호. */
+  ver?: number;
 }
 
 /** 주인공 페르소나(#534) — 사용자가 적은 캐릭터로 정의한 것. 인물 확인·고르기 화면에서 확인용으로 보여 준다. */
@@ -233,7 +237,7 @@ export interface NhJob {
   /** 장면 확인 차례(awaiting_scenes)에만 — 장면 초안 목록(#548). */
   scenes?: NhScene[] | null;
   /** own 길에서 장면 확인 차례에만 — 적은 내용을 1화 본문으로 다듬은 것(#548). */
-  story?: { title: string; body: string } | null;
+  story?: { title: string; body: string; /** own 길에서 1화를 다시 만든 횟수(#548) — 첫 번째는 무료 */ redraws?: number } | null;
   /** 장면 확인 차례에만 — 사람이 만들기에서 적은 것 그대로(#548). 「내가 적은 것」 카드가 보여 준다. */
   input?: NhJobInput | null;
   /** 시트가 다 그려졌나. 그림체를 바꾸면 다시 그리는 동안 false(#548). 없으면 그려진 것으로 본다. */
@@ -316,8 +320,9 @@ export function readJob(id: string): Promise<NhJob> {
 }
 
 /** 내가 만들던 것들 — 아직 안 끝난 작업. 첫 화면의 「만들던 웹툰」 알약. */
-export function myActiveJobs(): Promise<{ jobs: NhJob[] }> {
-  return call<{ jobs: NhJob[] }>(`/nh/jobs/mine?uid=${encodeURIComponent(getUid())}`);
+export interface NhActiveCard { id: string; name: string; created_at: string | null; updated_at: string | null }
+export function myActiveJobs(): Promise<{ jobs: NhJob[]; cards?: NhActiveCard[] }> {
+  return call<{ jobs: NhJob[]; cards?: NhActiveCard[] }>(`/nh/jobs/mine?uid=${encodeURIComponent(getUid())}`);
 }
 
 export function decideSheet(id: string, decision: "approve" | "retry", note = "") {
@@ -351,6 +356,10 @@ export function continueScenes(id: string) {
 export type SceneRetryReason = "awkward" | "character" | "stranger" | "offstory" | "pacing";
 export function retryScene(id: string, n: number, body: { reasons: SceneRetryReason[]; note: string }) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/scenes/${n}/retry`, body);
+}
+/** 장면 n 을 이전 판 v(1부터, 오래된 것부터)로 되돌린다(#548). */
+export function restoreScene(id: string, n: number, v: number) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes/${n}/restore`, { v });
 }
 export function retryScenes(id: string, note = "") {
   return post(`/nh/jobs/${encodeURIComponent(id)}/scenes-retry`, note ? { note } : {});
