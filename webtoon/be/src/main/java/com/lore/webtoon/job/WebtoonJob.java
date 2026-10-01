@@ -418,17 +418,6 @@ public class WebtoonJob {
         this.updatedAt = at;
     }
 
-    /** 그림체·화질을 바꾼다 — 장면 확인 자리에서, 그림이 시작되기 전에만(#548). */
-    void options(String style, String quality, Instant at) {
-        if (style != null && !style.isBlank()) {
-            this.style = style;
-        }
-        if (quality != null && !quality.isBlank()) {
-            this.quality = quality;
-        }
-        this.updatedAt = at;
-    }
-
     public Long getId() {
         return id;
     }
