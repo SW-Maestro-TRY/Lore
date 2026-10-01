@@ -473,8 +473,14 @@ public class JobService {
      */
     public void retryPick(String publicId, String note) {
         WebtoonJob job = store.byPublicId(publicId);
-        if (job.getStatus() != JobStatus.AWAITING_PICK) {
+        /* own 길(#548)은 장면 확인 자리에서도 1화를 다시 만들 수 있다 — 끝나면 이야기 확인으로 돌아가
+           새 1화를 보고 장면을 다시 나눈다. */
+        boolean ownScenes = job.isOwn() && job.getStatus() == JobStatus.AWAITING_SCENES;
+        if (job.getStatus() != JobStatus.AWAITING_PICK && !ownScenes) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 고를 차례가 아닙니다");
+        }
+        if (ownScenes && runner.scenesOf(job.getId(), job.getRunId()).stream().anyMatch(s -> Boolean.TRUE.equals(s.get("busy")))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "장면을 다시 뽑는 중입니다");
         }
         safety.checkText("webtoon-scenes", note);
         runner.retryDirections(job.getId(), note == null ? "" : note.trim());

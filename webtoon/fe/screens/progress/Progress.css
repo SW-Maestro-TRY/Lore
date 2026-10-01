@@ -392,3 +392,6 @@
 .wt .wt-prog-vers .num em { font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: var(--ink); border-radius: 999px; padding: 1px 6px; }
 .wt .wt-prog-oldver { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .wt .wt-prog-oldver-body { opacity: .55; }
+/* 1화 카드의 연필·다시 만들기 — 장면 카드와 같은 단추 */
+.wt .wt-prog-story .row .tools { display: inline-flex; gap: 6px; }
+.wt .wt-prog-sceneretry > .muted { font-size: 13px; }
