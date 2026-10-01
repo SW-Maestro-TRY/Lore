@@ -114,6 +114,8 @@ export interface WizardForm {
   title: string;
   /** own 길 — 「설정 더 적기」. 인물·세계·지킬 것을 한 칸에. 비워도 된다. */
   settings: string;
+  /** own 길 — 「1화에서 보여줄 것」(선택). 비우면 이야기 앞부분부터 1화로 만든다. */
+  episode: string;
 }
 
 /** 어느 길로 만드나(#548) — quick: 아이디어부터 · own: 만들고 싶은 내용이 있음. */
@@ -137,6 +139,7 @@ export const emptyWizardForm = (): WizardForm => ({
   create: "quick",
   title: "",
   settings: "",
+  episode: "",
 });
 
 /** 하네스 그림체 이름(캐릭터 카드의 style) → 화면 키. 카드에서 1화로 넘어갈 때
