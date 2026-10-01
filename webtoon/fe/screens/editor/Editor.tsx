@@ -102,15 +102,16 @@ export default function Editor({ runId, go, authStatus = "loading" }:
   /* 지금 고른 장 — 엔진이 #activeSceneLabel 에 「N번째 장」이라고 적는 것을 읽는다. */
   const [active, setActive] = useState(1);
   useEffect(() => {
-    const el = document.getElementById("activeSceneLabel");
-    if (!el) return;
+    /* 엔진이 그 칸을 통째로 갈아 끼울 때가 있어서, 칸 하나가 아니라 오른쪽 단 전체를 지켜보고
+       바뀔 때마다 칸을 새로 찾는다(#548 — 왼쪽 「N번째 장」이 1에 머물던 것). */
+    const host = document.getElementById("edDock") || document.body;
     const read = () => {
-      const n = parseInt(el.textContent || "", 10);
+      const n = parseInt(document.getElementById("activeSceneLabel")?.textContent || "", 10);
       if (Number.isFinite(n) && n > 0) setActive(n);
     };
     read();
     const mo = new MutationObserver(read);
-    mo.observe(el, { childList: true, characterData: true, subtree: true });
+    mo.observe(host, { childList: true, characterData: true, subtree: true });
     return () => mo.disconnect();
   }, [runId]);
 
