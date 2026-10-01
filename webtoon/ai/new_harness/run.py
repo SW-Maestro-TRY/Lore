@@ -122,6 +122,8 @@ def read_character(path: Path) -> dict:
         # 「만들고 싶은 내용이 있어요」(#548) — 더 적은 설정과 제목. 없을 수 있다.
         "settings": doc.get("settings"),
         "title": doc.get("title"),
+        # 「1화에서 보여줄 것」 — 적은 내용 가운데 이번 화에 넣을 부분. 없을 수 있다.
+        "episode": doc.get("episode"),
     })
 
 
@@ -151,6 +153,7 @@ def normalize(raw: dict) -> dict:
         "card": card,
         "settings": str(raw.get("settings") or "").strip(),
         "title": str(raw.get("title") or "").strip(),
+        "episode": str(raw.get("episode") or "").strip(),
     }
 
 
