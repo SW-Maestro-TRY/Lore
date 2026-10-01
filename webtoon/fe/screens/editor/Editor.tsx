@@ -5,6 +5,7 @@ import { creditBalance, creditHistory, type CreditLine } from "@common/api/credi
 import { pageUrl, readAllowance, readResult, type RunResult } from "../../lib/api";
 import { CREDIT_SHORT_EVENT, mountEditor, setEditorTranslator } from "../../lib/editorCore";
 import CreditShort from "../../ui/CreditShort";
+import { sceneParts } from "../../lib/sceneText";
 import { useLang } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
@@ -203,7 +204,17 @@ export default function Editor({ runId, go, authStatus = "loading" }:
           {/* 고른 장이 무슨 장면인지(#548) — 페이지 칸 바로 아래. 다시 그리기 칸에 있던 것을 옮겼다. */}
           <div className="wt-ed-sceneinfo">
             <b className="wt-ed-lefthead">{t("{n}번째 장", { n: active })}</b>
-            {activeNote ? <p>{activeNote}</p> : <p className="dim">{t("이 장의 장면 설명이 없어요")}</p>}
+            {activeNote ? (
+              /* 그림 밑에는 「장소와 상황」만 — 전체는 여기서 소제목별로(#548) */
+              <div className="wt-ed-sceneparts">
+                {sceneParts(activeNote).map((p, i) => (
+                  <div key={i} className="part">
+                    {p.label && <span>{t(p.label)}</span>}
+                    <p>{p.text}</p>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="dim">{t("이 장의 장면 설명이 없어요")}</p>}
           </div>
           {/* 다시 그리기도 왼쪽에 — 고른 장의 장면 바로 아래(#548) */}
           <div className="wt-ed-regen">
