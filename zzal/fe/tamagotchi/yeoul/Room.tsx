@@ -28,7 +28,7 @@ import { spriteUrl, useFootPad, useHeadPad, useLive, useSideEdges, yeoulSpriteUr
 import { useIsWide } from '../useIsWide';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
-import { charFit, HEAD_SAFE, FOOT_FLOOR, FOOT_FLOOR_SHORT, NARROW_Q, SHORT_Q } from '../props/layout';
+import { charFit, poseFromServer, HEAD_SAFE, FOOT_FLOOR, FOOT_FLOOR_SHORT, NARROW_Q, SHORT_Q } from '../props/layout';
 import { poseFacing, propSide, propUrl } from '../props/spec';
 import PropLayer, { RoomPropLayer, ScreenPropLayer } from '../props/PropLayer';
 import {
@@ -216,8 +216,13 @@ export default function Room({ y }: { y: Yeoul }) {
    *   대해서는 **표가 곧 실측**이다. 서버 없는 진짜 방(목)·그림이 깨져 여울로 버티는 자리가 여기다.
    *   빼 두면 여울을 그려 놓고 "표를 못 믿는다" 며 실루엣을 상자 전체(0~1)로 잡아, 옆자리를
    *   포기하고 아이를 135px 깎는다(1440 실측 499.4 → 364.0). 내 아이 그림일 때는 그대로 거짓이다.
+   * ★ 2026-10-01 — 서버 앵커는 **지금 자세가 그 파일에 실제로 있을 때만** 믿는다. 1층이 빠진 파일
+   *   (펫 5·8·9)은 빈 자세를 여울 고정표로 메우는데 출처는 `server` 로 찍혀, 여울의 발끝(318)·머리끝(44)으로
+   *   렌고쿠(282·27)를 세웠다 — 759x982 에서 발이 발끝선보다 46px 뜨고 머리가 무대 위로 잘렸다.
+   *   거짓이면 아래 크기·발밑은 그림에서 잰 여백(`footPad`·`headPad`) 길로 간다.
    */
-  const byK = anchors.source === 'server' || v.sample.show || charSrc === fallbackSrc;
+  const byK = (anchors.source === 'server' && poseFromServer(anchors.anchors, v.spriteKey))
+    || v.sample.show || charSrc === fallbackSrc;
 
   // ★ 말풍선 자리 — **화면 폭으로 가르지 않는다**(2026-09-20 재설계 · 안 1).
   //
