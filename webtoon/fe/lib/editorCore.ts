@@ -1660,9 +1660,7 @@ export function mountEditor(
     // 단추를 찾아야 하면 그 자체가 성가시다.
     $("#regenAskCancel").addEventListener("click", closeAsk);
     $("#regenAskGo").addEventListener("click", confirmAsk);
-    $("#regenAsk").addEventListener("click", e => {
-      if (e.target.id === "regenAsk") closeAsk();
-    });
+    // 다시 그리기 칸은 팝업이 아니라 오른쪽 단 안에 열린다(#548) — 바깥을 눌러 닫는 처리는 없앴다.
 
     on(document, "keydown", e => {
       // 확인 창이 열려 있으면 그 창부터 받는다 — 뒤에 있는 선택 해제나 삭제가
