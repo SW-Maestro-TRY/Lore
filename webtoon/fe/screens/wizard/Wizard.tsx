@@ -547,16 +547,19 @@ export default function Wizard({
         {step === 2 && (
           <>
             <div className="wt-wiz-body gap48">
-              <div className="wt-wiz-story wt-wiz-story-1col">
+              <div className="wt-wiz-story wt-wiz-story-1col wide">
                 <div className="wt-wiz-head">
                   <h2>{t("어떻게 시작할까요?")}</h2>
                 </div>
+                {/* 입구 카드와 같은 크기감 — 이 걸음은 이 선택이 전부라 카드가 작으면 빈 화면처럼 보인다(#548). */}
                 <div className="wt-wiz-modes wt-wiz-create">
                   <button type="button" className={`wt-wiz-mode${!own ? " on" : ""}`} onClick={() => pickCreate("quick")}>
                     <b>{t("아이디어부터 시작할게요")}</b><span className="muted">{t("캐릭터를 바탕으로 AI 가 스토리를 만들어드려요.")}</span>
+                    <em className="go">{t("AI 와 함께 만들기")} <IconArrow size={16} /></em>
                   </button>
                   <button type="button" className={`wt-wiz-mode${own ? " on" : ""}`} onClick={() => pickCreate("own")}>
                     <b>{t("만들고 싶은 내용이 있어요")}</b><span className="muted">{t("내가 생각한 내용을 바탕으로 장면을 만들고 웹툰으로 완성해요.")}</span>
+                    <em className="go">{t("내 내용으로 시작하기")} <IconArrow size={16} /></em>
                   </button>
                 </div>
                 {createNote && <span className="err">{createNote}</span>}
