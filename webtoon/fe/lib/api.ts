@@ -197,6 +197,21 @@ export interface NhDirection {
   hidden?: string[];
 }
 
+/** 만들기에서 적은 것(#548). 이야기·제목은 장면 확인 화면의 「이야기 (고치기)」가 고치고, 여기서는 보기만 한다. */
+export interface NhJobInput {
+  name: string;
+  description: string;
+  genre: string;
+  story: string;
+  episode: string;
+  settings: string;
+  title: string;
+  style: string;
+  quality: string;
+  language: string;
+  photos: number;
+}
+
 export interface NhJob {
   id: string;
   status: NhStatus;
@@ -214,6 +229,10 @@ export interface NhJob {
   scenes?: NhScene[] | null;
   /** own 길에서 장면 확인 차례에만 — 적은 내용을 1화 본문으로 다듬은 것(#548). */
   story?: { title: string; body: string } | null;
+  /** 장면 확인 차례에만 — 사람이 만들기에서 적은 것 그대로(#548). 「내가 적은 것」 카드가 보여 준다. */
+  input?: NhJobInput | null;
+  /** 시트가 다 그려졌나. 그림체를 바꾸면 다시 그리는 동안 false(#548). 없으면 그려진 것으로 본다. */
+  sheet_ready?: boolean | null;
   pick: number | null;
   style: string;
   style_label: string;
@@ -258,6 +277,8 @@ export interface NhCreateRequest {
   settings?: string;
   /** own 길의 제목(선택). 비우면 AI 가 짓는다. */
   title?: string;
+  /** own 길의 「1화에서 보여줄 것」(선택). 비우면 이야기 앞부분부터 1화로 만든다. */
+  episode?: string;
 }
 
 export function createJob(form: NhCreateRequest): Promise<{ id: string; credit_balance?: number }> {
@@ -316,6 +337,13 @@ export function continueScenes(id: string) {
 /** 「장면 다시 나누기」 — 메모를 적어 보내면 이번에만 반영한다. 고친 글은 버려진다. */
 export function retryScenes(id: string, note = "") {
   return post(`/nh/jobs/${encodeURIComponent(id)}/scenes-retry`, note ? { note } : {});
+}
+
+/** 그림체·촘촘함 바꾸기 — 웹툰을 만들기 전(장면 확인 차례)까지만. 그림체를 바꾸면 서버가 시트를 다시 그린다. */
+export function patchOptions(id: string, body: { style?: string; quality?: string }) {
+  return call<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/options`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
 }
 
 export function pickDirection(id: string, n: number, editedBody?: string) {

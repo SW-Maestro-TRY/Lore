@@ -13,8 +13,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
   cancelJob, continueScenes, decideSheet, jobPageUrl, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
-  retryScenes, saveScenes, sheetImageUrl, type NhCast, type NhDirection, type NhJob, type NhScene, rememberMyRun } from "../../lib/api";
+  patchOptions, retryScenes, saveScenes, sheetImageUrl, type NhCast, type NhDirection, type NhJob, type NhScene, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
+import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizardData";
+import { STYLE_THUMB } from "../../lib/styleThumbs";
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
@@ -86,6 +88,13 @@ function mockScenesJob(id: string): NhJob {
     story: own ? { title: "우산 하나", body: "비 오는 날 학교에서 서연이 민준에게 우산을 건넨다. 민준은 처음에는 거절하지만 결국 같이 우산을 쓴다." } : null,
     cast: [{ name: "민준", from_input: true, look: "젖은 교복에 안경, 키가 크고 말수가 적다.", gap: "무뚝뚝해 보이지만 먼저 말을 꺼내는 쪽이다.", line: "내일도 비 오면 좋겠다." }],
     persona: { name: "서연", look: "짧은 단발, 늘 우산을 들고 다닌다.", personality: "무심한 척하지만 먼저 챙긴다." },
+    input: {
+      name: "서연", description: "짧은 단발, 늘 우산을 들고 다닌다.", genre: "로맨스", title: own ? "우산 하나" : "",
+      story: own ? "비 오는 날 학교에서 서연이 민준에게 우산을 건넨다. 민준은 처음에는 거절하지만 결국 같이 우산을 쓴다." : "",
+      episode: own ? "우산을 건네는 데서 시작해서 둘이 같이 쓰고 걷는 데까지." : "", settings: own ? "민준: 서연의 옆 반. 말수가 적다." : "",
+      style: "webtoon", quality: "surf", language: "ko", photos: 1,
+    },
+    sheet_ready: true,
     style: "webtoon", style_label: "일반 웹툰", stage: "pages", stage_index: 2, stages: [], stage_label: "장면 확인",
     say: "", queue: null, notice: { logged_in: true, email: null, sent: false }, minutes_left: null, pct: 40,
     art: null, redraw: null, log: [], elapsed: 95,
@@ -291,6 +300,35 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     setSceneDraft({}); setSceneEdit({}); dirtyRef.current = false;
     void send(() => retryScenes(job.id, sceneNote.trim()));
   };
+  /* 「내가 적은 것」(#548) — 만들기에서 적은 것을 보여 주고, 그림체·촘촘함만 웹툰을 만들기 전까지
+     바꿀 수 있다. 그림체를 바꾸면 서버가 시트를 다시 그린다(sheet_ready 가 그동안 false). */
+  const input = job?.input ?? null;
+  const styleKey = input ? (STYLE_KEY_OF_HARNESS[input.style] ?? input.style) : "";
+  const [optBusy, setOptBusy] = useState(false);
+  const [optErr, setOptErr] = useState("");
+  const changeOptions = async (p: { style?: string; quality?: string }) => {
+    if (!job || optBusy) return;
+    setOptBusy(true); setOptErr("");
+    track("scenes_options", { job: job.id, style: p.style, quality: p.quality });
+    try {
+      if (isMock) {
+        setJob((j) => j && j.input ? { ...j, input: { ...j.input, ...p }, sheet_ready: p.style ? false : j.sheet_ready } : j);
+        if (p.style) setTimeout(() => setJob((j) => (j ? { ...j, sheet_ready: true } : j)), 1500);
+      } else {
+        setJob(await patchOptions(job.id, p));
+      }
+    } catch (e) {
+      setOptErr(e instanceof Error ? e.message : t("보내지 못했습니다"));
+    } finally {
+      setOptBusy(false);
+    }
+  };
+  const sheetWaiting = job?.sheet_ready === false;
+  const sheetWasWaiting = useRef(false);
+  useEffect(() => {
+    if (sheetWasWaiting.current && !sheetWaiting) setSheetV((v) => v + 1);   // 다시 그린 시트를 새로 받는다
+    sheetWasWaiting.current = sheetWaiting;
+  }, [sheetWaiting]);
 
   /* 그려진 장이 늘 때마다 그 자리로 스크롤한다 — 전에는 새 장이 그려져도
      화면이 그대로라 "진짜 만들고 있는 게 맞나" 라는 의심으로 이어졌다
@@ -592,6 +630,46 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
               {job && (
                 <div className="wt-prog-railfoot">
+                  {/* 「내가 적은 것」(#548) — 장면 확인 동안 왼쪽 줄에 작게. 본문은 장면만 남긴다. */}
+                  {status === "awaiting_scenes" && input && (
+                    <details className="wt-prog-mine wt-prog-mine-rail">
+                      <summary>
+                        <b>{t("내가 적은 것")}</b>
+                        <span className="dim">{t("웹툰을 만들기 전까지만 바꿀 수 있어요")}</span>
+                      </summary>
+                      <div className="wt-prog-mine-grid">
+                        <div className="kv"><span>{t("캐릭터")}</span><p>{input.name}{input.photos > 0 ? ` · ${t("사진 {n}장", { n: input.photos })}` : ""}</p></div>
+                        {input.description && <div className="kv"><span>{t("캐릭터 설명")}</span><p>{input.description}</p></div>}
+                        <div className="kv"><span>{t("장르")}</span><p>{input.genre ? t(input.genre) : t("비움")}</p></div>
+                        {input.title && <div className="kv"><span>{t("제목")}</span><p>{input.title}</p></div>}
+                        {input.story && <div className="kv wide"><span>{t("이야기")}</span><p>{input.story}</p></div>}
+                        {input.episode && <div className="kv wide"><span>{t("1화에서 보여줄 것")}</span><p>{input.episode}</p></div>}
+                        {input.settings && <div className="kv wide"><span>{t("설정")}</span><p>{input.settings}</p></div>}
+                      </div>
+                      <div className="wt-prog-pageshead"><b>{t("그림체")}</b></div>
+                      <div className="wt-prog-styles">
+                        {STYLE_INFO.map(([key, label]) => (
+                          <button key={key} type="button" className={`wt-prog-style${styleKey === key ? " on" : ""}`} disabled={optBusy}
+                                  onClick={() => { if (styleKey !== key) void changeOptions({ style: key }); }}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={STYLE_THUMB[key] || `/static/samples/ex-${key}-1.jpg`} alt="" />
+                            <b>{t(label)}</b>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="wt-prog-pageshead"><b>{t("촘촘함")}</b></div>
+                      <div className="wt-prog-qs">
+                        {QUALITY_INFO.map((q) => (
+                          <button key={q.key} type="button" className={`wt-prog-q${input.quality === q.key ? " on" : ""}`} disabled={optBusy}
+                                  onClick={() => { if (input.quality !== q.key) void changeOptions({ quality: q.key }); }}>
+                            <b>{t(q.label)}</b><span className="dim">{t(q.lede)}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {optErr && <span className="err">{optErr}</span>}
+                    </details>
+                  )}
+
                   <button type="button" className="btn btn-w" onClick={browseWorks}>{t("다른 사람 웹툰 둘러보기")}</button>
                   {mailCard}
                 </div>
@@ -707,70 +785,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   </div>
                   <input className="field wt-prog-mnote" value={sceneNote} placeholder={t("바라는 점을 적고 장면 다시 나누기")} aria-label={t("다시 만들기 메모")}
                          onChange={(e) => setSceneNote(e.target.value)} />
-
-                  {/* own 길 — 적은 내용을 다듬은 이야기. 고치면 장면과 같이 저장된다. */}
-                  {ownJob && job.story && (
-                    <div className="wt-prog-scene wt-prog-story">
-                      <div className="row">
-                        <b>{t("이야기")}</b>
-                        <button type="button" onClick={() => setStoryOpen((v) => !v)}>
-                          {storyOpen ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("고치기")} <IconChevronDown size={13} /></>}
-                        </button>
-                      </div>
-                      {storyOpen ? (
-                        <>
-                          <input className="field" value={storyDraft.title} aria-label={t("제목")} onChange={(e) => editStory({ title: e.target.value })} />
-                          <textarea className="field wt-prog-bodybox" value={storyDraft.body} aria-label={t("이야기 본문")} onChange={(e) => editStory({ body: e.target.value })} />
-                        </>
-                      ) : (
-                        <>
-                          <span className="title">{storyDraft.title}</span>
-                          <p className="muted">{storyDraft.body}</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {ownJob && (job.persona || cast.length > 0) && (
-                    <>
-                      <div className="wt-prog-pageshead"><b>{t("LORE 가 읽어낸 인물")}</b></div>
-                      <div className="wt-prog-dirs">
-                        {job.persona && (
-                          <div className="wt-prog-dir plain wt-prog-cast wt-prog-hero">
-                            <div className="row"><b>{t("주인공 · {name}", { name: job.persona.name })}</b></div>
-                            {job.persona.look && <span className="muted intro">{job.persona.look}</span>}
-                            {job.persona.personality && <span className="muted intro">{job.persona.personality}</span>}
-                          </div>
-                        )}
-                        {cast.map((c, i) => (
-                          <div key={c.name + i} className="wt-prog-dir plain wt-prog-cast">
-                            <div className="row"><b>{c.name}</b></div>
-                            {c.look && <span className="muted intro">{c.look}</span>}
-                            {c.gap && <span className="muted intro">{c.gap}</span>}
-                            {c.line && <q className="line">{c.line}</q>}
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  {ownJob && (
-                    <>
-                      <div className="wt-prog-pageshead"><b>{t("캐릭터 시트")}</b></div>
-                      <button type="button" className="wt-prog-sheet" onClick={() => setZoom(sheetImageUrl(job.id, sheetV))}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={sheetImageUrl(job.id, sheetV)} alt={t("캐릭터 시트")} />
-                        <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
-                      </button>
-                      <div className="wt-prog-acts">
-                        <input className="field" value={sheetNote} placeholder={t("고칠 점을 적고 다시 만들기 · 예: 머리를 더 길게")} aria-label={t("다시 만들기 메모")}
-                               onChange={(e) => setSheetNote(e.target.value)} />
-                        <button type="button" className="btn btn-w" disabled={busy} onClick={retrySheet}>
-                          <IconRetry size={18} /> {t("다시 만들기")}
-                        </button>
-                      </div>
-                    </>
-                  )}
 
                   <div className="wt-prog-scenes">
                     {scenes.map((s) => {
@@ -922,7 +936,62 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               )}
 
               {/* ---- 지나온 단계 다시 보기 ---- */}
-              {pane === "story-view" && (
+              {pane === "story-view" && job && ownJob && job.story && (
+                /* own 길(#548) — 1화 이야기와 LORE 가 읽어낸 인물. 장면 확인 동안은 이야기를 고칠 수 있다. */
+                <>
+                  <div className="wt-prog-head">
+                    <h2>{t("이야기")}</h2>
+                    {status === "awaiting_scenes" && <span className="muted lede">{t("고치면 장면과 같이 저장돼요.")}</span>}
+                  </div>
+                  {/* own 길 — 적은 내용을 다듬은 이야기. 고치면 장면과 같이 저장된다. */}
+                  {job.story && (
+                    <div className="wt-prog-scene wt-prog-story">
+                      <div className="row">
+                        <b>{t("이야기")}</b>
+                        {status === "awaiting_scenes" && <button type="button" onClick={() => setStoryOpen((v) => !v)}>
+                          {storyOpen ? <>{t("접기")} <IconChevronUp size={13} /></> : <>{t("고치기")} <IconChevronDown size={13} /></>}
+                        </button>}
+                      </div>
+                      {storyOpen ? (
+                        <>
+                          <input className="field" value={storyDraft.title} aria-label={t("제목")} onChange={(e) => editStory({ title: e.target.value })} />
+                          <textarea className="field wt-prog-bodybox" value={storyDraft.body} aria-label={t("이야기 본문")} onChange={(e) => editStory({ body: e.target.value })} />
+                        </>
+                      ) : (
+                        <>
+                          <span className="title">{storyDraft.title}</span>
+                          <p className="muted">{storyDraft.body}</p>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {(job.persona || cast.length > 0) && (
+                    <>
+                      <div className="wt-prog-pageshead"><b>{t("LORE 가 읽어낸 인물")}</b></div>
+                      <div className="wt-prog-dirs">
+                        {job.persona && (
+                          <div className="wt-prog-dir plain wt-prog-cast wt-prog-hero">
+                            <div className="row"><b>{t("주인공 · {name}", { name: job.persona.name })}</b></div>
+                            {job.persona.look && <span className="muted intro">{job.persona.look}</span>}
+                            {job.persona.personality && <span className="muted intro">{job.persona.personality}</span>}
+                          </div>
+                        )}
+                        {cast.map((c, i) => (
+                          <div key={c.name + i} className="wt-prog-dir plain wt-prog-cast">
+                            <div className="row"><b>{c.name}</b></div>
+                            {c.look && <span className="muted intro">{c.look}</span>}
+                            {c.gap && <span className="muted intro">{c.gap}</span>}
+                            {c.line && <q className="line">{c.line}</q>}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                </>
+              )}
+              {pane === "story-view" && !(job && ownJob && job.story) && (
                 <>
                   <div className="wt-prog-head">
                     <h2>{chosen ? t("고른 이야기 · {title}", { title: chosen.title }) : t("지어낸 이야기")}</h2>
@@ -948,11 +1017,26 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               {pane === "sheet-view" && job && (
                 <>
                   <div className="wt-prog-head"><h2>{t("캐릭터 시트")}</h2></div>
-                  <button type="button" className="wt-prog-sheet" onClick={() => setZoom(sheetImageUrl(job.id, sheetV))}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={sheetImageUrl(job.id, sheetV)} alt={t("캐릭터 시트")} />
-                    <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
-                  </button>
+                  {sheetWaiting ? (
+                    <div className="wt-prog-sheetwait"><span className="spin" /> {t("그림체에 맞춰 다시 그리는 중")}</div>
+                  ) : (
+                    <button type="button" className="wt-prog-sheet" onClick={() => setZoom(sheetImageUrl(job.id, sheetV))}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={sheetImageUrl(job.id, sheetV)} alt={t("캐릭터 시트")} />
+                      <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
+                    </button>
+                  )}
+                  {status === "awaiting_scenes" && (
+                    /* 장면 확인 동안은 여기서 시트를 다시 만들 수 있다(#548). */
+                    <div className="wt-prog-acts">
+                      <input className="field" value={sheetNote} placeholder={t("고칠 점을 적고 다시 만들기 · 예: 머리를 더 길게")} aria-label={t("다시 만들기 메모")}
+                             onChange={(e) => setSheetNote(e.target.value)} />
+                      <button type="button" className="btn btn-w" disabled={busy || sheetWaiting} onClick={retrySheet}>
+                        <IconRetry size={18} /> {t("다시 만들기")}
+                      </button>
+                    </div>
+                  )}
+                  {actErr && <span className="err">{actErr}</span>}
                 </>
               )}
               {pane === "pages-view" && job && art && (
