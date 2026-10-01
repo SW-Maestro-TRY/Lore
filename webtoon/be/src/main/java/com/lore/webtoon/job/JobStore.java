@@ -103,15 +103,6 @@ public class JobStore {
         });
     }
 
-    /** 그림체·화질을 바꾼다(#548). */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void options(Long id, String style, String quality) {
-        jobs.findById(id).ifPresent(job -> {
-            job.options(style, quality, Instant.now());
-            jobs.save(job);
-        });
-    }
-
     /** 고른 것을 지운다. 후보를 다시 지었을 때 부른다. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void unpick(Long id) {
