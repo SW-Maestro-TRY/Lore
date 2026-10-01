@@ -51,6 +51,42 @@ export default function Editor({ runId, go, authStatus = "loading" }:
     return () => { dispose(); setEditorTranslator(null); };
   }, [runId, go, lang, t, authenticated]);
 
+  /* 양쪽 단 폭(#548) — 경계를 끌어 넓히고 좁힌다. 두 번 누르면 기본 폭. 이 기기에 기억한다. */
+  const SIDE_DEFAULT = { left: 260, right: 260 };
+  const [sideW, setSideW] = useState(SIDE_DEFAULT);
+  useEffect(() => {
+    try {
+      const got = JSON.parse(localStorage.getItem("lore_editor_sides") || "null");
+      if (got && typeof got.left === "number" && typeof got.right === "number") setSideW(got);
+    } catch { /* 비공개 창 */ }
+  }, []);
+  const saveSides = (next: { left: number; right: number }) => {
+    setSideW(next);
+    try { localStorage.setItem("lore_editor_sides", JSON.stringify(next)); } catch { /* 비공개 창 */ }
+  };
+  const startResize = (e: React.PointerEvent<HTMLDivElement>, side: "left" | "right") => {
+    e.preventDefault();
+    const x0 = e.clientX;
+    const w0 = sideW[side];
+    let last = sideW;
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - x0;
+      const w = Math.round(Math.min(480, Math.max(180, side === "left" ? w0 + dx : w0 - dx)));
+      last = { ...sideW, [side]: w };
+      setSideW(last);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
+      saveSides(last);
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const resetSide = (side: "left" | "right") => saveSides({ ...sideW, [side]: SIDE_DEFAULT[side] });
+
   /* 크레딧이 모자랄 때 엔진이 보내는 사건을 받아 안내를 띄운다(#548). */
   const [creditShort, setCreditShort] = useState<string | null>(null);
   useEffect(() => {
@@ -186,7 +222,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
         <div className="bake-result" id="bakeResult" hidden />
       </header>
 
-      <div className="ed-body wt-ed-body">
+      <div className="ed-body wt-ed-body" style={{ ["--ed-left-w" as string]: `${sideW.left}px`, ["--ed-right-w" as string]: `${sideW.right}px` }}>
         <aside className="ed-works wt-ed-left" id="edWorks">
           <div className="wt-ed-pages">
             <b className="wt-ed-lefthead">{t("페이지")}</b>
@@ -216,36 +252,10 @@ export default function Editor({ runId, go, authStatus = "loading" }:
               </div>
             ) : <p className="dim">{t("이 장의 장면 설명이 없어요")}</p>}
           </div>
-          {/* 다시 그리기도 왼쪽에 — 고른 장의 장면 바로 아래(#548) */}
-          <div className="wt-ed-regen">
-            <b>{t("다시 그리기")}</b>
-            <button type="button" className="btn btn-p wt-ed-regenbtn" onClick={regenActive}>
-              {regenCost == null
-                ? t("이 컷 다시 그리기")
-                : t("이 컷 다시 그리기 · {n}크레딧", { n: regenCost })}
-            </button>
-            {/* 다시 그리기 칸 — 팝업이 아니라 단추 바로 아래에 열린다(#548). 항목(칩)은 엔진이 /config 에서
-                받아 채우고, 고른 항목과 적은 말이 둘 다 그리는 프롬프트에 들어간다. id 는 엔진이 쓴다. */}
-            <div className="wt-ed-regenask" id="regenAsk" hidden>
-              <b id="regenAskTitle">{t("다시 그리기")}</b>
-              <p className="ask-sub" id="regenAskSub" hidden />
-              <p className="ask-scene" id="regenAskScene" hidden />
-              <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
-              <div className="fb-tags" id="regenAskTags" />
-              <textarea id="regenAskText" rows={3} maxLength={500} className="field" aria-label={t("더 하고 싶은 말")}
-                        placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
-              <label className="check-line">
-                <input type="checkbox" id="regenAskTextless" />
-                <span>{t("말풍선 없이 그림만")}</span>
-              </label>
-              <div className="ask-actions">
-                <button type="button" className="btn btn-w btn-sm" id="regenAskCancel">{t("취소")}</button>
-                <button type="button" className="btn btn-p btn-sm" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
-              </div>
-            </div>
-          </div>
         </aside>
 
+        <div className="wt-ed-resize" role="separator" aria-orientation="vertical" aria-label={t("왼쪽 단 폭 조절")}
+             onPointerDown={(e) => startResize(e, "left")} onDoubleClick={() => resetSide("left")} />
         <main className="ed-stage wt-ed-stage" id="stageCol">
           <div className="ep-tabs wt-ed-eptabs" id="edEpTabs" hidden />
           <div id="scenes" className="wt-ed-scenes" />
@@ -258,6 +268,8 @@ export default function Editor({ runId, go, authStatus = "loading" }:
         </button>
         <div className="dock-scrim" id="dockScrim" hidden />
 
+        <div className="wt-ed-resize" role="separator" aria-orientation="vertical" aria-label={t("오른쪽 단 폭 조절")}
+             onPointerDown={(e) => startResize(e, "right")} onDoubleClick={() => resetSide("right")} />
         <aside className="ed-dock wt-ed-dock" id="edDock" aria-label={t("말풍선 · 스티커 · 효과음")}>
           <div className="dock-handle" id="dockHandle" aria-hidden="true" />
           <div className="dock-bar wt-ed-dockbar">
@@ -281,6 +293,30 @@ export default function Editor({ runId, go, authStatus = "loading" }:
       </div>
 
 
+      {/* 다시 그리기 창 — 장마다 있는 「다시 그리기」를 누르면 뜨는 팝업. 항목(칩)은 엔진이 /config 에서
+          받아 채우고, 고른 항목과 적은 말이 둘 다 그리는 프롬프트에 들어간다(#548). id 는 엔진이 쓴다. */}
+      <div className="ask modal" id="regenAsk" hidden>
+        <div className="ask-box modal-box" role="dialog" aria-modal="true" aria-labelledby="regenAskTitle">
+          <h2 id="regenAskTitle">{t("다시 그리기")}</h2>
+          <p className="ask-sub" id="regenAskSub" />
+          <p className="ask-scene" id="regenAskScene" hidden />
+          <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
+          <div className="fb-tags" id="regenAskTags" />
+          <label className="wt-ed-askfield">
+            <span>{t("더 하고 싶은 말")}</span>
+            <textarea id="regenAskText" rows={3} maxLength={500} className="field"
+                      placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
+          </label>
+          <label className="check-line">
+            <input type="checkbox" id="regenAskTextless" />
+            <span>{t("말풍선 없이 그림만")}</span>
+          </label>
+          <div className="ask-actions">
+            <button type="button" className="btn btn-w" id="regenAskCancel">{t("취소")}</button>
+            <button type="button" className="btn btn-p" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
+          </div>
+        </div>
+      </div>
       <div className="toast wt-ed-toast" id="toast" hidden />
       {creditShort !== null && (
         /* 장 다시 그리기를 눌렀는데 크레딧이 모자랄 때(#548) */

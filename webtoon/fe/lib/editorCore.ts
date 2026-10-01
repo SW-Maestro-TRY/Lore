@@ -19,7 +19,7 @@
  */
 
 import { louArt } from "./louArt";
-import { sceneShort } from "./sceneText";
+import { sceneParts, sceneShort } from "./sceneText";
 import { track } from "./track";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
@@ -122,6 +122,12 @@ export function mountEditor(
   const TAILED = new Set(["normal", "shout", "whisper", "thought"]);
 
   const STICKERS = ["💦", "❤️", "✨", "💢", "❗", "❓", "🌟", "🎵", "⚡", "💀", "😳", "🔥"];
+  /* 루 고래 스티커(#548) — 글자 대신 그림. 「lou:파일 이름」으로 저장하고, 굽는 쪽(BubbleArtist)도
+     같은 이름의 그림(webtoon/ai/assets/lou)을 붙인다. */
+  const LOU_STICKERS = ["logo-1-happy", "logo-1-curious", "logo-1-discover", "logo-1-thinking", "logo-1-sleepy", "logo-2-happy"];
+  const LOU_PREFIX = "lou:";
+  const louSrc = (text) => `/static/lou/${String(text).slice(LOU_PREFIX.length).replace(/[^a-z0-9-]/g, "")}.png`;
+  const isLou = (text) => String(text || "").startsWith(LOU_PREFIX);
   const SFX = ["쿵", "우당탕", "스윽", "두근", "촤악", "번쩍", "탁", "위이잉—"].map(s => tr(s));
 
   let data = null;
@@ -520,7 +526,9 @@ export function mountEditor(
     const box = $("#regenAskScene");
     if (box) {
       box.hidden = !src;
-      box.textContent = src;
+      // 소제목이 있으면 소제목별로 띄워 보여 준다(#548) — 한 덩어리로 붙이면 읽을 수가 없다.
+      box.innerHTML = sceneParts(src).map(p =>
+        `<span class="ask-scene-part">${p.label ? `<b>${esc(tr(p.label))}</b>` : ""}${esc(p.text)}</span>`).join("");
     }
     $("#regenAskText").value = "";
     $("#regenAskTextless").checked = !!st.noBubble;
@@ -712,7 +720,9 @@ export function mountEditor(
             ? `<div class="handle handle-tail" data-tail-drag title="${tr("꼬리를 끌어 말하는 사람을 가리키세요")}"></div>`
             : "")
         : it.type === "sticker"
-          ? `<div class="stk" style="font-size:${it.size * 2.2}px">${it.text}</div>`
+          ? (isLou(it.text)
+            ? `<div class="stk stk-lou" style="font-size:${it.size * 2.2}px"><img src="${louSrc(it.text)}" alt="" draggable="false"></div>`
+            : `<div class="stk" style="font-size:${it.size * 2.2}px">${it.text}</div>`)
           : `<div class="sfx" style="font-size:${it.size * 2}px"${ed}>${esc(it.text)}</div>`;
     return `<div class="item ${sel && sel.id === it.id ? "sel" : ""}" data-id="${it.id}"
       data-type="${it.type}"
@@ -1069,7 +1079,10 @@ export function mountEditor(
           <span>${label}</span>
         </button>`).join("");
     } else if (tab === "sticker") {
-      grid.innerHTML = STICKERS.map(s => `
+      grid.innerHTML = LOU_STICKERS.map(n => `
+        <button type="button" class="dock-item" data-add="sticker" data-text="${LOU_PREFIX}${n}" aria-label="${tr("루 스티커")}">
+          <div class="prev"><div class="stk stk-lou"><img src="${louSrc(LOU_PREFIX + n)}" alt="" draggable="false"></div></div>
+        </button>`).join("") + STICKERS.map(s => `
         <button type="button" class="dock-item" data-add="sticker" data-text="${s}">
           <div class="prev"><div class="stk">${s}</div></div>
         </button>`).join("");
@@ -1083,7 +1096,7 @@ export function mountEditor(
        대충 비슷했는데, 모양을 SVG 가 만들게 된 뒤로는 그리는 사람이 없어서
        글자만 덩그러니 남았다 — 무엇을 고르는지 알 수 없다. */
     $$(".prev[data-prev-variant]", grid).forEach(el => paintShape(el, {
-      variant: el.dataset.prevVariant, size: 10, tail: "left", tx: 20, ty: 126,
+      variant: el.dataset.prevVariant, size: 10, tail: "left", tx: 18, ty: 112,
     }));
     $$("[data-add]", grid).forEach(b => b.addEventListener("click", () =>
       addItem(b.dataset.add, b.dataset.variant || "", b.dataset.text)));
@@ -1661,7 +1674,9 @@ export function mountEditor(
     // 단추를 찾아야 하면 그 자체가 성가시다.
     $("#regenAskCancel").addEventListener("click", closeAsk);
     $("#regenAskGo").addEventListener("click", confirmAsk);
-    // 다시 그리기 칸은 팝업이 아니라 오른쪽 단 안에 열린다(#548) — 바깥을 눌러 닫는 처리는 없앴다.
+    $("#regenAsk").addEventListener("click", e => {
+      if (e.target.id === "regenAsk") closeAsk();
+    });
 
     on(document, "keydown", e => {
       // 확인 창이 열려 있으면 그 창부터 받는다 — 뒤에 있는 선택 해제나 삭제가
