@@ -452,16 +452,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     await savePerson(job.id, who, fields);
     await pull();
   };
-  /* 장면 확인 — 맨 위 「이대로 웹툰 만들기」가 스크롤로 안 보이면 오른쪽 아래에 띄운다. */
-  const goTopRef = useRef<HTMLButtonElement>(null);
-  const [goFloat, setGoFloat] = useState(false);
-  useEffect(() => {
-    const el = goTopRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") { setGoFloat(false); return; }
-    const io = new IntersectionObserver(([e]) => setGoFloat(!e.isIntersecting), { threshold: 0 });
-    io.observe(el);
-    return () => io.disconnect();
-  });
   const continueAll = () => {
     if (!job) return;
     track("scenes_continue", { job: job.id, edited: Object.keys(sceneDraft).length, own: ownJob });
@@ -994,15 +984,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       <span className={`dim wt-prog-saved${saveState === "failed" ? " err" : ""}`}>
                         {saveState === "saving" ? t("저장하는 중") : saveState === "saved" ? t("저장됨 · 방금") : saveState === "failed" ? t("저장하지 못했습니다") : ""}
                       </span>
-                      <button ref={goTopRef} type="button" className="btn btn-p btn-sm" disabled={busy} onClick={continueAll}>{t("이대로 웹툰 만들기")} <IconArrow size={16} /></button>
                     </div>
                   </div>
-                  {/* 위 단추가 화면 밖으로 나가면 오른쪽 아래에 떠 있는 단추로 */}
-                  {goFloat && (
-                    <button type="button" className="btn btn-p wt-prog-gofloat" disabled={busy} onClick={continueAll}>
-                      {t("이대로 웹툰 만들기")} <IconArrow size={18} />
-                    </button>
-                  )}
+                  {/* 「이대로 웹툰 만들기」는 오른쪽 아래에 떠 있는 단추 하나뿐이다 — 어디까지 읽었든 바로 누를 수 있게 */}
+                  <button type="button" className="btn btn-p wt-prog-gofloat" disabled={busy} onClick={continueAll}>
+                    {t("이대로 웹툰 만들기")} <IconArrow size={18} />
+                  </button>
 
                   <div className="wt-prog-scenes">
                     {scenes.map((s) => {
