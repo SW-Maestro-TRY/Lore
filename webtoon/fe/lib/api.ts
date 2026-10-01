@@ -237,7 +237,7 @@ export interface NhJob {
   /** 장면 확인 차례(awaiting_scenes)에만 — 장면 초안 목록(#548). */
   scenes?: NhScene[] | null;
   /** own 길에서 장면 확인 차례에만 — 적은 내용을 1화 본문으로 다듬은 것(#548). */
-  story?: { title: string; body: string } | null;
+  story?: { title: string; body: string; /** own 길에서 1화를 다시 만든 횟수(#548) — 첫 번째는 무료 */ redraws?: number } | null;
   /** 장면 확인 차례에만 — 사람이 만들기에서 적은 것 그대로(#548). 「내가 적은 것」 카드가 보여 준다. */
   input?: NhJobInput | null;
   /** 시트가 다 그려졌나. 그림체를 바꾸면 다시 그리는 동안 false(#548). 없으면 그려진 것으로 본다. */

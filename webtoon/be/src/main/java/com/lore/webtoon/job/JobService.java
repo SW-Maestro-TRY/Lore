@@ -471,7 +471,17 @@ public class JobService {
      * 두 번 서서, 하네스가 같은 폴더를 동시에 고쳐 쓴다(파이썬 쪽
      * {@code _require} 가 막던 것과 같은 자리다).
      */
+    /** own 길의 「1화 다시 만들기」는 첫 번째 무료, 그다음부터 1크레딧(#548). quick 길 후보 다시 만들기는 무료 그대로. */
+    public int restoryCost(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        return job.isOwn() && runner.storyRedraws(job.getRunId()) >= 1 ? 1 : 0;
+    }
+
     public void retryPick(String publicId, String note) {
+        retryPick(publicId, note, () -> { });
+    }
+
+    public void retryPick(String publicId, String note, Runnable onFail) {
         WebtoonJob job = store.byPublicId(publicId);
         /* own 길(#548)은 장면 확인 자리에서도 1화를 다시 만들 수 있다 — 끝나면 이야기 확인으로 돌아가
            새 1화를 보고 장면을 다시 나눈다. */
@@ -483,7 +493,7 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "장면을 다시 뽑는 중입니다");
         }
         safety.checkText("webtoon-scenes", note);
-        runner.retryDirections(job.getId(), note == null ? "" : note.trim());
+        runner.retryDirections(job.getId(), note == null ? "" : note.trim(), onFail);
     }
 
     /**
