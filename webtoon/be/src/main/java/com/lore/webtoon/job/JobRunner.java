@@ -1077,6 +1077,20 @@ public class JobRunner {
         }
     }
 
+    /** 장면마다 한 줄(#548) — 고친 글이 있으면 그것, 없으면 「벌어지는 일」. 결과 화면·편집실이 쓴다. */
+    public List<String> sceneCaptions(String runId) {
+        List<String> out = new ArrayList<>();
+        try {
+            for (JsonNode s : mapper.readTree(runDir(runId).resolve("scenes.json").toFile()).path("scenes")) {
+                String user = s.path("user_text").asText("").trim();
+                out.add(!user.isEmpty() ? user : cleanSceneField(s.path("what").asText("")));
+            }
+        } catch (IOException e) {
+            return List.of();
+        }
+        return out;
+    }
+
     /** 이 장면을 지금 다시 짓고 있나. */
     public boolean rescening(Long jobId, int n) {
         return rescening.getOrDefault(jobId, java.util.Set.of()).contains(n);

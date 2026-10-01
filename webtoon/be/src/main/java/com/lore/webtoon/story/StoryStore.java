@@ -107,6 +107,22 @@ public class StoryStore {
         }
     }
 
+    /**
+     * 고른 이야기의 장면 줄을 적는다(#548). 결과 화면·편집실이 장마다 「무슨 장면인가」를
+     * 여기서 읽는다(표지 다음 장이 첫 줄). own 길은 후보에 장면이 없어서 장면 확인을 마칠 때 적는다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void setScenes(String runId, List<String> scenes) {
+        stories.findByRunIdAndChosenTrue(runId).ifPresent(story -> {
+            try {
+                story.updateScenes(mapper.writeValueAsString(scenes));
+                stories.save(story);
+            } catch (Exception e) {                 // noqa: 설명 줄 때문에 그리기를 막지 않는다
+                log.warn("장면 줄을 적지 못했습니다 (run={})", runId, e);
+            }
+        });
+    }
+
     /** 이 작품이 된 이야기. 아직 안 골랐거나 안 옮겨 온 작품이면 비어 있다. */
     @Transactional(readOnly = true)
     public Optional<WebtoonStory> chosenOf(String runId) {
