@@ -128,6 +128,42 @@ def cast_of(detail: dict, run_dir: Path) -> list[dict]:
             and (c.get("name") or "").strip() != hero]
 
 
+def cast_sheets_of(run_dir: Path) -> dict[str, Path]:
+    """뽑아 둔 조연 시트(#548) — {이름: sheets/<이름>.png}. 없으면 빈 dict."""
+    folder = run_dir / "sheets"
+    if not folder.is_dir():
+        return {}
+    return {p.stem: p for p in sorted(folder.glob("*.png")) if p.stem}
+
+
+# 장 하나에 붙일 조연 시트 상한. 주인공 시트 1 + 조연 2 + 직전 장 1 = 참조 4장.
+# 더 붙이면 이미지 모델이 참조를 "고칠 그림"으로 읽어 장면이 흐려진다.
+CAST_SHEET_LIMIT = 2
+
+
+def cast_sheets_in_scene(sheets: dict[str, Path], scene: dict) -> list[str]:
+    """이 장면 글에 이름이 나오는 조연만 — 시트가 있는 조연 중에서. 순서는 시트 이름순."""
+    if not sheets:
+        return []
+    hay = " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends", "user_text"))
+    out = []
+    for name in sheets:
+        first = name.split()[0] if name.split() else name
+        if name in hay or (first and first in hay):
+            out.append(name)
+    return out[:CAST_SHEET_LIMIT]
+
+
+def cast_sheet_block(names: list[str]) -> str:
+    """인물 절 뒤에 붙는 「조연 시트」 — 첨부한 조연 시트를 따르라는 한 줄씩."""
+    if not names:
+        return ""
+    lines = ["## 조연 시트 (주인공 시트 다음에 붙은 그림들)",
+             "아래 인물은 첨부한 조연 시트를 따른다 — 얼굴·머리·옷차림을 시트 그대로, 이 화 내내 같은 사람으로 그린다."]
+    lines += [f"{name} — 첨부한 조연 시트를 따른다." for name in names]
+    return "\n".join(lines)
+
+
 def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> str:
     """장면마다 **글자까지 같게** 들어가는 인물 고정 앵커.
 
@@ -283,7 +319,8 @@ def narration_of(scenes: list[dict], scene_no: int) -> list[str] | None:
 
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
-                          has_prev: bool, fixed_names=(), lang: str = "ko", lore: str = "") -> str:
+                          has_prev: bool, fixed_names=(), lang: str = "ko", lore: str = "",
+                          cast_sheet_names=()) -> str:
     """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
 
     fixed_names : scenes.json 의 「이 화의 고정 설정」. 인물 절 바로 뒤에 붙는다
@@ -359,16 +396,28 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
     else:
         role = "중간 장면 — 앞 장면에서 자연스럽게 이어받아 진행한다."
 
+    # 사용자가 고친 글(#548)이 있으면 첫 줄이 이 장의 한 줄 요약이다 — AI 가 적은
+    # 「벌어지는 일」과 어긋나면 안 되므로 그쪽을 쓰지 않는다.
+    headline = ((scene.get("user_text") or "").strip().splitlines() or [""])[0] \
+        if (scene.get("user_text") or "").strip() else scene.get("what", "")
     lines = [f"[이 페이지의 역할] {role}", "",
              (f"위 목록의 {scene_no}번 장면 자리를 그린다: "
               if scene_context() == "all" else "이 장면을 그린다: ")
-             + f"\"{scene.get('what', '')}\"", ""]
-    if scene.get("where"):
+             + f"\"{headline}\"", ""]
+    # 사용자가 장면 글을 직접 고쳤으면(#548, scenes.json 의 user_text) 그 글이
+    # 「장면 내용」이다. 적힌 것은 그대로 따르고 적히지 않은 것은 그림 모델이
+    # 정한다 — 컷 수·카메라·대사를 억지로 다 적게 하지 않는 이유다. user_text 가
+    # 없는 장면은 아래 예전 길 그대로다.
+    user_text = (scene.get("user_text") or "").strip()
+    if user_text:
+        lines += ["[장면 내용 — 사용자가 적었다. 적힌 것은 그대로 따르고, 적히지 않은 것은 네가 정한다]",
+                  user_text, ""]
+    if scene.get("where") and not user_text:
         lines += [f"[장소와 상황] {scene['where']}", ""]
-    if scene.get("acting"):
+    if scene.get("acting") and not user_text:
         lines += [f"[인물의 행동과 표정] {scene['acting']}", ""]
     look = (scene.get("look") or "").strip()
-    if look and look not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
+    if look and not user_text and look not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
         # 시트와 달라진 겉모습(#147). 시트는 매 장 다시 붙어서, 여기 안 적으면
         # 젖은 머리·벗은 외투·든 물건이 다음 장에서 시트로 되돌아간다. 장면
         # 데이터 바로 옆에 둔다 — 멀리 있는 지시는 안 지켜진다(위 주석과 같다).
@@ -428,6 +477,7 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
                         "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
                         "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
     people = "\n\n".join(b for b in (character_block(char, spec, cast),
+                                     cast_sheet_block(list(cast_sheet_names)),
                                      fixed_block(fixed_names)) if b)
     return (text
             .replace("{{LANGUAGE_LINE}}", lang_mod.instruction(lang))
@@ -548,6 +598,9 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             f"캐릭터 시트가 없습니다: {sheet}\n"
             "        run.py --sheet 로 만들거나, 정말 없이 그리려면 --no-sheet 를 붙이세요.")
     refs_base = [sheet] if sheet.exists() else []
+    cast_sheets = cast_sheets_of(run_dir)          # 조연 시트(#548) — 없으면 빈 dict, 전과 같다
+    if cast_sheets:
+        log(f"[이어그리기] 조연 시트 {len(cast_sheets)}장: {', '.join(cast_sheets)}")
 
     # dry-run 은 키가 없어도 돌아야 한다 — backend_for() 는 키 없으면
     # SystemExit 이라, 진짜 생성일 때만 부른다.
@@ -590,9 +643,10 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             lore = lorebook.page_block(lorebook.page_entries(
                 lore_world, " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "prev", "ends"))
             )) if lore_world else ""
+            page_cast = cast_sheets_in_scene(cast_sheets, one)
             prompt = (build_continue_prompt(direction, scenes, char, spec, cast,
                                             scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
-                                            lang=lang, lore=lore)
+                                            lang=lang, lore=lore, cast_sheet_names=page_cast)
                       .replace("{style}", imageprompt.load_style(style)))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
@@ -615,7 +669,9 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             continue
 
         prev_img = page_path(run_dir, page_no - 1)
-        refs = refs_base + ([prev_img] if page_no > 1 and prev_img.exists() else [])
+        # 참조 순서: 주인공 시트 → 이 장면의 조연 시트 → 직전 장. 표지(n_==0)에는 조연 시트를 안 붙인다.
+        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1]) if n_ > 0 else [])]
+        refs = refs_base + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
         log(f"[{label}] 참조 {len(refs)}장 …")
         meta = None
         for attempt in (1, 2):

@@ -149,7 +149,22 @@ export function allowanceLine(a: Allowance | null): string {
 
 /* ---- 웹툰 만들기 ------------------------------------------------------------ */
 
-export type NhStatus = "queued" | "running" | "awaiting_sheet" | "awaiting_cast" | "awaiting_pick" | "done" | "error";
+export type NhStatus = "queued" | "running" | "awaiting_sheet" | "awaiting_cast" | "awaiting_pick" | "awaiting_scenes" | "done" | "error";
+
+/** 어느 길로 만드나(#548) — quick: 아이디어부터(AI 가 이야기를 지음) · own: 만들고 싶은 내용이 있음. */
+export type NhMode = "quick" | "own";
+
+/** 장면 초안 하나(#548). `text` 는 AI 가 나눈 장면, `user_text` 는 사람이 고친 글(안 고쳤으면 null). */
+export interface NhScene {
+  n: number;
+  text: string;
+  user_text: string | null;
+  /** AI 가 나눈 장면의 칸들(장소와 상황 / 벌어지는 일 / 행동과 표정 / 겉모습 / 끝나는 상태 / 나레이션 중 있는 것만).
+   *  user_text 가 있으면 parts 는 AI 원래 것이고 text 는 user_text 다. */
+  parts?: { label: string; text: string }[] | null;
+  /** 이 장면만 다시 뽑는 중(#548) — 그 카드만 「다시 뽑는 중」으로 보인다. */
+  busy?: boolean;
+}
 
 /** 주인공 페르소나(#534) — 사용자가 적은 캐릭터로 정의한 것. 인물 확인·고르기 화면에서 확인용으로 보여 준다. */
 export interface NhPersona {
@@ -167,6 +182,7 @@ export interface NhPersona {
 export interface NhCast {
   name: string;
   from_input?: boolean | string;
+  role?: string;
   look?: string;
   gap?: string;
   voice?: string;
@@ -187,6 +203,20 @@ export interface NhDirection {
   hidden?: string[];
 }
 
+/** 만들기에서 적은 것(#548). 이야기·제목은 장면 확인 화면의 「이야기 (고치기)」가 고치고, 여기서는 보기만 한다. */
+export interface NhJobInput {
+  name: string;
+  description: string;
+  genre: string;
+  story: string;
+  settings: string;
+  title: string;
+  style: string;
+  quality: string;
+  language: string;
+  photos: number;
+}
+
 export interface NhJob {
   id: string;
   status: NhStatus;
@@ -198,6 +228,20 @@ export interface NhJob {
   /** 인물 단계가 기다리는 것 — pick(한 명 고르기) · confirm(적은 인물 확인 후 진행). */
   cast_kind?: "pick" | "confirm" | null;
   persona?: NhPersona | null;
+  /** 어느 길로 만드는 작업인가(#548). 옛 작업은 비어 있고, 그때는 quick 으로 본다. */
+  mode?: NhMode | null;
+  /** 장면 확인 차례(awaiting_scenes)에만 — 장면 초안 목록(#548). */
+  scenes?: NhScene[] | null;
+  /** own 길에서 장면 확인 차례에만 — 적은 내용을 1화 본문으로 다듬은 것(#548). */
+  story?: { title: string; body: string } | null;
+  /** 장면 확인 차례에만 — 사람이 만들기에서 적은 것 그대로(#548). 「내가 적은 것」 카드가 보여 준다. */
+  input?: NhJobInput | null;
+  /** 시트가 다 그려졌나. 그림체를 바꾸면 다시 그리는 동안 false(#548). 없으면 그려진 것으로 본다. */
+  sheet_ready?: boolean | null;
+  /** 보관된 옛 시트 수(#548). 다시 만들 때마다 전 것이 1, 2, … 로 남고 sheetVersionUrl 로 본다. */
+  sheet_versions?: number | null;
+  /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
+  cast_sheets?: { name: string; ready: boolean }[] | null;
   pick: number | null;
   style: string;
   style_label: string;
@@ -236,6 +280,12 @@ export interface NhCreateRequest {
   agree_ip: boolean;
   checkpoints: boolean;
   character_id?: string;
+  /** 어느 길로 만드나(#548). own 이면 checkpoints 는 항상 true 로 보낸다. */
+  mode?: NhMode;
+  /** own 길의 「설정 더 적기」 — 인물·세계·지킬 것을 한 칸에 적은 자유 글. 없으면 빈 문자열. */
+  settings?: string;
+  /** own 길의 제목(선택). 비우면 AI 가 짓는다. */
+  title?: string;
 }
 
 export function createJob(form: NhCreateRequest): Promise<{ id: string; credit_balance?: number }> {
@@ -279,8 +329,38 @@ export function pickCast(id: string, n: number) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/cast`, { n });
 }
 
-export function pickDirection(id: string, n: number, editedBody?: string) {
-  return post(`/nh/jobs/${encodeURIComponent(id)}/pick`, editedBody ? { n, body: editedBody } : { n });
+/* ---- 장면 확인(#548) — awaiting_scenes 에서만 된다 ---- */
+
+/** 고친 장면(과 own 길이면 이야기 제목·본문)을 저장만 한다. 진행하지 않는다 — 나갔다 와도 그대로. */
+export function saveScenes(id: string, body: { scenes: { n: number; text: string }[]; body?: string; title?: string }) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes`, body);
+}
+
+/** 인물 카드 고치기(#548) — who 는 "hero" 이거나 cast 번호(0부터). 보낸 칸만 덮는다. */
+export function savePerson(id: string, who: string, fields: Record<string, string>) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/person`, { who, fields });
+}
+
+/** 「이대로 웹툰 만들기」 — 저장된 장면으로 다음 걸음(시트 확인 또는 그림)으로 간다. */
+export function continueScenes(id: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes-continue`);
+}
+
+/** 「장면 다시 나누기」 — 메모를 적어 보내면 이번에만 반영한다. 고친 글은 버려진다. */
+/** 장면 하나만 다시 뽑기(#548) — 이유 코드는 awkward·character·stranger·offstory·pacing. */
+export type SceneRetryReason = "awkward" | "character" | "stranger" | "offstory" | "pacing";
+export function retryScene(id: string, n: number, body: { reasons: SceneRetryReason[]; note: string }) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes/${n}/retry`, body);
+}
+export function retryScenes(id: string, note = "") {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes-retry`, note ? { note } : {});
+}
+
+
+export function pickDirection(id: string, n: number, editedBody?: string, editedTitle?: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/pick`, {
+    n, ...(editedBody != null ? { body: editedBody } : {}), ...(editedTitle != null ? { title: editedTitle } : {}),
+  });
 }
 
 export function retryDirections(id: string, note = "") {
@@ -297,6 +377,24 @@ export function notifyByEmail(id: string, email: string): Promise<{ email: strin
 
 export function sheetImageUrl(jobId: string, v: number | string = ""): string {
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet.png${v ? `?v=${v}` : ""}`;
+}
+/** v 번째 옛 시트 그림(#548). */
+export function sheetVersionUrl(jobId: string, v: number): string {
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet-v${v}.png`;
+}
+/** v 번째 옛 시트를 현재 시트로 되돌린다(#548). */
+export function restoreSheet(id: string, v: number) {
+  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/sheet-restore`, { v });
+}
+
+/** 조연 시트 그림(#548). */
+export function castSheetImageUrl(jobId: string, name: string, v: number | string = ""): string {
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/cast-sheet/${encodeURIComponent(name)}.png${v ? `?v=${v}` : ""}`;
+}
+
+/** 조연 한 명의 시트를 뽑는다(1크레딧). 장면 확인 차례에만. */
+export function requestCastSheet(id: string, name: string) {
+  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/cast-sheet`, { name });
 }
 
 export function jobPageUrl(jobId: string, no: number, width = 260): string {

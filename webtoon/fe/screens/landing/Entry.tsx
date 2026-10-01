@@ -23,7 +23,7 @@ const COVER_B = "/static/entry/character.jpg";
 const FALLBACK_A = "/static/samples/onboarding-page.jpg";
 const FALLBACK_B = "/static/samples/ex-romance-2.jpg";
 
-export default function Entry({ go }: { go: Go }) {
+export default function Entry({ go }: { go: Go; authenticated?: boolean }) {
   const t = useT();
   const phone = usePhone();
   /* 카드마다 남은 무료 횟수 — 왼쪽 카드는 웹툰 만들기(허용량), 오른쪽 카드는
@@ -46,7 +46,7 @@ export default function Entry({ go }: { go: Go }) {
   return (
     <div className="wt-wrap wt-page wt-entry">
       <div className="wt-entry-head">
-        <h2 style={phone ? { whiteSpace: "pre-line" } : undefined}>{t(phone ? "LORE에서\n무엇을 해볼까요?" : "LORE에서 무엇을 해볼까요?")}</h2>
+        <h2>{t("무엇을 만들고 싶나요?")}</h2>
       </div>
 
       <div className="wt-entry-cards">

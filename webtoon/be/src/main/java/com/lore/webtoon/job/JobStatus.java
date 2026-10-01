@@ -26,6 +26,13 @@ public enum JobStatus {
     /** 현대 로맨스 — 이야기 전에 상대 인물을 고르기를 기다린다(#534). */
     AWAITING_CAST("awaiting_cast"),
 
+    /**
+     * 장면 초안을 사람이 보고 고치는 중(#548). 「확인하고 만들기」와 「만들고 싶은
+     * 내용이 있어요」 둘 다 그림을 그리기 전에 여기서 멈춘다. <b>시간으로 넘어가지
+     * 않는다</b> — 「이대로 만들기」를 누를 때까지 기다린다.
+     */
+    AWAITING_SCENES("awaiting_scenes"),
+
     DONE("done"),
     ERROR("error");
 

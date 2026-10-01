@@ -272,3 +272,109 @@
 
 /* 「완성본 미리 보기」 (아트보드 Drawing) */
 .wt .wt-prog-peek { align-self: flex-start; margin-top: 10px; }
+
+/* ---- 장면 확인(#548) — 장면마다 자유 글 하나, 고치면 바로 저장 ---- */
+.wt .wt-prog-sceneacts .btn-p { height: 48px; font-size: 15px; padding: 0 22px; }
+/* 제목 줄 오른쪽에 「이대로 웹툰 만들기」 */
+.wt .wt-prog-head.split { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.wt .wt-prog-head.split > div:first-child { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wt .wt-prog-head.split .wt-prog-sceneacts { flex-shrink: 0; flex-wrap: nowrap; }
+.wt .wt-prog-head.split .wt-prog-saved { margin-left: 0; }
+.wt .wt-prog-scene .row .tools { display: inline-flex; gap: 2px; }
+.wt .wt-prog-scene .row button.on { background: var(--ink); color: #fff; }
+.wt .wt-prog-scene .row button:disabled { opacity: .4; cursor: default; }
+.wt .wt-prog-scene.busy { border-style: dashed; }
+/* 장면 하나 다시 뽑기 — 카드 아래 열리는 판 */
+.wt .wt-prog-sceneretry { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 16px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.wt .wt-prog-sceneretry > b { font-size: 13px; font-weight: 700; color: var(--ink); }
+.wt .wt-prog-sceneretry .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt .wt-prog-sceneretry .chip { height: 32px; padding: 0 13px; font-size: 13px; background: #fff; }
+.wt .wt-prog-sceneretry .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-prog-scene .wt-prog-sceneretry textarea.field { min-height: 96px; padding: 12px 14px; resize: vertical; line-height: 1.6; font-size: 14px; background: #fff; }
+.wt .wt-prog-sceneretry .acts { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+/* own 길 이야기 확인 — 제목·본문을 바로 고친다 */
+.wt .wt-prog-storycheck input.field.title { font-size: 17px; font-weight: 700; height: 48px; }
+.wt .wt-prog-story.wt-prog-storycheck textarea.wt-prog-bodybox { height: 480px; }
+.wt .wt-prog-storycheck .count { font-size: 12px; align-self: flex-end; }
+/* 옛 시트 줄 — 작은 썸네일을 골라 되돌린다 */
+.wt .wt-prog-oldsheets { display: flex; flex-direction: column; gap: 8px; }
+.wt .wt-prog-oldsheets > b { font-size: 13.5px; }
+.wt .wt-prog-oldsheets .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.wt .wt-prog-oldsheets .thumb { width: 96px; height: 72px; padding: 0; border-radius: 10px; overflow: hidden; border: 1.5px solid var(--line); background: #fff; cursor: pointer; }
+.wt .wt-prog-oldsheets .thumb.on { border: 2px solid var(--ink); }
+.wt .wt-prog-oldsheets .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wt .wt-prog-saved { font-size: 12.5px; margin-left: auto; }
+.wt .wt-prog-saved.err { color: #a13a2e; }
+.wt .wt-prog-scenes { display: grid; gap: 12px; }
+.wt .wt-prog-scene { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: #fff; border: 1px solid var(--line); }
+.wt .wt-prog-scene.editing { border-color: var(--ink); }
+.wt .wt-prog-scene .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.wt .wt-prog-scene .row b { font-size: 15px; }
+.wt .wt-prog-scene .row button { font-size: 12.5px; color: var(--sea); background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.wt .wt-prog-scene p { margin: 0; font-size: 14.5px; line-height: 1.85; white-space: pre-wrap; color: var(--ink); }
+.wt .wt-prog-scene .row button[aria-label] { padding: 4px; border-radius: 8px; color: var(--sea); }
+.wt .wt-prog-scene .row button[aria-label]:hover { background: var(--water-light); }
+.wt .wt-prog-scene textarea.field { min-height: 220px; padding: 14px 16px; resize: vertical; line-height: 1.7; font-size: 14.5px; }
+/* 「내가 적은 것」(#548) — 접힌 카드. 적은 것은 보기만, 그림체·촘촘함은 고를 수 있다. */
+.wt .wt-prog-mine { padding: 18px 20px; gap: 0; }
+.wt .wt-prog-mine-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin-bottom: 16px; }
+.wt .wt-prog-mine-grid .kv { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.wt .wt-prog-mine-grid .kv.wide { grid-column: 1 / -1; }
+.wt .wt-prog-mine-grid .kv span { font-size: 12px; font-weight: 600; color: var(--sea); }
+.wt .wt-prog-mine-grid .kv p { margin: 0; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; color: var(--muted); }
+.wt .wt-prog-mine .wt-prog-pageshead { margin: 4px 0 8px; }
+/* 왼쪽 줄의 「내가 적은 것」 — 걸음 단추와 같은 틀, 번호 없이. */
+/* 「내가 적은 것」(#548) — 걸음 단추와 달리 눌러야 하는 것이 보여야 한다: 테두리 있는 카드 단추. */
+.wt .wt-prog-minetab {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--paper);
+  color: var(--ink); font-family: inherit; transition: border-color .15s, background .15s;
+}
+.wt .wt-prog-minetab:hover { border-color: var(--sea); background: var(--water-light); }
+.wt .wt-prog-minetab.viewing { border-color: var(--ink); border-width: 2px; padding: 11.5px 13.5px; }
+.wt .wt-prog-minetab .ic { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: var(--water-light); color: var(--sea); }
+.wt .wt-prog-minetab.viewing .ic { background: var(--ink); color: #fff; }
+.wt .wt-prog-minetab .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.wt .wt-prog-minetab .txt b { font-size: 14px; }
+.wt .wt-prog-minetab .txt .dim { font-size: 11.5px; font-weight: 400; line-height: 1.4; }
+.wt .wt-prog-minetab .go { color: var(--dim); transform: rotate(-90deg); flex-shrink: 0; }
+.wt .wt-prog-minetab.viewing .go { transform: rotate(0deg); }
+/* 장면 칸들(#548) — 라벨 붙은 문단. */
+.wt .wt-prog-parts { display: grid; gap: 10px; }
+.wt .wt-prog-parts .part { display: grid; gap: 2px; }
+.wt .wt-prog-parts .part span { font-size: 12px; font-weight: 600; color: var(--sea); }
+.wt .wt-prog-parts .part p { margin: 0; font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; color: var(--ink); }
+/* 조연 시트(#548). */
+.wt .wt-prog-free { font-size: 13px; font-weight: 600; margin-left: 6px; }
+.wt .wt-prog-castsheet { gap: 8px; }
+.wt .wt-prog-castsheet .btn-sm { align-self: flex-start; }
+.wt .wt-prog-sheet.small img { max-height: 320px; object-fit: contain; }
+.wt .wt-prog-sheetwait.small { min-height: 120px; font-size: 13px; }
+.wt .wt-prog-sheetwait { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 200px; border-radius: 14px; background: var(--water-light); color: var(--muted); font-size: 14px; }
+.wt .wt-prog-story .title { font-size: 16px; font-weight: 700; }
+.wt .wt-prog-story textarea.wt-prog-bodybox { height: 360px; }
+@media (max-width: 767px) {
+  .wt .wt-prog-saved { margin-left: 0; }
+  .wt .wt-prog-mine-grid { grid-template-columns: 1fr; }
+  .wt .wt-prog-head.split { flex-direction: column; }
+  .wt .wt-prog-story.wt-prog-storycheck textarea.wt-prog-bodybox { height: 280px; }
+}
+/* 장면 고치기 — 읽을 때와 같은 폭·글자·줄바꿈, 높이는 글만큼 */
+.wt .wt-prog-scene textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; margin: 0 -10px; width: calc(100% + 20px); resize: none; overflow: hidden;
+  font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; color: var(--ink); border-radius: 8px; }
+/* 인물 카드 고치기 */
+.wt .wt-prog-cast .row .tools button { color: var(--ink-2, inherit); padding: 4px; border-radius: 6px; }
+.wt .wt-prog-cast.editing { border-color: var(--ink); }
+.wt .wt-prog-cast textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; resize: none; overflow: hidden; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; border-radius: 8px; }
+.wt .wt-prog-cast .acts { display: flex; gap: 8px; justify-content: flex-end; }
+.wt .wt-prog-cast .intro.tie { margin-bottom: 12px; color: var(--ink); }
+/* 장면 확인 — 떠 있는 「이대로 웹툰 만들기」 */
+.wt .wt-prog-gofloat { position: fixed; right: 28px; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); z-index: 40; height: 52px; padding: 0 22px; font-size: 15px; box-shadow: 0 8px 24px rgba(15, 30, 45, .22); }
+@media (max-width: 767px) { .wt .wt-prog-gofloat { display: none; } }
+/* 장면·인물 카드의 고치기·다시 뽑기 단추 — 눌러 보이게 크게 */
+.wt .wt-prog-scene .row .tools { gap: 6px; }
+.wt .wt-prog-scene .row .tools button[aria-label], .wt .wt-prog-cast .row .tools button {
+  width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.wt .wt-prog-scene .row .tools button[aria-label]:hover, .wt .wt-prog-cast .row .tools button:hover { background: var(--bg-2, #f4f6f8); }
+.wt .wt-prog-scene .row .tools button[aria-label].on, .wt .wt-prog-scene .row .tools button[aria-label].on:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-prog-scene .row { align-items: center; }

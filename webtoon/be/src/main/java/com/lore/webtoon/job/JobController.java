@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -281,7 +282,7 @@ public class JobController {
                     "다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.")
     @PostMapping("/jobs/{id}/pick")
     public Map<String, Object> pick(@PathVariable String id, @RequestBody PickRequest req) {
-        jobs.pick(id, req.n(), req.body());
+        jobs.pick(id, req.n(), req.body(), req.title());
         return Map.of("ok", true);
     }
 
@@ -294,6 +295,73 @@ public class JobController {
      * 스프링이 만든 작업을 모르니 「그런 작업이 없습니다」를 냈다 — 시트
      * 주소가 어긋나 있던 것과 같은 종류의 구멍이다.
      */
+    @Operation(summary = "장면 초안 저장",
+            description = "장면 확인 자리(#548)에서 고친 장면 글을 적는다. 멈춤은 그대로. body 를 보내면 본문도 바꾼다.")
+    @PostMapping("/jobs/{id}/scenes")
+    public Map<String, Object> saveScenes(@PathVariable String id, @RequestBody ScenesRequest body) {
+        jobs.saveScenes(id, body.scenes(), body.body(), body.title());
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "인물 카드 고치기",
+            description = "own 길(#548) — who 가 hero 면 주인공, 숫자면 cast 의 그 번째(0부터). 보낸 칸만 덮는다.")
+    @PostMapping("/jobs/{id}/person")
+    public Map<String, Object> savePerson(@PathVariable String id, @RequestBody PersonRequest body) {
+        jobs.savePerson(id, body.who(), body.fields());
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "이대로 웹툰 만들기", description = "장면 확인을 끝내고 그림으로 간다(#548).")
+    @PostMapping("/jobs/{id}/scenes-continue")
+    public Map<String, Object> continueScenes(@PathVariable String id) {
+        jobs.continueScenes(id);
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "장면 다시 나누기",
+            description = "본문·인물·시트는 두고 장면만 다시 나눈다(#548). note 를 보내면 이번에만 반영한다. 고친 글은 사라진다.")
+    @PostMapping("/jobs/{id}/scenes-retry")
+    public Map<String, Object> retryScenes(@PathVariable String id,
+                                           @RequestBody(required = false) NoteRequest body) {
+        jobs.retryScenes(id, body == null ? null : body.note());
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "장면 하나만 다시 짓기",
+            description = "장면 확인 자리(#548)에서 n번 장면만 다시 짓는다. 로그인 필수. reasons 는 이유 코드 "
+                    + "(awkward·character·stranger·offstory·pacing), note 는 메모. 돌아가는 동안 그 장면은 busy 다.")
+    @PostMapping("/jobs/{id}/scenes/{n}/retry")
+    public Map<String, Object> retryScene(@PathVariable String id, @PathVariable int n,
+                                          @RequestBody(required = false) RetrySceneRequest body) {
+        jobs.retryScene(id, n, body == null ? null : body.reasons(), body == null ? null : body.note(),
+                CreditGate.currentUser());
+        return Map.of("ok", true);
+    }
+
+    public record RetrySceneRequest(List<String> reasons, String note) {
+    }
+
+    @Operation(summary = "옛 시트 판으로 되돌리기",
+            description = "다시 그리기 전의 시트 판(1~sheet_versions)을 지금 시트로 올린다(#548). 지금 것도 보관한 뒤 바꾼다.")
+    @PostMapping("/jobs/{id}/sheet-restore")
+    public Map<String, Object> restoreSheet(@PathVariable String id, @RequestBody SheetRestoreRequest body) {
+        jobs.restoreSheet(id, body.v());
+        return Map.of("ok", true);
+    }
+
+    public record SheetRestoreRequest(int v) {
+    }
+
+    @Operation(summary = "보관한 옛 시트 판 그림")
+    @GetMapping(value = "/jobs/{id}/sheet-v{v}.png", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> sheetVersionImage(@PathVariable String id, @PathVariable int v) throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.sheetVersion(runId, v);
+        return src == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(Files.readAllBytes(src));
+    }
+
     @Operation(summary = "이야기 후보 다시 짓기",
             description = "고르는 차례일 때만 된다. note 를 적어 보내면 이번에만 반영한다.")
     @PostMapping("/jobs/{id}/pick-retry")
@@ -360,6 +428,29 @@ public class JobController {
      * 없이 그림 자체를 준다. 아직 안 그린 것은 404 다 — 화면은 그 자리를
      * 비워 두고 다음에 다시 묻는다.
      */
+    @Operation(summary = "조연 시트 뽑기 (크레딧 1)",
+            description = "인물 단계가 세운 다른 인물을 글 생김새만으로 시트로 그린다(#548). 장면 확인·이야기 고르기·시트 확인 자리에서만. "
+                    + "그린 뒤로는 장 그림이 참조로 받아 그 인물이 장마다 같은 사람으로 나온다. 못 그리면 크레딧을 돌려준다.")
+    @PostMapping("/jobs/{id}/cast-sheet")
+    public Map<String, Object> castSheet(@PathVariable String id, @RequestBody CastSheetRequest body) {
+        Long me = CreditGate.currentUser();
+        String name = body == null || body.name() == null ? "" : body.name().trim();
+        String ref = id + ":cast-sheet:" + name;
+        jobs.castSheet(id, name, me, () -> credits.refund(me, ref));
+        credits.charge(me, 1, ref, "조연 시트 · " + name);
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "조연 시트 그림")
+    @GetMapping(value = "/jobs/{id}/cast-sheet/{name}.png", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> castSheetImage(@PathVariable String id, @PathVariable String name) throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.castSheet(runId, name);
+        return src == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(Files.readAllBytes(src));
+    }
+
     @Operation(summary = "만드는 중인 캐릭터 시트")
     @GetMapping(value = "/jobs/{id}/sheet.png", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> sheetImage(@PathVariable String id) throws IOException {
@@ -403,9 +494,20 @@ public class JobController {
                 .body(Map.of("error", e.getMessage()));
     }
 
-    public record PickRequest(int n, String body) {
+    /** 이야기 고르기. body·title 은 own 길의 이야기 확인(#548)에서 고친 본문·제목(선택). */
+    public record PickRequest(int n, String body, String title) {
+    }
+
+    /** 장면 초안 저장(#548). scenes 의 각 줄은 {n, text}. body·title 은 own 길의 본문·제목(선택). */
+    public record ScenesRequest(List<Map<String, Object>> scenes, String body, String title) {
     }
 
     public record CastRequest(int n) {
+    }
+
+    public record CastSheetRequest(String name) {
+    }
+
+    public record PersonRequest(String who, Map<String, Object> fields) {
     }
 }
