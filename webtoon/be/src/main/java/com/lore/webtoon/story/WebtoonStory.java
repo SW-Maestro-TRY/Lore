@@ -178,6 +178,11 @@ public class WebtoonStory {
         return plot;
     }
 
+    /** 장면 한 줄씩(#548) — own 길은 장면 확인을 마친 뒤에야 장면이 정해져서 나중에 적는다. */
+    public void updateScenes(String scenesJson) {
+        this.scenesJson = scenesJson;
+    }
+
     public String getScenesJson() {
         return scenesJson;
     }
