@@ -158,10 +158,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
     <div className="ed wt-ed">
       <header className="ed-top wt-ed-top">
         <div className="ed-strip wt-ed-strip">
-          <button type="button" className="ed-works-toggle chip wt-ed-workstoggle" id="worksToggle"
-                  aria-expanded="false" aria-controls="edWorks">
-            <IconMenu size={16} /> {t("작품")}
-          </button>
+          {/* 「작품」 단추는 뺐다 — 왼쪽 단에 작품 목록이 없어졌다(#548). 엔진은 단추가 없으면 그냥 지나간다. */}
 
           <div className="ed-title wt-ed-title">
             <b id="edTitle" hidden />
@@ -208,6 +205,34 @@ export default function Editor({ runId, go, authStatus = "loading" }:
             <b className="wt-ed-lefthead">{t("{n}번째 장", { n: active })}</b>
             {activeNote ? <p>{activeNote}</p> : <p className="dim">{t("이 장의 장면 설명이 없어요")}</p>}
           </div>
+          {/* 다시 그리기도 왼쪽에 — 고른 장의 장면 바로 아래(#548) */}
+          <div className="wt-ed-regen">
+            <b>{t("다시 그리기")}</b>
+            <button type="button" className="btn btn-p wt-ed-regenbtn" onClick={regenActive}>
+              {regenCost == null
+                ? t("이 컷 다시 그리기")
+                : t("이 컷 다시 그리기 · {n}크레딧", { n: regenCost })}
+            </button>
+            {/* 다시 그리기 칸 — 팝업이 아니라 단추 바로 아래에 열린다(#548). 항목(칩)은 엔진이 /config 에서
+                받아 채우고, 고른 항목과 적은 말이 둘 다 그리는 프롬프트에 들어간다. id 는 엔진이 쓴다. */}
+            <div className="wt-ed-regenask" id="regenAsk" hidden>
+              <b id="regenAskTitle">{t("다시 그리기")}</b>
+              <p className="ask-sub" id="regenAskSub" hidden />
+              <p className="ask-scene" id="regenAskScene" hidden />
+              <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
+              <div className="fb-tags" id="regenAskTags" />
+              <textarea id="regenAskText" rows={3} maxLength={500} className="field" aria-label={t("더 하고 싶은 말")}
+                        placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
+              <label className="check-line">
+                <input type="checkbox" id="regenAskTextless" />
+                <span>{t("말풍선 없이 그림만")}</span>
+              </label>
+              <div className="ask-actions">
+                <button type="button" className="btn btn-w btn-sm" id="regenAskCancel">{t("취소")}</button>
+                <button type="button" className="btn btn-p btn-sm" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
+              </div>
+            </div>
+          </div>
         </aside>
 
         <main className="ed-stage wt-ed-stage" id="stageCol">
@@ -241,33 +266,6 @@ export default function Editor({ runId, go, authStatus = "loading" }:
             <div className="dock-grid wt-ed-dockgrid" id="dockGrid" />
           </div>
 
-          <div className="wt-ed-regen">
-            <b>{t("다시 그리기")}</b>
-            <button type="button" className="btn btn-p wt-ed-regenbtn" onClick={regenActive}>
-              {regenCost == null
-                ? t("이 컷 다시 그리기")
-                : t("이 컷 다시 그리기 · {n}크레딧", { n: regenCost })}
-            </button>
-            {/* 다시 그리기 칸 — 팝업이 아니라 단추 바로 아래에 열린다(#548). 항목(칩)은 엔진이 /config 에서
-                받아 채우고, 고른 항목과 적은 말이 둘 다 그리는 프롬프트에 들어간다. id 는 엔진이 쓴다. */}
-            <div className="wt-ed-regenask" id="regenAsk" hidden>
-              <b id="regenAskTitle">{t("다시 그리기")}</b>
-              <p className="ask-sub" id="regenAskSub" hidden />
-              <p className="ask-scene" id="regenAskScene" hidden />
-              <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
-              <div className="fb-tags" id="regenAskTags" />
-              <textarea id="regenAskText" rows={3} maxLength={500} className="field" aria-label={t("더 하고 싶은 말")}
-                        placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
-              <label className="check-line">
-                <input type="checkbox" id="regenAskTextless" />
-                <span>{t("말풍선 없이 그림만")}</span>
-              </label>
-              <div className="ask-actions">
-                <button type="button" className="btn btn-w btn-sm" id="regenAskCancel">{t("취소")}</button>
-                <button type="button" className="btn btn-p btn-sm" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
-              </div>
-            </div>
-          </div>
         </aside>
       </div>
 
