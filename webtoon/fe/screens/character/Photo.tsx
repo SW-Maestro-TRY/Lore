@@ -143,7 +143,7 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
               </div>
             )}
 
-            <span className="dim" style={{ fontSize: 12.5 }}>{t("사진은 캐릭터를 그린 뒤 지워요. 남의 사진은 팬 창작 범위 안에서만.")}</span>
+            <span className="dim" style={{ fontSize: 12.5 }}>{t("사진은 캐릭터를 그린 뒤 바로 서버에서 지워요!")}</span>
           </div>
 
           <div className="wt-ch-photo-right">
