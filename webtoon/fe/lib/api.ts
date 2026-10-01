@@ -149,7 +149,17 @@ export function allowanceLine(a: Allowance | null): string {
 
 /* ---- 웹툰 만들기 ------------------------------------------------------------ */
 
-export type NhStatus = "queued" | "running" | "awaiting_sheet" | "awaiting_cast" | "awaiting_pick" | "done" | "error";
+export type NhStatus = "queued" | "running" | "awaiting_sheet" | "awaiting_cast" | "awaiting_pick" | "awaiting_scenes" | "done" | "error";
+
+/** 어느 길로 만드나(#548) — quick: 아이디어부터(AI 가 이야기를 지음) · own: 만들고 싶은 내용이 있음. */
+export type NhMode = "quick" | "own";
+
+/** 장면 초안 하나(#548). `text` 는 AI 가 나눈 장면, `user_text` 는 사람이 고친 글(안 고쳤으면 null). */
+export interface NhScene {
+  n: number;
+  text: string;
+  user_text: string | null;
+}
 
 /** 주인공 페르소나(#534) — 사용자가 적은 캐릭터로 정의한 것. 인물 확인·고르기 화면에서 확인용으로 보여 준다. */
 export interface NhPersona {
@@ -198,6 +208,12 @@ export interface NhJob {
   /** 인물 단계가 기다리는 것 — pick(한 명 고르기) · confirm(적은 인물 확인 후 진행). */
   cast_kind?: "pick" | "confirm" | null;
   persona?: NhPersona | null;
+  /** 어느 길로 만드는 작업인가(#548). 옛 작업은 비어 있고, 그때는 quick 으로 본다. */
+  mode?: NhMode | null;
+  /** 장면 확인 차례(awaiting_scenes)에만 — 장면 초안 목록(#548). */
+  scenes?: NhScene[] | null;
+  /** own 길에서 장면 확인 차례에만 — 적은 내용을 1화 본문으로 다듬은 것(#548). */
+  story?: { title: string; body: string } | null;
   pick: number | null;
   style: string;
   style_label: string;
@@ -236,6 +252,12 @@ export interface NhCreateRequest {
   agree_ip: boolean;
   checkpoints: boolean;
   character_id?: string;
+  /** 어느 길로 만드나(#548). own 이면 checkpoints 는 항상 true 로 보낸다. */
+  mode?: NhMode;
+  /** own 길의 「설정 더 적기」 — 인물·세계·지킬 것을 한 칸에 적은 자유 글. 없으면 빈 문자열. */
+  settings?: string;
+  /** own 길의 제목(선택). 비우면 AI 가 짓는다. */
+  title?: string;
 }
 
 export function createJob(form: NhCreateRequest): Promise<{ id: string; credit_balance?: number }> {
@@ -277,6 +299,23 @@ export function decideSheet(id: string, decision: "approve" | "retry", note = ""
 /** 인물 단계의 답 — 고른 상대 번호(1~), 적은 인물을 확인하고 진행이면 0. */
 export function pickCast(id: string, n: number) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/cast`, { n });
+}
+
+/* ---- 장면 확인(#548) — awaiting_scenes 에서만 된다 ---- */
+
+/** 고친 장면(과 own 길이면 이야기 제목·본문)을 저장만 한다. 진행하지 않는다 — 나갔다 와도 그대로. */
+export function saveScenes(id: string, body: { scenes: { n: number; text: string }[]; body?: string; title?: string }) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes`, body);
+}
+
+/** 「이대로 웹툰 만들기」 — 저장된 장면으로 다음 걸음(시트 확인 또는 그림)으로 간다. */
+export function continueScenes(id: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes-continue`);
+}
+
+/** 「장면 다시 나누기」 — 메모를 적어 보내면 이번에만 반영한다. 고친 글은 버려진다. */
+export function retryScenes(id: string, note = "") {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes-retry`, note ? { note } : {});
 }
 
 export function pickDirection(id: string, n: number, editedBody?: string) {

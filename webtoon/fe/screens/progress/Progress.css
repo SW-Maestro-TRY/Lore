@@ -272,3 +272,21 @@
 
 /* 「완성본 미리 보기」 (아트보드 Drawing) */
 .wt .wt-prog-peek { align-self: flex-start; margin-top: 10px; }
+
+/* ---- 장면 확인(#548) — 장면마다 자유 글 하나, 고치면 바로 저장 ---- */
+.wt .wt-prog-sceneacts .btn-p { height: 48px; font-size: 15px; padding: 0 22px; }
+.wt .wt-prog-saved { font-size: 12.5px; margin-left: auto; }
+.wt .wt-prog-saved.err { color: #a13a2e; }
+.wt .wt-prog-scenes { display: grid; gap: 12px; }
+.wt .wt-prog-scene { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: #fff; border: 1px solid var(--line); }
+.wt .wt-prog-scene.editing { border-color: var(--ink); }
+.wt .wt-prog-scene .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.wt .wt-prog-scene .row b { font-size: 15px; }
+.wt .wt-prog-scene .row button { font-size: 12.5px; color: var(--sea); background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.wt .wt-prog-scene p { margin: 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+.wt .wt-prog-scene textarea.field { min-height: 160px; padding: 14px 16px; resize: vertical; line-height: 1.7; font-size: 14.5px; }
+.wt .wt-prog-story .title { font-size: 16px; font-weight: 700; }
+.wt .wt-prog-story textarea.wt-prog-bodybox { height: 220px; }
+@media (max-width: 767px) {
+  .wt .wt-prog-saved { margin-left: 0; }
+}

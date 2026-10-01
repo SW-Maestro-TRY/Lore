@@ -57,6 +57,8 @@ interface Route {
   run?: string;
   id?: string;
   tab?: "settings" | "feedback";
+  /** 만들기 화면의 길(#548). own = 「만들고 싶은 내용이 있어요」. */
+  mode?: "own";
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -73,6 +75,7 @@ function routeOf(search: URLSearchParams): Route {
     id: search.get("id") || undefined,
     tab: search.get("tab") === "settings" ? ("settings" as const)
       : search.get("tab") === "feedback" ? ("feedback" as const) : undefined,
+    mode: search.get("mode") === "own" ? ("own" as const) : undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
@@ -207,9 +210,10 @@ function WebtoonScreens() {
   return (
     <div ref={rootRef} className="wt" onContextMenu={guardImage} onDragStart={guardImage}>
       {route.view === "landing" && <Landing go={go} />}
-      {route.view === "entry" && <Entry go={go} />}
+      {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
-        <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated} />
+        <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated}
+                mode={route.mode} />
       )}
       {route.view === "running" && route.job && (
         <Progress jobId={route.job} go={go} />

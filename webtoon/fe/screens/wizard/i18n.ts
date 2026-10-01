@@ -165,6 +165,23 @@ const dict: Dict = {
   "캐릭터 사진 올리기": { en: "Upload character photos", ja: "キャラクターの写真をアップロード", zh: "上传角色照片" },
   "{n} / {max}장 · 각도가 다양할수록 더 닮아요": { en: "{n} / {max} · more angles, closer likeness", ja: "{n} / {max}枚 · 角度が多いほど似ます", zh: "{n} / {max} 张 · 角度越多越像" },
   "최대 4장 · 각도가 다양할수록 더 닮아요": { en: "Up to 4 · more angles, closer likeness", ja: "最大4枚 · 角度が多いほど似ます", zh: "最多 4 张 · 角度越多越像" },
+  "내 내용": { en: "My content", ja: "自分の内容", zh: "我的内容" },
+  "어떤 내용을 만들고 싶나요?": { en: "What would you like to make?", ja: "どんな内容を作りたいですか？", zh: "想做什么样的内容？" },
+  "예: 비 오는 날 학교에서 우산을 건네는 이야기": { en: "e.g. Handing over an umbrella at school on a rainy day", ja: "例：雨の日に学校で傘を渡す話", zh: "例：雨天在学校递伞的故事" },
+  "짧은 아이디어부터 자세한 시나리오까지 자유롭게 적어 주세요.": { en: "Anything from a short idea to a full scenario — write it your way.", ja: "短いアイデアから詳しいシナリオまで、自由に書いてください。", zh: "从简短的灵感到详细的剧本，随意写就好。" },
+  "대사·장면·연출을 적으면 그대로 반영돼요.": { en: "Lines, scenes and staging you write are kept as is.", ja: "セリフ・場面・演出を書けば、そのまま反映されます。", zh: "写下的台词、场景和分镜会原样保留。" },
+  "제목": { en: "Title", ja: "タイトル", zh: "标题" },
+  "안 적으면 AI 가 짓습니다": { en: "Leave it blank and AI will name it", ja: "空欄なら AI が付けます", zh: "留空则由 AI 命名" },
+  "설정 더 적기": { en: "Add more settings", ja: "設定をもっと書く", zh: "补充设定" },
+  "인물(이름·관계·외형) · 세계(배경·규칙) · 지킬 것": { en: "Characters (names, relations, looks) · World (setting, rules) · Things to keep", ja: "人物（名前・関係・外見）・世界（背景・ルール）・守ること", zh: "人物（名字·关系·外貌）· 世界（背景·规则）· 要遵守的事" },
+  "어떻게 만들까요?": { en: "How should we make it?", ja: "どう作りますか？", zh: "要怎么制作？" },
+  "바로 만들기": { en: "Make it right away", ja: "すぐ作る", zh: "直接制作" },
+  "AI 에게 맡기고 빠르게 완성해요. 중간에 확인하지 않아요.": { en: "Leave it to AI and finish fast. No check-ins along the way.", ja: "AI に任せて素早く完成。途中の確認はありません。", zh: "交给 AI 快速完成，中途不确认。" },
+  "확인하고 만들기": { en: "Check as we go", ja: "確認しながら作る", zh: "边确认边制作" },
+  "AI 가 만든 이야기와 장면을 확인하고, 원하는 부분을 고친 뒤 만들어요. 나갔다 와도 이어서 할 수 있어요.": { en: "Check the story and scenes AI made, fix what you want, then make it. You can leave and come back.", ja: "AI が作ったストーリーと場面を確認し、直したいところを直してから作ります。離れても続きからできます。", zh: "确认 AI 写的故事和场景，修改想改的部分再制作。离开后也能继续。" },
+  "로그인하면 확인하고 만들 수 있어요": { en: "Sign in to check as you go", ja: "ログインすると確認しながら作れます", zh: "登录后可以边确认边制作" },
+  "로그인하면 내 내용으로 만들 수 있어요": { en: "Sign in to make it with your own content", ja: "ログインすると自分の内容で作れます", zh: "登录后即可用自己的内容创作" },
+  "· 내 내용": { en: "· My content", ja: "· 自分の内容", zh: "· 我的内容" },
 };
 
 registerDict(dict);
