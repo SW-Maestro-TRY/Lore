@@ -1349,6 +1349,16 @@ public class JobRunner {
      *
      * 못 남겨도 만들기는 안 막는다 — 딱지가 안 뜰 뿐이다.
      */
+    /** 그림체·화질을 바꿨을 때 작품 폴더의 기록도 맞춘다(#548). */
+    public void rewriteOptions(String runId, String style, String quality) {
+        if (style != null && !style.isBlank()) {
+            writeStyle(runId, style);
+        }
+        if (quality != null && !quality.isBlank()) {
+            writeQuality(runId, quality);
+        }
+    }
+
     private void writeStyle(String runId, String style) {
         try {
             Files.writeString(runsDir.resolve(runId).resolve("style.txt"), style);
