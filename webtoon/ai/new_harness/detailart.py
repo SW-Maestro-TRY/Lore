@@ -359,16 +359,28 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
     else:
         role = "중간 장면 — 앞 장면에서 자연스럽게 이어받아 진행한다."
 
+    # 사용자가 고친 글(#548)이 있으면 첫 줄이 이 장의 한 줄 요약이다 — AI 가 적은
+    # 「벌어지는 일」과 어긋나면 안 되므로 그쪽을 쓰지 않는다.
+    headline = ((scene.get("user_text") or "").strip().splitlines() or [""])[0] \
+        if (scene.get("user_text") or "").strip() else scene.get("what", "")
     lines = [f"[이 페이지의 역할] {role}", "",
              (f"위 목록의 {scene_no}번 장면 자리를 그린다: "
               if scene_context() == "all" else "이 장면을 그린다: ")
-             + f"\"{scene.get('what', '')}\"", ""]
-    if scene.get("where"):
+             + f"\"{headline}\"", ""]
+    # 사용자가 장면 글을 직접 고쳤으면(#548, scenes.json 의 user_text) 그 글이
+    # 「장면 내용」이다. 적힌 것은 그대로 따르고 적히지 않은 것은 그림 모델이
+    # 정한다 — 컷 수·카메라·대사를 억지로 다 적게 하지 않는 이유다. user_text 가
+    # 없는 장면은 아래 예전 길 그대로다.
+    user_text = (scene.get("user_text") or "").strip()
+    if user_text:
+        lines += ["[장면 내용 — 사용자가 적었다. 적힌 것은 그대로 따르고, 적히지 않은 것은 네가 정한다]",
+                  user_text, ""]
+    if scene.get("where") and not user_text:
         lines += [f"[장소와 상황] {scene['where']}", ""]
-    if scene.get("acting"):
+    if scene.get("acting") and not user_text:
         lines += [f"[인물의 행동과 표정] {scene['acting']}", ""]
     look = (scene.get("look") or "").strip()
-    if look and look not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
+    if look and not user_text and look not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
         # 시트와 달라진 겉모습(#147). 시트는 매 장 다시 붙어서, 여기 안 적으면
         # 젖은 머리·벗은 외투·든 물건이 다음 장에서 시트로 되돌아간다. 장면
         # 데이터 바로 옆에 둔다 — 멀리 있는 지시는 안 지켜진다(위 주석과 같다).
