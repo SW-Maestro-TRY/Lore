@@ -42,7 +42,6 @@ export async function startJob(form: WizardForm, authenticated: boolean, lang: L
     mode: form.create,
     settings: form.create === "own" ? form.settings.trim() : "",
     title: form.create === "own" ? form.title.trim() : "",
-    episode: form.create === "own" ? form.episode.trim() : "",
   });
   return got.id;
 }

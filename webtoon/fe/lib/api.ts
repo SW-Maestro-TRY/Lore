@@ -203,7 +203,6 @@ export interface NhJobInput {
   description: string;
   genre: string;
   story: string;
-  episode: string;
   settings: string;
   title: string;
   style: string;
@@ -277,8 +276,6 @@ export interface NhCreateRequest {
   settings?: string;
   /** own 길의 제목(선택). 비우면 AI 가 짓는다. */
   title?: string;
-  /** own 길의 「1화에서 보여줄 것」(선택). 비우면 이야기 앞부분부터 1화로 만든다. */
-  episode?: string;
 }
 
 export function createJob(form: NhCreateRequest): Promise<{ id: string; credit_balance?: number }> {
