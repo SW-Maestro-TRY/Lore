@@ -366,7 +366,7 @@ def scene_text(scene: dict) -> str:
 
 
 def save_edits(run_dir: Path, edits: dict) -> None:
-    """사용자가 고친 장면 글(과 본문)을 적는다. `{scenes:[{n,text}], body?}`.
+    """사용자가 고친 장면 글(과 본문·제목)을 적는다. `{scenes:[{n,text}], body?, title?}`.
 
     고친 글은 `user_text` 로 남고, 그림 단계가 그것을 「장면 내용」으로 쓴다
     (`detailart.build_continue_prompt`). 안 적힌 것은 그대로 AI 가 정한다. 글의 마지막
@@ -400,13 +400,22 @@ def save_edits(run_dir: Path, edits: dict) -> None:
         changed += 1
     R.write_json(path, parsed)
     body = str(edits.get("body") or "").strip()
-    if body:
+    title = str(edits.get("title") or "").strip()
+    if body or title:
         dpath = run_dir / "directions.json"
         directions = R.read_json(dpath) if dpath.exists() else []
         if directions:
-            directions[0]["body"] = body
+            if body:
+                directions[0]["body"] = body
+            if title:
+                directions[0]["title"] = title
+                ppath = run_dir / "pick.json"
+                pick = R.read_json(ppath) if ppath.exists() else {"n": 1, "genre": directions[0].get("genre", "")}
+                pick["title"] = title
+                R.write_json(ppath, pick)
             R.write_json(dpath, directions)
-    log(f"[저장] 장면 {changed}개 반영 -> {path}" + (" · 본문도 바꿨습니다" if body else ""))
+    log(f"[저장] 장면 {changed}개 반영 -> {path}"
+        + (" · 본문도 바꿨습니다" if body else "") + (" · 제목도 바꿨습니다" if title else ""))
 
 
 def rescenes(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: str = "ko") -> None:

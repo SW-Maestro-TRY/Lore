@@ -198,7 +198,7 @@ public class JobStore {
     /** 이야기 후보가 이미 파일로 나와 있을 때인가. */
     private static boolean storyIsWritten(WebtoonJob job) {
         return switch (job.getStatus()) {
-            case AWAITING_PICK, AWAITING_SHEET, DONE -> true;
+            case AWAITING_PICK, AWAITING_SHEET, AWAITING_SCENES, DONE -> true;
             case AWAITING_CAST -> false;          // 아직 인물만 있다(#534)
             case RUNNING -> job.getStage() != JobStage.STORY;
             case QUEUED, ERROR -> false;

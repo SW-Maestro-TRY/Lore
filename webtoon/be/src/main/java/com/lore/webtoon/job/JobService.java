@@ -124,8 +124,22 @@ public class JobService {
         /* 글은 만들기 전에 거른다(#80). 파이썬까지 가서 모델이 거절하면 돈은 이미 나갔고
            사람은 "만들기가 안 된다" 로만 안다. 사진은 아직 안 본다(safety.md). */
         safety.checkText("webtoon-create", form.name(), form.character(), form.genre(), form.story(),
-                form.photoNote(),
+                form.photoNote(), form.settings(), form.title(),
                 form.fields() == null ? null : String.join("\n", form.fields().values()));
+        /* 어느 길인가(#548). own(만들고 싶은 내용이 있어요)은 적은 내용이 있어야 하고
+           확인 자리가 항상 있다. 확인하며 가는 길(own, 또는 quick 의 확인하고 만들기)은
+           며칠 뒤에 돌아와 이어서 할 수 있어야 해서 로그인한 사람만 받는다 — 게스트는
+           브라우저가 바뀌면 작업을 못 찾는다. */
+        boolean own = "own".equalsIgnoreCase(form.mode());
+        boolean checkpoints = own || form.checkpoints() == null || form.checkpoints();
+        if (own && !notBlank(form.story())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "만들고 싶은 내용을 적어 주세요 — 짧은 아이디어 한 줄도 괜찮아요.");
+        }
+        if (checkpoints && userId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "확인하며 만들기는 로그인한 뒤에 할 수 있어요. 나중에 돌아와 이어서 하려면 계정이 필요해요.");
+        }
         boolean known = notBlank(form.name()) || notBlank(form.character())
                 || (form.fields() != null && form.fields().values().stream().anyMatch(this::notBlank))
                 || (form.photosData() != null && !form.photosData().isEmpty());
@@ -173,7 +187,7 @@ public class JobService {
         String language = WebtoonLanguage.normalize(form.language());
         WebtoonJob job = jobs.save(WebtoonJob.queued(
                 publicId, userId, browserUid, guestKey, style, quality, language,
-                form.checkpoints() == null || form.checkpoints(),
+                checkpoints, own ? "own" : "quick",
                 inputOf(form), Instant.now()));
 
         /* **장부에도 적는다.**
@@ -217,7 +231,8 @@ public class JobService {
     @Transactional(readOnly = true)
     public List<JobView> activeOf(Long userId, Collection<String> uids) {
         return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
-                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST)).stream()
+                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST,
+                        JobStatus.AWAITING_SCENES)).stream()
                 .map(job -> view(job.getPublicId()))
                 .toList();
     }
@@ -234,9 +249,14 @@ public class JobService {
         JobQueue.Spot spot = queue.spotOf(job);
         return JobView.of(job, now,
                 store.directionsOf(job.getId()),
-                job.getStatus() == JobStatus.AWAITING_CAST ? runner.castOf(job.getRunId()) : null,
+                job.getStatus() == JobStatus.AWAITING_CAST || job.getStatus() == JobStatus.AWAITING_SCENES
+                        ? runner.castOf(job.getRunId()) : null,
                 job.getStatus() == JobStatus.AWAITING_CAST ? runner.castKind(job.getRunId()) : null,
-                job.getStatus() == JobStatus.AWAITING_CAST ? runner.personaOf(job.getRunId()) : null,
+                job.getStatus() == JobStatus.AWAITING_CAST || job.getStatus() == JobStatus.AWAITING_SCENES
+                        ? runner.personaOf(job.getRunId()) : null,
+                job.getStatus() == JobStatus.AWAITING_SCENES ? runner.scenesOf(job.getRunId()) : null,
+                job.getStatus() == JobStatus.AWAITING_SCENES && job.isOwn() ? runner.storyOf(job.getRunId()) : null,
+                runner.sheetReady(job.getRunId()),
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
                 spot,
@@ -372,11 +392,57 @@ public class JobService {
      */
     public void retrySheet(String publicId, String note) {
         WebtoonJob job = store.byPublicId(publicId);
-        if (job.getStatus() != JobStatus.AWAITING_SHEET) {
+        JobStatus at = job.getStatus();
+        /* 장면 확인 자리(#548)에서도 시트를 다시 만들 수 있다. 끝나면 있던 자리로 돌아온다. */
+        if (at != JobStatus.AWAITING_SHEET && at != JobStatus.AWAITING_SCENES) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 확인할 차례가 아닙니다");
         }
         clearSheet(job.getRunId());
-        runner.redrawSheet(job.getId(), note == null ? "" : note.trim());
+        runner.redrawSheet(job.getId(), note == null ? "" : note.trim(), at);
+    }
+
+    /* ---- 장면 초안(#548) ---- */
+
+    /** 고친 장면 글(과 본문)을 적는다. 멈춤은 그대로다. */
+    public void saveScenes(String publicId, List<Map<String, Object>> scenes, String body, String title) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        if (scenes != null) {
+            for (Map<String, Object> one : scenes) {
+                Object text = one.get("text");
+                safety.checkText("webtoon-scenes", text == null ? null : text.toString());
+            }
+        }
+        safety.checkText("webtoon-scenes", body, title);
+        /* 본문·제목은 own 길의 것이다 — quick 길에서는 고른 후보가 넷 중 하나라 바꾸지 않는다. */
+        boolean own = job.isOwn();
+        runner.saveScenes(job.getId(), scenes == null ? List.of() : scenes,
+                own ? body : null, own ? title : null);
+        if (own && (notBlank(body) || notBlank(title))) {
+            stories.replace(job.getRunId(), runner.directionsOf(job.getRunId()));
+            stories.choose(job.getRunId(), 1);
+        }
+    }
+
+    /** 「이대로 웹툰 만들기」 — 장면 확인을 끝내고 그림으로. */
+    public void continueScenes(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        runner.resumeAfterScenes(job.getId());
+    }
+
+    /** 「장면 다시 나누기」 — 본문·인물·시트는 두고 장면만 다시. 고친 글은 사라진다. */
+    public void retryScenes(String publicId, String note) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        safety.checkText("webtoon-scenes", note);
+        runner.rescenes(job.getId(), note == null ? "" : note.trim());
     }
 
     /** 시트를 다시 그리려면 먼저 지운다. 못 지운 것이 있어도 계속 간다. */
@@ -580,6 +646,10 @@ public class JobService {
         doc.put("genre", blank(form.genre()));
         doc.put("world", Map.of("preset", picked == null ? "" : blank(picked.getWorld()), "text", ""));
         doc.put("story", blank(form.story()));
+        // 「만들고 싶은 내용이 있어요」(#548) — 더 적은 설정과 제목. 하네스가 own 길에서 읽는다.
+        doc.put("settings", blank(form.settings()));
+        doc.put("title", blank(form.title()));
+        doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
         if (picked != null) {
             doc.put("card", cardOf(picked));
         }
@@ -631,6 +701,9 @@ public class JobService {
         doc.put("photo_note", blank(form.photoNote()));
         doc.put("genre", blank(form.genre()));
         doc.put("story", blank(form.story()));
+        doc.put("settings", blank(form.settings()));
+        doc.put("title", blank(form.title()));
+        doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
         doc.put("style", blank(form.style()));
         doc.put("fields", form.fields() == null ? Map.of() : form.fields());
         doc.put("photos", form.photosData() == null ? 0 : form.photosData().size());
@@ -699,7 +772,12 @@ public class JobService {
                                 /* 어느 언어로 만들까 — ko · en · ja. 안 보내면 기본(ko)이다.
                                    webtoon/fe 가 지금 화면 언어(lib/i18n.tsx 의 lang)를 그대로
                                    보낸다. */
-                                String language) {
+                                String language,
+                                /* 어느 길인가(#548): quick(기본) | own(만들고 싶은 내용이 있어요). */
+                                String mode,
+                                /* own 길의 「설정 더 적기」와 제목. 없을 수 있다. */
+                                String settings,
+                                String title) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;
