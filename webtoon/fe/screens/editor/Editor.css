@@ -309,7 +309,7 @@
   .wt .wt-ed-chips { order: 2; flex-basis: 100%; justify-content: flex-start; }
   .wt .wt-ed-body { flex-direction: column; }
   .wt .wt-ed-left { width: auto; position: static; max-height: none; height: auto; border-right: 0; border-bottom: 1px solid rgba(15, 51, 63, 0.08); }
-  .wt .wt-ed-body.works-off .wt-ed-left { display: none; }
+  /* 왼쪽 단은 페이지 · 장면 · 다시 그리기라 좁은 화면에서도 접지 않는다(#548) */
   .wt .wt-ed-pages { margin-top: 8px; }
   .wt .wt-ed-pagegrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .wt .wt-ed-stage { padding: 16px; }
@@ -367,3 +367,6 @@
 .wt .wt-ed-regenask textarea.field { min-height: 84px; resize: vertical; font-size: 13.5px; line-height: 1.55; padding: 10px 12px; }
 .wt .wt-ed-regenask .check-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .wt .wt-ed-regenask .ask-actions { display: flex; gap: 6px; justify-content: flex-end; }
+/* 왼쪽 단의 다시 그리기(#548) — 제목 줄과 같은 들여쓰기 */
+.wt .wt-ed-left .wt-ed-regen { padding: 10px 10px 4px; margin-top: 6px; }
+.wt .wt-ed-left .wt-ed-sceneinfo p { max-height: 220px; overflow: auto; }
