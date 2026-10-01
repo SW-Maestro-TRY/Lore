@@ -11,6 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE}/`, lastModified: now, changeFrequency: "weekly", priority: 1 },
     { url: `${BASE}/zzal`, lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: `${BASE}/webtoon`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
-    { url: `${BASE}/piece-maker`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
+    // staging·운영 라우트는 아직 /trailer. piece-maker 승격 뒤 /trailer→308 이동이므로 그때까지 이 주소를 알린다
+    { url: `${BASE}/trailer`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
   ];
 }
