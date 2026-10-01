@@ -14,6 +14,7 @@ scenes[].summary(원본 장면 문장). 그대로 넘기면 모델이 메모를 
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -260,8 +261,25 @@ def cast_lines(cast, page=None, skip=()) -> list[str]:
 
 DEFAULT_STYLE = "webtoon_lock_bg"
 
+# 흑백으로만 그리는 그림체. 그림체 문구만 흑백이라고 해도 소용없다 — 시트가
+# 컬러 칩과 "이 색을 정확히 써라" 를 그리고, 장은 그 시트를 1순위로 따른다.
+# 그래서 시트가 여기를 보고 색을 명암으로 바꿔 그린다(sheet.build_prompt).
+MONOCHROME_STYLES = frozenset({"shoujo"})
 
-def load_negative() -> str:
+
+def is_monochrome(name: str = "") -> bool:
+    return ((name or "").strip() or DEFAULT_STYLE) in MONOCHROME_STYLES
+
+
+# 공통 네거티브 중 이 그림체의 핵심과 정면으로 부딪치는 항목. 순정은 눈의
+# 반짝임과 먹 칠·흰 종이의 강한 대비가 그림체 자체라, 공통 금지가 이긴다
+# (2026-10-01 첫 실측에서 눈이 평범하게 나온 원인 중 하나).
+NEGATIVE_EXEMPT = {
+    "shoujo": frozenset({"excessive eye highlights", "high contrast"}),
+}
+
+
+def load_negative(style: str = "") -> str:
     """모든 그림체에 공통으로 붙는 네거티브 프롬프트. prompt/negative_prompt 에 있다.
 
     **그림체 파일마다 따로 넣지 않는다.** 사실적 렌더링·뻣뻣한 손발·워터마크
@@ -272,7 +290,16 @@ def load_negative() -> str:
     path = PROMPT_DIR / "negative_prompt"
     if not path.exists():
         return ""
-    return path.read_text(encoding="utf-8").strip()
+    text = path.read_text(encoding="utf-8").strip()
+    drop = NEGATIVE_EXEMPT.get(style)
+    if not drop:
+        return text
+    lines = []
+    for ln in text.splitlines():
+        kept = [t for t in ln.split(",") if t.strip() not in drop]
+        if any(t.strip() for t in kept):
+            lines.append(",".join(kept).strip())
+    return "\n".join(lines)
 
 
 def load_style(name: str = "") -> str:
@@ -294,7 +321,7 @@ def load_style(name: str = "") -> str:
     text = path.read_text(encoding="utf-8").strip()
     if not text:
         raise SystemExit(f"그림체가 비어 있습니다: {path}")
-    negative = load_negative()
+    negative = load_negative(name)
     if negative:
         text += "\n\n## 하지 마라 (공통, 모든 그림체)\n" + negative
     return "\n".join("  " + ln if ln.strip() else ln for ln in text.splitlines())
@@ -317,9 +344,56 @@ def load_fixed_block(provider: str = "", style: str = "") -> str:
         if cand.exists():
             text = cand.read_text(encoding="utf-8").strip()
             if text:
-                return text.replace("{style}", load_style(style))
+                return apply_style_sections(text, style).replace("{style}", load_style(style))
             raise SystemExit(f"프롬프트가 비어 있습니다: {cand}")
     raise SystemExit(f"프롬프트가 없습니다: {PROMPT_DIR / 'image_prompt'}")
+
+
+# 그림체가 공통 절을 자기 문구로 바꿀 수 있는 자리. 키는 prompt/style_sections/<그림체>/
+# 안의 파일 이름, 값은 바꿀 절 제목이 (번호를 빼고) 시작하는 글자다 —
+# "## 11. 배경 — …"(장) · "## 배경 — …"(image_prompt) · "## 4. 배경"(표지) 이 다 걸린다.
+STYLE_SECTION_HEADS = {
+    "background": "배경",
+    "lighting": "조명",
+}
+_SECTION_TITLE = re.compile(r"^## (?:\d+\.\s*)?(.*)")
+
+
+def _section_title(line: str) -> str:
+    m = _SECTION_TITLE.match(line)
+    return m.group(1) if m else ""
+
+
+def apply_style_sections(text: str, style: str = "") -> str:
+    """그림체 전용 절이 있으면(prompt/style_sections/<그림체>/) 공통 절을 그것으로 바꾼다.
+
+    공통 배경·조명 절은 "그림체와 상관없이" 넓은 벽면·그림자 덩어리·색면·
+    뚜렷한 빛으로 장소를 채우라고 한다. 대부분의 그림체에는 맞지만, 순정
+    흑백은 흰 종이에 선으로 그리는 것이 그림체라서 그림체 문구에 "배경은 흰
+    종이" 를 적어도 이 절이 이겼다(2026-10-01 실측). 장 그림 프롬프트가 둘
+    (image_prompt.* · detail_image_prompt)이라 둘 다 여기를 거친다. 폴더가
+    없는 그림체는 한 글자도 안 바뀐다.
+    """
+    folder = PROMPT_DIR / "style_sections" / ((style or "").strip() or DEFAULT_STYLE)
+    if not folder.is_dir():
+        return text
+    lines = text.splitlines(keepends=True)
+    for key, needle in STYLE_SECTION_HEADS.items():
+        path = folder / key
+        if not path.exists():
+            continue
+        start = next((i for i, ln in enumerate(lines)
+                      if _section_title(ln).startswith(needle)), None)
+        if start is None:                    # 이 프롬프트엔 그 절이 없다 (표지엔 조명 절이 없음)
+            continue
+        end = next((j for j in range(start + 1, len(lines))
+                    if lines[j].startswith("## ")), len(lines))
+        head = lines[start].rstrip("\n").replace("그림체와 상관없이 그대로다", "이 그림체에서는")
+        body = path.read_text(encoding="utf-8").strip()
+        # 넣은 문구도 줄 단위로 다시 쪼갠다 — 한 덩어리로 두면 다음 절을 찾을 때
+        # 그 덩어리 첫 줄(## 제목)과 본문 글자가 한 줄처럼 읽혀 엉뚱한 데 걸린다.
+        lines[start:end] = (head + "\n\n" + body + "\n\n").splitlines(keepends=True)
+    return "".join(lines)
 
 
 def place_block(page) -> str:
