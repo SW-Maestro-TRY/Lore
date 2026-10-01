@@ -7,6 +7,7 @@ import com.lore.webtoon.work.WorkLedger;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
@@ -124,7 +125,7 @@ public class JobService {
         /* 글은 만들기 전에 거른다(#80). 파이썬까지 가서 모델이 거절하면 돈은 이미 나갔고
            사람은 "만들기가 안 된다" 로만 안다. 사진은 아직 안 본다(safety.md). */
         safety.checkText("webtoon-create", form.name(), form.character(), form.genre(), form.story(),
-                form.photoNote(), form.settings(), form.title(),
+                form.photoNote(), form.settings(), form.title(), form.episode(),
                 form.fields() == null ? null : String.join("\n", form.fields().values()));
         /* 어느 길인가(#548). own(만들고 싶은 내용이 있어요)은 적은 내용이 있어야 하고
            확인 자리가 항상 있다. 확인하며 가는 길(own, 또는 quick 의 확인하고 만들기)은
@@ -257,6 +258,7 @@ public class JobService {
                 job.getStatus() == JobStatus.AWAITING_SCENES ? runner.scenesOf(job.getRunId()) : null,
                 job.getStatus() == JobStatus.AWAITING_SCENES && job.isOwn() ? runner.storyOf(job.getRunId()) : null,
                 runner.sheetReady(job.getRunId()),
+                job.getStatus() == JobStatus.AWAITING_SCENES ? inputOf(job) : null,
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
                 spot,
@@ -423,6 +425,96 @@ public class JobService {
         if (own && (notBlank(body) || notBlank(title))) {
             stories.replace(job.getRunId(), runner.directionsOf(job.getRunId()));
             stories.choose(job.getRunId(), 1);
+        }
+    }
+
+    /**
+     * 내가 적은 것(#548) — 장면 확인 화면이 보여 준다. 만들 때 남긴 {@code input_json}
+     * 에서 글만 꺼내고(사진은 장 수만), 그림체·화질·언어는 작업 줄에서.
+     */
+    private Map<String, Object> inputOf(WebtoonJob job) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, Object> saved = Map.of();
+        try {
+            if (notBlank(job.getInputJson())) {
+                saved = mapper.readValue(job.getInputJson(), new TypeReference<Map<String, Object>>() { });
+            }
+        } catch (IOException e) {
+            log.warn("만들 때 적은 것을 못 읽었습니다 (job={})", job.getPublicId(), e);
+        }
+        out.put("name", str(saved.get("name")));
+        out.put("description", str(saved.get("character")));
+        out.put("genre", str(saved.get("genre")));
+        out.put("story", str(saved.get("story")));
+        out.put("episode", str(saved.get("episode")));
+        out.put("settings", str(saved.get("settings")));
+        out.put("title", str(saved.get("title")));
+        Object photos = saved.get("photos");
+        out.put("photos", photos instanceof Number n ? n.intValue() : 0);
+        out.put("style", job.getStyle());
+        out.put("quality", WebtoonQuality.normalize(job.getQuality()));
+        out.put("language", WebtoonLanguage.normalize(job.getLanguage()));
+        return out;
+    }
+
+    private static String str(Object v) {
+        return v == null ? "" : v.toString();
+    }
+
+    /**
+     * 그림체·화질 바꾸기(#548) — 장면 확인 자리에서, 그림이 시작되기 전에만.
+     *
+     * 그림체가 바뀌면 시트를 그 그림체로 다시 그린다 — 글 사양({@code sheet_spec.json})은
+     * 그대로 두고 그림({@code sheet.png})만 지워서, 하네스가 사양을 재사용해 그림만 다시
+     * 뽑게 한다. 그동안 {@code sheet_ready} 는 false 다.
+     *
+     * 화질은 만들 때 크레딧을 그 값으로 받았으므로, <b>크레딧이 같은 화질로만</b> 바꿀 수
+     * 있다. 다른 크레딧으로 바꾸려면 차액을 받거나 돌려주는 자리가 필요한데 아직 없다.
+     */
+    public void updateOptions(String publicId, String style, String quality) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이미 그리기 시작해서 바꿀 수 없습니다");
+        }
+        String newStyle = null;
+        if (notBlank(style)) {
+            String asked = style.trim();
+            newStyle = STYLE.containsValue(asked) ? asked : STYLE.get(asked);
+            if (newStyle == null) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 그림체가 없습니다");
+            }
+            if (newStyle.equals(job.getStyle())) {
+                newStyle = null;                      // 바뀐 게 없다
+            }
+        }
+        String newQuality = null;
+        if (notBlank(quality)) {
+            String asked = WebtoonQuality.normalize(quality);
+            String now = WebtoonQuality.normalize(job.getQuality());
+            if (!asked.equals(now)) {
+                if (WebtoonQuality.creditsOf(asked) != WebtoonQuality.creditsOf(now)) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT,
+                            "크레딧이 다른 화질로는 바꿀 수 없습니다 — 만들 때 받은 크레딧 그대로인 화질만 됩니다");
+                }
+                newQuality = asked;
+            }
+        }
+        if (newStyle == null && newQuality == null) {
+            return;                                   // 아무것도 안 바뀌었다
+        }
+        store.options(job.getId(), newStyle, newQuality);
+        runner.rewriteOptions(job.getRunId(), newStyle, newQuality);
+        if (newStyle != null) {
+            // 사양은 두고 그림만 지운다 — 하네스가 사양을 재사용해 새 그림체로 그린다.
+            Path dir = runner.runDir(job.getRunId());
+            for (String name : new String[]{"sheet.png", "sheet_prompt.txt"}) {
+                try {
+                    Files.deleteIfExists(dir.resolve(name));
+                } catch (IOException e) {             // noqa: 하나 못 지워도 나머지를 지운다
+                    log.warn("시트 그림을 못 지웠습니다 ({})", name, e);
+                }
+            }
+            runner.redrawSheet(job.getId(), "", JobStatus.AWAITING_SCENES);
         }
     }
 
@@ -649,6 +741,7 @@ public class JobService {
         // 「만들고 싶은 내용이 있어요」(#548) — 더 적은 설정과 제목. 하네스가 own 길에서 읽는다.
         doc.put("settings", blank(form.settings()));
         doc.put("title", blank(form.title()));
+        doc.put("episode", blank(form.episode()));
         doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
         if (picked != null) {
             doc.put("card", cardOf(picked));
@@ -703,6 +796,7 @@ public class JobService {
         doc.put("story", blank(form.story()));
         doc.put("settings", blank(form.settings()));
         doc.put("title", blank(form.title()));
+        doc.put("episode", blank(form.episode()));
         doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
         doc.put("style", blank(form.style()));
         doc.put("fields", form.fields() == null ? Map.of() : form.fields());
@@ -777,7 +871,9 @@ public class JobService {
                                 String mode,
                                 /* own 길의 「설정 더 적기」와 제목. 없을 수 있다. */
                                 String settings,
-                                String title) {
+                                String title,
+                                /* own 길의 「1화에서 보여줄 것」 — 적은 내용 가운데 이번 화에 넣을 부분. 없을 수 있다. */
+                                String episode) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;
