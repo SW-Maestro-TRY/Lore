@@ -80,6 +80,12 @@ public class CheckpointTimeouts {
     }
 
     /** 10초마다 본다 — 끄면 아무것도 안 한다(설정 조회 한 번뿐, 부담 없다). */
+    /**
+     * <b>2026-10-01 결정(#548): 시간으로 진행을 정하지 않는다.</b> 기본값은 꺼짐이고
+     * 그대로 둔다. 장면 초안 자리({@code AWAITING_SCENES})는 이 스윕이 켜져 있어도
+     * 절대 안 건드린다 — 「이대로 만들기」를 누를 때까지 기다리는 것이 그 자리의 뜻이다.
+     * 설정 플래그는 비상용으로만 남겨 둔다.
+     */
     @Scheduled(fixedDelay = 10_000)
     public void sweep() {
         if (!enabled) {
