@@ -168,7 +168,9 @@ function PersonCard({ title, person, keys, hero, onSave }: {
         </div>
       ) : (
         <>
-          {keys.filter(([k]) => k !== "name" && k !== "role" && k !== "line" && val(k)).map(([k]) => (
+          {/* 읽을 때는 관계 → (한 줄 띄고) 생김새 → 대사. 말투는 고칠 때만 보인다. */}
+          {val("tie") && <span className="muted intro tie">{val("tie")}</span>}
+          {(hero ? ["look", "personality"] : ["look", "gap"]).filter((k) => val(k)).map((k) => (
             <span key={k} className="muted intro">{val(k)}</span>
           ))}
           {val("line") && <q className="line">{val("line")}</q>}
