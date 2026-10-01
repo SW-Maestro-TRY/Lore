@@ -9,15 +9,16 @@
 어느 길이 어느 규칙을 타는지 헷갈려서다. 공유하는 것은 바닥뿐이다 — 모델 호출,
 파일 쓰기, 응답 파서(`parse_directions`·`parse_scenes`), 시트 그리기 배관.
 
-한 호출(`run.py --own`)로 아래를 한다.
+호출은 셋이다. 사이사이에 사용자가 보고 멈춘다.
 
-    PERSONA ∥ CAST ∥ STORY ∥ SHEET(사양 + 그림)     ← 동시에
-                     ↓ (CAST·STORY 가 끝나면)
-                  SCENES
-    → persona.json · cast.json · directions.json(후보 1개) · pick.json(1번)
-      · scenes.json · sheet.png  (기존과 같은 이름 — 자바와 그림 단계가 그대로 읽는다)
+    --own          PERSONA ∥ CAST ∥ STORY ∥ SHEET(사양 + 그림)     ← 동시에
+                   → persona.json · cast.json · directions.json(후보 1개) · pick.json(1번) · sheet.png
+                   ⏸ 이야기 확인 — 본문·제목을 고치거나 --own-restory 로 다시
+    --own-scenes   본문 → scenes.json
+                   ⏸ 장면 확인 — 글을 고치거나(--own-save) --own-rescenes · --rescene N
+    (그림은 기존 코드)
 
-결과 파일 이름이 같으므로 그 뒤(그림·검수·업로드)는 기존 코드가 그대로 돈다.
+결과 파일 이름이 기존과 같으므로 그 뒤(그림·검수·업로드)는 기존 코드가 그대로 돈다.
 """
 from __future__ import annotations
 
@@ -31,7 +32,6 @@ import llm                                        # noqa: E402
 import imagegen                                   # noqa: E402
 import sheet as sheetmod                          # noqa: E402
 import failure                                    # noqa: E402
-import charcard                                   # noqa: E402
 from llm import story                             # noqa: E402
 
 log, warn = R.log, R.warn
@@ -44,11 +44,17 @@ SCENE_TEXT_KEYS = ("where", "what", "acting", "look", "ends")
 # --------------------------------------------------------------------- 입력
 
 def settings_block(char: dict) -> list[str]:
-    """「설정 더 적기」. 없으면 []."""
+    """「설정 더 적기」. 없으면 [].
+
+    배경이다. 첫 실행에서 여기 적힌 문장이 본문에 그대로 복사됐다(2026-10-01) —
+    설정은 지키는 것이지 옮겨 적는 것이 아니라서, 머리에 그렇게 적는다.
+    """
     text = str(char.get("settings") or "").strip()
     if not text:
         return []
-    return ["", "## 사용자가 더 적은 설정 — 적힌 것이다, 바꾸지 않는다", "", text]
+    return ["", "## 사용자가 더 적은 설정 — 배경이다",
+            "적힌 대로 지킨다(어긋나는 것을 쓰지 않는다). 그러나 이 문장들을 본문이나 장면에 "
+            "옮겨 적지 않는다 — 적은 내용에 나오는 일을 세우는 데 필요한 만큼만 쓴다.", "", text]
 
 
 def episode_text(char: dict) -> str:
@@ -76,9 +82,56 @@ def content_block(char: dict) -> list[str]:
     return lines
 
 
+def input_block(char: dict) -> str:
+    """own 길의 「이번 입력」 — `run.input_block` 과 다르다.
+
+    카드는 이 인물이 누구인지(종·세계)만 준다. 카드의 「이 세계에서 어떤 사람인가」·
+    「적힌 전개」·대사는 주지 않는다 — 첫 실행에서 카드의 사건이 적은 내용에 없는
+    4번 장면으로 들어왔다(2026-10-01). 이 길에서 무엇이 벌어지는지는 적은 내용이 정한다.
+    `TRAIT_RULES` 도 안 붙인다(네 후보·카드 사건 얘기라 이 길과 맞지 않는다).
+    """
+    lines = ["# 이번 입력", "", f"캐릭터 이름: {char['name']}"]
+    if char.get("photos"):
+        note = f" ({char['photo_note']})" if char.get("photo_note") else ""
+        lines.append(f"외관: 첨부한 사진 {len(char['photos'])}장을 보라{note}.")
+    else:
+        lines.append("외관: (사진 없음 — 아래 설명에서 읽는다)")
+    card = char.get("card") or {}
+    bits = [f"{label}: {card[key]}" for key, label in (("species", "종"), ("world_label", "세계"))
+            if card.get(key)]
+    if bits:
+        lines += ["", "고른 캐릭터 카드 — 이 인물이 누구인지만: " + " · ".join(bits),
+                  "(카드에 적힌 사건·전개는 이 입력에 없다. 무엇이 벌어지는지는 아래 적은 내용이 정한다. "
+                  "아래 설명과 종·세계가 다르면 카드를 따른다.)"]
+    if char.get("description") or char.get("fields"):
+        lines += ["", "설명:"]
+        if char.get("description"):
+            lines.append(char["description"])
+        for k, v in (char.get("fields") or {}).items():
+            lines.append(f"- {k}: {v}")
+    else:
+        lines += ["", "설명: (없음)"]
+    lines += ["", "이 인물의 성격·처지는 위 설명과 아래 적은 것이 전부다. 적히지 않은 성격·과거·"
+              "비밀을 더하지 않고, 적힌 성격을 뒤집지 않는다."]
+    lines += ["", f"장르: {char['genre']}" if char.get("genre") else "장르: (없음 — 적은 내용에서 읽는다)"]
+    return "\n".join(lines) + "\n"
+
+
 def base_block(char: dict) -> list[str]:
     """주인공 입력 + 더 적은 설정. 네 단계가 공통으로 받는 앞부분."""
-    return [R.input_block(char).rstrip("\n"), *settings_block(char)]
+    return [input_block(char).rstrip("\n"), *settings_block(char)]
+
+
+def character_lines(char: dict) -> list[str]:
+    """장면 단계의 「[캐릭터]」 절. 카드는 종·세계만(`input_block` 과 같은 이유)."""
+    lines = ["", "[캐릭터]", f"{char['name']} — {char.get('description') or ''}".rstrip(" —")]
+    card = char.get("card") or {}
+    bits = [f"{label}: {card[key]}" for key, label in (("species", "종"), ("world_label", "세계")) if card.get(key)]
+    if bits:
+        lines.append("- 고른 캐릭터 카드: " + " · ".join(bits) + " (원래 설명과 다르면 카드를 따른다)")
+    for k, v in (char.get("fields") or {}).items():
+        lines.append(f"- {k}: {v}")
+    return lines
 
 
 def cast_lines(cast: list[dict]) -> list[str]:
@@ -173,9 +226,16 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
     return cast
 
 
-def stage_story(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> dict | None:
-    """적은 내용을 바꾸지 않고 1화 본문으로. 후보 1개를 directions.json 에, pick.json 은 1번."""
-    prompt = R.compose("own/story_prompt", "\n".join(base_block(char) + content_block(char)) + "\n", lang=lang)
+def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: str = "ko") -> dict | None:
+    """적은 내용을 바꾸지 않고 1화 본문으로. 후보 1개를 directions.json 에, pick.json 은 1번.
+
+    `note` 는 「이야기 다시 만들기」에서 사용자가 남긴 말 — 이번 호출에만 붙는다.
+    """
+    lines = base_block(char)
+    note = (note or "").strip()
+    if note:
+        lines += ["", "## 이번에 다시 세우며 반영할 것 — 사용자가 남긴 말", note]
+    prompt = R.compose("own/story_prompt", "\n".join(lines + content_block(char)) + "\n", lang=lang)
     R.write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
@@ -233,7 +293,7 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool, note: str = "") -> Non
 
 def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: str) -> None:
     photos = char["photos"]
-    block = R.input_block(char)
+    block = input_block(char)
     note = (note or "").strip()
     if note:
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
@@ -407,11 +467,7 @@ def scenes_input(run_dir: Path, char: dict, note: str = "") -> str:
     persona = R.read_json(run_dir / "persona.json") if (run_dir / "persona.json").exists() else None
     lines = ["# 이번 입력", "", "[본문 — 적은 내용을 1화로 세운 것]", direction.get("title", ""), "",
              direction.get("body") or direction.get("raw", "")]
-    lines += ["", "[캐릭터]", f"{char['name']} — {char.get('description') or ''}".rstrip(" —")]
-    if charcard.short(char.get("card") or {}):
-        lines.append(f"- 고른 캐릭터 카드: {charcard.short(char['card'])} (원래 설명과 다르면 카드를 따른다)")
-    for k, v in (char.get("fields") or {}).items():
-        lines.append(f"- {k}: {v}")
+    lines += character_lines(char)
     lines += persona_lines(persona if isinstance(persona, dict) else None)
     lines += cast_lines(cast if isinstance(cast, list) else [])
     lines += settings_block(char)
@@ -455,7 +511,12 @@ def stage_scenes(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang:
 # --------------------------------------------------------------------- 묶음
 
 def run_own(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> None:
-    """PERSONA ∥ CAST ∥ STORY ∥ SHEET → SCENES. 자바가 `--own` 한 번으로 부른다."""
+    """PERSONA ∥ CAST ∥ STORY ∥ SHEET. 자바가 `--own` 으로 부르고, 끝나면 이야기 확인 자리에서 멈춘다.
+
+    장면은 여기서 안 나눈다 — 사용자가 본문을 보고(고치고) 넘긴 뒤 `--own-scenes` 다.
+    첫 실행에서 본문을 안 보여 주고 장면까지 갔더니, 적은 내용에 없는 장면이 들어온 것을
+    장면 확인에서야 봤다(2026-10-01).
+    """
     if not R.user_story(char):
         raise SystemExit("적은 내용이 없습니다 — 「만들고 싶은 내용이 있어요」는 내용이 있어야 합니다.")
     log("[내 내용으로] 주인공 카드·인물·본문·시트를 동시에 만듭니다…")
@@ -463,7 +524,7 @@ def run_own(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> None:
         jobs = {
             "persona": pool.submit(stage_persona, run_dir, char, dry_run, lang),
             "cast": pool.submit(stage_cast, run_dir, char, dry_run, lang),
-            "story": pool.submit(stage_story, run_dir, char, dry_run, lang),
+            "story": pool.submit(stage_story, run_dir, char, dry_run, lang=lang),
             "sheet": pool.submit(stage_sheet, run_dir, char, dry_run),
         }
         errors: dict[str, BaseException] = {}
@@ -476,12 +537,23 @@ def run_own(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> None:
     for name in ("story", "sheet"):
         if name in errors:
             raise errors[name]
+
+
+def restory(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: str = "ko") -> None:
+    """「이야기 다시 만들기」 — 인물·카드·시트는 두고 본문만 다시. 메모는 이번에만."""
+    stage_story(run_dir, char, dry_run, note=note, lang=lang)
+
+
+def own_scenes(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> None:
+    """이야기 확인을 지난 본문을 장면으로. 자바가 `--own-scenes` 로 부른다."""
     if dry_run:
-        # 본문이 없어서 장면 프롬프트를 못 짠다 — 프롬프트 파일만 보려는 길이다.
+        # 본문이 없으면 장면 프롬프트를 못 짠다 — 프롬프트 파일만 보려는 길이다.
         (run_dir / "directions.json").exists() or R.write_json(
             run_dir / "directions.json", [{"n": 1, "title": "", "genre": char.get("genre", ""),
                                            "intro": "", "body": R.user_story(char), "raw": ""}])
         (run_dir / "pick.json").exists() or R.write_json(run_dir / "pick.json", {"n": 1, "title": "", "genre": ""})
+    if not (run_dir / "directions.json").exists():
+        raise SystemExit("본문이 없습니다 — --own 이 먼저입니다.")
     stage_scenes(run_dir, char, dry_run, lang=lang)
 
 
@@ -506,9 +578,11 @@ def save_edits(run_dir: Path, edits: dict) -> None:
     이어지는 자리는 거기뿐이다.
     """
     path = run_dir / "scenes.json"
-    if not path.exists():
+    wants_scenes = bool(edits.get("scenes"))
+    if not path.exists() and wants_scenes:
         raise SystemExit(f"장면이 없습니다: {path}")
-    parsed = R.read_json(path)
+    # 이야기 확인 자리(장면이 아직 없다)에서는 본문·제목만 온다.
+    parsed = R.read_json(path) if path.exists() else {"scenes": []}
     scenes = parsed.get("scenes") or []
     by_n = {s.get("n"): s for s in scenes}
     changed = 0
@@ -530,7 +604,8 @@ def save_edits(run_dir: Path, edits: dict) -> None:
         if nxt is not None:
             nxt["prev"] = last
         changed += 1
-    R.write_json(path, parsed)
+    if path.exists():
+        R.write_json(path, parsed)
     body = str(edits.get("body") or "").strip()
     title = str(edits.get("title") or "").strip()
     if body or title:
@@ -553,3 +628,123 @@ def save_edits(run_dir: Path, edits: dict) -> None:
 def rescenes(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: str = "ko") -> None:
     """본문·인물·시트는 두고 장면만 다시 나눈다. 고친 글(user_text)은 사라진다."""
     stage_scenes(run_dir, char, dry_run, note=note, lang=lang)
+
+
+# --------------------------------------------------------------------- 장면 하나만 다시
+
+# 화면이 보내는 이유 코드 → 프롬프트에 넣는 말. 코드는 자바·화면과 같다.
+RESCENE_REASONS = {
+    "awkward": "내용이 어색하다 — 벌어지는 일이나 행동이 자연스럽게 이어지지 않는다.",
+    "character": "캐릭터가 이상하다 — 적힌 성격·말투와 다르게 움직인다.",
+    "stranger": "뜬금없는 인물이 추가되었다 — 본문과 인물 목록에 없는 사람이 나온다.",
+    "offstory": "이야기와 안 맞는다 — 본문에 없는 일이 벌어지거나 본문에 있는 일이 빠졌다.",
+    "pacing": "너무 길거나 급하다 — 한 장에 담길 양이 아니거나 너무 빨리 지나간다.",
+}
+
+# scenes.json 칸 → 장면 라벨. 지금 장면을 모델에 보여 줄 때와 응답을 읽을 때 같은 이름이다.
+SCENE_LABELS = (("prev", "직전 상태"), ("where", "장소와 상황"), ("what", "벌어지는 일"),
+                ("acting", "인물의 행동과 표정"), ("look", "겉모습·소지품·동행"), ("ends", "끝나는 상태"))
+
+
+def scene_labelled(scene: dict) -> list[str]:
+    """장면 하나를 라벨 형식 줄들로 — 모델이 받은 모양 그대로 돌려 보여 준다."""
+    out = [f"장면 {scene.get('n')}:"]
+    for key, label in SCENE_LABELS:
+        out.append(f"{label}: {str(scene.get(key) or '').strip()}")
+    narration = scene.get("narration")
+    if narration is not None:
+        out.append("나레이션: " + (" / ".join(str(n) for n in narration) if narration else "없음"))
+    return out
+
+
+def rescene_input(run_dir: Path, char: dict, n: int, reasons: list[str], note: str) -> str:
+    """`--rescene` 의 이번 입력. own·quick 공용 — 본문·인물·앞뒤 장면·지금 장면·이유·메모."""
+    parsed = R.read_json(run_dir / "scenes.json")
+    scenes = parsed.get("scenes") or []
+    by_n = {s.get("n"): s for s in scenes}
+    cur = by_n.get(n)
+    if cur is None:
+        raise SystemExit(f"{n}번 장면이 없습니다 (장면은 {len(scenes)}개)")
+    direction = R.direction_of(run_dir) or {}
+    lines = ["# 이번 입력", "", "[본문 — 이 화의 이야기. 바뀌지 않는다]", direction.get("title", ""), "",
+             direction.get("body") or direction.get("raw", "")]
+    lines += character_lines(char)
+    persona = R.read_json(run_dir / "persona.json") if (run_dir / "persona.json").exists() else None
+    lines += persona_lines(persona if isinstance(persona, dict) else None)
+    cast = R.read_json(run_dir / "cast.json") if (run_dir / "cast.json").exists() else []
+    if isinstance(cast, list) and cast:
+        lines += cast_lines(cast)
+    elif parsed.get("cast"):
+        # 인물 단계가 없던 길 — 장면 단계가 적은 「등장인물」(이름 — 외모)뿐이다.
+        lines += ["", "## 이 화의 등장인물 — 이름·외모를 바꾸지 않는다"]
+        lines += [f"- {c.get('name')} — {c.get('appearance')}" for c in parsed["cast"] if isinstance(c, dict)]
+    if parsed.get("fixed"):
+        lines += ["", "## 이 화의 고정 설정"] + [f"- {f}" for f in parsed["fixed"]]
+    lines += settings_block(char)
+    genre = (direction.get("genre") or char.get("genre") or "").strip()
+    if genre:
+        lines += ["", f"[장르] {genre}"]
+    prev = by_n.get(n - 1)
+    nxt = by_n.get(n + 1)
+    lines += ["", f"## 앞 장면({n - 1}번)이 끝난 상태 — 이 장면은 여기서 시작한다",
+              str(prev.get("ends") or "").strip() if prev else "없음 — 이 장면이 첫 장면이다"]
+    lines += ["", f"## 뒤 장면({n + 1}번)이 시작하는 상태 — 이 장면은 여기로 끝나야 한다",
+              str(nxt.get("prev") or "").strip() if nxt else "없음 — 이 장면이 마지막 장면이다"]
+    lines += ["", f"## 지금 {n}번 장면 — 이것을 다시 짓는다", ""]
+    lines += scene_labelled(cur)
+    picked = [RESCENE_REASONS[r] for r in reasons if r in RESCENE_REASONS]
+    if picked:
+        lines += ["", "## 사용자가 꼽은 문제"] + [f"- {r}" for r in picked]
+    note = (note or "").strip()
+    if note:
+        lines += ["", "## 사용자가 남긴 말", note]
+    if R.user_story(char):
+        lines += content_block(char)
+    return "\n".join(lines) + "\n"
+
+
+def rescene(run_dir: Path, char: dict, n: int, reasons: list[str], note: str,
+            dry_run: bool, lang: str = "ko") -> dict | None:
+    """scenes.json 의 n번 장면만 다시 짓는다. 다른 장면은 그대로, 앞뒤와 이어지게.
+
+    고친 글(`user_text`)은 지운다 — 새로 지은 장면이 그 자리의 글이다. 뒤 장면의
+    「직전 상태」는 새 장면의 「끝나는 상태」로 맞춘다(`save_edits` 와 같은 규칙).
+    """
+    path = run_dir / "scenes.json"
+    if not path.exists():
+        raise SystemExit(f"장면이 없습니다: {path}")
+    prompt = R.compose("own/rescene_prompt", rescene_input(run_dir, char, n, reasons, note), lang=lang)
+    R.write_text(run_dir / f"rescene{n:02d}_prompt.txt", prompt)
+    if dry_run:
+        log(f"[장면 {n}] 프롬프트만 썼습니다 -> {run_dir / f'rescene{n:02d}_prompt.txt'}")
+        return None
+    call = llm.Call("SCENE")
+    log(f"[장면 {n}] {call.describe()} 로 이 장면만 다시 짓습니다…")
+    try:
+        text, meta = call(prompt)
+    except BaseException as exc:                                      # noqa: BLE001
+        R.record_error(run_dir, "SCENE", call.provider, call.model, exc)
+        raise
+    R.write_text(run_dir / f"rescene{n:02d}.md", text)
+    R.record(run_dir, meta)
+    got = R.parse_scenes(text)["scenes"]
+    if not got:
+        raise SystemExit(f"다시 지은 장면을 못 읽었습니다. 원문은 {run_dir / f'rescene{n:02d}.md'} 에 있습니다.")
+    new = got[0]
+    new["n"] = n
+    parsed = R.read_json(path)
+    scenes = parsed.get("scenes") or []
+    by_n = {s.get("n"): s for s in scenes}
+    prev, nxt = by_n.get(n - 1), by_n.get(n + 1)
+    if prev and str(prev.get("ends") or "").strip():
+        new["prev"] = prev["ends"]           # 앞 장면이 끝난 자리에서 시작한다
+    if nxt is not None and str(new.get("ends") or "").strip():
+        nxt["prev"] = new["ends"]
+    for i, s in enumerate(scenes):
+        if s.get("n") == n:
+            scenes[i] = new
+            break
+    parsed["scenes"] = scenes
+    R.write_json(path, parsed)
+    log(f"[장면 {n}] 다시 지었습니다 -> {path}")
+    return new

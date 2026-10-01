@@ -281,6 +281,11 @@ public class JobRunner {
 
     /** 사람이 이야기를 골랐다(또는 서버가 골랐다). 다음 걸음으로. */
     public void resumeAfterPick(Long jobId) {
+        WebtoonJob job = store.byId(jobId);
+        if (job != null && job.isOwn()) {
+            ownScenes(jobId);                 // 시트는 --own 이 이미 그렸다 — 바로 장면으로
+            return;
+        }
         store.queued(jobId, JobStage.SHEET);
         line.submit(() -> {
             try {
@@ -642,8 +647,9 @@ public class JobRunner {
         WebtoonJob job = store.running(jobId, JobStage.STORY);
         progress.say(jobId, "루가 이야기를 다시 짓고 있어요");
 
+        boolean own = job.isOwn();
         List<String> args = new ArrayList<>(
-                List.of("--run-id", job.getRunId(), "--restory"));
+                List.of("--run-id", job.getRunId(), own ? "--own-restory" : "--restory"));
         if (note != null && !note.isBlank()) {
             args.add("--note");
             args.add(note.trim());
@@ -652,7 +658,7 @@ public class JobRunner {
         after.cost(job.getRunId());          // 다시 짓는 것도 값이 나간다
         stopIfCancelled(jobId);
         if (code != 0) {
-            throw harnessFailed(job.getRunId(), "이야기 후보를 다시 만들지 못했습니다");
+            throw harnessFailed(job.getRunId(), own ? "이야기를 다시 만들지 못했습니다" : "이야기 후보를 다시 만들지 못했습니다");
         }
 
         List<Map<String, Object>> directions = directionsOf(job.getRunId());
@@ -660,6 +666,13 @@ public class JobRunner {
             throw new IllegalStateException("이야기 후보를 하나도 못 읽었습니다");
         }
         store.directions(jobId, directions);
+        if (own) {
+            /* own 길(#548)은 후보가 하나고 번호는 늘 1이다 — 고른 것을 지우지 않고 바꿔 끼운다. */
+            stories.replace(job.getRunId(), directions);
+            stories.choose(job.getRunId(), 1);
+            store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
+            return;
+        }
         /* **갈아 끼운다.** 그냥 적으면(save) 이미 적힌 작품이라 아무 일도 안
            일어나서, 화면에는 새 이야기가 뜨고 DB 에는 옛 이야기가 남는다 —
            다 만든 뒤 「내가 만든 웹툰」에 고른 적 없는 제목이 뜬다. */
@@ -724,7 +737,9 @@ public class JobRunner {
 
     /**
      * own 길의 첫 걸음. 하네스 {@code --own} 한 번으로 주인공 카드·인물·본문·시트를 동시에
-     * 만들고 장면까지 나눈 뒤, 장면 확인 자리에서 멈춘다. 후보도 고르기도 없다.
+     * 만들고 <b>이야기 확인 자리</b>({@code AWAITING_PICK}, 후보 1개)에서 멈춘다. 사용자가 본문을
+     * 보고(고치고) 넘기면 {@link #ownScenes} 가 장면을 나눈다. 첫 실행에서 본문을 안 보여 주고
+     * 장면까지 갔더니 적은 내용에 없는 장면이 들어온 것을 장면 확인에서야 봤다(2026-10-01).
      */
     private void ownStart(Long jobId, WebtoonJob job, Path jobDir, String runId) throws Exception {
         progress.say(jobId, "루가 적어 주신 내용을 읽고 있어요");
@@ -734,7 +749,7 @@ public class JobRunner {
         after.cost(runId);
         stopIfCancelled(jobId);
         if (code != 0) {
-            throw harnessFailed(runId, "적어 주신 내용으로 장면을 만들지 못했습니다");
+            throw harnessFailed(runId, "적어 주신 내용으로 이야기를 세우지 못했습니다");
         }
         store.learnRun(jobId, runId);
         works.learnedRun(job.getPublicId(), runId, job.getUserId());
@@ -745,14 +760,35 @@ public class JobRunner {
         if (directions.isEmpty()) {
             throw new IllegalStateException("본문을 못 읽었습니다");
         }
-        if (!Files.isRegularFile(runDir(runId).resolve("scenes.json"))) {
-            throw new IllegalStateException("장면을 못 읽었습니다");
-        }
         store.directions(jobId, directions);
         stories.save(runId, directions);
         store.pick(jobId, 1);
         stories.choose(runId, 1);
-        store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
+        store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
+    }
+
+    /** own 길의 둘째 걸음(#548) — 이야기 확인을 지난 본문을 장면으로 나누고 장면 확인 자리에서 멈춘다. */
+    private void ownScenes(Long jobId) {
+        store.queued(jobId, JobStage.PAGES);
+        line.submit(() -> {
+            try {
+                if (!startable(jobId)) {
+                    return;
+                }
+                WebtoonJob job = store.running(jobId, JobStage.PAGES);
+                progress.say(jobId, "루가 장면을 나누고 있어요");
+                int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--own-scenes"));
+                after.cost(job.getRunId());
+                stopIfCancelled(jobId);
+                if (code != 0 || !Files.isRegularFile(runDir(job.getRunId()).resolve("scenes.json"))) {
+                    throw harnessFailed(job.getRunId(), "장면을 나누지 못했습니다");
+                }
+                dropPhotos(jobId);               // 시트가 확정됐다 — 사진을 다시 읽을 일이 없다
+                store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
+            } catch (Exception e) {
+                fail(jobId, e);
+            }
+        });
     }
 
     /** 「이대로 웹툰 만들기」 — 장면 확인을 끝내고 그림으로. */
@@ -833,7 +869,55 @@ public class JobRunner {
         });
     }
 
-    /** 장면 초안(#548) — 화면에 보여 줄 모양. {n, text, user_text}. 없으면 빈 목록. */
+    /** 지금 다시 짓는 중인 장면 번호(#548) — job → 번호들. 화면이 {@code busy} 로 본다. */
+    private final ConcurrentHashMap<Long, java.util.Set<Integer>> rescening = new ConcurrentHashMap<>();
+
+    /**
+     * 장면 하나만 다시 짓는다(#548). 멈춤({@code AWAITING_SCENES})은 그대로고, 끝나면 그 장면의
+     * 글만 바뀐다. 이유 코드는 하네스 {@code own.RESCENE_REASONS} 의 열쇠다.
+     */
+    public void rescene(Long jobId, int n, List<String> reasons, String note) {
+        java.util.Set<Integer> mine = rescening.computeIfAbsent(jobId, k -> ConcurrentHashMap.newKeySet());
+        if (!mine.add(n)) {
+            throw new IllegalStateException("그 장면은 이미 다시 짓는 중입니다");
+        }
+        side.submit(() -> {
+            try {
+                WebtoonJob job = store.byId(jobId);
+                List<String> args = new ArrayList<>(List.of("--run-id", job.getRunId(), "--rescene", String.valueOf(n)));
+                if (reasons != null && !reasons.isEmpty()) {
+                    args.add("--reasons");
+                    args.add(String.join(",", reasons));
+                }
+                if (note != null && !note.isBlank()) {
+                    args.add("--note");
+                    args.add(note.trim());
+                }
+                int code = callHarness(jobId, job, args);
+                after.cost(job.getRunId());
+                if (code != 0) {
+                    log.warn("장면 하나를 다시 짓지 못했습니다 (job={}, n={})", jobId, n);
+                    progress.say(jobId, n + "번 장면을 다시 짓지 못했어요 — 전처럼 두었어요");
+                }
+            } catch (Exception e) {
+                log.warn("장면 하나를 다시 짓다 실패했습니다 (job={}, n={})", jobId, n, e);
+            } finally {
+                mine.remove(n);
+            }
+        });
+    }
+
+    /** 장면 초안(#548) — 화면에 보여 줄 모양. {n, text, parts, user_text, busy}. 없으면 빈 목록. */
+    public List<Map<String, Object>> scenesOf(Long jobId, String runId) {
+        java.util.Set<Integer> busy = rescening.getOrDefault(jobId, java.util.Set.of());
+        List<Map<String, Object>> out = scenesOf(runId);
+        for (Map<String, Object> one : out) {
+            one.put("busy", busy.contains((Integer) one.get("n")));
+        }
+        return out;
+    }
+
+    /** 장면 초안(#548) — 화면에 보여 줄 모양. {n, text, parts, user_text}. 없으면 빈 목록. */
     public List<Map<String, Object>> scenesOf(String runId) {
         if (runId == null || runId.isBlank()) {
             return List.of();
@@ -1472,16 +1556,6 @@ public class JobRunner {
      *
      * 못 남겨도 만들기는 안 막는다 — 딱지가 안 뜰 뿐이다.
      */
-    /** 그림체·화질을 바꿨을 때 작품 폴더의 기록도 맞춘다(#548). */
-    public void rewriteOptions(String runId, String style, String quality) {
-        if (style != null && !style.isBlank()) {
-            writeStyle(runId, style);
-        }
-        if (quality != null && !quality.isBlank()) {
-            writeQuality(runId, quality);
-        }
-    }
-
     private void writeStyle(String runId, String style) {
         try {
             Files.writeString(runsDir.resolve(runId).resolve("style.txt"), style);

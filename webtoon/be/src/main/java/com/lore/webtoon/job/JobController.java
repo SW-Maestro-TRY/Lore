@@ -14,7 +14,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.http.MediaType;
@@ -283,7 +282,7 @@ public class JobController {
                     "다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.")
     @PostMapping("/jobs/{id}/pick")
     public Map<String, Object> pick(@PathVariable String id, @RequestBody PickRequest req) {
-        jobs.pick(id, req.n(), req.body());
+        jobs.pick(id, req.n(), req.body(), req.title());
         return Map.of("ok", true);
     }
 
@@ -320,16 +319,39 @@ public class JobController {
         return Map.of("ok", true);
     }
 
-    @Operation(summary = "그림체·화질 바꾸기",
-            description = "장면 확인 자리(#548)에서만 된다. 그림체가 바뀌면 시트를 그 그림체로 다시 그린다. "
-                    + "그림이 시작된 뒤에는 바꿀 수 없다.")
-    @PatchMapping("/jobs/{id}/options")
-    public Map<String, Object> options(@PathVariable String id, @RequestBody OptionsRequest body) {
-        jobs.updateOptions(id, body.style(), body.quality());
+    @Operation(summary = "장면 하나만 다시 짓기",
+            description = "장면 확인 자리(#548)에서 n번 장면만 다시 짓는다. 로그인 필수. reasons 는 이유 코드 "
+                    + "(awkward·character·stranger·offstory·pacing), note 는 메모. 돌아가는 동안 그 장면은 busy 다.")
+    @PostMapping("/jobs/{id}/scenes/{n}/retry")
+    public Map<String, Object> retryScene(@PathVariable String id, @PathVariable int n,
+                                          @RequestBody(required = false) RetrySceneRequest body) {
+        jobs.retryScene(id, n, body == null ? null : body.reasons(), body == null ? null : body.note(),
+                CreditGate.currentUser());
         return Map.of("ok", true);
     }
 
-    public record OptionsRequest(String style, String quality) {
+    public record RetrySceneRequest(List<String> reasons, String note) {
+    }
+
+    @Operation(summary = "옛 시트 판으로 되돌리기",
+            description = "다시 그리기 전의 시트 판(1~sheet_versions)을 지금 시트로 올린다(#548). 지금 것도 보관한 뒤 바꾼다.")
+    @PostMapping("/jobs/{id}/sheet-restore")
+    public Map<String, Object> restoreSheet(@PathVariable String id, @RequestBody SheetRestoreRequest body) {
+        jobs.restoreSheet(id, body.v());
+        return Map.of("ok", true);
+    }
+
+    public record SheetRestoreRequest(int v) {
+    }
+
+    @Operation(summary = "보관한 옛 시트 판 그림")
+    @GetMapping(value = "/jobs/{id}/sheet-v{v}.png", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> sheetVersionImage(@PathVariable String id, @PathVariable int v) throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.sheetVersion(runId, v);
+        return src == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(Files.readAllBytes(src));
     }
 
     @Operation(summary = "이야기 후보 다시 짓기",
@@ -464,7 +486,8 @@ public class JobController {
                 .body(Map.of("error", e.getMessage()));
     }
 
-    public record PickRequest(int n, String body) {
+    /** 이야기 고르기. body·title 은 own 길의 이야기 확인(#548)에서 고친 본문·제목(선택). */
+    public record PickRequest(int n, String body, String title) {
     }
 
     /** 장면 초안 저장(#548). scenes 의 각 줄은 {n, text}. body·title 은 own 길의 본문·제목(선택). */
