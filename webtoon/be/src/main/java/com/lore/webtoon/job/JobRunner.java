@@ -967,12 +967,10 @@ public class JobRunner {
     /** 「시트 그대로」·「없음」 같은 자리표는 뺀다. 「시트 그대로. 추가로 …」처럼 앞에 붙은 것도 떼어 낸다. */
     static String cleanSceneField(String raw) {
         String v = raw == null ? "" : raw.trim();
-        for (String mark : List.of("시트 그대로.", "시트 그대로", "없음.", "없음")) {
-            if (v.equals(mark)) {
-                return "";
-            }
+        for (String mark : List.of("시트 그대로", "없음")) {
             if (v.startsWith(mark)) {
-                v = v.substring(mark.length()).trim();
+                /* 「시트 그대로의 남색 드레스」「시트 그대로, 활을…」 — 자리표에 붙은 「의」·쉼표·마침표까지 뗀다. */
+                v = v.substring(mark.length()).replaceFirst("^(의\\s|[.,])", "").trim();
                 if (v.startsWith("추가로")) {
                     v = v.substring("추가로".length()).trim();
                 }
