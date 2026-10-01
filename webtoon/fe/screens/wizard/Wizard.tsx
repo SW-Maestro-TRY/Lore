@@ -346,19 +346,17 @@ export default function Wizard({
   const storyShown = form.story.trim();
   const sidePanel = (
     <div className="wt-wiz-side">
-      <div className="wt-wiz-sum">
-        <b>{t("이렇게 만들어요")}</b>
-        <div className="kvr"><span className="dim">{t("캐릭터")}</span><span>{characterSummary}</span></div>
-        {own && form.title.trim() && <div className="kvr"><span className="dim">{t("제목")}</span><span>{form.title.trim()}</span></div>}
-        <div className="kvr">
-          <span className="dim">{t("이야기")}</span>
-          <span>{storyShown ? (own && storyShown.length > 80 ? `${storyShown.slice(0, 80)}…` : storyShown) : t("비움")}</span>
-        </div>
-
-        <div className="kvr"><span className="dim">{t("장르")}</span><span>{form.genre.trim() ? t(form.genre.trim()) : t("비움")}</span></div>
-        <div className="kvr"><span className="dim">{t("그림체")}</span><span>{styleLabel ? t(styleLabel) : "—"}</span></div>
-        <div className="kvr"><span className="dim">{t("촘촘함")}</span><span>{t(quality.label)} · {qualityTime}</span></div>
-        {!own && <div className="kvr"><span className="dim">{t("보는 방식")}</span><span>{viewMode === "expert" ? t("확인하고 만들기") : t("바로 만들기")}</span></div>}
+      {/* own 길은 방금 자기가 적은 내용이라 요약을 다시 보여 주지 않는다 — 크레딧 줄만 남긴다. */}
+      <div className={`wt-wiz-sum${own ? " only-tot" : ""}`}>
+        {!own && <>
+          <b>{t("이렇게 만들어요")}</b>
+          <div className="kvr"><span className="dim">{t("캐릭터")}</span><span>{characterSummary}</span></div>
+          <div className="kvr"><span className="dim">{t("이야기")}</span><span>{storyShown || t("비움")}</span></div>
+          <div className="kvr"><span className="dim">{t("장르")}</span><span>{form.genre.trim() ? t(form.genre.trim()) : t("비움")}</span></div>
+          <div className="kvr"><span className="dim">{t("그림체")}</span><span>{styleLabel ? t(styleLabel) : "—"}</span></div>
+          <div className="kvr"><span className="dim">{t("촘촘함")}</span><span>{t(quality.label)} · {qualityTime}</span></div>
+          <div className="kvr"><span className="dim">{t("보는 방식")}</span><span>{viewMode === "expert" ? t("확인하고 만들기") : t("바로 만들기")}</span></div>
+        </>}
         <div className="tot">
           <b>{t("쓰는 크레딧")}</b>
           <b>{allow && !allow.logged_in ? t("무료") : cost == null ? "…" : cost}</b>

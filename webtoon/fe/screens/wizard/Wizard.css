@@ -144,6 +144,7 @@
 .wt .wt-wiz-sum .tot { display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid rgba(15, 51, 63, 0.12); }
 .wt .wt-wiz-sum .tot b:first-child { font-size: 14px; }
 .wt .wt-wiz-sum .tot b:last-child { font-size: 16px; color: var(--gold); }
+.wt .wt-wiz-sum.only-tot .tot { padding-top: 0; border-top: 0; align-items: baseline; }
 .wt .wt-wiz-agree { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; font-weight: 400; cursor: pointer; }
 .wt .wt-wiz-agree input { margin-top: 3px; }
 .wt .wt-wiz-agree i { font-style: normal; color: var(--gold); font-size: 11px; }
