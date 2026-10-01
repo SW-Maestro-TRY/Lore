@@ -74,7 +74,6 @@ function JudgeResultView({ result, chapter, titleOf, onOpen }: { result: JudgeRe
       </div>
       {presentation ? (
         <div className="judge-edited" data-part="judge-edited">
-          <p className="small muted judge-edition">문맥 편집본</p>
           <h3 className="judge-headline">{presentation.headline}</h3>
           <Sections sections={presentation.sections} />
           {presentation.details.length ? (

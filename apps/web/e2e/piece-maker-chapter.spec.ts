@@ -94,7 +94,7 @@ test('서버의 회차 범위를 검사하고 Esc·바깥 클릭·Tab으로 닫�
   await trigger.click();
   await expect(input).toHaveValue('1');
   await input.fill('8');
-  await page.locator('.wordmark').click();
+  await page.locator('[data-part="topbar"]').click({ position: { x: 1, y: 1 } });
   await expect(picker).toHaveCount(0);
   await expect(page.locator(CURRENT)).toHaveText('1화까지');
 

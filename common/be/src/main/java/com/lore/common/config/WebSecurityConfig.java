@@ -59,6 +59,8 @@ public class WebSecurityConfig {
                         // 조회만 열어 두는 것 — 랜딩·공개 목록이 여기 걸린다
                         .requestMatchers(HttpMethod.GET, "/api/zzal/v1/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/piece-maker/v1/public/**").permitAll()
+                        // 피드백(오류 신고 · 판정 후기)은 로그인 전에도 받는다 — 이 POST 하나만 연다
+                        .requestMatchers(HttpMethod.POST, "/api/piece-maker/v1/public/feedback").permitAll()
 
                         // ★★ 맥미니(codex 러너) 전용 문 — 사람 로그인이 아니라 **전용 열쇠**로 지킨다.
                         //   여기를 로그인 뒤로 두면 러너가 새벽에 혼자 못 올린다(사람 토큰은 몇 시간이면 만료).

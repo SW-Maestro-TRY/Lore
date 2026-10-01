@@ -11,6 +11,7 @@
  * 가설은 lore 백엔드에 맡긴다(`POST /api/piece-maker/v1/hypotheses`, 명세 2-5). 로그인이 있어야 하고, 서버는 저장만 하고
  * `PENDING` 으로 둔다 — 판정은 운영자가 따로 넣는다(NA later.md 1-2). 결과는 요청 id 로 되묻는다(2-6). */
 import { ApiError, request } from "@common/api/client";
+import { getMe } from "@common/auth/api";
 
 const CARDS_PATH = "/api/piece-maker/v1/public/cards";
 
@@ -362,4 +363,39 @@ export async function fetchHypothesis(id: number, signal?: AbortSignal): Promise
     if (error instanceof ApiError && error.code === "PIECE_MAKER_HYPOTHESIS_NOT_FOUND") return null;
     throw error;
   }
+}
+
+/* ---- 피드백 ---------------------------------------------------------------- */
+
+export const FEEDBACK_MAX_LENGTH = 2000;
+export type FeedbackKind = "ERROR_REPORT" | "JUDGEMENT_REVIEW";
+export type FeedbackRequest = { kind: FeedbackKind; body: string };
+export type Feedback = FeedbackRequest & { id: number; createdAt: string };
+
+/** 서버의 String.strip()과 같은 가장자리 공백만 뗀다. NBSP 등 줄바꿈을 막는 공백은 서버도 보존한다. */
+export function stripFeedbackBody(body: string): string {
+  return body.replace(/^[\t-\r\u001c-\u0020\u1680\u2000-\u2006\u2008-\u200a\u2028\u2029\u205f\u3000]+|[\t-\r\u001c-\u0020\u1680\u2000-\u2006\u2008-\u200a\u2028\u2029\u205f\u3000]+$/g, "");
+}
+
+/** 로그인 없이 종류와 본문을 보낸다(2-10). 쿠키가 있으면 공통 클라이언트가 함께 보낸다.
+ *
+ * 로그인한 독자(`loggedIn`)는 보내기 전에 내 정보를 한 번 묻는다. access 쿠키는 30분이면 사라지는데 이 주소는
+ * 로그인 없이도 받아 401 을 내지 않는다 — 그대로 보내면 공통 클라이언트가 토큰을 갱신할 계기가 없어 로그인한
+ * 독자의 피드백이 익명으로 남는다. 내 정보 조회가 401 이면 공통 클라이언트가 갱신한다. 갱신하지 못해도 피드백은 보낸다. */
+export async function submitFeedback(body: FeedbackRequest, signal?: AbortSignal, loggedIn = false): Promise<Feedback> {
+  if (loggedIn) await getMe(signal).catch(() => undefined);
+  const item: unknown = await request<unknown>("/api/piece-maker/v1/public/feedback", { method: "POST", body, signal });
+  if (
+    !isRecord(item) ||
+    !Number.isInteger(item.id) ||
+    (item.id as number) < 1 ||
+    (item.kind !== "ERROR_REPORT" && item.kind !== "JUDGEMENT_REVIEW") ||
+    typeof item.body !== "string" ||
+    stripFeedbackBody(item.body).length < 1 ||
+    stripFeedbackBody(item.body).length > FEEDBACK_MAX_LENGTH ||
+    !isFilledString(item.createdAt)
+  ) {
+    throw new Error("피드백 전송 결과를 확인할 수 없습니다.");
+  }
+  return { id: item.id as number, kind: item.kind, body: item.body, createdAt: item.createdAt };
 }
