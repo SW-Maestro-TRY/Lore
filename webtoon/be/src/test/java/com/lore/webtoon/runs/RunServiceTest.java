@@ -137,6 +137,19 @@ class RunServiceTest {
     }
 
     @Test
+    @DisplayName("예시 작품만 example 이 참이다 — 화면은 예시일 때만 남의 작품에도 내려받기를 보인다")
+    void 예시_작품_표시() {
+        WebtoonWork mine = 작품("run-1", true);
+        when(mine.getBrowserUid()).thenReturn("browser-1");
+        WebtoonWork seeded = 작품("run-2", true);
+        when(seeded.getBrowserUid()).thenReturn("lore-example-seed");
+        when(pages.pageNumbersOf(anyString())).thenReturn(List.of(1));
+
+        assertThat(runs.result("run-1")).containsEntry("example", false);
+        assertThat(runs.result("run-2")).containsEntry("example", true);
+    }
+
+    @Test
     @DisplayName("장면이 장 수보다 적어도 안 죽는다 — 빈 캡션으로 둔다")
     void 장면이_모자랄_때() {
         작품("run-1", true);

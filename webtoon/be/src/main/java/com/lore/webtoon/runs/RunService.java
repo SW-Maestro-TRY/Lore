@@ -8,6 +8,7 @@ import com.lore.webtoon.job.WebtoonJobRepository;
 import com.lore.webtoon.job.WebtoonStyles;
 import com.lore.webtoon.story.StoryStore;
 import com.lore.webtoon.story.WebtoonStory;
+import com.lore.webtoon.work.ExampleWorks;
 import com.lore.webtoon.work.RunLikeRepository;
 import com.lore.webtoon.work.WebtoonWork;
 import com.lore.webtoon.work.WebtoonWorkRepository;
@@ -233,6 +234,7 @@ public class RunService {
            「미리보기」가 없다. 화면은 이 둘이 다를 때만 "앞 몇 장만" 을 적는다. */
         out.put("planned_pages", numbers.size());
         out.put("preview", false);
+        out.put("example", ExampleWorks.isExample(work));
         return out;
     }
 
