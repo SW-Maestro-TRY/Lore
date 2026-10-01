@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { readCharacter, readSharedCard, type Character } from "../../lib/api";
 import { useLang, useT } from "../../lib/i18n";
+import { ErrLine, errText } from "../../ui/CreditShort";
 import type { Go } from "../../lib/nav";
 import { copyLink, kakaoAvailable, shareKakao, shareNative } from "../../lib/share";
 import { IconClose, IconDownload, IconRetry, IconShare } from "../../ui/Icons";
@@ -148,7 +149,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
         track("limit_view", { kind: "character", logged_in: authenticated });
         setLimited(e instanceof Error ? e.message : "");
       }
-      else setActErr(e instanceof Error ? e.message : t("다시 뽑지 못했습니다"));
+      else setActErr(errText(e, t("다시 뽑지 못했습니다")));
       setBusy(null);
     }
   };
@@ -311,7 +312,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
                     <button type="button" className="btn btn-w" onClick={() => setSaved(true)}><IconDownload size={18} /> {t("내 캐릭터에 저장")}</button>
                   )}
                 </div>
-                {actErr && <span className="err">{actErr}</span>}
+                <ErrLine text={actErr} />
                 <div className="wt-ch-res-again">
                   <b>{t("마음에 안 들어요?")}</b>
                 </div>

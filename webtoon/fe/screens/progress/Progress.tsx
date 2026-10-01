@@ -19,6 +19,7 @@ import { MASCOT_LINES } from "../../lib/progressData";
 import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizardData";
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
+import { ErrLine, errText } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { unwatchJob, watchJob } from "../../lib/watchJob";
 import { IconArrow, IconBack, IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconClose, IconEdit, IconRetry, IconZoom } from "../../ui/Icons";
@@ -321,7 +322,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       stopped.current = false;
       await pull();
     } catch (e) {
-      setActErr(e instanceof Error ? e.message : t("보내지 못했습니다"));
+      setActErr(errText(e, t("보내지 못했습니다")));
     } finally {
       setBusy(false);
     }
@@ -477,7 +478,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       setSceneDraft((d) => { const next = { ...d }; delete next[n]; return next; });
       setSceneVer((o) => { const next = { ...o }; delete next[n]; return next; });
     } catch (e) {
-      setActErr(e instanceof Error ? e.message : t("되돌리지 못했어요"));
+      setActErr(errText(e, t("되돌리지 못했어요")));
     }
   };
   const continueAll = () => {
@@ -528,7 +529,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       setSceneVer((o) => { const next = { ...o }; delete next[n]; return next; });
       setSceneRetry((o) => { const next = { ...o }; delete next[n]; return next; });
     } catch (e) {
-      setSceneRetryErr((er) => ({ ...er, [n]: e instanceof Error ? e.message : t("보내지 못했습니다") }));
+      setSceneRetryErr((er) => ({ ...er, [n]: errText(e, t("보내지 못했습니다")) }));
     }
   };
   /* 「내가 적은 것」(#548) — 만들기에서 적은 것을 글자로만 보여 준다(바꾸는 기능은 뺐다, 2026-10-01).
@@ -567,7 +568,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         setJob(await requestCastSheet(job.id, name));
       }
     } catch (e) {
-      setCastErr(e instanceof Error ? e.message : t("보내지 못했습니다"));
+      setCastErr(errText(e, t("보내지 못했습니다")));
     } finally {
       setCastBusy("");
     }
@@ -954,7 +955,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   </div>
                   <input className="field wt-prog-mnote" value={sheetNote} placeholder={t("고칠 점을 적고 다시 만들기 · 예: 머리를 더 길게")} aria-label={t("다시 만들기 메모")}
                          onChange={(e) => setSheetNote(e.target.value)} />
-                  {actErr && <span className="err">{actErr}</span>}
+                  <ErrLine text={actErr} />
                 </>
               )}
 
@@ -1005,7 +1006,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   <div className="wt-prog-acts" style={{ marginTop: 2 }}>
                     <button type="button" className="btn btn-p" disabled={busy || castSel == null} onClick={confirmCast}>{castButton}</button>
                   </div>
-                  {actErr && <span className="err">{actErr}</span>}
+                  <ErrLine text={actErr} />
                 </>
               )}
 
@@ -1084,7 +1085,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                               <textarea className="field" value={retry.note} placeholder={t("직접 수정사항을 적어 주세요")} aria-label={t("직접 수정사항을 적어 주세요")}
                                         onChange={(e) => setSceneRetry((o) => ({ ...o, [s.n]: { ...retry, note: e.target.value } }))} />
                               <div className="acts">
-                                {sceneRetryErr[s.n] && <span className="err">{sceneRetryErr[s.n]}</span>}
+                                <ErrLine text={sceneRetryErr[s.n] ?? ""} />
                                 <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => openSceneRetry(s.n)}>{t("닫기")}</button>
                                 {/* 장면마다 첫 번째는 무료, 같은 장면을 또 뽑으면 1크레딧(#548) */}
                                 <button type="button" className="btn btn-p btn-sm" disabled={busy || ((s.history?.length ?? 0) >= 1 && noCredit)}
@@ -1119,7 +1120,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       );
                     })}
                   </div>
-                  {actErr && <span className="err">{actErr}</span>}
+                  <ErrLine text={actErr} />
                 </>
               )}
 
@@ -1155,7 +1156,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   </div>
                   <input className="field wt-prog-mnote" value={dirNote} placeholder={t("바라는 방향을 적고 후보 다시 만들기")} aria-label={t("다시 만들기 메모")}
                          onChange={(e) => setDirNote(e.target.value)} />
-                  {actErr && <span className="err">{actErr}</span>}
+                  <ErrLine text={actErr} />
                 </>
               )}
 
@@ -1170,7 +1171,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <button type="button" className="btn btn-w" disabled={busy} onClick={() => setConfirming(false)}><IconBack size={16} /> {t("다른 이야기 보기")}</button>
                     <button type="button" className="btn btn-p" disabled={busy} onClick={confirmPick}>{t("이대로 진행하기")} <IconArrow size={18} /></button>
                   </div>
-                  {actErr && <span className="err">{actErr}</span>}
+                  <ErrLine text={actErr} />
                 </>
               )}
 
@@ -1240,7 +1241,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       {t("지금까지 그린 장 보기 ({n}장)", { n: art.done })}
                     </button>
                   )}
-                  {actErr && <span className="err">{actErr}</span>}
+                  <ErrLine text={actErr} />
                 </>
               )}
 
@@ -1290,7 +1291,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                               onChange={(e) => editStory({ body: e.target.value })} />
                     <span className="dim count">{t("{n}자", { n: storyDraft.body.length })}</span>
                   </div>
-                  {actErr && <span className="err">{actErr}</span>}
+                  <ErrLine text={actErr} />
                   {(job.persona || cast.length > 0) && (
                     <>
                       <div className="wt-prog-pageshead"><b>{t("루가 읽어낸 인물")}</b></div>
@@ -1443,7 +1444,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       </button>
                     </div>
                   )}
-                  {actErr && <span className="err">{actErr}</span>}
+                  <ErrLine text={actErr} />
                   {cast.length > 0 && (castOk || castSheets.length > 0) && (
                     <>
                       <div className="wt-prog-pageshead" style={{ marginTop: 8 }}>
@@ -1477,7 +1478,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                           );
                         })}
                       </div>
-                      {castErr && <span className="err">{castErr}</span>}
+                      <ErrLine text={castErr} />
                     </>
                   )}
                 </>
