@@ -9,7 +9,7 @@
 import { ApiError, request } from './api';
 
 /** 키가 들어갈 폴더. 서버 ALLOWED_DOMAINS 밖의 값은 400 이다. */
-export type UploadDomain = 'zzal' | 'webtoon' | 'trailer' | 'common';
+export type UploadDomain = 'zzal' | 'webtoon' | 'piece-maker' | 'common';
 
 /** presign 발급 결과(서버 S3Service.PresignedUpload). */
 export interface PresignedUpload {

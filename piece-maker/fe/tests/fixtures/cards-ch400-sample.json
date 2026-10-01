@@ -1,0 +1,889 @@
+{
+  "cards": [
+    {
+      "id": "T1",
+      "chapter": 1,
+      "type": "mystery",
+      "kind": "수수께끼",
+      "title": "Gol D. Roger's hidden treasure",
+      "fact": "Gol D. Roger's hidden treasure — he claimed to have left it all behind, but a seeker would have to search the entire world for it; its location is unknown.",
+      "people": [
+        "Gol D. Roger"
+      ],
+      "entities": [
+        {
+          "id": "E15",
+          "name": "Gol D. Roger's treasure",
+          "type": "object"
+        },
+        {
+          "id": "E1",
+          "name": "Gol D. Roger",
+          "type": "character"
+        },
+        {
+          "id": "E14",
+          "name": "Pirate King",
+          "type": "object"
+        }
+      ],
+      "excerpt": "Gol D. Roger's hidden treasure — he claimed to have left it all behind, but a seeker would have to search the entire world for it; its location is unknown.",
+      "scene": "V1",
+      "scene_excerpt": "Gol D. Roger is publicly executed; his final words about leaving all his treasure behind spark the Great Pirate Era.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T2",
+      "chapter": 1,
+      "type": "promise",
+      "kind": "약속",
+      "title": "Shanks entrusts his straw hat to Monkey D. Luffy with the promise that it be returned when Monkey D. Luffy has become a great pirate.",
+      "fact": "Shanks entrusts his straw hat to Monkey D. Luffy with the promise that it be returned when Monkey D. Luffy has become a great pirate.",
+      "people": [
+        "Shanks",
+        "Monkey D. Luffy"
+      ],
+      "entities": [
+        {
+          "id": "E18",
+          "name": "Shanks's straw hat (straw hat)",
+          "type": "object"
+        },
+        {
+          "id": "E3",
+          "name": "Shanks",
+          "type": "character"
+        },
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Shanks entrusts his straw hat to Monkey D. Luffy with the promise that it be returned when Monkey D. Luffy has become a great pirate.",
+      "scene": "V7",
+      "scene_excerpt": "Before the Red Hair Pirates leave Foosha Village forever, Shanks gives Monkey D. Luffy his straw hat, asking him to return it once he has become a great pirate.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T3",
+      "chapter": 1,
+      "type": "promise",
+      "kind": "약속",
+      "title": "Monkey D. Luffy declares he will assemble a crew of about ten stronger than Shanks's, get a pirate flag, gain the most treasure in the world, and become the Pirate King.",
+      "fact": "Monkey D. Luffy declares he will assemble a crew of about ten stronger than Shanks's, get a pirate flag, gain the most treasure in the world, and become the Pirate King.",
+      "people": [
+        "Monkey D. Luffy"
+      ],
+      "entities": [
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        },
+        {
+          "id": "E14",
+          "name": "Pirate King",
+          "type": "object"
+        },
+        {
+          "id": "E10",
+          "name": "Red Hair Pirates",
+          "type": "organization"
+        }
+      ],
+      "excerpt": "Monkey D. Luffy declares he will assemble a crew of about ten stronger than Shanks's, get a pirate flag, gain the most treasure in the world, and become the Pirate King.",
+      "scene": "V8",
+      "scene_excerpt": "Ten years later a teenaged Monkey D. Luffy sails from Foosha Village, defeats the Lord of the Coast with Gomu Gomu no Pistol, and declares he will gather a crew of ten, get a flag, and become the Pirate King.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T4",
+      "chapter": 1,
+      "type": "unexplained_ability",
+      "kind": "설명 없는 능력",
+      "title": "The Devil Fruits are a class of fruits, one of which grants rubber properties at the cost of never swimming again; the others are unspecified.",
+      "fact": "The Devil Fruits are a class of fruits, one of which grants rubber properties at the cost of never swimming again; the others are unspecified.",
+      "people": [],
+      "entities": [
+        {
+          "id": "E17",
+          "name": "Devil Fruits",
+          "type": "object"
+        },
+        {
+          "id": "E16",
+          "name": "Gomu Gomu no Mi",
+          "type": "object"
+        },
+        {
+          "id": "E20",
+          "name": "Rubber body",
+          "type": "ability"
+        }
+      ],
+      "excerpt": "The Devil Fruits are a class of fruits, one of which grants rubber properties at the cost of never swimming again; the others are unspecified.",
+      "scene": "V4",
+      "scene_excerpt": "Monkey D. Luffy eats the Gomu Gomu no Mi from the Red Hair Pirates's chest, gaining a rubber body and losing the ability to swim forever.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T5",
+      "chapter": 1,
+      "type": "chekhovs_gun",
+      "kind": "체호프의 총",
+      "title": "Monkey D. Luffy's permanent inability to swim is emphasized repeatedly as the price of his power.",
+      "fact": "Monkey D. Luffy's permanent inability to swim is emphasized repeatedly as the price of his power.",
+      "people": [
+        "Monkey D. Luffy"
+      ],
+      "entities": [
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        },
+        {
+          "id": "E20",
+          "name": "Rubber body",
+          "type": "ability"
+        }
+      ],
+      "excerpt": "Monkey D. Luffy's permanent inability to swim is emphasized repeatedly as the price of his power.",
+      "scene": "V4",
+      "scene_excerpt": "Monkey D. Luffy eats the Gomu Gomu no Mi from the Red Hair Pirates's chest, gaining a rubber body and losing the ability to swim forever.",
+      "status": "resolved",
+      "resolved_chapter": 66,
+      "resolution": "Monkey D. Luffy's inability to swim finally endangers him at the climax: netted above the ocean and then falling in after his winning blow, he is saved only by Sanji's dive."
+    },
+    {
+      "id": "T6",
+      "chapter": 1,
+      "type": "unexplained_ability",
+      "kind": "설명 없는 능력",
+      "title": "Shanks scares off a giant sea monster with just a look, and calmly warns a gunman he is 'risking his life'",
+      "fact": "Shanks scares off a giant sea monster with just a look, and calmly warns a gunman he is 'risking his life' — an unexplained aura of power.",
+      "people": [
+        "Shanks",
+        "Lord of the Coast"
+      ],
+      "entities": [
+        {
+          "id": "E3",
+          "name": "Shanks",
+          "type": "character"
+        },
+        {
+          "id": "E22",
+          "name": "Shanks's intimidating gaze",
+          "type": "ability"
+        },
+        {
+          "id": "E9",
+          "name": "Lord of the Coast",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Shanks scares off a giant sea monster with just a look, and calmly warns a gunman he is 'risking his life' — an unexplained aura of power.",
+      "scene": "V6",
+      "scene_excerpt": "At sea the Lord of the Coast devours Higuma and his boat; Shanks saves Monkey D. Luffy, losing his left arm to the creature and scaring it off with a look.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T7",
+      "chapter": 1,
+      "type": "mentioned_unseen",
+      "kind": "언급만 됨",
+      "title": "The Red Hair Pirates sail away from Foosha Village for the final time and do not return; Shanks's whereabouts and one-armed fate are left open.",
+      "fact": "The Red Hair Pirates sail away from Foosha Village for the final time and do not return; Shanks's whereabouts and one-armed fate are left open.",
+      "people": [
+        "Shanks"
+      ],
+      "entities": [
+        {
+          "id": "E3",
+          "name": "Shanks",
+          "type": "character"
+        },
+        {
+          "id": "E10",
+          "name": "Red Hair Pirates",
+          "type": "organization"
+        }
+      ],
+      "excerpt": "The Red Hair Pirates sail away from Foosha Village for the final time and do not return; Shanks's whereabouts and one-armed fate are left open.",
+      "scene": "V7",
+      "scene_excerpt": "Before the Red Hair Pirates leave Foosha Village forever, Shanks gives Monkey D. Luffy his straw hat, asking him to return it once he has become a great pirate.",
+      "status": "resolved",
+      "resolved_chapter": 96,
+      "resolution": "Shanks reappears alive on an isolated island, revealed as 'The Red-Haired captain of Red Hair Pirates', visited by Dracule Mihawk and celebrating Monkey D. Luffy's first bounty."
+    },
+    {
+      "id": "T8",
+      "chapter": 1,
+      "type": "chekhovs_gun",
+      "kind": "체호프의 총",
+      "title": "The self-inflicted scar under Monkey D. Luffy's left eye is given conspicuous attention as his mark of resolve.",
+      "fact": "The self-inflicted scar under Monkey D. Luffy's left eye is given conspicuous attention as his mark of resolve.",
+      "people": [
+        "Monkey D. Luffy"
+      ],
+      "entities": [
+        {
+          "id": "E19",
+          "name": "Scar under Monkey D. Luffy's left eye",
+          "type": "object"
+        },
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        }
+      ],
+      "excerpt": "The self-inflicted scar under Monkey D. Luffy's left eye is given conspicuous attention as his mark of resolve.",
+      "scene": "V2",
+      "scene_excerpt": "To prove his toughness to the Red Hair Pirates, Monkey D. Luffy stabs himself with a knife below his left eye.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T9",
+      "chapter": 1,
+      "type": "unexplained_ability",
+      "kind": "설명 없는 능력",
+      "title": "Benn Beckman alone dispatches an entire armed bandit gang with a cigarette and rifle butt, stunning the villagers.",
+      "fact": "Benn Beckman alone dispatches an entire armed bandit gang with a cigarette and rifle butt, stunning the villagers.",
+      "people": [
+        "Benn Beckman"
+      ],
+      "entities": [
+        {
+          "id": "E4",
+          "name": "Benn Beckman",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Benn Beckman alone dispatches an entire armed bandit gang with a cigarette and rifle butt, stunning the villagers.",
+      "scene": "V5",
+      "scene_excerpt": "After Higuma beats the captured Monkey D. Luffy, the Red Hair Pirates return; Lucky Roux shoots a bandit, Benn Beckman single-handedly routs the gang, and Higuma escapes with Monkey D. Luffy using a smoke bomb.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T10",
+      "chapter": 2,
+      "type": "mentioned_unseen",
+      "kind": "언급만 됨",
+      "title": "Roronoa Zoro, a famous bounty hunter feared even by Alvida, is talked about at length but never appears; Monkey D. Luffy sets out to recruit him.",
+      "fact": "Roronoa Zoro, a famous bounty hunter feared even by Alvida, is talked about at length but never appears; Monkey D. Luffy sets out to recruit him.",
+      "people": [
+        "Roronoa Zoro",
+        "Monkey D. Luffy"
+      ],
+      "entities": [
+        {
+          "id": "E28",
+          "name": "Roronoa Zoro",
+          "type": "character"
+        },
+        {
+          "id": "E31",
+          "name": "Bounty Hunter",
+          "type": "organization"
+        },
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Roronoa Zoro, a famous bounty hunter feared even by Alvida, is talked about at length but never appears; Monkey D. Luffy sets out to recruit him.",
+      "scene": "V16",
+      "scene_excerpt": "Monkey D. Luffy and Koby sail off together; on hearing more about Roronoa Zoro, Monkey D. Luffy decides to recruit him.",
+      "status": "resolved",
+      "resolved_chapter": 3,
+      "resolution": "Roronoa Zoro finally appears in person, bound in the 153rd Branch yard; Monkey D. Luffy and Koby meet and speak with him, though he initially refuses to join the crew."
+    },
+    {
+      "id": "T11",
+      "chapter": 2,
+      "type": "promise",
+      "kind": "약속",
+      "title": "Koby declares he would rather die escaping than remain with Alvida, and dreams of becoming a Marine who catches bad guys.",
+      "fact": "Koby declares he would rather die escaping than remain with Alvida, and dreams of becoming a Marine who catches bad guys.",
+      "people": [
+        "Koby"
+      ],
+      "entities": [
+        {
+          "id": "E24",
+          "name": "Koby",
+          "type": "character"
+        },
+        {
+          "id": "E30",
+          "name": "Marine",
+          "type": "organization"
+        }
+      ],
+      "excerpt": "Koby declares he would rather die escaping than remain with Alvida, and dreams of becoming a Marine who catches bad guys.",
+      "scene": "V13",
+      "scene_excerpt": "Koby hides Monkey D. Luffy, shows him the boat he built over two years, and the two exchange dreams: Pirate King and Marine.",
+      "status": "resolved",
+      "resolved_chapter": 7,
+      "resolution": "Koby achieves his dream: rather than sail with the pirates, he provokes a public fight with Monkey D. Luffy to hide his pirate association and is accepted into the Marines, even if only to do chores."
+    },
+    {
+      "id": "T12",
+      "chapter": 2,
+      "type": "chekhovs_gun",
+      "kind": "체호프의 총",
+      "title": "Koby's navigation knowledge is singled out as the one thing he is good at, the sole reason Alvida keeps him alive.",
+      "fact": "Koby's navigation knowledge is singled out as the one thing he is good at, the sole reason Alvida keeps him alive.",
+      "people": [
+        "Koby"
+      ],
+      "entities": [
+        {
+          "id": "E24",
+          "name": "Koby",
+          "type": "character"
+        },
+        {
+          "id": "E37",
+          "name": "Navigation skill",
+          "type": "ability"
+        }
+      ],
+      "excerpt": "Koby's navigation knowledge is singled out as the one thing he is good at, the sole reason Alvida keeps him alive.",
+      "scene": "V10",
+      "scene_excerpt": "Alvida beats a crewman over dust and forces Koby to declare her the most beautiful in the sea, then orders him to clean her shoes.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T13",
+      "chapter": 2,
+      "type": "mystery",
+      "kind": "수수께끼",
+      "title": "Alvida has a bounty on her head that bounty hunter would come to claim, hinting at a wider bounty system tied to pirates.",
+      "fact": "Alvida has a bounty on her head that bounty hunter would come to claim, hinting at a wider bounty system tied to pirates.",
+      "people": [
+        "Alvida"
+      ],
+      "entities": [
+        {
+          "id": "E23",
+          "name": "Alvida",
+          "type": "character"
+        },
+        {
+          "id": "E31",
+          "name": "Bounty Hunter",
+          "type": "organization"
+        }
+      ],
+      "excerpt": "Alvida has a bounty on her head that bounty hunter would come to claim, hinting at a wider bounty system tied to pirates.",
+      "scene": "V12",
+      "scene_excerpt": "Alvida hurls her club into the hideout; hearing an intruder, she fears the bounty hunter Roronoa Zoro has come for her bounty.",
+      "status": "resolved",
+      "resolved_chapter": 96,
+      "resolution": "The bounty system pays off on Monkey D. Luffy himself — the Marines issue his first wanted poster at 30,000,000, and Nami warns that everybody will now try to kill him."
+    },
+    {
+      "id": "T14",
+      "chapter": 3,
+      "type": "promise",
+      "kind": "약속",
+      "title": "Helmeppo announces he is going back on his promise to Roronoa Zoro and will have him executed in three days, setting a ticking clock; Monkey D. Luffy declares Roronoa Zoro is joining his crew.",
+      "fact": "Helmeppo announces he is going back on his promise to Roronoa Zoro and will have him executed in three days, setting a ticking clock; Monkey D. Luffy declares Roronoa Zoro is joining his crew.",
+      "people": [
+        "Helmeppo",
+        "Roronoa Zoro",
+        "Monkey D. Luffy"
+      ],
+      "entities": [
+        {
+          "id": "E39",
+          "name": "Helmeppo",
+          "type": "character"
+        },
+        {
+          "id": "E28",
+          "name": "Roronoa Zoro",
+          "type": "character"
+        },
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Helmeppo announces he is going back on his promise to Roronoa Zoro and will have him executed in three days, setting a ticking clock; Monkey D. Luffy declares Roronoa Zoro is joining his crew.",
+      "scene": "V24",
+      "scene_excerpt": "Helmeppo brags about breaking his promise and announces Roronoa Zoro will be executed in three days; Monkey D. Luffy punches him and decides Roronoa Zoro will join his crew.",
+      "status": "resolved",
+      "resolved_chapter": 5,
+      "resolution": "The three-day execution deadline is voided: Monkey D. Luffy frees Roronoa Zoro, blocks the Marines's bullets, and Roronoa Zoro agrees to join his crew, though Morgan remains to be defeated."
+    },
+    {
+      "id": "T15",
+      "chapter": 3,
+      "type": "mystery",
+      "kind": "수수께끼",
+      "title": "Roronoa Zoro refuses to become a criminal because he has 'his own dream' to follow, which he does not explain.",
+      "fact": "Roronoa Zoro refuses to become a criminal because he has 'his own dream' to follow, which he does not explain.",
+      "people": [
+        "Roronoa Zoro"
+      ],
+      "entities": [
+        {
+          "id": "E28",
+          "name": "Roronoa Zoro",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Roronoa Zoro refuses to become a criminal because he has 'his own dream' to follow, which he does not explain.",
+      "scene": "V22",
+      "scene_excerpt": "Roronoa Zoro refuses to join Monkey D. Luffy's pirate crew, saying he has his own dream, then asks for the dirt-covered rice buggy balls and tells Monkey D. Luffy to say they were tasty.",
+      "status": "resolved",
+      "resolved_chapter": 5,
+      "resolution": "Roronoa Zoro's dream is revealed in flashback: he swore with Kuina that one of them would become the world's greatest swordsman, and carries her sword to fulfill it on her behalf."
+    },
+    {
+      "id": "T16",
+      "chapter": 3,
+      "type": "mentioned_unseen",
+      "kind": "언급만 됨",
+      "title": "Morgan, the Marine in charge of the 153rd Branch, has a name that terrifies the townspeople as much as Roronoa Zoro's, yet never appears; Koby cannot understand why they fear a Marine.",
+      "fact": "Morgan, the Marine in charge of the 153rd Branch, has a name that terrifies the townspeople as much as Roronoa Zoro's, yet never appears; Koby cannot understand why they fear a Marine.",
+      "people": [
+        "Morgan",
+        "Koby"
+      ],
+      "entities": [
+        {
+          "id": "E38",
+          "name": "Morgan",
+          "type": "character"
+        },
+        {
+          "id": "E43",
+          "name": "153rd Branch",
+          "type": "place"
+        },
+        {
+          "id": "E24",
+          "name": "Koby",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Morgan, the Marine in charge of the 153rd Branch, has a name that terrifies the townspeople as much as Roronoa Zoro's, yet never appears; Koby cannot understand why they fear a Marine.",
+      "scene": "V18",
+      "scene_excerpt": "In the town restaurant and street, mentioning the names Roronoa Zoro and Morgan provokes fearful reactions from the customers/villagers.",
+      "status": "resolved",
+      "resolved_chapter": 4,
+      "resolution": "Morgan finally appears at the 153rd Branch: a tyrant who extorts offerings, strikes his own son and subordinates, erects a statue of himself and orders a child killed for 'disrespect' — explaining why the town fears him as much as Roronoa Zoro."
+    },
+    {
+      "id": "T17",
+      "chapter": 3,
+      "type": "mystery",
+      "kind": "수수께끼",
+      "title": "The Marine/Marines, supposedly lawmen who catch bad guys, behave cruelly and obey Helmeppo's abuse of authority, shocking Koby whose dream is to join them.",
+      "fact": "The Marine/Marines, supposedly lawmen who catch bad guys, behave cruelly and obey Helmeppo's abuse of authority, shocking Koby whose dream is to join them.",
+      "people": [
+        "Koby",
+        "Helmeppo"
+      ],
+      "entities": [
+        {
+          "id": "E42",
+          "name": "Marines",
+          "type": "organization"
+        },
+        {
+          "id": "E24",
+          "name": "Koby",
+          "type": "character"
+        },
+        {
+          "id": "E39",
+          "name": "Helmeppo",
+          "type": "character"
+        },
+        {
+          "id": "E45",
+          "name": "Helmeppo's law of complicity",
+          "type": "object"
+        }
+      ],
+      "excerpt": "The Marine/Marines, supposedly lawmen who catch bad guys, behave cruelly and obey Helmeppo's abuse of authority, shocking Koby whose dream is to join them.",
+      "scene": "V21",
+      "scene_excerpt": "Helmeppo arrives with Marines, spits out and stomps the sugar-made rice buggy balls, cites his father's law, and orders a Marine to throw Rika over the wall; Monkey D. Luffy catches her.",
+      "status": "resolved",
+      "resolved_chapter": 7,
+      "resolution": "With Morgan gone, the Marines prove honorable — they thank the pirates, decline to report them to Marine Headquarters, accept Koby despite his pirate past, and salute the departing pirates at the cost of a week without food, restoring Koby's faith in the Marine."
+    },
+    {
+      "id": "T18",
+      "chapter": 3,
+      "type": "chekhovs_gun",
+      "kind": "체호프의 총",
+      "title": "Roronoa Zoro's endurance is emphasized: bound without food for nine days, having struck some bargain/promise with Helmeppo that he would be freed if he survived.",
+      "fact": "Roronoa Zoro's endurance is emphasized: bound without food for nine days, having struck some bargain/promise with Helmeppo that he would be freed if he survived.",
+      "people": [
+        "Roronoa Zoro",
+        "Helmeppo"
+      ],
+      "entities": [
+        {
+          "id": "E28",
+          "name": "Roronoa Zoro",
+          "type": "character"
+        },
+        {
+          "id": "E39",
+          "name": "Helmeppo",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Roronoa Zoro's endurance is emphasized: bound without food for nine days, having struck some bargain/promise with Helmeppo that he would be freed if he survived.",
+      "scene": "V24",
+      "scene_excerpt": "Helmeppo brags about breaking his promise and announces Roronoa Zoro will be executed in three days; Monkey D. Luffy punches him and decides Roronoa Zoro will join his crew.",
+      "status": "resolved",
+      "resolved_chapter": 6,
+      "resolution": "Roronoa Zoro survives his ordeal bound and starving; freed by Monkey D. Luffy, he immediately overpowers the entire Marines force despite his weakened state."
+    },
+    {
+      "id": "T24",
+      "chapter": 4,
+      "type": "unexplained_ability",
+      "kind": "설명 없는 능력",
+      "title": "Roronoa Zoro, starved and only just untied, gives a single threatening glance toward the 153rd Branch roof that is treated as menacing.",
+      "fact": "Roronoa Zoro, starved and only just untied, gives a single threatening glance toward the 153rd Branch roof that is treated as menacing.",
+      "people": [
+        "Roronoa Zoro"
+      ],
+      "entities": [
+        {
+          "id": "E28",
+          "name": "Roronoa Zoro",
+          "type": "character"
+        },
+        {
+          "id": "E43",
+          "name": "153rd Branch",
+          "type": "place"
+        }
+      ],
+      "excerpt": "Roronoa Zoro, starved and only just untied, gives a single threatening glance toward the 153rd Branch roof that is treated as menacing.",
+      "scene": "V33",
+      "scene_excerpt": "Koby unties Roronoa Zoro and reveals his dream of being a just Marine and Monkey D. Luffy's dream of becoming Pirate King; a Marines spots them and Koby is shot, prompting Roronoa Zoro to glare at the 153rd Branch roof.",
+      "status": "resolved",
+      "resolved_chapter": 6,
+      "resolution": "Roronoa Zoro's menace is made good — once armed he immobilizes the whole Marines squad, terrifies them into tears, and personally defeats Morgan."
+    },
+    {
+      "id": "T34",
+      "chapter": 7,
+      "type": "mentioned_unseen",
+      "kind": "언급만 됨",
+      "title": "Marine Headquarters, the higher authority the Marines choose not to report Morgan's defeat to, is named but unseen.",
+      "fact": "Marine Headquarters, the higher authority the Marines choose not to report Morgan's defeat to, is named but unseen.",
+      "people": [],
+      "entities": [
+        {
+          "id": "E65",
+          "name": "Marine Headquarters",
+          "type": "organization"
+        },
+        {
+          "id": "E42",
+          "name": "Marines",
+          "type": "organization"
+        }
+      ],
+      "excerpt": "Marine Headquarters, the higher authority the Marines choose not to report Morgan's defeat to, is named but unseen.",
+      "scene": "V51",
+      "scene_excerpt": "The Marines confirm Monkey D. Luffy and Roronoa Zoro are pirates, thank them for their help, order them to leave town, but promise not to report the incident to Marine Headquarters.",
+      "status": "resolved",
+      "resolved_chapter": 94,
+      "resolution": "Marine Headquarters finally enters the story indirectly: Nezumi alerts Marine marine headquarters about the Straw Hat Crew at the 16th 153rd branch."
+    },
+    {
+      "id": "T374",
+      "chapter": 96,
+      "type": "promise",
+      "kind": "약속",
+      "title": "Dracule Mihawk tells Shanks of Monkey D. Luffy's first bounty, recalling Shanks's story about a kid in a little village; Shanks, eager to meet Monkey D. Luffy again, throws a party in celebration.",
+      "fact": "Dracule Mihawk tells Shanks of Monkey D. Luffy's first bounty, recalling Shanks's story about a kid in a little village; Shanks, eager to meet Monkey D. Luffy again, throws a party in celebration.",
+      "people": [
+        "Shanks",
+        "Dracule Mihawk",
+        "Monkey D. Luffy"
+      ],
+      "entities": [
+        {
+          "id": "E3",
+          "name": "Shanks",
+          "type": "character"
+        },
+        {
+          "id": "E313",
+          "name": "Dracule Mihawk",
+          "type": "character"
+        },
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        },
+        {
+          "id": "E628",
+          "name": "Shanks's celebration party",
+          "type": "object"
+        },
+        {
+          "id": "E627",
+          "name": "Dracule Mihawk's isolated island",
+          "type": "place"
+        }
+      ],
+      "excerpt": "Dracule Mihawk tells Shanks of Monkey D. Luffy's first bounty, recalling Shanks's story about a kid in a little village; Shanks, eager to meet Monkey D. Luffy again, throws a party in celebration.",
+      "scene": "V676",
+      "scene_excerpt": "On an isolated island Dracule Mihawk finds Shanks, the red-haired captain of the Red Hair Pirates, and tells him of Monkey D. Luffy's first wanted poster, recalling Shanks's story about a kid in a little village; Shanks throws a party in celebration.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T378",
+      "chapter": 97,
+      "type": "chekhovs_gun",
+      "kind": "체호프의 총",
+      "title": "Sandai Kitetsu is a cursed blade whose every previous wielder died a tragic death; Roronoa Zoro takes it after it refuses to cut him, and Ipponmatsu says the sword chose him.",
+      "fact": "Sandai Kitetsu is a cursed blade whose every previous wielder died a tragic death; Roronoa Zoro takes it after it refuses to cut him, and Ipponmatsu says the sword chose him.",
+      "people": [
+        "Roronoa Zoro",
+        "Ipponmatsu"
+      ],
+      "entities": [
+        {
+          "id": "E634",
+          "name": "Sandai Kitetsu",
+          "type": "object"
+        },
+        {
+          "id": "E641",
+          "name": "Sandai Kitetsu's curse",
+          "type": "object"
+        },
+        {
+          "id": "E28",
+          "name": "Roronoa Zoro",
+          "type": "character"
+        },
+        {
+          "id": "E629",
+          "name": "Ipponmatsu",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Sandai Kitetsu is a cursed blade whose every previous wielder died a tragic death; Roronoa Zoro takes it after it refuses to cut him, and Ipponmatsu says the sword chose him.",
+      "scene": null,
+      "scene_excerpt": "",
+      "status": "resolved",
+      "resolved_chapter": 108,
+      "resolution": "Partially paid off: Roronoa Zoro takes Sandai Kitetsu into its first battle and finds it 'remarkably sharp' — it cuts clean through a stone hammer. No tragic consequence of the curse yet appears, so the curse itself remains untested."
+    },
+    {
+      "id": "T467",
+      "chapter": 117,
+      "type": "chekhovs_gun",
+      "kind": "체호프의 총",
+      "title": "Monkey D. Luffy hands his treasured straw hat to Nefertari Vivi before fighting Dorry, over her protests.",
+      "fact": "Monkey D. Luffy hands his treasured straw hat to Nefertari Vivi before fighting Dorry, over her protests.",
+      "people": [
+        "Monkey D. Luffy",
+        "Nefertari Vivi"
+      ],
+      "entities": [
+        {
+          "id": "E18",
+          "name": "Shanks's straw hat (straw hat)",
+          "type": "object"
+        },
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        },
+        {
+          "id": "E685",
+          "name": "Nefertari Vivi",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Monkey D. Luffy hands his treasured straw hat to Nefertari Vivi before fighting Dorry, over her protests.",
+      "scene": "V802",
+      "scene_excerpt": "Dorry's rum explodes as he drinks it, gravely injuring him; he blames Monkey D. Luffy and Nefertari Vivi. Monkey D. Luffy hands his straw hat to Nefertari Vivi and goes to fight the giant despite her pleas.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T1575",
+      "chapter": 386,
+      "type": "chekhovs_gun",
+      "kind": "체호프의 총",
+      "title": "The Golden Den Den Mushi: a rank-restricted snail device given to Spandam by Admiral Kuzan that activates the Buster Call, with a button on its shell that destroys an entire island at one push. Spandam nearly presses it by accident when startled, and gloats about authority used as a weapon.",
+      "fact": "The Golden Den Den Mushi: a rank-restricted snail device given to Spandam by Admiral Kuzan that activates the Buster Call, with a button on its shell that destroys an entire island at one push. Spandam nearly presses it by accident when startled, and gloats about authority used as a weapon.",
+      "people": [
+        "Spandam",
+        "Vice Admiral Kuzan"
+      ],
+      "entities": [
+        {
+          "id": "E2913",
+          "name": "Golden Den Den Mushi (Buster Call snail)",
+          "type": "object"
+        },
+        {
+          "id": "E2659",
+          "name": "Spandam",
+          "type": "character"
+        },
+        {
+          "id": "E2708",
+          "name": "Buster Call",
+          "type": "organization"
+        },
+        {
+          "id": "E2205",
+          "name": "Vice Admiral Kuzan",
+          "type": "character"
+        },
+        {
+          "id": "E2920",
+          "name": "Enies Lobby casualty count (2,000+)",
+          "type": "object"
+        }
+      ],
+      "excerpt": "The Golden Den Den Mushi: a rank-restricted snail device given to Spandam by Admiral Kuzan that activates the Buster Call, with a button on its shell that destroys an entire island at one push. Spandam nearly presses it by accident when startled, and gloats about authority used as a weapon.",
+      "scene": "V2534",
+      "scene_excerpt": "In the Tower of Justice, Spandam shows Funkfreed the Golden Den Den Mushi, boasting that it activates the Buster Call, that Kuzan gave it to him, that one push of its button destroys an island, and that if the Ancient Weapons is revived he will command the Buster Call and run the Marines.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T1648",
+      "chapter": 400,
+      "type": "promise",
+      "kind": "약속",
+      "title": "The crew scatters into simultaneous duels: Franky vs Fukurou, Sogeking vs Jabra, Nami vs Kumadori, Sanji vs Kalifa, Roronoa Zoro vs Kaku, Monkey D. Luffy vs Rob Lucci.",
+      "fact": "The crew scatters into simultaneous duels: Franky vs Fukurou, Sogeking vs Jabra, Nami vs Kumadori, Sanji vs Kalifa, Roronoa Zoro vs Kaku, Monkey D. Luffy vs Rob Lucci.",
+      "people": [
+        "Franky",
+        "Fukurou",
+        "Sogeking",
+        "Jabra",
+        "Nami",
+        "Kumadori",
+        "Sanji",
+        "Kalifa",
+        "Roronoa Zoro",
+        "Kaku",
+        "Monkey D. Luffy",
+        "Rob Lucci"
+      ],
+      "entities": [
+        {
+          "id": "E2440",
+          "name": "Franky",
+          "type": "character"
+        },
+        {
+          "id": "E2823",
+          "name": "Fukurou",
+          "type": "character"
+        },
+        {
+          "id": "E2768",
+          "name": "Sogeking",
+          "type": "character"
+        },
+        {
+          "id": "E2824",
+          "name": "Jabra",
+          "type": "character"
+        },
+        {
+          "id": "E71",
+          "name": "Nami",
+          "type": "character"
+        },
+        {
+          "id": "E2825",
+          "name": "Kumadori",
+          "type": "character"
+        },
+        {
+          "id": "E269",
+          "name": "Sanji",
+          "type": "character"
+        },
+        {
+          "id": "E2389",
+          "name": "Kalifa",
+          "type": "character"
+        },
+        {
+          "id": "E28",
+          "name": "Roronoa Zoro",
+          "type": "character"
+        },
+        {
+          "id": "E2430",
+          "name": "Kaku",
+          "type": "character"
+        },
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        },
+        {
+          "id": "E2415",
+          "name": "Rob Lucci",
+          "type": "character"
+        }
+      ],
+      "excerpt": "The crew scatters into simultaneous duels: Franky vs Fukurou, Sogeking vs Jabra, Nami vs Kumadori, Sanji vs Kalifa, Roronoa Zoro vs Kaku, Monkey D. Luffy vs Rob Lucci.",
+      "scene": "V2658",
+      "scene_excerpt": "The crew scatters through the Tower of Justice and each meets a CP9 member: Fukurou ambushes Franky in the kitchen, Sogeking finds Jabra asleep beside a key, Kumadori confronts Nami in the basement, Kalifa traps Sanji over tea, and Kaku awaits Roronoa Zoro by the fireplace.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    }
+  ],
+  "chapter": 400,
+  "max_chapter": 400,
+  "state_digest": "139d61c9b7c7f9adc8768fa7a74eceb2a571c20c1f714f7bbe4804a6d2692b8e",
+  "cards_digest": "49700cffb2ae94c713d9f16fc7a2dbdad68974f010d7e2643a6c8332e5a06fca",
+  "source_notice": "장부에서 추출한 기록입니다. 원작의 확정 사실로 검증된 자료는 아닙니다."
+}

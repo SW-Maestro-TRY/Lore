@@ -17,7 +17,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 
 /**
- * 서비스 안의 사람. **세 도메인(zzal·webtoon·trailer)이 공유하는 기둥이다.**
+ * 서비스 안의 사람. **세 도메인(zzal·webtoon·piece-maker)이 공유하는 기둥이다.**
  *
  * 크레딧도, 펫도, 웹툰도 전부 이 번호만 바라본다. 그래서 이 표는 앞으로 거의 바뀌지 않아야 하고,
  * 자주 바뀌거나 늘어나는 것은 옆에 붙는 별도 표로 뺀다.

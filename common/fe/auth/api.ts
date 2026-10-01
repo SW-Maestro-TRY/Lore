@@ -1,6 +1,6 @@
 // 가입·로그인·로그아웃·내 정보. common/be 의 AuthController · UserController 와 짝이다.
 //
-// ★ 원래 zzal/fe/lib/auth.ts 였다. 로그인은 세 탭(zzal·trailer·webtoon)이 함께 쓰는 것이라
+// ★ 원래 zzal/fe/lib/auth.ts 였다. 로그인은 세 탭(zzal·piece-maker·webtoon)이 함께 쓰는 것이라
 //   한 도메인 폴더 안에 있으면 다른 도메인이 zzal 을 import 하는 모양이 된다.
 //   zzal/fe/lib/auth.ts 는 이 파일을 다시 내보내는 껍데기로 남는다.
 //

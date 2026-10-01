@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 흐름:
  *   1) 프론트가 여기서 presigned URL 을 받고
  *   2) 그 URL 로 S3 에 이미지를 직접 PUT 한 뒤
- *   3) 돌려받은 key 를 자기 도메인 API(zzal/webtoon/trailer)에 저장한다.
+ *   3) 돌려받은 key 를 자기 도메인 API(zzal/webtoon/piece-maker)에 저장한다.
  *
  * 서버는 파일 바이트를 만지지 않으므로 t3.micro 가 업로드로 멈출 위험이 없다.
  */
@@ -47,9 +47,9 @@ public class UploadController {
         return ApiResponse.ok(s3Service.createUploadUrl(userId, request.domain(), request.contentType()));
     }
 
-    /** 발급 요청 본문. domain = 키 폴더(zzal/webtoon/trailer), contentType = image/png 등. */
+    /** 발급 요청 본문. domain = 키 폴더(zzal/webtoon/piece-maker), contentType = image/png 등. */
     public record PresignRequest(
-            @Schema(description = "키 폴더. zzal · webtoon · trailer · common 만 허용", example = "zzal")
+            @Schema(description = "키 폴더. zzal · webtoon · piece-maker · common 만 허용", example = "zzal")
             @NotBlank String domain,
 
             @Schema(description = "올릴 파일의 MIME 타입", example = "image/png")

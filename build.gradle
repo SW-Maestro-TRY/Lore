@@ -35,7 +35,7 @@ sourceSets {
                 'common/be/src/main/java',   // 공통: config, 인증, 공통 응답
                 'webtoon/be/src/main/java',  // 하은
                 'zzal/be/src/main/java',     // 상훈
-                'trailer/be/src/main/java',  // 병연
+                'piece-maker/be/src/main/java',  // 병연
                 'apps/api/src/main/java'     // 서버 실행 진입점(main 클래스)
             ]
         }
@@ -47,7 +47,7 @@ sourceSets {
                 'common/be/src/main/resources',
                 'webtoon/be/src/main/resources',
                 'zzal/be/src/main/resources',
-                'trailer/be/src/main/resources'
+                'piece-maker/be/src/main/resources'
             ]
         }
     }
@@ -57,7 +57,7 @@ sourceSets {
                 'common/be/src/test/java',
                 'webtoon/be/src/test/java',
                 'zzal/be/src/test/java',
-                'trailer/be/src/test/java'
+                'piece-maker/be/src/test/java'
             ]
         }
     }

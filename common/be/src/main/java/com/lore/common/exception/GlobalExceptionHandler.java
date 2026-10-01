@@ -3,13 +3,17 @@ package com.lore.common.exception;
 import com.lore.common.response.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.util.Set;
 
 /**
  * 어느 컨트롤러에서 예외가 나든 여기로 모여 공통 응답 형태로 바뀐다.
@@ -74,6 +78,27 @@ public class GlobalExceptionHandler {
         log.debug("없는 주소 — {}", e.getResourcePath());
         return ResponseEntity.status(ErrorCode.NOT_FOUND.getStatus())
                 .body(ApiResponse.fail(ErrorCode.NOT_FOUND));
+    }
+
+    /**
+     * 주소는 있는데 그 방식(GET·POST …)은 받지 않는 경우.
+     *
+     * ★ 안 잡으면 아래 "그 밖의 모든 예외" 로 떨어져 <b>500 + "서버 오류가 발생했습니다"</b> 가 된다.
+     *   없는 주소(404)와 같은 사정이다 — 부른 쪽이 틀린 것인데 서버가 터진 것처럼 보이고 로그에 ERROR 가 쌓인다.
+     *   조회가 로그인 없이 열린 자리에서는 누구나 그 ERROR 를 만들 수 있다.
+     *   POST 만 받는 {@code /api/piece-maker/v1/public/feedback} 을 GET 으로 부르면 실제로 그랬다(2026-10-01 발견).
+     *
+     * ★ 받는 방식은 {@code Allow} 머리말로 알려 준다 — 405 의 약속이다.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException e) {
+        log.debug("받지 않는 방식 — {}", e.getMethod());
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(ErrorCode.METHOD_NOT_ALLOWED.getStatus());
+        Set<HttpMethod> supported = e.getSupportedHttpMethods();
+        if (supported != null && !supported.isEmpty()) {
+            response.allow(supported.toArray(HttpMethod[]::new));
+        }
+        return response.body(ApiResponse.fail(ErrorCode.METHOD_NOT_ALLOWED));
     }
 
     /** 그 밖의 모든 예외 — 상세 원인은 로그에만 남기고 밖으로는 내보내지 않는다 */

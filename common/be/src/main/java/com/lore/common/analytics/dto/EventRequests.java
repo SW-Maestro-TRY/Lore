@@ -34,6 +34,7 @@ public final class EventRequests {
      *   유입 출처는 방문 하나에 하나뿐이다. 화면은 <b>첫 묶음에만</b> 담아 보내고,
      *   그래서 한 방문의 첫 몇 줄에만 값이 남는다. 매 줄에 복사하면 같은 사실이 수십 번 쌓인다.
      */
+    @Schema(name = "CommonEventBatch")
     public record Batch(
             @Schema(description = "어디서 들어왔는지. 쿼리스트링은 서버가 잘라 버린다", example = "https://www.google.com/search")
             String referrer,
@@ -53,6 +54,7 @@ public final class EventRequests {
      * @param path  어느 화면이었나. 쿼리는 서버가 잘라 버린다
      * @param props 곁들이는 값. ★ 허용된 키만 남고 나머지는 서버가 버린다
      */
+    @Schema(name = "CommonEvent")
     public record Event(
             @Schema(description = "이벤트 이름", example = "zzal_upload_abandoned")
             String name,
