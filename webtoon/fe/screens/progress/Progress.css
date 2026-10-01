@@ -366,3 +366,4 @@
 .wt .wt-prog-cast.editing { border-color: var(--ink); }
 .wt .wt-prog-cast textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; resize: none; overflow: hidden; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; border-radius: 8px; }
 .wt .wt-prog-cast .acts { display: flex; gap: 8px; justify-content: flex-end; }
+.wt .wt-prog-cast .intro.tie { margin-bottom: 12px; color: var(--ink); }
