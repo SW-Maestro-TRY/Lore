@@ -492,7 +492,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     if (!job) return false;
     if (i === 0) return dirs.length > 0;
     if (i === 1) return cur > 1 || status === "awaiting_sheet";
-    if (i === SCENES) return scenes.length > 0 && cur > SCENES;
+    /* 장면 걸음은 장면이 하나라도 있으면 언제든 — 지금 걸음이면 장면 확인 화면으로 돌아오고,
+       끝난 뒤면 읽기 전용(scenes-view). 전에는 cur > SCENES 라 장면 확인 중에 걸음 2·「내가
+       적은 것」으로 갔다가 돌아오지 못했다(#548). */
+    if (i === SCENES) return scenes.length > 0;
     if (i === PAGES) return !!art || cur >= PAGES;
     return cur === REVIEW;
   };
