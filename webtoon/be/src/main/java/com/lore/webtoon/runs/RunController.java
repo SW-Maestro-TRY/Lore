@@ -333,7 +333,11 @@ public class RunController {
             throw new BusinessException(CreditGate.notEnough(), blocked);
         }
         try {
-            String note = body == null ? "" : String.valueOf(body.getOrDefault("feedback", ""));
+            /* 고른 항목(tags)과 적은 글(feedback)을 같이 넘긴다 — 전에는 글만 넘겨서, 항목만 고른
+               사람의 다시 그리기는 아무 지시 없이 그려졌다(#548). */
+            String typed = body == null ? "" : String.valueOf(body.getOrDefault("feedback", "")).trim();
+            String picked = body == null || !(body.get("tags") instanceof List<?> ids) ? "" : FeedbackTags.sceneNote(ids);
+            String note = picked.isEmpty() ? typed : typed.isEmpty() ? picked : picked + "\n" + typed;
             String id = regen.start(runId, no, note);
             if (cost > 0) {
                 credits.charge(userId, cost, "regen:" + runId + ":" + no + ":" + id, "장 다시 그리기");

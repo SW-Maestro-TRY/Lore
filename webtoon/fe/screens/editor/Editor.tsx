@@ -166,19 +166,14 @@ export default function Editor({ runId, go, authStatus = "loading" }:
             <b id="edTitle" hidden />
             <div className="title-row wt-ed-titlerow">
               <h1 id="edEpisode" data-title-edit tabIndex={0} title={t("눌러서 제목을 고칩니다")}>—</h1>
-              <button type="button" className="wt-ed-titleedit" id="edTitleEditBtn" title={t("제목 고치기")}>
-                <IconEdit size={13} /> {t("제목 고치기")}
+              <button type="button" className="wt-ed-titleedit" id="edTitleEditBtn" title={t("제목 고치기")} aria-label={t("제목 고치기")}>
+                <IconEdit size={15} />
               </button>
             </div>
             <span id="edMeta" className="dim" />
           </div>
 
           <div className="ed-chips wt-ed-chips">
-            <span className="chip wt-ed-credit">
-              ◈ {balance == null ? "—" : balance.toLocaleString("ko-KR")} {t("크레딧")}
-              <button type="button" className="wt-ed-ledgerbtn" aria-expanded={ledgerOpen}
-                      onClick={() => setLedgerOpen((v) => !v)}>{t("내역")}</button>
-            </span>
             <label className="mini-toggle wt-ed-overlaytoggle">
               <input type="checkbox" id="showOverlay" defaultChecked aria-label={t("내가 얹은 것 보기")} />
               {t("내가 얹은 것 보기")}
@@ -194,8 +189,6 @@ export default function Editor({ runId, go, authStatus = "loading" }:
 
       <div className="ed-body wt-ed-body">
         <aside className="ed-works wt-ed-left" id="edWorks">
-          <b className="wt-ed-lefthead">{t("내 작품")}</b>
-          <div id="worksList" className="wt-ed-workslist" />
           <div className="wt-ed-pages">
             <b className="wt-ed-lefthead">{t("페이지")}</b>
             <div className="wt-ed-pagegrid">
@@ -208,6 +201,11 @@ export default function Editor({ runId, go, authStatus = "loading" }:
                 </button>
               )) : [1, 2, 3].map((i) => <div key={i} className="skeleton wt-ed-thumb" />)}
             </div>
+          </div>
+          {/* 페이지가 위, 다른 작품으로 옮기는 「내 작품」은 맨 아래(#548) */}
+          <div className="wt-ed-works">
+            <b className="wt-ed-lefthead">{t("내 작품")}</b>
+            <div id="worksList" className="wt-ed-workslist" />
           </div>
         </aside>
 
@@ -242,30 +240,6 @@ export default function Editor({ runId, go, authStatus = "loading" }:
             <div className="dock-grid wt-ed-dockgrid" id="dockGrid" />
           </div>
 
-          <div className="dock-ledger wt-ed-ledger" hidden={!ledgerOpen}>
-            <div className="dock-props-head">
-              <b>{t("크레딧 사용 내역")}</b>
-              <button type="button" className="icon-btn" aria-label={t("닫기")}
-                      onClick={() => setLedgerOpen(false)}><IconClose size={14} /></button>
-            </div>
-            {ledgerErr ? (
-              <p className="err">{ledgerErr}</p>
-            ) : (
-              <ul>
-                {ledger == null ? (
-                  <li className="ledger-empty">{t("불러오는 중…")}</li>
-                ) : ledger.length === 0 ? (
-                  <li className="ledger-empty">{t("아직 쓴 크레딧이 없습니다.")}</li>
-                ) : ledger.map((x) => (
-                  <li key={x.id}>
-                    <span>{new Date(x.at).toLocaleDateString("ko-KR")} · {x.label}</span>
-                    <b className={x.delta < 0 ? "" : "plus"}>{x.delta < 0 ? "" : "+"}{x.delta}</b>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
           <div className="wt-ed-regen">
             <b>{t("다시 그리기")}</b>
             {activeNote && <span className="dim">{t("이 장의 장면 · {note}", { note: activeNote })}</span>}
@@ -274,33 +248,29 @@ export default function Editor({ runId, go, authStatus = "loading" }:
                 ? t("이 컷 다시 그리기")
                 : t("이 컷 다시 그리기 · {n}크레딧", { n: regenCost })}
             </button>
+            {/* 다시 그리기 칸 — 팝업이 아니라 단추 바로 아래에 열린다(#548). 항목(칩)은 엔진이 /config 에서
+                받아 채우고, 고른 항목과 적은 말이 둘 다 그리는 프롬프트에 들어간다. id 는 엔진이 쓴다. */}
+            <div className="wt-ed-regenask" id="regenAsk" hidden>
+              <b id="regenAskTitle">{t("다시 그리기")}</b>
+              <p className="ask-sub" id="regenAskSub" hidden />
+              <p className="ask-scene" id="regenAskScene" hidden />
+              <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
+              <div className="fb-tags" id="regenAskTags" />
+              <textarea id="regenAskText" rows={3} maxLength={500} className="field" aria-label={t("더 하고 싶은 말")}
+                        placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
+              <label className="check-line">
+                <input type="checkbox" id="regenAskTextless" />
+                <span>{t("말풍선 없이 그림만")}</span>
+              </label>
+              <div className="ask-actions">
+                <button type="button" className="btn btn-w btn-sm" id="regenAskCancel">{t("취소")}</button>
+                <button type="button" className="btn btn-p btn-sm" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
+              </div>
+            </div>
           </div>
         </aside>
       </div>
 
-      {/* 다시 그리기 확인 창 — 항목(칩)은 엔진이 /config 에서 받아 채운다. */}
-      <div className="ask modal" id="regenAsk" hidden>
-        <div className="ask-box modal-box" role="dialog" aria-modal="true" aria-labelledby="regenAskTitle">
-          <h2 id="regenAskTitle">{t("다시 그리기")}</h2>
-          <p className="ask-sub" id="regenAskSub" />
-          <p className="ask-scene" id="regenAskScene" hidden />
-          <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
-          <div className="fb-tags" id="regenAskTags" />
-          <label className="wt-ed-askfield">
-            <span>{t("더 하고 싶은 말")}</span>
-            <textarea id="regenAskText" rows={3} maxLength={500} className="field"
-                      placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
-          </label>
-          <label className="check-line">
-            <input type="checkbox" id="regenAskTextless" />
-            <span>{t("말풍선 없이 그림만")}</span>
-          </label>
-          <div className="ask-actions">
-            <button type="button" className="btn btn-w" id="regenAskCancel">{t("취소")}</button>
-            <button type="button" className="btn btn-p" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
-          </div>
-        </div>
-      </div>
 
       <div className="toast wt-ed-toast" id="toast" hidden />
       {creditShort !== null && (
