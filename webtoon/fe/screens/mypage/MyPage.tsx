@@ -390,21 +390,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               </div>
             </div>
 
-            {active.length > 0 && (
-              /* 만드는 중(#548) — 완성된 웹툰과 같은 카드 모양, 그 위에 따로 한 줄 */
-              <div className="wt-my-drafts">
-                <div className="wt-my-drafts-head">
-                  <b>{t("만드는 중")}</b>
-                  <span className="dim">{active.length}</span>
-                </div>
-                <div className="wt-my-grid">
-                  {active.map((j) => (
-                    <DraftCard key={j.id} job={j} card={activeCards[j.id]}
-                               onOpen={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }} />
-                  ))}
-                </div>
-              </div>
-            )}
 
             {runsFailed && (
               <div className="wt-my-empty">
@@ -437,10 +422,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             )}
 
 
-            {recent.length > 0 && (
+            {active.length > 0 && (
+              /* 만드는 중(#548) — 「최근 본 웹툰」 자리. 표지 한 줄과 같은 크기로, 눌러서 이어 만든다. */
               <div className="wt-my-strip">
-                <RunStrip title={t("최근 본 웹툰")} runs={recent}
-                          onOpen={(r) => { track("recent_open", { run: r.run_id }); go("result", { run: r.run_id }); }} />
+                <div className="wt-strip">
+                  <b className="wt-strip-title">{t("만드는 중")} <span className="dim wt-my-draftcount">{active.length}</span></b>
+                  <div className="wt-strip-row">
+                    {active.map((j) => (
+                      <DraftCard key={j.id} job={j} card={activeCards[j.id]}
+                                 onOpen={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }} />
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -592,20 +585,20 @@ function DraftCard({ job, card, onOpen }: { job: NhJob; card?: NhActiveCard; onO
   const t = useT();
   const title = activeJobTitle(job);
   const waiting = job.status.startsWith("awaiting_");
-  const meta = [card?.name, job.mode === "own" ? t("내 내용으로") : t("아이디어부터"), ago(card?.updated_at, t)].filter(Boolean).join(" · ");
+  const meta = [card?.name, ago(card?.updated_at, t)].filter(Boolean).join(" · ");
   return (
-    <div className="card wt-my-work wt-my-draft">
-      <button type="button" className="wt-my-cover wt-my-draftcover" onClick={onOpen} aria-label={title || t("제목 짓기 전")}>
+    <button type="button" className="wt-strip-item wt-my-draft" onClick={onOpen} aria-label={`${title || t("제목 짓기 전")} · ${t("이어서 만들기")}`}>
+      <span className="wt-my-draftcover">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={job.sheet_ready ? sheetImageUrl(job.id) : louArt("generating")} alt="" className={job.sheet_ready ? "" : "lou"} />
         <span className={`wt-my-draftchip${waiting ? " wait" : ""}`}>
           {job.status === "running" && job.art?.total ? t("그리는 중 · {label}", { label: activeJobLabel(job, t) }) : activeJobLabel(job, t)}
         </span>
-      </button>
-      <b className={title ? "" : "dim"}>{title || t("제목 짓기 전")}</b>
-      {meta && <span className="muted">{meta}</span>}
-      <button type="button" className="btn btn-p btn-sm wt-my-draftgo" onClick={onOpen}>{t("이어서 만들기")}</button>
-    </div>
+      </span>
+      <span className={`wt-strip-name${title ? "" : " dim"}`}>{title || t("제목 짓기 전")}</span>
+      {meta && <span className="wt-my-draftmeta">{meta}</span>}
+      <span className="wt-my-draftgo">{t("이어서 만들기")} ›</span>
+    </button>
   );
 }
 

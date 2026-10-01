@@ -165,20 +165,18 @@
 }
 
 /* 만드는 중(#548) — 멈춰 있는 작업으로 돌아가는 줄 */
-/* 만드는 중(#548) — 완성된 웹툰 카드와 같은 틀, 그림 위에 상태 딱지 */
-.wt .wt-my-drafts { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 28px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
-.wt .wt-my-drafts-head { display: flex; align-items: baseline; gap: 8px; }
-.wt .wt-my-drafts-head b { font-size: 16px; }
-.wt .wt-my-drafts-head .dim { font-size: 13px; font-weight: 700; }
-.wt .wt-my-draftcover { position: relative; }
-.wt .wt-my-draftcover img { object-fit: contain; object-position: center; background: #f6f7f9; }
-.wt .wt-my-draftcover img.lou { object-fit: contain; padding: 40px; box-sizing: border-box; background: var(--water-light); }
-.wt .wt-my-draftchip { position: absolute; left: 10px; top: 10px; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
-  background: rgba(255, 255, 255, .92); color: var(--ink); border: 1px solid var(--line); }
+/* 만드는 중(#548) — 표지 한 줄(RunStrip)과 같은 크기, 그림 위에 상태 딱지 */
+.wt .wt-my-draftcount { font-size: 13px; font-weight: 700; margin-left: 4px; }
+.wt .wt-my-draft { width: 150px; }
+.wt .wt-my-draftcover { position: relative; display: block; }
+.wt .wt-my-draftcover img { width: 150px; height: 200px; object-fit: contain; object-position: center; border-radius: 12px; background: #f6f7f9; display: block; }
+.wt .wt-my-draftcover img.lou { padding: 28px; box-sizing: border-box; background: var(--water-light); }
+.wt .wt-my-draftchip { position: absolute; left: 8px; top: 8px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, .92); color: var(--ink); border: 1px solid var(--line); }
 .wt .wt-my-draftchip.wait { background: var(--ink); color: #fff; border-color: var(--ink); }
-.wt .wt-my-draft > b.dim { font-weight: 600; }
-.wt .wt-my-draft { display: flex; flex-direction: column; }
-.wt .wt-my-draft > .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wt .wt-my-draftgo { width: 100%; margin-top: auto; }
-.wt .wt-my-draft > .muted + .wt-my-draftgo, .wt .wt-my-draft > b + .wt-my-draftgo { margin-top: auto; }
-.wt .wt-my-draft > .muted { margin-bottom: 10px; }
+.wt .wt-my-draftmeta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-my-draftgo { font-size: 12px; font-weight: 700; color: var(--sea-deep); }
+@media (max-width: 767px) {
+  .wt .wt-my-draft { width: 120px; }
+  .wt .wt-my-draftcover img { width: 120px; height: 160px; }
+}
