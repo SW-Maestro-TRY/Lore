@@ -87,24 +87,26 @@ public class SafetyGuard {
             return;
         }
         String joined = String.join("\n", parts);
-        if (joined.length() > MAX_CHARS) {
-            joined = joined.substring(0, MAX_CHARS);
-        }
-        ModerationClient.Verdict v;
-        try {
-            v = client.moderate(joined);
-        } catch (ModerationClient.ModerationUnavailable e) {
-            if (failClosed) {
-                log.warn("안전 검사를 못 해서 막습니다 ({}): {}", where, e.getMessage());
-                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "지금은 내용을 확인할 수 없어요. 잠시 뒤 다시 시도해 주세요.");
+        /* 긴 글은 MAX_CHARS 씩 잘라 전부 본다(#548). 전에는 앞 4,000자만 보고 뒤는 검사 없이
+           모델로 갔다 — 「만들고 싶은 내용」이 20,000자까지 들어오면서 구멍이 커져 바꿨다. */
+        for (int at = 0; at < joined.length(); at += MAX_CHARS) {
+            String chunk = joined.substring(at, Math.min(joined.length(), at + MAX_CHARS));
+            ModerationClient.Verdict v;
+            try {
+                v = client.moderate(chunk);
+            } catch (ModerationClient.ModerationUnavailable e) {
+                if (failClosed) {
+                    log.warn("안전 검사를 못 해서 막습니다 ({}): {}", where, e.getMessage());
+                    throw new BusinessException(ErrorCode.INTERNAL_ERROR, "지금은 내용을 확인할 수 없어요. 잠시 뒤 다시 시도해 주세요.");
+                }
+                log.warn("안전 검사를 못 해서 통과시킵니다 ({}): {}", where, e.getMessage());
+                return;
             }
-            log.warn("안전 검사를 못 해서 통과시킵니다 ({}): {}", where, e.getMessage());
-            return;
-        }
-        List<String> hit = hits(v);
-        if (!hit.isEmpty()) {
-            log.info("안전 검사에 걸려 막았습니다 ({}): {}", where, hit);
-            throw new BusinessException(ErrorCode.INVALID_INPUT, MESSAGE);
+            List<String> hit = hits(v);
+            if (!hit.isEmpty()) {
+                log.info("안전 검사에 걸려 막았습니다 ({}, {}자부터): {}", where, at, hit);
+                throw new BusinessException(ErrorCode.INVALID_INPUT, MESSAGE);
+            }
         }
     }
 
