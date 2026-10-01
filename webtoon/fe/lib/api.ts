@@ -164,6 +164,8 @@ export interface NhScene {
   parts?: { label: string; text: string }[] | null;
   /** 이 장면만 다시 뽑는 중(#548) — 그 카드만 「다시 뽑는 중」으로 보인다. */
   busy?: boolean;
+  /** 다시 뽑기 전의 판들(#548), 오래된 것부터. */
+  history?: { text: string; parts?: { label: string; text: string }[] | null }[];
 }
 
 /** 주인공 페르소나(#534) — 사용자가 적은 캐릭터로 정의한 것. 인물 확인·고르기 화면에서 확인용으로 보여 준다. */
@@ -351,6 +353,10 @@ export function continueScenes(id: string) {
 export type SceneRetryReason = "awkward" | "character" | "stranger" | "offstory" | "pacing";
 export function retryScene(id: string, n: number, body: { reasons: SceneRetryReason[]; note: string }) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/scenes/${n}/retry`, body);
+}
+/** 장면 n 을 이전 판 v(1부터, 오래된 것부터)로 되돌린다(#548). */
+export function restoreScene(id: string, n: number, v: number) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/scenes/${n}/restore`, { v });
 }
 export function retryScenes(id: string, note = "") {
   return post(`/nh/jobs/${encodeURIComponent(id)}/scenes-retry`, note ? { note } : {});

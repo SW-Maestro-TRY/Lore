@@ -382,3 +382,12 @@
 .wt .wt-prog-rebusy { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .wt .wt-prog-rebusy-body { opacity: .35; pointer-events: none; }
 .wt .wt-prog-scene .row .tools button.wt-prog-done { height: 36px; padding: 0 16px; border-radius: 10px; background: var(--ink); color: #fff; font-size: 13.5px; font-weight: 700; border: 0; }
+/* 장면 판(#548) — 제목 옆 「다시 뽑음 ‹ 2 / 2판 ›」 */
+.wt .wt-prog-scenehead { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wt .wt-prog-vers { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.wt .wt-prog-vers .tag { font-size: 12px; font-weight: 700; color: var(--ink); padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); margin-right: 2px; }
+.wt .wt-prog-scene .row .wt-prog-vers button { width: 26px; height: 26px; padding: 0; justify-content: center; border-radius: 8px; color: var(--ink); }
+.wt .wt-prog-scene .row .wt-prog-vers button:disabled { opacity: .3; }
+.wt .wt-prog-vers .num { font-variant-numeric: tabular-nums; min-width: 44px; text-align: center; color: var(--ink); font-weight: 600; }
+.wt .wt-prog-oldver { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.wt .wt-prog-oldver-body { opacity: .55; }
