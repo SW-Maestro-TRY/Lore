@@ -10,11 +10,16 @@ import { IconUser } from "../../ui/Icons";
 import { usePhone } from "./usePhone";
 import "./Entry.css";
 
-/* 두 카드 그림은 「가면 아래의 대리인」에서 가져온 정적 그림이다(webtoon/fe/static/entry).
-   왼쪽(웹툰 만들기)은 2쪽을 말상자까지 그대로 — 실제 웹툰 한 장이 보이게 한다.
-   오른쪽(캐릭터 만들어보기)은 같은 쪽 첫 컷의 인물만 잘라 둔 것이다.
+/* 두 카드 그림은 정적 그림이다(webtoon/fe/static/entry).
+   왼쪽(웹툰 만들기)은 「마탑의 실험용 캔」 3쪽의 위 세 컷을 말상자·말풍선까지 그대로
+   — 실제 웹툰 한 장이 보이게 한다. 카드 폭(약 430px)에 맞춰 1024×1225 로 잘라 두어
+   카드 높이 520px 에 거의 꼭 맞는다.
+   오른쪽(캐릭터 만들어보기)은 캐릭터 「흑설」(노란 후드티 검은 여우) 카드 그림이다
+   — "강아지도, 아무것도 없어도" 문구와 맞는 예시라 골랐다.
    창고의 쪽 그림(w=320)을 쓰면 카드 폭에 늘어나 흐려져서 정적 그림으로 뒀다. */
 const COVER_A = "/static/entry/webtoon-page.jpg";
+/* 폰은 그림을 안 자르고 통째로 보여서, 같은 쪽의 첫 컷 한 장만 둔 그림을 쓴다. */
+const COVER_A_PHONE = "/static/entry/webtoon-cut.jpg";
 const COVER_B = "/static/entry/character.jpg";
 const FALLBACK_A = "/static/samples/onboarding-page.jpg";
 const FALLBACK_B = "/static/samples/ex-romance-2.jpg";
@@ -56,7 +61,7 @@ export default function Entry({ go }: { go: Go }) {
         <a href={hrefOf("create", { step: 1 })} className="wt-entry-card on" onClick={to(() => go("create", { step: 1 }))}>
           <div className="wt-entry-pic">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={COVER_A} alt="" onError={onImgError(FALLBACK_A)} />
+            <img src={phone ? COVER_A_PHONE : COVER_A} alt="" onError={onImgError(FALLBACK_A)} />
             <span className="wt-entry-tag">{t("웹툰 만들기")}</span>
             {createFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: createFree })}</span>}
           </div>
@@ -69,7 +74,7 @@ export default function Entry({ go }: { go: Go }) {
         <a href={hrefOf("try")} className="wt-entry-card" onClick={to(() => go("try"))}>
           <div className="wt-entry-pic">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={COVER_B} alt="" className="wt-entry-pic-left" onError={onImgError(FALLBACK_B)} />
+            <img src={COVER_B} alt="" className="wt-entry-pic-center" onError={onImgError(FALLBACK_B)} />
             <span className="wt-entry-tag">{t("캐릭터 만들어보기")}</span>
             {charFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: charFree })}</span>}
           </div>
