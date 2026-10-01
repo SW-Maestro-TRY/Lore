@@ -347,3 +347,7 @@
 .wt .wt-ed .dock-ledger li b.plus { color: #0f9e8a; }
 .wt .wt-ed .dock-ledger .ledger-empty { justify-content: center; color: var(--dim); border: 0; padding: 14px 0; }
 .wt .wt-ed .dock-ledger .err { font-size: 12.5px; padding: 8px 2px; }
+/* 크레딧 부족 안내(#548) — 아래 가운데에 떠 있는 한 줄 */
+.wt .wt-ed-creditshort { position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 6px; box-shadow: 0 10px 28px rgba(15, 30, 45, .2); border-radius: 12px; }
+.wt .wt-ed-creditshort-x { width: 28px; height: 28px; border: 0; border-radius: 8px; background: #fff; cursor: pointer; font-size: 18px; color: var(--muted); }

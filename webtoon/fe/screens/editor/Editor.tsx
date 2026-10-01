@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { creditBalance, creditHistory, type CreditLine } from "@common/api/credits";
 import { pageUrl, readAllowance, readResult, type RunResult } from "../../lib/api";
-import { mountEditor, setEditorTranslator } from "../../lib/editorCore";
+import { CREDIT_SHORT_EVENT, mountEditor, setEditorTranslator } from "../../lib/editorCore";
+import CreditShort from "../../ui/CreditShort";
 import { useLang } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
@@ -48,6 +49,14 @@ export default function Editor({ runId, go, authStatus = "loading" }:
     const dispose = mountEditor({ runId, episode }, (r) => go("editor", { run: r }));
     return () => { dispose(); setEditorTranslator(null); };
   }, [runId, go, lang, t, authenticated]);
+
+  /* 크레딧이 모자랄 때 엔진이 보내는 사건을 받아 안내를 띄운다(#548). */
+  const [creditShort, setCreditShort] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setCreditShort(String((e as CustomEvent).detail ?? ""));
+    window.addEventListener(CREDIT_SHORT_EVENT, on);
+    return () => window.removeEventListener(CREDIT_SHORT_EVENT, on);
+  }, []);
 
   /* 페이지 썸네일과 장면 한 줄은 완성본 API 에서 받는다 — 엔진은 자기 데이터를
      밖으로 내주지 않는다. */
@@ -294,6 +303,13 @@ export default function Editor({ runId, go, authStatus = "loading" }:
       </div>
 
       <div className="toast wt-ed-toast" id="toast" hidden />
+      {creditShort !== null && (
+        /* 장 다시 그리기를 눌렀는데 크레딧이 모자랄 때(#548) */
+        <div className="wt-ed-creditshort">
+          <CreditShort raw={creditShort} />
+          <button type="button" className="wt-ed-creditshort-x" aria-label={t("닫기")} onClick={() => setCreditShort(null)}>×</button>
+        </div>
+      )}
     </div>
   );
 }
