@@ -56,6 +56,19 @@ public class RunArt {
         return exists(dir(runId).resolve("sheet.png"));
     }
 
+    /**
+     * 조연 시트(#548). 하네스가 {@code sheets/<이름>.png} 로 떨어뜨린다 — 이름의 경로 구분자만
+     * 밑줄로 바꾼다(하네스 {@code own.sheet_file_name} 과 같은 규칙). 아직 안 그렸으면 없다.
+     */
+    public Path castSheet(String runId, String name) {
+        String stem = castSheetStem(name);
+        return stem.isEmpty() ? null : exists(dir(runId).resolve("sheets").resolve(stem + ".png"));
+    }
+
+    static String castSheetStem(String name) {
+        return name == null ? "" : name.trim().replaceAll("[\\\\/]", "_");
+    }
+
     /** {@code n} 번째 장. 하네스가 {@code pages/page01.png} 로 떨어뜨린다. */
     public Path page(String runId, int no) {
         return exists(dir(runId).resolve("pages").resolve("page%02d.png".formatted(no)));
