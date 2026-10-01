@@ -182,6 +182,13 @@ public class JobRunner {
         return t;
     });
     /** 작업마다 먼저 띄운 시트 그리기. {@link #sheet} 가 기다렸다 거둔다. */
+    /**
+     * 그리는 중인 조연 시트(#548) — 작업 번호 → (이름 → 결과). 장면 확인 자리에서 사람이
+     * 시트를 뽑는 동안 작업 상태는 그대로이고, 그림 걸음은 이것들이 끝나길 기다렸다 간다.
+     */
+    private final ConcurrentHashMap<Long, ConcurrentHashMap<String, java.util.concurrent.Future<Path>>> castSheetsAhead =
+            new ConcurrentHashMap<>();
+
     private final ConcurrentHashMap<Long, java.util.concurrent.Future<Integer>> sheetAhead =
             new ConcurrentHashMap<>();
 
@@ -925,6 +932,83 @@ public class JobRunner {
         return out;
     }
 
+    /**
+     * 조연 시트 한 장을 그린다(#548) — 하네스 {@code --cast-sheet <이름>} 을 별도 프로세스로.
+     * 작업 상태·걸음은 바꾸지 않는다(사람은 장면 확인 자리에 그대로 있다). 끝나면 그림 경로.
+     * 같은 이름이 그리는 중이면 그 결과를 돌려준다.
+     */
+    public java.util.concurrent.Future<Path> drawCastSheet(Long jobId, String name) {
+        ConcurrentHashMap<String, java.util.concurrent.Future<Path>> mine =
+                castSheetsAhead.computeIfAbsent(jobId, k -> new ConcurrentHashMap<>());
+        return mine.computeIfAbsent(name, k -> side.submit(() -> {
+            try {
+                WebtoonJob job = store.byId(jobId);
+                int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--cast-sheet", name));
+                after.cost(job.getRunId());      // 글 1회 + 그림 1회 값이 나갔다
+                Path png = RunArt.castSheetStem(name).isEmpty() ? null
+                        : runDir(job.getRunId()).resolve("sheets").resolve(RunArt.castSheetStem(name) + ".png");
+                if (code != 0 || png == null || !Files.isRegularFile(png)) {
+                    throw harnessFailed(job.getRunId(), "조연 시트를 그리지 못했습니다: " + name);
+                }
+                return png;
+            } finally {
+                mine.remove(name);
+            }
+        }));
+    }
+
+    /** 조연 시트가 끝난 뒤 할 일(#548) — 성공이면 {@code ok}, 아니면 {@code failed}. 부른 쪽을 막지 않는다. */
+    public void afterCastSheet(java.util.concurrent.Future<Path> drawn, Runnable ok, Runnable failed) {
+        side.submit(() -> {
+            try {
+                drawn.get();
+                ok.run();
+            } catch (Exception e) {
+                failed.run();
+            }
+        });
+    }
+
+    /** 지금 그리는 중인 조연 시트 이름들(#548). 없으면 빈 목록. */
+    public List<String> castSheetsPending(Long jobId) {
+        ConcurrentHashMap<String, java.util.concurrent.Future<Path>> mine = castSheetsAhead.get(jobId);
+        return mine == null ? List.of() : new ArrayList<>(mine.keySet());
+    }
+
+    /** 그려 둔 조연 시트 이름들(#548) — 작품 폴더 {@code sheets/*.png}. */
+    public List<String> castSheetsDrawn(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return List.of();
+        }
+        Path folder = runDir(runId).resolve("sheets");
+        if (!Files.isDirectory(folder)) {
+            return List.of();
+        }
+        try (var found = Files.list(folder)) {
+            return found.filter(p -> p.getFileName().toString().endsWith(".png"))
+                    .map(p -> p.getFileName().toString().replaceAll("\\.png$", ""))
+                    .sorted().toList();
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
+    /** 그림 걸음 앞에서 — 그리는 중인 조연 시트가 있으면 끝날 때까지 기다린다. 실패한 것은 넘어간다. */
+    private void awaitCastSheets(Long jobId) {
+        ConcurrentHashMap<String, java.util.concurrent.Future<Path>> mine = castSheetsAhead.get(jobId);
+        if (mine == null || mine.isEmpty()) {
+            return;
+        }
+        progress.say(jobId, "루가 조연 시트를 마저 그리고 있어요");
+        for (var entry : new ArrayList<>(mine.entrySet())) {
+            try {
+                entry.getValue().get();
+            } catch (Exception e) {              // noqa: 실패한 조연 시트는 없는 채로 그린다
+                log.warn("조연 시트를 기다리다 실패를 봤습니다 (job={}, name={})", jobId, entry.getKey(), e);
+            }
+        }
+    }
+
     /** 시트 그림이 있나 — 고르기·장면 확인 화면이 같이 보여 준다(#548). */
     public boolean sheetReady(String runId) {
         return runId != null && !runId.isBlank()
@@ -935,6 +1019,7 @@ public class JobRunner {
         if (!startable(jobId)) {
             return;                 // 줄에서 기다리는 동안 그만뒀다
         }
+        awaitCastSheets(jobId);              // 조연 시트(#548)를 뽑는 중이면 그것부터 — 참조로 붙는다
         WebtoonJob job = store.running(jobId, JobStage.PAGES);
         progress.say(jobId, "루가 그림을 그리고 있어요");
 
