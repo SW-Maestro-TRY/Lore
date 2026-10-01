@@ -7,6 +7,7 @@ import {
   listCharacters, listWorlds, randomSeed, readCharacter, WebtoonApiError, type Character, type World,
 } from "../../lib/api";
 import { useLang, useT } from "../../lib/i18n";
+import { ErrLine, errText } from "../../ui/CreditShort";
 import type { Go } from "../../lib/nav";
 import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { IconArrow, IconBack, IconClose, IconDice, IconUpload } from "../../ui/Icons";
@@ -99,7 +100,7 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
         track("limit_view", { kind: "character", logged_in: authenticated });
         setLimited(e instanceof WebtoonApiError ? e.message : "");
       } else {
-        setErr(e instanceof Error ? e.message : t("캐릭터를 만들지 못했습니다"));
+        setErr(errText(e, t("캐릭터를 만들지 못했습니다")));
       }
       setBusy(null);
     }
@@ -163,7 +164,7 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
             <WorldCombo worlds={worlds} worldKey={worldKey} worldText={worldText}
                         onPick={(key) => { setWorldKey(key); setWorldText(""); }}
                         onType={(text) => { setWorldText(text); if (text.trim()) setWorldKey(""); }} />
-            {err && <span className="err">{err}</span>}
+            <ErrLine text={err} />
           </div>
         </div>
 
