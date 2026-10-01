@@ -89,6 +89,9 @@
   .wt .wt-result-titlemid { grid-column: auto; flex: 0 1 auto; min-width: 0; }
   .wt .wt-result-titlemid { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wt .wt-result-titlerow .wt-share { grid-column: auto; justify-self: auto; flex-shrink: 0; }
+  /* 예시 작품의 내려받기는 제목 줄에 공유와 같이 선다 — 폰에서는 글자를 빼고 그림만 둬 제목 자리를 지킨다. */
+  .wt .wt-result-exdl { flex-shrink: 0; padding: 0 12px; }
+  .wt .wt-result-exdl span { display: none; }
   .wt .wt-result-head h2 { font-size: 24px; }
   .wt .wt-result-meta { font-size: 13px; }
   .wt .wt-result-meta-pc { display: none; }
