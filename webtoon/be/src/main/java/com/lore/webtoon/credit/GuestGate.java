@@ -32,7 +32,7 @@ import java.util.HexFormat;
  *
  * <h2>얼마나 막는가</h2>
  *
- * 기본 하루 3회다. 한 편에 실측 1,148원이고, "한번 만들어 보고 마음에 들면
+ * 기본 하루 2회다. 한 편에 실측 1,148원이고, "한번 만들어 보고 마음에 들면
  * 로그인" 이 이 제품이 바라는 흐름이라 그 한 번을 넉넉히 두 번으로 잡았다.
  * 이 숫자는 {@code lore.webtoon.spend.guest-free} 로 바꾼다.
  *
@@ -65,7 +65,7 @@ public class GuestGate {
 
     @Autowired
     public GuestGate(GuestQuotaRepository quotas,
-                     @Value("${lore.webtoon.spend.guest-free:3}") long freePerDay,
+                     @Value("${lore.webtoon.spend.guest-free:2}") long freePerDay,
                      @Value("${lore.webtoon.spend.ip-salt:}") String salt) {
         this(quotas, freePerDay, salt, Clock.system(ZONE));
     }

@@ -1,0 +1,220 @@
+/* 웹툰 만들기 4걸음 — 캔버스 Characters · Setup · Style · Options (+ M 보드). */
+
+.wt .wt-wiz-body { display: flex; gap: 40px; margin: 28px 0 12px; flex-grow: 1; }
+.wt .wt-wiz-body.gap48 { gap: 48px; }
+.wt .wt-wiz-left { width: 600px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; }
+.wt .wt-wiz-right { flex-grow: 1; display: flex; flex-direction: column; gap: 16px; padding-top: 58px; min-width: 0; }
+.wt .wt-wiz-head { display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-wiz-head h2 { font-size: 32px; }
+.wt .wt-wiz-head .lede { font-size: 15px; }
+.wt .wt-wiz-head .lede a, .wt .wt-wiz-head .lede button {
+  font-weight: 700; text-decoration: none; background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--sea); font-size: inherit; font-family: inherit; display: inline-flex; align-items: center; gap: 4px;
+}
+
+/* 캐릭터 카드 줄 — 한 줄로 눕히고 좌우로 민다(Wizard.tsx 의 CardRail). */
+.wt .wt-wiz-rail { display: flex; flex-direction: column; gap: 10px; }
+.wt .wt-wiz-cards {
+  display: flex; gap: 12px; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: none; scroll-behavior: smooth;
+  /* 고른 카드의 2px 테두리와 동그란 단추가 잘리지 않게 양옆·위아래로 조금 둔다. */
+  padding: 2px; margin: -2px;
+}
+.wt .wt-wiz-cards::-webkit-scrollbar { display: none; }
+.wt .wt-wiz-cards .ccard { width: 184px; flex: none; padding: 12px; }
+
+/* 몇 번째 묶음인지 · 누르면 그리로 민다 */
+.wt .wt-wiz-dots { display: flex; gap: 7px; justify-content: center; }
+.wt .wt-wiz-dots button {
+  width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(15, 51, 63, 0.2);
+}
+.wt .wt-wiz-dots button.on { background: var(--ink); }
+.wt .wt-wiz-dots button:hover { background: var(--sea); }
+.wt .wt-wiz-cards .ccard img { height: 180px; width: 100%; border-radius: 12px; object-fit: cover; object-position: top; display: block; background: var(--water-light); }
+.wt .wt-wiz-cards .ccard .row { display: flex; justify-content: space-between; align-items: baseline; }
+.wt .wt-wiz-cards .ccard .row b { font-size: 16px; }
+.wt .wt-wiz-cards .ccard .row span { font-size: 12px; }
+.wt .wt-wiz-cards .ccard > .muted { font-size: 13px; }
+.wt .wt-wiz-cards.small .ccard img { height: 150px; }
+.wt .wt-wiz-cards.small .ccard .row b { font-size: 15px; }
+.wt .wt-wiz-cards.small .ccard .row span { font-size: 11.5px; }
+.wt .wt-wiz-cards.small .ccard > .muted { font-size: 12.5px; }
+.wt .wt-wiz-unpick {
+  position: absolute; top: 12px; left: 12px; width: 26px; height: 26px; border-radius: 50%; background: #fff;
+  border: 1px solid rgba(15, 51, 63, 0.2); display: flex; align-items: center; justify-content: center;
+  color: var(--ink); padding: 0; cursor: pointer; z-index: 1;
+}
+.wt .wt-wiz-check {
+  position: absolute; top: 12px; right: 12px; width: 26px; height: 26px; border-radius: 50%; background: var(--ink);
+  color: #fff; display: flex; align-items: center; justify-content: center; z-index: 1;
+}
+
+/* 골라서 들어왔을 때 */
+.wt .wt-wiz-picked { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.wt .wt-wiz-picked .ccard { width: 260px; }
+.wt .wt-wiz-picked .ccard img { height: 300px; width: 100%; border-radius: 12px; object-fit: cover; object-position: top; display: block; background: var(--water-light); }
+.wt .wt-wiz-picked .btn { width: 260px; height: 44px; font-size: 14px; }
+
+/* 「또는」 구분 줄 */
+.wt .wt-wiz-or { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.wt .wt-wiz-or i { flex-grow: 1; height: 1px; background: rgba(15, 51, 63, 0.12); }
+.wt .wt-wiz-or span { font-size: 13px; }
+
+/* 사진 올리기 · 직접 만들기 */
+.wt .wt-wiz-ways { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-wiz-way {
+  min-height: 110px; border-radius: 14px; border: 2px dashed rgba(15, 51, 63, 0.22); background: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  text-decoration: none; color: var(--ink); cursor: pointer; font-family: inherit; padding: 12px;
+}
+.wt .wt-wiz-way b { font-size: 15px; }
+.wt .wt-wiz-way span { font-size: 12px; }
+.wt .wt-wiz-ways.tall .wt-wiz-way { min-height: 150px; border-radius: 16px; gap: 8px; }
+.wt .wt-wiz-ways.tall .wt-wiz-way b { font-size: 16px; }
+.wt .wt-wiz-ways.tall .wt-wiz-way span { font-size: 12.5px; }
+.wt .wt-wiz-way.has { border-style: solid; border-color: var(--ink); }
+.wt .wt-wiz-thumbs { display: flex; gap: 6px; }
+.wt .wt-wiz-thumb { position: relative; width: 56px; height: 56px; }
+.wt .wt-wiz-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; display: block; }
+.wt .wt-wiz-thumb button {
+  position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  border: 1px solid rgba(15, 51, 63, 0.2); display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; color: var(--ink);
+}
+
+.wt .wt-wiz-req { color: var(--gold); font-weight: 400; font-size: 12px; }
+.wt .wt-wiz-opt { font-weight: 400; font-size: 12px; }
+.wt textarea.wt-wiz-desc { height: 150px; min-height: 0; padding: 12px 16px; resize: none; line-height: 1.6; }
+
+/* 2걸음 */
+.wt .wt-wiz-story { flex-grow: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.wt .wt-wiz-story-1col { width: 100%; max-width: 720px; margin: 0 auto; }
+.wt textarea.wt-wiz-storybox { flex-grow: 1; min-height: 260px; padding: 18px 20px; resize: none; line-height: 1.8; font-size: 16px; }
+.wt .wt-wiz-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.wt .wt-wiz-chips .chip { height: 34px; }
+.wt .wt-wiz-gnote { padding: 12px 14px; border-radius: 12px; background: #fff; border: 1px solid var(--line); color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+
+/* 3걸음 */
+.wt .wt-wiz-stylehead { display: flex; justify-content: space-between; align-items: flex-end; margin: 26px 0 22px; }
+/* 예시 그림이 세로로 긴 그림(2:3)이라, 낮고 넓은 칸에 담으면 얼굴이 잘린다.
+ * 칸을 좁히고 그림을 세로로 늘려 덜 잘리게 한다. 줄은 가운데로 모은다. */
+.wt .wt-wiz-styles {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px;
+  width: 100%; max-width: 860px; margin: 0 auto;
+}
+.wt .wt-wiz-style {
+  text-decoration: none; color: var(--ink); display: flex; flex-direction: column; border-radius: 16px; background: #fff;
+  border: 1px solid rgba(15, 51, 63, 0.12); overflow: hidden; position: relative; cursor: pointer; padding: 0; font-family: inherit; text-align: left;
+}
+.wt .wt-wiz-style.on { border: 2px solid var(--ink); }
+.wt .wt-wiz-style img { width: 100%; aspect-ratio: 3 / 4; height: auto; object-fit: cover; object-position: top; display: block; background: var(--water-light); }
+.wt .wt-wiz-style .txt { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 3px; }
+.wt .wt-wiz-style .txt b { font-size: 15.5px; }
+.wt .wt-wiz-style .txt span { font-size: 12.5px; line-height: 1.45; }
+.wt .wt-wiz-style .wt-wiz-check { top: 10px; right: 10px; }
+
+/* 4걸음 */
+.wt .wt-wiz-opts { flex-grow: 1; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.wt .wt-wiz-opts > div { display: flex; flex-direction: column; gap: 10px; }
+.wt .wt-wiz-opts h2 { font-size: 28px; }
+.wt .wt-wiz-qs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-wiz-q {
+  text-decoration: none; color: var(--ink); display: flex; flex-direction: column; gap: 8px; padding: 22px 24px; border-radius: 16px;
+  background: #fff; border: 1px solid rgba(15, 51, 63, 0.12); cursor: pointer; font-family: inherit; text-align: left;
+}
+.wt .wt-wiz-q.on { border: 2px solid var(--ink); }
+.wt .wt-wiz-q .row { display: flex; justify-content: space-between; align-items: baseline; }
+.wt .wt-wiz-q .row b { font-size: 22px; }
+.wt .wt-wiz-q .row i { font-style: normal; font-size: 13px; font-weight: 700; color: var(--gold); }
+.wt .wt-wiz-q .lede { font-size: 14px; font-weight: 600; }
+.wt .wt-wiz-q .desc { font-size: 13.5px; line-height: 1.55; }
+.wt .wt-wiz-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-wiz-mode {
+  text-decoration: none; color: var(--ink); display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; border-radius: 16px;
+  background: #fff; border: 1px solid rgba(15, 51, 63, 0.12); cursor: pointer; font-family: inherit; text-align: left;
+}
+.wt .wt-wiz-mode.on { border: 2px solid var(--ink); }
+.wt .wt-wiz-mode b { font-size: 17px; }
+.wt .wt-wiz-mode span { font-size: 13.5px; line-height: 1.55; }
+.wt .wt-wiz-side { width: 330px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; padding-top: 4px; }
+.wt .wt-wiz-sum { padding: 18px 20px; border-radius: 16px; background: #fff; border: 1px solid rgba(15, 51, 63, 0.12); display: flex; flex-direction: column; gap: 10px; }
+.wt .wt-wiz-sum > b { font-size: 15px; }
+.wt .wt-wiz-sum .kvr { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; padding: 6px 0; border-top: 1px solid rgba(15, 51, 63, 0.08); }
+.wt .wt-wiz-sum .kvr span:last-child { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-wiz-sum .tot { display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid rgba(15, 51, 63, 0.12); }
+.wt .wt-wiz-sum .tot b:first-child { font-size: 14px; }
+.wt .wt-wiz-sum .tot b:last-child { font-size: 16px; color: var(--gold); }
+.wt .wt-wiz-agree { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; font-weight: 400; cursor: pointer; }
+.wt .wt-wiz-agree input { margin-top: 3px; }
+.wt .wt-wiz-agree i { font-style: normal; color: var(--gold); font-size: 11px; }
+.wt .wt-wiz-terms { font-size: 12.5px; color: var(--muted); }
+.wt .wt-wiz-terms summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.wt .wt-wiz-terms ul { margin: 8px 0 0; padding-left: 18px; line-height: 1.6; }
+.wt .wt-wiz-side .btn { width: 100%; }
+.wt .wt-wiz-side .hint { font-size: 12px; text-align: center; }
+.wt .wt-wiz-block { padding: 10px 12px; border-radius: 12px; background: #fff; border: 1px solid rgba(161, 58, 46, 0.35); color: #a13a2e; font-size: 13px; line-height: 1.5; }
+
+/* 바닥 줄 (PC) */
+.wt .wt-wiz-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding-top: 28px; border-top: 1px solid rgba(15, 51, 63, 0.08); gap: 12px; }
+.wt .wt-wiz-foot.plain { border-top: 0; }
+.wt .wt-wiz-foot .btn { height: 46px; font-size: 14px; padding: 0 20px; }
+.wt .wt-wiz-foot .btn-p { padding: 0 22px; }
+.wt .wt-wiz-foot .btn-w .dim { font-weight: 400; }
+
+/* 폰 전용 */
+.wt .wt-wiz-mbars { display: none; }
+.wt .wt-wiz-mfoot-note { display: none; }
+
+@media (max-width: 767px) {
+  .wt .wt-wiz-foot { display: none; }
+  .wt .wt-wiz-mbars { display: flex; gap: 4px; padding: 10px 16px 0; }
+  .wt .wt-wiz-mbars i { height: 4px; flex: 1; border-radius: 2px; background: rgba(15, 51, 63, 0.15); }
+  .wt .wt-wiz-mbars i.on { background: var(--ink); }
+  .wt .wt-wiz-body, .wt .wt-wiz-body.gap48 { flex-direction: column; gap: 14px; margin-top: 0; }
+  .wt .wt-wiz-left, .wt .wt-wiz-right, .wt .wt-wiz-side { width: auto; padding-top: 0; gap: 14px; }
+  .wt .wt-wiz-story-1col { max-width: none; }
+  .wt .wt-wiz-head h2 { font-size: 24px; line-height: 1.3; }
+  .wt .wt-wiz-head .lede { font-size: 13.5px; line-height: 1.5; }
+  .wt .wt-wiz-cards { gap: 10px; }
+  .wt .wt-wiz-cards .ccard, .wt .wt-wiz-cards.small .ccard { width: 150px; padding: 10px; }
+  .wt .wt-wiz-cards .ccard img, .wt .wt-wiz-cards.small .ccard img { height: 150px; border-radius: 10px; }
+  .wt .wt-wiz-cards .ccard .row b { font-size: 14px; }
+  .wt .wt-wiz-cards .ccard > .muted { font-size: 12px; }
+  .wt .wt-wiz-picked .ccard { width: 100%; flex-direction: row; gap: 12px; padding: 10px; }
+  .wt .wt-wiz-picked .ccard img { width: 110px; height: 140px; border-radius: 10px; }
+  .wt .wt-wiz-picked .ccard .info { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+  .wt .wt-wiz-picked .btn { width: auto; height: 36px; font-size: 12.5px; padding: 0 14px; align-self: flex-start; }
+  .wt .wt-wiz-ways { gap: 10px; }
+  .wt .wt-wiz-way, .wt .wt-wiz-ways.tall .wt-wiz-way { min-height: 130px; border-radius: 16px; }
+  .wt .wt-wiz-way b, .wt .wt-wiz-ways.tall .wt-wiz-way b { font-size: 13.5px; }
+  .wt .wt-wiz-way span, .wt .wt-wiz-ways.tall .wt-wiz-way span { font-size: 11.5px; text-align: center; }
+  .wt textarea.wt-wiz-desc { height: 96px; padding: 12px 14px; line-height: 1.55; font-size: 14px; }
+  .wt textarea.wt-wiz-storybox { min-height: 150px; height: 150px; padding: 12px 14px; line-height: 1.6; font-size: 14px; flex-grow: 0; }
+  .wt .wt-wiz-chips .chip { height: 36px; font-size: 13px; padding: 0 14px; }
+  .wt .wt-wiz-gnote { padding: 10px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.55; color: var(--sea-deep); }
+  .wt .wt-wiz-stylehead { margin: 0; }
+  .wt .wt-wiz-stylehead > .dim { display: none; }
+  .wt .wt-wiz-styles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .wt .wt-wiz-style { border-radius: 14px; }
+  .wt .wt-wiz-style img { height: 150px; }
+  .wt .wt-wiz-style .txt { padding: 10px 12px 12px; gap: 2px; }
+  .wt .wt-wiz-style .txt b { font-size: 13.5px; }
+  .wt .wt-wiz-style .txt span { font-size: 11.5px; }
+  .wt .wt-wiz-style .wt-wiz-check { top: 8px; right: 8px; width: 22px; height: 22px; }
+  .wt .wt-wiz-opts { gap: 14px; }
+  .wt .wt-wiz-opts h2 { font-size: 24px; line-height: 1.3; }
+  .wt .wt-wiz-qs, .wt .wt-wiz-modes { grid-template-columns: 1fr; gap: 10px; }
+  .wt .wt-wiz-q { padding: 14px 16px; border-radius: 14px; gap: 4px; }
+  .wt .wt-wiz-q .row b { font-size: 17px; }
+  .wt .wt-wiz-q .row i { font-size: 12px; }
+  .wt .wt-wiz-q .lede { font-size: 13px; }
+  .wt .wt-wiz-q .desc { font-size: 12.5px; line-height: 1.5; }
+  .wt .wt-wiz-mode { padding: 14px 16px; border-radius: 14px; gap: 3px; }
+  .wt .wt-wiz-mode b { font-size: 15px; }
+  .wt .wt-wiz-mode span { font-size: 12.5px; }
+  .wt .wt-wiz-sum { padding: 14px 16px; border-radius: 14px; gap: 6px; }
+  .wt .wt-wiz-sum > b { font-size: 14px; }
+  .wt .wt-wiz-sum .kvr { font-size: 13px; padding: 5px 0; }
+  .wt .wt-wiz-side > .btn, .wt .wt-wiz-side .hint { display: none; }
+  .wt .wt-wiz-mfoot-note { display: block; font-size: 12px; text-align: center; }
+}

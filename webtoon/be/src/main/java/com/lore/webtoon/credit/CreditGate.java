@@ -50,12 +50,20 @@ public class CreditGate {
 
     private final CreditService credits;
     private final int cost;
+    private final int regenCost;
 
     @Autowired
     public CreditGate(CreditService credits,
-                      @Value("${lore.credit.cost-per-episode:12}") int cost) {
+                      @Value("${lore.credit.cost-per-episode:12}") int cost,
+                      @Value("${lore.credit.cost-per-regen:3}") int regenCost) {
         this.credits = credits;
         this.cost = cost;
+        this.regenCost = regenCost;
+    }
+
+    /** 편집실에서 한 장을 다시 그리는 값. 화면이 단추에 적으려고도 묻는다. */
+    public int regenCost() {
+        return regenCost;
     }
 
     /** 이 사람의 잔액. 로그인 안 했으면 0 — 게스트는 크레딧으로 안 센다. */
@@ -84,7 +92,8 @@ public class CreditGate {
     }
 
     /**
-     * 값을 지정해서 묻는다 — 웹툰 한 편(12)과 캐릭터 한 장(1)은 값이 다르다.
+     * 값을 지정해서 묻는다 — 웹툰 한 편(12) · 캐릭터 한 장(2) · 장 다시 그리기(3)는
+     * 값이 다르다.
      */
     public String whyBlocked(Long userId, int need) {
         if (userId == null || need <= 0) {

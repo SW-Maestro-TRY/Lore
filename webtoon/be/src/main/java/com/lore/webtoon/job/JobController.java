@@ -66,9 +66,12 @@ public class JobController {
     private final GuestGate guests;
     private final CreditGate credits;
     private final S3Service uploads;
+    private final com.lore.webtoon.character.CharacterOwner owner;
 
     public JobController(JobService jobs, JobQueue queue, RunArt art, SpendGuard guard,
-                         GuestGate guests, CreditGate credits, S3Service uploads) {
+                         GuestGate guests, CreditGate credits, S3Service uploads,
+                         com.lore.webtoon.character.CharacterOwner owner) {
+        this.owner = owner;
         this.jobs = jobs;
         this.queue = queue;
         this.art = art;
@@ -96,6 +99,8 @@ public class JobController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("logged_in", me != null);
         out.put("credit_cost", credits.cost());
+        // 편집실 단추가 값을 적으려고 쓴다 — 화면에 박아 두면 서버 설정과 어긋난다.
+        out.put("regen_cost", credits.regenCost());
         /* 화질 셋과 각각의 값. **화면이 여기서 받아 간다** — 같은 표를 화면에도
            적어 두면, 한쪽만 고치는 순간 적힌 값과 실제로 빠지는 크레딧이
            어긋난다. 사람에게 그건 거짓말이다. */
@@ -215,6 +220,15 @@ public class JobController {
         return ResponseEntity.ok(Map.of("id", id, "queue_position", ahead));
     }
 
+    @Operation(summary = "내가 만들던 것", description = """
+            아직 안 끝난 작업들(줄 서 있거나 · 그리는 중 · 사람 차례). 첫 화면의
+            「만들던 웹툰」 알약이 이것을 본다. 로그인 안 했으면 uid 로 가린다.""")
+    @GetMapping("/jobs/mine")
+    public Map<String, Object> mine(@RequestParam(required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        return Map.of("jobs", jobs.activeOf(me, owner.uidsOf(me, uid)));
+    }
+
     @Operation(summary = "진행 상황", description = """
             진행 화면이 0.8 초마다 부른다. 파이썬 서버가 내보내던 것과 **같은 모양**이다.""")
     @GetMapping("/jobs/{id}")
@@ -252,6 +266,14 @@ public class JobController {
 
     /** 받을 주소. 본문 없이 부르면 「안 받겠다」로 읽는다. */
     public record NotifyRequest(String email) {
+    }
+
+    @Operation(summary = "상대 인물 고르기",
+            description = "현대 로맨스에서 이야기 전에 상대 인물을 고른다(#534). 고르면 그 인물로 이야기 후보 넷을 짓는다.")
+    @PostMapping("/jobs/{id}/cast")
+    public Map<String, Object> pickCast(@PathVariable String id, @RequestBody CastRequest req) {
+        jobs.pickCast(id, req.n());
+        return Map.of("ok", true);
     }
 
     @Operation(summary = "이야기 고르기",
@@ -382,5 +404,8 @@ public class JobController {
     }
 
     public record PickRequest(int n, String body) {
+    }
+
+    public record CastRequest(int n) {
     }
 }

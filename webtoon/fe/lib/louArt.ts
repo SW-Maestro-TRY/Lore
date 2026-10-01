@@ -22,6 +22,26 @@ export function louArt(slot: keyof typeof LOU_ART | string): string {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+/* 만드는 중 — 단계마다 다른 루. 하네스 단계 이름(story·sheet·board·art·bind)
+ * 그대로 파일이 있어서 그 이름으로 찾는다. 같은 화면을 몇 분씩 보는 자리라,
+ * 단계가 넘어갈 때 그림이 바뀌는 것이 "지금 뭘 하는 중인지" 를 문구보다 먼저
+ * 알려 준다. 모르는 단계 이름이면 만드는 중 그림으로 돌아간다. */
+const STAGE_LOU: Record<string, string> = {
+  story: "/static/lou/stage/story.webp",
+  sheet: "/static/lou/stage/sheet.webp",
+  board: "/static/lou/stage/board.webp",
+  art: "/static/lou/stage/art.webp",
+  bind: "/static/lou/stage/bind.webp",
+  done: "/static/lou/stage/done.webp",
+};
+
+export function louStage(stage: string | undefined): string {
+  return (stage && STAGE_LOU[stage]) || louArt("generating");
+}
+
+/* 놀이터의 루 — 첫 프레임. 여기서부터 idle 이 돈다(mascotPlay). */
+export const LOU_IDLE = "/static/lou/react/idle/01.webp";
+
 /* 헤더 로고 — 표정 원화에서 고래 몸통만 잘라 둔 12장(whale1 · whale2 × 6).
  * 위자드가 걸음마다 이 중 하나를 뽑아 앉힌다. */
 export const LOU_LOGOS = ["curious", "default", "discover", "happy", "sleepy", "thinking"]

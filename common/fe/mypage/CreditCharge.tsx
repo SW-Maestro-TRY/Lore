@@ -2,6 +2,9 @@
 
 import { useEffect } from "react";
 import { CONTACT_CHANNEL } from "../links";
+/* 이 창의 모양은 mypage.css 에 있다. 예전에는 공용 마이페이지만 이 파일을 읽어서,
+   다른 곳(헤더의 크레딧 칩)에서 열면 글자만 나왔다 — 컴포넌트가 자기 모양을 들고 간다. */
+import "./mypage.css";
 
 /* 크레딧 충전 — 상품을 보여주는 창.
  *

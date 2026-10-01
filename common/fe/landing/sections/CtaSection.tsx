@@ -1,28 +1,45 @@
-// 7. CTA. 라이트/다크 모두 잉크 톤 배경 위 흰 글자라서 이 섹션만 색이 거의 고정이다.
-// (6번 Design foundations 섹션은 디자인 참고용이라 프로덕션 랜딩에서 제외했다.)
-import Link from "next/link";
+// 5. 마지막 CTA — 세 칸 아코디언 바로 다음, 작품 벽 위.
+// (2026-09-25 시안 A1: 큰 문장 + 뒤에 옅게 기울어진 작품 벽)
+//
+// "지금 시작하기"는 별도 모달이 없다 — 히어로의 두 갈래(웹툰 / 키우기)가
+// 실제 선택지라서, 여기서는 그 히어로로 도로 스크롤만 시킨다(id="top", Hero.tsx).
+// 뒤에 깔린 그림은 작품 벽(wall/) 그림을 다시 쓴다 — 따로 파일을 두지 않는다.
 import styles from "../landing.module.css";
-import { TABS_ANCHOR } from "../../links";
+import { currentLang, translator } from "../i18n";
 
-export default function CtaSection() {
+const DICT = {
+  "사진 한 장으로 어떤 콘텐츠든 끝까지 만들어볼 수 있어요.": {
+    en: "From a single photo, you can create any kind of content all the way through.",
+    ja: "写真1枚で、どんなコンテンツも最後まで作り上げられます。",
+  },
+  "지금 시작하기": { en: "Start now", ja: "今すぐ始める" },
+};
+
+const BG_IMAGES: readonly string[] = [
+  "webtoon-01.jpg", "zzal-03.jpg", "webtoon-04.jpg", "webtoon-07.jpg", "zzal-06.jpg",
+  "webtoon-10.jpg", "webtoon-13.jpg", "zzal-09.jpg", "webtoon-16.jpg", "webtoon-19.jpg",
+  "zzal-12.jpg", "webtoon-22.jpg",
+];
+
+export default async function CtaSection() {
+  const t = translator(await currentLang(), DICT);
+  const tiles = [...BG_IMAGES, ...BG_IMAGES, ...BG_IMAGES];
   return (
-    <section id="cta" className={styles.cta}>
-      <div className={`${styles.container} ${styles.ctaInner}`}>
-        <h2 className={styles.ctaTitle}>
-          우리 애 이야기,
-          <br />오늘 1화부터
-        </h2>
-        <p className={styles.ctaBody}>
-          사진 한 장이면 됩니다. 그림 실력도, 설정집도 미리 준비할 필요 없어요.
-        </p>
-        <div className={styles.ctaActions}>
-          <Link href="/zzal" className={styles.btnZzal}>
-            사진 올리기
-          </Link>
-          <a href={TABS_ANCHOR} className={styles.btnGhost}>
-            둘러보기
-          </a>
-        </div>
+    <section className={styles.ctaSection}>
+      <div className={styles.ctaBg} aria-hidden="true">
+        {tiles.map((file, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={`${file}-${i}`} src={`/static/landing/wall/${file}`} alt="" loading="lazy" />
+        ))}
+      </div>
+      <div className={`${styles.wrap} ${styles.ctaIn}`}>
+        <p className={styles.ctaText}>{t("사진 한 장으로 어떤 콘텐츠든 끝까지 만들어볼 수 있어요.")}</p>
+        <a className={styles.ctaBtn} href="#top">
+          {t("지금 시작하기")}
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true">
+            <path d="M4 10h11M11 5l5 5-5 5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </a>
       </div>
     </section>
   );

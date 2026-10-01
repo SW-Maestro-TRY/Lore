@@ -47,12 +47,15 @@ class JobNoticeTest {
         mail = mock(EmailService.class);
         StoryStore stories = mock(StoryStore.class);
         when(stories.chosenOf(anyString())).thenReturn(Optional.empty());
-        notice = new JobNotice(store, users, stories, mail, "https://lorecomic.com/");
+        // 수신 설정은 켜 둔 사람 기준으로 본다 — 끈 사람은 NotifySettingService 쪽에서 따로 본다.
+        NotifySettingService notifySettings = mock(NotifySettingService.class);
+        when(notifySettings.isOn(any())).thenReturn(true);
+        notice = new JobNotice(store, users, stories, mail, notifySettings, "https://lorecomic.com/");
     }
 
     private WebtoonJob 작업(Long userId, String typed) {
         WebtoonJob job = WebtoonJob.queued("job-1", userId, "uid-a", null,
-                "webtoon_lock_bg", "surf", false, "{}", Instant.now());
+                "webtoon_lock_bg", "surf", "ko", false, "{}", Instant.now());
         if (typed != null) {
             job.notifyTo(typed, Instant.now());
         }

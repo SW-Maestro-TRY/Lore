@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.safety.SafetyGuard;
 import com.lore.webtoon.character.CharacterOwner;
 import com.lore.webtoon.character.CharacterService;
 import com.lore.webtoon.character.WebtoonCharacter;
@@ -32,6 +33,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -59,12 +61,13 @@ public class JobService {
     private static final Map<String, String> STAGE_LABEL = Map.of(
             "story", "이야기 짓기",
             "sheet", "캐릭터 시트",
-            "board", "장면 나누기",
-            "pages", "페이지 그림");
+            "pages", "장면 나누기 · 페이지 그림",
+            "bind", "검수 · 합본");
 
     private static final String DEFAULT_STYLE = WebtoonStyles.DEFAULT_STYLE;
 
     private final WebtoonJobRepository jobs;
+    private final SafetyGuard safety;
     private final JobStore store;
     private final JobQueue queue;
     private final JobRunner runner;
@@ -84,9 +87,10 @@ public class JobService {
                       JobRunner runner,
                       JobProgress progress, StoryStore stories, WorkLedger works,
                       JobNotice notice, CharacterService characters, CharacterOwner owner, PrivateArt art,
-                      S3Service uploads, S3Storage storage,
+                      S3Service uploads, S3Storage storage, SafetyGuard safety,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.jobs = jobs;
+        this.safety = safety;
         this.works = works;
         this.notice = notice;
         this.characters = characters;
@@ -117,6 +121,11 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "저작권 확인에 동의해야 만들 수 있습니다");
         }
+        /* 글은 만들기 전에 거른다(#80). 파이썬까지 가서 모델이 거절하면 돈은 이미 나갔고
+           사람은 "만들기가 안 된다" 로만 안다. 사진은 아직 안 본다(safety.md). */
+        safety.checkText("webtoon-create", form.name(), form.character(), form.genre(), form.story(),
+                form.photoNote(),
+                form.fields() == null ? null : String.join("\n", form.fields().values()));
         boolean known = notBlank(form.name()) || notBlank(form.character())
                 || (form.fields() != null && form.fields().values().stream().anyMatch(this::notBlank))
                 || (form.photosData() != null && !form.photosData().isEmpty());
@@ -138,7 +147,8 @@ public class JobService {
             List<Path> photos = form.photoKeys() != null && !form.photoKeys().isEmpty()
                     ? pullPhotos(dir, form.photoKeys(), userId, guestKey)
                     : savePhotos(dir, form.photosData());
-            Path fromCharacter = characterArt(dir, form.characterId(), userId, form.uid());
+            WebtoonCharacter picked = pickedCharacter(form.characterId(), userId, form.uid());
+            Path fromCharacter = characterArt(dir, picked);
             /* 캐릭터를 골라 왔으면 그 그림을 참조로 붙인다.
              *
              * 화면은 **번호만** 보낸다. 그림은 S3 의 안 열리는 자리에 있고,
@@ -148,16 +158,21 @@ public class JobService {
                 photos = new ArrayList<>(photos);
                 photos.add(fromCharacter);
             }
-            writeCharacter(dir, form, photos);
+            writeCharacter(dir, form, photos, picked);
         } catch (IOException e) {
             log.error("만들기 준비에 실패했습니다 (job={})", publicId, e);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "만들기를 시작하지 못했습니다");
         }
 
-        String style = STYLE.getOrDefault(blank(form.style()), DEFAULT_STYLE);
+        /* 그림체는 화면 키(romance)로도, 하네스 이름(romance_fantasy)으로도 받는다.
+           「캐릭터 만들어보기」의 카드는 하네스 이름을 들고 있어서 — 한 컷을 그린
+           그 그림체 그대로 1화를 그려야 같은 캐릭터로 읽힌다. */
+        String asked = blank(form.style());
+        String style = STYLE.containsValue(asked) ? asked : STYLE.getOrDefault(asked, DEFAULT_STYLE);
         String quality = WebtoonQuality.normalize(form.quality());
+        String language = WebtoonLanguage.normalize(form.language());
         WebtoonJob job = jobs.save(WebtoonJob.queued(
-                publicId, userId, browserUid, guestKey, style, quality,
+                publicId, userId, browserUid, guestKey, style, quality, language,
                 form.checkpoints() == null || form.checkpoints(),
                 inputOf(form), Instant.now()));
 
@@ -194,6 +209,19 @@ public class JobService {
     }
 
     /** 이 작업이 만들고 있는 run 번호. 첫 단계가 끝나야 생기므로 없을 수 있다. */
+    /**
+     * 이 사람이 만들던 것들 — 아직 안 끝난 작업. 첫 화면이 「만들던 웹툰 · 7/12장」
+     * 알약을 띄우고, 눌러서 돌아간다. 새로고침하거나 기기를 바꿔도 하던 데로
+     * 돌아올 수 있어야 해서 주소나 화면 상태가 아니라 서버가 센다.
+     */
+    @Transactional(readOnly = true)
+    public List<JobView> activeOf(Long userId, Collection<String> uids) {
+        return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
+                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST)).stream()
+                .map(job -> view(job.getPublicId()))
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public String runOf(String publicId) {
         return store.byPublicId(publicId).getRunId();
@@ -202,12 +230,17 @@ public class JobService {
     @Transactional(readOnly = true)
     public JobView view(String publicId) {
         WebtoonJob job = store.byPublicId(publicId);
-        return JobView.of(job, progress.of(job.getId()),
+        JobProgress.Snapshot now = progress.of(job.getId());
+        JobQueue.Spot spot = queue.spotOf(job);
+        return JobView.of(job, now,
                 store.directionsOf(job.getId()),
+                job.getStatus() == JobStatus.AWAITING_CAST ? runner.castOf(job.getRunId()) : null,
+                job.getStatus() == JobStatus.AWAITING_CAST ? runner.castKind(job.getRunId()) : null,
+                job.getStatus() == JobStatus.AWAITING_CAST ? runner.personaOf(job.getRunId()) : null,
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
-                queue.spotOf(job),
-                notice.addressOf(job), queue.minutesLeft(job));
+                spot,
+                notice.addressOf(job), queue.etaOf(job, now, spot));
     }
 
     /**
@@ -250,6 +283,23 @@ public class JobService {
      * 실제 `directions.json`의 본문을 덮어쓴 뒤에야 다음 단계로 넘어간다.
      * 비어 있거나 원래 본문과 같으면 아무것도 안 건드린다.
      */
+    /**
+     * 인물 단계에 답한다(#534). 현대 로맨스에서 새 인물 중 상대를 고르면 n(1~),
+     * 사용자가 적은 인물을 확인하고 이대로 가면 0. 그 뒤 이야기 후보 넷을 짓는다.
+     */
+    public void pickCast(String publicId, int n) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_CAST) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 인물을 고를 차례가 아닙니다");
+        }
+        List<Map<String, Object>> cast = runner.castOf(job.getRunId());
+        boolean confirm = "confirm".equals(runner.castKind(job.getRunId()));
+        if (confirm ? n != 0 : (n < 1 || n > cast.size())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 인물이 없습니다");
+        }
+        runner.resumeAfterCast(job.getId(), n);
+    }
+
     public void pick(String publicId, int n, String editedBody) {
         WebtoonJob job = store.byPublicId(publicId);
         if (job.getStatus() != JobStatus.AWAITING_PICK) {
@@ -356,24 +406,15 @@ public class JobService {
     /**
      * 골라 온 캐릭터의 그림을 작업 폴더에 내려놓는다. 없으면 {@code null}.
      *
-     * <b>남의 캐릭터는 안 붙인다.</b> 내 것이거나 기본 제공만 — 안 그러면 번호를
-     * 찍어 넣어 남의 캐릭터로 웹툰을 만들 수 있다(그 기능은 #259 에서 따로 다룬다).
-     *
      * 못 가져와도 만들기는 안 막는다. 이름과 설명은 이미 폼에 실려 왔으므로
      * 그것만으로도 그릴 수 있다 — 여기서 막으면 S3 가 잠깐 흔들릴 때 만들기가
      * 통째로 죽는다.
      */
-    private Path characterArt(Path dir, String characterId, Long userId, String uid) {
-        if (characterId == null || characterId.isBlank()) {
+    private Path characterArt(Path dir, WebtoonCharacter one) {
+        if (one == null) {
             return null;
         }
         try {
-            /* 브라우저도 같이 넘긴다 — 로그인 안 하고 만든 캐릭터는 계정이
-               아니라 이 값으로만 자기 것임을 말할 수 있다. 안 넘기면 방금
-               자기가 만든 캐릭터로 웹툰을 만들려는 순간 "그런 캐릭터가
-               없습니다" 가 뜬다. */
-            WebtoonCharacter one = characters.byPublicId(
-                    characterId, userId, owner.uidsOf(userId, uid));
             byte[] bytes = art.read(one.getArtKey());
             if (bytes == null || bytes.length == 0) {
                 return null;
@@ -382,7 +423,33 @@ public class JobService {
             Files.write(out, bytes);
             return out;
         } catch (Exception e) {                     // noqa: 못 붙여도 만들기는 간다
-            log.warn("고른 캐릭터의 그림을 못 붙였습니다 (character={})", characterId, e);
+            log.warn("고른 캐릭터의 그림을 못 붙였습니다 (character={})", one.getPublicId(), e);
+            return null;
+        }
+    }
+
+    /**
+     * 골라 온 캐릭터. 없거나 남의 것이면 {@code null}.
+     *
+     * <b>남의 캐릭터는 안 쓴다.</b> 내 것이거나 기본 제공만 — 안 그러면 번호를
+     * 찍어 넣어 남의 캐릭터로 웹툰을 만들 수 있다(그 기능은 #259 에서 따로 다룬다).
+     *
+     * 그림({@link #characterArt})과 카드({@link #writeCharacter})가 같은 캐릭터를
+     * 쓰도록 여기서 한 번만 찾는다. 못 찾아도 만들기는 막지 않는다 — 이름과
+     * 설명은 이미 폼에 실려 왔다.
+     */
+    private WebtoonCharacter pickedCharacter(String characterId, Long userId, String uid) {
+        if (characterId == null || characterId.isBlank()) {
+            return null;
+        }
+        try {
+            /* 브라우저도 같이 넘긴다 — 로그인 안 하고 만든 캐릭터는 계정이
+               아니라 이 값으로만 자기 것임을 말할 수 있다. 안 넘기면 방금
+               자기가 만든 캐릭터로 웹툰을 만들려는 순간 "그런 캐릭터가
+               없습니다" 가 뜬다. */
+            return characters.byPublicId(characterId, userId, owner.uidsOf(userId, uid));
+        } catch (Exception e) {                     // noqa: 못 찾아도 만들기는 간다
+            log.warn("고른 캐릭터를 못 찾았습니다 (character={})", characterId, e);
             return null;
         }
     }
@@ -492,8 +559,8 @@ public class JobService {
      * <b>빈 칸은 빈 칸으로 둔다.</b> 코드가 기본값을 채우면 사람이 준 것과
      * 코드가 지어낸 것이 섞인다 — 하네스가 하지 않기로 한 일이다.
      */
-    private void writeCharacter(Path dir, CreateRequest form, List<Path> photos)
-            throws IOException {
+    private void writeCharacter(Path dir, CreateRequest form, List<Path> photos,
+                                WebtoonCharacter picked) throws IOException {
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("name", blank(form.name()));
         doc.put("character", blank(form.character()));
@@ -511,8 +578,11 @@ public class JobService {
            썼는데 그 말이 어디에도 안 닿는다(화면은 받아서 보내고 있었다). */
         doc.put("photo_note", blank(form.photoNote()));
         doc.put("genre", blank(form.genre()));
-        doc.put("world", Map.of("preset", "", "text", ""));
+        doc.put("world", Map.of("preset", picked == null ? "" : blank(picked.getWorld()), "text", ""));
         doc.put("story", blank(form.story()));
+        if (picked != null) {
+            doc.put("card", cardOf(picked));
+        }
         if (photos.size() == 1) {
             doc.put("photo", photos.get(0).toString());
         } else if (!photos.isEmpty()) {
@@ -520,6 +590,29 @@ public class JobService {
         }
         mapper.writerWithDefaultPrettyPrinter()
                 .writeValue(dir.resolve("character.json").toFile(), doc);
+    }
+
+    /**
+     * 고른 캐릭터 카드 — 사람이 카드 화면에서 본 그대로(#458).
+     *
+     * 전에는 카드를 골라도 이름과 {@code description}(처음 만들 때 적은 원래
+     * 설명)만 하네스에 갔다. 카드에 보이는 세계·종·이 세계에서의 자리·운명은
+     * 한 줄도 안 가서, 「마법대륙의 검은여우」를 고른 사람이 「노란 후드티
+     * 대학생」 이야기를 받았다(2026-09-27 로컬 확인). 하네스가 이것을 읽어
+     * 「고른 캐릭터 카드」로 프롬프트에 넣는다.
+     */
+    private Map<String, Object> cardOf(WebtoonCharacter one) {
+        Map<String, Object> card = new LinkedHashMap<>();
+        card.put("world", blank(one.getWorld()));
+        card.put("world_label", blank(one.getWorldLabel()));
+        card.put("genre", blank(one.getGenre()));
+        card.put("species", blank(one.getSpecies()));
+        card.put("role", blank(one.getRoleName()));
+        card.put("role_tier", blank(one.getRoleTier()));
+        card.put("twist", blank(one.getTwist()));
+        card.put("quote", blank(one.getQuote()));
+        card.put("fate", one.fateLines());
+        return card;
     }
 
     /**
@@ -602,7 +695,11 @@ public class JobService {
                                 String photoNote,
                                 /* 얼마나 촘촘히 그릴까 — wave · surf · swell.
                                    안 보내면 기본(파도)이다. */
-                                String quality) {
+                                String quality,
+                                /* 어느 언어로 만들까 — ko · en · ja. 안 보내면 기본(ko)이다.
+                                   webtoon/fe 가 지금 화면 언어(lib/i18n.tsx 의 lang)를 그대로
+                                   보낸다. */
+                                String language) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;

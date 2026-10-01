@@ -2,6 +2,7 @@ package com.lore.webtoon.runs;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lore.webtoon.Admins;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.job.AfterRun;
@@ -14,11 +15,17 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.lore.common.exception.BusinessException;
+import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.credit.CreditGate;
+import com.lore.webtoon.work.WorkLedger;
 
 import java.net.URI;
 import java.util.List;
@@ -59,6 +66,9 @@ public class RunController {
     private final StoryStore stories;
     private final RegenService regen;
     private final AfterRun after;
+    private final WorkLedger ledger;
+    private final CreditGate credits;
+    private final Admins admins;
     /* **경계에서는 Map 으로 주고받는다.**
      *
      * 이 앱의 HTTP 변환기는 Jackson 3(tools.jackson) 인데, 얹은 것을 다루는
@@ -70,7 +80,8 @@ public class RunController {
 
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
-                         RegenService regen, AfterRun after) {
+                         RegenService regen, AfterRun after, WorkLedger ledger,
+                         CreditGate credits, Admins admins) {
         this.runs = runs;
         this.pages = pages;
         this.export = export;
@@ -79,6 +90,33 @@ public class RunController {
         this.stories = stories;
         this.regen = regen;
         this.after = after;
+        this.ledger = ledger;
+        this.credits = credits;
+        this.admins = admins;
+    }
+
+    /**
+     * 편집실이 작품을 <b>고치는</b> 길의 문지기.
+     *
+     * 예전에는 아무 확인이 없어서, 주소만 알면 남의 작품을 다시 그리거나
+     * 제목을 바꿀 수 있었다 — 다시 그리기는 실제로 돈이 나간다.
+     *
+     * 주인은 <b>계정</b>이다. 게스트(브라우저)는 편집실을 못 쓴다 — 브라우저
+     * uid 는 같은 컴퓨터를 쓰는 사람끼리 겹치고, 지우면 사라져서 "고칠 권리"를
+     * 걸기에는 약하다. 대신 로그인하면 {@code POST /my/link} 가 그 브라우저를
+     * 계정에 이어 주고, 그때 그 브라우저로 만든(아직 주인 없는) 작품이
+     * 그대로 내 것이 된다({@link WorkLedger} 의 isOwner).
+     */
+    private Long mustOwn(String runId) {
+        Long userId = CreditGate.currentUser();
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED,
+                    "편집실은 로그인해야 쓸 수 있어요. 로그인하면 이 브라우저로 만든 작품도 같이 따라옵니다.");
+        }
+        if (!ledger.mayChange(runId, userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 고칠 수 있습니다");
+        }
+        return userId;
     }
 
     /**
@@ -92,9 +130,29 @@ public class RunController {
     @PostMapping("/{runId}/title")
     public ResponseEntity<Map<String, Object>> title(@PathVariable String runId,
                                                       @RequestBody Map<String, Object> body) {
+        mustOwn(runId);
         try {
             String got = stories.editTitle(runId, String.valueOf(body.getOrDefault("title", "")));
             return ResponseEntity.ok(Map.of("title", got));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
+        }
+    }
+
+    /**
+     * 줄거리(로그라인)를 고친다. 제목 고치기와 같은 규칙이다 — <b>빈 값으로
+     * 부르면 지운다</b>(모델이 지은 줄거리로 돌아간다). 길면 300자에서 자른다.
+     *
+     * 아직 이야기를 안 고른 작품(만드는 중)이면 404 다.
+     */
+    @Operation(summary = "줄거리 고치기", description = "logline 이 비어 있으면 원래 줄거리로 되돌린다. 300자에서 자른다.")
+    @PostMapping("/{runId}/logline")
+    public ResponseEntity<Map<String, Object>> logline(@PathVariable String runId,
+                                                        @RequestBody Map<String, Object> body) {
+        mustOwn(runId);
+        try {
+            String got = stories.editPlot(runId, String.valueOf(body.getOrDefault("logline", "")));
+            return ResponseEntity.ok(Map.of("logline", got));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
         }
@@ -126,6 +184,7 @@ public class RunController {
     public Map<String, Object> saveOverlay(@PathVariable String runId,
                                            @RequestParam(defaultValue = "1") int ep,
                                            @RequestBody(required = false) Map<String, Object> body) {
+        mustOwn(runId);
         return Map.of("ok", true, "items", overlays.save(runId, ep, asNode(body)));
     }
 
@@ -165,7 +224,8 @@ public class RunController {
         return Map.of("runs", found);
     }
 
-    @Operation(summary = "완성본 한 편")
+    @Operation(summary = "완성본 한 편", description = """
+            관리자가 열면 만들 때 넣은 설정(inputs)이 같이 온다(#329, #428) — 운영용이고 사람이 쓴 글이라 다른 사람에게는 안 준다.""")
     @GetMapping("/{runId}/result")
     public ResponseEntity<Map<String, Object>> result(@PathVariable String runId) {
         /* **여는 것만으로 낫게 한다.** 다 그려 놓고 올리는 데서 실패한 작품은
@@ -174,9 +234,17 @@ public class RunController {
            않으므로 돈이 안 나간다. 자세한 것은 AfterRun#healIfMissing. */
         after.healIfMissing(runId);
         Map<String, Object> found = runs.result(runId);
-        return found == null
-                ? ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"))
-                : ResponseEntity.ok(found);
+        if (found == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
+        }
+        /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
+        if (admins.current()) {
+            RunService.Inputs inputs = runs.inputsOf(runId);
+            if (inputs != null) {
+                found.put("inputs", inputs.values());
+            }
+        }
+        return ResponseEntity.ok(found);
     }
 
     /**
@@ -215,15 +283,13 @@ public class RunController {
         if (meta == null) {
             return ResponseEntity.notFound().build();
         }
-        byte[] png = export.png(runId, captionOf(meta));
+        byte[] png = export.png(runId);
         if (png == null) {
             return ResponseEntity.notFound().build();
         }
-        /* 받는 파일 이름은 작품 번호다. 제목을 쓰면 한글·따옴표가 섞여 브라우저마다
-           다르게 저장되고, 같은 작품을 두 번 받으면 이름이 겹친다. */
+        // 받는 파일 이름은 LORE_제목_1화.png — 옛 브라우저에는 작품 번호(DownloadName).
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + runId + ".png\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
@@ -237,11 +303,9 @@ public class RunController {
         return body == null ? null : mapper.valueToTree(body);
     }
 
-    /** 띠 오른쪽에 적을 한 줄 — 파이썬의 {@code episode_caption} 과 같은 모양. */
-    private static String captionOf(Map<String, Object> meta) {
-        Object name = meta.get("character");
-        String who = name == null ? "" : String.valueOf(name).trim();
-        return who.isEmpty() ? "1화" : who + " · 1화";
+    private static String titleOf(Map<String, Object> meta) {
+        Object t = meta.get("title");
+        return t == null ? "" : String.valueOf(t);
     }
 
     /* ---- 다시 그리기 ------------------------------------------------------- */
@@ -258,9 +322,22 @@ public class RunController {
                                                       @PathVariable int no,
                                                       @RequestBody(required = false)
                                                       Map<String, Object> body) {
+        Long userId = mustOwn(runId);
+        /* 화면이 단추에 값을 적어 놓고 실제로는 안 받고 있었다. 만들기·캐릭터와
+           같은 규칙으로 여기서도 받는다 — **시작하기 전에** 낼 수 있는지 보고,
+           줄을 세운 뒤에 뺀다. 먼저 빼면 시작이 실패했을 때 낸 것만 사라진다.
+           같은 ref 로 두 번 불려도 한 번만 빠진다(CreditGate.charge). */
+        int cost = credits.regenCost();
+        String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
+        if (blocked != null) {
+            throw new BusinessException(CreditGate.notEnough(), blocked);
+        }
         try {
             String note = body == null ? "" : String.valueOf(body.getOrDefault("feedback", ""));
             String id = regen.start(runId, no, note);
+            if (cost > 0) {
+                credits.charge(userId, cost, "regen:" + runId + ":" + no + ":" + id, "장 다시 그리기");
+            }
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
@@ -294,6 +371,7 @@ public class RunController {
     public ResponseEntity<Map<String, Object>> revert(@PathVariable String runId,
                                                        @PathVariable int no,
                                                        @RequestBody Map<String, Object> body) {
+        mustOwn(runId);
         try {
             int version = Integer.parseInt(String.valueOf(body.get("version")));
             List<Map<String, Object>> versions = regen.revert(runId, no, version);
@@ -325,6 +403,9 @@ public class RunController {
     public ResponseEntity<Void> page(@PathVariable String runId, @PathVariable int no,
                                      @RequestParam(defaultValue = "1080") int w,
                                      @RequestParam(required = false) String raw) {
+        if (runs.isTrashed(runId)) {
+            return ResponseEntity.notFound().build();      // 휴지통에 든 작품(#157)
+        }
         boolean wantRaw = raw != null && !raw.isBlank() && !"0".equals(raw);
         String where = wantRaw ? null : pages.urlOfKey(bakery.keyOf(runId, no));
         if (where == null) {
@@ -333,5 +414,30 @@ public class RunController {
         return where == null
                 ? ResponseEntity.notFound().build()
                 : ResponseEntity.status(302).location(URI.create(where)).build();
+    }
+
+    /**
+     * 컷 하나만 내려받는다 — 위 {@link #page} 는 302 로 S3/CloudFront 주소를
+     * 가리킬 뿐이라 {@code download} 속성이 안 먹는다(다른 도메인이라 파일
+     * 이름도 못 정한다). 결과 화면에서 컷을 체크박스로 몇 장만 골라 받을 때
+     * 쓴다 — 위 「한 편 내려받기」와 같은 이유로 <b>이 길에도 LORE 표시가
+     * 붙는다</b>: 낱장으로 나가도 어디서 만든 것인지 남아야 한다.
+     */
+    @Operation(summary = "컷 하나 내려받기",
+            description = "그 장 하나에 LORE 표시를 찍어서 준다.")
+    @GetMapping(value = "/{runId}/page/{no}/download", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> pageDownload(@PathVariable String runId, @PathVariable int no) {
+        Map<String, Object> meta = runs.result(runId);
+        if (meta == null) {
+            return ResponseEntity.notFound().build();
+        }
+        byte[] png = export.pagePng(runId, no);
+        if (png == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no))
+                .contentType(MediaType.IMAGE_PNG)
+                .body(png);
     }
 }

@@ -40,7 +40,7 @@ class StaleJobsTest {
 
     private WebtoonJob running(String id) {
         WebtoonJob job = WebtoonJob.queued(id, 7L, "uid", null, "webtoon_lock_bg",
-                WebtoonQuality.DEFAULT_QUALITY, false, "{}", Instant.parse("2026-09-07T12:00:00Z"));
+                WebtoonQuality.DEFAULT_QUALITY, "ko", false, "{}", Instant.parse("2026-09-07T12:00:00Z"));
         job.moveTo(JobStatus.RUNNING, JobStage.PAGES, Instant.parse("2026-09-07T12:01:00Z"));
         return job;
     }

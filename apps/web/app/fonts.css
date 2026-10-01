@@ -1,0 +1,7 @@
+/* 폰트 이름 → CSS 변수. common/fe/styles/tokens.css 와 webtoon/fe/webtoon.css 가 이 변수를 받아 쓴다.
+ * 파일은 layout.tsx 가 불러오는 @fontsource 패키지가 준다. 가변 폰트라 굵기(100~900)가 다 들어 있다. */
+:root {
+  --font-archivo: "Archivo Variable";
+  --font-noto-sans-kr: "Noto Sans KR Variable";
+  --font-ibm-plex-mono: "IBM Plex Mono";
+}

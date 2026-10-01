@@ -46,9 +46,17 @@ class RunFilesTest {
     }
 
     private RunFiles files(String bucket) {
+        return files(bucket, "");
+    }
+
+    private RunFiles files(String bucket, String keepFiles) {
+        return files(bucket, "", keepFiles);
+    }
+
+    private RunFiles files(String bucket, String endpoint, String keepFiles) {
         HarnessProcess harness = mock(HarnessProcess.class);
         when(harness.runsDir()).thenReturn(runs);
-        return new RunFiles(harness, pages, storage, bucket);
+        return new RunFiles(harness, pages, storage, bucket, endpoint, keepFiles);
     }
 
     /** 다 그려진 작품 하나를 디스크에 만든다. */
@@ -180,5 +188,54 @@ class RunFilesTest {
 
         assertThat(done).exists();
         assertThat(done.resolve("meta.json")).exists();
+    }
+
+    @Test
+    @DisplayName("keep-files=true 면 버킷이 있어도(로컬 MinIO) 그림을 안 치운다")
+    void 남기기_설정이면_안_지운다() throws IOException {
+        Path d = 작품("run-keep", 2);
+        올라가_있다("run-keep", 2);
+
+        RunFiles f = files("lore-content", "true");
+        assertThat(f.keepsFiles()).isTrue();
+        assertThat(f.sweepUploaded("run-keep")).isZero();
+        assertThat(d.resolve("pages/page01.png")).exists();
+        assertThat(d.resolve("episode.png")).exists();
+    }
+
+    @Test
+    @DisplayName("로컬(버킷 없음)은 끝까지 못 간 작품도 7일이 지나도 남긴다")
+    void 로컬은_못_간_작품도_남긴다() throws IOException {
+        Path old = 작품("run-local-old", 2);
+        when(pages.originalKeys("run-local-old")).thenReturn(Map.of());
+        Files.setLastModifiedTime(old,
+                FileTime.from(Instant.now().minus(30, ChronoUnit.DAYS)));
+
+        files("").sweepStale();
+
+        assertThat(old).exists();
+    }
+
+    @Test
+    @DisplayName("keep-files=false 를 적으면 버킷이 있을 때 지금처럼 치운다")
+    void 명시적으로_끄면_치운다() throws IOException {
+        Path d = 작품("run-off", 2);
+        올라가_있다("run-off", 2);
+
+        RunFiles f = files("lore-content", "false");
+        assertThat(f.keepsFiles()).isFalse();
+        assertThat(f.sweepUploaded("run-off")).isPositive();
+        assertThat(d.resolve("pages/page01.png")).doesNotExist();
+        assertThat(d.resolve("meta.json")).exists();
+    }
+
+    @Test
+    @DisplayName("창고가 이 기계(노트북 MinIO)면 설정 없이도 남기고, 바깥 창고면 치운다")
+    void 노트북_창고면_남긴다() {
+        assertThat(files("lore-dev-contents", "http://localhost:9000", "").keepsFiles()).isTrue();
+        assertThat(files("lore-dev-contents", "http://127.0.0.1:9000", "").keepsFiles()).isTrue();
+        assertThat(files("lore-dev-contents", "https://dev.example.com", "").keepsFiles()).isFalse();
+        assertThat(files("lore-content", "", "").keepsFiles()).isFalse();
+        assertThat(files("", "", "").keepsFiles()).isTrue();
     }
 }

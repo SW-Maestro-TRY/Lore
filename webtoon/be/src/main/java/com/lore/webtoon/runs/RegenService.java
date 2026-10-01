@@ -68,10 +68,12 @@ public class RegenService {
     private final PageUploader uploader;
     private final JobRunner runner;
     private final RunFiles files;
+    /** 다시 그리기도 그림 값이 나간다 — 원가 장부에 적는다(#444). */
+    private final com.lore.webtoon.job.AfterRun after;
 
     public RegenService(PageRegenRepository regens, PageStore pages, BakeService bakery,
                         HarnessProcess harness, PageUploader uploader, JobRunner runner,
-                        RunFiles files) {
+                        RunFiles files, com.lore.webtoon.job.AfterRun after) {
         this.regens = regens;
         this.pages = pages;
         this.bakery = bakery;
@@ -79,6 +81,7 @@ public class RegenService {
         this.uploader = uploader;
         this.runner = runner;
         this.files = files;
+        this.after = after;
     }
 
     /**
@@ -184,11 +187,17 @@ public class RegenService {
         }
         try {
             Path dest = pageFile(runId, pageNo);
+            /* 올린 뒤 서버 사본을 치웠으면 지금 그림이 디스크에 없어서, 아래
+               archive 가 아무것도 안 남긴다 — 되돌리기 전 판이 사라진다. */
+            files.restore(runId, pageNo);
             archive(runId, pageNo);      // 되돌리기 전 그림도 판본으로
             Files.createDirectories(dest.getParent());
             Files.copy(from, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             reupload(runId);
             bakery.invalidate(runId, pageNo);
+            /* 여기서는 서버 사본을 안 치운다. 되돌리기는 다시 그리기 줄 밖에서 돌아서,
+               같은 작품의 다른 장을 그리는 중이면 그쪽이 참조하는 그림을 지우게 된다.
+               남은 사본은 다음 다시 그리기가 끝날 때 같이 치워진다. */
             return versionsOf(runId, pageNo);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
@@ -241,12 +250,20 @@ public class RegenService {
             /* 다시 그리기는 취소 대상이 아니라 번호를 안 준다 — 작업이 아니라
                편집실에서 한 장을 고치는 일이고, 멈추는 길이 따로 없다. */
             int code = harness.run(null, args, env, line -> { });
+            /* **그 자리에서 적는다(#444).** run.py 는 다시 그린 호출도 작품의 meta.json 에
+               덧붙이는데, 여기서 아무도 안 읽어서 편집실 다시 그리기 값이 장부에서 빠졌다.
+               실패해도 나간 값은 나갔다 — 성공 여부를 보기 전에 적는다. 겹치는 줄은
+               (작품, 몇 번째)로 걸러진다. */
+            after.cost(runId);
             if (code != 0 || !Files.isRegularFile(dest)) {
                 fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
                 return;
             }
             reupload(runId);
             bakery.invalidate(runId, no);
+            /* 올렸으면 되살린 참조 그림과 새 그림을 서버에서 다시 치운다. 안 치우면
+               다시 그릴 때마다 원본이 서버에 쌓인다(로컬은 RunFiles 가 안 지운다). */
+            files.sweepUploaded(runId);
             move(id, RegenStatus.DONE);
         } catch (Exception e) {
             log.error("다시 그리지 못했습니다 (run={}, 장={})", runId, no, e);

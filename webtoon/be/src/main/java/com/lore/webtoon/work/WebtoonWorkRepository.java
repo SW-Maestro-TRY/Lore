@@ -31,7 +31,7 @@ public interface WebtoonWorkRepository extends JpaRepository<WebtoonWork, Long> 
      * 게스트로 만들고 로그인하는 흐름은 그대로다: 그때 그 작품은 주인이 없다. */
     @Query("""
            select w from WebtoonWork w
-            where w.runId is not null
+            where w.runId is not null and w.deletedAt is null
               and (w.userId = :userId
                    or (w.userId is null
                        and w.browserUid in (select l.browserUid from BrowserLink l
@@ -48,7 +48,7 @@ public interface WebtoonWorkRepository extends JpaRepository<WebtoonWork, Long> 
      */
     @Query("""
            select w from WebtoonWork w
-            where w.runId is not null and w.isPublic = true
+            where w.runId is not null and w.isPublic = true and w.deletedAt is null
             order by w.id desc
            """)
     List<WebtoonWork> onGallery();
@@ -56,10 +56,32 @@ public interface WebtoonWorkRepository extends JpaRepository<WebtoonWork, Long> 
     /** 이 브라우저가 만든 것 — 새 것부터. <b>비공개도 준다</b>(내 목록이라서). */
     @Query("""
            select w from WebtoonWork w
-            where w.runId is not null and w.browserUid = :browserUid
+            where w.runId is not null and w.browserUid = :browserUid and w.deletedAt is null
             order by w.id desc
            """)
     List<WebtoonWork> madeBy(@Param("browserUid") String browserUid);
+
+    /**
+     * 휴지통에 든 작품(#157). {@link #ownedBy} 와 같은 주인 기준이다 — 지운
+     * 사람만 자기 휴지통을 본다. 최근에 지운 것부터.
+     */
+    @Query("""
+           select w from WebtoonWork w
+            where w.runId is not null and w.deletedAt is not null
+              and (w.userId = :userId
+                   or (w.userId is null
+                       and w.browserUid in (select l.browserUid from BrowserLink l
+                                             where l.userId = :userId)))
+            order by w.deletedAt desc
+           """)
+    List<WebtoonWork> trashOf(@Param("userId") Long userId);
+
+    /** 휴지통에 든 지 {@code before} 보다 오래된 것. 영구 삭제할 차례다. */
+    @Query("""
+           select w from WebtoonWork w
+            where w.deletedAt is not null and w.deletedAt < :before
+           """)
+    List<WebtoonWork> trashedBefore(@Param("before") java.time.Instant before);
 
     /** 이 작품의 주인. 권한을 물을 때 쓴다. */
     Optional<WebtoonWork> findFirstByRunId(String runId);
