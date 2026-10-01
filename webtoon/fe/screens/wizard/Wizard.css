@@ -196,7 +196,8 @@
   .wt .wt-wiz-stylehead > .dim { display: none; }
   .wt .wt-wiz-styles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .wt .wt-wiz-style { border-radius: 14px; }
-  .wt .wt-wiz-style img { height: 150px; }
+  /* 폰에서도 견본을 통째로 보인다 — 높이를 150px 로 못 박으면 3:4 견본이 위쪽만 남게 잘렸다(2026-10-01 지적). */
+  .wt .wt-wiz-style img { height: auto; aspect-ratio: 3 / 4; }
   .wt .wt-wiz-style .txt { padding: 10px 12px 12px; gap: 2px; }
   .wt .wt-wiz-style .txt b { font-size: 13.5px; }
   .wt .wt-wiz-style .txt span { font-size: 11.5px; }
