@@ -110,6 +110,8 @@ const dict: Dict = {
   "다시 만들기 메모": { en: "Redo note", ja: "作り直しメモ", zh: "重做备注" },
 
   /* ---- 이야기 고르기 ---- */
+  "내가 적은 것 보기·고치기": { en: "See & edit what I wrote", ja: "書いた内容を見る・直す", zh: "查看并修改我写的内容" },
+  "그림체·촘촘함은 웹툰을 만들기 전까지 바꿀 수 있어요": { en: "Art style and detail level can be changed until the webtoon is made", ja: "画風と密度はウェブトゥーンを作る前まで変えられます", zh: "画风和细致度在生成漫画前可以更改" },
   "누구와의 이야기로 갈까요?": { en: "Whose story should it be?", ja: "誰との物語にしますか？", zh: "要和谁的故事？" },
   "주인공 · {name}": { en: "Lead · {name}", ja: "主人公 · {name}", zh: "主角 · {name}" },
   "이 인물들로 이야기를 지을게요": { en: "We'll write the story with these characters", ja: "この登場人物でストーリーを作ります", zh: "就用这些人物来写故事" },
