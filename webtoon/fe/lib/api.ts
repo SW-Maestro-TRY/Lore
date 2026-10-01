@@ -370,7 +370,7 @@ export function sheetImageUrl(jobId: string, v: number | string = ""): string {
 
 /** 조연 시트 그림(#548). */
 export function castSheetImageUrl(jobId: string, name: string, v: number | string = ""): string {
-  return `${BASE}/jobs/${encodeURIComponent(jobId)}/cast-sheet/${encodeURIComponent(name)}${v ? `?v=${v}` : ""}`;
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/cast-sheet/${encodeURIComponent(name)}.png${v ? `?v=${v}` : ""}`;
 }
 
 /** 조연 한 명의 시트를 뽑는다(1크레딧). 장면 확인 차례에만. */
