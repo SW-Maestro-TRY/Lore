@@ -182,6 +182,7 @@ export interface NhPersona {
 export interface NhCast {
   name: string;
   from_input?: boolean | string;
+  role?: string;
   look?: string;
   gap?: string;
   voice?: string;
@@ -333,6 +334,11 @@ export function pickCast(id: string, n: number) {
 /** 고친 장면(과 own 길이면 이야기 제목·본문)을 저장만 한다. 진행하지 않는다 — 나갔다 와도 그대로. */
 export function saveScenes(id: string, body: { scenes: { n: number; text: string }[]; body?: string; title?: string }) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/scenes`, body);
+}
+
+/** 인물 카드 고치기(#548) — who 는 "hero" 이거나 cast 번호(0부터). 보낸 칸만 덮는다. */
+export function savePerson(id: string, who: string, fields: Record<string, string>) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/person`, { who, fields });
 }
 
 /** 「이대로 웹툰 만들기」 — 저장된 장면으로 다음 걸음(시트 확인 또는 그림)으로 간다. */

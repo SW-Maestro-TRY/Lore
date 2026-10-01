@@ -608,6 +608,59 @@ public class JobRunner {
         }
     }
 
+    /** 인물 카드에서 고칠 수 있는 칸(#548). 이 밖의 칸은 무시한다. */
+    static final List<String> PERSON_FIELDS =
+            List.of("name", "role", "look", "personality", "gap", "voice", "line", "tie", "wants");
+
+    /**
+     * 인물 카드 하나를 고친다(#548) — {@code who} 가 "hero" 면 persona.json, 숫자면 cast.json 의
+     * 그 번째(0부터). 보낸 칸만 덮는다. 조연 이름이 바뀌면 이미 뽑은 시트 파일도 새 이름으로 옮긴다.
+     */
+    public void savePerson(String runId, String who, Map<String, Object> fields) throws IOException {
+        Map<String, Object> clean = new java.util.LinkedHashMap<>();
+        for (String k : PERSON_FIELDS) {
+            if (fields != null && fields.get(k) != null) {
+                clean.put(k, fields.get(k).toString().trim());
+            }
+        }
+        Path dir = runDir(runId);
+        if ("hero".equals(who)) {
+            Map<String, Object> persona = personaOf(runId);
+            if (persona == null) {
+                throw new IOException("persona.json 이 없습니다");
+            }
+            clean.remove("role");
+            persona.putAll(clean);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("persona.json").toFile(), persona);
+            return;
+        }
+        int i;
+        try {
+            i = Integer.parseInt(who);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("who 는 hero 이거나 번호입니다");
+        }
+        List<Map<String, Object>> cast = new ArrayList<>(castOf(runId));
+        if (i < 0 || i >= cast.size()) {
+            throw new IllegalArgumentException("그런 인물이 없습니다");
+        }
+        Map<String, Object> one = new java.util.LinkedHashMap<>(cast.get(i));
+        String oldName = String.valueOf(one.getOrDefault("name", ""));
+        clean.remove("personality");
+        one.putAll(clean);
+        cast.set(i, one);
+        mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("cast.json").toFile(), cast);
+        String newName = String.valueOf(one.getOrDefault("name", ""));
+        if (!newName.isBlank() && !newName.equals(oldName)) {
+            Path sheets = dir.resolve("sheets");
+            Path from = sheets.resolve(RunArt.castSheetStem(oldName) + ".png");
+            Path to = sheets.resolve(RunArt.castSheetStem(newName) + ".png");
+            if (Files.exists(from) && !Files.exists(to)) {
+                Files.move(from, to);
+            }
+        }
+    }
+
     /** 사람이 인물 단계에 답했다(#534) — n 번 상대를 골랐거나(1~), 이대로 진행(0). */
     public void resumeAfterCast(Long jobId, int n) {
         store.queued(jobId, JobStage.STORY);

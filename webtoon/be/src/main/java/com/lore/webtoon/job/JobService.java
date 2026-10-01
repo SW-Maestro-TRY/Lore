@@ -528,6 +528,26 @@ public class JobService {
         }
     }
 
+    /** 인물 카드 고치기(#548) — 이야기 확인·장면 확인 자리에서만, own 길만. */
+    public void savePerson(String publicId, String who, Map<String, Object> fields) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (!job.isOwn() || (job.getStatus() != JobStatus.AWAITING_PICK && job.getStatus() != JobStatus.AWAITING_SCENES)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 인물을 고칠 차례가 아닙니다");
+        }
+        if (fields != null) {
+            for (Object v : fields.values()) {
+                safety.checkText("webtoon-scenes", v == null ? null : v.toString());
+            }
+        }
+        try {
+            runner.savePerson(job.getRunId(), who, fields);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("인물을 적지 못했습니다", e);
+        }
+    }
+
     /**
      * 내가 적은 것(#548) — 장면 확인 화면이 보여 준다. 만들 때 남긴 {@code input_json}
      * 에서 글만 꺼내고(사진은 장 수만), 그림체·화질·언어는 작업 줄에서.

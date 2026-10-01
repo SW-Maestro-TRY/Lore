@@ -361,3 +361,8 @@
 /* 장면 고치기 — 읽을 때와 같은 폭·글자·줄바꿈, 높이는 글만큼 */
 .wt .wt-prog-scene textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; margin: 0 -10px; width: calc(100% + 20px); resize: none; overflow: hidden;
   font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; color: var(--ink); border-radius: 8px; }
+/* 인물 카드 고치기 */
+.wt .wt-prog-cast .row .tools button { color: var(--ink-2, inherit); padding: 4px; border-radius: 6px; }
+.wt .wt-prog-cast.editing { border-color: var(--ink); }
+.wt .wt-prog-cast textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; resize: none; overflow: hidden; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; border-radius: 8px; }
+.wt .wt-prog-cast .acts { display: flex; gap: 8px; justify-content: flex-end; }
