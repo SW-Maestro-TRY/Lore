@@ -2,7 +2,7 @@
  *
  *   /webtoon                       첫 화면
  *   /webtoon?view=entry            입구 (내 캐릭터로 웹툰 / 캐릭터 만들어보기)
- *   /webtoon?view=create&step=1    웹툰 만들기 1~4 (&character=<id> 로 캐릭터를 골라 들어옴)
+ *   /webtoon?view=create&step=1    웹툰 만들기 1~5 (&character=<id> 로 캐릭터를 골라 들어옴)
  *   /webtoon?view=running&job=<id> 만드는 중 (시트 확인 · 이야기 고르기 · 그리는 중)
  *   /webtoon?run=<id>              완성본 (공유 링크가 이 길이다)
  *   /webtoon?view=editor&run=<id>  편집실
