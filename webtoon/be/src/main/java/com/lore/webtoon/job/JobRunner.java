@@ -970,6 +970,58 @@ public class JobRunner {
         return out;
     }
 
+    /**
+     * 장면 n 을 이전 판 v(1부터, 오래된 것부터)로 되돌린다(#548). 지금 판도 버리지 않고 판 목록
+     * 끝에 붙인다 — 되돌린 것을 다시 되돌릴 수 있게. 뒤 장면의 「직전 상태」는 되돌린 판의
+     * 「끝나는 상태」로 맞춘다(다시 뽑기와 같은 규칙).
+     */
+    public synchronized void restoreScene(String runId, int n, int v) throws IOException {
+        Path file = runDir(runId).resolve("scenes.json");
+        ObjectNode root = (ObjectNode) mapper.readTree(file.toFile());
+        ArrayNode scenes = (ArrayNode) root.path("scenes");
+        int at = -1;
+        for (int i = 0; i < scenes.size(); i++) {
+            if (scenes.get(i).path("n").asInt() == n) {
+                at = i;
+                break;
+            }
+        }
+        if (at < 0) {
+            throw new IllegalArgumentException("그런 장면이 없습니다");
+        }
+        ObjectNode cur = (ObjectNode) scenes.get(at);
+        JsonNode hist = cur.path("history");
+        if (!hist.isArray() || v < 1 || v > hist.size()) {
+            throw new IllegalArgumentException("그런 판이 없습니다");
+        }
+        ArrayNode rest = mapper.createArrayNode();
+        ObjectNode chosen = ((ObjectNode) hist.get(v - 1)).deepCopy();
+        for (int i = 0; i < hist.size(); i++) {
+            if (i != v - 1) {
+                rest.add(hist.get(i));
+            }
+        }
+        ObjectNode now = cur.deepCopy();
+        now.remove("history");
+        rest.add(now);
+        chosen.remove("history");
+        chosen.put("n", n);
+        if (at > 0 && !scenes.get(at - 1).path("ends").asText("").isBlank()) {
+            chosen.put("prev", scenes.get(at - 1).path("ends").asText());
+        }
+        chosen.set("history", rest);
+        scenes.set(at, chosen);
+        if (at + 1 < scenes.size() && !chosen.path("ends").asText("").isBlank()) {
+            ((ObjectNode) scenes.get(at + 1)).put("prev", chosen.path("ends").asText());
+        }
+        mapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), root);
+    }
+
+    /** 이 장면을 지금 다시 짓고 있나. */
+    public boolean rescening(Long jobId, int n) {
+        return rescening.getOrDefault(jobId, java.util.Set.of()).contains(n);
+    }
+
     /** 장면 초안(#548) — 화면에 보여 줄 모양. {n, text, parts, user_text}. 없으면 빈 목록. */
     public List<Map<String, Object>> scenesOf(String runId) {
         if (runId == null || runId.isBlank()) {
@@ -985,6 +1037,15 @@ public class JobRunner {
                 one.put("parts", sceneParts(s));
                 String user = s.path("user_text").asText("");
                 one.put("user_text", user.isBlank() ? null : user);
+                /* 다시 뽑기 전의 판들(#548) — 오래된 것부터. 화면이 넘겨 보고 되돌린다. */
+                List<Map<String, Object>> history = new ArrayList<>();
+                for (JsonNode h : s.path("history")) {
+                    Map<String, Object> old = new LinkedHashMap<>();
+                    old.put("text", sceneText(h));
+                    old.put("parts", sceneParts(h));
+                    history.add(old);
+                }
+                one.put("history", history);
                 out.add(one);
             }
             return out;

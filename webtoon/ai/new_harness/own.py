@@ -743,6 +743,11 @@ def rescene(run_dir: Path, char: dict, n: int, reasons: list[str], note: str,
         nxt["prev"] = new["ends"]
     for i, s in enumerate(scenes):
         if s.get("n") == n:
+            # 이전 판은 버리지 않는다 — 화면에서 넘겨 보고 되돌릴 수 있게(#548). 오래된 것부터.
+            old = dict(s)
+            history = list(old.pop("history", None) or [])
+            history.append(old)
+            new["history"] = history
             scenes[i] = new
             break
     parsed["scenes"] = scenes

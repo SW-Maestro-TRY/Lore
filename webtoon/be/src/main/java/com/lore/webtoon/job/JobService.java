@@ -620,6 +620,24 @@ public class JobService {
         }
     }
 
+    /** 장면 하나를 이전 판으로 되돌린다(#548) — 장면 확인 자리에서만, 다시 짓는 중이 아닐 때. */
+    public void restoreScene(String publicId, int n, int v) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        if (runner.rescening(job.getId(), n)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이 장면을 다시 짓는 중입니다");
+        }
+        try {
+            runner.restoreScene(job.getRunId(), n, v);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("장면을 되돌리지 못했습니다", e);
+        }
+    }
+
     /* ---- 시트 판(#548) ---- */
 
     /** 시트를 되돌릴 수 있는 자리 — 시트를 다시 그릴 수 있는 멈춤들과 같다. */
