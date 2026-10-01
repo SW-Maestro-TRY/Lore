@@ -21,7 +21,8 @@
 }
 .wt .wt-ed-titlerow h1:hover { background: rgba(15, 51, 63, 0.06); }
 .wt .wt-ed-titlerow h1:focus-visible, .wt .wt-ed-titlerow h1.is-editing { outline: 2px solid var(--sea); outline-offset: 2px; background: transparent; }
-.wt .wt-ed-titleedit { display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; padding: 0; font-size: 12px; color: var(--sea); cursor: pointer; flex: none; }
+.wt .wt-ed-titleedit { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; padding: 0; color: var(--ink); cursor: pointer; flex: none; }
+.wt .wt-ed-titleedit:hover { background: var(--water-light); }
 .wt .wt-ed-title #edMeta { font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wt .wt-ed-chips { display: flex; align-items: center; gap: 10px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 .wt .wt-ed .mock-badge { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--ink); background: var(--water); padding: 3px 7px; border-radius: 5px; }
@@ -70,10 +71,11 @@
 .wt .wt-ed-left {
   /* 아트보드는 220인데 거기 목록은 썸네일 없는 한 줄이었다. 여기는 썸네일과
      두 줄이라 220이면 제목이 잘린다 — 그만큼 넓힌다. */
-  width: 260px; flex: none; border-right: 1px solid rgba(15, 51, 63, 0.08); padding: 16px 12px;
+  width: var(--ed-left-w, 260px); flex: none; border-right: 1px solid rgba(15, 51, 63, 0.08); padding: 16px 12px;
   display: flex; flex-direction: column; gap: 6px; background: #fff;
   position: sticky; top: calc(var(--lore-header-h, 0px) + 64px); align-self: flex-start;
-  max-height: calc(100vh - var(--lore-header-h, 0px) - 64px); overflow: auto;
+  /* 화면 높이만큼 세워 둔다 — 그래야 「내 작품」이 왼쪽 맨 아래에 붙는다(#548). */
+  height: calc(100vh - var(--lore-header-h, 0px) - 64px); overflow: auto;
 }
 .wt .wt-ed-lefthead { font-size: 12px; color: var(--dim); padding: 0 10px 6px; display: block; }
 .wt .wt-ed-workslist { display: flex; flex-direction: column; gap: 2px; }
@@ -90,7 +92,11 @@
 .wt .wt-ed-workslist .lou-note { padding: 14px 8px; }
 .wt .wt-ed-workslist .lou-note img { width: 72px; }
 .wt .wt-ed-workslist .lou-note p { font-size: 12px; color: var(--muted); line-height: 1.5; }
-.wt .wt-ed-pages { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding-top: 12px; }
+.wt .wt-ed-pages { display: flex; flex-direction: column; gap: 6px; }
+/* 고른 장이 무슨 장면인지(#548) */
+.wt .wt-ed-sceneinfo { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; margin-top: 6px; border-top: 1px solid var(--line); }
+.wt .wt-ed-sceneinfo > p { margin: 0; padding: 0 10px; font-size: 13px; line-height: 1.65; color: var(--ink); white-space: pre-wrap; }
+.wt .wt-ed-sceneinfo p.dim { color: var(--dim); }
 .wt .wt-ed-pagegrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .wt .wt-ed-thumb {
   position: relative; height: 56px; border-radius: 6px; background: var(--water-light); border: 1px solid rgba(15, 51, 63, 0.12);
@@ -104,14 +110,15 @@
 /* 무대 폭. 아트보드는 1280 프레임이라 가운데가 520이었는데, 실제 화면은 그보다
  * 훨씬 넓어서 그대로 두면 양옆이 600px 넘게 논다. 얹은 것의 좌표가 전부 %라
  * (editorCore 의 left/top/width) 넓혀도 말풍선이 그림을 따라간다. */
-.wt .wt-ed-eptabs { width: min(100%, 860px); display: flex; gap: 6px; }
+.wt .wt-ed-eptabs { width: min(100%, 640px); display: flex; gap: 6px; }
 .wt .wt-ed-eptabs[hidden] { display: none; }
 .wt .wt-ed .ep-tab {
   display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
   border: 1.5px solid rgba(15, 51, 63, 0.16); background: #fff; color: var(--ink); cursor: pointer; font-family: inherit;
 }
 .wt .wt-ed .ep-tab[aria-current="true"] { background: var(--ink); border-color: var(--ink); color: #fff; cursor: default; }
-.wt .wt-ed-scenes { width: min(100%, 860px); display: flex; flex-direction: column; }
+/* 페이지는 웹툰을 실제로 읽는 폭에 가깝게 — 860 은 한 장이 화면을 다 덮었다(#548) */
+.wt .wt-ed-scenes { width: min(100%, 640px); display: flex; flex-direction: column; }
 .wt .wt-ed-footnote { font-size: 12px; color: var(--dim); text-align: center; margin-top: 12px; }
 .wt .wt-ed-stage > .lou-note { margin-top: 40px; max-width: 360px; }
 
@@ -190,6 +197,9 @@
 .wt .wt-ed .item .handle-tail.is-off { border-style: dashed; opacity: 0.55; }
 .wt .wt-ed .item.sel .handle-tail.is-off { opacity: 0.7; }
 .wt .wt-ed .stk { line-height: 1; }
+/* 루 스티커(#548) — 이모지와 같은 크기 감각으로, 높이를 글자 크기의 1.5배 */
+.wt .wt-ed .stk-lou img { display: block; height: 1.5em; width: auto; pointer-events: none; user-select: none; }
+.wt .wt-ed .dock-item .prev .stk-lou img { height: 44px; }
 .wt .wt-ed .sfx { font-weight: 900; color: #fff; letter-spacing: -0.02em; white-space: nowrap; -webkit-text-stroke: 3px #111; paint-order: stroke fill; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35); }
 
 /* 지난 판 */
@@ -219,7 +229,8 @@
 .wt .wt-ed-dockopen { display: none; }
 .wt .wt-ed .dock-scrim { display: none; }
 .wt .wt-ed-dock {
-  width: 260px; flex: none; border-left: 1px solid rgba(15, 51, 63, 0.08); padding: 16px; display: flex; flex-direction: column; gap: 14px; background: #fff;
+  overflow-x: hidden;
+  width: var(--ed-right-w, 260px); flex: none; border-left: 1px solid rgba(15, 51, 63, 0.08); padding: 16px; display: flex; flex-direction: column; gap: 14px; background: #fff;
   position: sticky; top: calc(var(--lore-header-h, 0px) + 64px); align-self: flex-start;
   max-height: calc(100vh - var(--lore-header-h, 0px) - 64px); overflow: auto;
 }
@@ -241,7 +252,9 @@
 .wt .wt-ed .dock-item:hover { border-color: var(--ink); }
 .wt .wt-ed .dock-item:active { transform: translateY(1px); }
 .wt .wt-ed .dock-item span { font-size: 12px; color: var(--ink); }
+/* 말풍선 견본(#548) — 견본 칸 크기를 고정해 꼬리·뾰족한 테두리가 이름 글자를 덮거나 잘리지 않게 */
 .wt .wt-ed .dock-item .prev { pointer-events: none; position: relative; overflow: visible; min-height: 30px; display: flex; align-items: center; justify-content: center; }
+.wt .wt-ed .dock-item .prev[data-prev-variant] { width: 78px; height: 56px; margin: 2px auto 10px; }
 .wt .wt-ed .dock-item .prev .bub { font-size: 10px; padding: 0.4em 0.6em; }
 .wt .wt-ed .dock-item .prev .bub-svg .bs > * { stroke-width: 3.4; }
 .wt .wt-ed .dock-item .prev .handle-tail { display: none; }
@@ -301,8 +314,8 @@
   .wt .wt-ed-title { flex-basis: 100%; order: 1; }
   .wt .wt-ed-chips { order: 2; flex-basis: 100%; justify-content: flex-start; }
   .wt .wt-ed-body { flex-direction: column; }
-  .wt .wt-ed-left { width: auto; position: static; max-height: none; border-right: 0; border-bottom: 1px solid rgba(15, 51, 63, 0.08); }
-  .wt .wt-ed-body.works-off .wt-ed-left { display: none; }
+  .wt .wt-ed-left { width: auto; position: static; max-height: none; height: auto; border-right: 0; border-bottom: 1px solid rgba(15, 51, 63, 0.08); }
+  /* 왼쪽 단은 페이지 · 장면 · 다시 그리기라 좁은 화면에서도 접지 않는다(#548) */
   .wt .wt-ed-pages { margin-top: 8px; }
   .wt .wt-ed-pagegrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .wt .wt-ed-stage { padding: 16px; }
@@ -351,3 +364,28 @@
 .wt .wt-ed-creditshort { position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60;
   display: flex; align-items: center; gap: 6px; box-shadow: 0 10px 28px rgba(15, 30, 45, .2); border-radius: 12px; }
 .wt .wt-ed-creditshort-x { width: 28px; height: 28px; border: 0; border-radius: 8px; background: #fff; cursor: pointer; font-size: 18px; color: var(--muted); }
+/* 다시 그리기 칸 — 단추 바로 아래에 열린다(#548) */
+.wt .wt-ed-regenask { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.wt .wt-ed-regenask > b { font-size: 13px; }
+.wt .wt-ed-regenask .fb-lead { margin: 0; font-size: 12.5px; color: var(--muted); }
+/* 이 장의 장면은 바로 위 「다시 그리기」 단에 이미 있다 — 칸 안에서는 다시 안 보인다 */
+.wt .wt-ed-regenask .ask-scene { display: none; }
+.wt .wt-ed-regenask textarea.field { min-height: 84px; resize: vertical; font-size: 13.5px; line-height: 1.55; padding: 10px 12px; }
+.wt .wt-ed-regenask .check-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.wt .wt-ed-regenask .ask-actions { display: flex; gap: 6px; justify-content: flex-end; }
+/* 왼쪽 단의 다시 그리기(#548) — 제목 줄과 같은 들여쓰기 */
+.wt .wt-ed-left .wt-ed-regen { padding: 10px 10px 4px; margin-top: 6px; }
+/* 장면 전체 — 소제목별로 띄워서 읽기 쉽게(#548) */
+.wt .wt-ed-sceneparts { display: flex; flex-direction: column; gap: 14px; padding: 4px 10px 6px; }
+.wt .wt-ed-sceneparts .part { display: flex; flex-direction: column; gap: 4px; }
+.wt .wt-ed-sceneparts .part span { font-size: 11.5px; font-weight: 700; color: var(--sea); letter-spacing: .02em; }
+.wt .wt-ed-sceneparts .part p { margin: 0; font-size: 13.5px; line-height: 1.75; color: var(--ink); white-space: pre-wrap; word-break: keep-all; }
+/* 양쪽 단 폭 조절 손잡이(#548) — 경계 위에 얇게, 잡으면 진하게 */
+.wt .wt-ed-resize { flex: none; width: 6px; margin: 0 -3px; cursor: col-resize; position: relative; z-index: 5; align-self: stretch; }
+.wt .wt-ed-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; background: transparent; transition: background .15s; }
+.wt .wt-ed-resize:hover::after, .wt .wt-ed-resize:active::after { background: var(--sea); }
+@media (max-width: 879px) { .wt .wt-ed-resize { display: none; } }
+/* 다시 그리기 팝업의 장면 글 — 소제목별로(#548) */
+.wt .wt-ed .ask-scene { display: flex; flex-direction: column; gap: 10px; max-height: 240px; overflow: auto; }
+.wt .wt-ed .ask-scene-part { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
+.wt .wt-ed .ask-scene-part b { font-size: 11.5px; color: var(--sea); }

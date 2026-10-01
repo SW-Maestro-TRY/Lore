@@ -1077,6 +1077,31 @@ public class JobRunner {
         }
     }
 
+    /**
+     * 장면마다 글 하나(#548) — 「소제목\n글」을 빈 줄로 이은 것. 편집실은 그림 밑에 「장소와 상황」만,
+     * 왼쪽에 전체를 소제목별로 보여 준다. 고친 글이 있으면 그것(이미 같은 모양이다).
+     */
+    public List<String> sceneCaptions(String runId) {
+        List<String> out = new ArrayList<>();
+        try {
+            for (JsonNode s : mapper.readTree(runDir(runId).resolve("scenes.json").toFile()).path("scenes")) {
+                String user = s.path("user_text").asText("").trim();
+                if (!user.isEmpty()) {
+                    out.add(user);
+                    continue;
+                }
+                List<String> blocks = new ArrayList<>();
+                for (Map<String, String> part : sceneParts(s)) {
+                    blocks.add(part.get("label") + "\n" + part.get("text"));
+                }
+                out.add(String.join("\n\n", blocks));
+            }
+        } catch (IOException e) {
+            return List.of();
+        }
+        return out;
+    }
+
     /** 이 장면을 지금 다시 짓고 있나. */
     public boolean rescening(Long jobId, int n) {
         return rescening.getOrDefault(jobId, java.util.Set.of()).contains(n);
