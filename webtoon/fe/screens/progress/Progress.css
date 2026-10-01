@@ -285,15 +285,15 @@
 .wt .wt-prog-scene .row button:disabled { opacity: .4; cursor: default; }
 .wt .wt-prog-scene.busy { border-style: dashed; }
 /* 장면 하나 다시 뽑기 — 카드 아래 열리는 판 */
-.wt .wt-prog-sceneretry { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 12px; background: var(--water-light); }
+.wt .wt-prog-sceneretry { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
 .wt .wt-prog-sceneretry > b { font-size: 14px; }
 .wt .wt-prog-sceneretry .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .wt .wt-prog-sceneretry .chip { height: 34px; padding: 0 14px; font-size: 13px; }
-.wt .wt-prog-sceneretry textarea.field { min-height: 120px; padding: 12px 14px; resize: vertical; line-height: 1.6; font-size: 14px; background: #fff; }
+.wt .wt-prog-sceneretry textarea.field { min-height: 160px; padding: 12px 14px; resize: vertical; line-height: 1.6; font-size: 14px; background: #fff; }
 .wt .wt-prog-sceneretry .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 /* own 길 이야기 확인 — 제목·본문을 바로 고친다 */
 .wt .wt-prog-storycheck input.field.title { font-size: 17px; font-weight: 700; height: 48px; }
-.wt .wt-prog-storycheck textarea.wt-prog-bodybox { height: 360px; }
+.wt .wt-prog-story.wt-prog-storycheck textarea.wt-prog-bodybox { height: 480px; }
 .wt .wt-prog-storycheck .count { font-size: 12px; align-self: flex-end; }
 /* 옛 시트 줄 — 작은 썸네일을 골라 되돌린다 */
 .wt .wt-prog-oldsheets { display: flex; flex-direction: column; gap: 8px; }
@@ -351,10 +351,13 @@
 .wt .wt-prog-sheetwait.small { min-height: 120px; font-size: 13px; }
 .wt .wt-prog-sheetwait { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 200px; border-radius: 14px; background: var(--water-light); color: var(--muted); font-size: 14px; }
 .wt .wt-prog-story .title { font-size: 16px; font-weight: 700; }
-.wt .wt-prog-story textarea.wt-prog-bodybox { height: 220px; }
+.wt .wt-prog-story textarea.wt-prog-bodybox { height: 360px; }
 @media (max-width: 767px) {
   .wt .wt-prog-saved { margin-left: 0; }
   .wt .wt-prog-mine-grid { grid-template-columns: 1fr; }
   .wt .wt-prog-head.split { flex-direction: column; }
-  .wt .wt-prog-storycheck textarea.wt-prog-bodybox { height: 280px; }
+  .wt .wt-prog-story.wt-prog-storycheck textarea.wt-prog-bodybox { height: 280px; }
 }
+/* 장면 고치기 — 읽을 때와 같은 폭·글자·줄바꿈, 높이는 글만큼 */
+.wt .wt-prog-scene textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; margin: 0 -10px; width: calc(100% + 20px); resize: none; overflow: hidden;
+  font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; color: var(--ink); border-radius: 8px; }
