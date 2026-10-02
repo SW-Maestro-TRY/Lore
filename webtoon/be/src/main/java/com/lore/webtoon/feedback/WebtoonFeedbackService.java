@@ -114,7 +114,7 @@ public class WebtoonFeedbackService {
         asked.add(WebtoonFeedbackQuestion.S0.name());
         asked.add(fixed.name());
         pool.subList(0, extra).forEach(q -> asked.add(q.name()));
-        // 보여 주는 순서는 흐름대로(만족도 → 캐릭터 → 설정 → 이야기 → 재미 → 다음 화).
+        // 보여 주는 순서는 흐름대로(만족도 → 캐릭터 → 설정 → 이야기 → 재미).
         asked.sort(java.util.Comparator.comparingInt(n -> WebtoonFeedbackQuestion.valueOf(n).ordinal()));
         return new ShortQuestions(asked, p.own);
     }
@@ -232,8 +232,9 @@ public class WebtoonFeedbackService {
         boolean hasStory = !text(v.get("story")).isBlank();
         boolean own = hasPhoto || hasName || hasDesc;
 
+        /* 다음 이야기가 보고 싶나(S7) · 다시 만들 의향(S8)은 2026-10-02 에 묻기를 그만뒀다. 예전 답은 그대로 읽힌다. */
         Set<WebtoonFeedbackQuestion> applicable = EnumSet.of(WebtoonFeedbackQuestion.S0, WebtoonFeedbackQuestion.S2,
-                WebtoonFeedbackQuestion.S6, WebtoonFeedbackQuestion.S7, WebtoonFeedbackQuestion.S8);
+                WebtoonFeedbackQuestion.S6);
         if (own) {
             applicable.add(WebtoonFeedbackQuestion.S1);
             applicable.add(WebtoonFeedbackQuestion.S3);
@@ -312,15 +313,14 @@ public class WebtoonFeedbackService {
         return null;
     }
 
-    /** 전체 설문에 물을 질문 — 그 작품에 맞는 S1~S8 과 원하는 기능(S10). 작품이 없으면 빈 것. */
+    /** 전체 설문에 물을 질문 — 그 작품에 맞는 S0~S6 과 원하는 기능(S10). 작품이 없으면 빈 것. */
     private Set<WebtoonFeedbackQuestion> fullQuestions(String runId) {
         if (runId == null) {
             return EnumSet.noneOf(WebtoonFeedbackQuestion.class);
         }
         RunService.Inputs in = runs.inputsOf(runId);
         Set<WebtoonFeedbackQuestion> asked = in == null
-                ? EnumSet.of(WebtoonFeedbackQuestion.S0, WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6,
-                             WebtoonFeedbackQuestion.S7, WebtoonFeedbackQuestion.S8)
+                ? EnumSet.of(WebtoonFeedbackQuestion.S0, WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6)
                 : EnumSet.copyOf(profileFrom(in).applicable());
         asked.add(WebtoonFeedbackQuestion.S10);
         return asked;
