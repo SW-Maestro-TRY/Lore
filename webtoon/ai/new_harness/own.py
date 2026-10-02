@@ -748,8 +748,9 @@ def rescene(run_dir: Path, char: dict, n: int, reasons: list[str], note: str,
             history = list(old.pop("history", None) or [])
             # 판마다 만든 순서 번호(ver) — 되돌려서 자리가 바뀌어도 이름이 글을 따라간다.
             # 처음 판이 1. 번호가 없던 옛 판은 쌓인 순서로 채운다.
-            for i, h in enumerate(history):
-                h.setdefault("ver", i + 1)
+            # 바깥 i(장면 자리)를 덮으면 두 번째 다시 뽑기부터 엉뚱한 장면을 덮어쓴다.
+            for k, h in enumerate(history):
+                h.setdefault("ver", k + 1)
             old.setdefault("ver", len(history) + 1)
             history.append(old)
             new["ver"] = max(h["ver"] for h in history) + 1
