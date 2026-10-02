@@ -20,6 +20,7 @@ import { mySurveyStatus, sendFullSurvey, type SurveyAnswers, type SurveyStatus }
 import { registerDict, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
+import { Dialog } from "../../ui/Dialog";
 import { answeredAll, FreeNote, RewardBadge, SurveyQuestion, withAnswer } from "../../ui/Survey";
 import "./FeedbackPage.css";
 
@@ -53,9 +54,7 @@ export default function FeedbackPage({ go }: { go: Go }) {
       const got = await sendFullSurvey({ answers, comment, wantsInterview: interview, contact: interview ? contact : "" });
       track("feedback_submit", { where: "feedback", count: questions.length, ok: got.rewarded > 0 });
       if (got.rewarded > 0) notifyCreditsChanged(got.balance);
-      setStatus((s) => (s ? { ...s, done: true, prompt: false } : s));
       setSent(got.rewarded);
-      window.scrollTo({ top: 0 });
     } catch {
       setErr(t("보내지 못했어요. 잠시 뒤에 다시 눌러 주세요."));
     } finally {
@@ -80,39 +79,37 @@ export default function FeedbackPage({ go }: { go: Go }) {
     </>
   );
 
-  if (!loaded) return <div className="wt-wrap wt-page wt-fb" />;
-
-  if (sent !== null) {
-    return (
-      <div className="wt-wrap wt-page wt-fb">
-        <div className="wt-fb-head"><h2>{t("설문 제출 완료")}</h2></div>
-        <div className="card wt-fb-card wt-survey-sent">
-          <p>{t("소중한 의견을 보내 주셔서 감사해요!")}</p>
-          {sent > 0 ? (
-            <>
-              <RewardBadge amount={sent} />
-              <p>{t("크레딧이 지급되었어요. 바로 웹툰을 만들어 보세요!")}</p>
-              {interviewLine}
-            </>
-          ) : (
-            <>
-              <p>{t("이번 설문 크레딧은 이미 받으셔서 추가로 드리기 어려워요.")}</p>
-              <p>{t("대신 15분 인터뷰에 참여해 주시면 따로 보상을 드려요.")}</p>
-              {interviewLine}
-              <p className="wt-survey-sent-help">
-                {t("처음 참여했는데 크레딧이 들어오지 않았다면")}{" "}
-                <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">{t("1:1 문의하기")}</a>{t("로 알려 주세요.")}
-              </p>
-            </>
-          )}
-          <div className="wt-fb-actions">
-            <button type="button" className="btn btn-w" onClick={() => go("mypage")}>{t("마이페이지로")}</button>
-            <button type="button" className="btn btn-p" onClick={() => go("entry")}>{t("웹툰 만들러 가기")}</button>
-          </div>
-        </div>
+  /* 보낸 뒤 — 페이지는 그대로 두고 그 위에 창으로 알린다. 닫으면 마이페이지로. */
+  const sentDialog = sent !== null && (
+    <Dialog title={t("설문 제출 완료")} onClose={() => go("mypage")}>
+      <div className="wt-survey-sent">
+        <p>{t("소중한 의견을 보내 주셔서 감사해요!")}</p>
+        {sent > 0 ? (
+          <>
+            <RewardBadge amount={sent} />
+            <p>{t("크레딧이 지급되었어요. 바로 웹툰을 만들어 보세요!")}</p>
+            {interviewLine}
+          </>
+        ) : (
+          <>
+            <p>{t("이번 설문 크레딧은 이미 받으셔서 추가로 드리기 어려워요.")}</p>
+            <p>{t("대신 15분 인터뷰에 참여해 주시면 따로 보상을 드려요.")}</p>
+            {interviewLine}
+            <p className="wt-survey-sent-help">
+              {t("처음 참여했는데 크레딧이 들어오지 않았다면")}{" "}
+              <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">{t("1:1 문의하기")}</a>{t("로 알려 주세요.")}
+            </p>
+          </>
+        )}
       </div>
-    );
-  }
+      <div className="wt-dialog-actions">
+        <button type="button" className="btn btn-w" onClick={() => go("mypage")}>{t("마이페이지로")}</button>
+        <button type="button" className="btn btn-p" autoFocus onClick={() => go("entry")}>{t("웹툰 만들러 가기")}</button>
+      </div>
+    </Dialog>
+  );
+
+  if (!loaded) return <div className="wt-wrap wt-page wt-fb" />;
 
   if (!authenticated || questions.length === 0) {
     return (
@@ -157,10 +154,11 @@ export default function FeedbackPage({ go }: { go: Go }) {
         {err && <p className="wt-fb-err">{err}</p>}
         <div className="wt-fb-actions">
           <button type="button" className="btn btn-w" disabled={busy} onClick={() => go("mypage")}>{t("마이페이지로")}</button>
-          <button type="button" className="btn btn-p" disabled={busy || !answeredAll(questions, answers)}
+          <button type="button" className="btn btn-p" disabled={busy || sent !== null || !answeredAll(questions, answers)}
                   onClick={() => void send()}>{status?.done ? t("보내기") : t("보내고 {n}크레딧 받기", { n: reward })}</button>
         </div>
       </div>
+      {sentDialog}
     </div>
   );
 }
