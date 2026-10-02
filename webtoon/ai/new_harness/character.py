@@ -481,24 +481,30 @@ def panel_spec_of(name: str, description: str, photos: list[Path],
 
 def panel_prompt(spec: dict, style_text: str) -> str:
     """사양 -> 웹툰 한 컷 프롬프트. 세로 한 장, 글자 없음."""
+    # 주인공 규칙이 장면 묘사보다 **앞에** 선다. 전에는 scene_en 을 먼저 적고 "이
+    # 캐릭터가 가장 크다" 를 뒤에 붙였는데, scene_en 이 "둘이 마주 보고 전신" 이면
+    # 그림 모델은 구체적인 묘사를 따라 둘을 같은 크기로 그렸다(#402 뒤에도 재발, #587).
     parts = [
         "ONE panel of a Korean webtoon — a single vertical picture (portrait, 2:3), "
         "artwork only. Not a page of several panels, not a character sheet, not a cover.",
+        "",
+        "[SUBJECT]",
+        "  The subject of this panel is the character described under [CHARACTER] — "
+        "nobody else. That character is the largest thing in the frame, shown whole "
+        "(not cropped at the edge), and fills about half of the picture. The face (or, "
+        "if not human, the whole creature or object) reads clearly at a glance.",
+        "  Anyone else in the scene is secondary: smaller than this character, or only "
+        "partly in frame, or out of focus in the background. Never two figures of equal "
+        "size standing side by side or face to face at the same distance. If the [SCENE] "
+        "text below reads like a two-shot, keep this character at the size and "
+        "distance described here and push the other person back, aside or out of frame.",
         "",
         "[SCENE]",
         f"  {spec['scene_en']}",
         "  This is one moment of a webtoon scene, drawn so that a reader can tell what "
         "is happening from the picture alone: what the character is doing, and how "
-        "anyone else in the scene reacts.",
-        "  The subject of this panel is the character described under [CHARACTER] — "
-        "nobody else. That character is whole in the frame, the largest and most "
-        "prominent figure, and the face (or the head, if not human) reads clearly. "
-        "If the character is not a person, it must be plainly visible and "
-        "recognizable as exactly what it is — not implied by a hand, a shadow or an "
-        "edge. Anyone else the scene mentions is secondary: they may appear, but "
-        "they never take more of the frame or more attention than this character. "
-        "The place and the character's position in this world must be visible in "
-        "the picture itself.",
+        "anyone else in the scene reacts. The place and the character's position in "
+        "this world must be visible in the picture itself.",
         "",
         "[CHARACTER]",
         f"  {spec['appearance_en']}",
@@ -509,7 +515,11 @@ def panel_prompt(spec: dict, style_text: str) -> str:
             f"  This character is a real {sp}, drawn as a {sp} with its actual body and "
             f"anatomy. Do NOT anthropomorphize: no human body, no standing on two legs "
             f"like a person, no human face. Small accessories that mark its role in this "
-            f"world (a collar, a ribbon, a crest, a hat) may sit on its real body.",
+            f"world (a collar, a ribbon, a crest, a hat) may sit on its real body. "
+            f"It must be plainly visible and recognizable as exactly a {sp} — not implied "
+            f"by a paw, a shadow or an edge. If it is small, bring the camera close enough "
+            f"that it is still the largest thing in the frame; the people around it stay "
+            f"behind it, partly cropped, or out of focus.",
         ]
     parts += ["", "STYLE", style_text, "", NO_TEXT_CLAUSE, ""]
     return "\n".join(parts)
