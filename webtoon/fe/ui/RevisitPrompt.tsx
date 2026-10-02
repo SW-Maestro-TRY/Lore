@@ -5,7 +5,7 @@
  * 그 보상(웹툰 한 편 값의 크레딧)을 한 번 권한다. 대상인지는 서버가 정한다
  * (`GET /my/feedback` 의 prompt). 이 브라우저에서 한 번 띄웠으면 다시 띄우지 않는다.
  *
- * 만드는 중·편집실·만들기·마이페이지에서는 띄우지 않는다 — 일하는 도중에 가로막으면
+ * 만드는 중·편집실·만들기·마이페이지·피드백 페이지에서는 띄우지 않는다 — 일하는 도중에 가로막으면
  * 안 되고, 마이페이지에는 이미 「피드백 보내기」가 있다.
  */
 import { useEffect, useState } from "react";
@@ -18,7 +18,7 @@ import { RewardBadge } from "./Survey";
 import "./RevisitPrompt.css";
 
 const SEEN_KEY = "lore_feedback_prompt_seen";
-const QUIET: View[] = ["running", "editor", "mypage", "create"];
+const QUIET: View[] = ["running", "editor", "mypage", "create", "feedback"];
 
 function seen(): boolean {
   try { return localStorage.getItem(SEEN_KEY) === "1"; } catch { return true; }
@@ -65,7 +65,7 @@ export default function RevisitPrompt({ authenticated, view, go }: { authenticat
           <button type="button" className="btn btn-p wt-revisit-go" autoFocus onClick={() => {
             track("feedback_prompt_click", { where: view });
             close();
-            go("mypage", { tab: "feedback" });
+            go("feedback");
           }}>{t("{n}크레딧 받으러 가기", { n: reward })}</button>
           <button type="button" className="wt-revisit-later" onClick={close}>{t("다음에 할게요")}</button>
         </div>
