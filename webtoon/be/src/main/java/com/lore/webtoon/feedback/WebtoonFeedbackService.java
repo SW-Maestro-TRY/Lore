@@ -57,6 +57,8 @@ public class WebtoonFeedbackService {
 
     static final int MAX_COMMENT = 2000;
     static final int MAX_CONTACT = 200;
+    /** 답하지 않아도 되는 문항. 화면 `ui/Survey.tsx` 의 OPTIONAL 과 같다. */
+    static final Set<WebtoonFeedbackQuestion> OPTIONAL = EnumSet.of(WebtoonFeedbackQuestion.S10);
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -156,7 +158,7 @@ public class WebtoonFeedbackService {
     }
 
     /**
-     * 전체 설문. 모든 문항(S1~S10)에 답해야 받는다(넣은 것이 없어 답할 수 없는 문항은 「해당 없음」).
+     * 전체 설문. 원하는 기능(S10)을 뺀 모든 문항에 답해야 받는다 — 원하는 기능이 없는 사람도 있다.
      * 처음 낸 사람에게만 크레딧을 준다 — 다시 내는 것은 받지만 보상은 없다.
      */
     @Transactional
@@ -168,7 +170,7 @@ public class WebtoonFeedbackService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "웹툰을 한 편 완성한 뒤에 답할 수 있어요");
         }
         Map<String, Object> answers = clean(raw, asked);
-        if (asked.stream().anyMatch(q -> !answers.containsKey(q.name()))) {
+        if (asked.stream().anyMatch(q -> !OPTIONAL.contains(q) && !answers.containsKey(q.name()))) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "모든 문항에 답해 주세요");
         }
         String note = trimTo(comment, MAX_COMMENT);

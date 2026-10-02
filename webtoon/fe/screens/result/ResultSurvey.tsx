@@ -74,7 +74,7 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
         <div className="wt-dialog-actions">
           <button type="button" className="btn btn-w" onClick={() => setState("gone")}>{t("닫기")}</button>
           {reward !== null && (
-            <button type="button" className="btn btn-p" onClick={() => go("mypage", { tab: "feedback" })}>
+            <button type="button" className="btn btn-p" onClick={() => go("feedback")}>
               {t("{n}크레딧 받으러 가기", { n: reward })}
             </button>
           )}
