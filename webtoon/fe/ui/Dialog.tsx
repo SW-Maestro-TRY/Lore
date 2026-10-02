@@ -11,7 +11,8 @@ import { useEffect, useId, type ReactNode } from "react";
 import "./Dialog.css";
 
 export function Dialog({ title, sub, onClose, busy, wide, children }: {
-  title: string;
+  /** 없으면 제목 줄 없이 바로 내용부터 */
+  title?: string;
   sub?: ReactNode;
   onClose: () => void;
   busy?: boolean;
@@ -31,8 +32,8 @@ export function Dialog({ title, sub, onClose, busy, wide, children }: {
   return (
     <div className="wt-dialog" onClick={() => { if (!busy) onClose(); }}>
       <div className={`wt-dialog-box${wide ? " wide" : ""}`} role="dialog" aria-modal="true"
-           aria-labelledby={id} onClick={(e) => e.stopPropagation()}>
-        <h2 id={id}>{title}</h2>
+           aria-labelledby={title ? id : undefined} onClick={(e) => e.stopPropagation()}>
+        {title && <h2 id={id}>{title}</h2>}
         {sub && <p className="wt-dialog-sub">{sub}</p>}
         {children}
       </div>
