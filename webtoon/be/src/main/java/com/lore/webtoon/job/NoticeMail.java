@@ -48,22 +48,17 @@ final class NoticeMail {
     private NoticeMail() {
     }
 
-    /** 완성 메일 머리 모양. 두 가지를 번갈아 쓴다 — 고르는 것은 {@link JobNotice}. */
-    enum Look {
-        /** 민트 바탕 — 왼쪽 표지, 오른쪽 문구와 루. */
-        MINT,
-        /** 베이지 바탕 — 위에 문구와 루, 아래로 표지 윗부분을 넓게. */
-        BEIGE
-    }
-
     static final String SERVICE = "개인 IP 창작 서비스, LORE";
+
+    /** 바닥글 LORE 아래 한 줄. */
+    static final String TAGLINE = "개인 IP 중심 AI 웹툰 스튜디오";
 
     /**
      * 다 만들어졌다. 장르나 캐릭터 이름이 비면 그 줄만 뺀다 — 빈 「」 를 보내지 않는다.
      *
      * @param cover 표지(1장) 그림의 전체 주소
      */
-    static Body finished(String title, String genre, String name, String link, String cover, Look look, String site) {
+    static Body finished(String title, String genre, String name, String link, String cover, String site) {
         String t = "「" + title + "」";
         String g = genre == null ? "" : genre.trim();
         String n = name == null ? "" : name.trim();
@@ -97,8 +92,7 @@ final class NoticeMail {
         }
         html.append(button("웹툰 보러가기 →", link));
         html.append(p("루와 함께,<br>당신의 캐릭터로 새로운 이야기를 만들어보세요. ✨"));
-        String head = look == Look.BEIGE ? beigeHead(cover, site) : mintHead(cover, site);
-        return new Body(text.toString(), page(head, html.toString(), site));
+        return new Body(text.toString(), page(mintHead(cover, site), html.toString(), site));
     }
 
     /**
@@ -141,7 +135,7 @@ final class NoticeMail {
 
     private static String textFooter() {
         return "\n---\n"
-                + "LORE\nAI 웹툰 서비스\n\n"
+                + "LORE\n" + TAGLINE + "\n\n"
                 + "문의: " + CONTACT + "\n"
                 + "AI·SW마에스트로 17기\n"
                 + "주소: " + ADDRESS + "\n"
@@ -168,23 +162,6 @@ final class NoticeMail {
                 + "<img src=\"" + esc(site + "/static/lou/hero-whale1.png") + "\" width=\"210\" alt=\"루\" style=\"display:block;"
                 + "border:0;width:210px;height:auto;margin-top:22px;\"></td>"
                 + "</tr></table></td></tr>";
-    }
-
-    private static String beigeHead(String cover, String site) {
-        return "<tr><td style=\"padding:0;\">"
-                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5e7d3;"
-                + "border-radius:16px 16px 0 0;\"><tr>"
-                + "<td style=\"padding:28px 0 18px 32px;vertical-align:middle;" + FONT + "color:" + INK + ";\">"
-                + "<div style=\"font-size:22px;font-weight:800;line-height:1.35;\">내 캐릭터를<br>살아 움직이게.</div>"
-                + "<div style=\"font-size:13px;color:#7a6650;margin-top:6px;\">" + esc(SERVICE) + "</div></td>"
-                + "<td width=\"230\" align=\"right\" style=\"padding:18px 24px 10px 0;vertical-align:middle;\">"
-                + "<img src=\"" + esc(site + "/static/lou/hero-whale1.png") + "\" width=\"200\" alt=\"루\" style=\"display:block;"
-                + "border:0;width:200px;height:auto;\"></td></tr>"
-                + "<tr><td colspan=\"2\" style=\"padding:0 32px 32px;\">"
-                // 표지 윗부분만 — 높이를 자르지 못하는 메일 앱에서는 표지 전체가 나온다.
-                + "<div style=\"height:240px;overflow:hidden;border-radius:12px;\">"
-                + "<img src=\"" + esc(cover) + "\" width=\"536\" alt=\"\" style=\"display:block;border:0;width:100%;height:auto;\">"
-                + "</div></td></tr></table></td></tr>";
     }
 
     private static String failHead(String site) {
@@ -218,7 +195,7 @@ final class NoticeMail {
                 + "<tr><td style=\"padding:20px 32px 28px;border-top:1px solid " + LINE + ";font-family:-apple-system,"
                 + "BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:" + DIM + ";font-size:12px;line-height:1.7;\">"
                 + "<div style=\"color:" + INK + ";font-size:14px;font-weight:800;\">LORE</div>"
-                + "<div>AI 웹툰 서비스</div>"
+                + "<div>" + esc(TAGLINE) + "</div>"
                 + "<div style=\"margin-top:8px;\">문의: <a href=\"mailto:" + CONTACT + "\" style=\"color:" + DIM + ";\">"
                 + CONTACT + "</a></div>"
                 + "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:14px;\"><tr>"

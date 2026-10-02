@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 /**
@@ -128,10 +127,8 @@ public class JobNotice {
                 return;                     // 받을 사람이 없거나, 이미 보냈다
             }
             String title = titleOf(job.getRunId());
-            /* 머리 모양은 둘 중 하나를 무작위로 — 같은 사람이 여러 편을 받아도 매번 같은 메일로 안 보이게. */
-            NoticeMail.Look look = ThreadLocalRandom.current().nextBoolean() ? NoticeMail.Look.MINT : NoticeMail.Look.BEIGE;
             NoticeMail.Body body = NoticeMail.finished(title, genreOf(job.getRunId()), nameOf(job),
-                    resultLink(job.getRunId()), coverOf(job.getRunId()), look, site);
+                    resultLink(job.getRunId()), coverOf(job.getRunId()), site);
             mail.sendHtml(to, "[LORE] 「" + title + "」 웹툰이 다 만들어졌어요", body.text(), body.html());
             log.info("완성 알림을 보냈습니다 (job={}, run={})", jobId, job.getRunId());
         } catch (Exception e) {             // noqa: 메일이 만들기를 깨면 안 된다
