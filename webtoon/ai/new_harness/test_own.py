@@ -89,6 +89,43 @@ def test_rescene_replaces_only_that_scene(monkeypatch=None):
     assert scenes[1]["history"][0]["ver"] == 1 and scenes[1]["ver"] == 2
 
 
+def test_rescene_same_scene_twice_keeps_others():
+    """같은 장면을 거듭 다시 뽑아도 다른 장면 자리를 덮지 않는다 — 두 번째부터 1·2번이 사라졌다."""
+    d = _run_dir(scenes=4)
+    char = {"name": "몽이", "description": "", "genre": "", "photos": [], "fields": {}, "story": ""}
+    answers = iter([f"장면 3:\n직전 상태: 아무거나\n장소와 상황: {k}번째 장소\n벌어지는 일: 새 일\n"
+                    f"인물의 행동과 표정: 새 행동\n겉모습·소지품·동행: 시트 그대로\n끝나는 상태: 새 끝\n나레이션: 없음\n"
+                    for k in (1, 2, 3)])
+
+    class FakeCall:
+        provider = model = "fake"
+
+        def __init__(self, stage):
+            pass
+
+        def describe(self):
+            return "fake"
+
+        def __call__(self, prompt, **kw):
+            return next(answers), {"calls": []}
+
+    real = own.llm.Call
+    own.llm.Call = FakeCall
+    real_record = R.record
+    R.record = lambda run_dir, meta: None
+    try:
+        for _ in range(3):
+            own.rescene(d, char, 3, [], "", dry_run=False)
+    finally:
+        own.llm.Call = real
+        R.record = real_record
+    scenes = R.read_json(d / "scenes.json")["scenes"]
+    assert [s["n"] for s in scenes] == [1, 2, 3, 4]
+    assert [s["where"] for s in scenes] == ["1장소", "2장소", "3번째 장소", "4장소"]
+    assert [h["where"] for h in scenes[2]["history"]] == ["3장소", "1번째 장소", "2번째 장소"]
+    assert [h["ver"] for h in scenes[2]["history"]] == [1, 2, 3] and scenes[2]["ver"] == 4
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
