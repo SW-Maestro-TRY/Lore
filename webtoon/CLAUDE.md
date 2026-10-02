@@ -41,11 +41,15 @@ webtoon/ai/
 4. **작업 하나에 이슈 하나 · `feature/` 브랜치 하나 · develop 으로 PR 하나.** 이슈·PR
    제목은 명사로 끝냅니다. → [issues.md](docs/rules/issues.md)
 5. **파일을 고치는 작업은 워크트리를 파서 합니다.** 원본 폴더에서 바로 고치지 않습니다.
-   → [worktree.md](docs/rules/worktree.md)
+   다만 캡처·비교 페이지처럼 사용자에게 보여줄 결과물은 워크트리가 아니라 원본 저장소의
+   `haeun/` 에 저장합니다. → [worktree.md](docs/rules/worktree.md)
 6. **`webtoon/ai` 를 고쳐도 서버를 다시 빌드·기동하기 전까지는 반영되지 않습니다.**
    → [dev.md](docs/rules/dev.md)
 7. **배포가 실패하면 Actions 를 다시 돌리기 전에 로컬에서 같은 커밋을 빌드해 봅니다.**
    → [deploy-failure.md](docs/rules/deploy-failure.md)
+8. **결과물이 여러 개면 .html 한 장으로 묶어 보여줍니다** (Claude 아티팩트 또는 실제
+   .html 파일). 캡처·생성 결과를 터미널에 하나씩 늘어놓지 않습니다. 파일은 5번대로
+   원본 저장소 `haeun/` 에 둡니다.
 
 ## 언제 무엇을 읽나 — 작업 규칙 (`docs/rules/`)
 
