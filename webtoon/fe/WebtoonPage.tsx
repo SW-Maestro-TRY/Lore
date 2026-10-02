@@ -36,6 +36,7 @@ import Photo from "./screens/character/Photo";
 import PhotoResult from "./screens/character/PhotoResult";
 import CharList from "./screens/character/CharList";
 import MyPage from "./screens/mypage/MyPage";
+import FeedbackPage from "./screens/feedback/FeedbackPage";
 import RevisitPrompt from "./ui/RevisitPrompt";
 import RunningBubble from "./ui/RunningBubble";
 
@@ -56,7 +57,7 @@ interface Route {
   job?: string;
   run?: string;
   id?: string;
-  tab?: "settings" | "feedback";
+  tab?: "settings";
   /** 만들기 화면의 길(#548). own = 「만들고 싶은 내용이 있어요」. */
   mode?: "own";
 }
@@ -74,14 +75,15 @@ function routeOf(search: URLSearchParams): Route {
     job: search.get("job") || undefined,
     run,
     id: search.get("id") || undefined,
-    tab: search.get("tab") === "settings" ? ("settings" as const)
-      : search.get("tab") === "feedback" ? ("feedback" as const) : undefined,
+    tab: search.get("tab") === "settings" ? ("settings" as const) : undefined,
     mode: search.get("mode") === "own" ? ("own" as const) : undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
   if (view === "card" && base.id) return { view: "card", ...base };
-  if (view && ["entry", "create", "works", "characters", "try", "mypage"].includes(view)) {
+  /* 피드백이 마이페이지 창이던 때의 주소 — 다시 온 사람 안내 메일 등에 남아 있을 수 있다. */
+  if (view === "mypage" && search.get("tab") === "feedback") return { view: "feedback", ...base };
+  if (view && ["entry", "create", "works", "characters", "try", "mypage", "feedback"].includes(view)) {
     return { view: view as View, ...base };
   }
   if (run) return { view: "result", ...base };
@@ -231,6 +233,7 @@ function WebtoonScreens() {
         <PhotoResult id={route.id} shared go={go} authenticated={authenticated} />
       )}
       {route.view === "mypage" && <MyPage go={go} initialTab={route.tab} />}
+      {route.view === "feedback" && <FeedbackPage go={go} />}
       <RevisitPrompt authenticated={authenticated} view={route.view} go={go} />
       {/* 만드는 중이면 어느 화면에서든 돌아갈 동그라미(#507) */}
       <RunningBubble view={route.view} runId={route.run} go={go} />

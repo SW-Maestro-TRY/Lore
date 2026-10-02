@@ -16,7 +16,7 @@
  * 자리라 여기서 직접 붙였다(2026-09-19, 사용자 지적). */
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
-import { creditBalance, notifyCreditsChanged } from "@common/api/credits";
+import { creditBalance } from "@common/api/credits";
 import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
@@ -34,7 +34,6 @@ import { track } from "../../lib/track";
 import { IconUser } from "../../ui/Icons";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
-import FullSurvey from "./FullSurvey";
 import AdminSurvey from "./AdminSurvey";
 import "./MyPage.css";
 
@@ -125,7 +124,7 @@ registerDict({
   "바꾸지 못했어요": { en: "Couldn't change it", ja: "変更できませんでした", zh: "无法更改" },
 });
 
-export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" | "feedback" }) {
+export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" }) {
   const t = useT();
   const { user, isAuthenticated, signOut } = useAuth();
 
@@ -133,8 +132,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
      같은 레일 안에서 본문만 바꾼다 — 나중에 칸이 늘면 그때 공용 탭
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
   const [tab, setTab] = useState<"works" | "chars" | "settings">(initialTab === "settings" ? "settings" : "works");
-  /* 「피드백 보내기」(#471) — 다시 온 사람 안내나 완성 직후 설문에서 tab=feedback 으로 오면 바로 연다. */
-  const [surveyOpen, setSurveyOpen] = useState(initialTab === "feedback");
   const [contactOpen, setContactOpen] = useState(false);
   const [surveyStatus, setSurveyStatus] = useState<SurveyStatus | null>(null);
   useEffect(() => {
@@ -327,7 +324,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           <button type="button" onClick={() => { track("contact_open", { where: "mypage" }); setContactOpen(true); }}>
             {t("1:1 문의하기")}
           </button>
-          <button type="button" onClick={() => { track("feedback_open", { where: "mypage" }); setSurveyOpen(true); }}>
+          <button type="button" onClick={() => { track("feedback_open", { where: "mypage" }); go("feedback"); }}>
             {t("피드백 보내기")}
             {surveyStatus && !surveyStatus.done && <span className="dim">+{surveyStatus.reward}C</span>}
           </button>
@@ -356,15 +353,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                   ))}
                 </div>
               </Dialog>
-            )}
-            {surveyOpen && (
-              <FullSurvey authenticated={isAuthenticated} status={surveyStatus} go={go}
-                          onClose={() => setSurveyOpen(false)}
-                          onRewarded={(balance) => {
-                            setCredits(balance);
-                            notifyCreditsChanged(balance);
-                            setSurveyStatus((s) => (s ? { ...s, done: true, prompt: false } : s));
-                          }} />
             )}
             {trashOpen && (
               <Dialog title={t("휴지통")} wide onClose={() => setTrashOpen(false)}

@@ -33,7 +33,7 @@ public enum WebtoonFeedbackQuestion {
     S7(Answer.YES_NO),
     /** 다시 만들어 볼 의향이 있나 — 재사용 신호. */
     S8(Answer.YES_MAYBE_NO),
-    /** 있으면 좋겠는 기능 — 모두 고르기. 다음 기능 우선순위를 정하는 데 쓴다. 전체 설문만. */
+    /** 있으면 좋겠는 기능 — 있으면 모두 고르기(답 안 해도 됨). 다음 기능 우선순위를 정하는 데 쓴다. 전체 설문만. */
     S10(Answer.WANTS);
 
     private final Answer answer;
@@ -65,11 +65,12 @@ public enum WebtoonFeedbackQuestion {
         private static final Set<String> YPN = Set.of("yes", "partly", "no");
         private static final Set<String> YN = Set.of("yes", "no");
         private static final Set<String> YMN = Set.of("yes", "maybe", "no");
-        /** 여러 캐릭터 · 다음 화 · 장면 하나로 바로 만화 · 컷마다 그림 한 장 · 대사·컷 직접 설계 ·
-         *  트레일러 자동 공유 · 캐릭터 빌려주기 · 커뮤니티(댓글·작가홈·인기순) · 지금으로 충분 */
+        /** 여러 캐릭터 · 다음 화 · 컷마다 그림 따로 · 숏츠로 만들기 · 내 캐릭터 공개 · 커뮤니티 ·
+         *  그림체 생성·추가 · 로어북. 뺀 값(장면 하나로 바로 만화 · 대사·컷 직접 설계 · 지금으로
+         *  충분)은 더 받지 않는다 — 예전에 받은 답은 그대로 남아 있다. */
         private static final Set<String> FEATURES = Set.of(
-                "multi_char", "next_episode", "scene_comic", "cut_image", "script_cut_edit",
-                "trailer_share", "character_lend", "community", "enough");
+                "multi_char", "next_episode", "cut_image", "trailer_share", "character_lend",
+                "community", "style_add", "lorebook");
 
         Object accept(Object raw) {
             if (this == WANTS) {
