@@ -177,6 +177,12 @@ const dict: Dict = {
     zh: "可以。选择**「确认两次」**的话，能在角色设定表和故事阶段确认后重做。重写故事不会额外扣积分，还能留言说明想要的方向。完成之后，可以在编辑室只挑不满意的那一格重画（**每格 3 积分**）。",
   },
 
+  "크레딧은 무엇이고, 돈이 드나요?": { en: "What are credits, and does it cost money?", ja: "クレジットとは何ですか？お金はかかりますか？", zh: "积分是什么？需要付费吗？" },
+  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **12크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **12크레딧**(가장 높은 화질 「너울」은 18), 컷 하나 다시 그리기는 **3크레딧**, 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.** **지금은 모든 기능이 무료**이고, 결제 수단을 넣는 곳도 없어요. 크레딧을 돈으로 사는 기능은 아직 준비 중입니다. 유료 기능이 생기면 미리 공지하고 안내해 드릴게요.": {
+    en: "They're the in-service unit that gets used up when you generate something. You get **12 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **12 credits** (18 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits**, and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.** **Everything is free right now**, and there's nowhere to enter payment details. Buying credits isn't available yet. If paid features arrive, we'll announce them in advance.",
+    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**12クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**12クレジット**（最高画質「うねり」は18）、コマ1枚の描き直しは**3クレジット**、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。****現在はすべての機能が無料**で、支払い情報を入力する場所もありません。クレジットの購入はまだ準備中です。有料機能を始める際は、事前にお知らせします。",
+    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**12 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**12 积分**（最高画质「涌浪」为 18），重画一格是**3 积分**，创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。****目前所有功能都免费**，也没有输入付款信息的地方。积分购买功能还在准备中。如果将来推出付费功能，我们会提前公告。",
+  },
   "크레딧은 무엇인가요?": { en: "What are credits?", ja: "クレジットとは何ですか？", zh: "积分是什么？" },
   "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **12크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **12크레딧**(가장 높은 화질 「너울」은 18), 컷 하나 다시 그리기는 **3크레딧**, 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.**": {
     en: "They're the in-service unit that gets used up when you generate something. You get **12 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **12 credits** (18 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits**, and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.**",
