@@ -42,4 +42,18 @@ class WebtoonFeedbackQuestionTest {
         assertThat(WebtoonFeedbackQuestion.S10.accept(List.of("fly"))).isNull();
         assertThat(WebtoonFeedbackQuestion.S10.accept("multi_char")).isNull();
     }
+
+    @Test
+    @DisplayName("새로 넣은 기능(그림체·로어북)은 받고, 뺀 기능(장면 하나로 바로 만화·대사 직접 설계·지금으로 충분)은 버린다")
+    void wantsAddedAndRetired() {
+        assertThat(WebtoonFeedbackQuestion.S10.accept(List.of("style_add", "lorebook", "trailer_share")))
+                .isEqualTo(List.of("style_add", "lorebook", "trailer_share"));
+        assertThat(WebtoonFeedbackQuestion.S10.accept(List.of("scene_comic", "script_cut_edit", "enough"))).isNull();
+    }
+
+    @Test
+    @DisplayName("원하는 기능은 답하지 않아도 된다")
+    void wantsIsOptional() {
+        assertThat(WebtoonFeedbackService.OPTIONAL).containsExactly(WebtoonFeedbackQuestion.S10);
+    }
 }

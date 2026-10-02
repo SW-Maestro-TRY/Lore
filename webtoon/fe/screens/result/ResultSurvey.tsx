@@ -74,7 +74,7 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
         <div className="wt-dialog-actions">
           <button type="button" className="btn btn-w" onClick={() => setState("gone")}>{t("닫기")}</button>
           {reward !== null && (
-            <button type="button" className="btn btn-p" onClick={() => go("mypage", { tab: "feedback" })}>
+            <button type="button" className="btn btn-p" onClick={() => go("feedback")}>
               {t("{n}크레딧 받으러 가기", { n: reward })}
             </button>
           )}
@@ -106,7 +106,7 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
   };
 
   return (
-    <Dialog title={t("몇 가지만 여쭤볼게요")} onClose={skip} busy={state === "busy"}>
+    <Dialog onClose={skip} busy={state === "busy"}>
       <div className="wt-survey-full">
         {questions.map((q) => (
           <SurveyQuestion key={q} q={q} answers={answers}
@@ -125,7 +125,6 @@ export default function ResultSurvey({ runId, authenticated, go }: { runId: stri
 }
 
 registerDict({
-  "몇 가지만 여쭤볼게요": { en: "Just a few questions", ja: "いくつか質問させてください", zh: "想问你几个小问题" },
   "닫기": { en: "Close", ja: "閉じる", zh: "关闭" },
   "건너뛰기": { en: "Skip", ja: "スキップ", zh: "跳过" },
   "보내기": { en: "Send", ja: "送信", zh: "提交" },

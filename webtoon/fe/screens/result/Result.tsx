@@ -271,14 +271,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   )}
                   <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
                               onChange={(on, n) => { setLiked(on); setLikes(n); }} />
-                  {/* 내 작품이면 공유는 아래 「내려받기」 옆에 둔다 — 남의 작품은 그 줄이 없어서 여기. */}
-                  {!mine && data.example && (
-                    <a className="btn btn-w wt-result-exdl" href={episodeDownloadUrl(runId)} download aria-label={t("내려받기")}
-                       onClick={() => track("download_click", { run: runId, kind: "episode", example: true })}>
-                      <IconDownload size={18} /> <span>{t("내려받기")}</span>
-                    </a>
-                  )}
-                  {!mine && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
                 </span>
               </div>
 
@@ -342,7 +334,18 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   </label>
                 </div>
               </>
-            ) : null}
+            ) : (
+              /* 남의 작품도 내려받기·공유는 제목 옆이 아니라 제목 아래 줄에 — 내 작품과 같은 자리. */
+              <div className="wt-result-acts">
+                {data.example && (
+                  <a className="btn btn-w" href={episodeDownloadUrl(runId)} download
+                     onClick={() => track("download_click", { run: runId, kind: "episode", example: true })}>
+                    <IconDownload size={18} /> {t("내려받기")}
+                  </a>
+                )}
+                <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+              </div>
+            )}
 
             <div className="wt-result-sheet">
               {data.pages.map((pg, i) => {

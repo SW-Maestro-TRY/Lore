@@ -57,6 +57,8 @@ public class WebtoonFeedbackService {
 
     static final int MAX_COMMENT = 2000;
     static final int MAX_CONTACT = 200;
+    /** 답하지 않아도 되는 문항. 화면 `ui/Survey.tsx` 의 OPTIONAL 과 같다. */
+    static final Set<WebtoonFeedbackQuestion> OPTIONAL = EnumSet.of(WebtoonFeedbackQuestion.S10);
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -112,7 +114,7 @@ public class WebtoonFeedbackService {
         asked.add(WebtoonFeedbackQuestion.S0.name());
         asked.add(fixed.name());
         pool.subList(0, extra).forEach(q -> asked.add(q.name()));
-        // 보여 주는 순서는 흐름대로(만족도 → 캐릭터 → 설정 → 이야기 → 재미 → 다음 화).
+        // 보여 주는 순서는 흐름대로(만족도 → 캐릭터 → 설정 → 이야기 → 재미).
         asked.sort(java.util.Comparator.comparingInt(n -> WebtoonFeedbackQuestion.valueOf(n).ordinal()));
         return new ShortQuestions(asked, p.own);
     }
@@ -156,7 +158,7 @@ public class WebtoonFeedbackService {
     }
 
     /**
-     * 전체 설문. 모든 문항(S1~S10)에 답해야 받는다(넣은 것이 없어 답할 수 없는 문항은 「해당 없음」).
+     * 전체 설문. 원하는 기능(S10)을 뺀 모든 문항에 답해야 받는다 — 원하는 기능이 없는 사람도 있다.
      * 처음 낸 사람에게만 크레딧을 준다 — 다시 내는 것은 받지만 보상은 없다.
      */
     @Transactional
@@ -168,7 +170,7 @@ public class WebtoonFeedbackService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "웹툰을 한 편 완성한 뒤에 답할 수 있어요");
         }
         Map<String, Object> answers = clean(raw, asked);
-        if (asked.stream().anyMatch(q -> !answers.containsKey(q.name()))) {
+        if (asked.stream().anyMatch(q -> !OPTIONAL.contains(q) && !answers.containsKey(q.name()))) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "모든 문항에 답해 주세요");
         }
         String note = trimTo(comment, MAX_COMMENT);
@@ -230,8 +232,9 @@ public class WebtoonFeedbackService {
         boolean hasStory = !text(v.get("story")).isBlank();
         boolean own = hasPhoto || hasName || hasDesc;
 
+        /* 다음 이야기가 보고 싶나(S7) · 다시 만들 의향(S8)은 2026-10-02 에 묻기를 그만뒀다. 예전 답은 그대로 읽힌다. */
         Set<WebtoonFeedbackQuestion> applicable = EnumSet.of(WebtoonFeedbackQuestion.S0, WebtoonFeedbackQuestion.S2,
-                WebtoonFeedbackQuestion.S6, WebtoonFeedbackQuestion.S7, WebtoonFeedbackQuestion.S8);
+                WebtoonFeedbackQuestion.S6);
         if (own) {
             applicable.add(WebtoonFeedbackQuestion.S1);
             applicable.add(WebtoonFeedbackQuestion.S3);
@@ -310,15 +313,14 @@ public class WebtoonFeedbackService {
         return null;
     }
 
-    /** 전체 설문에 물을 질문 — 그 작품에 맞는 S1~S8 과 원하는 기능(S10). 작품이 없으면 빈 것. */
+    /** 전체 설문에 물을 질문 — 그 작품에 맞는 S0~S6 과 원하는 기능(S10). 작품이 없으면 빈 것. */
     private Set<WebtoonFeedbackQuestion> fullQuestions(String runId) {
         if (runId == null) {
             return EnumSet.noneOf(WebtoonFeedbackQuestion.class);
         }
         RunService.Inputs in = runs.inputsOf(runId);
         Set<WebtoonFeedbackQuestion> asked = in == null
-                ? EnumSet.of(WebtoonFeedbackQuestion.S0, WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6,
-                             WebtoonFeedbackQuestion.S7, WebtoonFeedbackQuestion.S8)
+                ? EnumSet.of(WebtoonFeedbackQuestion.S0, WebtoonFeedbackQuestion.S2, WebtoonFeedbackQuestion.S6)
                 : EnumSet.copyOf(profileFrom(in).applicable());
         asked.add(WebtoonFeedbackQuestion.S10);
         return asked;

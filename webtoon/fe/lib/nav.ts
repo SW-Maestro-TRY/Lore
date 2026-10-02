@@ -12,13 +12,14 @@
  *   /webtoon?view=card&id=<id>     캐릭터 만들어보기 (결과 — 내 것)
  *   /webtoon?card=<id>             공유된 카드 (남이 봄)
  *   /webtoon?view=mypage           마이페이지
+ *   /webtoon?view=feedback         피드백 보내기 (예전 주소 view=mypage&tab=feedback 도 여기로)
  *
  * 화면을 바꿀 때 주소도 같이 민다 — 뒤로가기·새로고침·공유가 전부 주소에
  * 기댄다. 상태만 바꾸면 뒤로가기가 웹툰 탭을 통째로 빠져나간다. */
 
 export type View =
   | "landing" | "entry" | "create" | "running" | "result" | "editor" | "works"
-  | "characters" | "try" | "card" | "sharedCard" | "mypage";
+  | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback";
 
 export interface GoParams {
   step?: number;
@@ -27,7 +28,7 @@ export interface GoParams {
   run?: string;
   id?: string;
   /** 마이페이지에서 처음 열 칸. 진행 화면의 「설정에서 끌 수 있어요」가 설정 칸으로 바로 보낸다. */
-  tab?: "settings" | "feedback";
+  tab?: "settings";
   /** 만들기 화면이 어느 길인가(#548). own = 「만들고 싶은 내용이 있어요」. 없으면 아이디어부터. */
   mode?: "own";
 }
