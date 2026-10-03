@@ -36,6 +36,7 @@ class RunInfoEditTest {
 
     private final StoryStore stories = mock(StoryStore.class);
     private final WorkLedger ledger = mock(WorkLedger.class);
+    private final Admins admins = mock(Admins.class);
     private RunController controller;
 
     @BeforeEach
@@ -43,7 +44,7 @@ class RunInfoEditTest {
         controller = new RunController(mock(RunService.class), mock(PageStore.class),
                 mock(EpisodeExport.class), mock(OverlayStore.class), mock(BakeService.class),
                 stories, mock(RegenService.class), mock(AfterRun.class), ledger,
-                mock(CreditGate.class), mock(Admins.class));
+                mock(CreditGate.class), admins);
     }
 
     @AfterEach
@@ -104,6 +105,32 @@ class RunInfoEditTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
         verify(stories, never()).editPlot(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("관리자 계정은 남의 작품도 고친다(운영 확인용)")
+    void 관리자는_남의_작품도_고친다() {
+        로그인(9L);
+        when(admins.isAdmin(9L)).thenReturn(true);
+        when(ledger.mayChange("run-1", 9L)).thenReturn(false);
+        when(stories.editPlot("run-1", "관리자가 고침")).thenReturn("관리자가 고침");
+
+        ResponseEntity<Map<String, Object>> got = controller.logline("run-1", Map.of("logline", "관리자가 고침"));
+
+        assertThat(got.getStatusCode().value()).isEqualTo(200);
+        assertThat(got.getBody()).containsEntry("logline", "관리자가 고침");
+    }
+
+    @Test
+    @DisplayName("관리자가 아니면 여전히 남의 작품을 못 고친다")
+    void 관리자가_아니면_403() {
+        로그인(8L);
+        when(admins.isAdmin(8L)).thenReturn(false);
+        when(ledger.mayChange("run-1", 8L)).thenReturn(false);
+
+        assertThatThrownBy(() -> controller.logline("run-1", Map.of("logline", "x")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
     }
 
     @Test
