@@ -55,6 +55,8 @@ public class ExampleBundleExporter {
     private static final Set<String> SKIP_FILES = Set.of("meta.json");
     private static final Set<String> RUN_EXTENSIONS = Set.of("json", "txt", "md", "png", "jpg", "jpeg", "webp");
     private static final Pattern SAFE_NAME = Pattern.compile("^[A-Za-z0-9._-]+$");
+    /** 캐릭터 시트와 그 이전 판({@code sheet.v1.png} …). */
+    private static final Pattern SHEET = Pattern.compile("^sheet(\\.v\\d+)?\\.png$");
 
     private final WebtoonWorkRepository works;
     private final WebtoonJobRepository jobs;
@@ -162,12 +164,20 @@ public class ExampleBundleExporter {
                     return;
                 }
                 for (int i = 0; i < rel.getNameCount() - 1; i++) {
-                    if (SKIP_DIRS.contains(rel.getName(i).toString())) {
+                    String dir = rel.getName(i).toString();
+                    if (SKIP_DIRS.contains(dir) || dir.startsWith("_")) {   // _old 같은 실험 백업
                         return;
                     }
                 }
                 String name = rel.getFileName().toString();
                 String ext = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT) : "";
+                /* 그림은 캐릭터 시트(와 이전 판) · 조연 시트만. 이어 붙인 전체 그림(episode.png)이나 쪽 그림 사본은
+                   몇 MB 씩이라 번들만 키운다 — 쪽 그림은 위에서 두 폭으로 따로 담았다. */
+                boolean image = Set.of("png", "jpg", "jpeg", "webp").contains(ext);
+                if (image && !(SHEET.matcher(name).matches()
+                        || (rel.getNameCount() == 2 && rel.getName(0).toString().equals("sheets")))) {
+                    return;
+                }
                 boolean safe = true;
                 for (Path part : rel) {
                     safe &= SAFE_NAME.matcher(part.toString()).matches();
