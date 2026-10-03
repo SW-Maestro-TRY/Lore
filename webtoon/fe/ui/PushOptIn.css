@@ -1,0 +1,15 @@
+/* 이 기기로 알림 받기(#599) — 진행 화면 알림 칸 안, 마이페이지 설정 칸 */
+.wt .wt-push { display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-push-progress { padding-top: 10px; border-top: 1px solid var(--line); }
+.wt .wt-push-progress b { font-size: 13.5px; }
+.wt .wt-push-progress .btn { height: 42px; font-size: 13.5px; }
+.wt .wt-push .dim { font-size: 12px; }
+.wt .wt-push-install { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wt .wt-my-setting .wt-push-install .dim { font-size: 12.5px; }
+.wt .wt-my-setting .wt-push-install { margin-top: 14px; }
+
+@media (max-width: 767px) {
+  .wt .wt-push-progress b { font-size: 13px; }
+  .wt .wt-push-progress .btn { height: 40px; font-size: 12.5px; }
+  .wt .wt-push .dim { font-size: 11px; }
+}

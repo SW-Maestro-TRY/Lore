@@ -4,6 +4,7 @@ import com.lore.common.email.EmailService;
 import com.lore.common.user.User;
 import com.lore.common.user.UserRepository;
 import com.lore.webtoon.WebtoonApi;
+import com.lore.webtoon.push.JobPush;
 import com.lore.webtoon.story.StoryStore;
 import com.lore.webtoon.story.WebtoonStory;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -65,17 +66,19 @@ public class JobNotice {
     private final StoryStore stories;
     private final EmailService mail;
     private final NotifySettingService settings;
+    private final JobPush push;
     private final String site;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public JobNotice(JobStore store, UserRepository users, StoryStore stories,
-                     EmailService mail, NotifySettingService settings,
+                     EmailService mail, NotifySettingService settings, JobPush push,
                      @Value("${lore.webtoon.site-url:https://lorecomic.com}") String site) {
         this.store = store;
         this.users = users;
         this.stories = stories;
         this.mail = mail;
         this.settings = settings;
+        this.push = push;
         this.site = site.endsWith("/") ? site.substring(0, site.length() - 1) : site;
     }
 
@@ -122,6 +125,7 @@ public class JobNotice {
     public void finished(Long jobId) {
         try {
             WebtoonJob job = store.byId(jobId);
+            push.finished(job);             // 푸시는 메일과 따로 간다 — 메일 받을 데가 없어도 보낸다(#599)
             String to = addressOf(job);
             if (to == null || !store.claimNotice(jobId)) {
                 return;                     // 받을 사람이 없거나, 이미 보냈다
@@ -149,6 +153,7 @@ public class JobNotice {
     public void failed(Long jobId, String why, Refunded back) {
         try {
             WebtoonJob job = store.byId(jobId);
+            push.failed(job, back);
             String to = addressOf(job);
             if (to == null || !store.claimNotice(jobId)) {
                 return;

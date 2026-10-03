@@ -3,6 +3,7 @@ package com.lore.webtoon.job;
 import com.lore.common.email.EmailService;
 import com.lore.common.user.User;
 import com.lore.common.user.UserRepository;
+import com.lore.webtoon.push.JobPush;
 import com.lore.webtoon.story.StoryStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,7 +51,7 @@ class JobNoticeTest {
         // 수신 설정은 켜 둔 사람 기준으로 본다 — 끈 사람은 NotifySettingService 쪽에서 따로 본다.
         NotifySettingService notifySettings = mock(NotifySettingService.class);
         when(notifySettings.isOn(any())).thenReturn(true);
-        notice = new JobNotice(store, users, stories, mail, notifySettings, "https://lorecomic.com/");
+        notice = new JobNotice(store, users, stories, mail, notifySettings, mock(JobPush.class), "https://lorecomic.com/");
     }
 
     private WebtoonJob 작업(Long userId, String typed) {

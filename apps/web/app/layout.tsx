@@ -6,7 +6,7 @@
 //
 // 공용 헤더(SiteHeader)는 여기가 아니라 랜딩(LandingPage)과 app/(domains)/layout.tsx 가 각자 붙인다.
 // 랜딩은 헤더 아래 자체 푸터까지 갖는 한 장짜리 화면이라 구성이 달라서다.
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 // 폰트는 npm 패키지(@fontsource)에서 온다. next/font/google 은 next build 도중
 // Google Fonts 에서 파일을 받는데, dev 서버에서 그 요청이 자주 끊겨 배포가 복불복으로
@@ -29,6 +29,14 @@ export const metadata: Metadata = {
   title: "Lore — 우리만의 캐릭터로 노는 만화 플랫폼",
   description:
     "사진 한 장에서 캐릭터를 뽑고, 그 캐릭터로 4컷 · 예고편 · 웹툰까지 이어서 만듭니다.",
+  // 홈 화면 바로가기(#599). manifest 는 app/manifest.ts, 아이폰 홈 화면 아이콘은
+  // app/apple-icon.png 가 맡는다. appleWebApp 이 있어야 아이폰에서 주소창 없는 앱으로
+  // 열리고, 그래야 웹푸시를 받을 수 있다.
+  appleWebApp: { capable: true, title: "LORE", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
 };
 
 // middleware.ts 가 /ko·/en·/ja 로 들어온 요청에 남기는 값. 언어 접두어가 없는 주소(예:
