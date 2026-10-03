@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { creditBalance, creditHistory, type CreditLine } from "@common/api/credits";
 import { pageUrl, readAllowance, readResult, type RunResult } from "../../lib/api";
-import { mountEditor, setEditorTranslator } from "../../lib/editorCore";
+import { CREDIT_SHORT_EVENT, mountEditor, setEditorTranslator } from "../../lib/editorCore";
+import CreditShort from "../../ui/CreditShort";
+import { sceneParts } from "../../lib/sceneText";
 import { useLang } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
@@ -49,6 +51,50 @@ export default function Editor({ runId, go, authStatus = "loading" }:
     return () => { dispose(); setEditorTranslator(null); };
   }, [runId, go, lang, t, authenticated]);
 
+  /* 양쪽 단 폭(#548) — 경계를 끌어 넓히고 좁힌다. 두 번 누르면 기본 폭. 이 기기에 기억한다. */
+  const SIDE_DEFAULT = { left: 260, right: 260 };
+  const [sideW, setSideW] = useState(SIDE_DEFAULT);
+  useEffect(() => {
+    try {
+      const got = JSON.parse(localStorage.getItem("lore_editor_sides") || "null");
+      if (got && typeof got.left === "number" && typeof got.right === "number") setSideW(got);
+    } catch { /* 비공개 창 */ }
+  }, []);
+  const saveSides = (next: { left: number; right: number }) => {
+    setSideW(next);
+    try { localStorage.setItem("lore_editor_sides", JSON.stringify(next)); } catch { /* 비공개 창 */ }
+  };
+  const startResize = (e: React.PointerEvent<HTMLDivElement>, side: "left" | "right") => {
+    e.preventDefault();
+    const x0 = e.clientX;
+    const w0 = sideW[side];
+    let last = sideW;
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - x0;
+      const w = Math.round(Math.min(480, Math.max(180, side === "left" ? w0 + dx : w0 - dx)));
+      last = { ...sideW, [side]: w };
+      setSideW(last);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
+      saveSides(last);
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  const resetSide = (side: "left" | "right") => saveSides({ ...sideW, [side]: SIDE_DEFAULT[side] });
+
+  /* 크레딧이 모자랄 때 엔진이 보내는 사건을 받아 안내를 띄운다(#548). */
+  const [creditShort, setCreditShort] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setCreditShort(String((e as CustomEvent).detail ?? ""));
+    window.addEventListener(CREDIT_SHORT_EVENT, on);
+    return () => window.removeEventListener(CREDIT_SHORT_EVENT, on);
+  }, []);
+
   /* 페이지 썸네일과 장면 한 줄은 완성본 API 에서 받는다 — 엔진은 자기 데이터를
      밖으로 내주지 않는다. */
   const [info, setInfo] = useState<RunResult | null>(null);
@@ -93,15 +139,16 @@ export default function Editor({ runId, go, authStatus = "loading" }:
   /* 지금 고른 장 — 엔진이 #activeSceneLabel 에 「N번째 장」이라고 적는 것을 읽는다. */
   const [active, setActive] = useState(1);
   useEffect(() => {
-    const el = document.getElementById("activeSceneLabel");
-    if (!el) return;
+    /* 엔진이 그 칸을 통째로 갈아 끼울 때가 있어서, 칸 하나가 아니라 오른쪽 단 전체를 지켜보고
+       바뀔 때마다 칸을 새로 찾는다(#548 — 왼쪽 「N번째 장」이 1에 머물던 것). */
+    const host = document.getElementById("edDock") || document.body;
     const read = () => {
-      const n = parseInt(el.textContent || "", 10);
+      const n = parseInt(document.getElementById("activeSceneLabel")?.textContent || "", 10);
       if (Number.isFinite(n) && n > 0) setActive(n);
     };
     read();
     const mo = new MutationObserver(read);
-    mo.observe(el, { childList: true, characterData: true, subtree: true });
+    mo.observe(host, { childList: true, characterData: true, subtree: true });
     return () => mo.disconnect();
   }, [runId]);
 
@@ -148,28 +195,20 @@ export default function Editor({ runId, go, authStatus = "loading" }:
     <div className="ed wt-ed">
       <header className="ed-top wt-ed-top">
         <div className="ed-strip wt-ed-strip">
-          <button type="button" className="ed-works-toggle chip wt-ed-workstoggle" id="worksToggle"
-                  aria-expanded="false" aria-controls="edWorks">
-            <IconMenu size={16} /> {t("작품")}
-          </button>
+          {/* 「작품」 단추는 뺐다 — 왼쪽 단에 작품 목록이 없어졌다(#548). 엔진은 단추가 없으면 그냥 지나간다. */}
 
           <div className="ed-title wt-ed-title">
             <b id="edTitle" hidden />
             <div className="title-row wt-ed-titlerow">
               <h1 id="edEpisode" data-title-edit tabIndex={0} title={t("눌러서 제목을 고칩니다")}>—</h1>
-              <button type="button" className="wt-ed-titleedit" id="edTitleEditBtn" title={t("제목 고치기")}>
-                <IconEdit size={13} /> {t("제목 고치기")}
+              <button type="button" className="wt-ed-titleedit" id="edTitleEditBtn" title={t("제목 고치기")} aria-label={t("제목 고치기")}>
+                <IconEdit size={15} />
               </button>
             </div>
             <span id="edMeta" className="dim" />
           </div>
 
           <div className="ed-chips wt-ed-chips">
-            <span className="chip wt-ed-credit">
-              ◈ {balance == null ? "—" : balance.toLocaleString("ko-KR")} {t("크레딧")}
-              <button type="button" className="wt-ed-ledgerbtn" aria-expanded={ledgerOpen}
-                      onClick={() => setLedgerOpen((v) => !v)}>{t("내역")}</button>
-            </span>
             <label className="mini-toggle wt-ed-overlaytoggle">
               <input type="checkbox" id="showOverlay" defaultChecked aria-label={t("내가 얹은 것 보기")} />
               {t("내가 얹은 것 보기")}
@@ -183,10 +222,8 @@ export default function Editor({ runId, go, authStatus = "loading" }:
         <div className="bake-result" id="bakeResult" hidden />
       </header>
 
-      <div className="ed-body wt-ed-body">
+      <div className="ed-body wt-ed-body" style={{ ["--ed-left-w" as string]: `${sideW.left}px`, ["--ed-right-w" as string]: `${sideW.right}px` }}>
         <aside className="ed-works wt-ed-left" id="edWorks">
-          <b className="wt-ed-lefthead">{t("내 작품")}</b>
-          <div id="worksList" className="wt-ed-workslist" />
           <div className="wt-ed-pages">
             <b className="wt-ed-lefthead">{t("페이지")}</b>
             <div className="wt-ed-pagegrid">
@@ -194,14 +231,31 @@ export default function Editor({ runId, go, authStatus = "loading" }:
                 <button key={p.no} type="button" className={`wt-ed-thumb${p.no === active ? " on" : ""}`}
                         onClick={() => pickScene(p.no)} aria-label={t("{n}번째 장", { n: p.no })} aria-current={p.no === active}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={pageUrl(runId, p.no, 160)} alt="" loading="lazy" />
+                  <img src={pageUrl(runId, p.no, 320)} alt="" loading="lazy" />
                   <span>{p.no}</span>
                 </button>
               )) : [1, 2, 3].map((i) => <div key={i} className="skeleton wt-ed-thumb" />)}
             </div>
           </div>
+          {/* 고른 장이 무슨 장면인지(#548) — 페이지 칸 바로 아래. 다시 그리기 칸에 있던 것을 옮겼다. */}
+          <div className="wt-ed-sceneinfo">
+            <b className="wt-ed-lefthead">{t("{n}번째 장", { n: active })}</b>
+            {activeNote ? (
+              /* 그림 밑에는 「장소와 상황」만 — 전체는 여기서 소제목별로(#548) */
+              <div className="wt-ed-sceneparts">
+                {sceneParts(activeNote).map((p, i) => (
+                  <div key={i} className="part">
+                    {p.label && <span>{t(p.label)}</span>}
+                    <p>{p.text}</p>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="dim">{t("이 장의 장면 설명이 없어요")}</p>}
+          </div>
         </aside>
 
+        <div className="wt-ed-resize" role="separator" aria-orientation="vertical" aria-label={t("왼쪽 단 폭 조절")}
+             onPointerDown={(e) => startResize(e, "left")} onDoubleClick={() => resetSide("left")} />
         <main className="ed-stage wt-ed-stage" id="stageCol">
           <div className="ep-tabs wt-ed-eptabs" id="edEpTabs" hidden />
           <div id="scenes" className="wt-ed-scenes" />
@@ -214,6 +268,8 @@ export default function Editor({ runId, go, authStatus = "loading" }:
         </button>
         <div className="dock-scrim" id="dockScrim" hidden />
 
+        <div className="wt-ed-resize" role="separator" aria-orientation="vertical" aria-label={t("오른쪽 단 폭 조절")}
+             onPointerDown={(e) => startResize(e, "right")} onDoubleClick={() => resetSide("right")} />
         <aside className="ed-dock wt-ed-dock" id="edDock" aria-label={t("말풍선 · 스티커 · 효과음")}>
           <div className="dock-handle" id="dockHandle" aria-hidden="true" />
           <div className="dock-bar wt-ed-dockbar">
@@ -233,43 +289,12 @@ export default function Editor({ runId, go, authStatus = "loading" }:
             <div className="dock-grid wt-ed-dockgrid" id="dockGrid" />
           </div>
 
-          <div className="dock-ledger wt-ed-ledger" hidden={!ledgerOpen}>
-            <div className="dock-props-head">
-              <b>{t("크레딧 사용 내역")}</b>
-              <button type="button" className="icon-btn" aria-label={t("닫기")}
-                      onClick={() => setLedgerOpen(false)}><IconClose size={14} /></button>
-            </div>
-            {ledgerErr ? (
-              <p className="err">{ledgerErr}</p>
-            ) : (
-              <ul>
-                {ledger == null ? (
-                  <li className="ledger-empty">{t("불러오는 중…")}</li>
-                ) : ledger.length === 0 ? (
-                  <li className="ledger-empty">{t("아직 쓴 크레딧이 없습니다.")}</li>
-                ) : ledger.map((x) => (
-                  <li key={x.id}>
-                    <span>{new Date(x.at).toLocaleDateString("ko-KR")} · {x.label}</span>
-                    <b className={x.delta < 0 ? "" : "plus"}>{x.delta < 0 ? "" : "+"}{x.delta}</b>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="wt-ed-regen">
-            <b>{t("다시 그리기")}</b>
-            {activeNote && <span className="dim">{t("이 장의 장면 · {note}", { note: activeNote })}</span>}
-            <button type="button" className="btn btn-p wt-ed-regenbtn" onClick={regenActive}>
-              {regenCost == null
-                ? t("이 컷 다시 그리기")
-                : t("이 컷 다시 그리기 · {n}크레딧", { n: regenCost })}
-            </button>
-          </div>
         </aside>
       </div>
 
-      {/* 다시 그리기 확인 창 — 항목(칩)은 엔진이 /config 에서 받아 채운다. */}
+
+      {/* 다시 그리기 창 — 장마다 있는 「다시 그리기」를 누르면 뜨는 팝업. 항목(칩)은 엔진이 /config 에서
+          받아 채우고, 고른 항목과 적은 말이 둘 다 그리는 프롬프트에 들어간다(#548). id 는 엔진이 쓴다. */}
       <div className="ask modal" id="regenAsk" hidden>
         <div className="ask-box modal-box" role="dialog" aria-modal="true" aria-labelledby="regenAskTitle">
           <h2 id="regenAskTitle">{t("다시 그리기")}</h2>
@@ -292,8 +317,14 @@ export default function Editor({ runId, go, authStatus = "loading" }:
           </div>
         </div>
       </div>
-
       <div className="toast wt-ed-toast" id="toast" hidden />
+      {creditShort !== null && (
+        /* 장 다시 그리기를 눌렀는데 크레딧이 모자랄 때(#548) */
+        <div className="wt-ed-creditshort">
+          <CreditShort raw={creditShort} />
+          <button type="button" className="wt-ed-creditshort-x" aria-label={t("닫기")} onClick={() => setCreditShort(null)}>×</button>
+        </div>
+      )}
     </div>
   );
 }

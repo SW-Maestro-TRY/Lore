@@ -3,6 +3,16 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  /* ---- 입구 — 만들고 싶은 내용이 있나요?(#548) ---- */
+  "무엇을 만들고 싶나요?": { en: "What would you like to make?", ja: "何を作りたいですか？", zh: "想做什么？" },
+  "아이디어부터 시작할게요": { en: "Start from an idea", ja: "アイデアから始める", zh: "从灵感开始" },
+  "캐릭터를 바탕으로 AI 가 스토리를 만들어드려요.": { en: "AI writes a story from your character.", ja: "キャラクターをもとに AI がストーリーを作ります。", zh: "AI 会根据角色为你创作故事。" },
+  "AI 와 함께 만들기": { en: "Make it with AI", ja: "AI と一緒に作る", zh: "和 AI 一起创作" },
+  "만들고 싶은 내용이 있어요": { en: "I know what I want to make", ja: "作りたい内容がある", zh: "我已经有想做的内容" },
+  "내가 생각한 내용을 바탕으로 장면을 만들고 웹툰으로 완성해요.": { en: "Build scenes from what you have in mind and finish the webtoon.", ja: "考えた内容をもとに場面を作り、ウェブトゥーンに仕上げます。", zh: "根据你的构思生成场景，完成漫画。" },
+  "내 내용으로 시작하기": { en: "Start with my own", ja: "自分の内容で始める", zh: "用我的内容开始" },
+  "로그인하면 내 내용으로 만들 수 있어요": { en: "Sign in to make it with your own content", ja: "ログインすると自分の内容で作れます", zh: "登录后即可用自己的内容创作" },
+
   /* ---- 히어로 ---- */
   "만들던 웹툰": { en: "Webtoon in progress", ja: "作りかけのウェブトゥーン", zh: "正在制作的漫画" },
   "{done} / {total}장": { en: "{done} / {total} pages", ja: "{done} / {total}枚", zh: "{done} / {total} 页" },
@@ -167,6 +177,12 @@ const dict: Dict = {
     zh: "可以。选择**「确认两次」**的话，能在角色设定表和故事阶段确认后重做。重写故事不会额外扣积分，还能留言说明想要的方向。完成之后，可以在编辑室只挑不满意的那一格重画（**每格 3 积分**）。",
   },
 
+  "크레딧은 무엇이고, 돈이 드나요?": { en: "What are credits, and does it cost money?", ja: "クレジットとは何ですか？お金はかかりますか？", zh: "积分是什么？需要付费吗？" },
+  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **12크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **12크레딧**(가장 높은 화질 「너울」은 18), 컷 하나 다시 그리기는 **3크레딧**, 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.** **지금은 모든 기능이 무료**이고, 결제 수단을 넣는 곳도 없어요. 크레딧을 돈으로 사는 기능은 아직 준비 중입니다. 유료 기능이 생기면 미리 공지하고 안내해 드릴게요.": {
+    en: "They're the in-service unit that gets used up when you generate something. You get **12 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **12 credits** (18 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits**, and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.** **Everything is free right now**, and there's nowhere to enter payment details. Buying credits isn't available yet. If paid features arrive, we'll announce them in advance.",
+    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**12クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**12クレジット**（最高画質「うねり」は18）、コマ1枚の描き直しは**3クレジット**、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。****現在はすべての機能が無料**で、支払い情報を入力する場所もありません。クレジットの購入はまだ準備中です。有料機能を始める際は、事前にお知らせします。",
+    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**12 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**12 积分**（最高画质「涌浪」为 18），重画一格是**3 积分**，创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。****目前所有功能都免费**，也没有输入付款信息的地方。积分购买功能还在准备中。如果将来推出付费功能，我们会提前公告。",
+  },
   "크레딧은 무엇인가요?": { en: "What are credits?", ja: "クレジットとは何ですか？", zh: "积分是什么？" },
   "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **12크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **12크레딧**(가장 높은 화질 「너울」은 18), 컷 하나 다시 그리기는 **3크레딧**, 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.**": {
     en: "They're the in-service unit that gets used up when you generate something. You get **12 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **12 credits** (18 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits**, and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.**",
@@ -244,6 +260,17 @@ const dict: Dict = {
     zh: "两条路最后都会做成漫画。做好的角色会保存下来，下次可以直接做漫画。",
   },
   "캐릭터 만들어보기": { en: "Try a character", ja: "キャラクターを作ってみる", zh: "试做一个角色" },
+  "캐릭터 만들기": { en: "Create character", ja: "キャラクターを作る", zh: "创建角色" },
+  "캐릭터와 스토리로 웹툰 1화를 생성해보아요": {
+    en: "Turn a character and a story into episode 1 of your webtoon",
+    ja: "キャラクターとストーリーでウェブトゥーン第1話を作ってみましょう",
+    zh: "用角色和故事生成漫画第 1 话",
+  },
+  "내가 ○○에 들어간다면? 재미있는 캐릭터를 만들어보아요": {
+    en: "What if I stepped into ○○? Make a fun character",
+    ja: "もし私が○○に入ったら？楽しいキャラクターを作ってみましょう",
+    zh: "如果我走进○○会怎样？来做一个有趣的角色吧",
+  },
   "바로 웹툰을 만들고 싶어요": { en: "I want to make a webtoon right away", ja: "すぐウェブトゥーンを作りたい", zh: "我想直接做漫画" },
   "남은 무료 {n}": { en: "{n} free left", ja: "無料残り {n}", zh: "剩余免费 {n}" },
   "내가 가진 캐릭터, 최애, 이미지, 설정으로 바로 웹툰을 만들어요.": {

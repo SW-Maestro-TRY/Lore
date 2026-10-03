@@ -24,7 +24,8 @@ import "./webtoon.css";
 import { hrefOf, type Go, type View } from "./lib/nav";
 import { linkThisBrowser } from "./lib/api";
 import { setView, track } from "./lib/track";
-import { LangProvider } from "./lib/i18n";
+import { LangProvider, useLang } from "./lib/i18n";
+import { syncPush } from "./lib/push";
 import Landing from "./screens/landing/Landing";
 import Entry from "./screens/landing/Entry";
 import Wizard from "./screens/wizard/Wizard";
@@ -36,6 +37,7 @@ import Photo from "./screens/character/Photo";
 import PhotoResult from "./screens/character/PhotoResult";
 import CharList from "./screens/character/CharList";
 import MyPage from "./screens/mypage/MyPage";
+import FeedbackPage from "./screens/feedback/FeedbackPage";
 import RevisitPrompt from "./ui/RevisitPrompt";
 import RunningBubble from "./ui/RunningBubble";
 
@@ -56,7 +58,9 @@ interface Route {
   job?: string;
   run?: string;
   id?: string;
-  tab?: "settings" | "feedback";
+  tab?: "settings";
+  /** 만들기 화면의 길(#548). own = 「만들고 싶은 내용이 있어요」. */
+  mode?: "own";
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -64,20 +68,23 @@ function routeOf(search: URLSearchParams): Route {
   const view = search.get("view");
   const run = search.get("run") || undefined;
   const card = search.get("card") || undefined;
-  const step = Math.min(4, Math.max(1, Number(search.get("step") || 1) || 1));
+  /* 아이디어부터 길은 다섯 걸음(캐릭터 · 시작 · 이야기 · 그림체 · 방식), 내 내용 길은 넷 — 위자드가 길에 맞게 다시 자른다(#548). */
+  const step = Math.min(5, Math.max(1, Number(search.get("step") || 1) || 1));
   const base = {
     step,
     character: search.get("character") || undefined,
     job: search.get("job") || undefined,
     run,
     id: search.get("id") || undefined,
-    tab: search.get("tab") === "settings" ? ("settings" as const)
-      : search.get("tab") === "feedback" ? ("feedback" as const) : undefined,
+    tab: search.get("tab") === "settings" ? ("settings" as const) : undefined,
+    mode: search.get("mode") === "own" ? ("own" as const) : undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
   if (view === "card" && base.id) return { view: "card", ...base };
-  if (view && ["entry", "create", "works", "characters", "try", "mypage"].includes(view)) {
+  /* 피드백이 마이페이지 창이던 때의 주소 — 다시 온 사람 안내 메일 등에 남아 있을 수 있다. */
+  if (view === "mypage" && search.get("tab") === "feedback") return { view: "feedback", ...base };
+  if (view && ["entry", "create", "works", "characters", "try", "mypage", "feedback"].includes(view)) {
     return { view: view as View, ...base };
   }
   if (run) return { view: "result", ...base };
@@ -130,6 +137,13 @@ function WebtoonScreens() {
   const authReady = authStatus !== "loading";
   const authenticatedRef = useRef(authenticated);
   authenticatedRef.current = authenticated;
+
+  /* 이미 알림을 받는 기기면 서버 기록을 지금 사람·언어로 맞춘다(#599) — 로그인·로그아웃하면
+     알림이 갈 계정이 바뀌고, 언어를 바꾸면 알림 문구도 바뀌어야 한다. */
+  const { lang } = useLang();
+  useEffect(() => {
+    if (authReady) void syncPush(lang);
+  }, [authReady, authenticated, lang]);
 
   /* 그림을 그냥 저장해 가지 못하게 — 오른쪽 누르기와 끌어다 놓기. 글 쓰는
      칸만 비워 둔다(복사·붙여넣기 메뉴는 있어야 한다). 막는 것이 아니라 문턱이다. */
@@ -207,9 +221,10 @@ function WebtoonScreens() {
   return (
     <div ref={rootRef} className="wt" onContextMenu={guardImage} onDragStart={guardImage}>
       {route.view === "landing" && <Landing go={go} />}
-      {route.view === "entry" && <Entry go={go} />}
+      {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
-        <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated} />
+        <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated}
+                mode={route.mode} />
       )}
       {route.view === "running" && route.job && (
         <Progress jobId={route.job} go={go} />
@@ -226,6 +241,7 @@ function WebtoonScreens() {
         <PhotoResult id={route.id} shared go={go} authenticated={authenticated} />
       )}
       {route.view === "mypage" && <MyPage go={go} initialTab={route.tab} />}
+      {route.view === "feedback" && <FeedbackPage go={go} />}
       <RevisitPrompt authenticated={authenticated} view={route.view} go={go} />
       {/* 만드는 중이면 어느 화면에서든 돌아갈 동그라미(#507) */}
       <RunningBubble view={route.view} runId={route.run} go={go} />

@@ -339,7 +339,44 @@ public class BubbleArtist {
     /** 이모지 스티커. 글꼴이 이모지를 못 그리면 네모가 나오므로 크기만 맞춘다. */
     private Tile sticker(JsonNode item, double scale) {
         int fs = (int) Math.max(8, item.path("size").asDouble(16) * 2.2 * scale);
-        return text(item.path("text").asText(""), font(fs, false), PAPER, null, 0);
+        String text = item.path("text").asText("");
+        if (text.startsWith(LOU_PREFIX)) {
+            Tile lou = louSticker(text.substring(LOU_PREFIX.length()), fs);
+            if (lou != null) {
+                return lou;
+            }
+        }
+        return text(text, font(fs, false), PAPER, null, 0);
+    }
+
+    /** 루 고래 스티커(#548) — 화면과 같은 이름의 그림(webtoon/ai/assets/lou)을 높이 1.5em 로. */
+    static final String LOU_PREFIX = "lou:";
+
+    private Tile louSticker(String name, int fs) {
+        String safe = name.replaceAll("[^a-z0-9-]", "");
+        if (safe.isEmpty()) {
+            return null;
+        }
+        try (var in = BubbleArtist.class.getResourceAsStream("/webtoon/ai/assets/lou/" + safe + ".png")) {
+            if (in == null) {
+                return null;
+            }
+            BufferedImage src = javax.imageio.ImageIO.read(in);
+            if (src == null) {
+                return null;
+            }
+            int h = Math.max(8, (int) Math.round(fs * 1.5));
+            int w = Math.max(1, (int) Math.round(src.getWidth() * (h / (double) src.getHeight())));
+            BufferedImage tile = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = tile.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g.drawImage(src, 0, 0, w, h, null);
+            g.dispose();
+            return new Tile(tile, 0, 0);
+        } catch (java.io.IOException e) {
+            return null;
+        }
     }
 
     /**

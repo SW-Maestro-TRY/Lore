@@ -296,7 +296,6 @@ very low-saturation colors,
 desaturated sophisticated color harmony,
 cool gray,
 muted blue,
-soft charcoal,
 muted brown,
 pale ivory,
 soft neutral beige,
@@ -348,16 +347,21 @@ clothing is less detailed than the face and hair,
 
 
 --------------------------------------------------
-BACKGROUND
+BACKGROUND — NEVER DETAILED
 --------------------------------------------------
 
-soft simplified background,
-low-detail environmental shapes,
-large quiet negative spaces,
-subtle atmospheric background,
-low contrast background,
-background significantly less detailed than the character,
-background never competes with the character,
+the background is never drawn in detail, in any panel,
+pale, light, nearly blank background,
+mostly empty pale ivory or cool gray-white space,
+the place is only hinted at with one or two soft, blurred shapes,
+or with a soft shadow falling across the space, such as the shadow of a window or leaves,
+low contrast, low saturation, almost no lines in the background,
+even when the scene description lists many things about the place, draw only a faint hint of it,
+no cityscapes, no skylines, no rows of buildings, no lit windows,
+no street lamps, no wet reflective ground, no bricks, no wall textures,
+no furniture rows, no shelves full of objects,
+night scenes stay pale and cool — never dark, never black-filled,
+the background never competes with the character,
 
 
 --------------------------------------------------
@@ -690,6 +694,11 @@ excessive micro-detail,
 chaotic line accumulation,
 uniform detail density,
 over-rendered background,
+detailed background,
+dark background,
+night cityscape,
+city lights,
+wet reflective street,
 excessive gradients,
 strong volumetric lighting,
 dramatic lighting,

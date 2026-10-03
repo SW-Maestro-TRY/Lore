@@ -46,7 +46,8 @@ import java.util.regex.Pattern;
  * 그 자리가 조용히 빈칸이 됐다.
  *
  * 지금은 예시도 <b>보통 작품과 똑같이 DB 에 있다.</b> 화면은 예시인지 모르고,
- * 알 필요도 없다.
+ * 알 필요도 없다. 예외는 내려받기 하나다 — 예시는 누구나 받을 수 있어서
+ * 결과 한 편에 {@code example} 이 실린다({@link #isExample}).
  *
  * <h2>심는 것은 한 작품에 한 번뿐이다</h2>
  *
@@ -249,6 +250,14 @@ public class ExampleWorks implements ApplicationRunner {
         ledger.learnedRun(jobId, runId, null);
         ledger.setPublic(runId, true);
         return true;
+    }
+
+    /**
+     * 심어 둔 예시 작품인가. 화면이 예시를 알아야 하는 자리는 하나뿐이다 — 예시는 누구나
+     * 내려받을 수 있다(남의 작품은 주인만). 그래서 결과 한 편에 {@code example} 로 실어 준다.
+     */
+    public static boolean isExample(WebtoonWork work) {
+        return work != null && SEED_UID.equals(work.getBrowserUid());
     }
 
     /** 작품 번호에서 곧장 짓는다 — 다시 띄워도 같은 값이라 줄이 늘지 않는다. */

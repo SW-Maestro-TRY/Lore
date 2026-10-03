@@ -86,6 +86,7 @@ public class WebtoonPurge implements UserDataPurge {
         n += rows.deleteCharacters(userId);
         n += rows.deleteBrowserLinks(userId);
         n += rows.deleteNotifySettings(userId);
+        n += rows.deletePushSubscriptions(userId);
         return n;
     }
 

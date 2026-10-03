@@ -31,17 +31,16 @@ export const SURVEY: Record<SurveyKey, Question> = {
   S7: { text: "이 캐릭터의 다음 이야기도 보고 싶나요?", kind: "choice", options: [["yes", "예"], ["no", "아니오"]] },
   S8: { text: "앞으로도 다시 웹툰을 만들어 볼 의향이 있으신가요?", kind: "choice", options: [["yes", "있어요"], ["maybe", "잘 모르겠어요"], ["no", "없어요"]] },
   S10: {
-    text: "추가로 어떤 기능이 있으면 좋을까요? 모두 골라 주세요.", kind: "multi",
+    text: "추가로 어떤 기능이 있으면 좋을까요? 있다면 모두 골라 주세요. (선택)", kind: "multi",
     options: [
-      ["multi_char", "웹툰에 캐릭터 여러 명 함께 넣기"],
-      ["next_episode", "같은 캐릭터로 다음 화 이어 만들기"],
-      ["scene_comic", "1화가 아니라 장면 하나만 넣으면 바로 만화로"],
-      ["my_style", "내가 넣은 그림체 그대로 웹툰 만들기"],
-      ["script_cut_edit", "대사·컷 구성을 내가 직접 설계하기"],
-      ["trailer_share", "완성한 웹툰을 짧은 영상으로 만들어 SNS에 공유하기"],
-      ["character_lend", "내 캐릭터를 공개해서 다른 사람이 그 캐릭터로 새 이야기 만들기"],
-      ["community", "댓글·작가 홈·인기순 같은 커뮤니티 기능"],
-      ["enough", "지금으로 충분해요"],
+      ["multi_char", "여러 캐릭터 함께 넣기"],
+      ["next_episode", "다음 화 이어 만들기"],
+      ["cut_image", "컷마다 그림 따로 그리기"],
+      ["trailer_share", "완성된 웹툰을 숏츠로 만들기"],
+      ["character_lend", "내 캐릭터 공개 기능"],
+      ["community", "커뮤니티 기능"],
+      ["style_add", "그림체 생성 및 추가 기능"],
+      ["lorebook", "로어북 기능"],
     ],
   },
 };
@@ -103,11 +102,7 @@ export function SurveyQuestion({ q, answers, set }: {
 
   if (def.kind === "multi") {
     const picked = Array.isArray(value) ? value : [];
-    const toggle = (v: string) => {
-      if (v === "enough") return set(q, picked.includes(v) ? [] : [v]);
-      const rest = picked.filter((x) => x !== "enough");
-      set(q, rest.includes(v) ? rest.filter((x) => x !== v) : [...rest, v]);
-    };
+    const toggle = (v: string) => set(q, picked.includes(v) ? picked.filter((x) => x !== v) : [...picked, v]);
     return (
       <fieldset className="wt-survey-q">
         <legend>{t(def.text)}</legend>
@@ -168,12 +163,25 @@ export function FreeNote({ value, onChange }: { value: string; onChange: (v: str
   );
 }
 
+/** 설문에서 뺀 S10 후보. 예전에 받은 답을 관리자 목록에서 읽을 수 있게 이름만 남긴다. */
+const S10_RETIRED: [string, string][] = [
+  ["my_style", "내가 넣은 그림체 그대로 웹툰 만들기"],
+  ["scene_comic", "1화가 아니라 장면 하나만 넣으면 바로 만화로"],
+  ["script_cut_edit", "대사·컷 구성을 내가 직접 설계하기"],
+  ["enough", "지금으로 충분해요"],
+];
+
+/** 답하지 않아도 되는 문항. 원하는 기능이 없는 사람도 있다. 서버 `WebtoonFeedbackService.OPTIONAL` 과 같다. */
+export const OPTIONAL: SurveyKey[] = ["S10"];
+
 /** 관리자 목록에서 답 하나를 사람이 읽는 말로. */
 export function answerLabel(key: string, v: SurveyValue | undefined, t: (s: string) => string): string {
   if (v === undefined) return "—";
   if (Array.isArray(v)) return v.map((x) => answerLabel(key, x, t)).join(", ");
   if (typeof v === "number") return String(v);
-  const options = key === "S7_why" ? S7_WHY : (SURVEY as Record<string, Question>)[key]?.options;
+  const options = key === "S7_why" ? S7_WHY
+    : key === "S10" ? [...SURVEY.S10.options!, ...S10_RETIRED]
+    : (SURVEY as Record<string, Question>)[key]?.options;
   const hit = options?.find(([k]) => k === v);
   return hit ? t(hit[1]) : String(v);
 }
@@ -188,7 +196,7 @@ export function withAnswer(a: SurveyAnswers, key: string, v: SurveyValue | undef
 }
 
 export function answeredAll(keys: SurveyKey[], answers: SurveyAnswers): boolean {
-  return keys.every((k) => {
+  return keys.filter((k) => !OPTIONAL.includes(k)).every((k) => {
     const v = answers[k];
     return Array.isArray(v) ? v.length > 0 : v !== undefined;
   });
@@ -211,7 +219,7 @@ registerDict({
   [SURVEY.S6.text]: { en: "Regardless of the character, was the episode itself fun?", ja: "キャラとは関係なく、1話そのものは面白かったですか？", zh: "不考虑角色，这一话本身有趣吗？" },
   [SURVEY.S7.text]: { en: "Would you like to see this character's next story?", ja: "このキャラの次の話も見たいですか？", zh: "想看这个角色的下一个故事吗？" },
   [SURVEY.S8.text]: { en: "Would you make another webtoon in the future?", ja: "これからもまたウェブトゥーンを作ってみたいですか？", zh: "以后还想再做漫画吗？" },
-  [SURVEY.S10.text]: { en: "What other features would you like? Pick all that apply.", ja: "ほかにどんな機能があるといいですか？当てはまるものをすべて選んでください。", zh: "还希望有哪些功能？请全部勾选。" },
+  [SURVEY.S10.text]: { en: "What other features would you like? Pick any that apply. (optional)", ja: "ほかにどんな機能があるといいですか？あればすべて選んでください。（任意）", zh: "还希望有哪些功能？如果有请全部勾选。（可选）" },
   "예": { en: "Yes", ja: "はい", zh: "是" },
   "일부": { en: "Partly", ja: "一部", zh: "部分" },
   "아니오": { en: "No", ja: "いいえ", zh: "否" },
@@ -221,6 +229,15 @@ registerDict({
   "웹툰에 캐릭터 여러 명 함께 넣기": { en: "Put several characters in one webtoon", ja: "1つのウェブトゥーンに複数のキャラを入れる", zh: "在一部漫画中放入多个角色" },
   "같은 캐릭터로 다음 화 이어 만들기": { en: "Make the next episode with the same character", ja: "同じキャラで次の話を続けて作る", zh: "用同一个角色接着做下一话" },
   "1화가 아니라 장면 하나만 넣으면 바로 만화로": { en: "Turn a single scene into a comic right away, not a whole episode", ja: "1話ではなく、場面ひとつを入れるだけですぐ漫画に", zh: "不做整话，只输入一个场景就直接变成漫画" },
+  "여러 캐릭터 함께 넣기": { en: "Put several characters together", ja: "複数のキャラを一緒に入れる", zh: "多个角色一起出场" },
+  "다음 화 이어 만들기": { en: "Continue with the next episode", ja: "次の話を続けて作る", zh: "接着做下一话" },
+  "컷마다 그림 따로 그리기": { en: "Draw each panel separately", ja: "コマごとに絵を別々に描く", zh: "每个分格单独画" },
+  "완성된 웹툰을 숏츠로 만들기": { en: "Turn the finished webtoon into Shorts", ja: "完成したウェブトゥーンをショート動画にする", zh: "把完成的漫画做成短视频" },
+  "내 캐릭터 공개 기능": { en: "Share my character publicly", ja: "自分のキャラを公開する機能", zh: "公开我的角色" },
+  "커뮤니티 기능": { en: "Community features", ja: "コミュニティ機能", zh: "社区功能" },
+  "그림체 생성 및 추가 기능": { en: "Create and add art styles", ja: "絵柄の生成・追加機能", zh: "生成和添加画风" },
+  "로어북 기능": { en: "Lorebook", ja: "ロアブック機能", zh: "设定集（Lorebook）功能" },
+  "컷마다 그림을 한 장씩 따로 그리기": { en: "Draw each panel as its own separate image", ja: "コマごとに絵を1枚ずつ別々に描く", zh: "每个分格单独画成一张图" },
   "내가 넣은 그림체 그대로 웹툰 만들기": { en: "Make the webtoon in the exact art style I provide", ja: "自分が入れた絵柄そのままでウェブトゥーンを作る", zh: "完全按我提供的画风来做漫画" },
   "대사·컷 구성을 내가 직접 설계하기": { en: "Design the dialogue and panel layout myself", ja: "セリフ・コマ構成を自分で設計する", zh: "自己设计台词和分镜构成" },
   "완성한 웹툰을 짧은 영상으로 만들어 SNS에 공유하기": { en: "Turn the finished webtoon into a short video to share on social media", ja: "完成したウェブトゥーンを短い動画にしてSNSで共有する", zh: "把完成的漫画做成短视频分享到社交媒体" },

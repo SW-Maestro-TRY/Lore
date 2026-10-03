@@ -36,7 +36,12 @@ export async function startJob(form: WizardForm, authenticated: boolean, lang: L
     photo_keys: keys,
     character_id: form.characterId,
     agree_ip: form.agreeIp,
-    checkpoints: form.mode === "expert",
+    /* own 길(#548)은 항상 확인하고 만든다 — 장면 확인에서 멈추는 것이 그 길의 전제다.
+       quick 길은 「확인하고 만들기」(expert)를 골랐을 때만 멈춘다. */
+    checkpoints: form.create === "own" || form.mode === "expert",
+    mode: form.create,
+    settings: form.create === "own" ? form.settings.trim() : "",
+    title: form.create === "own" ? form.title.trim() : "",
   });
   return got.id;
 }

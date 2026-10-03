@@ -7,6 +7,7 @@ import com.lore.webtoon.work.WorkLedger;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
@@ -14,6 +15,7 @@ import com.lore.webtoon.safety.SafetyGuard;
 import com.lore.webtoon.character.CharacterOwner;
 import com.lore.webtoon.character.CharacterService;
 import com.lore.webtoon.character.WebtoonCharacter;
+import com.lore.webtoon.push.JobPush;
 import com.lore.webtoon.story.StoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,9 +77,12 @@ public class JobService {
     private final StoryStore stories;
     private final WorkLedger works;
     private final JobNotice notice;
+    private final JobPush push;
     private final CharacterService characters;
     private final CharacterOwner owner;
     private final PrivateArt art;
+    private final RunArt runArt;
+    private final WebtoonCastSheetRepository castSheets;
     private final S3Service uploads;
     private final S3Storage storage;
     private final Path jobsDir;
@@ -88,11 +93,16 @@ public class JobService {
                       JobProgress progress, StoryStore stories, WorkLedger works,
                       JobNotice notice, CharacterService characters, CharacterOwner owner, PrivateArt art,
                       S3Service uploads, S3Storage storage, SafetyGuard safety,
+                      WebtoonCastSheetRepository castSheets, RunArt runArt,
+                      JobPush push,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
+        this.castSheets = castSheets;
+        this.runArt = runArt;
         this.jobs = jobs;
         this.safety = safety;
         this.works = works;
         this.notice = notice;
+        this.push = push;
         this.characters = characters;
         this.owner = owner;
         this.art = art;
@@ -106,6 +116,9 @@ public class JobService {
         this.jobsDir = Path.of(jobsDir == null || jobsDir.isBlank()
                 ? "webtoon/ai/work/jobs" : jobsDir).toAbsolutePath().normalize();
     }
+
+    /** 「만들고 싶은 내용」 상한(#548). 단편 소설 한 편 분량. 화면 `wizardData.OWN_STORY_MAX` 와 같다. */
+    static final int OWN_STORY_MAX = 20_000;
 
     /**
      * 만들기를 받는다.
@@ -124,8 +137,26 @@ public class JobService {
         /* 글은 만들기 전에 거른다(#80). 파이썬까지 가서 모델이 거절하면 돈은 이미 나갔고
            사람은 "만들기가 안 된다" 로만 안다. 사진은 아직 안 본다(safety.md). */
         safety.checkText("webtoon-create", form.name(), form.character(), form.genre(), form.story(),
-                form.photoNote(),
+                form.photoNote(), form.settings(), form.title(), form.episode(),
                 form.fields() == null ? null : String.join("\n", form.fields().values()));
+        /* 어느 길인가(#548). own(만들고 싶은 내용이 있어요)은 적은 내용이 있어야 하고
+           확인 자리가 항상 있다. 확인하며 가는 길(own, 또는 quick 의 확인하고 만들기)은
+           며칠 뒤에 돌아와 이어서 할 수 있어야 해서 로그인한 사람만 받는다 — 게스트는
+           브라우저가 바뀌면 작업을 못 찾는다. */
+        boolean own = "own".equalsIgnoreCase(form.mode());
+        boolean checkpoints = own || form.checkpoints() == null || form.checkpoints();
+        if (own && !notBlank(form.story())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "만들고 싶은 내용을 적어 주세요 — 짧은 아이디어 한 줄도 괜찮아요.");
+        }
+        if (form.story() != null && form.story().length() > OWN_STORY_MAX) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "내용이 너무 길어요. " + OWN_STORY_MAX + "자까지 적을 수 있어요.");
+        }
+        if (checkpoints && userId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "확인하며 만들기는 로그인한 뒤에 할 수 있어요. 나중에 돌아와 이어서 하려면 계정이 필요해요.");
+        }
         boolean known = notBlank(form.name()) || notBlank(form.character())
                 || (form.fields() != null && form.fields().values().stream().anyMatch(this::notBlank))
                 || (form.photosData() != null && !form.photosData().isEmpty());
@@ -173,7 +204,7 @@ public class JobService {
         String language = WebtoonLanguage.normalize(form.language());
         WebtoonJob job = jobs.save(WebtoonJob.queued(
                 publicId, userId, browserUid, guestKey, style, quality, language,
-                form.checkpoints() == null || form.checkpoints(),
+                checkpoints, own ? "own" : "quick",
                 inputOf(form), Instant.now()));
 
         /* **장부에도 적는다.**
@@ -217,8 +248,29 @@ public class JobService {
     @Transactional(readOnly = true)
     public List<JobView> activeOf(Long userId, Collection<String> uids) {
         return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
-                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST)).stream()
+                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST,
+                        JobStatus.AWAITING_SCENES)).stream()
                 .map(job -> view(job.getPublicId()))
+                .toList();
+    }
+
+    /**
+     * 만드는 중 카드(#548) — 마이페이지가 작업마다 캐릭터 이름과 마지막으로 손댄 때를 같이 보여 준다.
+     * {@link #activeOf} 와 같은 순서로 {id, name, created_at, updated_at}.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> activeCardsOf(Long userId, Collection<String> uids) {
+        return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
+                        JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST,
+                        JobStatus.AWAITING_SCENES)).stream()
+                .map(job -> {
+                    Map<String, Object> one = new LinkedHashMap<>();
+                    one.put("id", job.getPublicId());
+                    one.put("name", str(inputOf(job).get("name")));
+                    one.put("created_at", job.getCreatedAt() == null ? null : job.getCreatedAt().toString());
+                    one.put("updated_at", job.getUpdatedAt() == null ? null : job.getUpdatedAt().toString());
+                    return one;
+                })
                 .toList();
     }
 
@@ -229,14 +281,40 @@ public class JobService {
 
     @Transactional(readOnly = true)
     public JobView view(String publicId) {
+        return view(publicId, false);
+    }
+
+    /**
+     * @param watching 진행 화면이 앞에 떠서 묻는 것인가. 참이면 잠깐 동안 이 작업의
+     *                 푸시를 안 보낸다 — 이미 보고 있는 사람에게 알림은 소음이다(#599)
+     */
+    @Transactional(readOnly = true)
+    public JobView view(String publicId, boolean watching) {
         WebtoonJob job = store.byPublicId(publicId);
+        if (watching) {
+            push.seen(job.getId());
+        }
         JobProgress.Snapshot now = progress.of(job.getId());
         JobQueue.Spot spot = queue.spotOf(job);
+        JobStatus at = job.getStatus();
+        /* own 길(#548)은 이야기 확인(AWAITING_PICK)과 장면 확인(AWAITING_SCENES) 두 자리에서 멈추고,
+           두 화면 다 인물·주인공 카드·본문·시트·내가 적은 것을 보여 준다. */
+        boolean ownPause = job.isOwn() && (at == JobStatus.AWAITING_PICK || at == JobStatus.AWAITING_SCENES);
+        boolean castPause = at == JobStatus.AWAITING_CAST || at == JobStatus.AWAITING_SCENES || ownPause;
         return JobView.of(job, now,
                 store.directionsOf(job.getId()),
-                job.getStatus() == JobStatus.AWAITING_CAST ? runner.castOf(job.getRunId()) : null,
-                job.getStatus() == JobStatus.AWAITING_CAST ? runner.castKind(job.getRunId()) : null,
-                job.getStatus() == JobStatus.AWAITING_CAST ? runner.personaOf(job.getRunId()) : null,
+                castPause ? runner.castOf(job.getRunId()) : null,
+                at == JobStatus.AWAITING_CAST ? runner.castKind(job.getRunId()) : null,
+                castPause ? runner.personaOf(job.getRunId()) : null,
+                /* 장면은 확인 대기가 아니어도 싣는다(#601) — 확인한 뒤·그리는 중·완성 뒤에도 걸음 3 「장면 나누기」
+                   에서 읽기만 할 수 있게. 고치는 칸은 화면이 awaiting_scenes 일 때만 연다. 파일이 아직 없거나(장면을
+                   나누기 전) 치워졌으면 빈 목록이다. */
+                runner.scenesOf(job.getId(), job.getRunId()),
+                ownPause ? runner.storyOf(job.getRunId()) : null,
+                runner.sheetReady(job.getRunId()),
+                runArt.sheetVersions(job.getRunId()),
+                at == JobStatus.AWAITING_SCENES || ownPause ? castSheetsOf(job) : null,
+                at == JobStatus.AWAITING_SCENES || ownPause ? inputOf(job) : null,
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
                 spot,
@@ -271,7 +349,7 @@ public class JobService {
 
     /** 사람이 이야기를 골랐다. */
     public void pick(String publicId, int n) {
-        pick(publicId, n, null);
+        pick(publicId, n, null, null);
     }
 
     /**
@@ -287,6 +365,73 @@ public class JobService {
      * 인물 단계에 답한다(#534). 현대 로맨스에서 새 인물 중 상대를 고르면 n(1~),
      * 사용자가 적은 인물을 확인하고 이대로 가면 0. 그 뒤 이야기 후보 넷을 짓는다.
      */
+    /** 조연 시트를 뽑을 수 있는 자리인가(#548) — 인물 단계가 끝나 cast.json 이 있는 멈춤들. */
+    private static final java.util.Set<JobStatus> CAST_SHEET_OK = java.util.Set.of(
+            JobStatus.AWAITING_SCENES, JobStatus.AWAITING_PICK, JobStatus.AWAITING_SHEET);
+
+    /**
+     * 조연 시트 한 장(#548). 크레딧은 부르는 쪽(컨트롤러)이 먼저 받고, 못 그리면 {@code onFail} 로
+     * 돌려준다. 그리는 동안 작업 상태는 그대로다 — 끝나면 그림을 창고에 올리고 줄을 남긴다.
+     */
+    public void castSheet(String publicId, String name, Long userId, Runnable onFail) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "로그인하면 조연 시트를 뽑을 수 있어요");
+        }
+        if (!CAST_SHEET_OK.contains(job.getStatus())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금은 조연 시트를 뽑을 수 없습니다");
+        }
+        String who = name == null ? "" : name.trim();
+        boolean known = runner.castOf(job.getRunId()).stream()
+                .map(c -> String.valueOf(c.get("name")).trim())
+                .anyMatch(n -> n.equals(who) || n.split(" ")[0].equals(who));
+        if (who.isEmpty() || !known) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 인물이 없습니다");
+        }
+        if (castSheets.existsByJobIdAndName(publicId, who)
+                || runner.castSheetsPending(job.getId()).contains(who)
+                || runner.castSheetsDrawn(job.getRunId()).stream().anyMatch(d -> d.equals(who) || d.split(" ")[0].equals(who))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이미 뽑은 인물입니다");
+        }
+        Long jobId = job.getId();
+        java.util.concurrent.Future<Path> drawn = runner.drawCastSheet(jobId, who);
+        runner.afterCastSheet(drawn, () -> {
+            try {
+                Path png = drawn.get();
+                String key = art.upload(Files.readAllBytes(png), "image/png", false);
+                castSheets.save(new WebtoonCastSheet(publicId, who, key, Instant.now()));
+            } catch (Exception e) {              // noqa: 올리기·적기 실패 — 그림은 폴더에 남아 있다
+                log.warn("조연 시트를 창고에 못 올렸습니다 (job={}, name={})", publicId, who, e);
+                castSheets.save(new WebtoonCastSheet(publicId, who, null, Instant.now()));
+            }
+        }, () -> {
+            log.warn("조연 시트를 그리지 못해 크레딧을 돌려줍니다 (job={}, name={})", publicId, who);
+            onFail.run();
+        });
+    }
+
+    /** 조연 시트 목록(#548) — 그려진 것은 ready=true, 그리는 중은 false. */
+    List<Map<String, Object>> castSheetsOf(WebtoonJob job) {
+        java.util.LinkedHashMap<String, Boolean> seen = new java.util.LinkedHashMap<>();
+        for (String name : runner.castSheetsDrawn(job.getRunId())) {
+            seen.put(name, true);
+        }
+        for (WebtoonCastSheet row : castSheets.findByJobIdOrderByCreatedAtAsc(job.getPublicId())) {
+            seen.putIfAbsent(row.getName(), true);
+        }
+        for (String name : runner.castSheetsPending(job.getId())) {
+            seen.put(name, false);
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        seen.forEach((name, ready) -> {
+            Map<String, Object> one = new LinkedHashMap<>();
+            one.put("name", name);
+            one.put("ready", ready);
+            out.add(one);
+        });
+        return out;
+    }
+
     public void pickCast(String publicId, int n) {
         WebtoonJob job = store.byPublicId(publicId);
         if (job.getStatus() != JobStatus.AWAITING_CAST) {
@@ -300,7 +445,7 @@ public class JobService {
         runner.resumeAfterCast(job.getId(), n);
     }
 
-    public void pick(String publicId, int n, String editedBody) {
+    public void pick(String publicId, int n, String editedBody, String editedTitle) {
         WebtoonJob job = store.byPublicId(publicId);
         if (job.getStatus() != JobStatus.AWAITING_PICK) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 고를 차례가 아닙니다");
@@ -308,6 +453,21 @@ public class JobService {
         List<Map<String, Object>> got = store.directionsOf(job.getId());
         if (n < 1 || n > got.size()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 이야기가 없습니다");
+        }
+        if (job.isOwn()) {
+            /* own 길의 이야기 확인(#548) — 본문·제목을 고쳤으면 적고(하네스 --own-save, pick.json 제목까지
+               맞춘다) 장면 나누기로 간다. 후보는 하나라 n 은 1 이다. */
+            safety.checkText("webtoon-scenes", editedBody, editedTitle);
+            if (notBlank(editedBody) || notBlank(editedTitle)) {
+                runner.saveScenes(job.getId(), List.of(), editedBody, editedTitle);
+                List<Map<String, Object>> fresh = runner.directionsOf(job.getRunId());
+                store.directions(job.getId(), fresh);
+                stories.replace(job.getRunId(), fresh);
+            }
+            store.pick(job.getId(), 1);
+            stories.choose(job.getRunId(), 1);
+            runner.resumeAfterPick(job.getId());
+            return;
         }
         String clean = editedBody == null ? "" : editedBody.strip();
         if (!clean.isEmpty()) {
@@ -330,12 +490,29 @@ public class JobService {
      * 두 번 서서, 하네스가 같은 폴더를 동시에 고쳐 쓴다(파이썬 쪽
      * {@code _require} 가 막던 것과 같은 자리다).
      */
-    public void retryPick(String publicId, String note) {
+    /** own 길의 「1화 다시 만들기」는 첫 번째 무료, 그다음부터 1크레딧(#548). quick 길 후보 다시 만들기는 무료 그대로. */
+    public int restoryCost(String publicId) {
         WebtoonJob job = store.byPublicId(publicId);
-        if (job.getStatus() != JobStatus.AWAITING_PICK) {
+        return job.isOwn() && runner.storyRedraws(job.getRunId()) >= 1 ? 1 : 0;
+    }
+
+    public void retryPick(String publicId, String note) {
+        retryPick(publicId, note, () -> { });
+    }
+
+    public void retryPick(String publicId, String note, Runnable onFail) {
+        WebtoonJob job = store.byPublicId(publicId);
+        /* own 길(#548)은 장면 확인 자리에서도 1화를 다시 만들 수 있다 — 끝나면 이야기 확인으로 돌아가
+           새 1화를 보고 장면을 다시 나눈다. */
+        boolean ownScenes = job.isOwn() && job.getStatus() == JobStatus.AWAITING_SCENES;
+        if (job.getStatus() != JobStatus.AWAITING_PICK && !ownScenes) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 고를 차례가 아닙니다");
         }
-        runner.retryDirections(job.getId(), note == null ? "" : note.trim());
+        if (ownScenes && runner.scenesOf(job.getId(), job.getRunId()).stream().anyMatch(s -> Boolean.TRUE.equals(s.get("busy")))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "장면을 다시 뽑는 중입니다");
+        }
+        safety.checkText("webtoon-scenes", note);
+        runner.retryDirections(job.getId(), note == null ? "" : note.trim(), onFail);
     }
 
     /**
@@ -372,19 +549,210 @@ public class JobService {
      */
     public void retrySheet(String publicId, String note) {
         WebtoonJob job = store.byPublicId(publicId);
-        if (job.getStatus() != JobStatus.AWAITING_SHEET) {
+        JobStatus at = job.getStatus();
+        /* 장면 확인 자리(#548)에서도 시트를 다시 만들 수 있다. 끝나면 있던 자리로 돌아온다. */
+        if (at != JobStatus.AWAITING_SHEET && at != JobStatus.AWAITING_SCENES) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 확인할 차례가 아닙니다");
         }
         clearSheet(job.getRunId());
-        runner.redrawSheet(job.getId(), note == null ? "" : note.trim());
+        runner.redrawSheet(job.getId(), note == null ? "" : note.trim(), at);
     }
 
-    /** 시트를 다시 그리려면 먼저 지운다. 못 지운 것이 있어도 계속 간다. */
+    /* ---- 장면 초안(#548) ---- */
+
+    /** 고친 장면 글(과 본문)을 적는다. 멈춤은 그대로다. */
+    public void saveScenes(String publicId, List<Map<String, Object>> scenes, String body, String title) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        if (scenes != null) {
+            for (Map<String, Object> one : scenes) {
+                Object text = one.get("text");
+                safety.checkText("webtoon-scenes", text == null ? null : text.toString());
+            }
+        }
+        safety.checkText("webtoon-scenes", body, title);
+        /* 본문·제목은 own 길의 것이다 — quick 길에서는 고른 후보가 넷 중 하나라 바꾸지 않는다. */
+        boolean own = job.isOwn();
+        runner.saveScenes(job.getId(), scenes == null ? List.of() : scenes,
+                own ? body : null, own ? title : null);
+        if (own && (notBlank(body) || notBlank(title))) {
+            stories.replace(job.getRunId(), runner.directionsOf(job.getRunId()));
+            stories.choose(job.getRunId(), 1);
+        }
+    }
+
+    /** 인물 카드 고치기(#548) — 이야기 확인·장면 확인 자리에서만, own 길만. */
+    public void savePerson(String publicId, String who, Map<String, Object> fields) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (!job.isOwn() || (job.getStatus() != JobStatus.AWAITING_PICK && job.getStatus() != JobStatus.AWAITING_SCENES)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 인물을 고칠 차례가 아닙니다");
+        }
+        if (fields != null) {
+            for (Object v : fields.values()) {
+                safety.checkText("webtoon-scenes", v == null ? null : v.toString());
+            }
+        }
+        try {
+            runner.savePerson(job.getRunId(), who, fields);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("인물을 적지 못했습니다", e);
+        }
+    }
+
+    /**
+     * 내가 적은 것(#548) — 장면 확인 화면이 보여 준다. 만들 때 남긴 {@code input_json}
+     * 에서 글만 꺼내고(사진은 장 수만), 그림체·화질·언어는 작업 줄에서.
+     */
+    private Map<String, Object> inputOf(WebtoonJob job) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Map<String, Object> saved = Map.of();
+        try {
+            if (notBlank(job.getInputJson())) {
+                saved = mapper.readValue(job.getInputJson(), new TypeReference<Map<String, Object>>() { });
+            }
+        } catch (IOException e) {
+            log.warn("만들 때 적은 것을 못 읽었습니다 (job={})", job.getPublicId(), e);
+        }
+        out.put("name", str(saved.get("name")));
+        out.put("description", str(saved.get("character")));
+        out.put("genre", str(saved.get("genre")));
+        out.put("story", str(saved.get("story")));
+        out.put("episode", str(saved.get("episode")));
+        out.put("settings", str(saved.get("settings")));
+        out.put("title", str(saved.get("title")));
+        Object photos = saved.get("photos");
+        out.put("photos", photos instanceof Number n ? n.intValue() : 0);
+        out.put("style", job.getStyle());
+        out.put("quality", WebtoonQuality.normalize(job.getQuality()));
+        out.put("language", WebtoonLanguage.normalize(job.getLanguage()));
+        return out;
+    }
+
+    private static String str(Object v) {
+        return v == null ? "" : v.toString();
+    }
+
+    /** 「이대로 웹툰 만들기」 — 장면 확인을 끝내고 그림으로. */
+    public void continueScenes(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        /* own 길은 후보에 장면 줄이 없다 — 확정된 장면을 적어 둬야 결과 화면·편집실이 장마다
+           「무슨 장면인가」를 보여 준다(#548). */
+        if (job.isOwn()) {
+            List<String> captions = runner.sceneCaptions(job.getRunId());
+            if (!captions.isEmpty()) {
+                stories.setScenes(job.getRunId(), captions);
+            }
+        }
+        runner.resumeAfterScenes(job.getId());
+    }
+
+    /** 화면이 보내는 이유 코드(#548) — 하네스 {@code own.RESCENE_REASONS} 와 같다. */
+    private static final java.util.Set<String> RESCENE_REASONS = java.util.Set.of(
+            "awkward", "character", "stranger", "offstory", "pacing");
+
+    /**
+     * 장면 하나만 다시 짓기(#548). 로그인한 사람만. 멈춤은 그대로고, 돌아가는 동안 그 장면은
+     * {@code busy} 다. 전체 다시 나누기({@link #retryScenes})와 따로다.
+     */
+    /** 장면마다 첫 다시 뽑기는 무료, 그다음부터 1크레딧(#548). 이번 다시 뽑기에 드는 크레딧. */
+    public int resceneCost(String publicId, int n) {
+        WebtoonJob job = store.byPublicId(publicId);
+        return runner.sceneRedraws(job.getRunId(), n) >= 1 ? 1 : 0;
+    }
+
+    public void retryScene(String publicId, int n, List<String> reasons, String note, Long userId, Runnable onFail) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "로그인하면 장면을 다시 지을 수 있어요");
+        }
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        boolean known = runner.scenesOf(job.getRunId()).stream().anyMatch(s -> Integer.valueOf(n).equals(s.get("n")));
+        if (!known) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 장면이 없습니다");
+        }
+        List<String> picked = reasons == null ? List.of()
+                : reasons.stream().filter(r -> r != null && RESCENE_REASONS.contains(r.trim())).map(String::trim).toList();
+        safety.checkText("webtoon-scenes", note);
+        try {
+            runner.rescene(job.getId(), n, picked, note == null ? "" : note.trim(), onFail);
+        } catch (IllegalStateException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
+        }
+    }
+
+    /** 장면 하나를 이전 판으로 되돌린다(#548) — 장면 확인 자리에서만, 다시 짓는 중이 아닐 때. */
+    public void restoreScene(String publicId, int n, int v) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        if (runner.rescening(job.getId(), n)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이 장면을 다시 짓는 중입니다");
+        }
+        try {
+            runner.restoreScene(job.getRunId(), n, v);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("장면을 되돌리지 못했습니다", e);
+        }
+    }
+
+    /* ---- 시트 판(#548) ---- */
+
+    /** 시트를 되돌릴 수 있는 자리 — 시트를 다시 그릴 수 있는 멈춤들과 같다. */
+    private static final java.util.Set<JobStatus> SHEET_RESTORE_OK = java.util.Set.of(
+            JobStatus.AWAITING_SHEET, JobStatus.AWAITING_SCENES, JobStatus.AWAITING_PICK);
+
+    /** 보관한 옛 시트 판을 지금 시트로. 지금 것도 보관한 뒤 바꾼다. */
+    public void restoreSheet(String publicId, int v) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (!SHEET_RESTORE_OK.contains(job.getStatus())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금은 시트를 되돌릴 수 없습니다");
+        }
+        if (runArt.sheetVersion(job.getRunId(), v) == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 시트 판이 없습니다");
+        }
+        try {
+            runArt.restoreSheet(job.getRunId(), v);
+        } catch (IOException e) {
+            throw new IllegalStateException("시트를 되돌리지 못했습니다", e);
+        }
+    }
+
+    /** 「장면 다시 나누기」 — 본문·인물·시트는 두고 장면만 다시. 고친 글은 사라진다. */
+    public void retryScenes(String publicId, String note) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (job.getStatus() != JobStatus.AWAITING_SCENES) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
+        }
+        safety.checkText("webtoon-scenes", note);
+        runner.rescenes(job.getId(), note == null ? "" : note.trim());
+    }
+
+    /**
+     * 시트를 다시 그리려면 먼저 치운다. 그림과 사양은 지우지 않고 판으로 보관한다
+     * ({@link RunArt#archiveSheet}) — 다시 그린 것이 더 못하면 되돌릴 수 있게. 못 치운 것이 있어도 계속 간다.
+     */
     private void clearSheet(String runId) {
         if (runId == null || runId.isBlank()) {
             return;
         }
         Path dir = runner.runDir(runId);
+        try {
+            runArt.archiveSheet(runId);
+        } catch (IOException e) {
+            log.warn("옛 시트를 보관하지 못했습니다 — 지우고 갑니다 (run={})", runId, e);
+        }
         for (String name : new String[]{"sheet.png", "sheet_spec.json",
                                         "sheet_prompt.txt", "sheet_spec_prompt.txt"}) {
             try {
@@ -580,6 +948,11 @@ public class JobService {
         doc.put("genre", blank(form.genre()));
         doc.put("world", Map.of("preset", picked == null ? "" : blank(picked.getWorld()), "text", ""));
         doc.put("story", blank(form.story()));
+        // 「만들고 싶은 내용이 있어요」(#548) — 더 적은 설정과 제목. 하네스가 own 길에서 읽는다.
+        doc.put("settings", blank(form.settings()));
+        doc.put("title", blank(form.title()));
+        doc.put("episode", blank(form.episode()));
+        doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
         if (picked != null) {
             doc.put("card", cardOf(picked));
         }
@@ -631,6 +1004,10 @@ public class JobService {
         doc.put("photo_note", blank(form.photoNote()));
         doc.put("genre", blank(form.genre()));
         doc.put("story", blank(form.story()));
+        doc.put("settings", blank(form.settings()));
+        doc.put("title", blank(form.title()));
+        doc.put("episode", blank(form.episode()));
+        doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
         doc.put("style", blank(form.style()));
         doc.put("fields", form.fields() == null ? Map.of() : form.fields());
         doc.put("photos", form.photosData() == null ? 0 : form.photosData().size());
@@ -699,7 +1076,14 @@ public class JobService {
                                 /* 어느 언어로 만들까 — ko · en · ja. 안 보내면 기본(ko)이다.
                                    webtoon/fe 가 지금 화면 언어(lib/i18n.tsx 의 lang)를 그대로
                                    보낸다. */
-                                String language) {
+                                String language,
+                                /* 어느 길인가(#548): quick(기본) | own(만들고 싶은 내용이 있어요). */
+                                String mode,
+                                /* own 길의 「설정 더 적기」와 제목. 없을 수 있다. */
+                                String settings,
+                                String title,
+                                /* own 길의 「1화에서 보여줄 것」 — 적은 내용 가운데 이번 화에 넣을 부분. 없을 수 있다. */
+                                String episode) {
 
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;

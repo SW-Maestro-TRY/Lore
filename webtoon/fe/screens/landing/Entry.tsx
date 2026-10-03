@@ -6,27 +6,24 @@ import "./i18n";
 import * as api from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
-import { IconUser } from "../../ui/Icons";
 import { usePhone } from "./usePhone";
 import "./Entry.css";
 
-/* 두 카드 그림은 「가면 아래의 대리인」에서 가져온 정적 그림이다(webtoon/fe/static/entry).
-   왼쪽(웹툰 만들기)은 2쪽을 말상자까지 그대로 — 실제 웹툰 한 장이 보이게 한다.
-   오른쪽(캐릭터 만들어보기)은 같은 쪽 첫 컷의 인물만 잘라 둔 것이다.
+/* 두 카드 그림은 정적 그림이다(webtoon/fe/static/entry). 카드 전체에 배경으로
+   옅게 깔고 그 위에 글을 올린다.
+   왼쪽(웹툰 만들기)은 「마탑의 실험용 캔」 3쪽의 위 세 컷을 말상자·말풍선까지 그대로
+   — 실제 웹툰 한 장이 보이게 한다.
+   오른쪽(캐릭터 만들어보기)은 캐릭터 「흑설」(노란 후드티 검은 여우) 카드 그림이다
+   — "강아지도, 아무것도 없어도" 문구와 맞는 예시라 골랐다.
    창고의 쪽 그림(w=320)을 쓰면 카드 폭에 늘어나 흐려져서 정적 그림으로 뒀다. */
 const COVER_A = "/static/entry/webtoon-page.jpg";
+/* 폰 카드는 폭이 좁아서, 같은 쪽의 위 두 컷만 둔 그림을 쓴다. */
+const COVER_A_PHONE = "/static/entry/webtoon-cut.jpg";
 const COVER_B = "/static/entry/character.jpg";
 const FALLBACK_A = "/static/samples/onboarding-page.jpg";
 const FALLBACK_B = "/static/samples/ex-romance-2.jpg";
 
-const IconCamera = ({ size = 20 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}
-       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" />
-  </svg>
-);
-
-export default function Entry({ go }: { go: Go }) {
+export default function Entry({ go }: { go: Go; authenticated?: boolean }) {
   const t = useT();
   const phone = usePhone();
   /* 카드마다 남은 무료 횟수 — 왼쪽 카드는 웹툰 만들기(허용량), 오른쪽 카드는
@@ -49,35 +46,27 @@ export default function Entry({ go }: { go: Go }) {
   return (
     <div className="wt-wrap wt-page wt-entry">
       <div className="wt-entry-head">
-        <h2 style={phone ? { whiteSpace: "pre-line" } : undefined}>{t(phone ? "LORE에서\n무엇을 해볼까요?" : "LORE에서 무엇을 해볼까요?")}</h2>
+        <h2>{t("무엇을 만들고 싶나요?")}</h2>
       </div>
 
       <div className="wt-entry-cards">
         <a href={hrefOf("create", { step: 1 })} className="wt-entry-card on" onClick={to(() => go("create", { step: 1 }))}>
-          <div className="wt-entry-pic">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={COVER_A} alt="" onError={onImgError(FALLBACK_A)} />
-            <span className="wt-entry-tag">{t("웹툰 만들기")}</span>
-            {createFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: createFree })}</span>}
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="wt-entry-bg" src={phone ? COVER_A_PHONE : COVER_A} alt="" onError={onImgError(FALLBACK_A)} />
+          {createFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: createFree })}</span>}
           <div className="wt-entry-body">
-            <div className="wt-entry-title"><span className="wt-entry-ic"><IconUser size={20} /></span><b>{t("바로 웹툰을 만들고 싶어요")}</b></div>
-            <span className="muted">{t("내가 가진 캐릭터, 최애, 이미지, 설정으로 바로 웹툰을 만들어요.")}</span>
+            <span className="wt-entry-big">{t("웹툰 만들기")}</span>
+            <span className="wt-entry-desc">{t("캐릭터와 스토리로 웹툰 1화를 생성해보아요")}</span>
           </div>
         </a>
 
         <a href={hrefOf("try")} className="wt-entry-card" onClick={to(() => go("try"))}>
-          <div className="wt-entry-pic">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={COVER_B} alt="" className="wt-entry-pic-left" onError={onImgError(FALLBACK_B)} />
-            <span className="wt-entry-tag">{t("캐릭터 만들어보기")}</span>
-            {charFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: charFree })}</span>}
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="wt-entry-bg wt-entry-bg-char" src={COVER_B} alt="" onError={onImgError(FALLBACK_B)} />
+          {charFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: charFree })}</span>}
           <div className="wt-entry-body">
-            <div className="wt-entry-title"><span className="wt-entry-ic"><IconCamera /></span><b>{t("캐릭터를 만들어보고 싶어요")}</b></div>
-            <span className="muted">
-              {t(phone ? "사진이든 설명이든, 아무것도 없어도 돼요. 뭐든 웹툰 속 캐릭터가 돼요." : "내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요. 뭐든 넣으면 웹툰 속 캐릭터가 돼요.")}
-            </span>
+            <span className="wt-entry-big">{t("캐릭터 만들기")}</span>
+            <span className="wt-entry-desc">{t("내가 ○○에 들어간다면? 재미있는 캐릭터를 만들어보아요")}</span>
           </div>
         </a>
       </div>

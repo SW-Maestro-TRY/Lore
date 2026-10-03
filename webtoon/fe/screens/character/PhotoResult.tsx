@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { readCharacter, readSharedCard, type Character } from "../../lib/api";
 import { useLang, useT } from "../../lib/i18n";
+import { ErrLine, errText } from "../../ui/CreditShort";
 import type { Go } from "../../lib/nav";
 import { copyLink, kakaoAvailable, shareKakao, shareNative } from "../../lib/share";
 import { IconClose, IconDownload, IconRetry, IconShare } from "../../ui/Icons";
@@ -103,7 +104,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
   const onShare = async () => {
     /* 폰 공유 글 — 카드 문장 한 줄 뒤에 무엇을 하는 곳인지와 가 보라는 말을 붙인다. 링크 미리보기
        (apps/web 의 /webtoon 메타데이터)의 설명 줄과 같은 말이다. */
-    const native = await shareNative(url, t("{title} - AI 캐릭터 & 웹툰 생성 서비스, Lore. 나도 만들러 가기 -->", { title }));
+    const native = await shareNative(url, t("{title} - 내 캐릭터를 살아 움직이게. 개인 IP를 위한 AI 창작 서비스, LORE. 나도 만들러 가기 -->", { title }));
     track("card_share", { character: id, target: native ? "native" : "menu" });
     if (native) return;
     setMenu((v) => !v);
@@ -148,7 +149,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
         track("limit_view", { kind: "character", logged_in: authenticated });
         setLimited(e instanceof Error ? e.message : "");
       }
-      else setActErr(e instanceof Error ? e.message : t("다시 뽑지 못했습니다"));
+      else setActErr(errText(e, t("다시 뽑지 못했습니다")));
       setBusy(null);
     }
   };
@@ -311,7 +312,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
                     <button type="button" className="btn btn-w" onClick={() => setSaved(true)}><IconDownload size={18} /> {t("내 캐릭터에 저장")}</button>
                   )}
                 </div>
-                {actErr && <span className="err">{actErr}</span>}
+                <ErrLine text={actErr} />
                 <div className="wt-ch-res-again">
                   <b>{t("마음에 안 들어요?")}</b>
                 </div>

@@ -14,10 +14,10 @@
 export const STYLE_INFO: [key: string, label: string, desc: string][] = [
   ["webtoon", "일반 웹툰", "깔끔한 선과 셀 채색. 읽히는 속도가 기준."],
   ["romance", "로맨스 판타지", "표지 일러스트급 밀도. 보석 같은 눈, 금박, 레이스."],
-  ["shoujo", "순정 · BL", "길고 날카로운 눈, 스크린톤, 여백에 뜬 꽃."],
+  ["shoujo", "순정 · BL", "흑백 펜선과 빗금, 긴 속눈썹, 여백에 뜬 꽃."],
   ["frost", "세미리얼 · 성인향", "사실적인 인체, 얇은 선, 저채도로 차분하게."],
   ["pastel", "일상툰 감성", "흔들리는 연필선, 종이 결, 바랜 파스텔."],
-  ["game", "게임 원화", "섬세한 선화에 은은하게 빛나는 채색."],
+  ["game", "게임 원화", "또렷한 선과 셀 채색, 밝은 색, 캐릭터 중심."],
 ];
 
 // 개그·액션은 칩에서 뺐다(#524) — 칩이 16개가 되어 세 줄로 넘어갔다. 하네스는
@@ -108,7 +108,20 @@ export interface WizardForm {
   quality: WizardQuality;
   mode: WizardMode;
   agreeIp: boolean;
+  /** 어느 길인가(#548). 입구에서 고른 카드가 정한다. */
+  create: WizardCreate;
+  /** own 길 — 제목(선택). 비우면 AI 가 짓는다. */
+  title: string;
+  /** own 길 — 「설정 더 적기」. 인물·세계·지킬 것을 한 칸에. 비워도 된다. */
+  settings: string;
 }
+
+/** 어느 길로 만드나(#548) — quick: 아이디어부터 · own: 만들고 싶은 내용이 있음. */
+export type WizardCreate = "quick" | "own";
+
+/** own 길 「내 내용」 칸의 상한(#548). 단편 소설 한 편 분량. 서버 `JobService.OWN_STORY_MAX` 와 같다 —
+    안전 검사는 서버가 4,000자씩 나눠 전부 본다. */
+export const OWN_STORY_MAX = 20000;
 
 export const emptyWizardForm = (): WizardForm => ({
   photos: [],
@@ -122,6 +135,9 @@ export const emptyWizardForm = (): WizardForm => ({
   quality: QUALITY_DEFAULT,
   mode: "expert",
   agreeIp: false,
+  create: "quick",
+  title: "",
+  settings: "",
 });
 
 /** 하네스 그림체 이름(캐릭터 카드의 style) → 화면 키. 카드에서 1화로 넘어갈 때

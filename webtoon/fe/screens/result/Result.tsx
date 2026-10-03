@@ -19,7 +19,7 @@ import "./Result.css";
 
 /* 완성본 — 캔버스 Done(내 작품) · DoneOther(남의 작품) · MDone(폰).
  *
- * 내려받기 · 편집실 · 다음 편은 **내 작품일 때만** 보인다. 내 것인지는
+ * 내려받기 · 편집실 · 다음 편은 **내 작품일 때만** 보인다(예시 작품은 내려받기만 누구나). 내 것인지는
  * 이 브라우저(isMyRun)와 계정 목록(myAccountRuns) 둘 중 하나만 맞아도 된다 —
  * 다른 기기에서 로그인해 열어도 내 작품이 남의 것으로 보이면 안 된다.
  * 완성본을 여는 것만으로는 rememberMyRun 을 하지 않는다(만든 사람만 남긴다). */
@@ -271,8 +271,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   )}
                   <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
                               onChange={(on, n) => { setLiked(on); setLikes(n); }} />
-                  {/* 내 작품이면 공유는 아래 「내려받기」 옆에 둔다 — 남의 작품은 그 줄이 없어서 여기. */}
-                  {!mine && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
                 </span>
               </div>
 
@@ -336,7 +334,18 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   </label>
                 </div>
               </>
-            ) : null}
+            ) : (
+              /* 남의 작품도 내려받기·공유는 제목 옆이 아니라 제목 아래 줄에 — 내 작품과 같은 자리. */
+              <div className="wt-result-acts">
+                {data.example && (
+                  <a className="btn btn-w" href={episodeDownloadUrl(runId)} download
+                     onClick={() => track("download_click", { run: runId, kind: "episode", example: true })}>
+                    <IconDownload size={18} /> {t("내려받기")}
+                  </a>
+                )}
+                <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+              </div>
+            )}
 
             <div className="wt-result-sheet">
               {data.pages.map((pg, i) => {

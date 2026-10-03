@@ -119,6 +119,11 @@ def read_character(path: Path) -> dict:
         "photo_note": doc.get("photo_note"),
         "story": doc.get("story"),
         "card": doc.get("card"),
+        # 「만들고 싶은 내용이 있어요」(#548) — 더 적은 설정과 제목. 없을 수 있다.
+        "settings": doc.get("settings"),
+        "title": doc.get("title"),
+        # 「1화에서 보여줄 것」 — 적은 내용 가운데 이번 화에 넣을 부분. 없을 수 있다.
+        "episode": doc.get("episode"),
     })
 
 
@@ -146,6 +151,9 @@ def normalize(raw: dict) -> dict:
         "photo_note": str(raw.get("photo_note") or "").strip(),
         "story": str(raw.get("story") or "").strip(),
         "card": card,
+        "settings": str(raw.get("settings") or "").strip(),
+        "title": str(raw.get("title") or "").strip(),
+        "episode": str(raw.get("episode") or "").strip(),
     }
 
 
@@ -1752,6 +1760,23 @@ def main(argv=None) -> int:
     p.add_argument("--cast-pick", type=int,
                    help="인물 단계의 답(#534). 현대 로맨스는 고른 상대 번호(1~4), "
                         "사용자가 인물을 적었으면 0(이대로 진행). 그 뒤 이야기 후보 4개를 만든다")
+    p.add_argument("--own", action="store_true",
+                   help="「만들고 싶은 내용이 있어요」(#548): 적은 내용으로 주인공 카드·인물·본문·시트를 "
+                        "동시에 만든다. 후보·고르기 없음. 장면은 --own-scenes 로 따로")
+    p.add_argument("--own-restory", action="store_true",
+                   help="own 길의 「이야기 다시 만들기」 — 인물·시트는 두고 본문만 다시 (--note 로 메모)")
+    p.add_argument("--own-scenes", action="store_true",
+                   help="own 길의 본문(이야기 확인을 지난 것)을 장면으로 나눈다")
+    p.add_argument("--rescene", type=int, metavar="N",
+                   help="scenes.json 의 N번 장면만 다시 짓는다(own·quick 공용). --reasons 로 이유 코드, --note 로 메모")
+    p.add_argument("--reasons", default="",
+                   help="--rescene 의 이유 코드, 쉼표로 (awkward·character·stranger·offstory·pacing)")
+    p.add_argument("--own-save", type=Path,
+                   help="사용자가 고친 장면 글 파일({scenes:[{n,text}], body?}) 을 scenes.json 에 반영한다")
+    p.add_argument("--cast-sheet", metavar="이름",
+                   help="인물 단계가 세운 조연 한 명의 시트를 글 생김새만으로 그린다 — sheets/<이름>.png (#548, 크레딧 1)")
+    p.add_argument("--own-rescenes", action="store_true",
+                   help="본문·인물·시트는 두고 장면만 다시 나눈다 (--note 로 메모)")
     p.add_argument("--restory", action="store_true",
                    help="기존 run 에서 이야기 후보 4개를 다시 만든다 (방향 고르기 "
                         "화면에서 '다시 만들기' — --note 와 같이 쓸 수 있다)")
@@ -1833,6 +1858,27 @@ def main(argv=None) -> int:
         who = f" ({got['name']})" if got.get("name") else ""
         log(f"[시트] 가져왔습니다{who} <- {got['from']}")
         log(f"  사양도 함께: {'예' if got['spec'] else '아니오 (그림만)'}")
+
+    # 「만들고 싶은 내용이 있어요」(#548) — 프롬프트·단계가 따로다(own.py).
+    if (args.own or args.own_restory or args.own_scenes or args.own_save or args.own_rescenes
+            or args.cast_sheet or args.rescene):
+        import own
+        if args.own:
+            own.run_own(run_dir, char, args.dry_run, lang=args.lang)
+        if args.own_restory:
+            own.restory(run_dir, char, args.dry_run, note=args.note, lang=args.lang)
+        if args.own_scenes:
+            own.own_scenes(run_dir, char, args.dry_run, lang=args.lang)
+        if args.own_save:
+            own.save_edits(run_dir, json.loads(args.own_save.read_text(encoding="utf-8")))
+        if args.cast_sheet:
+            own.stage_cast_sheet(run_dir, args.cast_sheet, args.dry_run)
+        if args.own_rescenes:
+            own.rescenes(run_dir, char, args.dry_run, note=args.note, lang=args.lang)
+        if args.rescene:
+            reasons = [r.strip() for r in args.reasons.split(",") if r.strip()]
+            own.rescene(run_dir, char, args.rescene, reasons, args.note, args.dry_run, lang=args.lang)
+        return 0
 
     # 한 단계만 다시 돌리는 길.
     #
