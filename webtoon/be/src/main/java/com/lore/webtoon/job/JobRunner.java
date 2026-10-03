@@ -1451,6 +1451,7 @@ public class JobRunner {
      */
     private void ensureScenes(Long jobId, WebtoonJob job) throws Exception {
         if (Files.isRegularFile(runsDir.resolve(job.getRunId()).resolve("scenes.json"))) {
+            syncSceneCaptions(job.getRunId());
             return;
         }
         int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--scenes"));
@@ -1458,6 +1459,27 @@ public class JobRunner {
         stopIfCancelled(jobId);
         if (code != 0) {
             throw harnessFailed(job.getRunId(), "장면을 나누지 못했습니다");
+        }
+        syncSceneCaptions(job.getRunId());
+    }
+
+    /**
+     * 나눈 장면을 고른 이야기의 장면 줄({@code webtoon_story.scenes_json})에 옮겨 적는다(#607).
+     *
+     * 이야기 후보 단계는 장면을 늘 빈 배열로 내고 장면은 고른 뒤 따로 나뉘어 {@code scenes.json} 에만
+     * 있다. 이것을 안 옮겨 적으면 결과 화면·편집실이 장마다 「무슨 장면인가」를 못 보여 준다 — 편집실에
+     * 「이 장의 장면 설명이 없어요」가 떴다. 옮겨 적는 곳이 장면 확인을 마칠 때(own 길) 한 군데뿐이어서
+     * 「확인하고 만들기」·「바로 만들기」 작품은 전부 비어 있었다. 장면을 고친 뒤 다시 적는 자리는
+     * {@code JobService.continueScenes} 다. 못 적어도 그리기를 막지 않는다.
+     */
+    void syncSceneCaptions(String runId) {
+        try {
+            List<String> captions = sceneCaptions(runId);
+            if (!captions.isEmpty()) {
+                stories.setScenes(runId, captions);
+            }
+        } catch (Exception e) {             // noqa: 설명 줄 때문에 그리기를 막지 않는다
+            log.warn("장면 설명을 옮겨 적지 못했습니다 (run={})", runId, e);
         }
     }
 
