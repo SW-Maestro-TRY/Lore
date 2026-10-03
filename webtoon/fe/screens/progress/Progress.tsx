@@ -19,6 +19,7 @@ import { MASCOT_LINES } from "../../lib/progressData";
 import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizardData";
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
+import PushOptIn from "../../ui/PushOptIn";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { unwatchJob, watchJob } from "../../lib/watchJob";
@@ -280,7 +281,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       return;
     }
     try {
-      const got = await readJob(jobId);
+      /* 화면이 앞에 떠 있을 때만 「보고 있다」고 알린다 — 그동안 서버는 이 작업의 푸시를 안
+         보낸다(#599). 탭을 뒤로 보내도 몇 분은 계속 묻기 때문에 visibilityState 로 가린다. */
+      const got = await readJob(jobId, { watching: document.visibilityState === "visible" });
       clockBase.current = { elapsed: got.elapsed ?? 0, at: Date.now(),
                             ticking: got.status === "queued" || got.status === "running" };
       setJob(got);
@@ -743,6 +746,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
           <span className="dim">{t("이 작품의 알림에만 써요.")}</span>
         </>
       )}
+      <PushOptIn variant="progress" />
     </div>
   );
 

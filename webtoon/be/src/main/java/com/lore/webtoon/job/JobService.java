@@ -15,6 +15,7 @@ import com.lore.webtoon.safety.SafetyGuard;
 import com.lore.webtoon.character.CharacterOwner;
 import com.lore.webtoon.character.CharacterService;
 import com.lore.webtoon.character.WebtoonCharacter;
+import com.lore.webtoon.push.JobPush;
 import com.lore.webtoon.story.StoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +77,7 @@ public class JobService {
     private final StoryStore stories;
     private final WorkLedger works;
     private final JobNotice notice;
+    private final JobPush push;
     private final CharacterService characters;
     private final CharacterOwner owner;
     private final PrivateArt art;
@@ -92,6 +94,7 @@ public class JobService {
                       JobNotice notice, CharacterService characters, CharacterOwner owner, PrivateArt art,
                       S3Service uploads, S3Storage storage, SafetyGuard safety,
                       WebtoonCastSheetRepository castSheets, RunArt runArt,
+                      JobPush push,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.castSheets = castSheets;
         this.runArt = runArt;
@@ -99,6 +102,7 @@ public class JobService {
         this.safety = safety;
         this.works = works;
         this.notice = notice;
+        this.push = push;
         this.characters = characters;
         this.owner = owner;
         this.art = art;
@@ -277,7 +281,19 @@ public class JobService {
 
     @Transactional(readOnly = true)
     public JobView view(String publicId) {
+        return view(publicId, false);
+    }
+
+    /**
+     * @param watching 진행 화면이 앞에 떠서 묻는 것인가. 참이면 잠깐 동안 이 작업의
+     *                 푸시를 안 보낸다 — 이미 보고 있는 사람에게 알림은 소음이다(#599)
+     */
+    @Transactional(readOnly = true)
+    public JobView view(String publicId, boolean watching) {
         WebtoonJob job = store.byPublicId(publicId);
+        if (watching) {
+            push.seen(job.getId());
+        }
         JobProgress.Snapshot now = progress.of(job.getId());
         JobQueue.Spot spot = queue.spotOf(job);
         JobStatus at = job.getStatus();

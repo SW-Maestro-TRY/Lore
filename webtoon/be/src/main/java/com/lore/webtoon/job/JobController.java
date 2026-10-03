@@ -234,8 +234,10 @@ public class JobController {
     @Operation(summary = "진행 상황", description = """
             진행 화면이 0.8 초마다 부른다. 파이썬 서버가 내보내던 것과 **같은 모양**이다.""")
     @GetMapping("/jobs/{id}")
-    public JobView job(@PathVariable String id) {
-        return jobs.view(id);
+    public JobView job(@PathVariable String id,
+                       @RequestParam(defaultValue = "false") boolean watching) {
+        // watching — 진행 화면이 앞에 떠 있을 때만 붙인다. 그동안은 푸시를 안 보낸다(#599).
+        return jobs.view(id, watching);
     }
 
     /**

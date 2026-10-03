@@ -315,8 +315,9 @@ export async function uploadDataUrlsAsGuest(dataUrls: string[]): Promise<string[
   return keys;
 }
 
-export function readJob(id: string): Promise<NhJob> {
-  return call<NhJob>(`/nh/jobs/${encodeURIComponent(id)}`);
+/** `watching` — 진행 화면이 앞에 떠 있을 때만 참. 그동안 서버는 이 작업의 푸시를 안 보낸다(#599). */
+export function readJob(id: string, opts?: { watching?: boolean }): Promise<NhJob> {
+  return call<NhJob>(`/nh/jobs/${encodeURIComponent(id)}${opts?.watching ? "?watching=true" : ""}`);
 }
 
 /** 내가 만들던 것들 — 아직 안 끝난 작업. 첫 화면의 「만들던 웹툰」 알약. */
@@ -378,6 +379,22 @@ export function retryDirections(id: string, note = "") {
 
 export function cancelJob(id: string) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/cancel`);
+}
+
+/* ---- 웹푸시(#599) — 브라우저 쪽 일은 lib/push.ts 가 한다 ------------------ */
+
+/** 서버의 푸시 공개키. 빈 글자면 서버에 키가 없어 푸시가 꺼져 있다. */
+export function pushKey(): Promise<{ key: string }> {
+  return call<{ key: string }>("/push/key");
+}
+
+/** 이 기기를 받는 곳으로 적는다. 로그인했으면 계정에, 아니면 이 브라우저(uid)에 묶인다. */
+export function pushSubscribe(sub: PushSubscriptionJSON, lang: string): Promise<{ ok: boolean }> {
+  return post("/push/subscribe", { ...sub, uid: getUid(), lang });
+}
+
+export function pushUnsubscribe(endpoint: string): Promise<{ ok: boolean }> {
+  return post("/push/unsubscribe", { endpoint });
 }
 
 export function notifyByEmail(id: string, email: string): Promise<{ email: string | null }> {

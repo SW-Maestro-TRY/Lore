@@ -28,6 +28,7 @@ import {
 } from "../../lib/api";
 import { activeJobLabel, activeJobTitle } from "../../lib/jobLabel";
 import type { Go } from "../../lib/nav";
+import PushOptIn from "../../ui/PushOptIn";
 import RunStrip from "../../ui/RunStrip";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
@@ -532,6 +533,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               </div>
               {notifyErr && <span className="wt-my-err">{notifyErr}</span>}
             </div>
+            <PushOptIn variant="settings" />
             {isAuthenticated && (
               <div className="card wt-my-setting">
                 <div className="wt-my-setting-row">
