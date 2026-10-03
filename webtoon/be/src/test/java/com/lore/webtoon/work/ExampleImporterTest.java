@@ -152,6 +152,21 @@ class ExampleImporterTest {
     }
 
     @Test
+    @DisplayName("후보를 그대로 심어도 화면 제목·줄거리는 번들 값을 쓴다 — 후보 원래 제목과 다르면 고친 값 자리에")
+    void 번들_제목이_정본이다() throws Exception {
+        Map<String, byte[]> run = new LinkedHashMap<>();
+        run.put("directions.json", "[{\"n\":1,\"title\":\"후보 원래 제목\",\"intro\":\"소개\"}]".getBytes(StandardCharsets.UTF_8));
+        com.lore.webtoon.story.WebtoonStory chosen = com.lore.webtoon.story.WebtoonStory.of(
+                ExampleBundlesTest.RUN, 1, "후보 원래 제목", "g", "소개", "[]", "[]", java.time.Instant.now());
+        when(stories.chosenOf(ExampleBundlesTest.RUN)).thenReturn(Optional.of(chosen));
+
+        importer.importBundle(bundle(run, null), false);
+
+        verify(stories).editTitle(ExampleBundlesTest.RUN, "카페 사장에게는 비밀이 많다");
+        verify(stories).editPlot(ExampleBundlesTest.RUN, "한 줄");
+    }
+
+    @Test
     @DisplayName("이미 있는 작품은 건드리지 않는다 — 예시 표시도 말없이 켜지 않는다(남의 작품일 수 있다)")
     void 이미_있으면_건드리지_않는다() throws Exception {
         when(pages.has(ExampleBundlesTest.RUN)).thenReturn(true);
