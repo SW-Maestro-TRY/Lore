@@ -237,6 +237,17 @@ public class PageStore {
         return out;
     }
 
+    /** 한 장 한 폭의 S3 키(#614). 예시 번들을 내보낼 때 그림 내용을 읽으려고 쓴다. */
+    public record Entry(int pageNo, int width, String key, long bytes) {
+    }
+
+    @Transactional(readOnly = true)
+    public List<Entry> entriesOf(String runId) {
+        return pages.findByRunIdOrderByPageNoAscWidthAsc(runId).stream()
+                .map(p -> new Entry(p.getPageNo(), p.getWidth(), p.getS3Key(), p.getBytes()))
+                .toList();
+    }
+
     /** S3 에 올라와 있는 작품인가. */
     @Transactional(readOnly = true)
     public boolean has(String runId) {
