@@ -106,6 +106,8 @@ public class RunController {
      * 걸기에는 약하다. 대신 로그인하면 {@code POST /my/link} 가 그 브라우저를
      * 계정에 이어 주고, 그때 그 브라우저로 만든(아직 주인 없는) 작품이
      * 그대로 내 것이 된다({@link WorkLedger} 의 isOwner).
+     *
+     * <b>관리자 계정은 예외다</b> — 남의 작품도 편집실에서 열고 고친다(운영 확인용).
      */
     private Long mustOwn(String runId) {
         Long userId = CreditGate.currentUser();
@@ -113,7 +115,8 @@ public class RunController {
             throw new BusinessException(ErrorCode.UNAUTHORIZED,
                     "편집실은 로그인해야 쓸 수 있어요. 로그인하면 이 브라우저로 만든 작품도 같이 따라옵니다.");
         }
-        if (!ledger.mayChange(runId, userId)) {
+        /* 관리자 계정은 모든 작품의 편집실을 쓴다(운영 확인용). 다시 그리기 값은 관리자 계정의 크레딧에서 나간다. */
+        if (!admins.isAdmin(userId) && !ledger.mayChange(runId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 고칠 수 있습니다");
         }
         return userId;

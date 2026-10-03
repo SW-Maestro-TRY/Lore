@@ -5,6 +5,7 @@ import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
   readResult, rememberRecent, renameRun, type RunCard, type RunResult,
 } from "../../lib/api";
+import { useAuth } from "@common/auth/useAuth";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
@@ -98,6 +99,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   }, [runId, authenticated]);
 
   const mine = isMyRun(runId) || ownedByAccount;
+  const { user: me } = useAuth();
+  const isAdmin = authenticated && me?.role === "ADMIN";
 
   /* 제목 고치기(#78) — 로그인한 내 작품일 때 제목 옆 연필. 편집실의 제목 고치기와 같은 주소를 쓴다.
      Enter·바깥 누르기로 저장, Esc 로 취소. 서버가 돌려준 제목이 앞으로 보일 이름이다(비우면 원래 제목). */
@@ -337,6 +340,12 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             ) : (
               /* 남의 작품도 내려받기·공유는 제목 옆이 아니라 제목 아래 줄에 — 내 작품과 같은 자리. */
               <div className="wt-result-acts">
+                {/* 관리자 계정은 남의 작품도 편집실에서 열 수 있다(운영 확인용) — 서버도 같은 규칙(RunController.mustOwn). */}
+                {isAdmin && (
+                  <button type="button" className="btn btn-w" onClick={() => { track("editor_open", { run: runId, where: "result_admin" }); go("editor", { run: runId }); }}>
+                    <IconEdit size={18} /> {t("편집실")}
+                  </button>
+                )}
                 {data.example && (
                   <a className="btn btn-w" href={episodeDownloadUrl(runId)} download
                      onClick={() => track("download_click", { run: runId, kind: "episode", example: true })}>
