@@ -649,13 +649,11 @@ public class JobService {
         if (job.getStatus() != JobStatus.AWAITING_SCENES) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
         }
-        /* own 길은 후보에 장면 줄이 없다 — 확정된 장면을 적어 둬야 결과 화면·편집실이 장마다
-           「무슨 장면인가」를 보여 준다(#548). */
-        if (job.isOwn()) {
-            List<String> captions = runner.sceneCaptions(job.getRunId());
-            if (!captions.isEmpty()) {
-                stories.setScenes(job.getRunId(), captions);
-            }
+        /* 후보에는 장면 줄이 없다 — 사람이 고쳐서 확정한 장면을 적어 둬야 결과 화면·편집실이 장마다
+           「무슨 장면인가」를 보여 준다(#548). 확인하고 만들기 길도 같다(#607). */
+        List<String> captions = runner.sceneCaptions(job.getRunId());
+        if (!captions.isEmpty()) {
+            stories.setScenes(job.getRunId(), captions);
         }
         runner.resumeAfterScenes(job.getId());
     }

@@ -107,6 +107,18 @@ public class StoryStore {
         }
     }
 
+    /** 고른 이야기인데 장면 줄이 비어 있는 작품 번호들(#607) — 옮겨 적지 못했던 옛 작품을 채우는 데 쓴다. */
+    @Transactional(readOnly = true)
+    public List<String> runIdsWithoutScenes() {
+        return stories.findByChosenTrue().stream()
+                .filter(one -> {
+                    String json = one.getScenesJson();
+                    return json == null || json.isBlank() || "[]".equals(json.trim());
+                })
+                .map(WebtoonStory::getRunId)
+                .toList();
+    }
+
     /**
      * 고른 이야기의 장면 줄을 적는다(#548). 결과 화면·편집실이 장마다 「무슨 장면인가」를
      * 여기서 읽는다(표지 다음 장이 첫 줄). own 길은 후보에 장면이 없어서 장면 확인을 마칠 때 적는다.
