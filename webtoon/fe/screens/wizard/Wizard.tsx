@@ -255,19 +255,11 @@ export default function Wizard({
     : "";
   const [starting, setStarting] = useState(false);
   const [startErr, setStartErr] = useState("");
-  /* 「확인하고 만들기」와 own 길은 로그인한 사람만(#548) — 장면 확인에서 며칠이고 멈춰 있을 수
-     있어서 브라우저가 바뀌어도 찾아올 수 있어야 한다. 게스트는 고른 값과 상관없이 바로 만들기다. */
-  const viewMode = authenticated ? form.mode : "simple";
-  const [modeNote, setModeNote] = useState("");
-  const pickMode = (m: WizardForm["mode"]) => {
-    if (m === "expert" && !authenticated) {
-      track("login_prompt", { where: "wizard_mode" });
-      setModeNote(t("로그인하면 확인하고 만들 수 있어요"));
-      return;
-    }
-    setModeNote("");
-    patch({ mode: m });
-  };
+  /* 「확인하고 만들기」는 게스트도 쓴다(#608). 같은 브라우저에서는 첫 화면의 「만들던 웹툰」이 이어서 찾아 주고,
+     브라우저가 바뀌면 못 찾는다 — 그 말은 고르는 곳에 한 줄로 적는다. 「만들고 싶은 내용이 있어요」(own)는
+     로그인 전용 그대로다. */
+  const viewMode = form.mode;
+  const pickMode = (m: WizardForm["mode"]) => patch({ mode: m });
   const ownReady = !own || (form.story.trim().length > 0 && authenticated);
   const canStart = form.agreeIp && !blockedReason && !starting && step1Ok && ownReady;
 
@@ -723,7 +715,7 @@ export default function Wizard({
                 </div>
                 <div>
                   {/* 바로 만들기 / 확인하고 만들기(#548). 「확인하고」는 이야기·시트·장면에서 멈추고
-                      시간이 아니라 사람이 누를 때 진행한다 — 로그인한 사람만. */}
+                      시간이 아니라 사람이 누를 때 진행한다. 게스트도 되지만 이 브라우저에서만 이어 간다(#608). */}
                   <h2>{t("어떻게 만들까요?")}</h2>
                   <div className="wt-wiz-modes">
                     <button type="button" className={`wt-wiz-mode${viewMode === "simple" ? " on" : ""}`} onClick={() => pickMode("simple")}>
@@ -733,7 +725,9 @@ export default function Wizard({
                       <b>{t("확인하고 만들기")}</b><span className="muted">{t("AI 가 만든 이야기와 장면을 확인하고, 원하는 부분을 고친 뒤 만들어요. 나갔다 와도 이어서 할 수 있어요.")}</span>
                     </button>
                   </div>
-                  {modeNote && <span className="err">{modeNote}</span>}
+                  {!authenticated && viewMode === "expert" && (
+                    <span className="dim">{t("이 브라우저에서만 이어서 할 수 있어요. 다른 기기에서는 작업을 찾지 못해요.")}</span>
+                  )}
                 </div>
               </div>
 
