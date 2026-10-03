@@ -120,6 +120,11 @@ public class ExampleImporter {
         if (candidates != null) {
             stories.save(runId, candidates);
             stories.choose(runId, pickedOf(bundle.runFiles()));
+            /* 이미 다른 후보 줄이 있던 작품(예: 중간에 실패한 가져오기)은 고른 번호가 그 줄에 없을 수 있다.
+               그러면 「고른 이야기」가 없어 화면 제목이 빈다 — 첫 후보를 고르고 아래에서 번들 제목을 덮는다. */
+            if (stories.chosenOf(runId).isEmpty()) {
+                stories.choose(runId, 1);
+            }
             if (!m.captions().isEmpty()) {
                 stories.setScenes(runId, m.captions());           // 고른 후보의 장면 줄 — 편집실이 읽는다
             }

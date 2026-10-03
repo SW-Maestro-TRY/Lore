@@ -167,6 +167,20 @@ class ExampleImporterTest {
     }
 
     @Test
+    @DisplayName("고른 번호가 기존 후보 줄에 없어 고른 이야기가 비면 첫 후보를 고른다 — 화면 제목이 비지 않게")
+    void 고른_이야기가_비면_첫_후보() throws Exception {
+        Map<String, byte[]> run = new LinkedHashMap<>();
+        run.put("directions.json", "[{\"n\":1,\"title\":\"t\"}]".getBytes(StandardCharsets.UTF_8));
+        run.put("pick.json", "{\"n\":3}".getBytes(StandardCharsets.UTF_8));
+        when(stories.chosenOf(ExampleBundlesTest.RUN)).thenReturn(Optional.empty());
+
+        importer.importBundle(bundle(run, null), false);
+
+        verify(stories).choose(ExampleBundlesTest.RUN, 3);
+        verify(stories).choose(ExampleBundlesTest.RUN, 1);
+    }
+
+    @Test
     @DisplayName("이미 있는 작품은 건드리지 않는다 — 예시 표시도 말없이 켜지 않는다(남의 작품일 수 있다)")
     void 이미_있으면_건드리지_않는다() throws Exception {
         when(pages.has(ExampleBundlesTest.RUN)).thenReturn(true);
