@@ -19,6 +19,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -40,17 +41,32 @@ class GuestGateTest {
     /** (ip_hash, 날짜) -> 그 날 쓴 횟수. 진짜 표가 하는 일만 한다. */
     private final Map<String, GuestQuota> rows = new HashMap<>();
 
-    /** 지도 하나로 흉내 낸 저장소. 진짜 표가 하는 일 중 쓰는 것은 두 가지뿐이다.
+    /** 지도 하나로 흉내 낸 저장소. 진짜 표가 하는 일 중 쓰는 것은 세 가지뿐이다(찾기 · 한도 안에서 세기 · 물리기).
      *  JpaRepository 를 직접 구현하면 안 쓰는 메서드 수십 개를 같이 적어야 해서
      *  가짜를 세운다 — 여기서 보고 싶은 것은 JPA 가 아니라 세는 규칙이다. */
     private GuestQuotaRepository repo() {
         GuestQuotaRepository repo = mock(GuestQuotaRepository.class);
         when(repo.findByIpHashAndDay(anyString(), any())).thenAnswer(call ->
                 Optional.ofNullable(rows.get(key(call.getArgument(0), call.getArgument(1)))));
-        when(repo.save(any(GuestQuota.class))).thenAnswer(call -> {
-            GuestQuota row = call.getArgument(0);
-            rows.put(key(row.getIpHash(), row.getDay()), row);
-            return row;
+        // 진짜 표에서는 한 문장(insert … on conflict … where used < 한도)이 하는 일
+        when(repo.useIfUnder(anyString(), any(), anyLong())).thenAnswer(call -> {
+            String ip = call.getArgument(0);
+            LocalDate day = call.getArgument(1);
+            long limit = call.getArgument(2);
+            GuestQuota row = rows.computeIfAbsent(key(ip, day), k -> new GuestQuota(ip, day));
+            if (row.getUsed() >= limit) {
+                return 0;
+            }
+            row.use();
+            return 1;
+        });
+        when(repo.giveBackOne(anyString(), any())).thenAnswer(call -> {
+            GuestQuota row = rows.get(key(call.getArgument(0), call.getArgument(1)));
+            if (row == null || row.getUsed() == 0) {
+                return 0;
+            }
+            row.giveBack();
+            return 1;
         });
         return repo;
     }
