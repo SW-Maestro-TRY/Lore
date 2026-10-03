@@ -160,6 +160,10 @@ services:
       LORE_WEBTOON_INTERNAL_TOKEN: ${LORE_WEBTOON_INTERNAL_TOKEN:-}
       # 완성 알림 메일에 들어가는 기준 주소(lore.webtoon.site-url). 안 주면 운영 주소가 박힌다.
       LORE_WEBTOON_SITE_URL: ${LORE_WEBTOON_SITE_URL:-http://localhost:3100}
+      # 웹푸시 VAPID 키 한 쌍(#599, push/PushSender). 비우면 푸시만 꺼지고 나머지는 그대로 뜬다.
+      # 한 번 정하면 바꾸지 않는다 — 바꾸면 그전 구독이 전부 끊긴다.
+      LORE_WEBTOON_PUSH_PUBLIC_KEY: ${LORE_WEBTOON_PUSH_PUBLIC_KEY:-}
+      LORE_WEBTOON_PUSH_PRIVATE_KEY: ${LORE_WEBTOON_PUSH_PRIVATE_KEY:-}
       # 메일 계정(선택). 비워도 뜨도록 빈 기본값을 준다 — 안 주면 yml 의 ${MAIL_USERNAME}
       # 플레이스홀더가 안 풀려 기동이 막힌다.
       MAIL_USERNAME: ${MAIL_USERNAME:-}
