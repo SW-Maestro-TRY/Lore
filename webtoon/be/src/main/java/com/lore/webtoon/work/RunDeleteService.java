@@ -84,7 +84,7 @@ public class RunDeleteService {
     WebtoonWork checkMayDelete(Long userId, String runId) {
         WebtoonWork work = works.findFirstByRunId(runId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 작품이 없습니다"));
-        if (ExampleWorks.SEED_UID.equals(work.getBrowserUid())) {
+        if (ExampleWorks.isExample(work)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "예시 작품은 지울 수 없습니다");
         }
         if (!ledger.mayChange(runId, userId)) {
