@@ -723,7 +723,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       {job.notice?.email || mailSent ? (
         <>
           <label>{mailBefore}<b>{mailTo}</b>{mailAfter}</label>
-          {job.minutes_left != null && <span className="dim">{t("지금 약 {n}분 남았어요.", { n: job.minutes_left })}</span>}
           {offHint}
         </>
       ) : job.notice?.logged_in ? (
@@ -733,10 +732,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         </>
       ) : (
         <>
-          <label htmlFor="wt-prog-em">
-            {t("완성되면 이메일로 알려드릴게요.")}{" "}
-            {job.minutes_left != null && <span className="dim">{t("지금 약 {n}분 남았어요.", { n: job.minutes_left })}</span>}
-          </label>
+          <label htmlFor="wt-prog-em">{t("완성되면 이메일로 알려드릴게요.")}</label>
           <div className="row">
             <input id="wt-prog-em" className="field" type="email" value={email} placeholder="you@example.com" aria-label={t("이메일")}
                    onChange={(e) => setEmail(e.target.value)} />
