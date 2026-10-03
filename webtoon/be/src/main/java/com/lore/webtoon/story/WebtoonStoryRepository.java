@@ -14,4 +14,6 @@ public interface WebtoonStoryRepository extends JpaRepository<WebtoonStory, Long
     Optional<WebtoonStory> findByRunIdAndN(String runId, int n);
 
     boolean existsByRunId(String runId);
+
+    List<WebtoonStory> findByChosenTrue();
 }

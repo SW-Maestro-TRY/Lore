@@ -133,6 +133,29 @@ public class WorkLedger {
         return works.findFirstByRunId(runId).map(w -> isOwner(w, userId)).orElse(false);
     }
 
+    /**
+     * 예시로 지정하거나 해제한다(#614). 해제하면 순서도 비운다.
+     *
+     * @return 바뀌었으면 true. 그런 작품이 없으면 false
+     */
+    @Transactional
+    public boolean markExample(String runId, boolean value, Integer order) {
+        return works.findFirstByRunId(runId).map(work -> {
+            if (work.isExample() == value && java.util.Objects.equals(work.getExampleOrder(), value ? order : null)) {
+                return false;
+            }
+            work.markExample(value, order);
+            works.save(work);
+            return true;
+        }).orElse(false);
+    }
+
+    /** 예시 작품들 — 순서대로(#614). */
+    @Transactional(readOnly = true)
+    public List<WebtoonWork> examples() {
+        return works.findByExampleTrueAndDeletedAtIsNullOrderByExampleOrderAscIdAsc();
+    }
+
     /** 공개 여부를 적는다. -> 바뀌었으면 true (같은 값이면 아무 일도 안 한다) */
     @Transactional
     public boolean setPublic(String runId, boolean value) {

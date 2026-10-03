@@ -357,6 +357,21 @@ public class JobRunner {
 
     /** 사람이 시트를 확인했다. 마지막 걸음으로. */
     public void resumeAfterSheet(Long jobId) {
+        WebtoonJob now = store.byId(jobId);
+        if (now != null && now.isCheckpoints() && !now.isOwn()) {
+            /* 「확인하고 만들기」(#604) — 시트를 확정하면 장면 확인으로 간다. 사진은 아직 둔다:
+               장면 확인에서도 시트를 다시 만들 수 있고, 다시 만들기는 사진부터 사양을 다시 쓴다.
+               지우는 것은 장면 확인을 마칠 때({@link #resumeAfterScenes})다. */
+            store.queued(jobId, JobStage.PAGES);
+            line.submit(() -> {
+                try {
+                    scenesAfterSheet(jobId);
+                } catch (Exception e) {
+                    fail(jobId, e);
+                }
+            });
+            return;
+        }
         store.queued(jobId, JobStage.PAGES);
         dropPhotos(jobId);                   // 시트가 확정됐다 — 사진을 다시 읽을 일이 없다
         line.submit(() -> {
@@ -366,6 +381,17 @@ public class JobRunner {
                 fail(jobId, e);
             }
         });
+    }
+
+    /** 시트를 확정한 뒤 — 장면을 나눠 두고 장면 확인에서 멈춘다(#604). */
+    private void scenesAfterSheet(Long jobId) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
+        WebtoonJob job = store.running(jobId, JobStage.PAGES);
+        progress.say(jobId, "루가 장면을 나누고 있어요");
+        ensureScenes(jobId, job);
+        store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
     }
 
     /**
@@ -793,9 +819,16 @@ public class JobRunner {
         /* 시트를 확인하는 사람은 「다시 만들기」를 누를 수 있고, 다시 만들기는
            사양을 사진부터 다시 쓴다 — 그래서 확인을 기다리는 동안은 사진을 둔다.
            지우는 것은 시트를 확정하거나(resumeAfterSheet) 작업이 끝날 때(stop)다. */
+        if (job.isCheckpoints() && !job.isOwn()) {
+            /* 「확인하고 만들기」 — 시트를 다 그리면 사람이 보고 확정하거나 다시 만들 때까지 멈춘다(#604).
+               #548 에서 이 확인을 장면 확인에 합쳤더니 시트를 확인하라는 말도 확정 단추도 없이 넘어갔다.
+               확정하면 장면 초안(장면 확인)으로 간다 — {@link #resumeAfterSheet}. 시간으로 안 넘어간다. */
+            store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
+            return;
+        }
         if (job.isCheckpoints()) {
-            /* 「확인하고 만들기」(#548) — 시트 확인은 이야기 고르기 화면에 합쳤고, 그 대신
-               그림 전에 장면 초안을 보고 고치는 자리에서 멈춘다. 시간으로 안 넘어간다. */
+            /* own 길 — 시트는 이야기 확인 화면에 같이 나온다. 그림 전에 장면 초안을 보고 고치는
+               자리(장면 확인)에서 멈춘다. 시간으로 안 넘어간다. */
             ensureScenes(jobId, job);
             store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
             return;
@@ -1066,6 +1099,27 @@ public class JobRunner {
             return Integer.parseInt(Files.readString(runDir(runId).resolve("story_redraws.txt")).trim());
         } catch (IOException | NumberFormatException e) {
             return 0;
+        }
+    }
+
+    /**
+     * 게스트의 다시 뽑기 횟수(#608) — 작업당 종류별로 센다. {@code kind} 는 {@code restory}(이야기 후보 다시
+     * 만들기) · {@code rescenes}(장면 다시 나누기). 작품 폴더의 {@code redraws-<kind>.txt} 한 줄이다.
+     * own 길의 크레딧 계산에 쓰는 {@link #storyRedraws} 와 따로 둔다 — 서로 세는 때와 뜻이 다르다.
+     */
+    public int redrawCount(String runId, String kind) {
+        try {
+            return Integer.parseInt(Files.readString(runDir(runId).resolve("redraws-" + kind + ".txt")).trim());
+        } catch (IOException | NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    public void countRedraw(String runId, String kind) {
+        try {
+            Files.writeString(runDir(runId).resolve("redraws-" + kind + ".txt"), String.valueOf(redrawCount(runId, kind) + 1));
+        } catch (IOException e) {
+            log.warn("다시 뽑기 횟수를 못 적었습니다 (run={}, kind={})", runId, kind, e);
         }
     }
 
@@ -1451,6 +1505,7 @@ public class JobRunner {
      */
     private void ensureScenes(Long jobId, WebtoonJob job) throws Exception {
         if (Files.isRegularFile(runsDir.resolve(job.getRunId()).resolve("scenes.json"))) {
+            syncSceneCaptions(job.getRunId());
             return;
         }
         int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--scenes"));
@@ -1458,6 +1513,27 @@ public class JobRunner {
         stopIfCancelled(jobId);
         if (code != 0) {
             throw harnessFailed(job.getRunId(), "장면을 나누지 못했습니다");
+        }
+        syncSceneCaptions(job.getRunId());
+    }
+
+    /**
+     * 나눈 장면을 고른 이야기의 장면 줄({@code webtoon_story.scenes_json})에 옮겨 적는다(#607).
+     *
+     * 이야기 후보 단계는 장면을 늘 빈 배열로 내고 장면은 고른 뒤 따로 나뉘어 {@code scenes.json} 에만
+     * 있다. 이것을 안 옮겨 적으면 결과 화면·편집실이 장마다 「무슨 장면인가」를 못 보여 준다 — 편집실에
+     * 「이 장의 장면 설명이 없어요」가 떴다. 옮겨 적는 곳이 장면 확인을 마칠 때(own 길) 한 군데뿐이어서
+     * 「확인하고 만들기」·「바로 만들기」 작품은 전부 비어 있었다. 장면을 고친 뒤 다시 적는 자리는
+     * {@code JobService.continueScenes} 다. 못 적어도 그리기를 막지 않는다.
+     */
+    void syncSceneCaptions(String runId) {
+        try {
+            List<String> captions = sceneCaptions(runId);
+            if (!captions.isEmpty()) {
+                stories.setScenes(runId, captions);
+            }
+        } catch (Exception e) {             // noqa: 설명 줄 때문에 그리기를 막지 않는다
+            log.warn("장면 설명을 옮겨 적지 못했습니다 (run={})", runId, e);
         }
     }
 

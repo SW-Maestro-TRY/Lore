@@ -106,6 +106,17 @@ public class WebtoonWork {
             columnDefinition = "boolean not null default true")
     private boolean isPublic = true;
 
+    /**
+     * 둘러보기의 예시 작품인가(#614). 전에는 {@code browser_uid} 가 심은 자리의 특별한 값인지로만 알아봤다.
+     * 관리자 API 로 올리거나 같은 환경에서 만든 작품을 예시로 지정하려면 값이 따로 있어야 한다.
+     */
+    @Column(name = "is_example", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean example = false;
+
+    /** 예시끼리의 순서. 작을수록 앞. 비어 있으면 맨 뒤. */
+    @Column(name = "example_order")
+    private Integer exampleOrder;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -181,6 +192,20 @@ public class WebtoonWork {
 
     void setPublic(boolean value) {
         this.isPublic = value;
+    }
+
+    public boolean isExample() {
+        return example;
+    }
+
+    public Integer getExampleOrder() {
+        return exampleOrder;
+    }
+
+    /** 예시로 지정하거나 해제한다. 해제하면 순서도 비운다. */
+    void markExample(boolean value, Integer order) {
+        this.example = value;
+        this.exampleOrder = value ? order : null;
     }
 
     public Instant getDeletedAt() {
