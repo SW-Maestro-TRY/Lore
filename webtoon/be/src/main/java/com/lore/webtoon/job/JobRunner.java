@@ -357,6 +357,21 @@ public class JobRunner {
 
     /** 사람이 시트를 확인했다. 마지막 걸음으로. */
     public void resumeAfterSheet(Long jobId) {
+        WebtoonJob now = store.byId(jobId);
+        if (now != null && now.isCheckpoints() && !now.isOwn()) {
+            /* 「확인하고 만들기」(#604) — 시트를 확정하면 장면 확인으로 간다. 사진은 아직 둔다:
+               장면 확인에서도 시트를 다시 만들 수 있고, 다시 만들기는 사진부터 사양을 다시 쓴다.
+               지우는 것은 장면 확인을 마칠 때({@link #resumeAfterScenes})다. */
+            store.queued(jobId, JobStage.PAGES);
+            line.submit(() -> {
+                try {
+                    scenesAfterSheet(jobId);
+                } catch (Exception e) {
+                    fail(jobId, e);
+                }
+            });
+            return;
+        }
         store.queued(jobId, JobStage.PAGES);
         dropPhotos(jobId);                   // 시트가 확정됐다 — 사진을 다시 읽을 일이 없다
         line.submit(() -> {
@@ -366,6 +381,17 @@ public class JobRunner {
                 fail(jobId, e);
             }
         });
+    }
+
+    /** 시트를 확정한 뒤 — 장면을 나눠 두고 장면 확인에서 멈춘다(#604). */
+    private void scenesAfterSheet(Long jobId) throws Exception {
+        if (!startable(jobId)) {
+            return;                 // 줄에서 기다리는 동안 그만뒀다
+        }
+        WebtoonJob job = store.running(jobId, JobStage.PAGES);
+        progress.say(jobId, "루가 장면을 나누고 있어요");
+        ensureScenes(jobId, job);
+        store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
     }
 
     /**
@@ -793,9 +819,16 @@ public class JobRunner {
         /* 시트를 확인하는 사람은 「다시 만들기」를 누를 수 있고, 다시 만들기는
            사양을 사진부터 다시 쓴다 — 그래서 확인을 기다리는 동안은 사진을 둔다.
            지우는 것은 시트를 확정하거나(resumeAfterSheet) 작업이 끝날 때(stop)다. */
+        if (job.isCheckpoints() && !job.isOwn()) {
+            /* 「확인하고 만들기」 — 시트를 다 그리면 사람이 보고 확정하거나 다시 만들 때까지 멈춘다(#604).
+               #548 에서 이 확인을 장면 확인에 합쳤더니 시트를 확인하라는 말도 확정 단추도 없이 넘어갔다.
+               확정하면 장면 초안(장면 확인)으로 간다 — {@link #resumeAfterSheet}. 시간으로 안 넘어간다. */
+            store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
+            return;
+        }
         if (job.isCheckpoints()) {
-            /* 「확인하고 만들기」(#548) — 시트 확인은 이야기 고르기 화면에 합쳤고, 그 대신
-               그림 전에 장면 초안을 보고 고치는 자리에서 멈춘다. 시간으로 안 넘어간다. */
+            /* own 길 — 시트는 이야기 확인 화면에 같이 나온다. 그림 전에 장면 초안을 보고 고치는
+               자리(장면 확인)에서 멈춘다. 시간으로 안 넘어간다. */
             ensureScenes(jobId, job);
             store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
             return;
