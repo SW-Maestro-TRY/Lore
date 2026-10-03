@@ -87,6 +87,12 @@ class ExampleBundleExporterTest {
         Files.createDirectories(run.resolve("cache"));
         Files.writeString(run.resolve("cache").resolve("c.json"), "{}");
         Files.write(run.resolve("huge.txt"), new byte[13 * 1024 * 1024]);                     // 파일 상한 초과
+        Files.write(run.resolve("episode.png"), new byte[]{9});                               // 이어 붙인 전체 그림 — 안 담는다
+        Files.write(run.resolve("sheet.v1.png"), new byte[]{9});                              // 시트 이전 판 — 담는다
+        Files.createDirectories(run.resolve("sheets"));
+        Files.write(run.resolve("sheets").resolve("Rhea.png"), new byte[]{9});                // 조연 시트 — 담는다
+        Files.createDirectories(run.resolve("_old"));
+        Files.writeString(run.resolve("_old").resolve("scenes.json"), "{}");                  // 실험 백업 — 안 담는다
 
         exporter = new ExampleBundleExporter(works, jobs, stories, pages, art, harness);
     }
@@ -117,7 +123,8 @@ class ExampleBundleExporterTest {
     void 작품_폴더_걸러내기() {
         ExampleBundle got = exporter.export(RUN);
         assertThat(got.runFiles()).containsKeys("scenes.json", "directions.json", "pick.json", "input.json", "sheet.png");
-        assertThat(got.runFiles()).doesNotContainKeys("meta.json", "run.sh", "한글이름.txt", "huge.txt");
+        assertThat(got.runFiles()).doesNotContainKeys("meta.json", "run.sh", "한글이름.txt", "huge.txt", "episode.png", "_old/scenes.json");
+        assertThat(got.runFiles()).containsKeys("sheet.v1.png", "sheets/Rhea.png");
         assertThat(got.runFiles().keySet()).noneMatch(k -> k.startsWith("pages/") || k.startsWith("cache/"));
     }
 
