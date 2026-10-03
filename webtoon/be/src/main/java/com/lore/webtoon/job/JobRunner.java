@@ -1102,6 +1102,27 @@ public class JobRunner {
         }
     }
 
+    /**
+     * 게스트의 다시 뽑기 횟수(#608) — 작업당 종류별로 센다. {@code kind} 는 {@code restory}(이야기 후보 다시
+     * 만들기) · {@code rescenes}(장면 다시 나누기). 작품 폴더의 {@code redraws-<kind>.txt} 한 줄이다.
+     * own 길의 크레딧 계산에 쓰는 {@link #storyRedraws} 와 따로 둔다 — 서로 세는 때와 뜻이 다르다.
+     */
+    public int redrawCount(String runId, String kind) {
+        try {
+            return Integer.parseInt(Files.readString(runDir(runId).resolve("redraws-" + kind + ".txt")).trim());
+        } catch (IOException | NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    public void countRedraw(String runId, String kind) {
+        try {
+            Files.writeString(runDir(runId).resolve("redraws-" + kind + ".txt"), String.valueOf(redrawCount(runId, kind) + 1));
+        } catch (IOException e) {
+            log.warn("다시 뽑기 횟수를 못 적었습니다 (run={}, kind={})", runId, kind, e);
+        }
+    }
+
     private void countStoryRedraw(String runId) {
         try {
             Files.writeString(runDir(runId).resolve("story_redraws.txt"), String.valueOf(storyRedraws(runId) + 1));

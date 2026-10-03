@@ -78,6 +78,8 @@ public class JobService {
     private final WorkLedger works;
     private final JobNotice notice;
     private final JobPush push;
+    private final int guestStoryRedraws;
+    private final int guestRescenes;
     private final CharacterService characters;
     private final CharacterOwner owner;
     private final PrivateArt art;
@@ -95,6 +97,8 @@ public class JobService {
                       S3Service uploads, S3Storage storage, SafetyGuard safety,
                       WebtoonCastSheetRepository castSheets, RunArt runArt,
                       JobPush push,
+                      @Value("${lore.webtoon.guest.story-redraws:2}") int guestStoryRedraws,
+                      @Value("${lore.webtoon.guest.rescenes:2}") int guestRescenes,
                       @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
         this.castSheets = castSheets;
         this.runArt = runArt;
@@ -103,6 +107,8 @@ public class JobService {
         this.works = works;
         this.notice = notice;
         this.push = push;
+        this.guestStoryRedraws = guestStoryRedraws;
+        this.guestRescenes = guestRescenes;
         this.characters = characters;
         this.owner = owner;
         this.art = art;
@@ -140,9 +146,9 @@ public class JobService {
                 form.photoNote(), form.settings(), form.title(), form.episode(),
                 form.fields() == null ? null : String.join("\n", form.fields().values()));
         /* 어느 길인가(#548). own(만들고 싶은 내용이 있어요)은 적은 내용이 있어야 하고
-           확인 자리가 항상 있다. 확인하며 가는 길(own, 또는 quick 의 확인하고 만들기)은
-           며칠 뒤에 돌아와 이어서 할 수 있어야 해서 로그인한 사람만 받는다 — 게스트는
-           브라우저가 바뀌면 작업을 못 찾는다. */
+           확인 자리가 항상 있다. own 길은 장면 확인에서 며칠이고 멈추고 조연 시트·장면 다시 뽑기에
+           크레딧이 얽혀서 로그인한 사람만 받는다. 「확인하고 만들기」(quick)는 게스트도 받는다(#608) —
+           같은 브라우저에서는 「만들던 웹툰」이 uid 로 이어서 찾아 준다. 브라우저가 바뀌면 못 찾는다. */
         boolean own = "own".equalsIgnoreCase(form.mode());
         boolean checkpoints = own || form.checkpoints() == null || form.checkpoints();
         if (own && !notBlank(form.story())) {
@@ -153,9 +159,9 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "내용이 너무 길어요. " + OWN_STORY_MAX + "자까지 적을 수 있어요.");
         }
-        if (checkpoints && userId == null) {
+        if (own && userId == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
-                    "확인하며 만들기는 로그인한 뒤에 할 수 있어요. 나중에 돌아와 이어서 하려면 계정이 필요해요.");
+                    "만들고 싶은 내용으로 만들기는 로그인한 뒤에 할 수 있어요. 나중에 돌아와 이어서 하려면 계정이 필요해요.");
         }
         boolean known = notBlank(form.name()) || notBlank(form.character())
                 || (form.fields() != null && form.fields().values().stream().anyMatch(this::notBlank))
@@ -512,6 +518,7 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "장면을 다시 뽑는 중입니다");
         }
         safety.checkText("webtoon-scenes", note);
+        limitGuestRedraw(job, "restory", guestStoryRedraws, "이야기 후보를 다시 만드는 것");
         runner.retryDirections(job.getId(), note == null ? "" : note.trim(), onFail);
     }
 
@@ -734,7 +741,24 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 장면을 고칠 차례가 아닙니다");
         }
         safety.checkText("webtoon-scenes", note);
+        limitGuestRedraw(job, "rescenes", guestRescenes, "장면을 다시 나누는 것");
         runner.rescenes(job.getId(), note == null ? "" : note.trim());
+    }
+
+    /**
+     * 게스트의 다시 뽑기는 작업당 횟수를 둔다(#608). 로그인한 사람은 지금처럼 제한이 없다. 다시 뽑을
+     * 때마다 모델 값이 나가는데 게스트는 하루 무료 편수 말고는 막는 장치가 없어서다. 센 뒤에 시작하므로
+     * 중간에 실패해도 한 번으로 친다. 한도가 0 이하면 게스트는 아예 못 한다.
+     */
+    private void limitGuestRedraw(WebtoonJob job, String kind, int limit, String what) {
+        if (job.getUserId() != null) {
+            return;
+        }
+        if (runner.redrawCount(job.getRunId(), kind) >= Math.max(0, limit)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "로그인하지 않으면 " + what + "은 한 작품에 " + limit + "번까지 할 수 있어요. 로그인하면 계속할 수 있어요.");
+        }
+        runner.countRedraw(job.getRunId(), kind);
     }
 
     /**
