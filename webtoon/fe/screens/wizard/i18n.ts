@@ -192,7 +192,7 @@ const dict: Dict = {
   "AI 에게 맡기고 빠르게 완성해요. 중간에 확인하지 않아요.": { en: "Leave it to AI and finish fast. No check-ins along the way.", ja: "AI に任せて素早く完成。途中の確認はありません。", zh: "交给 AI 快速完成，中途不确认。" },
   "확인하고 만들기": { en: "Check as we go", ja: "確認しながら作る", zh: "边确认边制作" },
   "AI 가 만든 이야기와 장면을 확인하고, 원하는 부분을 고친 뒤 만들어요. 나갔다 와도 이어서 할 수 있어요.": { en: "Check the story and scenes AI made, fix what you want, then make it. You can leave and come back.", ja: "AI が作ったストーリーと場面を確認し、直したいところを直してから作ります。離れても続きからできます。", zh: "确认 AI 写的故事和场景，修改想改的部分再制作。离开后也能继续。" },
-  "로그인하면 확인하고 만들 수 있어요": { en: "Sign in to check as you go", ja: "ログインすると確認しながら作れます", zh: "登录后可以边确认边制作" },
+  "이 브라우저에서만 이어서 할 수 있어요. 다른 기기에서는 작업을 찾지 못해요.": { en: "You can only continue on this browser. Other devices can't find this job.", ja: "このブラウザでのみ続けられます。他の端末では作業が見つかりません。", zh: "只能在此浏览器继续，其他设备找不到这个作业。" },
   "· 내 내용": { en: "· My content", ja: "· 自分の内容", zh: "· 我的内容" },
 };
 
