@@ -24,7 +24,8 @@ import "./webtoon.css";
 import { hrefOf, type Go, type View } from "./lib/nav";
 import { linkThisBrowser } from "./lib/api";
 import { setView, track } from "./lib/track";
-import { LangProvider } from "./lib/i18n";
+import { LangProvider, useLang } from "./lib/i18n";
+import { syncPush } from "./lib/push";
 import Landing from "./screens/landing/Landing";
 import Entry from "./screens/landing/Entry";
 import Wizard from "./screens/wizard/Wizard";
@@ -136,6 +137,13 @@ function WebtoonScreens() {
   const authReady = authStatus !== "loading";
   const authenticatedRef = useRef(authenticated);
   authenticatedRef.current = authenticated;
+
+  /* 이미 알림을 받는 기기면 서버 기록을 지금 사람·언어로 맞춘다(#599) — 로그인·로그아웃하면
+     알림이 갈 계정이 바뀌고, 언어를 바꾸면 알림 문구도 바뀌어야 한다. */
+  const { lang } = useLang();
+  useEffect(() => {
+    if (authReady) void syncPush(lang);
+  }, [authReady, authenticated, lang]);
 
   /* 그림을 그냥 저장해 가지 못하게 — 오른쪽 누르기와 끌어다 놓기. 글 쓰는
      칸만 비워 둔다(복사·붙여넣기 메뉴는 있어야 한다). 막는 것이 아니라 문턱이다. */

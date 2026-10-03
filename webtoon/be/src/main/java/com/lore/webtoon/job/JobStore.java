@@ -2,6 +2,7 @@ package com.lore.webtoon.job;
 
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.webtoon.push.JobPush;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ public class JobStore {
 
     private final WebtoonJobRepository jobs;
     private final Path runsDir;
+    private final JobPush push;
 
     /**
      * 이야기 후보 넷. 화면이 고르라고 보여 주는 것이다.
@@ -37,9 +39,10 @@ public class JobStore {
      */
     private final Map<Long, List<Map<String, Object>>> directions = new ConcurrentHashMap<>();
 
-    public JobStore(WebtoonJobRepository jobs, HarnessProcess harness) {
+    public JobStore(WebtoonJobRepository jobs, HarnessProcess harness, JobPush push) {
         this.jobs = jobs;
         this.runsDir = harness.runsDir();
+        this.push = push;
     }
 
     @Transactional(readOnly = true)
@@ -80,10 +83,15 @@ public class JobStore {
         });
     }
 
+    /**
+     * 사람이 답할 차례로 멈춘다. 상대 인물 · 이야기 · 장면 · 시트 확인이 다 여기를
+     * 지나므로, <b>「답해 주세요」 푸시도 여기서 한 번에 보낸다</b>(#599). 다시 뽑거나
+     * 다시 그린 뒤 또 멈출 때도 새로 답할 것이 생긴 것이라 다시 보낸다.
+     */
     public void awaiting(Long id, JobStatus status, JobStage stage) {
         jobs.findById(id).ifPresent(job -> {
             job.moveTo(status, stage, Instant.now());
-            jobs.save(job);
+            push.awaiting(jobs.save(job));
         });
     }
 

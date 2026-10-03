@@ -97,6 +97,11 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Query("delete from NotifySetting n where n.userId = :userId")
     int deleteNotifySettings(@Param("userId") Long userId);
 
+    /** 이 계정으로 구독한 기기(#599). 같은 기기의 게스트 작업 알림도 같이 끊긴다 — 탈퇴한 사람의 기기다. */
+    @Modifying
+    @Query("delete from PushSubscription s where s.userId = :userId")
+    int deletePushSubscriptions(@Param("userId") Long userId);
+
     /* ---- 기간이 지난 것 ---------------------------------------------- */
 
     /**
