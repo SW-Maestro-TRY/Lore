@@ -312,6 +312,17 @@ public class WebtoonJob {
         return job;
     }
 
+    /**
+     * 예시 작품의 작업 줄에 작품 번호까지 적는다(#614). 작품 번호가 있어야 이 작업의 시트·이야기 후보·장면을
+     * 작품 폴더에서 읽는다 — 만든 과정을 통째로 심은 예시가 쓴다.
+     */
+    public static WebtoonJob seeded(String publicId, String browserUid, String runId, String style,
+                                    String inputJson, Instant at) {
+        WebtoonJob job = seeded(publicId, browserUid, style, inputJson, at);
+        job.runId = runId;
+        return job;
+    }
+
     void moveTo(JobStatus status, JobStage stage, Instant at) {
         /* **처음 돌기 시작한 때만 적는다.** 사람이 시트 앞에서 멈췄다가 다시
            가면 RUNNING 이 또 되는데, 그때 덮어쓰면 기다린 시간이 0 에 가깝게

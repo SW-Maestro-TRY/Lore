@@ -1,12 +1,5 @@
 package com.lore.webtoon.work;
 
-import com.lore.webtoon.art.PageStore;
-import com.lore.webtoon.art.PrivateArt;
-import com.lore.webtoon.job.WebtoonJob;
-import com.lore.webtoon.job.WebtoonJobRepository;
-import com.lore.webtoon.story.StoryStore;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,13 +14,6 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * 둘러보기에 처음부터 놓여 있는 예시 작품들.
@@ -68,9 +54,6 @@ public class ExampleWorks implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ExampleWorks.class);
 
-    /** {@code p03-w1080.jpg} 에서 쪽 번호와 폭을 읽는다. */
-    private static final Pattern PAGE_FILE = Pattern.compile("^p(\\d+)-w(\\d+)\\.(jpg|jpeg|png|webp)$");
-
     private static final String REPO_DIR = "webtoon/ai/assets/examples";
     private static final String CLASSPATH_DIR = "webtoon/ai/assets/examples/";
 
@@ -78,24 +61,14 @@ public class ExampleWorks implements ApplicationRunner {
     /** 예시를 심은 브라우저 번호. 지우기(RunDeleteService)가 예시를 알아보는 표시이기도 하다. */
     static final String SEED_UID = "lore-example-seed";
 
-    private final PrivateArt art;
-    private final PageStore pages;
-    private final StoryStore stories;
-    private final WorkLedger ledger;
-    private final WebtoonJobRepository jobs;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ExampleImporter importer;
     private final Path dir;
     private final boolean on;
 
-    public ExampleWorks(PrivateArt art, PageStore pages, StoryStore stories, WorkLedger ledger,
-                        WebtoonJobRepository jobs,
+    public ExampleWorks(ExampleImporter importer,
                         @Value("${lore.webtoon.example.works-dir:}") String worksDir,
                         @Value("${lore.webtoon.example.seed-works:true}") boolean on) {
-        this.art = art;
-        this.pages = pages;
-        this.stories = stories;
-        this.ledger = ledger;
-        this.jobs = jobs;
+        this.importer = importer;
         this.dir = resolveDir(worksDir);
         this.on = on;
     }
@@ -170,86 +143,20 @@ public class ExampleWorks implements ApplicationRunner {
         }
     }
 
-    /** @return 이번에 심었으면 true (이미 있거나 건너뛰었으면 false) */
+    /**
+     * 폴더 하나를 번들로 읽어 {@link ExampleImporter} 로 심는다.
+     *
+     * @return 이번에 심었으면 true (이미 있거나 건너뛰었으면 false)
+     */
     private boolean plant(Path folder) {
-        String runId = folder.getFileName().toString();
-        Path metaFile = folder.resolve("meta.json");
-        if (!Files.isRegularFile(metaFile)) {
-            log.warn("meta.json 이 없어 건너뜁니다: {}", folder);
-            return false;
-        }
-        if (pages.has(runId)) {
-            return false;               // 이미 심었다 — 다시 덮지 않는다
-        }
-        JsonNode meta;
         try {
-            meta = mapper.readTree(Files.readString(metaFile));
-        } catch (IOException e) {
-            log.error("meta.json 을 읽지 못했습니다: {}", metaFile, e);
+            ExampleBundle bundle = ExampleBundles.fromFolder(folder);
+            return importer.importBundle(bundle, false).status() == ExampleImporter.Status.PLANTED;
+        } catch (Exception e) {
+            // 한 작품이 잘못돼도 나머지 예시와 서버 기동은 막지 않는다.
+            log.error("예시 작품을 심지 못했습니다: {}", folder, e);
             return false;
         }
-
-        List<PageStore.Upload> uploads = new ArrayList<>();
-        try (var found = Files.list(folder)) {
-            for (Path file : found.sorted().toList()) {
-                Matcher m = PAGE_FILE.matcher(file.getFileName().toString());
-                if (!m.matches()) {
-                    continue;           // meta.json 등
-                }
-                byte[] bytes = Files.readAllBytes(file);
-                /* 공개 자리에 올린다 — 예시는 누구나 본다. 키는 PrivateArt 가
-                   짓고, 어느 창고인지는 환경이 정한다. */
-                String key = art.upload(bytes, typeOf(file.getFileName().toString()), true);
-                if (key == null || key.isBlank()) {
-                    log.error("예시 그림을 못 올렸습니다 — 이 작품은 건너뜁니다: {}", file);
-                    return false;
-                }
-                uploads.add(new PageStore.Upload(
-                        Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), key, bytes.length));
-            }
-        } catch (IOException e) {
-            log.error("예시 그림을 읽지 못했습니다: {}", folder, e);
-            return false;
-        }
-        if (uploads.isEmpty()) {
-            log.warn("예시 그림이 한 장도 없습니다: {}", folder);
-            return false;
-        }
-        pages.record(runId, uploads, true);
-
-        /* 이야기 — 후보 하나만 적고 그것을 고른 것으로 둔다. 예시는 고르는
-           과정을 거치지 않았지만, 화면이 「고른 이야기」에서 제목·장르·
-           로그라인·컷 설명을 읽으므로 그 자리를 채워야 한다. */
-        Map<String, Object> story = new LinkedHashMap<>();
-        story.put("n", 1);
-        story.put("title", meta.path("title").asText(""));
-        story.put("genre", meta.path("genre").asText(""));
-        story.put("plot", meta.path("logline").asText(""));
-        story.put("scenes", mapper.convertValue(meta.path("captions"), List.class));
-        stories.save(runId, List.of(story));
-        stories.choose(runId, 1);
-
-        /* 작업 줄 — 카드에 캐릭터 이름과 그림체 이름이 뜨려면 있어야 한다.
-           예시는 실제로 돈 작업이 아니라서 끝난 것(DONE)으로 넣는다 —
-           QUEUED 로 넣으면 줄에 영영 서 있다(WebtoonJob.seeded). */
-        String jobId = jobIdOf(runId);
-        if (jobs.findByPublicId(jobId).isEmpty()) {
-            Map<String, Object> input = new LinkedHashMap<>();
-            input.put("name", meta.path("character").asText(""));
-            String inputJson;
-            try {
-                inputJson = mapper.writeValueAsString(input);
-            } catch (IOException e) {
-                inputJson = "{}";
-            }
-            jobs.save(WebtoonJob.seeded(jobId, SEED_UID,
-                    meta.path("style").asText(""), inputJson, Instant.now()));
-        }
-
-        ledger.started(jobId, null, SEED_UID);
-        ledger.learnedRun(jobId, runId, null);
-        ledger.setPublic(runId, true);
-        return true;
     }
 
     /**
@@ -257,22 +164,6 @@ public class ExampleWorks implements ApplicationRunner {
      * 내려받을 수 있다(남의 작품은 주인만). 그래서 결과 한 편에 {@code example} 로 실어 준다.
      */
     public static boolean isExample(WebtoonWork work) {
-        return work != null && SEED_UID.equals(work.getBrowserUid());
-    }
-
-    /** 작품 번호에서 곧장 짓는다 — 다시 띄워도 같은 값이라 줄이 늘지 않는다. */
-    private static String jobIdOf(String runId) {
-        return "example-" + runId;
-    }
-
-    private static String typeOf(String file) {
-        String lower = file.toLowerCase();
-        if (lower.endsWith(".png")) {
-            return "image/png";
-        }
-        if (lower.endsWith(".webp")) {
-            return "image/webp";
-        }
-        return "image/jpeg";
+        return work != null && (work.isExample() || SEED_UID.equals(work.getBrowserUid()));
     }
 }
