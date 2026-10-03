@@ -123,6 +123,9 @@ public class ExampleImporter {
             if (!m.captions().isEmpty()) {
                 stories.setScenes(runId, m.captions());           // 고른 후보의 장면 줄 — 편집실이 읽는다
             }
+            /* 화면에 나갈 제목·줄거리는 번들 값이 정본이다. 후보의 원래 제목과 다르면(예시로 다듬어 둔 것)
+               사람이 고친 값 자리에 적는다 — 후보 원문은 그대로 남는다. */
+            keepShown(runId, m);
         } else {
             Map<String, Object> story = new LinkedHashMap<>();
             story.put("n", 1);
@@ -149,6 +152,21 @@ public class ExampleImporter {
         pages.record(runId, uploads, true);
         log.info("예시 작품을 심었습니다 (run={}, 제목={}, 그림 {}장)", runId, m.title(), uploads.size());
         return new Result(runId, m.title(), Status.PLANTED, pageCount, restored);
+    }
+
+    private void keepShown(String runId, ExampleBundle.Manifest m) {
+        try {
+            String shownTitle = stories.chosenOf(runId).map(st -> st.displayTitle()).orElse(null);
+            if (shownTitle != null && !m.title().isBlank() && !m.title().equals(shownTitle)) {
+                stories.editTitle(runId, m.title());
+            }
+            String shownPlot = stories.chosenOf(runId).map(st -> st.displayPlot()).orElse(null);
+            if (m.logline() != null && !m.logline().isBlank() && !m.logline().equals(shownPlot)) {
+                stories.editPlot(runId, m.logline());
+            }
+        } catch (RuntimeException e) {          // 이름 하나 때문에 심기를 막지 않는다
+            log.warn("예시 제목·줄거리를 맞추지 못했습니다 (run={})", runId, e);
+        }
     }
 
     /** 사용자가 실제로 넣은 값이 있으면 그대로, 없으면 캐릭터 이름만. */
