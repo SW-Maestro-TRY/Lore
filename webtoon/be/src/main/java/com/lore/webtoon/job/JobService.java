@@ -306,7 +306,10 @@ public class JobService {
                 castPause ? runner.castOf(job.getRunId()) : null,
                 at == JobStatus.AWAITING_CAST ? runner.castKind(job.getRunId()) : null,
                 castPause ? runner.personaOf(job.getRunId()) : null,
-                at == JobStatus.AWAITING_SCENES ? runner.scenesOf(job.getId(), job.getRunId()) : null,
+                /* 장면은 확인 대기가 아니어도 싣는다(#601) — 확인한 뒤·그리는 중·완성 뒤에도 걸음 3 「장면 나누기」
+                   에서 읽기만 할 수 있게. 고치는 칸은 화면이 awaiting_scenes 일 때만 연다. 파일이 아직 없거나(장면을
+                   나누기 전) 치워졌으면 빈 목록이다. */
+                runner.scenesOf(job.getId(), job.getRunId()),
                 ownPause ? runner.storyOf(job.getRunId()) : null,
                 runner.sheetReady(job.getRunId()),
                 runArt.sheetVersions(job.getRunId()),
