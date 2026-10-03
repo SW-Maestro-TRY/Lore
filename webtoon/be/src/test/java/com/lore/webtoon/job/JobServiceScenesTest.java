@@ -53,7 +53,7 @@ class JobServiceScenesTest {
                 mock(StoryStore.class), mock(WorkLedger.class), mock(JobNotice.class),
                 mock(CharacterService.class), mock(CharacterOwner.class), mock(PrivateArt.class),
                 mock(S3Service.class), mock(S3Storage.class), mock(SafetyGuard.class),
-                mock(WebtoonCastSheetRepository.class), mock(RunArt.class), mock(JobPush.class), "");
+                mock(WebtoonCastSheetRepository.class), mock(RunArt.class), mock(JobPush.class), 2, 2, "");
     }
 
     private void 작업이(JobStatus status, JobStage stage, boolean checkpoints) {
