@@ -1,5 +1,6 @@
 package com.lore.webtoon.job;
 
+import com.lore.webtoon.push.JobPush;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,7 @@ class JobStoreDirectionsTest {
         jobs = mock(WebtoonJobRepository.class);
         HarnessProcess harness = mock(HarnessProcess.class);
         when(harness.runsDir()).thenReturn(runsDir);
-        store = new JobStore(jobs, harness);   // 새로 뜬 서버 — 메모리가 비어 있다
+        store = new JobStore(jobs, harness, mock(JobPush.class));   // 새로 뜬 서버 — 메모리가 비어 있다
     }
 
     private WebtoonJob job(long id, JobStatus status, JobStage stage) {
