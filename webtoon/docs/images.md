@@ -91,6 +91,40 @@ webtoon/ai/assets/samples/ex-*.jpg     예시 캐릭터 (그림 한 장)
      모르는 값이면 카드에 그림체 이름이 안 뜹니다.
 4. 서버를 다시 빌드·기동합니다.
 
+### 관리자 API 로 올리기 (#614) — 저장소에 안 넣고 운영에서 바로
+
+저장소 폴더 방식은 편수가 늘수록 저장소·jar 가 커지고 git 기록에 남으며, 배포를 거쳐야 하고 내릴 때 DB 를
+만져야 합니다. **환경마다 S3 가 다르므로**(로컬 `~/lore-minio` · dev 박스 MinIO · staging · 운영 각자의 버킷)
+작품은 키로 옮길 수 없고, 그림 **내용**을 담은 **번들(zip)** 로 옮깁니다. 받는 쪽이 자기 창고에 새 키로 다시
+올립니다.
+
+번들 = 위의 예시 폴더와 같은 모양입니다: `manifest.json`(옛 이름 `meta.json` 도 읽음), `pages/pNN-wNNN.jpg`,
+선택으로 `run/`. 원본 사진은 담지 않습니다. 코드는 `ExampleBundle` · `ExampleBundles`(읽기·쓰기·검증) ·
+`ExampleImporter`(심기) · `ExampleBundleExporter`(내보내기) · `ExampleAdmin`(관리) 입니다. 저장소 폴더 방식의
+부팅 시드(`ExampleWorks`)도 같은 `ExampleImporter` 를 씁니다.
+
+관리자 계정(`role = ADMIN`)만 씁니다. 주소는 `/api/webtoon/v1/admin/examples`:
+
+| 하는 일 | 주소 |
+| --- | --- |
+| 목록(순서대로, 비공개로 내린 것도) | `GET /` |
+| 번들 내보내기 — 이 환경의 작품 하나를 zip 으로 | `GET /{runId}/bundle` |
+| 번들 올리기(작은 것·로컬·dev) — 본문이 zip, `?dryRun=true` 면 검사만 | `POST /import` |
+| 번들 올리기(운영·staging) — ① 주소 받기 ② S3 로 PUT ③ 키로 심기 | `POST /upload-url` → `PUT` → `POST /import-key` `{"key":…}` |
+| 지정·해제·공개·순서 | `PATCH /{runId}` `{"example":true,"public":true,"order":1}` |
+| 내리기(예시 해제 + 비공개, 작품은 안 지움) | `DELETE /{runId}` |
+
+- **운영·staging 은 `upload-url` 길을 씁니다.** CloudFront 앞단 WAF 가 큰 요청 본문을 403 으로 막아서
+  몇 MB 짜리 번들은 서버로 못 옵니다. 브라우저가 S3 로 직접 올리고 서버는 키만 받아 읽습니다. 키는 일회용이고
+  심은 뒤 올린 파일은 지웁니다.
+- 같은 `run_id` 가 이미 있으면 아무것도 안 하고 `EXISTS` 를 돌려줍니다. **예시 표시도 말없이 켜지 않습니다**
+  — 같은 번호의 작품이 이미 누군가의 것일 수 있습니다. 예시로 지정하려면 `PATCH` 로 명시합니다.
+- 같은 환경에서 만든 작품은 그림을 옮길 필요 없이 `PATCH {"example":true}` 한 번이면 예시가 됩니다.
+- 받은 zip 은 믿지 않습니다: 경로 이탈 · `run/` 의 스크립트 · JPEG 가 아닌 그림 · 용량 폭탄(실제로 읽은 바이트로
+  셉니다)을 거절합니다.
+- 예시 표시는 `webtoon_work.is_example` · `example_order` 입니다. 예전에 시드로 심은 것은 마이그레이션이
+  한 번에 켰습니다.
+
 **한 편 빼기**: 폴더를 지우는 것으로는 **안 없어집니다** — 이미 DB 에 심겨
 있기 때문입니다. 비공개로 돌리거나 DB 에서 지웁니다. 폴더도 같이 지우면
 다음에 빈 DB 로 시작할 때 안 심깁니다.

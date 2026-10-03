@@ -85,4 +85,7 @@ public interface WebtoonWorkRepository extends JpaRepository<WebtoonWork, Long> 
 
     /** 이 작품의 주인. 권한을 물을 때 쓴다. */
     Optional<WebtoonWork> findFirstByRunId(String runId);
+
+    /** 예시 작품 — 순서가 작은 것부터, 순서가 없으면 맨 뒤(만든 순서). 휴지통에 넣은 것은 뺀다(#614). */
+    List<WebtoonWork> findByExampleTrueAndDeletedAtIsNullOrderByExampleOrderAscIdAsc();
 }
