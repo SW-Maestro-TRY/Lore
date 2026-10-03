@@ -40,9 +40,9 @@ const suit = localFont({
  * `/runs`가 최신순이라 아무나 웹툰을 만들어 공개하면 그게 그대로 온보딩
  * 04 칸 표지를 덮어써 버렸다(2026-09-23 리포트) — 온보딩은 "이렇게 나온다"는
  * 고정 견본을 보여줘야지, 방금 만들어진 남의 작품을 보여주면 안 된다.
- * 그래서 다시 고정 run_id로 되돌린다. 이 run은 ExampleWorks(webtoon/be)가
- * webtoon/ai/assets/examples/에서 서버 기동 때마다 DB로 심어 두므로 빠질
- * 일이 없지만, 혹시 몰라 못 받아오면 정적 견본 그림으로 대신한다. */
+ * 그래서 다시 고정 run_id로 되돌린다. 이 run은 예시 번들로 올린다(#614 · #616 —
+ * 번들은 작품 번호를 그대로 둔다). 아직 안 올린 환경(예: 새 운영 서버)에서는 못
+ * 받아오므로 정적 견본 그림으로 대신한다. */
 const DONE_EXAMPLE_RUN_ID = "20260910T132240-ae8c28";
 const DONE_FALLBACK = "/static/samples/ex-romance-2.jpg";
 import { usePhone } from "./usePhone";
