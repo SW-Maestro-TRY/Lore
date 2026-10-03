@@ -92,19 +92,12 @@ public class GuestGate {
             return null;                     // 0 이면 안 센다 — 끄는 스위치
         }
 
-        String who = hash(clientIp(request));
-        LocalDate today = LocalDate.now(clock);
-        GuestQuota quota = quotas.findByIpHashAndDay(who, today)
-                .orElseGet(() -> new GuestQuota(who, today));
-
-        if (quota.getUsed() >= freePerDay) {
-            log.info("게스트 하루 몫을 다 썼습니다 ({}/{}편)", quota.getUsed(), freePerDay);
+        /* 검사와 세기를 DB 한 문장으로 — 동시에 두 번 눌러도 한도만큼만 통과한다(#623) */
+        if (quotas.useIfUnder(hash(clientIp(request)), LocalDate.now(clock), freePerDay) == 0) {
+            log.info("게스트 하루 몫을 다 썼습니다 ({}편)", freePerDay);
             return "오늘 무료로 만들 수 있는 " + freePerDay + "편을 다 쓰셨어요 — "
                     + "로그인하시면 이어서 만들 수 있어요.";
         }
-
-        quota.use();
-        quotas.save(quota);
         return null;
     }
 
@@ -149,14 +142,7 @@ public class GuestGate {
         if (key == null || key.isBlank() || freePerDay <= 0) {
             return false;
         }
-        return quotas.findByIpHashAndDay(key, LocalDate.now(clock))
-                .filter(q -> q.getUsed() > 0)
-                .map(q -> {
-                    q.giveBack();
-                    quotas.save(q);
-                    return true;
-                })
-                .orElse(false);
+        return quotas.giveBackOne(key, LocalDate.now(clock)) > 0;
     }
 
     @Transactional
@@ -164,12 +150,7 @@ public class GuestGate {
         if (loggedIn() || freePerDay <= 0) {
             return;                          // 애초에 안 셌다
         }
-        quotas.findByIpHashAndDay(hash(clientIp(request)), LocalDate.now(clock))
-                .filter(q -> q.getUsed() > 0)
-                .ifPresent(q -> {
-                    q.giveBack();
-                    quotas.save(q);
-                });
+        quotas.giveBackOne(hash(clientIp(request)), LocalDate.now(clock));
     }
 
     /** 로그인해 있는가. {@code @LoginUser} 는 없으면 예외를 던지므로 직접 본다. */
