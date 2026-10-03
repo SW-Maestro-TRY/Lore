@@ -800,3 +800,68 @@ export interface SurveyRow {
 export function adminSurveyRows(limit = 200): Promise<SurveyRow[]> {
   return call(`/admin/feedback?limit=${limit}`);
 }
+
+/* ---- 예시 작품 관리(#614 · #619) — 관리자만 ---------------------------------------- */
+
+export interface AdminExampleRow {
+  runId: string;
+  title: string;
+  genre: string;
+  isPublic: boolean;
+  order: number | null;
+  pages: number;
+  seeded: boolean;
+  createdAt: string;
+}
+
+export interface AdminImportResult {
+  runId: string;
+  title: string;
+  status: "PLANTED" | "EXISTS" | "DRY_RUN";
+  pages: number;
+  runFolderRestored: boolean;
+}
+
+export function adminExamples(): Promise<{ examples: AdminExampleRow[] }> {
+  return call<{ examples: AdminExampleRow[] }>("/admin/examples");
+}
+
+/** 번들 하나를 올린다. 운영·staging 은 WAF 가 큰 본문을 막으므로 S3 로 직접 올리고 키로 심는다.
+ *  S3 로 못 올리면(로컬 창고의 CORS 등) 본문으로 바로 올린다 — 로컬 · dev 는 이 길도 된다. */
+export async function adminImportBundle(file: File, dryRun: boolean): Promise<AdminImportResult> {
+  let put: Response | null = null;
+  let key = "";
+  try {
+    const up = await post<{ key: string; url: string }>("/admin/examples/upload-url");
+    key = up.key;
+    put = await fetch(up.url, { method: "PUT", headers: { "Content-Type": "application/zip" }, body: file });
+  } catch {
+    put = null;
+  }
+  if (put && put.ok) {
+    return post<AdminImportResult>("/admin/examples/import-key", { key, dryRun });
+  }
+  return call<AdminImportResult>(`/admin/examples/import?dryRun=${dryRun}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/zip" },
+    body: file,
+  });
+}
+
+export function adminUpdateExample(runId: string, body: { example?: boolean; public?: boolean; order?: number | null }):
+    Promise<AdminExampleRow> {
+  return call<AdminExampleRow>(`/admin/examples/${encodeURIComponent(runId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function adminTakeDownExample(runId: string): Promise<AdminExampleRow> {
+  return call<AdminExampleRow>(`/admin/examples/${encodeURIComponent(runId)}`, { method: "DELETE" });
+}
+
+export function adminBundleUrl(runId: string): string {
+  return `${BASE}/admin/examples/${encodeURIComponent(runId)}/bundle`;
+}
+

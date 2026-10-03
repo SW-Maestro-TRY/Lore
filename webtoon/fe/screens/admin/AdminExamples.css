@@ -1,0 +1,34 @@
+/* 예시 작품 관리(#619) — 관리자 운영 화면. 웹툰 탭의 카드·단추·스위치를 그대로 쓴다. */
+.wt .wt-adm { gap: 18px; }
+.wt .wt-adm h1 { font-size: 26px; }
+.wt .wt-adm h2 { font-size: 17px; }
+.wt .wt-adm-head { display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-adm-card { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.wt .wt-adm-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.wt .wt-adm-row .field { max-width: 320px; height: 42px; }
+.wt .wt-adm-check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.wt .wt-adm-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.wt .wt-adm-lines li { display: flex; gap: 10px; align-items: baseline; }
+.wt .wt-adm-lines li b { min-width: 260px; font-weight: 600; word-break: break-all; }
+.wt .wt-adm-lines li.is-ok span { color: var(--sea-deep); }
+.wt .wt-adm-lines li.is-err span { color: #c0392b; }
+.wt .wt-adm-lines li.is-wait span, .wt .wt-adm-lines li.is-busy span { color: var(--dim); }
+.wt .wt-adm-err { color: #c0392b; font-size: 13px; }
+.wt .wt-adm-listhead { display: flex; align-items: center; justify-content: space-between; }
+.wt .wt-adm-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.wt .wt-adm-table th { text-align: left; font-weight: 600; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.wt .wt-adm-table td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.wt .wt-adm-table tr[aria-busy="true"] { opacity: 0.5; }
+.wt .wt-adm-cover { width: 48px; height: 72px; object-fit: cover; border-radius: 6px; display: block; background: var(--paper); }
+.wt .wt-adm-sub { font-size: 12px; margin-top: 2px; }
+.wt .wt-adm-order { width: 72px; height: 36px; }
+.wt .wt-adm-acts { display: flex; gap: 6px; justify-content: flex-end; }
+.wt .wt-adm-acts .btn-sm { height: 34px; padding: 0 12px; font-size: 13px; }
+.wt .wt-adm .linkish { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; text-align: left; }
+
+@media (max-width: 767px) {
+  .wt .wt-adm-lines li { flex-direction: column; gap: 2px; }
+  .wt .wt-adm-lines li b { min-width: 0; }
+  .wt .wt-adm-table th:nth-child(3), .wt .wt-adm-table td:nth-child(3) { display: none; }
+  .wt .wt-adm-acts { flex-direction: column; }
+}
