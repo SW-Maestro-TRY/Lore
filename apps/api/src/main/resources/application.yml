@@ -53,10 +53,13 @@ spring:
       #   그 사실이 빌드·배포·기동을 전부 통과한 뒤 <b>실제 호출에서만</b> 드러난다.
       #   2026-09-09 회원가입·그림 등록이 그 이유로 500 이 났다. 이제는 어긋나면 기동이 멈춘다.
       ddl-auto: ${DDL_AUTO:validate}
-    show-sql: true
+    # ★ 쿼리를 로그로 찍지 않는다(#622). 켜 두면 쿼리마다 여러 줄이 찍혀, 2026-10-04 staging 부하 시험에서
+    #   로그를 받는 journald·rsyslog 가 java 만큼 CPU 를 썼다(1분에 약 10만 줄). 로컬에서 볼 때만
+    #   JPA_SHOW_SQL=true 로 켠다.
+    show-sql: ${JPA_SHOW_SQL:false}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: ${JPA_SHOW_SQL:false}
   mail:
     host: smtp.gmail.com
     port: 587
