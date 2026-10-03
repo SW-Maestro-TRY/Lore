@@ -655,6 +655,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     else if (status === "awaiting_sheet") pane = "sheet";
     else if (status === "awaiting_cast") pane = "cast";
     else if (status === "awaiting_scenes") pane = "scenes";
+    /* 장면을 다 나눴지만 첫 장이 그려지기 전이면 걸음 3 이 아직 「지금 단계」다 — 그래도 눌렀으면 장면을 읽게 한다(#601). */
+    else if (cur === SCENES && scenes.length > 0) pane = "scenes-view";
     else if (status === "awaiting_pick") pane = ownJob ? "story-check" : confirming ? "confirm" : "making";
     else pane = "drawing";
   }
