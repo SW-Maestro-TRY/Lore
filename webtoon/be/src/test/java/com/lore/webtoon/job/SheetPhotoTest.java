@@ -72,15 +72,27 @@ class SheetPhotoTest {
     void 확인_중에는_남는다() {
         when(job.isCheckpoints()).thenReturn(true);
 
-        /* 확인하며 가는 길은 시트 뒤에 장면 확인 자리(#548)에서 멈춘다 — 시트 확인은 거기에
-           합쳐졌다. 그동안 사진은 남아 있어야 시트를 다시 만들 수 있다. */
+        /* 확인하고 만들기 길은 시트를 다 그리면 시트 확인에서 멈춘다(#604). 다시 만들기가 사진부터
+           사양을 다시 쓰므로 그동안 사진은 남아 있어야 한다. */
         runner.resumeAfterPick(1L);
-        verify(store, timeout(2000)).awaiting(1L, JobStatus.AWAITING_SCENES, JobStage.PAGES);
+        verify(store, timeout(2000)).awaiting(1L, JobStatus.AWAITING_SHEET, JobStage.SHEET);
         assertThat(photo).exists();
 
-        when(job.getStatus()).thenReturn(JobStatus.AWAITING_SCENES);
-        runner.redrawSheet(1L, "머리를 더 길게", JobStatus.AWAITING_SCENES);
-        verify(store, timeout(2000).times(2)).awaiting(1L, JobStatus.AWAITING_SCENES, JobStage.PAGES);
+        when(job.getStatus()).thenReturn(JobStatus.AWAITING_SHEET);
+        runner.redrawSheet(1L, "머리를 더 길게", JobStatus.AWAITING_SHEET);
+        verify(store, timeout(2000).times(2)).awaiting(1L, JobStatus.AWAITING_SHEET, JobStage.SHEET);
+        assertThat(photo).exists();
+    }
+
+    @Test
+    @DisplayName("확인하고 만들기에서 시트를 확정해도 사진은 둔다 — 장면 확인에서도 시트를 다시 만들 수 있다(#604)")
+    void 확정해도_장면_확인까지_남는다() {
+        when(job.isCheckpoints()).thenReturn(true);
+        when(job.getStatus()).thenReturn(JobStatus.AWAITING_SHEET);
+
+        runner.resumeAfterSheet(1L);
+
+        verify(store, timeout(2000)).awaiting(1L, JobStatus.AWAITING_SCENES, JobStage.PAGES);
         assertThat(photo).exists();
     }
 
