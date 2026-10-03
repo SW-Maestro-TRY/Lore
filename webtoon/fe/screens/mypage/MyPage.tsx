@@ -555,6 +555,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 {withdrawErr && <span className="wt-my-err">{withdrawErr}</span>}
               </div>
             )}
+            {isAuthenticated && user?.role === "ADMIN" && (
+              /* 관리자만 — 예시 작품을 번들로 올리고 내리는 화면(#619) */
+              <div className="card wt-my-setting">
+                <div className="wt-my-setting-row">
+                  <div>
+                    <b>{t("예시 작품 관리")}</b>
+                    <span className="muted">{t("둘러보기의 예시 작품을 번들로 올리고, 순서·공개를 바꾸고, 내립니다. 관리자만 보여요.")}</span>
+                  </div>
+                  <button type="button" className="btn btn-w" onClick={() => go("admin-examples")}>{t("열기")}</button>
+                </div>
+              </div>
+            )}
             {isAuthenticated && <AdminSurvey />}
           </>
         )}
