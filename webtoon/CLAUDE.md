@@ -70,6 +70,7 @@ webtoon/ai/
 | [server.md](docs/server.md) | 서버 구조와 사용 설명서 | dev·staging·prod 세 환경의 구성과 주소 · 배포 흐름과 브랜치 규칙 · 비밀값 넣는 곳(dev 는 박스 `.env` 와 compose `environment:` 둘 다 필요) · 버킷 · 서버 로그 보기 · staging 자동 전원 · DB 직접 접근 · 비용 |
 | [env-diff.md](docs/env-diff.md) | 세 환경이 실제로 무엇이 다른가 | 대조표 · **dev 에서는 안 드러나고 승격 때 걸리는 것**(설정 주입 경로, venv 실패가 배포를 안 멈춤, 마이그레이션 순서, MinIO 의존 등) · 승격 점검표 |
 | [images.md](docs/images.md) | 화면에 그림 넣는 법 | 정적 그림은 원본 폴더에 넣음(`apps/web/public/static/` 금지) · 예시 작품·예시 캐릭터는 부팅 때 한 번 심고 그 뒤로는 DB 가 원본 · 온보딩 목업 상수 · 둘러보기 공개 · 예시 `run_id` 하드코딩 자리 |
+| [pipeline.md](docs/pipeline.md) | 웹툰 한 편이 만들어지는 순서와 단계별 모델 | 만드는 순서(이야기 · 시트 나란히 → 장면 → 장 그림 · 장 검수 → 화 전체 검수) · 단계별 모델(gpt-5.1 · gpt-4.1 · gpt-image-2)과 실제 기록 · 길마다 멈추는 자리 · 검수 세 가지가 보는 것과 다시 그리는 횟수 · 그림 품질 · 동시 작업 수 · 모델 바꾸는 법 |
 | [full-review-design.md](docs/full-review-design.md) | 완성된 화 전체를 다시 읽는 검수 설계 | 장 단위 검수로 못 잡는 장거리 문제 · 판정(`fullreview.py`)과 재생성 루프(`JobRunner.runFullReviewLoop`) 구현 상태 |
 | [mentoring-followup-2026-09-19.md](docs/mentoring-followup-2026-09-19.md) | 0911 멘토링 후속 과제 진행 기록 | 과제 11개별로 한 것 → 실측 결과 → 남은 것 |
 | [brand/](docs/brand/README.md) | 서비스를 뭐라고 소개하나 | 한 줄 정의·가치·핵심 경험 · 메인 타겟과 유입 타겟 · 문제 인식 · 문장 층위와 소개서 순서 · 지금 되는 기능과 실측 시간. 소개서·랜딩·광고 문구를 쓸 때 먼저 읽음 |
