@@ -207,9 +207,13 @@
   .wt .wt-landing-needs { padding: 60px 20px 0; gap: 18px; }
   .wt .wt-landing-needs h2 { font-size: 21px; }
   .wt .wt-landing-needs-row { flex-direction: column; gap: 18px; }
-  .wt .wt-landing-need { padding: 22px 20px 0; height: 470px; }
-  .wt .wt-landing-need + .wt-landing-need { height: 500px; }
-  .wt .wt-landing-need.on { flex: 1 1 0; }
+  /* 세로로 쌓이는 카드는 높이를 그림이 정한다 — 첫 카드의 편집실 목업(260)과 같은 높이로 맞춘다.
+     이전에는 .on 의 flex-basis 0 때문에 컷 원본 비율(2:3)이 그대로 나와 몽이 그림이 400px 넘게 컸다. */
+  .wt .wt-landing-need { padding: 22px 20px 0; height: auto; }
+  .wt .wt-landing-need.on { flex: 0 0 auto; }
+  .wt .wt-landing-need-fig { flex: 0 0 260px; height: 260px; }
+  /* 낮아진 칸에서 몽이 얼굴이 아래 자막에 가리지 않게, 그림을 위로 붙이지 않고 얼굴 높이로 맞춘다. */
+  .wt .wt-landing-cut > img { object-position: 50% 28%; }
   .wt .wt-landing-need-text > b { font-size: 20px; }
   .wt .wt-landing-need-text > span { font-size: 13.5px; line-height: 1.6; }
 
