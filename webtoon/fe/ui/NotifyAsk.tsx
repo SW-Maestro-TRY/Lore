@@ -11,7 +11,7 @@
  *   이메일     (게스트만) 메일 주소 칸           로그인한 사람은 계정 메일로 가니 건너뛴다
  *   푸시       브라우저 허용 안내 → 허용 요청     거부됨 · 아이폰(홈 화면에 추가해야 됨)은 안내만
  *
- * 띄울지는 부르는 쪽이 정한다(이 기기 알림이 이미 켜져 있으면 안 띄운다). 게스트도 기기 알림을 받는다 —
+ * 처음 한 번만 묻는다 — 답하면(괜찮아요 포함) 이 브라우저에서는 다시 안 묻는다. 이 기기 알림이 이미 켜져 있어도 안 묻는다. 게스트도 기기 알림을 받는다 —
  * 서버가 브라우저 단위로 보낸다(JobPush.recipientsOf). */
 import { useEffect, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
@@ -26,8 +26,21 @@ type Step = "ask" | "pick" | "email" | "push";
 
 const LOOKS_LIKE = /^[^@\s]+@[^@\s.]+\.[^@\s]+$/;
 
-/** 띄울 차례인가 — 이 기기 알림이 아직 안 켜졌으면. 상태를 모르면(불러오는 중) 띄우지 않는다. */
+/* 한 번 답하면(괜찮아요 포함) 이 브라우저에서는 다시 묻지 않는다 — 만들 때마다 물으면 귀찮다. 바꾸고 싶으면
+   마이페이지 설정(완성 알림 메일 · 이 기기로 푸시 알림)에서 바꾼다. 바탕 · Esc 로 닫은 것은 답이 아니라 다음에 또 묻는다. */
+const ANSWERED_KEY = "lore_wt_notify_asked";
+
+function answered(): boolean {
+  try { return localStorage.getItem(ANSWERED_KEY) === "1"; } catch { return false; }
+}
+
+function markAnswered(): void {
+  try { localStorage.setItem(ANSWERED_KEY, "1"); } catch { /* 이번만 */ }
+}
+
+/** 띄울 차례인가 — 처음이고 이 기기 알림이 아직 안 켜졌으면. 상태를 모르면(불러오는 중) 띄우지 않는다. */
 export async function shouldAskNotify(): Promise<boolean> {
+  if (answered()) return false;
   try {
     const s = await pushState();
     return s !== "on" && s !== "loading";
@@ -59,6 +72,7 @@ export default function NotifyAsk({ time, onStart, onClose }: {
   const canPush = push === "ready" || push === "denied" || push === "ios-install";
 
   const finish = (mail: string | null) => {
+    markAnswered();
     track("notify_ask_done", { push: wantPush, email: !!mail || (loggedIn && step !== "ask"), logged_in: loggedIn });
     onStart(mail);
   };
@@ -106,7 +120,7 @@ export default function NotifyAsk({ time, onStart, onClose }: {
       <Dialog title={t("완성되면 알림을 보내드릴까요?")}
               sub={t("한 편에 {time} 걸려요. 화면을 닫고 다른 일을 하셔도 괜찮아요.", { time })} onClose={onClose}>
         <div className="wt-dialog-actions">
-          <button type="button" className="btn btn-w" onClick={() => { track("notify_ask_skip"); onStart(null); }}>{t("괜찮아요")}</button>
+          <button type="button" className="btn btn-w" onClick={() => { markAnswered(); track("notify_ask_skip"); onStart(null); }}>{t("괜찮아요")}</button>
           <button type="button" className="btn btn-p" onClick={() => setStep("pick")}>{t("알림 받을게요")}</button>
         </div>
       </Dialog>
