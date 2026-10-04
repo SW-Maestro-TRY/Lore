@@ -1418,6 +1418,12 @@ public class JobRunner {
         after.finish(job.getRunId(), line -> progress.line(jobId, line));
         store.done(jobId);
         progress.forget(jobId);
+        if (!unsafePages(job.getRunId()).isEmpty()) {
+            /* 장면 몇 장이 안전 기준에 걸려 빈 장으로 완성됐다(#626) — 「완성됐어요」 대신 실패 때와 같은
+               모양으로, 무엇을 고치면 되는지 알린다. 크레딧은 그대로이고 빈 장 다시 그리기는 무료다. */
+            notice.partial(jobId, partialMessage(job.getRunId()));
+            return;
+        }
         /* **다 됐다고 적은 뒤에 알린다.** 먼저 보내면 메일의 링크를 눌러
            들어온 사람이 아직 안 끝난 작품을 본다. 이 부름은 안에서 실패를
            전부 삼키므로 여기서 죽지 않는다 — 메일이 안 가는 것보다 다 만든
@@ -1460,13 +1466,18 @@ public class JobRunner {
                 new java.util.concurrent.atomic.AtomicReference<>();
         progress.drew(jobId, 0, pages);
 
+        /* 안전 검사에 두 번 연속 걸린 장(#626). 다른 실패와 달리 남은 장은 계속 그린다 — 한두 장이면
+           그 장만 비워 두고 완성해서 사람이 편집실에서 장면을 고쳐 다시 그리게 한다. */
+        java.util.Set<Integer> unsafe = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
         List<java.util.concurrent.Future<?>> waiting = new ArrayList<>();
         for (int n = 1; n <= pages; n++) {
             final int page = n;
             waiting.add(paint.submit(() -> {
                 /* 이미 어긋났으면 시작하지 않는다 — 한 장이 실패했는데 남은
-                   장을 계속 그리면 어차피 못 쓸 화에 그림 값만 더 나간다. */
-                if (failed.get() != null || cancelled.contains(jobId)) {
+                   장을 계속 그리면 어차피 못 쓸 화에 그림 값만 더 나간다. 안전 검사에
+                   걸린 장이 너무 많아도(살려 완성할 수 없으니) 멈춘다. */
+                if (failed.get() != null || unsafe.size() > MAX_UNSAFE_PAGES || cancelled.contains(jobId)) {
                     return;
                 }
                 try {
@@ -1474,6 +1485,11 @@ public class JobRunner {
                     int code = callHarness(jobId, job,
                             List.of("--run-id", job.getRunId(), "--detail-pages",
                                     "--page", String.valueOf(page)));
+                    if (code != 0 && Files.isRegularFile(unsafeMarker(job.getRunId(), page))) {
+                        unsafe.add(page);
+                        log.warn("{}번째 장이 안전 검사에 걸렸습니다 — 나머지를 계속 그립니다 (job={})", page, jobId);
+                        return;
+                    }
                     if (code != 0) {
                         throw harnessFailed(job.getRunId(), page + "번째 장을 그리지 못했습니다");
                     }
@@ -1494,9 +1510,111 @@ public class JobRunner {
         stopIfCancelled(jobId);
         Exception bad = failed.get();
         if (bad != null) {
-            throw bad instanceof Cancelled ? bad
+            /* 하네스가 남긴 이유(HarnessFailed)는 그대로 올린다 — 전에는 여기서 「그림을 만들지
+               못했습니다」로 감싸 버려서 안전 검사에 걸린 것도 이유 없이 실패로만 보였다(#626). */
+            throw bad instanceof Cancelled || bad instanceof HarnessFailed ? bad
                     : new IllegalStateException("그림을 만들지 못했습니다", bad);
         }
+        if (unsafe.size() > MAX_UNSAFE_PAGES) {
+            /* 너무 많이 걸렸다 — 빈 장투성이로 완성하는 것보다 실패로 돌려주고 환급하는 것이 낫다. */
+            JobFailure first = JobFailure.read(runsDir.resolve(job.getRunId())).orElse(null);
+            String why = "장면 " + unsafe.size() + "장이 이미지 안전 기준" + (first != null && first.sexual() ? "(선정성)" : "")
+                    + "에 걸렸어요. 한 번 더 그려 봤지만 같았어요. 이야기 속 노출이나 선정적인 장면이 원인일 수 있으니, "
+                    + "다른 이야기로 다시 만들어 주세요.";
+            throw new HarnessFailed(why, first);
+        }
+        for (int page : unsafe) {
+            writeBlankPage(job.getRunId(), page);       // 빈 자리 — 이어 붙이기·올리기가 장 번호를 그대로 쓴다
+        }
+    }
+
+    /** 안전 검사에 걸려 비워 둔 장을 몇 장까지 살려 완성하나(#626). 그보다 많으면 실패로 돌려준다. */
+    static final int MAX_UNSAFE_PAGES = 2;
+
+    /** 하네스가 남기는 「이 장은 안전 검사에 걸렸다」 표시({@code failure.page_file}). */
+    public Path unsafeMarker(String runId, int page) {
+        return runsDir.resolve(runId).resolve("pages").resolve("page%02d.unsafe.json".formatted(page));
+    }
+
+    /** 안전 검사에 걸려 비워 둔 장 번호들. 다시 그려 성공하면 하네스가 표시를 지워 여기서 빠진다. */
+    public List<Integer> unsafePages(String runId) {
+        if (runId == null) {
+            return List.of();
+        }
+        Path dir = runsDir.resolve(runId).resolve("pages");
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
+        try (var found = Files.list(dir)) {
+            return found.map(p -> p.getFileName().toString())
+                    .map(java.util.regex.Pattern.compile("^page(\\d+)\\.unsafe\\.json$")::matcher)
+                    .filter(java.util.regex.Matcher::matches)
+                    .map(m -> Integer.parseInt(m.group(1)))
+                    .sorted()
+                    .toList();
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
+    /** 이 장이 안전 검사에 걸려 비워 둔 장인가. 편집실이 다시 그리기 값을 안 받는 근거다. */
+    public boolean isUnsafePage(String runId, int page) {
+        return runId != null && Files.isRegularFile(unsafeMarker(runId, page));
+    }
+
+    /** 걸린 장들 중 선정성이 있었나 — 안내 문구를 고른다. */
+    boolean unsafeSexual(String runId) {
+        for (int page : unsafePages(runId)) {
+            try {
+                JsonNode n = mapper.readTree(unsafeMarker(runId, page).toFile());
+                for (JsonNode c : n.path("categories")) {
+                    if (c.asText().toLowerCase().contains("sexual")) {
+                        return true;
+                    }
+                }
+            } catch (IOException e) {
+                // 못 읽으면 일반 문구
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 비워 둔 장 자리에 그림 대신 들어갈 빈 장. 글자는 넣지 않는다 — 서버에 한글 글꼴이 없을 수 있고,
+     * 안내 문구는 화면이 그 위에 네 언어로 얹는다. 크기는 다른 장과 맞춘다.
+     */
+    void writeBlankPage(String runId, int page) {
+        Path dir = runsDir.resolve(runId).resolve("pages");
+        Path out = dir.resolve("page%02d.png".formatted(page));
+        int w = 1024;
+        int h = 1536;
+        try (var found = Files.list(dir)) {
+            Path sample = found.filter(p -> p.getFileName().toString().matches("^page\\d+\\.png$")).findFirst().orElse(null);
+            if (sample != null) {
+                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(sample.toFile());
+                if (img != null) {
+                    w = img.getWidth();
+                    h = img.getHeight();
+                }
+            }
+            java.awt.image.BufferedImage blank = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D g = blank.createGraphics();
+            g.setColor(new java.awt.Color(0xEE, 0xF1, 0xF2));
+            g.fillRect(0, 0, w, h);
+            g.dispose();
+            javax.imageio.ImageIO.write(blank, "png", out.toFile());
+        } catch (IOException e) {
+            throw new IllegalStateException(page + "번째 빈 장을 만들지 못했습니다", e);
+        }
+    }
+
+    /** 장면 일부가 빠진 채 완성됐을 때 사람에게 할 말(#626). 문장은 화면 사전에도 키로 있다. */
+    String partialMessage(String runId) {
+        List<Integer> missing = unsafePages(runId);
+        String which = String.join(", ", missing.stream().map(p -> p + "쪽").toList());
+        return which + " 장면이 이미지 안전 기준" + (unsafeSexual(runId) ? "(선정성)" : "")
+                + "에 걸려 빈 장으로 두었어요. 나머지는 완성됐어요. 마이페이지 내 웹툰의 편집실에서 그 장면 설명을 고쳐 "
+                + "다시 그려 주세요. 빈 장 다시 그리기는 무료예요.";
     }
 
     /** 예전 길 — 한 프로세스가 표지부터 마지막 장까지 차례로 그린다. */
@@ -1543,7 +1661,7 @@ public class JobRunner {
      * 「확인하고 만들기」·「바로 만들기」 작품은 전부 비어 있었다. 장면을 고친 뒤 다시 적는 자리는
      * {@code JobService.continueScenes} 다. 못 적어도 그리기를 막지 않는다.
      */
-    void syncSceneCaptions(String runId) {
+    public void syncSceneCaptions(String runId) {
         try {
             List<String> captions = sceneCaptions(runId);
             if (!captions.isEmpty()) {
@@ -1645,6 +1763,9 @@ public class JobRunner {
                        읽고 9·18쪽을 다시 그리라고 한 적이 있다(2026-09-30). */
                     if (page <= 0 || pages > 0 && page > pages) {
                         continue;
+                    }
+                    if (isUnsafePage(job.getRunId(), page)) {
+                        continue;             // 안전 검사로 비워 둔 장 — 같은 장면으로 또 그리면 또 걸린다(#626)
                     }
                     int used = redrawn.getOrDefault(page, 0);
                     if (used >= MAX_PAGE_REDRAWS) {

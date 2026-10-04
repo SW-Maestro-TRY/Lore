@@ -5,6 +5,7 @@ import com.lore.webtoon.art.PageUploader;
 import com.lore.webtoon.job.HarnessProcess;
 import com.lore.webtoon.job.RunFiles;
 import com.lore.webtoon.job.JobRunner;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,7 @@ public class RegenService {
             Pattern.compile("page(\\d+)\\.v(\\d+)\\.png");
 
     private final PageRegenRepository regens;
+    private final ObjectMapper json = new ObjectMapper();
     private final PageStore pages;
     private final BakeService bakery;
     private final HarnessProcess harness;
@@ -231,6 +233,10 @@ public class RegenService {
         String runId = one.getRunId();
         int no = one.getPageNo();
         Path dest = pageFile(runId, no);
+        /* 원래 안전 검사로 비워 둔 장이었나(#626). 멀쩡하던 장을 다시 그리다 걸리면 하네스가 이 장에
+           표시를 남기는데, 원래 그림은 그대로이므로 그 표시는 지워야 한다 — 안 지우면 멀쩡한 장이
+           「빈 장」으로 보이고 다시 그리기가 공짜가 된다. */
+        boolean wasUnsafe = runner.isUnsafePage(runId, no);
 
         try {
             /* **참조할 그림부터 되살린다.** 이어그리기는 직전 장 그림을 붙여
@@ -268,6 +274,16 @@ public class RegenService {
                실패해도 나간 값은 나갔다 — 성공 여부를 보기 전에 적는다. 겹치는 줄은
                (작품, 몇 번째)로 걸러진다. */
             after.cost(runId);
+            if (code != 0 && runner.isUnsafePage(runId, no)) {
+                boolean sexual = unsafeSexual(runId, no);
+                if (!wasUnsafe) {
+                    Files.deleteIfExists(runner.unsafeMarker(runId, no));
+                }
+                fail(id, "다시 그린 그림이 이미지 안전 기준" + (sexual ? "(선정성)" : "") + "에 걸렸어요. "
+                        + (wasUnsafe ? "빈 장은 그대로예요. " : "원래 그림은 그대로예요. ")
+                        + "장면 설명에서 노출이나 선정적인 부분을 바꿔 다시 그려 주세요.");
+                return;
+            }
             if (code != 0 || !Files.isRegularFile(dest)) {
                 fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
                 return;
@@ -337,6 +353,68 @@ public class RegenService {
             one.move(to, Instant.now());
             regens.save(one);
         });
+    }
+
+    /* ---- 안전 검사로 비워 둔 장(#626) ---- */
+
+    /** 안전 검사에 걸려 빈 장으로 둔 장 번호들. 결과 화면·편집실이 안내를 띄운다. */
+    public List<Integer> unsafePages(String runId) {
+        return runner.unsafePages(runId);
+    }
+
+    /** 이 장이 빈 장인가 — 다시 그리기 값을 안 받는다. */
+    public boolean isUnsafe(String runId, int pageNo) {
+        return runner.isUnsafePage(runId, pageNo);
+    }
+
+    private boolean unsafeSexual(String runId, int pageNo) {
+        try {
+            String raw = Files.readString(runner.unsafeMarker(runId, pageNo));
+            return raw.toLowerCase().contains("sexual");
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     * 그 장의 장면 설명(장소와 상황 · 벌어지는 일)을 고친다 — 다시 그리기 직전에(#626). 걸린 장면은 같은
+     * 글로 다시 그리면 또 걸리므로, 사람이 설명을 고칠 수 있어야 한다. 표지(1장)는 장면이 아니라 없다.
+     * 장면 설명 칸(편집실 왼쪽)도 같이 맞춘다. null 인 칸은 그대로 둔다.
+     */
+    @SuppressWarnings("unchecked")
+    public void editScene(String runId, int pageNo, String where, String what) throws IOException {
+        if (pageNo <= 1 || (where == null && what == null)) {
+            return;
+        }
+        Path file = runner.runDir(runId).resolve("scenes.json");
+        if (!Files.isRegularFile(file)) {
+            throw new NoSuchElementException("장면 파일이 없습니다");
+        }
+        Map<String, Object> doc = json.readValue(file.toFile(), LinkedHashMap.class);
+        Object list = doc.get("scenes");
+        if (!(list instanceof List<?> scenes)) {
+            throw new NoSuchElementException("장면이 없습니다");
+        }
+        int n = pageNo - 1;
+        for (Object o : scenes) {
+            if (o instanceof Map<?, ?> m && Integer.valueOf(n).equals(asInt(m.get("n")))) {
+                Map<String, Object> scene = (Map<String, Object>) m;
+                if (where != null) {
+                    scene.put("where", where.strip());
+                }
+                if (what != null) {
+                    scene.put("what", what.strip());
+                }
+                json.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), doc);
+                runner.syncSceneCaptions(runId);
+                return;
+            }
+        }
+        throw new NoSuchElementException("그 장면이 없습니다");
+    }
+
+    private static Integer asInt(Object v) {
+        return v instanceof Number num ? num.intValue() : null;
     }
 
     private void fail(String id, String reason) {

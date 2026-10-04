@@ -246,6 +246,8 @@ export interface NhJob {
   sheet_blocked?: boolean;
   /** 고쳐서 다시 그리기를 몇 번 더 할 수 있나 */
   sheet_fix_left?: number;
+  /** 다 만들었지만 이미지 안전 기준에 걸려 빈 장으로 둔 장 번호들(#626) */
+  unsafe_pages?: number[];
   /** 보관된 옛 시트 수(#548). 다시 만들 때마다 전 것이 1, 2, … 로 남고 sheetVersionUrl 로 본다. */
   sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
@@ -517,6 +519,8 @@ export interface RunResult {
   example?: boolean;
   /** 관리자가 열 때만 온다(#329, #428) — 만들 때 넣은 설정. */
   inputs?: RunInputs;
+  /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
+  unsafe_pages?: number[];
 }
 
 export interface RunInputs {

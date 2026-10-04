@@ -44,7 +44,7 @@ class RunInfoEditTest {
         controller = new RunController(mock(RunService.class), mock(PageStore.class),
                 mock(EpisodeExport.class), mock(OverlayStore.class), mock(BakeService.class),
                 stories, mock(RegenService.class), mock(AfterRun.class), ledger,
-                mock(CreditGate.class), admins);
+                mock(CreditGate.class), admins, mock(com.lore.webtoon.safety.SafetyGuard.class));
     }
 
     @AfterEach

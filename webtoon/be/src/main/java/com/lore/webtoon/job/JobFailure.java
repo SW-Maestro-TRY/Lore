@@ -64,6 +64,10 @@ public record JobFailure(String stage, String code, List<String> categories, Str
         return new JobFailure(stage, code, categories, head + "--- 하네스 출력 끝부분 ---\n" + String.join("\n", tail));
     }
 
+    boolean sexual() {
+        return categories.stream().anyMatch(c -> c.toLowerCase().contains("sexual"));
+    }
+
     boolean imageSafety() {
         return "image_safety".equals(code);
     }

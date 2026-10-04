@@ -84,6 +84,14 @@ const dict: Dict = {
   "EP.{n}": { en: "EP.{n}", ja: "EP.{n}", zh: "EP.{n}" },
   "만들기": { en: "Create", ja: "作る", zh: "制作" },
   "크게 보기": { en: "View larger", ja: "大きく見る", zh: "放大查看" },
+
+  /* ---- 안전 기준에 걸려 빈 장으로 완성(#626) ---- */
+  "{pages} 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 편집실에서 그 장면 설명을 고쳐 다시 그려 주세요. 빈 장 다시 그리기는 무료예요.": {
+    en: "The scene on {pages} was flagged by the image safety filter, so we left it blank. Edit that scene's description in the editor and redraw it. Redrawing blank pages is free.",
+    ja: "{pages}の場面が画像の安全基準に引っかかったため、空白のページにしました。編集室でその場面の説明を直して描き直してください。空白ページの描き直しは無料です。",
+    zh: "{pages}的场景未通过图片安全标准，已留作空白页。请在编辑室修改该场景描述后重新绘制。重新绘制空白页免费。" },
+  "편집실에서 다시 그리기": { en: "Redraw in the editor", ja: "編集室で描き直す", zh: "在编辑室重新绘制" },
+  "이 장면은 이미지 안전 기준에 걸려 아직 그리지 못했어요": { en: "This scene was flagged by the image safety filter and hasn't been drawn yet", ja: "この場面は画像の安全基準に引っかかり、まだ描けていません", zh: "此场景未通过图片安全标准，尚未绘制" },
 };
 
 registerDict(dict);

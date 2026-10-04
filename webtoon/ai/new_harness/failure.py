@@ -73,6 +73,31 @@ def write(run_dir: Path, stage: str, code: str, message: str = "",
         pass
 
 
+def page_file(run_dir: Path, page_no: int) -> Path:
+    """장 하나가 안전 검사에 걸렸다는 표시 — pages/pageNN.unsafe.json (#626)."""
+    return Path(run_dir) / "pages" / f"page{page_no:02d}.unsafe.json"
+
+
+def write_page(run_dir: Path, page_no: int, message: str = "",
+               categories: list[str] | None = None) -> None:
+    """장 하나가 두 번 연속 안전 검사에 걸렸다고 남긴다. 다시 그려 성공하면 clear_page 로 지운다."""
+    try:
+        f = page_file(run_dir, page_no)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps({"page": page_no, "categories": categories or [],
+                                 "message": (message or "")[:1000]}, ensure_ascii=False, indent=1),
+                     encoding="utf-8")
+    except OSError:
+        pass
+
+
+def clear_page(run_dir: Path, page_no: int) -> None:
+    try:
+        page_file(run_dir, page_no).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def clear(run_dir: Path) -> None:
     """새로 시작하는 걸음은 앞 걸음의 실패를 지운다 — 안 지우면 옛 이유가 다시 읽힌다."""
     try:
