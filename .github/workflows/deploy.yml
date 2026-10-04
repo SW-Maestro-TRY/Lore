@@ -118,6 +118,9 @@ jobs:
               - 'common/be/**'
               - 'zzal/be/**'
               - 'webtoon/be/**'
+              # 웹툰 생성 파이프라인 — 백엔드 jar 리소스로 실려 나간다(AiHarnessResources).
+              # 빠져 있던 동안 이 폴더만 바꾼 PR 은 배포가 통째로 건너뛰어졌다(#584·#591).
+              - 'webtoon/ai/**'
               - 'trailer/be/**'
               - 'apps/api/**'
               - 'build.gradle'
