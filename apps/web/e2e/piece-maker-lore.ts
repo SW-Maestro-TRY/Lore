@@ -2,7 +2,7 @@
 // 로그인(`/api/v1/users/me` · `/api/v1/auth/login`)을 브라우저 안에서 대신 답한다.
 //
 // 왜 가짜 서버인가 — 화면 검사는 서버와 DB 없이 돌아야 한다(lore 의 zzal 검사도 목 서버다). 진짜 서버가 하는
-// 일(회차로 거르기 · 회수 칸 가리기 · 검색 · 나눠 주기)을 표본 25장 위에서 같은 규칙으로 한다. 규칙의 정본은
+// 일(회차로 거르기 · 회수 칸 가리기 · 검색 · 나눠 주기)을 불러온 카드 표본 위에서 같은 규칙으로 한다. 규칙의 정본은
 // NarrativeAnalysis `migration/front_back_protocol.md` 2-1~2-4 이고, 검색 규칙은 화면이 브라우저에서 찾던
 // `piece-maker/fe/lib/search.ts` 의 `matchesCard` 그대로다(서버도 이 규칙을 옮겼다).
 //

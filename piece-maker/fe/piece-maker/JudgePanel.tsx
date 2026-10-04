@@ -15,6 +15,8 @@ type Props = {
   frozen: boolean;
   /** 맡긴 판정을 아직 기다리는가. 클릭할 수 없는 대기 상태를 보인다. */
   pending: boolean;
+  /** 판정 실패 화면은 별도 환급 안내를 쓰고 도움말·상태 본문은 비운다. */
+  failed: boolean;
   /** 단추 아래의 한 줄. */
   stateText: string;
   /** 판정 1회에 깎는 크레딧. 장부 정보를 받기 전에는 null. */
@@ -62,7 +64,7 @@ function ReferenceLinks({ ids, label, titleOf, onOpen }: { ids: string[]; label:
   );
 }
 
-/** 판정 결과. 편집본을 보여 줄 수 있으면 편집본을 위에 두고 원문을 접어 둔다. 아니면 원문을 보인다. */
+/** 판정 결과. 편집본의 요약·본문만 보여 주고, 편집본이 없으면 원문을 본문으로 쓴다. */
 function JudgeResultView({ result, chapter, titleOf, onOpen }: { result: JudgeResult } & Pick<Props, "chapter" | "titleOf" | "onOpen">) {
   const value = result.judgement;
   const { presentation, notice } = readableJudgement(result);
@@ -76,12 +78,6 @@ function JudgeResultView({ result, chapter, titleOf, onOpen }: { result: JudgeRe
         <div className="judge-edited" data-part="judge-edited">
           <h3 className="judge-headline">{presentation.headline}</h3>
           <Sections sections={presentation.sections} />
-          {presentation.details.length ? (
-            <details className="judge-detail" data-part="judge-details">
-              <summary>추가 검토</summary>
-              <Sections sections={presentation.details} />
-            </details>
-          ) : null}
         </div>
       ) : (
         <>
@@ -97,26 +93,25 @@ function JudgeResultView({ result, chapter, titleOf, onOpen }: { result: JudgeRe
       )}
       <ReferenceLinks ids={value.support} label="뒷받침하는 근거" titleOf={titleOf} onOpen={onOpen} />
       <ReferenceLinks ids={value.against} label="반박하는 근거" titleOf={titleOf} onOpen={onOpen} />
-      {presentation ? (
-        <details className="judge-detail judge-original">
-          <summary>편집 전 원문</summary>
-          <p className="small muted">편집본을 위에 둔 채 원문과 비교할 수 있습니다.</p>
-          <p className="judge-reason">{value.reason}</p>
-        </details>
-      ) : null}
       <p className="small muted judge-footnote">근거를 누르면 카드의 원래 기록을 확인할 수 있습니다.</p>
     </>
   );
 }
 
-export default function JudgePanel({ canJudge, waiting, frozen, pending, stateText, price, result, chapter, titleOf, onJudge, onNew, onOpen }: Props) {
+export default function JudgePanel({ canJudge, waiting, frozen, pending, failed, stateText, price, result, chapter, titleOf, onJudge, onNew, onOpen }: Props) {
   return (
     <>
-      <p className="small muted" id="piece-maker-judge-help">
-        판정 결과는 ‘내 가설’에서 잠시후에 확인할 수 있어요.
-        <br />
-        가능성 있음/판정 보류/가능성 낮음으로 판정하고 이에 대한 이유를 알려드리고 있어요.
-      </p>
+      {failed ? (
+        <div className="judge-empty-line" aria-hidden="true" />
+      ) : (
+        <p className="small muted" id="piece-maker-judge-help">
+          {result !== null
+            ? "판정 결과는 ‘내 가설’에서 다시 확인할 수 있어요."
+            : "판정 결과는 ‘내 가설’에서 잠시후에 확인할 수 있어요."}
+          <br />
+          가능성 있음/판정 보류/가능성 낮음으로 판정하고 이에 대한 이유를 알려드리고 있어요.
+        </p>
+      )}
       {frozen ? (
         <div className="judge-submitted" data-part="judge-submitted">
           {pending ? (
@@ -145,9 +140,13 @@ export default function JudgePanel({ canJudge, waiting, frozen, pending, stateTe
           ) : null}
         </button>
       )}
-      <p className="small muted" role="status" style={{ marginTop: 8 }} data-part="judge-state" hidden={!stateText || pending}>
-        {stateText}
-      </p>
+      {failed ? (
+        <div className="judge-empty-line" style={{ marginTop: 8 }} aria-hidden="true" />
+      ) : (
+        <p className="small muted" role="status" style={{ marginTop: 8 }} data-part="judge-state" hidden={!stateText || pending}>
+          {stateText}
+        </p>
+      )}
       <div id="piece-maker-judge-result" className="inline-preview" aria-live="polite" hidden={result === null} data-part="judge-result">
         {result ? <JudgeResultView result={result} chapter={chapter} titleOf={titleOf} onOpen={onOpen} /> : null}
       </div>

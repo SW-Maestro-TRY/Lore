@@ -65,7 +65,7 @@ test('AC-추적-1~4 찾기 · 카드 · 가설 만들기 · 떠나기를 글 없
   const found = await cards.count();
 
   await cards.first().locator('[data-action="add"]').click();
-  await cards.first().locator('[data-action="detail"]').click();
+  await cards.first().locator('[data-action="open"]').click();
   await page.locator('dialog[data-part="modal"] .dialog-head [data-action="close"]').click();
   await openTab(page, 'compose');
   await page.fill('#piece-maker-title', '샹크스의 약속');

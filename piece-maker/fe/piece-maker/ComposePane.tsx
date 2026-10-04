@@ -11,6 +11,8 @@ type Props = {
   ready: boolean;
   /** 맡긴 초안인가. 입력을 잠근다. */
   frozen: boolean;
+  /** 접수 후 판정이 실패했는가. 접수 자체의 실패와 구분한다. */
+  judgementFailed: boolean;
   chapter: number | null;
   draft: Draft;
   saveStatus: string;
@@ -86,7 +88,7 @@ function SelectedItem({
           data-part="note"
           rows={2}
           maxLength={NOTE_MAX}
-          placeholder="내 가설과 어떤 관련이 있나요?"
+          placeholder={frozen ? undefined : "내 가설과 어떤 관련이 있나요?"}
           autoComplete="off"
           readOnly={frozen}
           value={note}
@@ -109,6 +111,7 @@ function sharedPeople(draft: Draft): string[] {
 export default function ComposePane({
   ready,
   frozen,
+  judgementFailed,
   chapter,
   draft,
   saveStatus,
@@ -133,34 +136,37 @@ export default function ComposePane({
   // 접수하면 판정 영역이 위로 이동한다. 작성 말미의 스크롤 위치에 결과가 가려지지 않게 한다.
   useEffect(() => {
     if (!frozen) return;
-    paper.current?.scrollTo({ top: 0, behavior: "instant" });
-    if (window.matchMedia("(max-width: 900px)").matches) {
-      paper.current?.parentElement?.scrollIntoView({ block: "start", behavior: "instant" });
-    }
+    const target = window.matchMedia("(max-width: 900px)").matches
+      ? paper.current?.parentElement
+      : paper.current?.querySelector(".submitted-judgement");
+    target?.scrollIntoView({ block: "start", behavior: "instant" });
   }, [frozen]);
 
   return (
-    <section className="compose" aria-labelledby="piece-maker-compose-title" data-part="compose" data-frozen={frozen ? "true" : "false"}>
+    <section className="compose" aria-labelledby="piece-maker-compose-title" data-part="compose" data-frozen={frozen ? "true" : "false"} data-judgement-failed={judgementFailed ? "true" : undefined}>
       <div className="compose-top">
         <div className="row between">
           <div className="compose-heading">
             <h2 id="piece-maker-compose-title">나만의 가설</h2>
-            <span className="count" data-part="evidence-count">근거 {count}</span>
           </div>
-          <button className="btn quiet" data-action="reset" aria-label="현재 가설 초기화" title="새로 시작" onClick={onReset}>
-            <ResetIcon />초기화
-          </button>
+          {!frozen ? (
+            <button className="btn quiet" data-action="reset" aria-label="현재 가설 초기화" title="새로 시작" onClick={onReset}>
+              <ResetIcon />초기화
+            </button>
+          ) : null}
         </div>
         <div className="row compose-status">
           <span className="small muted">{chapter === null ? "회차 확인 중" : `${chapter}화 기준`}</span>
           {frozen ? (
             <span className="tag amber" data-part="frozen-tag">
-              판정 맡김
+              {judgementFailed ? "판정 실패" : "판정 맡김"}
             </span>
           ) : null}
-          <span className="saved-status" role="status" data-part="save-status">
-            {saveStatus}
-          </span>
+          {!frozen ? (
+            <span className="saved-status" role="status" data-part="save-status">
+              {saveStatus}
+            </span>
+          ) : null}
         </div>
       </div>
       <div className="paper" ref={paper}>
@@ -173,7 +179,7 @@ export default function ComposePane({
           className="field title-input"
           rows={2}
           maxLength={TITLE_MAX}
-          placeholder="내 가설을 한 문장으로 적어보세요"
+          placeholder="어쩌면, 이건 우연이 아닐지도."
           autoComplete="off"
           readOnly={!ready || frozen}
           value={draft.title}
@@ -183,6 +189,7 @@ export default function ComposePane({
           <span>
             <span className="n">01</span>이 복선들을 보면
           </span>
+          <span className="count" data-part="evidence-count">근거 {count}</span>
         </div>
         <div data-part="selection">
           {!ready ? (
@@ -246,9 +253,11 @@ export default function ComposePane({
         {judge}</> : null}
       </div>
       <footer className="compose-footer">
-        <button className="btn" data-action="save" disabled={!filled || frozen} onClick={onSave}>
-          저장
-        </button>
+        {!frozen ? (
+          <button className="btn" data-action="save" disabled={!filled} onClick={onSave}>
+            임시 저장
+          </button>
+        ) : null}
         <button className="btn primary" data-action="preview" disabled={!canShare || !ready} onClick={onPreview} title={canShare ? undefined : "판정이 완료되면 공유할 수 있어요"}>
           <Icon name="copy" width={16} />
           공유하기

@@ -18,7 +18,6 @@ export const JUDGE_TEXT = {
   fetchFailed: "판정 상태를 받지 못했습니다. 잠시 뒤 다시 확인합니다.",
   resolving: "근거 카드를 확인하는 중입니다.",
   done: "판정이 끝났습니다. 근거를 누르면 카드의 기록을 볼 수 있습니다.",
-  judgeFailed: (message: string) => `판정을 완료하지 못했습니다. ${message}`,
   brokenResult: "판정은 끝났지만 근거 카드를 확인할 수 없어 보여 드리지 못합니다.",
   cardsFailed: "카드를 불러오지 못해 판정을 맡길 수 없습니다.",
   failed: (reason: string) => `판정을 맡기지 못했습니다. ${reason} 입력을 유지한 채 다시 시도할 수 있습니다.`,
