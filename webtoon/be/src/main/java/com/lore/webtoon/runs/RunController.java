@@ -302,6 +302,8 @@ public class RunController {
                 }
             }
         }
+        /* 남이 열 수 있는 작품인가(#638) — 아니면 화면이 공유 버튼을 감춘다. 링크를 보내도 받은 사람은 404 다. */
+        found.put("public", ledger.isOpen(runId));
         /* 안전 검사에 걸려 빈 장으로 둔 장들(#626) — 화면이 그 자리에 안내를 얹는다. */
         found.put("unsafe_pages", regen.unsafePages(runId));
         /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
