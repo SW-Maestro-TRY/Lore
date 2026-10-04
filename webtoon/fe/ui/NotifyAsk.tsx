@@ -6,7 +6,7 @@
  * 기다리기 시작하는 이 순간에 묻는다. 무엇을 골라도 생성은 그대로 시작한다 — 묻는 것 때문에 만들기가
  * 막히면 안 된다. 바탕을 누르거나 Esc 를 누르면 시작하지 않고 닫는다(아직 고치고 싶은 사람).
  *
- *   묻기       다 되면 알려 드릴까요?            [괜찮아요] [알려 주세요]
+ *   묻기       완성되면 알림을 보내드릴까요?      [괜찮아요] [알림 받을게요]
  *   고르기     어떻게 알려 드릴까요?            푸시 알림 / 이메일 알림 / 둘 다
  *   이메일     (게스트만) 메일 주소 칸           로그인한 사람은 계정 메일로 가니 건너뛴다
  *   푸시       브라우저 허용 안내 → 허용 요청     거부됨 · 아이폰(홈 화면에 추가해야 됨)은 안내만
@@ -103,11 +103,11 @@ export default function NotifyAsk({ time, onStart, onClose }: {
 
   if (step === "ask") {
     return (
-      <Dialog title={t("다 되면 알려 드릴까요?")}
+      <Dialog title={t("완성되면 알림을 보내드릴까요?")}
               sub={t("한 편에 {time} 걸려요. 화면을 닫고 다른 일을 하셔도 괜찮아요.", { time })} onClose={onClose}>
         <div className="wt-dialog-actions">
           <button type="button" className="btn btn-w" onClick={() => { track("notify_ask_skip"); onStart(null); }}>{t("괜찮아요")}</button>
-          <button type="button" className="btn btn-p" onClick={() => setStep("pick")}>{t("알려 주세요")}</button>
+          <button type="button" className="btn btn-p" onClick={() => setStep("pick")}>{t("알림 받을게요")}</button>
         </div>
       </Dialog>
     );
@@ -181,14 +181,14 @@ export default function NotifyAsk({ time, onStart, onClose }: {
 }
 
 registerDict({
-  "다 되면 알려 드릴까요?": { en: "Want us to let you know when it's done?", ja: "完成したらお知らせしましょうか？", zh: "完成后要通知你吗？" },
+  "완성되면 알림을 보내드릴까요?": { en: "Should we notify you when it's done?", ja: "完成したら通知をお送りしましょうか？", zh: "完成后要给你发送通知吗？" },
   "한 편에 {time} 걸려요. 화면을 닫고 다른 일을 하셔도 괜찮아요.": {
     en: "One episode takes {time}. Feel free to close this and do something else.",
     ja: "1話に{time}かかります。画面を閉じてほかのことをしていても大丈夫です。",
     zh: "一话需要 {time}。可以关闭页面去做别的事。",
   },
   "괜찮아요": { en: "No thanks", ja: "大丈夫です", zh: "不用了" },
-  "알려 주세요": { en: "Yes, notify me", ja: "知らせてください", zh: "通知我" },
+  "알림 받을게요": { en: "Yes, notify me", ja: "通知を受け取ります", zh: "我要接收通知" },
   "어떻게 알려 드릴까요?": { en: "How should we notify you?", ja: "どの方法でお知らせしますか？", zh: "用什么方式通知你？" },
   "푸시 알림": { en: "Push notification", ja: "プッシュ通知", zh: "推送通知" },
   "이 기기 화면에 바로 떠요": { en: "Shows up right on this device", ja: "この端末の画面にすぐ表示されます", zh: "直接显示在这台设备上" },

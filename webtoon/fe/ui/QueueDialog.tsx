@@ -3,7 +3,7 @@
 /* 순서 기다리기 팝업(#641) — 앞에 다른 사람의 작품이 있을 때 띄운다.
  *
  * 진행 화면 왼쪽 카드에 「현재 대기자 N명」이 글자로만 있어서, 기다리는지도 모르고 화면을 붙들고 있거나
- * 고장으로 보고 나갔다. 팝업으로 「앞에 몇 명 · 약 몇 분 뒤 시작」과 차오르는 게이지를 보여 주고,
+ * 고장으로 보고 나갔다. 팝업으로 「앞에 몇 명 · 앞으로 몇 분 남았어요」과 차오르는 게이지를 보여 주고,
  * 「여기서 기다리기」를 누르면 닫고 다른 웹툰을 둘러보게 한다 — 오른쪽 아래 진행 원(RunningBubble)이 남고,
  * 기다리는 동안 그 원을 누르면 이 팝업이 다시 뜬다.
  *
@@ -75,12 +75,11 @@ export default function QueueDialog({ job, onWait, onOpenProgress }: {
   return (
     <Dialog title={t("앞에 {n}명이 만들고 있어요", { n: ahead })} onClose={onWait}>
       <div className="wt-queue">
-        <p className="wt-queue-eta">{t("약 {m}분 뒤 내 차례예요", { m: minutes })}</p>
+        <p className="wt-queue-eta">{t("앞으로 {m}분 남았어요", { m: minutes })}</p>
         <div className="wt-queue-gauge" role="progressbar" aria-valuemin={0} aria-valuemax={100}
-             aria-valuenow={Math.round(fill * 100)} aria-label={t("내 차례까지")}>
+             aria-valuenow={Math.round(fill * 100)} aria-label={t("시작까지")}>
           <i style={{ width: `${fill * 100}%` }} />
         </div>
-        <div className="wt-queue-ends"><span>{t("줄을 섰어요")}</span><span>{t("내 차례")}</span></div>
         <p className="wt-dialog-sub">
           {t("기다리는 동안 다른 웹툰을 둘러보셔도 괜찮아요. 오른쪽 아래 동그라미를 누르면 언제든 다시 볼 수 있어요.")}
         </p>
@@ -97,10 +96,8 @@ export default function QueueDialog({ job, onWait, onOpenProgress }: {
 
 registerDict({
   "앞에 {n}명이 만들고 있어요": { en: "{n} ahead of you", ja: "前に{n}人が作成中です", zh: "前面有 {n} 人在制作" },
-  "약 {m}분 뒤 내 차례예요": { en: "Your turn in about {m} min", ja: "約{m}分後にあなたの番です", zh: "大约 {m} 分钟后轮到你" },
-  "내 차례까지": { en: "Until your turn", ja: "あなたの番まで", zh: "距离轮到你" },
-  "줄을 섰어요": { en: "In line", ja: "列に並びました", zh: "已排队" },
-  "내 차례": { en: "Your turn", ja: "あなたの番", zh: "轮到你" },
+  "앞으로 {m}분 남았어요": { en: "About {m} min to go", ja: "あと{m}分ほどです", zh: "还剩约 {m} 分钟" },
+  "시작까지": { en: "Until it starts", ja: "開始まで", zh: "距离开始" },
   "기다리는 동안 다른 웹툰을 둘러보셔도 괜찮아요. 오른쪽 아래 동그라미를 누르면 언제든 다시 볼 수 있어요.": {
     en: "Feel free to browse other webtoons while you wait. Tap the circle at the bottom right to check back anytime.",
     ja: "待っている間、ほかのウェブトゥーンを見ていても大丈夫です。右下の丸を押せばいつでも確認できます。",

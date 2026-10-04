@@ -283,7 +283,7 @@ export default function Wizard({
     cost: cost ?? undefined, free_left: allow?.free_left ?? undefined, logged_in: authenticated,
   });
 
-  /* 시작하기 전에 「다 되면 알려 드릴까요?」를 묻는다(#641) — 이 기기 알림이 이미 켜져 있으면 안 묻는다.
+  /* 시작하기 전에 「완성되면 알림을 보내드릴까요?」를 묻는다(#641) — 이 기기 알림이 이미 켜져 있으면 안 묻는다.
      무엇을 고르든 시작은 그대로 한다. 게스트가 적은 메일은 작업이 생긴 뒤 그 작업에 적는다. */
   const [asking, setAsking] = useState(false);
   const start = async () => {

@@ -700,7 +700,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     : finishing ? t("거의 다 됐어요. 마무리하고 있어요.") : "";
   const louLine = !job ? "" : waiting
     ? (job.notice?.logged_in || job.notice?.email ? t("닫아도 괜찮아요. 다 되면 이메일로 알려드려요.") : t("닫아도 괜찮아요."))
-    : queued ? t("현재 대기자 {n}명 · 약 {m}분 뒤 시작", { n: job.queue!.ahead, m: job.queue!.minutes })
+    : queued ? t("현재 대기자 {n}명 · 앞으로 {m}분 남았어요", { n: job.queue!.ahead, m: job.queue!.minutes })
     : leftText;
 
   const crumb = ownJob ? CRUMB_OWN : CRUMB;
