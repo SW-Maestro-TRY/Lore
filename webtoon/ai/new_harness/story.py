@@ -368,7 +368,9 @@ def supports_temperature(model: str, provider: str = None) -> bool:
 # ---------------------------------------------------------------- API
 
 class ParseFailure(Exception):
-    def __init__(self, stage, raw):
+    # raw 는 고를 수 있다 — 「JSON 객체가 아닙니다」처럼 이유 한 줄만 넘기는 곳이 일곱 군데다.
+    # 꼭 받게 해 뒀더니 응답을 못 읽은 그 순간에 TypeError 로 바뀌어 원래 이유를 가렸다(#626).
+    def __init__(self, stage, raw=""):
         super().__init__(f"{stage} JSON 파싱 실패")
         self.stage = stage
         self.raw = raw
