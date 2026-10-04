@@ -159,7 +159,10 @@ public class JobNotice {
                 return;
             }
             /* 사유(why)는 메일에 안 적는다 — 내부 문구라 받는 사람에게는 뜻이 없다. 로그에는 남는다. */
-            NoticeMail.Body body = NoticeMail.failed(chosenTitleOf(job.getRunId()), back, site + "/webtoon", site);
+            /* 안전 기준·글 모델 거절이면 이유를 적는다(#626) — 「잠시 후 다시」는 같은 내용이면 또 걸린다. */
+            boolean unfixable = "image_safety".equals(job.getFailCode()) || "text_refusal".equals(job.getFailCode());
+            NoticeMail.Body body = NoticeMail.failed(chosenTitleOf(job.getRunId()), back, site + "/webtoon", site,
+                    unfixable ? why : null);
             mail.sendHtml(to, "[LORE] 웹툰을 다 만들지 못했어요", body.text(), body.html());
             log.info("실패 알림을 보냈습니다 (job={}, why={})", jobId, why);
         } catch (Exception e) {             // noqa: 실패를 적는 길에서 또 죽으면 안 된다

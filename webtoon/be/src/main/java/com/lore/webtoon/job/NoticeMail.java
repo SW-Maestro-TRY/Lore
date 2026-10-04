@@ -99,6 +99,14 @@ final class NoticeMail {
      * 못 만들었다. 제목을 아직 못 정했으면 「내 웹툰」 대신 그냥 「웹툰」이라고 쓴다.
      */
     static Body failed(String title, Refunded back, String link, String site) {
+        return failed(title, back, link, site, null);
+    }
+
+    /**
+     * @param reason 다시 해도 같은 결과가 날 실패(안전 기준 · 글 모델 거절)의 사람용 이유(#626). 있으면
+     *               「잠시 후 다시 한 번 시도해 주세요!」 대신 이 문장을 적는다 — 같은 내용이면 또 걸린다.
+     */
+    static Body failed(String title, Refunded back, String link, String site, String reason) {
         String refund = refundLine(back);
         boolean titled = title != null && !title.isBlank();
 
@@ -110,7 +118,7 @@ final class NoticeMail {
         if (!refund.isEmpty()) {
             text.append(refund).append("\n");
         }
-        text.append("잠시 후 다시 한 번 시도해 주세요!\n\n");
+        text.append(reason == null || reason.isBlank() ? "잠시 후 다시 한 번 시도해 주세요!" : reason.trim()).append("\n\n");
         text.append("다시 시도하기 → ").append(link).append("\n\n");
         text.append("이번에는 루가 더 잘 만들어볼게요. ✨\n");
         text.append(textFooter());
@@ -124,7 +132,7 @@ final class NoticeMail {
         if (!refund.isEmpty()) {
             lead.append("<br>").append(esc(refund));
         }
-        lead.append("<br>잠시 후 다시 한 번 시도해 주세요!");
+        lead.append("<br>").append(reason == null || reason.isBlank() ? "잠시 후 다시 한 번 시도해 주세요!" : esc(reason.trim()));
         html.append(p(lead.toString()));
         html.append(button("다시 시도하기 →", link));
         html.append(p("이번에는 루가 더 잘 만들어볼게요. ✨"));
@@ -192,23 +200,32 @@ final class NoticeMail {
     }
 
     private static String failHead(String site) {
+        /* **휴대폰에서는 루가 위, 문구가 아래(사용자 요청).** 예전에는 표 한 줄에 그림 칸(250px)과 문구 칸을
+           나란히 두어서, 좁은 화면에서 둘이 억지로 붙어 깨졌다. 두 칸을 inline-block 으로 두면 넓은 화면에서는
+           나란히, 자리가 모자라면 그림 아래로 문구가 내려간다 — 미디어 쿼리를 무시하는 메일 앱에서도.
+           가운데 정렬만 page() 의 미디어 쿼리(.lore-head)가 맡는다. */
         return "<tr><td style=\"padding:0;\">"
-                + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#e4ece9;"
-                + "border-radius:16px 16px 0 0;\"><tr>"
-                + "<td width=\"250\" style=\"padding:30px 0 26px 28px;vertical-align:middle;\">"
-                + "<img src=\"" + esc(site + "/static/lou/art/error-2.png") + "\" width=\"220\" alt=\"루\" style=\"display:block;"
-                + "border:0;width:220px;height:auto;\"></td>"
-                + "<td style=\"padding:30px 28px 26px 16px;vertical-align:middle;" + FONT + "color:" + INK + ";\">"
+                + "<div class=\"lore-head\" style=\"background:#e4ece9;border-radius:16px 16px 0 0;"
+                + "padding:26px 20px 22px;font-size:0;text-align:left;\">"
+                + "<div class=\"lore-head-art\" style=\"display:inline-block;vertical-align:middle;width:230px;max-width:100%;\">"
+                + "<img src=\"" + esc(site + "/static/lou/art/error-2.png") + "\" width=\"210\" alt=\"루\" style=\"display:inline-block;"
+                + "border:0;width:210px;max-width:100%;height:auto;\"></div>"
+                + "<div class=\"lore-head-text\" style=\"display:inline-block;vertical-align:middle;width:260px;max-width:100%;"
+                + "padding:10px 8px 4px;box-sizing:border-box;text-align:left;" + FONT + "color:" + INK + ";\">"
                 + "<div style=\"font-size:12px;font-weight:700;letter-spacing:.08em;color:#3f7d6d;\">LORE</div>"
                 + "<div style=\"font-size:22px;font-weight:800;line-height:1.35;margin-top:10px;\">이번엔 루가<br>완성하지 못했어요.</div>"
-                + "<div style=\"font-size:13px;color:#3f6a60;margin-top:8px;\">" + esc(SERVICE) + "</div></td>"
-                + "</tr></table></td></tr>";
+                + "<div style=\"font-size:13px;color:#3f6a60;margin-top:8px;\">" + esc(SERVICE) + "</div></div>"
+                + "</div></td></tr>";
     }
 
     private static String page(String head, String body, String site) {
         String logo = site + "/static/badges/asm-icon.png";
         return "<!doctype html><html lang=\"ko\"><head><meta charset=\"utf-8\">"
-                + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>"
+                + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+                /* 좁은 화면에서 실패 메일 머리(루 · 문구)를 가운데로. 지원 안 하는 앱에서도 위아래로는 쌓인다. */
+                + "<style>@media only screen and (max-width:520px){.lore-head{text-align:center!important;}"
+                + ".lore-head-art,.lore-head-text{display:block!important;width:100%!important;margin:0 auto!important;}"
+                + ".lore-head-text{text-align:center!important;padding-top:14px!important;}}</style></head>"
                 + "<body style=\"margin:0;padding:0;background:" + BG + ";\">"
                 + "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:" + BG + ";\">"
                 + "<tr><td align=\"center\" style=\"padding:32px 16px;\">"
