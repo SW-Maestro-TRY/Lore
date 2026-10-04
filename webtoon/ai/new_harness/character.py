@@ -121,6 +121,12 @@ def paint_recorded(run_dir: Path, stage: str, prompt: str, out: Path, **kw) -> d
     except BaseException as exc:
         provider, model, _ = imagegen.backend_for(stage)
         record_error(run_dir, stage, provider, model, exc)
+        # 안전 검사 거절이면 이유를 남긴다(#626) — 서버가 「캐릭터를 그리지 못했습니다」 대신 무엇을 바꾸면
+        # 되는지 말하려면 거절인지 알아야 한다(같은 입력으로 다시 뽑으면 또 걸린다).
+        import failure
+        cats = failure.refusal_categories(exc)
+        if cats is not None:
+            failure.write(run_dir, stage, "image_safety", f"{type(exc).__name__}: {exc}", cats)
         raise
     record(run_dir, art_meta)
     return art_meta

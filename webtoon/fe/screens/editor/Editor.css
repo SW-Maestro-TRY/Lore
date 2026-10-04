@@ -389,3 +389,8 @@
 .wt .wt-ed .ask-scene { display: flex; flex-direction: column; gap: 10px; max-height: 240px; overflow: auto; }
 .wt .wt-ed .ask-scene-part { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.65; white-space: pre-wrap; }
 .wt .wt-ed .ask-scene-part b { font-size: 11.5px; color: var(--sea); }
+
+/* 안전 기준에 걸려 비워 둔 장 · 장면 설명 고치기(#626) */
+.wt .unsafe-note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 80%; text-align: center; color: #5b6b70; font-size: 14px; line-height: 1.6; pointer-events: none; }
+.wt .ask-unsafe { margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; background: #fff4f2; color: #8a2b1d; font-size: 14px; line-height: 1.6; }
+.wt .wt-ed-sceneedit { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }

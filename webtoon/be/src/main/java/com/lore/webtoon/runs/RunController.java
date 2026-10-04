@@ -28,6 +28,7 @@ import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.work.WorkLedger;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -68,6 +69,7 @@ public class RunController {
     private final AfterRun after;
     private final WorkLedger ledger;
     private final CreditGate credits;
+    private final com.lore.webtoon.safety.SafetyGuard safety;
     private final Admins admins;
     /* **경계에서는 Map 으로 주고받는다.**
      *
@@ -81,7 +83,8 @@ public class RunController {
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
                          RegenService regen, AfterRun after, WorkLedger ledger,
-                         CreditGate credits, Admins admins) {
+                         CreditGate credits, Admins admins, com.lore.webtoon.safety.SafetyGuard safety) {
+        this.safety = safety;
         this.runs = runs;
         this.pages = pages;
         this.export = export;
@@ -135,6 +138,7 @@ public class RunController {
                                                       @RequestBody Map<String, Object> body) {
         mustOwn(runId);
         try {
+            safety.checkText("editor-title", String.valueOf(body.getOrDefault("title", "")));   // 공개되는 글(#626)
             String got = stories.editTitle(runId, String.valueOf(body.getOrDefault("title", "")));
             return ResponseEntity.ok(Map.of("title", got));
         } catch (java.util.NoSuchElementException e) {
@@ -154,6 +158,7 @@ public class RunController {
                                                         @RequestBody Map<String, Object> body) {
         mustOwn(runId);
         try {
+            safety.checkText("editor-logline", String.valueOf(body.getOrDefault("logline", "")));   // 공개되는 글(#626)
             String got = stories.editPlot(runId, String.valueOf(body.getOrDefault("logline", "")));
             return ResponseEntity.ok(Map.of("logline", got));
         } catch (java.util.NoSuchElementException e) {
@@ -188,7 +193,22 @@ public class RunController {
                                            @RequestParam(defaultValue = "1") int ep,
                                            @RequestBody(required = false) Map<String, Object> body) {
         mustOwn(runId);
-        return Map.of("ok", true, "items", overlays.save(runId, ep, asNode(body)));
+        JsonNode node = asNode(body);
+        /* 말풍선·나레이션 글은 공개 작품에 그대로 보이는 사람의 글이다 — 만들기 입력과 같은 검사(#626).
+           한 번에 묶어 한 번만 묻는다(검사는 무료지만 저장이 잦다). */
+        List<String> texts = new ArrayList<>();
+        for (JsonNode scene : node.path("scenes")) {
+            for (JsonNode item : scene.path("items")) {
+                String t = item.path("text").asText("");
+                if (!t.isBlank()) {
+                    texts.add(t);
+                }
+            }
+        }
+        if (!texts.isEmpty()) {
+            safety.checkText("editor-overlay", String.join("\n", texts));
+        }
+        return Map.of("ok", true, "items", overlays.save(runId, ep, node));
     }
 
     /**
@@ -240,6 +260,8 @@ public class RunController {
         if (found == null) {
             return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
         }
+        /* 안전 검사에 걸려 빈 장으로 둔 장들(#626) — 화면이 그 자리에 안내를 얹는다. */
+        found.put("unsafe_pages", regen.unsafePages(runId));
         /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
         if (admins.current()) {
             RunService.Inputs inputs = runs.inputsOf(runId);
@@ -330,7 +352,8 @@ public class RunController {
            같은 규칙으로 여기서도 받는다 — **시작하기 전에** 낼 수 있는지 보고,
            줄을 세운 뒤에 뺀다. 먼저 빼면 시작이 실패했을 때 낸 것만 사라진다.
            같은 ref 로 두 번 불려도 한 번만 빠진다(CreditGate.charge). */
-        int cost = credits.regenCost();
+        /* 안전 검사에 걸려 빈 장으로 완성된 장은 다시 그리기가 무료다(#626) — 크레딧은 처음에 그대로 받았다. */
+        int cost = regen.isUnsafe(runId, no) ? 0 : credits.regenCost();
         String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
         if (blocked != null) {
             throw new BusinessException(CreditGate.notEnough(), blocked);
@@ -341,9 +364,22 @@ public class RunController {
             String typed = body == null ? "" : String.valueOf(body.getOrDefault("feedback", "")).trim();
             String picked = body == null || !(body.get("tags") instanceof List<?> ids) ? "" : FeedbackTags.sceneNote(ids);
             String note = picked.isEmpty() ? typed : typed.isEmpty() ? picked : picked + "\n" + typed;
+            /* 장면 설명을 고쳐 보냈으면 먼저 적는다(#626) — 걸린 장면은 같은 글로 또 그리면 또 걸린다.
+               사람이 적은 글이므로 메모와 함께 입력 검사를 거친다. */
+            Map<?, ?> scene = body != null && body.get("scene") instanceof Map<?, ?> m ? m : null;
+            String where = scene == null || scene.get("where") == null ? null : String.valueOf(scene.get("where"));
+            String what = scene == null || scene.get("what") == null ? null : String.valueOf(scene.get("what"));
+            safety.checkText("editor-regen", typed, where, what);
+            try {
+                regen.editScene(runId, no, where, what);
+            } catch (java.io.IOException e) {
+                throw new BusinessException(com.lore.common.exception.ErrorCode.INTERNAL_ERROR, "장면 설명을 저장하지 못했습니다");
+            }
             String id = regen.start(runId, no, note);
             if (cost > 0) {
-                credits.charge(userId, cost, "regen:" + runId + ":" + no + ":" + id, "장 다시 그리기");
+                String ref = "regen:" + runId + ":" + no + ":" + id;
+                credits.charge(userId, cost, ref, "장 다시 그리기");
+                regen.charged(id, userId, ref);           // 실패하면 돌려준다(#626)
             }
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {

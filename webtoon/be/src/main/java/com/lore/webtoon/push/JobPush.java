@@ -94,7 +94,7 @@ public class JobPush {
             case AWAITING_CAST -> Kind.CAST;
             case AWAITING_PICK -> Kind.PICK;
             case AWAITING_SCENES -> Kind.SCENES;
-            case AWAITING_SHEET -> Kind.SHEET;
+            case AWAITING_SHEET -> job.isSheetBlocked() ? Kind.FIX : Kind.SHEET;   // 걸려서 멈춘 시트(#626)
             default -> null;
         };
         if (kind != null) {
@@ -201,5 +201,5 @@ public class JobPush {
         }
     }
 
-    enum Kind { CAST, PICK, SCENES, SHEET, DONE, FAILED }
+    enum Kind { CAST, PICK, SCENES, SHEET, FIX, DONE, FAILED }
 }

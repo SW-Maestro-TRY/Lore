@@ -367,8 +367,32 @@ def supports_temperature(model: str, provider: str = None) -> bool:
 
 # ---------------------------------------------------------------- API
 
+class TextRefused(Exception):
+    """글 모델이 만들기를 거절했다(#626) — 성인물 같은 요청에 「죄송하지만…」으로 답한 것.
+
+    JSON 을 받아야 할 자리라 파싱 실패로만 보이면 서버는 「이야기 후보를 만들지 못했습니다」만 말할 수
+    있었다. 거절이면 run.py 가 failure.json 에 text_refusal 로 남겨 사람에게 무엇을 바꾸면 되는지 말한다.
+    """
+
+
+# 거절 문장의 머리. 정상 답은 길고 JSON 이라 이것들로 시작하는 짧은 답이면 거절로 본다.
+_REFUSAL_HEAD = re.compile(
+    r"^\s*(I['’]m sorry|I am sorry|Sorry,|I can['’]t help|I cannot help|I can['’]t assist|I cannot assist|"
+    r"I can['’]t comply|I won['’]t|죄송하지만|죄송합니다|도와드릴 수 없|요청하신 내용은|그 요청은)", re.IGNORECASE)
+
+
+def looks_refused(text: str, refusal: str | None = None) -> bool:
+    """모델 답이 거절인가. OpenAI 가 refusal 칸을 채웠거나, 짧은 답이 거절 문장으로 시작하면."""
+    if refusal:
+        return True
+    t = (text or "").strip()
+    return bool(t) and len(t) < 400 and "{" not in t and bool(_REFUSAL_HEAD.match(t))
+
+
 class ParseFailure(Exception):
-    def __init__(self, stage, raw):
+    # raw 는 고를 수 있다 — 「JSON 객체가 아닙니다」처럼 이유 한 줄만 넘기는 곳이 일곱 군데다.
+    # 꼭 받게 해 뒀더니 응답을 못 읽은 그 순간에 TypeError 로 바뀌어 원래 이유를 가렸다(#626).
+    def __init__(self, stage, raw=""):
         super().__init__(f"{stage} JSON 파싱 실패")
         self.stage = stage
         self.raw = raw
@@ -463,6 +487,8 @@ class OpenAIBackend(Backend):
         resp = self.client.chat.completions.create(**kwargs)
         choice = resp.choices[0]
         text = choice.message.content or ""
+        if looks_refused(text, getattr(choice.message, "refusal", None)):
+            raise TextRefused(text.strip()[:300] or "refused")
         u = resp.usage
         details = getattr(u, "prompt_tokens_details", None)
         usage = {

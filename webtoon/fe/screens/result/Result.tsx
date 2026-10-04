@@ -356,6 +356,18 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </div>
             )}
 
+            {mine && (data.unsafe_pages?.length ?? 0) > 0 && (
+              /* 안전 기준에 걸려 빈 장으로 완성됐다(#626) — 어디를 어떻게 고치면 되는지 */
+              <div className="wt-result-unsafe" role="status">
+                <p>{t("{pages} 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 편집실에서 그 장면 설명을 고쳐 다시 그려 주세요. 빈 장 다시 그리기는 무료예요.",
+                  { pages: (data.unsafe_pages ?? []).map((n) => t("{n}쪽", { n })).join(", ") })}</p>
+                <button type="button" className="btn btn-p btn-sm"
+                        onClick={() => { track("editor_open", { run: runId, where: "result_unsafe" }); go("editor", { run: runId }); }}>
+                  <IconEdit size={16} /> {t("편집실에서 다시 그리기")}
+                </button>
+              </div>
+            )}
+
             <div className="wt-result-sheet">
               {data.pages.map((pg, i) => {
                 const gap = i === data.pages.length - 1 ? 0 : +pg.gap || 0;
@@ -375,6 +387,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                             onClick={() => setZoom(pg.no)}>
                       {img}
                     </button>
+                    {data.unsafe_pages?.includes(pg.no) && (
+                      <span className="wt-result-blank">{t("이 장면은 이미지 안전 기준에 걸려 아직 그리지 못했어요")}</span>
+                    )}
                     {mine && perPage && (
                       <a className="wt-result-pgdl" href={pageDownloadUrl(runId, pg.no)} download
                          onClick={() => track("download_click", { run: runId, kind: "page", page: pg.no })}>

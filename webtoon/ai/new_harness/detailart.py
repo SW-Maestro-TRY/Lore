@@ -470,6 +470,9 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
          "**네가 정한다.**"),
         "- 나레이션이나 대사를 쓴다면 이 페이지 안에서 문장을 끝까지 완결한다. "
         "말줄임표나 접속사로 걸쳐 놓은 채 페이지를 끝내지 않는다.",
+        # 대사는 정해 주지 않는다 — 다만 말이 있어야 자연스러운 순간을 말 없이 두지 않게(장 검수의 「침묵」과 같은 기준).
+        "- 인물이 말을 해야 자연스러운 순간은 말 없이 두지 않는다. 말 없이 보여 줄 때는 그 침묵이 "
+        "연출로 읽혀야 한다.",
     ]
     scene_instr = "\n".join(lines)
     if has_prev:
@@ -702,11 +705,16 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                     continue
                 if cats is not None:
                     failure.write(run_dir, STAGE, "image_safety", err_meta["error"], cats)
+                    # **장마다 따로 남긴다(#626).** 여러 장을 동시에 그리면 failure.json 하나를 서로 덮어써서,
+                    # 서버가 어느 장이 왜 실패했는지 못 가렸다. 서버는 이 표시가 있는 장만 「안전 기준에 걸려
+                    # 빠진 장」으로 보고, 한두 장이면 나머지를 살려 완성한다.
+                    failure.write_page(run_dir, page_no, err_meta["error"], cats)
                     raise SystemExit(f"{label}이 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
                 failure.write(run_dir, STAGE, "error", err_meta["error"])
                 raise
         meta["page"] = page_no
         meta["scene"] = n_
+        failure.clear_page(run_dir, page_no)     # 걸렸던 장을 다시 그려 냈다 — 빠진 장이 아니다(#626)
         made.append(meta)
         if on_page:
             on_page(meta)
