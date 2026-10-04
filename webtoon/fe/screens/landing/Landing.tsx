@@ -6,7 +6,7 @@
 import "./i18n";
 import Link from "next/link";
 import localFont from "next/font/local";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CONTACT_CHANNEL } from "@common/links";
 import * as api from "../../lib/api";
 import { LangSwitch, useT } from "../../lib/i18n";
@@ -44,6 +44,14 @@ const suit = localFont({
  * 번들은 작품 번호를 그대로 둔다). 아직 안 올린 환경(예: 새 운영 서버)에서는 못
  * 받아오므로 정적 견본 그림으로 대신한다. */
 const DONE_EXAMPLE_RUN_ID = "20260910T132240-ae8c28";
+
+/* 마지막 구역에 펼치는 예시 작품 세 편(#640) — 그림은 static/last/card-N.jpg(표지 윗부분). 작품을 바꾸면 그림도 같이 바꾼다.
+   운영 · staging · dev 모두 예시로 심겨 있는 작품이다(webtoon/docs/examples-runbook.md). */
+const LAST_CARDS = [
+  { run: "20260930T223006-456ff0", title: "마왕성 공략 라이브, 한 번뿐인 시청자" },
+  { run: "20261003T133334-b5ccce", title: "카페 사장에게는 비밀이 많다" },
+  { run: "20261003T204446-99f4c3", title: "황궁에 떨어진 진실 변수" },
+];
 const DONE_FALLBACK = "/static/samples/ex-romance-2.jpg";
 import { usePhone } from "./usePhone";
 import "./Landing.css";
@@ -80,9 +88,16 @@ export default function Landing({ go }: { go: Go }) {
   const [need, setNeed] = useState(0);
   const [feat, setFeat] = useState<0 | 1 | 2>(0);
 
-  /* 약속 셋 — 마우스를 올려도 바뀌고, 가만히 둬도 시간이 지나면 저절로 다음으로 넘어간다. */
+  /* 니즈 카드 둘에 마우스가 올라가 있나 — 올라가 있는 동안은 저절로 넘기지 않는다(읽는 중에 카드가 바뀌면 놓친다). */
+  const needHover = useRef(false);
+
+  /* 약속 셋 · 니즈 카드 둘 — 마우스를 올려도 바뀌고, 가만히 둬도 시간이 지나면 저절로 다음으로 넘어간다.
+     둘이 같은 박자로 움직이게 시계 하나로 넘긴다(니즈 카드는 왼쪽 · 오른쪽이 번갈아 커진다). */
   useEffect(() => {
-    const id = setInterval(() => setFeat((f) => ((f + 1) % 3) as 0 | 1 | 2), 4000);
+    const id = setInterval(() => {
+      setFeat((f) => ((f + 1) % 3) as 0 | 1 | 2);
+      if (!needHover.current) setNeed((n) => 1 - n);
+    }, 4000);
     return () => clearInterval(id);
   }, []);
 
@@ -238,7 +253,8 @@ export default function Landing({ go }: { go: Go }) {
         <h2>{phone
           ? <>{t("이야기가 웹툰이 되는 과정,")}<br /><span className="wt-landing-hl">LORE</span>{t(" 하나로 충분합니다")}</>
           : <>{t("이미지 한장이 웹툰이 되는 과정,")}<br /><span className="wt-landing-hl">LORE</span>{t(" 하나로 충분합니다.")}</>}</h2>
-        <div className="wt-landing-needs-row">
+        <div className="wt-landing-needs-row"
+             onMouseEnter={() => { needHover.current = true; }} onMouseLeave={() => { needHover.current = false; }}>
           <a href={hrefOf("create")} className={`wt-landing-need${need === 0 ? " on" : ""}`}
              onMouseEnter={() => setNeed(0)} onClick={needTo(0)}>
             <div className="wt-landing-need-text">
@@ -299,13 +315,17 @@ export default function Landing({ go }: { go: Go }) {
         </div>
       </section>
 
-      {/* 마지막 CTA — 흰 카드 밖으로 실제 웹툰 컷 세 장이 기울어져 튀어나온다.
-          단추는 맨 위 「지금 시작하기」와 같은 규격(btn-p). */}
+      {/* 마지막 CTA — 왼쪽에 실제 예시 작품 세 편을 손에 든 카드처럼 펼친다(#640). 카드마다 작품 이름표가 붙고,
+          누르면 그 작품이 열린다. 단추는 맨 위 「지금 시작하기」와 같은 규격(btn-p). */}
       <section className="wt-landing-last">
-        <div className="wt-landing-last-cuts" aria-hidden="true">
-          {[1, 2, 3].map((n) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={n} src={`/static/last/cut-${n}.jpg`} alt="" />
+        <div className="wt-landing-last-fan">
+          {LAST_CARDS.map((c, i) => (
+            <a key={c.run} className="wt-landing-last-card" href={hrefOf("result", { run: c.run })}
+               onClick={(ev) => { ev.preventDefault(); track("landing_cta", { where: "last_card", run: c.run }); go("result", { run: c.run }); }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/static/last/card-${i + 1}.jpg`} alt="" loading="lazy" />
+              <span>{c.title}</span>
+            </a>
           ))}
         </div>
         <div className="wt-landing-last-text">

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
-  WebtoonApiError, allowanceLine, listCharacters, readAllowance, readCharacter,
+  WebtoonApiError, allowanceLine, listCharacters, notifyByEmail, readAllowance, readCharacter,
   type Allowance, type Character,
 } from "../../lib/api";
 import { startJob } from "../../lib/start";
@@ -21,6 +21,7 @@ import { ErrLine, errText } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { IconArrow, IconBack, IconCheck, IconClose, IconEdit } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
+import NotifyAsk, { shouldAskNotify } from "../../ui/NotifyAsk";
 import "./i18n";
 import "./Wizard.css";
 
@@ -282,7 +283,17 @@ export default function Wizard({
     cost: cost ?? undefined, free_left: allow?.free_left ?? undefined, logged_in: authenticated,
   });
 
+  /* 시작하기 전에 「완성되면 알림을 보내드릴까요?」를 묻는다(#641) — 이 기기 알림이 이미 켜져 있으면 안 묻는다.
+     무엇을 고르든 시작은 그대로 한다. 게스트가 적은 메일은 작업이 생긴 뒤 그 작업에 적는다. */
+  const [asking, setAsking] = useState(false);
   const start = async () => {
+    if (!canStart || starting) return;
+    if (await shouldAskNotify()) { setAsking(true); return; }
+    void begin(null);
+  };
+
+  const begin = async (notifyEmail: string | null) => {
+    setAsking(false);
     if (!canStart) return;
     setStarting(true);
     setStartErr("");
@@ -291,6 +302,9 @@ export default function Wizard({
     try {
       const id = await startJob({ ...form, mode: viewMode }, authenticated, lang);
       track("create_started", { ...props, job: id });
+      if (notifyEmail) {
+        try { await notifyByEmail(id, notifyEmail); } catch { /* 못 적어도 만들기는 간다 — 진행 화면에서 다시 적을 수 있다 */ }
+      }
       try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* 없어도 된다 */ }
       go("running", { job: id }, { replace: true });
     } catch (e) {
@@ -386,6 +400,7 @@ export default function Wizard({
 
   return (
     <div className="wt-wiz">
+      {asking && <NotifyAsk time={qualityTime} onStart={(mail) => void begin(mail)} onClose={() => setAsking(false)} />}
       <MobileTop back={mBack} title={t(mTitle[step - 1])} right={`${step} / ${crumb.length}`} />
       <div className="wt-wiz-mbars" aria-hidden="true">
         {crumb.map((_, i) => <i key={i} className={i < step ? "on" : ""} />)}
