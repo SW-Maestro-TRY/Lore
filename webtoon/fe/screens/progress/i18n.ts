@@ -336,6 +336,10 @@ const dict: Dict = {
   "캐릭터만 다시 그리기 · {n}번 남음": { en: "Redraw character only · {n} left", ja: "キャラクターだけ描き直す · 残り{n}回", zh: "只重新绘制角色 · 剩余 {n} 次" },
   "그만두기": { en: "Stop", ja: "やめる", zh: "放弃" },
   "다시 그리기를 다 썼어요. 그만두시면 쓰신 크레딧이나 무료 횟수를 돌려드려요.": { en: "You've used all redraws. If you stop, we'll refund the credits or free creation you used.", ja: "描き直しの回数を使い切りました。やめると、使ったクレジットか無料回数をお返しします。", zh: "重绘次数已用完。放弃的话，会退还已使用的点数或免费次数。" },
+  "적어 주신 내용 중 AI가 만들 수 없다고 판단한 부분이 있어요. 선정적이거나 잔혹한 표현을 바꿔서 다시 만들어 주세요.": {
+    en: "The AI decided part of what you wrote can't be made. Please change any sexual or graphic violent expressions and try again.",
+    ja: "書いていただいた内容の一部を、AIが作れない内容と判断しました。性的または残酷な表現を変えて作り直してください。",
+    zh: "AI 判断您写的内容中有无法制作的部分。请修改色情或残忍的表达后重新制作。" },
 };
 
 registerDict(dict);

@@ -202,6 +202,13 @@ export function mountEditor(
     return { scenes, gaps };
   }
 
+  /* 서버 오류의 사람용 문장. 우리 서버는 {error: {code, message}, message} 로 주고, 몇 군데는 {error: "글"} 로
+     준다 — 앞의 모양을 그대로 글로 쓰면 「[object Object]」가 떴다(#626). */
+  function errOf(out, fallback) {
+    const e = out && out.error;
+    return (typeof e === "string" ? e : e && e.message) || (out && out.message) || fallback;
+  }
+
   async function pushNow() {
     if (!RUN_ID) return;                       // 샘플은 올릴 곳이 없다
     if (pushing) { pushDirty = true; return; }
@@ -213,6 +220,11 @@ export function mountEditor(
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(overlayPayload()) });
       ok = res.ok;
+      if (res.status === 400) {
+        /* 말풍선 글이 입력 검사에 걸렸다(#626) — 다시 올려도 또 걸리니 왜 안 되는지 알린다. */
+        const out = await res.json().catch(() => ({}));
+        toast(errOf(out, tr("저장하지 못했습니다")));
+      }
     } catch { /* 아래에서 다시 시도된다 */ }
     pushing = false;
     // 아직 올릴 것이 남았으면 상태를 "됐다"로 되돌리지 않는다 — 곧 다시 올린다.
@@ -631,10 +643,10 @@ export function mountEditor(
       if (res.status === 402) {
         /* 크레딧 부족 — 알림 글 대신 화면(Editor.tsx)이 「크레딧 잔액이 부족해요 · 충전하기」를 띄운다(#548). */
         veil.remove(); btn.disabled = false;
-        window.dispatchEvent(new CustomEvent(CREDIT_SHORT_EVENT, { detail: job.error || job.message || "" }));
+        window.dispatchEvent(new CustomEvent(CREDIT_SHORT_EVENT, { detail: errOf(job, "") }));
         return;
       }
-      if (!res.ok) throw new Error(job.error || tr("시작하지 못했습니다"));
+      if (!res.ok) throw new Error(errOf(job, tr("시작하지 못했습니다")));
     } catch (err) {
       veil.remove(); btn.disabled = false;
       return toast(err.message);
@@ -712,7 +724,7 @@ export function mountEditor(
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ version: Number(b.dataset.v) }) });
         const out = await res.json();
-        if (!res.ok) throw new Error(out.error || tr("되돌리지 못했습니다"));
+        if (!res.ok) throw new Error(errOf(out, tr("되돌리지 못했습니다")));
         bustScene(no);
         paintVersions(no, out.versions);
         toast(tr("{n}번째 장을 v{v} 로 바꿨습니다", { n: no, v: b.dataset.v }));
@@ -1338,7 +1350,7 @@ export function mountEditor(
           body: JSON.stringify({ episode: EPISODE, title: want }),
         });
         const out = await res.json();
-        if (!res.ok) throw new Error(out.error || tr("저장하지 못했습니다"));
+        if (!res.ok) throw new Error(errOf(out, tr("저장하지 못했습니다")));
         // 서버가 돌려준 것이 **앞으로 보일 이름**이다 (비웠으면 원래 제목).
         data.title = out.title;
         h.textContent = out.title;
@@ -1696,7 +1708,7 @@ export function mountEditor(
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(overlayPayload()) });
         const out = await res.json();
-        if (!res.ok) throw new Error(out.error || tr("굽지 못했습니다"));
+        if (!res.ok) throw new Error(errOf(out, tr("굽지 못했습니다")));
         track("bake", { run: RUN_ID, page: out.scenes?.length, count: out.items });
         showBaked(out);
         // 굽자마자 바로 받는다 (pullFile 머리말 참고)

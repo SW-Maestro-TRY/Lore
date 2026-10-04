@@ -28,6 +28,7 @@ import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.work.WorkLedger;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -137,6 +138,7 @@ public class RunController {
                                                       @RequestBody Map<String, Object> body) {
         mustOwn(runId);
         try {
+            safety.checkText("editor-title", String.valueOf(body.getOrDefault("title", "")));   // 공개되는 글(#626)
             String got = stories.editTitle(runId, String.valueOf(body.getOrDefault("title", "")));
             return ResponseEntity.ok(Map.of("title", got));
         } catch (java.util.NoSuchElementException e) {
@@ -156,6 +158,7 @@ public class RunController {
                                                         @RequestBody Map<String, Object> body) {
         mustOwn(runId);
         try {
+            safety.checkText("editor-logline", String.valueOf(body.getOrDefault("logline", "")));   // 공개되는 글(#626)
             String got = stories.editPlot(runId, String.valueOf(body.getOrDefault("logline", "")));
             return ResponseEntity.ok(Map.of("logline", got));
         } catch (java.util.NoSuchElementException e) {
@@ -190,7 +193,22 @@ public class RunController {
                                            @RequestParam(defaultValue = "1") int ep,
                                            @RequestBody(required = false) Map<String, Object> body) {
         mustOwn(runId);
-        return Map.of("ok", true, "items", overlays.save(runId, ep, asNode(body)));
+        JsonNode node = asNode(body);
+        /* 말풍선·나레이션 글은 공개 작품에 그대로 보이는 사람의 글이다 — 만들기 입력과 같은 검사(#626).
+           한 번에 묶어 한 번만 묻는다(검사는 무료지만 저장이 잦다). */
+        List<String> texts = new ArrayList<>();
+        for (JsonNode scene : node.path("scenes")) {
+            for (JsonNode item : scene.path("items")) {
+                String t = item.path("text").asText("");
+                if (!t.isBlank()) {
+                    texts.add(t);
+                }
+            }
+        }
+        if (!texts.isEmpty()) {
+            safety.checkText("editor-overlay", String.join("\n", texts));
+        }
+        return Map.of("ok", true, "items", overlays.save(runId, ep, node));
     }
 
     /**
@@ -359,7 +377,9 @@ public class RunController {
             }
             String id = regen.start(runId, no, note);
             if (cost > 0) {
-                credits.charge(userId, cost, "regen:" + runId + ":" + no + ":" + id, "장 다시 그리기");
+                String ref = "regen:" + runId + ":" + no + ":" + id;
+                credits.charge(userId, cost, ref, "장 다시 그리기");
+                regen.charged(id, userId, ref);           // 실패하면 돌려준다(#626)
             }
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {

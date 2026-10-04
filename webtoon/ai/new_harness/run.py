@@ -1959,7 +1959,23 @@ def main(argv=None) -> int:
         f"  python run.py --run-id {run_dir.name} --detail-pages")
 
 
+def _note_text_refusal(exc: BaseException) -> None:
+    """글 모델이 거절했으면 그 작품 폴더에 이유를 남긴다(#626). 어느 폴더인지는 --run-id 로 안다."""
+    try:
+        argv = sys.argv[1:]
+        if "--run-id" in argv:
+            run_dir = RUNS_DIR / argv[argv.index("--run-id") + 1]
+            if run_dir.is_dir():
+                failure.write(run_dir, "STORY", "text_refusal", f"TextRefused: {exc}")
+    except Exception:                                                # noqa: BLE001 — 이유를 못 남겨도 원래 실패는 그대로
+        pass
+
+
 if __name__ == "__main__":
-    with tracing.run_span("run.py", sys.argv[1:]):
-        code = main()
+    try:
+        with tracing.run_span("run.py", sys.argv[1:]):
+            code = main()
+    except story.TextRefused as exc:
+        _note_text_refusal(exc)
+        raise SystemExit(f"글 모델이 이 내용을 만들지 않겠다고 했습니다: {exc}")
     raise SystemExit(code)
