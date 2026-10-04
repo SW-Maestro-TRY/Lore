@@ -46,6 +46,12 @@ public class BakeService {
     private final OverlayStore overlays;
     private final BubbleArtist artist;
     private final S3Storage storage;
+    private com.lore.webtoon.work.WorkLedger ledger;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setLedger(com.lore.webtoon.work.WorkLedger ledger) {
+        this.ledger = ledger;
+    }
 
     public BakeService(PageStore pages, BakedPageRepository baked, OverlayStore overlays,
                        BubbleArtist artist, S3Storage storage) {
@@ -101,6 +107,11 @@ public class BakeService {
             ImageIO.write(drawn, "png", to.toFile());
 
             String key = S3Service.newKey(DOMAIN);
+            /* 비공개 · 휴지통 작품은 처음부터 안 열리는 자리에 둔다(#638). 전에는 늘 공개 자리에 올려서,
+               비공개 작품의 구운 그림이 주소만 알면 열렸다. 공개로 바꾸면 PageStore.moveAll 이 같이 옮긴다. */
+            if (ledger != null && !ledger.isOpen(runId)) {
+                key = com.lore.webtoon.art.PrivateArt.moved(key, false);
+            }
             storage.upload(key, to, "image/png");
             record(runId, no, widthOf(runId, no), key);
             return true;

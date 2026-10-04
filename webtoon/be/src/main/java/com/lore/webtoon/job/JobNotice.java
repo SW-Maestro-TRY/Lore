@@ -227,6 +227,44 @@ public class JobNotice {
                 .orElse("내 웹툰");
     }
 
+    /**
+     * 관리자 처리를 작가에게 알린다(#638). -> 보냈으면 true
+     *
+     * <b>알림 설정(완성 메일 끄기)을 안 본다</b> — 이것은 자기가 시킨 일의 결과가 아니라 약관이 정한 조치
+     * 통지라서, 끈 사람에게도 간다. 게스트 작품(계정 없음) · 탈퇴 계정 · 주소가 이상한 계정이면 안 보낸다.
+     * 실패해도 던지지 않는다 — 처리 자체는 이미 끝났고, 못 보낸 것은 기록(notified=false)에 남는다.
+     *
+     * @param action HIDE · REMOVE · WARN
+     */
+    public boolean moderated(Long ownerUserId, String runId, String action, String reason, int keepDays) {
+        if (ownerUserId == null) {
+            return false;
+        }
+        try {
+            User owner = users.findById(ownerUserId).orElse(null);
+            if (owner == null || owner.getStatus() != com.lore.common.user.UserStatus.ACTIVE) {
+                return false;
+            }
+            String to = clean(owner.getEmail());
+            if (to == null) {
+                return false;
+            }
+            String title = chosenTitleOf(runId);
+            NoticeMail.Body body = NoticeMail.moderated(title, action, reason, keepDays, site + "/webtoon?view=mypage", site);
+            String subject = switch (action) {
+                case "HIDE" -> "[LORE] 작품이 비공개 처리되었어요";
+                case "REMOVE" -> "[LORE] 작품이 삭제 처리되었어요";
+                default -> "[LORE] 운영 정책 경고 안내";
+            };
+            mail.sendHtml(to, subject, body.text(), body.html());
+            log.info("관리자 처리 안내를 보냈습니다 (run={}, action={})", runId, action);
+            return true;
+        } catch (Exception e) {             // noqa: 메일이 처리를 깨면 안 된다
+            log.error("관리자 처리 안내를 못 보냈습니다 (run={}, action={})", runId, action, e);
+            return false;
+        }
+    }
+
     /** 고른 이야기의 제목. 아직 못 정했으면 빈 값 — 실패 메일은 그때 「웹툰」이라고만 쓴다. */
     private String chosenTitleOf(String runId) {
         if (runId == null) {

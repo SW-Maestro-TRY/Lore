@@ -79,6 +79,13 @@ public class RunController {
      * 나가고</b> 쓰기는 500 이 났다 — 실제로 그랬다. 안에서는 JsonNode 로,
      * 밖에서는 Map 으로 오간다. */
     private final ObjectMapper mapper = new ObjectMapper();
+    /* 관리자 처리 칸(#638). 세터로 받는다 — 없으면(시험) 결과에 안 붙일 뿐이다. */
+    private com.lore.webtoon.work.ModerationNotes notes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setNotes(com.lore.webtoon.work.ModerationNotes notes) {
+        this.notes = notes;
+    }
 
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
@@ -123,6 +130,22 @@ public class RunController {
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 고칠 수 있습니다");
         }
         return userId;
+    }
+
+    /**
+     * 이 작품을 지금 사람이 봐도 되나(#638) — 공개면 누구나, 비공개면 주인과 관리자만.
+     *
+     * 전에는 <b>읽는 주소에 이 확인이 하나도 없었다.</b> 비공개로 내리면 둘러보기에서만 빠지고, 작품 번호를 아는
+     * 사람(공유 링크를 받았던 사람)에게는 결과 화면 · 그림 · 내려받기가 그대로 열렸다. 관리자가 숨긴 작품도
+     * 마찬가지였다. 못 보는 사람에게는 403 이 아니라 404 를 준다 — 그런 작품이 있다는 것도 알리지 않는다.
+     */
+    private boolean mayRead(String runId) {
+        Long userId = CreditGate.currentUser();
+        return ledger.mayRead(runId, userId) || (userId != null && admins.isAdmin(userId));
+    }
+
+    private static <T> ResponseEntity<T> hidden() {
+        return ResponseEntity.status(404).build();
     }
 
     /**
@@ -178,6 +201,9 @@ public class RunController {
     @GetMapping("/{runId}/overlay")
     public Map<String, Object> overlay(@PathVariable String runId,
                                        @RequestParam(defaultValue = "1") int ep) {
+        if (!mayRead(runId)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "그런 작품이 없습니다");
+        }
         return asMap(overlays.read(runId, ep));
     }
 
@@ -223,6 +249,9 @@ public class RunController {
     public Map<String, Object> bake(@PathVariable String runId,
                                     @RequestParam(defaultValue = "1") int ep,
                                     @RequestBody(required = false) Map<String, Object> body) {
+        /* 본문이 있으면 얹은 것을 덮어쓰는 길이다 — 저장(saveOverlay)과 같은 문지기를 둔다(#638).
+           전에는 확인이 없어서 주소만 알면 남의 작품 말풍선을 바꿔 구울 수 있었다. */
+        mustOwn(runId);
         int items = body != null && body.get("scenes") != null
                 ? overlays.save(runId, ep, asNode(body))
                 : overlays.count(overlays.read(runId, ep));
@@ -255,11 +284,26 @@ public class RunController {
            여기서 404 가 된다. 그림이 디스크에 있으면 그 자리에서 적고 간다 —
            거의 매번 아무 일도 안 한다(적혀 있으면 바로 돌아온다). 다시 그리지
            않으므로 돈이 안 나간다. 자세한 것은 AfterRun#healIfMissing. */
+        if (!mayRead(runId)) {
+            return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
+        }
         after.healIfMissing(runId);
         Map<String, Object> found = runs.result(runId);
         if (found == null) {
             return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
         }
+        /* 관리자 처리 사유(#638) — 주인과 관리자에게만. 경고 사유는 남이 볼 글이 아니다. */
+        if (notes != null) {
+            Long me = CreditGate.currentUser();
+            if (me != null && (ledger.mayChange(runId, me) || admins.isAdmin(me))) {
+                Map<String, Object> note = notes.of(runId);
+                if (note != null) {
+                    found.put("moderation", note);
+                }
+            }
+        }
+        /* 남이 열 수 있는 작품인가(#638) — 아니면 화면이 공유 버튼을 감춘다. 링크를 보내도 받은 사람은 404 다. */
+        found.put("public", ledger.isOpen(runId));
         /* 안전 검사에 걸려 빈 장으로 둔 장들(#626) — 화면이 그 자리에 안내를 얹는다. */
         found.put("unsafe_pages", regen.unsafePages(runId));
         /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
@@ -284,6 +328,9 @@ public class RunController {
     @GetMapping("/{runId}/episode")
     public ResponseEntity<Map<String, Object>> episode(@PathVariable String runId,
                                                         @RequestParam(defaultValue = "1") int ep) {
+        if (!mayRead(runId)) {
+            return ResponseEntity.status(404).body(Map.of("error", "그런 작품이 없습니다"));
+        }
         Map<String, Object> found = runs.episode(runId, ep);
         return found == null
                 ? ResponseEntity.status(404).body(Map.of("error", "그 회차에 그려진 장이 없습니다"))
@@ -304,6 +351,9 @@ public class RunController {
             description = "낱장을 이어 붙이고 LORE 표시를 찍어서 준다.")
     @GetMapping(value = "/{runId}/episode.png", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> episode(@PathVariable String runId) {
+        if (!mayRead(runId)) {
+            return hidden();
+        }
         Map<String, Object> meta = runs.result(runId);
         if (meta == null) {
             return ResponseEntity.notFound().build();
@@ -393,6 +443,9 @@ public class RunController {
     @Operation(summary = "지난 판 목록")
     @GetMapping("/{runId}/scenes/{no}/versions")
     public Map<String, Object> versions(@PathVariable String runId, @PathVariable int no) {
+        if (!mayRead(runId)) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "그런 작품이 없습니다");
+        }
         return Map.of("versions", regen.versionsOf(runId, no));
     }
 
@@ -402,6 +455,9 @@ public class RunController {
     public ResponseEntity<byte[]> versionImage(@PathVariable String runId, @PathVariable int no,
                                                @PathVariable int v,
                                                @RequestParam(defaultValue = "1080") int w) {
+        if (!mayRead(runId)) {
+            return hidden();
+        }
         byte[] img = regen.versionImage(runId, no, v, w);
         return img == null
                 ? ResponseEntity.notFound().build()
@@ -446,8 +502,8 @@ public class RunController {
     public ResponseEntity<Void> page(@PathVariable String runId, @PathVariable int no,
                                      @RequestParam(defaultValue = "1080") int w,
                                      @RequestParam(required = false) String raw) {
-        if (runs.isTrashed(runId)) {
-            return ResponseEntity.notFound().build();      // 휴지통에 든 작품(#157)
+        if (runs.isTrashed(runId) || !mayRead(runId)) {
+            return ResponseEntity.notFound().build();      // 휴지통에 든 작품(#157) · 볼 수 없는 비공개 작품(#638)
         }
         boolean wantRaw = raw != null && !raw.isBlank() && !"0".equals(raw);
         String where = wantRaw ? null : pages.urlOfKey(bakery.keyOf(runId, no));
@@ -470,6 +526,9 @@ public class RunController {
             description = "그 장 하나에 LORE 표시를 찍어서 준다.")
     @GetMapping(value = "/{runId}/page/{no}/download", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> pageDownload(@PathVariable String runId, @PathVariable int no) {
+        if (!mayRead(runId)) {
+            return hidden();
+        }
         Map<String, Object> meta = runs.result(runId);
         if (meta == null) {
             return ResponseEntity.notFound().build();

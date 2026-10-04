@@ -48,6 +48,11 @@ const CONTACT_LINKS: { key: string; label: string; href: string }[] = [
 
 registerDict({
   "마이페이지": { en: "My page", ja: "マイページ", zh: "我的页面" },
+  "관리자 비공개": { en: "Hidden by admin", ja: "管理者が非公開", zh: "管理员设为不公开" },
+  "관리자가 비공개 처리했어요.": { en: "An admin made this private.", ja: "管理者が非公開にしました。", zh: "管理员已设为不公开。" },
+  "관리자가 삭제 처리했어요.": { en: "An admin removed this work.", ja: "管理者が削除しました。", zh: "管理员已删除这部作品。" },
+  "운영 정책 경고가 있어요.": { en: "This work has a policy warning.", ja: "運営ポリシーの警告があります。", zh: "这部作品有运营政策警告。" },
+  "사유: {reason}": { en: "Reason: {reason}", ja: "理由: {reason}", zh: "原因：{reason}" },
   "로그인 안 함": { en: "Not signed in", ja: "未ログイン", zh: "未登录" },
   "크레딧": { en: "Credits", ja: "クレジット", zh: "点数" },
   "한 편 {n} C": { en: "{n} C per episode", ja: "1話 {n} C", zh: "每话 {n} C" },
@@ -567,6 +572,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 </div>
               </div>
             )}
+            {isAuthenticated && user?.role === "ADMIN" && (
+              /* 관리자만 — 처리 기록 · 관리자 휴지통 · 작가별 처리 수(#638). 처리 자체는 작품 결과 화면의 관리자 칸에서. */
+              <div className="card wt-my-setting">
+                <div className="wt-my-setting-row">
+                  <div>
+                    <b>{t("작품 관리")}</b>
+                    <span className="muted">{t("다른 사람 작품의 비공개 · 경고 · 삭제 기록과 관리자 휴지통. 관리자만 보여요.")}</span>
+                  </div>
+                  <button type="button" className="btn btn-w" onClick={() => go("admin-works")}>{t("열기")}</button>
+                </div>
+              </div>
+            )}
             {isAuthenticated && <AdminSurvey />}
           </>
         )}
@@ -585,6 +602,7 @@ function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const left = Math.max(0, Math.ceil((new Date(run.purge_at).getTime() - Date.now()) / 86_400_000));
+  const removedByAdmin = run.moderation?.state === "REMOVED";
 
   const restore = async () => {
     setBusy(true);
@@ -606,9 +624,17 @@ function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void 
       <div className="wt-my-trashtext">
         <b>{run.title || t("제목 없음")}</b>
         <span className="muted">{left > 0 ? t("{n}일 뒤 영구 삭제", { n: left }) : t("오늘 영구 삭제")}</span>
+        {removedByAdmin && (
+          /* 관리자가 삭제 처리한 작품(#638) — 작가는 못 되살린다(서버 RunTrash.restore 도 막는다). */
+          <span className="wt-my-modnote">
+            {t("관리자가 삭제 처리했어요.")}{run.moderation?.reason ? ` ${t("사유: {reason}", { reason: run.moderation.reason })}` : ""}
+          </span>
+        )}
         {err && <span className="wt-my-err">{err}</span>}
       </div>
-      <button type="button" className="btn btn-w" disabled={busy} onClick={() => void restore()}>{t("되살리기")}</button>
+      {!removedByAdmin && (
+        <button type="button" className="btn btn-w" disabled={busy} onClick={() => void restore()}>{t("되살리기")}</button>
+      )}
     </div>
   );
 }
@@ -669,7 +695,9 @@ function ago(iso: string | null | undefined, t: (s: string, p?: Record<string, s
 
 function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keepDays: number; onDeleted: () => void }) {
   const t = useT();
-  const [pub, setPub] = useState(run.public !== false);
+  /* 관리자가 비공개 처리한 작품(#638) — 공개 스위치를 잠근다. 서버도 다시 공개를 막는다. */
+  const hiddenByAdmin = run.moderation?.state === "HIDDEN";
+  const [pub, setPub] = useState(run.public !== false && !hiddenByAdmin);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -725,8 +753,8 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
       <div className="wt-my-workfoot">
         <span className="wt-my-pub">
           <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
-                  aria-label={t("둘러보기에 공개")} disabled={busy} onClick={() => void flip()}><i /></button>
-          {pub ? t("공개") : t("비공개")}
+                  aria-label={t("둘러보기에 공개")} disabled={busy || hiddenByAdmin} onClick={() => void flip()}><i /></button>
+          {hiddenByAdmin ? t("관리자 비공개") : pub ? t("공개") : t("비공개")}
         </span>
         <span className="wt-my-workacts">
           <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
@@ -737,6 +765,13 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
           </button>
         </span>
       </div>
+      {(hiddenByAdmin || run.moderation?.warning) && (
+        <span className="wt-my-modnote" role="status">
+          {hiddenByAdmin && <>{t("관리자가 비공개 처리했어요.")}{run.moderation?.reason ? ` ${t("사유: {reason}", { reason: run.moderation.reason })}` : ""}</>}
+          {hiddenByAdmin && run.moderation?.warning && <br />}
+          {run.moderation?.warning && <>{t("운영 정책 경고가 있어요.")} {t("사유: {reason}", { reason: run.moderation.warning.reason })}</>}
+        </span>
+      )}
       {confirming && (
         <ConfirmDialog title={t("휴지통으로 옮길까요?")}
                        sub={<><b>{run.title || t("제목 없음")}</b><br />{t("{n}일 안에는 휴지통에서 되살릴 수 있어요.", { n: keepDays })}</>}
