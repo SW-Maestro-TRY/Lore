@@ -74,6 +74,8 @@ KINDS = ("장면구현", "연속성", "제자리", "건너뜀", "되돌아감", 
          # 말풍선이 딴 사람을 가리키거나 효과음이 말풍선에 들어간 것.
          # 둘 다 critical 이라 아래 fail 판정이 그대로 다시 그리게 한다.
          "말풍선", "대사", "효과음",
+         # 말이 있어야 자연스러운 순간을 말 없이 둔 것(침묵이 연출이 아닌 경우). critical 이면 다시 그린다.
+         "침묵",
          # 세로 스크롤인데 컷이 가로로 납작한 것. **경고만** 한다 —
          # 프롬프트가 critical 로 못 올리게 막아 두었다(다시 그려도 같은
          # 캔버스라 같은 결과가 나오기 쉽다).
@@ -326,7 +328,8 @@ def build_prompt(direction: dict, *, scene_no: int, char: dict | None = None,
 OPENS = ("이미", "처음", "없음")
 
 
-def parse(text: str, *, has_prev: bool = True, fixed_narration: bool = False) -> dict:
+def parse(text: str, *, has_prev: bool = True, fixed_narration: bool = False,
+          scene_page: bool = True) -> dict:
     """검수 응답(JSON) -> 판정.
 
     `verdict` 는 모델에게 안 묻는다. **흐름과 무게에서 코드가 센다** —
@@ -377,6 +380,17 @@ def parse(text: str, *, has_prev: bool = True, fixed_narration: bool = False) ->
                     "상황 설명으로 되돌아가 시작한다 — 독자가 같은 도입부를 두 번 "
                     "읽는다."})
 
+    # 말 없는 장(#628). **「어색한가」를 모델에게 묻지 않는다** — 그렇게 물으면 「그림과 나레이션만으로도
+    # 이해된다」며 통과를 냈다(2026-10-04, 말 없이 손님을 맞는 장이 두 번 통과). 말풍선 수와 「장면 글이 이 장을
+    # 말 없는 장면으로 정했는가」만 받고, 정하지 않았는데 0개면 여기서 다시 그리게 한다.
+    bubbles = obj.get("bubbles")
+    silent = obj.get("silent_by_scene") is True
+    if scene_page and isinstance(bubbles, int) and not isinstance(bubbles, bool) and bubbles == 0 and not silent:
+        issues.insert(0, {
+            "kind": "침묵", "severity": "critical",
+            "what": "장면 글이 말 없는 장면으로 정하지 않았는데 이 장에 말풍선이 하나도 없다 — 인물이 말·속마음·"
+                    "혼잣말을 할 자리가 비어 독자가 어색하게 읽는다."})
+
     fail = any(i["severity"] == "critical" for i in issues) or flow in BAD_FLOWS
     return {"verdict": "재생성" if fail else "통과",
             "flow": flow,
@@ -386,6 +400,8 @@ def parse(text: str, *, has_prev: bool = True, fixed_narration: bool = False) ->
             "scenes": _ints(obj.get("scenes")),
             "why": _text(obj.get("why")),
             "next_from": _text(obj.get("next_from")),
+            "bubbles": bubbles if isinstance(bubbles, int) and not isinstance(bubbles, bool) else None,
+            "silent_by_scene": silent,
             "issues": issues,
             "redraw": _text(obj.get("redraw"))}
 
@@ -437,13 +453,17 @@ def redraw_block(review: dict) -> str:
                     "이미 설명한 상황을 다시 설명하지 않는다 — 무슨 말을 쓸지는 "
                     "네가 정하되, 읽는 사람이 앞 장에서 읽던 자리에서 그대로 "
                     "계속 읽어야 한다.")
+    if "침묵" in kinds:
+        tail.append("- 인물이 말을 해야 자연스러운 순간을 **말 없이 두지 않는다.** 위에서 짚은 순간에 "
+                    "그 상황에 맞는 말을 말풍선으로 넣는다. 무슨 말을 할지는 네가 정하되, 장면 글과 "
+                    "앞뒤 대사에 맞아야 한다.")
     if "효과음" in kinds:
         tail.append("- **사물이 낸 소리는 말풍선에 담지 않는다.** 문 소리·발소리 "
                     "같은 것은 그림 위에 그대로 얹는 글자다. 말풍선에 들어가면 "
                     "독자는 그것을 누군가 입으로 한 말로 읽는다. 사람이 낸 소리"
                     "(비명·헛기침·웃음)는 대사이므로 말풍선에 담아도 된다.")
     if tail:
-        lines += ["", "**아래 둘은 연출이 아니라 지켜야 할 것이다.**", ""] + tail
+        lines += ["", "**아래는 연출이 아니라 지켜야 할 것이다.**", ""] + tail
 
     return "\n".join(lines)
 
@@ -506,7 +526,8 @@ def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
     try:
         one = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
         review = parse(text, has_prev=has_prev,
-                       fixed_narration=isinstance(one, dict) and one.get("narration") is not None)
+                       fixed_narration=isinstance(one, dict) and one.get("narration") is not None,
+                       scene_page=scene_no > 0)
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")
