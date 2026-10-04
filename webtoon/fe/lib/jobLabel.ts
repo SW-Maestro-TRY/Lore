@@ -10,7 +10,7 @@ export function activeJobLabel(job: NhJob, t: Tr): string {
   switch (job.status) {
     case "awaiting_pick": return job.mode === "own" ? t("이야기 확인 중") : t("이야기 고르는 중");
     case "awaiting_cast": return t("인물 확인 중");
-    case "awaiting_sheet": return t("캐릭터 확인 중");
+    case "awaiting_sheet": return job.sheet_blocked ? t("캐릭터 다시 그려 주세요") : t("캐릭터 확인 중");
     case "awaiting_scenes": return t("장면 확인 중");
     default:
       return job.art?.total
@@ -31,6 +31,7 @@ registerDict({
   "이야기 고르는 중": { en: "Picking a story", ja: "ストーリー選択中", zh: "正在选故事" },
   "인물 확인 중": { en: "Checking the characters", ja: "登場人物を確認中", zh: "正在确认人物" },
   "캐릭터 확인 중": { en: "Checking the character", ja: "キャラクター確認中", zh: "正在确认角色" },
+  "캐릭터 다시 그려 주세요": { en: "Redraw your character", ja: "キャラクターを描き直してください", zh: "请重新绘制角色" },
   "장면 확인 중": { en: "Checking the scenes", ja: "場面を確認中", zh: "正在确认场景" },
   "{done} / {total}장": { en: "{done} / {total} pages", ja: "{done} / {total}枚", zh: "{done} / {total} 页" },
   "만드는 중": { en: "In progress", ja: "作成中", zh: "制作中" },

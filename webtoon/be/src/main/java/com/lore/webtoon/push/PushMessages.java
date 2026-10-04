@@ -25,6 +25,8 @@ final class PushMessages {
                     Map.entry("PICK", "이야기를 확인해 주세요"),
                     Map.entry("SCENES", "1화를 확인해 주세요"),
                     Map.entry("SHEET", "캐릭터 시트를 확인해 주세요"),
+                    Map.entry("FIX", "캐릭터를 다시 그려 주세요"),
+                    Map.entry("fix", "캐릭터 그림이 안전 기준에 걸렸어요. 이야기는 그대로 있으니 사진이나 설명만 바꿔 주세요."),
                     Map.entry("DONE", "웹툰이 다 만들어졌어요"),
                     Map.entry("FAILED", "웹툰을 다 만들지 못했어요"),
                     Map.entry("continue", "답해 주시면 이어서 만들어요."),
@@ -37,6 +39,8 @@ final class PushMessages {
                     Map.entry("PICK", "Check the story"),
                     Map.entry("SCENES", "Check episode 1"),
                     Map.entry("SHEET", "Check the character sheet"),
+                    Map.entry("FIX", "Please redraw your character"),
+                    Map.entry("fix", "The character image was flagged by the safety filter. Your story is kept — just change the photo or description."),
                     Map.entry("DONE", "Your webtoon is ready"),
                     Map.entry("FAILED", "We couldn't finish your webtoon"),
                     Map.entry("continue", "Reply and we'll keep going."),
@@ -49,6 +53,8 @@ final class PushMessages {
                     Map.entry("PICK", "ストーリーを確認してください"),
                     Map.entry("SCENES", "第1話を確認してください"),
                     Map.entry("SHEET", "キャラクターシートを確認してください"),
+                    Map.entry("FIX", "キャラクターを描き直してください"),
+                    Map.entry("fix", "キャラクター画像が安全基準に引っかかりました。ストーリーはそのまま残っているので、写真か説明だけ変えてください。"),
                     Map.entry("DONE", "ウェブトゥーンが完成しました"),
                     Map.entry("FAILED", "ウェブトゥーンを完成できませんでした"),
                     Map.entry("continue", "お答えいただくと続きを作ります。"),
@@ -61,6 +67,8 @@ final class PushMessages {
                     Map.entry("PICK", "请确认故事"),
                     Map.entry("SCENES", "请确认第 1 话"),
                     Map.entry("SHEET", "请确认角色设定图"),
+                    Map.entry("FIX", "请重新绘制角色"),
+                    Map.entry("fix", "角色图片未通过安全审核。故事已保留，只需更换照片或修改描述。"),
                     Map.entry("DONE", "网络漫画完成了"),
                     Map.entry("FAILED", "网络漫画没能完成"),
                     Map.entry("continue", "回复后我们会继续制作。"),
@@ -79,6 +87,7 @@ final class PushMessages {
         String named = workTitle == null || workTitle.isBlank() ? "" : "「" + workTitle + "」 ";
         String body = switch (kind) {
             case DONE -> named + t.get("ready");
+            case FIX -> named + t.get("fix");
             case FAILED -> back == Refunded.CREDIT ? t.get("credit")
                     : back == Refunded.FREE ? t.get("free")
                     : t.get("retry");

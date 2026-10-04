@@ -314,6 +314,28 @@ const dict: Dict = {
   "루가 읽어낸 인물": { en: "Characters LOU read from your content", ja: "ルーが読み取った人物", zh: "LOU 读出的人物" },
   "캐릭터 시트": { en: "Character sheet", ja: "キャラクターシート", zh: "角色设定图" },
   "내 내용": { en: "My content", ja: "自分の内容", zh: "我的内容" },
+
+  /* ---- 걸린 캐릭터 시트 고치기(#626) — 서버 문장(JobFailure.sheetFixMessage)도 키로 둔다 ---- */
+  "캐릭터를 다시 그려 주세요": { en: "Please redraw your character", ja: "キャラクターを描き直してください", zh: "请重新绘制角色" },
+  "캐릭터 그림이 이미지 안전 기준(선정성)에 걸렸어요. 적어 주신 이야기는 그대로 있어요. 노출이 적은 옷을 입은 사진으로 바꾸거나 옷차림 설명을 고쳐서 캐릭터만 다시 그려 주세요.": {
+    en: "The character image was flagged by the image safety filter (sexual content). Your story is kept. Switch to a photo with less exposed clothing or edit the outfit description, then redraw just the character.",
+    ja: "キャラクター画像が画像の安全基準（性的表現）に引っかかりました。書いていただいたストーリーはそのまま残っています。露出の少ない服の写真に替えるか、服装の説明を直して、キャラクターだけ描き直してください。",
+    zh: "角色图片未通过图片安全标准（色情内容）。您写的故事已保留。请换一张穿着暴露较少的照片，或修改服装描述，只重新绘制角色。" },
+  "캐릭터 그림이 이미지 안전 기준에 걸렸어요. 적어 주신 이야기는 그대로 있어요. 다른 사진으로 바꾸거나 설명을 고쳐서 캐릭터만 다시 그려 주세요.": {
+    en: "The character image was flagged by the image safety filter. Your story is kept. Switch to another photo or edit the description, then redraw just the character.",
+    ja: "キャラクター画像が画像の安全基準に引っかかりました。書いていただいたストーリーはそのまま残っています。別の写真に替えるか説明を直して、キャラクターだけ描き直してください。",
+    zh: "角色图片未通过图片安全标准。您写的故事已保留。请换一张照片或修改描述，只重新绘制角色。" },
+  "사진 바꾸기": { en: "Change photo", ja: "写真を変える", zh: "更换照片" },
+  "선택 · 최대 4장": { en: "Optional · up to 4", ja: "任意 · 最大4枚", zh: "可选 · 最多 4 张" },
+  "새 사진 고르기": { en: "Choose new photos", ja: "新しい写真を選ぶ", zh: "选择新照片" },
+  "새 사진으로 그리면 예전 사진은 바로 지워요.": { en: "When you redraw with new photos, the old ones are deleted right away.", ja: "新しい写真で描くと、前の写真はすぐに削除します。", zh: "用新照片重新绘制后，旧照片会立即删除。" },
+  "외모·옷차림 설명": { en: "Looks · outfit", ja: "見た目・服装の説明", zh: "外貌 · 服装描述" },
+  "이번에 더 바랄 점": { en: "Anything else this time", ja: "今回の追加の要望", zh: "这次的其他要求" },
+  "이번에 더 바랄 점 · 예: 단정한 정장 차림으로": { en: "Anything else this time · e.g. a neat suit", ja: "今回の追加の要望 · 例: きちんとしたスーツ姿で", zh: "这次的其他要求 · 例如：穿整洁的西装" },
+  "캐릭터만 다시 그리기": { en: "Redraw character only", ja: "キャラクターだけ描き直す", zh: "只重新绘制角色" },
+  "캐릭터만 다시 그리기 · {n}번 남음": { en: "Redraw character only · {n} left", ja: "キャラクターだけ描き直す · 残り{n}回", zh: "只重新绘制角色 · 剩余 {n} 次" },
+  "그만두기": { en: "Stop", ja: "やめる", zh: "放弃" },
+  "다시 그리기를 다 썼어요. 그만두시면 쓰신 크레딧이나 무료 횟수를 돌려드려요.": { en: "You've used all redraws. If you stop, we'll refund the credits or free creation you used.", ja: "描き直しの回数を使い切りました。やめると、使ったクレジットか無料回数をお返しします。", zh: "重绘次数已用完。放弃的话，会退还已使用的点数或免费次数。" },
 };
 
 registerDict(dict);

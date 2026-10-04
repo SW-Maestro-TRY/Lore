@@ -95,6 +95,27 @@ public class JobStore {
         });
     }
 
+    /** 시트가 안전 검사에 걸려 멈춘다(#626). 「답해 주세요」 푸시도 보낸다 — 사람이 고칠 차례다. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public WebtoonJob sheetBlocked(Long id, String why, JobFailure failure) {
+        return jobs.findById(id).map(job -> {
+            job.sheetBlocked(why, failure == null ? "SHEET_IMAGE" : failure.stage(),
+                    failure == null ? null : failure.detail(), Instant.now());
+            WebtoonJob saved = jobs.save(job);
+            push.awaiting(saved);
+            return saved;
+        }).orElse(null);
+    }
+
+    /** 고쳐서 다시 그리기 시작 — 걸렸던 표시를 지운다. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void sheetUnblocked(Long id) {
+        jobs.findById(id).ifPresent(job -> {
+            job.sheetUnblocked(Instant.now());
+            jobs.save(job);
+        });
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void learnRun(Long id, String runId) {
         jobs.findById(id).ifPresent(job -> {

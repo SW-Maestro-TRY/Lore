@@ -81,6 +81,23 @@ class JobPushTest {
     }
 
     @Test
+    @DisplayName("시트가 안전 기준에 걸려 멈추면 「확인해 주세요」가 아니라 「다시 그려 주세요」가 간다(#626)")
+    void blockedSheetSendsFix() {
+        when(subs.findByBrowserUid("u1")).thenReturn(List.of(sub("https://fcm.googleapis.com/x", "ko")));
+        WebtoonJob job = job(1L, null, "u1", JobStatus.AWAITING_SHEET);
+        when(job.isSheetBlocked()).thenReturn(true);
+
+        push.awaiting(job);
+
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(sender).send(any(), body.capture(), eq("abc1"));
+        assertThat(body.getValue())
+                .contains("캐릭터를 다시 그려 주세요")
+                .contains("이야기는 그대로")
+                .contains("/webtoon?view=running&job=abc1");
+    }
+
+    @Test
     @DisplayName("기다리는 상태가 아니면(도는 중) 안 보낸다")
     void runningDoesNotSend() {
         push.awaiting(job(1L, null, "u1", JobStatus.RUNNING));
