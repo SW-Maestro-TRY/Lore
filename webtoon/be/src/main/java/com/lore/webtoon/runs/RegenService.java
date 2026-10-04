@@ -66,6 +66,10 @@ public class RegenService {
 
     private final PageRegenRepository regens;
     private final ObjectMapper json = new ObjectMapper();
+    private final com.lore.webtoon.credit.CreditGate credits;
+    /** 다시 그리기 번호 -> (누가, 어떤 기록으로) 냈나. 실패하면 이걸로 돌려준다(#626). 서버가 다시 뜨면
+     *  돌던 다시 그리기도 같이 사라지므로 메모리에만 둔다. */
+    private final Map<String, String[]> paid = new java.util.concurrent.ConcurrentHashMap<>();
     private final PageStore pages;
     private final BakeService bakery;
     private final HarnessProcess harness;
@@ -77,7 +81,9 @@ public class RegenService {
 
     public RegenService(PageRegenRepository regens, PageStore pages, BakeService bakery,
                         HarnessProcess harness, PageUploader uploader, JobRunner runner,
-                        RunFiles files, com.lore.webtoon.job.AfterRun after) {
+                        RunFiles files, com.lore.webtoon.job.AfterRun after,
+                        com.lore.webtoon.credit.CreditGate credits) {
+        this.credits = credits;
         this.regens = regens;
         this.pages = pages;
         this.bakery = bakery;
@@ -294,6 +300,7 @@ public class RegenService {
                다시 그릴 때마다 원본이 서버에 쌓인다(로컬은 RunFiles 가 안 지운다). */
             files.sweepUploaded(runId);
             move(id, RegenStatus.DONE);
+            settled(id);
         } catch (Exception e) {
             log.error("다시 그리지 못했습니다 (run={}, 장={})", runId, no, e);
             fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
@@ -417,7 +424,25 @@ public class RegenService {
         return v instanceof Number num ? num.intValue() : null;
     }
 
+    /** 다시 그리기 값을 받았다고 적어 둔다 — 실패하면 {@link #fail} 이 돌려준다(#626). */
+    public void charged(String id, Long userId, String ref) {
+        if (id != null && userId != null && ref != null) {
+            paid.put(id, new String[]{String.valueOf(userId), ref});
+        }
+    }
+
+    /** 끝났다 — 잘 됐으면 받은 값은 그대로 두고 기억만 지운다. */
+    private void settled(String id) {
+        paid.remove(id);
+    }
+
     private void fail(String id, String reason) {
+        /* **실패하면 받은 값을 돌려준다(#626).** 웹툰 만들기와 같은 원칙 — 전에는 다시 그리기가 안전 검사에
+           걸리거나 실패해도 크레딧이 그대로 빠졌다(로컬 시험에서 3크레딧). */
+        String[] who = paid.remove(id);
+        if (who != null) {
+            credits.refund(Long.valueOf(who[0]), who[1]);
+        }
         regens.findById(id).ifPresent(one -> {
             one.fail(reason, Instant.now());
             regens.save(one);

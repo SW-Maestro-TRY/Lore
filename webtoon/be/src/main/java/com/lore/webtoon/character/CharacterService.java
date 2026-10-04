@@ -406,7 +406,8 @@ public class CharacterService {
                     name.isBlank() ? made.named() : null, made.card());
         } catch (Exception e) {                    // noqa: 사유는 로그에, 사람에겐 한 줄
             log.error("캐릭터를 못 그렸습니다 (id={}, name={})", id, name, e);
-            finish(id, null, null, "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.", null, null);
+            finish(id, null, null, e instanceof CharacterMaker.Refused refused ? refused.getMessage()
+                    : "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.", null, null);
         } finally {
             // **어떻게 끝나든 올린 사진은 지운다.** 외모를 글로 적는 데만 쓰고,
             // 그 뒤로는 다시 안 쓴다. 사람 얼굴을 서버에 둘 이유가 없다.

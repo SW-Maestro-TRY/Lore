@@ -177,6 +177,16 @@ const dict: Dict = {
 
   /* ---- 서버가 보내는 실패 한 줄 (CharacterService.draw) ---- */
   "캐릭터를 그리지 못했습니다. 다시 시도해 주세요.": { en: "Couldn't draw the character. Please try again.", ja: "キャラクターを描けませんでした。もう一度お試しください。", zh: "没能画出角色，请重试。" },
+
+  /* ---- 캐릭터 그림이 안전 기준에 걸렸을 때(#626) — 서버 문장(CharacterMaker.Refused)이 키 ---- */
+  "캐릭터 그림이 이미지 안전 기준(선정성)에 걸렸어요. 같은 내용으로 다시 뽑으면 또 걸려요. 노출이 적은 옷차림의 사진이나 설명으로 바꿔 다시 만들어 주세요.": {
+    en: "The character image was flagged by the image safety filter (sexual content). Rerolling with the same input will be flagged again. Please try again with a photo or description with less exposed clothing.",
+    ja: "キャラクター画像が画像の安全基準（性的表現）に引っかかりました。同じ内容で引き直すとまた引っかかります。露出の少ない服装の写真か説明に変えて作り直してください。",
+    zh: "角色图片未通过图片安全标准（色情内容）。用相同内容重新抽取还会被拦截。请换成穿着暴露较少的照片或描述后重新制作。" },
+  "캐릭터 그림이 이미지 안전 기준에 걸렸어요. 같은 내용으로 다시 뽑으면 또 걸려요. 다른 사진이나 설명으로 바꿔 다시 만들어 주세요.": {
+    en: "The character image was flagged by the image safety filter. Rerolling with the same input will be flagged again. Please try again with a different photo or description.",
+    ja: "キャラクター画像が画像の安全基準に引っかかりました。同じ内容で引き直すとまた引っかかります。別の写真か説明に変えて作り直してください。",
+    zh: "角色图片未通过图片安全标准。用相同内容重新抽取还会被拦截。请换一张照片或修改描述后重新制作。" },
 };
 
 registerDict(dict);
