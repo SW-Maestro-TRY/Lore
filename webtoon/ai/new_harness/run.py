@@ -1825,7 +1825,14 @@ def main(argv=None) -> int:
               "(.env.example 참고).")
         return 0
 
-    if args.run_id and (RUNS_DIR / args.run_id).exists():
+    # **폴더가 있다고 이어 하는 것이 아니다(#626).** 바로 만들기는 시트와 이야기를 같은 번호로 **동시에**
+    # 띄운다(--character 를 둘 다 준다). 시트 쪽이 0.몇 초 먼저 폴더를 만들면 이야기 쪽이 「이미 있는 run」
+    # 으로 보고 「이미 이야기 후보가 있습니다」로 멈췄다(dev 2026-10-03). 사람을 새로 받는 호출(--character)
+    # 은 이야기 후보가 아직 없으면 새 작품으로 본다. input.json 은 같은 파일에서 나와 둘이 써도 같다.
+    existing = bool(args.run_id) and (RUNS_DIR / args.run_id).exists()
+    fresh_input = bool(args.character) and not (
+        existing and (RUNS_DIR / args.run_id / "directions.json").exists())
+    if existing and not fresh_input:
         run_dir = RUNS_DIR / args.run_id
         char = read_input(run_dir)
         new_run = False
@@ -1952,7 +1959,23 @@ def main(argv=None) -> int:
         f"  python run.py --run-id {run_dir.name} --detail-pages")
 
 
+def _note_text_refusal(exc: BaseException) -> None:
+    """글 모델이 거절했으면 그 작품 폴더에 이유를 남긴다(#626). 어느 폴더인지는 --run-id 로 안다."""
+    try:
+        argv = sys.argv[1:]
+        if "--run-id" in argv:
+            run_dir = RUNS_DIR / argv[argv.index("--run-id") + 1]
+            if run_dir.is_dir():
+                failure.write(run_dir, "STORY", "text_refusal", f"TextRefused: {exc}")
+    except Exception:                                                # noqa: BLE001 — 이유를 못 남겨도 원래 실패는 그대로
+        pass
+
+
 if __name__ == "__main__":
-    with tracing.run_span("run.py", sys.argv[1:]):
-        code = main()
+    try:
+        with tracing.run_span("run.py", sys.argv[1:]):
+            code = main()
+    except story.TextRefused as exc:
+        _note_text_refusal(exc)
+        raise SystemExit(f"글 모델이 이 내용을 만들지 않겠다고 했습니다: {exc}")
     raise SystemExit(code)

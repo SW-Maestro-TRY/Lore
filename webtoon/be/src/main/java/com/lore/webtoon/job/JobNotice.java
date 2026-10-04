@@ -159,11 +159,60 @@ public class JobNotice {
                 return;
             }
             /* 사유(why)는 메일에 안 적는다 — 내부 문구라 받는 사람에게는 뜻이 없다. 로그에는 남는다. */
-            NoticeMail.Body body = NoticeMail.failed(chosenTitleOf(job.getRunId()), back, site + "/webtoon", site);
+            /* 안전 기준·글 모델 거절이면 이유를 적는다(#626) — 「잠시 후 다시」는 같은 내용이면 또 걸린다. */
+            boolean unfixable = "image_safety".equals(job.getFailCode()) || "text_refusal".equals(job.getFailCode());
+            NoticeMail.Body body = NoticeMail.failed(chosenTitleOf(job.getRunId()), back, site + "/webtoon", site,
+                    unfixable ? why : null);
             mail.sendHtml(to, "[LORE] 웹툰을 다 만들지 못했어요", body.text(), body.html());
             log.info("실패 알림을 보냈습니다 (job={}, why={})", jobId, why);
         } catch (Exception e) {             // noqa: 실패를 적는 길에서 또 죽으면 안 된다
             log.error("실패 알림을 못 보냈습니다 (job={})", jobId, e);
+        }
+    }
+
+    /**
+     * 사람이 고쳐야 이어 갈 수 있다고 알린다(#626) — 시트가 안전 기준에 걸려 멈췄을 때.
+     *
+     * {@link #finished}·{@link #failed} 와 달리 <b>한 번만 보내기(claimNotice)를 쓰지 않는다</b> — 그 표시를
+     * 여기서 써 버리면 고쳐서 다 만든 뒤의 완성 메일이 안 간다. 다시 그리기는 세 번까지라 많아야 몇 통이다.
+     * 푸시는 {@link JobStore#sheetBlocked} 가 이미 보냈다.
+     */
+    public void needsFix(Long jobId, String why) {
+        try {
+            WebtoonJob job = store.byId(jobId);
+            String to = addressOf(job);
+            if (to == null) {
+                return;
+            }
+            String link = site + "/webtoon?view=running&job=" + job.getPublicId();
+            NoticeMail.Body body = NoticeMail.needsFix(chosenTitleOf(job.getRunId()), why,
+                    "캐릭터 다시 그리러 가기 →", link, site);
+            mail.sendHtml(to, "[LORE] 캐릭터를 다시 그려 주세요 — 이야기는 그대로 있어요", body.text(), body.html());
+            log.info("고쳐 달라는 알림을 보냈습니다 (job={})", jobId);
+        } catch (Exception e) {             // noqa: 알림이 만들기를 깨면 안 된다
+            log.error("고쳐 달라는 알림을 못 보냈습니다 (job={})", jobId, e);
+        }
+    }
+
+    /**
+     * 다 만들었지만 장면 몇 장이 안전 기준에 걸려 빈 장으로 남았다고 알린다(#626). 완성 메일 대신 간다 —
+     * 「다 만들어졌어요」만 보내면 빈 장을 보고 놀란다. 실패 메일과 같은 머리에 고칠 방법을 적고,
+     * 버튼은 편집실로 보낸다. 완성처럼 한 번만 보낸다(claimNotice). 푸시는 완성 푸시를 그대로 보낸다.
+     */
+    public void partial(Long jobId, String why) {
+        try {
+            WebtoonJob job = store.byId(jobId);
+            push.finished(job);
+            String to = addressOf(job);
+            if (to == null || !store.claimNotice(jobId)) {
+                return;
+            }
+            String link = site + "/webtoon?view=editor&run=" + job.getRunId();
+            NoticeMail.Body body = NoticeMail.needsFix(titleOf(job.getRunId()), why, "편집실에서 다시 그리기 →", link, site);
+            mail.sendHtml(to, "[LORE] 「" + titleOf(job.getRunId()) + "」 장면 몇 장을 다시 그려 주세요", body.text(), body.html());
+            log.info("일부 장면이 빠진 완성 알림을 보냈습니다 (job={}, run={})", jobId, job.getRunId());
+        } catch (Exception e) {             // noqa: 메일이 만들기를 깨면 안 된다
+            log.error("일부 장면이 빠진 완성 알림을 못 보냈습니다 (job={})", jobId, e);
         }
     }
 

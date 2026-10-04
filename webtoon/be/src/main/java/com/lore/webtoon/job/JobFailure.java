@@ -64,8 +64,26 @@ public record JobFailure(String stage, String code, List<String> categories, Str
         return new JobFailure(stage, code, categories, head + "--- 하네스 출력 끝부분 ---\n" + String.join("\n", tail));
     }
 
+    boolean sexual() {
+        return categories.stream().anyMatch(c -> c.toLowerCase().contains("sexual"));
+    }
+
     boolean imageSafety() {
         return "image_safety".equals(code);
+    }
+
+    /**
+     * 시트가 걸려 <b>멈춰 기다릴 때</b> 할 말(#626) — 작업은 안 끝났고 이야기는 남아 있다.
+     * 문장은 화면 사전({@code webtoon/fe/screens/progress/i18n.ts})에 그대로 키로 있어야 번역된다.
+     */
+    String sheetFixMessage() {
+        boolean sexual = categories.stream().anyMatch(c -> c.toLowerCase().contains("sexual"));
+        if (sexual) {
+            return "캐릭터 그림이 이미지 안전 기준(선정성)에 걸렸어요. 적어 주신 이야기는 그대로 있어요. "
+                    + "노출이 적은 옷을 입은 사진으로 바꾸거나 옷차림 설명을 고쳐서 캐릭터만 다시 그려 주세요.";
+        }
+        return "캐릭터 그림이 이미지 안전 기준에 걸렸어요. 적어 주신 이야기는 그대로 있어요. "
+                + "다른 사진으로 바꾸거나 설명을 고쳐서 캐릭터만 다시 그려 주세요.";
     }
 
     /**
@@ -78,6 +96,11 @@ public record JobFailure(String stage, String code, List<String> categories, Str
     String humanMessage(String fallback) {
         if ("photo_missing".equals(code)) {
             return "올린 사진을 찾지 못했어요. 사진을 다시 올려 새로 만들어 주세요.";
+        }
+        if ("text_refusal".equals(code)) {
+            /* 글 모델이 만들기를 거절했다(#626) — 입력 검사를 통과했지만 모델이 성인물·잔혹물로 본 것. */
+            return "적어 주신 내용 중 AI가 만들 수 없다고 판단한 부분이 있어요. "
+                    + "선정적이거나 잔혹한 표현을 바꿔서 다시 만들어 주세요.";
         }
         if (!imageSafety()) {
             return fallback;

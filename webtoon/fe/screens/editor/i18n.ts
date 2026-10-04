@@ -184,6 +184,17 @@ const dict: Dict = {
   "이 컷 다시 그리기 · {n}크레딧": { en: "Redraw this panel · {n} credits", ja: "このコマを描き直す · {n}クレジット", zh: "重绘这一格 · {n} 积分" },
   "● 저장됨": { en: "● Saved", ja: "● 保存済み", zh: "● 已保存" },
   "다음 장까지 여백": { en: "Gap before next page", ja: "次のページまでの余白", zh: "到下一页的留白" },
+
+  /* ---- 안전 기준에 걸려 비워 둔 장(#626) ---- */
+  "이미지 안전 기준에 걸려 비워 둔 장이에요. 장면 설명을 고쳐 다시 그려 주세요.": {
+    en: "This page was left blank because it was flagged by the image safety filter. Edit the scene description and redraw it.",
+    ja: "画像の安全基準に引っかかったため空白にしたページです。場面の説明を直して描き直してください。",
+    zh: "此页因未通过图片安全标准而留空。请修改场景描述后重新绘制。" },
+  "이 장은 이미지 안전 기준에 걸려 비워 둔 장이에요. 노출이나 선정적인 부분을 바꿔 장면 설명을 고쳐 주세요. 다시 그리기는 무료예요.": {
+    en: "This page was left blank because it was flagged by the image safety filter. Change any exposed or sexual details in the scene description. Redrawing it is free.",
+    ja: "このページは画像の安全基準に引っかかったため空白にしました。露出や性的な部分を変えて場面の説明を直してください。描き直しは無料です。",
+    zh: "此页因未通过图片安全标准而留空。请修改场景描述中暴露或色情的部分。重新绘制免费。" },
+  "무료": { en: "Free", ja: "無料", zh: "免费" },
 };
 
 registerDict(dict);

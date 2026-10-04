@@ -96,7 +96,14 @@ public record JobView(
         Redraw redraw,
         List<String> log,
         /** 기계가 일한 시간(초) — 줄 선 시간은 넣고, 사람을 기다린 시간은 뺀다(#509). */
-        double elapsed) {
+        double elapsed,
+        /* 캐릭터 시트가 이미지 안전 기준에 걸려 사진·설명을 고쳐 다시 그리기를 기다리는 중(#626).
+           상태는 awaiting_sheet 그대로라 화면이 이걸로 「확인」과 「고치기」를 가른다. 문장은 error 에 있다. */
+        boolean sheet_blocked,
+        /* 고쳐서 다시 그리기를 몇 번 더 할 수 있나 */
+        int sheet_fix_left,
+        /* 안전 검사에 걸려 빈 장으로 완성된 장 번호들(#626). 없으면 빈 목록 */
+        List<Integer> unsafe_pages) {
 
     /**
      * @param total      0 이면 아직 몇 장인지 모른다 — 그때는 통째로 안 보낸다.
@@ -151,7 +158,7 @@ public record JobView(
                       int sheetVersions, List<Map<String, Object>> castSheets, Map<String, Object> input,
                       String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
-                      String notifyEmail, JobEta.Eta eta) {
+                      String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages) {
         int stageIndex = job.getStage().order();
         if (eta == null) {
             eta = JobEta.of(job, now, 1, spot == null ? 0 : spot.seconds(), Instant.now());
@@ -195,6 +202,9 @@ public record JobView(
                 now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage(), drawn) : null,
                 now.redraw().isEmpty() ? null : new Redraw(now.redraw(), now.redrawDone()),
                 now.log(),
-                eta.work());
+                eta.work(),
+                job.isSheetBlocked(),
+                sheetFixLeft,
+                unsafePages == null ? List.of() : unsafePages);
     }
 }

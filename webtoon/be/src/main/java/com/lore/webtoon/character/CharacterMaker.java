@@ -103,6 +103,38 @@ public class CharacterMaker {
         return run(name, description, photos, null, out, world == null ? "" : world, language);
     }
 
+    /**
+     * 그림이 이미지 안전 검사에 걸려 실패했으면 그렇다고 말하는 예외를(#626), 아니면 지금처럼 「그리지 못했습니다」를.
+     * 하네스(character.py)가 거절이면 폴더에 failure.json 을 남긴다.
+     */
+    private RuntimeException refusedOr(Path dir) {
+        try {
+            Path f = dir == null ? null : dir.resolve("failure.json");
+            if (f != null && Files.isRegularFile(f)) {
+                JsonNode n = mapper.readTree(f.toFile());
+                if ("image_safety".equals(n.path("code").asText())) {
+                    boolean sexual = false;
+                    for (JsonNode c : n.path("categories")) {
+                        sexual |= c.asText().toLowerCase().contains("sexual");
+                    }
+                    return new Refused(sexual);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("캐릭터 실패 이유를 못 읽었습니다", e);
+        }
+        return new IllegalStateException("캐릭터를 그리지 못했습니다");
+    }
+
+    /** 캐릭터 그림이 이미지 안전 검사에 걸렸다. 메시지는 사람에게 보여 줄 문장이다(#626). */
+    public static final class Refused extends IllegalStateException {
+        public Refused(boolean sexual) {
+            super(sexual
+                    ? "캐릭터 그림이 이미지 안전 기준(선정성)에 걸렸어요. 같은 내용으로 다시 뽑으면 또 걸려요. 노출이 적은 옷차림의 사진이나 설명으로 바꿔 다시 만들어 주세요."
+                    : "캐릭터 그림이 이미지 안전 기준에 걸렸어요. 같은 내용으로 다시 뽑으면 또 걸려요. 다른 사진이나 설명으로 바꿔 다시 만들어 주세요.");
+        }
+    }
+
     private Made run(String name, String description, List<Path> photos, String style, Path out,
                      String world, String language) throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>(List.of(
@@ -132,6 +164,9 @@ public class CharacterMaker {
         // 진행 상황(stderr)은 흘려보내고 결과(stdout)만 읽는다.
         pb.redirectError(ProcessBuilder.Redirect.INHERIT);
 
+        if (out.getParent() != null) {
+            Files.deleteIfExists(out.getParent().resolve("failure.json"));   // 지난번 거절이 이번 실패로 읽히지 않게(#626)
+        }
         log.info("캐릭터를 그립니다: {}", String.join(" ", cmd));
         Process p = pb.start();
 
@@ -159,7 +194,7 @@ public class CharacterMaker {
         }
         reader.join(5_000);
         if (p.exitValue() != 0) {
-            throw new IllegalStateException("캐릭터를 그리지 못했습니다");
+            throw refusedOr(out.getParent());
         }
 
         JsonNode got = mapper.readTree(last.toString());
