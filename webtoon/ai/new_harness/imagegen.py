@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """이미지 한 장을 그린다. 시트도 페이지도 여기를 지난다.
 
-실제 호출은 story-harness 의 make_sheet_painter 를 그대로 쓴다 — 컷을 그리는
+실제 호출은 story.py 의 make_sheet_painter 를 그대로 쓴다 — 컷을 그리는
 코드와 같은 경로다. 여기서 다시 구현하면 재시도·응답 파싱·참조 이미지 첨부가
 조금씩 달라지고, 그 차이가 그림 차이로 나타난다.
 
@@ -19,6 +19,7 @@ from pathlib import Path
 
 import cost
 import llm
+import tracing
 from llm import story
 
 SHEET_KIND = "sheet"        # 가로로 넓은 자료 시트 (story.py 가 이미 아는 칸)
@@ -125,11 +126,20 @@ def paint(stage: str, prompt: str, out_path: Path, refs=None,
     painter, label = story.make_sheet_painter(provider, model, quality, refs)
     started = time.monotonic()
     at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-    data, meta = painter(prompt, kind)
-    seconds = round(time.monotonic() - started, 2)
+    # Logfire 에 그림 한 장이 한 span 으로 남는다(tracing.image_span). 실패하면
+    # 예외가 그 span 에 기록되고 그대로 위로 던져진다.
+    with tracing.image_span(stage, provider, model, quality, kind, prompt, refs) as span:
+        data, meta = painter(prompt, kind)
+        seconds = round(time.monotonic() - started, 2)
+        cost_info = cost.cost_fields(provider, model, quality, (meta or {}).get("usage_dict"))
+        if span is not None:
+            span.set_attribute("seconds", seconds)
+            span.set_attribute("bytes", len(data))
+            span.set_attribute("backend", label)
+            span.set_attribute("cost", cost_info)
+            span.set_attribute("meta", meta or {})
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(data)
-    cost_info = cost.cost_fields(provider, model, quality, (meta or {}).get("usage_dict"))
     # `at`·`seconds` — 그림 한 장에 몇 초가 걸리는지는 재시도·모델 교체를
     # 판단할 때 비용만큼 자주 쓰는 값인데, 남기지 않으면 run 이 끝난 뒤에는
     # 알아낼 방법이 없다. `chars` 는 이 호출에 실제로 들어간 프롬프트 길이다.

@@ -7,8 +7,8 @@
 컷은 **한 장씩 그리지 않는다.** pages.py 가 붙일 수 있는 컷을 한 페이지로 묶고,
 페이지 하나당 이미지 호출을 한 번 한다 (pageart.py).
 
-이야기는 story-harness 를 거치지 않는다. prompt/ 안의 프롬프트가 전부다.
-이미지 호출만 story-harness 것을 빌려 쓴다 (imagegen.py 참고).
+이야기는 prompt/ 안의 프롬프트가 전부다. 모델 호출과 시트 그림은 story.py 를
+거친다 (llm.py · imagegen.py 참고).
 
 사용법
   python run.py --plan                                 # 어느 단계가 어느 모델인지
@@ -17,7 +17,7 @@
   python run.py --run-id <id> --pick 2                 # 후보 고르고 콘티까지
   python run.py --run-id <id> --pick 2 --scenes        # 줄거리 없이 곧장 장면 분리 (글 1회)
   python run.py --run-id <id> --sheet                  # 캐릭터 시트
-  python run.py --run-id <id> --sheet-from ../story-harness/runs/<run>  # 시트 재사용
+  python run.py --run-id <id> --sheet-from <옛 story-harness run 폴더>  # 시트 재사용
   python run.py --run-id <id> --pages                  # 페이지 그림 (페이지당 1회 호출)
   python run.py --run-id <id> --page 3                 # 3페이지만 다시
   python run.py --name ... --photo a.png --all --pick 2   # 한 번에
@@ -30,6 +30,7 @@ import argparse
 import json
 import random
 import re
+from concurrent.futures import ThreadPoolExecutor
 import sys
 import unicodedata
 import os
@@ -47,14 +48,20 @@ if str(WEBTOON_HARNESS) not in sys.path:
 import directing                              # noqa: E402  (webtoon-harness 것을 그대로 빌린다)
 import imagegen                              # noqa: E402
 import llm                                    # noqa: E402
+import tracing                                # noqa: E402
 import detailart                              # noqa: E402
 import storycheck                             # noqa: E402
+import charcard                               # noqa: E402
+import lorebook                               # noqa: E402
+import storydiff                              # noqa: E402
 import fullreview                             # noqa: E402
 import pages as pagemod                       # noqa: E402
 import runmeta                                # noqa: E402
 import sheet as sheetmod                      # noqa: E402
+import failure                                # noqa: E402
+import lang as lang_mod                       # noqa: E402
 from llm import story                         # noqa: E402
-import samples                                # noqa: E402  (story-harness 것을 그대로 빌린다)
+import samples                                # noqa: E402
 from pages import SIZES                       # noqa: E402
 
 PROMPT_DIR = HERE / "prompt"
@@ -90,9 +97,9 @@ def read_character(path: Path) -> dict:
     「어떤 이야기를 만들까요?」를 한 단계로 물어보고 확인 화면에서 다시
     보여준다. 물어보고 버리면 사람은 자기가 적은 것이 반영된 줄 안다.
 
-    프롬프트 원문은 **안 고친다.** 사람이 적은 것이 있을 때만 입력 블록에
-    한 문단을 더해 그 규칙을 덮는다(story_input_block) — 안 적었으면 블록이
-    아예 안 붙어서 예전 run 은 프롬프트가 한 글자도 안 바뀐다.
+    적었으면 이야기 단계가 프롬프트부터 바꾼다 — `story_prompt` 대신
+    적힌 이야기를 중심에 두는 `story_prompt_seeded` 를 쓴다
+    (`seeded_input_block` 참고). 안 적었으면 예전과 한 글자도 안 바뀐다.
     """
     if path.is_dir():
         path = path / "character.json"
@@ -111,6 +118,12 @@ def read_character(path: Path) -> dict:
         "photos": photos,
         "photo_note": doc.get("photo_note"),
         "story": doc.get("story"),
+        "card": doc.get("card"),
+        # 「만들고 싶은 내용이 있어요」(#548) — 더 적은 설정과 제목. 없을 수 있다.
+        "settings": doc.get("settings"),
+        "title": doc.get("title"),
+        # 「1화에서 보여줄 것」 — 적은 내용 가운데 이번 화에 넣을 부분. 없을 수 있다.
+        "episode": doc.get("episode"),
     })
 
 
@@ -118,6 +131,10 @@ def normalize(raw: dict) -> dict:
     """빈 칸은 빈 칸으로 둔다. 코드가 기본값을 채우면 작가가 준 것과 섞인다."""
     fields = {k: str(v).strip() for k, v in (raw.get("fields") or {}).items()
               if str(v or "").strip()}
+    # 고른 캐릭터 카드(#458). 장르를 따로 안 골랐으면 카드 세계의 장르를 쓴다 —
+    # 안 그러면 마법대륙 카드를 골라도 모델이 장르를 새로 정해 현대물이 나온다.
+    card = charcard.normalize(raw.get("card"))
+    genre = str(raw.get("genre") or "").strip() or charcard.default_genre(card)
     photos = []
     for p in raw.get("photos") or []:
         path = Path(p)
@@ -129,10 +146,14 @@ def normalize(raw: dict) -> dict:
         "name": str(raw.get("name") or "").strip(),
         "description": str(raw.get("description") or "").strip(),
         "fields": fields,
-        "genre": str(raw.get("genre") or "").strip(),
+        "genre": genre,
         "photos": photos,
         "photo_note": str(raw.get("photo_note") or "").strip(),
         "story": str(raw.get("story") or "").strip(),
+        "card": card,
+        "settings": str(raw.get("settings") or "").strip(),
+        "title": str(raw.get("title") or "").strip(),
+        "episode": str(raw.get("episode") or "").strip(),
     }
 
 
@@ -141,9 +162,44 @@ def gate_input(char: dict) -> list[str]:
     bad = []
     if not char["name"]:
         bad.append("캐릭터 이름이 없습니다 (필수).")
-    if not char["photos"] and not char["description"] and not char["fields"]:
+    if (not char["photos"] and not char["description"] and not char["fields"]
+            and not char.get("card")):
         bad.append("외관이 없습니다 — 사진이나 설명 중 하나는 있어야 합니다.")
     return bad
+
+
+# 사용자가 적은 설명을 어떻게 쓰는가 — 설명이 있을 때만 그 바로 아래에 붙는다(#458).
+#
+# 모모를 「장난치는 걸 좋아한다」 한 줄로 돌렸더니, 후보 넷 중 둘이 장난 때문에
+# 사건이 터지는 이야기(장난으로 쓴 동의서가 왕실 계약서가 된다)였고, 하나는
+# 방향별 축(전문가 · 냉소)을 따라 「냉소적인 전문가」가 됐다(2026-09-27).
+# 사용자 지시: 설명에 없는 성격은 절대 붙이지 않는다. 그리고 「이름만 바꿔
+# 다른 캐릭터를 넣어도 성립하면」 그 인물이 살아 움직이는 게 아니다 — 장난치다
+# 금지 소환진을 터뜨린 후보처럼 성격이 일을 바꿔야 그 인물로 읽힌다. 다만
+# 「성격이 이야기를 만들어야 한다」를 세게 걸었더니 모델이 판 자체를 성격으로
+# 지었다(장난감 전쟁 기념관, 장난 배틀 앱). 판이 먼저 서고 성격은 그 판에서 일을
+# 바꾸는 쪽이다(사용자 판정, 2026-09-27). 0921 멘토링대로 판정 기준을 적는다.
+TRAIT_RULES = [
+    "## 사용자가 적은 것이 최우선이다",
+    "",
+    "- 위 설명(과 고른 캐릭터 카드)에 적힌 것 — 자리, 시점, 종, 세계, 처지 — 은 이 "
+    "프롬프트의 다른 어떤 것(세계 재료·기준 샘플·이야기 변수·전개 문법)보다 먼저다. "
+    "그것과 안 맞는 재료나 샘플은 그쪽을 버린다. 적힌 시점(예: 아직 어떤 자리에 "
+    "오기 전)을 뒤로 밀거나, 적힌 처지를 다른 처지로 바꾸지 않는다.",
+    "- **사용자가 직접 적은 설명**에 이미 뒤집히는 순간이나 오늘 벌어진 일이 적혀 "
+    "있으면 그것이 1화의 판이다. 다른 것으로 갈아 끼우지 않는다. 재료는 그 판 위에서 "
+    "벌어진다. 고른 캐릭터 카드에 적힌 사건(누구를 만나 무엇을 하는지)은 여기에 들지 "
+    "않는다 — 그것은 이 인물을 소개하는 한 장면이라 네 후보 중 하나까지만 따라간다.",
+    "",
+    "## 이 인물의 성격은 위 설명이 전부다",
+    "",
+    "- 위 설명(과 고른 캐릭터 카드)에 없는 성격·말투·버릇·과거를 붙이지 않는다. "
+    "설명이 짧으면 짧은 대로 둔다. 빈 곳을 성격 형용사로 채우지 마라.",
+    "- 판(세계·소재·중심 사건)은 성격 없이도 그 장르에서 재미있게 서 있어야 한다. "
+    "성격 낱말로 세계·소재·제목을 짓지 마라 — 판을 성격에 맞추면 재미도 사건도 사라진다.",
+    "- 그 판에서 적힌 성격 때문에 일이 다르게 터지거나 꼬이거나 풀린다. 판정: 주인공을 "
+    "다른 인물로 바꾸면 이 판에서 벌어지는 일이 달라지는가?",
+]
 
 
 def input_block(char: dict, *, with_genre: bool = True) -> str:
@@ -157,12 +213,19 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     else:
         lines.append("외관: (사진 없음 — 아래 설명에서 읽는다)")
 
+    card = char.get("card") or {}
+    if card:
+        lines += ["", *charcard.block(card, has_story=bool(user_story(char)))]
+
     if char["description"] or char["fields"]:
-        lines += ["", "설명:"]
+        # 카드를 골랐으면 이 설명은 카드가 되기 전에 사람이 처음 적은 것이다 —
+        # 종·세계가 카드와 다를 수 있어서(사람 → 검은여우) 이름표를 단다.
+        lines += ["", "사용자가 처음 적은 설명 (성격·분위기 참고):" if card else "설명:"]
         if char["description"]:
             lines.append(char["description"])
         for k, v in char["fields"].items():
             lines.append(f"- {k}: {v}")
+        lines += ["", *TRAIT_RULES]
     else:
         lines += ["", "설명: (없음 — 네가 정한다)"]
 
@@ -172,35 +235,47 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     return "\n".join(lines) + "\n"
 
 
-def user_story_block(char: dict) -> str:
-    """사람이 「어떤 이야기를 만들까요?」에 적은 것. 안 적었으면 빈 문자열.
+def user_story(char: dict) -> str:
+    """사람이 「어떤 이야기를 볼까요?」에 적은 것. 안 적었으면 빈 문자열."""
+    return (char.get("story") or "").strip()
 
-    story_prompt 는 "줄거리는 받지 않는다" 로 시작한다. 그것을 여기서
-    덮는다 — **프롬프트 파일은 안 고치고**, 사람이 적은 것이 있을 때만 이
-    문단이 붙는다. `compose` 가 입력을 프롬프트 **뒤**에 놓으므로(모델은
-    뒤에 온 것을 더 세게 듣는다) 이 문단이 이긴다. 안 적었으면 블록이
-    아예 안 붙어서 예전 run 은 프롬프트가 한 글자도 안 바뀐다.
 
-    **후보 4개를 다 같은 이야기로 만들라는 뜻은 아니다.** 그러면 고를
-    것이 없어진다 — 출발점만 공유하고 가는 길은 갈라지게 못 박는다.
+def seeded_input_block(char: dict) -> str:
+    """사람이 줄거리를 적었을 때의 이야기 단계 입력 (#457).
+
+    예전에는 `story_prompt`(입력이 없을 때를 기준으로 쓴 프롬프트) 뒤에
+    「사람이 적은 이야기」 한 문단을 덧붙여 "줄거리는 받지 않는다" 만
+    덮었다. 그런데 그 프롬프트의 나머지 — 캐릭터를 잊고 장르 소재부터
+    떠올려 "완전히 다른 판 4개"를 고르라는 단계 — 와, 그 뒤에 "참고가
+    아니라 지시다" 로 붙는 방향별 축·구조가 그대로 살아서 적힌 이야기를
+    밀어냈다. "역대급 꼴찌가 입학했다" 에 주인공 위치 「최상위」가
+    배정되는 식이다(2026-09-26, 사용자 지적).
+
+    그래서 적은 것이 있으면 프롬프트부터 `story_prompt_seeded` 로 바꾸고,
+    여기서는 다음을 뺀다.
+      - 방향별 축·구조·엔진 — 무작위라 적힌 사실과 부딪힌다. 후보 넷의
+        차이는 적힌 것에 무엇을 더하느냐에서 나오게 한다.
+      - 장르 기준 샘플 카드 — 다른 주인공의 사건이라, 적힌 이야기 옆에
+        두면 그 소재가 섞여 든다.
+    세계관·전개 문법은 남기되 적힌 이야기 아래에 둔다. 적힌 이야기는
+    **맨 뒤**에 놓는다 — 모델은 뒤에 온 것을 더 세게 듣는다(`compose`).
     """
-    seed = (char.get("story") or "").strip()
-    if not seed:
-        return ""
-    return ("\n## 사용자가 직접 적은 이야기\n\n"
-            "앞에서 「줄거리는 받지 않는다」고 한 것은 **아무것도 안 주어졌을 "
-            "때의 규칙**이다. 아래는 이 작품을 만들어 달라고 한 사람이 직접 "
-            "적은 것이라, 여기서는 이것이 출발점이다.\n\n"
-            f"> {seed}\n\n"
-            "- **네 후보 모두 이 이야기에서 출발한다.** 하나라도 여기서 "
-            "벗어나면 사람이 적은 것을 버린 것이다.\n"
-            "- 그렇다고 넷을 같은 이야기로 만들지 마라. 출발점만 같고 **가는 "
-            "길은 서로 갈라져야** 고를 것이 생긴다.\n"
-            "- 적힌 것이 한 줄뿐이어도 그 한 줄이 1화 안에서 **실제로 일어나야** "
-            "한다. 배경 설정으로만 깔고 넘어가지 마라.\n")
+    lines = [input_block(char).rstrip("\n")]
+    genre = char["genre"]
+    if genre:
+        world = world_text_for(genre)
+        if world:
+            lines += ["", "## 이 세계의 배경 — 적힌 이야기와 부딪히지 않는 곳에서만 쓴다",
+                      "", world]
+        lines += genre_lore_section(genre)
+    lines += ["", "## 사용자가 적은 이야기 — 이 웹툰의 중심", "",
+              f"> {user_story(char)}"]
+    if genre:
+        lines += ["", "위의 세계관·전개 문법이 이 이야기와 부딪히면 이 이야기가 이긴다."]
+    return "\n".join(lines) + "\n"
 
 
-def story_input_block(char: dict) -> str:
+def story_input_block(char: dict, run_dir: Path | None = None) -> str:
     """이야기 단계의 입력 — 장르가 주어졌을 때만 장르 참고 자료를 더한다.
 
     장르가 없으면 story_prompt 가 4개 방향마다 서로 다른 장르를 스스로
@@ -209,19 +284,26 @@ def story_input_block(char: dict) -> str:
     world_text_for) — 구체화 단계에서만 장르 세계관을 주면, 장면 목록 자체가
     이미 장르 색이 없는 소재(출입증·CCTV 등)로 굳어 있어서 구체화가 소재를
     바꿔치기하는 식으로만 손볼 수 있었다(2026-08-31, 사용자 지적).
+
+    `run_dir`(2026-09-19 추가) — 있으면 장르 샘플 카드가 **최근에 안 보여준
+    카드를 우선** 고르고, 이번에 고른 카드를 그 run 에 남겨 다음 run 이 이어
+    피하게 한다(`genre_samples_for` 참고). 없으면(기본) 예전처럼 그냥
+    무작위로 고른다 — 호출부를 다 못 고친 자리가 있어도 안 깨진다.
     """
     block = input_block(char).rstrip("\n")
     genre = char["genre"]
     if not genre:
-        return block + "\n" + user_story_block(char)
+        return block + "\n"
     lines = [block]
-    lore = genre_lore_for(genre)
-    if lore:
-        lines += ["", "## 이 장르의 모티프·캐릭터유형·전개패턴 (참고 자료)", "", lore]
     world = world_text_for(genre)
     if world:
-        lines += ["", "## 이 장르의 세계관 — 이 이야기가 실제로 따르는 규칙", "", world]
-    return "\n".join(lines) + "\n" + user_story_block(char)
+        lines += ["", "## 이 세계의 배경 — 이 안에서 무엇이 벌어질지는 정해져 있지 않다", "", world]
+    cards = genre_samples_for(genre, run_dir=run_dir)
+    if cards:
+        lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
+                  "", GENRE_SAMPLE_NOTE, "", cards]
+    lines += genre_lore_section(genre)
+    return "\n".join(lines) + "\n"
 
 
 def load_prompt(name: str) -> str:
@@ -234,9 +316,10 @@ def load_prompt(name: str) -> str:
     return text
 
 
-def compose(prompt_name: str, block: str) -> str:
+def compose(prompt_name: str, block: str, lang: str = "ko") -> str:
     """프롬프트 + 이번 입력. 입력은 **뒤**에 붙인다 — 모델은 뒤에 온 것을 더 세게 듣는다."""
-    return f"{load_prompt(prompt_name)}\n\n---\n\n{block}"
+    text = load_prompt(prompt_name).replace("{{LANGUAGE_LINE}}", lang_mod.instruction(lang))
+    return f"{text}\n\n---\n\n{block}"
 
 
 # --------------------------------------------------------------------- 파싱
@@ -309,6 +392,20 @@ def _cast_bullets(text: str) -> list[dict]:
     return out
 
 
+def _drop_trailing_rules(text: str) -> str:
+    """끝에 붙은 가로줄(`---` 등)을 걷어낸다.
+
+    방향은 다음 「## 방향」 머리까지 잘라 읽는데, 모델이 방향 사이에 가로줄을
+    넣어서 **마지막 칸(본문)의 끝에 `---` 가 딸려 들어온다.** 그 본문이 그대로
+    이야기 고르기 화면의 「직접 고쳐도 돼요」 칸과 DB(webtoon_story)로 가서,
+    사람에게 `---` 가 보였다(2026-09-26 run 20260926T132032-278bf7, 넷 중 셋).
+    """
+    lines = text.rstrip().splitlines()
+    while lines and (not lines[-1].strip() or _RULE_RE.match(lines[-1])):
+        lines.pop()
+    return "\n".join(lines).rstrip()
+
+
 def _labeled(body: str, label_re: re.Pattern, stop_res: list[re.Pattern]) -> str:
     """`label_re` 줄 다음부터, `stop_res` 중 가장 먼저 나오는 줄 전까지."""
     m = label_re.search(body)
@@ -319,7 +416,16 @@ def _labeled(body: str, label_re: re.Pattern, stop_res: list[re.Pattern]) -> str
         sm = stop_re.search(body, m.end())
         if sm and sm.start() < end:
             end = sm.start()
-    return body[m.end():end].strip()
+    return _drop_trailing_rules(body[m.end():end].strip())
+
+
+def shuffle_directions(directions: list[dict], rng=None) -> list[dict]:
+    """사람에게 보여 줄 순서를 섞는다. 번호 `n` 은 그대로다 — 고르기(--pick)·검수·
+    lore.json 은 전부 `n` 으로 찾는다. 재료 받는 방향이 1·2 로 고정돼서, 순서대로
+    보여 주면 앞 둘만 세계 재료가 있는 것이 사람 눈에 규칙으로 읽힌다."""
+    out = list(directions)
+    (rng or random).shuffle(out)
+    return out
 
 
 def parse_directions(md: str) -> list[dict]:
@@ -433,6 +539,8 @@ def read_input(run_dir: Path) -> dict:
 
 
 DIRECTIONS_PER_RUN = 4
+# 사용자가 적은 것이 있을 때 재료(lorebook)를 받는 방향 수. 없으면 넷 다 받는다.
+LORE_FILL_WITH_INPUT = 2
 
 
 def _distinct_structures(genre: str, first: dict, n: int = DIRECTIONS_PER_RUN) -> list[dict]:
@@ -565,6 +673,11 @@ def axes_enabled() -> bool:
     return str(llm.env("NH_STORY_AXES") or "1").strip().lower() in ("1", "on", "true", "yes")
 
 
+def has_character_traits(char: dict) -> bool:
+    """사용자가 성격을 정할 거리를 줬는가 — 설명 · 항목 · 고른 카드 중 하나라도."""
+    return bool(char.get("description") or char.get("fields") or char.get("card"))
+
+
 def story_variety_block(run_dir: Path, char: dict) -> str:
     """방향별 압력 — 그리고 (켜져 있으면) 이야기 변수 · 회차 구조.
 
@@ -581,10 +694,37 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     나중에 다시 켤 때 이어지고, 무엇이 뽑혔는지 비교할 수 있다.
     """
     axes, structure, fresh = samples.pick_fresh(char["genre"], runs_dir=RUNS_DIR)
-    use_axes = axes_enabled()
+    # 사용자가 캐릭터 설명(또는 카드)을 한 줄이라도 넣었으면 축·구조를 안 박는다
+    # (#458). 모모(「장난치는 걸 좋아한다」)로 같은 프롬프트를 축 켬/끔으로 돌려
+    # 보니, 켜면 축 이름과 그 값을 풀어 쓴 추상어가 소개에 새고(「외부자」, 「악의는
+    # 없지만 미묘하게 어긋난다」) 여섯 판 내내 비슷한 판(대역 공주)이 반복됐다.
+    # 끄면 두 번 다 소개가 바로 읽히고 장르가 넷으로 갈렸다(2026-09-27, 각 1~2회).
+    # 줄거리를 적은 경우는 이미 이 블록을 안 거친다(stage_story). 사진만 있을 때는
+    # 그대로 켠다. 무엇이 뽑혔는지는 axes.json 에 그대로 남긴다.
+    use_axes = axes_enabled() and not has_character_traits(char)
     axes_list = _distinct_axes(char["genre"], axes) if (axes and use_axes) else []
     structures = _distinct_structures(char["genre"], structure) if (structure and use_axes) else []
     engines = _pick_engines()
+
+    # 세계별 재미 재료(#502). 축·엔진과 같은 층이 아니다 — 축은 '어디에 서 있는가',
+    # 재료는 '이 세계에서 무엇이 벌어질 수 있는가'다. 사용자가 성격을 적었어도 붙는다
+    # (재료는 세계의 사실이지 성격이 아니라서, 축이 성격으로 새던 문제와 다르다).
+    # 세계를 모르면(장르도 카드도 없음) 안 붙는다 — story_prompt 가 방향마다 장르를
+    # 스스로 고르는 자리라 어느 세계의 재료를 줄지 알 수 없다.
+    lore_world = lorebook.world_key_for(char["genre"], char.get("card")) if lorebook.enabled() else ""
+    # 사용자가 적은 것(설명·항목·고른 카드)이 있으면 방향 넷 중 **둘만** 재료를
+    # 받는다 — 나머지 둘은 적힌 것만으로 판을 세운다. 사진만 있으면 넷 다 받는다
+    # (사용자 결정, 2026-09-30). 어느 둘인지는 무작위다.
+    lore_fill = DIRECTIONS_PER_RUN if not has_character_traits(char) else LORE_FILL_WITH_INPUT
+    # 재료 받는 방향은 **앞에서부터 고정**(1·2)이고, 사람에게 보여 줄 때 순서를
+    # 섞는다(shuffle_directions) — 무작위 배정은 어느 방향이 재료 없이 갔는지 사람도
+    # 모르게 했고, 재료 없는 방향이 남의 재료를 가져다 쓰는 것을 견주기도 어려웠다.
+    lore_list = lorebook.reuse(run_dir, lore_world) if lore_world else []      # 실험용 재사용
+    if lore_world and not lore_list:
+        lore_list = lorebook.assign(lore_world, n=DIRECTIONS_PER_RUN, fill=lore_fill,
+                                    avoid=lorebook.recent_ids(lore_world, RUNS_DIR), fixed=True)
+    if lore_list:
+        lorebook.record(run_dir, lore_world, lore_list)
 
     if axes or structure or engines:
         write_json(run_dir / "axes.json",
@@ -592,8 +732,10 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
                     "엔진_사용": engines_enabled(),
                     "방향별_축": axes_list, "방향별_구조": structures,
                     "방향별_엔진": engines})
-    for i in range(max(len(axes_list), len(structures), len(engines))):
+    for i in range(max(len(axes_list), len(structures), len(engines), len(lore_list))):
         bits = []
+        if i < len(lore_list) and lore_list[i]:
+            bits.append("재료: " + "·".join(e["name"] for e in lore_list[i]))
         if i < len(engines):
             bits.append(str(engines[i].get("이름") or ""))
         if i < len(axes_list):
@@ -605,45 +747,411 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     if use_axes and (axes or structure) and not fresh:
         log("  (최근 생성물과 조합이 겹칩니다 — 고를 수 있는 폭이 좁습니다)")
 
-    count = max(len(axes_list), len(structures), len(engines))
+    count = max(len(axes_list), len(structures), len(engines), len(lore_list))
     if not count:
         return ""
     head = "## 방향별 「문제가 옮겨 가는 길」" \
            + (" · 이야기 변수 · 회차 구조" if use_axes else "") \
+           + (" · 이 세계의 재료" if lore_list else "") \
            + " — 참고가 아니라 지시다"
     parts = [
         "", head, "",
         "아래 값은 방향 번호에 그대로 대응한다. **방향 N 은 N 번 값으로 쓴다.** "
-        "4개가 서로 다른 이야기가 되게 하는 장치가 이것이다 — 값을 무시하고 그 "
-        "장르에서 가장 흔한 설정으로 돌아가면 넷이 비슷해진다.", "",
+        "4개가 서로 다른 이야기가 되게 하는 장치가 이것이다 — 넷이 같은 소재로 "
+        "모이면 값을 안 쓴 것이다.", "",
+        # 값은 어느 세계에나 얹히는 말이라, 번역하지 않으면 아무 데서나 가능한
+        # 장면이 된다. 실측으로 확인됐다 — 「동료 · 반복되는 하루 · 대리인」이
+        # 마법학교에서 관청 서류 업무로 나왔다(2026-09-19). 무대만 그 장르이고
+        # 벌어지는 일은 어느 장르에서나 가능한 판이 되는 것을 여기서 막는다.
+        "**값은 그 세계 안에서 무엇으로 나타나는지를 먼저 정하고 쓴다.** 값은 어느 "
+        "세계에나 얹히는 말이라, 그대로 두면 아무 데서나 가능한 장면이 된다 — "
+        "「동료」를 사무실 동료로, 「반복되는 하루」를 출근길로 쓰면 무대만 그 "
+        "장르이고 벌어지는 일은 그 장르가 아니다. 위에 적힌 세계관의 규칙과 그 "
+        "장르가 실제로 다루는 것으로 값을 옮겨 적어라. **옮긴 결과를 다른 장르에 "
+        "그대로 가져가도 말이 되면, 아직 옮기지 않은 것이다.**", "",
         "**이것은 소재가 아니라 경로다.** 무엇에 대한 이야기인지가 아니라, 처음 "
         "문제가 마지막에 무엇이 되어 있는지를 정한 것이다. 배정된 시작점과 도착점을 "
-        "먼저 잡고 그 사이를 채워라 — 소재는 장르에서 고른다. 도착점이 시작점과 "
-        "같은 종류의 문제면 실패고, 넷의 도착점이 서로 비슷해도 실패다.",
+        "먼저 잡고 그 사이를 채워라. 도착점이 시작점과 같은 종류의 문제면 실패고, "
+        "넷의 도착점이 서로 비슷해도 실패다.",
     ]
     if use_axes:
         parts += ["", "이야기 변수는 인물이 어디에 서서 무엇과 부딪히는지를, 회차 "
-                  "구조는 그것을 어떤 순서로 보여줄지를 정한다. 소재는 장르에서 "
-                  "고르고 이 위에 얹는다."]
+                  "구조는 그것을 어떤 순서로 보여줄지를 정한다. 그 '어디'와 '무엇'은 "
+                  "이 세계의 것이어야 한다 — 값과 세계는 따로가 아니다."]
+    parts += ["", "**값은 판과 처지에 건다. 주인공의 성격으로 옮기지 않는다.** 톤은 "
+              "이야기의 분위기이고, 주인공 위치와 모순은 주인공이 놓인 처지다. "
+              "주인공이 어떤 사람인지는 사용자가 적은 설명만 정한다."]
+    if lore_list:
+        parts += ["", lorebook.STORY_HEAD]
     for i in range(count):
+        blocks = [txt for txt in (
+            ("\n".join(lorebook.story_lines(lore_list[i])) if i < len(lore_list) else ""),
+            _engine_block(engines[i]) if i < len(engines) else "",
+            samples.axes_block(axes_list[i]) if i < len(axes_list) else "",
+            samples.structure_block(structures[i]) if i < len(structures) else "") if txt]
+        if not blocks:
+            continue                       # 값이 하나도 없는 방향 — 빈 절을 안 만든다
         parts += ["", f"### 방향 {i + 1}", ""]
-        for txt in (_engine_block(engines[i]) if i < len(engines) else "",
-                    samples.axes_block(axes_list[i]) if i < len(axes_list) else "",
-                    samples.structure_block(structures[i]) if i < len(structures) else ""):
-            if txt:
-                parts += [txt, ""]
+        for txt in blocks:
+            parts += [txt, ""]
     return "\n".join(parts)
 
 
+def cast_enabled() -> bool:
+    """이야기 전에 인물을 먼저 세우는가(#534). 기본 켜짐. 끄려면 `NH_STORY_CAST=0`."""
+    return (llm.env("NH_STORY_CAST") or "1").strip().lower() not in ("0", "off", "false", "no")
+
+
+def is_romance(char: dict) -> bool:
+    genre = (char.get("genre") or "").strip()
+    return bool(genre) and samples.guess_genre(genre) == "romance_modern"
+
+
+def cast_wait_kind(char: dict, cast: list[dict]) -> str:
+    """인물을 세운 뒤 사람을 기다리는가(#534).
+
+    - "confirm" : 사용자가 인물을 적었다(장르 무관). 세운 인물을 보여 주고
+      「이대로 진행하기」를 기다린다. 그 인물들을 모두 담아 이야기 넷을 만든다.
+    - "pick"    : 현대 로맨스인데 적은 인물이 없다. 새 인물 넷 중 상대를 한 명
+      고르기를 기다린다. 고른 사람으로 이야기 넷을 만든다.
+    - ""        : 그 밖(적은 인물 없는 다른 장르). 보여 주지 않고 바로 이야기로
+      간다 — 인물은 후보마다 쓸 재료다.
+    """
+    if not cast:
+        return ""
+    if any(from_input(c) for c in cast):
+        return "confirm"
+    return "pick" if is_romance(char) else ""
+
+
+def from_input(c: dict) -> bool:
+    """사용자가 설명·줄거리에 적은 인물인가(cast_prompt 의 from_input)."""
+    v = c.get("from_input")
+    return v is True or str(v).strip().lower() == "true"
+
+
+def picked_cast(run_dir: Path) -> dict | None:
+    """사람이(또는 서버가) 답한 것. 한 명을 골랐으면 그 인물, 「이대로 진행」이면
+    {"all": true}. 아직이면 None."""
+    path = run_dir / "cast_pick.json"
+    got = read_json(path) if path.exists() else None
+    if not isinstance(got, dict):
+        return None
+    return got if got.get("all") or str(got.get("name") or "").strip() else None
+
+
+def save_cast_pick(run_dir: Path, n: int) -> dict:
+    """cast.json 의 n 번째(1부터) 인물을 고른 것으로 적는다. 0 이면 「이대로 진행」."""
+    path = run_dir / "cast.json"
+    cast = read_json(path) if path.exists() else []
+    if not isinstance(cast, list) or not cast or not 0 <= n <= len(cast):
+        raise SystemExit(f"고를 인물이 없습니다: {n}번 (cast.json 에 {len(cast or [])}명)")
+    chosen = {"all": True} if n == 0 else {**cast[n - 1], "n": n}
+    write_json(run_dir / "cast_pick.json", chosen)
+    what = "이대로 진행" if n == 0 else f"{n}번 {chosen.get('name')}"
+    log(f"[인물] {what} -> {run_dir / 'cast_pick.json'}")
+    return chosen
+
+
+def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> dict | None:
+    """주인공 페르소나 — 사용자가 적은 캐릭터로 정의한다(#534).
+
+    사용자에게 확인받는 용도다(0921 멘토링: 페르소나는 유저에게 입력받거나
+    확인받아야 한다). 인물 확인·고르기 화면에 주인공 카드로 나간다. 생성(인물·
+    이야기·장면)에는 넣지 않는다 — stage_story 주석 참고. 적힌 것이 뼈대이고,
+    드러나는 모습은 근거가 입력에 글자 그대로 있을 때만 남긴다(persona_prompt).
+
+    다시 지을 때는 있던 것을 그대로 쓴다. 실패하면 없이 간다(예전처럼).
+    """
+    path = run_dir / "persona.json"
+    if path.exists():
+        old = read_json(path)
+        if isinstance(old, dict) and str(old.get("name") or "").strip():
+            return old
+    lines = [input_block(char).rstrip("\n")]
+    story_text = user_story(char)
+    if story_text:
+        lines += ["", "사용자가 적은 이야기:", story_text]
+    prompt = compose("persona_prompt", "\n".join(lines) + "\n", lang=lang)
+    write_text(run_dir / "persona_prompt.txt", prompt)
+    if dry_run:
+        log(f"[페르소나] 프롬프트만 썼습니다 -> {run_dir / 'persona_prompt.txt'}")
+        return None
+    call = llm.Call("PERSONA")
+    log(f"[페르소나] {call.describe()} 로 주인공 페르소나를 정리합니다…")
+    try:
+        text, meta = call(prompt, images=llm.load_images(char.get("photos") or []))
+    except Exception as exc:                                          # noqa: BLE001
+        record_error(run_dir, "PERSONA", call.provider, call.model, exc)
+        warn(f"주인공 페르소나를 못 만들었습니다 — 없이 갑니다 ({exc})")
+        return None
+    write_text(run_dir / "persona_raw.txt", text)
+    record(run_dir, meta)
+    try:
+        obj = story.extract_json(text)
+    except Exception as exc:                                          # noqa: BLE001
+        warn(f"페르소나 응답을 못 읽었습니다 — 없이 갑니다 ({exc})")
+        return None
+    if not isinstance(obj, dict) or not str(obj.get("name") or "").strip():
+        return None
+    # 드러나는 모습은 근거가 입력에 글자 그대로 있을 때만 남긴다 — 근거 없이 붙은
+    # 것은 「왜 이런 설정이 붙었지」가 된다(2026-10-01 사용자 지적).
+    kept, dropped = persona_details(obj.get("details"), persona_source_text(char))
+    obj["details"] = kept
+    if dropped:
+        obj["dropped_details"] = dropped
+        log(f"[페르소나] 근거가 입력에 없어 뺀 모습 {len(dropped)}개: "
+            + " / ".join(d.get("detail", "") for d in dropped))
+    write_json(path, obj)
+    return obj
+
+
+def persona_source_text(char: dict) -> str:
+    """페르소나 근거를 찾아볼 입력 원문 — 설명·카드·사용자가 적은 이야기."""
+    parts = [str(char.get("description") or ""), user_story(char) or ""]
+    card = char.get("card")
+    if isinstance(card, dict):
+        parts += [str(v) for v in card.values() if isinstance(v, (str, list))]
+    return "\n".join(parts)
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"[\s「」『』\"'“”‘’.,!?…·]", "", text or "")
+
+
+def persona_details(raw, source: str) -> tuple[list[dict], list[dict]]:
+    """근거(source)가 입력에 글자 그대로 있는 모습만 남긴다. (남긴 것, 뺀 것)."""
+    hay = _squash(source)
+    kept, dropped = [], []
+    for d in raw or []:
+        if not isinstance(d, dict) or not str(d.get("detail") or "").strip():
+            continue
+        quote = _squash(str(d.get("source") or ""))
+        (kept if quote and quote in hay else dropped).append(
+            {"detail": str(d["detail"]).strip(), "source": str(d.get("source") or "").strip()})
+    return kept, dropped
+
+
+def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> list[dict]:
+    """주인공과 얽힐 인물을 세운다(#532·#534).
+
+    이야기 한 호출 안에서 판·사건·반전·주인공·세계 재료를 다 챙기면서 인물까지
+    매력 있게 만들라고 했더니, 인물은 「택배 기사 김윤호」 같은 라벨로만 나왔다
+    (2026-10-01, 서윤재 입력 여러 회). 그래서 인물만 보는 호출을 따로 둔다 —
+    이 단계는 오직 매력(생김새·인상·갭·말투·주인공과의 얽힘·원하는 것)만 본다.
+
+    사용자가 인물을 적었으면 그 사람들(많아야 넷)의 페르소나를, 안 적었으면
+    새 인물 넷을 세운다(cast_prompt).
+
+    실패해도 이야기는 만든다 — 인물 없이 예전처럼 간다. 원문은 파싱 전에 남긴다.
+    """
+    lines = [input_block(char).rstrip("\n")]
+    story_text = user_story(char)
+    if story_text:
+        # 줄거리에 적힌 인물도 새로 만들지 않고 페르소나를 세운다.
+        lines += ["", "사용자가 적은 이야기:", story_text]
+    genre = (char.get("genre") or "").strip()
+    world = world_text_for(genre) if genre else ""
+    if world:
+        lines += ["", "## 이 세계의 배경", "", world]
+    prompt = compose("cast_prompt", "\n".join(lines) + "\n", lang=lang)
+    write_text(run_dir / "cast_prompt.txt", prompt)
+    if dry_run:
+        log(f"[인물] 프롬프트만 썼습니다 -> {run_dir / 'cast_prompt.txt'}")
+        return []
+    call = llm.Call("CAST")
+    log(f"[인물] {call.describe()} 로 주인공과 얽힐 인물을 세웁니다…")
+    try:
+        # 사진을 같이 준다 — 주인공의 성별을 보고 로맨스 상대를 정한다(cast_prompt).
+        text, meta = call(prompt, images=llm.load_images(char.get("photos") or []))
+    except Exception as exc:                                          # noqa: BLE001
+        record_error(run_dir, "CAST", call.provider, call.model, exc)
+        warn(f"인물을 못 만들었습니다 — 인물 없이 이야기로 갑니다 ({exc})")
+        return []
+    write_text(run_dir / "cast_raw.txt", text)
+    record(run_dir, meta)
+    try:
+        obj = story.extract_json(text)
+        cast = [c for c in (obj.get("cast") or []) if isinstance(c, dict)
+                and str(c.get("name") or "").strip()]
+    except Exception as exc:                                          # noqa: BLE001
+        warn(f"인물 응답을 못 읽었습니다 — 인물 없이 이야기로 갑니다 ({exc})")
+        return []
+    # 같은 사람이 두 번 나오면 하나만 둔다 — 보여 주는 화면에 같은 카드가 겹친다.
+    seen: set[str] = set()
+    cast = [c for c in cast if not (str(c.get("name")).strip() in seen
+                                    or seen.add(str(c.get("name")).strip()))][:4]
+    if any(from_input(c) for c in cast):
+        # 사용자가 인물을 적었으면 그 사람들만 — 모델이 더한 인물은 뺀다. 더한
+        # 인물이 적힌 관계를 흔드는 자리로 쓰였다(2026-10-01 서연화 입력).
+        extra = [c["name"] for c in cast if not from_input(c)]
+        if extra:
+            log(f"[인물] 사용자가 적은 인물만 남깁니다 — 뺀 인물: {', '.join(extra)}")
+        cast = [c for c in cast if from_input(c)]
+    if len(cast) != 4 and not any(from_input(c) for c in cast):
+        warn(f"인물을 {len(cast)}명만 읽었습니다 (새로 만들 때는 4명이어야 합니다).")
+    write_json(run_dir / "cast.json", cast)
+    return cast
+
+
+CAST_FIELDS = (("look", "생김새·인상"), ("gap", "갭"), ("voice", "말투"),
+               ("line", "대표 대사"), ("tie", "주인공과의 얽힘"), ("wants", "원하거나 숨기는 것"))
+
+
+def _cast_lines(c: dict) -> list[str]:
+    out = []
+    for key, label in CAST_FIELDS:
+        v = str(c.get(key) or "").strip()
+        if v:
+            out.append(f"- {label}: {v}")
+    return out
+
+
+def chosen_cast_block(c: dict) -> str:
+    """이야기 입력에 붙는 「상대 인물 — 사용자가 골랐다」(현대 로맨스, #534)."""
+    return "\n".join(["", "## 상대 인물 — 사용자가 골랐다",
+                      "네 후보 모두 이 사람이 주인공과 가장 크게 얽히는 상대다. 사용자는 이 사람을 "
+                      "보고 골랐다. 넷은 이 사람과 벌어지는 **서로 다른 이야기**다 — 판과 사건이 "
+                      "겹치지 않게 한다. 이름·생김새·갭·말투·얽힘을 바꾸지 말고, 이 사람의 매력이 "
+                      "드러나도록 판과 사건을 짠다. 소개에도 이 사람이 이름과 인상과 함께 나온다.",
+                      "", f"상대: {str(c.get('name')).strip()}", *_cast_lines(c)])
+
+
+def ensemble_cast_block(cast: list[dict]) -> str:
+    """이야기 입력에 붙는 「이야기의 인물들」 — 사용자가 인물을 적었을 때(#534)."""
+    out = ["", "## 이야기의 인물들 — 이미 정해졌다",
+           "사용자가 적은 인물이다. 네 후보 모두 이 사람들로 짠다. "
+           "새 인물로 바꾸지 않고, 이름·생김새·갭·말투·얽힘을 바꾸지 않는다. "
+           "모두가 1화에 나올 필요는 없다 — 1화에 필요한 사람만 나오게 하되, 나오는 사람은 "
+           "매력이 드러나게 한다. 네 후보는 이 사람들 사이에서 벌어지는 서로 다른 이야기다."]
+    for c in cast:
+        out += ["", str(c.get("name")).strip(), *_cast_lines(c)]
+    return "\n".join(out)
+
+
+def cast_block(cast: list[dict]) -> str:
+    """이야기 입력에 붙는 「후보마다 상대 인물」."""
+    if not cast:
+        return ""
+    out = ["", "## 후보마다 인물 재료",
+           "방향 n 에 쓸 수 있는 인물 n 이다. 재료일 뿐이다 — 꼭 사건의 중심일 필요도, 이름이나 "
+           "설정을 그대로 쓸 필요도 없다. 이야기에 맞게 바꾸거나 다른 인물을 세워도 된다. 다만 "
+           "이야기에 나오는 인물은 이만큼 매력이 있어야 한다."]
+    for i, c in enumerate(cast, 1):
+        out += ["", f"인물 {i}: {str(c.get('name')).strip()}", *_cast_lines(c)]
+    return "\n".join(out)
+
+
+def story_split() -> int:
+    """이야기 후보를 몇 호출에 나눠 만드는가. 기본 1(한 번에 넷). `NH_STORY_SPLIT=2` 면 둘씩(#532 실험)."""
+    return 2 if (llm.env("NH_STORY_SPLIT") or "").strip() == "2" else 1
+
+
+def _story_in_two(run_dir: Path, char: dict, prompt: str, cast: list[dict]) -> list[dict]:
+    """방향 1·2 와 3·4 를 두 호출로 동시에 만든다(#532 실험).
+
+    한 호출에 넷을 다 쓰게 하면 인물 단계에서 만든 인물이 이야기로 넘어오며 라벨로
+    줄었다 — 한 호출이 챙길 후보를 둘로 줄이면 후보 하나에 쓸 몫이 두 배가 된다.
+    두 호출은 서로를 모르므로, 다른 쪽이 맡은 인물 이름만 알려 판이 겹치지 않게 한다.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    names = [str(c.get("name") or "").strip() for c in cast]
+
+    def part(a: int, b: int, c: int, d: int) -> str:
+        other = ", ".join(f"방향 {k}은 {names[k-1]}" for k in (c, d) if k - 1 < len(names))
+        return (prompt + "\n\n## 이번 호출에서 만들 것\n"
+                f"이번 호출은 **방향 {a}와 방향 {b} 두 개만** 만든다. 번호도 그대로 "
+                f"「## 방향 {a} — 제목」「## 방향 {b} — 제목」으로 쓴다. 위에서 「4개」「넷」이라고 "
+                "한 곳은 이번 호출에서는 이 두 개를 가리킨다. 나머지 두 방향은 다른 호출이 "
+                f"만든다({other}이 상대다) — 그 둘과 판이 겹치지 않게 한다. 넷에 나눠 쓸 몫을 "
+                "이 두 후보에 다 쓴다 — 특히 받은 상대 인물의 인상과 말이 소개와 본문에 살아 있게 한다.\n")
+
+    jobs = [((1, 2), part(1, 2, 3, 4)), ((3, 4), part(3, 4, 1, 2))]
+    for i, (_, pr) in enumerate(jobs, 1):
+        write_text(run_dir / f"story_prompt_part{i}.txt", pr)
+
+    def run_one(i: int, pr: str):
+        call = llm.Call("STORY")
+        log(f"[이야기 {i}/2] {call.describe()} 로 후보 2개를 만듭니다…")
+        try:
+            return call(pr, images=llm.load_images(char["photos"]))
+        except Exception as exc:                                      # noqa: BLE001
+            record_error(run_dir, "STORY", call.provider, call.model, exc)
+            raise
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futs = [pool.submit(run_one, i, pr) for i, (_, pr) in enumerate(jobs, 1)]
+        results = [f.result() for f in futs]
+    out, texts = [], []
+    for i, ((want, _), (text, meta)) in enumerate(zip(jobs, results), 1):
+        write_text(run_dir / f"story_part{i}.md", text)
+        record(run_dir, meta)
+        texts.append(text)
+        got = [d for d in parse_directions(text) if d.get("n") in want]
+        if len(got) != 2:
+            warn(f"이야기 {i}/2 에서 방향을 {len(got)}개만 읽었습니다(방향 {want}).")
+        out += got
+    write_text(run_dir / "story.md", "\n\n".join(texts))
+    return sorted(out, key=lambda d: d.get("n") or 0)
+
+
 def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
-                review: bool | None = None) -> list[dict]:
+                review: bool | None = None, diff: bool | None = None,
+                lang: str = "ko") -> list[dict]:
     """이야기 후보 4개. 다 쓰고 나서 **한 번 더 독자의 눈으로 읽는다.**
 
-    review : 후보를 검수한다(storycheck). 사람이 고르는 화면에 판정이 같이
-    붙어 보이는 것이 전부고, **아무 후보도 막지 않는다.** None 이면
-    `.env`(`NH_STORY_REVIEW`, 기본 켜짐)를 따른다.
+    review : 후보 하나하나를 검수한다(storycheck). 사람이 고르는 화면에
+    판정이 같이 붙어 보이는 것이 전부고, **아무 후보도 막지 않는다.**
+    None 이면 `.env`(`NH_STORY_REVIEW`, 기본 켜짐)를 따른다.
+
+    diff : 후보 넷이 서로 다른가를 견준다(storydiff). review 와 같은
+    자리에서 도는 별도 검수다 — 하나가 하나를 읽는 것이 아니라 넷을 짝지어
+    본다. None 이면 `.env`(`NH_STORY_DIFF`, **기본 꺼짐**)를 따른다. 이
+    자가 사람 눈과 맞는지 아직 확인되지 않아서, storycheck 과 달리 켜져
+    있지 않다(`storydiff.enabled` 참고).
     """
-    block = story_input_block(char).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
+    # 사람이 줄거리를 적었으면 그 줄거리가 중심이다 — 프롬프트도, 입력
+    # 블록도 따로 간다(seeded_input_block 참고). 안 적었으면 예전 그대로.
+    seeded = bool(user_story(char))
+    if seeded:
+        block = seeded_input_block(char).rstrip("\n")
+    else:
+        block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
+    # 인물을 먼저 뽑고 거기에 사건을 붙인다(#532·#534). 줄거리를 적은 경우도
+    # 같다 — 그때는 줄거리·설명에 적힌 인물의 페르소나를 세운다(cast_prompt).
+    cast: list[dict] = []
+    if cast_enabled():
+        # **주인공 페르소나는 사용자에게 보여 주기만 한다(#534).** 생성에는 넣지 않는다 —
+        # 이야기에 넣었더니 페르소나를 보여 주는 쪽으로 가서 판이 작아졌고(2026-10-01
+        # 서연화 있음·없음 비교, 사용자 판정 「없는 게 훨씬 낫다」), 장면에 넣어도 더해
+        # 주는 게 작았다. 멘토링(0921) 대로 페르소나는 사용자에게 확인받는 자리에서
+        # 보여 준다(인물 확인·고르기 화면). 서로 기다릴 이유가 없어 인물과 동시에 부른다.
+        # 다시 지을 때는 이미 세운 인물을 그대로 쓴다 — 사람이 본 카드가 바뀌면 안 된다.
+        old = read_json(run_dir / "cast.json") if (run_dir / "cast.json").exists() else None
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            persona_job = pool.submit(stage_persona, run_dir, char, dry_run, lang)
+            made = old if isinstance(old, list) and old else stage_cast(run_dir, char, dry_run, lang=lang)
+            persona_job.result()
+        kind = cast_wait_kind(char, made)
+        answer = picked_cast(run_dir)
+        if kind and not answer:
+            # 사람을 기다린다 — 서버는 cast.json 이 있고 directions.json 이 없는 것을
+            # 보고 「인물 확인」으로 넘어간다(JobRunner). 답을 받으면 `--cast-pick N`
+            # (0 = 이대로 진행)으로 다시 부른다.
+            (run_dir / "directions.json").unlink(missing_ok=True)
+            write_json(run_dir / "cast_wait.json", {"kind": kind})
+            log(f"[인물] {'상대를 고를' if kind == 'pick' else '인물을 확인할'} 때까지 멈춥니다 "
+                f"-> {run_dir / 'cast.json'}")
+            return []
+        if kind == "confirm":
+            block += "\n" + ensemble_cast_block(made)
+        elif kind == "pick":
+            cast = [answer] * 4
+            block += "\n" + chosen_cast_block(answer)
+        elif made:
+            # 다른 장르 — 보여 주지 않고 후보마다 재료로 붙인다(방향 n 은 인물 n).
+            cast = [made[i % len(made)] for i in range(4)]
+            block += "\n" + cast_block(cast)
     note = (note or "").strip()
     if note:
         # 다시 만들기에서 사람이 남긴 요청 — 캐릭터 설정 자체가 아니라 "이번엔
@@ -651,23 +1159,30 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         # 여기서 따로 붙인다(캐릭터 파일을 고치면 다음 시도에도 계속 남는다).
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
                  f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
-    prompt = compose("story_prompt", block)
+    prompt = compose("story_prompt_seeded" if seeded else "story_prompt", block, lang=lang)
     write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
         return []
 
-    call = llm.Call("STORY")
-    log(f"[이야기] {call.describe()} 로 후보 4개를 만듭니다…")
-    try:
-        text, meta = call(prompt, images=llm.load_images(char["photos"]))
-    except Exception as exc:                                          # noqa: BLE001
-        record_error(run_dir, "STORY", call.provider, call.model, exc)
-        raise
-    write_text(run_dir / "story.md", text)
-    record(run_dir, meta)
-
-    directions = parse_directions(text)
+    if cast and story_split() == 2:
+        directions = _story_in_two(run_dir, char, prompt, cast)
+    else:
+        call = llm.Call("STORY")
+        log(f"[이야기] {call.describe()} 로 후보 4개를 만듭니다…")
+        try:
+            text, meta = call(prompt, images=llm.load_images(char["photos"]))
+        except BaseException as exc:                                  # noqa: BLE001 — SystemExit 도 남긴다(#531)
+            record_error(run_dir, "STORY", call.provider, call.model, exc)
+            raise
+        write_text(run_dir / "story.md", text)
+        record(run_dir, meta)
+        directions = parse_directions(text)
+    directions = shuffle_directions(directions)
+    for d in directions:
+        n = d.get("n")
+        if cast and isinstance(n, int) and n > 0:
+            d["lead"] = cast[(n - 1) % len(cast)]   # 이 후보의 상대 인물(#532)
     if len(directions) != 4:
         warn(f"방향을 {len(directions)}개만 읽었습니다 (4개여야 합니다). "
              f"원문은 {run_dir / 'story.md'} 에 그대로 있습니다.")
@@ -680,6 +1195,14 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         _, rmeta = storycheck.review_directions(run_dir, char, directions)
         if rmeta:
             record(run_dir, rmeta)
+
+    # 넷이 서로 다른가는 후보 하나하나를 보는 것과 다른 질문이라, 따로
+    # 붙였다(storydiff 문서 참고) — 기본 꺼짐이라 지금은 켜기 전까지
+    # 아무 run 에도 안 걸린다.
+    if (storydiff.enabled() if diff is None else diff) and directions:
+        _, dmeta = storydiff.diff_directions(run_dir, char, directions)
+        if dmeta:
+            record(run_dir, dmeta)
     return directions
 
 
@@ -711,25 +1234,17 @@ def choose(directions: list[dict], pick: int | None) -> dict:
         print("목록에 있는 번호를 넣으세요.")
 
 
-# 장르 문자열(자유 텍스트, 예: "헌터·게이트") -> story-harness/worlds.json
-# 프리셋 라벨의 키워드. 여러 개 걸리면 첫 번째로 매칭된 것을 쓴다. 장르가
-# 이 목록에 없으면(오컬트 미스터리·좀비 아포칼립스 등) 조용히 건너뛴다 —
-# 세계관 문장 없이도 지금까지처럼 돌아간다.
-_WORLD_KEYWORDS = {
-    "hunter_gate": ("헌터", "게이트"),
-    "academy_magic": ("마법학교", "마법", "학원"),
-    "idol_agency": ("아이돌", "연습생"),
-    "hero_city": ("히어로", "능력자", "빌런"),
-    "post_disaster": ("재난", "좀비", "아포칼립스"),
-    "royal_court": ("궁정", "왕궁", "무협"),
-}
+# 장르 문자열 -> 세계 키 표는 lorebook.WORLD_KEYWORDS 에 있다(#502). 세계관 문단
+# (worlds.json)과 재미 재료(lorebook.json)가 같은 세계를 가리켜야 해서 한 곳에 둔다.
+# 예전에는 여섯 줄뿐이라 화면이 고르게 해 둔 장르 14개 중 9개가 세계관 문장을
+# 한 줄도 못 받았다(2026-09-17, 사용자 지적으로 확인).
 
 
 def genre_lore_for(genre: str) -> str:
-    """장르에 맞는 story-harness 의 장르 템플릿(모티프·캐릭터유형·전개패턴·
+    """장르에 맞는 장르 템플릿(모티프·캐릭터유형·전개패턴·
     체크리스트)을 그대로 빌린다. 없으면 빈 문자열.
 
-    story-harness/samples/genre_template.json 의 `_preset_map` 이 "헌터·게이트"
+    samples/genre_template.json 의 `_preset_map` 이 "헌터·게이트"
     같은 한글 장르명을 이미 판타지·액션·스릴러 같은 실제 템플릿 조합으로
     라우팅해 둔 상태다(story.resolve_genre_templates). world_text_for 보다
     훨씬 구체적이라 — 던전·이세계 전이·용/드래곤 같은 실제 소재 목록과
@@ -748,29 +1263,121 @@ def genre_lore_for(genre: str) -> str:
         return ""
 
 
+# 기준 샘플을 프롬프트에 붙일 때 같이 주는 경고. 샘플은 정답지가 아니라
+# 기준선이라(samples.py 첫 줄) 이 말을 빼면 모델이 카드 소재를 그대로
+# 베낀다 — story-harness 쪽 P1 도 같은 문장을 달고 쓴다.
+GENRE_SAMPLE_NOTE = (
+    "아래는 이 장르가 실제로 어떤 소재·어떤 밀도로 쓰이는지 보여 주는 "
+    "기준선이다. **베끼지 마라** — 같은 소재가 다시 나오면 베낀 것이 "
+    "바로 보인다. 이 장르의 이야기가 무엇을 다루는지, 어느 정도로 "
+    "구체적인지만 읽고 네 캐릭터의 이야기를 써라. 다만 **첫 줄이 얼마나 큰 일을 "
+    "걸어 놓는지는 이 카드들 수준이어야 한다** — 소재는 다르게, 걸린 것의 크기는 "
+    "이만큼."
+)
+
+
+def genre_samples_for(genre: str, run_dir: Path | None = None) -> str:
+    """장르에 맞는 검수된 기준 샘플 카드. 없으면 빈 문자열.
+
+    samples/ 에는 장르 14종마다 사람이 검수해 실제로 서비스에 나간 카드가
+    6장씩 있고, `samples.guess_genre` 가 "아이돌"·"헌터·게이트" 같은 한글
+    장르명을 그 풀로 정확히 민다. 그런데 new_harness 는 이 풀을 **한 번도
+    안 쓰고** 있었다 — axes·structure(무엇을 쓰는가의 '자리')만 빌려 쓰고,
+    정작 그 장르가 무엇을 다루는지(소재)는 안 빌렸다.
+
+    그래서 소재 쪽 입력이 worlds.json 한 문단뿐이었고, 장르 템플릿은
+    전개 문법(일상·로맨스 …)만 주는 축이라 — 아이돌을 골라도 연습생·무대가
+    한 번도 안 나오고 그냥 학원물이 됐다(2026-09-17, 사용자 지적).
+
+    못 찾으면 빈 문자열이다. 안 맞는 장르 카드를 억지로 붙이지 않는다
+    (resolve_genre_templates 와 같은 원칙).
+
+    `run_dir` 이 있으면 회피가 붙는다(2026-09-19) — 장르당 카드가 6장뿐이라
+    (`samples.EXEMPLAR_PICK` 주석 참고) 최근 run들과 안 겹치게 고르지 않으면
+    몇 번 안 가 같은 3장 조합이 반복된다(사용자 지적 — "시작점이 5개뿐이라
+    매번 비슷해 보인다"와 같은 종류의 문제, 카드 쪽이 더 좁다). 골랐으면 그
+    run 디렉터리에 `story_cards.json` 으로 남겨서 다음 run 이 이어 피한다.
+    """
+    genre = (genre or "").strip()
+    if not genre:
+        return ""
+    try:
+        key = samples.guess_genre(genre)
+        if not key:
+            return ""
+        if run_dir is None:
+            return samples.exemplars(key)
+        avoid = samples.recent_card_ids(key, RUNS_DIR)
+        text, ids = samples.exemplars_fresh(key, avoid_ids=avoid)
+        if ids:
+            write_json(run_dir / "story_cards.json", {"genre": key, "ids": ids})
+        return text
+    except Exception:
+        return ""
+
+
+# 장르 템플릿을 **빌려 쓸 때** 같이 주는 틀.
+#
+# genre_template.json 의 _preset_map 은 일부러 두 축을 나눠 뒀다 — 프리셋
+# (아이돌·헌터·마법학교·히어로)은 **소재** 축이고, 템플릿(일상·로맨스·판타지…)은
+# **전개 문법** 축이다. 그래서 아이돌은 "일상+로맨스" 를 빌린다.
+#
+# 문제는 빌려온 템플릿의 '소재모티프배경'·'사례분석' 칸이 그 템플릿 장르의
+# 소재("학교, 회사, 가정, 카페")로 차 있다는 것이다. 틀 없이 그대로 주면
+# 모델이 그것을 이번 화의 소재로 읽는다 — 아이돌을 골랐는데 예술고등학교
+# 복도와 교복이 나온 실제 경로가 이것이다(2026-09-17).
+#
+# 그래서 빌려 쓸 때는 "여기서 가져갈 것은 전개 문법뿐, 소재는 위 세계관과
+# 샘플을 따른다"를 명시한다. 템플릿을 덜어내지 않는 이유는 전개 문법 쪽은
+# 그대로 쓸모가 있고, story.py 의 렌더링은 다른 하네스와 공유라서다.
+GENRE_LORE_NOTE_BORROWED = (
+    "아래 템플릿은 이 장르의 **전개 문법**(분위기·인물 관계·사건이 굴러가는 "
+    "방식)을 빌려 오려고 붙인 것이지, 이 화의 소재가 아니다. 템플릿에 적힌 "
+    "장소·소품·직업(학교·회사·카페 같은 것)을 이번 화의 무대로 가져오지 마라 "
+    "— 무대와 소재는 위의 세계관과 기준 샘플이 정한다."
+)
+
+
+def genre_lore_section(genre: str) -> list[str]:
+    """장르 문법 블록 + (빌려 쓴 것이면) 그 사실을 밝히는 틀.
+
+    이야기 단계와 장면 단계가 **같은 문구**를 쓰도록 여기 하나로 모은다.
+    """
+    lore = genre_lore_for(genre)
+    if not lore:
+        return []
+    try:
+        names = story.resolve_genre_templates(genre)
+    except Exception:
+        names = []
+    borrowed = bool(names) and genre.strip() not in names
+    head = ["", "## 이 장르의 전개 문법 (참고 자료)"]
+    if borrowed:
+        head += ["", GENRE_LORE_NOTE_BORROWED]
+    return head + ["", lore]
+
+
 def world_text_for(genre: str) -> str:
-    """장르에 맞는 story-harness/worlds.json 세계관 한 문단. 없으면 빈 문자열.
+    """장르에 맞는 worlds.json 세계관 한 문단. 없으면 빈 문자열.
 
     detail_prompt 가 "장르"만 받고 구체적인 세계 규칙을 못 받아서, 구체화
     단계가 장르 특유의 소재(마나·몬스터·게이트 현상 등) 없이 아무 장르에나
     쓸 수 있는 일반적인 소재(출입증·CCTV·무전기)로 채우는 문제가 있었다
-    (2026-08-30, 사용자 지적). story-harness 가 이미 갖고 있는 프리셋
+    (2026-08-30, 사용자 지적). worlds.json 이 이미 갖고 있는 프리셋
     문장을 그대로 빌려 온다 — 새 문장을 짓지 않는다.
     """
     genre = (genre or "").strip()
     if not genre:
         return ""
-    path = llm.STORY_HARNESS / "worlds.json"
+    path = llm.HERE / "worlds.json"
     if not path.exists():
         return ""
     try:
         presets = json.loads(path.read_text(encoding="utf-8")).get("presets") or {}
     except Exception:
         return ""
-    for key, keywords in _WORLD_KEYWORDS.items():
-        if any(kw in genre for kw in keywords):
-            return (presets.get(key) or {}).get("text") or ""
-    return ""
+    key = lorebook.world_key_for(genre)
+    return ((presets.get(key) or {}).get("text") or "") if key else ""
 
 
 def picked_direction(run_dir: Path, pick: int | None) -> dict:
@@ -794,36 +1401,99 @@ def picked_direction(run_dir: Path, pick: int | None) -> dict:
 
 SCENE_RE = re.compile(rf"^{S}장면{S}(\d+){S}[:：]?{S}$", re.M)
 SCENE_FIELD_RE = re.compile(
-    rf"^{S}(직전 상태|장소와 상황|벌어지는 일|인물의 행동과 표정|끝나는 상태){S}[:：]{S}(.*)$")
+    rf"^{S}(직전 상태|장소와 상황|벌어지는 일|인물의 행동과 표정|겉모습·소지품·동행|끝나는 상태|나레이션){S}[:：]{S}(.*)$")
 PLOT_LABEL_RE = re.compile(rf"^{S}줄거리{S}[:：]{S}$", re.M)
 CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
+# 이 화 안에서 장마다 같아야 하는 것(단체·장소 이름, 인물이 입는 옷).
+# 장면을 동시에 그리면 장마다 따로 지어내서 회사 이름·옷이 장마다 바뀌었다
+# (2026-09-30, run 20260930T212420-43e5c0 — 표지는 LUNAR, 2페이지는 NEST).
+FIXED_LABEL_RE = re.compile(rf"^{S}이 화의 고정 설정{S}[:：]{S}$", re.M)
 
 
-def scene_input_block(char: dict, direction: dict) -> str:
-    """scene_prompt 뒤에 붙는 이번 입력 — 고른 스토리 + 캐릭터."""
+def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) -> str:
+    """scene_prompt 뒤에 붙는 이번 입력 — 고른 스토리 + 캐릭터 + **장르**.
+
+    **장르를 여기에도 준다.** 예전에는 제목·본문·캐릭터만 넘겼는데, 장면
+    단계는 무엇을 실제로 그릴지(장소·상황·옷차림)를 정하는 자리라 장르를
+    모르면 가장 무난한 해석으로 번역해 버린다 — "데뷔조 막내"를 받고
+    「예술고등학교 복도 · 교복」으로 적어서, 아이돌을 골랐는데 다 그리고
+    나면 그냥 학원물이 되어 있었다(2026-09-17, 실측 확인: 그 run 의
+    scene_prompt.txt 10KB 안에 '아이돌·연습생·데뷔·기획사' 가 0번).
+
+    이야기 단계와 **같은 자료**를 준다(genre_lore_for · world_text_for ·
+    genre_samples_for) — 단계마다 다른 것을 주면 고른 이야기와 그려지는
+    장면이 갈라진다. 장르가 없으면 지금까지처럼 아무것도 안 붙는다.
+    """
     lines = ["# 이번 입력", "", "[선택된 스토리]", direction.get("title", ""), ""]
     lines.append(direction.get("body") or direction.get("raw", ""))
     lines += ["", "[캐릭터]", f"{char['name']} — {char.get('description') or ''}".rstrip(" —")]
+    # 고른 카드가 있으면 종·세계·정체를 같이 준다(#458) — 원래 설명(사람 ·
+    # 대학생 …)만 보고 장면을 짜면 사람이 고른 캐릭터가 아닌 인물로 그린다.
+    if charcard.short(char.get("card") or {}):
+        lines.append(f"- 고른 캐릭터 카드: {charcard.short(char['card'])} (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
+
+    # 고른 방향이 스스로 밝힌 장르가 먼저다. 사람이 장르를 안 고르면
+    # story_prompt 가 방향마다 장르를 정하므로, 그때는 캐릭터의 장르 칸이
+    # 비어 있고 방향 쪽에만 있다.
+    genre = (direction.get("genre") or char.get("genre") or "").strip()
+    if genre:
+        lines += ["", f"[장르] {genre}",
+                  "", "이 화는 위 장르의 작품이다. 장소·소품·옷차림·인물들이 하는 "
+                  "일이 그 장르의 것이어야 한다 — 장르를 지우고 아무 데서나 "
+                  "일어날 수 있는 장면으로 옮기지 마라."]
+        world = world_text_for(genre)
+        if world:
+            lines += ["", "## 이 세계의 배경 — 이 안에서 무엇이 벌어질지는 정해져 있지 않다", "", world]
+        cards = genre_samples_for(genre)
+        if cards:
+            lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
+                      "", GENRE_SAMPLE_NOTE, "", cards]
+        lines += genre_lore_section(genre)
+    # 이 방향이 서 있던 재료(#502). 이야기 단계에서 배정된 것 + 본문에 등장하는 것.
+    # run_dir 이 없거나 lore.json 이 없으면(옛 run) 아무것도 안 붙는다.
+    if run_dir is not None and lorebook.enabled():
+        lines += lorebook.scene_block(lorebook.scene_entries(
+            run_dir, int(direction.get("n") or 0), direction.get("body") or direction.get("raw", "")))
     return "\n".join(lines) + "\n"
 
 
+def split_narration(line: str) -> list[str]:
+    """`나레이션: 상자1 / 상자2` -> ["상자1", "상자2"]. "없음" 이면 빈 목록.
+
+    모델이 상자 하나를 따옴표로 감싸 오는 일이 있어 벗긴다 — 그림에는
+    따옴표가 대사처럼 찍힌다.
+    """
+    out = []
+    for part in (line or "").split(" / "):
+        part = part.strip().strip("\"'“”‘’「」").strip()
+        if part and part not in ("없음", "없음.", "..."):
+            out.append(part)
+    return out
+
+
 def parse_scenes(text: str) -> dict:
-    """scene_prompt 응답 -> {"plot", "scenes":[{"n","prev","where","what","acting","ends"}], "cast"}."""
+    """scene_prompt 응답 -> {"plot", "scenes":[{"n","prev","where","what","acting","look","ends","narration"}],
+    "cast", "fixed"}. `fixed` 는 「이 화의 고정 설정」 줄 목록이다(옛 응답에는 없어서 빈 목록)."""
     plot_m = PLOT_LABEL_RE.search(text)
     scene_marks = list(SCENE_RE.finditer(text))
     cast_m = CAST_LABEL_RE.search(text)
+    fixed_m = FIXED_LABEL_RE.search(text)
+    # 장면 뒤에 오는 절들. 장면·절 본문은 자기 다음에 오는 절의 머리에서 끝난다.
+    labels = [m.start() for m in (cast_m, fixed_m) if m]
     plot = ""
     if plot_m:
         end = scene_marks[0].start() if scene_marks else len(text)
         plot = text[plot_m.end():end].strip()
 
+    def section_end(start: int, end: int) -> int:
+        return min([p for p in labels if start < p < end] + [end])
+
     scenes = []
     for i, m in enumerate(scene_marks):
         end = scene_marks[i + 1].start() if i + 1 < len(scene_marks) else len(text)
-        if cast_m and cast_m.start() < end and cast_m.start() > m.start():
-            end = cast_m.start()
+        end = section_end(m.start(), end)
         body = text[m.end():end]
         fields = {}
         for line in body.splitlines():
@@ -836,15 +1506,27 @@ def parse_scenes(text: str) -> dict:
             "where": fields.get("장소와 상황", ""),
             "what": fields.get("벌어지는 일", ""),
             "acting": fields.get("인물의 행동과 표정", ""),
+            # 시트와 달라진 겉모습·소지품·동행 (#147). 옛 scenes.json 에는 없다 — 빈 값.
+            "look": fields.get("겉모습·소지품·동행", ""),
             "ends": fields.get("끝나는 상태", ""),
+            # 이 장에 쓸 수 있는 나레이션 글. 글 모델이 화 전체를 한 번에 읽고
+            # 이어지게 쓴 것이고, 그림 모델은 이 중에서 고르되 넣으면 글자 그대로
+            # 넣는다(detailart.build_continue_prompt). 칸이 **아예 없으면 None**
+            # 이다(옛 응답) — 그때는 예전처럼 그림 모델이 나레이션을 정한다.
+            "narration": (split_narration(fields["나레이션"]) if "나레이션" in fields else None),
         })
-    cast = _cast_bullets(text[cast_m.end():]) if cast_m else []
-    return {"plot": plot, "scenes": scenes, "cast": cast}
+    cast = (_cast_bullets(text[cast_m.end():section_end(cast_m.start(), len(text))])
+            if cast_m else [])
+    fixed = ([ln for ln in _bullets(text[fixed_m.end():section_end(fixed_m.start(), len(text))])
+              if ln.strip(" .") not in ("없음", "")]
+             if fixed_m else [])
+    return {"plot": plot, "scenes": scenes, "cast": cast, "fixed": fixed}
 
 
-def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> dict | None:
+def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
+                 lang: str = "ko") -> dict | None:
     """선택된 방향 -> 줄거리 + 장면(직전 상태·끝나는 상태 포함). `scenes.json` 에 쓴다."""
-    prompt = compose("scene_prompt", scene_input_block(char, direction))
+    prompt = compose("scene_prompt", scene_input_block(char, direction, run_dir), lang=lang)
     write_text(run_dir / "scene_prompt.txt", prompt)
     if dry_run:
         log(f"[장면] 프롬프트만 썼습니다 -> {run_dir / 'scene_prompt.txt'}")
@@ -854,7 +1536,7 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> d
     log(f"[장면] {call.describe()} 로 줄거리와 장면을 만듭니다…")
     try:
         text, meta = call(prompt)
-    except Exception as exc:                                          # noqa: BLE001
+    except BaseException as exc:                                      # noqa: BLE001 — SystemExit 도 남긴다(#531)
         record_error(run_dir, "SCENE", call.provider, call.model, exc)
         raise
     write_text(run_dir / "scene.md", text)
@@ -870,6 +1552,43 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool) -> d
 
 def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
                 spec_only: bool = False, note: str = "") -> None:
+    """캐릭터 시트 — 그림이 안전 검사에 걸리면 **한 번은 스스로 다시 그린다**(#531).
+
+    다시 그릴 때는 사양부터 다시 쓴다. 걸린 것은 대개 사진에서 옮겨 적은 옷차림
+    같은 사양 쪽이라, 그림 프롬프트만 고쳐서는 같은 사양이 또 들어간다. 두 번째도
+    걸리면 `failure.json` 에 이유를 남기고 멈춘다 — 자바가 그걸 읽어 사람에게
+    어떤 사진·설명이 문제였는지 알린다.
+    """
+    failure.clear(run_dir)
+    missing = [str(p) for p in char["photos"] if not Path(p).is_file()]
+    if missing and not dry_run:
+        failure.write(run_dir, "SHEET", "photo_missing", "사진 파일이 없습니다: " + ", ".join(missing))
+        raise SystemExit("사진 파일이 없습니다: " + ", ".join(missing))
+
+    safety = ""
+    for attempt in (1, 2):
+        try:
+            _sheet_attempt(run_dir, char, dry_run, spec_only, note, safety)
+            return
+        except BaseException as exc:                                  # noqa: BLE001
+            cats = failure.refusal_categories(exc)
+            if cats is None:
+                failure.write(run_dir, "SHEET", "error", f"{type(exc).__name__}: {exc}")
+                raise
+            if attempt == 1:
+                warn(f"[시트] 안전 검사에 걸렸습니다({', '.join(cats) or '분류 미상'}) — "
+                     "걸린 분류를 피해 사양부터 한 번 다시 씁니다")
+                for name in ("sheet.png", "sheet_spec.json"):
+                    (run_dir / name).unlink(missing_ok=True)
+                safety = failure.safety_note(cats)
+                continue
+            failure.write(run_dir, "SHEET_IMAGE", "image_safety",
+                          f"{type(exc).__name__}: {exc}", cats)
+            raise SystemExit(f"시트가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
+
+
+def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
+                   note: str, safety: str) -> None:
     photos = char["photos"]
     block = input_block(char)
     note = (note or "").strip()
@@ -878,6 +1597,8 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
         # 여기서만 붙인다(stage_story 의 note 와 같은 이유).
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
                  f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
+    if safety:
+        block += "\n\n" + safety
     prompt = compose("sheet_prompt", block)
     write_text(run_dir / "sheet_spec_prompt.txt", prompt)
 
@@ -893,7 +1614,7 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
         log(f"[시트] {call.describe()} 로 사양을 적습니다…")
         try:
             text, meta = call(prompt, images=llm.load_images(photos), temperature=0.4)
-        except Exception as exc:                                      # noqa: BLE001
+        except BaseException as exc:                                  # noqa: BLE001 — SystemExit 도 남긴다(#531)
             record_error(run_dir, "SHEET", call.provider, call.model, exc)
             raise
         record(run_dir, meta)
@@ -928,7 +1649,7 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
     sheet_provider, sheet_model, _q = imagegen.backend_for("SHEET_IMAGE")
     try:
         meta = sheetmod.paint(image_prompt, out)
-    except Exception as exc:                                          # noqa: BLE001
+    except BaseException as exc:                                      # noqa: BLE001 — SystemExit 도 남긴다(#531)
         record_error(run_dir, "SHEET_IMAGE", sheet_provider, sheet_model, exc)
         raise
     record(run_dir, meta)
@@ -950,7 +1671,7 @@ def direction_of(run_dir: Path) -> dict | None:
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
-                       note: str = "") -> None:
+                       note: str = "", lang: str = "ko") -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
 
@@ -976,11 +1697,11 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
             raise SystemExit(f"{run_dir / 'directions.json'} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
         char = json.loads((run_dir / "input.json").read_text(encoding="utf-8")) \
             if (run_dir / "input.json").exists() else None
-        stage_scenes(run_dir, char, direction, dry_run)
+        stage_scenes(run_dir, char, direction, dry_run, lang=lang)
 
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
-                                   note=note,
+                                   note=note, lang=lang,
                                    on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
@@ -1004,6 +1725,8 @@ def main(argv=None) -> int:
     p.add_argument("--photo", action="append", default=[], help="사진 (여러 번 가능)")
     p.add_argument("--desc", default="", help="설명 (선택)")
     p.add_argument("--genre", default="", help="장르 (선택)")
+    p.add_argument("--lang", default=None, choices=sorted(lang_mod.LANG_NAMES),
+                   help="웹툰 언어. 안 주면 .env(NH_LANG) 를 보고, 그것도 없으면 ko")
 
     p.add_argument("--run-id",
                    help="이어서 할 run. 없는 번호를 주고 --character 를 같이 "
@@ -1034,6 +1757,26 @@ def main(argv=None) -> int:
                    help="다른 단계를 안 돌리고 pick.json 만 남긴다 — 이어그리기 "
                         "흐름은 구체화가 없어서, 방향을 고른 뒤 검수 화면으로 "
                         "가기 전에 이걸로 pick 만 기록한다 (호출 0회)")
+    p.add_argument("--cast-pick", type=int,
+                   help="인물 단계의 답(#534). 현대 로맨스는 고른 상대 번호(1~4), "
+                        "사용자가 인물을 적었으면 0(이대로 진행). 그 뒤 이야기 후보 4개를 만든다")
+    p.add_argument("--own", action="store_true",
+                   help="「만들고 싶은 내용이 있어요」(#548): 적은 내용으로 주인공 카드·인물·본문·시트를 "
+                        "동시에 만든다. 후보·고르기 없음. 장면은 --own-scenes 로 따로")
+    p.add_argument("--own-restory", action="store_true",
+                   help="own 길의 「이야기 다시 만들기」 — 인물·시트는 두고 본문만 다시 (--note 로 메모)")
+    p.add_argument("--own-scenes", action="store_true",
+                   help="own 길의 본문(이야기 확인을 지난 것)을 장면으로 나눈다")
+    p.add_argument("--rescene", type=int, metavar="N",
+                   help="scenes.json 의 N번 장면만 다시 짓는다(own·quick 공용). --reasons 로 이유 코드, --note 로 메모")
+    p.add_argument("--reasons", default="",
+                   help="--rescene 의 이유 코드, 쉼표로 (awkward·character·stranger·offstory·pacing)")
+    p.add_argument("--own-save", type=Path,
+                   help="사용자가 고친 장면 글 파일({scenes:[{n,text}], body?}) 을 scenes.json 에 반영한다")
+    p.add_argument("--cast-sheet", metavar="이름",
+                   help="인물 단계가 세운 조연 한 명의 시트를 글 생김새만으로 그린다 — sheets/<이름>.png (#548, 크레딧 1)")
+    p.add_argument("--own-rescenes", action="store_true",
+                   help="본문·인물·시트는 두고 장면만 다시 나눈다 (--note 로 메모)")
     p.add_argument("--restory", action="store_true",
                    help="기존 run 에서 이야기 후보 4개를 다시 만든다 (방향 고르기 "
                         "화면에서 '다시 만들기' — --note 와 같이 쓸 수 있다)")
@@ -1047,6 +1790,10 @@ def main(argv=None) -> int:
     p.add_argument("--no-story-review", action="store_true",
                    help="이야기 후보를 만든 뒤 검수를 하지 않는다 (기본은 켜짐 — "
                         ".env 의 NH_STORY_REVIEW=0 과 같다)")
+    p.add_argument("--story-diff", action="store_true",
+                   help="이미 만든 이야기 후보 넷이 서로 다른가를 견주기만 한다 "
+                        "(기본 흐름에선 NH_STORY_DIFF=1 일 때만 자동으로 도는 단계 — "
+                        "단독 재실행용. 후보는 안 건드리고 story_diff.json 만 쓴다)")
     p.add_argument("--full-review", action="store_true",
                    help="이미 그린 화를 처음부터 끝까지 읽어 검수만 한다 "
                         "(다시 그리지 않는다. full_review.json 만 쓴다)")
@@ -1055,6 +1802,9 @@ def main(argv=None) -> int:
                                               "반영할 요청 (이야기·시트 단계에서 씀)")
     p.add_argument("--plan", action="store_true", help="단계별 모델만 보여준다")
     args = p.parse_args(argv)
+    if not args.lang:
+        env_lang = (llm.env("NH_LANG") or "").strip()
+        args.lang = env_lang if env_lang in lang_mod.LANG_NAMES else "ko"
 
     if args.plan:
         rows = llm.plan()
@@ -1075,7 +1825,14 @@ def main(argv=None) -> int:
               "(.env.example 참고).")
         return 0
 
-    if args.run_id and (RUNS_DIR / args.run_id).exists():
+    # **폴더가 있다고 이어 하는 것이 아니다(#626).** 바로 만들기는 시트와 이야기를 같은 번호로 **동시에**
+    # 띄운다(--character 를 둘 다 준다). 시트 쪽이 0.몇 초 먼저 폴더를 만들면 이야기 쪽이 「이미 있는 run」
+    # 으로 보고 「이미 이야기 후보가 있습니다」로 멈췄다(dev 2026-10-03). 사람을 새로 받는 호출(--character)
+    # 은 이야기 후보가 아직 없으면 새 작품으로 본다. input.json 은 같은 파일에서 나와 둘이 써도 같다.
+    existing = bool(args.run_id) and (RUNS_DIR / args.run_id).exists()
+    fresh_input = bool(args.character) and not (
+        existing and (RUNS_DIR / args.run_id / "directions.json").exists())
+    if existing and not fresh_input:
         run_dir = RUNS_DIR / args.run_id
         char = read_input(run_dir)
         new_run = False
@@ -1109,27 +1866,55 @@ def main(argv=None) -> int:
         log(f"[시트] 가져왔습니다{who} <- {got['from']}")
         log(f"  사양도 함께: {'예' if got['spec'] else '아니오 (그림만)'}")
 
+    # 「만들고 싶은 내용이 있어요」(#548) — 프롬프트·단계가 따로다(own.py).
+    if (args.own or args.own_restory or args.own_scenes or args.own_save or args.own_rescenes
+            or args.cast_sheet or args.rescene):
+        import own
+        if args.own:
+            own.run_own(run_dir, char, args.dry_run, lang=args.lang)
+        if args.own_restory:
+            own.restory(run_dir, char, args.dry_run, note=args.note, lang=args.lang)
+        if args.own_scenes:
+            own.own_scenes(run_dir, char, args.dry_run, lang=args.lang)
+        if args.own_save:
+            own.save_edits(run_dir, json.loads(args.own_save.read_text(encoding="utf-8")))
+        if args.cast_sheet:
+            own.stage_cast_sheet(run_dir, args.cast_sheet, args.dry_run)
+        if args.own_rescenes:
+            own.rescenes(run_dir, char, args.dry_run, note=args.note, lang=args.lang)
+        if args.rescene:
+            reasons = [r.strip() for r in args.reasons.split(",") if r.strip()]
+            own.rescene(run_dir, char, args.rescene, reasons, args.note, args.dry_run, lang=args.lang)
+        return 0
+
     # 한 단계만 다시 돌리는 길.
     #
     # --sheet-from 만 준 것도 여기서 끝난다 — 시트를 가져다 놓는 것이 그
     # 명령의 전부인데, 그냥 흘려보내면 아래 이야기 단계로 내려가 "어느 방향으로
     # 갈까요" 를 묻는다 (실제로 그래서 EOFError 로 죽었다).
-    if (args.story_review or args.full_review
+    if (args.story_review or args.story_diff or args.full_review
             or args.sheet or args.sheet_spec or args.detail_pages
             or args.page or args.sheet_from or args.pick_save or args.restory
-            or args.scenes):
-        if args.restory:
+            or args.scenes or args.cast_pick is not None):
+        if args.cast_pick is not None:
+            save_cast_pick(run_dir, args.cast_pick)
+        if args.restory or args.cast_pick is not None:
             # 방향 후보를 다시 만든다 — 이전 pick.json 은 더 이상 유효하지
             # 않다(방향 번호가 새로 나온 4개와 안 맞을 수 있다), 지운다.
             (run_dir / "pick.json").unlink(missing_ok=True)
             # 지난 판정도 같이 지운다 — 후보가 바뀌었는데 옛 판정이 남아
             # 있으면 화면이 다른 이야기의 지적을 붙여 보여준다.
             (run_dir / "story_review.json").unlink(missing_ok=True)
+            (run_dir / "story_diff.json").unlink(missing_ok=True)
             stage_story(run_dir, char, args.dry_run, note=args.note,
-                        review=False if args.no_story_review else None)
+                        review=False if args.no_story_review else None,
+                        lang=args.lang)
         if args.story_review:
             storycheck.review_run(run_dir, dry_run=args.dry_run,
                                   on_call=lambda meta: record(run_dir, meta))
+        if args.story_diff:
+            storydiff.diff_run(run_dir, dry_run=args.dry_run,
+                               on_call=lambda meta: record(run_dir, meta))
         if args.full_review:
             fullreview.review_run(run_dir, dry_run=args.dry_run,
                                   on_call=lambda meta: record(run_dir, meta))
@@ -1142,17 +1927,18 @@ def main(argv=None) -> int:
             stage_sheet(run_dir, char, args.dry_run, spec_only=args.sheet_spec, note=args.note)
         if args.scenes:
             direction = picked_direction(run_dir, args.pick)
-            stage_scenes(run_dir, char, direction, args.dry_run)
+            stage_scenes(run_dir, char, direction, args.dry_run, lang=args.lang)
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
                                allow_no_sheet=args.no_sheet,
                                review=False if args.no_page_review else None,
-                               note=args.note)
+                               note=args.note, lang=args.lang)
         return 0
 
     if new_run:
         directions = stage_story(run_dir, char, args.dry_run, note=args.note,
-                                 review=False if args.no_story_review else None)
+                                 review=False if args.no_story_review else None,
+                                 lang=args.lang)
         if args.dry_run:
             return 0
         show_directions(directions)
@@ -1173,5 +1959,23 @@ def main(argv=None) -> int:
         f"  python run.py --run-id {run_dir.name} --detail-pages")
 
 
+def _note_text_refusal(exc: BaseException) -> None:
+    """글 모델이 거절했으면 그 작품 폴더에 이유를 남긴다(#626). 어느 폴더인지는 --run-id 로 안다."""
+    try:
+        argv = sys.argv[1:]
+        if "--run-id" in argv:
+            run_dir = RUNS_DIR / argv[argv.index("--run-id") + 1]
+            if run_dir.is_dir():
+                failure.write(run_dir, "STORY", "text_refusal", f"TextRefused: {exc}")
+    except Exception:                                                # noqa: BLE001 — 이유를 못 남겨도 원래 실패는 그대로
+        pass
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        with tracing.run_span("run.py", sys.argv[1:]):
+            code = main()
+    except story.TextRefused as exc:
+        _note_text_refusal(exc)
+        raise SystemExit(f"글 모델이 이 내용을 만들지 않겠다고 했습니다: {exc}")
+    raise SystemExit(code)

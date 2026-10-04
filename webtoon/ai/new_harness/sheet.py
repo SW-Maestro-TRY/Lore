@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """캐릭터 시트 — 사양(JSON) 검사와 이미지 프롬프트, 그리고 실제 그리기.
 
-이미지 호출 자체는 story-harness/story.py 의 make_sheet_painter 를 그대로 쓴다
+이미지 호출 자체는 story.py 의 make_sheet_painter 를 그대로 쓴다
 (컷을 그리는 코드와 같은 경로다). 여기서 새로 짜는 것은 **무엇을 그릴지**뿐이다.
 
 story.py 의 시트와 다른 점은 하나, 소지품(props) 영역이 있다는 것이다. 그래서
@@ -130,10 +130,21 @@ def build_prompt(spec: dict, style: str = None, from_photo: bool = False) -> str
     등)을 보완했을 때 그걸 밝히라는 문구가 이때만 붙는다 — 이름만으로 지은
     캐릭터에는 "원본"이 없어서 이 문구가 의미가 없다.
     """
+    style_name = llm.env("NH_STYLE") or llm.env("PAGE_STYLE") or ""
+    mono = style is None and imageprompt.is_monochrome(style_name)
     palette = spec["color_palette"]
     color_line = " / ".join(f"{k}: {palette[k]}" for k in PALETTE_KEYS if palette.get(k))
     n_details = len(spec["design_details"])
     props = spec["props"]
+
+    # 흑백 그림체는 색을 칠하지 않고 명암으로 옮긴다. 팔레트를 빼지 않는 것은
+    # 머리·눈·옷의 밝기 차이가 곧 인물 구분이라서다 — 다 같은 회색이 되면 안 된다.
+    swatch_row = ("one horizontal row of value swatch chips in black, screentone greys "
+                  "and white, one chip per palette entry, in the listed order, each "
+                  "showing the ink value that entry becomes in black and white."
+                  if mono else
+                  "one horizontal row of flat color swatch chips, one "
+                  "chip per palette entry, in the listed order.")
 
     parts = [COMMON_EN, ""]
 
@@ -203,22 +214,24 @@ def build_prompt(spec: dict, style: str = None, from_photo: bool = False) -> str
             "character in this region. Each item is drawn from the angle that reads best, "
             "at a size that makes its shape, decoration and material visible.",
             "",
-            "REGION 8 — one horizontal row of flat color swatch chips, one "
-            "chip per palette entry, in the listed order.",
+            "REGION 8 — " + swatch_row,
         ]
     else:
         parts += [
             "",
-            "REGION 7 — one horizontal row of flat color swatch chips, one "
-            "chip per palette entry, in the listed order.",
+            "REGION 7 — " + swatch_row,
         ]
 
     parts += [
         "",
         f"CHARACTER\n{spec['appearance_en']}",
         "",
-        f"COLOR PALETTE (use exactly these, and these are the chips in the swatch row)\n"
-        f"{color_line}",
+        ("COLOR PALETTE — this sheet is black and white, so these colors are never "
+         "painted. Each one is drawn as its ink value: solid black, a screentone of "
+         "matching darkness, or white paper. The swatch chips show those values.\n"
+         if mono else
+         "COLOR PALETTE (use exactly these, and these are the chips in the swatch row)\n")
+        + color_line,
         "",
         "FIXED DESIGN ELEMENTS — visible and identical everywhere on the sheet, and one "
         "inset each in region 3. Written in Korean; follow them literally:",
@@ -246,8 +259,7 @@ def build_prompt(spec: dict, style: str = None, from_photo: bool = False) -> str
     # 눈앞의 그림을 더 세게 따른다). 실제로 그래서 frost 를 넣고도 시트의
     # webtoon 그림체가 8장 내내 나왔다.
     if style is None:
-        style = imageprompt.load_style(
-            llm.env("NH_STYLE") or llm.env("PAGE_STYLE") or "")
+        style = imageprompt.load_style(style_name)
     return "\n".join(parts) + f"\n\nSTYLE\n{style}\n"
 
 

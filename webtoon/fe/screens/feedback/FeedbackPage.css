@@ -1,0 +1,15 @@
+/* 「피드백 보내기」 페이지 — 설문 한 장을 가운데 좁은 칸에. 문항 모양은 ui/Survey.css. */
+.wt .wt-fb { align-items: center; gap: 20px; }
+.wt .wt-fb-head, .wt .wt-fb-card { width: 100%; max-width: 640px; }
+.wt .wt-fb-head { display: flex; flex-direction: column; gap: 8px; }
+.wt .wt-fb-head h2 { font-size: 32px; margin: 0; }
+.wt .wt-fb-head p { margin: 0; font-size: 15px; line-height: 1.6; }
+.wt .wt-fb-card { display: flex; flex-direction: column; gap: 20px; padding: 28px; }
+.wt .wt-fb-card > p { margin: 0; }
+.wt .wt-fb-err { color: var(--gold); font-size: 12.5px; margin: 0; }
+.wt .wt-fb-actions { display: flex; gap: 8px; }
+.wt .wt-fb-actions .btn { flex: 1; height: 48px; font-size: 14.5px; }
+@media (max-width: 720px) {
+  .wt .wt-fb-head h2 { font-size: 24px; }
+  .wt .wt-fb-card { padding: 20px 16px; }
+}

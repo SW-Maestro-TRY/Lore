@@ -46,6 +46,8 @@ class RegenServiceTest {
     private HarnessProcess harness;
     private PageUploader uploader;
     private JobRunner runner;
+    private com.lore.webtoon.job.AfterRun after;
+    private com.lore.webtoon.credit.CreditGate credits;
     private RegenService service;
 
     @BeforeEach
@@ -75,8 +77,10 @@ class RegenServiceTest {
         runner = mock(JobRunner.class);
         when(runner.runDir("run-1")).thenReturn(Files.createDirectories(runsDir.resolve("run-1")));
 
+        after = mock(com.lore.webtoon.job.AfterRun.class);
+        credits = mock(com.lore.webtoon.credit.CreditGate.class);
         service = new RegenService(regens, pages, bakery, harness, uploader, runner,
-                mock(com.lore.webtoon.job.RunFiles.class));
+                mock(com.lore.webtoon.job.RunFiles.class), after, credits);
     }
 
     private void 페이지파일(int no, byte[] content) throws IOException {
@@ -130,6 +134,7 @@ class RegenServiceTest {
         Path v1 = runsDir.resolve("run-1/pages/versions/page01.v1.png");
         assertThat(Files.readString(v1)).isEqualTo("옛 그림");
         verify(bakery).invalidate("run-1", 1);
+        verify(after).cost("run-1");            // 다시 그린 값도 장부에(#444)
     }
 
     @Test
@@ -139,14 +144,17 @@ class RegenServiceTest {
         when(harness.run(any(), any(), anyMap(), any())).thenReturn(1);   // exit != 0
 
         String id = service.start("run-1", 1, "");
+        service.charged(id, 7L, "regen:run-1:1:" + id);
         큐를_바로_돌린다();
 
         Map<String, Object> status = service.statusOf(id);
         assertThat(status.get("status")).isEqualTo("error");
+        verify(credits).refund(7L, "regen:run-1:1:" + id);   // 실패하면 받은 크레딧을 돌려준다(#626)
         assertThat(status.get("error")).isEqualTo("다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
         // 실패해도 지금 그림은 판본으로 이미 떠 뒀다 — 그 자체는 해롭지 않다.
         assertThat(service.versionsOf("run-1", 1)).hasSize(1);
         verify(bakery, never()).invalidate(anyString(), eq(1));
+        verify(after).cost("run-1");            // 실패해도 나간 값은 적는다(#444)
     }
 
     @Test

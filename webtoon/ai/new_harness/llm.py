@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """단계마다 다른 모델을 부를 수 있는 텍스트 호출 계층.
 
-프로바이더 구현(OpenAI·Gemini·Anthropic)은 story-harness/story.py 것을 그대로
+프로바이더 구현(OpenAI·Gemini·Anthropic)은 같은 폴더의 story.py 것을 그대로
 빌려 쓴다. 여기서 다시 짜면 재시도·이미지 첨부·토큰 집계가 조금씩 달라지고,
 그 차이가 결과 차이로 나타난다.
 
@@ -9,7 +9,7 @@
 
     <STAGE>_PROVIDER / <STAGE>_MODEL   (단계별)
       -> NH_PROVIDER / NH_MODEL        (이 하네스 전체 기본)
-      -> PROVIDER                      (story-harness 와 같은 기본)
+      -> PROVIDER                      (story.py 의 기본)
 
 단계 이름은 STORY · BOARD · SHEET 다. 예를 들어 이야기만 GPT 로 뽑고 콘티는
 Gemini 로 두려면 .env 에 이렇게 적는다:
@@ -22,13 +22,11 @@ Gemini 로 두려면 .env 에 이렇게 적는다:
 from __future__ import annotations
 
 import os
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STORY_HARNESS = HERE.parent / "story-harness"
 
 
 def load_dotenv(path: Path) -> None:
@@ -50,9 +48,8 @@ def load_dotenv(path: Path) -> None:
             os.environ.setdefault(key, value)
 
 
-# new_harness/.env 를 story-harness/.env 보다 **먼저** 읽는다. 둘 다
-# setdefault 라 먼저 읽힌 쪽이 이긴다 — 모델 선택은 여기서 하고, API 키는
-# 이미 있는 story-harness/.env 것을 그대로 물려받는다.
+# new_harness/.env 를 먼저 읽는다. story.py 도 import 될 때 같은 파일을 읽지만
+# setdefault 라 먼저 읽힌 쪽이 이기고, 이미 있는 환경변수는 덮어쓰지 않는다.
 load_dotenv(HERE / ".env")
 
 # 운영 서버(EC2)는 Parameter Store 에서 키 하나(WEBTOON_API_KEY)만 받는다
@@ -64,10 +61,11 @@ load_dotenv(HERE / ".env")
 if os.environ.get("WEBTOON_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
     os.environ["OPENAI_API_KEY"] = os.environ["WEBTOON_API_KEY"]
 
-if str(STORY_HARNESS) not in sys.path:
-    sys.path.insert(0, str(STORY_HARNESS))
+# 모델 호출 추적(Logfire). LOGFIRE_TOKEN 이 있을 때만 켜지고, 없으면 아무것도 안 한다.
+import tracing  # noqa: E402
+tracing.start()
 
-import story  # noqa: E402  (sys.path 를 세운 뒤에야 import 할 수 있다)
+import story  # noqa: E402  (위에서 .env 를 읽고 키 이름을 맞춘 뒤에 import 해야 한다)
 
 
 PROVIDERS = tuple(story.PROVIDERS)          # gemini / openai / anthropic
@@ -76,8 +74,9 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # 글을 쓰는 단계 / 그림을 그리는 단계. 이름이 곧 .env 의 앞자리다
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "SCENE", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
-               "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "FULL_REVIEW")
-IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE")
+               "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "COVER_REVIEW", "CAST", "PERSONA",
+               "FULL_REVIEW", "CAST_SHEET")
+IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE", "CAST_SHEET_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
 DEFAULT_MAX_TOKENS = story.env_int("NH_MAX_TOKENS", 16000)
@@ -142,13 +141,53 @@ def image_default(provider: str) -> str:
     return story.image_backend_ready(provider)[1]
 
 
+# 단계마다 따로 두는 기본 모델 — 설정(`<단계>_MODEL` · `NH_MODEL`)이 없을 때만 쓴다.
+#
+# **이야기 후보(STORY)는 gpt-5.1 이다(#457).** 같은 프롬프트·같은 입력으로
+# gpt-4.1 과 나란히 돌려 보니, gpt-4.1 은 후보 넷이 적힌 줄거리를 장면으로
+# 옮겨 적고 분위기만 다른 이야기가 됐고 인물도 이름·형용사 하나뿐이었다.
+# gpt-5.1 은 같은 한 줄을 서로 다른 이야기(비밀 동맹·독립·배틀·미스터리)로
+# 읽고 인물마다 매력을 줬다(2026-09-26, 두 입력 각 한 번씩). 호출당 값은
+# 약 2.5배($0.012 → $0.03)지만 run 하나에 한 번뿐이다.
+#
+# `.env` 가 아니라 코드에 두는 이유는 DEFAULT_PROVIDER 와 같다 — 서버에는
+# new_harness/.env 가 안 실린다.
+#
+# **장면(SCENE)도 gpt-5.1 이다(#511).** 장면 단계가 나레이션 글을 쓰고 그림
+# 모델은 그 안에서 골라 글자 그대로 넣게 바뀌어서, 이 단계의 문장이 곧 독자가
+# 읽는 문장이다. 화 하나에 한 번뿐이다.
+#
+# **화 전체 검수(FULL_REVIEW)도 gpt-5.1 이다.** gpt-4.1 전체 검수는 1장면을 네
+# 컷으로 그리고 제목도 없는 표지를 "표지를 장식한다" 로 읽고 넘겼고, 표지와
+# 2페이지가 같은 순간을 되풀이한 것도 회사 이름이 다르다는 major 하나로만
+# 잡았다(2026-09-30, run 20260930T212420-43e5c0). 화 하나에 몇 번뿐이라 값이
+# 올라도 편당 차이는 작다. 8장짜리 화를 22장으로 읽은 적이 있어서 없는 쪽
+# 번호는 fullreview.parse 가 버린다.
+#
+# 표지 검수(COVER_REVIEW)는 칸·글상자를 세고 제목을 옮겨 적기만 하는 일이라
+# 기본 모델(gpt-4.1) 그대로 둔다(2026-09-30 결정).
+#
+# **인물(CAST)도 gpt-5.1 이다(#532).** 이야기 후보의 인물이 라벨만 붙은 채
+# 나와서, 인물만 따로 만드는 단계를 이야기 앞에 뒀다. 이 단계의 글이 곧
+# 사용자가 반할지 말지를 정한다. 화 하나에 한 번뿐이다.
+#
+# **주인공 페르소나(PERSONA)도 gpt-5.1 이다(#534).** 사용자가 적은 캐릭터로
+# 주인공 페르소나를 정의한다. 이게 틀리면 뒤의 인물·이야기가 모두 틀린 캐릭터로 간다.
+STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
+                        ("CAST", "openai"): "gpt-5.1",
+                        ("PERSONA", "openai"): "gpt-5.1",
+                        ("SCENE", "openai"): "gpt-5.1",
+                        ("FULL_REVIEW", "openai"): "gpt-5.1"}
+
+
 def model_for(stage: str, provider: str) -> str:
     """이 단계가 쓸 모델 이름."""
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
         return model or image_default(provider)
     model, _ = _pick(stage, "MODEL", ("NH_MODEL",))
-    return model or story.default_model_for(provider)
+    return (model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider))
+            or story.default_model_for(provider))
 
 
 def load_images(paths) -> list:
@@ -217,6 +256,8 @@ class Call:
 STAGE_LABEL = {
     "STORY": "이야기 후보",
     "STORY_REVIEW": "이야기 후보 검수 (고르기 전)",
+    "CAST": "주인공과 얽힐 인물 넷 (이야기 후보 전)",
+    "PERSONA": "주인공 페르소나 — 사용자가 적은 캐릭터로 정의 (인물 단계 전)",
     "DETAIL": "디테일 — 장면마다 어디서 끝나는가 (동시에 그리기 위한 이음새)",
     "CUTSCRIPT": "컷 대본",
     "REVIEW": "스토리 검수",
@@ -225,8 +266,11 @@ STAGE_LABEL = {
     "BOARD": "콘티",
     "SHEET": "시트 사양",
     "SHEET_IMAGE": "시트 그림",
+    "CAST_SHEET": "조연 시트 사양 (글로 적힌 생김새만으로, 크레딧 1)",
+    "CAST_SHEET_IMAGE": "조연 시트 그림",
     "PAGE_IMAGE": "페이지 그림",
     "PAGE_REVIEW": "그림 검수 (장마다)",
+    "COVER_REVIEW": "표지 검수 (칸 하나 · 글상자 없음 · 제목 그대로)",
     "FULL_REVIEW": "화 전체 검수 (다 그린 뒤 처음부터 끝까지)",
 }
 

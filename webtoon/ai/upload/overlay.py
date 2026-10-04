@@ -317,23 +317,21 @@ def _silhouette(size, shapes, stroke: int, dashed_box=None, tail_box=None):
 
 def _fit(probe, text: str, font, box_w: int, pad_x: int, pad_y: int,
          spread: float, target: float):
-    """글을 어디서 끊을지 <b>모양을 보고</b> 고른다. -> (폭, 높이, 줄들)
+    """풍선 크기와 줄바꿈. -> (폭, 높이, 줄들)
 
-    한 줄로 다 들어간다고 한 줄로 두면, 대사가 길수록 풍선이 국수 가락이 된다
-    (웹툰에서 그렇게 생긴 풍선은 없다). 그래서 몇 가지 폭으로 끊어 보고
-    <b>가로세로 비가 가장 보기 좋은 것</b>을 고른다. 사람이 정한 폭은 넘지
-    않는다 — 그건 한계지 목표가 아니다.
+    <b>폭은 사람이 정한 그대로다.</b> 예전에는 글에 맞춰 풍선을 도로 줄였다 —
+    몇 가지 폭으로 놓아 보고 가로세로 비가 제일 나은 것을 고르는 식이었는데,
+    그러면 <b>끌어도 안 커지거나 오히려 작아졌다</b>(실제 제보). 끌어서 크기를
+    정하는 손잡이인데 그 값을 프로그램이 도로 덮어쓰면 고장 난 것과 같다.
+
+    글은 그 폭 안에서 줄바꿈될 뿐이고, 높이만 글에 맞춰 늘어난다. 다만 글이
+    짧다고 납작한 국수 가락이 되지는 않게 <b>가장 낮은 높이</b>를 둔다 —
+    폭÷{@code target} 보다 낮아지지 않는다.
     """
-    best = None
-    for frac in (1.0, 0.82, 0.68, 0.56, 0.46, 0.38):
-        inner = max(10, int(box_w * frac / spread) - pad_x * 2)
-        lines, tw, th = _lines_and_box(probe, text, font, inner)
-        w = min(box_w, int(tw * spread) + pad_x * 2)
-        h = int(th * spread) + pad_y * 2
-        score = abs(w / max(1, h) - target)
-        if best is None or score < best[0]:
-            best = (score, w, h, lines)
-    return best[1], best[2], best[3]
+    inner = max(10, int(box_w / spread) - pad_x * 2)
+    lines, _, th = _lines_and_box(probe, text, font, inner)
+    h = max(int(th * spread) + pad_y * 2, int(box_w / max(0.1, target)))
+    return box_w, h, lines
 
 
 def _tail_shape(cx, cy, a, b, tip, root_half):
@@ -457,6 +455,19 @@ def _sticker_tile(item: dict[str, Any], scale: float):
     """이모지 스티커. 글꼴이 없으면 None — 나머지는 그대로 구워진다."""
     Image, ImageDraw, _ = _pil()
     target = max(8, int(item["size"] * 2.2 * scale))
+    text = str(item.get("text") or "")
+    if text.startswith("lou:"):
+        # 루 고래 스티커(#548) — 화면·자바(BubbleArtist)와 같은 그림을 높이 1.5em 로.
+        import re
+        name = re.sub(r"[^a-z0-9-]", "", text[4:])
+        path = Path(__file__).resolve().parent.parent / "assets" / "lou" / f"{name}.png"
+        if not name or not path.is_file():
+            return None
+        src = Image.open(path).convert("RGBA")
+        h = max(8, round(target * 1.5))
+        tile = src.resize((max(1, round(src.width * h / src.height)), h), Image.LANCZOS)
+        tile.info["off"] = (0, 0)
+        return tile
     font, drawn = _emoji_font(target)
     if font is None:
         return None

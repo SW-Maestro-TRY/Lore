@@ -1,0 +1,404 @@
+/* 만드는 중 — 캔버스 Sheet · Making · Confirm · Drawing · Failed · GuestLimit (+ M 보드). */
+
+.wt .wt-prog-body { display: flex; gap: 40px; margin-top: 12px; flex-grow: 1; }
+.wt .wt-prog-rail { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 22px; }
+.wt .wt-prog-main { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.wt .wt-prog-head { display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-prog-head h2 { font-size: 28px; }
+.wt .wt-prog-head h2 .dim { font-size: 14px; font-weight: 400; }
+.wt .wt-prog-head .lede { font-size: 15px; }
+
+/* 루 카드 — 놀이터로 들어가는 문이라 버튼이다 */
+.wt .wt-prog-lou {
+  border-radius: 22px; background: #d9f2f8; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px;
+  border: 2px solid transparent; font-family: inherit; color: inherit; cursor: pointer; width: 100%; text-align: center;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+.wt .wt-prog-lou:hover:not(:disabled) { border-color: rgba(15, 51, 63, 0.18); }
+.wt .wt-prog-lou:active:not(:disabled) { transform: scale(0.99); }
+.wt .wt-prog-lou:disabled { cursor: default; }
+.wt .wt-prog-lou.on { border-color: var(--ink); }
+.wt .wt-prog-lou img { width: 160px; pointer-events: none; }
+.wt .wt-prog-lou b { font-size: 16px; text-align: center; }
+.wt .wt-prog-lou .txt { display: contents; }
+
+/* 단계 화면 제목 옆 걸음별 루 */
+.wt .wt-prog-headlou { flex-direction: row; align-items: center; gap: 16px; }
+.wt .wt-prog-headlou .stagelou { width: 64px; height: 64px; object-fit: contain; flex-shrink: 0; }
+
+/* 루와 놀기 제목 줄 — 버튼은 오른쪽에 제 크기만큼만 */
+.wt .wt-prog-playhead { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+.wt .wt-prog-playhead .btn { flex-shrink: 0; }
+.wt .wt-prog-playhead h2 { min-width: 0; }
+
+/* 루와 놀기 — 루는 늘 position:absolute + translate(-50%,-50%)로 중심을 잡는다.
+ * 끄는 동안 mascotPlay 가 style.left/top 만 px 로 바꾸는데, translate 가 항상
+ * 절반을 다시 빼 주는 덕에 그 좌표가 곧 "커서가 있는 그 자리" 가 된다 — 왼쪽
+ * 위 모서리 기준으로 두면 커서보다 반 박스만큼 어긋나 "잘 안 따라오는" 것처럼
+ * 보인다(2026-09-19, 실제로 이렇게 어긋나 있었다). */
+.wt .wt-prog-play { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 0 12px; }
+.wt .wt-prog-play .stage { width: 100%; max-width: 440px; height: 320px; position: relative; touch-action: none; }
+.wt .wt-prog-play .mascot {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  background: none; border: 0; padding: 0; margin: 0; width: 260px; height: 260px;
+  cursor: grab; touch-action: none; animation: wtLouSwim 4.6s ease-in-out infinite;
+}
+.wt .wt-prog-play .mascot img { width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.wt .wt-prog-play .mascot[data-grab="1"] { cursor: grabbing; animation: none; }
+.wt .wt-prog-play .mascot[data-home="1"] { transition: left 0.45s cubic-bezier(0.3, 1.3, 0.5, 1), top 0.45s cubic-bezier(0.3, 1.3, 0.5, 1); }
+.wt .wt-prog-play .mascot[data-react] { animation: wtLouWiggle 0.5s ease-in-out 2; }
+.wt .wt-prog-play .mascot[data-react="shake"] { animation: wtLouQuake 0.18s linear infinite; }
+.wt .wt-prog-play .say { font-size: 15px; font-weight: 700; min-height: 20px; }
+.wt .wt-prog-play .hint { font-size: 12px; color: var(--dim); }
+@keyframes wtLouSwim {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+  30% { transform: translate(-50%, calc(-50% - 7px)) rotate(-1.4deg); }
+  65% { transform: translate(-50%, calc(-50% + 3px)) rotate(1.1deg); }
+}
+@keyframes wtLouWiggle {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  25% { transform: translate(-50%, -50%) rotate(-5deg) scale(1.04); }
+  75% { transform: translate(-50%, -50%) rotate(5deg) scale(1.04); }
+}
+@keyframes wtLouQuake {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+  25% { transform: translate(calc(-50% - 4px), -50%) rotate(-3deg); }
+  75% { transform: translate(calc(-50% + 4px), -50%) rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt .wt-prog-play .mascot, .wt .wt-prog-play .mascot[data-react] { animation: none; }
+}
+.wt .wt-prog-tips { margin-top: 6px; padding: 10px 16px; border-radius: 12px; background: var(--water-light); display: flex; gap: 8px; align-items: baseline; max-width: 420px; transition: opacity 0.3s ease; }
+.wt .wt-prog-tips[data-fade="1"] { opacity: 0; }
+.wt .wt-prog-tips .kind { font-size: 11px; font-weight: 700; color: var(--sea-deep); flex-shrink: 0; }
+.wt .wt-prog-tips .text { font-size: 12.5px; line-height: 1.5; }
+.wt .wt-prog-bar { width: 100%; height: 8px; border-radius: 999px; background: rgba(15, 51, 63, 0.12); overflow: hidden; }
+.wt .wt-prog-bar i { display: block; height: 100%; width: 100%; background: var(--ink); border-radius: 999px; transform-origin: left; transition: transform 0.6s ease; }
+.wt .wt-prog-lou .dim { font-size: 12px; }
+.wt .wt-prog-pct { font-size: 13px; font-weight: 700; color: var(--sea-deep); font-variant-numeric: tabular-nums; }
+.wt .wt-prog-line { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; background: #fff; border: 1px solid var(--line); font-size: 13px; }
+.wt .wt-prog-line i { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); flex-shrink: 0; }
+.wt .wt-prog-line.off { border-style: dashed; border-color: rgba(15, 51, 63, 0.2); color: var(--muted); }
+
+/* 단계 줄 */
+.wt .wt-prog-steps { display: flex; flex-direction: column; gap: 16px; }
+.wt .wt-prog-step {
+  display: flex; gap: 12px; align-items: flex-start; background: none; border: 0; padding: 0; text-align: left;
+  font-family: inherit; color: var(--ink); cursor: pointer; width: 100%;
+}
+.wt .wt-prog-step:disabled { opacity: 0.55; cursor: default; }
+.wt .wt-prog-step .no {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; border: 1.5px solid rgba(15, 51, 63, 0.25); color: var(--dim);
+}
+.wt .wt-prog-step.cur .no { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-prog-step.done .no { background: #0f9e8a; color: #fff; border-color: #0f9e8a; }
+.wt .wt-prog-step .txt { display: flex; flex-direction: column; gap: 2px; }
+.wt .wt-prog-step .txt b { font-size: 15px; }
+.wt .wt-prog-step .txt span { font-size: 12.5px; }
+.wt .wt-prog-step .txt em { font-style: normal; font-size: 12.5px; font-weight: 700; color: var(--sea); display: inline-flex; align-items: center; gap: 3px; }
+.wt .wt-prog-step.viewing .txt b { text-decoration: underline; text-underline-offset: 3px; }
+
+/* 줄 아래 */
+.wt .wt-prog-railfoot { display: flex; flex-direction: column; gap: 12px; }
+.wt .wt-prog-railfoot > .btn { height: 44px; font-size: 14px; }
+
+/* 이메일 카드 */
+.wt .wt-prog-mail { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: #fff; border: 1px solid var(--line); }
+.wt .wt-prog-mail label { font-size: 14px; }
+.wt .wt-prog-mail label .dim { font-weight: 400; }
+.wt .wt-prog-mail .row { display: flex; gap: 8px; }
+.wt .wt-prog-mailoff { font-size: var(--fs-xs, 12px); }
+.wt .wt-prog-mailoff .linkish {
+  background: none; border: 0; padding: 0; font: inherit; color: var(--sea); font-weight: 700;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.wt .wt-prog-mail .row .field { height: 42px; flex-grow: 1; min-width: 0; }
+.wt .wt-prog-mail .row .btn { height: 42px; font-size: 13.5px; }
+.wt .wt-prog-mail .dim { font-size: 12px; }
+
+/* 시트 */
+.wt .wt-prog-sheet { border-radius: 16px; overflow: hidden; background: #fff; border: 1px solid var(--line); height: 380px; position: relative; cursor: zoom-in; padding: 0; width: 100%; }
+.wt .wt-prog-sheet img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wt .wt-prog-sheet .zoom { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: rgba(15, 51, 63, 0.82); color: #fff; font-size: 12px; }
+.wt .wt-prog-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.wt .wt-prog-acts .field { width: 360px; }
+.wt .wt-prog-acts .field.w300 { width: 300px; }
+
+/* 이야기 고르기 */
+.wt .wt-prog-dirs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.wt .wt-prog-dir {
+  display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border-radius: 14px; background: #fff;
+  border: 1px solid rgba(15, 51, 63, 0.12); cursor: pointer; text-align: left; font-family: inherit; color: var(--ink);
+}
+.wt .wt-prog-dir.on { border: 2px solid var(--ink); }
+.wt .wt-prog-dir .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.wt .wt-prog-dir .row b { font-size: 16px; }
+.wt .wt-prog-dir .genre { font-size: 12px; margin-top: -2px; }
+.wt .wt-prog-dir .row button { font-size: 12.5px; color: var(--sea); background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.wt .wt-prog-dir .intro { font-size: 13.5px; line-height: 1.55; }
+.wt .wt-prog-dir p { margin: 8px 0 0; font-size: 13px; line-height: 1.6; }
+.wt .wt-prog-dir.plain { cursor: default; }
+/* 인물 카드(#534) — 이야기 카드와 같은 틀에 대표 대사 한 줄. */
+.wt .wt-prog-cast .line { font-size: 13.5px; line-height: 1.55; color: var(--ink); quotes: "“" "”"; }
+/* 주인공 페르소나(#534) — 확인용. 고르는 카드가 아니라 위에 한 장. */
+.wt .wt-prog-hero { background: var(--water-light); border-color: transparent; }
+.wt .wt-prog-hero .details { margin: 4px 0 0; padding-left: 1.1em; font-size: 13px; line-height: 1.55; color: var(--muted); display: grid; gap: 2px; }
+
+/* 본문 확인 */
+.wt textarea.wt-prog-bodybox { height: 300px; min-height: 0; padding: 16px 18px; resize: none; line-height: 1.75; font-size: 15px; }
+
+/* 그리는 중 */
+.wt .wt-prog-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.wt .wt-prog-row .btn { height: 44px; font-size: 14px; }
+.wt .wt-prog-card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 14px; background: #fff; border: 1px solid var(--line); }
+.wt .wt-prog-card b { font-size: 14px; }
+.wt .wt-prog-card .muted { font-size: 13px; line-height: 1.55; }
+.wt .wt-prog-card .dim { font-size: 12px; }
+.wt .wt-prog-pageshead { display: flex; justify-content: space-between; align-items: baseline; }
+.wt .wt-prog-pageshead b { font-size: 15px; }
+.wt .wt-prog-pageshead span { font-size: 13px; }
+.wt .wt-prog-pages { width: 520px; max-width: 100%; display: flex; flex-direction: column; gap: 14px; }
+.wt .wt-prog-pages img { width: 100%; border-radius: 10px; display: block; background: #fff; }
+.wt .wt-prog-slot { height: 120px; border-radius: 10px; background: var(--water-light); display: flex; align-items: center; justify-content: center; color: var(--sea-deep); font-size: 13px; font-weight: 700; }
+.wt .wt-prog-mgrid { display: none; }
+.wt .wt-prog-cancel { display: flex; align-items: center; gap: 14px; margin-top: 6px; flex-wrap: wrap; }
+.wt .wt-prog-cancel > .btn { height: 42px; font-size: 13.5px; color: #a13a2e; border-color: rgba(161, 58, 46, 0.35); }
+.wt .wt-prog-cancel .ask { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: #fff; border: 1px solid rgba(15, 51, 63, 0.12); flex-grow: 1; }
+.wt .wt-prog-cancel .ask b { font-size: 13.5px; }
+.wt .wt-prog-cancel .ask b i { font-style: normal; color: #a13a2e; }
+.wt .wt-prog-cancel .ask .dim { font-size: 12.5px; }
+.wt .wt-prog-cancel .ask .chips { display: flex; gap: 6px; }
+.wt .wt-prog-cancel .ask .chip { height: 32px; font-size: 12.5px; }
+.wt .wt-prog-cancel .ask .chip.danger { background: #a13a2e; border-color: #a13a2e; color: #fff; }
+
+/* 실패 · 한도 */
+.wt .wt-prog-center { flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 40px; }
+.wt .wt-prog-fail { width: 560px; max-width: 100%; padding: 36px; align-items: center; text-align: center; gap: 10px; }
+.wt .wt-prog-fail img { width: 150px; opacity: 0.85; }
+.wt .wt-prog-fail h2 { font-size: 30px; }
+.wt .wt-prog-fail .muted { font-size: 15px; line-height: 1.6; }
+.wt .wt-prog-fail .ok { font-size: 14px; color: #0f9e8a; font-weight: 600; }
+.wt .wt-prog-fail .btn { width: 100%; }
+.wt .wt-prog-fail .btn-p { margin-top: 10px; }
+.wt .wt-prog-limit { display: grid; grid-template-columns: minmax(0, 560px); justify-content: center; gap: 24px; flex-grow: 1; align-content: center; }
+.wt .wt-prog-limit .card { padding: 32px; align-items: center; text-align: center; gap: 10px; justify-content: center; }
+.wt .wt-prog-limit img { width: 120px; }
+.wt .wt-prog-limit h2 { font-size: 26px; }
+.wt .wt-prog-limit .muted { font-size: 14.5px; line-height: 1.6; }
+.wt .wt-prog-limit .btn { width: 100%; }
+.wt .wt-prog-limit .btn-p { margin-top: 8px; }
+
+/* 확대 보기 */
+.wt .wt-prog-zoom { position: fixed; inset: 0; z-index: 50; background: rgba(15, 51, 63, 0.88); display: flex; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out; }
+.wt .wt-prog-zoom img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px; background: #fff; }
+.wt .wt-prog-zoom .icon-btn { position: absolute; top: 20px; right: 20px; }
+
+/* 폰 전용 */
+.wt .wt-prog-mbars, .wt .wt-prog-mchips, .wt .wt-prog-mnote { display: none; }
+
+@media (max-width: 767px) {
+  .wt .wt-prog-acts, .wt .wt-prog-railfoot > .btn, .wt .wt-prog-steps, .wt .wt-prog-fail .btn { display: none; }
+  .wt .wt-prog-mbars { display: flex; gap: 4px; padding: 10px 16px 0; }
+  .wt .wt-prog-mbars i { height: 4px; flex: 1; border-radius: 2px; background: rgba(15, 51, 63, 0.15); }
+  .wt .wt-prog-mbars i.on { background: var(--ink); }
+  .wt .wt-prog-body { flex-direction: column; gap: 14px; margin-top: 0; }
+  .wt .wt-prog-rail { width: auto; gap: 14px; }
+  .wt .wt-prog-lou { border-radius: 18px; flex-direction: row; gap: 14px; padding: 14px 16px; align-items: center; }
+  .wt .wt-prog-lou img { width: 72px; }
+  .wt .wt-prog-lou .txt { display: flex; flex-grow: 1; flex-direction: column; gap: 6px; min-width: 0; }
+  .wt .wt-prog-lou b { font-size: 14px; text-align: left; }
+  .wt .wt-prog-bar { height: 6px; }
+  .wt .wt-prog-lou .dim { font-size: 11px; }
+  .wt .wt-prog-pct { font-size: 12px; }
+  .wt .wt-prog-line { font-size: 12.5px; padding: 10px 12px; }
+  /* 데스크톱 값(440×320, 루 260px)은 폰 폭을 넘친다 — 화면 폭 안에 들어오는
+     크기로 줄인다. */
+  .wt .wt-prog-play { padding: 12px 0 4px; }
+  .wt .wt-prog-play .stage { max-width: 240px; height: 200px; }
+  .wt .wt-prog-play .mascot { width: 150px; height: 150px; }
+  .wt .wt-prog-mchips { display: flex; justify-content: space-between; padding: 0 4px; }
+  .wt .wt-prog-mnote { display: block; }
+  /* 지나온 단계를 다시 보는 단추다(전에는 그냥 글자였다) — 버튼 기본
+     테두리·배경만 지우고 칩 모양은 그대로 둔다. */
+  .wt .wt-prog-mchips button {
+    font-family: inherit; font-size: 11.5px; color: var(--dim); background: none; border: 0; padding: 0;
+    cursor: pointer;
+  }
+  .wt .wt-prog-mchips button:disabled { cursor: default; opacity: 0.6; }
+  .wt .wt-prog-mchips button.cur { font-weight: 700; color: var(--ink); }
+  .wt .wt-prog-mchips button.done { color: #0f9e8a; }
+  .wt .wt-prog-main { gap: 14px; }
+  .wt .wt-prog-head h2 { font-size: 24px; line-height: 1.3; }
+  .wt .wt-prog-head .lede { font-size: 13.5px; line-height: 1.5; }
+  /* 「웹툰 보면서 기다리기」 단추가 긴 제목에 밀려 화면 밖으로 나가던 것 —
+     폰에서는 제목 아래로 내려 폭 전체를 쓴다(2026-09-23). */
+  .wt .wt-prog-playhead { flex-direction: column; align-items: stretch; gap: 10px; }
+  .wt .wt-prog-playhead .btn { width: 100%; }
+  .wt .wt-prog-sheet { height: auto; border-radius: 14px; }
+  .wt .wt-prog-sheet img { height: auto; }
+  .wt .wt-prog-sheet .zoom { position: static; display: flex; justify-content: center; background: none; color: var(--dim); font-size: 11.5px; padding: 6px; border-radius: 0; }
+  .wt .wt-prog-dirs { grid-template-columns: 1fr; }
+  .wt .wt-prog-dir { padding: 14px 16px; gap: 3px; }
+  .wt .wt-prog-dir .row b { font-size: 15px; }
+  .wt .wt-prog-dir .intro { font-size: 13px; }
+  .wt .wt-prog-dir p { font-size: 12.5px; margin-top: 6px; }
+  .wt textarea.wt-prog-bodybox { height: 240px; font-size: 14px; padding: 12px 14px; }
+  .wt .wt-prog-row .dim { display: none; }
+  .wt .wt-prog-row .btn { display: none; }
+  .wt .wt-prog-mgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .wt .wt-prog-mgrid img, .wt .wt-prog-mgrid .wt-prog-slot { width: 100%; height: 150px; object-fit: cover; object-position: top; border-radius: 10px; font-size: 12.5px; }
+  .wt .wt-prog-pages { width: 100%; gap: 10px; }
+  .wt .wt-prog-pages .wt-prog-slot { display: none; }
+  .wt .wt-prog-mail { padding: 12px; border-radius: 12px; gap: 6px; }
+  .wt .wt-prog-mail label { font-size: 13px; }
+  .wt .wt-prog-mail .row .field { height: 40px; font-size: 13px; }
+  .wt .wt-prog-mail .row .btn { height: 40px; font-size: 12.5px; padding: 0 12px; }
+  .wt .wt-prog-mail .dim { font-size: 11px; }
+  .wt .wt-prog-cancel > .btn { display: inline-flex; height: auto; padding: 0; border: 0; background: none; font-size: 13px; }
+  .wt .wt-prog-center { align-items: flex-start; }
+  .wt .wt-prog-fail { padding: 28px 18px; gap: 8px; }
+  .wt .wt-prog-fail img { width: 110px; }
+  .wt .wt-prog-fail h2 { font-size: 22px; }
+  .wt .wt-prog-fail .muted { font-size: 13.5px; }
+  .wt .wt-prog-fail .ok { font-size: 13px; }
+  .wt .wt-prog-limit { align-content: flex-start; }
+  .wt .wt-prog-limit .card { padding: 28px 18px; gap: 8px; }
+  .wt .wt-prog-limit img { width: 100px; }
+  .wt .wt-prog-limit h2 { font-size: 22px; }
+  .wt .wt-prog-limit .muted { font-size: 13.5px; }
+  .wt .wt-prog-limit .btn { display: none; }
+}
+
+/* 「완성본 미리 보기」 (아트보드 Drawing) */
+.wt .wt-prog-peek { align-self: flex-start; margin-top: 10px; }
+
+/* ---- 장면 확인(#548) — 장면마다 자유 글 하나, 고치면 바로 저장 ---- */
+.wt .wt-prog-sceneacts .btn-p { height: 48px; font-size: 15px; padding: 0 22px; }
+/* 제목 줄 오른쪽에 「이대로 웹툰 만들기」 */
+.wt .wt-prog-head.split { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.wt .wt-prog-head.split > div:first-child { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wt .wt-prog-head.split .wt-prog-sceneacts { flex-shrink: 0; flex-wrap: nowrap; }
+.wt .wt-prog-head.split .wt-prog-saved { margin-left: 0; }
+.wt .wt-prog-scene .row .tools { display: inline-flex; gap: 2px; }
+.wt .wt-prog-scene .row button.on { background: var(--ink); color: #fff; }
+.wt .wt-prog-scene .row button:disabled { opacity: .4; cursor: default; }
+.wt .wt-prog-scene.busy { border-style: dashed; }
+/* 장면 하나 다시 뽑기 — 카드 아래 열리는 판 */
+.wt .wt-prog-sceneretry { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 16px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+.wt .wt-prog-sceneretry > b { font-size: 13px; font-weight: 700; color: var(--ink); }
+.wt .wt-prog-sceneretry .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt .wt-prog-sceneretry .chip { height: 32px; padding: 0 13px; font-size: 13px; background: #fff; }
+.wt .wt-prog-sceneretry .chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-prog-scene .wt-prog-sceneretry textarea.field { min-height: 96px; padding: 12px 14px; resize: vertical; line-height: 1.6; font-size: 14px; background: #fff; }
+.wt .wt-prog-sceneretry .acts { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+/* own 길 이야기 확인 — 제목·본문을 바로 고친다 */
+.wt .wt-prog-storycheck input.field.title { font-size: 17px; font-weight: 700; height: 48px; }
+.wt .wt-prog-story.wt-prog-storycheck textarea.wt-prog-bodybox { height: 480px; }
+.wt .wt-prog-storycheck .count { font-size: 12px; align-self: flex-end; }
+/* 옛 시트 줄 — 작은 썸네일을 골라 되돌린다 */
+.wt .wt-prog-oldsheets { display: flex; flex-direction: column; gap: 8px; }
+.wt .wt-prog-oldsheets > b { font-size: 13.5px; }
+.wt .wt-prog-oldsheets .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.wt .wt-prog-oldsheets .thumb { width: 96px; height: 72px; padding: 0; border-radius: 10px; overflow: hidden; border: 1.5px solid var(--line); background: #fff; cursor: pointer; }
+.wt .wt-prog-oldsheets .thumb.on { border: 2px solid var(--ink); }
+.wt .wt-prog-oldsheets .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.wt .wt-prog-saved { font-size: 12.5px; margin-left: auto; }
+.wt .wt-prog-saved.err { color: #a13a2e; }
+.wt .wt-prog-scenes { display: grid; gap: 12px; }
+.wt .wt-prog-scene { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: #fff; border: 1px solid var(--line); }
+.wt .wt-prog-scene.editing { border-color: var(--ink); }
+.wt .wt-prog-scene .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.wt .wt-prog-scene .row b { font-size: 15px; }
+.wt .wt-prog-scene .row button { font-size: 12.5px; color: var(--sea); background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.wt .wt-prog-scene p { margin: 0; font-size: 14.5px; line-height: 1.85; white-space: pre-wrap; color: var(--ink); }
+.wt .wt-prog-scene .row button[aria-label] { padding: 4px; border-radius: 8px; color: var(--sea); }
+.wt .wt-prog-scene .row button[aria-label]:hover { background: var(--water-light); }
+.wt .wt-prog-scene textarea.field { min-height: 220px; padding: 14px 16px; resize: vertical; line-height: 1.7; font-size: 14.5px; }
+/* 「내가 적은 것」(#548) — 접힌 카드. 적은 것은 보기만, 그림체·촘촘함은 고를 수 있다. */
+.wt .wt-prog-mine { padding: 18px 20px; gap: 0; }
+.wt .wt-prog-mine-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; margin-bottom: 16px; }
+.wt .wt-prog-mine-grid .kv { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.wt .wt-prog-mine-grid .kv.wide { grid-column: 1 / -1; }
+.wt .wt-prog-mine-grid .kv span { font-size: 12px; font-weight: 600; color: var(--sea); }
+.wt .wt-prog-mine-grid .kv p { margin: 0; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; color: var(--muted); }
+.wt .wt-prog-mine .wt-prog-pageshead { margin: 4px 0 8px; }
+/* 왼쪽 줄의 「내가 적은 것」 — 걸음 단추와 같은 틀, 번호 없이. */
+/* 「내가 적은 것」(#548) — 걸음 단추와 달리 눌러야 하는 것이 보여야 한다: 테두리 있는 카드 단추. */
+.wt .wt-prog-minetab {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--paper);
+  color: var(--ink); font-family: inherit; transition: border-color .15s, background .15s;
+}
+.wt .wt-prog-minetab:hover { border-color: var(--sea); background: var(--water-light); }
+.wt .wt-prog-minetab.viewing { border-color: var(--ink); border-width: 2px; padding: 11.5px 13.5px; }
+.wt .wt-prog-minetab .ic { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: var(--water-light); color: var(--sea); }
+.wt .wt-prog-minetab.viewing .ic { background: var(--ink); color: #fff; }
+.wt .wt-prog-minetab .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.wt .wt-prog-minetab .txt b { font-size: 14px; }
+.wt .wt-prog-minetab .txt .dim { font-size: 11.5px; font-weight: 400; line-height: 1.4; }
+.wt .wt-prog-minetab .go { color: var(--dim); transform: rotate(-90deg); flex-shrink: 0; }
+.wt .wt-prog-minetab.viewing .go { transform: rotate(0deg); }
+/* 장면 칸들(#548) — 라벨 붙은 문단. */
+.wt .wt-prog-parts { display: grid; gap: 10px; }
+.wt .wt-prog-parts .part { display: grid; gap: 2px; }
+.wt .wt-prog-parts .part span { font-size: 12px; font-weight: 600; color: var(--sea); }
+.wt .wt-prog-parts .part p { margin: 0; font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; color: var(--ink); }
+/* 조연 시트(#548). */
+.wt .wt-prog-free { font-size: 13px; font-weight: 600; margin-left: 6px; }
+.wt .wt-prog-castsheet { gap: 8px; }
+.wt .wt-prog-castsheet .btn-sm { align-self: flex-start; }
+.wt .wt-prog-sheet.small img { max-height: 320px; object-fit: contain; }
+.wt .wt-prog-sheetwait.small { min-height: 120px; font-size: 13px; }
+.wt .wt-prog-sheetwait { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 200px; border-radius: 14px; background: var(--water-light); color: var(--muted); font-size: 14px; }
+.wt .wt-prog-story .title { font-size: 16px; font-weight: 700; }
+.wt .wt-prog-story textarea.wt-prog-bodybox { height: 360px; }
+@media (max-width: 767px) {
+  .wt .wt-prog-saved { margin-left: 0; }
+  .wt .wt-prog-mine-grid { grid-template-columns: 1fr; }
+  .wt .wt-prog-head.split { flex-direction: column; }
+  .wt .wt-prog-story.wt-prog-storycheck textarea.wt-prog-bodybox { height: 280px; }
+}
+/* 장면 고치기 — 읽을 때와 같은 폭·글자·줄바꿈, 높이는 글만큼 */
+.wt .wt-prog-scene textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; margin: 0 -10px; width: calc(100% + 20px); resize: none; overflow: hidden;
+  font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; color: var(--ink); border-radius: 8px; }
+/* 인물 카드 고치기 */
+.wt .wt-prog-cast .row .tools button { color: var(--ink-2, inherit); padding: 4px; border-radius: 6px; }
+.wt .wt-prog-cast.editing { border-color: var(--ink); }
+.wt .wt-prog-cast textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; resize: none; overflow: hidden; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; border-radius: 8px; }
+.wt .wt-prog-cast .acts { display: flex; gap: 8px; justify-content: flex-end; }
+.wt .wt-prog-cast .intro.tie { margin-bottom: 12px; color: var(--ink); }
+/* 장면 확인 — 떠 있는 「이대로 웹툰 만들기」 */
+.wt .wt-prog-gofloat { position: fixed; right: 28px; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); z-index: 40; height: 52px; padding: 0 22px; font-size: 15px; box-shadow: 0 8px 24px rgba(15, 30, 45, .22); }
+@media (max-width: 767px) { .wt .wt-prog-gofloat { display: none; } }
+/* 장면·인물 카드의 고치기·다시 뽑기 단추 — 눌러 보이게 크게 */
+.wt .wt-prog-scene .row .tools { gap: 6px; }
+.wt .wt-prog-scene .row .tools button[aria-label], .wt .wt-prog-cast .row .tools button {
+  width: 36px; height: 36px; padding: 0; justify-content: center; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.wt .wt-prog-scene .row .tools button[aria-label]:hover, .wt .wt-prog-cast .row .tools button:hover { background: var(--bg-2, #f4f6f8); }
+.wt .wt-prog-scene .row .tools button[aria-label].on, .wt .wt-prog-scene .row .tools button[aria-label].on:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-prog-scene .row { align-items: center; }
+/* 장면 하나 다시 뽑는 중 — 배경 없이 한 줄, 지금 글은 흐리게 */
+.wt .wt-prog-rebusy { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.wt .wt-prog-rebusy-body { opacity: .35; pointer-events: none; }
+.wt .wt-prog-scene .row .tools button.wt-prog-done { height: 36px; padding: 0 16px; border-radius: 10px; background: var(--ink); color: #fff; font-size: 13.5px; font-weight: 700; border: 0; }
+/* 장면 판(#548) — 제목 옆 「다시 뽑음 ‹ 2 / 2판 ›」 */
+.wt .wt-prog-scenehead { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wt .wt-prog-vers { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.wt .wt-prog-vers .tag { font-size: 12px; font-weight: 700; color: var(--ink); padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); margin-right: 2px; }
+.wt .wt-prog-scene .row .wt-prog-vers button { width: 26px; height: 26px; padding: 0; justify-content: center; border-radius: 8px; color: var(--ink); }
+.wt .wt-prog-scene .row .wt-prog-vers button:disabled { opacity: .3; }
+.wt .wt-prog-vers .num { min-width: 52px; font-variant-numeric: tabular-nums; text-align: center; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.wt .wt-prog-vers .num em { font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: var(--ink); border-radius: 999px; padding: 1px 6px; }
+.wt .wt-prog-oldver { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.wt .wt-prog-oldver-body { opacity: .55; }
+/* 1화 카드의 연필·다시 만들기 — 장면 카드와 같은 단추 */
+.wt .wt-prog-story .row .tools { display: inline-flex; gap: 6px; }
+.wt .wt-prog-sceneretry > .muted { font-size: 13px; }
+
+/* 걸린 캐릭터 시트 고치기(#626) */
+.wt .wt-prog-fixwhy { margin: 0; padding: 14px 16px; border-radius: 12px; background: #fff4f2; color: #8a2b1d; line-height: 1.6; }
+.wt .wt-prog-fix { display: flex; flex-direction: column; gap: 14px; }
+.wt .wt-prog-fix .fieldset b { font-size: 14px; }
+.wt .wt-prog-fixthumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.wt .wt-prog-fixthumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }

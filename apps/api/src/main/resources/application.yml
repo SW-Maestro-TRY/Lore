@@ -40,6 +40,13 @@ spring:
     #   빈 DB 에는 이 표시를 안 찍으므로 V1 부터 전부 실행된다 — 양쪽이 같은 결과가 된다.
     baseline-on-migrate: true
     baseline-version: 1
+    # ★ out-of-order — 번호가 낮은 마이그레이션이 늦게 도착해도 기동을 막지 않고 그 자리에서 적용한다.
+    #   기능 브랜치는 main 에서 따서 develop(보여주기)과 staging(검수) 두 줄기로 들어가므로,
+    #   양쪽에서 번호가 따로 붙는다 — 운영에 V23 이 먼저 올라간 뒤 V21·V22 가 오는 상황이 생긴다.
+    #   끄면 그때 Flyway 가 "resolved migration not applied" 로 <b>기동 자체를 거부</b>한다.
+    #   표는 서비스별로 분리돼 있어 적용 순서에 의존하는 것이 없고, 같은 번호를 둘이 쓰는 충돌은
+    #   앞으로 날짜 번호(V<YYYYMMDD>_<HHMM>__<설명>.sql) 규칙으로 막는다.
+    out-of-order: true
     locations: classpath:db/migration
 
   jpa:
@@ -53,10 +60,13 @@ spring:
       #   그 사실이 빌드·배포·기동을 전부 통과한 뒤 <b>실제 호출에서만</b> 드러난다.
       #   2026-09-09 회원가입·그림 등록이 그 이유로 500 이 났다. 이제는 어긋나면 기동이 멈춘다.
       ddl-auto: ${DDL_AUTO:validate}
-    show-sql: true
+    # ★ 쿼리를 로그로 찍지 않는다(#622). 켜 두면 쿼리마다 여러 줄이 찍혀, 2026-10-04 staging 부하 시험에서
+    #   로그를 받는 journald·rsyslog 가 java 만큼 CPU 를 썼다(1분에 약 10만 줄). 로컬에서 볼 때만
+    #   JPA_SHOW_SQL=true 로 켠다.
+    show-sql: ${JPA_SHOW_SQL:false}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: ${JPA_SHOW_SQL:false}
   mail:
     host: smtp.gmail.com
     port: 587
@@ -105,6 +115,19 @@ lore:
   webtoon:
     python:
       direct: ${LORE_WEBTOON_PYTHON_DIRECT:true}
+
+  # 개인정보 보존기간 파기 (2026-09-23).
+  #
+  # ★ 둘 다 기본 꺼짐 — 되돌릴 수 없는 일을 하고, 서버가 두 대 이상이면 한 대만 켠다.
+  #   이 저장소에는 분산 락이 없고, 시각 트리거를 설정으로 한 대만 켜는 것이 관례다
+  #   (바로 위 zzal night.sweep-enabled 와 같은 이유).
+  # ★ 기간 숫자는 여기 없다 — RetentionPolicy.java 한 곳에 있고, 개인정보처리방침에
+  #   적힌 약속과 같은 숫자여야 한다. 환경마다 다르면 안 되는 값이라 설정으로 안 뺀다.
+  retention:
+    # 탈퇴 30일 뒤 계정·사진·생성물을 실제로 지운다. 매일 04:50 KST.
+    account-purge-enabled: ${LORE_RETENTION_ACCOUNT_PURGE_ENABLED:false}
+    # 기간이 지난 것을 비운다(게스트 카운터·알림 주소·생성 기록·크레딧 메모). 매일 05:40 KST.
+    sweep-enabled: ${LORE_RETENTION_SWEEP_ENABLED:false}
 
 # 콘텐츠 이미지 S3 (presigned 업로드).
 # 실제 업로드는 브라우저 → S3 직접(presigned PUT)이라 서버(t3.micro)를 안 거친다.

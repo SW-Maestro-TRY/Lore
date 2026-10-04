@@ -3,6 +3,7 @@ package com.lore.webtoon.job;
 import com.lore.common.email.EmailService;
 import com.lore.common.user.User;
 import com.lore.common.user.UserRepository;
+import com.lore.webtoon.push.JobPush;
 import com.lore.webtoon.story.StoryStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,12 +48,15 @@ class JobNoticeTest {
         mail = mock(EmailService.class);
         StoryStore stories = mock(StoryStore.class);
         when(stories.chosenOf(anyString())).thenReturn(Optional.empty());
-        notice = new JobNotice(store, users, stories, mail, "https://lorecomic.com/");
+        // 수신 설정은 켜 둔 사람 기준으로 본다 — 끈 사람은 NotifySettingService 쪽에서 따로 본다.
+        NotifySettingService notifySettings = mock(NotifySettingService.class);
+        when(notifySettings.isOn(any())).thenReturn(true);
+        notice = new JobNotice(store, users, stories, mail, notifySettings, mock(JobPush.class), "https://lorecomic.com/");
     }
 
     private WebtoonJob 작업(Long userId, String typed) {
         WebtoonJob job = WebtoonJob.queued("job-1", userId, "uid-a", null,
-                "webtoon_lock_bg", "surf", false, "{}", Instant.now());
+                "webtoon_lock_bg", "surf", "ko", false, "{}", Instant.now());
         if (typed != null) {
             job.notifyTo(typed, Instant.now());
         }
@@ -68,7 +72,7 @@ class JobNoticeTest {
 
         notice.finished(1L);
 
-        verify(mail, never()).send(any(), any(), any());
+        verify(mail, never()).sendHtml(any(), any(), any(), any());
         // 집지도 않는다 — 안 보냈는데 보냈다고 적으면 나중에 못 보낸다.
         verify(store, never()).claimNotice(any());
     }
@@ -82,7 +86,7 @@ class JobNoticeTest {
 
         notice.finished(1L);
 
-        verify(mail).send(eq("hae@lorecomic.com"), anyString(), anyString());
+        verify(mail).sendHtml(eq("hae@lorecomic.com"), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -94,7 +98,7 @@ class JobNoticeTest {
 
         notice.finished(1L);
 
-        verify(mail).send(eq("other@lorecomic.com"), anyString(), anyString());
+        verify(mail).sendHtml(eq("other@lorecomic.com"), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -107,7 +111,7 @@ class JobNoticeTest {
         notice.finished(1L);
         notice.finished(1L);
 
-        verify(mail, times(1)).send(any(), any(), any());
+        verify(mail, times(1)).sendHtml(any(), any(), any(), any());
     }
 
     @Test
@@ -119,7 +123,7 @@ class JobNoticeTest {
         notice.finished(1L);
 
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-        verify(mail).send(any(), any(), body.capture());
+        verify(mail).sendHtml(any(), any(), body.capture(), any());
         // 끝의 / 를 두 번 찍지 않는다 — "https://lorecomic.com//webtoon" 이 되면 안 된다.
         assertThat(body.getValue())
                 .contains("https://lorecomic.com/webtoon?run=20260913T032543-aecc64")
@@ -132,7 +136,7 @@ class JobNoticeTest {
         작업(null, "guest@lorecomic.com");
         when(store.claimNotice(1L)).thenReturn(true);
         org.mockito.Mockito.doThrow(new RuntimeException("smtp 가 죽었다"))
-                .when(mail).send(any(), any(), any());
+                .when(mail).sendHtml(any(), any(), any(), any());
 
         notice.finished(1L);            // 여기서 터지면 다 만든 작품이 실패로 적힌다
         notice.failed(1L, "그림을 만들지 못했습니다", Refunded.CREDIT);
@@ -147,10 +151,10 @@ class JobNoticeTest {
         notice.failed(1L, "그림을 만들지 못했습니다", Refunded.FREE);
 
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-        verify(mail).send(any(), any(), body.capture());
+        verify(mail).sendHtml(any(), any(), body.capture(), any());
         assertThat(body.getValue())
                 .contains("무료 생성 횟수")
-                .doesNotContain("크레딧은 자동으로 환불");
+                .doesNotContain("크레딧은 환불");
     }
 
     /* 위 검사들은 "불렀을 때 무엇을 하나" 를 본다. **아무도 안 부르면 전부

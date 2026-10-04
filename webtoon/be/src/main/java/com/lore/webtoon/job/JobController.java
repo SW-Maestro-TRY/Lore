@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -66,9 +67,12 @@ public class JobController {
     private final GuestGate guests;
     private final CreditGate credits;
     private final S3Service uploads;
+    private final com.lore.webtoon.character.CharacterOwner owner;
 
     public JobController(JobService jobs, JobQueue queue, RunArt art, SpendGuard guard,
-                         GuestGate guests, CreditGate credits, S3Service uploads) {
+                         GuestGate guests, CreditGate credits, S3Service uploads,
+                         com.lore.webtoon.character.CharacterOwner owner) {
+        this.owner = owner;
         this.jobs = jobs;
         this.queue = queue;
         this.art = art;
@@ -96,6 +100,8 @@ public class JobController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("logged_in", me != null);
         out.put("credit_cost", credits.cost());
+        // 편집실 단추가 값을 적으려고 쓴다 — 화면에 박아 두면 서버 설정과 어긋난다.
+        out.put("regen_cost", credits.regenCost());
         /* 화질 셋과 각각의 값. **화면이 여기서 받아 간다** — 같은 표를 화면에도
            적어 두면, 한쪽만 고치는 순간 적힌 값과 실제로 빠지는 크레딧이
            어긋난다. 사람에게 그건 거짓말이다. */
@@ -215,11 +221,23 @@ public class JobController {
         return ResponseEntity.ok(Map.of("id", id, "queue_position", ahead));
     }
 
+    @Operation(summary = "내가 만들던 것", description = """
+            아직 안 끝난 작업들(줄 서 있거나 · 그리는 중 · 사람 차례). 첫 화면의
+            「만들던 웹툰」 알약이 이것을 본다. 로그인 안 했으면 uid 로 가린다.""")
+    @GetMapping("/jobs/mine")
+    public Map<String, Object> mine(@RequestParam(required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        var uids = owner.uidsOf(me, uid);
+        return Map.of("jobs", jobs.activeOf(me, uids), "cards", jobs.activeCardsOf(me, uids));
+    }
+
     @Operation(summary = "진행 상황", description = """
             진행 화면이 0.8 초마다 부른다. 파이썬 서버가 내보내던 것과 **같은 모양**이다.""")
     @GetMapping("/jobs/{id}")
-    public JobView job(@PathVariable String id) {
-        return jobs.view(id);
+    public JobView job(@PathVariable String id,
+                       @RequestParam(defaultValue = "false") boolean watching) {
+        // watching — 진행 화면이 앞에 떠 있을 때만 붙인다. 그동안은 푸시를 안 보낸다(#599).
+        return jobs.view(id, watching);
     }
 
     /**
@@ -254,12 +272,20 @@ public class JobController {
     public record NotifyRequest(String email) {
     }
 
+    @Operation(summary = "상대 인물 고르기",
+            description = "현대 로맨스에서 이야기 전에 상대 인물을 고른다(#534). 고르면 그 인물로 이야기 후보 넷을 짓는다.")
+    @PostMapping("/jobs/{id}/cast")
+    public Map<String, Object> pickCast(@PathVariable String id, @RequestBody CastRequest req) {
+        jobs.pickCast(id, req.n());
+        return Map.of("ok", true);
+    }
+
     @Operation(summary = "이야기 고르기",
             description = "body 를 같이 보내면 그 방향의 본문을 사람이 고친 내용으로 바꿔서 " +
                     "다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.")
     @PostMapping("/jobs/{id}/pick")
     public Map<String, Object> pick(@PathVariable String id, @RequestBody PickRequest req) {
-        jobs.pick(id, req.n(), req.body());
+        jobs.pick(id, req.n(), req.body(), req.title());
         return Map.of("ok", true);
     }
 
@@ -272,13 +298,119 @@ public class JobController {
      * 스프링이 만든 작업을 모르니 「그런 작업이 없습니다」를 냈다 — 시트
      * 주소가 어긋나 있던 것과 같은 종류의 구멍이다.
      */
+    @Operation(summary = "장면 초안 저장",
+            description = "장면 확인 자리(#548)에서 고친 장면 글을 적는다. 멈춤은 그대로. body 를 보내면 본문도 바꾼다.")
+    @PostMapping("/jobs/{id}/scenes")
+    public Map<String, Object> saveScenes(@PathVariable String id, @RequestBody ScenesRequest body) {
+        jobs.saveScenes(id, body.scenes(), body.body(), body.title());
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "인물 카드 고치기",
+            description = "own 길(#548) — who 가 hero 면 주인공, 숫자면 cast 의 그 번째(0부터). 보낸 칸만 덮는다.")
+    @PostMapping("/jobs/{id}/person")
+    public Map<String, Object> savePerson(@PathVariable String id, @RequestBody PersonRequest body) {
+        jobs.savePerson(id, body.who(), body.fields());
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "이대로 웹툰 만들기", description = "장면 확인을 끝내고 그림으로 간다(#548).")
+    @PostMapping("/jobs/{id}/scenes-continue")
+    public Map<String, Object> continueScenes(@PathVariable String id) {
+        jobs.continueScenes(id);
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "장면 다시 나누기",
+            description = "본문·인물·시트는 두고 장면만 다시 나눈다(#548). note 를 보내면 이번에만 반영한다. 고친 글은 사라진다.")
+    @PostMapping("/jobs/{id}/scenes-retry")
+    public Map<String, Object> retryScenes(@PathVariable String id,
+                                           @RequestBody(required = false) NoteRequest body) {
+        jobs.retryScenes(id, body == null ? null : body.note());
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "장면 하나만 다시 짓기",
+            description = "장면 확인 자리(#548)에서 n번 장면만 다시 짓는다. 로그인 필수. reasons 는 이유 코드 "
+                    + "(awkward·character·stranger·offstory·pacing), note 는 메모. 돌아가는 동안 그 장면은 busy 다.")
+    @PostMapping("/jobs/{id}/scenes/{n}/retry")
+    public Map<String, Object> retryScene(@PathVariable String id, @PathVariable int n,
+                                          @RequestBody(required = false) RetrySceneRequest body) {
+        Long me = CreditGate.currentUser();
+        /* 장면마다 첫 번째는 무료, 같은 장면을 또 뽑으면 1크레딧(#548). 먼저 받고, 못 지으면 돌려준다. */
+        int cost = me == null ? 0 : jobs.resceneCost(id, n);
+        String ref = id + ":rescene:" + n + ":" + System.currentTimeMillis();
+        Runnable refund = cost > 0 ? () -> credits.refund(me, ref) : () -> { };
+        if (cost > 0) {
+            credits.requireEnough(me, cost);
+            credits.charge(me, cost, ref, "장면 다시 뽑기 · " + n + "번");
+        }
+        try {
+            jobs.retryScene(id, n, body == null ? null : body.reasons(), body == null ? null : body.note(), me, refund);
+        } catch (RuntimeException e) {
+            refund.run();
+            throw e;
+        }
+        return Map.of("ok", true, "cost", cost);
+    }
+
+    @Operation(summary = "장면 이전 판으로 되돌리기",
+            description = "다시 뽑기 전의 판 v(1부터, 오래된 것부터)로 되돌린다(#548). 지금 판은 판 목록 끝에 남는다.")
+    @PostMapping("/jobs/{id}/scenes/{n}/restore")
+    public Map<String, Object> restoreScene(@PathVariable String id, @PathVariable int n,
+                                            @RequestBody RestoreSceneRequest body) {
+        jobs.restoreScene(id, n, body == null ? 0 : body.v());
+        return Map.of("ok", true);
+    }
+
+    public record RestoreSceneRequest(int v) {
+    }
+
+    public record RetrySceneRequest(List<String> reasons, String note) {
+    }
+
+    @Operation(summary = "옛 시트 판으로 되돌리기",
+            description = "다시 그리기 전의 시트 판(1~sheet_versions)을 지금 시트로 올린다(#548). 지금 것도 보관한 뒤 바꾼다.")
+    @PostMapping("/jobs/{id}/sheet-restore")
+    public Map<String, Object> restoreSheet(@PathVariable String id, @RequestBody SheetRestoreRequest body) {
+        jobs.restoreSheet(id, body.v());
+        return Map.of("ok", true);
+    }
+
+    public record SheetRestoreRequest(int v) {
+    }
+
+    @Operation(summary = "보관한 옛 시트 판 그림")
+    @GetMapping(value = "/jobs/{id}/sheet-v{v}.png", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> sheetVersionImage(@PathVariable String id, @PathVariable int v) throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.sheetVersion(runId, v);
+        return src == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(Files.readAllBytes(src));
+    }
+
     @Operation(summary = "이야기 후보 다시 짓기",
             description = "고르는 차례일 때만 된다. note 를 적어 보내면 이번에만 반영한다.")
     @PostMapping("/jobs/{id}/pick-retry")
     public Map<String, Object> retryPick(@PathVariable String id,
                                          @RequestBody(required = false) NoteRequest body) {
-        jobs.retryPick(id, body == null ? null : body.note());
-        return Map.of("ok", true);
+        Long me = CreditGate.currentUser();
+        /* own 길의 1화 다시 만들기는 첫 번째 무료, 그다음부터 1크레딧(#548). 먼저 받고, 못 지으면 돌려준다. */
+        int cost = me == null ? 0 : jobs.restoryCost(id);
+        String ref = id + ":restory:" + System.currentTimeMillis();
+        Runnable refund = cost > 0 ? () -> credits.refund(me, ref) : () -> { };
+        if (cost > 0) {
+            credits.requireEnough(me, cost);
+            credits.charge(me, cost, ref, "1화 다시 만들기");
+        }
+        try {
+            jobs.retryPick(id, body == null ? null : body.note(), refund);
+        } catch (RuntimeException e) {
+            refund.run();
+            throw e;
+        }
+        return Map.of("ok", true, "cost", cost);
     }
 
     /**
@@ -327,6 +459,17 @@ public class JobController {
         return Map.of("ok", true);
     }
 
+    @Operation(summary = "안전 기준에 걸린 캐릭터 시트 고치기",
+            description = "시트가 이미지 안전 기준에 걸려 멈춘 작업에서, 사진(photo_keys · photos_data)이나 외모 설명"
+                    + "(character)을 바꿔 시트만 다시 그린다. 이야기·장면은 그대로다. 작업당 3번까지(#626).")
+    @PostMapping("/jobs/{id}/sheet-fix")
+    public Map<String, Object> sheetFix(@PathVariable String id, HttpServletRequest request,
+                                        @RequestBody(required = false) JobService.SheetFixRequest body) {
+        Long me = CreditGate.currentUser();
+        jobs.fixSheet(id, body, me, me == null ? guests.keyOf(request) : null);
+        return Map.of("ok", true);
+    }
+
     /** 본문이 없으면(옛 이름으로 부르면) 그대로 진행으로 본다. */
     public record SheetDecision(String decision, String note) {
     }
@@ -338,6 +481,30 @@ public class JobController {
      * 없이 그림 자체를 준다. 아직 안 그린 것은 404 다 — 화면은 그 자리를
      * 비워 두고 다음에 다시 묻는다.
      */
+    @Operation(summary = "조연 시트 뽑기 (크레딧 1)",
+            description = "인물 단계가 세운 다른 인물을 글 생김새만으로 시트로 그린다(#548). 장면 확인·이야기 고르기·시트 확인 자리에서만. "
+                    + "그린 뒤로는 장 그림이 참조로 받아 그 인물이 장마다 같은 사람으로 나온다. 못 그리면 크레딧을 돌려준다.")
+    @PostMapping("/jobs/{id}/cast-sheet")
+    public Map<String, Object> castSheet(@PathVariable String id, @RequestBody CastSheetRequest body) {
+        Long me = CreditGate.currentUser();
+        String name = body == null || body.name() == null ? "" : body.name().trim();
+        String ref = id + ":cast-sheet:" + name;
+        credits.requireEnough(me, 1);
+        jobs.castSheet(id, name, me, () -> credits.refund(me, ref));
+        credits.charge(me, 1, ref, "조연 시트 · " + name);
+        return Map.of("ok", true);
+    }
+
+    @Operation(summary = "조연 시트 그림")
+    @GetMapping(value = "/jobs/{id}/cast-sheet/{name}.png", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<byte[]> castSheetImage(@PathVariable String id, @PathVariable String name) throws IOException {
+        String runId = jobs.runOf(id);
+        Path src = runId == null ? null : art.castSheet(runId, name);
+        return src == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(Files.readAllBytes(src));
+    }
+
     @Operation(summary = "만드는 중인 캐릭터 시트")
     @GetMapping(value = "/jobs/{id}/sheet.png", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> sheetImage(@PathVariable String id) throws IOException {
@@ -381,6 +548,20 @@ public class JobController {
                 .body(Map.of("error", e.getMessage()));
     }
 
-    public record PickRequest(int n, String body) {
+    /** 이야기 고르기. body·title 은 own 길의 이야기 확인(#548)에서 고친 본문·제목(선택). */
+    public record PickRequest(int n, String body, String title) {
+    }
+
+    /** 장면 초안 저장(#548). scenes 의 각 줄은 {n, text}. body·title 은 own 길의 본문·제목(선택). */
+    public record ScenesRequest(List<Map<String, Object>> scenes, String body, String title) {
+    }
+
+    public record CastRequest(int n) {
+    }
+
+    public record CastSheetRequest(String name) {
+    }
+
+    public record PersonRequest(String who, Map<String, Object> fields) {
     }
 }

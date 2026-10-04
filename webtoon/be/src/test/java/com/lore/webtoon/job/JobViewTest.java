@@ -25,17 +25,21 @@ class JobViewTest {
 
     private WebtoonJob job(JobStatus status, JobStage stage) {
         // 게스트 열쇠는 로그인한 사람에게 없다 — 여기 7L 은 계정이다.
+        // moveTo 는 "지금"에 가깝게 둔다 — story·sheet·bind 는 그 걸음에
+        // 들어선 뒤 지난 시간으로 진행률을 추정하는데(JobView.timeFrac),
+        // 옛 고정 시각을 쓰면 "이미 오래 지났다"로 읽혀 아래 floor 값
+        // 검증이 흔들린다.
+        Instant createdAt = Instant.now().minusSeconds(60);
         WebtoonJob job = WebtoonJob.queued("job-1", 7L, "uid-a", null, "romance_fantasy",
-                WebtoonQuality.DEFAULT_QUALITY, true, "{}",
-                Instant.parse("2026-09-06T00:00:00Z"));
-        job.moveTo(status, stage, Instant.parse("2026-09-06T00:01:00Z"));
+                WebtoonQuality.DEFAULT_QUALITY, "ko", true, "{}", createdAt);
+        job.moveTo(status, stage, Instant.now());
         return job;
     }
 
     private JobView view(WebtoonJob job, JobProgress.Snapshot now) {
         // 줄 정보는 여기서 볼 것이 아니다(JobQueueTest 가 본다) — 내 차례라고 둔다.
         // 알림 주소와 남은 시간도 여기서 볼 것이 아니다 — 없는 채로 둔다.
-        return JobView.of(job, now, List.of(), "로맨스 판타지", "이야기 짓기", null, null, null);
+        return JobView.of(job, now, List.of(), null, null, null, null, null, false, 0, null, null, "로맨스 판타지", "이야기 짓기", null, null, null, 0, List.of());
     }
 
     @Test
@@ -65,34 +69,65 @@ class JobViewTest {
     @DisplayName("걸음 이름과 순서가 파이썬 것과 같다 — 화면이 이 순서로 진행률을 그린다")
     void 걸음_순서() {
         assertThat(List.of(JobStage.values()).stream().map(JobStage::wire).toList())
-                .containsExactly("story", "sheet", "board", "pages");
+                .containsExactly("story", "sheet", "pages", "bind");
         assertThat(view(job(JobStatus.RUNNING, JobStage.STORY),
                 new JobProgress.Snapshot(List.of(), "", 0, 0, 0)).stages())
-                .containsExactly("story", "sheet", "board", "pages");
+                .containsExactly("story", "sheet", "pages", "bind");
     }
 
     @Test
     @DisplayName("걸음이 넘어갈수록 진행률이 오른다")
     void 진행률() {
         var 없음 = new JobProgress.Snapshot(List.of(), "", 0, 0, 0);
-        assertThat(view(job(JobStatus.RUNNING, JobStage.STORY), 없음).pct()).isZero();
-        assertThat(view(job(JobStatus.RUNNING, JobStage.SHEET), 없음).pct()).isEqualTo(25);
-        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 없음).pct()).isEqualTo(75);
+        int story = view(job(JobStatus.RUNNING, JobStage.STORY), 없음).pct();
+        int sheet = view(job(JobStatus.RUNNING, JobStage.SHEET), 없음).pct();
+        int pages = view(job(JobStatus.RUNNING, JobStage.PAGES), 없음).pct();
+        int bind = view(job(JobStatus.RUNNING, JobStage.BIND), 없음).pct();
+        assertThat(List.of(story, sheet, pages, bind)).isSorted();
+        assertThat(bind).isLessThan(100);
     }
 
     @Test
     @DisplayName("그리는 중이면 그 걸음 안에서도 진행률이 오른다")
     void 그리는_중_진행률() {
+        var 처음 = new JobProgress.Snapshot(List.of(), "", 0, 6, 0);
         var 절반 = new JobProgress.Snapshot(List.of(), "", 3, 6, 0);
-        // pages 는 네 걸음 중 마지막(3/4=75%). 그 안에서 절반이면 75 + 12.5
-        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 절반).pct()).isEqualTo(88);
+        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 절반).pct())
+                .isGreaterThan(view(job(JobStatus.RUNNING, JobStage.PAGES), 처음).pct());
+    }
+
+    @Test
+    @DisplayName("검수 걸음에 들어가도 100 이 아니다 — 그린 장 7/7 이 남아 있어도")
+    void 검수는_백이_아니다() {
+        // 예전에는 검수에 들어서자마자 100% 가 되어, 뒤이은 다시 그리기 4분 동안
+        // 100% 로 멈춰 있었다(#509).
+        var 다그림 = new JobProgress.Snapshot(List.of(), "", 7, 7, 0);
+        assertThat(view(job(JobStatus.RUNNING, JobStage.BIND), 다그림).pct()).isLessThan(100);
     }
 
     @Test
     @DisplayName("끝나면 무조건 100 — 걸음이 어디든")
     void 끝나면_백() {
-        assertThat(view(job(JobStatus.DONE, JobStage.PAGES),
+        assertThat(view(job(JobStatus.DONE, JobStage.BIND),
                 new JobProgress.Snapshot(List.of(), "", 1, 6, 0)).pct()).isEqualTo(100);
+    }
+
+    @Test
+    @DisplayName("다시 그리는 중이면 어느 장인지 보낸다")
+    void 다시_그리기() {
+        var 다시 = new JobProgress.Snapshot(List.of(), "", 7, 7, 0, List.of(), List.of(4, 5, 7), 1, Instant.now());
+        assertThat(view(job(JobStatus.RUNNING, JobStage.BIND), 다시).redraw())
+                .isEqualTo(new JobView.Redraw(List.of(4, 5, 7), 1));
+        assertThat(view(job(JobStatus.RUNNING, JobStage.BIND),
+                new JobProgress.Snapshot(List.of(), "", 7, 7, 0)).redraw()).isNull();
+    }
+
+    @Test
+    @DisplayName("동시에 그려 순서대로 안 끝났으면 실제로 그려진 장 번호를 보낸다")
+    void 그려진_장_번호() {
+        var 띄엄 = new JobProgress.Snapshot(List.of(), "", 2, 6, 0, List.of(1, 5), List.of(), 0, Instant.now());
+        assertThat(view(job(JobStatus.RUNNING, JobStage.PAGES), 띄엄).art().pages())
+                .containsExactly(1, 5);
     }
 
     @Test

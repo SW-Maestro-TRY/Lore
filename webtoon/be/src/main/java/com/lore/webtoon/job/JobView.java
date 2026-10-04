@@ -31,6 +31,29 @@ public record JobView(
            하는 말이고, 무는 쪽은 더해도 된다. */
         String refunded,
         List<Map<String, Object>> directions,
+        /** 인물 단계가 세운 인물(#534) — 인물 단계에서 기다릴 때만. 아니면 {@code null}. */
+        List<Map<String, Object>> cast,
+        /** 그때 무엇을 기다리나 — {@code pick}(한 명 고르기) · {@code confirm}(이대로 진행). */
+        String castKind,
+        /** 주인공 페르소나 — 인물 단계에서 기다릴 때만 확인용으로 보여 준다(#534). 아니면 {@code null}. */
+        Map<String, Object> persona,
+        /** 장면 초안(#548) — 장면 확인 자리에서만. {n, text, user_text}. 아니면 {@code null}. */
+        List<Map<String, Object>> scenes,
+        /** 내 내용 길에서 세운 본문(#548) — 장면 확인 자리에서만. {title, body}. 아니면 {@code null}. */
+        Map<String, Object> story,
+        /** 시트 그림이 있나 — 이야기 고르기·장면 확인 화면이 시트를 같이 보여 준다(#548). */
+        boolean sheet_ready,
+        /** 보관해 둔 옛 시트 판 수(#548). {@code GET /jobs/{id}/sheet-v{v}.png} 로 보고 {@code sheet-restore} 로 되돌린다. */
+        int sheet_versions,
+        /** 조연 시트(#548) — {name, ready}. 그리는 중이면 ready=false. 장면 확인 자리에서만. 아니면 {@code null}. */
+        List<Map<String, Object>> cast_sheets,
+        /** 어느 길인가(#548): quick | own. */
+        String mode,
+        /**
+         * 내가 적은 것(#548) — 장면 확인 자리에서만. {name, description, genre, story, episode,
+         * settings, title, photos, style, quality, language}. 그 밖에는 {@code null}.
+         */
+        Map<String, Object> input,
         Integer pick,
         String style,
         String style_label,
@@ -64,8 +87,23 @@ public record JobView(
         Integer minutes_left,
         int pct,
         Art art,
+        /**
+         * 화 전체 검수에서 걸린 장을 <b>다시 그리는 중</b>이면 그 장들. 아니면 {@code null}.
+         *
+         * 이게 없을 때 화면은 검수 뒤 다시 그리는 몇 분 동안 「검수하고 있어요 · 7번째
+         * 장을 그리고 있어요」로 멈춰 보였다(#509).
+         */
+        Redraw redraw,
         List<String> log,
-        double elapsed) {
+        /** 기계가 일한 시간(초) — 줄 선 시간은 넣고, 사람을 기다린 시간은 뺀다(#509). */
+        double elapsed,
+        /* 캐릭터 시트가 이미지 안전 기준에 걸려 사진·설명을 고쳐 다시 그리기를 기다리는 중(#626).
+           상태는 awaiting_sheet 그대로라 화면이 이걸로 「확인」과 「고치기」를 가른다. 문장은 error 에 있다. */
+        boolean sheet_blocked,
+        /* 고쳐서 다시 그리기를 몇 번 더 할 수 있나 */
+        int sheet_fix_left,
+        /* 안전 검사에 걸려 빈 장으로 완성된 장 번호들(#626). 없으면 빈 목록 */
+        List<Integer> unsafe_pages) {
 
     /**
      * @param total      0 이면 아직 몇 장인지 모른다 — 그때는 통째로 안 보낸다.
@@ -95,18 +133,40 @@ public record JobView(
     public record Notice(boolean logged_in, String email, boolean sent) {
     }
 
-    public record Art(int done, int total, int retry_page) {
+    /**
+     * @param pages 다 그려진 장 번호. 장면을 동시에 그리면 순서대로 안 끝나서, 개수만으로는
+     *              어느 장을 불러야 할지 모른다(#509). 차례로 그렸으면 1..done 이다.
+     */
+    public record Art(int done, int total, int retry_page, List<Integer> pages) {
+
+        public Art(int done, int total, int retry_page) {
+            this(done, total, retry_page, java.util.stream.IntStream.rangeClosed(1, done).boxed().toList());
+        }
+    }
+
+    /**
+     * @param pages 다시 그리는 장 번호
+     * @param done  그중 다 그린 수
+     */
+    public record Redraw(List<Integer> pages, int done) {
     }
 
     static JobView of(WebtoonJob job, JobProgress.Snapshot now,
-                      List<Map<String, Object>> directions, String styleLabel,
+                      List<Map<String, Object>> directions, List<Map<String, Object>> cast,
+                      String castKind, Map<String, Object> persona,
+                      List<Map<String, Object>> scenes, Map<String, Object> story, boolean sheetReady,
+                      int sheetVersions, List<Map<String, Object>> castSheets, Map<String, Object> input,
+                      String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
-                      String notifyEmail, Integer minutesLeft) {
+                      String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages) {
         int stageIndex = job.getStage().order();
-        double frac = now.total() > 0 ? (double) now.done() / now.total() : 0.0;
-        int pct = job.getStatus() == JobStatus.DONE
-                ? 100
-                : (int) Math.round((stageIndex + frac) / JobStage.count() * 100);
+        if (eta == null) {
+            eta = JobEta.of(job, now, 1, spot == null ? 0 : spot.seconds(), Instant.now());
+        }
+        int pct = eta.pct(job.getStatus() == JobStatus.DONE);
+        List<Integer> drawn = now.drawn().isEmpty()
+                ? java.util.stream.IntStream.rangeClosed(1, now.done()).boxed().toList()
+                : now.drawn();
 
         return new JobView(
                 job.getPublicId(),
@@ -115,29 +175,36 @@ public record JobView(
                 job.getError(),
                 job.getRefunded() == null ? null : job.getRefunded().wire(),
                 directions,
+                cast,
+                castKind,
+                persona,
+                scenes,
+                story,
+                sheetReady,
+                sheetVersions,
+                castSheets,
+                job.getMode(),
+                input,
                 job.getPicked(),
                 job.getStyle(),
                 styleLabel,
                 job.getStage().wire(),
                 stageIndex,
-                List.of("story", "sheet", "board", "pages"),
+                List.of("story", "sheet", "pages", "bind"),
                 stageLabel,
                 now.say(),
                 job.isCheckpoints(),
                 spot == null ? null
                         : new Queue(spot.ahead(), spot.minutes(), spot.line()),
                 new Notice(job.getUserId() != null, notifyEmail, job.getNotifiedAt() != null),
-                minutesLeft,
-                Math.max(0, Math.min(100, pct)),
-                now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage()) : null,
+                eta.minutes(),
+                pct,
+                now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage(), drawn) : null,
+                now.redraw().isEmpty() ? null : new Redraw(now.redraw(), now.redrawDone()),
                 now.log(),
-                elapsed(job));
-    }
-
-    /** 시작하고 얼마나 지났나(초). 끝난 것은 끝난 시각까지만 센다. */
-    private static double elapsed(WebtoonJob job) {
-        Instant until = job.getStatus().isOver() ? job.getUpdatedAt() : Instant.now();
-        double seconds = (until.toEpochMilli() - job.getCreatedAt().toEpochMilli()) / 1000.0;
-        return Math.round(Math.max(0, seconds) * 10) / 10.0;
+                eta.work(),
+                job.isSheetBlocked(),
+                sheetFixLeft,
+                unsafePages == null ? List.of() : unsafePages);
     }
 }

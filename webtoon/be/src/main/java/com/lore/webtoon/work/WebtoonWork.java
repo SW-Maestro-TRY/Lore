@@ -106,8 +106,25 @@ public class WebtoonWork {
             columnDefinition = "boolean not null default true")
     private boolean isPublic = true;
 
+    /**
+     * 둘러보기의 예시 작품인가(#614). 전에는 {@code browser_uid} 가 심은 자리의 특별한 값인지로만 알아봤다.
+     * 관리자 API 로 올리거나 같은 환경에서 만든 작품을 예시로 지정하려면 값이 따로 있어야 한다.
+     */
+    @Column(name = "is_example", nullable = false, columnDefinition = "boolean not null default false")
+    private boolean example = false;
+
+    /** 예시끼리의 순서. 작을수록 앞. 비어 있으면 맨 뒤. */
+    @Column(name = "example_order")
+    private Integer exampleOrder;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    /* 휴지통에 넣은 시각(#157). 비어 있으면 살아 있는 작품이다. 이 값이 있으면
+       목록·둘러보기·결과 주소가 모두 없는 작품처럼 굴고, RunTrash 가 기간이 지난
+       것을 예전 영구 삭제로 지운다. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     protected WebtoonWork() {
     }
@@ -175,5 +192,35 @@ public class WebtoonWork {
 
     void setPublic(boolean value) {
         this.isPublic = value;
+    }
+
+    public boolean isExample() {
+        return example;
+    }
+
+    public Integer getExampleOrder() {
+        return exampleOrder;
+    }
+
+    /** 예시로 지정하거나 해제한다. 해제하면 순서도 비운다. */
+    void markExample(boolean value, Integer order) {
+        this.example = value;
+        this.exampleOrder = value ? order : null;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public boolean isTrashed() {
+        return deletedAt != null;
+    }
+
+    void trash(Instant at) {
+        this.deletedAt = at;
+    }
+
+    void untrash() {
+        this.deletedAt = null;
     }
 }

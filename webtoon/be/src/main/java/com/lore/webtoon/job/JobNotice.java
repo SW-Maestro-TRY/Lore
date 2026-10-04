@@ -3,8 +3,11 @@ package com.lore.webtoon.job;
 import com.lore.common.email.EmailService;
 import com.lore.common.user.User;
 import com.lore.common.user.UserRepository;
+import com.lore.webtoon.WebtoonApi;
+import com.lore.webtoon.push.JobPush;
 import com.lore.webtoon.story.StoryStore;
 import com.lore.webtoon.story.WebtoonStory;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,15 +65,20 @@ public class JobNotice {
     private final UserRepository users;
     private final StoryStore stories;
     private final EmailService mail;
+    private final NotifySettingService settings;
+    private final JobPush push;
     private final String site;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public JobNotice(JobStore store, UserRepository users, StoryStore stories,
-                     EmailService mail,
+                     EmailService mail, NotifySettingService settings, JobPush push,
                      @Value("${lore.webtoon.site-url:https://lorecomic.com}") String site) {
         this.store = store;
         this.users = users;
         this.stories = stories;
         this.mail = mail;
+        this.settings = settings;
+        this.push = push;
         this.site = site.endsWith("/") ? site.substring(0, site.length() - 1) : site;
     }
 
@@ -90,7 +98,9 @@ public class JobNotice {
      * 이 작업의 결과를 어디로 보낼까. 보낼 데가 없으면 {@code null}.
      *
      * 게스트가 적은 주소가 <b>계정 이메일을 이긴다</b> — 로그인한 사람이
-     * 굳이 다른 주소를 적었다면 그쪽으로 받고 싶다는 뜻이다.
+     * 굳이 다른 주소를 적었다면 그쪽으로 받고 싶다는 뜻이다. 그래서
+     * {@link NotifySettingService}는 <b>계정 이메일로 떨어지는 자리에서만</b>
+     * 본다 — 이번만 다른 주소로 받겠다는 명시적 선택까지 막으면 안 된다.
      */
     public String addressOf(WebtoonJob job) {
         if (job == null) {
@@ -100,7 +110,7 @@ public class JobNotice {
         if (typed != null) {
             return typed;
         }
-        if (job.getUserId() == null) {
+        if (job.getUserId() == null || !settings.isOn(job.getUserId())) {
             return null;
         }
         return users.findById(job.getUserId()).map(User::getEmail).map(JobNotice::clean).orElse(null);
@@ -115,26 +125,15 @@ public class JobNotice {
     public void finished(Long jobId) {
         try {
             WebtoonJob job = store.byId(jobId);
+            push.finished(job);             // 푸시는 메일과 따로 간다 — 메일 받을 데가 없어도 보낸다(#599)
             String to = addressOf(job);
             if (to == null || !store.claimNotice(jobId)) {
                 return;                     // 받을 사람이 없거나, 이미 보냈다
             }
             String title = titleOf(job.getRunId());
-            mail.send(to,
-                    "[LORE] 「" + title + "」 웹툰이 다 만들어졌어요",
-                    """
-                    안녕하세요, 루예요.
-
-                    부탁하신 웹툰 「%s」 이(가) 다 만들어졌어요.
-                    아래 주소에서 바로 볼 수 있어요.
-
-                    %s
-
-                    이 링크는 기기가 달라도 열려요 — 다른 기기에서 만드셨어도
-                    여기로 들어오시면 그 작품이 그대로 있어요.
-
-                    — LORE
-                    """.formatted(title, resultLink(job.getRunId())));
+            NoticeMail.Body body = NoticeMail.finished(title, genreOf(job.getRunId()), nameOf(job),
+                    resultLink(job.getRunId()), coverOf(job.getRunId()), site);
+            mail.sendHtml(to, "[LORE] 「" + title + "」 웹툰이 다 만들어졌어요", body.text(), body.html());
             log.info("완성 알림을 보냈습니다 (job={}, run={})", jobId, job.getRunId());
         } catch (Exception e) {             // noqa: 메일이 만들기를 깨면 안 된다
             log.error("완성 알림을 못 보냈습니다 (job={})", jobId, e);
@@ -154,35 +153,66 @@ public class JobNotice {
     public void failed(Long jobId, String why, Refunded back) {
         try {
             WebtoonJob job = store.byId(jobId);
+            push.failed(job, back);
             String to = addressOf(job);
             if (to == null || !store.claimNotice(jobId)) {
                 return;
             }
-            String refundLine = back == Refunded.CREDIT
-                    ? "사용된 크레딧은 자동으로 환불했어요."
-                    : back == Refunded.FREE
-                    ? "사용한 무료 생성 횟수는 자동으로 복구했어요."
-                    : "";
-            mail.send(to,
-                    "[LORE] 웹툰을 다 만들지 못했어요",
-                    """
-                    안녕하세요, 루예요.
-
-                    부탁하신 웹툰을 만들다가 멈췄어요.
-                    %s
-
-                    %s
-                    다시 시도해 주시면 처음부터 새로 그려 드려요.
-
-                    %s/webtoon
-
-                    — LORE
-                    """.formatted(
-                            why == null || why.isBlank() ? "" : "사유: " + why,
-                            refundLine, site));
-            log.info("실패 알림을 보냈습니다 (job={})", jobId);
+            /* 사유(why)는 메일에 안 적는다 — 내부 문구라 받는 사람에게는 뜻이 없다. 로그에는 남는다. */
+            /* 안전 기준·글 모델 거절이면 이유를 적는다(#626) — 「잠시 후 다시」는 같은 내용이면 또 걸린다. */
+            boolean unfixable = "image_safety".equals(job.getFailCode()) || "text_refusal".equals(job.getFailCode());
+            NoticeMail.Body body = NoticeMail.failed(chosenTitleOf(job.getRunId()), back, site + "/webtoon", site,
+                    unfixable ? why : null);
+            mail.sendHtml(to, "[LORE] 웹툰을 다 만들지 못했어요", body.text(), body.html());
+            log.info("실패 알림을 보냈습니다 (job={}, why={})", jobId, why);
         } catch (Exception e) {             // noqa: 실패를 적는 길에서 또 죽으면 안 된다
             log.error("실패 알림을 못 보냈습니다 (job={})", jobId, e);
+        }
+    }
+
+    /**
+     * 사람이 고쳐야 이어 갈 수 있다고 알린다(#626) — 시트가 안전 기준에 걸려 멈췄을 때.
+     *
+     * {@link #finished}·{@link #failed} 와 달리 <b>한 번만 보내기(claimNotice)를 쓰지 않는다</b> — 그 표시를
+     * 여기서 써 버리면 고쳐서 다 만든 뒤의 완성 메일이 안 간다. 다시 그리기는 세 번까지라 많아야 몇 통이다.
+     * 푸시는 {@link JobStore#sheetBlocked} 가 이미 보냈다.
+     */
+    public void needsFix(Long jobId, String why) {
+        try {
+            WebtoonJob job = store.byId(jobId);
+            String to = addressOf(job);
+            if (to == null) {
+                return;
+            }
+            String link = site + "/webtoon?view=running&job=" + job.getPublicId();
+            NoticeMail.Body body = NoticeMail.needsFix(chosenTitleOf(job.getRunId()), why,
+                    "캐릭터 다시 그리러 가기 →", link, site);
+            mail.sendHtml(to, "[LORE] 캐릭터를 다시 그려 주세요 — 이야기는 그대로 있어요", body.text(), body.html());
+            log.info("고쳐 달라는 알림을 보냈습니다 (job={})", jobId);
+        } catch (Exception e) {             // noqa: 알림이 만들기를 깨면 안 된다
+            log.error("고쳐 달라는 알림을 못 보냈습니다 (job={})", jobId, e);
+        }
+    }
+
+    /**
+     * 다 만들었지만 장면 몇 장이 안전 기준에 걸려 빈 장으로 남았다고 알린다(#626). 완성 메일 대신 간다 —
+     * 「다 만들어졌어요」만 보내면 빈 장을 보고 놀란다. 실패 메일과 같은 머리에 고칠 방법을 적고,
+     * 버튼은 편집실로 보낸다. 완성처럼 한 번만 보낸다(claimNotice). 푸시는 완성 푸시를 그대로 보낸다.
+     */
+    public void partial(Long jobId, String why) {
+        try {
+            WebtoonJob job = store.byId(jobId);
+            push.finished(job);
+            String to = addressOf(job);
+            if (to == null || !store.claimNotice(jobId)) {
+                return;
+            }
+            String link = site + "/webtoon?view=editor&run=" + job.getRunId();
+            NoticeMail.Body body = NoticeMail.needsFix(titleOf(job.getRunId()), why, "편집실에서 다시 그리기 →", link, site);
+            mail.sendHtml(to, "[LORE] 「" + titleOf(job.getRunId()) + "」 장면 몇 장을 다시 그려 주세요", body.text(), body.html());
+            log.info("일부 장면이 빠진 완성 알림을 보냈습니다 (job={}, run={})", jobId, job.getRunId());
+        } catch (Exception e) {             // noqa: 메일이 만들기를 깨면 안 된다
+            log.error("일부 장면이 빠진 완성 알림을 못 보냈습니다 (job={})", jobId, e);
         }
     }
 
@@ -195,6 +225,42 @@ public class JobNotice {
                 .map(WebtoonStory::displayTitle)
                 .filter(s -> !s.isBlank())
                 .orElse("내 웹툰");
+    }
+
+    /** 고른 이야기의 제목. 아직 못 정했으면 빈 값 — 실패 메일은 그때 「웹툰」이라고만 쓴다. */
+    private String chosenTitleOf(String runId) {
+        if (runId == null) {
+            return "";
+        }
+        return stories.chosenOf(runId).map(WebtoonStory::displayTitle).orElse("");
+    }
+
+    private String genreOf(String runId) {
+        if (runId == null) {
+            return "";
+        }
+        return stories.chosenOf(runId).map(WebtoonStory::getGenre).orElse("");
+    }
+
+    /** 만들 때 적은 캐릭터 이름. 못 읽으면 빈 값 — 그 줄만 빠진다. */
+    private String nameOf(WebtoonJob job) {
+        String json = job.getInputJson();
+        if (json == null || json.isBlank()) {
+            return "";
+        }
+        try {
+            return mapper.readTree(json).path("name").asText("");
+        } catch (Exception e) {             // noqa: 이름 하나 때문에 메일이 안 가면 안 된다
+            return "";
+        }
+    }
+
+    /**
+     * 표지(1장) 그림 주소. 그림 자리를 직접 적지 않고 서버 주소를 적는다 — 서버가 열 때마다
+     * 그때의 그림 자리로 넘겨 주므로(RunController#page), 며칠 뒤에 메일을 열어도 그림이 뜬다.
+     */
+    private String coverOf(String runId) {
+        return site + WebtoonApi.V1 + "/runs/" + runId + "/page/1";
     }
 
     /** 결과 화면 주소. <b>게스트가 자기 작품으로 돌아오는 유일한 길이다.</b> */

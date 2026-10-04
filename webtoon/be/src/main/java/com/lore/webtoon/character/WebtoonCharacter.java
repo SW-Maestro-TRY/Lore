@@ -11,7 +11,9 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * 사람이 가지고 노는 캐릭터.
@@ -90,6 +92,70 @@ public class WebtoonCharacter {
     @Column(length = 300)
     private String error;
 
+    /*
+     * 「캐릭터 만들어보기」로 만든 것만 아래 칸이 찬다 — 그 세계관 웹툰의 한 컷
+     * (art_key 가 그 그림이다)과 카드 글. 직접 만들기·기본 제공은 전부 비어 있다.
+     *
+     * 카드 글을 따로 표로 빼지 않는다. 캐릭터 하나에 카드 하나이고, 「이 캐릭터로
+     * 1화 보기」·「내 캐릭터에 저장」이 전부 이 줄 하나를 가리키면 되기 때문이다.
+     */
+
+    /** 세계관 — worlds.json 프리셋 키. 사람이 직접 썼으면 비어 있다. */
+    @Column(length = 80)
+    private String world;
+
+    /** 딱지에 쓸 세계관 이름(로판·헌터처럼 짧게). */
+    @Column(name = "world_label", length = 20)
+    private String worldLabel;
+
+    /** 반전 문장에 들어가는 장르 한 단어. */
+    @Column(length = 40)
+    private String genre;
+
+    /** 그 세계관에서 맡은 자리. */
+    @Column(name = "role_name", length = 40)
+    private String roleName;
+
+    /** 자리의 무게 — 하네스가 굴린 값 그대로(중심 · 곁 · 스쳐감 · 뜬금). 화면이 주연·조연 같은 딱지로 옮긴다. */
+    @Column(name = "role_tier", length = 20)
+    private String roleTier;
+
+    /** 종까지 바뀐 뽑기였나(#331). 화면이 이걸 보고 "당황하셨나요?" 설문을 띄운다. */
+    @Column(nullable = false)
+    private boolean lucky;
+    /* 넣은 것과 나온 것을 나란히(#329). 이름은 비어 있으면 모델이 지어 name 을 덮으므로
+       사람이 적은 것을 따로 둔다. 세계관은 world 에 프리셋 키만 남아 직접 적은 한 줄이
+       사라진다. 종은 카드가 읽어 낸 값 — 사진·설명이 무엇으로 읽혔는지 보여 주는 근거다. */
+    @Column(name = "asked_name", length = 60)
+    private String askedName;
+
+    @Column(name = "asked_world", length = 120)
+    private String askedWorld;
+
+    @Column(length = 40)
+    private String species;
+
+    /** 반전 한 줄 — 카드의 제목이다. */
+    @Column(length = 300)
+    private String twist;
+
+    /** 옛 카드의 대사 한 줄. 새 카드는 dialogue 를 쓰고 여기엔 그 줄들을 「누구: 말」로 이어 둔다. */
+    @Column(length = 300)
+    private String quote;
+
+    /** 한 컷 위에 얹을 말풍선 두세 줄. 줄마다 「누구 TAB 내것(1/0) TAB 쪽 TAB 말」, 줄바꿈으로 나눈다.
+        그림에는 글자가 없고 화면이 얹는다 — 이 그림이 1화의 참고 그림으로도 쓰여서 글자를 구우면 샌다. */
+    @Column(columnDefinition = "text")
+    private String dialogue;
+
+    /** 운명 두세 줄. 줄바꿈으로 잇는다. */
+    @Column(columnDefinition = "text")
+    private String fate;
+
+    /** 그린 그림체(prompt/style 의 이름). 1화를 같은 그림체로 그리려고 남긴다. */
+    @Column(length = 40)
+    private String style;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -134,6 +200,79 @@ public class WebtoonCharacter {
         this.status = CharacterStatus.READY;
         this.error = null;
         this.updatedAt = at;
+    }
+
+    /** 한 컷과 카드 글이 다 됐다 — 「캐릭터 만들어보기」의 끝. */
+    public void drewPanel(String key, CharacterSource source, Card card, Instant at) {
+        drewArt(key, source, at);
+        this.world = cut(card.world(), 80);
+        this.worldLabel = cut(card.worldLabel(), 20);
+        this.genre = cut(card.genre(), 40);
+        this.roleName = cut(card.role(), 40);
+        this.roleTier = cut(card.roleTier(), 20);
+        this.lucky = card.lucky();
+        this.species = cut(card.species(), 40);
+        this.twist = cut(card.twist(), 300);
+        this.quote = cut(card.quote(), 300);
+        this.dialogue = card.dialogue() == null || card.dialogue().isEmpty() ? null
+                : card.dialogue().stream().map(DialogueLine::pack).collect(java.util.stream.Collectors.joining("\n"));
+        this.fate = card.fate() == null || card.fate().isEmpty()
+                ? null : String.join("\n", card.fate());
+        this.style = cut(card.style(), 40);
+    }
+
+    /** 카드 글. 한 컷으로 만든 캐릭터만 갖는다. */
+    public record Card(String world, String worldLabel, String genre, String role, String roleTier,
+                       String twist, String quote, List<DialogueLine> dialogue,
+                       List<String> fate, String style, boolean lucky, String species) {
+    }
+
+    /** 말풍선 한 줄. side 는 말하는 이가 화면에서 서 있는 쪽(left · right · center). */
+    public record DialogueLine(String who, boolean mine, String side, String text) {
+        String pack() {
+            return String.join("\t", clean(who), mine ? "1" : "0", clean(side), clean(text));
+        }
+
+        static DialogueLine unpack(String line) {
+            String[] p = line.split("\t", -1);
+            if (p.length < 4 || p[3].isBlank()) {
+                return null;
+            }
+            return new DialogueLine(p[0], "1".equals(p[1]), p[2], p[3]);
+        }
+
+        private static String clean(String s) {
+            return s == null ? "" : s.replace('\t', ' ').replace('\n', ' ').trim();
+        }
+    }
+
+    /** 카드가 있나 — 「캐릭터 만들어보기」로 만든 것인가. */
+    public boolean hasCard() {
+        return twist != null && !twist.isBlank();
+    }
+
+    /** 운명 줄들. 없으면 빈 목록. */
+    public List<DialogueLine> dialogueLines() {
+        if (dialogue == null || dialogue.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(dialogue.split("\n")).map(DialogueLine::unpack)
+                .filter(java.util.Objects::nonNull).toList();
+    }
+
+    public List<String> fateLines() {
+        if (fate == null || fate.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(fate.split("\n")).map(String::trim)
+                .filter(l -> !l.isEmpty()).toList();
+    }
+
+    private static String cut(String s, int max) {
+        if (s == null || s.isBlank()) {
+            return null;
+        }
+        return s.length() <= max ? s : s.substring(0, max);
     }
 
     /** 못 그렸다. 사유는 사람이 읽을 한 줄이어야 한다. */
@@ -183,6 +322,60 @@ public class WebtoonCharacter {
 
     public String getBrowserUid() {
         return browserUid;
+    }
+
+    public String getWorld() {
+        return world;
+    }
+
+    public String getWorldLabel() {
+        return worldLabel;
+    }
+
+    public String getGenre() {
+        return genre;
+    }
+
+    public String getRoleName() {
+        return roleName;
+    }
+
+    public String getRoleTier() {
+        return roleTier;
+    }
+
+    public boolean isLucky() {
+        return lucky;
+    }
+
+    /** 사람이 넣은 이름·세계관을 그대로 적어 둔다. 만들 때 한 번. */
+    public void asked(String name, String world) {
+        this.askedName = name == null || name.isBlank() ? null : cut(name.trim(), 60);
+        this.askedWorld = world == null || world.isBlank() ? null : cut(world.trim(), 120);
+    }
+
+    public String getAskedName() {
+        return askedName;
+    }
+
+    public String getAskedWorld() {
+        return askedWorld;
+    }
+
+    public String getSpecies() {
+        return species;
+    }
+
+    public String getTwist() {
+        return twist;
+    }
+
+    public String getQuote() {
+        return quote;
+    }
+
+    public String getStyle() {
+        return style;
     }
 
     /** 빈 문자열은 없는 것과 같다 — 그 값이 들어오면 아무나 자기 것이 된다. */

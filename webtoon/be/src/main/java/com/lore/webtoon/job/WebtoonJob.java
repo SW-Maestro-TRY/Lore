@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -104,6 +105,16 @@ public class WebtoonJob {
     private String quality;
 
     /**
+     * 어느 언어로 만들지 — {@code run.py} 에 {@code NH_LANG} 으로 넘어간다.
+     *
+     * quality 와 같은 이유로 작업에 남긴다 — 한 장 다시 그릴 때도 같은 언어여야
+     * 한다. 옛 작업에는 값이 없어 nullable 이고, 읽는 쪽이 "ko" 로 기본값을
+     * 돌린다.
+     */
+    @Column(length = 10)
+    private String language;
+
+    /**
      * 사람이 중간에 멈춰 서서 볼 것인가.
      *
      * 거짓이면 시트도 이야기도 서버가 알아서 고르고 끝까지 간다
@@ -111,6 +122,13 @@ public class WebtoonJob {
      */
     @Column(nullable = false)
     private boolean checkpoints;
+
+    /**
+     * 어느 길로 만드나(#548). {@code quick} — 이야기가 없어 AI 가 후보를 짓는 지금 흐름.
+     * {@code own} — 사용자가 적은 내용을 그대로 장면까지 가져가는 길. 옛 줄은 전부 quick.
+     */
+    @Column(nullable = false, length = 10)
+    private String mode = "quick";
 
     /** 고른 이야기 번호. 아직 안 골랐으면 비어 있다. */
     @Column(name = "picked")
@@ -143,6 +161,19 @@ public class WebtoonJob {
     private Refunded refunded;
 
     /**
+     * 실패를 개발자가 다시 찾아볼 수 있게 남기는 셋(#531). {@link #error} 는 사람에게
+     * 보여 줄 한 줄이고, 이쪽은 무엇이 실제로 터졌는지다. 잘 끝났으면 비어 있다.
+     */
+    @Column(name = "fail_stage", length = 30)
+    private String failStage;
+
+    @Column(name = "fail_code", length = 30)
+    private String failCode;
+
+    @Column(name = "fail_detail", columnDefinition = "text")
+    private String failDetail;
+
+    /**
      * <b>줄에서 빠져나와 실제로 돌기 시작한 때.</b>
      *
      * 만든 때({@code createdAt})와의 차이가 <b>기다린 시간</b>이다. 이걸 안
@@ -162,6 +193,27 @@ public class WebtoonJob {
      */
     @Column(name = "finished_at")
     private Instant finishedAt;
+
+    /**
+     * 사람을 기다린 시간(초) — 이야기를 고르거나 시트를 확인하느라 멈춘 동안.
+     *
+     * 진행 화면의 경과 시간과 남은 시간은 <b>기계가 일한 시간</b>으로 센다.
+     * 이걸 안 빼면 사람이 이야기를 2분 고르는 동안 남은 시간이 2분 줄어서,
+     * 그림을 그리기 시작할 즈음엔 「약 1분 남음」이 떠 있었다(#509).
+     */
+    @Column(name = "paused_seconds", nullable = false)
+    private long pausedSeconds;
+
+    /** 지금 사람을 기다리는 중이면 멈춘 때. 아니면 {@code null}. */
+    @Column(name = "paused_at")
+    private Instant pausedAt;
+
+    /**
+     * 지금 걸음을 시작한 때. {@code updatedAt} 은 알림 주소 같은 걸음과
+     * 상관없는 쓰기에도 바뀌어서 걸음 안에서 얼마나 지났는지를 못 잰다.
+     */
+    @Column(name = "stage_at")
+    private Instant stageAt;
 
     /**
      * 줄 설 때 <b>앞에 몇 개</b> 있었나. 화면에 「앞에 3명」이라고 적은 그 숫자다.
@@ -208,7 +260,7 @@ public class WebtoonJob {
     }
 
     private WebtoonJob(String publicId, Long userId, String browserUid, String guestKey,
-                       String style, String quality, boolean checkpoints,
+                       String style, String quality, String language, boolean checkpoints,
                        String inputJson, Instant at) {
         this.publicId = publicId;
         this.guestKey = guestKey;
@@ -216,6 +268,7 @@ public class WebtoonJob {
         this.browserUid = browserUid;
         this.style = style;
         this.quality = quality;
+        this.language = language;
         this.checkpoints = checkpoints;
         this.inputJson = inputJson;
         this.status = JobStatus.QUEUED;
@@ -226,9 +279,48 @@ public class WebtoonJob {
 
     public static WebtoonJob queued(String publicId, Long userId, String browserUid,
                                     String guestKey, String style, String quality,
-                                    boolean checkpoints, String inputJson, Instant at) {
+                                    String language, boolean checkpoints, String inputJson, Instant at) {
         return new WebtoonJob(publicId, userId, browserUid, guestKey,
-                style, quality, checkpoints, inputJson, at);
+                style, quality, language, checkpoints, inputJson, at);
+    }
+
+    /** 길(mode)까지 정해서 줄에 세운다(#548). own 이면 확인 자리는 항상 있다. */
+    public static WebtoonJob queued(String publicId, Long userId, String browserUid,
+                                    String guestKey, String style, String quality,
+                                    String language, boolean checkpoints, String mode,
+                                    String inputJson, Instant at) {
+        WebtoonJob job = new WebtoonJob(publicId, userId, browserUid, guestKey,
+                style, quality, language, checkpoints, inputJson, at);
+        job.mode = "own".equalsIgnoreCase(mode) ? "own" : "quick";
+        return job;
+    }
+
+    /**
+     * 예시 작품의 작업 줄 — <b>처음부터 끝난 것</b>으로 만든다.
+     *
+     * 예시는 실제로 도는 작업이 아니다. QUEUED 로 두면 영영 안 끝나 줄에 서
+     * 있게 되고, 모든 사람에게 「앞에 대기자 9명」이 뜨며 하루 비용 상한도 그만큼
+     * 미리 잡힌다({@code JobQueue.ahead}·{@code reserved}).
+     */
+    public static WebtoonJob seeded(String publicId, String browserUid, String style,
+                                    String inputJson, Instant at) {
+        WebtoonJob job = new WebtoonJob(publicId, null, browserUid, null,
+                style, null, null, false, inputJson, at);
+        job.status = JobStatus.DONE;
+        job.stage = JobStage.BIND;
+        job.finishedAt = at;
+        return job;
+    }
+
+    /**
+     * 예시 작품의 작업 줄에 작품 번호까지 적는다(#614). 작품 번호가 있어야 이 작업의 시트·이야기 후보·장면을
+     * 작품 폴더에서 읽는다 — 만든 과정을 통째로 심은 예시가 쓴다.
+     */
+    public static WebtoonJob seeded(String publicId, String browserUid, String runId, String style,
+                                    String inputJson, Instant at) {
+        WebtoonJob job = seeded(publicId, browserUid, style, inputJson, at);
+        job.runId = runId;
+        return job;
     }
 
     void moveTo(JobStatus status, JobStage stage, Instant at) {
@@ -241,14 +333,34 @@ public class WebtoonJob {
         if (status.isOver() && this.finishedAt == null) {
             this.finishedAt = at;
         }
+        /* 사람을 기다린 시간 — 기다리기 시작한 때를 적어 두고, 다른 상태로
+           넘어갈 때 그 차이를 쌓는다. */
+        boolean waitsNow = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET
+                || status == JobStatus.AWAITING_CAST || status == JobStatus.AWAITING_SCENES;
+        Instant waitedFrom = waitingSince();
+        if (waitsNow && waitedFrom == null) {
+            this.pausedAt = at;
+        } else if (!waitsNow && waitedFrom != null) {
+            this.pausedSeconds += Math.max(0, Duration.between(waitedFrom, at).getSeconds());
+            this.pausedAt = null;
+        }
+        /* 걸음이 바뀌었거나 멈춰 있다가 다시 돌기 시작하면 걸음 시계를 새로 켠다.
+           같은 걸음 안에서 RUNNING 을 다시 적는 것(시트 다시 그리기 등)도 그 걸음을
+           새로 시작하는 것이다. */
+        if (stage != this.stage || status == JobStatus.RUNNING && this.status != JobStatus.RUNNING
+                || this.stageAt == null) {
+            this.stageAt = at;
+        }
+        /* **다 됐으면 실패 사유를 지운다.** 서버를 하나 더 띄우면 StaleJobs 가
+           다른 서버에서 아직 도는 작업을 「서버가 다시 시작되어…」로 적는데,
+           그 작업은 실제로 끝까지 가서 DONE 이 된다. 사유가 남으면 다 된 작품에
+           실패 문구가 붙는다(2026-09-26 로컬에서 봄). */
+        if (status == JobStatus.DONE) {
+            this.error = null;
+        }
         this.status = status;
         this.stage = stage;
         this.updatedAt = at;
-    }
-
-    /** 줄 설 때 앞에 몇 개 있었는지 적어 둔다. */
-    void queuedBehind(int ahead) {
-        this.queuedAhead = ahead;
     }
 
     /**
@@ -270,6 +382,53 @@ public class WebtoonJob {
         this.error = why == null ? null : why.substring(0, Math.min(why.length(), 300));
         this.refunded = refunded;
         this.updatedAt = at;
+    }
+
+    /**
+     * 캐릭터 시트가 이미지 안전 검사에 걸려 <b>사람이 고쳐 주기를 기다린다</b>(#626).
+     *
+     * 실패로 끝내지 않는다 — 적어 둔 이야기·고른 후보·장면은 그대로 두고, 사진이나 외모 설명만 바꿔
+     * 시트를 다시 그리게 한다. 시트 확인 자리({@link JobStatus#AWAITING_SHEET})를 그대로 써서
+     * 마이페이지·진행 중 동그라미·그만두기가 지금처럼 동작한다. 화면은 {@link #isSheetBlocked} 로 가른다.
+     */
+    void sheetBlocked(String why, String stage, String detail, Instant at) {
+        moveTo(JobStatus.AWAITING_SHEET, JobStage.SHEET, at);
+        this.error = why == null ? null : why.substring(0, Math.min(why.length(), 300));
+        failure(stage, "image_safety", detail);
+    }
+
+    /** 사람이 고쳐서 다시 그리기 시작했다 — 걸렸던 표시를 지운다. 실패 원문은 개발자용으로 남긴다. */
+    void sheetUnblocked(Instant at) {
+        this.error = null;
+        this.failCode = null;
+        this.updatedAt = at;
+    }
+
+    /** 시트가 안전 검사에 걸려 고쳐 주기를 기다리는 중인가. */
+    public boolean isSheetBlocked() {
+        return status == JobStatus.AWAITING_SHEET && "image_safety".equals(failCode) && error != null;
+    }
+
+    void failure(String stage, String code, String detail) {
+        this.failStage = cut(stage, 30);
+        this.failCode = cut(code, 30);
+        this.failDetail = detail;
+    }
+
+    private static String cut(String v, int max) {
+        return v == null ? null : v.substring(0, Math.min(v.length(), max));
+    }
+
+    public String getFailStage() {
+        return failStage;
+    }
+
+    public String getFailCode() {
+        return failCode;
+    }
+
+    public String getFailDetail() {
+        return failDetail;
     }
 
     void learnRun(String runId, Instant at) {
@@ -336,6 +495,20 @@ public class WebtoonJob {
     public String getQuality() {
         return quality;
     }
+
+    /** 어느 언어로. 옛 작업은 비어 있다 — 읽는 쪽이 "ko" 로 돌린다. */
+    public String getLanguage() {
+        return language;
+    }
+    public String getMode() {
+        return mode == null || mode.isBlank() ? "quick" : mode;
+    }
+
+    /** 「만들고 싶은 내용이 있어요」 길인가(#548). */
+    public boolean isOwn() {
+        return "own".equals(getMode());
+    }
+
     public boolean isCheckpoints() {
         return checkpoints;
     }
@@ -383,6 +556,34 @@ public class WebtoonJob {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    /** 사람을 기다린 시간(초). 지금 기다리는 중이면 지금까지 기다린 만큼도 더한다. */
+    public long pausedSecondsAt(Instant now) {
+        Instant from = waitingSince();
+        long more = from == null ? 0 : Math.max(0, Duration.between(from, now).getSeconds());
+        return pausedSeconds + more;
+    }
+
+    /**
+     * 지금 사람을 기다리고 있으면 언제부터인가. 아니면 {@code null}.
+     *
+     * 이 칸이 생기기 전(#509)부터 기다리던 작업은 {@code pausedAt} 이 비어 있다 —
+     * 그때는 마지막으로 상태가 바뀐 때부터 기다린 것으로 본다. 안 그러면 일주일
+     * 기다린 작업의 경과 시간이 「172:58:19」로 나왔다(로컬에서 봄).
+     */
+    private Instant waitingSince() {
+        if (pausedAt != null) {
+            return pausedAt;
+        }
+        boolean waiting = status == JobStatus.AWAITING_PICK || status == JobStatus.AWAITING_SHEET
+                || status == JobStatus.AWAITING_CAST || status == JobStatus.AWAITING_SCENES;
+        return waiting ? updatedAt : null;
+    }
+
+    /** 지금 걸음을 시작한 때. 옛 작업(칸이 없음)은 {@code updatedAt}. */
+    public Instant getStageAt() {
+        return stageAt != null ? stageAt : updatedAt;
     }
 
     public Instant getUpdatedAt() {

@@ -107,6 +107,34 @@ public class StoryStore {
         }
     }
 
+    /** 고른 이야기인데 장면 줄이 비어 있는 작품 번호들(#607) — 옮겨 적지 못했던 옛 작품을 채우는 데 쓴다. */
+    @Transactional(readOnly = true)
+    public List<String> runIdsWithoutScenes() {
+        return stories.findByChosenTrue().stream()
+                .filter(one -> {
+                    String json = one.getScenesJson();
+                    return json == null || json.isBlank() || "[]".equals(json.trim());
+                })
+                .map(WebtoonStory::getRunId)
+                .toList();
+    }
+
+    /**
+     * 고른 이야기의 장면 줄을 적는다(#548). 결과 화면·편집실이 장마다 「무슨 장면인가」를
+     * 여기서 읽는다(표지 다음 장이 첫 줄). own 길은 후보에 장면이 없어서 장면 확인을 마칠 때 적는다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void setScenes(String runId, List<String> scenes) {
+        stories.findByRunIdAndChosenTrue(runId).ifPresent(story -> {
+            try {
+                story.updateScenes(mapper.writeValueAsString(scenes));
+                stories.save(story);
+            } catch (Exception e) {                 // noqa: 설명 줄 때문에 그리기를 막지 않는다
+                log.warn("장면 줄을 적지 못했습니다 (run={})", runId, e);
+            }
+        });
+    }
+
     /** 이 작품이 된 이야기. 아직 안 골랐거나 안 옮겨 온 작품이면 비어 있다. */
     @Transactional(readOnly = true)
     public Optional<WebtoonStory> chosenOf(String runId) {
@@ -131,10 +159,31 @@ public class StoryStore {
     @Transactional
     public String editTitle(String runId, String title) {
         WebtoonStory chosen = stories.findByRunIdAndChosenTrue(runId).orElseThrow();
-        String clean = title == null ? "" : String.join(" ", title.trim().split("\s+"));
+        String clean = title == null ? "" : String.join(" ", title.trim().split("\\s+"));
         chosen.editTitle(clean.isBlank() ? null : clean.substring(0, Math.min(60, clean.length())));
         stories.save(chosen);
         return chosen.displayTitle();
+    }
+
+    /** 줄거리(로그라인)를 고칠 때 받는 최대 길이. 칸 크기(user_plot varchar(300))와 같다. */
+    public static final int PLOT_MAX = 300;
+
+    /**
+     * 완성본의 줄거리(로그라인)를 고친다. -> 화면에 <b>앞으로</b> 보일 줄거리
+     *
+     * {@link #editTitle} 과 같은 규칙이다 — 빈 값으로 부르면 지워서 모델이 지은
+     * 줄거리로 돌아가고, 공백은 한 칸으로 줄이며, 길면 {@link #PLOT_MAX} 에서 자른다.
+     *
+     * @throws java.util.NoSuchElementException 고른 이야기가 없을 때
+     */
+    @Transactional
+    public String editPlot(String runId, String plot) {
+        WebtoonStory chosen = stories.findByRunIdAndChosenTrue(runId).orElseThrow();
+        String clean = plot == null ? "" : String.join(" ", plot.trim().split("\\s+"));
+        chosen.editPlot(clean.isBlank() ? null : clean.substring(0, Math.min(PLOT_MAX, clean.length())));
+        stories.save(chosen);
+        String shown = chosen.displayPlot();
+        return shown == null ? "" : shown;
     }
 
     /**

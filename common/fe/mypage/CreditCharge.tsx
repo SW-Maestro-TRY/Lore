@@ -2,6 +2,9 @@
 
 import { useEffect } from "react";
 import { CONTACT_CHANNEL } from "../links";
+/* 이 창의 모양은 mypage.css 에 있다. 예전에는 공용 마이페이지만 이 파일을 읽어서,
+   다른 곳(헤더의 크레딧 칩)에서 열면 글자만 나왔다 — 컴포넌트가 자기 모양을 들고 간다. */
+import "./mypage.css";
 
 /* 크레딧 충전 — 상품을 보여주는 창.
  *
@@ -48,13 +51,17 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
 
         {/* 제일 먼저 말한다. 상품을 보고 나서 "그런데 안 됩니다" 를 만나면
             고른 시간이 통째로 헛것이 된다. PG 가 아직 없어서(#155) 결제
-            대신 계좌 입금을 문의로 안내한다 — 막다른 길 대신 갈 자리를 준다. */}
+            대신 결제 방법을 문의로 안내한다 — 막다른 길 대신 갈 자리를 준다. */}
         <p className="credit-notice">
-          결제는 아직 준비 중이에요! 크레딧이 필요하시면{" "}
+          <b>결제 안내</b>
+          <br />
+          아직 정식 결제 기능을 준비 중이에요!
+          <br />
+          크레딧이 필요하신 경우{" "}
           <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">
-            1:1 문의하기
+            <b>1:1 문의하기</b>
           </a>
-          를 통해 계좌 입금을 안내드리겠습니다.
+          를 남겨주시면 결제 방법을 안내해 드릴게요. :)
         </p>
 
         <div className="credit-modal-body">

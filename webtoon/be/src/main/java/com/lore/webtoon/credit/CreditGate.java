@@ -50,12 +50,20 @@ public class CreditGate {
 
     private final CreditService credits;
     private final int cost;
+    private final int regenCost;
 
     @Autowired
     public CreditGate(CreditService credits,
-                      @Value("${lore.credit.cost-per-episode:12}") int cost) {
+                      @Value("${lore.credit.cost-per-episode:12}") int cost,
+                      @Value("${lore.credit.cost-per-regen:3}") int regenCost) {
         this.credits = credits;
         this.cost = cost;
+        this.regenCost = regenCost;
+    }
+
+    /** 편집실에서 한 장을 다시 그리는 값. 화면이 단추에 적으려고도 묻는다. */
+    public int regenCost() {
+        return regenCost;
     }
 
     /** 이 사람의 잔액. 로그인 안 했으면 0 — 게스트는 크레딧으로 안 센다. */
@@ -84,7 +92,8 @@ public class CreditGate {
     }
 
     /**
-     * 값을 지정해서 묻는다 — 웹툰 한 편(12)과 캐릭터 한 장(1)은 값이 다르다.
+     * 값을 지정해서 묻는다 — 웹툰 한 편(12) · 캐릭터 한 장(2) · 장 다시 그리기(3)는
+     * 값이 다르다.
      */
     public String whyBlocked(Long userId, int need) {
         if (userId == null || need <= 0) {
@@ -92,9 +101,20 @@ public class CreditGate {
         }
         int have = credits.balance(userId);
         if (have < need) {
-            return "크레딧이 모자랍니다 (필요 " + need + " · 보유 " + have + ")";
+            return "크레딧 잔액이 부족해요 (필요 " + need + " · 보유 " + have + ")";
         }
         return null;
+    }
+
+    /**
+     * 모자라면 여기서 막는다(402). {@link #charge} 는 모자라도 요청을 실패시키지 않으므로,
+     * 시작하기 전에 값을 받는 일(조연 시트 · 장면 다시 뽑기 · 1화 다시 만들기)은 이걸 먼저 부른다.
+     */
+    public void requireEnough(Long userId, int need) {
+        String blocked = whyBlocked(userId, need);
+        if (blocked != null) {
+            throw new BusinessException(ErrorCode.CREDIT_NOT_ENOUGH, blocked);
+        }
     }
 
     /**

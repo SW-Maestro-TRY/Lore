@@ -66,6 +66,7 @@ import os
 import re
 from pathlib import Path
 
+import covercheck
 import llm
 import runmeta
 from llm import story
@@ -184,7 +185,139 @@ def build_prompt() -> str:
 
 # ------------------------------------------------------------------------ 파싱
 
-def parse(text: str) -> dict:
+# 몇 장부터 "제자리" 인가. 두 장은 연출일 수 있다 — 세 장이면 독자가
+# 같은 장면을 세 번 읽은 것이다.
+STUCK_PAGES = 3
+# 앞에서 이어받지 않고 처음으로 되돌아가는 페이지가 몇 장이면 잡는가.
+# 한 장은 환기일 수 있다 — 두 장이면 읽는 사람이 이야기를 못 따라간다.
+RESET_PAGES = 2
+
+
+def reset_issues(read: list[dict], fixed_narration: bool = False) -> list[dict]:
+    """페이지마다 이야기가 도입부로 되돌아가는가. **코드가 센다.**
+
+    `read` 의 `opens` 는 판정이 아니라 기억 질문의 답이다 — "이 페이지
+    첫 줄이 앞에 이미 나왔는가". 그렇게 물어야 답이 나온다: "앞에서
+    이어받지 않고 되돌아가는 페이지를 적어라" 라고 판정을 맡겼더니, 같은
+    응답 안에 근거(`says`)를 다 적어 놓고도 빈 배열을 냈다(2026-09-19,
+    run 20260919T022231-383b4b — 2페이지가 깔아 놓은 "잠깐만 지켜 달라는
+    부탁" 으로 3·4·5페이지가 전부 되돌아가 시작하는데도). 이야기가 이해는
+    되니 통과 쪽으로 기운다.
+
+    그래서 "좋은가" 는 안 묻고 "앞에 나왔는가" 만 묻는다. 몇 장부터
+    문제인지는 여기서 센다.
+    """
+    # 형식을 어기면(값 대신 문장을 옮겨 적는 일이 실제로 있었다) 조용히
+    # 통과시키지 않는다 — 셋 중 하나가 아닌 답은 "판정 없음" 이라, 아래
+    # 세기에서 빠지는 대신 로그로 드러난다.
+    OPENS = ("이미", "처음", "없음")
+    bad = [r["page"] for r in read if r.get("opens") and _text(r["opens"]) not in OPENS]
+    if bad:
+        log(f"  [전체 검수] `opens` 를 형식대로 안 적은 페이지가 있습니다 "
+            f"({', '.join(map(str, bad))}) — 되돌아감은 못 셉니다")
+    back = [r["page"] for r in read if _text(r.get("opens")) == "이미"]
+    if len(back) < RESET_PAGES:
+        return []
+    if fixed_narration:
+        # 나레이션 글을 장면 단계에서 정해 둔 run 이다(scenes.json 의
+        # `narration`). 그림을 다시 그려도 같은 글 안에서 고르니 다시 그리기로
+        # 고쳐지지 않는다 — 값만 나간다. 기록으로만 남긴다.
+        return [{
+            "rank": 2, "severity": "major", "redraw": False,
+            "pages": back, "redraw_pages": [],
+            "why": f"{len(back)}장({', '.join(map(str, back))})의 나레이션이 앞에서 "
+                   "이미 말한 상황으로 되돌아가 시작한다. 나레이션은 장면 단계에서 "
+                   "정해진 글이라 다시 그려도 안 바뀐다 — 장면 글(scene.md)을 봐야 한다.",
+            "redraw_pick_reason": "",
+        }]
+    return [{
+        "rank": 2, "severity": "critical", "redraw": True,
+        "pages": back, "redraw_pages": back[1:] or back,
+        "why": f"{len(back)}장({', '.join(map(str, back))})이 앞 페이지 끝에서 "
+               "이어받지 않고, 앞에서 이미 말한 상황 설명으로 되돌아가 시작한다. "
+               "매 장 새 정보가 한 줄씩 붙어 있어도 독자는 이야기를 따라가는 것이 "
+               "아니라 같은 도입부를 여러 번 읽는다. 다시 그릴 때는 그림과 인물은 "
+               "그대로 두고 나레이션만 앞 장 마지막 줄 다음에서 이어지게 쓴다 — "
+               "이미 말한 것을 다시 설명하지 않는다.",
+        "redraw_pick_reason": "",
+    }]
+
+
+def cover_issues(cover, title: str, checked: dict | None = None) -> list[dict]:
+    """모델이 센 `cover` -> issues. **표지인가는 코드가 정한다**(covercheck.judge).
+
+    그리는 자리의 표지 검수(covercheck)와 같은 기준을 쓴다 — 거기서 다시 그릴
+    횟수를 다 쓰고도 표지 모양이 아니었거나, 검수가 꺼져 있었던 경우를 여기서
+    한 번 더 잡는다. 잡히면 1페이지를 다시 그리게 한다(JobRunner 의 재생성
+    루프가 `--page 1` 로 부른다).
+    """
+    if checked is not None:
+        # 표지 검수가 지금 이 그림을 이미 봤다 — 그 판정을 따른다.
+        found = checked.get("issues") or []
+    elif isinstance(cover, dict):
+        found = covercheck.judge(cover, title)
+    else:
+        return []
+    if not found:
+        return []
+    return [{
+        "rank": 3, "severity": "critical", "redraw": True,
+        "pages": [1], "redraw_pages": [1],
+        "why": "1페이지가 표지 모양이 아니다 — " + " ".join(f["what"] for f in found)
+               + " 다시 그릴 때는 칸을 나누지 않은 그림 한 장에 제목만 넣는다. "
+                 "이 화의 한 장면을 옮겨 그리지 않는다.",
+        "redraw_pick_reason": "",
+    }]
+
+
+def repeat_issues(repeat, total: int) -> list[dict]:
+    """모델이 센 `repeat` -> issues. **문턱은 코드가 정한다.**
+
+    무엇을 세는가 — `does`(주인공이 그 자리에 머무는가)와
+    `resets`(나레이션이 앞 장에서 이어받지 않고 처음으로 되돌아가는가).
+    둘째는 "같은 말이 몇 번 나왔는가" 가 아니다. 글자가 다 달라도 그
+    페이지가 이미 아는 상황에서 다시 출발하면 독자의 읽는 자리가 매 장
+    리셋된다 — 실제로 그렇게 나왔다(2026-09-19, run
+    20260919T022231-383b4b: 2페이지가 "잠깐만 지켜 달라는 부탁을 받았다"
+    로 상황을 깔고 끝났는데 3·4·5페이지가 전부 그 문장으로 되돌아가
+    시작한다).
+
+    `read` 를 보고 코드가 issues 를 지어내지는 않는다는 원칙은 그대로다
+    (아래 `suspicious` 주석 참고) — 여기서 쓰는 것은 모델이 "같은 뜻인가"
+    를 판단해 **일부러 세어 적은 값**이고, 코드는 거기에 "몇 장부터
+    문제인가" 만 얹는다(`pagecheck.parse` 가 흐름·무게에서 판정을 코드로
+    세는 것과 같은 자리).
+
+    왜 모델에게 판정을 안 맡기는가 — 맡겨 봤더니 안 된다. `does` 에
+    "의자에 앉아 있다" 를 네 장 연속으로 적고, `says` 에 "잠시만 자리를
+    지켜 달라고 했다" 를 네 번 옮겨 적어 놓고도 `issues` 는 빈 배열이
+    나왔다(2026-09-19, run 20260919T022231-383b4b). 프롬프트가 "세어서
+    판정하라" 고 시켰는데도 그랬다 — 이야기가 이해는 되니까 통과 쪽으로
+    기운다. 세는 것까지는 모델이 하고, 거기서 자르는 것은 코드가 한다.
+    """
+    if not isinstance(repeat, dict):
+        return []
+    out = []
+    stuck = _ints(repeat.get("does"))
+    if len(stuck) >= STUCK_PAGES:
+        # 페이지 하나를 다시 그려서 고쳐지는 문제가 아니다 — 장면 배정
+        # 자체가 주인공을 세워 둔 것이라 redraw 는 안 건다.
+        out.append({
+            "rank": 2, "severity": "critical", "redraw": False,
+            "pages": stuck, "redraw_pages": [],
+            "why": f"{len(stuck)}장({', '.join(map(str, stuck))})에 걸쳐 주인공이 "
+                   "같은 행동·같은 자세에 머물러 있다. 주변에서 사건이 벌어져도 "
+                   "주인공이 움직이지 않으면 독자는 같은 장면을 그만큼 다시 읽는다. "
+                   "페이지를 다시 그려서 고칠 수 있는 것이 아니라 장면 배정을 "
+                   "고쳐야 한다.",
+            "redraw_pick_reason": "",
+        })
+    return out
+
+
+def parse(text: str, *, title: str = "", cover_attached: bool = True,
+          cover_checked: dict | None = None, page_count: int = 0,
+          fixed_narration: bool = False) -> dict:
     """검수 응답(JSON) -> 판정.
 
     `severity`(얼마나 심각한가)와 `redraw`(그래서 다시 그려야 하는가)는
@@ -204,6 +337,11 @@ def parse(text: str) -> dict:
         raise story.ParseFailure("검수 결과가 JSON 객체가 아닙니다.")
 
     read = []
+    # 이 화에 없는 쪽 번호. gpt-5.1 이 8장짜리 화를 22장으로 읽고(칸을 쪽으로 센
+    # 것으로 보인다) 9·18쪽을 다시 그리라고 한 적이 있다(2026-09-30, run
+    # 20260930T223006-456ff0) — 서버는 없는 쪽을 그리러 갔다. 모델이 무엇을 읽든
+    # 실제 쪽수 밖의 번호는 여기서 버린다.
+    ghosts: set[int] = set()
     for one in obj.get("read") or []:
         if not isinstance(one, dict):
             continue
@@ -211,7 +349,18 @@ def parse(text: str) -> dict:
             page = int(one.get("page"))
         except (TypeError, ValueError):
             continue
+        # `does`(주인공이 한 것)·`says`(그 페이지의 글자)는 2순위(반복·
+        # 제자리걸음)를 **세어서** 판정하게 하려고 받는 자리다. 사람이
+        # 나중에 판정을 되짚을 때도 이 두 줄만 훑으면 같은 말이 몇 번
+        # 나왔는지가 그대로 보인다.
+        if page_count and not 1 <= page < page_count + 1:
+            # 없는 쪽이다 — 아래 `drop_ghost_pages` 가 센다.
+            ghosts.add(page)
+            continue
         read.append({"page": page, "what": _text(one.get("what")),
+                     "does": _text(one.get("does")),
+                     "opens": _text(one.get("opens")),
+                     "says": _text(one.get("says")),
                      "understood": bool(one.get("understood"))})
 
     issues = []
@@ -234,10 +383,29 @@ def parse(text: str) -> dict:
             "severity": severity,
             "redraw": redraw,
             "pages": _ints(one.get("pages")),
-            "redraw_pages": _ints(one.get("redraw_pages")) if redraw else [],
+            "redraw_pages": [n for n in _ints(one.get("redraw_pages"))
+                             if not page_count or 1 <= n <= page_count] if redraw else [],
             "why": _text(one.get("why")),
             "redraw_pick_reason": _text(one.get("redraw_pick_reason")) if redraw else "",
         })
+    issues += repeat_issues(obj.get("repeat"), len(read))
+    issues += reset_issues(read, fixed_narration)
+    if cover_attached:
+        issues += cover_issues(obj.get("cover"), title, cover_checked)
+    if page_count:
+        for one in issues:
+            bad = [n for n in one["pages"] if not 1 <= n <= page_count]
+            ghosts.update(bad)
+            one["pages"] = [n for n in one["pages"] if 1 <= n <= page_count]
+            if one["redraw"] and not one["redraw_pages"]:
+                one["redraw"] = False
+        issues = [one for one in issues if one["pages"] or not page_count]
+    if ghosts:
+        log(f"  [전체 검수] 이 화에 없는 쪽({', '.join(map(str, sorted(ghosts)))})을 적었습니다 "
+            f"— {page_count}쪽까지만 봅니다")
+    if page_count:
+        for one in issues:
+            one["redraw_pages"] = [n for n in one["redraw_pages"] if 1 <= n <= page_count]
     issues.sort(key=lambda i: (SEVERITIES.index(i["severity"]), i["rank"]))
 
     # 모델이 "이해 안 됨"이라고 스스로 적어 놓고 issues 를 빈 배열로 내는
@@ -289,6 +457,8 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
         log(f"  [전체 검수] 페이지가 {len(pages)}장이라 뒤 {cap}장만 붙입니다")
         pages = pages[-cap:]
 
+    # 앞 장을 잘라 붙였으면 첫 그림이 표지가 아니다 — 그때는 표지 판정을 안 한다.
+    cover_attached = bool(pages) and pages[0].name == "page01.png"
     images = llm.load_images(pages)
     call = llm.Call(STAGE)
     log(f"[전체 검수] {call.describe()} · 그림 {len(images)}장을 처음부터 끝까지 읽습니다…")
@@ -306,7 +476,12 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
     write_text(run_dir / "full_review.txt", text)
     meta["pages"] = len(images)
     try:
-        review = parse(text)
+        scenes = (read_json(run_dir / "scenes.json") or {}).get("scenes") or []
+        review = parse(text, title=covercheck.title_of(run_dir), cover_attached=cover_attached,
+                       cover_checked=covercheck.latest_review(run_dir),
+                       page_count=len(pages_of(run_dir)),
+                       fixed_narration=any(isinstance(sc, dict) and sc.get("narration") is not None
+                                           for sc in scenes))
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [전체 검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")

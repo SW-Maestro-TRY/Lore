@@ -29,26 +29,30 @@ import java.util.UUID;
  *
  * 캐릭터 탭에 처음 들어오면 아무것도 없다. "만들어 보세요" 만 있는 화면은
  * <b>무엇이 나오는지 모르는 채로 값을 내라는 것</b>이라, 대부분 거기서 나간다.
- * 그림체가 여덟 개인데 「세미리얼」이 무엇인지도 글로만 적혀 있다.
  *
- * 그래서 그림체마다 하나씩, 이미 그려 둔 것을 얹어 둔다. 골라서 웹툰을
- * 만들어 보고 마음에 들면 그때 자기 것을 만든다.
+ * 그래서 이미 그려 둔 것을 얹어 둔다. 골라서 웹툰을 만들어 보고 마음에 들면
+ * 그때 자기 것을 만든다.
  *
- * <h2>왜 견본 그림을 그대로 쓰나</h2>
+ * <h2>그림체와 짝지어 두지 않는다</h2>
  *
- * 그림체 고르개가 쓰는 견본이 이미 여덟 장 있다({@code web/samples/ex-*}).
- * 같은 그림을 캐릭터로도 쓰면 <b>고른 그림체와 나온 캐릭터가 같아 보인다</b> —
- * 새로 그리면 값이 나가고, 무엇보다 둘이 달라 보이면 고르개가 거짓말이 된다.
+ * 전에는 그림체 고르개의 여덟 견본({@code ex-webtoon-1} 따위)을 그대로
+ * 캐릭터로도 썼다 — 고른 그림체와 나온 캐릭터가 같아 보이게 하려던 것이다.
+ * 지금은 예시 캐릭터를 따로 고른다. 그림체 짝을 맞추느라 <b>보여 줄 그림의
+ * 수가 그림체 수에 묶이는</b> 것이 더 아까웠다. 그림체 고르개는 여전히 같은
+ * 견본 파일을 쓰므로({@code webtoon/fe/lib/styleThumbs.ts}) 그 파일들은
+ * 지우면 안 된다.
  *
- * <h2>여러 번 떠도 한 번만 심는다</h2>
+ * <h2>심는 것은 처음 한 번뿐이고, 그 뒤로는 DB 가 원본이다</h2>
  *
- * 이름으로 이미 있는지 본다. 서버가 다시 떠도 늘지 않는다.
+ * 이름으로 이미 있는지 보고, 있으면 건드리지 않는다. 그래서 심은 다음에
+ * <b>DB 에서 이름·설명을 고치거나 카드 설정을 붙여도 다음 기동에 안 되돌아간다.</b>
+ * 여기 {@code SEEDS} 는 "빈 DB 를 채우는 첫 값" 이지 계속 맞춰야 할 정답이
+ * 아니다 — 고치는 법은 {@code webtoon/docs/images.md} 에 적어 두었다.
  *
- * <h2>목록에서 뺀 것은 거둔다</h2>
- *
- * 여기 {@code SEEDS} 가 <b>유일한 근거</b>다. 목록에서 지웠는데 DB 에 남아
- * 있으면 화면에는 그대로 보이고, 지운 사람은 지워진 줄 안다. 그래서 뜰 때마다
- * 목록에 없는 기본 제공 캐릭터를 지운다.
+ * 전에는 {@code SEEDS} 에 없는 이름의 기본 제공 캐릭터를 뜰 때마다 지웠다.
+ * 그 규칙 아래에서는 <b>DB 에서 이름을 바꾸는 순간 다음 기동에 그 줄이
+ * 사라진다</b> — 고쳐 쓰라고 열어 둔 자리가 고치면 지워지는 자리가 된다.
+ * 그래서 지우지 않고 로그로만 알린다. 정말 뺄 때는 DB 에서 지운다.
  *
  * 이미 그 캐릭터로 만든 작품은 <b>안 없어진다</b> — 만들 때 그림을 작업 폴더로
  * 복사해 두고 쓰므로 작품이 이 줄을 참조하지 않는다.
@@ -58,40 +62,43 @@ public class BuiltinCharacters implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(BuiltinCharacters.class);
 
-    /** 그림체 하나에 캐릭터 하나. 이름과 설명은 그 그림에 맞춰 지었다. */
-    private record Seed(String style, String file, String name, String description) {
+    /** 빈 DB 를 채울 첫 값. 그림 파일 하나에 이름과 설명. */
+    private record Seed(String file, String name, String description) {
     }
 
     private static final List<Seed> SEEDS = List.of(
-            new Seed("webtoon", "ex-webtoon-1.jpg", "하리",
-                    "동네 서점에서 일하는 스무 살. 무슨 일이 나도 일단 웃고 보는데, "
-                    + "정작 자기 얘기는 한 마디도 안 한다."),
-            new Seed("romance", "ex-romance-1.png", "세이엘",
-                    "몰락한 공작가의 마지막 사람. 무도회장에서 제일 예쁘게 웃으면서 "
-                    + "누가 자기 집을 무너뜨렸는지 세고 있다."),
-            new Seed("shoujo", "ex-shoujo-1.jpg", "윤슬",
-                    "전학 온 지 사흘째. 아무하고도 말을 안 하는데 창가 자리 하나만은 "
-                    + "매일 오래 바라본다."),
-            new Seed("frost", "ex-frost-1.jpg", "제하",
-                    "밤에만 문을 여는 상담소 주인. 무엇이든 들어 주지만 "
-                    + "값은 반드시 받는다."),
-            new Seed("pastel", "ex-pastel-1.jpg", "소미",
-                    "자취 3년 차. 오늘도 라면을 끓이다 말고 창밖을 본다. "
-                    + "별일 없는 하루를 잘 견디는 사람."),
-            new Seed("noir", "ex-noir-1.jpg", "강도윤",
-                    "잠복 열흘째인 형사. 담배를 끊었다고 말하고 다니는데 "
-                    + "주머니에는 늘 한 갑이 있다."),
-            new Seed("game", "ex-game-1.jpg", "이올",
-                    "길드 청산인. 망한 길드를 찾아가 장비를 회수한다. "
-                    + "가는 곳마다 환영받지 못해서 말수가 적다."),
-            /* 예외 — 그림체 고르개의 여덟 견본과 달리, 이건 실제로 한 사람이
-             * 「내 캐릭터」로 만든 캐릭터(id=10, source=PROMPT)를 둘러보기용
-             * 으로도 보이게 한 것이다. 그 원본 캐릭터는 그대로 그 사람 것으로
-             * 남고, 이건 같은 그림·이름으로 새로 심은 별개의 BUILTIN 줄이다
-             * (2026-09-14, #33). */
-            new Seed("webtoon", "ex-jiyun-1.jpg", "지윤",
-                    "창가 자리를 독차지하는 대학원생. 안경 너머로 다 보면서도 "
-                    + "정작 중요한 이야기는 늘 못 본 척 넘긴다."));
+            new Seed("ex-harin-1.jpg", "하린",
+                    "국밥집 창가 자리가 자기 자리인 줄 안다. 누구에게나 잘 웃는데 "
+                    + "정작 자기 얘기는 안 한다."),
+            new Seed("ex-riseel-1.jpg", "리스엘",
+                    "성을 내려다보는 발코니가 그의 자리다. 아래 도시 이름을 전부 "
+                    + "외우는데, 그중 하나는 곧 사라진다."),
+            new Seed("ex-seoyun-1.jpg", "서윤",
+                    "밤에 문 닫는 헌책방을 혼자 지킨다. 묻는 말에는 답하지만 "
+                    + "먼저 묻는 법이 없다."),
+            new Seed("ex-ruda-1.jpg", "루다",
+                    "싸우고 온 걸 숨기려고 더 크게 웃는다. 팔에 난 자국은 "
+                    + "넘어져서 그런 거라고 한다."),
+            new Seed("ex-seojin-1.jpg", "서진",
+                    "밤에만 움직이는 해결사. 받은 일은 끝내고, 끝낸 일은 "
+                    + "말하지 않는다."),
+            new Seed("ex-dogyeong-1.jpg", "도경",
+                    "사무실에서 제일 조용한 사람. 웃는 걸 본 사람이 아직 없다."),
+            new Seed("ex-ihyeon-1.jpg", "이현",
+                    "약속 시간에 늘 십 분 늦고, 늦은 이유는 매번 다르다."),
+            new Seed("ex-rozel-1.png", "로젤",
+                    "다과회에서 제일 먼저 웃고 제일 늦게 돌아간다. 그날 오간 말을 "
+                    + "하나도 안 잊는다."),
+            new Seed("ex-sea-1.jpg", "세아",
+                    "연습실 불을 마지막으로 끄는 사람. 거울 앞에서만 표정을 바꾼다."),
+            new Seed("ex-daon-1.jpg", "다온",
+                    "과제는 늘 산더미고 잠은 늘 부족하다. 그래도 창밖은 꼭 본다."),
+            new Seed("ex-yungyeom-1.jpg", "윤겸",
+                    "왕궁 문서를 나르는 일을 한다. 오늘 전할 두루마리 내용을 "
+                    + "이미 읽어 버렸다."),
+            new Seed("ex-mongi-2.jpg", "몽이",
+                    "로판 악역 영애로 태어난 강아지. 구두를 물어뜯은 것이 "
+                    + "첫 번째 악행이다."));
 
     private final WebtoonCharacterRepository characters;
     private final PrivateArt art;
@@ -171,6 +178,17 @@ public class BuiltinCharacters implements ApplicationRunner {
         if (!on) {
             return;
         }
+        /* **한 명이라도 심겨 있으면 새로 심지 않는다.**
+         *
+         * 이 목록과 DB 를 이름으로 맞춰 보기 때문에, DB 에서 이름을 고치면
+         * 그 이름이 "아직 안 심긴 것" 으로 보인다 — 고쳐 놓으면 다음 기동에
+         * 옛 이름이 새 줄로 되살아나서, 고친 것과 옛것이 나란히 뜬다.
+         *
+         * 그래서 심는 것은 <b>기본 제공이 하나도 없을 때뿐</b>이다. 그 뒤로는
+         * DB 가 원본이고, 예시를 늘리고 싶으면 DB 에 직접 넣는다
+         * ({@code webtoon/docs/images.md}).
+         */
+        boolean fresh = characters.findBySource(CharacterSource.BUILTIN).isEmpty();
         int made = 0;
         int fixed = 0;
         for (Seed seed : SEEDS) {
@@ -186,6 +204,9 @@ public class BuiltinCharacters implements ApplicationRunner {
                     .orElse(null);
             if (old != null && old.getArtKey() != null && !old.getArtKey().isBlank()) {
                 continue;
+            }
+            if (old == null && !fresh) {
+                continue;               // 이미 심은 뒤다 — 이름이 바뀐 것이지 빠진 것이 아니다
             }
             Path file = samples.resolve(seed.file());
             if (!Files.isRegularFile(file)) {
@@ -228,39 +249,38 @@ public class BuiltinCharacters implements ApplicationRunner {
         if (made > 0) {
             log.info("기본 캐릭터 {}명을 심었습니다", made);
         }
-        retire();
+        reportStrays();
     }
 
     /**
-     * {@code SEEDS} 에서 빠진 기본 제공 캐릭터를 지운다.
+     * {@code SEEDS} 에 없는 기본 제공 캐릭터를 <b>알리기만 한다.</b>
      *
-     * 목록에서 지웠는데 DB 에 남아 있으면 화면에는 그대로 보인다 — 지운
-     * 사람은 지워진 줄 알고, 왜 아직 나오는지 찾느라 시간을 쓴다.
+     * 전에는 여기서 지웠다. 그런데 무엇이 "빠진 것" 인지 이름으로 가리기
+     * 때문에, <b>DB 에서 이름을 고치는 순간 그 줄이 빠진 것으로 보인다</b> —
+     * 예시 캐릭터를 DB 에서 다듬으라고 열어 두고는 다듬으면 다음 기동에
+     * 지워 버리는 셈이었다.
+     *
+     * 이름 말고 기댈 만한 표시가 없어서(심을 때 매기는 번호는 랜덤이고,
+     * 시드를 가리키는 칸은 표에 없다) 가리는 쪽이 아니라 지우는 쪽을
+     * 그만둔다. 정말 뺄 때는 사람이 DB 에서 지운다 — 어차피 예시를 바꾸는
+     * 일은 드물고, 그때 한 줄 지우는 것이 매번 덮어쓰이는 것보다 낫다.
      */
-    private void retire() {
-        Set<String> keep = SEEDS.stream().map(Seed::name).collect(Collectors.toSet());
-        /* **우리가 심은 것만 본다.**
-         *
-         * 전에는 주인이 빈 것(`findByOwnerIdIsNull`)을 다 훑었다. 그런데
-         * 로그인 안 하고 만든 캐릭터도 주인이 비어 있다 — 캐릭터 만들기는
-         * 로그인을 안 따지고(`CreditGate.currentUser()` 가 그냥 null 이 된다),
-         * 그 줄은 주인 없이 저장된다.
-         *
-         * 그래서 **게스트가 만든 캐릭터가 서버를 다시 띄울 때마다 지워졌다.**
-         * 무료 횟수를 써서 만들었는데 다음 기동에 사라진다. 심은 표시
-         * (`source = BUILTIN`)로 좁힌다. */
-        List<WebtoonCharacter> gone = characters.findBySource(CharacterSource.BUILTIN).stream()
-                .filter(one -> !keep.contains(one.getName()))
+    private void reportStrays() {
+        Set<String> known = SEEDS.stream().map(Seed::name).collect(Collectors.toSet());
+        /* **우리가 심은 것만 본다.** 주인이 빈 것을 다 훑으면 로그인 없이
+         * 만든 캐릭터까지 걸린다 — 캐릭터 만들기는 로그인을 안 따져서
+         * (`CreditGate.currentUser()` 가 그냥 null 이 된다) 그 줄도 주인이
+         * 비어 있다. 심은 표시(`source = BUILTIN`)로 좁힌다. */
+        List<String> strays = characters.findBySource(CharacterSource.BUILTIN).stream()
+                .map(WebtoonCharacter::getName)
+                .filter(name -> !known.contains(name))
                 .toList();
-        if (gone.isEmpty()) {
+        if (strays.isEmpty()) {
             return;
         }
-        characters.deleteAll(gone);
-        log.info("목록에서 빠진 기본 캐릭터 {}명을 거뒀습니다: {}", gone.size(),
-                gone.stream().map(WebtoonCharacter::getName).toList());
+        log.info("시드 목록에 없는 기본 제공 캐릭터가 있습니다(지우지 않습니다): {}"
+                + " — DB 에서 고친 것이면 그대로 두고, 정말 뺄 것이면 DB 에서 지우세요",
+                strays);
     }
 
-    private static String typeOf(String file) {
-        return file.endsWith(".png") ? "image/png" : "image/jpeg";
-    }
 }

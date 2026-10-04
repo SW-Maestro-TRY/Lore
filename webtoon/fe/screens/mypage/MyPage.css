@@ -1,0 +1,188 @@
+/* 마이페이지 — 보드 MyPage.dc.html / MMyPage.dc.html */
+.wt .wt-my { flex-direction: row; gap: 32px; }
+.wt .wt-my-rail { width: 250px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; }
+.wt .wt-my-main { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+/* 왼쪽 줄 */
+.wt .wt-my-me { align-items: center; padding: 20px 14px; gap: 6px; }
+.wt .wt-my-me b { font-size: 16px; }
+.wt .wt-my-me .dim { font-size: 12px; }
+.wt .wt-my-avatar {
+  width: 56px; height: 56px; border-radius: 50%; background: var(--water);
+  display: inline-flex; align-items: center; justify-content: center; color: var(--sea-deep);
+}
+.wt .wt-my-credit { gap: 6px; }
+.wt .wt-my-credit .dim { font-size: 12px; }
+.wt .wt-my-credit > b { font-size: 24px; }
+.wt .wt-my-credit > b span { font-size: 13px; font-weight: 400; }
+.wt .wt-my-creditacts { display: flex; gap: 6px; margin-top: 4px; }
+.wt .wt-my-creditacts .btn { flex: 1 1 0; }
+.wt .wt-my-menu { gap: 2px; padding: 8px; }
+.wt .wt-my-menu .dim { font-size: 12px; }
+.wt .wt-my-lang { gap: 8px; }
+.wt .wt-my-lang label { font-size: 12px; color: var(--dim); font-weight: 700; }
+
+/* 오른쪽 — 머리 줄 */
+.wt .wt-my-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.wt .wt-my-head > div { display: flex; flex-direction: column; gap: 4px; }
+.wt .wt-my-head h2 { font-size: 30px; }
+.wt .wt-my-head .muted { font-size: 14px; }
+.wt .wt-my-strip { margin-top: 18px; }
+.wt .wt-my-head-sub { margin-top: 10px; }
+.wt .wt-my-head-sub h2 { font-size: 22px; }
+.wt .wt-my-head-sub .muted { font-size: 13.5px; }
+.wt .wt-my-head .btn, .wt .wt-my-headacts .btn { height: 42px; font-size: 14px; }
+.wt .wt-my-head-sub .btn { height: 38px; font-size: 13px; }
+.wt .wt-my-headacts { display: flex; gap: 8px; }
+
+/* 작품 그리드 */
+.wt .wt-my-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.wt .wt-my-work > b { font-size: 15px; }
+.wt .wt-my-work > .muted { font-size: 12.5px; }
+.wt .wt-my-cover { padding: 0; border: 0; background: none; cursor: pointer; display: block; }
+.wt .wt-my-cover img {
+  width: 100%; height: 260px; object-fit: cover; object-position: top;
+  border-radius: 12px; display: block; background: var(--water-light);
+}
+.wt .wt-my-eps { display: flex; gap: 6px; flex-wrap: wrap; }
+.wt .wt-my-eps .ep { cursor: pointer; }
+.wt .wt-my-workfoot {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line);
+}
+.wt .wt-my-pub { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.wt .wt-my-edit { height: 30px; font-size: 12px; padding: 0 14px; }
+.wt .wt-my-workacts { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+/* 카드가 좁아지면(창 폭 1100px 안팎에서 세 칸 · 폰 두 칸) 편집실·지우기가 카드 밖으로
+   넘쳤다 — 공개 스위치 아래 줄로 내리고 두 버튼이 그 줄을 반씩 나눠 쓴다 */
+.wt .wt-my-work { container-type: inline-size; }
+.wt .wt-my-workfoot { flex-wrap: wrap; row-gap: 8px; column-gap: 8px; }
+@container (max-width: 250px) {
+  .wt .wt-my-workacts { width: 100%; margin-left: 0; }
+  .wt .wt-my-workacts .btn { flex: 1 1 0; min-width: 0; padding: 0 6px; }
+}
+.wt .wt-my-err { font-size: 11.5px; color: var(--gold); }
+
+/* 1:1 문의 창구 선택(카카오톡·인스타그램·X) — 「1:1 문의하기」 메뉴로 여는 창(ui/Dialog) 안 */
+.wt .wt-my-contact { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.wt .wt-my-contact .btn { height: 46px; text-decoration: none; }
+
+/* 휴지통(#157) — 사이드바 「휴지통」 메뉴로 여는 창(ui/Dialog) 안 */
+.wt .wt-my-trash { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.wt .wt-my-trashempty { font-size: 13px; padding: 18px 0; text-align: center; }
+.wt .wt-my-trashrow {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px;
+}
+.wt .wt-my-trashrow img, .wt .wt-my-trashimg {
+  width: 44px; height: 56px; object-fit: cover; border-radius: 8px;
+  background: var(--water-light); flex-shrink: 0; opacity: .7;
+}
+.wt .wt-my-trashtext { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.wt .wt-my-trashtext b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-my-trashtext .muted { font-size: 12px; }
+.wt .wt-my-trashrow .btn { height: 32px; font-size: 12px; padding: 0 14px; flex-shrink: 0; }
+
+/* 설정 탭 */
+.wt .wt-my-setting { padding: 18px 20px; }
+.wt .wt-my-setting-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.wt .wt-my-setting-row > div { display: flex; flex-direction: column; gap: 6px; max-width: 480px; }
+.wt .wt-my-setting-row b { font-size: 14.5px; }
+.wt .wt-my-setting-row .muted { font-size: 12.5px; line-height: 1.55; }
+.wt .wt-my-setting-row .sw { flex-shrink: 0; margin-top: 2px; }
+.wt .wt-my-setting + .wt-my-setting { margin-top: 12px; }
+.wt .wt-my-withdraw { flex-shrink: 0; }
+.wt .wt-my-withdraw-confirm { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.wt .wt-my-withdraw-confirm .muted { font-size: 12.5px; }
+
+/* 작품 목록이 실패했거나(에러) 아직 없을 때(빈 목록). 둘을 가른다 —
+   실패를 "그냥 없음"으로 보이게 두면 웹툰이 사라진 것처럼 읽힌다. */
+.wt .wt-my-empty {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  padding: 24px 0;
+}
+.wt .wt-my-empty img { width: 96px; }
+.wt .wt-my-empty b { font-size: 15px; }
+.wt .wt-my-empty .inline-link {
+  background: none; border: 0; padding: 0; font: inherit; color: var(--sea-deep);
+  text-decoration: underline; cursor: pointer;
+}
+
+/* 캐릭터 줄 */
+.wt .wt-my-chars { display: flex; gap: 12px; flex-wrap: wrap; }
+.wt .wt-my-char {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: none; border: 0; padding: 0; cursor: pointer; color: var(--ink);
+}
+.wt .wt-my-char img {
+  width: 96px; height: 96px; border-radius: 50%; object-fit: cover; object-position: top;
+  display: block; background: var(--water-light);
+}
+.wt .wt-my-char b { font-size: 13px; }
+.wt .wt-my-char-new {
+  width: 96px; height: 96px; border-radius: 50%; border: 1.5px dashed rgba(15, 51, 63, 0.25);
+  background: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; color: var(--ink); font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.wt .wt-my-char-new b { font-size: 20px; }
+.wt .wt-my-char-new:hover { border-color: var(--ink); }
+
+@media (max-width: 767px) {
+  /* 폰은 왼쪽 줄을 그대로 쌓지 않는다 — 아트보드 MMyPage 처럼 계정·크레딧을
+     한 줄로 눕히고 메뉴를 가로 칩 줄로 접는다. 그대로 쌓으면 키 큰 카드 넷을
+     지나야 작품이 나온다. */
+  .wt .wt-my { flex-direction: column; gap: 14px; }
+  .wt .wt-my-rail { width: auto; gap: 10px; }
+
+  .wt .wt-my-me { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; }
+  .wt .wt-my-me .wt-my-avatar { width: 44px; height: 44px; flex-shrink: 0; }
+  .wt .wt-my-me b { font-size: 15px; }
+  .wt .wt-my-me .dim { margin-left: auto; }
+
+  .wt .wt-my-credit { flex-direction: row; align-items: baseline; gap: 8px; padding: 12px 14px; flex-wrap: wrap; }
+  .wt .wt-my-credit > b { font-size: 19px; }
+
+  .wt .wt-my-menu { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px; }
+  .wt .wt-my-menu small { display: none; }
+  .wt .wt-my-menu button, .wt .wt-my-menu a {
+    width: auto; flex: 0 0 auto; gap: 6px; padding: 8px 12px; border-radius: 999px;
+    border: 1px solid var(--line-strong);
+  }
+  .wt .wt-my-menu button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .wt .wt-my-menu button.on .dim { color: rgba(255, 255, 255, 0.75); }
+  .wt .wt-my-lang { padding: 10px 14px; }
+  /* 제목과 단추가 한 줄에서 겹쳐 보인다 — 폰에서는 위아래로 나눈다. */
+  .wt .wt-my-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .wt .wt-my-head h2 { font-size: 24px; }
+  .wt .wt-my-head-sub h2 { font-size: 19px; }
+  /* 가로로 나란히 두면 버튼이 길고 얇아져 보기 안 좋다 — 세로로 쌓고 폭 전체를 쓴다. */
+  .wt .wt-my-headacts { flex-direction: column; }
+  .wt .wt-my-headacts .btn { width: 100%; }
+  .wt .wt-my-head-sub .btn { align-self: flex-start; }
+  .wt .wt-my-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .wt .wt-my-cover img { height: 180px; border-radius: 10px; }
+  .wt .wt-my-char img, .wt .wt-my-char-new { width: 76px; height: 76px; }
+}
+
+/* 만드는 중(#548) — 멈춰 있는 작업으로 돌아가는 줄 */
+/* 만드는 중(#548) — 표지 한 줄(RunStrip)과 같은 크기, 그림 위에 상태 딱지 */
+.wt .wt-my-draftcount { font-size: 13px; font-weight: 700; margin-left: 4px; }
+.wt .wt-my-draft { width: 150px; }
+.wt .wt-my-draftcover { position: relative; display: block; }
+.wt .wt-my-draftcover img { width: 150px; height: 200px; object-fit: contain; object-position: center; border-radius: 12px; background: #f6f7f9; display: block; }
+.wt .wt-my-draftcover img.lou { padding: 28px; box-sizing: border-box; background: var(--water-light); }
+.wt .wt-my-draftchip { position: absolute; left: 8px; top: 8px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, .92); color: var(--ink); border: 1px solid var(--line); }
+.wt .wt-my-draftchip.wait { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt .wt-my-draftmeta { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-my-draftgo { font-size: 12px; font-weight: 700; color: var(--sea-deep); }
+@media (max-width: 767px) {
+  .wt .wt-my-draft { width: 120px; }
+  .wt .wt-my-draftcover img { width: 120px; height: 160px; }
+}
+/* 내 캐릭터 탭(#548) — 내 웹툰과 같은 카드 */
+.wt .wt-my-charcard .wt-my-cover { position: relative; cursor: default; }
+.wt .wt-my-charcard .wt-my-cover img, .wt .wt-my-charnoimg { width: 100%; height: 260px; object-fit: cover; object-position: top; border-radius: 12px; display: block; background: var(--water-light); }
+.wt .wt-my-charcard .wt-my-draftchip { position: absolute; left: 10px; top: 10px; }
+.wt .wt-my-charcard .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-my-charcard .wt-my-workfoot .grow { flex: 1; }

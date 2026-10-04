@@ -1,0 +1,97 @@
+import { registerDict, type Dict } from "../../lib/i18n";
+
+/* 완성본 · 공유 — 화면의 한국어 원문이 키다. 서버가 만든 글(제목·오류 본문)은 여기 없다. */
+const dict: Dict = {
+  /* ---- Result ---- */
+  "이런 웹툰은 어때요": { en: "You might also like", ja: "こんな作品はいかが", zh: "你可能也喜欢" },
+  "찜하기": { en: "Save", ja: "お気に入りに追加", zh: "收藏" },
+  "찜 취소": { en: "Unsave", ja: "お気に入りから外す", zh: "取消收藏" },
+  "로그인하면 찜할 수 있어요": { en: "Sign in to save webtoons", ja: "ログインするとお気に入りに追加できます", zh: "登录后可收藏" },
+  "작품을 열지 못했습니다": { en: "Couldn't open this work.", ja: "作品を開けませんでした", zh: "无法打开这部作品" },
+  "제목을 바꾸지 못했습니다": { en: "Couldn't change the title.", ja: "タイトルを変更できませんでした", zh: "无法修改标题" },
+  "미리보기 ({planned}장 중 앞 {count}장만 그렸습니다)": {
+    en: "Preview (only the first {count} of {planned} pages were drawn)",
+    ja: "プレビュー（{planned}ページのうち最初の{count}ページだけ描いています）",
+    zh: "预览（共 {planned} 页，只画了前 {count} 页）",
+  },
+  "{n}컷": { en: "{n} panels", ja: "{n}コマ", zh: "{n} 格" },
+  "{n}쪽": { en: "Page {n}", ja: "{n}ページ", zh: "第 {n} 页" },
+  "처음으로": { en: "Start over", ja: "最初へ", zh: "回到开始" },
+  "완성": { en: "Done", ja: "完成", zh: "完成" },
+  "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
+  "이야기": { en: "Story", ja: "ストーリー", zh: "故事" },
+  "다시 시도": { en: "Try again", ja: "もう一度", zh: "重试" },
+  "확인": { en: "OK", ja: "確認", zh: "确定" },
+  "제목": { en: "Title", ja: "タイトル", zh: "标题" },
+  "저장": { en: "Save", ja: "保存", zh: "保存" },
+  "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  "저장하지 못했습니다": { en: "Couldn't save.", ja: "保存できませんでした", zh: "无法保存" },
+  "제목 고치기": { en: "Edit title", ja: "タイトルを直す", zh: "修改标题" },
+  "다음 편 만들기": { en: "Make the next episode", ja: "次の話を作る", zh: "制作下一话" },
+  "편집실": { en: "Editor", ja: "編集室", zh: "编辑室" },
+  "내려받기": { en: "Download", ja: "ダウンロード", zh: "下载" },
+  "아직 다음화 기능은 준비 중이에요!": {
+    en: "Next episodes are still in the works!",
+    ja: "次の話の機能はまだ準備中です！",
+    zh: "下一话功能还在准备中！",
+  },
+  "내 작품이 아니면 내려받기·편집실·다음 편은 없어요. 읽고 공유하는 것만.": {
+    en: "Download, editor and next episode are only for your own works. Here you can read and share.",
+    ja: "自分の作品でない場合、ダウンロード・編集室・次の話はありません。読んで共有するだけです。",
+    zh: "不是自己的作品时，没有下载、编辑室和下一话，只能阅读和分享。",
+  },
+  "이 장 내려받기": { en: "Download this page", ja: "このページをダウンロード", zh: "下载这一页" },
+  "다음화 보기": { en: "Next episode", ja: "次の話を見る", zh: "看下一话" },
+  "맨 위로": { en: "Back to top", ja: "一番上へ", zh: "回到顶部" },
+
+  /* ---- ShareMenu ---- */
+  "공유": { en: "Share", ja: "共有", zh: "分享" },
+  "LORE 로 만든 웹툰": { en: "A webtoon made with LORE", ja: "LORE で作ったウェブトゥーン", zh: "用 LORE 制作的网络漫画" },
+  "링크를 복사했어요 — 글에 붙여 넣으세요": {
+    en: "Link copied — paste it into your post.",
+    ja: "リンクをコピーしました — 記事に貼り付けてください",
+    zh: "已复制链接 — 请粘贴到文章里",
+  },
+  "카카오톡 공유를 열지 못했어요": { en: "Couldn't open KakaoTalk sharing.", ja: "カカオトークの共有を開けませんでした", zh: "无法打开 KakaoTalk 分享" },
+  "링크를 복사했어요": { en: "Link copied.", ja: "リンクをコピーしました", zh: "已复制链接" },
+  "복사하지 못했어요 — 주소창을 그대로 쓰세요": {
+    en: "Couldn't copy — use the address bar instead.",
+    ja: "コピーできませんでした — アドレスバーのURLをお使いください",
+    zh: "无法复制 — 请直接使用地址栏",
+  },
+  "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
+  "라인": { en: "LINE", ja: "LINE", zh: "LINE" },
+  "포스타입": { en: "Postype", ja: "Postype", zh: "Postype" },
+  "링크 복사": { en: "Copy link", ja: "リンクをコピー", zh: "复制链接" },
+  "컷별로 내려받기": { en: "Download each page", ja: "コマごとにダウンロード", zh: "逐页下载" },
+  "넣은 설정이 간 곳": { en: "Where your input went", ja: "入れた設定の行き先", zh: "你的设定去了哪里" },
+  "이름": { en: "Name", ja: "名前", zh: "名字" },
+  "장르": { en: "Genre", ja: "ジャンル", zh: "类型" },
+  "그림체": { en: "Art style", ja: "画風", zh: "画风" },
+  "캐릭터 설명": { en: "Character description", ja: "キャラクター説明", zh: "角色描述" },
+  "이야기 소재": { en: "Story idea", ja: "物語の素材", zh: "故事素材" },
+  "사진": { en: "Photo", ja: "写真", zh: "照片" },
+  "{a} → 주인공 {b}": { en: "{a} → lead {b}", ja: "{a} → 主人公 {b}", zh: "{a} → 主角 {b}" },
+  "안 넣음": { en: "Not given", ja: "未入力", zh: "未填写" },
+  "{a} → {b}": { en: "{a} → {b}", ja: "{a} → {b}", zh: "{a} → {b}" },
+  "안 정함 → {b}": { en: "Not chosen → {b}", ja: "未指定 → {b}", zh: "未选择 → {b}" },
+  "「{d}」→ 이야기 속 {b}": { en: "\"{d}\" → {b} in the story", ja: "「{d}」→ 物語の中の {b}", zh: "「{d}」→ 故事里的 {b}" },
+  "「{d}」→ 줄거리: {b}": { en: "\"{d}\" → plot: {b}", ja: "「{d}」→ あらすじ: {b}", zh: "「{d}」→ 剧情: {b}" },
+  "안 넣음 → 줄거리: {b}": { en: "Not given → plot: {b}", ja: "未入力 → あらすじ: {b}", zh: "未填写 → 剧情: {b}" },
+  "사진을 보고 외모를 읽었어요": { en: "Looks were read from your photo", ja: "写真から外見を読み取りました", zh: "外貌来自你的照片" },
+  "사진 없음 → 설명으로만": { en: "No photo → from the description only", ja: "写真なし → 説明のみ", zh: "无照片 → 仅凭描述" },
+  "{who}의 다른 편": { en: "Other episodes with {who}", ja: "{who}の他の話", zh: "{who}的其他话" },
+  "EP.{n}": { en: "EP.{n}", ja: "EP.{n}", zh: "EP.{n}" },
+  "만들기": { en: "Create", ja: "作る", zh: "制作" },
+  "크게 보기": { en: "View larger", ja: "大きく見る", zh: "放大查看" },
+
+  /* ---- 안전 기준에 걸려 빈 장으로 완성(#626) ---- */
+  "{pages} 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 편집실에서 그 장면 설명을 고쳐 다시 그려 주세요. 빈 장 다시 그리기는 무료예요.": {
+    en: "The scene on {pages} was flagged by the image safety filter, so we left it blank. Edit that scene's description in the editor and redraw it. Redrawing blank pages is free.",
+    ja: "{pages}の場面が画像の安全基準に引っかかったため、空白のページにしました。編集室でその場面の説明を直して描き直してください。空白ページの描き直しは無料です。",
+    zh: "{pages}的场景未通过图片安全标准，已留作空白页。请在编辑室修改该场景描述后重新绘制。重新绘制空白页免费。" },
+  "편집실에서 다시 그리기": { en: "Redraw in the editor", ja: "編集室で描き直す", zh: "在编辑室重新绘制" },
+  "이 장면은 이미지 안전 기준에 걸려 아직 그리지 못했어요": { en: "This scene was flagged by the image safety filter and hasn't been drawn yet", ja: "この場面は画像の安全基準に引っかかり、まだ描けていません", zh: "此场景未通过图片安全标准，尚未绘制" },
+};
+
+registerDict(dict);
