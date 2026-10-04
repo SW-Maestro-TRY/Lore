@@ -459,6 +459,17 @@ public class JobController {
         return Map.of("ok", true);
     }
 
+    @Operation(summary = "안전 기준에 걸린 캐릭터 시트 고치기",
+            description = "시트가 이미지 안전 기준에 걸려 멈춘 작업에서, 사진(photo_keys · photos_data)이나 외모 설명"
+                    + "(character)을 바꿔 시트만 다시 그린다. 이야기·장면은 그대로다. 작업당 3번까지(#626).")
+    @PostMapping("/jobs/{id}/sheet-fix")
+    public Map<String, Object> sheetFix(@PathVariable String id, HttpServletRequest request,
+                                        @RequestBody(required = false) JobService.SheetFixRequest body) {
+        Long me = CreditGate.currentUser();
+        jobs.fixSheet(id, body, me, me == null ? guests.keyOf(request) : null);
+        return Map.of("ok", true);
+    }
+
     /** 본문이 없으면(옛 이름으로 부르면) 그대로 진행으로 본다. */
     public record SheetDecision(String decision, String note) {
     }

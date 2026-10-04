@@ -320,11 +320,12 @@ public class JobService {
                 runner.sheetReady(job.getRunId()),
                 runArt.sheetVersions(job.getRunId()),
                 at == JobStatus.AWAITING_SCENES || ownPause ? castSheetsOf(job) : null,
-                at == JobStatus.AWAITING_SCENES || ownPause ? inputOf(job) : null,
+                at == JobStatus.AWAITING_SCENES || ownPause || job.isSheetBlocked() ? inputOf(job) : null,
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
                 spot,
-                notice.addressOf(job), queue.etaOf(job, now, spot));
+                notice.addressOf(job), queue.etaOf(job, now, spot),
+                job.isSheetBlocked() ? Math.max(0, SHEET_FIX_MAX - sheetFixesOf(job)) : 0);
     }
 
     /**
@@ -563,6 +564,119 @@ public class JobService {
         }
         clearSheet(job.getRunId());
         runner.redrawSheet(job.getId(), note == null ? "" : note.trim(), at);
+    }
+
+    /* ---- 시트가 안전 기준에 걸렸을 때(#626) ---- */
+
+    /** 고쳐서 다시 그리기 상한 — 게스트도 같다. 시트 한 장에 그림 값이 두 번(스스로 한 번 더) 나간다. */
+    static final int SHEET_FIX_MAX = 3;
+    private static final String SHEET_FIX_FILE = "sheet-fixes.txt";
+
+    /**
+     * 걸린 캐릭터 시트를 <b>사진·외모 설명을 고쳐</b> 다시 그린다(#626). 이야기·장면은 그대로 둔다.
+     *
+     * <ul>
+     *   <li>새 사진을 주면 예전 사진은 그 자리에서 지운다. 안 주면 있던 사진을 그대로 쓴다.</li>
+     *   <li>설명은 사람이 새로 적은 글이라 입력 검사를 거친다.</li>
+     *   <li>크레딧은 더 안 받는다 — 처음 낸 값 안에서. 대신 {@link #SHEET_FIX_MAX} 번까지.</li>
+     *   <li>바로 만들기는 다시 그려지면 확인을 묻지 않고 장면 · 그림으로 이어 간다. 확인하고 만들기는 시트
+     *       확인 자리로 돌아간다.</li>
+     * </ul>
+     */
+    public void fixSheet(String publicId, SheetFixRequest form, Long userId, String guestKey) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (!job.isSheetBlocked()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 캐릭터를 고칠 차례가 아닙니다");
+        }
+        String desc = form == null || form.character() == null ? null : form.character().trim();
+        String note = form == null || form.note() == null ? "" : form.note().trim();
+        safety.checkText("webtoon-sheet-fix", desc, note);
+        if (sheetFixesOf(job) >= SHEET_FIX_MAX) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "캐릭터 다시 그리기는 " + SHEET_FIX_MAX + "번까지예요. 그만두시면 쓰신 크레딧이나 무료 횟수를 돌려드려요.");
+        }
+        Path dir = jobsDir.resolve(job.getPublicId());
+        try {
+            List<Path> photos = null;
+            boolean newPhotos = form != null && ((form.photoKeys() != null && !form.photoKeys().isEmpty())
+                    || (form.photosData() != null && !form.photosData().isEmpty()));
+            if (newPhotos) {
+                runner.dropPhotos(job.getId());          // 걸린 사진은 바로 지운다
+                photos = form.photoKeys() != null && !form.photoKeys().isEmpty()
+                        ? pullPhotos(dir, form.photoKeys(), userId, guestKey)
+                        : savePhotos(dir, form.photosData());
+            }
+            rewriteForSheetFix(dir.resolve("character.json"), runner.runDir(job.getRunId()).resolve("input.json"),
+                    photos, desc);
+            Files.writeString(dir.resolve(SHEET_FIX_FILE), String.valueOf(sheetFixesOf(job) + 1));
+        } catch (IOException e) {
+            log.error("캐릭터 고치기를 준비하지 못했습니다 (job={})", publicId, e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "캐릭터를 다시 그리지 못했습니다");
+        }
+        clearSheet(job.getRunId());
+        store.sheetUnblocked(job.getId());
+        log.info("걸린 캐릭터 시트를 고쳐 다시 그립니다 (job={}, 사진 바꿈={}, 설명 바꿈={})",
+                publicId, form != null && form.photoKeys() != null && !form.photoKeys().isEmpty(), desc != null);
+        runner.redrawSheet(job.getId(), note, job.isCheckpoints() ? JobStatus.AWAITING_SHEET : null);
+    }
+
+    /** 몇 번 고쳐 그렸나. 파일이 없으면 0. */
+    int sheetFixesOf(WebtoonJob job) {
+        try {
+            Path f = jobsDir.resolve(job.getPublicId()).resolve(SHEET_FIX_FILE);
+            return Files.isRegularFile(f) ? Integer.parseInt(Files.readString(f).trim()) : 0;
+        } catch (IOException | NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * 사진·설명을 두 자리에 적는다 — 작업 폴더의 {@code character.json}(서버가 읽는 입력)과 작품 폴더의
+     * {@code input.json}(시트를 다시 그리는 {@code run.py --sheet} 가 읽는 입력). 둘 다 안 고치면 바뀐 사진이
+     * 그림에 안 들어간다. 안 준 칸(null)은 그대로 둔다.
+     */
+    @SuppressWarnings("unchecked")
+    private void rewriteForSheetFix(Path characterJson, Path inputJson, List<Path> photos, String desc)
+            throws IOException {
+        if (Files.isRegularFile(characterJson)) {
+            Map<String, Object> doc = mapper.readValue(characterJson.toFile(), LinkedHashMap.class);
+            if (photos != null) {
+                doc.remove("photo");
+                if (photos.size() == 1) {
+                    doc.put("photo", photos.get(0).toString());
+                } else if (!photos.isEmpty()) {
+                    doc.put("photo", photos.stream().map(Path::toString).toList());
+                }
+            }
+            if (desc != null) {
+                doc.put("character", desc);
+            }
+            mapper.writerWithDefaultPrettyPrinter().writeValue(characterJson.toFile(), doc);
+        }
+        if (Files.isRegularFile(inputJson)) {
+            Map<String, Object> doc = mapper.readValue(inputJson.toFile(), LinkedHashMap.class);
+            if (photos != null) {
+                doc.put("photos", photos.stream().map(p -> p.toAbsolutePath().toString()).toList());
+            }
+            if (desc != null) {
+                doc.put("description", desc);
+            }
+            mapper.writerWithDefaultPrettyPrinter().writeValue(inputJson.toFile(), doc);
+        }
+    }
+
+    /**
+     * 걸린 시트를 고치는 요청. 사진은 만들기와 같은 두 길(presign 키 · data URL)로 받는다.
+     *
+     * @param character 외모·옷차림 설명. null 이면 그대로
+     * @param note      이번 한 번 그릴 때만 붙이는 말
+     */
+    public record SheetFixRequest(@com.fasterxml.jackson.annotation.JsonProperty("photo_keys")
+                                  @com.fasterxml.jackson.annotation.JsonAlias("photoKeys") List<String> photoKeys,
+                                  @com.fasterxml.jackson.annotation.JsonProperty("photos_data")
+                                  @com.fasterxml.jackson.annotation.JsonAlias("photosData") List<String> photosData,
+                                  String character,
+                                  String note) {
     }
 
     /* ---- 장면 초안(#548) ---- */

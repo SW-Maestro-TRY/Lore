@@ -131,6 +131,33 @@ final class NoticeMail {
         return new Body(text.toString(), page(failHead(site), html.toString(), site));
     }
 
+    /**
+     * 다 못 만들었지만 <b>사람이 고치면 이어 갈 수 있다</b>(#626) — 캐릭터 시트가 안전 기준에 걸려
+     * 멈췄거나, 장면 몇 장만 걸려 빠진 채 완성됐을 때. 실패 메일과 같은 머리를 쓰되, 「잠시 후 다시
+     * 시도해 주세요」가 아니라 무엇을 고치면 되는지(why)를 적는다 — 같은 내용으로 다시 하면 또 걸린다.
+     *
+     * @param why  사람에게 보여 준 문장 그대로(진행 화면과 같은 말)
+     * @param button 버튼 글자 · 예: 「캐릭터 다시 그리러 가기 →」
+     */
+    static Body needsFix(String title, String why, String button, String link, String site) {
+        boolean titled = title != null && !title.isBlank();
+        String reason = why == null ? "" : why.trim();
+        StringBuilder text = new StringBuilder();
+        text.append("안녕하세요! 루예요. 👋\n\n");
+        text.append(titled ? "요청하신 「" + title + "」" + eulReul(title) : "요청하신 웹툰을")
+                .append(" 만들던 중 확인이 필요한 일이 생겼어요.\n\n");
+        text.append(reason).append("\n\n");
+        text.append(button).append(" ").append(link).append("\n");
+        text.append(textFooter());
+        StringBuilder html = new StringBuilder();
+        html.append(p("안녕하세요! 루예요. 👋"));
+        html.append(p((titled ? "요청하신 <b>「" + esc(title) + "」</b>" + eulReul(title) : "요청하신 웹툰을")
+                + " 만들던 중 <b>확인이 필요한 일이 생겼어요.</b>"));
+        html.append(p(esc(reason)));
+        html.append(button(button, link));
+        return new Body(text.toString(), page(failHead(site), html.toString(), site));
+    }
+
     /* ---- 아래 공통 ---------------------------------------------------------- */
 
     private static String textFooter() {

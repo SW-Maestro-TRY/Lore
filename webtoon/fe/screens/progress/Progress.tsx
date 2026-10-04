@@ -13,9 +13,12 @@ import mockReal from "./mockScenes.json";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
-  cancelJob, continueScenes, decideSheet, jobPageUrl, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
+  cancelJob, continueScenes, decideSheet, fixSheet, jobPageUrl, uploadDataUrlsAsGuest, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
   castSheetImageUrl, readAllowance, requestCastSheet, restoreScene, restoreSheet, retryScene, saveScenes, savePerson, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
+import { readPhoto } from "../../lib/photoFile";
+import { useAuth } from "@common/auth/useAuth";
+import { uploadDataUrls } from "@common/api/uploads";
 import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizardData";
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
@@ -336,6 +339,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const [sheetV, setSheetV] = useState(0); // 시트 그림 캐시 깨기
   const [zoom, setZoom] = useState<string | null>(null);
   const [sheetNote, setSheetNote] = useState("");
+  /* 걸린 시트 고치기(#626) — 새 사진(data URL)·외모 설명·이번만 붙일 말 */
+  const { status: authStatus } = useAuth();
+  const [fixPhotos, setFixPhotos] = useState<string[]>([]);
+  const [fixDesc, setFixDesc] = useState<string | null>(null);
+  const [fixNote, setFixNote] = useState("");
   const [pickN, setPickN] = useState<number | null>(null);
   const [castN, setCastN] = useState<number | null>(null);
   const [open, setOpen] = useState<Record<number, boolean>>({});
@@ -645,14 +653,14 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const autoTab: Tab = waiting || cur === REVIEW ? cur : "play";
   const at: Tab = tab ?? autoTab;
 
-  type Pane = "loading" | "play" | "sheet" | "cast" | "scenes" | "making" | "confirm" | "story-check" | "drawing" | "failed" | "story-view" | "sheet-view" | "scenes-view" | "pages-view" | "mine";
+  type Pane = "loading" | "play" | "sheet" | "sheet-fix" | "cast" | "scenes" | "making" | "confirm" | "story-check" | "drawing" | "failed" | "story-view" | "sheet-view" | "scenes-view" | "pages-view" | "mine";
   let pane: Pane = "loading";
   if (job) {
     if (status === "error") pane = "failed";
     else if (at === "play") pane = "play";
     else if (at === "mine") pane = "mine";
     else if (at !== cur) pane = (["story-view", "sheet-view", "scenes-view", "pages-view", "drawing"] as Pane[])[at];
-    else if (status === "awaiting_sheet") pane = "sheet";
+    else if (status === "awaiting_sheet") pane = job.sheet_blocked ? "sheet-fix" : "sheet";
     else if (status === "awaiting_cast") pane = "cast";
     else if (status === "awaiting_scenes") pane = "scenes";
     /* 장면을 다 나눴지만 첫 장이 그려지기 전이면 걸음 3 이 아직 「지금 단계」다 — 그래도 눌렀으면 장면을 읽게 한다(#601). */
@@ -764,6 +772,39 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     track("sheet_decide", { job: job.id, result: "retry", has_note: !!sheetNote.trim() });
     void send(() => decideSheet(job.id, "retry", sheetNote.trim()));
   };
+  const pickFixPhotos = async (files: FileList | null) => {
+    if (!files) return;
+    setActErr("");
+    const got: string[] = [];
+    for (const f of Array.from(files).slice(0, 4)) {
+      try { got.push(await readPhoto(f)); } catch (e) { setActErr(e instanceof Error ? e.message : t("사진을 열지 못했습니다")); }
+    }
+    setFixPhotos(got);
+  };
+  const submitFix = () => {
+    if (!job) return;
+    const desc = fixDesc ?? job.input?.description ?? "";
+    track("sheet_fix", { job: job.id, photos: fixPhotos.length, desc_changed: fixDesc != null, has_note: !!fixNote.trim() });
+    void send(async () => {
+      let keys: string[] | undefined;
+      if (fixPhotos.length) {
+        try {
+          keys = authStatus === "authenticated" ? await uploadDataUrls(fixPhotos, "webtoon") : await uploadDataUrlsAsGuest(fixPhotos);
+        } catch {
+          keys = undefined;                   // 올리다 막히면 본문으로 — 만들기와 같다(start.ts)
+        }
+      }
+      await fixSheet(job.id, {
+        photo_keys: keys,
+        photos_data: keys ? undefined : (fixPhotos.length ? fixPhotos : undefined),
+        character: fixDesc ?? undefined,
+        note: fixNote.trim() || undefined,
+      });
+      if (desc) setFixDesc(null);
+      setFixPhotos([]);
+      setFixNote("");
+    });
+  };
   /* 옛 시트로 되돌리기(#548) — 다시 만들 때마다 전 시트가 보관되고, 걸음 2 에서 골라 되돌린다. */
   const [sheetPick, setSheetPick] = useState<number | null>(null);
   const restoreOldSheet = () => {
@@ -795,6 +836,14 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   /* ---- 폰 바닥 단추 ---- */
   const mfoot = (() => {
     if (!job) return null;
+    if (pane === "sheet-fix") return (
+      <>
+        <button type="button" className="btn btn-p" disabled={busy || !(job.sheet_fix_left ?? 0)} onClick={submitFix}>
+          {t("캐릭터만 다시 그리기")}
+        </button>
+        <button type="button" className="btn btn-w" disabled={busy} onClick={doCancel}>{t("그만두기")}</button>
+      </>
+    );
     if (pane === "sheet") return (
       <>
         <button type="button" className="btn btn-p" disabled={busy} onClick={approveSheet}>{t("이 얼굴로 갈게요")}</button>
@@ -957,6 +1006,46 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   </div>
                   <input className="field wt-prog-mnote" value={sheetNote} placeholder={t("고칠 점을 적고 다시 만들기 · 예: 머리를 더 길게")} aria-label={t("다시 만들기 메모")}
                          onChange={(e) => setSheetNote(e.target.value)} />
+                  <ErrLine text={actErr} />
+                </>
+              )}
+
+              {pane === "sheet-fix" && job && (
+                <>
+                  <div className="wt-prog-head">
+                    <h2>{t("캐릭터를 다시 그려 주세요")}</h2>
+                  </div>
+                  {job.error && <p className="wt-prog-fixwhy">{t(job.error)}</p>}
+                  <div className="wt-prog-fix">
+                    <label className="fieldset">
+                      <b>{t("사진 바꾸기")} <span className="dim">{t("선택 · 최대 4장")}</span></b>
+                      <input type="file" accept="image/*" multiple aria-label={t("새 사진 고르기")}
+                             onChange={(e) => void pickFixPhotos(e.target.files)} />
+                    </label>
+                    {fixPhotos.length > 0 && (
+                      <div className="wt-prog-fixthumbs">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {fixPhotos.map((u, i) => <img key={i} src={u} alt="" />)}
+                        <span className="dim">{t("새 사진으로 그리면 예전 사진은 바로 지워요.")}</span>
+                      </div>
+                    )}
+                    <label className="fieldset">
+                      <b>{t("외모·옷차림 설명")}</b>
+                      <textarea className="field" rows={3} value={fixDesc ?? job.input?.description ?? ""}
+                                aria-label={t("외모·옷차림 설명")} onChange={(e) => setFixDesc(e.target.value)} />
+                    </label>
+                    <input className="field" value={fixNote} placeholder={t("이번에 더 바랄 점 · 예: 단정한 정장 차림으로")}
+                           aria-label={t("이번에 더 바랄 점")} onChange={(e) => setFixNote(e.target.value)} />
+                  </div>
+                  <div className="wt-prog-acts">
+                    <button type="button" className="btn btn-p" disabled={busy || !(job.sheet_fix_left ?? 0)} onClick={submitFix}>
+                      <IconRetry size={18} /> {t("캐릭터만 다시 그리기 · {n}번 남음", { n: job.sheet_fix_left ?? 0 })}
+                    </button>
+                    <button type="button" className="btn btn-w" disabled={busy} onClick={doCancel}>{t("그만두기")}</button>
+                  </div>
+                  {!(job.sheet_fix_left ?? 0) && (
+                    <p className="muted">{t("다시 그리기를 다 썼어요. 그만두시면 쓰신 크레딧이나 무료 횟수를 돌려드려요.")}</p>
+                  )}
                   <ErrLine text={actErr} />
                 </>
               )}
