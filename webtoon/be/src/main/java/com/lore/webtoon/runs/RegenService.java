@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
@@ -100,7 +102,18 @@ public class RegenService {
         String clean = note == null ? "" : note.strip();
         regens.save(PageRegen.queued(id, runId, pageNo,
                 clean.substring(0, Math.min(500, clean.length())), Instant.now()));
-        runner.enqueue(() -> run(id));
+        /* **커밋된 뒤에 줄에 넣는다(#626).** 줄이 놀고 있으면 바로 run() 이 도는데, 그때는 이 기록이
+           아직 커밋 전이라 안 보인다 — run() 은 못 찾으면 조용히 끝나서 화면이 「대기 중」에 영영 머물렀다. */
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    runner.enqueue(() -> run(id));
+                }
+            });
+        } else {
+            runner.enqueue(() -> run(id));
+        }
         return id;
     }
 
