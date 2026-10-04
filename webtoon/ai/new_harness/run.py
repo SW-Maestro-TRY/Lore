@@ -1825,7 +1825,14 @@ def main(argv=None) -> int:
               "(.env.example 참고).")
         return 0
 
-    if args.run_id and (RUNS_DIR / args.run_id).exists():
+    # **폴더가 있다고 이어 하는 것이 아니다(#626).** 바로 만들기는 시트와 이야기를 같은 번호로 **동시에**
+    # 띄운다(--character 를 둘 다 준다). 시트 쪽이 0.몇 초 먼저 폴더를 만들면 이야기 쪽이 「이미 있는 run」
+    # 으로 보고 「이미 이야기 후보가 있습니다」로 멈췄다(dev 2026-10-03). 사람을 새로 받는 호출(--character)
+    # 은 이야기 후보가 아직 없으면 새 작품으로 본다. input.json 은 같은 파일에서 나와 둘이 써도 같다.
+    existing = bool(args.run_id) and (RUNS_DIR / args.run_id).exists()
+    fresh_input = bool(args.character) and not (
+        existing and (RUNS_DIR / args.run_id / "directions.json").exists())
+    if existing and not fresh_input:
         run_dir = RUNS_DIR / args.run_id
         char = read_input(run_dir)
         new_run = False
