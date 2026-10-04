@@ -18,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -77,8 +78,8 @@ class JobFailureTest {
     }
 
     @Test
-    @DisplayName("시트가 안전 검사로 실패하면 사람에게 그 이유를, DB 에는 원문과 하네스 출력을 남긴다")
-    void 실행기가_이유를_남긴다() throws Exception {
+    @DisplayName("시트가 안전 검사에 걸리면 실패로 끝내지 않고 고쳐 주기를 기다린다 — 이유는 사람에게, 원문은 DB 에(#626)")
+    void 실행기가_멈추고_기다린다() throws Exception {
         JobStore store = mock(JobStore.class);
         HarnessProcess harness = mock(HarnessProcess.class);
         JobProgress progress = mock(JobProgress.class);
@@ -100,21 +101,22 @@ class JobFailureTest {
         when(store.byId(1L)).thenReturn(job);
         when(store.running(any(), any())).thenReturn(job);
 
+        JobNotice notice = mock(JobNotice.class);
         JobRunner runner = new JobRunner(harness, progress, store,
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                mock(CreditGate.class), mock(GuestGate.class), mock(JobNotice.class),
+                mock(CreditGate.class), mock(GuestGate.class), notice,
                 1, 1, tmp.resolve("jobs").toString());
 
         runner.resumeAfterPick(1L);
 
         ArgumentCaptor<String> why = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<JobFailure> failure = ArgumentCaptor.forClass(JobFailure.class);
-        verify(store, timeout(2000)).failed(eq(1L), why.capture(), any(), failure.capture());
-        assertThat(why.getValue()).contains("선정성");
+        verify(store, timeout(2000)).sheetBlocked(eq(1L), why.capture(), failure.capture());
+        verify(store, never()).failed(anyLong(), any(), any(), any());
+        verify(notice).needsFix(eq(1L), any());
+        assertThat(why.getValue()).contains("선정성").contains("이야기는 그대로");
         assertThat(failure.getValue().code()).isEqualTo("image_safety");
         assertThat(failure.getValue().stage()).isEqualTo("SHEET_IMAGE");
-        assertThat(failure.getValue().detail())
-                .contains("moderation_blocked")
-                .contains("안전 검사에 걸렸습니다");
+        assertThat(failure.getValue().detail()).contains("moderation_blocked");
     }
 }

@@ -130,7 +130,7 @@ export default function RunningBubble({ view, runId, go }: { view: View; runId?:
   const art = job.art && job.art.total > 0 ? job.art : null;
   const label = done ? t("완성됐어요!")
     : failed ? t("만들기가 멈췄어요")
-    : status === "awaiting_sheet" ? t("캐릭터를 확인해 주세요")
+    : status === "awaiting_sheet" ? (job.sheet_blocked ? t("캐릭터를 다시 그려 주세요") : t("캐릭터를 확인해 주세요"))
     : status === "awaiting_cast" ? (job.cast_kind === "confirm" ? t("인물을 확인해 주세요") : t("상대를 골라 주세요"))
     : status === "awaiting_pick" ? t("이야기를 골라 주세요")
     : status === "awaiting_scenes" ? t("장면을 확인해 주세요")
@@ -226,6 +226,7 @@ registerDict({
   "완성됐어요!": { en: "It's ready!", ja: "完成しました！", zh: "完成了！" },
   "만들기가 멈췄어요": { en: "Creation stopped", ja: "作成が止まりました", zh: "制作已中断" },
   "캐릭터를 확인해 주세요": { en: "Check your character", ja: "キャラクターを確認してください", zh: "请确认角色" },
+  "캐릭터를 다시 그려 주세요": { en: "Please redraw your character", ja: "キャラクターを描き直してください", zh: "请重新绘制角色" },
   "이야기를 골라 주세요": { en: "Pick a story", ja: "ストーリーを選んでください", zh: "请选择故事" },
   "상대를 골라 주세요": { en: "Pick who it's with", ja: "相手を選んでください", zh: "请选择对象" },
   "인물을 확인해 주세요": { en: "Check the characters", ja: "登場人物を確認してください", zh: "请确认登场人物" },

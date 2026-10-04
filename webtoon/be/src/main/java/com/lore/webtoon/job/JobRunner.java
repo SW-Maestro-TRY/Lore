@@ -429,7 +429,16 @@ public class JobRunner {
                 after.cost(job.getRunId());      // 다시 그리는 것도 값이 나간다
                 stopIfCancelled(jobId);
                 if (code != 0) {
+                    if (blockSheetIfUnsafe(jobId, job.getRunId())) {
+                        return;                  // 또 걸렸다 — 다시 고칠 차례(#626)
+                    }
                     throw harnessFailed(job.getRunId(), "캐릭터 시트를 다시 만들지 못했습니다");
+                }
+                if (back == null) {
+                    /* 바로 만들기에서 시트가 걸렸다가 고쳐서 다시 그렸다 — 사람이 이미 한 번 손을 댔으니
+                       확인을 또 묻지 않고 원래 흐름(장면 · 그림)으로 간다(#626). */
+                    resumeAfterSheet(jobId);
+                    return;
                 }
                 store.awaiting(jobId, back,
                         back == JobStatus.AWAITING_SCENES ? JobStage.PAGES : JobStage.SHEET);
@@ -807,11 +816,19 @@ public class JobRunner {
             }
         }
         stopIfCancelled(jobId);
+        /* 먼저 띄운 시트가 이미 두 번 안전 검사에 걸렸으면 또 그리지 않는다 — 같은 사진·설명으로는
+           또 걸리고 그림 값만 두 번 더 나간다. 사람에게 고칠 것을 묻는다(#626). */
+        if (!ready && blockSheetIfUnsafe(jobId, job.getRunId())) {
+            return;
+        }
         if (!ready) {
             int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(), "--sheet"));
             after.cost(job.getRunId());      // 시트는 그림이다 — 죽어도 값은 나갔다
             stopIfCancelled(jobId);
             if (code != 0) {
+                if (blockSheetIfUnsafe(jobId, job.getRunId())) {
+                    return;
+                }
                 throw harnessFailed(job.getRunId(), "캐릭터 시트를 만들지 못했습니다");
             }
         }
@@ -2004,6 +2021,27 @@ public class JobRunner {
         log.error("만들기가 실패했습니다 (job={}, 걸음={}, 종류={}, 분류={})",
                 jobId, why.stage(), why.code(), why.categories(), e);
         stop(jobId, humanReason(e), why);
+    }
+
+    /**
+     * 시트가 이미지 안전 검사에 두 번 연속 걸렸으면(하네스가 한 번은 스스로 다시 그린다) 작업을 실패로
+     * 끝내지 않고 <b>사람이 사진·설명을 고쳐 다시 그리기를 기다린다</b>(#626). 적어 둔 이야기·장면은 그대로다.
+     * 사진은 지우지 않는다 — 사진은 그대로 두고 설명만 고칠 수도 있다. 그만두거나 시트를 확정할 때 지운다.
+     *
+     * @return 그렇게 멈췄으면 참. 안전 검사가 아닌 실패면 거짓 — 부르는 쪽이 지금처럼 실패시킨다
+     */
+    private boolean blockSheetIfUnsafe(Long jobId, String runId) {
+        JobFailure found = runId == null ? null : JobFailure.read(runsDir.resolve(runId)).orElse(null);
+        if (found == null || !found.imageSafety() || found.stage() == null || !found.stage().startsWith("SHEET")) {
+            return false;
+        }
+        String why = found.sheetFixMessage();
+        log.warn("캐릭터 시트가 안전 검사에 걸려 고쳐 주기를 기다립니다 (job={}, 분류={})", jobId, found.categories());
+        sheetAhead.remove(jobId);
+        store.sheetBlocked(jobId, why, found);
+        progress.say(jobId, why);
+        notice.needsFix(jobId, why);
+        return true;
     }
 
     /**

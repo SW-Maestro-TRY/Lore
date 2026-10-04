@@ -69,6 +69,20 @@ public record JobFailure(String stage, String code, List<String> categories, Str
     }
 
     /**
+     * 시트가 걸려 <b>멈춰 기다릴 때</b> 할 말(#626) — 작업은 안 끝났고 이야기는 남아 있다.
+     * 문장은 화면 사전({@code webtoon/fe/screens/progress/i18n.ts})에 그대로 키로 있어야 번역된다.
+     */
+    String sheetFixMessage() {
+        boolean sexual = categories.stream().anyMatch(c -> c.toLowerCase().contains("sexual"));
+        if (sexual) {
+            return "캐릭터 그림이 이미지 안전 기준(선정성)에 걸렸어요. 적어 주신 이야기는 그대로 있어요. "
+                    + "노출이 적은 옷을 입은 사진으로 바꾸거나 옷차림 설명을 고쳐서 캐릭터만 다시 그려 주세요.";
+        }
+        return "캐릭터 그림이 이미지 안전 기준에 걸렸어요. 적어 주신 이야기는 그대로 있어요. "
+                + "다른 사진으로 바꾸거나 설명을 고쳐서 캐릭터만 다시 그려 주세요.";
+    }
+
+    /**
      * 사람에게 할 말. 알아볼 수 있는 이유가 아니면 {@code fallback}(어디서 멈췄나)을 그대로 쓴다.
      *
      * 안전 검사는 이미 한 번 스스로 다시 그려 본 뒤에 여기 온다 — 그래서 "다시 누르세요"

@@ -384,6 +384,31 @@ public class WebtoonJob {
         this.updatedAt = at;
     }
 
+    /**
+     * 캐릭터 시트가 이미지 안전 검사에 걸려 <b>사람이 고쳐 주기를 기다린다</b>(#626).
+     *
+     * 실패로 끝내지 않는다 — 적어 둔 이야기·고른 후보·장면은 그대로 두고, 사진이나 외모 설명만 바꿔
+     * 시트를 다시 그리게 한다. 시트 확인 자리({@link JobStatus#AWAITING_SHEET})를 그대로 써서
+     * 마이페이지·진행 중 동그라미·그만두기가 지금처럼 동작한다. 화면은 {@link #isSheetBlocked} 로 가른다.
+     */
+    void sheetBlocked(String why, String stage, String detail, Instant at) {
+        moveTo(JobStatus.AWAITING_SHEET, JobStage.SHEET, at);
+        this.error = why == null ? null : why.substring(0, Math.min(why.length(), 300));
+        failure(stage, "image_safety", detail);
+    }
+
+    /** 사람이 고쳐서 다시 그리기 시작했다 — 걸렸던 표시를 지운다. 실패 원문은 개발자용으로 남긴다. */
+    void sheetUnblocked(Instant at) {
+        this.error = null;
+        this.failCode = null;
+        this.updatedAt = at;
+    }
+
+    /** 시트가 안전 검사에 걸려 고쳐 주기를 기다리는 중인가. */
+    public boolean isSheetBlocked() {
+        return status == JobStatus.AWAITING_SHEET && "image_safety".equals(failCode) && error != null;
+    }
+
     void failure(String stage, String code, String detail) {
         this.failStage = cut(stage, 30);
         this.failCode = cut(code, 30);
