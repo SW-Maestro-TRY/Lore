@@ -50,7 +50,7 @@ const dict: Dict = {
   "아직 쓴 크레딧이 없습니다.": { en: "No credits spent yet.", ja: "まだ使ったクレジットはありません。", zh: "还没有使用过积分。" },
   "다시 그리기": { en: "Redraw", ja: "描き直す", zh: "重新绘制" },
   "이 장의 장면 · {note}": { en: "This scene · {note}", ja: "このコマの場面 · {note}", zh: "这一格的场景 · {note}" },
-  "이 컷 다시 그리기 · 3크레딧": { en: "Redraw this panel · 3 credits", ja: "このコマを描き直す · 3クレジット", zh: "重绘这一格 · 3 积分" },
+  "이 장면 다시 그리기 · 3크레딧": { en: "Redraw this scene · 3 credits", ja: "この場面を描き直す · 3クレジット", zh: "重新绘制这个场景 · 3 积分" },
 
   /* ---- 다시 그리기 확인 창 ---- */
   "무엇이 마음에 안 드나요?": { en: "What don't you like?", ja: "どこが気に入りませんか？", zh: "哪里不满意？" },
@@ -63,7 +63,7 @@ const dict: Dict = {
     zh: "会真正重新绘制 — 需要 1~2 分钟和生成费用。",
   },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
-  "이 컷 다시 그리기": { en: "Redraw this panel", ja: "このコマを描き直す", zh: "重绘这一格" },
+  "이 장면 다시 그리기": { en: "Redraw this scene", ja: "この場面を描き直す", zh: "重新绘制这个场景" },
   /* ---- 엔진(lib/editorCore.ts)이 innerHTML·textContent·toast·title 로 그리는 글 ---- */
   /* 말풍선 종류와 예시 */
   "일반": { en: "Speech", ja: "通常", zh: "普通" },
@@ -181,7 +181,7 @@ const dict: Dict = {
   "둘러보기": { en: "Browse", ja: "見てまわる", zh: "浏览" },
   "내역을 불러오지 못했습니다.": { en: "Couldn't load the history.", ja: "履歴を読み込めませんでした。", zh: "无法加载记录。" },
   "불러오는 중…": { en: "Loading…", ja: "読み込み中…", zh: "加载中…" },
-  "이 컷 다시 그리기 · {n}크레딧": { en: "Redraw this panel · {n} credits", ja: "このコマを描き直す · {n}クレジット", zh: "重绘这一格 · {n} 积分" },
+  "이 장면 다시 그리기 · {n}크레딧": { en: "Redraw this scene · {n} credits", ja: "この場面を描き直す · {n}クレジット", zh: "重新绘制这个场景 · {n} 积分" },
   "● 저장됨": { en: "● Saved", ja: "● 保存済み", zh: "● 已保存" },
   "다음 장까지 여백": { en: "Gap before next page", ja: "次のページまでの余白", zh: "到下一页的留白" },
 

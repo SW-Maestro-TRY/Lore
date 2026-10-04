@@ -42,9 +42,9 @@ const DICT = {
     en: "Choose a world and art style",
     ja: "世界観・作画スタイルを選ぶ",
   },
-  "10분쯤 기다리면 1화 완성, 마음에 안 드는 컷만 다시": {
-    en: "Wait about 10 minutes for episode 1 — redraw only the panels you don't like",
-    ja: "約10分待てば1話完成、気に入らないコマだけ描き直し",
+  "10분쯤 기다리면 1화 완성, 마음에 안 드는 장면만 다시": {
+    en: "Wait about 10 minutes for episode 1 — redraw only the scenes you don't like",
+    ja: "約10分待てば1話完成、気に入らない場面だけ描き直し",
   },
   "캐릭터 다마고치": { en: "Character Tamagotchi", ja: "キャラクターたまごっち" },
   "캐릭터가 새로운 동작을 배우며 살아 움직입니다.": {
@@ -97,7 +97,7 @@ export default async function Hero() {
                     <b>02</b> {t("세계관 · 그림체 고르기")}
                   </li>
                   <li>
-                    <b>03</b> {t("10분쯤 기다리면 1화 완성, 마음에 안 드는 컷만 다시")}
+                    <b>03</b> {t("10분쯤 기다리면 1화 완성, 마음에 안 드는 장면만 다시")}
                   </li>
                 </ol>
               </span>
