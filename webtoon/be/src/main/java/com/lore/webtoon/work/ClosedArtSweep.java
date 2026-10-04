@@ -24,11 +24,16 @@ public class ClosedArtSweep {
     private final WebtoonWorkRepository works;
     private final PageStore pages;
     private final com.lore.webtoon.art.PrivateArt art;
+    /* 끌 수 있게 둔다 — 로컬에서 DB 사본으로 서버를 하나 더 띄우면, 그림 창고는 원래 서버와 같이 쓰는데 DB 만
+       사본이라 옮긴 그림을 원래 DB 가 못 찾는다(2026-10-04 실제로 4편이 깨질 뻔했다). 배포 환경은 켠 채로 둔다. */
+    private final boolean enabled;
 
-    public ClosedArtSweep(WebtoonWorkRepository works, PageStore pages, com.lore.webtoon.art.PrivateArt art) {
+    public ClosedArtSweep(WebtoonWorkRepository works, PageStore pages, com.lore.webtoon.art.PrivateArt art,
+                          @org.springframework.beans.factory.annotation.Value("${lore.webtoon.closed-art-sweep:true}") boolean enabled) {
         this.works = works;
         this.pages = pages;
         this.art = art;
+        this.enabled = enabled;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -41,7 +46,7 @@ public class ClosedArtSweep {
     /** -> 옮긴 그림 수 */
     int sweep() {
         int moved = 0;
-        if (!art.ready()) {
+        if (!enabled || !art.ready()) {
             return 0;                       // 그림 창고를 안 쓰는 환경(버킷 없음)
         }
         try {

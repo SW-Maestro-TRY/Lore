@@ -328,7 +328,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                      }}>
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
-                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+                  {/* 비공개 작품은 공유 버튼을 감춘다(#638) — 링크를 받은 사람은 404 를 본다. */}
+                  {data.public !== false && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
                 </div>
                 <div className="wt-result-dlrow">
                   <label className="wt-result-perpage">
@@ -353,7 +354,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
                 )}
-                <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+                {data.public !== false && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
               </div>
             )}
 

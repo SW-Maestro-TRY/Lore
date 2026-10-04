@@ -533,6 +533,8 @@ export interface RunResult {
   unsafe_pages?: number[];
   /** 관리자 처리(#638) — 주인과 관리자에게만 온다. */
   moderation?: ModerationNote;
+  /** 남이 열 수 있나(#638). false 면 공유 링크가 받은 사람에게 404 라 공유 버튼을 감춘다. */
+  public?: boolean;
 }
 
 export interface RunInputs {
