@@ -413,13 +413,14 @@ export function mountEditor(
              뜨기 전까지 높이가 0 이라 카드가 납작해졌다가 튄다. -->
         <img src="${rawImg(s)}" alt="${tr("{n}번째 장", { n: s.no })}" width="${s.w}" height="${s.h}" loading="lazy">
         <div class="overlay" data-overlay></div>
+        ${unsafePages.has(s.no) ? `<div class="unsafe-note">${tr("이미지 안전 기준에 걸려 비워 둔 장이에요. 장면 설명을 고쳐 다시 그려 주세요.")}</div>` : ""}
       </div>
 
       ${sceneNote(s) ? `<p class="scene-note">${esc(sceneShort(sceneNote(s)))}</p>` : ""}
 
       <div class="scene-tools">
         <button type="button" class="btn btn-quiet btn-sm" data-act="regen">
-          ${tr("다시 그리기")}${RUN_ID ? "" : ` <span class="cost">−${COST.regen} C</span>`}
+          ${tr("다시 그리기")}${unsafePages.has(s.no) ? ` <span class="cost">${tr("무료")}</span>` : RUN_ID ? "" : ` <span class="cost">−${COST.regen} C</span>`}
         </button>
       </div>
 
@@ -473,6 +474,8 @@ export function mountEditor(
    * 된다 — 그러면 같은 조건으로 한 번 더 그린다. */
 
   let askCtx = null;                 // { no, btn, cost }
+
+  let unsafePages = new Set();   // 안전 기준에 걸려 빈 장으로 둔 장 번호(#626)
   let sceneTags = [];                // /api/config 의 feedback_tags.scene
 
   async function loadSceneTags() {
@@ -523,13 +526,29 @@ export function mountEditor(
     // 무엇을 그리라고 준 장면이었는지. 없으면(표지·옛 작품) 자리를 통째로
     // 비운다 — 빈 상자만 남으면 뭘 못 읽은 것처럼 보인다.
     const src = sceneSource(no);
+    const parts = sceneParts(src);
+    /* 「장소와 상황」·「벌어지는 일」은 고칠 수 있게 칸으로(#626) — 안전 기준에 걸린 장면은 같은 글로
+       다시 그리면 또 걸린다. 나머지 소제목은 지금처럼 읽기만. */
+    const where = parts.find(p => p.label === "장소와 상황");
+    const happen = parts.find(p => p.label === "벌어지는 일");
+    const edit = $("#regenAskSceneEdit");
+    if (edit) {
+      edit.hidden = !(where || happen) || !RUN_ID;
+      $("#regenAskWhere").value = where ? where.text : "";
+      $("#regenAskWhat").value = happen ? happen.text : "";
+      askCtx.where0 = where ? where.text : null;
+      askCtx.what0 = happen ? happen.text : null;
+    }
+    const rest = edit && !edit.hidden ? parts.filter(p => p !== where && p !== happen) : parts;
     const box = $("#regenAskScene");
     if (box) {
-      box.hidden = !src;
+      box.hidden = !rest.length;
       // 소제목이 있으면 소제목별로 띄워 보여 준다(#548) — 한 덩어리로 붙이면 읽을 수가 없다.
-      box.innerHTML = sceneParts(src).map(p =>
+      box.innerHTML = rest.map(p =>
         `<span class="ask-scene-part">${p.label ? `<b>${esc(tr(p.label))}</b>` : ""}${esc(p.text)}</span>`).join("");
     }
+    const unsafeLine = $("#regenAskUnsafe");
+    if (unsafeLine) unsafeLine.hidden = !unsafePages.has(no);
     $("#regenAskText").value = "";
     $("#regenAskTextless").checked = !!st.noBubble;
     $("#regenAsk").hidden = false;
@@ -548,6 +567,14 @@ export function mountEditor(
       .map(b => b.dataset.tagId);
     const feedback = $("#regenAskText").value.trim();
     const textless = $("#regenAskTextless").checked;
+    /* 장면 설명을 고쳤으면 같이 보낸다(#626) — 바뀐 칸만. */
+    const scene = {};
+    const editBox = $("#regenAskSceneEdit");
+    if (editBox && !editBox.hidden) {
+      const w = $("#regenAskWhere").value.trim(), h = $("#regenAskWhat").value.trim();
+      if (askCtx.where0 != null && w && w !== askCtx.where0.trim()) scene.where = w;
+      if (askCtx.what0 != null && h && h !== askCtx.what0.trim()) scene.what = h;
+    }
     // 확인 창에서 바꾼 "글자 없이" 는 그 장의 설정이 된다 — 창을 닫자마자
     // 장 머리의 표시와 갈리면 어느 쪽이 참인지 알 수 없다.
     const st = sc(no);
@@ -555,7 +582,7 @@ export function mountEditor(
     const el = $(`#scene-${no}`);
     $("[data-nobub]", el).hidden = !textless;
     closeAsk();
-    regen(no, btn, cost, { feedback, textless, tags });
+    regen(no, btn, cost, Object.keys(scene).length ? { feedback, textless, tags, scene } : { feedback, textless, tags });
   }
 
   function regen(no, btn, cost, body) {
@@ -626,6 +653,7 @@ export function mountEditor(
       }
       if (s.status === "done") {
         veil.remove();
+        if (unsafePages.delete(no)) $(".unsafe-note", el)?.remove();   // 빈 장을 다시 그려 냈다(#626)
         bustScene(no);
         paintVersions(no, s.versions);
         toast(tr("{n}번째 장을 다시 그렸습니다", { n: no }));
@@ -1409,7 +1437,8 @@ export function mountEditor(
   function toast(msg) {
     const el = $("#toast");
     el.textContent = msg; el.hidden = false;
-    clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 3200);
+    // 안전 기준 안내처럼 긴 말은 읽을 시간을 더 준다(#626)
+    clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, Math.max(3200, String(msg).length * 70));
   }
 
   /* ---- 작품 고르개 — 어떤 웹툰을 편집할지 -------------------------------
@@ -1561,6 +1590,13 @@ export function mountEditor(
       const res = await fetch(src);
       if (!res.ok) throw new Error(await res.text());
       data = await res.json();
+      if (RUN_ID) {
+        /* 안전 기준에 걸려 빈 장으로 둔 장(#626) — 그 장은 안내를 얹고 다시 그리기가 무료다. */
+        try {
+          const r = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/result`);
+          if (r.ok) unsafePages = new Set(((await r.json()).unsafe_pages || []).map(Number));
+        } catch { /* 못 읽어도 편집은 된다 */ }
+      }
     } catch (err) {
       // 무대만 갈아 끼운다 (예전에는 document.body 를 통째로 덮었다 — 그러면
       // 왼쪽 목록도 같이 지워져서 다른 작품을 고를 수가 없었다).

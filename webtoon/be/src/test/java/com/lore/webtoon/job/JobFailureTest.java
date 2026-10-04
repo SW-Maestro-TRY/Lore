@@ -119,4 +119,28 @@ class JobFailureTest {
         assertThat(failure.getValue().stage()).isEqualTo("SHEET_IMAGE");
         assertThat(failure.getValue().detail()).contains("moderation_blocked");
     }
+
+    @Test
+    @DisplayName("안전 검사로 비워 둔 장은 하네스 표시로 알아보고, 안내는 장 번호와 선정성을 말한다(#626)")
+    void 빈_장을_알아본다() throws Exception {
+        HarnessProcess harness = mock(HarnessProcess.class);
+        when(harness.runsDir()).thenReturn(tmp);
+        JobRunner runner = new JobRunner(harness, mock(JobProgress.class), mock(JobStore.class),
+                mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
+                mock(CreditGate.class), mock(GuestGate.class), mock(JobNotice.class),
+                1, 1, tmp.resolve("jobs").toString());
+        Path pages = tmp.resolve("run-2").resolve("pages");
+        Files.createDirectories(pages);
+        Files.writeString(pages.resolve("page04.unsafe.json"), "{\"page\": 4, \"categories\": [\"sexual\"]}");
+        Files.writeString(pages.resolve("page04.png"), "x");     // 비슷한 이름이 섞여도 표시만 센다
+        Files.writeString(pages.resolve("page06.unsafe.json"), "{\"page\": 6, \"categories\": []}");
+
+        assertThat(runner.unsafePages("run-2")).containsExactly(4, 6);
+        assertThat(runner.isUnsafePage("run-2", 4)).isTrue();
+        assertThat(runner.isUnsafePage("run-2", 5)).isFalse();
+        assertThat(runner.unsafePages("없는-작품")).isEmpty();
+        assertThat(runner.partialMessage("run-2"))
+                .startsWith("4쪽, 6쪽 장면이 이미지 안전 기준(선정성)에 걸려 빈 장으로")
+                .contains("무료");
+    }
 }

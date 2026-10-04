@@ -325,7 +325,8 @@ public class JobService {
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
                 spot,
                 notice.addressOf(job), queue.etaOf(job, now, spot),
-                job.isSheetBlocked() ? Math.max(0, SHEET_FIX_MAX - sheetFixesOf(job)) : 0);
+                job.isSheetBlocked() ? Math.max(0, SHEET_FIX_MAX - sheetFixesOf(job)) : 0,
+                at == JobStatus.DONE ? runner.unsafePages(job.getRunId()) : List.of());
     }
 
     /**
