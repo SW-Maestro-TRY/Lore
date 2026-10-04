@@ -328,7 +328,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
           </label>
           <div className="ask-actions">
             <button type="button" className="btn btn-w" id="regenAskCancel">{t("취소")}</button>
-            <button type="button" className="btn btn-p" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
+            <button type="button" className="btn btn-p" id="regenAskGo">{t("이 장면 다시 그리기")}</button>
           </div>
         </div>
       </div>
