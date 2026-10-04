@@ -169,6 +169,18 @@ public class WorkLedger {
         }).orElse(false);
     }
 
+    /** 아무나 봐도 되는 상태인가 — 공개이고 휴지통에 없다(#638). 모르는 작품은 그렇다고 본다. */
+    @Transactional(readOnly = true)
+    public boolean isOpen(String runId) {
+        return works.findFirstByRunId(runId).map(w -> w.isPublic() && !w.isTrashed()).orElse(true);
+    }
+
+    /** 작품 한 줄(#638). */
+    @Transactional(readOnly = true)
+    public java.util.Optional<WebtoonWork> find(String runId) {
+        return works.findFirstByRunId(runId);
+    }
+
     /** 지금 공개인가. 모르는 작품은 공개로 본다(위 mayRead 와 같은 이유). */
     @Transactional(readOnly = true)
     public boolean isPublic(String runId) {

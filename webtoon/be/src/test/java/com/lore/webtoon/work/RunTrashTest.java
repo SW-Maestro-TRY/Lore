@@ -67,6 +67,22 @@ class RunTrashTest {
     }
 
     @Test
+    @DisplayName("관리자가 삭제 처리한 작품은 작가가 못 되살린다(#638)")
+    void 관리자_삭제는_못_되살림() {
+        WebtoonWork w = 작품("r1");
+        w.moderate(WorkModeration.REMOVED, "사유", Instant.now());
+        w.trash(Instant.now());
+        when(works.findFirstByRunId("r1")).thenReturn(Optional.of(w));
+        when(ledger.mayChange("r1", 7L)).thenReturn(true);
+
+        assertThatThrownBy(() -> trash.restore(7L, "r1"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+        assertThat(w.isTrashed()).isTrue();
+        verify(works, never()).save(any());
+    }
+
+    @Test
     @DisplayName("지울 수 없는 작품이면(남의 것·예시·만드는 중) 아무것도 안 바꾼다")
     void 권한이_없으면_그대로() {
         when(deleter.checkMayDelete(9L, "r1"))

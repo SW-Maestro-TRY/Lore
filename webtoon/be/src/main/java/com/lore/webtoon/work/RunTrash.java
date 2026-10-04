@@ -48,6 +48,14 @@ public class RunTrash {
     private final com.lore.webtoon.runs.RunService runs;
     private final int keepDays;
 
+    /* 관리자 처리 칸(#638). 세터로 받는다 — 없으면(시험) 카드에 안 붙일 뿐이다. */
+    private ModerationNotes notes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setNotes(ModerationNotes notes) {
+        this.notes = notes;
+    }
+
     public RunTrash(WebtoonWorkRepository works, RunDeleteService deleter, WorkLedger ledger,
                     PageStore pages, com.lore.webtoon.runs.RunService runs,
                     @Value("${lore.webtoon.trash.keep-days:30}") int keepDays) {
@@ -95,6 +103,10 @@ public class RunTrash {
         if (!work.isTrashed()) {
             return false;
         }
+        /* 관리자가 삭제 처리한 작품은 작가가 못 되살린다(#638) — 되살리는 것은 관리자 휴지통에서. */
+        if (work.isRemovedByAdmin()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "관리자가 삭제 처리한 작품이라 되살릴 수 없어요");
+        }
         work.untrash();
         works.save(work);
         if (work.isPublic()) {
@@ -120,6 +132,9 @@ public class RunTrash {
             /* 표지 주소를 여기서 준다. 휴지통 작품은 장 주소(/runs/{id}/page/{no})가
                404 라 화면이 평소처럼 표지를 부를 수 없다. 주인 확인을 마친 목록이라
                비공개 자리의 잠깐 열리는 주소를 줘도 된다. */
+            if (notes != null) {
+                notes.attach(card);          // 관리자가 지운 것이면 사유가 붙고 화면이 되살리기를 감춘다(#638)
+            }
             Object runId = card.get("run_id");
             Object cover = card.get("cover_page");
             if (runId != null && cover instanceof Number no) {

@@ -456,6 +456,16 @@ export interface RunCard {
   likes?: number;
   /** 내가 찜했나. 찜 목록(/my/likes)에서만 서버가 붙이고, 둘러보기는 likedAmong 으로 화면이 채운다. */
   liked?: boolean;
+  /** 관리자 처리(#638) — 내 목록 · 휴지통에서만 온다. */
+  moderation?: ModerationNote;
+}
+
+/** 관리자 처리 한 칸(#638). state 가 없으면 경고만 받은 작품이다. */
+export interface ModerationNote {
+  state?: "HIDDEN" | "REMOVED";
+  reason?: string;
+  at?: string | null;
+  warning?: { reason: string; at: string };
 }
 
 /* ---- 최근 본 웹툰 (#247) ---------------------------------------------------- */
@@ -521,6 +531,8 @@ export interface RunResult {
   inputs?: RunInputs;
   /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 관리자 처리(#638) — 주인과 관리자에게만 온다. */
+  moderation?: ModerationNote;
 }
 
 export interface RunInputs {
@@ -878,3 +890,73 @@ export function adminBundleUrl(runId: string): string {
   return `${BASE}/admin/examples/${encodeURIComponent(runId)}/bundle`;
 }
 
+/* ---- 관리자 작품 처리(#638) — 관리자만 ---------------------------------------- */
+
+export type ModerationAction = "HIDE" | "UNHIDE" | "REMOVE" | "RESTORE" | "WARN";
+
+export interface ModerationRow {
+  id: number;
+  run_id: string;
+  action: ModerationAction;
+  reason: string;
+  /** 작가에게 메일이 갔나 — 게스트 작품 · 탈퇴 계정이면 false */
+  notified: boolean;
+  owner_user_id: number | null;
+  at: string;
+  title?: string;
+  owner_email?: string | null;
+  admin_email?: string | null;
+}
+
+export interface ModerationState {
+  run_id: string;
+  title: string;
+  public: boolean;
+  trashed: boolean;
+  example: boolean;
+  moderation: ModerationNote | null;
+  /** 게스트 작품이면 null — 알릴 방법이 없다 */
+  owner: { user_id: number; email: string | null; counts: number } | null;
+  history: ModerationRow[];
+}
+
+export interface RemovedRow {
+  run_id: string;
+  title: string;
+  reason: string | null;
+  removed_at: string | null;
+  purge_at: string | null;
+  owner_email: string | null;
+  cover_url: string | null;
+}
+
+export interface OwnerCountRow {
+  user_id: number;
+  email: string | null;
+  warn: number;
+  hide: number;
+  remove: number;
+  total: number;
+}
+
+export function adminWorkState(runId: string): Promise<ModerationState> {
+  return call<ModerationState>(`/admin/works/${encodeURIComponent(runId)}`);
+}
+
+/** 비공개 · 다시 공개 · 삭제 · 되살리기 · 경고. 비공개 · 삭제 · 경고는 사유가 꼭 있어야 한다. */
+export function adminModerate(runId: string, action: ModerationAction, reason: string): Promise<ModerationState> {
+  const path = { HIDE: "hide", UNHIDE: "unhide", REMOVE: "remove", RESTORE: "restore", WARN: "warn" }[action];
+  return post<ModerationState>(`/admin/works/${encodeURIComponent(runId)}/${path}`, { reason });
+}
+
+export function adminModerationLog(limit = 100): Promise<{ rows: ModerationRow[] }> {
+  return call(`/admin/works/log?limit=${limit}`);
+}
+
+export function adminRemovedWorks(): Promise<{ rows: RemovedRow[] }> {
+  return call("/admin/works/removed");
+}
+
+export function adminOwnerCounts(): Promise<{ rows: OwnerCountRow[] }> {
+  return call("/admin/works/owners");
+}

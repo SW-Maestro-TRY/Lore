@@ -64,7 +64,7 @@ public class BakedPage {
         return one;
     }
 
-    void movedTo(String s3Key, Instant at) {
+    public void movedTo(String s3Key, Instant at) {
         this.s3Key = s3Key;
         this.bakedAt = at;
     }
