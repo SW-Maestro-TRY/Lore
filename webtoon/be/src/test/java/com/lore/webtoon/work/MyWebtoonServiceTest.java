@@ -166,6 +166,22 @@ class MyWebtoonServiceTest {
     }
 
     @Test
+    @DisplayName("관리자가 비공개 처리한 작품은 작가가 다시 공개로 못 바꾼다(#638) — 비공개로 두는 것은 된다")
+    void 관리자_비공개는_다시_공개_못함() {
+        when(ledger.mayChange("r1", 7L)).thenReturn(true);
+        WebtoonWork w = WebtoonWork.started("job-r1", 7L, "uid", java.time.Instant.now());
+        w.learnRun("r1");
+        w.moderate(WorkModeration.HIDDEN, "사유", java.time.Instant.now());
+        when(ledger.find("r1")).thenReturn(java.util.Optional.of(w));
+
+        assertThatThrownBy(() -> service.setVisibility(7L, "r1", true))
+                .isInstanceOf(BusinessException.class);
+        verify(ledger, never()).setPublic(anyString(), anyBoolean());
+
+        assertThat(service.setVisibility(7L, "r1", false)).isFalse();
+    }
+
+    @Test
     @DisplayName("내 것이 아니면 못 바꾼다 — 표에 쓰지도 않는다")
     void 남의_작품은_못_바꾼다() {
         when(ledger.mayChange("남의것", 7L)).thenReturn(false);

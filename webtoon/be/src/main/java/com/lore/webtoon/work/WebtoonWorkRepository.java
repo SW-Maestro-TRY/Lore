@@ -88,4 +88,11 @@ public interface WebtoonWorkRepository extends JpaRepository<WebtoonWork, Long> 
 
     /** 예시 작품 — 순서가 작은 것부터, 순서가 없으면 맨 뒤(만든 순서). 휴지통에 넣은 것은 뺀다(#614). */
     List<WebtoonWork> findByExampleTrueAndDeletedAtIsNullOrderByExampleOrderAscIdAsc();
+
+    /** 아무나 보면 안 되는 작품 — 비공개이거나 휴지통(#638). 구운 그림 자리를 바로잡을 때 훑는다. */
+    @Query("select w.runId from WebtoonWork w where w.runId is not null and (w.isPublic = false or w.deletedAt is not null)")
+    List<String> closedRunIds();
+
+    /** 관리자 처리 상태가 이것인 작품들 — 최근 처리한 것부터(#638). */
+    List<WebtoonWork> findByModerationOrderByModeratedAtDesc(String moderation);
 }

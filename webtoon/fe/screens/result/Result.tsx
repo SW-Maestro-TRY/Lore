@@ -15,6 +15,7 @@ import ShareMenu from "./ShareMenu";
 import RunStrip from "../../ui/RunStrip";
 import LikeButton from "../../ui/LikeButton";
 import ResultSurvey from "./ResultSurvey";
+import AdminModeration from "./AdminModeration";
 import "./i18n";
 import "./Result.css";
 
@@ -353,6 +354,24 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   </a>
                 )}
                 <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />
+              </div>
+            )}
+
+            {isAdmin && !mine && (
+              /* 관리자 처리(#638) — 비공개 · 경고 · 삭제. 서버도 관리자만 받는다(ModerationController). */
+              <AdminModeration runId={runId} go={go} onChanged={() => setTick((n) => n + 1)} />
+            )}
+
+            {mine && data.moderation && (
+              /* 관리자가 처리한 작품(#638) — 작가에게만 보인다. 메일로도 같은 사유가 갔다. */
+              <div className="wt-result-unsafe wt-result-moderated" role="status">
+                {data.moderation.state === "HIDDEN" && (
+                  <p>{t("관리자가 이 작품을 비공개 처리했어요. 다른 사람에게는 보이지 않아요.")}
+                    {data.moderation.reason ? ` ${t("사유: {reason}", { reason: data.moderation.reason })}` : ""}</p>
+                )}
+                {data.moderation.warning && (
+                  <p>{t("이 작품에 운영 정책 경고가 있어요.")} {t("사유: {reason}", { reason: data.moderation.warning.reason })}</p>
+                )}
               </div>
             )}
 

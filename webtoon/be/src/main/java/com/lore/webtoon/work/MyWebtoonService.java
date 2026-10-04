@@ -56,6 +56,14 @@ public class MyWebtoonService {
      */
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /* 관리자 처리 칸(#638). 세터로 받는다 — 없으면(시험) 카드에 안 붙일 뿐이다. */
+    private ModerationNotes notes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setNotes(ModerationNotes notes) {
+        this.notes = notes;
+    }
+
     public MyWebtoonService(BrowserLinkRepository links,
                             WorkLedger ledger, PageStore pages, RunService runs,
                             AfterRun after) {
@@ -115,6 +123,9 @@ public class MyWebtoonService {
             }
             Map<String, Object> card = cardOf(runId);
             if (card != null) {
+                if (notes != null) {
+                    notes.attach(card);      // 내 목록이라 관리자 처리 사유까지 보인다(#638)
+                }
                 merged.put(runId, card);
             }
         }
@@ -171,6 +182,10 @@ public class MyWebtoonService {
            자리는 DB 와 S3 가 정한다. */
         if (!ledger.mayChange(runId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 바꿀 수 있습니다");
+        }
+        /* 관리자가 비공개 처리한 작품은 작가가 다시 공개로 못 바꾼다(#638). 비공개로 두는 것은 막지 않는다. */
+        if (isPublic && ledger.find(runId).map(WebtoonWork::isHiddenByAdmin).orElse(false)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "관리자가 비공개 처리한 작품이라 공개로 바꿀 수 없어요");
         }
 
         ledger.setPublic(runId, isPublic);
