@@ -146,3 +146,9 @@
   .wt .wt-result-zoom { padding: 16px 8px; }
   .wt .wt-result-zoom .icon-btn { top: 12px; right: 12px; }
 }
+
+/* 안전 기준에 걸려 빈 장으로 완성됐을 때(#626) */
+.wt .wt-result-unsafe { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; padding: 14px 16px; margin-bottom: 16px; border-radius: 12px; background: #fff4f2; color: #8a2b1d; line-height: 1.6; }
+.wt .wt-result-unsafe p { margin: 0; }
+.wt .wt-result-pg { position: relative; }
+.wt .wt-result-blank { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 80%; text-align: center; color: #5b6b70; font-size: 15px; line-height: 1.6; pointer-events: none; }

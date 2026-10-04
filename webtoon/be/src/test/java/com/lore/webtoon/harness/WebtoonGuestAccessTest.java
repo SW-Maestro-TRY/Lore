@@ -86,6 +86,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean AfterRun afterRun;
     @MockitoBean PrivateArt privateArt;
     @MockitoBean WorkLedger workLedger;
+    @MockitoBean com.lore.webtoon.safety.SafetyGuard safetyGuard;   // 편집실 다시 그리기의 입력 검사(#626)
     @MockitoBean com.lore.webtoon.work.RunLikeService runLikeService;
     @MockitoBean JwtProvider jwtProvider;
     @MockitoBean MyWebtoonService myWebtoonService;
