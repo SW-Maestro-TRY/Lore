@@ -102,23 +102,45 @@ const dict: Dict = {
   "웹툰 1화를 위해서": { en: "For your first episode,", ja: "ウェブトゥーン第1話のために", zh: "为了漫画第 1 话，" },
   "LORE가 약속 하는 세 가지": { en: "three things LORE promises", ja: "LOREが約束する3つのこと", zh: "LORE 承诺的三件事" },
   "같은 얼굴, 마지막 컷까지": { en: "The same face, right to the last panel", ja: "同じ顔で、最後のコマまで", zh: "同一张脸，直到最后一格" },
-  "캐릭터 시트를 먼저 만들어 두어, 어느 장면에서도 얼굴과 옷이 흐트러지지 않아요.": {
-    en: "The character sheet is made first, so the face and outfit hold steady in every scene.",
-    ja: "先にキャラクターシートを作っておくので、どの場面でも顔と服が崩れません。",
-    zh: "先做好角色设定表，任何场景里脸和衣服都不会走样。",
+  "캐릭터를 먼저 정해 두니까, 장면이 바뀌어도 내 캐릭터 그대로 이어져요.": {
+    en: "The character is settled first, so your character stays the same even when the scene changes.",
+    ja: "先にキャラクターを決めておくので、場面が変わっても自分のキャラクターのまま続きます。",
+    zh: "先把角色定下来，所以场景再怎么变，也还是你的角色。",
   },
-  "마음에 안 드는 컷만 다시": { en: "Redo only the panels you don't like", ja: "気に入らないコマだけ描き直し", zh: "只重画不满意的格子" },
-  "한 편을 다시 만들지 않아요. 그 컷만 콕 집어 다시 그려요.": {
-    en: "You never remake the whole episode. Point at the panel, and only that one is redrawn.",
-    ja: "1話まるごと作り直しはしません。そのコマだけを選んで描き直します。",
-    zh: "不用整话重做。只挑出那一格，重新画它。",
+  "머릿속 이야기를, 장면으로 먼저": { en: "The story in your head, as scenes first", ja: "頭の中のストーリーを、まず場面に", zh: "先把脑海里的故事变成场景" },
+  "이야기를 적으면 AI가 장면과 대사로 나눠 보여 줘요. 직접 고쳐 본 뒤 웹툰으로 만들 수 있어요.": {
+    en: "Write your story and the AI splits it into scenes and lines for you to see. Edit them yourself, then make the webtoon.",
+    ja: "ストーリーを書くと、AIが場面とセリフに分けて見せてくれます。自分で直してから、ウェブトゥーンにできます。",
+    zh: "写下故事，AI 会把它分成场景和台词展示给你。亲自修改之后，再制作漫画。",
   },
-  "넣은 그대로, 그 세계관 안에": { en: "As you put it in, inside that world", ja: "入れたそのままで、その世界観の中へ", zh: "原样不变，进入那个世界观" },
-  "강아지는 강아지인 채로 악역 영애가 돼요. 사람으로 바꾸지도, 다른 얼굴로 바꾸지도 않아요.": {
-    en: "A puppy becomes the villainess while staying a puppy. We don't turn it into a person or swap in a different face.",
-    ja: "子犬は子犬のまま悪役令嬢になります。人間に変えることも、別の顔に変えることもありません。",
-    zh: "小狗保持小狗的样子成为反派千金。不会变成人，也不会换成别的脸。",
+  "마음에 드는 장면만 남기기": { en: "Keep only the scenes you like", ja: "気に入った場面だけを残す", zh: "只留下满意的场景" },
+  "아쉬운 장면이 있다면 그 장면만 다시 그려요. 처음부터 전부 다시 만들 필요 없어요.": {
+    en: "If a scene falls short, redraw just that scene. No need to start over from scratch.",
+    ja: "惜しい場面があれば、その場面だけ描き直します。最初から全部やり直す必要はありません。",
+    zh: "如果有不满意的场景，只重新绘制那个场景。不用从头全部重来。",
   },
+
+  "장면 {n} / {total}": { en: "Scene {n} / {total}", ja: "場面 {n} / {total}", zh: "场景 {n} / {total}" },
+  "장소와 상황": { en: "Place & situation", ja: "場所と状況", zh: "地点与情境" },
+  "벌어지는 일": { en: "What happens", ja: "起きること", zh: "发生的事" },
+  "행동과 표정": { en: "Actions & expressions", ja: "行動と表情", zh: "动作与表情" },
+  "이 장면 다시 그리기": { en: "Redraw this scene", ja: "この場面を描き直す", zh: "重新绘制这个场景" },
+  "장면 하나를 다시 그리기": { en: "Redrawing a single scene", ja: "場面を一つ描き直す", zh: "重新绘制单个场景" },
+  "{n}번째 장 다시 그리기": { en: "Redraw page {n}", ja: "{n}ページ目を描き直す", zh: "重新绘制第 {n} 页" },
+  "다시 그리기": { en: "Redraw", ja: "描き直す", zh: "重新绘制" },
+  "무엇이 마음에 안 드나요?": { en: "What don't you like?", ja: "どこが気に入りませんか？", zh: "哪里不满意？" },
+  "캐릭터가 이상해요": { en: "The character looks off", ja: "キャラクターがおかしい", zh: "角色不对劲" },
+  "표정이 안 맞아요": { en: "The expression is wrong", ja: "表情が合っていない", zh: "表情不对" },
+  "포즈가 어색해요": { en: "The pose is awkward", ja: "ポーズが不自然", zh: "姿势别扭" },
+  "배경이 이상해요": { en: "The background looks off", ja: "背景がおかしい", zh: "背景不对劲" },
+  "더 하고 싶은 말": { en: "Anything else", ja: "ほかに伝えたいこと", zh: "还想补充的话" },
+  "무대 문 앞이라 조금 더 긴장한 표정으로": { en: "A bit more nervous, since she's at the stage door", ja: "ステージの扉の前なので、もう少し緊張した表情で", zh: "在舞台门前，表情再紧张一点" },
+  "말풍선 없이 그림만": { en: "Picture only, no speech bubbles", ja: "吹き出しなしで絵だけ", zh: "只要画面，不要对话气泡" },
+  "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  "표지": { en: "Cover", ja: "表紙", zh: "封面" },
+  "대기실 거울 앞, 무대 직전": { en: "In front of the waiting-room mirror, just before the stage", ja: "控え室の鏡の前、ステージ直前", zh: "休息室镜子前，登台之前" },
+  "마지막 무대임을 떠올리며 임시 센터 계약서를 확인한다": { en: "Remembering it's her last stage, she checks the temporary-center contract", ja: "最後のステージだと思い出しながら、臨時センター契約書を確認する", zh: "想起这是最后一场舞台，查看临时 C 位合约" },
+  "휴대폰 속 D-day를 읽고, 입꼬리가 처진다": { en: "She reads the D-day on her phone, the corners of her mouth drooping", ja: "スマホのD-dayを読み、口角が下がる", zh: "读着手机里的 D-day，嘴角垂了下来" },
 
   /* ---- 마지막 CTA ---- */
   "당신의 이야기를 기다리고 있어요": { en: "Your story is waiting", ja: "あなたの物語を待っています", zh: "等待着你的故事" },
@@ -171,10 +193,10 @@ const dict: Dict = {
   },
 
   "마음에 들지 않으면 다시 만들 수 있나요?": { en: "Can I redo it if I don't like it?", ja: "気に入らなければ作り直せますか？", zh: "不满意可以重做吗？" },
-  "네. **「2번 확인하며」**를 고르면 캐릭터 시트와 이야기 단계에서 확인하고 다시 만들 수 있어요. 이야기를 다시 지을 때는 크레딧이 더 들지 않고, 원하는 방향을 메모로 적어 줄 수 있습니다. 완성한 뒤에는 편집실에서 마음에 안 드는 컷만 골라 다시 그릴 수 있어요(**한 컷 3크레딧**).": {
-    en: "Yes. If you choose **\"Check twice along the way\"**, you can review and redo the character sheet and story steps. Rewriting the story costs no extra credits, and you can leave a note about the direction you want. After it's finished, you can pick just the panels you don't like and redraw them in the editing room (**3 credits per panel**).",
-    ja: "はい。**「2回確認しながら」**を選ぶと、キャラクターシートと物語の段階で確認して作り直せます。物語を作り直すときは追加のクレジットはかからず、希望の方向をメモで伝えられます。完成後は、気に入らないコマだけを選んで編集室で描き直せます（**1コマ3クレジット**）。",
-    zh: "可以。选择**「确认两次」**的话，能在角色设定表和故事阶段确认后重做。重写故事不会额外扣积分，还能留言说明想要的方向。完成之后，可以在编辑室只挑不满意的那一格重画（**每格 3 积分**）。",
+  "네. **「2번 확인하며」**를 고르면 캐릭터 시트와 이야기 단계에서 확인하고 다시 만들 수 있어요. 이야기를 다시 지을 때는 크레딧이 더 들지 않고, 원하는 방향을 메모로 적어 줄 수 있습니다. 완성한 뒤에는 편집실에서 마음에 안 드는 장면만 골라 다시 그릴 수 있어요(**한 장면 3크레딧**).": {
+    en: "Yes. If you choose **\"Check twice along the way\"**, you can review and redo the character sheet and story steps. Rewriting the story costs no extra credits, and you can leave a note about the direction you want. After it's finished, you can pick just the scenes you don't like and redraw them in the editing room (**3 credits per scene**).",
+    ja: "はい。**「2回確認しながら」**を選ぶと、キャラクターシートと物語の段階で確認して作り直せます。物語を作り直すときは追加のクレジットはかからず、希望の方向をメモで伝えられます。完成後は、気に入らない場面だけを選んで編集室で描き直せます（**1場面3クレジット**）。",
+    zh: "可以。选择**「确认两次」**的话，能在角色设定表和故事阶段确认后重做。重写故事不会额外扣积分，还能留言说明想要的方向。完成之后，可以在编辑室只挑不满意的场景重新绘制（**每个场景 3 积分**）。",
   },
 
   "크레딧은 무엇이고, 돈이 드나요?": { en: "What are credits, and does it cost money?", ja: "クレジットとは何ですか？お金はかかりますか？", zh: "积分是什么？需要付费吗？" },
@@ -297,8 +319,6 @@ const dict: Dict = {
   "컷과 말풍선이 들어간 페이지": { en: "A page with panels and speech bubbles", ja: "コマと吹き出しの入ったページ", zh: "带分镜和对话气泡的页面" },
   "캐릭터 시트": { en: "Character sheet", ja: "キャラクターシート", zh: "角色设定表" },
   "캐릭터 시트 · {who}": { en: "Character sheet · {who}", ja: "キャラクターシート・{who}", zh: "角色设定表 · {who}" },
-  "한 컷만 다시 그리기": { en: "Redraw just one panel", ja: "1コマだけ描き直す", zh: "只重画一格" },
-  "이 컷만 다시 그리기": { en: "Redraw this panel only", ja: "このコマだけ描き直す", zh: "只重画这一格" },
   "진심이 아니었던 적은 단 한 번도 없어. 다만 그 진심이, 매번 다른 사람을 향했을 뿐이지.": {
     en: "I've never once been insincere. It's just that my sincerity pointed at someone different every time.",
     ja: "本気じゃなかったことは一度もない。ただその本気が、毎回別の人に向いていただけさ。",
