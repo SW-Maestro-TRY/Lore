@@ -87,6 +87,12 @@ public class SafetyGuard {
             return;
         }
         String joined = String.join("\n", parts);
+        /* 금지어 먼저(#626) — moderation 이 한국어 성인물을 잘 못 잡는다. 검사 서비스가 죽어 있어도 동작한다. */
+        String banned = BannedWords.find(joined);
+        if (banned != null) {
+            log.info("금지어에 걸려 막았습니다 ({}): {}", where, banned);
+            throw new BusinessException(ErrorCode.INVALID_INPUT, MESSAGE);
+        }
         /* 긴 글은 MAX_CHARS 씩 잘라 전부 본다(#548). 전에는 앞 4,000자만 보고 뒤는 검사 없이
            모델로 갔다 — 「만들고 싶은 내용」이 20,000자까지 들어오면서 구멍이 커져 바꿨다. */
         for (int at = 0; at < joined.length(); at += MAX_CHARS) {
