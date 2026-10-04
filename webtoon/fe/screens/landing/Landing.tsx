@@ -44,6 +44,14 @@ const suit = localFont({
  * 번들은 작품 번호를 그대로 둔다). 아직 안 올린 환경(예: 새 운영 서버)에서는 못
  * 받아오므로 정적 견본 그림으로 대신한다. */
 const DONE_EXAMPLE_RUN_ID = "20260910T132240-ae8c28";
+
+/* 마지막 구역에 펼치는 예시 작품 세 편(#640) — 그림은 static/last/card-N.jpg(표지 윗부분). 작품을 바꾸면 그림도 같이 바꾼다.
+   운영 · staging · dev 모두 예시로 심겨 있는 작품이다(webtoon/docs/examples-runbook.md). */
+const LAST_CARDS = [
+  { run: "20260930T223006-456ff0", title: "마왕성 공략 라이브, 한 번뿐인 시청자" },
+  { run: "20261003T133334-b5ccce", title: "카페 사장에게는 비밀이 많다" },
+  { run: "20261003T204446-99f4c3", title: "황궁에 떨어진 진실 변수" },
+];
 const DONE_FALLBACK = "/static/samples/ex-romance-2.jpg";
 import { usePhone } from "./usePhone";
 import "./Landing.css";
@@ -307,13 +315,17 @@ export default function Landing({ go }: { go: Go }) {
         </div>
       </section>
 
-      {/* 마지막 CTA — 흰 카드 밖으로 실제 웹툰 컷 세 장이 기울어져 튀어나온다.
-          단추는 맨 위 「지금 시작하기」와 같은 규격(btn-p). */}
+      {/* 마지막 CTA — 왼쪽에 실제 예시 작품 세 편을 손에 든 카드처럼 펼친다(#640). 카드마다 작품 이름표가 붙고,
+          누르면 그 작품이 열린다. 단추는 맨 위 「지금 시작하기」와 같은 규격(btn-p). */}
       <section className="wt-landing-last">
-        <div className="wt-landing-last-cuts" aria-hidden="true">
-          {[1, 2, 3].map((n) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={n} src={`/static/last/cut-${n}.jpg`} alt="" />
+        <div className="wt-landing-last-fan">
+          {LAST_CARDS.map((c, i) => (
+            <a key={c.run} className="wt-landing-last-card" href={hrefOf("result", { run: c.run })}
+               onClick={(ev) => { ev.preventDefault(); track("landing_cta", { where: "last_card", run: c.run }); go("result", { run: c.run }); }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/static/last/card-${i + 1}.jpg`} alt="" loading="lazy" />
+              <span>{c.title}</span>
+            </a>
           ))}
         </div>
         <div className="wt-landing-last-text">
