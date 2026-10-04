@@ -6,7 +6,7 @@
 import "./i18n";
 import Link from "next/link";
 import localFont from "next/font/local";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CONTACT_CHANNEL } from "@common/links";
 import * as api from "../../lib/api";
 import { LangSwitch, useT } from "../../lib/i18n";
@@ -80,9 +80,16 @@ export default function Landing({ go }: { go: Go }) {
   const [need, setNeed] = useState(0);
   const [feat, setFeat] = useState<0 | 1 | 2>(0);
 
-  /* 약속 셋 — 마우스를 올려도 바뀌고, 가만히 둬도 시간이 지나면 저절로 다음으로 넘어간다. */
+  /* 니즈 카드 둘에 마우스가 올라가 있나 — 올라가 있는 동안은 저절로 넘기지 않는다(읽는 중에 카드가 바뀌면 놓친다). */
+  const needHover = useRef(false);
+
+  /* 약속 셋 · 니즈 카드 둘 — 마우스를 올려도 바뀌고, 가만히 둬도 시간이 지나면 저절로 다음으로 넘어간다.
+     둘이 같은 박자로 움직이게 시계 하나로 넘긴다(니즈 카드는 왼쪽 · 오른쪽이 번갈아 커진다). */
   useEffect(() => {
-    const id = setInterval(() => setFeat((f) => ((f + 1) % 3) as 0 | 1 | 2), 4000);
+    const id = setInterval(() => {
+      setFeat((f) => ((f + 1) % 3) as 0 | 1 | 2);
+      if (!needHover.current) setNeed((n) => 1 - n);
+    }, 4000);
     return () => clearInterval(id);
   }, []);
 
@@ -238,7 +245,8 @@ export default function Landing({ go }: { go: Go }) {
         <h2>{phone
           ? <>{t("이야기가 웹툰이 되는 과정,")}<br /><span className="wt-landing-hl">LORE</span>{t(" 하나로 충분합니다")}</>
           : <>{t("이미지 한장이 웹툰이 되는 과정,")}<br /><span className="wt-landing-hl">LORE</span>{t(" 하나로 충분합니다.")}</>}</h2>
-        <div className="wt-landing-needs-row">
+        <div className="wt-landing-needs-row"
+             onMouseEnter={() => { needHover.current = true; }} onMouseLeave={() => { needHover.current = false; }}>
           <a href={hrefOf("create")} className={`wt-landing-need${need === 0 ? " on" : ""}`}
              onMouseEnter={() => setNeed(0)} onClick={needTo(0)}>
             <div className="wt-landing-need-text">
