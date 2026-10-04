@@ -29,6 +29,7 @@ import { unwatchJob, watchJob } from "../../lib/watchJob";
 import { IconArrow, IconBack, IconChevronDown, IconChevronLeft, IconChevronRight, IconChevronUp, IconClose, IconEdit, IconRetry, IconZoom } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import LouPlay from "./LouPlay";
+import QueueDialog, { isQueued, markQueueSeen, queueSeen } from "../../ui/QueueDialog";
 import "./i18n";
 import "./Progress.css";
 
@@ -202,9 +203,14 @@ function Crumb({ items }: { items: string[] }) {
 
 /* 서버 없이 눌러 보는 자리(#548) — job 번호가 `mock-scenes`(아이디어부터) 또는 `mock-scenes-own`
    (내 내용)이면 장면 확인, `mock-story-own` 이면 own 길의 이야기 확인(awaiting_pick) 화면을
-   서버 없이 보여 준다. 실제 작업 번호와는 겹치지 않는다. */
-const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own"];
+   서버 없이 보여 준다. `mock-queued` 는 앞에 세 명이 있어 순서를 기다리는 작업(대기 팝업, #641).
+   실제 작업 번호와는 겹치지 않는다. */
+const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued"];
 function mockScenesJob(id: string): NhJob {
+  if (id === "mock-queued") {
+    return { ...mockScenesJob("mock-scenes"), id, status: "queued", pick: null, scenes: [], stage: "story", stage_index: 0,
+             stage_label: "", queue: { ahead: 3, minutes: 12, line: "" }, minutes_left: 22, pct: 0, sheet_ready: false };
+  }
   const own = id !== "mock-scenes";
   const storyCheck = id === "mock-story-own";
   /* 실제 작품(2026-10-01 서연화 · 「상견례는 아직 이르지만」)의 scenes.json·본문·인물을 서버와
@@ -827,6 +833,19 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const browseWorks = () => {
     track("browse_while_waiting", { job: jobId, pane, status });
     go("works");
+  };
+
+  /* 순서를 기다리는 중이면 팝업으로 알린다(#641) — 작업마다 처음 한 번만 저절로 뜬다.
+     「여기서 기다리기」는 닫고 둘러보기로 보낸다(진행 원이 남고, 그 원을 누르면 이 팝업이 다시 뜬다). */
+  const [queueOpen, setQueueOpen] = useState(false);
+  useEffect(() => {
+    if (isQueued(job) && !queueSeen(jobId)) { markQueueSeen(jobId); setQueueOpen(true); }
+    if (!isQueued(job)) setQueueOpen(false);
+  }, [job, jobId]);
+  const waitElsewhere = () => {
+    setQueueOpen(false);
+    track("queue_popup_wait", { job: jobId, ahead: job?.queue?.ahead });
+    browseWorks();
   };
   const remakeAfterFail = () => {
     track("remake_after_fail", { job: jobId });
@@ -1603,6 +1622,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       </div>
 
       <div className="mfoot">{mfoot}</div>
+
+      {queueOpen && job && isQueued(job) && <QueueDialog job={job} onWait={waitElsewhere} />}
 
       {zoom && (
         <div className="wt-prog-zoom" onClick={() => setZoom(null)} role="dialog" aria-label={t("크게 보기")}>
