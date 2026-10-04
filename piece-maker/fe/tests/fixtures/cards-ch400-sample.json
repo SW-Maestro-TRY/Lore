@@ -746,6 +746,108 @@
       "resolution": null
     },
     {
+      "id": "T906",
+      "chapter": 234,
+      "type": "promise",
+      "kind": "약속",
+      "title": "Edward Newgate rejects Shanks's letter, demanding he come in person with rum; Shanks denies Rockstar his revenge and instead orders the whole crew to prepare for battle.",
+      "fact": "Edward Newgate rejects Shanks's letter, demanding he come in person with rum; Shanks denies Rockstar his revenge and instead orders the whole crew to prepare for battle.",
+      "people": [
+        "Shanks",
+        "Edward Newgate (the man)",
+        "Benn Beckman",
+        "Rockstar"
+      ],
+      "entities": [
+        {
+          "id": "E3",
+          "name": "Shanks",
+          "type": "character"
+        },
+        {
+          "id": "E1585",
+          "name": "Edward Newgate (the man)",
+          "type": "character"
+        },
+        {
+          "id": "E1605",
+          "name": "Shanks's torn letter",
+          "type": "object"
+        },
+        {
+          "id": "E1609",
+          "name": "Shanks's order to prepare for battle",
+          "type": "object"
+        },
+        {
+          "id": "E4",
+          "name": "Benn Beckman",
+          "type": "character"
+        },
+        {
+          "id": "E1603",
+          "name": "Rockstar",
+          "type": "character"
+        }
+      ],
+      "excerpt": "Edward Newgate rejects Shanks's letter, demanding he come in person with rum; Shanks denies Rockstar his revenge and instead orders the whole crew to prepare for battle.",
+      "scene": "V1498",
+      "scene_excerpt": "Shanks speaks to Rockstar by Den Den Mushi, laughs that the old man has not changed, denies him the chance to redeem his honor against Edward Newgate's crew and orders him back; asked by Benn Beckman whether they should go to Edward Newgate, he tells the crew to prepare for battle.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
+      "id": "T1132",
+      "chapter": 280,
+      "type": "chekhovs_gun",
+      "kind": "체호프의 총",
+      "title": "Monkey D. Luffy throws his treasured straw hat to the frightened Nami, telling her she is the Pirate King's friend, and declares himself the pirate king of the sea before the final clash in the sky.",
+      "fact": "Monkey D. Luffy throws his treasured straw hat to the frightened Nami, telling her she is the Pirate King's friend, and declares himself the pirate king of the sea before the final clash in the sky.",
+      "people": [
+        "Monkey D. Luffy",
+        "Nami"
+      ],
+      "entities": [
+        {
+          "id": "E2021",
+          "name": "Monkey D. Luffy's straw hat thrown to Nami",
+          "type": "object"
+        },
+        {
+          "id": "E2022",
+          "name": "Pirate King of the sea (Monkey D. Luffy's answer)",
+          "type": "object"
+        },
+        {
+          "id": "E2",
+          "name": "Monkey D. Luffy",
+          "type": "character"
+        },
+        {
+          "id": "E71",
+          "name": "Nami",
+          "type": "character"
+        },
+        {
+          "id": "E14",
+          "name": "Pirate King",
+          "type": "object"
+        },
+        {
+          "id": "E18",
+          "name": "Shanks's straw hat (straw hat)",
+          "type": "object"
+        }
+      ],
+      "excerpt": "Monkey D. Luffy throws his treasured straw hat to the frightened Nami, telling her she is the Pirate King's friend, and declares himself the pirate king of the sea before the final clash in the sky.",
+      "scene": "V1817",
+      "scene_excerpt": "Monkey D. Luffy silences Nami's request for guidance by throwing her his straw hat and telling her she is the Pirate King's friend; asked what country he rules, he answers that he is the pirate king of the sea, and Enel prepares to finish the battle in the sky.",
+      "status": "open",
+      "resolved_chapter": null,
+      "resolution": null
+    },
+    {
       "id": "T1575",
       "chapter": 386,
       "type": "chekhovs_gun",
