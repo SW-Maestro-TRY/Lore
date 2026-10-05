@@ -828,6 +828,65 @@ export function adminSurveyRows(limit = 200): Promise<SurveyRow[]> {
   return call(`/admin/feedback?limit=${limit}`);
 }
 
+/* ---- 관리자 실시간 집계 — 관리자만 ---------------------------------------- */
+
+export interface AdminLiveSource {
+  key: string;
+  visitors: number;
+  started: number;
+  baked: number;
+}
+
+export interface AdminLiveRefHost {
+  host: string;
+  visitors: number;
+}
+
+export interface AdminLiveEvent {
+  name: string;
+  uids: number;
+  total: number;
+}
+
+export interface AdminLiveSurvey { positive: number; total: number }
+
+export interface AdminLive {
+  from: string;
+  to: string;
+  activeMinutes: number;
+  activeUids: number;
+  runningJobs: number;
+  funnel: {
+    landing: number;
+    newSessions: number;
+    returningSessions: number;
+    signedIn: number;
+    createStarted: number;
+    baked: number;
+    readEnd: number;
+    nextEpisodeClicked: number;
+    kakaoShared: number;
+    downloadClicked: number;
+    createFailed: number;
+    createBlocked: number;
+  };
+  revisions: { story: number; sheet: number; scene: number; panel: number };
+  survey: Record<string, AdminLiveSurvey>;
+  sources: AdminLiveSource[];
+  mediums: AdminLiveSource[];
+  campaigns: AdminLiveSource[];
+  refHosts: AdminLiveRefHost[];
+  events: AdminLiveEvent[];
+}
+
+export function adminLive(from?: string, to?: string): Promise<AdminLive> {
+  const q = new URLSearchParams();
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  const s = q.toString();
+  return call<AdminLive>(`/admin/live${s ? "?" + s : ""}`);
+}
+
 /* ---- 예시 작품 관리(#614 · #619) — 관리자만 ---------------------------------------- */
 
 export interface AdminExampleRow {
