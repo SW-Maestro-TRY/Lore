@@ -186,3 +186,5 @@
 .wt .wt-my-charcard .wt-my-draftchip { position: absolute; left: 10px; top: 10px; }
 .wt .wt-my-charcard .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wt .wt-my-charcard .wt-my-workfoot .grow { flex: 1; }
+/* 관리자 처리 안내(#638) — 작가에게만 보인다 */
+.wt .wt-my-modnote { display: block; font-size: 12px; line-height: 1.5; color: var(--ink); background: #f1f4f3; border-radius: 8px; padding: 6px 8px; word-break: keep-all; }

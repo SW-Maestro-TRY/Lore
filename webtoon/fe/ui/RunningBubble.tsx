@@ -21,6 +21,7 @@ import { registerDict, useT } from "../lib/i18n";
 import type { Go, View } from "../lib/nav";
 import { track } from "../lib/track";
 import { unwatchJob, watchedJob, watchJob } from "../lib/watchJob";
+import QueueDialog, { isQueued } from "./QueueDialog";
 import "./RunningBubble.css";
 
 const POLL_MS = 4000;
@@ -51,6 +52,8 @@ export default function RunningBubble({ view, runId, go }: { view: View; runId?:
   const [job, setJob] = useState<NhJob | null>(null);
   const [pos, setPos] = useState<Pos | null>(null);
   const [dragging, setDragging] = useState(false);
+  /* 순서를 기다리는 중에 누르면 진행 화면 대신 대기 팝업을 띄운다(#641). */
+  const [queueOpen, setQueueOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ px: number; py: number; x: number; y: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
@@ -149,6 +152,10 @@ export default function RunningBubble({ view, runId, go }: { view: View; runId?:
   const open = () => {
     if (suppressClick.current) { suppressClick.current = false; return; }
     track("waiting_bubble_open", { job: job.id, status });
+    if (isQueued(job)) {
+      setQueueOpen(true);
+      return;
+    }
     if (done && job.run_id) {
       unwatchJob(job.id);
       go("result", { run: job.run_id });
@@ -187,7 +194,18 @@ export default function RunningBubble({ view, runId, go }: { view: View; runId?:
     });
   };
 
-  return createPortal(
+  /* 대기 팝업은 원과 따로 body 에 띄운다 — 원 상자 안에 두면 원의 자리에 묶인다.
+     body 는 .wt 바깥이라 팝업 모양(.wt .wt-dialog)과 색 변수가 먹게 .wt 로 감싼다. .wt 의 최소 높이 · 바탕이
+     페이지 끝에 빈 덩어리를 만들지 않게 자리는 차지하지 않는다(display: contents — 변수는 그대로 물려받는다). */
+  const queuePopup = queueOpen && isQueued(job) && createPortal(
+    <div className="wt" style={{ display: "contents" }}>
+      <QueueDialog job={job} onWait={() => setQueueOpen(false)}
+                   onOpenProgress={() => { setQueueOpen(false); go("running", { job: job.id }); }} />
+    </div>,
+    document.body,
+  );
+
+  return <>{queuePopup}{createPortal(
     <div ref={boxRef} className={`wt-bubble ${kind}${dragging ? " dragging" : ""}`}
          style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}>
       <button type="button" className="wt-bubble-btn"
@@ -219,7 +237,7 @@ export default function RunningBubble({ view, runId, go }: { view: View; runId?:
       )}
     </div>,
     document.body,
-  );
+  )}</>;
 }
 
 registerDict({

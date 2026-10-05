@@ -50,7 +50,7 @@ const CARDS: readonly Card[] = [
     lead: "세계관과 그림체만 고르면 표지부터 마지막 장까지 한 편이 통째로 나옵니다.",
     list: [
       "한 편에 보통 10분 안팎 걸립니다.",
-      "완성한 뒤에도 마음에 안 드는 컷만 골라 다시 그릴 수 있습니다.",
+      "완성한 뒤에도 마음에 안 드는 장면만 골라 다시 그릴 수 있습니다.",
     ],
   },
   {
@@ -108,9 +108,9 @@ const DICT = {
     en: "One episode usually takes around 10 minutes.",
     ja: "1話あたり通常10分前後かかります。",
   },
-  "완성한 뒤에도 마음에 안 드는 컷만 골라 다시 그릴 수 있습니다.": {
-    en: "Even after it's done, you can pick just the panels you don't like and redraw them.",
-    ja: "完成した後も、気に入らないコマだけ選んで描き直せます。",
+  "완성한 뒤에도 마음에 안 드는 장면만 골라 다시 그릴 수 있습니다.": {
+    en: "Even after it's done, you can pick just the scenes you don't like and redraw them.",
+    ja: "完成した後も、気に入らない場面だけ選んで描き直せます。",
   },
   "캐릭터 키우기": { en: "Raise your character", ja: "キャラクターを育てる" },
   "사계절을 함께 보낸 캐릭터": { en: "A character who's spent all four seasons with you", ja: "四季を共に過ごしたキャラクター" },

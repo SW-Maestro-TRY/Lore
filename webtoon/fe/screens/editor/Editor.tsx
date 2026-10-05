@@ -214,7 +214,8 @@ export default function Editor({ runId, go, authStatus = "loading" }:
               {t("내가 얹은 것 보기")}
             </label>
             <p className="ed-saved wt-ed-saved" id="savedNote" data-state="idle" />
-            <ShareMenu runId={runId} episode={episode} className="icon-btn" iconOnly />
+            {/* 비공개 작품은 공유 버튼을 감춘다(#638) */}
+            {info?.public !== false && <ShareMenu runId={runId} episode={episode} className="icon-btn" iconOnly />}
             <button type="button" className="btn btn-p wt-ed-bake" id="bakeBtn">{t("이미지로 뽑기")}</button>
             <button type="button" className="btn btn-w wt-ed-done" onClick={() => go("result", { run: runId })}>{t("완성본으로")}</button>
           </div>
@@ -327,7 +328,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
           </label>
           <div className="ask-actions">
             <button type="button" className="btn btn-w" id="regenAskCancel">{t("취소")}</button>
-            <button type="button" className="btn btn-p" id="regenAskGo">{t("이 컷 다시 그리기")}</button>
+            <button type="button" className="btn btn-p" id="regenAskGo">{t("이 장면 다시 그리기")}</button>
           </div>
         </div>
       </div>

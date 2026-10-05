@@ -126,6 +126,22 @@ public class WebtoonWork {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /* 관리자 처리 상태(#638). 비어 있으면 처리 없음. HIDDEN 이면 작가가 다시 공개로 못 바꾸고,
+       REMOVED 면 관리자 휴지통이라 작가가 못 되살린다. 무엇을 누가 했는지는 ModerationLog 에 쌓인다. */
+    @Column(name = "moderation", length = 16)
+    private String moderation;
+
+    /** 작가에게 보여 주는 사유. */
+    @Column(name = "moderation_reason", length = 500)
+    private String moderationReason;
+
+    @Column(name = "moderated_at")
+    private Instant moderatedAt;
+
+    /** 처리 전에 공개였나 — 다시 공개 · 되살리기 때 원래 상태로 돌린다. */
+    @Column(name = "moderation_was_public")
+    private Boolean moderationWasPublic;
+
     protected WebtoonWork() {
     }
 
@@ -222,5 +238,52 @@ public class WebtoonWork {
 
     void untrash() {
         this.deletedAt = null;
+    }
+
+    /** 관리자 처리 상태. 처리 없으면 {@code null}. */
+    public String getModeration() {
+        return moderation;
+    }
+
+    public String getModerationReason() {
+        return moderationReason;
+    }
+
+    public Instant getModeratedAt() {
+        return moderatedAt;
+    }
+
+    public boolean isHiddenByAdmin() {
+        return WorkModeration.HIDDEN.equals(moderation);
+    }
+
+    public boolean isRemovedByAdmin() {
+        return WorkModeration.REMOVED.equals(moderation);
+    }
+
+    /** 처리 전 공개 여부. 적힌 것이 없으면 지금 값. */
+    boolean wasPublicBeforeModeration() {
+        return moderationWasPublic == null ? isPublic : moderationWasPublic;
+    }
+
+    /**
+     * 관리자가 처리했다. 처리 전 공개 여부는 <b>처음 처리할 때만</b> 적는다 — 비공개 처리한 뒤 삭제하면
+     * 그때의 값(비공개)이 아니라 처음 값(공개)으로 돌아가야 한다.
+     */
+    void moderate(String state, String reason, Instant at) {
+        if (this.moderation == null) {
+            this.moderationWasPublic = this.isPublic;
+        }
+        this.moderation = state;
+        this.moderationReason = reason;
+        this.moderatedAt = at;
+    }
+
+    /** 관리자 처리를 거둔다. */
+    void clearModeration() {
+        this.moderation = null;
+        this.moderationReason = null;
+        this.moderatedAt = null;
+        this.moderationWasPublic = null;
     }
 }

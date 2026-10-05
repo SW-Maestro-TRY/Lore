@@ -3,6 +3,17 @@ import { registerDict, type Dict } from "../../lib/i18n";
 /* 완성본 · 공유 — 화면의 한국어 원문이 키다. 서버가 만든 글(제목·오류 본문)은 여기 없다. */
 const dict: Dict = {
   /* ---- Result ---- */
+  "관리자가 이 작품을 비공개 처리했어요. 다른 사람에게는 보이지 않아요.": {
+    en: "An admin has made this work private. Other people can't see it.",
+    ja: "管理者がこの作品を非公開にしました。ほかの人には表示されません。",
+    zh: "管理员已将这部作品设为不公开，其他人无法看到。",
+  },
+  "이 작품에 운영 정책 경고가 있어요.": {
+    en: "This work has received a policy warning.",
+    ja: "この作品には運営ポリシーの警告があります。",
+    zh: "这部作品收到了运营政策警告。",
+  },
+  "사유: {reason}": { en: "Reason: {reason}", ja: "理由: {reason}", zh: "原因：{reason}" },
   "이런 웹툰은 어때요": { en: "You might also like", ja: "こんな作品はいかが", zh: "你可能也喜欢" },
   "찜하기": { en: "Save", ja: "お気に入りに追加", zh: "收藏" },
   "찜 취소": { en: "Unsave", ja: "お気に入りから外す", zh: "取消收藏" },

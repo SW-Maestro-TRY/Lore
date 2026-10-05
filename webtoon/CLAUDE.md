@@ -69,13 +69,14 @@ webtoon/ai/
 | --- | --- | --- |
 | [server.md](docs/server.md) | 서버 구조와 사용 설명서 | dev·staging·prod 세 환경의 구성과 주소 · 배포 흐름과 브랜치 규칙 · 비밀값 넣는 곳(dev 는 박스 `.env` 와 compose `environment:` 둘 다 필요) · 버킷 · 서버 로그 보기 · staging 자동 전원 · DB 직접 접근 · 비용 |
 | [env-diff.md](docs/env-diff.md) | 세 환경이 실제로 무엇이 다른가 | 대조표 · **dev 에서는 안 드러나고 승격 때 걸리는 것**(설정 주입 경로, venv 실패가 배포를 안 멈춤, 마이그레이션 순서, MinIO 의존 등) · 승격 점검표 |
+| [examples-runbook.md](docs/examples-runbook.md) | 예시 작품 올리는 법 — 이어서 할 때 | 환경별 지금 상태 · 관리자 계정 위치(`webtoon/account/admin-accounts.txt`) · 도구 `webtoon/tools/examples/`(make-admin · push · list · set · pull · db-sql) · 새 환경 채우기 · 한 편 더하기 · 빼기 · 순서 · 막힐 때 |
 | [images.md](docs/images.md) | 화면에 그림 넣는 법 | 정적 그림은 원본 폴더에 넣음(`apps/web/public/static/` 금지) · 예시 작품·예시 캐릭터는 부팅 때 한 번 심고 그 뒤로는 DB 가 원본 · 온보딩 목업 상수 · 둘러보기 공개 · 예시 `run_id` 하드코딩 자리 |
 | [pipeline.md](docs/pipeline.md) | 웹툰 한 편이 만들어지는 순서와 단계별 모델 | 만드는 순서(이야기 · 시트 나란히 → 장면 → 장 그림 · 장 검수 → 화 전체 검수) · 단계별 모델(gpt-5.1 · gpt-4.1 · gpt-image-2)과 실제 기록 · 길마다 멈추는 자리 · 검수 세 가지가 보는 것과 다시 그리는 횟수 · 그림 품질 · 동시 작업 수 · 모델 바꾸는 법 |
 | [full-review-design.md](docs/full-review-design.md) | 완성된 화 전체를 다시 읽는 검수 설계 | 장 단위 검수로 못 잡는 장거리 문제 · 판정(`fullreview.py`)과 재생성 루프(`JobRunner.runFullReviewLoop`) 구현 상태 |
 | [mentoring-followup-2026-09-19.md](docs/mentoring-followup-2026-09-19.md) | 0911 멘토링 후속 과제 진행 기록 | 과제 11개별로 한 것 → 실측 결과 → 남은 것 |
 | [brand/](docs/brand/README.md) | 서비스를 뭐라고 소개하나 | 한 줄 정의·가치·핵심 경험 · 메인 타겟과 유입 타겟 · 문제 인식 · 문장 층위와 소개서 순서 · 지금 되는 기능과 실측 시간. 소개서·랜딩·광고 문구를 쓸 때 먼저 읽음 |
 | [validation.md](docs/validation.md) | 사용자 검증 설계 | 이번 스프린트 가설(H1~H4)과 판단 기준 · 사용자 여정 단계별로 세는 이벤트와 물어볼 것 · 완성 직후 설문(S1~S6)과 인터뷰 질문 · 메시지별 UTM 링크 규칙 · 결과별 다음 행동. 사용자를 받기 전과 결과를 판정할 때 읽음 |
-| [safety.md](docs/safety.md) | 콘텐츠 안전 — 무엇을 막고 어디서 막나 | 금지 분류표 · 입력 글은 서버가 moderation 으로 거름(무료) · 사진·생성 글은 아직 안 봄 · 검사 서비스가 죽었을 때 기본 통과 · 사용자 문구 · 미성년 · 신고 절차 |
+| [safety.md](docs/safety.md) | 콘텐츠 안전 — 무엇을 막고 어디서 막나 | 금지 분류표 · 입력 글은 서버가 moderation 으로 거름(무료) · 사진·생성 글은 아직 안 봄 · 검사 서비스가 죽었을 때 기본 통과 · 사용자 문구 · 미성년 · 신고 절차와 관리자 처리(비공개 · 경고 · 삭제, #638) |
 | [legal/](docs/legal/) | 이용약관·개인정보처리방침 작업본 | 법률 검토 전 초안 · 판 번호는 `user_agreement.version` 과 같아야 함 · 게시본은 `게시본-뽑기.py` 로 뽑음(작업본을 화면에 직접 쓰지 않음) |
 | [backend.md](docs/backend.md) | **낡은 문서** | serve.py 프록시 시절 설명입니다. 그 구조는 2026-09-12에 지웠으니 지금 백엔드 설명으로 읽지 않습니다 |
 

@@ -31,6 +31,15 @@ public class PageStore {
     /** 로컬에서만 켠다 — 서명 주소로 준다(아래 url 주석). */
     private final boolean presignLocally;
     private final Clock clock;
+    /* 말풍선을 구운 그림(#638). 이것도 공개 · 비공개를 따라 옮겨야 한다 — 전에는 장 그림만 옮겨서, 비공개로
+       내리거나 휴지통에 넣어도 구운 그림은 공개 자리에 남아 주소를 아는 사람에게 계속 열렸다.
+       세터로 받는다: 생성자에 넣으면 이 클래스를 직접 만드는 시험이 모두 바뀌고, 없으면 장 그림만 옮긴다. */
+    private com.lore.webtoon.runs.BakedPageRepository baked;
+
+    @Autowired(required = false)
+    void setBaked(com.lore.webtoon.runs.BakedPageRepository baked) {
+        this.baked = baked;
+    }
 
     @Autowired
     public PageStore(WebtoonPageRepository pages, PrivateArt art,
@@ -147,9 +156,30 @@ public class PageStore {
                 moved++;
             }
         }
+        moved += moveBaked(runId, toPublic);
         if (moved > 0) {
             log.info("작품 그림을 {} 자리로 옮겼습니다 (run={}, {}장)",
                     toPublic ? "공개" : "비공개", runId, moved);
+        }
+        return moved;
+    }
+
+    /** 구운 그림도 같은 규칙으로 옮긴다. -> 옮긴 수 */
+    private int moveBaked(String runId, boolean toPublic) {
+        if (baked == null) {
+            return 0;
+        }
+        int moved = 0;
+        for (com.lore.webtoon.runs.BakedPage one : baked.findByRunIdOrderByPageNoAscWidthAsc(runId)) {
+            if (PrivateArt.isPrivate(one.getS3Key()) != toPublic) {
+                continue;
+            }
+            String to = art.move(one.getS3Key(), toPublic);
+            if (to != null && !to.equals(one.getS3Key())) {
+                one.movedTo(to, Instant.now(clock));
+                baked.save(one);
+                moved++;
+            }
         }
         return moved;
     }
