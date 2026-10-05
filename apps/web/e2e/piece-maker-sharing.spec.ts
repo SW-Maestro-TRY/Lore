@@ -227,7 +227,11 @@ test('AC-공유-2 · 이미지 없이 수정 글 복사·3개 SNS 전달을 추�
   await write(page);
   await complete(page, lore);
   const writes: string[] = [];
-  page.on('request', req => { if (req.method() === 'POST') writes.push(new URL(req.url()).pathname); });
+  page.on('request', req => {
+    const path = new URL(req.url()).pathname;
+    // 결과 조회 기록은 공유와 별개 기능이다(piece-maker-result-view.spec.ts). 공유가 만드는 쓰기만 센다.
+    if (req.method() === 'POST' && !path.endsWith('/result-view')) writes.push(path);
+  });
   await page.evaluate(() => {
     const original = HTMLCanvasElement.prototype.toBlob;
     (window as unknown as { imageCalls: number }).imageCalls = 0;

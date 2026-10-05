@@ -5,6 +5,7 @@ import type { JudgeResult, PresentationSection } from "../lib/api";
 import { GRADES, readableJudgement } from "../lib/judgement";
 import Icon from "./Icon";
 import CreditCoin from "./CreditCoin";
+import type { RefObject } from "react";
 
 type Props = {
   /** 단추를 누를 수 있는가. 카드를 받았고, 담은 카드와 주장이 있고, 맡기는 중이 아니어야 한다. */
@@ -23,6 +24,7 @@ type Props = {
   price: number | null;
   /** 받아 둔 판정. 없으면 결과 상자를 숨긴다. */
   result: JudgeResult | null;
+  resultRef: RefObject<HTMLDivElement | null>;
   chapter: number | null;
   /** 근거 단추에 붙일 카드 제목. */
   titleOf: (id: string) => string | undefined;
@@ -98,7 +100,7 @@ function JudgeResultView({ result, chapter, titleOf, onOpen }: { result: JudgeRe
   );
 }
 
-export default function JudgePanel({ canJudge, waiting, frozen, pending, failed, stateText, price, result, chapter, titleOf, onJudge, onNew, onOpen }: Props) {
+export default function JudgePanel({ canJudge, waiting, frozen, pending, failed, stateText, price, result, resultRef, chapter, titleOf, onJudge, onNew, onOpen }: Props) {
   return (
     <>
       {failed ? (
@@ -147,7 +149,7 @@ export default function JudgePanel({ canJudge, waiting, frozen, pending, failed,
           {stateText}
         </p>
       )}
-      <div id="piece-maker-judge-result" className="inline-preview" aria-live="polite" hidden={result === null} data-part="judge-result">
+      <div ref={resultRef} id="piece-maker-judge-result" className="inline-preview" aria-live="polite" hidden={result === null} data-part="judge-result">
         {result ? <JudgeResultView result={result} chapter={chapter} titleOf={titleOf} onOpen={onOpen} /> : null}
       </div>
     </>
