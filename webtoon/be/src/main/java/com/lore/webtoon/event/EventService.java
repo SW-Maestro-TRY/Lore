@@ -68,10 +68,13 @@ public class EventService {
             "where", "target", "kind", "tab", "pane", "filter", "reason", "status", "result",
             // 만들기 설정
             "step", "quality", "style", "mode", "preset", "lang",
+            // 만들기 선택값 — 라벨만, 글은 아님(#665)
+            "path", "way", "world", "genre", "pick", "to", "field", "source",
             // 가리키는 것 (작품·작업·캐릭터 id, 몇 번째)
             "run", "job", "character", "n", "ep", "cut", "page",
-            // 수·시간·돈
+            // 수·시간·돈 · 길이 · 깊이 — 사람이 쓴 글 그 자체는 안 담고 길이만(#665)
             "count", "ms", "cost", "free_left", "balance",
+            "name_len", "desc_len", "note_len", "depth_pct", "from_step", "to_step", "dwell_ms",
             // 참거짓
             "mine", "logged_in", "edited", "random", "ok",
             "has_photo", "has_name", "has_desc", "has_note", "has_email");

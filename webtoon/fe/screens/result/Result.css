@@ -49,6 +49,20 @@
 }
 .wt .wt-result-pg:hover .wt-result-pgdl, .wt .wt-result-pgdl:focus-visible { opacity: 1; }
 
+.wt .wt-result-remix {
+  width: 720px; max-width: 100%;
+  margin: 24px 0 16px; padding: 20px 22px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--paper);
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+}
+.wt .wt-result-remix b { font-size: 17px; }
+.wt .wt-result-remix .muted { font-size: 13px; }
+.wt .wt-result-remix .btn { margin-top: 6px; align-self: stretch; }
+@media (min-width: 720px) {
+  .wt .wt-result-remix { align-items: center; text-align: center; }
+  .wt .wt-result-remix .btn { align-self: center; min-width: 220px; }
+}
+
 /* 좌 · 가운데 · 우 세 칸. 좌우가 같은 폭(1fr)이라 가운데 칸이 줄 한가운데에
    온다 — 「맨 위로」가 오른쪽 단추 폭만큼 밀리지 않는다. */
 .wt .wt-result-foot {
