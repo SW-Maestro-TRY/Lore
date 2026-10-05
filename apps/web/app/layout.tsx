@@ -1,13 +1,15 @@
 // 앱 전체 공통 레이아웃. 여기는 "연결 파일"이라 화면 로직을 넣지 않는다.
 //
-// 하는 일 2가지:
+// 하는 일 3가지:
 //   1) 폰트 로드 → CSS 변수로 노출 (common/fe/styles/tokens.css 가 이 변수를 받아 쓴다)
 //   2) 전역 스타일 로드
+//   3) 구글 광고 측정 태그(gtag.js) 로드 — NEXT_PUBLIC_GOOGLE_ADS_ID 가 있을 때만
 //
 // 공용 헤더(SiteHeader)는 여기가 아니라 랜딩(LandingPage)과 app/(domains)/layout.tsx 가 각자 붙인다.
 // 랜딩은 헤더 아래 자체 푸터까지 갖는 한 장짜리 화면이라 구성이 달라서다.
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
+import Script from "next/script";
 // 폰트는 npm 패키지(@fontsource)에서 온다. next/font/google 은 next build 도중
 // Google Fonts 에서 파일을 받는데, dev 서버에서 그 요청이 자주 끊겨 배포가 복불복으로
 // 실패했다 — 한국어 폰트가 글자 범위별로 백 수십 조각이라 하나만 못 받아도 빌드가 죽는다.
@@ -44,6 +46,11 @@ async function locale(): Promise<string> {
   return v === "en" || v === "ja" ? v : "ko";
 }
 
+// 구글 광고 측정 태그(AW-XXXXXXXX). 환경변수가 있을 때만 로드한다 —
+// 로컬·개발 서버에선 보통 비워 두므로 자동으로 꺼진다.
+// strategy="afterInteractive" — 첫 그림이 뜬 뒤 로드돼서 LCP 를 늦추지 않는다.
+const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+
 export default async function RootLayout({
   children,
 }: {
@@ -51,7 +58,23 @@ export default async function RootLayout({
 }) {
   return (
     <html lang={await locale()}>
-      <body>{children}</body>
+      <body>
+        {GOOGLE_ADS_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-ads-init" strategy="afterInteractive">
+              {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GOOGLE_ADS_ID}');`}
+            </Script>
+          </>
+        )}
+        {children}
+      </body>
     </html>
   );
 }
