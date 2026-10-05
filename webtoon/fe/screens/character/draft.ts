@@ -1,6 +1,7 @@
 /* 「캐릭터 만들어보기」의 입력값을 잠깐 들고 있는 자리 — 결과 화면의 「다시 뽑기」가
  * 같은 입력으로 다시 만들 수 있게 sessionStorage 에 남긴다. 탭을 닫으면 사라진다. */
-import { tryCharacter, type Character } from "../../lib/api";
+import { uploadDataUrls } from "@common/api/uploads";
+import { tryCharacter, uploadDataUrlsAsGuest, type Character } from "../../lib/api";
 import type { Lang } from "../../lib/i18n";
 
 export const DRAFT_KEY = "lore_try_draft";
@@ -62,13 +63,31 @@ export function lastCardId(): string | null {
   }
 }
 
-/** 입력값으로 캐릭터를 만들고 마지막 카드로 기억한다. 카드 글은 지금 화면 언어로 나온다. */
-export async function runTry(d: TryDraft, lang: Lang): Promise<Character> {
+/**
+ * 입력값으로 캐릭터를 만들고 마지막 카드로 기억한다. 카드 글은 지금 화면 언어로 나온다.
+ *
+ * 사진은 S3 로 먼저 올린다(start.ts 와 같은 규칙, #660) — 본문에 data URL 로
+ * 실으면 사진 한 장만 커져도 요청이 몇 MB 가 되고, CloudFront 앞단 WAF 가
+ * 통째로 막는다(2026-10-05 실측). 로그인한 사람은 팀 공용 presign 을, 게스트는
+ * webtoon 전용 presign 을 쓴다. 올리다 실패하면 data URL 로 되돌린다.
+ */
+export async function runTry(d: TryDraft, lang: Lang, authenticated: boolean): Promise<Character> {
   const body: Parameters<typeof tryCharacter>[0] = { language: lang };
   if (d.name.trim()) body.name = d.name.trim();
   if (d.description.trim()) body.description = d.description.trim();
   if (d.world.trim()) body.world = d.world.trim();
-  if (d.photo) body.photos_data = [d.photo];
+  if (d.photo) {
+    let keys: string[] | undefined;
+    try {
+      keys = authenticated
+        ? await uploadDataUrls([d.photo], "webtoon")
+        : await uploadDataUrlsAsGuest([d.photo]);
+    } catch {
+      keys = undefined;
+    }
+    if (keys?.length) body.photo_keys = keys;
+    else body.photos_data = [d.photo];
+  }
   const c = await tryCharacter(body);
   rememberLast(c.id);
   return c;
