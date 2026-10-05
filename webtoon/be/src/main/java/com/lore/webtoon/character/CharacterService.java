@@ -8,6 +8,8 @@ import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.usage.SpendGuard;
 import com.lore.webtoon.usage.UsageService;
+import com.lore.common.s3.S3Service;
+import com.lore.common.s3.S3Storage;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.webtoon.safety.SafetyGuard;
@@ -92,6 +94,14 @@ public class CharacterService {
     /** 하루 돈 상한(#444). 테스트용 생성자로 만들면 비어 있고, 그때는 안 막는다. */
     private SpendGuard spend;
     /**
+     * 사진을 presign 키로 받을 때 쓴다(#660). base64 로 그대로 실으면 본문이
+     * 몇 MB 가 되어 CloudFront 앞단 WAF(SizeRestrictions_BODY) 가 통째로
+     * 막는다 — 웹툰 만들기(JobService.pullPhotos)와 같은 길. 테스트용 생성자로
+     * 만들면 비어 있는데, 그때는 photoKeys 를 안 쓰므로 괜찮다.
+     */
+    private S3Service uploads;
+    private S3Storage storage;
+    /**
      * 그린 뒤 작업 폴더를 남기는가.
      *
      * 로컬은 남긴다 — 무엇을 넣고 무엇을 불러 얼마가 나갔는지(input.json · meta.json ·
@@ -115,7 +125,7 @@ public class CharacterService {
                             @Value("${lore.webtoon.character.free-per-day:3}") int freePerDay,
                             @Value("${lore.webtoon.character.credit-cost:2}") int cost,
                             @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally,
-                            UsageService usage, SpendGuard spend,
+                            UsageService usage, SpendGuard spend, S3Service uploads, S3Storage storage,
                             @Value("${app.s3.content-bucket:}") String bucket,
                             @Value("${app.s3.endpoint:}") String endpoint,
                             @Value("${lore.webtoon.character.keep-files:}") String keepFiles) {
@@ -124,6 +134,8 @@ public class CharacterService {
         this.safety = safety;
         this.usage = usage;
         this.spend = spend;
+        this.uploads = uploads;
+        this.storage = storage;
         this.keepFiles = keepsFiles(bucket, endpoint, keepFiles);
         log.info("캐릭터 작업 폴더: {}", this.keepFiles
                 ? "남깁니다(로컬)" : "원가를 DB 에 적은 뒤 치웁니다(배포)");
@@ -235,13 +247,19 @@ public class CharacterService {
      *
      * @param photoDataUrls 있으면 읽어서 외모를 적는다(최대 {@value #MAX_PHOTOS}장 —
      *              넘으면 그만큼만 쓰고 나머지는 버린다). 비었으면 이름·설명만으로
+     * @param photoKeys presign 으로 S3 에 먼저 올린 사진의 키. 있으면 이것을 쓰고
+     *              {@code photoDataUrls} 는 무시한다(#660) — 둘 다 없으면 사진 없음
+     * @param guestKey 로그인 안 했을 때 photoKeys 티켓 주인을 확인할 열쇠(IP 해시).
+     *              로그인했으면 안 본다
      * @return 만든 캐릭터
      */
     @Transactional
     public WebtoonCharacter create(Long userId, String browserUid, String name,
-                                   String description, List<String> photoDataUrls, String style,
+                                   String description, List<String> photoDataUrls,
+                                   List<String> photoKeys, String guestKey, String style,
                                    String language) {
-        return start(userId, browserUid, name, description, photoDataUrls, style, null, language);
+        return start(userId, browserUid, name, description, photoDataUrls, photoKeys, guestKey,
+                     style, null, language);
     }
 
     /**
@@ -257,15 +275,17 @@ public class CharacterService {
      */
     @Transactional
     public WebtoonCharacter tryOut(Long userId, String browserUid, String name,
-                                   String description, List<String> photoDataUrls, String world,
+                                   String description, List<String> photoDataUrls,
+                                   List<String> photoKeys, String guestKey, String world,
                                    String language) {
-        return start(userId, browserUid, name, description, photoDataUrls, null,
-                     world == null ? "" : world.trim(), language);
+        return start(userId, browserUid, name, description, photoDataUrls, photoKeys, guestKey,
+                     null, world == null ? "" : world.trim(), language);
     }
 
     /** @param world {@code null} 이면 초상 한 장, 아니면 한 컷("" 는 세계관 무작위) */
     private WebtoonCharacter start(Long userId, String browserUid, String name,
-                                   String description, List<String> photoDataUrls, String style,
+                                   String description, List<String> photoDataUrls,
+                                   List<String> photoKeys, String guestKey, String style,
                                    String world, String language) {
         /* **로그인은 안 시킨다.** 이 제품은 회원가입 없이 한번 써 보게 하는
            것이 목적이고, 웹툰 만들기가 이미 그렇다 — 캐릭터만 로그인을
@@ -286,7 +306,11 @@ public class CharacterService {
                 .filter(s -> s != null && !s.isBlank())
                 .limit(MAX_PHOTOS)
                 .toList();
-        boolean hasPhoto = !photos.isEmpty();
+        List<String> keys = (photoKeys == null ? List.<String>of() : photoKeys).stream()
+                .filter(s -> s != null && !s.isBlank())
+                .limit(MAX_PHOTOS)
+                .toList();
+        boolean hasPhoto = !photos.isEmpty() || !keys.isEmpty();
         // 한 컷은 빈손도 된다 — 그게 「랜덤으로 만들어보기」다.
         if (world == null && !hasPhoto && (description == null || description.isBlank())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
@@ -340,9 +364,13 @@ public class CharacterService {
         List<Path> savedPhotos;
         try {
             Files.createDirectories(dir);
-            savedPhotos = new ArrayList<>();
-            for (int i = 0; i < photos.size(); i++) {
-                savedPhotos.add(savePhoto(dir, photos.get(i), i));
+            if (!keys.isEmpty()) {
+                savedPhotos = pullPhotos(dir, keys, userId, guestKey);
+            } else {
+                savedPhotos = new ArrayList<>();
+                for (int i = 0; i < photos.size(); i++) {
+                    savedPhotos.add(savePhoto(dir, photos.get(i), i));
+                }
             }
         } catch (BusinessException e) {
             throw e;
@@ -621,6 +649,38 @@ public class CharacterService {
     }
 
     // ---- 안쪽 -------------------------------------------------------------
+
+    /**
+     * presign 으로 S3 에 먼저 올린 사진을 작업 폴더로 내린다(#660).
+     *
+     * <b>티켓을 먼저 태운다</b>({@code S3Service.consume}) — 웹툰 만들기
+     * (JobService.pullPhotos)와 같은 이유로, 남의 키를 적어 보내거나 같은
+     * 키를 두 번 쓰는 것을 막는다. 로그인했으면 계정으로, 게스트면 guestKey
+     * (IP 해시)로 — 이 티켓이 정말 이 사람이 방금 받은 것인지 확인한다.
+     */
+    private List<Path> pullPhotos(Path dir, List<String> keys, Long userId, String guestKey)
+            throws IOException {
+        List<Path> out = new ArrayList<>();
+        for (int i = 0; i < keys.size(); i++) {
+            String key = keys.get(i);
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            if (userId != null) {
+                uploads.consume(userId, key, Instant.now(clock));
+            } else {
+                uploads.consumeGuest(guestKey, key, Instant.now(clock));
+            }
+            Path to = dir.resolve("photo" + i + ".png");
+            storage.download(key, to);
+            if (Files.size(to) > MAX_PHOTO_BYTES) {
+                Files.deleteIfExists(to);
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "사진이 너무 큽니다 (6MB 까지)");
+            }
+            out.add(to);
+        }
+        return out;
+    }
 
     /** @param index 여러 장일 때 파일 이름이 안 겹치게 붙이는 번호(0부터). */
     private Path savePhoto(Path dir, String dataUrl, int index) throws IOException {

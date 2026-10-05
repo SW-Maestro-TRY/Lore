@@ -736,6 +736,8 @@ export function tryCharacter(body: {
   name?: string;
   description?: string;
   photos_data?: string[];
+  /** presign 으로 S3 에 먼저 올린 사진의 키. 있으면 photos_data 는 안 본다(#660). */
+  photo_keys?: string[];
   /** 프리셋 키 또는 직접 쓴 한 줄. 비우면 무작위. */
   world?: string;
   /** 카드 글의 언어 — 화면 언어. 서버가 모르는 값(zh 등)은 ko 로 돌린다. */
@@ -745,7 +747,7 @@ export function tryCharacter(body: {
 }
 
 /** 직접 만들기(초상 한 장) — 백로그이지만 서버 길은 남아 있다. */
-export function createCharacter(body: { name: string; description: string; photos_data?: string[]; style?: string; language?: string }) {
+export function createCharacter(body: { name: string; description: string; photos_data?: string[]; photo_keys?: string[]; style?: string; language?: string }) {
   return post<Character>("/characters", body);
 }
 
