@@ -112,6 +112,19 @@ management:
 # **파이썬 서버(serve.py)는 더 이상 안 쓴다** — 2026-09-12에 프록시 경로를
 # 걷어냈다. 파이썬은 서버가 아니라 CLI 파이프라인으로만 쓴다.
 lore:
+  # Piece Maker 전용 측정 설정. 다른 서비스의 수집·삭제 동작은 바꾸지 않는다.
+  piece-maker:
+    meta-pixel:
+      enabled: ${PIECE_MAKER_META_ENABLED:false}
+      id: ${PIECE_MAKER_META_PIXEL_ID:}
+      site-origin: ${PIECE_MAKER_META_SITE_ORIGIN:}
+    measurement:
+      retention-enabled: ${PIECE_MAKER_RETENTION_ENABLED:false}
+    ad-report:
+      excluded-user-ids: ${PIECE_MAKER_TEST_USER_IDS:}
+      test-exclusions-reviewed: ${PIECE_MAKER_TEST_EXCLUSIONS_REVIEWED:false}
+      history-verified-from: ${PIECE_MAKER_HISTORY_VERIFIED_FROM:}
+      history-verified-through: ${PIECE_MAKER_HISTORY_VERIFIED_THROUGH:}
   webtoon:
     python:
       direct: ${LORE_WEBTOON_PYTHON_DIRECT:true}

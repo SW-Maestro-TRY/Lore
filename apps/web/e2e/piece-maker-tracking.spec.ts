@@ -75,6 +75,7 @@ test('AC-추적-1~4 찾기 · 카드 · 가설 만들기 · 떠나기를 글 없
 
   const events = await flush();
   expect(mine(events)).toEqual([
+    { name: 'piece_maker_visit', props: undefined },
     { name: 'piece_maker_search', props: { has_keywords: true, type: 'all', count: found, seq: 1 } },
     { name: 'piece_maker_card', props: { action: 'add', from: 'list' } },
     { name: 'piece_maker_compose', props: { step: 'first_card' } },
@@ -108,6 +109,9 @@ test('AC-추적-5~6 판정 결과를 본 때와 그 뒤의 행동을 남긴다',
   lore.hypotheses[0].judgedAt = '2026-09-27T00:00:00Z';
   await waitForJudgementPoll(page);
   await expect(page.locator('[data-part="judge-result"]')).toBeVisible();
+  const viewed = page.waitForResponse(response => /\/hypotheses\/\d+\/result-view$/.test(response.url()));
+  await page.locator('[data-part="judge-grade"]').evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await viewed;
 
   const close = page.locator('dialog[data-part="modal"] .dialog-head [data-action="close"]');
   await page.locator('[data-part="judge-result"] [data-action="open"]').first().click();

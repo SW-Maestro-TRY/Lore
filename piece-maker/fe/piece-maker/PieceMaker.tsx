@@ -23,7 +23,6 @@ import {
   trackDraftAbandoned,
   trackFeedbackOpened,
   trackResultAction,
-  trackResultViewed,
   trackSubmitBlocked,
   type CardFrom,
 } from "../lib/track";
@@ -47,6 +46,7 @@ import CreditCoin from "./CreditCoin";
 import CreditLedgerView from "./CreditLedgerView";
 import SharePanel from "./SharePanel";
 import FeedbackPanel from "./FeedbackPanel";
+import { useResultViewed } from "./useResultViewed";
 
 const NEW_DRAFT_TOAST = "맡긴 가설은 내 가설에 두고 새 가설을 시작했어요.";
 
@@ -233,12 +233,10 @@ export default function PieceMaker() {
       ? { judgement: hypothesis.judgement, presentation: hypothesis.presentation }
       : null;
 
-  // 판정 결과가 화면에 나온 때를 남긴다. 서버는 판정 시각만 알고 독자가 봤는지는 모른다.
+  // 받은 결과가 실제로 화면에 보일 때만 기록한다. FAILED는 정상 열람에 포함하지 않는다.
+  const resultRef = useRef<HTMLDivElement>(null);
+  useResultViewed(resultRef, result?.judgement.reason.trim() ? hypothesis!.id : null, requests, authOpen || modal !== null);
   const shown = hypothesis?.judgementStatus === "FAILED" ? "FAILED" : result ? "COMPLETE" : null;
-  const shownId = hypothesis?.id;
-  useEffect(() => {
-    if (shown && shownId !== undefined) trackResultViewed(shownId, shown);
-  }, [shown, shownId]);
 
   /** 맡긴 가설을 두고 새 가설을 시작했다. 그때 화면에 나와 있던 판정 상태를 함께 남긴다(결과가 나오기 전이면 PENDING). */
   const shownNow = useRef(shown);
@@ -674,6 +672,7 @@ export default function PieceMaker() {
                   failed={judgementFailed}
                   stateText={stateText}
                   result={result}
+                  resultRef={resultRef}
                   chapter={chapter}
                   titleOf={(id) => findCard(id)?.title}
                   onJudge={requestJudge}
