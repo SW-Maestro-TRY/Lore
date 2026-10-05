@@ -155,7 +155,14 @@ export default function Wizard({
   const crumb = own ? CRUMB_OWN : CRUMB;
   const mTitle = own ? M_TITLE_OWN : M_TITLE;
 
-  const goStep = (n: number) => go("create", { step: n, character: presetCharacterId, mode: own ? "own" : undefined });
+  /* 걸음 이동을 하나로 모아, 어디서 어디로 왜 넘어갔는지(앞/뒤 · 머문 시간)를 함께 적는다. */
+  const stepEnteredAt = useRef<number>(Date.now());
+  useEffect(() => { stepEnteredAt.current = Date.now(); }, [step]);
+  const goStep = (n: number) => {
+    const dir = n > step ? "wizard_next" : n < step ? "wizard_back" : "wizard_same";
+    track(dir, { from_step: step, to_step: n, dwell_ms: Date.now() - stepEnteredAt.current, mode: own ? "own" : "quick" });
+    go("create", { step: n, character: presetCharacterId, mode: own ? "own" : undefined });
+  };
 
   /* ---- 1걸음 ---- */
   const [chars, setChars] = useState<Character[] | null>(null);
@@ -195,10 +202,13 @@ export default function Wizard({
     [presetChar, form.characterId],
   );
 
-  const pickChar = (c: Character) => patch({
-    characterId: c.id, characterArt: c.art_url || undefined, photos: [],
-    name: c.builtin ? t(c.name) : c.name, character: (c.builtin ? t(c.description || "") : c.description) || "",
-  });
+  const pickChar = (c: Character) => {
+    track("cast_pick", { character: c.id, preset: c.builtin, way: c.builtin ? "builtin" : "mine" });
+    patch({
+      characterId: c.id, characterArt: c.art_url || undefined, photos: [],
+      name: c.builtin ? t(c.name) : c.name, character: (c.builtin ? t(c.description || "") : c.description) || "",
+    });
+  };
   const unpick = () => {
     patch({ characterId: undefined, characterArt: undefined });
     if (presetCharacterId) go("create", { step: 1, mode: own ? "own" : undefined });
@@ -238,6 +248,7 @@ export default function Wizard({
       return;
     }
     setCreateNote("");
+    track("start_pick", { path: c, logged_in: !!authenticated });
     if (form.create !== c) patch({ create: c });
     go("create", { step: 3, character: presetCharacterId, mode: c === "own" ? "own" : undefined });
   };
@@ -659,10 +670,16 @@ export default function Wizard({
             </div>
             <div className="wt-wiz-foot">
               <button type="button" className="btn btn-w" onClick={() => goStep(2)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 시작")}</span></button>
-              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => goStep(4)}>{t("다음")} <IconArrow size={18} /></button>
+              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => {
+                track("story_input", { genre: form.genre || "", edited: genreIsCustom, name_len: form.story.length, mode: own ? "own" : "quick" });
+                goStep(4);
+              }}>{t("다음")} <IconArrow size={18} /></button>
             </div>
             <div className="mfoot">
-              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => goStep(4)}>{t("다음")}</button>
+              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => {
+                track("story_input", { genre: form.genre || "", edited: genreIsCustom, name_len: form.story.length, mode: own ? "own" : "quick" });
+                goStep(4);
+              }}>{t("다음")}</button>
             </div>
           </>
         )}
@@ -678,7 +695,7 @@ export default function Wizard({
             <div className="wt-wiz-styles">
               {STYLE_INFO.map(([key, label, desc]) => (
                 <button key={key} type="button" className={`wt-wiz-style${form.style === key ? " on" : ""}`}
-                        onClick={() => patch({ style: key })}>
+                        onClick={() => { track("style_pick", { style: key, mode: own ? "own" : "quick" }); patch({ style: key }); }}>
                   {form.style === key && <CheckMark />}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={STYLE_THUMB[key] || `/static/samples/ex-${key}-1.jpg`} alt={t("{label} 예시", { label: t(label) })} />
