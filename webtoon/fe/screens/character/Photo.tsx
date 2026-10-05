@@ -93,7 +93,7 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
       preset: !!worldKey, random: usedRandom.current, logged_in: authenticated,
     });
     try {
-      const c = await runTry(draft, lang);
+      const c = await runTry(draft, lang, authenticated);
       go("card", { id: c.id }, { replace: false });
     } catch (e) {
       if (isLimitError(e)) {
