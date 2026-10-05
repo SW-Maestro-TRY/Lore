@@ -168,6 +168,74 @@ final class NoticeMail {
 
     /* ---- 아래 공통 ---------------------------------------------------------- */
 
+    /**
+     * 관리자 처리 안내(#638) — 비공개 · 삭제 · 경고. 약관의 「조치 사실을 이용자에게 통지」 자리다.
+     *
+     * 루가 말하는 다른 메일과 달리 <b>운영팀이 말한다</b> — 잘못을 알리는 글에 마스코트가 웃고 있으면 가볍게 읽힌다.
+     *
+     * @param action HIDE · REMOVE · WARN
+     * @param keepDays 삭제 처리 뒤 완전히 지우기까지 남는 날 수(REMOVE 일 때만 씀)
+     */
+    static Body moderated(String title, String action, String reason, int keepDays, String link, String site) {
+        boolean titled = title != null && !title.isBlank();
+        String work = titled ? "「" + title + "」" : "웹툰";
+        String head;
+        String lead;
+        String after;
+        switch (action) {
+            case "HIDE" -> {
+                head = "작품이 비공개 처리되었어요";
+                lead = "회원님의 웹툰 " + work + (titled ? iGa(title) : "이") + " 운영 정책에 따라 비공개 처리되었어요.";
+                after = "지금은 다른 사람에게 보이지 않고, 회원님은 마이페이지에서 계속 볼 수 있어요.";
+            }
+            case "REMOVE" -> {
+                head = "작품이 삭제 처리되었어요";
+                lead = "회원님의 웹툰 " + work + (titled ? iGa(title) : "이") + " 운영 정책에 따라 삭제 처리되었어요.";
+                after = "작품은 " + keepDays + "일 동안 보관된 뒤 완전히 지워져요. 그 안에 알려 주시면 다시 살펴볼게요.";
+            }
+            default -> {
+                head = "운영 정책 경고 안내";
+                lead = "회원님의 웹툰 " + work + "에 대해 운영 정책 경고를 드려요.";
+                after = "같은 일이 반복되면 이용약관에 따라 작품이 비공개 · 삭제되거나 서비스 이용이 제한될 수 있어요.";
+            }
+        }
+        String why = reason == null || reason.isBlank() ? "" : reason.trim();
+        String ask = "처리에 이의가 있으시면 이 메일에 답장하시거나 " + CONTACT + " 로 알려 주세요.";
+
+        StringBuilder text = new StringBuilder();
+        text.append("안녕하세요, LORE 운영팀입니다.\n\n");
+        text.append(lead).append("\n");
+        if (!why.isEmpty()) {
+            text.append("사유: ").append(why).append("\n");
+        }
+        text.append("\n").append(after).append("\n");
+        text.append(ask).append("\n\n");
+        text.append("마이페이지에서 보기 → ").append(link).append("\n");
+        text.append(textFooter());
+
+        StringBuilder html = new StringBuilder();
+        html.append(p("안녕하세요, LORE 운영팀입니다."));
+        html.append(p(esc(lead).replace(esc(work), "<b>" + esc(work) + "</b>")));
+        if (!why.isEmpty()) {
+            html.append("<p style=\"margin:0 0 18px;padding:14px 16px;background:" + BG + ";border-radius:10px;\">"
+                    + "<b>사유</b><br>" + esc(why) + "</p>");
+        }
+        html.append(p(esc(after)));
+        html.append(p("처리에 이의가 있으시면 이 메일에 답장하시거나 <a href=\"mailto:" + CONTACT + "\" style=\"color:" + INK + ";\">"
+                + CONTACT + "</a> 로 알려 주세요."));
+        html.append(button("마이페이지에서 보기 →", link));
+        return new Body(text.toString(), page(plainHead(head), html.toString(), site));
+    }
+
+    /** 그림 없는 머리글 — 운영 안내용. */
+    private static String plainHead(String headline) {
+        return "<tr><td style=\"padding:0;\">"
+                + "<div style=\"background:#e4ece9;border-radius:16px 16px 0 0;padding:26px 32px 22px;" + FONT + "color:" + INK + ";\">"
+                + "<div style=\"font-size:12px;font-weight:700;letter-spacing:.08em;color:#3f7d6d;\">LORE</div>"
+                + "<div style=\"font-size:22px;font-weight:800;line-height:1.35;margin-top:10px;\">" + esc(headline) + "</div>"
+                + "</div></td></tr>";
+    }
+
     private static String textFooter() {
         return "\n---\n"
                 + "LORE\n" + TAGLINE + "\n\n"

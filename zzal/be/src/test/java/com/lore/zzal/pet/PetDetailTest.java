@@ -176,7 +176,8 @@ class PetDetailTest {
         assertThat(d.gauges()).isEqualTo(new PetResponses.Gauges(0, 3, 4, 0));     // ★ 배부름 0 으로 시작
         assertThat(d.food()).isEqualTo(new PetResponses.Food(3, null));
         assertThat(d.mood()).isEqualTo("HUNGRY");   // ★ 배부름 0 으로 시작한다(튜토리얼 첫 칸이 밥)
-        assertThat(d.features()).isEqualTo(new PetResponses.Features(true, true, false, false, false, false, false));
+        // 앨범(6번째)은 처음부터 참이다 — 나머지는 아직 잠겨 있다(정본 6·16장).
+        assertThat(d.features()).isEqualTo(new PetResponses.Features(true, true, false, false, false, true, false));
         // ★ daysLeft 는 항상 0 — 첫 선물은 날짜가 아니라 튜토리얼 완주로 열린다.
         //   옛 3일 규칙으로 계산한 값을 내려보내면 화면이 뜻 없는 카운트다운을 그린다.
         assertThat(d.firstGift()).isEqualTo(new PetResponses.FirstGift("LOCKED", 0));
@@ -223,7 +224,8 @@ com.lore.zzal.motion.MotionSource.API,
         assertThat(waiting.learnedToday()).isEmpty();
         assertThat(waiting.baking()).isEqualTo("PRACTICING");
         assertThat(waiting.firstGift().status()).isEqualTo("BAKING");
-        assertThat(waiting.features().album()).isFalse();
+        assertThat(waiting.features().album())
+                .as("앨범은 심화 행동과 무관하게 처음부터 열려 있다(정본 6·16장)").isTrue();
 
         // 2) 검수 통과했지만 아직 도착 전 — 여전히 안 보인다
         roll.approve(T0);
@@ -266,6 +268,20 @@ com.lore.zzal.motion.MotionSource.API,
         assertThat(PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG).firstGift())
                 .as("함께한 날은 여전히 첫날이다 — 그래도 열린다")
                 .isEqualTo(new PetResponses.FirstGift("WAITING", 0));
+    }
+
+    @Test
+    @DisplayName("★★ 앨범은 튜토리얼 첫 순간부터 열려 있다 — 첫 심화(선물 1)를 기다리지 않는다")
+    void albumIsOpenFromTheFirstMoment() {
+        ZzalPet pet = baby();
+        assertThat(pet.isInTutorial()).isTrue();
+
+        PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
+
+        assertThat(d.firstGift().status()).as("선물 1 은 아직 잠겨 있다").isEqualTo("LOCKED");
+        assertThat(d.features().album())
+                .as("그래도 앨범은 열린다 — 기본 행동 8종부터 담긴다(정본 6·16장 \"앨범 = 처음부터\")")
+                .isTrue();
     }
 
     @Test

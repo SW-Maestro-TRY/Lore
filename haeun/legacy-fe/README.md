@@ -2,7 +2,7 @@
 
 이 탭의 화면은 **React 가 아니다.**
 
-다른 도메인(`comic/fe`, `trailer/fe`)에는 `*.tsx` 화면 컴포넌트가 있는데 여기만
+다른 도메인(`comic/fe`, `piece-maker/fe`)에는 `*.tsx` 화면 컴포넌트가 있는데 여기만
 없다. 일부러 그렇다.
 
 Webtoon 탭의 화면은 `haeun/landing` 의 프로토타입이다 — `index.html` 999줄 ·

@@ -169,11 +169,45 @@ class ChatServiceTest {
         ChatService.Answered a = service.answer(USER, PET, ChatSlot.MORNING, "학교 갔다 왔어", t);
         assertThat(a.replyLine()).isNotBlank();
         assertThat(BanFilter.isBanned(a.replyLine())).isFalse();
-        assertThat(a.reactionKey()).isEqualTo("pet");                    // 답하기(2층)는 채팅 4회라 아직 잠김
+        assertThat(a.reactionKey()).isEqualTo("hello");                  // 답하기(2층)는 채팅 4회라 아직 잠김 → 인사
         assertThat(pet.getIntimacy()).isEqualTo(40);
         assertThat(pet.getChatAnswers()).isEqualTo(1);
         assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.MORNING, "또", t.plusSeconds(1)))
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_CHAT_SLOT_CLOSED);
+    }
+
+    @Test
+    @DisplayName("★★ 답하기(2층)가 잠긴 동안 반응은 인사(hello) — 쓰다듬 자세(pet)를 주면 화면이 대체표를 못 거친다")
+    void lockedReplyReactsWithHello() {
+        pet.choosePersonality(List.of(Personality.LIVELY), null);
+        // 이번 답으로 3회 — 답하기 해금(4회)까지 한 번 남았다
+        ReflectionTestUtils.setField(pet, "chatAnswers", 2);
+
+        ChatService.Answered a = service.answer(USER, PET, ChatSlot.MORNING, "학교 갔다 왔어", kst("2026-09-05 13:30"));
+
+        assertThat(pet.getChatAnswers()).isEqualTo(3);
+        // ★ 정본 6장이 이름으로 못 박은 두 예외 중 하나 — "잠긴 동안 답하기는 인사(hello)".
+        //   서버가 pet 을 주면 화면은 받은 키를 그대로 재생해 자기 대체표를 안 거친다.
+        assertThat(a.reactionKey()).isEqualTo("hello");
+        assertThat(call(ChatSlot.MORNING).orElseThrow().getReactionKey())
+                .as("저장된 줄도 같은 키여야 한다 — 나중에 다시 그릴 때 갈라지면 안 된다")
+                .isEqualTo("hello");
+    }
+
+    @Test
+    @DisplayName("★★★ 해금되는 바로 그 답부터 reply — 네 번째 답의 반응이 옛 동작이면 안 된다")
+    void theUnlockingAnswerAlreadyReactsWithReply() {
+        pet.choosePersonality(List.of(Personality.LIVELY), null);
+        // 이번 답이 네 번째 = 답하기가 열리는 그 답
+        ReflectionTestUtils.setField(pet, "chatAnswers", 3);
+
+        ChatService.Answered a = service.answer(USER, PET, ChatSlot.MORNING, "네 번째야", kst("2026-09-05 13:30"));
+
+        assertThat(pet.getChatAnswers()).isEqualTo(4);
+        // ★ 반응 키를 카운터보다 먼저 고르면 여기서 hello 가 나온다 — 사용자는 "이번에 열렸다"는
+        //   폭죽을 보면서 옛 동작을 본다(연결 감사 F6).
+        assertThat(a.reactionKey()).isEqualTo("reply");
+        assertThat(call(ChatSlot.MORNING).orElseThrow().getReactionKey()).isEqualTo("reply");
     }
 
     @Test

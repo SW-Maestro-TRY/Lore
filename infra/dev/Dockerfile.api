@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
 # Lore 백엔드(Spring Boot) 개발용 이미지.
-# 컨텍스트는 레포 루트다(도메인 소스가 common/·zzal/·webtoon/·trailer/·apps/api 로 흩어져 있음).
+# 컨텍스트는 레포 루트다(도메인 소스가 common/·zzal/·webtoon/·piece-maker/·apps/api 로 흩어져 있음).
 # CI 와 같은 방식으로 빌드한다: ./gradlew clean build -x test → build/libs/*.jar 중 -plain 이 아닌 것.
 
 # ── 빌드 단계: Gradle 로 bootJar (Java 21) ──
@@ -18,7 +18,7 @@ RUN chmod +x gradlew && ./gradlew --no-daemon --version
 COPY common ./common
 COPY zzal ./zzal
 COPY webtoon ./webtoon
-COPY trailer ./trailer
+COPY piece-maker ./piece-maker
 COPY apps/api ./apps/api
 
 # 테스트 제외 빌드 → -plain 아닌 실행 jar 를 골라 app.jar 로.

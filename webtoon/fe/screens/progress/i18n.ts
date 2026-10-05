@@ -70,7 +70,7 @@ const dict: Dict = {
   "루가 만들고 있어요": { en: "Lou is working on it", ja: "Louが作っています", zh: "Lou 正在制作" },
   "닫아도 괜찮아요. 다 되면 이메일로 알려드려요.": { en: "You can close this. We'll email you when it's done.", ja: "閉じても大丈夫です。できたらメールでお知らせします。", zh: "可以关闭页面。完成后会发邮件通知你。" },
   "닫아도 괜찮아요.": { en: "You can close this.", ja: "閉じても大丈夫です。", zh: "可以关闭页面。" },
-  "현재 대기자 {n}명 · 약 {m}분 뒤 시작": { en: "{n} ahead of you · starts in about {m} min", ja: "現在{n}人待ち · 約{m}分後に開始", zh: "前方 {n} 人 · 约 {m} 分钟后开始" },
+  "현재 대기자 {n}명 · 앞으로 {m}분 남았어요": { en: "{n} ahead of you · about {m} min to go", ja: "現在{n}人待ち · あと{m}分ほどです", zh: "前方 {n} 人 · 还剩约 {m} 分钟" },
   "{pct}% · {time} 경과": { en: "{pct}% · {time} elapsed", ja: "{pct}% · {time}経過", zh: "{pct}% · 已用 {time}" },
   "{pct}% · {time} 경과 · 약 {n}분 남았어요": { en: "{pct}% · {time} elapsed · about {n} min left", ja: "{pct}% · {time}経過 · 残り約{n}分", zh: "{pct}% · 已用 {time} · 还剩约 {n} 分钟" },
   "사용된 크레딧은 자동으로 환불되었어요.": { en: "The credits used have been refunded automatically.", ja: "使用したクレジットは自動的に返金されました。", zh: "已使用的点数已自动退还。" },

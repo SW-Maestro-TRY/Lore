@@ -1,27 +1,29 @@
 // 아침 도착과 앨범(정본 §2·§6·§9 · 계약 1.6·해석 25·29·30·31).
 //
 // 밤에 구운 심화 행동은 **깨어 있는 첫 조회**에 도착한다(해석 31). 이 스펙은 그 하룻밤을 실제로 지나간다 —
-// 사흘째 아이를 저녁에 열고, 재우고, 아침에 깨우면 폴라로이드가 올라와야 한다.
+// 아이를 저녁에 열고, 재우고, 아침에 깨우면 폴라로이드가 올라와야 한다.
+//
+// ★★ 2026-09-22 — **"사흘째 밤에 첫 선물" 전제를 걷어냈다.** 정본 §6 표가 둘을 갈라 놓았다:
+//   구르기 = **튜토리얼 9칸을 다 끝낸 그 순간** 굽기(첫날 보상) / 뒤로 넘어짐 = 3층 첫 심화 행동의
+//   선물(함께한 날 3 + 케어 미스 0). 목이 구르기에 뒤엣것의 조건을 걸고 있었다.
+//   그래서 튜토리얼을 지난 프리셋은 **이미 굽는 중**이고, 이 스펙은 그 도착만 본다.
 import { expect, test } from '@playwright/test';
 import { HOUR, MIN, advance, gotoMock, press, status } from './helpers';
 
-test('사흘째 밤 → 아침에 첫 선물이 도착하고, 확인하면 도감에 남는다', async ({ page }) => {
+test('튜토리얼을 지난 아이 → 아침에 첫 선물이 도착하고, 확인하면 도감에 남는다', async ({ page }) => {
   test.setTimeout(120_000);
   await gotoMock(page, 'grown', '2026-09-05T18:00');
 
-  // 저녁에는 아직 아무것도 안 굽는다. 첫 선물은 "오늘 밤" 자리에 있다.
-  await expect(page.locator('[data-part="album-notes"]')).toHaveAttribute('data-practicing', '0');
-  await expect(page.locator('[data-note="gift"]')).toContainText('오늘 잘 지내면');
+  // ★ 튜토리얼을 끝낸 그 순간부터 굽는 중이다(정본 §6 표 · 1.8). "오늘 잘 지내면…" 이라는
+  //   날짜 조건은 구르기의 것이 아니었다 — 그 말이 붙는 자리는 3층의 뒤로 넘어짐이다.
+  await expect(page.locator('[data-part="album-notes"]')).toHaveAttribute('data-practicing', '1');
+  await expect(page.locator('[data-note="gift"]')).toHaveCount(0);
 
-  // 19:00 재우기 → 이 순간 밤 굽기가 계획된다(하루의 경계 = 잠드는 순간).
+  // 19:00 재우기.
   await advance(page, HOUR);
   await press(page, 'sleep');
   expect(await status(page)).toBe('sleeping');
-
-  // ★ 잠든 뒤에는 "오늘 잘 지내면…" 이 남아 있으면 안 된다. 그 말은 이미 지난 이야기다.
-  //   (앨범 응답은 도착 수가 바뀔 때만 다시 읽으므로, 낡은 앨범이 이기면 밤새 그대로 남는다.)
   await expect(page.locator('[data-part="album-notes"]')).toHaveAttribute('data-practicing', '1');
-  await expect(page.locator('[data-note="gift"]')).toHaveCount(0);
 
   // 아침 07:30 에 깨운다. ★ 도착은 시각이 아니라 **깨어 있는 첫 조회**에서 일어난다.
   await advance(page, 12 * HOUR + 30 * 60_000);
@@ -98,7 +100,7 @@ test('배경 바꾸기는 2층 4종 뒤에 열린다', async ({ page }) => {
 });
 
 
-test('그 밤에 실패하면 다음 밤에 다시, 케어 미스가 있던 밤에는 아예 안 굽는다', async ({ page }) => {
+test('그 밤에 실패해도 조각을 소모하지 않고 계속 다시 굽는다(정본 §6 1.8)', async ({ page }) => {
   test.setTimeout(150_000);
   await gotoMock(page, 'grown', '2026-09-05T18:00');
 
@@ -112,17 +114,13 @@ test('그 밤에 실패하면 다음 밤에 다시, 케어 미스가 있던 밤�
   await advance(page, 12 * HOUR + 30 * MIN);   // 07:30
   await page.locator('[data-action="sleep"]').click();
   await page.waitForTimeout(600);
-  // 그 밤은 실패했다 — 폴라로이드도 없고, 선물은 처음 자리로 돌아가 다음 밤을 기다린다.
+  // 그 밤은 실패했다 — 폴라로이드는 없다. ★ 그래도 **계속 연습 중**이다(정본 1.8):
+  //   "굽기 실패는 조각을 소모하지 않는다 — 같은 동작을 계속 다시 굽는다."
+  //   옛 판은 NONE 으로 되돌려 "다음 밤" 을 기다렸는데, 그 개념이 1.8 에서 없어졌다.
   await expect(page.locator('[data-celebration]')).toHaveCount(0);
-  await expect(page.locator('[data-part="album-notes"]')).toHaveAttribute('data-practicing', '0');
+  await expect(page.locator('[data-part="album-notes"]')).toHaveAttribute('data-practicing', '1');
 
-  // 이 날은 밥을 한 번도 안 준다 → 16:30 에 배부름 0 → 22:30 에 케어 미스 → 23:00 자동 취침.
-  await advance(page, 15 * HOUR + 30 * MIN);   // 23:00
-  expect(await status(page)).toBe('sleeping');
-  // ★ 케어 미스가 있던 밤에는 굽지 않는다(정본 §16). 안 걸러내면 목이 서버보다 너그러워지고,
-  //   검사는 통과하는데 실서버에서는 선물이 안 온다.
-  await expect(page.locator('[data-part="album-notes"]')).toHaveAttribute('data-practicing', '0');
-
-  await advance(page, 11 * HOUR);      // 10:00 늦잠 자동 기상
-  await expect(page.locator('[data-celebration]')).toHaveCount(0);
+  // 선물은 사라지지 않았다 — 조각을 소모하지 않았으니 같은 동작을 계속 굽는다.
+  //   (도착 그 자체는 위 첫 스펙이 본다. 여기서 보는 것은 **실패가 선물을 없애지 않는다** 는 것.)
+  await expect(page.locator('[data-note="gift"]')).toHaveCount(0);
 });

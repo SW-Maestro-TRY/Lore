@@ -925,7 +925,9 @@ class PetServiceTest {
             gift.toReview("k", null, null,
 com.lore.zzal.motion.MotionSource.API,
                     com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
-            gift.approve(T0);
+            // ★ 판정을 <b>마지막 기상 전</b>으로 둔다 — 기상 뒤에 판정된 것은 다음 기상까지 보류되므로
+            //   (정본 2·16장) 그대로 T0 에 통과시키면 이 시험이 보려는 "도착" 자체가 안 일어난다.
+            gift.approve(kst("2026-09-05 09:00"));
             when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
                     eq(PET_ID), eq(com.lore.zzal.motion.MotionStatus.OPEN)))
                     .thenAnswer(i -> gift.getRevealedAt() == null ? List.of(gift) : List.of());
@@ -954,19 +956,29 @@ com.lore.zzal.motion.MotionSource.API,
             return pet;
         }
 
-        /** 검수까지 통과한(OPEN) 선물 1 행. 아직 도착 전. */
-        private com.lore.zzal.motion.ZzalMotion approvedGift() {
+        /**
+         * 검수까지 통과한(OPEN) 선물 1 행. 아직 도착 전.
+         *
+         * ★ 판정 시각을 인자로 받는다 — <b>마지막 기상 전에 통과했나</b>가 곧 도착 여부라
+         *   (정본 2·16장) 이 시각을 고정해 두면 보류 규칙을 볼 수 없다.
+         */
+        private com.lore.zzal.motion.ZzalMotion approvedGift(Instant openedAt) {
             com.lore.zzal.motion.ZzalMotion m = com.lore.zzal.motion.ZzalMotion.forCatalog(
                     PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
             org.springframework.test.util.ReflectionTestUtils.setField(m, "status", com.lore.zzal.motion.MotionStatus.BAKING);
             m.toReview("images/zzal/pets/7/motions/9/motion.webp", null, null,
 com.lore.zzal.motion.MotionSource.API,
                     com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
-            m.approve(T0);
+            m.approve(openedAt);
             when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
                     eq(PET_ID), eq(com.lore.zzal.motion.MotionStatus.OPEN)))
                     .thenAnswer(i -> m.getRevealedAt() == null ? List.of(m) : List.of());
             return m;
+        }
+
+        /** 지난밤(마지막 기상 전)에 판정이 끝난 선물 — 다음 기상에 와야 하는 몫. */
+        private com.lore.zzal.motion.ZzalMotion approvedGift() {
+            return approvedGift(kst("2026-09-05 09:00"));
         }
 
         @Test
@@ -988,12 +1000,49 @@ com.lore.zzal.motion.MotionSource.API,
         }
 
         @Test
-        @DisplayName("★ 10시를 넘겨 판정돼도 그날 낮 조회에서 도착한다(늦잠 강제 없음, 정본 16장)")
-        void arrivesInTheAfternoon() {
-            childWithId();
-            com.lore.zzal.motion.ZzalMotion gift = approvedGift();
+        @DisplayName("★★★ 깨어 있는 중에 판정이 끝나면 그날은 안 준다 — 다음 기상까지 기다린다(정본 2·16장)")
+        void aVerdictAfterWakingWaitsForTheNextWake() {
+            ZzalPet pet = childWithId();
+            // 마지막 기상(09-05 10:00) <뒤>인 낮 12:00 에 판정이 끝났다
+            com.lore.zzal.motion.ZzalMotion gift = approvedGift(T0);
 
-            service.refresh(USER_ID, PET_ID, kst("2026-09-06 15:00"));
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 15:00"));
+
+            assertThat(pet.isSleeping()).as("자는 것도 아니다 — 깨어 있는데 안 준다").isFalse();
+            assertThat(gift.getRevealedAt())
+                    .as("\"자는 동안 연습해서 아침에 배워 왔다\" 는 이야기를 지킨다")
+                    .isNull();
+            assertThat(gift.advancedImageKey()).as("그림도 안 내려간다").isNull();
+
+            // 23:00 자동 취침 → 10:00 자동 기상 뒤 첫 조회 — 그때 도착한다
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 10:30"));
+
+            assertThat(pet.isSleeping()).isFalse();
+            assertThat(gift.getRevealedAt()).isNotNull();
+            assertThat(gift.advancedImageKey()).endsWith("/motion.webp");
+        }
+
+        @Test
+        @DisplayName("★ 마지막 기상 <전>에 끝난 판정은 깨어 있는 첫 조회에서 바로 온다 — 밀리지 않는다")
+        void aVerdictBeforeWakingArrivesRightAway() {
+            childWithId();
+            com.lore.zzal.motion.ZzalMotion gift = approvedGift(kst("2026-09-05 09:00"));
+
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 15:00"));
+
+            assertThat(gift.getRevealedAt())
+                    .as("기상 전에 판정이 끝났으면 그 기상이 곧 '다음 기상' 이다")
+                    .isNotNull();
+        }
+
+        @Test
+        @DisplayName("★ 판정 시각이 없는 옛 행은 가두지 않는다 — 그대로 도착시킨다")
+        void legacyRowsWithoutAVerdictTimeStillArrive() {
+            childWithId();
+            com.lore.zzal.motion.ZzalMotion gift = approvedGift(T0);
+            org.springframework.test.util.ReflectionTestUtils.setField(gift, "openedAt", null);
+
+            service.refresh(USER_ID, PET_ID, kst("2026-09-05 15:00"));
 
             assertThat(gift.getRevealedAt()).isNotNull();
         }

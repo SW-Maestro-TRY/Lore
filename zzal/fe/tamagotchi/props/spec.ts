@@ -159,6 +159,11 @@ export interface CharAnchors {
   /** 스프라이트 캔버스 [가로, 세로]. */
   canvas: [number, number];
   poses: Record<string, PoseAnchors>;
+  /**
+   * 서버 파일에서 **실제로 읽힌** 자세 key. 고정값(여울)으로 메운 자세는 안 들어간다.
+   * 없으면(고정값 그대로) 서버에서 온 자세가 하나도 없다는 뜻이다.
+   */
+  serverPoses?: readonly string[];
 }
 
 // ── 주소 ────────────────────────────────────────────────────────────────

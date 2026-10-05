@@ -1,13 +1,15 @@
 // 앱 전체 공통 레이아웃. 여기는 "연결 파일"이라 화면 로직을 넣지 않는다.
 //
-// 하는 일 2가지:
+// 하는 일 3가지:
 //   1) 폰트 로드 → CSS 변수로 노출 (common/fe/styles/tokens.css 가 이 변수를 받아 쓴다)
 //   2) 전역 스타일 로드
+//   3) 구글 광고 측정 태그(gtag.js) 로드 — NEXT_PUBLIC_GOOGLE_ADS_ID 가 있을 때만
 //
 // 공용 헤더(SiteHeader)는 여기가 아니라 랜딩(LandingPage)과 app/(domains)/layout.tsx 가 각자 붙인다.
 // 랜딩은 헤더 아래 자체 푸터까지 갖는 한 장짜리 화면이라 구성이 달라서다.
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
+import Script from "next/script";
 // 폰트는 npm 패키지(@fontsource)에서 온다. next/font/google 은 next build 도중
 // Google Fonts 에서 파일을 받는데, dev 서버에서 그 요청이 자주 끊겨 배포가 복불복으로
 // 실패했다 — 한국어 폰트가 글자 범위별로 백 수십 조각이라 하나만 못 받아도 빌드가 죽는다.
@@ -21,7 +23,11 @@ import "./fonts.css";
 import "@common/styles/tokens.css";
 import "./globals.css";
 
+// metadataBase — 각 페이지가 openGraph.url·canonical 을 상대 주소로 적어도 크롤러가 절대 주소로
+// 읽게 하는 기준. 제목·설명·이미지의 기본값은 여기 두지 않는다(웹툰 공유 페이지처럼 자기
+// metadata 를 가진 화면이 홈 값을 물려받아 덮이지 않게).
 export const metadata: Metadata = {
+  metadataBase: new URL("https://lorecomic.com"),
   title: "Lore — 우리만의 캐릭터로 노는 만화 플랫폼",
   description:
     "사진 한 장에서 캐릭터를 뽑고, 그 캐릭터로 4컷 · 예고편 · 웹툰까지 이어서 만듭니다.",
@@ -36,13 +42,18 @@ export const viewport: Viewport = {
 };
 
 // middleware.ts 가 /ko·/en·/ja 로 들어온 요청에 남기는 값. 언어 접두어가 없는 주소(예:
-// /zzal·/trailer)는 지난 방문의 값이 남아 있을 수 있다 — 화면 내용은 그 도메인 것 그대로고
+// /zzal·/piece-maker)는 지난 방문의 값이 남아 있을 수 있다 — 화면 내용은 그 도메인 것 그대로고
 // <html lang> 만 한 박자 늦게 따라오는 정도라 지금은 그대로 둔다.
 async function locale(): Promise<string> {
   const store = await cookies();
   const v = store.get("lore_locale")?.value;
   return v === "en" || v === "ja" ? v : "ko";
 }
+
+// 구글 광고 측정 태그(AW-XXXXXXXX). 환경변수가 있을 때만 로드한다 —
+// 로컬·개발 서버에선 보통 비워 두므로 자동으로 꺼진다.
+// strategy="afterInteractive" — 첫 그림이 뜬 뒤 로드돼서 LCP 를 늦추지 않는다.
+const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
 
 export default async function RootLayout({
   children,
@@ -51,7 +62,23 @@ export default async function RootLayout({
 }) {
   return (
     <html lang={await locale()}>
-      <body>{children}</body>
+      <body>
+        {GOOGLE_ADS_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-ads-init" strategy="afterInteractive">
+              {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GOOGLE_ADS_ID}');`}
+            </Script>
+          </>
+        )}
+        {children}
+      </body>
     </html>
   );
 }

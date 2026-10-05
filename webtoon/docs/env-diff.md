@@ -70,7 +70,7 @@ staging·prod 는 배포할 때마다 S3 의 requirements 로 설치하는데,
 
 ### 3-3. 마이그레이션 순서
 
-세 폴더(`apps/api` · `webtoon/be` · `trailer/be`)가 classpath `db/migration` 한 곳으로
+세 폴더(`apps/api` · `webtoon/be` · `piece-maker/be`)가 classpath `db/migration` 한 곳으로
 합쳐지고 **같은 `flyway_schema_history` 를 공유**합니다. 번호가 겹치면 기동이
 멈춥니다(`application.yml:36-50`).
 

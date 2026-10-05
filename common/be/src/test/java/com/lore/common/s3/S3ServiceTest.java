@@ -71,7 +71,32 @@ class S3ServiceTest {
         S3Service service = serviceReturningUrl("bucket-a");
 
         assertThat(service.createUploadUrl(USER_ID, "zzal", "image/png").key()).startsWith("images/zzal/");
-        assertThat(service.createUploadUrl(USER_ID, "trailer", "image/png").key()).startsWith("images/trailer/");
+        assertThat(service.createUploadUrl(USER_ID, "piece-maker", "image/png").key()).startsWith("images/piece-maker/");
+    }
+
+    @Test
+    @DisplayName("Piece Maker로 전환한 기존 업로드 티켓은 이전 객체 주소로 계속 쓸 수 있다")
+    void renamedDomainKeepsExistingObjectKeyConsumable() {
+        S3Service service = new S3Service(presigner, ticketRepository, "bucket-a", 10);
+        String existingKey = "images/trailer/existing-object";
+        UploadTicket ticket = UploadTicket.issue(USER_ID, existingKey, "piece-maker",
+                "image/png", Instant.now());
+        when(ticketRepository.findByS3Key(existingKey)).thenReturn(Optional.of(ticket));
+
+        service.consume(USER_ID, existingKey, Instant.now());
+
+        assertThat(ticket.isUsed()).isTrue();
+        assertThat(ticket.getS3Key()).isEqualTo(existingKey);
+        assertThat(ticket.getDomain()).isEqualTo("piece-maker");
+    }
+
+    @Test
+    @DisplayName("새 업로드는 이전 서비스 식별자로 발급하지 않는다")
+    void rejectsRetiredDomainForNewUploads() {
+        S3Service service = serviceReturningUrl("bucket-a");
+
+        assertThatThrownBy(() -> service.createUploadUrl(USER_ID, "trailer", "image/png"))
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test

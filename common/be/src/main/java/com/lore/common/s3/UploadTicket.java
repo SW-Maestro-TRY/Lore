@@ -22,7 +22,7 @@ import java.time.Instant;
  *     가짜 키   → 표에 없으므로 거부
  *     재사용    → usedAt 이 이미 차 있으므로 거부
  *
- * ★ 이 보호는 도메인 공통이다. zzal 뿐 아니라 webtoon·trailer 도 같은 presign 을 쓰므로
+ * ★ 이 보호는 도메인 공통이다. zzal 뿐 아니라 webtoon·piece-maker 도 같은 presign 을 쓰므로
  *   똑같이 보호받는다.
  *
  * ★ 지금 이걸 넣는 이유 — 생성 한 번에 실제로 돈이 나간다($0.19). 검증이 없으면

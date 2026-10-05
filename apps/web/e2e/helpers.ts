@@ -102,14 +102,22 @@ export async function doBabyStep(page: Page, key: string): Promise<void> {
     case 'GAME': {
       await page.locator('[data-action="game-start"]').click();
       await page.waitForSelector('[data-action="game-left"]');
-      for (let i = 0; i < 5; i++) { await page.locator('[data-action="game-left"]').click(); await page.waitForTimeout(150); }
+      // ★★ **다섯 회차를 다 친다고 가정하지 않는다** — 매치는 3승 또는 3패에서 그 자리에서 끝난다
+      //   (서버 `ZzalGame.guess` 2026-09-22 `1f7093f`). 다섯은 상한이고 최단은 세 회차다.
+      for (let i = 0; i < 5; i++) {
+        const btn = page.locator('[data-action="game-left"]');
+        if (!(await btn.count())) break;   // 이미 끝난 판
+        await btn.click();
+        await page.waitForTimeout(150);
+      }
       await page.waitForTimeout(500);
       return;
     }
     case 'SHARE': { await page.locator('[data-dex="base"] button').first().click(); await page.waitForTimeout(600); return; }
     case 'NAP': {
+      // ★ 재우면 **깨우기 버튼이 곧바로 켜진다**(정본 §16 1.4 — 튜토리얼 동안 시계가 멈춰 있어
+      //   분 단위 대기가 없다). 옛 판의 "5분 뒤" 는 시계가 도는 줄 알던 시절의 잔재였다.
       await press(page, 'sleep');
-      await advance(page, 5 * MIN);
       await press(page, 'sleep');
       return;
     }

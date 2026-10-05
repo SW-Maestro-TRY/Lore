@@ -136,7 +136,7 @@ public class CreditController {
     }
 
     /**
-     * @param domain 어느 서비스에서 쓰나 (WEBTOON · ZZAL · TRAILER)
+     * @param domain 어느 서비스에서 쓰나 (WEBTOON · ZZAL · PIECE_MAKER)
      * @param amount 쓸 양. 0 이하면 아무 일도 안 한다
      * @param refId  무엇에 쓴 것인가 — <b>같은 값으로 두 번 불러도 한 번만 빠진다.</b>
      *               작품 id 처럼 그 일을 가리키는 값을 넣는다
@@ -209,7 +209,7 @@ public class CreditController {
     }
 
     /**
-     * @param domain 어느 서비스가 주나 (WEBTOON · ZZAL · TRAILER)
+     * @param domain 어느 서비스가 주나 (WEBTOON · ZZAL · PIECE_MAKER)
      * @param amount 줄 양
      * @param refId  무슨 활동인가 — <b>같은 값이면 한 번만 들어간다.</b>
      *               반복 보상은 회차를 붙인다 (daily-2026-09-08)
@@ -244,7 +244,7 @@ public class CreditController {
      * @param delta  움직인 양. 받으면 양수, 쓰면 음수
      * @param reason 코드 이름 그대로 — 화면이 문구가 아니라 이것으로 분기한다
      * @param label  사람이 읽을 말
-     * @param domain 어느 서비스에서 일어난 일인가 (WEBTOON · ZZAL · TRAILER · COMMON).
+     * @param domain 어느 서비스에서 일어난 일인가 (WEBTOON · ZZAL · PIECE_MAKER · COMMON).
      *               이 칸이 생기기 전 줄은 COMMON 으로 온다
      * @param domainLabel 사람이 읽을 서비스 이름
      */

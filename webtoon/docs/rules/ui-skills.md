@@ -2,7 +2,7 @@
 
 webtoon 화면을 설계·수정할 때 읽습니다. `apps/web` 에 UI/UX 자동화 스킬 세트가 설치돼
 있습니다(`.claude/skills/`, gitignore 처리돼 팀 레포에는 안 올라감). 이 정책은
-**webtoon 화면에만** 해당합니다. zzal·trailer 는 각 담당자가 정합니다.
+**webtoon 화면에만** 해당합니다. zzal·piece-maker 는 각 담당자가 정합니다.
 
 ## 1. 누구 판단이 이기나
 

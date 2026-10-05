@@ -378,7 +378,12 @@ public final class PetResponses {
             @Schema(description = """
                     튜토리얼 진행 상태. 9단계를 모두 완료하면 null 이 되고 clock.clockStartedAt 이 채워진다.
                     진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다""")
-            Tutorial tutorial) {
+            Tutorial tutorial,
+            @Schema(description = """
+                    튜토리얼 졸업 축하 창을 본 시각. 아직 안 봤으면 null.
+                    화면은 이 값이 null 일 때만 축하 창을 띄우고, 닫을 때 POST /{petId}/graduation-seen 을 부른다.
+                    기기가 아니라 캐릭터에 붙는 값이라 새 탭·재시작에도 같은 창이 다시 뜨지 않는다""")
+            Instant graduationSeenAt) {
 
         /**
          * <b>조각 판을 빼고</b> 그린다 — 이름이 그 사실을 말한다.
@@ -420,7 +425,10 @@ public final class PetResponses {
                         List.of(), List.of(), false, List.of(),
                         // firstGift · chatSummary · scenes · personality · world · tone · genre
                         // · background · anchorsKey · features · leaving · trip · tutorial
-                        null, null, null, null, null, null, null, null, null, null, null, null, null);
+                        null, null, null, null, null, null, null, null, null, null, null, null, null,
+                        // ★ 여기만 ALIVE 전용이 아니다 — 축하를 본 뒤 떠난 아이도 "봤다" 는 사실은 남는다.
+                        //   빈 값으로 덮으면 그 화면이 다시 뜰 수 있고, 그건 이 칸이 막으려던 바로 그 일이다.
+                        pet.getGraduationSeenAt());
             }
 
             boolean sleeping = pet.isSleeping();
@@ -448,7 +456,13 @@ public final class PetResponses {
                     pet.getLeftRightWins() >= ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS,
                     pet.isScenesEnabled(),                                  // 장면 — 첫 부재 4시간 뒤 자동
                     layerTwoOpen >= ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN,
-                    "OPEN".equals(firstGift.status()),                       // 앨범 = 첫 심화가 도착하면 같이 열린다(설계 규칙)
+                    // ★ 앨범은 <b>처음부터</b> 열려 있다(정본 6·16장 "앨범 = 처음부터" · 2026-09-22 상훈님 결정).
+                    //   기본 행동 8종부터 담기므로 심화 행동을 기다릴 이유가 없다.
+                    //   ★ 옛 값은 {@code "OPEN".equals(firstGift.status())} — 첫 심화가 도착해야 참이었다.
+                    //     화면이 이 플래그를 보고 입구를 막지 않아 사용자에게는 이미 열려 있었고, 플래그만 늦어
+                    //     <b>계약과 정본이 조용히 어긋나 있었다</b>(연결 감사 J1). 화면을 고치는 쪽이 아니라
+                    //     정본이 이미 답을 정해 둔 쪽으로 플래그를 맞춘다.
+                    true,
                     pet.isPiecesEnabled());                                 // 조각
 
             TutorialSchedule.State t = TutorialSchedule.of(pet);
@@ -490,7 +504,8 @@ public final class PetResponses {
                     features,
                     leaving(pet),
                     pet.isTraveling() ? new Trip(pet.getTripStartedAt(), pet.getPostcardCount()) : null,
-                    tutorial);
+                    tutorial,
+                    pet.getGraduationSeenAt());
         }
 
         /**
@@ -672,7 +687,7 @@ public final class PetResponses {
 
         /** 다음 부름 시각 — 기상+1h / 기상+7h / 19:00 중 지금 이후 가장 가까운 것(부름 상태는 PR-4). */
         static Instant nextChatAt(ZzalPet pet, Instant now) {
-            Instant woke = pet.getWokeAt() == null ? pet.getHatchedAt() : pet.getWokeAt();
+            Instant woke = pet.dayStartedAt();
             Instant evening = AwakeClock.dateOf(woke).atTime(ZzalRules.SLEEP_WINDOW_OPENS).atZone(ZzalRules.ZONE).toInstant();
             return Stream.of(woke.plus(ZzalRules.CHAT_MORNING_AFTER_WAKE), woke.plus(ZzalRules.CHAT_NOON_AFTER_WAKE), evening)
                     .filter(t -> t.isAfter(now))

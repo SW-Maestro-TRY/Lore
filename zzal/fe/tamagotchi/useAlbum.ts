@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { assetUrl } from '../lib/assets';
-import { copyImageLink, downloadImage, imageFileName } from '../lib/download';
+import { downloadImage, imageFileName, prepareImageFile, shareImageFile } from '../lib/download';
 import type { Album, Motion, PetDetail, ShareKind } from '../lib/pet';
 import type { PetSource } from '../lib/petSource';
 import { YEOUL_MOTION } from './constants';
@@ -74,22 +74,20 @@ export function useDexCards({ motions, pc, say, petName, onShared }: UseDexOptio
       // ★ 어느 갈래로 끝나든 반드시 한마디를 띄운다. 아무 일도 안 일어나는 버튼이 가장 나쁘다.
       save: () => {
         if (!open || !imageKey) { say('아직 그림이 준비되지 않았어요'); return; }
-        // ★ await 없이 곧바로 부른다 — iOS 갈래가 새 탭을 여는데, 기다렸다 부르면 팝업으로 막힌다.
         void downloadImage(assetUrl(imageKey), imageFileName(petName || 'lore', m.label)).then((r) => {
-          if (r.outcome === 'saved') { say(m.label + ' 저장했어요'); onShared?.(m.key, 'DOWNLOAD'); }
-          else if (r.outcome === 'opened') { say('새 탭에서 열었어요. 그림을 꾹 눌러 저장해 주세요'); onShared?.(m.key, 'DOWNLOAD'); }
+          if (r.outcome === 'saved') { say(m.label + ' 파일 다운로드를 시작했어요'); onShared?.(m.key, 'DOWNLOAD'); }
           else if (r.code === 'http_404') say('아직 그림이 준비되지 않았어요');
-          else if (r.code === 'popup_blocked') say('새 탭이 막혀 있어요. 팝업을 허용해 주세요');
           else say('저장하지 못했어요. 잠시 뒤 다시 눌러 주세요');
         });
       },
       share: () => {
         if (!open || !imageKey) { say('아직 그림이 준비되지 않았어요'); return; }
-        void copyImageLink(assetUrl(imageKey)).then((r) => {
-          if (r.manual) say('주소를 직접 복사해 주세요');
-          else if (r.ok) { say('링크를 복사했어요'); onShared?.(m.key, 'SHARE'); }
-          else say('링크를 복사하지 못했어요');
-        });
+        void prepareImageFile(assetUrl(imageKey), imageFileName(petName || 'lore', m.label))
+          .then(shareImageFile).then((result) => {
+            if (result === 'shared') { say('공유창에 파일을 전달했어요'); onShared?.(m.key, 'SHARE'); }
+            else if (result !== 'cancelled') say('저장한 뒤 앱에서 파일을 첨부해 주세요');
+          }).catch(() => say('아직 그림이 준비되지 않았어요'));
+
       },
     };
   }), [motions, pc, say, petName, onShared]);
