@@ -57,6 +57,9 @@ export const DETAIL_URL = /\/api\/piece-maker\/v1\/public\/cards\/(T\d+)(\?.*)?$
 export const HYPOTHESES_URL = /\/api\/piece-maker\/v1\/hypotheses$/;
 /** 가설 하나(2-6). 끝이 숫자여야 한다 — `/hypotheses/my` 는 여기 걸리지 않는다. */
 export const HYPOTHESIS_URL = /\/api\/piece-maker\/v1\/hypotheses\/(\d+)$/;
+export const AD_LANDINGS_URL = /\/api\/piece-maker\/v1\/ad-landings$/;
+export const AD_LANDING_CLAIM_URL = /\/api\/piece-maker\/v1\/ad-landings\/([0-9a-f-]+)\/claim$/;
+export const RESULT_VIEW_URL = /\/api\/piece-maker\/v1\/hypotheses\/(\d+)\/result-view$/;
 
 /** 대기 화면을 확인한 뒤 호출한다. 탐색 전에 설치한 clock으로 다음 자동 조회를 기다린다. */
 export async function waitForJudgementPoll(page: Page): Promise<void> {
@@ -314,6 +317,29 @@ export async function mockLore(context: BrowserContext, options: LoreMockOptions
   const fixture = (): Fixture => (typeof options.fixture === 'function' ? options.fixture() : options.fixture ?? CARDS);
   // 검사가 넘긴 객체를 그대로 쓴다(복사하지 않는다) — 검사가 그 객체를 들여다보고 바꾸기 때문이다.
   const state = (options.state ?? { loggedIn: false, hypotheses: [] }) as LoreState;
+  const firstViews = new Map<number, string>();
+  const landings = new Map<string, { landingId: string; landedAt: string; owner: number | null }>();
+  await context.route(AD_LANDINGS_URL, route => {
+    const body = route.request().postDataJSON();
+    const owner = state.loggedIn ? (state.me?.userId ?? ME.userId) : null;
+    if (body.expectedUserId !== owner) return answer(route, fail(409, 'INVALID_INPUT', '계정이 바뀌었습니다'));
+    let saved = landings.get(body.requestKey);
+    if (!saved) {
+      saved = { landingId: body.requestKey, landedAt: new Date().toISOString(), owner };
+      landings.set(body.requestKey, saved);
+    }
+    return answer(route, ok({ landingId: saved.landingId, landedAt: saved.landedAt }));
+  });
+  await context.route(AD_LANDING_CLAIM_URL, route => {
+    if (!state.loggedIn) return answer(route, fail(401, 'UNAUTHORIZED', '로그인이 필요합니다'));
+    const saved = landings.get(AD_LANDING_CLAIM_URL.exec(new URL(route.request().url()).pathname)?.[1] ?? '');
+    if (!saved) return answer(route, fail(404, 'INVALID_INPUT', '유입을 찾을 수 없습니다'));
+    if (route.request().postDataJSON().expectedUserId !== state.me.userId || (saved.owner !== null && saved.owner !== state.me.userId)) {
+      return answer(route, fail(409, 'INVALID_INPUT', '계정이 바뀌었습니다'));
+    }
+    saved.owner = state.me.userId;
+    return answer(route, ok({ linked: true, landedAt: saved.landedAt }));
+  });
   if (state.credits === undefined) state.credits = DEFAULT_CREDITS;
   if (state.me === undefined) state.me = ME;
   await context.route(CREDIT_ME_URL, (route) =>
@@ -347,6 +373,20 @@ export async function mockLore(context: BrowserContext, options: LoreMockOptions
     // 남의 가설과 없는 가설은 같은 404 다(2-6).
     const found = state.hypotheses.find((item) => item.id === id && ownerOf(item) === state.me.userId);
     return answer(route, found ? ok(publicOf(found)) : fail(404, 'PIECE_MAKER_HYPOTHESIS_NOT_FOUND', '가설을 찾을 수 없습니다'));
+  });
+  await context.route(RESULT_VIEW_URL, (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    if (!state.loggedIn) return answer(route, fail(401, 'UNAUTHORIZED', '로그인이 필요합니다'));
+    const id = Number(RESULT_VIEW_URL.exec(new URL(route.request().url()).pathname)?.[1]);
+    const found = state.hypotheses.find(item => item.id === id && ownerOf(item) === state.me.userId);
+    if (!found) return answer(route, fail(404, 'PIECE_MAKER_HYPOTHESIS_NOT_FOUND', '가설을 찾을 수 없습니다'));
+    if (found.judgementStatus !== 'COMPLETE' || !found.judgement) {
+      return answer(route, fail(400, 'INVALID_INPUT', '정상 판정 결과가 없습니다'));
+    }
+    const previous = firstViews.get(state.me.userId);
+    const viewedAt = previous ?? new Date().toISOString();
+    firstViews.set(state.me.userId, viewedAt);
+    return answer(route, ok({ firstView: previous === undefined, viewedAt }));
   });
   await context.route(HYPOTHESES_URL, (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
