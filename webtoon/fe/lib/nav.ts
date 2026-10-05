@@ -14,13 +14,14 @@
  *   /webtoon?view=mypage           마이페이지
  *   /webtoon?view=feedback         피드백 보내기 (예전 주소 view=mypage&tab=feedback 도 여기로)
  *   /webtoon?view=admin-examples   예시 작품 관리 (관리자만, #619)
+ *   /webtoon?view=admin-works      작품 관리 — 처리 기록 · 관리자 휴지통 (관리자만, #638)
  *
  * 화면을 바꿀 때 주소도 같이 민다 — 뒤로가기·새로고침·공유가 전부 주소에
  * 기댄다. 상태만 바꾸면 뒤로가기가 웹툰 탭을 통째로 빠져나간다. */
 
 export type View =
   | "landing" | "entry" | "create" | "running" | "result" | "editor" | "works"
-  | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin-examples";
+  | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin-examples" | "admin-works";
 
 export interface GoParams {
   step?: number;
