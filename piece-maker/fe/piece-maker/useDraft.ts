@@ -259,7 +259,7 @@ export function useDraft(meta: MetaState, onChange: () => void, viewer: Viewer) 
     const current = draftRef.current;
     if (!ledgerRef.current || !hasContent(current) || isFrozen(current)) return null;
     const works = store(current, upsertSaved(memoryRef.current.saved, current));
-    return works ? "내 가설에 저장했어요." : "브라우저 저장이 안 됩니다. 게시글을 복사해 보관하세요.";
+    return works ? "내 가설에 임시 저장했어요." : "브라우저 저장이 안 됩니다. 게시글을 복사해 보관하세요.";
   }, [store]);
 
   /** "내 가설"의 한 항목을 초안으로 연다. 열었으면 true 다. 지금 회차의 가설만 연다. */
