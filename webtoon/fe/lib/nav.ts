@@ -13,6 +13,7 @@
  *   /webtoon?card=<id>             공유된 카드 (남이 봄)
  *   /webtoon?view=mypage           마이페이지
  *   /webtoon?view=feedback         피드백 보내기 (예전 주소 view=mypage&tab=feedback 도 여기로)
+ *   /webtoon?view=admin            관리자 홈 — 실시간 유입 · 바로가기 · UTM 링크 (관리자만)
  *   /webtoon?view=admin-examples   예시 작품 관리 (관리자만, #619)
  *   /webtoon?view=admin-works      작품 관리 — 처리 기록 · 관리자 휴지통 (관리자만, #638)
  *
@@ -21,7 +22,7 @@
 
 export type View =
   | "landing" | "entry" | "create" | "running" | "result" | "editor" | "works"
-  | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin-examples" | "admin-works";
+  | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin" | "admin-examples" | "admin-works";
 
 export interface GoParams {
   step?: number;

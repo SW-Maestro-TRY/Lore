@@ -40,6 +40,7 @@ import MyPage from "./screens/mypage/MyPage";
 import FeedbackPage from "./screens/feedback/FeedbackPage";
 import AdminExamples from "./screens/admin/AdminExamples";
 import AdminWorks from "./screens/admin/AdminWorks";
+import AdminHome from "./screens/admin/AdminHome";
 import RevisitPrompt from "./ui/RevisitPrompt";
 import RunningBubble from "./ui/RunningBubble";
 
@@ -86,7 +87,7 @@ function routeOf(search: URLSearchParams): Route {
   if (view === "card" && base.id) return { view: "card", ...base };
   /* 피드백이 마이페이지 창이던 때의 주소 — 다시 온 사람 안내 메일 등에 남아 있을 수 있다. */
   if (view === "mypage" && search.get("tab") === "feedback") return { view: "feedback", ...base };
-  if (view && ["entry", "create", "works", "characters", "try", "mypage", "feedback", "admin-examples", "admin-works"].includes(view)) {
+  if (view && ["entry", "create", "works", "characters", "try", "mypage", "feedback", "admin", "admin-examples", "admin-works"].includes(view)) {
     return { view: view as View, ...base };
   }
   if (run) return { view: "result", ...base };
@@ -244,6 +245,7 @@ function WebtoonScreens() {
       )}
       {route.view === "mypage" && <MyPage go={go} initialTab={route.tab} />}
       {route.view === "feedback" && <FeedbackPage go={go} />}
+      {route.view === "admin" && <AdminHome go={go} />}
       {route.view === "admin-examples" && <AdminExamples go={go} />}
       {route.view === "admin-works" && <AdminWorks go={go} />}
       <RevisitPrompt authenticated={authenticated} view={route.view} go={go} />
