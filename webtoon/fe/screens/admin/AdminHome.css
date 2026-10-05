@@ -1,0 +1,57 @@
+/* 관리자 홈 — 운영용 화면이라 webtoon 공용 토큰(.wt)을 그대로 쓰고 꾸밈은 최소로. */
+.wt .wt-admin-home { gap: 16px; padding: 20px 22px; display: flex; flex-direction: column; }
+.wt .wt-admin-home h1 { font-size: 26px; margin: 0; }
+.wt .wt-admin-home h2 { font-size: 16px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+
+.wt .wt-admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wt .wt-admin-shortcuts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.wt .wt-admin-section { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); display: flex; flex-direction: column; gap: 10px; }
+.wt .wt-admin-section.wt-admin-2col { flex-direction: row; gap: 16px; }
+.wt .wt-admin-section.wt-admin-2col > div { flex: 1 1 0; min-width: 0; }
+
+.wt .wt-admin-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.wt .wt-admin-row label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.wt .wt-admin-row input[type="date"] { height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+
+.wt .wt-admin-note { font-size: 12px; color: var(--muted); }
+.wt .wt-admin-err { font-size: 13px; color: #c0392b; }
+
+.wt .wt-admin-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.wt .wt-admin-stats.wt-admin-stats-top { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.wt .wt-admin-hypo td { vertical-align: top; }
+.wt .wt-admin-hypo td:first-child { width: 24%; }
+.wt .wt-admin-hypo-src { font-size: 11px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.wt .wt-admin-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.wt .wt-admin-badge.ok { background: #d9f5e5; color: #156a3b; }
+.wt .wt-admin-badge.part { background: #fff4cc; color: #866100; }
+.wt .wt-admin-badge.warn { background: #fde0db; color: #a0391a; }
+.wt .wt-admin-badge.none { background: var(--line); color: var(--muted); }
+.wt .wt-admin-details { background: #fafafa; }
+.wt .wt-admin-details summary { cursor: pointer; color: var(--muted); }
+.wt .wt-admin-details h3 { font-size: 14px; margin: 10px 0 6px; color: var(--muted); }
+.wt .wt-admin-hypo .muted { color: var(--muted); }
+.wt .wt-admin-stat { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; display: flex; flex-direction: column; gap: 2px; }
+.wt .wt-admin-stat-value { font-size: 24px; font-weight: 700; color: var(--ink); }
+.wt .wt-admin-stat-label { font-size: 12px; color: var(--muted); }
+
+.wt .wt-admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.wt .wt-admin-table th, .wt .wt-admin-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.wt .wt-admin-table th { font-weight: 600; color: var(--muted); }
+.wt .wt-admin-table th.num, .wt .wt-admin-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.wt .wt-admin-utm { display: flex; flex-direction: column; gap: 10px; }
+.wt .wt-admin-utm-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.wt .wt-admin-utm-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); flex: 0 0 auto; }
+.wt .wt-admin-utm-row label.wt-admin-utm-grow { flex: 1 1 240px; min-width: 0; }
+.wt .wt-admin-utm-row input, .wt .wt-admin-utm-row select { height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 13px; min-width: 180px; }
+.wt .wt-admin-utm-row label.wt-admin-utm-grow input { min-width: 0; width: 100%; }
+
+.wt .wt-admin-utm-out { display: flex; gap: 8px; align-items: stretch; }
+.wt .wt-admin-utm-out input { flex: 1 1 auto; min-width: 0; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+@media (max-width: 767px) {
+  .wt .wt-admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wt .wt-admin-section.wt-admin-2col { flex-direction: column; }
+}
