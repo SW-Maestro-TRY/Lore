@@ -50,7 +50,7 @@ export function trackResultViewed(hypothesisId: number, status: "COMPLETE" | "FA
   track("piece_maker_result_viewed", { type: status });
 }
 
-/** 맡긴 뒤의 행동. `type` 은 공유에 쓴 수단(image · copy · native · SNS 이름)이거나, 새 가설을 시작한 때의 판정 상태다. */
+/** 맡긴 뒤의 행동. `type` 은 공유에 쓴 수단(copy · native · SNS 이름)이거나, 새 가설을 시작한 때의 판정 상태다. */
 export function trackResultAction(action: "share_open" | "share_done" | "new_draft", type?: string): void {
   track("piece_maker_result_action", type ? { action, type } : { action });
 }
