@@ -12,6 +12,7 @@
  * `PENDING` 으로 둔다 — 판정은 운영자가 따로 넣는다(NA later.md 1-2). 결과는 요청 id 로 되묻는다(2-6). */
 import { ApiError, request } from "@common/api/client";
 import { getMe } from "@common/auth/api";
+import { parseMetaPixelEvent, type MetaPixelEvent } from "./meta-pixel";
 
 const CARDS_PATH = "/api/piece-maker/v1/public/cards";
 
@@ -363,6 +364,17 @@ export async function fetchHypothesis(id: number, signal?: AbortSignal): Promise
     if (error instanceof ApiError && error.code === "PIECE_MAKER_HYPOTHESIS_NOT_FOUND") return null;
     throw error;
   }
+}
+
+/** 실제로 본 정상 결과를 기록한다. 서버가 계정의 최초 열람 한 건만 보존한다(API 2-11). */
+export async function recordResultView(id: number, signal?: AbortSignal): Promise<{ firstView: boolean; viewedAt: string; metaEvent: MetaPixelEvent | null }> {
+  const value = await request<unknown>(`${HYPOTHESES_PATH}/${id}/result-view`, { method: "POST", signal });
+  if (!isRecord(value) || typeof value.firstView !== "boolean" || typeof value.viewedAt !== "string" || !Number.isFinite(Date.parse(value.viewedAt))) {
+    throw new Error("결과 열람 기록 응답을 확인할 수 없습니다.");
+  }
+  // Meta 정보가 없거나 잘못되어도 내부 기록의 성공을 취소하지 않는다. 구버전 BE도 허용한다.
+  return { firstView: value.firstView, viewedAt: value.viewedAt,
+    metaEvent: value.firstView ? parseMetaPixelEvent(value.metaEvent) : null };
 }
 
 /* ---- 피드백 ---------------------------------------------------------------- */

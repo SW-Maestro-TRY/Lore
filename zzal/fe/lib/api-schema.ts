@@ -15,6 +15,76 @@
  */
 
 export interface paths {
+    "/api/piece-maker/v1/ad-landings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 광고 URL 최초 수신 기록
+         * @description 실제 광고 URL 진입 때 호출한다. 같은 쿠키와 requestKey의 재시도는 최초 서버 시각을 유지한다. 광고 정보를 바꾸거나 expectedUserId가 현재 인증과 다르면 409. 새 기록의 로그인 계정은 즉시 귀속하지만, 기존 익명 기록은 별도 claim으로 연결한다. 분석 비활성화는 쿠키 발급·저장 없이 409. 잘못된 본문은 400, 쿠키별 분당 상한은 429, DB 실패는 5xx이며 다시 시도할 수 있다.
+         */
+        post: operations["capture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/piece-maker/v1/ad-landings/{id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 이번 광고 방문을 로그인 계정에 연결
+         * @description 기존 익명 쿠키와 서버 발급 landingId가 모두 일치해야 한다. expectedUserId가 인증 계정과 다르면 409이며 변경하지 않는다. 다른 계정이 같은 방문을 요구하면 원래 소유자는 유지하되 모호함을 표시해 집계에서 제외한다. 쿠키나 기록이 없으면 404. 새 쿠키를 발급하거나 과거 익명 이벤트 전체를 연결하지 않는다.
+         */
+        post: operations["claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/piece-maker/v1/admin/ad-cohort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 광고 첫 유입 후 24시간 정상 열람 집계
+         * @description 운영자 전용 읽기 API. campaign은 영문·숫자·점·밑줄·하이픈 1~64자, from/to/asOf는 ISO-8601 시각이다.
+         *     from은 포함, to는 제외하며 from < to <= asOf <= 현재, 조회 기간은 최대 31일이다. asOf 생략 시 현재를 쓴다.
+         *     계정별 최초로 연결된 광고 유입을 전체 이력에서 고른 뒤 캠페인·기간으로 거른다. 계정별 중복은 없다.
+         *     기존 제출자·이전 정상 열람자·관리자·탈퇴자·설정한 테스트 계정·모호한 연결은 제외한다.
+         *     만료·선택 삭제·수집 검증 공백으로 신규 여부를 판단할 수 없는 계정은 HISTORY_UNVERIFIABLE로 제외한다.
+         *     history에는 실제 조회 시점의 보관 범위와 운영 검증으로 설정한 연속 수집 구간을 반환한다.
+         *     보관 범위를 벗어난 from은 400이다. 오래된 asOf로 삭제 자료를 복원하지 않는다.
+         *     24시간 이내(경계 포함) 첫 정상 열람, 관찰 중, 기간 내 미완료를 구분한다.
+         *     계정 연결이 없거나 모호한 유입 수는 계정 수와 별도로 반환한다. 계정번호나 개인정보는 반환하지 않는다.
+         *     서버 수신 시각에 근거한 내부 UTM 집계이며 Meta 기여 전환 보고서가 아니다.
+         *     수집이 중지되어도 저장된 이력을 조회할 수 있고 collectionEnabled=false로 표시한다.
+         */
+        get: operations["report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/piece-maker/v1/admin/hypotheses": {
         parameters: {
             query?: never;
@@ -141,6 +211,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/piece-maker/v1/hypotheses/{id}/result-view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 첫 정상 판정 열람 기록
+         * @description 로그인한 독자의 정상 판정이 활성 탭의 화면에 실제로 보였을 때 부른다. 요청 몸통은 없다.
+         *     서버는 소유자와 COMPLETE 상태 및 판정 형식을 검사하고 계정당 보관 범위의 첫 한 줄만 저장한다.
+         *     보관 중 새 탭·재열람·동시 요청은 firstView=false와 기존 viewedAt을 돌려준다. 만료 뒤에는 새 기록이 될 수 있다.
+         *     firstView=true는 생애 최초나 신규 광고 전환을 뜻하지 않는다. DB 저장 실패는 성공으로 답하지 않는다.
+         *     app.analytics.enabled=false이면 409로 답하며 기록하지 않는다. 같은 설정에서는 재시도하지 않는다.
+         *     viewedAt은 최초 저장 시 서버가 기록한 시각이다. 기능 도입 전 열람 이력을 복원하지 않는다.
+         *     이 기록은 광고 24시간 성과 집계 그 자체가 아니다.
+         *     Meta 설정과 시험 계정 검토가 완료된 경우, 제외 대상이 아닌 첫 저장 응답에만 metaEvent를 발급한다.
+         *     metaEvent는 광고 출처와 무관한 보관 기록상 첫 정상 열람 신호이며 Meta 수신·광고 기여를 보장하지 않는다.
+         *     응답 유실·픽셀 차단 시 내부 열람은 유지되지만 Meta 신호는 누락될 수 있다.
+         */
+        post: operations["record"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/piece-maker/v1/public/cards": {
         parameters: {
             query?: never;
@@ -162,7 +261,7 @@ export interface paths {
          *     chapter 가 없거나 숫자가 아니거나 1~maxChapter 를 벗어나면 400(PIECE_MAKER_INVALID_CHAPTER).
          *     search 가 200자 또는 단어 10개를 넘거나 page · size 가 틀리면 400(INVALID_INPUT).
          */
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
         post?: never;
         delete?: never;
@@ -536,6 +635,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/admin/examples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 예시 작품 목록
+         * @description 순서대로. 비공개로 내려 둔 것도 보인다.
+         */
+        get: operations["list_3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/examples/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 번들 올리기(본문)
+         * @description 요청 본문이 번들 zip 이다. dryRun=true 면 검사만 한다. 운영은 upload-url 길을 쓴다.
+         */
+        post: operations["importBody"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/examples/import-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 번들 올리기(S3 키)
+         * @description upload-url 로 올린 zip 을 서버가 읽어 심는다. 심은 뒤 올린 파일은 지운다.
+         */
+        post: operations["importKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/examples/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 번들 올릴 주소 발급
+         * @description S3 로 직접 올릴 임시 주소를 받는다(10분). 올린 뒤 import-key 에 key 를 넘긴다.
+         */
+        post: operations["uploadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/examples/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 예시 내리기
+         * @description 예시를 해제하고 비공개로 돌린다. 작품을 지우지는 않는다.
+         */
+        delete: operations["takeDown"];
+        options?: never;
+        head?: never;
+        /**
+         * 예시 지정·해제·공개·순서
+         * @description 보내지 않은 값은 그대로 둔다. 예시로 지정하면서 공개 여부를 안 정하면 공개로 둔다.
+         */
+        patch: operations["update"];
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/examples/{runId}/bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 작품을 번들로 내보내기
+         * @description 이 환경의 작품 하나를 zip 으로 받는다. 다른 환경에 올리면 예시가 된다.
+         */
+        get: operations["bundle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/admin/feedback": {
         parameters: {
             query?: never;
@@ -550,6 +773,186 @@ export interface paths {
         get: operations["latest"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 처리 기록
+         * @description 최근부터.
+         */
+        get: operations["log"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 작가별 처리 수
+         * @description 경고 · 비공개 · 삭제를 센다. 많은 사람부터.
+         */
+        get: operations["owners"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/removed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 관리자 휴지통
+         * @description 관리자가 삭제 처리한 작품들.
+         */
+        get: operations["removed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 작품 처리 상태
+         * @description 지금 상태 · 작가(이메일 · 처리 받은 수) · 이 작품의 지난 처리.
+         */
+        get: operations["state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/hide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 비공개 처리
+         * @description 둘러보기에서 빠지고 그림도 안 열리는 자리로. 작가는 다시 공개로 못 바꾼다. 작가에게 메일.
+         */
+        post: operations["hide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 삭제 처리
+         * @description 관리자 휴지통. 작가는 못 되살리고, 기간이 지나면 영구 삭제된다. 작가에게 메일.
+         */
+        post: operations["remove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 되살리기
+         * @description 관리자 휴지통에서 꺼낸다. 처리 전 공개 여부로 돌아간다.
+         */
+        post: operations["restore_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/unhide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 다시 공개
+         * @description 관리자 비공개를 거둔다. 처리 전 공개 여부로 돌아간다.
+         */
+        post: operations["unhide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/warn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 경고
+         * @description 작품은 그대로 두고 작가에게 알린다. 기록에 남아 작가별로 센다.
+         */
+        post: operations["warn"];
         delete?: never;
         options?: never;
         head?: never;
@@ -670,7 +1073,7 @@ export interface paths {
          * 지우기
          * @description 그림은 S3 에 그대로 둔다 — 이 캐릭터로 이미 만든 웹툰이 그것을 보고 있다.
          */
-        delete: operations["remove"];
+        delete: operations["remove_1"];
         options?: never;
         head?: never;
         /** 이름·설명 고치기 */
@@ -1309,6 +1712,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/nh/jobs/{id}/cast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 상대 인물 고르기
+         * @description 현대 로맨스에서 이야기 전에 상대 인물을 고른다(#534). 고르면 그 인물로 이야기 후보 넷을 짓는다.
+         */
+        post: operations["pickCast"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/cast-sheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 조연 시트 뽑기 (크레딧 1)
+         * @description 인물 단계가 세운 다른 인물을 글 생김새만으로 시트로 그린다(#548). 장면 확인·이야기 고르기·시트 확인 자리에서만. 그린 뒤로는 장 그림이 참조로 받아 그 인물이 장마다 같은 사람으로 나온다. 못 그리면 크레딧을 돌려준다.
+         */
+        post: operations["castSheet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/cast-sheet/{name}.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 조연 시트 그림 */
+        get: operations["castSheetImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/nh/jobs/{id}/notify": {
         parameters: {
             query?: never;
@@ -1340,6 +1800,26 @@ export interface paths {
         get: operations["pageImage"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/person": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 인물 카드 고치기
+         * @description own 길(#548) — who 가 hero 면 주인공, 숫자면 cast 의 그 번째(0부터). 보낸 칸만 덮는다.
+         */
+        post: operations["savePerson"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1386,6 +1866,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/nh/jobs/{id}/scenes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 장면 초안 저장
+         * @description 장면 확인 자리(#548)에서 고친 장면 글을 적는다. 멈춤은 그대로. body 를 보내면 본문도 바꾼다.
+         */
+        post: operations["saveScenes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/scenes-continue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 이대로 웹툰 만들기
+         * @description 장면 확인을 끝내고 그림으로 간다(#548).
+         */
+        post: operations["continueScenes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/scenes-retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 장면 다시 나누기
+         * @description 본문·인물·시트는 두고 장면만 다시 나눈다(#548). note 를 보내면 이번에만 반영한다. 고친 글은 사라진다.
+         */
+        post: operations["retryScenes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/scenes/{n}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 장면 이전 판으로 되돌리기
+         * @description 다시 뽑기 전의 판 v(1부터, 오래된 것부터)로 되돌린다(#548). 지금 판은 판 목록 끝에 남는다.
+         */
+        post: operations["restoreScene"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/scenes/{n}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 장면 하나만 다시 짓기
+         * @description 장면 확인 자리(#548)에서 n번 장면만 다시 짓는다. 로그인 필수. reasons 는 이유 코드 (awkward·character·stranger·offstory·pacing), note 는 메모. 돌아가는 동안 그 장면은 busy 다.
+         */
+        post: operations["retryScene"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/nh/jobs/{id}/sheet": {
         parameters: {
             query?: never;
@@ -1426,6 +2006,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/nh/jobs/{id}/sheet-fix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 안전 기준에 걸린 캐릭터 시트 고치기
+         * @description 시트가 이미지 안전 기준에 걸려 멈춘 작업에서, 사진(photo_keys · photos_data)이나 외모 설명(character)을 바꿔 시트만 다시 그린다. 이야기·장면은 그대로다. 작업당 3번까지(#626).
+         */
+        post: operations["sheetFix"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/sheet-restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 옛 시트 판으로 되돌리기
+         * @description 다시 그리기 전의 시트 판(1~sheet_versions)을 지금 시트로 올린다(#548). 지금 것도 보관한 뒤 바꾼다.
+         */
+        post: operations["restoreSheet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/nh/jobs/{id}/sheet-v{v}.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 보관한 옛 시트 판 그림 */
+        get: operations["sheetVersionImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/nh/jobs/{id}/sheet.png": {
         parameters: {
             query?: never;
@@ -1457,6 +2094,63 @@ export interface paths {
          * @description 로그인 없이 S3 에 직접 올릴 임시 주소를 받는다. 10분간 유효.
          */
         post: operations["photoPresign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/push/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 푸시 공개키
+         * @description 브라우저가 구독할 때 쓴다. 서버에 키가 없으면 빈 글자 — 화면은 「알림 받기」를 안 띄운다.
+         */
+        get: operations["key"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/push/subscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 이 기기로 알림 받기
+         * @description 브라우저가 준 구독(endpoint · keys)을 적는다. 로그인했으면 계정에, 아니면 uid 에 묶는다.
+         */
+        post: operations["subscribe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/push/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 이 기기 알림 끄기 */
+        post: operations["unsubscribe"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2636,6 +3330,39 @@ export interface components {
              */
             winAt?: number;
         };
+        AccountCounts: {
+            /** Format: int64 */
+            completed?: number;
+            /** Format: int64 */
+            eligible?: number;
+            /** Format: int64 */
+            excluded?: number;
+            /** Format: int64 */
+            firstAttributed?: number;
+            /** Format: int64 */
+            noCompletion?: number;
+            /** Format: int64 */
+            pending?: number;
+        };
+        AdCohortReport: {
+            accounts?: components["schemas"]["AccountCounts"];
+            /** Format: date-time */
+            asOf?: string;
+            basis?: components["schemas"]["Basis"];
+            campaign?: string;
+            collectionEnabled?: boolean;
+            creatives?: components["schemas"]["CreativeCounts"][];
+            exclusions?: components["schemas"]["ExclusionCount"][];
+            /** Format: date-time */
+            from?: string;
+            history?: components["schemas"]["PieceMakerAdMeasurementHistory"];
+            observationWindowClosed?: boolean;
+            provisional?: boolean;
+            receipts?: components["schemas"]["ReceiptCounts"];
+            testExclusionsReviewed?: boolean;
+            /** Format: date-time */
+            to?: string;
+        };
         /** @description 시간 당기기 요청 — 초·분 중 아무 쪽이나 준다(둘 다 주면 더한다) */
         AdvanceClock: {
             /**
@@ -2704,6 +3431,12 @@ export interface components {
         };
         ApiResponseAbandonResult: {
             data?: components["schemas"]["AbandonResult"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseAdCohortReport: {
+            data?: components["schemas"]["AdCohortReport"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -2848,6 +3581,18 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponsePieceMakerAdLanding: {
+            data?: components["schemas"]["PieceMakerAdLanding"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponsePieceMakerAdLandingClaim: {
+            data?: components["schemas"]["PieceMakerAdLandingClaim"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponsePieceMakerFeedback: {
             data?: components["schemas"]["PieceMakerFeedback"];
             error?: components["schemas"]["ErrorBody"];
@@ -2868,6 +3613,12 @@ export interface components {
         };
         ApiResponsePieceMakerPendingHypothesisList: {
             data?: components["schemas"]["PieceMakerPendingHypothesisList"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponsePieceMakerResultView: {
+            data?: components["schemas"]["PieceMakerResultView"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -2971,6 +3722,7 @@ export interface components {
         Art: {
             /** Format: int32 */
             done?: number;
+            pages?: number[];
             /** Format: int32 */
             retry_page?: number;
             /** Format: int32 */
@@ -2984,6 +3736,19 @@ export interface components {
         Balance: {
             /** Format: int32 */
             balance?: number;
+        };
+        Basis: {
+            accountState?: string;
+            attribution?: string;
+            completion?: string;
+            landingTime?: string;
+            limitations?: string[];
+        };
+        Batch: {
+            events?: components["schemas"]["Event"][];
+            ref?: string;
+            source?: string;
+            uid?: string;
         };
         Call: {
             /** Format: date-time */
@@ -3010,6 +3775,13 @@ export interface components {
              * @enum {string}
              */
             action: "FEED" | "SNACK" | "PET" | "CLEAN" | "BATH" | "MEDICINE";
+        };
+        CastRequest: {
+            /** Format: int32 */
+            n?: number;
+        };
+        CastSheetRequest: {
+            name?: string;
         };
         /** @description 캐릭터 정보 등록 요청. 이름 외 항목은 선택이다 */
         Character: {
@@ -3138,6 +3910,29 @@ export interface components {
              */
             source?: string;
         };
+        CreateRequest: {
+            agree_ip?: boolean;
+            character?: string;
+            character_id?: string;
+            checkpoints?: boolean;
+            episode?: string;
+            fields?: {
+                [key: string]: string;
+            };
+            genre?: string;
+            language?: string;
+            mode?: string;
+            name?: string;
+            photo_keys?: string[];
+            photo_note?: string;
+            photos_data?: string[];
+            quality?: string;
+            settings?: string;
+            story?: string;
+            style?: string;
+            title?: string;
+            uid?: string;
+        };
         /** @description 캐릭터 정보 등록 결과 */
         Created: {
             /**
@@ -3160,6 +3955,18 @@ export interface components {
              * @example HATCHING
              */
             phase?: string;
+        };
+        CreativeCounts: {
+            adId?: string;
+            /** Format: int64 */
+            completed?: number;
+            /** Format: int64 */
+            eligible?: number;
+            /** Format: int64 */
+            noCompletion?: number;
+            /** Format: int64 */
+            pending?: number;
+            placement?: string;
         };
         /** @description 크레딧 내역 한 줄 */
         CreditEventLine: {
@@ -3294,6 +4101,20 @@ export interface components {
         ErrorBody: {
             code?: string;
             message?: string;
+        };
+        Event: {
+            name?: string;
+            props?: {
+                [key: string]: unknown;
+            };
+            /** Format: int64 */
+            ts?: number;
+            view?: string;
+        };
+        ExclusionCount: {
+            /** Format: int64 */
+            accounts?: number;
+            reason?: string;
         };
         Features: {
             album?: boolean;
@@ -3601,6 +4422,13 @@ export interface components {
         };
         JobView: {
             art?: components["schemas"]["Art"];
+            cast?: {
+                [key: string]: unknown;
+            }[];
+            castKind?: string;
+            cast_sheets?: {
+                [key: string]: unknown;
+            }[];
             checkpoints?: boolean;
             directions?: {
                 [key: string]: unknown;
@@ -3609,26 +4437,55 @@ export interface components {
             elapsed?: number;
             error?: string;
             id?: string;
+            input?: {
+                [key: string]: unknown;
+            };
             log?: string[];
             /** Format: int32 */
             minutes_left?: number;
+            mode?: string;
             notice?: components["schemas"]["Notice"];
             /** Format: int32 */
             pct?: number;
+            persona?: {
+                [key: string]: unknown;
+            };
             /** Format: int32 */
             pick?: number;
             queue?: components["schemas"]["Queue"];
+            redraw?: components["schemas"]["Redraw"];
             refunded?: string;
             run_id?: string;
             say?: string;
+            scenes?: {
+                [key: string]: unknown;
+            }[];
+            sheet_blocked?: boolean;
+            /** Format: int32 */
+            sheet_fix_left?: number;
+            sheet_ready?: boolean;
+            /** Format: int32 */
+            sheet_versions?: number;
             stage?: string;
             /** Format: int32 */
             stage_index?: number;
             stage_label?: string;
             stages?: string[];
             status?: string;
+            story?: {
+                [key: string]: unknown;
+            };
             style?: string;
             style_label?: string;
+            unsafe_pages?: number[];
+        };
+        KeyRequest: {
+            dryRun?: boolean;
+            key?: string;
+        };
+        Keys: {
+            auth?: string;
+            p256dh?: string;
         };
         Learned: {
             /** Format: int32 */
@@ -3779,6 +4636,12 @@ export interface components {
              */
             visitTime?: string;
         };
+        PersonRequest: {
+            fields?: {
+                [key: string]: unknown;
+            };
+            who?: string;
+        };
         /** @description 성격 등록·수정 요청. 수면 중을 포함해 언제든 변경할 수 있다 */
         PersonalityChoice: {
             /**
@@ -3808,6 +4671,50 @@ export interface components {
             body?: string;
             /** Format: int32 */
             n?: number;
+            title?: string;
+        };
+        PieceMakerAdAttribution: {
+            /** Format: int64 */
+            firstAdLandedAt?: number;
+            placement?: string;
+            utmCampaign?: string;
+            utmContent?: string;
+            utmMedium?: string;
+            utmSource?: string;
+        };
+        /** @description 광고 URL의 최초 서버 수신. 실제 광고 클릭을 외부 검증한 기록은 아님 */
+        PieceMakerAdLanding: {
+            /** Format: date-time */
+            landedAt?: string;
+            /** Format: uuid */
+            landingId?: string;
+        };
+        PieceMakerAdLandingClaim: {
+            /** Format: date-time */
+            landedAt?: string;
+            linked?: boolean;
+        };
+        PieceMakerAdLandingClaimRequest: {
+            /** Format: int64 */
+            expectedUserId: number;
+        };
+        PieceMakerAdLandingRequest: {
+            attribution: components["schemas"]["PieceMakerAdAttribution"];
+            /** Format: int64 */
+            expectedUserId?: number;
+            /** Format: uuid */
+            requestKey: string;
+        };
+        PieceMakerAdMeasurementHistory: {
+            /** Format: date-time */
+            collectionVerifiedFrom?: string;
+            /** Format: date-time */
+            collectionVerifiedThrough?: string;
+            /** Format: date-time */
+            evaluatedAt?: string;
+            /** Format: date-time */
+            recordsAvailableAfter?: string;
+            requestedWindowCovered?: boolean;
         };
         /** @description 저장된 피드백 하나 */
         PieceMakerFeedback: {
@@ -3991,6 +4898,13 @@ export interface components {
             /** @description 제목. 없으면 빈 글 */
             title?: string;
         };
+        /** @description 브라우저가 한 번 시도할 PM 전용 이벤트. Meta 수신이나 광고 기여를 뜻하지 않는다 */
+        PieceMakerMetaPixelEvent: {
+            eventId?: string;
+            eventName?: string;
+            pixelId?: string;
+            siteOrigin?: string;
+        };
         /** @description 판정 안 된 가설 한 줄. judge.py 의 입력이 그대로 든다 */
         PieceMakerPendingHypothesis: {
             /** @description 맡길 때 복사한 카드. 순서 그대로. judge.py 에는 id 만 넘긴다 */
@@ -4029,6 +4943,18 @@ export interface components {
         PieceMakerPendingHypothesisList: {
             /** @description 판정 안 된 가설. 없으면 빈 배열 */
             items?: components["schemas"]["PieceMakerPendingHypothesis"][];
+        };
+        /** @description 보관 중인 계정의 첫 정상 판정 열람 기록. 생애 최초나 광고 전환을 보장하지 않는다 */
+        PieceMakerResultView: {
+            /** @description 이번 요청으로 보관 범위의 첫 기록을 저장했으면 true. 만료 뒤에도 true가 될 수 있다 */
+            firstView?: boolean;
+            /** @description 전송 설정이 켜져 있고 대상인 첫 요청에만 발급. 운영자·시험 계정·불완전 이력·재열람은 null */
+            metaEvent?: components["schemas"]["PieceMakerMetaPixelEvent"];
+            /**
+             * Format: date-time
+             * @description 보관 중인 최초 기록 시각(UTC). 보관 중 재열람에는 바뀌지 않는다
+             */
+            viewedAt?: string;
         };
         Pieces: {
             bond?: boolean;
@@ -4112,6 +5038,20 @@ export interface components {
             /** Format: int32 */
             minutes?: number;
         };
+        ReasonRequest: {
+            reason?: string;
+        };
+        ReceiptCounts: {
+            /** Format: int64 */
+            ambiguousLandings?: number;
+            /** Format: int64 */
+            unclaimedLandings?: number;
+        };
+        Redraw: {
+            /** Format: int32 */
+            done?: number;
+            pages?: number[];
+        };
         Reply: {
             line?: string;
             reactionKey?: string;
@@ -4120,10 +5060,40 @@ export interface components {
             restored?: boolean;
             runId?: string;
         };
+        RestoreSceneRequest: {
+            /** Format: int32 */
+            v?: number;
+        };
+        Result: {
+            /** Format: int32 */
+            pages?: number;
+            runFolderRestored?: boolean;
+            runId?: string;
+            /** @enum {string} */
+            status?: "PLANTED" | "EXISTS" | "DRY_RUN";
+            title?: string;
+        };
+        RetrySceneRequest: {
+            note?: string;
+            reasons?: string[];
+        };
         ReuploadResult: {
             /** Format: int32 */
             recorded?: number;
             runId?: string;
+        };
+        Row: {
+            /** Format: date-time */
+            createdAt?: string;
+            genre?: string;
+            isPublic?: boolean;
+            /** Format: int32 */
+            order?: number;
+            /** Format: int32 */
+            pages?: number;
+            runId?: string;
+            seeded?: boolean;
+            title?: string;
         };
         /** @description 달리기 종료 결과 */
         RunResult: {
@@ -4161,6 +5131,13 @@ export interface components {
         Scenes: {
             enabled?: boolean;
             latest?: components["schemas"]["Scene"];
+        };
+        ScenesRequest: {
+            body?: string;
+            scenes?: {
+                [key: string]: unknown;
+            }[];
+            title?: string;
         };
         /** @description 시계 맞추기 — at · sinceHatchMinutes · localTime 중 하나 */
         SetClock: {
@@ -4205,6 +5182,16 @@ export interface components {
         SheetDecision: {
             decision?: string;
             note?: string;
+        };
+        SheetFixRequest: {
+            character?: string;
+            note?: string;
+            photo_keys?: string[];
+            photos_data?: string[];
+        };
+        SheetRestoreRequest: {
+            /** Format: int32 */
+            v?: number;
         };
         ShortQuestions: {
             own?: boolean;
@@ -4401,6 +5388,12 @@ export interface components {
             /** @description 자유롭게 쓴 말. 안 썼으면 null */
             text?: string;
         };
+        SubscribeRequest: {
+            endpoint?: string;
+            keys?: components["schemas"]["Keys"];
+            lang?: string;
+            uid?: string;
+        };
         TodayView: {
             canCreate?: boolean;
             /** Format: int64 */
@@ -4434,6 +5427,7 @@ export interface components {
             description?: string;
             language?: string;
             name?: string;
+            photo_keys?: string[];
             photos_data?: string[];
             world?: string;
         };
@@ -4447,6 +5441,15 @@ export interface components {
             current?: boolean;
             done?: boolean;
             key?: string;
+        };
+        UnsubscribeRequest: {
+            endpoint?: string;
+        };
+        UpdateRequest: {
+            example?: boolean;
+            /** Format: int32 */
+            order?: number;
+            public?: boolean;
         };
         Upload: {
             /** Format: int64 */
@@ -4473,47 +5476,6 @@ export interface components {
             public?: boolean;
             runId?: string;
         };
-        WebtoonCharacterCreateRequest: {
-            description?: string;
-            language?: string;
-            name?: string;
-            photos_data?: string[];
-            style?: string;
-        };
-        WebtoonEvent: {
-            name?: string;
-            props?: {
-                [key: string]: unknown;
-            };
-            /** Format: int64 */
-            ts?: number;
-            view?: string;
-        };
-        WebtoonEventBatch: {
-            events?: components["schemas"]["WebtoonEvent"][];
-            ref?: string;
-            source?: string;
-            uid?: string;
-        };
-        WebtoonJobCreateRequest: {
-            agree_ip?: boolean;
-            character?: string;
-            character_id?: string;
-            checkpoints?: boolean;
-            fields?: {
-                [key: string]: string;
-            };
-            genre?: string;
-            language?: string;
-            name?: string;
-            photo_keys?: string[];
-            photo_note?: string;
-            photos_data?: string[];
-            quality?: string;
-            story?: string;
-            style?: string;
-            uid?: string;
-        };
         /** @description 오늘 한 일 — 자정에 0 으로 돌아간다 */
         ZzalToday: {
             bathDone?: boolean;
@@ -4535,6 +5497,81 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    capture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PieceMakerAdLandingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerAdLanding"];
+                };
+            };
+        };
+    };
+    claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PieceMakerAdLandingClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerAdLandingClaim"];
+                };
+            };
+        };
+    };
+    report: {
+        parameters: {
+            query: {
+                campaign: string;
+                from: string;
+                to: string;
+                asOf?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAdCohortReport"];
+                };
+            };
+        };
+    };
     pending: {
         parameters: {
             query?: never;
@@ -4766,7 +5803,65 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 계정의 첫 열람 기록 또는 기존 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
+                };
+            };
+            /** @description 정상 판정이 아님(INVALID_INPUT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
+                };
+            };
+            /** @description 로그인 필요 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
+                };
+            };
+            /** @description 없는 번호 또는 남의 가설(PIECE_MAKER_HYPOTHESIS_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
+                };
+            };
+            /** @description 기록 비활성화(PIECE_MAKER_RESULT_VIEW_DISABLED). 저장되지 않았으며 재시도하지 않음 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
+                };
+            };
+        };
+    };
+    list_4: {
         parameters: {
             query: {
                 /**
@@ -5253,6 +6348,164 @@ export interface operations {
             };
         };
     };
+    list_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    importBody: {
+        parameters: {
+            query?: {
+                dryRun?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Result"];
+                };
+            };
+        };
+    };
+    importKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Result"];
+                };
+            };
+        };
+    };
+    uploadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PresignedUpload"];
+                };
+            };
+        };
+    };
+    takeDown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Row"];
+                };
+            };
+        };
+    };
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Row"];
+                };
+            };
+        };
+    };
+    bundle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
     latest: {
         parameters: {
             query?: {
@@ -5273,6 +6526,238 @@ export interface operations {
                     "*/*": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    log: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    owners: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    removed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    hide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    restore_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    unhide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    warn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -5312,7 +6797,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WebtoonCharacterCreateRequest"];
+                "application/json": components["schemas"]["CreateRequest"];
             };
         };
         responses: {
@@ -5427,7 +6912,7 @@ export interface operations {
             };
         };
     };
-    remove: {
+    remove_1: {
         parameters: {
             query?: never;
             header?: {
@@ -5466,7 +6951,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WebtoonCharacterCreateRequest"];
+                "application/json": components["schemas"]["CreateRequest"];
             };
         };
         responses: {
@@ -5587,7 +7072,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["WebtoonEventBatch"];
+                "application/json": components["schemas"]["Batch"];
             };
         };
         responses: {
@@ -6115,7 +7600,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WebtoonJobCreateRequest"];
+                "application/json": components["schemas"]["CreateRequest"];
             };
         };
         responses: {
@@ -6158,7 +7643,9 @@ export interface operations {
     };
     job: {
         parameters: {
-            query?: never;
+            query?: {
+                watching?: boolean;
+            };
             header?: never;
             path: {
                 id: string;
@@ -6198,6 +7685,85 @@ export interface operations {
                     "*/*": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    pickCast: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CastRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    castSheet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CastSheetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    castSheetImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
                 };
             };
         };
@@ -6255,6 +7821,34 @@ export interface operations {
             };
         };
     };
+    savePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     pick: {
         parameters: {
             query?: never;
@@ -6295,6 +7889,144 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": components["schemas"]["NoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    saveScenes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScenesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    continueScenes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    retryScenes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["NoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    restoreScene: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreSceneRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    retryScene: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RetrySceneRequest"];
             };
         };
         responses: {
@@ -6367,6 +8099,85 @@ export interface operations {
             };
         };
     };
+    sheetFix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SheetFixRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    restoreSheet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SheetRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    sheetVersionImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                v: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+        };
+    };
     sheetImage: {
         parameters: {
             query?: never;
@@ -6409,6 +8220,80 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PresignedUpload"];
+                };
+            };
+        };
+    };
+    key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    subscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    unsubscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnsubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

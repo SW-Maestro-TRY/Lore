@@ -50,6 +50,10 @@ import java.lang.annotation.Target;
                 "spring.datasource.username=${LORE_TEST_DB_USERNAME:}",
                 "spring.datasource.password=${LORE_TEST_DB_PASSWORD:}",
 
+                // 설정이 다른 검사마다 컨텍스트가 따로 떠서 캐시에 남고, 저마다 접속 풀을 쥔다.
+                // 기본 풀(10)이면 전체 검사 후반에 시험 DB 접속 한도(기본 100)를 넘어 늦게 뜨는 컨텍스트가 거절당한다.
+                "spring.datasource.hikari.maximum-pool-size=3",
+
                 // application.yml 의 ${MAIL_USERNAME} 은 기본값이 없어 비어 있으면 기동이 막힌다. SMTP 는 쓰지 않는다.
                 "spring.mail.username=piece-maker-it@example.invalid",
                 "spring.mail.password=unused-in-tests",
