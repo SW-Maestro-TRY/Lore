@@ -15,6 +15,76 @@
  */
 
 export interface paths {
+    "/api/piece-maker/v1/ad-landings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 광고 URL 최초 수신 기록
+         * @description 실제 광고 URL 진입 때 호출한다. 같은 쿠키와 requestKey의 재시도는 최초 서버 시각을 유지한다. 광고 정보를 바꾸거나 expectedUserId가 현재 인증과 다르면 409. 새 기록의 로그인 계정은 즉시 귀속하지만, 기존 익명 기록은 별도 claim으로 연결한다. 분석 비활성화는 쿠키 발급·저장 없이 409. 잘못된 본문은 400, 쿠키별 분당 상한은 429, DB 실패는 5xx이며 다시 시도할 수 있다.
+         */
+        post: operations["capture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/piece-maker/v1/ad-landings/{id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 이번 광고 방문을 로그인 계정에 연결
+         * @description 기존 익명 쿠키와 서버 발급 landingId가 모두 일치해야 한다. expectedUserId가 인증 계정과 다르면 409이며 변경하지 않는다. 다른 계정이 같은 방문을 요구하면 원래 소유자는 유지하되 모호함을 표시해 집계에서 제외한다. 쿠키나 기록이 없으면 404. 새 쿠키를 발급하거나 과거 익명 이벤트 전체를 연결하지 않는다.
+         */
+        post: operations["claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/piece-maker/v1/admin/ad-cohort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 광고 첫 유입 후 24시간 정상 열람 집계
+         * @description 운영자 전용 읽기 API. campaign은 영문·숫자·점·밑줄·하이픈 1~64자, from/to/asOf는 ISO-8601 시각이다.
+         *     from은 포함, to는 제외하며 from < to <= asOf <= 현재, 조회 기간은 최대 31일이다. asOf 생략 시 현재를 쓴다.
+         *     계정별 최초로 연결된 광고 유입을 전체 이력에서 고른 뒤 캠페인·기간으로 거른다. 계정별 중복은 없다.
+         *     기존 제출자·이전 정상 열람자·관리자·탈퇴자·설정한 테스트 계정·모호한 연결은 제외한다.
+         *     만료·선택 삭제·수집 검증 공백으로 신규 여부를 판단할 수 없는 계정은 HISTORY_UNVERIFIABLE로 제외한다.
+         *     history에는 실제 조회 시점의 보관 범위와 운영 검증으로 설정한 연속 수집 구간을 반환한다.
+         *     보관 범위를 벗어난 from은 400이다. 오래된 asOf로 삭제 자료를 복원하지 않는다.
+         *     24시간 이내(경계 포함) 첫 정상 열람, 관찰 중, 기간 내 미완료를 구분한다.
+         *     계정 연결이 없거나 모호한 유입 수는 계정 수와 별도로 반환한다. 계정번호나 개인정보는 반환하지 않는다.
+         *     서버 수신 시각에 근거한 내부 UTM 집계이며 Meta 기여 전환 보고서가 아니다.
+         *     수집이 중지되어도 저장된 이력을 조회할 수 있고 collectionEnabled=false로 표시한다.
+         */
+        get: operations["report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/piece-maker/v1/admin/hypotheses": {
         parameters: {
             query?: never;
@@ -135,6 +205,35 @@ export interface paths {
         get: operations["get_1"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/piece-maker/v1/hypotheses/{id}/result-view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 첫 정상 판정 열람 기록
+         * @description 로그인한 독자의 정상 판정이 활성 탭의 화면에 실제로 보였을 때 부른다. 요청 몸통은 없다.
+         *     서버는 소유자와 COMPLETE 상태 및 판정 형식을 검사하고 계정당 보관 범위의 첫 한 줄만 저장한다.
+         *     보관 중 새 탭·재열람·동시 요청은 firstView=false와 기존 viewedAt을 돌려준다. 만료 뒤에는 새 기록이 될 수 있다.
+         *     firstView=true는 생애 최초나 신규 광고 전환을 뜻하지 않는다. DB 저장 실패는 성공으로 답하지 않는다.
+         *     app.analytics.enabled=false이면 409로 답하며 기록하지 않는다. 같은 설정에서는 재시도하지 않는다.
+         *     viewedAt은 최초 저장 시 서버가 기록한 시각이다. 기능 도입 전 열람 이력을 복원하지 않는다.
+         *     이 기록은 광고 24시간 성과 집계 그 자체가 아니다.
+         *     Meta 설정과 시험 계정 검토가 완료된 경우, 제외 대상이 아닌 첫 저장 응답에만 metaEvent를 발급한다.
+         *     metaEvent는 광고 출처와 무관한 보관 기록상 첫 정상 열람 신호이며 Meta 수신·광고 기여를 보장하지 않는다.
+         *     응답 유실·픽셀 차단 시 내부 열람은 유지되지만 Meta 신호는 누락될 수 있다.
+         */
+        post: operations["record"];
         delete?: never;
         options?: never;
         head?: never;
@@ -680,6 +779,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/admin/works/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 처리 기록
+         * @description 최근부터.
+         */
+        get: operations["log"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 작가별 처리 수
+         * @description 경고 · 비공개 · 삭제를 센다. 많은 사람부터.
+         */
+        get: operations["owners"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/removed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 관리자 휴지통
+         * @description 관리자가 삭제 처리한 작품들.
+         */
+        get: operations["removed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 작품 처리 상태
+         * @description 지금 상태 · 작가(이메일 · 처리 받은 수) · 이 작품의 지난 처리.
+         */
+        get: operations["state"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/hide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 비공개 처리
+         * @description 둘러보기에서 빠지고 그림도 안 열리는 자리로. 작가는 다시 공개로 못 바꾼다. 작가에게 메일.
+         */
+        post: operations["hide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 삭제 처리
+         * @description 관리자 휴지통. 작가는 못 되살리고, 기간이 지나면 영구 삭제된다. 작가에게 메일.
+         */
+        post: operations["remove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 되살리기
+         * @description 관리자 휴지통에서 꺼낸다. 처리 전 공개 여부로 돌아간다.
+         */
+        post: operations["restore_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/unhide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 다시 공개
+         * @description 관리자 비공개를 거둔다. 처리 전 공개 여부로 돌아간다.
+         */
+        post: operations["unhide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/webtoon/v1/admin/works/{runId}/warn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 경고
+         * @description 작품은 그대로 두고 작가에게 알린다. 기록에 남아 작가별로 센다.
+         */
+        post: operations["warn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/characters": {
         parameters: {
             query?: never;
@@ -794,7 +1073,7 @@ export interface paths {
          * 지우기
          * @description 그림은 S3 에 그대로 둔다 — 이 캐릭터로 이미 만든 웹툰이 그것을 보고 있다.
          */
-        delete: operations["remove"];
+        delete: operations["remove_1"];
         options?: never;
         head?: never;
         /** 이름·설명 고치기 */
@@ -3051,6 +3330,39 @@ export interface components {
              */
             winAt?: number;
         };
+        AccountCounts: {
+            /** Format: int64 */
+            completed?: number;
+            /** Format: int64 */
+            eligible?: number;
+            /** Format: int64 */
+            excluded?: number;
+            /** Format: int64 */
+            firstAttributed?: number;
+            /** Format: int64 */
+            noCompletion?: number;
+            /** Format: int64 */
+            pending?: number;
+        };
+        AdCohortReport: {
+            accounts?: components["schemas"]["AccountCounts"];
+            /** Format: date-time */
+            asOf?: string;
+            basis?: components["schemas"]["Basis"];
+            campaign?: string;
+            collectionEnabled?: boolean;
+            creatives?: components["schemas"]["CreativeCounts"][];
+            exclusions?: components["schemas"]["ExclusionCount"][];
+            /** Format: date-time */
+            from?: string;
+            history?: components["schemas"]["PieceMakerAdMeasurementHistory"];
+            observationWindowClosed?: boolean;
+            provisional?: boolean;
+            receipts?: components["schemas"]["ReceiptCounts"];
+            testExclusionsReviewed?: boolean;
+            /** Format: date-time */
+            to?: string;
+        };
         /** @description 시간 당기기 요청 — 초·분 중 아무 쪽이나 준다(둘 다 주면 더한다) */
         AdvanceClock: {
             /**
@@ -3119,6 +3431,12 @@ export interface components {
         };
         ApiResponseAbandonResult: {
             data?: components["schemas"]["AbandonResult"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseAdCohortReport: {
+            data?: components["schemas"]["AdCohortReport"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -3263,6 +3581,18 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponsePieceMakerAdLanding: {
+            data?: components["schemas"]["PieceMakerAdLanding"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponsePieceMakerAdLandingClaim: {
+            data?: components["schemas"]["PieceMakerAdLandingClaim"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponsePieceMakerFeedback: {
             data?: components["schemas"]["PieceMakerFeedback"];
             error?: components["schemas"]["ErrorBody"];
@@ -3283,6 +3613,12 @@ export interface components {
         };
         ApiResponsePieceMakerPendingHypothesisList: {
             data?: components["schemas"]["PieceMakerPendingHypothesisList"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponsePieceMakerResultView: {
+            data?: components["schemas"]["PieceMakerResultView"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -3400,6 +3736,13 @@ export interface components {
         Balance: {
             /** Format: int32 */
             balance?: number;
+        };
+        Basis: {
+            accountState?: string;
+            attribution?: string;
+            completion?: string;
+            landingTime?: string;
+            limitations?: string[];
         };
         Batch: {
             events?: components["schemas"]["Event"][];
@@ -3613,6 +3956,18 @@ export interface components {
              */
             phase?: string;
         };
+        CreativeCounts: {
+            adId?: string;
+            /** Format: int64 */
+            completed?: number;
+            /** Format: int64 */
+            eligible?: number;
+            /** Format: int64 */
+            noCompletion?: number;
+            /** Format: int64 */
+            pending?: number;
+            placement?: string;
+        };
         /** @description 크레딧 내역 한 줄 */
         CreditEventLine: {
             /** Format: date-time */
@@ -3755,6 +4110,11 @@ export interface components {
             /** Format: int64 */
             ts?: number;
             view?: string;
+        };
+        ExclusionCount: {
+            /** Format: int64 */
+            accounts?: number;
+            reason?: string;
         };
         Features: {
             album?: boolean;
@@ -4313,6 +4673,49 @@ export interface components {
             n?: number;
             title?: string;
         };
+        PieceMakerAdAttribution: {
+            /** Format: int64 */
+            firstAdLandedAt?: number;
+            placement?: string;
+            utmCampaign?: string;
+            utmContent?: string;
+            utmMedium?: string;
+            utmSource?: string;
+        };
+        /** @description 광고 URL의 최초 서버 수신. 실제 광고 클릭을 외부 검증한 기록은 아님 */
+        PieceMakerAdLanding: {
+            /** Format: date-time */
+            landedAt?: string;
+            /** Format: uuid */
+            landingId?: string;
+        };
+        PieceMakerAdLandingClaim: {
+            /** Format: date-time */
+            landedAt?: string;
+            linked?: boolean;
+        };
+        PieceMakerAdLandingClaimRequest: {
+            /** Format: int64 */
+            expectedUserId: number;
+        };
+        PieceMakerAdLandingRequest: {
+            attribution: components["schemas"]["PieceMakerAdAttribution"];
+            /** Format: int64 */
+            expectedUserId?: number;
+            /** Format: uuid */
+            requestKey: string;
+        };
+        PieceMakerAdMeasurementHistory: {
+            /** Format: date-time */
+            collectionVerifiedFrom?: string;
+            /** Format: date-time */
+            collectionVerifiedThrough?: string;
+            /** Format: date-time */
+            evaluatedAt?: string;
+            /** Format: date-time */
+            recordsAvailableAfter?: string;
+            requestedWindowCovered?: boolean;
+        };
         /** @description 저장된 피드백 하나 */
         PieceMakerFeedback: {
             /** @description 본문. 앞뒤 빈칸을 뗀 글 */
@@ -4495,6 +4898,13 @@ export interface components {
             /** @description 제목. 없으면 빈 글 */
             title?: string;
         };
+        /** @description 브라우저가 한 번 시도할 PM 전용 이벤트. Meta 수신이나 광고 기여를 뜻하지 않는다 */
+        PieceMakerMetaPixelEvent: {
+            eventId?: string;
+            eventName?: string;
+            pixelId?: string;
+            siteOrigin?: string;
+        };
         /** @description 판정 안 된 가설 한 줄. judge.py 의 입력이 그대로 든다 */
         PieceMakerPendingHypothesis: {
             /** @description 맡길 때 복사한 카드. 순서 그대로. judge.py 에는 id 만 넘긴다 */
@@ -4533,6 +4943,18 @@ export interface components {
         PieceMakerPendingHypothesisList: {
             /** @description 판정 안 된 가설. 없으면 빈 배열 */
             items?: components["schemas"]["PieceMakerPendingHypothesis"][];
+        };
+        /** @description 보관 중인 계정의 첫 정상 판정 열람 기록. 생애 최초나 광고 전환을 보장하지 않는다 */
+        PieceMakerResultView: {
+            /** @description 이번 요청으로 보관 범위의 첫 기록을 저장했으면 true. 만료 뒤에도 true가 될 수 있다 */
+            firstView?: boolean;
+            /** @description 전송 설정이 켜져 있고 대상인 첫 요청에만 발급. 운영자·시험 계정·불완전 이력·재열람은 null */
+            metaEvent?: components["schemas"]["PieceMakerMetaPixelEvent"];
+            /**
+             * Format: date-time
+             * @description 보관 중인 최초 기록 시각(UTC). 보관 중 재열람에는 바뀌지 않는다
+             */
+            viewedAt?: string;
         };
         Pieces: {
             bond?: boolean;
@@ -4615,6 +5037,15 @@ export interface components {
             line?: string;
             /** Format: int32 */
             minutes?: number;
+        };
+        ReasonRequest: {
+            reason?: string;
+        };
+        ReceiptCounts: {
+            /** Format: int64 */
+            ambiguousLandings?: number;
+            /** Format: int64 */
+            unclaimedLandings?: number;
         };
         Redraw: {
             /** Format: int32 */
@@ -4996,6 +5427,7 @@ export interface components {
             description?: string;
             language?: string;
             name?: string;
+            photo_keys?: string[];
             photos_data?: string[];
             world?: string;
         };
@@ -5065,6 +5497,81 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    capture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PieceMakerAdLandingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerAdLanding"];
+                };
+            };
+        };
+    };
+    claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PieceMakerAdLandingClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerAdLandingClaim"];
+                };
+            };
+        };
+    };
+    report: {
+        parameters: {
+            query: {
+                campaign: string;
+                from: string;
+                to: string;
+                asOf?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAdCohortReport"];
+                };
+            };
+        };
+    };
     pending: {
         parameters: {
             query?: never;
@@ -5292,6 +5799,64 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponsePieceMakerHypothesis"];
+                };
+            };
+        };
+    };
+    record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 계정의 첫 열람 기록 또는 기존 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
+                };
+            };
+            /** @description 정상 판정이 아님(INVALID_INPUT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
+                };
+            };
+            /** @description 로그인 필요 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
+                };
+            };
+            /** @description 없는 번호 또는 남의 가설(PIECE_MAKER_HYPOTHESIS_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
+                };
+            };
+            /** @description 기록 비활성화(PIECE_MAKER_RESULT_VIEW_DISABLED). 저장되지 않았으며 재시도하지 않음 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePieceMakerResultView"];
                 };
             };
         };
@@ -5965,6 +6530,238 @@ export interface operations {
             };
         };
     };
+    log: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    owners: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    removed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    state: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    hide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    restore_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    unhide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    warn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     list: {
         parameters: {
             query?: never;
@@ -6115,7 +6912,7 @@ export interface operations {
             };
         };
     };
-    remove: {
+    remove_1: {
         parameters: {
             query?: never;
             header?: {
