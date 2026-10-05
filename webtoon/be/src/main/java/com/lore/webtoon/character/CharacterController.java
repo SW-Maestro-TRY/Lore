@@ -1,6 +1,7 @@
 package com.lore.webtoon.character;
 
 import com.lore.webtoon.credit.CreditGate;
+import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.Admins;
 import com.lore.webtoon.WebtoonApi;
 import com.lore.common.exception.BusinessException;
@@ -52,13 +53,15 @@ public class CharacterController {
     private final CharacterOwner who;
     private final ShareReward shareReward;
     private final Admins admins;
+    private final GuestGate guests;
 
     public CharacterController(CharacterService characters, CharacterOwner who, ShareReward shareReward,
-                               Admins admins) {
+                               Admins admins, GuestGate guests) {
         this.characters = characters;
         this.who = who;
         this.shareReward = shareReward;
         this.admins = admins;
+        this.guests = guests;
     }
 
     @Operation(summary = "고를 수 있는 캐릭터", description = """
@@ -90,11 +93,12 @@ public class CharacterController {
     @PostMapping
     public Map<String, Object> create(
             @RequestBody CreateRequest form,
-            @RequestHeader(value = UID_HEADER, required = false) String uid) {
+            @RequestHeader(value = UID_HEADER, required = false) String uid,
+            HttpServletRequest request) {
         Long me = CreditGate.currentUser();
         WebtoonCharacter made = characters.create(
-                me, uid, form.name(), form.description(), form.photosData(), form.style(),
-                form.language());
+                me, uid, form.name(), form.description(), form.photosData(), form.photoKeys(),
+                guests.keyOf(request), form.style(), form.language());
         return view(made, me, who.uidsOf(me, uid));
     }
 
@@ -109,11 +113,13 @@ public class CharacterController {
     @PostMapping("/try")
     public Map<String, Object> tryOut(
             @RequestBody(required = false) TryRequest form,
-            @RequestHeader(value = UID_HEADER, required = false) String uid) {
+            @RequestHeader(value = UID_HEADER, required = false) String uid,
+            HttpServletRequest request) {
         Long me = CreditGate.currentUser();
-        TryRequest f = form == null ? new TryRequest(null, null, null, null, null) : form;
+        TryRequest f = form == null ? new TryRequest(null, null, null, null, null, null) : form;
         WebtoonCharacter made = characters.tryOut(
-                me, uid, f.name(), f.description(), f.photosData(), f.world(), f.language());
+                me, uid, f.name(), f.description(), f.photosData(), f.photoKeys(),
+                guests.keyOf(request), f.world(), f.language());
         return view(made, me, who.uidsOf(me, uid));
     }
 
@@ -294,11 +300,19 @@ public class CharacterController {
                 .body(Map.of("error", e.getMessage()));
     }
 
-    /** 「캐릭터 만들어보기」 입력. 전부 비어도 된다. language 는 화면 언어(ko·en·ja) — 안 오면 ko. */
+    /** 「캐릭터 만들어보기」 입력. 전부 비어도 된다. language 는 화면 언어(ko·en·ja) — 안 오면 ko.
+     *
+     * {@code photoKeys} 가 있으면 그걸 쓰고({@code photosData} 는 무시), 없으면
+     * {@code photosData}(base64) 로 되돌린다 — 웹툰 만들기(start.ts)와 같은 폴백
+     * 규칙. 사진을 base64 로 그대로 실으면 본문이 몇 MB 가 되고, CloudFront 앞단
+     * WAF(SizeRestrictions_BODY) 가 통째로 막는다(#660, 2026-10-05 실측). */
     public record TryRequest(String name, String description,
                              @com.fasterxml.jackson.annotation.JsonProperty("photos_data")
                              @com.fasterxml.jackson.annotation.JsonAlias("photosData")
                              List<String> photosData,
+                             @com.fasterxml.jackson.annotation.JsonProperty("photo_keys")
+                             @com.fasterxml.jackson.annotation.JsonAlias("photoKeys")
+                             List<String> photoKeys,
                              String world, String language) {
     }
 
@@ -306,6 +320,9 @@ public class CharacterController {
                                 @com.fasterxml.jackson.annotation.JsonProperty("photos_data")
                                 @com.fasterxml.jackson.annotation.JsonAlias("photosData")
                                 List<String> photosData,
+                                @com.fasterxml.jackson.annotation.JsonProperty("photo_keys")
+                                @com.fasterxml.jackson.annotation.JsonAlias("photoKeys")
+                                List<String> photoKeys,
                                 String style, String language) {
     }
 

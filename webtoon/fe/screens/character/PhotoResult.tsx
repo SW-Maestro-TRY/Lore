@@ -142,7 +142,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       ? draft
       : { name: ch.name, description: ch.description, world: card?.world || "", photo: draft?.photo };
     try {
-      const c = await runTry(d, lang);
+      const c = await runTry(d, lang, authenticated);
       go("card", { id: c.id });
     } catch (e) {
       if (isLimitError(e)) {
