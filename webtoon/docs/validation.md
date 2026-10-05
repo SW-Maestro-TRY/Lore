@@ -327,3 +327,44 @@ where kind = 'FULL' group by 1 order by 2 desc;
 ```
 
 아직 남은 것: 개인정보처리방침 수집 항목에 "피드백 내용(자유 의견·인터뷰 연락처)"을 넣을지 결정. 게시본이 `apps/web` 에 있어 따로 확인한다.
+
+## 지금까지 쌓인 숫자 보는 법
+
+가설 체크보드가 묻는 수(외부 유입 · 생성 전환 · 다시 그리기 단계 · 다음 화 · 설문 긍정 비율)를 꺼내는 길이 둘. 어느 쪽이든 **같은 집계**를 쓴다.
+
+### 1. 관리자 홈 UI (상시)
+
+관리자 계정으로 `/<환경>/webtoon?view=admin` 열고 「최근 7일」을 누르면 발표 7번 장 체크보드가 뜬다. 날짜 범위를 바꾸거나 20초 자동 갱신으로 지금 들어오는 사람 수를 바로 본다. 운영 중에 상시로 보려면 여기.
+
+### 2. 터미널 — `webtoon/tools/events-summary.sh` (한 번 뽑아 볼 때)
+
+```
+webtoon/tools/events-summary.sh prod                              # 최근 7일
+webtoon/tools/events-summary.sh prod --days 14
+webtoon/tools/events-summary.sh prod --since 2026-10-05T16:00+09  # 그 시각부터 지금
+```
+
+안쪽에서 `webtoon/tools/examples/db-sql.sh` 를 호출해 SSM 으로 psql 을 돌린다 — 노트북에서 비밀번호를 한 번도 안 찍는다. 접근 문서는 [server.md 4-6 절](server.md#4-6-db-에-직접-접근하기-).
+
+보여 주는 것(기간 안):
+- 요약 — 이벤트 수, unique uid, 처음·마지막 시각
+- 가설 체크보드 — session_start · auth_done · create_started · bake · read_end · next_episode_click · story_retry · sheet_fix/restore · scene_retry/restore · regen_start · feedback_submit · create_failed · create_blocked 각 unique uid
+- UTM source / medium / 레퍼러 호스트 상위 10
+- 모든 이벤트 상위 30
+- 설문 답 수 · S0~S7 긍정 비율(5점 척도 4~5, YES/부분/NO 는 YES)
+
+### 하은 테스트 분(내부 트래픽) 빼기
+
+**로그인한 적 있는 브라우저**는 자동으로 뺄 수 있다. ADMIN 역할 계정으로 로그인한 적 있는 모든 `uid` 를 집계에서 제외한다:
+
+```
+webtoon/tools/events-summary.sh prod --exclude-admins
+```
+
+**로그인하지 않은 세션**(시크릿 창에서 랜딩만 보고 나간 등)은 못 뺀다 — 그 세션은 ADMIN 계정과 묶여 있지 않다. 특정 브라우저를 꼭 빼야 하면 그 브라우저 콘솔에 `localStorage.lore_uid` 를 쳐서 값을 꺼내 손으로 넘긴다:
+
+```
+webtoon/tools/events-summary.sh prod --exclude-uid 1a2b3c4d-...-ef12
+```
+
+하은은 Chrome 개인 · Chrome 공동 · 모바일 등 여러 브라우저로 들어오고 각각 uid 가 다르지만, 로그인했으면 `--exclude-admins` 가 user_id 로 묶어 전부 걸러 낸다.

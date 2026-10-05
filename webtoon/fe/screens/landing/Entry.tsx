@@ -6,6 +6,7 @@ import "./i18n";
 import * as api from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
+import { track } from "../../lib/track";
 import { usePhone } from "./usePhone";
 import "./Entry.css";
 
@@ -50,7 +51,7 @@ export default function Entry({ go }: { go: Go; authenticated?: boolean }) {
       </div>
 
       <div className="wt-entry-cards">
-        <a href={hrefOf("create", { step: 1 })} className="wt-entry-card on" onClick={to(() => go("create", { step: 1 }))}>
+        <a href={hrefOf("create", { step: 1 })} className="wt-entry-card on" onClick={to(() => { track("entry_pick", { pick: "webtoon" }); go("create", { step: 1 }); })}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="wt-entry-bg" src={phone ? COVER_A_PHONE : COVER_A} alt="" onError={onImgError(FALLBACK_A)} />
           {createFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: createFree })}</span>}
@@ -60,7 +61,7 @@ export default function Entry({ go }: { go: Go; authenticated?: boolean }) {
           </div>
         </a>
 
-        <a href={hrefOf("try")} className="wt-entry-card" onClick={to(() => go("try"))}>
+        <a href={hrefOf("try")} className="wt-entry-card" onClick={to(() => { track("entry_pick", { pick: "character" }); go("try"); })}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="wt-entry-bg wt-entry-bg-char" src={COVER_B} alt="" onError={onImgError(FALLBACK_B)} />
           {charFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: charFree })}</span>}
