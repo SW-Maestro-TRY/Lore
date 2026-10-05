@@ -42,12 +42,12 @@ export function trackDraftAbandoned(cards: number, hasNote: boolean): void {
   track("piece_maker_draft_abandoned", { count: cards, has_note: hasNote });
 }
 
-/** 판정 결과가 화면에 나왔다. 같은 가설의 같은 결과는 한 방문에 한 번만 남긴다. */
-export function trackResultViewed(hypothesisId: number, status: "COMPLETE" | "FAILED"): void {
-  const key = `result:${hypothesisId}:${status}`;
+/** 정상 결과가 실제로 보였다. 계정별 같은 가설은 한 방문에 한 번만 남긴다. 영속 중복 제거는 result-view API가 맡는다. */
+export function trackResultViewed(accountId: number, hypothesisId: number): void {
+  const key = `result:${accountId}:${hypothesisId}`;
   if (once.has(key)) return;
   once.add(key);
-  track("piece_maker_result_viewed", { type: status });
+  track("piece_maker_result_viewed", { type: "COMPLETE" });
 }
 
 /** 맡긴 뒤의 행동. `type` 은 공유에 쓴 수단(copy · native · SNS 이름)이거나, 새 가설을 시작한 때의 판정 상태다. */

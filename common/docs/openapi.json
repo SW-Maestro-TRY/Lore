@@ -79,6 +79,91 @@
         },
         "type": "object"
       },
+      "AccountCounts": {
+        "properties": {
+          "completed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "eligible": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "excluded": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "firstAttributed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "noCompletion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pending": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "AdCohortReport": {
+        "properties": {
+          "accounts": {
+            "$ref": "#/components/schemas/AccountCounts"
+          },
+          "asOf": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/Basis"
+          },
+          "campaign": {
+            "type": "string"
+          },
+          "collectionEnabled": {
+            "type": "boolean"
+          },
+          "creatives": {
+            "items": {
+              "$ref": "#/components/schemas/CreativeCounts"
+            },
+            "type": "array"
+          },
+          "exclusions": {
+            "items": {
+              "$ref": "#/components/schemas/ExclusionCount"
+            },
+            "type": "array"
+          },
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "history": {
+            "$ref": "#/components/schemas/PieceMakerAdMeasurementHistory"
+          },
+          "observationWindowClosed": {
+            "type": "boolean"
+          },
+          "provisional": {
+            "type": "boolean"
+          },
+          "receipts": {
+            "$ref": "#/components/schemas/ReceiptCounts"
+          },
+          "testExclusionsReviewed": {
+            "type": "boolean"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AdvanceClock": {
         "description": "시간 당기기 요청 — 초·분 중 아무 쪽이나 준다(둘 다 주면 더한다)",
         "properties": {
@@ -237,6 +322,23 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/AbandonResult"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseAdCohortReport": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AdCohortReport"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -657,6 +759,40 @@
         },
         "type": "object"
       },
+      "ApiResponsePieceMakerAdLanding": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PieceMakerAdLanding"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponsePieceMakerAdLandingClaim": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PieceMakerAdLandingClaim"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponsePieceMakerFeedback": {
         "properties": {
           "data": {
@@ -712,6 +848,23 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/PieceMakerPendingHypothesisList"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponsePieceMakerResultView": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PieceMakerResultView"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -1001,6 +1154,13 @@
             "format": "int32",
             "type": "integer"
           },
+          "pages": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
           "retry_page": {
             "format": "int32",
             "type": "integer"
@@ -1032,6 +1192,49 @@
           "balance": {
             "format": "int32",
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Basis": {
+        "properties": {
+          "accountState": {
+            "type": "string"
+          },
+          "attribution": {
+            "type": "string"
+          },
+          "completion": {
+            "type": "string"
+          },
+          "landingTime": {
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Batch": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            },
+            "type": "array"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "string"
           }
         },
         "type": "object"
@@ -1096,6 +1299,23 @@
         "required": [
           "action"
         ],
+        "type": "object"
+      },
+      "CastRequest": {
+        "properties": {
+          "n": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CastSheetRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "Character": {
@@ -1339,6 +1559,77 @@
         ],
         "type": "object"
       },
+      "CreateRequest": {
+        "properties": {
+          "agree_ip": {
+            "type": "boolean"
+          },
+          "character": {
+            "type": "string"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "checkpoints": {
+            "type": "boolean"
+          },
+          "episode": {
+            "type": "string"
+          },
+          "fields": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "genre": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "photo_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "photo_note": {
+            "type": "string"
+          },
+          "photos_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "quality": {
+            "type": "string"
+          },
+          "settings": {
+            "type": "string"
+          },
+          "story": {
+            "type": "string"
+          },
+          "style": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Created": {
         "description": "캐릭터 정보 등록 결과",
         "properties": {
@@ -1364,6 +1655,33 @@
           "phase": {
             "description": "HATCHING",
             "example": "HATCHING",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CreativeCounts": {
+        "properties": {
+          "adId": {
+            "type": "string"
+          },
+          "completed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "eligible": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "noCompletion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pending": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "placement": {
             "type": "string"
           }
         },
@@ -1600,6 +1918,37 @@
             "type": "string"
           },
           "message": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Event": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "props": {
+            "additionalProperties": { },
+            "type": "object"
+          },
+          "ts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "view": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ExclusionCount": {
+        "properties": {
+          "accounts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reason": {
             "type": "string"
           }
         },
@@ -2116,6 +2465,23 @@
           "art": {
             "$ref": "#/components/schemas/Art"
           },
+          "cast": {
+            "items": {
+              "additionalProperties": { },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "castKind": {
+            "type": "string"
+          },
+          "cast_sheets": {
+            "items": {
+              "additionalProperties": { },
+              "type": "object"
+            },
+            "type": "array"
+          },
           "checkpoints": {
             "type": "boolean"
           },
@@ -2136,6 +2502,10 @@
           "id": {
             "type": "string"
           },
+          "input": {
+            "additionalProperties": { },
+            "type": "object"
+          },
           "log": {
             "items": {
               "type": "string"
@@ -2146,6 +2516,9 @@
             "format": "int32",
             "type": "integer"
           },
+          "mode": {
+            "type": "string"
+          },
           "notice": {
             "$ref": "#/components/schemas/Notice"
           },
@@ -2153,12 +2526,19 @@
             "format": "int32",
             "type": "integer"
           },
+          "persona": {
+            "additionalProperties": { },
+            "type": "object"
+          },
           "pick": {
             "format": "int32",
             "type": "integer"
           },
           "queue": {
             "$ref": "#/components/schemas/Queue"
+          },
+          "redraw": {
+            "$ref": "#/components/schemas/Redraw"
           },
           "refunded": {
             "type": "string"
@@ -2168,6 +2548,27 @@
           },
           "say": {
             "type": "string"
+          },
+          "scenes": {
+            "items": {
+              "additionalProperties": { },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "sheet_blocked": {
+            "type": "boolean"
+          },
+          "sheet_fix_left": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sheet_ready": {
+            "type": "boolean"
+          },
+          "sheet_versions": {
+            "format": "int32",
+            "type": "integer"
           },
           "stage": {
             "type": "string"
@@ -2188,10 +2589,43 @@
           "status": {
             "type": "string"
           },
+          "story": {
+            "additionalProperties": { },
+            "type": "object"
+          },
           "style": {
             "type": "string"
           },
           "style_label": {
+            "type": "string"
+          },
+          "unsafe_pages": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "KeyRequest": {
+        "properties": {
+          "dryRun": {
+            "type": "boolean"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Keys": {
+        "properties": {
+          "auth": {
+            "type": "string"
+          },
+          "p256dh": {
             "type": "string"
           }
         },
@@ -2492,6 +2926,18 @@
         },
         "type": "object"
       },
+      "PersonRequest": {
+        "properties": {
+          "fields": {
+            "additionalProperties": { },
+            "type": "object"
+          },
+          "who": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PersonalityChoice": {
         "description": "성격 등록·수정 요청. 수면 중을 포함해 언제든 변경할 수 있다",
         "properties": {
@@ -2551,6 +2997,115 @@
           "n": {
             "format": "int32",
             "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerAdAttribution": {
+        "properties": {
+          "firstAdLandedAt": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "utmCampaign": {
+            "type": "string"
+          },
+          "utmContent": {
+            "type": "string"
+          },
+          "utmMedium": {
+            "type": "string"
+          },
+          "utmSource": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerAdLanding": {
+        "description": "광고 URL의 최초 서버 수신. 실제 광고 클릭을 외부 검증한 기록은 아님",
+        "properties": {
+          "landedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "landingId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerAdLandingClaim": {
+        "properties": {
+          "landedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "linked": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerAdLandingClaimRequest": {
+        "properties": {
+          "expectedUserId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expectedUserId"
+        ],
+        "type": "object"
+      },
+      "PieceMakerAdLandingRequest": {
+        "properties": {
+          "attribution": {
+            "$ref": "#/components/schemas/PieceMakerAdAttribution"
+          },
+          "expectedUserId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "requestKey": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attribution",
+          "requestKey"
+        ],
+        "type": "object"
+      },
+      "PieceMakerAdMeasurementHistory": {
+        "properties": {
+          "collectionVerifiedFrom": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "collectionVerifiedThrough": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "evaluatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "recordsAvailableAfter": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "requestedWindowCovered": {
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -2847,6 +3402,24 @@
         },
         "type": "object"
       },
+      "PieceMakerMetaPixelEvent": {
+        "description": "브라우저가 한 번 시도할 PM 전용 이벤트. Meta 수신이나 광고 기여를 뜻하지 않는다",
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "eventName": {
+            "type": "string"
+          },
+          "pixelId": {
+            "type": "string"
+          },
+          "siteOrigin": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PieceMakerPendingHypothesis": {
         "description": "판정 안 된 가설 한 줄. judge.py 의 입력이 그대로 든다",
         "properties": {
@@ -2909,6 +3482,26 @@
               "$ref": "#/components/schemas/PieceMakerPendingHypothesis"
             },
             "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PieceMakerResultView": {
+        "description": "보관 중인 계정의 첫 정상 판정 열람 기록. 생애 최초나 광고 전환을 보장하지 않는다",
+        "properties": {
+          "firstView": {
+            "description": "이번 요청으로 보관 범위의 첫 기록을 저장했으면 true. 만료 뒤에도 true가 될 수 있다",
+            "type": "boolean"
+          },
+          "metaEvent": {
+            "$ref": "#/components/schemas/PieceMakerMetaPixelEvent",
+            "description": "전송 설정이 켜져 있고 대상인 첫 요청에만 발급. 운영자·시험 계정·불완전 이력·재열람은 null",
+            "type": "null"
+          },
+          "viewedAt": {
+            "description": "보관 중인 최초 기록 시각(UTC). 보관 중 재열람에는 바뀌지 않는다",
+            "format": "date-time",
+            "type": "string"
           }
         },
         "type": "object"
@@ -3079,6 +3672,43 @@
         },
         "type": "object"
       },
+      "ReasonRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReceiptCounts": {
+        "properties": {
+          "ambiguousLandings": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unclaimedLandings": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Redraw": {
+        "properties": {
+          "done": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pages": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "Reply": {
         "properties": {
           "line": {
@@ -3101,6 +3731,55 @@
         },
         "type": "object"
       },
+      "RestoreSceneRequest": {
+        "properties": {
+          "v": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Result": {
+        "properties": {
+          "pages": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "runFolderRestored": {
+            "type": "boolean"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "PLANTED",
+              "EXISTS",
+              "DRY_RUN"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RetrySceneRequest": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "ReuploadResult": {
         "properties": {
           "recorded": {
@@ -3108,6 +3787,38 @@
             "type": "integer"
           },
           "runId": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Row": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "genre": {
+            "type": "string"
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "order": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pages": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "seeded": {
+            "type": "boolean"
+          },
+          "title": {
             "type": "string"
           }
         },
@@ -3183,6 +3894,24 @@
         },
         "type": "object"
       },
+      "ScenesRequest": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "scenes": {
+            "items": {
+              "additionalProperties": { },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SetClock": {
         "description": "시계 맞추기 — at · sinceHatchMinutes · localTime 중 하나",
         "properties": {
@@ -3254,6 +3983,38 @@
           },
           "note": {
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SheetFixRequest": {
+        "properties": {
+          "character": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "photo_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "photos_data": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "SheetRestoreRequest": {
+        "properties": {
+          "v": {
+            "format": "int32",
+            "type": "integer"
           }
         },
         "type": "object"
@@ -3606,6 +4367,23 @@
         },
         "type": "object"
       },
+      "SubscribeRequest": {
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          },
+          "keys": {
+            "$ref": "#/components/schemas/Keys"
+          },
+          "lang": {
+            "type": "string"
+          },
+          "uid": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "TodayView": {
         "properties": {
           "canCreate": {
@@ -3682,6 +4460,12 @@
           "name": {
             "type": "string"
           },
+          "photo_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "photos_data": {
             "items": {
               "type": "string"
@@ -3722,6 +4506,29 @@
           },
           "key": {
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UnsubscribeRequest": {
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateRequest": {
+        "properties": {
+          "example": {
+            "type": "boolean"
+          },
+          "order": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "public": {
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -3785,127 +4592,6 @@
         },
         "type": "object"
       },
-      "WebtoonCharacterCreateRequest": {
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "language": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "photos_data": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "style": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "WebtoonEvent": {
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "props": {
-            "additionalProperties": { },
-            "type": "object"
-          },
-          "ts": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "view": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "WebtoonEventBatch": {
-        "properties": {
-          "events": {
-            "items": {
-              "$ref": "#/components/schemas/WebtoonEvent"
-            },
-            "type": "array"
-          },
-          "ref": {
-            "type": "string"
-          },
-          "source": {
-            "type": "string"
-          },
-          "uid": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "WebtoonJobCreateRequest": {
-        "properties": {
-          "agree_ip": {
-            "type": "boolean"
-          },
-          "character": {
-            "type": "string"
-          },
-          "character_id": {
-            "type": "string"
-          },
-          "checkpoints": {
-            "type": "boolean"
-          },
-          "fields": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object"
-          },
-          "genre": {
-            "type": "string"
-          },
-          "language": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "photo_keys": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "photo_note": {
-            "type": "string"
-          },
-          "photos_data": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "quality": {
-            "type": "string"
-          },
-          "story": {
-            "type": "string"
-          },
-          "style": {
-            "type": "string"
-          },
-          "uid": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "ZzalToday": {
         "description": "오늘 한 일 — 자정에 0 으로 돌아간다",
         "properties": {
@@ -3948,6 +4634,146 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/piece-maker/v1/ad-landings": {
+      "post": {
+        "description": "실제 광고 URL 진입 때 호출한다. 같은 쿠키와 requestKey의 재시도는 최초 서버 시각을 유지한다. 광고 정보를 바꾸거나 expectedUserId가 현재 인증과 다르면 409. 새 기록의 로그인 계정은 즉시 귀속하지만, 기존 익명 기록은 별도 claim으로 연결한다. 분석 비활성화는 쿠키 발급·저장 없이 409. 잘못된 본문은 400, 쿠키별 분당 상한은 429, DB 실패는 5xx이며 다시 시도할 수 있다.",
+        "operationId": "capture",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PieceMakerAdLandingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerAdLanding"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "광고 URL 최초 수신 기록",
+        "tags": [
+          "광고 측정"
+        ]
+      }
+    },
+    "/api/piece-maker/v1/ad-landings/{id}/claim": {
+      "post": {
+        "description": "기존 익명 쿠키와 서버 발급 landingId가 모두 일치해야 한다. expectedUserId가 인증 계정과 다르면 409이며 변경하지 않는다. 다른 계정이 같은 방문을 요구하면 원래 소유자는 유지하되 모호함을 표시해 집계에서 제외한다. 쿠키나 기록이 없으면 404. 새 쿠키를 발급하거나 과거 익명 이벤트 전체를 연결하지 않는다.",
+        "operationId": "claim",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PieceMakerAdLandingClaimRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerAdLandingClaim"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "이번 광고 방문을 로그인 계정에 연결",
+        "tags": [
+          "광고 측정"
+        ]
+      }
+    },
+    "/api/piece-maker/v1/admin/ad-cohort": {
+      "get": {
+        "description": "운영자 전용 읽기 API. campaign은 영문·숫자·점·밑줄·하이픈 1~64자, from/to/asOf는 ISO-8601 시각이다.\nfrom은 포함, to는 제외하며 from < to <= asOf <= 현재, 조회 기간은 최대 31일이다. asOf 생략 시 현재를 쓴다.\n계정별 최초로 연결된 광고 유입을 전체 이력에서 고른 뒤 캠페인·기간으로 거른다. 계정별 중복은 없다.\n기존 제출자·이전 정상 열람자·관리자·탈퇴자·설정한 테스트 계정·모호한 연결은 제외한다.\n만료·선택 삭제·수집 검증 공백으로 신규 여부를 판단할 수 없는 계정은 HISTORY_UNVERIFIABLE로 제외한다.\nhistory에는 실제 조회 시점의 보관 범위와 운영 검증으로 설정한 연속 수집 구간을 반환한다.\n보관 범위를 벗어난 from은 400이다. 오래된 asOf로 삭제 자료를 복원하지 않는다.\n24시간 이내(경계 포함) 첫 정상 열람, 관찰 중, 기간 내 미완료를 구분한다.\n계정 연결이 없거나 모호한 유입 수는 계정 수와 별도로 반환한다. 계정번호나 개인정보는 반환하지 않는다.\n서버 수신 시각에 근거한 내부 UTM 집계이며 Meta 기여 전환 보고서가 아니다.\n수집이 중지되어도 저장된 이력을 조회할 수 있고 collectionEnabled=false로 표시한다.",
+        "operationId": "report",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "campaign",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asOf",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseAdCohortReport"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "광고 첫 유입 후 24시간 정상 열람 집계",
+        "tags": [
+          "Piece Maker 광고 집계"
+        ]
+      }
+    },
     "/api/piece-maker/v1/admin/hypotheses": {
       "get": {
         "description": "`judgementStatus` 가 `PENDING` 인 가설을 **맡긴 순서(오래된 것이 앞)**로 준다. 먼저 맡긴 독자가 먼저 판정을 받는다.\n운영자가 `judge.py` 를 돌리기 전에 부른다.\n- 한 줄에 `judge.py` 의 입력이 다 든다 — `chapter` · `claim` · `cards[]`(복사한 카드) · `notes{}` · 해시 둘\n- 해시 둘은 독자가 맡길 때의 값이다. `judge.py` 가 자기 파일과 같은 자료인지 이 값으로 본다\n- 운영자가 아니면 403(ADMIN_ONLY). 없으면 빈 배열",
@@ -4245,10 +5071,87 @@
         ]
       }
     },
+    "/api/piece-maker/v1/hypotheses/{id}/result-view": {
+      "post": {
+        "description": "로그인한 독자의 정상 판정이 활성 탭의 화면에 실제로 보였을 때 부른다. 요청 몸통은 없다.\n서버는 소유자와 COMPLETE 상태 및 판정 형식을 검사하고 계정당 보관 범위의 첫 한 줄만 저장한다.\n보관 중 새 탭·재열람·동시 요청은 firstView=false와 기존 viewedAt을 돌려준다. 만료 뒤에는 새 기록이 될 수 있다.\nfirstView=true는 생애 최초나 신규 광고 전환을 뜻하지 않는다. DB 저장 실패는 성공으로 답하지 않는다.\napp.analytics.enabled=false이면 409로 답하며 기록하지 않는다. 같은 설정에서는 재시도하지 않는다.\nviewedAt은 최초 저장 시 서버가 기록한 시각이다. 기능 도입 전 열람 이력을 복원하지 않는다.\n이 기록은 광고 24시간 성과 집계 그 자체가 아니다.\nMeta 설정과 시험 계정 검토가 완료된 경우, 제외 대상이 아닌 첫 저장 응답에만 metaEvent를 발급한다.\nmetaEvent는 광고 출처와 무관한 보관 기록상 첫 정상 열람 신호이며 Meta 수신·광고 기여를 보장하지 않는다.\n응답 유실·픽셀 차단 시 내부 열람은 유지되지만 Meta 신호는 누락될 수 있다.",
+        "operationId": "record",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerResultView"
+                }
+              }
+            },
+            "description": "계정의 첫 열람 기록 또는 기존 기록"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerResultView"
+                }
+              }
+            },
+            "description": "정상 판정이 아님(INVALID_INPUT)"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerResultView"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerResultView"
+                }
+              }
+            },
+            "description": "없는 번호 또는 남의 가설(PIECE_MAKER_HYPOTHESIS_NOT_FOUND)"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePieceMakerResultView"
+                }
+              }
+            },
+            "description": "기록 비활성화(PIECE_MAKER_RESULT_VIEW_DISABLED). 저장되지 않았으며 재시도하지 않음"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "첫 정상 판정 열람 기록",
+        "tags": [
+          "가설"
+        ]
+      }
+    },
     "/api/piece-maker/v1/public/cards": {
       "get": {
         "description": "독자가 읽은 회차 N 이하에 심은 카드를 표의 id 순(= T 번호 순)으로 나눠 준다.\nN화 뒤에 회수된 복선은 status=open, resolvedChapter=null, resolution=null 로 가려서 준다.\n\n검색 규칙은 화면이 브라우저에서 찾던 것과 같다.\n· search 가 T12 꼴이면 그 번호의 카드 한 장만(대소문자 무관)\n· 그 밖에는 빈칸으로 나눈 단어가 모두 카드의 글(id · 제목 · 본문 · 인물 · 유형 · \"12화\")에 들어 있어야 한다.\n  소문자로 바꾸고 빈칸을 없애고 견준다. % 와 _ 는 글자 그대로 찾는다\n· kind 는 유형의 한국어 이름이 똑같은 카드만. 검색어와 함께 건다\n\nchapter 가 없거나 숫자가 아니거나 1~maxChapter 를 벗어나면 400(PIECE_MAKER_INVALID_CHAPTER).\nsearch 가 200자 또는 단어 10개를 넘거나 page · size 가 틀리면 400(INVALID_INPUT).",
-        "operationId": "list_3",
+        "operationId": "list_4",
         "parameters": [
           {
             "description": "독자가 읽은 회차 N. 1부터 maxChapter 까지",
@@ -4945,6 +5848,221 @@
         ]
       }
     },
+    "/api/webtoon/v1/admin/examples": {
+      "get": {
+        "description": "순서대로. 비공개로 내려 둔 것도 보인다.",
+        "operationId": "list_3",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "예시 작품 목록",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/examples/import": {
+      "post": {
+        "description": "요청 본문이 번들 zip 이다. dryRun=true 면 검사만 한다. 운영은 upload-url 길을 쓴다.",
+        "operationId": "importBody",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dryRun",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "번들 올리기(본문)",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/examples/import-key": {
+      "post": {
+        "description": "upload-url 로 올린 zip 을 서버가 읽어 심는다. 심은 뒤 올린 파일은 지운다.",
+        "operationId": "importKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "번들 올리기(S3 키)",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/examples/upload-url": {
+      "post": {
+        "description": "S3 로 직접 올릴 임시 주소를 받는다(10분). 올린 뒤 import-key 에 key 를 넘긴다.",
+        "operationId": "uploadUrl",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedUpload"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "번들 올릴 주소 발급",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/examples/{runId}": {
+      "delete": {
+        "description": "예시를 해제하고 비공개로 돌린다. 작품을 지우지는 않는다.",
+        "operationId": "takeDown",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Row"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "예시 내리기",
+        "tags": [
+          "Webtoon"
+        ]
+      },
+      "patch": {
+        "description": "보내지 않은 값은 그대로 둔다. 예시로 지정하면서 공개 여부를 안 정하면 공개로 둔다.",
+        "operationId": "update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Row"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "예시 지정·해제·공개·순서",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/examples/{runId}/bundle": {
+      "get": {
+        "description": "이 환경의 작품 하나를 zip 으로 받는다. 다른 환경에 올리면 예시가 된다.",
+        "operationId": "bundle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "format": "byte",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "작품을 번들로 내보내기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/admin/feedback": {
       "get": {
         "description": "관리자 계정만. 새 것부터 limit 개(최대 500).",
@@ -4978,6 +6096,330 @@
           }
         },
         "summary": "설문 답 모아 보기 (관리자)",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/works/log": {
+      "get": {
+        "description": "최근부터.",
+        "operationId": "log",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "처리 기록",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/works/owners": {
+      "get": {
+        "description": "경고 · 비공개 · 삭제를 센다. 많은 사람부터.",
+        "operationId": "owners",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "작가별 처리 수",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/works/removed": {
+      "get": {
+        "description": "관리자가 삭제 처리한 작품들.",
+        "operationId": "removed",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "관리자 휴지통",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/works/{runId}": {
+      "get": {
+        "description": "지금 상태 · 작가(이메일 · 처리 받은 수) · 이 작품의 지난 처리.",
+        "operationId": "state",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "작품 처리 상태",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/works/{runId}/hide": {
+      "post": {
+        "description": "둘러보기에서 빠지고 그림도 안 열리는 자리로. 작가는 다시 공개로 못 바꾼다. 작가에게 메일.",
+        "operationId": "hide",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "비공개 처리",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/works/{runId}/remove": {
+      "post": {
+        "description": "관리자 휴지통. 작가는 못 되살리고, 기간이 지나면 영구 삭제된다. 작가에게 메일.",
+        "operationId": "remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "삭제 처리",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/works/{runId}/restore": {
+      "post": {
+        "description": "관리자 휴지통에서 꺼낸다. 처리 전 공개 여부로 돌아간다.",
+        "operationId": "restore_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "되살리기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/works/{runId}/unhide": {
+      "post": {
+        "description": "관리자 비공개를 거둔다. 처리 전 공개 여부로 돌아간다.",
+        "operationId": "unhide",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "다시 공개",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/admin/works/{runId}/warn": {
+      "post": {
+        "description": "작품은 그대로 두고 작가에게 알린다. 기록에 남아 작가별로 센다.",
+        "operationId": "warn",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "경고",
         "tags": [
           "Webtoon"
         ]
@@ -5032,7 +6474,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WebtoonCharacterCreateRequest"
+                "$ref": "#/components/schemas/CreateRequest"
               }
             }
           },
@@ -5150,7 +6592,7 @@
     "/api/webtoon/v1/characters/{publicId}": {
       "delete": {
         "description": "그림은 S3 에 그대로 둔다 — 이 캐릭터로 이미 만든 웹툰이 그것을 보고 있다.",
-        "operationId": "remove",
+        "operationId": "remove_1",
         "parameters": [
           {
             "in": "path",
@@ -5250,7 +6692,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WebtoonCharacterCreateRequest"
+                "$ref": "#/components/schemas/CreateRequest"
               }
             }
           },
@@ -5423,7 +6865,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WebtoonEventBatch"
+                "$ref": "#/components/schemas/Batch"
               }
             }
           }
@@ -6218,7 +7660,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WebtoonJobCreateRequest"
+                "$ref": "#/components/schemas/CreateRequest"
               }
             }
           },
@@ -6288,6 +7730,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "watching",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -6336,6 +7787,132 @@
           }
         },
         "summary": "만들기 그만두기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/cast": {
+      "post": {
+        "description": "현대 로맨스에서 이야기 전에 상대 인물을 고른다(#534). 고르면 그 인물로 이야기 후보 넷을 짓는다.",
+        "operationId": "pickCast",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CastRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "상대 인물 고르기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/cast-sheet": {
+      "post": {
+        "description": "인물 단계가 세운 다른 인물을 글 생김새만으로 시트로 그린다(#548). 장면 확인·이야기 고르기·시트 확인 자리에서만. 그린 뒤로는 장 그림이 참조로 받아 그 인물이 장마다 같은 사람으로 나온다. 못 그리면 크레딧을 돌려준다.",
+        "operationId": "castSheet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CastSheetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "조연 시트 뽑기 (크레딧 1)",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/cast-sheet/{name}.png": {
+      "get": {
+        "operationId": "castSheetImage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "byte",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "조연 시트 그림",
         "tags": [
           "Webtoon"
         ]
@@ -6434,6 +8011,49 @@
         ]
       }
     },
+    "/api/webtoon/v1/nh/jobs/{id}/person": {
+      "post": {
+        "description": "own 길(#548) — who 가 hero 면 주인공, 숫자면 cast 의 그 번째(0부터). 보낸 칸만 덮는다.",
+        "operationId": "savePerson",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "인물 카드 고치기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/nh/jobs/{id}/pick": {
       "post": {
         "description": "body 를 같이 보내면 그 방향의 본문을 사람이 고친 내용으로 바꿔서 다음 단계(장면 나누기)부터 그 내용을 쓴다. 안 보내거나 비우면 원래 본문 그대로 간다.",
@@ -6514,6 +8134,227 @@
           }
         },
         "summary": "이야기 후보 다시 짓기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/scenes": {
+      "post": {
+        "description": "장면 확인 자리(#548)에서 고친 장면 글을 적는다. 멈춤은 그대로. body 를 보내면 본문도 바꾼다.",
+        "operationId": "saveScenes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "장면 초안 저장",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/scenes-continue": {
+      "post": {
+        "description": "장면 확인을 끝내고 그림으로 간다(#548).",
+        "operationId": "continueScenes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "이대로 웹툰 만들기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/scenes-retry": {
+      "post": {
+        "description": "본문·인물·시트는 두고 장면만 다시 나눈다(#548). note 를 보내면 이번에만 반영한다. 고친 글은 사라진다.",
+        "operationId": "retryScenes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "장면 다시 나누기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/scenes/{n}/restore": {
+      "post": {
+        "description": "다시 뽑기 전의 판 v(1부터, 오래된 것부터)로 되돌린다(#548). 지금 판은 판 목록 끝에 남는다.",
+        "operationId": "restoreScene",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreSceneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "장면 이전 판으로 되돌리기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/scenes/{n}/retry": {
+      "post": {
+        "description": "장면 확인 자리(#548)에서 n번 장면만 다시 짓는다. 로그인 필수. reasons 는 이유 코드 (awkward·character·stranger·offstory·pacing), note 는 메모. 돌아가는 동안 그 장면은 busy 다.",
+        "operationId": "retryScene",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrySceneRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "장면 하나만 다시 짓기",
         "tags": [
           "Webtoon"
         ]
@@ -6603,6 +8444,132 @@
         ]
       }
     },
+    "/api/webtoon/v1/nh/jobs/{id}/sheet-fix": {
+      "post": {
+        "description": "시트가 이미지 안전 기준에 걸려 멈춘 작업에서, 사진(photo_keys · photos_data)이나 외모 설명(character)을 바꿔 시트만 다시 그린다. 이야기·장면은 그대로다. 작업당 3번까지(#626).",
+        "operationId": "sheetFix",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SheetFixRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "안전 기준에 걸린 캐릭터 시트 고치기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/sheet-restore": {
+      "post": {
+        "description": "다시 그리기 전의 시트 판(1~sheet_versions)을 지금 시트로 올린다(#548). 지금 것도 보관한 뒤 바꾼다.",
+        "operationId": "restoreSheet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SheetRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "옛 시트 판으로 되돌리기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/nh/jobs/{id}/sheet-v{v}.png": {
+      "get": {
+        "operationId": "sheetVersionImage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "v",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {
+                "schema": {
+                  "format": "byte",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "보관한 옛 시트 판 그림",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/nh/jobs/{id}/sheet.png": {
       "get": {
         "operationId": "sheetImage",
@@ -6662,6 +8629,94 @@
           }
         },
         "summary": "게스트 사진 업로드 주소 발급",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/push/key": {
+      "get": {
+        "description": "브라우저가 구독할 때 쓴다. 서버에 키가 없으면 빈 글자 — 화면은 「알림 받기」를 안 띄운다.",
+        "operationId": "key",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "푸시 공개키",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/push/subscribe": {
+      "post": {
+        "description": "브라우저가 준 구독(endpoint · keys)을 적는다. 로그인했으면 계정에, 아니면 uid 에 묶는다.",
+        "operationId": "subscribe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "이 기기로 알림 받기",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
+    "/api/webtoon/v1/push/unsubscribe": {
+      "post": {
+        "operationId": "unsubscribe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnsubscribeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "이 기기 알림 끄기",
         "tags": [
           "Webtoon"
         ]
