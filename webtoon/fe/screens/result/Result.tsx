@@ -451,6 +451,21 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             {/* 「맨 위로」가 가운데, 「다음화 보기」가 오른쪽. 가운데를 진짜
                 가운데에 두려면 좌우 칸의 폭이 같아야 해서 격자로 짠다 —
                 한 줄 flex 로는 오른쪽 단추 폭만큼 밀린다. */}
+            {!mine && readEnd && (
+              /* 끝까지 본 사람에게 「나만의 이야기 만들어 보기」. 다음 화를 눌러도 아직
+                 없는 상태라, 다른 사람 작품을 본 창작자가 바로 자기 작품으로 넘어갈 수
+                 있게 다리를 놓는다. 캐릭터 번호는 결과에 안 실려 있어서(아직) 1걸음을
+                 그냥 연다 — 거기서 자기 캐릭터를 고르거나 체험 캐릭터로 시작한다. */
+              <div className="wt-result-remix">
+                <b>{t("나만의 웹툰 1화 만들어 보기")}</b>
+                <span className="muted">{t("다 봤다면, 당신의 캐릭터로 당신의 1화를 만들어 보세요.")}</span>
+                <button type="button" className="btn btn-p" onClick={() => {
+                  track("remix_cta_click", { source: runId, logged_in: authenticated });
+                  go("create", { step: 1 });
+                }}>{t("웹툰 만들기 시작")}</button>
+              </div>
+            )}
+
             {!mine && (
               <div className="wt-result-foot">
                 <button type="button" className="btn-ghost wt-result-top" onClick={toTop}>
