@@ -491,9 +491,10 @@ jobs:
           E='${{ needs.setup.outputs.env_name }}'
           # 환경변수 이름을 그대로 돈다 — SSM 키가 /lore/<env>/<이름> 형식이라 순회로 끝난다.
           # 비어 있거나 없는 값은 조용히 넘기고(개발 중인 환경), 받은 것만 $GITHUB_ENV 에 적는다.
+          # 값은 SecureString(alias/aws/ssm) 이라 --with-decryption 이 없으면 암호문을 받아 번들에 박는다.
           # 새 NEXT_PUBLIC_* 를 추가할 때 여기에 이름을 더하면 그 환경부터 번들에 들어간다.
           for key in NEXT_PUBLIC_GOOGLE_ADS_ID NEXT_PUBLIC_KAKAO_JS_KEY; do
-            V=$(aws ssm get-parameter --region "$AWS_REGION" \
+            V=$(aws ssm get-parameter --with-decryption --region "$AWS_REGION" \
                   --name "/lore/$E/$key" \
                   --query 'Parameter.Value' --output text 2>/dev/null || echo '')
             if [ -n "$V" ] && [ "$V" != 'None' ]; then
