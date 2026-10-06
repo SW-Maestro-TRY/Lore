@@ -39,7 +39,7 @@ const MAX_PROP_VALUE = 64;
 
 /** GA4 측정 ID(빌드 때 박힌다). 환경변수가 없으면 운영 기본값 — 단 그때는 운영 호스트에서만 거울을 보낸다(루트 레이아웃과 같은 규칙). */
 const GA4_FROM_ENV = process.env.NEXT_PUBLIC_GA4_ID;
-const GA4_ID = GA4_FROM_ENV || 'G-43WXM8SJM5';
+const GA4_ID = GA4_FROM_ENV || 'G-YTH2YN6019';
 const PROD_HOSTS = ['lorecomic.com', 'www.lorecomic.com'];
 function ga4Enabled(): boolean {
   if (GA4_FROM_ENV) return true;
