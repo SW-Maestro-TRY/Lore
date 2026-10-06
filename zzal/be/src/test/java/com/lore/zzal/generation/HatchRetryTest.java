@@ -265,7 +265,7 @@ class HatchRetryTest {
         when(petRepository.findById(PET)).thenReturn(Optional.of(pet));
         return new HatchService(runner, recorder, jobRepository, registry, petRepository,
                 quotaBreaker, blockLog, mock(ZzalAlerts.class), MAX_ATTEMPTS, mock(MotionSeeder.class),
-                onlyFailedGrid, onPostprocessCrash);
+                onlyFailedGrid, onPostprocessCrash, RejectedGridArchive.none());
     }
 
     private void failsOnceThenSucceeds(RunResult failure) {
@@ -399,6 +399,39 @@ class HatchRetryTest {
 
         assertThat(jobs).hasSize(4);
         assertThat(jobs.stream().filter(j -> j.getAttempt() == 1).count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("★★ 버리는 격자는 버리기 직전에 rejected/{jobId}-grid2.png 로 보존한다 — 재시도가 같은 키에 덮어쓴다(2026-10-07)")
+    void discardedGridIsPreservedFirst() {
+        RejectedGridArchive archive = mock(RejectedGridArchive.class);
+        ZzalPetRepository petRepository = mock(ZzalPetRepository.class);
+        ZzalPet pet = ZzalPet.draft(1L, "images/zzal/src", T0);
+        pet.character("여울", null, null, null, null, null, T0);
+        when(petRepository.findById(PET)).thenReturn(Optional.of(pet));
+        service = new HatchService(runner, recorder, jobRepository, registry, petRepository,
+                quotaBreaker, blockLog, mock(ZzalAlerts.class), MAX_ATTEMPTS, mock(MotionSeeder.class),
+                true, true, archive);
+
+        GenStepRecord grid2 = GenStepRecord.start(41L, 3, PostProcessStep_GRID2, T0);
+        grid2.succeed("images/zzal/pets/7/grid2.png", null, "gpt-image-2", BigDecimal.ZERO, T0);
+        GenStepRecord grid1 = GenStepRecord.start(41L, 2, GRID, T0);
+        grid1.succeed("images/zzal/pets/7/grid.png", null, "gpt-image-2", BigDecimal.ZERO, T0);
+        when(recorder.loadSucceeded(PET, GenKind.HATCH)).thenReturn(List.of(grid1, grid2));
+
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        failsOnceThenSucceeds(RunResult.failedWith(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN,
+                true, true, PostProcessStep_GRID2));
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(archive, times(1)).preserve(PET, grid2);
+        verify(archive, never()).preserve(PET, grid1);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(archive, recorder);
+        order.verify(archive).preserve(PET, grid2);
+        order.verify(recorder).discardSucceeded(PET, GenKind.HATCH, PostProcessStep_GRID2);
+        assertThat(RejectedGridArchive.keyOf(PET, 41L, PostProcessStep_GRID2))
+                .isEqualTo("images/zzal/pets/7/rejected/41-grid2.png");
     }
 
     private static final String GRID = com.lore.zzal.generation.steps.GridStep.NAME;
