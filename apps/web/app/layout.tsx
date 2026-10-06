@@ -62,7 +62,7 @@ const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
 //   환경변수가 없을 때만 쓰이고, 그때는 아래 인라인 스크립트가 **호스트가 lorecomic.com 일 때만** 켠다
 //   (dev·staging 빌드가 운영 통계를 더럽히지 않게). 환경변수로 주면 호스트와 무관하게 켠다.
 const PROD_HOSTS = ['lorecomic.com', 'www.lorecomic.com'];
-const PROD_GA4_ID = 'G-43WXM8SJM5';
+const PROD_GA4_ID = 'G-YTH2YN6019';
 const PROD_CLARITY_ID: string | undefined = undefined; // Clarity 프로젝트 ID 받으면 채운다
 const GA4_FROM_ENV = safeId(process.env.NEXT_PUBLIC_GA4_ID);
 const GA4_ID = GA4_FROM_ENV ?? PROD_GA4_ID;
