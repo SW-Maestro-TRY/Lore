@@ -11,6 +11,7 @@ import com.lore.zzal.generation.GenStepRecord;
 import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
+import com.lore.zzal.generation.RejectedGridArchive;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.PostProcessStep;
 import com.lore.zzal.pet.PetPhase;
@@ -63,6 +64,7 @@ public class AdminRehatchService {
     private final GenStepRecordRepository stepRepository;
     private final HatchService hatchService;
     private final ApplicationEventPublisher events;
+    private final RejectedGridArchive archive;
 
     public AdminRehatchService(AdminGuard adminGuard,
                                ZzalPetRepository petRepository,
@@ -70,7 +72,8 @@ public class AdminRehatchService {
                                GenJobRepository jobRepository,
                                GenStepRecordRepository stepRepository,
                                HatchService hatchService,
-                               ApplicationEventPublisher events) {
+                               ApplicationEventPublisher events,
+                               RejectedGridArchive archive) {
         this.adminGuard = adminGuard;
         this.petRepository = petRepository;
         this.userRepository = userRepository;
@@ -78,6 +81,7 @@ public class AdminRehatchService {
         this.stepRepository = stepRepository;
         this.hatchService = hatchService;
         this.events = events;
+        this.archive = archive;
     }
 
     /** 재굽기 결과 — 새 job 번호와 되돌린 상태(HATCHING · 이름이 없으면 DRAFT). */
@@ -109,6 +113,8 @@ public class AdminRehatchService {
         List<GenStepRecord> grids = stepRepository.findSucceededByPet(petId, GenKind.HATCH).stream()
                 .filter(s -> DISCARDED_STEPS.contains(s.getName()))
                 .toList();
+        // ★ 버리기 전에 그림을 보존한다(재시도와 같은 길 — RejectedGridArchive). 실패해도 재굽기는 진행한다.
+        grids.forEach(g -> archive.preserve(petId, g));
         grids.forEach(stepRepository::delete);
 
         pet.reopenHatch(now);
