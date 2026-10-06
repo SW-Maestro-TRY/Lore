@@ -18,7 +18,8 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { EGG_IMG, POP_LIFT, SPRITE_FOOT_PAD } from './constants';
+import { EGG_IMG, POP_LIFT, ROOM_KEYS, SPRITE_FOOT_PAD } from './constants';
+import { onLeave, ztrack } from './funnel';
 import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, C2, GAEGU, LV, MONO, TAP_MIN, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
 import Album from './Album';
@@ -45,6 +46,7 @@ const SWEEP_ROW_ID = '__sweep__';
 
 export default function Room({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
+  useRoomFunnel(s.roomSel, v.mini.tutAt, s.sampleMode);
   // 좁은 폰(SE)에서 말풍선이 떴을 때만, 머리 위 공간을 벌기 위해 아이를 소폭 낮춘다(아래 SIL).
   const narrow = useIsWide(NARROW_Q);
   // ★ 좁고 **짧은** 화면(SE 667 등)만 — 팝오버를 콤팩트하게 줄이고 발끝선 예약(LIFT 하한)을 낮춰 아이를 키운다.
@@ -1603,4 +1605,76 @@ function PopButton({ b }: { b: NonNullable<Yeoul['v']['pop']['a']> }) {
         : <span style={{ font: `${monoSize.sm}px ${MONO}`, color: b.subFg }}>{b.count}</span>}
     </button>
   );
+}
+
+/**
+ * 계측 — 방 칸(타일 다섯)과 튜토리얼 칸마다 **머문 시간**.
+ *
+ * ★ 칸을 떠나는 순간 한 줄이다: `step` = 칸 번호(1부터 — 화면의 `3 / 9` 와 같은 수),
+ *   `ms` = 그 칸에 머문 시간, `action` = next(다음 칸으로)·switch(다른 타일로)·leave(방을 닫거나 탭을 떠남),
+ *   `type` = sample(연습방)·real(내 아이 방).
+ * ★ 튜토리얼은 칸이 **넘어갈 때** 센다. 떠날 때 찍는 leave 는 "그 칸에서 멈췄다" 는 뜻이다.
+ * ★ 탭을 떠날 때도 지금 칸을 한 줄 남긴다(page_leave 직전, `funnel.onLeave`) — 안 그러면 마지막 칸의 체류가 빠진다.
+ */
+function useRoomFunnel(roomSel: string, tutAt: number, sampleMode: boolean) {
+  const type = sampleMode ? 'sample' : 'real';
+  const room = useRef({ key: roomSel, at: Date.now(), type });
+  const tut = useRef({ idx: tutAt, at: Date.now(), type });
+
+  const sendRoom = (action: string) => {
+    const r = room.current;
+    ztrack('zzal_room_viewed', { step: ROOM_KEYS.indexOf(r.key as (typeof ROOM_KEYS)[number]) + 1, ms: Date.now() - r.at, action, type: r.type });
+  };
+  const sendTut = (action: string) => {
+    const t = tut.current;
+    if (t.idx < 0) return;
+    ztrack('zzal_tutorial_step', { step: t.idx + 1, ms: Date.now() - t.at, action, type: t.type });
+  };
+  const sendRef = useRef({ sendRoom, sendTut });
+  sendRef.current = { sendRoom, sendTut };
+
+  useEffect(() => {
+    if (room.current.key === roomSel && room.current.type === type) return;
+    sendRef.current.sendRoom('switch');
+    room.current = { key: roomSel, at: Date.now(), type };
+  }, [roomSel, type]);
+
+  useEffect(() => {
+    if (tut.current.idx === tutAt && tut.current.type === type) return;
+    sendRef.current.sendTut('next');
+    tut.current = { idx: tutAt, at: Date.now(), type };
+  }, [tutAt, type]);
+
+  // ★ 개발 모드의 StrictMode 는 마운트 직후 한 번 내렸다 다시 올린다. 그때 leave 가 바로 찍히면
+  //   0ms 짜리 가짜 줄이 생기므로, 내릴 때는 한 틱 미뤄 두고 곧바로 다시 올라오면 취소한다.
+  const pendingLeave = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (pendingLeave.current !== null) { clearTimeout(pendingLeave.current); pendingLeave.current = null; }
+    let gone = false;
+    const leave = () => {
+      if (gone) return;
+      gone = true;
+      sendRef.current.sendRoom('leave');
+      sendRef.current.sendTut('leave');
+    };
+    const back = () => {
+      if (!gone) return;
+      gone = false;
+      // 돌아왔으면 체류를 새로 잰다 — 숨어 있던 시간은 머문 시간이 아니다.
+      room.current = { ...room.current, at: Date.now() };
+      tut.current = { ...tut.current, at: Date.now() };
+    };
+    // 탭을 떠날 때는 page_leave 와 같은 자리(Yeoul.tsx)에서 불린다 — 직접 pagehide 를 듣지 않는다.
+    const off = onLeave(leave);
+    const onVis = () => { if (document.visibilityState === 'visible') back(); };
+    window.addEventListener('pageshow', back);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      off();
+      window.removeEventListener('pageshow', back);
+      document.removeEventListener('visibilitychange', onVis);
+      // 방을 닫고 다른 화면으로 갔다(탭은 그대로).
+      pendingLeave.current = setTimeout(() => { pendingLeave.current = null; leave(); }, 0);
+    };
+  }, []);
 }
