@@ -96,6 +96,15 @@ public class GenJob {
     @Column
     private Instant finishedAt;
 
+    /**
+     * 관리자 재굽기가 만드는 job 의 attempt 표식(2026-10-07).
+     *
+     * ★ 사람 상한({@link GenJobRepository#countHatchesOfUser} 등)은 {@code attempt = 1} 만 센다.
+     *   재굽기는 서비스 사정이라 사람 몫을 깎으면 안 되므로 1 이 아닌 0 으로 둔다.
+     *   {@code HatchService} 는 이 값을 1 로 읽어 재시도 상한을 새로 적용한다(이어지는 재시도는 2~).
+     */
+    public static final int ADMIN_REHATCH_ATTEMPT = 0;
+
     protected GenJob() {
     }
 

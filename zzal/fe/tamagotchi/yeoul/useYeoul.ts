@@ -2898,6 +2898,8 @@ export function useYeoul(live?: Live) {
         show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && (!es.sleeping || showTutMini),
         isTut: showTutMini, tutText: tut?.text ?? '',
         tutStep: `${tutIdx + 1} / ${TUT.length}`,
+        /** 지금 칸 번호(0부터). 튜토리얼 밖이면 -1. 계측(`Room.tsx` 의 zzal_tutorial_step)이 읽는다. */
+        tutAt: tut ? tutIdx : -1,
         /**
          * 연습방에서만 앞뒤로 오간다 — 연습이라 되돌아가 다시 볼 수 있어야 한다.
          * 진짜 방에는 없다: 서버가 칸을 세므로 화면이 되감으면 두 곳에서 세게 되고 언젠가 갈린다.

@@ -30,6 +30,7 @@ import { abandonGame, getCurrentGame, guess, startGame, type GameState, type Gue
 import { classifyUploadFailure, uploadFailureLine, uploadImage, type UploadFailure } from '../../lib/upload';
 import { readHatchBlocked, type HatchBlocked } from '../../lib/hatchBlocked';
 import { ApiError } from '../../lib/api';
+import { STAGE, failCode, markUploadStart, once, reachStage, sinceUpload, ztrack } from './funnel';
 
 /**
  * 눌린 순간 **먼저 얹는 값**(낙관적 갱신). 서버 응답이 오면 그 자리에서 사라지고,
@@ -502,6 +503,9 @@ export function useHatchState(): Live {
     if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     objectUrl.current = URL.createObjectURL(file);
     setPreviewUrl(objectUrl.current);
+    // 계측 — 여기가 "업로드 시작" 이다. 부화 계열 ms 는 이 순간부터 잰다.
+    markUploadStart();
+    ztrack('zzal_pet_create_requested');
     try {
       // ★ 한 key 는 한 번만 쓸 수 있다. 실패하면 presign 부터 다시 — 같은 key 로 재시도하지 않는다.
       const key = await uploadImage(file, 'zzal');
@@ -509,7 +513,9 @@ export function useHatchState(): Live {
       // ★ 여기서 곧바로 초안을 잡는다. 이 한 줄이 이름 짓는 시간(약 74초)을 버는 자리다.
       const { petId: id } = await draftPet(key);
       setPetId(id);
+      ztrack('zzal_pet_create_succeeded');
     } catch (e) {
+      ztrack('zzal_pet_create_failed', { code: failCode(e) });
       // ★ 실패하면 미리보기도 함께 지운다(상훈님 판정 19). 그림만 크게 남아 있으면
       //   작은 오류 한 줄보다 그림이 먼저 읽혀 성공한 줄 안다.
       setImageKey(null);
@@ -588,6 +594,8 @@ export function useHatchState(): Live {
         phase: created.phase, label: null, progress: 0, total: 0,
         estimatedSeconds: created.estimatedSeconds, message: null,
       });
+      reachStage(STAGE.baking);
+      ztrack('zzal_hatch_started', sinceUpload());
       return true;
     } catch (e) {
       // 막기는 **이 호출에도** 걸린다 — 돈이 나가기 시작하는 자리가 여기라서다.
@@ -595,6 +603,8 @@ export function useHatchState(): Live {
       const stop = readHatchBlocked(e);
       setBlocked(stop);
       setError(stop ? null : e instanceof Error ? e.message : '부화를 시작하지 못했어요');
+      // 굽기를 시작조차 못 했다 — 굽다 실패한 것(FAILED)과 가르려고 `start:` 를 붙인다.
+      ztrack('zzal_hatch_failed', { ...sinceUpload(), reason: `start:${failCode(e)}`.slice(0, 64) });
       return false;
     } finally {
       setBusy(false);
@@ -945,6 +955,27 @@ export function useHatchState(): Live {
     look();
     const t = setInterval(look, 3000);
     return () => { alive = false; clearInterval(t); };
+  }, [watching, petId]);
+
+  // ── 계측: 굽기의 끝(성공·실패)과 굽는 중 이탈 ─────────────────────────
+  // ★ 굽는 것을 **이 화면에서 지켜본 아이만** 센다. 이미 함께 사는 아이로 돌아온 사람까지
+  //   hatch_succeeded 로 세면 부화 성공이 방문 수만큼 부풀어 오른다.
+  const sawBaking = useRef(false);
+  if (watching) sawBaking.current = true;
+  const readyNow = phase === 'ALIVE' && !!pet && pet.phase === 'ALIVE' && !!pet.gauges && gameLoaded && chatLoaded;
+  const failedNow = phase === 'FAILED' || phase === 'DEAD';
+  useEffect(() => {
+    if (!sawBaking.current || !petId) return;
+    if (readyNow) once(`hatch_ok:${petId}`, () => ztrack('zzal_hatch_succeeded', sinceUpload()));
+    else if (failedNow) once(`hatch_fail:${petId}`, () => ztrack('zzal_hatch_failed', { ...sinceUpload(), reason: phase ?? 'FAILED' }));
+  }, [readyNow, failedNow, petId, phase]);
+  // 굽는 중에 페이지를 버리면 한 줄. ★ pagehide 만 듣는다 — 탭을 잠깐 바꾸는 것(visibilitychange)은
+  //   기다리는 중이지 떠난 것이 아니다(74초 굽기 동안 다른 탭을 보는 사람이 많다).
+  useEffect(() => {
+    if (!watching || !petId) return;
+    const bye = () => once(`hatch_abandoned:${petId}`, () => ztrack('zzal_hatch_abandoned', sinceUpload()));
+    window.addEventListener('pagehide', bye);
+    return () => window.removeEventListener('pagehide', bye);
   }, [watching, petId]);
 
   // 다 됐을 때 무거운 쪽을 부른다 — 그림 주소(`motions[].basicImageKey`)가 거기 있다.

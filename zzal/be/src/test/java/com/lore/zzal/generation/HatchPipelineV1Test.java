@@ -319,4 +319,67 @@ class HatchPipelineV1Test {
         assertThat(r.success()).isFalse();
         assertThat(r.gridRejected()).isFalse();
     }
+
+    /** 주어진 메시지로 실패하는 후처리 단계. */
+    private static GenerationStep failingPost(String message) {
+        return new GenerationStep() {
+            @Override
+            public String name() {
+                return PostProcessStep.NAME;
+            }
+
+            @Override
+            public int limitSeconds() {
+                return 30;
+            }
+
+            @Override
+            public String label() {
+                return "깨어날 준비를 하는 중";
+            }
+
+            @Override
+            public StepResult run(StepContext ctx) {
+                throw new IllegalStateException(message);
+            }
+        };
+    }
+
+    @Test
+    @DisplayName("★★ 2026-10-07 — 후처리 exit 1(빈 칸 등)은 '후처리 실패' 신호와 격자 이름이 붙어 돌아온다")
+    void postprocessCrashCarriesTheGrid() {
+        GenerationRunner runner = new GenerationRunner(mock(GenerationRecorder.class), mock(ZzalAlerts.class));
+        RunResult r = runner.run(1L, new StepContext(7L, "여울", null, "v1"),
+                List.of(List.of(failingPost(PostProcessStep.GRID_SOURCE_FORMAT.formatted(PostProcessStep.GRID2)
+                        + " 후처리 실패(exit 1)\nValueError: min() arg is an empty sequence"))), List.of());
+
+        assertThat(r.success()).isFalse();
+        assertThat(r.postprocessCrashed()).isTrue();
+        assertThat(r.gridRejected()).isFalse();
+        assertThat(r.failedGrid()).isEqualTo(PostProcessStep.GRID2);
+    }
+
+    @Test
+    @DisplayName("★ 게이트 거부도 어느 격자인지 실어 보낸다")
+    void gateRejectionCarriesTheGrid() {
+        GenerationRunner runner = new GenerationRunner(mock(GenerationRecorder.class), mock(ZzalAlerts.class));
+        RunResult r = runner.run(1L, new StepContext(7L, "여울", null, "v1"),
+                List.of(List.of(failingPost(PostProcessStep.GRID_SOURCE_FORMAT.formatted(GridStep.NAME)
+                        + " 후처리 실패(exit 3)\n[게이트] " + GenerationRunner.GRID_STRUCTURE_MARK))), List.of());
+
+        assertThat(r.gridRejected()).isTrue();
+        assertThat(r.failedGrid()).isEqualTo(GridStep.NAME);
+    }
+
+    @Test
+    @DisplayName("★ 후처리 시간 초과는 '후처리 실패' 가 아니다 — 격자를 버리지 않는다")
+    void postprocessTimeoutIsNotACrash() {
+        GenerationRunner runner = new GenerationRunner(mock(GenerationRecorder.class), mock(ZzalAlerts.class));
+        RunResult r = runner.run(1L, new StepContext(7L, "여울", null, "v1"),
+                List.of(List.of(failingPost(PostProcessStep.GRID_SOURCE_FORMAT.formatted(GridStep.NAME)
+                        + " 후처리 시간 초과(120초)"))), List.of());
+
+        assertThat(r.postprocessCrashed()).isFalse();
+        assertThat(r.gridRejected()).isFalse();
+    }
 }
