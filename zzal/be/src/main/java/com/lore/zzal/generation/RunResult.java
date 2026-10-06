@@ -14,7 +14,17 @@ public record RunResult(boolean success,
                         BigDecimal costUsd,
                         GenErrorCode errorCode,
                         boolean gridRejected,
-                        boolean quotaBlocked) {
+                        boolean quotaBlocked,
+                        boolean postprocessCrashed,
+                        String failedGrid) {
+
+    /**
+     * 옛 모양(표식 둘) 그대로 만드는 길. 후처리 실패 여부·격자 이름은 비어 있다.
+     */
+    public RunResult(boolean success, StepContext ctx, BigDecimal costUsd, GenErrorCode errorCode,
+                     boolean gridRejected, boolean quotaBlocked) {
+        this(success, ctx, costUsd, errorCode, gridRejected, quotaBlocked, false, null);
+    }
 
     public static RunResult ok(StepContext ctx, BigDecimal cost) {
         return new RunResult(true, ctx, cost, null, false, false);
@@ -22,6 +32,21 @@ public record RunResult(boolean success,
 
     public static RunResult failed(StepContext ctx, BigDecimal cost, GenErrorCode code) {
         return new RunResult(false, ctx, cost, code, false, false);
+    }
+
+    /**
+     * 후처리 스크립트가 <b>0 이 아닌 코드로 끝났다</b>(빈 칸·파이썬 예외 등) — 시간 초과는 아니다.
+     *
+     * <h3>★ 왜 따로 알리나 (2026-10-07)</h3>
+     * 운영 10/6 — 모델이 16명을 6·6·2·2 로 몰아 그린 격자는 격자점이 정확해 게이트를 통과했고,
+     * 자르기에서 빈 칸 때문에 예외로 죽었다. 이 실패는 표식이 없어 <b>폐기 조건이 아니었고</b>,
+     * 재시도가 <b>바로 그 격자</b>를 다시 잘라 똑같이 죽었다. 격자 구조 이상과 처방이 같다 — 격자를 버린다.
+     *
+     * @param failedGrid 어느 격자를 자르다 죽었나({@code grid}/{@code grid2}). 모르면 null(둘 다 버린다).
+     */
+    public static RunResult failedWith(StepContext ctx, BigDecimal cost, GenErrorCode code,
+                                       boolean gridRejected, boolean postprocessCrashed, String failedGrid) {
+        return new RunResult(false, ctx, cost, code, gridRejected, false, postprocessCrashed, failedGrid);
     }
 
     /**

@@ -124,10 +124,13 @@ public class GenerationRunner {
                     // ★★ 바깥이 한도로 막았다 — 다시 구우면 또 막히고 돈만 두 번 나간다.
                     return RunResult.quotaBlocked(ctx, total, outcome.error());
                 }
-                // ★ 격자 구조 게이트가 막은 것이면 같은 격자로 다시 해 봐야 소용없다 — 부르는 쪽에 알린다.
-                return outcome.gridRejected()
-                        ? RunResult.gridRejected(ctx, total, outcome.error())
-                        : RunResult.failed(ctx, total, outcome.error());
+                // ★ 격자 구조 게이트가 막았거나 후처리 스크립트가 죽은 것이면 같은 격자로 다시 해 봐야
+                //   소용없다 — 부르는 쪽에 알린다(무엇을 버릴지는 부르는 쪽이 정한다).
+                if (outcome.gridRejected() || outcome.postprocessCrashed()) {
+                    return RunResult.failedWith(ctx, total, outcome.error(),
+                            outcome.gridRejected(), outcome.postprocessCrashed(), outcome.failedGrid());
+                }
+                return RunResult.failed(ctx, total, outcome.error());
             }
         }
 
@@ -152,7 +155,7 @@ public class GenerationRunner {
      *   필요하기 때문이다(→ {@link RunResult#gridRejected}).
      */
     private record StageOutcome(BigDecimal cost, GenErrorCode error, boolean gridRejected,
-                               boolean quotaBlocked) {
+                               boolean quotaBlocked, boolean postprocessCrashed, String failedGrid) {
     }
 
     /**
@@ -183,6 +186,8 @@ public class GenerationRunner {
         GenErrorCode error = null;
         boolean gridRejected = false;
         boolean quotaBlocked = false;
+        boolean postprocessCrashed = false;
+        String failedGrid = null;
         List<StepResult> done = new ArrayList<>(running.size());
 
         for (Running r : running) {
@@ -205,6 +210,11 @@ public class GenerationRunner {
                 gridRejected |= gridRejected(cause);
                 // ★ 한 장만 한도에 걸려도 그 시도 전체가 한도에 걸린 것이다(같은 계정·같은 키).
                 quotaBlocked |= quotaBlocked(cause);
+                // ★ 후처리 스크립트가 0 이 아닌 코드로 끝났나(시간 초과 제외) · 어느 격자를 자르다 그랬나.
+                postprocessCrashed |= postprocessCrashed(cause);
+                if (failedGrid == null) {
+                    failedGrid = failedGrid(cause);
+                }
                 // ★★ 실패해도 <b>이미 나간 돈</b>은 적는다. 유료 호출은 200 이 돌아온 순간 과금이 끝나므로,
                 //   응답 파싱·S3 업로드에서 터진 실패는 공짜가 아니다. 여기서 안 더하면 원가가
                 //   실제보다 낮게 보여 중복 과금이나 급증을 못 본다.
@@ -227,7 +237,7 @@ public class GenerationRunner {
                 ctx.putText(result.name(), result.text());
             }
         }
-        return new StageOutcome(cost, error, gridRejected, quotaBlocked);
+        return new StageOutcome(cost, error, gridRejected, quotaBlocked, postprocessCrashed, failedGrid);
     }
 
     /**
@@ -290,6 +300,32 @@ public class GenerationRunner {
                 || msg.contains("quota_exceeded")
                 || msg.contains("billing_hard_limit_reached");
     }
+
+    /**
+     * 후처리 스크립트가 <b>0 이 아닌 코드로</b> 끝났나 — {@code PythonPostProcessor} 가 붙이는
+     * "후처리 실패(exit N)" 문구로 가른다. 시간 초과("후처리 시간 초과")는 여기 안 걸린다(재시도만, 폐기 없음).
+     */
+    static boolean postprocessCrashed(Throwable e) {
+        return e != null && String.valueOf(e.getMessage()).contains(POSTPROCESS_EXIT_MARK);
+    }
+
+    /**
+     * 어느 격자를 자르다 실패했나 — {@code PostProcessStep} 이 예외 메시지 앞에 붙이는
+     * {@code [격자=grid2]} 표식에서 읽는다. 없으면 null(부르는 쪽이 둘 다 버린다).
+     */
+    static String failedGrid(Throwable e) {
+        if (e == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = GRID_SOURCE.matcher(String.valueOf(e.getMessage()));
+        return m.find() ? m.group(1) : null;
+    }
+
+    /** {@code PythonPostProcessor} 가 스크립트 종료 코드를 알릴 때 쓰는 문구. 글자가 같아야 한다. */
+    static final String POSTPROCESS_EXIT_MARK = "후처리 실패(exit ";
+
+    /** {@code PostProcessStep#GRID_SOURCE_FORMAT} 과 짝. */
+    private static final java.util.regex.Pattern GRID_SOURCE = java.util.regex.Pattern.compile("\\[격자=([A-Za-z0-9_]+)]");
 
     private static boolean gridRejected(Throwable e) {
         return e != null && String.valueOf(e.getMessage()).contains(GRID_STRUCTURE_MARK);

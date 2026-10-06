@@ -60,10 +60,11 @@ public class GenerationConfig {
                                    @Value("${app.zzal.generation.fake-delay-ms:4000}") int delay,
                                    @Value("${app.zzal.generation.fake-grid-key:}") String fakeGridKey,
                                    @Value("${app.zzal.openai.api-key:}") String apiKey,
+                                   @Value("${app.zzal.openai.image-timeout-seconds:90}") int imageTimeoutSeconds,
                                    S3Storage storage) {
         if (real) {
             requireKey(apiKey);
-            return new OpenAiImageClient(storage, apiKey, 180);
+            return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds);
         }
         ImageClient base = new FakeImageClient(delay, fakeGridKey);
         return wrapFlaky(base);
