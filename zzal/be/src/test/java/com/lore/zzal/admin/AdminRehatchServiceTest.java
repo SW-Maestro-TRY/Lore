@@ -101,7 +101,7 @@ class AdminRehatchServiceTest {
     }
 
     @Test
-    @DisplayName("★★ 이름 지은 실패 알 → HATCHING · 격자 두 장만 폐기 · attempt=1 job · 부화 이벤트")
+    @DisplayName("★★ 이름 지은 실패 알 → HATCHING · 격자 두 장만 폐기 · attempt=0(재굽기 표식) job · 부화 이벤트")
     void namedFailedPetGoesBackToHatching() {
         ZzalPet pet = failedPet("루나");
         GenStepRecord sheet = succeeded("sheet");
@@ -118,7 +118,9 @@ class AdminRehatchServiceTest {
         verify(stepRepository).delete(grid2);
         verify(stepRepository, never()).delete(sheet);
         assertThat(saved).hasSize(1);
-        assertThat(saved.get(0).getAttempt()).isEqualTo(1);
+        assertThat(saved.get(0).getAttempt())
+                .as("1 이면 사람 상한(attempt=1 만 셈)을 깎는다 — 재굽기는 서비스 사정이다")
+                .isEqualTo(GenJob.ADMIN_REHATCH_ATTEMPT);
         verify(events).publishEvent(new PetHatchRequested(saved.get(0).getId(), PET, "v1"));
     }
 
