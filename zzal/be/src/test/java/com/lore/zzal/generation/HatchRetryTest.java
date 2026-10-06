@@ -368,6 +368,39 @@ class HatchRetryTest {
         verify(runner, times(MAX_ATTEMPTS)).run(anyLong(), any(), any(), any());
     }
 
+    @Test
+    @DisplayName("★★ 관리자 재굽기 job(attempt=0)은 1 로 읽혀 상한(5)까지 굽고, 재시도는 attempt 2~ — 사람 상한 셈(attempt=1)에 안 들어간다")
+    void adminRehatchJobCountsFromOneAndRetriesAreNotFirstAttempts() {
+        GenJob job = jobRepository.save(GenJob.start(PET, GenKind.HATCH, GenJob.ADMIN_REHATCH_ATTEMPT, V, T0));
+        job.markRunning(T0);
+        job.fail(GenErrorCode.UNKNOWN, BigDecimal.ZERO, T0);
+        runnerAlwaysFails(GenErrorCode.UNKNOWN);
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(runner, times(MAX_ATTEMPTS)).run(anyLong(), any(), any(), any());
+        assertThat(jobs.stream().map(GenJob::getAttempt).toList()).containsExactly(0, 2, 3, 4, 5);
+        assertThat(jobs.stream().filter(j -> j.getAttempt() == 1).count())
+                .as("사람이 시작한 부화로 세는 줄(attempt=1)이 하나도 없어야 한다").isZero();
+    }
+
+    @Test
+    @DisplayName("★★ 사람이 시작한 부화가 재시도 3번을 거쳐도 attempt=1 인 줄은 하나뿐이다")
+    void retriesLeaveOnlyOneFirstAttempt() {
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenReturn(RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN))
+                .thenReturn(RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN))
+                .thenReturn(RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN))
+                .thenReturn(RunResult.ok(new StepContext(PET, "여울", null, V), BigDecimal.ZERO));
+
+        service.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(4);
+        assertThat(jobs.stream().filter(j -> j.getAttempt() == 1).count()).isEqualTo(1);
+    }
+
     private static final String GRID = com.lore.zzal.generation.steps.GridStep.NAME;
     private static final String PostProcessStep_GRID2 = com.lore.zzal.generation.steps.PostProcessStep.GRID2;
 
