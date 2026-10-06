@@ -63,7 +63,7 @@ const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
 //   (dev·staging 빌드가 운영 통계를 더럽히지 않게). 환경변수로 주면 호스트와 무관하게 켠다.
 const PROD_HOSTS = ['lorecomic.com', 'www.lorecomic.com'];
 const PROD_GA4_ID = 'G-YTH2YN6019';
-const PROD_CLARITY_ID: string | undefined = undefined; // Clarity 프로젝트 ID 받으면 채운다
+const PROD_CLARITY_ID: string | undefined = 'ytlgmr0e9m';
 const GA4_FROM_ENV = safeId(process.env.NEXT_PUBLIC_GA4_ID);
 const GA4_ID = GA4_FROM_ENV ?? PROD_GA4_ID;
 // Microsoft Clarity(세션 녹화·히트맵). 프로젝트 ID 가 있을 때만.
