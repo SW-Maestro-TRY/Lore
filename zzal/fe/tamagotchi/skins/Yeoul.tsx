@@ -27,6 +27,7 @@ import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radiu
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import { useDevVisible } from '../useDevVisible';
+import { STAGE, lastStage, once, reachStage, runLeaveHooks, sinceT0, startClock, ztrack } from '../yeoul/funnel';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { GIFT_CYCLES, SITUATION_TABLE, scenePlays } from '../props/situations';
 import { ApiError } from '../../lib/api';
@@ -42,8 +43,9 @@ export default function Yeoul(_props: SkinProps) {
   const { s, v, actions } = y;
 
   // 이미 로그인한 채로 들어온 사람에게는 문을 열어 둔다 — 첫 화면에서 다시 묻지 않는다.
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const { passAuth, goStep, goEgg, enterRoom } = actions;
+  useFunnel(s, isAuthenticated, isLoading);
   useEffect(() => {
     if (isAuthenticated) passAuth('session');
   }, [isAuthenticated, passAuth]);
@@ -127,6 +129,7 @@ export default function Yeoul(_props: SkinProps) {
   return (
     <div
       className="yeoul"
+      onScrollCapture={onLandingScroll}
       style={{
         position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center',
         // ★ 바깥 바탕을 **화면 전체 폭의 방**으로 깐다(2026-09-16 강화). 은은한 그라데이션만으로는
@@ -181,6 +184,91 @@ export default function Yeoul(_props: SkinProps) {
       <DevJump y={y} live={live} missingBasics={live.missingBasics} />
     </div>
   );
+}
+
+/**
+ * 깔때기 계측 — 첫 표시·단계 도달·가입 창 열림·떠남. 무엇을 왜 재는지는 `yeoul/funnel.ts` 머리말에.
+ *
+ * ★ page_view 는 **로그인 여부가 확정된 뒤** 한 번 찍는다. 확정 전에 찍으면 이미 로그인한
+ *   사람도 전부 guest 로 남는다. ms 는 이 탭의 첫 표시면 0, 새로고침이면 t0 이후 경과다.
+ * ★ 가입 창은 공통 부품(AuthModal)이라 안을 건드리지 않고, 여는 값(`s.authOpen`)이 켜지는
+ *   순간을 여기서 본다 — 올리기 칸·헤더 어느 쪽에서 열려도 같은 한 자리로 모인다.
+ * ★ page_leave 는 탭을 숨길 때마다 한 줄이다(돌아오면 다시 셀 수 있게 푼다). 실제 전송은
+ *   공통 기록기가 떠나는 중임을 보고 beacon 으로 바로 내보낸다.
+ */
+function useFunnel(s: ReturnType<typeof useYeoul>['s'], isAuthenticated: boolean, isLoading: boolean) {
+  useEffect(() => {
+    if (isLoading) return;
+    once('page_view', () => {
+      const { fresh } = startClock();
+      ztrack('zzal_page_view', { type: isAuthenticated ? 'member' : 'guest', ms: fresh ? 0 : sinceT0() });
+    });
+  }, [isLoading, isAuthenticated]);
+
+  const authWas = useRef(false);
+  useEffect(() => {
+    if (s.authOpen && !authWas.current) {
+      reachStage(STAGE.auth);
+      ztrack('zzal_auth_open', { tab: s.authTab });
+    }
+    authWas.current = s.authOpen;
+  }, [s.authOpen, s.authTab]);
+
+  useEffect(() => {
+    if (s.screen === 'egg') reachStage(STAGE.baking);
+    else if (s.screen === 'room') { if (!s.sampleMode) reachStage(STAGE.room); }
+    else {
+      const key = STEPS[s.step];
+      if (key === 'upload') reachStage(STAGE.upload);
+      else if (key === 'char') reachStage(STAGE.input);
+      else if (key === 'born') reachStage(STAGE.baking);
+    }
+  }, [s.screen, s.step, s.sampleMode]);
+
+  useEffect(() => {
+    startClock();
+    let sent = false;
+    const leave = () => {
+      if (sent) return;
+      sent = true;
+      runLeaveHooks();
+      ztrack('zzal_page_leave', { ms: sinceT0(), step: lastStage() });
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') leave(); else sent = false; };
+    const onShow = () => { sent = false; };
+    window.addEventListener('pagehide', leave);
+    window.addEventListener('pageshow', onShow);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', leave);
+      window.removeEventListener('pageshow', onShow);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+}
+
+/**
+ * 랜딩 스크롤 깊이 25·50·75·100% — 각 한 번.
+ *
+ * ★ 페이지 자체는 스크롤하지 않는다(셸이 높이를 한 통으로 채운다). 스크롤은 온보딩 안의
+ *   `.onb-scroll` 칸에서 일어나고, scroll 은 거품이 안 올라오므로 **잡는 단계(capture)** 에서 받는다.
+ * ★ 랜딩 칸에서만 센다 — 방의 시트·앨범 스크롤까지 섞이면 "랜딩을 얼마나 읽었나" 가 흐려진다.
+ * ★ 랜딩이 화면 한 장에 다 들어가면(스크롤할 것이 없으면) 이 이벤트는 안 생긴다.
+ */
+function onLandingScroll(e: React.UIEvent<HTMLDivElement>) {
+  try {
+    const el = e.target as HTMLElement;
+    if (!el || !el.classList?.contains('onb-scroll')) return;
+    if (!el.closest('[data-step="landing"]')) return;
+    const room = el.scrollHeight - el.clientHeight;
+    if (room <= 0) return;
+    const pct = (el.scrollTop / room) * 100;
+    for (const th of [25, 50, 75, 100]) {
+      if (pct >= th - 1) once(`scroll_${th}`, () => ztrack('zzal_scroll', { count: th }));
+    }
+  } catch {
+    // 계측이 스크롤을 막으면 안 된다.
+  }
 }
 
 /**
