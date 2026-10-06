@@ -58,9 +58,19 @@ async function locale(): Promise<string> {
 const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
 // GA4(G-XXXXXXX) — 광고 태그와 **같은 gtag.js 한 벌**을 쓴다. 광고 ID 없이 GA4 만 있어도 로드된다.
 // common/fe/analytics.ts 의 track() 이 window.gtag 가 있으면 같은 이벤트를 한 번 더 보낸다.
-const GA4_ID = safeId(process.env.NEXT_PUBLIC_GA4_ID);
+// ★ 운영 기본값(2026-10-07) — 측정 ID 는 페이지 소스에 그대로 노출되는 공개 값이라 코드에 둔다.
+//   환경변수가 없을 때만 쓰이고, 그때는 아래 인라인 스크립트가 **호스트가 lorecomic.com 일 때만** 켠다
+//   (dev·staging 빌드가 운영 통계를 더럽히지 않게). 환경변수로 주면 호스트와 무관하게 켠다.
+const PROD_HOSTS = ['lorecomic.com', 'www.lorecomic.com'];
+const PROD_GA4_ID = 'G-43WXM8SJM5';
+const PROD_CLARITY_ID: string | undefined = undefined; // Clarity 프로젝트 ID 받으면 채운다
+const GA4_FROM_ENV = safeId(process.env.NEXT_PUBLIC_GA4_ID);
+const GA4_ID = GA4_FROM_ENV ?? PROD_GA4_ID;
 // Microsoft Clarity(세션 녹화·히트맵). 프로젝트 ID 가 있을 때만.
-const CLARITY_ID = safeId(process.env.NEXT_PUBLIC_CLARITY_ID);
+const CLARITY_FROM_ENV = safeId(process.env.NEXT_PUBLIC_CLARITY_ID);
+const CLARITY_ID = CLARITY_FROM_ENV ?? PROD_CLARITY_ID;
+// 인라인 스크립트에 박는 호스트 판정. 환경변수로 받은 ID 는 어디서든 켠다(스테이징 검증용).
+const HOST_GATE = `var h=location.hostname,prod=${JSON.stringify(PROD_HOSTS)}.indexOf(h)>=0;`;
 const GTAG_ID = GOOGLE_ADS_ID || GA4_ID;
 
 // 스크립트 문자열에 그대로 들어가는 값이라 영숫자·하이픈만 받는다(설정 실수로 따옴표가 섞여도 깨지지 않게).
@@ -77,21 +87,22 @@ const gtagTags = GTAG_ID && (
     <Script id="google-ads-init" strategy="afterInteractive">
       {`window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());` +
+gtag('js', new Date());
+${HOST_GATE}` +
         (GOOGLE_ADS_ID ? `
 gtag('config', '${GOOGLE_ADS_ID}');` : '') +
         (GA4_ID ? `
-gtag('config', '${GA4_ID}');` : '')}
+if(prod||${GA4_FROM_ENV ? 'true' : 'false'}){gtag('config', '${GA4_ID}');}` : '')}
     </Script>
   </>
 );
 
 const clarityTag = CLARITY_ID && (
   <Script id="ms-clarity" strategy="afterInteractive">
-    {`(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+    {`${HOST_GATE}if(prod||${CLARITY_FROM_ENV ? 'true' : 'false'}){(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
 t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
 y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-})(window, document, "clarity", "script", "${CLARITY_ID}");`}
+})(window, document, "clarity", "script", "${CLARITY_ID}");}`}
   </Script>
 );
 

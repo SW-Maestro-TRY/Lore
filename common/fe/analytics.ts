@@ -37,8 +37,14 @@ const FLUSH_MS = 5000;
 /** props 문자열 값 길이 상한. 서버와 같은 값이다. */
 const MAX_PROP_VALUE = 64;
 
-/** GA4 측정 ID(빌드 때 박힌다). 없으면 gtag 거울을 안 쓴다. */
-const GA4_ID = process.env.NEXT_PUBLIC_GA4_ID;
+/** GA4 측정 ID(빌드 때 박힌다). 환경변수가 없으면 운영 기본값 — 단 그때는 운영 호스트에서만 거울을 보낸다(루트 레이아웃과 같은 규칙). */
+const GA4_FROM_ENV = process.env.NEXT_PUBLIC_GA4_ID;
+const GA4_ID = GA4_FROM_ENV || 'G-43WXM8SJM5';
+const PROD_HOSTS = ['lorecomic.com', 'www.lorecomic.com'];
+function ga4Enabled(): boolean {
+  if (GA4_FROM_ENV) return true;
+  return typeof window !== 'undefined' && PROD_HOSTS.includes(window.location.hostname);
+}
 
 /** 유입 출처를 이번 방문에 이미 보냈는지 적어 두는 자리. */
 const ORIGIN_SENT_KEY = 'lore_origin_sent';
@@ -112,7 +118,7 @@ export function track(event: string, props: Props = {}): void {
   // GA4 거울 — 루트 레이아웃이 GA4 를 켰을 때만(NEXT_PUBLIC_GA4_ID) 같은 이벤트를 GA4 로도 보내 자체 수집과 대조한다. send_to 로 광고 계정엔 안 간다.
   try {
     const gtag = (window as { gtag?: (...a: unknown[]) => void }).gtag;
-    if (GA4_ID && typeof gtag === 'function') gtag('event', event, { ...cleanProps(props), send_to: GA4_ID });
+    if (ga4Enabled() && typeof gtag === 'function') gtag('event', event, { ...cleanProps(props), send_to: GA4_ID });
   } catch { /* 거울이 깨져도 자체 기록은 이미 큐에 있다 */ }
 }
 
