@@ -3,7 +3,9 @@
 // 하는 일 3가지:
 //   1) 폰트 로드 → CSS 변수로 노출 (common/fe/styles/tokens.css 가 이 변수를 받아 쓴다)
 //   2) 전역 스타일 로드
-//   3) 구글 광고 측정 태그(gtag.js) 로드 — NEXT_PUBLIC_GOOGLE_ADS_ID 가 있을 때만
+//   3) 구글 측정 태그(gtag.js) 로드 — NEXT_PUBLIC_GOOGLE_ADS_ID(광고)·NEXT_PUBLIC_GA4_ID(GA4) 중 하나라도 있을 때만
+//   4) Microsoft Clarity 로드 — NEXT_PUBLIC_CLARITY_ID 가 있을 때만
+//   ★ 셋 다 없으면 렌더 결과가 이 태그들을 넣기 전과 한 글자도 다르지 않다.
 //
 // 공용 헤더(SiteHeader)는 여기가 아니라 랜딩(LandingPage)과 app/(domains)/layout.tsx 가 각자 붙인다.
 // 랜딩은 헤더 아래 자체 푸터까지 갖는 한 장짜리 화면이라 구성이 달라서다.
@@ -54,6 +56,44 @@ async function locale(): Promise<string> {
 // 로컬·개발 서버에선 보통 비워 두므로 자동으로 꺼진다.
 // strategy="afterInteractive" — 첫 그림이 뜬 뒤 로드돼서 LCP 를 늦추지 않는다.
 const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+// GA4(G-XXXXXXX) — 광고 태그와 **같은 gtag.js 한 벌**을 쓴다. 광고 ID 없이 GA4 만 있어도 로드된다.
+// common/fe/analytics.ts 의 track() 이 window.gtag 가 있으면 같은 이벤트를 한 번 더 보낸다.
+const GA4_ID = safeId(process.env.NEXT_PUBLIC_GA4_ID);
+// Microsoft Clarity(세션 녹화·히트맵). 프로젝트 ID 가 있을 때만.
+const CLARITY_ID = safeId(process.env.NEXT_PUBLIC_CLARITY_ID);
+const GTAG_ID = GOOGLE_ADS_ID || GA4_ID;
+
+// 스크립트 문자열에 그대로 들어가는 값이라 영숫자·하이픈만 받는다(설정 실수로 따옴표가 섞여도 깨지지 않게).
+function safeId(v: string | undefined): string | undefined {
+  return v && /^[A-Za-z0-9-]+$/.test(v) ? v : undefined;
+}
+
+const gtagTags = GTAG_ID && (
+  <>
+    <Script
+      src={`https://www.googletagmanager.com/gtag/js?id=${GTAG_ID}`}
+      strategy="afterInteractive"
+    />
+    <Script id="google-ads-init" strategy="afterInteractive">
+      {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());` +
+        (GOOGLE_ADS_ID ? `
+gtag('config', '${GOOGLE_ADS_ID}');` : '') +
+        (GA4_ID ? `
+gtag('config', '${GA4_ID}');` : '')}
+    </Script>
+  </>
+);
+
+const clarityTag = CLARITY_ID && (
+  <Script id="ms-clarity" strategy="afterInteractive">
+    {`(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+})(window, document, "clarity", "script", "${CLARITY_ID}");`}
+  </Script>
+);
 
 export default async function RootLayout({
   children,
@@ -63,20 +103,9 @@ export default async function RootLayout({
   return (
     <html lang={await locale()}>
       <body>
-        {GOOGLE_ADS_ID && (
-          <>
-            <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`}
-              strategy="afterInteractive"
-            />
-            <Script id="google-ads-init" strategy="afterInteractive">
-              {`window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-gtag('config', '${GOOGLE_ADS_ID}');`}
-            </Script>
-          </>
-        )}
+        {/* ★ 클래리티가 없으면 예전과 **같은 한 자리**에 gtag 묶음만 놓는다. 자리를 하나 더 만들면
+            보이는 HTML 은 같아도 RSC 페이로드에 `$undefined` 가 한 칸 늘어 출력이 달라진다. */}
+        {clarityTag ? <>{gtagTags}{clarityTag}</> : gtagTags}
         {children}
       </body>
     </html>
