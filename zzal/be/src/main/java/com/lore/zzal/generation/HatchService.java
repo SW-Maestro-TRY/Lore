@@ -98,6 +98,7 @@ public class HatchService {
         // ★ 몇 번째 시도인가는 <b>지금 job 의 attempt</b> 에서 센다(2026-10-07).
         //   전에는 이 펫의 HATCH job 전체 수를 셌는데, 그러면 관리자 재굽기(attempt 를 1 부터 다시 매긴다)가
         //   옛 실패분에 걸려 한 번도 다시 못 굽는다. 기동 복구는 attempt = 지금까지 수 + 1 로 만들므로 상한이 그대로 지켜진다.
+        //   관리자 재굽기 job 은 attempt=0(GenJob.ADMIN_REHATCH_ATTEMPT — 사람 상한 셈에서 빠지는 표식)이라 1 로 읽는다.
         int attempt = Math.max(1, job.getAttempt());
         while (true) {
             // ★★ 바깥이 한도(429)로 막았으면 <b>다시 굽지 않는다</b>.

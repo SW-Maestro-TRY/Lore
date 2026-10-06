@@ -39,13 +39,14 @@ import java.util.Set;
  *   <li>그 알이 FAILED 인지, 주인 자리가 비어 있는지 확인</li>
  *   <li><b>격자 두 장의 성공 기록만</b> 버린다 — 시트·문단은 이어받는다(돈을 두 번 쓰지 않는다).
  *       격자는 실패의 원인일 수 있으므로 새로 굽는다.</li>
- *   <li>알을 되돌리고({@link ZzalPet#reopenHatch}), attempt=1 인 새 job 을 만들어 부화와 같은 길
- *       ({@link PetHatchRequested} → 커밋 뒤 {@link HatchService#hatch})로 보낸다.
- *       attempt 를 1 부터 다시 매기므로 재시도 상한({@code app.zzal.max-hatch-attempts})이 새로 적용된다.</li>
+ *   <li>알을 되돌리고({@link ZzalPet#reopenHatch}), attempt={@link GenJob#ADMIN_REHATCH_ATTEMPT}(0) 인 새 job 을
+ *       만들어 부화와 같은 길({@link PetHatchRequested} → 커밋 뒤 {@link HatchService#hatch})로 보낸다.
+ *       재시도 상한({@code app.zzal.max-hatch-attempts})은 새로 적용되고(0 을 1 로 읽는다),
+ *       사람 상한은 attempt=1 만 세므로 재굽기와 그 재시도는 사람 몫을 깎지 않는다.</li>
  * </ol>
  *
- * ★ 사람 쪽 상한(하루·평생·IP — {@code HatchGuard})은 보지 않는다. 관리자가 직접 고르는 구조 행위다.
- *   다만 굽기 기록(zzal_gen_job)은 남으므로 그 사람의 상한 셈에는 들어간다.
+ * ★ 사람 쪽 상한(하루·평생·IP — {@code HatchGuard})은 보지 않고, 셈에도 안 들어간다(attempt=0).
+ *   관리자가 직접 고르는 구조 행위이고 실패는 서비스 사정이기 때문이다.
  */
 @Service
 public class AdminRehatchService {
@@ -111,7 +112,7 @@ public class AdminRehatchService {
         grids.forEach(stepRepository::delete);
 
         pet.reopenHatch(now);
-        GenJob job = jobRepository.save(GenJob.start(petId, GenKind.HATCH, 1, version, now));
+        GenJob job = jobRepository.save(GenJob.start(petId, GenKind.HATCH, GenJob.ADMIN_REHATCH_ATTEMPT, version, now));
         // ★ 부화 시작과 같은 길 — 커밋 뒤에 굽기가 시작된다(PetHatchListener). 커밋 전에 굽기 시작하면
         //   굽는 쪽이 아직 FAILED 인 알과 지워지지 않은 격자를 본다.
         events.publishEvent(new PetHatchRequested(job.getId(), petId, version));
