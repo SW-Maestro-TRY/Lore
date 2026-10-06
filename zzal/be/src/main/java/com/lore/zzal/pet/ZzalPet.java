@@ -678,6 +678,29 @@ public class ZzalPet {
     }
 
     /**
+     * 부화에 실패한 알을 <b>다시 굽는 상태로</b> 되돌린다 — 관리자 재굽기 전용(2026-10-07).
+     *
+     * <ul>
+     *   <li>이름을 지은 알이면 {@code HATCHING}, 아직 이름이 없으면 {@code DRAFT} 로 돌린다.
+     *       이름 없는 알을 {@code HATCHING} 으로 두면 이름을 지을 길(초안에서만 열린다)도, 살아날 길
+     *       (이름이 있어야 살린다)도 막혀 <b>영원히 굽는 중</b>으로 남는다.</li>
+     *   <li>실패 사유를 지운다 — 화면이 그 값으로 실패 문구를 고른다.</li>
+     *   <li>{@code hatchStartedAt} 을 지금으로 — 진행률·멈춘 알 복구(12분)가 새 시도를 기준으로 잰다.</li>
+     * </ul>
+     *
+     * @return 되돌렸으면 true. 실패한 알이 아니면 아무것도 안 하고 false.
+     */
+    public boolean reopenHatch(Instant now) {
+        if (phase != PetPhase.FAILED) {
+            return false;
+        }
+        this.phase = (name == null || name.isBlank()) ? PetPhase.DRAFT : PetPhase.HATCHING;
+        this.deathReason = null;
+        this.hatchStartedAt = now;
+        return true;
+    }
+
+    /**
      * 주인이 직접 보낸다(놓아주기). 행은 남긴다 — 이미 돈을 써서 구운 결과물이고 재회가 붙을 자리다.
      * ALIVE 가 아니면 아무 일도 하지 않는다(부화 중 보내면 굽는 작업이 주인을 잃는다 — 서비스가 이유를 말한다).
      */
