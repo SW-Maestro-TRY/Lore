@@ -11,6 +11,7 @@ import com.lore.zzal.generation.GenStepRecord;
 import com.lore.zzal.generation.GenStepRecordRepository;
 import com.lore.zzal.generation.HatchService;
 import com.lore.zzal.generation.PetHatchRequested;
+import com.lore.zzal.generation.RejectedGridArchive;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.PostProcessStep;
 import com.lore.zzal.pet.PetPhase;
@@ -56,6 +57,7 @@ class AdminRehatchServiceTest {
     private GenJobRepository jobRepository;
     private GenStepRecordRepository stepRepository;
     private ApplicationEventPublisher events;
+    private RejectedGridArchive archive;
     private AdminRehatchService service;
     private final List<GenJob> saved = new ArrayList<>();
 
@@ -67,6 +69,7 @@ class AdminRehatchServiceTest {
         jobRepository = mock(GenJobRepository.class);
         stepRepository = mock(GenStepRecordRepository.class);
         events = mock(ApplicationEventPublisher.class);
+        archive = mock(RejectedGridArchive.class);
         HatchService hatch = mock(HatchService.class);
         when(hatch.currentVersion()).thenReturn("v1");
 
@@ -80,7 +83,7 @@ class AdminRehatchServiceTest {
             return j;
         });
         service = new AdminRehatchService(guard, petRepository, userRepository, jobRepository,
-                stepRepository, hatch, events);
+                stepRepository, hatch, events, archive);
     }
 
     private ZzalPet failedPet(String name) {
@@ -117,6 +120,10 @@ class AdminRehatchServiceTest {
         verify(stepRepository).delete(grid);
         verify(stepRepository).delete(grid2);
         verify(stepRepository, never()).delete(sheet);
+        // ★ 버리기 전에 그림을 보존한다(재시도와 같은 길)
+        verify(archive).preserve(PET, grid);
+        verify(archive).preserve(PET, grid2);
+        verify(archive, never()).preserve(PET, sheet);
         assertThat(saved).hasSize(1);
         assertThat(saved.get(0).getAttempt())
                 .as("1 이면 사람 상한(attempt=1 만 셈)을 깎는다 — 재굽기는 서비스 사정이다")

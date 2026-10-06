@@ -45,6 +45,7 @@ public class HatchService {
     private final int maxAttempts;
     private final boolean discardOnlyFailedGrid;
     private final boolean discardOnPostprocessCrash;
+    private final RejectedGridArchive archive;
 
     public HatchService(GenerationRunner runner, GenerationRecorder recorder,
                         GenJobRepository jobRepository, PipelineRegistry registry,
@@ -55,7 +56,7 @@ public class HatchService {
                         int maxAttempts,
                         MotionSeeder motionSeeder) {
         this(runner, recorder, jobRepository, registry, petRepository, quotaBreaker, blockLog, alerts,
-                maxAttempts, motionSeeder, true, true);
+                maxAttempts, motionSeeder, true, true, RejectedGridArchive.none());
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -68,7 +69,8 @@ public class HatchService {
                         @Value("${app.zzal.max-hatch-attempts:5}") int maxAttempts,
                         MotionSeeder motionSeeder,
                         @Value("${app.zzal.hatch-retry.discard-only-failed-grid:true}") boolean discardOnlyFailedGrid,
-                        @Value("${app.zzal.hatch-retry.discard-on-postprocess-crash:true}") boolean discardOnPostprocessCrash) {
+                        @Value("${app.zzal.hatch-retry.discard-on-postprocess-crash:true}") boolean discardOnPostprocessCrash,
+                        RejectedGridArchive archive) {
         this.runner = runner;
         this.recorder = recorder;
         this.jobRepository = jobRepository;
@@ -81,6 +83,7 @@ public class HatchService {
         this.motionSeeder = motionSeeder;
         this.discardOnlyFailedGrid = discardOnlyFailedGrid;
         this.discardOnPostprocessCrash = discardOnPostprocessCrash;
+        this.archive = archive;
     }
 
     @Async("hatchExecutor")
@@ -180,7 +183,16 @@ public class HatchService {
             targets = List.of(GridStep.NAME, PostProcessStep.GRID2);
         }
         int discarded = 0;
+        List<GenStepRecord> succeeded = recorder.loadSucceeded(petId, GenKind.HATCH);
         for (String step : targets) {
+            // ★ 버리기 전에 그림을 보존한다 — 재시도가 같은 키에 덮어써 거부된 격자가 사라진다(2026-10-07).
+            //   ⚠️ 단계 기록은 지운다. status 칸에 값 목록 CHECK 가 걸려 있어 DISCARDED 를 남기려면
+            //     마이그레이션이 필요하다 — 대신 보존 키를 로그에 남긴다(RejectedGridArchive).
+            for (GenStepRecord rec : succeeded == null ? List.<GenStepRecord>of() : succeeded) {
+                if (step.equals(rec.getName())) {
+                    archive.preserve(petId, rec);
+                }
+            }
             discarded += recorder.discardSucceeded(petId, GenKind.HATCH, step);
         }
         log.info("격자 {} — {} {}건을 폐기하고 다시 굽는다 (petId={} 격자표식={})",
