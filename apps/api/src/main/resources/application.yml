@@ -199,7 +199,19 @@ app:
     #    내려갔는데, 그러면 설정은 새것인데 그림은 옛것이 구워지고 화면을 봐야만 드러난다.
     pipeline-version: ${ZZAL_PIPELINE_VERSION:v1}
     motion-pipeline-version: ${ZZAL_MOTION_PIPELINE_VERSION:v1}
-    max-hatch-attempts: 2
+    # 부화 한 마리를 몇 번까지 굽나(첫 시도 포함). ★ 2026-10-07 2 → 5 — 운영 10/6 부화 32건 중 8건 실패,
+    #   대부분 게이트 오판·한 장만 깨진 격자라 다시 구우면 되는 실패였다. 5번 다 실패하면 지금처럼 FAILED + 경보.
+    max-hatch-attempts: ${ZZAL_MAX_HATCH_ATTEMPTS:5}
+    # 재시도 때 무엇을 버리나(2026-10-07). 둘 다 끄면 옛 동작(게이트 거부면 격자 두 장 모두 폐기 · 후처리 예외는 폐기 없음).
+    hatch-retry:
+      # 게이트 거부·후처리 예외가 <b>어느 격자</b>에서 났는지 알면 그 한 장만 버린다(모르면 둘 다).
+      discard-only-failed-grid: ${ZZAL_HATCH_DISCARD_ONLY_FAILED_GRID:true}
+      # 후처리 스크립트가 0 이 아닌 코드로 끝나면(빈 칸·파이썬 예외) 그 격자를 버리고 다시 굽는다. 시간 초과는 폐기 없음.
+      discard-on-postprocess-crash: ${ZZAL_HATCH_DISCARD_ON_POSTPROCESS_CRASH:true}
+    # 두 번째 선물(뒤로 넘어짐)을 좌우 맞히기 첫 패배에 굽나. ★ 2026-10-07 상훈님 결정으로 기본 꺼짐(새 조건 미정).
+    #   꺼져 있어도 잠긴 칸 문구("언젠가 깜짝 선물")는 그대로다.
+    gift:
+      second-on-first-loss: ${ZZAL_GIFT_SECOND_ON_FIRST_LOSS:false}
     # 심화 행동 API 굽기 시도 횟수. ★ 정본 6장은 API 1회 → 실패면 로컬(맥미니) 재생성 2회다.
     #   API 로 반복하면 같은 돈이 두세 배로 나가고, 재생성은 돈이 안 드는 맥미니가 맡는다.
     #   (예고대로 밤 굽기가 붙으면서 3 → 1 로 내렸다. 로컬 재생성 배선은 night.local-regen-max)
@@ -333,7 +345,7 @@ app:
       to: ${ZZAL_ALERT_TO:}
       # 누적 비용을 얼마 단위로 알릴까(달러). 잔액 $70 기준 $10 이면 일곱 번 안에 다 쓴다.
       cost-step-usd: ${ZZAL_ALERT_COST_STEP_USD:10}
-      # 몇 번 연달아 실패하면 알릴까. 한 마리가 안에서 이미 2번 굽는다(max-hatch-attempts).
+      # 몇 번 연달아 실패하면 알릴까. 한 마리가 안에서 최대 5번 굽는다(max-hatch-attempts).
       hatch-fail-streak: ${ZZAL_ALERT_HATCH_FAIL_STREAK:3}
 
     # 행동 기록 보관 — 하루 한 번(KST 05:10) zzal_event 를 S3 로 베껴 둔다 (2026-09-14).
@@ -404,6 +416,9 @@ app:
       # ★ 절대 커밋하지 않는다. 로컬은 ~/.claude/.env, 서버는 /etc/lore/lore.env 에서 주입.
       #   환경별로 다른 키를 쓴다 — 섞으면 dev 가 실험 한도를 먹고 원가 산정이 흐려진다.
       api-key: ${ZZAL_OPENAI_API_KEY:}
+      # 이미지 요청 한 번의 응답 대기 상한(초). 시트·부화 격자·심화 행동 격자가 같은 클라이언트를 쓴다.
+      #   ★ 2026-10-07 180 → 90 — 운영 10/6 실측 격자 최대 50초·시트 최대 57초. 걸린 요청은 끊고 다시 굽는다.
+      image-timeout-seconds: ${ZZAL_OPENAI_IMAGE_TIMEOUT_SECONDS:90}
 
     python:
       # 후처리가 numpy·scipy·pillow 를 쓰므로 그것들이 깔린 파이썬이어야 한다.

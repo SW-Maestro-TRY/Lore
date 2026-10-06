@@ -51,11 +51,14 @@ public class OpenAiImageClient implements ImageClient {
     private final S3Storage storage;
     private final String apiKey;
     private final HttpClient http;
+    /** 요청 한 번의 응답 대기 상한(초). 설정 {@code app.zzal.openai.image-timeout-seconds}. */
+    private final int timeoutSeconds;
     private final ObjectMapper json = new ObjectMapper();
 
     public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds) {
         this.storage = storage;
         this.apiKey = apiKey;
+        this.timeoutSeconds = timeoutSeconds;
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(20))
                 // 리다이렉트를 따라가지 않는다 — 따라가면 같은 요청이 두 번 갈 수 있다
@@ -81,7 +84,10 @@ public class OpenAiImageClient implements ImageClient {
             HttpRequest req = HttpRequest.newBuilder(URI.create(ENDPOINT))
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                    .timeout(Duration.ofSeconds(180))
+                    // ★ 생성자 인자를 실제로 쓴다(2026-10-07). 전에는 인자를 받고도 180 이 박혀 있어
+                    //   설정으로 바꿀 길이 없었다. 운영 10/6 격자 실측 최대 50초·시트 최대 57초라 90초로 줄였다
+                    //   — 걸린 요청을 180초 기다리느니 끊고 다시 굽는 편이 사용자에게 빠르다.
+                    .timeout(Duration.ofSeconds(timeoutSeconds))
                     .POST(HttpRequest.BodyPublishers.ofByteArray(body))
                     .build();
 

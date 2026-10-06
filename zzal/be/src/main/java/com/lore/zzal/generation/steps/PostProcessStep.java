@@ -95,16 +95,36 @@ public class PostProcessStep implements GenerationStep {
 
         try (PostProcessor.Session session = postProcessor.open(prefix, ctx.version())) {
             // ★ 같은 세션·같은 스레드에서 순차로 돈다 — 2층이 1층 앵커에 합쳐 쓴다.
-            session.split(ctx.image(GridStep.NAME), keysOf(MotionLayer.BASIC_1),
-                    postures.forStep(ctx.version(), GridStep.NAME));
-            session.split(grid2, keysOf(MotionLayer.BASIC_2),
-                    postures.forStep(ctx.version(), GRID2));
+            splitTagged(session, GridStep.NAME, ctx.image(GridStep.NAME), MotionLayer.BASIC_1, ctx.version());
+            splitTagged(session, GRID2, grid2, MotionLayer.BASIC_2, ctx.version());
         }
         // ★ 세션이 닫히고(앵커까지 올라가고) 나서 판을 올린다. 먼저 올리면 앵커가 빠진 판을
         //   화면이 먼저 받는다.
         recorder.markBasicBaked(ctx.petId(), round);
         return StepResult.free(NAME);
     }
+
+    /**
+     * 한 층을 자르고, 실패하면 <b>어느 격자였는지</b>를 메시지 앞에 붙여 올린다({@code [격자=grid2]}).
+     *
+     * <h3>★ 왜 (2026-10-07)</h3>
+     * 재시도는 실패한 격자만 버리고 다시 굽는다. 전에는 어느 쪽이 깨졌는지 몰라 <b>둘 다</b> 버렸고,
+     * 멀쩡한 쪽까지 다시 구워 돈과 시간을 두 배로 썼다. 이 표식은 {@code GenerationRunner} 가 읽는다.
+     * ★ 원래 메시지는 그대로 뒤에 붙인다 — 게이트 표식·한도(429) 판정이 그 글자를 본다.
+     */
+    private void splitTagged(PostProcessor.Session session, String gridStep, String gridKey,
+                             MotionLayer layer, String version) throws Exception {
+        try {
+            session.split(gridKey, keysOf(layer), postures.forStep(version, gridStep));
+        } catch (InterruptedException e) {
+            throw e;                    // 시간 초과로 끊긴 것 — 그대로 올린다
+        } catch (Exception e) {
+            throw new IllegalStateException(GRID_SOURCE_FORMAT.formatted(gridStep) + " " + e.getMessage(), e);
+        }
+    }
+
+    /** 실패 메시지 앞에 붙는 격자 이름 표식. {@code GenerationRunner#failedGrid} 와 짝이다. */
+    public static final String GRID_SOURCE_FORMAT = "[격자=%s]";
 
     /** 두 번째 격자(2층) 단계의 이름. */
     public static final String GRID2 = "grid2";

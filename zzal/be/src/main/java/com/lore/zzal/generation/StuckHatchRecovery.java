@@ -54,7 +54,7 @@ public class StuckHatchRecovery {
                               HatchService hatchService,
                               GenerationRecorder recorder,
                               ZzalAlerts alerts,
-                              @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts,
+                              @Value("${app.zzal.max-hatch-attempts:5}") int maxAttempts,
                               @Value("${app.zzal.recovery.grace-minutes:12}") int graceMinutes) {
         this.petRepository = petRepository;
         this.jobRepository = jobRepository;

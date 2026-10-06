@@ -61,16 +61,61 @@ class HatchLimitsIT extends ZzalItSupport {
         });
     }
 
-    /** 그 사람이 <b>지금까지 구운 횟수</b>만 만들어 둔다 — 펫은 실패로 끝나 자리를 안 먹는다. */
+    /**
+     * 그 사람이 <b>지금까지 시작한 부화</b>만 만들어 둔다 — 펫은 실패로 끝나 자리를 안 먹는다.
+     * ★ 2026-10-07 — 상한은 시작한 부화(attempt=1)만 센다. 그래서 부화마다 실패한 알 하나 + 첫 시도 한 줄.
+     */
     private void pretendBaked(Long userId, int times) {
         transactions.executeWithoutResult(status -> {
             Instant at = Instant.now();
-            ZzalPet pet = petRepository.save(ZzalPet.draft(userId, "images/zzal/old-%d".formatted(userId), at));
-            ReflectionTestUtils.setField(pet, "phase", PetPhase.FAILED);
             for (int i = 1; i <= times; i++) {
-                jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, i, "v1", at));
+                ZzalPet pet = petRepository.save(ZzalPet.draft(userId, "images/zzal/old-%d".formatted(userId), at));
+                ReflectionTestUtils.setField(pet, "phase", PetPhase.FAILED);
+                jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, "v1", at));
             }
         });
+    }
+
+    /** 한 알을 첫 시도 + 재시도 {@code retries} 번 + (있으면) 관리자 재굽기로 구운 것으로 둔다. */
+    private void oneEggRetried(Long userId, int retries, boolean rehatched) {
+        transactions.executeWithoutResult(status -> {
+            Instant at = Instant.now();
+            ZzalPet pet = petRepository.save(ZzalPet.draft(userId, "images/zzal/retry-%d".formatted(userId), at));
+            ReflectionTestUtils.setField(pet, "phase", PetPhase.FAILED);
+            for (int i = 1; i <= 1 + retries; i++) {
+                jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, i, "v1", at));
+            }
+            if (rehatched) {
+                jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, GenJob.ADMIN_REHATCH_ATTEMPT, "v1", at));
+                jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 2, "v1", at));
+            }
+        });
+    }
+
+    @Test
+    @DisplayName("★★ 재시도 3번을 거쳐도 사람 상한 셈은 1 — 재시도는 서비스 사정이라 사람 몫을 깎지 않는다(2026-10-07)")
+    void retriesDoNotCountAgainstThePerson() {
+        Long userId = newUserId();
+        Instant from = Instant.now().minus(Duration.ofDays(1));
+        long serviceBefore = jobRepository.countHatchesSince(GenKind.HATCH, from);
+        oneEggRetried(userId, 3, false);
+
+        assertThat(jobRepository.countHatchesOfUser(userId, GenKind.HATCH)).isEqualTo(1);
+        assertThat(jobRepository.countHatchesOfUserSince(userId, GenKind.HATCH, from)).isEqualTo(1);
+        assertThat(jobRepository.countHatchesSince(GenKind.HATCH, from) - serviceBefore).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("★★ 관리자 재굽기(attempt=0)와 그 재시도 뒤에도 사람 상한 셈은 1")
+    void adminRehatchDoesNotCountAgainstThePerson() {
+        Long userId = newUserId();
+        Instant from = Instant.now().minus(Duration.ofDays(1));
+        long serviceBefore = jobRepository.countHatchesSince(GenKind.HATCH, from);
+        oneEggRetried(userId, 4, true);
+
+        assertThat(jobRepository.countHatchesOfUser(userId, GenKind.HATCH)).isEqualTo(1);
+        assertThat(jobRepository.countHatchesOfUserSince(userId, GenKind.HATCH, from)).isEqualTo(1);
+        assertThat(jobRepository.countHatchesSince(GenKind.HATCH, from) - serviceBefore).isEqualTo(1);
     }
 
     /** 남은 막힘 기록의 사유들. */
@@ -105,18 +150,18 @@ class HatchLimitsIT extends ZzalItSupport {
     // ══ 2. 누적 3마리 ══════════════════════════════════════════════════
 
     @Test
-    @DisplayName("★★ 누적 3번을 다 쓰면 아이가 없어도 못 만든다 — 세는 것은 펫이 아니라 <b>구운 횟수</b>다")
-    void lifetimeCapCountsBakesNotPets() throws Exception {
+    @DisplayName("★★ 누적 3번을 다 쓰면 아이가 없어도 못 만든다 — 세는 것은 살아 있는 펫이 아니라 <b>시작한 부화</b>다")
+    void lifetimeCapCountsStartedHatches() throws Exception {
         Long userId = newUserId();
-        pretendBaked(userId, 3);                 // 펫은 한 마리(실패), 구운 것은 세 번
+        pretendBaked(userId, 3);                 // 시작한 부화 세 번(전부 실패해 자리는 안 먹는다)
 
         MvcResult result = draft(userId);
 
         assertThat(result.getResponse().getStatus()).isEqualTo(409);
         assertThat(errorCode(result)).isEqualTo("ZZAL_HATCH_BLOCKED_PET_LIMIT");
         assertThat(petRepository.findByUserIdOrderByIdDesc(userId))
-                .as("펫 줄로 셌다면 한 마리뿐이라 통과했을 자리다 — 그 사이 돈은 세 번 나갔다")
-                .hasSize(1);
+                .as("네 번째 알은 만들어지지 않았다")
+                .hasSize(3);
         assertThat(blockReasons()).singleElement().asString().contains("pet_limit");
     }
 

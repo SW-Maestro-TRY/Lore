@@ -31,6 +31,15 @@ import { CHAR_TEXT_MAX } from '../../lib/pet';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
 import { OnbDevProvider, OnbChangeList, useOnbFlag, useCharLayout } from './onboardingDev';
+import { once, ztrack } from './funnel';
+
+/** 캐릭터 칸에서 채운 묶음 수(이름 포함). 고른 칩이 있거나 글을 쓴 묶음을 하나로 센다 — 글 내용은 안 보낸다. */
+function filledGroups(picks: Record<string, string[]>, texts: Record<string, string>): number {
+  const keys = new Set<string>();
+  for (const [k, v] of Object.entries(picks)) if (v && v.length > 0) keys.add(k);
+  for (const [k, v] of Object.entries(texts)) if (v && v.trim()) keys.add(k);
+  return keys.size + 1;
+}
 
 /**
  * OB-03 진입 등장(stagger) 스타일. 랜딩 v2 의 ztV2Rise 결로, 이미 전역에 심긴 KEYFRAMES 의
@@ -316,6 +325,11 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   const askAuth = () => { askedAuth.current = true; openSignup(); };
   // 랜딩 칸의 제목·부제는 랜딩 v2 무대가 직접 들고 있다(같은 상수 LANDING_COPY). 나머지 칸만 여기서.
   const [title, sub] = ONB_COPY[key];
+  // 계측 — 이름 칸이 처음 채워진 순간 한 번(직접 쓰든 '랜덤' 이든).
+  const hasName = !!s.petName.trim();
+  useEffect(() => {
+    if (hasName) once('name_entered', () => ztrack('zzal_name_entered', { step: 1 }));
+  }, [hasName]);
   // 겉모습 스왑 플래그(전부 OFF=현재 코드 그대로).
   const fShell = useOnbFlag('ob-01');
   const fTitle = useOnbFlag('ob-02');
@@ -449,6 +463,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) {
+                  ztrack('zzal_image_picked', { count: Math.ceil(f.size / 1024) });
                   actions.onUpload();
                   // 이 그림으로는 아직 안 물어봤다 — 다시 물을 수 있게 푼다.
                   askedAuth.current = false;
@@ -464,6 +479,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               onClick={() => {
                 // 고른 그림이 손에 있는데 로그인 전이면 **다시 고르게 하지 않는다** — 가입 창만 다시 연다.
                 if (needAuth) { askAuth(); return; }
+                ztrack('zzal_upload_opened');
                 file.current?.click();
               }}
               data-action="upload" data-pending-auth={needAuth ? 'true' : undefined} disabled={live.busy}
@@ -751,6 +767,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             // ★ **끝나기를 기다린다**(2026-09-10). 전에는 `void` 로 던져 두고 곧바로 넘어가서,
             //   이름 짓기가 실패해도 알이 흔들리기 시작했다 — 굽지도 않는 알을 사람이 지켜본다.
             if (key === 'char' && s.petName) {
+              once('persona_filled', () => ztrack('zzal_persona_filled', { step: filledGroups(s.picks, s.texts) }));
               void (async () => {
                 const ok = await live.setChar({
                   name: s.petName,
