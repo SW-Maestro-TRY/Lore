@@ -28,15 +28,24 @@ def lattice_xy(cols=5, rows=5):
     return ([INSET + STEP * i for i in range(cols)], [INSET + STEP * j for j in range(rows)])
 
 
-def make_grid(rows=5, drop=(), ribbon=False):
+def make_grid(rows=5, drop=(), ribbon=False, empty=(), twin=(), prop=()):
     a = np.zeros((N, N, 3), np.uint8)
     a[:] = GREEN
     xs, ys = lattice_xy(5, rows)
     # 캐릭터 — 칸 가운데 회색 몸통. ribbon=True 면 몸통 안에 시안·마젠타 조각(리본·옷 무늬)
     for j in range(4):
         for i in range(4):
+            k = j * 4 + i + 1                     # 칸 번호 f01~f16
             cx, cy = int(xs[i] + STEP / 2), int(INSET + STEP * j + STEP / 2)
+            if k in empty:
+                continue
+            if k in twin:                         # 한 칸에 둘 — 좁은 몸 두 개
+                a[cy - 100:cy + 100, cx - 120:cx - 20] = BODY
+                a[cy - 100:cy + 100, cx + 20:cx + 120] = BODY
+                continue
             a[cy - 100:cy + 100, cx - 55:cx + 55] = BODY
+            if k in prop:                         # 몸과 떨어진 소품(빗자루·그릇) 칸 면적 약 4%
+                a[cy + 40:cy + 100, cx + 75:cx + 135] = (150, 100, 60)
             if ribbon:
                 a[cy - 80:cy - 64, cx - 30:cx - 14] = CYA
                 a[cy + 20:cy + 32, cx + 10:cx + 22] = MAG
@@ -116,3 +125,29 @@ def test_no_layout_still_filters_by_green(tmp_path):
     """layout 을 모를 때(frame_cut 단독 실행)도 그린 조건은 건다 — 개수 자르기만 안 한다."""
     mag, cya, _ = frame_cut.find_marks_by_color(make_grid(ribbon=True))
     assert (len(mag), len(cya)) == (15, 10)
+
+
+# ── 칸별 검사 (#687 2-2) ──────────────────────────────────────────────
+
+def test_cells_normal_with_props(tmp_path):
+    code, out = gate(tmp_path, make_grid(ribbon=True, prop={3, 4, 9, 10}))
+    assert code == 0, out                         # 소품을 든 칸은 정상
+
+
+def test_cells_empty(tmp_path):
+    code, out = gate(tmp_path, make_grid(empty={15, 16}))
+    assert code == 3, out
+    assert "빈 칸 f15" in out and "빈 칸 f16" in out
+    assert "칸별 (덩어리 수, 전경 비율)" in out and "f15(0,0.00)" in out
+
+
+def test_cells_two_in_one(tmp_path):
+    code, out = gate(tmp_path, make_grid(twin={8}))
+    assert code == 3, out
+    assert "한 칸에 캐릭터 2명 f08" in out
+
+
+def test_cells_skipped_for_asset_layout(tmp_path):
+    """공통에셋 layout(4x3 등)은 칸 검사를 걸지 않는다 — 한 칸에 사물 둘이 정상."""
+    import check_grid
+    assert "lattice_4x3" not in check_grid.CELL_LAYOUTS
