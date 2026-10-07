@@ -86,6 +86,17 @@ public class HatchService {
         this.archive = archive;
     }
 
+    /**
+     * 2층 배경 굽기(#696). 생성자를 늘리지 않고 따로 받는다 — 시험과 옛 생성자가 그대로 돈다.
+     * 없으면(시험) 부화 완료 뒤 2층을 안 넘긴다.
+     */
+    private Layer2Service layer2Service;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setLayer2Service(Layer2Service layer2Service) {
+        this.layer2Service = layer2Service;
+    }
+
     @Async("hatchExecutor")
     public void hatch(Long jobId, Long petId, String version) {
         RunResult result = runAttempt(jobId, petId, version);
@@ -272,7 +283,12 @@ public class HatchService {
         // ★ 부화 완료 = 동작 18행(정본 13장). 1층 8종은 이 순간이 열린 시각. 심화 행동은 아직(NONE).
         //   두 번 불려도 이미 있는 seq 는 건너뛴다(MotionSeeder).
         motionSeeder.seed(petId, now);
-        log.info("부화 완료 — petId={} version={}", petId, version);
+        log.info("부화 완료(1층) — petId={} version={}", petId, version);
+        // ★ #696 — 2층은 여기서부터 뒤에서 굽는다. 두 길(굽기 끝·이름 들어옴)이 겹쳐 두 번 불려도
+        //   2층 집기(Layer2Recorder.claim)가 한쪽만 통과시킨다.
+        if (layer2Service != null) {
+            layer2Service.schedule(petId);
+        }
         return true;
     }
 

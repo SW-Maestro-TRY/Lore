@@ -52,6 +52,29 @@ public interface PostProcessor {
         void split(String gridImageKey, List<String> keys, String postures) throws Exception;
 
         /**
+         * 앞 층의 {@code anchors.json} 을 작업 폴더에 <b>미리 내려받아 둔다</b>(#696 — 2층을 따로 굽기).
+         *
+         * ★ 왜 — 2층 후처리는 1층 앵커에서 K·Hw(크기 기준)를 받아 정규화하고, 같은 파일에 합쳐 쓴다.
+         *   전에는 1층·2층이 한 세션에서 연달아 돌아 그 파일이 이미 폴더에 있었다. 이제 2층이 따로 돌므로
+         *   1층이 올려 둔 그 파일을 같은 자리에 놓는다 — 스크립트는 바뀌지 않는다(같은 바이트가 나온다).
+         */
+        default void seedAnchors(String anchorsKey) throws Exception {
+        }
+
+        /**
+         * 앞 판의 그림을 이번 판 자리로 <b>그대로 옮겨 싣는다</b>(내려받아 다시 올린다 — 바이트 불변).
+         *
+         * ★ 왜 — 판 번호가 주소에 들어가고 CDN 이 1년 캐시를 든다. 2층을 1층 판에 덧올리면
+         *   그사이 화면이 받아 간 {@code anchors.json}(1층만 든 것)이 캐시에 남는다. 그래서 2층이 생기면
+         *   <b>새 판</b>을 열고 1층 8종을 그 판으로 옮겨 싣는다.
+         *
+         * @param fromPrefix 앞 판 자리({@code images/zzal/pets/{id}/basic/{판}})
+         * @param keys       옮길 이름들(webp)
+         */
+        default void carryOver(String fromPrefix, List<String> keys) throws Exception {
+        }
+
+        /**
          * 앵커를 올리고(있으면) 작업 폴더를 지운다.
          *
          * ★ 앵커를 내야 하는 버전인데 없으면 <b>여기서 실패시킨다.</b> 그림만 올라가고 앵커만 사라진

@@ -314,9 +314,31 @@ public class PetService {
         leaveService.fillPostcards(pet, now);
         pet.visit(now);
         reveal(pet, now);
+        announceLayer2(pet, now);
         openPieces(pet, windowStart, now);
         // ★ 기상에 네 칸을 되돌리고 기분 좋은 날의 선물을 얹는다(설계 규칙). 엔티티가 남긴 쪽지를 본다.
         pieceService.settle(pet);
+    }
+
+    /**
+     * 2층 그림이 READY 가 된 뒤 <b>처음 만지는 순간</b> — 조건을 이미 채워 "연습 중" 이던 동작을 연다(#696).
+     *
+     * ★ 2층은 뒤에서 구워져 사용자의 행동과 무관한 순간에 READY 가 된다. 행동 전후 비교({@link #withUnlockDiff})로는
+     *   그 순간이 안 잡히므로(이미 열린 채로 비교가 시작된다), READY 를 처음 본 조회·행동 응답의
+     *   {@code justUnlocked} 에 실어 보낸다 — 화면은 평소처럼 "○○를 배웠어요" 폭죽을 띄운다.
+     * ★ 한 번만 — 알린 시각을 적는다. 조건을 아직 못 채운 동작은 여기 없고, 나중에 평소 길로 열린다.
+     */
+    private void announceLayer2(ZzalPet pet, Instant now) {
+        if (!pet.isLayer2Ready() || pet.getLayer2AnnouncedAt() != null) {
+            return;
+        }
+        List<Integer> opened = catalog.basic().stream()
+                .filter(spec -> spec.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2)
+                .filter(spec -> UnlockRules.isUnlocked(pet, spec, catalog))
+                .map(MotionSpec::seq)
+                .sorted()
+                .toList();
+        pet.announceLayer2(opened, now);
     }
 
     /**
@@ -479,9 +501,13 @@ public class PetService {
         //   행동으로 열린 것은 "지금" 열린 것이라 구간 시작도 지금이다.
         Instant actedAt = pet.getSettledAt() == null ? Instant.now() : pet.getSettledAt();
         openPieces(pet, actedAt, actedAt);
-        List<Integer> opened = UnlockRules.unlockedKeys(pet, catalog).stream()
-                .filter(k -> !before.contains(k))
-                .map(k -> catalog.byKey(k).orElseThrow().seq())
+        // ★ 2층 READY 알림(#696)은 이 행동 전의 정산(touch)에서 잡혔다 — 전후 비교에는 안 나오므로 합친다.
+        List<Integer> opened = java.util.stream.Stream.concat(
+                        UnlockRules.unlockedKeys(pet, catalog).stream()
+                                .filter(k -> !before.contains(k))
+                                .map(k -> catalog.byKey(k).orElseThrow().seq()),
+                        pet.takeLayer2JustUnlocked().stream())
+                .distinct()
                 .sorted()
                 .toList();
         return new Action(pet, opened);
