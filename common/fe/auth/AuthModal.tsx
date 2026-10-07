@@ -114,6 +114,12 @@ function useStepMode(): boolean {
  */
 const KEYBOARD_MIN_PX = 80;
 
+/**
+ * 칸 포커스가 빠진 뒤(또는 손가락을 뗀 뒤) 시트를 바닥으로 돌리기 전 기다리는 시간.
+ * 닫기·다음 버튼을 누르는 사이 시트가 움직여 누름이 빗나가지 않게(탭 한 번은 보통 100~200ms).
+ */
+const HOLD_MS = 350;
+
 function EyeIcon({ open }: { open: boolean }) {
   // 그림 문자 대신 SVG — 기기마다 모양이 달라지지 않게.
   return (
@@ -162,7 +168,12 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
 
   // 포털은 DOM 이 있어야 쏜다. 서버 렌더에는 document 가 없다.
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  /** `?authdebug=1` — 폰에서 키보드 숫자를 읽어 주실 수 있게 창 모서리에 띄운다(개발용, 기본 꺼짐). */
+  const [debug, setDebug] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    setDebug(new URLSearchParams(window.location.search).get("authdebug") === "1");
+  }, []);
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
@@ -227,66 +238,192 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   useEffect(() => {
     if (!open) return;
     openerRef.current = document.activeElement;
-    emailRef.current?.focus();
+    // ★ 폰에서는 첫 칸이 아니라 창에 포커스를 둔다(2026-10-08 #690 2차). iOS·안드로이드 모두 탭 없이
+    //   준 포커스로는 키보드를 안 띄우는데, 칸에 포커스가 있으면 "키보드가 오른다" 로 읽어 시트를
+    //   위로 올리게 된다(아래 효과). 사용자가 칸을 누르는 순간 키보드와 함께 위로 간다.
+    if (window.matchMedia(STEP_MEDIA).matches) dialogRef.current?.focus({ preventScroll: true });
+    else emailRef.current?.focus();
     return () => {
       const opener = openerRef.current;
       if (opener instanceof HTMLElement) opener.focus();
     };
   }, [open]);
 
-  // ★ 키보드가 올라오면 오버레이를 **보이는 영역(visualViewport)** 에 맞춘다(2026-10-08 #690).
-  //   iOS 사파리는 키보드가 떠도 레이아웃 높이를 안 줄이고 위를 덮기만 해서, inset:0 오버레이의
-  //   바닥(=주 버튼)이 키보드 밑에 깔린다. 전역 viewport meta(interactive-widget)를 바꾸면
-  //   모든 화면의 키보드 동작이 바뀌므로, 이 창이 열려 있는 동안만 이 창의 높이를 맞춘다.
-  //   키보드가 없으면(데스크톱 포함) 인라인 값을 비워 CSS 그대로 둔다.
+  // ★ 폰 키보드 대응 2차(2026-10-08 #690 — 상훈님 실기기: 인스타 인앱에서 이메일 칸을 누르면
+  //   바닥 시트 자리를 키보드가 그대로 덮었다).
+  //
+  //   1차(이 자리의 옛 코드)는 "보이는 영역(visualViewport)이 창(innerHeight)보다 80px 이상 작아지면"
+  //   그때만 오버레이를 보이는 영역에 맞췄다. 가장 유력한 원인(실기기 숫자는 ?authdebug=1 로 확인 예정)은
+  //   키보드를 **아예 알리지 않는** 브라우저다 — 안드로이드 인앱 WebView(인스타·페북 등, 보고 기기는
+  //   갤럭시)는 앱이 키보드 자리만큼 WebView 를 줄이지 않으면 innerHeight 도 visualViewport 도 그대로다.
+  //   둘 다 그대로면 1차 조건은 끝내 참이 안 되고, 바닥 고정 시트는 키보드 뒤에 남는다(그 경우를
+  //   흉내 내면 칸·오류·버튼·닫기가 모두 가려진다 — 16/16 조합 실측). Playwright 1차 검증은 키보드를
+  //   "뷰포트를 줄여서" 흉내 냈으니, 줄어들지 않는 이 경우를 못 봤다.
+  //
+  //   2차는 숫자를 기다리지 않는다. 폰(터치 + 폭 480 이하)에서 **글자 칸에 포커스가 들어오면**
+  //   키보드가 오른다고 보고, 시트를 바닥에서 떼어 **보이는 영역 맨 위**에 붙인다(data-sheet="top").
+  //   키보드는 언제나 아래에서 오르므로 위에 붙은 시트(약 200~270px)는 어떤 키보드에도 안 가린다.
+  //   - iOS 사파리·iOS 인앱(WKWebView): innerHeight 는 그대로, visualViewport 만 줄고 위로 밀린다
+  //     (offsetTop). 오버레이를 top=offsetTop · height=vv.height 로 옮겨 보이는 영역에 겹친다.
+  //   - 안드로이드 크롬(기본 resizes-visual): iOS 와 같은 경로.
+  //   - 안드로이드 WebView 중 창이 줄어드는 것: innerHeight 가 같이 줄어 inset:0 이 이미 맞다.
+  //   - 안드로이드 WebView 중 아무것도 안 알리는 것: 위치는 못 재지만 시트가 맨 위라 안 가린다.
+  //   키보드를 알리는 브라우저(한 번이라도 숫자가 줄었던 곳)에서는 숫자를 믿어, 칸에 포커스를 둔 채
+  //   키보드만 내리면(안드로이드 뒤로 버튼) 바닥 시트로 돌아간다.
+  //
+  //   ★ 포커스가 빠지는 순간 곧바로 바닥으로 돌리지 않는다 — 닫기·다음 버튼을 누르는 순간 칸
+  //     포커스가 빠지며 시트가 움직여 누름이 빗나갔다(1차 e2e 실측). 손가락이 닿아 있는 동안과
+  //     뗀 뒤 HOLD_MS 동안은 그대로 둔다.
+  //   데스크톱(마우스)은 숫자가 줄 일이 없고 폰 판정도 안 되므로 인라인 값이 붙지 않는다.
   useEffect(() => {
     if (!open || !mounted) return;
+    const overlay = overlayRef.current;
+    if (!overlay) return;
     const vv = window.visualViewport;
-    if (!vv) return;
-    // 키보드가 창 높이 자체를 줄이는 기기(안드로이드 인앱 WebView 등 — innerHeight 가 같이 준다)도
-    // 잡도록, 열린 동안 본 가장 큰 높이를 기준으로 삼는다. 화면을 돌려 폭이 바뀌면 기준을 새로 잡는다.
+    const phoneMq = window.matchMedia(STEP_MEDIA);
+    const debugEl = overlay.querySelector<HTMLElement>("[data-part=auth-debug]");
+    // 키보드가 창 높이 자체를 줄이는 기기도 잡도록, 열린 동안 본 가장 큰 높이를 기준으로 삼는다.
+    // 화면을 돌려 폭이 바뀌면 기준을 새로 잡는다.
     let baseH = window.innerHeight;
     let baseW = window.innerWidth;
+    /** 이 브라우저가 키보드를 숫자로 알린 적이 있는가(열려 있는 동안). */
+    let reports = false;
+    let pointerDown = false;
+    let wasTop = false;
+    let holdUntil = 0;
+    let timer = 0;
+    const typingNow = () => {
+      const a = document.activeElement;
+      return a instanceof HTMLInputElement && a.type !== "checkbox" && overlay.contains(a);
+    };
     const sync = () => {
-      const overlay = overlayRef.current;
-      if (!overlay) return;
       if (Math.abs(window.innerWidth - baseW) > 40) {
         baseW = window.innerWidth;
         baseH = window.innerHeight;
       }
       baseH = Math.max(baseH, window.innerHeight);
-      const keyboard = baseH - vv.height > KEYBOARD_MIN_PX;
-      // 오버레이 높이를 손대는 것은 레이아웃 높이는 그대로인데 보이는 영역만 준 경우(iOS)뿐이다.
-      if (window.innerHeight - vv.height > KEYBOARD_MIN_PX) {
-        overlay.style.top = `${vv.offsetTop}px`;
+      const vvH = vv ? vv.height : window.innerHeight;
+      const vvTop = vv ? vv.offsetTop : 0;
+      // ★ 핀치 줌(scale>1)도 보이는 영역을 줄인다 — 그걸 키보드로 읽으면 오버레이를 줌 영역으로
+      //   자르고 머리 띠를 접었다(합본 H13). 줌 중에는 높이 차를 키보드로 치지 않는다.
+      const zoomed = vv ? vv.scale > 1.01 : false;
+      const visualShrunk = !zoomed && window.innerHeight - vvH > KEYBOARD_MIN_PX; // iOS · 안드로이드 크롬
+      const windowShrunk = baseH - window.innerHeight > KEYBOARD_MIN_PX; // 창이 줄어드는 WebView
+      if (visualShrunk || windowShrunk) reports = true;
+      const phone = phoneMq.matches;
+      // 손가락이 닿아 있거나 막 뗀 동안은 **지금 위에 있으면 위에 둔다**(닫기·다음을 누르는 사이 안 움직이게).
+      // 바닥에 있던 시트를 이것만으로 올리지는 않는다 — 탭을 누르는 순간 창이 위로 튀어 누름이 빗나갔다(실측).
+      const holding = pointerDown || Date.now() < holdUntil;
+      const typing = typingNow() || (holding && wasTop);
+      // 숫자로 알리는 브라우저면 숫자를, 안 알리는 브라우저면 포커스를 믿는다.
+      const keyboard = visualShrunk || windowShrunk || (phone && typing && !reports);
+      const top = phone && keyboard;
+      // 오버레이를 보이는 영역에 겹치는 것은 레이아웃 높이는 그대로인데 보이는 영역만 준 경우(iOS)뿐.
+      if (visualShrunk) {
+        overlay.style.top = `${vvTop}px`;
         overlay.style.bottom = "auto";
-        overlay.style.height = `${vv.height}px`;
+        overlay.style.height = `${vvH}px`;
+        // 가로로 밀린 보이는 영역(offsetLeft)도 따라간다(H13).
+        overlay.style.left = vv ? `${vv.offsetLeft}px` : "";
+        overlay.style.right = "auto";
+        overlay.style.width = vv ? `${vv.width}px` : "";
       } else {
         overlay.style.top = "";
         overlay.style.bottom = "";
         overlay.style.height = "";
+        overlay.style.left = "";
+        overlay.style.right = "";
+        overlay.style.width = "";
       }
       // 키보드가 떠 있다는 표시 — 겉옷(zzal authSkin)이 머리 띠를 접는 데 쓴다.
-      // ★ 포커스(:focus)로 판단하지 않는다 — 닫기 버튼을 누르는 순간 입력칸 포커스가 빠지며
-      //   배치가 바뀌어 누름이 빗나갔다(e2e 실측).
       if (keyboard) overlay.dataset.keyboard = "1";
       else delete overlay.dataset.keyboard;
-      // 높이가 바뀐 뒤 지금 치는 칸이 주 버튼 뒤로 숨지 않게(.form 의 scroll-padding 이 버튼 몫을 비워 둔다).
+      wasTop = top;
+      if (phone) overlay.dataset.sheet = top ? "top" : "bottom";
+      else delete overlay.dataset.sheet;
+      if (debugEl) {
+        debugEl.textContent =
+          `inner=${window.innerHeight} base=${baseH} vv.h=${Math.round(vvH)} vv.top=${Math.round(vvTop)} ` +
+          `scale=${vv ? vv.scale.toFixed(2) : "-"} ` +
+          `focus=${typingNow() ? 1 : 0} reports=${reports ? 1 : 0} mode=${phone ? (top ? "top" : "bottom") : "desk"}`;
+      }
+      // 한 판 폼(데스크톱·태블릿)은 높이가 바뀐 뒤 지금 치는 칸이 주 버튼 뒤로 숨지 않게 굴린다.
+      // 폰 단계형은 굴릴 것이 없고, 굴리면 iOS 가 문서까지 밀어 올려 위치가 흔들린다.
       const active = document.activeElement;
-      if (active instanceof HTMLInputElement && formRef.current?.contains(active)) {
+      if (!phone && active instanceof HTMLInputElement && formRef.current?.contains(active)) {
         requestAnimationFrame(() => active.scrollIntoView({ block: "nearest" }));
       }
     };
-    sync();
-    vv.addEventListener("resize", sync);
-    vv.addEventListener("scroll", sync);
-    window.addEventListener("resize", sync);
-    return () => {
-      vv.removeEventListener("resize", sync);
-      vv.removeEventListener("scroll", sync);
-      window.removeEventListener("resize", sync);
+    // vv resize·scroll 은 키보드가 오르는 동안 연달아 온다 — 한 프레임에 한 번만 잰다(H11).
+    let raf = 0;
+    const onViewport = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        sync();
+      });
     };
-  }, [open, mounted]);
+    const later = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(sync, HOLD_MS + 20);
+    };
+    const onFocusIn = () => sync();
+    const onFocusOut = () => {
+      holdUntil = Date.now() + HOLD_MS;
+      later();
+    };
+    const onPointerDown = () => {
+      pointerDown = true;
+    };
+    const onPointerUp = () => {
+      if (!pointerDown) return;
+      pointerDown = false;
+      holdUntil = Date.now() + HOLD_MS;
+      later();
+    };
+    sync();
+    overlay.addEventListener("focusin", onFocusIn);
+    overlay.addEventListener("focusout", onFocusOut);
+    overlay.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+    vv?.addEventListener("resize", onViewport);
+    vv?.addEventListener("scroll", onViewport);
+    window.addEventListener("resize", onViewport);
+    phoneMq.addEventListener("change", sync);
+    return () => {
+      window.clearTimeout(timer);
+      cancelAnimationFrame(raf);
+      overlay.removeEventListener("focusin", onFocusIn);
+      overlay.removeEventListener("focusout", onFocusOut);
+      overlay.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      vv?.removeEventListener("resize", onViewport);
+      vv?.removeEventListener("scroll", onViewport);
+      window.removeEventListener("resize", onViewport);
+      phoneMq.removeEventListener("change", sync);
+    };
+  }, [open, mounted, debug]);
+
+  // ★ 폰에서는 뒤 문서를 position:fixed 로 묶는다(2026-10-08 #690 2차). overflow:hidden 만으로는
+  //   iOS 가 포커스 때 문서를 밀어 올려(칸을 키보드 위로 보이려고) 시트가 뒤 화면과 같이 흔들린다.
+  //   묶은 자리(scrollY)는 닫을 때 되돌린다. 데스크톱은 건드리지 않는다(스크롤바 자리 등).
+  useEffect(() => {
+    if (!open || !window.matchMedia(STEP_MEDIA).matches) return;
+    const body = document.body;
+    const y = window.scrollY;
+    const prev = { position: body.style.position, top: body.style.top, left: body.style.left, right: body.style.right, width: body.style.width };
+    body.style.position = "fixed";
+    body.style.top = `-${y}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    return () => {
+      Object.assign(body.style, prev);
+      window.scrollTo(0, y);
+    };
+  }, [open]);
 
   // 오류가 뜨면 그 칸으로 데려가고 문구가 보이게 굴린다. 비밀번호 칸은 내용을 선택해 두어
   // 바로 다시 치면 덮어써지게 한다(지우고 다시 쓰기).
@@ -653,8 +790,12 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        // 폰에서 처음 열 때 포커스를 받는 자리(칸에 주면 키보드 없이 시트가 위로 간다 — 위 효과).
+        tabIndex={-1}
         onKeyDown={handleKeyDown}
+        style={debug ? { position: "relative" } : undefined}
       >
+        {debug && <span className={styles.debug} data-part="auth-debug" aria-hidden="true" />}
         <div className={styles.head}>
           {stepMode && stepIndex > 0 && (
             <button type="button" className={styles.stepBack} onClick={goBack}
