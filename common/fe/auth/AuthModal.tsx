@@ -169,6 +169,8 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   /** 오류가 아닌 안내(가입 완료 등). 탭을 옮길 때 지운다. */
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** 입력이 있는 채 뒤로가기를 눌렀을 때 띄우는 "닫을까요?" (H6). */
+  const [confirmClose, setConfirmClose] = useState(false);
   /** 요청이 나가는 중인가 — 같은 틱 재진입까지 막는 잠금(H15). */
   const submittingRef = useRef(false);
 
@@ -226,6 +228,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     setInfo(null);
     setSubmitting(false);
     submittingRef.current = false;
+    setConfirmClose(false);
     submittedRef.current = false;
     track("auth_modal_opened", { tab: initialTab });
   }, [open, initialTab]);
@@ -487,7 +490,9 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     const onPop = () => {
       if (!historyPushedRef.current) return; // 우리가 걷은 것
       if (dirtyRef.current) {
+        // ★ 무르기만 하면 화면이 그대로라 먹통처럼 보였다(합본 H6). 칸은 다시 쌓되, 닫을지 묻는다.
         push();
+        setConfirmClose(true);
         return;
       }
       historyPushedRef.current = false;
@@ -935,6 +940,22 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             회원가입
           </button>
         </div>
+
+        {confirmClose && (
+          <div className={styles.confirm} role="group" aria-label="닫기 확인" data-part="auth-close-confirm">
+            <p className={styles.confirmText}>닫을까요? 입력한 내용이 사라져요</p>
+            <div className={styles.confirmActions}>
+              <button type="button" className={styles.confirmStay} data-action="auth-close-stay"
+                      onClick={() => { setConfirmClose(false); inputOf(step)?.focus({ preventScroll: true }); }}>
+                계속
+              </button>
+              <button type="button" className={styles.confirmLeave} data-action="auth-close-leave"
+                      onClick={() => requestClose("back")}>
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
 
         <form
           id={panelId}

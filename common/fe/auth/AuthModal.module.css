@@ -569,3 +569,51 @@
   word-break: break-all;
   pointer-events: none;
 }
+
+/* 입력이 있는 채 뒤로가기(H6) — "닫을까요?" 한 줄 확인. 오류와 같은 자리 위계, 색은 중립. */
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.confirmText {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.confirmActions {
+  display: flex;
+  gap: 6px;
+}
+
+.confirmStay,
+.confirmLeave {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.confirmStay {
+  border: 1px solid var(--border-strong);
+  background: var(--card);
+  color: var(--text);
+}
+
+.confirmLeave {
+  border: 0;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+}
