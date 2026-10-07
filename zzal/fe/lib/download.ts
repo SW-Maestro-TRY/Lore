@@ -14,6 +14,9 @@ import { track } from './analytics';
  * 받기의 결말.
  *
  * - `saved`  브라우저 다운로드가 시작됐다. 파일 저장 완료나 사진첩 등록은 보장하지 않는다.
+ *            ★ 기록(`zzal_dex_download` action=saved)은 <a download> 를 **누른 시점**에 남는다 —
+ *              뜻은 "저장함" 이 아니라 "저장을 눌렀고 브라우저에 넘김" 이다. 인앱 브라우저가
+ *              다운로드를 조용히 무시해도 saved 로 찍힌다(2026-10-08 #690).
  * - `failed` 아무것도 못 했다. 부르는 쪽이 반드시 무언가를 띄워야 한다.
  */
 export type DownloadOutcome = 'saved' | 'failed';
