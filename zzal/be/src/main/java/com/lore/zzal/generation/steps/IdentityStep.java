@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
  *   빈 문단이면 격자 단계가 {IDENT} 자리를 지운다(GridStep). 원인 조사는 하지 않기로 했다.
  *   스위치: app.zzal.identity.validate (기본 true, 끄면 옛 동작).
  *
- * 실측 15~22초 · $0.018
+ * 실측 15~22초 · $0.018 (운영 10/7 gpt-5 는 39~48초까지 — 아래 시간 제한 참고)
  */
 @Component
 public class IdentityStep implements GenerationStep {
@@ -59,12 +59,16 @@ public class IdentityStep implements GenerationStep {
     private final TextClient textClient;
     private final PromptLoader prompts;
     private final boolean validate;
+    /** 이 단계의 시간 제한(초). 설정 {@code app.zzal.openai.text-timeout-seconds}. */
+    private final int timeoutSeconds;
 
     public IdentityStep(TextClient textClient, PromptLoader prompts,
-                        @Value("${app.zzal.identity.validate:true}") boolean validate) {
+                        @Value("${app.zzal.identity.validate:true}") boolean validate,
+                        @Value("${app.zzal.openai.text-timeout-seconds:90}") int timeoutSeconds) {
         this.textClient = textClient;
         this.prompts = prompts;
         this.validate = validate;
+        this.timeoutSeconds = timeoutSeconds;
     }
 
     /**
@@ -106,9 +110,14 @@ public class IdentityStep implements GenerationStep {
         return NAME;
     }
 
+    /**
+     * ★ 2026-10-08 60 → 90(설정값으로 승격). 운영 10/7 실측 gpt-5 응답 39~48초 — 린델(pet52)·로미(pet48)
+     *   둘 다 시도 1이 이 단계 TIMEOUT(60초)으로 끝나 5회 중 1회를 격자와 무관하게 잃었다.
+     *   HTTP 요청 자체의 상한(OpenAiTextClient 120초)보다 짧아야 이 값이 실제로 먹는다.
+     */
     @Override
     public int limitSeconds() {
-        return 60;
+        return timeoutSeconds;
     }
 
     @Override

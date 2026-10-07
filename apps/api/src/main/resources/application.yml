@@ -419,6 +419,9 @@ app:
       # 이미지 요청 한 번의 응답 대기 상한(초). 시트·부화 격자·심화 행동 격자가 같은 클라이언트를 쓴다.
       #   ★ 2026-10-07 180 → 90 — 운영 10/6 실측 격자 최대 50초·시트 최대 57초. 걸린 요청은 끊고 다시 굽는다.
       image-timeout-seconds: ${ZZAL_OPENAI_IMAGE_TIMEOUT_SECONDS:90}
+      # 정체성(identity) 문단 단계의 시간 제한(초). 글 생성(gpt-5)은 이 단계만 쓴다.
+      #   ★ 2026-10-08 60 → 90 — 운영 10/7 실측 응답 39~48초, 60초 제한에 시도 1을 잃었다.
+      text-timeout-seconds: ${ZZAL_OPENAI_TEXT_TIMEOUT_SECONDS:90}
 
     python:
       # 후처리가 numpy·scipy·pillow 를 쓰므로 그것들이 깔린 파이썬이어야 한다.

@@ -169,7 +169,7 @@ class IdentityStepTest {
         PromptLoader prompts = mock(PromptLoader.class);
         when(prompts.prompt("v1", IdentityStep.NAME)).thenReturn("PROMPT");
         when(prompts.model("v1", IdentityStep.NAME)).thenReturn(ModelSpec.of("gpt-5"));
-        return new IdentityStep(client, prompts, validate);
+        return new IdentityStep(client, prompts, validate, 90);
     }
 
     private static StepContext ctx() {
