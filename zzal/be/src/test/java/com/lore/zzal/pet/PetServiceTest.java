@@ -1092,4 +1092,58 @@ com.lore.zzal.motion.MotionSource.API,
             assertThat(gift.getSeenAt()).isNull();
         }
     }
+
+    @Nested
+    @DisplayName("2층 READY 알림 (#696) — 뒤에서 구워진 2층은 처음 본 응답의 justUnlocked 로 알린다")
+    class Layer2Announcement {
+
+        @Test
+        @DisplayName("★★ READY 전엔 조건을 채워도 안 열리고, READY 뒤 첫 조회에 한 번만 실린다")
+        void announcedOnceOnFirstLookAfterReady() {
+            ZzalPet pet = baby();
+            pet.resetLayer2(T0);
+            for (int i = 0; i < 4; i++) {
+                pet.pet(T0);
+            }
+            service.refresh(USER_ID, PET_ID, T0);
+            assertThat(pet.takeLayer2JustUnlocked()).isEmpty();
+            assertThat(pet.getLayer2AnnouncedAt()).isNull();
+
+            pet.markLayer2Ready(T0);                                     // 뒤에서 구워졌다
+            service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofMinutes(1)));
+            assertThat(pet.takeLayer2JustUnlocked()).containsExactly(14);  // 쓰다듬 받기
+            assertThat(pet.getLayer2AnnouncedAt()).isNotNull();
+
+            service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofMinutes(2)));
+            assertThat(pet.takeLayer2JustUnlocked()).isEmpty();          // 두 번 알리지 않는다
+        }
+
+        @Test
+        @DisplayName("★ READY 뒤 첫 응답이 돌봄이면 그 응답의 justUnlocked 에 합쳐진다")
+        void mergedIntoActionResponse() {
+            ZzalPet pet = baby();
+            pet.resetLayer2(T0);
+            for (int i = 0; i < 4; i++) {
+                pet.pet(T0);
+            }
+            pet.markLayer2Ready(T0);
+            PetService.Action a = service.care(USER_ID, PET_ID, CareAction.PET, T0.plus(Duration.ofMinutes(1)));
+            assertThat(a.justUnlocked()).contains(14);
+        }
+
+        @Test
+        @DisplayName("★ READY 때 조건을 못 채운 동작은 알림에 없다 — 나중에 평소 길(행동 전후 비교)로 열린다")
+        void notMetYetComesLaterTheUsualWay() {
+            ZzalPet pet = baby();
+            pet.resetLayer2(T0);
+            pet.markLayer2Ready(T0);
+            service.refresh(USER_ID, PET_ID, T0);
+            assertThat(pet.takeLayer2JustUnlocked()).isEmpty();
+            for (int i = 0; i < 3; i++) {
+                pet.pet(T0);
+            }
+            PetService.Action a = service.care(USER_ID, PET_ID, CareAction.PET, T0.plus(Duration.ofMinutes(1)));
+            assertThat(a.justUnlocked()).containsExactly(14);
+        }
+    }
 }

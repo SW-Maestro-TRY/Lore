@@ -42,13 +42,14 @@ class ModerationDiscardTest {
     }
 
     @Test
-    @DisplayName("★★ 문단과 격자 두 장이 함께 폐기 대상이다")
-    void discardsBothGrids() {
-        List<String> targets = registry("v1").identityDependents(GenKind.HATCH, "v1");
-
-        assertThat(targets)
-                .as("2층만 거부됐을 때 1층이 남으면 두 격자의 근거가 갈린다")
-                .containsExactlyInAnyOrder(IdentityStep.NAME, GridStep.NAME, PostProcessStep.GRID2);
+    @DisplayName("★★ 문단과 1층 격자가 함께 폐기 대상이다 — 2층은 부화 밖이라 문단을 다시 만들지 않는다(#696)")
+    void discardsIdentityAndLayer1Grid() {
+        PipelineRegistry r = registry("v1");
+        assertThat(r.identityDependents(GenKind.HATCH, "v1"))
+                .as("부화는 1층에서 끝난다 — 문단과 그 문단으로 구운 1층 격자만")
+                .containsExactlyInAnyOrder(IdentityStep.NAME, GridStep.NAME);
+        // ★ 2층이 문단을 새로 만들면 이미 지급된 1층과 묘사 근거가 갈린다 — 2층은 아무것도 폐기하지 않는다.
+        assertThat(r.identityDependents(GenKind.LAYER2, "v1")).isEmpty();
     }
 
     @Test
