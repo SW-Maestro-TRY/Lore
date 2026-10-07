@@ -31,7 +31,7 @@ import { CHAR_TEXT_MAX } from '../../lib/pet';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
 import { OnbDevProvider, OnbChangeList, useOnbFlag, useCharLayout } from './onboardingDev';
-import { once, ztrack } from './funnel';
+import { holdForPicker, once, releasePicker, ztrack } from './funnel';
 
 /** 캐릭터 칸에서 채운 묶음 수(이름 포함). 고른 칩이 있거나 글을 쓴 묶음을 하나로 센다 — 글 내용은 안 보낸다. */
 function filledGroups(picks: Record<string, string[]>, texts: Record<string, string>): number {
@@ -462,6 +462,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];
+                // 고르기 창이 닫혔다 — 이제부터의 숨김은 다시 떠남으로 센다(→ funnel `holdForPicker`).
+                releasePicker();
                 if (f) {
                   ztrack('zzal_image_picked', { count: Math.ceil(f.size / 1024) });
                   actions.onUpload();
@@ -480,6 +482,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                 // 고른 그림이 손에 있는데 로그인 전이면 **다시 고르게 하지 않는다** — 가입 창만 다시 연다.
                 if (needAuth) { askAuth(); return; }
                 ztrack('zzal_upload_opened');
+                // ★ 폰의 사진 고르기 창은 페이지를 숨긴다 — 그 숨김을 page_leave 로 세지 않게 표시한다.
+                holdForPicker();
                 file.current?.click();
               }}
               data-action="upload" data-pending-auth={needAuth ? 'true' : undefined} disabled={live.busy}

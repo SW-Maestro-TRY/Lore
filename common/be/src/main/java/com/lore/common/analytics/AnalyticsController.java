@@ -84,12 +84,23 @@ public class AnalyticsController {
         }
 
         String anonId = anonIdResolver.resolve(request, response);
+        // 화면이 읽을 수 있는 번호 사본 — 쿠키가 지워진 뒤 옛 번호를 잇는 데 쓴다(AnonIdResolver#HINT_COOKIE).
+        anonIdResolver.syncHint(request, response, anonId);
         Long userId = currentUserId();
 
         try {
             analyticsService.collect(batch, anonId, userId, userAgent);
             // ★ 저장과 다른 트랜잭션이어야 해서 여기서 따로 부른다(AnalyticsService#linkIdentity 주석).
             analyticsService.linkIdentity(anonId, userId);
+            // ★ 쿠키가 지워져 번호가 바뀐 브라우저 — 가입·로그인 성공 줄의 from(옛 번호)도 같은 사람으로 잇는다
+            //   (2026-10-07, 화면 common/fe/analytics.ts 가 localStorage 에 남긴 옛 번호를 싣는다).
+            //   로그인한 요청에서만, 번호 모양이 맞을 때만 잇는다 — 비로그인 요청은 userId 가 없어 아무 일도 안 한다.
+            //   본문 값을 믿는 유일한 자리지만, 할 수 있는 일은 "내 계정에 번호 하나를 더 묶기" 뿐이라 남의 기록을 바꾸지 못한다.
+            if (userId != null) {
+                for (String previous : AnalyticsService.previousAnonIds(batch, anonId)) {
+                    analyticsService.linkIdentity(previous, userId);
+                }
+            }
         } catch (RuntimeException ex) {
             // 여기서 위로 던지면 500 이 나가고, 그걸 본 화면이 재시도를 하게 된다.
             // 기록은 잃어도 되는 것이라 잃고 만다.

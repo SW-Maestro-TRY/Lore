@@ -265,6 +265,26 @@ public class AnalyticsService {
         }
     }
 
+    /** 옛 번호를 실어 오는 이벤트. 화면 common/fe/analytics.ts 의 LINK_EVENTS 와 같다. */
+    private static final Set<String> LINK_EVENTS = Set.of("auth_login_succeeded", "auth_signup_succeeded");
+
+    /**
+     * 묶음 안의 가입·로그인 성공 줄이 실어 온 옛 익명 번호({@code props.from})들.
+     * 모양이 맞고 지금 번호와 다른 것만. 컨트롤러가 이것으로 {@link #linkIdentity} 를 한 번 더 부른다.
+     */
+    public static List<String> previousAnonIds(EventRequests.Batch batch, String anonId) {
+        List<String> out = new ArrayList<>();
+        if (batch == null || batch.events() == null) return out;
+        for (EventRequests.Event e : batch.events()) {
+            if (e == null || !LINK_EVENTS.contains(e.name()) || e.props() == null) continue;
+            Object from = e.props().get("from");
+            if (from instanceof String s && AnonIdResolver.isWellFormed(s) && !s.equals(anonId) && !out.contains(s)) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
     private void rememberLink(String key) {
         if (linkedCache.size() >= MAX_CACHED_LINKS) linkedCache.clear();
         linkedCache.add(key);
