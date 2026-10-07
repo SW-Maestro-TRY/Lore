@@ -114,6 +114,14 @@ body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"]{
   max-height:min(72dvh, 620px); overflow-y:auto;
 }
 body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"] h2{ letter-spacing:0; }
+/* ★ 키보드가 오르면(공통 창이 오버레이에 data-keyboard 를 켠다) 머리 띠를 접고 창을 보이는 높이 전부로
+   쓴다(2026-10-08 #690 2차). 키보드 위 300~500px 에 그림 띠(약 80px)까지 얹으면 지금 칸·버튼이
+   밀려난다. 그림 띠는 키보드가 내려가면 다시 나온다. */
+body[data-zzal-auth="1"] div[data-keyboard="1"] .zzal-auth-intro{ display:none; }
+body[data-zzal-auth="1"] div[data-keyboard="1"] > [role="dialog"][aria-modal="true"]{
+  max-height:100%; border-radius:${radius.xl}px;
+}
+
 .zzal-auth-intro{
   width:100%; max-width:420px; margin:0 auto; box-sizing:border-box;
   display:flex; align-items:center; gap:${gap.lg}px;

@@ -8,7 +8,7 @@
 //
 // "use client" 인 이유: 현재 경로를 알아야 열려 있는 탭을 표시할 수 있어서다.
 // (로그인 상태와 모달도 클라이언트에서만 도는 것들이라 같은 이유로 여기 들어온다.)
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import TabLink from "./TabLink";
@@ -54,6 +54,42 @@ export default function SiteHeader() {
     return () => { alive = false; window.removeEventListener(CREDITS_CHANGED, onChanged); };
   }, [isAuthenticated]);
   const [authOpen, setAuthOpen] = useState(false);
+
+  /* ★ 로그아웃은 한 번 묻는다(2026-10-08 #690). 운영에서 선물 화면을 닫으려다 헤더 "로그아웃" 을
+     누르고 1초 뒤 같은 자리의 "로그인" 을 다시 누른 사람이 있었다(10/7 실측). 브라우저 confirm 은
+     인앱 브라우저에서 막히거나 화면 전체를 덮어서, 버튼 밑에 작은 확인 칸을 띄운다. */
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
+  /* 로그아웃 직후 1초 동안 같은 자리의 "로그인" 을 잠근다 — 연달아 누른 두 번째 탭이 곧장
+     로그인 창을 여는 것을 막는다. */
+  const [loginLocked, setLoginLocked] = useState(false);
+  const confirmRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!confirmingLogout) return;
+    // 확인 칸 밖을 누르거나 Esc 면 그냥 접는다(취소와 같다).
+    const onDown = (e: PointerEvent) => {
+      if (confirmRef.current && !confirmRef.current.contains(e.target as Node)) setConfirmingLogout(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setConfirmingLogout(false); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [confirmingLogout]);
+
+  useEffect(() => {
+    if (!loginLocked) return;
+    const t = window.setTimeout(() => setLoginLocked(false), 1000);
+    return () => window.clearTimeout(t);
+  }, [loginLocked]);
+
+  const doSignOut = () => {
+    setConfirmingLogout(false);
+    setLoginLocked(true);
+    void signOut();
+  };
 
   // 이메일 전체를 다 그리면 좁은 화면에서 헤더가 밀린다. 아이디 부분만 보여 주고
   // 전체는 title 로 남긴다(마우스를 올리면 보인다).
@@ -122,13 +158,36 @@ export default function SiteHeader() {
                 <span className={styles.userEmail} title={user?.email}>
                   {displayName}
                 </span>
-                <button type="button" className={styles.authButton} onClick={() => void signOut()}>
-                  로그아웃
-                </button>
+                <div className={styles.logoutWrap} ref={confirmRef}>
+                  <button type="button" className={styles.authButton}
+                          data-action="logout"
+                          aria-expanded={confirmingLogout}
+                          onClick={() => setConfirmingLogout(true)}>
+                    로그아웃
+                  </button>
+                  {confirmingLogout && (
+                    <div className={styles.logoutConfirm} role="group" aria-label="로그아웃 확인">
+                      <span className={styles.logoutConfirmText}>로그아웃할까요?</span>
+                      <div className={styles.logoutConfirmActions}>
+                        <button type="button" className={styles.logoutConfirmYes}
+                                data-action="logout-confirm" onClick={doSignOut}>
+                          로그아웃
+                        </button>
+                        <button type="button" className={styles.logoutConfirmNo}
+                                data-action="logout-cancel" autoFocus
+                                onClick={() => setConfirmingLogout(false)}>
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </>
             )
           ) : (
-            <button type="button" className={styles.authButton} onClick={() => setAuthOpen(true)}>
+            <button type="button" className={styles.authButton} data-action="login"
+                    disabled={loginLocked}
+                    onClick={() => setAuthOpen(true)}>
               로그인
             </button>
           )}

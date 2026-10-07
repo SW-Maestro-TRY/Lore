@@ -12,8 +12,8 @@
 //   backdrop-filter 가 있는 요소는 position:fixed 자손의 기준 상자가 되어 버려서,
 //   포털 없이 그리면 전체 화면 오버레이가 헤더 높이 안에 갇힌다.
 
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal, flushSync } from "react-dom";
 import { ApiError } from "../api/client";
 import { track } from "../analytics";
 import { LEGAL_LINKS } from "../links";
@@ -56,6 +56,77 @@ interface AgreementState {
 const NO_AGREEMENT: AgreementState = { age: false, terms: false, privacy: false, marketing: false };
 
 /**
+ * 오류 문구를 어느 칸 밑에 띄울지(2026-10-08 #690).
+ *
+ * ★ 왜 칸 밑인가 — 예전엔 문구 하나를 폼 맨 끝(주 버튼 바로 위)에 띄웠다. 작은 폰에서는
+ *   가입 탭이 길어 그 자리가 **화면 밖이거나 바닥에 붙은 주 버튼 뒤**였다(320·360·390 세 기기
+ *   모두 "비밀번호가 서로 다릅니다" 가 안 보였음, 실측). 눌러도 아무 일 없는 것처럼 보여
+ *   운영에서 불일치 실패 8건이 그대로 이탈이 됐다. 문제가 난 칸 바로 밑에 두고 그 칸으로 데려간다.
+ */
+type ErrorSpot = "email" | "password" | "confirm" | "agree" | "form";
+
+/** 화면에서 먼저 막는 코드 → 문구를 붙일 칸. 코드 이름(이벤트 값)은 그대로 둔다. */
+const SPOT_OF_CODE: Record<string, ErrorSpot> = {
+  client_empty_email: "email",
+  client_password_short: "password",
+  client_password_long: "password",
+  client_password_mismatch: "confirm",
+  client_age_unchecked: "agree",
+  client_required_agreement: "agree",
+};
+
+/**
+ * ★ 폰 단계형(2026-10-08 #690 2차 — 상훈님 판정 "키보드가 올라오면 모달에 이메일 하나만 보이고,
+ *   쓰고 나면 밑으로 내려야 해서 엄청 불편하다").
+ *
+ * 키보드가 오른 화면(320×308 · 360×380 · 390×508)을 기준 화면으로 잡으면, 칸 셋·약관·버튼을 한 판에
+ * 두는 한 무엇을 해도 굴려야 한다(가입 탭 내용 높이 약 600px). 그래서 폰에서는 **한 화면에 한 칸**:
+ * 지금 칸 + 오류 한 줄 + 다음/제출 버튼 하나만 둔다. 데스크톱(마우스)은 지금 한 판 그대로.
+ *
+ * ★ 모든 칸은 늘 같은 <form> 안에 그려 두고 지금 칸이 아닌 것만 눈에서 숨긴다(display:none 아님).
+ *   iOS·크롬 비밀번호 관리자는 같은 폼 안의 이메일 칸 + 비밀번호 칸을 짝으로 보고 자동 입력·저장을
+ *   하기 때문이다 — 단계마다 칸을 빼 버리면 "비밀번호 저장" 이 안 뜬다.
+ */
+type Step = "email" | "password" | "confirm" | "agree";
+const LOGIN_STEPS: Step[] = ["email", "password"];
+const SIGNUP_STEPS: Step[] = ["email", "password", "confirm", "agree"];
+const STEP_OF_SPOT: Partial<Record<ErrorSpot, Step>> = {
+  email: "email", password: "password", confirm: "confirm", agree: "agree",
+};
+const STEP_MEDIA = "(pointer: coarse) and (max-width: 480px)";
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** 폰(터치 + 좁은 폭)인가. 바뀌면(가로 회전 등) 따라간다. */
+function useStepMode(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(STEP_MEDIA);
+    const sync = () => setOn(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return on;
+}
+
+/**
+ * 키보드가 화면을 덮었다고 볼 높이 차. 주소창이 접히고 펴지는 정도(수십 px)는 무시한다.
+ */
+const KEYBOARD_MIN_PX = 80;
+
+function EyeIcon({ open }: { open: boolean }) {
+  // 그림 문자 대신 SVG — 기기마다 모양이 달라지지 않게.
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+      {!open && <path d="M4 4l16 16" />}
+    </svg>
+  );
+}
+
+/**
  * 기록에 남길 실패 코드. 문구가 아니라 코드만 남긴다 —
  * 문구는 서버가 바꾸면 통계가 끊기고, 무엇보다 이메일·비밀번호는 절대 실려 나가면 안 된다.
  */
@@ -79,6 +150,12 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [agree, setAgree] = useState<AgreementState>(NO_AGREEMENT);
   const [formError, setFormError] = useState<string | null>(null);
+  /** 오류 문구를 붙일 칸. formError 와 늘 같이 바뀐다. */
+  const [errorSpot, setErrorSpot] = useState<ErrorSpot>("form");
+  const stepMode = useStepMode();
+  const [step, setStep] = useState<Step>("email");
+  /** 비밀번호 보기. 가입 탭에서는 두 칸에 같이 걸린다 — 친 것을 눈으로 맞춰 볼 수 있게. */
+  const [showPassword, setShowPassword] = useState(false);
   /** 오류가 아닌 안내(가입 완료 등). 탭을 옮길 때 지운다. */
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -89,6 +166,13 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  /** 다음 렌더 뒤에 포커스를 줄 칸. 오류·가입 완료 뒤에 쓴다(탭이 바뀌면 칸이 새로 그려져서). */
+  const focusNextRef = useRef<"email" | "password" | "confirm" | null>(null);
   /** 모달을 열기 직전에 포커스가 있던 곳. 닫을 때 되돌려 준다. */
   const openerRef = useRef<Element | null>(null);
   /**
@@ -102,18 +186,26 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   const loginTabId = useId();
   const signupTabId = useId();
   const passwordHintId = useId();
+  const passwordId = useId();
+  const errorId = useId();
 
   const isLogin = tab === "login";
 
   // 열릴 때마다 처음 상태로 되돌린다. 지난번에 치다 만 비밀번호가 남아 있으면 안 된다.
-  useEffect(() => {
+  // ★ useLayoutEffect 인 이유(2026-10-08 #690) — useEffect 면 다시 연 첫 화면 한 장이 **지난 상태로**
+  //   그려진 뒤에 지워진다. 가입하면 창이 가입 탭인 채 닫히게 되면서(바로 로그인), 다음에 열 때
+  //   그 한 장에 가입 탭과 지난 비밀번호가 비쳤다(e2e 실측). 그리기 전에 되돌린다.
+  useLayoutEffect(() => {
     if (!open) return;
     setTab(initialTab);
+    setStep("email");
     setEmail("");
     setPassword("");
     setPasswordConfirm("");
     setAgree(NO_AGREEMENT);
     setFormError(null);
+    setErrorSpot("form");
+    setShowPassword(false);
     setInfo(null);
     setSubmitting(false);
     submittedRef.current = false;
@@ -142,14 +234,160 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     };
   }, [open]);
 
+  // ★ 키보드가 올라오면 오버레이를 **보이는 영역(visualViewport)** 에 맞춘다(2026-10-08 #690).
+  //   iOS 사파리는 키보드가 떠도 레이아웃 높이를 안 줄이고 위를 덮기만 해서, inset:0 오버레이의
+  //   바닥(=주 버튼)이 키보드 밑에 깔린다. 전역 viewport meta(interactive-widget)를 바꾸면
+  //   모든 화면의 키보드 동작이 바뀌므로, 이 창이 열려 있는 동안만 이 창의 높이를 맞춘다.
+  //   키보드가 없으면(데스크톱 포함) 인라인 값을 비워 CSS 그대로 둔다.
+  useEffect(() => {
+    if (!open || !mounted) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    // 키보드가 창 높이 자체를 줄이는 기기(안드로이드 인앱 WebView 등 — innerHeight 가 같이 준다)도
+    // 잡도록, 열린 동안 본 가장 큰 높이를 기준으로 삼는다. 화면을 돌려 폭이 바뀌면 기준을 새로 잡는다.
+    let baseH = window.innerHeight;
+    let baseW = window.innerWidth;
+    const sync = () => {
+      const overlay = overlayRef.current;
+      if (!overlay) return;
+      if (Math.abs(window.innerWidth - baseW) > 40) {
+        baseW = window.innerWidth;
+        baseH = window.innerHeight;
+      }
+      baseH = Math.max(baseH, window.innerHeight);
+      const keyboard = baseH - vv.height > KEYBOARD_MIN_PX;
+      // 오버레이 높이를 손대는 것은 레이아웃 높이는 그대로인데 보이는 영역만 준 경우(iOS)뿐이다.
+      if (window.innerHeight - vv.height > KEYBOARD_MIN_PX) {
+        overlay.style.top = `${vv.offsetTop}px`;
+        overlay.style.bottom = "auto";
+        overlay.style.height = `${vv.height}px`;
+      } else {
+        overlay.style.top = "";
+        overlay.style.bottom = "";
+        overlay.style.height = "";
+      }
+      // 키보드가 떠 있다는 표시 — 겉옷(zzal authSkin)이 머리 띠를 접는 데 쓴다.
+      // ★ 포커스(:focus)로 판단하지 않는다 — 닫기 버튼을 누르는 순간 입력칸 포커스가 빠지며
+      //   배치가 바뀌어 누름이 빗나갔다(e2e 실측).
+      if (keyboard) overlay.dataset.keyboard = "1";
+      else delete overlay.dataset.keyboard;
+      // 높이가 바뀐 뒤 지금 치는 칸이 주 버튼 뒤로 숨지 않게(.form 의 scroll-padding 이 버튼 몫을 비워 둔다).
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement && formRef.current?.contains(active)) {
+        requestAnimationFrame(() => active.scrollIntoView({ block: "nearest" }));
+      }
+    };
+    sync();
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    window.addEventListener("resize", sync);
+    return () => {
+      vv.removeEventListener("resize", sync);
+      vv.removeEventListener("scroll", sync);
+      window.removeEventListener("resize", sync);
+    };
+  }, [open, mounted]);
+
+  // 오류가 뜨면 그 칸으로 데려가고 문구가 보이게 굴린다. 비밀번호 칸은 내용을 선택해 두어
+  // 바로 다시 치면 덮어써지게 한다(지우고 다시 쓰기).
+  useEffect(() => {
+    const target = focusNextRef.current;
+    focusNextRef.current = null;
+    const input =
+      target === "email" ? emailRef.current
+      : target === "password" ? passwordRef.current
+      : target === "confirm" ? confirmRef.current
+      : null;
+    if (input) {
+      input.focus({ preventScroll: true });
+      if (input.type !== "email") input.select();
+    }
+    const msg = errorRef.current;
+    if (msg) requestAnimationFrame(() => msg.scrollIntoView({ block: "nearest" }));
+    else if (input) requestAnimationFrame(() => input.scrollIntoView({ block: "nearest" }));
+  }, [formError, errorSpot, tab, info]);
+
+  /** 오류 하나를 칸에 붙여 띄운다. 입력칸이면 그 칸으로 포커스를 옮긴다. */
+  const showError = (spot: ErrorSpot, message: string) => {
+    setErrorSpot(spot);
+    setFormError(message);
+    // 단계형이면 문제가 난 칸의 단계로 데려간다(가입 제출 때 막힌 경우 등).
+    const at = STEP_OF_SPOT[spot];
+    if (at) setStep(at);
+    if (spot === "email" || spot === "password" || spot === "confirm") focusNextRef.current = spot;
+  };
+
+  /**
+   * ★ 폰 뒤로가기 = 창 닫기(2026-10-08 #690).
+   *
+   * 창을 열 때 history 에 한 칸을 쌓고, 뒤로가기(popstate)가 오면 창만 닫는다. 예전엔 창이
+   * history 를 안 써서 뒤로가기가 **페이지를 떠났다** — 치던 것도, 보던 화면도 같이 사라졌다.
+   * - 쌓는 값은 지금 state 를 그대로 복사해 표시만 더한다. Next 라우터가 자기 state(__NA 등)가
+   *   없는 칸으로 돌아오면 새로고침해 버리므로, 빈 state 를 쌓으면 안 된다.
+   * - 입력이 있으면 바깥 탭과 같은 규칙으로 닫지 않고 칸을 다시 쌓는다(뒤로가기를 한 번 무른다).
+   * - 닫기 버튼·Esc·바깥 탭으로 닫히면 쌓은 칸을 걷는다(history.back). 성공해서 닫힐 때는
+   *   부르는 쪽이 곧장 다른 주소로 보낼 수 있어서(웹툰 → 마이페이지), **먼저** 걷고 나서 알린다.
+   */
+  const historyPushedRef = useRef(false);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = Boolean(email || password || passwordConfirm);
+  const requestCloseRef = useRef<(reason: "esc" | "backdrop" | "button" | "back") => void>(() => {});
+
+  useEffect(() => {
+    if (!open) return;
+    const push = () =>
+      window.history.pushState({ ...(window.history.state ?? {}), loreAuthModal: true }, "");
+    push();
+    historyPushedRef.current = true;
+    const onPop = () => {
+      if (!historyPushedRef.current) return; // 우리가 걷은 것
+      if (dirtyRef.current) {
+        push();
+        return;
+      }
+      historyPushedRef.current = false;
+      requestCloseRef.current("back");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      if (historyPushedRef.current) {
+        historyPushedRef.current = false;
+        if (window.history.state?.loreAuthModal) window.history.back();
+      }
+    };
+  }, [open]);
+
+  /** 성공 직전에 쌓은 칸을 걷고 돌아온 것을 기다린다(늦어도 0.4초). */
+  const popOwnHistory = () =>
+    new Promise<void>((resolve) => {
+      if (!historyPushedRef.current || !window.history.state?.loreAuthModal) {
+        historyPushedRef.current = false;
+        resolve();
+        return;
+      }
+      historyPushedRef.current = false;
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        window.removeEventListener("popstate", done);
+        resolve();
+      };
+      window.addEventListener("popstate", done);
+      window.history.back();
+      window.setTimeout(done, 400);
+    });
+
   const requestClose = useCallback(
-    (reason: "esc" | "backdrop" | "button") => {
+    (reason: "esc" | "backdrop" | "button" | "back") => {
       // 성공해서 닫히는 경우는 이 함수를 안 거친다. 여기 오는 건 전부 물러난 것이다.
       if (!submittedRef.current) track("auth_modal_dismissed", { tab, reason });
       onClose();
     },
     [onClose, tab],
   );
+  requestCloseRef.current = requestClose;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Escape") {
@@ -178,11 +416,98 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     if (next === tab) return;
     track("auth_tab_switched", { from: tab, to: next });
     setTab(next);
+    setStep("email");
     // 이메일·비밀번호는 남긴다. 로그인에 실패해 가입으로 넘어오는 흐름이 가장 흔한데
     // 거기서 다시 치게 하면 그 자리에서 그만둔다. 문구만 지운다.
     setFormError(null);
     setInfo(null);
   };
+
+  /**
+   * 키보드의 "이동/완료" 를 눌렀을 때. 마지막 칸이 아니면 제출하지 말고 다음 칸으로.
+   * 예전엔 이메일 칸에서 누르면 바로 제출돼 "비밀번호 8자 이상" 같은 오류부터 봤다.
+   */
+  const enterToNext = (next: React.RefObject<HTMLInputElement | null>) =>
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+      e.preventDefault();
+      next.current?.focus();
+    };
+
+  const steps = isLogin ? LOGIN_STEPS : SIGNUP_STEPS;
+  const stepIndex = Math.max(0, steps.indexOf(step));
+  const lastStep = stepIndex === steps.length - 1;
+  const inputOf = (st: Step) =>
+    st === "email" ? emailRef.current
+    : st === "password" ? passwordRef.current
+    : st === "confirm" ? confirmRef.current
+    : null;
+
+  /**
+   * 단계 이동. ★ 다음 칸으로의 포커스는 **누른 그 자리에서 동기로** 준다(flushSync 로 먼저 그린 뒤).
+   * iOS 는 사용자 동작 밖에서(useEffect 등) 준 포커스로는 키보드를 띄우지 않아서, 단계가 넘어갈 때
+   * 키보드가 내려갔다 다시 눌러야 올라오는 일이 생긴다.
+   */
+  const moveTo = (next: Step) => {
+    flushSync(() => {
+      setStep(next);
+      setFormError(null);
+    });
+    const input = inputOf(next);
+    if (input) input.focus({ preventScroll: true });
+    else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  };
+
+  /** 단계 안에서 막는 것. 제출 때와 같은 기준·같은 코드로 센다(실패 통계가 끊기지 않게). */
+  const failStep = (code: string, spot: ErrorSpot, message: string) => {
+    track(isLogin ? "auth_login_failed" : "auth_signup_failed", { code });
+    setErrorSpot(spot);
+    setFormError(message);
+  };
+
+  /**
+   * "다음". 지금 단계를 확인하고, **이미 채워진 뒤 단계는 건너뛴다.**
+   *
+   * ★ 건너뛰는 이유 — 비밀번호 관리자(iOS 키체인·크롬)는 이메일 칸에서 저장된 계정을 고르면
+   *   숨어 있는 비밀번호 칸까지 한 번에 채운다. 그 사람에게 비밀번호 단계를 또 보여 주면 이미 끝난
+   *   일을 한 번 더 누르게 된다. 채워진 것이 맞으면 바로 다음 빈 단계로, 다 찼으면 바로 제출한다.
+   *   틀린 것이 있으면 그 단계로 데려가 같은 문구를 띄운다.
+   */
+  const goNext = () => {
+    const trimmedEmail = email.trim();
+    if (step === "email") {
+      if (!trimmedEmail) return failStep("client_empty_email", "email", "이메일을 입력해 주세요");
+      if (!EMAIL_SHAPE.test(trimmedEmail)) return failStep("client_email_shape", "email", "이메일 주소를 다시 확인해 주세요");
+      if (!password) return moveTo("password");
+      if (isLogin) return submitAll();
+    }
+    if (!isLogin && (step === "email" || step === "password")) {
+      if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) {
+        if (step !== "password") moveTo("password");
+        return password.length < PASSWORD_MIN
+          ? failStep("client_password_short", "password", `비밀번호는 ${PASSWORD_MIN}자 이상이어야 합니다`)
+          : failStep("client_password_long", "password", `비밀번호는 ${PASSWORD_MAX}자까지 쓸 수 있습니다`);
+      }
+      if (!passwordConfirm) return moveTo("confirm");
+    }
+    if (!isLogin && step !== "agree") {
+      if (password !== passwordConfirm) {
+        if (step !== "confirm") moveTo("confirm");
+        return failStep("client_password_mismatch", "confirm", "비밀번호가 서로 다릅니다");
+      }
+      if (!(agree.age && agree.terms && agree.privacy)) return moveTo("agree");
+      return submitAll();
+    }
+  };
+
+  const goBack = () => {
+    if (stepIndex > 0) moveTo(steps[stepIndex - 1]);
+  };
+
+  /** 단계형에서 지금 단계가 아닌 칸은 눈에서만 숨긴다(폼에는 남는다 — 자동 입력 짝). */
+  const hiddenUnless = (st: Step) => (stepMode && step !== st ? ` ${styles.stepHidden}` : "");
+  const hiddenProps = (st: Step) =>
+    stepMode && step !== st ? ({ tabIndex: -1, "aria-hidden": true } as const) : {};
 
   const toggleAll = () => {
     const next = !(agree.age && agree.terms && agree.privacy && agree.marketing);
@@ -199,7 +524,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
 
     if (!trimmedEmail || !password) {
       track("auth_login_failed", { code: "client_empty_field" });
-      setFormError("이메일과 비밀번호를 입력해 주세요");
+      showError(trimmedEmail ? "password" : "email", "이메일과 비밀번호를 입력해 주세요");
       return;
     }
 
@@ -208,11 +533,13 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     try {
       await signIn({ email: trimmedEmail, password });
       track("auth_login_succeeded");
+      await popOwnHistory();
       onSuccess?.("login");
       onClose();
     } catch (e) {
       track("auth_login_failed", { code: errorCodeOf(e) });
-      setFormError(messageOf(e));
+      // 로그인 실패는 대개 비밀번호 오타다 — 비밀번호 칸 밑에 두고 그 칸을 선택해 둔다.
+      showError("password", messageOf(e));
     } finally {
       setSubmitting(false);
     }
@@ -236,7 +563,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       // 실패로 함께 센다. 보내 보지도 못하고 여기서 그만두는 사람이
       // 서버가 거절한 사람만큼이나 중요한 이탈이라서다.
       track("auth_signup_failed", { code: blocked[0] });
-      setFormError(blocked[1]);
+      showError(SPOT_OF_CODE[blocked[0]] ?? "form", blocked[1]);
       return;
     }
 
@@ -257,17 +584,16 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
         },
       });
       track("auth_signup_succeeded");
-      // ★ 가입은 로그인시키지 않는다(서버가 토큰을 주지 않는다). 창을 닫지 말고
-      //   로그인 탭으로 옮겨, 방금 만든 계정으로 바로 들어갈 수 있게 한다.
-      //   이메일은 그대로 두고 비밀번호만 비운다 — 그 자리에서 오타를 걸러낸다.
-      setTab("login");
-      setPassword("");
-      setPasswordConfirm("");
-      setInfo("가입됐어요. 방금 만든 비밀번호로 로그인해 주세요");
+      // ★ 가입하면 바로 로그인된다(2026-10-08 #690 — 서버가 로그인과 같은 쿠키를 준다).
+      //   로그인 탭으로 옮겨 비밀번호를 다시 치게 하던 단계는 없앴다. 창을 닫는다.
+      //   auth_login_* 이벤트는 이 경로에서 안 찍힌다(가입 = 가입 성공 하나).
+      await popOwnHistory();
       onSuccess?.("signup");
+      onClose();
     } catch (e) {
       track("auth_signup_failed", { code: errorCodeOf(e) });
-      setFormError(messageOf(e));
+      // 이미 가입된 이메일은 이메일 칸의 문제다 — 단계형이면 이메일 단계로 돌아간다.
+      showError(errorCodeOf(e) === "EMAIL_ALREADY_EXISTS" ? "email" : "form", messageOf(e));
     } finally {
       setSubmitting(false);
     }
@@ -276,36 +602,77 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting) return; // 중복 제출 방지. 버튼도 잠그지만 엔터로도 들어온다.
+    // 단계형: 마지막 단계 전에는 "다음". 키보드의 이동/엔터도 이 길로 온다(폼의 암묵 제출).
+    if (stepMode && !lastStep) {
+      goNext();
+      return;
+    }
+    submitAll();
+  };
+
+  function submitAll() {
     submittedRef.current = true;
     const trimmedEmail = email.trim();
     void (isLogin ? handleLogin(trimmedEmail) : handleSignUp(trimmedEmail));
-  };
+  }
 
   if (!open || !mounted) return null;
 
   const allAgreed = agree.age && agree.terms && agree.privacy && agree.marketing;
+
+  /** spot 칸의 오류 문구. role="alert" — 생기면 화면 낭독기가 즉시 읽는다. */
+  const errorAt = (spot: ErrorSpot) =>
+    formError && errorSpot === spot ? (
+      <p ref={errorRef} id={errorId} className={styles.error} role="alert">
+        {formError}
+      </p>
+    ) : null;
+  const invalid = (spot: ErrorSpot) => Boolean(formError) && errorSpot === spot;
+  const describedBy = (...ids: (string | false | undefined)[]) =>
+    ids.filter(Boolean).join(" ") || undefined;
 
   return createPortal(
     <div
       className={styles.overlay}
       // 배경을 눌러 닫는다. mousedown 을 보는 이유는, 입력 칸에서 드래그하다
       // 배경에서 손을 떼는 경우까지 "닫기" 로 읽히는 걸 막기 위해서다.
+      ref={overlayRef}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) requestClose("backdrop");
+        if (e.target !== e.currentTarget) return;
+        // ★ 뭔가 쳐 둔 게 있으면 배경을 눌러도 안 닫는다(2026-10-08 #690). 폰에서는 키보드
+        //   가장자리·창 위 여백을 스치기만 해도 닫혀 친 것이 통째로 사라졌다(실측: 390 가입 탭
+        //   포함 4/6 조합에서 닫힘). 닫기 버튼과 Esc 는 그대로 닫는다.
+        if (email || password || passwordConfirm) return;
+        requestClose("backdrop");
       }}
     >
       <div
         ref={dialogRef}
-        className={styles.dialog}
+        className={`${styles.dialog}${stepMode ? ` ${styles.stepMode}` : ""}`}
+        data-step-mode={stepMode ? step : undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         onKeyDown={handleKeyDown}
       >
         <div className={styles.head}>
+          {stepMode && stepIndex > 0 && (
+            <button type="button" className={styles.stepBack} onClick={goBack}
+                    aria-label="이전" data-action="auth-step-back">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M15 5l-7 7 7 7" />
+              </svg>
+            </button>
+          )}
           <h2 id={titleId} className={styles.title}>
             {isLogin ? "로그인" : "회원가입"}
           </h2>
+          {stepMode && (
+            <span className={styles.progress} data-part="auth-step-progress">
+              {stepIndex + 1} / {steps.length}
+            </span>
+          )}
           <button
             type="button"
             className={styles.close}
@@ -316,7 +683,12 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           </button>
         </div>
 
-        <div className={styles.tabs} role="tablist" aria-label="로그인 또는 회원가입">
+        {/* 단계형에서는 첫 단계에만 탭을 보인다 — 키보드가 오른 화면에서 한 줄(52px)이 아깝다.
+            ★ 빼지 않고 눈에서만 숨긴다: 피스메이커가 `:has(> [role="tablist"])` 로 이 창을 찾아 옷을
+              입히므로(piece-maker.css), 탭이 DOM 에서 빠지면 둘째 단계부터 옷이 벗겨졌다(실측). */}
+        <div className={`${styles.tabs}${stepMode && step !== "email" ? ` ${styles.stepHidden}` : ""}`}
+             role="tablist" aria-label="로그인 또는 회원가입"
+             aria-hidden={stepMode && step !== "email" ? true : undefined}>
           <button
             type="button"
             role="tab"
@@ -325,6 +697,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             aria-controls={panelId}
             className={`${styles.tab} ${isLogin ? styles.tabActive : ""}`}
             onClick={() => switchTab("login")}
+            tabIndex={stepMode && step !== "email" ? -1 : undefined}
           >
             로그인
           </button>
@@ -336,6 +709,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             aria-controls={panelId}
             className={`${styles.tab} ${!isLogin ? styles.tabActive : ""}`}
             onClick={() => switchTab("signup")}
+            tabIndex={stepMode && step !== "email" ? -1 : undefined}
           >
             회원가입
           </button>
@@ -345,56 +719,98 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           id={panelId}
           role="tabpanel"
           aria-labelledby={isLogin ? loginTabId : signupTabId}
+          ref={formRef}
           className={styles.form}
           onSubmit={handleSubmit}
           // 브라우저 기본 말풍선을 끄고 우리 문구로 통일한다.
           noValidate
         >
-          <label className={styles.field}>
+          <label className={`${styles.field}${hiddenUnless("email")}`}>
             <span className={styles.label}>이메일</span>
             <input
               ref={emailRef}
+              {...hiddenProps("email")}
               className={styles.input}
               type="email"
               inputMode="email"
               autoComplete="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              enterKeyHint="next"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={stepMode ? undefined : enterToNext(passwordRef)}
+              aria-invalid={invalid("email") || undefined}
+              aria-describedby={describedBy(invalid("email") && errorId)}
               placeholder="you@example.com"
             />
           </label>
+          {errorAt("email")}
 
-          <label className={styles.field}>
-            <span className={styles.label}>비밀번호</span>
-            <input
-              className={styles.input}
-              type="password"
-              autoComplete={isLogin ? "current-password" : "new-password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              aria-describedby={isLogin ? undefined : passwordHintId}
-            />
+          {/* 보기 버튼이 들어가서 label 로 감싸지 않고 htmlFor 로 잇는다 —
+              label 안의 버튼은 브라우저마다 누름이 입력칸 포커스로 새기도 한다. */}
+          <div className={`${styles.field}${hiddenUnless("password")}`}>
+            <label htmlFor={passwordId} className={styles.label}>비밀번호</label>
+            <span className={styles.inputWrap}>
+              <input
+                ref={passwordRef}
+                id={passwordId}
+                {...hiddenProps("password")}
+                className={`${styles.input} ${styles.inputWithReveal}`}
+                type={showPassword ? "text" : "password"}
+                autoComplete={isLogin ? "current-password" : "new-password"}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint={isLogin ? "go" : "next"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={isLogin || stepMode ? undefined : enterToNext(confirmRef)}
+                aria-invalid={invalid("password") || undefined}
+                aria-describedby={describedBy(!isLogin && passwordHintId, invalid("password") && errorId)}
+              />
+              <button
+                type="button"
+                className={styles.reveal}
+                {...hiddenProps("password")}
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                aria-pressed={showPassword}
+              >
+                <EyeIcon open={showPassword} />
+              </button>
+            </span>
             {!isLogin && (
               <span id={passwordHintId} className={styles.hint}>
                 {PASSWORD_MIN}자 이상
               </span>
             )}
-          </label>
+          </div>
+          {errorAt("password")}
 
           {!isLogin && (
             <>
-              <label className={styles.field}>
+              <label className={`${styles.field}${hiddenUnless("confirm")}`}>
                 <span className={styles.label}>비밀번호 확인</span>
                 <input
+                  ref={confirmRef}
+                  {...hiddenProps("confirm")}
                   className={styles.input}
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="done"
                   value={passwordConfirm}
                   onChange={(e) => setPasswordConfirm(e.target.value)}
+                  aria-invalid={invalid("confirm") || undefined}
+                  aria-describedby={describedBy(invalid("confirm") && errorId)}
                 />
               </label>
+              {errorAt("confirm")}
 
-              <fieldset className={styles.agreements}>
+              <fieldset className={`${styles.agreements}${hiddenUnless("agree")}`}>
                 <legend className={styles.srOnly}>약관 동의</legend>
 
                 <label className={`${styles.agreeLabel} ${styles.agreeAll}`}>
@@ -456,15 +872,12 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
                   </label>
                 </div>
               </fieldset>
+              {errorAt("agree")}
             </>
           )}
 
-          {/* role="alert" — 오류가 생기면 화면 낭독기가 즉시 읽어 준다. */}
-          {formError && (
-            <p className={styles.error} role="alert">
-              {formError}
-            </p>
-          )}
+          {/* 칸에 붙일 수 없는 오류(서버 거절 등)는 예전처럼 주 버튼 바로 위. */}
+          {errorAt("form")}
 
           {/* 오류가 아닌 안내(가입 완료). status 로 읽어 주되 오류처럼 다급하게 읽지 않는다. */}
           {!formError && info && (
@@ -473,8 +886,11 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             </p>
           )}
 
-          <button type="submit" className={styles.submit} disabled={submitting}>
-            {submitting ? "처리 중…" : isLogin ? "로그인" : "가입하고 시작하기"}
+          <button type="submit" className={styles.submit} disabled={submitting}
+                  data-action={stepMode && !lastStep ? "auth-step-next" : "auth-submit"}>
+            {submitting ? "처리 중…"
+              : stepMode && !lastStep ? "다음"
+              : isLogin ? "로그인" : "가입하고 시작하기"}
           </button>
         </form>
       </div>

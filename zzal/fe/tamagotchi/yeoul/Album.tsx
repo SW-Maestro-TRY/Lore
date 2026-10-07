@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { assetUrl } from '../../lib/assets';
 import { downloadImage, imageFileName, prepareImageFile, shareImageFile } from '../../lib/download';
+import { detectInApp } from '../../lib/inapp';
 import { C, C2, GAEGU, TAP_MIN, gap, radius, fz, ink, paperA } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
@@ -145,6 +146,9 @@ function FrameView({ y }: { y: Yeoul }) {
     }
     return () => { active = false; };
   }, [fileSrc, fileName, f.open]);
+  // 인앱 브라우저는 <a download> 를 무시하기 쉽다(2026-10-08 #690). UA 는 클라이언트에서만 본다.
+  const [inApp, setInApp] = useState(false);
+  useEffect(() => { setInApp(detectInApp() != null); }, []);
   const record = (kind: 'SHARE' | 'DOWNLOAD') => {
     if (live.petId && !y.s.sampleMode) void live.shareMotion(f.key, kind);
   };
@@ -178,6 +182,11 @@ function FrameView({ y }: { y: Yeoul }) {
         <span style={{ fontFamily: GAEGU, fontSize: fz.h2, color: C2.onDark }}>{f.name}</span>
         {notice && <span role="status" data-part="album-file-notice" style={{ fontSize: fz.sm, color: C2.onDark, textAlign: 'center' }}>{notice}</span>}
         {f.locked && <span style={{ padding: '7px 14px', borderRadius: radius.pill, background: paperA(.16), fontSize: fz.sm, color: '#F3E9DC' }}>{f.cond}</span>}
+        {f.open && inApp && (
+          <span data-part="album-inapp-note" style={{ maxWidth: 300, fontSize: fz.sm, lineHeight: 1.5, color: C2.onDark, textAlign: 'center' }}>
+            인앱에서는 저장이 안 될 수 있어요 — 그림을 길게 눌러 저장하거나 외부 브라우저로 열어 주세요(외부 브라우저에선 다시 로그인이 필요해요)
+          </span>
+        )}
         {f.open && (
           <span style={{ display: 'flex', gap: gap.sm }}>
             {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 39px). */}

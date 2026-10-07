@@ -15,6 +15,7 @@
 
 import { useSyncExternalStore } from "react";
 import { ApiError } from "../api/client";
+import { track } from "../analytics";
 import {
   getMe,
   login as loginApi,
@@ -125,14 +126,12 @@ export async function signIn(input: LoginInput): Promise<void> {
 }
 
 /**
- * 가입. **로그인 상태가 되지 않는다** — 서버가 토큰을 주지 않기 때문이다.
- *
- * ★ 화면은 가입 뒤 로그인 화면으로 보낸다. 방금 정한 비밀번호를 한 번 더 치게 하는 셈이지만,
- *   그 자리에서 비밀번호가 맞는지 확인된다. 오타를 낸 채 가입한 사람이 다음 접속에서야
- *   못 들어오는 일을 막는다.
+ * 가입. **성공하면 바로 로그인 상태가 된다**(2026-10-08 #690 — 서버가 로그인과 같은 쿠키 2종을 준다).
+ * 로그인과 마찬가지로 내 정보까지 다시 받아 채운다 — 안 그러면 헤더가 여전히 "로그인" 을 그린다.
  */
 export async function signUp(input: SignUpInput): Promise<void> {
   await signUpApi(input);
+  await load(true);
 }
 
 /**
@@ -140,6 +139,10 @@ export async function signUp(input: SignUpInput): Promise<void> {
  * "로그아웃 눌렀는데 에러" 만큼 이상한 것이 없다(auth/api.ts 의 logout 주석과 같은 약속).
  */
 export async function signOut(): Promise<void> {
+  // 로그아웃도 센다 — 헤더 "로그아웃" 을 눌렀다가 1초 만에 다시 로그인하는 오조작이 운영에서
+  // 보였는데(10/7), 로그아웃 기록이 없어 재로그인만 찍혀 있었다. 이벤트 이름은 서버가
+  // 형식(소문자·밑줄)으로만 거르므로 따로 목록에 올릴 것이 없다.
+  track("auth_logout");
   await logoutApi();
   settled = true;
   setState({ status: "anonymous", user: null });
