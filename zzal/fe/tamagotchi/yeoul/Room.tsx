@@ -75,6 +75,35 @@ export default function Room({ y }: { y: Yeoul }) {
   const [brokenSrc, setBrokenSrc] = useState<ReadonlySet<string>>(() => new Set());
   const fallbackSrc = yeoulSpriteUrl(v.spriteKey);
   const charSrc = brokenSrc.has(wantSrc) ? fallbackSrc : wantSrc;
+  /**
+   * **앱에서 나갔다 돌아오면 아이 그림을 새로 단다**(2026-10-07, 상훈님 실기기 관찰).
+   *
+   * ★ 증상 — 폰에서 방을 켠 채 홈 버튼 → 사진 저장·캡처 → 돌아오면 아이가 안 보이고, 새로고침해야 보였다.
+   * ★ 원인(재현으로 확인한 갈래) — 숨어 있는 동안 그림을 다시 받아야 하는 일이 생기고(iOS 가 메모리를
+   *   회수해 그림 바이트를 버림) 그 순간 네트워크가 아직 안 붙어 있으면 `<img>` 는 **깨진 채로 남는다.**
+   *   브라우저는 같은 `src` 를 스스로 다시 받지 않는다. 진짜 방에서는 그 실패가 `onError` →
+   *   `brokenSrc` 에 **영구히** 적혀 내 아이 대신 여울이 서고, 연습방(이미 여울)에서는 빈 무대로 남는다.
+   *   둘 다 새로고침 전까지 안 풀린다(Playwright 로 "그림 회수 + 오프라인 → 복귀" 를 만들어 naturalWidth 0 유지 확인).
+   * ★ 고친 것 — 다시 보이는 순간(`visibilitychange: visible`·bfcache 복귀 `pageshow`) **그림 칸을 새로
+   *   마운트**하고 `brokenSrc` 를 비운다. 받아 둔 그림은 1년 불변 캐시라 새로 마운트해도 대개 왕복이 없다.
+   *   iOS 의 "합성 층이 복귀 뒤 다시 안 그려지는" 현상도 새 요소라 함께 덮인다(이쪽은 실기기 확인 필요).
+   * ⚠️ 정말로 없는 그림(굽기 전 아이의 403)은 복귀 때마다 한 번 다시 시도하고 여울로 내려간다 — 한 틱 깜빡일 수 있다.
+   */
+  const [imgEpoch, setImgEpoch] = useState(0);
+  useEffect(() => {
+    const revive = () => {
+      setBrokenSrc((prev) => (prev.size ? new Set() : prev));
+      setImgEpoch((n) => n + 1);
+    };
+    const onVis = () => { if (document.visibilityState === 'visible') revive(); };
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted) revive(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pageshow', onShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pageshow', onShow);
+    };
+  }, []);
   // 발밑 여백은 그림마다 다르다 — 상수로 두면 어떤 아이는 뜨고 어떤 아이는 잠긴다.
   const footPad = useFootPad(charSrc, SPRITE_FOOT_PAD);
   // 머리 위 여백·좌우 가장자리도 **그림에서 잰다** — 아래 `headSpan`·`silLeft` 참조.
@@ -468,6 +497,7 @@ export default function Room({ y }: { y: Yeoul }) {
               <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
+                  key={imgEpoch}
                   src={charSrc} alt=""
                   data-sprite-fallback={charSrc === fallbackSrc && wantSrc !== fallbackSrc ? '1' : undefined}
                   onError={() => {
