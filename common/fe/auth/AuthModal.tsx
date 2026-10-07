@@ -257,14 +257,77 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     if (spot === "email" || spot === "password" || spot === "confirm") focusNextRef.current = spot;
   };
 
+  /**
+   * ★ 폰 뒤로가기 = 창 닫기(2026-10-08 #690).
+   *
+   * 창을 열 때 history 에 한 칸을 쌓고, 뒤로가기(popstate)가 오면 창만 닫는다. 예전엔 창이
+   * history 를 안 써서 뒤로가기가 **페이지를 떠났다** — 치던 것도, 보던 화면도 같이 사라졌다.
+   * - 쌓는 값은 지금 state 를 그대로 복사해 표시만 더한다. Next 라우터가 자기 state(__NA 등)가
+   *   없는 칸으로 돌아오면 새로고침해 버리므로, 빈 state 를 쌓으면 안 된다.
+   * - 입력이 있으면 바깥 탭과 같은 규칙으로 닫지 않고 칸을 다시 쌓는다(뒤로가기를 한 번 무른다).
+   * - 닫기 버튼·Esc·바깥 탭으로 닫히면 쌓은 칸을 걷는다(history.back). 성공해서 닫힐 때는
+   *   부르는 쪽이 곧장 다른 주소로 보낼 수 있어서(웹툰 → 마이페이지), **먼저** 걷고 나서 알린다.
+   */
+  const historyPushedRef = useRef(false);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = Boolean(email || password || passwordConfirm);
+  const requestCloseRef = useRef<(reason: "esc" | "backdrop" | "button" | "back") => void>(() => {});
+
+  useEffect(() => {
+    if (!open) return;
+    const push = () =>
+      window.history.pushState({ ...(window.history.state ?? {}), loreAuthModal: true }, "");
+    push();
+    historyPushedRef.current = true;
+    const onPop = () => {
+      if (!historyPushedRef.current) return; // 우리가 걷은 것
+      if (dirtyRef.current) {
+        push();
+        return;
+      }
+      historyPushedRef.current = false;
+      requestCloseRef.current("back");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      if (historyPushedRef.current) {
+        historyPushedRef.current = false;
+        if (window.history.state?.loreAuthModal) window.history.back();
+      }
+    };
+  }, [open]);
+
+  /** 성공 직전에 쌓은 칸을 걷고 돌아온 것을 기다린다(늦어도 0.4초). */
+  const popOwnHistory = () =>
+    new Promise<void>((resolve) => {
+      if (!historyPushedRef.current || !window.history.state?.loreAuthModal) {
+        historyPushedRef.current = false;
+        resolve();
+        return;
+      }
+      historyPushedRef.current = false;
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        window.removeEventListener("popstate", done);
+        resolve();
+      };
+      window.addEventListener("popstate", done);
+      window.history.back();
+      window.setTimeout(done, 400);
+    });
+
   const requestClose = useCallback(
-    (reason: "esc" | "backdrop" | "button") => {
+    (reason: "esc" | "backdrop" | "button" | "back") => {
       // 성공해서 닫히는 경우는 이 함수를 안 거친다. 여기 오는 건 전부 물러난 것이다.
       if (!submittedRef.current) track("auth_modal_dismissed", { tab, reason });
       onClose();
     },
     [onClose, tab],
   );
+  requestCloseRef.current = requestClose;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Escape") {
@@ -334,6 +397,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     try {
       await signIn({ email: trimmedEmail, password });
       track("auth_login_succeeded");
+      await popOwnHistory();
       onSuccess?.("login");
       onClose();
     } catch (e) {
@@ -387,6 +451,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       // ★ 가입하면 바로 로그인된다(2026-10-08 #690 — 서버가 로그인과 같은 쿠키를 준다).
       //   로그인 탭으로 옮겨 비밀번호를 다시 치게 하던 단계는 없앴다. 창을 닫는다.
       //   auth_login_* 이벤트는 이 경로에서 안 찍힌다(가입 = 가입 성공 하나).
+      await popOwnHistory();
       onSuccess?.("signup");
       onClose();
     } catch (e) {
