@@ -119,6 +119,12 @@ public class HatchService {
             }
 
             if (attempt >= maxAttempts) {
+                // ★ 실패가 확정되는 마지막 시도의 거부 격자도 보존한다(2026-10-08). 전에는 보존이
+                //   아래 재시도 준비(discardBadGrids) 안에만 있어 5번째 격자만 rejected/ 에 안 남았다
+                //   (운영 job 119·130). 폐기는 하지 않는다 — 다시 구울 일이 없고, 관리자 재굽기가 제 길에서 폐기한다.
+                if (result != null) {
+                    preserveBadGrids(petId, result);
+                }
                 log.warn("부화 실패 확정 — petId={} 시도={}회", petId, attempt);
                 recorder.markPetFailed(petId);
                 // ★★ 알리는 것은 <b>표에 FAILED 가 적힌 뒤</b>다. 먼저 부르면 연속 실패를 세는 질의가
@@ -171,9 +177,32 @@ public class HatchService {
      * 스위치: {@code app.zzal.hatch-retry.discard-only-failed-grid} · {@code ...discard-on-postprocess-crash}.
      */
     private void discardBadGrids(Long petId, RunResult result) {
+        // ★ 버리기 전에 그림을 보존한다 — 재시도가 같은 키에 덮어써 거부된 격자가 사라진다(2026-10-07).
+        //   ⚠️ 단계 기록은 지운다. status 칸에 값 목록 CHECK 가 걸려 있어 DISCARDED 를 남기려면
+        //     마이그레이션이 필요하다 — 대신 보존 키를 로그에 남긴다(RejectedGridArchive).
+        List<String> targets = preserveBadGrids(petId, result);
+        if (targets.isEmpty()) {
+            return;
+        }
+        int discarded = 0;
+        for (String step : targets) {
+            discarded += recorder.discardSucceeded(petId, GenKind.HATCH, step);
+        }
+        log.info("격자 {} — {} {}건을 폐기하고 다시 굽는다 (petId={} 격자표식={})",
+                result.gridRejected() ? "구조 이상" : "후처리 실패", targets, discarded, petId, result.failedGrid());
+    }
+
+    /**
+     * 실패 원인이 격자에 있으면 그 격자를 {@code rejected/} 로 <b>보존만</b> 한다(폐기는 하지 않는다).
+     *
+     * ★ 재시도 여부와 무관하게 불린다 — 재시도 전({@link #discardBadGrids})과 실패 확정 직전 둘 다(2026-10-08).
+     *
+     * @return 못 쓸 격자로 판정된 단계 이름들. 격자 탓이 아니면 빈 목록
+     */
+    private List<String> preserveBadGrids(Long petId, RunResult result) {
         boolean bad = result.gridRejected() || (discardOnPostprocessCrash && result.postprocessCrashed());
         if (!bad) {
-            return;
+            return List.of();
         }
         List<String> targets;
         String which = result.failedGrid();
@@ -182,21 +211,15 @@ public class HatchService {
         } else {
             targets = List.of(GridStep.NAME, PostProcessStep.GRID2);
         }
-        int discarded = 0;
         List<GenStepRecord> succeeded = recorder.loadSucceeded(petId, GenKind.HATCH);
         for (String step : targets) {
-            // ★ 버리기 전에 그림을 보존한다 — 재시도가 같은 키에 덮어써 거부된 격자가 사라진다(2026-10-07).
-            //   ⚠️ 단계 기록은 지운다. status 칸에 값 목록 CHECK 가 걸려 있어 DISCARDED 를 남기려면
-            //     마이그레이션이 필요하다 — 대신 보존 키를 로그에 남긴다(RejectedGridArchive).
             for (GenStepRecord rec : succeeded == null ? List.<GenStepRecord>of() : succeeded) {
                 if (step.equals(rec.getName())) {
                     archive.preserve(petId, rec);
                 }
             }
-            discarded += recorder.discardSucceeded(petId, GenKind.HATCH, step);
         }
-        log.info("격자 {} — {} {}건을 폐기하고 다시 굽는다 (petId={} 격자표식={})",
-                result.gridRejected() ? "구조 이상" : "후처리 실패", targets, discarded, petId, which);
+        return targets;
     }
 
     /** 이 알의 주인. 막힘 기록에 누구였는지를 남기려고 본다(없으면 null — 기록은 그래도 남는다). */
