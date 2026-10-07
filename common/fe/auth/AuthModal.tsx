@@ -160,6 +160,8 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   const [formError, setFormError] = useState<string | null>(null);
   /** 오류 문구를 붙일 칸. formError 와 늘 같이 바뀐다. */
   const [errorSpot, setErrorSpot] = useState<ErrorSpot>("form");
+  /** 오류를 띄운 횟수. 같은 문구가 반복돼도 새 오류로 알리는 데 쓴다(H14). */
+  const [errorSeq, setErrorSeq] = useState(0);
   const stepMode = useStepMode();
   const [step, setStep] = useState<Step>("email");
   /** 비밀번호 보기. 가입 탭에서는 두 칸에 같이 걸린다 — 친 것을 눈으로 맞춰 볼 수 있게. */
@@ -447,10 +449,11 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     const msg = errorRef.current;
     if (msg) requestAnimationFrame(() => msg.scrollIntoView({ block: "nearest" }));
     else if (input) requestAnimationFrame(() => input.scrollIntoView({ block: "nearest" }));
-  }, [formError, errorSpot, tab, info]);
+  }, [formError, errorSpot, tab, info, errorSeq]);
 
   /** 오류 하나를 칸에 붙여 띄운다. 입력칸이면 그 칸으로 포커스를 옮긴다. */
   const showError = (spot: ErrorSpot, message: string) => {
+    setErrorSeq((n) => n + 1);
     setErrorSpot(spot);
     setFormError(message);
     // 단계형이면 문제가 난 칸의 단계로 데려간다(가입 제출 때 막힌 경우 등).
@@ -606,6 +609,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   /** 단계 안에서 막는 것. 제출 때와 같은 기준·같은 코드로 센다(실패 통계가 끊기지 않게). */
   const failStep = (code: string, spot: ErrorSpot, message: string) => {
     track(isLogin ? "auth_login_failed" : "auth_signup_failed", { code });
+    setErrorSeq((n) => n + 1);
     setErrorSpot(spot);
     setFormError(message);
   };
@@ -836,7 +840,9 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   /** spot 칸의 오류 문구. role="alert" — 생기면 화면 낭독기가 즉시 읽는다. */
   const errorAt = (spot: ErrorSpot) =>
     formError && errorSpot === spot ? (
-      <p ref={errorRef} id={errorId} className={styles.error} role="alert">
+      // ★ key 가 오류마다 바뀐다(H14) — 같은 문구가 다시 나와도 새 요소로 붙어 낭독기가 다시 읽고,
+      //   위 효과도 다시 돌아 칸 포커스·선택이 돌아온다. 예전엔 같은 값이라 아무 반응이 없어 보였다.
+      <p key={errorSeq} ref={errorRef} id={errorId} className={styles.error} role="alert">
         {formError}
       </p>
     ) : null;
