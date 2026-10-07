@@ -90,6 +90,83 @@
   color: var(--text);
 }
 
+/* 손가락 누름 영역 44px(2026-10-08 #690). 보이는 버튼(높이 30~34px)은 그대로 두고 투명한 덧칸만
+ * 위아래로 넓힌다. 헤더(56~61px) 안에 들어가 다른 것을 덮지 않는다. */
+.authButton {
+  position: relative;
+}
+
+.authButton::after {
+  content: "";
+  position: absolute;
+  inset: -7px -2px;
+}
+
+/* 로그아웃 직후 1초 잠금. 흐리게만 하고 모양은 그대로 둔다. */
+.authButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 로그아웃 확인 칸 — 버튼 바로 밑에 붙는 작은 말풍선. 헤더 높이를 바꾸지 않게 띄운다. */
+.logoutWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.logoutConfirm {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 180px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--card, #fff);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.logoutConfirmText {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.logoutConfirmActions {
+  display: flex;
+  gap: 8px;
+}
+
+.logoutConfirmYes,
+.logoutConfirmNo {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.logoutConfirmYes {
+  border: 0;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+}
+
+.logoutConfirmNo {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+}
+
 /* 로그인 여부를 확인하는 동안 버튼 자리를 미리 잡아 둔다(레이아웃 덜컹임 방지). */
 .authPlaceholder {
   display: inline-block;
