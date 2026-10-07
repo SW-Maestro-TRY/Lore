@@ -70,6 +70,8 @@ import state8_v4 as S4   # noqa: E402  (읽기만. import 시 S8.key_green 이 v
                           #   여기서는 감싸지기 **이전**의 원본을 `S4._v3_key_green` 로 명시적으로 쓴다 —
                           #   state8_v5.py 와 똑같은 방식. 이유는 아래 `cut_one` 참고.)
 import state8_v5 as S5   # noqa: E402  (읽기만. lattice_points/mark_zone/strip_marks_in_zone 재사용)
+# ★2026-10-08 #687 — state8_v5 의 검출·구역이 바뀌어(격자 맞추기·원 구역) 여기는 옛 동작(`*_legacy`)에 묶었다.
+#   선물 움짤 결과를 검수 없이 바꾸지 않기 위해서다(바이트 동일 28/28 확인). 새 방식 적용은 후속 과제.
 
 PAD_CUT_TOP = 60   # 칸 위쪽 절단 여유 — state8_v5 와 같은 값·같은 근거(위 docstring 2번)
 PAD_ALIGN = 120    # 정렬 클리핑 방지용 여유 — state8_v5 와 같은 값
@@ -121,7 +123,7 @@ def cut_one(ext, im_orig_shape, cw, ch, r, c, W0, H0, points):
     cell = S4._v3_key_green(ext.crop(box), up + int(ch))
     # 균등분할 격자선이 이 칸 안에서 지나는 로컬 y 두 개(위 PAD 만큼 밀려 있다)
     corner_rows = (up, up + int(ch))
-    zone = S5.mark_zone((cell.height, cell.width), corner_rows, (x0, gy - up), points)
+    zone = S5.mark_zone_legacy((cell.height, cell.width), corner_rows, (x0, gy - up), points)
     before = int((np.array(cell.convert("RGBA"))[:, :, 3] > 8).sum())
     cell2 = S5.strip_marks_in_zone(cell, zone)
     after = int((np.array(cell2.convert("RGBA"))[:, :, 3] > 8).sum())
@@ -143,7 +145,7 @@ def main(grid, cols=4, rows=4, align="none", duration=120):
     ext.paste(im, (0, PAD_CUT_TOP))
 
     # ★격자 전체에서 마크를 먼저 찾는다(원본 좌표계) — 이게 v5 식 제거의 구역 근거다.
-    points = S5.lattice_points(np.array(im))
+    points = S5.lattice_points_legacy(np.array(im))
     print(f"격자점 검출 {len(points)}개")
 
     cells = []
