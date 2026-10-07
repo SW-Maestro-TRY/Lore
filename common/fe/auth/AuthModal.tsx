@@ -793,9 +793,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
         // 폰에서 처음 열 때 포커스를 받는 자리(칸에 주면 키보드 없이 시트가 위로 간다 — 위 효과).
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        style={debug ? { position: "relative" } : undefined}
       >
-        {debug && <span className={styles.debug} data-part="auth-debug" aria-hidden="true" />}
         <div className={styles.head}>
           {stepMode && stepIndex > 0 && (
             <button type="button" className={styles.stepBack} onClick={goBack}
@@ -1034,6 +1032,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
               : isLogin ? "로그인" : "가입하고 시작하기"}
           </button>
         </form>
+        {debug && <span className={styles.debug} data-part="auth-debug" aria-hidden="true" />}
       </div>
     </div>,
     document.body,
