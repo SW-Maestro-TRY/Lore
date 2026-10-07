@@ -131,3 +131,28 @@ export function runLeaveHooks(): void {
     try { fn(); } catch { /* 한 화면의 계측 실패가 page_leave 를 막으면 안 된다 */ }
   }
 }
+
+/**
+ * **사진 고르기 창이 떠 있는 동안의 숨김은 떠남이 아니다**(2026-10-07).
+ *
+ * ★ 왜 — 폰에서 `<input type=file>` 을 열면 사진 고르기 창이 페이지를 덮고, 브라우저는 그것을
+ *   `visibilitychange: hidden` 으로 알린다. 그러면 page_leave 가 찍히고 방·튜토리얼 체류 `ms` 도
+ *   거기서 끊긴다. 운영 실측: page_leave 200건 중 33건이 60초 안에 `zzal_image_picked` 가 뒤따랐다
+ *   — 떠난 게 아니라 사진을 고르고 있었다.
+ * ★ 언제 풀리나 — 그림을 고르면(`releasePicker`), 창을 닫고 화면이 다시 보이면(취소), 또는
+ *   10초가 지나면. 10초는 "여는 순간 바로 오는 hidden" 을 덮기에 충분하고, 고르는 창에서 그대로
+ *   다른 앱으로 떠난 사람을 오래 놓치지 않는 길이다(그 사람은 다음 hidden 에서 다시 잡힌다).
+ * ★ 공통 기록기의 전송(beacon)은 막지 않는다 — 큐는 보내도 된다. **이벤트를 만들지 않을 뿐**이다.
+ */
+const PICKER_HOLD_MS = 10_000;
+let pickerUntil = 0;
+export function holdForPicker(): void {
+  pickerUntil = Date.now() + PICKER_HOLD_MS;
+}
+export function releasePicker(): void {
+  pickerUntil = 0;
+}
+/** 지금 숨김이 사진 고르기 창 때문인가. */
+export function pickerHolding(): boolean {
+  return pickerUntil > Date.now();
+}

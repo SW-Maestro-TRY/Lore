@@ -27,7 +27,7 @@ import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radiu
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import { useDevVisible } from '../useDevVisible';
-import { STAGE, lastStage, once, reachStage, runLeaveHooks, sinceT0, startClock, ztrack } from '../yeoul/funnel';
+import { STAGE, lastStage, once, pickerHolding, reachStage, releasePicker, runLeaveHooks, sinceT0, startClock, ztrack } from '../yeoul/funnel';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { GIFT_CYCLES, SITUATION_TABLE, scenePlays } from '../props/situations';
 import { ApiError } from '../../lib/api';
@@ -230,11 +230,18 @@ function useFunnel(s: ReturnType<typeof useYeoul>['s'], isAuthenticated: boolean
     let sent = false;
     const leave = () => {
       if (sent) return;
+      // ★ 사진 고르기 창이 페이지를 덮은 것이다 — 떠남이 아니다. 방·튜토리얼 체류도 끊지 않는다
+      //   (`runLeaveHooks` 를 안 돌리므로 그쪽 시계가 그대로 이어진다). → funnel `holdForPicker`
+      if (pickerHolding()) return;
       sent = true;
       runLeaveHooks();
       ztrack('zzal_page_leave', { ms: sinceT0(), step: lastStage() });
     };
-    const onVis = () => { if (document.visibilityState === 'hidden') leave(); else sent = false; };
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') leave();
+      // 다시 보이면 고르기 창은 닫힌 것이다(골랐든 취소했든) — 표시를 푼다.
+      else { sent = false; releasePicker(); }
+    };
     const onShow = () => { sent = false; };
     window.addEventListener('pagehide', leave);
     window.addEventListener('pageshow', onShow);

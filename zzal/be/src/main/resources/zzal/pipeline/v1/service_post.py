@@ -122,6 +122,51 @@ ALPHA_ON = 8
 #   — 지워 버리면 결함이 있었다는 사실까지 사라진다.
 SPECK_MAX_RATIO = 0.005
 
+# ★캔버스 끝 닿음 안전망(2026-10-08) — 결과 프레임의 전경이 캔버스 한 변에 '직선으로' 닿은 길이(px).
+#   잰 법 = `edge_contact`: 전경 bbox 가 그 변에서 EDGE_BAND px 안에 있으면, bbox 끝 3px 띠에
+#   전경이 있는 줄(좌·우) 또는 열(위·아래)의 수. 2층 정규화(배율 0.86~0.95)가 잘린 면을 안쪽으로
+#   몇 px 끌어오므로 '맨 끝 한 줄'만 보면 놓친다(실측: 펫24·41 sweep 은 x=0 에 0px).
+#   실측(실사용자 전달본 = 현행 후처리 결과, 52마리 104층 1,664프레임):
+#     좌·우·아래 — 결함으로 판정된 것 펫41 sweep 173 · 펫24 sweep 74·59 · 펫47 2층 24~44(격자에서 이미 잘림),
+#                  그 밖의 정상 프레임은 **전부 0**.
+#     위        — 정상(눈 검사 통과) 최대 33(펫49 eat_snack 머리끝 · 펫14 petted 손 31 · 펫64 27).
+#   → 좌·우·아래 20px(정상 0 · 결함 최소 24 사이), 위 40px(정상 최대 33 위).
+#   ⚠️위는 state8_v5 가 위로 필요한 만큼 넓히므로(머리끝+4px) 후처리가 위를 자르는 일은 거의 없다 —
+#     위가 닿았다면 대개 격자 칸에서 이미 잘린 그림이고, 정상 판정 3건도 그랬다.
+EDGE_BAND = 6
+CLIP_MIN = {"L": 20, "R": 20, "B": 20, "T": 40}
+POSTPROCESS_CLIP_MARK = "POSTPROCESS_CLIP"
+GRID_CELL_CLIP_MARK = "GRID_CELL_CLIP"
+
+
+class ClipError(RuntimeError):
+    """결과 프레임이 캔버스 끝에 잘려 닿았다 — 메시지에 GRID_STRUCTURE_INVALID 표식이 실린다."""
+
+
+def edge_contact(alpha: np.ndarray, band: int = EDGE_BAND) -> dict:
+    """변별 '직선 닿음' 길이 {"L","R","T","B": px}. 닿지 않은 변은 빠진다."""
+    m = alpha > 128
+    H, W = m.shape
+    ys, xs = np.nonzero(m)
+    if not len(xs):
+        return {}
+    x0, x1, y0, y1 = int(xs.min()), int(xs.max()), int(ys.min()), int(ys.max())
+    hit = {}
+    if x0 <= band:
+        hit["L"] = int(m[:, x0:x0 + 3].any(1).sum())
+    if x1 >= W - 1 - band:
+        hit["R"] = int(m[:, x1 - 2:x1 + 1].any(1).sum())
+    if y0 <= band:
+        hit["T"] = int(m[y0:y0 + 3].any(0).sum())
+    if y1 >= H - 1 - band:
+        hit["B"] = int(m[y1 - 2:y1 + 1].any(0).sum())
+    return hit
+
+
+# 정규화가 캔버스 밖으로 밀어낸 변(프레임 번호 → 변 목록). normalize_grid 가 채운다.
+_NORM_CLIPPED: dict = {}
+_SIDE_KO = {"좌": "L", "우": "R", "위": "T", "아래": "B"}
+
 # 앵커 파일 이름. 프론트·백엔드가 이 이름으로 찾는다 — 한쪽만 바꾸면 조용히 못 읽는다.
 ANCHORS_NAME = "anchors.json"
 # K·Hw 를 재는 칸 이름(1층). 2층 --keys 에는 이 이름이 없으므로 다른 데서 받아야 한다.
@@ -266,6 +311,7 @@ def normalize_grid(frames_dir: Path, keys, postures, ref_path) -> bool:
         out.save(frame_paths[idx])
         if clipped:
             warned.append(f"f{idx + 1:02d}({','.join(clipped)})")
+            _NORM_CLIPPED[idx + 1] = [_SIDE_KO[c] for c in clipped]
     if warned:
         print(f"    ⚠️ 정규화 클리핑 — 캔버스를 벗어난 칸: {', '.join(warned)} "
               f"(배율 {scale:.3f} 로 커졌거나 발끝선이 멀다는 뜻. 확인 필요)")
@@ -432,6 +478,8 @@ def build(grid_path: str, out_dir: str, keys, postures,
     shutil.copy(grid_path, work_grid)
 
     state8_v5.main(str(work_grid), str(work), postures=postures)
+    crop_loss = list(state8_v5.LAST_CROP_LOSS)
+    _NORM_CLIPPED.clear()
 
     frames = work / "frames"
 
@@ -449,6 +497,7 @@ def build(grid_path: str, out_dir: str, keys, postures,
     # 앵커는 **서비스에 나가는 바로 그 첫 장**에서 잰다(티끌을 지운 뒤의 a1).
     # 원본 f01.png 에서 재면 지운 티끌이 발 아래 10px 로 남아 발끝이 그만큼 내려간다.
     first = {}
+    clips = []                                  # (프레임, 이름, 변, 닿은 px, 잘라내기 손실 px, 후처리 탓?)
     if want_anchors:
         base_k, base_hw = find_base_scale(out, keys, base_k, base_hw)
     for i, name in enumerate(keys):
@@ -476,6 +525,27 @@ def build(grid_path: str, out_dir: str, keys, postures,
                     duration=state8_v5.FRAME_MS, loop=0, quality=state8_v5.WEBP_Q)
         made.append(str(dst))
         first[name] = a1
+        for j, fr in ((i * 2 + 1, a1), (i * 2 + 2, b1)):
+            for side, n in edge_contact(np.array(fr)[:, :, 3]).items():
+                if n < CLIP_MIN[side]:
+                    continue
+                lost = crop_loss[j - 1].get(side, 0) if j - 1 < len(crop_loss) else 0
+                by_post = lost > 0 or side in _NORM_CLIPPED.get(j, [])
+                clips.append((j, name, side, n, lost, by_post))
+
+    if clips:
+        post = [c for c in clips if c[5]]
+        grid = [c for c in clips if not c[5]]
+        def fmt(cs):
+            return ",".join(f"f{j:02d}({nm} {sd} {n}px" + (f"·잘린 {lo}px" if lo else "") + ")"
+                            for j, nm, sd, n, lo, _ in cs)
+        parts = []
+        if post:
+            parts.append(f"{POSTPROCESS_CLIP_MARK} {fmt(post)} — 후처리 정렬·정규화가 칸 밖으로 밀어 잘림")
+        if grid:
+            parts.append(f"{GRID_CELL_CLIP_MARK} {fmt(grid)} — 격자 칸에서 이미 잘려 그려짐(격자 결함)")
+        shutil.rmtree(work, ignore_errors=True)
+        raise ClipError("GRID_STRUCTURE_INVALID — " + " / ".join(parts) + " — 다시 굽기 대상")
 
     if want_anchors:
         data = anchors.build(first, keys, K=base_k, Hw=base_hw, base_key=BASE_KEY)
@@ -531,6 +601,11 @@ def main(argv) -> int:
         paths = build(a.grid, a.out, keys, pmap,
                       want_anchors=not a.no_anchors, base_k=base_k, base_hw=base_hw,
                       normalize=a.normalize, base_anchors=a.base_anchors)
+    except ClipError as e:
+        # 끝 닿음 = 다시 구울 그림. 자바가 GRID_STRUCTURE_INVALID 로 '격자 거부'로 분류한다
+        #   (POSTPROCESS_* 를 따로 가르는 코드가 자바에 아직 없다 — 표식만 실어 둔다).
+        print(str(e), file=sys.stderr)
+        return EXIT_GRID_STRUCTURE
     except anchors.AnchorError as e:
         # 앵커가 원인일 때는 그림 탓으로 보이지 않게 말머리를 붙인다.
         print(f"✗ 앵커: {e}", file=sys.stderr)
