@@ -736,6 +736,20 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     }
   }
 
+  /**
+   * ★ 한글 조합 중 Enter 는 무시한다(합본 H3). 조합을 확정하는 Enter 가 폼의 암묵 제출까지 일으켜,
+   *   이메일 끝에 "ㅎ" 이 붙은 채 다음 단계로 넘어갔다(크롬 CDP 재현: `a@b.coㅎ`).
+   *   keyCode 229 는 조합 중 키를 isComposing 없이 보내는 브라우저(구형 사파리·일부 안드로이드)용.
+   */
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    // 조합 중 다른 키(229)는 건드리지 않는다 — 막으면 글자 입력 자체가 끊긴다.
+    if (e.key !== "Enter") return;
+    if (e.nativeEvent.isComposing || e.keyCode === 229) {
+      e.preventDefault();
+      return;
+    }
+  };
+
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting) return; // 중복 제출 방지. 버튼도 잠그지만 엔터로도 들어온다.
@@ -861,6 +875,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           ref={formRef}
           className={styles.form}
           onSubmit={handleSubmit}
+          onKeyDown={handleFormKeyDown}
           // 브라우저 기본 말풍선을 끄고 우리 문구로 통일한다.
           noValidate
         >
