@@ -805,6 +805,11 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   if (!open || !mounted) return null;
 
   const allAgreed = agree.age && agree.terms && agree.privacy && agree.marketing;
+  /**
+   * 단계형 탭 줄은 첫 단계에만 둔다. ★ 단, 로그인이 비밀번호 단계에서 막혔으면 다시 보인다(합본 H42) —
+   * 로그인에 실패한 사람의 다음 행동이 "아, 가입을 안 했구나" 인데, 그 자리에 "회원가입" 이 없었다.
+   */
+  const tabsHidden = stepMode && step !== "email" && !(isLogin && formError !== null && errorSpot === "password");
 
   /** spot 칸의 오류 문구. role="alert" — 생기면 화면 낭독기가 즉시 읽는다. */
   const errorAt = (spot: ErrorSpot) =>
@@ -874,9 +879,9 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
         {/* 단계형에서는 첫 단계에만 탭을 보인다 — 키보드가 오른 화면에서 한 줄(52px)이 아깝다.
             ★ 빼지 않고 눈에서만 숨긴다: 피스메이커가 `:has(> [role="tablist"])` 로 이 창을 찾아 옷을
               입히므로(piece-maker.css), 탭이 DOM 에서 빠지면 둘째 단계부터 옷이 벗겨졌다(실측). */}
-        <div className={`${styles.tabs}${stepMode && step !== "email" ? ` ${styles.stepHidden}` : ""}`}
+        <div className={`${styles.tabs}${tabsHidden ? ` ${styles.stepHidden}` : ""}`}
              role="tablist" aria-label="로그인 또는 회원가입"
-             aria-hidden={stepMode && step !== "email" ? true : undefined}>
+             aria-hidden={tabsHidden ? true : undefined}>
           <button
             type="button"
             role="tab"
@@ -885,7 +890,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             aria-controls={panelId}
             className={`${styles.tab} ${isLogin ? styles.tabActive : ""}`}
             onClick={() => switchTab("login")}
-            tabIndex={stepMode && step !== "email" ? -1 : undefined}
+            tabIndex={tabsHidden ? -1 : undefined}
           >
             로그인
           </button>
@@ -897,7 +902,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             aria-controls={panelId}
             className={`${styles.tab} ${!isLogin ? styles.tabActive : ""}`}
             onClick={() => switchTab("signup")}
-            tabIndex={stepMode && step !== "email" ? -1 : undefined}
+            tabIndex={tabsHidden ? -1 : undefined}
           >
             회원가입
           </button>
