@@ -167,6 +167,8 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   /** 오류가 아닌 안내(가입 완료 등). 탭을 옮길 때 지운다. */
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** 요청이 나가는 중인가 — 같은 틱 재진입까지 막는 잠금(H15). */
+  const submittingRef = useRef(false);
 
   // 포털은 DOM 이 있어야 쏜다. 서버 렌더에는 document 가 없다.
   const [mounted, setMounted] = useState(false);
@@ -221,6 +223,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     setShowPassword(false);
     setInfo(null);
     setSubmitting(false);
+    submittingRef.current = false;
     submittedRef.current = false;
     track("auth_modal_opened", { tab: initialTab });
   }, [open, initialTab]);
@@ -674,6 +677,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setFormError(null);
     try {
@@ -688,6 +692,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       // (확인 실패(me_failed)도 같은 자리 — 같은 칸에서 다시 누르면 된다.)
       showError("password", messageOf(e));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -714,6 +719,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setFormError(null);
     setInfo(null);
@@ -752,6 +758,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       // 이미 가입된 이메일은 이메일 칸의 문제다 — 단계형이면 이메일 단계로 돌아간다.
       showError(errorCodeOf(e) === "EMAIL_ALREADY_EXISTS" ? "email" : "form", messageOf(e));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
@@ -801,7 +808,9 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
 
   /** 다음(단계형, 마지막 전) 또는 제출. 버튼·Enter·키보드 "다음" 이 모두 이리 온다. */
   function advance() {
-    if (submitting) return; // 중복 제출 방지. 버튼도 잠그지만 엔터로도 들어온다.
+    // 중복 제출 방지. 버튼도 잠그지만 엔터로도 들어온다. ★ state 만으로는 같은 틱 두 번째 누름
+    // (다시 그리기 전)을 못 막아서 ref 로도 잠근다(합본 H15).
+    if (submitting || submittingRef.current) return;
     if (stepMode && !lastStep) {
       goNext();
       return;
