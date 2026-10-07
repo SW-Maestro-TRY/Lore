@@ -2,6 +2,7 @@ package com.lore.zzal.generation;
 
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
+import com.lore.zzal.generation.steps.Layer2PostStep;
 import com.lore.zzal.generation.steps.PostProcessStep;
 import com.lore.zzal.generation.steps.MotionGridStep;
 import com.lore.zzal.generation.steps.MotionPostStep;
@@ -50,19 +51,34 @@ public class PipelineRegistry {
      */
     private static final Map<GenKind, Map<String, List<String>>> IDENTITY_DEPENDENTS = Map.of(
             GenKind.HATCH, Map.of(
-                    "v1", List.of(IdentityStep.NAME, GridStep.NAME, PostProcessStep.GRID2)),
-            GenKind.MOTION, Map.of("v1", List.of()));
+                    "v1", List.of(IdentityStep.NAME, GridStep.NAME)),
+            GenKind.MOTION, Map.of("v1", List.of()),
+            // ★ 2층은 문단을 <b>쓰지만 다시 만들지 않는다</b>(#696). 문단은 1층이 이미 쓴 것이라, 2층 거부로
+            //   문단을 새로 만들면 1층과 2층의 묘사 근거가 갈린다(아래 identityDependents 주석의 그 사고).
+            //   2층 거부는 같은 문단으로 다시 굽고, 다 실패하면 관리자 목록으로 간다.
+            GenKind.LAYER2, Map.of("v1", List.of()));
 
     private final Map<GenKind, Map<String, List<List<GenerationStep>>>> versions;
     private final Map<GenKind, String> currentVersions;
 
     private static final Logger log = LoggerFactory.getLogger(PipelineRegistry.class);
 
+    /**
+     * 2층 단계 없이 만드는 길 — 시험·옛 호출용(#696 전 모양). 2층 후처리는 아무것도 못 하는 빈 껍데기다.
+     */
+    public PipelineRegistry(SheetStep sheet, IdentityStep identity, GridStep grid, GridStep grid2,
+                            PostProcessStep post, MotionGridStep motionGrid, MotionPostStep motionPost,
+                            String hatchVersion, String motionVersion) {
+        this(sheet, identity, grid, grid2, post, motionGrid, motionPost,
+                new Layer2PostStep(null, null, null, null), hatchVersion, motionVersion);
+    }
+
     @Autowired
     public PipelineRegistry(SheetStep sheet, IdentityStep identity,
                             @Qualifier("gridStep") GridStep grid, @Qualifier("grid2Step") GridStep grid2,
                             PostProcessStep post,
                             MotionGridStep motionGrid, MotionPostStep motionPost,
+                            Layer2PostStep layer2Post,
                             @Value("${app.zzal.pipeline-version:v1}") String hatchVersion,
                             @Value("${app.zzal.motion-pipeline-version:v1}") String motionVersion) {
         this.versions = Map.of(
@@ -73,9 +89,15 @@ public class PipelineRegistry {
                         // ★ [grid, grid2] 가 한 묶음 = 나란히 굽는다 — 두 격자는 서로를 안 보고
                         //   identity 하나만 쓰므로 겹쳐 구우면 한 장 값(실측 41초)이 통째로 빠진다.
                         //   identity 는 앞 묶음이라 반드시 먼저 끝난다.
-                        "v1", List.of(List.of(sheet), List.of(identity), List.of(grid, grid2), List.of(post))),
-                GenKind.MOTION, Map.of("v1", List.of(List.of(motionGrid), List.of(motionPost))));
-        this.currentVersions = Map.of(GenKind.HATCH, hatchVersion, GenKind.MOTION, motionVersion);
+                        // ★ #696 — 부화는 <b>1층에서 끝난다</b>. 2층(grid2)은 아래 LAYER2 가 부화 뒤에 굽는다.
+                        //   옛 구성: [sheet] [identity] [grid, grid2] [post(1층+2층)]
+                        "v1", List.of(List.of(sheet), List.of(identity), List.of(grid), List.of(post))),
+                GenKind.MOTION, Map.of("v1", List.of(List.of(motionGrid), List.of(motionPost))),
+                // 2층 = 격자 2장째 → 자르기(1층 앵커 이어받기). 버전은 그 펫의 <b>부화 버전</b>을 그대로 쓴다
+                //   (프롬프트 prompt/{버전}/grid2.txt · 후처리 pipeline/{버전}/service_post.py 가 부화와 짝이다).
+                GenKind.LAYER2, Map.of("v1", List.of(List.of(grid2), List.of(layer2Post))));
+        this.currentVersions = Map.of(GenKind.HATCH, hatchVersion, GenKind.MOTION, motionVersion,
+                GenKind.LAYER2, hatchVersion);
         verifyIdentityDependents();
         verifyCurrentVersions();
         // ★★ 설정이 안 먹었을 때 조용히 옛 값으로 도는 것을 막는다 — 어느 버전으로 굽는지는
@@ -95,8 +117,8 @@ public class PipelineRegistry {
         currentVersions.forEach((kind, version) -> {
             Map<String, List<List<GenerationStep>>> known = versions.getOrDefault(kind, Map.of());
             if (!known.containsKey(version)) {
-                String property = kind == GenKind.HATCH
-                        ? "app.zzal.pipeline-version" : "app.zzal.motion-pipeline-version";
+                String property = kind == GenKind.MOTION
+                        ? "app.zzal.motion-pipeline-version" : "app.zzal.pipeline-version";
                 throw new IllegalStateException(
                         "%s 에 모르는 파이프라인 버전이 적혀 있습니다: %s (가능한 값: %s)"
                                 .formatted(property, version, known.keySet()));
