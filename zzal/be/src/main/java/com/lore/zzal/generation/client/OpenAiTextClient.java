@@ -112,7 +112,10 @@ public class OpenAiTextClient implements TextClient {
                 throw new BilledFailureException(cost, e);
             }
 
-            log.info("정체성 문단 — {}자 · {} · ${}", text.length(), spec.model(), cost);
+            // 입력 토큰 수로 그림이 실제로 실렸는지 가늠한다(글만이면 수백, 그림이 붙으면 그보다 크게 뛴다).
+            JsonNode usage = payload.path("usage");
+            log.info("정체성 문단 — {}자 · {} · ${} · 토큰 입력 {} · 출력 {}", text.length(), spec.model(), cost,
+                    usage.path("prompt_tokens").asLong(0), usage.path("completion_tokens").asLong(0));
             return new Result(text, cost);
         } finally {
             deleteQuietly(work);
