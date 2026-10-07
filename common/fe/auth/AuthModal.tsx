@@ -17,7 +17,7 @@ import { createPortal, flushSync } from "react-dom";
 import { ApiError } from "../api/client";
 import { track } from "../analytics";
 import { LEGAL_LINKS } from "../links";
-import { signIn, signUp } from "./useAuth";
+import { SessionCheckError, signIn, signUp } from "./useAuth";
 import styles from "./AuthModal.module.css";
 
 export type AuthTab = "login" | "signup";
@@ -137,11 +137,13 @@ function EyeIcon({ open }: { open: boolean }) {
  * 문구는 서버가 바꾸면 통계가 끊기고, 무엇보다 이메일·비밀번호는 절대 실려 나가면 안 된다.
  */
 function errorCodeOf(e: unknown): string {
+  if (e instanceof SessionCheckError) return e.code;
   if (e instanceof ApiError) return e.code ?? `http_${e.status}`;
   return "network_error";
 }
 
 function messageOf(e: unknown): string {
+  if (e instanceof SessionCheckError) return e.message;
   return e instanceof ApiError && e.message ? e.message : FALLBACK_MESSAGE;
 }
 
@@ -683,6 +685,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     } catch (e) {
       track("auth_login_failed", { code: errorCodeOf(e) });
       // 로그인 실패는 대개 비밀번호 오타다 — 비밀번호 칸 밑에 두고 그 칸을 선택해 둔다.
+      // (확인 실패(me_failed)도 같은 자리 — 같은 칸에서 다시 누르면 된다.)
       showError("password", messageOf(e));
     } finally {
       setSubmitting(false);
@@ -735,6 +738,16 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       onSuccess?.("signup");
       onClose();
     } catch (e) {
+      if (e instanceof SessionCheckError) {
+        // ★ 가입 자체는 됐다 — 다시 가입하면 "이미 가입된 이메일" 을 듣는다. 가입 성공으로 세고,
+        //   로그인 탭(이메일·비밀번호 유지)으로 옮겨 그대로 로그인만 다시 누르게 한다(H16).
+        track("auth_signup_succeeded");
+        track("auth_login_failed", { code: e.code });
+        setTab("login");
+        setStep("password");
+        showError("password", "가입은 됐어요. 로그인 상태를 확인하지 못했어요 — 로그인을 눌러 다시 시도해 주세요");
+        return;
+      }
       track("auth_signup_failed", { code: errorCodeOf(e) });
       // 이미 가입된 이메일은 이메일 칸의 문제다 — 단계형이면 이메일 단계로 돌아간다.
       showError(errorCodeOf(e) === "EMAIL_ALREADY_EXISTS" ? "email" : "form", messageOf(e));
