@@ -46,8 +46,28 @@ function ga4Enabled(): boolean {
   return typeof window !== 'undefined' && PROD_HOSTS.includes(window.location.hostname);
 }
 
-/** 유입 출처를 이번 방문에 이미 보냈는지 적어 두는 자리. */
-const ORIGIN_SENT_KEY = 'lore_origin_sent';
+// ── 유입 출처·익명 번호를 브라우저에 남겨 두는 자리(2026-10-07) ─────────────
+//
+// ★ 왜 바꿨나 — 예전에는 유입(UTM·referrer)을 **방문의 첫 묶음에만** 실었다. 서버는 묶음마다
+//   그 값을 줄마다 적으므로, 첫 묶음 뒤에 나오는 가입·부화 줄에는 source 가 비어 있었고
+//   "광고로 온 사람의 가입" 이 0 으로 보였다. 이제 **모든 묶음**에 싣는다(서버 변경 없음 —
+//   EventRequests.Batch 의 source·referrer 를 이미 받는다).
+// ★ 쿠키(lore_anon_id)를 지워도 같은 브라우저면 첫 도착과 옛 익명 번호를 localStorage 에서 잇는다.
+/** 이번 방문(탭)의 유입. sessionStorage. */
+const ORIGIN_SESSION_KEY = 'lore_origin';
+/** 마지막으로 **직접 방문이 아닌** 유입. localStorage — 새 탭·쿠키 삭제 뒤의 직접 방문이 이 값을 잇는다. */
+const ORIGIN_LAST_KEY = 'lore_origin_last';
+/** 이 브라우저의 첫 도착. localStorage — 한 번 적으면 덮지 않는다(보존용, 전송하지 않는다). */
+const ORIGIN_FIRST_KEY = 'lore_origin_first';
+/** 서버가 lore_anon_id 와 같은 값으로 함께 내려 주는 **스크립트가 읽을 수 있는** 사본(AnonIdResolver). */
+const ANON_HINT_COOKIE = 'lore_anon_hint';
+/** 이 브라우저에서 마지막으로 본 익명 번호 / 그 전 번호. localStorage. */
+const ANON_LAST_KEY = 'lore_anon_last';
+const ANON_PREV_KEY = 'lore_anon_prev';
+/** 익명 번호의 생김새 — 서버 AnonIdResolver.SHAPE 와 같다. */
+const ANON_SHAPE = /^[0-9a-f]{32}$/;
+/** 옛 익명 번호를 `from` 으로 실어 보낼 이벤트. 서버가 이 줄을 보고 (옛 번호, 사용자) 를 한 줄 더 잇는다. */
+const LINK_EVENTS = new Set(['auth_login_succeeded', 'auth_signup_succeeded']);
 
 /**
  * 저장될 props 키.
@@ -97,11 +117,19 @@ export function track(event: string, props: Props = {}): void {
   }
   try {
     bindFlushListeners();
+    // ★ 가입·로그인 성공 줄에는 이 브라우저의 **옛 익명 번호**를 붙인다(쿠키가 지워져 번호가 바뀐 경우).
+    //   부르는 쪽(AuthModal)은 그대로 두고 여기서 붙인다 — 화면 41곳의 시그니처를 안 바꾸기 위해서다.
+    //   GA4 거울에는 안 붙인다(익명 번호를 바깥 서비스로 내보낼 이유가 없다).
+    let ownProps = props;
+    if (LINK_EVENTS.has(event) && props.from === undefined) {
+      const prev = previousAnonId();
+      if (prev) ownProps = { ...props, from: prev };
+    }
     queue.push({
       name: event,
       ts: Date.now(),
       path: currentPath(),
-      props: cleanProps(props),
+      props: cleanProps(ownProps),
     });
 
     // ★ 떠나는 중이면 다음 타이머가 없다. 지금 안 보내면 영영 안 나간다.
@@ -169,9 +197,13 @@ function flush(useBeacon: boolean): Promise<void> {
   queue = [];
 
   const body: Record<string, unknown> = { events };
-  // 유입 출처는 이번 방문의 첫 묶음에만 담는다. 매 줄에 붙이면 같은 사실이 수십 번 쌓인다.
-  const origin = takeOriginOnce();
-  if (origin) Object.assign(body, origin);
+  // ★ 유입 출처는 **모든 묶음**에 담는다(2026-10-07). 서버는 묶음 단위로 줄마다 적으므로,
+  //   첫 묶음에만 담으면 뒤에 오는 가입·부화 줄의 source 가 비어 광고 전환이 0 으로 보인다.
+  const origin = currentOrigin();
+  if (origin?.referrer) body.referrer = origin.referrer;
+  if (origin?.source) body.source = origin.source;
+  // 서버가 내려 준 익명 번호 사본을 브라우저 저장소에 옮겨 둔다(쿠키가 지워져도 남게).
+  rememberAnonId();
 
   return send(JSON.stringify(body), useBeacon);
 }
@@ -222,6 +254,8 @@ function send(payload: string, useBeacon: boolean): Promise<void> {
 function bindFlushListeners(): void {
   if (listenersBound) return;
   listenersBound = true;
+  // 유입은 **첫 기록 때** 정한다 — 5초 뒤 첫 전송 때 정하면 그 사이 주소에서 UTM 이 지워질 수 있다.
+  currentOrigin();
 
   window.addEventListener('pagehide', () => {
     leaving = true;
@@ -289,31 +323,128 @@ function currentPath(): string {
   }
 }
 
+type Origin = { source?: string; referrer?: string };
+
+/** 이 페이지(문서)에서 정한 유입. 한 번 정하면 같은 페이지 안에서는 다시 안 읽는다. */
+let originMemo: Origin | null | undefined;
+
 /**
- * 유입 출처를 **이번 방문에 한 번만** 꺼낸다.
+ * 이번 묶음에 실을 유입.
  *
- * ★ sessionStorage 에 표시를 남기는 이유 — 탭 안에서 새로고침이나 페이지 이동이 일어나도
- *   같은 방문이다. 모듈 변수만 쓰면 이동할 때마다 다시 첫 묶음이 되어 같은 유입이 반복된다.
- * ★ referrer 를 그대로 담아도 되는 이유 — 서버가 쿼리스트링을 잘라 낸다. 그래도 여기서
- *   미리 origin+path 로 줄여 보낸다. 검색 쿼리·토큰이 실려 오는 자리라 안 내보내는 편이 낫다.
+ * 정하는 순서:
+ *   1. 주소에 UTM 이 있거나 **바깥** referrer 가 있으면 — 새로 도착한 것이다. 그 값으로
+ *      이번 방문(sessionStorage)과 마지막 유입(localStorage)을 **덮는다**.
+ *      (같은 탭에서 새 UTM 으로 다시 들어오면 새 값이 이긴다.)
+ *      이 브라우저의 첫 도착(localStorage)은 비어 있을 때만 적는다.
+ *   2. 아니면(새로고침·내부 이동) 이번 방문 값.
+ *   3. 그것도 없으면(새 탭·쿠키 삭제 뒤 직접 방문) 마지막 유입을 잇는다 — "마지막 비직접 유입" 기준.
+ * ★ 저장소가 막힌 브라우저(사생활 모드)에서는 1번만 동작한다. 기록이 조금 덜 이어질 뿐 화면은 무사하다.
  */
-function takeOriginOnce(): { referrer?: string; source?: string } | null {
+function currentOrigin(): Origin | null {
+  if (originMemo !== undefined) return originMemo;
+  originMemo = null;
   try {
-    if (window.sessionStorage.getItem(ORIGIN_SENT_KEY) === '1') return null;
-    window.sessionStorage.setItem(ORIGIN_SENT_KEY, '1');
+    const arrived: Origin = {};
+    const source = readUtm();
+    if (source) arrived.source = source;
+    const referrer = externalReferrer();
+    if (referrer) arrived.referrer = referrer;
+
+    if (arrived.source || arrived.referrer) {
+      const text = JSON.stringify(arrived);
+      storeSet('session', ORIGIN_SESSION_KEY, text);
+      storeSet('local', ORIGIN_LAST_KEY, text);
+      if (!readOrigin('local', ORIGIN_FIRST_KEY)) {
+        storeSet('local', ORIGIN_FIRST_KEY, JSON.stringify({ ...arrived, at: Date.now() }));
+      }
+      originMemo = arrived;
+      return originMemo;
+    }
+
+    const visit = readOrigin('session', ORIGIN_SESSION_KEY);
+    if (visit) { originMemo = visit; return originMemo; }
+
+    const last = readOrigin('local', ORIGIN_LAST_KEY);
+    if (last) {
+      storeSet('session', ORIGIN_SESSION_KEY, JSON.stringify(last));
+      originMemo = last;
+    }
   } catch {
-    // 사생활 보호 모드 등으로 sessionStorage 가 막힌 브라우저. 유입이 몇 번 더 쌓일 뿐이라 넘어간다.
+    // 유입을 못 정해도 기록은 나간다.
   }
+  return originMemo;
+}
 
-  const result: { referrer?: string; source?: string } = {};
+/** 다른 사이트에서 왔을 때만. 우리 사이트 안 이동(같은 origin)은 유입이 아니다. */
+function externalReferrer(): string | undefined {
+  const trimmed = trimReferrer(document.referrer);
+  if (!trimmed) return undefined;
+  try {
+    if (new URL(trimmed).origin === window.location.origin) return undefined;
+  } catch {
+    return undefined;
+  }
+  return trimmed;
+}
 
-  const referrer = trimReferrer(document.referrer);
-  if (referrer) result.referrer = referrer;
+/** 저장된 유입을 읽는다. 모양이 이상하면(누가 손댔거나 옛 형식) 없는 것으로 본다. */
+function readOrigin(kind: 'session' | 'local', key: string): Origin | null {
+  const raw = storeGet(kind, key);
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Record<string, unknown>;
+    const out: Origin = {};
+    if (typeof v.source === 'string' && v.source.length <= 100) out.source = v.source;
+    if (typeof v.referrer === 'string' && v.referrer.length <= 200) out.referrer = v.referrer;
+    return out.source || out.referrer ? out : null;
+  } catch {
+    return null;
+  }
+}
 
-  const source = readUtm();
-  if (source) result.source = source;
+/**
+ * 서버가 내려 준 익명 번호 사본(lore_anon_hint)을 localStorage 로 옮긴다.
+ * 번호가 바뀌었으면(쿠키가 지워져 새로 발급됨) 앞 번호를 `lore_anon_prev` 에 남긴다.
+ */
+function rememberAnonId(): void {
+  const cur = readAnonHint();
+  if (!cur) return;
+  const last = storeGet('local', ANON_LAST_KEY);
+  if (last === cur) return;
+  if (last && ANON_SHAPE.test(last)) storeSet('local', ANON_PREV_KEY, last);
+  storeSet('local', ANON_LAST_KEY, cur);
+}
 
-  return result.referrer || result.source ? result : null;
+/** 지금 번호와 다른 옛 번호. 없으면 null. */
+function previousAnonId(): string | null {
+  rememberAnonId();
+  const prev = storeGet('local', ANON_PREV_KEY);
+  if (!prev || !ANON_SHAPE.test(prev)) return null;
+  return prev === readAnonHint() ? null : prev;
+}
+
+function readAnonHint(): string | null {
+  try {
+    for (const part of document.cookie.split(';')) {
+      const [k, v] = part.trim().split('=');
+      if (k === ANON_HINT_COOKIE && v && ANON_SHAPE.test(v)) return v;
+    }
+  } catch { /* 쿠키를 못 읽는 환경 */ }
+  return null;
+}
+
+function storeOf(kind: 'session' | 'local'): Storage | null {
+  try {
+    return kind === 'session' ? window.sessionStorage : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+function storeGet(kind: 'session' | 'local', key: string): string | null {
+  try { return storeOf(kind)?.getItem(key) ?? null; } catch { return null; }
+}
+function storeSet(kind: 'session' | 'local', key: string, value: string): void {
+  try { storeOf(kind)?.setItem(key, value); } catch { /* 막힌 브라우저 — 넘어간다 */ }
 }
 
 /** origin + path 만. 쿼리·fragment 는 버린다. */
