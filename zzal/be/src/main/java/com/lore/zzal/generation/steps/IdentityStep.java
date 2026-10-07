@@ -6,6 +6,7 @@ import com.lore.zzal.generation.StepContext;
 import com.lore.zzal.generation.StepResult;
 import com.lore.zzal.generation.client.ModelSpec;
 import com.lore.zzal.generation.client.TextClient;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -23,7 +24,7 @@ import java.util.List;
  * ★ 이 단계는 없어질 수도 있다(상훈님 2026-09-02). 그때는 파이프라인 목록에서 빼면 되고,
  *   이 클래스는 남겨 v1 로 만들어진 펫들을 계속 설명한다.
  *
- * 실측 15~22초 · $0.018
+ * 실측 15~22초 · $0.018 (운영 10/7 gpt-5 는 39~48초까지 — 아래 시간 제한 참고)
  */
 @Component
 public class IdentityStep implements GenerationStep {
@@ -32,10 +33,14 @@ public class IdentityStep implements GenerationStep {
 
     private final TextClient textClient;
     private final PromptLoader prompts;
+    /** 이 단계의 시간 제한(초). 설정 {@code app.zzal.openai.text-timeout-seconds}. */
+    private final int timeoutSeconds;
 
-    public IdentityStep(TextClient textClient, PromptLoader prompts) {
+    public IdentityStep(TextClient textClient, PromptLoader prompts,
+                        @Value("${app.zzal.openai.text-timeout-seconds:90}") int timeoutSeconds) {
         this.textClient = textClient;
         this.prompts = prompts;
+        this.timeoutSeconds = timeoutSeconds;
     }
 
     @Override
@@ -43,9 +48,14 @@ public class IdentityStep implements GenerationStep {
         return NAME;
     }
 
+    /**
+     * ★ 2026-10-08 60 → 90(설정값으로 승격). 운영 10/7 실측 gpt-5 응답 39~48초 — 린델(pet52)·로미(pet48)
+     *   둘 다 시도 1이 이 단계 TIMEOUT(60초)으로 끝나 5회 중 1회를 격자와 무관하게 잃었다.
+     *   HTTP 요청 자체의 상한(OpenAiTextClient 120초)보다 짧아야 이 값이 실제로 먹는다.
+     */
     @Override
     public int limitSeconds() {
-        return 60;
+        return timeoutSeconds;
     }
 
     @Override
