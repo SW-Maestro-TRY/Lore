@@ -122,6 +122,25 @@ public class PythonPostProcessor implements PostProcessor {
             run(gridImageKey, keys, args);
         }
 
+        @Override
+        public void seedAnchors(String anchorsKey) throws Exception {
+            Files.createDirectories(out);
+            storage.download(anchorsKey, out.resolve(ANCHORS));
+            log.info("앞 층 앵커 내려받음 — {} → {}", anchorsKey, out.resolve(ANCHORS));
+        }
+
+        @Override
+        public void carryOver(String fromPrefix, List<String> keys) throws Exception {
+            Path dir = work.resolve("carry");
+            Files.createDirectories(dir);
+            for (String key : keys) {
+                Path file = dir.resolve(key + ".webp");
+                storage.download("%s/%s.webp".formatted(fromPrefix, key), file);
+                storage.upload("%s/%s.webp".formatted(outputPrefix, key), file, "image/webp");
+            }
+            log.info("앞 판 그림 옮겨 실음 — {} → {} ({}종)", fromPrefix, outputPrefix, keys.size());
+        }
+
         /**
          * 자르려는 이름이 <b>설정에 선언된 출력 목록</b> 안에 있는가.
          *

@@ -100,6 +100,48 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int basicRound;
 
+    // ── 2층 (#696 — 1층 우선 부화) ─────────────────────────────────────────
+
+    /**
+     * 2층 8종이 어디까지 왔나. 부화는 1층에서 끝나고 2층은 뒤에서 굽는다.
+     *
+     * ★ 자바 기본값이 READY 인 이유 — 이 칸이 생기기 전 흐름(1층·2층을 함께 굽고 살리던 것)으로 만든 펫과
+     *   시험이 만드는 펫은 2층이 이미 있는 것으로 본다. 새 부화는 {@code GenerationRecorder.markPetAlive} 가
+     *   살리는 <b>같은 트랜잭션에서</b> PENDING 으로 돌려 놓는다(살아난 순간 2층이 열려 보이는 틈이 없다).
+     *   DB 기본값은 PENDING 이다(마이그레이션이 옛 행을 백필한다).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "layer2_status", nullable = false, length = 16)
+    private Layer2Status layer2Status = Layer2Status.READY;
+
+    @Column(name = "layer2_attempts", nullable = false, columnDefinition = "integer default 0")
+    private int layer2Attempts;
+
+    @Column(name = "layer2_last_error", length = 500)
+    private String layer2LastError;
+
+    @Column(name = "layer2_updated_at")
+    private Instant layer2UpdatedAt;
+
+    /** READY 를 사용자에게 알린 시각. null 이면 READY 가 된 뒤 아직 안 알렸다. */
+    @Column(name = "layer2_announced_at")
+    private Instant layer2AnnouncedAt;
+
+    @Column(name = "layer2_flagged", nullable = false, columnDefinition = "boolean default false")
+    private boolean layer2Flagged;
+
+    /** 관리자가 올린 2층 후보(후보id:격자키:게이트, 쉼표 구분). */
+    @Column(name = "layer2_candidates", length = 2000)
+    private String layer2Candidates;
+
+    /** 관리자가 올린 1층 후보(같은 형식). */
+    @Column(name = "layer1_candidates", length = 2000)
+    private String layer1Candidates;
+
+    /** 이번 조회에서 2층 READY 를 처음 알리며 열린 동작 seq. 저장하지 않는다(수명 = 이 요청). */
+    @jakarta.persistence.Transient
+    private java.util.List<Integer> layer2JustUnlocked = java.util.List.of();
+
     // ── 단계 ──────────────────────────────────────────────────────────────
 
     @Enumerated(EnumType.STRING)
@@ -2029,6 +2071,143 @@ public class ZzalPet {
         if (round > this.basicRound) {
             this.basicRound = round;
         }
+    }
+
+    // ── 2층 상태 (#696) ────────────────────────────────────────────────────
+
+    public Layer2Status getLayer2Status() {
+        return layer2Status;
+    }
+
+    /** 2층 8종이 사용자에게 보여도 되나. 아니면 조건을 채워도 "연습 중" 이다. */
+    public boolean isLayer2Ready() {
+        return layer2Status == Layer2Status.READY;
+    }
+
+    public int getLayer2Attempts() {
+        return layer2Attempts;
+    }
+
+    public String getLayer2LastError() {
+        return layer2LastError;
+    }
+
+    public Instant getLayer2UpdatedAt() {
+        return layer2UpdatedAt;
+    }
+
+    public Instant getLayer2AnnouncedAt() {
+        return layer2AnnouncedAt;
+    }
+
+    public boolean isLayer2Flagged() {
+        return layer2Flagged;
+    }
+
+    /**
+     * 2층을 처음부터 다시 굽는 자리로 둔다(부화 완료 · 관리자 재시도 · 1층 교체).
+     * 시도 수를 0 으로 돌리고 알림 표식을 지운다 — 다시 READY 가 되면 그때 한 번 알린다.
+     */
+    public void resetLayer2(Instant now) {
+        this.layer2Status = Layer2Status.PENDING;
+        this.layer2Attempts = 0;
+        this.layer2UpdatedAt = now;
+        this.layer2AnnouncedAt = null;
+    }
+
+    /**
+     * 한 번 굽기 시작한다. <b>PENDING 일 때만</b> 집는다 — RUNNING 은 이미 누가 굽는 중(두 번 구우면 돈이 두 번),
+     * READY 는 끝났고, FAILED 는 관리자가 재시도({@link #resetLayer2})로 PENDING 에 돌려야 다시 집힌다
+     * (부화 완료 훅이 늦게 한 번 더 불려 FAILED 를 저절로 다시 굽는 일을 막는다).
+     *
+     * @return 집었으면 true
+     */
+    public boolean startLayer2Attempt(Instant now) {
+        if (layer2Status != Layer2Status.PENDING) {
+            return false;
+        }
+        this.layer2Status = Layer2Status.RUNNING;
+        this.layer2Attempts += 1;
+        this.layer2UpdatedAt = now;
+        return true;
+    }
+
+    /** 이어서 한 번 더(같은 작업 안의 재시도). RUNNING 을 유지하고 시도 수만 올린다. */
+    public void nextLayer2Attempt(String lastError, Instant now) {
+        this.layer2Attempts += 1;
+        this.layer2LastError = trimError(lastError);
+        this.layer2UpdatedAt = now;
+    }
+
+    /** 기동 복구 — 굽던 중 서버가 죽었다. PENDING 으로 내려 다시 집히게 한다(시도 수는 그대로 — 상한이 이어진다). */
+    public void requeueLayer2(Instant now) {
+        if (layer2Status == Layer2Status.RUNNING) {
+            this.layer2Status = Layer2Status.PENDING;
+            this.layer2Attempts = Math.max(0, layer2Attempts - 1);
+            this.layer2UpdatedAt = now;
+        }
+    }
+
+    /** 다 구웠다. 결함 표시도 지운다. */
+    public void markLayer2Ready(Instant now) {
+        this.layer2Status = Layer2Status.READY;
+        this.layer2Flagged = false;
+        this.layer2UpdatedAt = now;
+    }
+
+    /** 재시도를 다 썼다. */
+    public void markLayer2Failed(String lastError, Instant now) {
+        this.layer2Status = Layer2Status.FAILED;
+        this.layer2LastError = trimError(lastError);
+        this.layer2UpdatedAt = now;
+    }
+
+    /**
+     * 통과했지만 결함인 2층을 관리자가 목록에 올린다 — FAILED 로 두고 <b>올라간 그림은 그대로</b> 둔다.
+     * 사용자에게는 READY 가 아니므로 2층 8종이 "연습 중" 으로 돌아간다.
+     */
+    public void flagLayer2(String reason, Instant now) {
+        this.layer2Status = Layer2Status.FAILED;
+        this.layer2Flagged = true;
+        this.layer2LastError = trimError(reason);
+        this.layer2UpdatedAt = now;
+    }
+
+    /** READY 를 사용자에게 알렸다. 그때 열린 동작 seq 를 이 요청에 실어 보낸다(폭죽). */
+    public void announceLayer2(java.util.List<Integer> opened, Instant now) {
+        this.layer2AnnouncedAt = now;
+        this.layer2JustUnlocked = java.util.List.copyOf(opened);
+    }
+
+    /** 이 요청에서 READY 알림으로 열린 동작을 꺼낸다(한 번 꺼내면 빈다). */
+    public java.util.List<Integer> takeLayer2JustUnlocked() {
+        java.util.List<Integer> out = layer2JustUnlocked == null ? java.util.List.of() : layer2JustUnlocked;
+        this.layer2JustUnlocked = java.util.List.of();
+        return out;
+    }
+
+    public String getLayer2Candidates() {
+        return layer2Candidates;
+    }
+
+    public void setLayer2Candidates(String candidates) {
+        this.layer2Candidates = candidates;
+    }
+
+    public String getLayer1Candidates() {
+        return layer1Candidates;
+    }
+
+    public void setLayer1Candidates(String candidates) {
+        this.layer1Candidates = candidates;
+    }
+
+    private static String trimError(String s) {
+        if (s == null) {
+            return null;
+        }
+        String one = s.strip();
+        return one.length() > 480 ? one.substring(0, 480) : one;
     }
 
     public PetPhase getPhase() {
