@@ -59,7 +59,8 @@ public class PetController {
 
     private PetResponses.Detail detail(ZzalPet pet, String stepLabel, Instant real) {
         return PetResponses.Detail.from(pet, stepLabel, pet.now(real), catalog,
-                petService.motionRows(pet.getId()), List.of(), false, petService.scenes(pet.getId()),
+                // ★ 2층 READY 를 이 조회에서 처음 봤으면 그때 열린 동작이 실린다(#696). 평소엔 빈 목록이다.
+                petService.motionRows(pet.getId()), pet.takeLayer2JustUnlocked(), false, petService.scenes(pet.getId()),
                 petService.pieces(pet.getId()));
     }
 

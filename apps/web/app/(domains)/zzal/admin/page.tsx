@@ -11,7 +11,8 @@
 //   둘 다 넣을 수 없어서 이 자리는 껍데기로 남기고 알맹이는 @zzal/admin 에 둔다.
 //   (라우팅 파일에 화면 로직을 안 두는 것은 /zzal 과 같은 규칙이기도 하다)
 import type { Metadata } from 'next';
-import AdminReviewScreen from '@zzal/admin/AdminReviewScreen';
+// #696 — 탭 묶음(움짤 검수 · 2층 실패·대기). 검수 화면은 그대로 첫 탭이다.
+import AdminScreen from '@zzal/admin/AdminScreen';
 
 export const metadata: Metadata = {
   title: '움짤 검수',
@@ -21,5 +22,5 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <AdminReviewScreen />;
+  return <AdminScreen />;
 }

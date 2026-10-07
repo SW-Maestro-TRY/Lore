@@ -65,7 +65,49 @@ def _hsv(im: np.ndarray):
     return h * 60.0, s, mx
 
 
-def find_marks_by_color(im: np.ndarray):
+# ★격자점 후보는 '사방이 크로마 그린'이어야 한다 (2026-10-07, B6).
+#   덩어리 경계 상자를 RING_PAD 만큼 넓힌 테두리 띠에서 그린 비율이 RING_THR 이상일 때만 후보.
+#   실측(그린 배경 정상 격자 103장 · 격자점 2,561개): 띠 그린 비율 최저 0.874, 하위 1% 0.926.
+#   캐릭터 안의 시안 리본·보라 옷 조각은 띠가 캐릭터 색이라 0.0~0.6에 머문다.
+RING_PAD = 6
+RING_THR = 0.80
+GREEN_BG_MIN = 0.30   # 화면의 이 비율 이상이 그린이어야 '그린 배경 격자'로 본다
+
+
+def _green_mask(im: np.ndarray, hsv=None) -> np.ndarray:
+    """크로마 그린 픽셀 — hue 100~140·채도>0.5·명도>0.5, 또는 RGB (r<120, g>150, b<120)."""
+    h, s, v = hsv if hsv is not None else _hsv(im)
+    r, g, b = im[:, :, 0], im[:, :, 1], im[:, :, 2]
+    return (((h >= 100) & (h <= 140) & (s > 0.5) & (v > 0.5))
+            | ((r < 120) & (g > 150) & (b < 120)))
+
+
+def _ring_green(green: np.ndarray, sl, pad: int = RING_PAD) -> float:
+    """경계 상자 바깥 pad px 띠의 그린 비율. 캔버스 밖으로 나가는 변은 세지 않는다."""
+    H, W = green.shape
+    y0, y1, x0, x1 = sl[0].start, sl[0].stop, sl[1].start, sl[1].stop
+    Y0, Y1, X0, X1 = max(0, y0 - pad), min(H, y1 + pad), max(0, x0 - pad), min(W, x1 + pad)
+    tot = (Y1 - Y0) * (X1 - X0) - (y1 - y0) * (x1 - x0)
+    if tot <= 0:
+        return 0.0
+    n = int(green[Y0:Y1, X0:X1].sum()) - int(green[y0:y1, x0:x1].sum())
+    return n / tot
+
+
+def lattice_expect(layout):
+    """layout 이름에서 격자점 기대 개수 (마젠타, 시안). lattice_CxR 만 안다 — 그 밖은 None.
+
+    색 규칙은 프롬프트 그대로: 열 1·3·5… 마젠타, 열 2·4… 시안 (예: 5x5 → 15·10, 7x4 → 16·12).
+    """
+    import re as _re
+    m = _re.fullmatch(r"lattice_(\d+)x(\d+)", layout or "")
+    if not m:
+        return None
+    c, r = int(m.group(1)), int(m.group(2))
+    return (c + 1) // 2 * r, c // 2 * r
+
+
+def find_marks_by_color(im: np.ndarray, layout=None, fit=False):
     """★색으로 마크를 찾는다 (2026-08-10 신설, p_v9_smooth부터).
 
     왜 바꿨나
@@ -102,6 +144,9 @@ def find_marks_by_color(im: np.ndarray):
     """
     h, s, v = _hsv(im)
     strong = (s > 0.45) & (v > 0.55)
+    green = _green_mask(im, (h, s, v))
+    green_bg = float(green.mean()) >= GREEN_BG_MIN
+    score = {}                                   # (색, x, y) → 띠 그린 비율
 
     def grab(lo, hi):
         """(픽셀수, x, y) 목록 — 밴드도 크기 임계도 걸지 않는다."""
@@ -112,12 +157,38 @@ def find_marks_by_color(im: np.ndarray):
             px = int((lab[sl] == i).sum())
             if px < 6 or px > 900:           # 명백한 먼지·거대 영역만 뺀다
                 continue
-            out.append((px, (sl[1].start + sl[1].stop) / 2, (sl[0].start + sl[0].stop) / 2))
+            b = (px, (sl[1].start + sl[1].stop) / 2, (sl[0].start + sl[0].stop) / 2)
+            score[(lo,) + b[1:]] = _ring_green(green, sl)
+            out.append(b)
         return out
 
     raw_mag, raw_cya = grab(280, 340), grab(165, 205)
     H, W = im.shape[0], im.shape[1]
-    info = {"raw": (len(raw_mag), len(raw_cya)), "next_ratio": 0.0, "H": H, "W": W}
+    info = {"raw": (len(raw_mag), len(raw_cya)), "next_ratio": 0.0, "H": H, "W": W,
+            "green_bg": green_bg,
+            "cands": sorted([(b[0], b[1], b[2], score[(280,) + b[1:]], "m") for b in raw_mag]
+                            + [(b[0], b[1], b[2], score[(165,) + b[1:]], "c") for b in raw_cya],
+                            reverse=True)}
+
+    # ★2026-10-07(B6) — 위치를 본다. 그 전엔 hue·크기만 봐서 캐릭터의 시안 리본·보라 옷 조각이
+    #   격자점으로 섞였고, 운영 거부 40장 중 26장이 배치 정상인데 "열 7~9개"로 버려졌다.
+    #   격자점은 프롬프트가 '모든 그림 뒤, 그린 위'에 그리라고 못 박았으므로 사방이 그린이다.
+    #   ⚠️그린 배경이 아닌 격자(모델이 투명 배경으로 낸 공통에셋 시트)는 이 조건을 걸지 않는다 —
+    #     걸면 진짜 격자점까지 전부 빠진다. 그 격자들은 옛 동작 그대로다.
+    if green_bg:
+        raw_mag = [b for b in raw_mag if score[(280,) + b[1:]] >= RING_THR]
+        raw_cya = [b for b in raw_cya if score[(165,) + b[1:]] >= RING_THR]
+        # 개수 사양화 — 그래도 기대보다 많으면 그린 비율 높은 순(같으면 큰 순)으로 자른다.
+        #   ★색별이 아니라 **두 색 합계**로 자른다. 모델이 색 규칙을 다 지키진 않는다
+        #     (정상 격자 103장 중 37장이 마젠타 13·시안 12 — 색별 15·10으로 자르면 진짜를 버린다).
+        exp = lattice_expect(layout)
+        if exp and len(raw_mag) + len(raw_cya) > sum(exp):
+            allc = sorted([(score[(280,) + b[1:]], b[0], "m", b) for b in raw_mag]
+                          + [(score[(165,) + b[1:]], b[0], "c", b) for b in raw_cya],
+                          key=lambda t: (t[0], t[1]), reverse=True)[:sum(exp)]
+            raw_mag = [t[3] for t in allc if t[2] == "m"]
+            raw_cya = [t[3] for t in allc if t[2] == "c"]
+    info["filtered"] = (len(raw_mag), len(raw_cya))
 
     # ★2026-08-25 재설계 — 마크 수를 16으로 하드코딩하지 않는다.
     #
@@ -157,7 +228,137 @@ def find_marks_by_color(im: np.ndarray):
         mag = [(b[1], b[2]) for b in sorted(keep_mag, reverse=True)[:16]]
     if len(_bands(cya, H / 4 * 0.15)) == 4 and len(cya) > 16:
         cya = [(b[1], b[2]) for b in sorted(keep_cya, reverse=True)[:16]]
+
+    # ★2026-10-08 — 격자 맞추기(fit=True 일 때만, 후처리 state8_v5·state16 이 부른다).
+    #   그린 띠를 지나고도 남은 가짜 후보를 **자리**로 한 번 더 거른다. 자세한 근거는 fit_lattice.
+    #   ⚠️게이트(check_grid)는 fit 을 안 쓴다 — 게이트의 일은 구조 이상(열 6개 등)을 **보는** 것인데,
+    #     맞추기는 어긋난 점을 버려 그 신호를 지운다(마지막 행 5칸 격자가 5열로 맞춰져 통과할 수 있다).
+    if fit:
+        dims = _lattice_dims(layout)
+        if dims is None:
+            info["fit"] = {"ok": False, "reason": f"layout '{layout}' 에서 격자 크기를 못 읽음"}
+        else:
+            got = fit_lattice(mag + cya, dims[0], dims[1], W, H)
+            info["fit"] = got
+            if got["ok"]:
+                keep = set(got["points"])
+                mag = [p for p in mag if p in keep]
+                cya = [p for p in cya if p in keep]
     return mag, cya, info
+
+
+# ★격자 맞추기 허용 오차(px) — 추정한 열 x·줄 y 에서 이만큼 넘게 벗어난 후보는 버린다.
+#   실측(2026-10-08, 실사용자 격자 중 게이트 통과 117장 · 격자점 2,925개):
+#     열 x 의 열 중앙값과의 차 최대 7.5px · 줄 y 의 줄 중앙값과의 차 최대 2.5px.
+#   → 15px = 실측 최대의 2배. 캐릭터 안의 시안·마젠타 조각은 칸 안쪽에 있어 이보다 훨씬 멀다.
+LATTICE_TOL = 15.0
+# 이웃 격자선 간격의 허용 범위 — 칸 크기(W/칸수) 대비 배수. 실측 간격 254~352px(칸 312px 기준 0.81~1.13배).
+LATTICE_GAP = (0.6, 1.4)
+
+
+def _lattice_dims(layout):
+    import re as _re
+    m = _re.fullmatch(r"lattice_(\d+)x(\d+)", layout or "")
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def _pick_lines(vals, n, extent, tol=None):
+    """한 축의 후보 좌표에서 격자선 n 개를 고른다. 반환 = (선 좌표 목록 | None, 설명).
+
+    1) 좌표를 칸 크기의 15% 보다 먼 곳에서 끊어 군집(= `_bands` 와 같은 간격)으로 묶는다.
+    2) 군집 중 n 개를 **왼쪽→오른쪽 순서를 지키며** 고르되, 이웃 간격이 칸 크기의 0.6~1.4배인
+       조합 가운데 **군집 중앙값 ±tol 안의 후보 수 합이 가장 큰 것**을 고른다(DP).
+       → 열마다 격자점이 5개씩 쌓이는 진짜 격자선이 이기고, 몇 개 안 되는 캐릭터 조각 군집은 진다.
+    선 좌표 = 군집 중앙값(평균은 조각 하나에 끌린다).
+    """
+    cell = extent / max(1, n - 1)
+    tol = LATTICE_TOL if tol is None else tol
+    vals = sorted(vals)
+    if not vals:
+        return None, "후보 없음"
+    groups = [[vals[0]]]
+    for v in vals[1:]:
+        (groups.append([v]) if v - groups[-1][-1] > cell * 0.15 else groups[-1].append(v))
+    cen = [float(np.median(g)) for g in groups]
+    # 지지 수 = 군집 중앙값에서 tol 안에 있는 후보만. 진짜 격자선은 퍼짐이 작고(실측 최대 7.5px),
+    #   가짜 조각이 사슬처럼 이어진 군집(퍼짐 수십 px)은 수가 많아도 지지가 적다.
+    sup = [sum(1 for v in g if abs(v - c) <= tol) for g, c in zip(groups, cen)]
+    m = len(groups)
+    if m < n:
+        return None, f"선 {m}개 (군집 크기 {sup}) — {n}개가 안 된다"
+    lo, hi = cell * LATTICE_GAP[0], cell * LATTICE_GAP[1]
+    NEG = -1
+    # best[k][i] = 군집 i 를 k+1 번째 선으로 쓸 때 앞 선들까지의 최대 후보 수, prev = 역추적
+    best = [[NEG] * m for _ in range(n)]
+    prev = [[-1] * m for _ in range(n)]
+    for i in range(m):
+        best[0][i] = sup[i]
+    for k in range(1, n):
+        for i in range(m):
+            for j in range(i):
+                if best[k - 1][j] == NEG:
+                    continue
+                d = cen[i] - cen[j]
+                if lo <= d <= hi and best[k - 1][j] + sup[i] > best[k][i]:
+                    best[k][i] = best[k - 1][j] + sup[i]
+                    prev[k][i] = j
+    end = max(range(m), key=lambda i: (best[n - 1][i], -i))
+    if best[n - 1][end] == NEG:
+        return None, f"간격 {lo:.0f}~{hi:.0f}px 로 {n}개를 못 이음 (군집 중심 {[round(c) for c in cen]})"
+    pick = [end]
+    for k in range(n - 1, 0, -1):
+        pick.append(prev[k][pick[-1]])
+    pick.reverse()
+    dropped = [(round(cen[i]), sup[i]) for i in range(m) if i not in pick]
+    return [cen[i] for i in pick], (f"군집 {m}개 중 {n}개" + (f" · 버린 군집(중심,수) {dropped}" if dropped else ""))
+
+
+def fit_lattice(pts, ncols, nrows, W, H, tol=LATTICE_TOL):
+    """후보 점들에 ncols x nrows 격자를 맞추고, 격자 자리에 있는 점만 남긴다 (2026-10-08 신설).
+
+    왜 — 후처리(state8_v5)가 격자점을 40~55개로 잡아 캐릭터의 시안·마젠타 조각 둘레를 지웠고,
+      로미·민트·아이루·린델 프레임이 사각형으로 뚫렸다(잔존 0.47~0.58). 그린 띠(#687)가 대부분을
+      거르지만, 그린 위에 떠 있는 조각(반짝이·소품)이나 그린 배경이 아닌 격자에서는 색·띠만으로
+      못 거른다. 격자점은 정의상 **열 x 5개 × 줄 y 5개의 교차점**에만 있으므로 자리로 거른다.
+    어떻게 — 축마다 `_pick_lines` 로 격자선을 고르고(간격이 칸 크기의 0.6~1.4배),
+      점마다 가장 가까운 열·줄까지의 거리가 둘 다 tol 이하인 것만 남긴다.
+      한 교차점에 여럿이면 가장 가까운 하나만(→ 최대 ncols*nrows 개).
+    ⚠️모델이 그린 격자는 **등간격이 아니다**(줄 간격 254~352px) — 그래서 간격을 하나로 묶지 않고
+      선 위치를 축마다 따로 정한다. '등간격'은 간격 범위 제약으로만 쓴다.
+    반환 = {"ok", "points", "cols", "rows", "dropped", "reason"}
+      ok=False = 열 또는 줄이 ncols/nrows 개로 안 맞는다 → 부르는 쪽이 GRID_STRUCTURE 로 거부.
+    """
+    pts = [tuple(p) for p in pts]
+    xs, why_x = _pick_lines([p[0] for p in pts], ncols, W, tol)
+    ys, why_y = _pick_lines([p[1] for p in pts], nrows, H, tol)
+    if xs is None or ys is None:
+        bad = []
+        if xs is None:
+            bad.append(f"열: {why_x}")
+        if ys is None:
+            bad.append(f"줄: {why_y}")
+        return {"ok": False, "points": [], "cols": xs, "rows": ys, "dropped": [],
+                "reason": " / ".join(bad)}
+    slot = {}
+    dropped = []
+    for p in pts:
+        ci = int(np.argmin([abs(p[0] - x) for x in xs]))
+        ri = int(np.argmin([abs(p[1] - y) for y in ys]))
+        dx, dy = abs(p[0] - xs[ci]), abs(p[1] - ys[ri])
+        if dx > tol or dy > tol:
+            dropped.append((p, f"열{ci + 1}에서 {dx:.0f}px·줄{ri + 1}에서 {dy:.0f}px"))
+            continue
+        d = dx * dx + dy * dy
+        if (ci, ri) in slot:
+            q, dq = slot[(ci, ri)]
+            if dq <= d:
+                dropped.append((p, f"교차점 ({ci + 1},{ri + 1}) 중복"))
+                continue
+            dropped.append((q, f"교차점 ({ci + 1},{ri + 1}) 중복"))
+        slot[(ci, ri)] = (p, d)
+    kept = [v[0] for v in slot.values()]
+    return {"ok": True, "points": kept, "cols": xs, "rows": ys, "dropped": dropped,
+            "reason": f"열 {why_x} · 줄 {why_y}"}
 
 
 def _bands(pts, gap, axis=1, min_frac=0.0):

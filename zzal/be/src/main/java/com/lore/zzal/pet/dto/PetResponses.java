@@ -610,9 +610,13 @@ public final class PetResponses {
                         : null;
                 ZzalMotion row = rows.get(spec.seq());
                 Advanced advanced = row == null ? Advanced.NONE : Advanced.of(row);
+                // ★ 2층 그림이 아직 안 구워졌는데 조건을 먼저 채웠다(#696) — 잠긴 칸의 문구 자리에
+                //   "연습 중이에요" 를 둔다. 화면은 잠긴 칸의 hint·progress 를 그대로 그리므로 새 칸이 필요 없다.
+                //   READY 가 되면 그다음 조회의 justUnlocked 로 "○○를 배웠어요" 가 나간다.
+                boolean practicing = !unlocked && layerTwoWaiting(pet, spec) && UnlockRules.conditionMet(pet, spec, catalog);
                 return new Motion(spec.seq(), spec.key(), spec.label(), spec.layer().name(), unlocked,
                         basicImageKey(pet, spec),
-                        unlocked ? null : rule.hint(),
+                        unlocked ? null : practicing ? LAYER2_PRACTICING_HINT : rule.hint(),
                         progress,
                         advanced);
             }).toList();
@@ -678,12 +682,25 @@ public final class PetResponses {
             if (spec.isGift()) {
                 return null;
             }
+            // ★ 2층이 아직 안 구워졌으면(#696) 그 그림은 <b>올라간 파일이 없다</b> — 이 칸의 null 뜻 그대로다.
+            //   1층 우선 부화에서는 2층 webp 가 READY 가 될 때 새 판에 함께 올라간다.
+            if (layerTwoWaiting(pet, spec)) {
+                return null;
+            }
             // ★ 앵커와 같은 기준이다 — anchorsKey 도 판이 0 이면 null 을 준다. 갈리면
             //   "그림은 없는데 그 그림을 설명하는 앵커는 있다" 는 앞뒤 안 맞는 응답이 나간다.
             return pet.getBasicRound() > 0
                     ? MotionImageKeys.basic(pet.getId(), pet.getBasicRound(), spec.key())
                     : null;
         }
+
+        /** 2층 동작인데 2층 그림이 아직 READY 가 아니다(#696). */
+        static boolean layerTwoWaiting(ZzalPet pet, MotionSpec spec) {
+            return spec.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2 && !pet.isLayer2Ready();
+        }
+
+        /** 2층 그림이 준비되기 전에 조건을 채운 칸의 문구(#696). 심화 행동의 "아직 연습 중이에요" 와 같은 말이다. */
+        public static final String LAYER2_PRACTICING_HINT = "연습 중이에요";
 
         /** 다음 부름 시각 — 기상+1h / 기상+7h / 19:00 중 지금 이후 가장 가까운 것(부름 상태는 PR-4). */
         static Instant nextChatAt(ZzalPet pet, Instant now) {

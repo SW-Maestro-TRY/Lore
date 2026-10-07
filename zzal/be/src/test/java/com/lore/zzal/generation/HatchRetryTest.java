@@ -434,6 +434,38 @@ class HatchRetryTest {
                 .isEqualTo("images/zzal/pets/7/rejected/41-grid2.png");
     }
 
+    @Test
+    @DisplayName("★★ 실패가 확정되는 마지막 시도의 거부 격자도 rejected/ 로 보존한 뒤 실패로 끝낸다(2026-10-08 운영 job 119·130)")
+    void lastAttemptRejectedGridIsPreservedBeforeFailing() {
+        RejectedGridArchive archive = mock(RejectedGridArchive.class);
+        ZzalPetRepository petRepository = mock(ZzalPetRepository.class);
+        ZzalPet pet = ZzalPet.draft(1L, "images/zzal/src", T0);
+        pet.character("여울", null, null, null, null, null, T0);
+        when(petRepository.findById(PET)).thenReturn(Optional.of(pet));
+        service = new HatchService(runner, recorder, jobRepository, registry, petRepository,
+                quotaBreaker, blockLog, mock(ZzalAlerts.class), MAX_ATTEMPTS, mock(MotionSeeder.class),
+                true, true, archive);
+
+        GenStepRecord grid = GenStepRecord.start(130L, 2, GRID, T0);
+        grid.succeed("images/zzal/pets/7/grid.png", null, "gpt-image-2", BigDecimal.ZERO, T0);
+        when(recorder.loadSucceeded(PET, GenKind.HATCH)).thenReturn(List.of(grid));
+
+        // 이미 4번 구웠고 지금이 5번째(마지막) — 재시도가 남아 있지 않다
+        alreadyAttempted(MAX_ATTEMPTS - 1);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenReturn(RunResult.failedWith(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN, true, false, GRID));
+
+        service.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).as("재시도 job 은 만들지 않는다").hasSize(1);
+        verify(archive, times(1)).preserve(PET, grid);
+        verify(recorder, never()).discardSucceeded(anyLong(), any(), anyString());
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(archive, recorder);
+        order.verify(archive).preserve(PET, grid);
+        order.verify(recorder).markPetFailed(PET);
+    }
+
     private static final String GRID = com.lore.zzal.generation.steps.GridStep.NAME;
     private static final String PostProcessStep_GRID2 = com.lore.zzal.generation.steps.PostProcessStep.GRID2;
 

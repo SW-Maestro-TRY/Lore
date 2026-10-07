@@ -16,7 +16,22 @@ public record RunResult(boolean success,
                         boolean gridRejected,
                         boolean quotaBlocked,
                         boolean postprocessCrashed,
-                        String failedGrid) {
+                        String failedGrid,
+                        String errorDetail) {
+
+    /**
+     * {@code errorDetail} 없이 만드는 길 — 실패 메시지 앞부분은 2층 관리자 목록(마지막 거부 사유)에만 쓴다(#696).
+     */
+    public RunResult(boolean success, StepContext ctx, BigDecimal costUsd, GenErrorCode errorCode,
+                     boolean gridRejected, boolean quotaBlocked, boolean postprocessCrashed, String failedGrid) {
+        this(success, ctx, costUsd, errorCode, gridRejected, quotaBlocked, postprocessCrashed, failedGrid, null);
+    }
+
+    /** 같은 결과에 실패 메시지 앞부분을 붙인다(실행기가 쓴다). */
+    public RunResult withDetail(String detail) {
+        return new RunResult(success, ctx, costUsd, errorCode, gridRejected, quotaBlocked, postprocessCrashed,
+                failedGrid, detail);
+    }
 
     /**
      * 옛 모양(표식 둘) 그대로 만드는 길. 후처리 실패 여부·격자 이름은 비어 있다.
