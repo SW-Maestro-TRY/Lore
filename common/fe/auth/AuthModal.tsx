@@ -554,8 +554,11 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     track("auth_tab_switched", { from: tab, to: next });
     setTab(next);
     setStep("email");
-    // 이메일·비밀번호는 남긴다. 로그인에 실패해 가입으로 넘어오는 흐름이 가장 흔한데
-    // 거기서 다시 치게 하면 그 자리에서 그만둔다. 문구만 지운다.
+    // 이메일은 남긴다. 로그인에 실패해 가입으로 넘어오는 흐름이 가장 흔한데 거기서 다시 치게 하면
+    // 그 자리에서 그만둔다. ★ 비밀번호·확인은 비운다(합본 H20) — 로그인에 쳤던(틀렸을 수도 있는)
+    //   비밀번호가 가입으로 따라와, 9자 이상이면 비밀번호 단계를 건너뛰고 3/4 로 뛰었다.
+    setPassword("");
+    setPasswordConfirm("");
     setFormError(null);
     setInfo(null);
   };
