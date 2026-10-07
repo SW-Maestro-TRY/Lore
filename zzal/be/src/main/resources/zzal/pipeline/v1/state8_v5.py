@@ -701,6 +701,14 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
     # ── 마지막 잘라내기 (--frame 방식)
     #   아래·좌·우는 원본 칸 경계에 고정, 위만 필요한 만큼 넓힌다.
     base_top = PAD_ALIGN + PAD_CUT_TOP           # 넓힌 캔버스 안에서 **원본 칸의 위 경계**
+    # ★빈 칸이면 여기서 멈춘다 (2026-10-07, #687 2-3). 그 전엔 아래 min() 이 빈 배열에서
+    #   ValueError traceback 으로 죽어 원인이 안 보였다(펫4 grid — 칸 15·16이 빔).
+    #   격자 게이트(check_grid 칸 검사)가 먼저 잡지만, 침범 제거 뒤에 비는 경우를 대비한다.
+    #   종료 코드 3 + GRID_STRUCTURE_INVALID 표식 = 게이트 거부와 같은 취급(재생성 대상).
+    empty = [f"f{i:02d}" for i, c in enumerate(cells, 1) if not (np.array(c)[:, :, 3] > 8).any()]
+    if empty:
+        print(f"GRID_STRUCTURE_INVALID — 빈 칸 {','.join(empty)} — 격자 생성 결함", file=sys.stderr)
+        raise SystemExit(3)
     uy0 = min(int(np.nonzero(np.array(c)[:, :, 3] > 8)[0].min()) for c in cells)
     top = max(0, min(uy0 - TOP_MARGIN, base_top))
     box = (PAD_ALIGN, top, PAD_ALIGN + W0, base_top + H0)
