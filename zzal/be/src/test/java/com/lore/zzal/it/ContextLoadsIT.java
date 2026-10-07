@@ -116,7 +116,8 @@ class ContextLoadsIT extends ZzalItSupport {
     @DisplayName("★ 부화는 설정에 적힌 그 버전으로 뜬다 — 폴백이 없어 조용히 딴 버전으로 내려가지 않는다")
     void hatchPipelineIsV2() {
         assertThat(pipelineRegistry.currentVersion(GenKind.HATCH)).isEqualTo("v1");
-        assertThat(pipelineRegistry.steps(GenKind.HATCH, "v1")).hasSize(5);
+        assertThat(pipelineRegistry.steps(GenKind.HATCH, "v1")).hasSize(4);          // #696 — 1층에서 끝
+        assertThat(pipelineRegistry.steps(GenKind.LAYER2, "v1")).hasSize(2);         // 2층은 뒤에서
     }
 
     @Test
