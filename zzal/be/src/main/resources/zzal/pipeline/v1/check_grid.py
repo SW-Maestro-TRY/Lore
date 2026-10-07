@@ -76,14 +76,15 @@ def main() -> int:
         print(f"읽기 실패: {e}", file=sys.stderr)
         return 1
 
-    mag, cya, info = find_marks_by_color(im)
+    spec = read_spec(prompt) if prompt else None
+    # ★layout 을 넘겨 격자점 기대 개수를 사양에서 계산하게 한다(2026-10-07, B6).
+    mag, cya, info = find_marks_by_color(im, (spec or {}).get("layout"))
     pts = list(mag) + list(cya)
     H, W = info.get("H", im.shape[0]), info.get("W", im.shape[1])
     cols = _bands(pts, W / 4 * 0.15, axis=0, min_frac=0.08)
     rows = _bands(pts, H / 4 * 0.15, axis=1, min_frac=0.08)
     found = f"마크 {len(mag)}+{len(cya)}={len(pts)}개 · 열 {len(cols)} · 줄 {len(rows)}"
 
-    spec = read_spec(prompt) if prompt else None
     if not spec or spec.get("layout") not in LAYOUTS:
         why = "프롬프트를 안 줌" if not prompt else (
             "GRID_SPEC 줄이 없음" if not spec else f"처음 보는 layout={spec.get('layout')}")
@@ -109,6 +110,11 @@ def main() -> int:
 
     if bad:
         print(f"구조이상 {p.name} [{spec['layout']}]: " + " / ".join(bad), file=sys.stderr)
+        # 후보 상위 20개(크기 순) — 무엇을 격자점으로 봤고 무엇을 뺐는지 사람이 바로 보게.
+        top = info.get("cands", [])[:20]
+        if top:
+            print("  후보 상위 20 (px, x, y, 그린비율, 색): " + " ".join(
+                f"({c[0]},{c[1]:.0f},{c[2]:.0f},{c[3]:.2f},{c[4]})" for c in top), file=sys.stderr)
         return 3
     print(f"구조정상 {p.name} [{spec['layout']}] {found}")
     return 0
