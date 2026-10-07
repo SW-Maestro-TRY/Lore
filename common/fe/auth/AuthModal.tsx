@@ -641,6 +641,10 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
     if (stepIndex > 0) moveTo(steps[stepIndex - 1]);
   };
 
+  /** 키보드 Enter 키 모양. 단계형은 마지막 단계만 go, 나머지는 next(H43·H58). 한 판 폼은 예전 그대로. */
+  const keyHint = (st: Step, flat: "next" | "go" | "done") =>
+    stepMode ? (steps[steps.length - 1] === st ? "go" : "next") : flat;
+
   /** 단계형에서 지금 단계가 아닌 칸은 눈에서만 숨긴다(폼에는 남는다 — 자동 입력 짝). */
   const hiddenUnless = (st: Step) => (stepMode && step !== st ? ` ${styles.stepHidden}` : "");
   const hiddenProps = (st: Step) =>
@@ -748,18 +752,46 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       e.preventDefault();
       return;
     }
+    // ★ 단계형은 Enter 를 직접 받아 다음으로 보낸다(합본 H43·H58). 폼의 암묵 제출에 기대면
+    //   키 종류(next·done·go)와 브라우저에 따라 Enter 가 submit 으로 안 이어지는 경우가 갈린다.
+    if (stepMode && e.target instanceof HTMLInputElement && e.target.type !== "checkbox") {
+      e.preventDefault();
+      advance();
+    }
+  };
+
+  /**
+   * 안드로이드 키보드의 "다음"(enterKeyHint=next)은 Enter 가 아니라 **포커스를 다음 칸으로 옮기는**
+   * 동작으로 오는 경우가 있다(H43). 그 칸이 아직 숨은 단계면 아무 일도 안 일어난 것처럼 보이므로,
+   * 손가락 없이 포커스가 숨은 칸으로 넘어오면 "다음" 으로 읽는다. moveTo 는 단계를 먼저 바꾼 뒤
+   * 포커스를 주므로 여기에 안 걸린다.
+   */
+  /** 폼 안을 손가락·마우스로 누른 시각. 누른 지 0.6초 안의 포커스 이동은 사용자가 고른 칸이다. */
+  const formPointerAtRef = useRef(0);
+  const handleFormFocus = (e: React.FocusEvent<HTMLFormElement>) => {
+    if (!stepMode || Date.now() - formPointerAtRef.current < 600) return;
+    const t = e.target;
+    if (!(t instanceof HTMLInputElement) || t.type === "checkbox") return;
+    if (t !== inputOf(step) && e.relatedTarget === inputOf(step)) {
+      inputOf(step)?.focus({ preventScroll: true });
+      advance();
+    }
   };
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    advance();
+  };
+
+  /** 다음(단계형, 마지막 전) 또는 제출. 버튼·Enter·키보드 "다음" 이 모두 이리 온다. */
+  function advance() {
     if (submitting) return; // 중복 제출 방지. 버튼도 잠그지만 엔터로도 들어온다.
-    // 단계형: 마지막 단계 전에는 "다음". 키보드의 이동/엔터도 이 길로 온다(폼의 암묵 제출).
     if (stepMode && !lastStep) {
       goNext();
       return;
     }
     submitAll();
-  };
+  }
 
   function submitAll() {
     submittedRef.current = true;
@@ -876,6 +908,8 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           className={styles.form}
           onSubmit={handleSubmit}
           onKeyDown={handleFormKeyDown}
+          onFocus={handleFormFocus}
+          onPointerDown={() => { formPointerAtRef.current = Date.now(); }}
           // 브라우저 기본 말풍선을 끄고 우리 문구로 통일한다.
           noValidate
         >
@@ -890,7 +924,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
               autoComplete="email"
               autoCapitalize="none"
               spellCheck={false}
-              enterKeyHint="next"
+              enterKeyHint={keyHint("email", "next")}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={stepMode ? undefined : enterToNext(passwordRef)}
@@ -916,7 +950,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                enterKeyHint={isLogin ? "go" : "next"}
+                enterKeyHint={keyHint("password", isLogin ? "go" : "next")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={isLogin || stepMode ? undefined : enterToNext(confirmRef)}
@@ -955,7 +989,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
-                  enterKeyHint="done"
+                  enterKeyHint={keyHint("confirm", "done")}
                   value={passwordConfirm}
                   onChange={(e) => setPasswordConfirm(e.target.value)}
                   aria-invalid={invalid("confirm") || undefined}
