@@ -30,7 +30,7 @@ import { abandonGame, getCurrentGame, guess, startGame, type GameState, type Gue
 import { classifyUploadFailure, uploadFailureLine, uploadImage, type UploadFailure } from '../../lib/upload';
 import { readHatchBlocked, type HatchBlocked } from '../../lib/hatchBlocked';
 import { ApiError } from '../../lib/api';
-import { STAGE, failCode, markUploadStart, once, reachStage, sinceUpload, ztrack } from './funnel';
+import { STAGE, failCode, markUploadStart, once, pickerHolding, reachStage, sinceUpload, ztrack } from './funnel';
 
 /**
  * 눌린 순간 **먼저 얹는 값**(낙관적 갱신). 서버 응답이 오면 그 자리에서 사라지고,
@@ -973,7 +973,8 @@ export function useHatchState(): Live {
   //   기다리는 중이지 떠난 것이 아니다(74초 굽기 동안 다른 탭을 보는 사람이 많다).
   useEffect(() => {
     if (!watching || !petId) return;
-    const bye = () => once(`hatch_abandoned:${petId}`, () => ztrack('zzal_hatch_abandoned', sinceUpload()));
+    // ★ 사진 고르기 창 때문에 숨은 것이면 떠난 것이 아니다(→ funnel `holdForPicker`).
+    const bye = () => { if (pickerHolding()) return; once(`hatch_abandoned:${petId}`, () => ztrack('zzal_hatch_abandoned', sinceUpload())); };
     window.addEventListener('pagehide', bye);
     return () => window.removeEventListener('pagehide', bye);
   }, [watching, petId]);
