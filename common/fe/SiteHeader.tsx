@@ -166,7 +166,7 @@ export default function SiteHeader() {
                     로그아웃
                   </button>
                   {confirmingLogout && (
-                    <div className={styles.logoutConfirm} role="dialog" aria-label="로그아웃 확인">
+                    <div className={styles.logoutConfirm} role="group" aria-label="로그아웃 확인">
                       <span className={styles.logoutConfirmText}>로그아웃할까요?</span>
                       <div className={styles.logoutConfirmActions}>
                         <button type="button" className={styles.logoutConfirmYes}
