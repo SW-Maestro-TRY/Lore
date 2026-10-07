@@ -65,7 +65,49 @@ def _hsv(im: np.ndarray):
     return h * 60.0, s, mx
 
 
-def find_marks_by_color(im: np.ndarray):
+# ★격자점 후보는 '사방이 크로마 그린'이어야 한다 (2026-10-07, B6).
+#   덩어리 경계 상자를 RING_PAD 만큼 넓힌 테두리 띠에서 그린 비율이 RING_THR 이상일 때만 후보.
+#   실측(그린 배경 정상 격자 103장 · 격자점 2,561개): 띠 그린 비율 최저 0.874, 하위 1% 0.926.
+#   캐릭터 안의 시안 리본·보라 옷 조각은 띠가 캐릭터 색이라 0.0~0.6에 머문다.
+RING_PAD = 6
+RING_THR = 0.80
+GREEN_BG_MIN = 0.30   # 화면의 이 비율 이상이 그린이어야 '그린 배경 격자'로 본다
+
+
+def _green_mask(im: np.ndarray, hsv=None) -> np.ndarray:
+    """크로마 그린 픽셀 — hue 100~140·채도>0.5·명도>0.5, 또는 RGB (r<120, g>150, b<120)."""
+    h, s, v = hsv if hsv is not None else _hsv(im)
+    r, g, b = im[:, :, 0], im[:, :, 1], im[:, :, 2]
+    return (((h >= 100) & (h <= 140) & (s > 0.5) & (v > 0.5))
+            | ((r < 120) & (g > 150) & (b < 120)))
+
+
+def _ring_green(green: np.ndarray, sl, pad: int = RING_PAD) -> float:
+    """경계 상자 바깥 pad px 띠의 그린 비율. 캔버스 밖으로 나가는 변은 세지 않는다."""
+    H, W = green.shape
+    y0, y1, x0, x1 = sl[0].start, sl[0].stop, sl[1].start, sl[1].stop
+    Y0, Y1, X0, X1 = max(0, y0 - pad), min(H, y1 + pad), max(0, x0 - pad), min(W, x1 + pad)
+    tot = (Y1 - Y0) * (X1 - X0) - (y1 - y0) * (x1 - x0)
+    if tot <= 0:
+        return 0.0
+    n = int(green[Y0:Y1, X0:X1].sum()) - int(green[y0:y1, x0:x1].sum())
+    return n / tot
+
+
+def lattice_expect(layout):
+    """layout 이름에서 격자점 기대 개수 (마젠타, 시안). lattice_CxR 만 안다 — 그 밖은 None.
+
+    색 규칙은 프롬프트 그대로: 열 1·3·5… 마젠타, 열 2·4… 시안 (예: 5x5 → 15·10, 7x4 → 16·12).
+    """
+    import re as _re
+    m = _re.fullmatch(r"lattice_(\d+)x(\d+)", layout or "")
+    if not m:
+        return None
+    c, r = int(m.group(1)), int(m.group(2))
+    return (c + 1) // 2 * r, c // 2 * r
+
+
+def find_marks_by_color(im: np.ndarray, layout=None):
     """★색으로 마크를 찾는다 (2026-08-10 신설, p_v9_smooth부터).
 
     왜 바꿨나
@@ -102,6 +144,9 @@ def find_marks_by_color(im: np.ndarray):
     """
     h, s, v = _hsv(im)
     strong = (s > 0.45) & (v > 0.55)
+    green = _green_mask(im, (h, s, v))
+    green_bg = float(green.mean()) >= GREEN_BG_MIN
+    score = {}                                   # (색, x, y) → 띠 그린 비율
 
     def grab(lo, hi):
         """(픽셀수, x, y) 목록 — 밴드도 크기 임계도 걸지 않는다."""
@@ -112,12 +157,38 @@ def find_marks_by_color(im: np.ndarray):
             px = int((lab[sl] == i).sum())
             if px < 6 or px > 900:           # 명백한 먼지·거대 영역만 뺀다
                 continue
-            out.append((px, (sl[1].start + sl[1].stop) / 2, (sl[0].start + sl[0].stop) / 2))
+            b = (px, (sl[1].start + sl[1].stop) / 2, (sl[0].start + sl[0].stop) / 2)
+            score[(lo,) + b[1:]] = _ring_green(green, sl)
+            out.append(b)
         return out
 
     raw_mag, raw_cya = grab(280, 340), grab(165, 205)
     H, W = im.shape[0], im.shape[1]
-    info = {"raw": (len(raw_mag), len(raw_cya)), "next_ratio": 0.0, "H": H, "W": W}
+    info = {"raw": (len(raw_mag), len(raw_cya)), "next_ratio": 0.0, "H": H, "W": W,
+            "green_bg": green_bg,
+            "cands": sorted([(b[0], b[1], b[2], score[(280,) + b[1:]], "m") for b in raw_mag]
+                            + [(b[0], b[1], b[2], score[(165,) + b[1:]], "c") for b in raw_cya],
+                            reverse=True)}
+
+    # ★2026-10-07(B6) — 위치를 본다. 그 전엔 hue·크기만 봐서 캐릭터의 시안 리본·보라 옷 조각이
+    #   격자점으로 섞였고, 운영 거부 40장 중 26장이 배치 정상인데 "열 7~9개"로 버려졌다.
+    #   격자점은 프롬프트가 '모든 그림 뒤, 그린 위'에 그리라고 못 박았으므로 사방이 그린이다.
+    #   ⚠️그린 배경이 아닌 격자(모델이 투명 배경으로 낸 공통에셋 시트)는 이 조건을 걸지 않는다 —
+    #     걸면 진짜 격자점까지 전부 빠진다. 그 격자들은 옛 동작 그대로다.
+    if green_bg:
+        raw_mag = [b for b in raw_mag if score[(280,) + b[1:]] >= RING_THR]
+        raw_cya = [b for b in raw_cya if score[(165,) + b[1:]] >= RING_THR]
+        # 개수 사양화 — 그래도 기대보다 많으면 그린 비율 높은 순(같으면 큰 순)으로 자른다.
+        #   ★색별이 아니라 **두 색 합계**로 자른다. 모델이 색 규칙을 다 지키진 않는다
+        #     (정상 격자 103장 중 37장이 마젠타 13·시안 12 — 색별 15·10으로 자르면 진짜를 버린다).
+        exp = lattice_expect(layout)
+        if exp and len(raw_mag) + len(raw_cya) > sum(exp):
+            allc = sorted([(score[(280,) + b[1:]], b[0], "m", b) for b in raw_mag]
+                          + [(score[(165,) + b[1:]], b[0], "c", b) for b in raw_cya],
+                          key=lambda t: (t[0], t[1]), reverse=True)[:sum(exp)]
+            raw_mag = [t[3] for t in allc if t[2] == "m"]
+            raw_cya = [t[3] for t in allc if t[2] == "c"]
+    info["filtered"] = (len(raw_mag), len(raw_cya))
 
     # ★2026-08-25 재설계 — 마크 수를 16으로 하드코딩하지 않는다.
     #
