@@ -2,7 +2,8 @@
 //
 // 하는 일 셋:
 //   1) 폰이냐 PC 냐를 화면 폭으로 고른다 (시안이 두 배치를 따로 그렸다)
-//   2) <html data-skin> 을 심어 공용 헤더가 이 시안 색으로 갈아입게 한다 (skin-header.css)
+//   2) <html data-skin> 을 심는다 (skin-header.css — main 폭·여백 풀기, 본문·가입 창 색).
+//      2026-10-08 부터 공용 헤더는 이 색을 안 입는다(웹툰·피스메이커와 같은 헤더, 멘토 지적).
 //   3) 헤더 높이를 실측해 --tama-header-h 로 넘긴다 — 앱이 그 아래 남은 높이를 정확히 채우도록
 //
 // 헤더를 덮지 않는다. 이 화면에서도 헤더로 webtoon·piece-maker 로 건너갈 수 있어야 한다.
@@ -28,7 +29,7 @@ export default function TamagotchiScreen({ name }: { name: SkinName }) {
   const wide = useIsWide();
   const box = useRef<HTMLDivElement>(null);
 
-  // 공용 헤더에 이 시안의 색을 입힌다. 나갈 때 원래대로 되돌린다.
+  // 이 시안의 표시를 <html> 에 심는다(헤더 색은 안 바꾼다 — skin-header.css 머리말). 나갈 때 지운다.
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.skin = name;
