@@ -32,6 +32,7 @@ import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
 import { OnbDevProvider, OnbChangeList, useOnbFlag, useCharLayout } from './onboardingDev';
 import { once, ztrack } from './funnel';
+import InAppBanner from '../parts/InAppBanner';
 
 /** 캐릭터 칸에서 채운 묶음 수(이름 포함). 고른 칩이 있거나 글을 쓴 묶음을 하나로 센다 — 글 내용은 안 보낸다. */
 function filledGroups(picks: Record<string, string[]>, texts: Record<string, string>): number {
@@ -454,6 +455,9 @@ function OnboardingInner({ y }: { y: Yeoul }) {
 
         {key === 'upload' && (
           <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', gap: gap.lg, animationDelay: '130ms' }}>
+            {/* 인앱 브라우저(카톡·인스타 …)면 한 줄 — 스크랩북과 같은 부품(2026-10-08 #690).
+                유입 대부분이 인스타 광고라 여울 첫 화면에서도 바깥 브라우저로 나갈 길을 준다. 막지 않는다. */}
+            <InAppBanner />
             {/* ★ 올리는 칸이 **맨 위**다. 예시를 먼저 두었더니 390×844 에서 버튼이 화면 밖으로
                 밀려 스크롤해야 보였다(2026-09-07 상훈님 지적). 여기서 할 일은 하나뿐이므로
                 그 하나가 첫 화면에 있어야 한다. 예시는 참고물이라 아래로 내렸다. */}
