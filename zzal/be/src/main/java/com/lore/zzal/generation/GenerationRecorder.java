@@ -99,7 +99,15 @@ public class GenerationRecorder {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markPetAlive(Long petId, String sheetKey, String identityText, Instant now) {
-        petRepository.findById(petId).ifPresent(p -> p.markAlive(sheetKey, identityText, now));
+        petRepository.findById(petId).ifPresent(p -> {
+            boolean hatching = p.getPhase() == com.lore.zzal.pet.PetPhase.HATCHING;
+            p.markAlive(sheetKey, identityText, now);
+            // ★ #696 — 부화는 1층에서 끝난다. 살아나는 <b>같은 커밋</b>에서 2층을 "아직" 으로 둔다.
+            //   따로 커밋하면 살아난 직후 잠깐 2층 8종이 열린 것으로 보이고, 그 그림은 아직 없다.
+            if (hatching && p.isAlive()) {
+                p.resetLayer2(now);
+            }
+        });
     }
 
     /**
