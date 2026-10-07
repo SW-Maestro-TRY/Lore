@@ -12,7 +12,7 @@
 //   backdrop-filter 가 있는 요소는 position:fixed 자손의 기준 상자가 되어 버려서,
 //   포털 없이 그리면 전체 화면 오버레이가 헤더 높이 안에 갇힌다.
 
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { ApiError } from "../api/client";
 import { track } from "../analytics";
@@ -156,7 +156,10 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
   const isLogin = tab === "login";
 
   // 열릴 때마다 처음 상태로 되돌린다. 지난번에 치다 만 비밀번호가 남아 있으면 안 된다.
-  useEffect(() => {
+  // ★ useLayoutEffect 인 이유(2026-10-08 #690) — useEffect 면 다시 연 첫 화면 한 장이 **지난 상태로**
+  //   그려진 뒤에 지워진다. 가입하면 창이 가입 탭인 채 닫히게 되면서(바로 로그인), 다음에 열 때
+  //   그 한 장에 가입 탭과 지난 비밀번호가 비쳤다(e2e 실측). 그리기 전에 되돌린다.
+  useLayoutEffect(() => {
     if (!open) return;
     setTab(initialTab);
     setEmail("");
