@@ -384,16 +384,11 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
         },
       });
       track("auth_signup_succeeded");
-      // ★ 가입은 로그인시키지 않는다(서버가 토큰을 주지 않는다). 창을 닫지 말고
-      //   로그인 탭으로 옮겨, 방금 만든 계정으로 바로 들어갈 수 있게 한다.
-      //   이메일은 그대로 두고 비밀번호만 비운다 — 그 자리에서 오타를 걸러낸다.
-      setTab("login");
-      setPassword("");
-      setPasswordConfirm("");
-      setInfo("가입됐어요. 방금 만든 비밀번호로 로그인해 주세요");
-      // 바로 칠 수 있게 비밀번호 칸으로(이메일은 남아 있다). 자동 로그인은 API 흐름 변경이라 안 한다.
-      focusNextRef.current = "password";
+      // ★ 가입하면 바로 로그인된다(2026-10-08 #690 — 서버가 로그인과 같은 쿠키를 준다).
+      //   로그인 탭으로 옮겨 비밀번호를 다시 치게 하던 단계는 없앴다. 창을 닫는다.
+      //   auth_login_* 이벤트는 이 경로에서 안 찍힌다(가입 = 가입 성공 하나).
       onSuccess?.("signup");
+      onClose();
     } catch (e) {
       track("auth_signup_failed", { code: errorCodeOf(e) });
       showError("form", messageOf(e));

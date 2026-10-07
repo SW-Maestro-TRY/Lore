@@ -53,17 +53,19 @@ public class AuthService {
     /**
      * 회원가입. 필수 약관에 동의하지 않으면 성립하지 않는다.
      *
-     * <h3>★ 가입은 로그인시키지 않는다</h3>
-     * 토큰을 주지 않으므로 화면은 가입 뒤 <b>로그인 화면으로 보낸다.</b> 방금 정한 비밀번호를
-     * 한 번 더 치게 하는 것이라 번거로워 보이지만, 그 자리에서 비밀번호가 맞는지 확인된다.
-     * 오타를 낸 채 가입한 사람이 다음 접속에서야 못 들어오는 일을 막는다.
+     * <h3>★ 가입하면 바로 로그인된다(2026-10-08 #690)</h3>
+     * 예전에는 토큰을 주지 않고 로그인 화면으로 보내 비밀번호를 한 번 더 치게 했다
+     * (오타 확인 목적). 운영(10/6~7)에서 그 재입력 단계가 그대로 이탈·실패로 남았고,
+     * 화면이 비밀번호 확인 칸과 보기 토글로 오타를 이미 걸러 준다. 그래서 로그인과
+     * <b>같은 발급 경로</b>({@link #issueTokens})로 토큰을 내준다 — refresh 는 로그인과
+     * 똑같이 기기(User-Agent)별로 저장된다.
      *
      * @param agreements 항목별 동의 여부. 선택 항목(마케팅)은 false 도 기록으로 남긴다 —
      *                   "안 물어본 것"과 "거부한 것"은 다르기 때문이다.
      */
     @Transactional
-    public void signUp(String email, String rawPassword, Map<AgreementType, Boolean> agreements,
-                       String termsVersion, Instant now) {
+    public Tokens signUp(String email, String rawPassword, Map<AgreementType, Boolean> agreements,
+                         String termsVersion, String userAgent, Instant now) {
         if (userRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
@@ -77,6 +79,7 @@ public class AuthService {
         credentialRepository.save(UserCredential.local(user, passwordEncoder.encode(rawPassword)));
         agreements.forEach((type, agreed) ->
                 agreementRepository.save(UserAgreement.of(user, type, termsVersion, Boolean.TRUE.equals(agreed), now)));
+        return issueTokens(user, userAgent, now);
     }
 
     /**
