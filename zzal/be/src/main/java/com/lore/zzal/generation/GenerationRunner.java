@@ -229,7 +229,7 @@ public class GenerationRunner {
                 //   실제보다 낮게 보여 중복 과금이나 급증을 못 본다.
                 BigDecimal billed = BilledFailureException.billed(e);
                 log.warn("단계 실패 — jobId={} step={} code={} 비용=${} : {}",
-                        jobId, r.step().name(), code, billed, String.valueOf(e));
+                        jobId, r.step().name(), codeLabel(code, cause), billed, String.valueOf(e));
                 recorder.failStep(r.stepId(), code, billed);
                 cost = cost.add(billed);
                 error = worse(error, code);
@@ -335,6 +335,20 @@ public class GenerationRunner {
 
     /** {@code PostProcessStep#GRID_SOURCE_FORMAT} 과 짝. */
     private static final java.util.regex.Pattern GRID_SOURCE = java.util.regex.Pattern.compile("\\[격자=([A-Za-z0-9_]+)]");
+
+    /**
+     * 로그에 찍는 실패 코드. 격자 구조 게이트가 막은 것은 {@code GRID_STRUCTURE_INVALID} 로 적는다.
+     *
+     * ★ 기록({@code zzal_gen_step.error_code})에는 여전히 {@link GenErrorCode} 값이 들어간다 — 그 칼럼은
+     *   값 목록 CHECK 에 묶여 있어 새 값을 넣으려면 마이그레이션이 필요하다({@link RunResult#gridRejected}).
+     *   게이트 거부를 {@code code=UNKNOWN} 으로 찍으면 원인 모를 실패로 읽혀 로그를 다시 뒤지게 된다(#706).
+     */
+    static String codeLabel(GenErrorCode code, Throwable cause) {
+        if (code != GenErrorCode.MODERATION_BLOCKED && gridRejected(cause)) {
+            return GRID_STRUCTURE_MARK;
+        }
+        return String.valueOf(code);
+    }
 
     private static boolean gridRejected(Throwable e) {
         return e != null && String.valueOf(e.getMessage()).contains(GRID_STRUCTURE_MARK);
