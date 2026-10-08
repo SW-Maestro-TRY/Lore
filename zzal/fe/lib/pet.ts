@@ -15,7 +15,7 @@
 //   - 게이지 4칸 · 밥 3개 · 돌봄 6종 · 재우기/깨우기 창 · 낮잠 · 함께한 날 · 친밀도 · 채팅 3슬롯 ·
 //     2층 즉시 해금(`justUnlocked`) · 아침 도착(`learnedToday`) · 기능 열림(`features`).
 
-import { request } from './api';
+import { API_BASE, request } from './api';
 import type { components, operations } from './api-schema';
 
 /** 지금 어느 단계인가. 프론트의 'none'(아직 아무도 없음)은 서버에 없다 — 그건 행이 없는 것. */
@@ -461,8 +461,14 @@ export interface Drafted {
 export interface CharacterInput {
   /** 12자 이하(정본 15장). */
   name: string;
-  /** 성격. 대사 톤에 쓰인다. 선택 */
+  /** 성격 하나(옛 칸). `personalities` 를 보내면 서버는 그쪽을 쓴다. 선택 */
   personality?: Personality;
+  /** 고른 성격 전부. 맨 앞이 대표. 선택 */
+  personalities?: Personality[];
+  /** 말투 — 고른 칩과 직접 쓴 말을 ` · ` 로 합쳐 `CHAR_TEXT_MAX.tone` 자 이하. 선택 */
+  tone?: string;
+  /** 장르 — 말투와 같은 방식, `CHAR_TEXT_MAX.genre` 자 이하. 선택 */
+  genre?: string;
   /** 세계관·설정. **고른 칩까지 합쳐** `CHAR_TEXT_MAX.world` 자 이하. 선택 */
   world?: string;
   /** 그 밖에 알려 주고 싶은 것. `CHAR_TEXT_MAX.extra` 자 이하. 선택. ★ **그림이 아니라 대사에 쓰인다**(위 머리말). */
@@ -483,8 +489,7 @@ export interface CharacterInput {
  *
  * ★ `world` 는 서버 **한 칸**에 고른 칩과 직접 쓴 말이 ` · ` 로 이어져 함께 담긴다.
  *   그래서 입력칸 자체의 상한은 이 숫자가 아니라 **칩이 먹고 남은 자리**다(화면이 계산한다).
- * ★ `persona` 는 아직 보내는 자리가 없다(위 `CharacterInput`). 화면에만 남아 잘릴 일이 없으므로
- *   넉넉히 두고, 보내기 시작할 때 서버 칸과 다시 맞춘다.
+ * ★ `persona` 의 **자유 입력**은 아직 보내는 자리가 없다(서버 칸이 없다). 칩은 `personalities` 로 간다.
  */
 export const CHAR_TEXT_MAX: Record<string, number> = {
   persona: 200,
@@ -597,6 +602,39 @@ export function motionWish(petId: number, text: string): Promise<void> {
 export function setCharacter(petId: number, input: CharacterInput): Promise<PetCreated> {
   return request<PetCreated>(`${PET_BASE}/draft/${petId}/character`, { method: 'POST', body: input });
 }
+
+/**
+ * 사용자 정보 6문항 중 **보낸 칸만** 저장한다(`PATCH /api/zzal/v1/me/profile`).
+ * 대사에 쓰이는 것은 호칭(`callMe`)뿐이다 — 나머지는 분석용이라 대사 지시문에 들어가지 않는다.
+ */
+export interface ProfilePatch {
+  callMe?: string;
+  visitTime?: string;
+  relation?: string;
+  draws?: string;
+  ageBand?: string;
+  cameFrom?: string;
+}
+
+/**
+ * ★ 공통 `request` 는 PATCH 를 안 받는다(GET·POST·PUT·DELETE). 공통 코드를 건드리지 않으려고
+ *   여기서만 맨 `fetch` 로 부른다 — 쿠키 인증(`credentials: 'include'`)은 같고, 401 자동 갱신은 없다.
+ *   설문 저장은 곁다리라 갱신 없이 실패해도 괜찮다(부르는 쪽이 오류를 삼킨다).
+ */
+export async function patchProfile(patch: ProfilePatch): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/zzal/v1/me/profile`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`profile ${res.status}`);
+}
+
+/** 여울 설문의 문항 키 → 서버 칸 이름. 화면 키(`USER_Q.key`)와 서버 칸이 이름이 달라 한 곳에 둔다. */
+export const PROFILE_FIELD_OF: Record<string, keyof ProfilePatch> = {
+  nick: 'callMe', when: 'visitTime', whose: 'relation', draw: 'draws', from: 'cameFrom', age: 'ageBand',
+};
 
 /** 부화 진행. 알 화면이 몇 초마다 되풀이해 부른다 — 가벼운 응답이다. */
 export function getHatchProgress(petId: number, signal?: AbortSignal): Promise<HatchProgress> {

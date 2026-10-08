@@ -224,9 +224,8 @@ const worldRoom = (chips: readonly string[] | undefined) => {
  * **지금 서버에 저장되지 않는 칸.** 사실만 적는다 — "곧 대화에 반영돼요" 같은 말은 지킬 수
  * 없는 약속이라 적지 않는다(자캐 규범: 주인에게 헛된 기대를 주지 않는다).
  *
- * 근거는 계약 한 곳이다 — `lib/pet.ts` 의 `CharacterInput` 이 보내는 칸은
- * `name`·`personality`·`world`·`note` 넷뿐이다. (서버 DTO 에는 `tone`·`genre`·`personalities`
- * 자리가 이미 있는데 **프론트가 아직 안 보낸다** — 그쪽을 여는 것은 별도 판단거리다.)
+ * 근거는 계약 한 곳이다 — `lib/pet.ts` 의 `CharacterInput`. 채팅 v1(#704)부터 말투·장르·성격 전부를
+ * 보내므로 **남은 것은 성격 자유 입력 하나**다(서버 칸이 없다).
  * ★ 배치 세 가지 중 무엇을 고르든 같은 자리에 뜬다 — 묶음 카드 안이라 배치와 무관하다.
  * ★ 칸 **전체**가 안 가는 묶음(말투·장르)은 머리줄에, 자유 입력**만** 안 가는 묶음(성격)은
  *   그 입력칸 아래에 붙인다 — 무엇을 가리키는 말인지가 자리로 드러나야 한다.
@@ -234,10 +233,7 @@ const worldRoom = (chips: readonly string[] | undefined) => {
 // ★ 2026-09-22 — **묶음 이름을 문장에 넣는다.** 예전에는 두 묶음이 **똑같은 한 문장**이라
 //   말투·장르 카드가 위아래로 놓이는 폭에서 같은 말이 나란히 두 번 떴다(판정 3).
 //   무엇이 저장되지 않는지는 카드 이름이 아니라 **문장 자체**가 말해야 한다.
-const NOT_SAVED_GROUP: Record<string, string> = {
-  tone: '말투는 아직 저장되지 않아요.',
-  genre: '장르는 아직 저장되지 않아요.',
-};
+const NOT_SAVED_GROUP: Record<string, string> = {};
 /** 자유 입력**만** 저장되지 않는 묶음 — 그 입력칸 **아래**에 붙인다(칩은 저장되므로). */
 const NOT_SAVED_TEXT: Record<string, string> = {
   persona: '적어 주신 글은 아직 저장되지 않아요.',
@@ -250,6 +246,19 @@ const NOT_SAVED_TEXT: Record<string, string> = {
  */
 const worldOf = (chips: readonly string[] | undefined, text: string | undefined) =>
   [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, WORLD_TOTAL);
+
+/** 고른 성격 칩 → 서버 값. 모르는 칩은 버린다. 하나도 없으면 보내지 않는다. */
+const personasOf = (chips: readonly string[] | undefined) => {
+  const all = (chips ?? []).map((c) => PERSONALITY_OF[c]).filter((p): p is NonNullable<typeof p> => !!p);
+  return all.length ? all : undefined;
+};
+
+/**
+ * 말투·장르도 세계관과 **같은 셈**으로 칩과 직접 쓴 말을 한 줄로 합친다(서버 한 칸, 각 100자).
+ * ★ 입력칸 자체가 `CHAR_TEXT_MAX` 로 막혀 있어 칩까지 합치면 넘칠 수 있다 — 넘친 꼬리는 여기서 자른다.
+ */
+const lineOf = (chips: readonly string[] | undefined, text: string | undefined, max: number) =>
+  [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, max);
 
 /**
  * 업로드 안내의 예시 그림 한 칸.
@@ -770,8 +779,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             // 첫 걸음(초안 잡기)은 이미 그림을 올린 순간에 끝났다 — 그래서 여기까지 오는 동안
             // 서버가 캐릭터 시트를 미리 구워 두었다.
             //
-            // ★ 그림에 들어가는 것은 `note` 뿐이다. `personality`·`world` 는 대사 톤에만 쓰인다.
-            //   말투·장르 칩은 보낼 자리가 없어(그리고 그림에 영향도 없어) 아직 화면에만 남는다.
+            // ★ 그림에 들어가는 칸은 없다. 성격·말투·장르·세계관·그 밖에는 전부 대사에만 쓰인다(채팅 v1, #704).
             // ★ **끝나기를 기다린다**(2026-09-10). 전에는 `void` 로 던져 두고 곧바로 넘어가서,
             //   이름 짓기가 실패해도 알이 흔들리기 시작했다 — 굽지도 않는 알을 사람이 지켜본다.
             if (key === 'char' && s.petName) {
@@ -779,8 +787,12 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               void (async () => {
                 const ok = await live.setChar({
                   name: s.petName,
-                  // ★ 성격은 여러 개 고를 수 있지만 **서버는 하나만 받는다** — 맨 앞(처음 고른 것)만 간다.
+                  // ★ 성격은 고른 순서 그대로 전부 보낸다 — 맨 앞이 대표(서버가 템플릿·폴백 톤에 쓴다).
+                  //   `personality` 는 옛 서버를 위한 다리다(서버는 `personalities` 가 있으면 그쪽을 쓴다).
                   personality: PERSONALITY_OF[(s.picks.persona ?? [])[0] ?? ''],
+                  personalities: personasOf(s.picks.persona),
+                  tone: lineOf(s.picks.tone, s.texts.tone, CHAR_TEXT_MAX.tone) || undefined,
+                  genre: lineOf(s.picks.genre, s.texts.genre, CHAR_TEXT_MAX.genre) || undefined,
                   world: worldOf(s.picks.world, s.texts.world) || undefined,
                   note: (s.texts.extra ?? '').trim() || undefined,
                 });
