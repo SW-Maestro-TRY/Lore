@@ -283,6 +283,17 @@ public class AdminLayerService {
         return st;
     }
 
+    // ── 업로드 주소 ──────────────────────────────────────────────────────
+
+    /** 후보 격자를 올릴 presign(#702). 관리자 줄에 있어 봇 토큰으로도 부른다. png 만. */
+    public S3Service.PresignedUpload presign(Long adminUserId, String contentType) {
+        adminGuard.require(adminUserId);
+        if (!"image/png".equals(contentType)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "후보 격자는 image/png 만 받습니다");
+        }
+        return s3Service.createUploadUrl(adminUserId, "zzal", contentType);
+    }
+
     // ── 후보 ─────────────────────────────────────────────────────────────
 
     /**
