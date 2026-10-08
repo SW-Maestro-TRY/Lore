@@ -63,6 +63,7 @@ import java.util.stream.Collectors;
  * <h3>★ 1층 고르기 = 새 판 = 후보 8종 + 후보 앵커(1층만) · 2층은 PENDING 으로 되돌려 다시 굽는다</h3>
  * 1층 앵커(K·Hw)가 바뀌므로 옛 2층 그림은 더 이상 맞지 않는다. 2층 격자(grid2)는 남겨 두므로 다시 자르기만 한다(돈 안 듦).
  * 부화에 실패한(FAILED) 알이면 그 자리에서 살린다(관리자 재굽기와 같은 자리 확인).
+ * ★ 고르기는 부화 시각을 건드리지 않는다 — 복구한 시각은 {@code recovered_at} 에만 남는다(#702).
  *
  * ★ 잠금은 다른 관리자 API 와 같다(스위치·{@link AdminGuard}·화면 noindex).
  */
@@ -419,6 +420,7 @@ public class AdminLayerService {
                 p.resetLayer2(now);
                 scheduleLayer2[0] = true;
             }
+            p.markRecovered(now);
             // 나머지 후보 격자는 보존, 임시 파일은 정리
             cleanup(petId, layer, all, candidateId);
             if (layer == 1) {
@@ -466,8 +468,8 @@ public class AdminLayerService {
         if (p.getHatchPipelineVersion() == null) {
             p.setHatchPipelineVersion(hatchService.currentVersion());
         }
-        p.reopenHatch(now);
-        p.markAlive(sheet, identity, now);
+        // ★ 부화 시각(hatch_started_at·hatched_at)을 지금으로 덮지 않는다(#702) — recovered_at 에 남긴다.
+        p.reviveByAdmin(sheet, identity, now);
         motionSeeder.seed(p.getId(), now);
         log.info("1층 후보로 부화 실패 알을 살림 — petId={}", p.getId());
     }

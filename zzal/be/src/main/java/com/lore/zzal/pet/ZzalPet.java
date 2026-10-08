@@ -138,6 +138,15 @@ public class ZzalPet {
     @Column(name = "layer1_candidates", length = 2000)
     private String layer1Candidates;
 
+    /**
+     * 관리자가 1층·2층을 손으로 고친 마지막 시각(#702).
+     *
+     * ★ 부화 시각({@link #hatchStartedAt}·{@link #hatchedAt})을 덮어쓰지 않으려고 따로 둔다 — 복구가 그 둘을
+     *   지금으로 바꾸면 부화 소요 시간·부화일 통계가 복구한 날로 튄다.
+     */
+    @Column(name = "recovered_at")
+    private Instant recoveredAt;
+
     /** 이번 조회에서 2층 READY 를 처음 알리며 열린 동작 seq. 저장하지 않는다(수명 = 이 요청). */
     @jakarta.persistence.Transient
     private java.util.List<Integer> layer2JustUnlocked = java.util.List.of();
@@ -687,13 +696,52 @@ public class ZzalPet {
         this.identityText = identityText;
         // ★ 초 단위로 — 정산이 초 단위라 밀리초가 남으면 정각 조회가 한 호출 늦어진다.
         this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
+        startLife(now);
+    }
+
+    /**
+     * 부화에 실패한 알을 관리자가 1층 후보로 살린다(#702).
+     *
+     * ★★ 부화 시각을 덮어쓰지 않는다. {@link #hatchStartedAt} 은 원래 값 그대로, {@link #hatchedAt} 은 비어 있을 때만
+     *   지금으로 채운다(실패한 알은 보통 비어 있다). 복구한 시각은 {@link #recoveredAt} 에 남긴다.
+     *   옛 경로({@link #reopenHatch} + {@link #markAlive})는 두 시각을 모두 지금으로 바꿔 통계가 복구한 날로 튀었다.
+     *
+     * ★ 게이지·정산 기준(settledAt·wokeAt)은 지금부터다 — 부화와 같은 첫 상태로 시작한다(튜토리얼부터).
+     */
+    public void reviveByAdmin(String sheetImageKey, String identityText, Instant now) {
+        if (phase != PetPhase.FAILED) {
+            throw new IllegalStateException("부화에 실패한 알이 아니다(지금 " + phase + ")");
+        }
+        this.phase = PetPhase.ALIVE;
+        this.deathReason = null;
+        this.sheetImageKey = sheetImageKey;
+        this.identityText = identityText;
+        if (this.hatchedAt == null) {
+            this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
+        }
+        startLife(now);
+        this.recoveredAt = now;
+    }
+
+    /** 관리자가 층을 손으로 고쳤다(후보 고르기). 부화 시각은 그대로 두고 이 시각만 남긴다. */
+    public void markRecovered(Instant now) {
+        this.recoveredAt = now;
+    }
+
+    public Instant getRecoveredAt() {
+        return recoveredAt;
+    }
+
+    /** 살아난 순간의 첫 상태 — 부화·관리자 살리기가 함께 쓴다. 정산 기준은 지금(초 단위)이다. */
+    private void startLife(Instant now) {
+        Instant t = now.truncatedTo(ChronoUnit.SECONDS);
         this.fullness = ZzalRules.TUTORIAL_START_FULLNESS;
         this.happiness = ZzalRules.HATCH_HAPPINESS;
         this.trash = ZzalRules.HATCH_TRASH;
         this.food = ZzalRules.HATCH_FOOD;
         this.foodAt = null;
-        this.settledAt = this.hatchedAt;
-        this.wokeAt = this.hatchedAt;
+        this.settledAt = t;
+        this.wokeAt = t;
         this.lastSeenAt = now;
         // "N일째 함께" — 부화한 날이 1일째(api-v2.md 2절 예시).
         this.daysTogether = 1;
