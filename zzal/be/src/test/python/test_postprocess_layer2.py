@@ -5,6 +5,8 @@
     쓰면 16칸이 아래로 잘렸다. 아랫변에서의 거리로 읽는다(옛 파일은 절대값 그대로).
 (2) 소품 — 빗자루 솔이 발보다 아래로 내려온 서 있는 칸은 발 기준점이 솔에 붙었다(펭놈·쿠리만쥬 청소).
     몸통 밖 기준점일 때만 솔을 아래에서부터 따라가 떼어 내고 발을 찾는다.
+(3) 모서리 격자점 — 검출 중심이 십자 교차점에서 비켜 팔 끝이 26px 원 밖에 남았다(아이루).
+    원에 걸친 마크 덩어리가 40px 안이면 덩어리째 지운다.
 
 실행: python -m pytest zzal/be/src/test/python/test_postprocess_layer2.py
 """
@@ -127,3 +129,45 @@ def test_foot_ref_body_untouched_when_feet_under_body():
                                 | (a[330:480, :, :3] == (215, 170, 90)).all(-1, keepdims=True), 0, a[330:480])
     im = Image.fromarray(a)
     assert state8_v5.foot_ref_body(im) == state8_v5.foot_ref_clean(im)
+
+
+# ── (3) 원 밖으로 삐져나온 격자점 조각 ─────────────────────────────────
+
+from test_find_marks import MAG, GREEN  # noqa: E402
+
+
+def _off_center_cross(hair=False):
+    """그린 바탕 + 마젠타 십자(교차점 100,100 · 팔 ±20 · 굵기 3). 검출 중심은 9px 오른쪽(109,100)이라
+    왼팔 끝(x=80)이 중심에서 29px — 26px 원 밖. hair=True 면 아래 팔 끝에 같은 색 띠가 80px 이어진다."""
+    a = np.zeros((220, 260, 3), np.uint8)
+    a[:] = GREEN
+    a[99:102, 80:121] = MAG
+    a[80:121, 99:102] = MAG
+    if hair:
+        a[118:124, 100:200] = MAG                    # 십자에 붙은 같은 색 머리카락(원 밖으로 길게)
+    return a
+
+
+def _mag_left(rgb, zone):
+    keyed = state8_v5._key_green_nostrip(Image.fromarray(rgb))
+    out = np.array(state8_v5.strip_marks_in_zone(keyed, zone))
+    return out[:, :, 3] > 8
+
+
+def test_blob_zone_erases_arm_tip_outside_circle():
+    rgb = _off_center_cross()
+    pts = [(109.0, 100.5)]
+    circle = state8_v5.mark_zone((220, 260), (0, 0), (0, 0), pts)
+    mark = (rgb == MAG).all(-1)
+    assert (_mag_left(rgb, circle) & mark).sum() > 0          # 종전: 왼팔 끝이 남는다
+    zone = circle | state8_v5.mark_blob_zone(rgb, pts)
+    assert (_mag_left(rgb, zone) & mark).sum() == 0           # 고친 뒤: 잔여 0
+    yy, xx = np.mgrid[:220, :260]
+    assert not (zone & ((xx - 109) ** 2 + (yy - 100.5) ** 2 > state8_v5.MARK_R_MAX ** 2)).any()
+
+
+def test_blob_zone_skips_mark_joined_to_long_hair():
+    """마크에 닿은 같은 색 띠가 40px 밖까지 이어지면 덩어리째 빼고 원 안만 지운다(종전과 같음)."""
+    rgb = _off_center_cross(hair=True)
+    pts = [(109.0, 100.5)]
+    assert not state8_v5.mark_blob_zone(rgb, pts).any()
