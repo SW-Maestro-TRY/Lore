@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { assetUrl } from '../lib/assets';
-import { downloadImage, imageFileName, prepareImageFile, shareImageFile } from '../lib/download';
+import { dexLayer, downloadImage, imageFileName, prepareImageFile, shareImageFile } from '../lib/download';
 import type { Album, Motion, PetDetail, ShareKind } from '../lib/pet';
 import type { PetSource } from '../lib/petSource';
 import { YEOUL_MOTION } from './constants';
@@ -56,6 +56,7 @@ export function useDexCards({ motions, pc, say, petName, onShared }: UseDexOptio
     const advanced = m.advanced.status === 'OPEN' && !!m.advanced.imageKey;
     const imageKey = advanced ? m.advanced.imageKey : m.basicImageKey;
     const img = imageKey ? assetUrl(imageKey) : (YEOUL_MOTION[m.key] ?? YEOUL_MOTION.base);
+    const meta = { motion: m.key, layer: dexLayer(m.layer) };
     const hint = open ? '' : `${m.hint ?? ''}${m.progress ? ` · ${m.progress.current}/${m.progress.target}` : ''}`;
     return {
       seq: m.seq, key: m.key, name: m.label, hint, open, locked: !open, advanced, img,
@@ -74,7 +75,7 @@ export function useDexCards({ motions, pc, say, petName, onShared }: UseDexOptio
       // ★ 어느 갈래로 끝나든 반드시 한마디를 띄운다. 아무 일도 안 일어나는 버튼이 가장 나쁘다.
       save: () => {
         if (!open || !imageKey) { say('아직 그림이 준비되지 않았어요'); return; }
-        void downloadImage(assetUrl(imageKey), imageFileName(petName || 'lore', m.label)).then((r) => {
+        void downloadImage(assetUrl(imageKey), imageFileName(petName || 'lore', m.label), meta).then((r) => {
           if (r.outcome === 'saved') { say(m.label + ' 파일 다운로드를 시작했어요'); onShared?.(m.key, 'DOWNLOAD'); }
           else if (r.code === 'http_404') say('아직 그림이 준비되지 않았어요');
           else say('저장하지 못했어요. 잠시 뒤 다시 눌러 주세요');
@@ -83,7 +84,7 @@ export function useDexCards({ motions, pc, say, petName, onShared }: UseDexOptio
       share: () => {
         if (!open || !imageKey) { say('아직 그림이 준비되지 않았어요'); return; }
         void prepareImageFile(assetUrl(imageKey), imageFileName(petName || 'lore', m.label))
-          .then(shareImageFile).then((result) => {
+          .then((file) => shareImageFile(file, meta)).then((result) => {
             if (result === 'shared') { say('공유창에 파일을 전달했어요'); onShared?.(m.key, 'SHARE'); }
             else if (result !== 'cancelled') say('저장한 뒤 앱에서 파일을 첨부해 주세요');
           }).catch(() => say('아직 그림이 준비되지 않았어요'));

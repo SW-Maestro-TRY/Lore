@@ -30,6 +30,29 @@ export interface DownloadResult {
   code?: string;
 }
 
+/**
+ * 어떤 그림을 받거나 나눴는지 — 기록(`zzal_dex_download`·`zzal_dex_share`)에만 실린다.
+ *
+ * ★ 둘 다 **카탈로그가 정한 값**이다(사람이 쓴 글이 아니다). 서버 analytics 가 허용하는 키
+ *   (`motion`·`layer`)라 그대로 저장된다. 펫 이름·파일 이름은 절대 싣지 않는다.
+ * - `motion` 동작 키(`base`·`sweep`·`roll` …)
+ * - `layer`  1층=1 · 2층=2 · 선물=`gift`
+ */
+export interface DexMeta {
+  motion?: string;
+  layer?: DexLayer;
+}
+
+export type DexLayer = 1 | 2 | 'gift';
+
+/** 카탈로그의 층 이름을 기록용 값으로. 모르는 값이면 싣지 않는다. */
+export function dexLayer(layer: string | null | undefined): DexLayer | undefined {
+  if (layer === 'BASIC_1') return 1;
+  if (layer === 'BASIC_2') return 2;
+  if (layer === 'GIFT') return 'gift';
+  return undefined;
+}
+
 export interface CopyResult {
   ok: boolean;
   /** 사용자가 직접 복사하도록 창을 띄웠는가. ok 가 true 여도 이때는 안내 문구가 달라야 한다. */
@@ -49,8 +72,9 @@ const MAX_NAME = 60;
  * @param url      assetUrl() 로 만든 그림 주소.
  * @param baseName 확장자를 뺀 파일 이름. 여기서 다시 걸러 쓴다.
  */
-export async function downloadImage(url: string, baseName: string): Promise<DownloadResult> {
-  track('zzal_dex_download', { action: 'start' });
+export async function downloadImage(url: string, baseName: string, meta: DexMeta = {}): Promise<DownloadResult> {
+  track('zzal_dex_download', { action: 'start', ...metaProps(meta) });
+  const done = (result: DownloadResult) => finish(result, meta);
 
   if (typeof window === 'undefined') return done({ outcome: 'failed', code: 'no_window' });
   // assetUrl() 은 키가 비면 빈 문자열을 준다. 그대로 fetch 하면 현재 페이지 HTML 을 받아
@@ -108,8 +132,9 @@ export async function prepareImageFile(url: string, baseName: string): Promise<F
 export type FileShareOutcome = 'shared' | 'unsupported' | 'cancelled' | 'failed';
 
 /** 원본 파일을 공유한다. 취소는 오류가 아니며 미지원 브라우저에서는 저장 후 첨부를 안내한다. */
-export async function shareImageFile(file: File): Promise<FileShareOutcome> {
-  track('zzal_dex_share', { action: 'start' });
+export async function shareImageFile(file: File, meta: DexMeta = {}): Promise<FileShareOutcome> {
+  track('zzal_dex_share', { action: 'start', ...metaProps(meta) });
+  const shared = (outcome: FileShareOutcome) => sharedWith(outcome, meta);
   try {
     if (!navigator.share || !navigator.canShare?.({ files: [file] })) return shared('unsupported');
     await navigator.share({ files: [file] });
@@ -127,7 +152,8 @@ export async function shareImageFile(file: File): Promise<FileShareOutcome> {
  *   있어야 하는데, 그건 **인증 없이 남의 펫이 보이는 새 표면**이라 따로 정해야 할 문제다.
  *   나중에 공유 페이지가 생기면 복사할 주소만 그 페이지로 바뀐다.
  */
-export async function copyImageLink(url: string): Promise<CopyResult> {
+export async function copyImageLink(url: string, meta: DexMeta = {}): Promise<CopyResult> {
+  const copied = (result: CopyResult) => copiedWith(result, meta);
   if (typeof window === 'undefined') return copied({ ok: false, code: 'no_window' });
   if (!url) return copied({ ok: false, code: 'no_url' });
 
@@ -226,23 +252,33 @@ function execCopy(text: string): boolean {
 }
 
 /** 결말을 기록하고 그대로 돌려준다. 어느 갈래로 끝나도 한 줄이 남게 하려고 한 곳에 모았다. */
-function done(result: DownloadResult): DownloadResult {
+function finish(result: DownloadResult, meta: DexMeta): DownloadResult {
   track('zzal_dex_download', {
     action: result.outcome,
     ...(result.code ? { code: result.code } : {}),
+    ...metaProps(meta),
   });
   return result;
 }
 
-function copied(result: CopyResult): CopyResult {
+function copiedWith(result: CopyResult, meta: DexMeta): CopyResult {
   track('zzal_dex_share', {
     action: result.ok ? (result.manual ? 'manual' : 'copied') : 'failed',
     ...(result.code ? { code: result.code } : {}),
+    ...metaProps(meta),
   });
   return result;
 }
 
-function shared(outcome: FileShareOutcome): FileShareOutcome {
-  track('zzal_dex_share', { action: outcome });
+function sharedWith(outcome: FileShareOutcome, meta: DexMeta): FileShareOutcome {
+  track('zzal_dex_share', { action: outcome, ...metaProps(meta) });
   return outcome;
+}
+
+/** 빈 값은 키째 뺀다 — 서버가 빈 문자열을 버리긴 하지만, 안 보내는 쪽이 기록을 읽기 쉽다. */
+function metaProps(meta: DexMeta): Record<string, string | number> {
+  return {
+    ...(meta.motion ? { motion: meta.motion } : {}),
+    ...(meta.layer !== undefined ? { layer: meta.layer } : {}),
+  };
 }
