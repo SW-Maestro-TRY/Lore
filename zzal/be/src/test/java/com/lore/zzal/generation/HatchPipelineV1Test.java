@@ -112,9 +112,9 @@ class HatchPipelineV1Test {
         verify(post, times(1)).open("images/zzal/pets/7/basic/2", "v1");
         InOrder order = inOrder(session);
         order.verify(session).split(eq("images/zzal/pets/7/grid.png"),
-                eq(LAYER1), eq(postures.forStep("v1", GridStep.NAME)));
+                eq(LAYER1), eq(postures.forStep("v1", GridStep.NAME)), eq(1));
         order.verify(session).close();
-        verify(session, times(1)).split(anyString(), anyList(), anyString());
+        verify(session, times(1)).split(anyString(), anyList(), anyString(), anyInt());
         verify(recorder).markBasicBaked(7L, 2);
     }
 
@@ -141,7 +141,7 @@ class HatchPipelineV1Test {
         order.verify(session).seedAnchors("images/zzal/pets/7/basic/1/anchors.json");
         order.verify(session).carryOver("images/zzal/pets/7/basic/1", LAYER1);
         order.verify(session).split(eq("images/zzal/pets/7/grid2.png"),
-                eq(LAYER2), eq(postures.forStep("v1", PostProcessStep.GRID2)));
+                eq(LAYER2), eq(postures.forStep("v1", PostProcessStep.GRID2)), eq(2));
         order.verify(session).close();
         // 판을 올리고 READY 로 바꾸는 일은 Layer2Service 가 한 커밋에서 — 여기서는 판 번호만 돌려준다.
         assertThat(r.text()).isEqualTo("2");
