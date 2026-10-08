@@ -288,6 +288,12 @@ app:
     #    셋 중 하나만으로는 부족하다. 검색에 걸려 발견되는 것이 실제로 가장 흔한 경로다.
     admin:
       enabled: ${ZZAL_ADMIN:false}
+      # 관리자 봇 토큰(#702) — 맥미니 러너가 비밀번호 로그인 없이 X-Admin-Token 헤더로 관리자 복구 API 를 부른다.
+      #   · 기본값 없음 — 비어 있으면 꺼진다(헤더를 보내도 401). 32자 미만·사용자 번호 없음도 꺼진다(기동은 막지 않음)
+      #   · bot-user-id 는 관리자 계정이어야 한다(AdminGuard 가 DB 로 다시 본다). 업로드 키의 주인도 이 번호다
+      #   · 경로는 /api/zzal/v1/admin/** 에만 걸린다
+      bot-token: ${ZZAL_ADMIN_TOKEN:}
+      bot-user-id: ${ZZAL_ADMIN_BOT_USER_ID:0}
 
     # 맥미니(codex 러너) 전용 문 — 사람이 아니라 기계가 부른다.
     #

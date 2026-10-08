@@ -31,7 +31,10 @@ import java.util.List;
  *   POST /api/zzal/v1/admin/pets/{id}/layer2/retry          운영 API 로 2층 다시 굽기(돈 듦)
  *   POST /api/zzal/v1/admin/pets/{id}/layer1/candidates     1층 후보 격자 1~3장
  *   POST /api/zzal/v1/admin/pets/{id}/layer1/pick           1층 후보 고르기 → 새 판·2층 PENDING(실패 알이면 살림)
+ *   POST /api/zzal/v1/admin/uploads/presign                 후보 격자 업로드 주소(관리자·봇 토큰, #702)
  * </pre>
+ *
+ * ★ 쿠키 로그인과 함께 {@code X-Admin-Token}(봇 토큰)으로도 부를 수 있다 — {@link AdminBotToken}(#702).
  */
 @Tag(name = "관리자", description = "밤에 구운 움짤 검수. 운영에서는 꺼져 있어 존재하지 않는다")
 @RestController
@@ -53,6 +56,19 @@ public class AdminLayerController {
     }
 
     public record FlagRequest(String reason) {
+    }
+
+    public record PresignRequest(@NotBlank String contentType) {
+    }
+
+    @Operation(summary = "후보 격자 업로드 주소", description = """
+            관리자(또는 봇 토큰)가 후보 격자를 올릴 자리. 공통 presign(`/api/v1/uploads/presign`)과 같은 표를 쓰지만
+            이 주소는 관리자 줄에 있어 봇 토큰으로도 부를 수 있다. 키의 주인 = 부른 관리자(봇이면 토큰에 묶인 번호).
+            `image/png` 만 받는다.""")
+    @PostMapping("/uploads/presign")
+    public ApiResponse<com.lore.common.s3.S3Service.PresignedUpload> presign(@LoginUser Long userId,
+                                                                            @Valid @RequestBody PresignRequest body) {
+        return ApiResponse.ok(service.presign(userId, body.contentType()));
     }
 
     @Operation(summary = "1층·2층 복구 목록", description = """
