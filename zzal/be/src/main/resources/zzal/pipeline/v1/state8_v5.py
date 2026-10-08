@@ -116,6 +116,8 @@ v3 대비 바뀐 것 다섯
        GRID_STRUCTURE_INVALID(exit 3).
    (2) 지우기는 확정된 격자점 둘레 반경 `MARK_R`(26px) 원 안의 마크색(+4px 테)만.
        균등분할 모서리 구역은 뺐고, v3 키잉이 지운 것도 원 밖이면 되돌린다.
+       + (#701) 원에 걸친 마크색 덩어리가 통째로 `MARK_R_MAX`(40px) 안이면 그 덩어리(+4px 테)까지
+       (`mark_blob_zone`) — 검출 중심이 교차점에서 비켜 십자 팔 끝이 원 밖에 남던 것(아이루 모서리 점).
    (3) 안전망 — 지우기가 캐릭터(원 밖까지 이어진 덩어리)를 칸마다 몇 % 깎았는지 재서
        `HOLE_MAX` 넘으면 `GRID_STRUCTURE_INVALID — POSTPROCESS_HOLE fNN` exit 3.
 
@@ -233,6 +235,16 @@ VERIFY_TOP_PAD = True       # 위 PAD 가 이웃 조각을 끌고 들어오지 �
 #   + 흐린 테 + 4px 번지기가 여기까지 온다. 지시서의 '약 18px'은 십자 몸통 기준이라 테·번지기를
 #   못 덮는다(18px 이면 103장 중 다수에서 마크 테가 수십~수백 px 남는다 — 실측 d>18 최대 607px).
 MARK_R = 26
+
+# ★2026-10-08(#701) — 원 밖으로 삐져나온 **같은 격자점 덩어리**까지 지우는 상한(px).
+#   증상 = 아이루(pet19) kept81 1층 4프레임 오른쪽 위 모서리에 보라 점 5~10px.
+#   실측 — 이 격자의 십자는 팔 ±20px 인데, 검출 중심(덩어리 경계 상자 중심)이 십자 교차점에서 7~9px
+#     비켜 있어 반대쪽 팔 끝이 중심에서 26.5~27px → 26px 원 밖에 한두 줄 남았다(13칸 103px).
+#   처방 = 확정 25점 각각에 대해, 원(MARK_R)에 걸친 마크색 연결 덩어리가 **통째로 MARK_R_MAX 안에
+#     들어오면** 그 덩어리(+4px 테, MARK_R_MAX 안)를 지우기 구역에 더한다. 덩어리 단위라 십자 팔 끝은
+#     따라가고, 마크에 닿은 캐릭터의 시안·마젠타(머리카락 등)는 덩어리가 40px 를 넘으므로 아예
+#     더하지 않는다(그 경우는 종전처럼 원 안만).
+MARK_R_MAX = 40
 
 # ★2026-10-08 — 구멍 안전망 임계(칸마다 캐릭터 감소율). 근거 표는 HOLE_MAX 를 정한 커밋 메시지·보고서.
 #   감소율 = (지우기 전 전경 중 '원 안에만 있는 마크 덩어리'를 뺀 것) 가운데 지워진 비율.
@@ -515,6 +527,47 @@ def mark_zone(shape, corner_rows, box, points, r=None):
         if -R <= lx <= W - 1 + R and -R <= ly <= H - 1 + R:
             m |= (xx - lx) ** 2 + (yy - ly) ** 2 <= R * R
     return m
+
+
+def mark_blob_zone(rgb: np.ndarray, points, r=None, r_max=None, grow_px=4):
+    """격자 원본 좌표계의 '원 밖 격자점 조각' 구역 마스크(#701). `mark_zone` 에 OR 로 더한다.
+
+    마크색(느슨 — `strip_marks_in_zone` 의 loose 와 같은 기준) 연결 덩어리 중
+    격자점 둘레 원(r)에 걸치고 **모든 픽셀이 r_max 안**인 것만, +grow_px 테(역시 r_max 안)."""
+    R = MARK_R if r is None else r
+    RM = MARK_R_MAX if r_max is None else r_max
+    H, W = rgb.shape[:2]
+    out = np.zeros((H, W), bool)
+    h, s, v = S4._hsv(rgb)
+    loose = (s > 0.22) & (v > 0.30) & (S4._in(h, S4.MAG, 12) | S4._in(h, S4.CYA, 12))
+    for px, py in points:
+        x0, x1 = max(0, int(px - RM) - 1), min(W, int(px + RM) + 2)
+        y0, y1 = max(0, int(py - RM) - 1), min(H, int(py + RM) + 2)
+        sub = loose[y0:y1, x0:x1]
+        if not sub.any():
+            continue
+        yy, xx = np.ogrid[y0:y1, x0:x1]
+        d2 = (xx - px) ** 2 + (yy - py) ** 2
+        # 창 가장자리에 닿은 덩어리는 창 밖으로 이어질 수 있다 → 창을 r_max 보다 1px 넓게 잡고,
+        #   r_max 밖 픽셀이 하나라도 있으면 버린다(창 테두리는 r_max 밖이다).
+        lab, n = ndimage.label(sub)
+        if not n:
+            continue
+        in_circle = np.unique(lab[(d2 <= R * R) & (lab > 0)])
+        add = np.zeros_like(sub)
+        for i in in_circle[in_circle > 0]:
+            bm = lab == i
+            if (d2[bm] <= RM * RM).all() and (d2[bm] > R * R).any():
+                add |= bm
+        if not add.any():
+            continue
+        for _ in range(grow_px):
+            g = add.copy()
+            g[1:, :] |= add[:-1, :]; g[:-1, :] |= add[1:, :]
+            g[:, 1:] |= add[:, :-1]; g[:, :-1] |= add[:, 1:]
+            add = g
+        out[y0:y1, x0:x1] |= add & (d2 <= RM * RM)
+    return out
 
 
 def _key_green_nostrip(cell):
@@ -811,6 +864,11 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
         print(f"GRID_STRUCTURE_INVALID — {e} — 격자 생성 결함", file=sys.stderr)
         raise SystemExit(3)
     print(f"격자점 검출 {len(points)}개")
+    # ★원 밖으로 삐져나온 같은 격자점 조각(#701) — 격자 원본 좌표계. 칸마다 잘라 zone 에 더한다.
+    blobz = mark_blob_zone(np.array(im), points)
+    if blobz.any():
+        print(f"  격자점 조각 — 원({MARK_R}px) 밖까지 이어진 마크 덩어리 구역 {int(blobz.sum())}px 추가"
+              f"(상한 {MARK_R_MAX}px)")
 
     def cut_one(r, c, up, stats=None):
         """칸 하나를 떠서 키잉 + 격자점 제거까지. up = 위로 더 뜨는 양(0 이면 v3 와 같은 절단).
@@ -822,6 +880,12 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
         cell = S4._v3_key_green(raw, up + int(ch))   # v3 키잉 원본 그대로(마크 지우기 포함)
         corner_rows = (up, up + int(ch))
         zone = mark_zone((cell.height, cell.width), corner_rows, (x0, gy - up), points)
+        if blobz.any():                          # 칸 (0,0) = 격자 (x0, gy-up). 격자 밖(위 PAD)은 False
+            gy0 = gy - up
+            ys0, ys1 = max(0, gy0), min(blobz.shape[0], gy0 + cell.height)
+            xs1 = min(blobz.shape[1], x0 + cell.width)
+            if ys1 > ys0 and xs1 > x0:
+                zone[ys0 - gy0:ys1 - gy0, 0:xs1 - x0] |= blobz[ys0:ys1, x0:xs1]
         # ★v3 키잉의 마크 지우기는 원(zone) 안에서만 인정한다 — 원 밖에서 지운 것은 되돌린다.
         ns = np.array(_key_green_nostrip(raw))
         k3 = np.array(cell)
