@@ -3,6 +3,8 @@
 
 (1) 발끝선 — 1층 캔버스가 위로 늘어난 펫(민트 312x405)의 feet.y 를 2층 캔버스(313x350)에 절대값으로
     쓰면 16칸이 아래로 잘렸다. 아랫변에서의 거리로 읽는다(옛 파일은 절대값 그대로).
+(2) 소품 — 빗자루 솔이 발보다 아래로 내려온 서 있는 칸은 발 기준점이 솔에 붙었다(펭놈·쿠리만쥬 청소).
+    몸통 밖 기준점일 때만 솔을 아래에서부터 따라가 떼어 내고 발을 찾는다.
 
 실행: python -m pytest zzal/be/src/test/python/test_postprocess_layer2.py
 """
@@ -79,3 +81,49 @@ def test_normalize_same_canvas_height_same_as_absolute(tmp_path):
         b = np.array(Image.open(tmp_path / "old" / "frames" / f"f{i:02d}.png"))
         assert (a == b).all()
     assert _foot_y(tmp_path / "new" / "frames" / "f01.png") == 290
+
+
+# ── (2) 소품이 바닥에 닿은 서 있는 칸 — 발 기준점은 몸통 아래 ─────────────
+
+def _sweeper(broom_side, w=552, h=649, body_cx=276, reach=95):
+    """정렬 캔버스 크기의 서 있는 칸 — 몸통 120x200 · 발 두 개(아래 y=470) · 빗자루 솔이 발보다 10px 아래.
+    broom_side=-1 이면 왼쪽, +1 이면 오른쪽(청소 두 칸처럼 좌우가 바뀐다).
+    reach = 몸통 중심~솔 중심. 70 이면 솔이 발에 닿아 띠에서 한 덩어리가 된다(펭놈 f06)."""
+    a = np.zeros((h, w, 4), np.uint8)
+    a[250:450, body_cx - 60:body_cx + 60] = (40, 70, 140, 255)          # 몸통
+    a[450:470, body_cx - 50:body_cx - 15] = (245, 165, 20, 255)          # 왼발
+    a[450:470, body_cx + 15:body_cx + 50] = (245, 165, 20, 255)          # 오른발
+    hx = body_cx + broom_side * reach                                       # 솔 중심
+    for y in range(330, 440):                                            # 자루(손 → 솔), 몸통에 붙는다
+        x = int(body_cx + broom_side * (40 + (y - 330) * 0.5))
+        a[y, x - 3:x + 4] = (150, 100, 50, 255)
+    for y in range(440, 480):                                            # 솔(아래로 넓어짐) — 발보다 10px 아래
+        half = 8 + (y - 440) // 2
+        a[y, hx - half:hx + half] = (215, 170, 90, 255)
+    return Image.fromarray(a)
+
+
+def test_foot_ref_clean_is_fooled_by_broom():
+    """대조 — 고치기 전 기준점은 빗자루 솔(몸통 중심에서 95px)에 붙는다."""
+    fx, _ = state8_v5.foot_ref_clean(_sweeper(-1))
+    assert abs(fx - (276 - 95)) < 10
+
+
+def test_foot_ref_body_finds_feet_both_sides(capsys):
+    for side in (-1, +1):
+        fx, fy = state8_v5.foot_ref_body(_sweeper(side))
+        assert abs(fx - 276) <= 2                   # 두 발의 가운데(몸통 아래)
+        assert fy == 469                            # 바닥선 = 발 밑창(솔 끝 479 가 아니라)
+    # 솔이 발에 닿은 경우 — 솔이 있던 열을 떼어 내므로 닿은 발 가장자리만큼(수 px) 치우칠 수 있다.
+    fx, fy = state8_v5.foot_ref_body(_sweeper(+1, reach=70))
+    assert abs(fx - 276) <= 6 and fy == 469
+    assert "발 기준 몸통 한정" in capsys.readouterr().out
+
+
+def test_foot_ref_body_untouched_when_feet_under_body():
+    """빗자루가 없으면 종전 값과 정확히 같다(바이트 동일 회귀의 근거)."""
+    a = np.array(_sweeper(-1))
+    a[330:480, :, :] = np.where((a[330:480, :, :3] == (150, 100, 50)).all(-1, keepdims=True)
+                                | (a[330:480, :, :3] == (215, 170, 90)).all(-1, keepdims=True), 0, a[330:480])
+    im = Image.fromarray(a)
+    assert state8_v5.foot_ref_body(im) == state8_v5.foot_ref_clean(im)
