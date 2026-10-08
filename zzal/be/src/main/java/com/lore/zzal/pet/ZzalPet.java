@@ -2148,10 +2148,11 @@ public class ZzalPet {
         }
     }
 
-    /** 다 구웠다. 결함 표시도 지운다. */
+    /** 다 구웠다. 결함 표시와 지난 실패 사유도 지운다 — READY 인데 사유가 남으면 관리자 목록이 실패로 읽힌다(#706). */
     public void markLayer2Ready(Instant now) {
         this.layer2Status = Layer2Status.READY;
         this.layer2Flagged = false;
+        this.layer2LastError = null;
         this.layer2UpdatedAt = now;
     }
 
