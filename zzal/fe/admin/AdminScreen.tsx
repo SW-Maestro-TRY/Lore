@@ -1,6 +1,6 @@
 'use client';
 
-// 관리자 화면 묶음 — 탭 둘: 움짤 검수(기존) · 2층 실패·대기(#696).
+// 관리자 화면 묶음 — 탭 둘: 움짤 검수(기존) · 1·2층 복구(#696, 카드 재설계 #702).
 // 고른 탭은 주소 해시(#layer)로 남긴다 — 새로고침해도 보던 탭에 머문다.
 
 import { useEffect, useState } from 'react';
@@ -21,7 +21,7 @@ export default function AdminScreen() {
   return (
     <div style={{ maxWidth: 880, margin: '0 auto', padding: '8px 12px 0' }}>
       <nav data-part="admin-tabs" style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-        {([['review', '움짤 검수'], ['layer', '2층 실패·대기']] as const).map(([t, label]) => (
+        {([['review', '움짤 검수'], ['layer', '1·2층 복구']] as const).map(([t, label]) => (
           <button
             key={t}
             type="button"
