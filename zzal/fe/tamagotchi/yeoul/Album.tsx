@@ -7,8 +7,9 @@
 
 import { useEffect, useState } from 'react';
 import { assetUrl } from '../../lib/assets';
-import { downloadImage, imageFileName, prepareImageFile, shareImageFile } from '../../lib/download';
+import { dexLayer, downloadImage, imageFileName, prepareImageFile, shareImageFile } from '../../lib/download';
 import { detectInApp } from '../../lib/inapp';
+import { motionByKey } from '../constants';
 import { C, C2, GAEGU, TAP_MIN, gap, radius, fz, ink, paperA } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
@@ -149,13 +150,15 @@ function FrameView({ y }: { y: Yeoul }) {
   // 인앱 브라우저는 <a download> 를 무시하기 쉽다(2026-10-08 #690). UA 는 클라이언트에서만 본다.
   const [inApp, setInApp] = useState(false);
   useEffect(() => { setInApp(detectInApp() != null); }, []);
+  // 기록에 실을 동작 키·층(2026-10-08 — 어떤 자세를 저장하려 했는지가 지표에 안 남았다).
+  const meta = { motion: f.key, layer: dexLayer(motionByKey(f.key)?.layer) };
   const record = (kind: 'SHARE' | 'DOWNLOAD') => {
     if (live.petId && !y.s.sampleMode) void live.shareMotion(f.key, kind);
   };
   const save = () => {
     if (!fileSrc || busy) return;
     setBusy(true);
-    void downloadImage(fileSrc, fileName).then((result) => {
+    void downloadImage(fileSrc, fileName, meta).then((result) => {
       if (result.outcome === 'saved') {
         setNotice('파일 다운로드를 시작했어요. 다운로드한 파일을 확인해 주세요.');
         record('DOWNLOAD');
@@ -166,7 +169,7 @@ function FrameView({ y }: { y: Yeoul }) {
     if (!file || busy) return;
     // 미리 읽은 File을 클릭 안에서 곧바로 넘겨 iOS의 사용자 활성화를 보존한다.
     setBusy(true);
-    void shareImageFile(file).then((result) => {
+    void shareImageFile(file, meta).then((result) => {
       if (result === 'shared') { setNotice('공유창에 파일을 전달했어요.'); record('SHARE'); }
       else if (result === 'unsupported') setNotice('이 브라우저에서는 파일 공유를 지원하지 않아요. 저장한 뒤 앱에서 파일을 첨부해 주세요.');
       else if (result === 'failed') setNotice('공유창을 열지 못했어요. 저장한 뒤 앱에서 파일을 첨부해 주세요.');
