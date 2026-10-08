@@ -333,6 +333,137 @@ def foot_ref_clean(im, frac=0.04, tag=""):
 
 
 
+# ★2026-10-08(#701) — **발 기준점을 캐릭터 본체 아래로 한정한다** (`foot_ref_body`)
+#   무슨 일이 있었나 — 2층 `sweep`(청소)에서 빗자루 머리가 발보다 **아래**까지 내려온 판은
+#     아래 4% 띠에 빗자루만 들어온다(펭놈·쿠리만쥬·우사기). 띠 덩어리가 1개라 `foot_ref_clean`
+#     (3개 이상일 때만 색으로 거름)이 손을 못 대고, 빗자루 머리가 '발'이 됐다.
+#     빗자루는 두 칸에서 좌우가 바뀌므로 층1 dx 가 -140·-142·-79px(겹침 0.05~0.10)로 몸을 밀었고,
+#     빗자루가 고정된 채 몸이 좌우로 튀어 캔버스 끝에 잘렸다(펭놈·쿠리만쥬 POSTPROCESS_CLIP).
+#   어떻게 가르나 = **발 기준점이 몸통 아래에 있나.** 몸통 = 본체(가장 큰 덩어리) 무게중심 x,
+#     몸통 폭 = 높이 30~70% 줄들의 가로폭 중앙값. 발 기준점이 무게중심에서 몸통 폭의 몇 배 떨어졌나:
+#     실사용자 1·2층 서 있는 칸 2,140개 실측 — 정상 최대 0.291(펫71 eat_rice) ·
+#     빗자루 오염 0.388~0.574(우사기 0.388·0.420 · 쿠리만쥬 0.496·0.574 · 펭놈 0.522·0.549).
+#     → 0.34 를 넘을 때만 작동한다. 그 밖의 칸은 `foot_ref_clean` 값을 **그대로** 돌려준다(바이트 동일).
+#   작동하면 — 맨 아래 줄에서 몸통 밖(무게중심 ±0.34배 폭 밖)에 중심이 있는 구간을 소품으로 보고
+#     **한 줄씩 위로 따라간다**: 아래 줄 소품 열에 걸친 부분은 소품(빗자루 솔·자루), 안 걸친 구간이
+#     나오면 그것이 발이다(발은 몸통 폭보다 벌어질 수 있어 위치로 거르지 않는다). 발이 솔에 닿아 한
+#     구간이 돼도 솔 열만 떼어 낸다(펭놈 f06). 발 y 도 발이 처음 나온 줄이다(솔 끝이 아니라 발 밑창).
+#     몸 높이 절반까지 올라가도 발을 못 찾으면 종전 값 그대로 쓰고 경고한다(지어내지 않는다).
+#   ⚠️덩어리 단위로 하면 안 된다 — 맨 아래 4% 띠에 발 밑창 한 줄과 솔이 닿아 한 덩어리로 들어오면
+#     발까지 소품으로 지워진다(합성 시험에서 한쪽 발만 남아 33px 어긋남).
+#   ⚠️서 있는 칸(`standing`)에만 쓴다. 웅크림·눕기는 띠가 애초에 발이 아니고(눕기 정상값 0.61),
+#     층2 발 중앙값에 들어가는 그 칸들의 값이 바뀌면 다른 펫 결과까지 흔들린다.
+#   ⚠️소품을 지우는 것이 아니다 — 그림은 그대로이고 '어디를 발로 볼까'만 바꾼다.
+FOOT_OFF_MAX = 0.34     # 발 기준점 ~ 몸통 무게중심 거리 / 몸통 폭 상한(정상 ≤0.291 · 오염 ≥0.388)
+FOOT_SCAN = 0.5         # 소품을 따라 올라가는 한계(몸 높이 대비) — 이 안에서 발이 안 나오면 종전 값
+FOOT_GROW = 2           # 소품이 한 줄 위로 갈 때 넓어질 여유(px, 양쪽)
+FOOT_MIN_W = 0.1        # 소품에 걸친 구간을 떼어 낸 나머지가 발이려면 최소 폭(몸통 폭 대비)
+
+
+def _torso(m):
+    """본체 마스크의 (무게중심 x, 몸통 폭). 몸통 폭 = 높이 30~70% 줄 가로폭의 중앙값."""
+    ys, xs = np.nonzero(m)
+    if not len(xs):
+        return None, None
+    y0, y1 = int(ys.min()), int(ys.max())
+    h = y1 - y0
+    spans = []
+    for y in range(int(y0 + 0.3 * h), int(y0 + 0.7 * h) + 1):
+        r = np.nonzero(m[y])[0]
+        if len(r):
+            spans.append(int(r.max() - r.min() + 1))
+    return float(xs.mean()), (float(np.median(spans)) if spans else float(xs.max() - xs.min() + 1))
+
+
+def _runs(row):
+    """한 줄의 연속 구간 [(x0, x1), ...] (양끝 포함)."""
+    x = np.nonzero(row)[0]
+    if not len(x):
+        return []
+    cut = np.nonzero(np.diff(x) > 1)[0]
+    starts = np.r_[x[0], x[cut + 1]]
+    ends = np.r_[x[cut], x[-1]]
+    return list(zip(starts.tolist(), ends.tolist()))
+
+
+def foot_ref_body(im, frac=0.04, tag=""):
+    """서 있는 칸의 발 기준점 — `foot_ref_clean` 이 몸통 아래를 벗어났을 때만 고쳐 쓴다(#701).
+
+    고칠 때는 **아래에서 위로 한 줄씩** 올라가며 소품을 따라간다.
+      · 씨앗: 맨 아래 4% 띠 덩어리 중 중심이 몸통(무게중심 ± FOOT_OFF_MAX·몸통폭) 밖인 것 = 소품.
+      · 그 위 줄: 바로 아래 줄 소품 열(±FOOT_GROW px)에 걸친 부분 = 소품. 걸친 구간에서 떼어 낸
+        나머지는 폭이 몸통폭의 FOOT_MIN_W 배 이상일 때만 발(솔 가장자리가 넓어진 가는 조각은 소품).
+        아래 소품에 안 걸친 구간 = 발.
+      · 발이 처음 나온 줄이 발 밑창(바닥선 y)이고, 거기서 위로 `frac`(4%) 높이의 발 픽셀로
+        `foot_ref` 와 같은 25% 규칙·좌우 끝 중점을 낸다.
+    """
+    fx, fy = foot_ref_clean(im, frac, tag)
+    m = S8.mk_char(im)
+    cx, tw = _torso(m)
+    if cx is None or not tw or abs(fx - cx) <= FOOT_OFF_MAX * tw:
+        return fx, fy
+    lim = FOOT_OFF_MAX * tw
+    ys_all = np.nonzero(m)[0]
+    top, bot = int(ys_all.min()), int(ys_all.max())
+    h = bot - top
+    W = m.shape[1]
+    # 씨앗 = 맨 아래 4% 띠의 덩어리 중 중심이 몸통 밖인 것(빗자루 솔 끝). 솔 끝 털이 줄마다 따로
+    #   떨어진 구간으로 나와도 덩어리로 보면 한 묶음이다(줄 단위로 위치를 보면 털 한 가닥이 몸통 안에 든다).
+    band0 = m.copy()
+    band0[:int(bot - h * frac), :] = False
+    lab0, n0 = ndimage.label(band0)
+    seed = np.zeros_like(m)
+    for i in range(n0):
+        bm = lab0 == i + 1
+        bx = np.nonzero(bm.any(axis=0))[0]
+        if abs((bx.min() + bx.max()) / 2 - cx) > lim:
+            seed |= bm
+    feet = np.zeros_like(m)
+    prev = None                                      # 바로 아래 줄의 소품 열(bool, 폭 W)
+    sole = None                                      # 발이 처음 나온 줄
+    for y in range(bot, int(bot - h * FOOT_SCAN), -1):
+        cur = np.zeros(W, bool)
+        for x0, x1 in _runs(m[y]):
+            seg = np.zeros(W, bool)
+            seg[x0:x1 + 1] = True
+            hit = seg & prev if prev is not None else np.zeros(W, bool)
+            if not hit.any():
+                if seed[y, x0:x1 + 1].any():
+                    cur |= seg                           # 씨앗(솔 끝) 구간
+                else:
+                    feet[y] |= seg
+                continue
+            cur |= hit
+            rest = seg & ~prev
+            for r0, r1 in _runs(rest):
+                if r1 - r0 + 1 >= FOOT_MIN_W * tw:
+                    feet[y, r0:r1 + 1] = True
+                else:
+                    cur[r0:r1 + 1] = True               # 솔이 넓어진 가장자리 — 소품
+        if sole is None and feet[y].any():
+            sole = y
+        if sole is not None and y < sole - h * frac:
+            break
+        g = np.zeros(W, bool)                        # 다음 줄에서 소품이 넓어질 여유
+        for x in np.nonzero(cur)[0]:
+            g[max(0, x - FOOT_GROW):x + FOOT_GROW + 1] = True
+        prev = g
+    if sole is None:
+        print(f"    ⚠️ 발 기준 몸통 한정{tag} — 띠 중심 {fx:.1f} 이 몸통 밖인데 몸통 아래 발을 못 찾음 "
+              f"→ 띠 중심을 그대로 씀")
+        return fx, fy
+    band = feet.copy()
+    band[:int(sole - h * frac), :] = False
+    lab, n = ndimage.label(band)
+    sizes = ndimage.sum(band, lab, range(1, n + 1))
+    keep = [i + 1 for i in range(n) if sizes[i] >= sizes.max() * 0.25]     # v3 의 25% 규칙 그대로
+    kx = np.nonzero(np.isin(lab, keep).any(axis=0))[0]
+    nx = (kx.min() + kx.max()) / 2
+    print(f"    발 기준 몸통 한정{tag} — 띠 중심 {fx:.1f} 이 몸통(무게중심 {cx:.1f} ± {lim:.0f})을 "
+          f"벗어나 소품으로 봄 · 발 {nx:.1f} (y {fy:.0f}→{sole})")
+    return float(nx), float(sole)
+
+
 class LatticeFitError(ValueError):
     """격자점이 cols+1 x rows+1 격자로 안 맞는다 — 격자 구조 결함(재생성 대상)."""
 
@@ -769,8 +900,8 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
                 print(f"    ⚠️ 층1 탐색 한계 — 시드 둘레 ±{rng}px 의 **끝값**이 최적이다. "
                       f"정답이 구간 밖일 수 있으니 시드(본체 bbox 중심)를 의심할 것")
         elif P["l1"] == "foot":
-            ax, _ = foot_ref_clean(cells[k*2], tag=f" f{k*2+1:02d}")
-            bx, _ = foot_ref_clean(cells[k*2+1], tag=f" f{k*2+2:02d}")
+            ax, _ = foot_ref_body(cells[k*2], tag=f" f{k*2+1:02d}")
+            bx, _ = foot_ref_body(cells[k*2+1], tag=f" f{k*2+2:02d}")
             dx = int(round(ax - bx))
             tmp = S8.move(cells[k*2+1], dx, 0)
             v, _, dy = S8.best(S8.mk_char(cells[k*2]), S8.mk_char(tmp), rng)
@@ -787,7 +918,9 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
     # ── 층2: 쌍 사이 — 발 좌표 중앙값에 맞춘다(v3 그대로).
     #   foot_ref 의 y 는 실루엣 최하단 y 이므로, 눕기 칸은 세로만 맞춰도
     #   "몸 최하단선 = 바닥선"이 그대로 성립한다.
-    refs = [foot_ref_clean(c) for c in cells]
+    # 서 있는 칸만 몸통 한정(#701) — 웅크림·눕기 칸은 종전 값 그대로(중앙값이 흔들리지 않게).
+    refs = [(foot_ref_body(c) if prof[i // 2] == "standing" else foot_ref_clean(c))
+            for i, c in enumerate(cells)]
     rx = float(np.median([r[0] for r in refs]))
     ry = float(np.median([r[1] for r in refs]))
     for k in range(npairs):
