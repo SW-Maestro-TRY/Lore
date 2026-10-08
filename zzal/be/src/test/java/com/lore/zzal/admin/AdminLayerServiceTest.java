@@ -206,6 +206,11 @@ class AdminLayerServiceTest {
         AdminLayerService.Picked picked = service.pick(ADMIN, PET, 1, cands.get(0).candidateId(), NOW);
 
         assertThat(pet.getPhase()).isEqualTo(PetPhase.ALIVE);
+        assertThat(pet.getDeathReason()).isNull();
+        // ★ 부화 시각은 덮어쓰지 않는다(#702) — 시작 시각은 원래 값, 부화 시각은 비어 있었으니 지금, 복구 시각은 따로
+        assertThat(pet.getHatchStartedAt()).isEqualTo(T0);
+        assertThat(pet.getHatchedAt()).isEqualTo(NOW);
+        assertThat(pet.getRecoveredAt()).isEqualTo(NOW);
         assertThat(pet.getSheetImageKey()).isEqualTo("images/zzal/pets/7/sheet.png");
         assertThat(pet.getIdentityText()).isEqualTo("생김새 문단");
         assertThat(pet.getBasicRound()).isEqualTo(1);
@@ -217,6 +222,46 @@ class AdminLayerServiceTest {
         verify(layer2).schedule(PET);
         List<String> to = uploads.stream().map(u -> u[0]).toList();
         assertThat(to.stream().filter(k -> k.startsWith("images/zzal/pets/7/basic/1/"))).hasSize(9);
+    }
+
+    @Test
+    @DisplayName("★ 살리기 — 부화 시각이 이미 있으면 그대로 둔다(비어 있을 때만 채움)")
+    void reviveKeepsExistingHatchedAt() {
+        ZzalPet pet = ZzalPet.draft(OWNER, "images/zzal/src", T0);
+        pet.character("루나", null, null, null, null, null, T0);
+        pet.markHatchFailed();
+        Instant old = T0.plusSeconds(300);
+        ReflectionTestUtils.setField(pet, "hatchedAt", old);
+
+        pet.reviveByAdmin("s.png", "문단", NOW);
+
+        assertThat(pet.getPhase()).isEqualTo(PetPhase.ALIVE);
+        assertThat(pet.getHatchStartedAt()).isEqualTo(T0);
+        assertThat(pet.getHatchedAt()).isEqualTo(old);
+        assertThat(pet.getRecoveredAt()).isEqualTo(NOW);
+        assertThatThrownBy(() -> pet.reviveByAdmin("s.png", "문단", NOW)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("★★ 살아 있는 펫의 1층·2층 고르기 — 부화 시각은 그대로, recovered_at 만 남는다(#702)")
+    void pickKeepsHatchTimes() {
+        ZzalPet pet = alivePet(Layer2Status.FAILED);
+        Instant started = pet.getHatchStartedAt();
+        Instant hatched = pet.getHatchedAt();
+        assertThat(pet.getRecoveredAt()).isNull();
+
+        List<AdminLayerService.Candidate> c2 = service.candidates(ADMIN, PET, 2, List.of("up/a.png"), NOW);
+        service.pick(ADMIN, PET, 2, c2.get(0).candidateId(), NOW);
+        assertThat(pet.getHatchStartedAt()).isEqualTo(started);
+        assertThat(pet.getHatchedAt()).isEqualTo(hatched);
+        assertThat(pet.getRecoveredAt()).isEqualTo(NOW);
+
+        Instant later = NOW.plusSeconds(600);
+        List<AdminLayerService.Candidate> c1 = service.candidates(ADMIN, PET, 1, List.of("up/g.png"), later);
+        service.pick(ADMIN, PET, 1, c1.get(0).candidateId(), later);
+        assertThat(pet.getHatchStartedAt()).isEqualTo(started);
+        assertThat(pet.getHatchedAt()).isEqualTo(hatched);
+        assertThat(pet.getRecoveredAt()).isEqualTo(later);
     }
 
     @Test
