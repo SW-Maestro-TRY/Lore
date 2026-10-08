@@ -2164,14 +2164,20 @@ public class ZzalPet {
     }
 
     /**
-     * 통과했지만 결함인 2층을 관리자가 목록에 올린다 — FAILED 로 두고 <b>올라간 그림은 그대로</b> 둔다.
-     * 사용자에게는 READY 가 아니므로 2층 8종이 "연습 중" 으로 돌아간다.
+     * 통과했지만 결함인 2층을 관리자 복구 목록에 올린다 — <b>표시만 한다</b>(#702).
+     *
+     * ★★ 사용자 노출 상태({@link #layer2Status})는 건드리지 않는다. 옛 동작(#696)은 FAILED 로 바꿔
+     *   사용자 2층 8종이 그 자리에서 "연습 중" 으로 잠겼다(2026-10-08 펭놈·쿠리만쥬). 결함이 있어도
+     *   지금 보이는 그림이 아무것도 안 보이는 것보다 낫고, 바뀌는 순간은 관리자가 후보를 고를 때 하나뿐이다.
      */
-    public void flagLayer2(String reason, Instant now) {
-        this.layer2Status = Layer2Status.FAILED;
+    public void flagLayer2(String reason) {
         this.layer2Flagged = true;
         this.layer2LastError = trimError(reason);
-        this.layer2UpdatedAt = now;
+    }
+
+    /** 결함 표시를 거둔다(목록에서 내림). 노출 상태는 그대로. */
+    public void unflagLayer2() {
+        this.layer2Flagged = false;
     }
 
     /** READY 를 사용자에게 알렸다. 그때 열린 동작 seq 를 이 요청에 실어 보낸다(폭죽). */
