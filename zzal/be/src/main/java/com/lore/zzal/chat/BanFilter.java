@@ -54,6 +54,47 @@ public final class BanFilter {
         return nfkc.replaceAll("[^가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9]", "");
     }
 
+    /**
+     * LLM 대사에만 더 거는 어간(채팅 v1, #704) — 떠남 암시·폭력·정신건강·음주·성적 소재·"주인님".
+     *
+     * <h3>★ 왜 {@link #DENY} 와 따로 두나</h3>
+     * {@code DENY} 는 템플릿에도 걸리고 프론트가 같은 목록을 한 벌 더 갖고 있다(두 겹). 이 목록은
+     * <b>모델이 작가 메모에서 끌어올 수 있는 소재</b>를 막는 것이라 템플릿에는 필요 없다. 운영 메모에 실제로
+     * 들어온 값("살인청부업자", "킬러", "우울증", "멘헤라", "애주가", "맥주")에서 출발했다.
+     * ★ 걸리면 대사를 지우지 않고 <b>템플릿으로 폴백</b>한다(부르는 쪽). 넓게 잡아 헛걸림이 나도
+     *   잃는 것은 LLM 대사 한 줄뿐이라, 좁게 잡아 새는 것보다 낫다.
+     */
+    static final List<String> LLM_UNSAFE = List.of(
+            // 떠남·사라짐·이별 암시
+            "떠날", "떠나버", "떠나야", "떠나갈", "사라질", "사라져버", "없어질", "헤어지", "헤어질", "이별",
+            // 폭력·무기·죽음
+            "죽이", "죽여", "죽일", "죽었", "죽고싶", "죽을래", "살인", "살해", "청부", "킬러", "암살", "피투성",
+            "피범벅", "때리", "때릴", "때려", "칼로", "총으로", "총을", "싸움", "싸우",
+            // 정신건강
+            "우울", "자살", "자해", "멘헤라", "트라우마", "정신병",
+            // 음주·흡연
+            "맥주", "소주", "와인", "애주", "음주", "취했", "취해", "술한", "술마", "한잔", "담배",
+            // 성적
+            "섹스", "야한", "벗겨", "키스",
+            // 호칭 금기
+            "주인님"
+    );
+
+    /** LLM 대사가 원망 목록이나 LLM 전용 목록에 걸리나. 걸린 목록의 이름을 돌려준다(안 걸리면 null). */
+    public static String llmViolation(String line) {
+        if (line == null) {
+            return null;
+        }
+        String tight = normalize(line);
+        if (DENY.stream().anyMatch(tight::contains)) {
+            return "resent";
+        }
+        if (LLM_UNSAFE.stream().anyMatch(tight::contains)) {
+            return "unsafe";
+        }
+        return null;
+    }
+
     /** 출력 직전 — 걸리면 안전한 한 줄로. */
     public static String clean(String line) {
         return isBanned(line) ? SAFE_LINE : line;

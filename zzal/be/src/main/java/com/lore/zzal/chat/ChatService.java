@@ -2,12 +2,25 @@ package com.lore.zzal.chat;
 
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.zzal.chat.line.GeneratedLine;
+import com.lore.zzal.chat.line.LineChain;
+import com.lore.zzal.chat.memory.Memory;
+import com.lore.zzal.chat.memory.MemoryProvider;
+import com.lore.zzal.chat.memory.RecallQuery;
+import com.lore.zzal.chat.memory.RecentAnswersMemory;
+import com.lore.zzal.chat.persona.PersonaSheet;
+import com.lore.zzal.chat.persona.PersonaSheetBuilder;
+import com.lore.zzal.chat.prompt.ChatContext;
+import com.lore.zzal.chat.prompt.LineKind;
+import com.lore.zzal.chat.prompt.PetState;
+import com.lore.zzal.motion.MotionSpec;
 import com.lore.zzal.motion.MotionCatalog;
 import com.lore.zzal.pet.AwakeClock;
 import com.lore.zzal.pet.PetService;
 import com.lore.zzal.pet.UnlockRules;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +29,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * 하루 3회의 부름(정본 10·16장).
@@ -41,13 +55,33 @@ public class ChatService {
     private final PetService petService;
     private final MotionCatalog catalog;
     private final com.lore.zzal.piece.PieceService pieceService;
+    private final PersonaSheetBuilder sheets;
+    private final MemoryProvider memory;
+    private final LineChain lines;
 
+    /**
+     * ★ 대사는 {@link LineChain}(템플릿·LLM 사슬)이, 기억은 {@link MemoryProvider} 가, 재료는
+     *   {@link PersonaSheetBuilder} 가 맡는다(채팅 v1, #704). 이 클래스는 "언제 무엇을 부르나" 만 안다 —
+     *   v2 에서 기억·생성기가 바뀌어도 여기는 그대로다.
+     */
+    @Autowired
     public ChatService(ZzalChatCallRepository callRepository, PetService petService, MotionCatalog catalog,
-                       com.lore.zzal.piece.PieceService pieceService) {
+                       com.lore.zzal.piece.PieceService pieceService, PersonaSheetBuilder sheets,
+                       MemoryProvider memory, LineChain lines) {
         this.callRepository = callRepository;
         this.petService = petService;
         this.catalog = catalog;
         this.pieceService = pieceService;
+        this.sheets = sheets;
+        this.memory = memory;
+        this.lines = lines;
+    }
+
+    /** 템플릿만 쓰는 조립(시험용) — 채팅 v0 과 같은 대사가 나온다. */
+    public ChatService(ZzalChatCallRepository callRepository, PetService petService, MotionCatalog catalog,
+                       com.lore.zzal.piece.PieceService pieceService) {
+        this(callRepository, petService, catalog, pieceService, new PersonaSheetBuilder(null),
+                new RecentAnswersMemory(callRepository), LineChain.templateOnly());
     }
 
     /**
@@ -63,7 +97,7 @@ public class ChatService {
         ZzalPet pet = petService.alive(userId, petId, realNow);
         Instant now = pet.now(realNow);
         List<ZzalChatCall> calls = materialize(pet, now);
-        return new View(openSlot(pet, calls, now), calls, memories(pet));
+        return new View(openSlot(pet, calls, now), calls, memoryTexts(pet, now, null));
     }
 
     /** 부름에 답한다. 대사 1줄 + 반응 동작 + 친밀도 +40. 자는 중엔 안 된다(모든 행동과 같다). */
@@ -77,8 +111,10 @@ public class ChatService {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_CHAT_SLOT_CLOSED));
 
-        List<String> memories = memories(pet);
-        String reply = BanFilter.clean(ChatTemplates.reply(pet.getPersonality(), text, memories, pet.getChatAnswers()));
+        List<Memory> memories = memory.recall(pet.getId(), new RecallQuery(now, slot, text));
+        // ★ 재언급 규칙(v1 = 세 번에 한 번, 기억 맨 앞 1개)은 이번 답을 <b>세기 전</b>의 횟수로 정한다 — 템플릿 v0 과 같다.
+        int answeredBefore = pet.getChatAnswers();
+        boolean recall = !memories.isEmpty() && answeredBefore > 0 && answeredBefore % 3 == 0;
         // ★★ 세는 것을 <b>먼저</b> 한다 — 반응 동작을 이번 답까지 센 뒤에 골라야
         //   "해금되는 바로 그 답부터 reply" 가 된다(아래 reactionKey 주석).
         PetService.Action action = petService.withUnlockDiff(pet, () -> {
@@ -86,8 +122,21 @@ public class ChatService {
             pieceService.count(pet, com.lore.zzal.piece.PieceEvent.CHAT);
         });
         String reaction = reactionKey(pet);
-        call.answer(text, reply, reaction, now);
-        return new Answered(action, reply, reaction);
+        // ★ 해금되는 바로 그 답은 답하기 자세로 못 박는다(폭죽과 함께 새 자세가 보여야 한다). 그 밖에는 기쁨도 고를 수 있다.
+        boolean unlockedNow = catalog.byKey("reply").map(MotionSpec::seq)
+                .map(seq -> action.justUnlocked() != null && action.justUnlocked().contains(seq)).orElse(false);
+        List<String> motions = unlockedNow ? List.of(reaction) : List.of(reaction, "joy");
+        ChatContext ctx = new ChatContext(sheets.build(pet), PetState.of(pet, now),
+                recall ? LineKind.RECALL : LineKind.REPLY, slot, call.getLine(), text, memories,
+                recall ? memories.getFirst() : null, answeredBefore,
+                // 질문 여부는 코드가 정한다 — 재언급은 되묻는 것이 자연스럽고, 보통 답은 세 번에 한 번만.
+                recall || answeredBefore % 3 == 1, motions);
+        GeneratedLine g = lines.generate(ctx, userId);
+        String motion = g.motion() == null ? reaction : g.motion();
+        call.answer(text, g.text(), motion, now);
+        call.noteReply(g.generator(), g.model(), g.costUsd(), g.fallbackReason());
+        memory.remember(pet.getId(), call);
+        return new Answered(action, g.text(), motion);
     }
 
     // ── 안쪽 ──────────────────────────────────────────────────────────────
@@ -95,6 +144,8 @@ public class ChatService {
     /** 지금까지 도래한 슬롯의 행이 없으면 만든다. 기상일(BABY 는 부화일) 기준으로 하루에 슬롯 하나. */
     private List<ZzalChatCall> materialize(ZzalPet pet, Instant now) {
         List<ZzalChatCall> out = new ArrayList<>();
+        // 재료는 새 부름을 만들 때만 읽는다(조회마다 프로필을 읽지 않게).
+        Supplier<PersonaSheet> sheet = memo(() -> sheets.build(pet));
         // ★ 튜토리얼 부름(BABY) — 정본 12장 3번 칸 "뭐라고 말을 거네요".
         //   1.4 이전에는 "부화 +8분" 이었다. 지금은 시간이 아니라 순서다 — 앞의 두 칸(밥·쓰다듬)을
         //   끝내면 그 자리에서 부른다. 며칠 뒤에 와도 이 부름은 그대로 기다리고 있다.
@@ -102,10 +153,8 @@ public class ChatService {
         if (pet.getTutorialStep() >= ZzalRules.TUTORIAL_CHAT_AFTER) {
             LocalDate babyDay = AwakeClock.dateOf(pet.getHatchedAt());
             ZzalChatCall baby = callRepository.findByPetIdAndDayOfAndSlot(pet.getId(), babyDay, ChatSlot.BABY)
-                    .orElseGet(() -> callRepository.save(ZzalChatCall.call(pet.getId(), babyDay, ChatSlot.BABY,
-                            BanFilter.clean(ChatTemplates.call(pet.getPersonality(), ChatSlot.BABY, pet.getName())),
-                            // ★ 튜토리얼 부름은 만료가 없다 — 시계가 안 돌기 때문이다. 답할 때까지 기다린다.
-                            babyAt, null)));
+                    // ★ 튜토리얼 부름은 만료가 없다 — 시계가 안 돌기 때문이다. 답할 때까지 기다린다.
+                    .orElseGet(() -> newCall(pet, sheet, babyDay, ChatSlot.BABY, babyAt, null, now));
             // 답했거나 만료된 BABY 는 부화 당일에만 보인다 — 이후 날의 "오늘의 부름" 에 영구히 끼지 않게(리뷰 반영).
             if (baby.isOpen(now) || AwakeClock.dateOf(now).equals(babyDay)) {
                 out.add(baby);
@@ -131,11 +180,38 @@ public class ChatService {
                 continue;
             }
             out.add(callRepository.findByPetIdAndDayOfAndSlot(pet.getId(), day, d.slot())
-                    .orElseGet(() -> callRepository.save(ZzalChatCall.call(pet.getId(), day, d.slot(),
-                            BanFilter.clean(ChatTemplates.call(pet.getPersonality(), d.slot(), pet.getName())),
-                            d.at(), d.until()))));
+                    .orElseGet(() -> newCall(pet, sheet, day, d.slot(), d.at(), d.until(), now)));
         }
         return out;
+    }
+
+    /**
+     * 부름 한 줄을 만들어 저장한다. 대사는 사슬(LLM → 템플릿)이 낸다.
+     *
+     * ★ LLM 호출이 이 트랜잭션 안(펫 행 잠금 중)에서 난다 — 최대 {@code app.zzal.chat.timeout-ms}(4초).
+     *   같은 펫의 동시 요청은 잠금에서 줄을 서므로 같은 부름이 두 번 생성되지 않는다(두 번째는 저장된 행을 읽는다).
+     */
+    private ZzalChatCall newCall(ZzalPet pet, Supplier<PersonaSheet> sheet, LocalDate day, ChatSlot slot,
+                                 Instant at, Instant until, Instant now) {
+        ChatContext ctx = new ChatContext(sheet.get(), PetState.of(pet, now), LineKind.CALL, slot, null, null,
+                memory.recall(pet.getId(), new RecallQuery(now, slot, null)), null, pet.getChatAnswers(),
+                // 첫 부름은 호칭을 묻는 자리라 질문을 허용한다. 하루 부름은 날·슬롯으로 번갈아 — 매번 물으면 취조가 된다.
+                slot == ChatSlot.BABY || (day.getDayOfYear() + slot.ordinal()) % 2 == 0, List.of());
+        GeneratedLine g = lines.generate(ctx, pet.getUserId());
+        ZzalChatCall row = ZzalChatCall.call(pet.getId(), day, slot, g.text(), at, until);
+        row.noteLine(g.generator(), g.model(), g.costUsd(), g.fallbackReason());
+        return callRepository.save(row);
+    }
+
+    private static <T> Supplier<T> memo(Supplier<T> s) {
+        Object[] box = new Object[1];
+        return () -> {
+            if (box[0] == null) {
+                box[0] = s.get();
+            }
+            @SuppressWarnings("unchecked") T t = (T) box[0];
+            return t;
+        };
     }
 
     private static Instant min(Instant a, Instant b) {
@@ -162,11 +238,9 @@ public class ChatService {
         };
     }
 
-    /** 기억 — 최근 답 5개(10장). 오래된 것부터가 아니라 최근 것부터. */
-    private List<String> memories(ZzalPet pet) {
-        return callRepository.findTop5ByPetIdAndAnsweredAtIsNotNullOrderByAnsweredAtDesc(pet.getId()).stream()
-                .map(ZzalChatCall::getAnswer)
-                .toList();
+    /** 기억 — 최근 답 5개(10장). 오래된 것부터가 아니라 최근 것부터. 화면 칩에 그대로 쓴다. */
+    private List<String> memoryTexts(ZzalPet pet, Instant now, ChatSlot slot) {
+        return memory.recall(pet.getId(), new RecallQuery(now, slot, null)).stream().map(Memory::text).toList();
     }
 
     /**
