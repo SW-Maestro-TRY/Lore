@@ -318,6 +318,44 @@ class AdminLayerServiceTest {
     }
 
     @Test
+    @DisplayName("★★ 다시 만들기 — LOCAL_REQUESTED 로 목록에 오르고 노출 상태는 그대로 · 후보가 오면 요청이 지워진다")
+    void regenRequestThenCandidatesClear() {
+        ZzalPet pet = alivePet(Layer2Status.READY);
+        when(pets.findByPhaseAndLayer2FlaggedTrueOrderByIdDesc(PetPhase.ALIVE)).thenAnswer(inv ->
+                pet.isLayer2Flagged() ? List.of(pet) : List.of());
+
+        AdminLayerService.Regen r = service.requestRegen(ADMIN, PET, 2, NOW);
+        assertThat(r.regenRequestedAt()).isEqualTo(NOW);
+        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
+        assertThat(pet.isLayer2Flagged()).as("READY 펫이 목록에서 사라지지 않게 표시도 건다").isTrue();
+
+        AdminLayerService.Item it = service.list(ADMIN, NOW).get(0);
+        assertThat(it.recovery()).isEqualTo(AdminLayerService.LOCAL_REQUESTED);
+        assertThat(it.regenRequestedAt()).isEqualTo(NOW);
+        // 지금 보이는 2층 8종(결함이 있는 그 판)도 함께 준다 — 카드에서 견준다
+        assertThat(it.currentKeys()).hasSize(8).containsEntry("eat_rice", "images/zzal/pets/7/basic/1/eat_rice.webp");
+
+        service.candidates(ADMIN, PET, 2, List.of("up/a.png"), NOW);
+        assertThat(pet.getRegenRequestedAt(2)).isNull();
+        assertThat(service.list(ADMIN, NOW).get(0).recovery()).isEqualTo("CANDIDATES");
+        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
+    }
+
+    @Test
+    @DisplayName("★ 다시 만들기 — 1층은 부화 실패 알만, 취소하면 지워진다 · 해제하면 2층 요청도 지워진다")
+    void regenRules() {
+        ZzalPet pet = alivePet(Layer2Status.FAILED);
+        assertThatThrownBy(() -> service.requestRegen(ADMIN, PET, 1, NOW)).isInstanceOf(BusinessException.class);
+        service.requestRegen(ADMIN, PET, 2, NOW);
+        assertThat(pet.isLayer2Flagged()).as("FAILED 는 이미 목록에 있다 — 표시를 덧붙이지 않는다").isFalse();
+        service.cancelRegen(ADMIN, PET, 2);
+        assertThat(pet.getRegenRequestedAt(2)).isNull();
+        service.requestRegen(ADMIN, PET, 2, NOW);
+        service.unflag(ADMIN, PET);
+        assertThat(pet.getRegenRequestedAt(2)).isNull();
+    }
+
+    @Test
     @DisplayName("★ 재시도 — FAILED 2층은 PENDING·시도 0 으로 돌리고 넘김(격자 보존)")
     void retryFailed() {
         alivePet(Layer2Status.FAILED);
