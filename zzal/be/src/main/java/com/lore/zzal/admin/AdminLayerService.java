@@ -146,11 +146,18 @@ public class AdminLayerService {
         adminGuard.require(adminUserId);
         return tx.execute(s -> {
             List<Item> out = new ArrayList<>();
+            java.util.Set<Long> seen = new java.util.HashSet<>();
+            // ★ 결함 표시(flagged)는 노출 상태와 따로 간다(#702) — READY 인 채로 목록에 오른다.
+            for (ZzalPet p : petRepository.findByPhaseAndLayer2FlaggedTrueOrderByIdDesc(PetPhase.ALIVE)) {
+                if (seen.add(p.getId())) {
+                    out.add(item(p, 2));
+                }
+            }
             for (ZzalPet p : petRepository.findByPhaseAndLayer2StatusInOrderByIdDesc(PetPhase.ALIVE,
                     List.of(Layer2Status.FAILED, Layer2Status.PENDING, Layer2Status.RUNNING))) {
                 boolean stale = p.getLayer2Status() != Layer2Status.FAILED
                         && (p.getLayer2UpdatedAt() == null || p.getLayer2UpdatedAt().isBefore(now.minus(STALE)));
-                if (p.getLayer2Status() == Layer2Status.FAILED || stale) {
+                if ((p.getLayer2Status() == Layer2Status.FAILED || stale) && seen.add(p.getId())) {
                     out.add(item(p, 2));
                 }
             }
@@ -216,7 +223,10 @@ public class AdminLayerService {
 
     // ── 2층 수동 등록·재시도 ─────────────────────────────────────────────
 
-    /** 통과했지만 결함인 2층을 목록에 올린다 — FAILED, 올라간 그림은 그대로. 사용자에게는 2층이 "연습 중" 이 된다. */
+    /**
+     * 통과했지만 결함인 2층을 목록에 올린다 — <b>표시만</b>(#702). 2층 상태·올라간 그림·사용자 화면은 그대로다.
+     * 사용자 화면이 바뀌는 것은 후보를 고를 때({@link #pick}) 하나뿐이다.
+     */
     public State flag(Long adminUserId, Long petId, String reason, Instant now) {
         adminGuard.require(adminUserId);
         return tx.execute(s -> {
@@ -225,10 +235,25 @@ public class AdminLayerService {
                 throw new BusinessException(ErrorCode.ZZAL_PET_ALREADY_HATCHING,
                         "2층이 아직 굽는 중입니다(지금 %s)".formatted(p.getLayer2Status()));
             }
-            p.flagLayer2(reason == null || reason.isBlank() ? "관리자 수동 등록" : "관리자 수동 등록 — " + reason, now);
-            log.info("2층 수동 등록 — petId={} (admin={})", petId, adminUserId);
-            return new State(petId, p.getLayer2Status().name(), p.getLayer2Attempts(), p.isLayer2Flagged());
+            p.flagLayer2(reason == null || reason.isBlank() ? "관리자 수동 등록" : "관리자 수동 등록 — " + reason);
+            log.info("2층 결함 표시 — petId={} 상태={} (admin={})", petId, p.getLayer2Status(), adminUserId);
+            return state(p);
         });
+    }
+
+    /** 결함 표시를 거둔다 — 목록에서 내린다. 노출 상태는 그대로. */
+    public State unflag(Long adminUserId, Long petId) {
+        adminGuard.require(adminUserId);
+        return tx.execute(s -> {
+            ZzalPet p = alive(petId);
+            p.unflagLayer2();
+            log.info("2층 결함 표시 해제 — petId={} (admin={})", petId, adminUserId);
+            return state(p);
+        });
+    }
+
+    private static State state(ZzalPet p) {
+        return new State(p.getId(), p.getLayer2Status().name(), p.getLayer2Attempts(), p.isLayer2Flagged());
     }
 
     /**
@@ -242,9 +267,15 @@ public class AdminLayerService {
             if (p.getLayer2Status() == Layer2Status.RUNNING) {
                 throw new BusinessException(ErrorCode.ZZAL_PET_ALREADY_HATCHING, "2층이 지금 굽는 중입니다");
             }
+            // ★ READY(결함 표시만 된 것)는 막는다(#702) — PENDING 으로 돌리는 순간 사용자 2층이 "연습 중" 으로 잠기고,
+            //   운영 굽기가 또 실패하면 FAILED 로 남는다. 결함 표시된 펫은 후보(맥미니 다시 만들기·직접 올리기)로 고친다.
+            if (p.getLayer2Status() == Layer2Status.READY) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        "2층이 READY 입니다 — 사용자 화면을 잠그지 않도록 후보를 올려 고르세요(다시 만들기·후보 올리기)");
+            }
             discardLayer2Steps(petId, true);
             p.resetLayer2(now);
-            return new State(petId, p.getLayer2Status().name(), p.getLayer2Attempts(), p.isLayer2Flagged());
+            return state(p);
         });
         layer2Service.schedule(petId);
         log.info("2층 재시도 — petId={} (admin={})", petId, adminUserId);

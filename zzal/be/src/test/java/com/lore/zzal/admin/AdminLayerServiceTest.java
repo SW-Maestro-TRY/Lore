@@ -219,15 +219,62 @@ class AdminLayerServiceTest {
     }
 
     @Test
-    @DisplayName("★ 수동 등록 — READY 였던 2층을 FAILED 로(그림은 그대로) · 재시도 — PENDING·시도 0 으로 돌리고 넘김")
-    void flagThenRetry() {
+    @DisplayName("★★ 결함 표시 — 사용자 노출 상태(READY)는 그대로, 목록에만 오른다 · READY 는 운영 재시도도 막는다(#702)")
+    void flagDoesNotTouchExposure() {
         ZzalPet pet = alivePet(Layer2Status.READY);
+        when(pets.findByPhaseAndLayer2FlaggedTrueOrderByIdDesc(PetPhase.ALIVE)).thenAnswer(inv ->
+                pet.isLayer2Flagged() ? List.of(pet) : List.of());
+
         AdminLayerService.State flagged = service.flag(ADMIN, PET, "빈 칸", NOW);
-        assertThat(flagged.layer2Status()).isEqualTo("FAILED");
+
+        assertThat(flagged.layer2Status()).isEqualTo("READY");
         assertThat(flagged.flagged()).isTrue();
+        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
+        assertThat(pet.isLayer2Ready()).isTrue();
+        assertThat(pet.getLayer2UpdatedAt()).isEqualTo(T0);      // 상태 시각도 안 바뀐다
         assertThat(pet.getBasicRound()).isEqualTo(1);
         verify(storage, never()).delete(any());
+        // 목록에 오른다 — 사유와 함께
+        assertThat(service.list(ADMIN, NOW)).singleElement().satisfies(it -> {
+            assertThat(it.petId()).isEqualTo(PET);
+            assertThat(it.flagged()).isTrue();
+            assertThat(it.layer2Status()).isEqualTo("READY");
+            assertThat(it.lastError()).contains("빈 칸");
+        });
+        // READY 를 PENDING 으로 돌리는 운영 재시도는 막는다 — 사용자 2층이 잠기므로
+        assertThatThrownBy(() -> service.retry(ADMIN, PET, NOW)).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("READY");
+        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
+        verify(layer2, never()).schedule(any());
 
+        // 해제 — 목록에서 내려가고 상태는 그대로
+        AdminLayerService.State unflagged = service.unflag(ADMIN, PET);
+        assertThat(unflagged.flagged()).isFalse();
+        assertThat(unflagged.layer2Status()).isEqualTo("READY");
+        assertThat(service.list(ADMIN, NOW)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("★★ 노출 상태가 바뀌는 것은 고르기뿐 — 결함 표시 READY 펫에 후보를 올려도 그대로, 고르면 새 판·표시 해제")
+    void onlyPickChangesExposure() {
+        ZzalPet pet = alivePet(Layer2Status.READY);
+        service.flag(ADMIN, PET, "빈 칸", NOW);
+
+        List<AdminLayerService.Candidate> cands = service.candidates(ADMIN, PET, 2, List.of("up/a.png"), NOW);
+        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
+        assertThat(pet.getBasicRound()).isEqualTo(1);
+        assertThat(pet.isLayer2Flagged()).isTrue();
+
+        service.pick(ADMIN, PET, 2, cands.get(0).candidateId(), NOW);
+        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
+        assertThat(pet.getBasicRound()).isEqualTo(2);
+        assertThat(pet.isLayer2Flagged()).isFalse();
+    }
+
+    @Test
+    @DisplayName("★ 재시도 — FAILED 2층은 PENDING·시도 0 으로 돌리고 넘김(격자 보존)")
+    void retryFailed() {
+        alivePet(Layer2Status.FAILED);
         GenStepRecord grid2 = GenStepRecord.start(2L, 0, PostProcessStep.GRID2, T0);
         when(steps.findSucceededByPet(PET, GenKind.LAYER2)).thenReturn(List.of(grid2));
         AdminLayerService.State retried = service.retry(ADMIN, PET, NOW);
