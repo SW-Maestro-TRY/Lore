@@ -272,6 +272,16 @@ app:
     # ★ 어느 쪽이든 원망 문장 금지 필터는 출력 단계에 강제된다(정본 0장 6).
     chat:
       mode: ${ZZAL_CHAT_MODE:template}
+      # 채팅 v1(#704) — 부름·답·재언급 대사를 LLM 1회로. 실패·시간 초과·금칙·일 상한이면 템플릿으로 폴백.
+      # ★ 기본 꺼짐. dev 에서만 ZZAL_CHAT_LLM=true. 켰는데 ZZAL_OPENAI_API_KEY 가 비면 기동을 막는다.
+      # ★ mode 는 옛 칸이다(아무도 안 읽음). 스위치는 llm 하나다.
+      llm: ${ZZAL_CHAT_LLM:false}
+      # gpt-5-mini = 입력 $0.25 · 출력 $2.00 / 1M(2026-10-08). 한 줄 약 $0.001 안팎.
+      model: ${ZZAL_CHAT_MODEL:gpt-5-mini}
+      timeout-ms: ${ZZAL_CHAT_TIMEOUT_MS:4000}
+      # 그날(한국 날짜) 채팅 LLM 비용 합(zzal_chat_call.cost_usd)이 이 값 이상이면 템플릿만.
+      daily-cost-usd: ${ZZAL_CHAT_DAILY_COST_USD:2}
+      reasoning-effort: ${ZZAL_CHAT_REASONING_EFFORT:minimal}
 
     # 개발용 시계 API(/api/zzal/v1/dev/**).
     #
