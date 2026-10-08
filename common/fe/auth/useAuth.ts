@@ -116,13 +116,34 @@ export function reloadMe(): Promise<void> {
 }
 
 /**
+ * 로그인·가입은 됐는데 **내 정보(/users/me)로 확인이 안 되는** 경우(합본 H16).
+ * 쿠키가 저장되지 않았거나(인앱 쿠키 차단·http) 서버가 잠깐 실패한 경우다. 예전엔 이걸 삼키고
+ * 성공으로 닫아, 헤더는 그대로 "로그인" 이고 여울 그림도 안 올라갔다.
+ */
+export class SessionCheckError extends Error {
+  readonly code = "me_failed";
+  constructor() {
+    super("로그인 상태를 확인하지 못했어요. 다시 시도해 주세요");
+    this.name = "SessionCheckError";
+  }
+}
+
+/** 방금 받은 쿠키로 정말 로그인됐는지 확인한다. 한 번 더 물어보고도 아니면 SessionCheckError. */
+async function confirmSession(): Promise<void> {
+  await load(true);
+  if (state.status === "authenticated") return;
+  await load(true);
+  if ((state as AuthState).status !== "authenticated") throw new SessionCheckError();
+}
+
+/**
  * 로그인. 성공하면 곧바로 내 정보까지 채워 넣는다 —
  * 쿠키만 받고 상태를 안 갱신하면 헤더가 여전히 "로그인" 을 그린다.
  * 실패는 ApiError 로 그대로 던진다. 문구를 고르는 건 화면 몫이다.
  */
 export async function signIn(input: LoginInput): Promise<void> {
   await loginApi(input);
-  await load(true);
+  await confirmSession();
 }
 
 /**
@@ -131,7 +152,7 @@ export async function signIn(input: LoginInput): Promise<void> {
  */
 export async function signUp(input: SignUpInput): Promise<void> {
   await signUpApi(input);
-  await load(true);
+  await confirmSession();
 }
 
 /**
