@@ -125,12 +125,30 @@ public class AdminLayerService {
                             String previewKey, Map<String, String> previewKeys) {
     }
 
-    /** 목록 한 줄. {@code layer} = 1(부화 실패) 또는 2(2층 실패·대기). */
+    /**
+     * 목록 한 줄. {@code layer} = 1(부화 실패) 또는 2(2층 실패·대기·결함 표시).
+     *
+     * <ul>
+     *   <li>{@code recovery} — 복구가 어디까지 왔나: {@code LOCAL_REQUESTED}(다시 만들기 요청 — 맥미니 러너가 집는다) ·
+     *       {@code CANDIDATES}(올라온 후보가 있다 — 사람이 고른다) · {@code WAITING}(아무것도 없음)</li>
+     *   <li>{@code currentKeys} — 지금 사용자에게 보이는 그 층 8종(key → webp 키). 2층은 READY 일 때만(아니면 그 판에 2층이 없다)</li>
+     *   <li>{@code recoveredAt} — 마지막으로 손으로 고친 시각(부화 시각과 따로)</li>
+     * </ul>
+     */
     public record Item(Long petId, String name, int layer, String phase, String layer2Status, boolean flagged,
                        int attempts, String lastError, Instant updatedAt, int basicRound,
                        String sheetKey, String identityText, String anchorsKey,
-                       List<String> rejectedKeys, List<Candidate> candidates) {
+                       List<String> rejectedKeys, List<Candidate> candidates,
+                       String recovery, Instant regenRequestedAt, Instant recoveredAt,
+                       Map<String, String> currentKeys) {
     }
+
+    /** 다시 만들기 요청 결과. */
+    public record Regen(Long petId, int layer, Instant regenRequestedAt) {
+    }
+
+    /** 러너가 집을 상태 값 — 선물 재생성(LOCAL_REQUESTED)과 같은 이름. */
+    public static final String LOCAL_REQUESTED = "LOCAL_REQUESTED";
 
     /** 고르기 결과. */
     public record Picked(Long petId, int layer, String candidateId, int basicRound, String phase,
@@ -185,12 +203,27 @@ public class AdminLayerService {
             }
         }
         String lastError = layer == 2 ? p.getLayer2LastError() : lastHatchError(p.getId());
+        List<Candidate> cands = CandidateList.parse(layer == 1 ? p.getLayer1Candidates() : p.getLayer2Candidates())
+                .stream().map(c -> c.toResponse(p.getId(), layer, baker)).toList();
+        Instant regen = p.getRegenRequestedAt(layer);
+        String recovery = regen != null ? LOCAL_REQUESTED : cands.isEmpty() ? "WAITING" : "CANDIDATES";
         return new Item(p.getId(), p.getName(), layer, p.getPhase().name(), p.getLayer2Status().name(),
                 p.isLayer2Flagged(), layer == 2 ? p.getLayer2Attempts() : hatchAttempts(p.getId()), lastError,
                 layer == 2 ? p.getLayer2UpdatedAt() : p.getHatchStartedAt(), p.getBasicRound(), sheet, identity,
                 p.getBasicRound() > 0 ? MotionImageKeys.anchors(p.getId(), p.getBasicRound()) : null,
-                rejectedKeys(p.getId(), layer), CandidateList.parse(layer == 1 ? p.getLayer1Candidates() : p.getLayer2Candidates())
-                .stream().map(c -> c.toResponse(p.getId(), layer, baker)).toList());
+                rejectedKeys(p.getId(), layer), cands, recovery, regen, p.getRecoveredAt(), currentKeys(p, layer));
+    }
+
+    /** 지금 사용자에게 보이는 그 층 8종. 판이 없거나(부화 실패) 2층이 READY 가 아니면 빈 맵. */
+    private Map<String, String> currentKeys(ZzalPet p, int layer) {
+        if (p.getBasicRound() <= 0 || !p.isAlive() || (layer == 2 && !p.isLayer2Ready())) {
+            return Map.of();
+        }
+        Map<String, String> out = new java.util.LinkedHashMap<>();
+        for (String k : baker.keys(layer)) {
+            out.put(k, MotionImageKeys.basic(p.getId(), p.getBasicRound(), k));
+        }
+        return out;
     }
 
     private String lastHatchError(Long petId) {
@@ -283,6 +316,46 @@ public class AdminLayerService {
         return st;
     }
 
+    // ── 다시 만들기(맥미니) ──────────────────────────────────────────────
+
+    /**
+     * 그 층을 맥미니에서 다시 만들어 달라고 표시한다(#702) — 러너가 10분마다 목록에서 {@code LOCAL_REQUESTED} 를 집어
+     * Codex 로 후보 격자를 만들고 후보 올리기로 등록한다. <b>고르는 것은 사람</b>이다. 사용자 화면은 그대로.
+     * 2층이면 목록에 남도록 결함 표시도 함께 건다(READY 펫이 목록에서 사라지지 않게).
+     */
+    public Regen requestRegen(Long adminUserId, Long petId, int layer, Instant now) {
+        adminGuard.require(adminUserId);
+        return tx.execute(s -> {
+            ZzalPet p = petRepository.findByIdForUpdate(petId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
+            requireLayerTarget(p, layer);
+            if (layer == 1 && p.getPhase() != PetPhase.FAILED) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "1층 다시 만들기는 부화에 실패한 알만 받습니다");
+            }
+            if (layer == 2 && p.getLayer2Status() == Layer2Status.READY && !p.isLayer2Flagged()) {
+                p.flagLayer2("관리자 다시 만들기 요청");
+            }
+            p.requestRegen(layer, now);
+            log.info("{}층 다시 만들기 요청 — petId={} (admin={})", layer, petId, adminUserId);
+            return new Regen(petId, layer, p.getRegenRequestedAt(layer));
+        });
+    }
+
+    /** 다시 만들기 요청을 거둔다. */
+    public Regen cancelRegen(Long adminUserId, Long petId, int layer) {
+        adminGuard.require(adminUserId);
+        if (layer != 1 && layer != 2) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "층은 1 또는 2 입니다");
+        }
+        return tx.execute(s -> {
+            ZzalPet p = petRepository.findByIdForUpdate(petId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
+            p.clearRegen(layer);
+            log.info("{}층 다시 만들기 요청 취소 — petId={} (admin={})", layer, petId, adminUserId);
+            return new Regen(petId, layer, null);
+        });
+    }
+
     // ── 업로드 주소 ──────────────────────────────────────────────────────
 
     /** 후보 격자를 올릴 presign(#702). 관리자 줄에 있어 봇 토큰으로도 부른다. png 만. */
@@ -352,6 +425,8 @@ public class AdminLayerService {
             } else {
                 p.setLayer2Candidates(joined);
             }
+            // 후보가 왔다 — 다시 만들기 요청은 채워졌다(러너가 같은 요청을 또 집지 않는다)
+            p.clearRegen(layer);
         });
         log.info("후보 {}장 처리 — petId={} layer={} 결과={} (admin={})", entries.size(), petId, layer,
                 entries.stream().map(CandidateList.Entry::gate).toList(), adminUserId);
@@ -432,6 +507,7 @@ public class AdminLayerService {
                 scheduleLayer2[0] = true;
             }
             p.markRecovered(now);
+            p.clearRegen(layer);
             // 나머지 후보 격자는 보존, 임시 파일은 정리
             cleanup(petId, layer, all, candidateId);
             if (layer == 1) {

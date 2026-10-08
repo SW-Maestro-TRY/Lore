@@ -31,6 +31,8 @@ import java.util.List;
  *   POST /api/zzal/v1/admin/pets/{id}/layer2/retry          운영 API 로 2층 다시 굽기(돈 듦)
  *   POST /api/zzal/v1/admin/pets/{id}/layer1/candidates     1층 후보 격자 1~3장
  *   POST /api/zzal/v1/admin/pets/{id}/layer1/pick           1층 후보 고르기 → 새 판·2층 PENDING(실패 알이면 살림)
+ *   POST /api/zzal/v1/admin/pets/{id}/layer{1|2}/regen        맥미니에서 다시 만들기 요청(LOCAL_REQUESTED, #702)
+ *   POST /api/zzal/v1/admin/pets/{id}/layer{1|2}/regen/cancel 요청 취소
  *   POST /api/zzal/v1/admin/uploads/presign                 후보 격자 업로드 주소(관리자·봇 토큰, #702)
  * </pre>
  *
@@ -118,6 +120,23 @@ public class AdminLayerController {
     @PostMapping("/pets/{petId}/layer2/retry")
     public ApiResponse<AdminLayerService.State> layer2Retry(@LoginUser Long userId, @PathVariable Long petId) {
         return ApiResponse.ok(service.retry(userId, petId, Instant.now()));
+    }
+
+    @Operation(summary = "다시 만들기(맥미니)", description = """
+            그 층을 맥미니 러너가 Codex 로 다시 만들어 후보로 올리게 표시한다(`recovery = LOCAL_REQUESTED`).
+            사용자 화면은 그대로이고, 고르는 것은 사람이다. 후보가 올라오면 요청은 지워진다.
+            2층 READY 펫이면 목록에 남도록 결함 표시도 함께 건다. 1층은 부화에 실패한 알만.""")
+    @PostMapping("/pets/{petId}/layer{layer}/regen")
+    public ApiResponse<AdminLayerService.Regen> regen(@LoginUser Long userId, @PathVariable Long petId,
+                                                     @PathVariable int layer) {
+        return ApiResponse.ok(service.requestRegen(userId, petId, layer, Instant.now()));
+    }
+
+    @Operation(summary = "다시 만들기 취소")
+    @PostMapping("/pets/{petId}/layer{layer}/regen/cancel")
+    public ApiResponse<AdminLayerService.Regen> cancelRegen(@LoginUser Long userId, @PathVariable Long petId,
+                                                           @PathVariable int layer) {
+        return ApiResponse.ok(service.cancelRegen(userId, petId, layer));
     }
 
     @Operation(summary = "1층 후보 올리기", description = "grid.png 키 1~3장. 살아 있거나 부화에 실패한 펫.")

@@ -75,6 +75,18 @@ class AdminRecoveryIT extends ZzalItSupport {
         assertThat(items.get(0).path("flagged").asBoolean()).isTrue();
         assertThat(items.get(0).path("layer2Status").asText()).isEqualTo("READY");
 
+        // 다시 만들기(봇이 집을 표시) — 목록에 LOCAL_REQUESTED, 노출 상태는 그대로
+        MvcResult regen = mockMvc.perform(post("/api/zzal/v1/admin/pets/%d/layer2/regen".formatted(pet.getId()))
+                .header("X-Admin-Token", TOKEN)).andReturn();
+        assertThat(regen.getResponse().getStatus()).isEqualTo(200);
+        JsonNode requested = body(mockMvc.perform(get(LIST).header("X-Admin-Token", TOKEN)).andReturn()).path("data").get(0);
+        assertThat(requested.path("recovery").asText()).isEqualTo("LOCAL_REQUESTED");
+        assertThat(requested.path("regenRequestedAt").isNull()).isFalse();
+        assertThat(requested.path("currentKeys").size()).isEqualTo(8);
+        assertThat(petRepository.findById(pet.getId()).orElseThrow().getLayer2Status()).isEqualTo(Layer2Status.READY);
+        assertThat(jdbc.queryForObject("select layer2_regen_requested_at is not null from zzal_pet where id = ?",
+                Boolean.class, pet.getId())).isTrue();
+
         // READY 펫 운영 재시도는 막힌다(사용자 2층 잠김 방지)
         MvcResult retry = mockMvc.perform(post("/api/zzal/v1/admin/pets/%d/layer2/retry".formatted(pet.getId()))
                 .header("X-Admin-Token", TOKEN)).andReturn();
