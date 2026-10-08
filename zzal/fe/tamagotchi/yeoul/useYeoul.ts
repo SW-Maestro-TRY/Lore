@@ -19,7 +19,7 @@ import {
 import { josa } from '../constants';
 import { ACCENT, C, C2, LV, sel, type LvKey, type Sel, ink, paperA } from './ui';
 import type { Live } from './useHatch';
-import { CHAR_TEXT_MAX, type CareAction, type ChatState, type Personality } from '../../lib/pet';
+import { CHAR_TEXT_MAX, PROFILE_FIELD_OF, patchProfile, type CareAction, type ChatState, type Personality } from '../../lib/pet';
 import { ApiError } from '../../lib/api';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
@@ -1909,13 +1909,19 @@ export function useYeoul(live?: Live) {
   })), []);
   const pickUser = useCallback((k: string, v: string) => () => setS((w) => ({ ...w, user: { ...w.user, [k]: w.user[k] === v ? null : v } })), []);
   /**
-   * 여울의 물음에 답하거나 넘긴다. 답은 `user` 에 쌓인다.
-   * ★ 고른 호칭(`user.nick`)을 아이가 실제로 부르는 말에 끼우는 것은 아직 안 했다 —
-   *   말투·대사 생성이 서버로 넘어갈 때 그쪽에서 쓴다. 지금은 저장만 한다.
+   * 여울의 물음에 답하거나 넘긴다. 답은 `user` 에 쌓이고 **서버에도 한 칸씩 저장**한다(#704).
+   * ★ 대사에 쓰이는 것은 호칭(`nick` → `callMe`)뿐이다 — 서버 채팅 v1 이 지시문에 넣는다.
+   *   나머지(시각·사이·그림·경로·나이대)는 분석용이라 대사에 안 들어간다.
+   * ★ 저장 실패는 화면에 알리지 않는다 — 설문은 곁다리고, 실패해도 대사가 호칭 없이 말할 뿐이다.
    */
   const askNext = useCallback((key: string | null, val: string | null) => () => {
     lastSel.current = Date.now();
     setS((v) => ({ ...v, user: key && val ? { ...v.user, [key]: val } : v.user, uq: v.uq + 1, askDraft: '' }));
+    const field = key ? PROFILE_FIELD_OF[key] : undefined;
+    const text = (val ?? '').trim();
+    if (field && text) {
+      patchProfile({ [field]: text.slice(0, field === 'cameFrom' ? 40 : 20) }).catch(() => {});
+    }
   }, []);
   /** 직접 적기. 적기 시작하면 칩 선택을 지운다 — 둘 다 켜져 있으면 무엇이 답인지 알 수 없다. */
   const onAskDraft = useCallback((key: string, t: string, max: number) => {
