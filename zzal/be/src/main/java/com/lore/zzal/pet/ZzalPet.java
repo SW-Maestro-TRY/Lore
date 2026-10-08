@@ -147,6 +147,16 @@ public class ZzalPet {
     @Column(name = "recovered_at")
     private Instant recoveredAt;
 
+    /**
+     * 관리자 "다시 만들기" 요청 시각(#702) — 맥미니 러너가 집어 후보를 올린다. 노출 상태와 따로 간다.
+     * 후보가 올라오거나(누가 올렸든) 고르면 지워진다.
+     */
+    @Column(name = "layer1_regen_requested_at")
+    private Instant layer1RegenRequestedAt;
+
+    @Column(name = "layer2_regen_requested_at")
+    private Instant layer2RegenRequestedAt;
+
     /** 이번 조회에서 2층 READY 를 처음 알리며 열린 동작 seq. 저장하지 않는다(수명 = 이 요청). */
     @jakarta.persistence.Transient
     private java.util.List<Integer> layer2JustUnlocked = java.util.List.of();
@@ -2222,9 +2232,33 @@ public class ZzalPet {
         this.layer2LastError = trimError(reason);
     }
 
-    /** 결함 표시를 거둔다(목록에서 내림). 노출 상태는 그대로. */
+    /** 결함 표시를 거둔다(목록에서 내림). 2층 다시 만들기 요청도 함께 거둔다. 노출 상태는 그대로. */
     public void unflagLayer2() {
         this.layer2Flagged = false;
+        this.layer2RegenRequestedAt = null;
+    }
+
+    /** 그 층의 "다시 만들기" 요청 시각. 없으면 null. */
+    public Instant getRegenRequestedAt(int layer) {
+        return layer == 1 ? layer1RegenRequestedAt : layer2RegenRequestedAt;
+    }
+
+    /** 그 층을 맥미니에서 다시 만들어 달라고 표시한다(이미 있으면 시각만 새로). 노출 상태는 그대로. */
+    public void requestRegen(int layer, Instant now) {
+        if (layer == 1) {
+            this.layer1RegenRequestedAt = now;
+        } else {
+            this.layer2RegenRequestedAt = now;
+        }
+    }
+
+    /** 그 층의 요청을 지운다(후보가 왔거나 골랐거나 취소). */
+    public void clearRegen(int layer) {
+        if (layer == 1) {
+            this.layer1RegenRequestedAt = null;
+        } else {
+            this.layer2RegenRequestedAt = null;
+        }
     }
 
     /** READY 를 사용자에게 알렸다. 그때 열린 동작 seq 를 이 요청에 실어 보낸다(폭죽). */

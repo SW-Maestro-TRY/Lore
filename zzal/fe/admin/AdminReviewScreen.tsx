@@ -103,7 +103,7 @@ function defaultCandidate(m: PendingMotion): MotionCandidate | null {
  * next/image 를 안 쓰는 이유 — 애니메이션 webp 는 최적화를 거치면 첫 프레임만 남는다.
  * 검수는 움직임을 보는 일이라 그러면 목적을 잃는다.
  */
-function Picture({ src, alt, style }: { src: string; alt: string; style: React.CSSProperties }) {
+export function Picture({ src, alt, style }: { src: string; alt: string; style: React.CSSProperties }) {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={assetUrl(src)} alt={alt} style={style} />;
 }
@@ -337,6 +337,8 @@ export default function AdminReviewScreen() {
 }
 
 // ── 생김새. 검수용이라 꾸미지 않는다 ────────────────────────────────────────
+// ★ 1·2층 복구 탭(AdminLayerTab, #702)이 같은 그림 자리·같은 생김새를 그대로 가져다 쓴다 — 그래서 export 다.
+//   "움짤 검수가 보기 편했다" 는 그 모양을 두 탭이 한 벌로 쓰게 하려는 것이라, 복사하지 않고 여기서 빌려 간다.
 
 const PAGE: React.CSSProperties = {
   maxWidth: 880,
@@ -344,9 +346,9 @@ const PAGE: React.CSSProperties = {
   padding: '8px 12px 64px',
 };
 
-const DIM: React.CSSProperties = { color: 'var(--muted, #7a7a7a)', fontSize: 13 };
+export const DIM: React.CSSProperties = { color: 'var(--muted, #7a7a7a)', fontSize: 13 };
 
-const NOTICE: React.CSSProperties = {
+export const NOTICE: React.CSSProperties = {
   fontSize: 13,
   lineHeight: 1.5,
   margin: '0 0 16px',
@@ -355,9 +357,9 @@ const NOTICE: React.CSSProperties = {
   background: 'rgba(127,127,127,0.10)',
 };
 
-const NOTICE_BAD: React.CSSProperties = { background: 'rgba(220,80,60,0.14)' };
+export const NOTICE_BAD: React.CSSProperties = { background: 'rgba(220,80,60,0.14)' };
 
-const CARD: React.CSSProperties = {
+export const CARD: React.CSSProperties = {
   border: '1px solid rgba(127,127,127,0.28)',
   borderRadius: 10,
   padding: 12,
@@ -365,7 +367,7 @@ const CARD: React.CSSProperties = {
 };
 
 /** 크게 보는 자리. 폭을 고정해 두어야 탭을 오갈 때 카드 높이가 튀지 않는다. */
-const STAGE: React.CSSProperties = {
+export const STAGE: React.CSSProperties = {
   marginTop: 10,
   width: '100%',
   maxWidth: 420,
@@ -383,13 +385,13 @@ const STAGE: React.CSSProperties = {
  *   원본과 완성본이 위아래로 갈라지면 "나란히 놓고 견준다" 는 목적 자체가 사라지므로,
  *   칸 수를 grid 에 맡기고 그림이 칸에 맞춰 줄어들게 한다. 더 좁은 폰에서도 안 접힌다.
  */
-const GRID: React.CSSProperties = {
+export const GRID: React.CSSProperties = {
   display: 'grid',
   gap: 6,
   marginTop: 8,
 };
 
-const THUMB: React.CSSProperties = {
+export const THUMB: React.CSSProperties = {
   width: '100%',
   boxSizing: 'border-box',
   padding: 3,
@@ -401,20 +403,20 @@ const THUMB: React.CSSProperties = {
   lineHeight: 0,
 };
 
-const THUMB_ON: React.CSSProperties = {
+export const THUMB_ON: React.CSSProperties = {
   borderColor: 'rgba(60,150,90,0.95)',
   boxShadow: '0 0 0 1px rgba(60,150,90,0.6) inset',
 };
 
 /** 칸에 맞춰 줄어든다. 정사각으로 잡아 두어야 그림이 없는 칸에서도 줄 높이가 안 튄다. */
-const THUMB_IMG: React.CSSProperties = {
+export const THUMB_IMG: React.CSSProperties = {
   width: '100%',
   aspectRatio: '1 / 1',
   objectFit: 'contain',
   display: 'block',
 };
 
-const THUMB_CAP: React.CSSProperties = {
+export const THUMB_CAP: React.CSSProperties = {
   display: 'block',
   marginTop: 3,
   fontSize: 10,
@@ -425,7 +427,7 @@ const THUMB_CAP: React.CSSProperties = {
   wordBreak: 'keep-all',
 };
 
-const INPUT: React.CSSProperties = {
+export const INPUT: React.CSSProperties = {
   width: '100%',
   marginTop: 8,
   padding: '7px 9px',
@@ -437,7 +439,7 @@ const INPUT: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-const BTN: React.CSSProperties = {
+export const BTN: React.CSSProperties = {
   padding: '8px 14px',
   fontSize: 13,
   fontWeight: 700,
@@ -448,5 +450,5 @@ const BTN: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const BTN_OK: React.CSSProperties = { borderColor: 'rgba(60,150,90,0.7)' };
-const BTN_BAD: React.CSSProperties = { borderColor: 'rgba(200,90,60,0.7)' };
+export const BTN_OK: React.CSSProperties = { borderColor: 'rgba(60,150,90,0.7)' };
+export const BTN_BAD: React.CSSProperties = { borderColor: 'rgba(200,90,60,0.7)' };
