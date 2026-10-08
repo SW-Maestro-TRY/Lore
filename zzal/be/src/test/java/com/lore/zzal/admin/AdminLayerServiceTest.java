@@ -43,6 +43,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -134,7 +135,7 @@ class AdminLayerServiceTest {
         ZzalPet pet = alivePet(Layer2Status.FAILED);
         // 두 번째 후보만 게이트 거부
         doThrow(new IllegalStateException("후처리 실패(exit 1)\nGRID_STRUCTURE_INVALID 열 개수 5 != 4"))
-                .when(session).split(eq("up/b.png"), any(), anyString());
+                .when(session).split(eq("up/b.png"), any(), anyString(), anyInt());
 
         List<AdminLayerService.Candidate> cands =
                 service.candidates(ADMIN, PET, 2, List.of("up/a.png", "up/b.png", "up/c.png"), NOW);

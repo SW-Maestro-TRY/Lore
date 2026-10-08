@@ -103,7 +103,7 @@ public class PostProcessStep implements GenerationStep {
                             MotionLayer layer, String version, java.util.List<String> keys,
                             HatchPostures postures) throws Exception {
         try {
-            session.split(gridKey, keys, postures.forStep(version, gridStep));
+            session.split(gridKey, keys, postures.forStep(version, gridStep), layerNumber(layer));
         } catch (InterruptedException e) {
             throw e;                    // 시간 초과로 끊긴 것 — 그대로 올린다
         } catch (Exception e) {
@@ -113,6 +113,11 @@ public class PostProcessStep implements GenerationStep {
 
     /** 실패 메시지 앞에 붙는 격자 이름 표식. {@code GenerationRunner#failedGrid} 와 짝이다. */
     public static final String GRID_SOURCE_FORMAT = "[격자=%s]";
+
+    /** 로그·작업 파일 이름에 쓰는 층 번호. 1층=1 · 2층=2 · 선물=3. */
+    static int layerNumber(MotionLayer layer) {
+        return layer == null ? 1 : layer.ordinal() + 1;
+    }
 
     /** 두 번째 격자(2층) 단계의 이름. */
     public static final String GRID2 = "grid2";
