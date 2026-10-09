@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
+  ALBUM, CHAR_GROUPS, CHAT_CLOSE, CHAT_HINTS, CHAT_MAX_ROUNDS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
   STEPS, TUTOR, TUTOR_ROOM, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
   WISH_COPY, WISH_MAX, UNLOCK_COPY, WISH_REPLY,
@@ -31,6 +31,7 @@ import { motionAliases, YEOUL_MOTION } from '../constants';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { assetUrl } from '../../lib/assets';
 import { trackConversion } from '../../lib/analytics';
+import { ztrack } from './funnel';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -243,6 +244,8 @@ export interface YeoulState {
   popOpen: boolean; popClosing: boolean;
   chatOpen: boolean; chatClosing: boolean;
   mine: string; petLine: string;
+  /** 연습방(목) 대화 한 판에서 답한 횟수 — 서버 방은 서버의 `session.round` 를 쓴다. */
+  mockRound: number;
   day: number; bond: number; floorLv: number;
   cChat: number; cBath: number; cSleep: number; cGame: number;
   /** 손으로 깨운 횟수. 2층 '일어나기' 조건(정본 §6 16번)이라 재우기(`cSleep`)와 따로 센다. */
@@ -396,7 +399,7 @@ export interface YeoulState {
  */
 const INITIAL: YeoulState = {
   screen: 'onb', step: 0, roomSel: 'table', popOpen: true, popClosing: false,
-  chatOpen: false, chatClosing: false, mine: '', petLine: '',
+  chatOpen: false, chatClosing: false, mine: '', petLine: '', mockRound: 0,
   day: 12, bond: 40, floorLv: 2, cChat: 0, cBath: 0, cSleep: 0, cGame: 0, cWake: 0,
   full: 2, happy: 2, stock: 3, trace: 2, plays: 3, snacks: 0,
   bathUsed: false, pets: 1, sick: false, sleeping: false, night: false,
@@ -493,11 +496,28 @@ function serverLog(c: ChatState | null): { who: 'me' | 'pet'; text: string }[] {
   if (!c) return [];
   const out: { who: 'me' | 'pet'; text: string }[] = [];
   for (const call of c.calls) {
+    // ★ 지금의 판(#704)은 턴 전부를 편다 — 한 판에 여러 왕복이 오간다.
+    if (c.session && call.slot === c.session.slot && c.turns?.length) {
+      for (const t of c.turns) out.push({ who: t.speaker === 'PET' ? 'pet' : 'me', text: t.line });
+      continue;
+    }
     out.push({ who: 'pet', text: call.line });
     if (call.answer) out.push({ who: 'me', text: call.answer });
     if (call.replyLine) out.push({ who: 'pet', text: call.replyLine });
   }
   return out;
+}
+
+/**
+ * 연습방(목)의 펫 대사 — 시험·캡처가 `window.__ZZAL_MOCK_TURNS__`(첫 말 + 이어 말 … + 닫기 말)로 바꿀 수 있다.
+ * 없으면 기본 목 대사. **서버 방에서는 안 쓴다.**
+ */
+function mockTurn(i: number, closing: boolean): string {
+  const o = typeof window !== 'undefined'
+    ? (window as unknown as { __ZZAL_MOCK_TURNS__?: string[] }).__ZZAL_MOCK_TURNS__ : undefined;
+  if (o && o.length) return closing ? o[o.length - 1] : (o[Math.min(i, o.length - 2)] ?? o[0]);
+  if (closing) return CHAT_CLOSE;
+  return i === 0 ? '오늘은 뭐 했어요?' : CHAT_REPLY[(i - 1) % CHAT_REPLY.length];
 }
 
 /** 부름이 닫혀 있을 때 입력칸에 두는 **화면의 안내**(아이 대사가 아니다). */
@@ -1635,6 +1655,15 @@ export function useYeoul(live?: Live) {
         const r = await liveRef.current?.sendChat(text);
         if (!r) return;
         if (r.error) { flash(r.error); return; }
+        // ★ 채팅 계측(#704) — 허용 키만: action(pet·user) · step(왕복) · code(판 종류) · type(생성기) · reason.
+        const sess = r.reply?.session;
+        if (sess) {
+          for (const t of r.reply?.turns ?? []) {
+            ztrack('zzal_chat_turn', t.speaker === 'USER'
+              ? { action: 'user', step: sess.round, code: sess.kind }
+              : { action: 'pet', step: sess.round, code: sess.kind, type: t.generator ?? 'template', reason: t.filteredReason ?? (t.type === 'CLOSE' ? 'close' : 'ok') });
+          }
+        }
         // ★ 자세는 **서버가 정한다**. 그 자세가 '답하기' 일 때만 표의 `reply_done` 을 같이 켠다 —
         //   서버가 다른 자세(기쁨·놀람…)를 골랐는데 답하기 상황을 켜면 자세가 덮여 서버 뜻이 사라진다.
         // ★★ **안전망**(2026-09-22) — 이 길은 `careAct` 를 안 거쳐서 잠금 대체(`LOCKED_POSE`)가
@@ -1651,17 +1680,23 @@ export function useYeoul(live?: Live) {
       })();
       return;
     }
+    // ★ 연습방도 서버와 같은 모양의 한 판이다(#704) — 최대 `CHAT_MAX_ROUNDS` 왕복, 마지막은 닫기 말.
+    //   친밀도·부름 수는 판당 한 번만(서버의 "보상은 판당 1회" 와 같다).
+    if (sRef.current.mockRound >= CHAT_MAX_ROUNDS) return;
     setS((v) => {
-      const reply = CHAT_REPLY[v.log.length % CHAT_REPLY.length];
+      const round = v.mockRound + 1;
+      const closing = round >= CHAT_MAX_ROUNDS;
+      const reply = mockTurn(round, closing);
+      const first = v.mockRound === 0;
       return {
         ...v,
         log: [...v.log, { who: 'me' as const, text }, { who: 'pet' as const, text: reply }].slice(-6),
-        draft: '', mine: text, petLine: reply,
-        calls: Math.max(0, v.calls - 1),
+        draft: '', mine: text, petLine: reply, mockRound: round,
+        calls: first ? Math.max(0, v.calls - 1) : v.calls,
         resolved: { ...v.resolved, chat: true },
-        bond: Math.min(100, v.bond + 2),
+        bond: first ? Math.min(100, v.bond + 2) : v.bond,
         memories: [...v.memories, text.slice(0, 8)].slice(-8),
-        cChat: v.cChat + 1,
+        cChat: first ? v.cChat + 1 : v.cChat,
       };
     });
     careAct('reply');
@@ -2562,13 +2597,19 @@ export function useYeoul(live?: Live) {
     const sc = live?.chat ?? null;
     const openCall = sc?.calls.find((c) => c.slot === sc.openSlot && !c.answered) ?? null;
     const lastAnswered = sc ? [...sc.calls].reverse().find((c) => c.answered) ?? null : null;
+    // ★ 대화형(#704) — 지금의 판이 있으면 **판이 정본**이다. 열려 있는 동안 입력칸이 남고(여러 왕복),
+    //   아이 말풍선은 그 판의 마지막 펫 턴이다. 닫기 턴이 오면 판이 닫혀 입력칸이 잠기고 다음 부름을 알린다.
+    //   판이 없는 옛 서버면 예전처럼 "안 답한 부름" 하나로 본다.
+    const sess = sc?.session ?? null;
+    const sessOpen = !!sess && !sess.closed && sc?.openSlot === sess.slot;
+    const lastPetTurn = sess ? [...(sc?.turns ?? [])].reverse().find((t) => t.speaker === 'PET') ?? null : null;
     /** 지금 아이가 걸어 둔 말. 열린 부름이 없으면 마지막으로 돌려준 말. 둘 다 없으면 없음. */
-    const svPetLine = openCall?.line ?? lastAnswered?.replyLine ?? null;
-    const canAnswer = onServer ? !!openCall : true;
+    const svPetLine = lastPetTurn?.line ?? openCall?.line ?? lastAnswered?.replyLine ?? null;
+    const canAnswer = onServer ? (sess ? sessOpen : !!openCall) : s.mockRound < CHAT_MAX_ROUNDS;
 
     // ── 말풍선 ──
     const chatLine = s.chatOpen
-      ? (onServer ? svPetLine : (s.petLine || '오늘은 뭐 했어요?'))
+      ? (onServer ? svPetLine : (s.petLine || mockTurn(0, false)))
       : null;
     /**
      * 좌우 맞히기가 **아이 말풍선으로** 말한다(2026-09-20 안 1) — 게임 전용 말 장치를 새로 만들지 않는다.
@@ -2869,7 +2910,7 @@ export function useYeoul(live?: Live) {
          */
         canSend: canAnswer && !live?.chatting && s.draft.trim().length > 0,
         hint: !canAnswer
-          ? nextCallHint(sv?.chatSummary?.nextAt ?? null)
+          ? (onServer ? nextCallHint(sv?.chatSummary?.nextAt ?? null) : nextCallHint(null))
           : `${CHAT_HINTS[s.hintI % CHAT_HINTS.length]}처럼 · 40자까지`,
       },
       fab: {
@@ -2877,7 +2918,7 @@ export function useYeoul(live?: Live) {
         //   아파도 눌린다 — 아플 때 말이 막히면 아이가 제일 필요한 순간에 말을 못 한다.
         //   자는 동안만 안 뜬다.
         show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
-        dot: onServer ? !!openCall : s.calls > 0,
+        dot: onServer ? (sess ? sessOpen : !!openCall) : s.calls > 0,
         bw: tut && tut.room === 'chat' ? '2.5px' : '1px',
         bd: tut && tut.room === 'chat' ? ACCENT : C.line,
         anim: tut && tut.room === 'chat' ? 'yNudge 1.9s ease-in-out infinite' : 'none',
@@ -3105,14 +3146,17 @@ export function useYeoul(live?: Live) {
           ...(s.playTab === k ? { bg: C.ink, fg: C2.onDark, bd: C.ink } : { bg: C.slot, fg: C.sub2, bd: '#E3DBCD' }),
         })),
         isTalk: s.playTab === 'talk', isRun: s.playTab === 'run',
-        callsLeft: onServer ? (openCall ? 1 : 0) : s.calls,
+        callsLeft: onServer ? ((sess ? sessOpen : !!openCall) ? 1 : 0) : s.calls,
+        // ★ 열린 판이 없으면 칩·입력·보내기를 잠그고 대화 줄과 같은 안내를 둔다(전에는 눌리고 조용히 버려졌다).
+        can: canAnswer && !live?.chatting,
+        lockHint: canAnswer ? '' : (onServer ? nextCallHint(sv?.chatSummary?.nextAt ?? null) : nextCallHint(null)),
         memCount: onServer ? (sc?.memories.length ?? 0) : s.memories.length,
         // 오늘 오간 말. 서버가 부름마다 [건넨 말 · 내가 한 답 · 돌려준 말] 셋을 들고 있다.
         log: (onServer ? serverLog(sc) : s.log).map((l) => (l.who === 'pet'
           ? { text: l.text, align: 'flex-start', radius: '15px 15px 15px 5px', bg: C2.paperDim, fg: C.ink }
           : { text: l.text, align: 'flex-end', radius: '15px 15px 5px 15px', bg: ACCENT, fg: C.accentInk })),
         // 빠른 답은 **내가 하는 말**이라 화면이 갖고 있어도 된다(아이 대사가 아니다).
-        quick: CHAT_QUICK.map((t) => ({ text: t, pick: () => pushReply(t) })),
+        quick: CHAT_QUICK.map((t) => ({ text: t, pick: () => { if (canAnswer) pushReply(t); } })),
         draft: s.draft,
         memories: (onServer ? (sc?.memories ?? []) : s.memories).map((t) => ({ text: t })),
         // 오늘 남은 판은 **두 게임 합산**이고 지금 치는 판은 빠져 있다(서버 규칙).

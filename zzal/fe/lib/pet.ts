@@ -270,6 +270,10 @@ export interface ChatReply {
   line: string;
   /** 반응 동작 키(Motion.key). */
   reactionKey: string;
+  /** 답한 뒤의 판 상태(#704). 옛 서버면 없다. */
+  session?: ChatSession | null;
+  /** 이번에 생긴 두 턴 — 내 말, 아이의 다음 말. */
+  turns?: ChatTurn[];
 }
 
 /** 기능 열림(정본 6장 "기능 해금"). 프론트는 이 값만 보고 버튼을 켠다. */
@@ -531,6 +535,37 @@ export interface ChatCall {
   reactionKey: string | null;
 }
 
+/**
+ * 대화 한 판(#704). 부름 하나가 판이 되고, 펫·사용자 턴이 최대 `maxRounds` 왕복 오간다.
+ * `closed` 면 더 못 답한다(상한에 닿아 아이가 닫았거나 · 시각이 지났거나 · 답하다 말았거나).
+ */
+export interface ChatSession {
+  id: number;
+  slot: ChatSlot;
+  /** BABY · FIRST_MEET · DAILY · LONG_ABSENCE */
+  kind: string;
+  /** 이번 판에서 사용자가 답한 횟수. */
+  round: number;
+  maxRounds: number;
+  closed: boolean;
+  /** CLOSED · EXPIRED · ABANDONED. 열려 있으면 null. */
+  closeReason: string | null;
+}
+
+/** 대화의 한 마디. 펫 턴의 `type`·`generator`·`filteredReason` 은 계측용(화면에 안 띄운다). */
+export interface ChatTurn {
+  idx: number;
+  speaker: 'PET' | 'USER';
+  /** 펫 턴 종류 — FIRST_MEET · GREETING · REUNION · CONTINUE · CLOSE. 사용자 턴은 null. */
+  type: string | null;
+  line: string;
+  motion: string | null;
+  /** template · llm */
+  generator: string | null;
+  /** LLM 이 걸려 폴백했으면 그 사유. */
+  filteredReason: string | null;
+}
+
 /** GET /chat 의 응답. */
 export interface ChatState {
   /** 지금 답할 수 있는 슬롯. 없으면 null. */
@@ -539,6 +574,10 @@ export interface ChatState {
   calls: ChatCall[];
   /** 기억(최근 답 5개, 오래된 것부터). */
   memories: string[];
+  /** 지금의 판(열린 판, 없으면 오늘 마지막 판). 옛 서버면 없다. */
+  session?: ChatSession | null;
+  /** 그 판의 턴들(차례대로). */
+  turns?: ChatTurn[];
 }
 
 export interface Postcard {
@@ -753,11 +792,13 @@ export function getChat(petId: number, signal?: AbortSignal): Promise<ChatState>
  *   (풀지 않으면 훅이 받는 객체에 `petId` 조차 없어 화면이 조용히 빈다 — 실서버 왕복에서 확인.)
  */
 export async function answerChat(petId: number, slot: ChatSlot, text: string): Promise<PetDetail> {
-  const res = await request<{ pet: PetDetail; chatReply: ChatReply | null }>(
+  const res = await request<{ pet: PetDetail; chatReply: ChatReply | null; session?: ChatSession | null; turns?: ChatTurn[] }>(
     `${PET_BASE}/${petId}/chat/${slot}/answer`,
     { method: 'POST', body: { text } },
   );
-  return { ...res.pet, chatReply: res.chatReply };
+  // ★ 판 상태와 이번 두 턴도 `chatReply` 안으로 옮긴다(위와 같은 이유 — 훅은 PetDetail 하나만 안다).
+  const chatReply = res.chatReply ? { ...res.chatReply, session: res.session ?? null, turns: res.turns ?? [] } : null;
+  return { ...res.pet, chatReply };
 }
 
 /** "배워왔어요" 확인. learnedToday 에서 빠진다. */
