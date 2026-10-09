@@ -2733,9 +2733,12 @@ export interface paths {
         /**
          * 오늘의 대화 조회
          * @description 현재 시점까지 발생한 대화 목록과 응답 가능한 슬롯(openSlot), 최근 응답 5건을 반환한다.
+         *     session·turns 는 지금의 판(열린 판, 없으면 오늘 마지막 판)과 그 판의 턴들이다.
          *
-         *     대화는 기상 후 1시간, 기상 후 7시간, 19:00 에 발생한다. 응답하지 않은 채 다음 시각이
-         *     지나면 해당 대화는 만료되며 별도 감점은 없다.
+         *     하루 대화 창은 KST 10~14시, 14~19시, 19~23시다. 창이 지나면 만료되며 별도 감점은 없다.
+         *     지난 창에는 새 판을 만들지 않는다. 튜토리얼 BABY는 순서로 열리며 만료가 없다.
+         *     BABY 첫 생성 실패는 5분 재시도 대기 후 누적 3회 실패 시 중립 문장으로 열린다.
+         *     첫 답 뒤 10분 동안 말이 없으면 그 판은 닫힌다(ABANDONED).
          *
          *     수면 중에도 조회는 가능하지만 openSlot 은 null 이다.
          */
@@ -2759,13 +2762,13 @@ export interface paths {
         put?: never;
         /**
          * 대화 응답
-         * @description 슬롯당 1회, 자유 입력 40자로 응답한다. 응답 시 친밀도 +40 을 부여하며,
-         *     이는 단일 행동으로 얻는 가장 큰 값이다.
+         * @description 열린 대화(판)에 자유 입력 40자로 한 마디 한다. 한 판은 최대 max-rounds 왕복이고, 마지막 펫 턴은
+         *     닫기 턴이다(session.closed=true). 친밀도 +40·응답 카운터는 판당 1회(첫 답)만 센다.
          *
-         *     응답은 변경된 캐릭터 상태(pet)와 대사·반응 동작(chatReply)으로 구성한다.
-         *     입력한 내용은 기억으로 저장되어 이후 대화에서 다시 언급된다.
+         *     응답은 변경된 캐릭터 상태(pet)·다음 펫 대사와 반응 동작(chatReply)·판 상태(session)·
+         *     이번에 생긴 두 턴(turns = 사용자 턴, 펫 턴)으로 구성한다.
          *
-         *     누적 응답 횟수는 동작 해금 조건(1회·4회·12회)에 사용한다.
+         *     누적 응답 횟수(판 수)는 답하기 동작 해금(4회)에 사용한다.
          */
         post: operations["answer"];
         delete?: never;
@@ -3419,15 +3422,17 @@ export interface components {
         AmongRequest: {
             runIds?: string[];
         };
-        /** @description 대화 응답 요청. 슬롯당 1회, 최대 40자 */
+        /** @description 대화 한 마디. 열린 판에 최대 max-rounds 번, 한 번에 최대 40자 */
         Answer: {
             /** @example 오늘 학교 갔다 왔어 */
             text: string;
         };
-        /** @description 대화 응답 결과. 변경된 캐릭터 상태와 대사·반응 동작으로 구성한다 */
+        /** @description 대화 응답 결과. 변경된 캐릭터 상태·대사·반응 동작, 그리고 판 상태와 이번에 생긴 두 턴(사용자·펫) */
         Answered: {
             chatReply?: components["schemas"]["Reply"];
             pet?: components["schemas"]["Detail"];
+            session?: components["schemas"]["ChatSession"];
+            turns?: components["schemas"]["ChatTurn"][];
         };
         ApiResponseAbandonResult: {
             data?: components["schemas"]["AbandonResult"];
@@ -3825,11 +3830,13 @@ export interface components {
              */
             world?: string;
         };
-        /** @description 오늘의 대화 목록. openSlot 이 null 이면 현재 응답 가능한 대화가 없다 */
+        /** @description 오늘의 대화 목록. openSlot 이 null 이면 현재 응답 가능한 대화가 없다. session·turns 는 지금의 판(열린 판, 없으면 오늘 마지막 판) */
         Chat: {
             calls?: components["schemas"]["ChatCall"][];
             memories?: string[];
             openSlot?: string;
+            session?: components["schemas"]["ChatSession"];
+            turns?: components["schemas"]["ChatTurn"][];
         };
         /** @description 오늘 온 대화 한 건 */
         ChatCall: {
@@ -3844,10 +3851,34 @@ export interface components {
             replyLine?: string;
             slot?: string;
         };
+        /** @description 대화 한 판. closed 면 더 답할 수 없다(상한·만료·이탈) */
+        ChatSession: {
+            closeReason?: string;
+            closed?: boolean;
+            /** Format: int64 */
+            id?: number;
+            kind?: string;
+            /** Format: int32 */
+            maxRounds?: number;
+            /** Format: int32 */
+            round?: number;
+            slot?: string;
+        };
         ChatSummary: {
             /** Format: date-time */
             nextAt?: string;
             openSlot?: string;
+        };
+        /** @description 대화의 한 마디. speaker = PET · USER, type 은 펫 턴의 종류 */
+        ChatTurn: {
+            filteredReason?: string;
+            generator?: string;
+            /** Format: int32 */
+            idx?: number;
+            line?: string;
+            motion?: string;
+            speaker?: string;
+            type?: string;
         };
         Clock: {
             /** Format: date-time */
