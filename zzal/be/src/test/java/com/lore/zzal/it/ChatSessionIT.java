@@ -78,6 +78,9 @@ class ChatSessionIT extends ZzalItSupport {
                 .isEqualTo(5);
         assertThat(turns.answeredItems(pet.getId())).isNotEmpty();
         assertThat(sessions.sumCostSince(now.minusSeconds(3600))).isNotNull();
+        // 그날 시작한 판만 센다 — 내일 0시 기준이면 오늘 판은 0
+        assertThat(sessions.sumCostSince(now.plusSeconds(86400))).isEqualByComparingTo("0");
+        assertThat(sessions.findByPetIdAndCloseReasonIsNull(pet.getId())).isEmpty();
 
         JsonNode again = getJson(userId, pets + "/chat").path("data");
         assertThat(again.path("openSlot").isNull()).isTrue();
