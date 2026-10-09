@@ -390,6 +390,15 @@ export interface YeoulState {
    * ★ 새로고침하면 꺼진다(로컬 검증용). 공개 도메인에선 이동 창이 없어 켜질 길이 없다.
    */
   fbPreview: boolean;
+  /**
+   * 진짜 방에서 **대화를 열어 본 판**의 열쇠(`s<판 id>` · 옛 서버는 `c<슬롯>`). 열린 판이 없을 때 열면 `null`.
+   *
+   * ★ 2026-10-10(상훈님 "닫은 뒤 마지막 대사 남기지 않음") — 이 판을 한 번 열어 봤으면, 닫은 뒤
+   *   무대 말풍선에 그 판의 말을 다시 걸지 않는다. 남는 것은 급한 부름(아픔·배고픔·청소)뿐이다.
+   *   새 판이 열리면 열쇠가 달라져 다시 부른다. 열어 둔 동안 판이 닫히면(닫는 말) 그 말은 보인다.
+   * ★ 연습방은 안 쓴다 — 거기는 목 `log`·`calls`·`resolved.chat` 이 정본이다.
+   */
+  chatSeen: string | null;
 }
 
 /**
@@ -425,6 +434,7 @@ const INITIAL: YeoulState = {
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
   hintI: 0, leaveOff: false, sleepCover: false,
   authOpen: false, authTab: 'signup', fbPreview: false,
+  chatSeen: null,
 };
 
 // ── 작은 계산들 ──────────────────────────────────────────────────────────
@@ -459,8 +469,35 @@ function levelsOf(s: YeoulState, m: Mode): Record<RoomKey, LvKey> {
 
 export interface CallItem { kind: 'chat' | 'call'; text: string; room: RoomKey }
 
-/** 지금 아이가 기다리는 일. 첫 번째가 말풍선으로 뜨고, 그 방 타일이 흔들린다. 시안 `callQueue()`. */
-function callQueueOf(s: YeoulState, m: Mode): CallItem[] {
+/**
+ * 진짜 방에서 **지금 열려 있는 대화 판**과 그 판의 마지막 펫 말. 없으면 `null`.
+ *
+ * ★ 2026-10-10 — 진짜 방의 대화 부름은 **이것만** 말한다(말풍선 전수조사 처방 1).
+ *   예전에는 목 `log` 의 시안 문장("있잖아, 오늘은 뭐 했어요?")이 진짜 방에서도 늘 부름 줄 끝에 남아,
+ *   대화를 닫을 때마다 그 문장이 돌아왔다. 열린 판이 없으면 대화 부름도 없다.
+ * ★ 판이 있는 서버(#704)는 판이 정본이다. 판이 없는 옛 서버면 "안 답한 열린 부름" 하나로 본다.
+ * @returns `key` = 이 판의 열쇠(`chatSeen` 과 맞대는 값), `line` = 걸어 둔 말
+ */
+function serverOpenChat(c: ChatState | null | undefined): { key: string; line: string } | null {
+  if (!c) return null;
+  const sess = c.session ?? null;
+  if (sess) {
+    if (sess.closed || c.openSlot !== sess.slot) return null;
+    const pet = [...(c.turns ?? [])].reverse().find((t) => t.speaker === 'PET');
+    const line = pet?.line ?? c.calls.find((x) => x.slot === sess.slot)?.line ?? null;
+    return line ? { key: `s${sess.id}`, line } : null;
+  }
+  const call = c.calls.find((x) => x.slot === c.openSlot && !x.answered);
+  return call ? { key: `c${call.slot}`, line: call.line } : null;
+}
+
+/**
+ * 지금 아이가 기다리는 일. 첫 번째가 말풍선으로 뜨고, 그 방 타일이 흔들린다. 시안 `callQueue()`.
+ *
+ * @param svChat 진짜 방이면 `serverOpenChat()` 의 값(열린 판이 없으면 `null`). 연습방이면 `undefined` —
+ *   그때만 목 `log`·`calls`·`resolved.chat` 을 읽는다(2026-10-10 · 전수조사 처방 1).
+ */
+function callQueueOf(s: YeoulState, m: Mode, svChat?: { key: string; line: string } | null): CallItem[] {
   const r = s.resolved;
   const out: CallItem[] = [];
   if (m === 'sleep') return out;
@@ -469,13 +506,21 @@ function callQueueOf(s: YeoulState, m: Mode): CallItem[] {
   //   예전엔 대화가 늘 1순위라 밤에도 아플 때도 잡담이 먼저 떴다. 급한 것이 먼저 말해야 한다.
   //   첫 부름의 방이 흔들리므로 이 순서가 곧 **강조되는 타일의 순서**이기도 하다.
   if (m === 'sick') out.push({ kind: 'call', text: '몸이 무거워요…', room: 'bath' });
-  if (m === 'night' && !r.bed) out.push({ kind: 'call', text: '이제 졸려요', room: 'bed' });
+  // ★ 밤 부름은 **연습방에서만** 낸다(2026-10-10). 진짜 방의 `night` 는 목 값(서버가 안 준다)이라
+  //   이 줄은 진짜 방에서 한 번도 안 뜨는 죽은 줄이었다(전수조사 4번). 잠은 서버 시계가 재운다.
+  if (svChat === undefined && m === 'night' && !r.bed) out.push({ kind: 'call', text: '이제 졸려요', room: 'bed' });
   // ★ 문턱을 **자세와 같은 0 칸**으로 맞췄다(2026-09-22 판정 J). 예전에는 `<= 2` 라 두 칸이나
   //   남았는데도 "배고파요" 가 떠 있었고, 자세는 0 칸에서야 바뀌어 **말과 몸이 따로 놀았다**
   //   (상훈님 dev 실측: 배부름 1·2 에서 말풍선만 떠 있음).
   if (s.full <= 0 && !r.table) out.push({ kind: 'call', text: '배고파요', room: 'table' });
   if (s.trace >= 2 && !r.bath) out.push({ kind: 'call', text: '여기 좀 치워 주세요', room: 'bath' });
 
+  if (svChat !== undefined) {
+    // 진짜 방 — 서버 열린 판의 펫 말뿐이다. 없으면 대화 부름 자체가 없다.
+    if (svChat) out.push({ kind: 'chat', text: svChat.line, room: 'play' });
+    return out;
+  }
+  // 연습방(목) — 시안 대화 그대로.
   const last = s.log[s.log.length - 1];
   if (!r.chat && s.calls > 0) {
     out.push({ kind: 'chat', text: last?.who === 'pet' ? last.text : '방금 얘기 좋았어요', room: 'play' });
@@ -521,13 +566,19 @@ function mockTurn(i: number, closing: boolean): string {
 }
 
 /** 부름이 닫혀 있을 때 입력칸에 두는 **화면의 안내**(아이 대사가 아니다). */
+/**
+ * ★ 2026-10-10 — 부름 창이 10-14 · 14-19 · 19-23 시로 바뀌어 다음 부름은 대개 **정시**다. 그래서
+ *   "14:00쯤" 대신 **"오후 2시쯤"** 으로 읽는다(아이 말풍선이 "N시 넘어서 다시 와줘" 라 말하는 것과 같은 결).
+ *   정시가 아니면(부화 직후 +1시간 같은 경우) 분까지 붙인다. 시각은 서버 `chatSummary.nextAt` 그대로다.
+ */
 function nextCallHint(nextAt: string | null): string {
   if (!nextAt) return '오늘 부름은 다 끝났어요';
   const t = new Date(nextAt);
   if (Number.isNaN(t.getTime())) return '다음 부름을 기다려요';
-  const hh = String(t.getHours()).padStart(2, '0');
-  const mm = String(t.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}쯤 다시 불러요`;
+  const h = t.getHours();
+  const m = t.getMinutes();
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h < 12 ? '오전' : '오후'} ${h12}시${m ? ` ${m}분` : ''}쯤 다시 불러요`;
 }
 
 const cells = (n: number, on: string, off: string) => [0, 1, 2, 3].map((i) => ({ bg: i < n ? on : off }));
@@ -722,6 +773,10 @@ export function useYeoul(live?: Live) {
   }, []);
 
   const mode: Mode = es.sleeping ? 'sleep' : es.sick ? 'sick' : es.night ? 'night' : 'day';
+  /** 진짜 방의 열린 대화 판(없으면 `null`). 연습방이면 `undefined` — 부름 줄이 목을 읽는다(→ `callQueueOf`). */
+  const svChat = useMemo(() => (onServer ? serverOpenChat(live?.chat) : undefined), [onServer, live?.chat]);
+  const svChatRef = useRef(svChat);
+  svChatRef.current = svChat;
   const needStyle: NeedStyle = s.needStyleLocal ?? '색+모양+글자';
 
   /**
@@ -1196,7 +1251,10 @@ export function useYeoul(live?: Live) {
     const tl = tutLockRef.current;
     if (tl && tl.room !== 'chat') return;
     lastSel.current = Date.now();
-    patch({ chatOpen: true, popOpen: false, toast: '', mine: '' });
+    // ★ 진짜 방은 **연 판의 열쇠**를 적어 둔다(→ `chatSeen`). 닫은 뒤 그 판의 말을 무대에 다시 걸지 않고,
+    //   열어 둔 동안 판이 닫혀도(닫는 말) 그 말은 보이게 하는 기준이다. 열린 판이 없으면 `null`.
+    const seen = onServerRef.current ? (svChatRef.current?.key ?? null) : null;
+    patch({ chatOpen: true, popOpen: false, toast: '', mine: '', chatSeen: seen });
   }, [patch, flash]);
   const closeChat = useCallback(() => {
     lastSel.current = Date.now();
@@ -1735,7 +1793,7 @@ export function useYeoul(live?: Live) {
   }, [patch]);
 
   const onAnswerCall = useCallback(() => {
-    const top = callQueueOf(esRef.current, mode)[0];
+    const top = callQueueOf(esRef.current, mode, svChatRef.current)[0];
     if (!top) return;
     if (top.kind === 'chat') { openChat(); return; }
     selRoom(top.room)();
@@ -2347,7 +2405,7 @@ export function useYeoul(live?: Live) {
     const albumOpen = onServer ? albumMotions.filter((m) => m.unlocked).length : s.albumOpen;
 
     const lv = levelsOf(es, mode);
-    const calls = callQueueOf(es, mode);
+    const calls = callQueueOf(es, mode, svChat);
     const top = calls[0] ?? null;
     const wl = WALLS.find((x) => x.id === s.wallId) ?? WALLS[0];
     const unlimited = s.sampleMode;
@@ -2608,14 +2666,29 @@ export function useYeoul(live?: Live) {
     const sess = sc?.session ?? null;
     const sessOpen = !!sess && !sess.closed && sc?.openSlot === sess.slot;
     const lastPetTurn = sess ? [...(sc?.turns ?? [])].reverse().find((t) => t.speaker === 'PET') ?? null : null;
-    /** 지금 아이가 걸어 둔 말. 열린 부름이 없으면 마지막으로 돌려준 말. 둘 다 없으면 없음. */
-    const svPetLine = lastPetTurn?.line ?? openCall?.line ?? lastAnswered?.replyLine ?? null;
     const canAnswer = onServer ? (sess ? sessOpen : !!openCall) : s.mockRound < CHAT_MAX_ROUNDS;
 
     // ── 말풍선 ──
+    /**
+     * 대화가 열려 있는 동안 무대에 거는 아이 말.
+     *
+     * ★ 진짜 방(2026-10-10 · 전수조사 처방 1·3) — **열린 판의 마지막 펫 말**, 또는 **열어 둔 동안 닫힌
+     *   그 판의 닫는 말**뿐이다. 열린 판이 없을 때 열면 `null` 이다: 말풍선 없이 입력칸의 안내
+     *   ("N시쯤 다시 불러요")만 남는다. 예전에는 이 자리에 목 문장이 떠서 "아이는 묻는데 답은 못 하는"
+     *   모양이 됐다(전수조사 그림 4). 지난 판의 말("마지막으로 돌려준 말" 갈래)도 다시 꺼내지 않는다.
+     */
+    const svSeenLine = sess && s.chatSeen === `s${sess.id}` ? (lastPetTurn?.line ?? null)
+      : !sess && lastAnswered && s.chatSeen === `c${lastAnswered.slot}` ? (lastAnswered.replyLine ?? lastAnswered.line)
+        : null;
     const chatLine = s.chatOpen
-      ? (onServer ? svPetLine : (s.petLine || mockTurn(0, false)))
+      ? (onServer ? (svChat?.line ?? svSeenLine) : (s.petLine || mockTurn(0, false)))
       : null;
+    /**
+     * 무대 부름으로 걸 첫 줄. ★ 진짜 방에서 **이미 열어 본 판**의 대화 부름은 닫은 뒤 다시 걸지 않는다
+     * (상훈님 2026-10-10 "닫은 뒤 마지막 대사 남기지 않음"). 대화 부름은 늘 줄 맨 끝이라, 그게 첫 줄이면
+     * 급한 부름이 없다는 뜻이고 말풍선은 비운다. 타일 흔들림·알림 목록은 그대로 둔다(아직 답할 판이다).
+     */
+    const stageTop = top && !(onServer && top.kind === 'chat' && svChat && s.chatSeen === svChat.key) ? top : null;
     /**
      * 좌우 맞히기가 **아이 말풍선으로** 말한다(2026-09-20 안 1) — 게임 전용 말 장치를 새로 만들지 않는다.
      * ★ 사용자를 탓하는 말을 쓰지 않는다(자캐 규범) — 빗나가도 "아쉬워요" 까지다.
@@ -2645,8 +2718,11 @@ export function useYeoul(live?: Live) {
       //   다만 **대화를 열어 아이가 건넨 말이 있으면 그건 보여야 한다**. 안 그러면 서버가 준
       //   대사가 화면에 한 번도 안 나온다(2026-09-09 실측으로 그랬다).
       // 게임이 도는 동안에는 **게임이 말한다** — 부름·튜토리얼보다 앞선다(무대에 그것만 남으므로).
-      show: s.gOn ? true : ((!tut || !!chatLine) && (!!top || !!chatLine) && !es.sleeping),
-      text: s.gOn ? guessLine : (chatLine || (top?.text ?? '')),
+      // ★ 대화가 열려 있으면 **대화의 말만** 건다(2026-10-10) — 열린 판이 없을 때 "배고파요" 같은 부름이
+      //   대화창 위에 떠서 아이가 말을 건 것처럼 보이지 않게. 그때 안내는 입력칸이 맡는다.
+      show: s.gOn ? true : s.chatOpen ? (!!chatLine && !es.sleeping)
+        : ((!tut || !!chatLine) && (!!stageTop || !!chatLine) && !es.sleeping),
+      text: s.gOn ? guessLine : s.chatOpen ? (chatLine ?? '') : (chatLine || (stageTop?.text ?? '')),
     };
 
     // ── 시트 ──
@@ -3273,7 +3349,7 @@ export function useYeoul(live?: Live) {
     };
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
-    s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
+    s, es, sv, onServer, svChat, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess, quitGuess,
     nextTutor, onAnswerCall, skipTutorStep, finishTutorHere, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, popPostcard, popScenes, toggleDeco, toggleMini, pickWall, pickNeedStyle, pickTime, onAskDraft,

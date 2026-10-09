@@ -45,6 +45,9 @@ const SWEEP_ROW_ID = '__sweep__';
 // `NARROW_Q`(좁은 폰)·`SHORT_Q`(짧은 화면)는 `../props/layout` 에서 가져온다 — 소품 층과 **같은 기준**이라야
 // 캐릭터 발끝선과 소품이 어긋나지 않는다. 좁고 짧은 화면(SE 등)만 `compact` 로 아이를 키우고 팝오버를 줄인다.
 
+/** 대화를 닫은 뒤 후기 판을 저절로 열지 않는 시간(→ `chatJustClosed`). */
+const FEEDBACK_AFTER_CHAT_MS = 30_000;
+
 export default function Room({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
   useRoomFunnel(s.roomSel, v.mini.tutAt, s.sampleMode);
@@ -366,6 +369,24 @@ export default function Room({ y }: { y: Yeoul }) {
   useEffect(() => {
     if (s.fire?.wishFrom === 'tutorial_gift') setGiftIntroSeen(true);
   }, [s.fire]);
+  /**
+   * **대화를 닫은 직후 30초**는 후기 판을 저절로 안 연다(2026-10-10 · 전수조사 처방 3).
+   * ★ 예전 `hold` 는 `s.chatOpen` 만 봐서, 대화를 닫는 **그 순간** 후기 판이 올라올 수 있었다 —
+   *   "닫으면 뭔가 정해진 게 뜬다" 의 두 번째 후보였다. 30초가 지나거나 다음 진입 때 연다.
+   */
+  // ★ 닫힘을 **그리는 중에** 알아챈다(이전 값 비교 · React 의 "지난 그림의 값 저장" 방식). 효과(useEffect)로
+  //   알아채면 한 박자 늦다 — 자식(`FeedbackSheet`)의 효과가 먼저 돌아 hold 가 풀린 그림에서 판을 연다(실측).
+  const [chatPrev, setChatPrev] = useState(s.chatOpen);
+  const [chatJustClosed, setChatJustClosed] = useState(false);
+  if (chatPrev !== s.chatOpen) {
+    setChatPrev(s.chatOpen);
+    setChatJustClosed(!s.chatOpen);
+  }
+  useEffect(() => {
+    if (!chatJustClosed) return;
+    const t = setTimeout(() => setChatJustClosed(false), FEEDBACK_AFTER_CHAT_MS);
+    return () => clearTimeout(t);
+  }, [chatJustClosed]);
 
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
@@ -391,7 +412,7 @@ export default function Room({ y }: { y: Yeoul }) {
         // ★ 2026-10-09 — **구르기 안내(졸업) 판이 뜨기 직전 한 그림**도 막는다(`grownLinePending`).
         //   서버가 튜토리얼을 닫은 그림에서 후기 효과가 졸업 판 효과보다 먼저 돌아, 안 막으면 둘이 같이 뜬다.
         //   순서는 "튜토리얼 완료 → 구르기 안내 판 → 닫은 뒤 후기 판" 이다(상훈님 2026-10-09).
-        hold={!!s.fire || v.wall.show || v.frame.show || !!s.sheet || s.chatOpen || s.decoOpen || (live.pet != null && live.petId != null && grownLinePending(live.petId, live.pet))}
+        hold={!!s.fire || v.wall.show || v.frame.show || !!s.sheet || s.chatOpen || chatJustClosed || s.decoOpen || (live.pet != null && live.petId != null && grownLinePending(live.petId, live.pet))}
         // 기록용 갈래 — 이 화면에서 졸업 판을 닫고 바로 연 것인지, 다시 들어온 사람인지.
         autoReason={giftIntroSeen ? 'after_gift_intro' : 'returning'}
         tone="yeoul"
