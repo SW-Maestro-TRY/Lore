@@ -600,7 +600,10 @@ public class AdminLayerService {
                 copyQuietly(e.gridKey(), "images/zzal/pets/%d/rejected/cand-%s-%s.png"
                         .formatted(petId, e.id(), layer == 1 ? "grid" : "grid2"), "image/png");
             }
-            baker.keys(layer).forEach(k -> trash.add("%s/%s.webp".formatted(prefix, k)));
+            baker.keys(layer).forEach(k -> {
+                trash.add("%s/%s.webp".formatted(prefix, k));
+                trash.add("%s/%s.gif".formatted(prefix, k));      // #713 — 없는 키는 S3 가 성공으로 친다
+            });
             trash.add(prefix + "/anchors.json");
         }
         try {
@@ -613,6 +616,9 @@ public class AdminLayerService {
     private void copyAll(String fromPrefix, String toPrefix, List<String> keys, String ext) {
         for (String k : keys) {
             copy("%s/%s%s".formatted(fromPrefix, k, ext), "%s/%s%s".formatted(toPrefix, k, ext), "image/webp");
+            // 저장·공유용 GIF 도 같이 옮긴다(#713). 옛 후보·옛 판에는 없다 — 없으면 프론트가 webp 로 폴백하므로
+            // 그림 옮기기를 멈추지 않는다(copyQuietly).
+            copyQuietly("%s/%s.gif".formatted(fromPrefix, k), "%s/%s.gif".formatted(toPrefix, k), "image/gif");
         }
     }
 
@@ -640,7 +646,7 @@ public class AdminLayerService {
         try {
             copy(from, to, contentType);
         } catch (RuntimeException e) {
-            log.warn("후보 격자 보존 실패(무시) — {} → {} : {}", from, to, String.valueOf(e));
+            log.warn("복사 실패(무시 — 후보 격자 보존·옛 GIF) — {} → {} : {}", from, to, String.valueOf(e));
         }
     }
 
