@@ -10,16 +10,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ALBUM, CHAR_GROUPS, CHAT_HINTS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
+  ALBUM, CHAR_GROUPS, CHAT_CLOSE, CHAT_CLOSE_HOLD_MS, CHAT_HINTS, CHAT_MAX_ROUNDS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
-  STEPS, TUTOR, TUTOR_ROOM, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
+  STEPS, TUTOR, TUTOR_ROOM, TUTOR_GAME_IDX, TUTOR_GAME_STEP, TUTOR_GAME_UNTIL_RESULT, TUTOR_ALBUM_PICK, TUTOR_ALBUM_SAVE, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
   WISH_COPY, WISH_MAX, UNLOCK_COPY, WISH_REPLY,
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
 import { josa } from '../constants';
 import { ACCENT, C, C2, LV, sel, type LvKey, type Sel, ink, paperA } from './ui';
 import type { Live } from './useHatch';
-import { CHAR_TEXT_MAX, type CareAction, type ChatState, type Personality } from '../../lib/pet';
+import { CHAR_TEXT_MAX, PROFILE_FIELD_OF, patchProfile, type CareAction, type ChatSlot, type ChatState, type Personality } from '../../lib/pet';
 import { ApiError } from '../../lib/api';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
@@ -31,6 +31,7 @@ import { motionAliases, YEOUL_MOTION } from '../constants';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { assetUrl } from '../../lib/assets';
 import { trackConversion } from '../../lib/analytics';
+import { ztrack } from './funnel';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -243,6 +244,8 @@ export interface YeoulState {
   popOpen: boolean; popClosing: boolean;
   chatOpen: boolean; chatClosing: boolean;
   mine: string; petLine: string;
+  /** 연습방(목) 대화 한 판에서 답한 횟수 — 서버 방은 서버의 `session.round` 를 쓴다. */
+  mockRound: number;
   day: number; bond: number; floorLv: number;
   cChat: number; cBath: number; cSleep: number; cGame: number;
   /** 손으로 깨운 횟수. 2층 '일어나기' 조건(정본 §6 16번)이라 재우기(`cSleep`)와 따로 센다. */
@@ -387,6 +390,36 @@ export interface YeoulState {
    * ★ 새로고침하면 꺼진다(로컬 검증용). 공개 도메인에선 이동 창이 없어 켜질 길이 없다.
    */
   fbPreview: boolean;
+  /**
+   * 진짜 방에서 **대화를 열어 본 판**의 열쇠(`s<판 id>` · 옛 서버는 `c<슬롯>`). 열린 판이 없을 때 열면 `null`.
+   *
+   * ★ 2026-10-10(상훈님 "닫은 뒤 마지막 대사 남기지 않음") — 이 판을 한 번 열어 봤으면, 닫은 뒤
+   *   무대 말풍선에 그 판의 말을 다시 걸지 않는다. 남는 것은 급한 부름(아픔·배고픔·청소)뿐이다.
+   *   새 판이 열리면 열쇠가 달라져 다시 부른다. 열어 둔 동안 판이 닫히면(닫는 말) 그 말은 보인다.
+   * ★ 연습방은 안 쓴다 — 거기는 목 `log`·`calls`·`resolved.chat` 이 정본이다.
+   */
+  chatSeen: string | null;
+  /**
+   * 진짜 방에서 **답 응답으로 받은 닫는 말**과 그 판의 턴 전부(#714 · 2026-10-10 dev 실측).
+   *
+   * ★ 판이 닫히면 뒤따르는 `GET /chat` 이 `session: null`·`turns: []` 를 줘서, 그것만 보면 닫는 말이
+   *   말풍선에도 대화 기록에도 안 남는다. 그래서 답 응답에서 받은 그 자리에서 여기 붙잡는다.
+   *   말풍선은 `chatEndShow`·`chatEndHold` 가, 대화 기록은 서버에 다른 판이 생기기 전까지 이 턴들을 쓴다.
+   */
+  chatEnd: ChatEnd | null;
+  /** 닫는 말을 **연 대화창**의 말풍선에 거는가. 판이 닫힌 순간 켜고, 대화창을 새로 열 때 끈다. */
+  chatEndShow: boolean;
+  /** 닫는 말이 도착한 뒤 `CHAT_CLOSE_HOLD_MS` 동안 켜져 있다 — 그 사이 창을 닫아도 무대에 남긴다. */
+  chatEndHold: boolean;
+  /**
+   * 튜토리얼 6칸(게임)을 **한 게임 결과까지** 붙잡아 두는가(2026-10-10 상훈님 "5판 3선의 결과가 나는 걸 보고").
+   *
+   * ★ 서버는 판을 **시작한 순간** 6칸을 넘긴다(`ZzalPet.startGame`). 그래서 화면이 결과가 날 때까지
+   *   6칸을 계속 보여 준다 — 카드·하이라이트만 붙잡고 서버 칸은 안 건드린다.
+   *   결과(기권이 아닌 `done`)가 나면 풀린다. 게임 중 ✕(기권)로 나가면 **그대로 붙잡혀** 한 게임을 다시 권한다.
+   * ★ 오늘 판이 다 떨어지면 풀린다(더 칠 수 없는데 붙잡으면 막다른 길). 새로고침하면 사라진다(서버 칸을 따른다).
+   */
+  tutGameHold: boolean;
 }
 
 /**
@@ -396,7 +429,7 @@ export interface YeoulState {
  */
 const INITIAL: YeoulState = {
   screen: 'onb', step: 0, roomSel: 'table', popOpen: true, popClosing: false,
-  chatOpen: false, chatClosing: false, mine: '', petLine: '',
+  chatOpen: false, chatClosing: false, mine: '', petLine: '', mockRound: 0,
   day: 12, bond: 40, floorLv: 2, cChat: 0, cBath: 0, cSleep: 0, cGame: 0, cWake: 0,
   full: 2, happy: 2, stock: 3, trace: 2, plays: 3, snacks: 0,
   bathUsed: false, pets: 1, sick: false, sleeping: false, night: false,
@@ -422,6 +455,8 @@ const INITIAL: YeoulState = {
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
   hintI: 0, leaveOff: false, sleepCover: false,
   authOpen: false, authTab: 'signup', fbPreview: false,
+  chatSeen: null, tutGameHold: false,
+  chatEnd: null, chatEndShow: false, chatEndHold: false,
 };
 
 // ── 작은 계산들 ──────────────────────────────────────────────────────────
@@ -456,8 +491,35 @@ function levelsOf(s: YeoulState, m: Mode): Record<RoomKey, LvKey> {
 
 export interface CallItem { kind: 'chat' | 'call'; text: string; room: RoomKey }
 
-/** 지금 아이가 기다리는 일. 첫 번째가 말풍선으로 뜨고, 그 방 타일이 흔들린다. 시안 `callQueue()`. */
-function callQueueOf(s: YeoulState, m: Mode): CallItem[] {
+/**
+ * 진짜 방에서 **지금 열려 있는 대화 판**과 그 판의 마지막 펫 말. 없으면 `null`.
+ *
+ * ★ 2026-10-10 — 진짜 방의 대화 부름은 **이것만** 말한다(말풍선 전수조사 처방 1).
+ *   예전에는 목 `log` 의 시안 문장("있잖아, 오늘은 뭐 했어요?")이 진짜 방에서도 늘 부름 줄 끝에 남아,
+ *   대화를 닫을 때마다 그 문장이 돌아왔다. 열린 판이 없으면 대화 부름도 없다.
+ * ★ 판이 있는 서버(#704)는 판이 정본이다. 판이 없는 옛 서버면 "안 답한 열린 부름" 하나로 본다.
+ * @returns `key` = 이 판의 열쇠(`chatSeen` 과 맞대는 값), `line` = 걸어 둔 말
+ */
+function serverOpenChat(c: ChatState | null | undefined): { key: string; line: string } | null {
+  if (!c) return null;
+  const sess = c.session ?? null;
+  if (sess) {
+    if (sess.closed || c.openSlot !== sess.slot) return null;
+    const pet = [...(c.turns ?? [])].reverse().find((t) => t.speaker === 'PET');
+    const line = pet?.line ?? c.calls.find((x) => x.slot === sess.slot)?.line ?? null;
+    return line ? { key: `s${sess.id}`, line } : null;
+  }
+  const call = c.calls.find((x) => x.slot === c.openSlot && !x.answered);
+  return call ? { key: `c${call.slot}`, line: call.line } : null;
+}
+
+/**
+ * 지금 아이가 기다리는 일. 첫 번째가 말풍선으로 뜨고, 그 방 타일이 흔들린다. 시안 `callQueue()`.
+ *
+ * @param svChat 진짜 방이면 `serverOpenChat()` 의 값(열린 판이 없으면 `null`). 연습방이면 `undefined` —
+ *   그때만 목 `log`·`calls`·`resolved.chat` 을 읽는다(2026-10-10 · 전수조사 처방 1).
+ */
+function callQueueOf(s: YeoulState, m: Mode, svChat?: { key: string; line: string } | null): CallItem[] {
   const r = s.resolved;
   const out: CallItem[] = [];
   if (m === 'sleep') return out;
@@ -466,13 +528,21 @@ function callQueueOf(s: YeoulState, m: Mode): CallItem[] {
   //   예전엔 대화가 늘 1순위라 밤에도 아플 때도 잡담이 먼저 떴다. 급한 것이 먼저 말해야 한다.
   //   첫 부름의 방이 흔들리므로 이 순서가 곧 **강조되는 타일의 순서**이기도 하다.
   if (m === 'sick') out.push({ kind: 'call', text: '몸이 무거워요…', room: 'bath' });
-  if (m === 'night' && !r.bed) out.push({ kind: 'call', text: '이제 졸려요', room: 'bed' });
+  // ★ 밤 부름은 **연습방에서만** 낸다(2026-10-10). 진짜 방의 `night` 는 목 값(서버가 안 준다)이라
+  //   이 줄은 진짜 방에서 한 번도 안 뜨는 죽은 줄이었다(전수조사 4번). 잠은 서버 시계가 재운다.
+  if (svChat === undefined && m === 'night' && !r.bed) out.push({ kind: 'call', text: '이제 졸려요', room: 'bed' });
   // ★ 문턱을 **자세와 같은 0 칸**으로 맞췄다(2026-09-22 판정 J). 예전에는 `<= 2` 라 두 칸이나
   //   남았는데도 "배고파요" 가 떠 있었고, 자세는 0 칸에서야 바뀌어 **말과 몸이 따로 놀았다**
   //   (상훈님 dev 실측: 배부름 1·2 에서 말풍선만 떠 있음).
   if (s.full <= 0 && !r.table) out.push({ kind: 'call', text: '배고파요', room: 'table' });
   if (s.trace >= 2 && !r.bath) out.push({ kind: 'call', text: '여기 좀 치워 주세요', room: 'bath' });
 
+  if (svChat !== undefined) {
+    // 진짜 방 — 서버 열린 판의 펫 말뿐이다. 없으면 대화 부름 자체가 없다.
+    if (svChat) out.push({ kind: 'chat', text: svChat.line, room: 'play' });
+    return out;
+  }
+  // 연습방(목) — 시안 대화 그대로.
   const last = s.log[s.log.length - 1];
   if (!r.chat && s.calls > 0) {
     out.push({ kind: 'chat', text: last?.who === 'pet' ? last.text : '방금 얘기 좋았어요', room: 'play' });
@@ -489,25 +559,69 @@ const PET_MAX = 3;
  * 오늘 오간 말을 화면 순서대로 편다. 부름 하나가 최대 세 줄이 된다 —
  * 아이가 건넨 말 · 내가 한 답 · 아이가 돌려준 말. **전부 서버 문구 그대로다.**
  */
-function serverLog(c: ChatState | null): { who: 'me' | 'pet'; text: string }[] {
-  if (!c) return [];
+function serverLog(c: ChatState | null, end?: ChatEnd | null): { who: 'me' | 'pet'; text: string }[] {
   const out: { who: 'me' | 'pet'; text: string }[] = [];
+  // ★ 방금 닫힌 판(#714) — 서버가 그 판을 더는 안 돌려주면(뒤따르는 GET 이 `session: null`) 화면이 받아 둔
+  //   턴으로 편다. 서버에 **다른 판**이 생기면 그 판이 정본이라 버린다. 서버가 그 판을 아직 주면 서버 것을 쓴다.
+  const sid = c?.session?.id ?? null;
+  const useEnd = !!end && (sid === null || (sid === end.sid && !c?.turns?.length));
+  if (!c) return useEnd && end ? end.turns.map(({ who, text }) => ({ who, text })) : [];
   for (const call of c.calls) {
+    // 받아 둔 닫힌 판으로 펼 부름은 건너뛴다 — 같은 말이 두 번 적히지 않게.
+    if (useEnd && end && call.slot === end.slot) continue;
+    // ★ 지금의 판(#704)은 턴 전부를 편다 — 한 판에 여러 왕복이 오간다.
+    if (c.session && call.slot === c.session.slot && c.turns?.length) {
+      for (const t of c.turns) out.push({ who: t.speaker === 'PET' ? 'pet' : 'me', text: t.line });
+      continue;
+    }
     out.push({ who: 'pet', text: call.line });
     if (call.answer) out.push({ who: 'me', text: call.answer });
     if (call.replyLine) out.push({ who: 'pet', text: call.replyLine });
   }
+  if (useEnd && end) for (const { who, text } of end.turns) out.push({ who, text });
   return out;
 }
 
+/** 답 응답에서 붙잡은 닫힌 판(→ `YeoulState.chatEnd`). */
+interface ChatEnd {
+  /** 어느 아이의 판인가 — 다른 아이로 바뀌면 안 쓴다. */
+  pid: number | null;
+  /** 판 id. */
+  sid: number;
+  /** 판의 부름 자리. */
+  slot: ChatSlot;
+  /** 닫는 말(그 판의 마지막 펫 턴). */
+  line: string;
+  /** 그 판의 턴 전부 — 서버가 판을 더 안 줄 때 대화 기록이 쓴다. */
+  turns: { idx: number; who: 'me' | 'pet'; text: string }[];
+}
+
+/**
+ * 연습방(목)의 펫 대사 — 시험·캡처가 `window.__ZZAL_MOCK_TURNS__`(첫 말 + 이어 말 … + 닫기 말)로 바꿀 수 있다.
+ * 없으면 기본 목 대사. **서버 방에서는 안 쓴다.**
+ */
+function mockTurn(i: number, closing: boolean): string {
+  const o = typeof window !== 'undefined'
+    ? (window as unknown as { __ZZAL_MOCK_TURNS__?: string[] }).__ZZAL_MOCK_TURNS__ : undefined;
+  if (o && o.length) return closing ? o[o.length - 1] : (o[Math.min(i, o.length - 2)] ?? o[0]);
+  if (closing) return CHAT_CLOSE;
+  return i === 0 ? '오늘은 뭐 했어요?' : CHAT_REPLY[(i - 1) % CHAT_REPLY.length];
+}
+
 /** 부름이 닫혀 있을 때 입력칸에 두는 **화면의 안내**(아이 대사가 아니다). */
+/**
+ * ★ 2026-10-10 — 부름 창이 10-14 · 14-19 · 19-23 시로 바뀌어 다음 부름은 대개 **정시**다. 그래서
+ *   "14:00쯤" 대신 **"오후 2시쯤"** 으로 읽는다(아이 말풍선이 "N시 넘어서 다시 와줘" 라 말하는 것과 같은 결).
+ *   정시가 아니면(부화 직후 +1시간 같은 경우) 분까지 붙인다. 시각은 서버 `chatSummary.nextAt` 그대로다.
+ */
 function nextCallHint(nextAt: string | null): string {
   if (!nextAt) return '오늘 부름은 다 끝났어요';
   const t = new Date(nextAt);
   if (Number.isNaN(t.getTime())) return '다음 부름을 기다려요';
-  const hh = String(t.getHours()).padStart(2, '0');
-  const mm = String(t.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}쯤 다시 불러요`;
+  const h = t.getHours();
+  const m = t.getMinutes();
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h < 12 ? '오전' : '오후'} ${h12}시${m ? ` ${m}분` : ''}쯤 다시 불러요`;
 }
 
 const cells = (n: number, on: string, off: string) => [0, 1, 2, 3].map((i) => ({ bg: i < n ? on : off }));
@@ -702,6 +816,10 @@ export function useYeoul(live?: Live) {
   }, []);
 
   const mode: Mode = es.sleeping ? 'sleep' : es.sick ? 'sick' : es.night ? 'night' : 'day';
+  /** 진짜 방의 열린 대화 판(없으면 `null`). 연습방이면 `undefined` — 부름 줄이 목을 읽는다(→ `callQueueOf`). */
+  const svChat = useMemo(() => (onServer ? serverOpenChat(live?.chat) : undefined), [onServer, live?.chat]);
+  const svChatRef = useRef(svChat);
+  svChatRef.current = svChat;
   const needStyle: NeedStyle = s.needStyleLocal ?? '색+모양+글자';
 
   /**
@@ -934,11 +1052,24 @@ export function useYeoul(live?: Live) {
    *   확인할 수 없었다. 목록을 하나로 합치면서 그 구멍이 닫혔다.
    */
   const TUT: readonly TutorStep[] = s.sampleMode ? TUTOR : TUTOR_ROOM;
-  const tut: TutorStep | null = onServer
+  const rawTut: TutorStep | null = onServer
     ? (svTutIdx >= 0 ? TUTOR_ROOM[svTutIdx] ?? null : null)
     : (s.sampleMode || s.tutorOn) && s.tutor < TUT.length ? TUT[s.tutor] : null;
-  /** 지금 몇 번째 칸인가(점·`3 / 9` 표시용). 서버에 붙어 있으면 서버 숫자 그대로. */
-  const tutIdx = onServer ? Math.max(0, svTutIdx) : s.tutor;
+  /**
+   * 6칸(게임)을 **한 게임 결과까지** 붙잡고 있는가(→ `tutGameHold` 머리말 · 2026-10-10 상훈님).
+   * ★ 서버는 판을 시작하자마자 7칸(앨범)으로 넘기므로, 화면이 6칸을 계속 보여 준다 — 붙잡는 것은
+   *   **지금 칸이 6칸이나 바로 다음 7칸일 때만**이다(그보다 더 갔으면 서버를 따른다).
+   * ★ 오늘 판이 다 떨어졌으면 놓는다 — 더 칠 수 없는데 "결과까지 해 보자" 를 걸면 막다른 길이다.
+   */
+  const playsLeftNow = onServer ? (live?.game?.remainingToday ?? 0) : s.plays;
+  const tutGameHeld = s.tutGameHold && !s.sampleMode && !!rawTut
+    && (rawTut.done === 'GAME' || rawTut.done === 'SHARE')
+    && (s.gOn || playsLeftNow > 0);
+  const tut: TutorStep | null = tutGameHeld ? { ...TUTOR_GAME_STEP, text: TUTOR_GAME_UNTIL_RESULT } : rawTut;
+  /** 지금 몇 번째 칸인가(점·`3 / 9` 표시용). 서버에 붙어 있으면 서버 숫자 그대로(붙잡은 동안은 6칸). */
+  const tutIdx = tutGameHeld ? TUTOR_GAME_IDX : onServer ? Math.max(0, svTutIdx) : s.tutor;
+  const tutRef = useRef(tut);
+  tutRef.current = tut;
   /** 마지막 칸 — 누를 것이 없어서 우리가 `tutorial/done` 을 보내야 하는 자리. */
   /** 마지막 칸 — 누를 것이 없어서 **눌러서 끝내는** 자리. 목도 서버와 같은 칸을 쓴다. */
   const atDone = !s.sampleMode && !!tut && tut.done === 'DONE';
@@ -1002,7 +1133,7 @@ export function useYeoul(live?: Live) {
    *   **켜진 채 하이라이트로 깜빡인다**(실측). 그리고 다음 칸에서 타일을 누르면 대화 칸은
    *   그때 저절로 닫힌다(`selRoom`) — 안내 카드도 같이 돌아온다.
    */
-  const tutStepKey = onServer
+  const tutStepKey = tutGameHeld ? TUTOR_GAME_IDX : onServer
     ? svTutIdx
     : (s.sampleMode || s.tutorOn) && s.tutor < TUT.length ? s.tutor : -1;
   const prevTutStepRef = useRef(tutStepKey);
@@ -1154,9 +1285,10 @@ export function useYeoul(live?: Live) {
     lastSel.current = Date.now();
     // 벽을 열 때 도감을 다시 읽는다 — 그사이 밤에 배운 것이 도착해 있을 수 있다.
     if (onServerRef.current) void liveRef.current?.loadAlbum();
-    tutorDone('SHARE');
+    // ★ 7칸(앨범)은 벽을 **여는 것으로 끝나지 않는다**(2026-10-10) — 안에서 액자를 열어 저장해야 끝난다
+    //   (→ 액자의 `onTaken`). 예전엔 여기서 넘겨서 안을 안내할 틈이 없었다.
     patch({ wallOpen: true, wallClosing: false, popOpen: false, sheet: null, chatOpen: false, toast: '' });
-  }, [patch, tutorDone]);
+  }, [patch]);
   const closeWall = useCallback(() => {
     patch({ wallClosing: true });
     later('wallClose', 230, () => setS((v) => ({ ...v, wallOpen: false, wallClosing: false, frame: null })));
@@ -1176,7 +1308,10 @@ export function useYeoul(live?: Live) {
     const tl = tutLockRef.current;
     if (tl && tl.room !== 'chat') return;
     lastSel.current = Date.now();
-    patch({ chatOpen: true, popOpen: false, toast: '', mine: '' });
+    // ★ 진짜 방은 **연 판의 열쇠**를 적어 둔다(→ `chatSeen`). 닫은 뒤 그 판의 말을 무대에 다시 걸지 않고,
+    //   열어 둔 동안 판이 닫혀도(닫는 말) 그 말은 보이게 하는 기준이다. 열린 판이 없으면 `null`.
+    const seen = onServerRef.current ? (svChatRef.current?.key ?? null) : null;
+    patch({ chatOpen: true, popOpen: false, toast: '', mine: '', chatSeen: seen, chatEndShow: false, chatEndHold: false });
   }, [patch, flash]);
   const closeChat = useCallback(() => {
     lastSel.current = Date.now();
@@ -1443,13 +1578,15 @@ export function useYeoul(live?: Live) {
   const startGuess = useCallback(() => {
     lastSel.current = Date.now();
     const happy0 = esRef.current.happy;
-    // ★ 목의 6칸(게임)은 **넘어가는 길이 아예 없었다**(2026-09-22 발견) — 옛 8칸 목록에도 이 칸이
-    //   있었는데 아무도 `tutorDone` 을 안 불러서, 서버 없는 진짜 방 튜토리얼은 거기서 멎었다.
-    //   서버는 **판을 시작한 순간** 이 칸을 넘긴다(기권해도 넘어간다 — dev 실측). 목도 같게.
-    tutorDone('GAME');
+    // ★ 6칸(게임)은 **한 게임 결과까지**다(2026-10-10 상훈님 "5판 3선의 결과가 나는 걸 보고").
+    //   서버는 판을 시작한 순간 이 칸을 넘기므로(기권해도 — dev 실측), 화면이 결과가 날 때까지
+    //   6칸을 붙잡는다(`tutGameHold`). 목은 결과가 난 순간 칸을 넘긴다(→ `onGuess` 의 `finished`).
+    //   예전에는 여기서 바로 넘겨서, 1판만 치면 카드가 앨범을 가리키고 게임은 닫히기만 했다.
+    const atGame = tutRef.current?.done === 'GAME';
     // 하루 판수는 **매치 단위**로 준다(정본: 판 = 한 매치). 예전 목은 한 판(라운드)마다 깎았다.
     setS((v) => (v.gOn ? v : {
       ...v,
+      tutGameHold: atGame || v.tutGameHold,
       gOn: true, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
       gMarks: [null, null, null, null, null], gQuit: false, gHappy0: happy0, gStarted: false,
       lastGuess: null,
@@ -1459,7 +1596,7 @@ export function useYeoul(live?: Live) {
       //   그때 하루 판수를 쓴다. 판을 열자마자 깎으면 한 판도 안 치고 ✕ 해도 「3판 남음」이
       //   2 가 되어, 목이 서버와 다른 말을 한다(실측). 목의 차감은 `onGuess` 첫 탭에 있다.
     }));
-  }, [tutorDone]);
+  }, []);
 
   /** 매치를 접고 마당 팝오버를 다시 연다 — 거기 "좌우 맞히기" 가 곧 "한 판 더" 다. */
   const endGuess = useCallback(() => {
@@ -1564,7 +1701,10 @@ export function useYeoul(live?: Live) {
         careAct(hit ? 'game_win' : 'game_lose');
         if (finished) {
           later('guessEnd', GUESS_AFTERGLOW_MS, () => {
-            setS((v) => ({ ...v, gPhase: 'done' }));
+            // ★ **결과 화면이 난 순간** 6칸이 끝난다(2026-10-10). 붙잡던 것을 놓고, 목은 칸을 넘긴다.
+            //   기권(`quitEnd`)은 이 길을 안 탄다 — 그래서 ✕ 로 나가면 칸이 안 끝난다.
+            tutorDone('GAME');
+            setS((v) => ({ ...v, gPhase: 'done', tutGameHold: false }));
             later('guessNext', GUESS_MATCH_END_MS, endGuess);
           });
           return;
@@ -1619,7 +1759,7 @@ export function useYeoul(live?: Live) {
       happy: finished && win ? Math.min(4, v0.happy + 1) : v0.happy,
     });
     reveal(hit, hits, finished, win);
-  }, [patch, careAct, flash, later, endGuess, floor2Of]);
+  }, [patch, careAct, flash, later, endGuess, floor2Of, tutorDone]);
   const onGuessSide = useCallback((side: Side) => () => onGuess(side), [onGuess]);
 
   // ── 대화 ──
@@ -1635,6 +1775,36 @@ export function useYeoul(live?: Live) {
         const r = await liveRef.current?.sendChat(text);
         if (!r) return;
         if (r.error) { flash(r.error); return; }
+        // ★★ 닫는 말은 **이 응답에서 받은 그 자리에서** 붙잡는다(#714 · 2026-10-10 dev 실측).
+        //   판이 닫히면 곧바로(45ms 뒤) 다시 읽은 `GET /chat` 이 `session: null`·`turns: []` 라,
+        //   말풍선을 서버 판에서만 꺼내면 닫는 말이 한 번도 안 보였다(5번째 답 뒤 2.5초까지 빈 말풍선).
+        const closed = r.reply?.session?.closed ? r.reply.session : null;
+        if (closed) {
+          const fresh = r.reply?.turns ?? [];
+          const before = liveRef.current?.chat?.session?.id === closed.id ? (liveRef.current?.chat?.turns ?? []) : [];
+          const byIdx = new Map<number, { idx: number; who: 'me' | 'pet'; text: string }>();
+          for (const t of [...before, ...fresh]) byIdx.set(t.idx, { idx: t.idx, who: t.speaker === 'PET' ? 'pet' : 'me', text: t.line });
+          const turns = [...byIdx.values()].sort((a, b) => a.idx - b.idx);
+          const line = [...fresh].reverse().find((t) => t.speaker === 'PET')?.line ?? r.reply?.line ?? '';
+          if (line) {
+            patch({ chatEnd: { pid: liveRef.current?.petId ?? null, sid: closed.id, slot: closed.slot, line, turns }, chatEndShow: true, chatEndHold: true });
+            later('chatEndHold', CHAT_CLOSE_HOLD_MS, () => setS((v) => (v.chatEnd?.sid === closed.id ? { ...v, chatEndHold: false } : v)));
+          }
+        }
+        // ★ 채팅 계측(#704) — 허용 키만. 서버 이벤트 `zzal_chat_llm` 과 **키 뜻이 같다**:
+        //   action = 펫 턴 종류(first_meet·continue·close …) 또는 user, step = 판 안의 펫 턴 번호
+        //   (사용자 턴은 답한 그 펫 턴의 번호), code = 판 종류, type = 생성기, reason = 폴백 사유만(없으면 ok).
+        const sess = r.reply?.session;
+        if (sess) {
+          const all = liveRef.current?.chat?.turns ?? [];
+          // 이 응답 전의 턴 목록에서 "앞선 펫 턴 수" 를 센다(새 두 턴이 아직 안 얹혔어도 맞게).
+          const petsBefore = (idx: number) => all.filter((x) => x.speaker === 'PET' && x.idx < idx).length;
+          for (const t of r.reply?.turns ?? []) {
+            ztrack('zzal_chat_turn', t.speaker === 'USER'
+              ? { action: 'user', step: petsBefore(t.idx), code: sess.kind.toLowerCase() }
+              : { action: (t.type ?? 'continue').toLowerCase(), step: petsBefore(t.idx) + 1, code: sess.kind.toLowerCase(), type: t.generator ?? 'template', reason: t.filteredReason ?? 'ok' });
+          }
+        }
         // ★ 자세는 **서버가 정한다**. 그 자세가 '답하기' 일 때만 표의 `reply_done` 을 같이 켠다 —
         //   서버가 다른 자세(기쁨·놀람…)를 골랐는데 답하기 상황을 켜면 자세가 덮여 서버 뜻이 사라진다.
         // ★★ **안전망**(2026-09-22) — 이 길은 `careAct` 를 안 거쳐서 잠금 대체(`LOCKED_POSE`)가
@@ -1651,22 +1821,28 @@ export function useYeoul(live?: Live) {
       })();
       return;
     }
+    // ★ 연습방도 서버와 같은 모양의 한 판이다(#704) — 최대 `CHAT_MAX_ROUNDS` 왕복, 마지막은 닫기 말.
+    //   친밀도·부름 수는 판당 한 번만(서버의 "보상은 판당 1회" 와 같다).
+    if (sRef.current.mockRound >= CHAT_MAX_ROUNDS) return;
     setS((v) => {
-      const reply = CHAT_REPLY[v.log.length % CHAT_REPLY.length];
+      const round = v.mockRound + 1;
+      const closing = round >= CHAT_MAX_ROUNDS;
+      const reply = mockTurn(round, closing);
+      const first = v.mockRound === 0;
       return {
         ...v,
         log: [...v.log, { who: 'me' as const, text }, { who: 'pet' as const, text: reply }].slice(-6),
-        draft: '', mine: text, petLine: reply,
-        calls: Math.max(0, v.calls - 1),
+        draft: '', mine: text, petLine: reply, mockRound: round,
+        calls: first ? Math.max(0, v.calls - 1) : v.calls,
         resolved: { ...v.resolved, chat: true },
-        bond: Math.min(100, v.bond + 2),
+        bond: first ? Math.min(100, v.bond + 2) : v.bond,
         memories: [...v.memories, text.slice(0, 8)].slice(-8),
-        cChat: v.cChat + 1,
+        cChat: first ? v.cChat + 1 : v.cChat,
       };
     });
     careAct('reply');
     tutorDone('CHAT');
-  }, [act, careAct, tutorDone, patch, flash, floor2Of, sitOf]);
+  }, [act, careAct, tutorDone, patch, flash, floor2Of, sitOf, later]);
   /**
    * 보내기.
    *
@@ -1695,7 +1871,7 @@ export function useYeoul(live?: Live) {
   }, [patch]);
 
   const onAnswerCall = useCallback(() => {
-    const top = callQueueOf(esRef.current, mode)[0];
+    const top = callQueueOf(esRef.current, mode, svChatRef.current)[0];
     if (!top) return;
     if (top.kind === 'chat') { openChat(); return; }
     selRoom(top.room)();
@@ -1909,13 +2085,19 @@ export function useYeoul(live?: Live) {
   })), []);
   const pickUser = useCallback((k: string, v: string) => () => setS((w) => ({ ...w, user: { ...w.user, [k]: w.user[k] === v ? null : v } })), []);
   /**
-   * 여울의 물음에 답하거나 넘긴다. 답은 `user` 에 쌓인다.
-   * ★ 고른 호칭(`user.nick`)을 아이가 실제로 부르는 말에 끼우는 것은 아직 안 했다 —
-   *   말투·대사 생성이 서버로 넘어갈 때 그쪽에서 쓴다. 지금은 저장만 한다.
+   * 여울의 물음에 답하거나 넘긴다. 답은 `user` 에 쌓이고 **서버에도 한 칸씩 저장**한다(#704).
+   * ★ 대사에 쓰이는 것은 호칭(`nick` → `callMe`)뿐이다 — 서버 채팅 v1 이 지시문에 넣는다.
+   *   나머지(시각·사이·그림·경로·나이대)는 분석용이라 대사에 안 들어간다.
+   * ★ 저장 실패는 화면에 알리지 않는다 — 설문은 곁다리고, 실패해도 대사가 호칭 없이 말할 뿐이다.
    */
   const askNext = useCallback((key: string | null, val: string | null) => () => {
     lastSel.current = Date.now();
     setS((v) => ({ ...v, user: key && val ? { ...v.user, [key]: val } : v.user, uq: v.uq + 1, askDraft: '' }));
+    const field = key ? PROFILE_FIELD_OF[key] : undefined;
+    const text = (val ?? '').trim();
+    if (field && text) {
+      patchProfile({ [field]: text.slice(0, field === 'cameFrom' ? 40 : 20) }).catch(() => {});
+    }
   }, []);
   /** 직접 적기. 적기 시작하면 칩 선택을 지운다 — 둘 다 켜져 있으면 무엇이 답인지 알 수 없다. */
   const onAskDraft = useCallback((key: string, t: string, max: number) => {
@@ -2301,7 +2483,7 @@ export function useYeoul(live?: Live) {
     const albumOpen = onServer ? albumMotions.filter((m) => m.unlocked).length : s.albumOpen;
 
     const lv = levelsOf(es, mode);
-    const calls = callQueueOf(es, mode);
+    const calls = callQueueOf(es, mode, svChat);
     const top = calls[0] ?? null;
     const wl = WALLS.find((x) => x.id === s.wallId) ?? WALLS[0];
     const unlimited = s.sampleMode;
@@ -2556,14 +2738,43 @@ export function useYeoul(live?: Live) {
     const sc = live?.chat ?? null;
     const openCall = sc?.calls.find((c) => c.slot === sc.openSlot && !c.answered) ?? null;
     const lastAnswered = sc ? [...sc.calls].reverse().find((c) => c.answered) ?? null : null;
-    /** 지금 아이가 걸어 둔 말. 열린 부름이 없으면 마지막으로 돌려준 말. 둘 다 없으면 없음. */
-    const svPetLine = openCall?.line ?? lastAnswered?.replyLine ?? null;
-    const canAnswer = onServer ? !!openCall : true;
+    // ★ 대화형(#704) — 지금의 판이 있으면 **판이 정본**이다. 열려 있는 동안 입력칸이 남고(여러 왕복),
+    //   아이 말풍선은 그 판의 마지막 펫 턴이다. 닫기 턴이 오면 판이 닫혀 입력칸이 잠기고 다음 부름을 알린다.
+    //   판이 없는 옛 서버면 예전처럼 "안 답한 부름" 하나로 본다.
+    const sess = sc?.session ?? null;
+    const sessOpen = !!sess && !sess.closed && sc?.openSlot === sess.slot;
+    const lastPetTurn = sess ? [...(sc?.turns ?? [])].reverse().find((t) => t.speaker === 'PET') ?? null : null;
+    const canAnswer = onServer ? (sess ? sessOpen : !!openCall) : s.mockRound < CHAT_MAX_ROUNDS;
 
     // ── 말풍선 ──
+    /**
+     * 대화가 열려 있는 동안 무대에 거는 아이 말.
+     *
+     * ★ 진짜 방(2026-10-10 · 전수조사 처방 1·3) — **열린 판의 마지막 펫 말**, 또는 **열어 둔 동안 닫힌
+     *   그 판의 닫는 말**뿐이다. 열린 판이 없을 때 열면 `null` 이다: 말풍선 없이 입력칸의 안내
+     *   ("N시쯤 다시 불러요")만 남는다. 예전에는 이 자리에 목 문장이 떠서 "아이는 묻는데 답은 못 하는"
+     *   모양이 됐다(전수조사 그림 4). 지난 판의 말("마지막으로 돌려준 말" 갈래)도 다시 꺼내지 않는다.
+     */
+    const svSeenLine = sess && s.chatSeen === `s${sess.id}` ? (lastPetTurn?.line ?? null)
+      : !sess && lastAnswered && s.chatSeen === `c${lastAnswered.slot}` ? (lastAnswered.replyLine ?? lastAnswered.line)
+        : null;
+    /**
+     * 방금 닫힌 판의 닫는 말(#714). 답 응답에서 받아 둔 값이라 뒤따르는 GET 이 판을 비워도 남는다.
+     * 대화창이 열려 있으면 다시 열 때까지, 창을 닫았으면 도착 뒤 `CHAT_CLOSE_HOLD_MS` 까지만 건다 —
+     * 그 뒤 무대는 지금 규칙(비움·급한 부름만) 그대로다.
+     */
+    const chatEnd = s.chatEnd && s.chatEnd.pid === (live?.petId ?? null) ? s.chatEnd : null;
+    const endLine = onServer && chatEnd && (s.chatOpen ? (s.chatEndShow || s.chatEndHold) : s.chatEndHold)
+      ? chatEnd.line : null;
     const chatLine = s.chatOpen
-      ? (onServer ? svPetLine : (s.petLine || '오늘은 뭐 했어요?'))
-      : null;
+      ? (onServer ? (svChat?.line ?? endLine ?? svSeenLine) : (s.petLine || mockTurn(0, false)))
+      : endLine;
+    /**
+     * 무대 부름으로 걸 첫 줄. ★ 진짜 방에서 **이미 열어 본 판**의 대화 부름은 닫은 뒤 다시 걸지 않는다
+     * (상훈님 2026-10-10 "닫은 뒤 마지막 대사 남기지 않음"). 대화 부름은 늘 줄 맨 끝이라, 그게 첫 줄이면
+     * 급한 부름이 없다는 뜻이고 말풍선은 비운다. 타일 흔들림·알림 목록은 그대로 둔다(아직 답할 판이다).
+     */
+    const stageTop = top && !(onServer && top.kind === 'chat' && svChat && s.chatSeen === svChat.key) ? top : null;
     /**
      * 좌우 맞히기가 **아이 말풍선으로** 말한다(2026-09-20 안 1) — 게임 전용 말 장치를 새로 만들지 않는다.
      * ★ 사용자를 탓하는 말을 쓰지 않는다(자캐 규범) — 빗나가도 "아쉬워요" 까지다.
@@ -2593,8 +2804,11 @@ export function useYeoul(live?: Live) {
       //   다만 **대화를 열어 아이가 건넨 말이 있으면 그건 보여야 한다**. 안 그러면 서버가 준
       //   대사가 화면에 한 번도 안 나온다(2026-09-09 실측으로 그랬다).
       // 게임이 도는 동안에는 **게임이 말한다** — 부름·튜토리얼보다 앞선다(무대에 그것만 남으므로).
-      show: s.gOn ? true : ((!tut || !!chatLine) && (!!top || !!chatLine) && !es.sleeping),
-      text: s.gOn ? guessLine : (chatLine || (top?.text ?? '')),
+      // ★ 대화가 열려 있으면 **대화의 말만** 건다(2026-10-10) — 열린 판이 없을 때 "배고파요" 같은 부름이
+      //   대화창 위에 떠서 아이가 말을 건 것처럼 보이지 않게. 그때 안내는 입력칸이 맡는다.
+      show: s.gOn ? true : s.chatOpen ? (!!chatLine && !es.sleeping)
+        : ((!tut || !!chatLine) && (!!stageTop || !!chatLine) && !es.sleeping),
+      text: s.gOn ? guessLine : s.chatOpen ? (chatLine ?? '') : (chatLine || (stageTop?.text ?? '')),
     };
 
     // ── 시트 ──
@@ -2690,13 +2904,30 @@ export function useYeoul(live?: Live) {
       const parts = String(name).split(' · ');
       return [parts[0], open ? 1 : 0, parts[1] || '조건 미정', FRAME_KEYS[i % FRAME_KEYS.length]] as const;
     });
-    const frames = (onServer ? svFrames : mockFrames).map(([name, open, cond, key]) => {
+    /**
+     * 7칸(앨범) 안의 두 단계(2026-10-10 상훈님 "기본 동작 하이라이트, 저장 하이라이트").
+     *   `pick` = 1층 기본 동작 액자 하나를 빛낸다 → 누르면 `save` = 액자 안 「저장」을 빛낸다.
+     * ★ 칸을 끝내는 것은 **저장(또는 공유)** 이다 — 서버도 공유 기록(`share`)으로 넘긴다. 예전에는 목이
+     *   벽을 **여는 것만으로** 칸을 넘겨서, 안에서 무엇을 눌러야 하는지 안내할 틈이 없었다.
+     * ★ 연습방은 안 쓴다(거기 칸 목록은 앞뒤로 넘겨 보는 연습이다).
+     */
+    const tutAlbum: 'pick' | 'save' | null = tut?.done === 'SHARE' && !s.sampleMode
+      ? (s.frame?.open ? 'save' : 'pick') : null;
+    const frameRows = onServer ? svFrames : mockFrames;
+    // 빛낼 액자 = 열린 **1층 기본 동작** 중 첫 칸. 목은 층을 모르므로 열린 첫 칸.
+    const hlFrame = tutAlbum !== 'pick' ? -1 : onServer
+      ? svMotions.findIndex((m) => m.unlocked && m.layer === 'BASIC_1')
+      : frameRows.findIndex(([, open]) => !!open);
+    const frames = frameRows.map(([name, open, cond, key], i) => {
       const f: FrameData = { name, open: !!open, cond: open ? '' : (cond || '조건 미정'), key };
+      const hl = i === hlFrame;
       return {
         ...f,
+        hl,
+        anim: hl ? 'yBlink 1.2s ease-in-out infinite' : 'none',
         label: open ? f.name : (cond || '조건 미정'),
         labelFg: open ? '#5A4A3C' : C.faint,
-        bd: open ? C.frameWood : 'rgba(201,169,141,.45)',
+        bd: hl ? ACCENT : open ? C.frameWood : 'rgba(201,169,141,.45)',
         bg: open ? C.paper : paperA(.5),
         shadow: open ? `0 4px 10px ${ink(.18)}` : 'none',
         opacity: open ? 1 : 0.2,
@@ -2863,7 +3094,7 @@ export function useYeoul(live?: Live) {
          */
         canSend: canAnswer && !live?.chatting && s.draft.trim().length > 0,
         hint: !canAnswer
-          ? nextCallHint(sv?.chatSummary?.nextAt ?? null)
+          ? (onServer ? nextCallHint(sv?.chatSummary?.nextAt ?? null) : nextCallHint(null))
           : `${CHAT_HINTS[s.hintI % CHAT_HINTS.length]}처럼 · 40자까지`,
       },
       fab: {
@@ -2871,7 +3102,7 @@ export function useYeoul(live?: Live) {
         //   아파도 눌린다 — 아플 때 말이 막히면 아이가 제일 필요한 순간에 말을 못 한다.
         //   자는 동안만 안 뜬다.
         show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
-        dot: onServer ? !!openCall : s.calls > 0,
+        dot: onServer ? (sess ? sessOpen : !!openCall) : s.calls > 0,
         bw: tut && tut.room === 'chat' ? '2.5px' : '1px',
         bd: tut && tut.room === 'chat' ? ACCENT : C.line,
         anim: tut && tut.room === 'chat' ? 'yNudge 1.9s ease-in-out infinite' : 'none',
@@ -3046,6 +3277,8 @@ export function useYeoul(live?: Live) {
         show: s.screen === 'room' && (s.wallOpen || s.wallClosing),
         anim: s.wallClosing ? 'yWallDown .22s ease forwards' : 'yWallUp .3s cubic-bezier(.2,.85,.25,1)',
         count: `${albumOpen} / ${albumAll}`, close: closeWall, frames,
+        /** 7칸 1단계 안내 한 줄(빛나는 액자를 누르라). 튜토리얼 밖이면 빈 칸. */
+        tutGuide: tutAlbum === 'pick' ? TUTOR_ALBUM_PICK : '',
         /**
          * 앨범 안의 손잡이 줄. **개수가 늘 것을 전제로 둔다** — 엽서·여행처럼 앨범에 들어올 것이
          * 더 있다(2026-09-21). 그래서 화면이 넉 줄을 딱 맞춰 그리지 않고 **흐르게** 그린다
@@ -3076,6 +3309,13 @@ export function useYeoul(live?: Live) {
         open: !!s.frame?.open, locked: !!s.frame && !s.frame.open,
         cond: s.frame?.cond ?? '', opacity: s.frame?.open ? 1 : 0.24,
         close: closeFrame, save: saveShot, share: shareFrame,
+        /** 7칸 2단계 — 「저장」을 빛내고 안내 한 줄을 단다. */
+        tutSave: tutAlbum === 'save',
+        tutGuide: tutAlbum === 'save' ? TUTOR_ALBUM_SAVE : '',
+        /**
+         * 저장·공유가 **된 뒤** 부른다. 목은 여기서 7칸을 넘긴다(서버는 공유 기록이 넘긴다 — 화면은 안 센다).
+         */
+        onTaken: () => tutorDone('SHARE'),
       },
       fullCells: cells(es.full, '#F2C3A8', C.slotDim),
       happyCells: cells(es.happy, '#C9DFB4', C.slotDim),
@@ -3099,14 +3339,17 @@ export function useYeoul(live?: Live) {
           ...(s.playTab === k ? { bg: C.ink, fg: C2.onDark, bd: C.ink } : { bg: C.slot, fg: C.sub2, bd: '#E3DBCD' }),
         })),
         isTalk: s.playTab === 'talk', isRun: s.playTab === 'run',
-        callsLeft: onServer ? (openCall ? 1 : 0) : s.calls,
+        callsLeft: onServer ? ((sess ? sessOpen : !!openCall) ? 1 : 0) : s.calls,
+        // ★ 열린 판이 없으면 칩·입력·보내기를 잠그고 대화 줄과 같은 안내를 둔다(전에는 눌리고 조용히 버려졌다).
+        can: canAnswer && !live?.chatting,
+        lockHint: canAnswer ? '' : (onServer ? nextCallHint(sv?.chatSummary?.nextAt ?? null) : nextCallHint(null)),
         memCount: onServer ? (sc?.memories.length ?? 0) : s.memories.length,
         // 오늘 오간 말. 서버가 부름마다 [건넨 말 · 내가 한 답 · 돌려준 말] 셋을 들고 있다.
-        log: (onServer ? serverLog(sc) : s.log).map((l) => (l.who === 'pet'
+        log: (onServer ? serverLog(sc, chatEnd) : s.log).map((l) => (l.who === 'pet'
           ? { text: l.text, align: 'flex-start', radius: '15px 15px 15px 5px', bg: C2.paperDim, fg: C.ink }
           : { text: l.text, align: 'flex-end', radius: '15px 15px 5px 15px', bg: ACCENT, fg: C.accentInk })),
         // 빠른 답은 **내가 하는 말**이라 화면이 갖고 있어도 된다(아이 대사가 아니다).
-        quick: CHAT_QUICK.map((t) => ({ text: t, pick: () => pushReply(t) })),
+        quick: CHAT_QUICK.map((t) => ({ text: t, pick: () => { if (canAnswer) pushReply(t); } })),
         draft: s.draft,
         memories: (onServer ? (sc?.memories ?? []) : s.memories).map((t) => ({ text: t })),
         // 오늘 남은 판은 **두 게임 합산**이고 지금 치는 판은 빠져 있다(서버 규칙).
@@ -3218,11 +3461,11 @@ export function useYeoul(live?: Live) {
     };
   }, [
     // hatchN 은 s 가 아니라 서버(live)에서도 온다 — 빼면 부화가 진행돼도 화면이 안 바뀐다.
-    s, es, sv, onServer, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
+    s, es, sv, onServer, svChat, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess, quitGuess,
     nextTutor, onAnswerCall, skipTutorStep, finishTutorHere, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, popPostcard, popScenes, toggleDeco, toggleMini, pickWall, pickNeedStyle, pickTime, onAskDraft,
-    toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash,
+    toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash, tutorDone,
     tutIdx, atDone, onFinishTutorial, onSavePersona, noop, live?.resting,
   ]);
 

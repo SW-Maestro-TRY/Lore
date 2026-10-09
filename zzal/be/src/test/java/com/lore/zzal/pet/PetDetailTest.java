@@ -181,7 +181,7 @@ class PetDetailTest {
         // ★ daysLeft 는 항상 0 — 첫 선물은 날짜가 아니라 튜토리얼 완주로 열린다.
         //   옛 3일 규칙으로 계산한 값을 내려보내면 화면이 뜻 없는 카운트다운을 그린다.
         assertThat(d.firstGift()).isEqualTo(new PetResponses.FirstGift("LOCKED", 0));
-        assertThat(d.chatSummary().nextAt()).isEqualTo(T0.plus(Duration.ofHours(1)));   // 기상(부화)+1h
+        assertThat(d.chatSummary().nextAt()).isEqualTo(kst("2026-09-05 14:00"));   // 12:00 → 다음 창(낮) 14:00 (#709)
         assertThat(d.tutorial().active()).isTrue();
         assertThat(d.tutorial().steps().get(0).current()).isTrue();
         assertThat(d.justUnlocked()).isEmpty();

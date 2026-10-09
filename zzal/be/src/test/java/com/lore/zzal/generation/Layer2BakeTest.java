@@ -195,7 +195,11 @@ class Layer2BakeTest {
         service.bake(PET);                       // READY — 건너뜀
         verify(runner, times(1)).run(any(), any(), any(), any());
 
-        pet.flagLayer2("빈 칸", T0);             // FAILED — 저절로 다시 굽지 않는다
+        pet.flagLayer2("빈 칸");                 // 결함 표시 — READY 그대로, 저절로 다시 굽지 않는다
+        service.bake(PET);
+        verify(runner, times(1)).run(any(), any(), any(), any());
+
+        pet.markLayer2Failed("소진", T0);        // FAILED — 저절로 다시 굽지 않는다
         service.bake(PET);
         verify(runner, times(1)).run(any(), any(), any(), any());
 

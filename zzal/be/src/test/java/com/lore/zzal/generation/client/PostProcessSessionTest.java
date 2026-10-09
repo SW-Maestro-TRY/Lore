@@ -52,6 +52,8 @@ class PostProcessSessionTest {
         /** 이 호출에서는 파일을 새로 쓰지 않고, 앞 호출이 남긴 것을 <b>옛 시각 그대로</b> 둔다. */
         private final boolean leaveStale;
         private final boolean writeAnchors;
+        /** 스크립트가 저장용 GIF 도 냈다(#713 이후의 service_post.py). */
+        private boolean writeGif;
         private int call;
 
         FakeScript(S3Storage storage, PipelineScripts scripts, List<List<String>> made,
@@ -73,6 +75,9 @@ class PostProcessSessionTest {
             for (String k : keys) {
                 Path f = out.resolve(k + ".webp");
                 Files.writeString(f, k);
+                if (writeGif) {
+                    Files.writeString(out.resolve(k + ".gif"), k);
+                }
                 if (leaveStale) {
                     // 스크립트가 이번 호출에서는 안 건드린 셈 — 파일만 남아 있다.
                     Files.setLastModifiedTime(f, FileTime.fromMillis(0));
@@ -138,6 +143,20 @@ class PostProcessSessionTest {
     }
 
     @Test
+    @DisplayName("★ 2층만 여는 세션(#696) — 작업 파일 이름이 호출 순번(grid1)이 아니라 층(grid2)을 따른다(#706)")
+    void layerTwoOnlySessionNamesFilesByLayer() throws Exception {
+        FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER2), true, false);
+
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/2", "v1")) {
+            s.split("images/zzal/pets/7/grid2.png", LAYER2, "", 2);
+        }
+
+        // 파이썬 게이트 로그가 이 이름을 그대로 찍는다 — grid1.png 면 1층 실패로 읽힌다.
+        assertThat(p.grids.get(0).getFileName().toString()).isEqualTo("grid2.png");
+        assertThat(p.logs.get(0).getFileName().toString()).isEqualTo("log2.txt");
+    }
+
+    @Test
     @DisplayName("★★ 앵커를 내야 하는 버전인데 없으면 실패로 올린다 — 그림만 올라가는 모양은 화면을 봐야만 드러난다")
     void failsWhenAnchorsAreMissing() {
         FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER1), false, false);
@@ -171,5 +190,64 @@ class PostProcessSessionTest {
             }
         }).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("base");
+    }
+
+    @Test
+    @DisplayName("★ 저장용 GIF(#713) — 스크립트가 내면 webp 바로 옆 같은 이름으로 image/gif 로 올린다")
+    void uploadsGifBesideEachWebp() throws Exception {
+        S3Storage storage = mock(S3Storage.class);
+        FakeScript p = new FakeScript(storage, scripts(), List.of(LAYER1), true, false);
+        p.writeGif = true;
+
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
+            s.split("grid1.png", LAYER1, "");
+        }
+
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> type = ArgumentCaptor.forClass(String.class);
+        verify(storage, times(5)).upload(key.capture(), any(Path.class), type.capture());
+        assertThat(key.getAllValues()).containsExactly(
+                "images/zzal/pets/7/basic/1/base.webp",
+                "images/zzal/pets/7/basic/1/base.gif",
+                "images/zzal/pets/7/basic/1/eat.webp",
+                "images/zzal/pets/7/basic/1/eat.gif",
+                "images/zzal/pets/7/basic/1/anchors.json");
+        assertThat(type.getAllValues()).containsExactly(
+                "image/webp", "image/gif", "image/webp", "image/gif", "application/json");
+    }
+
+    @Test
+    @DisplayName("★ GIF 가 없어도 부화는 성공이다 — 화면은 webp 로 돌고 저장 버튼은 webp 로 폴백한다(#713)")
+    void missingGifDoesNotFailTheLayer() throws Exception {
+        S3Storage storage = mock(S3Storage.class);
+        FakeScript p = new FakeScript(storage, scripts(), List.of(LAYER1), true, false);
+
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/1", "v1")) {
+            s.split("grid1.png", LAYER1, "");
+        }
+
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        verify(storage, times(3)).upload(key.capture(), any(Path.class), anyString());
+        assertThat(key.getAllValues()).noneMatch(k -> k.endsWith(".gif"));
+    }
+
+    @Test
+    @DisplayName("★ 앞 판 옮겨 싣기(carryOver)는 GIF 도 옮기고, 옛 판이라 GIF 가 없으면 webp 만 옮긴다(#713)")
+    void carryOverMovesGifWhenPresent() throws Exception {
+        S3Storage storage = mock(S3Storage.class);
+        org.mockito.Mockito.doThrow(new RuntimeException("NoSuchKey"))
+                .when(storage).download(org.mockito.ArgumentMatchers.eq("images/zzal/pets/7/basic/1/eat.gif"), any(Path.class));
+        FakeScript p = new FakeScript(storage, scripts(), List.of(LAYER1), false, false);
+
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/2", "옛버전")) {
+            s.carryOver("images/zzal/pets/7/basic/1", LAYER1);
+        }
+
+        ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
+        verify(storage, times(3)).upload(key.capture(), any(Path.class), anyString());
+        assertThat(key.getAllValues()).containsExactly(
+                "images/zzal/pets/7/basic/2/base.webp",
+                "images/zzal/pets/7/basic/2/base.gif",
+                "images/zzal/pets/7/basic/2/eat.webp");
     }
 }

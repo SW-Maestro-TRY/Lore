@@ -5,6 +5,7 @@
   python3 service_post.py <격자.png> <출력폴더> [--keys a,b,..] [--postures sick=crouch,..]
                           [--base-anchors <앵커.json> | --base-k N --base-hw N] [--no-anchors]
   → 출력폴더/<key>.webp x 8  +  출력폴더/anchors.json (1층·2층이 **한 장에 합쳐진다**)
+     + 출력폴더/<key>.gif x 8 — 저장·공유용(같은 webp 에서 만든 투명 GIF, gif_out.py · #713)
 
   --keys      자바 카탈로그(또는 app.zzal.hatch.states.v4)의 이름을 격자 칸 순서로 넘길 때.
               생략하면 state8_v5.KEYS(= base,eat,joy,sad,sick,pet,hello,sleep)를 쓴다.
@@ -102,6 +103,7 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 import anchors      # noqa: E402
 import state8_v5    # noqa: E402
+import gif_out      # noqa: E402
 
 GATE = _HERE / "check_grid.py"
 GATE_SPEC = _HERE / "grid_spec.txt"
@@ -222,18 +224,41 @@ def measure_body(img: Image.Image):
 
 
 def read_norm_ref(path):
-    """정규화 기준(1층)을 앵커 파일에서 읽는다 — (Hw_target, foot_y_target).
+    """정규화 기준(1층)을 앵커 파일에서 읽는다 — (Hw_target, 발끝선).
 
-    ★새 필드를 만들지 않는다 — 이미 있는 `Hw` 와 자세별 `feet.y` 만 읽는다(스키마 불변).
+    발끝선 = `("bottom", 캔버스 아래에서 발끝까지 px)` 또는 `("abs", 절대 y)` 또는 None.
+    ★새 필드를 만들지 않는다 — 이미 있는 `Hw`·자세별 `feet.y`·자세별 `canvas` 만 읽는다(스키마 불변).
       발끝선은 한 격자 안에서 자세가 달라도 거의 같으므로(실측 288~289) 자세들의 중앙값을 쓴다.
+    ★2026-10-08(#701) — 발끝선을 **캔버스 아랫변에서의 거리**(`canvas_h - feet.y`)로 읽는다.
+      state8_v5 는 아래·좌·우를 원본 칸 경계에 고정하고 **위로만** 캔버스를 넓힌다(머리끝이 칸 위로
+      나간 만큼). 그래서 층마다 캔버스 높이가 다르다(민트 1층 312x405 · 2층 313x350). 절대 y(362)를
+      2층에 그대로 쓰면 발이 캔버스 아래로 12px 나가고 16칸 전부 아래가 잘렸다(POSTPROCESS_CLIP 5회).
+      아랫변은 두 층 다 '원본 칸 아래 경계'라 그 거리는 층이 바뀌어도 같은 뜻이다.
+      · 두 층 캔버스 높이가 같으면(위로 안 넓힌 대부분의 펫) 절대 y 와 **값이 같다** → 결과 바이트 동일.
+      · 자세에 `canvas` 가 없는 옛 파일은 머리의 `canvas.h` 를, 그것도 없으면 **절대 y 로** 읽는다(옛 동작).
     """
     d = json.loads(Path(path).read_text(encoding="utf-8"))
     if "Hw" not in d:
         raise anchors.AnchorError(f"정규화 기준에 Hw 가 없습니다: {path}")
-    foot_ys = [p["feet"]["y"] for p in (d.get("poses") or {}).values()
-               if p and isinstance(p.get("feet"), dict) and "y" in p["feet"]]
-    foot_y = float(np.median(foot_ys)) if foot_ys else None
-    return float(d["Hw"]), foot_y
+    head = d.get("canvas") if isinstance(d.get("canvas"), dict) else {}
+    head_h = head.get("h")
+    from_bottom, absolute = [], []
+    for p in (d.get("poses") or {}).values():
+        if not (p and isinstance(p.get("feet"), dict) and "y" in p["feet"]):
+            continue
+        c = p.get("canvas")
+        ch = c[1] if isinstance(c, (list, tuple)) and len(c) == 2 else head_h
+        if ch is None:
+            absolute.append(p["feet"]["y"])
+        else:
+            from_bottom.append(ch - p["feet"]["y"])
+    if from_bottom and not absolute:
+        foot = ("bottom", float(np.median(from_bottom)))
+    elif absolute:
+        foot = ("abs", float(np.median(absolute)))   # 캔버스를 모르는 옛 파일 — 옛 동작 그대로
+    else:
+        foot = None
+    return float(d["Hw"]), foot
 
 
 def _place_scaled(img: Image.Image, scale: float, cx: float, foot_y: float, dst_foot_y: float):
@@ -272,11 +297,18 @@ def normalize_grid(frames_dir: Path, keys, postures, ref_path) -> bool:
     if ref_path is None or not Path(ref_path).exists():
         print("[정규화] 기준(1층 앵커)이 없어 이 격자는 건너뜁니다 — 이 격자가 기준입니다(1층).")
         return False
-    hw_target, foot_y_target = read_norm_ref(ref_path)
+    hw_target, foot = read_norm_ref(ref_path)
 
     n = len(keys) * 2
     frame_paths = [frames_dir / f"f{i:02d}.png" for i in range(1, n + 1)]
     imgs = [Image.open(p).convert("RGBA") for p in frame_paths]
+    # 발끝선을 **이 격자 캔버스**의 y 로 옮긴다 — 아랫변 거리면 이 캔버스 높이에서 뺀다(#701).
+    if foot is None:
+        foot_y_target = None
+    elif foot[0] == "bottom":
+        foot_y_target = imgs[0].height - foot[1]
+    else:
+        foot_y_target = foot[1]
 
     # ── 이 격자의 머리 폭 = **서 있는 칸들**의 머리폭 중앙값(자세·층 불변인 자).
     hws = []
@@ -296,7 +328,9 @@ def normalize_grid(frames_dir: Path, keys, postures, ref_path) -> bool:
     scale = hw_target / hw_current
 
     print(f"[정규화] 기준 Hw={hw_target:.1f} · 이 격자 머리폭(서있는 칸 중앙값)={hw_current:.1f} "
-          f"→ 배율 {scale:.4f} · 발끝선 {('%.0f' % foot_y_target) if foot_y_target is not None else '유지'}")
+          f"→ 배율 {scale:.4f} · 발끝선 {('%.0f' % foot_y_target) if foot_y_target is not None else '유지'}"
+          + (f"(아랫변에서 {foot[1]:.0f} · 캔버스 높이 {imgs[0].height})" if foot and foot[0] == "bottom"
+             else " (절대 y — 기준에 캔버스 크기가 없음)" if foot else ""))
     if abs(scale - 1.0) < NORM_SCALE_EPS and foot_y_target is None:
         print("[정규화] 배율이 1 에 가깝고 발끝 기준도 없어 손대지 않습니다(no-op).")
         return False
@@ -524,6 +558,8 @@ def build(grid_path: str, out_dir: str, keys, postures,
             a1.save(dst, save_all=True, append_images=[b1],
                     duration=state8_v5.FRAME_MS, loop=0, quality=state8_v5.WEBP_Q)
         made.append(str(dst))
+        # 저장·공유용 GIF(#713) — 방금 낸 webp 에서 만든다. 화면은 webp, 휴대폰에 받는 파일만 GIF.
+        made.append(gif_out.webp_to_gif(dst))
         first[name] = a1
         for j, fr in ((i * 2 + 1, a1), (i * 2 + 2, b1)):
             for side, n in edge_contact(np.array(fr)[:, :, 3]).items():
