@@ -78,6 +78,8 @@ function PlaySheet({ y }: { y: Yeoul }) {
   const box = useRef<HTMLInputElement>(null);
   const composing = useRef(false);
   const send = () => {
+    // ★ 열린 판이 없으면 보내지 않는다 — 전에는 눌리고 아무 말 없이 버려졌다(전수조사 보강 2).
+    if (!p.can) return;
     const el = box.current;
     actions.onSend(el?.value ?? '');
     if (el) el.value = '';
@@ -98,13 +100,13 @@ function PlaySheet({ y }: { y: Yeoul }) {
           ))}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
             {p.quick.map((q) => (
-              <button key={q.text} onClick={q.pick} style={{ padding: pad.tiny, borderRadius: radius.pill, border: '1px solid #EFDFD9', background: '#FDF1EE', fontSize: fz.sm, color: C2.accentInk2 }}>{q.text}</button>
+              <button key={q.text} onClick={q.pick} disabled={!p.can} style={{ padding: pad.tiny, borderRadius: radius.pill, border: '1px solid #EFDFD9', background: '#FDF1EE', fontSize: fz.sm, color: C2.accentInk2, opacity: p.can ? 1 : 0.45 }}>{q.text}</button>
             ))}
           </div>
           <div style={{ display: 'flex', gap: gap.sm, alignItems: 'center' }}>
             <input
               ref={box} defaultValue="" onChange={(e) => actions.onDraft(e.target.value)} maxLength={CHAT_MAX}
-              placeholder={`${CHAT_MAX}자까지`} data-part="play-chat-input"
+              placeholder={p.can ? `${CHAT_MAX}자까지` : p.lockHint} data-part="play-chat-input" disabled={!p.can}
               onCompositionStart={() => { composing.current = true; }}
               onCompositionEnd={(e) => { composing.current = false; actions.onDraft(e.currentTarget.value); }}
               onKeyDown={(e) => {
@@ -114,7 +116,7 @@ function PlaySheet({ y }: { y: Yeoul }) {
               }}
               style={{ flex: 1, padding: pad.field, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.md, color: C.ink, outline: 'none' }}
             />
-            <button onClick={send} data-action="play-chat-send" style={{ padding: pad.field, borderRadius: radius.pill, border: 'none', background: C.ink, color: C2.onDark, fontSize: fz.md }}>보내기</button>
+            <button onClick={send} disabled={!p.can} data-action="play-chat-send" style={{ padding: pad.field, borderRadius: radius.pill, border: 'none', background: C.ink, color: C2.onDark, fontSize: fz.md, opacity: p.can ? 1 : 0.45 }}>보내기</button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
             {p.memories.map((m, i) => (
