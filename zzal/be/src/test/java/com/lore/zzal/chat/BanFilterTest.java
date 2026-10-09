@@ -40,7 +40,7 @@ class BanFilterTest {
     }
 
     @Test
-    @DisplayName("★ 폴백 문형 (여는 턴·이어·닫기) × (성격 5 + 없음) × 호칭·세계관 유무 — 전부 원망·LLM 필터를 지나고 60자 안, 질문 없음")
+    @DisplayName("★ 폴백 문형 (턴 종류) × (성격 5 + 없음) × 질문 항목 × 호칭·세계관 유무 — 필터 통과·60자 안, 항목이 있으면 질문 하나")
     void allFallbackLinesAreClean() {
         java.util.List<Personality> ps = new java.util.ArrayList<>(List.of(Personality.values()));
         ps.add(null);
@@ -50,12 +50,20 @@ class BanFilterTest {
                     for (String world : java.util.Arrays.asList(null, "현대 · 홍대 부근 자취방", "장례식에서 시체를 꾸며주는 곳")) {
                         var sheet = new com.lore.zzal.chat.persona.PersonaSheet("서지환",
                                 p == null ? List.of() : List.of(p), null, world, null, null, call, false);
-                        String line = com.lore.zzal.chat.line.FallbackLines.line(sheet, t);
-                        String at = p + " " + t + " " + call + " " + world + " → " + line;
-                        assertThat(BanFilter.isBanned(line)).as(at).isFalse();
-                        assertThat(BanFilter.llmViolation(line)).as(at).isNull();
-                        assertThat(line.codePointCount(0, line.length())).as(at).isLessThanOrEqualTo(60);
-                        assertThat(line).as(at).doesNotContain("?", "{", "}");
+                        for (var item : java.util.Arrays.asList(null, com.lore.zzal.chat.session.QuestionItem.CALL_ME,
+                                com.lore.zzal.chat.session.QuestionItem.WHO, com.lore.zzal.chat.session.QuestionItem.FUN,
+                                com.lore.zzal.chat.session.QuestionItem.LIKES, com.lore.zzal.chat.session.QuestionItem.MOOD)) {
+                            String line = com.lore.zzal.chat.line.FallbackLines.line(sheet, t, item);
+                            String at = p + " " + t + " " + item + " " + call + " " + world + " → " + line;
+                            assertThat(BanFilter.isBanned(line)).as(at).isFalse();
+                            assertThat(BanFilter.llmViolation(line)).as(at).isNull();
+                            assertThat(line.codePointCount(0, line.length())).as(at).isLessThanOrEqualTo(60);
+                            assertThat(line).as(at).doesNotContain("{", "}");
+                            boolean asks = item != null && t != com.lore.zzal.chat.session.TurnType.CLOSE
+                                    && t != com.lore.zzal.chat.session.TurnType.REUNION;
+                            // ★ 물을 항목이 있으면 질문 하나, 없으면 질문 없음 — LLM 없이도 흐름이 선다
+                            assertThat(line.chars().filter(c -> c == '?').count()).as(at).isEqualTo(asks ? 1 : 0);
+                        }
                     }
                 }
             }
