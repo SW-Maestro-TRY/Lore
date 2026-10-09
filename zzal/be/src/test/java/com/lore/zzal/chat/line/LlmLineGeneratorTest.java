@@ -156,10 +156,14 @@ class LlmLineGeneratorTest {
     }
 
     @Test
-    @DisplayName("LLM 꺼진 사슬은 대사를 내지 않는다 — 부르면 예외(부르는 쪽이 판을 만들지 않아야 한다)")
-    void offChainRefuses() {
+    @DisplayName("LLM 꺼진 사슬 — 모델 없이 닫는 말(llm_off)로 판을 닫는다(BABY 중립 판에 답했을 때만 닿는 길)")
+    void offChainCloses() {
         assertThat(LineChain.off().llmEnabled()).isFalse();
-        assertThatThrownBy(() -> LineChain.off().generate(reply(), 1L)).isInstanceOf(IllegalStateException.class);
+        GeneratedLine g = LineChain.off().generate(reply(), 1L);
+        assertThat(g.text()).isEqualTo(LineChain.CLOSING_LINE);
+        assertThat(g.closesSession()).isTrue();
+        assertThat(g.failReason()).isEqualTo("llm_off");
+        assertThat(g.attempts()).isZero();
     }
 
     @Test
