@@ -80,30 +80,6 @@ public class ZzalChatCall {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
-    // ── 대사를 누가 만들었나(채팅 v1, #704) ─────────────────────────────────
-    // ★ 통계·폴백 추적용이다. 템플릿과 LLM 을 나란히 비교하고(v2 전환 판단), 폴백이 왜 났는지를
-    //   행 단위로 본다. 한 행에 대사가 둘(부름·답)이라 생성기는 둘로, 모델·비용은 합쳐서 적는다.
-
-    /** 부름 대사를 만든 생성기 — template · llm. 옛 행은 비어 있다(= template). */
-    @Column(name = "line_generator", length = 10)
-    private String lineGenerator;
-
-    /** 답 대사를 만든 생성기 — template · llm. 답하기 전엔 비어 있다. */
-    @Column(name = "reply_generator", length = 10)
-    private String replyGenerator;
-
-    /** LLM 을 불렀으면 그 모델(부름·답 중 마지막). */
-    @Column(name = "model", length = 40)
-    private String model;
-
-    /** 이 행에서 나간 돈(USD) — 부름·답 LLM 호출의 합. 폴백이 나도 이미 나간 돈은 적는다. */
-    @Column(name = "cost_usd", precision = 10, scale = 6)
-    private java.math.BigDecimal costUsd;
-
-    /** 폴백 사유 — "call:timeout", "reply:filter_unsafe" 처럼. 둘 다 났으면 ';' 로 잇는다. */
-    @Column(name = "filtered_reason", length = 64)
-    private String filteredReason;
-
     protected ZzalChatCall() {
     }
 
@@ -123,51 +99,6 @@ public class ZzalChatCall {
         this.replyLine = replyLine;
         this.reactionKey = reactionKey;
         this.answeredAt = now;
-    }
-
-    /** 부름 대사의 출처를 적는다. */
-    public void noteLine(String generator, String model, java.math.BigDecimal cost, String fallbackReason) {
-        this.lineGenerator = generator;
-        note(model, cost, fallbackReason == null ? null : "call:" + fallbackReason);
-    }
-
-    /** 답 대사의 출처를 적는다. */
-    public void noteReply(String generator, String model, java.math.BigDecimal cost, String fallbackReason) {
-        this.replyGenerator = generator;
-        note(model, cost, fallbackReason == null ? null : "reply:" + fallbackReason);
-    }
-
-    private void note(String model, java.math.BigDecimal cost, String reason) {
-        if (model != null) {
-            this.model = model;
-        }
-        if (cost != null && cost.signum() > 0) {
-            this.costUsd = this.costUsd == null ? cost : this.costUsd.add(cost);
-        }
-        if (reason != null) {
-            String joined = this.filteredReason == null ? reason : this.filteredReason + ";" + reason;
-            this.filteredReason = joined.length() > 64 ? joined.substring(0, 64) : joined;
-        }
-    }
-
-    public String getLineGenerator() {
-        return lineGenerator;
-    }
-
-    public String getReplyGenerator() {
-        return replyGenerator;
-    }
-
-    public String getModel() {
-        return model;
-    }
-
-    public java.math.BigDecimal getCostUsd() {
-        return costUsd;
-    }
-
-    public String getFilteredReason() {
-        return filteredReason;
     }
 
     public boolean isAnswered() {
