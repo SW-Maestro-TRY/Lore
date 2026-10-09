@@ -622,6 +622,13 @@ public class ZzalPet {
     @Column(length = ZzalRules.GENRE_MAX_CHARS)
     private String genre;
 
+    /**
+     * 아이가 사용자를 부르는 말(채팅, #704). 대화 중 "뭐라고 부를까" 에 대한 답에서 <b>코드가</b> 뽑아 둔다.
+     * ★ 사용자 프로필의 {@code callMe}(설문)보다 이 칸이 먼저다 — 이 아이와 나눈 말이 더 가깝다.
+     */
+    @Column(name = "call_me", length = 20)
+    private String callMe;
+
     @Column(length = 32)
     private String background;
 
@@ -2509,6 +2516,16 @@ public class ZzalPet {
 
     public String getGenre() {
         return genre;
+    }
+
+    public String getCallMe() {
+        return callMe;
+    }
+
+    /** 호칭 저장(20자 상한). 비우면 지운다. */
+    public void rememberCallMe(String value) {
+        String v = value == null ? null : value.strip();
+        this.callMe = v == null || v.isEmpty() ? null : (v.length() > 20 ? v.substring(0, 20) : v);
     }
 
     public String getBackground() {
