@@ -10,7 +10,8 @@ import java.math.BigDecimal;
  * @param generator  생성기 이름 — template · llm
  * @param model      부른 모델(템플릿이면 null)
  * @param costUsd    나간 돈(0 이상)
- * @param failReason 실패 사유(성공이면 null) — off · cap · timeout · error · parse · blank · length · questions · resent · unsafe
+ * @param failReason 실패 사유(성공이면 null) — cap · timeout · error · parse · blank · length · bracket · emoji · questions
+ *                   · asked · resent · unsafe
  * @param millis     걸린 시간
  */
 public record LineAttempt(String text, String motion, String generator, String model, BigDecimal costUsd,

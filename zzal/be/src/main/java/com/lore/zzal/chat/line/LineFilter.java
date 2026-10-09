@@ -21,7 +21,7 @@ public final class LineFilter {
     /** 지문·동작 묘사의 흔적 — 괄호류와 별표. */
     private static final Pattern BRACKETS = Pattern.compile("[()\\[\\]{}（）［］【】<>〈〉《》*]");
 
-    /** 통과면 null, 아니면 사유(blank · length · bracket · emoji · questions · resent · unsafe). */
+    /** 통과면 null, 아니면 사유(blank · length · bracket · emoji · questions · asked · resent · unsafe). */
     public static String check(String line, ChatContext ctx) {
         if (line == null || line.isBlank()) {
             return "blank";
@@ -38,6 +38,10 @@ public final class LineFilter {
         long questions = line.chars().filter(c -> c == '?' || c == '？').count();
         if (questions > 1) {
             return "questions";
+        }
+        // 질문 금지 턴(짝수 턴·되묻기 답·오랜만·닫기)에 물음표가 있으면 지시문만 믿지 않고 폴백한다.
+        if (questions > 0 && ctx != null && ctx.plan() != null && !ctx.plan().allowQuestion()) {
+            return "asked";
         }
         return BanFilter.llmViolation(line);
     }

@@ -21,7 +21,8 @@ import java.util.function.Supplier;
  *   <li>{@code timeout} — 시간 안에 못 받음(기본 4초). 비용은 추정치로 적는다</li>
  *   <li>{@code error} — HTTP 오류·네트워크</li>
  *   <li>{@code parse} — JSON 이 아니거나 line 이 없음</li>
- *   <li>{@code blank}·{@code length}·{@code questions}·{@code resent}·{@code unsafe} — 출력 검사</li>
+ *   <li>{@code blank}·{@code length}·{@code bracket}·{@code emoji}·{@code questions}·{@code asked}·{@code resent}·{@code unsafe}
+ *       — 출력 검사({@link LineFilter})</li>
  * </ul>
  * ★ 재시도는 없다(v1). v2 의 "걸리면 재생성 1회" 는 {@link LineChain} 에 붙는다.
  */
@@ -33,7 +34,7 @@ public class LlmLineGenerator implements LineGenerator {
     private final String model;
     private final Duration timeout;
     private final BigDecimal dailyCapUsd;
-    /** 오늘 지금까지 나간 돈. 서비스에서는 {@code zzal_chat_call.cost_usd} 의 합. */
+    /** 오늘 지금까지 나간 돈. 서비스에서는 그날 시작한 판의 {@code zzal_chat_session.cost_usd} 합. */
     private final Supplier<BigDecimal> spentToday;
     private final SystemPromptCache systems;
     private final ObjectMapper json = new ObjectMapper();

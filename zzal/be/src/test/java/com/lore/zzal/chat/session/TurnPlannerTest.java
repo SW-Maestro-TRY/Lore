@@ -51,7 +51,8 @@ class TurnPlannerTest {
         for (String asks : new String[]{"잘 지냈어. 너는?", "토벌봉이 뭐야", "오늘은 어땠니?", "넌 뭐해", "그건 왜"}) {
             assertThat(TurnPlanner.userAsked(asks)).as(asks).isTrue();
         }
-        for (String plain : new String[]{"응 좋아", "피자!", "알바 가기 싫다..", "상훈이라고 불러줘"}) {
+        for (String plain : new String[]{"응 좋아", "피자!", "알바 가기 싫다..", "상훈이라고 불러줘", "너는 최고야",
+                "너도 귀여워", "나 알아", "뭐 그냥 그래서 잘 지냈어"}) {
             assertThat(TurnPlanner.userAsked(plain)).as(plain).isFalse();
         }
     }
