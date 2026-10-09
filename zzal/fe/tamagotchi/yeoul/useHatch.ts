@@ -751,6 +751,17 @@ export function useHatchState(): Live {
     const seq = takeSeq();
     try {
       const next = await answerChat(petId, slot, text);
+      // ★ 대화형(#704) — 응답에 실린 두 턴(내 말·아이의 다음 말)과 판 상태를 **바로** 얹는다.
+      //   아래 효과가 곧 다시 읽어 맞추지만, 그 사이에도 말풍선이 다음 말로 바뀌어 있어야 한다.
+      const cr = next.chatReply;
+      if (cr?.session) {
+        setChat((c) => (c ? {
+          ...c,
+          session: cr.session,
+          turns: [...(c.session?.id === cr.session?.id ? (c.turns ?? []) : []), ...(cr.turns ?? [])],
+          openSlot: cr.session?.closed ? null : c.openSlot,
+        } : c));
+      }
       // `pet` 이 바뀌면 아래 효과가 오늘의 부름을 다시 읽는다 — 여기서 또 부르면 두 번 나간다.
       putPet(seq, next);
       return { error: null, reply: next.chatReply };
