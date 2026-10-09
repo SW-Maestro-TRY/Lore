@@ -162,10 +162,11 @@ class AdminLayerServiceTest {
         assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
         assertThat(pet.getLayer2Candidates()).isNull();
         List<String> to = uploads.stream().map(u -> u[0]).toList();
-        // 새 판 = 1층 8종(옮겨 실음) + 후보 2층 8종 + 후보 앵커
+        // 새 판 = 1층 8종(옮겨 실음) + 후보 2층 8종 + 후보 앵커 — 각 그림 옆에 저장용 GIF(#713)
         assertThat(to).contains("images/zzal/pets/7/basic/2/base.webp", "images/zzal/pets/7/basic/2/eat_rice.webp",
+                "images/zzal/pets/7/basic/2/base.gif", "images/zzal/pets/7/basic/2/eat_rice.gif",
                 "images/zzal/pets/7/basic/2/anchors.json");
-        assertThat(to.stream().filter(k -> k.startsWith("images/zzal/pets/7/basic/2/"))).hasSize(17);
+        assertThat(to.stream().filter(k -> k.startsWith("images/zzal/pets/7/basic/2/"))).hasSize(16 * 2 + 1);
         // 고르지 않은 후보 격자는 rejected/ 로 보존
         assertThat(to).contains("images/zzal/pets/7/rejected/cand-" + cands.get(1).candidateId() + "-grid2.png",
                 "images/zzal/pets/7/rejected/cand-" + cands.get(2).candidateId() + "-grid2.png");
@@ -221,7 +222,8 @@ class AdminLayerServiceTest {
         verify(steps, never()).delete(grid2);
         verify(layer2).schedule(PET);
         List<String> to = uploads.stream().map(u -> u[0]).toList();
-        assertThat(to.stream().filter(k -> k.startsWith("images/zzal/pets/7/basic/1/"))).hasSize(9);
+        // 1층 8종 + 저장용 GIF 8종(#713) + 앵커
+        assertThat(to.stream().filter(k -> k.startsWith("images/zzal/pets/7/basic/1/"))).hasSize(8 * 2 + 1);
     }
 
     @Test

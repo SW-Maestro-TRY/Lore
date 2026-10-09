@@ -5,6 +5,7 @@
   python3 service_post.py <격자.png> <출력폴더> [--keys a,b,..] [--postures sick=crouch,..]
                           [--base-anchors <앵커.json> | --base-k N --base-hw N] [--no-anchors]
   → 출력폴더/<key>.webp x 8  +  출력폴더/anchors.json (1층·2층이 **한 장에 합쳐진다**)
+     + 출력폴더/<key>.gif x 8 — 저장·공유용(같은 webp 에서 만든 투명 GIF, gif_out.py · #713)
 
   --keys      자바 카탈로그(또는 app.zzal.hatch.states.v4)의 이름을 격자 칸 순서로 넘길 때.
               생략하면 state8_v5.KEYS(= base,eat,joy,sad,sick,pet,hello,sleep)를 쓴다.
@@ -102,6 +103,7 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 import anchors      # noqa: E402
 import state8_v5    # noqa: E402
+import gif_out      # noqa: E402
 
 GATE = _HERE / "check_grid.py"
 GATE_SPEC = _HERE / "grid_spec.txt"
@@ -556,6 +558,8 @@ def build(grid_path: str, out_dir: str, keys, postures,
             a1.save(dst, save_all=True, append_images=[b1],
                     duration=state8_v5.FRAME_MS, loop=0, quality=state8_v5.WEBP_Q)
         made.append(str(dst))
+        # 저장·공유용 GIF(#713) — 방금 낸 webp 에서 만든다. 화면은 webp, 휴대폰에 받는 파일만 GIF.
+        made.append(gif_out.webp_to_gif(dst))
         first[name] = a1
         for j, fr in ((i * 2 + 1, a1), (i * 2 + 2, b1)):
             for side, n in edge_contact(np.array(fr)[:, :, 3]).items():
