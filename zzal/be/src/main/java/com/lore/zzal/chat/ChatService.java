@@ -132,14 +132,16 @@ public class ChatService {
         List<ZzalChatTurn> sessionTurns = new ArrayList<>(row.turns());
 
         // ── 사용자 턴 ──
-        ZzalChatTurn lastPet = lastPet(sessionTurns);
-        QuestionItem answering = lastPet == null ? null : lastPet.getQuestionItem();
+        // ★ 사용자가 답하는 항목은 <b>바로 앞 턴</b>이 펫 턴이고 그 턴이 실제로 물었을 때만(question_item 은
+        //   물음표가 있는 대사에만 적힌다 — 아래 asked()). 폴백이 안 물은 항목을 소비하던 결함 수정.
+        ZzalChatTurn prev = sessionTurns.isEmpty() ? null : sessionTurns.getLast();
+        QuestionItem answering = prev != null && prev.isPet() ? prev.getQuestionItem() : null;
         ZzalChatTurn userTurn = turns.save(ZzalChatTurn.user(session, sessionTurns.size(), text, answering, now));
         sessionTurns.add(userTurn);
         boolean firstAnswer = session.countUserTurn(text);
         // 호칭 질문에 대한 답이면 코드가 호칭을 뽑아 펫 칸에 둔다(못 뽑으면 다음 판에 다시 묻는다).
         if (answering == QuestionItem.CALL_ME) {
-            String call = CallMeExtractor.extract(text);
+            String call = CallMeExtractor.extract(text, pet.getName());
             if (call != null) {
                 pet.rememberCallMe(call);
             }
@@ -169,7 +171,7 @@ public class ChatService {
         GeneratedLine g = lines.generate(ctx, userId);
         String motion = g.motion() == null ? reaction : g.motion();
         ZzalChatTurn petTurn = turns.save(ZzalChatTurn.pet(session, sessionTurns.size(), plan.type(), g.text(), motion,
-                g.generator(), g.fallbackReason(), plan.item(), now));
+                g.generator(), g.fallbackReason(), asked(plan, g.text()), now));
         session.notePetTurn(g.generator(), g.costUsd());
         if (plan.type() == TurnType.CLOSE) {
             session.close(CloseReason.CLOSED, now);
@@ -267,7 +269,7 @@ public class ChatService {
                 List.of());
         GeneratedLine g = lines.generate(ctx, pet.getUserId());
         ZzalChatTurn first = turns.save(ZzalChatTurn.pet(s, 0, plan.type(), g.text(), null, g.generator(),
-                g.fallbackReason(), plan.item(), now));
+                g.fallbackReason(), asked(plan, g.text()), now));
         s.notePetTurn(g.generator(), g.costUsd());
         return new Row(slot, s, List.of(first), null);
     }
@@ -343,6 +345,17 @@ public class ChatService {
             return r.session().isOpen(now);
         }
         return r.legacyCall() != null && r.legacyCall().isOpen(now);
+    }
+
+    /**
+     * 펫 턴에 적을 질문 항목 — 계획에 항목이 있고 <b>저장되는 대사에 물음표가 있을 때만</b>.
+     * LLM 이 안 물었거나 폴백이 안 물었으면 항목은 소비되지 않고 다음 판에 다시 온다.
+     */
+    static QuestionItem asked(TurnPlan plan, String line) {
+        if (plan.item() == null || line == null) {
+            return null;
+        }
+        return line.indexOf('?') >= 0 || line.indexOf('？') >= 0 ? plan.item() : null;
     }
 
     private static ZzalChatTurn lastPet(List<ZzalChatTurn> ts) {
