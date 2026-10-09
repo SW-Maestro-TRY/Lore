@@ -4,6 +4,7 @@ import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.zzal.chat.line.GeneratedLine;
 import com.lore.zzal.chat.line.LineChain;
+import com.lore.zzal.chat.line.LineOutcome;
 import com.lore.zzal.chat.memory.Memory;
 import com.lore.zzal.chat.memory.MemoryProvider;
 import com.lore.zzal.chat.memory.RecallQuery;
@@ -60,9 +61,21 @@ import java.util.function.Supplier;
  * 창이 지나면 그 창의 판은 없다(만료 슬롯에 판 생성 금지). 펫이 자는 동안에는 새 판을 만들지 않는다(아무도 답할 수 없다).
  * 놓친 부름은 패널티 0. BABY 는 하루 3회에 안 세지만 친밀도·2층 카운터에는 센다.
  *
- * <h3>LLM 이 꺼져 있으면 부름 없음(#709)</h3>
- * 성격별 고정 문형(템플릿)을 지웠으므로 대사를 낼 길이 없다 — {@code app.zzal.chat.llm=false} 면 새 판을 만들지 않는다
- * (BABY 포함). 이미 있는 판은 그대로 보인다.
+ * <h3>LLM 이 꺼져 있으면 하루 부름 없음(#709)</h3>
+ * 성격별 고정 문형(템플릿)을 지웠으므로 대사를 낼 길이 없다 — {@code app.zzal.chat.llm=false} 면 하루 부름의 새 판을
+ * 만들지 않는다. 이미 있는 판은 그대로 보인다. ★ BABY 만은 예외 — 아래.
+ *
+ * <h3>★★ BABY 첫 턴은 닫지 않는다(#709) — 튜토리얼이 막히면 안 된다</h3>
+ * 하루 부름은 첫 턴이 두 번 다 실패하면 닫는다(부름 없음과 같다). BABY 는 온보딩 필수 단계(튜토리얼 대화 칸 →
+ * {@code answerChat} → 다음 칸)라 닫으면 같은 (펫, 날, BABY) 판이 재사용돼 영영 막힌다. 그래서:
+ * <ol>
+ *   <li>두 번 다 실패 → 판을 <b>재시도 대기</b>로 둔다({@code retry_after} = 지금 + {@link #BABY_RETRY_AFTER}).
+ *       대기 중 판은 안 보이고 답할 수 없다. 쿨다운 안의 조회는 모델 호출 0(폴링 폭주 방지)</li>
+ *   <li>쿨다운 뒤 조회 → 1회 더 부른다. 또 실패(누적 3회)면 {@link LineChain#BABY_NEUTRAL_LINE}(중립 한 줄, 호칭 질문)로
+ *       판을 연다 — 템플릿 전면 제거의 유일한 예외</li>
+ *   <li>LLM 이 꺼져 있으면 처음부터 그 중립 한 줄로 연다</li>
+ * </ol>
+ * 사용자가 답하면 다음 턴부터는 평소대로 LLM 이다(실패하면 하루 부름과 같이 닫는 말).
  *
  * <h3>★ BABY 는 시각이 아니라 <b>순서</b>다</h3>
  * 튜토리얼 앞의 두 칸(밥·쓰다듬)을 끝내면({@link ZzalRules#TUTORIAL_CHAT_AFTER}) 그 자리에서 부른다.
@@ -70,7 +83,7 @@ import java.util.function.Supplier;
  *
  * <h3>대화 한 판(#704)</h3>
  * 펫 턴 → 사용자 답 → 펫 턴 … 최대 {@code app.zzal.chat.max-rounds} 왕복, 마지막은 닫기 턴.
- * LLM 이 두 번 다 실패하면 그 자리에서 중립 닫는 말로 판을 닫는다({@code failed_closed}).
+ * LLM 이 두 번 다 실패하면 그 자리에서 중립 닫는 말로 판을 닫는다({@code failed_closed}) — BABY 첫 턴만 예외(위).
  * 턴 종류·질문 허용·질문 항목은 {@link TurnPlanner} 가 정한다. <b>보상(+40·답 카운터·튜토리얼 넘김)은 판당 1회</b>,
  * 첫 답에서. 첫 답 뒤 {@link TurnPlanner#ABANDON_AFTER} 동안 답이 없으면 이탈(닫기 턴 없음).
  *
@@ -91,6 +104,9 @@ public class ChatService {
     private final MemoryProvider memory;
     private final LineChain lines;
     private final int maxRounds;
+
+    /** BABY 첫 턴 실패 뒤 다시 부르기까지 기다리는 시간(#709). 이 안의 조회는 모델을 부르지 않는다. */
+    public static final Duration BABY_RETRY_AFTER = Duration.ofMinutes(5);
 
     @Autowired
     public ChatService(ZzalChatCallRepository legacy, ZzalChatSessionRepository sessions, ZzalChatTurnRepository turns,
@@ -239,7 +255,9 @@ public class ChatService {
             // ★ 튜토리얼 부름은 만료가 없다 — 시계가 안 돌기 때문이다. 답할 때까지 기다린다.
             Row baby = row(pet, sheet, babyDay, ChatSlot.BABY, pet.getHatchedAt(), null, now);
             // 끝났거나 만료된 BABY 는 부화 당일에만 보인다 — 이후 날의 "오늘의 부름" 에 영구히 끼지 않게(리뷰 반영).
-            if (baby != null && (isOpen(baby, now) || AwakeClock.dateOf(now).equals(babyDay))) {
+            // ★ 첫 턴 재시도 대기 중인 판은 안 보인다(첫 턴이 없다 — 빈 부름을 띄우지 않는다).
+            boolean waiting = baby != null && baby.session() != null && baby.session().isWaitingForFirstLine();
+            if (baby != null && !waiting && (isOpen(baby, now) || AwakeClock.dateOf(now).equals(babyDay))) {
                 out.add(baby);
             }
         }
@@ -269,6 +287,10 @@ public class ChatService {
         Optional<ZzalChatSession> found = sessions.findByPetIdAndDayOfAndSlot(pet.getId(), day, slot);
         if (found.isPresent()) {
             ZzalChatSession s = found.get();
+            // ★ BABY 첫 턴 재시도 대기 — 쿨다운 안이면 그대로(모델 호출 0), 지났으면 다시 부른다.
+            if (s.isWaitingForFirstLine()) {
+                return s.isRetryDue(now) ? babyFirstTurn(pet, sheet.get(), s, now) : new Row(slot, s, List.of(), null);
+            }
             List<ZzalChatTurn> ts = turns.findBySessionIdOrderByIdxAsc(s.getId());
             settle(s, ts, now);
             return new Row(slot, s, ts, null);
@@ -293,8 +315,9 @@ public class ChatService {
         if (until != null && !now.isBefore(until)) {
             return null;
         }
-        // ★ LLM 이 꺼져 있으면 부름 없음(#709) — 대사를 낼 길이 없다(템플릿을 지웠다).
-        if (!lines.llmEnabled()) {
+        // ★ LLM 이 꺼져 있으면 하루 부름 없음(#709) — 대사를 낼 길이 없다(템플릿을 지웠다).
+        //   BABY 는 예외 — 중립 한 줄로라도 연다(튜토리얼이 막히지 않게, {@link #babyFirstTurn}).
+        if (!lines.llmEnabled() && slot.daily()) {
             return null;
         }
         // 자는 동안에는 하루 부름을 새로 열지 않는다 — 답할 수 없는 판에 LLM 을 부르지 않는다. 깨면 창 안에서 열린다.
@@ -306,6 +329,7 @@ public class ChatService {
 
     /**
      * 새 판 + 첫 펫 턴. 대사는 LLM 이 낸다(실패하면 한 번 더, 또 실패하면 중립 닫는 말로 판을 바로 닫는다).
+     * BABY 는 닫지 않는다 — {@link #babyFirstTurn}.
      *
      * ★ LLM 호출이 이 트랜잭션 안(펫 행 잠금 중)에서 난다 — 최대 {@code app.zzal.chat.timeout-ms} × 2.
      *   같은 펫의 동시 요청은 잠금에서 줄을 서므로 같은 판이 두 번 생기지 않는다.
@@ -314,6 +338,9 @@ public class ChatService {
                            Instant now) {
         SessionKind kind = slot == ChatSlot.BABY ? SessionKind.BABY : dailyKind(pet, now);
         ZzalChatSession s = sessions.save(ZzalChatSession.open(pet.getId(), day, slot, kind, at, until, now));
+        if (kind == SessionKind.BABY) {
+            return babyFirstTurn(pet, sheet, s, now);
+        }
         TurnPlan plan = TurnPlanner.first(kind, answeredItems(pet, sheet), slot);
         ChatContext ctx = new ChatContext(pet.getId(), sheet, PetState.of(pet, now), kind, plan, null,
                 history(pet, s, now), List.of());
@@ -326,6 +353,32 @@ public class ChatService {
             s.close(CloseReason.CLOSED, now);
         }
         return new Row(slot, s, List.of(first), null);
+    }
+
+    /**
+     * BABY 판의 첫 펫 턴(#709) — 판을 닫지 않는다. 실패하면 재시도 대기({@link #BABY_RETRY_AFTER}),
+     * 누적 실패 3회 또는 LLM 꺼짐이면 중립 한 줄({@link LineChain#BABY_NEUTRAL_LINE}, 질문 항목 CALL_ME).
+     */
+    private Row babyFirstTurn(ZzalPet pet, PersonaSheet sheet, ZzalChatSession s, Instant now) {
+        TurnPlan plan = TurnPlanner.first(SessionKind.BABY, answeredItems(pet, sheet), s.getSlot());
+        ChatContext ctx = new ChatContext(pet.getId(), sheet, PetState.of(pet, now), SessionKind.BABY, plan, null,
+                history(pet, s, now), List.of());
+        GeneratedLine g = lines.firstBaby(ctx, pet.getUserId(), s.getFirstLineFailures());
+        s.notePetTurn(null, g.costUsd());
+        if (g.waitsForRetry()) {
+            s.countFirstLineFailures(g.attempts());
+            s.waitForRetry(now.plus(BABY_RETRY_AFTER));
+            return new Row(s.getSlot(), s, List.of(), null);
+        }
+        boolean neutral = g.outcome() == LineOutcome.BABY_NEUTRAL;
+        // 중립 한 줄은 실패한 호출만 냈다(LLM 꺼짐이면 0). 재호출로 살았으면 첫 호출 1회가 실패다.
+        s.countFirstLineFailures(neutral ? g.attempts() : g.attempts() - 1);
+        s.firstLineArrived();
+        QuestionItem item = neutral ? QuestionItem.CALL_ME : asked(plan, g.text());
+        ZzalChatTurn first = turns.save(ZzalChatTurn.pet(s, 0, plan.type(), g.text(), null, g.generator(),
+                g.failReason(), item, g.outcome().code(), g.latencyMs(), now));
+        s.notePetTurn(g.generator(), null);
+        return new Row(s.getSlot(), s, List.of(first), null);
     }
 
     /** 하루 부름의 판 종류 — 답한 적이 없으면 첫 만남, 마지막 답에서 오래 지났으면 오랜만, 아니면 보통. */
