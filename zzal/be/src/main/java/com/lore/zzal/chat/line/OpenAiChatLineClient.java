@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
  * <h3>★ 단가는 모델마다 다르다</h3>
  * 그림 쪽에서 이미지 단가를 글에 적용해 원가가 3~4배 부푼 적이 있다({@code OpenAiTextClient} 주석).
  * 그래서 모델 이름으로 단가를 찾고, 모르는 모델이면 <b>비싼 쪽(gpt-5)</b>으로 세고 경고를 남긴다 —
- * 상한 판정은 넘치게 세는 쪽이 안전하다. 2026-10-08 공식 가격표 확인(USD / 1M 토큰).
+ * 비용 기록은 넘치게 세는 쪽이 안전하다. 2026-10-08 공식 가격표 확인(USD / 1M 토큰).
  *
  * <h3>★ 추론 강도</h3>
  * gpt-5 계열은 추론 모델이라 기본 설정이면 짧은 대사에도 몇 초를 생각한다. {@code reasoning_effort}
@@ -116,7 +116,7 @@ public class OpenAiChatLineClient implements ChatLineClient {
     static BigDecimal cost(String model, long in, long out) {
         BigDecimal[] p = PRICES.get(model);
         if (p == null) {
-            log.warn("채팅 LLM 단가표에 없는 모델 — {}. gpt-5 단가로 셉니다(상한은 넘치게).", model);
+            log.warn("채팅 LLM 단가표에 없는 모델 — {}. gpt-5 단가로 셉니다(넘치게).", model);
             p = PRICES.get("gpt-5");
         }
         return p[0].multiply(BigDecimal.valueOf(in)).add(p[1].multiply(BigDecimal.valueOf(out)))
@@ -125,7 +125,7 @@ public class OpenAiChatLineClient implements ChatLineClient {
 
     /**
      * 시간 초과처럼 응답을 못 받았을 때의 추정 비용 — 지시문 글자 수로 입력 토큰을 넉넉히 잡고 출력 300토큰.
-     * ★ 실제로 과금됐는지 알 수 없다. 상한 판정이 새지 않게 넘치게 적는다.
+     * ★ 실제로 과금됐는지 알 수 없다. 비용 기록이 새지 않게 넘치게 적는다.
      */
     public static BigDecimal estimate(String model, int promptChars) {
         return cost(model, promptChars, 300);

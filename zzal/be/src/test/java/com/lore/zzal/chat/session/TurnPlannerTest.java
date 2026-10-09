@@ -67,4 +67,20 @@ class TurnPlannerTest {
         assertThat(TurnPlanner.nextItem(EnumSet.of(QuestionItem.CALL_ME, QuestionItem.WHO, QuestionItem.FUN)))
                 .isEqualTo(QuestionItem.LIKES);
     }
+
+    @Test
+    @DisplayName("★ #709 — 하루 부름 창의 첫 턴은 창 화제가 질문 자리를 차지(항목 없음), 항목은 3번째 펫 턴에. BABY 는 그대로")
+    void windowTopicTakesFirstQuestion() {
+        TurnPlan daily = TurnPlanner.first(SessionKind.DAILY, NONE, com.lore.zzal.chat.ChatSlot.MORNING);
+        assertThat(daily.allowQuestion()).isTrue();
+        assertThat(daily.item()).isNull();
+        assertThat(daily.slot()).isEqualTo(com.lore.zzal.chat.ChatSlot.MORNING);
+        assertThat(TurnPlanner.next(1, 5, 2, "응", false, NONE, com.lore.zzal.chat.ChatSlot.MORNING).item()).isNull();
+        TurnPlan third = TurnPlanner.next(2, 5, 3, "응", false, NONE, com.lore.zzal.chat.ChatSlot.MORNING);
+        assertThat(third.item()).isEqualTo(QuestionItem.CALL_ME);
+        assertThat(TurnPlanner.next(5, 5, 6, "응", true, NONE, com.lore.zzal.chat.ChatSlot.NOON).slot())
+                .as("닫기 턴도 창을 싣는다").isEqualTo(com.lore.zzal.chat.ChatSlot.NOON);
+        assertThat(TurnPlanner.first(SessionKind.BABY, NONE, com.lore.zzal.chat.ChatSlot.BABY).item())
+                .isEqualTo(QuestionItem.CALL_ME);
+    }
 }

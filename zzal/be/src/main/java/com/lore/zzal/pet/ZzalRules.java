@@ -260,15 +260,24 @@ public final class ZzalRules {
 
     // ── 10장 채팅 ─────────────────────────────────────────────────────────
 
-    /** 부름 시각 — 기상+1h / 기상+7h / 19:00 고정(SLEEP_WINDOW_OPENS). 부름은 다음 부름 시각에 만료. */
-    public static final Duration CHAT_MORNING_AFTER_WAKE = Duration.ofHours(1);
-    public static final Duration CHAT_NOON_AFTER_WAKE = Duration.ofHours(7);
+    /**
+     * 부름 창 — <b>벽시계</b>(KST) 아침 10:00~14:00 · 낮 14:00~19:00 · 저녁 19:00~23:00 (#709, 상훈 결정 10/10).
+     * 판은 창 안에서 조회가 올 때 열리고 창 끝에 만료된다. 창이 지나면 그 창의 판은 없다(만료 슬롯에 판 생성 금지).
+     * ★ 예전에는 기상+1h·기상+7h·19:00 이었다 — 기상 시각에 따라 부름이 흔들려 하루 리듬(아침·점심·저녁)과 어긋났다.
+     */
+    public static final LocalTime CHAT_MORNING_OPENS = LocalTime.of(10, 0);
+    public static final LocalTime CHAT_NOON_OPENS = LocalTime.of(14, 0);
+    public static final LocalTime CHAT_EVENING_OPENS = LocalTime.of(19, 0);
+    public static final LocalTime CHAT_EVENING_CLOSES = LocalTime.of(23, 0);
 
     /** 자유 입력 40자. */
     public static final int CHAT_MAX_CHARS = 40;
 
-    /** 기억 — 최근 답 5개를 재언급. */
+    /** 기억 칩(화면) — 사용자가 한 말 최근 5개. */
     public static final int CHAT_MEMORY = 5;
+
+    /** 지시문 [지금까지] — 오늘 포함 최근 3일의 판 턴 전부(#709). */
+    public static final int CHAT_MEMORY_DAYS = 3;
 
     /**
      * 세계관 <b>200자</b>. 성격 그룹은 5개 고정(GENTLE·LIVELY·SHY·CLINGY·COOL).

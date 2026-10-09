@@ -26,6 +26,7 @@ import java.time.LocalDate;
  *
  * <h3>닫히는 길</h3>
  * {@link CloseReason} — 상한에 닿아 닫기 턴(CLOSED) · 시각이 지남(EXPIRED) · 답하다 말았음(ABANDONED).
+ * LLM 이 두 번 다 실패하면 중립 닫는 말로 CLOSED 가 되고 {@link #failedClosed} 가 켜진다(#709).
  * 만료·이탈은 타이머가 아니라 <b>읽을 때</b> 판정해 적는다(부름을 물어볼 때 만드는 것과 같은 이유).
  */
 @Entity
@@ -75,13 +76,17 @@ public class ZzalChatSession {
     @Column(name = "reward_given", nullable = false)
     private boolean rewardGiven;
 
-    /** 펫 턴을 만든 생성기 집계 — template · llm · mixed. */
+    /** 펫 턴을 만든 생성기 집계 — llm · fixed(중립 닫는 말) · template(옛 부름에서 옮긴 첫 턴) · mixed. */
     @Column(length = 10)
     private String generator;
 
     /** 이 판에서 LLM 에 나간 돈의 합(폴백이어도 이미 나간 돈은 센다). */
     @Column(name = "cost_usd", precision = 10, scale = 6)
     private BigDecimal costUsd;
+
+    /** LLM 이 두 번 다 실패해 중립 닫는 말로 닫힌 판인가(#709). 지표용 — 닫힘 사유는 CLOSED 그대로. */
+    @Column(name = "failed_closed", nullable = false)
+    private boolean failedClosed;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -134,6 +139,15 @@ public class ZzalChatSession {
         if (cost != null && cost.signum() > 0) {
             costUsd = costUsd == null ? cost : costUsd.add(cost);
         }
+    }
+
+    /** 중립 닫는 말로 닫힌다는 표시. 닫기는 부르는 쪽이 {@link #close} 로 한다. */
+    public void markFailedClosed() {
+        failedClosed = true;
+    }
+
+    public boolean isFailedClosed() {
+        return failedClosed;
     }
 
     public void close(CloseReason reason, Instant at) {

@@ -88,6 +88,22 @@ public class ZzalItConfig {
     }
 
     /**
+     * 채팅 대사 — 목 LLM 으로 도는 켜진 사슬(#709). 돈이 안 나간다.
+     *
+     * ★ 템플릿을 지워 LLM 이 꺼지면 채팅 부름(튜토리얼 대화 칸 포함)이 아예 없다. 시험 DB 에는 OpenAI 키가 없으므로
+     *   진짜 사슬은 {@code app.zzal.chat.llm=false}(ZzalIntegrationTest)로 꺼 두고, 여기 목 사슬에 우선권을 준다.
+     */
+    @Bean
+    @Primary
+    public com.lore.zzal.chat.line.LineChain fakeChatLineChain(com.lore.zzal.chat.line.ChatLineEvents events) {
+        return new com.lore.zzal.chat.line.LineChain(new com.lore.zzal.chat.line.LlmLineGenerator(
+                // 물음표가 있어야 그 턴의 질문 항목(호칭 등)이 소비된다 — 템플릿이 하던 몫을 목이 대신한다.
+                new com.lore.zzal.chat.line.FakeChatLineClient()
+                        .whenEmpty("{\"line\":\"응, 반가워. 뭐라고 부르면 돼?\",\"motion\":\"hello\"}"), "gpt-5-mini", java.time.Duration.ofSeconds(4),
+                new com.lore.zzal.chat.prompt.SystemPromptCache()), events);
+    }
+
+    /**
      * 대역 후처리 프로파일 — <b>시험 전용이다. 운영 프로파일과 아무 관계가 없다.</b>
      *
      * <h3>★★ 운영에서는 절대 안 뜬다 — 두 겹으로 막혀 있다</h3>

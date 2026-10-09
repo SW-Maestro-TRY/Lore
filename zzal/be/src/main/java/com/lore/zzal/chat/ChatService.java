@@ -39,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -52,12 +53,16 @@ import java.util.function.Supplier;
  *
  * <h3>부름은 "물어볼 때" 만든다</h3>
  * 타이머로 19:00 에 행을 넣지 않는다 — 시계와 같은 이유(서버가 죽어 있어도 같은 결과). 조회·답 때
- * 지금까지 도래한 슬롯 중 없는 판을 만들고 첫 펫 턴을 붙인다. 만료·이탈도 읽을 때 판정해 적는다.
+ * <b>지금 열려 있는 창</b>의 판이 없으면 만들고 첫 펫 턴을 붙인다. 만료·이탈도 읽을 때 판정해 적는다.
  *
- * <h3>슬롯 시각(16장)</h3>
- * MORNING 기상+1h(만료 NOON) / NOON 기상+7h(만료 EVENING) /
- * EVENING 19:00 고정(만료 23:00 — 그 전에 잠들면 "자는 중" 으로 닫힘).
+ * <h3>부름 창(#709) — 벽시계, KST</h3>
+ * MORNING 10:00~14:00 / NOON 14:00~19:00 / EVENING 19:00~23:00 ({@link ChatSlot#opens()}). 판의 만료 = 창 끝.
+ * 창이 지나면 그 창의 판은 없다(만료 슬롯에 판 생성 금지). 펫이 자는 동안에는 새 판을 만들지 않는다(아무도 답할 수 없다).
  * 놓친 부름은 패널티 0. BABY 는 하루 3회에 안 세지만 친밀도·2층 카운터에는 센다.
+ *
+ * <h3>LLM 이 꺼져 있으면 부름 없음(#709)</h3>
+ * 성격별 고정 문형(템플릿)을 지웠으므로 대사를 낼 길이 없다 — {@code app.zzal.chat.llm=false} 면 새 판을 만들지 않는다
+ * (BABY 포함). 이미 있는 판은 그대로 보인다.
  *
  * <h3>★ BABY 는 시각이 아니라 <b>순서</b>다</h3>
  * 튜토리얼 앞의 두 칸(밥·쓰다듬)을 끝내면({@link ZzalRules#TUTORIAL_CHAT_AFTER}) 그 자리에서 부른다.
@@ -65,6 +70,7 @@ import java.util.function.Supplier;
  *
  * <h3>대화 한 판(#704)</h3>
  * 펫 턴 → 사용자 답 → 펫 턴 … 최대 {@code app.zzal.chat.max-rounds} 왕복, 마지막은 닫기 턴.
+ * LLM 이 두 번 다 실패하면 그 자리에서 중립 닫는 말로 판을 닫는다({@code failed_closed}).
  * 턴 종류·질문 허용·질문 항목은 {@link TurnPlanner} 가 정한다. <b>보상(+40·답 카운터·튜토리얼 넘김)은 판당 1회</b>,
  * 첫 답에서. 첫 답 뒤 {@link TurnPlanner#ABANDON_AFTER} 동안 답이 없으면 이탈(닫기 턴 없음).
  *
@@ -139,12 +145,13 @@ public class ChatService {
         ZzalChatTurn userTurn = turns.save(ZzalChatTurn.user(session, sessionTurns.size(), text, answering, now));
         sessionTurns.add(userTurn);
         boolean firstAnswer = session.countUserTurn(text);
-        // 호칭 질문에 대한 답이면 코드가 호칭을 뽑아 펫 칸에 둔다(못 뽑으면 다음 판에 다시 묻는다).
-        if (answering == QuestionItem.CALL_ME) {
-            String call = CallMeExtractor.extract(text, pet.getName());
-            if (call != null) {
-                pet.rememberCallMe(call);
-            }
+        // ── 호칭(#709) — 코드 패턴은 호칭 질문의 답일 때만 돌리고, 뽑으면 먼저 펫 칸에 둔다(이번 대사가 바로 부르게).
+        //    모델이 읽은 호칭과의 대조는 대사를 받은 뒤 {@link #settleCallMe}.
+        String callBefore = pet.getCallMe();
+        boolean callOpen = answering == QuestionItem.CALL_ME || !sheets.build(pet).callMeSettled();
+        String callCode = answering == QuestionItem.CALL_ME ? CallMeExtractor.extract(text, pet.getName()) : null;
+        if (callCode != null) {
+            pet.rememberCallMe(callCode);
         }
 
         // ── 보상은 판당 1회 ──
@@ -165,20 +172,45 @@ public class ChatService {
         int petTurnNo = (int) sessionTurns.stream().filter(ZzalChatTurn::isPet).count() + 1;
         boolean itemAsked = sessionTurns.stream().anyMatch(t -> t.isPet() && t.getQuestionItem() != null);
         TurnPlan plan = TurnPlanner.next(session.getRoundCount(), maxRounds, petTurnNo, text, itemAsked,
-                answeredItems(pet, sheet));
+                answeredItems(pet, sheet), session.getSlot());
         ChatContext ctx = new ChatContext(pet.getId(), sheet, PetState.of(pet, now), session.getKind(), plan,
-                lastSessionLine(pet, session), history(sessionTurns), motions);
+                answering, history(pet, session, now), motions);
         GeneratedLine g = lines.generate(ctx, userId);
+        String modelCall = settleCallMe(pet, callOpen, callBefore, callCode, g.extract().callMe());
+        userTurn.recordRead(callCode, modelCall, g.extract().userSaid(),
+                TurnPlanner.userAsked(text) || g.extract().askedBack());
         String motion = g.motion() == null ? reaction : g.motion();
         ZzalChatTurn petTurn = turns.save(ZzalChatTurn.pet(session, sessionTurns.size(), plan.type(), g.text(), motion,
-                g.generator(), g.fallbackReason(), asked(plan, g.text()), now));
+                g.generator(), g.failReason(), asked(plan, g.text()), g.outcome().code(), g.latencyMs(), now));
         session.notePetTurn(g.generator(), g.costUsd());
-        if (plan.type() == TurnType.CLOSE) {
+        if (g.closesSession()) {
+            session.markFailedClosed();
+        }
+        if (plan.type() == TurnType.CLOSE || g.closesSession()) {
             session.close(CloseReason.CLOSED, now);
         }
         memory.remember(pet.getId(), userTurn);
         return new Answered(action, g.text(), motion, SessionView.of(session, maxRounds),
                 List.of(TurnView.of(userTurn), TurnView.of(petTurn)));
+    }
+
+    /**
+     * 호칭 저장 규칙(#709) — 코드가 뽑으면 그것, 못 뽑으면 모델 것. 둘 다 뽑았는데 다르면 <b>저장하지 않고</b>
+     * (코드 값을 되돌린다) 턴 행에 둘 다 남긴다 — 호칭이 비어 있으니 다음 판에 다시 묻는다.
+     * 모델 것은 호칭이 아직 없거나 호칭 질문의 답일 때만 쓴다(정해진 호칭을 대화 중 말 한마디로 바꾸지 않는다).
+     *
+     * @return 턴 행에 남길 모델 호칭(걸러진 값, 없으면 null)
+     */
+    private static String settleCallMe(ZzalPet pet, boolean open, String before, String code, String rawModel) {
+        String model = CallMeExtractor.acceptModel(rawModel, pet.getName());
+        if (code != null) {
+            if (model != null && !CallMeExtractor.same(code, model)) {
+                pet.rememberCallMe(before);
+            }
+        } else if (model != null && open) {
+            pet.rememberCallMe(model);
+        }
+        return model;
     }
 
     // ── 안쪽 ──────────────────────────────────────────────────────────────
@@ -189,11 +221,14 @@ public class ChatService {
     private record Row(ChatSlot slot, ZzalChatSession session, List<ZzalChatTurn> turns, ZzalChatCall legacyCall) {
     }
 
-    /** 지금까지 도래한 슬롯의 판이 없으면 만든다. 기상일(BABY 는 부화일) 기준으로 하루에 슬롯 하나. */
+    /**
+     * 지금 열린 창의 판이 없으면 만든다(#709 벽시계 창). 오늘(KST) 이미 지난 창의 판은 있으면 보여 주고 없으면 만들지 않는다.
+     * BABY 는 튜토리얼 순서로 연다.
+     */
     private List<Row> materialize(ZzalPet pet, Instant now) {
         List<Row> out = new ArrayList<>();
         // ★ 이 펫의 <b>모든</b> 열린 판의 만료·이탈을 먼저 적는다 — 오늘 슬롯만 보면 사용자가 안 돌아온 지난 판이
-        //   영영 열린 채로 남는다(일 비용 합·통계가 그 판을 계속 열린 것으로 본다).
+        //   영영 열린 채로 남는다(통계가 그 판을 계속 열린 것으로 본다).
         for (ZzalChatSession open : sessions.findByPetIdAndCloseReasonIsNull(pet.getId())) {
             settle(open, turns.findBySessionIdOrderByIdxAsc(open.getId()), now);
         }
@@ -204,34 +239,29 @@ public class ChatService {
             // ★ 튜토리얼 부름은 만료가 없다 — 시계가 안 돌기 때문이다. 답할 때까지 기다린다.
             Row baby = row(pet, sheet, babyDay, ChatSlot.BABY, pet.getHatchedAt(), null, now);
             // 끝났거나 만료된 BABY 는 부화 당일에만 보인다 — 이후 날의 "오늘의 부름" 에 영구히 끼지 않게(리뷰 반영).
-            if (isOpen(baby, now) || AwakeClock.dateOf(now).equals(babyDay)) {
+            if (baby != null && (isOpen(baby, now) || AwakeClock.dateOf(now).equals(babyDay))) {
                 out.add(baby);
             }
         }
         if (pet.isInTutorial()) {
             return out;
         }
-        Instant woke = pet.dayStartedAt();
-        LocalDate day = AwakeClock.dateOf(woke);
-        Instant morning = woke.plus(ZzalRules.CHAT_MORNING_AFTER_WAKE);
-        Instant noon = woke.plus(ZzalRules.CHAT_NOON_AFTER_WAKE);
-        Instant evening = day.atTime(ZzalRules.SLEEP_WINDOW_OPENS).atZone(ZzalRules.ZONE).toInstant();
-        Instant nightEnd = day.atTime(ZzalRules.AUTO_SLEEP_AT).atZone(ZzalRules.ZONE).toInstant();
-        record Due(ChatSlot slot, Instant at, Instant until) {
-        }
-        // 만료 = 다음 부름 시각(16장). 시작 ≥ 만료인 슬롯은 건너뛴다(해석 23).
-        for (Due d : List.of(new Due(ChatSlot.MORNING, morning, min(noon, evening)), new Due(ChatSlot.NOON, noon, evening),
-                new Due(ChatSlot.EVENING, evening, nightEnd))) {
-            if (!d.at().isBefore(d.until()) || now.isBefore(d.at())) {
-                continue;
+        LocalDate day = AwakeClock.dateOf(now);
+        LocalTime clock = now.atZone(ZzalRules.ZONE).toLocalTime();
+        for (ChatSlot slot : DAILY) {
+            if (clock.isBefore(slot.opens())) {
+                continue;                               // 아직 안 열린 창
             }
-            Row r = row(pet, sheet, day, d.slot(), d.at(), d.until(), now);
+            Instant until = day.atTime(slot.closes()).atZone(ZzalRules.ZONE).toInstant();
+            Row r = row(pet, sheet, day, slot, now, until, now);
             if (r != null) {
                 out.add(r);
             }
         }
         return out;
     }
+
+    private static final List<ChatSlot> DAILY = List.of(ChatSlot.MORNING, ChatSlot.NOON, ChatSlot.EVENING);
 
     /** 한 슬롯 — 판이 있으면 그것, 옛 부름만 있으면 그것(열려 있으면 판으로 옮김), 둘 다 없으면 새 판(지난 슬롯이면 null). */
     private Row row(ZzalPet pet, Supplier<PersonaSheet> sheet, LocalDate day, ChatSlot slot, Instant at, Instant until,
@@ -258,32 +288,43 @@ public class ChatService {
             s.notePetTurn("template", null);
             return new Row(slot, s, List.of(first), null);
         }
-        // ★ 이미 지난 슬롯(지금 ≥ 만료)은 판을 만들지 않는다 — 아무도 답할 수 없는 판에 LLM 을 부르면 돈과
-        //   지연(펫 잠금 안 최대 4초 × 슬롯 수)만 든다. 21시에 처음 들어온 사람에게 아침·낮 부름은 없었던 것이다.
+        // ★ 이미 지난 창(지금 ≥ 만료)은 판을 만들지 않는다 — 아무도 답할 수 없는 판에 LLM 을 부르면 돈과
+        //   지연(펫 잠금 안 최대 4초 × 2회)만 든다. 21시에 처음 들어온 사람에게 아침·낮 부름은 없었던 것이다.
         if (until != null && !now.isBefore(until)) {
+            return null;
+        }
+        // ★ LLM 이 꺼져 있으면 부름 없음(#709) — 대사를 낼 길이 없다(템플릿을 지웠다).
+        if (!lines.llmEnabled()) {
+            return null;
+        }
+        // 자는 동안에는 하루 부름을 새로 열지 않는다 — 답할 수 없는 판에 LLM 을 부르지 않는다. 깨면 창 안에서 열린다.
+        if (slot.daily() && pet.isSleeping()) {
             return null;
         }
         return newSession(pet, sheet.get(), day, slot, at, until, now);
     }
 
     /**
-     * 새 판 + 첫 펫 턴. 대사는 사슬(LLM → 템플릿)이 낸다.
+     * 새 판 + 첫 펫 턴. 대사는 LLM 이 낸다(실패하면 한 번 더, 또 실패하면 중립 닫는 말로 판을 바로 닫는다).
      *
-     * ★ LLM 호출이 이 트랜잭션 안(펫 행 잠금 중)에서 난다 — 최대 {@code app.zzal.chat.timeout-ms}.
+     * ★ LLM 호출이 이 트랜잭션 안(펫 행 잠금 중)에서 난다 — 최대 {@code app.zzal.chat.timeout-ms} × 2.
      *   같은 펫의 동시 요청은 잠금에서 줄을 서므로 같은 판이 두 번 생기지 않는다.
      */
     private Row newSession(ZzalPet pet, PersonaSheet sheet, LocalDate day, ChatSlot slot, Instant at, Instant until,
                            Instant now) {
         SessionKind kind = slot == ChatSlot.BABY ? SessionKind.BABY : dailyKind(pet, now);
-        String lastLine = lastUserLine(pet, null);
         ZzalChatSession s = sessions.save(ZzalChatSession.open(pet.getId(), day, slot, kind, at, until, now));
-        TurnPlan plan = TurnPlanner.first(kind, answeredItems(pet, sheet));
-        ChatContext ctx = new ChatContext(pet.getId(), sheet, PetState.of(pet, now), kind, plan, lastLine, List.of(),
-                List.of());
+        TurnPlan plan = TurnPlanner.first(kind, answeredItems(pet, sheet), slot);
+        ChatContext ctx = new ChatContext(pet.getId(), sheet, PetState.of(pet, now), kind, plan, null,
+                history(pet, s, now), List.of());
         GeneratedLine g = lines.generate(ctx, pet.getUserId());
         ZzalChatTurn first = turns.save(ZzalChatTurn.pet(s, 0, plan.type(), g.text(), null, g.generator(),
-                g.fallbackReason(), asked(plan, g.text()), now));
+                g.failReason(), asked(plan, g.text()), g.outcome().code(), g.latencyMs(), now));
         s.notePetTurn(g.generator(), g.costUsd());
+        if (g.closesSession()) {
+            s.markFailedClosed();
+            s.close(CloseReason.CLOSED, now);
+        }
         return new Row(slot, s, List.of(first), null);
     }
 
@@ -304,24 +345,6 @@ public class ChatService {
         Instant b = legacy.findTop5ByPetIdAndAnsweredAtIsNotNullOrderByAnsweredAtDesc(pet.getId()).stream()
                 .findFirst().map(ZzalChatCall::getAnsweredAt).orElse(null);
         return a == null ? b : b == null ? a : (a.isAfter(b) ? a : b);
-    }
-
-    /** "지난 대화 마지막 말" — 이 판이 아닌 곳에서 사용자가 마지막으로 한 말(옛 부름 포함). */
-    private String lastSessionLine(ZzalPet pet, ZzalChatSession current) {
-        return lastUserLine(pet, current == null ? null : current.getId());
-    }
-
-    private String lastUserLine(ZzalPet pet, Long excludeSession) {
-        Optional<ZzalChatTurn> t = excludeSession == null
-                ? turns.findFirstByPetIdAndSpeakerOrderByCreatedAtDescIdDesc(pet.getId(), Speaker.USER)
-                : turns.findFirstByPetIdAndSpeakerAndSessionIdNotOrderByCreatedAtDescIdDesc(pet.getId(), Speaker.USER,
-                excludeSession);
-        Optional<ZzalChatCall> c = legacy.findTop5ByPetIdAndAnsweredAtIsNotNullOrderByAnsweredAtDesc(pet.getId())
-                .stream().findFirst();
-        if (t.isPresent() && (c.isEmpty() || !t.get().getCreatedAt().isBefore(c.get().getAnsweredAt()))) {
-            return t.get().getLine();
-        }
-        return c.map(ZzalChatCall::getAnswer).orElse(null);
     }
 
     /** 답이 있는 질문 항목 — 호칭은 시트(저장 여부)로, 나머지는 그 항목에 답한 사용자 턴으로. */
@@ -380,8 +403,16 @@ public class ChatService {
         return null;
     }
 
-    private static List<HistoryLine> history(List<ZzalChatTurn> ts) {
-        return ts.stream().map(t -> new HistoryLine(t.getSpeaker(), t.getLine())).toList();
+    /**
+     * [지금까지](#709) — 오늘 포함 최근 3일의 판 턴 전부(이번 판 포함), 오래된 순. 판마다 며칠 전·어느 부름인지를 붙인다.
+     */
+    private List<HistoryLine> history(ZzalPet pet, ZzalChatSession current, Instant now) {
+        LocalDate today = AwakeClock.dateOf(now);
+        return memory.recall(pet.getId(), new RecallQuery(now, current.getSlot(), null)).stream()
+                .map(m -> new HistoryLine(m.byUser() ? Speaker.USER : Speaker.PET, m.text(),
+                        (int) java.time.temporal.ChronoUnit.DAYS.between(AwakeClock.dateOf(m.at()), today), m.slot(),
+                        m.sessionId(), java.util.Objects.equals(m.sessionId(), current.getId())))
+                .toList();
     }
 
     private View view(ZzalPet pet, List<Row> rows, Instant now) {
@@ -400,8 +431,14 @@ public class ChatService {
         SessionView sv = current.map(r -> SessionView.of(r.session(), maxRounds)).orElse(null);
         List<TurnView> tv = current.map(r -> r.turns().stream().map(TurnView::of).toList()).orElse(List.of());
         List<CallView> calls = rows.stream().map(ChatService::callView).toList();
-        List<String> mem = memory.recall(pet.getId(), new RecallQuery(now, null, null)).stream().map(Memory::text)
-                .toList();
+        // 화면 기억 칩 — 사용자가 한 말 최근 것부터 {@link ZzalRules#CHAT_MEMORY}개.
+        List<Memory> recalled = memory.recall(pet.getId(), new RecallQuery(now, null, null));
+        List<String> mem = new ArrayList<>();
+        for (int i = recalled.size() - 1; i >= 0 && mem.size() < ZzalRules.CHAT_MEMORY; i--) {
+            if (recalled.get(i).byUser()) {
+                mem.add(recalled.get(i).text());
+            }
+        }
         return new View(open, calls, mem, sv, tv);
     }
 
@@ -421,10 +458,6 @@ public class ChatService {
                 answered ? s.getLastUserLine() : null,
                 lastPet == null ? null : lastPet.getLine(),
                 lastPet == null ? null : lastPet.getMotion());
-    }
-
-    private static Instant min(Instant a, Instant b) {
-        return a.isBefore(b) ? a : b;
     }
 
     private static <T> Supplier<T> memo(Supplier<T> s) {
