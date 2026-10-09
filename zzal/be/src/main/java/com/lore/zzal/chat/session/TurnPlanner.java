@@ -26,9 +26,12 @@ public final class TurnPlanner {
     /** 마지막 펫 턴 뒤 이만큼 답이 없으면 그 판은 이탈(ABANDONED). 첫 답 전에는 적용하지 않는다(만료 규칙이 따로 있다). */
     public static final Duration ABANDON_AFTER = Duration.ofMinutes(10);
 
-    /** 되묻기 표지 — 물음표 말고도 물음으로 읽히는 끝말. */
+    /**
+     * 되묻기 표지 — 물음표, 또는 의문사(뭐·왜·어디·언제·누구·어때·어땠)가 <b>말 끝</b>에 있을 때만.
+     * ★ "너는 최고야"·"너도 귀여워"·"나 알아" 는 되묻기가 아니다 — 대명사·"알아" 로 잡던 헛걸림을 걷었다.
+     */
     private static final Pattern ASKS = Pattern.compile(
-            "[?？]|뭐야|뭐해|뭐하|뭐 해|너는|너도|넌 |어때|어땠|어디야|누구야|왜\\s*$|알아\\s*$");
+            "[?？]|(뭐|왜|어디|언제|누구|어때|어땠)[가-힣]{0,3}\\s*[.!~…]*$");
 
     private TurnPlanner() {
     }

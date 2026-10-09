@@ -78,17 +78,27 @@ class PromptAssemblerTest {
     @DisplayName("할 일 — 턴 종류마다 문서의 문장. 빈 재료는 그 조각만 빠진다")
     void tasks() {
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.FIRST_MEET, 1, true, QuestionItem.CALL_ME, false), null))
-                .isEqualTo("네가 있는 곳 한 조각을 말하며 인사하고, \"뭐라고 부를까\"을 하나 묻는다.");
+                .isEqualTo("네가 있는 곳 한 조각을 말하며 인사하고, \"뭐라고 부를까\"를 하나 묻는다.");
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.GREETING, 1, true, QuestionItem.FUN, false), "알바 가기 싫다"))
-                .isEqualTo("인사하고 \"알바 가기 싫다\"을 짧게 받은 뒤 \"요즘 재밌는 것\"을 묻는다.");
+                .isEqualTo("인사하고 \"알바 가기 싫다\"를 짧게 받은 뒤 \"요즘 재밌는 것\"을 묻는다.");
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.REUNION, 1, false, null, false), "미안해"))
-                .isEqualTo("반가워하되 원망 없이. \"미안해\"을 받는다. 질문 없음.");
+                .isEqualTo("반가워하되 원망 없이. \"미안해\"를 받는다. 질문 없음.");
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.CONTINUE, 3, false, null, true), null))
                 .isEqualTo("상대의 마지막 말을 받아서 한 줄. 질문 금지. 상대가 물었으니 먼저 답한다.");
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.CONTINUE, 3, true, QuestionItem.WHO, false), null))
-                .isEqualTo("상대의 마지막 말을 받아서 한 줄. 질문 허용. 묻는다면 \"뭐 하는 사람인지\"을 하나 묻는다.");
+                .isEqualTo("상대의 마지막 말을 받아서 한 줄. 질문 허용. 묻는다면 \"뭐 하는 사람인지\"를 하나 묻는다.");
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.CLOSE, 6, false, null, false), null))
                 .isEqualTo("네가 할 일로 돌아가며 끝낸다. 질문 금지. 다음에 또 말 걸겠다는 뜻을 담는다.");
+    }
+
+    @Test
+    @DisplayName("목적격 조사 — 마지막 한글 받침으로, 괄호·물음표 꼬리는 건너뜀")
+    void objectParticle() {
+        assertThat(PromptAssembler.obj("요즘 재밌는 것")).isEqualTo("을");
+        assertThat(PromptAssembler.obj("좋아하는 것(음식·놀이)")).isEqualTo("을");
+        assertThat(PromptAssembler.obj("토벌봉이 뭐야?")).isEqualTo("를");
+        assertThat(PromptAssembler.obj("피자!")).isEqualTo("를");
+        assertThat(PromptAssembler.obj("ok")).isEqualTo("를");
     }
 
     @Test

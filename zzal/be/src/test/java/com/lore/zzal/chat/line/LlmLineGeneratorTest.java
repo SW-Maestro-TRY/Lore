@@ -97,6 +97,7 @@ class LlmLineGeneratorTest {
                 new Case("오늘도 좋아 ✨", "emoji"),
                 new Case("좋아 ♡", "emoji"),
                 new Case("뭐 했어? 밥은 먹었어?", "questions"),
+                new Case("오늘은 뭐 했어?", "asked"),            // 질문 금지 턴에 물음표 하나
                 new Case("왜 이렇게 늦게 왔어요.", "resent"),
                 new Case("저녁에 맥주 한 잔 생각나요.", "unsafe"),
                 new Case("…요즘 좀 우울해.", "unsafe"),
@@ -104,9 +105,11 @@ class LlmLineGeneratorTest {
             assertThat(gen(new FakeChatLineClient().line(k.line(), "hello"), BigDecimal.ZERO).generate(reply())
                     .failReason()).as(k.line()).isEqualTo(k.reason());
         }
-        for (String ok : List.of("…응~ 나도 좋아.", "심상훈! 이름 길다. 상훈이라고 불러도 돼? 나는 우사기야.")) {
-            assertThat(LineFilter.check(ok, reply())).as(ok).isNull();
-        }
+        assertThat(LineFilter.check("…응~ 나도 좋아.", reply())).isNull();
+        // 질문 허용 턴이면 물음표 하나는 통과
+        ChatContext allowed = new ChatContext(7L, reply().sheet(), reply().state(), SessionKind.DAILY,
+                new TurnPlan(TurnType.CONTINUE, 3, true, null, false), null, List.of(), List.of("hello"));
+        assertThat(LineFilter.check("심상훈! 이름 길다. 상훈이라고 불러도 돼? 나는 우사기야.", allowed)).isNull();
     }
 
     @Test

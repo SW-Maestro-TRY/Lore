@@ -108,21 +108,23 @@ public final class PromptAssembler {
         QuestionItem item = p.item();
         String q = item == null ? null : "\"" + item.text() + "\"";
         String l = last == null ? null : "\"" + last + "\"";
+        String qo = q == null ? null : q + obj(item.text());
+        String lo = l == null ? null : l + obj(last);
         return switch (p.type()) {
             case FIRST_MEET -> q == null ? "네가 있는 곳 한 조각을 말하며 인사한다."
-                    : "네가 있는 곳 한 조각을 말하며 인사하고, " + q + "을 하나 묻는다.";
+                    : "네가 있는 곳 한 조각을 말하며 인사하고, " + qo + " 하나 묻는다.";
             case GREETING -> {
                 if (l != null && q != null) {
-                    yield "인사하고 " + l + "을 짧게 받은 뒤 " + q + "을 묻는다.";
+                    yield "인사하고 " + lo + " 짧게 받은 뒤 " + qo + " 묻는다.";
                 } else if (l != null) {
-                    yield "인사하고 " + l + "을 짧게 받는다.";
+                    yield "인사하고 " + lo + " 짧게 받는다.";
                 } else if (q != null) {
-                    yield "인사하고 " + q + "을 묻는다.";
+                    yield "인사하고 " + qo + " 묻는다.";
                 }
                 yield "인사한다.";
             }
             case REUNION -> l == null ? "반가워하되 원망 없이. 질문 없음."
-                    : "반가워하되 원망 없이. " + l + "을 받는다. 질문 없음.";
+                    : "반가워하되 원망 없이. " + lo + " 받는다. 질문 없음.";
             case CONTINUE -> {
                 StringBuilder t = new StringBuilder("상대의 마지막 말을 받아서 한 줄. 질문 ")
                         .append(p.allowQuestion() ? "허용." : "금지.");
@@ -130,7 +132,7 @@ public final class PromptAssembler {
                     t.append(" 상대가 물었으니 먼저 답한다.");
                 }
                 if (q != null) {
-                    t.append(" 묻는다면 ").append(q).append("을 하나 묻는다.");
+                    t.append(" 묻는다면 ").append(qo).append(" 하나 묻는다.");
                 }
                 yield t.toString();
             }
@@ -149,6 +151,18 @@ public final class PromptAssembler {
             from += 1;
         }
         return all.subList(from, all.size());
+    }
+
+    /** 목적격 조사 — 마지막 한글 글자의 받침으로(끝의 괄호 덧말·물음표 같은 꼬리는 건너뛴다). 한글이 없으면 "를". */
+    static String obj(String raw) {
+        String text = raw.replaceAll("\\([^)]*\\)\\s*$", "");   // 끝의 괄호 덧말은 읽지 않는다 — "것(음식·놀이)" → "것"
+        for (int i = text.length() - 1; i >= 0; i--) {
+            char c = text.charAt(i);
+            if (c >= 0xAC00 && c <= 0xD7A3) {
+                return Josa.of(String.valueOf(c), "을", "를");
+            }
+        }
+        return "를";
     }
 
     public static String label(Personality p) {
