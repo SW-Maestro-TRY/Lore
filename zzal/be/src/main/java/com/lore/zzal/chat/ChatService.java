@@ -225,12 +225,15 @@ public class ChatService {
             if (!d.at().isBefore(d.until()) || now.isBefore(d.at())) {
                 continue;
             }
-            out.add(row(pet, sheet, day, d.slot(), d.at(), d.until(), now));
+            Row r = row(pet, sheet, day, d.slot(), d.at(), d.until(), now);
+            if (r != null) {
+                out.add(r);
+            }
         }
         return out;
     }
 
-    /** 한 슬롯 — 판이 있으면 그것, 옛 부름만 있으면 그것(열려 있으면 판으로 옮김), 둘 다 없으면 새 판. */
+    /** 한 슬롯 — 판이 있으면 그것, 옛 부름만 있으면 그것(열려 있으면 판으로 옮김), 둘 다 없으면 새 판(지난 슬롯이면 null). */
     private Row row(ZzalPet pet, Supplier<PersonaSheet> sheet, LocalDate day, ChatSlot slot, Instant at, Instant until,
                     Instant now) {
         Optional<ZzalChatSession> found = sessions.findByPetIdAndDayOfAndSlot(pet.getId(), day, slot);
@@ -254,6 +257,11 @@ public class ChatService {
                     "template", null, null, c.getCalledAt()));
             s.notePetTurn("template", null);
             return new Row(slot, s, List.of(first), null);
+        }
+        // ★ 이미 지난 슬롯(지금 ≥ 만료)은 판을 만들지 않는다 — 아무도 답할 수 없는 판에 LLM 을 부르면 돈과
+        //   지연(펫 잠금 안 최대 4초 × 슬롯 수)만 든다. 21시에 처음 들어온 사람에게 아침·낮 부름은 없었던 것이다.
+        if (until != null && !now.isBefore(until)) {
+            return null;
         }
         return newSession(pet, sheet.get(), day, slot, at, until, now);
     }
