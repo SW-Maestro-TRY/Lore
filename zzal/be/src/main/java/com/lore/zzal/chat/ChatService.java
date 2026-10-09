@@ -192,6 +192,11 @@ public class ChatService {
     /** 지금까지 도래한 슬롯의 판이 없으면 만든다. 기상일(BABY 는 부화일) 기준으로 하루에 슬롯 하나. */
     private List<Row> materialize(ZzalPet pet, Instant now) {
         List<Row> out = new ArrayList<>();
+        // ★ 이 펫의 <b>모든</b> 열린 판의 만료·이탈을 먼저 적는다 — 오늘 슬롯만 보면 사용자가 안 돌아온 지난 판이
+        //   영영 열린 채로 남는다(일 비용 합·통계가 그 판을 계속 열린 것으로 본다).
+        for (ZzalChatSession open : sessions.findByPetIdAndCloseReasonIsNull(pet.getId())) {
+            settle(open, turns.findBySessionIdOrderByIdxAsc(open.getId()), now);
+        }
         Supplier<PersonaSheet> sheet = memo(() -> sheets.build(pet));
         // ★ 튜토리얼 부름(BABY) — 시간이 아니라 순서다. 앞의 두 칸(밥·쓰다듬)을 끝내면 그 자리에서 부른다.
         if (pet.getTutorialStep() >= ZzalRules.TUTORIAL_CHAT_AFTER) {
