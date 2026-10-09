@@ -31,24 +31,43 @@ class ChatLineConfigTest {
     }
 
     @Test
-    @DisplayName("꺼짐이면 부름 없음(꺼진 사슬), 켰는데 키가 없으면 기동을 막는다(설정 이름을 말한다)")
+    @DisplayName("꺼짐이면 부름 없음(꺼진 사슬), 켜고 키가 있으면 켜진 사슬")
     void switchAndKey() {
         AnalyticsService analytics = mock(AnalyticsService.class);
         LineChain off = config.lineChain(false, "gpt-5-mini", 4000, "minimal", "", new SystemPromptCache(),
-                events(analytics));
+                events(analytics), "prod");
         assertThat(off.llmEnabled()).isFalse();
-        assertThatThrownBy(() -> config.lineChain(true, "gpt-5-mini", 4000, "minimal", " ", new SystemPromptCache(),
-                events(analytics))).hasMessageContaining("ZZAL_OPENAI_API_KEY");
         LineChain on = config.lineChain(true, "gpt-5-mini", 4000, "minimal", "sk-test", new SystemPromptCache(),
-                events(analytics));
+                events(analytics), "prod");
         assertThat(on.llmEnabled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("★ 운영·스테이징(LORE_ENV=prod|staging)에서 켰는데 키가 없으면 기동을 막는다(설정 이름을 말한다)")
+    void missingKeyBlocksOnServer() {
+        AnalyticsService analytics = mock(AnalyticsService.class);
+        for (String env : new String[]{"prod", "staging", " PROD "}) {
+            assertThatThrownBy(() -> config.lineChain(true, "gpt-5-mini", 4000, "minimal", " ", new SystemPromptCache(),
+                    events(analytics), env)).hasMessageContaining("ZZAL_OPENAI_API_KEY");
+        }
+    }
+
+    @Test
+    @DisplayName("★ 그 밖(로컬·테스트·dev)에서 켰는데 키가 없으면 기동은 하고 채팅만 꺼진다(꺼짐과 같은 사슬)")
+    void missingKeyDisablesElsewhere() {
+        AnalyticsService analytics = mock(AnalyticsService.class);
+        for (String env : new String[]{"", "dev", null}) {
+            LineChain chain = config.lineChain(true, "gpt-5-mini", 4000, "minimal", "", new SystemPromptCache(),
+                    events(analytics), env);
+            assertThat(chain.llmEnabled()).isFalse();
+        }
     }
 
     @Test
     @DisplayName("★ 스위치 기본값은 켜짐 — 운영은 기존 키(ZZAL_OPENAI_API_KEY)만으로 켜진다(새 파라미터 없음)")
     void defaultIsOn() throws Exception {
         Method m = ChatLineConfig.class.getMethod("lineChain", boolean.class, String.class, long.class, String.class,
-                String.class, SystemPromptCache.class, ChatLineEvents.class);
+                String.class, SystemPromptCache.class, ChatLineEvents.class, String.class);
         Value v = m.getParameters()[0].getAnnotation(Value.class);
         assertThat(v.value()).isEqualTo("${app.zzal.chat.llm:true}");
     }
