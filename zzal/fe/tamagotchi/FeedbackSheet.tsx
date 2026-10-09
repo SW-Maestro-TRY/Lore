@@ -34,6 +34,13 @@ const RED = '#B4614C';
 const PAPER = '#FFFDF6';
 const EDGE = '#E0D7C0';
 
+/**
+ * 판 제목. **이 한 곳만 고치면 된다.**
+ * ★ 2026-10-09 임시 문구 — 후기 판이 이제 튜토리얼 직후(구르기를 아직 못 받은 때)에 뜨므로
+ *   "받은 움직임, 어땠어요?" 가 맞지 않는다. 상훈님 최종 확인 전이다.
+ */
+const FB_TITLE = '오늘 함께한 첫날, 어땠어요?';
+
 /** 자유 글 상한. 서버의 @Size(max = 500) 과 같은 값이다 — 다르면 화면이 통과시킨 글이 400 이 된다. */
 const MAX_TEXT = 500;
 
@@ -62,7 +69,7 @@ export interface FeedbackSheetProps {
   //   상훈님 원문: *"2번을 제거하자. 순수하게 튜토리얼이 끝나면 구르기 창이 뜨고 그 이후에 후기 창을
   //   띄우는 걸로 하자."* 운영 진단(10/8)에서 튜토리얼을 끝낸 20계정 중 공개에 닿은 것이 4계정뿐이었다 —
   //   구르기는 굽기·검수·기상 뒤 공개라 며칠이 걸리고, 그 사이 대부분이 후기 창을 한 번도 못 봤다.
-  //   이제 순서는 **튜토리얼 완료 → 구르기 안내(졸업) 판 → 그 판이 닫힌 뒤 후기 띠** 다.
+  //   이제 순서는 **튜토리얼 완료 → 구르기 안내(졸업) 판 → 그 판이 닫힌 뒤 후기 판(폼)** 이다.
   //   구르기 결과물이 언제 오는지(생성·검수·revealed_at)는 그대로다 — 묻는 시점만 앞당겼다.
   //   "졸업 판이 떠 있는 동안·뜨기 직전" 을 막는 것은 스킨이 넘기는 `hold` 다(yeoul/Room.tsx).
   /**
@@ -79,7 +86,7 @@ export interface FeedbackSheetProps {
    */
   hold?: boolean;
   /**
-   * 저절로 올라온 띠의 **계기**. 기록(`zzal_feedback_opened` 의 `reason`)에만 쓴다.
+   * 저절로 열린 판의 **계기**. 기록(`zzal_feedback_opened` 의 `reason`)에만 쓴다.
    *
    * ★ `reason` 은 서버 허용 키 목록(AnalyticsService.ALLOWED_PROP_KEYS)에 이미 있는 키다 —
    *   목록을 늘리지 않고 갈래를 남긴다. 값은 정해진 낱말뿐이다(사람이 쓴 글이 안 들어간다).
@@ -154,13 +161,12 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
   const [error, setError] = useState<string | null>(null);
 
   /** 어디서 열렸나. 닫힘 기록에 같은 값을 실어 열림과 짝을 맞춘다. */
-  const from = useRef<'unlock' | 'dex'>('dex');
-  /**
-   * 저절로 올라온 것인가. ★ 저절로 올라온 것은 **화면을 덮지 않는 띠**로 그린다.
-   *   사람이 도감에서 직접 연 것만 판(모달)으로 띄운다 — 내가 연 판은 내가 닫으면 되지만,
-   *   저절로 뜬 판은 하려던 일을 가로막는다.
-   */
-  const [banner, setBanner] = useState(false);
+  //   'unlock' 은 옛 자동 띠가 쓰던 값이다(2026-10-09 전 기록). 지금 저절로 열리는 판은 'auto' 다.
+  const from = useRef<'auto' | 'dex'>('dex');
+  // ★★ 2026-10-09 — 저절로 뜨던 **띠(배너)를 없애고 판(폼)을 바로 연다.** 상훈님 원문:
+  //   *"후기 띠만 나오는 거야? 후기 창도 띄워줬으면 좋겠는데."* 예전에 띠로 바꾼 이유(판이 돌봄
+  //   버튼을 가로막는다)는 **뜨는 순간**으로 갚는다 — 졸업(구르기 안내) 판을 닫은 직후, 다른 시트·
+  //   판이 없을 때(hold)만, 펫당 한 번만(wasAsked) 연다. 닫으면 "후기 남기기" 링크만 남는다.
 
   // 이미 냈는지 물어본다. ★ 이 한 번이 "이미 낸 사람에게 또 띄우지 않는다" 를 지킨다.
   useEffect(() => {
@@ -197,19 +203,19 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
   // ★ 2026-10-09 — 받은 움직임(심화 공개) 여부는 더 이상 보지 않는다(위 props 머리말).
   useEffect(() => {
     if (preview) return; // 미리보기는 위 효과가 직접 연다 — 자동 띠 규칙을 타지 않는다.
-    if (petId == null || submitted !== false || open || banner || hold) return;
+    if (petId == null || submitted !== false || open || hold) return;
     if (tutorialActive || wasAsked(petId)) return;
     markAsked(petId);
-    // ★ `from: 'unlock'` 은 그대로 둔다 — 닫힘 기록과 짝을 맞추는 값이고, 지난 집계가 이 값으로 묶여 있다.
-    //   새 갈래는 `reason` 으로만 더한다.
-    from.current = 'unlock';
-    setBanner(true);
-    track('zzal_feedback_opened', autoReason ? { from: 'unlock', reason: autoReason } : { from: 'unlock' });
-  }, [petId, submitted, open, banner, hold, tutorialActive, autoReason, preview]);
+    // ★ `from: 'auto'` — 옛 띠(`unlock`)와 값을 갈라 둔다. 닫힘 기록도 같은 값을 실어 짝이 맞는다.
+    //   계기(졸업 판 직후 / 재방문)는 `reason` 으로 남긴다 — 둘 다 서버 허용 키 안이다.
+    from.current = 'auto';
+    setOpen(true);
+    setError(null);
+    track('zzal_feedback_opened', autoReason ? { from: 'auto', reason: autoReason } : { from: 'auto' });
+  }, [petId, submitted, open, hold, tutorialActive, autoReason, preview]);
 
   const openFromDex = useCallback(() => {
     if (petId == null) return;
-    setBanner(false);
     // 손으로 연 것도 "물어봤다" 로 친다 — 닫고 새로고침했을 때 또 저절로 뜨면 성가시다.
     markAsked(petId);
     from.current = 'dex';
@@ -272,30 +278,17 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
 
   return (
     <>
-      {/* 작은 링크. 첫 판(띠)을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
-          ★ 띠가 떠 있는 동안에는 안 그린다 — 같은 자리에 "한 장 남기기" 가 이미 있어서
-            같은 뜻의 손잡이가 두 줄로 겹친다(여울에서 실측). 띠를 닫으면 다시 나온다.
-          ★★ **띠와 같은 기준을 본다**(2026-09-22 상훈님 판정 E — 예전에 이 링크만 기준이 달라
-            첫날 튜토리얼 1칸부터 떠 있었다). 2026-10-09 띠의 기준이 "튜토리얼이 끝났고 전면 판이
+      {/* 작은 링크. 저절로 열린 판을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
+          ★ 판이 열려 있는 동안에는 안 그린다.
+          ★★ **자동 판과 같은 기준을 본다**(2026-09-22 상훈님 판정 E — 예전에 이 링크만 기준이 달라
+            첫날 튜토리얼 1칸부터 떠 있었다). 2026-10-09 자동 기준이 "튜토리얼이 끝났고 전면 판이
             없다" 로 바뀌어 링크도 같이 바뀌었다 — 튜토리얼 중·졸업 판이 덮고 있는 동안에는 안 그린다.
           ★ 곁들여 얻는 것 — 이 줄이 사라지면 **무대가 24px 돌아온다**(머리줄과 무대 사이에
             끼어 있던 16px + 여백). 아이가 커 보이던 문제의 실제 해결분이다. */}
-      {!submitted && !banner && !preview && !tutorialActive && !hold && (
+      {!submitted && !open && !preview && !tutorialActive && !hold && (
         <button data-action="feedback-open" onClick={openFromDex} style={T.link}>
           후기 남기기
         </button>
-      )}
-
-      {/*
-        저절로 올라온 물음은 **띠**로만 그린다. 이 자리는 도감 구역이라 위쪽 돌봄 버튼을 덮지 않고,
-        덮개(dim)도 없어서 하려던 일을 가로막지 않는다. 판으로 여는 것은 사람이 "네" 를 누른 뒤.
-      */}
-      {banner && !open && (
-        <div data-part="feedback-banner" style={T.banner}>
-          <span style={T.bannerText}>받은 움직임, 어땠어요?</span>
-          <button data-action="feedback-banner-open" onClick={openFromDex} style={T.bannerYes}>한 장 남기기</button>
-          <button data-action="feedback-close" onClick={() => { setBanner(false); }} style={T.bannerNo}>나중에</button>
-        </div>
       )}
 
       {open && (
@@ -314,7 +307,7 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
             ) : (
               <>
                 <p style={T.eyebrow}>한 장만</p>
-                <h3 style={T.h3}>받은 움직임, 어땠어요?</h3>
+                <h3 style={T.h3}>{FB_TITLE}</h3>
 
                 <span style={T.label}>별점</span>
                 <div style={{ display: 'flex', gap: gap.xs, margin: '6px 0 16px' }}>
@@ -393,7 +386,6 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
  * 그 시안에서만 조용히 스타일이 빠진다.
  */
 type Tone = {
-  banner: CSSProperties; bannerText: CSSProperties; bannerYes: CSSProperties; bannerNo: CSSProperties;
   link: CSSProperties; overlay: CSSProperties; dim: CSSProperties; card: CSSProperties; tape: CSSProperties;
   eyebrow: CSSProperties; h3: CSSProperties; thanksEyebrow: CSSProperties; thanksBody: CSSProperties;
   label: CSSProperties; labelHint: CSSProperties; textarea: CSSProperties; counter: CSSProperties;
@@ -407,21 +399,6 @@ type Tone = {
 
 /** 스크랩북 결 — 누런 종이 · 테이프 · 펜글씨. */
 const S: Tone = {
-  banner: {
-    display: 'flex', alignItems: 'center', gap: gap.sm, flexWrap: 'wrap',
-    margin: '12px 0 0', padding: '10px 12px',
-    background: '#FBEFA8', border: '1px solid ' + EDGE, borderRadius: 3,
-    boxShadow: '2px 3px 0 rgba(58,53,43,.14)',
-  } as CSSProperties,
-  bannerText: { flex: '1 1 auto', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.lg, color: INK } as CSSProperties,
-  bannerYes: {
-    border: '1px solid ' + INK, background: PAPER, borderRadius: 3, padding: pad.tiny,
-    cursor: 'pointer', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.md, color: INK,
-  } as CSSProperties,
-  bannerNo: {
-    border: 'none', background: 'none', padding: '5px 4px', cursor: 'pointer',
-    fontFamily: PEN, fontSize: fz.lg, color: SUB,
-  } as CSSProperties,
   link: {
     border: 'none', background: 'none', padding: 0, cursor: 'pointer',
     fontFamily: PEN, fontSize: fz.xl, color: SUB, textDecoration: 'underline',
@@ -504,24 +481,10 @@ const S: Tone = {
  *   `fixed` 로 덮으면 셸 바깥 바탕까지 어두워져 "앱 위에 뜬 판" 이 아니라 "페이지가 덮였다" 가 된다.
  *   방(`Room`)의 뿌리가 `position: relative` 라 `inset: 0` 이 곧 셸 안쪽이다.
  * ★ 층수 13 — 벽 9 · 액자 10 · 시트 11 · 전면 판 12 위다. 사람이 직접 연 판이므로 가장 위에 온다.
- * ★ 띠(`banner`)는 방의 세로 흐름에 **끼어드는 한 줄**이다(덮개 없음·자리 차지). 그래서
- *   무대만 그만큼 짧아지고 **아래 돌봄 타일은 한 번도 가려지지 않는다** — 예전 판이 돌봄 버튼을
- *   덮어 띠로 바꾼 그 이유를 여기서도 지킨다.
+ * ★ 2026-10-09 — 저절로 뜨던 띠(`banner`)는 없앴다. 저절로 여는 것도 이 판이다(위 `from` 머리말).
  */
 const Y: Tone = {
-  banner: {
-    display: 'flex', alignItems: 'center', gap: gap.sm, flexWrap: 'wrap',
-    flex: 'none', margin: '0 20px 9px', padding: pad.chip,
-    borderRadius: radius.md, background: C.accentSoft, border: `1px solid ${C.accentDim}`,
-    animation: 'yPop .26s ease',
-  },
-  bannerText: { flex: '1 1 auto', minWidth: 0, fontFamily: Y_GAEGU, fontWeight: 700, fontSize: fz.xl, lineHeight: 1.25, color: C.ink },
-  bannerYes: {
-    flex: 'none', border: 'none', background: C.accent, color: C.accentInk,
-    borderRadius: radius.pill, padding: '7px 14px', fontSize: fz.md, cursor: 'pointer',
-  },
-  bannerNo: { flex: 'none', border: 'none', background: 'none', padding: '7px 5px', fontSize: fz.sm, color: C.faint, cursor: 'pointer' },
-  // 띠를 닫은 사람이 나중에 다시 찾을 유일한 길. 방 화면에 늘 떠 있으므로 **가장 조용한 한 줄**이다.
+  // 판을 닫은 사람이 나중에 다시 찾을 유일한 길. 방 화면에 늘 떠 있으므로 **가장 조용한 한 줄**이다.
   link: {
     alignSelf: 'flex-end', flex: 'none', margin: '0 20px 8px',
     border: 'none', background: 'none', padding: 0, cursor: 'pointer',
