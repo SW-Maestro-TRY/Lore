@@ -418,7 +418,7 @@ class ChatSessionFlowTest {
 
     @Test
     @DisplayName("★★ 창 화제 — 아침 판 첫 턴은 '잘 잤는지·오늘 뭐 하는지', 닫기 턴은 '점심 먹고 2시 넘어서'. 항목은 3번째 턴")
-    void windowHintsOnMorningSession() {
+    void windowHintsOnMorningSession() throws Exception {
         llm.line("안녕! 뭐라고 부를까?", "");
         service.calls(USER, PET, at(1));
         service.answer(USER, PET, ChatSlot.BABY, "상훈이라고 불러", at(2));
@@ -436,6 +436,11 @@ class ChatSessionFlowTest {
         assertThat(morning.get(2)).contains("질문 허용. 묻는다면 \"뭐 하는 사람인지\"를 하나 묻는다.");
         assertThat(morning.get(5)).contains("종류: 닫기",
                 "할 일: 네가 할 일로 돌아가며 끝낸다. 질문 금지. 점심 먹고 2시 넘어서 다시 오라는 뜻을 네 식으로 담는다.");
+
+        // 보고서용 — 다음 날 아침 판 첫 턴·닫기 턴의 사용자 메시지 전문
+        Path out = Path.of("build", "chat-usagi-morning.txt");
+        Files.createDirectories(out.getParent());
+        Files.writeString(out, "=== 아침 첫 턴 ===\n" + morning.get(0) + "\n=== 아침 닫기 턴 ===\n" + morning.get(5));
     }
 
     @Test
