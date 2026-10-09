@@ -45,28 +45,36 @@ public class PersonaSheetBuilder {
         this.profiles = profiles;
     }
 
+    /**
+     * 펫 + 프로필 → 시트.
+     * ★ 호칭은 펫 칸({@code zzal_pet.call_me}, 대화에서 뽑은 것)이 먼저, 없으면 설문의 {@code callMe}.
+     */
     public PersonaSheet build(ZzalPet pet) {
-        String rawCall = null;
+        String profileCall = null;
         if (profiles != null && pet.getUserId() != null) {
-            rawCall = profiles.findById(pet.getUserId()).map(ZzalUserProfile::getCallMe).orElse(null);
+            profileCall = profiles.findById(pet.getUserId()).map(ZzalUserProfile::getCallMe).orElse(null);
         }
-        String call = callMe(rawCall);
+        String petCall = blank(pet.getCallMe());
+        String call = petCall != null ? petCall : callMe(profileCall);
+        boolean declined = petCall == null && blank(profileCall) != null && NO_CALL.contains(blank(profileCall));
         return new PersonaSheet(
                 pet.getName() == null ? "" : pet.getName().strip(),
                 pet.getPersonalities(),
                 blank(pet.getTone()),
-                blank(pet.getGenre()),
                 blank(pet.getWorld()),
                 blank(pet.getNote()),
+                appearance(pet.getIdentityText()),
                 call,
-                call != null && call.contains("/"),
-                appearance(pet.getIdentityText()));
+                declined);
     }
 
-    /** 설문의 호칭 답 → 지시문에 넣을 호칭. "이름 없이"·빈칸이면 null(부르지 않고 말한다). */
+    /**
+     * 설문의 호칭 답 → 지시문에 넣을 호칭.
+     * "이름 없이"·빈칸이면 null. "언니/오빠" 처럼 둘 중 하나인 칩도 null — 어느 쪽인지 대화에서 다시 묻는다.
+     */
     static String callMe(String raw) {
         String v = blank(raw);
-        if (v == null || NO_CALL.contains(v)) {
+        if (v == null || NO_CALL.contains(v) || v.contains("/")) {
             return null;
         }
         return v;
