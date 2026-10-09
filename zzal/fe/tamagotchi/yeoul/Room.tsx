@@ -18,6 +18,7 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { grownLinePending } from '../tutorial';
 import { EGG_IMG, POP_LIFT, ROOM_KEYS, SPRITE_FOOT_PAD } from './constants';
 import { onLeave, ztrack } from './funnel';
 import { YEOUL_ANCHORS_URL } from '../constants';
@@ -357,6 +358,14 @@ export default function Room({ y }: { y: Yeoul }) {
    */
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
   const [charProbeEl, setCharProbeEl] = useState<HTMLDivElement | null>(null);
+  /**
+   * 이 화면에서 **구르기 안내(졸업) 판이 한 번이라도 떴는가.** 후기 띠의 기록 갈래(`reason`)에만 쓴다.
+   * ★ 판을 알아보는 손잡이는 `wishFrom: 'tutorial_gift'` 다 — 졸업 판만 이 값을 단다(useYeoul `finishTutor`).
+   */
+  const [giftIntroSeen, setGiftIntroSeen] = useState(false);
+  useEffect(() => {
+    if (s.fire?.wishFrom === 'tutorial_gift') setGiftIntroSeen(true);
+  }, [s.fire]);
 
   return (
     <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative' }}>
@@ -366,8 +375,8 @@ export default function Room({ y }: { y: Yeoul }) {
       {v.hud.show && <Hud y={y} />}
       {v.sample.show && <SampleHud y={y} />}
 
-      {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가 · 아기 시간표 중인가 · 받은 움직임이
-          도착했는가)는 **FeedbackSheet 이 정한다.** 여기서 판정하면 스킨이 그 규칙을 알아야 하고,
+      {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가 · 아기 시간표 중인가 · 전면 판이
+          덮고 있는가)는 **FeedbackSheet 이 정한다.** 여기서 판정하면 스킨이 그 규칙을 알아야 하고,
           규칙이 바뀔 때마다 스킨이 같이 바뀐다 — 스크랩북과 같은 약속이다(skins/Scrapbook.tsx).
           ★ 자리 — 머리줄 **아래, 무대 위**. 띠는 덮개 없이 세로 흐름에 끼어드는 한 줄이라
             **아래 돌봄 타일을 한 번도 가리지 않는다**(예전에 돌봄 버튼을 덮어 띠로 바꾼 그 이유).
@@ -375,12 +384,15 @@ export default function Room({ y }: { y: Yeoul }) {
           ★ 목(여울 연습방·시안 미리보기)에서는 안 그린다 — 후기는 실서버 전용이다. */}
       <FeedbackSheet
         petId={!s.sampleMode && live.pet?.phase === 'ALIVE' ? live.petId : null}
-        // 받은 움직임이 실제로 있을 때만 "받은 움직임, 어땠어요?" 를 묻는다.
-        advancedArrived={(live.pet?.learnedToday?.length ?? 0) > 0 || live.pet?.firstGift?.status === 'OPEN'}
         // 아기 시간표는 **서버가 센다**(계약 — 끝나면 블록이 null 이다). 화면이 다시 세지 않는다.
         tutorialActive={live.pet?.tutorial?.active === true || s.tutorOn}
         // 전면 판(해금 축하·선물)과 앨범 벽이 떠 있는 동안에는 저절로 안 올라온다.
-        hold={!!s.fire || v.wall.show || v.frame.show}
+        // ★ 2026-10-09 — **구르기 안내(졸업) 판이 뜨기 직전 한 그림**도 막는다(`grownLinePending`).
+        //   서버가 튜토리얼을 닫은 그림에서 후기 효과가 졸업 판 효과보다 먼저 돌아, 안 막으면 둘이 같이 뜬다.
+        //   순서는 "튜토리얼 완료 → 구르기 안내 판 → 닫은 뒤 후기 띠" 다(상훈님 2026-10-09).
+        hold={!!s.fire || v.wall.show || v.frame.show || (live.pet != null && live.petId != null && grownLinePending(live.petId, live.pet))}
+        // 기록용 갈래 — 이 화면에서 졸업 판을 닫고 바로 온 것인지, 다시 들어온 사람인지.
+        autoReason={giftIntroSeen ? 'after_gift_intro' : 'returning'}
         tone="yeoul"
         // ★ 개발용 미리보기 — 이동 창에서 켜면 목(연습방)에서도 후기 판을 mock 으로 강제로 띄운다.
         //   실서버 경로는 위 props 그대로이고, 이 값만 갈래를 나눈다(공개 도메인에선 켜질 길이 없다).
