@@ -1,6 +1,6 @@
 package com.lore.zzal.chat.memory;
 
-import com.lore.zzal.chat.ZzalChatCall;
+import com.lore.zzal.chat.session.ZzalChatTurn;
 
 import java.util.List;
 
@@ -23,8 +23,8 @@ public interface MemoryProvider {
     List<Memory> recall(Long petId, RecallQuery query);
 
     /**
-     * 답 하나가 저장된 뒤 부른다. v1 은 할 일이 없다 — 답한 부름 행 자체가 기억이다.
+     * 사용자 턴 하나가 저장된 뒤 부른다. v1 은 할 일이 없다 — 사용자 턴 행 자체가 기억이다.
      * v2 는 여기서 받아 적기(추론)·등급 판정·저장을 한다.
      */
-    void remember(Long petId, ZzalChatCall answered);
+    void remember(Long petId, ZzalChatTurn userTurn);
 }
