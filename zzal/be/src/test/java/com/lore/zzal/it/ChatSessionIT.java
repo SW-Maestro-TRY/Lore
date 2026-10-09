@@ -16,7 +16,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 대화형 채팅(#704) — 진짜 DB·진짜 진입점으로 튜토리얼 대화 한 판(5왕복)을 끝까지. LLM 은 꺼져 있다(폴백 문형).
+ * 대화형 채팅(#704·#709) — 진짜 DB·진짜 진입점으로 튜토리얼 대화 한 판(5왕복)을 끝까지. LLM 은 목이다
+ * ({@link ZzalItConfig#fakeChatLineChain}, 돈이 안 나간다).
  * 새 표·칸(마이그레이션)과 손으로 쓴 질의가 실제 Postgres 에서 도는지도 여기서 본다.
  */
 @ZzalIntegrationTest
@@ -77,9 +78,20 @@ class ChatSessionIT extends ZzalItSupport {
         assertThat(jdbc.queryForObject("select round_count from zzal_chat_session where pet_id = ?", Integer.class, pet.getId()))
                 .isEqualTo(5);
         assertThat(turns.answeredItems(pet.getId())).isNotEmpty();
-        assertThat(sessions.sumCostSince(now.minusSeconds(3600))).isNotNull();
-        // 그날 시작한 판만 센다 — 내일 0시 기준이면 오늘 판은 0
-        assertThat(sessions.sumCostSince(now.plusSeconds(86400))).isEqualByComparingTo("0");
+        // #709 — 결과·걸린 시간·호칭 추출 칸이 실제 표에 적힌다
+        assertThat(jdbc.queryForObject("select count(*) from zzal_chat_turn where pet_id = ? and speaker = 'PET' "
+                + "and outcome = 'ok' and latency_ms is not null", Integer.class, pet.getId())).isEqualTo(6);
+        assertThat(jdbc.queryForObject("select call_me_code from zzal_chat_turn where pet_id = ? and idx = 1",
+                String.class, pet.getId())).isEqualTo("상훈");
+        assertThat(jdbc.queryForObject("select asked_back from zzal_chat_turn where pet_id = ? and idx = 3",
+                Boolean.class, pet.getId())).isTrue();
+        assertThat(jdbc.queryForObject("select failed_closed from zzal_chat_session where pet_id = ?", Boolean.class,
+                pet.getId())).isFalse();
+        assertThat(jdbc.queryForObject("select cost_usd from zzal_chat_session where pet_id = ?",
+                java.math.BigDecimal.class, pet.getId())).as("비용 기록은 남는다").isPositive();
+        // 3일 기억 질의 — 진짜 Postgres 에서 오래된 순으로 11줄
+        assertThat(turns.findByPetIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAscIdAsc(pet.getId(),
+                now.minusSeconds(86400))).hasSize(11);
         assertThat(sessions.findByPetIdAndCloseReasonIsNull(pet.getId())).isEmpty();
 
         JsonNode again = getJson(userId, pets + "/chat").path("data");

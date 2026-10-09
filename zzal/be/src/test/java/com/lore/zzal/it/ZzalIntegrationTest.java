@@ -72,6 +72,8 @@ import java.lang.annotation.Target;
                 // ★★ 돈이 나가는 길 — 가짜로 못 박는다. 켜져 있으면 RealGenerationGuard 가 기동을 막는다.
                 "app.zzal.generation.real=false",
                 "app.zzal.generation.real-postprocess=false",
+                // 채팅 LLM — 진짜 사슬은 끈다(키가 없으면 기동을 막으므로). 목 사슬은 ZzalItConfig 가 준다(#709).
+                "app.zzal.chat.llm=false",
                 // 가짜 클라이언트의 흉내 지연. 0 이면 시험이 기다릴 것이 없다.
                 "app.zzal.generation.fake-delay-ms=0",
 

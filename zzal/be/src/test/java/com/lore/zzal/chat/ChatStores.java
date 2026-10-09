@@ -49,9 +49,11 @@ public final class ChatStores {
         when(sessionRepo.findByPetIdAndDayOfAndSlot(anyLong(), any(), any())).thenAnswer(inv -> sessions.stream()
                 .filter(s -> s.getPetId().equals(inv.getArgument(0)) && s.getDayOf().equals(inv.getArgument(1))
                         && s.getSlot() == inv.getArgument(2)).findFirst());
-        when(sessionRepo.sumCostSince(any())).thenAnswer(inv -> sessions.stream()
-                .filter(s -> !s.getStartedAt().isBefore(inv.getArgument(0))).map(ZzalChatSession::getCostUsd)
-                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+        when(sessionRepo.findAllById(any())).thenAnswer(inv -> {
+            java.util.Collection<Long> ids = new java.util.HashSet<>();
+            ((Iterable<Long>) inv.getArgument(0)).forEach(ids::add);
+            return sessions.stream().filter(s -> ids.contains(s.getId())).toList();
+        });
         when(sessionRepo.findByPetIdAndCloseReasonIsNull(anyLong())).thenAnswer(inv -> sessions.stream()
                 .filter(s -> s.getPetId().equals(inv.getArgument(0)) && !s.isClosed()).toList());
 
@@ -66,12 +68,13 @@ public final class ChatStores {
         when(turnRepo.findBySessionIdOrderByIdxAsc(anyLong())).thenAnswer(inv -> turns.stream()
                 .filter(t -> t.getSessionId().equals(inv.getArgument(0)))
                 .sorted(Comparator.comparingInt(ZzalChatTurn::getIdx)).toList());
-        when(turnRepo.findTop5ByPetIdAndSpeakerOrderByCreatedAtDescIdDesc(anyLong(), any())).thenAnswer(inv ->
-                users(inv.getArgument(0), inv.getArgument(1), null).limit(5).toList());
+        when(turnRepo.findByPetIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAscIdAsc(anyLong(), any())).thenAnswer(inv ->
+                turns.stream().filter(t -> t.getPetId().equals(inv.getArgument(0))
+                                && !t.getCreatedAt().isBefore(inv.getArgument(1)))
+                        .sorted(Comparator.comparing(ZzalChatTurn::getCreatedAt).thenComparing(ZzalChatTurn::getId))
+                        .toList());
         when(turnRepo.findFirstByPetIdAndSpeakerOrderByCreatedAtDescIdDesc(anyLong(), any())).thenAnswer(inv ->
                 users(inv.getArgument(0), inv.getArgument(1), null).findFirst());
-        when(turnRepo.findFirstByPetIdAndSpeakerAndSessionIdNotOrderByCreatedAtDescIdDesc(anyLong(), any(), anyLong()))
-                .thenAnswer(inv -> users(inv.getArgument(0), inv.getArgument(1), inv.getArgument(2)).findFirst());
         when(turnRepo.answeredItems(anyLong())).thenAnswer(inv -> turns.stream()
                 .filter(t -> t.getPetId().equals(inv.getArgument(0)) && t.getSpeaker() == Speaker.USER
                         && t.getQuestionItem() != null)
