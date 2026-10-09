@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ALBUM, CHAR_GROUPS, CHAT_CLOSE, CHAT_HINTS, CHAT_MAX_ROUNDS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
-  STEPS, TUTOR, TUTOR_ROOM, TUTOR_GAME_IDX, TUTOR_GAME_STEP, TUTOR_GAME_UNTIL_RESULT, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
+  STEPS, TUTOR, TUTOR_ROOM, TUTOR_GAME_IDX, TUTOR_GAME_STEP, TUTOR_GAME_UNTIL_RESULT, TUTOR_ALBUM_PICK, TUTOR_ALBUM_SAVE, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
   WISH_COPY, WISH_MAX, UNLOCK_COPY, WISH_REPLY,
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
@@ -1251,9 +1251,10 @@ export function useYeoul(live?: Live) {
     lastSel.current = Date.now();
     // 벽을 열 때 도감을 다시 읽는다 — 그사이 밤에 배운 것이 도착해 있을 수 있다.
     if (onServerRef.current) void liveRef.current?.loadAlbum();
-    tutorDone('SHARE');
+    // ★ 7칸(앨범)은 벽을 **여는 것으로 끝나지 않는다**(2026-10-10) — 안에서 액자를 열어 저장해야 끝난다
+    //   (→ 액자의 `onTaken`). 예전엔 여기서 넘겨서 안을 안내할 틈이 없었다.
     patch({ wallOpen: true, wallClosing: false, popOpen: false, sheet: null, chatOpen: false, toast: '' });
-  }, [patch, tutorDone]);
+  }, [patch]);
   const closeWall = useCallback(() => {
     patch({ wallClosing: true });
     later('wallClose', 230, () => setS((v) => ({ ...v, wallOpen: false, wallClosing: false, frame: null })));
@@ -2845,13 +2846,30 @@ export function useYeoul(live?: Live) {
       const parts = String(name).split(' · ');
       return [parts[0], open ? 1 : 0, parts[1] || '조건 미정', FRAME_KEYS[i % FRAME_KEYS.length]] as const;
     });
-    const frames = (onServer ? svFrames : mockFrames).map(([name, open, cond, key]) => {
+    /**
+     * 7칸(앨범) 안의 두 단계(2026-10-10 상훈님 "기본 동작 하이라이트, 저장 하이라이트").
+     *   `pick` = 1층 기본 동작 액자 하나를 빛낸다 → 누르면 `save` = 액자 안 「저장」을 빛낸다.
+     * ★ 칸을 끝내는 것은 **저장(또는 공유)** 이다 — 서버도 공유 기록(`share`)으로 넘긴다. 예전에는 목이
+     *   벽을 **여는 것만으로** 칸을 넘겨서, 안에서 무엇을 눌러야 하는지 안내할 틈이 없었다.
+     * ★ 연습방은 안 쓴다(거기 칸 목록은 앞뒤로 넘겨 보는 연습이다).
+     */
+    const tutAlbum: 'pick' | 'save' | null = tut?.done === 'SHARE' && !s.sampleMode
+      ? (s.frame?.open ? 'save' : 'pick') : null;
+    const frameRows = onServer ? svFrames : mockFrames;
+    // 빛낼 액자 = 열린 **1층 기본 동작** 중 첫 칸. 목은 층을 모르므로 열린 첫 칸.
+    const hlFrame = tutAlbum !== 'pick' ? -1 : onServer
+      ? svMotions.findIndex((m) => m.unlocked && m.layer === 'BASIC_1')
+      : frameRows.findIndex(([, open]) => !!open);
+    const frames = frameRows.map(([name, open, cond, key], i) => {
       const f: FrameData = { name, open: !!open, cond: open ? '' : (cond || '조건 미정'), key };
+      const hl = i === hlFrame;
       return {
         ...f,
+        hl,
+        anim: hl ? 'yBlink 1.2s ease-in-out infinite' : 'none',
         label: open ? f.name : (cond || '조건 미정'),
         labelFg: open ? '#5A4A3C' : C.faint,
-        bd: open ? C.frameWood : 'rgba(201,169,141,.45)',
+        bd: hl ? ACCENT : open ? C.frameWood : 'rgba(201,169,141,.45)',
         bg: open ? C.paper : paperA(.5),
         shadow: open ? `0 4px 10px ${ink(.18)}` : 'none',
         opacity: open ? 1 : 0.2,
@@ -3201,6 +3219,8 @@ export function useYeoul(live?: Live) {
         show: s.screen === 'room' && (s.wallOpen || s.wallClosing),
         anim: s.wallClosing ? 'yWallDown .22s ease forwards' : 'yWallUp .3s cubic-bezier(.2,.85,.25,1)',
         count: `${albumOpen} / ${albumAll}`, close: closeWall, frames,
+        /** 7칸 1단계 안내 한 줄(빛나는 액자를 누르라). 튜토리얼 밖이면 빈 칸. */
+        tutGuide: tutAlbum === 'pick' ? TUTOR_ALBUM_PICK : '',
         /**
          * 앨범 안의 손잡이 줄. **개수가 늘 것을 전제로 둔다** — 엽서·여행처럼 앨범에 들어올 것이
          * 더 있다(2026-09-21). 그래서 화면이 넉 줄을 딱 맞춰 그리지 않고 **흐르게** 그린다
@@ -3231,6 +3251,13 @@ export function useYeoul(live?: Live) {
         open: !!s.frame?.open, locked: !!s.frame && !s.frame.open,
         cond: s.frame?.cond ?? '', opacity: s.frame?.open ? 1 : 0.24,
         close: closeFrame, save: saveShot, share: shareFrame,
+        /** 7칸 2단계 — 「저장」을 빛내고 안내 한 줄을 단다. */
+        tutSave: tutAlbum === 'save',
+        tutGuide: tutAlbum === 'save' ? TUTOR_ALBUM_SAVE : '',
+        /**
+         * 저장·공유가 **된 뒤** 부른다. 목은 여기서 7칸을 넘긴다(서버는 공유 기록이 넘긴다 — 화면은 안 센다).
+         */
+        onTaken: () => tutorDone('SHARE'),
       },
       fullCells: cells(es.full, '#F2C3A8', C.slotDim),
       happyCells: cells(es.happy, '#C9DFB4', C.slotDim),
@@ -3380,7 +3407,7 @@ export function useYeoul(live?: Live) {
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess, quitGuess,
     nextTutor, onAnswerCall, skipTutorStep, finishTutorHere, pickChip, onGroupText, pickUser, askNext, pickTab,
     pushReply, popPostcard, popScenes, toggleDeco, toggleMini, pickWall, pickNeedStyle, pickTime, onAskDraft,
-    toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash,
+    toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash, tutorDone,
     tutIdx, atDone, onFinishTutorial, onSavePersona, noop, live?.resting,
   ]);
 

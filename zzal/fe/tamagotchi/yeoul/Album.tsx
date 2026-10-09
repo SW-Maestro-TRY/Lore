@@ -10,7 +10,7 @@ import { assetUrl } from '../../lib/assets';
 import { dexLayer, downloadImage, imageFileName, prepareImageFile, shareImageFile } from '../../lib/download';
 import { detectInApp } from '../../lib/inapp';
 import { motionByKey } from '../constants';
-import { C, C2, GAEGU, TAP_MIN, gap, radius, fz, ink, paperA } from './ui';
+import { ACCENT, C, C2, GAEGU, TAP_MIN, gap, radius, fz, ink, paperA } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
 
@@ -50,6 +50,14 @@ function Wall({ y }: { y: Yeoul }) {
         </button>
       </div>
 
+      {/* ★ 튜토리얼 7칸 1단계 안내(2026-10-10) — 빛나는 액자 하나를 누르라고 말한다. 판 위라 방의 안내 카드가
+          가려지므로 여기서 한 줄로 잇는다. 튜토리얼 밖이면 안 그린다. */}
+      {w.tutGuide && (
+        <span data-part="album-tut-guide" style={{ flex: 'none', margin: '0 18px 8px', padding: '8px 12px', borderRadius: radius.sm, border: `1.5px solid ${ACCENT}`, background: C.paper, fontSize: fz.sm, color: C.ink }}>
+          {w.tutGuide}
+        </span>
+      )}
+
       <div style={{
         flex: '1 1 auto', overflow: 'auto', padding: '6px 18px 18px',
         display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 14px',
@@ -64,8 +72,9 @@ function Wall({ y }: { y: Yeoul }) {
                 흐린 액자와 또렷한 액자의 차이는 눈으로만 갈리기 때문이다. */}
             <button
               onClick={f.tap}
+              data-tut-hl={f.hl ? '1' : undefined}
               aria-label={f.open ? f.name : `${f.name} · 아직 못 배운 모습 · ${f.cond}`}
-              style={{ position: 'relative', width: '100%', height: 0, padding: '0 0 133%', boxSizing: 'content-box', border: `5px solid ${f.bd}`, borderRadius: radius.frame, background: f.bg, boxShadow: f.shadow, overflow: 'hidden' }}
+              style={{ position: 'relative', width: '100%', height: 0, padding: '0 0 133%', boxSizing: 'content-box', border: `5px solid ${f.bd}`, borderRadius: radius.frame, background: f.bg, boxShadow: f.shadow, overflow: 'hidden', animation: f.anim }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={(!y.s.sampleMode && albumImageUrl(live, f.key)) || spriteUrl(live, f.key, y.s.sampleMode)} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity, filter: f.filter }} />
@@ -162,6 +171,7 @@ function FrameView({ y }: { y: Yeoul }) {
       if (result.outcome === 'saved') {
         setNotice('파일 다운로드를 시작했어요. 다운로드한 파일을 확인해 주세요.');
         record('DOWNLOAD');
+        f.onTaken();
       } else setNotice('파일을 받지 못했어요. Safari나 Chrome에서 다시 눌러 주세요.');
     }).finally(() => setBusy(false));
   };
@@ -170,7 +180,7 @@ function FrameView({ y }: { y: Yeoul }) {
     // 미리 읽은 File을 클릭 안에서 곧바로 넘겨 iOS의 사용자 활성화를 보존한다.
     setBusy(true);
     void shareImageFile(file, meta).then((result) => {
-      if (result === 'shared') { setNotice('공유창에 파일을 전달했어요.'); record('SHARE'); }
+      if (result === 'shared') { setNotice('공유창에 파일을 전달했어요.'); record('SHARE'); f.onTaken(); }
       else if (result === 'unsupported') setNotice('이 브라우저에서는 파일 공유를 지원하지 않아요. 저장한 뒤 앱에서 파일을 첨부해 주세요.');
       else if (result === 'failed') setNotice('공유창을 열지 못했어요. 저장한 뒤 앱에서 파일을 첨부해 주세요.');
     }).finally(() => setBusy(false));
@@ -190,10 +200,14 @@ function FrameView({ y }: { y: Yeoul }) {
             인앱에서는 저장이 안 될 수 있어요 — 그림을 길게 눌러 저장하거나 외부 브라우저로 열어 주세요(외부 브라우저에선 다시 로그인이 필요해요)
           </span>
         )}
+        {/* ★ 튜토리얼 7칸 2단계 안내(2026-10-10) — 「저장」을 빛내고 한 줄로 말한다. */}
+        {f.open && f.tutGuide && (
+          <span data-part="frame-tut-guide" style={{ fontSize: fz.sm, color: C2.onDark, textAlign: 'center' }}>{f.tutGuide}</span>
+        )}
         {f.open && (
           <span style={{ display: 'flex', gap: gap.sm }}>
             {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 39px). */}
-            <button onClick={save} disabled={!fileSrc || busy} data-action="frame-save" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>저장</button>
+            <button onClick={save} disabled={!fileSrc || busy} data-action="frame-save" data-tut-hl={f.tutSave ? '1' : undefined} style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: f.tutSave ? `2px solid ${ACCENT}` : 'none', background: C.paper, fontSize: fz.md, color: C.ink, animation: f.tutSave ? 'yBlink 1.2s ease-in-out infinite' : 'none' }}>저장</button>
             {/* 미리 읽은 애니메이션 파일을 OS 공유창에 전달한다. */}
             <button onClick={share} disabled={!file || busy} data-action="frame-share" style={{ minHeight: TAP_MIN, padding: '10px 18px', borderRadius: radius.sm, border: 'none', background: C.paper, fontSize: fz.md, color: C.ink }}>{file || notice ? '공유' : '공유 준비 중…'}</button>
           </span>
