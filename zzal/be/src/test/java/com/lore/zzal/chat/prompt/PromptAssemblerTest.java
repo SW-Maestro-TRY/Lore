@@ -1,56 +1,104 @@
 package com.lore.zzal.chat.prompt;
 
-import com.lore.zzal.chat.ChatSlot;
-import com.lore.zzal.chat.memory.Memory;
 import com.lore.zzal.chat.persona.PersonaSheet;
+import com.lore.zzal.chat.session.QuestionItem;
+import com.lore.zzal.chat.session.SessionKind;
+import com.lore.zzal.chat.session.Speaker;
+import com.lore.zzal.chat.session.TurnPlan;
+import com.lore.zzal.chat.session.TurnType;
 import com.lore.zzal.pet.Personality;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.DayOfWeek;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisplayName("채팅 v1 — 지시문 조립")
+@DisplayName("채팅 — 지시문 조립(시스템 A · 사용자 B)")
 class PromptAssemblerTest {
 
-    private static PersonaSheet full() {
-        return new PersonaSheet("서지환", List.of(Personality.COOL, Personality.LIVELY), "반말 · 무뚝뚝", "일상",
-                "현대 · 홍대 부근 자취방", "치이카와를 좋아한다", "누나", false, "sandy-blond hair, black choker");
+    static final String USAGI_WORLD = "자연 · 현대 · 귀여운 동물 캐릭터들이 살고 있지만, 가끔 무서운 몬스터나 키메라가 나타나 토벌을 해야 하는 판타지 세계관.";
+
+    static PersonaSheet usagi(String callMe) {
+        return new PersonaSheet("우사기", List.of(), null, USAGI_WORLD, "초코비, 피자, 카레를 좋아한다.",
+                "egg-shaped small body, long rabbit ears", callMe, false);
     }
 
     @Test
-    @DisplayName("재료가 전부 들어간다 — 이름·성격 여럿·말투(우선)·장르·세계관·메모·외형·호칭·최근 답·상태")
-    void allMaterials() {
-        ChatContext ctx = new ChatContext(full(), new PetState(8, 10, 2, 2, 2, 4, false), LineKind.CALL,
-                ChatSlot.MORNING, null, null, List.of(Memory.recentAnswer("알바 가기 싫다", null)), null, 2, true, List.of());
-        String p = PromptAssembler.assemble(ctx);
-        assertThat(p).contains("이름: 서지환", "시크 — ", "활발 — ", "(맨 앞이 대표)", "작가가 정한 말투: 반말 · 무뚝뚝",
-                "장르: 일상", "세계관: 현대 · 홍대 부근 자취방", "작가 메모: 치이카와를 좋아한다", "sandy-blond hair",
-                "호칭: 누나", "\"알바 가기 싫다\"", "오전 8시 10분", "함께한 지 2일째", "배는 적당하다", "몸은 깨끗하다",
-                "질문은 해도 되고", "아침이다", "{\"line\": \"대사\", \"motion\": \"\"}");
+    @DisplayName("★ A — 문서 그대로: 성격 빈 칸은 줄째 빠지고, 말투 없으면 '반말, 짧게', 호칭 모르면 '너'")
+    void systemLikeDoc() {
+        String s = PromptAssembler.system(usagi(null));
+        assertThat(s).startsWith("너는 '우사기'다. 작가가 만든 캐릭터이고, 작가와 짧은 대화를 나눈다.\n\n[너에 대해]\n말투: 반말, 짧게\n");
+        assertThat(s).doesNotContain("성격:");
+        assertThat(s).contains("네가 사는 곳: " + USAGI_WORLD + "\n", "작가 메모: 초코비", "네 모습: egg-shaped",
+                "상대를 뭐라고 부를지 아직 모른다. '너'라고 한다.\n\n[말하는 법]\n",
+                "- 한 번에 한 줄, 60자 이내. 말만 한다. 지문·괄호·이모지·동작 묘사 금지.",
+                "  이름의 유래 지어내기, \"주인님\", 상대의 개인정보 되풀이.",
+                "[출력]\nJSON 한 줄: {\"line\": \"<대사>\", \"motion\": \"<hello, reply, joy 중 하나>\"}\n");
+        assertThat(s).doesNotContain("[지금]", "[이번 턴]\n종류");   // 시스템은 턴마다 같아야 캐시가 먹는다
+        String named = PromptAssembler.system(new PersonaSheet("서지환", List.of(Personality.COOL, Personality.SHY), "반말 · 무뚝뚝",
+                null, null, null, "누나", false));
+        assertThat(named).startsWith("너는 '서지환'이다.").contains("성격: 시크, 수줍음\n", "말투: 반말 · 무뚝뚝\n", "상대를 부르는 말: 누나\n");
     }
 
     @Test
-    @DisplayName("빈 칸은 줄째 빠지고, 호칭이 없으면 '부르지 말고' 규칙, 질문 금지 줄이 들어간다")
-    void emptyFieldsAndNoQuestion() {
-        PersonaSheet bare = new PersonaSheet("멀린", List.of(), null, null, null, null, null, false, null);
-        ChatContext ctx = new ChatContext(bare, new PetState(13, 0, 3, 1, 2, 2, false), LineKind.REPLY,
-                ChatSlot.NOON, "심심했어요! 지금 뭐 해요?", "뭐해?", List.of(), null, 1, false, List.of("hello", "joy"));
-        String p = PromptAssembler.assemble(ctx);
-        assertThat(p).doesNotContain("작가 메모:", "세계관:", "장르:", "외형(", "상대가 전에 너에게");
-        assertThat(p).contains("온순 — ", "부르지 말고 그냥 말한다", "물음표를 쓰지 않고", "배는 조금 고프다",
-                "상대의 답: \"뭐해?\"", "motion 은 다음 중 하나: hello, joy");
+    @DisplayName("★ B — [지금] 요일·시각·상태 단어, [지금까지] 지난 말 + 최근 3왕복만, [이번 턴] 종류·할 일")
+    void userLikeDoc() {
+        List<HistoryLine> h = List.of(
+                new HistoryLine(Speaker.PET, "p1"), new HistoryLine(Speaker.USER, "u1"),
+                new HistoryLine(Speaker.PET, "p2"), new HistoryLine(Speaker.USER, "u2"),
+                new HistoryLine(Speaker.PET, "p3"), new HistoryLine(Speaker.USER, "u3"),
+                new HistoryLine(Speaker.PET, "p4"), new HistoryLine(Speaker.USER, "u4"));
+        ChatContext ctx = new ChatContext(1L, usagi("상훈"), new PetState(DayOfWeek.THURSDAY, 23, 0, 1, 2, 3, 2, false),
+                SessionKind.BABY, new TurnPlan(TurnType.CONTINUE, 5, true, null, false), "어제 한 말", h, List.of("hello", "joy"));
+        String u = PromptAssembler.user(ctx);
+        assertThat(u).isEqualTo("""
+                [지금]
+                목요일 밤 11시, 만난 지 1일째.
+                상태: 보통 · 보통 · 보통
+
+                [지금까지]
+                지난 대화 마지막 말: 어제 한 말
+                이번 대화:
+                너: p2
+                상대: u2
+                너: p3
+                상대: u3
+                너: p4
+                상대: u4
+
+                [이번 턴]
+                종류: 이어 말하기
+                할 일: 상대의 마지막 말을 받아서 한 줄. 질문 허용.
+                """);
     }
 
     @Test
-    @DisplayName("재언급 — 꺼낼 기억 하나가 장면에 들어간다. 호칭이 '언니/오빠' 면 확실할 때만")
-    void recallAndAmbiguousCall() {
-        PersonaSheet s = new PersonaSheet("셰인", List.of(Personality.GENTLE), null, null, null, null, "언니/오빠", true, null);
-        ChatContext ctx = new ChatContext(s, new PetState(19, 30, 4, 3, 3, 3, false), LineKind.RECALL, ChatSlot.EVENING,
-                "하루 어땠어요?", "잘 지냈어!", List.of(Memory.recentAnswer("소설 쓰려고!", null)),
-                Memory.recentAnswer("소설 쓰려고!", null), 3, true, List.of("reply", "joy"));
-        String p = PromptAssembler.assemble(ctx);
-        assertThat(p).contains("상대가 전에 한 말 \"소설 쓰려고!\"을 자연스럽게", "호칭 후보: 언니/오빠", "오후 7시 30분");
+    @DisplayName("할 일 — 턴 종류마다 문서의 문장. 빈 재료는 그 조각만 빠진다")
+    void tasks() {
+        assertThat(PromptAssembler.task(new TurnPlan(TurnType.FIRST_MEET, 1, true, QuestionItem.CALL_ME, false), null))
+                .isEqualTo("네가 있는 곳 한 조각을 말하며 인사하고, \"뭐라고 부를까\"을 하나 묻는다.");
+        assertThat(PromptAssembler.task(new TurnPlan(TurnType.GREETING, 1, true, QuestionItem.FUN, false), "알바 가기 싫다"))
+                .isEqualTo("인사하고 \"알바 가기 싫다\"을 짧게 받은 뒤 \"요즘 재밌는 것\"을 묻는다.");
+        assertThat(PromptAssembler.task(new TurnPlan(TurnType.REUNION, 1, false, null, false), "미안해"))
+                .isEqualTo("반가워하되 원망 없이. \"미안해\"을 받는다. 질문 없음.");
+        assertThat(PromptAssembler.task(new TurnPlan(TurnType.CONTINUE, 3, false, null, true), null))
+                .isEqualTo("상대의 마지막 말을 받아서 한 줄. 질문 금지. 상대가 물었으니 먼저 답한다.");
+        assertThat(PromptAssembler.task(new TurnPlan(TurnType.CONTINUE, 3, true, QuestionItem.WHO, false), null))
+                .isEqualTo("상대의 마지막 말을 받아서 한 줄. 질문 허용. 묻는다면 \"뭐 하는 사람인지\"을 하나 묻는다.");
+        assertThat(PromptAssembler.task(new TurnPlan(TurnType.CLOSE, 6, false, null, false), null))
+                .isEqualTo("네가 할 일로 돌아가며 끝낸다. 질문 금지. 다음에 또 말 걸겠다는 뜻을 담는다.");
+    }
+
+    @Test
+    @DisplayName("시스템 캐시 — 시트가 같으면 그대로, 호칭이 생기면 다시 만든다")
+    void cache() {
+        SystemPromptCache c = new SystemPromptCache();
+        String a = c.get(1L, usagi(null));
+        assertThat(c.get(1L, usagi(null))).isSameAs(a);
+        assertThat(c.builds()).isEqualTo(1);
+        assertThat(c.get(1L, usagi("상훈"))).contains("상대를 부르는 말: 상훈");
+        assertThat(c.builds()).isEqualTo(2);
     }
 }
