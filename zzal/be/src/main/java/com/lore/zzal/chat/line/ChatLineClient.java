@@ -15,7 +15,7 @@ public interface ChatLineClient {
      * @throws java.util.concurrent.TimeoutException 시간 안에 못 받았을 때. 돈이 나갔는지는 모른다
      * @throws Exception 그 밖의 실패. 비용을 알면 {@link BilledException} 으로 감싼다
      */
-    Completion complete(String prompt, String model, Duration timeout) throws Exception;
+    Completion complete(String system, String user, String model, Duration timeout) throws Exception;
 
     /** @param text 모델이 낸 글 그대로(JSON 문자열이어야 한다) */
     record Completion(String text, BigDecimal costUsd, long inputTokens, long outputTokens) {

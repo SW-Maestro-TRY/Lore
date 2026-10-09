@@ -3,8 +3,8 @@ package com.lore.zzal.chat.line;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.zzal.chat.prompt.ChatContext;
-import com.lore.zzal.chat.prompt.LineKind;
 import com.lore.zzal.chat.prompt.PromptAssembler;
+import com.lore.zzal.chat.prompt.SystemPromptCache;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -12,7 +12,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
 /**
- * LLM 생성기 — 지시문 한 벌({@link PromptAssembler}) → OpenAI 1회 → JSON {@code {line, motion}} → {@link LineFilter}.
+ * LLM 생성기 — 시스템 메시지(펫당 캐시) + 사용자 메시지(이번 턴)({@link PromptAssembler}) → OpenAI 1회
+ * → JSON {@code {line, motion}} → {@link LineFilter}.
  *
  * <h3>실패하는 길(전부 사유를 남기고 템플릿으로 떨어진다)</h3>
  * <ul>
@@ -34,11 +35,13 @@ public class LlmLineGenerator implements LineGenerator {
     private final BigDecimal dailyCapUsd;
     /** 오늘 지금까지 나간 돈. 서비스에서는 {@code zzal_chat_call.cost_usd} 의 합. */
     private final Supplier<BigDecimal> spentToday;
+    private final SystemPromptCache systems;
     private final ObjectMapper json = new ObjectMapper();
 
     public LlmLineGenerator(ChatLineClient client, String model, Duration timeout, BigDecimal dailyCapUsd,
-                            Supplier<BigDecimal> spentToday) {
+                            Supplier<BigDecimal> spentToday, SystemPromptCache systems) {
         this.client = client;
+        this.systems = systems;
         this.model = model;
         this.timeout = timeout;
         this.dailyCapUsd = dailyCapUsd;
@@ -61,12 +64,14 @@ public class LlmLineGenerator implements LineGenerator {
         if (spent != null && spent.compareTo(dailyCapUsd) >= 0) {
             return LineAttempt.fail(NAME, null, BigDecimal.ZERO, "cap", 0);
         }
-        String prompt = PromptAssembler.assemble(ctx);
+        String system = systems.get(ctx.petId(), ctx.sheet());
+        String user = PromptAssembler.user(ctx);
         ChatLineClient.Completion c;
         try {
-            c = client.complete(prompt, model, timeout);
+            c = client.complete(system, user, model, timeout);
         } catch (TimeoutException e) {
-            return LineAttempt.fail(NAME, model, OpenAiChatLineClient.estimate(model, prompt.length()), "timeout", ms(t0));
+            return LineAttempt.fail(NAME, model,
+                    OpenAiChatLineClient.estimate(model, system.length() + user.length()), "timeout", ms(t0));
         } catch (ChatLineClient.BilledException e) {
             return LineAttempt.fail(NAME, model, e.costUsd(), "parse", ms(t0));
         } catch (Exception e) {
@@ -88,7 +93,8 @@ public class LlmLineGenerator implements LineGenerator {
             return new LineAttempt(line, null, NAME, model, c.costUsd(), bad, ms(t0));
         }
         // 동작은 받은 목록 안에서만. 벗어나면 기본값(대사를 버리지는 않는다).
-        String picked = ctx.kind() == LineKind.CALL ? null
+        // 판의 첫 턴(부름)에는 반응 동작이 없다.
+        String picked = ctx.plan().petTurnNo() == 1 ? null
                 : (ctx.motions() != null && ctx.motions().contains(motion) ? motion : ctx.defaultMotion());
         return new LineAttempt(line, picked, NAME, model, c.costUsd(), null, ms(t0));
     }
