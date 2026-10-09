@@ -779,6 +779,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webtoon/v1/admin/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 실시간 집계
+         * @description 날짜 범위(KST, 포함) 안의 유입·생성·완성 수와 UTM 출처별 분해. 범위를 안 넘기면 오늘.
+         */
+        get: operations["live"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webtoon/v1/admin/works/log": {
         parameters: {
             query?: never;
@@ -6557,6 +6577,31 @@ export interface operations {
                     "*/*": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    live: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

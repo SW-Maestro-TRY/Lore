@@ -6177,6 +6177,47 @@
         ]
       }
     },
+    "/api/webtoon/v1/admin/live": {
+      "get": {
+        "description": "날짜 범위(KST, 포함) 안의 유입·생성·완성 수와 UTM 출처별 분해. 범위를 안 넘기면 오늘.",
+        "operationId": "live",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "additionalProperties": { },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "실시간 집계",
+        "tags": [
+          "Webtoon"
+        ]
+      }
+    },
     "/api/webtoon/v1/admin/works/log": {
       "get": {
         "description": "최근부터.",
@@ -10127,7 +10168,7 @@
         },
         "security": [
           {
-            "cookieAuth": []
+            "cookieAuth": [ ]
           }
         ],
         "summary": "오늘의 대화 조회",
@@ -10199,7 +10240,7 @@
         },
         "security": [
           {
-            "cookieAuth": []
+            "cookieAuth": [ ]
           }
         ],
         "summary": "대화 응답",
