@@ -186,8 +186,9 @@ function FrameView({ y }: { y: Yeoul }) {
     }).finally(() => setBusy(false));
   };
   return (
-    <div onClick={f.close} data-part="frame" style={{ position: 'absolute', inset: 0, zIndex: 10, background: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22, animation: 'yFadeIn .18s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.lg, width: '100%', animation: f.anim }}>
+    <div onClick={f.close} data-part="frame" style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(0,0,0,.78)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 22, animation: 'yFadeIn .18s ease' }}>
+      <div onClick={(e) => e.stopPropagation()} data-part="frame-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.lg, width: 'min(300px,100%)', animation: f.anim }}>
+        <button onClick={f.close} data-action="frame-back" aria-label="앨범 목록으로 돌아가기" style={{ alignSelf: 'flex-start', minHeight: TAP_MIN, padding: '10px 16px', borderRadius: radius.sm, border: `1px solid ${paperA(.6)}`, background: C.paper, color: C.ink, fontSize: fz.md, cursor: 'pointer' }}>← 뒤로</button>
         <span style={{ position: 'relative', width: 'min(190px,70%)', height: 0, padding: '0 0 93%', boxSizing: 'content-box', border: `7px solid ${C.frameWood}`, borderRadius: radius.frame, background: C.paper, overflow: 'hidden', boxShadow: '0 12px 28px rgba(46,42,38,.32)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={src} alt="" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block', opacity: f.opacity }} />

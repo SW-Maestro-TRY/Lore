@@ -27,6 +27,7 @@ for (const mobile of ['iPhone Safari UA', 'Android Chrome UA']) {
       expect(readFileSync((await file.path())!)).toEqual(readFileSync(source));
       await expect(page.locator('[data-part="album-file-notice"]')).toContainText('다운로드');
       expect(await page.evaluate(() => (window as unknown as { records: string[] }).records)).toEqual(['DOWNLOAD']);
+      await expect(page.locator('[data-part="frame"]')).toBeVisible();
     });
     test('native share receives same animation bytes', async ({ page }) => {
       await page.evaluate(() => {
@@ -40,6 +41,7 @@ for (const mobile of ['iPhone Safari UA', 'Android Chrome UA']) {
       const shared = await page.evaluate(() => (window as unknown as { shared: { name: string; type: string; bytes: number[] } }).shared);
       expect(shared.name).toBe('여울_구르기.webp'); expect(shared.type).toBe('image/webp'); expect(Buffer.from(shared.bytes)).toEqual(readFileSync(source));
       expect(await page.evaluate(() => (window as unknown as { records: string[] }).records)).toEqual(['SHARE']);
+      await expect(page.locator('[data-part="frame"]')).toBeVisible();
     });
     test('unsupported share guides save and attach without recording success', async ({ page }) => {
       await page.evaluate(() => Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => false }));
@@ -76,6 +78,32 @@ for (const mobile of ['iPhone Safari UA', 'Android Chrome UA']) {
       await page.locator('[data-action="frame-save"]').click();
       await expect(page.locator('[data-part="album-file-notice"]')).toContainText('받지 못했어요');
       expect(await page.evaluate(() => (window as unknown as { records: string[] }).records)).toEqual([]);
+    });
+  });
+}
+
+for (const viewport of [{ width: 390, height: 844 }, { width: 1200, height: 900 }]) {
+  test.describe(`album return at ${viewport.width}px`, () => {
+    test.use({ viewport });
+    test.beforeEach(async ({ page }) => {
+      await page.route('**/zzal/pets/123/**/*.webp', r => r.fulfill({ status: 200, contentType: 'image/webp', body: readFileSync(source) }));
+      await page.goto('/uiux-e2e');
+      await page.locator('[data-action="close-preview"]').click();
+    });
+    test('visible enabled back returns to album without recording a save', async ({ page }) => {
+      const back = page.locator('[data-action="frame-back"]');
+      await expect(back).toBeVisible();
+      await expect(back).toBeEnabled();
+      await back.click();
+      await expect(page.locator('[data-part="frame"]')).toHaveCount(0);
+      await expect(page.locator('[data-part="wall"]')).toBeVisible();
+    });
+    test('black backdrop returns to album while image clicks stay inside', async ({ page }) => {
+      await page.locator('[data-part="frame"] img').click();
+      await expect(page.locator('[data-part="frame"]')).toBeVisible();
+      await page.locator('[data-part="frame"]').click({ position: { x: 4, y: 4 } });
+      await expect(page.locator('[data-part="frame"]')).toHaveCount(0);
+      await expect(page.locator('[data-part="wall"]')).toBeVisible();
     });
   });
 }
