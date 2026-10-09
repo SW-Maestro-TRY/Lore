@@ -110,6 +110,9 @@ class ChatServiceTest {
     void normalDayHasThree() {
         pet.settle(kst("2026-09-06 07:00"));
         pet.wake(kst("2026-09-06 07:00"));
+        // ★ 지난 슬롯은 판을 안 만든다(#704) — 각 부름 시각 안에 한 번씩 들러야 셋이 다 생긴다.
+        service.calls(USER, PET, kst("2026-09-06 08:30"));
+        service.calls(USER, PET, kst("2026-09-06 14:30"));
         ChatService.View v = service.calls(USER, PET, kst("2026-09-06 19:00"));
         assertThat(v.calls().stream().filter(c -> com.lore.zzal.pet.AwakeClock.dateOf(c.calledAt()).equals(java.time.LocalDate.of(2026, 9, 6))))
                 .extracting(ChatService.CallView::slot).containsExactly(ChatSlot.MORNING, ChatSlot.NOON, ChatSlot.EVENING);
@@ -117,6 +120,18 @@ class ChatServiceTest {
                 && c.getDayOf().equals(java.time.LocalDate.of(2026, 9, 6))).findFirst().orElseThrow();
         assertThat(morning.getStartedAt()).isEqualTo(kst("2026-09-06 08:00"));
         assertThat(morning.getExpiresAt()).isEqualTo(kst("2026-09-06 14:00"));
+    }
+
+    @Test
+    @DisplayName("★ 늦게 들어오면 지난 슬롯(아침·낮)은 판이 없다 — 저녁 부름 하나만")
+    void lateVisitSkipsExpiredSlots() {
+        pet.settle(kst("2026-09-06 07:00"));
+        pet.wake(kst("2026-09-06 07:00"));
+        ChatService.View v = service.calls(USER, PET, kst("2026-09-06 21:00"));
+        assertThat(v.calls().stream().filter(c -> com.lore.zzal.pet.AwakeClock.dateOf(c.calledAt())
+                .equals(java.time.LocalDate.of(2026, 9, 6)))).extracting(ChatService.CallView::slot)
+                .containsExactly(ChatSlot.EVENING);
+        assertThat(v.openSlot()).isEqualTo("EVENING");
     }
 
     @Test
