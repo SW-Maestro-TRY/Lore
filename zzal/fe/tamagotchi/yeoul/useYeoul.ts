@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ALBUM, CHAR_GROUPS, CHAT_CLOSE, CHAT_HINTS, CHAT_MAX_ROUNDS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
-  STEPS, TUTOR, TUTOR_ROOM, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
+  STEPS, TUTOR, TUTOR_ROOM, TUTOR_GAME_IDX, TUTOR_GAME_STEP, TUTOR_GAME_UNTIL_RESULT, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
   WISH_COPY, WISH_MAX, UNLOCK_COPY, WISH_REPLY,
   type NeedStyle, type RoomKey, type ScreenKey, type StepKey, type TutorStep,
 } from './constants';
@@ -399,6 +399,15 @@ export interface YeoulState {
    * ★ 연습방은 안 쓴다 — 거기는 목 `log`·`calls`·`resolved.chat` 이 정본이다.
    */
   chatSeen: string | null;
+  /**
+   * 튜토리얼 6칸(게임)을 **한 게임 결과까지** 붙잡아 두는가(2026-10-10 상훈님 "5판 3선의 결과가 나는 걸 보고").
+   *
+   * ★ 서버는 판을 **시작한 순간** 6칸을 넘긴다(`ZzalPet.startGame`). 그래서 화면이 결과가 날 때까지
+   *   6칸을 계속 보여 준다 — 카드·하이라이트만 붙잡고 서버 칸은 안 건드린다.
+   *   결과(기권이 아닌 `done`)가 나면 풀린다. 게임 중 ✕(기권)로 나가면 **그대로 붙잡혀** 한 게임을 다시 권한다.
+   * ★ 오늘 판이 다 떨어지면 풀린다(더 칠 수 없는데 붙잡으면 막다른 길). 새로고침하면 사라진다(서버 칸을 따른다).
+   */
+  tutGameHold: boolean;
 }
 
 /**
@@ -434,7 +443,7 @@ const INITIAL: YeoulState = {
   tutor: 0, tutorOn: false, cracking: false, eggMsg: '', nameErr: false,
   hintI: 0, leaveOff: false, sleepCover: false,
   authOpen: false, authTab: 'signup', fbPreview: false,
-  chatSeen: null,
+  chatSeen: null, tutGameHold: false,
 };
 
 // ── 작은 계산들 ──────────────────────────────────────────────────────────
@@ -1009,11 +1018,24 @@ export function useYeoul(live?: Live) {
    *   확인할 수 없었다. 목록을 하나로 합치면서 그 구멍이 닫혔다.
    */
   const TUT: readonly TutorStep[] = s.sampleMode ? TUTOR : TUTOR_ROOM;
-  const tut: TutorStep | null = onServer
+  const rawTut: TutorStep | null = onServer
     ? (svTutIdx >= 0 ? TUTOR_ROOM[svTutIdx] ?? null : null)
     : (s.sampleMode || s.tutorOn) && s.tutor < TUT.length ? TUT[s.tutor] : null;
-  /** 지금 몇 번째 칸인가(점·`3 / 9` 표시용). 서버에 붙어 있으면 서버 숫자 그대로. */
-  const tutIdx = onServer ? Math.max(0, svTutIdx) : s.tutor;
+  /**
+   * 6칸(게임)을 **한 게임 결과까지** 붙잡고 있는가(→ `tutGameHold` 머리말 · 2026-10-10 상훈님).
+   * ★ 서버는 판을 시작하자마자 7칸(앨범)으로 넘기므로, 화면이 6칸을 계속 보여 준다 — 붙잡는 것은
+   *   **지금 칸이 6칸이나 바로 다음 7칸일 때만**이다(그보다 더 갔으면 서버를 따른다).
+   * ★ 오늘 판이 다 떨어졌으면 놓는다 — 더 칠 수 없는데 "결과까지 해 보자" 를 걸면 막다른 길이다.
+   */
+  const playsLeftNow = onServer ? (live?.game?.remainingToday ?? 0) : s.plays;
+  const tutGameHeld = s.tutGameHold && !s.sampleMode && !!rawTut
+    && (rawTut.done === 'GAME' || rawTut.done === 'SHARE')
+    && (s.gOn || playsLeftNow > 0);
+  const tut: TutorStep | null = tutGameHeld ? { ...TUTOR_GAME_STEP, text: TUTOR_GAME_UNTIL_RESULT } : rawTut;
+  /** 지금 몇 번째 칸인가(점·`3 / 9` 표시용). 서버에 붙어 있으면 서버 숫자 그대로(붙잡은 동안은 6칸). */
+  const tutIdx = tutGameHeld ? TUTOR_GAME_IDX : onServer ? Math.max(0, svTutIdx) : s.tutor;
+  const tutRef = useRef(tut);
+  tutRef.current = tut;
   /** 마지막 칸 — 누를 것이 없어서 우리가 `tutorial/done` 을 보내야 하는 자리. */
   /** 마지막 칸 — 누를 것이 없어서 **눌러서 끝내는** 자리. 목도 서버와 같은 칸을 쓴다. */
   const atDone = !s.sampleMode && !!tut && tut.done === 'DONE';
@@ -1077,7 +1099,7 @@ export function useYeoul(live?: Live) {
    *   **켜진 채 하이라이트로 깜빡인다**(실측). 그리고 다음 칸에서 타일을 누르면 대화 칸은
    *   그때 저절로 닫힌다(`selRoom`) — 안내 카드도 같이 돌아온다.
    */
-  const tutStepKey = onServer
+  const tutStepKey = tutGameHeld ? TUTOR_GAME_IDX : onServer
     ? svTutIdx
     : (s.sampleMode || s.tutorOn) && s.tutor < TUT.length ? s.tutor : -1;
   const prevTutStepRef = useRef(tutStepKey);
@@ -1521,13 +1543,15 @@ export function useYeoul(live?: Live) {
   const startGuess = useCallback(() => {
     lastSel.current = Date.now();
     const happy0 = esRef.current.happy;
-    // ★ 목의 6칸(게임)은 **넘어가는 길이 아예 없었다**(2026-09-22 발견) — 옛 8칸 목록에도 이 칸이
-    //   있었는데 아무도 `tutorDone` 을 안 불러서, 서버 없는 진짜 방 튜토리얼은 거기서 멎었다.
-    //   서버는 **판을 시작한 순간** 이 칸을 넘긴다(기권해도 넘어간다 — dev 실측). 목도 같게.
-    tutorDone('GAME');
+    // ★ 6칸(게임)은 **한 게임 결과까지**다(2026-10-10 상훈님 "5판 3선의 결과가 나는 걸 보고").
+    //   서버는 판을 시작한 순간 이 칸을 넘기므로(기권해도 — dev 실측), 화면이 결과가 날 때까지
+    //   6칸을 붙잡는다(`tutGameHold`). 목은 결과가 난 순간 칸을 넘긴다(→ `onGuess` 의 `finished`).
+    //   예전에는 여기서 바로 넘겨서, 1판만 치면 카드가 앨범을 가리키고 게임은 닫히기만 했다.
+    const atGame = tutRef.current?.done === 'GAME';
     // 하루 판수는 **매치 단위**로 준다(정본: 판 = 한 매치). 예전 목은 한 판(라운드)마다 깎았다.
     setS((v) => (v.gOn ? v : {
       ...v,
+      tutGameHold: atGame || v.tutGameHold,
       gOn: true, gPhase: 'wait', gRound: 0, gHits: 0, gPick: null, gHit: null,
       gMarks: [null, null, null, null, null], gQuit: false, gHappy0: happy0, gStarted: false,
       lastGuess: null,
@@ -1537,7 +1561,7 @@ export function useYeoul(live?: Live) {
       //   그때 하루 판수를 쓴다. 판을 열자마자 깎으면 한 판도 안 치고 ✕ 해도 「3판 남음」이
       //   2 가 되어, 목이 서버와 다른 말을 한다(실측). 목의 차감은 `onGuess` 첫 탭에 있다.
     }));
-  }, [tutorDone]);
+  }, []);
 
   /** 매치를 접고 마당 팝오버를 다시 연다 — 거기 "좌우 맞히기" 가 곧 "한 판 더" 다. */
   const endGuess = useCallback(() => {
@@ -1642,7 +1666,10 @@ export function useYeoul(live?: Live) {
         careAct(hit ? 'game_win' : 'game_lose');
         if (finished) {
           later('guessEnd', GUESS_AFTERGLOW_MS, () => {
-            setS((v) => ({ ...v, gPhase: 'done' }));
+            // ★ **결과 화면이 난 순간** 6칸이 끝난다(2026-10-10). 붙잡던 것을 놓고, 목은 칸을 넘긴다.
+            //   기권(`quitEnd`)은 이 길을 안 탄다 — 그래서 ✕ 로 나가면 칸이 안 끝난다.
+            tutorDone('GAME');
+            setS((v) => ({ ...v, gPhase: 'done', tutGameHold: false }));
             later('guessNext', GUESS_MATCH_END_MS, endGuess);
           });
           return;
@@ -1697,7 +1724,7 @@ export function useYeoul(live?: Live) {
       happy: finished && win ? Math.min(4, v0.happy + 1) : v0.happy,
     });
     reveal(hit, hits, finished, win);
-  }, [patch, careAct, flash, later, endGuess, floor2Of]);
+  }, [patch, careAct, flash, later, endGuess, floor2Of, tutorDone]);
   const onGuessSide = useCallback((side: Side) => () => onGuess(side), [onGuess]);
 
   // ── 대화 ──

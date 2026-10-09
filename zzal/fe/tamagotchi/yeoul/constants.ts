@@ -437,6 +437,18 @@ export const TUTOR_ROOM: readonly TutorStep[] = [
 ];
 
 /**
+ * 6칸(게임)을 **한 게임 결과까지** 붙잡아 두는 동안의 안내(2026-10-10 상훈님 "5판 3선의 결과가 나는 걸 보고 가는 걸로").
+ *
+ * ★ 왜 — 서버는 판을 시작하자마자 이 칸을 넘겨서, 1판만 치면 카드가 앨범을 가리켰고 게임은 이어지지
+ *   않은 채 닫히기만 했다(dev 실측 · 이 칸에서 이탈). 이제 결과 화면이 날 때까지 이 칸에 머문다.
+ * ★ 게임 중 ✕ 로 나가도 칸은 안 끝난다 — 그때 카드가 이 문구로 한 게임을 다시 권한다.
+ */
+export const TUTOR_GAME_UNTIL_RESULT = '한 게임은 다섯 판이에요. 세 번 맞히면 이겨요. 결과가 나올 때까지 같이 해 봐요.';
+/** 6칸(게임)의 자리 — 붙잡는 동안 점·`6 / 9` 표시가 이 칸을 가리킨다. */
+export const TUTOR_GAME_IDX = TUTOR_ROOM.findIndex((x) => x.done === 'GAME');
+export const TUTOR_GAME_STEP: TutorStep = TUTOR_ROOM[TUTOR_GAME_IDX];
+
+/**
  * 안내판 「배울 것」의 **목 폴백**. 서버에 붙으면 이 표는 안 쓰인다 — 그때는 도감(`motions`)이
  * 이름·조건·진행도를 다 준다(→ `useYeoul` 의 `goals`).
  *
