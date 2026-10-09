@@ -47,6 +47,20 @@ class ChatLineConfigTest {
     }
 
     @Test
+    @DisplayName("★ LLM 꺼져도 이벤트를 남긴다 — type=template, reason=ok, step=펫 턴 번호, action=턴 종류")
+    void eventWhenOff() {
+        AnalyticsService analytics = mock(AnalyticsService.class);
+        LineChain off = config.lineChain(false, "gpt-5-mini", 4000, new BigDecimal("2"), "minimal", "",
+                mock(ZzalChatSessionRepository.class), new SystemPromptCache(), new TemplateLineGenerator(), events(analytics));
+        off.generate(LlmLineGeneratorTest.cont(com.lore.zzal.chat.session.TurnType.CLOSE, 6), 9L);
+        verify(analytics).collect(org.mockito.ArgumentMatchers.argThat(b -> {
+                    var p = b.events().getFirst().props();
+                    return "template".equals(p.get("type")) && "ok".equals(p.get("reason")) && "close".equals(p.get("action"))
+                            && Integer.valueOf(6).equals(p.get("step")) && "daily".equals(p.get("code"));
+                }), eq(ChatLineEvents.SERVER_ANON), eq(9L), isNull());
+    }
+
+    @Test
     @DisplayName("이벤트 zzal_chat_llm — 허용된 키(action·type·reason·ms)로 서버 익명 번호에 남긴다")
     void eventRecorded() {
         AnalyticsService analytics = mock(AnalyticsService.class);

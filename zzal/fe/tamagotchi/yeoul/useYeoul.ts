@@ -1655,13 +1655,18 @@ export function useYeoul(live?: Live) {
         const r = await liveRef.current?.sendChat(text);
         if (!r) return;
         if (r.error) { flash(r.error); return; }
-        // ★ 채팅 계측(#704) — 허용 키만: action(pet·user) · step(왕복) · code(판 종류) · type(생성기) · reason.
+        // ★ 채팅 계측(#704) — 허용 키만. 서버 이벤트 `zzal_chat_llm` 과 **키 뜻이 같다**:
+        //   action = 펫 턴 종류(first_meet·continue·close …) 또는 user, step = 판 안의 펫 턴 번호
+        //   (사용자 턴은 답한 그 펫 턴의 번호), code = 판 종류, type = 생성기, reason = 폴백 사유만(없으면 ok).
         const sess = r.reply?.session;
         if (sess) {
+          const all = liveRef.current?.chat?.turns ?? [];
+          // 이 응답 전의 턴 목록에서 "앞선 펫 턴 수" 를 센다(새 두 턴이 아직 안 얹혔어도 맞게).
+          const petsBefore = (idx: number) => all.filter((x) => x.speaker === 'PET' && x.idx < idx).length;
           for (const t of r.reply?.turns ?? []) {
             ztrack('zzal_chat_turn', t.speaker === 'USER'
-              ? { action: 'user', step: sess.round, code: sess.kind }
-              : { action: 'pet', step: sess.round, code: sess.kind, type: t.generator ?? 'template', reason: t.filteredReason ?? (t.type === 'CLOSE' ? 'close' : 'ok') });
+              ? { action: 'user', step: petsBefore(t.idx), code: sess.kind.toLowerCase() }
+              : { action: (t.type ?? 'continue').toLowerCase(), step: petsBefore(t.idx) + 1, code: sess.kind.toLowerCase(), type: t.generator ?? 'template', reason: t.filteredReason ?? 'ok' });
           }
         }
         // ★ 자세는 **서버가 정한다**. 그 자세가 '답하기' 일 때만 표의 `reply_done` 을 같이 켠다 —

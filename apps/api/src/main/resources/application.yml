@@ -279,7 +279,7 @@ app:
       # gpt-5-mini = 입력 $0.25 · 출력 $2.00 / 1M(2026-10-08). 한 줄 약 $0.001 안팎.
       model: ${ZZAL_CHAT_MODEL:gpt-5-mini}
       timeout-ms: ${ZZAL_CHAT_TIMEOUT_MS:4000}
-      # 그날(한국 날짜) 채팅 LLM 비용 합(zzal_chat_call.cost_usd)이 이 값 이상이면 템플릿만.
+      # 그날(한국 날짜) 시작한 판의 채팅 LLM 비용 합(zzal_chat_session.cost_usd)이 이 값 이상이면 템플릿만.
       daily-cost-usd: ${ZZAL_CHAT_DAILY_COST_USD:2}
       reasoning-effort: ${ZZAL_CHAT_REASONING_EFFORT:minimal}
       # 대화 한 판의 왕복 상한(#704). 마지막 펫 턴은 닫기 턴. 보상은 판당 1회라 늘려도 친밀도는 안 부푼다.

@@ -16,7 +16,7 @@ import java.math.BigDecimal;
  * <h3>★ 남기는 것</h3>
  * 어느 생성기가 냈는지·폴백 사유·비용을 {@link GeneratedLine} 에 담아 부름 행에 적고(DB),
  * 로그 한 줄과 분석 이벤트 {@code zzal_chat_llm} 을 남긴다 — v2 로 갈 때 템플릿·v1·v2 를 같은 잣대로 비교하려고.
- * LLM 이 꺼져 있으면 이벤트는 안 남긴다(운영에서 매 부름마다 "off" 가 쌓이는 것은 정보가 아니다).
+ * LLM 이 꺼져 있어도 이벤트를 남긴다(type=template, reason=ok) — 켜기 전후 비교의 바탕선이다.
  *
  * <h3>★ v2 에서 붙는 자리</h3>
  * "필터에 걸리면 재생성 1회" 는 {@link #generate} 안, LLM 실패 직후에 한 번 더 부르는 것으로 붙는다.
@@ -47,7 +47,10 @@ public class LineChain {
     public GeneratedLine generate(ChatContext ctx, Long userId) {
         if (primary == null) {
             LineAttempt t = template.generate(ctx);
-            return new GeneratedLine(t.text(), t.motion(), t.generator(), null, BigDecimal.ZERO, null);
+            GeneratedLine out = new GeneratedLine(t.text(), t.motion(), t.generator(), null, BigDecimal.ZERO, null);
+            // ★ LLM 이 꺼져 있어도 남긴다(type=template, reason=ok) — 켜기 전후를 같은 잣대로 비교하려고.
+            record(ctx, out, 0, userId);
+            return out;
         }
         LineAttempt a = primary.generate(ctx);
         GeneratedLine out;
@@ -60,11 +63,20 @@ public class LineChain {
         log.info("채팅 대사 — {} {}번째 · {} · {} · {}ms · ${}{}", ctx.plan().type(), ctx.plan().petTurnNo(), out.generator(),
                 a.model() == null ? "-" : a.model(), a.millis(), a.costUsd(),
                 out.fallbackReason() == null ? "" : " · 폴백 " + out.fallbackReason());
+        record(ctx, out, a.millis(), userId);
+        return out;
+    }
+
+    /**
+     * 이벤트 {@code zzal_chat_llm} — 프론트 {@code zzal_chat_turn} 과 키 뜻이 같다:
+     * action = 턴 종류(first_meet·greeting·reunion·continue·close), step = 판 안의 펫 턴 번호,
+     * code = 판 종류(baby·first_meet·daily·long_absence), type = 생성기, reason = 폴백 사유(없으면 ok).
+     */
+    private void record(ChatContext ctx, GeneratedLine out, long millis, Long userId) {
         if (events != null) {
             events.record(ctx.plan().type().name().toLowerCase(java.util.Locale.ROOT), ctx.plan().petTurnNo(),
                     ctx.kind().name().toLowerCase(java.util.Locale.ROOT), out.generator(), out.fallbackReason(),
-                    a.millis(), userId);
+                    millis, userId);
         }
-        return out;
     }
 }
