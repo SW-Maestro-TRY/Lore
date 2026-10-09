@@ -46,6 +46,9 @@ public class PythonPostProcessor implements PostProcessor {
      * ★ 없으면 실패로 올린다 — 그림만 올라가고 앵커만 사라지면 화면이 소품을 못 얹는데,
      *   서버에는 아무 오류가 없어 <b>화면을 봐야만</b> 드러난다.
      */
+    /** 저장·공유용 GIF 의 형식(#713). 안 박으면 S3 가 기본 형식으로 내려보내 휴대폰이 그림으로 못 연다. */
+    static final String GIF_TYPE = "image/gif";
+
     private static final Set<String> ANCHORS_REQUIRED = com.lore.zzal.motion.MotionImageKeys.ANCHOR_VERSIONS;
 
     /**
@@ -143,8 +146,23 @@ public class PythonPostProcessor implements PostProcessor {
                 Path file = dir.resolve(key + ".webp");
                 storage.download("%s/%s.webp".formatted(fromPrefix, key), file);
                 storage.upload("%s/%s.webp".formatted(outputPrefix, key), file, "image/webp");
+                carryGif(fromPrefix, key, dir);
             }
             log.info("앞 판 그림 옮겨 실음 — {} → {} ({}종)", fromPrefix, outputPrefix, keys.size());
+        }
+
+        /**
+         * 앞 판의 저장·공유용 GIF 도 옮긴다(#713). <b>없어도 실패가 아니다</b> — GIF 이전에 구운 판에는
+         * 원래 없고, 프론트가 webp 로 폴백한다. 그림(webp)을 옮기는 일을 GIF 때문에 멈추지 않는다.
+         */
+        private void carryGif(String fromPrefix, String key, Path dir) {
+            Path gif = dir.resolve(key + ".gif");
+            try {
+                storage.download("%s/%s.gif".formatted(fromPrefix, key), gif);
+                storage.upload("%s/%s.gif".formatted(outputPrefix, key), gif, GIF_TYPE);
+            } catch (RuntimeException e) {
+                log.info("앞 판 GIF 없음(옛 판) — {}/{}.gif : {}", fromPrefix, key, e.getClass().getSimpleName());
+            }
         }
 
         /**
@@ -195,10 +213,28 @@ public class PythonPostProcessor implements PostProcessor {
                 Path file = out.resolve(state + ".webp");
                 requireFresh(file, since, state);
                 storage.upload("%s/%s.webp".formatted(outputPrefix, state), file, "image/webp");
+                uploadGif(state, since);
                 uploaded.add(state);
             }
             log.info("후처리 완료 {} — {} → {} ({}종, {}번째 층)",
                     version, gridImageKey, outputPrefix, uploaded.size(), layer);
+        }
+
+        /**
+         * 저장·공유용 GIF(#713)를 webp 옆에 올린다.
+         *
+         * ★ <b>없으면 경고만 하고 넘어간다.</b> 화면은 webp 로 돌고, 저장 버튼은 GIF 가 없으면 webp 로
+         *   폴백한다. GIF 하나 때문에 돈을 쓴 부화를 실패로 돌리지 않는다. 대신 로그에 남겨
+         *   백필({@code backfill_gif.py})로 메울 수 있게 한다.
+         * ★ 앞 층이 남긴 GIF 는 안 올린다 — webp 와 같은 이유(엉뚱한 층의 그림이 저장된다).
+         */
+        private void uploadGif(String state, FileTime since) throws IOException {
+            Path gif = out.resolve(state + ".gif");
+            if (!Files.exists(gif) || Files.getLastModifiedTime(gif).compareTo(since) < 0) {
+                log.warn("저장용 GIF 없음 — {}/{}.gif (저장 버튼은 webp 로 폴백, 백필 대상)", outputPrefix, state);
+                return;
+            }
+            storage.upload("%s/%s.gif".formatted(outputPrefix, state), gif, GIF_TYPE);
         }
 
         /**
@@ -219,6 +255,7 @@ public class PythonPostProcessor implements PostProcessor {
             Files.createDirectories(out);
             for (String state : expected) {
                 Files.deleteIfExists(out.resolve(state + ".webp"));
+                Files.deleteIfExists(out.resolve(state + ".gif"));
             }
             Path stamp = work.resolve(".stamp");
             Files.deleteIfExists(stamp);
