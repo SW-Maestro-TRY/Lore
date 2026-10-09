@@ -16,12 +16,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 분석 이벤트 {@code zzal_chat_llm} — 대사 한 줄마다 생성기·폴백 사유·걸린 시간.
+ * 분석 이벤트 {@code zzal_chat_llm} — 대사 한 줄마다 결과(outcome)·걸린 시간·호출 횟수.
  *
  * <h3>★ props 는 이미 허용된 키만 쓴다</h3>
- * {@code AnalyticsService} 의 허용 키(common, 안 고침)만 쓴다 — {@code action}=턴 종류(first_meet·continue·close …),
- * {@code step}=판 안의 몇 번째 펫 턴, {@code code}=판 종류(baby·daily …), {@code type}=생성기(template·llm),
- * {@code reason}=폴백 사유(성공이면 "ok"), {@code ms}=걸린 시간.
+ * {@code AnalyticsService} 의 허용 키(common, 안 고침)만 쓴다 — 새 키({@code outcome}·{@code latency_ms})는
+ * 허용 목록에 없어 버려지므로 뜻을 옛 키에 싣는다:
+ * {@code action}=턴 종류(first_meet·continue·close …), {@code step}=판 안의 몇 번째 펫 턴,
+ * {@code code}=판 종류(baby·daily …), {@code type}=낸 곳(llm·fixed),
+ * {@code reason}=<b>outcome</b>(ok · retried_ok · failed_closed · truncated), {@code ms}=<b>latency_ms</b>(재호출까지 합),
+ * {@code count}=호출 횟수(1·2). 첫 실패 사유(timeout·parse …)는 턴 행 {@code filtered_reason} 에 있다.
  *
  * <h3>★ 커밋 <b>뒤에</b> 남긴다</h3>
  * 채팅 요청은 펫 행을 잠근 트랜잭션 안이다. 거기서 기록을 쓰다 실패하면 트랜잭션이 롤백 전용으로 바뀌어
@@ -47,15 +50,16 @@ public class ChatLineEvents {
         this.newTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    public void record(String action, int step, String kind, String generator, String fallbackReason, long millis,
-                       Long userId) {
+    public void record(String action, int step, String kind, String generator, String outcome, long latencyMs,
+                       int attempts, Long userId) {
         Map<String, Object> props = new HashMap<>();
         props.put("action", action);
         props.put("step", step);
         props.put("code", kind);
         props.put("type", generator);
-        props.put("reason", fallbackReason == null ? "ok" : fallbackReason);
-        props.put("ms", millis);
+        props.put("reason", outcome);
+        props.put("ms", latencyMs);
+        props.put("count", attempts);
         Runnable send = () -> {
             try {
                 newTx.executeWithoutResult(st -> analytics.collect(new EventRequests.Batch(null, null,
