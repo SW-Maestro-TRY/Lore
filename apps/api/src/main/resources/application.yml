@@ -146,6 +146,11 @@ lore:
 # 실제 업로드는 브라우저 → S3 직접(presigned PUT)이라 서버(t3.micro)를 안 거친다.
 # 버킷 이름은 환경변수로 주입한다(로컬은 미설정 가능, EC2 는 배포 시 주입).
 app:
+  # 이 서버가 어느 환경인가(prod · staging · dev, 로컬·테스트는 빈 값). 서버는 /etc/lore/lore.env 의 LORE_ENV,
+  # dev 는 docker-compose.yml·infra/dev 가 넣는다. 키 없이 뜨면 안 되는 환경을 가리는 데 쓴다(#709 채팅 키 검사).
+  lore:
+    env: ${LORE_ENV:}
+
   # 사용자 행동 기록 (2026-09-04)
   #
   # ★ 화면에는 이미 41곳에 기록 지점이 심어져 있고, 받아 줄 곳이 없었을 뿐이다.
@@ -268,10 +273,23 @@ app:
       max-bakes: ${ZZAL_NIGHT_MAX_BAKES:200}
       local-regen-max: 2
 
-    # 채팅 대사 생성 방식 — template(5그룹×슬롯 템플릿) · llm(나중).
-    # ★ 어느 쪽이든 원망 문장 금지 필터는 출력 단계에 강제된다(정본 0장 6).
+    # 채팅 대사 — LLM(아래 llm 스위치). 금기(원망·위험 소재)는 지시문 [말하는 법] 이 맡는다(#709).
     chat:
       mode: ${ZZAL_CHAT_MODE:template}
+      # 채팅(#704·#709) — 대사는 LLM 이 낸다. 실패(빈 줄·JSON 깨짐·시간 초과·오류)면 재호출 1회,
+      # 또 실패면 중립 닫는 말 1줄로 판을 닫는다. 성격별 고정 문형(템플릿)·내용 필터·일 비용 상한은 지웠다.
+      # ★ 기본 켜짐(#709) — 키는 그림 생성과 같은 ZZAL_OPENAI_API_KEY(운영 SSM /lore/prod/OPENAI_KEY). 새 파라미터 없음.
+      #   켜져 있는데 키가 비면 운영·스테이징(app.lore.env=prod|staging)은 기동을 막고, 그 밖은 WARN 뒤 꺼짐. ZZAL_CHAT_LLM=false 는 "끄는 용도" 로만 남긴다 —
+      #   꺼져 있으면 채팅 자체가 "부름 없음"이다(판을 만들지 않는다 — 튜토리얼 대화 칸도 안 열린다).
+      # ★ mode 는 옛 칸이다(아무도 안 읽음). 스위치는 llm 하나다.
+      llm: ${ZZAL_CHAT_LLM:true}
+      # gpt-5-mini = 입력 $0.25 · 출력 $2.00 / 1M(2026-10-08). 한 줄 약 $0.001 안팎. 비용은 zzal_chat_session.cost_usd 에 기록.
+      model: ${ZZAL_CHAT_MODEL:gpt-5-mini}
+      # 한 번 호출의 시간 제한. 재호출까지 최악 2배.
+      timeout-ms: ${ZZAL_CHAT_TIMEOUT_MS:4000}
+      reasoning-effort: ${ZZAL_CHAT_REASONING_EFFORT:minimal}
+      # 대화 한 판의 왕복 상한(#704). 마지막 펫 턴은 닫기 턴. 보상은 판당 1회라 늘려도 친밀도는 안 부푼다.
+      max-rounds: ${ZZAL_CHAT_MAX_ROUNDS:5}
 
     # 개발용 시계 API(/api/zzal/v1/dev/**).
     #
@@ -288,6 +306,12 @@ app:
     #    셋 중 하나만으로는 부족하다. 검색에 걸려 발견되는 것이 실제로 가장 흔한 경로다.
     admin:
       enabled: ${ZZAL_ADMIN:false}
+      # 관리자 봇 토큰(#702) — 맥미니 러너가 비밀번호 로그인 없이 X-Admin-Token 헤더로 관리자 복구 API 를 부른다.
+      #   · 기본값 없음 — 비어 있으면 꺼진다(헤더를 보내도 401). 32자 미만·사용자 번호 없음도 꺼진다(기동은 막지 않음)
+      #   · bot-user-id 는 관리자 계정이어야 한다(AdminGuard 가 DB 로 다시 본다). 업로드 키의 주인도 이 번호다
+      #   · 경로는 /api/zzal/v1/admin/** 에만 걸린다
+      bot-token: ${ZZAL_ADMIN_TOKEN:}
+      bot-user-id: ${ZZAL_ADMIN_BOT_USER_ID:0}
 
     # 맥미니(codex 러너) 전용 문 — 사람이 아니라 기계가 부른다.
     #

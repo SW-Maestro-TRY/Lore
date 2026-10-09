@@ -1,0 +1,97 @@
+package com.lore.zzal.chat.session;
+
+import com.lore.zzal.chat.ChatSlot;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+/**
+ * 턴 결정 규칙 — 다음 펫 턴의 종류·질문 허용·질문 항목을 <b>코드가</b> 정한다(LLM 이 고르면 흐름이 흔들린다).
+ *
+ * <h3>규칙</h3>
+ * <ul>
+ *   <li>첫 턴 = 세션 종류({@link SessionKind#firstTurn()}): 첫 만남 · 오늘 첫 인사 · 오랜만</li>
+ *   <li>사용자 답 뒤: 왕복이 상한({@code maxRounds})에 닿았으면 <b>닫기</b>, 아니면 <b>이어 말하기</b></li>
+ *   <li>질문 허용 — 한 턴 걸러(펫 턴 1·3·5번째). 오랜만·닫기는 질문 금지</li>
+ *   <li>사용자가 되물었으면(물음표·"뭐야" 류) 그 턴은 <b>답 우선</b> — 질문 금지</li>
+ *   <li>질문 항목 — 순서표({@link QuestionItem})에서 아직 답이 없는 첫 항목. <b>한 판에 한 항목</b>,
+ *       질문이 허용된 첫 펫 턴에 싣는다. 다 끝났으면 없음</li>
+ *   <li>★ 하루 부름(아침·낮·저녁)의 첫 턴은 <b>창 화제</b>(잘 잤는지·점심·저녁 …)가 질문 자리를 차지한다(#709).
+ *       항목은 그 뒤 질문이 허용된 턴(3번째)에 싣는다 — 한 턴에 질문은 하나뿐이라 겹치면 창 화제가 먼저다</li>
+ * </ul>
+ */
+public final class TurnPlanner {
+
+    /** 마지막 답에서 이만큼 지나 돌아오면 "오랜만". 하룻밤(저녁 답 → 다음 아침)은 오랜만이 아니다. */
+    public static final Duration LONG_ABSENCE_AFTER = Duration.ofHours(24);
+
+    /** 마지막 펫 턴 뒤 이만큼 답이 없으면 그 판은 이탈(ABANDONED). 첫 답 전에는 적용하지 않는다(만료 규칙이 따로 있다). */
+    public static final Duration ABANDON_AFTER = Duration.ofMinutes(10);
+
+    /**
+     * 되묻기 표지 — 물음표, 또는 의문사(뭐·왜·어디·언제·누구·어때·어땠)가 <b>말 끝</b>에 있을 때만.
+     * ★ "너는 최고야"·"너도 귀여워"·"나 알아" 는 되묻기가 아니다 — 대명사·"알아" 로 잡던 헛걸림을 걷었다.
+     */
+    private static final Pattern ASKS = Pattern.compile(
+            "[?？]|(뭐|왜|어디|언제|누구|어때|어땠)[가-힣]{0,3}\\s*[.!~…]*$");
+
+    private TurnPlanner() {
+    }
+
+    /** 판의 첫 펫 턴(창 없음 — BABY·시험). */
+    public static TurnPlan first(SessionKind kind, Set<QuestionItem> answered) {
+        return first(kind, answered, null);
+    }
+
+    /** 판의 첫 펫 턴. 하루 부름 창이면 창 화제가 질문 자리를 차지해 항목은 뒤로 미룬다. */
+    public static TurnPlan first(SessionKind kind, Set<QuestionItem> answered, ChatSlot slot) {
+        TurnType type = kind.firstTurn();
+        boolean allow = type != TurnType.REUNION;
+        boolean windowTopic = slot != null && slot.daily();
+        return new TurnPlan(type, 1, allow, allow && !windowTopic ? nextItem(answered) : null, false, slot);
+    }
+
+    /**
+     * 사용자 답 뒤의 펫 턴.
+     *
+     * @param rounds        이번 답까지 센 왕복 수
+     * @param maxRounds     상한
+     * @param petTurnNo     이번에 만들 펫 턴의 번호(1부터)
+     * @param userLine      방금 사용자가 한 말
+     * @param itemAsked     이번 판에서 이미 항목을 물었나
+     * @param answered      답이 있는 항목
+     */
+    public static TurnPlan next(int rounds, int maxRounds, int petTurnNo, String userLine, boolean itemAsked,
+                                Set<QuestionItem> answered) {
+        return next(rounds, maxRounds, petTurnNo, userLine, itemAsked, answered, null);
+    }
+
+    /** 사용자 답 뒤의 펫 턴(이 판의 부름을 실어 보낸다 — 닫기 턴이 다음 창을 말하게). */
+    public static TurnPlan next(int rounds, int maxRounds, int petTurnNo, String userLine, boolean itemAsked,
+                                Set<QuestionItem> answered, ChatSlot slot) {
+        if (rounds >= maxRounds) {
+            return new TurnPlan(TurnType.CLOSE, petTurnNo, false, null, false, slot);
+        }
+        boolean asked = userAsked(userLine);
+        boolean allow = petTurnNo % 2 == 1 && !asked;
+        QuestionItem item = allow && !itemAsked ? nextItem(answered) : null;
+        return new TurnPlan(TurnType.CONTINUE, petTurnNo, allow, item, asked, slot);
+    }
+
+    /** 순서표에서 아직 답이 없는 첫 항목. */
+    public static QuestionItem nextItem(Set<QuestionItem> answered) {
+        for (QuestionItem q : List.of(QuestionItem.values())) {
+            if (!answered.contains(q)) {
+                return q;
+            }
+        }
+        return null;
+    }
+
+    /** 사용자가 되물었나. */
+    public static boolean userAsked(String line) {
+        return line != null && ASKS.matcher(line.strip()).find();
+    }
+}

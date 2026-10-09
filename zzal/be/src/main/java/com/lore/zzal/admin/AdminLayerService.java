@@ -63,6 +63,7 @@ import java.util.stream.Collectors;
  * <h3>★ 1층 고르기 = 새 판 = 후보 8종 + 후보 앵커(1층만) · 2층은 PENDING 으로 되돌려 다시 굽는다</h3>
  * 1층 앵커(K·Hw)가 바뀌므로 옛 2층 그림은 더 이상 맞지 않는다. 2층 격자(grid2)는 남겨 두므로 다시 자르기만 한다(돈 안 듦).
  * 부화에 실패한(FAILED) 알이면 그 자리에서 살린다(관리자 재굽기와 같은 자리 확인).
+ * ★ 고르기는 부화 시각을 건드리지 않는다 — 복구한 시각은 {@code recovered_at} 에만 남는다(#702).
  *
  * ★ 잠금은 다른 관리자 API 와 같다(스위치·{@link AdminGuard}·화면 noindex).
  */
@@ -124,12 +125,30 @@ public class AdminLayerService {
                             String previewKey, Map<String, String> previewKeys) {
     }
 
-    /** 목록 한 줄. {@code layer} = 1(부화 실패) 또는 2(2층 실패·대기). */
+    /**
+     * 목록 한 줄. {@code layer} = 1(부화 실패) 또는 2(2층 실패·대기·결함 표시).
+     *
+     * <ul>
+     *   <li>{@code recovery} — 복구가 어디까지 왔나: {@code LOCAL_REQUESTED}(다시 만들기 요청 — 맥미니 러너가 집는다) ·
+     *       {@code CANDIDATES}(올라온 후보가 있다 — 사람이 고른다) · {@code WAITING}(아무것도 없음)</li>
+     *   <li>{@code currentKeys} — 지금 사용자에게 보이는 그 층 8종(key → webp 키). 2층은 READY 일 때만(아니면 그 판에 2층이 없다)</li>
+     *   <li>{@code recoveredAt} — 마지막으로 손으로 고친 시각(부화 시각과 따로)</li>
+     * </ul>
+     */
     public record Item(Long petId, String name, int layer, String phase, String layer2Status, boolean flagged,
                        int attempts, String lastError, Instant updatedAt, int basicRound,
                        String sheetKey, String identityText, String anchorsKey,
-                       List<String> rejectedKeys, List<Candidate> candidates) {
+                       List<String> rejectedKeys, List<Candidate> candidates,
+                       String recovery, Instant regenRequestedAt, Instant recoveredAt,
+                       Map<String, String> currentKeys) {
     }
+
+    /** 다시 만들기 요청 결과. */
+    public record Regen(Long petId, int layer, Instant regenRequestedAt) {
+    }
+
+    /** 러너가 집을 상태 값 — 선물 재생성(LOCAL_REQUESTED)과 같은 이름. */
+    public static final String LOCAL_REQUESTED = "LOCAL_REQUESTED";
 
     /** 고르기 결과. */
     public record Picked(Long petId, int layer, String candidateId, int basicRound, String phase,
@@ -146,11 +165,18 @@ public class AdminLayerService {
         adminGuard.require(adminUserId);
         return tx.execute(s -> {
             List<Item> out = new ArrayList<>();
+            java.util.Set<Long> seen = new java.util.HashSet<>();
+            // ★ 결함 표시(flagged)는 노출 상태와 따로 간다(#702) — READY 인 채로 목록에 오른다.
+            for (ZzalPet p : petRepository.findByPhaseAndLayer2FlaggedTrueOrderByIdDesc(PetPhase.ALIVE)) {
+                if (seen.add(p.getId())) {
+                    out.add(item(p, 2));
+                }
+            }
             for (ZzalPet p : petRepository.findByPhaseAndLayer2StatusInOrderByIdDesc(PetPhase.ALIVE,
                     List.of(Layer2Status.FAILED, Layer2Status.PENDING, Layer2Status.RUNNING))) {
                 boolean stale = p.getLayer2Status() != Layer2Status.FAILED
                         && (p.getLayer2UpdatedAt() == null || p.getLayer2UpdatedAt().isBefore(now.minus(STALE)));
-                if (p.getLayer2Status() == Layer2Status.FAILED || stale) {
+                if ((p.getLayer2Status() == Layer2Status.FAILED || stale) && seen.add(p.getId())) {
                     out.add(item(p, 2));
                 }
             }
@@ -177,12 +203,27 @@ public class AdminLayerService {
             }
         }
         String lastError = layer == 2 ? p.getLayer2LastError() : lastHatchError(p.getId());
+        List<Candidate> cands = CandidateList.parse(layer == 1 ? p.getLayer1Candidates() : p.getLayer2Candidates())
+                .stream().map(c -> c.toResponse(p.getId(), layer, baker)).toList();
+        Instant regen = p.getRegenRequestedAt(layer);
+        String recovery = regen != null ? LOCAL_REQUESTED : cands.isEmpty() ? "WAITING" : "CANDIDATES";
         return new Item(p.getId(), p.getName(), layer, p.getPhase().name(), p.getLayer2Status().name(),
                 p.isLayer2Flagged(), layer == 2 ? p.getLayer2Attempts() : hatchAttempts(p.getId()), lastError,
                 layer == 2 ? p.getLayer2UpdatedAt() : p.getHatchStartedAt(), p.getBasicRound(), sheet, identity,
                 p.getBasicRound() > 0 ? MotionImageKeys.anchors(p.getId(), p.getBasicRound()) : null,
-                rejectedKeys(p.getId(), layer), CandidateList.parse(layer == 1 ? p.getLayer1Candidates() : p.getLayer2Candidates())
-                .stream().map(c -> c.toResponse(p.getId(), layer, baker)).toList());
+                rejectedKeys(p.getId(), layer), cands, recovery, regen, p.getRecoveredAt(), currentKeys(p, layer));
+    }
+
+    /** 지금 사용자에게 보이는 그 층 8종. 판이 없거나(부화 실패) 2층이 READY 가 아니면 빈 맵. */
+    private Map<String, String> currentKeys(ZzalPet p, int layer) {
+        if (p.getBasicRound() <= 0 || !p.isAlive() || (layer == 2 && !p.isLayer2Ready())) {
+            return Map.of();
+        }
+        Map<String, String> out = new java.util.LinkedHashMap<>();
+        for (String k : baker.keys(layer)) {
+            out.put(k, MotionImageKeys.basic(p.getId(), p.getBasicRound(), k));
+        }
+        return out;
     }
 
     private String lastHatchError(Long petId) {
@@ -216,7 +257,10 @@ public class AdminLayerService {
 
     // ── 2층 수동 등록·재시도 ─────────────────────────────────────────────
 
-    /** 통과했지만 결함인 2층을 목록에 올린다 — FAILED, 올라간 그림은 그대로. 사용자에게는 2층이 "연습 중" 이 된다. */
+    /**
+     * 통과했지만 결함인 2층을 목록에 올린다 — <b>표시만</b>(#702). 2층 상태·올라간 그림·사용자 화면은 그대로다.
+     * 사용자 화면이 바뀌는 것은 후보를 고를 때({@link #pick}) 하나뿐이다.
+     */
     public State flag(Long adminUserId, Long petId, String reason, Instant now) {
         adminGuard.require(adminUserId);
         return tx.execute(s -> {
@@ -225,10 +269,25 @@ public class AdminLayerService {
                 throw new BusinessException(ErrorCode.ZZAL_PET_ALREADY_HATCHING,
                         "2층이 아직 굽는 중입니다(지금 %s)".formatted(p.getLayer2Status()));
             }
-            p.flagLayer2(reason == null || reason.isBlank() ? "관리자 수동 등록" : "관리자 수동 등록 — " + reason, now);
-            log.info("2층 수동 등록 — petId={} (admin={})", petId, adminUserId);
-            return new State(petId, p.getLayer2Status().name(), p.getLayer2Attempts(), p.isLayer2Flagged());
+            p.flagLayer2(reason == null || reason.isBlank() ? "관리자 수동 등록" : "관리자 수동 등록 — " + reason);
+            log.info("2층 결함 표시 — petId={} 상태={} (admin={})", petId, p.getLayer2Status(), adminUserId);
+            return state(p);
         });
+    }
+
+    /** 결함 표시를 거둔다 — 목록에서 내린다. 노출 상태는 그대로. */
+    public State unflag(Long adminUserId, Long petId) {
+        adminGuard.require(adminUserId);
+        return tx.execute(s -> {
+            ZzalPet p = alive(petId);
+            p.unflagLayer2();
+            log.info("2층 결함 표시 해제 — petId={} (admin={})", petId, adminUserId);
+            return state(p);
+        });
+    }
+
+    private static State state(ZzalPet p) {
+        return new State(p.getId(), p.getLayer2Status().name(), p.getLayer2Attempts(), p.isLayer2Flagged());
     }
 
     /**
@@ -242,13 +301,70 @@ public class AdminLayerService {
             if (p.getLayer2Status() == Layer2Status.RUNNING) {
                 throw new BusinessException(ErrorCode.ZZAL_PET_ALREADY_HATCHING, "2층이 지금 굽는 중입니다");
             }
+            // ★ READY(결함 표시만 된 것)는 막는다(#702) — PENDING 으로 돌리는 순간 사용자 2층이 "연습 중" 으로 잠기고,
+            //   운영 굽기가 또 실패하면 FAILED 로 남는다. 결함 표시된 펫은 후보(맥미니 다시 만들기·직접 올리기)로 고친다.
+            if (p.getLayer2Status() == Layer2Status.READY) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        "2층이 READY 입니다 — 사용자 화면을 잠그지 않도록 후보를 올려 고르세요(다시 만들기·후보 올리기)");
+            }
             discardLayer2Steps(petId, true);
             p.resetLayer2(now);
-            return new State(petId, p.getLayer2Status().name(), p.getLayer2Attempts(), p.isLayer2Flagged());
+            return state(p);
         });
         layer2Service.schedule(petId);
         log.info("2층 재시도 — petId={} (admin={})", petId, adminUserId);
         return st;
+    }
+
+    // ── 다시 만들기(맥미니) ──────────────────────────────────────────────
+
+    /**
+     * 그 층을 맥미니에서 다시 만들어 달라고 표시한다(#702) — 러너가 10분마다 목록에서 {@code LOCAL_REQUESTED} 를 집어
+     * Codex 로 후보 격자를 만들고 후보 올리기로 등록한다. <b>고르는 것은 사람</b>이다. 사용자 화면은 그대로.
+     * 2층이면 목록에 남도록 결함 표시도 함께 건다(READY 펫이 목록에서 사라지지 않게).
+     */
+    public Regen requestRegen(Long adminUserId, Long petId, int layer, Instant now) {
+        adminGuard.require(adminUserId);
+        return tx.execute(s -> {
+            ZzalPet p = petRepository.findByIdForUpdate(petId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
+            requireLayerTarget(p, layer);
+            if (layer == 1 && p.getPhase() != PetPhase.FAILED) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "1층 다시 만들기는 부화에 실패한 알만 받습니다");
+            }
+            if (layer == 2 && p.getLayer2Status() == Layer2Status.READY && !p.isLayer2Flagged()) {
+                p.flagLayer2("관리자 다시 만들기 요청");
+            }
+            p.requestRegen(layer, now);
+            log.info("{}층 다시 만들기 요청 — petId={} (admin={})", layer, petId, adminUserId);
+            return new Regen(petId, layer, p.getRegenRequestedAt(layer));
+        });
+    }
+
+    /** 다시 만들기 요청을 거둔다. */
+    public Regen cancelRegen(Long adminUserId, Long petId, int layer) {
+        adminGuard.require(adminUserId);
+        if (layer != 1 && layer != 2) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "층은 1 또는 2 입니다");
+        }
+        return tx.execute(s -> {
+            ZzalPet p = petRepository.findByIdForUpdate(petId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
+            p.clearRegen(layer);
+            log.info("{}층 다시 만들기 요청 취소 — petId={} (admin={})", layer, petId, adminUserId);
+            return new Regen(petId, layer, null);
+        });
+    }
+
+    // ── 업로드 주소 ──────────────────────────────────────────────────────
+
+    /** 후보 격자를 올릴 presign(#702). 관리자 줄에 있어 봇 토큰으로도 부른다. png 만. */
+    public S3Service.PresignedUpload presign(Long adminUserId, String contentType) {
+        adminGuard.require(adminUserId);
+        if (!"image/png".equals(contentType)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "후보 격자는 image/png 만 받습니다");
+        }
+        return s3Service.createUploadUrl(adminUserId, "zzal", contentType);
     }
 
     // ── 후보 ─────────────────────────────────────────────────────────────
@@ -309,6 +425,8 @@ public class AdminLayerService {
             } else {
                 p.setLayer2Candidates(joined);
             }
+            // 후보가 왔다 — 다시 만들기 요청은 채워졌다(러너가 같은 요청을 또 집지 않는다)
+            p.clearRegen(layer);
         });
         log.info("후보 {}장 처리 — petId={} layer={} 결과={} (admin={})", entries.size(), petId, layer,
                 entries.stream().map(CandidateList.Entry::gate).toList(), adminUserId);
@@ -388,6 +506,8 @@ public class AdminLayerService {
                 p.resetLayer2(now);
                 scheduleLayer2[0] = true;
             }
+            p.markRecovered(now);
+            p.clearRegen(layer);
             // 나머지 후보 격자는 보존, 임시 파일은 정리
             cleanup(petId, layer, all, candidateId);
             if (layer == 1) {
@@ -435,8 +555,8 @@ public class AdminLayerService {
         if (p.getHatchPipelineVersion() == null) {
             p.setHatchPipelineVersion(hatchService.currentVersion());
         }
-        p.reopenHatch(now);
-        p.markAlive(sheet, identity, now);
+        // ★ 부화 시각(hatch_started_at·hatched_at)을 지금으로 덮지 않는다(#702) — recovered_at 에 남긴다.
+        p.reviveByAdmin(sheet, identity, now);
         motionSeeder.seed(p.getId(), now);
         log.info("1층 후보로 부화 실패 알을 살림 — petId={}", p.getId());
     }
@@ -480,7 +600,10 @@ public class AdminLayerService {
                 copyQuietly(e.gridKey(), "images/zzal/pets/%d/rejected/cand-%s-%s.png"
                         .formatted(petId, e.id(), layer == 1 ? "grid" : "grid2"), "image/png");
             }
-            baker.keys(layer).forEach(k -> trash.add("%s/%s.webp".formatted(prefix, k)));
+            baker.keys(layer).forEach(k -> {
+                trash.add("%s/%s.webp".formatted(prefix, k));
+                trash.add("%s/%s.gif".formatted(prefix, k));      // #713 — 없는 키는 S3 가 성공으로 친다
+            });
             trash.add(prefix + "/anchors.json");
         }
         try {
@@ -493,6 +616,9 @@ public class AdminLayerService {
     private void copyAll(String fromPrefix, String toPrefix, List<String> keys, String ext) {
         for (String k : keys) {
             copy("%s/%s%s".formatted(fromPrefix, k, ext), "%s/%s%s".formatted(toPrefix, k, ext), "image/webp");
+            // 저장·공유용 GIF 도 같이 옮긴다(#713). 옛 후보·옛 판에는 없다 — 없으면 프론트가 webp 로 폴백하므로
+            // 그림 옮기기를 멈추지 않는다(copyQuietly).
+            copyQuietly("%s/%s.gif".formatted(fromPrefix, k), "%s/%s.gif".formatted(toPrefix, k), "image/gif");
         }
     }
 
@@ -520,7 +646,7 @@ public class AdminLayerService {
         try {
             copy(from, to, contentType);
         } catch (RuntimeException e) {
-            log.warn("후보 격자 보존 실패(무시) — {} → {} : {}", from, to, String.valueOf(e));
+            log.warn("복사 실패(무시 — 후보 격자 보존·옛 GIF) — {} → {} : {}", from, to, String.valueOf(e));
         }
     }
 

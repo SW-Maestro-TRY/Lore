@@ -87,6 +87,55 @@ public class ZzalItConfig {
         return mock(S3Presigner.class);
     }
 
+    /** 채팅 목 LLM — 시험이 실패(예외)를 줄 세울 수 있게 빈으로 둔다. 준비한 응답이 없으면 물음표 있는 한 줄. */
+    @Bean
+    public com.lore.zzal.chat.line.FakeChatLineClient fakeChatLineClient() {
+        // 물음표가 있어야 그 턴의 질문 항목(호칭 등)이 소비된다 — 템플릿이 하던 몫을 목이 대신한다.
+        return new com.lore.zzal.chat.line.FakeChatLineClient()
+                .whenEmpty("{\"line\":\"응, 반가워. 뭐라고 부르면 돼?\",\"motion\":\"hello\"}");
+    }
+
+    /**
+     * 채팅 대사 — 목 LLM 으로 도는 켜진 사슬(#709). 돈이 안 나간다.
+     *
+     * ★ 템플릿을 지워 LLM 이 꺼지면 하루 부름이 아예 없다. 시험 DB 에는 OpenAI 키가 없으므로
+     *   진짜 사슬은 {@code app.zzal.chat.llm=false}(ZzalIntegrationTest)로 꺼 두고, 여기 목 사슬에 우선권을 준다.
+     * ★ {@link SwitchableLineChain#llmOff} 로 시험 중 "LLM 꺼짐" 을 흉내 낸다(시험이 끝나면 되돌릴 것).
+     */
+    @Bean
+    @Primary
+    public SwitchableLineChain fakeChatLineChain(com.lore.zzal.chat.line.ChatLineEvents events,
+                                                 com.lore.zzal.chat.line.FakeChatLineClient client) {
+        return new SwitchableLineChain(new com.lore.zzal.chat.line.LlmLineGenerator(client, "gpt-5-mini",
+                java.time.Duration.ofSeconds(4), new com.lore.zzal.chat.prompt.SystemPromptCache()), events);
+    }
+
+    /** 켜고 끌 수 있는 시험용 사슬 — 꺼지면 {@link com.lore.zzal.chat.line.LineChain#off()} 와 똑같이 군다. */
+    public static class SwitchableLineChain extends com.lore.zzal.chat.line.LineChain {
+        private static final com.lore.zzal.chat.line.LineChain OFF = com.lore.zzal.chat.line.LineChain.off();
+        public volatile boolean llmOff;
+
+        SwitchableLineChain(com.lore.zzal.chat.line.LineGenerator llm, com.lore.zzal.chat.line.ChatLineEvents events) {
+            super(llm, events);
+        }
+
+        @Override
+        public boolean llmEnabled() {
+            return !llmOff && super.llmEnabled();
+        }
+
+        @Override
+        public com.lore.zzal.chat.line.GeneratedLine generate(com.lore.zzal.chat.prompt.ChatContext ctx, Long userId) {
+            return llmOff ? OFF.generate(ctx, userId) : super.generate(ctx, userId);
+        }
+
+        @Override
+        public com.lore.zzal.chat.line.GeneratedLine firstBaby(com.lore.zzal.chat.prompt.ChatContext ctx, Long userId,
+                                                               int failedSoFar) {
+            return llmOff ? OFF.firstBaby(ctx, userId, failedSoFar) : super.firstBaby(ctx, userId, failedSoFar);
+        }
+    }
+
     /**
      * 대역 후처리 프로파일 — <b>시험 전용이다. 운영 프로파일과 아무 관계가 없다.</b>
      *

@@ -11,7 +11,7 @@ public final class ChatRequests {
     private ChatRequests() {
     }
 
-    @Schema(description = "대화 응답 요청. 슬롯당 1회, 최대 40자")
+    @Schema(description = "대화 한 마디. 열린 판에 최대 max-rounds 번, 한 번에 최대 40자")
     public record Answer(
             @Schema(example = "오늘 학교 갔다 왔어") @NotBlank @Size(max = ZzalRules.CHAT_MAX_CHARS) String text) {
     }

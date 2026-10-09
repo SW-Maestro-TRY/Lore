@@ -24,13 +24,19 @@ import java.util.List;
  *
  * <pre>
  *   GET  /api/zzal/v1/admin/layer2                          목록(2층 실패·대기 + 1층 실패)
- *   POST /api/zzal/v1/admin/pets/{id}/layer2/flag           통과했지만 결함인 2층을 목록에 올림(FAILED·그림 유지)
+ *   POST /api/zzal/v1/admin/pets/{id}/layer2/flag           통과했지만 결함인 2층을 목록에 올림(표시만 — 사용자 화면 그대로, #702)
+ *   POST /api/zzal/v1/admin/pets/{id}/layer2/unflag         결함 표시 해제(목록에서 내림)
  *   POST /api/zzal/v1/admin/pets/{id}/layer2/candidates     2층 후보 격자 1~3장 → 게이트+후처리
  *   POST /api/zzal/v1/admin/pets/{id}/layer2/pick           2층 후보 고르기 → 새 판·READY
  *   POST /api/zzal/v1/admin/pets/{id}/layer2/retry          운영 API 로 2층 다시 굽기(돈 듦)
  *   POST /api/zzal/v1/admin/pets/{id}/layer1/candidates     1층 후보 격자 1~3장
  *   POST /api/zzal/v1/admin/pets/{id}/layer1/pick           1층 후보 고르기 → 새 판·2층 PENDING(실패 알이면 살림)
+ *   POST /api/zzal/v1/admin/pets/{id}/layer{1|2}/regen        맥미니에서 다시 만들기 요청(LOCAL_REQUESTED, #702)
+ *   POST /api/zzal/v1/admin/pets/{id}/layer{1|2}/regen/cancel 요청 취소
+ *   POST /api/zzal/v1/admin/uploads/presign                 후보 격자 업로드 주소(관리자·봇 토큰, #702)
  * </pre>
+ *
+ * ★ 쿠키 로그인과 함께 {@code X-Admin-Token}(봇 토큰)으로도 부를 수 있다 — {@link AdminBotToken}(#702).
  */
 @Tag(name = "관리자", description = "밤에 구운 움짤 검수. 운영에서는 꺼져 있어 존재하지 않는다")
 @RestController
@@ -54,8 +60,21 @@ public class AdminLayerController {
     public record FlagRequest(String reason) {
     }
 
+    public record PresignRequest(@NotBlank String contentType) {
+    }
+
+    @Operation(summary = "후보 격자 업로드 주소", description = """
+            관리자(또는 봇 토큰)가 후보 격자를 올릴 자리. 공통 presign(`/api/v1/uploads/presign`)과 같은 표를 쓰지만
+            이 주소는 관리자 줄에 있어 봇 토큰으로도 부를 수 있다. 키의 주인 = 부른 관리자(봇이면 토큰에 묶인 번호).
+            `image/png` 만 받는다.""")
+    @PostMapping("/uploads/presign")
+    public ApiResponse<com.lore.common.s3.S3Service.PresignedUpload> presign(@LoginUser Long userId,
+                                                                            @Valid @RequestBody PresignRequest body) {
+        return ApiResponse.ok(service.presign(userId, body.contentType()));
+    }
+
     @Operation(summary = "1층·2층 복구 목록", description = """
-            - layer=2: 살아 있는 펫 중 2층 `FAILED`(재시도 소진·수동 등록) 또는 30분 넘게 `PENDING`·`RUNNING`
+            - layer=2: 살아 있는 펫 중 결함 표시(`flagged`, 2층 상태 무관) · 2층 `FAILED`(재시도 소진) · 30분 넘게 `PENDING`·`RUNNING`
             - layer=1: 부화에 실패한(`FAILED`) 알
             - 시트 키·생김새 문단·보존 격자 키(`rejected/`)·올려 둔 후보를 함께 준다""")
     @GetMapping("/layer2")
@@ -63,11 +82,19 @@ public class AdminLayerController {
         return ApiResponse.ok(service.list(userId, Instant.now()));
     }
 
-    @Operation(summary = "2층 수동 등록", description = "통과했지만 결함인 2층을 FAILED 로 둔다. 올라간 그림은 그대로이고 사용자에게는 2층이 '연습 중' 이 된다.")
+    @Operation(summary = "2층 결함 표시", description = """
+            통과했지만 결함인 2층을 복구 목록에 올린다. **표시만 한다** — 2층 상태·올라간 그림·사용자 화면은 그대로(#702).
+            사용자 화면이 바뀌는 것은 후보를 고를 때(pick) 하나뿐이다.""")
     @PostMapping("/pets/{petId}/layer2/flag")
     public ApiResponse<AdminLayerService.State> flag(@LoginUser Long userId, @PathVariable Long petId,
                                                      @RequestBody(required = false) FlagRequest body) {
         return ApiResponse.ok(service.flag(userId, petId, body == null ? null : body.reason(), Instant.now()));
+    }
+
+    @Operation(summary = "2층 결함 표시 해제", description = "목록에서 내린다. 노출 상태는 그대로.")
+    @PostMapping("/pets/{petId}/layer2/unflag")
+    public ApiResponse<AdminLayerService.State> unflag(@LoginUser Long userId, @PathVariable Long petId) {
+        return ApiResponse.ok(service.unflag(userId, petId));
     }
 
     @Operation(summary = "2층 후보 올리기", description = """
@@ -87,10 +114,29 @@ public class AdminLayerController {
         return ApiResponse.ok(service.pick(userId, petId, 2, body.candidateId(), Instant.now()));
     }
 
-    @Operation(summary = "2층 다시 굽기(운영 API)", description = "시도 수 0부터 다시. 이미지 API 비용이 든다 — 기본은 후보 올리기.")
+    @Operation(summary = "2층 다시 굽기(운영 API)", description = """
+            시도 수 0부터 다시. 이미지 API 비용이 든다 — 기본은 후보 올리기.
+            2층이 READY(결함 표시만 된 것)면 막는다 — PENDING 으로 돌리면 사용자 2층이 잠기기 때문(#702).""")
     @PostMapping("/pets/{petId}/layer2/retry")
     public ApiResponse<AdminLayerService.State> layer2Retry(@LoginUser Long userId, @PathVariable Long petId) {
         return ApiResponse.ok(service.retry(userId, petId, Instant.now()));
+    }
+
+    @Operation(summary = "다시 만들기(맥미니)", description = """
+            그 층을 맥미니 러너가 Codex 로 다시 만들어 후보로 올리게 표시한다(`recovery = LOCAL_REQUESTED`).
+            사용자 화면은 그대로이고, 고르는 것은 사람이다. 후보가 올라오면 요청은 지워진다.
+            2층 READY 펫이면 목록에 남도록 결함 표시도 함께 건다. 1층은 부화에 실패한 알만.""")
+    @PostMapping("/pets/{petId}/layer{layer}/regen")
+    public ApiResponse<AdminLayerService.Regen> regen(@LoginUser Long userId, @PathVariable Long petId,
+                                                     @PathVariable int layer) {
+        return ApiResponse.ok(service.requestRegen(userId, petId, layer, Instant.now()));
+    }
+
+    @Operation(summary = "다시 만들기 취소")
+    @PostMapping("/pets/{petId}/layer{layer}/regen/cancel")
+    public ApiResponse<AdminLayerService.Regen> cancelRegen(@LoginUser Long userId, @PathVariable Long petId,
+                                                           @PathVariable int layer) {
+        return ApiResponse.ok(service.cancelRegen(userId, petId, layer));
     }
 
     @Operation(summary = "1층 후보 올리기", description = "grid.png 키 1~3장. 살아 있거나 부화에 실패한 펫.")

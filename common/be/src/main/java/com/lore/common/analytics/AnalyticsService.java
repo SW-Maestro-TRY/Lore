@@ -66,6 +66,9 @@ public class AnalyticsService {
      *   <tr><td>stars</td>       <td>feedback_submit — 1~5 점수</td></tr>
      *   <tr><td>has_image, has_keywords, has_note, has_email</td>
      *                            <td>★ 내용 대신 "있었는가" 만 남기는, 이 서비스가 이미 쓰고 있는 패턴</td></tr>
+     *   <tr><td>motion, layer</td>
+     *                            <td>zzal_dex_download·zzal_dex_share — 동작 키(카탈로그 18종)와 층(1|2|gift).
+     *                                카탈로그가 정한 값이라 사람이 쓴 글이 들어올 자리가 없다(2026-10-08 #705)</td></tr>
      *   <tr><td>step, count, seq, ms</td>
      *                            <td>아직 안 쓰지만 곧 들어올 자리(미니게임·후기 단계·소요시간).
      *                                숫자이거나 열거값이라 새어도 개인을 가리키지 않는다</td></tr>
@@ -82,7 +85,8 @@ public class AnalyticsService {
     private static final Set<String> ALLOWED_PROP_KEYS = Set.of(
             "action", "tab", "from", "to", "code", "reason", "type", "stars",
             "has_image", "has_keywords", "has_note", "has_email",
-            "step", "count", "seq", "ms");
+            "step", "count", "seq", "ms",
+            "motion", "layer");
 
     /** 이벤트 이름의 생김새. 화면이 부르는 이름 그대로라 소문자·숫자·밑줄뿐이다. */
     private static final Pattern EVENT_NAME = Pattern.compile("^[a-z][a-z0-9_]{0,59}$");
@@ -302,7 +306,7 @@ public class AnalyticsService {
      * <p>문자열이 64자를 넘으면 <b>자르지 않고 버린다.</b> 잘라서 넣으면 이메일 앞부분이나
      * 후기 첫 문장이 그대로 남는다 — 개인정보의 절반은 여전히 개인정보다.
      */
-    private String sanitizeProps(Map<String, Object> props) {
+    static String sanitizeProps(Map<String, Object> props) {
         if (props == null || props.isEmpty()) return null;
 
         Map<String, Object> kept = new LinkedHashMap<>();

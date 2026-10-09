@@ -138,6 +138,25 @@ public class ZzalPet {
     @Column(name = "layer1_candidates", length = 2000)
     private String layer1Candidates;
 
+    /**
+     * 관리자가 1층·2층을 손으로 고친 마지막 시각(#702).
+     *
+     * ★ 부화 시각({@link #hatchStartedAt}·{@link #hatchedAt})을 덮어쓰지 않으려고 따로 둔다 — 복구가 그 둘을
+     *   지금으로 바꾸면 부화 소요 시간·부화일 통계가 복구한 날로 튄다.
+     */
+    @Column(name = "recovered_at")
+    private Instant recoveredAt;
+
+    /**
+     * 관리자 "다시 만들기" 요청 시각(#702) — 맥미니 러너가 집어 후보를 올린다. 노출 상태와 따로 간다.
+     * 후보가 올라오거나(누가 올렸든) 고르면 지워진다.
+     */
+    @Column(name = "layer1_regen_requested_at")
+    private Instant layer1RegenRequestedAt;
+
+    @Column(name = "layer2_regen_requested_at")
+    private Instant layer2RegenRequestedAt;
+
     /** 이번 조회에서 2층 READY 를 처음 알리며 열린 동작 seq. 저장하지 않는다(수명 = 이 요청). */
     @jakarta.persistence.Transient
     private java.util.List<Integer> layer2JustUnlocked = java.util.List.of();
@@ -603,6 +622,13 @@ public class ZzalPet {
     @Column(length = ZzalRules.GENRE_MAX_CHARS)
     private String genre;
 
+    /**
+     * 아이가 사용자를 부르는 말(채팅, #704). 대화 중 "뭐라고 부를까" 에 대한 답에서 <b>코드가</b> 뽑아 둔다.
+     * ★ 사용자 프로필의 {@code callMe}(설문)보다 이 칸이 먼저다 — 이 아이와 나눈 말이 더 가깝다.
+     */
+    @Column(name = "call_me", length = 20)
+    private String callMe;
+
     @Column(length = 32)
     private String background;
 
@@ -687,13 +713,52 @@ public class ZzalPet {
         this.identityText = identityText;
         // ★ 초 단위로 — 정산이 초 단위라 밀리초가 남으면 정각 조회가 한 호출 늦어진다.
         this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
+        startLife(now);
+    }
+
+    /**
+     * 부화에 실패한 알을 관리자가 1층 후보로 살린다(#702).
+     *
+     * ★★ 부화 시각을 덮어쓰지 않는다. {@link #hatchStartedAt} 은 원래 값 그대로, {@link #hatchedAt} 은 비어 있을 때만
+     *   지금으로 채운다(실패한 알은 보통 비어 있다). 복구한 시각은 {@link #recoveredAt} 에 남긴다.
+     *   옛 경로({@link #reopenHatch} + {@link #markAlive})는 두 시각을 모두 지금으로 바꿔 통계가 복구한 날로 튀었다.
+     *
+     * ★ 게이지·정산 기준(settledAt·wokeAt)은 지금부터다 — 부화와 같은 첫 상태로 시작한다(튜토리얼부터).
+     */
+    public void reviveByAdmin(String sheetImageKey, String identityText, Instant now) {
+        if (phase != PetPhase.FAILED) {
+            throw new IllegalStateException("부화에 실패한 알이 아니다(지금 " + phase + ")");
+        }
+        this.phase = PetPhase.ALIVE;
+        this.deathReason = null;
+        this.sheetImageKey = sheetImageKey;
+        this.identityText = identityText;
+        if (this.hatchedAt == null) {
+            this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
+        }
+        startLife(now);
+        this.recoveredAt = now;
+    }
+
+    /** 관리자가 층을 손으로 고쳤다(후보 고르기). 부화 시각은 그대로 두고 이 시각만 남긴다. */
+    public void markRecovered(Instant now) {
+        this.recoveredAt = now;
+    }
+
+    public Instant getRecoveredAt() {
+        return recoveredAt;
+    }
+
+    /** 살아난 순간의 첫 상태 — 부화·관리자 살리기가 함께 쓴다. 정산 기준은 지금(초 단위)이다. */
+    private void startLife(Instant now) {
+        Instant t = now.truncatedTo(ChronoUnit.SECONDS);
         this.fullness = ZzalRules.TUTORIAL_START_FULLNESS;
         this.happiness = ZzalRules.HATCH_HAPPINESS;
         this.trash = ZzalRules.HATCH_TRASH;
         this.food = ZzalRules.HATCH_FOOD;
         this.foodAt = null;
-        this.settledAt = this.hatchedAt;
-        this.wokeAt = this.hatchedAt;
+        this.settledAt = t;
+        this.wokeAt = t;
         this.lastSeenAt = now;
         // "N일째 함께" — 부화한 날이 1일째(api-v2.md 2절 예시).
         this.daysTogether = 1;
@@ -2148,10 +2213,11 @@ public class ZzalPet {
         }
     }
 
-    /** 다 구웠다. 결함 표시도 지운다. */
+    /** 다 구웠다. 결함 표시와 지난 실패 사유도 지운다 — READY 인데 사유가 남으면 관리자 목록이 실패로 읽힌다(#706). */
     public void markLayer2Ready(Instant now) {
         this.layer2Status = Layer2Status.READY;
         this.layer2Flagged = false;
+        this.layer2LastError = null;
         this.layer2UpdatedAt = now;
     }
 
@@ -2163,14 +2229,44 @@ public class ZzalPet {
     }
 
     /**
-     * 통과했지만 결함인 2층을 관리자가 목록에 올린다 — FAILED 로 두고 <b>올라간 그림은 그대로</b> 둔다.
-     * 사용자에게는 READY 가 아니므로 2층 8종이 "연습 중" 으로 돌아간다.
+     * 통과했지만 결함인 2층을 관리자 복구 목록에 올린다 — <b>표시만 한다</b>(#702).
+     *
+     * ★★ 사용자 노출 상태({@link #layer2Status})는 건드리지 않는다. 옛 동작(#696)은 FAILED 로 바꿔
+     *   사용자 2층 8종이 그 자리에서 "연습 중" 으로 잠겼다(2026-10-08 펭놈·쿠리만쥬). 결함이 있어도
+     *   지금 보이는 그림이 아무것도 안 보이는 것보다 낫고, 바뀌는 순간은 관리자가 후보를 고를 때 하나뿐이다.
      */
-    public void flagLayer2(String reason, Instant now) {
-        this.layer2Status = Layer2Status.FAILED;
+    public void flagLayer2(String reason) {
         this.layer2Flagged = true;
         this.layer2LastError = trimError(reason);
-        this.layer2UpdatedAt = now;
+    }
+
+    /** 결함 표시를 거둔다(목록에서 내림). 2층 다시 만들기 요청도 함께 거둔다. 노출 상태는 그대로. */
+    public void unflagLayer2() {
+        this.layer2Flagged = false;
+        this.layer2RegenRequestedAt = null;
+    }
+
+    /** 그 층의 "다시 만들기" 요청 시각. 없으면 null. */
+    public Instant getRegenRequestedAt(int layer) {
+        return layer == 1 ? layer1RegenRequestedAt : layer2RegenRequestedAt;
+    }
+
+    /** 그 층을 맥미니에서 다시 만들어 달라고 표시한다(이미 있으면 시각만 새로). 노출 상태는 그대로. */
+    public void requestRegen(int layer, Instant now) {
+        if (layer == 1) {
+            this.layer1RegenRequestedAt = now;
+        } else {
+            this.layer2RegenRequestedAt = now;
+        }
+    }
+
+    /** 그 층의 요청을 지운다(후보가 왔거나 골랐거나 취소). */
+    public void clearRegen(int layer) {
+        if (layer == 1) {
+            this.layer1RegenRequestedAt = null;
+        } else {
+            this.layer2RegenRequestedAt = null;
+        }
     }
 
     /** READY 를 사용자에게 알렸다. 그때 열린 동작 seq 를 이 요청에 실어 보낸다(폭죽). */
@@ -2420,6 +2516,16 @@ public class ZzalPet {
 
     public String getGenre() {
         return genre;
+    }
+
+    public String getCallMe() {
+        return callMe;
+    }
+
+    /** 호칭 저장(20자 상한). 비우면 지운다. */
+    public void rememberCallMe(String value) {
+        String v = value == null ? null : value.strip();
+        this.callMe = v == null || v.isEmpty() ? null : (v.length() > 20 ? v.substring(0, 20) : v);
     }
 
     public String getBackground() {

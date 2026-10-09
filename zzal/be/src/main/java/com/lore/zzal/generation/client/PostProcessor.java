@@ -52,6 +52,17 @@ public interface PostProcessor {
         void split(String gridImageKey, List<String> keys, String postures) throws Exception;
 
         /**
+         * 몇 층의 격자인지 밝혀 자른다. 작업 폴더 안의 격자·로그 이름과 로그의 층 번호가 이 값을 따른다.
+         *
+         * ★ 2층만 따로 굽는 작업(#696)은 <b>새 세션</b>을 열어 2층 하나만 자른다. 세션 안의 호출 순번으로
+         *   층을 적으면 그 작업의 로그가 {@code grid1.png}·「1번째 층」으로 찍혀 1층 실패로 읽혔다(#706).
+         *   층을 모르는 구현은 3인자 판으로 그대로 간다.
+         */
+        default void split(String gridImageKey, List<String> keys, String postures, int layer) throws Exception {
+            split(gridImageKey, keys, postures);
+        }
+
+        /**
          * 앞 층의 {@code anchors.json} 을 작업 폴더에 <b>미리 내려받아 둔다</b>(#696 — 2층을 따로 굽기).
          *
          * ★ 왜 — 2층 후처리는 1층 앵커에서 K·Hw(크기 기준)를 받아 정규화하고, 같은 파일에 합쳐 쓴다.
