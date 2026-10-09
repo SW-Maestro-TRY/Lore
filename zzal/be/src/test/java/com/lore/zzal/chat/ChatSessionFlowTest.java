@@ -6,8 +6,9 @@ import com.lore.zzal.PetFixture;
 import com.lore.zzal.chat.line.FakeChatLineClient;
 import com.lore.zzal.chat.line.LineChain;
 import com.lore.zzal.chat.line.LlmLineGenerator;
-import com.lore.zzal.chat.line.TemplateLineGenerator;
-import com.lore.zzal.chat.memory.RecentAnswersMemory;
+import com.lore.zzal.chat.line.ChatChains;
+import com.lore.zzal.chat.line.LineOutcome;
+import com.lore.zzal.chat.memory.RecentDaysMemory;
 import com.lore.zzal.chat.persona.PersonaSheetBuilder;
 import com.lore.zzal.chat.prompt.SystemPromptCache;
 import com.lore.zzal.chat.session.CloseReason;
@@ -91,11 +92,10 @@ class ChatSessionFlowTest {
         });
         llm = new FakeChatLineClient();
         systems = new SystemPromptCache();
-        LineChain chain = new LineChain(new LlmLineGenerator(llm, "gpt-5-mini", Duration.ofSeconds(4),
-                new BigDecimal("2"), () -> BigDecimal.ZERO, systems), new TemplateLineGenerator(), null);
+        LineChain chain = ChatChains.fake(llm, systems);
         service = new ChatService(st.callRepo, st.sessionRepo, st.turnRepo, pets, new MotionCatalog("", "", "v1"),
                 com.lore.zzal.PieceFixture.inMemory(new java.util.HashMap<>()), new PersonaSheetBuilder(null),
-                new RecentAnswersMemory(st.turnRepo, st.callRepo), chain, 5);
+                new RecentDaysMemory(st.turnRepo, st.sessionRepo), chain, 5);
     }
 
     private static Instant at(int minute) {
@@ -170,9 +170,17 @@ class ChatSessionFlowTest {
         assertThat(llm.users.get(3)).contains("질문 금지.");
         assertThat(llm.users.get(4)).contains("질문 허용.").doesNotContain("묻는다면");
         assertThat(llm.users.get(5)).contains("종류: 닫기", "질문 금지. 다음에 또 말 걸겠다는 뜻을 담는다.");
-        // 턴 5는 최근 3왕복만 — 첫 턴·첫 답은 빠진다
-        assertThat(llm.users.get(4)).doesNotContain("너는 뭐라고 부를까", "상훈이라고 불러줘")
-                .contains("너: 상훈! 좋아, 외웠어. 나 토벌봉 닦던 중이었어.\n상대: 토벌봉이 뭐야?");
+        // ★ #709 — [지금까지] 는 이번 판 전부(최근 3일): 첫 턴·첫 답도 들어간다. 판 머리에 날짜 줄.
+        assertThat(llm.users.get(4)).contains("[지금까지]\n오늘 첫 만남(지금 대화):\n너: 어, 여기 몬스터 없네. 나는 우사기! 너는 뭐라고 부를까?\n상대: 상훈이라고 불러줘\n",
+                "너: 상훈! 좋아, 외웠어. 나 토벌봉 닦던 중이었어.\n상대: 토벌봉이 뭐야?");
+        assertThat(llm.users.get(1)).contains("상대가 답한 질문: \"뭐라고 부를까\"");
+        assertThat(llm.systems.get(0)).doesNotContain("네 모습", "egg-shaped");
+        assertThat(ts.stream().filter(ZzalChatTurn::isPet).map(ZzalChatTurn::getOutcome).distinct().toList())
+                .containsExactly("ok");
+        assertThat(ts.stream().filter(ZzalChatTurn::isPet).map(ZzalChatTurn::getLatencyMs).allMatch(java.util.Objects::nonNull)).isTrue();
+        assertThat(ts.get(1).getCallMeCode()).isEqualTo("상훈");
+        assertThat(ts.get(3).getAskedBack()).as("'토벌봉이 뭐야?' — 코드 정규식").isTrue();
+        assertThat(s.isFailedClosed()).isFalse();
 
         // ── 닫힌 판엔 더 답할 수 없다 ──
         assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.BABY, "또", at(8)))
@@ -187,7 +195,7 @@ class ChatSessionFlowTest {
     }
 
     @Test
-    @DisplayName("★ 첫 답 뒤 10분 말이 없으면 이탈 — 닫기 턴 없이 닫히고, 다음 판의 '지난 대화 마지막 말' 로만 이어진다")
+    @DisplayName("★ 첫 답 뒤 10분 말이 없으면 이탈 — 닫기 턴 없이 닫히고, 다음 날 아침 판의 [지금까지] 에 '어제' 로 이어진다")
     void abandoned() {
         service.calls(USER, PET, at(1));
         service.answer(USER, PET, ChatSlot.BABY, "응 안녕", at(2));
@@ -206,7 +214,8 @@ class ChatSessionFlowTest {
         service.calls(USER, PET, kst("2026-10-09 10:05"));
         ZzalChatSession morning = st.session(ChatSlot.MORNING).orElseThrow();
         assertThat(morning.getKind()).isEqualTo(SessionKind.DAILY);
-        assertThat(llm.users.getLast()).contains("지난 대화 마지막 말: 응 안녕", "종류: 오늘 첫 인사");
+        assertThat(llm.users.getLast()).contains("[지금까지]\n어제 첫 만남:\n", "상대: 응 안녕\n", "종류: 오늘 첫 인사",
+                "할 일: 하루를 여는 인사를 하고, 잘 잤는지·오늘 뭐 하는지 중 하나를 네 식으로 묻는다.");
     }
 
     @Test
@@ -246,7 +255,8 @@ class ChatSessionFlowTest {
         pet.wake(kst("2026-10-11 09:00"));
         service.calls(USER, PET, kst("2026-10-11 10:05"));
         assertThat(st.session(ChatSlot.MORNING).orElseThrow().getKind()).isEqualTo(SessionKind.LONG_ABSENCE);
-        assertThat(llm.users.getLast()).contains("종류: 오랜만", "반가워하되 원망 없이. \"또 올게\"를 받는다. 질문 없음.");
+        assertThat(llm.users.getLast()).contains("종류: 오랜만", "반가워하되 원망 없이. 질문 없음.")
+                .as("3일 전 대화는 [지금까지] 에 없다").doesNotContain("또 올게");
     }
 
     @Test
@@ -268,31 +278,8 @@ class ChatSessionFlowTest {
         ZzalChatCall done = ZzalChatCall.call(PET, LocalDate.of(2026, 10, 7), ChatSlot.EVENING, "하루 끝.", T0, null);
         done.answer("즐거웠어", "…나쁘지 않군.", "hello", T0);
         st2.calls.add(done);
-        assertThat(service.calls(USER, PET, at(3)).memories()).contains("즐거웠어", "응 안녕");
-    }
-
-    @Test
-    @DisplayName("★★ LLM 꺼짐 5왕복 — 인사·감탄·펫 이름 답은 호칭으로 저장 안 됨, 소비된 항목은 실제로 물은 호칭 하나뿐")
-    void templateOnlyDoesNotMisfileCallMe() {
-        service = new ChatService(st.callRepo, st.sessionRepo, st.turnRepo, mockPets(), new MotionCatalog("", "", "v1"),
-                com.lore.zzal.PieceFixture.inMemory(new java.util.HashMap<>()), new PersonaSheetBuilder(null),
-                new RecentAnswersMemory(st.turnRepo, st.callRepo), LineChain.templateOnly(), 5);
-        service.calls(USER, PET, at(1));
-        List<String> answers = List.of("반가워", "고마워", "사랑해", "우사기", "응");
-        for (int i = 0; i < answers.size(); i++) {
-            service.answer(USER, PET, ChatSlot.BABY, answers.get(i), at(2 + i));
-        }
-        assertThat(pet.getCallMe()).isNull();
-        List<ZzalChatTurn> ts = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow());
-        assertThat(ts).hasSize(11);
-        assertThat(ts.getFirst().getLine()).contains("?");
-        assertThat(ts.stream().filter(t -> t.getSpeaker() == Speaker.USER && t.getQuestionItem() != null)
-                .map(ZzalChatTurn::getQuestionItem).toList()).containsExactly(QuestionItem.CALL_ME);
-        assertThat(st.turnRepo.answeredItems(PET)).containsExactly(QuestionItem.CALL_ME);
-        // 질문 금지 턴(2·4번째·닫기)의 폴백에는 물음표가 없다
-        List<ZzalChatTurn> petTurns = ts.stream().filter(ZzalChatTurn::isPet).toList();
-        assertThat(petTurns.get(1).getLine()).doesNotContain("?");
-        assertThat(petTurns.get(5).getLine()).doesNotContain("?");
+        // 기억은 새 대화(턴 표)만 읽는다(#709) — 옛 부름의 답은 칩에 안 들어온다.
+        assertThat(service.calls(USER, PET, at(3)).memories()).containsExactly("응 안녕");
     }
 
     private PetService mockPets() {
@@ -312,16 +299,171 @@ class ChatSessionFlowTest {
         return pets;
     }
 
+    /** 튜토리얼을 마친 펫으로 — 하루 부름을 보려고. */
+    private void graduate() {
+        pet.skipTutorial(at(0));
+    }
+
     @Test
-    @DisplayName("LLM 이 괄호·이모지를 내면 그 턴만 폴백 문형 — 사유가 턴에 남는다")
-    void filteredTurnFallsBack() {
-        llm.line("(깡총깡총) 안녕! 너는 누구야?", "");
+    @DisplayName("★★ 실패 경로 — 답 뒤 두 번 다 실패(JSON 깨짐·시간 초과)면 중립 닫는 말로 판이 닫히고 사유·결과가 남는다")
+    void failedTwiceClosesWithNeutralLine() {
+        llm.line("안녕! 너는 뭐라고 부를까?", "")
+                .reply("그냥 글")
+                .fail(new java.util.concurrent.TimeoutException());
+        service.calls(USER, PET, at(1));
+        ChatService.Answered a = service.answer(USER, PET, ChatSlot.BABY, "상훈이라고 불러", at(2));
+        assertThat(a.replyLine()).isEqualTo(LineChain.CLOSING_LINE);
+        assertThat(a.session().closed()).isTrue();
+        assertThat(a.session().closeReason()).isEqualTo(CloseReason.CLOSED);
+        ZzalChatSession s = st.session(ChatSlot.BABY).orElseThrow();
+        assertThat(s.isFailedClosed()).isTrue();
+        ZzalChatTurn pt = st.lastPet(ChatSlot.BABY);
+        assertThat(pt.getOutcome()).isEqualTo("failed_closed");
+        assertThat(pt.getGenerator()).isEqualTo(LineChain.FIXED);
+        assertThat(pt.getFilteredReason()).isEqualTo("parse/timeout");
+        assertThat(pt.getTurnType()).as("계획은 이어 말하기였지만 판은 닫힌다").isEqualTo(TurnType.CONTINUE);
+        assertThat(llm.users).hasSize(3);                         // 첫 턴 1 + 재호출 포함 2
+        assertThat(pet.getChatAnswers()).as("보상은 그대로 1회").isEqualTo(1);
+        assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.BABY, "또", at(3)))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_CHAT_SLOT_CLOSED);
+    }
+
+    @Test
+    @DisplayName("★ 첫 턴(판 열기)에서 두 번 다 실패하면 그 판은 열리자마자 닫힌다 — 부름 없음과 같다")
+    void failedOnOpeningClosesSession() {
+        llm.reply("{\"line\":\"  \"}").fail(new IllegalStateException("HTTP 500"));
+        ChatService.View v = service.calls(USER, PET, at(1));
+        assertThat(v.openSlot()).isNull();
+        ZzalChatSession s = st.session(ChatSlot.BABY).orElseThrow();
+        assertThat(s.isFailedClosed()).isTrue();
+        assertThat(s.getCloseReason()).isEqualTo(CloseReason.CLOSED);
+        ZzalChatTurn first = st.turnsOf(s).getFirst();
+        assertThat(first.getLine()).isEqualTo(LineChain.CLOSING_LINE);
+        assertThat(first.getOutcome()).isEqualTo("failed_closed");
+        assertThat(first.getFilteredReason()).isEqualTo("blank/error");
+        assertThat(first.getQuestionItem()).as("안 물었으니 항목은 소비되지 않는다").isNull();
+    }
+
+    @Test
+    @DisplayName("★ 재호출로 살면 retried_ok(첫 사유 남김), 160자 넘으면 잘라 저장 truncated — 내용은 거르지 않는다")
+    void retriedAndTruncated() {
+        llm.reply("{oops").line("(깡총깡총) 안녕! 🐰 너는 뭐라고 부를까? 밥은 먹었어?", "");
         service.calls(USER, PET, at(1));
         ZzalChatTurn first = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow()).getFirst();
-        assertThat(first.getGenerator()).isEqualTo("template");
-        assertThat(first.getFilteredReason()).isEqualTo("bracket");
-        // 폴백도 이번 턴에 물을 항목(호칭)을 실제로 묻는다 — 그래서 항목이 적힌다
-        assertThat(first.getLine()).isEqualTo("안녕. 나 우사기. 뭐라고 부르면 돼?");
-        assertThat(first.getQuestionItem()).isEqualTo(QuestionItem.CALL_ME);
+        assertThat(first.getLine()).as("괄호·이모지·질문 둘 — 그대로 쓴다(#709 필터 제거)")
+                .isEqualTo("(깡총깡총) 안녕! 🐰 너는 뭐라고 부를까? 밥은 먹었어?");
+        assertThat(first.getOutcome()).isEqualTo(LineOutcome.RETRIED_OK.code());
+        assertThat(first.getFilteredReason()).isEqualTo("parse");
+        assertThat(first.getGenerator()).isEqualTo("llm");
+
+        String longLine = "가".repeat(150) + "나다라마바사아자차카타파하";      // 163자
+        llm.line(longLine, "hello");
+        ChatService.Answered a = service.answer(USER, PET, ChatSlot.BABY, "응", at(2));
+        ZzalChatTurn pt = st.lastPet(ChatSlot.BABY);
+        assertThat(pt.getLine()).hasSize(ZzalChatTurn.LINE_MAX).isEqualTo(longLine.substring(0, 160));
+        assertThat(pt.getOutcome()).isEqualTo("truncated");
+        assertThat(a.replyLine()).hasSize(160);
+        assertThat(a.session().closed()).isFalse();
     }
+
+    @Test
+    @DisplayName("★★ 호칭 — 코드가 뽑으면 그것 · 못 뽑으면 모델 것 · 둘이 다르면 저장 안 하고 둘 다 남긴다(다음 판에 다시 묻는다)")
+    void callMePriority() {
+        // 1) 코드도 모델도 같은 값 — 저장
+        llm.line("안녕! 뭐라고 부를까?", "").full("상훈! 외웠어.", "hello", "상훈", "상훈이라고 불러 달라고 함", false);
+        service.calls(USER, PET, at(1));
+        service.answer(USER, PET, ChatSlot.BABY, "상훈이라고 불러", at(2));
+        assertThat(pet.getCallMe()).isEqualTo("상훈");
+        ZzalChatTurn u = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow()).get(1);
+        assertThat(u.getCallMeCode()).isEqualTo("상훈");
+        assertThat(u.getCallMeModel()).isEqualTo("상훈");
+        assertThat(u.getUserSaid()).isEqualTo("상훈이라고 불러 달라고 함");
+        assertThat(u.getAskedBack()).isFalse();
+    }
+
+    @Test
+    @DisplayName("★ 호칭 — 코드 패턴이 못 뽑은 답은 모델 것을 저장한다")
+    void callMeFromModel() {
+        llm.line("안녕! 뭐라고 부를까?", "").full("좋아, 상훈님!", "hello", "상훈님", null, false);
+        service.calls(USER, PET, at(1));
+        service.answer(USER, PET, ChatSlot.BABY, "음 그냥 상훈님 정도?", at(2));
+        assertThat(pet.getCallMe()).isEqualTo("상훈님");
+        ZzalChatTurn u = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow()).get(1);
+        assertThat(u.getCallMeCode()).isNull();
+        assertThat(u.getCallMeModel()).isEqualTo("상훈님");
+        assertThat(u.getAskedBack()).as("물음표 — 코드 정규식이 잡는다").isTrue();
+    }
+
+    @Test
+    @DisplayName("★ 호칭 — 코드와 모델이 다르면 저장 안 함, 다음 판에 다시 묻는다. 되물음은 모델 OR 코드")
+    void callMeMismatchAsksAgain() {
+        llm.line("안녕! 뭐라고 부를까?", "").full("민지구나!", "hello", "민지언니", null, true);
+        service.calls(USER, PET, at(1));
+        service.answer(USER, PET, ChatSlot.BABY, "민지", at(2));
+        assertThat(pet.getCallMe()).as("불일치 — 되돌린다").isNull();
+        ZzalChatTurn u = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow()).get(1);
+        assertThat(u.getCallMeCode()).isEqualTo("민지");
+        assertThat(u.getCallMeModel()).isEqualTo("민지언니");
+        assertThat(u.getAskedBack()).as("코드는 못 잡았지만 모델이 되물음이라 함").isTrue();
+
+        // 다음 날 아침 판 — 첫 턴은 창 화제, 호칭은 세 번째 펫 턴에 다시 묻는다
+        graduate();
+        pet.settle(kst("2026-10-09 10:05"));
+        service.calls(USER, PET, kst("2026-10-09 10:05"));
+        assertThat(st.turnsOf(st.session(ChatSlot.MORNING).orElseThrow()).getFirst().getQuestionItem()).isNull();
+        service.answer(USER, PET, ChatSlot.MORNING, "잘 잤어", kst("2026-10-09 10:06"));
+        service.answer(USER, PET, ChatSlot.MORNING, "오늘 학교 가", kst("2026-10-09 10:07"));
+        assertThat(llm.users.getLast()).contains("묻는다면 \"뭐라고 부를까\"를 하나 묻는다.");
+    }
+
+    @Test
+    @DisplayName("★★ 창 화제 — 아침 판 첫 턴은 '잘 잤는지·오늘 뭐 하는지', 닫기 턴은 '점심 먹고 2시 넘어서'. 항목은 3번째 턴")
+    void windowHintsOnMorningSession() {
+        llm.line("안녕! 뭐라고 부를까?", "");
+        service.calls(USER, PET, at(1));
+        service.answer(USER, PET, ChatSlot.BABY, "상훈이라고 불러", at(2));
+        graduate();
+        pet.settle(kst("2026-10-09 10:30"));
+        int before = llm.users.size();
+        service.calls(USER, PET, kst("2026-10-09 10:30"));
+        assertThat(llm.users.get(before)).contains("종류: 오늘 첫 인사",
+                "할 일: 하루를 여는 인사를 하고, 잘 잤는지·오늘 뭐 하는지 중 하나를 네 식으로 묻는다.");
+        for (int i = 0; i < 5; i++) {
+            service.answer(USER, PET, ChatSlot.MORNING, "응 " + i, kst("2026-10-09 10:3" + (i + 1)));
+        }
+        List<String> morning = llm.users.subList(before, llm.users.size());
+        assertThat(morning).hasSize(6);
+        assertThat(morning.get(2)).contains("질문 허용. 묻는다면 \"뭐 하는 사람인지\"를 하나 묻는다.");
+        assertThat(morning.get(5)).contains("종류: 닫기",
+                "할 일: 네가 할 일로 돌아가며 끝낸다. 질문 금지. 점심 먹고 2시 넘어서 다시 오라는 뜻을 네 식으로 담는다.");
+    }
+
+    @Test
+    @DisplayName("★★ 기억 3일치 — 오늘 포함 최근 3일의 판 턴 전부, 오래된 순, 판마다 날짜 줄. 4일 전은 빠진다")
+    void threeDaysOfHistory() {
+        service.calls(USER, PET, at(1));                                       // 10/08 BABY(4일 전)
+        service.answer(USER, PET, ChatSlot.BABY, "나흘 전 말", at(2));
+        graduate();
+        pet.settle(kst("2026-10-10 19:30"));
+        service.calls(USER, PET, kst("2026-10-10 19:30"));                     // 그저께 저녁
+        service.answer(USER, PET, ChatSlot.EVENING, "그저께 말", kst("2026-10-10 19:31"));
+        pet.settle(kst("2026-10-11 14:30"));
+        service.calls(USER, PET, kst("2026-10-11 14:30"));                     // 어제 낮
+        service.answer(USER, PET, ChatSlot.NOON, "어제 말", kst("2026-10-11 14:31"));
+        pet.settle(kst("2026-10-12 10:05"));
+        service.calls(USER, PET, kst("2026-10-12 10:05"));                     // 오늘 아침 첫 턴
+        service.answer(USER, PET, ChatSlot.MORNING, "오늘 말", kst("2026-10-12 10:06"));
+        String u = llm.users.getLast();
+        assertThat(u).doesNotContain("나흘 전 말", "첫 만남");
+        int a = u.indexOf("그저께 저녁:\n너: ");
+        int b = u.indexOf("상대: 그저께 말\n");
+        int c = u.indexOf("어제 낮:\n너: ");
+        int d = u.indexOf("상대: 어제 말\n");
+        int e = u.indexOf("오늘 아침(지금 대화):\n너: ");
+        int f = u.indexOf("상대: 오늘 말\n\n[이번 턴]");
+        assertThat(List.of(a, b, c, d, e, f)).doesNotContain(-1).isSorted();
+        // 펫·사용자 양쪽 — 각 판 2턴(펫·사용자)+펫 응답 = 3줄, 오늘 판은 지금까지 2줄
+        assertThat(u.lines().filter(l -> l.startsWith("너: ") || l.startsWith("상대: ")).count()).isEqualTo(3 + 3 + 2);
+    }
+
 }

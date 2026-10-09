@@ -1,5 +1,7 @@
 package com.lore.zzal.chat.session;
 
+import com.lore.zzal.chat.ChatSlot;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
@@ -16,6 +18,8 @@ import java.util.regex.Pattern;
  *   <li>사용자가 되물었으면(물음표·"뭐야" 류) 그 턴은 <b>답 우선</b> — 질문 금지</li>
  *   <li>질문 항목 — 순서표({@link QuestionItem})에서 아직 답이 없는 첫 항목. <b>한 판에 한 항목</b>,
  *       질문이 허용된 첫 펫 턴에 싣는다. 다 끝났으면 없음</li>
+ *   <li>★ 하루 부름(아침·낮·저녁)의 첫 턴은 <b>창 화제</b>(잘 잤는지·점심·저녁 …)가 질문 자리를 차지한다(#709).
+ *       항목은 그 뒤 질문이 허용된 턴(3번째)에 싣는다 — 한 턴에 질문은 하나뿐이라 겹치면 창 화제가 먼저다</li>
  * </ul>
  */
 public final class TurnPlanner {
@@ -36,11 +40,17 @@ public final class TurnPlanner {
     private TurnPlanner() {
     }
 
-    /** 판의 첫 펫 턴. */
+    /** 판의 첫 펫 턴(창 없음 — BABY·시험). */
     public static TurnPlan first(SessionKind kind, Set<QuestionItem> answered) {
+        return first(kind, answered, null);
+    }
+
+    /** 판의 첫 펫 턴. 하루 부름 창이면 창 화제가 질문 자리를 차지해 항목은 뒤로 미룬다. */
+    public static TurnPlan first(SessionKind kind, Set<QuestionItem> answered, ChatSlot slot) {
         TurnType type = kind.firstTurn();
         boolean allow = type != TurnType.REUNION;
-        return new TurnPlan(type, 1, allow, allow ? nextItem(answered) : null, false);
+        boolean windowTopic = slot != null && slot.daily();
+        return new TurnPlan(type, 1, allow, allow && !windowTopic ? nextItem(answered) : null, false, slot);
     }
 
     /**
@@ -55,13 +65,19 @@ public final class TurnPlanner {
      */
     public static TurnPlan next(int rounds, int maxRounds, int petTurnNo, String userLine, boolean itemAsked,
                                 Set<QuestionItem> answered) {
+        return next(rounds, maxRounds, petTurnNo, userLine, itemAsked, answered, null);
+    }
+
+    /** 사용자 답 뒤의 펫 턴(이 판의 부름을 실어 보낸다 — 닫기 턴이 다음 창을 말하게). */
+    public static TurnPlan next(int rounds, int maxRounds, int petTurnNo, String userLine, boolean itemAsked,
+                                Set<QuestionItem> answered, ChatSlot slot) {
         if (rounds >= maxRounds) {
-            return new TurnPlan(TurnType.CLOSE, petTurnNo, false, null, false);
+            return new TurnPlan(TurnType.CLOSE, petTurnNo, false, null, false, slot);
         }
         boolean asked = userAsked(userLine);
         boolean allow = petTurnNo % 2 == 1 && !asked;
         QuestionItem item = allow && !itemAsked ? nextItem(answered) : null;
-        return new TurnPlan(TurnType.CONTINUE, petTurnNo, allow, item, asked);
+        return new TurnPlan(TurnType.CONTINUE, petTurnNo, allow, item, asked, slot);
     }
 
     /** 순서표에서 아직 답이 없는 첫 항목. */

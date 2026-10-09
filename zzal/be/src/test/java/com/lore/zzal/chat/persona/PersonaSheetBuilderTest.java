@@ -18,25 +18,14 @@ import static org.mockito.Mockito.when;
 class PersonaSheetBuilderTest {
 
     @Test
-    @DisplayName("정체성 문단의 앞뒤 안내문을 걷고 외형만 남긴다(운영 문단 모양)")
-    void stripsInstructions() {
-        String raw = "Input image 1: the ONLY character identity/style reference. Preserve exactly the same SD/chibi "
-                + "proportions (large head), pale skin, round gray-violet eyes, black apron; Ignore the sheet's text, "
-                + "labels, boxes, swatches, palettes.";
-        assertThat(PersonaSheetBuilder.appearance(raw))
-                .isEqualTo("SD/chibi proportions (large head), pale skin, round gray-violet eyes, black apron");
-        String raw2 = "the sole identity/style reference. Preserve and reproduce exactly the same chibi penguin body. "
-                + "Ignore all text.";
-        assertThat(PersonaSheetBuilder.appearance(raw2)).isEqualTo("chibi penguin body");
-    }
-
-    @Test
-    @DisplayName("외형이 아닌 문단(모델의 되묻기)·빈칸은 빼고, 길면 자른다")
-    void dropsNonAppearance() {
-        assertThat(PersonaSheetBuilder.appearance("Please upload or paste the character sheet image so I can study it."))
-                .isNull();
-        assertThat(PersonaSheetBuilder.appearance("  ")).isNull();
-        assertThat(PersonaSheetBuilder.appearance("a".repeat(900))).hasSize(PersonaSheetBuilder.APPEARANCE_MAX);
+    @DisplayName("★ 외형은 시트에 없다(#709) — 정체성 문단이 있어도 시스템 메시지에 '네 모습' 줄이 없다")
+    void noAppearance() {
+        ZzalPet pet = PetFixture.hatching(1L, "여울", null, "k", Instant.parse("2026-10-01T00:00:00Z"));
+        pet.markAlive("s", "the sole identity/style reference. Preserve exactly the same chibi penguin body.",
+                Instant.parse("2026-10-01T00:00:00Z"));
+        PersonaSheet sheet = new PersonaSheetBuilder(null).build(pet);
+        assertThat(sheet.toString()).doesNotContain("penguin");
+        assertThat(com.lore.zzal.chat.prompt.PromptAssembler.system(sheet)).doesNotContain("네 모습", "penguin");
     }
 
     @Test
