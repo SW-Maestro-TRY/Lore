@@ -425,12 +425,8 @@ export interface paths {
         put?: never;
         /**
          * 회원가입
-         * @description 이메일·비밀번호로 가입한다. **토큰을 발급하지 않으므로 로그인 상태가 되지 않는다.**
-         *     화면은 가입 뒤 로그인 화면으로 보낸다.
-         *
-         *     방금 정한 비밀번호를 한 번 더 입력하게 하는 셈이지만, 그 자리에서 비밀번호가
-         *     맞는지 확인된다. 오타를 낸 채 가입한 사용자가 다음 접속에서야 들어오지 못하는
-         *     상황을 막는다.
+         * @description 이메일·비밀번호로 가입한다. **성공하면 로그인과 같은 토큰 2종이 쿠키로 발급되어
+         *     바로 로그인 상태가 된다**(2026-10-08 변경 — 예전에는 가입 뒤 로그인을 한 번 더 했다).
          *
          *     필수 동의는 AGE_14 · TERMS · PRIVACY 세 가지다. MARKETING 은 선택이며
          *     false 도 기록으로 남긴다 — 묻지 않은 것과 거부한 것은 다른 사실이다.
@@ -6136,7 +6132,9 @@ export interface operations {
     signUp: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "User-Agent"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6146,7 +6144,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description 가입 성공 */
+            /** @description 가입 성공(로그인 쿠키 발급) */
             200: {
                 headers: {
                     [name: string]: unknown;
