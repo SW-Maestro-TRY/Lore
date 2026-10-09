@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ALBUM, CHAR_GROUPS, CHAT_CLOSE, CHAT_HINTS, CHAT_MAX_ROUNDS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
+  ALBUM, CHAR_GROUPS, CHAT_CLOSE, CHAT_CLOSE_HOLD_MS, CHAT_HINTS, CHAT_MAX_ROUNDS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LEARN_GOALS, LINE,
   NAME_POOL, PERSONA_LABEL, PERSONALITY_OF, POSTCARDS, ROOM_KEYS, ROOM_NAME, SAY, SHEET_TITLE,
   STEPS, TUTOR, TUTOR_ROOM, TUTOR_GAME_IDX, TUTOR_GAME_STEP, TUTOR_GAME_UNTIL_RESULT, TUTOR_ALBUM_PICK, TUTOR_ALBUM_SAVE, SHARDS, USER_Q, WALLS, GRAD_COPY, GRAD_PREVIEW_SRC,
   WISH_COPY, WISH_MAX, UNLOCK_COPY, WISH_REPLY,
@@ -19,7 +19,7 @@ import {
 import { josa } from '../constants';
 import { ACCENT, C, C2, LV, sel, type LvKey, type Sel, ink, paperA } from './ui';
 import type { Live } from './useHatch';
-import { CHAR_TEXT_MAX, PROFILE_FIELD_OF, patchProfile, type CareAction, type ChatState, type Personality } from '../../lib/pet';
+import { CHAR_TEXT_MAX, PROFILE_FIELD_OF, patchProfile, type CareAction, type ChatSlot, type ChatState, type Personality } from '../../lib/pet';
 import { ApiError } from '../../lib/api';
 import { takeGrownLine } from '../tutorial';
 import type { GuessResult, Side } from '../../lib/game';
@@ -400,6 +400,18 @@ export interface YeoulState {
    */
   chatSeen: string | null;
   /**
+   * 진짜 방에서 **답 응답으로 받은 닫는 말**과 그 판의 턴 전부(#714 · 2026-10-10 dev 실측).
+   *
+   * ★ 판이 닫히면 뒤따르는 `GET /chat` 이 `session: null`·`turns: []` 를 줘서, 그것만 보면 닫는 말이
+   *   말풍선에도 대화 기록에도 안 남는다. 그래서 답 응답에서 받은 그 자리에서 여기 붙잡는다.
+   *   말풍선은 `chatEndShow`·`chatEndHold` 가, 대화 기록은 서버에 다른 판이 생기기 전까지 이 턴들을 쓴다.
+   */
+  chatEnd: ChatEnd | null;
+  /** 닫는 말을 **연 대화창**의 말풍선에 거는가. 판이 닫힌 순간 켜고, 대화창을 새로 열 때 끈다. */
+  chatEndShow: boolean;
+  /** 닫는 말이 도착한 뒤 `CHAT_CLOSE_HOLD_MS` 동안 켜져 있다 — 그 사이 창을 닫아도 무대에 남긴다. */
+  chatEndHold: boolean;
+  /**
    * 튜토리얼 6칸(게임)을 **한 게임 결과까지** 붙잡아 두는가(2026-10-10 상훈님 "5판 3선의 결과가 나는 걸 보고").
    *
    * ★ 서버는 판을 **시작한 순간** 6칸을 넘긴다(`ZzalPet.startGame`). 그래서 화면이 결과가 날 때까지
@@ -444,6 +456,7 @@ const INITIAL: YeoulState = {
   hintI: 0, leaveOff: false, sleepCover: false,
   authOpen: false, authTab: 'signup', fbPreview: false,
   chatSeen: null, tutGameHold: false,
+  chatEnd: null, chatEndShow: false, chatEndHold: false,
 };
 
 // ── 작은 계산들 ──────────────────────────────────────────────────────────
@@ -546,10 +559,16 @@ const PET_MAX = 3;
  * 오늘 오간 말을 화면 순서대로 편다. 부름 하나가 최대 세 줄이 된다 —
  * 아이가 건넨 말 · 내가 한 답 · 아이가 돌려준 말. **전부 서버 문구 그대로다.**
  */
-function serverLog(c: ChatState | null): { who: 'me' | 'pet'; text: string }[] {
-  if (!c) return [];
+function serverLog(c: ChatState | null, end?: ChatEnd | null): { who: 'me' | 'pet'; text: string }[] {
   const out: { who: 'me' | 'pet'; text: string }[] = [];
+  // ★ 방금 닫힌 판(#714) — 서버가 그 판을 더는 안 돌려주면(뒤따르는 GET 이 `session: null`) 화면이 받아 둔
+  //   턴으로 편다. 서버에 **다른 판**이 생기면 그 판이 정본이라 버린다. 서버가 그 판을 아직 주면 서버 것을 쓴다.
+  const sid = c?.session?.id ?? null;
+  const useEnd = !!end && (sid === null || (sid === end.sid && !c?.turns?.length));
+  if (!c) return useEnd && end ? end.turns.map(({ who, text }) => ({ who, text })) : [];
   for (const call of c.calls) {
+    // 받아 둔 닫힌 판으로 펼 부름은 건너뛴다 — 같은 말이 두 번 적히지 않게.
+    if (useEnd && end && call.slot === end.slot) continue;
     // ★ 지금의 판(#704)은 턴 전부를 편다 — 한 판에 여러 왕복이 오간다.
     if (c.session && call.slot === c.session.slot && c.turns?.length) {
       for (const t of c.turns) out.push({ who: t.speaker === 'PET' ? 'pet' : 'me', text: t.line });
@@ -559,7 +578,22 @@ function serverLog(c: ChatState | null): { who: 'me' | 'pet'; text: string }[] {
     if (call.answer) out.push({ who: 'me', text: call.answer });
     if (call.replyLine) out.push({ who: 'pet', text: call.replyLine });
   }
+  if (useEnd && end) for (const { who, text } of end.turns) out.push({ who, text });
   return out;
+}
+
+/** 답 응답에서 붙잡은 닫힌 판(→ `YeoulState.chatEnd`). */
+interface ChatEnd {
+  /** 어느 아이의 판인가 — 다른 아이로 바뀌면 안 쓴다. */
+  pid: number | null;
+  /** 판 id. */
+  sid: number;
+  /** 판의 부름 자리. */
+  slot: ChatSlot;
+  /** 닫는 말(그 판의 마지막 펫 턴). */
+  line: string;
+  /** 그 판의 턴 전부 — 서버가 판을 더 안 줄 때 대화 기록이 쓴다. */
+  turns: { idx: number; who: 'me' | 'pet'; text: string }[];
 }
 
 /**
@@ -1277,7 +1311,7 @@ export function useYeoul(live?: Live) {
     // ★ 진짜 방은 **연 판의 열쇠**를 적어 둔다(→ `chatSeen`). 닫은 뒤 그 판의 말을 무대에 다시 걸지 않고,
     //   열어 둔 동안 판이 닫혀도(닫는 말) 그 말은 보이게 하는 기준이다. 열린 판이 없으면 `null`.
     const seen = onServerRef.current ? (svChatRef.current?.key ?? null) : null;
-    patch({ chatOpen: true, popOpen: false, toast: '', mine: '', chatSeen: seen });
+    patch({ chatOpen: true, popOpen: false, toast: '', mine: '', chatSeen: seen, chatEndShow: false, chatEndHold: false });
   }, [patch, flash]);
   const closeChat = useCallback(() => {
     lastSel.current = Date.now();
@@ -1741,6 +1775,22 @@ export function useYeoul(live?: Live) {
         const r = await liveRef.current?.sendChat(text);
         if (!r) return;
         if (r.error) { flash(r.error); return; }
+        // ★★ 닫는 말은 **이 응답에서 받은 그 자리에서** 붙잡는다(#714 · 2026-10-10 dev 실측).
+        //   판이 닫히면 곧바로(45ms 뒤) 다시 읽은 `GET /chat` 이 `session: null`·`turns: []` 라,
+        //   말풍선을 서버 판에서만 꺼내면 닫는 말이 한 번도 안 보였다(5번째 답 뒤 2.5초까지 빈 말풍선).
+        const closed = r.reply?.session?.closed ? r.reply.session : null;
+        if (closed) {
+          const fresh = r.reply?.turns ?? [];
+          const before = liveRef.current?.chat?.session?.id === closed.id ? (liveRef.current?.chat?.turns ?? []) : [];
+          const byIdx = new Map<number, { idx: number; who: 'me' | 'pet'; text: string }>();
+          for (const t of [...before, ...fresh]) byIdx.set(t.idx, { idx: t.idx, who: t.speaker === 'PET' ? 'pet' : 'me', text: t.line });
+          const turns = [...byIdx.values()].sort((a, b) => a.idx - b.idx);
+          const line = [...fresh].reverse().find((t) => t.speaker === 'PET')?.line ?? r.reply?.line ?? '';
+          if (line) {
+            patch({ chatEnd: { pid: liveRef.current?.petId ?? null, sid: closed.id, slot: closed.slot, line, turns }, chatEndShow: true, chatEndHold: true });
+            later('chatEndHold', CHAT_CLOSE_HOLD_MS, () => setS((v) => (v.chatEnd?.sid === closed.id ? { ...v, chatEndHold: false } : v)));
+          }
+        }
         // ★ 채팅 계측(#704) — 허용 키만. 서버 이벤트 `zzal_chat_llm` 과 **키 뜻이 같다**:
         //   action = 펫 턴 종류(first_meet·continue·close …) 또는 user, step = 판 안의 펫 턴 번호
         //   (사용자 턴은 답한 그 펫 턴의 번호), code = 판 종류, type = 생성기, reason = 폴백 사유만(없으면 ok).
@@ -1792,7 +1842,7 @@ export function useYeoul(live?: Live) {
     });
     careAct('reply');
     tutorDone('CHAT');
-  }, [act, careAct, tutorDone, patch, flash, floor2Of, sitOf]);
+  }, [act, careAct, tutorDone, patch, flash, floor2Of, sitOf, later]);
   /**
    * 보내기.
    *
@@ -2708,9 +2758,17 @@ export function useYeoul(live?: Live) {
     const svSeenLine = sess && s.chatSeen === `s${sess.id}` ? (lastPetTurn?.line ?? null)
       : !sess && lastAnswered && s.chatSeen === `c${lastAnswered.slot}` ? (lastAnswered.replyLine ?? lastAnswered.line)
         : null;
+    /**
+     * 방금 닫힌 판의 닫는 말(#714). 답 응답에서 받아 둔 값이라 뒤따르는 GET 이 판을 비워도 남는다.
+     * 대화창이 열려 있으면 다시 열 때까지, 창을 닫았으면 도착 뒤 `CHAT_CLOSE_HOLD_MS` 까지만 건다 —
+     * 그 뒤 무대는 지금 규칙(비움·급한 부름만) 그대로다.
+     */
+    const chatEnd = s.chatEnd && s.chatEnd.pid === (live?.petId ?? null) ? s.chatEnd : null;
+    const endLine = onServer && chatEnd && (s.chatOpen ? (s.chatEndShow || s.chatEndHold) : s.chatEndHold)
+      ? chatEnd.line : null;
     const chatLine = s.chatOpen
-      ? (onServer ? (svChat?.line ?? svSeenLine) : (s.petLine || mockTurn(0, false)))
-      : null;
+      ? (onServer ? (svChat?.line ?? endLine ?? svSeenLine) : (s.petLine || mockTurn(0, false)))
+      : endLine;
     /**
      * 무대 부름으로 걸 첫 줄. ★ 진짜 방에서 **이미 열어 본 판**의 대화 부름은 닫은 뒤 다시 걸지 않는다
      * (상훈님 2026-10-10 "닫은 뒤 마지막 대사 남기지 않음"). 대화 부름은 늘 줄 맨 끝이라, 그게 첫 줄이면
@@ -3287,7 +3345,7 @@ export function useYeoul(live?: Live) {
         lockHint: canAnswer ? '' : (onServer ? nextCallHint(sv?.chatSummary?.nextAt ?? null) : nextCallHint(null)),
         memCount: onServer ? (sc?.memories.length ?? 0) : s.memories.length,
         // 오늘 오간 말. 서버가 부름마다 [건넨 말 · 내가 한 답 · 돌려준 말] 셋을 들고 있다.
-        log: (onServer ? serverLog(sc) : s.log).map((l) => (l.who === 'pet'
+        log: (onServer ? serverLog(sc, chatEnd) : s.log).map((l) => (l.who === 'pet'
           ? { text: l.text, align: 'flex-start', radius: '15px 15px 15px 5px', bg: C2.paperDim, fg: C.ink }
           : { text: l.text, align: 'flex-end', radius: '15px 15px 5px 15px', bg: ACCENT, fg: C.accentInk })),
         // 빠른 답은 **내가 하는 말**이라 화면이 갖고 있어도 된다(아이 대사가 아니다).
