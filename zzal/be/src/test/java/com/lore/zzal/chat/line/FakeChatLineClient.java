@@ -7,16 +7,22 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 
-/** 시험용 — 준비해 둔 응답(또는 예외)을 차례로 돌려주고, 받은 지시문을 남긴다. */
+/** 시험용 — 준비해 둔 응답(또는 예외)을 차례로 돌려주고, 받은 시스템·사용자 메시지를 남긴다. 돈이 안 나간다. */
 public class FakeChatLineClient implements ChatLineClient {
 
-    public final List<String> prompts = new ArrayList<>();
+    public final List<String> systems = new ArrayList<>();
+    public final List<String> users = new ArrayList<>();
     private final Deque<Object> answers = new ArrayDeque<>();
-    public static final BigDecimal COST = new BigDecimal("0.000800");
+    public static final BigDecimal COST = new BigDecimal("0.000300");
 
     public FakeChatLineClient reply(String json) {
         answers.add(json);
         return this;
+    }
+
+    /** {"line": …, "motion": …} 한 줄. */
+    public FakeChatLineClient line(String line, String motion) {
+        return reply("{\"line\":\"" + line.replace("\"", "\\\"") + "\",\"motion\":\"" + motion + "\"}");
     }
 
     public FakeChatLineClient fail(Exception e) {
@@ -25,9 +31,10 @@ public class FakeChatLineClient implements ChatLineClient {
     }
 
     @Override
-    public Completion complete(String prompt, String model, Duration timeout) throws Exception {
-        prompts.add(prompt);
-        Object a = answers.isEmpty() ? "{\"line\":\"응, 반가워.\",\"motion\":\"\"}" : answers.poll();
+    public Completion complete(String system, String user, String model, Duration timeout) throws Exception {
+        systems.add(system);
+        users.add(user);
+        Object a = answers.isEmpty() ? "{\"line\":\"응, 반가워.\",\"motion\":\"hello\"}" : answers.poll();
         if (a instanceof Exception e) {
             throw e;
         }

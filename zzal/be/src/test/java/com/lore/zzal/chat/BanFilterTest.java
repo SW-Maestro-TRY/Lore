@@ -40,18 +40,25 @@ class BanFilterTest {
     }
 
     @Test
-    @DisplayName("★ 템플릿 5그룹 × 부름 4 × 답 3 + 재언급 — 전부 필터를 지난다")
-    void allTemplatesAreClean() {
-        for (Personality p : Personality.values()) {
-            for (ChatSlot s : ChatSlot.values()) {
-                assertThat(BanFilter.isBanned(ChatTemplates.call(p, s, "여울"))).as(p + " " + s).isFalse();
+    @DisplayName("★ 폴백 문형 (여는 턴·이어·닫기) × (성격 5 + 없음) × 호칭·세계관 유무 — 전부 원망·LLM 필터를 지나고 60자 안, 질문 없음")
+    void allFallbackLinesAreClean() {
+        java.util.List<Personality> ps = new java.util.ArrayList<>(List.of(Personality.values()));
+        ps.add(null);
+        for (Personality p : ps) {
+            for (com.lore.zzal.chat.session.TurnType t : com.lore.zzal.chat.session.TurnType.values()) {
+                for (String call : java.util.Arrays.asList(null, "누나")) {
+                    for (String world : java.util.Arrays.asList(null, "현대 · 홍대 부근 자취방", "장례식에서 시체를 꾸며주는 곳")) {
+                        var sheet = new com.lore.zzal.chat.persona.PersonaSheet("서지환",
+                                p == null ? List.of() : List.of(p), null, world, null, null, call, false);
+                        String line = com.lore.zzal.chat.line.FallbackLines.line(sheet, t);
+                        String at = p + " " + t + " " + call + " " + world + " → " + line;
+                        assertThat(BanFilter.isBanned(line)).as(at).isFalse();
+                        assertThat(BanFilter.llmViolation(line)).as(at).isNull();
+                        assertThat(line.codePointCount(0, line.length())).as(at).isLessThanOrEqualTo(60);
+                        assertThat(line).as(at).doesNotContain("?", "{", "}");
+                    }
+                }
             }
-            for (String answer : List.of("가", "나다", "라마바")) {
-                assertThat(BanFilter.isBanned(ChatTemplates.reply(p, answer, List.of(), 1))).as(p + " reply").isFalse();
-            }
-            assertThat(BanFilter.isBanned(ChatTemplates.reply(p, "x", List.of("어제 답"), 3))).as(p + " recall").isFalse();
-            assertThat(ChatTemplates.reply(p, "x", List.of("어제 답"), 3)).contains("어제 답");
         }
-        assertThat(ChatTemplates.call(null, ChatSlot.EVENING, "여울")).contains("여울");   // 성격 미선택 = 온순
     }
 }
