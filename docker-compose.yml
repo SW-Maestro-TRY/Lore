@@ -144,8 +144,9 @@ services:
       # ★ 실제 OpenAI 호출 스위치(app.zzal.generation.real). 이 값을 안 넘기면 키가 있어도
       #   application.yml 기본값(false)이라 가짜 모드로 뜬다. .env 의 ZZAL_GENERATION_REAL 로 켠다.
       ZZAL_GENERATION_REAL: ${ZZAL_GENERATION_REAL:-false}
-      # 채팅 대사 LLM 스위치(app.zzal.chat.llm, #704). 기본 꺼짐 — dev .env 에서만 true. 키는 위 ZZAL_OPENAI_API_KEY.
-      ZZAL_CHAT_LLM: ${ZZAL_CHAT_LLM:-false}
+      # 채팅 대사 LLM 스위치(app.zzal.chat.llm, #704·#709). 기본 켜짐 — 키는 위 ZZAL_OPENAI_API_KEY 그대로(새 파라미터 없음).
+      # ★ 끄는 용도로만 쓴다. 꺼지면 채팅 부름이 아예 없다(템플릿 삭제) — 튜토리얼 대화 칸도 안 열린다.
+      ZZAL_CHAT_LLM: ${ZZAL_CHAT_LLM:-true}
       # 파이썬 후처리 실제 실행(돈 안 남). 슬림 JRE 이미지엔 numpy/scipy/PIL 이 없어 켜면 기동이 막힌다 → 기본 꺼짐.
       ZZAL_REAL_POSTPROCESS: ${ZZAL_REAL_POSTPROCESS:-false}
       # ── 웹툰 만들기 ────────────────────────────────────────────────
