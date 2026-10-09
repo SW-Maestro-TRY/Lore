@@ -41,7 +41,7 @@ class PromptAssemblerTest {
                         + "\"call_me\": \"<상대 말에서 읽은, 상대를 부를 호칭이나 이름. 없으면 null>\", "
                         + "\"user_said\": \"<상대가 [이번 턴]의 '상대가 답한 질문'에 답했으면 그 답의 요지. 없으면 null>\", "
                         + "\"asked_back\": <상대가 너에게 되물었으면 true, 아니면 false>}\n");
-        assertThat(s).doesNotContain("[지금]", "[이번 턴]\n종류");   // 시스템은 턴마다 같아야 캐시가 먹는다
+        assertThat(s).doesNotContain("[지금]\n", "[이번 턴]\n종류");   // [지금] 칸 머리(규칙 문장의 "[지금]의" 는 괜찮다)   // 시스템은 턴마다 같아야 캐시가 먹는다
         String named = PromptAssembler.system(new PersonaSheet("서지환", List.of(Personality.COOL, Personality.SHY), "반말 · 무뚝뚝",
                 null, null, "누나", false));
         assertThat(named).startsWith("너는 '서지환'이다.").contains("성격: 시크, 수줍음\n", "말투: 반말 · 무뚝뚝\n", "상대를 부르는 말: 누나\n");
@@ -150,5 +150,36 @@ class PromptAssemblerTest {
         assertThat(c.builds()).isEqualTo(1);
         assertThat(c.get(1L, usagi("상훈"))).contains("상대를 부르는 말: 상훈");
         assertThat(c.builds()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("★ v2.1 질문 순서 — 하루 부름 첫 턴은 창 화제(항목 없음)·항목은 3번째 펫 턴, 튜토리얼 BABY 첫 턴은 호칭 질문(창 화제 없음)")
+    void questionOrderByKind() {
+        java.util.Set<QuestionItem> none = java.util.EnumSet.noneOf(QuestionItem.class);
+        for (ChatSlot slot : List.of(ChatSlot.MORNING, ChatSlot.NOON, ChatSlot.EVENING)) {
+            TurnPlan first = com.lore.zzal.chat.session.TurnPlanner.first(SessionKind.DAILY, none, slot);
+            assertThat(first.item()).as(slot.name()).isNull();
+            assertThat(PromptAssembler.task(first)).as(slot.name())
+                    .contains(PromptAssembler.windowTopic(slot)).doesNotContain("뭐라고 부를까");
+            assertThat(com.lore.zzal.chat.session.TurnPlanner.next(1, 5, 2, "응", false, none, slot).item()).isNull();
+            TurnPlan third = com.lore.zzal.chat.session.TurnPlanner.next(2, 5, 3, "응", false, none, slot);
+            assertThat(third.item()).as(slot.name()).isEqualTo(QuestionItem.CALL_ME);
+            assertThat(PromptAssembler.task(third)).contains("묻는다면 \"뭐라고 부를까\"를 하나 묻는다.");
+        }
+        TurnPlan baby = com.lore.zzal.chat.session.TurnPlanner.first(SessionKind.BABY, none, ChatSlot.BABY);
+        assertThat(baby.item()).isEqualTo(QuestionItem.CALL_ME);
+        assertThat(PromptAssembler.task(baby))
+                .isEqualTo("네가 있는 곳 한 조각을 말하며 인사하고, \"뭐라고 부를까\"를 하나 묻는다.")
+                .doesNotContain("잘 잤는지", "점심", "저녁");
+    }
+
+    @Test
+    @DisplayName("★ v2.1 [말하는 법] — 설정을 네 사정으로·지어내지 않기·먼저 답하기·되풀이 금지·첫 인사는 시간대 화제")
+    void rulesV21() {
+        String s = PromptAssembler.system(usagi(null));
+        assertThat(s).contains(
+                "- 네가 사는 곳과 작가 메모를 네 사정으로 삼는다. 사실·인물·사건을 지어내지 않는다.\n",
+                "- 상대 말에 먼저 답한다. 앞에서 한 말을 되풀이하지 않고, 기존 설정 안에서 반응을 달리한다. 첫 인사는 [지금]의 시간대 화제로 연다.\n")
+                .doesNotContain("단어만 쓴다");
     }
 }
