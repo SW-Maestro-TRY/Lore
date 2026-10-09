@@ -36,4 +36,17 @@ class CallMeExtractorTest {
         }
         assertThat(CallMeExtractor.extract(null)).isNull();
     }
+
+    @Test
+    @DisplayName("★ 헛걸림 막기 — 인사·감탄·맞장구, 말끝 꼴(워·해·도·다·요), 자음만, 펫 이름은 호칭이 아니다")
+    void notNames() {
+        for (String a : List.of("반가워", "고마워", "사랑해", "나도", "응", "네", "ㅋㅋ", "ㅎㅎㅎ", "좋아해", "보스다", "귀여워요",
+                "보고싶었어", "우와")) {
+            assertThat(CallMeExtractor.extract(a, "우사기")).as(a).isNull();
+        }
+        assertThat(CallMeExtractor.extract("우사기", "우사기")).isNull();
+        assertThat(CallMeExtractor.extract("우사기라고 불러", "우사기")).isNull();
+        assertThat(CallMeExtractor.extract("민지", "우사기")).isEqualTo("민지");
+        assertThat(CallMeExtractor.extract("누나라고 불러줘", "우사기")).isEqualTo("누나");
+    }
 }

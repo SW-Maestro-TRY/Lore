@@ -245,6 +245,47 @@ class ChatSessionFlowTest {
     }
 
     @Test
+    @DisplayName("★★ LLM 꺼짐 5왕복 — 인사·감탄·펫 이름 답은 호칭으로 저장 안 됨, 소비된 항목은 실제로 물은 호칭 하나뿐")
+    void templateOnlyDoesNotMisfileCallMe() {
+        service = new ChatService(st.callRepo, st.sessionRepo, st.turnRepo, mockPets(), new MotionCatalog("", "", "v1"),
+                com.lore.zzal.PieceFixture.inMemory(new java.util.HashMap<>()), new PersonaSheetBuilder(null),
+                new RecentAnswersMemory(st.turnRepo, st.callRepo), LineChain.templateOnly(), 5);
+        service.calls(USER, PET, at(1));
+        List<String> answers = List.of("반가워", "고마워", "사랑해", "우사기", "응");
+        for (int i = 0; i < answers.size(); i++) {
+            service.answer(USER, PET, ChatSlot.BABY, answers.get(i), at(2 + i));
+        }
+        assertThat(pet.getCallMe()).isNull();
+        List<ZzalChatTurn> ts = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow());
+        assertThat(ts).hasSize(11);
+        assertThat(ts.getFirst().getLine()).contains("?");
+        assertThat(ts.stream().filter(t -> t.getSpeaker() == Speaker.USER && t.getQuestionItem() != null)
+                .map(ZzalChatTurn::getQuestionItem).toList()).containsExactly(QuestionItem.CALL_ME);
+        assertThat(st.turnRepo.answeredItems(PET)).containsExactly(QuestionItem.CALL_ME);
+        // 질문 금지 턴(2·4번째·닫기)의 폴백에는 물음표가 없다
+        List<ZzalChatTurn> petTurns = ts.stream().filter(ZzalChatTurn::isPet).toList();
+        assertThat(petTurns.get(1).getLine()).doesNotContain("?");
+        assertThat(petTurns.get(5).getLine()).doesNotContain("?");
+    }
+
+    private PetService mockPets() {
+        PetService pets = mock(PetService.class);
+        when(pets.alive(any(), any(), any())).thenAnswer(inv -> {
+            pet.settle(pet.now(inv.getArgument(2)));
+            return pet;
+        });
+        when(pets.awake(any(), any(), any())).thenAnswer(inv -> {
+            pet.settle(pet.now(inv.getArgument(2)));
+            return pet;
+        });
+        when(pets.withUnlockDiff(any(), any())).thenAnswer(inv -> {
+            ((Runnable) inv.getArgument(1)).run();
+            return new PetService.Action(pet, List.of());
+        });
+        return pets;
+    }
+
+    @Test
     @DisplayName("LLM 이 괄호·이모지를 내면 그 턴만 폴백 문형 — 사유가 턴에 남는다")
     void filteredTurnFallsBack() {
         llm.line("(깡총깡총) 안녕! 너는 누구야?", "");
@@ -252,6 +293,8 @@ class ChatSessionFlowTest {
         ZzalChatTurn first = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow()).getFirst();
         assertThat(first.getGenerator()).isEqualTo("template");
         assertThat(first.getFilteredReason()).isEqualTo("bracket");
-        assertThat(first.getLine()).isEqualTo("안녕. 나 우사기. 오늘 숲은 조용해.");
+        // 폴백도 이번 턴에 물을 항목(호칭)을 실제로 묻는다 — 그래서 항목이 적힌다
+        assertThat(first.getLine()).isEqualTo("안녕. 나 우사기. 뭐라고 부르면 돼?");
+        assertThat(first.getQuestionItem()).isEqualTo(QuestionItem.CALL_ME);
     }
 }
