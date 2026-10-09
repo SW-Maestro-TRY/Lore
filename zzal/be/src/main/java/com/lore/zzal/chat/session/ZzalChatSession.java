@@ -28,6 +28,11 @@ import java.time.LocalDate;
  * {@link CloseReason} — 상한에 닿아 닫기 턴(CLOSED) · 시각이 지남(EXPIRED) · 답하다 말았음(ABANDONED).
  * LLM 이 두 번 다 실패하면 중립 닫는 말로 CLOSED 가 되고 {@link #failedClosed} 가 켜진다(#709).
  * 만료·이탈은 타이머가 아니라 <b>읽을 때</b> 판정해 적는다(부름을 물어볼 때 만드는 것과 같은 이유).
+ *
+ * <h3>★ BABY 첫 턴 재시도 대기(#709)</h3>
+ * 튜토리얼 부름(BABY)은 첫 턴 생성이 실패해도 닫지 않는다 — {@link #retryAfter} 를 적고 턴 없이 기다린다.
+ * 그동안 판은 <b>열려 있지 않다</b>({@link #isOpen} false — 답할 수 없고 화면에 안 보인다). 그 시각이 지난 뒤
+ * 조회가 오면 다시 부르고, 첫 턴이 붙으면 {@link #firstLineArrived()} 로 비운다.
  */
 @Entity
 @Table(name = "zzal_chat_session",
@@ -88,6 +93,14 @@ public class ZzalChatSession {
     @Column(name = "failed_closed", nullable = false)
     private boolean failedClosed;
 
+    /** BABY 첫 턴이 실패해 다시 부를 수 있는 시각(#709). 값이 있으면 재시도 대기 — 이 전에는 모델을 부르지 않는다. */
+    @Column(name = "retry_after")
+    private Instant retryAfter;
+
+    /** 첫 턴 생성에서 실패한 모델 호출 수의 누적(#709). BABY 는 3이면 중립 한 줄로 연다. 지표용이기도 하다. */
+    @Column(name = "first_line_failures", nullable = false)
+    private int firstLineFailures;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -107,9 +120,42 @@ public class ZzalChatSession {
         return s;
     }
 
-    /** 답할 수 있나 — 안 닫혔고 시각이 안 지났다. */
+    /** 답할 수 있나 — 안 닫혔고, 첫 턴 재시도 대기가 아니고, 시각이 안 지났다. */
     public boolean isOpen(Instant now) {
-        return closeReason == null && !isPastExpiry(now);
+        return closeReason == null && retryAfter == null && !isPastExpiry(now);
+    }
+
+    /** BABY 첫 턴 재시도 대기 중인가(첫 턴이 아직 없다). */
+    public boolean isWaitingForFirstLine() {
+        return retryAfter != null && closeReason == null;
+    }
+
+    /** 대기가 끝나 다시 불러도 되나. */
+    public boolean isRetryDue(Instant now) {
+        return isWaitingForFirstLine() && !now.isBefore(retryAfter);
+    }
+
+    /** 첫 턴 생성에서 실패한 호출을 센다. */
+    public void countFirstLineFailures(int calls) {
+        firstLineFailures += Math.max(0, calls);
+    }
+
+    /** 첫 턴이 실패했다 — {@code until} 까지 기다렸다가 다시 부른다. */
+    public void waitForRetry(Instant until) {
+        retryAfter = until;
+    }
+
+    /** 첫 턴이 붙었다 — 대기를 푼다. */
+    public void firstLineArrived() {
+        retryAfter = null;
+    }
+
+    public Instant getRetryAfter() {
+        return retryAfter;
+    }
+
+    public int getFirstLineFailures() {
+        return firstLineFailures;
     }
 
     public boolean isPastExpiry(Instant now) {

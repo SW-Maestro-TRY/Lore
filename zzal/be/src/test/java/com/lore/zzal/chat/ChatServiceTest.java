@@ -164,15 +164,16 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("★ LLM 이 꺼져 있으면 부름 없음 — BABY 도 하루 부름도 판을 만들지 않는다")
-    void llmOffMeansNoCalls() {
+    @DisplayName("★ LLM 이 꺼져 있으면 하루 부름 없음 — BABY 만 중립 한 줄로 판을 연다(튜토리얼이 막히지 않게)")
+    void llmOffMeansNoDailyCalls() {
         service = new ChatService(st.callRepo, st.sessionRepo, st.turnRepo, mockPets(), new MotionCatalog("", "", "v1"),
                 com.lore.zzal.PieceFixture.inMemory(pieces), new PersonaSheetBuilder(null),
                 new RecentDaysMemory(st.turnRepo, st.sessionRepo), LineChain.off(), 5);
         ChatService.View v = service.calls(USER, PET, kst("2026-09-05 13:00"));
-        assertThat(v.calls()).isEmpty();
-        assertThat(v.openSlot()).isNull();
-        assertThat(st.sessions).isEmpty();
+        assertThat(v.calls()).extracting(ChatService.CallView::slot).containsExactly(ChatSlot.BABY);
+        assertThat(v.calls().getFirst().line()).isEqualTo(LineChain.BABY_NEUTRAL_LINE);
+        assertThat(v.openSlot()).isEqualTo("BABY");
+        assertThat(st.sessions).hasSize(1);
         assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.MORNING, "안녕", kst("2026-09-05 13:00")))
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_CHAT_SLOT_CLOSED);
     }

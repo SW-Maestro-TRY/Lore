@@ -192,6 +192,11 @@ class ChatSessionFlowTest {
         Path out = Path.of("build", "chat-usagi-turn5.txt");
         Files.createDirectories(out.getParent());
         Files.writeString(out, "=== system ===\n" + llm.systems.get(4) + "\n=== user ===\n" + llm.users.get(4));
+        // 보고서용 — 닫기 턴(펫 6번째 대사) 조립 전문. 턴 5는 중간 턴이라 닫기 검증 근거가 안 된다.
+        Path close = Path.of("build", "chat-usagi-close.txt");
+        Files.writeString(close, "=== 닫기 턴(펫 6번째 대사) system ===\n" + llm.systems.get(5)
+                + "\n=== 닫기 턴(펫 6번째 대사) user ===\n" + llm.users.get(5)
+                + "\n=== 받은 대사 ===\n" + ts.get(10).getLine());
     }
 
     @Test
@@ -324,24 +329,146 @@ class ChatSessionFlowTest {
         assertThat(pt.getTurnType()).as("계획은 이어 말하기였지만 판은 닫힌다").isEqualTo(TurnType.CONTINUE);
         assertThat(llm.users).hasSize(3);                         // 첫 턴 1 + 재호출 포함 2
         assertThat(pet.getChatAnswers()).as("보상은 그대로 1회").isEqualTo(1);
+        assertThat(pet.getTutorialStep()).as("★ 첫 답 뒤 생성이 실패해도 튜토리얼 대화 칸은 넘어간다")
+                .isGreaterThan(ZzalRules.TUTORIAL_CHAT_AFTER);
         assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.BABY, "또", at(3)))
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_CHAT_SLOT_CLOSED);
     }
 
     @Test
-    @DisplayName("★ 첫 턴(판 열기)에서 두 번 다 실패하면 그 판은 열리자마자 닫힌다 — 부름 없음과 같다")
-    void failedOnOpeningClosesSession() {
+    @DisplayName("★ 하루 부름 첫 턴(판 열기)에서 두 번 다 실패하면 그 판은 열리자마자 닫힌다 — 부름 없음과 같다(재시도 없음)")
+    void dailyFailedOnOpeningClosesSession() {
+        service.calls(USER, PET, at(1));
+        service.answer(USER, PET, ChatSlot.BABY, "응", at(2));
+        graduate();
+        pet.settle(kst("2026-10-09 10:30"));
+        int before = llm.users.size();
         llm.reply("{\"line\":\"  \"}").fail(new IllegalStateException("HTTP 500"));
-        ChatService.View v = service.calls(USER, PET, at(1));
+        ChatService.View v = service.calls(USER, PET, kst("2026-10-09 10:30"));
         assertThat(v.openSlot()).isNull();
-        ZzalChatSession s = st.session(ChatSlot.BABY).orElseThrow();
+        ZzalChatSession s = st.session(ChatSlot.MORNING).orElseThrow();
         assertThat(s.isFailedClosed()).isTrue();
         assertThat(s.getCloseReason()).isEqualTo(CloseReason.CLOSED);
+        assertThat(s.getRetryAfter()).as("하루 부름은 재시도 대기가 없다").isNull();
         ZzalChatTurn first = st.turnsOf(s).getFirst();
         assertThat(first.getLine()).isEqualTo(LineChain.CLOSING_LINE);
         assertThat(first.getOutcome()).isEqualTo("failed_closed");
         assertThat(first.getFilteredReason()).isEqualTo("blank/error");
         assertThat(first.getQuestionItem()).as("안 물었으니 항목은 소비되지 않는다").isNull();
+        service.calls(USER, PET, kst("2026-10-09 10:50"));
+        assertThat(llm.users.size() - before).as("닫힌 판은 다시 부르지 않는다").isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("★★ BABY 첫 턴 두 번 실패 → 닫지 않고 재시도 대기 — 쿨다운 안 조회 10회에 모델 호출 0, 답 불가, 쿨다운 뒤 1회 더 불러 연다")
+    void babyFailsTwiceThenRetries() {
+        llm.reply("{oops").fail(new java.util.concurrent.TimeoutException());
+        ChatService.View v = service.calls(USER, PET, at(1));
+        assertThat(v.openSlot()).isNull();
+        assertThat(v.calls()).as("첫 턴 없는 판은 안 보인다").isEmpty();
+        ZzalChatSession s = st.session(ChatSlot.BABY).orElseThrow();
+        assertThat(s.isClosed()).isFalse();
+        assertThat(s.isFailedClosed()).isFalse();
+        assertThat(s.getRetryAfter()).isEqualTo(at(1).plus(ChatService.BABY_RETRY_AFTER));
+        assertThat(s.getFirstLineFailures()).isEqualTo(2);
+        assertThat(st.turnsOf(s)).isEmpty();
+        assertThat(llm.users).hasSize(2);
+
+        // 쿨다운 안 — 폴링 10회에 모델 호출 0
+        for (int i = 0; i < 10; i++) {
+            ChatService.View poll = service.calls(USER, PET, at(1).plusSeconds(25L * (i + 1)));
+            assertThat(poll.openSlot()).isNull();
+        }
+        assertThat(llm.users).as("쿨다운 안의 조회는 모델을 부르지 않는다").hasSize(2);
+        assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.BABY, "안녕", at(3)))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_CHAT_SLOT_CLOSED);
+        assertThat(pet.getTutorialStep()).isEqualTo(ZzalRules.TUTORIAL_CHAT_AFTER);
+
+        // 쿨다운 뒤 — 1회 더(성공)
+        llm.line("어, 여기 몬스터 없네. 너는 뭐라고 부를까?", "");
+        ChatService.View after = service.calls(USER, PET, at(6));
+        assertThat(llm.users).hasSize(3);
+        assertThat(after.openSlot()).isEqualTo("BABY");
+        assertThat(s.getRetryAfter()).isNull();
+        ZzalChatTurn first = st.turnsOf(s).getFirst();
+        assertThat(first.getOutcome()).isEqualTo("ok");
+        assertThat(first.getGenerator()).isEqualTo("llm");
+        assertThat(first.getQuestionItem()).isEqualTo(QuestionItem.CALL_ME);
+        service.answer(USER, PET, ChatSlot.BABY, "상훈이라고 불러", at(7));
+        assertThat(pet.getTutorialStep()).isGreaterThan(ZzalRules.TUTORIAL_CHAT_AFTER);
+    }
+
+    @Test
+    @DisplayName("★★ BABY 누적 실패 3회 → 중립 한 줄(CALL_ME)로 판을 연다 — 답하면 다음 턴은 평소 LLM, 보상·튜토리얼 넘김 1회")
+    void babyThirdFailureOpensWithNeutralLine() {
+        llm.reply("{oops").reply("{oops").fail(new IllegalStateException("HTTP 500"));
+        service.calls(USER, PET, at(1));
+        assertThat(llm.users).hasSize(2);
+        ChatService.View v = service.calls(USER, PET, at(6));
+        assertThat(llm.users).as("재시도는 1회만 — 판 하나의 첫 턴 호출은 최대 3").hasSize(3);
+        assertThat(v.openSlot()).isEqualTo("BABY");
+        assertThat(v.turns()).extracting(ChatService.TurnView::line).containsExactly(LineChain.BABY_NEUTRAL_LINE);
+        ZzalChatSession s = st.session(ChatSlot.BABY).orElseThrow();
+        assertThat(s.getFirstLineFailures()).isEqualTo(3);
+        assertThat(s.getRetryAfter()).isNull();
+        ZzalChatTurn first = st.turnsOf(s).getFirst();
+        assertThat(first.getOutcome()).isEqualTo(LineOutcome.BABY_NEUTRAL.code());
+        assertThat(first.getGenerator()).isEqualTo(LineChain.FIXED);
+        assertThat(first.getQuestionItem()).isEqualTo(QuestionItem.CALL_ME);
+        assertThat(first.getFilteredReason()).as("이번 시도(재시도 1회)의 사유").isEqualTo("error");
+        assertThat(first.getTurnType()).isEqualTo(TurnType.FIRST_MEET);
+
+        // 이후 조회는 다시 부르지 않는다
+        service.calls(USER, PET, at(20));
+        assertThat(llm.users).hasSize(3);
+
+        llm.line("상훈! 좋아, 외웠어.", "hello").line("나 토벌봉 닦던 중이었어.", "hello");
+        ChatService.Answered a = service.answer(USER, PET, ChatSlot.BABY, "상훈이라고 불러", at(21));
+        assertThat(a.replyLine()).isEqualTo("상훈! 좋아, 외웠어.");
+        assertThat(llm.users).as("답한 뒤 다음 턴은 평소대로 LLM").hasSize(4);
+        assertThat(pet.getCallMe()).isEqualTo("상훈");
+        assertThat(st.lastPet(ChatSlot.BABY).getGenerator()).isEqualTo("llm");
+        service.answer(USER, PET, ChatSlot.BABY, "응", at(22));
+        assertThat(pet.getChatAnswers()).as("같은 판에 두 번 답해도 보상 1회").isEqualTo(1);
+        assertThat(pet.getIntimacy()).isEqualTo(ZzalRules.CHAT_INTIMACY);
+        assertThat(pet.getTutorialStep()).isGreaterThan(ZzalRules.TUTORIAL_CHAT_AFTER);
+    }
+
+    @Test
+    @DisplayName("★★ LLM 꺼짐 — BABY 는 중립 한 줄로 판을 열고, 답하면 모델 없이 닫는 말로 닫는다(튜토리얼은 넘어간다). 하루 부름은 판 없음")
+    void llmOffBabyNeutral() {
+        LineChain off = LineChain.off();
+        PetService pets = mock(PetService.class);
+        when(pets.alive(any(), any(), any())).thenAnswer(inv -> pet);
+        when(pets.awake(any(), any(), any())).thenAnswer(inv -> pet);
+        when(pets.withUnlockDiff(any(), any())).thenAnswer(inv -> {
+            ((Runnable) inv.getArgument(1)).run();
+            return new PetService.Action(pet, List.of());
+        });
+        service = new ChatService(st.callRepo, st.sessionRepo, st.turnRepo, pets, new MotionCatalog("", "", "v1"),
+                com.lore.zzal.PieceFixture.inMemory(new java.util.HashMap<>()), new PersonaSheetBuilder(null),
+                new RecentDaysMemory(st.turnRepo, st.sessionRepo), off, 5);
+        ChatService.View v = service.calls(USER, PET, at(1));
+        assertThat(v.openSlot()).isEqualTo("BABY");
+        ZzalChatTurn first = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow()).getFirst();
+        assertThat(first.getLine()).isEqualTo(LineChain.BABY_NEUTRAL_LINE);
+        assertThat(first.getOutcome()).isEqualTo("baby_neutral");
+        assertThat(first.getFilteredReason()).isEqualTo("llm_off");
+        assertThat(first.getQuestionItem()).isEqualTo(QuestionItem.CALL_ME);
+
+        ChatService.Answered a = service.answer(USER, PET, ChatSlot.BABY, "상훈이라고 불러", at(2));
+        assertThat(a.replyLine()).isEqualTo(LineChain.CLOSING_LINE);
+        assertThat(a.session().closed()).isTrue();
+        assertThat(st.lastPet(ChatSlot.BABY).getFilteredReason()).isEqualTo("llm_off");
+        assertThat(pet.getChatAnswers()).isEqualTo(1);
+        assertThat(pet.getCallMe()).isEqualTo("상훈");
+        assertThat(pet.getTutorialStep()).isGreaterThan(ZzalRules.TUTORIAL_CHAT_AFTER);
+        assertThat(llm.users).isEmpty();
+
+        graduate();
+        pet.settle(kst("2026-10-09 10:30"));
+        service.calls(USER, PET, kst("2026-10-09 10:30"));
+        assertThat(st.session(ChatSlot.MORNING)).as("하루 부름은 LLM 꺼짐이면 판 없음 그대로").isEmpty();
     }
 
     @Test
