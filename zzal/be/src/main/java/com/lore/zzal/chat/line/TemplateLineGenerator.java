@@ -21,7 +21,7 @@ public class TemplateLineGenerator implements LineGenerator {
 
     @Override
     public LineAttempt generate(ChatContext ctx) {
-        String line = FallbackLines.line(ctx.sheet(), ctx.plan().type());
+        String line = FallbackLines.line(ctx.sheet(), ctx.plan().type(), ctx.plan().item());
         // 판의 첫 턴(부름)에는 반응 동작이 없다 — 사용자가 아직 아무것도 안 했다.
         String motion = ctx.plan().petTurnNo() == 1 ? null : ctx.defaultMotion();
         return new LineAttempt(BanFilter.clean(line), motion, NAME, null, BigDecimal.ZERO, null, 0);
