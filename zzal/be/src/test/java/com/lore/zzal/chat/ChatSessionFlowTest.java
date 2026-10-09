@@ -223,6 +223,20 @@ class ChatSessionFlowTest {
     }
 
     @Test
+    @DisplayName("★ 늦게 들어온 조회 — 지난 슬롯에는 LLM 을 안 부른다(저녁 판 하나만)")
+    void lateGetCallsLlmOnlyForOpenSlot() {
+        service.calls(USER, PET, at(1));                 // BABY 첫 말 — 1회
+        assertThat(llm.users).hasSize(1);
+        pet.skipTutorial(at(3));
+        pet.settle(kst("2026-10-09 07:00"));
+        pet.wake(kst("2026-10-09 07:00"));
+        service.calls(USER, PET, kst("2026-10-09 21:00"));
+        assertThat(llm.users).as("아침·낮은 지났으니 저녁 판 하나만 만든다").hasSize(2);
+        assertThat(st.session(ChatSlot.MORNING)).isEmpty();
+        assertThat(st.session(ChatSlot.NOON)).isEmpty();
+    }
+
+    @Test
     @DisplayName("오랜만 — 마지막 답에서 24시간 넘게 지나 돌아오면 첫 턴이 '오랜만'(질문 없음)")
     void longAbsence() {
         service.calls(USER, PET, at(1));
