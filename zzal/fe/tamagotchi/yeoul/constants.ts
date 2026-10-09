@@ -449,6 +449,16 @@ export const TUTOR_GAME_IDX = TUTOR_ROOM.findIndex((x) => x.done === 'GAME');
 export const TUTOR_GAME_STEP: TutorStep = TUTOR_ROOM[TUTOR_GAME_IDX];
 
 /**
+ * 7칸(앨범) 안에서의 **두 단계 안내**(2026-10-10 상훈님 "앨범은 기본 동작 하이라이트, 저장 하이라이트").
+ *
+ * ★ 왜 — 앨범에 들어간 뒤 어느 액자를 눌러 저장·공유하는지가 안 보였다(dev 실측). 그래서
+ *   1단계 = 1층 기본 동작 액자 하나를 빛내고, 누르면 2단계 = 액자 안 「저장」을 빛낸다.
+ *   저장(또는 공유)을 누르면 칸이 끝난다(서버도 공유 기록 `share` 로 이 칸을 넘긴다).
+ */
+export const TUTOR_ALBUM_PICK = '빛나는 액자를 눌러 크게 열어 보세요.';
+export const TUTOR_ALBUM_SAVE = '「저장」을 눌러 이 모습을 가져가 보세요.';
+
+/**
  * 안내판 「배울 것」의 **목 폴백**. 서버에 붙으면 이 표는 안 쓰인다 — 그때는 도감(`motions`)이
  * 이름·조건·진행도를 다 준다(→ `useYeoul` 의 `goals`).
  *
