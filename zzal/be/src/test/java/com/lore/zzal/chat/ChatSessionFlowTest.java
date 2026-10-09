@@ -210,6 +210,19 @@ class ChatSessionFlowTest {
     }
 
     @Test
+    @DisplayName("★ 지난 판도 읽을 때 정리된다 — 어제 저녁 첫 답만 하고 떠난 판은 다음 날 조회에서 이탈로 닫힌다")
+    void staleSessionsAreSettled() {
+        service.calls(USER, PET, at(1));
+        service.answer(USER, PET, ChatSlot.BABY, "응 안녕", at(2));
+        pet.skipTutorial(at(3));
+        pet.settle(kst("2026-10-10 09:00"));
+        pet.wake(kst("2026-10-10 09:00"));
+        // 부화 다음다음 날 — BABY 는 부화 당일이 아니라 목록에 안 끼지만, 그래도 정리는 된다
+        service.calls(USER, PET, kst("2026-10-10 10:05"));
+        assertThat(st.session(ChatSlot.BABY).orElseThrow().getCloseReason()).isEqualTo(CloseReason.ABANDONED);
+    }
+
+    @Test
     @DisplayName("오랜만 — 마지막 답에서 24시간 넘게 지나 돌아오면 첫 턴이 '오랜만'(질문 없음)")
     void longAbsence() {
         service.calls(USER, PET, at(1));

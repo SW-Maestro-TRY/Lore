@@ -49,8 +49,11 @@ public final class ChatStores {
         when(sessionRepo.findByPetIdAndDayOfAndSlot(anyLong(), any(), any())).thenAnswer(inv -> sessions.stream()
                 .filter(s -> s.getPetId().equals(inv.getArgument(0)) && s.getDayOf().equals(inv.getArgument(1))
                         && s.getSlot() == inv.getArgument(2)).findFirst());
-        when(sessionRepo.sumCostSince(any())).thenAnswer(inv -> sessions.stream().map(ZzalChatSession::getCostUsd)
+        when(sessionRepo.sumCostSince(any())).thenAnswer(inv -> sessions.stream()
+                .filter(s -> !s.getStartedAt().isBefore(inv.getArgument(0))).map(ZzalChatSession::getCostUsd)
                 .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+        when(sessionRepo.findByPetIdAndCloseReasonIsNull(anyLong())).thenAnswer(inv -> sessions.stream()
+                .filter(s -> s.getPetId().equals(inv.getArgument(0)) && !s.isClosed()).toList());
 
         when(turnRepo.save(any())).thenAnswer(inv -> {
             ZzalChatTurn t = inv.getArgument(0);
