@@ -164,7 +164,7 @@ class ChatSessionFlowTest {
 
         // ── 턴마다 [이번 턴] ──
         assertThat(llm.users.get(0)).contains("종류: 첫 만남",
-                "할 일: 네가 있는 곳 한 조각을 말하며 인사하고, \"뭐라고 부를까\"을 하나 묻는다.");
+                "할 일: 네가 있는 곳 한 조각을 말하며 인사하고, \"뭐라고 부를까\"를 하나 묻는다.");
         assertThat(llm.users.get(1)).contains("종류: 이어 말하기", "질문 금지.");
         assertThat(llm.users.get(2)).contains("질문 금지. 상대가 물었으니 먼저 답한다.");
         assertThat(llm.users.get(3)).contains("질문 금지.");
@@ -246,7 +246,7 @@ class ChatSessionFlowTest {
         pet.wake(kst("2026-10-11 09:00"));
         service.calls(USER, PET, kst("2026-10-11 10:05"));
         assertThat(st.session(ChatSlot.MORNING).orElseThrow().getKind()).isEqualTo(SessionKind.LONG_ABSENCE);
-        assertThat(llm.users.getLast()).contains("종류: 오랜만", "반가워하되 원망 없이. \"또 올게\"을 받는다. 질문 없음.");
+        assertThat(llm.users.getLast()).contains("종류: 오랜만", "반가워하되 원망 없이. \"또 올게\"를 받는다. 질문 없음.");
     }
 
     @Test
