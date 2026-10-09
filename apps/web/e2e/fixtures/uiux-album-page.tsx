@@ -12,6 +12,7 @@ export default function Fixture() {
   const [arrived, setArrived] = useState(true);
   const [preview, setPreview] = useState('/zzal/demo/v7/roll.v1.webp');
   const [closed, setClosed] = useState(false);
+  const [frameOpen, setFrameOpen] = useState(true);
   const live = { ...empty, petId: 123, pet: { name: '여울', motions: [
       { key: 'roll', basicImageKey: null, advanced: { status: arrived ? 'OPEN' : 'PENDING', imageKey: arrived ? 'images/zzal/pets/123/advanced/roll.webp' : null } },
       { key: 'base', basicImageKey: 'images/zzal/pets/123/basic/base.webp', advanced: { status: 'NONE', imageKey: null } },
@@ -24,8 +25,8 @@ export default function Fixture() {
   } as unknown as Live;
   const y = { s: { sampleMode: false, petName: '여울', fire: closed ? null : {
     title: '첫날을 함께 마쳤어요', body: '샘플', preview: { src: preview, badge: '예시', caption: '여울의 구르기' }, actions: [], hint: '',
-  } }, v: { wall: { show: false }, sheet: { show: false }, frame: {
-    show: true, key, name: key === 'roll' ? '구르기' : '기본', open: true, opacity: 1, close: () => {}, anim: '',
+  } }, v: { wall: { show: true, count: '1 / 18', frames: [], actions: [], close: () => {}, anim: '' }, sheet: { show: false }, frame: {
+    show: frameOpen, key, name: key === 'roll' ? '구르기' : '기본', open: true, opacity: 1, close: () => setFrameOpen(false), anim: '', onTaken: () => {},
   } }, actions: { closeFire: () => setClosed(true) } } as unknown as Yeoul;
   return <LiveProvider value={live}>
     <button data-action="select-basic" onClick={() => setKey('base')}>기본 행동</button>

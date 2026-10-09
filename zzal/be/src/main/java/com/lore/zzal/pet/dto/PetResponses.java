@@ -702,11 +702,11 @@ public final class PetResponses {
         /** 2층 그림이 준비되기 전에 조건을 채운 칸의 문구(#696). 심화 행동의 "아직 연습 중이에요" 와 같은 말이다. */
         public static final String LAYER2_PRACTICING_HINT = "연습 중이에요";
 
-        /** 다음 부름 시각 — 기상+1h / 기상+7h / 19:00 중 지금 이후 가장 가까운 것(부름 상태는 PR-4). */
+        /** 다음 부름 시각 — 오늘(KST) 부름 창이 열리는 10:00 / 14:00 / 19:00 중 지금 이후 가장 가까운 것(#709). */
         static Instant nextChatAt(ZzalPet pet, Instant now) {
-            Instant woke = pet.dayStartedAt();
-            Instant evening = AwakeClock.dateOf(woke).atTime(ZzalRules.SLEEP_WINDOW_OPENS).atZone(ZzalRules.ZONE).toInstant();
-            return Stream.of(woke.plus(ZzalRules.CHAT_MORNING_AFTER_WAKE), woke.plus(ZzalRules.CHAT_NOON_AFTER_WAKE), evening)
+            java.time.LocalDate today = AwakeClock.dateOf(now);
+            return Stream.of(ZzalRules.CHAT_MORNING_OPENS, ZzalRules.CHAT_NOON_OPENS, ZzalRules.CHAT_EVENING_OPENS)
+                    .map(t -> today.atTime(t).atZone(ZzalRules.ZONE).toInstant())
                     .filter(t -> t.isAfter(now))
                     .min(Instant::compareTo)
                     .orElse(null);

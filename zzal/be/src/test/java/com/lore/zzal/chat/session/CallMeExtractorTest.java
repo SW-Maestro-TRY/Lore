@@ -25,8 +25,8 @@ class CallMeExtractorTest {
                 new String[]{"민지", "민지"},
                 new String[]{"조랭이!", "조랭이"},
                 new String[]{"편한대로?", null},
-                new String[]{"안녕 난 김민서야", null},
-                new String[]{"안녕 나는 심상훈이라고 해", null},
+                new String[]{"안녕 난 김민서야", "김민서"},                 // #709 — 앞 인사 떼고 "X야"
+                new String[]{"안녕 나는 심상훈이라고 해", "심상훈"},         // #709 — "X라고 해"
                 new String[]{"메롱", null},
                 new String[]{"가", null},
                 new String[]{"아무거나", null},
@@ -48,5 +48,42 @@ class CallMeExtractorTest {
         assertThat(CallMeExtractor.extract("우사기라고 불러", "우사기")).isNull();
         assertThat(CallMeExtractor.extract("민지", "우사기")).isEqualTo("민지");
         assertThat(CallMeExtractor.extract("누나라고 불러줘", "우사기")).isEqualTo("누나");
+    }
+
+    @Test
+    @DisplayName("★★ #709 패턴 10 — 'X라고 해 / X야 / X이야 / X예요 / X입니다 / 나는 X', 앞 인사는 뗀다")
+    void moreIntroPatterns() {
+        List<String[]> cases = List.of(
+                new String[]{"상훈이라고 해", "상훈"},
+                new String[]{"나는 민지라고 해요", "민지"},
+                new String[]{"민지야", "민지"},
+                new String[]{"나 상훈이야", "상훈"},
+                new String[]{"상훈이야!", "상훈"},
+                new String[]{"전 서연이에요", "서연"},
+                new String[]{"지수예요", "지수"},
+                new String[]{"김철수입니다", "김철수"},
+                new String[]{"나는 하늘", "하늘"},
+                new String[]{"안녕하세요, 제 이름은 도윤입니다", "도윤"},
+                new String[]{"아니야", null},
+                new String[]{"비밀이야", null});
+        for (String[] c : cases) {
+            assertThat(CallMeExtractor.extract(c[0], "우사기")).as(Arrays.toString(c)).isEqualTo(c[1]);
+        }
+        assertThat(CallMeExtractor.extract("우사기야", "우사기")).as("펫 이름은 호칭이 아니다").isNull();
+    }
+
+    @Test
+    @DisplayName("모델 호칭 거르기 — 펫 이름·대명사('너')·인사·자음만은 null, 따옴표·끝 부호는 벗긴다")
+    void acceptModel() {
+        assertThat(CallMeExtractor.acceptModel("\"상훈\"", "우사기")).isEqualTo("상훈");
+        assertThat(CallMeExtractor.acceptModel("상훈님!", "우사기")).isEqualTo("상훈님");
+        assertThat(CallMeExtractor.acceptModel("우사기", "우사기")).isNull();
+        assertThat(CallMeExtractor.acceptModel("너", "우사기")).isNull();
+        assertThat(CallMeExtractor.acceptModel("반가워", "우사기")).isNull();
+        assertThat(CallMeExtractor.acceptModel("ㅋㅋ", "우사기")).isNull();
+        assertThat(CallMeExtractor.acceptModel(" ", "우사기")).isNull();
+        assertThat(CallMeExtractor.acceptModel(null, "우사기")).isNull();
+        assertThat(CallMeExtractor.same("심 상훈", "심상훈")).isTrue();
+        assertThat(CallMeExtractor.same("민지", "민지언니")).isFalse();
     }
 }

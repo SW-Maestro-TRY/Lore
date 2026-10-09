@@ -1,13 +1,19 @@
 package com.lore.zzal.it;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.lore.zzal.chat.ChatService;
+import com.lore.zzal.chat.line.FakeChatLineClient;
+import com.lore.zzal.chat.line.LineChain;
+import com.lore.zzal.pet.ZzalRules;
 import com.lore.zzal.pet.CareAction;
 import com.lore.zzal.pet.TutorialSchedule;
 import com.lore.zzal.pet.ZzalPet;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 
@@ -109,6 +115,106 @@ class TutorialNineStepsIT extends ZzalItSupport {
         ZzalPet done = petRepository.findById(petId).orElseThrow();
         assertThat(done.isInTutorial()).as("아홉 칸을 끝내면 게임이 진짜로 시작된다").isFalse();
         assertThat(done.getClockStartedAt()).isNotNull();
+    }
+
+    @Autowired FakeChatLineClient chatLlm;
+    @Autowired ZzalItConfig.SwitchableLineChain chatChain;
+
+    /** 밥·쓰다듬을 끝내 튜토리얼 대화 칸(BABY 부름) 앞에 세운다. */
+    private String toChatStep(Long userId, Long petId) throws Exception {
+        String pets = "/api/zzal/v1/me/pets/" + petId;
+        ok(userId, pets + "/care", Map.of("action", CareAction.FEED.name()));
+        ok(userId, pets + "/care", Map.of("action", CareAction.PET.name()));
+        assertThat(stepOf(petId)).isEqualTo(TutorialSchedule.Step.CHAT);
+        return pets;
+    }
+
+    /** BABY 에 답해 대화 칸을 넘기고, 같은 판에 한 번 더 답해도 보상(+40·답 카운터)은 1회인지 본다. */
+    private JsonNode answerTwiceRewardOnce(Long userId, Long petId, String pets) throws Exception {
+        int intimacy = petRepository.findById(petId).orElseThrow().getIntimacy();
+        JsonNode first = body(ok(userId, pets + "/chat/BABY/answer", Map.of("text", "여울이야"))).path("data");
+        assertThat(stepOf(petId)).as("대화 칸이 넘어간다(answerChat → advance)").isEqualTo(TutorialSchedule.Step.PERSONALITY);
+        // 같은 판에 두 번째 답 — 판이 열려 있으면 200(다음 턴), 이미 닫혔으면 409. 어느 쪽이든 보상은 더 안 난다.
+        int second = postAs(userId, pets + "/chat/BABY/answer", Map.of("text", "응")).getResponse().getStatus();
+        assertThat(second).isIn(200, 409);
+        assertThat(second == 409).isEqualTo(first.path("session").path("closed").asBoolean());
+        ZzalPet after = petRepository.findById(petId).orElseThrow();
+        assertThat(after.getChatAnswers()).as("같은 판 답 2번에도 답 카운터 1회").isEqualTo(1);
+        assertThat(after.getIntimacy()).as("보상 +40 1회").isEqualTo(intimacy + ZzalRules.CHAT_INTIMACY);
+        return first;
+    }
+
+    @Test
+    @DisplayName("★★ 첫 턴 생성이 거듭 실패해도 대화 칸 통과 — 재시도 대기(쿨다운 안 폴링 10회 호출 0) → 누적 3회째 중립 한 줄 → 답")
+    void chatStepPassesWhenFirstLineKeepsFailing() throws Exception {
+        Long userId = newUserId();
+        Long petId = freshlyHatched(userId).getId();
+        String pets = toChatStep(userId, petId);
+
+        chatLlm.fail(new IllegalStateException("HTTP 500")).fail(new IllegalStateException("HTTP 500"))
+                .fail(new IllegalStateException("HTTP 500"));
+        int before = chatLlm.users.size();
+        JsonNode waiting = getJson(userId, pets + "/chat").path("data");
+        assertThat(chatLlm.users.size() - before).isEqualTo(2);
+        assertThat(waiting.path("calls")).as("첫 턴 없는 판은 안 보인다").isEmpty();
+        assertThat(jdbc.queryForObject("select retry_after is not null and close_reason is null and first_line_failures = 2 "
+                + "from zzal_chat_session where pet_id = ?", Boolean.class, petId)).isTrue();
+        for (int i = 0; i < 10; i++) {
+            getJson(userId, pets + "/chat");
+        }
+        assertThat(chatLlm.users.size() - before).as("쿨다운 안 폴링 10회 — 모델 호출 0").isEqualTo(2);
+        MvcResult early = postAs(userId, pets + "/chat/BABY/answer", Map.of("text", "안녕"));
+        assertThat(early.getResponse().getStatus()).isEqualTo(409);
+        assertThat(stepOf(petId)).isEqualTo(TutorialSchedule.Step.CHAT);
+
+        advanceClock(userId, petId, ChatService.BABY_RETRY_AFTER.plus(Duration.ofMinutes(1)));
+        JsonNode opened = getJson(userId, pets + "/chat").path("data");
+        assertThat(chatLlm.users.size() - before).as("재시도는 1회").isEqualTo(3);
+        assertThat(opened.path("openSlot").asText()).isEqualTo("BABY");
+        assertThat(opened.path("calls").get(0).path("line").asText()).isEqualTo(LineChain.BABY_NEUTRAL_LINE);
+        assertThat(jdbc.queryForObject("select outcome from zzal_chat_turn where pet_id = ? and idx = 0", String.class,
+                petId)).isEqualTo("baby_neutral");
+
+        JsonNode answered = answerTwiceRewardOnce(userId, petId, pets);
+        assertThat(answered.path("chatReply").path("line").asText()).as("답 뒤는 평소 LLM")
+                .isEqualTo("응, 반가워. 뭐라고 부르면 돼?");
+    }
+
+    @Test
+    @DisplayName("★★ LLM 꺼짐에도 대화 칸 통과 — BABY 중립 한 줄 → 답 → 모델 없이 닫는 말")
+    void chatStepPassesWhenLlmOff() throws Exception {
+        Long userId = newUserId();
+        Long petId = freshlyHatched(userId).getId();
+        String pets = toChatStep(userId, petId);
+        int before = chatLlm.users.size();
+        chatChain.llmOff = true;
+        try {
+            JsonNode chat = getJson(userId, pets + "/chat").path("data");
+            assertThat(chat.path("openSlot").asText()).isEqualTo("BABY");
+            assertThat(chat.path("calls").get(0).path("line").asText()).isEqualTo(LineChain.BABY_NEUTRAL_LINE);
+            JsonNode answered = answerTwiceRewardOnce(userId, petId, pets);
+            assertThat(answered.path("chatReply").path("line").asText()).isEqualTo(LineChain.CLOSING_LINE);
+            assertThat(answered.path("session").path("closed").asBoolean()).isTrue();
+            assertThat(chatLlm.users.size() - before).as("모델 호출 0").isZero();
+        } finally {
+            chatChain.llmOff = false;
+        }
+    }
+
+    @Test
+    @DisplayName("★★ 첫 답 뒤 생성이 실패해도 대화 칸 통과 — 닫는 말로 닫히고 보상·넘김은 1회")
+    void chatStepPassesWhenReplyFails() throws Exception {
+        Long userId = newUserId();
+        Long petId = freshlyHatched(userId).getId();
+        String pets = toChatStep(userId, petId);
+        JsonNode chat = getJson(userId, pets + "/chat").path("data");
+        assertThat(chat.path("openSlot").asText()).isEqualTo("BABY");
+        chatLlm.fail(new IllegalStateException("HTTP 500")).fail(new IllegalStateException("HTTP 500"));
+        JsonNode answered = answerTwiceRewardOnce(userId, petId, pets);
+        assertThat(answered.path("chatReply").path("line").asText()).isEqualTo(LineChain.CLOSING_LINE);
+        assertThat(answered.path("session").path("closed").asBoolean()).isTrue();
+        assertThat(jdbc.queryForObject("select failed_closed from zzal_chat_session where pet_id = ?", Boolean.class,
+                petId)).isTrue();
     }
 
     @Test

@@ -1,10 +1,12 @@
 package com.lore.zzal.chat.prompt;
 
+import com.lore.zzal.chat.ChatSlot;
 import com.lore.zzal.chat.persona.PersonaSheet;
 import com.lore.zzal.chat.session.QuestionItem;
 import com.lore.zzal.chat.session.Speaker;
 import com.lore.zzal.chat.session.TurnPlan;
 import com.lore.zzal.pet.Personality;
+import com.lore.zzal.pet.ZzalRules;
 import com.lore.zzal.text.Josa;
 
 import java.util.List;
@@ -16,17 +18,18 @@ import java.util.stream.Collectors;
  * <h3>A. 시스템 메시지</h3>
  * [너에 대해](시트, 빈 칸은 줄째 뺀다) · [말하는 법](고정) · [출력]. 펫이 같고 시트가 같으면 글자까지 같다 —
  * 캐시({@code SystemPromptCache})가 이 성질에 기댄다. 그래서 여기에는 <b>시각·상태·턴</b>을 넣지 않는다.
+ * ★ 외형(정체성 문단)은 넣지 않는다(#709) — 화면에 움짤이 보이고, 정체성 문단은 그림 생성에만 쓴다.
  *
  * <h3>B. 사용자 메시지</h3>
- * [지금](요일·시각·만난 날·상태 단어) · [지금까지](지난 판 마지막 말 1줄 + 이번 판 최대 3왕복) · [이번 턴](종류·할 일).
- * [이번 턴]은 {@link TurnPlan} 그대로다 — 질문 여부·항목은 코드가 정했다.
+ * [지금](요일·시각·만난 날·상태 단어) · [지금까지](오늘 포함 최근 3일의 판 턴 전부, 판마다 날짜 줄) ·
+ * [이번 턴](종류·답한 질문·할 일). [이번 턴]은 {@link TurnPlan} 그대로다 — 질문 여부·항목·창 화제는 코드가 정했다.
  */
 public final class PromptAssembler {
 
     private PromptAssembler() {
     }
 
-    /** 대사 최대 글자 수. 필터가 같은 숫자로 거른다. */
+    /** 대사 최대 글자 수 — 지시문 [말하는 법] 의 숫자. 코드는 이 숫자로 거르지 않는다(#709, DB 칸 160자만 자른다). */
     public static final int LINE_MAX = 60;
 
     /** 시스템 메시지가 [출력] 에 적는 동작 목록. 실제로 고를 수 있는 것은 턴마다 코드가 다시 거른다. */
@@ -35,12 +38,19 @@ public final class PromptAssembler {
     static final String RULES = """
             [말하는 법]
             - 한 번에 한 줄, 60자 이내. 말만 한다. 지문·괄호·이모지·동작 묘사 금지.
-            - 네가 사는 곳과 작가 메모에 있는 단어만 쓴다. 없는 설정·사건·인물을 만들지 않는다.
+            - 네가 사는 곳과 작가 메모를 네 사정으로 삼는다. 사실·인물·사건을 지어내지 않는다.
+            - 작가 메모의 사정(직업·병·버릇)은 네 사정으로 남는다. 그 사정을 가진 사람의 말투·관심으로만 비치고, 행위·도구·증상·술 이름은 말하지 않는다.
+            - 상대 말에 먼저 답한다. 앞에서 한 말을 되풀이하지 않고, 기존 설정 안에서 반응을 달리한다. 첫 인사는 [지금]의 시간대 화제로 연다.
             - 상대가 한 말을 받아서 말한다. 상대 말을 네 세계 식으로 해석해도 된다.
             - 질문은 [이번 턴]에서 허락할 때만, 하나만.
-            - 하지 않는 말: 상대 원망, 떠난다는 암시, 네 상태로 죄책감 주기, 성적·폭력·음주·정신건강 소재,
+            - 하지 않는 말: 상대 원망, 떠난다는 암시, 네 상태로 죄책감 주기, 성적·폭력 묘사, 술 이름·취함, 증상 설명,
               이름의 유래 지어내기, "주인님", 상대의 개인정보 되풀이.
             - 상대가 금기 소재를 꺼내면 가볍게 화제를 돌린다.
+            - 비속어·욕설은 쓰지 않는다. 작가 메모에 있어도 말투로 옮기지 않는다.
+            - 술을 좋아한다는 사실은 말해도 되지만, 술 이름·취한 모습·같이 마시자는 권유는 말하지 않는다.
+            - 설정은 상대 말과 관련 있을 때 자연스럽게 드러낸다. 설정을 보여주려고 무관한 사실을 덧붙이지 않는다.
+            - 없는 과거 경험을 지어내거나 "경험이 없어/말할 수 없어"로 설명하지 않는다. 되묻기에는 원설정에서 알 수 있는 네 관심·성격·현재 생각으로 짧게 답한다.
+            - 상대가 속상한 얘기를 하거나 위로받은 직후에는 그 말의 여운을 먼저 받는다. 대화와 무관한 호칭·프로필 질문으로 갑자기 돌리지 않는다.
             """;
 
     // ── A. 시스템 ─────────────────────────────────────────────────────────
@@ -57,7 +67,6 @@ public final class PromptAssembler {
         b.append("말투: ").append(s.tone() == null ? "반말, 짧게" : s.tone()).append('\n');
         line(b, "네가 사는 곳", s.world());
         line(b, "작가 메모", s.note());
-        line(b, "네 모습", s.appearance());
         if (s.callMe() != null) {
             b.append("상대를 부르는 말: ").append(s.callMe()).append('\n');
         } else if (s.callMeDeclined()) {
@@ -68,7 +77,10 @@ public final class PromptAssembler {
         b.append('\n').append(RULES).append('\n');
         b.append("[출력]\n");
         b.append("JSON 한 줄: {\"line\": \"<대사>\", \"motion\": \"<")
-                .append(String.join(", ", MOTIONS)).append(" 중 하나>\"}\n");
+                .append(String.join(", ", MOTIONS)).append(" 중 하나>\", ")
+                .append("\"call_me\": \"<상대 말에서 읽은, 상대를 부를 호칭이나 이름. 없으면 null>\", ")
+                .append("\"user_said\": \"<상대가 [이번 턴]의 '상대가 답한 질문'에 답했으면 그 답의 요지. 없으면 null>\", ")
+                .append("\"asked_back\": <상대가 너에게 되물었으면 true, 아니면 false>}\n");
         return b.toString();
     }
 
@@ -81,17 +93,18 @@ public final class PromptAssembler {
         b.append(st.when()).append(", 만난 지 ").append(st.daysTogether()).append("일째.\n");
         b.append("상태: ").append(st.words()).append("\n\n");
 
-        List<HistoryLine> hist = recent(ctx.history());
-        if (ctx.lastSessionLine() != null || !hist.isEmpty()) {
+        List<HistoryLine> hist = ctx.history() == null ? List.of() : ctx.history();
+        if (!hist.isEmpty()) {
             b.append("[지금까지]\n");
-            if (ctx.lastSessionLine() != null) {
-                b.append("지난 대화 마지막 말: ").append(ctx.lastSessionLine()).append('\n');
-            }
-            if (!hist.isEmpty()) {
-                b.append("이번 대화:\n");
-                for (HistoryLine h : hist) {
-                    b.append(h.speaker() == Speaker.PET ? "너: " : "상대: ").append(h.line()).append('\n');
+            Long session = null;
+            boolean first = true;
+            for (HistoryLine h : hist) {
+                if (first || !java.util.Objects.equals(session, h.sessionId())) {
+                    b.append(heading(h)).append('\n');
+                    session = h.sessionId();
+                    first = false;
                 }
+                b.append(h.speaker() == Speaker.PET ? "너: " : "상대: ").append(h.line()).append('\n');
             }
             b.append('\n');
         }
@@ -99,32 +112,82 @@ public final class PromptAssembler {
         TurnPlan p = ctx.plan();
         b.append("[이번 턴]\n");
         b.append("종류: ").append(p.type().label()).append('\n');
-        b.append("할 일: ").append(task(p, ctx.lastSessionLine())).append('\n');
+        if (ctx.answering() != null) {
+            b.append("상대가 답한 질문: \"").append(ctx.answering().text()).append("\"\n");
+        }
+        b.append("할 일: ").append(task(p)).append('\n');
         return b.toString();
     }
 
-    /** [이번 턴] 의 할 일 — 턴 종류마다 한 문장. */
-    static String task(TurnPlan p, String last) {
+    /** 판마다 붙는 날짜 줄 — "어제 저녁:" · "오늘 아침(지금 대화):". */
+    static String heading(HistoryLine h) {
+        String day = switch (h.daysAgo()) {
+            case 0 -> "오늘";
+            case 1 -> "어제";
+            case 2 -> "그저께";
+            default -> h.daysAgo() + "일 전";
+        };
+        String slot = h.slot() == null ? "" : " " + slotWord(h.slot());
+        return day + slot + (h.current() ? "(지금 대화)" : "") + ":";
+    }
+
+    static String slotWord(ChatSlot slot) {
+        return switch (slot) {
+            case BABY -> "첫 만남";
+            case MORNING -> "아침";
+            case NOON -> "낮";
+            case EVENING -> "저녁";
+        };
+    }
+
+    /** 창별 첫 턴 화제(#709) — 고정 문장이 아니라 힌트. 펫이 자기 말투로 하나를 묻는다. */
+    static String windowTopic(ChatSlot slot) {
+        return switch (slot) {
+            case MORNING -> "잘 잤는지·오늘 뭐 하는지";
+            case NOON -> "점심 뭐 먹었는지·지금 뭐 하는지";
+            case EVENING -> "저녁 먹었는지·오늘 어땠는지";
+            case BABY -> null;
+        };
+    }
+
+    /** 창별 닫기 턴 힌트(#709) — 다음 부름 시각을 펫의 말로. */
+    static String windowClose(ChatSlot slot) {
+        return switch (slot) {
+            case MORNING -> "점심 먹고 " + hour(ZzalRules.CHAT_NOON_OPENS) + " 넘어서 다시 오라는 뜻을 네 식으로 담는다.";
+            case NOON -> "저녁 먹고 " + hour(ZzalRules.CHAT_EVENING_OPENS) + " 넘어서 다시 오라는 뜻을 네 식으로 담는다.";
+            case EVENING -> "잘 자라고, 내일 아침에 보자는 뜻을 네 식으로 담는다.";
+            case BABY -> null;
+        };
+    }
+
+    /** 14:00 → "2시". */
+    private static String hour(java.time.LocalTime t) {
+        int h = t.getHour() % 12 == 0 ? 12 : t.getHour() % 12;
+        return h + "시";
+    }
+
+    /** [이번 턴] 의 할 일 — 턴 종류마다 한 문장(+ 하루 부름 창이면 창 화제). */
+    static String task(TurnPlan p) {
         QuestionItem item = p.item();
         String q = item == null ? null : "\"" + item.text() + "\"";
-        String l = last == null ? null : "\"" + last + "\"";
         String qo = q == null ? null : q + obj(item.text());
-        String lo = l == null ? null : l + obj(last);
+        String topic = p.dailyWindow() ? windowTopic(p.slot()) : null;
         return switch (p.type()) {
-            case FIRST_MEET -> q == null ? "네가 있는 곳 한 조각을 말하며 인사한다."
-                    : "네가 있는 곳 한 조각을 말하며 인사하고, " + qo + " 하나 묻는다.";
-            case GREETING -> {
-                if (l != null && q != null) {
-                    yield "인사하고 " + lo + " 짧게 받은 뒤 " + qo + " 묻는다.";
-                } else if (l != null) {
-                    yield "인사하고 " + lo + " 짧게 받는다.";
-                } else if (q != null) {
-                    yield "인사하고 " + qo + " 묻는다.";
+            case FIRST_MEET -> {
+                if (topic != null) {
+                    yield "네가 있는 곳 한 조각을 말하며 인사하고, " + topic + " 중 하나를 네 식으로 묻는다.";
                 }
-                yield "인사한다.";
+                yield q == null ? "네가 있는 곳 한 조각을 말하며 인사한다."
+                        : "네가 있는 곳 한 조각을 말하며 인사하고, " + qo + " 하나 묻는다.";
             }
-            case REUNION -> l == null ? "반가워하되 원망 없이. 질문 없음."
-                    : "반가워하되 원망 없이. " + lo + " 받는다. 질문 없음.";
+            case GREETING -> {
+                if (topic != null) {
+                    yield (p.slot() == ChatSlot.MORNING ? "하루를 여는 인사를 하고, " : "인사하고, ")
+                            + topic + " 중 하나를 네 식으로 묻는다.";
+                }
+                yield q == null ? "인사한다." : "인사하고 " + qo + " 묻는다.";
+            }
+            case REUNION -> "반가워하되 원망 없이. 질문 없음.";
             case CONTINUE -> {
                 StringBuilder t = new StringBuilder("상대의 마지막 말을 받아서 한 줄. 질문 ")
                         .append(p.allowQuestion() ? "허용." : "금지.");
@@ -136,21 +199,9 @@ public final class PromptAssembler {
                 }
                 yield t.toString();
             }
-            case CLOSE -> "네가 할 일로 돌아가며 끝낸다. 질문 금지. 다음에 또 말 걸겠다는 뜻을 담는다.";
+            case CLOSE -> "네가 할 일로 돌아가며 끝낸다. 질문 금지. "
+                    + (p.dailyWindow() ? windowClose(p.slot()) : "다음에 또 말 걸겠다는 뜻을 담는다.");
         };
-    }
-
-    /** 이번 판의 최근 3왕복(펫 턴부터 시작하게 자른다). */
-    static List<HistoryLine> recent(List<HistoryLine> all) {
-        if (all == null || all.isEmpty()) {
-            return List.of();
-        }
-        int max = ChatContext.HISTORY_ROUNDS * 2;
-        int from = Math.max(0, all.size() - max);
-        if (from > 0 && all.get(from).speaker() != Speaker.PET) {
-            from += 1;
-        }
-        return all.subList(from, all.size());
     }
 
     /** 목적격 조사 — 마지막 한글 글자의 받침으로(끝의 괄호 덧말·물음표 같은 꼬리는 건너뛴다). 한글이 없으면 "를". */

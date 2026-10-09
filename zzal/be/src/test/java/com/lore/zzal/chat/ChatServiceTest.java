@@ -9,7 +9,9 @@ import com.lore.zzal.pet.Personality;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
 import com.lore.zzal.chat.line.LineChain;
-import com.lore.zzal.chat.memory.RecentAnswersMemory;
+import com.lore.zzal.chat.line.ChatChains;
+import com.lore.zzal.chat.line.FakeChatLineClient;
+import com.lore.zzal.chat.memory.RecentDaysMemory;
 import com.lore.zzal.chat.persona.PersonaSheetBuilder;
 import com.lore.zzal.chat.session.ZzalChatSession;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,10 +34,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 채팅 — 부름 시각·만료·답·기억·원망 필터(정본 10·16장).
+ * 채팅 — 부름 창·만료·답·기억(정본 10·16장, #709).
  *
- * ★ 부름은 타이머가 아니라 "물어볼 때" 만들어진다. 여기서 지키는 것은 슬롯 시각(기상+1h·+7h·19:00)과
- *   "다음 부름 시각에 만료" 다. 놓친 부름에 패널티가 없는 것도.
+ * ★ 부름은 타이머가 아니라 "물어볼 때" 만들어진다. 여기서 지키는 것은 벽시계 창(아침 10~14·낮 14~19·저녁 19~23)과
+ *   "창 끝에 만료" 다. 놓친 부름에 패널티가 없는 것도. 대사는 목 LLM 이 낸다(돈이 안 나간다).
  */
 @DisplayName("채팅 — 하루 3회의 부름")
 class ChatServiceTest {
@@ -81,57 +83,123 @@ class ChatServiceTest {
         pieces.clear();
         service = new ChatService(st.callRepo, st.sessionRepo, st.turnRepo, pets, new MotionCatalog("", "", "v1"),
                 com.lore.zzal.PieceFixture.inMemory(pieces), new PersonaSheetBuilder(null),
-                new RecentAnswersMemory(st.turnRepo, st.callRepo), LineChain.templateOnly(), 5);
+                new RecentDaysMemory(st.turnRepo, st.sessionRepo), ChatChains.fake(new FakeChatLineClient()), 5);
     }
 
     private Optional<ZzalChatSession> call(ChatSlot slot) {
         return st.session(slot);
     }
 
+    /** 오늘 날짜의 하루 부름만. */
+    private static List<ChatSlot> daily(ChatService.View v, String date) {
+        return v.calls().stream().filter(c -> c.slot().daily()
+                        && com.lore.zzal.pet.AwakeClock.dateOf(c.calledAt()).equals(java.time.LocalDate.parse(date)))
+                .map(ChatService.CallView::slot).toList();
+    }
+
+    private void wakeAt(String at) {
+        pet.settle(kst(at));
+        pet.wake(kst(at));
+    }
+
     @Test
-    @DisplayName("★ 튜토리얼 3칸에서 BABY, 기상+1h 에 MORNING, +7h 에 NOON, 19:00 에 EVENING 이 차례로 생긴다")
-    void slotsAppearOnTime() {
+    @DisplayName("★ 부화 당일 아침 창(12:00) 안 부화 — BABY 와 아침 판만, 14:00 에 낮 판이 생기고 아침 판은 14:00 에 만료")
+    void hatchInsideMorningWindow() {
         // ★ 1.4 — BABY 는 "부화 +8분" 이 아니라 앞의 두 칸을 끝낸 그 자리에서 열린다(시간이 아니라 순서).
-        assertThat(service.calls(USER, PET, T0.plus(Duration.ofMinutes(1))).calls()).extracting(ChatService.CallView::slot)
-                .containsExactly(ChatSlot.BABY);
-        ChatService.View v = service.calls(USER, PET, kst("2026-09-05 13:00"));
+        ChatService.View v = service.calls(USER, PET, T0.plus(Duration.ofMinutes(1)));
         assertThat(v.calls()).extracting(ChatService.CallView::slot).containsExactly(ChatSlot.BABY, ChatSlot.MORNING);
         assertThat(v.openSlot()).isEqualTo("MORNING");                 // 하루 부름이 BABY 보다 먼저
-        // 정오 부화(기상=12:00)라 NOON(기상+7h)이 19:00 = EVENING 과 겹친다 → NOON 은 없다. 한 시각에 둘을 부르지 않는다.
-        v = service.calls(USER, PET, kst("2026-09-05 19:00"));
+        v = service.calls(USER, PET, kst("2026-09-05 13:59"));
+        assertThat(v.calls()).extracting(ChatService.CallView::slot).containsExactly(ChatSlot.BABY, ChatSlot.MORNING);
+        v = service.calls(USER, PET, kst("2026-09-05 14:00"));
         assertThat(v.calls()).extracting(ChatService.CallView::slot)
-                .containsExactly(ChatSlot.BABY, ChatSlot.MORNING, ChatSlot.EVENING);
-        assertThat(call(ChatSlot.MORNING).orElseThrow().getExpiresAt()).isEqualTo(kst("2026-09-05 19:00"));
-        assertThat(call(ChatSlot.EVENING).orElseThrow().getExpiresAt()).isEqualTo(kst("2026-09-05 23:00"));
+                .containsExactly(ChatSlot.BABY, ChatSlot.MORNING, ChatSlot.NOON);
+        assertThat(call(ChatSlot.MORNING).orElseThrow().getExpiresAt()).isEqualTo(kst("2026-09-05 14:00"));
+        assertThat(call(ChatSlot.MORNING).orElseThrow().getStartedAt()).isEqualTo(T0.plus(Duration.ofMinutes(1)));
+        assertThat(call(ChatSlot.NOON).orElseThrow().getExpiresAt()).isEqualTo(kst("2026-09-05 19:00"));
     }
 
     @Test
-    @DisplayName("07:00 에 깨우면 MORNING 08:00 · NOON 14:00 · EVENING 19:00, MORNING 은 14:00 에 만료")
-    void normalDayHasThree() {
-        pet.settle(kst("2026-09-06 07:00"));
-        pet.wake(kst("2026-09-06 07:00"));
-        // ★ 지난 슬롯은 판을 안 만든다(#704) — 각 부름 시각 안에 한 번씩 들러야 셋이 다 생긴다.
-        service.calls(USER, PET, kst("2026-09-06 08:30"));
-        service.calls(USER, PET, kst("2026-09-06 14:30"));
-        ChatService.View v = service.calls(USER, PET, kst("2026-09-06 19:00"));
-        assertThat(v.calls().stream().filter(c -> com.lore.zzal.pet.AwakeClock.dateOf(c.calledAt()).equals(java.time.LocalDate.of(2026, 9, 6))))
-                .extracting(ChatService.CallView::slot).containsExactly(ChatSlot.MORNING, ChatSlot.NOON, ChatSlot.EVENING);
-        ZzalChatSession morning = st.sessions.stream().filter(c -> c.getSlot() == ChatSlot.MORNING
-                && c.getDayOf().equals(java.time.LocalDate.of(2026, 9, 6))).findFirst().orElseThrow();
-        assertThat(morning.getStartedAt()).isEqualTo(kst("2026-09-06 08:00"));
-        assertThat(morning.getExpiresAt()).isEqualTo(kst("2026-09-06 14:00"));
-    }
+    @DisplayName("★★ 창 판정 — 09:59 없음 · 10:00 아침 · 13:59 아침 · 14:00 낮 · 18:59 낮 · 19:00 저녁 · 23:00 없음")
+    void windowBoundaries() {
+        wakeAt("2026-09-06 07:00");                     // 사용자가 일찍 깨워도 부름은 10:00 부터
+        assertThat(daily(service.calls(USER, PET, kst("2026-09-06 09:59")), "2026-09-06")).isEmpty();
 
-    @Test
-    @DisplayName("★ 늦게 들어오면 지난 슬롯(아침·낮)은 판이 없다 — 저녁 부름 하나만")
-    void lateVisitSkipsExpiredSlots() {
-        pet.settle(kst("2026-09-06 07:00"));
-        pet.wake(kst("2026-09-06 07:00"));
-        ChatService.View v = service.calls(USER, PET, kst("2026-09-06 21:00"));
-        assertThat(v.calls().stream().filter(c -> com.lore.zzal.pet.AwakeClock.dateOf(c.calledAt())
-                .equals(java.time.LocalDate.of(2026, 9, 6)))).extracting(ChatService.CallView::slot)
-                .containsExactly(ChatSlot.EVENING);
+        ChatService.View v = service.calls(USER, PET, kst("2026-09-06 10:00"));
+        assertThat(daily(v, "2026-09-06")).containsExactly(ChatSlot.MORNING);
+        assertThat(v.openSlot()).isEqualTo("MORNING");
+        assertThat(service.calls(USER, PET, kst("2026-09-06 13:59")).openSlot()).isEqualTo("MORNING");
+
+        v = service.calls(USER, PET, kst("2026-09-06 14:00"));
+        assertThat(daily(v, "2026-09-06")).containsExactly(ChatSlot.MORNING, ChatSlot.NOON);
+        assertThat(v.openSlot()).isEqualTo("NOON");
+        assertThat(service.calls(USER, PET, kst("2026-09-06 18:59")).openSlot()).isEqualTo("NOON");
+
+        v = service.calls(USER, PET, kst("2026-09-06 19:00"));
+        assertThat(daily(v, "2026-09-06")).containsExactly(ChatSlot.MORNING, ChatSlot.NOON, ChatSlot.EVENING);
         assertThat(v.openSlot()).isEqualTo("EVENING");
+
+        v = service.calls(USER, PET, kst("2026-09-06 23:00"));
+        assertThat(v.openSlot()).isNull();
+        assertThat(st.sessions.stream().filter(s -> s.getSlot() == ChatSlot.EVENING).findFirst().orElseThrow()
+                .getExpiresAt()).isEqualTo(kst("2026-09-06 23:00"));
+        assertThat(st.sessions.stream().filter(s -> s.getDayOf().equals(java.time.LocalDate.of(2026, 9, 6)))).hasSize(3);
+        assertThat(ChatSlot.windowAt(java.time.LocalTime.of(9, 59))).isNull();
+        assertThat(ChatSlot.windowAt(java.time.LocalTime.of(10, 0))).isEqualTo(ChatSlot.MORNING);
+        assertThat(ChatSlot.windowAt(java.time.LocalTime.of(13, 59))).isEqualTo(ChatSlot.MORNING);
+        assertThat(ChatSlot.windowAt(java.time.LocalTime.of(14, 0))).isEqualTo(ChatSlot.NOON);
+        assertThat(ChatSlot.windowAt(java.time.LocalTime.of(18, 59))).isEqualTo(ChatSlot.NOON);
+        assertThat(ChatSlot.windowAt(java.time.LocalTime.of(19, 0))).isEqualTo(ChatSlot.EVENING);
+        assertThat(ChatSlot.windowAt(java.time.LocalTime.of(22, 59))).isEqualTo(ChatSlot.EVENING);
+        assertThat(ChatSlot.windowAt(java.time.LocalTime.of(23, 0))).isNull();
+    }
+
+    @Test
+    @DisplayName("★ 늦게 들어오면 지난 창(아침·낮)은 판이 없다 — 저녁 부름 하나만")
+    void lateVisitSkipsExpiredSlots() {
+        wakeAt("2026-09-06 07:00");
+        ChatService.View v = service.calls(USER, PET, kst("2026-09-06 21:00"));
+        assertThat(daily(v, "2026-09-06")).containsExactly(ChatSlot.EVENING);
+        assertThat(v.openSlot()).isEqualTo("EVENING");
+    }
+
+    @Test
+    @DisplayName("★ LLM 이 꺼져 있으면 하루 부름 없음 — BABY 만 중립 한 줄로 판을 연다(튜토리얼이 막히지 않게)")
+    void llmOffMeansNoDailyCalls() {
+        service = new ChatService(st.callRepo, st.sessionRepo, st.turnRepo, mockPets(), new MotionCatalog("", "", "v1"),
+                com.lore.zzal.PieceFixture.inMemory(pieces), new PersonaSheetBuilder(null),
+                new RecentDaysMemory(st.turnRepo, st.sessionRepo), LineChain.off(), 5);
+        ChatService.View v = service.calls(USER, PET, kst("2026-09-05 13:00"));
+        assertThat(v.calls()).extracting(ChatService.CallView::slot).containsExactly(ChatSlot.BABY);
+        assertThat(v.calls().getFirst().line()).isEqualTo(LineChain.BABY_NEUTRAL_LINE);
+        assertThat(v.openSlot()).isEqualTo("BABY");
+        assertThat(st.sessions).hasSize(1);
+        assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.MORNING, "안녕", kst("2026-09-05 13:00")))
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_CHAT_SLOT_CLOSED);
+    }
+
+    @Test
+    @DisplayName("자는 동안에는 하루 부름을 새로 열지 않는다 — 19:10 에 재우면 저녁 판 없음")
+    void noNewCallWhileSleeping() {
+        wakeAt("2026-09-06 07:00");
+        pet.settle(kst("2026-09-06 19:10"));
+        pet.sleep(kst("2026-09-06 19:10"));
+        ChatService.View v = service.calls(USER, PET, kst("2026-09-06 19:20"));
+        assertThat(daily(v, "2026-09-06")).isEmpty();
+        assertThat(st.sessions.stream().filter(s -> s.getSlot() == ChatSlot.EVENING)).isEmpty();
+    }
+
+    private PetService mockPets() {
+        PetService pets = mock(PetService.class);
+        when(pets.alive(any(), any(), any())).thenAnswer(inv -> {
+            pet.settle(pet.now(inv.getArgument(2)));
+            return pet;
+        });
+        when(pets.awake(any(), any(), any())).thenAnswer(inv -> {
+            pet.settle(pet.now(inv.getArgument(2)));
+            return pet;
+        });
+        return pets;
     }
 
     @Test
@@ -147,7 +215,7 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("18:30 부화 — MORNING(19:30)·NOON 은 19:00 뒤라 없고 EVENING 만(해석 23 확장, 리뷰 하-5)")
+    @DisplayName("18:30 부화 — 아침·낮 창은 지났으니 판이 없고, 19:00 이 지나면 저녁 판만")
     void lateHatchSkipsMorningAndNoon() {
         Instant hatched = kst("2026-09-05 18:30");
         pet = PetFixture.hatching(USER, "여울", null, "k", hatched);
@@ -155,16 +223,19 @@ class ChatServiceTest {
         ReflectionTestUtils.setField(pet, "tutorialStep", ZzalRules.TUTORIAL_CHAT_AFTER);
         pet.skipTutorial(hatched);
         ReflectionTestUtils.setField(pet, "id", PET);
-        // 아기 60분(19:30)이 끝나야 하루 부름이 온다. 19:30 은 밤이 아니라 깨어 있다.
+        assertThat(service.calls(USER, PET, kst("2026-09-05 18:40")).calls()).extracting(ChatService.CallView::slot)
+                .containsExactly(ChatSlot.BABY, ChatSlot.NOON);
         ChatService.View v = service.calls(USER, PET, kst("2026-09-05 19:35"));
-        assertThat(v.calls()).extracting(ChatService.CallView::slot).containsExactly(ChatSlot.BABY, ChatSlot.EVENING);
+        assertThat(v.calls()).extracting(ChatService.CallView::slot)
+                .containsExactly(ChatSlot.BABY, ChatSlot.NOON, ChatSlot.EVENING);
+        assertThat(st.session(ChatSlot.MORNING)).isEmpty();
     }
 
     @Test
-    @DisplayName("★ 부름은 다음 부름 시각에 만료 — 19:00 에 MORNING 에 답하면 ZZAL_CHAT_SLOT_CLOSED, 패널티 0")
+    @DisplayName("★ 부름은 창 끝에 만료 — 14:00 에 MORNING 에 답하면 ZZAL_CHAT_SLOT_CLOSED, 패널티 0")
     void expiresAtNextCall() {
         service.calls(USER, PET, kst("2026-09-05 13:00"));
-        Instant evening = kst("2026-09-05 19:00");
+        Instant evening = kst("2026-09-05 14:00");
         assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.MORNING, "늦었지", evening))
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_CHAT_SLOT_CLOSED);
         assertThat(pet.getIntimacy()).isZero();
@@ -234,7 +305,7 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("기억 — 사용자가 한 말 최근 5개, 최근 것부터(재언급 규칙은 #704 에서 지움 — 지난 말은 지시문이 받는다)")
+    @DisplayName("기억 칩 — 사용자가 한 말 최근 것부터(최근 3일 대화에서)")
     void memories() {
         pet.choosePersonality(List.of(Personality.GENTLE), null);
         service.answer(USER, PET, ChatSlot.BABY, "첫째", T0.plus(Duration.ofMinutes(9)));
