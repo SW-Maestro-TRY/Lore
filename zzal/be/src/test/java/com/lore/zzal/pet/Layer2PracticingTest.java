@@ -89,17 +89,20 @@ class Layer2PracticingTest {
     }
 
     @Test
-    @DisplayName("★ 결함 표시(관리자) — READY 였던 2층이 다시 연습 중이 된다, 1층은 그대로")
-    void flaggedGoesBackToPracticing() {
+    @DisplayName("★★ 결함 표시(관리자) — 사용자 화면은 그대로다: READY 2층이 연습 중으로 잠기지 않는다(#702)")
+    void flaggedKeepsUserView() {
         ZzalPet pet = aliveWaitingLayer2();
         for (int i = 0; i < 4; i++) {
             pet.pet(T0);
         }
         pet.markLayer2Ready(T0);
-        pet.flagLayer2("빈 칸", T0);
+        pet.flagLayer2("빈 칸");
 
-        assertThat(UnlockRules.unlockedKeys(pet, CATALOG)).doesNotContain("petted").contains("base", "sleep");
-        assertThat(motion(pet, "petted").hint()).isEqualTo(PetResponses.Detail.LAYER2_PRACTICING_HINT);
+        assertThat(pet.isLayer2Flagged()).isTrue();
+        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
+        assertThat(UnlockRules.unlockedKeys(pet, CATALOG)).contains("petted", "base", "sleep");
+        assertThat(motion(pet, "petted").unlocked()).isTrue();
+        assertThat(motion(pet, "petted").hint()).isNull();
     }
 
     @Test

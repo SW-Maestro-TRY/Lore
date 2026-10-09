@@ -8,6 +8,10 @@ import com.lore.zzal.pet.PetService;
 import com.lore.zzal.pet.Personality;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
+import com.lore.zzal.chat.line.LineChain;
+import com.lore.zzal.chat.memory.RecentAnswersMemory;
+import com.lore.zzal.chat.persona.PersonaSheetBuilder;
+import com.lore.zzal.chat.session.ZzalChatSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,25 +44,15 @@ class ChatServiceTest {
     private static final Long USER = 1L;
     private static final Long PET = 7L;
 
-    private final List<ZzalChatCall> store = new ArrayList<>();
     /** ★ 조각 줄 — 지금까지 채팅이 교감 칸을 올리는지 아무도 확인하지 않았다(M-18). */
     private final java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> pieces = new java.util.HashMap<>();
-    private ZzalChatCallRepository repo;
+    private ChatStores st;
     private ZzalPet pet;
     private ChatService service;
 
     @BeforeEach
     void setUp() {
-        repo = mock(ZzalChatCallRepository.class);
-        when(repo.save(any())).thenAnswer(inv -> {
-            store.add(inv.getArgument(0));
-            return inv.getArgument(0);
-        });
-        when(repo.findByPetIdAndDayOfAndSlot(anyLong(), any(), any())).thenAnswer(inv ->
-                store.stream().filter(c -> c.getDayOf().equals(inv.getArgument(1)) && c.getSlot() == inv.getArgument(2)).findFirst());
-        when(repo.findTop5ByPetIdAndAnsweredAtIsNotNullOrderByAnsweredAtDesc(anyLong())).thenAnswer(inv ->
-                store.stream().filter(ZzalChatCall::isAnswered)
-                        .sorted((a, b) -> b.getAnsweredAt().compareTo(a.getAnsweredAt())).limit(5).toList());
+        st = new ChatStores();
 
         pet = PetFixture.hatching(USER, "여울", null, "k", T0);
         pet.markAlive("s", "i", T0);
@@ -85,26 +79,27 @@ class ChatServiceTest {
             return new PetService.Action(pet, List.of());
         });
         pieces.clear();
-        service = new ChatService(repo, pets, new MotionCatalog("", "", "v1"),
-                com.lore.zzal.PieceFixture.inMemory(pieces));
+        service = new ChatService(st.callRepo, st.sessionRepo, st.turnRepo, pets, new MotionCatalog("", "", "v1"),
+                com.lore.zzal.PieceFixture.inMemory(pieces), new PersonaSheetBuilder(null),
+                new RecentAnswersMemory(st.turnRepo, st.callRepo), LineChain.templateOnly(), 5);
     }
 
-    private Optional<ZzalChatCall> call(ChatSlot slot) {
-        return store.stream().filter(c -> c.getSlot() == slot).findFirst();
+    private Optional<ZzalChatSession> call(ChatSlot slot) {
+        return st.session(slot);
     }
 
     @Test
     @DisplayName("★ 튜토리얼 3칸에서 BABY, 기상+1h 에 MORNING, +7h 에 NOON, 19:00 에 EVENING 이 차례로 생긴다")
     void slotsAppearOnTime() {
         // ★ 1.4 — BABY 는 "부화 +8분" 이 아니라 앞의 두 칸을 끝낸 그 자리에서 열린다(시간이 아니라 순서).
-        assertThat(service.calls(USER, PET, T0.plus(Duration.ofMinutes(1))).calls()).extracting(ZzalChatCall::getSlot)
+        assertThat(service.calls(USER, PET, T0.plus(Duration.ofMinutes(1))).calls()).extracting(ChatService.CallView::slot)
                 .containsExactly(ChatSlot.BABY);
         ChatService.View v = service.calls(USER, PET, kst("2026-09-05 13:00"));
-        assertThat(v.calls()).extracting(ZzalChatCall::getSlot).containsExactly(ChatSlot.BABY, ChatSlot.MORNING);
+        assertThat(v.calls()).extracting(ChatService.CallView::slot).containsExactly(ChatSlot.BABY, ChatSlot.MORNING);
         assertThat(v.openSlot()).isEqualTo("MORNING");                 // 하루 부름이 BABY 보다 먼저
         // 정오 부화(기상=12:00)라 NOON(기상+7h)이 19:00 = EVENING 과 겹친다 → NOON 은 없다. 한 시각에 둘을 부르지 않는다.
         v = service.calls(USER, PET, kst("2026-09-05 19:00"));
-        assertThat(v.calls()).extracting(ZzalChatCall::getSlot)
+        assertThat(v.calls()).extracting(ChatService.CallView::slot)
                 .containsExactly(ChatSlot.BABY, ChatSlot.MORNING, ChatSlot.EVENING);
         assertThat(call(ChatSlot.MORNING).orElseThrow().getExpiresAt()).isEqualTo(kst("2026-09-05 19:00"));
         assertThat(call(ChatSlot.EVENING).orElseThrow().getExpiresAt()).isEqualTo(kst("2026-09-05 23:00"));
@@ -115,24 +110,39 @@ class ChatServiceTest {
     void normalDayHasThree() {
         pet.settle(kst("2026-09-06 07:00"));
         pet.wake(kst("2026-09-06 07:00"));
+        // ★ 지난 슬롯은 판을 안 만든다(#704) — 각 부름 시각 안에 한 번씩 들러야 셋이 다 생긴다.
+        service.calls(USER, PET, kst("2026-09-06 08:30"));
+        service.calls(USER, PET, kst("2026-09-06 14:30"));
         ChatService.View v = service.calls(USER, PET, kst("2026-09-06 19:00"));
-        assertThat(v.calls().stream().filter(c -> c.getDayOf().equals(java.time.LocalDate.of(2026, 9, 6))))
-                .extracting(ZzalChatCall::getSlot).containsExactly(ChatSlot.MORNING, ChatSlot.NOON, ChatSlot.EVENING);
-        ZzalChatCall morning = store.stream().filter(c -> c.getSlot() == ChatSlot.MORNING
+        assertThat(v.calls().stream().filter(c -> com.lore.zzal.pet.AwakeClock.dateOf(c.calledAt()).equals(java.time.LocalDate.of(2026, 9, 6))))
+                .extracting(ChatService.CallView::slot).containsExactly(ChatSlot.MORNING, ChatSlot.NOON, ChatSlot.EVENING);
+        ZzalChatSession morning = st.sessions.stream().filter(c -> c.getSlot() == ChatSlot.MORNING
                 && c.getDayOf().equals(java.time.LocalDate.of(2026, 9, 6))).findFirst().orElseThrow();
-        assertThat(morning.getCalledAt()).isEqualTo(kst("2026-09-06 08:00"));
+        assertThat(morning.getStartedAt()).isEqualTo(kst("2026-09-06 08:00"));
         assertThat(morning.getExpiresAt()).isEqualTo(kst("2026-09-06 14:00"));
+    }
+
+    @Test
+    @DisplayName("★ 늦게 들어오면 지난 슬롯(아침·낮)은 판이 없다 — 저녁 부름 하나만")
+    void lateVisitSkipsExpiredSlots() {
+        pet.settle(kst("2026-09-06 07:00"));
+        pet.wake(kst("2026-09-06 07:00"));
+        ChatService.View v = service.calls(USER, PET, kst("2026-09-06 21:00"));
+        assertThat(v.calls().stream().filter(c -> com.lore.zzal.pet.AwakeClock.dateOf(c.calledAt())
+                .equals(java.time.LocalDate.of(2026, 9, 6)))).extracting(ChatService.CallView::slot)
+                .containsExactly(ChatSlot.EVENING);
+        assertThat(v.openSlot()).isEqualTo("EVENING");
     }
 
     @Test
     @DisplayName("답한 BABY 는 부화 당일에만 보이고 이후 날의 부름 목록에 끼지 않는다 (리뷰 하-3)")
     void answeredBabyNotCarriedOver() {
         service.answer(USER, PET, ChatSlot.BABY, "이름", T0.plus(Duration.ofMinutes(9)));
-        assertThat(service.calls(USER, PET, kst("2026-09-05 15:00")).calls()).extracting(ZzalChatCall::getSlot)
+        assertThat(service.calls(USER, PET, kst("2026-09-05 15:00")).calls()).extracting(ChatService.CallView::slot)
                 .contains(ChatSlot.BABY);
         pet.settle(kst("2026-09-06 07:00"));
         pet.wake(kst("2026-09-06 07:00"));
-        assertThat(service.calls(USER, PET, kst("2026-09-06 08:30")).calls()).extracting(ZzalChatCall::getSlot)
+        assertThat(service.calls(USER, PET, kst("2026-09-06 08:30")).calls()).extracting(ChatService.CallView::slot)
                 .doesNotContain(ChatSlot.BABY);
     }
 
@@ -147,7 +157,7 @@ class ChatServiceTest {
         ReflectionTestUtils.setField(pet, "id", PET);
         // 아기 60분(19:30)이 끝나야 하루 부름이 온다. 19:30 은 밤이 아니라 깨어 있다.
         ChatService.View v = service.calls(USER, PET, kst("2026-09-05 19:35"));
-        assertThat(v.calls()).extracting(ZzalChatCall::getSlot).containsExactly(ChatSlot.BABY, ChatSlot.EVENING);
+        assertThat(v.calls()).extracting(ChatService.CallView::slot).containsExactly(ChatSlot.BABY, ChatSlot.EVENING);
     }
 
     @Test
@@ -162,7 +172,7 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("답하면 대사 1줄 + 반응 동작 + 친밀도 +40 + 채팅 카운터. 같은 부름에 두 번은 닫힘")
+    @DisplayName("★ 답하면 대사 1줄 + 반응 동작 + 친밀도 +40 + 채팅 카운터 — 같은 판에서 더 답해도 보상은 판당 1회")
     void answerRewards() {
         pet.choosePersonality(List.of(Personality.LIVELY), null);
         Instant t = kst("2026-09-05 13:30");
@@ -172,8 +182,12 @@ class ChatServiceTest {
         assertThat(a.reactionKey()).isEqualTo("hello");                  // 답하기(2층)는 채팅 4회라 아직 잠김 → 인사
         assertThat(pet.getIntimacy()).isEqualTo(40);
         assertThat(pet.getChatAnswers()).isEqualTo(1);
-        assertThatThrownBy(() -> service.answer(USER, PET, ChatSlot.MORNING, "또", t.plusSeconds(1)))
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ZZAL_CHAT_SLOT_CLOSED);
+        // 대화형(#704) — 같은 판에서 한 마디 더. 대사는 오지만 친밀도·카운터는 그대로다.
+        ChatService.Answered b = service.answer(USER, PET, ChatSlot.MORNING, "또", t.plusSeconds(1));
+        assertThat(b.replyLine()).isNotBlank();
+        assertThat(pet.getIntimacy()).isEqualTo(40);
+        assertThat(pet.getChatAnswers()).isEqualTo(1);
+        assertThat(call(ChatSlot.MORNING).orElseThrow().getRoundCount()).isEqualTo(2);
     }
 
     @Test
@@ -189,8 +203,8 @@ class ChatServiceTest {
         // ★ 정본 6장이 이름으로 못 박은 두 예외 중 하나 — "잠긴 동안 답하기는 인사(hello)".
         //   서버가 pet 을 주면 화면은 받은 키를 그대로 재생해 자기 대체표를 안 거친다.
         assertThat(a.reactionKey()).isEqualTo("hello");
-        assertThat(call(ChatSlot.MORNING).orElseThrow().getReactionKey())
-                .as("저장된 줄도 같은 키여야 한다 — 나중에 다시 그릴 때 갈라지면 안 된다")
+        assertThat(st.lastPet(ChatSlot.MORNING).getMotion())
+                .as("저장된 펫 턴도 같은 키여야 한다 — 나중에 다시 그릴 때 갈라지면 안 된다")
                 .isEqualTo("hello");
     }
 
@@ -207,7 +221,7 @@ class ChatServiceTest {
         // ★ 반응 키를 카운터보다 먼저 고르면 여기서 hello 가 나온다 — 사용자는 "이번에 열렸다"는
         //   폭죽을 보면서 옛 동작을 본다(연결 감사 F6).
         assertThat(a.reactionKey()).isEqualTo("reply");
-        assertThat(call(ChatSlot.MORNING).orElseThrow().getReactionKey()).isEqualTo("reply");
+        assertThat(st.lastPet(ChatSlot.MORNING).getMotion()).isEqualTo("reply");
     }
 
     @Test
@@ -220,53 +234,13 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("기억 — 최근 답 5개, 세 번째 답마다 재언급")
+    @DisplayName("기억 — 사용자가 한 말 최근 5개, 최근 것부터(재언급 규칙은 #704 에서 지움 — 지난 말은 지시문이 받는다)")
     void memories() {
         pet.choosePersonality(List.of(Personality.GENTLE), null);
         service.answer(USER, PET, ChatSlot.BABY, "첫째", T0.plus(Duration.ofMinutes(9)));
         service.answer(USER, PET, ChatSlot.MORNING, "둘째", kst("2026-09-05 13:30"));
-        ChatService.Answered third = service.answer(USER, PET, ChatSlot.EVENING, "셋째", kst("2026-09-05 19:30"));
+        service.answer(USER, PET, ChatSlot.EVENING, "셋째", kst("2026-09-05 19:30"));
         assertThat(service.calls(USER, PET, kst("2026-09-05 19:31")).memories()).containsExactly("셋째", "둘째", "첫째");
-        // 세 번째 답(answerCount 가 3 이 되기 전 = 2)은 아직 재언급 아님 — 재언급은 answerCount % 3 == 0 인 답
-        assertThat(third.replyLine()).doesNotContain("저번에");
-    }
-
-    @Test
-    @DisplayName("★★ 네 번째 답에서 재언급이 열린다 — 카운트를 올리기 <b>전</b> 값으로 고르기 때문이다 (M-30)")
-    void theFourthAnswerRecalls() {
-        pet.choosePersonality(List.of(Personality.GENTLE), null);
-        service.answer(USER, PET, ChatSlot.BABY, "첫째", T0.plus(Duration.ofMinutes(9)));
-        service.answer(USER, PET, ChatSlot.MORNING, "둘째", kst("2026-09-05 13:30"));
-        service.answer(USER, PET, ChatSlot.EVENING, "셋째", kst("2026-09-05 19:30"));
-        assertThat(pet.getChatAnswers()).isEqualTo(3);
-
-        // 하룻밤을 지나 다음 날 아침 부름에 답한다 — 이것이 네 번째 답이다.
-        ChatService.Answered fourth = service.answer(USER, PET, ChatSlot.MORNING, "넷째", kst("2026-09-06 11:30"));
-
-        assertThat(fourth.replyLine())
-                .as("직전 기억(가장 최근 답)을 그대로 물어봐야 한다 — 순서가 뒤집히면 첫 답을 꺼낸다")
-                .contains("셋째");
-        assertThat(pet.getChatAnswers()).isEqualTo(4);
-    }
-
-    @Test
-    @DisplayName("★ 재언급은 세 번에 한 번 — 다섯째·여섯째는 아니고 일곱째에 다시 열린다")
-    void recallRepeatsEveryThird() {
-        pet.choosePersonality(List.of(Personality.GENTLE), null);
-        service.answer(USER, PET, ChatSlot.BABY, "첫째", T0.plus(Duration.ofMinutes(9)));
-        service.answer(USER, PET, ChatSlot.MORNING, "둘째", kst("2026-09-05 13:30"));
-        service.answer(USER, PET, ChatSlot.EVENING, "셋째", kst("2026-09-05 19:30"));
-        service.answer(USER, PET, ChatSlot.MORNING, "넷째", kst("2026-09-06 11:30"));
-
-        ChatService.Answered fifth = service.answer(USER, PET, ChatSlot.NOON, "다섯째", kst("2026-09-06 17:30"));
-        ChatService.Answered sixth = service.answer(USER, PET, ChatSlot.EVENING, "여섯째", kst("2026-09-06 19:30"));
-        ChatService.Answered seventh = service.answer(USER, PET, ChatSlot.MORNING, "일곱째", kst("2026-09-07 11:30"));
-
-        assertThat(fifth.replyLine()).doesNotContain("넷째");
-        assertThat(sixth.replyLine()).doesNotContain("다섯째");
-        assertThat(seventh.replyLine())
-                .as("일곱째 답에서 다시 열린다(그때 카운트가 6 이다)")
-                .contains("여섯째");
     }
 
     @Test

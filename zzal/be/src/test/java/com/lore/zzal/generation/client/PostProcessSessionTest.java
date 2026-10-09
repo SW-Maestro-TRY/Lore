@@ -138,6 +138,20 @@ class PostProcessSessionTest {
     }
 
     @Test
+    @DisplayName("★ 2층만 여는 세션(#696) — 작업 파일 이름이 호출 순번(grid1)이 아니라 층(grid2)을 따른다(#706)")
+    void layerTwoOnlySessionNamesFilesByLayer() throws Exception {
+        FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER2), true, false);
+
+        try (PostProcessor.Session s = p.open("images/zzal/pets/7/basic/2", "v1")) {
+            s.split("images/zzal/pets/7/grid2.png", LAYER2, "", 2);
+        }
+
+        // 파이썬 게이트 로그가 이 이름을 그대로 찍는다 — grid1.png 면 1층 실패로 읽힌다.
+        assertThat(p.grids.get(0).getFileName().toString()).isEqualTo("grid2.png");
+        assertThat(p.logs.get(0).getFileName().toString()).isEqualTo("log2.txt");
+    }
+
+    @Test
     @DisplayName("★★ 앵커를 내야 하는 버전인데 없으면 실패로 올린다 — 그림만 올라가는 모양은 화면을 봐야만 드러난다")
     void failsWhenAnchorsAreMissing() {
         FakeScript p = new FakeScript(mock(S3Storage.class), scripts(), List.of(LAYER1), false, false);

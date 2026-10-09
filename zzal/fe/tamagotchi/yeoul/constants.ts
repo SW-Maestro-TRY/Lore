@@ -392,6 +392,10 @@ export type NeedStyle = (typeof NEED_STYLES)[number];
 export const CHAT_HINTS = ['잘 지냈어', '조금 피곤해', '보고 싶었어', '오늘 빵 만들었어'] as const;
 export const CHAT_QUICK = ['잘 지냈어', '빵 만들었어', '조금 피곤해'] as const;
 export const CHAT_REPLY = ['그 얘기 기억해 둘게요.', '오늘도 들려줘서 좋아요.', '나도 그런 날이 있어요.', '음, 그랬구나.'] as const;
+/** 연습방(목) 대화 한 판의 닫기 줄 — 서버의 닫기 턴과 같은 자리. */
+export const CHAT_CLOSE = '나 잠깐 창밖 구경하러 갈게요. 또 말 걸게요.';
+/** 대화 한 판의 왕복 상한(서버 `app.zzal.chat.max-rounds` 기본값과 같다). 연습방 목이 쓴다 — 서버 방은 서버 값. */
+export const CHAT_MAX_ROUNDS = 5;
 
 /** 다음에 배울 동작 — 왼쪽 아래 작은 카드가 이 표를 보고 하나를 고른다. */
 /**

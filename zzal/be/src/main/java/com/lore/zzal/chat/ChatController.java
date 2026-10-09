@@ -40,26 +40,29 @@ public class ChatController {
 
     @Operation(summary = "오늘의 대화 조회", description = """
             현재 시점까지 발생한 대화 목록과 응답 가능한 슬롯(openSlot), 최근 응답 5건을 반환한다.
+            session·turns 는 지금의 판(열린 판, 없으면 오늘 마지막 판)과 그 판의 턴들이다.
 
             대화는 기상 후 1시간, 기상 후 7시간, 19:00 에 발생한다. 응답하지 않은 채 다음 시각이
-            지나면 해당 대화는 만료되며 별도 감점은 없다.
+            지나면 해당 대화는 만료되며 별도 감점은 없다. 이미 지난 시각의 대화는 새로 만들지 않는다.
+            첫 답 뒤 10분 동안 말이 없으면 그 판은 닫힌다(ABANDONED).
 
             수면 중에도 조회는 가능하지만 openSlot 은 null 이다.""")
     @GetMapping
     public ApiResponse<ChatResponses.Chat> calls(@LoginUser Long userId, @PathVariable Long petId) {
         ChatService.View v = chatService.calls(userId, petId, Instant.now());
         return ApiResponse.ok(new ChatResponses.Chat(v.openSlot(),
-                v.calls().stream().map(ChatResponses.Call::from).toList(), v.memories()));
+                v.calls().stream().map(ChatResponses.Call::from).toList(), v.memories(),
+                ChatResponses.Session.from(v.session()), v.turns().stream().map(ChatResponses.Turn::from).toList()));
     }
 
     @Operation(summary = "대화 응답", description = """
-            슬롯당 1회, 자유 입력 40자로 응답한다. 응답 시 친밀도 +40 을 부여하며,
-            이는 단일 행동으로 얻는 가장 큰 값이다.
+            열린 대화(판)에 자유 입력 40자로 한 마디 한다. 한 판은 최대 max-rounds 왕복이고, 마지막 펫 턴은
+            닫기 턴이다(session.closed=true). 친밀도 +40·응답 카운터는 판당 1회(첫 답)만 센다.
 
-            응답은 변경된 캐릭터 상태(pet)와 대사·반응 동작(chatReply)으로 구성한다.
-            입력한 내용은 기억으로 저장되어 이후 대화에서 다시 언급된다.
+            응답은 변경된 캐릭터 상태(pet)·다음 펫 대사와 반응 동작(chatReply)·판 상태(session)·
+            이번에 생긴 두 턴(turns = 사용자 턴, 펫 턴)으로 구성한다.
 
-            누적 응답 횟수는 동작 해금 조건(1회·4회·12회)에 사용한다.""")
+            누적 응답 횟수(판 수)는 답하기 동작 해금(4회)에 사용한다.""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "응답 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
@@ -74,6 +77,7 @@ public class ChatController {
         PetResponses.Detail pet = PetResponses.Detail.from(a.action().pet(), null, a.action().pet().now(real), catalog,
                 petService.motionRows(petId), a.action().justUnlocked(), false,
                 petService.scenes(petId), petService.pieces(petId));
-        return ApiResponse.ok(new ChatResponses.Answered(pet, new ChatResponses.Reply(a.replyLine(), a.reactionKey())));
+        return ApiResponse.ok(new ChatResponses.Answered(pet, new ChatResponses.Reply(a.replyLine(), a.reactionKey()),
+                ChatResponses.Session.from(a.session()), a.turns().stream().map(ChatResponses.Turn::from).toList()));
     }
 }

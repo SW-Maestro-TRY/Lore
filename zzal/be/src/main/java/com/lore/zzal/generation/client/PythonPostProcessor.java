@@ -106,6 +106,12 @@ public class PythonPostProcessor implements PostProcessor {
 
         @Override
         public void split(String gridImageKey, List<String> keys, String postures) throws Exception {
+            // 층을 모르는 옛 호출 — 세션 안의 순번을 층으로 본다(1층→2층 순서로 부르던 시절의 뜻 그대로).
+            split(gridImageKey, keys, postures, call + 1);
+        }
+
+        @Override
+        public void split(String gridImageKey, List<String> keys, String postures, int layer) throws Exception {
             if (keys == null || keys.isEmpty()) {
                 throw new IllegalArgumentException("--keys 가 비었습니다(후처리는 카탈로그 key 8개가 필요)");
             }
@@ -119,7 +125,7 @@ public class PythonPostProcessor implements PostProcessor {
                 // ★ 빈 값이면 아예 안 넘긴다 — 이 인자를 모르는 스크립트에 넘기면 argparse 가 죽는다.
                 args.addAll(List.of("--postures", postures));
             }
-            run(gridImageKey, keys, args);
+            run(gridImageKey, keys, args, layer);
         }
 
         @Override
@@ -173,14 +179,16 @@ public class PythonPostProcessor implements PostProcessor {
          * 전에는 층이 달라도 {@code grid.png}·{@code log.txt} 로 같아서 <b>2층이 1층의 기록을 덮어썼다.</b>
          * 1층이 어떤 격자로 무엇을 남겼는지가 사라져, 2층에서 터졌을 때 1층을 판정할 근거가 없다.
          */
-        private void run(String gridImageKey, List<String> expected, List<String> extraArgs) throws Exception {
+        private void run(String gridImageKey, List<String> expected, List<String> extraArgs, int layer)
+                throws Exception {
             call += 1;
-            Path grid = work.resolve("grid%d.png".formatted(call));
+            // ★ 이름은 호출 순번이 아니라 <b>층</b>으로 — 파이썬 게이트 로그가 이 파일 이름을 그대로 찍는다(#706).
+            Path grid = work.resolve("grid%d.png".formatted(layer));
             storage.download(gridImageKey, grid);
 
             FileTime since = stampNow(expected);
             exec(scripts.script(version, "service_post.py"), grid, out, extraArgs,
-                    work.resolve("log%d.txt".formatted(call)));
+                    work.resolve("log%d.txt".formatted(layer)));
 
             List<String> uploaded = new ArrayList<>();
             for (String state : expected) {
@@ -190,7 +198,7 @@ public class PythonPostProcessor implements PostProcessor {
                 uploaded.add(state);
             }
             log.info("후처리 완료 {} — {} → {} ({}종, {}번째 층)",
-                    version, gridImageKey, outputPrefix, uploaded.size(), call);
+                    version, gridImageKey, outputPrefix, uploaded.size(), layer);
         }
 
         /**

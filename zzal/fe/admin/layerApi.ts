@@ -45,6 +45,16 @@ export interface LayerItem {
   /** rejected/ 에 보존된 그 층 격자들. */
   rejectedKeys: string[];
   candidates: LayerCandidate[];
+  /**
+   * 복구가 어디까지 왔나(#702).
+   * LOCAL_REQUESTED = 다시 만들기 요청(맥미니 러너가 10분마다 집는다) · CANDIDATES = 고를 후보가 있다 · WAITING = 아무것도 없음
+   */
+  recovery: 'LOCAL_REQUESTED' | 'CANDIDATES' | 'WAITING';
+  regenRequestedAt: string | null;
+  /** 마지막으로 손으로 고친 시각(부화 시각과 따로). */
+  recoveredAt: string | null;
+  /** 지금 사용자에게 보이는 그 층 8종(key → webp). 2층은 READY 일 때만, 부화 실패 알은 비어 있다. */
+  currentKeys: Record<string, string>;
 }
 
 export interface Picked {
@@ -73,6 +83,21 @@ export function pickCandidate(petId: number, layer: 1 | 2, candidateId: string):
   return request<Picked>(`${PET(petId, layer)}/pick`, { method: 'POST', body: { candidateId } });
 }
 
+/** 맥미니에서 다시 만들기 요청(#702) — 사용자 화면은 그대로, 후보가 올라오면 요청이 지워진다. */
+export function requestRegen(petId: number, layer: 1 | 2): Promise<unknown> {
+  return request(`${PET(petId, layer)}/regen`, { method: 'POST' });
+}
+
+export function cancelRegen(petId: number, layer: 1 | 2): Promise<unknown> {
+  return request(`${PET(petId, layer)}/regen/cancel`, { method: 'POST' });
+}
+
+/** 결함 표시 해제(목록에서 내림). 노출 상태는 그대로. */
+export function unflagLayer2(petId: number): Promise<unknown> {
+  return request(`${PET(petId, 2)}/unflag`, { method: 'POST' });
+}
+
+/** 결함 표시(#702 — 표시만, 사용자 화면은 그대로). */
 export function flagLayer2(petId: number, reason?: string): Promise<unknown> {
   return request(`${PET(petId, 2)}/flag`, { method: 'POST', body: { reason: reason?.trim() || null } });
 }

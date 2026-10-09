@@ -15,7 +15,7 @@
 //   - 게이지 4칸 · 밥 3개 · 돌봄 6종 · 재우기/깨우기 창 · 낮잠 · 함께한 날 · 친밀도 · 채팅 3슬롯 ·
 //     2층 즉시 해금(`justUnlocked`) · 아침 도착(`learnedToday`) · 기능 열림(`features`).
 
-import { request } from './api';
+import { API_BASE, request } from './api';
 import type { components, operations } from './api-schema';
 
 /** 지금 어느 단계인가. 프론트의 'none'(아직 아무도 없음)은 서버에 없다 — 그건 행이 없는 것. */
@@ -270,6 +270,10 @@ export interface ChatReply {
   line: string;
   /** 반응 동작 키(Motion.key). */
   reactionKey: string;
+  /** 답한 뒤의 판 상태(#704). 옛 서버면 없다. */
+  session?: ChatSession | null;
+  /** 이번에 생긴 두 턴 — 내 말, 아이의 다음 말. */
+  turns?: ChatTurn[];
 }
 
 /** 기능 열림(정본 6장 "기능 해금"). 프론트는 이 값만 보고 버튼을 켠다. */
@@ -461,8 +465,14 @@ export interface Drafted {
 export interface CharacterInput {
   /** 12자 이하(정본 15장). */
   name: string;
-  /** 성격. 대사 톤에 쓰인다. 선택 */
+  /** 성격 하나(옛 칸). `personalities` 를 보내면 서버는 그쪽을 쓴다. 선택 */
   personality?: Personality;
+  /** 고른 성격 전부. 맨 앞이 대표. 선택 */
+  personalities?: Personality[];
+  /** 말투 — 고른 칩과 직접 쓴 말을 ` · ` 로 합쳐 `CHAR_TEXT_MAX.tone` 자 이하. 선택 */
+  tone?: string;
+  /** 장르 — 말투와 같은 방식, `CHAR_TEXT_MAX.genre` 자 이하. 선택 */
+  genre?: string;
   /** 세계관·설정. **고른 칩까지 합쳐** `CHAR_TEXT_MAX.world` 자 이하. 선택 */
   world?: string;
   /** 그 밖에 알려 주고 싶은 것. `CHAR_TEXT_MAX.extra` 자 이하. 선택. ★ **그림이 아니라 대사에 쓰인다**(위 머리말). */
@@ -483,8 +493,7 @@ export interface CharacterInput {
  *
  * ★ `world` 는 서버 **한 칸**에 고른 칩과 직접 쓴 말이 ` · ` 로 이어져 함께 담긴다.
  *   그래서 입력칸 자체의 상한은 이 숫자가 아니라 **칩이 먹고 남은 자리**다(화면이 계산한다).
- * ★ `persona` 는 아직 보내는 자리가 없다(위 `CharacterInput`). 화면에만 남아 잘릴 일이 없으므로
- *   넉넉히 두고, 보내기 시작할 때 서버 칸과 다시 맞춘다.
+ * ★ `persona` 의 **자유 입력**은 아직 보내는 자리가 없다(서버 칸이 없다). 칩은 `personalities` 로 간다.
  */
 export const CHAR_TEXT_MAX: Record<string, number> = {
   persona: 200,
@@ -526,6 +535,37 @@ export interface ChatCall {
   reactionKey: string | null;
 }
 
+/**
+ * 대화 한 판(#704). 부름 하나가 판이 되고, 펫·사용자 턴이 최대 `maxRounds` 왕복 오간다.
+ * `closed` 면 더 못 답한다(상한에 닿아 아이가 닫았거나 · 시각이 지났거나 · 답하다 말았거나).
+ */
+export interface ChatSession {
+  id: number;
+  slot: ChatSlot;
+  /** BABY · FIRST_MEET · DAILY · LONG_ABSENCE */
+  kind: string;
+  /** 이번 판에서 사용자가 답한 횟수. */
+  round: number;
+  maxRounds: number;
+  closed: boolean;
+  /** CLOSED · EXPIRED · ABANDONED. 열려 있으면 null. */
+  closeReason: string | null;
+}
+
+/** 대화의 한 마디. 펫 턴의 `type`·`generator`·`filteredReason` 은 계측용(화면에 안 띄운다). */
+export interface ChatTurn {
+  idx: number;
+  speaker: 'PET' | 'USER';
+  /** 펫 턴 종류 — FIRST_MEET · GREETING · REUNION · CONTINUE · CLOSE. 사용자 턴은 null. */
+  type: string | null;
+  line: string;
+  motion: string | null;
+  /** template · llm */
+  generator: string | null;
+  /** LLM 이 걸려 폴백했으면 그 사유. */
+  filteredReason: string | null;
+}
+
 /** GET /chat 의 응답. */
 export interface ChatState {
   /** 지금 답할 수 있는 슬롯. 없으면 null. */
@@ -534,6 +574,10 @@ export interface ChatState {
   calls: ChatCall[];
   /** 기억(최근 답 5개, 오래된 것부터). */
   memories: string[];
+  /** 지금의 판(열린 판, 없으면 오늘 마지막 판). 옛 서버면 없다. */
+  session?: ChatSession | null;
+  /** 그 판의 턴들(차례대로). */
+  turns?: ChatTurn[];
 }
 
 export interface Postcard {
@@ -597,6 +641,39 @@ export function motionWish(petId: number, text: string): Promise<void> {
 export function setCharacter(petId: number, input: CharacterInput): Promise<PetCreated> {
   return request<PetCreated>(`${PET_BASE}/draft/${petId}/character`, { method: 'POST', body: input });
 }
+
+/**
+ * 사용자 정보 6문항 중 **보낸 칸만** 저장한다(`PATCH /api/zzal/v1/me/profile`).
+ * 대사에 쓰이는 것은 호칭(`callMe`)뿐이다 — 나머지는 분석용이라 대사 지시문에 들어가지 않는다.
+ */
+export interface ProfilePatch {
+  callMe?: string;
+  visitTime?: string;
+  relation?: string;
+  draws?: string;
+  ageBand?: string;
+  cameFrom?: string;
+}
+
+/**
+ * ★ 공통 `request` 는 PATCH 를 안 받는다(GET·POST·PUT·DELETE). 공통 코드를 건드리지 않으려고
+ *   여기서만 맨 `fetch` 로 부른다 — 쿠키 인증(`credentials: 'include'`)은 같고, 401 자동 갱신은 없다.
+ *   설문 저장은 곁다리라 갱신 없이 실패해도 괜찮다(부르는 쪽이 오류를 삼킨다).
+ */
+export async function patchProfile(patch: ProfilePatch): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/zzal/v1/me/profile`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`profile ${res.status}`);
+}
+
+/** 여울 설문의 문항 키 → 서버 칸 이름. 화면 키(`USER_Q.key`)와 서버 칸이 이름이 달라 한 곳에 둔다. */
+export const PROFILE_FIELD_OF: Record<string, keyof ProfilePatch> = {
+  nick: 'callMe', when: 'visitTime', whose: 'relation', draw: 'draws', from: 'cameFrom', age: 'ageBand',
+};
 
 /** 부화 진행. 알 화면이 몇 초마다 되풀이해 부른다 — 가벼운 응답이다. */
 export function getHatchProgress(petId: number, signal?: AbortSignal): Promise<HatchProgress> {
@@ -715,11 +792,13 @@ export function getChat(petId: number, signal?: AbortSignal): Promise<ChatState>
  *   (풀지 않으면 훅이 받는 객체에 `petId` 조차 없어 화면이 조용히 빈다 — 실서버 왕복에서 확인.)
  */
 export async function answerChat(petId: number, slot: ChatSlot, text: string): Promise<PetDetail> {
-  const res = await request<{ pet: PetDetail; chatReply: ChatReply | null }>(
+  const res = await request<{ pet: PetDetail; chatReply: ChatReply | null; session?: ChatSession | null; turns?: ChatTurn[] }>(
     `${PET_BASE}/${petId}/chat/${slot}/answer`,
     { method: 'POST', body: { text } },
   );
-  return { ...res.pet, chatReply: res.chatReply };
+  // ★ 판 상태와 이번 두 턴도 `chatReply` 안으로 옮긴다(위와 같은 이유 — 훅은 PetDetail 하나만 안다).
+  const chatReply = res.chatReply ? { ...res.chatReply, session: res.session ?? null, turns: res.turns ?? [] } : null;
+  return { ...res.pet, chatReply };
 }
 
 /** "배워왔어요" 확인. learnedToday 에서 빠진다. */

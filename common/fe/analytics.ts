@@ -83,6 +83,8 @@ const ALLOWED_PROP_KEYS = new Set([
   'action', 'tab', 'from', 'to', 'code', 'reason', 'type', 'stars',
   'has_image', 'has_keywords', 'has_note', 'has_email',
   'step', 'count', 'seq', 'ms',
+  // 도감 저장·공유(zzal_dex_download·zzal_dex_share)의 동작 키·층 — 카탈로그 열거값(#705).
+  'motion', 'layer',
 ]);
 
 /** 서버로 나가는 한 줄. 익명 번호도 기기 정보도 없다 — 그건 서버가 쿠키·헤더로 안다. */
