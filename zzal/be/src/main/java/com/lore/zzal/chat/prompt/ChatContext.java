@@ -1,45 +1,53 @@
 package com.lore.zzal.chat.prompt;
 
-import com.lore.zzal.chat.ChatSlot;
-import com.lore.zzal.chat.memory.Memory;
 import com.lore.zzal.chat.persona.PersonaSheet;
+import com.lore.zzal.chat.session.SessionKind;
+import com.lore.zzal.chat.session.TurnPlan;
 
 import java.util.List;
 
 /**
- * 대사 한 줄을 만드는 데 필요한 것 전부. 생성기(템플릿·LLM)는 이것만 받는다.
+ * 펫 턴 하나를 만드는 데 필요한 것 전부. 생성기(템플릿·LLM)는 이것만 받는다.
  *
  * <h3>★ v2 에서 칸이 늘어나는 자리</h3>
- * 최근 대화(10턴)·꺼내도 되는 기억(종류별 0~1개)·금기 화제가 여기 칸으로 붙는다.
- * v1 의 {@code memories} 는 "최근 답 5개"이고, {@code recall} 은 재언급 때 꺼낼 1개다.
+ * 꺼내도 되는 기억(종류별 0~1개)·금기 화제가 여기 칸으로 붙는다. v1 의 "기억" 은 지난 판의 마지막 말 한 줄이다.
  *
- * @param sheet         페르소나 시트
- * @param state         지금 상태
- * @param kind          부름·답·재언급
- * @param slot          이번 부름 슬롯
- * @param callLine      (답·재언급) 아이가 먼저 건 말. 부름이면 null
- * @param answer        (답·재언급) 사용자가 한 말. 부름이면 null
- * @param memories      최근 기억(최근 것이 앞). 이번 답은 들어 있지 않다
- * @param recall        (재언급) 이번에 꺼낼 기억 하나. 아니면 null
- * @param answerCount   지금까지 답한 횟수(이번 답 전). 템플릿이 벌을 고르는 데 쓴다
- * @param allowQuestion 이번 줄에 질문을 해도 되나 — 코드가 정한다(LLM 에게 비율을 맡기지 않는다)
- * @param motions       (답·재언급) 고를 수 있는 반응 동작 키. 맨 앞이 기본값
+ * @param petId            펫(시스템 메시지 캐시 열쇠)
+ * @param sheet            페르소나 시트(시스템 메시지)
+ * @param state            지금
+ * @param kind             이 판의 종류
+ * @param plan             이번 턴에 할 일 — 코드가 정함
+ * @param lastSessionLine  지난 판에서 사용자가 마지막으로 한 말(없으면 null)
+ * @param history          이번 판의 지금까지(최근 것이 뒤, 최대 3왕복)
+ * @param motions          고를 수 있는 반응 동작. 맨 앞이 기본값
  */
 public record ChatContext(
+        Long petId,
         PersonaSheet sheet,
         PetState state,
-        LineKind kind,
-        ChatSlot slot,
-        String callLine,
-        String answer,
-        List<Memory> memories,
-        Memory recall,
-        int answerCount,
-        boolean allowQuestion,
+        SessionKind kind,
+        TurnPlan plan,
+        String lastSessionLine,
+        List<HistoryLine> history,
         List<String> motions) {
 
-    /** 기본 반응 동작(부름이면 null). */
+    /** 지시문 [지금까지] 에 넣는 최대 왕복 수. */
+    public static final int HISTORY_ROUNDS = 3;
+
     public String defaultMotion() {
         return motions == null || motions.isEmpty() ? null : motions.getFirst();
+    }
+
+    /** 사용자의 마지막 말(이번 판). 없으면 null. */
+    public String lastUserLine() {
+        if (history == null) {
+            return null;
+        }
+        for (int i = history.size() - 1; i >= 0; i--) {
+            if (history.get(i).speaker() == com.lore.zzal.chat.session.Speaker.USER) {
+                return history.get(i).line();
+            }
+        }
+        return null;
     }
 }

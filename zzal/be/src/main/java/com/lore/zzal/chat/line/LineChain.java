@@ -57,11 +57,13 @@ public class LineChain {
             LineAttempt t = template.generate(ctx);
             out = new GeneratedLine(t.text(), t.motion(), t.generator(), a.model(), a.costUsd(), a.failReason());
         }
-        log.info("채팅 대사 — {} · {} · {} · {}ms · ${}{}", ctx.kind().code(), out.generator(),
+        log.info("채팅 대사 — {} {}번째 · {} · {} · {}ms · ${}{}", ctx.plan().type(), ctx.plan().petTurnNo(), out.generator(),
                 a.model() == null ? "-" : a.model(), a.millis(), a.costUsd(),
                 out.fallbackReason() == null ? "" : " · 폴백 " + out.fallbackReason());
         if (events != null) {
-            events.record(ctx.kind().code(), out.generator(), out.fallbackReason(), a.millis(), userId);
+            events.record(ctx.plan().type().name().toLowerCase(java.util.Locale.ROOT), ctx.plan().petTurnNo(),
+                    ctx.kind().name().toLowerCase(java.util.Locale.ROOT), out.generator(), out.fallbackReason(),
+                    a.millis(), userId);
         }
         return out;
     }

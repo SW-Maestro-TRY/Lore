@@ -1,6 +1,7 @@
 package com.lore.zzal.chat.line;
 
-import com.lore.zzal.chat.ZzalChatCallRepository;
+import com.lore.zzal.chat.prompt.SystemPromptCache;
+import com.lore.zzal.chat.session.ZzalChatSessionRepository;
 import com.lore.zzal.pet.ZzalRules;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +22,7 @@ import java.time.LocalDate;
  *   <li>{@code app.zzal.chat.llm} — 기본 false(템플릿만). dev 에서만 켠다</li>
  *   <li>{@code app.zzal.chat.model} — 기본 gpt-5-mini</li>
  *   <li>{@code app.zzal.chat.timeout-ms} — 기본 4000. 넘으면 템플릿</li>
- *   <li>{@code app.zzal.chat.daily-cost-usd} — 기본 2. 그날(한국 날짜) 채팅 LLM 비용 합이 넘으면 템플릿</li>
+ *   <li>{@code app.zzal.chat.daily-cost-usd} — 기본 2. 그날(한국 날짜) 채팅 LLM 비용 합({@code zzal_chat_session.cost_usd})이 넘으면 템플릿</li>
  *   <li>{@code app.zzal.chat.reasoning-effort} — 기본 minimal(gpt-5 계열만 보낸다)</li>
  * </ul>
  * ★ 켰는데 키가 없으면 기동을 막는다 — 조용히 템플릿으로 돌면 "켰는데 안 켜진" 상태가 실제 대화에서야 드러난다.
@@ -38,7 +39,8 @@ public class ChatLineConfig {
                                @Value("${app.zzal.chat.daily-cost-usd:2}") BigDecimal dailyCap,
                                @Value("${app.zzal.chat.reasoning-effort:minimal}") String effort,
                                @Value("${app.zzal.openai.api-key:}") String apiKey,
-                               ZzalChatCallRepository calls,
+                               ZzalChatSessionRepository sessions,
+                               SystemPromptCache systems,
                                TemplateLineGenerator template,
                                ChatLineEvents events) {
         if (!llm) {
@@ -51,7 +53,7 @@ public class ChatLineConfig {
         log.info("채팅 대사 LLM 켜짐 — {} · {}ms · 일 상한 ${}", model, timeoutMs, dailyCap);
         LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort), model,
                 Duration.ofMillis(timeoutMs), dailyCap,
-                () -> calls.sumCostSince(startOfToday()));
+                () -> sessions.sumCostSince(startOfToday()), systems);
         return new LineChain(gen, template, events);
     }
 

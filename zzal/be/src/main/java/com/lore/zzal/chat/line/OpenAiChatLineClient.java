@@ -58,16 +58,21 @@ public class OpenAiChatLineClient implements ChatLineClient {
     }
 
     @Override
-    public Completion complete(String prompt, String model, Duration timeout) throws Exception {
+    public Completion complete(String system, String userText, String model, Duration timeout) throws Exception {
         ObjectNode body = json.createObjectNode();
         body.put("model", model);
         if (reasoningEffort != null && model.startsWith("gpt-5")) {
             body.put("reasoning_effort", reasoningEffort);
         }
         body.putObject("response_format").put("type", "json_object");
-        ObjectNode user = body.putArray("messages").addObject();
+        // ★ 시스템 메시지(펫당 고정)를 앞에 — 같은 앞부분이 반복돼야 OpenAI 프롬프트 캐시가 먹는다.
+        var messages = body.putArray("messages");
+        ObjectNode sys = messages.addObject();
+        sys.put("role", "system");
+        sys.put("content", system);
+        ObjectNode user = messages.addObject();
         user.put("role", "user");
-        user.put("content", prompt);
+        user.put("content", userText);
 
         HttpRequest req = HttpRequest.newBuilder(URI.create(ENDPOINT))
                 .header("Authorization", "Bearer " + apiKey)

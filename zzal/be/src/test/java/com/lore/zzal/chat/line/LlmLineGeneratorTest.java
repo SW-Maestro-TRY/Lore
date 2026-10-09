@@ -1,87 +1,111 @@
 package com.lore.zzal.chat.line;
 
-import com.lore.zzal.chat.ChatSlot;
-import com.lore.zzal.chat.memory.Memory;
 import com.lore.zzal.chat.persona.PersonaSheet;
 import com.lore.zzal.chat.prompt.ChatContext;
-import com.lore.zzal.chat.prompt.LineKind;
+import com.lore.zzal.chat.prompt.HistoryLine;
 import com.lore.zzal.chat.prompt.PetState;
+import com.lore.zzal.chat.prompt.SystemPromptCache;
+import com.lore.zzal.chat.session.SessionKind;
+import com.lore.zzal.chat.session.Speaker;
+import com.lore.zzal.chat.session.TurnPlan;
+import com.lore.zzal.chat.session.TurnType;
 import com.lore.zzal.pet.Personality;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DisplayName("채팅 v1 — LLM 생성기·폴백 사슬")
+@DisplayName("채팅 — LLM 생성기·폴백 사슬·출력 검사")
 class LlmLineGeneratorTest {
 
-    static ChatContext reply(String answer) {
-        PersonaSheet sheet = new PersonaSheet("루아나", List.of(Personality.SHY), null, null, "현대 · 학교", null,
-                null, false, "light blue beret, aqua jacket");
-        return new ChatContext(sheet, new PetState(21, 0, 3, 3, 3, 3, false), LineKind.REPLY, ChatSlot.EVENING,
-                "…오늘도 와 줘서, 고마워요.", answer, List.of(Memory.recentAnswer("안녕너무귀여워", null)), null, 1,
-                false, List.of("hello", "joy"));
+    static ChatContext cont(TurnType type, int no) {
+        PersonaSheet sheet = new PersonaSheet("루아나", List.of(Personality.SHY), null, "현대 · 학교", null,
+                "light blue beret", null, false);
+        return new ChatContext(7L, sheet, new PetState(DayOfWeek.THURSDAY, 21, 0, 3, 3, 3, 3, false), SessionKind.DAILY,
+                new TurnPlan(type, no, false, null, false), "미안해",
+                List.of(new HistoryLine(Speaker.PET, "…왔네."), new HistoryLine(Speaker.USER, "오늘 좀 힘들었어")),
+                List.of("hello", "joy"));
+    }
+
+    static ChatContext reply() {
+        return cont(TurnType.CONTINUE, 2);
     }
 
     private static LlmLineGenerator gen(FakeChatLineClient c, BigDecimal spent) {
-        return new LlmLineGenerator(c, "gpt-5-mini", Duration.ofSeconds(4), new BigDecimal("2"), () -> spent);
+        return new LlmLineGenerator(c, "gpt-5-mini", Duration.ofSeconds(4), new BigDecimal("2"), () -> spent,
+                new SystemPromptCache());
     }
 
     @Test
-    @DisplayName("JSON 의 line·motion 을 그대로 쓴다. 비용·모델이 남는다")
+    @DisplayName("시스템·사용자 두 메시지로 부르고, JSON 의 line·motion 을 쓴다. 비용·모델이 남는다")
     void ok() {
-        FakeChatLineClient c = new FakeChatLineClient().reply("{\"line\":\"…힘들었구나. 옆에 있을게요.\",\"motion\":\"joy\"}");
-        LineAttempt a = gen(c, BigDecimal.ZERO).generate(reply("오늘 좀 힘들었어"));
+        FakeChatLineClient c = new FakeChatLineClient().line("…힘들었구나. 옆에 있을게.", "joy");
+        LineAttempt a = gen(c, BigDecimal.ZERO).generate(reply());
         assertThat(a.ok()).isTrue();
-        assertThat(a.text()).isEqualTo("…힘들었구나. 옆에 있을게요.");
+        assertThat(a.text()).isEqualTo("…힘들었구나. 옆에 있을게.");
         assertThat(a.motion()).isEqualTo("joy");
-        assertThat(a.model()).isEqualTo("gpt-5-mini");
         assertThat(a.costUsd()).isEqualByComparingTo(FakeChatLineClient.COST);
+        assertThat(c.systems.getFirst()).startsWith("너는 '루아나'다.").contains("[말하는 법]").doesNotContain("[이번 턴]\n종류");
+        assertThat(c.users.getFirst()).contains("[이번 턴]", "종류: 이어 말하기").doesNotContain("[말하는 법]");
     }
 
     @Test
-    @DisplayName("목록 밖 동작은 기본값으로 — 대사는 버리지 않는다. 코드 블록·바깥 따옴표는 벗긴다")
-    void motionOutsideListAndFence() {
-        FakeChatLineClient c = new FakeChatLineClient().reply("```json\n{\"line\":\"\\\"…응.\\\"\",\"motion\":\"sleep\"}\n```");
-        LineAttempt a = gen(c, BigDecimal.ZERO).generate(reply("뭐해"));
+    @DisplayName("목록 밖 동작은 기본값으로, 첫 턴(부름)은 동작 없음. 코드 블록·바깥 따옴표는 벗긴다")
+    void motionAndFence() {
+        LineAttempt a = gen(new FakeChatLineClient().reply("```json\n{\"line\":\"\\\"…응.\\\"\",\"motion\":\"sleep\"}\n```"),
+                BigDecimal.ZERO).generate(reply());
         assertThat(a.ok()).isTrue();
         assertThat(a.text()).isEqualTo("…응.");
         assertThat(a.motion()).isEqualTo("hello");
+        LineAttempt first = gen(new FakeChatLineClient().line("…안녕.", "joy"), BigDecimal.ZERO)
+                .generate(cont(TurnType.GREETING, 1));
+        assertThat(first.motion()).isNull();
     }
 
     @Test
     @DisplayName("파싱 실패·빈 줄·시간 초과·오류는 사유를 담아 실패, 비용은 남긴다(시간 초과는 추정치)")
     void failures() {
-        assertThat(gen(new FakeChatLineClient().reply("그냥 글"), BigDecimal.ZERO).generate(reply("a")).failReason())
+        assertThat(gen(new FakeChatLineClient().reply("그냥 글"), BigDecimal.ZERO).generate(reply()).failReason())
                 .isEqualTo("parse");
-        LineAttempt blank = gen(new FakeChatLineClient().reply("{\"line\":\"  \"}"), BigDecimal.ZERO).generate(reply("a"));
+        LineAttempt blank = gen(new FakeChatLineClient().reply("{\"line\":\"  \"}"), BigDecimal.ZERO).generate(reply());
         assertThat(blank.failReason()).isEqualTo("blank");
         assertThat(blank.costUsd()).isEqualByComparingTo(FakeChatLineClient.COST);
-        LineAttempt slow = gen(new FakeChatLineClient().fail(new TimeoutException()), BigDecimal.ZERO).generate(reply("a"));
+        LineAttempt slow = gen(new FakeChatLineClient().fail(new TimeoutException()), BigDecimal.ZERO).generate(reply());
         assertThat(slow.failReason()).isEqualTo("timeout");
         assertThat(slow.costUsd()).isPositive();
         assertThat(gen(new FakeChatLineClient().fail(new IllegalStateException("HTTP 500")), BigDecimal.ZERO)
-                .generate(reply("a")).failReason()).isEqualTo("error");
+                .generate(reply()).failReason()).isEqualTo("error");
     }
 
     @Test
-    @DisplayName("출력 검사 — 길이 60자 초과·질문 둘·원망·작가 메모의 민감 소재(술·우울·살인)")
+    @DisplayName("출력 검사 — 60자 초과·괄호(지문)·이모지·질문 둘·원망·민감 소재")
     void filtered() {
-        String longLine = "가".repeat(61);
-        assertThat(gen(new FakeChatLineClient().reply("{\"line\":\"" + longLine + "\"}"), BigDecimal.ZERO)
-                .generate(reply("a")).failReason()).isEqualTo("length");
-        assertThat(gen(new FakeChatLineClient().reply("{\"line\":\"뭐 했어? 밥은 먹었어?\"}"), BigDecimal.ZERO)
-                .generate(reply("a")).failReason()).isEqualTo("questions");
-        assertThat(gen(new FakeChatLineClient().reply("{\"line\":\"왜 이렇게 늦게 왔어요.\"}"), BigDecimal.ZERO)
-                .generate(reply("a")).failReason()).isEqualTo("resent");
-        for (String bad : List.of("저녁에 맥주 한 잔 생각나요.", "…요즘 좀 우울해.", "오늘도 청부 일이 있었지.", "주인님, 왔어요?")) {
-            assertThat(gen(new FakeChatLineClient().reply("{\"line\":\"" + bad + "\"}"), BigDecimal.ZERO)
-                    .generate(reply("a")).failReason()).as(bad).isEqualTo("unsafe");
+        record Case(String line, String reason) {
+        }
+        for (Case k : List.of(
+                new Case("가".repeat(61), "length"),
+                new Case("(꼬리를 흔들며) 왔구나!", "bracket"),
+                new Case("*폴짝* 안녕!", "bracket"),
+                new Case("[웃음] 그렇구나", "bracket"),
+                new Case("안녕! 🐰", "emoji"),
+                new Case("오늘도 좋아 ✨", "emoji"),
+                new Case("좋아 ♡", "emoji"),
+                new Case("뭐 했어? 밥은 먹었어?", "questions"),
+                new Case("왜 이렇게 늦게 왔어요.", "resent"),
+                new Case("저녁에 맥주 한 잔 생각나요.", "unsafe"),
+                new Case("…요즘 좀 우울해.", "unsafe"),
+                new Case("주인님, 왔어요.", "unsafe"))) {
+            assertThat(gen(new FakeChatLineClient().line(k.line(), "hello"), BigDecimal.ZERO).generate(reply())
+                    .failReason()).as(k.line()).isEqualTo(k.reason());
+        }
+        for (String ok : List.of("…응~ 나도 좋아.", "심상훈! 이름 길다. 상훈이라고 불러도 돼? 나는 우사기야.")) {
+            assertThat(LineFilter.check(ok, reply())).as(ok).isNull();
         }
     }
 
@@ -89,28 +113,28 @@ class LlmLineGeneratorTest {
     @DisplayName("★ 일 상한 이상이면 부르지 않는다(돈이 안 나간다)")
     void capStopsBeforeCalling() {
         FakeChatLineClient c = new FakeChatLineClient();
-        LineAttempt a = gen(c, new BigDecimal("2.0001")).generate(reply("a"));
+        LineAttempt a = gen(c, new BigDecimal("2.0001")).generate(reply());
         assertThat(a.failReason()).isEqualTo("cap");
         assertThat(a.costUsd()).isZero();
-        assertThat(c.prompts).isEmpty();
+        assertThat(c.users).isEmpty();
     }
 
     @Test
-    @DisplayName("사슬 — LLM 실패면 템플릿 대사 + 폴백 사유, 비용·모델은 남긴다. LLM 꺼짐이면 템플릿만")
+    @DisplayName("사슬 — LLM 실패면 턴 종류에 맞는 폴백 문형 + 폴백 사유, 비용·모델은 남긴다. LLM 꺼짐이면 템플릿만")
     void chainFallsBack() {
-        LineChain chain = new LineChain(gen(new FakeChatLineClient().fail(new TimeoutException()), BigDecimal.ZERO),
+        LineChain chain = new LineChain(gen(new FakeChatLineClient().line("(웃으며) 그렇구나", "hello"), BigDecimal.ZERO),
                 new TemplateLineGenerator(), null);
-        GeneratedLine g = chain.generate(reply("미안해"), 1L);
+        GeneratedLine g = chain.generate(reply(), 1L);
         assertThat(g.generator()).isEqualTo("template");
-        assertThat(g.fallbackReason()).isEqualTo("timeout");
+        assertThat(g.fallbackReason()).isEqualTo("bracket");
         assertThat(g.model()).isEqualTo("gpt-5-mini");
-        assertThat(g.text()).startsWith("…");                      // 수줍음 템플릿
+        assertThat(g.text()).isEqualTo("…그렇구나. 잘 들었어.");   // 수줍음 · 이어 말하기
         assertThat(g.motion()).isEqualTo("hello");
 
-        GeneratedLine off = LineChain.templateOnly().generate(reply("미안해"), 1L);
-        assertThat(off.generator()).isEqualTo("template");
-        assertThat(off.fallbackReason()).isNull();
-        assertThat(off.costUsd()).isZero();
+        GeneratedLine close = LineChain.templateOnly().generate(cont(TurnType.CLOSE, 6), 1L);
+        assertThat(close.text()).isEqualTo("…나 동네 쪽에 잠깐 있을게. 또 말 걸게.");
+        assertThat(close.fallbackReason()).isNull();
+        assertThat(close.costUsd()).isZero();
     }
 
     @Test
