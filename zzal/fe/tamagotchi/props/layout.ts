@@ -154,14 +154,14 @@ export interface CharFit {
  *   아이 크기가 출렁인다 — 크기는 화면 크기만의 함수여야 한다.
  */
 export function charFit(anchors: CharAnchors, pose: string): CharFit {
-  const [canvasW, canvasH] = anchors.canvas;
   const p = poseAnchors(anchors, pose);
+  const [canvasW, canvasH] = p.canvas ?? anchors.canvas;
   let tallest = 0;
   let headSpanTallest = 0;
   let upright: typeof p | null = null;
   for (const q of Object.values(anchors.poses)) {
     tallest = Math.max(tallest, q.bbox.h);
-    const span = (q.feet.y - q.head_top.y) / canvasH;
+    const span = (q.feet.y - q.head_top.y) / (q.canvas ?? anchors.canvas)[1];
     if (span > headSpanTallest) { headSpanTallest = span; upright = q; }
   }
   return {
@@ -173,8 +173,8 @@ export function charFit(anchors: CharAnchors, pose: string): CharFit {
     headSpanTallestPerBoxH: headSpanTallest > 0 ? headSpanTallest : (p.feet.y - p.head_top.y) / canvasH,
     silLeftPerBoxW: p.bbox.x / canvasW,
     silRightPerBoxW: (p.bbox.x + p.bbox.w) / canvasW,
-    silLeftUprightPerBoxW: (upright ?? p).bbox.x / canvasW,
-    silRightUprightPerBoxW: ((upright ?? p).bbox.x + (upright ?? p).bbox.w) / canvasW,
+    silLeftUprightPerBoxW: (upright ?? p).bbox.x / ((upright ?? p).canvas ?? anchors.canvas)[0],
+    silRightUprightPerBoxW: ((upright ?? p).bbox.x + (upright ?? p).bbox.w) / ((upright ?? p).canvas ?? anchors.canvas)[0],
     headSidePerBoxH: (p.feet.y - p.head_side.y) / canvasH,
   };
 }

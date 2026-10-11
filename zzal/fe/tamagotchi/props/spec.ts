@@ -143,6 +143,8 @@ export interface AnchorSpan { y: number; left_x: number; right_x: number }
 export interface AnchorFeet extends AnchorSpan { center_x: number }
 
 export interface PoseAnchors {
+  /** 층별 캔버스가 다르면 해당 자세의 실제 크기를 사용한다. */
+  canvas?: [number, number];
   bbox: { x: number; y: number; w: number; h: number };
   head_top: AnchorPoint;
   head_side: AnchorSpan;

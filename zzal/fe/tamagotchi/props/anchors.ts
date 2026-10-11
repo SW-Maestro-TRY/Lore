@@ -76,6 +76,7 @@ function pose(v: unknown): PoseAnchors | null {
   if (!ht || !hs || !hf || !ft || cx === null) return null;
   const bb = (o.bbox ?? {}) as Record<string, unknown>;
   return {
+    ...(o.canvas ? { canvas: parseCanvas(o.canvas, [0, 0]) } : {}),
     bbox: { x: num(bb.x) ?? 0, y: num(bb.y) ?? 0, w: num(bb.w) ?? 0, h: num(bb.h) ?? 0 },
     head_top: ht,
     head_side: hs,
@@ -103,6 +104,7 @@ export function mergeAnchors(raw: unknown, fixed: CharAnchors = FIXED_ANCHORS): 
   const taken: string[] = [];
   for (const [k, v] of Object.entries(poses as Record<string, unknown>)) {
     const p = pose(v);
+    if (p?.canvas && (p.canvas[0] <= 0 || p.canvas[1] <= 0)) delete p.canvas;
     if (p) { merged[k] = p; taken.push(k); }
   }
   // 한 칸도 못 읽었으면 받은 것이 아니다 — 폴백으로 돌린다.

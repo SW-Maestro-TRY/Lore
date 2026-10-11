@@ -54,6 +54,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 # 알파가 이보다 크면 '보이는 픽셀'. state8_v5 의 마지막 잘라내기·service_post 의 티끌 제거와 같은 기준.
 ALPHA_ON = 8
@@ -122,15 +123,28 @@ def measure(m: np.ndarray) -> dict:
     }
 
 
+def body_mask(img: Image.Image) -> np.ndarray:
+    """측정만 본체에 한정한다. 떨어진 격자 표시가 K/Hw를 바꾸지 않게 한다.
+
+    원본 픽셀과 소품은 지우지 않는다. 2층 정규화의 measure_body와 같은 연결 기준이다.
+    """
+    m = mask(img)
+    labels, count = ndimage.label(m)
+    if count <= 1:
+        return m
+    sizes = ndimage.sum(m, labels, range(1, count + 1))
+    return labels == int(np.argmax(sizes)) + 1
+
+
 def base_scale(img: Image.Image) -> tuple:
     """base 한 장에서 (K, Hw). K = 머리끝~발끝, Hw = 머리 폭."""
-    d = measure(mask(img))
+    d = measure(body_mask(img))
     return int(d["bbox"][3]), int(d["hw"])
 
 
-def pose_anchors(img: Image.Image, K: float, Hw: float) -> dict:
+def pose_anchors(img: Image.Image, K: float, Hw: float, *, reference_body=False) -> dict:
     """자세 한 장의 앵커 한 벌. 정본 JSON 의 자세 한 칸과 **같은 모양**이다."""
-    m = mask(img)
+    m = body_mask(img) if reference_body else mask(img)
     d = measure(m)
     x0, y0, w, h = d["bbox"]
     y1 = y0 + h - 1
@@ -198,7 +212,7 @@ def build(frames: dict, keys, K=None, Hw=None, base_key: str = "base") -> dict:
     poses, missing = {}, []
     for k in keys:
         try:
-            poses[k] = pose_anchors(frames[k], K, Hw)
+            poses[k] = pose_anchors(frames[k], K, Hw, reference_body=(k == base_key))
         except AnchorError as e:
             poses[k] = None
             missing.append(k)
@@ -230,8 +244,9 @@ def merge_into(path, data: dict) -> dict:
     1층 여덟 자세를 지운다. 통과는 하고 화면에서 1층 소품만 제자리를 잃는데, 그건 부화를
     끝까지 돌려 봐야만 드러난다.
 
-    머리(canvas·K·Hw)가 다르면 합치지 않고 **갈아엎고 한 줄 남긴다** — 다른 캐릭터이거나
+    기준(version·K·Hw)이 다르면 합치지 않고 **갈아엎고 한 줄 남긴다** — 다른 캐릭터이거나
     다시 구운 것이므로, 옛 자세를 남겨 두면 그쪽이 틀린 자리를 가리킨다.
+    층마다 캔버스 높이는 다를 수 있다. 자세별 canvas를 보존하고 기본 자세의 헤더를 유지한다.
     """
     p = Path(path)
     if not p.exists():
@@ -239,7 +254,6 @@ def merge_into(path, data: dict) -> dict:
     try:
         old = json.loads(p.read_text(encoding="utf-8"))
         same = (old.get("version") == data["version"]
-                and old.get("canvas") == data["canvas"]
                 and old.get("K") == data["K"] and old.get("Hw") == data["Hw"])
     except (OSError, ValueError):
         print(f"[앵커] 기존 {p.name} 을 읽지 못해 새로 씁니다")
@@ -250,10 +264,21 @@ def merge_into(path, data: dict) -> dict:
               f"{data['canvas']} K={data['K']} Hw={data['Hw']}) — 합치지 않고 새로 씁니다")
         return data
 
-    poses = dict(old.get("poses") or {})
-    poses.update(data["poses"])                      # 이번에 잰 것이 이긴다
+    def with_canvas(source):
+        result = {}
+        canvas = source.get("canvas") or {}
+        for key, pose in (source.get("poses") or {}).items():
+            if pose is not None and "canvas" not in pose and "w" in canvas and "h" in canvas:
+                pose = dict(pose, canvas=[canvas["w"], canvas["h"]])
+            result[key] = pose
+        return result
+
+    poses = with_canvas(old)
+    poses.update(with_canvas(data))                      # 이번에 잰 것이 이긴다
     merged = dict(data)
     merged["poses"] = poses
+    if "base" in (old.get("poses") or {}) and "base" not in data["poses"]:
+        merged["canvas"] = dict(old["canvas"])
     missing = [k for k in (old.get("missing") or []) if k not in data["poses"]]
     missing += data.get("missing", [])
     if missing:
