@@ -2,11 +2,13 @@ package com.lore.zzal.it;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.lore.zzal.game.GameKind;
+import com.lore.zzal.game.ZzalGameRepository;
 import com.lore.zzal.pet.CareAction;
 import com.lore.zzal.pet.ZzalPet;
 import com.lore.zzal.pet.ZzalRules;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
@@ -32,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ZzalIntegrationTest
 @DisplayName("시나리오 6 — HTTP 계약: 주소가 있고 잘못된 값은 400")
 class HttpContractIT extends ZzalItSupport {
+
+    @Autowired ZzalGameRepository games;
 
     /** 튜토리얼을 지나 바로 놀 수 있는 펫. 조각(3층)은 안 연다 — 여기서 보려는 것이 아니다. */
     /**
@@ -104,10 +108,10 @@ class HttpContractIT extends ZzalItSupport {
         assertThat(data.path("win").asBoolean()).as("30,000ms 는 승리선이다").isTrue();
 
         // ★ 주소가 없던 시절의 증상 — 끝내지 못한 판이 계속 돌아와 그날 아무 게임도 못 했다.
-        JsonNode current = getJson(userId, "/api/zzal/v1/me/pets/%d/games/current".formatted(petId));
-        assertThat(current.path("data").path("playing").asBoolean())
+        // 미완료 판은 /games/current 가 돌려주지 않는다(ef07cc68) — 끝났는지는 저장소로 확인한다.
+        assertThat(games.findById(gameId).orElseThrow().isFinished())
                 .as("끝낸 판은 더 이상 진행 중이 아니다")
-                .isFalse();
+                .isTrue();
     }
 
     @Test
@@ -140,9 +144,10 @@ class HttpContractIT extends ZzalItSupport {
         }
 
         // 거절당한 뒤에도 그 판은 살아 있다 — 400 이 판을 태워 버리면 하루치를 잃는다.
-        JsonNode current = getJson(userId, "/api/zzal/v1/me/pets/%d/games/current".formatted(petId));
-        assertThat(current.path("data").path("playing").asBoolean()).isTrue();
-        assertThat(current.path("data").path("gameId").asLong()).isEqualTo(gameId);
+        // 미완료 판은 /games/current 가 돌려주지 않는다(ef07cc68) — 저장소로 확인한다.
+        assertThat(games.findById(gameId).orElseThrow().getFinishedAt())
+                .as("400 거절 뒤에도 그 판은 끝나지 않았다")
+                .isNull();
 
         assertThat(finish(userId, petId, gameId, 60_000L)).as("상한 정확히는 통과한다").isEqualTo(200);
     }
