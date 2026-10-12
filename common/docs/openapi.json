@@ -178,6 +178,11 @@
             "example": 60,
             "format": "int64",
             "type": "integer"
+          },
+          "visit": {
+            "description": "방문으로 칠까(기본 true). false 면 정산만 하고 방문으로 안 친다 — 결석 떠남 재현용",
+            "example": true,
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -450,6 +455,91 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Detail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevBake": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevBake"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevBakeProgress": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevBakeProgress"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevPing": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevPing"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevResult": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevResult"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevState": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevState"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -1957,6 +2047,480 @@
           },
           "world": {
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DevBake": {
+        "description": "굽기 시작 결과",
+        "properties": {
+          "estimatedCostUsd": {
+            "description": "예상 비용(달러). 가짜면 0",
+            "example": 0.19,
+            "type": "number"
+          },
+          "jobId": {
+            "description": "진행 조회 열쇠(hatch-{genJobId} · layer2-{초} · gift-{seq}-{초})",
+            "example": "hatch-12",
+            "type": "string"
+          },
+          "kind": {
+            "description": "hatch · layer2 · gift",
+            "type": "string"
+          },
+          "note": {
+            "description": "사람 말 한 줄",
+            "type": "string"
+          },
+          "real": {
+            "description": "진짜 그림 생성으로 굽는가",
+            "type": "boolean"
+          },
+          "result": {
+            "$ref": "#/components/schemas/DevResult",
+            "description": "시작 직후 상태"
+          }
+        },
+        "type": "object"
+      },
+      "DevBakeProgress": {
+        "description": "굽기 진행",
+        "properties": {
+          "costUsd": {
+            "description": "이번 굽기에서 지금까지 기록된 비용(달러)",
+            "type": "number"
+          },
+          "done": {
+            "description": "끝난 단계 수(부화만)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "finished": {
+            "description": "끝났나(성공·실패 모두)",
+            "type": "boolean"
+          },
+          "jobId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "description": "지금 상태(부화=phase · 2층=layer2Status · 선물=동작 status)",
+            "type": "string"
+          },
+          "total": {
+            "description": "전체 단계 수(부화만)",
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DevBakeRequest": {
+        "description": "굽기 요청",
+        "properties": {
+          "kind": {
+            "description": "hatch · layer2 · gift",
+            "example": "gift",
+            "type": "string"
+          },
+          "real": {
+            "description": "진짜로 굽는 줄 아는가 — 서버 스위치(ZZAL_GENERATION_REAL)와 같아야 한다",
+            "example": false,
+            "type": "boolean"
+          },
+          "seq": {
+            "description": "gift 일 때 동작 seq(없으면 첫 선물)",
+            "example": 101,
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DevMotionPatch": {
+        "description": "동작 행 세팅",
+        "properties": {
+          "revealed": {
+            "description": "도착(revealedAt) — true 면 지금, false 면 지운다",
+            "type": "boolean"
+          },
+          "seen": {
+            "description": "열람(seenAt) — true 면 지금, false 면 지운다",
+            "type": "boolean"
+          },
+          "seq": {
+            "description": "카탈로그 seq",
+            "example": 101,
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "description": "NONE · QUEUED · BAKING · REVIEW · LOCAL_REQUESTED · OPEN · FAILED · HOLD",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DevPetPatch": {
+        "description": "개발 리모컨 상태 세팅 — 준 칸만 바꾼다. 범위를 넘으면 400, 연쇄(병·떠남)는 시간이 지나야 이어진다",
+        "properties": {
+          "absenceHours": {
+            "description": "부재(깨어 있는) 시간 0~72 — 4시간마다 혼자 논 장면 1컷",
+            "format": "int32",
+            "type": "integer"
+          },
+          "background": {
+            "description": "배경 키(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "bathCount": {
+            "description": "목욕 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "bonusPiece": {
+            "description": "오늘 보너스 조각 받음 표시",
+            "type": "boolean"
+          },
+          "callMe": {
+            "description": "호칭(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "careMiss": {
+            "description": "누적 케어 미스 0~99",
+            "format": "int32",
+            "type": "integer"
+          },
+          "chatAnswers": {
+            "description": "채팅 답 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "cleans": {
+            "description": "청소 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "daysTogether": {
+            "description": "함께한 날 1~9999",
+            "format": "int32",
+            "type": "integer"
+          },
+          "deathReason": {
+            "description": "HATCH_FAILED · NEGLECTED · RELEASED (DEAD·FAILED 일 때)",
+            "enum": [
+              "HATCH_FAILED",
+              "NEGLECTED",
+              "RELEASED"
+            ],
+            "type": "string"
+          },
+          "feeds": {
+            "description": "밥 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "food": {
+            "description": "밥 재고 0~3",
+            "example": 3,
+            "format": "int32",
+            "type": "integer"
+          },
+          "fullness": {
+            "description": "배부름 0~4",
+            "example": 4,
+            "format": "int32",
+            "type": "integer"
+          },
+          "gameStarts": {
+            "description": "게임 시작 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "genre": {
+            "description": "장르(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "goodDayPending": {
+            "description": "기분 좋은 날 판정 대기(내일 아침 보너스)",
+            "type": "boolean"
+          },
+          "goodDayToday": {
+            "description": "오늘이 기분 좋은 날",
+            "type": "boolean"
+          },
+          "graduationSeen": {
+            "description": "졸업 축하 창을 봤나. false 면 다시 뜬다",
+            "type": "boolean"
+          },
+          "happiness": {
+            "description": "행복 0~4",
+            "example": 4,
+            "format": "int32",
+            "type": "integer"
+          },
+          "healed": {
+            "description": "방금 나음 표시(healedAt). true 면 지금, false 면 지운다",
+            "type": "boolean"
+          },
+          "intimacy": {
+            "description": "친밀도 0~999 (최고치는 따라 올라간다)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "intimacyPeak": {
+            "description": "친밀도 최고치 0~999 (재회 시 50%)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "lastNightCareMiss": {
+            "description": "어젯밤 케어 미스 스냅샷 0~99",
+            "format": "int32",
+            "type": "integer"
+          },
+          "lastVisitDaysAgo": {
+            "description": "마지막 방문이 며칠 전인가 0~60(결석 떠남 재현)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "layer2Flagged": {
+            "description": "2층 결함 표시",
+            "type": "boolean"
+          },
+          "layer2Status": {
+            "description": "2층 굽기 상태 — PENDING · RUNNING · READY · FAILED",
+            "type": "string"
+          },
+          "layerTwoDone": {
+            "description": "2층 8종 완주 표시(다음 기상에 3층)",
+            "type": "boolean"
+          },
+          "leaveEnabled": {
+            "description": "떠남 켜기",
+            "type": "boolean"
+          },
+          "leaveNotice": {
+            "description": "떠남 예고 — true 면 지금 예고, false 면 지운다",
+            "type": "boolean"
+          },
+          "leavingJustCancelled": {
+            "description": "예고 막 취소됨 연출",
+            "type": "boolean"
+          },
+          "leftRightWins": {
+            "description": "좌우 맞히기 승수(5 → 달리기)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "motions": {
+            "description": "동작 행 상태 — seq 마다 status·도착·열람",
+            "items": {
+              "$ref": "#/components/schemas/DevMotionPatch"
+            },
+            "type": "array"
+          },
+          "napCount": {
+            "description": "낮잠 횟수 0~1",
+            "format": "int32",
+            "type": "integer"
+          },
+          "naturalSickInMinutes": {
+            "description": "자연 발병까지 깨어 있는 분. -1 이면 예약을 지운다",
+            "format": "int32",
+            "type": "integer"
+          },
+          "overslept": {
+            "description": "늦잠 표시",
+            "type": "boolean"
+          },
+          "personality": {
+            "description": "대표 성격 — GENTLE · LIVELY · SHY · CLINGY",
+            "enum": [
+              "GENTLE",
+              "LIVELY",
+              "SHY",
+              "CLINGY",
+              "COOL"
+            ],
+            "type": "string"
+          },
+          "pets": {
+            "description": "쓰다듬기 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "phase": {
+            "description": "DRAFT · HATCHING · ALIVE · FAILED · DEAD",
+            "enum": [
+              "DRAFT",
+              "HATCHING",
+              "ALIVE",
+              "FAILED",
+              "DEAD"
+            ],
+            "type": "string"
+          },
+          "pieces": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "description": "조각 칸별 채움 — FOOD · PLAY · CLEAN · BOND → true/false (3층이 열려 있어야 한다)",
+            "type": "object"
+          },
+          "piecesEnabled": {
+            "description": "3층(조각) 열림",
+            "type": "boolean"
+          },
+          "shares": {
+            "description": "공유 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "sick": {
+            "description": "병 — NONE · NEGLECT · DIRTY · UPSET · NATURAL",
+            "example": "DIRTY",
+            "type": "string"
+          },
+          "sickHoursAgo": {
+            "description": "병이 난 지 몇 시간(깨어 있는 시간 기준 24시간마다 케어 미스). 0~240",
+            "format": "int32",
+            "type": "integer"
+          },
+          "sleep": {
+            "description": "잠 — NONE · NIGHT · NAP (훅은 안 돈다 — 밤 정산은 events/night-settle)",
+            "type": "string"
+          },
+          "sleepWakeCount": {
+            "description": "재우기+깨우기 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "snacks": {
+            "description": "간식 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todayBathDone": {
+            "description": "오늘 목욕했나",
+            "type": "boolean"
+          },
+          "todayCareIntimacy": {
+            "description": "오늘 돌봄 친밀도 0~30",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todayCareMiss": {
+            "description": "오늘 케어 미스 0~99",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todayCared": {
+            "description": "오늘 한 번이라도 돌봤나(잘 돌본 날 판정)",
+            "type": "boolean"
+          },
+          "todayGames": {
+            "description": "오늘 게임 판 수 0~3",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todayPetCount": {
+            "description": "오늘 쓰다듬기 0~3",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todaySnacks": {
+            "description": "오늘 간식 0~5",
+            "format": "int32",
+            "type": "integer"
+          },
+          "tone": {
+            "description": "말투(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "trash": {
+            "description": "똥(흔적) 0~4",
+            "example": 4,
+            "format": "int32",
+            "type": "integer"
+          },
+          "trip": {
+            "description": "여행 중 — true 면 지금 출발(엽서 0), false 면 지운다(재회 값은 events/call-back)",
+            "type": "boolean"
+          },
+          "tutorialStep": {
+            "description": "튜토리얼 칸 0~9. 9 = 끝(시계가 지금 켜진다), 0~8 = 튜토리얼 중으로 되돌린다",
+            "example": 0,
+            "format": "int32",
+            "type": "integer"
+          },
+          "wakes": {
+            "description": "손으로 깨운 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "world": {
+            "description": "세계관(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "zeroMissDays": {
+            "description": "잘 돌본 날 수 0~999",
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DevPing": {
+        "description": "개발 도구 켜짐 확인. 꺼진 서버에는 이 주소가 없다(404)",
+        "properties": {
+          "devTools": {
+            "description": "늘 true(꺼져 있으면 응답 자체가 없다)",
+            "type": "boolean"
+          },
+          "generationReal": {
+            "description": "진짜 그림 생성 스위치(ZZAL_GENERATION_REAL). false 면 진짜 굽기를 거절한다",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "DevResult": {
+        "description": "리모컨 조작 결과 — 이번에 일어난 일 · 바꾸기 전과 뒤의 캐릭터 상태 · 내부 칸 한 벌",
+        "properties": {
+          "after": {
+            "$ref": "#/components/schemas/Detail",
+            "description": "바꾼 뒤 캐릭터 상태(방문 없이 정산한 값)"
+          },
+          "before": {
+            "$ref": "#/components/schemas/Detail",
+            "description": "바꾸기 전 캐릭터 상태"
+          },
+          "effects": {
+            "description": "이번에 일어난 일(바뀐 칸마다 한 줄, '배부름: 3 → 0'). 아무것도 안 바뀌면 빈 목록",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "state": {
+            "additionalProperties": { },
+            "description": "바꾼 뒤 내부 칸 한 벌(케어 미스·오늘 한도·평생 횟수·조각 칸·동작 행 등)",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "DevState": {
+        "description": "내부 칸 한 벌(리모컨 상태 패널)",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/Detail"
+          },
+          "state": {
+            "additionalProperties": { },
+            "type": "object"
           }
         },
         "type": "object"
@@ -4007,6 +4571,11 @@
             "example": 40,
             "format": "int32",
             "type": "integer"
+          },
+          "visit": {
+            "description": "방문으로 칠까(기본 true). false 면 정산만 한다",
+            "example": true,
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -9556,7 +10125,7 @@
     },
     "/api/zzal/v1/dev/pets/{petId}/advance-clock": {
       "post": {
-        "description": "이 펫의 시계를 준 만큼 **앞으로** 민다. 게이지·잠·창·자동 취침이 그 시각 기준으로 정산된다.\n\n- **규칙은 그대로다.** 값을 짧게 바꾸는 것이 아니라 시계만 밀므로 여기서 확인한 동작이 곧 운영 동작이다\n- 응답의 `serverNow` 도 밀린 시계다\n- 내 펫만(남의 펫은 404) · 운영에서는 이 API 가 존재하지 않는다",
+        "description": "이 펫의 시계를 준 만큼 **앞으로** 민다. 게이지·잠·창·자동 취침이 그 시각 기준으로 정산된다.\n\n- **규칙은 그대로다.** 값을 짧게 바꾸는 것이 아니라 시계만 밀므로 여기서 확인한 동작이 곧 운영 동작이다\n- 응답의 `after.serverNow` 도 밀린 시계다. `effects` 에 이번 점프에서 바뀐 칸(케어 미스·병·떠남·장면·엽서…)이 한 줄씩\n- `visit:false` 면 방문으로 치지 않는다 — 하루씩 여러 번 밀어도 결석 떠남이 난다(기본 true)\n- 내 펫만(남의 펫은 404) · 운영에서는 이 API 가 존재하지 않는다",
         "operationId": "advanceClock",
         "parameters": [
           {
@@ -9584,7 +10153,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9594,7 +10163,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9604,7 +10173,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9617,6 +10186,155 @@
           }
         ],
         "summary": "시간 당기기",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/pets/{petId}/bake": {
+      "post": {
+        "description": "부화(다시)·2층(처음부터)·선물/심화 한 판을 운영과 같은 길로 굽는다. real 이 서버 스위치와 다르면 409(과금 스위치 꺼짐 등).\n응답에 예상 비용(부화 $0.19 · 2층/동작 격자 $0.09, 가짜면 0)과 진행 조회 열쇠(jobId).",
+        "operationId": "devBake",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevBakeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevBake"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "굽기 시작",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/pets/{petId}/bake/{jobId}": {
+      "get": {
+        "description": "bake 응답의 jobId 로 지금 상태·단계·기록된 비용을 본다.",
+        "operationId": "devBakeProgress",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevBakeProgress"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "굽기 진행",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/pets/{petId}/events/{kind}": {
+      "post": {
+        "description": "운영이 그 일을 일으키는 메서드를 그대로 부른다(시각·조건 무시). 응답 effects 에 그 사이 일어난 일이 한 줄씩.\n\nhatch-complete · hatch-fail · tutorial-next · tutorial-skip · tutorial-restart · clock-start · graduation ·\ngraduation-reset · care-miss · sick(arg=NEGLECT|DIRTY|UPSET|NATURAL) · recover · sleep · nap · night-settle ·\nwake · wake-auto · leave-notice · visit · trip-start · postcard · call-back · day-plus · scene(arg=1~3) ·\nnight-scene · chat-open · chat-close · chat-expire · chat-abandon · game-win · game-lose · today-reset ·\nunlock(arg=all|2층 key) · pieces-open · piece-add(arg=FOOD|PLAY|CLEAN|BOND) · piece-complete ·\ngift-review · gift-open · gift-arrive · gift-view(arg=seq, 기본 첫 선물) · release · revive",
+        "operationId": "devEvent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "이벤트 인자 하나(병 종류·조각 칸·장면 수·seq·해금 대상)",
+            "in": "query",
+            "name": "arg",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "이벤트 일으키기",
         "tags": [
           "개발용"
         ]
@@ -9709,7 +10427,7 @@
     },
     "/api/zzal/v1/dev/pets/{petId}/set-clock": {
       "post": {
-        "description": "이 펫의 시계를 특정 시각으로 맞춘다. `at`(ISO) · `sinceHatchMinutes`(부화 뒤 N분) · `localTime`(\"19:00\", 오늘 KST) 중 하나.\n과거로도 갈 수 있지만 이미 정산된 것은 되돌리지 않는다 — 과거로 맞추면 그 시각까지 아무것도 안 흐른 것이 된다.",
+        "description": "이 펫의 시계를 특정 시각으로 맞춘다. `at`(ISO) · `sinceHatchMinutes`(부화 뒤 N분) · `localTime`(\"19:00\", 오늘 KST) 중 하나.\n과거로도 갈 수 있지만 이미 정산된 것은 되돌리지 않는다 — 과거로 맞추면 그 시각까지 아무것도 안 흐른 것이 된다.\n`visit:false` 면 방문으로 치지 않는다. 응답은 시간 당기기와 같은 모양(effects · before · after · state).",
         "operationId": "setClock",
         "parameters": [
           {
@@ -9737,7 +10455,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9747,7 +10465,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9757,7 +10475,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9770,6 +10488,117 @@
           }
         ],
         "summary": "시계 맞추기",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/pets/{petId}/state": {
+      "get": {
+        "description": "리모컨 상태 패널용 — 케어 미스·오늘 한도·평생 횟수·조각 칸·동작 행까지. 방문으로 치지 않는다.",
+        "operationId": "devState",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevState"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "내부 상태 읽기",
+        "tags": [
+          "개발용"
+        ]
+      },
+      "patch": {
+        "description": "준 칸만 값으로 바꾼다(부분 갱신). 검증은 범위만 — 넘으면 400 이고 아무것도 안 바뀐다.\n연쇄(병·떠남)는 돌리지 않는다. 시계를 넘기면 규칙대로 이어진다. 응답의 effects 에 바뀐 칸이 한 줄씩.",
+        "operationId": "devPatchState",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevPetPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "상태 세팅",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/ping": {
+      "get": {
+        "description": "200 이면 리모컨을 그린다. 꺼진 서버에는 이 주소가 없다(404). 진짜 생성 스위치도 함께 알린다.",
+        "operationId": "devPing",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevPing"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "개발 도구 켜짐 확인",
         "tags": [
           "개발용"
         ]
