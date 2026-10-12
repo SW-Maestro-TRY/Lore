@@ -23,7 +23,7 @@ import "./webtoon.css";
 
 import { hrefOf, type Go, type View } from "./lib/nav";
 import { linkThisBrowser } from "./lib/api";
-import { setView, track } from "./lib/track";
+import { installAutoTrack, navCause, screenProps, setView, takeDepth, track } from "./lib/track";
 import { LangProvider, useLang } from "./lib/i18n";
 import { syncPush } from "./lib/push";
 import Landing from "./screens/landing/Landing";
@@ -168,29 +168,40 @@ function WebtoonScreens() {
   const prevView = useRef<View | null>(null);
   useEffect(() => {
     if (!authReady) return;
-    const leave = () => {
+    /* how · via — 어떻게 나갔나(무엇을 눌러서 · 브라우저 뒤로 · 창을 닫거나 새로고침).
+       depth_pct — 그 화면을 어디까지 내려 봤나. 둘 다 「왜 빠지나」를 보려고 더했다. */
+    const leave = (how?: string) => {
       if (prevView.current && enteredAt.current) {
-        track("page_leave", { target: prevView.current, ms: Date.now() - enteredAt.current });
+        const cause = how ? { how } : navCause(false);
+        track("page_leave", { target: prevView.current, ms: Date.now() - enteredAt.current,
+          depth_pct: takeDepth(), ...cause });
       }
     };
+    const onHide = () => leave("close");
     leave();
     prevView.current = route.view;
     enteredAt.current = Date.now();
-    window.addEventListener("pagehide", leave);
-    return () => window.removeEventListener("pagehide", leave);
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.view, authReady]);
 
   /* 화면 이동은 전부 여기를 지난다 — 화면마다 따로 달지 않는다(#413).
      로그인 확인이 끝나기 전(loading)에는 기다린다. 안 기다리면 로그인한 사람의
      첫 화면이 전부 로그인 안 한 것으로 찍힌다. */
+  const firstView = useRef(true);
   useEffect(() => {
     if (!authReady) return;
     track("page_view", {
       step: route.view === "create" ? route.step : undefined,  // 걸음은 만들기 화면에만 뜻이 있다
       run: route.run, logged_in: authenticatedRef.current,
+      ...navCause(true, firstView.current),   // 어떻게 왔나 — load · click(via) · history · auto
     });
+    firstView.current = false;
   }, [route.view, route.step, route.run, authReady]);
+
+  /* 누른 것 · 입력 칸 · 오류 · API 실패 · 탭 숨김을 화면마다 달지 않고 한 번에 켠다(track.ts 「자동 기록」). */
+  useEffect(() => installAutoTrack(), []);
 
   /* 방문의 첫 줄 — 깔때기의 분모다. "100명이 들어와서" 의 100 을 여기서 센다.
      한 탭에서 한 번(sessionStorage), 처음 온 브라우저인지는 localStorage 로 안다. */
@@ -202,7 +213,7 @@ function WebtoonScreens() {
       const seen = localStorage.getItem("lore_wt_seen");
       localStorage.setItem("lore_wt_seen", "1");
       track("session_start", { kind: seen ? "returning" : "new", logged_in: authenticatedRef.current,
-        target: route.view });   // 어느 화면으로 들어왔나(공유 링크면 result · card)
+        target: route.view, ...screenProps() });   // 어느 화면으로 들어왔나(공유 링크면 result · card)
     } catch { /* 저장소가 막혀 있으면 세지 않는다 */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady]);

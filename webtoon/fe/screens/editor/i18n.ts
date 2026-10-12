@@ -150,16 +150,6 @@ const dict: Dict = {
   "저장하지 못했습니다": { en: "Couldn't save.", ja: "保存できませんでした", zh: "无法保存" },
   "제목을 바꿨습니다": { en: "Title changed.", ja: "タイトルを変更しました", zh: "已修改标题" },
   /* 굽기 */
-  "이미지로 만들었습니다": { en: "Exported as image", ja: "画像に書き出しました", zh: "已导出为图片" },
-  "얹은 것 {n}개를 그림에 넣었습니다": { en: "{n} added items are baked into the image.", ja: "載せたもの {n}個を絵に入れました。", zh: "已将添加的 {n} 项合成到图片中。" },
-  "얹은 것이 없어 원본 그림 그대로 받습니다": { en: "Nothing was added, so you get the original images.", ja: "載せたものがないので、元の絵のまま受け取ります。", zh: "没有添加内容，将下载原图。" },
-  "아직 안 그려진 장 {list}번은 빠졌습니다.": { en: "Scenes {list} haven't been drawn yet and were left out.", ja: "まだ描かれていないコマ {list} は除外しました。", zh: "尚未绘制的第 {list} 格已被跳过。" },
-  "못 그린 것: {list} — 이모지 글꼴이 없는 서버에서는 스티커가 빠집니다.": { en: "Couldn't render: {list} — stickers are dropped on servers without an emoji font.", ja: "描けなかったもの: {list} — 絵文字フォントのないサーバーではステッカーが抜けます。", zh: "未能绘制：{list} — 没有表情字体的服务器会跳过贴纸。" },
-  "내려받는 파일에는 컷마다 LORE 표시가 붙고, 맨 아래에 브랜드 띠가 한 줄 덧대집니다.": {
-    en: "The downloaded file carries a LORE mark on each panel and a brand strip at the very bottom.",
-    ja: "ダウンロードするファイルには各コマに LORE の表示が付き、一番下にブランドの帯が一行加わります。",
-    zh: "下载的文件每格都会带有 LORE 标记，最底部会加上一条品牌横幅。",
-  },
   "내려받기": { en: "Download", ja: "ダウンロード", zh: "下载" },
   "새 탭에서 보기": { en: "Open in new tab", ja: "新しいタブで見る", zh: "在新标签页中查看" },
   "샘플에는 구울 그림이 없습니다. 실제 작품을 열어 주세요.": { en: "A sample has nothing to export. Please open a real work.", ja: "サンプルには書き出す絵がありません。実際の作品を開いてください。", zh: "示例没有可导出的画面。请打开真实作品。" },
