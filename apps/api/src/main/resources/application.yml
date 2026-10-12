@@ -129,6 +129,13 @@ lore:
     python:
       direct: ${LORE_WEBTOON_PYTHON_DIRECT:true}
 
+  # 메일의 보낸사람. 비우면 SMTP 계정(spring.mail.username)으로 나간다.
+  # ★ 그 Gmail 계정의 「다른 주소에서 메일 보내기」에 등록·인증된 주소여야 한다(EmailService).
+  # ★ 주소와 이름을 따로 받는다 — 서버 secrets.env 는 따옴표 없이 쓰여 공백·< 가 든 값이 깨진다.
+  mail:
+    from: ${MAIL_FROM:}            # 예: lore@lorecomic.com
+    from-name: ${MAIL_FROM_NAME:}  # 예: LORE
+
   # 개인정보 보존기간 파기 (2026-09-23).
   #
   # ★ 둘 다 기본 꺼짐 — 되돌릴 수 없는 일을 하고, 서버가 두 대 이상이면 한 대만 켠다.
