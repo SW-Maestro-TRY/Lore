@@ -13,8 +13,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import TabLink from "./TabLink";
 import AuthModal from "./auth/AuthModal";
-import CreditCharge from "./mypage/CreditCharge";
-import { CREDITS_CHANGED, creditBalance } from "./api/credits";
+import { creditBalance } from "./api/credits";
 import { useAuth } from "./auth/useAuth";
 import { TABS } from "./links";
 import styles from "./SiteHeader.module.css";
@@ -29,29 +28,14 @@ export default function SiteHeader() {
   /* 웹툰 탭은 헤더에서 **로그인 하나만** 본다. (담당: 하은, #223) */
   const onWebtoon = pathname.startsWith("/webtoon");
 
-  /* 크레딧은 계정 것이라 탭과 상관없이 같은 값이다 — 헤더에 두고 어디서나 보이게 한다.
-     누르면 충전 창이 열린다. 잔액을 묻는 것 자체가 오늘 몫을 챙겨 주는 길이라
-     (`/api/v1/credits/me`), 들어오자마자 한 번 부르면 오늘 것이 들어와 있다. */
-  const [credits, setCredits] = useState<number | null>(null);
-  const [chargeOpen, setChargeOpen] = useState(false);
-
-
   const { status, user, isAuthenticated, signOut } = useAuth();
 
+  /* 헤더에 크레딧 칩은 두지 않는다(2026-10-12) — 좁은 폰에서 칩 때문에 탭이 밀려 Webtoon 탭이
+     안 보였고, 잔액·충전은 이름을 누르면 가는 마이페이지에 이미 있다.
+     잔액을 한 번 묻는 것만 남긴다: 그 질문(`/api/v1/credits/me`)이 오늘 몫을 챙겨 주는 길이라
+     들어오자마자 부르면 오늘 것이 들어와 있다. */
   useEffect(() => {
-    if (!isAuthenticated) { setCredits(null); return; }
-    let alive = true;
-    creditBalance()
-      .then((b) => { if (alive) setCredits(b.balance); })
-      .catch(() => { /* 못 받으면 칩을 아예 안 그린다 */ });
-    /* 다른 화면이 크레딧을 움직였다고 알리면 바꾼다(notifyCreditsChanged). */
-    const onChanged = (e: Event) => {
-      const next = (e as CustomEvent<{ balance?: number }>).detail?.balance;
-      if (typeof next === "number") { setCredits(next); return; }
-      creditBalance().then((b) => { if (alive) setCredits(b.balance); }).catch(() => {});
-    };
-    window.addEventListener(CREDITS_CHANGED, onChanged);
-    return () => { alive = false; window.removeEventListener(CREDITS_CHANGED, onChanged); };
+    if (isAuthenticated) creditBalance().catch(() => { /* 못 받아도 화면엔 영향 없다 */ });
   }, [isAuthenticated]);
   const [authOpen, setAuthOpen] = useState(false);
 
@@ -63,6 +47,35 @@ export default function SiteHeader() {
      로그인 창을 여는 것을 막는다. */
   const [loginLocked, setLoginLocked] = useState(false);
   const confirmRef = useRef<HTMLDivElement>(null);
+
+  /* 좁은 폰에서는 탭 줄이 옆으로 스크롤된다(헤더는 한 줄 고정). 그런데 스크롤이 늘 맨 앞이라
+     갤럭시 S26(360px, 글꼴 크게)에서 지금 보는 Webtoon 탭이 화면 밖에 있었고, 잘린 탭 글자가
+     오른쪽 단추 밑에 붙어 깨진 것처럼 보였다(2026-10-12 캡처). 그래서
+     - 지금 탭이 보이게 스크롤을 옮기고
+     - 잘린 쪽 가장자리를 흐리게 해서 더 있다는 것을 보인다(data-more-left / data-more-right). */
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const edges = () => {
+      const more = nav.scrollWidth - nav.clientWidth > 1;
+      nav.toggleAttribute("data-more-left", more && nav.scrollLeft > 1);
+      nav.toggleAttribute("data-more-right", more && nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
+    };
+    const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
+    if (active && nav.scrollWidth > nav.clientWidth) {
+      const right = active.offsetLeft + active.offsetWidth - nav.offsetLeft;
+      if (right > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = right - nav.clientWidth + 4;
+    }
+    edges();
+    nav.addEventListener("scroll", edges, { passive: true });
+    window.addEventListener("resize", edges);
+    return () => {
+      nav.removeEventListener("scroll", edges);
+      window.removeEventListener("resize", edges);
+    };
+    // 로그인 단추가 이름으로 바뀌면 탭 줄 폭이 바뀐다 — 그때도 다시 맞춘다.
+  }, [pathname, status]);
 
   useEffect(() => {
     if (!confirmingLogout) return;
@@ -106,7 +119,7 @@ export default function SiteHeader() {
           LORE<span className={styles.wordmarkDot}>.</span>
         </Link>
 
-        <nav className={styles.nav}>
+        <nav className={styles.nav} ref={navRef}>
           {TABS.map((tab) => {
             const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
             return (
@@ -141,18 +154,9 @@ export default function SiteHeader() {
                로그인한 사람이 자기 이름을 누르는 것은 어디서나 "내 자리로"
                라는 뜻이라, 라벨을 따로 달지 않아도 읽힌다. */
             onWebtoon ? (
-              <>
-                {credits != null && (
-                  <button type="button" className={styles.creditChip}
-                          onClick={() => setChargeOpen(true)}
-                          title="크레딧 충전">
-                    ◈ {credits.toLocaleString("ko-KR")}
-                  </button>
-                )}
-                <Link href={MY_PAGE} className={styles.authButton} title={user?.email}>
-                  {displayName}
-                </Link>
-              </>
+              <Link href={MY_PAGE} className={styles.authButton} title={user?.email}>
+                {displayName}
+              </Link>
             ) : (
               <>
                 <span className={styles.userEmail} title={user?.email}>
@@ -201,7 +205,6 @@ export default function SiteHeader() {
           하던 자리에 그대로 남는다(모달의 원래 뜻). */}
     </header>
 
-    {chargeOpen && <CreditCharge onClose={() => setChargeOpen(false)} />}
 
     <AuthModal
       open={authOpen}
