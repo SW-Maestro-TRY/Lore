@@ -254,6 +254,55 @@ public class PageStore {
         return PrivateArt.isPrivate(key) ? art.temporaryUrl(key) : url(key);
     }
 
+    /** 크기를 읽으려고 먼저 받아 보는 앞부분. PNG 는 24바이트면 되고 JPEG 는 머리 뒤에 EXIF 가 붙을 수 있다. */
+    static final int HEAD_BYTES = 256 * 1024;
+
+    /**
+     * 그림의 가로·세로를 <b>키로</b> 읽는다. 없거나 못 읽으면 {0, 0}.
+     *
+     * 주소로 열지 않는다 — 운영의 주소는 도메인 없는 상대경로(`/images/…`)라
+     * URL 로 열 수 없고(2026-10-12, 편집실을 열 때마다 `URI is not absolute` 로
+     * 크기를 0으로 넘기고 있었다), 로컬·비공개만 절대 주소가 와서 우연히 됐다.
+     * 창고에서 앞부분만 받아 머리에서 크기를 읽고, 그걸로 안 되면 한 번 전체를
+     * 받는다.
+     */
+    public int[] dimensionsOf(String key) {
+        if (key == null || key.isBlank()) {
+            return new int[]{0, 0};
+        }
+        int[] got = dimensionsIn(art.readHead(key, HEAD_BYTES));
+        if (got == null) {
+            got = dimensionsIn(art.read(key));
+        }
+        if (got == null) {
+            log.warn("그림 크기를 못 읽었습니다 (key={})", key);
+            return new int[]{0, 0};
+        }
+        return got;
+    }
+
+    /** 바이트에서 크기. 못 읽으면 {@code null}. */
+    static int[] dimensionsIn(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return null;
+        }
+        try (var in = javax.imageio.ImageIO.createImageInputStream(new java.io.ByteArrayInputStream(bytes))) {
+            var readers = javax.imageio.ImageIO.getImageReaders(in);
+            if (!readers.hasNext()) {
+                return null;
+            }
+            var reader = readers.next();
+            try {
+                reader.setInput(in);
+                return new int[]{reader.getWidth(0), reader.getHeight(0)};
+            } finally {
+                reader.dispose();
+            }
+        } catch (Exception e) {          // noqa: 앞부분이 모자라면 전체로 다시 읽는다
+            return null;
+        }
+    }
+
     /** 장 번호 -> 가진 것 중 가장 큰 폭. 구운 것을 같은 폭으로 적을 때 쓴다. */
     @Transactional(readOnly = true)
     public Map<Integer, Integer> widthsOf(String runId) {
