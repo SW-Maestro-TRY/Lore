@@ -140,7 +140,15 @@ public class UsageService {
                     one.path("error").asText(null),
                     calledAt(one.path("at"))));
         }
-        return ingest(runId, out);
+        try {
+            return ingest(runId, out);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            /* 시트와 이야기가 같은 run 에서 나란히 돌다 둘 다 이 파일을 읽으면(#548), 둘 다
+               「없다」를 보고 넣다가 한쪽이 (run_id, seq) 유니크에 걸린다(2026-10-10 운영,
+               #727). 그 묶음은 통째로 롤백되므로 한 번 더 읽어 남은 것만 넣는다. */
+            log.info("비용 기록이 겹쳐 다시 넣습니다 (run={})", runId);
+            return ingest(runId, out);
+        }
     }
 
     /** 캐릭터 만들기의 기록 이름 앞자리. 작품 번호(날짜-시각)와 안 겹치고, 편수에서 뺄 때 쓴다. */
