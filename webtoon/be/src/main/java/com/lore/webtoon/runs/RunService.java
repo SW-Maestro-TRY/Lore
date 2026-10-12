@@ -273,7 +273,7 @@ public class RunService {
 
         List<Map<String, Object>> sceneList = new ArrayList<>();
         for (int no : numbers) {
-            int[] dim = dimensionsOf(pages.urlOfKey(keys.get(no)));
+            int[] dim = pages.dimensionsOf(keys.get(no));
             String note = no == 1 ? "표지" : captionOf(scenes, no);
 
             Map<String, Object> cut = new LinkedHashMap<>();
@@ -319,37 +319,6 @@ public class RunService {
         return out;
     }
 
-    /**
-     * 그림의 가로·세로. 없거나 못 읽으면 {0, 0} — 편집실은 얹은 것의 좌표를
-     * 퍼센트로 다루므로, 이 값을 몰라도 그림 자체는 그대로 뜬다(레이아웃
-     * 비율만 못 맞춘다).
-     *
-     * 전체를 내려받지 않는다 — {@link javax.imageio.ImageReader} 는 머리에서
-     * 크기를 읽고 그친다. 장마다 한 번씩(편집실을 열 때) 부르는 자리라
-     * 전체를 받으면 그만큼 열리는 것이 느려진다.
-     */
-    private static int[] dimensionsOf(String url) {
-        if (url == null || url.isBlank()) {
-            return new int[]{0, 0};
-        }
-        try (var in = javax.imageio.ImageIO.createImageInputStream(
-                java.net.URI.create(url).toURL().openStream())) {
-            var readers = javax.imageio.ImageIO.getImageReaders(in);
-            if (!readers.hasNext()) {
-                return new int[]{0, 0};
-            }
-            var reader = readers.next();
-            try {
-                reader.setInput(in);
-                return new int[]{reader.getWidth(0), reader.getHeight(0)};
-            } finally {
-                reader.dispose();
-            }
-        } catch (Exception e) {          // noqa: 크기 하나 때문에 편집실이 안 열리면 안 된다
-            log.warn("그림 크기를 못 읽었습니다 ({})", url, e);
-            return new int[]{0, 0};
-        }
-    }
 
     /**
      * 이 장이 그린 장면 한 줄.
