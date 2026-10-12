@@ -119,9 +119,12 @@
 .wt .wt-landing-fig { margin: 0; width: 300px; }
 .wt .wt-landing-fig a { display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--ink); }
 .wt .wt-landing-cover { width: 300px; height: 450px; border-radius: 12px; }
-.wt .wt-landing-fig figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 0 2px; }
-.wt .wt-landing-fig figcaption b { font-size: 15px; }
-.wt .wt-landing-fig figcaption span { font-size: 13px; flex-shrink: 0; }
+/* 제목·장르는 카드 폭 안에서 한 줄로 자른다. 전에는 장르가 안 줄어들어(flex-shrink: 0)
+   「서바이벌 성장 드라마」처럼 긴 장르가 옆 카드 제목 위로 넘어갔다 — 글꼴을 키운 폰에서
+   특히 심했다(2026-10-12 갤럭시 캡처). */
+.wt .wt-landing-fig figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 0 2px; min-width: 0; }
+.wt .wt-landing-fig figcaption b { font-size: 15px; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-landing-fig figcaption span { font-size: 13px; flex: 0 1 auto; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* FAQ */
 .wt .wt-landing-faq { padding: 40px 48px 72px; display: flex; flex-direction: column; align-items: center; gap: 28px; }
