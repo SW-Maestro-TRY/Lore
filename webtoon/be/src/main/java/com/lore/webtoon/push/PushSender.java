@@ -47,7 +47,7 @@ public class PushSender {
 
     public PushSender(@Value("${lore.webtoon.push.public-key:}") String publicKey,
                       @Value("${lore.webtoon.push.private-key:}") String privateKey,
-                      @Value("${lore.webtoon.push.subject:mailto:lightbluue6@gmail.com}") String subject) {
+                      @Value("${lore.webtoon.push.subject:mailto:lore@lorecomic.com}") String subject) {
         ECPrivateKey key = null;
         String pub = publicKey == null ? "" : publicKey.trim();
         if (!pub.isEmpty() && privateKey != null && !privateKey.isBlank()) {

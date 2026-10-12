@@ -44,10 +44,6 @@
 /* 구운 결과 띠 */
 .wt .wt-ed .bake-result { display: flex; align-items: center; gap: 14px; padding: 10px 20px; background: var(--water-light); border-top: 1px solid rgba(15, 51, 63, 0.08); font-size: 13px; flex-wrap: wrap; }
 .wt .wt-ed .bake-result[hidden] { display: none; }
-.wt .wt-ed .bake-head { display: contents; }
-.wt .wt-ed .bake-head b { font-size: 13px; }
-.wt .wt-ed .bake-head span { color: var(--dim); }
-.wt .wt-ed .bake-warn { margin: 0; color: #a13a2e; }
 .wt .wt-ed .bake-acts { display: flex; gap: 8px; align-items: center; margin-left: auto; }
 .wt .wt-ed .bake-acts .btn { height: 32px; font-size: 12.5px; padding: 0 14px; }
 
@@ -314,7 +310,9 @@
   .wt .wt-ed-title { flex-basis: 100%; order: 1; }
   .wt .wt-ed-chips { order: 2; flex-basis: 100%; justify-content: flex-start; }
   .wt .wt-ed-body { flex-direction: column; }
-  .wt .wt-ed-left { width: auto; position: static; max-height: none; height: auto; border-right: 0; border-bottom: 1px solid rgba(15, 51, 63, 0.08); }
+  /* align-self: stretch — 넓은 화면의 flex-start 가 남아 있으면 세로로 쌓인 지금은 폭이 내용만큼
+     줄어 장 목록이 화면 왼쪽 2/3 에만 섰다(360px 폭에서 확인). */
+  .wt .wt-ed-left { width: auto; align-self: stretch; position: static; max-height: none; height: auto; border-right: 0; border-bottom: 1px solid rgba(15, 51, 63, 0.08); }
   /* 왼쪽 단은 페이지 · 장면 · 다시 그리기라 좁은 화면에서도 접지 않는다(#548) */
   .wt .wt-ed-pages { margin-top: 8px; }
   .wt .wt-ed-pagegrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }

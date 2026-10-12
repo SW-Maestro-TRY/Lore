@@ -40,6 +40,7 @@ class RunServiceTest {
         jobs = mock(WebtoonJobRepository.class);
         stories = mock(StoryStore.class);
         pages = mock(PageStore.class);
+        when(pages.dimensionsOf(org.mockito.ArgumentMatchers.any())).thenReturn(new int[]{0, 0});
         runs = new RunService(works, jobs, stories, pages, mock(com.lore.webtoon.work.RunLikeRepository.class));
     }
 

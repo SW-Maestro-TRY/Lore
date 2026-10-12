@@ -122,6 +122,25 @@ export function translateNow(src: string, vars?: Record<string, string | number>
   return fill(lookup(current, src), vars);
 }
 
+/** 화면에 보이는 글자가 **사전에 있는 화면 문구와 정확히 같을 때만** 그 문구의 영문을 준다.
+ *  행동 기록이 단추·오류 문구에 이름을 붙일 때 쓴다. `{name}` 같은 자리 맞추기는 하지 않는다 —
+ *  잡힌 자리에 사람이 쓴 이름이 들어 있을 수 있어서다. 화면 언어가 영어·일어·중국어여도
+ *  같은 문구로 찾는다. 사전에 없으면 undefined. */
+export function knownEnglishOf(text: string): string | undefined {
+  const src = text.replace(/\s+/g, " ").trim();
+  if (!src) return undefined;
+  for (let i = registry.length - 1; i >= 0; i--) {
+    const dict = registry[i];
+    const hit = dict[src];
+    if (hit) return hit.en || src;
+    for (const [ko, entry] of Object.entries(dict)) {
+      if (/\{\w+\}/.test(ko)) continue;
+      if (entry.en === src || entry.ja === src || entry.zh === src) return entry.en || ko;
+    }
+  }
+  return undefined;
+}
+
 /** 영문 번역. 행동 기록(track)은 한글 값을 버리므로 화면 이름을 기호로 바꿀 때 쓴다. 없으면 원문. */
 export function englishOf(src: string): string {
   return lookup("en", src);
