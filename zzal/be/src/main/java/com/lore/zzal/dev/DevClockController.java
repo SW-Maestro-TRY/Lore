@@ -52,11 +52,14 @@ public class DevClockController {
     private final PetService petService;
     private final MotionCatalog catalog;
     private final NightSweep nightSweep;
+    private final DevService devService;
 
-    public DevClockController(PetService petService, MotionCatalog catalog, NightSweep nightSweep) {
+    public DevClockController(PetService petService, MotionCatalog catalog, NightSweep nightSweep,
+                              DevService devService) {
         this.petService = petService;
         this.catalog = catalog;
         this.nightSweep = nightSweep;
+        this.devService = devService;
     }
 
     @Operation(summary = "밤 스위프 지금(이 펫만)", description = """
@@ -94,7 +97,8 @@ public class DevClockController {
             이 펫의 시계를 준 만큼 **앞으로** 민다. 게이지·잠·창·자동 취침이 그 시각 기준으로 정산된다.
 
             - **규칙은 그대로다.** 값을 짧게 바꾸는 것이 아니라 시계만 밀므로 여기서 확인한 동작이 곧 운영 동작이다
-            - 응답의 `serverNow` 도 밀린 시계다
+            - 응답의 `after.serverNow` 도 밀린 시계다. `effects` 에 이번 점프에서 바뀐 칸(케어 미스·병·떠남·장면·엽서…)이 한 줄씩
+            - `visit:false` 면 방문으로 치지 않는다 — 하루씩 여러 번 밀어도 결석 떠남이 난다(기본 true)
             - 내 펫만(남의 펫은 404) · 운영에서는 이 API 가 존재하지 않는다""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "당김"),
@@ -103,7 +107,7 @@ public class DevClockController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
                     description = "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)")})
     @PostMapping("/{petId}/advance-clock")
-    public ApiResponse<PetResponses.Detail> advanceClock(@LoginUser Long userId,
+    public ApiResponse<DevResponses.DevResult> advanceClock(@LoginUser Long userId,
                                                          @PathVariable Long petId,
                                                          @Valid @RequestBody DevRequests.AdvanceClock request) {
         Duration by;
@@ -119,14 +123,13 @@ public class DevClockController {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "한 번에 %d일까지만 당길 수 있어요".formatted(MAX_ADVANCE.toDays()));
         }
-        Instant real = Instant.now();
-        ZzalPet pet = petService.advanceClock(userId, petId, by, real);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of(), false, petService.scenes(petId), petService.pieces(petId)));
+        return ApiResponse.ok(devService.advance(userId, petId, by, request.visits(), Instant.now()));
     }
 
     @Operation(summary = "시계 맞추기", description = """
             이 펫의 시계를 특정 시각으로 맞춘다. `at`(ISO) · `sinceHatchMinutes`(부화 뒤 N분) · `localTime`("19:00", 오늘 KST) 중 하나.
-            과거로도 갈 수 있지만 이미 정산된 것은 되돌리지 않는다 — 과거로 맞추면 그 시각까지 아무것도 안 흐른 것이 된다.""")
+            과거로도 갈 수 있지만 이미 정산된 것은 되돌리지 않는다 — 과거로 맞추면 그 시각까지 아무것도 안 흐른 것이 된다.
+            `visit:false` 면 방문으로 치지 않는다. 응답은 시간 당기기와 같은 모양(effects · before · after · state).""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "맞춤"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
@@ -134,7 +137,7 @@ public class DevClockController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
                     description = "없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND)")})
     @PostMapping("/{petId}/set-clock")
-    public ApiResponse<PetResponses.Detail> setClock(@LoginUser Long userId,
+    public ApiResponse<DevResponses.DevResult> setClock(@LoginUser Long userId,
                                                      @PathVariable Long petId,
                                                      @Valid @RequestBody DevRequests.SetClock request) {
         if (request.given() != 1) {
@@ -168,7 +171,6 @@ public class DevClockController {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "지금부터 %d일 안으로만 맞출 수 있어요".formatted(MAX_ADVANCE.toDays()));
         }
-        ZzalPet pet = petService.setClock(userId, petId, target, real);
-        return ApiResponse.ok(PetResponses.Detail.from(pet, null, pet.now(real), catalog, petService.motionRows(petId), java.util.List.of(), false, petService.scenes(petId), petService.pieces(petId)));
+        return ApiResponse.ok(devService.setClock(userId, petId, target, request.visits(), real));
     }
 }
