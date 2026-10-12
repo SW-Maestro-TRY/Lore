@@ -133,7 +133,7 @@ export const emptyWizardForm = (): WizardForm => ({
   genre: "",
   style: "",
   quality: QUALITY_DEFAULT,
-  mode: "expert",
+  mode: "simple",
   agreeIp: false,
   create: "quick",
   title: "",
