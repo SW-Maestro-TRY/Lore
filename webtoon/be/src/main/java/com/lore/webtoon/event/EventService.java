@@ -77,7 +77,10 @@ public class EventService {
             "name_len", "desc_len", "note_len", "depth_pct", "from_step", "to_step", "dwell_ms",
             // 참거짓
             "mine", "logged_in", "edited", "random", "ok",
-            "has_photo", "has_name", "has_desc", "has_note", "has_email");
+            "has_photo", "has_name", "has_desc", "has_note", "has_email",
+            // 자동 기록(track.ts) — 어떻게 왔다 갔나 · 누른 것 · 입력 칸 글자 수 · 오류 · 화면 크기.
+            // via·error 는 사전에 있는 화면 문구나 개발자가 붙인 이름에서만 온다(사람이 쓴 글 아님).
+            "how", "via", "len", "disabled", "error", "vw", "vh", "touch");
 
     /** 화면 시계가 말이 되는 범위. 벗어나면 받은 시각으로 대신한다. */
     private static final Duration TS_PAST = Duration.ofDays(2);
