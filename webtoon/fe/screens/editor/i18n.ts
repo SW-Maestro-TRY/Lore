@@ -150,10 +150,11 @@ const dict: Dict = {
   "저장하지 못했습니다": { en: "Couldn't save.", ja: "保存できませんでした", zh: "无法保存" },
   "제목을 바꿨습니다": { en: "Title changed.", ja: "タイトルを変更しました", zh: "已修改标题" },
   /* 굽기 */
-  "{n}장을 구웠습니다": { en: "{n} pages exported", ja: "{n}ページを書き出しました", zh: "已导出 {n} 页" },
+  "이미지로 만들었습니다": { en: "Exported as image", ja: "画像に書き出しました", zh: "已导出为图片" },
+  "얹은 것 {n}개를 그림에 넣었습니다": { en: "{n} added items are baked into the image.", ja: "載せたもの {n}個を絵に入れました。", zh: "已将添加的 {n} 项合成到图片中。" },
+  "얹은 것이 없어 원본 그림 그대로 받습니다": { en: "Nothing was added, so you get the original images.", ja: "載せたものがないので、元の絵のまま受け取ります。", zh: "没有添加内容，将下载原图。" },
   "아직 안 그려진 장 {list}번은 빠졌습니다.": { en: "Scenes {list} haven't been drawn yet and were left out.", ja: "まだ描かれていないコマ {list} は除外しました。", zh: "尚未绘制的第 {list} 格已被跳过。" },
   "못 그린 것: {list} — 이모지 글꼴이 없는 서버에서는 스티커가 빠집니다.": { en: "Couldn't render: {list} — stickers are dropped on servers without an emoji font.", ja: "描けなかったもの: {list} — 絵文字フォントのないサーバーではステッカーが抜けます。", zh: "未能绘制：{list} — 没有表情字体的服务器会跳过贴纸。" },
-  "{w}×{h}px · 얹은 것 {n}개": { en: "{w}×{h}px · {n} items added", ja: "{w}×{h}px · 載せたもの {n}個", zh: "{w}×{h}px · 添加了 {n} 项" },
   "내려받는 파일에는 컷마다 LORE 표시가 붙고, 맨 아래에 브랜드 띠가 한 줄 덧대집니다.": {
     en: "The downloaded file carries a LORE mark on each panel and a brand strip at the very bottom.",
     ja: "ダウンロードするファイルには各コマに LORE の表示が付き、一番下にブランドの帯が一行加わります。",
