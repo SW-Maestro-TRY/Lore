@@ -252,4 +252,19 @@ public class BakeTrigger {
             return "unknown";
         }
     }
+
+    /**
+     * dev(리모컨) — 그 줄을 지금 큐에 올리고 집어서 굽는다(선물·심화 아무 seq). 굽기는 운영과 같은 길
+     * ({@code motionService.bakeNow})이고 그림 클라이언트가 가짜면 돈 0, 진짜면 한 판 값이 나간다.
+     *
+     * @return 실제로 집었으면 true. 이미 굽는 중·판정을 지난 줄이면 false
+     */
+    @Transactional
+    public boolean devBake(ZzalMotion row, Instant now) {
+        if (!row.queue(AwakeClock.dateOf(now))) {
+            return false;
+        }
+        claimAndBake(List.of(row), now);
+        return true;
+    }
 }
