@@ -1,7 +1,9 @@
 # Lore 개발용 self-contained 스택 (base).
 #
 # 같은 compose 가 개발자 노트북과 dev EC2 양쪽에서 돈다 — 차이는 .env 하나뿐이다.
-#   노트북 : docker compose --env-file infra/dev/.env up --build   (→ http://localhost:3100)
+#   노트북 : scripts/dev.sh up 을 쓴다(브랜치별 스택·포트 분리·테스트 계정 — scripts/README-dev.md).
+#            이 파일로 직접 띄우면 project 가 lore-dev 하나라, 워크트리마다 같은 컨테이너를 덮어쓴다.
+#            docker compose --env-file infra/dev/.env up --build   (→ http://localhost:3100)
 #   dev EC2: docker compose -f docker-compose.yml -f docker-compose.dev-ec2.yml up -d
 #            (override 가 nginx(80/443·TLS)를 얹는다)
 #
@@ -147,6 +149,15 @@ services:
       # 채팅 대사 LLM 스위치(app.zzal.chat.llm, #704·#709). 기본 켜짐 — 키는 위 ZZAL_OPENAI_API_KEY 그대로(새 파라미터 없음).
       # ★ 끄는 용도로만 쓴다. 꺼지면 채팅 부름이 아예 없다(템플릿 삭제) — 튜토리얼 대화 칸도 안 열린다.
       ZZAL_CHAT_LLM: ${ZZAL_CHAT_LLM:-true}
+      # ── 리모컨(dev API)·관리자 화면 ──
+      # 통로가 없어서 박스 .env 에 값을 넣어도 앱이 못 봤다(dev API 404·관리자 화면 안 열림, 9/22·10/9).
+      # 기본은 꺼짐 — 켜는 건 박스 /opt/lore-dev/.env 에서만(ZZAL_DEV_TOOLS=true · ZZAL_ADMIN=true).
+      # 운영·스테이징은 이 compose 를 안 쓰고 SSM 에도 이 키가 없어 빈이 안 올라온다(404).
+      ZZAL_DEV_TOOLS: ${ZZAL_DEV_TOOLS:-false}
+      ZZAL_ADMIN: ${ZZAL_ADMIN:-false}
+      # 관리자 봇(맥미니 러너) 토큰·사용자 번호. 비우면 봇 문만 꺼진다(사람 관리자 로그인은 그대로).
+      ZZAL_ADMIN_TOKEN: ${ZZAL_ADMIN_TOKEN:-}
+      ZZAL_ADMIN_BOT_USER_ID: ${ZZAL_ADMIN_BOT_USER_ID:-0}
       # 파이썬 후처리 실제 실행(돈 안 남). 슬림 JRE 이미지엔 numpy/scipy/PIL 이 없어 켜면 기동이 막힌다 → 기본 꺼짐.
       ZZAL_REAL_POSTPROCESS: ${ZZAL_REAL_POSTPROCESS:-false}
       # ── 웹툰 만들기 ────────────────────────────────────────────────
