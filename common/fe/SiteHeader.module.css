@@ -214,6 +214,20 @@
   .nav::-webkit-scrollbar {
     display: none;
   }
+  /* 잘린 쪽 가장자리를 흐리게 — 옆으로 밀면 탭이 더 있다는 표시. 칸 밖 글자가 오른쪽 단추
+     밑에 그대로 붙어 있으면 깨진 것처럼 보였다(SiteHeader.tsx 의 navRef 설명). */
+  .nav[data-more-right] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  }
+  .nav[data-more-left] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 20px);
+    mask-image: linear-gradient(to right, transparent, #000 20px);
+  }
+  .nav[data-more-left][data-more-right] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 20px, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 20px, #000 calc(100% - 20px), transparent);
+  }
 
   .navLink {
     padding: 6px 7px;
@@ -233,24 +247,17 @@
   }
 }
 
-/* 더 좁은 화면 — 크레딧 칩까지 있으면 여기서부턴 확실히 모자란다.
-   단추 안쪽 여백만 한 번 더 줄인다(글자를 자르거나 탭을 빼지 않는다). */
+/* 더 좁은 화면 — 로고·탭 여백과 단추 안쪽 여백을 한 번 더 줄인다(글자를 자르거나 탭을 빼지 않는다). */
 @media (max-width: 400px) {
+  .wordmark {
+    font-size: 17px;
+  }
+  .navLink {
+    padding: 6px 5px;
+  }
   .authButton {
     padding: 8px 10px;
     font-size: 12.5px;
   }
-  .creditChip {
-    padding: 0 10px;
-    font-size: 12px;
-  }
 }
 
-/* 크레딧 칩. 누르면 충전 창이 열린다. 로그인했을 때만 그린다. */
-.creditChip {
-  display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px;
-  border-radius: 999px; border: 1px solid var(--line-strong, rgba(15, 51, 63, 0.18));
-  background: #fff; color: inherit; font: inherit; font-size: 13px; font-weight: 700;
-  cursor: pointer; white-space: nowrap;
-}
-.creditChip:hover { border-color: currentColor; }

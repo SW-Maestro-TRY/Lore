@@ -181,9 +181,9 @@
 
 | 이벤트 | 언제 | 주요 값 |
 |---|---|---|
-| `session_start` | 한 탭에서 웹툰 화면을 처음 열 때 (`WebtoonPage.tsx`) | `kind`: new · returning(이 브라우저가 전에 왔었나), `target`(들어온 화면), `logged_in` |
-| `page_view` | 화면이 바뀔 때마다 | `view` 칸에 화면 이름, `step`(만들기 화면만), `run`, `logged_in` |
-| `page_leave` | 화면을 떠날 때 (다른 화면으로 가거나 페이지를 닫을 때) | `target`(떠난 화면), `ms`(머문 시간, 탭이 뒤로 가 있던 시간 포함) |
+| `session_start` | 한 탭에서 웹툰 화면을 처음 열 때 (`WebtoonPage.tsx`) | `kind`: new · returning(이 브라우저가 전에 왔었나), `target`(들어온 화면), `logged_in`, `vw`·`vh`(화면 폭·높이 px), `touch`(터치 기기인가) |
+| `page_view` | 화면이 바뀔 때마다 (만들기는 걸음마다) | `view` 칸에 화면 이름, `step`(만들기 화면만), `run`, `logged_in`, `how`·`via`(어떻게 왔나 — 아래 표) |
+| `page_leave` | 화면을 떠날 때 (다른 화면으로 가거나 페이지를 닫을 때) | `target`(떠난 화면), `ms`(머문 시간, 탭이 뒤로 가 있던 시간 포함), `depth_pct`(그 화면을 어디까지 내려 봤나 %), `how`·`via`(어떻게 갔나) |
 | `auth_done` | 이 방문 중에 로그인 안 한 상태에서 로그인 상태가 됨 | `target`(그때 보던 화면) |
 | `login_prompt` | 로그인이 필요한 문턱을 봄 | `where`: editor · character_limit |
 | `landing_cta` | 첫 화면의 시작 단추 | `where`: hero · bottom · need_create · need_try · works_all |
@@ -219,6 +219,32 @@
 | `feedback_view` · `feedback_submit` · `feedback_skip` | 설문이 뜸 · 보냄 · 건너뜀 (#471, [validation.md](validation.md)). 답 자체는 `webtoon_feedback` 표에 있다 | `where`: result · mypage, `run`, `count`(문항 수), `ok`(보상을 받았나) |
 | `feedback_open` | 마이페이지 「피드백 보내기」를 엶 | `where` |
 | `feedback_prompt_view` · `feedback_prompt_click` | 다시 온 사람 안내가 뜸 · 「설문하러 가기」를 누름 | `where`(그때 보던 화면) |
+
+### 자동 기록 (`lib/track.ts` 「자동 기록」)
+
+화면마다 따로 달지 않아도 웹툰 화면에 있는 동안은 아래가 전부 남습니다. 「1걸음에서 왜
+빠지나」를 물었을 때, 고르고 1초 만에 나간 사람이 무엇을 눌렀는지(「이전」 단추인지 브라우저
+뒤로 가기인지) 기록에 없어서 더했습니다(#733).
+
+| 이벤트 | 언제 | 주요 값 |
+|---|---|---|
+| `ui_click` | 단추·링크·카드·체크 칸을 누름. **비활성 단추를 누른 것도**(`disabled: true`) | `target`(누른 것의 이름), `kind`(button · a · card · input_checkbox …), `where`(어느 칸), `to`(링크면 갈 화면, 바깥이면 external), `step`, `n`(같은 줄 카드 중 몇 번째), `ok`(체크 칸이면 켰나) |
+| `field_edit` | 입력 칸에서 나감 · 고르기 칸을 바꿈 | `field`(칸 이름), `where`, `len`(글자 수), `edited`(들어올 때와 글자 수가 달라졌나), `step`. **내용은 안 남긴다** |
+| `file_pick` | 파일을 고름 | `field`, `count`(몇 개), `step` |
+| `ui_error` | 화면에 오류·안내 문구가 뜸 (`.err` · 토스트 · `role=alert` 등) | `error`(문구의 영문 기호), `where`, `step` |
+| `js_error` | 잡히지 않은 자바스크립트 오류 | `error`, `where`(파일:줄), `kind`: error · rejection |
+| `api_error` · `api_slow` | API 가 실패함 · 5초 넘게 걸림 | `where`(주소 모양, 번호 자리는 `id` 로 접음 — 예: `webtoon.v1.runs.id.bake`), `status`(0 이면 연결 실패), `ms`, `kind`(get · post …) |
+| `tab_hidden` · `tab_back` | 탭을 숨김 · 돌아옴 | `ms`(그 전까지 보던 시간 · 떠나 있던 시간) |
+
+`how` 값 — `load`(처음 열거나 새로고침) · `click`(무언가를 눌러서, `via` 에 그 이름) ·
+`history`(브라우저 뒤로·앞으로, 폰의 뒤로 단추·밀기 포함) · `auto`(누른 것 없이 코드가 옮김) ·
+`close`(창을 닫거나 새로고침해서 떠남, `page_leave` 만).
+
+**누른 것의 이름(`target` · `via`)은 사람이 쓴 글이 아닙니다.** `data-track` 속성 → `id` →
+사전에 **정확히** 있는 화면 문구의 영문(`knownEnglishOf`) → 칸 모양(class) 순서로 정합니다.
+카드에 적힌 캐릭터 이름처럼 사전에 없는 글은 이름으로 안 쓰고 `ccard` 같은 칸 모양만 남깁니다.
+오류 문구도 사전에 있거나 영문으로만 된 것(브라우저 오류)만 기호로 남기고, 나머지는
+`unlisted` 입니다. 같은 오류는 한 번 열 때 다섯 번까지만 셉니다.
 
 ### 알고 있는 한계
 

@@ -89,6 +89,16 @@
   /* 폰은 화면 아래에 단추 줄(.mfoot)이 붙는 화면이 있어 그 위로 띄운다 */
   .wt-bubble { right: 14px; bottom: 96px; }
 }
+/* 좁은 폰(360px 안팎)에서는 68px 동그라미와 이름표가 「캐릭터 만들어보기」 칸이나 단추를 가렸다.
+   크기만 줄인다 — 끌어서 옮기는 것은 그대로다. */
+@media (max-width: 420px) {
+  .wt-bubble-btn { gap: 4px; }
+  .wt-bubble-ring { width: 52px; height: 52px; }
+  .wt-bubble-num { padding-top: 17px; font-size: 14px; }
+  .wt-bubble.failed .wt-bubble-num { font-size: 20px; padding-top: 15px; }
+  .wt-bubble-label { max-width: 132px; padding: 3px 8px; font-size: 10.5px; }
+  .wt-bubble-x { left: calc(50% + 14px); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .wt-bubble, .wt-bubble-ring, .wt-bubble-ring .fill { animation: none; transition: none; }
