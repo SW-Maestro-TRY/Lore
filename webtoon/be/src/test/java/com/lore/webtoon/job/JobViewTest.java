@@ -51,7 +51,8 @@ class JobViewTest {
 
         assertThat(got).containsKeys("id", "status", "run_id", "error", "directions", "pick",
                 "style", "style_label", "stage", "stage_index", "stages", "stage_label",
-                "say", "checkpoints", "pct", "art", "log", "elapsed");
+                "say", "checkpoints", "pct", "art", "log", "elapsed",
+                "cast", "cast_kind", "persona");
     }
 
     @Test

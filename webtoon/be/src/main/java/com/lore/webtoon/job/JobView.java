@@ -34,7 +34,7 @@ public record JobView(
         /** 인물 단계가 세운 인물(#534) — 인물 단계에서 기다릴 때만. 아니면 {@code null}. */
         List<Map<String, Object>> cast,
         /** 그때 무엇을 기다리나 — {@code pick}(한 명 고르기) · {@code confirm}(이대로 진행). */
-        String castKind,
+        String cast_kind,
         /** 주인공 페르소나 — 인물 단계에서 기다릴 때만 확인용으로 보여 준다(#534). 아니면 {@code null}. */
         Map<String, Object> persona,
         /** 장면 초안(#548) — 장면 확인 자리에서만. {n, text, user_text}. 아니면 {@code null}. */

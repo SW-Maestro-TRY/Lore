@@ -158,4 +158,30 @@ class PageStoreTest {
         store.record("run-1", List.of(up(2, 1080, "images/webtoon/abc.jpg")));
         assertThat(store.has("run-1")).isTrue();
     }
+
+    private static byte[] png(int w, int h) throws Exception {
+        var out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", out);
+        return out.toByteArray();
+    }
+
+    @Test
+    @DisplayName("그림 크기는 주소가 아니라 키로 창고에서 앞부분만 읽어 구한다 — 운영 주소는 상대경로라 URL 로 못 연다 (#725)")
+    void 크기는_키로_읽는다() throws Exception {
+        when(art.readHead(org.mockito.ArgumentMatchers.eq("images/webtoon/a.png"), anyInt())).thenReturn(png(1080, 1920));
+
+        assertThat(store.dimensionsOf("images/webtoon/a.png")).containsExactly(1080, 1920);
+        org.mockito.Mockito.verify(art, org.mockito.Mockito.never()).read(anyString());
+    }
+
+    @Test
+    @DisplayName("앞부분으로 못 읽으면 한 번 전체를 받고, 그래도 없으면 0·0")
+    void 크기_못_읽으면() throws Exception {
+        when(art.readHead(anyString(), anyInt())).thenReturn(new byte[]{1, 2, 3});
+        when(art.read("images/webtoon/b.png")).thenReturn(png(800, 600));
+
+        assertThat(store.dimensionsOf("images/webtoon/b.png")).containsExactly(800, 600);
+        assertThat(store.dimensionsOf("images/webtoon/없음.png")).containsExactly(0, 0);
+        assertThat(store.dimensionsOf(null)).containsExactly(0, 0);
+    }
 }

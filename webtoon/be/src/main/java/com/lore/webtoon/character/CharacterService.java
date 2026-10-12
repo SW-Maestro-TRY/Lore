@@ -695,8 +695,16 @@ public class CharacterService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "사진이 너무 큽니다 (6MB 까지)");
         }
         Path out = dir.resolve("photo" + index + ".png");
-        Files.write(out, bytes);
-        return out;
+        if (bytes.length <= com.lore.webtoon.job.PhotoFile.MAX_BYTES) {
+            Files.write(out, bytes);
+            return out;
+        }
+        /* 하네스는 5MB 를 넘는 사진에서 죽는다(#726). 그보다 크면 한 번 열어 줄여 적는다. */
+        BufferedImage image = ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+        if (image == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "사진을 열지 못했습니다");
+        }
+        return com.lore.webtoon.job.PhotoFile.write(image, dir, "photo" + index);
     }
 
     private void dropPhoto(Path photo) {
