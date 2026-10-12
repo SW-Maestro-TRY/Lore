@@ -999,8 +999,7 @@ public class JobService {
                 throw new BusinessException(ErrorCode.INVALID_INPUT,
                         i + "번째 사진을 열지 못했습니다. 아이폰 사진(HEIC)이면 JPG 나 PNG 로 바꿔서 올려 주세요.");
             }
-            Path to = dir.resolve("photo" + i + ".png");
-            ImageIO.write(shrink(image), "png", to.toFile());
+            Path to = PhotoFile.write(shrink(image), dir, "photo" + i);
             Files.deleteIfExists(raw);
             saved.add(to);
         }
@@ -1038,8 +1037,7 @@ public class JobService {
                 throw new BusinessException(ErrorCode.INVALID_INPUT,
                         i + "번째 사진을 열지 못했습니다. 아이폰 사진(HEIC)이면 JPG 나 PNG 로 바꿔서 올려 주세요.");
             }
-            Path to = dir.resolve("photo" + i + ".png");
-            ImageIO.write(shrink(image), "png", to.toFile());
+            Path to = PhotoFile.write(shrink(image), dir, "photo" + i);
             saved.add(to);
         }
         return saved;
