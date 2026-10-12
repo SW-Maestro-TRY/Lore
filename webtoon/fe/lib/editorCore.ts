@@ -256,7 +256,11 @@ export function mountEditor(
      서 있으므로 접두사를 갈아 끼운다 — 안 바꾸면 그림도 내려받기도 404 다.
      (우리가 직접 만든 주소는 이미 API 로 시작하므로 그대로 지나간다.) */
   function atApi(u) {
-    return typeof u === "string" && u.startsWith("/api/") ? API + u.slice("/api".length) : u;
+    if (typeof u !== "string" || !u.startsWith("/api/")) return u;
+    // 굽기 결과(RunController#bake)처럼 이미 API 접두사가 붙은 주소에 한 번 더
+    // 붙이면 /api/webtoon/v1/webtoon/v1/... 이 되어 내려받기가 404 다(#729).
+    if (u === API || u.startsWith(API + "/")) return u;
+    return API + u.slice("/api".length);
   }
 
   function rawImg(s) {
@@ -1419,20 +1423,29 @@ export function mountEditor(
     }
   }
 
-  /* 구운 결과 — 몇 장을 구웠고 무엇이 빠졌는지 말하고, 내려받을 자리를 준다.
+  /* 구운 결과 — 무엇을 넣었는지 말하고, 내려받을 자리를 준다.
      토스트 한 줄로 끝내지 않는 이유: 스티커가 빠졌거나 안 그려진 장이 있으면
-     그것을 알아야 하고, 그건 한 줄에 안 들어간다. */
+     그것을 알아야 하고, 그건 한 줄에 안 들어간다.
+
+     서버가 주는 것은 {ok, items, pages, url} 뿐이다(RunController#bake).
+     전에는 없는 scenes·width·height 를 읽다가 여기서 멈춰 파일이 안 받아졌다(#729).
+     pages 는 얹은 것이 있어 새로 구운 장 수라, 받는 한 편 전체 장 수가 아니다 —
+     그래서 장 수 대신 얹은 것 수를 말한다. */
   function showBaked(out) {
     const box = $("#bakeResult");
-    if (!box) return toast(tr("{n}장을 구웠습니다", { n: out.scenes.length }));
+    const items = Number(out.items) || 0;
+    const what = items
+      ? tr("얹은 것 {n}개를 그림에 넣었습니다", { n: items })
+      : tr("얹은 것이 없어 원본 그림 그대로 받습니다");
+    if (!box) return toast(tr("이미지로 만들었습니다"));
     const gone = (out.missing || []).length
       ? `<p class="bake-warn">${tr("아직 안 그려진 장 {list}번은 빠졌습니다.", { list: out.missing.join(", ") })}</p>` : "";
     const skip = (out.skipped || []).length
       ? `<p class="bake-warn">${tr("못 그린 것: {list} — 이모지 글꼴이 없는 서버에서는 스티커가 빠집니다.", { list: out.skipped.map(esc).join(", ") })}</p>` : "";
     box.innerHTML = `
       <div class="bake-head">
-        <b>${tr("{n}장을 구웠습니다", { n: out.scenes.length })}</b>
-        <span>${tr("{w}×{h}px · 얹은 것 {n}개", { w: out.width, h: out.height, n: out.items })}</span>
+        <b>${tr("이미지로 만들었습니다")}</b>
+        <span>${what}</span>
         <span class="bake-wm">${tr("내려받는 파일에는 컷마다 LORE 표시가 붙고, 맨 아래에 브랜드 띠가 한 줄 덧대집니다.")}</span>
       </div>
       ${gone}${skip}
@@ -1709,7 +1722,7 @@ export function mountEditor(
             body: JSON.stringify(overlayPayload()) });
         const out = await res.json();
         if (!res.ok) throw new Error(errOf(out, tr("굽지 못했습니다")));
-        track("bake", { run: RUN_ID, page: out.scenes?.length, count: out.items });
+        track("bake", { run: RUN_ID, page: out.pages, count: out.items });
         showBaked(out);
         // 굽자마자 바로 받는다 (pullFile 머리말 참고)
         pullFile(atApi(out.url), `${RUN_ID}.png`);
