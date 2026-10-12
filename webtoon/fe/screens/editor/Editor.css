@@ -44,10 +44,6 @@
 /* 구운 결과 띠 */
 .wt .wt-ed .bake-result { display: flex; align-items: center; gap: 14px; padding: 10px 20px; background: var(--water-light); border-top: 1px solid rgba(15, 51, 63, 0.08); font-size: 13px; flex-wrap: wrap; }
 .wt .wt-ed .bake-result[hidden] { display: none; }
-.wt .wt-ed .bake-head { display: contents; }
-.wt .wt-ed .bake-head b { font-size: 13px; }
-.wt .wt-ed .bake-head span { color: var(--dim); }
-.wt .wt-ed .bake-warn { margin: 0; color: #a13a2e; }
 .wt .wt-ed .bake-acts { display: flex; gap: 8px; align-items: center; margin-left: auto; }
 .wt .wt-ed .bake-acts .btn { height: 32px; font-size: 12.5px; padding: 0 14px; }
 
