@@ -42,7 +42,7 @@ final class NoticeMail {
     private static final String LINE = "#e3ebe8";
     private static final String BG = "#f4f8f6";
 
-    static final String CONTACT = "lightbluue6@gmail.com";
+    static final String CONTACT = "lore@lorecomic.com";
     static final String ADDRESS = "서울특별시 마포구 마포대로 89 포스트타워 7층, 12층 (우편번호 04156)";
 
     private NoticeMail() {
