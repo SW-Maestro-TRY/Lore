@@ -22,7 +22,7 @@ import { ApiError } from '../api';
 import type {
   Album, BakingState, ChatCall, ChatReply, ChatSlot, ChatState, Clock, Features, FirstGift, Motion, PetCreated, Pieces, SickKind,
   PetDetail, PetPhase, Personality, Shared, ShareKind, Sick, Today, Tutorial, TutorialStep,
-  CharacterInput, Drafted, HatchProgress,
+  CharacterInput, Drafted, HatchProgress, Postcard,
   TutorialStepKey, CareAction,
 } from '../pet';
 import type { AbandonResult, GameKind, GameState, GuessResult, RunResult, Side } from '../game';
@@ -185,6 +185,13 @@ interface Row {
 
   game: GameRow | null;
   seenAdv: Set<number>;
+  /**
+   * 여행을 떠난 시각(서버 `ZzalPet.tripStartedAt`). 없거나 null 이면 집에 있다.
+   * ★ 목은 떠남(6일 부재)을 스스로 일으키지 않는다 — `__zzalMock.trip(true)` 로만 켠다.
+   */
+  tripStartedAt?: number | null;
+  /** 재회 때 전달된 엽서(서버 `deliverAll`). 앨범이 읽는다. */
+  postcards?: Postcard[];
 }
 
 /** 여울 8상태 파일에 동작 키를 댄 서버 키(목 전용). assetUrl() 을 지나는 경로를 그대로 탄다. */
@@ -365,6 +372,7 @@ export class MockPetServer implements PetSource {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
+    if (r.tripStartedAt != null) throw err(409, 'ZZAL_TRAVELING', '여행 중이에요');
     if (r.sleeping) throw err(409, 'ZZAL_PET_SLEEPING', '자고 있어요');
     const before = this.unlockedSeqs(r);
     /** 이 행동으로 방금 나았는가. 행동 응답에만 실린다(해석 38). */
@@ -452,6 +460,7 @@ export class MockPetServer implements PetSource {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
+    if (r.tripStartedAt != null) throw err(409, 'ZZAL_TRAVELING', '여행 중이에요');
     if (r.sleeping) throw err(409, 'ZZAL_PET_SLEEPING', '이미 자고 있어요');
     const clock = this.clockOf(r, now);
     if (!clock.canSleep) throw err(409, 'ZZAL_NOT_SLEEP_TIME', '아직 잘 시간이 아니에요');
@@ -464,12 +473,57 @@ export class MockPetServer implements PetSource {
     await this.wait();
     const r = this.alive(petId);
     const now = this.settle(r, this.now());
+    if (r.tripStartedAt != null) throw err(409, 'ZZAL_TRAVELING', '여행 중이에요');
     if (!r.sleeping) throw err(409, 'ZZAL_PET_NOT_SLEEPING', '자고 있지 않아요');
     const clock = this.clockOf(r, now);
     if (!clock.canWake) throw err(409, 'ZZAL_NOT_WAKE_TIME', '아직 깨울 시간이 아니에요');
     const before = this.unlockedSeqs(r);
     this.doWake(r, now, false);
     return this.detail(r, now, this.newlyUnlocked(r, before, now));
+  }
+
+  /**
+   * 부르기(재회) — 서버 `PetService.callBack` 과 같은 규칙. 여행 중이 아니면 409 ZZAL_NOT_TRAVELING.
+   * 엽서는 출발일 포함 하루 한 장, 상한 3장(서버 `LeaveService.fillPostcards`)을 이 자리에서 전달한다.
+   */
+  async callBack(petId: number): Promise<PetDetail> {
+    await this.wait();
+    const r = this.alive(petId);
+    const now = this.now();
+    if (r.tripStartedAt == null) throw err(409, 'ZZAL_NOT_TRAVELING', '여행 중이 아니에요');
+    const start = r.tripStartedAt;
+    const n = this.tripPostcardCount(r, now);
+    const places = ['sea', 'forest', 'city', 'mountain', 'island'];
+    const lines = ['여기 도착했어요. 잘 지내고 있어요.', '오늘은 좋은 걸 봤어요. 같이 봤으면 좋았을 텐데요.', '이제 슬슬 돌아가고 싶어요.'];
+    const delivered = r.postcards ?? [];
+    for (let seq = delivered.length + 1; seq <= n; seq++) {
+      delivered.push({
+        seq, place: places[(r.id + seq) % places.length],
+        at: new Date(Math.min(now, start + (seq - 1) * DAY_MS)).toISOString(),
+        line: lines[Math.min(seq, 3) - 1],
+      });
+    }
+    r.postcards = delivered;
+    r.tripStartedAt = null;
+    // 서버 `ZzalPet.callBack` — 게이지 2칸 · 케어 미스 0 · 아픔·잠 해제 · 시계 다시 출발
+    r.fullness = 2; r.happiness = 2; r.trash = MAX_TRASH - 2;
+    r.sick = null; r.sleeping = false; r.sleepKind = null;
+    r.today.careMiss = 0;
+    r.settledAt = now;
+    return this.detail(r, now);
+  }
+
+  /** 출발일 포함 하루 한 장, 상한 3장(서버 `LeaveService.fillPostcards`). */
+  private tripPostcardCount(r: Row, now: number): number {
+    if (r.tripStartedAt == null) return 0;
+    const days = dayIndex(now) - dayIndex(r.tripStartedAt) + 1;
+    return Math.max(0, Math.min(3, days));
+  }
+
+  /** 개발용 — 여행을 켜고 끈다. 켜면 이틀 전에 떠난 것으로 둔다(엽서 3장이 쌓일 날짜). */
+  trip_(on: boolean): void {
+    if (!this.row) return;
+    this.row.tripStartedAt = on ? this.now() - 2 * DAY_MS : null;
   }
 
   async setPersonality(petId: number, personality: Personality, world?: string): Promise<PetDetail> {
@@ -605,7 +659,7 @@ export class MockPetServer implements PetSource {
     this.settle(r, this.now());
     // ★ v0 동안 조회를 막지 않는다(해석 25). 잠긴 칸의 이름·조건을 보여주는 것이 정본 6장인데
     //   조회 자체를 막으면 그 규칙과 어긋난다. `features.album` 은 플래그로만 쓴다.
-    return { motions: this.motionsOf(r), postcards: [], scenes: [], firstGift: this.firstGiftOf(r) };
+    return { motions: this.motionsOf(r), postcards: [...(r.postcards ?? [])], scenes: [], firstGift: this.firstGiftOf(r) };
   }
 
   async startGame(petId: number, kind: GameKind = 'LEFT_RIGHT'): Promise<GameState> {
@@ -1360,7 +1414,10 @@ export class MockPetServer implements PetSource {
       sceneNew: alive ? false : null,
       personality: r.personality, world: r.world, background: alive ? r.background : null,
       features: alive ? this.featuresOf(r) : null,
-      leaving: null, trip: null,
+      leaving: null,
+      trip: alive && r.tripStartedAt != null
+        ? { startedAt: new Date(r.tripStartedAt).toISOString(), postcards: this.tripPostcardCount(r, now) }
+        : null,
       tutorial: alive ? this.tutorialOf(r) : null,
       graduationSeenAt: r.graduationSeenAt === null ? null : new Date(r.graduationSeenAt).toISOString(),
     };
@@ -1560,6 +1617,8 @@ export interface ZzalMockHandle {
    * @returns 성공하면 서버 응답, 실패하면 `{ error: { status, code } }`.
    */
   abandonOverHttp: (petId: number, gameId: number) => Promise<unknown>;
+  /** 여행을 켜고 끈다(켜면 이틀 전 출발 · 엽서 3장). 부르기·여행 중 화면을 확인하는 자리. */
+  trip: (on: boolean) => void;
 }
 
 declare global {
@@ -1578,6 +1637,7 @@ export function installMockHandle(server: MockPetServer): void {
     makeSick: (kind) => { server.makeSick_(kind); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
     forceOpen: (seq) => { server.forceOpen_(seq); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
     nightSweep: () => { server.nightSweep_(); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
+    trip: (on) => { server.trip_(on); window.dispatchEvent(new Event(MOCK_ADVANCED_EVENT)); },
     now: () => new Date(server.now()).toISOString(),
     state: () => server.state(),
     reset: (preset) => server.reset(preset),

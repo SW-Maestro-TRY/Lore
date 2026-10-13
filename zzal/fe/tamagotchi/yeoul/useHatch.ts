@@ -22,7 +22,7 @@ import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS, GUESS_HAND_PRELOAD } from './constants';
 import {
   answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
-  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet,
+  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet, callBack as callBackPet,
   type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
   type HatchProgress, type PetDetail, type Personality,
 } from '../../lib/pet';
@@ -242,6 +242,16 @@ export interface Live {
    *   그 전에 미리 써 버리면 튜토리얼이 영영 안 끝나므로 서버가 409 로 막는다.
    */
   doRest: () => Promise<CareResult>;
+  /** 부르는 중(재회 요청이 나가 있다). 그동안 「불러오기」를 잠근다 — 두 번 눌러 409 를 보지 않게. */
+  calling: boolean;
+  /**
+   * 부르기(재회) — 여행 중인 아이를 데려온다.
+   *
+   * ★ 성공하면 **앨범을 다시 읽어** 실제로 전달된 엽서 장수를 돌려준다. 서버가 부르는 순간 밀린 엽서를
+   *   채우므로(`PetService.callBack`) 부르기 전의 `trip.postcards` 보다 많을 수 있다.
+   *   앨범을 못 읽으면 `postcards` 는 null — 화면은 부르기 전 숫자로 말한다.
+   */
+  callBack: () => Promise<CareResult & { postcards: number | null }>;
   /**
    * 성격·세계관 저장. **튜토리얼 4칸(PERSONALITY)을 넘기는 호출**이기도 하다.
    * 언제든 다시 바꿀 수 있다(정본 0장 6).
@@ -352,6 +362,8 @@ const EMPTY: Live = {
   upload: async () => {}, holdUpload: () => {}, resumeUpload: async () => {}, discardUpload: () => {},
   setChar: async () => false, doCare: async () => ({ ok: false, message: null }),
   doRest: async () => ({ ok: false, message: null }),
+  calling: false,
+  callBack: async () => ({ ok: false, message: null, postcards: null }),
   savePersonality: async () => ({ ok: false, message: null }),
   finishTutorial: async () => ({ ok: false, message: null }),
   tutorialSeen: async () => ({ ok: false, message: null }),
@@ -691,6 +703,38 @@ export function useHatchState(): Live {
     }
   }, [petId, takeSeq, putPet]);
 
+  const [calling, setCalling] = useState(false);
+  const callingRef = useRef(false);
+  const callBack = useCallback(async (): Promise<CareResult & { postcards: number | null }> => {
+    if (!petId || callingRef.current) return { ok: false, message: null, postcards: null };
+    callingRef.current = true;
+    setCalling(true);
+    const seq = takeSeq();
+    try {
+      putPet(seq, await callBackPet(petId));
+      let postcards: number | null = null;
+      try {
+        const a = await getAlbum(petId);
+        setAlbum(a);
+        postcards = a.postcards.length;
+      } catch { /* 앨범을 못 읽어도 아이는 돌아왔다 */ }
+      return { ok: true, message: null, postcards };
+    } catch (e) {
+      const back = takeSeq();
+      try { putPet(back, await getPet(petId)); } catch { /* 못 읽으면 화면은 그대로 */ }
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : '지금은 부를 수 없어요',
+        code: e instanceof ApiError ? e.code : null,
+        status: e instanceof ApiError ? e.status : undefined,
+        postcards: null,
+      };
+    } finally {
+      callingRef.current = false;
+      setCalling(false);
+    }
+  }, [petId, takeSeq, putPet]);
+
   /** 서버로 보내고 응답(=최신 상태)을 얹는 작은 틀. 성격 저장·튜토리얼 마무리가 같은 모양이라 묶었다. */
   const send = useCallback(async (call: () => Promise<PetDetail>, fallback: string): Promise<CareResult> => {
     if (!petId) return { ok: false, message: fallback, code: 'ZZAL_PET_NOT_FOUND' };
@@ -929,10 +973,13 @@ export function useHatchState(): Live {
         //   "방은 무엇을 보고 그렸나" 가 한 줄로 남는다. 못 받으면 목록 값으로 간다.
         //   ★ 한 벌을 **한꺼번에** 받는다(병렬). 하나씩 받으면 받는 순서대로 화면이 한 칸씩 채워져
         //     결국 같은 튐이 된다.
+        // ★ 여행 중이면 판·부름은 묻지 않는다(2026-10-13 상훈님) — 서버가 409(ZZAL_TRAVELING)로 막는 길이라
+        //   물어도 콘솔에 오류만 남는다. 부르기로 `trip` 이 사라지면 아래 효과들이 다시 읽는다.
+        const away = !!living.trip;
         const [detail, g, c] = await Promise.all([
           getPet(living.petId).catch(() => living),
-          getCurrentGame(living.petId).catch(() => null),
-          getChat(living.petId).catch(() => null),
+          away ? null : getCurrentGame(living.petId).catch(() => null),
+          away ? null : getChat(living.petId).catch(() => null),
         ]);
         if (!mineStill()) return null;
         setPetId(living.petId); setCharSet(true); putPet(takeSeq(), detail);
@@ -1040,20 +1087,27 @@ export function useHatchState(): Live {
   //   가벼운 응답이고 돌보기 한 번에 한 번뿐이라 그만한 값은 한다. 서버가 요약을 맞춰 주면
   //   그때 이 자리를 `chatSummary` 로 되돌린다.
   const living = pet?.phase === 'ALIVE';
+  // ★ 여행 중(`trip`)엔 부름·판을 묻지 않는다(2026-10-13 상훈님) — 서버가 409(ZZAL_TRAVELING)로 막는다.
+  //   60초 맞춤(`refreshPet`)이 `pet` 을 갈아도 아래 두 효과가 이 값에서 멈춘다. 부르기 성공으로
+  //   `trip` 이 null 이 되면 이 값이 바뀌어 두 효과가 다시 돈다(= 조회 재개).
+  //   방이 안 열리는 일이 없게 '읽음' 표시는 세운다 — 전에는 409 로 실패한 뒤 세우던 것과 같다.
+  const traveling = !!pet?.trip;
   useEffect(() => {
     if (!petId || !living) return;
+    if (traveling) { setChatLoaded(true); return; }
     let alive = true;
     void getChat(petId)
       .then((c) => { if (alive) setChat(c); })
       .catch(() => {})
       .finally(() => { if (alive) setChatLoaded(true); });
     return () => { alive = false; };
-  }, [petId, living, pet]);
+  }, [petId, living, pet, traveling]);
 
   // 치던 판과 앨범은 아이가 살아난 뒤 한 번만 읽는다 — 돌보기마다 다시 읽을 값이 아니다.
   // (판은 칠 때마다 응답으로 갱신되고, 앨범은 벽을 열 때 `loadAlbum` 으로 다시 읽는다)
   useEffect(() => {
     if (!petId || !living) return;
+    if (traveling) { setGameLoaded(true); return; }
     let alive = true;
     const seq = takeSeq();
     void getCurrentGame(petId)
@@ -1063,7 +1117,7 @@ export function useHatchState(): Live {
     // 앨범은 기다리지 않는다 — 못 받아도 펫 상태의 같은 18칸으로 **같은 숫자**가 나온다(튀지 않는다).
     void getAlbum(petId).then((a) => { if (alive) setAlbum(a); }).catch(() => {});
     return () => { alive = false; };
-  }, [petId, living, takeSeq, putGame]);
+  }, [petId, living, traveling, takeSeq, putGame]);
 
   /**
    * 기본 8종을 미리 받아 둔다(상훈님 2026-09-10 승인).
@@ -1164,7 +1218,7 @@ export function useHatchState(): Live {
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
     justUnlocked,
-    setChar, doCare, doRest, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
+    setChar, doCare, doRest, calling, callBack, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
     clearJustUnlocked, noteUnlocked,
     loadAlbum, shareMotion, sendWish, resume, reset,
   };

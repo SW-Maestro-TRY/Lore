@@ -32,6 +32,49 @@ export default function Album({ y }: { y: Yeoul }) {
   );
 }
 
+/** 서버 배경 key → 이름. 모르는 key 는 '어딘가' — 빈칸보다 낫다. */
+const PLACE: Record<string, string> = { sea: '바다', forest: '숲', city: '도시', mountain: '산', island: '섬' };
+
+/** "10월 13일" — 엽서는 날짜만 말한다(몇 시인지는 이야기가 아니다). */
+function postcardDay(at: string): string {
+  const t = new Date(at);
+  if (Number.isNaN(t.getTime())) return '';
+  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' }).format(t);
+}
+
+/**
+ * 여행 엽서 칸. 여행에서 돌아올 때 서버가 한꺼번에 전달한 것만 온다(여행 중인 엽서는 안 보인다).
+ * 한 장도 없으면 칸 자체를 안 그린다 — 빈 상자는 "뭔가 빠졌다" 로 읽힌다.
+ */
+function Postcards({ cards }: { cards: ReadonlyArray<{ seq: number; place: string; at: string; line: string }> }) {
+  if (cards.length === 0) return null;
+  return (
+    <section data-part="postcards" aria-label={`여행 엽서 ${cards.length}장`} style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: gap.sm, margin: '0 0 18px', minWidth: 0 }}>
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm }}>
+        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.lg, color: C.ink }}>여행 엽서</span>
+        <span style={{ fontSize: fz.sm, color: C.faint }}>{cards.length}장</span>
+      </span>
+      {cards.map((c) => (
+        <article
+          key={c.seq} data-part="postcard" data-seq={c.seq}
+          style={{
+            display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: '4px 10px', alignItems: 'start',
+            padding: '12px 14px', borderRadius: radius.sm, background: C.paper,
+            border: `1px solid ${ink(.12)}`, boxShadow: `0 2px 6px ${ink(.08)}`, minWidth: 0,
+          }}
+        >
+          <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.35, color: C.ink, overflowWrap: 'anywhere' }}>{c.line}</span>
+          {/* 우표 자리 — 어디서 보냈는가. 글자만으로 말한다(아이콘·이모지 안 씀). */}
+          <span style={{ gridRow: 'span 2', padding: '4px 8px', borderRadius: 4, border: `1.5px dashed ${ink(.25)}`, fontSize: fz.sm, color: C.sub, whiteSpace: 'nowrap' }}>
+            {PLACE[c.place] ?? '어딘가'}
+          </span>
+          <span style={{ fontSize: fz.xs, color: C.faint }}>{postcardDay(c.at)}</span>
+        </article>
+      ))}
+    </section>
+  );
+}
+
 function Wall({ y }: { y: Yeoul }) {
   const w = y.v.wall;
   const live = useLive();
@@ -64,6 +107,9 @@ function Wall({ y }: { y: Yeoul }) {
         alignContent: 'start', alignItems: 'start',
         backgroundImage: `repeating-linear-gradient(90deg,${ink(.05)} 0 2px,transparent 2px 22px)`,
       }}>
+        {/* ★ 여행 엽서(정본 16장 "앨범 = 도감 + 여행 엽서 + …") — **도감보다 위**다. 재회 판의 「앨범에서 보기」가
+            여기로 오므로, 18칸 아래에 묻히면 폰 한 화면에서 안 보인다. 그리드 전 칸을 가로질러 한 장씩 쌓는다. */}
+        <Postcards cards={live.album?.postcards ?? []} />
         {w.frames.map((f, i) => (
           <span key={i} style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, alignSelf: 'start', margin: '0 0 22px' }}>
             {/* ★ 이 버튼 안에는 그림 한 장뿐이라 **화면 낭독기에는 "버튼" 으로만 들린다**

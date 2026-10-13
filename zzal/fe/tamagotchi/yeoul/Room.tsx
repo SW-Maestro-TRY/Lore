@@ -467,6 +467,8 @@ export default function Room({ y }: { y: Yeoul }) {
 
         {/* 그림자 — 캐릭터와 같은 걸음으로 움직인다. */}
         <div style={{
+          // 여행 중엔 그림자도 없다(아이가 없으므로). `hidden` 은 인라인 display 에 져서 쓰지 않는다.
+          ...(v.away ? { visibility: 'hidden' as const } : null),
           position: 'absolute', left: 0, right: 0, // 그림자는 발끝을 따라간다 — 발끝에서 18px 아래가 중심(예전 값과 같다).
           bottom: `calc(${LIFT} - 30px)`, height: 24,
           display: 'flex', justifyContent: 'center',
@@ -483,8 +485,12 @@ export default function Room({ y }: { y: Yeoul }) {
           // 지금 어떤 자세를 짓고 있는지. 화면을 밖에서 확인할 때 쓰는 손잡이다(`data-room`·`data-action` 과 같은 쓰임).
           data-sprite={v.spriteKey}
           hidden={v.hidePet}
-          onClick={(e) => { e.stopPropagation(); actions.onPet(); }}
+          // ★ 여행 중 — 아이 그림만 비우고 상자는 남긴다(가방이 그 상자 폭으로 크기를 잰다). 누르지 못한다.
+          data-away={v.away ? '1' : undefined}
+          aria-hidden={v.away || undefined}
+          onClick={(e) => { e.stopPropagation(); if (!v.away) actions.onPet(); }}
           style={{
+            ...(v.away ? { opacity: 0, pointerEvents: 'none' as const } : null),
             position: 'absolute', left: 0, right: 0,
             bottom: `calc(${LIFT} - ${CHAR_H} * ${BELOW_FOOT.toFixed(4)})`,
             height: CHAR_H, display: 'flex', justifyContent: 'center', zIndex: 2,
@@ -1285,7 +1291,7 @@ function MiniCard({ y }: { y: Yeoul }) {
     <div
       className="yeoul-mini"
       onClick={(e) => { e.stopPropagation(); if (canOpen) m.toggle(); }}
-      data-part="mini" data-open={open ? '1' : '0'}
+      data-part="mini" data-open={open ? '1' : '0'} data-guide={m.guideKind || undefined}
       style={{
         // ★ 이제 **선반 위 한 칸**이다(2026-09-20) — 구석에 따로 떠 있지 않는다. 펼침은 그대로
         //   위로 자란다(선반이 아래에 붙어 있어 내려갈 곳이 없는 것은 예전과 같다).
