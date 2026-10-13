@@ -8,6 +8,7 @@ import {
 import { useAuth } from "@common/auth/useAuth";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
+import { metaTrack, metaTrackCustom } from "../../lib/metaPixel";
 import type { Go } from "../../lib/nav";
 import { IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
 import { Crumb, MobileTop } from "../../ui/TopNav";
@@ -36,6 +37,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const [failed, setFailed] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [ownedByAccount, setOwnedByAccount] = useState(false);
+  /* 계정 목록 확인이 끝났나 — 메타 ViewContent 를 「내 작품」에 보내지 않으려고 기다린다. */
+  const [accountChecked, setAccountChecked] = useState(false);
   /* 아트보드 Done 의 「컷별로 내려받기」 — 켜면 장마다 내려받기 줄이 붙는다. */
   const [perPage, setPerPage] = useState(false);
   /* 크게 보기 — 장을 누르면 화면 전체에 띄운다. 웹툰 장은 세로로 길어서
@@ -93,9 +96,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   useEffect(() => {
     if (!authenticated) return;
     let alive = true;
+    setAccountChecked(false);
     myAccountRuns()
       .then((got) => { if (alive) setOwnedByAccount(got.some((r) => r.run_id === runId)); })
-      .catch(() => { /* 브라우저 것만 쓴다 */ });
+      .catch(() => { /* 브라우저 것만 쓴다 */ })
+      .finally(() => { if (alive) setAccountChecked(true); });
     return () => { alive = false; };
   }, [runId, authenticated]);
 
@@ -115,11 +120,21 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   /* 광고·SNS 링크(UTM)를 달고 이 화면으로 바로 들어왔나. 첫 그림 뒤에 읽는다 —
      서버가 그린 화면과 첫 그림이 달라지면 안 된다. */
   const [fromLink, setFromLink] = useState(false);
+  /* 메타 픽셀(#751) — 남의 작품 완성본에 도착. 광고는 예시 작품으로 보내서 이것이 광고의 첫 도착이다.
+     내 것인지는 계정 목록을 받은 뒤에 바뀔 수 있어, 그 확인이 끝나기 전에는 보내지 않는다. */
+  const viewSent = useRef("");
+  useEffect(() => {
+    if (!data || mine || viewSent.current === runId) return;
+    if (authenticated && !accountChecked) return;
+    viewSent.current = runId;
+    metaTrack("ViewContent", { content_type: "webtoon", content_ids: [runId] });
+  }, [data, mine, runId, authenticated, accountChecked]);
   useEffect(() => {
     try { setFromLink(new URLSearchParams(location.search).has("utm_source")); } catch { /* 없음 */ }
   }, []);
   const startMaking = (where: string) => {
     track("remix_cta_click", { source: runId, where, logged_in: authenticated, free_left: freeLeft || undefined });
+    metaTrackCustom("MakeClick", { where });
     go("create", { step: 1 });
   };
   const { user: me } = useAuth();
