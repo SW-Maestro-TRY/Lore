@@ -36,6 +36,18 @@ public enum ErrorCode {
     // 띄울지가 이 코드에서 갈린다.
     CREDIT_NOT_ENOUGH(HttpStatus.PAYMENT_REQUIRED, "크레딧이 모자랍니다"),
 
+    // 충전 결제 (common, #155)
+    // 준비 안 됨은 503 — 이 서버에 페이앱 연동값이 안 들어 있다. 화면은 이 코드를 보고
+    // 결제 대신 1:1 문의를 안내한다(사람이 할 수 있는 일이 문의뿐이다).
+    PAYMENT_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "결제 기능을 준비 중이에요"),
+    // 결제대행사가 결제창을 못 만들어 줬다. 다시 눌러 볼 만한 일이다.
+    PAYMENT_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "결제창을 열지 못했어요. 잠시 뒤 다시 시도해 주세요"),
+    PAYMENT_ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없어요"),
+    // 환불할 수 없는 주문 — 결제 완료가 아니거나, 이미 환불했거나, 돌려줄 유료 크레딧이 없다.
+    PAYMENT_NOT_REFUNDABLE(HttpStatus.CONFLICT, "환불할 수 없는 주문이에요"),
+    // 페이앱이 취소를 거절했다. 크레딧은 회수하지 않았다.
+    PAYMENT_REFUND_FAILED(HttpStatus.BAD_GATEWAY, "페이앱이 환불(취소)을 거절했어요"),
+
     // 업로드 (common)
     INVALID_UPLOAD_KEY(HttpStatus.BAD_REQUEST, "올바르지 않은 이미지입니다"),
     UPLOAD_KEY_ALREADY_USED(HttpStatus.BAD_REQUEST, "이미 사용한 이미지입니다"),

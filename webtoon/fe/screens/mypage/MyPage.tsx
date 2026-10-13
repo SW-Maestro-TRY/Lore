@@ -77,6 +77,13 @@ registerDict({
   "탈퇴하기": { en: "Delete", ja: "退会する", zh: "注销" },
   "정말 탈퇴할까요? 되돌릴 수 없어요.": { en: "Really delete your account? This can't be undone.", ja: "本当に退会しますか？元に戻せません。", zh: "确定要注销吗？此操作无法撤销。" },
   "탈퇴": { en: "Delete account", ja: "退会", zh: "注销" },
+  "충전한 크레딧이 남아 있어요": { en: "You still have purchased credits", ja: "購入したクレジットが残っています", zh: "你还有已购买的点数" },
+  "탈퇴하면 환불받을 수 없어요. 먼저 1:1 문의로 환불을 신청해 주세요.": {
+    en: "They can't be refunded after you delete your account. Please request a refund via 1:1 support first.",
+    ja: "退会すると返金できません。先に1:1お問い合わせから返金を申請してください。",
+    zh: "注销后将无法退款。请先通过1:1咨询申请退款。",
+  },
+  "환불 신청하기": { en: "Request a refund", ja: "返金を申請する", zh: "申请退款" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   "지우기": { en: "Delete", ja: "削除", zh: "删除" },
   "휴지통": { en: "Trash", ja: "ゴミ箱", zh: "回收站" },
@@ -152,6 +159,8 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
      따로 만들 것이 아니다). 잔액도 헤더와 같은 `/credits/me` 를 읽어야 두
      자리가 같은 값을 말한다. */
   const [credits, setCredits] = useState<number | null>(null);
+  /* 남은 유료 크레딧. 탈퇴하면 소멸하고 환불도 못 받으므로(이용약관 13조 7항) 확인 단계에서 먼저 알린다. */
+  const [paidCredits, setPaidCredits] = useState(0);
   const [creditModal, setCreditModal] = useState<"charge" | "history" | null>(null);
 
   const [allowance, setAllowance] = useState<Allowance | null>(null);
@@ -235,7 +244,9 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   useEffect(() => {
     listCharacters().then((l) => setChars(l.characters.filter((c) => c.mine))).catch(() => {});
     readAllowance().then(setAllowance).catch(() => {});
-    if (isAuthenticated) creditBalance().then((b) => setCredits(b.balance)).catch(() => {});
+    if (isAuthenticated) {
+      creditBalance().then((b) => { setCredits(b.balance); setPaidCredits(b.paid ?? 0); }).catch(() => {});
+    }
   }, [isAuthenticated]);
 
   /* 설정 탭 — 웹툰 완성 메일. 안 건드렸으면 서버가 켜진 채로 준다. */
@@ -552,6 +563,12 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 </div>
                 {withdrawMode === "confirm" && (
                   <div className="wt-my-withdraw-confirm">
+                    {paidCredits > 0 && (
+                      <span className="wt-my-err" role="alert">
+                        {t("충전한 크레딧이 남아 있어요")} ({paidCredits}C). {t("탈퇴하면 환불받을 수 없어요. 먼저 1:1 문의로 환불을 신청해 주세요.")}{" "}
+                        <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">{t("환불 신청하기")}</a>
+                      </span>
+                    )}
                     <span className="muted">{t("정말 탈퇴할까요? 되돌릴 수 없어요.")}</span>
                     <button type="button" className="btn btn-p" disabled={withdrawBusy} onClick={() => void withdraw()}>{t("탈퇴")}</button>
                     <button type="button" className="btn btn-w" disabled={withdrawBusy} onClick={() => setWithdrawMode("idle")}>{t("취소")}</button>

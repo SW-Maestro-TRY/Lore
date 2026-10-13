@@ -7,7 +7,7 @@ import "./i18n";
 import Link from "next/link";
 import localFont from "next/font/local";
 import { useEffect, useRef, useState } from "react";
-import { CONTACT_CHANNEL } from "@common/links";
+import { SELLER_READY, sellerLine, CONTACT_CHANNEL } from "@common/links";
 import * as api from "../../lib/api";
 import { LangSwitch, useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
@@ -370,10 +370,13 @@ export default function Landing({ go }: { go: Go }) {
             운영 주체는 약관 제1조의 「TRY팀」, 연락처는 약관·처리방침에 적힌 주소와 같다.
             사업자등록번호·통신판매업 신고번호는 등록되면 여기 한 줄 더 붙인다. */}
         <div className="dim wt-landing-biz">
-          <span>{t("운영")} {t("TRY팀")}</span>
-          <span>{t("문의")} <a href="mailto:lore@lorecomic.com">lore@lorecomic.com</a></span>
+          {/* 판매자 정보 줄(아래)에 상호·문의가 같이 있으면 여기서는 빼서 두 번 안 보이게 한다. */}
+          {!SELLER_READY && <span>{t("운영")} {t("TRY팀")}</span>}
+          {!SELLER_READY && <span>{t("문의")} <a href="mailto:lore@lorecomic.com">lore@lorecomic.com</a></span>}
           <span>{t("AI SW MAESTRO 17기 프로젝트")}</span>
         </div>
+        {/* 유료 충전을 받으면 판매자 정보를 표시해야 한다(전자상거래법 제10조). 주소가 비면 안 그린다. */}
+        {SELLER_READY && <div className="dim wt-landing-biz">{sellerLine()}</div>}
         <span className="dim wt-landing-copy">{t("© 2026 LORE · TRY팀")}</span>
       </footer>
     </div>
