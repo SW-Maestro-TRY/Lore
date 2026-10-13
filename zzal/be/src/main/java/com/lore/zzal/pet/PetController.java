@@ -398,6 +398,26 @@ public class PetController {
         return ApiResponse.ok(detail(petService.markSeen(userId, petId, seq, real), real));
     }
 
+    // ── 떠남·재회 (설계 규칙) ──────────────────────────────────────────────
+
+    @Operation(summary = "부르기(재회)", description = """
+            여행 중인 캐릭터를 즉시 데려온다. 여행 중 모인 엽서도 이때 한꺼번에 전달된다.
+
+            - 게이지 전부 2칸 · 케어 미스 0 · 친밀도는 떠나기 전 최고치의 50%
+            - 도감·조각·3층 진행은 그대로 보존된다
+            - 데려오는 데 값을 매기지 않는다. 여행 중이 아니면 409(ZZAL_NOT_TRAVELING)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "돌아왔음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "여행 중이 아님(ZZAL_NOT_TRAVELING) 또는 보낸 캐릭터(ZZAL_PET_NOT_ALIVE)")})
+    @PostMapping("/{petId}/call-back")
+    public ApiResponse<PetResponses.Detail> callBack(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant real = Instant.now();
+        return ApiResponse.ok(detail(petService.callBack(userId, petId, real), real));
+    }
+
     // ── 앨범 (설계 규칙) ─────────────────────────────────────────────────
 
     @Operation(summary = "앨범 조회", description = """

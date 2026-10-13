@@ -10900,6 +10900,64 @@
         ]
       }
     },
+    "/api/zzal/v1/me/pets/{petId}/call-back": {
+      "post": {
+        "description": "여행 중인 캐릭터를 즉시 데려온다. 여행 중 모인 엽서도 이때 한꺼번에 전달된다.\n\n- 게이지 전부 2칸 · 케어 미스 0 · 친밀도는 떠나기 전 최고치의 50%\n- 도감·조각·3층 진행은 그대로 보존된다\n- 데려오는 데 값을 매기지 않는다. 여행 중이 아니면 409(ZZAL_NOT_TRAVELING)",
+        "operationId": "callBack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDetail"
+                }
+              }
+            },
+            "description": "돌아왔음"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDetail"
+                }
+              }
+            },
+            "description": "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDetail"
+                }
+              }
+            },
+            "description": "여행 중이 아님(ZZAL_NOT_TRAVELING) 또는 보낸 캐릭터(ZZAL_PET_NOT_ALIVE)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "부르기(재회)",
+        "tags": [
+          "펫"
+        ]
+      }
+    },
     "/api/zzal/v1/me/pets/{petId}/care": {
       "post": {
         "description": "수행할 행동만 전달하면 수치 변화와 수행 가능 여부를 서버가 판정한다.\n응답은 변경된 전체 상태이므로 화면은 별도 재조회 없이 그대로 반영한다.\n\n| action | 효과 | 거부 조건 |\n|---|---|---|\n| FEED | 배부름 +1, 재고 -1 | 배부름이 최대치일 때 |\n| SNACK | 행복 +1 | 질병 상태 · 연속 5회 시 배탈 발생 |\n| PET | 친밀도 +5 (하루 3회까지) | 없음 |\n| CLEAN | 흔적 제거 | 이미 청결한 상태일 때 |\n| BATH | 흔적 제거, 행복 +1 | 하루 1회 초과 |\n| MEDICINE | 질병 즉시 치료 | 질병 상태가 아닐 때 |\n\nFEED·CLEAN·BATH·MEDICINE 은 친밀도 +5 를 부여하며 하루 합산 30 이 상한이다.\n\n응답의 justUnlocked 에 이번 행동으로 해금된 동작 seq 가 담긴다.",
