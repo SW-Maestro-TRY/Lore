@@ -980,10 +980,13 @@ export function useHatchState(): Live {
         //   "방은 무엇을 보고 그렸나" 가 한 줄로 남는다. 못 받으면 목록 값으로 간다.
         //   ★ 한 벌을 **한꺼번에** 받는다(병렬). 하나씩 받으면 받는 순서대로 화면이 한 칸씩 채워져
         //     결국 같은 튐이 된다.
+        // ★ 여행 중이면 판·부름은 묻지 않는다(2026-10-13 상훈님) — 서버가 409(ZZAL_TRAVELING)로 막는 길이라
+        //   물어도 콘솔에 오류만 남는다. 부르기로 `trip` 이 사라지면 아래 효과들이 다시 읽는다.
+        const away = !!living.trip;
         const [detail, g, c] = await Promise.all([
           getPet(living.petId).catch(() => living),
-          getCurrentGame(living.petId).catch(() => null),
-          getChat(living.petId).catch(() => null),
+          away ? null : getCurrentGame(living.petId).catch(() => null),
+          away ? null : getChat(living.petId).catch(() => null),
         ]);
         if (!mineStill()) return null;
         setPetId(living.petId); setCharSet(true); putPet(takeSeq(), detail);
@@ -1091,20 +1094,27 @@ export function useHatchState(): Live {
   //   가벼운 응답이고 돌보기 한 번에 한 번뿐이라 그만한 값은 한다. 서버가 요약을 맞춰 주면
   //   그때 이 자리를 `chatSummary` 로 되돌린다.
   const living = pet?.phase === 'ALIVE';
+  // ★ 여행 중(`trip`)엔 부름·판을 묻지 않는다(2026-10-13 상훈님) — 서버가 409(ZZAL_TRAVELING)로 막는다.
+  //   60초 맞춤(`refreshPet`)이 `pet` 을 갈아도 아래 두 효과가 이 값에서 멈춘다. 부르기 성공으로
+  //   `trip` 이 null 이 되면 이 값이 바뀌어 두 효과가 다시 돈다(= 조회 재개).
+  //   방이 안 열리는 일이 없게 '읽음' 표시는 세운다 — 전에는 409 로 실패한 뒤 세우던 것과 같다.
+  const traveling = !!pet?.trip;
   useEffect(() => {
     if (!petId || !living) return;
+    if (traveling) { setChatLoaded(true); return; }
     let alive = true;
     void getChat(petId)
       .then((c) => { if (alive) setChat(c); })
       .catch(() => {})
       .finally(() => { if (alive) setChatLoaded(true); });
     return () => { alive = false; };
-  }, [petId, living, pet]);
+  }, [petId, living, pet, traveling]);
 
   // 치던 판과 앨범은 아이가 살아난 뒤 한 번만 읽는다 — 돌보기마다 다시 읽을 값이 아니다.
   // (판은 칠 때마다 응답으로 갱신되고, 앨범은 벽을 열 때 `loadAlbum` 으로 다시 읽는다)
   useEffect(() => {
     if (!petId || !living) return;
+    if (traveling) { setGameLoaded(true); return; }
     let alive = true;
     const seq = takeSeq();
     void getCurrentGame(petId)
@@ -1114,7 +1124,7 @@ export function useHatchState(): Live {
     // 앨범은 기다리지 않는다 — 못 받아도 펫 상태의 같은 18칸으로 **같은 숫자**가 나온다(튀지 않는다).
     void getAlbum(petId).then((a) => { if (alive) setAlbum(a); }).catch(() => {});
     return () => { alive = false; };
-  }, [petId, living, takeSeq, putGame]);
+  }, [petId, living, traveling, takeSeq, putGame]);
 
   /**
    * 기본 8종을 미리 받아 둔다(상훈님 2026-09-10 승인).
