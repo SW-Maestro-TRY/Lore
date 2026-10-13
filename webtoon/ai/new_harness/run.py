@@ -1410,6 +1410,63 @@ CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
 FIXED_LABEL_RE = re.compile(rf"^{S}이 화의 고정 설정{S}[:：]{S}$", re.M)
 
 
+def _same_person(scene_name: str, cast_name: str) -> bool:
+    """장면 단계가 「등장인물」에 쓴 이름이 인물 단계의 그 사람인가.
+
+    장면 단계는 이름을 줄여 쓴다 — 「패치승 천율」을 「천율」로, 「백설화」를 「설화」로.
+    그래서 장면 쪽 이름의 낱말이 **전부** 인물 단계 이름 안에 들어 있으면 같은 사람이다.
+    한 낱말만 겹치는 것으로는 안 본다 — 「쌀숭이 린아」와 무리를 가리키는 「쌀숭이
+    조직원들」이 같은 사람이 되면 린아의 외모가 무리에 덮인다(2026-10-13 운영 작업에서 확인).
+    """
+    words = [w for w in re.split(r"[\s·,()]+", scene_name or "") if len(w) >= 2]
+    whole = re.sub(r"\s+", "", cast_name or "")
+    return bool(words) and all(w in whole for w in words)
+
+
+def story_cast(run_dir: Path | None, direction: dict, hero: str = "") -> list[dict]:
+    """인물 단계(cast.json)가 세운 인물 가운데 고른 이야기에 실제로 나오는 사람.
+
+    장면 단계는 이 화의 조연 외모를 「등장인물」 칸에서 처음부터 다시 지었다 — 인물 단계가
+    「짧게 잘린 검은 머리」로 세운 사람이 장면에서 「짧은 금발」이 됐다(2026-10-13 운영 작업
+    10개 확인, 이야기에 나온 13명 중 11명). 그래서 이 목록을 장면 입력에 넣고, 장면이 쓴
+    외모도 이 생김새로 덮는다(`pin_cast_looks`). cast.json 이 없으면(옛 run) 빈 목록이다.
+    """
+    if run_dir is None:
+        return []
+    cast = read_json(run_dir / "cast.json")
+    if not isinstance(cast, list):
+        return []
+    text = " ".join(str(direction.get(k) or "") for k in ("title", "intro", "body", "raw"))
+    words = set(re.findall(r"[^\s·,.!?\"'“”‘’()「」]{2,}", text))
+    out = []
+    for c in cast:
+        name = str((c or {}).get("name") or "").strip()
+        look = str((c or {}).get("look") or "").strip()
+        if not name or not look or (hero and (_same_person(hero, name) or _same_person(name, hero))):
+            continue
+        words = [w for w in re.split(r"[\s·]+", name) if len(w) >= 2]
+        words += [w[1:] for w in words if len(w) == 3]      # 성을 뺀 이름(백설화 → 설화)
+        if any(w in text for w in words):
+            out.append({"name": name, "look": look})
+    return out
+
+
+def pin_cast_looks(parsed: dict, pinned: list[dict]) -> dict:
+    """장면 단계가 쓴 「등장인물」에서 인물 단계 인물의 외모를 인물 단계 생김새로 바꾼다.
+    장면이 그 사람을 등장인물에 안 적었으면 더한다 — 그림은 이 목록으로 외모를 고정한다."""
+    if not pinned:
+        return parsed
+    cast = [c for c in (parsed.get("cast") or []) if isinstance(c, dict)]
+    for p in pinned:
+        hit = next((c for c in cast if _same_person(str(c.get("name") or ""), p["name"])), None)
+        if hit is not None:
+            hit["appearance"] = p["look"]
+        else:
+            cast.append({"name": p["name"], "appearance": p["look"]})
+    parsed["cast"] = cast
+    return parsed
+
+
 def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) -> str:
     """scene_prompt 뒤에 붙는 이번 입력 — 고른 스토리 + 캐릭터 + **장르**.
 
@@ -1433,6 +1490,12 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
         lines.append(f"- 고른 캐릭터 카드: {charcard.short(char['card'])} (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
+    pinned = story_cast(run_dir, direction, char.get("name") or "")
+    if pinned:
+        lines += ["", "[이 이야기의 인물 — 생김새가 이미 정해졌다]",
+                  "아래 사람들은 앞 단계에서 생김새까지 정해졌다. 장면 서술과 「등장인물」에 "
+                  "이 생김새를 그대로 쓴다. 머리색·머리 길이·옷차림을 바꾸지 않는다."]
+        lines += [f"- {p['name']}: {p['look']}" for p in pinned]
 
     # 고른 방향이 스스로 밝힌 장르가 먼저다. 사람이 장르를 안 고르면
     # story_prompt 가 방향마다 장르를 정하므로, 그때는 캐릭터의 장르 칸이
@@ -1542,11 +1605,74 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     write_text(run_dir / "scene.md", text)
     record(run_dir, meta)
 
-    parsed = parse_scenes(text)
+    parsed = pin_cast_looks(parse_scenes(text), story_cast(run_dir, direction, (char or {}).get("name") or ""))
     if len(parsed["scenes"]) < 4:
         warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (4개 이상이어야 합니다). "
              f"원문은 {run_dir / 'scene.md'} 에 그대로 있습니다.")
+    if parsed["scenes"] and narration_stage_enabled():
+        parsed = stage_narration(run_dir, char, direction, parsed, lang=lang)
     write_json(run_dir / "scenes.json", parsed)
+    return parsed
+
+
+def narration_stage_enabled() -> bool:
+    """나레이션을 장면 단계와 따로 쓰는가. 기본은 켜짐 — 끄려면 `.env` 에 `NH_NARRATION_STAGE=0`."""
+    return (llm.env("NH_NARRATION_STAGE") or "1").strip() not in ("0", "false", "off")
+
+
+def narration_input_block(char: dict | None, direction: dict, scene_text: str) -> str:
+    """나레이션 단계의 입력 — 이야기 본문 + 나레이션 줄을 뺀 장면 글 + 사용자가 적은 것.
+
+    장면 글에서 나레이션 줄을 빼는 이유: 앞 단계가 쓴 문장을 보면 그 문장을 다듬는 데
+    그친다(2026-10-13 실험). 사용자가 적은 것은 「옮겨 적지 말 재료」로 따로 둔다 —
+    나레이션이 사용자가 넣은 설정 문구를 그대로 옮기는 일이 잦았다.
+    """
+    scenes = re.sub(r"^[*\s]*나레이션[*\s]*[:：].*\n?", "", scene_text, flags=re.M)
+    body = direction.get("body") or direction.get("raw", "")
+    mine = []
+    if char:
+        mine.append(f"{char.get('name') or ''} — {char.get('description') or ''}".strip(" —"))
+        for k, v in (char.get("fields") or {}).items():
+            mine.append(f"- {k}: {v}")
+    return "\n".join(["# 이야기 본문 — 앞 단계에서 정해진 것", "", direction.get("title", ""), "", body,
+                      "", "# 장면 (나레이션을 뺀 것)", "", scenes.strip(),
+                      "", "# 사용자가 적은 것 — 독자가 볼 글이 아니다, 옮겨 적지 않는다", "",
+                      *(mine or ["(없음)"])]) + "\n"
+
+
+def stage_narration(run_dir: Path, char: dict | None, direction: dict, parsed: dict,
+                    lang: str = "ko") -> dict:
+    """장면 글을 다 받은 뒤 나레이션 상자만 따로 쓴다. `scenes.json` 의 narration 을 바꾼다.
+
+    장면 프롬프트 안에서는 나레이션 규칙을 몇 번 고쳐도 격언투(「빌런들은 조회수가 몰리는
+    곳을 귀신같이 찾아온다」)·줄거리 옮겨 적기가 계속 나왔다. 따로 떼어 「그림과 말풍선으로
+    안 되는, 먼저 알아야 하는 사실」만 판단하게 했더니 상자가 장마다에서 한 화 두세 개로
+    줄고 격언투가 사라졌다(2026-10-13, 멘토 작품·하은 작품 각각, 그려서 확인).
+
+    여기서 비운 장은 그림 단계에 「이 장은 나레이션 없음」으로 간다(`narration_stage`
+    표시, detailart). 실패하면 장면 단계가 쓴 나레이션을 그대로 둔다.
+    """
+    prompt = compose("narration_prompt", narration_input_block(char, direction, (run_dir / "scene.md").read_text(encoding="utf-8")), lang=lang)
+    write_text(run_dir / "narration_prompt.txt", prompt)
+    call = llm.Call("NARRATION")
+    log(f"[나레이션] {call.describe()} 로 나레이션 상자를 따로 씁니다…")
+    try:
+        text, meta = call(prompt)
+    except (Exception, SystemExit) as exc:                            # noqa: BLE001 — 실패해도 장면은 살린다
+        record_error(run_dir, "NARRATION", call.provider, call.model, exc)
+        warn("나레이션 단계가 실패해 장면 단계가 쓴 나레이션을 그대로 씁니다.")
+        return parsed
+    record(run_dir, meta)
+    write_text(run_dir / "narration.md", text)
+    try:
+        items = json.loads(text[text.find("["):text.rfind("]") + 1])
+        got = {int(x.get("n")): str(x.get("narration") or "").strip() for x in items if isinstance(x, dict)}
+    except Exception:                                                 # noqa: BLE001
+        warn(f"나레이션 답을 읽지 못해 장면 단계 나레이션을 그대로 씁니다 -> {run_dir / 'narration.md'}")
+        return parsed
+    for s in parsed.get("scenes") or []:
+        s["narration"] = split_narration(got.get(int(s.get("n") or 0), ""))
+    parsed["narration_stage"] = True
     return parsed
 
 
