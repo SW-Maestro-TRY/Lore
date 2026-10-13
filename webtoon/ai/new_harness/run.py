@@ -1410,6 +1410,56 @@ CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
 FIXED_LABEL_RE = re.compile(rf"^{S}이 화의 고정 설정{S}[:：]{S}$", re.M)
 
 
+def _same_person(a: str, b: str) -> bool:
+    """인물 단계의 이름과 장면 단계가 쓴 이름이 같은 사람인가. 장면 단계는 「패치승 천율」을
+    「천율」로, 「이솔드 베를레느」를 「이솔드」로 줄여 쓴다 — 두 글자 이상 낱말 하나가 겹치면 같다."""
+    wa = {w for w in re.split(r"[\s·,()]+", a or "") if len(w) >= 2}
+    wb = {w for w in re.split(r"[\s·,()]+", b or "") if len(w) >= 2}
+    return bool(wa & wb)
+
+
+def story_cast(run_dir: Path | None, direction: dict, hero: str = "") -> list[dict]:
+    """인물 단계(cast.json)가 세운 인물 가운데 고른 이야기에 실제로 나오는 사람.
+
+    장면 단계는 이 화의 조연 외모를 「등장인물」 칸에서 처음부터 다시 지었다 — 인물 단계가
+    「짧게 잘린 검은 머리」로 세운 사람이 장면에서 「짧은 금발」이 됐다(2026-10-13 운영 작업
+    10개 확인, 이야기에 나온 13명 중 11명). 그래서 이 목록을 장면 입력에 넣고, 장면이 쓴
+    외모도 이 생김새로 덮는다(`pin_cast_looks`). cast.json 이 없으면(옛 run) 빈 목록이다.
+    """
+    if run_dir is None:
+        return []
+    cast = read_json(run_dir / "cast.json")
+    if not isinstance(cast, list):
+        return []
+    text = " ".join(str(direction.get(k) or "") for k in ("title", "intro", "body", "raw"))
+    words = set(re.findall(r"[^\s·,.!?\"'“”‘’()「」]{2,}", text))
+    out = []
+    for c in cast:
+        name = str((c or {}).get("name") or "").strip()
+        look = str((c or {}).get("look") or "").strip()
+        if not name or not look or (hero and _same_person(name, hero)):
+            continue
+        if any(w in text for w in re.split(r"[\s·]+", name) if len(w) >= 2):
+            out.append({"name": name, "look": look})
+    return out
+
+
+def pin_cast_looks(parsed: dict, pinned: list[dict]) -> dict:
+    """장면 단계가 쓴 「등장인물」에서 인물 단계 인물의 외모를 인물 단계 생김새로 바꾼다.
+    장면이 그 사람을 등장인물에 안 적었으면 더한다 — 그림은 이 목록으로 외모를 고정한다."""
+    if not pinned:
+        return parsed
+    cast = [c for c in (parsed.get("cast") or []) if isinstance(c, dict)]
+    for p in pinned:
+        hit = next((c for c in cast if _same_person(str(c.get("name") or ""), p["name"])), None)
+        if hit is not None:
+            hit["appearance"] = p["look"]
+        else:
+            cast.append({"name": p["name"], "appearance": p["look"]})
+    parsed["cast"] = cast
+    return parsed
+
+
 def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) -> str:
     """scene_prompt 뒤에 붙는 이번 입력 — 고른 스토리 + 캐릭터 + **장르**.
 
@@ -1433,6 +1483,12 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
         lines.append(f"- 고른 캐릭터 카드: {charcard.short(char['card'])} (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
+    pinned = story_cast(run_dir, direction, char.get("name") or "")
+    if pinned:
+        lines += ["", "[이 이야기의 인물 — 생김새가 이미 정해졌다]",
+                  "아래 사람들은 앞 단계에서 생김새까지 정해졌다. 장면 서술과 「등장인물」에 "
+                  "이 생김새를 그대로 쓴다. 머리색·머리 길이·옷차림을 바꾸지 않는다."]
+        lines += [f"- {p['name']}: {p['look']}" for p in pinned]
 
     # 고른 방향이 스스로 밝힌 장르가 먼저다. 사람이 장르를 안 고르면
     # story_prompt 가 방향마다 장르를 정하므로, 그때는 캐릭터의 장르 칸이
@@ -1542,7 +1598,7 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     write_text(run_dir / "scene.md", text)
     record(run_dir, meta)
 
-    parsed = parse_scenes(text)
+    parsed = pin_cast_looks(parse_scenes(text), story_cast(run_dir, direction, (char or {}).get("name") or ""))
     if len(parsed["scenes"]) < 4:
         warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (4개 이상이어야 합니다). "
              f"원문은 {run_dir / 'scene.md'} 에 그대로 있습니다.")
