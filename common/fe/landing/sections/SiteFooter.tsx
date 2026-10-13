@@ -61,7 +61,7 @@ export default async function SiteFooter() {
           </a>
         </div>
 
-        {/* 유료 충전을 받으면 판매자 정보를 표시해야 한다(전자상거래법 제10조). 주소·전화를 채우기 전엔 안 그린다. */}
+        {/* 유료 충전을 받으면 판매자 정보를 표시해야 한다(전자상거래법 제10조). 주소가 비면 안 그린다. */}
         {SELLER_READY && <span className={styles.copyright}>{sellerLine()}</span>}
       </div>
     </footer>
