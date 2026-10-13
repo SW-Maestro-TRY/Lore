@@ -1,7 +1,7 @@
 // 8. 푸터.
 import TabLink from "../../TabLink";
 import styles from "../landing.module.css";
-import { TABS, LEGAL_LINKS, CONTACT_CHANNEL } from "../../links";
+import { TABS, LEGAL_LINKS, CONTACT_CHANNEL, SELLER_READY, sellerLine } from "../../links";
 import { currentLang, translator } from "../i18n";
 
 // tab.label 은 안 옮긴다 — TABS 는 공용 헤더(SiteHeader)도 같이 쓰는 값이라
@@ -60,6 +60,9 @@ export default async function SiteFooter() {
             {t("1:1 문의")}
           </a>
         </div>
+
+        {/* 유료 충전을 받으면 판매자 정보를 표시해야 한다(전자상거래법 제10조). 주소·전화를 채우기 전엔 안 그린다. */}
+        {SELLER_READY && <span className={styles.copyright}>{sellerLine()}</span>}
       </div>
     </footer>
   );

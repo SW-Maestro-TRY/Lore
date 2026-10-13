@@ -47,3 +47,36 @@ export const LEGAL_LINKS = {
 /** 1:1 문의 카카오톡 채널. 마이페이지의 「1:1 문의하기」와 크레딧 충전 창
  *  둘 다 이걸 가리키므로 한 곳에 둔다. */
 export const CONTACT_CHANNEL = "https://pf.kakao.com/_bjxexiX";
+
+/**
+ * 판매자 정보 — 유료 충전을 받으면 사이트에 표시해야 한다(전자상거래법 제10조: 상호·대표자·주소·
+ * 전화번호·이메일, 신고했다면 통신판매업 신고번호).
+ *
+ * 주소·전화번호가 비어 있으면 아무 데도 안 그린다 — 반쪽짜리 정보를 내보이지 않는다. 채우면 웹툰
+ * 첫 화면 아래·홈 푸터·충전 창에 같이 나온다. 개인판매자라 대표자의 실제 주소·연락처가 공개된다.
+ * 통신판매업 신고번호는 간이과세자·연 50건 미만이면 신고 면제라 비워 둬도 된다.
+ */
+export const SELLER = {
+  name: "TRY팀",
+  owner: "박하은",
+  email: "lore@lorecomic.com",
+  address: "",
+  phone: "",
+  mailOrderNo: "",
+} as const;
+
+/** 판매자 정보를 표시할 만큼 다 채웠나. */
+export const SELLER_READY: boolean = SELLER.address.trim() !== "" && SELLER.phone.trim() !== "";
+
+/** 한 줄로 이은 판매자 정보. SELLER_READY 일 때만 쓴다. */
+export function sellerLine(): string {
+  const parts = [
+    `상호 ${SELLER.name}`,
+    `대표 ${SELLER.owner}`,
+    `주소 ${SELLER.address}`,
+    `전화 ${SELLER.phone}`,
+    `이메일 ${SELLER.email}`,
+  ];
+  if (SELLER.mailOrderNo.trim()) parts.push(`통신판매업 ${SELLER.mailOrderNo}`);
+  return parts.join(" · ");
+}

@@ -1,6 +1,7 @@
 package com.lore.common.payment;
 
 import com.lore.common.credit.CreditDomain;
+import com.lore.common.credit.CreditPools;
 import com.lore.common.credit.CreditReason;
 import com.lore.common.credit.CreditService;
 import com.lore.common.exception.BusinessException;
@@ -36,6 +37,8 @@ import static org.mockito.Mockito.when;
 class PaymentServiceTest {
 
     private static final Clock NOW = Clock.fixed(Instant.parse("2026-10-13T05:00:00Z"), ZoneId.of("Asia/Seoul"));
+    /** 결제하고 8일 뒤 — 7일 전액 환불 기간이 지난 시각. */
+    private static final Clock LATER = Clock.fixed(Instant.parse("2026-10-21T05:00:00Z"), ZoneId.of("Asia/Seoul"));
     private static final long ME = 7L;
 
     private PaymentOrderRepository orders;
@@ -258,5 +261,138 @@ class PaymentServiceTest {
 
         assertThat(got).containsEntry("state", "1").containsEntry("mul_no", "123")
                 .containsEntry("payurl", "https://payapp.kr/pay/abc").containsEntry("errorMessage", "");
+    }
+
+    // ── 환불 ─────────────────────────────────────────────────────────────
+
+    /** 결제 완료까지 간 주문. 남은 유료 크레딧을 정해 둔다. */
+    private PaymentOrder 결제된_주문(CreditPackage pack, int paidLeft) {
+        PaymentOrder o = 주문을_연다(pack);
+        service.feedback(통보(o, "4"));
+        when(credits.split(ME)).thenReturn(new CreditPools.Split(20, paidLeft));
+        return o;
+    }
+
+    private PaymentService 나중의_서비스() {
+        return new PaymentService(orders, payApp, credits, "https://dev.lorecomic.com", LATER);
+    }
+
+    @Test
+    @DisplayName("7일 안에 하나도 안 썼으면 수수료 없이 전액 취소한다")
+    void 환불_7일_미사용() {
+        PaymentOrder o = 결제된_주문(CreditPackage.MID, 70);
+        when(payApp.cancel(eq("MUL-1"), anyString(), any())).thenReturn(new PayAppClient.CancelResult(true, "", ""));
+
+        PaymentService.Refunded r = service.refund(o.getOrderNo(), PaymentService.RefundCause.USER, null);
+
+        assertThat(r.quote().refundWon()).isEqualTo(18_900);
+        assertThat(r.quote().feeWon()).isZero();
+        assertThat(r.quote().whole()).isTrue();
+        verify(payApp).cancel(eq("MUL-1"), anyString(), eq(null));
+        verify(credits).reclaim(eq(ME), eq(70), eq("payapp-cancel-" + o.getOrderNo()), anyString());
+        assertThat(o.getStatus()).isEqualTo(PaymentStatus.REFUNDED);
+        assertThat(o.getRefundAmount()).isEqualTo(18_900);
+    }
+
+    @Test
+    @DisplayName("일부 썼으면 남은 유료분 금액에서 10% 를 빼고 부분 취소한다")
+    void 환불_일부_사용() {
+        PaymentOrder o = 결제된_주문(CreditPackage.MID, 16);
+        when(payApp.cancel(eq("MUL-1"), anyString(), any())).thenReturn(new PayAppClient.CancelResult(true, "", ""));
+
+        PaymentService.Refunded r = service.refund(o.getOrderNo(), PaymentService.RefundCause.USER, null);
+
+        // 18,900 × 16 ÷ 70 = 4,320 → 10% 빼고 3,888
+        assertThat(r.quote().baseWon()).isEqualTo(4_320);
+        assertThat(r.quote().refundWon()).isEqualTo(3_888);
+        assertThat(r.quote().feeWon()).isEqualTo(432);
+        verify(payApp).cancel(eq("MUL-1"), anyString(), eq(3_888));
+        verify(credits).reclaim(eq(ME), eq(16), eq("payapp-cancel-" + o.getOrderNo()), anyString());
+        assertThat(o.getStatus()).isEqualTo(PaymentStatus.PARTIAL_REFUNDED);
+    }
+
+    @Test
+    @DisplayName("7일이 지나면 하나도 안 썼어도 10% 를 뗀다")
+    void 환불_7일_지남() {
+        PaymentOrder o = 결제된_주문(CreditPackage.MID, 70);
+
+        PaymentService.RefundQuote q = 나중의_서비스().quote(o.getOrderNo(), PaymentService.RefundCause.USER);
+
+        assertThat(q.withinWeek()).isFalse();
+        assertThat(q.refundWon()).isEqualTo(17_010);
+        assertThat(q.whole()).isFalse();
+    }
+
+    @Test
+    @DisplayName("우리 잘못이면 쓴 뒤라도 수수료를 안 뗀다")
+    void 환불_우리_잘못() {
+        PaymentOrder o = 결제된_주문(CreditPackage.MID, 16);
+
+        PaymentService.RefundQuote q = 나중의_서비스().quote(o.getOrderNo(), PaymentService.RefundCause.OUR_FAULT);
+
+        assertThat(q.refundWon()).isEqualTo(4_320);
+        assertThat(q.feeWon()).isZero();
+    }
+
+    @Test
+    @DisplayName("남은 유료 크레딧이 없으면 환불할 수 없다")
+    void 환불_남은_것_없음() {
+        PaymentOrder o = 결제된_주문(CreditPackage.MID, 0);
+
+        assertThatThrownBy(() -> service.refund(o.getOrderNo(), PaymentService.RefundCause.USER, null))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_NOT_REFUNDABLE);
+        verify(payApp, never()).cancel(anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("정산이 끝나 바로 취소가 안 되면 환불 요청으로 다시 간다")
+    void 환불_정산_후() {
+        PaymentOrder o = 결제된_주문(CreditPackage.MID, 70);
+        when(payApp.cancel(anyString(), anyString(), any())).thenReturn(new PayAppClient.CancelResult(false, "80010", "취소 불가"));
+        when(payApp.cancelRequest(anyString(), anyString(), any())).thenReturn(new PayAppClient.CancelResult(true, "", ""));
+
+        PaymentService.Refunded r = service.refund(o.getOrderNo(), PaymentService.RefundCause.USER, null);
+
+        assertThat(r.requested()).isTrue();
+        verify(credits).reclaim(eq(ME), eq(70), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("페이앱이 거절하면 크레딧도 상태도 그대로다")
+    void 환불_거절() {
+        PaymentOrder o = 결제된_주문(CreditPackage.MID, 70);
+        when(payApp.cancel(anyString(), anyString(), any())).thenReturn(new PayAppClient.CancelResult(false, "70010", "인증 오류"));
+
+        assertThatThrownBy(() -> service.refund(o.getOrderNo(), PaymentService.RefundCause.USER, null))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_REFUND_FAILED);
+        verify(credits, never()).reclaim(anyLong(), anyInt(), any(), any());
+        assertThat(o.getStatus()).isEqualTo(PaymentStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("이미 환불한 주문은 다시 환불할 수 없다")
+    void 환불_두_번() {
+        PaymentOrder o = 결제된_주문(CreditPackage.MID, 70);
+        when(payApp.cancel(anyString(), anyString(), any())).thenReturn(new PayAppClient.CancelResult(true, "", ""));
+        service.refund(o.getOrderNo(), PaymentService.RefundCause.USER, null);
+
+        assertThatThrownBy(() -> service.refund(o.getOrderNo(), PaymentService.RefundCause.USER, null))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PAYMENT_NOT_REFUNDABLE);
+    }
+
+    @Test
+    @DisplayName("판매자 사이트에서 직접 부분취소하면 남은 유료분을 회수한다 — 금액이 달라도 받는다")
+    void 사이트_부분취소() {
+        PaymentOrder o = 결제된_주문(CreditPackage.MID, 16);
+        Map<String, String> p = 통보(o, "70");
+        p.put("price", "3888");
+
+        assertThat(service.feedback(p)).isEqualTo("SUCCESS");
+
+        verify(credits).reclaim(eq(ME), eq(16), eq("payapp-cancel-" + o.getOrderNo()), anyString());
+        assertThat(o.getStatus()).isEqualTo(PaymentStatus.PARTIAL_REFUNDED);
     }
 }

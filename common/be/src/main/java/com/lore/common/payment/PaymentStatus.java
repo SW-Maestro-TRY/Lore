@@ -10,7 +10,10 @@ package com.lore.common.payment;
  *   4        결제완료        → PAID      (여기서 크레딧이 들어간다)
  *   8 · 32   요청취소(결제 전) → CANCELLED
  *   9 · 64   승인취소(결제 후) → REFUNDED  (여기서 크레딧을 도로 뺀다)
- *   70 · 71  부분취소        → PARTIAL_REFUNDED (장부는 사람이 맞춘다)
+ *   70 · 71  부분취소        → PARTIAL_REFUNDED
+ *
+ * 환불은 관리자 화면에서 한다(PaymentService.refund) — 금액 계산·페이앱 취소·크레딧 회수를
+ * 한 번에 하고 상태를 REFUNDED(전액) 또는 PARTIAL_REFUNDED(남은 유료분)로 바꾼다.
  * </pre>
  */
 public enum PaymentStatus {

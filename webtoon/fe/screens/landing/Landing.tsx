@@ -7,7 +7,7 @@ import "./i18n";
 import Link from "next/link";
 import localFont from "next/font/local";
 import { useEffect, useRef, useState } from "react";
-import { CONTACT_CHANNEL } from "@common/links";
+import { SELLER_READY, sellerLine, CONTACT_CHANNEL } from "@common/links";
 import * as api from "../../lib/api";
 import { LangSwitch, useT } from "../../lib/i18n";
 import { hrefOf, type Go } from "../../lib/nav";
@@ -374,6 +374,8 @@ export default function Landing({ go }: { go: Go }) {
           <span>{t("문의")} <a href="mailto:lore@lorecomic.com">lore@lorecomic.com</a></span>
           <span>{t("AI SW MAESTRO 17기 프로젝트")}</span>
         </div>
+        {/* 유료 충전을 받으면 판매자 정보를 표시해야 한다(전자상거래법 제10조). 주소·전화를 채우기 전엔 안 그린다. */}
+        {SELLER_READY && <div className="dim wt-landing-biz">{sellerLine()}</div>}
         <span className="dim wt-landing-copy">{t("© 2026 LORE · TRY팀")}</span>
       </footer>
     </div>

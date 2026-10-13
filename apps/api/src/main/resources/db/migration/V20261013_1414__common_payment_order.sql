@@ -8,7 +8,8 @@
 --                상품표가 나중에 바뀌어도 이미 낸 사람의 주문 내용은 안 바뀐다
 --   mul_no       페이앱 결제요청번호. 취소·대조할 때 쓴다
 --   status       READY(결제창 열림) · WAITING(가상계좌 입금 대기) · PAID · CANCELLED(결제 전 취소)
---                · REFUNDED(결제 후 취소) · PARTIAL_REFUNDED(부분 취소 — 장부는 사람이 맞춘다)
+--                · REFUNDED(결제 후 전액 취소) · PARTIAL_REFUNDED(남은 유료분만 부분 취소)
+--   refund_*     관리자 화면에서 환불한 기록 — 돌려준 금액·회수한 크레딧·사유(USER 이용자 요청 · OUR_FAULT 우리 잘못)
 --   구매자 휴대폰 번호는 **안 남긴다**. 페이앱이 필수로 받지만 우리는 넘기기만 한다.
 
 CREATE TABLE IF NOT EXISTS payment_order (
@@ -24,6 +25,9 @@ CREATE TABLE IF NOT EXISTS payment_order (
     created_at    timestamp(6) with time zone NOT NULL,
     paid_at       timestamp(6) with time zone,
     cancelled_at  timestamp(6) with time zone,
+    refund_amount  integer,
+    refund_credits integer,
+    refund_reason  character varying(20),
     CONSTRAINT uk_payment_order_no UNIQUE (order_no),
     CONSTRAINT payment_order_status_check CHECK (status IN
         ('READY', 'WAITING', 'PAID', 'CANCELLED', 'REFUNDED', 'PARTIAL_REFUNDED'))

@@ -10,16 +10,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -153,14 +156,16 @@ public class PaymentService {
                     orderNo, order.getMulNo(), p.get("mul_no"));
             return "FAIL";
         }
-        if (!Integer.toString(order.getAmount()).equals(p.get("price"))) {
+        Instant now = Instant.now(clock);
+        String state = p.getOrDefault("pay_state", "");
+        /* 금액은 돈이 들어오는 통보(결제완료·입금대기)에서만 맞춰 본다. 취소 통보의 금액은
+           부분취소면 원래 금액과 다를 수 있는데, 거기서 FAIL 을 주면 취소가 장부에 안 남는다. */
+        if (("4".equals(state) || "10".equals(state))
+                && !Integer.toString(order.getAmount()).equals(p.get("price"))) {
             log.error("페이앱 통보 — 금액이 다릅니다 order={} 기대={} 받음={}",
                     orderNo, order.getAmount(), p.get("price"));
             return "FAIL";
         }
-
-        Instant now = Instant.now(clock);
-        String state = p.getOrDefault("pay_state", "");
         switch (state) {
             case "4" -> paid(order, p.get("pay_type"), now);
             case "10" -> order.markWaiting();
@@ -170,13 +175,7 @@ public class PaymentService {
                 }
             }
             case "9", "64" -> refunded(order, now);
-            case "70", "71" -> {
-                if (order.getStatus() == PaymentStatus.PAID) {
-                    order.markCancelled(PaymentStatus.PARTIAL_REFUNDED, now);
-                    log.warn("페이앱 부분취소 order={} user={} — 크레딧은 손으로 맞춰야 합니다",
-                            orderNo, order.getUserId());
-                }
-            }
+            case "70", "71" -> partlyRefunded(order, now);
             default -> log.debug("페이앱 통보 pay_state={} order={} — 할 일 없음", state, orderNo);
         }
         return "SUCCESS";
@@ -200,10 +199,153 @@ public class PaymentService {
         if (order.getStatus() != PaymentStatus.PAID) {
             return;                         // 안 들어간 크레딧은 뺄 것도 없다
         }
-        order.markCancelled(PaymentStatus.REFUNDED, now);
+        /* 판매자 사이트에서 직접 전액 취소한 경우 — 돈을 전부 돌려줬으니 이 주문 크레딧을 전부 회수한다. */
+        order.markRefunded(true, order.getAmount(), order.getCredits(), "PAYAPP_SITE", now);
         credits.reclaim(order.getUserId(), order.getCredits(),
                 CreditPools.PURCHASE_CANCEL_PREFIX + order.getOrderNo(),
                 "결제 취소로 충전분 회수");
+    }
+
+    /**
+     * 페이앱 판매자 사이트에서 직접 부분취소한 경우. 관리자 화면 버튼으로 환불했다면 이미
+     * PARTIAL_REFUNDED 라 여기서 할 일이 없다.
+     *
+     * 통보에는 얼마를 돌려줬는지가 안 온다. 그래서 약관의 부분 환불 규칙("남은 유료 크레딧을
+     * 돌려준다")대로 이 주문의 남은 유료분을 회수한다.
+     */
+    private void partlyRefunded(PaymentOrder order, Instant now) {
+        if (order.getStatus() != PaymentStatus.PAID) {
+            return;
+        }
+        int left = paidLeft(order);
+        credits.reclaim(order.getUserId(), left, CreditPools.PURCHASE_CANCEL_PREFIX + order.getOrderNo(),
+                "부분 환불로 남은 충전분 회수");
+        order.markRefunded(false, 0, left, "PAYAPP_SITE", now);
+        log.warn("페이앱 판매자 사이트에서 부분취소 order={} user={} — 남은 유료 {}C 회수 (금액은 페이앱 기록 참고)",
+                order.getOrderNo(), order.getUserId(), left);
+    }
+
+    // ── 환불 (관리자) ────────────────────────────────────────────────────
+
+    /** 환불을 누가 원인으로 하나. 우리 잘못이면 수수료를 안 뗀다(이용약관 13조 8항). */
+    public enum RefundCause { USER, OUR_FAULT }
+
+    /** 환불 수수료. 7일 안에 하나도 안 쓴 것과 우리 잘못에는 안 뗀다. */
+    static final int FEE_PERCENT = 10;
+
+    /** 이 주문으로 산 크레딧 중 아직 남은 것. 무료부터 쓰는 규칙으로 센다. */
+    private int paidLeft(PaymentOrder order) {
+        int paid = credits.split(order.getUserId()).paid();
+        return Math.max(0, Math.min(order.getCredits(), paid));
+    }
+
+    /**
+     * 지금 환불하면 얼마를 돌려주게 되나. 버튼을 누르기 전에 화면이 보여 준다.
+     *
+     * <pre>
+     *   남은 유료분 금액 = 결제 금액 × 남은 유료 크레딧 ÷ 산 크레딧   (원 미만 버림)
+     *   7일 안 + 하나도 안 씀, 또는 우리 잘못 → 그대로
+     *   그 밖                              → 10% 를 뺀 나머지 (원 미만 버림)
+     * </pre>
+     */
+    @Transactional(readOnly = true)
+    public RefundQuote quote(String orderNo, RefundCause cause) {
+        PaymentOrder o = orders.findByOrderNo(orderNo)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND));
+        return quote(o, cause);
+    }
+
+    private RefundQuote quote(PaymentOrder o, RefundCause cause) {
+        if (o.getStatus() != PaymentStatus.PAID) {
+            return RefundQuote.no(o, "결제 완료 상태가 아니에요 (" + o.getStatus() + ")");
+        }
+        int left = paidLeft(o);
+        boolean withinWeek = o.getPaidAt() != null
+                && Instant.now(clock).isBefore(o.getPaidAt().plus(Duration.ofDays(7)));
+        boolean untouched = left == o.getCredits();
+        int base = (int) ((long) o.getAmount() * left / o.getCredits());
+        boolean noFee = cause == RefundCause.OUR_FAULT || (withinWeek && untouched);
+        int won = noFee ? base : (int) ((long) base * (100 - FEE_PERCENT) / 100);
+        if (left <= 0 || won <= 0) {
+            return RefundQuote.no(o, "돌려줄 유료 크레딧이 남아 있지 않아요");
+        }
+        return new RefundQuote(o.getOrderNo(), o.getUserId(), o.getCredits(), o.getAmount(), left,
+                withinWeek, untouched, base, base - won, won, won == o.getAmount(), true, null);
+    }
+
+    /**
+     * 환불한다 — 금액 계산, 페이앱 취소, 크레딧 회수를 한 번에.
+     *
+     * 페이앱 취소가 성공한 뒤에만 크레딧을 회수한다. 정산이 끝나 바로 취소가 안 되면
+     * 환불 요청(paycancelreq)으로 다시 간다. 둘 다 안 되면 아무것도 안 바꾸고 오류를 낸다.
+     *
+     * 트랜잭션으로 감싸지 않는다 — 페이앱 호출 동안 DB 연결을 붙잡지 않으려고. 크레딧 회수는
+     * 장부의 refId(payapp-cancel-<주문번호>)가 한 번만 받으므로, 그사이 페이앱 취소 통보가
+     * 먼저 와서 회수해도 두 번 빠지지 않는다.
+     */
+    public Refunded refund(String orderNo, RefundCause cause, String memo) {
+        PaymentOrder o = orders.findByOrderNo(orderNo)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND));
+        RefundQuote q = quote(o, cause);
+        if (!q.refundable()) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_REFUNDABLE, q.why());
+        }
+        String why = memo == null || memo.isBlank()
+                ? (cause == RefundCause.OUR_FAULT ? "서비스 문제로 환불" : "이용자 요청 환불") : memo.trim();
+        Integer part = q.whole() ? null : q.refundWon();
+
+        PayAppClient.CancelResult got = payApp.cancel(o.getMulNo(), why, part);
+        boolean requested = false;
+        if (!got.ok() && got.notCancellable()) {
+            got = payApp.cancelRequest(o.getMulNo(), why, part);
+            requested = got.ok();
+        }
+        if (!got.ok()) {
+            throw new BusinessException(ErrorCode.PAYMENT_REFUND_FAILED,
+                    "페이앱이 환불을 거절했어요: " + got.errorMessage()
+                            + (got.errorCode().isBlank() ? "" : " (" + got.errorCode() + ")"));
+        }
+
+        credits.reclaim(o.getUserId(), q.refundCredits(), CreditPools.PURCHASE_CANCEL_PREFIX + o.getOrderNo(),
+                q.whole() ? "환불로 충전분 회수" : "부분 환불로 남은 충전분 회수");
+        PaymentOrder fresh = orders.findByOrderNo(orderNo).orElse(o);
+        fresh.markRefunded(q.whole(), q.refundWon(), q.refundCredits(), cause.name(), Instant.now(clock));
+        orders.save(fresh);
+        log.info("환불 order={} user={} {}원 {}C cause={} requested={}",
+                orderNo, o.getUserId(), q.refundWon(), q.refundCredits(), cause, requested);
+        return new Refunded(q, requested);
+    }
+
+    /** 관리자 화면의 최근 주문 목록. */
+    @Transactional(readOnly = true)
+    public List<PaymentOrder> recent(int limit) {
+        return orders.findAllByOrderByIdDesc(
+                PageRequest.of(0, Math.clamp(limit, 1, 200)));
+    }
+
+    /**
+     * @param paidLeft     이 주문으로 산 크레딧 중 남은 것(= 회수할 크레딧)
+     * @param baseWon      남은 유료분 금액(수수료 빼기 전)
+     * @param feeWon       뗀 수수료
+     * @param refundWon    돌려줄 금액
+     * @param whole        전액 취소인가(아니면 부분 취소)
+     * @param why          환불할 수 없을 때 그 이유
+     */
+    public record RefundQuote(String orderNo, Long userId, int credits, int amount, int paidLeft,
+                              boolean withinWeek, boolean untouched, int baseWon, int feeWon,
+                              int refundWon, boolean whole, boolean refundable, String why) {
+        public int refundCredits() {
+            return paidLeft;
+        }
+
+        static RefundQuote no(PaymentOrder o, String why) {
+            return new RefundQuote(o.getOrderNo(), o.getUserId(), o.getCredits(), o.getAmount(), 0,
+                    false, false, 0, 0, 0, false, false, why);
+        }
+    }
+
+    /** @param requested 정산이 끝나 바로 취소 대신 환불 요청으로 갔나(돌려받기까지 며칠 걸린다) */
+    public record Refunded(RefundQuote quote, boolean requested) {
     }
 
     static String purchaseRef(PaymentOrder order) {

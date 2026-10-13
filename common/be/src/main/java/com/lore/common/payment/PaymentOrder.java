@@ -66,6 +66,18 @@ public class PaymentOrder {
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
+    /** 관리자 화면에서 환불했을 때 돌려준 금액(원). */
+    @Column(name = "refund_amount")
+    private Integer refundAmount;
+
+    /** 그 환불로 회수한 크레딧. */
+    @Column(name = "refund_credits")
+    private Integer refundCredits;
+
+    /** USER(이용자 요청 — 7일 안 미사용이 아니면 수수료 10%) · OUR_FAULT(우리 잘못 — 수수료 없음). */
+    @Column(name = "refund_reason", length = 20)
+    private String refundReason;
+
     protected PaymentOrder() {
     }
 
@@ -102,6 +114,26 @@ public class PaymentOrder {
     void markCancelled(PaymentStatus to, Instant at) {
         this.status = to;
         this.cancelledAt = at;
+    }
+
+    void markRefunded(boolean whole, int won, int credits, String reason, Instant at) {
+        this.status = whole ? PaymentStatus.REFUNDED : PaymentStatus.PARTIAL_REFUNDED;
+        this.refundAmount = won;
+        this.refundCredits = credits;
+        this.refundReason = reason;
+        this.cancelledAt = at;
+    }
+
+    public Integer getRefundAmount() {
+        return refundAmount;
+    }
+
+    public Integer getRefundCredits() {
+        return refundCredits;
+    }
+
+    public String getRefundReason() {
+        return refundReason;
     }
 
     public Long getId() {

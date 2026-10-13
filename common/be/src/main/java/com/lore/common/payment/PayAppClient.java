@@ -97,6 +97,56 @@ public class PayAppClient {
     }
 
     /**
+     * 결제를 취소한다 — 전액 또는 일부({@code cmd=paycancel}). <b>정산 전</b> 결제만 된다.
+     *
+     * @param partWon 일부만 돌려줄 금액. null 이면 전액 취소
+     */
+    public CancelResult cancel(String mulNo, String memo, Integer partWon) {
+        return cancelCall("paycancel", mulNo, memo, partWon);
+    }
+
+    /**
+     * 정산이 끝난 결제의 환불을 요청한다({@code cmd=paycancelreq}). 성공해도 바로 취소된 것이
+     * 아니라, 페이앱이 판매자 정산금에서 떼어 구매자에게 돌려주는 절차가 시작된 것이다.
+     */
+    public CancelResult cancelRequest(String mulNo, String memo, Integer partWon) {
+        return cancelCall("paycancelreq", mulNo, memo, partWon);
+    }
+
+    private CancelResult cancelCall(String cmd, String mulNo, String memo, Integer partWon) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("cmd", cmd);
+        form.add("userid", userId);
+        form.add("linkkey", linkKey);
+        form.add("mul_no", mulNo);
+        form.add("cancelmemo", memo);
+        if (partWon != null) {
+            form.add("partcancel", "1");
+            form.add("cancelprice", Integer.toString(partWon));
+        } else {
+            form.add("partcancel", "0");
+        }
+        Map<String, String> got = post(form);
+        boolean ok = "1".equals(got.get("state"));
+        if (!ok) {
+            log.warn("페이앱 {} 실패 mul_no={} code={} msg={}", cmd, mulNo,
+                    got.get("errorCode"), got.get("errorMessage"));
+        }
+        return new CancelResult(ok, got.getOrDefault("errorCode", ""), got.getOrDefault("errorMessage", ""));
+    }
+
+    /**
+     * @param errorCode 80010 · 80020 이면 "취소할 수 있는 상태가 아님" — 보통 정산이 이미 끝난 것이다
+     */
+    public record CancelResult(boolean ok, String errorCode, String errorMessage) {
+        /** 정산이 끝나서 바로 취소가 안 되는 경우인가. 그때는 환불 요청으로 다시 간다. */
+        public boolean notCancellable() {
+            return "80010".equals(errorCode) || "80020".equals(errorCode)
+                    || "70050".equals(errorCode);
+        }
+    }
+
+    /**
      * 통보가 진짜 페이앱에서 온 것인가 — userid · linkkey · linkval 셋이 다 맞아야 한다.
      *
      * 시간이 일정한 비교를 쓴다. 보통 비교는 앞에서부터 틀린 자리에서 멈춰서, 응답

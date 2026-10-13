@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CONTACT_CHANNEL } from "../links";
+import { CONTACT_CHANNEL, SELLER_READY, sellerLine } from "../links";
 import { ApiError } from "../api/client";
 import { notifyCreditsChanged } from "../api/credits";
 import {
@@ -49,8 +49,9 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [step, setStep] = useState<Step>({ kind: "pick" });
   const [phone, setPhone] = useState("");
-  /* 쓴 크레딧은 환불되지 않는다는 안내를 결제 전에 확인받는다(이용약관 13조 8항). 디지털 콘텐츠의
-     청약철회를 제한하려면 결제 전에 알려야 한다 — 확인해야 「결제하기」가 눌린다. */
+  /* 결제 직전에 두 가지를 확인받는다 — 쓴 크레딧은 환불되지 않는다는 환불 기준(이용약관 13조 8항,
+     디지털 콘텐츠의 청약철회를 제한하려면 결제 전에 알려야 한다)과, 휴대폰 번호를 결제대행사에
+     넘기는 것(개인정보처리방침 제1조 2-1·제7조). 확인해야 「결제하기」가 눌린다. */
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -222,9 +223,10 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
                 </p>
                 <label className="credit-refund-ok">
                   <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-                  환불 기준을 확인했어요
+                  환불 기준을 확인했고, 결제를 위해 휴대폰 번호를 페이앱에 넘기는 데 동의해요
                 </label>
               </div>
+              {SELLER_READY && <p className="credit-pay-fine">{sellerLine()}</p>}
               {error && <p className="credit-pay-error" role="alert">{error}</p>}
               <div className="credit-pay-acts">
                 <button type="button" className="credit-btn credit-btn-quiet" onClick={() => setStep({ kind: "pick" })}>

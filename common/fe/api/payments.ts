@@ -79,3 +79,70 @@ export function readPending(): PendingOrder | null {
     return null;
   }
 }
+
+/* ---- 결제 관리 (관리자만) ------------------------------------------------------
+ *
+ * 환불은 버튼 하나로 끝난다 — 서버가 금액을 계산하고(이용약관 13조 8항), 페이앱 취소(부분
+ * 포함, 정산 후면 환불 요청)를 하고, 성공하면 크레딧을 회수한다.
+ */
+
+export type RefundCause = "USER" | "OUR_FAULT";
+
+export interface AdminPayRow {
+  orderNo: string;
+  userId: number;
+  email: string | null;
+  packageCode: string;
+  credits: number;
+  amount: number;
+  status: PayStatus;
+  payType: string | null;
+  createdAt: string;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  refundAmount: number | null;
+  refundCredits: number | null;
+  refundReason: string | null;
+}
+
+export interface RefundQuote {
+  orderNo: string;
+  userId: number;
+  credits: number;
+  amount: number;
+  /** 이 주문으로 산 크레딧 중 남은 것 = 회수할 크레딧 */
+  paidLeft: number;
+  withinWeek: boolean;
+  untouched: boolean;
+  /** 남은 유료분 금액(수수료 빼기 전) */
+  baseWon: number;
+  feeWon: number;
+  refundWon: number;
+  /** 전액 취소인가(아니면 부분 취소) */
+  whole: boolean;
+  refundable: boolean;
+  why: string | null;
+}
+
+export interface RefundDone {
+  quote: RefundQuote;
+  /** 정산이 끝나 바로 취소 대신 환불 요청으로 갔나 */
+  requested: boolean;
+}
+
+export function adminPayments(limit = 100): Promise<AdminPayRow[]> {
+  return request<AdminPayRow[]>(`/api/v1/admin/payments?limit=${limit}`);
+}
+
+export function adminRefundQuote(orderNo: string, cause: RefundCause): Promise<RefundQuote> {
+  return request<RefundQuote>(
+    `/api/v1/admin/payments/${encodeURIComponent(orderNo)}/refund-quote?cause=${cause}`,
+  );
+}
+
+export function adminRefund(orderNo: string, cause: RefundCause, memo: string): Promise<RefundDone> {
+  return request<RefundDone>(`/api/v1/admin/payments/${encodeURIComponent(orderNo)}/refund`, {
+    method: "POST",
+    body: { cause, memo },
+  });
+}
