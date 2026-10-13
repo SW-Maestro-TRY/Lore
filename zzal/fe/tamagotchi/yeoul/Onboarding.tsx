@@ -33,6 +33,8 @@ import type { HatchBlocked } from '../../lib/hatchBlocked';
 import { OnbDevProvider, OnbChangeList, useOnbFlag, useCharLayout } from './onboardingDev';
 import { holdForPicker, once, releasePicker, ztrack } from './funnel';
 import InAppBanner from '../parts/InAppBanner';
+import PersonaEgg from './PersonaEgg';
+import { eggVariant, type EggVariant } from './personaSteps';
 
 /** 캐릭터 칸에서 채운 묶음 수(이름 포함). 고른 칩이 있거나 글을 쓴 묶음을 하나로 센다 — 글 내용은 안 보낸다. */
 function filledGroups(picks: Record<string, string[]>, texts: Record<string, string>): number {
@@ -311,6 +313,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
    * ★ **표현만** 가른다. 칩·입력의 핸들러, `data-part`, 서버 호출, 칸 이동은 셋이 완전히 같다.
    */
   const layout = useCharLayout();
+  const [eggMode, setEggMode] = useState<EggVariant>('dots');
+  useEffect(() => { setEggMode(eggVariant()); }, []);
   /**
    * 접이식(안 2)에서 **지금 펼쳐 둔 묶음**. 표현 상태라 서버·저장과 아무 상관이 없고,
    * 접어도 고른 값(`s.picks`·`s.texts`)은 그대로 남는다 — 접는 것은 **그리느냐 마느냐**뿐이다.
@@ -395,6 +399,19 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   const ctaLabel = key === 'upload'
     ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : needAuth ? UPLOAD_COPY.pendingCta : '그림을 먼저 올려 주세요')
     : (key === 'char' && live.busy ? '준비하는 중…' : o.cta);
+
+  /**
+   * ★ 알 온보딩(2026-10-13) — 캐릭터 칸을 **알 화면 + 한 칸씩**으로 바꾼다(`PersonaEgg`).
+   *   `?egg=dots|glow` 로 두 시안을 바꿔 보고(기본 dots), `?egg=off` 면 아래 옛 한 화면이 그대로 뜬다.
+   *   첫 렌더(서버)에서는 주소를 못 읽으니 dots 로 두고, 붙은 뒤에 한 번 읽는다.
+   */
+  if (key === 'char' && eggMode !== 'off') {
+    return (
+      <div data-part="onb" data-step={key} style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: C.eggBg }}>
+        <PersonaEgg y={y} variant={eggMode} />
+      </div>
+    );
+  }
 
   return (
     <div
