@@ -627,7 +627,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
                 {isCrack ? '지금 나오고 있어요' : baked ? '다 됐어요' : '다 넣었어요'}
               </span>
               <span className="pe-sub" style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.sub2 }}>
-                {isCrack ? '잠시만요.' : baked ? '이제 만나러 가도 돼요.' : `곧 나와요.${skipped.length ? ' 비워 둔 칸은 나중에 아이 정보에서 채울 수 있어요.' : ''}`}
+                {isCrack ? '잠시만요.' : baked ? '이제 만나러 가도 돼요.' : `곧 나와요.${skipped.length ? ' 비워 둔 칸은 비워 둬도 괜찮아요.' : ''}`}
               </span>
             </>
           )}
