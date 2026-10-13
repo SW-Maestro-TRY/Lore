@@ -94,6 +94,12 @@ public class WebSecurityConfig {
                         //    믿지 않고 쿠키만 신뢰(본문을 믿으면 남의 번호로 기록을 심을 수 있다).
                         .requestMatchers(HttpMethod.POST, "/api/v1/events").permitAll()
 
+                        // 충전 결제(#155). 상품표는 로그인 전에도 보여 준다.
+                        // 통보 주소는 페이앱 서버가 부르므로 계정이 없다 — 대신 PaymentService 가
+                        // 연동값 세 개와 금액·결제요청번호를 맞춰 본다(안 맞으면 아무것도 안 한다).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/payments/packages").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/payapp/feedback").permitAll()
+
                         // 나머지는 로그인 필요.
                         // ★ 관리자 주소를 여기서 role 로 가르지 않는다 — 지금 JWT 에는 role 이
                         //   없어서(모두에게 ROLE_USER 를 하드코딩) hasRole 로 잠그면 아무도 못 들어온다.

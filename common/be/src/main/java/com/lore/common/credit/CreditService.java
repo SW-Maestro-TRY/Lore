@@ -165,6 +165,25 @@ public class CreditService {
                 why == null || why.isBlank() ? CreditReason.REFUND.label() : why) ? paid : 0;
     }
 
+    /**
+     * 충전한 것을 도로 뺀다 — 결제가 취소됐을 때(#155).
+     *
+     * {@link #spend} 와 달리 <b>모자라도 뺀다.</b> 충전분을 이미 써 버린 뒤 결제를
+     * 취소하면 잔액이 0 아래로 내려가는데, 그게 맞는 기록이다 — 막으면 낸 돈은
+     * 돌려받고 받은 크레딧은 그대로 남는다. 0 아래인 동안은 spend 가 막는다.
+     *
+     * @param refId 무엇을 취소한 것인가. 같은 값으로 두 번 불려도 한 번만 빠진다
+     * @return 이번에 실제로 뺀 양 (이미 뺐으면 0)
+     */
+    @Transactional
+    public int reclaim(Long userId, int amount, String refId, String why) {
+        if (amount <= 0) {
+            return 0;
+        }
+        return ledger.write(userId, -amount, CreditReason.ADJUST, CreditDomain.COMMON, refId,
+                why == null || why.isBlank() ? CreditReason.ADJUST.label() : why) ? amount : 0;
+    }
+
     /** 최근 내역. 잔액과 같은 자료에서 나오므로 둘이 어긋날 수 없다. */
     @Transactional(readOnly = true)
     public List<CreditEvent> history(Long userId, int limit) {
