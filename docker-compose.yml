@@ -193,6 +193,13 @@ services:
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      # 크레딧 충전 결제 — 페이앱(#155, common/docs/payment.md). 넷 중 하나라도 비면 충전 창이
+      # 「준비 중」으로 막힐 뿐 나머지는 그대로 뜬다. 테스트 환경이 없어서 값을 넣으면 실결제가 된다.
+      # SITE_URL 은 페이앱이 통보를 보낼 이 박스의 바깥 주소(https://dev.lorecomic.com).
+      PAYAPP_USERID: ${PAYAPP_USERID:-}
+      PAYAPP_LINKKEY: ${PAYAPP_LINKKEY:-}
+      PAYAPP_LINKVAL: ${PAYAPP_LINKVAL:-}
+      PAYAPP_SITE_URL: ${PAYAPP_SITE_URL:-}
       # http(노트북)에서는 Secure 쿠키가 저장 안 되므로 false. https(박스)는 .env 에서 true.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       # 공유 링크의 기준 주소. 안 넘기면 application.yml 기본값(http://localhost:3100/zzal/s)이라
