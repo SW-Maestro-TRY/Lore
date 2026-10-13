@@ -49,6 +49,9 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [step, setStep] = useState<Step>({ kind: "pick" });
   const [phone, setPhone] = useState("");
+  /* 쓴 크레딧은 환불되지 않는다는 안내를 결제 전에 확인받는다(이용약관 13조 8항). 디지털 콘텐츠의
+     청약철회를 제한하려면 결제 전에 알려야 한다 — 확인해야 「결제하기」가 눌린다. */
+  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -172,7 +175,7 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
                       type="button"
                       className="credit-btn credit-btn-quiet"
                       disabled={!ready}
-                      onClick={() => { setError(null); setStep({ kind: "phone", pack }); }}
+                      onClick={() => { setError(null); setAgreed(false); setStep({ kind: "phone", pack }); }}
                     >
                       {ready ? "충전" : "준비 중"}
                     </button>
@@ -190,7 +193,7 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
           {step.kind === "phone" && (
             <form
               className="credit-pay"
-              onSubmit={(e) => { e.preventDefault(); if (phoneOk && !busy) void pay(step.pack); }}
+              onSubmit={(e) => { e.preventDefault(); if (phoneOk && agreed && !busy) void pay(step.pack); }}
             >
               <p className="credit-pay-what">
                 <b>{step.pack.credits}C</b> · {won(step.pack.won)}
@@ -211,12 +214,23 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
               <p className="credit-pay-fine">
                 결제는 페이앱 결제창에서 해요. 번호는 페이앱에만 전달되고 LORE 에는 저장되지 않아요.
               </p>
+              <div className="credit-refund">
+                <p>
+                  결제 후 7일 안에 하나도 쓰지 않으면 전액 환불돼요. 쓴 크레딧은 환불되지 않고,
+                  남은 크레딧은 수수료 10%를 뺀 금액으로 환불돼요. 무료 크레딧부터 먼저 쓰여요.{" "}
+                  <a href="/legal/terms" target="_blank" rel="noopener noreferrer">이용약관</a>
+                </p>
+                <label className="credit-refund-ok">
+                  <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+                  환불 기준을 확인했어요
+                </label>
+              </div>
               {error && <p className="credit-pay-error" role="alert">{error}</p>}
               <div className="credit-pay-acts">
                 <button type="button" className="credit-btn credit-btn-quiet" onClick={() => setStep({ kind: "pick" })}>
                   다른 상품
                 </button>
-                <button type="submit" className="credit-btn credit-btn-primary" disabled={!phoneOk || busy}>
+                <button type="submit" className="credit-btn credit-btn-primary" disabled={!phoneOk || !agreed || busy}>
                   {busy ? "결제창 여는 중…" : "결제하기"}
                 </button>
               </div>
