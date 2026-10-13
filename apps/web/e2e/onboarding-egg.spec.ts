@@ -192,7 +192,11 @@ test('넣기 → 사본이 날아가고 사라짐 → 다음 칸 · 건너뛰기
   await expect(page.locator('[data-part="pe-dot"]')).toHaveCount(2);
 
   // 성격: 새 칩(장난기 → 활발 근사) + 기존(시크) → 대표는 첫 칩의 근사값 LIVELY, 장난기라는 말은 note 에도.
+  // 성격 축의 짝(장난기 ↔ 진지함)은 함께 못 고른다 — 나중 것이 앞 것을 푼다.
+  await pick(page, '진지함');
   await pick(page, '장난기');
+  await expect(page.locator('[data-part="pe-chip"][data-chip="진지함"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-part="pe-chip"][data-chip="장난기"]')).toHaveAttribute('aria-pressed', 'true');
   await pick(page, '시크');
   await put(page).click();
   await expect(pe(page)).toHaveAttribute('data-q', 'likes');

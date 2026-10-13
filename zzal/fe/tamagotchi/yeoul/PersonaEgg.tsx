@@ -23,7 +23,7 @@ import { useLive } from './useHatch';
 import { EGG_CRACK_MS, type Yeoul } from './useYeoul';
 import { once, ztrack } from './funnel';
 import {
-  NAME_STEP, PERSONA_STEPS, answerOf, clearSaved, extraRoom, hasAnswer, loadSaved, pieceOf,
+  NAME_STEP, PERSONA_STEPS, answerOf, clearSaved, extraRoom, hasAnswer, loadSaved, pickChips, pieceOf,
   toCharacterInput, writeSaved, type Answers, type FieldAnswer, type PersonaField, type PersonaStep,
 } from './personaSteps';
 
@@ -489,12 +489,10 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
 
   const room = useMemo(() => extraRoom(answers), [answers]);
 
-  const setChip = (fkey: string, chip: string, multi: boolean) => {
+  const setChip = (f: PersonaField, chip: string) => {
     setAnswers((a) => {
-      const cur = answerOf(a, fkey);
-      const has = cur.chips.includes(chip);
-      const chips = multi ? (has ? cur.chips.filter((c) => c !== chip) : [...cur.chips, chip]) : (has ? [] : [chip]);
-      return { ...a, [fkey]: { ...cur, chips } };
+      const cur = answerOf(a, f.key);
+      return { ...a, [f.key]: { ...cur, chips: pickChips(f, cur.chips, chip) } };
     });
   };
   const setText = (fkey: string, t: string, max: number) => {
@@ -667,7 +665,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
                               key={c} type="button" className="pe-chip" data-part="pe-chip" data-chip={c} aria-pressed={on}
                               data-flying={busyFx && on ? '1' : undefined}
                               ref={(el) => { chipRefs.current[`${f.key}:${c}`] = el; }}
-                              onClick={() => setChip(f.key, c, f.multi)} disabled={busyFx}
+                              onClick={() => setChip(f, c)} disabled={busyFx}
                               style={{ minHeight: TAP_MIN, padding: '0 15px', borderRadius: radius.pill, border: `${on ? 2 : 1}px solid ${on ? C.accent : C.lineHard}`, background: on ? C.accentSoft : C.paper, fontSize: fz.md, color: on ? C.accent : C.ink }}
                             >{c}</button>
                           );

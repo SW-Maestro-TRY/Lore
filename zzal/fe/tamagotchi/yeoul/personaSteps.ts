@@ -28,6 +28,8 @@ export interface PersonaField {
   rowNames?: readonly string[];
   /** 여러 개 고를 수 있는가. false 면 누를 때마다 바뀐다. */
   multi: boolean;
+  /** 함께 못 고르는 짝(축의 양 끝). 한쪽을 고르면 다른 쪽이 풀린다. */
+  pairs?: readonly (readonly [string, string])[];
   /** 직접 적는 칸. 없으면 칩만. `max` 는 이 칸 혼자의 상한이다(합친 뒤 상한은 아래 `NOTE_MAX`). */
   text?: { ph: string; max: number };
   target: PersonaTarget;
@@ -66,7 +68,7 @@ export const NOTE_MAX = CHAR_TEXT_MAX.extra;
 /**
  * 이름 다음에 묻는 칸들. **순서가 곧 화면 순서**다.
  * 칩 어휘는 `~/shared-context/work/projects/lore/persona-chips-1013.md` **v2** 3절 데이터 블록(커밋 84a48e9 — 칩은 넓은 범주어, 자리표시는 실제 원문을 다듬은 세세한 예)에서 옮겼다.
- * 지금 값(상훈님 10/13 2차 결정): 어떤 세상(세계관·장르를 한 칸으로) → 직업/소속 · 성격 → 좋아하는 것 · 싫어하는 것 → 그 밖에.
+ * 지금 값(상훈님 10/14 확정 — 세상·직업·성격·좋아함·싫어함 모두 A안. 세상에서 '일상' 빠짐, 성격은 독립 축 6쌍): 어떤 세상(세계관·장르를 한 칸으로) → 직업/소속 · 성격 → 좋아하는 것 · 싫어하는 것 → 그 밖에.
  * 종족 칸은 뺐다(종족·설정은 그 밖에에). 원칙: 고민시키는 칸·칩은 빼고 재밌게 설레며 쓰게.
  * ★ 장르(`genre`) 칸은 지금 비워 보낸다. 종족 칩 묶음은 쓰지 않는다(칸 삭제).
  */
@@ -75,7 +77,7 @@ export const PERSONA_STEPS: readonly PersonaStep[] = [
     key: 'world', section: '바탕', q: '어떤 세상이야?', sub: '여러 개 골라도 돼요.', color: '#4F8FCB',
     fields: [{
       key: 'world', multi: true, target: 'world',
-      chips: ['현대', '학교', '일상', '판타지', '중세', '미래', '어두운 세상'],
+      chips: ['현대', '학교', '판타지', '중세', '미래', '어두운 세상'],
       text: { ph: '예: 홍대 근처 자취방 · 수인이 사는 이세계 · 꽃 바이러스로 봉쇄된 도시', max: 100 },
     }],
   },
@@ -90,8 +92,11 @@ export const PERSONA_STEPS: readonly PersonaStep[] = [
   {
     key: 'persona', section: '누구인가', q: '어떤 성격이에요?', sub: '여러 개 골라도 돼요. 처음 고른 것이 대표예요.', color: '#E0607E',
     fields: [{
-      key: 'persona', multi: true, target: 'persona', noteLabel: '성격', rows: [4, 4],
-      chips: ['활발', '긍정적', '장난기', '다정', '차분', '무뚝뚝', '시크', '수줍음'],
+      // ★ 서로 독립인 축 6쌍(상훈님 10/14 확정) — 윗줄이 한쪽 극, 아랫줄이 반대 극이고 **같은 자리끼리 짝**이다.
+      //   짝의 양쪽은 함께 못 고른다(나중 것이 앞 것을 해제 — `pickChips`).
+      key: 'persona', multi: true, target: 'persona', noteLabel: '성격', rows: [6, 6],
+      chips: ['활발', '다정', '긍정적', '사교적', '장난기', '엉뚱함', '차분', '무뚝뚝', '걱정 많음', '수줍음', '진지함', '시크'],
+      pairs: [['활발', '차분'], ['다정', '무뚝뚝'], ['긍정적', '걱정 많음'], ['사교적', '수줍음'], ['장난기', '진지함'], ['엉뚱함', '시크']],
       text: { ph: '예: 겉으론 밝은데 속은 겁이 많아요 · 건들지 않으면 안 물지만 건들면 물어요 · 원하는 게 있으면 애교', max: 80 },
     }],
   },
@@ -113,13 +118,13 @@ export const PERSONA_STEPS: readonly PersonaStep[] = [
   },
   {
     key: 'extra', section: '그 밖에', q: '그 밖에 알려 주고 싶은 것', sub: '종족·설정도 여기에 적어 주세요.', color: '#9B7653',
-    fields: [{ key: 'extra', chips: [], multi: false, text: { ph: '예: 긴장하면 리본 끝을 만지작거림 · 가족 얘기는 금지 · 사실 염소 수인', max: NOTE_MAX }, target: 'note' }],
+    fields: [{ key: 'extra', chips: [], multi: false, text: { ph: '예: 긴장하면 리본 끝을 만지작거림 · 가족 얘기는 금지 · 사실 염소 수인 (종족·설정도 여기에)', max: NOTE_MAX }, target: 'note' }],
   },
 ];
 
 /**
  * 성격 칩 → 서버 성격 키. 서버는 다섯 키(GENTLE·LIVELY·SHY·CLINGY·COOL)뿐이다.
- * ★ 칩 v2(활발·긍정적·장난기·다정·차분·무뚝뚝·시크·수줍음) 중 대응되는 것만 성격 칸으로 보낸다 —
+ * ★ 칩 확정판(10/14, 독립 축 6쌍 12개) 중 대응되는 것만 성격 칸으로 보낸다 —
  *   활발·시크·수줍음은 그대로, 다정→온순(GENTLE), 장난기→활발(LIVELY, 근사).
  * ★ 이름이 서버 값과 **똑같지 않은 칩**(근사 둘 포함)은 그 말 그대로 note 의 "성격:" 줄에도 싣는다(임시) —
  *   사용자가 고른 낱말이 근사값 뒤로 사라지지 않게.
@@ -127,6 +132,19 @@ export const PERSONA_STEPS: readonly PersonaStep[] = [
 const PERSONA_KEY: Record<string, string | undefined> = { 활발: 'LIVELY', 시크: 'COOL', 수줍음: 'SHY', 온순: 'GENTLE', 응석: 'CLINGY', 다정: 'GENTLE', 장난기: 'LIVELY' };
 /** 서버 성격과 이름까지 같은 칩. 이 밖의 칩은 note 에도 남긴다. */
 const PERSONA_EXACT = new Set(Object.keys(PERSONALITY_OF));
+
+/**
+ * 칩을 눌렀을 때 새 칩 목록. 여럿 고르는 칸은 넣고/빼고, 하나 고르는 칸은 바꾸고/풀고.
+ * `pairs` 가 있으면 새로 고른 칩의 짝을 뺀다 — 나중 것이 이긴다(둘 다는 안 됨).
+ */
+export function pickChips(f: Pick<PersonaField, 'multi' | 'pairs'>, cur: readonly string[], chip: string): string[] {
+  const has = cur.includes(chip);
+  if (!f.multi) return has ? [] : [chip];
+  if (has) return cur.filter((c) => c !== chip);
+  const mate = f.pairs?.find((p) => p.includes(chip));
+  const other = mate ? (mate[0] === chip ? mate[1] : mate[0]) : null;
+  return [...cur.filter((c) => c !== other), chip];
+}
 
 /** 한 칸의 답. 칩과 글을 따로 둔다 — 칸별 저장 API 가 생기면 그대로 옮겨 실을 수 있게. 칩을 눌러도 글 칸엔 아무것도 안 들어간다. */
 export interface FieldAnswer { chips: string[]; text: string }
