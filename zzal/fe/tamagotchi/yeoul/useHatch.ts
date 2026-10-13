@@ -22,7 +22,7 @@ import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS, GUESS_HAND_PRELOAD } from './constants';
 import {
   answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
-  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet,
+  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet, callBack as callBackPet,
   type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
   type HatchProgress, type PetDetail, type Personality,
 } from '../../lib/pet';
@@ -242,6 +242,16 @@ export interface Live {
    *   그 전에 미리 써 버리면 튜토리얼이 영영 안 끝나므로 서버가 409 로 막는다.
    */
   doRest: () => Promise<CareResult>;
+  /** 부르는 중(재회 요청이 나가 있다). 그동안 「불러오기」를 잠근다 — 두 번 눌러 409 를 보지 않게. */
+  calling: boolean;
+  /**
+   * 부르기(재회) — 여행 중인 아이를 데려온다.
+   *
+   * ★ 성공하면 **앨범을 다시 읽어** 실제로 전달된 엽서 장수를 돌려준다. 서버가 부르는 순간 밀린 엽서를
+   *   채우므로(`PetService.callBack`) 부르기 전의 `trip.postcards` 보다 많을 수 있다.
+   *   앨범을 못 읽으면 `postcards` 는 null — 화면은 부르기 전 숫자로 말한다.
+   */
+  callBack: () => Promise<CareResult & { postcards: number | null }>;
   /**
    * 성격·세계관 저장. **튜토리얼 4칸(PERSONALITY)을 넘기는 호출**이기도 하다.
    * 언제든 다시 바꿀 수 있다(정본 0장 6).
@@ -352,6 +362,8 @@ const EMPTY: Live = {
   upload: async () => {}, holdUpload: () => {}, resumeUpload: async () => {}, discardUpload: () => {},
   setChar: async () => false, doCare: async () => ({ ok: false, message: null }),
   doRest: async () => ({ ok: false, message: null }),
+  calling: false,
+  callBack: async () => ({ ok: false, message: null, postcards: null }),
   savePersonality: async () => ({ ok: false, message: null }),
   finishTutorial: async () => ({ ok: false, message: null }),
   tutorialSeen: async () => ({ ok: false, message: null }),
@@ -688,6 +700,38 @@ export function useHatchState(): Live {
     } finally {
       restingRef.current = false;
       setResting(false);
+    }
+  }, [petId, takeSeq, putPet]);
+
+  const [calling, setCalling] = useState(false);
+  const callingRef = useRef(false);
+  const callBack = useCallback(async (): Promise<CareResult & { postcards: number | null }> => {
+    if (!petId || callingRef.current) return { ok: false, message: null, postcards: null };
+    callingRef.current = true;
+    setCalling(true);
+    const seq = takeSeq();
+    try {
+      putPet(seq, await callBackPet(petId));
+      let postcards: number | null = null;
+      try {
+        const a = await getAlbum(petId);
+        setAlbum(a);
+        postcards = a.postcards.length;
+      } catch { /* 앨범을 못 읽어도 아이는 돌아왔다 */ }
+      return { ok: true, message: null, postcards };
+    } catch (e) {
+      const back = takeSeq();
+      try { putPet(back, await getPet(petId)); } catch { /* 못 읽으면 화면은 그대로 */ }
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : '지금은 부를 수 없어요',
+        code: e instanceof ApiError ? e.code : null,
+        status: e instanceof ApiError ? e.status : undefined,
+        postcards: null,
+      };
+    } finally {
+      callingRef.current = false;
+      setCalling(false);
     }
   }, [petId, takeSeq, putPet]);
 
@@ -1164,7 +1208,7 @@ export function useHatchState(): Live {
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
     justUnlocked,
-    setChar, doCare, doRest, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
+    setChar, doCare, doRest, calling, callBack, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
     clearJustUnlocked, noteUnlocked,
     loadAlbum, shareMotion, sendWish, resume, reset,
   };

@@ -31,7 +31,7 @@ import { motionAliases, YEOUL_MOTION } from '../constants';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { assetUrl } from '../../lib/assets';
 import { trackConversion } from '../../lib/analytics';
-import { ztrack } from './funnel';
+import { once, ztrack } from './funnel';
 
 /**
  * 아이 이름 + 조사. **이름은 사용자가 짓는다** — 받침이 있는지 없는지 우리가 알 수 없으므로
@@ -348,6 +348,11 @@ export interface YeoulState {
   /** 여울의 물음에 **직접 적는** 칸의 초안(지금은 호칭 문항만 쓴다). */
   askDraft: string;
   fire: Fire | null; decoOpen: boolean; albumOpen: number;
+  /**
+   * 여행에서 막 돌아와 **아직 앨범을 안 열었다** — 가져온 엽서 장수(0 이면 안내 없음).
+   * ★ 화면 메모리뿐이다. 새로고침하면 사라져도 된다 — 엽서는 앨범에 영구히 남는다(구현계획 3-4).
+   */
+  tripPostcards: number;
   wallOpen: boolean; wallClosing: boolean;
   frame: FrameData | null; frameClosing: boolean;
   notifOn: boolean; needStyleLocal: NeedStyle | null; unlockShown: boolean;
@@ -446,7 +451,7 @@ const INITIAL: YeoulState = {
   petName: '', uploaded: false, authed: '', askDraft: '',
   shards: 2, tutorDone: false, rollUnlocked: false, acting: null, actSit: null,
   dev: DEV_OFF, actStep: 0,
-  fire: null, decoOpen: false, albumOpen: 8,
+  fire: null, decoOpen: false, albumOpen: 8, tripPostcards: 0,
   wallOpen: false, wallClosing: false, frame: null, frameClosing: false,
   notifOn: true, needStyleLocal: null, unlockShown: false,
   wishes: 0, cardIdx: 0,
@@ -1104,6 +1109,48 @@ export function useYeoul(live?: Live) {
   tutLockRef.current = tutLock;
 
   /**
+   * **여행 중 길 안내** — 튜토리얼 하이라이트를 그대로 빌려 쓴다(구현계획 3-3 · 상훈님 10/10
+   * "여행 갔을 때는 해당 기능으로 가는 길을 하이라이트해줘서 유저가 뭘 하면 되는 지 계속 계속 알려주는 걸로").
+   *
+   * ★★ `tut` 를 덮어쓰지 않고 `guide = tut ?? tripGuide` 한 겹을 둔다. 하이라이트·잠금만 `guide` 를 읽고
+   *   칸 번호(`tutIdx`)·`atDone`·계측 `tutAt` 은 `tut` 그대로다 — 튜토리얼 계측이 여행으로 오염되지 않게.
+   * ★ 서버 `trip` 으로 **매번 계산한다.** 닫기·기억 상태가 없다 — 새로고침해도, 팝오버를 닫아도 다시 보인다.
+   * ★ 두 단계다: 여행 중 = 침실(「불러오기」) / 돌아온 뒤 앨범을 열 때까지 = 앨범(화면 메모리 `tripPostcards`).
+   * ★ 개발 리모컨의 「여행 중」(`s.dev.trip`)도 같은 길을 탄다 — 서버 없이 화면을 확인하는 자리.
+   */
+  const svTrip = onServer ? (sv.trip ?? null) : null;
+  const tripOn = !!svTrip || s.dev.trip;
+  const tripGuide: { room: string; act: 'a'; text: string } | null = tripOn
+    ? { room: 'bed', act: 'a', text: `${petWith((onServer ? sv?.name : '') || s.petName || '아이', '이', '가')} 여행을 떠났어요 · 침실에서 불러 주세요` }
+    : s.tripPostcards > 0
+      ? { room: 'album', act: 'a', text: `엽서 ${s.tripPostcards}장이 앨범에 도착했어요` }
+      : null;
+  const guide = tut ?? tripGuide;
+  /**
+   * 여행 중 잠금. 튜토리얼 잠금과 같은 규칙(말없이 비활성)이되 **앨범은 연다** — 서버가 조회를 허락하고,
+   * 여행 전 모습을 보는 것을 막을 이유가 없다(구현계획 문제점 3 · 상훈님 10/12 "3 좋아").
+   * 돌아온 뒤(앨범 안내 단계)는 아무것도 안 잠근다 — 다 돌봐도 되는 아이다.
+   */
+  const guideLock = tutLock ?? (tripOn ? { room: 'bed' as string | null, act: 'a' as string | null } : null);
+  const lockedRoom = (k: string) => !!guideLock && guideLock.room !== k && !(tripOn && !tut && k === 'album');
+  const petNameNowRef = useRef('');
+  petNameNowRef.current = (onServer ? sv?.name : '') || s.petName || '아이';
+  /** 여행 중인 방에 들어온 시각 — `zzal_trip_called_back.ms`(길 안내가 통하는지)의 기준. */
+  const tripSeenAt = useRef<number | null>(null);
+  /** 돌아온 시각 — `zzal_trip_postcards_opened.ms` 의 기준. */
+  const tripBackAt = useRef<number | null>(null);
+  const tripDays = (startedAt: string | null | undefined) => {
+    if (!startedAt) return 0;
+    const t = Date.parse(startedAt);
+    return Number.isFinite(t) ? Math.max(0, Math.floor((Date.now() - t) / 86_400_000)) : 0;
+  };
+  useEffect(() => {
+    if (!svTrip || s.screen !== 'room') return;
+    if (tripSeenAt.current === null) tripSeenAt.current = Date.now();
+    once('zzal_trip_seen', () => ztrack('zzal_trip_seen', { days: tripDays(svTrip.startedAt), postcards: svTrip.postcards }));
+  }, [svTrip, s.screen]);
+
+  /**
    * **칸이 넘어가는 순간, 덮고 있던 것(팝오버·대화)을 내린다**(2026-09-23 · 막다른 골목 0).
    *
    * ★★ 무엇이 고장이었나 — 1칸에서 「밥 주기」를 누르면 칸은 2칸(`PET`)으로 넘어가는데 **주방
@@ -1285,9 +1332,17 @@ export function useYeoul(live?: Live) {
     lastSel.current = Date.now();
     // 벽을 열 때 도감을 다시 읽는다 — 그사이 밤에 배운 것이 도착해 있을 수 있다.
     if (onServerRef.current) void liveRef.current?.loadAlbum();
+    // 돌아온 뒤 처음 여는 앨범 — 엽서 안내가 통했는지 잰다. 연 순간 안내(앨범 타일 하이라이트)가 걷힌다.
+    const brought = sRef.current.tripPostcards;
+    if (brought > 0) {
+      ztrack('zzal_trip_postcards_opened', {
+        postcards: brought, ms: tripBackAt.current === null ? undefined : Date.now() - tripBackAt.current,
+      });
+      tripBackAt.current = null;
+    }
     // ★ 7칸(앨범)은 벽을 **여는 것으로 끝나지 않는다**(2026-10-10) — 안에서 액자를 열어 저장해야 끝난다
     //   (→ 액자의 `onTaken`). 예전엔 여기서 넘겨서 안을 안내할 틈이 없었다.
-    patch({ wallOpen: true, wallClosing: false, popOpen: false, sheet: null, chatOpen: false, toast: '' });
+    patch({ wallOpen: true, wallClosing: false, popOpen: false, sheet: null, chatOpen: false, toast: '', tripPostcards: 0 });
   }, [patch]);
   const closeWall = useCallback(() => {
     patch({ wallClosing: true });
@@ -1519,6 +1574,62 @@ export function useYeoul(live?: Live) {
       if (!r || !r.ok) { if (r?.message) flash(r.message); return; }
     })();
   }, [flash]);
+
+  /**
+   * **부르기(재회)** — 침실 팝오버 첫 버튼이 여행 중엔 「불러오기」가 된다(상훈님 10/12 결정 1).
+   *
+   * 흐름: 서버 `call-back` → 응답이 곧 돌아온 아이(방이 즉시 평소로) → 재회 연출 한 번 → 축하 판
+   * "돌아왔어요! 엽서 N장" + 「앨범에서 보기」. N 은 **부른 뒤 앨범을 다시 읽은 실제 장수**다.
+   * ★ 개발 리모컨으로만 켠 여행(서버는 여행 아님)은 서버를 안 부른다 — 부르면 409 다. 화면만 되돌린다.
+   */
+  const reunite = useCallback((postcards: number) => {
+    tripBackAt.current = Date.now();
+    tripSeenAt.current = null;
+    setS((v) => ({
+      ...v, popOpen: false, sheet: null, chatOpen: false, tripPostcards: postcards,
+      dev: { ...v.dev, trip: false },
+    }));
+    act('joy', 'reunion', 2);
+    const name = petWith(petNameNowRef.current, '이', '가');
+    later('tripFire', CYCLE_MS * 2, () => setS((v) => ({
+      ...v,
+      fire: {
+        title: '돌아왔어요!',
+        body: postcards > 0 ? `${name} 엽서 ${postcards}장을 가져왔어요` : `${name} 무사히 돌아왔어요`,
+        hint: '',
+        actions: postcards > 0
+          ? [
+            { label: '앨범에서 보기', action: 'trip-open-album', primary: true, tap: () => { setS((w) => ({ ...w, fire: null })); openWall(); } },
+            { label: '나중에 볼게요', action: 'trip-later', primary: false, tap: () => setS((w) => ({ ...w, fire: null })) },
+          ]
+          : [{ label: '반가워요', action: 'trip-close', primary: true, tap: () => setS((w) => ({ ...w, fire: null })) }],
+      },
+    })));
+  }, [act, later, openWall]);
+
+  const onCallBack = useCallback(() => {
+    lastSel.current = Date.now();
+    const trip = onServerRef.current ? (liveRef.current?.pet?.trip ?? null) : null;
+    if (!trip) {
+      // 개발 리모컨으로 켠 여행 — 서버는 모른다. 화면만 재회를 보여 준다(엽서는 서버가 없으니 3장으로 친다).
+      if (sRef.current.dev.trip) reunite(3);
+      return;
+    }
+    if (liveRef.current?.calling) return;
+    const days = tripDays(trip.startedAt);
+    const waited = tripSeenAt.current === null ? undefined : Date.now() - tripSeenAt.current;
+    void (async () => {
+      const r = await liveRef.current?.callBack();
+      if (!r || !r.ok) {
+        ztrack('zzal_trip_called_back', { days, postcards: trip.postcards, ms: waited, fail: r?.code ?? (r ? 'network' : 'no_live') });
+        if (r?.message) flash(r.message);
+        return;
+      }
+      const n = r.postcards ?? trip.postcards;
+      ztrack('zzal_trip_called_back', { days, postcards: n, ms: waited });
+      reunite(n);
+    })();
+  }, [flash, reunite]);
 
   const onSleep = useCallback(() => {
     if (onServerRef.current) {
@@ -2497,7 +2608,7 @@ export function useYeoul(live?: Live) {
     ];
 
     const selK: RoomKey = ROOM_KEYS.includes(s.roomSel) ? s.roomSel : 'table';
-    const hlRoom = tut ? tut.room : top?.room ?? null;
+    const hlRoom = guide ? guide.room : top?.room ?? null;
 
     const tiles: Tile[] = roomDefs.map(([k, key, badge, hasBadge]) => {
       const on = selK === k && s.popOpen;
@@ -2522,8 +2633,9 @@ export function useYeoul(live?: Live) {
         //   자는 동안 잠기는 것은 그대로 한 줄을 말한다 — 그건 튜토리얼이 아니라 상태이고,
         //   왜 안 되는지가 화면에 안 보이기 때문이다(커튼만 보인다).
         pick: asleep && k !== 'bed' ? () => flash(sleepingLine(s.petName)) : selRoom(k),
-        off: !!(tutLock && tutLock.room !== k),
-        dim: (asleep && k !== 'bed') || !!(tutLock && tutLock.room !== k),
+        // ★ 여행 중에도 같은 규칙이다(→ `guideLock`) — 침실만 길이고 다른 방은 말없이 안 눌린다. 앨범만 연다.
+        off: lockedRoom(k),
+        dim: (asleep && k !== 'bed') || lockedRoom(k),
       };
     });
 
@@ -2531,14 +2643,13 @@ export function useYeoul(live?: Live) {
     // ★ 자는 동안은 **전부 잠근다**(상훈님 판정 13). 방마다 깨어 있는 말을 하던 것이 문제였다.
     //   커튼을 치고 타일·팝오버를 통째로 막고, 하는 말은 한 줄뿐이다.
     const sleepLine = sleepingLine(s.petName);
-    // ★ 여행 중에는 **돌보기가 통째로 막힌다**(서버 `ZZAL_TRAVELING`). 침실도 예외가 아니다.
-    //   떠남·재회는 2차라 지금은 `trip` 이 늘 null 이지만, 값이 오기 시작하는 날
-    //   화면만 모른 채 눌리는 것보다 미리 막아 두는 편이 안전하다.
-    const tripMsg = (s.dev.trip || (onServer && sv.trip)) ? `${petWith(s.petName, '이', '가')} 여행 중이에요` : '';
-    const lockMsg = tripMsg || (mode === 'sleep' ? sleepLine
+    // ★ 여행 중에는 **돌보기가 통째로 막힌다**(서버 `ZZAL_TRAVELING`). 화면은 그 버튼들을 튜토리얼처럼
+    //   **말없이 비활성**으로 잠그고(`guideLock`), 문장은 선반 카드 한 곳에서만 말한다(구현계획 3-3 —
+    //   잠긴 버튼마다 "여행 중이에요" 를 되풀이하던 것이 출구 없는 안내였다). 침실 첫 버튼은 「불러오기」다.
+    const lockMsg = tripOn ? '' : (mode === 'sleep' ? sleepLine
       : (mode === 'sick' && selK === 'play') ? '아플 땐 못 놀아요' : '');
-    // 여행이면 침실까지 잠근다. 그 밖의 잠금(자는 중·아픔)은 침실을 비켜 간다 — 거기서 깨워야 하므로.
-    const locked = !!lockMsg && (!!tripMsg || selK !== 'bed');
+    // 자는 중·아픔 잠금은 침실을 비켜 간다 — 거기서 깨워야 하므로.
+    const locked = !!lockMsg && selK !== 'bed';
 
     /** `no` = 눌러도 거절될 이유. 비어 있지 않으면 **미리 잠근다**(계약 10절). */
     interface Raw { label: string; count: string; tap: () => void; soft?: boolean; no?: string }
@@ -2586,6 +2697,16 @@ export function useYeoul(live?: Live) {
        *   그래서 이 두 값만 보면 낮잠을 미리 써서 튜토리얼이 막히는 일이 생기지 않는다.
        */
       bed: (() => {
+        // ★ 여행 중 침실 = **부르는 자리**(상훈님 10/12 결정 1). 첫 버튼 하나뿐이고 언제든 눌린다 —
+        //   데려오는 데 조건·값을 매기지 않는다(서버 `callBack` 머리말과 같은 말).
+        if (tripOn) {
+          const busy = !!live?.calling;
+          return {
+            say: '여행 중이에요. 부르면 바로 돌아와요', n: 4, on: 0, tint: '#6E7BA6',
+            a: { label: busy ? '부르는 중' : '불러오기', count: svTrip ? `엽서 ${svTrip.postcards}장 모였어요` : '', tap: onCallBack, no: '' },
+            b: null,
+          };
+        }
         const asleep = onServer ? es.sleeping : mode === 'sleep';
         const canSleep = onServer ? !!sv.clock?.canSleep : mode === 'night' || s.sampleMode;
         const canWake = onServer ? !!sv.clock?.canWake : true;
@@ -2634,7 +2755,7 @@ export function useYeoul(live?: Live) {
       // 서버가 이미 아는 거절 이유. 여울 샘플 방에서는 안 건다 — 거긴 연습이라 늘 눌려야 한다.
       const pre = unlimited ? '' : (r.no ?? '');
       // 돌보기·재우기가 도는 동안엔 전부 잠근다 — 두 번 눌러 두 번 나가는 일을 막는다.
-      const waiting = !!live?.careing || !!live?.resting;
+      const waiting = !!live?.careing || !!live?.resting || !!live?.calling;
       // ★ 튜토리얼 잠금이 **가장 앞이다**(판정 J8) — 그 칸에서 안 시킨 버튼은 다른 이유를 따지기 전에 잠긴다.
       //   ★ 2026-09-22 — 튜토리얼 잠금은 **이유를 안 쓴다**(상훈님 판정). 비활성만으로 말한다.
       const why = locked ? lockMsg : sickSnack ? '아플 땐 간식을 안 먹어요' : pre;
@@ -2665,7 +2786,7 @@ export function useYeoul(live?: Live) {
       };
     };
 
-    const isTutTarget = !!tut && tut.act === 'a' && tut.room === selK;
+    const isTutTarget = !!guide && guide.act === 'a' && guide.room === selK;
     const pop: Pop = {
       // 자는 동안은 팝오버를 안 띄운다 — 다만 **침실은 띄운다.** 거기서 깨워야 하기 때문이다.
       show: s.screen === 'room' && !s.sheet && (s.popOpen || s.popClosing) && !s.chatOpen
@@ -2679,8 +2800,8 @@ export function useYeoul(live?: Live) {
       //   동안 늘 잠긴다 — 안내가 가리키는 것이 언제나 첫 버튼이라서다.
       // ★ 2026-09-22 — 잠긴 쪽은 **아무 말도 안 하고 안 눌린다**(상훈님 판정). 눌러야 할 하나만
       //   깜빡이고(`isTutTarget`), 나머지는 흐린 채 비활성이다.
-      a: pbtn(cur.a, isTutTarget, !!tutLock && !(tutLock.act === 'a' && tutLock.room === selK)),
-      b: pbtn(cur.b, false, !!tutLock),
+      a: pbtn(cur.a, isTutTarget, !!guideLock && !(guideLock.act === 'a' && guideLock.room === selK) && !(tripOn && !tut && selK === 'album')),
+      b: pbtn(cur.b, false, !!guideLock),
       hasB: !!cur.b,
     };
 
@@ -2806,7 +2927,8 @@ export function useYeoul(live?: Live) {
       // 게임이 도는 동안에는 **게임이 말한다** — 부름·튜토리얼보다 앞선다(무대에 그것만 남으므로).
       // ★ 대화가 열려 있으면 **대화의 말만** 건다(2026-10-10) — 열린 판이 없을 때 "배고파요" 같은 부름이
       //   대화창 위에 떠서 아이가 말을 건 것처럼 보이지 않게. 그때 안내는 입력칸이 맡는다.
-      show: s.gOn ? true : s.chatOpen ? (!!chatLine && !es.sleeping)
+      // ★ 여행 중에는 말하지 않는다 — 말할 아이가 무대에 없다(안내는 선반 카드 한 곳이 맡는다).
+      show: tripOn ? false : s.gOn ? true : s.chatOpen ? (!!chatLine && !es.sleeping)
         : ((!tut || !!chatLine) && (!!stageTop || !!chatLine) && !es.sleeping),
       text: s.gOn ? guessLine : s.chatOpen ? (chatLine ?? '') : (chatLine || (stageTop?.text ?? '')),
     };
@@ -2975,7 +3097,7 @@ export function useYeoul(live?: Live) {
      *   자는 동안 카드를 접는 것은 "방이 조용해야 한다" 는 연출인데, 튜토리얼 중에는
      *   그 카드가 유일한 길이라 연출보다 길이 먼저다.
      */
-    const showTutMini = !!tut && !s.chatOpen;
+    const showTutMini = !!guide && !s.chatOpen;
 
     /**
      * 자유 입력칸이 그릴 것 한 벌. **뷰에서 만든다** — 글자마다 바뀌는 값이라
@@ -3038,7 +3160,9 @@ export function useYeoul(live?: Live) {
         hungry: es.full <= 0,
         unhappy: es.happy <= 0,
         chatOpen: s.chatOpen,
-        trash: es.trace,
+        // ★ 여행 중엔 바닥 흔적을 안 그린다 — 빈 자리 + 가방만(상훈님 10/12 결정 3). 돌아오는 순간
+        //   서버가 청결을 2칸으로 되돌리므로, 떠난 동안 쌓인 흔적을 보여 줄 이유가 없다(탓하는 그림이 된다).
+        trash: tripOn ? 0 : es.trace,
         /** 지금 도는 행동의 상황 id. 반응 그림(`acting`)과 **같이 켜지고 같이 꺼진다**. */
         act: s.actSit,
         /** 그 행동의 단계 소품이 지금 몇 번째 바퀴인가. 방이 표를 보고 실제 단계로 옮긴다. */
@@ -3046,7 +3170,8 @@ export function useYeoul(live?: Live) {
         /** 24시간+ 방치 — 땀 대신 해골. 표의 `sick_long` 줄이다(지금은 개발용으로만 켠다). */
         sickLong: s.dev.sickLong,
         /** 화면에만 얹는 상황 줄(가방·재회 하트…). 서버 신호가 생기면 여기 말고 상태에서 온다. */
-        extra: s.dev.extra,
+        // ★ 여행 중이면 가방(`leaving_soon` 소품)을 얹는다 — 아이가 없는 자리에 남은 짐(상훈님 10/12 결정 3).
+        extra: tripOn && !s.dev.extra.includes('leaving_soon') ? [...s.dev.extra, 'leaving_soon'] : s.dev.extra,
         /** 하루 소품 하나(`prop_ball`…). 고른 것이 없으면 안 띄운다. */
         daily: s.dev.daily,
       },
@@ -3058,6 +3183,11 @@ export function useYeoul(live?: Live) {
       //   그림이 나오면서 전제가 사라졌다.
       //   ⚠️ 방을 못 열게 막는 판정 13(`asleep`)은 그대로다 — 그건 그림이 아니라 규칙이다.
       hidePet: s.sleepCover,
+      /**
+       * 여행 중 — 무대에 아이가 없다(빈 자리 + 가방). ★ `hidePet` 과 다르다: 아이 상자는 자리를 지켜야
+       * 바닥 소품(가방)이 자를 잃지 않으므로, 그림만 투명하게 하고 누르지 못하게 한다.
+       */
+      away: tripOn,
       sleepLine: sleepingLine(s.petName),
       screen: { room: s.screen === 'room', onb: s.screen === 'onb', egg: s.screen === 'egg' },
       hud: {
@@ -3065,7 +3195,7 @@ export function useYeoul(live?: Live) {
         // 튜토리얼 4칸은 '아이 정보' 안에서 하는 일이라, 타일이 아니라 이 버튼을 가리켜야 한다.
         hl: !!tut && tut.room === 'info',
         // ★ 그 칸이 아니면 잠근다(판정 J8) — 눌러도 시트가 안 열리고 한 줄만 말한다.
-        off: !!tutLock && tutLock.room !== 'info',
+        off: !!guideLock && guideLock.room !== 'info',
       },
       /**
        * 머리줄. 서버가 붙으면 **이름·N일째·친밀도 셋 다 서버 값**이다.
@@ -3101,7 +3231,8 @@ export function useYeoul(live?: Live) {
         // ★ 대화의 **유일한 입구**다(상훈님 2026-09-08 판정 14). 마당 팝오버에서 대화를 뺐고,
         //   아파도 눌린다 — 아플 때 말이 막히면 아이가 제일 필요한 순간에 말을 못 한다.
         //   자는 동안만 안 뜬다.
-        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
+        // ★ 여행 중에는 숨긴다(상훈님 10/12 결정 3) — 서버가 말 걸기를 거절한다(`ZZAL_TRAVELING`).
+        show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping && !tripOn,
         dot: onServer ? (sess ? sessOpen : !!openCall) : s.calls > 0,
         bw: tut && tut.room === 'chat' ? '2.5px' : '1px',
         bd: tut && tut.room === 'chat' ? ACCENT : C.line,
@@ -3116,7 +3247,7 @@ export function useYeoul(live?: Live) {
        * 돌보기가 도는 동안에는 잠근다(연타 방지).
        */
       medFab: {
-        show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping,
+        show: s.screen === 'room' && es.sick && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && !es.sleeping && !tripOn,
         off: !!live?.careing,
       },
       // 좌측 하단 카드. 세 얼굴을 차례로 갖는다 —
@@ -3127,8 +3258,11 @@ export function useYeoul(live?: Live) {
         // ★ 자는 동안에는 접는다 — **튜토리얼 중만 빼고**(→ `showTutMini` 머리말).
         //   9칸은 아이가 잠든 채로 오므로, 접으면 마지막 손잡이가 화면에서 사라진다.
         show: s.screen === 'room' && !s.chatOpen && !s.popOpen && !s.sheet && !s.gOn && (!es.sleeping || showTutMini),
-        isTut: showTutMini, tutText: tut?.text ?? '',
-        tutStep: `${tutIdx + 1} / ${TUT.length}`,
+        isTut: showTutMini, tutText: guide?.text ?? '',
+        // 여행 안내에는 칸 번호가 없다 — 튜토리얼이 아니다.
+        tutStep: tut ? `${tutIdx + 1} / ${TUT.length}` : '',
+        /** 지금 안내가 무엇인가. 화면을 밖에서 확인할 때 쓰는 손잡이(`data-guide`). */
+        guideKind: tut ? 'tutorial' : tripOn ? 'trip' : tripGuide ? 'postcards' : '',
         /** 지금 칸 번호(0부터). 튜토리얼 밖이면 -1. 계측(`Room.tsx` 의 zzal_tutorial_step)이 읽는다. */
         tutAt: tut ? tutIdx : -1,
         /**
@@ -3467,6 +3601,7 @@ export function useYeoul(live?: Live) {
     pushReply, popPostcard, popScenes, toggleDeco, toggleMini, pickWall, pickNeedStyle, pickTime, onAskDraft,
     toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash, tutorDone,
     tutIdx, atDone, onFinishTutorial, onSavePersona, noop, live?.resting,
+    live?.calling, guide, guideLock, tripOn, tripGuide, svTrip, onCallBack, lockedRoom,
   ]);
 
   const actions = useMemo(() => ({

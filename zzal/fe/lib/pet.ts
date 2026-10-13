@@ -711,6 +711,17 @@ export function wake(petId: number): Promise<PetDetail> {
 }
 
 /**
+ * 부르기(재회) — 여행 중인 아이를 데려온다. 여행 중 모인 엽서가 이때 앨범으로 전달된다.
+ *
+ * ★ 응답이 곧 돌아온 아이의 상태다(게이지 2칸 · `trip` null). 엽서 장수는 앨범을 다시 읽어 센다 —
+ *   서버가 부르는 순간 밀린 엽서를 채우므로 부르기 전의 `trip.postcards` 보다 많을 수 있다.
+ * 실패 코드 — ZZAL_NOT_TRAVELING(409, 이미 돌아왔음) · ZZAL_PET_NOT_ALIVE(409) · ZZAL_PET_NOT_FOUND(404).
+ */
+export function callBack(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/call-back`, { method: 'POST' });
+}
+
+/**
  * 튜토리얼 9칸을 다 마쳤음을 알린다 — **마지막 칸(DONE)을 누르는 자리다.**
  *
  * ★ 이 호출이 시계를 켠다. 여기까지는 게이지가 줄지도, 케어 미스가 쌓이지도 않는다.

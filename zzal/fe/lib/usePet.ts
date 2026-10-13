@@ -73,6 +73,8 @@ export interface UsePetResult {
   care: (action: CareAction) => Promise<PetDetail | null>;
   sleep: () => Promise<PetDetail | null>;
   wake: () => Promise<PetDetail | null>;
+  /** 부르기(재회). 응답이 곧 돌아온 아이의 상태다. */
+  callBack: () => Promise<PetDetail | null>;
   setPersonality: (personality: Personality, world?: string) => Promise<PetDetail | null>;
   setBackground: (background: string) => Promise<PetDetail | null>;
   /** 공유 링크. 상태는 pet 으로 자동 갱신되고, 여기서는 붙여넣을 주소만 돌아온다. */
@@ -172,6 +174,7 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
   const care = useCallback((action: CareAction) => act((s, id) => s.care(id, action)), [act]);
   const sleep = useCallback(() => act((s, id) => s.sleep(id)), [act]);
   const wake = useCallback(() => act((s, id) => s.wake(id)), [act]);
+  const callBack = useCallback(() => act((s, id) => s.callBack(id)), [act]);
   const setPersonality = useCallback(
     (p: Personality, world?: string) => act((s, id) => s.setPersonality(id, p, world)),
     [act],
@@ -324,6 +327,6 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
     pet, loading, error, acting,
     justUnlocked, clearJustUnlocked, noteUnlocked, applyExternal,
     chat, chatReply, clearChatReply,
-    reload, care, sleep, wake, setPersonality, setBackground, share, answerChat, markSeen,
+    reload, care, sleep, wake, callBack, setPersonality, setBackground, share, answerChat, markSeen,
   };
 }
