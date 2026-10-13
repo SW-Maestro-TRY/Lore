@@ -24,6 +24,7 @@ import "./webtoon.css";
 import { hrefOf, type Go, type View } from "./lib/nav";
 import { linkThisBrowser } from "./lib/api";
 import { installAutoTrack, navCause, screenProps, setView, takeDepth, track } from "./lib/track";
+import { metaTrack } from "./lib/metaPixel";
 import { LangProvider, useLang } from "./lib/i18n";
 import { syncPush } from "./lib/push";
 import Landing from "./screens/landing/Landing";
@@ -199,6 +200,7 @@ function WebtoonScreens() {
       ...navCause(true, firstView.current),   // 어떻게 왔나 — load · click(via) · history · auto
     });
     firstView.current = false;
+    metaTrack("PageView");  // 메타 픽셀(#751) — 운영 호스트에서만 켜진다
   }, [route.view, route.step, route.run, authReady]);
 
   /* 누른 것 · 입력 칸 · 오류 · API 실패 · 탭 숨김을 화면마다 달지 않고 한 번에 켠다(track.ts 「자동 기록」). */
