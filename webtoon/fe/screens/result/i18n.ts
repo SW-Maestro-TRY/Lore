@@ -54,6 +54,21 @@ const dict: Dict = {
   "이 장 내려받기": { en: "Download this page", ja: "このページをダウンロード", zh: "下载这一页" },
   "다음화 보기": { en: "Next episode", ja: "次の話を見る", zh: "看下一话" },
   "맨 위로": { en: "Back to top", ja: "一番上へ", zh: "回到顶部" },
+  "나만의 웹툰 1화 만들어 보기": { en: "Make your own episode 1", ja: "自分だけのウェブトゥーン第1話を作ってみる", zh: "制作属于你的第1话" },
+  "다 봤다면, 당신의 캐릭터로 당신의 1화를 만들어 보세요.": {
+    en: "Finished reading? Make your own episode 1 with your character.",
+    ja: "読み終えたら、あなたのキャラクターであなたの第1話を作ってみましょう。",
+    zh: "看完了吗？用你的角色制作你的第1话吧。",
+  },
+  "가입 없이 오늘 {n}편 무료": { en: "{n} free today, no sign-up", ja: "登録なしで今日{n}話無料", zh: "无需注册，今天免费{n}话" },
+  "웹툰 만들기 시작": { en: "Start making a webtoon", ja: "ウェブトゥーンを作り始める", zh: "开始制作网络漫画" },
+  "LORE 에서 만든 웹툰이에요. 내 캐릭터로도 한 편 만들 수 있어요.": {
+    en: "This webtoon was made on LORE. You can make one with your own character too.",
+    ja: "LORE で作ったウェブトゥーンです。自分のキャラクターでも1話作れます。",
+    zh: "这是用 LORE 制作的网络漫画。你也可以用自己的角色制作一话。",
+  },
+  "내 캐릭터로 만들기": { en: "Make with my character", ja: "自分のキャラで作る", zh: "用我的角色制作" },
+  "내 캐릭터로 1화 만들기": { en: "Make episode 1 with my character", ja: "自分のキャラで第1話を作る", zh: "用我的角色制作第1话" },
 
   /* ---- ShareMenu ---- */
   "공유": { en: "Share", ja: "共有", zh: "分享" },

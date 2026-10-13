@@ -38,6 +38,7 @@ public class AuthController {
      * 시행 7일 전 공지로 갈음한다(이용자에게 불리한 개정이 아니다 — 원하는 사람만 사는 새 상품).
      * 결제 때 결제대행사로 넘기는 휴대폰 번호는 충전 창에서 결제 직전에 따로 동의받는다.
      */
+    // 같은 2026-10-21 판에 개인정보처리방침의 외부 측정 도구(Google·Clarity·Meta 픽셀) 고지도 함께 넣었다(#752).
     private static final String CURRENT_TERMS_VERSION = "2026-10-21";
 
     private final AuthService authService;
