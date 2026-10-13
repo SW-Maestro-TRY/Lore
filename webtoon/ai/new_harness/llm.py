@@ -75,7 +75,7 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "SCENE", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
                "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "COVER_REVIEW", "CAST", "PERSONA",
-               "FULL_REVIEW", "CAST_SHEET")
+               "FULL_REVIEW", "CAST_SHEET", "NARRATION")
 IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE", "CAST_SHEET_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
@@ -177,6 +177,7 @@ STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
                         ("CAST", "openai"): "gpt-5.1",
                         ("PERSONA", "openai"): "gpt-5.1",
                         ("SCENE", "openai"): "gpt-5.1",
+                        ("NARRATION", "openai"): "gpt-5.1",
                         ("FULL_REVIEW", "openai"): "gpt-5.1"}
 
 
