@@ -35,7 +35,8 @@ public class AuthController {
      * 같은 문자열이어야 한다(`webtoon/docs/legal/` 작업본 머리말). 문서를 고치면 이 값을
      * 올리고 재동의를 받는다.
      */
-    private static final String CURRENT_TERMS_VERSION = "2026-10-01";
+    // 2026-10-14: 개인정보처리방침에 외부 측정 도구(Google·Clarity·Meta 픽셀)를 적으며 올림(#752). 약관 본문은 그대로.
+    private static final String CURRENT_TERMS_VERSION = "2026-10-14";
 
     private final AuthService authService;
     private final AuthCookies cookies;
