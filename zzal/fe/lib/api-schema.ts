@@ -2476,10 +2476,79 @@ export interface paths {
          * @description 이 펫의 시계를 준 만큼 **앞으로** 민다. 게이지·잠·창·자동 취침이 그 시각 기준으로 정산된다.
          *
          *     - **규칙은 그대로다.** 값을 짧게 바꾸는 것이 아니라 시계만 밀므로 여기서 확인한 동작이 곧 운영 동작이다
-         *     - 응답의 `serverNow` 도 밀린 시계다
+         *     - 응답의 `after.serverNow` 도 밀린 시계다. `effects` 에 이번 점프에서 바뀐 칸(케어 미스·병·떠남·장면·엽서…)이 한 줄씩
+         *     - `visit:false` 면 방문으로 치지 않는다 — 하루씩 여러 번 밀어도 결석 떠남이 난다(기본 true)
          *     - 내 펫만(남의 펫은 404) · 운영에서는 이 API 가 존재하지 않는다
          */
         post: operations["advanceClock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/pets/{petId}/bake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 굽기 시작
+         * @description 부화(다시)·2층(처음부터)·선물/심화 한 판을 운영과 같은 길로 굽는다. real 이 서버 스위치와 다르면 409(과금 스위치 꺼짐 등).
+         *     응답에 예상 비용(부화 $0.19 · 2층/동작 격자 $0.09, 가짜면 0)과 진행 조회 열쇠(jobId).
+         */
+        post: operations["devBake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/pets/{petId}/bake/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 굽기 진행
+         * @description bake 응답의 jobId 로 지금 상태·단계·기록된 비용을 본다.
+         */
+        get: operations["devBakeProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/pets/{petId}/events/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 이벤트 일으키기
+         * @description 운영이 그 일을 일으키는 메서드를 그대로 부른다(시각·조건 무시). 응답 effects 에 그 사이 일어난 일이 한 줄씩.
+         *
+         *     hatch-complete · hatch-fail · tutorial-next · tutorial-skip · tutorial-restart · clock-start · graduation ·
+         *     graduation-reset · care-miss · sick(arg=NEGLECT|DIRTY|UPSET|NATURAL) · recover · sleep · nap · night-settle ·
+         *     wake · wake-auto · leave-notice · visit · trip-start · postcard · call-back · day-plus · scene(arg=1~3) ·
+         *     night-scene · chat-open · chat-close · chat-expire · chat-abandon · game-win · game-lose · today-reset ·
+         *     unlock(arg=all|2층 key) · pieces-open · piece-add(arg=FOOD|PLAY|CLEAN|BOND) · piece-complete ·
+         *     gift-review · gift-open · gift-arrive · gift-view(arg=seq, 기본 첫 선물) · release · revive
+         */
+        post: operations["devEvent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2544,8 +2613,54 @@ export interface paths {
          * 시계 맞추기
          * @description 이 펫의 시계를 특정 시각으로 맞춘다. `at`(ISO) · `sinceHatchMinutes`(부화 뒤 N분) · `localTime`("19:00", 오늘 KST) 중 하나.
          *     과거로도 갈 수 있지만 이미 정산된 것은 되돌리지 않는다 — 과거로 맞추면 그 시각까지 아무것도 안 흐른 것이 된다.
+         *     `visit:false` 면 방문으로 치지 않는다. 응답은 시간 당기기와 같은 모양(effects · before · after · state).
          */
         post: operations["setClock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/pets/{petId}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내부 상태 읽기
+         * @description 리모컨 상태 패널용 — 케어 미스·오늘 한도·평생 횟수·조각 칸·동작 행까지. 방문으로 치지 않는다.
+         */
+        get: operations["devState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 상태 세팅
+         * @description 준 칸만 값으로 바꾼다(부분 갱신). 검증은 범위만 — 넘으면 400 이고 아무것도 안 바뀐다.
+         *     연쇄(병·떠남)는 돌리지 않는다. 시계를 넘기면 규칙대로 이어진다. 응답의 effects 에 바뀐 칸이 한 줄씩.
+         */
+        patch: operations["devPatchState"];
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 개발 도구 켜짐 확인
+         * @description 200 이면 리모컨을 그린다. 꺼진 서버에는 이 주소가 없다(404). 진짜 생성 스위치도 함께 알린다.
+         */
+        get: operations["devPing"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3420,6 +3535,11 @@ export interface components {
              * @example 60
              */
             seconds?: number;
+            /**
+             * @description 방문으로 칠까(기본 true). false 면 정산만 하고 방문으로 안 친다 — 결석 떠남 재현용
+             * @example true
+             */
+            visit?: boolean;
         };
         Advanced: {
             /**
@@ -3518,6 +3638,36 @@ export interface components {
         };
         ApiResponseDetail: {
             data?: components["schemas"]["Detail"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevBake: {
+            data?: components["schemas"]["DevBake"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevBakeProgress: {
+            data?: components["schemas"]["DevBakeProgress"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevPing: {
+            data?: components["schemas"]["DevPing"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevResult: {
+            data?: components["schemas"]["DevResult"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevState: {
+            data?: components["schemas"]["DevState"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -4152,6 +4302,347 @@ export interface components {
              */
             tutorial?: components["schemas"]["Tutorial"];
             world?: string;
+        };
+        /** @description 굽기 시작 결과 */
+        DevBake: {
+            /**
+             * @description 예상 비용(달러). 가짜면 0
+             * @example 0.19
+             */
+            estimatedCostUsd?: number;
+            /**
+             * @description 진행 조회 열쇠(hatch-{genJobId} · layer2-{초} · gift-{seq}-{초})
+             * @example hatch-12
+             */
+            jobId?: string;
+            /** @description hatch · layer2 · gift */
+            kind?: string;
+            /** @description 사람 말 한 줄 */
+            note?: string;
+            /** @description 진짜 그림 생성으로 굽는가 */
+            real?: boolean;
+            /** @description 시작 직후 상태 */
+            result?: components["schemas"]["DevResult"];
+        };
+        /** @description 굽기 진행 */
+        DevBakeProgress: {
+            /** @description 이번 굽기에서 지금까지 기록된 비용(달러) */
+            costUsd?: number;
+            /**
+             * Format: int32
+             * @description 끝난 단계 수(부화만)
+             */
+            done?: number;
+            /** @description 끝났나(성공·실패 모두) */
+            finished?: boolean;
+            jobId?: string;
+            kind?: string;
+            /** @description 지금 상태(부화=phase · 2층=layer2Status · 선물=동작 status) */
+            status?: string;
+            /**
+             * Format: int32
+             * @description 전체 단계 수(부화만)
+             */
+            total?: number;
+        };
+        /** @description 굽기 요청 */
+        DevBakeRequest: {
+            /**
+             * @description hatch · layer2 · gift
+             * @example gift
+             */
+            kind?: string;
+            /**
+             * @description 진짜로 굽는 줄 아는가 — 서버 스위치(ZZAL_GENERATION_REAL)와 같아야 한다
+             * @example false
+             */
+            real?: boolean;
+            /**
+             * Format: int32
+             * @description gift 일 때 동작 seq(없으면 첫 선물)
+             * @example 101
+             */
+            seq?: number;
+        };
+        /** @description 동작 행 세팅 */
+        DevMotionPatch: {
+            /** @description 도착(revealedAt) — true 면 지금, false 면 지운다 */
+            revealed?: boolean;
+            /** @description 열람(seenAt) — true 면 지금, false 면 지운다 */
+            seen?: boolean;
+            /**
+             * Format: int32
+             * @description 카탈로그 seq
+             * @example 101
+             */
+            seq?: number;
+            /** @description NONE · QUEUED · BAKING · REVIEW · LOCAL_REQUESTED · OPEN · FAILED · HOLD */
+            status?: string;
+        };
+        /** @description 개발 리모컨 상태 세팅 — 준 칸만 바꾼다. 범위를 넘으면 400, 연쇄(병·떠남)는 시간이 지나야 이어진다 */
+        DevPetPatch: {
+            /**
+             * Format: int32
+             * @description 부재(깨어 있는) 시간 0~72 — 4시간마다 혼자 논 장면 1컷
+             */
+            absenceHours?: number;
+            /** @description 배경 키(빈 문자열이면 지운다) */
+            background?: string;
+            /**
+             * Format: int32
+             * @description 목욕 횟수
+             */
+            bathCount?: number;
+            /** @description 오늘 보너스 조각 받음 표시 */
+            bonusPiece?: boolean;
+            /** @description 호칭(빈 문자열이면 지운다) */
+            callMe?: string;
+            /**
+             * Format: int32
+             * @description 누적 케어 미스 0~99
+             */
+            careMiss?: number;
+            /**
+             * Format: int32
+             * @description 채팅 답 횟수
+             */
+            chatAnswers?: number;
+            /**
+             * Format: int32
+             * @description 청소 횟수
+             */
+            cleans?: number;
+            /**
+             * Format: int32
+             * @description 함께한 날 1~9999
+             */
+            daysTogether?: number;
+            /**
+             * @description HATCH_FAILED · NEGLECTED · RELEASED (DEAD·FAILED 일 때)
+             * @enum {string}
+             */
+            deathReason?: "HATCH_FAILED" | "NEGLECTED" | "RELEASED";
+            /**
+             * Format: int32
+             * @description 밥 횟수
+             */
+            feeds?: number;
+            /**
+             * Format: int32
+             * @description 밥 재고 0~3
+             * @example 3
+             */
+            food?: number;
+            /**
+             * Format: int32
+             * @description 배부름 0~4
+             * @example 4
+             */
+            fullness?: number;
+            /**
+             * Format: int32
+             * @description 게임 시작 횟수
+             */
+            gameStarts?: number;
+            /** @description 장르(빈 문자열이면 지운다) */
+            genre?: string;
+            /** @description 기분 좋은 날 판정 대기(내일 아침 보너스) */
+            goodDayPending?: boolean;
+            /** @description 오늘이 기분 좋은 날 */
+            goodDayToday?: boolean;
+            /** @description 졸업 축하 창을 봤나. false 면 다시 뜬다 */
+            graduationSeen?: boolean;
+            /**
+             * Format: int32
+             * @description 행복 0~4
+             * @example 4
+             */
+            happiness?: number;
+            /** @description 방금 나음 표시(healedAt). true 면 지금, false 면 지운다 */
+            healed?: boolean;
+            /**
+             * Format: int32
+             * @description 친밀도 0~999 (최고치는 따라 올라간다)
+             */
+            intimacy?: number;
+            /**
+             * Format: int32
+             * @description 친밀도 최고치 0~999 (재회 시 50%)
+             */
+            intimacyPeak?: number;
+            /**
+             * Format: int32
+             * @description 어젯밤 케어 미스 스냅샷 0~99
+             */
+            lastNightCareMiss?: number;
+            /**
+             * Format: int32
+             * @description 마지막 방문이 며칠 전인가 0~60(결석 떠남 재현)
+             */
+            lastVisitDaysAgo?: number;
+            /** @description 2층 결함 표시 */
+            layer2Flagged?: boolean;
+            /** @description 2층 굽기 상태 — PENDING · RUNNING · READY · FAILED */
+            layer2Status?: string;
+            /** @description 2층 8종 완주 표시(다음 기상에 3층) */
+            layerTwoDone?: boolean;
+            /** @description 떠남 켜기 */
+            leaveEnabled?: boolean;
+            /** @description 떠남 예고 — true 면 지금 예고, false 면 지운다 */
+            leaveNotice?: boolean;
+            /** @description 예고 막 취소됨 연출 */
+            leavingJustCancelled?: boolean;
+            /**
+             * Format: int32
+             * @description 좌우 맞히기 승수(5 → 달리기)
+             */
+            leftRightWins?: number;
+            /** @description 동작 행 상태 — seq 마다 status·도착·열람 */
+            motions?: components["schemas"]["DevMotionPatch"][];
+            /**
+             * Format: int32
+             * @description 낮잠 횟수 0~1
+             */
+            napCount?: number;
+            /**
+             * Format: int32
+             * @description 자연 발병까지 깨어 있는 분. -1 이면 예약을 지운다
+             */
+            naturalSickInMinutes?: number;
+            /** @description 늦잠 표시 */
+            overslept?: boolean;
+            /**
+             * @description 대표 성격 — GENTLE · LIVELY · SHY · CLINGY
+             * @enum {string}
+             */
+            personality?: "GENTLE" | "LIVELY" | "SHY" | "CLINGY" | "COOL";
+            /**
+             * Format: int32
+             * @description 쓰다듬기 횟수
+             */
+            pets?: number;
+            /**
+             * @description DRAFT · HATCHING · ALIVE · FAILED · DEAD
+             * @enum {string}
+             */
+            phase?: "DRAFT" | "HATCHING" | "ALIVE" | "FAILED" | "DEAD";
+            /** @description 조각 칸별 채움 — FOOD · PLAY · CLEAN · BOND → true/false (3층이 열려 있어야 한다) */
+            pieces?: {
+                [key: string]: boolean;
+            };
+            /** @description 3층(조각) 열림 */
+            piecesEnabled?: boolean;
+            /**
+             * Format: int32
+             * @description 공유 횟수
+             */
+            shares?: number;
+            /**
+             * @description 병 — NONE · NEGLECT · DIRTY · UPSET · NATURAL
+             * @example DIRTY
+             */
+            sick?: string;
+            /**
+             * Format: int32
+             * @description 병이 난 지 몇 시간(깨어 있는 시간 기준 24시간마다 케어 미스). 0~240
+             */
+            sickHoursAgo?: number;
+            /** @description 잠 — NONE · NIGHT · NAP (훅은 안 돈다 — 밤 정산은 events/night-settle) */
+            sleep?: string;
+            /**
+             * Format: int32
+             * @description 재우기+깨우기 횟수
+             */
+            sleepWakeCount?: number;
+            /**
+             * Format: int32
+             * @description 간식 횟수
+             */
+            snacks?: number;
+            /** @description 오늘 목욕했나 */
+            todayBathDone?: boolean;
+            /**
+             * Format: int32
+             * @description 오늘 돌봄 친밀도 0~30
+             */
+            todayCareIntimacy?: number;
+            /**
+             * Format: int32
+             * @description 오늘 케어 미스 0~99
+             */
+            todayCareMiss?: number;
+            /** @description 오늘 한 번이라도 돌봤나(잘 돌본 날 판정) */
+            todayCared?: boolean;
+            /**
+             * Format: int32
+             * @description 오늘 게임 판 수 0~3
+             */
+            todayGames?: number;
+            /**
+             * Format: int32
+             * @description 오늘 쓰다듬기 0~3
+             */
+            todayPetCount?: number;
+            /**
+             * Format: int32
+             * @description 오늘 간식 0~5
+             */
+            todaySnacks?: number;
+            /** @description 말투(빈 문자열이면 지운다) */
+            tone?: string;
+            /**
+             * Format: int32
+             * @description 똥(흔적) 0~4
+             * @example 4
+             */
+            trash?: number;
+            /** @description 여행 중 — true 면 지금 출발(엽서 0), false 면 지운다(재회 값은 events/call-back) */
+            trip?: boolean;
+            /**
+             * Format: int32
+             * @description 튜토리얼 칸 0~9. 9 = 끝(시계가 지금 켜진다), 0~8 = 튜토리얼 중으로 되돌린다
+             * @example 0
+             */
+            tutorialStep?: number;
+            /**
+             * Format: int32
+             * @description 손으로 깨운 횟수
+             */
+            wakes?: number;
+            /** @description 세계관(빈 문자열이면 지운다) */
+            world?: string;
+            /**
+             * Format: int32
+             * @description 잘 돌본 날 수 0~999
+             */
+            zeroMissDays?: number;
+        };
+        /** @description 개발 도구 켜짐 확인. 꺼진 서버에는 이 주소가 없다(404) */
+        DevPing: {
+            /** @description 늘 true(꺼져 있으면 응답 자체가 없다) */
+            devTools?: boolean;
+            /** @description 진짜 그림 생성 스위치(ZZAL_GENERATION_REAL). false 면 진짜 굽기를 거절한다 */
+            generationReal?: boolean;
+        };
+        /** @description 리모컨 조작 결과 — 이번에 일어난 일 · 바꾸기 전과 뒤의 캐릭터 상태 · 내부 칸 한 벌 */
+        DevResult: {
+            /** @description 바꾼 뒤 캐릭터 상태(방문 없이 정산한 값) */
+            after?: components["schemas"]["Detail"];
+            /** @description 바꾸기 전 캐릭터 상태 */
+            before?: components["schemas"]["Detail"];
+            /** @description 이번에 일어난 일(바뀐 칸마다 한 줄, '배부름: 3 → 0'). 아무것도 안 바뀌면 빈 목록 */
+            effects?: string[];
+            /** @description 바꾼 뒤 내부 칸 한 벌(케어 미스·오늘 한도·평생 횟수·조각 칸·동작 행 등) */
+            state?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description 내부 칸 한 벌(리모컨 상태 패널) */
+        DevState: {
+            detail?: components["schemas"]["Detail"];
+            state?: {
+                [key: string]: unknown;
+            };
         };
         /** @description 이미지 등록 요청. 이 요청으로 부화 전 단계가 모두 시작된다 */
         Draft: {
@@ -5229,6 +5720,11 @@ export interface components {
              * @example 40
              */
             sinceHatchMinutes?: number;
+            /**
+             * @description 방문으로 칠까(기본 true). false 면 정산만 한다
+             * @example true
+             */
+            visit?: boolean;
         };
         /** @description 공유 링크 발급 요청 */
         Share: {
@@ -8848,7 +9344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
             /** @description 0 이하이거나 30일을 넘김(INVALID_INPUT) */
@@ -8857,7 +9353,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
             /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
@@ -8866,7 +9362,82 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
+                };
+            };
+        };
+    };
+    devBake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevBakeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevBake"];
+                };
+            };
+        };
+    };
+    devBakeProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevBakeProgress"];
+                };
+            };
+        };
+    };
+    devEvent: {
+        parameters: {
+            query?: {
+                /** @description 이벤트 인자 하나(병 종류·조각 칸·장면 수·seq·해금 대상) */
+                arg?: string;
+            };
+            header?: never;
+            path: {
+                petId: number;
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
         };
@@ -8937,7 +9508,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
             /** @description 셋 중 하나가 아님 · 형식 오류 · 부화 전(INVALID_INPUT) */
@@ -8946,7 +9517,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
             /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
@@ -8955,7 +9526,75 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
+                };
+            };
+        };
+    };
+    devState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevState"];
+                };
+            };
+        };
+    };
+    devPatchState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevPetPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
+                };
+            };
+        };
+    };
+    devPing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevPing"];
                 };
             };
         };

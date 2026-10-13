@@ -200,41 +200,30 @@ export interface Fire {
 }
 
 /**
- * 개발용 덮어쓰기 한 겹. **여기 있는 값만이 서버 값을 이긴다.**
+ * 개발용 덮어쓰기 한 겹 — **그림을 보려는 칸만** 남았다(자세·상황·하루 소품·연출 중 흔적·재회 하트).
  *
- * ★ 운영에서는 전부 `null`·빈 값이라 `es` 가 예전과 **글자 그대로 같은 객체**다(덮을 것이 없으면
- *   새 객체도 안 만든다). 그래서 이 겹이 운영 동작을 바꾸지 않는다.
+ * ★ 2026-10-12 리모컨 서버화 — 게이지·똥·친밀도·병·잠·밤·여행·2층 해금·떠남 예고는 **여기서 뺐다.**
+ *   그 값들은 이제 리모컨이 서버(`/api/zzal/v1/dev/**`)를 진짜로 바꾸고, 화면은 서버 응답을 그린다.
+ *   화면에만 덮어쓰면 새로고침하면 사라지고 연쇄(미스→병→예고)가 안 일어나 "그 상황" 이 아니었다
+ *   (remote-control-spec-1011 5장 — 덮어쓰기 18칸 중 서버를 바꾸는 것 2칸).
+ * ★ 운영에서는 전부 `null`·빈 값이라 `es` 가 예전과 **글자 그대로 같은 객체**다.
  */
 export interface DevState {
   /** 자세 강제(카탈로그 key). 상황보다 먼저 화면에 반영된다. */
   pose: string | null;
   /** 상황 강제(상황표의 id). 고르면 그 줄이 적어 둔 자세도 같이 온다. */
   sit: string | null;
-  /** 바닥 흔적(똥) 개수 0~4. */
+  /** 연출 줄의 청소가 화면에서만 줄이는 흔적(규칙을 안 타는 연출 전용). 리모컨의 똥은 서버를 바꾼다. */
   trash: number | null;
-  /** 게이지. 화면에만 얹는다 — 서버 숫자는 안 바뀐다. */
-  full: number | null; happy: number | null; bond: number | null;
-  /** 몸 상태. `sickLong` 은 24시간+ 방치(해골). */
-  sick: boolean | null; sickLong: boolean;
-  /** 잠 · 밤 창. **시각과 무관하게** 그 상태를 만든다. */
-  sleeping: boolean | null; night: boolean | null;
-  /** 여행 중(떠남 2차). 화면에만 — 돌보기 잠금 문구까지 재현한다. */
-  trip: boolean;
-  /** 2층 8종 **전부** 열기. 개별 해금보다 먼저 본다. */
-  floor2: boolean;
-  /** 2층 8종 **각각** 열기(자세 key → 열림). 정본 §6 의 8칸을 하나씩 켤 수 있게. */
-  unlocked: Record<string, boolean>;
   /** 하루 소품 하나 고르기(`prop_ball` 같은 소품 key). `null` 이면 안 띄운다. */
   daily: string | null;
-  /** 그 밖에 화면에만 얹을 상황 id(가방·재회 하트 같은 것). */
+  /** 그 밖에 화면에만 얹을 상황 id — 서버 신호가 없는 재회 하트(`reunion`)만 남았다. */
   extra: string[];
 }
 
 /** 아무것도 안 덮은 상태. 운영이 늘 이 값이다. */
 export const DEV_OFF: DevState = {
-  pose: null, sit: null, trash: null, full: null, happy: null, bond: null,
-  sick: null, sickLong: false, sleeping: null, night: null, trip: false,
-  floor2: false, unlocked: {}, daily: null, extra: [],
+  pose: null, sit: null, trash: null, daily: null, extra: [],
 };
 
 export interface YeoulState {
@@ -471,15 +460,7 @@ const INITIAL: YeoulState = {
  * 덮을 것이 없으면 받은 것을 그대로 돌려준다 — 운영에서 새 객체를 만들지 않으려고.
  */
 function applyDev(base: YeoulState, d: DevState): YeoulState {
-  const over: Partial<YeoulState> = {};
-  if (d.full != null) over.full = d.full;
-  if (d.happy != null) over.happy = d.happy;
-  if (d.trash != null) over.trace = d.trash;
-  if (d.bond != null) over.bond = d.bond;
-  if (d.sick != null) over.sick = d.sick;
-  if (d.sleeping != null) over.sleeping = d.sleeping;
-  if (d.night != null) over.night = d.night;
-  return Object.keys(over).length === 0 ? base : { ...base, ...over };
+  return d.trash == null ? base : { ...base, trace: d.trash };
 }
 
 /** 급함의 단계. 시안 `levels()`. */
@@ -916,12 +897,11 @@ export function useYeoul(live?: Live) {
    *   표(`SITUATION_TABLE`)가 그 낱말로 적혀 있어 통역이 필요 없다.
    */
   const floor2Of = useCallback((action: ActionKey) => {
-    const d = sRef.current.dev;
-    if (d.floor2) return true;
+    // ★ 2026-10-12 — 개발 창의 화면 해금(floor2·unlocked)은 없앴다. 2층은 **서버 도감**만 본다
+    //   (리모컨의 `해금` 이벤트가 서버 횟수를 채워 진짜로 연다).
     const l2 = (ACTION_SITUATION[action] as { l2?: string }).l2;
     const pose = l2 ? poseOfSituation(SITUATION_TABLE, l2) : null;
     if (!pose) return false;
-    if (d.unlocked[pose]) return true;
     if (!onServerRef.current) return false;
     return !!liveRef.current?.pet?.motions?.find((m) => m.key === pose)?.unlocked;
   }, []);
@@ -941,11 +921,7 @@ export function useYeoul(live?: Live) {
    * ★ 걷는 것은 **그 행동이 건드리는 칸만**이다. 재워 놓고 밥을 줬다고 잠이 풀리면 안 된다.
    */
   const RELEASE: Partial<Record<ActionKey, readonly (keyof DevState)[]>> = useMemo(() => ({
-    feed_rice: ['full'], feed_snack: ['full'],
     clean: ['trash'], bath: ['trash'],
-    medicine: ['sick', 'sickLong'],
-    game_win: ['happy'], game_lose: ['happy'],
-    wake: ['sleeping'],
   }), []);
 
   const careAct = useCallback((action: ActionKey) => {
@@ -1116,10 +1092,11 @@ export function useYeoul(live?: Live) {
    *   칸 번호(`tutIdx`)·`atDone`·계측 `tutAt` 은 `tut` 그대로다 — 튜토리얼 계측이 여행으로 오염되지 않게.
    * ★ 서버 `trip` 으로 **매번 계산한다.** 닫기·기억 상태가 없다 — 새로고침해도, 팝오버를 닫아도 다시 보인다.
    * ★ 두 단계다: 여행 중 = 침실(「불러오기」) / 돌아온 뒤 앨범을 열 때까지 = 앨범(화면 메모리 `tripPostcards`).
-   * ★ 개발 리모컨의 「여행 중」(`s.dev.trip`)도 같은 길을 탄다 — 서버 없이 화면을 확인하는 자리.
+   * ★ 개발 리모컨의 「여행 중」도 같은 길을 탄다 — 리모컨이 서버 이벤트(`events/trip-start`)로 진짜 여행을 걸고
+   *   화면은 서버 `trip` 만 읽는다(2026-10-12 리모컨 서버화 · 화면 전용 `dev.trip` 은 없앴다).
    */
   const svTrip = onServer ? (sv.trip ?? null) : null;
-  const tripOn = !!svTrip || s.dev.trip;
+  const tripOn = !!svTrip;
   const tripGuide: { room: string; act: 'a'; text: string } | null = tripOn
     ? { room: 'bed', act: 'a', text: `${petWith((onServer ? sv?.name : '') || s.petName || '아이', '이', '가')} 여행을 떠났어요 · 침실에서 불러 주세요` }
     : s.tripPostcards > 0
@@ -1580,14 +1557,13 @@ export function useYeoul(live?: Live) {
    *
    * 흐름: 서버 `call-back` → 응답이 곧 돌아온 아이(방이 즉시 평소로) → 재회 연출 한 번 → 축하 판
    * "돌아왔어요! 엽서 N장" + 「앨범에서 보기」. N 은 **부른 뒤 앨범을 다시 읽은 실제 장수**다.
-   * ★ 개발 리모컨으로만 켠 여행(서버는 여행 아님)은 서버를 안 부른다 — 부르면 409 다. 화면만 되돌린다.
+   * ★ 개발 리모컨의 여행도 서버 이벤트(`events/trip-start`)로 걸리므로 여기서 똑같이 `call-back` 을 부른다.
    */
   const reunite = useCallback((postcards: number) => {
     tripBackAt.current = Date.now();
     tripSeenAt.current = null;
     setS((v) => ({
       ...v, popOpen: false, sheet: null, chatOpen: false, tripPostcards: postcards,
-      dev: { ...v.dev, trip: false },
     }));
     act('joy', 'reunion', 2);
     const name = petWith(petNameNowRef.current, '이', '가');
@@ -1610,11 +1586,8 @@ export function useYeoul(live?: Live) {
   const onCallBack = useCallback(() => {
     lastSel.current = Date.now();
     const trip = onServerRef.current ? (liveRef.current?.pet?.trip ?? null) : null;
-    if (!trip) {
-      // 개발 리모컨으로 켠 여행 — 서버는 모른다. 화면만 재회를 보여 준다(엽서는 서버가 없으니 3장으로 친다).
-      if (sRef.current.dev.trip) reunite(3);
-      return;
-    }
+    // 서버가 여행이 아니면 부를 것이 없다(부르면 409). 개발 리모컨의 여행도 서버 이벤트로 걸리므로 같은 길이다.
+    if (!trip) return;
     if (liveRef.current?.calling) return;
     const days = tripDays(trip.startedAt);
     const waited = tripSeenAt.current === null ? undefined : Date.now() - tripSeenAt.current;
@@ -2271,10 +2244,6 @@ export function useYeoul(live?: Live) {
   const devSet = useCallback((p: Partial<DevState>) => setS((v) => ({ ...v, dev: { ...v.dev, ...p } })), []);
   /** 덮어쓰기를 통째로 걷어낸다 — 서버·목이 정하는 대로 돌아간다. */
   const devReset = useCallback(() => setS((v) => ({ ...v, dev: DEV_OFF })), []);
-  /** 2층 한 종을 열고 닫는다(정본 §6 의 여덟 칸을 각각). */
-  const devUnlock = useCallback((pose: string) => () => setS((v) => ({
-    ...v, dev: { ...v.dev, unlocked: { ...v.dev.unlocked, [pose]: !v.dev.unlocked[pose] } },
-  })), []);
   /** 화면에만 얹는 상황 한 줄을 켜고 끈다(가방·재회 하트처럼 서버 신호가 아직 없는 것). */
   const devExtra = useCallback((id: string) => () => setS((v) => ({
     ...v,
@@ -2284,22 +2253,6 @@ export function useYeoul(live?: Live) {
     },
   })), []);
 
-  const toggleSick = useCallback(() => devSet({ sick: !esRef.current.sick, sickLong: false }), [devSet]);
-  const pickTime = useCallback((v: 'day' | 'night' | 'sleep') => () => devSet({
-    night: v !== 'day', sleeping: v === 'sleep',
-  }), [devSet]);
-  /**
-   * 이동 창의 시간대·몸 상태 넷. **아이 정보 시트에 있던 같은 버튼과 한 벌로 합쳤다** —
-   * 예전엔 `setMode`(이동 창)와 `pickTime`·`toggleSick`(시트)이 따로 두 벌이라 서로 어긋났다.
-   */
-  const setMode = useCallback((m: Mode) => () => {
-    devSet({
-      sleeping: m === 'sleep', sick: m === 'sick',
-      night: m === 'night' || m === 'sleep',
-      sickLong: false,
-    });
-    patch({ screen: 'room', sheet: null, toast: '' });
-  }, [devSet, patch]);
   /**
    * 개발용 — 하루를 넘긴다.
    * ★ 예전에는 0.5초 뒤 **엽서 판**을 자동으로 띄웠다. 날짜를 넘기려고 누른 사람에게 판이
@@ -2333,11 +2286,6 @@ export function useYeoul(live?: Live) {
    * ★ 상황을 고르면 **그 줄이 적어 둔 자세**도 같이 온다(표가 짝지어 둔 것을 화면이 다시 정하지 않는다).
    */
   const pickScene = useCallback((pose: string | null, sit: string | null = null) => () => devSet({ pose, sit }), [devSet]);
-  /**
-   * 개발용(연습방) — **2층 8종 전부 열기/닫기.** 켜면 돌보기가 2층 자세를 쓰고,
-   * 그에 맞는 소품(대개 "그림 안에 있으니 소품 없음")이 따라온다.
-   */
-  const toggleFloor2 = useCallback(() => setS((v) => ({ ...v, dev: { ...v.dev, floor2: !v.dev.floor2 } })), []);
   /** 개발용 — 후기 판(FeedbackSheet)을 mock 상태로 강제로 띄운다/끈다. 실서버는 안 탄다. */
   const toggleFbPreview = useCallback(() => setS((v) => ({ ...v, fbPreview: !v.fbPreview })), []);
   /** 선반 카드 펼치기/접기. 카드가 사라졌다 다시 떠도 **편 채로 남는다**(→ `miniOpen`). */
@@ -3134,8 +3082,6 @@ export function useYeoul(live?: Live) {
       tiles, pop, st, bub, sheet, charGroups, frames, spriteKey,
       /** 개발용 고정(자세·상황 고르기). 방과 이동 창이 함께 읽는다. */
       posePick: s.dev.pose, sitPick: s.dev.sit,
-      /** 개발용 — 2층을 다 연 것으로 치고 있는가. 이동 창의 스위치가 읽는다. */
-      floor2: s.dev.floor2,
       /** 개발용 — 후기 판을 mock 으로 강제로 띄우는 중인가. 방과 이동 창이 함께 읽는다. */
       fbPreview: s.fbPreview,
       /** 개발용 덮어쓰기 한 벌 그대로. 이동 창이 불(켜짐 표시)을 이 값으로만 판단한다. */
@@ -3167,11 +3113,19 @@ export function useYeoul(live?: Live) {
         act: s.actSit,
         /** 그 행동의 단계 소품이 지금 몇 번째 바퀴인가. 방이 표를 보고 실제 단계로 옮긴다. */
         actStep: s.actStep,
-        /** 24시간+ 방치 — 땀 대신 해골. 표의 `sick_long` 줄이다(지금은 개발용으로만 켠다). */
-        sickLong: s.dev.sickLong,
-        /** 화면에만 얹는 상황 줄(가방·재회 하트…). 서버 신호가 생기면 여기 말고 상태에서 온다. */
-        // ★ 여행 중이면 가방(`leaving_soon` 소품)을 얹는다 — 아이가 없는 자리에 남은 짐(상훈님 10/12 결정 3).
-        extra: tripOn && !s.dev.extra.includes('leaving_soon') ? [...s.dev.extra, 'leaving_soon'] : s.dev.extra,
+        /**
+         * 24시간+ 방치 — 땀 대신 해골(표 `sick_long`). ★ 2026-10-12 — 서버 신호로 켠다:
+         * 병이 난 지(`sick.since`) 서버 시각으로 24시간이 지났으면. 리모컨의 `sickHoursAgo` 로 만들 수 있다.
+         */
+        sickLong: onServer && !!sv?.sick && !!sv.serverNow
+          && Date.parse(sv.serverNow) - Date.parse(sv.sick.since) >= 24 * 3_600_000,
+        /**
+         * 상황 줄 덧붙이기. ★ 가방(`leaving_soon`)은 **서버 신호**에서 온다(2026-10-12) — 떠남 예고(`leaving`)와
+         * 여행 중(`trip` → `tripOn`, 아이가 없는 자리에 남은 짐 · 상훈님 10/12 결정 3) 둘 다.
+         * 화면에만 얹는 것은 서버 신호가 없는 재회 하트(`reunion`)뿐이다.
+         */
+        extra: (tripOn || (onServer && !!sv?.leaving)) && !s.dev.extra.includes('leaving_soon')
+          ? [...s.dev.extra, 'leaving_soon'] : s.dev.extra,
         /** 하루 소품 하나(`prop_ball`…). 고른 것이 없으면 안 띄운다. */
         daily: s.dev.daily,
       },
@@ -3598,8 +3552,8 @@ export function useYeoul(live?: Live) {
     s, es, sv, onServer, svChat, live?.careing, live?.chat, live?.chatting, live?.game, live?.guessing, live?.album, hatchN, hatchReady, hatchPct, hatchText, mode, tut, TUT, needStyle, statusText, selRoom, onRice, onSnack, onClean, onBath, onSleep,
     openPlay, openChat, openWall, openSheet, closeWall, closeFrame, saveShot, pickFrame, prevTutor, startGuess, endGuess, quitGuess,
     nextTutor, onAnswerCall, skipTutorStep, finishTutorHere, pickChip, onGroupText, pickUser, askNext, pickTab,
-    pushReply, popPostcard, popScenes, toggleDeco, toggleMini, pickWall, pickNeedStyle, pickTime, onAskDraft,
-    toggleSick, toggleNotif, toggleLeave, exitSample, goEgg, flash, tutorDone,
+    pushReply, popPostcard, popScenes, toggleDeco, toggleMini, pickWall, pickNeedStyle, onAskDraft,
+    toggleNotif, toggleLeave, exitSample, goEgg, flash, tutorDone,
     tutIdx, atDone, onFinishTutorial, onSavePersona, noop, live?.resting,
     live?.calling, guide, guideLock, tripOn, tripGuide, svTrip, onCallBack, lockedRoom,
   ]);
@@ -3609,20 +3563,20 @@ export function useYeoul(live?: Live) {
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
+    nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
     popPostcard,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
-    devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFbPreview, showUnlock,
+    devSet, devReset, devExtra, playGift, playScene,
     backToSample: () => patch({ screen: 'room' }),
   }), [
     patch, flash, closePop, bottomTap, selRoom, openSheet, closeSheet, openWall, closeWall,
     closeFrame, closeFire, openChat, closeChat, onPet, onRice, onSnack, onClean, onBath, onMed, shareFrame,
     onSleep, onGuess, onSend, onDraft, onAnswerCall, saveShot, enterSample, goEgg, exitSample,
     tapEgg, goStep, onNext, onBack, onUpload, onName, randomName, openNotify, openSettings, enterRoom,
-    setMode, nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
+    nextDay, restart, leaveAccount, setShards, finishRoadmap, showTutorEnd, startTutor, endTutor, skipTutorStep, openPlay, onGuessSide, startGuess, endGuess, quitGuess,
     popPostcard,
-    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFloor2, toggleFbPreview, showUnlock,
-    devSet, devReset, devUnlock, devExtra, playGift, playScene, pickTime, toggleSick,
+    openAuth, closeAuth, passAuth, onSavePersona, onFinishTutorial, pickScene, toggleFbPreview, showUnlock,
+    devSet, devReset, devExtra, playGift, playScene,
   ]);
 
   return { s, v, actions };

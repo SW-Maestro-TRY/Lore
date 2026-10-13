@@ -113,4 +113,25 @@ public class LeaveService {
         };
         return BanFilter.clean(raw);
     }
+
+    /**
+     * dev(리모컨) — 날짜와 무관하게 엽서 <b>한 장</b>을 지금 쓴다(여행 중·3장 미만일 때만).
+     * ★ 운영은 {@link #fillPostcards} 가 출발일부터 날수로 채운다. 리모컨은 다음 날을 기다리지 않고 한 장씩 보려고 쓴다.
+     *
+     * @return 썼으면 true
+     */
+    public boolean devWriteOne(ZzalPet pet, Instant now) {
+        if (!pet.isAlive() || !pet.isTraveling() || pet.getPostcardCount() >= ZzalRules.POSTCARD_MAX) {
+            return false;
+        }
+        int seq = pet.getPostcardCount() + 1;
+        postcardRepository.save(ZzalPostcard.of(pet.getId(), seq, place(pet, seq), now));
+        pet.wrotePostcard(now);
+        return true;
+    }
+
+    /** dev(리모컨) — 이 펫의 엽서 수(전달 여부 무관). */
+    public int devCount(Long petId) {
+        return postcardRepository.findByPetIdOrderByWrittenAtAscIdAsc(petId).size();
+    }
 }

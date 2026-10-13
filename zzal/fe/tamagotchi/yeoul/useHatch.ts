@@ -348,6 +348,11 @@ export interface Live {
   sendWish: (text: string) => Promise<{ ok: boolean; code: string | null }>;
   /** 두고 간 아이가 있는지 서버에 물어본다. 로그인한 뒤에 한 번만 부른다. */
   resume: () => Promise<'draft' | 'hatching' | 'alive' | null>;
+  /**
+   * 개발 리모컨 — 서버가 방금 돌려준 상태를 **그대로** 얹는다(응답 순서 자물쇠를 같이 탄다).
+   * ★ 다시 조회하지 않는 이유 — 조회는 방문으로 처리돼 방금 켠 떠남 예고가 그 자리에서 취소된다.
+   */
+  putDetail: (next: PetDetail) => void;
   reset: () => void;
 }
 
@@ -375,7 +380,7 @@ const EMPTY: Live = {
   clearJustUnlocked: () => {}, noteUnlocked: () => {},
   sendWish: async () => ({ ok: false, code: 'no_pet' }),
   loadAlbum: async () => {}, shareMotion: async () => ({ error: null, url: null }),
-  resume: async () => null, reset: () => {},
+  resume: async () => null, reset: () => {}, putDetail: () => {},
 };
 
 export function useHatchState(): Live {
@@ -495,6 +500,8 @@ export function useHatchState(): Live {
     noteUnlocked(next.justUnlocked ?? []);
     return true;
   }, [noteUnlocked]);
+  /** 리모컨 응답을 얹는다(아래 Live.putDetail). 순번은 지금 받는다 — 보낸 뒤 도착한 응답이라 그 사이 다른 응답이 없었다. */
+  const putDetail = useCallback((next: PetDetail) => { putPet(takeSeq(), next); }, [putPet, takeSeq]);
   /** 판도 같은 규칙으로. ref 를 함께 바꿔 **같은 틱에** 읽을 수 있게 한다. */
   const putGame = useCallback((seq: number, next: GameState | null) => {
     if (seq <= appliedGame.current) return false;
@@ -1210,7 +1217,7 @@ export function useHatchState(): Live {
     justUnlocked,
     setChar, doCare, doRest, calling, callBack, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
     clearJustUnlocked, noteUnlocked,
-    loadAlbum, shareMotion, sendWish, resume, reset,
+    loadAlbum, shareMotion, sendWish, resume, reset, putDetail,
   };
 }
 

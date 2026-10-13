@@ -2078,6 +2078,397 @@ public class ZzalPet {
 
     public enum Mood { SICK, HUNGRY, SAD, DIRTY, NORMAL }
 
+    // ── 개발 리모컨 (dev 컨트롤러만 부른다 — app.zzal.dev-tools) ─────────────
+    //
+    // ★ 운영 규칙이 쓰는 메서드를 고치지 않고 여기에 따로 둔다. 운영 코드가 이 메서드를 부르는 일은 없다
+    //   (부르는 곳은 com.lore.zzal.dev 뿐이고, 그 빈은 dev-tools=true 일 때만 뜬다).
+    // ★ 값을 바꾸는 곳은 이 묶음 한 곳이다 — 리모컨이 엔티티 칸을 직접 만지는 길이 서비스 여기저기로 새지 않게.
+
+    /**
+     * dev — 칸 값을 직접 세팅한다({@link DevPetPatch}). null 인 칸은 그대로.
+     *
+     * ★ 연쇄는 안 돌린다. 대신 경계값(게이지 0·똥 4)을 넣으면 <b>그 상태가 지금 막 된 것처럼</b> 타이머를 맞춘다 —
+     *   그래야 시계를 6시간 넘겼을 때 운영과 같은 순서로 케어 미스·병이 이어진다.
+     * ★ 범위 검증은 부르는 쪽이 {@link DevPetPatch#violations()} 로 먼저 한다.
+     */
+    public void devApply(DevPetPatch p, Instant now) {
+        Instant t = now.truncatedTo(ChronoUnit.SECONDS);
+        if (p.phase() != null) {
+            this.phase = p.phase();
+            if (phase == PetPhase.ALIVE) {
+                this.deathReason = null;
+                if (hatchedAt == null) {
+                    this.hatchedAt = t;
+                    startLife(t);
+                }
+                if (settledAt == null) {
+                    settledAt = t;
+                }
+            }
+        }
+        if (p.deathReason() != null) {
+            this.deathReason = p.deathReason();
+        }
+        if (p.tutorialStep() != null) {
+            int step = p.tutorialStep();
+            if (step >= TutorialSchedule.TOTAL) {
+                // 끝 = 시계가 지금 켜진다(startClock 과 같은 칸). 구르기 선물 굽기는 events/clock-start 가 한다.
+                this.tutorialStep = TutorialSchedule.TOTAL;
+                if (clockStartedAt == null) {
+                    clockStartedAt = t;
+                    settledAt = t;
+                    wokeAt = t;
+                }
+            } else {
+                // 튜토리얼 안으로 되돌린다 — 시계가 꺼져야 settle 이 다시 멈춘다(isInTutorial).
+                this.tutorialStep = step;
+                this.clockStartedAt = null;
+            }
+        }
+        if (p.graduationSeen() != null) {
+            this.graduationSeenAt = p.graduationSeen() ? t : null;
+        }
+        if (p.fullness() != null) {
+            this.fullness = p.fullness();
+            this.fullnessMissArmed = fullness == 0;
+            this.fullnessZeroSec = 0;
+        }
+        if (p.happiness() != null) {
+            this.happiness = p.happiness();
+            this.happinessMissArmed = happiness == 0;
+            this.happinessZeroSec = 0;
+        }
+        if (p.trash() != null) {
+            this.trash = p.trash();
+            this.cleanMissArmed = trash >= ZzalRules.TRASH_MAX;
+            this.cleanZeroSec = 0;
+        }
+        if (p.food() != null) {
+            this.food = p.food();
+            // 가득이면 충전 시계가 멈추고, 모자라면 지금부터 4시간에 하나(chargeFood 와 같은 모양)
+            this.foodAt = food >= ZzalRules.FOOD_MAX ? null : t;
+        }
+        if (p.careMiss() != null) {
+            this.careMiss = p.careMiss();
+        }
+        if (p.todayCareMiss() != null) {
+            this.todayCareMiss = p.todayCareMiss();
+        }
+        if (p.lastNightCareMiss() != null) {
+            this.lastNightCareMiss = p.lastNightCareMiss();
+        }
+        if (p.zeroMissDays() != null) {
+            this.zeroMissDays = p.zeroMissDays();
+        }
+        if (p.sick() != null) {
+            if ("NONE".equals(p.sick())) {
+                this.sickSince = null;
+                this.sickKind = null;
+                this.sickAwakeSec = 0;
+            } else {
+                this.sickKind = SickKind.valueOf(p.sick());
+                if (sickSince == null) {
+                    this.sickSince = t;
+                }
+                this.sickAwakeSec = 0;
+            }
+        }
+        if (p.sickHoursAgo() != null && sickSince != null) {
+            this.sickSince = t.minus(Duration.ofHours(p.sickHoursAgo()));
+            this.sickAwakeSec = Duration.ofHours(p.sickHoursAgo()).getSeconds()
+                    % ZzalRules.CARE_MISS_SICK_EVERY.getSeconds();
+        }
+        if (p.naturalSickInMinutes() != null) {
+            this.naturalSickDueAwakeSec = p.naturalSickInMinutes() < 0 ? null
+                    : Math.max(1L, Duration.ofMinutes(p.naturalSickInMinutes()).getSeconds());
+        }
+        if (p.sleep() != null) {
+            if ("NONE".equals(p.sleep())) {
+                this.sleepKind = null;
+                this.sleptAt = null;
+            } else {
+                this.sleepKind = SleepKind.valueOf(p.sleep());
+                this.sleptAt = t;
+            }
+        }
+        if (p.overslept() != null) {
+            this.overslept = p.overslept();
+        }
+        if (p.napCount() != null) {
+            this.napCount = p.napCount();
+        }
+        if (p.intimacy() != null) {
+            this.intimacy = p.intimacy();
+            this.intimacyPeak = Math.max(intimacyPeak, intimacy);
+        }
+        if (p.intimacyPeak() != null) {
+            this.intimacyPeak = Math.max(p.intimacyPeak(), intimacy);
+        }
+        if (p.todayPetCount() != null) {
+            this.todayPetCount = p.todayPetCount();
+        }
+        if (p.todayCareIntimacy() != null) {
+            this.todayCareIntimacy = p.todayCareIntimacy();
+        }
+        if (p.todayGames() != null) {
+            this.todayGames = p.todayGames();
+        }
+        if (p.todayBathDone() != null) {
+            this.todayBathDone = p.todayBathDone();
+        }
+        if (p.todaySnacks() != null) {
+            this.todaySnacks = p.todaySnacks();
+        }
+        if (p.todayCared() != null) {
+            this.todayCared = p.todayCared();
+        }
+        if (p.feeds() != null) {
+            this.feeds = p.feeds();
+        }
+        if (p.pets() != null) {
+            this.pets = p.pets();
+        }
+        if (p.cleans() != null) {
+            this.cleans = p.cleans();
+        }
+        if (p.bathCount() != null) {
+            this.bathCount = p.bathCount();
+        }
+        if (p.snacks() != null) {
+            this.snacks = p.snacks();
+        }
+        if (p.chatAnswers() != null) {
+            this.chatAnswers = p.chatAnswers();
+        }
+        if (p.sleepWakeCount() != null) {
+            this.sleepWakeCount = p.sleepWakeCount();
+        }
+        if (p.wakes() != null) {
+            this.wakes = p.wakes();
+        }
+        if (p.gameStarts() != null) {
+            this.gameStarts = p.gameStarts();
+        }
+        if (p.shares() != null) {
+            this.shares = p.shares();
+        }
+        if (p.leftRightWins() != null) {
+            this.leftRightWins = p.leftRightWins();
+        }
+        if (p.daysTogether() != null) {
+            this.daysTogether = p.daysTogether();
+        }
+        if (p.lastVisitDaysAgo() != null) {
+            this.lastVisitDate = AwakeClock.dateOf(t).minusDays(p.lastVisitDaysAgo());
+        }
+        if (p.leaveEnabled() != null) {
+            setLeaveEnabled(p.leaveEnabled());
+        }
+        if (p.leaveNotice() != null) {
+            this.leaveNoticeAt = p.leaveNotice() ? t : null;
+        }
+        if (p.trip() != null) {
+            if (p.trip()) {
+                devTripStart(t);
+            } else {
+                this.tripStartedAt = null;
+            }
+        }
+        if (p.leavingJustCancelled() != null) {
+            this.leavingJustCancelled = p.leavingJustCancelled();
+        }
+        if (p.absenceHours() != null) {
+            this.absenceAwakeSec = Duration.ofHours(p.absenceHours()).getSeconds();
+        }
+        if (p.layer2Status() != null) {
+            this.layer2Status = Layer2Status.valueOf(p.layer2Status());
+            this.layer2UpdatedAt = t;
+        }
+        if (p.layer2Flagged() != null) {
+            this.layer2Flagged = p.layer2Flagged();
+        }
+        if (p.layerTwoDone() != null) {
+            this.layerTwoDoneAt = p.layerTwoDone() ? t : null;
+        }
+        if (p.piecesEnabled() != null) {
+            this.piecesEnabledAt = p.piecesEnabled() ? t : null;
+            if (p.piecesEnabled() && layerTwoDoneAt == null) {
+                this.layerTwoDoneAt = t;
+            }
+        }
+        if (p.goodDayPending() != null) {
+            this.goodDayPending = p.goodDayPending();
+        }
+        if (p.goodDayToday() != null) {
+            this.goodDayToday = p.goodDayToday();
+        }
+        if (p.bonusPiece() != null) {
+            this.bonusPiece = p.bonusPiece();
+        }
+        if (p.personality() != null) {
+            this.personality = p.personality();
+        }
+        if (p.world() != null) {
+            this.world = blankToNull(p.world());
+        }
+        if (p.tone() != null) {
+            this.tone = blankToNull(p.tone());
+        }
+        if (p.genre() != null) {
+            this.genre = blankToNull(p.genre());
+        }
+        if (p.background() != null) {
+            this.background = blankToNull(p.background());
+        }
+        if (p.callMe() != null) {
+            this.callMe = blankToNull(p.callMe());
+        }
+        if (p.healed() != null) {
+            this.healedAt = p.healed() ? t : null;
+        }
+    }
+
+    /** dev — 강제 발병. 이미 아파도 그 종류로 바꾼다(운영의 "먼저 난 병이 이긴다" 와 다르게 — 고른 것을 보려고). */
+    public void devFallSick(SickKind kind, Instant at) {
+        this.sickSince = null;
+        fallSick(kind, at);
+    }
+
+    /** dev — 케어 미스 +1. 운영과 같은 길(홀수면 30% 방치 병 굴림)을 탄다. */
+    public void devAddCareMiss(Instant at) {
+        addCareMiss(at);
+    }
+
+    /**
+     * dev — 시각과 무관하게 재운다. {@code manual} 이 true 면 사용자가 재운 것(보상 행복+1·친밀+10·횟수),
+     * false 면 23:00 자동 취침(밤 정산만).
+     */
+    public void devSleep(SleepKind kind, Instant at, boolean manual) {
+        if (isSleeping()) {
+            onWake(at, false);
+        }
+        onSleep(at, kind, manual);
+    }
+
+    /** dev — 시각과 무관하게 깨운다. {@code manual} 이 false 면 10:00 자동 기상(늦잠). 안 자면 아무 일도 없다. */
+    public void devWake(Instant at, boolean manual) {
+        if (!isSleeping()) {
+            return;
+        }
+        onWake(at, manual);
+    }
+
+    /** dev — 떠남 예고를 지금 켠다(조건과 무관). 떠남 꺼짐·여행 중이어도 켠다 — 화면 확인용. */
+    public void devLeaveNotice(Instant at) {
+        this.leaveNoticeAt = at;
+        this.leavingJustCancelled = false;
+    }
+
+    /** dev — 지금 여행을 떠난다. 예고가 출발로 넘어가는 그 자리(judgeLeaving)와 같은 칸을 바꾼다. */
+    public void devTripStart(Instant at) {
+        this.tripStartedAt = at;
+        this.leaveNoticeAt = null;
+        this.postcardCount = 0;
+        this.lastPostcardDate = null;
+    }
+
+    /** dev — 부재(깨어 있는) 시간을 더한다. 4시간마다 혼자 논 장면 한 컷 — 실제로 남기는 것은 장면 서비스다. */
+    public void devAddAbsence(Duration by) {
+        this.absenceAwakeSec += by.getSeconds();
+    }
+
+    /** dev — 밤 장면 대기를 지금으로 건다(그 밤 잠든 것처럼). 실제 컷은 장면 서비스가 남긴다. */
+    public void devQueueNightScene(Instant at) {
+        this.nightSceneAt = null;
+        this.pendingNightSceneAt = at;
+        this.pendingNightSick = isSick();
+        this.pendingNightMood = mood().name();
+    }
+
+    /**
+     * dev — <b>튜토리얼을 처음부터</b>. 부화 직후의 첫 상태로 되돌린다(배부름 0·첫 칸·시계 꺼짐·졸업 창 다시).
+     * 평생 횟수·도감·조각은 그대로 둔다 — 튜토리얼을 다시 보는 것이지 아이를 새로 키우는 것이 아니다.
+     */
+    public void devRestartTutorial(Instant now) {
+        Instant t = now.truncatedTo(ChronoUnit.SECONDS);
+        this.tutorialStep = 0;
+        this.clockStartedAt = null;
+        this.graduationSeenAt = null;
+        this.napCount = 0;
+        this.sleepKind = null;
+        this.sleptAt = null;
+        this.fullness = ZzalRules.TUTORIAL_START_FULLNESS;
+        this.happiness = ZzalRules.HATCH_HAPPINESS;
+        this.trash = ZzalRules.HATCH_TRASH;
+        this.food = ZzalRules.HATCH_FOOD;
+        this.foodAt = null;
+        this.sickSince = null;
+        this.sickKind = null;
+        this.sickAwakeSec = 0;
+        this.fullnessMissArmed = false;
+        this.happinessMissArmed = false;
+        this.cleanMissArmed = false;
+        this.settledAt = t;
+    }
+
+    /** dev — 떠난(DEAD)·실패한(FAILED) 아이를 되살린다. 부화한 적이 없으면 첫 상태부터. */
+    public void devRevive(Instant now) {
+        this.phase = PetPhase.ALIVE;
+        this.deathReason = null;
+        if (hatchedAt == null) {
+            this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
+            startLife(now);
+        }
+        this.settledAt = now.truncatedTo(ChronoUnit.SECONDS);
+    }
+
+    /**
+     * dev — 이 아이를 <b>다시 굽는 중</b>(HATCHING)으로 돌린다(굽기 hatch). 굽기가 끝나면 운영과 같은 길
+     * ({@code HatchService.completeIfReady} → {@link #markAlive})로 살아난다 — 게이지는 부화 직후 값이 된다.
+     */
+    public void devRehatch(Instant now) {
+        this.phase = PetPhase.HATCHING;
+        this.deathReason = null;
+        this.hatchStartedAt = now;
+    }
+
+    /** dev — 2층 완주 + 3층 조각 열림을 지금으로(다음 기상을 기다리지 않는다). */
+    public void devOpenPieces(Instant at) {
+        if (layerTwoDoneAt == null) {
+            layerTwoDoneAt = at;
+        }
+        piecesEnabledAt = at;
+    }
+
+    /** dev — 오늘(하루) 한도·카운터를 밤 리셋처럼 0 으로. 잠들지 않고 한도만 되돌린다. */
+    public void devResetToday() {
+        todayGames = 0;
+        todayPetCount = 0;
+        todayCareIntimacy = 0;
+        todayBathDone = false;
+        todaySnacks = 0;
+    }
+
+    public boolean isTodayCared() {
+        return todayCared;
+    }
+
+    public boolean isGoodDayPending() {
+        return goodDayPending;
+    }
+
+    public Instant getLayerTwoDoneAt() {
+        return layerTwoDoneAt;
+    }
+
+    public Instant getFoodAt() {
+        return foodAt;
+    }
+
+    public Instant getNightSceneAt() {
+        return nightSceneAt;
+    }
+
     // ── getter ────────────────────────────────────────────────────────────
 
     public Long getId() {

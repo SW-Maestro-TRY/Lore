@@ -76,8 +76,9 @@ export default function DevPanel({ petId, serverNow, mock, onPet }: DevPanelProp
       const base = serverNow ? new Date(serverNow).getTime() : Date.now();
       const next = j.act === 'force-open' ? await forceOpen(petId, GIFT_SEQ)
         : j.act === 'night-sweep' ? await nightSweep(petId)
-          : j.minutes != null ? await advanceClock(petId, j.minutes)
-            : await setClockAt(petId, new Date(nextLocalAt(base, j.at as string)).toISOString());
+          // 시계 두 주소는 리모컨 모양(DevResult)으로 답한다 — 화면 상태는 `after` 다.
+          : j.minutes != null ? (await advanceClock(petId, j.minutes)).after
+            : (await setClockAt(petId, new Date(nextLocalAt(base, j.at as string)).toISOString())).after;
       onPet(next);
     } catch (e) {
       // ★ dev 도구가 꺼진 서버에서는 그 주소가 아예 없다(404) 또는 막힌다(403).

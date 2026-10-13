@@ -294,6 +294,16 @@ public class PetService {
 
     /** 정산 + 방문(그날 처음이면 함께한 날 +1) + 아침 공개. 조회든 행동이든 펫을 만지는 모든 길이 여기를 지난다. */
     private void touch(ZzalPet pet, Instant realNow) {
+        touch(pet, realNow, true);
+    }
+
+    /**
+     * {@code visit} 이 false 면 <b>방문만 빼고</b> 똑같이 정산한다 — 개발 리모컨의 "방문 없이 시간 넘기기" 전용.
+     *
+     * ★ 왜 필요한가 — 시계를 하루씩 다섯 번 밀면 매번 방문으로 처리돼 결석 떠남이 영영 안 난다(remote-control-spec 3절).
+     *   방문({@code visit})은 함께한 날·떠남 예고 취소·부재 시계를 바꾸므로 그것만 건너뛴다. 나머지 순서는 그대로다.
+     */
+    private void touch(ZzalPet pet, Instant realNow, boolean visit) {
         if (!pet.isAlive()) {
             return;
         }
@@ -312,7 +322,9 @@ public class PetService {
         // ★ 여행 중이면 소식(엽서)만 쌓인다 — 장면도 도착도 없다(방에 없으므로).
         //   밀린 몫까지 채운다(조회를 했든 안 했든 결과가 같아야 한다).
         leaveService.fillPostcards(pet, now);
-        pet.visit(now);
+        if (visit) {
+            pet.visit(now);
+        }
         reveal(pet, now);
         announceLayer2(pet, now);
         openPieces(pet, windowStart, now);
@@ -822,9 +834,15 @@ public class PetService {
      */
     @Transactional
     public ZzalPet advanceClock(Long userId, Long petId, Duration by, Instant realNow) {
+        return advanceClock(userId, petId, by, realNow, true);
+    }
+
+    /** {@code visit} 이 false 면 민 뒤 정산만 하고 방문으로 치지 않는다(결석 떠남 재현). */
+    @Transactional
+    public ZzalPet advanceClock(Long userId, Long petId, Duration by, Instant realNow, boolean visit) {
         ZzalPet pet = findMine(userId, petId);
         pet.advanceDevClock(by);
-        touch(pet, realNow);
+        touch(pet, realNow, visit);
         return pet;
     }
 
@@ -859,10 +877,39 @@ public class PetService {
     /** 이 펫의 지금을 {@code target} 으로 맞춘다. */
     @Transactional
     public ZzalPet setClock(Long userId, Long petId, Instant target, Instant realNow) {
+        return setClock(userId, petId, target, realNow, true);
+    }
+
+    /** {@code visit} 이 false 면 맞춘 뒤 정산만 하고 방문으로 치지 않는다. */
+    @Transactional
+    public ZzalPet setClock(Long userId, Long petId, Instant target, Instant realNow, boolean visit) {
         ZzalPet pet = findMine(userId, petId);
         pet.setDevClock(target, realNow);
-        touch(pet, realNow);
+        touch(pet, realNow, visit);
         return pet;
+    }
+
+    // ── 개발 리모컨 (com.lore.zzal.dev 만 부른다 — 부르는 쪽 트랜잭션 안에서) ──────────
+
+    /** dev — 내 펫을 잠그고 꺼낸다(정산 없음). 남의 펫은 404. 부르는 쪽이 트랜잭션을 연다. */
+    public ZzalPet devLock(Long userId, Long petId) {
+        return findMine(userId, petId);
+    }
+
+    /** dev — 흐른 시간을 정산한다. {@code visit} 이 false 면 방문으로 치지 않는다(조회와 다른 점은 그것뿐). */
+    public void devSettle(ZzalPet pet, Instant realNow, boolean visit) {
+        touch(pet, realNow, visit);
+    }
+
+    /** dev — 아침 도착(판정이 끝난 동작을 지금 도착시킬 수 있으면)을 지금 본다. 깨운 뒤에 부른다. */
+    public void devReveal(ZzalPet pet, Instant now) {
+        reveal(pet, now);
+    }
+
+    /** dev — 2층 완주·3층 열림을 판정하고 조각 줄을 연다(이미 열렸으면 줄만 확인). */
+    public void devOpenPieces(ZzalPet pet, Instant now) {
+        pet.devOpenPieces(now);
+        pieceService.open(pet.getId());
     }
 
     // ── 보내기 ────────────────────────────────────────────────────────────

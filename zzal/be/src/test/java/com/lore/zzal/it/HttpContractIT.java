@@ -313,7 +313,8 @@ class HttpContractIT extends ZzalItSupport {
                 Map.of("localTime", "19:00"));
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
 
-        java.time.Instant after = java.time.Instant.parse(body(result).path("data").path("serverNow").asText());
+        // ★ 시계 응답은 리모컨 모양(effects · before · after · state)이다 — 맞춘 뒤의 시각은 after 에 있다.
+        java.time.Instant after = java.time.Instant.parse(body(result).path("data").path("after").path("serverNow").asText());
         assertThat(after.atZone(ZzalRules.ZONE).toLocalDate())
                 .as("서버 날짜를 쓰면 여기서 어제로 되돌아간다. 실제=%s", after)
                 .isEqualTo(petToday);
@@ -400,6 +401,11 @@ class HttpContractIT extends ZzalItSupport {
                 "/api/zzal/v1/me/pets/{petId}/chat/{slot}/answer",
                 "/api/zzal/v1/me/pets/{petId}/call-back",
                 "/api/zzal/v1/dev/pets/{petId}/advance-clock",
-                "/api/zzal/v1/dev/pets/{petId}/set-clock");
+                "/api/zzal/v1/dev/pets/{petId}/set-clock",
+                "/api/zzal/v1/dev/ping",
+                "/api/zzal/v1/dev/pets/{petId}/state",
+                "/api/zzal/v1/dev/pets/{petId}/events/{kind}",
+                "/api/zzal/v1/dev/pets/{petId}/bake",
+                "/api/zzal/v1/dev/pets/{petId}/bake/{jobId}");
     }
 }
