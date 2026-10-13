@@ -49,15 +49,32 @@
 }
 .wt .wt-result-pg:hover .wt-result-pgdl, .wt .wt-result-pgdl:focus-visible { opacity: 1; }
 
+/* 남의 작품 끝의 만들기 영역(#750). 이 화면에서 가장 눈에 띄는 것이어야 해서 바다색으로
+   채운다 — 흰 카드였을 때는 아래 「다음화 보기」 단추에 묻혔다. */
 .wt .wt-result-remix {
   width: 720px; max-width: 100%;
-  margin: 24px 0 16px; padding: 20px 22px;
-  border: 1px solid var(--line); border-radius: 12px; background: var(--paper);
+  margin: 28px 0 20px; padding: 26px 22px;
+  border-radius: 14px; background: var(--sea); color: #fff;
   display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
 }
-.wt .wt-result-remix b { font-size: 17px; }
-.wt .wt-result-remix .muted { font-size: 13px; }
-.wt .wt-result-remix .btn { margin-top: 6px; align-self: stretch; }
+.wt .wt-result-remix b { font-size: 20px; }
+.wt .wt-result-remix-sub { font-size: 14px; color: rgba(255, 255, 255, 0.9); }
+.wt .wt-result-remix-free {
+  font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2); color: #fff;
+}
+.wt .wt-result-remix .btn { margin-top: 8px; align-self: stretch; border-color: #fff; color: var(--sea-deep); font-weight: 800; }
+
+/* 광고·SNS 링크를 달고 바로 들어온 사람에게만 보이는 한 줄(#750). 제목 바로 아래. */
+/* 머리 칸은 내용 폭을 따라 줄어드는 칸이라, 안에 720px 짜리를 두면 폰에서 화면 밖으로 넓어진다 —
+   머리 칸을 본문 폭에 맞추고 이 줄은 최대 720px 로 둔다. */
+.wt .wt-result-head:has(.wt-result-linkbar) { align-self: stretch; }
+.wt .wt-result-linkbar {
+  width: 100%; max-width: 720px; margin-top: 6px; padding: 10px 12px 10px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  border: 1px solid var(--water); border-radius: 12px; background: var(--water-light);
+  font-size: 14px; color: var(--sea-deep); text-align: left;
+}
 @media (min-width: 720px) {
   .wt .wt-result-remix { align-items: center; text-align: center; }
   .wt .wt-result-remix .btn { align-self: center; min-width: 220px; }

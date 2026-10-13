@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
-  readResult, rememberRecent, renameRun, type RunCard, type RunResult,
+  readAllowance, readResult, rememberRecent, renameRun, type Allowance, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useT } from "../../lib/i18n";
@@ -100,6 +100,28 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   }, [runId, authenticated]);
 
   const mine = isMyRun(runId) || ownedByAccount;
+
+  /* 남의 작품을 본 사람을 만들기로 잇는다(#750). 광고는 예시 작품 완성본으로 바로 보내서,
+     여기가 광고로 온 사람의 첫 화면이다. 로그인 없이도 오늘 몇 편 무료인지는 서버가
+     정한다(GuestGate) — 화면에 숫자를 박지 않는다. */
+  const [allow, setAllow] = useState<Allowance | null>(null);
+  useEffect(() => {
+    if (mine) return;
+    let alive = true;
+    readAllowance().then((a) => { if (alive) setAllow(a); }).catch(() => {});
+    return () => { alive = false; };
+  }, [mine, authenticated]);
+  const freeLeft = allow && !allow.logged_in && !allow.blocked ? allow.free_left ?? 0 : 0;
+  /* 광고·SNS 링크(UTM)를 달고 이 화면으로 바로 들어왔나. 첫 그림 뒤에 읽는다 —
+     서버가 그린 화면과 첫 그림이 달라지면 안 된다. */
+  const [fromLink, setFromLink] = useState(false);
+  useEffect(() => {
+    try { setFromLink(new URLSearchParams(location.search).has("utm_source")); } catch { /* 없음 */ }
+  }, []);
+  const startMaking = (where: string) => {
+    track("remix_cta_click", { source: runId, where, logged_in: authenticated, free_left: freeLeft || undefined });
+    go("create", { step: 1 });
+  };
   const { user: me } = useAuth();
   const isAdmin = authenticated && me?.role === "ADMIN";
 
@@ -283,6 +305,15 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 <span className="wt-result-meta-m">{metaM}</span>
                 {preview && <span className="dim"> · {preview}</span>}
               </span>
+
+              {!mine && fromLink && (
+                <div className="wt-result-linkbar">
+                  <span>{t("LORE 에서 만든 웹툰이에요. 내 캐릭터로도 한 편 만들 수 있어요.")}</span>
+                  <button type="button" className="btn btn-p btn-sm" onClick={() => startMaking("link_bar")}>
+                    {t("내 캐릭터로 만들기")}
+                  </button>
+                </div>
+              )}
             </div>
 
             {data.inputs && (
@@ -421,6 +452,23 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               })}
             </div>
 
+            {!mine && (
+              /* 끝까지 본 사람에게 「나만의 이야기 만들어 보기」(#669). 마지막 장 바로 아래, 다른 작품 줄보다
+                 먼저 둔다 — 멘토링(10/12)에서 흰 카드가 「다음화 보기」에 묻혀 시선이 지나간다고 했다(#750).
+                 캐릭터 번호는 결과에 안 실려 있어서(아직) 1걸음을 그냥 연다 — 거기서 자기 캐릭터를
+                 고르거나 체험 캐릭터로 시작한다. */
+              <div className="wt-result-remix">
+                <b>{t("나만의 웹툰 1화 만들어 보기")}</b>
+                <span className="wt-result-remix-sub">{t("다 봤다면, 당신의 캐릭터로 당신의 1화를 만들어 보세요.")}</span>
+                {freeLeft > 0 && (
+                  <span className="wt-result-remix-free">{t("가입 없이 오늘 {n}편 무료", { n: freeLeft })}</span>
+                )}
+                <button type="button" className="btn btn-w" onClick={() => startMaking("end_card")}>
+                  {t("웹툰 만들기 시작")}
+                </button>
+              </div>
+            )}
+
             {mine && readEnd && <ResultSurvey key={runId} runId={runId} authenticated={authenticated} go={go} />}
 
             {mine && siblings.length > 0 && (
@@ -451,27 +499,13 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             {/* 「맨 위로」가 가운데, 「다음화 보기」가 오른쪽. 가운데를 진짜
                 가운데에 두려면 좌우 칸의 폭이 같아야 해서 격자로 짠다 —
                 한 줄 flex 로는 오른쪽 단추 폭만큼 밀린다. */}
-            {!mine && readEnd && (
-              /* 끝까지 본 사람에게 「나만의 이야기 만들어 보기」. 다음 화를 눌러도 아직
-                 없는 상태라, 다른 사람 작품을 본 창작자가 바로 자기 작품으로 넘어갈 수
-                 있게 다리를 놓는다. 캐릭터 번호는 결과에 안 실려 있어서(아직) 1걸음을
-                 그냥 연다 — 거기서 자기 캐릭터를 고르거나 체험 캐릭터로 시작한다. */
-              <div className="wt-result-remix">
-                <b>{t("나만의 웹툰 1화 만들어 보기")}</b>
-                <span className="muted">{t("다 봤다면, 당신의 캐릭터로 당신의 1화를 만들어 보세요.")}</span>
-                <button type="button" className="btn btn-p" onClick={() => {
-                  track("remix_cta_click", { source: runId, logged_in: authenticated });
-                  go("create", { step: 1 });
-                }}>{t("웹툰 만들기 시작")}</button>
-              </div>
-            )}
 
             {!mine && (
               <div className="wt-result-foot">
                 <button type="button" className="btn-ghost wt-result-top" onClick={toTop}>
                   <IconChevronUp size={16} /> {t("맨 위로")}
                 </button>
-                <button type="button" className="btn btn-p wt-result-next" onClick={() => nextEpisode("other_foot")}>
+                <button type="button" className="btn btn-w wt-result-next" onClick={() => nextEpisode("other_foot")}>
                   {t("다음화 보기")}
                 </button>
               </div>
@@ -488,7 +522,15 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
           <div className="modal-box wt-result-soonbox" role="dialog" aria-modal="true"
                aria-labelledby="wt-soon-title" onClick={(e) => e.stopPropagation()}>
             <h2 id="wt-soon-title">{t("아직 다음화 기능은 준비 중이에요!")}</h2>
-            <button type="button" className="btn btn-p" autoFocus onClick={() => setNextNote(false)}>
+            {/* 남의 작품에서 다음화를 찾은 사람은 여기서 막히지 않게 만들기로 잇는다(#750). */}
+            {!mine && (
+              <button type="button" className="btn btn-p" autoFocus
+                      onClick={() => { setNextNote(false); startMaking("next_note"); }}>
+                {t("내 캐릭터로 1화 만들기")}
+              </button>
+            )}
+            <button type="button" className={mine ? "btn btn-p" : "btn btn-w"} autoFocus={mine}
+                    onClick={() => setNextNote(false)}>
               {t("확인")}
             </button>
           </div>
