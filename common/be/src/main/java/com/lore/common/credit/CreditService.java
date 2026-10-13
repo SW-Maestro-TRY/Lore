@@ -58,6 +58,20 @@ public class CreditService {
     }
 
     /**
+     * 잔액을 무료 몫과 산 몫으로 나눠 센다. <b>무료부터 쓰는</b> 규칙으로 센다({@link CreditPools}).
+     *
+     * 환불할 때 "남은 유료 크레딧" 이 이 값의 {@code paid} 다. 산 적이 없는 사람은
+     * 장부를 다시 읽지 않는다(대부분이 그렇다).
+     */
+    @Transactional(readOnly = true)
+    public CreditPools.Split split(Long userId) {
+        if (!events.existsByUserIdAndReason(userId, CreditReason.PURCHASE)) {
+            return new CreditPools.Split(events.balanceOf(userId), 0);
+        }
+        return CreditPools.replay(events.allOf(userId));
+    }
+
+    /**
      * 오늘 몫까지 챙겨 준 다음의 잔액.
      *
      * 화면이 잔액을 물을 때마다 부른다 — 따로 "받기" 단추를 두지 않는다.

@@ -1,6 +1,7 @@
 package com.lore.common.payment;
 
 import com.lore.common.credit.CreditDomain;
+import com.lore.common.credit.CreditPools;
 import com.lore.common.credit.CreditReason;
 import com.lore.common.credit.CreditService;
 import com.lore.common.exception.BusinessException;
@@ -200,7 +201,8 @@ public class PaymentService {
             return;                         // 안 들어간 크레딧은 뺄 것도 없다
         }
         order.markCancelled(PaymentStatus.REFUNDED, now);
-        credits.reclaim(order.getUserId(), order.getCredits(), "payapp-cancel-" + order.getOrderNo(),
+        credits.reclaim(order.getUserId(), order.getCredits(),
+                CreditPools.PURCHASE_CANCEL_PREFIX + order.getOrderNo(),
                 "결제 취소로 충전분 회수");
     }
 

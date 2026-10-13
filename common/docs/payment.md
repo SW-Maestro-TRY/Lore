@@ -69,9 +69,21 @@ curl -s https://dev.lorecomic.com/api/v1/payments/packages
 
 ## 4. 환불할 때
 
+**쓸 때는 무료로 받은 크레딧부터 빠집니다**(`common/be/.../credit/CreditPools.java`). 그래서 남은
+유료 크레딧 = 돌려줄 수 있는 크레딧이고, 그 사람의 `GET /api/v1/credits/me` 응답 `paid` 가 그 값입니다.
+
+- 결제 7일 안에 산 크레딧을 하나도 안 썼으면(`paid` 가 산 양 그대로) → 전체 취소
+- 일부 썼으면 → 남은 `paid` 만큼만 환불. 금액은 `결제금액 × paid ÷ 산 크레딧` 을 기준으로 정합니다
+
 - 이용자가 환불을 요청하면 **페이앱 판매자 사이트에서 그 결제를 취소**합니다. 통보가 오면 서버가
   충전분을 자동으로 회수합니다(충전분을 이미 썼으면 잔액이 0 아래로 내려가고, 그동안은 만들기가 막힙니다).
-- **부분 취소**는 주문에 `PARTIAL_REFUNDED` 만 표시합니다. 크레딧은 관리자가 손으로 맞춥니다.
+- **부분 취소**는 주문에 `PARTIAL_REFUNDED` 만 표시합니다. 크레딧은 관리자가 손으로 맞춥니다 —
+  돌려준 만큼(보통 남은 `paid` 전부)을 결제 취소와 같은 refId 로 빼야 무료·유료 나눠 세기가 맞습니다.
+
+  ```
+  webtoon/tools/examples/db-sql.sh <env> "insert into credit_event(user_id,delta,reason,domain,ref_id,memo,created_at)
+    values (<계정id>, -<뺄 양>, 'ADJUST', 'COMMON', 'payapp-cancel-<주문번호>', '부분 취소로 충전분 회수', now())" --write
+  ```
 - 정산이 끝난 건은 페이앱에서 바로 취소가 안 되고 「환불 요청」 절차가 따로 있습니다(`paycancelreq`).
 
 ## 5. 이상할 때
@@ -93,4 +105,4 @@ curl -s https://dev.lorecomic.com/api/v1/payments/packages
 - 가격 확정(지금 값은 자리표시자)
 - 이용약관·개인정보처리방침 게시 — 작업본(`webtoon/docs/legal/`)에 초안만 넣어 두었습니다.
   게시하려면 판 번호를 올리고 사전 공지를 거쳐야 합니다
-- 미사용 유료 크레딧의 유효기간, 유료·무료 크레딧 중 무엇부터 쓰는지
+- 미사용 유료 크레딧의 유효기간

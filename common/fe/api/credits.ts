@@ -12,6 +12,8 @@ import { request } from "./client";
 
 export interface CreditBalance {
   balance: number;
+  /** 그중 충전으로 산 몫. 쓸 때는 무료로 받은 몫부터 빠지므로, 환불할 수 있는 크레딧이 이것이다. */
+  paid: number;
 }
 
 /** 내역 한 줄. `delta` 는 받으면 양수, 쓰면 음수다. */
