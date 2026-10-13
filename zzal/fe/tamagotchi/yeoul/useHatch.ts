@@ -210,6 +210,19 @@ export interface Live {
    */
   setChar: (input: CharacterInput) => Promise<boolean>;
   /**
+   * 이름을 넣은 순간부터 **알을 지켜보기 시작한다**(알 온보딩 2026-10-13).
+   *
+   * ★ 서버는 그림을 올린 순간부터 이미 굽고 있다(`PetController.character` 머리말). 이름(`setChar`)은
+   *   한 아이에 **한 번만** 받으므로, 이름 직후에 보내 버리면 그 뒤 알에서 받는 칸(세계관·종족…)을
+   *   실을 길이 없다(두 번째는 409). 그래서 이름 직후에는 **진행만 묻고**, 서버 저장은 마지막에 한 번 한다.
+   */
+  watchEarly: () => void;
+  /**
+   * 굽기가 끝났는가 — **이름을 아직 안 보냈어도.** 서버는 이름이 들어와야 살리므로(`completeIfReady`)
+   * 그 전엔 `ready`(ALIVE)가 안 켜진다. 알 화면이 "다 됐어요" 를 말할 근거는 이쪽이다.
+   */
+  baked: boolean;
+  /**
    * 지금 도는 돌보기. 있으면 **버튼을 전부 잠근다** — 계약 10절 "누르면 잠그고 기다린다".
    */
   careing: CareAction | null;
@@ -350,7 +363,7 @@ const EMPTY: Live = {
   img: () => null,
   pendingUpload: false,
   upload: async () => {}, holdUpload: () => {}, resumeUpload: async () => {}, discardUpload: () => {},
-  setChar: async () => false, doCare: async () => ({ ok: false, message: null }),
+  setChar: async () => false, watchEarly: () => {}, baked: false, doCare: async () => ({ ok: false, message: null }),
   doRest: async () => ({ ok: false, message: null }),
   savePersonality: async () => ({ ok: false, message: null }),
   finishTutorial: async () => ({ ok: false, message: null }),
@@ -393,6 +406,9 @@ export function useHatchState(): Live {
   const [pendingUpload, setPendingUpload] = useState(false);
   /** 이름을 보냈는가. 이게 켜져야 굽기가 도는 것이므로 그때부터 진행을 묻는다. */
   const [charSet, setCharSet] = useState(false);
+  /** 이름은 넣었지만 아직 안 보냈다 — 진행만 묻는 중(→ Live.watchEarly). */
+  const [earlyWatch, setEarlyWatch] = useState(false);
+  const watchEarly = useCallback(() => setEarlyWatch(true), []);
   const [hatch, setHatch] = useState<HatchProgress | null>(null);
   const [resumedDraft, setResumedDraft] = useState(false);
   const [careing, setCareing] = useState<CareAction | null>(null);
@@ -590,10 +606,12 @@ export function useHatchState(): Live {
     try {
       const created = await setCharacter(petId, input);
       setCharSet(true);
-      setHatch({
-        phase: created.phase, label: null, progress: 0, total: 0,
+      // ★ 미리 지켜보던 진행(→ watchEarly)이 있으면 **그 숫자를 지우지 않는다** — 0 으로 되돌리면
+      //   알 아래 진행이 한 번 '처음부터' 로 튄다. 단계는 바로 다음 조회가 서버 값으로 덮는다.
+      setHatch((prev) => ({
+        phase: created.phase, label: prev?.label ?? null, progress: prev?.progress ?? 0, total: prev?.total ?? 0,
         estimatedSeconds: created.estimatedSeconds, message: null,
-      });
+      }));
       reachStage(STAGE.baking);
       ztrack('zzal_hatch_started', sinceUpload());
       return true;
@@ -951,7 +969,7 @@ export function useHatchState(): Live {
   // ── 부화 지켜보기 ──────────────────────────────────────────────
   // 무거운 `getPet` 대신 **전용 API** 를 3초마다. 끝나면 스스로 멈춘다.
   const phase = hatch?.phase ?? null;
-  const watching = !!petId && charSet && phase !== 'ALIVE' && phase !== 'FAILED' && phase !== 'DEAD';
+  const watching = !!petId && (charSet || earlyWatch) && phase !== 'ALIVE' && phase !== 'FAILED' && phase !== 'DEAD';
   useEffect(() => {
     if (!watching || !petId) return;
     let alive = true;
@@ -966,7 +984,9 @@ export function useHatchState(): Live {
     look();
     const t = setInterval(look, 3000);
     return () => { alive = false; clearInterval(t); };
-  }, [watching, petId]);
+    // ★ `charSet` 이 켜지는 순간에도 **곧바로 한 번** 묻는다 — 굽기가 이미 끝난 채 이름이 들어오면
+    //   서버가 그 자리에서 살리는데(completeIfReady), 3초를 더 기다리면 「만나러 가기」가 그만큼 멎는다.
+  }, [watching, petId, charSet]);
 
   // ── 계측: 굽기의 끝(성공·실패)과 굽는 중 이탈 ─────────────────────────
   // ★ 굽는 것을 **이 화면에서 지켜본 아이만** 센다. 이미 함께 사는 아이로 돌아온 사람까지
@@ -1134,7 +1154,7 @@ export function useHatchState(): Live {
     appliedGame.current = issued.current;
     session.current += 1;
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null); setErrorKind(null); setBlocked(null);
-    setCharSet(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
+    setCharSet(false); setEarlyWatch(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
     setGameLoaded(false); setChatLoaded(false);
     setChat(null); putGame(takeSeq(), null); setAlbum(null);
     // 앞사람의 해금 판이 다음 사람 화면에 뜨면 안 된다.
@@ -1147,6 +1167,7 @@ export function useHatchState(): Live {
     draftOnly: !!petId && !charSet,
     resumedDraft: resumedDraft && !charSet,
     ready: phase === 'ALIVE',
+    baked: phase === 'ALIVE' || ((hatch?.total ?? 0) > 0 && (hatch?.progress ?? 0) >= (hatch?.total ?? 0) && phase !== 'FAILED' && phase !== 'DEAD'),
     // 방을 그려도 되는 순간 = 서버가 준 지금 상태(게이지 포함)를 들고 있을 때.
     petReady: pet?.phase === 'ALIVE' && !!pet.gauges && gameLoaded && chatLoaded,
     failed: phase === 'FAILED' || phase === 'DEAD',
@@ -1164,7 +1185,7 @@ export function useHatchState(): Live {
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
     justUnlocked,
-    setChar, doCare, doRest, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
+    setChar, watchEarly, doCare, doRest, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
     clearJustUnlocked, noteUnlocked,
     loadAlbum, shareMotion, sendWish, resume, reset,
   };
