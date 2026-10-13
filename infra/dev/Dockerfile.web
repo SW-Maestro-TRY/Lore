@@ -26,8 +26,13 @@ COPY . .
 ARG API_PROXY=http://app:8080
 ENV API_PROXY=$API_PROXY
 
-# ★ IMAGE_PROXY(/images → MinIO) 는 상훈의 다른 커밋(0e81e82c)이 만든 것이라
-#   이 하은 전용 브랜치엔 없다. 그 커밋이 별도로 승격되면 이 자리에 합쳐진다.
+# 같은 이유로 /images → MinIO 도 Next rewrite 로 굽는다.
+# 화면은 /images/zzal/... 로 그림을 부르는데(assets.ts 의 NEXT_PUBLIC_CDN_BASE 기본값),
+# 노트북엔 그 주소를 받아 줄 자리가 없어 전부 404 다. dev EC2 는 nginx 의
+# location /images/ 가 먼저 잡으므로 이 값이 쓰이지 않는다(무해).
+ARG IMAGE_PROXY=http://minio:9000/lore-content/images
+ENV IMAGE_PROXY=$IMAGE_PROXY
+
 # 카카오 공유 버튼(webtoon/fe/lib/share.ts)이 읽는 값. NEXT_PUBLIC_* 는 next build 가
 # 클라이언트 번들에 문자열로 박아 넣으므로 런타임 environment 로는 못 넘기고 빌드 인자로만
 # 넘길 수 있다. 비우면 공유 버튼이 조용히 꺼진다(에러 아님).

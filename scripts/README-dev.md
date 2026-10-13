@@ -13,6 +13,7 @@ scripts/dev.sh logs app    # 로그 따라 보기(서비스: postgres minio app 
 scripts/dev.sh down        # 컨테이너만 내림 — DB·MinIO 볼륨은 남아 다음 up 에 같은 계정·펫
 scripts/dev.sh reset       # 볼륨·이미지까지 지우고 장부에서 뺌("깨끗이"는 이것 하나. 비대화식은 --yes)
 scripts/dev.sh seed        # 시드만 다시(멱등)
+scripts/dev.sh assets      # 공통 그림 다시 받기 + 이 스택 버킷에 올리기(멱등)
 scripts/dev.sh up app      # 서비스 일부만(뒤에 이름)
 scripts/dev.sh --stack 이름 up   # 브랜치 이름 대신 다른 스택 이름(LORE_STACK=이름 도 같음)
 ```
@@ -55,6 +56,16 @@ feat-dev-env-1012            feat/dev-env-1012              3201  8201  5401  90
 | 관리자 | `admin@lore.test` / `lore-admin-1234` | role=ADMIN, 관리자 화면 확인용 |
 
 로컬 기본값은 `ZZAL_DEV_TOOLS=true`(리모컨 dev API)·`ZZAL_ADMIN=true`. 바꾸려면 `infra/local/.env.dev.local` 에 바꿀 줄만 적는다(커밋 안 됨). `OPENAI_KEY`+`ZZAL_GENERATION_REAL=true` 는 부화마다 과금된다.
+
+## 공통 그림(배경·소품·알·여울 시연·온보딩 예시)
+
+화면은 그림을 `/images/zzal/...` 로 부른다(`NEXT_PUBLIC_CDN_BASE` 기본값 `/images`). 운영·staging 은 CloudFront 가 그 자리를 S3 로 보내는데, 로컬 스택은 MinIO 가 빈 통으로 떠서 그대로면 전부 404 다. 그래서:
+
+1. `dev.sh up` 이 `infra/dev/seed-assets.txt`(dev 박스와 같은 목록, 127개·약 8MB)를 staging 공개 주소에서 `~/.lore-dev/assets/` 로 받는다. AWS 자격 불필요, 이미 받은 건 건너뛰고, 오프라인이면 경고만 내고 그림 없이 뜬다. 스택이 여러 개여도 한 번만 받는다.
+2. compose 의 `minio-seed` 가 그 캐시를 키 그대로 이 스택 버킷에 올린다(`mc mirror`, 이미 있는 키는 건너뜀).
+3. web 빌드 인자 `IMAGE_PROXY` 로 Next 가 `/images/*` 를 MinIO 로 넘긴다(next.config.mjs. 이 값을 안 주는 CI·배포 빌드엔 꺼져 있다).
+
+새 그림이 화면에 들어가면 `infra/dev/seed-assets.txt` 에 키를 한 줄 더하고 `dev.sh assets`. 펫마다 구운 그림(`images/zzal/pets/<id>/...`)은 목록에 없다 — 가짜 굽기(`ZZAL_GENERATION_REAL=false`)는 파일을 만들지 않아 404 이고, 화면은 여울 시연 그림으로 대신 그린다.
 
 ## 리셋과 정리
 

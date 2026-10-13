@@ -77,6 +77,36 @@ services:
         mc anonymous set download local/"$$CONTENT_BUCKET";
         echo "버킷 준비 완료: $$CONTENT_BUCKET"
 
+  # 공통 그림(배경·소품·알·여울 시연·온보딩 예시·랜딩 썸네일)을 버킷에 넣는다. 한 번 돌고 끝.
+  # 화면은 /images/zzal/... 로 그림을 부르는데 MinIO 는 빈 통으로 뜬다 → 안 채우면 전부 404(깨진 그림).
+  # 내려받기는 dev.sh 가 호스트에서 한 번만 한다(staging CloudFront 공개 주소 → ~/.lore-dev/assets,
+  # 목록 = infra/dev/seed-assets.txt, dev 박스와 같은 목록). 여기서는 그 캐시를 키 그대로 올리기만 한다.
+  # mc mirror 는 이미 있는 키를 건너뛰므로 재기동해도 안전하다. 실패해도 스택은 뜬다(exit 0).
+  minio-seed:
+    image: quay.io/minio/mc:latest
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      CONTENT_BUCKET: ${CONTENT_BUCKET}
+      MINIO_PORT: ${MINIO_PORT}
+    volumes:
+      - ${ASSET_CACHE:?ASSET_CACHE 필요}:/seed/data:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        mc alias set local "http://minio:$$MINIO_PORT" "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" >/dev/null || exit 0;
+        if [ -d /seed/data/images ]; then
+          mc mirror --quiet /seed/data/images local/"$$CONTENT_BUCKET"/images || echo '[seed] 업로드 일부 실패 — 스택은 계속 뜹니다';
+        else
+          echo '[seed] 캐시가 비었습니다 — 그림 없이 뜹니다(scripts/dev.sh assets 로 다시 받기)';
+        fi;
+        echo "[seed] 버킷 그림 수: $$(mc ls --recursive local/$$CONTENT_BUCKET/images/zzal 2>/dev/null | wc -l)";
+        exit 0
+
   # ── 백엔드(Spring Boot) ───────────────────────────────────────────
   app:
     build:
@@ -86,6 +116,8 @@ services:
       postgres:
         condition: service_healthy
       minio-init:
+        condition: service_completed_successfully
+      minio-seed:
         condition: service_completed_successfully
     environment:
       LORE_ENV: dev
@@ -150,7 +182,8 @@ services:
       dockerfile: infra/dev/Dockerfile.web
       args:
         API_PROXY: http://app:8080
-        # /images → MinIO. next.config.mjs 에 IMAGE_PROXY 규칙이 있는 판(develop)에서만 쓰인다. 없는 판엔 무해.
+        # /images → MinIO(minio-seed 가 채운 버킷). 운영에선 CloudFront 가 하는 일을 로컬에선 Next rewrite 가 한다.
+        # next.config.mjs 의 IMAGE_PROXY 규칙 — 이 값을 안 주는 CI·배포 빌드엔 꺼져 있다.
         IMAGE_PROXY: http://minio:${MINIO_PORT}/${CONTENT_BUCKET}/images
         NEXT_PUBLIC_KAKAO_JS_KEY: ${NEXT_PUBLIC_KAKAO_JS_KEY:-}
     depends_on:
