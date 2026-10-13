@@ -16,13 +16,14 @@
  *   /webtoon?view=admin            관리자 홈 — 실시간 유입 · 바로가기 · UTM 링크 (관리자만)
  *   /webtoon?view=admin-examples   예시 작품 관리 (관리자만, #619)
  *   /webtoon?view=admin-works      작품 관리 — 처리 기록 · 관리자 휴지통 (관리자만, #638)
+ *   /webtoon?view=admin-payments   결제 관리 — 충전 주문 · 환불 (관리자만, #155)
  *
  * 화면을 바꿀 때 주소도 같이 민다 — 뒤로가기·새로고침·공유가 전부 주소에
  * 기댄다. 상태만 바꾸면 뒤로가기가 웹툰 탭을 통째로 빠져나간다. */
 
 export type View =
   | "landing" | "entry" | "create" | "running" | "result" | "editor" | "works"
-  | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin" | "admin-examples" | "admin-works";
+  | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin" | "admin-examples" | "admin-works" | "admin-payments";
 
 export interface GoParams {
   step?: number;
