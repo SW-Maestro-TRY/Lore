@@ -3,7 +3,7 @@
 /**
  * 관리자 홈 — 운영 중에 「지금 몇 명이 들어와 있나 · 어디서 왔나」를 보는 자리다.
  *
- * - 바로가기: 작품 관리 · 예시 작품 관리 · 설문(마이페이지의 「설문 답 모아 보기」)
+ * - 바로가기: 작품 관리 · 예시 작품 관리 · 결제 관리 · 설문(마이페이지의 「설문 답 모아 보기」)
  * - 실시간 패널: 최근 5분 활성 uid · 지금 돌고 있는 작업 · 날짜 범위 안의 유입·시작·완성
  * - 유입 분석: UTM source · medium · campaign · ref_host 별 unique uid 와 깔때기
  * - UTM 링크 생성기: /webtoon 또는 /webtoon?run=<id> 뒤에 utm_* 를 붙여 한 줄 복사
@@ -70,6 +70,7 @@ export default function AdminHome({ go }: { go: Go }) {
         <div className="wt-admin-shortcuts">
           <button type="button" className="btn btn-w" onClick={() => go("admin-works")}>작품 관리</button>
           <button type="button" className="btn btn-w" onClick={() => go("admin-examples")}>예시 작품 관리</button>
+          <button type="button" className="btn btn-w" onClick={() => go("admin-payments")}>결제 관리</button>
           <button type="button" className="btn btn-w" onClick={() => go("mypage", { tab: "settings" })}>설문 모아보기</button>
         </div>
       </div>

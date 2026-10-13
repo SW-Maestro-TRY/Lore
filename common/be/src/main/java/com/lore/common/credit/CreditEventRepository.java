@@ -30,4 +30,11 @@ public interface CreditEventRepository extends JpaRepository<CreditEvent, Long> 
     /** 최근 것부터. id 로 내림차순이면 같은 순간에 적힌 것도 순서가 흔들리지 않는다. */
     @Query("select e from CreditEvent e where e.userId = :userId order by e.id desc")
     List<CreditEvent> historyOf(@Param("userId") Long userId, Pageable page);
+
+    /** 산 적이 있나. 없으면 잔액 전부가 무료 몫이라 장부를 다시 읽을 필요가 없다. */
+    boolean existsByUserIdAndReason(Long userId, CreditReason reason);
+
+    /** 이 사람의 줄 전부, 적힌 순서대로. 무료·유료 몫을 나눠 셀 때({@link CreditPools}) 쓴다. */
+    @Query("select e from CreditEvent e where e.userId = :userId order by e.id asc")
+    List<CreditEvent> allOf(@Param("userId") Long userId);
 }

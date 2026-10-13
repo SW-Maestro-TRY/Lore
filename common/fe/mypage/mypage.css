@@ -256,6 +256,121 @@
   text-align: center;
 }
 
+/* 단추 — 이 창은 웹툰·공용 마이페이지 어디서든 열리는데, 두 곳의 .btn 모양이
+   서로 다르다(웹툰은 .wt 아래에만 있다). 창이 자기 단추 모양을 들고 간다. */
+.credit-btn {
+  flex: none;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.credit-btn:disabled {
+  opacity: .45;
+  cursor: default;
+}
+.credit-btn-quiet {
+  background: transparent;
+  color: var(--text);
+  border: 1.5px solid var(--border-strong);
+}
+.credit-btn-quiet:hover:not(:disabled) {
+  border-color: var(--text);
+}
+.credit-btn-primary {
+  background: var(--btn-primary-bg, #17121f);
+  color: var(--btn-primary-fg, #fff);
+  border: 1.5px solid transparent;
+}
+
+/* 결제 단계 — 번호 받기 · 기다리기 · 끝 */
+.credit-pay {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.credit-pay-what {
+  margin: 0;
+  font-size: 15px;
+}
+.credit-pay-what b {
+  font-size: 20px;
+}
+.credit-pay-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.credit-pay-input {
+  height: 44px;
+  padding: 0 12px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 16px;               /* 16px 아래면 아이폰이 입력할 때 화면을 확대한다 */
+  background: transparent;
+  color: var(--text);
+}
+.credit-pay-input:focus {
+  outline: none;
+  border-color: var(--text);
+}
+.credit-pay-fine {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.credit-refund {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--sea-sand, rgba(23, 18, 31, 0.04));
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.credit-refund p {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+}
+.credit-refund a {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.credit-refund-ok {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.credit-refund-ok input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--btn-primary-bg, #17121f);
+}
+.credit-pay-status {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.credit-pay-error {
+  margin: 0;
+  color: #c0392b;
+  font-size: 13px;
+}
+.credit-pay-acts {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
 /* 폰 — 창을 아래에서 올라오는 판으로. 가운데 띄우면 위아래 여백만 먹고
    손이 닿는 자리(아래쪽)에서 멀어진다. */
 @media (max-width: 560px) {
@@ -275,8 +390,13 @@
     flex-wrap: wrap;
   }
 
-  .credit-pack .btn {
+  .credit-pack .credit-btn {
     flex: 1 1 100%;
+  }
+
+  .credit-pay-acts .credit-btn {
+    flex: 1 1 0;
+    height: 46px;
   }
 }
 
