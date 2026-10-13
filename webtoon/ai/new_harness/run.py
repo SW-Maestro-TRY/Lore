@@ -1410,12 +1410,17 @@ CAST_LABEL_RE = re.compile(rf"^{S}등장인물{S}[:：]{S}$", re.M)
 FIXED_LABEL_RE = re.compile(rf"^{S}이 화의 고정 설정{S}[:：]{S}$", re.M)
 
 
-def _same_person(a: str, b: str) -> bool:
-    """인물 단계의 이름과 장면 단계가 쓴 이름이 같은 사람인가. 장면 단계는 「패치승 천율」을
-    「천율」로, 「이솔드 베를레느」를 「이솔드」로 줄여 쓴다 — 두 글자 이상 낱말 하나가 겹치면 같다."""
-    wa = {w for w in re.split(r"[\s·,()]+", a or "") if len(w) >= 2}
-    wb = {w for w in re.split(r"[\s·,()]+", b or "") if len(w) >= 2}
-    return bool(wa & wb)
+def _same_person(scene_name: str, cast_name: str) -> bool:
+    """장면 단계가 「등장인물」에 쓴 이름이 인물 단계의 그 사람인가.
+
+    장면 단계는 이름을 줄여 쓴다 — 「패치승 천율」을 「천율」로, 「백설화」를 「설화」로.
+    그래서 장면 쪽 이름의 낱말이 **전부** 인물 단계 이름 안에 들어 있으면 같은 사람이다.
+    한 낱말만 겹치는 것으로는 안 본다 — 「쌀숭이 린아」와 무리를 가리키는 「쌀숭이
+    조직원들」이 같은 사람이 되면 린아의 외모가 무리에 덮인다(2026-10-13 운영 작업에서 확인).
+    """
+    words = [w for w in re.split(r"[\s·,()]+", scene_name or "") if len(w) >= 2]
+    whole = re.sub(r"\s+", "", cast_name or "")
+    return bool(words) and all(w in whole for w in words)
 
 
 def story_cast(run_dir: Path | None, direction: dict, hero: str = "") -> list[dict]:
@@ -1437,9 +1442,11 @@ def story_cast(run_dir: Path | None, direction: dict, hero: str = "") -> list[di
     for c in cast:
         name = str((c or {}).get("name") or "").strip()
         look = str((c or {}).get("look") or "").strip()
-        if not name or not look or (hero and _same_person(name, hero)):
+        if not name or not look or (hero and (_same_person(hero, name) or _same_person(name, hero))):
             continue
-        if any(w in text for w in re.split(r"[\s·]+", name) if len(w) >= 2):
+        words = [w for w in re.split(r"[\s·]+", name) if len(w) >= 2]
+        words += [w[1:] for w in words if len(w) == 3]      # 성을 뺀 이름(백설화 → 설화)
+        if any(w in text for w in words):
             out.append({"name": name, "look": look})
     return out
 
