@@ -104,10 +104,13 @@ public class CreditController {
 
     @Operation(summary = "내 크레딧 잔액", description = """
             오늘 몫까지 챙겨 준 다음의 잔액이다 — 따로 「받기」를 누르지 않아도 된다.
-            받으러 눌러야 하는 무료 크레딧은 안 누른 사람에게는 없는 것과 같다.""")
+            받으러 눌러야 하는 무료 크레딧은 안 누른 사람에게는 없는 것과 같다.
+
+            paid 는 그중 충전으로 산 몫이다. 쓸 때는 무료로 받은 몫부터 빠진다.""")
     @GetMapping("/me")
     public ApiResponse<Balance> balance(@LoginUser Long userId) {
-        return ApiResponse.ok(new Balance(credits.balanceWithDaily(userId)));
+        int balance = credits.balanceWithDaily(userId);
+        return ApiResponse.ok(new Balance(balance, credits.split(userId).paid()));
     }
 
     @Operation(summary = "내 크레딧 내역", description = """
@@ -234,8 +237,11 @@ public class CreditController {
     public record Granted(int granted, int balance) {
     }
 
-    /** @param balance 지금 쓸 수 있는 크레딧 */
-    public record Balance(int balance) {
+    /**
+     * @param balance 지금 쓸 수 있는 크레딧
+     * @param paid    그중 돈 내고 산 몫(무료부터 쓰는 규칙으로 센 것). 환불할 때 돌려줄 수 있는 크레딧이다
+     */
+    public record Balance(int balance, int paid) {
     }
 
     /**
