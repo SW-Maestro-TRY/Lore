@@ -32,6 +32,8 @@ export function writeDevEgg(v: EggVariant | null): void {
     // 저장이 막힌 창(사생활 보호)이어도 이번 화면에는 알린다.
   }
   try { window.dispatchEvent(new CustomEvent(EVENT, { detail: v })); } catch { /* 무시 */ }
+  // 알 온보딩 화면(feat/onboarding-egg-1013)이 듣는 이름 — 같은 탭에서 바로 반영되게 함께 보낸다.
+  try { window.dispatchEvent(new Event('zzal:devEgg')); } catch { /* 무시 */ }
 }
 
 /** 바뀌면 부른다. 돌려준 함수로 끊는다. */
