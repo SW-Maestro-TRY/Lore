@@ -72,11 +72,13 @@ const pe = (p: Page) => p.locator('[data-part="persona-egg"]');
 const put = (p: Page) => p.locator('[data-action="pe-put"]');
 
 /** 올리기까지 마치고 캐릭터(알) 칸에 선다. */
-async function toEgg(page: Page, variant: 'dots' | 'glow' = 'dots'): Promise<Stub> {
+async function toEgg(page: Page, variant: 'dots' | 'glow' = 'dots', withQuery = true): Promise<Stub> {
   const s = await stubServer(page);
   const me = page.waitForResponse('**/api/v1/users/me');
-  await page.goto(`/zzal?skin=yeoul&egg=${variant}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`/zzal?skin=yeoul${withQuery ? `&egg=${variant}` : ''}`, { waitUntil: 'domcontentloaded' });
   await me;
+  // 개발 서버의 Next.js 도구 단추(왼쪽 아래)가 「이전」 자리를 덮는다 — 운영 빌드엔 없는 것이라 검사에서만 숨긴다.
+  await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
   await expect(page.locator('[data-part="onb"]')).toHaveAttribute('data-step', 'upload');
   await page.locator('input[type="file"]').setInputFiles({ name: 'oc.png', mimeType: 'image/png', buffer: PNG });
   await expect.poll(() => s.drafted).toBe(true);
@@ -318,3 +320,135 @@ for (const variant of ['dots', 'glow'] as const) {
     await page.screenshot({ path: path.join(SHOT_DIR, `onb-egg-${variant}-320x568-text.png`) });
   });
 }
+
+// ── 이전 · 다음 · 건너뛰기(10/13 상훈님 원문: "이전, 다음, 건너뛰기 이런 형태였으면 좋겠어.
+//    그리고 이전으로 가면 그려졌던 점 하나는 이전으로 돌아가야지") ──
+const dots = (p: Page) => p.locator('[data-part="pe-dot"]');
+const prev = (p: Page) => p.locator('[data-action="pe-prev"]');
+const skip = (p: Page) => p.locator('[data-action="pe-skip"]');
+const V2_SHOT_DIR = process.env.V2_SHOT_DIR ?? SHOT_DIR;
+
+/** 아래 줄 단추 숫자 — 몇 개, 44px 미만, 한 줄인가(위 끝 차이), 글자 잘림, 화면 밖. */
+async function navRow(page: Page) {
+  return page.evaluate(() => {
+    const bs = [...document.querySelectorAll('[data-part="pe-nav"] button')] as HTMLElement[];
+    const rs = bs.map((b) => b.getBoundingClientRect());
+    const tops = rs.map((r) => Math.round(r.top));
+    return {
+      n: bs.length,
+      labels: bs.map((b) => b.textContent?.trim()),
+      under44: rs.filter((r) => r.height < 44 || r.width < 44).length,
+      topSpread: tops.length ? Math.max(...tops) - Math.min(...tops) : 0,
+      clipped: bs.filter((b) => b.scrollWidth > b.clientWidth + 1).length,
+      outside: rs.filter((r) => r.left < 0 || r.right > window.innerWidth).length,
+      overlap: rs.filter((a, i) => rs.some((b, j) => j > i && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom)).length,
+      w: rs.map((r) => Math.round(r.width)),
+    };
+  });
+}
+
+for (const vp of [{ w: 320, h: 568 }, { w: 390, h: 844 }, { w: 430, h: 932 }] as const) {
+  test(`${vp.w}×${vp.h} — 이전·다음·건너뛰기: 다음 점+1 · 이전 점-1·값 보존 · 건너뛰기 점 그대로 · 한 줄 44px`, async ({ page }) => {
+    await page.setViewportSize({ width: vp.w, height: vp.h });
+    const s = await toEgg(page);
+
+    // 이름 칸 — 「이전」·「건너뛰기」 없음, 「다음」 하나.
+    await expect(prev(page)).toHaveCount(0);
+    await expect(skip(page)).toHaveCount(0);
+    expect((await navRow(page)).labels).toEqual(['다음']);
+    await putName(page, '보리');
+    await expect(dots(page)).toHaveCount(1);
+
+    // 세계관 — 비어 있으면 다음은 흐림, 건너뛰기만 살아 있다. 세 단추가 한 줄.
+    await expect(put(page)).toBeDisabled();
+    await expect(skip(page)).toBeEnabled();
+    const row = await navRow(page);
+    console.log(`[nav ${vp.w}x${vp.h}]`, JSON.stringify(row));
+    expect(row.labels).toEqual(['‹이전', '다음', '건너뛰기']);
+    expect(row.under44).toBe(0);
+    expect(row.topSpread).toBeLessThanOrEqual(1);
+    expect(row.clipped).toBe(0);
+    expect(row.outside).toBe(0);
+    expect(row.overlap).toBe(0);
+
+    // 첫 질문에서 이전 → 이름 칸, 이름 점이 빠지고 이름은 그대로.
+    await prev(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'name');
+    await expect(dots(page)).toHaveCount(0);
+    await expect(page.locator('[data-part="pet-name"]')).toHaveValue('보리');
+    await expect(prev(page)).toHaveCount(0);
+    await put(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'world', { timeout: 3000 });
+    await expect(dots(page)).toHaveCount(1);
+
+    // 다음 = 점 +1
+    await pick(page, '현대');
+    await page.locator('[data-part="pe-text"][data-field="world"]').fill('오니가 있는 세상');
+    await put(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'job');
+    await expect(dots(page)).toHaveCount(2);
+    await pick(page, '학생');
+    await put(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'persona');
+    await expect(dots(page)).toHaveCount(3);
+
+    // 이전 = 점 -1, 값 보존(칩 눌린 채). 역연출 사본은 끝나면 0.
+    await prev(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'job');
+    await expect(dots(page)).toHaveCount(2);
+    await expect(page.locator('[data-part="pe-chip"][data-chip="학생"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-part="pe-fly"]')).toHaveCount(0);
+    await prev(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'world');
+    await expect(dots(page)).toHaveCount(1);
+    await expect(page.locator('[data-part="pe-chip"][data-chip="현대"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-part="pe-text"][data-field="world"]')).toHaveValue('오니가 있는 세상');
+    await expect(put(page)).toBeEnabled();
+    if (vp.w !== 430) {
+      fs.mkdirSync(V2_SHOT_DIR, { recursive: true });
+      await page.waitForTimeout(350);
+      await page.screenshot({ path: path.join(V2_SHOT_DIR, `onb-egg-v2-${vp.w}.png`) });
+    }
+
+    // 다시 다음 두 번 → 점 3, 학생은 여전히 눌려 있음.
+    await put(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'job');
+    await expect(dots(page)).toHaveCount(2);
+    await expect(page.locator('[data-part="pe-chip"][data-chip="학생"]')).toHaveAttribute('aria-pressed', 'true');
+    await put(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'persona');
+    await expect(dots(page)).toHaveCount(3);
+
+    // 건너뛰기 = 점 그대로, 칸 +1
+    await skip(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'likes');
+    await expect(dots(page)).toHaveCount(3);
+
+    // 좋아함에서 골라 두고 이전 → 성격(건너뛴 칸, 점 없음) → 점 수 그대로. 좋아함 칩은 알에 안 들었으니 나중에 안 보낸다.
+    await pick(page, '간식');
+    await prev(page).click();
+    await expect(pe(page)).toHaveAttribute('data-q', 'persona');
+    await expect(dots(page)).toHaveCount(3);
+    await page.locator('[data-action="pe-skip-rest"]').click();
+    await expect.poll(() => s.character.length).toBe(1);
+    expect(s.character[0]).toMatchObject({ name: '보리', world: '현대 · 오니가 있는 세상' });
+    expect(JSON.stringify(s.character[0])).not.toContain('간식');
+  });
+}
+
+test('알 시안 — 쿼리 없으면 브라우저 저장 zzal.devEgg 를 따르고, 같은 탭 리모컨 변경도 따라간다', async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('zzal.devEgg', 'glow'); } catch { /* */ } });
+  await toEgg(page, 'glow', false);
+  await page.evaluate(() => { localStorage.setItem('zzal.devEgg', 'dots'); window.dispatchEvent(new Event('zzal:devEgg')); });
+  await expect(pe(page)).toHaveAttribute('data-variant', 'dots');
+});
+
+test('알 시안 — 쿼리도 저장도 없으면 dots', async ({ page }) => {
+  await toEgg(page, 'dots', false);
+});
+
+test('알 시안 — ?egg= 가 zzal.devEgg 보다 우선', async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('zzal.devEgg', 'glow'); } catch { /* */ } });
+  await toEgg(page, 'dots');
+  await expect(pe(page)).toHaveAttribute('data-variant', 'dots');
+});

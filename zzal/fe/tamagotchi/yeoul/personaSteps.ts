@@ -212,6 +212,11 @@ export interface Saved {
   answers: Answers;
   /** 건너뛴 칸 키. 계측·요약용. */
   skipped: string[];
+  /**
+   * 알에 앉은 점(= 넣은 칸) 키. 「이전」으로 돌아가면 그 칸의 점이 빠지되 글·칩은 남아 있어서,
+   * 답이 있다고 넣은 칸이라 볼 수 없다. 옛 저장본(없음)은 답이 있는 칸으로 되살린다.
+   */
+  placed?: string[];
   at: number;
 }
 
@@ -239,13 +244,23 @@ export function clearSaved(petId: number | null): void {
   try { window.localStorage.removeItem(KEY(petId)); } catch { /* 무시 */ }
 }
 
-/** `?egg=dots|glow|off` — 두 시안을 나란히 보려고. 기본은 dots. off 는 옛 한 화면(되돌려 보기용). */
+/**
+ * 알 시안 — `dots`(기본, 칸마다 색 점) / `glow`(빛만) / `off`(옛 한 화면, 되돌려 보기용).
+ * 읽는 순서: 주소 `?egg=` → 브라우저 저장 `zzal.devEgg`(개발 리모컨이 쓰는 키) → `dots`.
+ * ★ 사용자에게는 늘 dots 다. 나머지는 비교·되돌려 보기용으로만 남긴다(상훈님 10/13 "닷이 더 좋은 것 같아").
+ */
 export type EggVariant = 'dots' | 'glow' | 'off';
+export const DEV_EGG_KEY = 'zzal.devEgg';
+const asVariant = (v: string | null | undefined): EggVariant | null =>
+  v === 'dots' || v === 'glow' || v === 'off' ? v : null;
 export function eggVariant(): EggVariant {
   try {
-    const v = new URLSearchParams(window.location.search).get('egg');
-    return v === 'glow' || v === 'off' ? v : 'dots';
-  } catch {
-    return 'dots';
-  }
+    const q = asVariant(new URLSearchParams(window.location.search).get('egg'));
+    if (q) return q;
+  } catch { /* 무시 */ }
+  try {
+    const d = asVariant(window.localStorage.getItem(DEV_EGG_KEY));
+    if (d) return d;
+  } catch { /* 막힌 브라우저 */ }
+  return 'dots';
 }

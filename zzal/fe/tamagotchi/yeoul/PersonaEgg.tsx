@@ -11,6 +11,9 @@
 // ★ 연출은 `transform`·`opacity` 만 쓴다(인앱 브라우저 저사양 폰). 날아가는 사본은 body 위 고정 한 겹이고,
 //   끝나면 지운다(검사: `[data-part="pe-fly"]` 개수가 0 으로 돌아오는가).
 // ★ 건너뛰면 알이 한 번 갸웃할 뿐이다. 서운해하거나 원망하는 연출·대사는 없다(자캐 커뮤니티 규범).
+// ★ 단추(10/13 상훈님 원문): "이전, 다음, 건너뛰기 이런 형태였으면 좋겠어. 그리고 이전으로 가면 그려졌던 점
+//   하나는 이전으로 돌아가야지" — 「다음」= 넣기(빈 칸이면 흐림), 「건너뛰기」= 갸웃·점 없음,
+//   「이전」= 앞 칸으로 가며 그 칸의 점이 알에서 칸으로 돌아온다(0.3초). 글·칩은 칸에 그대로 남아 다시 고칠 수 있다.
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -32,6 +35,8 @@ const STAGGER_MS = 60;
 const MAX_PIECES = 3;
 /** 건너뛰면 갸웃 한 번. */
 const TILT_MS = 300;
+/** 「이전」— 점이 알에서 칸으로 돌아오는 시간. */
+const BACK_MS = 300;
 /** 동작 줄이기 설정이면 날아감 없이 빛만. */
 const REDUCED_GLOW_MS = 150;
 /** 깨지는 순간(껍질 그림이 바뀌는 때). Egg.tsx 와 같은 값. */
@@ -41,6 +46,16 @@ const EGG_BREAK_MS = 950;
 const DOT_AT: readonly [number, number][] = [
   [50, 60], [38, 51], [62, 49], [43, 71], [58, 72], [33, 63], [67, 62], [50, 44], [50, 82], [40, 40], [60, 39],
 ];
+
+/** 아래 줄 단추 — 셋 다 같은 높이(52)로 한 줄에. 글자는 접히지 않는다(320 폭에서 잰다). */
+const NAV_SIDE = {
+  flex: 'none', minHeight: 52, minWidth: TAP_MIN, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+  borderRadius: radius.pill, fontSize: fz.lg, whiteSpace: 'nowrap',
+} as const;
+const NAV_MAIN = {
+  flex: '1 1 auto', minWidth: 0, minHeight: 52, borderRadius: radius.pill, border: 'none',
+  fontSize: fz.xl, fontFamily: GAEGU, fontWeight: 700, whiteSpace: 'nowrap',
+} as const;
 
 const STYLE = `
 .pe-root{ --pe-stage: 40%; }
@@ -148,6 +163,44 @@ function flyPieces(pieces: { rect: DOMRect; label: string }[], to: DOMRect): Pro
   return wait(Math.max(0, lastStart + FLY_MS - OVERLAP_MS));
 }
 
+/**
+ * 「이전」의 역연출 — 알 위의 점 하나가 칸(질문 제목 자리)으로 돌아오며 흐려진다. 끝나면 사본을 지운다.
+ * 넣기와 같은 겹(`pe-fly`)을 쓰므로 검사 「끝나면 사본 0」이 그대로 적용된다.
+ */
+function flyBack(from: DOMRect, to: DOMRect, color: string): Promise<void> {
+  const layer = document.createElement('div');
+  layer.setAttribute('data-part', 'pe-fly');
+  layer.setAttribute('aria-hidden', 'true');
+  layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden;';
+  document.body.appendChild(layer);
+  const el = document.createElement('span');
+  el.style.cssText = [
+    'position:absolute', `left:${from.left}px`, `top:${from.top}px`, `width:${from.width}px`, `height:${from.height}px`,
+    'border-radius:50%', `background:${color}`, 'border:2px solid #FFFDF8', 'box-sizing:border-box',
+    `box-shadow:0 0 0 1px ${ink(.22)}, 0 2px 6px ${ink(.25)}`, 'will-change:transform,opacity',
+  ].join(';');
+  layer.appendChild(el);
+  const dx = to.left + 28 - (from.left + from.width / 2);
+  const dy = to.top + 26 - (from.top + from.height / 2);
+  // 아래로 떨어지는 길 — 넣을 때(위로 휘어 들어감)의 거울.
+  el.animate([
+    { transform: 'translate(0,0) scale(1)', opacity: 1 },
+    { transform: `translate(${dx * 0.45}px,${dy * 0.25 - 18}px) scale(1.25)`, opacity: 1, offset: 0.35 },
+    { transform: `translate(${dx}px,${dy}px) scale(1.6)`, opacity: 0 },
+  ], { duration: BACK_MS, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'both' });
+  setTimeout(() => layer.remove(), BACK_MS + 40);
+  return wait(BACK_MS);
+}
+
+/** `upto` 앞 칸들의 답만 남긴다 — 「이전」으로 되돌린 칸(점이 빠진 칸)의 글·칩은 화면에만 있고 알에는 안 들었다. */
+function settledOf(ans: Answers, upto: number): Answers {
+  const out: Answers = {};
+  PERSONA_STEPS.slice(0, Math.max(0, upto)).forEach((st) => st.fields.forEach((f) => {
+    if (ans[f.key]) out[f.key] = ans[f.key];
+  }));
+  return out;
+}
+
 /** 알 껍데기 그림이 없을 때(로컬·CDN 장애) 그리는 알. 점·빛이 앉을 자리를 같은 모양으로 둔다. */
 function CssEgg() {
   return (
@@ -191,6 +244,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const textRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const nameRef = useRef<HTMLInputElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   const petId = live.petId;
   const submitted = !live.draftOnly && !!petId;
@@ -210,7 +264,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
     if (saved.named) {
       setNamed(true);
       setIdx(Math.min(N, Math.max(0, saved.idx)));
-      setPlaced([NAME_STEP.key, ...PERSONA_STEPS.filter((st) => st.fields.some((f) => hasAnswer(saved.answers[f.key]))).map((st) => st.key)]);
+      setPlaced(saved.placed ?? [NAME_STEP.key, ...PERSONA_STEPS.filter((st) => st.fields.some((f) => hasAnswer(saved.answers[f.key]))).map((st) => st.key)]);
       live.watchEarly();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 아이 번호가 정해질 때 한 번만 되살린다
@@ -220,8 +274,8 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
   useEffect(() => {
     if (!petId || submitted) return;
     if (!named && !s.petName && Object.keys(answers).length === 0) return;
-    writeSaved({ v: 1, petId, name: s.petName, named, idx, answers, skipped, at: Date.now() });
-  }, [petId, submitted, named, idx, answers, skipped, s.petName]);
+    writeSaved({ v: 1, petId, name: s.petName, named, idx, answers, skipped, placed, at: Date.now() });
+  }, [petId, submitted, named, idx, answers, skipped, placed, s.petName]);
   // 서버가 받았으면 브라우저 사본은 지운다(같은 틱의 마지막 쓰기보다 **뒤에** 돌도록 효과로 둔다).
   useEffect(() => { if (submitted) clearSaved(petId); }, [submitted, petId]);
 
@@ -242,6 +296,9 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
   }, [idx, answers]);
+
+  // 칸이 바뀌면 질문 제목부터 보이게 — 앞 칸에서 내려 둔 스크롤이 남으면 320 폭에서 제목이 가려진다.
+  useEffect(() => { if (sheetRef.current) sheetRef.current.scrollTop = 0; }, [idx]);
 
   // ── 계측: 질문이 보였다 ──
   useEffect(() => {
@@ -355,7 +412,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
     setSkipped((sk) => sk.filter((k) => k !== step.key));
     await putIn(pieces, step.color, step.key);
     setBusyFx(false);
-    if (idx + 1 >= N) finish(answers);
+    if (idx + 1 >= N) finish(settledOf(answers, N));
     else setIdx(idx + 1);
   }, [step, busyFx, answers, idx, N, putIn, finish]);
 
@@ -379,9 +436,8 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
   const skipRest = useCallback(() => {
     if (!step || busyFx) return;
     ztrack('zzal_persona_q_skipped', { step: idx + 2, type: step.key, action: 'rest' });
-    // 지금 칸에 고르다 만 것은 넣지 않았으므로 버린다.
-    const next = { ...answers };
-    for (const f of step.fields) delete next[f.key];
+    // 지금 칸과 그 뒤(「이전」으로 되돌려 점이 빠진 칸)에 남은 것은 알에 안 들었으므로 버린다.
+    const next = settledOf(answers, idx);
     setAnswers(next);
     setSkipped((sk) => [...sk, ...PERSONA_STEPS.slice(idx).map((st) => st.key).filter((k) => !sk.includes(k))]);
     finish(next);
@@ -390,11 +446,11 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
   // ── 만나러 가기 ──
   const meet = useCallback(async () => {
     if (meeting) return;
-    // 넣던 칸이 남아 있어도 끊지 않고 지금까지 넣은 것만 보낸다.
-    const ok = await submit(answers);
+    // 넣던 칸이 남아 있어도 끊지 않고 지금까지 넣은 것(점이 앉은 칸)만 보낸다.
+    const ok = await submit(idx >= N ? answers : settledOf(answers, Math.max(0, idx)));
     if (!ok) return;
     setMeeting(true);
-  }, [meeting, submit, answers]);
+  }, [meeting, submit, answers, idx, N]);
 
   // 서버가 살렸다는 답(ALIVE)이 오면 그때 깬다. `tapEgg` 가 깨짐 → 태어남 칸으로 옮긴다.
   const cracked = useRef(false);
@@ -445,11 +501,30 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
     setAnswers((a) => ({ ...a, [fkey]: { ...answerOf(a, fkey), text: t.slice(0, max) } as FieldAnswer }));
   };
 
-  const back = () => {
+  /**
+   * 「이전」(머리줄 ‹ 도 같다). 앞 칸으로 가며 **그 칸의 점이 알에서 빠진다** — 점은 칸으로 돌아오는 0.3초
+   * 역연출(동작 줄이기면 즉시). 그 칸의 글·칩은 지우지 않아 그대로 보이고 다시 고칠 수 있다.
+   * 이름 칸에서는 올리기 화면으로 돌아간다(머리줄 ‹ 만, 아래 「이전」은 숨김).
+   */
+  const back = useCallback(async () => {
     if (busyFx || submitted) return;
     if (idx < 0) { actions.onBack(); return; }
-    setIdx(idx - 1);
-  };
+    const target = Math.min(idx, N) - 1;
+    const st = target < 0 ? null : PERSONA_STEPS[target];
+    const key = st ? st.key : NAME_STEP.key;
+    const color = st ? st.color : NAME_STEP.color;
+    const dot = eggBox.current?.querySelector<HTMLElement>(`[data-part="pe-dot"][data-key="${key}"]`);
+    const from = dot?.getBoundingClientRect();
+    const to = sheetRef.current?.getBoundingClientRect();
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    setPlaced((p) => p.filter((k) => k !== key));
+    setIdx(target);
+    if (from && to && variant === 'dots' && !reducedMotion()) {
+      setBusyFx(true);
+      await flyBack(from, to, color);
+      setBusyFx(false);
+    }
+  }, [busyFx, submitted, idx, N, actions, variant]);
 
   const stepAnswered = !!step && step.fields.some((f) => hasAnswer(answerOf(answers, f.key)));
   const showReadyNote = baked && named && !isCrack && idx < N;
@@ -472,7 +547,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.sm, padding: '6px 14px 0', minHeight: TAP_MIN }}>
         {!submitted ? (
           <button
-            type="button" onClick={back} aria-label="뒤로" data-action="pe-back" className="onb-back"
+            type="button" onClick={() => void back()} aria-label="뒤로" data-action="pe-back" className="onb-back"
             style={{ width: TAP_MIN, height: TAP_MIN, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', padding: 0 }}
           >
             <span style={{ border: `1px solid ${C.lineHard}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: fz.md, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</span>
@@ -550,7 +625,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
 
       {/* 아래 — 질문 한 칸(스크롤) + 단추(고정) */}
       <div style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', background: C.paper, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, boxShadow: `0 -6px 20px ${ink(.06)}`, marginTop: gap.sm }}>
-        <div className="pe-scroll" style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto', padding: '16px 20px 8px', display: 'flex', flexDirection: 'column', gap: gap.md }}>
+        <div ref={sheetRef} className="pe-scroll" style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto', padding: '16px 20px 8px', display: 'flex', flexDirection: 'column', gap: gap.md }}>
           {idx < 0 && (
             <>
               <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, lineHeight: 1.25, color: C.ink }}>{NAME_STEP.q}</span>
@@ -633,30 +708,40 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
           )}
         </div>
 
-        {/* 단추 — 넣기 바로 아래 「다음에 할게요」(44px). 엄지가 넣기 옆에서 바로 닿는 자리. */}
-        <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 20px', paddingBottom: 'max(14px, env(safe-area-inset-bottom))' }}>
+        {/* 단추 — 한 줄: 「이전」 · 「다음」 · 「건너뛰기」(상훈님 10/13 순서 그대로). 높이 52, 320 폭에서도 한 줄.
+            빈 칸이면 「다음」은 흐리고 「건너뛰기」에 테두리를 둘러 지금 누를 단추가 하나로 보이게 한다. */}
+        <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 16px', paddingBottom: 'max(14px, env(safe-area-inset-bottom))' }}>
           {(sendErr || live.error || live.blocked) && (
             <span data-part="pe-error" style={{ fontSize: fz.sm, lineHeight: 1.5, color: live.blocked ? C.sub2 : C.accent, textAlign: 'center', paddingBottom: 4 }}>
               {live.blocked ? `${live.blocked.title} ${live.blocked.body}` : (live.error ?? sendErr)}
             </span>
           )}
-          {idx < 0 && (
-            <button
-              type="button" onClick={() => void putName()} data-action="pe-put" disabled={busyFx}
-              style={{ minHeight: 52, borderRadius: radius.pill, border: 'none', background: s.petName.trim() ? C.accent : C.off, color: s.petName.trim() ? C.accentInk : C.sub2, fontSize: fz.xl, fontFamily: GAEGU, fontWeight: 700, boxShadow: s.petName.trim() ? `0 6px 16px ${acc(.24)}` : 'none' }}
-            >이름 넣기</button>
-          )}
-          {step && (
-            <>
-              <button
-                type="button" onClick={() => void putStep()} data-action="pe-put" disabled={busyFx || !stepAnswered}
-                style={{ minHeight: 52, borderRadius: radius.pill, border: 'none', background: stepAnswered ? C.accent : C.off, color: stepAnswered ? C.accentInk : C.sub2, fontSize: fz.xl, fontFamily: GAEGU, fontWeight: 700, boxShadow: stepAnswered ? `0 6px 16px ${acc(.24)}` : 'none' }}
-              >알에 넣기</button>
-              <button
-                type="button" onClick={() => void skipOne()} data-action="pe-skip" disabled={busyFx}
-                style={{ minHeight: TAP_MIN, border: 'none', background: 'none', fontSize: fz.md, color: C.sub2 }}
-              >다음에 할게요</button>
-            </>
+          {(idx < 0 || step) && (
+            <div data-part="pe-nav" style={{ display: 'flex', alignItems: 'stretch', gap: gap.sm }}>
+              {step && (
+                <button
+                  type="button" onClick={() => void back()} data-action="pe-prev" disabled={busyFx} aria-label="이전 칸"
+                  style={{ ...NAV_SIDE, border: `1px solid ${C.lineHard}`, background: C.paper, color: C.sub2, padding: '0 14px 0 10px' }}
+                ><span aria-hidden style={{ fontSize: fz.xl, lineHeight: 1, marginTop: -2 }}>‹</span>이전</button>
+              )}
+              {idx < 0 ? (
+                <button
+                  type="button" onClick={() => void putName()} data-action="pe-put" disabled={busyFx}
+                  style={{ ...NAV_MAIN, background: s.petName.trim() ? C.accent : C.off, color: s.petName.trim() ? C.accentInk : C.sub2, boxShadow: s.petName.trim() ? `0 6px 16px ${acc(.24)}` : 'none' }}
+                >다음</button>
+              ) : (
+                <button
+                  type="button" onClick={() => void putStep()} data-action="pe-put" disabled={busyFx || !stepAnswered}
+                  style={{ ...NAV_MAIN, background: stepAnswered ? C.accent : C.off, color: stepAnswered ? C.accentInk : C.sub2, boxShadow: stepAnswered ? `0 6px 16px ${acc(.24)}` : 'none' }}
+                >다음</button>
+              )}
+              {step && (
+                <button
+                  type="button" onClick={() => void skipOne()} data-action="pe-skip" disabled={busyFx}
+                  style={{ ...NAV_SIDE, padding: '0 14px', border: `1px solid ${stepAnswered ? 'transparent' : C.lineHard}`, background: stepAnswered ? 'none' : C.paper, color: stepAnswered ? C.sub2 : C.ink }}
+                >건너뛰기</button>
+              )}
+            </div>
           )}
           {waitingDone && !isCrack && (
             baked || meeting ? (

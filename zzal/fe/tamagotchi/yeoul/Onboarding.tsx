@@ -314,7 +314,14 @@ function OnboardingInner({ y }: { y: Yeoul }) {
    */
   const layout = useCharLayout();
   const [eggMode, setEggMode] = useState<EggVariant>('dots');
-  useEffect(() => { setEggMode(eggVariant()); }, []);
+  useEffect(() => {
+    setEggMode(eggVariant());
+    // 리모컨(다른 탭·같은 탭)이 `zzal.devEgg` 를 바꾸면 따라 바꾼다. 주소 `?egg=` 가 있으면 그게 이긴다.
+    const on = () => setEggMode(eggVariant());
+    window.addEventListener('storage', on);
+    window.addEventListener('zzal:devEgg', on);
+    return () => { window.removeEventListener('storage', on); window.removeEventListener('zzal:devEgg', on); };
+  }, []);
   /**
    * 접이식(안 2)에서 **지금 펼쳐 둔 묶음**. 표현 상태라 서버·저장과 아무 상관이 없고,
    * 접어도 고른 값(`s.picks`·`s.texts`)은 그대로 남는다 — 접는 것은 **그리느냐 마느냐**뿐이다.
@@ -402,7 +409,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
 
   /**
    * ★ 알 온보딩(2026-10-13) — 캐릭터 칸을 **알 화면 + 한 칸씩**으로 바꾼다(`PersonaEgg`).
-   *   `?egg=dots|glow` 로 두 시안을 바꿔 보고(기본 dots), `?egg=off` 면 아래 옛 한 화면이 그대로 뜬다.
+   *   `?egg=dots|glow|off`(없으면 브라우저 저장 `zzal.devEgg`)로 바꿔 보고(기본 dots), off 면 아래 옛 한 화면이 그대로 뜬다.
    *   첫 렌더(서버)에서는 주소를 못 읽으니 dots 로 두고, 붙은 뒤에 한 번 읽는다.
    */
   if (key === 'char' && eggMode !== 'off') {
