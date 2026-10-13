@@ -19,6 +19,7 @@ import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { useLang, useT } from "../../lib/i18n";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
+import { metaTrack } from "../../lib/metaPixel";
 import { IconArrow, IconBack, IconCheck, IconClose, IconEdit } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import NotifyAsk, { shouldAskNotify } from "../../ui/NotifyAsk";
@@ -313,6 +314,7 @@ export default function Wizard({
     try {
       const id = await startJob({ ...form, mode: viewMode }, authenticated, lang);
       track("create_started", { ...props, job: id });
+      metaTrack("StartTrial", { content_type: "webtoon" });
       if (notifyEmail) {
         try { await notifyByEmail(id, notifyEmail); } catch { /* 못 적어도 만들기는 간다 — 진행 화면에서 다시 적을 수 있다 */ }
       }
