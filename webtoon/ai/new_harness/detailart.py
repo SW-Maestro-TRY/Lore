@@ -320,8 +320,12 @@ def narration_of(scenes: list[dict], scene_no: int) -> list[str] | None:
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
                           has_prev: bool, fixed_names=(), lang: str = "ko", lore: str = "",
-                          cast_sheet_names=()) -> str:
+                          cast_sheet_names=(), narration_none: bool = False) -> str:
     """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
+
+    narration_none : 나레이션 단계(run.stage_narration)가 따로 돌았으면 참. 그때 나레이션이
+    빈 장은 「이 장은 나레이션 없음」으로 그린다. 거짓(옛 run)이면 예전처럼 빈 장의
+    나레이션을 그림 모델이 정한다.
 
     fixed_names : scenes.json 의 「이 화의 고정 설정」. 인물 절 바로 뒤에 붙는다
     (`fixed_block`). 없으면(옛 run) 아무것도 안 붙는다.
@@ -447,6 +451,13 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
                   "위에서 아래로 놓는다. 여기 없는 나레이션 문장은 새로 만들지 않는다 — "
                   "위 글을 다 빼도 된다. 앞의 「나레이션 상자를 최소 1개 넣는다」보다 "
                   "이것이 먼저다.", ""]
+    elif narration_none and fixed == []:
+        # 나레이션 단계가 이 장은 상자가 필요 없다고 판단한 경우. 이 줄이 없으면 앞의
+        # 「나레이션 상자를 최소 1개 넣는다」만 남아 그림 모델이 나레이션을 지어 넣는다 —
+        # 격언투 상자가 붙던 바로 그 경로다(위 주석, 2026-10-13 그려서 확인).
+        lines += ["[나레이션 — 이 장은 없다]",
+                  "  이 장에는 나레이션 상자를 넣지 않는다. 그림과 말풍선으로만 전한다. "
+                  "앞의 「나레이션 상자를 최소 1개 넣는다」보다 이것이 먼저다.", ""]
     lines += [
         (f"[이 화가 열리는 자리 — 여기서부터 그린다] {opens}" if first else
          f"[여기서부터 그린다 — 앞 장이 끝난 자리다] {opens}"),
@@ -650,7 +661,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             prompt = imageprompt.apply_style_sections(
                 build_continue_prompt(direction, scenes, char, spec, cast,
                                       scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
-                                      lang=lang, lore=lore, cast_sheet_names=page_cast),
+                                      lang=lang, lore=lore, cast_sheet_names=page_cast, narration_none=bool(scene_data.get("narration_stage"))),
                 style).replace("{style}", imageprompt.load_style(style))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
