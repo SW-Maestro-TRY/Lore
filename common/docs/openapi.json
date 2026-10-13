@@ -502,10 +502,44 @@
         },
         "type": "object"
       },
+      "ApiResponseDevHatchStage": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevHatchStage"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseDevPing": {
         "properties": {
           "data": {
             "$ref": "#/components/schemas/DevPing"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevReset": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevReset"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -2139,6 +2173,39 @@
         },
         "type": "object"
       },
+      "DevHatchStage": {
+        "description": "굽기 단계 강제 결과 — 바꾼 뒤 부화 진행(알 화면이 폴링하는 것과 같은 모양)",
+        "properties": {
+          "effects": {
+            "description": "이번에 일어난 일",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "hatch": {
+            "$ref": "#/components/schemas/Hatch",
+            "description": "바꾼 뒤 부화 진행"
+          },
+          "stage": {
+            "description": "요청한 단계(숫자 · done · failed)",
+            "example": "2",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DevHatchStageRequest": {
+        "description": "굽기 단계 강제 요청",
+        "properties": {
+          "stage": {
+            "description": "1..전체 단계 수 · done · failed",
+            "example": "2",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "DevMotionPatch": {
         "description": "동작 행 세팅",
         "properties": {
@@ -2482,6 +2549,32 @@
           "generationReal": {
             "description": "진짜 그림 생성 스위치(ZZAL_GENERATION_REAL). false 면 진짜 굽기를 거절한다",
             "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "DevReset": {
+        "description": "내 펫 지우기 결과 — 지운 펫 id 와 표별 지운 행 수(지운 순서대로)",
+        "properties": {
+          "deleted": {
+            "additionalProperties": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "description": "표 이름 → 지운 행 수",
+            "example": {
+              "zzal_motion": 16,
+              "zzal_pet": 1
+            },
+            "type": "object"
+          },
+          "petIds": {
+            "description": "지운 펫 id. 비어 있으면 원래 펫이 없었다",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
           }
         },
         "type": "object"
@@ -10123,6 +10216,33 @@
         ]
       }
     },
+    "/api/zzal/v1/dev/me/reset": {
+      "post": {
+        "description": "로그인한 내 계정의 펫 전부와 딸린 행(동작·후보·소원·엽서·장면·채팅·게임·조각·굽기 기록·공유)을 한 트랜잭션으로 지운다.\n피드백·행동 기록은 남긴다. 되돌릴 수 없다. 응답에 표별 지운 행 수.",
+        "operationId": "devResetMe",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevReset"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "내 펫 지우고 처음부터",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
     "/api/zzal/v1/dev/pets/{petId}/advance-clock": {
       "post": {
         "description": "이 펫의 시계를 준 만큼 **앞으로** 민다. 게이지·잠·창·자동 취침이 그 시각 기준으로 정산된다.\n\n- **규칙은 그대로다.** 값을 짧게 바꾸는 것이 아니라 시계만 밀므로 여기서 확인한 동작이 곧 운영 동작이다\n- 응답의 `after.serverNow` 도 밀린 시계다. `effects` 에 이번 점프에서 바뀐 칸(케어 미스·병·떠남·장면·엽서…)이 한 줄씩\n- `visit:false` 면 방문으로 치지 않는다 — 하루씩 여러 번 밀어도 결석 떠남이 난다(기본 true)\n- 내 펫만(남의 펫은 404) · 운영에서는 이 API 가 존재하지 않는다",
@@ -10382,6 +10502,54 @@
           }
         ],
         "summary": "심화 행동 즉시 공개(가짜 그림)",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/pets/{petId}/hatch/stage": {
+      "post": {
+        "description": "알 화면의 굽기 진행을 강제한다. 숫자 N = 앞의 N 단계만 끝난 척(나머지는 아직) · done = 모두 끝내고 운영과 같은 길로 살린다\n· failed = 부화 실패. 단계 기록의 상태만 바꾸고 그림을 새로 굽지 않는다(돈 0). 지금 굽는 중이면 409.\n가짜 생성 서버에서는 살아난 아이(ALIVE)도 알로 되돌린다. 진짜 생성 서버에서는 거절(되살릴 때 2층이 다시 구워져 돈이 나간다).",
+        "operationId": "devHatchStage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevHatchStageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevHatchStage"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "굽기 단계 강제",
         "tags": [
           "개발용"
         ]

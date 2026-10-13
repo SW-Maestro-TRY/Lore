@@ -27,6 +27,7 @@ import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radiu
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import DevRemote, { useDevPing, type RemoteTab } from '../yeoul/DevRemote';
+import DevOnboardingTab from '../yeoul/DevOnboardingTab';
 import { STAGE, lastStage, once, pickerHolding, reachStage, releasePicker, runLeaveHooks, sinceT0, startClock, ztrack } from '../yeoul/funnel';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { GIFT_CYCLES, SITUATION_TABLE, scenePlays } from '../props/situations';
@@ -320,10 +321,13 @@ const DAILY: ReadonlyArray<readonly [string, string]> = [
   ['prop_ball', '공'], ['prop_book', '책'], ['prop_cup', '컵'], ['prop_plant', '화분'],
 ];
 
-type JumpTab = RemoteTab | 'screen';
+type JumpTab = RemoteTab | 'screen' | 'onb';
+/** 방(연습방·진짜 방)의 탭 — 서버 넷 + 화면 + 온보딩(펫 지우기). */
 const TABS: ReadonlyArray<readonly [JumpTab, string]> = [
-  ['state', '상태'], ['events', '이벤트'], ['clock', '시계'], ['bake', '굽기'], ['screen', '화면'],
+  ['state', '상태'], ['events', '이벤트'], ['clock', '시계'], ['bake', '굽기'], ['screen', '화면'], ['onb', '온보딩'],
 ];
+/** 온보딩 화면(랜딩·올리기·캐릭터·알·태어남)의 탭. 첫 탭이 기본이다. */
+const ONB_TABS: ReadonlyArray<readonly [JumpTab, string]> = [['onb', '온보딩'], ['bake', '굽기']];
 
 function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; live: Live; missingBasics?: string[] }) {
   const [open, setOpen] = useState(false);
@@ -470,7 +474,11 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
   }
 
   const petId = live.petId;
-  const serverTab = tab !== 'screen';
+  // ★ 화면에 따라 탭이 갈린다(2026-10-13). 온보딩(랜딩·올리기·캐릭터·알·태어남)에는 아이가 없거나 굽는 중이라
+  //   상태·이벤트·시계가 할 일이 없다 — 「온보딩」·「굽기」 둘만. 방(연습방·진짜 방)은 다섯 탭 + 「온보딩」(펫 지우기).
+  const tabs = room ? TABS : ONB_TABS;
+  const cur: JumpTab = tabs.some(([k]) => k === tab) ? tab : tabs[0][0];
+  const serverTab = cur !== 'screen' && cur !== 'onb';
 
   return (
     <div
@@ -485,12 +493,12 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       {/* 머리 — 탭과 닫기. 탭은 늘 보이게 스크롤 밖에 둔다. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 6px 0', borderBottom: `1px solid ${C.line}` }}>
         <div role="tablist" style={{ display: 'flex', flex: 1, minWidth: 0, overflowX: 'auto' }}>
-          {TABS.map(([k, label]) => (
-            <button key={k} role="tab" aria-selected={tab === k} data-remote-tab={k} onClick={() => setTab(k)}
+          {tabs.map(([k, label]) => (
+            <button key={k} role="tab" aria-selected={cur === k} data-remote-tab={k} onClick={() => setTab(k)}
               style={{
                 flex: '1 0 auto', minHeight: 44, minWidth: 44, padding: '0 9px', border: 'none', background: 'none',
-                borderBottom: `2px solid ${tab === k ? C.ink : 'transparent'}`,
-                fontSize: fz.sm, fontWeight: tab === k ? 700 : 400, color: tab === k ? C.ink : C.sub,
+                borderBottom: `2px solid ${cur === k ? C.ink : 'transparent'}`,
+                fontSize: fz.sm, fontWeight: cur === k ? 700 : 400, color: cur === k ? C.ink : C.sub,
               }}>{label}</button>
           ))}
         </div>
@@ -502,18 +510,22 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint, lineHeight: 1.4 }}>
           {serverTab
             ? `서버를 바꿉니다 · 펫 #${petId ?? '—'} · 생성 스위치 ${ping.generationReal ? '진짜(과금)' : '가짜'}`
-            : '화면에만 — 그림을 보려는 손잡이입니다(서버·규칙 안 바뀜)'}
+            : cur === 'onb'
+              ? `온보딩 다시 밟기 · 생성 스위치 ${ping.generationReal ? '진짜(과금)' : '가짜'}`
+              : '화면에만 — 그림을 보려는 손잡이입니다(서버·규칙 안 바뀜)'}
         </span>
 
         {serverTab && petId == null && (
           <p style={{ margin: 0, fontSize: fz.sm, color: C.sub }}>아이가 아직 없어요 — 부화한 뒤에 서버를 조작할 수 있습니다.</p>
         )}
         {serverTab && petId != null && (
-          <DevRemote tab={tab as RemoteTab} petId={petId} pet={live.pet} ping={ping}
+          <DevRemote tab={cur as RemoteTab} petId={petId} pet={live.pet} ping={ping}
             onDetail={live.putDetail} onReload={live.resume} />
         )}
 
-        {!serverTab && rows.map((g) => (
+        {cur === 'onb' && <DevOnboardingTab y={y} live={live} />}
+
+        {cur === 'screen' && rows.map((g) => (
           <div key={g.n} style={{ display: 'flex', flexDirection: 'column', gap: gap.xs }}>
             <span style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm }}>
               <span style={{ fontSize: fz.sm, color: C.sub }}>{g.label}</span>
@@ -538,14 +550,14 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         ))}
 
         {/* ★ 기본 8종 중 서버가 그림을 안 준 것. **방에 들어온 시점에 비어 있어야 한다.** */}
-        {!serverTab && missingBasics.length > 0 && (
+        {cur === 'screen' && missingBasics.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: pad.tiny, borderRadius: radius.sm, background: C.accentSoft }}>
             <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>기본 8종 중 그림 없음</span>
             <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>{missingBasics.join(' · ')}</span>
           </div>
         )}
 
-        {!serverTab && (
+        {cur === 'screen' && (
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: gap.sm, paddingTop: 2 }}>
             {WEB_KEYS.map(([k, text]) => (
               <span key={k} style={{ display: 'flex', alignItems: 'center', gap: gap.sm, fontSize: fz.sm, color: C.sub }}>

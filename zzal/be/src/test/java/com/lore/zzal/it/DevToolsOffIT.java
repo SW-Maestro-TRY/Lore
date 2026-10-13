@@ -3,6 +3,8 @@ package com.lore.zzal.it;
 import com.lore.zzal.dev.DevBakeController;
 import com.lore.zzal.dev.DevBakeService;
 import com.lore.zzal.dev.DevClockController;
+import com.lore.zzal.dev.DevOnboardingController;
+import com.lore.zzal.dev.DevOnboardingService;
 import com.lore.zzal.dev.DevPingController;
 import com.lore.zzal.dev.DevService;
 import com.lore.zzal.dev.DevStateController;
@@ -28,17 +30,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DevToolsOffIT extends ZzalItSupport {
 
     @Test
-    @DisplayName("★★ dev 컨트롤러·서비스 6종 모두 빈이 없다")
+    @DisplayName("★★ dev 컨트롤러·서비스 8종 모두 빈이 없다")
     void noDevBeans() {
         for (Class<?> type : List.of(DevClockController.class, DevStateController.class, DevBakeController.class,
-                DevPingController.class, DevService.class, DevBakeService.class)) {
+                DevPingController.class, DevService.class, DevBakeService.class,
+                DevOnboardingController.class, DevOnboardingService.class)) {
             assertThat(context.getBeanNamesForType(type)).as("%s 가 dev-tools=false 인데 떠 있다", type.getSimpleName())
                     .isEmpty();
         }
     }
 
     @Test
-    @DisplayName("★ ping·state·events·bake·advance-clock 모두 404")
+    @DisplayName("★ ping·state·events·bake·advance-clock·me/reset·hatch/stage 모두 404")
     void everyAddressIsGone() throws Exception {
         Long userId = newUserId();
         assertThat(mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
@@ -46,5 +49,7 @@ class DevToolsOffIT extends ZzalItSupport {
         assertThat(postAs(userId, "/api/zzal/v1/dev/pets/1/events/sick", null).getResponse().getStatus()).isEqualTo(404);
         assertThat(postAs(userId, "/api/zzal/v1/dev/pets/1/bake", Map.of("kind", "gift")).getResponse().getStatus()).isEqualTo(404);
         assertThat(postAs(userId, "/api/zzal/v1/dev/pets/1/advance-clock", Map.of("minutes", 10)).getResponse().getStatus()).isEqualTo(404);
+        assertThat(postAs(userId, "/api/zzal/v1/dev/me/reset", null).getResponse().getStatus()).isEqualTo(404);
+        assertThat(postAs(userId, "/api/zzal/v1/dev/pets/1/hatch/stage", Map.of("stage", "done")).getResponse().getStatus()).isEqualTo(404);
     }
 }

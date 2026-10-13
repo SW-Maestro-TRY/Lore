@@ -30,6 +30,7 @@ import { assetUrl } from '../../lib/assets';
 import { CHAR_TEXT_MAX } from '../../lib/pet';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
+import { DevPresetBar } from './DevOnboardingTab';
 import { OnbDevProvider, OnbChangeList, useOnbFlag, useCharLayout } from './onboardingDev';
 import { holdForPicker, once, releasePicker, ztrack } from './funnel';
 import InAppBanner from '../parts/InAppBanner';
@@ -592,6 +593,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
 
         {key === 'char' && (
           <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', gap: gap.xl, animationDelay: '130ms' }}>
+            {/* dev 도구가 켜진 서버에서만 보이는 목 데이터 줄(2026-10-13). 운영은 ping 404 라 그려지지 않는다. */}
+            <DevPresetBar y={y} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
                 <span style={{ fontSize: fz.sm, color: C.sub2 }}>이름 · 12자까지</span>

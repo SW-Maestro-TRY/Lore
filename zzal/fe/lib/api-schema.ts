@@ -2466,6 +2466,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/dev/me/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 내 펫 지우고 처음부터
+         * @description 로그인한 내 계정의 펫 전부와 딸린 행(동작·후보·소원·엽서·장면·채팅·게임·조각·굽기 기록·공유)을 한 트랜잭션으로 지운다.
+         *     피드백·행동 기록은 남긴다. 되돌릴 수 없다. 응답에 표별 지운 행 수.
+         */
+        post: operations["devResetMe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/dev/pets/{petId}/advance-clock": {
         parameters: {
             query?: never;
@@ -2577,6 +2598,28 @@ export interface paths {
          *     - 없는 seq 면 400
          */
         post: operations["forceOpen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/pets/{petId}/hatch/stage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 굽기 단계 강제
+         * @description 알 화면의 굽기 진행을 강제한다. 숫자 N = 앞의 N 단계만 끝난 척(나머지는 아직) · done = 모두 끝내고 운영과 같은 길로 살린다
+         *     · failed = 부화 실패. 단계 기록의 상태만 바꾸고 그림을 새로 굽지 않는다(돈 0). 지금 굽는 중이면 409.
+         *     가짜 생성 서버에서는 살아난 아이(ALIVE)도 알로 되돌린다. 진짜 생성 서버에서는 거절(되살릴 때 2층이 다시 구워져 돈이 나간다).
+         */
+        post: operations["devHatchStage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3658,8 +3701,20 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseDevHatchStage: {
+            data?: components["schemas"]["DevHatchStage"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseDevPing: {
             data?: components["schemas"]["DevPing"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevReset: {
+            data?: components["schemas"]["DevReset"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -4368,6 +4423,26 @@ export interface components {
              */
             seq?: number;
         };
+        /** @description 굽기 단계 강제 결과 — 바꾼 뒤 부화 진행(알 화면이 폴링하는 것과 같은 모양) */
+        DevHatchStage: {
+            /** @description 이번에 일어난 일 */
+            effects?: string[];
+            /** @description 바꾼 뒤 부화 진행 */
+            hatch?: components["schemas"]["Hatch"];
+            /**
+             * @description 요청한 단계(숫자 · done · failed)
+             * @example 2
+             */
+            stage?: string;
+        };
+        /** @description 굽기 단계 강제 요청 */
+        DevHatchStageRequest: {
+            /**
+             * @description 1..전체 단계 수 · done · failed
+             * @example 2
+             */
+            stage?: string;
+        };
         /** @description 동작 행 세팅 */
         DevMotionPatch: {
             /** @description 도착(revealedAt) — true 면 지금, false 면 지운다 */
@@ -4627,6 +4702,21 @@ export interface components {
             devTools?: boolean;
             /** @description 진짜 그림 생성 스위치(ZZAL_GENERATION_REAL). false 면 진짜 굽기를 거절한다 */
             generationReal?: boolean;
+        };
+        /** @description 내 펫 지우기 결과 — 지운 펫 id 와 표별 지운 행 수(지운 순서대로) */
+        DevReset: {
+            /**
+             * @description 표 이름 → 지운 행 수
+             * @example {
+             *       "zzal_motion": 16,
+             *       "zzal_pet": 1
+             *     }
+             */
+            deleted?: {
+                [key: string]: number;
+            };
+            /** @description 지운 펫 id. 비어 있으면 원래 펫이 없었다 */
+            petIds?: number[];
         };
         /** @description 리모컨 조작 결과 — 이번에 일어난 일 · 바꾸기 전과 뒤의 캐릭터 상태 · 내부 칸 한 벌 */
         DevResult: {
@@ -9325,6 +9415,26 @@ export interface operations {
             };
         };
     };
+    devResetMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevReset"];
+                };
+            };
+        };
+    };
     advanceClock: {
         parameters: {
             query?: never;
@@ -9463,6 +9573,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+        };
+    };
+    devHatchStage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevHatchStageRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevHatchStage"];
                 };
             };
         };
