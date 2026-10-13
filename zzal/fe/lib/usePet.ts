@@ -303,7 +303,8 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
   // ── 부름 대사 ─────────────────────────────────────────────────────────
   // ★ v0 백엔드는 chatSummary.openSlot 을 null 로 준다(PR #216) — 열린 슬롯은 GET /chat 이 정본이다.
   //   그래서 ALIVE 상태가 새로 올 때마다(폴링·행동) 같이 묻는다. 답한 뒤(chat=null)도 다시 묻는다.
-  const aliveStamp = pet?.phase === 'ALIVE' ? pet.serverNow : null;
+  // ★ 여행 중(`trip`)엔 묻지 않는다 — 서버가 409(ZZAL_TRAVELING)로 막는다(2026-10-13). 부르면 다시 묻는다.
+  const aliveStamp = pet?.phase === 'ALIVE' && !pet.trip ? pet.serverNow : null;
   useEffect(() => {
     const s = src.current;
     if (!s || petId === null || !aliveStamp) {

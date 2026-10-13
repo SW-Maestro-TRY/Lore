@@ -83,6 +83,22 @@ for (const size of SIZES) {
     await page.setViewportSize({ width: size.w, height: size.h });
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
+    // ★ 여행 중엔 부름·판 조회를 아예 안 부른다(2026-10-13 상훈님) — 409 콘솔 오류가 남지 않아야 한다.
+    const consoleErrors: string[] = [];
+    // 404 는 helpers.collectErrors 와 같이 뺀다 — 그림(`/zzal/*`, S3 전용)과 이 시험이 안 가로채는
+    // 남의 API(`/api/v1/credits/me` 등, 백엔드 없음). zzal API 의 실패(409 등)는 전부 센다.
+    page.on('console', (msg) => {
+      if (msg.type() !== 'error') return;
+      const at = msg.location().url ?? '';
+      if (msg.text().includes('status of 404') && !at.includes('/api/zzal/')) return;
+      consoleErrors.push(`${msg.text().slice(0, 200)} @ ${at}`);
+    });
+    const calls = { chat: 0, game: 0 };
+    page.on('request', (req) => {
+      const path = new URL(req.url()).pathname;
+      if (/\/api\/zzal\/v1\/me\/pets\/\d+\/chat$/.test(path)) calls.chat += 1;
+      if (/\/api\/zzal\/v1\/me\/pets\/\d+\/games\/current$/.test(path)) calls.game += 1;
+    });
     await serve(page);
     await page.goto('/zzal?skin=yeoul', { waitUntil: 'domcontentloaded' });
 
@@ -117,6 +133,9 @@ for (const size of SIZES) {
     m.popBtn = await first.evaluate((el) => { const b = el.getBoundingClientRect(); return { y: Math.round(b.y), h: Math.round(b.height), bottom: Math.round(b.bottom), w: Math.round(b.width), anim: getComputedStyle(el).animationName }; });
     m.vh = size.h;
 
+    // 여행 중 — 부름·판 조회 0건(불러오기 직전까지)
+    m.awayCalls = { ...calls };
+
     // 3) 부르기 → 재회 판
     await first.click();
     const fire = page.locator('[data-action="trip-open-album"]');
@@ -137,6 +156,11 @@ for (const size of SIZES) {
     if (SHOT_DIR) await page.screenshot({ path: `${SHOT_DIR}/trip-return-${size.name}-album.png` });
     m.postcardBox = await rect(page, '[data-part="postcards"]');
     m.albumScrollW = await page.locator('[data-part="wall"]').evaluate((el) => el.scrollWidth - el.clientWidth);
+    // 부르기 뒤 — 조회가 다시 돈다
+    await expect.poll(() => calls.chat, { message: '부르기 뒤 부름 조회 재개' }).toBeGreaterThan(0);
+    await expect.poll(() => calls.game, { message: '부르기 뒤 판 조회 재개' }).toBeGreaterThan(0);
+    m.afterCalls = { ...calls };
+    m.consoleErrors = consoleErrors.length;
     m.errors = errors.length;
     // eslint-disable-next-line no-console
     console.log('TRIP_METRIC ' + JSON.stringify(m));
@@ -155,6 +179,8 @@ for (const size of SIZES) {
     expect(m.miniClipped, '안내 문장 잘림 없음').toBe(false);
     expect(m.postcards).toBe(3);
     expect(String(m.fireText)).toContain('엽서 3장');
+    expect(m.awayCalls, '여행 중 chat·games 요청 0건').toEqual({ chat: 0, game: 0 });
+    expect(consoleErrors, '콘솔 오류 0').toEqual([]);
     expect(errors).toEqual([]);
   });
 }
