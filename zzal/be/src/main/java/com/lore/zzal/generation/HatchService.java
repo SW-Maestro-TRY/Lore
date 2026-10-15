@@ -352,6 +352,11 @@ public class HatchService {
                 .count();
     }
 
+    /** 부화 단계 이름을 <b>순서대로</b>(dev 리모컨이 "N단계까지 끝난 척" 을 만들 때 쓴다). */
+    public List<String> stepNamesInOrder(String version) {
+        return List.copyOf(stepNames(version));
+    }
+
     /** 부화가 모두 몇 단계인가. */
     public int stepsTotal(String version) {
         return stepNames(version).size();

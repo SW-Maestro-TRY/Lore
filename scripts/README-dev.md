@@ -13,6 +13,7 @@ scripts/dev.sh logs app    # 로그 따라 보기(서비스: postgres minio app 
 scripts/dev.sh down        # 컨테이너만 내림 — DB·MinIO 볼륨은 남아 다음 up 에 같은 계정·펫
 scripts/dev.sh reset       # 볼륨·이미지까지 지우고 장부에서 뺌("깨끗이"는 이것 하나. 비대화식은 --yes)
 scripts/dev.sh seed        # 시드만 다시(멱등)
+scripts/dev.sh assets      # 공통 그림 다시 받기 + 이 스택 버킷에 올리기(멱등)
 scripts/dev.sh up app      # 서비스 일부만(뒤에 이름)
 scripts/dev.sh --stack 이름 up   # 브랜치 이름 대신 다른 스택 이름(LORE_STACK=이름 도 같음)
 ```
@@ -56,6 +57,16 @@ feat-dev-env-1012            feat/dev-env-1012              3201  8201  5401  90
 
 로컬 기본값은 `ZZAL_DEV_TOOLS=true`(리모컨 dev API)·`ZZAL_ADMIN=true`. 바꾸려면 `infra/local/.env.dev.local` 에 바꿀 줄만 적는다(커밋 안 됨). `OPENAI_KEY`+`ZZAL_GENERATION_REAL=true` 는 부화마다 과금된다.
 
+## 공통 그림(배경·소품·알·여울 시연·온보딩 예시)
+
+화면은 그림을 `/images/zzal/...` 로 부른다(`NEXT_PUBLIC_CDN_BASE` 기본값 `/images`). 운영·staging 은 CloudFront 가 그 자리를 S3 로 보내는데, 로컬 스택은 MinIO 가 빈 통으로 떠서 그대로면 전부 404 다. 그래서:
+
+1. `dev.sh up` 이 `infra/dev/seed-assets.txt`(dev 박스와 같은 목록, 127개·약 8MB)를 staging 공개 주소에서 `~/.lore-dev/assets/` 로 받는다. AWS 자격 불필요, 이미 받은 건 건너뛰고, 오프라인이면 경고만 내고 그림 없이 뜬다. 스택이 여러 개여도 한 번만 받는다.
+2. compose 의 `minio-seed` 가 그 캐시를 키 그대로 이 스택 버킷에 올린다(`mc mirror`, 이미 있는 키는 건너뜀).
+3. web 빌드 인자 `IMAGE_PROXY` 로 Next 가 `/images/*` 를 MinIO 로 넘긴다(next.config.mjs. 이 값을 안 주는 CI·배포 빌드엔 꺼져 있다).
+
+새 그림이 화면에 들어가면 `infra/dev/seed-assets.txt` 에 키를 한 줄 더하고 `dev.sh assets`. 펫마다 구운 그림(`images/zzal/pets/<id>/...`)은 목록에 없다 — 가짜 굽기(`ZZAL_GENERATION_REAL=false`)는 파일을 만들지 않아 404 이고, 화면은 여울 시연 그림으로 대신 그린다.
+
 ## 리셋과 정리
 
 - `down`: 컨테이너만. 메모리를 돌려받고 데이터는 둔다. 브랜치 작업을 쉬는 동안은 이것.
@@ -66,15 +77,17 @@ feat-dev-env-1012            feat/dev-env-1012              3201  8201  5401  90
 
 `infra/local/docker-compose.local.yml` 은 로컬 전용이다. dev.lorecomic.com 은 계속 루트 `docker-compose.yml` + `infra/dev/` 로 배포된다.
 
-## 개발 리모컨(여울 방의 「리모컨」 탭)
+## 개발 리모컨(/zzal 오른쪽 가장자리의 「리모컨」 탭)
 
 서버 상태를 진짜로 바꾸는 리모컨이다. 화면에 덮어쓰지 않고 dev API 가 DB 값을 바꾼 뒤 그 서버 상태를 그린다 — 새로고침해도 남고, 시계를 넘기면 운영 규칙대로 이어진다(똥 4 → 6시간 → 더러움 병 → 케어 미스 → 떠남 예고 → 여행). 범위는 `remote-control-spec-1011`(상태 41·이벤트 47 전수표).
 
 ### 켜는 법
 
 - 서버: `ZZAL_DEV_TOOLS=true`(로컬 스택 기본값). 꺼져 있으면 아래 주소가 전부 404 이고 빈도 안 뜬다(`DevToolsOffIT`).
-- 화면: `GET /api/zzal/v1/dev/ping` 이 200 이면 방 오른쪽 가장자리에 「리모컨」 탭이 뜬다. 도메인으로 가르지 않는다 — 로그인 전(401)·꺼진 서버(404)면 안 뜬다.
-- 탭: 상태(값 세팅) · 이벤트(트리거) · 시계(방문 없이 넘기기 포함) · 굽기 · 화면(그림만 보는 손잡이 — 서버 안 바뀜). 누를 때마다 서버가 돌려준 "이번에 일어난 일"(`effects[]`)이 위에 토스트로 뜬다.
+- 화면: `GET /api/zzal/v1/dev/ping` 이 200 이면 `/zzal` 의 **모든 화면**(랜딩·올리기·캐릭터·알·태어남·연습방·방) 오른쪽 가장자리에 「리모컨」 탭이 뜬다. 도메인으로 가르지 않는다 — 로그인 전(401)·꺼진 서버(404)면 안 뜬다.
+- 탭(방·연습방): 상태(값 세팅) · 이벤트(트리거) · 시계(방문 없이 넘기기 포함) · 굽기 · 화면(그림만 보는 손잡이 — 서버 안 바뀜) · 온보딩. 누를 때마다 서버가 돌려준 "이번에 일어난 일"(`effects[]`)이 위에 토스트로 뜬다.
+- 탭(온보딩 화면): 온보딩 · 굽기. 「온보딩」 탭에는 지금 화면 이름 · 화면 점프 · 목 데이터 프리셋 3벌(현대 학생 / 판타지 마법사 / 어두운 세상 모험가 — 캐릭터 칸을 통째로 채움, 같은 줄이 캐릭터 칸 위에도 dev 에서만 뜬다) · 알 화면 시안(dots / glow / off, `localStorage zzal.devEgg` — 새로고침에도 남음) · 굽기 단계 강제(1/N…N/N · 완료 · 실패) · **내 펫 지우고 처음부터**(한 번 더 눌러야 지움)가 있다.
+- 굽기 단계 강제는 굽는 중이면 끝나길 기다렸다가(최대 90초) 적용한다. 가짜 생성은 이름을 내면 10초 남짓에 살아나므로, 가짜 서버에서는 살아난 아이도 알로 되돌려 단계를 보여 준다(진짜 생성 서버는 거절 — 되살릴 때 2층이 다시 구워져 돈이 나간다).
 
 ### 엔드포인트(모두 `app.zzal.dev-tools=true` 일 때만 존재, 내 펫만 — 남의 펫 404)
 
@@ -85,6 +98,8 @@ feat-dev-env-1012            feat/dev-env-1012              3201  8201  5401  90
 | `POST /api/zzal/v1/dev/pets/{id}/events/{kind}?arg=` | 운영 전이 메서드 실행(재우기·발병·떠남·부르기·게임 승·조각 완주·선물 도착·놓아주기 등 41종) |
 | `POST .../advance-clock`·`.../set-clock` `{..., visit:false}` | 시계 이동. `visit:false` 면 방문으로 안 쳐서 하루씩 밀어도 결석 떠남이 난다. 응답에 `effects[]` |
 | `POST /api/zzal/v1/dev/pets/{id}/bake {kind, real, seq}` · `GET .../bake/{jobId}` | 부화(다시)·2층·선물 한 판을 운영 길로 굽기 + 진행·비용 조회 |
+| `POST /api/zzal/v1/dev/me/reset` | **내 펫 전부와 딸린 행 지우기**(동작·후보·소원·엽서·장면·채팅·게임·조각·굽기 기록·공유). 피드백·행동 기록은 남김. 되돌릴 수 없음. 응답 `{petIds, deleted:{표:행 수}}` |
+| `POST /api/zzal/v1/dev/pets/{id}/hatch/stage {stage}` | 굽기 진행 강제 — `1..N`(앞 N 단계만 끝난 척) · `done`(운영 `completeIfReady` 로 살리기) · `failed`. 단계 기록 상태만 바꿔 돈 0. 굽는 중이면 409 |
 
 응답은 `{effects, before, after, state}` — `after` 는 방문 없이 정산한 화면 상태다(다시 조회하면 그 조회가 방문이라 떠남 예고가 취소된다).
 

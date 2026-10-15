@@ -65,4 +65,20 @@ public final class DevResponses {
             @Schema(description = "이번 굽기에서 지금까지 기록된 비용(달러)") BigDecimal costUsd,
             @Schema(description = "끝났나(성공·실패 모두)") boolean finished) {
     }
+
+    /** 내 펫 지우기 결과. */
+    @Schema(description = "내 펫 지우기 결과 — 지운 펫 id 와 표별 지운 행 수(지운 순서대로)")
+    public record DevReset(
+            @Schema(description = "지운 펫 id. 비어 있으면 원래 펫이 없었다") List<Long> petIds,
+            @Schema(description = "표 이름 → 지운 행 수", example = "{\"zzal_motion\": 16, \"zzal_pet\": 1}")
+            Map<String, Integer> deleted) {
+    }
+
+    /** 굽기 단계 강제 결과. */
+    @Schema(description = "굽기 단계 강제 결과 — 바꾼 뒤 부화 진행(알 화면이 폴링하는 것과 같은 모양)")
+    public record DevHatchStage(
+            @Schema(description = "요청한 단계(숫자 · done · failed)", example = "2") String stage,
+            @Schema(description = "이번에 일어난 일") List<String> effects,
+            @Schema(description = "바꾼 뒤 부화 진행") PetResponses.Hatch hatch) {
+    }
 }

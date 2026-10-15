@@ -118,6 +118,15 @@ public class GenStepRecord {
         this.finishedAt = now;
     }
 
+    /**
+     * dev 리모컨 전용 — 단계 상태만 바꾼다(굽기 단계 강제). 산출물(그림 키·문단)은 그대로 둔다 —
+     * 「완료 강제」 가 되돌릴 때 그 산출물로 살아나야 하기 때문이다. 운영 코드는 부르지 않는다.
+     */
+    public void devSetStatus(GenStatus status, Instant now) {
+        this.status = status;
+        this.finishedAt = status == GenStatus.SUCCEEDED || status == GenStatus.FAILED ? now : null;
+    }
+
     public boolean isSucceeded() {
         return status == GenStatus.SUCCEEDED;
     }

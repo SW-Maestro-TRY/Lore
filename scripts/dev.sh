@@ -8,6 +8,7 @@
 #   scripts/dev.sh status          컨테이너·헬스·포트·마지막 Flyway·접속 주소
 #   scripts/dev.sh ls [--pr]       모든 스택 장부(어느 포트에 어느 브랜치가 떠 있나)
 #   scripts/dev.sh seed            시드만 다시(멱등)
+#   scripts/dev.sh assets          공통 그림 캐시 다시 받기 + 이 스택 버킷에 올리기(멱등)
 #
 # 스택 이름 = 현재 브랜치 slug(feat/dev-env-1012 → feat-dev-env-1012).
 # 다른 이름을 쓰려면 --stack <이름> 또는 LORE_STACK=<이름>.
@@ -22,6 +23,10 @@ ENV_EXAMPLE="$REPO_ROOT/infra/local/env.dev.example"
 ENV_LOCAL="$REPO_ROOT/infra/local/.env.dev.local"
 STATE_DIR="${LORE_DEV_HOME:-$HOME/.lore-dev}"
 LEDGER="$STATE_DIR/stacks.json"
+# 공통 그림 캐시 — 스택이 몇 개든 한 번만 받는다(127개·약 8MB). 버킷에는 minio-seed 가 올린다.
+ASSET_CACHE="$STATE_DIR/assets"
+ASSET_LIST="$REPO_ROOT/infra/dev/seed-assets.txt"
+ASSET_FETCH="$REPO_ROOT/infra/dev/seed-assets.sh"
 REQUIRED_KEYS=(DB_USERNAME DB_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY CONTENT_BUCKET
                DEV_USER_EMAIL DEV_USER_PASSWORD DEV_ADMIN_EMAIL DEV_ADMIN_PASSWORD)
 
@@ -143,6 +148,7 @@ write_env() {
     echo "MINIO_PORT=$minio"
     echo "S3_PUBLIC_URL=http://s3.lore.localhost:$minio"
     echo "SITE_URL=http://$STACK.localhost:$web"
+    echo "ASSET_CACHE=$ASSET_CACHE"
     echo "JWT_SECRET=lore-local-$(printf '%s' "$STACK" | shasum -a 256 | cut -c1-40)"
   } > "$STACK_ENV"
   chmod 600 "$STACK_ENV"
@@ -161,6 +167,15 @@ check_env() {
 envval() { grep -E "^$1=" "$STACK_ENV" | tail -1 | cut -d= -f2-; }
 
 dc() { docker compose -p "$PROJECT" -f "$COMPOSE_FILE" --env-file "$STACK_ENV" "$@"; }
+
+# 공통 그림을 호스트 캐시로 받는다. 화면은 /images/zzal/... 를 부르는데 MinIO 는 빈 통으로 뜨므로,
+# dev 박스와 같은 목록(infra/dev/seed-assets.txt)을 staging CloudFront 공개 주소에서 받는다(AWS 자격 불필요).
+# 이미 받은 파일은 건너뛰고, 오프라인이면 경고만 찍고 넘어간다(스택은 그림 없이 뜬다).
+fetch_assets() {
+  mkdir -p "$ASSET_CACHE"
+  [ -f "$ASSET_LIST" ] || { echo "⚠ 그림 목록이 없습니다: $ASSET_LIST — 그림 없이 뜹니다"; return 0; }
+  SEED_LIST="$ASSET_LIST" SEED_DIR="$ASSET_CACHE" sh "$ASSET_FETCH" | sed 's/^/  /' || true
+}
 
 need_docker() { docker info >/dev/null 2>&1 || die "도커가 꺼져 있습니다(맥미니: colima start / 맥북: Docker Desktop 실행)."; }
 
@@ -200,6 +215,8 @@ cmd_up() {
   read -r WEB API PG MINIO <<<"$p"
   write_env "$WEB" "$API" "$PG" "$MINIO"
   check_env
+  info "공통 그림 캐시 확인($ASSET_CACHE)"
+  fetch_assets
   info "스택 $STACK ($PROJECT) · 브랜치 $BRANCH · web $WEB api $API pg $PG minio $MINIO"
   dc up -d --build "$@"
   local commit; commit="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
@@ -238,6 +255,13 @@ cmd_reset() {
   ledger remove "$STACK"
   rm -rf "$STACK_DIR"
   info "스택 '$STACK' 을 지우고 장부에서 뺐습니다."
+}
+
+cmd_assets() {
+  need_docker; load_existing
+  write_env "$WEB" "$API" "$PG" "$MINIO"   # 옛 env 엔 ASSET_CACHE 가 없을 수 있다
+  fetch_assets
+  dc up --no-deps minio-seed
 }
 
 cmd_logs() { need_docker; load_existing; dc logs -f --tail=200 "$@"; }
@@ -303,6 +327,7 @@ case "$CMD" in
   status) cmd_status ;;
   ls)     cmd_ls "$@" ;;
   seed)   cmd_seed ;;
-  help|-h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
-  *) die "모르는 명령: $CMD (up|down|reset|logs|status|ls|seed)" ;;
+  assets) cmd_assets ;;
+  help|-h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) die "모르는 명령: $CMD (up|down|reset|logs|status|ls|seed|assets)" ;;
 esac

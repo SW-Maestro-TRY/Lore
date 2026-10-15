@@ -353,6 +353,11 @@ export interface Live {
    * ★ 다시 조회하지 않는 이유 — 조회는 방문으로 처리돼 방금 켠 떠남 예고가 그 자리에서 취소된다.
    */
   putDetail: (next: PetDetail) => void;
+  /**
+   * 개발 리모컨 — 굽기 단계 강제(`POST /dev/pets/{id}/hatch/stage`)가 돌려준 진행을 얹는다.
+   * ★ 실패(FAILED)로 멈춘 폴링을 다시 깨우려면 이 값이 HATCHING 으로 바뀌어야 한다 — 폴링은 phase 를 보고 돈다.
+   */
+  putHatch: (next: HatchProgress) => void;
   reset: () => void;
 }
 
@@ -380,7 +385,7 @@ const EMPTY: Live = {
   clearJustUnlocked: () => {}, noteUnlocked: () => {},
   sendWish: async () => ({ ok: false, code: 'no_pet' }),
   loadAlbum: async () => {}, shareMotion: async () => ({ error: null, url: null }),
-  resume: async () => null, reset: () => {}, putDetail: () => {},
+  resume: async () => null, reset: () => {}, putDetail: () => {}, putHatch: () => {},
 };
 
 export function useHatchState(): Live {
@@ -1227,7 +1232,7 @@ export function useHatchState(): Live {
     justUnlocked,
     setChar, doCare, doRest, calling, callBack, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
     clearJustUnlocked, noteUnlocked,
-    loadAlbum, shareMotion, sendWish, resume, reset, putDetail,
+    loadAlbum, shareMotion, sendWish, resume, reset, putDetail, putHatch: setHatch,
   };
 }
 

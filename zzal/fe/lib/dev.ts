@@ -121,3 +121,27 @@ export function forceOpen(petId: number, seq: number): Promise<PetDetail> {
 export function nightSweep(petId: number): Promise<PetDetail> {
   return request<PetDetail>(`${DEV_BASE}/${petId}/night-sweep`, { method: 'POST' });
 }
+
+// ── 온보딩 다시 밟기(2026-10-13) ────────────────────────────────────────────
+
+/** 내 펫 지우기 결과(백엔드 `DevResponses.DevReset`) — 지운 펫 id 와 표별 지운 행 수. */
+export interface DevReset { petIds: number[]; deleted: Record<string, number> }
+
+/**
+ * ★ 되돌릴 수 없다 — 내 계정의 펫 전부와 딸린 행(동작·채팅·게임·조각·굽기 기록…)을 지운다.
+ *   화면은 이 뒤에 손에 든 아이를 버리고 랜딩으로 돌아간다(`useHatch.reset` + `leaveAccount`).
+ */
+export function devResetMe(): Promise<DevReset> {
+  return request<DevReset>(`${DEV_ROOT}/me/reset`, { method: 'POST' });
+}
+
+/** 굽기 단계 강제 결과 — `hatch` 는 알 화면이 폴링하는 `GET /me/pets/{id}/hatch` 와 같은 모양. */
+export interface DevHatchStage {
+  stage: string; effects: string[];
+  hatch: { phase: string; label: string | null; progress: number; total: number; estimatedSeconds: number; message: string | null };
+}
+
+/** 알 화면의 굽기 진행을 강제한다 — 숫자 N(앞의 N 단계만 끝난 척) · done(운영 길로 살리기) · failed. 돈 0. */
+export function devHatchStage(petId: number, stage: number | 'done' | 'failed'): Promise<DevHatchStage> {
+  return request<DevHatchStage>(`${DEV_BASE}/${petId}/hatch/stage`, { method: 'POST', body: { stage: String(stage) } });
+}
