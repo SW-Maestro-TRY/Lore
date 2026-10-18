@@ -49,7 +49,8 @@ public final class TurnPlanner {
     public static TurnPlan first(SessionKind kind, Set<QuestionItem> answered, ChatSlot slot) {
         TurnType type = kind.firstTurn();
         boolean allow = type != TurnType.REUNION;
-        boolean windowTopic = slot != null && slot.daily();
+        // 지속대화 첫말에서도 프로필 순서표를 강제하지 않는다. 질문 여부/내용은 문맥에 맡긴다.
+        boolean windowTopic = slot == ChatSlot.CONTINUOUS || (slot != null && slot.daily());
         return new TurnPlan(type, 1, allow, allow && !windowTopic ? nextItem(answered) : null, false, slot);
     }
 
@@ -71,6 +72,9 @@ public final class TurnPlanner {
     /** 사용자 답 뒤의 펫 턴(이 판의 부름을 실어 보낸다 — 닫기 턴이 다음 창을 말하게). */
     public static TurnPlan next(int rounds, int maxRounds, int petTurnNo, String userLine, boolean itemAsked,
                                 Set<QuestionItem> answered, ChatSlot slot) {
+        if (slot == ChatSlot.CONTINUOUS) {
+            return new TurnPlan(TurnType.CONTINUE, petTurnNo, !userAsked(userLine), null, userAsked(userLine), slot);
+        }
         if (rounds >= maxRounds) {
             return new TurnPlan(TurnType.CLOSE, petTurnNo, false, null, false, slot);
         }

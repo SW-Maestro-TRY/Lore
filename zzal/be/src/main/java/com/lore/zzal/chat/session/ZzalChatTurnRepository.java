@@ -9,7 +9,18 @@ import java.util.List;
 
 public interface ZzalChatTurnRepository extends JpaRepository<ZzalChatTurn, Long> {
 
+    List<ZzalChatTurn> findByPetIdAndIdIn(Long petId,List<Long> ids);
+
     List<ZzalChatTurn> findBySessionIdOrderByIdxAsc(Long sessionId);
+
+    /** First meeting reads only the immutable opening turn, never the full conversation. */
+    java.util.Optional<ZzalChatTurn> findFirstBySessionIdAndIdx(Long sessionId, int idx);
+    boolean existsBySessionId(Long sessionId);
+
+    List<ZzalChatTurn> findByPetIdAndIdLessThanOrderByIdDesc(Long petId,Long beforeId,org.springframework.data.domain.Pageable page);
+
+    List<ZzalChatTurn> findTop40BySessionIdOrderByIdxDesc(Long sessionId);
+    List<ZzalChatTurn> findTop40ByPetIdAndCreatedAtBetweenOrderByCreatedAtDescIdDesc(Long petId, Instant from, Instant until);
 
     /** 기억(#709) — 이 펫의 턴 중 {@code from} 이후 것 전부(펫·사용자 양쪽), 오래된 순. */
     List<ZzalChatTurn> findByPetIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAscIdAsc(Long petId, Instant from);

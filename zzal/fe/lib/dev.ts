@@ -1,16 +1,8 @@
-// 개발용 시계·리모컨 도구 — **화면에 기본으로 없다.**
+// 서버 개발 리모컨. 실제 노출은 dev/ping 응답으로 결정하고 서버 스위치가 권한을 제한한다.
 //
-// ★ 2026-10-12 리모컨 서버화 — 여울 리모컨은 `GET /dev/ping` 이 200 일 때만 뜬다(결정 3, 도메인 판정 아님).
-//   상태 세팅(PATCH state)·이벤트(POST events/{kind})·굽기(POST bake)가 **서버를 진짜로 바꾼다.**
-//   응답은 `DevResult`(effects · before · after · state) — 화면은 `after` 를 그대로 얹는다.
-//   (다시 조회하면 그 조회가 방문으로 처리돼 방금 켠 떠남 예고가 취소된다 — 백엔드 DevResponses 머리말.)
-//
-// ★ 운영에서 무해한 이유가 두 겹이다.
-//   1) 주소에 플래그가 없으면 패널 자체가 안 그려진다.
-//   2) 그려져서 눌러도 **서버가 거절한다** — dev 도구는 `ZZAL_DEV_TOOLS=true` 일 때만 존재하는 주소다.
-//   화면 쪽 플래그 하나에 기대지 않는다. 진짜 자물쇠는 서버에 있다.
-//
-// ★ 응답은 `PetDetail` 이다(계약 6절). 누른 뒤 다시 조회하지 않는다 — "행동 응답 = 최신 상태" 그대로.
+// dev/ping 성공일 때만 패널을 노출한다. 서버 dev 도구는 ZZAL_DEV_TOOLS=true에서만 열린다.
+// 상태/이벤트/시계 응답은 DevResult이며 after를 방문 GET 없이 적용한다.
+// 기존 시계 호출부는 visit 인자 생략 시 after만 받는 호환 계약을 유지한다.
 import { request, type RequestOptions } from './api';
 import { PET_BASE, type PetDetail } from './pet';
 
@@ -75,12 +67,9 @@ export function devBakeProgress(petId: number, jobId: string): Promise<DevBakePr
 /** `/api/zzal/v1/me/pets` → `/api/zzal/v1/dev/pets`. 기준 경로는 한 곳(PET_BASE)에서만 온다(C41). */
 const DEV_BASE = PET_BASE.replace('/me/pets', '/dev/pets');
 
-/**
- * 그 펫의 시계를 앞으로 민다(오프셋). 규칙은 한 글자도 안 바뀐다.
- * `visit=false` 면 방문으로 안 친다 — 하루씩 밀어도 결석 떠남이 난다(기본 true, 예전 그대로).
- */
+/** 그 펫의 시계를 앞으로 민다(오프셋). 규칙은 한 글자도 안 바뀐다. */
 export function advanceClock(petId: number, minutes: number, visit = true): Promise<DevResult> {
-  return request<DevResult>(`${DEV_BASE}/${petId}/advance-clock`, { method: 'POST', body: { minutes, visit } });
+  return request<DevResult>(`${DEV_BASE}/${petId}/advance-clock`, {method:'POST',body:{minutes,visit}});
 }
 
 /**
@@ -91,7 +80,7 @@ export function advanceClock(petId: number, minutes: number, visit = true): Prom
  *   그래서 화면이 **다음에 그 시각이 오는 때**를 계산해 절대 시각으로 보낸다.
  */
 export function setClockAt(petId: number, atIso: string, visit = true): Promise<DevResult> {
-  return request<DevResult>(`${DEV_BASE}/${petId}/set-clock`, { method: 'POST', body: { at: atIso, visit } });
+  return request<DevResult>(`${DEV_BASE}/${petId}/set-clock`, {method:'POST',body:{at:atIso,visit}});
 }
 
 /**

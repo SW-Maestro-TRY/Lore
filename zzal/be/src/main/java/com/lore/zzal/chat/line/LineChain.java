@@ -48,7 +48,7 @@ public class LineChain {
      *    LLM 이 끝내 못 내면(누적 실패 {@link #BABY_NEUTRAL_AFTER}회·LLM 꺼짐) 이 한 줄로라도 판을 열어야 튜토리얼이
      *    진행된다. 다른 고정 문형을 더하지 말 것 — 이 줄 말고는 {@link #CLOSING_LINE}(닫는 말)뿐이다.
      */
-    public static final String BABY_NEUTRAL_LINE = "안녕. 나 여기 처음이야. 뭐라고 부르면 좋을까?";
+    public static final String BABY_NEUTRAL_LINE = "안녕. 여기서 이야기해도 좋아.";
 
     /** BABY 첫 턴 — 모델 호출 실패가 누적 이만큼이면 {@link #BABY_NEUTRAL_LINE} 로 연다(첫 판 2회 + 쿨다운 뒤 1회). */
     public static final int BABY_NEUTRAL_AFTER = 3;
@@ -73,20 +73,39 @@ public class LineChain {
         return llm != null;
     }
 
+    private static LineOutcome failureOutcome(ChatContext ctx) {
+        return ctx.plan().slot() == com.lore.zzal.chat.ChatSlot.CONTINUOUS
+                ? LineOutcome.FAILED_REPLY : LineOutcome.FAILED_CLOSED;
+    }
+
+    private static String closingLine(ChatContext ctx) {
+        return ctx.plan().slot() == com.lore.zzal.chat.ChatSlot.CONTINUOUS
+                ? "잠깐 말이 잘 안 나왔어." : CLOSING_LINE;
+    }
+
+    /** Explicit stage claim permits exactly one provider attempt; normal dialogue retry policy is unchanged. */
+    public GeneratedLine generateOnce(ChatContext ctx,Long userId){
+        if(llm==null){var off=new GeneratedLine(null,"base",FIXED,null,BigDecimal.ZERO,"llm_off",LineOutcome.RETRY_WAIT,0,0,LineExtract.NONE);done(ctx,off,userId);return off;}
+        Tries t=tries(ctx,1);
+        if(t.last()!=null)return success(ctx,t,userId);
+        GeneratedLine out=new GeneratedLine(closingLine(ctx),ctx.defaultMotion(),FIXED,t.model(),t.cost(),t.fails(),failureOutcome(ctx),t.ms(),t.calls(),LineExtract.NONE);
+        done(ctx,out,userId);return out;
+    }
+
     public GeneratedLine generate(ChatContext ctx, Long userId) {
         if (llm == null) {
             // BABY 중립 판에 답했는데 LLM 이 꺼져 있다 — 모델 없이 닫는 말로 닫는다(보상·튜토리얼 넘김은 이미 났다).
             String motion = ctx.plan().petTurnNo() == 1 ? null : ctx.defaultMotion();
-            GeneratedLine out = new GeneratedLine(CLOSING_LINE, motion, FIXED, null, BigDecimal.ZERO, "llm_off",
-                    LineOutcome.FAILED_CLOSED, 0, 0, LineExtract.NONE);
+            GeneratedLine out = new GeneratedLine(closingLine(ctx), motion, FIXED, null, BigDecimal.ZERO, "llm_off",
+                    failureOutcome(ctx), 0, 0, LineExtract.NONE);
             done(ctx, out, userId);
             return out;
         }
         Tries t = tries(ctx, 2);
         if (t.last() == null) {
             String motion = ctx.plan().petTurnNo() == 1 ? null : ctx.defaultMotion();
-            GeneratedLine out = new GeneratedLine(CLOSING_LINE, motion, FIXED, t.model(), t.cost(), t.fails(),
-                    LineOutcome.FAILED_CLOSED, t.ms(), t.calls(), LineExtract.NONE);
+            GeneratedLine out = new GeneratedLine(closingLine(ctx), motion, FIXED, t.model(), t.cost(), t.fails(),
+                    failureOutcome(ctx), t.ms(), t.calls(), LineExtract.NONE);
             done(ctx, out, userId);
             return out;
         }

@@ -168,14 +168,20 @@ public class ZzalChatSession {
 
     /** 사용자 턴 하나를 센다. 첫 답이면 true(보상을 줄 차례). */
     public boolean countUserTurn(String line) {
+        return countUserTurn(line, true);
+    }
+
+    public boolean countUserTurn(String line, boolean markReward) {
         roundCount += 1;
         lastUserLine = line == null ? null : (line.length() > 40 ? line.substring(0, 40) : line);
-        if (rewardGiven) {
+        if (!markReward || rewardGiven) {
             return false;
         }
         rewardGiven = true;
         return true;
     }
+
+    public void noteReward() { rewardGiven = true; }
 
     /** 펫 턴의 출처를 집계한다. */
     public void notePetTurn(String gen, BigDecimal cost) {

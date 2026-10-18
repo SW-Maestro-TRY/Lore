@@ -1,5 +1,8 @@
 package com.lore.zzal.pet;
 
+import com.lore.zzal.pet.persona.AuthoredPersona;
+import com.lore.zzal.pet.persona.FirstMeeting;
+
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.common.s3.S3Service;
@@ -68,6 +71,13 @@ public class PetService {
     private final com.lore.zzal.leave.LeaveService leaveService;
     private final com.lore.zzal.piece.PieceService pieceService;
     private final HatchGuard hatchGuard;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.attendance.AttendanceService attendanceService;
+
+    private CareMotionRotationService careMotionRotationService;
+    /** Existing constructor callers remain compatible; production wiring is required. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setCareMotionRotationService(CareMotionRotationService service){this.careMotionRotationService=service;}
 
     public PetService(ZzalPetRepository petRepository,
                       GenJobRepository jobRepository,
@@ -191,6 +201,14 @@ public class PetService {
     public ZzalPet character(Long userId, Long petId, String name, String note,
                              java.util.List<Personality> personalities,
                              String world, String tone, String genre, Instant now) {
+        return character(userId, petId, name, note, personalities, world, tone, genre, null, now);
+    }
+
+    @Transactional
+    public ZzalPet character(Long userId, Long petId, String name, String note,
+                             java.util.List<Personality> personalities,
+                             String world, String tone, String genre,
+                             AuthoredPersona authoredPersona, Instant now) {
         ZzalPet pet = findMine(userId, petId);
         // ★★ 굽기가 실패한 펫을 "이미 이름을 지었다" 로 답하면 안 된다 — 이름을 방금 처음 지은
         //   사람에게 사실과 정반대로 말하게 되고, 다음에 무엇을 해야 하는지도 알 수 없다.
@@ -202,11 +220,51 @@ public class PetService {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_DRAFT);
         }
         pet.character(name, note, personalities, world, tone, genre, now);
+        pet.recordAuthoredPersona(authoredPersona);
+        if (attendanceService != null) attendanceService.initializeBackground(pet, now);
+        if (authoredPersona != null) pet.beginFirstMeeting();
 
         String version = pet.getHatchPipelineVersion() != null
                 ? pet.getHatchPipelineVersion() : hatchService.currentVersion();
         events.publishEvent(new PetNamed(petId, version));
         return pet;
+    }
+
+    /** 같은 단계 요청의 재전송은 상태를 되돌리거나 보상을 다시 만들지 않는다. */
+    @Transactional
+    public FirstMeeting.View firstMeeting(Long userId, Long petId,
+            FirstMeeting.Request request) {
+        ZzalPet pet = findMine(userId, petId);
+        if (!pet.isAlive()) throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        var state = pet.getFirstMeetingState();
+        if (state == null) return FirstMeeting.View.of(pet); // 기존 사용자 재강제 없음
+        switch (request.action()) {
+            case PREPARE_DISCOVERY -> throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            case NEXT -> {
+                if (state == FirstMeeting.State.DISCOVERED)
+                    pet.advanceFirstMeeting(FirstMeeting.State.ADDRESS);
+            }
+            case SET_ADDRESS, DEFER_ADDRESS -> {
+                if (state == FirstMeeting.State.ADDRESS) {
+                    if (request.action() == FirstMeeting.Action.SET_ADDRESS)
+                        pet.rememberExplicitCallMe(request.callMe());
+                    else pet.deferCallMe();
+                    pet.advanceFirstMeeting(FirstMeeting.State.READY_TO_ENTER);
+                } else if (state == FirstMeeting.State.DISCOVERED) {
+                    throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+                } else if (request.action() == FirstMeeting.Action.SET_ADDRESS
+                        && !java.util.Objects.equals(pet.getCallMe(), request.callMe().strip())) {
+                    throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+                }
+            }
+            case ENTER_ROOM -> {
+                if (state == FirstMeeting.State.READY_TO_ENTER)
+                    pet.advanceFirstMeeting(FirstMeeting.State.COMPLETE);
+                else if (state != FirstMeeting.State.COMPLETE)
+                    throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            }
+        }
+        return FirstMeeting.View.of(pet);
     }
 
     /** 내 펫 하나. 남의 펫이면 403 이 아니라 404 — 403 은 "그 번호의 펫이 있다" 를 알려준다. */
@@ -288,7 +346,7 @@ public class PetService {
     @Transactional
     public List<ZzalPet> refreshAll(Long userId, Instant realNow) {
         List<ZzalPet> pets = petRepository.findByUserIdOrderByIdDesc(userId);
-        pets.forEach(p -> touch(p, realNow));
+        pets.forEach(p -> touch(findMine(userId,p.getId()), realNow));
         return pets;
     }
 
@@ -322,9 +380,8 @@ public class PetService {
         // ★ 여행 중이면 소식(엽서)만 쌓인다 — 장면도 도착도 없다(방에 없으므로).
         //   밀린 몫까지 채운다(조회를 했든 안 했든 결과가 같아야 한다).
         leaveService.fillPostcards(pet, now);
-        if (visit) {
-            pet.visit(now);
-        }
+        if(visit && attendanceService!=null) attendanceService.observe(pet, now, false);
+        if (visit) pet.visit(now);
         reveal(pet, now);
         announceLayer2(pet, now);
         openPieces(pet, windowStart, now);
@@ -346,6 +403,7 @@ public class PetService {
         }
         List<Integer> opened = catalog.basic().stream()
                 .filter(spec -> spec.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2)
+                .filter(spec -> !com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(spec.seq()))
                 .filter(spec -> UnlockRules.isUnlocked(pet, spec, catalog))
                 .map(MotionSpec::seq)
                 .sorted()
@@ -444,6 +502,8 @@ public class PetService {
         Instant woke = pet.dayStartedAt();
         List<ZzalMotion> arrived = motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
                         pet.getId(), MotionStatus.OPEN).stream()
+                // Preserve already owned gifts; do not newly grant retired rewards.
+                .filter(m -> !com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(m.getSeq()))
                 .filter(m -> revealedByNow(m, woke))
                 .toList();
         arrived.forEach(m -> m.reveal(now));
@@ -493,14 +553,19 @@ public class PetService {
      * ★ {@code justHealed} 를 응답에 싣는 이유 — 설계 규칙의 "나은 동작(기쁜 자세 + 반짝) 1회" 는
      *   <b>한 번만</b> 나와야 한다. 상태(안 아픔)로는 "방금 나은 것" 과 "원래 안 아팠던 것" 을 못 가른다.
      */
-    public record Action(ZzalPet pet, List<Integer> justUnlocked, boolean justHealed) {
+    public record Action(ZzalPet pet, List<Integer> justUnlocked, boolean justHealed, CareMotionPlayback motionPlayback, boolean performed) {
+
+        public Action(ZzalPet pet,List<Integer> justUnlocked,boolean justHealed,CareMotionPlayback playback){this(pet,justUnlocked,justHealed,playback,true);}
+        public static Action noOp(ZzalPet pet){return new Action(pet,List.of(),false,null,false);}
+
+        public Action(ZzalPet pet,List<Integer> justUnlocked,boolean justHealed){this(pet,justUnlocked,justHealed,null);}
 
         public Action(ZzalPet pet, List<Integer> justUnlocked) {
             this(pet, justUnlocked, false);
         }
 
         Action healed() {
-            return new Action(pet, justUnlocked, true);
+            return new Action(pet, justUnlocked, true, motionPlayback, performed);
         }
     }
 
@@ -529,10 +594,30 @@ public class PetService {
 
     @Transactional(noRollbackFor = BusinessException.class)
     public Action care(Long userId, Long petId, CareAction action, Instant realNow) {
-        ZzalPet pet = awake(userId, petId, realNow);
+        return care(userId,petId,action,null,realNow);
+    }
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action care(Long userId,Long petId,CareAction action,FirstIntro.Step expected,Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (expected!=null) {
+            if (action==CareAction.MEDICINE || !expected.name().equals(action.name()) || !pet.hasFirstIntro())
+                throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            if (pet.introPassed(expected)) return Action.noOp(pet);
+            if (!pet.introAt(expected)) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+        }
+        if (pet.isFirstIntroEndingPending()) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+        if (pet.isSleeping()) throw new BusinessException(ErrorCode.ZZAL_PET_SLEEPING);
         Instant now = pet.now(realNow);
+        if (pet.hasFirstIntro() && pet.isInTutorial()) {
+            if (!pet.isFirstMeetingComplete()) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            if (pet.introCareAlreadyDone(action)) return Action.noOp(pet);
+            if (!pet.introCareCurrent(action)) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+        }
         boolean wasSick = pet.isSick();
         Action result = withUnlockDiff(pet, () -> doCare(pet, action, now));
+        // Rejected/no-op intro paths returned above. Only this successful occurrence consumes a cursor.
+        CareMotionPlayback playback=careMotionRotationService==null?null:careMotionRotationService.afterSuccess(pet,action);
+        result=new Action(result.pet(),result.justUnlocked(),result.justHealed(),playback);
         // 약을 먹고 나은 그 응답에만 "나은 동작" 연출이 실린다(설계 규칙).
         return wasSick && !pet.isSick() ? result.healed() : result;
     }
@@ -604,6 +689,14 @@ public class PetService {
         }
     }
 
+    private boolean introReceipt(ZzalPet pet,FirstIntro.Step expected,FirstIntro.Step action) {
+        if (expected==null) return false;
+        if (!pet.hasFirstIntro() || expected!=action) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+        if (pet.introPassed(expected)) return true;
+        if (!pet.introAt(expected)) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+        return false;
+    }
+
     // ── 잠 (설계 규칙) ──────────────────────────────────────────────────
 
     /**
@@ -611,9 +704,15 @@ public class PetService {
      * 창 밖이면 {@code ZZAL_NOT_SLEEP_TIME} — 화면은 "저녁 7시가 되면 재워 주세요" 를 띄운다.
      */
     @Transactional(noRollbackFor = BusinessException.class)
-    public Action sleep(Long userId, Long petId, Instant realNow) {
-        ZzalPet pet = awake(userId, petId, realNow);
+    public Action sleep(Long userId, Long petId, Instant realNow) { return sleep(userId,petId,null,realNow); }
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action sleep(Long userId,Long petId,FirstIntro.Step expected,Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        if (introReceipt(pet,expected,FirstIntro.Step.NAP_SLEEP)) return new Action(pet,List.of());
         Instant now = pet.now(realNow);
+        if (pet.hasFirstIntro() && pet.introAt(FirstIntro.Step.NAP_WAKE) && pet.getSleepKind() == SleepKind.NAP) return new Action(pet, List.of());
+        if (pet.isFirstIntroEndingPending()) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+        if (pet.isSleeping()) throw new BusinessException(ErrorCode.ZZAL_PET_SLEEPING);
         if (pet.sleepKindAvailable(now) == null) {
             // ★ 튜토리얼 중에는 8칸 차례가 오기 전까지 아이가 안 졸리다 — 시각과 무관하므로
             //   "저녁 7시" 라고 말하면 사용자가 저녁까지 기다린다.
@@ -640,13 +739,20 @@ public class PetService {
      *   그게 맞다. "깨웠다" 는 보상(친밀도 +10)은 창 안에서 사용자가 눌렀을 때만.
      */
     @Transactional(noRollbackFor = BusinessException.class)
-    public Action wake(Long userId, Long petId, Instant realNow) {
+    public Action wake(Long userId, Long petId, Instant realNow) { return wake(userId,petId,null,realNow); }
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action wake(Long userId,Long petId,FirstIntro.Step expected,Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
+        if (introReceipt(pet,expected,FirstIntro.Step.NAP_WAKE)) {
+            if (pet.getFirstNightChatDeadlineAt() != null) touch(pet,realNow);
+            return new Action(pet,List.of());
+        }
         if (!pet.isAlive()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
         }
         Instant now = pet.now(realNow);
         touch(pet, realNow);
+        if (pet.hasFirstIntro() && pet.introAtOrAfter(pet.getFirstIntroVersion() == 4 ? FirstIntro.Step.ATTENDANCE_INTRO : FirstIntro.Step.ALBUM) && pet.isInTutorial()) return new Action(pet, List.of());
         if (!pet.isSleeping()) {
             throw new BusinessException(ErrorCode.ZZAL_PET_NOT_SLEEPING);
         }
@@ -655,6 +761,7 @@ public class PetService {
                     pet.getSleepKind() == SleepKind.NAP ? "조금만 더 재워 주세요" : "아침 7시에 깨워 주세요");
         }
         Action action = withUnlockDiff(pet, () -> pet.wake(now));
+        if(attendanceService!=null) attendanceService.observe(pet,now,false);
         // ★★ 깨우는 그 응답에 아침 도착이 실려야 한다(#224 리뷰 상-2). touch 는 이 메서드 앞에서 돌았고
         //   그때는 자는 중이라 아무것도 안 찍혔다. 여기서 안 부르면 "깨웠다" 응답에는 안 오고 다음 조회에서야 온다 —
         //   "행동 응답 = 최신 상태" 원칙을 어기고, 화면은 깨우자마자 새로고침해야 배워 온 것을 본다.
@@ -676,20 +783,44 @@ public class PetService {
     @Transactional(noRollbackFor = BusinessException.class)
     public Action tutorialDone(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
+        if (pet.hasFirstIntro() && pet.getClockStartedAt() != null) return new Action(pet, List.of());
         if (!pet.isInTutorial()) {
             throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_ALREADY_DONE);
         }
-        if (pet.getTutorialStep() < TutorialSchedule.TOTAL - 1) {
+        if (pet.hasFirstIntro() ? !pet.introAt(FirstIntro.Step.FINISH_NOTICE) : pet.getTutorialStep() < TutorialSchedule.TOTAL - 1) {
             throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_NOT_FINISHED);
         }
         Action a = withUnlockDiff(pet, () -> pet.startClock(pet.now(realNow)));
         // ★ 튜토리얼 완주 보상(구르기)을 <b>그 순간</b> 굽는다(설계 규칙).
         //   첫날에 손에 쥐는 결과물이 있어야 다음 날 다시 온다.
-        bakeTrigger.onTutorialDone(pet, pet.now(realNow));
+        if(attendanceService!=null) attendanceService.observe(pet, pet.now(realNow), true);
+        if (!pet.hasFirstIntro()) bakeTrigger.onTutorialDone(pet, pet.now(realNow));
         return a;
     }
 
     // ── 성격·배경·공유 (설계 규칙) ───────────────────────────────────
+
+    /** Explicit source/address edits. No model extraction, image generation, or first-meeting restart. */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action editPersona(Long userId,Long petId,com.lore.zzal.pet.dto.PetRequests.PersonalityChoice request,Instant realNow) {
+        if (request.authoredPersona()==null && request.callMe()==null)
+            return choosePersonality(userId,petId,request.picked(),request.world(),realNow);
+        ZzalPet pet=alive(userId,petId,realNow);
+        if (request.callMe()!=null && request.callMe().isBlank())
+            throw new BusinessException(ErrorCode.INVALID_INPUT,"부르는 이름을 입력해 주세요");
+        if (request.expectedPersonaHash()==null || request.expectedPersonaHash().isBlank())
+            throw new BusinessException(ErrorCode.INVALID_INPUT,"현재 설정을 다시 확인해 주세요");
+        String current=com.lore.zzal.pet.persona.PersonaSourceVersion.of(pet);
+        boolean exact=(request.authoredPersona()==null || request.authoredPersona().equals(pet.getAuthoredPersona()))
+                && (request.callMe()==null || (request.callMe().strip().equals(pet.getCallMe()) && "EXPLICIT".equals(pet.getCallMeSource())));
+        if (!current.equals(request.expectedPersonaHash())) {
+            if (exact) return new Action(pet,List.of()); // lost response: recover the exact stored edit, never overwrite newer source
+            throw new BusinessException(ErrorCode.ZZAL_PERSONA_SOURCE_STALE);
+        }
+        if (request.authoredPersona()!=null) pet.recordAuthoredPersona(request.authoredPersona());
+        if (request.callMe()!=null) pet.rememberExplicitCallMe(request.callMe());
+        return new Action(pet,List.of());
+    }
 
     /** 성격·세계관. 언제든, 자는 중에도(설계 규칙 "언제든 변경"). */
     @Transactional(noRollbackFor = BusinessException.class)
@@ -715,7 +846,26 @@ public class PetService {
      */
     @Transactional(noRollbackFor = BusinessException.class)
     public Action tutorialSeen(Long userId, Long petId, Instant realNow) {
+        return tutorialSeen(userId, petId, null, realNow);
+    }
+
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action tutorialSeen(Long userId, Long petId, FirstIntro.Step topic, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
+        if (pet.hasFirstIntro()) {
+            if (topic == null || !FirstIntro.seenTopicAllowed(pet.getFirstIntroVersion(), topic))
+                throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            if (pet.introPassed(topic)) return new Action(pet, List.of());
+            if (!pet.introAt(topic)) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            if (topic == FirstIntro.Step.REVIEW_SEEN) pet.finishFirstIntroReview(pet.now(realNow));
+            else pet.advanceFirstIntro(topic);
+            // Prepare and attach the gift in the response that first opens the finish notice.
+            // touch() observed the previous step; waiting for the next GET loses the preview
+            // for people who open the notice immediately.
+            if (pet.introAt(FirstIntro.Step.FINISH_NOTICE) && attendanceService != null)
+                attendanceService.observe(pet, pet.now(realNow), false);
+            return new Action(pet, List.of());
+        }
         if (!pet.isInTutorial()) {
             throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_ALREADY_DONE);
         }
@@ -754,12 +904,12 @@ public class PetService {
     @Transactional(noRollbackFor = BusinessException.class)
     public Action changeBackground(Long userId, Long petId, String background, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
-        if (UnlockRules.openedLayerTwo(pet, catalog) < ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN) {
-            throw new BusinessException(ErrorCode.ZZAL_FEATURE_LOCKED,
-                    "동작을 %d개 더 배우면 배경을 바꿀 수 있어요".formatted(
-                            ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN - UnlockRules.openedLayerTwo(pet, catalog)));
-        }
-        return withUnlockDiff(pet, () -> pet.changeBackground(background));
+        if (!"room".equals(background) && !java.util.Objects.equals(background,pet.getBackground())
+                && !attendanceService.ownsBackground(petId,background))
+            throw new BusinessException(ErrorCode.ZZAL_FEATURE_LOCKED,"아직 소유하지 않은 배경이에요");
+        Action changed=withUnlockDiff(pet, () -> pet.changeBackground(background));
+        attendanceService.attach(pet);
+        return changed;
     }
 
     /**
@@ -899,6 +1049,7 @@ public class PetService {
     /** dev — 흐른 시간을 정산한다. {@code visit} 이 false 면 방문으로 치지 않는다(조회와 다른 점은 그것뿐). */
     public void devSettle(ZzalPet pet, Instant realNow, boolean visit) {
         touch(pet, realNow, visit);
+        devAttachAttendance(pet, pet.now(realNow));
     }
 
     /** dev — 아침 도착(판정이 끝난 동작을 지금 도착시킬 수 있으면)을 지금 본다. 깨운 뒤에 부른다. */
@@ -1007,5 +1158,12 @@ public class PetService {
                         .findFirst())
                 .map(s -> labels.label(s.getName()))
                 .orElse(null);
+    }
+
+    /** Attach rewards without creating an awake visit; first finish notice may reserve its preview. */
+    public void devAttachAttendance(ZzalPet pet, Instant now) {
+        if (attendanceService == null) return;
+        if (pet.isInTutorial()) attendanceService.observe(pet, now, false);
+        else attendanceService.attach(pet);
     }
 }

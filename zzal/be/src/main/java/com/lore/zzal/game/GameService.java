@@ -110,10 +110,21 @@ public class GameService {
      *   이 통째로 사라진다 — 사용자 눈에는 "거절당했더니 시간이 되감겼다" 로 보인다.
      */
     @Transactional(noRollbackFor = BusinessException.class)
-    public Started start(Long userId, Long petId, GameKind kind, Instant realNow) {
+    public Started start(Long userId, Long petId, GameKind kind, Instant realNow) { return start(userId,petId,kind,null,realNow); }
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Started start(Long userId,Long petId,GameKind kind,com.lore.zzal.pet.FirstIntro.Step expected,Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
+        if (expected!=null && (expected!=com.lore.zzal.pet.FirstIntro.Step.GAME || !pet.hasFirstIntro() || !pet.introAt(expected)))
+            throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
         Instant now = pet.now(realNow);
+        if (pet.isFirstIntroEndingPending()) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
 
+        if (pet.hasFirstIntro() && pet.isInTutorial()) {
+            if (!pet.introAt(com.lore.zzal.pet.FirstIntro.Step.GAME) || kind != GameKind.LEFT_RIGHT)
+                throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            var existing=gameRepository.findFirstByPetIdAndFinishedAtIsNullOrderByIdDesc(pet.getId());
+            if (existing.isPresent()) return new Started(existing.get(), List.of(), runUnlocked(pet));
+        }
         // ★★ 아픔이 맨 위다 — 이 검사가 옛 이어치기 return 보다 아래에 있었을 때,
         //   건강할 때 시작한 판을 병든 뒤에도 계속 눌러 5판을 다 치고 <b>승리 보상(행복 +1)</b>까지 받았다.
         //   그 행복이 병든 상태를 스스로 풀어 "아프면 놀지 않는다"(정본 16장)가 통째로 무력화됐다.
@@ -124,7 +135,7 @@ public class GameService {
             throw new BusinessException(ErrorCode.ZZAL_FEATURE_LOCKED,
                     "좌우 맞히기에서 %d번 이기면 달리기가 열려요".formatted(ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS));
         }
-        if (pet.getTodayGames() >= dailyLimit) {
+        if (pet.getTodayGames() >= dailyLimit && !(pet.hasFirstIntro() && pet.introAt(com.lore.zzal.pet.FirstIntro.Step.GAME))) {
             throw new BusinessException(ErrorCode.ZZAL_GAME_DAILY_LIMIT);
         }
         // ★ 남아 있던 미완료 판을 접는다(패) — 나가기 버튼을 안 눌렀어도 마찬가지다.

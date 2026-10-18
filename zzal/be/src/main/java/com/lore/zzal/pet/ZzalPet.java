@@ -1,5 +1,8 @@
 package com.lore.zzal.pet;
 
+import com.lore.zzal.pet.persona.AuthoredPersona;
+import com.lore.zzal.pet.persona.FirstMeeting;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -71,6 +74,11 @@ public class ZzalPet {
     @Column(length = 200)
     private String note;
 
+    /** 새 온보딩의 작성 원문. null인 기존 사용자는 기존 칸을 계속 읽는다. */
+    @jakarta.persistence.Convert(converter = com.lore.zzal.pet.persona.AuthoredPersonaConverter.class)
+    @Column(name = "authored_persona", columnDefinition = "text")
+    private AuthoredPersona authoredPersona;
+
     @Column(nullable = false, length = 300)
     private String sourceImageKey;
 
@@ -100,6 +108,22 @@ public class ZzalPet {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int basicRound;
 
+    /** Last successful care selection per explicit situation; null preserves historical pets. */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name="care_motion_cursor",columnDefinition="jsonb")
+    private java.util.Map<String,CareMotionCursor> careMotionCursor;
+
+    public record CareMotionCursor(String id,Long setId) {}
+    public CareMotionCursor careMotionCursor(String situation){
+        return careMotionCursor==null?null:careMotionCursor.get(situation);
+    }
+    public void rememberCareMotion(String situation,CareMotionCursor value){
+        if(!com.lore.zzal.attendance.CustomMotionPlan.CARE_SITUATIONS.contains(situation)||value==null||value.id()==null||value.id().isBlank()
+                ||(value.setId()!=null&&value.setId()<=0)) throw new IllegalArgumentException("Invalid care cursor");
+        var next=new java.util.HashMap<>(careMotionCursor==null?java.util.Map.<String,CareMotionCursor>of():careMotionCursor);
+        next.put(situation,value);careMotionCursor=next;
+    }
+
     // ── 2층 (#696 — 1층 우선 부화) ─────────────────────────────────────────
 
     /**
@@ -113,6 +137,14 @@ public class ZzalPet {
     @Enumerated(EnumType.STRING)
     @Column(name = "layer2_status", nullable = false, length = 16)
     private Layer2Status layer2Status = Layer2Status.READY;
+
+    /** Immutable cutover ownership snapshot. New pets never earn retired seq9..16 from counters. */
+    @Column(name = "legacy_layer2_owned_mask", nullable = false)
+    private int legacyLayer2OwnedMask;
+
+    public boolean ownsRetiredLayerTwo(int seq) {
+        return seq >= 9 && seq <= 16 && (legacyLayer2OwnedMask & (1 << (seq - 9))) != 0;
+    }
 
     @Column(name = "layer2_attempts", nullable = false, columnDefinition = "integer default 0")
     private int layer2Attempts;
@@ -374,6 +406,14 @@ public class ZzalPet {
     /** 밤 연습 장면을 남긴 잠(그 밤 잠든 시각). 같은 잠에 두 컷을 남기지 않으려는 표식. */
     @Column
     private Instant nightSceneAt;
+    @jakarta.persistence.Column(name="attendance_night_cycle_at")
+    private Instant attendanceNightCycleAt;
+    @jakarta.persistence.Transient
+    private com.lore.zzal.attendance.AttendanceRewards attendanceRewards;
+    public Instant getAttendanceNightCycleAt(){return attendanceNightCycleAt;}
+    public com.lore.zzal.attendance.AttendanceRewards getAttendanceRewards(){return attendanceRewards;}
+    public void setAttendanceRewards(com.lore.zzal.attendance.AttendanceRewards value){attendanceRewards=value;}
+
 
     /**
      * 밤 장면을 <b>아직 안 만든 잠</b>의 잠든 시각. 잠드는 순간 적어 두고, 다음 정산·조회에서 쓴 뒤 지운다.
@@ -629,6 +669,13 @@ public class ZzalPet {
     @Column(name = "call_me", length = 20)
     private String callMe;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "first_meeting_state", length = 24)
+    private FirstMeeting.State firstMeetingState;
+
+    @Column(name = "call_me_source", length = 24)
+    private String callMeSource;
+
     @Column(length = 32)
     private String background;
 
@@ -754,7 +801,7 @@ public class ZzalPet {
         Instant t = now.truncatedTo(ChronoUnit.SECONDS);
         this.fullness = ZzalRules.TUTORIAL_START_FULLNESS;
         this.happiness = ZzalRules.HATCH_HAPPINESS;
-        this.trash = ZzalRules.HATCH_TRASH;
+        this.trash = firstIntroVersion == 4 && introAt(FirstIntro.Step.FEED) ? ZzalRules.TRASH_MAX : ZzalRules.HATCH_TRASH;
         this.food = ZzalRules.HATCH_FOOD;
         this.foodAt = null;
         this.settledAt = t;
@@ -931,7 +978,81 @@ public class ZzalPet {
      * 5칸이 "바닥을 치워 주세요" 인데, 시계가 멈춰 있어 흔적이 시간으로 생기지 않는다.
      * 그래서 <b>이 칸이 직접 만든다</b>(설계 규칙 — 게이지는 시간이 아니라 각 칸이 만든다).
      */
+    @Column(name = "first_intro_step")
+    private Integer firstIntroStep;
+    @Column(name = "first_intro_version", nullable = false)
+    private int firstIntroVersion = 2;
+
+    public Integer getFirstIntroStep() { return firstIntroStep; }
+    public int getFirstIntroVersion() { return firstIntroVersion; }
+    public int firstIntroIndex(FirstIntro.Step step) { return FirstIntro.index(firstIntroVersion,step); }
+    public boolean hasFirstIntro() { return firstIntroStep != null; }
+    public boolean introAt(FirstIntro.Step step) { return firstIntroStep != null && firstIntroIndex(step) >= 0 && firstIntroStep == firstIntroIndex(step); }
+    public boolean introPassed(FirstIntro.Step step) { return firstIntroStep != null && firstIntroIndex(step) >= 0 && firstIntroStep > firstIntroIndex(step); }
+    public boolean introAtOrAfter(FirstIntro.Step step) { return firstIntroStep != null && firstIntroIndex(step) >= 0 && firstIntroStep >= firstIntroIndex(step); }
+    public boolean firstIntroChatAvailable() {
+        return introAtOrAfter(firstIntroVersion == 4 ? FirstIntro.Step.COMPLETE : FirstIntro.Step.CHAT);
+    }
+    /** v4 review/farewell is pending: keep awake, but do not allow ordinary care/chat. */
+    @Column(name="first_night_chat_deadline_at") private Instant firstNightChatDeadlineAt;
+    @Column(name="first_night_chat_ended_at") private Instant firstNightChatEndedAt;
+    public Instant getFirstNightChatDeadlineAt() { return firstNightChatDeadlineAt; }
+    public Instant getFirstNightChatEndedAt() { return firstNightChatEndedAt; }
+    public boolean firstNightChatGraceEligible(Instant now) {
+        return isAlive() && !isSleeping() && !isTraveling() && isFirstIntroEndingPending()
+                && firstNightChatDeadlineAt == null && firstNightChatEndedAt == null && AwakeClock.isNight(now);
+    }
+    public boolean firstNightChatGraceActive(Instant now) {
+        return isAlive() && !isSleeping() && !isTraveling() && firstIntroVersion == 4
+                && introAt(FirstIntro.Step.COMPLETE) && firstNightChatDeadlineAt != null
+                && firstNightChatEndedAt == null && now.isBefore(firstNightChatDeadlineAt);
+    }
+    public boolean isFirstIntroEndingPending() {
+        return firstIntroVersion == 4 && introAt(FirstIntro.Step.REVIEW_SEEN);
+    }
+    public void finishFirstIntroReview(Instant now) {
+        if (!introAt(FirstIntro.Step.REVIEW_SEEN)) return;
+        Instant at = now.truncatedTo(ChronoUnit.SECONDS);
+        boolean eligible = firstNightChatGraceEligible(at);
+        advanceFirstIntro(FirstIntro.Step.REVIEW_SEEN);
+        if (firstIntroVersion == 4) {
+            settledAt = at;
+            if (eligible) {
+                var local = at.atZone(ZzalRules.ZONE);
+                Instant morning = local.toLocalDate().plusDays(local.getHour() >= 7 ? 1 : 0)
+                        .atTime(7, 0).atZone(ZzalRules.ZONE).toInstant();
+                Instant limit = at.plus(java.time.Duration.ofMinutes(30));
+                firstNightChatDeadlineAt = limit.isBefore(morning) ? limit : morning;
+            } else if (!isSleeping() && AwakeClock.isNight(at)) onSleep(at, SleepKind.NIGHT, false);
+        }
+    }
+    public void advanceFirstIntro(FirstIntro.Step done) {
+        if (done == FirstIntro.Step.COMPLETE || !introAt(done)) return;
+        firstIntroStep += 1;
+        FirstIntro.Step current=FirstIntro.sequence(firstIntroVersion).get(firstIntroStep);
+        if (firstIntroVersion != 4 && current==FirstIntro.Step.CLEAN) trash = Math.max(trash, ZzalRules.TUTORIAL_FIRST_TRASH);
+        if (firstIntroVersion != 4 && current==FirstIntro.Step.BATH) trash = ZzalRules.TUTORIAL_BATH_TRASH;
+    }
+    public boolean introCareAlreadyDone(CareAction action) {
+        if (action == CareAction.MEDICINE) return false;
+        FirstIntro.Step step = FirstIntro.Step.valueOf(action.name());
+        return introPassed(step);
+    }
+    public boolean introCareCurrent(CareAction action) {
+        return action != CareAction.MEDICINE && introAt(FirstIntro.Step.valueOf(action.name()));
+    }
+
     public void advanceTutorial(TutorialSchedule.Step done) {
+        if (hasFirstIntro()) {
+            switch (done) {
+                case FEED -> advanceFirstIntro(FirstIntro.Step.FEED);
+                case CLEAN -> advanceFirstIntro(FirstIntro.Step.CLEAN);
+                case PET -> advanceFirstIntro(FirstIntro.Step.PET);
+                case NAP -> advanceFirstIntro(FirstIntro.Step.NAP_WAKE);
+                default -> { }
+            }
+            return;
+        }
         if (!isInTutorial() || TutorialSchedule.currentOf(tutorialStep) != done) {
             return;
         }
@@ -954,7 +1075,9 @@ public class ZzalPet {
             return;
         }
         tutorialStep = TutorialSchedule.TOTAL - 1;
+        if (hasFirstIntro()) firstIntroStep = firstIntroIndex(FirstIntro.Step.FINISH_NOTICE);
         startClock(now);
+        if (hasFirstIntro()) firstIntroStep = firstIntroIndex(FirstIntro.Step.COMPLETE);
     }
 
     /**
@@ -967,14 +1090,17 @@ public class ZzalPet {
      *   여기서 따로 재우지 않는다 — 잠드는 길이 둘이 되면 하루 정산이 두 번 돌 수 있다.
      */
     public void startClock(Instant now) {
-        if (!isInTutorial() || tutorialStep < TutorialSchedule.TOTAL - 1) {
+        if (!isInTutorial() || (hasFirstIntro() ? !introAt(FirstIntro.Step.FINISH_NOTICE) : tutorialStep < TutorialSchedule.TOTAL - 1)) {
             throw new IllegalStateException("아직 튜토리얼이 안 끝났다");
         }
         tutorialStep = TutorialSchedule.TOTAL;
+        if (hasFirstIntro()) advanceFirstIntro(FirstIntro.Step.FINISH_NOTICE);
         Instant at = now.truncatedTo(ChronoUnit.SECONDS);
         clockStartedAt = at;
         settledAt = at;
         wokeAt = at;
+        // v4 stays awake through review/farewell; its final REVIEW receipt applies current night.
+        if (hasFirstIntro() && firstIntroVersion != 4 && AwakeClock.isNight(at)) onSleep(at, SleepKind.NIGHT, false);
     }
 
     public boolean isSleeping() {
@@ -985,7 +1111,7 @@ public class ZzalPet {
         // ★ 옛 인자는 "아기 60분이 끝나는 시각" 이었다(그때까지 자동 취침을 막는 용도).
         //   지금은 튜토리얼 중이면 settle 이 아예 안 걷으므로 막을 것이 없다.
         return sleepKind == null
-                ? AwakeClock.State.awake(null)
+                ? AwakeClock.State.awake(firstNightChatEndedAt == null ? firstNightChatDeadlineAt : null)
                 : AwakeClock.State.asleep(sleepKind, sleptAt, null);
     }
 
@@ -1026,7 +1152,7 @@ public class ZzalPet {
         //   며칠 뒤에 돌아온 사용자에게만 드러나서 거의 안 잡힌다.
         //
         //   시각만 옮겨 둔다 — 시계가 켜지는 순간 그때부터 세기 시작하게.
-        if (isInTutorial()) {
+        if (isInTutorial() || isFirstIntroEndingPending()) {
             settledAt = now;
             return;
         }
@@ -1044,6 +1170,8 @@ public class ZzalPet {
                 }
             }
         }
+        if (firstNightChatDeadlineAt != null && firstNightChatEndedAt == null
+                && !now.isBefore(firstNightChatDeadlineAt)) firstNightChatEndedAt = firstNightChatDeadlineAt;
         chargeFood(now);
         settledAt = now;
     }
@@ -1055,6 +1183,36 @@ public class ZzalPet {
      *   튜토리얼 동안 시계가 멈추면서 <b>속도라는 개념 자체가 성립하지 않게</b> 되어 사라졌다.
      *   지금 속도는 하나뿐이다.
      */
+    @Column(name="diary_absence_started_at") private Instant diaryAbsenceStartedAt;
+    @Column(name="diary_absence_awake_sec",nullable=false) private long diaryAbsenceAwakeSec;
+    @Column(name="diary_opportunity_at") private Instant diaryOpportunityAt;
+    @Column(name="diary_opportunity_consumed",nullable=false) private boolean diaryOpportunityConsumed;
+    @Column(name="diary_language",nullable=false,length=12) private String diaryLanguage="ko";
+
+    public void startDiaryAbsence(Instant now) {
+        if(diaryAbsenceStartedAt!=null)return;
+        diaryAbsenceStartedAt=now;diaryAbsenceAwakeSec=0;diaryOpportunityAt=null;diaryOpportunityConsumed=false;
+    }
+    public void endDiaryAbsence() {
+        diaryAbsenceStartedAt=null;diaryAbsenceAwakeSec=0;diaryOpportunityAt=null;diaryOpportunityConsumed=false;
+    }
+    private void accumulateDiaryAwake(Instant from,Instant to) {
+        if(diaryAbsenceStartedAt==null||diaryOpportunityConsumed||diaryOpportunityAt!=null)return;
+        Instant start=from.isBefore(diaryAbsenceStartedAt)?diaryAbsenceStartedAt:from;
+        if(!to.isAfter(start))return;
+        long seconds=Duration.between(start,to).getSeconds();
+        long remaining=14400-diaryAbsenceAwakeSec;
+        if(seconds>=remaining){diaryOpportunityAt=start.plusSeconds(remaining);diaryAbsenceAwakeSec=14400;}
+        else diaryAbsenceAwakeSec+=seconds;
+    }
+    public Instant getDiaryAbsenceStartedAt(){return diaryAbsenceStartedAt;}
+    public long getDiaryAbsenceAwakeSec(){return diaryAbsenceAwakeSec;}
+    public Instant getDiaryOpportunityAt(){return diaryOpportunityAt;}
+    public boolean isDiaryOpportunityConsumed(){return diaryOpportunityConsumed;}
+    public void consumeDiaryOpportunity(){diaryOpportunityConsumed=true;}
+    public String getDiaryLanguage(){return diaryLanguage==null?"ko":diaryLanguage;}
+    public void diaryLanguage(String language){if(java.util.Set.of("ko","ja","en").contains(language))diaryLanguage=language;}
+
     private void advanceAwake(Instant from, Instant to) {
         // ★ 여행 중에는 게이지·흔적·병·케어 미스·부재가 전부 멈춘다(설계 규칙 "여행 중·잠든 동안은
         //   어떤 카운터도 안 돈다"). 자는 동안과 같은 대접이라, 여기 한 줄이면 아래 전부가 따라 멈춘다.
@@ -1062,6 +1220,7 @@ public class ZzalPet {
             return;
         }
         if (from.isBefore(to)) {
+            accumulateDiaryAwake(from,to);
             tick(Duration.between(from, to).getSeconds(), from);
         }
     }
@@ -1636,9 +1795,11 @@ public class ZzalPet {
             //   실제로 순서를 어기고 눌러 재현했다(2026-09-09).
             //
             //   아이가 아직 안 졸린 것이라 사용자에게도 설명이 된다.
+            if (hasFirstIntro()) return introAt(FirstIntro.Step.NAP_SLEEP) ? SleepKind.NAP : null;
             return TutorialSchedule.currentOf(tutorialStep) == TutorialSchedule.Step.NAP
                     && napCount < ZzalRules.NAP_MAX ? SleepKind.NAP : null;
         }
+        if (firstNightChatGraceActive(now)) return SleepKind.NIGHT;
         return AwakeClock.inSleepWindow(now) ? SleepKind.NIGHT : null;
     }
 
@@ -1653,6 +1814,7 @@ public class ZzalPet {
             throw new IllegalStateException("지금은 재울 수 없다");
         }
         onSleep(now, kind, true);
+        if (kind == SleepKind.NAP) advanceFirstIntro(FirstIntro.Step.NAP_SLEEP);
     }
 
     /** 지금 깨울 수 있나 — 밤잠은 KST 07:00~10:00, 낮잠은 5분 뒤. */
@@ -1660,6 +1822,7 @@ public class ZzalPet {
         if (!isSleeping()) {
             return false;
         }
+        if (hasFirstIntro() && isInTutorial() && sleepKind == SleepKind.NAP) return true;
         return !now.isBefore(AwakeClock.wakeWindowOpensAt(sleepKind, sleptAt));
     }
 
@@ -1682,6 +1845,8 @@ public class ZzalPet {
      * (3층 조각 판정·굽기 큐 등록은 서비스 층에서 이 뒤에 붙는다 — PR-6·10)
      */
     private void onSleep(Instant at, SleepKind kind, boolean manual) {
+        if (firstNightChatDeadlineAt != null && firstNightChatEndedAt == null)
+            firstNightChatEndedAt = at.isBefore(firstNightChatDeadlineAt) ? at : firstNightChatDeadlineAt;
         sleepKind = kind;
         sleptAt = at;
         if (kind == SleepKind.NIGHT) {
@@ -1735,6 +1900,7 @@ public class ZzalPet {
         sleepKind = null;
         sleptAt = null;
         if (was == SleepKind.NIGHT) {
+            attendanceNightCycleAt = at;
             wokeAt = at;
             overslept = !manual;
             judgeLeaving(at);
@@ -1784,6 +1950,7 @@ public class ZzalPet {
 
     /** 간식. 행복 +1. 다른 행동 없이 <b>연속 5개면 배탈</b>(설계 규칙, 100%). */
     public void snack(Instant now) {
+        advanceFirstIntro(FirstIntro.Step.SNACK);
         happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.SNACK_HAPPINESS);
         todaySnacks += 1;
         // ★★ 해금에 세는 것은 그날 4개까지다(배탈이 나는 5개째부터는 안 센다).
@@ -1843,6 +2010,7 @@ public class ZzalPet {
 
     /** 목욕. 흔적 0 + 행복 +1. 하루 1회(서비스가 막는다). */
     public void bath(Instant now) {
+        advanceFirstIntro(FirstIntro.Step.BATH);
         trash = 0;
         happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.BATH_HAPPINESS);
         todayBathDone = true;
@@ -2014,6 +2182,7 @@ public class ZzalPet {
      */
     public void finishGame() {
         gameStarts += 1;
+        advanceFirstIntro(FirstIntro.Step.GAME);
     }
 
     /** 좌우 맞히기 승리 — 달리기 해금(5승)의 재료. */
@@ -2124,6 +2293,11 @@ public class ZzalPet {
                 this.tutorialStep = step;
                 this.clockStartedAt = null;
             }
+        }
+        if (p.firstIntroVersion() != null || p.firstIntroKey() != null) {
+            FirstIntro.Step key = p.firstIntroKey() != null ? p.firstIntroKey()
+                    : hasFirstIntro() ? FirstIntro.sequence(firstIntroVersion).get(firstIntroStep) : FirstIntro.Step.FEED;
+            devSetFirstIntro(p.firstIntroVersion() == null ? (hasFirstIntro() ? firstIntroVersion : 3) : p.firstIntroVersion(), key, t);
         }
         if (p.graduationSeen() != null) {
             this.graduationSeenAt = p.graduationSeen() ? t : null;
@@ -2392,9 +2566,12 @@ public class ZzalPet {
     public void devRestartTutorial(Instant now) {
         Instant t = now.truncatedTo(ChronoUnit.SECONDS);
         this.tutorialStep = 0;
+        if (hasFirstIntro()) this.firstIntroStep = firstIntroIndex(FirstIntro.Step.FEED);
         this.clockStartedAt = null;
         this.graduationSeenAt = null;
         this.napCount = 0;
+        this.todayBathDone = false;
+        this.todaySnacks = 0;
         this.sleepKind = null;
         this.sleptAt = null;
         this.fullness = ZzalRules.TUTORIAL_START_FULLNESS;
@@ -2481,6 +2658,14 @@ public class ZzalPet {
 
     public String getName() {
         return name;
+    }
+
+    public AuthoredPersona getAuthoredPersona() {
+        return authoredPersona;
+    }
+
+    public void recordAuthoredPersona(AuthoredPersona value) {
+        this.authoredPersona = value;
     }
 
     public String getNote() {
@@ -2915,8 +3100,35 @@ public class ZzalPet {
 
     /** 호칭 저장(20자 상한). 비우면 지운다. */
     public void rememberCallMe(String value) {
+        if (callMeSource != null) return; // 명시 입력/나중에 상태를 모델 추출이 덮지 않는다.
         String v = value == null ? null : value.strip();
         this.callMe = v == null || v.isEmpty() ? null : (v.length() > 20 ? v.substring(0, 20) : v);
+    }
+
+    public FirstMeeting.State getFirstMeetingState() { return firstMeetingState; }
+    public String getCallMeSource() { return callMeSource; }
+    public boolean isFirstMeetingComplete() {
+        return firstMeetingState == null || firstMeetingState == FirstMeeting.State.COMPLETE;
+    }
+    public void beginFirstMeeting() {
+        // Only fresh authored registration uses v4. Existing progress and meeting stay intact.
+        if (hasFirstIntro()) return;
+        firstMeetingState = FirstMeeting.State.DISCOVERED;
+        firstIntroVersion = 4;
+        firstIntroStep = firstIntroIndex(FirstIntro.Step.FEED);
+        trash = ZzalRules.TRASH_MAX; // fresh v4 starts dirty once; CLEAN removes one, BATH clears the rest
+        food = Math.max(food, 1);
+        fullness = Math.min(fullness, ZzalRules.GAUGE_MAX - 1);
+    }
+    public void advanceFirstMeeting(FirstMeeting.State state) { firstMeetingState = state; }
+    public void rememberExplicitCallMe(String value) {
+        if (value == null || value.isBlank() || value.strip().length() > 20) throw new IllegalArgumentException("호칭 입력을 확인해 주세요");
+        callMe = value.strip();
+        callMeSource = "EXPLICIT";
+    }
+    public void deferCallMe() {
+        // 건너뛰기는 기존에 알려준 호칭을 지우지 않고 영구 거절로 저장하지 않는다.
+        if (callMe == null || callMe.isBlank()) callMeSource = "DEFERRED";
     }
 
     public String getBackground() {
@@ -2929,5 +3141,84 @@ public class ZzalPet {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    /** Explicitly simulated development state; never called by normal care/progress. */
+    public void devSetFirstIntro(int version, FirstIntro.Step key, Instant now) {
+        if (!java.util.Set.of(2,3,4).contains(version) || FirstIntro.index(version,key) < 0)
+            throw new IllegalArgumentException("first intro version/key");
+        firstIntroVersion = version;
+        firstIntroStep = firstIntroIndex(key);
+        boolean finished = key == FirstIntro.Step.REVIEW_SEEN || key == FirstIntro.Step.COMPLETE;
+        tutorialStep = finished ? TutorialSchedule.TOTAL : 0;
+        clockStartedAt = finished ? (clockStartedAt == null ? now : clockStartedAt) : null;
+        settledAt = now;
+        if (finished) wokeAt = now;
+        if (!finished) {
+            sleepKind = key == FirstIntro.Step.NAP_WAKE ? SleepKind.NAP : null;
+            sleptAt = sleepKind == null ? null : now;
+        }
+        if (key == FirstIntro.Step.FEED) { fullness = ZzalRules.TUTORIAL_START_FULLNESS; food = Math.max(food,1); }
+        if (version == 4 && key == FirstIntro.Step.FEED) trash = ZzalRules.TRASH_MAX;
+        if (key == FirstIntro.Step.CLEAN) trash = version == 4 ? ZzalRules.TRASH_MAX : ZzalRules.TUTORIAL_FIRST_TRASH;
+        if (key == FirstIntro.Step.BATH) { trash = ZzalRules.TUTORIAL_BATH_TRASH; todayBathDone = false; }
+        if (key == FirstIntro.Step.GAME) todayGames = 0;
     }
 }

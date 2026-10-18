@@ -39,6 +39,8 @@ public class Layer2Recovery {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void recover() {
+        // Keep old rows/assets intact. Recovery must not restart retired generation.
+        if (!com.lore.zzal.motion.RetiredRewardGeneration.layerTwoAutoEnabled()) return;
         List<ZzalPet> stuck = petRepository.findByPhaseAndLayer2StatusIn(
                 PetPhase.ALIVE, List.of(Layer2Status.PENDING, Layer2Status.RUNNING));
         Instant now = Instant.now();

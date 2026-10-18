@@ -1,0 +1,18 @@
+# GRID_SPEC: marks=25 layout=lattice_5x5
+
+Use case: stylized-concept
+Asset type: final virtual-pet state sheet, one square PNG.
+
+Input image 1: {IDENT}
+
+Create ONE square 1:1 image, a precise grid of 16 equal invisible cells arranged as 4 columns x 4 rows, read left-to-right then top-to-bottom. Entire backdrop perfectly uniform pure chroma green #00FF00, no variation, texture, gradient, floor, ground line, horizon, shadow, separators, gutters, or lines.
+
+GRID POINTS ARE CRITICAL: exactly 25 small thin plus crosses in a perfectly regular 5x5 lattice at all cell corners, behind all art. 5 identical x coordinates and 5 identical y coordinates; outer rows/columns centered on image edges, inner points exactly on the cell divisions. Each cross has equal short horizontal/vertical strokes, about 1/16 cell width. Columns 1, 3, 5 pure magenta #FF00FF; columns 2, 4 pure cyan #00FFFF. Flat solid. No magenta or cyan anywhere else. Only crosses, never connect them, none nudged or missing.
+
+Place one full-body front-view copy of the same character in each cell, same scale and baseline. Each cell is TALLER THAN IT IS WIDE, so keep the character narrow and upright. Character small enough for a clearly visible green band roughly one cross-width above the complete head including every hair strand, ahoge, ear, horn or hat, below complete shoes, and on both sides, with all symbols and raised arms also inside the cell. Nothing touches/crosses any cell boundary or grid mark, nothing cropped. Feet share identical local x/y across all cells (pose-specific grounding is declared by each dynamic action). Fixed frontal eye-level camera; no body/head yaw, no walking, no drift, no crop. No cast/contact shadows. If it does not fit, draw SMALLER — generous clearance beats character size.
+
+The 16 cells form 8 independent adjacent 2-frame A-B loops. Inside each pair preserve character identity, scale and anchor-defined placement, changing only the specified tiny motion. Render only the props and interactions explicitly declared by each frozen dynamic motion's props, pose and staging. Their count, size, contact and grounding follow that plan: multiple coordinated props such as a lunchbox plus fork, an external petting hand, or a bathtub are allowed when planned; they need not be hand-held, smaller than the head or confined to the body's width. Respect explicitly planned seated/lying grounding and prop occlusion rather than forcing standing or visible feet. Keep every body part, prop and external interacting part fully inside its own cell with generous green clearance and stable A-B placement. State mapping and exact content:
+
+{DYNAMIC_MOTIONS}
+
+No unplanned objects, interactions or effects. Character keeps the sheet's flat cel colouring, soft dark outlines, chibi/SD proportions and limited palette, instantly identical in every cell. Props and any visual effects must be explicitly specified by the frozen plan and must preserve that identity and the fixed grid. No text, letters, digits, labels, captions, watermark, speech bubble, unplanned motion lines, gradients, texture, vignette, unplanned lighting change, random blink, floor, or shadow. Prioritize generous cell clearance over character size.

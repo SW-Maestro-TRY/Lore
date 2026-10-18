@@ -8,15 +8,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import com.lore.zzal.pet.*;
+import com.lore.zzal.pet.persona.AuthoredPersona;
+import com.lore.zzal.pet.persona.FirstMeeting;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.test.context.TestPropertySource;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * 개발 리모컨(remote-control-spec-1011) — <b>서버를 진짜로 바꾸는가</b>.
@@ -27,6 +32,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * <b>다음 조회에서 서버가 같은 값을 말하는지</b>까지 본다.
  */
 @ZzalIntegrationTest
+@TestPropertySource(properties="app.zzal.attendance.published-backgrounds=[{\"key\":\"images/fixture/modern.webp\",\"url\":\"/images/fixture/modern.webp\",\"world\":\"modern_daily\",\"tags\":[],\"published\":true,\"autoCheck\":\"PASS\",\"humanReview\":\"UNREVIEWED\"}]")
 @DisplayName("개발 리모컨 — 상태 세팅·이벤트·방문 없는 시계·굽기")
 class DevRemoteIT extends ZzalItSupport {
 
@@ -176,7 +182,7 @@ class DevRemoteIT extends ZzalItSupport {
     }
 
     @Test
-    @DisplayName("이벤트 — 게임 승은 실제 판 길로(좌우 승수 +1), 해금 all 은 2층 조건 횟수를 채운다")
+    @DisplayName("이벤트 — 게임 승은 실제 판 길로, 구 해금 조건을 채워도 새 구보상은 열리지 않는다")
     void gameWinAndUnlock() throws Exception {
         Long userId = newUserId();
         Long petId = pet(userId).getId();
@@ -186,45 +192,30 @@ class DevRemoteIT extends ZzalItSupport {
 
         ok(patchAs(userId, (DEV + "/state").formatted(petId), Map.of("layer2Status", "READY")));
         JsonNode unlocked = ok(postAs(userId, (DEV + "/events/unlock?arg=all").formatted(petId), null));
-        assertThat(unlocked.path("after").path("justUnlocked").size()).isGreaterThan(0);
+        assertThat(unlocked.path("after").path("justUnlocked").size()).isZero();
     }
 
     @Test
-    @DisplayName("이벤트 — 튜토리얼 처음부터: 0칸·시계 꺼짐·졸업 창 다시")
+    @DisplayName("이벤트 — 첫 안내 처음부터: FEED·시계 꺼짐·졸업 창 다시")
     void tutorialRestart() throws Exception {
         Long userId = newUserId();
         Long petId = pet(userId).getId();
         JsonNode r = ok(postAs(userId, (DEV + "/events/tutorial-restart").formatted(petId), null));
-        assertThat(r.path("state").path("tutorialStep").asInt()).isZero();
+        assertThat(r.path("state").path("firstIntroKey").asText()).isEqualTo("FEED");
         assertThat(r.path("state").path("clockStarted").asBoolean()).isFalse();
-        assertThat(r.path("after").path("tutorial").path("active").asBoolean()).isTrue();
+        assertThat(r.path("after").path("firstIntro").path("active").asBoolean()).isTrue();
+        assertThat(r.path("after").path("firstIntro").path("key").asText()).isEqualTo("FEED");
     }
 
     @Test
-    @DisplayName("★ 굽기 — 진짜를 달라면 과금 스위치 꺼짐(409), 가짜 선물은 운영 길로 구워 검수 대기까지 간다")
-    void bakeRespectsTheSwitch() throws Exception {
-        Long userId = newUserId();
-        Long petId = pet(userId).getId();
-        String bake = (DEV + "/bake").formatted(petId);
-
-        MvcResult refused = postAs(userId, bake, Map.of("kind", "gift", "real", true));
+    @DisplayName("폐기된 선물 굽기는 개발 리모컨에서도 거절하고 작업을 만들지 않는다")
+    void bakeRespectsTheSwitchAndRetirement() throws Exception {
+        Long userId=newUserId();Long petId=pet(userId).getId();String bake=(DEV+"/bake").formatted(petId);
+        var refused=postAs(userId,bake,Map.of("kind","gift","real",true));
         assertThat(refused.getResponse().getStatus()).isEqualTo(409);
         assertThat(body(refused).path("error").path("message").asText()).contains("과금 스위치 꺼짐");
-
-        JsonNode started = ok(postAs(userId, bake, Map.of("kind", "gift", "real", false)));
-        assertThat(started.path("estimatedCostUsd").decimalValue()).isZero();
-        String jobId = started.path("jobId").asText();
-        assertThat(jobId).startsWith("gift-101-");
-
-        String progress = (DEV + "/bake/%s").formatted(petId, jobId);
-        await("가짜 선물 굽기 끝", Duration.ofSeconds(30), () -> {
-            try {
-                return getJson(userId, progress).path("data").path("finished").asBoolean();
-            } catch (Exception e) {
-                throw new IllegalStateException(e);
-            }
-        });
-        assertThat(getJson(userId, progress).path("data").path("status").asText()).isEqualTo("REVIEW");
+        assertThat(postAs(userId,bake,Map.of("kind","gift","real",false)).getResponse().getStatus()).isEqualTo(409);
+        assertThat(jdbc.queryForObject("select count(*) from zzal_gen_job where pet_id=?",Integer.class,petId)).isZero();
     }
 
     @Test
@@ -237,5 +228,131 @@ class DevRemoteIT extends ZzalItSupport {
                 .isEqualTo(404);
         assertThat(postAs(stranger, (DEV + "/events/sick").formatted(petId), null).getResponse().getStatus())
                 .isEqualTo(404);
+    }
+
+    // 최신 버전형 첫 안내/저장 인사/출석 연결 회귀를 기존 리모컨 검수와 함께 보존한다.
+    record Room(Long user,Long id){String remote(){return "/api/zzal/v1/dev/pets/"+id;} String normal(){return "/api/zzal/v1/me/pets/"+id;}}
+    Room room(boolean intro){
+        Long user=newUserId();Instant at=kstToday(3,0);
+        Long id=transactions.execute(t->{var p=ZzalPet.draft(user,newUploadedImageKey(user),at);
+            p.character("아이",null,null,null,null,null,at);p.markAlive("sheet","identity",at);
+            if(intro){p.recordAuthoredPersona(new AuthoredPersona(1,List.of()));p.beginFirstMeeting();p.devSetFirstIntro(3,FirstIntro.Step.FEED,at);p.advanceFirstMeeting(FirstMeeting.State.COMPLETE);}
+            return petRepository.save(p).getId();});
+        motionSeeder.seed(id,at);pinClock(id,at);return new Room(user,id);
+    }
+    com.fasterxml.jackson.databind.JsonNode patchRoom(Room r,Map<String,Object> fields)throws Exception{
+        var result=mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(r.remote()+"/state").with(asUser(r.user)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content(json.writeValueAsBytes(fields))).andExpect(status().isOk()).andReturn();
+        return body(result).path("data");
+    }
+    com.fasterxml.jackson.databind.JsonNode event(Room r,String kind)throws Exception{
+        var result=postAs(r.user,r.remote()+"/events/"+kind,null);
+        assertThat(result.getResponse().getStatus()).as(result.getResponse().getContentAsString()).isEqualTo(200);
+        return body(result).path("data");
+    }
+    int visits(Room r){return jdbc.queryForObject("SELECT count(*) FROM zzal_awake_visit WHERE pet_id=?",Integer.class,r.id);}
+
+    @ParameterizedTest @ValueSource(ints={2,3,4})
+    void remoteReplaysVersionedIntroAndPreviewsWithoutRecordingAVisit(int version)throws Exception{
+        var r=room(true);
+        patchRoom(r,Map.of("firstIntroVersion",version,"firstIntroKey","BATH","todayBathDone",true));
+        var restart=event(r,"tutorial-restart");
+        assertThat(restart.path("state").path("firstIntroVersion").asInt()).isEqualTo(version);
+        assertThat(restart.path("state").path("firstIntroKey").asText()).isEqualTo("FEED");
+        // A restarted mandatory action follows the real care path, not just the remote counter.
+        petService.care(r.user,r.id,CareAction.FEED,Instant.now());
+        assertThat(petRepository.findById(r.id).orElseThrow().introAt(FirstIntro.Step.SNACK)).isTrue();
+        var sequence=FirstIntro.sequence(version);
+        for(int i=sequence.indexOf(FirstIntro.Step.SNACK);i<sequence.indexOf(FirstIntro.Step.FINISH_NOTICE);i++){
+            var next=event(r,"tutorial-next");
+            assertThat(next.path("state").path("firstIntroKey").asText()).isEqualTo(sequence.get(i+1).name());
+            assertThat(getJson(r.user,r.remote()+"/state").path("data").path("state").path("firstIntroKey").asText()).isEqualTo(sequence.get(i+1).name());
+        }
+        var state=getJson(r.user,r.remote()+"/state").path("data");
+        assertThat(state.path("detail").path("attendanceRewards").path("background").path("preview").path("key").asText()).isEqualTo("images/fixture/modern.webp");
+        assertThat(state.path("detail").path("clock").path("clockStartedAt").isNull()).isTrue();
+        assertThat(visits(r)).isZero();
+        assertThat(postAs(r.user,r.remote()+"/events/tutorial-next",null).getResponse().getStatus()).isEqualTo(409);
+        var done=event(r,"clock-start");
+        assertThat(done.path("state").path("firstIntroKey").asText()).isEqualTo("REVIEW_SEEN");
+        assertThat(visits(r)).isEqualTo(1);
+        event(r,"tutorial-next");
+        assertThat(petRepository.findById(r.id).orElseThrow().introAt(FirstIntro.Step.COMPLETE)).isTrue();
+    }
+
+    @Test void versionSwitchPreservesSemanticKeyAndDirectPreviewPatchIsNotCompletion()throws Exception{
+        var r=room(true);patchRoom(r,Map.of("firstIntroKey","CHAT"));
+        var changed=patchRoom(r,Map.of("firstIntroVersion",2));
+        assertThat(changed.path("state").path("firstIntroKey").asText()).isEqualTo("CHAT");
+        assertThat(changed.path("state").path("firstIntroStep").asInt()).isEqualTo(FirstIntro.index(2,FirstIntro.Step.CHAT));
+        var preview=patchRoom(r,Map.of("firstIntroKey","FINISH_NOTICE"));
+        assertThat(preview.path("after").path("attendanceRewards").path("background").path("preview").path("key").asText()).isEqualTo("images/fixture/modern.webp");
+        assertThat(preview.path("after").path("clock").path("clockStartedAt").isNull()).isTrue();assertThat(visits(r)).isZero();
+        patchRoom(r,Map.of("firstIntroKey","NAP_WAKE"));
+        assertThat(petRepository.findById(r.id).orElseThrow().getSleepKind()).isEqualTo(SleepKind.NAP);
+        petService.wake(r.user,r.id,Instant.now());
+        assertThat(petRepository.findById(r.id).orElseThrow().introAt(FirstIntro.Step.ALBUM)).isTrue();
+    }
+
+    @Test void finishingReviewPreservesTheNightStartedByClockCompletion()throws Exception{
+        var r=room(true);pinClock(r.id,kstToday(23,30));
+        patchRoom(r,Map.of("firstIntroKey","FINISH_NOTICE"));event(r,"clock-start");
+        var before=petRepository.findById(r.id).orElseThrow();
+        assertThat(before.getSleepKind()).isEqualTo(SleepKind.NIGHT);
+        Instant started=before.getClockStartedAt();
+        event(r,"tutorial-next");var complete=petRepository.findById(r.id).orElseThrow();
+        assertThat(complete.getSleepKind()).isEqualTo(SleepKind.NIGHT);
+        assertThat(complete.getClockStartedAt()).isEqualTo(started);
+    }
+
+    @Test void tutorialSelectionNeverSilentlyCompletesTheFirstMeeting()throws Exception{
+        var r=room(true);
+        transactions.executeWithoutResult(tx->petRepository.findByIdForUpdate(r.id).orElseThrow().advanceFirstMeeting(FirstMeeting.State.DISCOVERED));
+        var response=patchRoom(r,Map.of("firstIntroKey","FINISH_NOTICE"));
+        assertThat(response.path("state").path("firstMeetingState").asText()).isEqualTo("DISCOVERED");
+        assertThat(petRepository.findById(r.id).orElseThrow().isFirstMeetingComplete()).isFalse();
+    }
+
+    @Test void forcedSkipCompletesOnceAndRecordsDayOneWithoutLosingTheVersion()throws Exception{
+        var r=room(true);patchRoom(r,Map.of("firstIntroVersion",2));
+        var skipped=event(r,"tutorial-skip");
+        assertThat(skipped.path("state").path("firstIntroKey").asText()).isEqualTo("COMPLETE");
+        assertThat(skipped.path("state").path("firstIntroVersion").asInt()).isEqualTo(2);
+        assertThat(visits(r)).isEqualTo(1);
+        assertThat(postAs(r.user,r.remote()+"/events/tutorial-skip",null).getResponse().getStatus()).isEqualTo(409);
+        assertThat(visits(r)).isEqualTo(1);
+    }
+
+    @Test void paidModeMismatchCannotStartGeneration()throws Exception{
+        var r=room(true);
+        assertThat(postAs(r.user,r.remote()+"/bake",Map.of("kind","hatch","real",true)).getResponse().getStatus()).isEqualTo(409);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM zzal_gen_job WHERE pet_id=?",Integer.class,r.id)).isZero();
+        assertThat(petRepository.findById(r.id).orElseThrow().isAlive()).isTrue();
+    }
+
+    @Test void ownershipValidationAndLegacyControlsRemainEffective()throws Exception{
+        var r=room(false);Long other=newUserId();
+        assertThat(postAs(other,r.remote()+"/events/tutorial-restart",null).getResponse().getStatus()).isEqualTo(404);
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(r.remote()+"/state").with(asUser(r.user)).contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"fullness\":9,\"trash\":4}")).andExpect(status().isBadRequest());
+        assertThat(petRepository.findById(r.id).orElseThrow().getTrash()).isNotEqualTo(4);
+        patchRoom(r,Map.of("tutorialStep",8));event(r,"clock-start");assertThat(visits(r)).isEqualTo(1);
+        patchRoom(r,Map.of("fullness",4,"happiness",4,"food",3));
+        event(r,"sick");assertThat(petRepository.findById(r.id).orElseThrow().isSick()).isTrue();
+        event(r,"recover");assertThat(petRepository.findById(r.id).orElseThrow().isSick()).isFalse();
+        event(r,"trip-start");event(r,"postcard");
+        assertThat(petRepository.findById(r.id).orElseThrow().getPostcardCount()).isGreaterThan(0);
+        // Clock responses keep before/after/effects and visit:false never adds attendance.
+        var advance=postAs(r.user,r.remote()+"/advance-clock",Map.of("minutes",1,"visit",false));
+        assertThat(advance.getResponse().getStatus()).isEqualTo(200);
+        assertThat(body(advance).path("data").has("after")).isTrue();assertThat(visits(r)).isEqualTo(1);
+    }
+    @Test void v4RemoteReviewNextAndSkipUseTheCurrentNightBoundary()throws Exception{
+        var r=room(true);patchRoom(r,Map.of("firstIntroVersion",4,"firstIntroKey","FINISH_NOTICE"));
+        event(r,"clock-start");assertThat(petRepository.findById(r.id).orElseThrow().isSleeping()).isFalse();
+        event(r,"tutorial-next");assertThat(petRepository.findById(r.id).orElseThrow().getFirstNightChatDeadlineAt()).isNotNull();
+        assertThat(petRepository.findById(r.id).orElseThrow().isSleeping()).isFalse();
+        var other=room(true);patchRoom(other,Map.of("firstIntroVersion",4));event(other,"tutorial-skip");
+        assertThat(petRepository.findById(other.id).orElseThrow().getFirstNightChatDeadlineAt()).isNotNull();
+        assertThat(petRepository.findById(other.id).orElseThrow().isSleeping()).isFalse();
+        assertThat(visits(other)).isEqualTo(1);
     }
 }

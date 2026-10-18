@@ -1,3 +1,5 @@
+import type {StageSpeechView} from './tutorialStageSpeech';
+import type { FirstIntro, FirstIntroKey, IntroTopic } from '../tamagotchi/yeoul/firstIntro';
 // 펫 API v2. zzal/be 의 v2 PetController(`/api/zzal/v1/me/pets`)와 짝이다.
 //
 // ★ 이 파일의 타입은 서버의 PetResponses.Detail(v2)을 그대로 옮긴 것이다. 화면이 쓰기 편하게
@@ -46,7 +48,7 @@ export type SleepKind = 'NIGHT' | 'NAP';
 export type Mood = 'SICK' | 'HUNGRY' | 'SAD' | 'DIRTY' | 'NORMAL';
 
 /** 채팅 부름 슬롯. BABY 는 아기 8분 부름이고 하루 3회에 안 든다(정본 12장·16장). */
-export type ChatSlot = 'BABY' | 'MORNING' | 'NOON' | 'EVENING';
+export type ChatSlot = 'CONTINUOUS' | 'BABY' | 'MORNING' | 'NOON' | 'EVENING';
 
 /** 동작이 어느 층인가. GIFT 는 카탈로그 밖 선물(구르기·뒤로 넘어짐, seq 101·102). */
 export type MotionLayer = 'BASIC_1' | 'BASIC_2' | 'GIFT';
@@ -343,7 +345,24 @@ export interface Shared {
   pet: PetDetail;
 }
 
+/** Server-filtered GRANTED inventory; IDs are opaque. */
+export interface OwnedCustomMotion {
+ id:string; setId:number; order:number; title:string; description:string;
+ semantic:'base'|'eat'|'joy'|'sad'|'sick'|'pet'|'hello'|'sleep'|null;
+ planVersion?:'CUSTOM_MOTION_PLAN_V1'|'CUSTOM_MOTION_PLAN_V2'; situations?:CareAction[];
+ albumOnly:boolean; imageKey:string; anchorsKey:string|null; anchorPoseKey:string;
+ baseReferenceRound:number|null; embeddedProps:boolean; suppressRoomProps:boolean; sourceKind:'CUSTOM';
+}
+/** A successful care response's one selection, separate from chat reactionKey. */
+export interface CareMotionPlayback {
+ situationKey:string; motionId:string; basicSemantic:string; sourceKind:'BASIC'|'CUSTOM';
+ resource:OwnedCustomMotion|null;
+}
+export interface CareReceipt { requestId:string;action:CareAction;status:'APPLIED'|'REPLAYED'|'NO_OP' }
 export interface PetDetail {
+  careReceipt?: CareReceipt | null;
+ motionPlayback?:CareMotionPlayback|null;
+ customMotions?: OwnedCustomMotion[]|null;
   petId: number;
   name: string;
   note: string | null;
@@ -416,10 +435,13 @@ export interface PetDetail {
   world: string | null;
   /** 배경 키(constants.BACKGROUNDS). 기본 'room'. */
   background: string | null;
+  attendanceRewards?: AttendanceRewards | null;
   features: Features | null;
   leaving: Leaving | null;
   trip: Trip | null;
   tutorial: Tutorial | null;
+  firstIntro?: FirstIntro | null;
+  firstNightChatGrace?: { eligible: boolean; active: boolean; deadlineAt: string | null; endedAt: string | null; willSleepAtEnd: boolean } | null;
   /**
    * **첫날 축하 판을 본 시각**(ISO) — 안 봤으면 `null`. 떠난 아이에게도 남는다.
    *
@@ -462,7 +484,20 @@ export interface Drafted {
  *   전부 **대사와 말투**에만 쓰인다. 이 주석을 믿고 "그림을 바꾸려면 `note` 를 고치라" 고
  *   안내하면 그대로 거짓말이 된다.
  */
+export interface AuthoredPersona {
+  /** Source schema version, independent of the legacy personality enum. */
+  version: 1;
+  fields: Array<{
+    fieldId: 'world' | 'job' | 'persona' | 'likes' | 'dislikes' | 'extra';
+    chips: string[];
+    rawText: string;
+    skipped: boolean;
+  }>;
+}
+
 export interface CharacterInput {
+  /** Unabridged authored source. Legacy fields below are compatibility projections. */
+  authoredPersona?: AuthoredPersona;
   /** 12자 이하(정본 15장). */
   name: string;
   /** 성격 하나(옛 칸). `personalities` 를 보내면 서버는 그쪽을 쓴다. 선택 */
@@ -546,7 +581,7 @@ export interface ChatSession {
   kind: string;
   /** 이번 판에서 사용자가 답한 횟수. */
   round: number;
-  maxRounds: number;
+  maxRounds: number | null;
   closed: boolean;
   /** CLOSED · EXPIRED · ABANDONED. 열려 있으면 null. */
   closeReason: string | null;
@@ -566,8 +601,25 @@ export interface ChatTurn {
   filteredReason: string | null;
 }
 
+/** Persisted tutorial delivery, never inferred from ordinary CONTINUE turns. */
+export interface TutorialAnswerReceipt {
+  requestId: string;
+  sessionId: number;
+  expectedRound: number;
+  step: 'FEED' | 'GAME';
+  answerType: 'SUGGESTED' | 'FREE_TEXT';
+  text: string;
+  chatReply: { line: string; reactionKey: string | null };
+  turns: ChatTurn[];
+}
+
 /** GET /chat 의 응답. */
 export interface ChatState {
+  /** Present only when the backend supports explicit, stored-only stage preparation. */
+  stageSpeeches?: StageSpeechView[];
+  tutorialAnswers?: TutorialAnswerReceipt[];
+  /** Server-authoritative, unconsumed proactive speech; absent on legacy servers. */
+  stageSpeech?: { turnIdx: number; line: string } | null;
   /** 지금 답할 수 있는 슬롯. 없으면 null. */
   openSlot: ChatSlot | null;
   /** 오늘 도래한 부름들(BABY 포함). */
@@ -590,6 +642,7 @@ export interface Postcard {
 
 /** 앨범. 첫 심화 행동이 열리기 전엔 ZZAL_FEATURE_LOCKED. */
 export interface Album {
+ customMotions?: OwnedCustomMotion[]|null;
   motions: Motion[];
   postcards: Postcard[];
   scenes: SceneRecipe[];
@@ -696,18 +749,18 @@ export function getPet(petId: number, signal?: AbortSignal): Promise<PetDetail> 
  * 실패 코드 — ZZAL_CARE_NOT_NEEDED · ZZAL_NO_FOOD · ZZAL_BATH_DONE_TODAY · ZZAL_SICK_REFUSES ·
  * ZZAL_PET_SLEEPING · ZZAL_TRAVELING(409).
  */
-export function care(petId: number, action: CareAction): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/care`, { method: 'POST', body: { action } });
+export function care(petId: number, action: CareAction, firstIntroStep?: FirstIntroKey, requestId?:string, signal?:AbortSignal): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/care`, { method: 'POST', signal, body: { action, ...(firstIntroStep ? {firstIntroStep} : {}), ...(requestId?{requestId}:{}) } });
 }
 
 /** 재우기(19~23시, 아기 중엔 낮잠). 창 밖이면 ZZAL_NOT_SLEEP_TIME. */
-export function sleep(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/sleep`, { method: 'POST' });
+export function sleep(petId: number, firstIntroStep?: FirstIntroKey): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/sleep`, { method: 'POST', ...(firstIntroStep ? {body: {firstIntroStep}} : {}) });
 }
 
 /** 깨우기(07~10시, 낮잠은 5분 뒤). 창 밖이면 ZZAL_NOT_WAKE_TIME. */
-export function wake(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/wake`, { method: 'POST' });
+export function wake(petId: number, firstIntroStep?: FirstIntroKey): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/wake`, { method: 'POST', ...(firstIntroStep ? {body: {firstIntroStep}} : {}) });
 }
 
 /**
@@ -742,8 +795,8 @@ export function tutorialDone(petId: number): Promise<PetDetail> {
  *   **첫 흔적이 이 칸을 넘길 때 생기므로** 바닥이 깨끗해 5칸에서 또 막힌다(서버 주석).
  * ★ 지금 칸이 4칸이 아니면 409 `ZZAL_TUTORIAL_STEP_MISMATCH`.
  */
-export function tutorialSeen(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/seen`, { method: 'POST' });
+export function tutorialSeen(petId: number, topic?: IntroTopic): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/seen`, { method: 'POST', ...(topic ? { body: { topic } } : {}) });
 }
 
 /**
@@ -794,6 +847,18 @@ export function getChat(petId: number, signal?: AbortSignal): Promise<ChatState>
   return request<ChatState>(`${PET_BASE}/${petId}/chat`, { signal });
 }
 
+/** 원문 이력은 최근 문맥과 별개로 전체 커서 조회한다. */
+export interface ChatHistoryTurn { id: number; sessionId: number; idx: number; speaker: 'PET' | 'USER'; line: string; at: string }
+export interface ChatHistoryPage { turns: ChatHistoryTurn[]; nextBeforeId: number | null }
+export interface LegacyChatHistoryCall { id: number; slot: string; petLine: string; calledAt: string; userLine: string | null; answeredAt: string | null; replyLine: string | null }
+export interface LegacyChatHistoryPage { calls: LegacyChatHistoryCall[]; nextBeforeId: number | null }
+export function getChatHistory(petId: number, beforeId?: number, signal?: AbortSignal): Promise<ChatHistoryPage> {
+  return request<ChatHistoryPage>(`${PET_BASE}/${petId}/chat/history?limit=40${beforeId == null ? '' : `&beforeId=${beforeId}`}`, { signal });
+}
+export function getLegacyChatHistory(petId: number, beforeId?: number, signal?: AbortSignal): Promise<LegacyChatHistoryPage> {
+  return request<LegacyChatHistoryPage>(`${PET_BASE}/${petId}/chat/history/legacy?limit=40${beforeId == null ? '' : `&beforeId=${beforeId}`}`, { signal });
+}
+
 /**
  * 부름에 답한다. 40자. 닫힌 슬롯이면 ZZAL_CHAT_SLOT_CLOSED.
  *
@@ -802,10 +867,19 @@ export function getChat(petId: number, signal?: AbortSignal): Promise<ChatState>
  *   훅과 목 서버는 끝까지 "행동 응답 = PetDetail" 하나만 알면 되게 한다.
  *   (풀지 않으면 훅이 받는 객체에 `petId` 조차 없어 화면이 조용히 빈다 — 실서버 왕복에서 확인.)
  */
-export async function answerChat(petId: number, slot: ChatSlot, text: string): Promise<PetDetail> {
+/** 응답을 다시 확인할 때도 이 값을 바꾸지 않는다. 옛 스킨은 메타 없이 호환. */
+export interface TutorialAnswerMeta { step: 'FEED'|'GAME'; answerType: 'SUGGESTED'|'FREE_TEXT' }
+export interface ChatAnswerIdentity {
+  tutorial?: TutorialAnswerMeta;
+  sessionId: number;
+  expectedRound: number;
+  requestId: string;
+}
+
+export async function answerChat(petId: number, slot: ChatSlot, text: string, identity?: ChatAnswerIdentity, signal?: AbortSignal): Promise<PetDetail> {
   const res = await request<{ pet: PetDetail; chatReply: ChatReply | null; session?: ChatSession | null; turns?: ChatTurn[] }>(
     `${PET_BASE}/${petId}/chat/${slot}/answer`,
-    { method: 'POST', body: { text } },
+    { method: 'POST', body: { text, ...identity }, signal },
   );
   // ★ 판 상태와 이번 두 턴도 `chatReply` 안으로 옮긴다(위와 같은 이유 — 훅은 PetDetail 하나만 안다).
   const chatReply = res.chatReply ? { ...res.chatReply, session: res.session ?? null, turns: res.turns ?? [] } : null;
@@ -822,3 +896,31 @@ export function getAlbum(petId: number, signal?: AbortSignal): Promise<Album> {
   return request<Album>(`${PET_BASE}/${petId}/album`, { signal });
 }
 
+
+/** Authored source is owned by this pet; null means legacy source was never stored. */
+export function getAuthoredPersona(petId: number): Promise<PersonaSource> {
+  return request(`${PET_BASE}/${petId}/persona`);
+}
+
+export interface PersonaSource { authoredPersona: AuthoredPersona | null; callMe: string | null; addressStatus: string; personaSourceHash: string }
+export interface PersonaUpdate { authoredPersona?: AuthoredPersona; callMe?: string; expectedPersonaHash: string }
+export function updatePersonaSource(petId: number, input: PersonaUpdate): Promise<PetDetail> {
+ return request(`${PET_BASE}/${petId}/personality`, { method: 'POST', body: input });
+}
+
+export interface AttendanceRewards {
+  programVersion: string;
+  attendanceDay: number;
+  firstBundleState: 'NONE' | 'PENDING' | 'CLAIMED' | 'GENERATED' | 'FAILED';
+  eligibleUnfulfilledCount: number;
+  ownedRewards: { slotKey: string; kind: 'BACKGROUND' | 'MOTION'; assetKey: string; url: string; motionOrder: number | null }[];
+  background: { selectedKey: string; owned: { key: string; url: string }[]; preview?: { key: string; url: string } | null };
+}
+export interface DiaryEntry { id: number; writtenAt: string; body: string; preview: string; language: string; readAt: string | null; kind: 'CHARACTER_DIARY' }
+export interface DiaryPage { entries: DiaryEntry[]; nextBeforeId: number | null; unreadCount: number; pending: boolean }
+export function getDiary(petId: number, beforeId?: number, signal?: AbortSignal): Promise<DiaryPage> {
+  return request(`${PET_BASE}/${petId}/diary?limit=20${beforeId == null ? '' : `&beforeId=${beforeId}`}`, { signal });
+}
+export function readDiary(petId: number, id: number): Promise<DiaryEntry> {
+  return request(`${PET_BASE}/${petId}/diary/${id}/read`, { method: 'POST' });
+}

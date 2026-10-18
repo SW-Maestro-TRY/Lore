@@ -4,6 +4,8 @@ import com.lore.zzal.pet.CareAction;
 import com.lore.zzal.pet.Personality;
 import com.lore.zzal.pet.ZzalRules;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import com.lore.zzal.pet.persona.AuthoredPersona;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -58,7 +60,15 @@ public final class PetRequests {
 
             @Schema(description = "추가 정보. 그림에는 들어가지 않고 저장만 하며 대사에서 쓴다",
                     example = "왼쪽 눈에 흉터")
-            @Size(max = 200) String note) {
+            @Size(max = 200) String note,
+
+            @Schema(description = "선택칩·자유글·건너뜀 원문. 기존 personality/note는 호환값이다")
+            @Valid AuthoredPersona authoredPersona) {
+
+        public Character(String name, Personality personality, List<Personality> personalities,
+                         String world, String tone, String genre, String note) {
+            this(name, personality, personalities, world, tone, genre, note, null);
+        }
 
         /** 고른 성격 전부. 맨 앞이 대표. 아무것도 안 골랐으면 빈 목록. */
         public List<Personality> picked() {
@@ -67,11 +77,26 @@ public final class PetRequests {
     }
 
     @Schema(description = "돌보기 요청. 수행할 행동만 전달하고 수치 변화는 서버가 결정한다")
+    public record IntroAction(com.lore.zzal.pet.FirstIntro.Step firstIntroStep) { }
+
+    public record TutorialSeen(@NotNull com.lore.zzal.pet.FirstIntro.Step topic,@Schema(nullable=true,description="생략/null은 ACKNOWLEDGE") TutorialPurpose purpose,
+            @Schema(nullable=true,description="PREPARE_SPEECH일 때 ENTRY/AFTER_ACTION 필수. ACK에서는 생략/null") com.lore.zzal.chat.prompt.ConversationScene.Beat phase) {
+        public TutorialSeen(com.lore.zzal.pet.FirstIntro.Step topic){this(topic,null,null);}
+        public enum TutorialPurpose { ACKNOWLEDGE, PREPARE_SPEECH }
+        @jakarta.validation.constraints.AssertTrue(message="대사 준비에는 허용된 일곱 단계와 장면 박자가 필요합니다")
+        @com.fasterxml.jackson.annotation.JsonIgnore public boolean isPrepareValid(){
+            if(purpose!=TutorialPurpose.PREPARE_SPEECH)return phase==null;
+            return topic!=null&&phase!=null&&java.util.Set.of("FEED","SNACK","CLEAN","BATH","GAME","NAP_SLEEP","NAP_WAKE").contains(topic.name());
+        }
+    }
+
     public record Care(
 
             @Schema(description = "FEED(급식) · SNACK(간식) · PET(쓰다듬기) · CLEAN(청소) · BATH(목욕) · MEDICINE(투약)",
                     example = "FEED")
-            @NotNull CareAction action) {
+            @NotNull CareAction action, com.lore.zzal.pet.FirstIntro.Step firstIntroStep, @Schema(nullable=true,description="동일 행동 재전송에 같은 UUID를 사용한다. 생략/null은 기존 비보호 호출") java.util.UUID requestId) {
+        public Care(CareAction action) { this(action,null,null); }
+        public Care(CareAction action,com.lore.zzal.pet.FirstIntro.Step step) { this(action,step,null); }
     }
 
     /**
@@ -94,7 +119,14 @@ public final class PetRequests {
             List<Personality> personalities,
 
             @Schema(description = "세계관 한 줄. 생략할 수 있다", example = "구름 위 마을에 사는 고양이")
-            @Size(max = ZzalRules.WORLD_MAX_CHARS) String world) {
+            @Size(max = ZzalRules.WORLD_MAX_CHARS) String world,
+            @Valid com.lore.zzal.pet.persona.AuthoredPersona authoredPersona,
+            @Size(max = 20) String callMe,
+            @Size(max = 64) String expectedPersonaHash) {
+
+        public PersonalityChoice(Personality personality,List<Personality> personalities,String world) {
+            this(personality,personalities,world,null,null,null);
+        }
 
         /** 고른 성격 전부. 맨 앞이 대표. 하나도 없으면 빈 목록 — 서비스가 막는다. */
         public List<Personality> picked() {

@@ -58,4 +58,29 @@ class PersonaSheetBuilderTest {
         assertThat(s.callMeDeclined()).isTrue();
         assertThat(s.callMeSettled()).isTrue();
     }
+    @Test
+    void selectedLanguageIsSharedPromptMaterial() {
+        ZzalPet pet = PetFixture.hatching(1L, "여울", null, "k", Instant.parse("2026-10-01T00:00:00Z"));
+        pet.diaryLanguage("ja");
+        pet.rememberExplicitCallMe("작가님");
+        PersonaSheet sheet = new PersonaSheetBuilder(null).build(pet);
+        assertThat(sheet.preferredResponseLanguage()).isEqualTo("ja");
+        assertThat(sheet.name()).isEqualTo("여울");
+        assertThat(sheet.callMe()).isEqualTo("작가님");
+        pet.diaryLanguage("en");
+        assertThat(new PersonaSheetBuilder(null).build(pet).preferredResponseLanguage()).isEqualTo("en");
+    }
+    @Test
+    void deferredAddressStaysUserDefaultEvenWhenLegacySurveyHasAName() {
+        ZzalUserProfileRepository repo = mock(ZzalUserProfileRepository.class);
+        ZzalUserProfile profile = mock(ZzalUserProfile.class);
+        when(repo.findById(1L)).thenReturn(Optional.of(profile));
+        when(profile.getCallMe()).thenReturn("예전설문호칭");
+        ZzalPet pet = PetFixture.hatching(1L, "시온", null, "k", Instant.parse("2026-10-01T00:00:00Z"));
+        pet.deferCallMe();
+        PersonaSheet sheet = new PersonaSheetBuilder(repo).build(pet);
+        assertThat(sheet.callMe()).isEqualTo("사용자님");
+        assertThat(com.lore.zzal.chat.prompt.PromptAssembler.system(sheet))
+                .contains("상대를 부르는 말: 사용자님").doesNotContain("예전설문호칭");
+    }
 }

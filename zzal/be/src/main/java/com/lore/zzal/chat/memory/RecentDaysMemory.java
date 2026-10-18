@@ -47,8 +47,19 @@ public class RecentDaysMemory implements MemoryProvider {
 
     @Override
     public List<Memory> recall(Long petId, RecallQuery query) {
-        List<ZzalChatTurn> ts = turns.findByPetIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAscIdAsc(petId,
-                since(query.now()));
+        List<ZzalChatTurn> ts;
+        if (query.slot() == ChatSlot.CONTINUOUS) {
+            ts = new ArrayList<>(turns.findTop40ByPetIdAndCreatedAtBetweenOrderByCreatedAtDescIdDesc(petId,
+                    since(query.now()), query.now()));
+            java.util.Collections.reverse(ts);
+            int chars = 0;
+            for (int i = ts.size() - 1; i >= 0; i--) {
+                chars += ts.get(i).getLine().length();
+                if (chars > 6000) { ts = new ArrayList<>(ts.subList(i + 1, ts.size())); break; }
+            }
+        } else {
+            ts = turns.findByPetIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAscIdAsc(petId, since(query.now()));
+        }
         if (ts.isEmpty()) {
             return List.of();
         }
@@ -69,7 +80,7 @@ public class RecentDaysMemory implements MemoryProvider {
             e.getValue().sort(Comparator.comparingInt(ZzalChatTurn::getIdx));
             for (ZzalChatTurn t : e.getValue()) {
                 out.add(new Memory(t.getLine(), t.isPet() ? Memory.PET_LINE : Memory.USER_LINE, t.getCreatedAt(),
-                        t.getSessionId(), slots.get(t.getSessionId())));
+                        t.getSessionId(), slots.get(t.getSessionId()), t.getId()));
             }
         }
         return List.copyOf(out);
