@@ -18,6 +18,7 @@ import {
   nightSweep, setClockAt, type DevBakeProgress, type DevPatch, type DevPing, type DevResult, type DevStateMap,
 } from '../../lib/dev';
 import type { PetDetail } from '../../lib/pet';
+import {FIRST_INTRO_KEYS,FIRST_INTRO_V4_KEYS} from './firstIntro';
 import { C, MONO, TAP_MIN, chipTone, fz, gap, monoSize, radius } from './ui';
 
 /**
@@ -27,13 +28,14 @@ import { C, MONO, TAP_MIN, chipTone, fz, gap, monoSize, radius } from './ui';
  * ★ 첫 렌더는 늘 null — 서버 렌더와 갈리지 않게(하이드레이션).
  */
 export function useDevPing(key: unknown): DevPing | null {
-  const [ping, setPing] = useState<DevPing | null>(null);
-  useEffect(() => {
-    let alive = true;
-    devPing().then((p) => { if (alive) setPing(p?.devTools ? p : null); }).catch(() => { if (alive) setPing(null); });
-    return () => { alive = false; };
-  }, [key]);
-  return ping;
+  const [resolved,setResolved]=useState<{key:unknown;ping:DevPing|null}|null>(null);
+  useEffect(()=>{
+    let alive=true;
+    devPing().then(p=>{if(alive)setResolved({key,ping:p?.devTools?p:null});})
+      .catch(()=>{if(alive)setResolved({key,ping:null});});
+    return()=>{alive=false;};
+  },[key]);
+  return resolved&&resolved.key===key?resolved.ping:null;
 }
 
 /** 토스트 한 장. */
@@ -50,14 +52,16 @@ interface Props {
   onDetail: (next: PetDetail) => void;
   /** 채팅·게임처럼 판 상태까지 다시 받아야 하는 이벤트 뒤에 부른다(그 조회는 방문이다). */
   onReload: () => Promise<unknown>;
+  onIntroPreview: () => void;
 }
 
 /** 리모컨 본문 — 탭 하나를 그린다. 토스트는 패널 위에 뜬다. */
-export default function DevRemote({ tab, petId, pet, ping, onDetail, onReload }: Props) {
+export default function DevRemote({ tab, petId, pet, ping, onDetail, onReload, onIntroPreview }: Props) {
   const [state, setState] = useState<DevStateMap | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
+  const runLocked=useRef(false);
 
   const toast = useCallback((t: Omit<Toast, 'id'>) => {
     const id = ++seq.current;
@@ -74,19 +78,20 @@ export default function DevRemote({ tab, petId, pet, ping, onDetail, onReload }:
   }, [petId]);
 
   /** 서버 호출 하나 — 응답을 화면에 얹고 effects 를 토스트로. 실패하면 서버 말을 그대로. */
-  const run = useCallback(async (label: string, call: () => Promise<DevResult>, reload = false) => {
-    if (busy) return;
-    setBusy(label);
+  const run = useCallback(async (label: string, call: () => Promise<DevResult>, reload = false, onApplied?: () => void) => {
+    if (runLocked.current) return;
+    runLocked.current=true;setBusy(label);
     try {
       const r = await call();
       onDetail(r.after);
       setState(r.state);
+      onApplied?.();
       if (reload) await onReload();
       toast({ title: label, lines: r.effects.length ? r.effects : ['바뀐 칸 없음'] });
     } catch (e) {
       toast({ title: `${label} — 실패`, lines: [errorText(e)], bad: true });
     } finally {
-      setBusy(null);
+      runLocked.current=false;setBusy(null);
     }
   }, [busy, onDetail, onReload, toast]);
 
@@ -94,7 +99,7 @@ export default function DevRemote({ tab, petId, pet, ping, onDetail, onReload }:
   const fire = (label: string, kind: string, arg?: string | number, reload = false) =>
     run(label, () => devEvent(petId, kind, arg), reload);
 
-  const body = tab === 'state' ? <StateTab s={state} pet={pet} busy={busy} patch={patch} fire={fire} />
+  const body = tab === 'state' ? <StateTab s={state} pet={pet} busy={busy} patch={patch} fire={fire} onIntroPreview={()=>void run('완료 안내 미리보기',()=>devPatch(petId,{firstIntroKey:'FINISH_NOTICE'}),false,onIntroPreview)} />
     : tab === 'events' ? <EventsTab busy={busy} fire={fire} />
       : tab === 'clock' ? <ClockTab petId={petId} pet={pet} busy={busy} run={run} onDetail={onDetail} toast={toast} setBusy={setBusy} />
         : <BakeTab petId={petId} ping={ping} busy={busy} onDetail={onDetail} setState={setState} toast={toast} setBusy={setBusy} />;
@@ -190,8 +195,8 @@ const SICK: ReadonlyArray<readonly [string, string]> = [
 ];
 const PIECES: ReadonlyArray<readonly [string, string]> = [['FOOD', '밥'], ['PLAY', '놀이'], ['CLEAN', '청결'], ['BOND', '교감']];
 
-function StateTab({ s, pet, busy, patch, fire }: {
-  s: DevStateMap | null; pet: PetDetail | null; busy: string | null; patch: Patch; fire: Fire;
+function StateTab({ s, pet, busy, patch, fire, onIntroPreview }: {
+  s: DevStateMap | null; pet: PetDetail | null; busy: string | null; patch: Patch; fire: Fire; onIntroPreview: () => void;
 }) {
   if (!s) return <p style={{ margin: 0, fontSize: fz.sm, color: C.faint }}>서버 상태를 받는 중…</p>;
   const gauge = (name: string, key: string) => (
@@ -239,6 +244,7 @@ function StateTab({ s, pet, busy, patch, fire }: {
       </Group>
 
       <Group title="잠 · 친밀도 · 튜토리얼">
+        <p data-remote-first-meeting style={{margin:0,fontSize:fz.xs,color:C.faint,lineHeight:1.5}}>첫만남: {str(s,'firstMeetingState')??'기존 완료'}. 첫만남은 정상 입력으로 마친 뒤 첫체험을 조작해 주세요. 저장된 인사·호칭을 지우거나 첫만남을 되돌리지는 않아요.</p>
         <Line name="잠(값만 — 밤 정산은 이벤트)" value={str(s, 'sleep')}>
           {(['NONE', 'NIGHT', 'NAP'] as const).map((k) => (
             <Btn key={k} label={{ NONE: '깨어 있음', NIGHT: '밤잠', NAP: '낮잠' }[k]} id={`sleep:${k}`}
@@ -251,12 +257,29 @@ function StateTab({ s, pet, busy, patch, fire }: {
               onClick={() => patch(`친밀도 ${i}`, { intimacy: i })} />
           ))}
         </Line>
-        <Line name="튜토리얼 칸" value={`${num(s, 'tutorialStep')}/9${bool(s, 'clockStarted') ? ' · 시계 켜짐' : ''}`}>
+        {str(s,'firstIntroKey')? <>
+          <Line name="첫체험" value={`v${num(s,'firstIntroVersion')} · ${num(s,'firstIntroStep')} · ${str(s,'firstIntroKey')}`}>
+            <Btn label="처음부터" id="intro:restart" busy={busy} onClick={()=>fire('첫체험 처음부터','tutorial-restart')}/>
+            <Btn label="다음 단계" id="intro:next" busy={busy} onClick={()=>fire('첫체험 다음 단계','tutorial-next')}/>
+            <Btn label="완료 안내 미리보기" id="intro:preview" busy={busy} onClick={onIntroPreview}/>
+            <Btn label="강제 완료" id="intro:skip" busy={busy} onClick={()=>fire('첫체험 강제 완료','tutorial-skip')}/>
+          </Line>
+          <Line name="첫체험 버전" note="단계의 의미는 서버 key로 유지">
+            {([2,3,4] as const).map(version=><Btn key={version} label={`v${version}`} id={`intro:version:${version}`} busy={busy} on={num(s,'firstIntroVersion')===version} onClick={()=>patch(`첫체험 v${version}`,{firstIntroVersion:version})}/>)}
+          </Line>
+          <label style={{display:'flex',flexDirection:'column',gap:8,fontSize:fz.sm,color:C.sub}}>단계로 이동
+            <select data-remote="intro:key" value={str(s,'firstIntroKey')??'FEED'} disabled={!!busy} onChange={e=>patch(`첫체험 ${e.target.value}`,{firstIntroKey:e.target.value})} style={{width:'100%',minHeight:44,padding:10,borderRadius:radius.sm,border:`1px solid ${C.lineHard}`,background:C.paper,color:C.ink,font:'inherit'}}>
+              {(num(s,'firstIntroVersion')===4?[...FIRST_INTRO_V4_KEYS,'COMPLETE']:num(s,'firstIntroVersion')===3?[...FIRST_INTRO_KEYS.filter(k=>k!=='DIARY_INTRO'&&k!=='CHAT'&&k!=='PERSONALITY').slice(0,9),'DIARY_INTRO','CHAT','PERSONALITY','FINISH_NOTICE','REVIEW_SEEN','COMPLETE']:[...FIRST_INTRO_KEYS,'COMPLETE']).map(key=><option key={key} value={key}>{key}</option>)}
+            </select>
+          </label>
+        </>:<>
+        <Line name="기존 9칸 튜토리얼" value={`${num(s, 'tutorialStep')}/9${bool(s, 'clockStarted') ? ' · 시계 켜짐' : ''}`}>
           <Btn label="−" id="tutorial:-" busy={busy} onClick={() => patch('튜토리얼 칸 −1', { tutorialStep: Math.max(0, (num(s, 'tutorialStep') ?? 0) - 1) })} />
           <Btn label="+" id="tutorial:+" busy={busy} onClick={() => patch('튜토리얼 칸 +1', { tutorialStep: Math.min(9, (num(s, 'tutorialStep') ?? 0) + 1) })} />
           <Btn label="처음부터" id="tutorial:restart" busy={busy} onClick={() => fire('튜토리얼 처음부터', 'tutorial-restart')} />
           <Btn label="끝(9)" id="tutorial:9" busy={busy} on={num(s, 'tutorialStep') === 9} onClick={() => patch('튜토리얼 끝', { tutorialStep: 9 })} />
         </Line>
+        </>}
       </Group>
 
       <Group title="방문 · 떠남 · 여행">
@@ -281,7 +304,8 @@ function StateTab({ s, pet, busy, patch, fire }: {
         </Line>
       </Group>
 
-      <Group title="2층 · 3층(조각)">
+      <Group title="기존 보상 점검 · 2층/조각">
+        <p style={{margin:0,fontSize:fz.xs,color:C.faint,lineHeight:1.5}}>폐기된 보상 경로와 기존 소유를 확인하는 도구예요. 신규 출석 보상이 아니며, 서버에서 거절할 수 있어요.</p>
         <Line name="2층 굽기" value={str(s, 'layer2Status')} note={`열린 동작 ${(str(s, 'unlocked') ?? '').split(',').filter(Boolean).length}`}>
           {(['PENDING', 'READY', 'FAILED'] as const).map((k) => (
             <Btn key={k} label={k} id={`layer2:${k}`} on={str(s, 'layer2Status') === k} busy={busy}
@@ -328,7 +352,7 @@ function AllFields({ s }: { s: DevStateMap }) {
 const EVENT_GROUPS: ReadonlyArray<{ title: string; items: ReadonlyArray<readonly [string, string, (string | number)?, boolean?]> }> = [
   { title: '부화 · 튜토리얼', items: [
     ['부화 강제 성공', 'hatch-complete'], ['부화 실패', 'hatch-fail'], ['튜토리얼 다음 칸', 'tutorial-next'],
-    ['튜토리얼 건너뛰기', 'tutorial-skip'], ['튜토리얼 처음부터', 'tutorial-restart'], ['시계 켜기(완주)', 'clock-start'],
+    ['튜토리얼 강제 완료', 'tutorial-skip'], ['튜토리얼 처음부터', 'tutorial-restart'], ['시계 켜기(완주)', 'clock-start'],
     ['졸업 창 봄', 'graduation'], ['졸업 창 다시', 'graduation-reset'],
   ] },
   { title: '돌봄 · 병', items: [
@@ -347,10 +371,10 @@ const EVENT_GROUPS: ReadonlyArray<{ title: string; items: ReadonlyArray<readonly
     ['채팅 창 열기', 'chat-open', undefined, true], ['채팅 닫기', 'chat-close', undefined, true],
     ['채팅 만료', 'chat-expire', undefined, true], ['채팅 이탈', 'chat-abandon', undefined, true],
   ] },
-  { title: '게임 · 해금', items: [
+  { title: '게임 · 기존 해금 점검', items: [
     ['게임 승', 'game-win', undefined, true], ['게임 패', 'game-lose', undefined, true], ['2층 전부 해금', 'unlock', 'all'],
   ] },
-  { title: '조각 · 선물(101 구르기 · 102 뒤로 넘어짐)', items: [
+  { title: '기존 조각 · 선물 점검(101/102 · 신규 출석 보상 아님)', items: [
     ['3층 열기', 'pieces-open'], ['조각 밥', 'piece-add', 'FOOD'], ['조각 놀이', 'piece-add', 'PLAY'],
     ['조각 청결', 'piece-add', 'CLEAN'], ['조각 교감', 'piece-add', 'BOND'], ['조각 완주(굽기)', 'piece-complete'],
     ['101 검수 대기', 'gift-review', 101], ['101 열기', 'gift-open', 101], ['101 도착', 'gift-arrive', 101], ['101 열람', 'gift-view', 101],
@@ -424,7 +448,7 @@ function ClockTab({ petId, pet, busy, run, onDetail, toast, setBusy }: {
           <Btn key={h} label={h} id={`clock:${h}`} busy={busy} onClick={() => at(h)} />
         ))}
       </Line>
-      <Line name="밤 굽기">
+      <Line name="기존 밤 큐 점검" note="폐기된 보상 경로 · 신규 출석 지급과 별개">
         <Btn label="밤 큐 돌리기" id="clock:night-sweep" busy={busy} onClick={() => legacy('밤 큐 돌리기', () => nightSweep(petId))} />
         <Btn label="선물 강제 열기(가짜)" id="clock:force-open" busy={busy} onClick={() => legacy('선물 강제 열기', () => forceOpen(petId, 101))} />
       </Line>
@@ -483,6 +507,7 @@ function BakeTab({ petId, ping, busy, onDetail, setState, toast, setBusy }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: gap.md }}>
+      <p style={{margin:0,fontSize:fz.xs,color:C.faint,lineHeight:1.5}}>기존 부화·2층·선물 생성 점검입니다. 신규 출석 맞춤 동작 지급과는 별개예요.</p>
       <Line name="무엇을">
         {KINDS.map(([l], i) => <Btn key={l} label={l} id={`bake:${i}`} on={pick === i} busy={busy} onClick={() => setPick(i)} />)}
       </Line>

@@ -17,6 +17,8 @@
 //   벗어나면 브라우저가 통째로 무시한다(2026-09-07 실측: 폰트 요청이 아예 안 나갔다).
 //   그래서 next/font 로 받아 CSS 변수로 내려 준다.
 import type { Metadata } from 'next';
+import {cookies,headers} from 'next/headers';
+import {ZzalLocaleProvider,type ZzalLocale}from '@zzal/lib/locale';
 import { Gaegu, Gowun_Dodum } from 'next/font/google';
 import TamagotchiScreen, { type SkinName } from '@zzal/tamagotchi/TamagotchiScreen';
 
@@ -62,10 +64,12 @@ export default async function Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
+  const localeValue=(await headers()).get('x-lore-locale')??(await cookies()).get('lore_locale')?.value;
+  const locale:ZzalLocale=localeValue==='en'||localeValue==='ja'?localeValue:'ko';
   const skin: SkinName = sp.skin === 'scrapbook' ? 'scrapbook' : 'yeoul';
   return (
     <div className={`${gaegu.variable} ${gowun.variable}`}>
-      <TamagotchiScreen name={skin} />
+      <ZzalLocaleProvider initialLocale={locale}><TamagotchiScreen name={skin} focusedRoom={sp.room !== 'legacy'} /></ZzalLocaleProvider>
     </div>
   );
 }

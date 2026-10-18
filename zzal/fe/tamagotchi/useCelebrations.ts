@@ -6,6 +6,7 @@
 // 화면은 한 번에 하나만 보여주고, 닫으면 다음 것이 뜬다. 아침 도착은 닫을 때 서버에 seen 을 보낸다(ack).
 'use client';
 
+import { isRetiredRewardSeq } from './yeoul/retiredRewards';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assetUrl } from '../lib/assets';
 import type { PetDetail } from '../lib/pet';
@@ -56,7 +57,7 @@ export function useCelebrations(
 
   useEffect(() => {
     if (!justUnlocked.length || !pet) return;
-    const items: Celebration[] = justUnlocked.map((seq) => {
+    const items: Celebration[] = justUnlocked.filter(seq => !isRetiredRewardSeq(seq)).map((seq) => {
       const m = pet.motions?.find((x) => x.seq === seq) ?? null;
       const def = motionBySeq(seq);
       const key = m?.key ?? def?.key ?? String(seq);
@@ -74,7 +75,7 @@ export function useCelebrations(
   // ★ `pet.learnedToday` 는 응답마다 새 배열이라 그대로 deps 에 넣으면 폴링마다 효과가 돈다.
   //   실제로 바뀌는 것은 seq 목록뿐이라, 그것으로 서명을 만들어 그때만 다시 계산한다.
   const learnedKey = (pet?.learnedToday ?? []).map((l) => l.seq).join(',');
-  const learned = useMemo(() => pet?.learnedToday ?? [], [learnedKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const learned = useMemo(() => (pet?.learnedToday ?? []).filter(l => !isRetiredRewardSeq(l.seq)), [learnedKey]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const fresh = learned.filter((l) => !queuedArrivals.current.has(l.seq));
     if (!fresh.length) return;

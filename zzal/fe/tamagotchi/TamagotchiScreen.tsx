@@ -24,7 +24,7 @@ export type SkinName = 'scrapbook' | 'yeoul';
 
 const SKINS: Record<SkinName, ComponentType<SkinProps>> = { scrapbook: Scrapbook, yeoul: Yeoul };
 
-export default function TamagotchiScreen({ name }: { name: SkinName }) {
+export default function TamagotchiScreen({ name, focusedRoom = false }: { name: SkinName; focusedRoom?: boolean }) {
   const Skin = SKINS[name];
   const wide = useIsWide();
   const box = useRef<HTMLDivElement>(null);
@@ -33,11 +33,13 @@ export default function TamagotchiScreen({ name }: { name: SkinName }) {
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.skin = name;
-    return () => { delete root.dataset.skin; };
-  }, [name]);
+    if(focusedRoom)root.dataset.focusedRoom='true';
+    return () => { delete root.dataset.skin;delete root.dataset.focusedRoom; };
+  }, [name,focusedRoom]);
 
   // 헤더 높이는 화면 폭·글꼴에 따라 달라지므로 값을 박지 않고 재서 쓴다.
   useEffect(() => {
+    if(focusedRoom){box.current?.style.setProperty('--tama-header-h','0px');return;}
     const header = document.querySelector('header');
     if (!header) return;
     const set = () => {
@@ -47,7 +49,7 @@ export default function TamagotchiScreen({ name }: { name: SkinName }) {
     const ro = new ResizeObserver(set);
     ro.observe(header);
     return () => ro.disconnect();
-  }, []);
+  }, [focusedRoom]);
 
   return (
     <div
@@ -57,10 +59,10 @@ export default function TamagotchiScreen({ name }: { name: SkinName }) {
         position: 'relative',
         // 헤더를 뺀 나머지를 채운다. 실측 전에는 0 으로 두어 100dvh 로 시작한다.
         height: 'calc(100dvh - var(--tama-header-h, 0px))',
-        minHeight: 360,
+        minHeight: focusedRoom?0:360,
       }}
     >
-      <Skin mode={wide ? 'pc' : 'phone'} />
+      {name === 'yeoul' && focusedRoom ? <Yeoul mode={wide ? 'pc' : 'phone'} focusedRoom /> : <Skin mode={wide ? 'pc' : 'phone'} />}
     </div>
   );
 }

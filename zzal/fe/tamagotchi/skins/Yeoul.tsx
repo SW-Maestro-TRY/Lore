@@ -9,8 +9,7 @@
 // ★ 개발용 이동 띠는 **떠 있는 창**이다. 예전처럼 위에 자리를 차지하면 무대 높이가 줄어
 //   판정한 화면과 실제 화면이 달라진다 — 배경 그림을 무대 크기에 맞춰 만들 예정이라 특히 그렇다.
 //   기본은 닫혀 있고 오른쪽 가장자리의 세로 '이동' 탭을 누르면 열린다.
-//   ★ **서버 dev 도구가 켜진 곳에서만** 그려진다(`GET /dev/ping` 200 — 2026-10-12 결정 3). 운영은 그 주소가 404 라
-//   아예 안 뜨므로 실서비스로 낼 때 이 파일을 지울 필요가 없다.
+//   ★ dev/ping이 성공한 서버에서만 서버 리모컨을 그린다. 도메인이나 화면 목 값으로 판정하지 않는다.
 //
 // 색·여백을 손보실 자리는 `yeoul/ui.ts` 한 곳이다.
 'use client';
@@ -22,8 +21,10 @@ import Egg from '../yeoul/Egg';
 import Onboarding from '../yeoul/Onboarding';
 import AuthSkin from '../yeoul/authSkin';
 import Room from '../yeoul/Room';
+import FocusedRoom from '../focused-room/FocusedRoom';
+import FirstMeetingGate from '../yeoul/FirstMeetingGate';
 import { STEPS, WEB_KEYS } from '../yeoul/constants';
-import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radius, fz, ink, pad } from '../yeoul/ui';
+import { C, chipTone, KEYFRAMES, MONO, SANS, SHELL_MAX, gap, monoSize, radius, fz, ink, pad } from '../yeoul/ui';
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
 import DevRemote, { useDevPing, type RemoteTab } from '../yeoul/DevRemote';
@@ -32,7 +33,7 @@ import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { GIFT_CYCLES, SITUATION_TABLE, scenePlays } from '../props/situations';
 import type { SkinProps } from './Scrapbook';
 
-export default function Yeoul(_props: SkinProps) {
+export default function Yeoul(_props: SkinProps & { focusedRoom?: boolean }) {
   // 진짜 부화(그림을 올린 경우)만 여기 붙는다. 안 올렸으면 통째로 잠자고 화면은 목으로 돈다.
   // ★ `useYeoul` 보다 먼저 부른다 — 부화 진행을 목이 아니라 **서버가 말하게** 하려면
   //   목이 만들어질 때 이미 손에 들려 있어야 한다(판정 1).
@@ -159,7 +160,11 @@ export default function Yeoul(_props: SkinProps) {
           display: 'flex', flexDirection: 'column',
         }}
       >
-        {v.screen.room && (waitingRoom ? <RoomWait /> : <Room y={y} />)}
+        {v.screen.room && (waitingRoom ? <RoomWait /> : !s.sampleMode && live.petId && live.pet ? (
+          <FirstMeetingGate focusedScene={_props.focusedRoom} key={live.petId} petId={live.petId} characterName={live.pet.name} imageSrc={live.img('base') ?? undefined}>
+            {_props.focusedRoom ? <FocusedRoom live={live} /> : <Room y={y} />}
+          </FirstMeetingGate>
+        ) : <Room y={y} />)}
         {v.screen.egg && <Egg y={y} />}
         {v.screen.onb && <Onboarding y={y} />}
         <AuthModal
@@ -328,6 +333,12 @@ const TABS: ReadonlyArray<readonly [JumpTab, string]> = [
 function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; live: Live; missingBasics?: string[] }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<JumpTab>('state');
+  const [previewFor,setPreviewFor]=useState<number|null>(null);
+  useEffect(()=>{
+    if(previewFor==null)return;
+    if(previewFor!==live.petId){setPreviewFor(null);return;}
+    if(live.pet?.firstIntro?.key==='FINISH_NOTICE'){setPreviewFor(null);y.actions.onFinishTutorial();setOpen(false);}
+  },[previewFor,live.petId,live.pet,y.actions.onFinishTutorial]);
   const { isAuthenticated } = useAuth();
   // 로그인·아이가 바뀌면 다시 묻는다(로그인 전 401 → 안 그림).
   const ping = useDevPing(`${isAuthenticated}:${live.petId ?? ''}`);
@@ -510,7 +521,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         )}
         {serverTab && petId != null && (
           <DevRemote tab={tab as RemoteTab} petId={petId} pet={live.pet} ping={ping}
-            onDetail={live.putDetail} onReload={live.resume} />
+            onDetail={live.putDetail} onReload={live.resume} onIntroPreview={()=>setPreviewFor(live.petId)} />
         )}
 
         {!serverTab && rows.map((g) => (

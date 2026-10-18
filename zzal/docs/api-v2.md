@@ -603,3 +603,21 @@
 - **2026-09-05** — PR-8(#198): 병·약·케어 미스 연결(9절), 해석 34~38. `deathReason`은 FAILED·DEAD에서 절대 null이 아니다.
 - **2026-09-05** — PR-7(#197) 리뷰 반영(#224): 판정은 `REVIEW`인 행에만(`ZZAL_NOT_IN_REVIEW`), 깨우기 응답에 도착, `queue()`가 `regenRound` 리셋, 판정·업로드 행 잠금, 해석 25 확정(앨범은 플래그만).
 - **2026-09-05** — PR-7(#197): 검수 후 공개. 관리자 5개를 v2 경로로, 아침 공개(`revealedAt`)·`learnedToday`·`seen`·`baking`·`firstGift`·`features.album`, "검수 전 지급" 제거. 해석 29~33. 1.5 채팅 봉투·1.7 게임 응답 필드를 실물과 대조해 확정.
+
+
+### 첫만남의 선택 언어 (2026-10-17 통합 코드)
+
+`POST /api/zzal/v1/me/pets/{petId}/first-meeting`은 기존 선택 헤더 `X-Zzal-Language: ko|ja|en`을 선택적으로 받는다. URI/본문/응답은 바뀌지 않는다. 소유권 확인·펫 잠금 뒤, 미완료 첫만남에서 기존 저장 언어를 갱신하고 호칭 확정/스킵 후 첫 인사 생성에 사용한다. 헤더가 없거나 지원하지 않는 값이면 기존 저장 언어를 유지한다(신규 기본 ko). 언어 선택은 첫 선발화의 기본값이며 현재 사용자 언어·명시 전환 요청이 우선한다.
+
+GET은 읽기 전용이다. 저장된 첫 인사는 재시도/완료 뒤 언어가 달라도 다시 생성·번역하지 않는다. 현재 호칭 전 discoveryLine은 고정 서비스 안내이며 이 변경으로 QUESTION LLM 생성이 추가되는 것은 아니다. 원문 대화와 이전 인사를 무음 번역하지 않는다.
+
+
+### 첫 안내 v4 — 새 작성 캐릭터 전용 (2026-10-17 통합 코드)
+
+기존 firstIntro 응답 URI/형태를 유지하고 version=4를 추가한다. sequence는 FEED→SNACK→CLEAN→BATH→GAME→NAP_SLEEP→NAP_WAKE→ATTENDANCE_INTRO→FINISH_NOTICE→REVIEW_SEEN→COMPLETE다. 숫자 step은 version별sequence 인덱스이며 enum.ordinal이 아니다. 기존 v2/v3 저장진도·완료사용자는 자동변환하거나 재시작하지 않는다.
+
+care/sleep/wake의 기존 firstIntroStep receipt를 사용한다. 현재 단계가 아닌 행동은 완료되지 않으며 이미확정된같은receipt는 재실행하지 않는다. NAP는 밤잠출석/일일리셋이 아니고 연습중 즉시깰수있다. v4 일반채팅은 일곱행동과 마무리를 마친 COMPLETE부터 허용하되 수면·여행·첫만남미완료 가드를 유지한다.
+
+기존 tutorial/seen POST에서 v4 허용 topic은 ATTENDANCE_INTRO,REVIEW_SEEN이다. ATTENDANCE_INTRO를본뒤seen으로 FINISH_NOTICE에들어가면 실제발행배경preview준비를기존 AttendanceService에요청한다. FINISH_NOTICE의확인은기존 tutorial/done으로시계를한번시작하고 깨어있는 REVIEW_SEEN으로이동한다. 후기제출/닫기 뒤 깨어있는 짧은 마지막인사를 보여준 다음 자동 seen REVIEW_SEEN으로 COMPLETE(추가확인버튼없음),전송강제없음. pending동안 일반대화/돌봄/게임은열리지않고 정산은멈춘다. v2/v3의ALBUM/PERSONALITY/DIARY_INTRO는해당구버전만유지한다. 새 v4가구14코스를다시요구하지않는다.
+
+마지막 seen 시점의 실제 게임시각이23:00~07:00이면 즉시NIGHT로응답한다. 후기/인사중 나갔다오면 같은 REVIEW_SEEN을재개하며07:00지난후에는소급취침하지않는다. 추가채팅유예없음; 일반19/23/07/10규칙과v2/v3종료동작보존. v4에는새 migration V20261017_0010으로기존CHECK(2,3)를(2,3,4)로확장해야한다. 수동FE타입/DevRemote v4는반영; legacy출석안내실UI/생성OpenAPI스냅샷은별도접합범위다.

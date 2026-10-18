@@ -357,7 +357,7 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
     petName: session.server?.pet?.name,
     onShared: (key, kind) => { void tama.actions.share(key, kind); },
   });
-  const dex = album.cards;
+  const dex = album.cards.filter(card => card.open);
 
   // 하단 바는 탭이 아니라 섹션 점프다. 앱으로 낼 때 그대로 탭이 된다.
   const tabDefs: [string, string][] = (s.hasChar || derived.booting)
@@ -584,8 +584,8 @@ export default function Scrapbook({ mode = 'phone' }: SkinProps) {
             <div style={L.albumSheet}>
               {/* 밤에 굽는 일은 사용자가 자는 동안 일어난다. 아무 말도 없으면 "고장났나" 가 된다. */}
               <AlbumNotes
-                practicing={album.practicing}
-                firstGift={album.firstGift}
+                practicing={false}
+                firstGift={null}
                 unlocked={album.unlocked}
                 postcards={album.postcards.length}
                 scenes={album.scenes.length}
