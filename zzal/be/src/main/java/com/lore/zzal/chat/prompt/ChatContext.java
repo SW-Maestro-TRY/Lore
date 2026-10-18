@@ -30,8 +30,25 @@ public record ChatContext(
         TurnPlan plan,
         QuestionItem answering,
         List<HistoryLine> history,
-        List<String> motions) {
+        List<String> motions,
+        List<com.lore.zzal.chat.memory.facts.FactView> factMemories,List<ActionOption> actionOptions, ConversationScene scene) {
+    public ChatContext(Long petId,PersonaSheet sheet,PetState state,SessionKind kind,TurnPlan plan,QuestionItem answering,List<HistoryLine> history,List<String> motions,List<com.lore.zzal.chat.memory.facts.FactView> facts,List<ActionOption> actions){this(petId,sheet,state,kind,plan,answering,history,motions,facts,actions,null);}
+    public record ActionOption(String id,String title,String description,String semantic){}
+    public ChatContext(Long petId,PersonaSheet sheet,PetState state,SessionKind kind,TurnPlan plan,QuestionItem answering,List<HistoryLine> history,List<String> motions,List<com.lore.zzal.chat.memory.facts.FactView> facts){this(petId,sheet,state,kind,plan,answering,history,motions,facts,List.of());}
+    public ChatContext(Long petId,PersonaSheet sheet,PetState state,SessionKind kind,TurnPlan plan,
+            QuestionItem answering,List<HistoryLine> history,List<String> motions){
+        this(petId,sheet,state,kind,plan,answering,history,motions,List.of());
+    }
+    public ChatContext withFacts(List<com.lore.zzal.chat.memory.facts.FactView> facts){
+        return new ChatContext(petId,sheet,state,kind,plan,answering,history,motions,List.copyOf(facts),actionOptions,scene);
+    }
 
+    public ChatContext withHistory(List<HistoryLine> filtered){
+        return new ChatContext(petId,sheet,state,kind,plan,answering,List.copyOf(filtered),motions,factMemories,actionOptions,scene);
+    }
+
+    public ChatContext withActionOptions(List<ActionOption> options){return new ChatContext(petId,sheet,state,kind,plan,answering,history,options.stream().map(ActionOption::id).toList(),factMemories,List.copyOf(options),scene);}
+    public ChatContext withScene(ConversationScene value){return new ChatContext(petId,sheet,state,kind,plan,answering,history,motions,factMemories,actionOptions,value);}
     public String defaultMotion() {
         return motions == null || motions.isEmpty() ? null : motions.getFirst();
     }

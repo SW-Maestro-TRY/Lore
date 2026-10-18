@@ -64,6 +64,20 @@ public final class CallMeExtractor {
     private CallMeExtractor() {
     }
 
+    /** 주체가 '나를/날/저를'인 명시적인 호칭 변경 요청만 받는다. 소개·친구·캐릭터 이름은 아님. */
+    public static String explicitRequest(String text) {
+        if (text == null) return null;
+        String prefix = "^(?:아니[,，]?\\s*)?(?:앞으로\\s*)?";
+        String ending = "\\s*(?:이라고|라고|으로|로)\\s*불러(?:줘|주세요)?[.!~…]*$";
+        var replace = Pattern.compile(prefix + "나(?:를|는)?\\s+.{1,20}?\\s*말고\\s*(.{1,20}?)" + ending)
+                .matcher(text.strip());
+        if (replace.matches()) return replace.group(1).strip();
+        var direct = Pattern.compile(prefix + "(?:나를|날|저를)\\s+(.{1,20}?)" + ending).matcher(text.strip());
+        if (direct.matches()) return direct.group(1).strip();
+        var bare = Pattern.compile(prefix + "(?:그냥\\s+)?([가-힣A-Za-z0-9_]{1,20}?)" + ending).matcher(text.strip());
+        return bare.matches() ? bare.group(1).strip() : null;
+    }
+
     /** 뽑은 호칭. 없으면 null. 펫 이름을 모르는 자리(시험)용. */
     public static String extract(String answer) {
         return extract(answer, null);

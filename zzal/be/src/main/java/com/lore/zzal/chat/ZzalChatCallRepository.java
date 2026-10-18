@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface ZzalChatCallRepository extends JpaRepository<ZzalChatCall, Long> {
 
+    List<ZzalChatCall> findByPetIdAndIdLessThanOrderByIdDesc(Long petId,Long beforeId,org.springframework.data.domain.Pageable page);
+
     /** 그 날의 부름들(기상일 기준). */
     List<ZzalChatCall> findByPetIdAndDayOfOrderByCalledAtAsc(Long petId, LocalDate dayOf);
 

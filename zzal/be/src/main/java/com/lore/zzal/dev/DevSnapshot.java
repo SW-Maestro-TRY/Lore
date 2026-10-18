@@ -42,7 +42,8 @@ public final class DevSnapshot {
     static {
         String[][] rows = {
                 {"clock", "펫 시계"}, {"phase", "생애"}, {"deathReason", "떠난 이유"},
-                {"tutorialStep", "튜토리얼 칸"}, {"clockStarted", "시계 켜짐"}, {"graduationSeen", "졸업 창 봄"},
+                {"tutorialStep", "튜토리얼 칸"}, {"firstIntroVersion", "첫 안내 버전"},
+                {"firstIntroStep", "첫 안내 칸"}, {"firstMeetingState", "첫만남 상태(저장 인사 재사용)"}, {"firstIntroKey", "첫 안내 key"}, {"clockStarted", "시계 켜짐"}, {"graduationSeen", "졸업 창 봄"},
                 {"sleep", "잠"}, {"wokeAt", "마지막 기상"}, {"overslept", "늦잠"}, {"napCount", "낮잠 횟수"},
                 {"fullness", "배부름"}, {"happiness", "행복"}, {"trash", "똥"}, {"food", "밥 재고"},
                 {"careMiss", "케어 미스"}, {"todayCareMiss", "오늘 케어 미스"}, {"lastNightCareMiss", "어젯밤 케어 미스"},
@@ -92,6 +93,10 @@ public final class DevSnapshot {
         m.put("phase", pet.getPhase().name());
         m.put("deathReason", pet.getDeathReason() == null ? null : pet.getDeathReason().name());
         m.put("tutorialStep", pet.getTutorialStep());
+        m.put("firstIntroVersion", pet.hasFirstIntro() ? pet.getFirstIntroVersion() : null);
+        m.put("firstIntroStep", pet.getFirstIntroStep());
+        m.put("firstMeetingState", pet.getFirstMeetingState() == null ? null : pet.getFirstMeetingState().name());
+        m.put("firstIntroKey", pet.hasFirstIntro() ? com.lore.zzal.pet.FirstIntro.sequence(pet.getFirstIntroVersion()).get(pet.getFirstIntroStep()).name() : null);
         m.put("clockStarted", pet.getClockStartedAt() != null);
         m.put("graduationSeen", pet.getGraduationSeenAt() != null);
         m.put("sleep", pet.getSleepKind() == null ? "NONE" : pet.getSleepKind().name());

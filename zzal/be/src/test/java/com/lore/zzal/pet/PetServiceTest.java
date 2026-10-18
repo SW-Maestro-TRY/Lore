@@ -433,7 +433,7 @@ class PetServiceTest {
     class JustUnlocked {
 
         @Test
-        @DisplayName("★★ 네 번째로 깨우는 그 행동에 '일어나기'(16)가 실린다 — 튜토리얼 낮잠은 안 센다")
+        @DisplayName("밤잠 깨우기 카운터는 유지하되 새 해금16은 지급하지 않는다 — 낮잠 제외")
         void manualWakesOpenWakeUp() {
             ZzalPet pet = inTutorial();
             PetFixture.readyForNap(pet);
@@ -453,9 +453,9 @@ class PetServiceTest {
             }
 
             assertThat(pet.getWakes()).isEqualTo(4);
-            assertThat(last.justUnlocked()).containsExactly(16);
+            assertThat(last.justUnlocked()).isEmpty();
             MotionCatalog catalog = new MotionCatalog("", "", "v1");
-            assertThat(UnlockRules.isUnlocked(pet, catalog.bySeq(16).orElseThrow(), catalog)).isTrue();
+            assertThat(UnlockRules.isUnlocked(pet, catalog.bySeq(16).orElseThrow(), catalog)).isFalse();
         }
     }
 
@@ -791,6 +791,7 @@ class PetServiceTest {
                     "chatAnswers", "pets", "gameStarts", "wakes")) {
                 org.springframework.test.util.ReflectionTestUtils.setField(pet, f, 20);
             }
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "legacyLayer2OwnedMask", 255);
             return pet;
         }
 
@@ -920,7 +921,7 @@ class PetServiceTest {
             assertThat(pet.getNaturalSickDueAwakeSec()).isNull();
 
             com.lore.zzal.motion.ZzalMotion gift = com.lore.zzal.motion.ZzalMotion.forCatalog(
-                    PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
+                    PET_ID, new MotionCatalog("", "", "v1").bySeq(1).orElseThrow(), T0);
             org.springframework.test.util.ReflectionTestUtils.setField(gift, "status", com.lore.zzal.motion.MotionStatus.BAKING);
             gift.toReview("k", null, null,
 com.lore.zzal.motion.MotionSource.API,
@@ -957,16 +958,16 @@ com.lore.zzal.motion.MotionSource.API,
         }
 
         /**
-         * 검수까지 통과한(OPEN) 선물 1 행. 아직 도착 전.
+         * 검수까지 통과한(OPEN) 기존 기본1 심화 행. 아직 도착 전.
          *
          * ★ 판정 시각을 인자로 받는다 — <b>마지막 기상 전에 통과했나</b>가 곧 도착 여부라
          *   (정본 2·16장) 이 시각을 고정해 두면 보류 규칙을 볼 수 없다.
          */
         private com.lore.zzal.motion.ZzalMotion approvedGift(Instant openedAt) {
             com.lore.zzal.motion.ZzalMotion m = com.lore.zzal.motion.ZzalMotion.forCatalog(
-                    PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
+                    PET_ID, new MotionCatalog("", "", "v1").bySeq(1).orElseThrow(), T0);
             org.springframework.test.util.ReflectionTestUtils.setField(m, "status", com.lore.zzal.motion.MotionStatus.BAKING);
-            m.toReview("images/zzal/pets/7/motions/9/motion.webp", null, null,
+            m.toReview("images/zzal/pets/7/motions/1/motion.webp", null, null,
 com.lore.zzal.motion.MotionSource.API,
                     com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
             m.approve(openedAt);
@@ -1074,9 +1075,29 @@ com.lore.zzal.motion.MotionSource.API,
 
             service.refresh(USER_ID, PET_ID, kst("2026-09-06 15:00"));
             Instant first = gift.getRevealedAt();
+            assertThat(first).as("보존 기본1 심화는 실제 도착해야 한다").isNotNull();
             service.refresh(USER_ID, PET_ID, kst("2026-09-06 16:00"));
 
             assertThat(gift.getRevealedAt()).isEqualTo(first);
+        }
+
+        @Test
+        @DisplayName("폐기 GIFT101은 승인 행이 남아 있어도 새 도착·병 예약을 만들지 않는다")
+        void retiredPendingGiftNeverArrives() {
+            ZzalPet pet = childWithId();
+            com.lore.zzal.motion.ZzalMotion gift = com.lore.zzal.motion.ZzalMotion.forCatalog(
+                    PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
+            org.springframework.test.util.ReflectionTestUtils.setField(gift, "status", com.lore.zzal.motion.MotionStatus.BAKING);
+            gift.toReview("legacy-gift.webp", null, null, com.lore.zzal.motion.MotionSource.API,
+                    com.lore.zzal.motion.GateVerdict.REVIEW, "n", "g0");
+            gift.approve(kst("2026-09-05 09:00"));
+            when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(
+                    eq(PET_ID), eq(com.lore.zzal.motion.MotionStatus.OPEN))).thenReturn(List.of(gift));
+            service.refresh(USER_ID, PET_ID, kst("2026-09-06 15:00"));
+            assertThat(gift.getRevealedAt()).isNull();
+            assertThat(gift.getStatus()).isEqualTo(com.lore.zzal.motion.MotionStatus.OPEN);
+            assertThat(gift.getImageKey()).isEqualTo("legacy-gift.webp");
+            assertThat(pet.getNaturalSickDueAwakeSec()).isNull();
         }
 
         @Test
@@ -1084,7 +1105,7 @@ com.lore.zzal.motion.MotionSource.API,
         void seenBeforeArrival() {
             childWithId();
             com.lore.zzal.motion.ZzalMotion gift = com.lore.zzal.motion.ZzalMotion.forCatalog(
-                    PET_ID, new MotionCatalog("", "", "v1").bySeq(101).orElseThrow(), T0);
+                    PET_ID, new MotionCatalog("", "", "v1").bySeq(1).orElseThrow(), T0);
             when(motionRepository.findByPetIdAndSeq(PET_ID, 101)).thenReturn(Optional.of(gift));
             when(motionRepository.findByPetIdAndStatusAndRevealedAtIsNull(any(), any())).thenReturn(List.of());
 
@@ -1094,11 +1115,11 @@ com.lore.zzal.motion.MotionSource.API,
     }
 
     @Nested
-    @DisplayName("2층 READY 알림 (#696) — 뒤에서 구워진 2층은 처음 본 응답의 justUnlocked 로 알린다")
+    @DisplayName("해금8 폐기 — READY·돌봄 카운터가 신규 해금 알림을 만들지 않는다")
     class Layer2Announcement {
 
         @Test
-        @DisplayName("★★ READY 전엔 조건을 채워도 안 열리고, READY 뒤 첫 조회에 한 번만 실린다")
+        @DisplayName("READY 전후 모두 신규 소유·축하를 만들지 않는다")
         void announcedOnceOnFirstLookAfterReady() {
             ZzalPet pet = baby();
             pet.resetLayer2(T0);
@@ -1109,9 +1130,10 @@ com.lore.zzal.motion.MotionSource.API,
             assertThat(pet.takeLayer2JustUnlocked()).isEmpty();
             assertThat(pet.getLayer2AnnouncedAt()).isNull();
 
+            org.springframework.test.util.ReflectionTestUtils.setField(pet, "legacyLayer2OwnedMask", 32);
             pet.markLayer2Ready(T0);                                     // 뒤에서 구워졌다
             service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofMinutes(1)));
-            assertThat(pet.takeLayer2JustUnlocked()).containsExactly(14);  // 쓰다듬 받기
+            assertThat(pet.takeLayer2JustUnlocked()).isEmpty();  // 쓰다듬 받기
             assertThat(pet.getLayer2AnnouncedAt()).isNotNull();
 
             service.refresh(USER_ID, PET_ID, T0.plus(Duration.ofMinutes(2)));
@@ -1119,7 +1141,7 @@ com.lore.zzal.motion.MotionSource.API,
         }
 
         @Test
-        @DisplayName("★ READY 뒤 첫 응답이 돌봄이면 그 응답의 justUnlocked 에 합쳐진다")
+        @DisplayName("READY 뒤 돌봄 응답에도 폐기한 해금 축하가 없다")
         void mergedIntoActionResponse() {
             ZzalPet pet = baby();
             pet.resetLayer2(T0);
@@ -1128,11 +1150,11 @@ com.lore.zzal.motion.MotionSource.API,
             }
             pet.markLayer2Ready(T0);
             PetService.Action a = service.care(USER_ID, PET_ID, CareAction.PET, T0.plus(Duration.ofMinutes(1)));
-            assertThat(a.justUnlocked()).contains(14);
+            assertThat(a.justUnlocked()).isEmpty();
         }
 
         @Test
-        @DisplayName("★ READY 때 조건을 못 채운 동작은 알림에 없다 — 나중에 평소 길(행동 전후 비교)로 열린다")
+        @DisplayName("READY 뒤 조건을 나중에 채워도 새 해금이 생기지 않는다")
         void notMetYetComesLaterTheUsualWay() {
             ZzalPet pet = baby();
             pet.resetLayer2(T0);
@@ -1143,7 +1165,41 @@ com.lore.zzal.motion.MotionSource.API,
                 pet.pet(T0);
             }
             PetService.Action a = service.care(USER_ID, PET_ID, CareAction.PET, T0.plus(Duration.ofMinutes(1)));
-            assertThat(a.justUnlocked()).containsExactly(14);
+            assertThat(a.justUnlocked()).isEmpty();
         }
     }
+    @Test void successfulPetCarriesRotationButReadAndRejectedCareDoNotConsume() {
+        ZzalPet pet=baby();
+        var rotation=mock(CareMotionRotationService.class);
+        service.setCareMotionRotationService(rotation);
+        var receipt=new CareMotionPlayback("PET","base","pet","BASIC",null);
+        when(rotation.afterSuccess(pet,CareAction.PET)).thenReturn(receipt);
+        assertThat(service.care(USER_ID,PET_ID,CareAction.PET,T0).motionPlayback()).isSameAs(receipt);
+        service.alive(USER_ID,PET_ID,T0);
+        org.mockito.Mockito.verify(rotation,org.mockito.Mockito.times(1)).afterSuccess(any(),any());
+        org.springframework.test.util.ReflectionTestUtils.setField(pet,"sleepKind",SleepKind.NAP);
+        org.springframework.test.util.ReflectionTestUtils.setField(pet,"sleptAt",T0);
+        assertThatThrownBy(()->service.care(USER_ID,PET_ID,CareAction.PET,T0)).isInstanceOf(BusinessException.class);
+        org.mockito.Mockito.verify(rotation,org.mockito.Mockito.times(1)).afterSuccess(any(),any());
+    }
+
+    @Test void actionCompatibilityAndHealedPreservePlaybackAndGetDtoIsNull() {
+        ZzalPet pet=baby();
+        var receipt=new CareMotionPlayback("PET","base","pet","BASIC",null);
+        assertThat(new PetService.Action(pet,List.of()).motionPlayback()).isNull();
+        assertThat(new PetService.Action(pet,List.of(),false).motionPlayback()).isNull();
+        assertThat(new PetService.Action(pet,List.of(),false,receipt).healed().motionPlayback()).isSameAs(receipt);
+        assertThat(PetResponses.Detail.fromWithoutPieces(pet,null,T0,catalogForRotation()).motionPlayback()).isNull();
+    }
+
+    @Test void alreadyCompletedLegacyIntroPetReturnsWithoutRotationConsumption(){
+        ZzalPet pet=baby();var rotation=mock(CareMotionRotationService.class);service.setCareMotionRotationService(rotation);
+        org.springframework.test.util.ReflectionTestUtils.setField(pet,"firstIntroVersion",3);
+        org.springframework.test.util.ReflectionTestUtils.setField(pet,"firstIntroStep",FirstIntro.Step.NAP_SLEEP.ordinal());
+        assertThat(service.care(USER_ID,PET_ID,CareAction.PET,FirstIntro.Step.PET,T0).motionPlayback()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(rotation);
+    }
+
+    private MotionCatalog catalogForRotation(){return new MotionCatalog("", "", "v1");}
+
 }

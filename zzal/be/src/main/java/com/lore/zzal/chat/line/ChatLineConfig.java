@@ -21,7 +21,7 @@ import java.time.Duration;
  *   <li>{@code app.zzal.chat.timeout-ms} — 기본 4000. 넘으면 한 번 더, 또 넘으면 중립 닫는 말</li>
  *   <li>{@code app.zzal.chat.reasoning-effort} — 기본 minimal(gpt-5 계열만 보낸다)</li>
  * </ul>
- * ★ 일 비용 상한({@code daily-cost-usd})은 #709 에서 지웠다 — 판당 5왕복·하루 3판이라 인당 호출 수가 이미 묶여 있다.
+ * ★ 일 비용 상한({@code daily-cost-usd})은 #709 에서 지웠다. 현재 지속대화는 횟수·시간 제한이 없으며 이 설정은 현금상한이 아니다.
  *   비용 기록({@code zzal_chat_session.cost_usd})은 그대로 남는다.
  * ★ 켰는데 키가 없을 때 — <b>운영·스테이징({@code LORE_ENV} = prod · staging)에서만 기동을 막는다.</b>
  *   조용히 꺼진 채로 돌면 "켰는데 안 켜진" 상태가 실제 대화에서야 드러나기 때문이다.

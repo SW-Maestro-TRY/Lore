@@ -85,7 +85,7 @@ public class LlmLineGenerator implements LineGenerator {
             line = clean(n.path("line").asText(""));
             motion = n.path("motion").asText("").strip();
             extract = new LineExtract(field(n, "call_me", CALL_ME_MAX), field(n, "user_said", USER_SAID_MAX),
-                    n.path("asked_back").asBoolean(false));
+                    n.path("asked_back").asBoolean(false), n.has("memory_deltas") ? n.get("memory_deltas").toString() : null);
         } catch (Exception e) {
             return LineAttempt.fail(NAME, model, c.costUsd(), "parse", ms(t0));
         }

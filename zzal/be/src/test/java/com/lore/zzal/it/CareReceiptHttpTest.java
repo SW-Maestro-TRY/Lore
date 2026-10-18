@@ -1,0 +1,19 @@
+package com.lore.zzal.it;
+import com.lore.zzal.pet.*;import com.lore.common.auth.jwt.JwtProvider;import org.junit.jupiter.api.Test;import org.springframework.beans.factory.annotation.Autowired;import org.springframework.boot.test.web.server.LocalServerPort;import org.springframework.test.util.ReflectionTestUtils;import java.net.*;import java.net.http.*;import java.time.*;import java.util.*;import static org.assertj.core.api.Assertions.*;
+@CareReceiptHttpIntegration class CareReceiptHttpTest extends ZzalItSupport {
+ @LocalServerPort int port;@Autowired JwtProvider jwt;
+ @Test void actualHttpReportsAppliedReplayNoopAndLegacy()throws Exception{
+  var uid=newUserId();var pet=aliveLayerTwoPet(uid);var noon=Instant.parse("2026-10-18T03:00:00Z");pinClock(pet.getId(),noon);String token=jwt.createAccessToken(uid,Instant.now());var id=UUID.randomUUID();
+  var applied=care(pet.getId(),token,"{\"action\":\"PET\",\"requestId\":\""+id+"\"}");assertThat(applied.at("/data/careReceipt/status").asText()).isEqualTo("APPLIED");
+  var replay=care(pet.getId(),token,"{\"action\":\"PET\",\"requestId\":\""+id+"\"}");assertThat(replay.at("/data/careReceipt/status").asText()).isEqualTo("REPLAYED");assertThat(replay.at("/data/careReceipt/requestId").asText()).isEqualTo(id.toString());
+  transactions.executeWithoutResult(x->petRepository.findById(pet.getId()).orElseThrow().devSetFirstIntro(4,FirstIntro.Step.CLEAN,noon));
+  var noop=care(pet.getId(),token,"{\"action\":\"FEED\",\"firstIntroStep\":\"FEED\",\"requestId\":\""+UUID.randomUUID()+"\"}");assertThat(noop.at("/data/careReceipt/status").asText()).isEqualTo("NO_OP");
+  transactions.executeWithoutResult(x->petRepository.findById(pet.getId()).orElseThrow().devSetFirstIntro(4,FirstIntro.Step.COMPLETE,noon));
+  assertThat(care(pet.getId(),token,"{\"action\":\"PET\"}").at("/data/careReceipt").isNull()).isTrue();
+  var getReq=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/zzal/v1/me/pets/"+pet.getId())).header("Cookie","access_token="+token).GET().build();var getResponse=HttpClient.newHttpClient().send(getReq,HttpResponse.BodyHandlers.ofString());assertThat(getResponse.statusCode()).isEqualTo(200);assertThat(json.readTree(getResponse.body()).at("/data/careReceipt").isNull()).isTrue();
+  var docsReq=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/v3/api-docs")).GET().build();var docs=HttpClient.newHttpClient().send(docsReq,HttpResponse.BodyHandlers.ofString());assertThat(docs.statusCode()).isEqualTo(200);var schema=json.readTree(docs.body());var detail=schema.at("/components/schemas/Detail");assertThat(detail.path("required").toString()).doesNotContain("careReceipt");var receipt=detail.at("/properties/careReceipt");assertThat(receipt.toString()).contains("APPLIED","REPLAYED","NO_OP","null");assertThat(receipt.path("required").toString()).contains("requestId","action","status");
+  var out=java.nio.file.Path.of(System.getenv("LORE_CARE_RECEIPT_EVIDENCE"));java.nio.file.Files.writeString(out.resolve("actual-applied.json"),applied.toString());java.nio.file.Files.writeString(out.resolve("actual-replayed.json"),replay.toString());java.nio.file.Files.writeString(out.resolve("actual-noop.json"),noop.toString());java.nio.file.Files.writeString(out.resolve("http-openapi.json"),docs.body());
+
+ }
+ com.fasterxml.jackson.databind.JsonNode care(Long pet,String token,String body)throws Exception{var req=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/api/zzal/v1/me/pets/"+pet+"/care")).header("Cookie","access_token="+token).header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();var response=HttpClient.newHttpClient().send(req,HttpResponse.BodyHandlers.ofString());assertThat(response.statusCode()).describedAs(response.body()).isEqualTo(200);return json.readTree(response.body());}
+}

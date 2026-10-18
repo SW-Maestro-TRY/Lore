@@ -28,7 +28,7 @@ class ChatSessionIT extends ZzalItSupport {
     @Autowired ZzalChatTurnRepository turns;
 
     @Test
-    @DisplayName("★★ BABY 판 5왕복 — 보상 1회·튜토리얼 넘김·호칭 저장·닫기 턴·닫힌 뒤 409, 행이 표에 남는다")
+    @DisplayName("★★ 지속 판 5왕복 — 보상1회·튜토리얼·호칭·원문저장, 종료 없이 계속")
     void fiveRoundsOnRealDb() throws Exception {
         Long userId = newUserId();
         Instant now = Instant.now();
@@ -44,29 +44,24 @@ class ChatSessionIT extends ZzalItSupport {
         assertThat(postAs(userId, pets + "/care", Map.of("action", CareAction.PET.name())).getResponse().getStatus()).isEqualTo(200);
 
         JsonNode chat = getJson(userId, pets + "/chat").path("data");
-        assertThat(chat.path("openSlot").asText()).isEqualTo("BABY");
+        assertThat(chat.path("openSlot").asText()).isEqualTo("CONTINUOUS");
         assertThat(chat.path("session").path("kind").asText()).isEqualTo("BABY");
-        assertThat(chat.path("session").path("maxRounds").asInt()).isEqualTo(5);
+        assertThat(chat.path("session").path("maxRounds").isNull()).isTrue();
         assertThat(chat.path("turns")).hasSize(1);
         assertThat(chat.path("calls").get(0).path("answered").asBoolean()).isFalse();
 
         String[] answers = {"상훈이라고 불러줘", "토벌봉이 뭐야?", "오 멋지다", "고마워", "피자!"};
         JsonNode last = null;
         for (int i = 0; i < answers.length; i++) {
-            MvcResult r = postAs(userId, pets + "/chat/BABY/answer", Map.of("text", answers[i]));
+            MvcResult r = postAs(userId, pets + "/chat/CONTINUOUS/answer", Map.of("text", answers[i]));
             assertThat(r.getResponse().getStatus()).as(r.getResponse().getContentAsString()).isEqualTo(200);
             last = body(r).path("data");
             assertThat(last.path("turns")).hasSize(2);
             assertThat(last.path("session").path("round").asInt()).isEqualTo(i + 1);
             assertThat(last.path("chatReply").path("line").asText()).isNotBlank();
         }
-        assertThat(last.path("session").path("closed").asBoolean()).isTrue();
-        assertThat(last.path("session").path("closeReason").asText()).isEqualTo("CLOSED");
-        assertThat(last.path("turns").get(1).path("type").asText()).isEqualTo("CLOSE");
-
-        MvcResult closed = postAs(userId, pets + "/chat/BABY/answer", Map.of("text", "또"));
-        assertThat(closed.getResponse().getStatus()).isEqualTo(409);
-        assertThat(errorCode(closed)).isEqualTo("ZZAL_CHAT_SLOT_CLOSED");
+        assertThat(last.path("session").path("closed").asBoolean()).isFalse();
+        assertThat(last.path("turns").get(1).path("type").asText()).isEqualTo("CONTINUE");
 
         ZzalPet after = petRepository.findById(pet.getId()).orElseThrow();
         assertThat(after.getChatAnswers()).as("보상·카운터는 판당 1회").isEqualTo(1);
@@ -77,7 +72,7 @@ class ChatSessionIT extends ZzalItSupport {
                 .isEqualTo(11);
         assertThat(jdbc.queryForObject("select round_count from zzal_chat_session where pet_id = ?", Integer.class, pet.getId()))
                 .isEqualTo(5);
-        assertThat(turns.answeredItems(pet.getId())).isNotEmpty();
+        assertThat(turns.answeredItems(pet.getId())).as("지속 대화는 호칭·프로필 항목을 강제하지 않는다").isEmpty();
         // #709 — 결과·걸린 시간·호칭 추출 칸이 실제 표에 적힌다
         assertThat(jdbc.queryForObject("select count(*) from zzal_chat_turn where pet_id = ? and speaker = 'PET' "
                 + "and outcome = 'ok' and latency_ms is not null", Integer.class, pet.getId())).isEqualTo(6);
@@ -92,10 +87,10 @@ class ChatSessionIT extends ZzalItSupport {
         // 3일 기억 질의 — 진짜 Postgres 에서 오래된 순으로 11줄
         assertThat(turns.findByPetIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAscIdAsc(pet.getId(),
                 now.minusSeconds(86400))).hasSize(11);
-        assertThat(sessions.findByPetIdAndCloseReasonIsNull(pet.getId())).isEmpty();
+        assertThat(sessions.findByPetIdAndCloseReasonIsNull(pet.getId())).hasSize(1);
 
         JsonNode again = getJson(userId, pets + "/chat").path("data");
-        assertThat(again.path("openSlot").isNull()).isTrue();
+        assertThat(again.path("openSlot").asText()).isEqualTo("CONTINUOUS");
         assertThat(again.path("turns")).hasSize(11);
         assertThat(again.path("memories").get(0).asText()).isEqualTo("피자!");
     }

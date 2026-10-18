@@ -13,7 +13,10 @@ import com.lore.zzal.chat.session.Speaker;
  * @param sessionId 그 판(바뀌면 날짜 줄을 새로 단다)
  * @param current   지금 이어 가는 판인가
  */
-public record HistoryLine(Speaker speaker, String line, int daysAgo, ChatSlot slot, Long sessionId, boolean current) {
+public record HistoryLine(Speaker speaker, String line, int daysAgo, ChatSlot slot, Long sessionId, boolean current,Long sourceTurnId) {
+    public HistoryLine(Speaker speaker,String line,int daysAgo,ChatSlot slot,Long sessionId,boolean current){
+        this(speaker,line,daysAgo,slot,sessionId,current,null);
+    }
 
     /** 이번 판의 줄(시험용 간이 생성자). */
     public HistoryLine(Speaker speaker, String line) {

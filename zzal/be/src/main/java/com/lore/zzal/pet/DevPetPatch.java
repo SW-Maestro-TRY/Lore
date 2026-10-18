@@ -32,6 +32,8 @@ public record DevPetPatch(
         // 2·3 튜토리얼
         @Schema(description = "튜토리얼 칸 0~9. 9 = 끝(시계가 지금 켜진다), 0~8 = 튜토리얼 중으로 되돌린다", example = "0")
         Integer tutorialStep,
+        @Schema(description="첫 안내 버전 2, 3 또는 4. key 없이 바꾸면 현재 key를 보존한다") Integer firstIntroVersion,
+        @Schema(description="가짜 체험 상태: FEED부터 COMPLETE까지 서버 첫 안내 key") FirstIntro.Step firstIntroKey,
         @Schema(description = "졸업 축하 창을 봤나. false 면 다시 뜬다") Boolean graduationSeen,
         // 4~7 게이지·밥
         @Schema(description = "배부름 0~4", example = "4") Integer fullness,
@@ -122,6 +124,9 @@ public record DevPetPatch(
     public List<String> violations() {
         List<String> out = new ArrayList<>();
         range(out, "tutorialStep", tutorialStep, 0, TutorialSchedule.TOTAL);
+        range(out, "firstIntroVersion", firstIntroVersion, 2, 4);
+        if (tutorialStep != null && (firstIntroVersion != null || firstIntroKey != null))
+            out.add("tutorialStep 과 firstIntroVersion/key 는 함께 바꿀 수 없습니다");
         range(out, "fullness", fullness, 0, ZzalRules.GAUGE_MAX);
         range(out, "happiness", happiness, 0, ZzalRules.GAUGE_MAX);
         range(out, "trash", trash, 0, ZzalRules.TRASH_MAX);

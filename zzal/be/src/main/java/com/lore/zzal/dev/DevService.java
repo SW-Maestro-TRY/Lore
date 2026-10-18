@@ -22,6 +22,7 @@ import com.lore.zzal.motion.ZzalMotionRepository;
 import com.lore.zzal.night.BakeTrigger;
 import com.lore.zzal.pet.AwakeClock;
 import com.lore.zzal.pet.DevPetPatch;
+import com.lore.zzal.pet.FirstIntro;
 import com.lore.zzal.pet.PetService;
 import com.lore.zzal.pet.SickKind;
 import com.lore.zzal.pet.SleepKind;
@@ -133,7 +134,10 @@ public class DevService {
         }
         return run(userId, petId, real, (pet, now) -> {
             List<String> notes = new ArrayList<>();
+            if (pet.hasFirstIntro() && patch.tutorialStep() != null)
+                throw conflict("첫 안내는 firstIntroKey 로 선택해 주세요(legacy tutorialStep은 구9칸 전용)");
             pet.devApply(patch, now);
+            notes.add("개발 리모컨의 명시적 가짜 상태 세팅입니다");
             if (Boolean.TRUE.equals(patch.piecesEnabled())) {
                 pieceService.open(pet.getId());
             }
@@ -204,38 +208,43 @@ public class DevService {
                 pet.markHatchFailed();
             }
             case "tutorial-next" -> {
-                TutorialSchedule.Step step = TutorialSchedule.currentOf(pet.getTutorialStep());
-                if (!pet.isInTutorial() || step == null) {
-                    throw conflict("튜토리얼이 이미 끝났어요 — 처음부터는 tutorial-restart");
+                if (pet.hasFirstIntro()) {
+                    FirstIntro.Step step = FirstIntro.sequence(pet.getFirstIntroVersion()).get(pet.getFirstIntroStep());
+                    if (step == FirstIntro.Step.FINISH_NOTICE) throw conflict("완료 안내입니다 — clock-start 로 시계를 켜 주세요");
+                    if (step == FirstIntro.Step.COMPLETE) throw conflict("첫 안내가 끝났어요 — tutorial-restart");
+                    if (step == FirstIntro.Step.REVIEW_SEEN) pet.finishFirstIntroReview(now);
+                    else pet.advanceFirstIntro(step);
+                    FirstIntro.Step next = FirstIntro.sequence(pet.getFirstIntroVersion()).get(pet.getFirstIntroStep());
+                    pet.devSetFirstIntro(pet.getFirstIntroVersion(), next, now);
+                    notes.add("가짜 체험 완료: " + step + " → " + next);
+                } else {
+                    TutorialSchedule.Step step = TutorialSchedule.currentOf(pet.getTutorialStep());
+                    if (!pet.isInTutorial() || step == null) throw conflict("튜토리얼이 이미 끝났어요 — tutorial-restart");
+                    if (step == TutorialSchedule.Step.DONE) throw conflict("마지막 칸이에요 — clock-start");
+                    pet.advanceTutorial(step);
+                    notes.add("가짜 체험 완료: " + step);
                 }
-                if (step == TutorialSchedule.Step.DONE) {
-                    throw conflict("마지막 칸이에요 — 시계를 켜려면 clock-start");
-                }
-                pet.advanceTutorial(step);
-                notes.add("튜토리얼 " + step + " 칸을 끝낸 것으로 쳤어요");
             }
             case "tutorial-skip" -> {
-                if (!pet.isInTutorial()) {
-                    throw conflict("튜토리얼이 이미 끝났어요");
-                }
-                petService.withUnlockDiff(pet, () -> pet.skipTutorial(now));
-                bakeTrigger.onTutorialDone(pet, now);
-                notes.add("튜토리얼을 건너뛰고 시계를 켰어요(구르기 선물 굽기 시작)");
+                if (!pet.isInTutorial()) throw conflict("튜토리얼이 이미 끝났어요");
+                if (pet.hasFirstIntro()) pet.devSetFirstIntro(pet.getFirstIntroVersion(), FirstIntro.Step.FINISH_NOTICE, now);
+                else pet.devApply(patchOf(Map.of("tutorialStep", TutorialSchedule.TOTAL - 1)), now);
+                petService.tutorialDone(userId, petId, real);
+                if (pet.hasFirstIntro()) pet.finishFirstIntroReview(now);
+                notes.add("가짜 튜토리얼 완주 — 시계와 첫 출석을 시작하고 후기 안내까지 건너뛰었습니다");
             }
             case "tutorial-restart" -> {
                 pet.devRestartTutorial(now);
-                notes.add("튜토리얼 첫 칸으로 — 배부름 0·시계 꺼짐·졸업 창 다시");
+                if (!pet.hasFirstIntro()) pet.devSetFirstIntro(3, FirstIntro.Step.FEED, now);
+                notes.add("첫 안내 재시작 — 같은 버전의 FEED, 가짜 상태이며 평생 기록/출석/선물은 보존합니다");
             }
             case "clock-start" -> {
-                if (!pet.isInTutorial()) {
-                    throw conflict("이미 시계가 켜져 있어요");
-                }
-                if (pet.getTutorialStep() < TutorialSchedule.TOTAL - 1) {
-                    throw conflict("마지막 칸(DONE)이 아니에요 — 지금 %d칸. tutorial-skip 은 칸과 무관하게 켭니다"
-                            .formatted(pet.getTutorialStep()));
-                }
-                petService.withUnlockDiff(pet, () -> pet.startClock(now));
-                bakeTrigger.onTutorialDone(pet, now);
+                if (!pet.isInTutorial()) throw conflict("이미 시계가 켜져 있어요");
+                if (pet.hasFirstIntro() ? !pet.introAt(FirstIntro.Step.FINISH_NOTICE)
+                        : pet.getTutorialStep() < TutorialSchedule.TOTAL - 1)
+                    throw conflict("완료 안내(FINISH_NOTICE/legacy DONE)에서만 시계를 켤 수 있어요");
+                petService.tutorialDone(userId, petId, real);
+                notes.add("완료 처리 — 실제 시계와 첫 출석을 시작합니다");
             }
             case "graduation" -> pet.markGraduationSeen(now);
             case "graduation-reset" -> pet.devApply(patchOf(Map.of("graduationSeen", false)), now);
@@ -547,6 +556,7 @@ public class DevService {
                 .map(key -> catalog.byKey(key).orElseThrow().seq())
                 .sorted()
                 .toList();
+        petService.devAttachAttendance(pet, pet.now(real));
         Map<String, Object> after = snapshot(pet, real);
         List<String> effects = new ArrayList<>(notes);
         effects.addAll(DevSnapshot.diff(before, after));

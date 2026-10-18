@@ -102,6 +102,12 @@ public class MotionService {
      * 그래서 {@code try/catch} 로 감싸 <b>무엇이 터지든 {@code FAILED}</b> 로 내린다 — 다음 밤에 다시 오른다(설계 규칙).
      */
     public void bakeNow(Long motionId) {
+        // Also protect direct/late automatic callers. Do not delete queued or owned rows.
+        ZzalMotion requested = motionRepository.findById(motionId).orElse(null);
+        if (requested != null && RetiredRewardGeneration.isRetiredNewMotion(requested.getSeq())) {
+            log.info("기존 선물 신규생성 중단 — motionId={}", motionId);
+            return;
+        }
         try {
             for (int attempt = 1; attempt <= maxAttempts; attempt++) {
                 if (runAttempt(motionId, attempt)) {

@@ -261,6 +261,7 @@ public class NightSweep {
         Map<Long, ZzalPet> pets = petRepository.findAllById(queued.stream().map(ZzalMotion::getPetId).distinct().toList())
                 .stream().collect(Collectors.toMap(ZzalPet::getId, Function.identity()));
         List<ZzalMotion> ordered = queued.stream()
+                .filter(m -> !com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(m.getSeq()))
                 .sorted(priority(pets))
                 .toList();
         int claimed = 0;

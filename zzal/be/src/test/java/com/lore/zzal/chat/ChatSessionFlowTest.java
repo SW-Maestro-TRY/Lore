@@ -103,9 +103,58 @@ class ChatSessionFlowTest {
     }
 
     @Test
+    void waitingFirstLineDoesNotRetryDuringSleep() {
+        llm.fail(new java.io.IOException("timeout")).fail(new java.io.IOException("timeout"));
+        service.calls(USER, PET, at(1));
+        assertThat(llm.systems).hasSize(2);
+        assertThat(st.session(ChatSlot.BABY).orElseThrow().isWaitingForFirstLine()).isTrue();
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "sleepKind", com.lore.zzal.pet.SleepKind.NIGHT);
+        service.calls(USER, PET, at(7));
+        assertThat(llm.systems).hasSize(2);
+    }
+
+    @Test
+    void explicitAddressSurvivesModelExtractionAndChangesOnlyOnClearUserRequest() {
+        pet.rememberExplicitCallMe("상훈");
+        llm.full("반가워, 상훈.", "hello", "우사기", null, false)
+                .full("그랬구나.", "hello", "잘못 읽은 이름", null, false)
+                .full("알겠어, 민지.", "hello", "또 다른 이름", null, false);
+        service.calls(USER, PET, at(1));
+        service.answer(USER, PET, ChatSlot.BABY, "우사기는 네 이름이야", at(2));
+        assertThat(pet.getCallMe()).isEqualTo("상훈");
+        service.answer(USER, PET, ChatSlot.BABY, "나 상훈 말고 민지라고 불러", at(3));
+        assertThat(pet.getName()).isEqualTo("우사기");
+        assertThat(pet.getCallMe()).isEqualTo("민지");
+        assertThat(llm.systems.getLast()).contains("상대를 부르는 말: 민지", "옛 호칭이나 캐릭터 이름보다 우선");
+    }
+
+    @Test
+    void deferIsNotAStoredNameOrPermanentDeclineAndCanBeCorrectedInChat() {
+        pet.deferCallMe();
+        service.calls(USER, PET, at(1));
+        assertThat(pet.getCallMe()).isNull();
+        assertThat(pet.getCallMeSource()).isEqualTo("DEFERRED");
+        assertThat(llm.systems.getFirst()).contains("상대를 부르는 말: 사용자님");
+        service.answer(USER, PET, ChatSlot.BABY, "나를 민지라고 불러줘", at(2));
+        assertThat(pet.getCallMe()).isEqualTo("민지");
+        assertThat(pet.getCallMeSource()).isEqualTo("EXPLICIT");
+    }
+
+    @Test
+    void sleepingOrFirstMeetingDoesNotGenerateOpeningLine() {
+        pet.beginFirstMeeting();
+        service.calls(USER, PET, at(1));
+        assertThat(llm.systems).isEmpty();
+        pet.advanceFirstMeeting(com.lore.zzal.pet.persona.FirstMeeting.State.COMPLETE);
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "sleepKind", com.lore.zzal.pet.SleepKind.NIGHT);
+        service.calls(USER, PET, at(2));
+        assertThat(llm.systems).isEmpty();
+    }
+
+    @Test
     @DisplayName("★★ 5왕복 한 판 — 턴 종류 순서·질문 교대·되묻기 우선·호칭 저장·시스템 재생성·보상 1회·닫힘")
     void fiveRounds() throws Exception {
-        llm.line("어, 여기 몬스터 없네. 나는 우사기! 너는 뭐라고 부를까?", "")
+        llm.line("어, 여기 몬스터 없네. 나는 우사기! 뭐 하고 있었어?", "")
                 .line("상훈! 좋아, 외웠어. 나 토벌봉 닦던 중이었어.", "hello")
                 .line("노란 막대야! 몬스터 나오면 이걸로 휘둘러.", "hello")
                 .line("헤헤, 멋지지. 이따 피자 생기면 반 줄게.", "joy")
@@ -115,7 +164,7 @@ class ChatSessionFlowTest {
         ChatService.View v = service.calls(USER, PET, at(1));
         assertThat(v.openSlot()).isEqualTo("BABY");
         assertThat(v.session().kind()).isEqualTo(SessionKind.BABY);
-        assertThat(v.turns()).extracting(ChatService.TurnView::line).containsExactly("어, 여기 몬스터 없네. 나는 우사기! 너는 뭐라고 부를까?");
+        assertThat(v.turns()).extracting(ChatService.TurnView::line).containsExactly("어, 여기 몬스터 없네. 나는 우사기! 뭐 하고 있었어?");
 
         List<String> answers = List.of("상훈이라고 불러줘", "토벌봉이 뭐야?", "오 멋지다", "고마워 우사기", "피자!");
         ChatService.Answered last = null;
@@ -136,8 +185,8 @@ class ChatSessionFlowTest {
         assertThat(ts.stream().filter(ZzalChatTurn::isPet).map(ZzalChatTurn::getTurnType).toList())
                 .containsExactly(TurnType.FIRST_MEET, TurnType.CONTINUE, TurnType.CONTINUE, TurnType.CONTINUE,
                         TurnType.CONTINUE, TurnType.CLOSE);
-        assertThat(ts.get(0).getQuestionItem()).isEqualTo(QuestionItem.CALL_ME);
-        assertThat(ts.get(1).getQuestionItem()).as("답한 사용자 턴에 항목이 옮겨 적힌다").isEqualTo(QuestionItem.CALL_ME);
+        assertThat(ts.get(0).getQuestionItem()).isNotEqualTo(QuestionItem.CALL_ME);
+        assertThat(ts.get(1).getQuestionItem()).as("답한 사용자 턴에 항목이 옮겨 적힌다").isNotEqualTo(QuestionItem.CALL_ME);
         assertThat(ts.stream().filter(ZzalChatTurn::isPet).map(ZzalChatTurn::getGenerator).distinct().toList())
                 .containsExactly("llm");
         assertThat(s.getRoundCount()).isEqualTo(5);
@@ -157,23 +206,23 @@ class ChatSessionFlowTest {
         // ── 호칭 — 코드가 뽑아 펫 칸에, 시스템 메시지는 그 뒤로 다시 만든다 ──
         assertThat(pet.getCallMe()).isEqualTo("상훈");
         assertThat(systems.builds()).isEqualTo(2);
-        assertThat(llm.systems.get(0)).contains("상대를 뭐라고 부를지 아직 모른다. '너'라고 한다.");
+        assertThat(llm.systems.get(0)).contains("저장된 호칭이 없으면 '사용자님'이라고 한다. 호칭을 다시 묻지 않는다.");
         for (int i = 1; i < 6; i++) {
             assertThat(llm.systems.get(i)).contains("상대를 부르는 말: 상훈");
         }
 
         // ── 턴마다 [이번 턴] ──
         assertThat(llm.users.get(0)).contains("종류: 첫 만남",
-                "할 일: 네가 있는 곳 한 조각을 말하며 인사하고, \"뭐라고 부를까\"를 하나 묻는다.");
+                "할 일: 네가 있는 곳 한 조각을 말하며 인사하고, \"뭐 하는 사람인지\"를 하나 묻는다.");
         assertThat(llm.users.get(1)).contains("종류: 이어 말하기", "질문 금지.");
         assertThat(llm.users.get(2)).contains("질문 금지. 상대가 물었으니 먼저 답한다.");
         assertThat(llm.users.get(3)).contains("질문 금지.");
         assertThat(llm.users.get(4)).contains("질문 허용.").doesNotContain("묻는다면");
         assertThat(llm.users.get(5)).contains("종류: 닫기", "질문 금지. 다음에 또 말 걸겠다는 뜻을 담는다.");
         // ★ #709 — [지금까지] 는 이번 판 전부(최근 3일): 첫 턴·첫 답도 들어간다. 판 머리에 날짜 줄.
-        assertThat(llm.users.get(4)).contains("[지금까지]\n오늘 첫 만남(지금 대화):\n너: 어, 여기 몬스터 없네. 나는 우사기! 너는 뭐라고 부를까?\n상대: 상훈이라고 불러줘\n",
+        assertThat(llm.users.get(4)).contains("[지금까지]\n오늘 첫 만남(지금 대화):\n너: 어, 여기 몬스터 없네. 나는 우사기! 뭐 하고 있었어?\n상대: 상훈이라고 불러줘\n",
                 "너: 상훈! 좋아, 외웠어. 나 토벌봉 닦던 중이었어.\n상대: 토벌봉이 뭐야?");
-        assertThat(llm.users.get(1)).contains("상대가 답한 질문: \"뭐라고 부를까\"");
+        assertThat(llm.users.get(1)).contains("상대가 답한 질문: \"뭐 하는 사람인지\"");
         assertThat(llm.systems.get(0)).doesNotContain("네 모습", "egg-shaped");
         assertThat(ts.stream().filter(ZzalChatTurn::isPet).map(ZzalChatTurn::getOutcome).distinct().toList())
                 .containsExactly("ok");
@@ -393,7 +442,7 @@ class ChatSessionFlowTest {
         ZzalChatTurn first = st.turnsOf(s).getFirst();
         assertThat(first.getOutcome()).isEqualTo("ok");
         assertThat(first.getGenerator()).isEqualTo("llm");
-        assertThat(first.getQuestionItem()).isEqualTo(QuestionItem.CALL_ME);
+        assertThat(first.getQuestionItem()).isNotEqualTo(QuestionItem.CALL_ME);
         service.answer(USER, PET, ChatSlot.BABY, "상훈이라고 불러", at(7));
         assertThat(pet.getTutorialStep()).isGreaterThan(ZzalRules.TUTORIAL_CHAT_AFTER);
     }
@@ -414,7 +463,7 @@ class ChatSessionFlowTest {
         ZzalChatTurn first = st.turnsOf(s).getFirst();
         assertThat(first.getOutcome()).isEqualTo(LineOutcome.BABY_NEUTRAL.code());
         assertThat(first.getGenerator()).isEqualTo(LineChain.FIXED);
-        assertThat(first.getQuestionItem()).isEqualTo(QuestionItem.CALL_ME);
+        assertThat(first.getQuestionItem()).isNotEqualTo(QuestionItem.CALL_ME);
         assertThat(first.getFilteredReason()).as("이번 시도(재시도 1회)의 사유").isEqualTo("error");
         assertThat(first.getTurnType()).isEqualTo(TurnType.FIRST_MEET);
 
@@ -454,7 +503,7 @@ class ChatSessionFlowTest {
         assertThat(first.getLine()).isEqualTo(LineChain.BABY_NEUTRAL_LINE);
         assertThat(first.getOutcome()).isEqualTo("baby_neutral");
         assertThat(first.getFilteredReason()).isEqualTo("llm_off");
-        assertThat(first.getQuestionItem()).isEqualTo(QuestionItem.CALL_ME);
+        assertThat(first.getQuestionItem()).isNotEqualTo(QuestionItem.CALL_ME);
 
         ChatService.Answered a = service.answer(USER, PET, ChatSlot.BABY, "상훈이라고 불러", at(2));
         assertThat(a.replyLine()).isEqualTo(LineChain.CLOSING_LINE);
@@ -509,12 +558,12 @@ class ChatSessionFlowTest {
     }
 
     @Test
-    @DisplayName("★ 호칭 — 코드 패턴이 못 뽑은 답은 모델 것을 저장한다")
-    void callMeFromModel() {
+    @DisplayName("★ 호칭 — 명시 변경 요청이 아니면 모델 추출만으로 호칭을 저장하지 않는다")
+    void modelExtractionAloneDoesNotChangeAddress() {
         llm.line("안녕! 뭐라고 부를까?", "").full("좋아, 상훈님!", "hello", "상훈님", null, false);
         service.calls(USER, PET, at(1));
         service.answer(USER, PET, ChatSlot.BABY, "음 그냥 상훈님 정도?", at(2));
-        assertThat(pet.getCallMe()).isEqualTo("상훈님");
+        assertThat(pet.getCallMe()).isNull();
         ZzalChatTurn u = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow()).get(1);
         assertThat(u.getCallMeCode()).isNull();
         assertThat(u.getCallMeModel()).isEqualTo("상훈님");
@@ -522,14 +571,14 @@ class ChatSessionFlowTest {
     }
 
     @Test
-    @DisplayName("★ 호칭 — 코드와 모델이 다르면 저장 안 함, 다음 판에 다시 묻는다. 되물음은 모델 OR 코드")
-    void callMeMismatchAsksAgain() {
+    @DisplayName("★ 호칭 — 모호한 이름 언급은 저장하지 않고 다음 판에도 호칭을 다시 묻지 않는다")
+    void ambiguousMentionDoesNotStoreAddressOrAskAgain() {
         llm.line("안녕! 뭐라고 부를까?", "").full("민지구나!", "hello", "민지언니", null, true);
         service.calls(USER, PET, at(1));
         service.answer(USER, PET, ChatSlot.BABY, "민지", at(2));
         assertThat(pet.getCallMe()).as("불일치 — 되돌린다").isNull();
         ZzalChatTurn u = st.turnsOf(st.session(ChatSlot.BABY).orElseThrow()).get(1);
-        assertThat(u.getCallMeCode()).isEqualTo("민지");
+        assertThat(u.getCallMeCode()).isNull();
         assertThat(u.getCallMeModel()).isEqualTo("민지언니");
         assertThat(u.getAskedBack()).as("코드는 못 잡았지만 모델이 되물음이라 함").isTrue();
 
@@ -540,7 +589,7 @@ class ChatSessionFlowTest {
         assertThat(st.turnsOf(st.session(ChatSlot.MORNING).orElseThrow()).getFirst().getQuestionItem()).isNull();
         service.answer(USER, PET, ChatSlot.MORNING, "잘 잤어", kst("2026-10-09 10:06"));
         service.answer(USER, PET, ChatSlot.MORNING, "오늘 학교 가", kst("2026-10-09 10:07"));
-        assertThat(llm.users.getLast()).contains("묻는다면 \"뭐라고 부를까\"를 하나 묻는다.");
+        assertThat(llm.users.getLast().split("\\[이번 턴\\]")[1]).doesNotContain("뭐라고 부를까");
     }
 
     @Test
@@ -560,7 +609,7 @@ class ChatSessionFlowTest {
         }
         List<String> morning = llm.users.subList(before, llm.users.size());
         assertThat(morning).hasSize(6);
-        assertThat(morning.get(2)).contains("질문 허용. 묻는다면 \"뭐 하는 사람인지\"를 하나 묻는다.");
+        assertThat(morning.get(2)).contains("질문 허용. 묻는다면 \"요즘 재밌는 것\"을 하나 묻는다.");
         assertThat(morning.get(5)).contains("종류: 닫기",
                 "할 일: 네가 할 일로 돌아가며 끝낸다. 질문 금지. 점심 먹고 2시 넘어서 다시 오라는 뜻을 네 식으로 담는다.");
 
@@ -592,10 +641,167 @@ class ChatSessionFlowTest {
         int c = u.indexOf("어제 낮:\n너: ");
         int d = u.indexOf("상대: 어제 말\n");
         int e = u.indexOf("오늘 아침(지금 대화):\n너: ");
-        int f = u.indexOf("상대: 오늘 말\n\n[이번 턴]");
+        int f = u.indexOf("상대: 오늘 말\n");
         assertThat(List.of(a, b, c, d, e, f)).doesNotContain(-1).isSorted();
         // 펫·사용자 양쪽 — 각 판 2턴(펫·사용자)+펫 응답 = 3줄, 오늘 판은 지금까지 2줄
         assertThat(u.lines().filter(l -> l.startsWith("너: ") || l.startsWith("상대: ")).count()).isEqualTo(3 + 3 + 2);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"ja,はじめまして。お会いできて嬉しいです。,日本語", "en,It is nice to meet you today.,English"})
+    void firstGreetingLanguageAndStoredOriginalSurviveRetry(String language, String original, String label) {
+        wireFactFixture();
+        pet.beginFirstMeeting();
+        pet.advanceFirstMeeting(com.lore.zzal.pet.persona.FirstMeeting.State.READY_TO_ENTER);
+        pet.rememberExplicitCallMe("작가님");
+        pet.diaryLanguage(language);
+        pet.recordAuthoredPersona(new com.lore.zzal.pet.persona.AuthoredPersona(1, java.util.stream.Stream.of("world","job","persona","likes","dislikes","extra").map(id->new com.lore.zzal.pet.persona.AuthoredPersona.Field(id,List.of("chip-"+id),"원문-"+id,false)).toList()));
+        when(st.turnRepo.existsBySessionId(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(inv ->
+                st.turns.stream().anyMatch(t -> t.getSessionId().equals(inv.getArgument(0))));
+        when(st.turnRepo.findFirstBySessionIdAndIdx(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyInt())).thenAnswer(inv ->
+                st.turns.stream().filter(t -> t.getSessionId().equals(inv.getArgument(0)) && t.getIdx() == (int) inv.getArgument(1)).findFirst());
+        llm.full(original, "hello", null, null, false);
+        service.prepareFirstMeetingGreeting(pet, at(1));
+        String saved = service.firstMeetingGreeting(pet);
+        assertThat(saved).isEqualTo(original);
+        assertThat(llm.systems).hasSize(1);
+        assertThat(llm.systems.getFirst()).contains(language.equals("ja") ? "기본 언어: 일본어" : "기본 언어: 영어", "상대를 부르는 말: 작가님");
+        for (String id:List.of("world","job","persona","likes","dislikes","extra")) assertThat(llm.systems.getFirst()).contains("원문-"+id);
+        assertThat(llm.users.getFirst()).contains("FIRST_MEETING","차가 좋아","USER","revision");
+        pet.diaryLanguage("ko");
+        service.prepareFirstMeetingGreeting(pet, at(2));
+        assertThat(service.firstMeetingGreeting(pet)).isEqualTo(original);
+        assertThat(llm.systems).hasSize(1);
+        assertThat(st.turns).hasSize(1);
+        assertThat(st.turns.getFirst().getLine()).isEqualTo(original);
+    }
+    @Test
+    void v4ChatOpensOnlyAfterSevenActionsAndDoesNotRequireRemovedChatStep() {
+        pet.beginFirstMeeting();
+        pet.advanceFirstMeeting(com.lore.zzal.pet.persona.FirstMeeting.State.COMPLETE);
+        pet.devSetFirstIntro(4, com.lore.zzal.pet.FirstIntro.Step.NAP_SLEEP, at(1));
+        assertThat(service.continuousCalls(USER,PET,at(1)).openSlot()).isNull();
+        pet.sleep(at(1));
+        assertThat(service.continuousCalls(USER,PET,at(1)).openSlot()).isNull();
+        pet.wake(at(1));
+        assertThat(service.continuousCalls(USER,PET,at(1)).openSlot()).isNull();
+        pet.advanceFirstIntro(com.lore.zzal.pet.FirstIntro.Step.ATTENDANCE_INTRO);
+        pet.startClock(at(1));
+        assertThat(service.continuousCalls(USER,PET,at(1)).openSlot()).isNull();
+        pet.finishFirstIntroReview(at(1));
+        llm.full("이제 조금 개운해. 네 하루는 어땠어?", "hello", null, null, false);
+        assertThat(service.continuousCalls(USER,PET,at(1)).openSlot()).isEqualTo("CONTINUOUS");
+        assertThat(pet.introAt(com.lore.zzal.pet.FirstIntro.Step.COMPLETE)).isTrue();
+        assertThat(pet.introAtOrAfter(com.lore.zzal.pet.FirstIntro.Step.CHAT)).isFalse();
+    }
+    @Test void ownedCustomIdIsSelectedAndStoredFromTheSameAnswerCall() {
+        var ownership=mock(com.lore.zzal.attendance.CustomMotionOwnershipService.class);
+        var owned=new com.lore.zzal.attendance.OwnedCustomMotion("custom:z",1L,6,"인사","도시락을 들고 인사","hello",false,"images/custom/petted.webp",null,"petted",1,true,true,"CUSTOM");
+        var free=new com.lore.zzal.attendance.OwnedCustomMotion("custom:10",1L,1,"자유 행동","앨범용",null,true,"images/custom/eat_rice.webp",null,"eat_rice",1,true,true,"CUSTOM");
+        when(ownership.owned(USER,PET)).thenReturn(List.of(owned,free));
+        ReflectionTestUtils.setField(service,"customMotionOwnership",ownership);
+        service.calls(USER,PET,at(1));int before=llm.users.size();
+        llm.line("도시락 같이 먹자","custom:z");
+        var answered=service.answer(USER,PET,ChatSlot.BABY,"왔어",at(2));
+        assertThat(llm.users).hasSize(before+1);assertThat(llm.users.getLast()).contains("custom:z").doesNotContain("custom:10");
+        assertThat(answered.reactionKey()).isEqualTo("custom:z");
+        assertThat(st.lastPet(ChatSlot.BABY).getMotion()).isEqualTo("custom:z");
+    }
+
+    private void wireFactFixture(){
+        var facts=mock(com.lore.zzal.chat.memory.facts.FactMemoryService.class);
+        var fact=new com.lore.zzal.chat.memory.facts.FactView(800L,"USER",null,"차를 좋아함","USER_REPORTED","ACTIVE",700L,"차가 좋아",at(0),null,2,"ADD");
+        when(facts.recall(any(),org.mockito.ArgumentMatchers.nullable(String.class))).thenReturn(List.of(fact));
+        when(facts.filterHistory(any(),any())).thenAnswer(inv->inv.getArgument(1));
+        ReflectionTestUtils.setField(service,"factMemory",facts);
+    }
+    private void wireContinuousFixtures(){
+        wireFactFixture();
+        ReflectionTestUtils.setField(service,"rewardLedger",mock(com.lore.zzal.chat.delivery.ChatRewardLedger.class));
+        when(st.turnRepo.findTop40ByPetIdAndCreatedAtBetweenOrderByCreatedAtDescIdDesc(any(),any(),any())).thenAnswer(inv->st.turns.stream().filter(t->t.getPetId().equals(inv.getArgument(0))).sorted(java.util.Comparator.comparing(com.lore.zzal.chat.session.ZzalChatTurn::getId).reversed()).limit(40).toList());
+        when(st.turnRepo.findTop40BySessionIdOrderByIdxDesc(any())).thenAnswer(inv->st.turns.stream().filter(t->t.getSessionId().equals(inv.getArgument(0))).sorted(java.util.Comparator.comparingInt(com.lore.zzal.chat.session.ZzalChatTurn::getIdx).reversed()).limit(40).toList());
+    }
+    @Test void continuousCallerPreservesSixFieldsAndCurrentUserThroughRealPrompt() {
+        wireContinuousFixtures();
+        pet.beginFirstMeeting();pet.advanceFirstMeeting(com.lore.zzal.pet.persona.FirstMeeting.State.COMPLETE);
+        pet.devSetFirstIntro(4,com.lore.zzal.pet.FirstIntro.Step.FINISH_NOTICE,at(1));
+        pet.startClock(at(1));pet.finishFirstIntroReview(at(1));
+        pet.rememberExplicitCallMe("현재호칭");pet.diaryLanguage("en");
+        pet.recordAuthoredPersona(new com.lore.zzal.pet.persona.AuthoredPersona(1,java.util.stream.Stream.of("world","job","persona","likes","dislikes","extra").map(id->new com.lore.zzal.pet.persona.AuthoredPersona.Field(id,List.of(),"전체-"+id,false)).toList()));
+        service.continuousCalls(USER,PET,at(1));llm.line("I hear you.","base");
+        service.answerContinuousLegacy(USER,PET,"I like tea.",at(2));
+        for(String id:List.of("world","job","persona","likes","dislikes","extra"))assertThat(llm.systems.getLast()).contains("전체-"+id);
+        assertThat(llm.systems.getLast()).contains("현재호칭","기본 언어: 영어");
+        assertThat(llm.users.getLast()).contains("I like tea.","차가 좋아","USER","revision");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value=com.lore.zzal.chat.prompt.ConversationScene.Step.class,names={"FEED","GAME"})
+    void tutorialCallerStoresOriginalWithoutProgressRewardOrCare(com.lore.zzal.chat.prompt.ConversationScene.Step step){
+        wireContinuousFixtures();
+        pet.beginFirstMeeting();pet.advanceFirstMeeting(com.lore.zzal.pet.persona.FirstMeeting.State.COMPLETE);
+        pet.devSetFirstIntro(4,com.lore.zzal.pet.FirstIntro.Step.valueOf(step.name()),at(1));pet.rememberExplicitCallMe("현재호칭");
+        pet.recordAuthoredPersona(new com.lore.zzal.pet.persona.AuthoredPersona(1,java.util.stream.Stream.of("world","job","persona","likes","dislikes","extra").map(id->new com.lore.zzal.pet.persona.AuthoredPersona.Field(id,List.of(),"설정-"+id,false)).toList()));
+        var session=st.sessionRepo.save(ZzalChatSession.open(PET,com.lore.zzal.pet.AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS,SessionKind.BABY,at(1),null,at(1)));
+        when(st.sessionRepo.findById(session.getId())).thenReturn(java.util.Optional.of(session));
+        var tutorial=new com.lore.zzal.chat.dto.ChatRequests.Answer.Tutorial(step,com.lore.zzal.chat.dto.ChatRequests.Answer.AnswerType.FREE_TEXT);
+        int trash=pet.getTrash();int intro=pet.getFirstIntroStep();llm.line("네 말 들었어.","base");
+        var answer=service.answerTutorial(USER,PET,"난 아직 안 먹었어",session.getId(),0,tutorial,at(2));
+        assertThat(answer.turns()).hasSize(2);assertThat(answer.turns().getFirst().line()).isEqualTo("난 아직 안 먹었어");
+        assertThat(llm.users.getLast()).contains("TUTORIAL",step.name(),"난 아직 안 먹었어","차가 좋아","USER","revision");
+        for(String id:List.of("world","job","persona","likes","dislikes","extra"))assertThat(llm.systems.getLast()).contains("설정-"+id);
+        assertThat(pet.getTrash()).isEqualTo(trash);assertThat(pet.getFirstIntroStep()).isEqualTo(intro);assertThat(session.isRewardGiven()).isFalse();
+        int calls=llm.users.size();assertThatThrownBy(()->service.answerContinuousLegacy(USER,PET,"우회",at(2))).isInstanceOf(com.lore.common.exception.BusinessException.class);
+        assertThatThrownBy(()->service.answerTargeted(USER,PET,ChatSlot.CONTINUOUS,"보호요청우회",session.getId(),session.getRoundCount(),at(2))).isInstanceOf(com.lore.common.exception.BusinessException.class);
+        assertThat(llm.users).hasSize(calls);
+        assertThatThrownBy(()->service.answerTutorial(USER,PET,"중복",session.getId(),0,tutorial,at(2))).isInstanceOf(com.lore.common.exception.BusinessException.class);
+    }
+
+    @Test void tutorialDeliveryReplaysAfterStepChangeWithoutSecondGeneration(){
+        wireContinuousFixtures();pet.beginFirstMeeting();pet.advanceFirstMeeting(com.lore.zzal.pet.persona.FirstMeeting.State.COMPLETE);
+        pet.devSetFirstIntro(4,com.lore.zzal.pet.FirstIntro.Step.FEED,at(1));
+        var session=st.sessionRepo.save(ZzalChatSession.open(PET,com.lore.zzal.pet.AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS,SessionKind.BABY,at(1),null,at(1)));
+        when(st.sessionRepo.findById(session.getId())).thenReturn(java.util.Optional.of(session));
+        var pets=mock(com.lore.zzal.pet.ZzalPetRepository.class);when(pets.findByIdForUpdate(PET)).thenReturn(java.util.Optional.of(pet));
+        var repo=mock(com.lore.zzal.chat.delivery.ZzalChatDeliveryRepository.class);
+        var saved=new java.util.HashMap<java.util.UUID,com.lore.zzal.chat.delivery.ZzalChatDelivery>();
+        when(repo.findByPetIdAndRequestId(any(),any())).thenAnswer(inv->java.util.Optional.ofNullable(saved.get(inv.getArgument(1))));
+        var request=new com.lore.zzal.chat.dto.ChatRequests.Answer("먹었어",session.getId(),0,java.util.UUID.randomUUID(),new com.lore.zzal.chat.dto.ChatRequests.Answer.Tutorial(com.lore.zzal.chat.prompt.ConversationScene.Step.FEED,com.lore.zzal.chat.dto.ChatRequests.Answer.AnswerType.SUGGESTED));
+        when(repo.save(any())).thenAnswer(inv->{var row=(com.lore.zzal.chat.delivery.ZzalChatDelivery)inv.getArgument(0);saved.put(request.requestId(),row);return row;});
+        var petService=mock(PetService.class);
+        when(petService.refresh(any(),any(),any())).thenReturn(pet);
+        var delivery=new com.lore.zzal.chat.delivery.ChatDeliveryService(service,pets,repo,petService,new MotionCatalog("","","v1"),tools.jackson.databind.json.JsonMapper.builder().build());
+        llm.line("너는 먹었구나. 나는 배가 고파.","base");
+        var first=delivery.answer(USER,PET,ChatSlot.CONTINUOUS,request,at(2));int calls=llm.users.size();int turns=st.turns.size();
+        String storedReceipt=saved.get(request.requestId()).responseJson();
+        when(pets.findById(PET)).thenReturn(java.util.Optional.of(pet));
+        when(repo.latestTutorial(any(),any(),any(),any())).thenAnswer(inv->{
+            String pattern=inv.getArgument(2);assertThat(pattern).isIn("FEED","GAME");
+            return saved.values().stream().filter(row->row.tutorial().map(meta->pattern.equals(meta.step().name())).orElse(false)).toList();
+        });
+        var controller=new ChatController(service,delivery);
+        var refreshed=controller.calls(USER,PET).getData();var otherTab=controller.calls(USER,PET).getData();
+        assertThat(refreshed.openSlot()).isNull();assertThat(refreshed.stageSpeech()).isNull();assertThat(refreshed.session().id()).isEqualTo(session.getId());
+        assertThat(refreshed.tutorialAnswers()).hasSize(1);assertThat(refreshed.tutorialAnswers()).isEqualTo(otherTab.tutorialAnswers());
+        var receipt=refreshed.tutorialAnswers().getFirst();assertThat(receipt.text()).isEqualTo("먹었어");assertThat(receipt.requestId()).isEqualTo(request.requestId());
+        assertThat(receipt.chatReply()).isEqualTo(first.chatReply());assertThat(receipt.turns()).isEqualTo(first.turns());
+        assertThatThrownBy(()->delivery.tutorialAnswers(999L,PET)).isInstanceOf(com.lore.common.exception.BusinessException.class);
+        assertThat(llm.users).hasSize(calls);
+
+        pet.advanceFirstIntro(com.lore.zzal.pet.FirstIntro.Step.FEED);
+        var replay=delivery.answer(USER,PET,ChatSlot.CONTINUOUS,request,at(3));
+        assertThat(replay.chatReply()).isEqualTo(first.chatReply());assertThat(llm.users).hasSize(calls);assertThat(st.turns).hasSize(turns);
+        assertThat(replay.pet().firstIntro().key()).isEqualTo(com.lore.zzal.pet.FirstIntro.Step.SNACK);
+        ReflectionTestUtils.setField(pet,"sleepKind",com.lore.zzal.pet.SleepKind.NIGHT);ReflectionTestUtils.setField(pet,"sleptAt",at(3));
+        var sleepingReplay=delivery.answer(USER,PET,ChatSlot.CONTINUOUS,request,at(4));assertThat(sleepingReplay.pet().clock().sleeping()).isTrue();
+        ReflectionTestUtils.setField(pet,"sleepKind",null);ReflectionTestUtils.setField(pet,"tripStartedAt",at(4));
+        var travelReplay=delivery.answer(USER,PET,ChatSlot.CONTINUOUS,request,at(5));assertThat(travelReplay.pet().trip()).isNotNull();
+        assertThat(sleepingReplay.chatReply()).isEqualTo(first.chatReply());assertThat(travelReplay.turns()).isEqualTo(first.turns());
+        assertThat(saved.get(request.requestId()).responseJson()).isEqualTo(storedReceipt);
+        assertThat(llm.users).hasSize(calls);assertThat(st.turns).hasSize(turns);
+        var conflict=new com.lore.zzal.chat.dto.ChatRequests.Answer("먹었어",session.getId(),0,request.requestId(),new com.lore.zzal.chat.dto.ChatRequests.Answer.Tutorial(com.lore.zzal.chat.prompt.ConversationScene.Step.GAME,com.lore.zzal.chat.dto.ChatRequests.Answer.AnswerType.SUGGESTED));
+        assertThatThrownBy(()->delivery.answer(USER,PET,ChatSlot.CONTINUOUS,conflict,at(3))).isInstanceOf(com.lore.common.exception.BusinessException.class);
+        assertThatThrownBy(()->delivery.answer(999L,PET,ChatSlot.CONTINUOUS,request,at(3))).isInstanceOf(com.lore.common.exception.BusinessException.class);
     }
 
 }

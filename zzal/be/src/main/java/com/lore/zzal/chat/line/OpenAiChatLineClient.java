@@ -1,4 +1,5 @@
 package com.lore.zzal.chat.line;
+import com.lore.zzal.generation.client.ProviderUsageRecorder;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,13 +47,44 @@ public class OpenAiChatLineClient implements ChatLineClient {
 
     private final String apiKey;
     private final String reasoningEffort;
-    private final HttpClient http = HttpClient.newBuilder()
+    private final HttpClient http;
+    private final URI endpoint;
+    private final Integer maxCompletionTokens;
+    private final ProviderUsageRecorder usageRecorder;
+    private static HttpClient defaultHttp() { return HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(2))
             .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
+            .build(); }
     private final ObjectMapper json = new ObjectMapper();
 
     public OpenAiChatLineClient(String apiKey, String reasoningEffort) {
+        this(apiKey, reasoningEffort, null);
+    }
+
+    public OpenAiChatLineClient(String apiKey, String reasoningEffort, Integer maxCompletionTokens) {
+        this(apiKey,reasoningEffort,maxCompletionTokens,ProviderUsageRecorder.NO_OP);
+    }
+    public OpenAiChatLineClient(String apiKey,String reasoningEffort,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
+        this(apiKey, reasoningEffort, defaultHttp(), URI.create(ENDPOINT), maxCompletionTokens,recorder);
+    }
+
+    /** Package-only HTTP seam for loopback contract tests; production endpoint is fixed. */
+    OpenAiChatLineClient(String apiKey, String reasoningEffort, HttpClient http, URI endpoint) {
+        this(apiKey, reasoningEffort, http, endpoint, null);
+    }
+
+    OpenAiChatLineClient(String apiKey, String reasoningEffort, HttpClient http, URI endpoint,
+                         Integer maxCompletionTokens) {
+        this(apiKey,reasoningEffort,http,endpoint,maxCompletionTokens,ProviderUsageRecorder.NO_OP);
+    }
+    OpenAiChatLineClient(String apiKey,String reasoningEffort,HttpClient http,URI endpoint,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
+        this.usageRecorder=java.util.Objects.requireNonNull(recorder);
+        if (maxCompletionTokens != null && maxCompletionTokens <= 0) {
+            throw new IllegalArgumentException("maxCompletionTokens must be positive");
+        }
+        this.maxCompletionTokens = maxCompletionTokens;
+        this.http = java.util.Objects.requireNonNull(http);
+        this.endpoint = java.util.Objects.requireNonNull(endpoint);
         this.apiKey = apiKey;
         this.reasoningEffort = reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.strip();
     }
@@ -61,6 +93,7 @@ public class OpenAiChatLineClient implements ChatLineClient {
     public Completion complete(String system, String userText, String model, Duration timeout) throws Exception {
         ObjectNode body = json.createObjectNode();
         body.put("model", model);
+        if (maxCompletionTokens != null) body.put("max_completion_tokens", maxCompletionTokens);
         if (reasoningEffort != null && model.startsWith("gpt-5")) {
             body.put("reasoning_effort", reasoningEffort);
         }
@@ -74,7 +107,7 @@ public class OpenAiChatLineClient implements ChatLineClient {
         user.put("role", "user");
         user.put("content", userText);
 
-        HttpRequest req = HttpRequest.newBuilder(URI.create(ENDPOINT))
+        HttpRequest req = HttpRequest.newBuilder(endpoint)
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
                 .timeout(timeout)
@@ -88,19 +121,24 @@ public class OpenAiChatLineClient implements ChatLineClient {
             res = f.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.TimeoutException e) {
             f.cancel(true);
+            usageRecorder.record(ProviderUsageRecorder.headers(model,0,null));
             throw e;
         } catch (java.util.concurrent.ExecutionException e) {
+            usageRecorder.record(ProviderUsageRecorder.headers(model,0,null));
             if (e.getCause() instanceof java.net.http.HttpTimeoutException) {
                 throw new java.util.concurrent.TimeoutException("응답 시간 초과");
             }
             throw e;
         }
+        String requestId=res.headers().firstValue("x-request-id").orElse(null);
+        usageRecorder.record(ProviderUsageRecorder.headers(model,res.statusCode(),requestId));
         if (res.statusCode() != 200) {
             // 4xx·5xx 는 돈이 안 나간다(OpenAI 는 실패 요청에 과금하지 않는다).
             throw new IllegalStateException("대사 생성 실패(HTTP %d): %s".formatted(res.statusCode(),
                     res.body().length() > 300 ? res.body().substring(0, 300) : res.body()));
         }
         JsonNode payload = json.readTree(res.body());
+        usageRecorder.record(ProviderUsageRecorder.payload(model,res.statusCode(),requestId,payload));
         JsonNode usage = payload.path("usage");
         long in = usage.path("prompt_tokens").asLong(0);
         long out = usage.path("completion_tokens").asLong(0);
