@@ -136,23 +136,28 @@ public final class PromptAssembler {
 
     private static String user(ChatContext ctx, boolean includeHistory) {
         StringBuilder b = new StringBuilder();
+        boolean firstMeeting = ctx.scene() != null && ctx.scene().phase() == ConversationScene.Phase.FIRST_MEETING;
         if (ctx.scene() != null) {
             b.append("[서버가 정한 대화 장면]\n");
             b.append("장면: ").append(ctx.scene().phase()).append("\n");
             b.append("장면 박자: ").append(ctx.scene().beat()).append("\n");
-            if(ctx.scene().step()==ConversationScene.Step.FIRST_MEETING_DISCOVERY) b.append("처음 눈을 뜨고 상대를 발견한 순간이다. 아직 호칭은 확정되지 않았다. 호칭이나 사용자 사실을 추정하지 말고 캐릭터의 상태와 마음을 짧게 표현한다. 호칭을 이미 들었다거나 행동을 마쳤다고 말하지 않는다.\n");
+            if(ctx.scene().step()==ConversationScene.Step.FIRST_MEETING_DISCOVERY) b.append("처음 눈을 뜨고 낯선 주변과 상대를 발견한 순간이다. 아직 호칭은 확정되지 않았다. 작성한 캐릭터 설정의 말투로 주변의 신기함과 상대에 대한 호기심을 짧게 드러낸다. 호칭이나 사용자 사실을 추정하지 않고, 호칭을 이미 들었다거나 행동을 마쳤다고 말하지 않는다.\n");
             if (ctx.scene().phase()==ConversationScene.Phase.TUTORIAL_STAGE) b.append("ENTRY는 현재 상태와 마음을 짧게 말하며 캐릭터에게 필요한 돌봄이나 함께할 행동을 안내한다. 사용자에게 질문하거나 대답을 요구하지 않는다. AFTER_ACTION은 서버가 방금 성공 처리한 행동 뒤 반응이다. 사용자 발화를 새로 만들거나 행동을 또 성공시켰다고 하지 않는다.\n");
             if (ctx.scene().step() != null) b.append("현재 행동: ").append(ctx.scene().step()).append("\n");
             b.append("같은 캐릭터 설정·호칭·언어를 유지한다. ");
-            b.append(ctx.scene().phase() == ConversationScene.Phase.TUTORIAL_STAGE
-                    ? "사용자 대답을 요구하지 않고 상태와 마음을 짧게 말한다. "
-                    : "사용자 답을 먼저 받아주고 상태와 마음을 짧게 말한다. ");
+            b.append(firstMeeting
+                    ? "낯선 주변의 신기함과 상대에 대한 관심을 캐릭터의 말투로 짧게 표현한다. "
+                    : ctx.scene().phase() == ConversationScene.Phase.TUTORIAL_STAGE
+                            ? "사용자 대답을 요구하지 않고 상태와 마음을 짧게 말한다. "
+                            : "사용자 답을 먼저 받아주고 상태와 마음을 짧게 말한다. ");
             b.append("버튼명과 절차를 나열하지 않는다. 사용자 답이나 네 대사를 행동 성공·보상 지급의 증거로 삼지 않는다.\n\n");
         }
         PetState st = ctx.state();
         b.append("[지금]\n");
         b.append(st.when()).append(", 만난 지 ").append(st.daysTogether()).append("일째.\n");
-        b.append("캐릭터 자신의 상태(사용자의 상태 아님): ").append(st.labeledWords()).append("\n");
+        if (!firstMeeting) {
+            b.append("캐릭터 자신의 상태(사용자의 상태 아님): ").append(st.labeledWords()).append("\n");
+        }
         if (ctx.scene() == null || ctx.scene().phase() == ConversationScene.Phase.CONTINUOUS) {
             b.append("이 상태는 대화의 배경 정보이며 매번 말할 주제가 아니다. 사용자의 구체적인 이야기와 감정에 먼저 반응하고, 캐릭터의 설정과 관계에 맞게 편하게 대화를 이어간다. 사용자 주제와 관련 없으면 낮은 게이지를 돌봄 요구나 하소연으로 돌리지 않는다.\n");
             b.append("상태를 직접 물었거나 실제 케어 전후의 맥락, 자연스럽게 관련된 주제에서는 자신의 상태를 짧게 말해도 된다. 사용자가 다시 묻지 않았는데 스스로 이력의 같은 하소연을 되풀이하지 않는다. 캐릭터의 배고픔·청결·기분을 사용자의 상태로 옮겨 말하지 않는다.\n");
@@ -205,7 +210,15 @@ public final class PromptAssembler {
         if (ctx.answering() != null) {
             b.append("상대가 답한 질문: \"").append(ctx.answering().text()).append("\"\n");
         }
-        b.append("할 일: ").append(task(p)).append('\n');
+        b.append("할 일: ");
+        if (firstMeeting) {
+            b.append(ctx.scene().step() == ConversationScene.Step.FIRST_MEETING_DISCOVERY
+                    ? "호칭 선택을 아직 받지 않은 발견 장면이다. 주변과 상대에게 처음 느낀 신기함과 관심을 짧게 말한다. 함께한 과거와 사용자 사실을 지어내지 않는다."
+                    : "저장된 호칭 선택을 확인한 뒤의 첫 인사다. 현재 저장된 호칭 선택과 작성한 캐릭터 말투를 따른다. 이름이나 호칭을 다시 묻지 않고 상대에게 반가운 관심을 건넨다.");
+        } else {
+            b.append(task(p));
+        }
+        b.append('\n');
         return b.toString();
     }
 
