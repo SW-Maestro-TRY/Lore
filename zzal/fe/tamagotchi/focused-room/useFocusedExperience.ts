@@ -7,7 +7,7 @@ import type { Side, GuessResult } from '../../lib/game';
 import type { ZzalLocale } from '../../lib/locale';
 import { CYCLE_MS, cyclesOfAction, situationOfAction, poseOfSituation, stagePlanOf, stageAt, type ActionKey } from '../props/situations';
 import { SITUATION_TABLE } from '../props/table';
-import { focusedCopy, fallbackIntroLine } from './focusedCopy';
+import { focusedCopy, fallbackIntroLine, focusedGameLine } from './focusedCopy';
 import {useFocusedStageSpeech} from './useFocusedStageSpeech';
 import {selectOwnedChatResource,sameChatResource,type FocusedChatResource} from './focusedChatMotion';
 import{selectCarePlayback}from'./focusedCareMotion';
@@ -105,8 +105,8 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
  const rest=()=>run(()=>owner.current.doRest(),sleeping?'wake':undefined);
  const startGame=async()=>{if(lock.current||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip)return;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);try{const message=await owner.current.startPlay();if(!valid(stamp,id))return;if(message)setError(message);else{setPanel('game');setResult(null);setSelected(null);setGamePhase('ready');setGameScore({tries:owner.current.game?.round??0,hits:owner.current.game?.hits??0});if(!owner.current.game?.playing)setMarks({});}}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error)}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
  const choose=async(side:Side)=>{if(lock.current||!owner.current.game?.playing||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip)return;const stamp=epoch.current,id=petId,gameStamp=gameEpoch.current;lock.current=true;setBusy(true);setError(null);setSelected(side);setGamePhase('choosing');
-  try{const [reply]=await Promise.all([owner.current.pickSide(side),animate('game_choose',1)]);if(!valid(stamp,id)||gameEpoch.current!==gameStamp)return;if(!reply.result){setError(reply.error||t.error);setGamePhase('ready');setSelected(null);return;}
-   const r=reply.result;setResult(r);setGameScore({tries:r.round+1,hits:r.hits});setMarks(old=>({...old,[r.round]:r.hit}));setGamePhase('reveal');await animate(r.hit?'game_win':'game_lose',1);if(!valid(stamp,id)||gameEpoch.current!==gameStamp)return;setGamePhase(r.finished?'done':'ready');if(!r.finished){setResult(null);setSelected(null);}
+  try{const reply=await owner.current.pickSide(side);if(!valid(stamp,id)||gameEpoch.current!==gameStamp)return;if(!reply.result){setError(reply.error||t.error);setGamePhase('ready');setSelected(null);return;}
+   const r=reply.result;setResult(r);setGameScore({tries:r.round+1,hits:r.hits});setMarks(old=>({...old,[r.round]:r.hit}));setGamePhase('reveal');await animate(r.hit?'game_win':'game_choose',1,true);if(!valid(stamp,id)||gameEpoch.current!==gameStamp)return;setGamePhase(r.finished?'done':'ready');if(!r.finished){setResult(null);setSelected(null);}
   }catch(e){if(valid(stamp,id)&&gameEpoch.current===gameStamp){setError(e instanceof Error?e.message:t.error);setGamePhase('ready');setSelected(null)}}finally{if(valid(stamp,id)){lock.current=false;setBusy(false);}}
  };
  const acknowledge=async(topic:'ATTENDANCE_INTRO'|'REVIEW_SEEN')=>{const stamp=epoch.current,id=petId;if(lock.current)return false;lock.current=true;setBusy(true);setError(null);try{const r=await owner.current.tutorialSeen(topic);if(!valid(stamp,id))return false;if(!r.ok){setError(r.message||t.error);return false;}setPanel(null);return true;}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error);return false;}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
@@ -147,8 +147,8 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
   return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',hide)};
  },[petId,sleeping,traveling,grace?.active,grace?.endedAt]);
  const currentTarget=busy?null:key==='ATTENDANCE_INTRO'?(panel==='attendance'?'attendance-ack':panel==='finish'?null:'attendance-menu'):key==='FINISH_NOTICE'?'finish':key==='REVIEW_SEEN'?null:panel==='care'?(key==='FEED'?'FEED':key==='SNACK'?'SNACK':key==='CLEAN'?'CLEAN':key==='BATH'?'BATH':key==='GAME'?'GAME':key==='NAP_SLEEP'||key==='NAP_WAKE'?'REST':null):panel==='game'?null:key?'care':null;
- const gameLine=panel==='game'&&result&&(gamePhase==='reveal'||gamePhase==='done')?(result.finished?(result.win?t.won:t.lost):(result.hit?t.won:locale==='en'?'It was in this hand.':locale==='ja'?'こっちの手だったよ。':'이쪽 손에 있었어.')):null;
- const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided,fallbackIntroLine(key,locale),!busy&&!gameLine&&!farewell);
+ const gameLine=panel==='game'?(result&&(gamePhase==='reveal'||gamePhase==='done')?focusedGameLine(locale,result):locale==='en'?'Which hand did I hide it in?':locale==='ja'?'どっちの手に隠したかな？':'어느 손에 숨겼을까?'):null;
+ const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided&&panel!=='game',fallbackIntroLine(key,locale),!busy&&!gameLine&&!farewell);
  const speech=gameLine??(farewell&&!sleeping?(live.pet?.firstNightChatGrace?.eligible?t.goodbyeNight:t.goodbye):!sleeping&&guided?stage.line:null);
  const speechSource=gameLine||farewell?'SERVICE_FALLBACK':stage.source;
  return{careUncertain,retryCare,visualTrash:trashOverride??live.pet?.gauges?.trash??0,graceSync,sleepFarewell,graceNotice,gameScore,panel,open,close,busy,error,visual,key,guided,currentTarget,care,rest,startGame,choose,result,marks,gamePhase,selected,acknowledge,finish,dismissReview,farewell,closingReview,retryFarewell,speech,speechSource,stageStatus:stage.status,animate,playChatMotion,chatMotionReady};

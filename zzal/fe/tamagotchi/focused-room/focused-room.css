@@ -17,3 +17,16 @@
 .fr-languages{display:flex;flex-wrap:wrap;gap:6px}.fr-languages button{flex:1;font-size:12px}.fr-languages [aria-pressed=true]{background:#FBEAE5;border-color:#9C4232}.fr-logout{border-top:1px solid #d8cbb9;padding-top:8px}.fr-logout p{margin:4px 0}
 
 .fr-meeting-room{flex:1;min-height:0}.fr-meeting-controls{position:absolute;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:20;border:1px solid #CDBEAC;background:#FFFDF8;border-radius:22px;padding:12px;display:flex;flex-direction:column;gap:8px;max-height:45%;overflow:auto}.fr-meeting-controls form{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important}.fr-meeting-controls form label,.fr-meeting-controls input{grid-column:1/-1}.fr-meeting-controls button{font-size:14px!important;padding:10px 8px!important;min-width:0!important}.fr-meeting-controls>button{width:100%}.fr-meeting-controls p{margin:0;font-size:13px}.fr-meeting-controls:focus-within{bottom:max(8px,env(safe-area-inset-bottom))}
+
+/* During guessing, the room itself is the game surface. */
+.focused-room[data-game-open=true] .fr-dock{display:none}
+.focused-room .fr-game-sheet{background:transparent;border:0;box-shadow:none;padding-bottom:max(5px,env(safe-area-inset-bottom))}
+.focused-room .fr-hands button{border-radius:18px;transition:transform .1s ease,background-color .1s ease,box-shadow .1s ease}
+.focused-room .fr-hands button[data-choosing=true]{transform:translateY(2px) scale(.94);background:#FFFDF899;box-shadow:0 0 0 2px #B9785E}
+@media(prefers-reduced-motion:reduce){.focused-room .fr-hands button{transition:none}}
+
+.focused-room .fr-game-sheet .fr-stamps{position:absolute;left:50%;top:-13px;transform:translateX(-50%)}
+.focused-room .fr-game-sheet:not([data-game-phase=done]) .fr-game-count p{display:none}
+.focused-room .fr-game-sheet .fr-game-foot>.fr-close{position:absolute;right:0;top:11px;background:transparent;border-color:transparent}
+.focused-room .fr-game-sheet .fr-game-foot>.fr-close svg{width:17px;height:17px}
+.focused-room .fr-game-sheet .fr-stamps span[data-result=empty]{border-color:#795C48;opacity:1}

@@ -51,9 +51,19 @@ export function FocusedProps({live,visual,width,height,actor,footFloor,renderTra
   const floorEffect=screen&&(r.spec.key==='bath'||r.spec.key==='dust');
   const effectHeights=floorEffect?r.spec.stages.map(propStage=>layoutScreenProp(r.spec,propStage,stage)?.height??0):[];
   const effectScale=floorEffect?Math.min(1,Math.max(0,effectBottom-8)/Math.max(1,...effectHeights)):1;
-  const propWidth=box.width*effectScale,propHeight=box.height*effectScale;
-  const left=floorEffect?box.left+(box.width-propWidth)/2:naturalLeft+shift;
-  const top=floorEffect?effectBottom-propHeight:box.top+(screen||fixed?0:actor.top);
+  let propWidth=box.width*effectScale,propHeight=box.height*effectScale;
+  let left=floorEffect?box.left+(box.width-propWidth)/2:naturalLeft+shift;
+  let top=floorEffect?effectBottom-propHeight:box.top+(screen||fixed?0:actor.top);
+  if(r.spec.key==='win_star'&&!screen&&!fixed){
+   // Fit the full sequence with one correction so later star frames never jump at the edge.
+   const frames=r.spec.stages.map(value=>layoutProp(r.spec,value,{boxW:actor.width,boxH:actor.height,anchors:anchors.anchors,pose:visual.pose})).filter((value):value is NonNullable<typeof value>=>value!==null);
+   const minX=Math.min(...frames.map(value=>value.left+actor.left)),maxX=Math.max(...frames.map(value=>value.left+actor.left+value.width));
+   const minY=Math.min(...frames.map(value=>value.top+actor.top)),maxY=Math.max(...frames.map(value=>value.top+actor.top+value.height));
+   const fit=Math.min(1,Math.max(0,width-12)/Math.max(1,maxX-minX),Math.max(0,height-12)/Math.max(1,maxY-minY));
+   const shiftX=Math.max(6-minX,Math.min(0,width-6-(minX+(maxX-minX)*fit)));
+   const shiftY=Math.max(6-minY,Math.min(0,height-6-(minY+(maxY-minY)*fit)));
+   left=minX+(left-minX)*fit+shiftX;top=minY+(top-minY)*fit+shiftY;propWidth*=fit;propHeight*=fit;
+  }
   return <img key={`${r.row.id}:${r.stage.key}`} data-fr-prop={r.spec.key} data-stage={r.stage.n} alt="" src={stageUrl(r.stage)} onError={event=>{event.currentTarget.hidden=true}} style={{position:'absolute',left,top,width:propWidth,height:propHeight,transform:box.mirrored?'scaleX(-1)':undefined}}/>;
  })}</div>;
 }
