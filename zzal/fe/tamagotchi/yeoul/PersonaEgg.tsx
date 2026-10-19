@@ -2,7 +2,7 @@
 //
 // 상훈님 원문(10/13): "글이나 칩을 눌러서 제출하면 알에 그런 내용들이 쇽 하고 들어가는 느낌이 좋을 것 같아."
 // 결정(10/13): 알을 화면 위 40% 에 두고 아래에서 한 칸씩 · 핵심은 "사용자가 부화에 개입하고 있다는 느낌" ·
-//   입력 중에 다 구워지면 끊지 않고 알만 크게 몸부림 + "다 됐어요 · 남은 칸은 나중에 해도 돼요" ·
+//   입력 중에 다 구워져도 질문을 이어가며, 마지막 칸 뒤에 만나러 가기를 보여 준다(2026-10-19).
 //   두 시안(dots = 칸마다 색 점이 껍데기에 쌓임 / glow = 빛만)을 `?egg=` 로 바꿔 본다.
 //
 // ★ 칸·칩·순서는 여기 적지 않는다 — `personaSteps.ts` 한 파일의 데이터다.
@@ -546,7 +546,6 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
   }, [busyFx, submitted, idx, N, actions, variant]);
 
   const stepAnswered = !!step && step.fields.some((f) => hasAnswer(answerOf(answers, f.key))) && step.fields.every(f => f.maxChips == null || answerOf(answers, f.key).chips.length <= f.maxChips);
-  const showReadyNote = baked && named && !isCrack && idx < N;
   const waitingDone = idx >= N;
 
   // ── 화면 ──
@@ -632,17 +631,6 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
           {left && <span style={{ color: ink(.45) }}>· {tr(left)}</span>}
         </span>
       </div>
-
-      {/* 다 구워졌는데 아직 넣는 중 — 끊지 않고 한 줄만. */}
-      {showReadyNote && !kb && (
-        <div data-part="pe-ready-note" style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.sm, margin: '0 16px', padding: '6px 6px 6px 14px', borderRadius: radius.pill, background: C.paper, border: `1px solid ${C.accentDim}` }}>
-          <span style={{ flex: 1, fontSize: fz.sm, lineHeight: 1.4, color: C.ink }}>{tr('다 됐어요 · 남은 칸은 나중에 해도 돼요')}</span>
-          <button
-            type="button" onClick={meet} data-action="pe-meet" disabled={sending || meeting}
-            style={{ flex: 'none', minHeight: TAP_MIN, padding: '0 16px', borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: fz.md, fontFamily: GAEGU, fontWeight: 700 }}
-          >{tr(sending || meeting ? '깨우는 중…' : '지금 만나러 가기')}</button>
-        </div>
-      )}
 
       {/* 아래 — 질문 한 칸(스크롤) + 단추(고정) */}
       <div className="pe-sheet" style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', background: C.paper, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, boxShadow: `0 -6px 20px ${ink(.06)}`, marginTop: gap.sm }}>
