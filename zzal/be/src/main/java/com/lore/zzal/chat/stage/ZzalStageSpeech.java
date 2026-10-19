@@ -45,8 +45,11 @@ public class ZzalStageSpeech {
  @io.swagger.v3.oas.annotations.media.Schema(nullable=true) Long turnRef,
  @io.swagger.v3.oas.annotations.media.Schema(requiredMode=io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED) Instant updatedAt){}
 
- public View view(boolean visible){boolean present=visible&&(status==Status.READY||"FALLBACK".equals(source));return new View(id,step,phase,visible?status:Status.SUPERSEDED,contextRevision,present?line:null,visible?source:null,present?motionId:null,present?turnRef:null,updatedAt);}
+ public View view(boolean visible){return view(visible,true);}
+ public View view(boolean visible,boolean activated){boolean present=visible&&activated&&(status==Status.READY||"FALLBACK".equals(source));return new View(id,step,phase,visible?status:Status.SUPERSEDED,contextRevision,present?line:null,visible?source:null,present?motionId:null,present?turnRef:null,updatedAt);}
+ public void activate(Long turn, String motion, Instant now){if(status==Status.READY&&turnRef==null){turnRef=turn;motionId=motion;updatedAt=now;}}
  public Long id(){return id;}public Long ownerId(){return ownerId;}public Long petId(){return petId;}public int introVersion(){return introVersion;}
  public ConversationScene.Step step(){return step;}public ConversationScene.Beat phase(){return phase;}public Status status(){return status;}public UUID token(){return claimToken;}
  public String snapshot(){return inputSnapshot;}public String hash(){return inputHash;}public String revision(){return contextRevision;}public String expectedStep(){return expectedStep;}public Long sessionId(){return sessionId;}
+ public Long turnRef(){return turnRef;}public String line(){return line;}public String costTrace(){return costTrace;}
 }

@@ -349,8 +349,7 @@ public class ChatService {
         var session=sessions.findByPetIdAndDayOfAndSlot(pet.getId(),AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS)
             .orElseThrow(()->new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
         var options=com.lore.zzal.attendance.CustomChatActions.allowed(customMotionOwnership==null?List.of():customMotionOwnership.owned(pet.getUserId(),pet.getId()));
-        boolean question=beat==com.lore.zzal.chat.prompt.ConversationScene.Beat.ENTRY && (step==com.lore.zzal.chat.prompt.ConversationScene.Step.FEED||step==com.lore.zzal.chat.prompt.ConversationScene.Step.GAME);
-        var plan=new TurnPlan(TurnType.CONTINUE,session.getRoundCount()+1,question,null,false,ChatSlot.CONTINUOUS);
+        var plan=new TurnPlan(TurnType.CONTINUE,session.getRoundCount()+1,false,null,false,ChatSlot.CONTINUOUS);
         return withFacts(new ChatContext(pet.getId(),sheets.build(pet),PetState.of(pet,now),session.getKind(),plan,null,history(pet,session,now),List.of())
             .withActionOptions(options).withScene(new com.lore.zzal.chat.prompt.ConversationScene(com.lore.zzal.chat.prompt.ConversationScene.Phase.TUTORIAL_STAGE,step,beat)),null);
     }

@@ -141,9 +141,13 @@ public final class PromptAssembler {
             b.append("장면: ").append(ctx.scene().phase()).append("\n");
             b.append("장면 박자: ").append(ctx.scene().beat()).append("\n");
             if(ctx.scene().step()==ConversationScene.Step.FIRST_MEETING_DISCOVERY) b.append("처음 눈을 뜨고 상대를 발견한 순간이다. 아직 호칭은 확정되지 않았다. 호칭이나 사용자 사실을 추정하지 말고 캐릭터의 상태와 마음을 짧게 표현한다. 호칭을 이미 들었다거나 행동을 마쳤다고 말하지 않는다.\n");
-            if (ctx.scene().phase()==ConversationScene.Phase.TUTORIAL_STAGE) b.append("ENTRY는 현재 상태와 마음을 짧게 말한다. ENTRY의 FEED는 사용자 끼니, GAME은 놀이 의향을 짧게 묻는다. AFTER_ACTION은 서버가 방금 성공 처리한 행동 뒤 반응이다. 사용자 발화를 새로 만들거나 행동을 또 성공시켰다고 하지 않는다.\n");
+            if (ctx.scene().phase()==ConversationScene.Phase.TUTORIAL_STAGE) b.append("ENTRY는 현재 상태와 마음을 짧게 말하며 캐릭터에게 필요한 돌봄이나 함께할 행동을 안내한다. 사용자에게 질문하거나 대답을 요구하지 않는다. AFTER_ACTION은 서버가 방금 성공 처리한 행동 뒤 반응이다. 사용자 발화를 새로 만들거나 행동을 또 성공시켰다고 하지 않는다.\n");
             if (ctx.scene().step() != null) b.append("현재 행동: ").append(ctx.scene().step()).append("\n");
-            b.append("같은 캐릭터 설정·호칭·언어를 유지한다. 사용자 답을 먼저 받아주고 상태와 마음을 짧게 말한다. 버튼명과 절차를 나열하지 않는다. 사용자 답이나 네 대사를 행동 성공·보상 지급의 증거로 삼지 않는다.\n\n");
+            b.append("같은 캐릭터 설정·호칭·언어를 유지한다. ");
+            b.append(ctx.scene().phase() == ConversationScene.Phase.TUTORIAL_STAGE
+                    ? "사용자 대답을 요구하지 않고 상태와 마음을 짧게 말한다. "
+                    : "사용자 답을 먼저 받아주고 상태와 마음을 짧게 말한다. ");
+            b.append("버튼명과 절차를 나열하지 않는다. 사용자 답이나 네 대사를 행동 성공·보상 지급의 증거로 삼지 않는다.\n\n");
         }
         PetState st = ctx.state();
         b.append("[지금]\n");

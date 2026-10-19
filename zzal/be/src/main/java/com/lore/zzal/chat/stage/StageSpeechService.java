@@ -4,10 +4,17 @@ import org.springframework.stereotype.Service;import org.springframework.transac
 import java.time.Instant;import java.util.List;
 /** Orchestrates committed claim -> no transaction/model call -> committed completion. */
 @Service public class StageSpeechService {
- private final StageSpeechTransactions tx;private final LineChain lines;
- public StageSpeechService(StageSpeechTransactions tx,LineChain lines){this.tx=tx;this.lines=lines;}
+ private final StageSpeechTransactions tx;private final LineChain lines;private final StageSpeechBatchGenerator batch;
+ public StageSpeechService(StageSpeechTransactions tx,LineChain lines){this(tx,lines,null);}
+ @org.springframework.beans.factory.annotation.Autowired
+ public StageSpeechService(StageSpeechTransactions tx,LineChain lines,StageSpeechBatchGenerator batch){this.tx=tx;this.lines=lines;this.batch=batch;}
  public ZzalStageSpeech.View prepare(Long owner,Long petId,ConversationScene.Step step,ConversationScene.Beat phase,Instant now){
   if(TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("Stage generation must not run inside caller transaction");
+  if(batch!=null){
+   var claims=tx.claimBatch(owner,petId,step,phase,now);
+   if(!claims.claims().isEmpty())tx.completeBatch(owner,petId,claims,batch.generate(claims.claims()),Instant.now());
+   return tx.activate(owner,petId,step,phase,Instant.now());
+  }
   return generate(owner,petId,tx.claim(owner,petId,step,phase,now));
  }
  public ZzalStageSpeech.View prepareDiscovery(Long owner,Long petId,Instant now,String language){
