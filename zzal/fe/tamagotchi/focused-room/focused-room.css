@@ -30,3 +30,10 @@
 .focused-room .fr-game-sheet .fr-game-foot>.fr-close{position:absolute;right:0;top:11px;background:transparent;border-color:transparent}
 .focused-room .fr-game-sheet .fr-game-foot>.fr-close svg{width:17px;height:17px}
 .focused-room .fr-game-sheet .fr-stamps span[data-result=empty]{border-color:#795C48;opacity:1}
+
+/* Larger hands keep the same room composition and compact game footprint. */
+.focused-room .fr-game-sheet .fr-hands{height:84px;gap:20px}
+.focused-room .fr-game-sheet .fr-hands button{width:84px;height:84px;min-height:84px;flex-shrink:0}
+.focused-room .fr-game-sheet .fr-hands img{width:78px;height:78px}
+.focused-room .fr-game-sheet .fr-game-foot{height:22px;flex-shrink:0}
+.focused-room .fr-game-sheet .fr-game-foot>button:not(.fr-close){position:absolute;right:0;top:11px;width:44px;min-width:44px;min-height:44px;padding:4px;font-size:13px}

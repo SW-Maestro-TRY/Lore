@@ -7,7 +7,7 @@ import type {ZzalLocale} from '../../lib/locale';
 import type {FocusedExperience} from './useFocusedExperience';
 import {focusedCopy,restHelp} from './focusedCopy';
 import './focused-tiles.css';
-const actions={table:['FEED','SNACK'],bath:['CLEAN','BATH'],play:['GAME','PET'],bed:['REST'],album:['collection','journal','background']} as const;
+const actions={table:['FEED','SNACK'],bath:['CLEAN','BATH'],play:['GAME'],bed:['REST'],album:['collection','journal','background']} as const;
 const tutorialAction:Record<string,string>={FEED:'FEED',SNACK:'SNACK',CLEAN:'CLEAN',BATH:'BATH',GAME:'GAME',NAP_SLEEP:'REST',NAP_WAKE:'REST'};
 const layerStyle=(text:string)=>Object.fromEntries([['position','absolute'],...text.split(';').filter(Boolean).map(part=>{const i=part.indexOf(':');return[part.slice(0,i).replace(/-([a-z])/g,(_,c:string)=>c.toUpperCase()),part.slice(i+1)]})]) as CSSProperties;
 /** Approved A: only the five-tile row changes; the real composer stays mounted. */
@@ -15,7 +15,7 @@ export default function FocusedTiles({live,x,locale,drawerOpen,beforeOpen}:{live
  const t=focusedCopy(locale),[group,setGroup]=useState<RoomKey|null>(null),root=useRef<HTMLDivElement>(null),last=useRef<RoomKey|null>(null);
  const sleeping=!!live.pet?.clock?.sleeping,traveling=!!live.pet?.trip,target=x.guided&&x.currentTarget?tutorialAction[x.key??'']:null;
  const names:Record<RoomKey,string>=locale==='en'?{table:'Kitchen',bath:'Bathroom',play:'Yard',bed:'Bedroom',album:t.album}:locale==='ja'?{table:'キッチン',bath:'浴室',play:'庭',bed:'寝室',album:t.album}:{table:'주방',bath:'욕실',play:'마당',bed:'침실',album:t.album};
- const labels:Record<string,string>={FEED:t.feed,SNACK:t.snack,CLEAN:t.clean,BATH:t.bath,GAME:live.game?.playing?t.restart:t.game,PET:t.pet,REST:sleeping?t.wake:t.sleep,collection:t.album,journal:t.journal,background:t.background};
+ const labels:Record<string,string>={FEED:t.feed,SNACK:t.snack,CLEAN:t.clean,BATH:t.bath,GAME:locale==='en'?'Left or right':locale==='ja'?'左右あて':'좌우 맞히기',PET:t.pet,REST:sleeping?t.wake:t.sleep,collection:t.album,journal:t.journal,background:t.background};
  const allowed=(action:string)=>!x.busy&&(!traveling||['collection','journal','background'].includes(action))&&(!x.guided||target===action)&&(action==='REST'?!!(sleeping?live.pet?.clock?.canWake:live.pet?.clock?.canSleep):['collection','journal','background'].includes(action)||!sleeping);
  const enabled=(key:RoomKey)=>!x.busy&&(!x.guided||!!target&&(actions[key] as readonly string[]).includes(target))&&(key==='album'||!traveling)&&(key==='bed'||key==='album'||!sleeping);
  const back=()=>{last.current=group;setGroup(null);if(x.panel==='care')x.close()};
