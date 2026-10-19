@@ -24,7 +24,7 @@ import {useZzalLocale} from '../../lib/locale';
 import {useUiText} from '../../lib/uiCopy';
 import {personaChipLabel} from './personaChipCopy';
 import {personaStepCopy,personaNameCopy} from './personaStepCopy';
-import { C, GAEGU, MONO, TAP_MIN, gap, monoSize, radius, fz, ink, acc } from './ui';
+import { C, GAEGU, TAP_MIN, gap, radius, fz, ink, acc } from './ui';
 import { useLive } from './useHatch';
 import { EGG_CRACK_MS, type Yeoul } from './useYeoul';
 import { once, ztrack } from './funnel';
@@ -454,16 +454,6 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
     else setIdx(idx + 1);
   }, [step, busyFx, idx, answers, N, tilt, finish]);
 
-  const skipRest = useCallback(() => {
-    if (!step || busyFx) return;
-    ztrack('zzal_persona_q_skipped', { step: idx + 2, type: step.key, action: 'rest' });
-    // 지금 칸과 그 뒤(「이전」으로 되돌려 점이 빠진 칸)에 남은 것은 알에 안 들었으므로 버린다.
-    const next = settledOf(answers, idx);
-    setAnswers(next);
-    setSkipped((sk) => [...sk, ...PERSONA_STEPS.slice(idx).map((st) => st.key).filter((k) => !sk.includes(k))]);
-    finish(next);
-  }, [step, busyFx, idx, answers, finish]);
-
   // ── 만나러 가기 ──
   const meet = useCallback(async () => {
     if (meeting) return;
@@ -493,17 +483,6 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
   const eggAnim = isCrack ? 'yCrack 1.45s cubic-bezier(.36,.07,.19,.97) 1 both'
     : !named ? 'none'
       : baked ? 'yShakeBig 1.35s ease-in-out infinite' : 'yWiggle 2.2s ease-in-out infinite';
-
-  // ── 알 아래 한 줄 ──
-  const left = live.etaSeconds > 0 && !baked && !live.failed
-    ? (live.etaSeconds >= 60 ? `약 ${Math.ceil(live.etaSeconds / 60)}분` : '곧')
-    : '';
-  const status = live.failed
-    ? (live.message ?? '이 그림은 좀 어렵네요')
-    : !named ? '이름을 기다리는 알'
-      : baked ? '다 됐어요'
-        : (live.step ?? '깨어나는 중');
-  const count = named && live.total > 0 ? `${Math.min(live.progress, live.total)} / ${live.total}` : '';
 
   // 글로우 세기 — 넣을수록 조금씩 밝아진다(glow 판의 보상). dots 판은 은은하게 고정.
   const glowBase = variant === 'glow' ? Math.min(0.95, 0.35 + placed.length * 0.09) : 0.18;
@@ -560,10 +539,10 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
       <style>{STYLE}</style>
       {sampleOpen && <div role="dialog" aria-modal="true" aria-label={tr('로미의 방')} style={{position:'absolute',inset:0,zIndex:60,background:C.paper,display:'flex',flexDirection:'column'}}><RomiSampleRoom onBack={closeSample} onReady={live.ready ? () => { closeSample(); void meet(); } : undefined}/></div>}
       <span aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
-        {idx < 0 ? nameCopy.q : step ? `${idx + 2} · ${step.q}` : baked ? tr('다 됐어요. 만나러 갈 수 있어요.') : tr('다 넣었어요. 곧 나와요.')}
+        {idx < 0 ? nameCopy.q : step ? step.q : baked ? tr('다 됐어요. 만나러 갈 수 있어요.') : tr('다 넣었어요. 곧 나와요.')}
       </span>
 
-      {/* 머리줄 — 뒤로 · 묶음 이름 · 나머지는 나중에 */}
+      {/* 머리줄 — 뒤로 · 언어 선택 */}
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.sm, padding: '6px 14px 0', minHeight: TAP_MIN }}>
         {!submitted ? (
           <button
@@ -573,15 +552,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
             <span style={{ border: `1px solid ${C.lineHard}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: fz.md, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</span>
           </button>
         ) : <span style={{ width: TAP_MIN }} />}
-        <span style={{ flex: 1, textAlign: 'center', font: `${monoSize.sm}px ${MONO}`, color: ink(.45) }}>
-          {idx < 0 ? '' : step ? `${step.section} · ${idx + 2}/${N + 1}` : ''}
-        </span>
-        {step && !submitted ? (
-          <button
-            type="button" onClick={skipRest} data-action="pe-skip-rest" disabled={busyFx}
-            style={{ minHeight: TAP_MIN, padding: '0 6px', border: 'none', background: 'none', fontSize: fz.sm, color: C.sub2, textDecoration: 'underline', textUnderlineOffset: 3 }}
-          >{tr('나머지는 나중에')}</button>
-        ) : <span style={{ width: TAP_MIN }} />}
+        <span aria-hidden style={{ flex: 1 }} />
       </div>
 
       {/* 알 무대 — 입력 중에도 같은 크기와 위치. 누르는 자리는 없다(보기만). */}
@@ -625,11 +596,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
             </div>
           </div>
         </div>
-        <span className="pe-status" data-part="pe-status" style={{ display: 'flex', alignItems: 'center', gap: gap.sm, flex: 'none', fontSize: fz.sm, color: live.failed ? C.accent : ink(.58) }}>
-          <span>{tr(status)}</span>
-          {count && <span style={{ font: `${monoSize.xs}px ${MONO}`, color: ink(.4) }}>{count}</span>}
-          {left && <span style={{ color: ink(.45) }}>· {tr(left)}</span>}
-        </span>
+        {live.failed && <span className="pe-status" data-part="pe-status" role="alert" style={{ flex: 'none', fontSize: fz.sm, color: C.accent }}>{tr(live.message ?? '이 그림은 좀 어렵네요')}</span>}
       </div>
 
       {/* 아래 — 질문 한 칸(스크롤) + 단추(고정) */}
