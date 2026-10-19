@@ -15,7 +15,8 @@ import { useFocusedExperience } from './useFocusedExperience';
 import { FocusedPanels } from './FocusedPanels';
 import { FocusedProps } from './FocusedProps';
 import FocusedTiles from './FocusedTiles';
-import { focusedCopy } from './focusedCopy';
+import { focusedCopy, endingCopy } from './focusedCopy';
+import {RomiChatExample} from './RomiChatExample';
 import { useAnchors } from '../props/anchors';
 import {useAuth} from '@common/auth/useAuth';
 import SceneShare from '../yeoul/SceneShare';
@@ -42,7 +43,7 @@ export default function FocusedRoom({ live }: { live: Live }) {
 export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBridge, sampleMode=false }: {
   live: FocusedLive; sampleMode?:boolean; bridgeFactory?: (source: RoomChatSource) => RoomChatBridge;
 }) {
-  const locale=useZzalLocale(),t=focusedCopy(locale),x=useFocusedExperience(live,locale);
+  const locale=useZzalLocale(),t=focusedCopy(locale),x=useFocusedExperience(live,locale,sampleMode);
   const openAnnouncements=useOpenAnnouncements();
   const metrics=useFocusedAnalytics(live,sampleMode);
   const [returnError,setReturnError]=useState<string|null>(null);
@@ -59,7 +60,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const bridgeRef = useRef<RoomChatBridge | null>(null);
   const [storedSnapshot, setSnapshot] = useState<RoomChatSnapshot | null>(null);
   const [drawer, setDrawer] = useState<'history' | 'menu' | null>(null);
-  const [shareOpen,setShareOpen]=useState(false);
+  const [shareOpen,setShareOpen]=useState(false),[exampleReady,setExampleReady]=useState(false);
   const scene=useRef<HTMLDivElement>(null);
   const [legacy, setLegacy] = useState(false);
   const [reply, setReply] = useState<{ petId: number; sessionId: number | null; idx: number; line: string } | null>(null);
@@ -162,9 +163,11 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     </div>
     <header className="fr-header">
       <div><h1>{pet?.name || '방'}</h1><p>{pet?.daysTogether != null ? locale==='ko'?`함께한 지 ${pet.daysTogether}일`:locale==='en'?`${pet.daysTogether} days together`:`一緒に${pet.daysTogether}日` : ''}</p></div>
-      <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" onClick={() => { input.current?.blur(); setDrawer('menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={t.menu} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button></div>
+      <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" disabled={x.farewell} onClick={() => { input.current?.blur(); setDrawer('menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={t.menu} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button></div>
     </header>
-    {!traveling && !sleeping && line && <SpeechBubble key={`${live.petId}:${line}`} line={line} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{ left: speechWidth === size.width - 24 ? 12 : speechLeft, top: speechTop, width: speechWidth }} />}
+    {!traveling && !sleeping && line && <SpeechBubble key={`${live.petId}:${line}`} wideAbove={x.key==='FINISH_NOTICE'||x.farewell&&x.storyPhase===3} line={line} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{ left: speechWidth === size.width - 24 ? 12 : speechLeft, top: speechTop, width: speechWidth }} />}
+    {x.farewell&&x.storyPhase<2&&<RomiChatExample phase={x.storyPhase} locale={locale} onReady={setExampleReady}/>}
+    {x.farewell&&x.storyPhase===2&&<p className="fr-ending-system" data-fr-ending-system role="status">{endingCopy(locale).memory}</p>}
     {x.sleepFarewell&&!traveling&&sleeping&&<SpeechBubble line={locale==='ko'?'나는 이제 졸려서 자러 갈게. 아침에 또 이야기하자.':locale==='en'?'I am sleepy now, so I am going to bed. Let’s talk again in the morning.':'もう眠いから、そろそろ寝るね。また朝に話そう。'} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{left:speechWidth===size.width-24?12:speechLeft,top:speechTop,width:speechWidth}}/>}
     {(!src || geometry.failed) && !traveling && <p className="fr-asset-status" role="status">{locale==='en'?'Could not load the character image.':locale==='ja'?'キャラクターの画像を読み込めませんでした。':'캐릭터 그림을 불러오지 못했어요.'}</p>}
     <div className="fr-status" role="status" aria-live="polite">
@@ -175,7 +178,6 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       {x.graceNotice&&!sleeping&&!traveling&&<p data-fr-grace-notice>{locale==='ko'?'조금 있으면 잠들어요. 나머지 이야기는 아침에 이어가요.':locale==='en'?'Sleep is coming soon. Continue the conversation in the morning.':'もうすぐ眠ります。続きは朝に話しましょう。'}</p>}
       {x.error&&<p role="alert">{x.error}</p>}
       {x.careUncertain&&<button data-fr-care-retry onClick={()=>void x.retryCare()}>{t.retry}</button>}
-      {x.farewell&&x.error&&<button disabled={x.closingReview} onClick={()=>void x.retryFarewell()}>{t.retry}</button>}
       {activeCustom&&!customReady&&<p role="status">{t.loading}</p>}
       {sending && <p>{t.thinking}</p>}
       {snapshot?.error && <p>{snapshot.error}</p>}
@@ -183,8 +185,12 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       {blocked === 'loading' && snapshot?.error && <button onClick={() => void bridgeRef.current?.loadContext()}>{t.retry}</button>}
     </div>
     <footer ref={dock} className="fr-dock" aria-hidden={x.panel==='game'} inert={x.panel==='game'}>
-      <FocusedTiles live={live} x={x} locale={locale} drawerOpen={!!drawer} beforeOpen={()=>{input.current?.blur();setDrawer(null)}}/>
-      {x.guided&&x.key==='FINISH_NOTICE'&&!x.panel&&<button className="fr-finish-trigger" data-fr-target="true" onClick={()=>x.open('finish')}>{t.next}</button>}
+      {x.key!=='FINISH_NOTICE'&&!x.farewell&&<FocusedTiles live={live} x={x} locale={locale} drawerOpen={!!drawer} beforeOpen={()=>{input.current?.blur();setDrawer(null)}}/>}
+      {x.guided&&x.key==='FINISH_NOTICE'&&!x.panel&&<div data-fr-finish-beat={x.finishBeat}>
+        {x.finishBeat===1&&(pet?.attendanceRewards?.background.preview?<figure className="fr-finish-preview"><img data-fr-preview src={assetUrl(pet.attendanceRewards.background.preview.url)} alt={t.preview}/><figcaption>{t.preview}</figcaption></figure>:<p className="fr-finish-preparing" data-fr-preview-pending>{t.preparing}</p>)}
+        <button className="fr-finish-trigger" data-fr-action="finish-next" data-fr-target={x.currentTarget==='finish'&&!drawer?'true':undefined} disabled={x.busy||sleeping||traveling||pet?.phase!=='ALIVE'} onClick={x.nextFinish}>{x.busy?t.busy:x.error?t.retry:t.next}</button>
+      </div>}
+      {x.farewell&&<button className="fr-finish-trigger" data-fr-story-next={x.storyPhase} data-fr-target={!x.busy&&!sleeping&&!traveling&&pet?.phase==='ALIVE'&&(x.storyPhase!==1||exampleReady)?'true':undefined} disabled={x.busy||sleeping||traveling||pet?.phase!=='ALIVE'||x.storyPhase===1&&!exampleReady} onClick={()=>void x.nextStory()}>{x.busy?t.busy:x.error?t.retry:t.next}</button>}
       {x.guided&&x.key==='REVIEW_SEEN'&&!x.panel&&!x.farewell&&<button onClick={()=>x.open('review')}>{t.review}</button>}
       {(!x.guided||x.panel==='game')&&<form className="fr-composer" onSubmit={send}>
         <button type="button" ref={historyButton} className="fr-history-icon" onClick={openHistory} disabled={x.busy} aria-label={t.history}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2"/></svg></button>
@@ -219,24 +225,24 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
 }
 
 type SpeechBounds={left:number;right:number;top:number;bottom:number};
-export function SpeechBubble({line,budget,style,previous,next,bounds}:{line:string;budget:number;style:CSSProperties;previous:string;next:string;bounds:SpeechBounds}){
+export function SpeechBubble({line,budget,style,previous,next,bounds,wideAbove=false}:{line:string;budget:number;style:CSSProperties;previous:string;next:string;bounds:SpeechBounds;wideAbove?:boolean}){
  const root=useRef<HTMLDivElement>(null),[page,setPage]=useState(0),[capacity,setCapacity]=useState(Number.MAX_SAFE_INTEGER);const chars=Array.from(line),count=Math.max(1,Math.ceil(chars.length/capacity)),current=Math.min(page,count-1);
  useLayoutEffect(()=>{
   const bubble=root.current,host=bubble?.closest<HTMLElement>('.focused-room'),body=bubble?.querySelector('p');if(!bubble||!host||!body)return;
-  const width=host.clientWidth,height=host.clientHeight,edge=12,gap=12;let safeTop=12,safeBottom=height-12;
-  for(const selector of ['.fr-header','.fr-sample-controls']){const e=host.querySelector<HTMLElement>(selector);if(e&&e.checkVisibility())safeTop=Math.max(safeTop,e.getBoundingClientRect().bottom-host.getBoundingClientRect().top+8)}
+  const width=host.clientWidth,height=host.clientHeight,edge=12,gap=wideAbove?4:12;let safeTop=12,safeBottom=height-12;
+  for(const selector of ['.fr-header','.fr-sample-controls']){const e=host.querySelector<HTMLElement>(selector);if(e&&e.checkVisibility())safeTop=Math.max(safeTop,e.getBoundingClientRect().bottom-host.getBoundingClientRect().top+(wideAbove?2:8))}
   for(const selector of ['.fr-dock','.fr-game-sheet','.fr-meeting-controls']){const e=host.querySelector<HTMLElement>(selector);if(e&&e.checkVisibility())safeBottom=Math.min(safeBottom,e.getBoundingClientRect().top-host.getBoundingClientRect().top-gap)}
   const old=body.textContent;body.textContent=line;bubble.querySelector<HTMLElement>('.fr-speech-pages')?.style.setProperty('display','none');
-  const probe=document.createElement('span');probe.style.cssText='position:absolute;visibility:hidden;white-space:pre';probe.style.font=getComputedStyle(body).font;probe.textContent=line;host.append(probe);const natural=probe.getBoundingClientRect().width+30;probe.remove();const preferred=Math.min(width-edge*2,Math.max(84,Math.min(260,natural)));
+  const probe=document.createElement('span');probe.style.cssText='position:absolute;visibility:hidden;white-space:pre';probe.style.font=getComputedStyle(body).font;probe.textContent=line;host.append(probe);const natural=probe.getBoundingClientRect().width+30;probe.remove();const preferred=wideAbove?width-edge*2:Math.min(width-edge*2,Math.max(84,Math.min(260,natural)));
   const measure=(w:number)=>{bubble.style.width=Math.floor(w)+'px';return bubble.getBoundingClientRect().height};const candidates:Array<{mode:string;w:number;left:number;top:number;available:number;fits:boolean}>=[];
   const add=(mode:string,w:number,left:number,top:number,min:number,max:number)=>{if(w<84||max-min<28)return;const h=measure(w);candidates.push({mode,w,left,top:Math.max(min,Math.min(top,max-h)),available:max-min,fits:h<=max-min+.5})};
   const above=bounds.top-gap;add('above',preferred,width-edge-preferred,above-measure(preferred),safeTop,above);if(!candidates.some(c=>c.fits)&&preferred<width-edge*2)add('above',width-edge*2,edge,above-measure(width-edge*2),safeTop,above);
-  const rightWidth=width-edge-bounds.right-gap;if(rightWidth>=84){const w=Math.min(preferred,rightWidth);add('right',w,bounds.right+gap,bounds.top+8,safeTop,safeBottom)}const leftWidth=bounds.left-gap-edge;if(leftWidth>=84){const w=Math.min(preferred,leftWidth);add('left',w,bounds.left-gap-w,bounds.top+8,safeTop,safeBottom)}
+  const rightWidth=width-edge-bounds.right-gap;if(!wideAbove&&rightWidth>=84){const w=Math.min(preferred,rightWidth);add('right',w,bounds.right+gap,bounds.top+8,safeTop,safeBottom)}const leftWidth=bounds.left-gap-edge;if(!wideAbove&&leftWidth>=84){const w=Math.min(preferred,leftWidth);add('left',w,bounds.left-gap-w,bounds.top+8,safeTop,safeBottom)}
   const chosen=candidates.find(c=>c.fits)||candidates.sort((a,b)=>b.w*b.available-a.w*a.available)[0]||{mode:'above',w:width-edge*2,left:edge,top:safeTop,available:Math.max(28,safeBottom-safeTop),fits:false};
-  bubble.style.width=chosen.w+'px';bubble.style.left=Math.max(edge,Math.min(width-edge-chosen.w,chosen.left+10))+'px';bubble.style.top=Math.max(safeTop,chosen.top-10)+'px';bubble.dataset.speechPlacement=chosen.mode;bubble.dataset.speechFits=String(chosen.fits);bubble.style.setProperty('--fr-tail-x',Math.max(20,Math.min(chosen.w-24,(bounds.left+bounds.right)/2-chosen.left))+'px');body.textContent=old;
+  bubble.style.width=chosen.w+'px';bubble.style.left=Math.max(edge,Math.min(width-edge-chosen.w,chosen.left+(wideAbove?0:10)))+'px';bubble.style.top=Math.max(safeTop,chosen.top-(wideAbove?0:10))+'px';bubble.dataset.speechPlacement=chosen.mode;bubble.dataset.speechFits=String(chosen.fits);bubble.style.setProperty('--fr-tail-x',Math.max(20,Math.min(chosen.w-24,(bounds.left+bounds.right)/2-chosen.left))+'px');body.textContent=old;
   const cap=chosen.fits?Number.MAX_SAFE_INTEGER:Math.max(12,Math.min(budget,Math.floor(chosen.w/14)*Math.max(1,Math.floor((chosen.available-72)/28))));setCapacity(cap);bubble.querySelector<HTMLElement>('.fr-speech-pages')?.style.removeProperty('display');
  });
- return <div ref={root} className="fr-bubble" data-fr-speech style={style}><p>{chars.slice(current*capacity,(current+1)*capacity).join('')}</p>{count>1&&<div className="fr-speech-pages"><button aria-label={previous} disabled={current===0} onClick={()=>setPage(current-1)}>{previous}</button><span>{current+1}/{count}</span><button aria-label={next} disabled={current+1===count} onClick={()=>setPage(current+1)}>{next}</button></div>}</div>;
+ return <div ref={root} className="fr-bubble" data-fr-speech data-fr-ending-speech={wideAbove?true:undefined} style={style}><p>{chars.slice(current*capacity,(current+1)*capacity).join('')}</p>{count>1&&<div className="fr-speech-pages"><button aria-label={previous} disabled={current===0} onClick={()=>setPage(current-1)}>{previous}</button><span>{current+1}/{count}</span><button aria-label={next} disabled={current+1===count} onClick={()=>setPage(current+1)}>{next}</button></div>}</div>;
 }
 
 function RoomAccountActions({locale}:{locale:'ko'|'en'|'ja'}){const{signOut}=useAuth(),[confirm,setConfirm]=useState(false),[busy,setBusy]=useState(false);return confirm?<div className="fr-logout"><p>{locale==='ko'?'로그아웃할까요?':locale==='en'?'Sign out?':'ログアウトしますか？'}</p><button disabled={busy} onClick={()=>{setBusy(true);void signOut().then(()=>{location.assign('/zzal')}).finally(()=>setBusy(false))}}>{locale==='ko'?'로그아웃':locale==='en'?'Sign out':'ログアウト'}</button><button disabled={busy} onClick={()=>setConfirm(false)}>{locale==='ko'?'취소':locale==='en'?'Cancel':'キャンセル'}</button></div>:<button onClick={()=>setConfirm(true)}>{locale==='ko'?'로그아웃':locale==='en'?'Sign out':'ログアウト'}</button>;}

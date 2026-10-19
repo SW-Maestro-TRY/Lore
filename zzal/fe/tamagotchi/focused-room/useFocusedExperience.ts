@@ -7,19 +7,20 @@ import type { Side, GuessResult } from '../../lib/game';
 import type { ZzalLocale } from '../../lib/locale';
 import { CYCLE_MS, cyclesOfAction, situationOfAction, poseOfSituation, stagePlanOf, stageAt, type ActionKey } from '../props/situations';
 import { SITUATION_TABLE } from '../props/table';
-import { focusedCopy, fallbackIntroLine, focusedGameLine } from './focusedCopy';
+import { focusedCopy, fallbackIntroLine, focusedGameLine, finishDialogueLine } from './focusedCopy';
+import {useTutorialEnding} from './useTutorialEnding';
 import {useFocusedStageSpeech} from './useFocusedStageSpeech';
 import {selectOwnedChatResource,sameChatResource,type FocusedChatResource} from './focusedChatMotion';
 import{selectCarePlayback}from'./focusedCareMotion';
 import type{PetDetail}from'../../lib/pet';
-export type FocusedPanel = 'care'|'game'|'attendance'|'finish'|'review'|'collection-hub'|'collection'|'journal'|'background'|'info'|'help'|null;
+export type FocusedPanel = 'care'|'game'|'attendance'|'review'|'collection-hub'|'collection'|'journal'|'background'|'info'|'help'|null;
 const careAction:Record<string,ActionKey>={FEED:'feed_rice',SNACK:'feed_snack',CLEAN:'clean',BATH:'bath',PET:'pet',MEDICINE:'medicine'};
 const actionCare:Partial<Record<ActionKey,CareAction>>={feed_rice:'FEED',feed_snack:'SNACK',clean:'CLEAN',bath:'BATH',pet:'PET',medicine:'MEDICINE'};
 const custom:Partial<Record<ActionKey,string>>={feed_rice:'eat_rice',feed_snack:'eat_snack',clean:'sweep',bath:'wash',pet:'petted',wake:'wake_up',reply:'reply',game_choose:'startle'};
 export type FocusedVisual={custom?:FocusedChatResource;pose:string;situation:string|null;stage:number;prop:string|null;signal:string|null};
 const idle:FocusedVisual={pose:'base',situation:null,stage:0,prop:null,signal:null};
 /** Only server responses advance an intro; visual timers are never completion receipts. */
-export function useFocusedExperience(live:Live,locale:ZzalLocale){
+export function useFocusedExperience(live:Live,locale:ZzalLocale,sampleMode=false){
  const t=focusedCopy(locale),owner=useRef(live);owner.current=live;
  const [panel,setPanel]=useState<FocusedPanel>(null),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[visual,setVisual]=useState(idle);
  const [result,setResult]=useState<GuessResult|null>(null),[marks,setMarks]=useState<Record<number,boolean>>({});
@@ -30,7 +31,7 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
  const graceSyncRef=useRef(false);graceSyncRef.current=graceSync;
  const [graceNotice,setGraceNotice]=useState(false),[sleepFarewell,setSleepFarewell]=useState(false);
  const observedDeadline=useRef<{petId:number|null;deadline:string}|null>(null);
- const [farewell,setFarewell]=useState(false),[closingReview,setClosingReview]=useState(false);
+ const [closingReview,setClosingReview]=useState(false);
  const lock=useRef(false),gameEpoch=useRef(0),epoch=useRef(0),cancelVisual=useRef<(()=>void)|null>(null),timers=useRef(new Set<ReturnType<typeof setTimeout>>()),mounted=useRef(true);
  const chatPlayback=useRef<{id:string;start:()=>void;fail:()=>void}|null>(null),playedReplies=useRef(new Set<string>()),playedCareResponses=useRef(new Set<string>()),careAuthority=useRef<{before:PetDetail|null;response:PetDetail}|null>(null);
  const petId=live.petId,serverIntro=live.pet?.firstIntro;
@@ -38,12 +39,14 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
  const guided=serverIntro?.version===4&&serverIntro.key!=='COMPLETE';
  // Follow the authoritative step immediately, including while its action animation finishes.
  const key=guided?serverIntro?.key:undefined;
+ const ending=useTutorialEnding(petId,serverIntro?.key,sampleMode);
+ const farewell=!sampleMode&&key==='REVIEW_SEEN'&&ending.storyPhase>=0;
  const sleeping=!!live.pet?.clock?.sleeping,traveling=!!live.pet?.trip;
  const valid=(stamp:number,id:number|null)=>mounted.current&&epoch.current===stamp&&owner.current.petId===id;
  useEffect(()=>{if(sleeping||traveling){gameEpoch.current++;cancelVisual.current?.();setPanel(null);}},[sleeping,traveling]);
 
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;epoch.current++;cancelVisual.current?.();for(const timer of timers.current)clearTimeout(timer);};},[]);
- useEffect(()=>{setTrashOverride(null);epoch.current++;lock.current=false;cancelVisual.current?.();for(const timer of timers.current)clearTimeout(timer);timers.current.clear();setBusy(false);setPanel(null);setVisual(idle);setError(null);setFarewell(false);setClosingReview(false);setSleepFarewell(false);setGraceSync(false);observedDeadline.current=null;setResult(null);setMarks({});setGamePhase('ready');},[petId]);
+ useEffect(()=>{setTrashOverride(null);epoch.current++;lock.current=false;cancelVisual.current?.();for(const timer of timers.current)clearTimeout(timer);timers.current.clear();setBusy(false);setPanel(null);setVisual(idle);setError(null);setClosingReview(false);setSleepFarewell(false);setGraceSync(false);observedDeadline.current=null;setResult(null);setMarks({});setGamePhase('ready');},[petId]);
  const animate=(action:ActionKey,cycleOverride?:number,forceBasic=false)=>{
   // Compatibility for existing semantic-key catalog assets only; never infer generated multi-set metadata here.
   cancelVisual.current?.();if(document.hidden)return Promise.resolve();const l=owner.current;const owned=!forceBasic&&custom[action]&&l.pet?.motions?.some(m=>m.key===custom[action]&&m.unlocked&&m.basicImageKey);
@@ -111,15 +114,10 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
  };
  const acknowledge=async(topic:'ATTENDANCE_INTRO'|'REVIEW_SEEN')=>{const stamp=epoch.current,id=petId;if(lock.current)return false;lock.current=true;setBusy(true);setError(null);try{const r=await owner.current.tutorialSeen(topic);if(!valid(stamp,id))return false;if(!r.ok){setError(r.message||t.error);return false;}setPanel(null);return true;}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error);return false;}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
  const finish=async()=>{if(lock.current)return;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);try{const r=await owner.current.finishTutorial();if(!valid(stamp,id))return;if(!r.ok){setError(r.message||t.error);return;}setPanel(null);}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error)}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
- const farewellKey=`zzal-focused-review-dismissed-v4:${petId}`;
- const dismissReview=()=>{setPanel(null);if(serverIntro?.key!=='REVIEW_SEEN')return;setFarewell(true);try{sessionStorage.setItem(farewellKey,'1')}catch{/* UI state only; server remains REVIEW_SEEN until acknowledgment */}};
- useEffect(()=>{if(serverIntro?.version!==4||serverIntro.key!=='REVIEW_SEEN'){setFarewell(false);return;}try{if(sessionStorage.getItem(farewellKey)==='1'){setFarewell(true);return;}}catch{}setPanel('review');},[petId,serverIntro?.version,serverIntro?.key]);
- useEffect(()=>{if(!farewell||closingReview||sleeping||serverIntro?.key!=='REVIEW_SEEN')return;let timer:ReturnType<typeof setTimeout>|undefined;let alive=true;
-  const schedule=()=>{if(timer)clearTimeout(timer);if(document.hidden)return;timer=setTimeout(()=>{if(!alive)return;setClosingReview(true);void acknowledge('REVIEW_SEEN').then(ok=>{if(!alive)return;setClosingReview(false);if(ok){setFarewell(false);try{sessionStorage.removeItem(farewellKey)}catch{}}});},2400);};
-  schedule();document.addEventListener('visibilitychange',schedule);return()=>{alive=false;if(timer)clearTimeout(timer);document.removeEventListener('visibilitychange',schedule)};
- // Failed ACK remains visible with explicit retry; never loops requests.
- },[farewell,sleeping,serverIntro?.key,petId]);
- const retryFarewell=async()=>{setClosingReview(true);const ok=await acknowledge('REVIEW_SEEN');setClosingReview(false);if(ok){setFarewell(false);try{sessionStorage.removeItem(farewellKey)}catch{}}};
+ const nextFinish=()=>{if(lock.current||key!=='FINISH_NOTICE')return;if(ending.finishBeat===0)ending.nextFinish();else void finish()};
+ const dismissReview=()=>{setPanel(null);if(serverIntro?.key==='REVIEW_SEEN'&&!sampleMode)ending.startStory()};
+ useEffect(()=>{if(sampleMode||serverIntro?.version!==4||serverIntro.key!=='REVIEW_SEEN'||!ending.ready)return;setPanel(ending.storyPhase<0?'review':null)},[petId,serverIntro?.version,serverIntro?.key,ending.ready,ending.storyPhase,sampleMode]);
+ const nextStory=async()=>{if(lock.current||!farewell||sleeping||traveling||owner.current.pet?.phase!=='ALIVE')return;if(ending.storyPhase<3){ending.nextStory();return;}const stamp=epoch.current,id=petId;setClosingReview(true);await acknowledge('REVIEW_SEEN');if(valid(stamp,id))setClosingReview(false)};
  // The clock only schedules a read/notice. The server alone grants chat or sleep.
  const grace=live.pet?.firstNightChatGrace;
  useEffect(()=>{
@@ -146,11 +144,12 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
   const hide=()=>{if(document.hidden)setSleepFarewell(false)};document.addEventListener('visibilitychange',hide);
   return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',hide)};
  },[petId,sleeping,traveling,grace?.active,grace?.endedAt]);
- const currentTarget=busy?null:key==='ATTENDANCE_INTRO'?(panel==='attendance'?'attendance-ack':panel==='finish'?null:'attendance-menu'):key==='FINISH_NOTICE'?'finish':key==='REVIEW_SEEN'?null:panel==='care'?(key==='FEED'?'FEED':key==='SNACK'?'SNACK':key==='CLEAN'?'CLEAN':key==='BATH'?'BATH':key==='GAME'?'GAME':key==='NAP_SLEEP'||key==='NAP_WAKE'?'REST':null):panel==='game'?null:key?'care':null;
+ const currentTarget=busy?null:key==='ATTENDANCE_INTRO'?(panel==='attendance'?'attendance-ack':'attendance-menu'):key==='FINISH_NOTICE'?'finish':key==='REVIEW_SEEN'?null:panel==='care'?(key==='FEED'?'FEED':key==='SNACK'?'SNACK':key==='CLEAN'?'CLEAN':key==='BATH'?'BATH':key==='GAME'?'GAME':key==='NAP_SLEEP'||key==='NAP_WAKE'?'REST':null):panel==='game'?null:key?'care':null;
  const gameLine=panel==='game'?(result&&(gamePhase==='reveal'||gamePhase==='done')?focusedGameLine(locale,result):locale==='en'?'Which hand did I hide it in?':locale==='ja'?'どっちの手に隠したかな？':'어느 손에 숨겼을까?'):null;
- const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided&&panel!=='game',fallbackIntroLine(key,locale),!busy&&!gameLine&&!farewell);
- const speech=gameLine??(farewell&&!sleeping?(live.pet?.firstNightChatGrace?.eligible?t.goodbyeNight:t.chatInvite):!sleeping&&guided?stage.line:null);
- const speechSource=gameLine||farewell?'SERVICE_FALLBACK':stage.source;
- return{careUncertain,retryCare,visualTrash:trashOverride??live.pet?.gauges?.trash??0,graceSync,sleepFarewell,graceNotice,gameScore,panel,open,close,busy,error,visual,key,guided,currentTarget,care,rest,startGame,choose,result,marks,gamePhase,selected,acknowledge,finish,dismissReview,farewell,closingReview,retryFarewell,speech,speechSource,stageStatus:stage.status,animate,playChatMotion,chatMotionReady};
+ const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided&&panel!=='game'&&key!=='FINISH_NOTICE',fallbackIntroLine(key,locale),!busy&&!gameLine&&!farewell);
+ const finishLine=key==='FINISH_NOTICE'?finishDialogueLine(ending.finishBeat,locale,!!live.pet?.attendanceRewards?.background.preview):null;
+ const speech=gameLine??(farewell&&!sleeping?(ending.storyPhase===3?t.chatInvite:null):!sleeping&&guided?finishLine??stage.line:null);
+ const speechSource=gameLine||farewell||finishLine?'SERVICE_FALLBACK':stage.source;
+ return{careUncertain,retryCare,visualTrash:trashOverride??live.pet?.gauges?.trash??0,graceSync,sleepFarewell,graceNotice,gameScore,panel,open,close,busy,error,visual,key,guided,currentTarget,care,rest,startGame,choose,result,marks,gamePhase,selected,acknowledge,finishBeat:ending.finishBeat,nextFinish,dismissReview,farewell,storyPhase:ending.storyPhase,nextStory,closingReview,speech,speechSource,stageStatus:stage.status,animate,playChatMotion,chatMotionReady};
 }
 export type FocusedExperience=ReturnType<typeof useFocusedExperience>;
