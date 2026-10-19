@@ -11,7 +11,7 @@ import { useZzalLocale } from '../../lib/locale';
 import { CHAT_MAX_CHARS } from '../rules';
 import { useFocusedAnalytics } from './useFocusedAnalytics';
 import { useFocusedExperience } from './useFocusedExperience';
-import { FocusedPanels, FocusedQuestion } from './FocusedPanels';
+import { FocusedPanels } from './FocusedPanels';
 import { FocusedProps } from './FocusedProps';
 import FocusedTiles from './FocusedTiles';
 import { focusedCopy } from './focusedCopy';
@@ -144,7 +144,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   };
   const openHistory = () => { input.current?.blur(); setDrawer('history'); void bridgeRef.current?.history(legacy); };
 
-  return <section ref={host} data-dialogue-source={x.speechSource} data-stage-status={x.stageStatus} data-intro-key={x.key??''} onPointerDown={event=>{const target=(event.target as HTMLElement).closest<HTMLElement>('[data-fr-target=true]');if(target)target.dataset.frPressed='true';}} className={`focused-room ${sleeping ? 'fr-sleeping' : ''} ${x.questionPending?'fr-question-active':''}`} data-focused-room data-care-open={x.panel==='care'?'true':undefined} data-compact={compact?'true':undefined} data-pet-id={live.petId ?? ''}>
+  return <section ref={host} data-dialogue-source={x.speechSource} data-stage-status={x.stageStatus} data-intro-key={x.key??''} onPointerDown={event=>{const target=(event.target as HTMLElement).closest<HTMLElement>('[data-fr-target=true]');if(target)target.dataset.frPressed='true';}} className={`focused-room ${sleeping ? 'fr-sleeping' : ''}`} data-focused-room data-care-open={x.panel==='care'?'true':undefined} data-compact={compact?'true':undefined} data-pet-id={live.petId ?? ''}>
     <div className="fr-scene" ref={scene} data-fr-scene>
       <div className="fr-world" aria-hidden="true">{backgroundUrl&&<img src={backgroundUrl} alt=""/>}</div>
       {!traveling && src && reference.loaded && geometry.loaded && !geometry.failed && <img className="fr-actor" data-fr-actor data-fr-custom-id={activeCustom?.id} data-fr-custom-anchor={customAnchorMode??undefined} data-fr-base-reference-round={activeCustom?.baseReferenceRound??undefined} src={src} alt={pet?.name || '캐릭터'} role="button" aria-label={t.pet} aria-disabled={x.busy||x.guided||sleeping||traveling} tabIndex={x.busy||x.guided||sleeping||traveling?-1:0} onClick={()=>{if(!x.busy&&!x.guided&&!sleeping&&!traveling)void x.care('PET')}} onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&!x.busy&&!x.guided&&!sleeping&&!traveling){e.preventDefault();void x.care('PET')}}} style={{...actorStyle,visibility:geometry.measured&&(!activeCustom||customReady)?'visible':'hidden',pointerEvents:'auto',cursor:x.busy||x.guided||sleeping||traveling?'default':'pointer'}} />}
@@ -159,31 +159,30 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     {x.sleepFarewell&&!traveling&&sleeping&&<SpeechBubble line={locale==='ko'?'나는 이제 졸려서 자러 갈게. 아침에 또 이야기하자.':locale==='en'?'I am sleepy now, so I am going to bed. Let’s talk again in the morning.':'もう眠いから、そろそろ寝るね。また朝に話そう。'} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{left:speechWidth===size.width-24?12:speechLeft,top:speechTop,width:speechWidth}}/>}
     {(!src || geometry.failed) && !traveling && <p className="fr-asset-status" role="status">{locale==='en'?'Could not load the character image.':locale==='ja'?'キャラクターの画像を読み込めませんでした。':'캐릭터 그림을 불러오지 못했어요.'}</p>}
     <div className="fr-status" role="status" aria-live="polite">
-      {blocked && (!x.questionPending||sleeping||traveling) && <p>{blocked==='sleeping'?t.sleeping:blocked==='traveling'?t.traveling:locale==='ko'?blocks[blocked]:t.loading}</p>}
+      {blocked && (!x.guided||sleeping||traveling) && <p>{blocked==='sleeping'?t.sleeping:blocked==='traveling'?t.traveling:locale==='ko'?blocks[blocked]:t.loading}</p>}
       {traveling&&<button type="button" data-fr-call-back disabled={live.calling} onClick={()=>void callBack()} style={{minWidth:44,minHeight:44}}>{live.calling?t.calling:t.callBack}</button>}
       {traveling&&returnError&&<p role="alert">{returnError}</p>}
-      {x.guided&&!x.questionPending&&!sleeping&&!traveling&&<p>{t.guide}</p>}
       {x.graceSync&&!sleeping&&!traveling&&<p>{t.loading} <button onClick={()=>void live.refreshPet()}>{t.retry}</button></p>}
       {x.graceNotice&&!sleeping&&!traveling&&<p data-fr-grace-notice>{locale==='ko'?'조금 있으면 잠들어요. 나머지 이야기는 아침에 이어가요.':locale==='en'?'Sleep is coming soon. Continue the conversation in the morning.':'もうすぐ眠ります。続きは朝に話しましょう。'}</p>}
       {x.error&&<p role="alert">{x.error}</p>}
       {x.careUncertain&&<button data-fr-care-retry onClick={()=>void x.retryCare()}>{t.retry}</button>}
       {x.farewell&&x.error&&<button disabled={x.closingReview} onClick={()=>void x.retryFarewell()}>{t.retry}</button>}
       {activeCustom&&!customReady&&<p role="status">{t.loading}</p>}
-      {(x.questionPending?x.busy:sending) && <p>{t.thinking}</p>}
-      {!x.questionPending&&snapshot?.error && <p>{snapshot.error}</p>}
-      {!x.questionPending&&uncertain && <p>{t.uncertain}</p>}
-      {!x.questionPending && blocked === 'loading' && snapshot?.error && <button onClick={() => void bridgeRef.current?.loadContext()}>{t.retry}</button>}
+      {sending && <p>{t.thinking}</p>}
+      {snapshot?.error && <p>{snapshot.error}</p>}
+      {uncertain && <p>{t.uncertain}</p>}
+      {blocked === 'loading' && snapshot?.error && <button onClick={() => void bridgeRef.current?.loadContext()}>{t.retry}</button>}
     </div>
     <footer className="fr-dock">
       <FocusedTiles live={live} x={x} locale={locale} drawerOpen={!!drawer} beforeOpen={()=>{input.current?.blur();setDrawer(null)}}/>
       {x.guided&&x.key==='FINISH_NOTICE'&&!x.panel&&<button className="fr-finish-trigger" data-fr-target="true" onClick={()=>x.open('finish')}>{t.next}</button>}
       {x.guided&&x.key==='REVIEW_SEEN'&&!x.panel&&!x.farewell&&<button onClick={()=>x.open('review')}>{t.review}</button>}
-      <form className="fr-composer" onSubmit={send}>
+      {!x.guided&&<form className="fr-composer" onSubmit={send}>
         <button type="button" ref={historyButton} className="fr-history-icon" onClick={openHistory} disabled={x.busy} aria-label={t.history}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2"/></svg></button>
         <input ref={input} maxLength={CHAT_MAX_CHARS} aria-label={t.input} placeholder={sleeping ? t.sleeping : traveling ? t.traveling : x.guided?t.guide:t.placeholder} value={uncertain ? snapshot?.delivery.text ?? '' : snapshot?.draft ?? ''}
           disabled={x.graceSync || x.guided || x.busy || !!blocked || sending || uncertain} onChange={event => bridgeRef.current?.setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
         <button type="submit" disabled={!canSend}>{uncertain ? t.recheck : sending ? t.busy : t.send}</button>
-      </form>
+      </form>}
     </footer>
     {drawer && <div className={`fr-modal ${drawer === 'menu' ? 'fr-menu-panel' : ''}`} role="dialog" aria-modal="true" aria-label={drawer === 'history' ? t.history : t.menu} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); closeDrawer(); }
@@ -205,7 +204,6 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
         {((legacy ? snapshot?.legacyHistory : snapshot?.history)?.nextBeforeId != null) && <button aria-disabled={snapshot?.historyLoading} onClick={() => {if(!snapshot?.historyLoading)void bridgeRef.current?.history(legacy, true)}}>{t.more}</button>}
       </div>}
     </div>}
-    <FocusedQuestion x={x} locale={locale}/>
     <FocusedPanels live={live} x={x.panel==='care'?{...x,panel:null}:x} locale={locale} sampleMode={sampleMode}/>
     {shareOpen&&<SceneShare stage={scene.current} logoUrl="/zzal-entry/logo-08-transparent.png" onClose={()=>setShareOpen(false)}/>}
   </section>;
@@ -218,7 +216,7 @@ export function SpeechBubble({line,budget,style,previous,next,bounds}:{line:stri
   const bubble=root.current,host=bubble?.closest<HTMLElement>('.focused-room'),body=bubble?.querySelector('p');if(!bubble||!host||!body)return;
   const width=host.clientWidth,height=host.clientHeight,edge=12,gap=12;let safeTop=12,safeBottom=height-12;
   for(const selector of ['.fr-header','.fr-sample-controls']){const e=host.querySelector<HTMLElement>(selector);if(e&&e.checkVisibility())safeTop=Math.max(safeTop,e.getBoundingClientRect().bottom-host.getBoundingClientRect().top+8)}
-  for(const selector of ['.fr-dock','.fr-question','.fr-meeting-controls']){const e=host.querySelector<HTMLElement>(selector);if(e&&e.checkVisibility())safeBottom=Math.min(safeBottom,e.getBoundingClientRect().top-host.getBoundingClientRect().top-gap)}
+  for(const selector of ['.fr-dock','.fr-meeting-controls']){const e=host.querySelector<HTMLElement>(selector);if(e&&e.checkVisibility())safeBottom=Math.min(safeBottom,e.getBoundingClientRect().top-host.getBoundingClientRect().top-gap)}
   const old=body.textContent;body.textContent=line;bubble.querySelector<HTMLElement>('.fr-speech-pages')?.style.setProperty('display','none');
   const probe=document.createElement('span');probe.style.cssText='position:absolute;visibility:hidden;white-space:pre';probe.style.font=getComputedStyle(body).font;probe.textContent=line;host.append(probe);const natural=probe.getBoundingClientRect().width+30;probe.remove();const preferred=Math.min(width-edge*2,Math.max(84,Math.min(260,natural)));
   const measure=(w:number)=>{bubble.style.width=Math.floor(w)+'px';return bubble.getBoundingClientRect().height};const candidates:Array<{mode:string;w:number;left:number;top:number;available:number;fits:boolean}>=[];

@@ -4,7 +4,6 @@ import {claimCarePlayback} from '../../lib/careDelivery';
 import type { Live } from '../yeoul/useHatch';
 import type { CareAction } from '../../lib/pet';
 import type { Side, GuessResult } from '../../lib/game';
-import type { FirstIntroKey } from '../yeoul/firstIntro';
 import type { ZzalLocale } from '../../lib/locale';
 import { CYCLE_MS, cyclesOfAction, situationOfAction, poseOfSituation, stagePlanOf, stageAt, type ActionKey } from '../props/situations';
 import { SITUATION_TABLE } from '../props/table';
@@ -23,10 +22,9 @@ const idle:FocusedVisual={pose:'base',situation:null,stage:0,prop:null,signal:nu
 export function useFocusedExperience(live:Live,locale:ZzalLocale){
  const t=focusedCopy(locale),owner=useRef(live);owner.current=live;
  const [panel,setPanel]=useState<FocusedPanel>(null),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[visual,setVisual]=useState(idle);
- const [heldKey,setHeldKey]=useState<FirstIntroKey|undefined>(),[result,setResult]=useState<GuessResult|null>(null),[marks,setMarks]=useState<Record<number,boolean>>({});
+ const [result,setResult]=useState<GuessResult|null>(null),[marks,setMarks]=useState<Record<number,boolean>>({});
  const [gameScore,setGameScore]=useState({tries:0,hits:0});
  const [gamePhase,setGamePhase]=useState<'ready'|'choosing'|'reveal'|'done'>('ready'),[selected,setSelected]=useState<Side|null>(null);
- const [answerState,setAnswerState]=useState<{petId:number|null;values:Record<string,{kind:'SUGGESTED_REPLY'|'FREE_TEXT';text:string;source:'SERVER_SAVED';line:string;sessionId:number;userIdx:number;petIdx:number}>}>({petId:null,values:{}});
  const [trashOverride,setTrashOverride]=useState<number|null>(null);
  const [graceSync,setGraceSync]=useState(false);
  const graceSyncRef=useRef(false);graceSyncRef.current=graceSync;
@@ -38,34 +36,14 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
  const petId=live.petId,serverIntro=live.pet?.firstIntro;
  useEffect(()=>{setMarks({});setResult(null);setGameScore({tries:live.game?.round??0,hits:live.game?.hits??0});},[petId,live.game?.gameId]);
  const guided=serverIntro?.version===4&&serverIntro.key!=='COMPLETE';
- const key=heldKey??(guided?serverIntro?.key:undefined);
- const answers={...(answerState.petId===petId?answerState.values:{})};
- // Restore only metadata-bearing server receipts. Ordinary turns and browser caches are not completion evidence.
- for(const receipt of live.chat?.tutorialAnswers??[]){
-  if(!['FEED','GAME'].includes(receipt.step)||!receipt.requestId||!Number.isSafeInteger(receipt.sessionId)||receipt.sessionId<=0||!Number.isSafeInteger(receipt.expectedRound)||receipt.expectedRound<0||!['SUGGESTED','FREE_TEXT'].includes(receipt.answerType)||!receipt.text?.trim()||!receipt.chatReply?.line?.trim())continue;
-  const turns=receipt.turns??[],user=[...turns].reverse().find(v=>v.speaker==='USER'&&v.line===receipt.text),pet=[...turns].reverse().find(v=>v.speaker==='PET'&&v.line===receipt.chatReply.line);
-  if(!user||!pet||pet.idx<=user.idx)continue;
-  answers[receipt.step]={kind:receipt.answerType==='SUGGESTED'?'SUGGESTED_REPLY':'FREE_TEXT',text:user.line,source:'SERVER_SAVED',line:pet.line,sessionId:receipt.sessionId,userIdx:user.idx,petIdx:pet.idx};
- }
- const questionPending=!!(guided&&['FEED','GAME'].includes(key??'')&&!answers[key!]);
- // Only a saved response, never the old local answers cache, unlocks this question.
- const answer=async(kind:'SUGGESTED_REPLY'|'FREE_TEXT',text:string):Promise<boolean>=>{
-  if(!questionPending||!key||!['FEED','GAME'].includes(key)||!text.trim()||lock.current)return false;
-  const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);
-  try{const result=await owner.current.sendChat(text.trim(),{step:key as 'FEED'|'GAME',answerType:kind==='SUGGESTED_REPLY'?'SUGGESTED':'FREE_TEXT'});
-   if(!valid(stamp,id)||owner.current.pet?.firstIntro?.key!==key)return false;
-   if(result.error||!result.reply?.session||!result.reply.line){setError(result.error||t.error);return false;}
-   const turns=result.reply.turns??[];const user=[...turns].reverse().find(v=>v.speaker==='USER'&&v.line===text.trim());const pet=[...turns].reverse().find(v=>v.speaker==='PET'&&v.line===result.reply!.line);
-   if(!user||!pet||pet.idx<=user.idx||result.reply.session.id!==owner.current.chat?.session?.id){setError(t.error);return false;}
-   setAnswerState(previous=>({petId:id,values:{...(previous.petId===id?previous.values:{}),[key]:{kind,text:user.line,source:'SERVER_SAVED',line:pet.line,sessionId:result.reply!.session!.id,userIdx:user.idx,petIdx:pet.idx}}}));return true;
-  }catch(e){if(valid(stamp,id)&&owner.current.pet?.firstIntro?.key===key)setError(e instanceof Error?e.message:t.error);return false;}finally{if(valid(stamp,id)){lock.current=false;setBusy(false);}}
- };
+ // Follow the authoritative step immediately, including while its action animation finishes.
+ const key=guided?serverIntro?.key:undefined;
  const sleeping=!!live.pet?.clock?.sleeping,traveling=!!live.pet?.trip;
  const valid=(stamp:number,id:number|null)=>mounted.current&&epoch.current===stamp&&owner.current.petId===id;
  useEffect(()=>{if(sleeping||traveling){gameEpoch.current++;cancelVisual.current?.();setPanel(null);}},[sleeping,traveling]);
 
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;epoch.current++;cancelVisual.current?.();for(const timer of timers.current)clearTimeout(timer);};},[]);
- useEffect(()=>{setTrashOverride(null);epoch.current++;lock.current=false;cancelVisual.current?.();for(const timer of timers.current)clearTimeout(timer);timers.current.clear();setBusy(false);setPanel(null);setVisual(idle);setHeldKey(undefined);setError(null);setFarewell(false);setClosingReview(false);setSleepFarewell(false);setGraceSync(false);observedDeadline.current=null;setResult(null);setMarks({});setGamePhase('ready');},[petId]);
+ useEffect(()=>{setTrashOverride(null);epoch.current++;lock.current=false;cancelVisual.current?.();for(const timer of timers.current)clearTimeout(timer);timers.current.clear();setBusy(false);setPanel(null);setVisual(idle);setError(null);setFarewell(false);setClosingReview(false);setSleepFarewell(false);setGraceSync(false);observedDeadline.current=null;setResult(null);setMarks({});setGamePhase('ready');},[petId]);
  const animate=(action:ActionKey,cycleOverride?:number,forceBasic=false)=>{
   // Compatibility for existing semantic-key catalog assets only; never infer generated multi-set metadata here.
   cancelVisual.current?.();if(document.hidden)return Promise.resolve();const l=owner.current;const owned=!forceBasic&&custom[action]&&l.pet?.motions?.some(m=>m.key===custom[action]&&m.unlocked&&m.basicImageKey);
@@ -105,7 +83,7 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
  const close=()=>{if(lock.current&&panel!=='game')return;if(panel==='game')gameEpoch.current++;cancelVisual.current?.();setPanel(null);setError(null);};
  const retryingCare=useRef(false);
  const run=async(call:()=>ReturnType<Live['doCare']>,action?:ActionKey)=>{
-  if(lock.current||traveling||questionPending)return;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);setHeldKey(guided?serverIntro?.key:undefined);setPanel(null);let unresolved=false;
+  if(lock.current||traveling)return;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);setPanel(null);let unresolved=false;
   try{const receipt=await call();if(!valid(stamp,id))return;if(!receipt.ok){unresolved=receipt.uncertain===true;setError(receipt.message||t.error);return;}if(receipt.careReceipt?.status==='NO_OP')return;if(receipt.presentationAccepted===false||document.hidden||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip||receipt.responsePet?.clock?.sleeping||receipt.responsePet?.trip)return;if(receipt.careReceipt&&(!id||!claimCarePlayback(id,receipt.careReceipt.requestId)))return;
    const careKind=action? actionCare[action]:undefined;
    if(action&&careKind&&receipt.careReceipt){
@@ -115,21 +93,21 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
     if(selected.kind==='basic')await animate(action,undefined,true);
     else{const response=receipt.responsePet!;const before=owner.current.pet;const playing=beginResourcePlayback(selected.resource);careAuthority.current={before,response};await playing;}
    }else if(action)await animate(action);}
-  catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error)}finally{if(valid(stamp,id)&&!unresolved){lock.current=false;setBusy(false);setHeldKey(undefined);}}
+  catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error)}finally{if(valid(stamp,id)&&!unresolved){lock.current=false;setBusy(false);}}
  };
  const careUncertain=live.careDelivery?.status==='uncertain';
  useEffect(()=>{if(careUncertain){lock.current=true;setBusy(true);setError(live.careDelivery?.message??t.error)}},[petId,careUncertain,live.careDelivery?.requestId]);
  const retryCare=async()=>{const pending=owner.current.careDelivery;if(pending?.status!=='uncertain'||retryingCare.current)return;retryingCare.current=true;lock.current=false;try{await run(()=>owner.current.doCare(pending.action),careAction[pending.action]);}finally{retryingCare.current=false}};
  const care=(action:CareAction)=>{
-  if(lock.current||traveling||questionPending)return Promise.resolve();
+  if(lock.current||traveling)return Promise.resolve();
   return run(()=>owner.current.doCare(action),careAction[action]);
  };
  const rest=()=>run(()=>owner.current.doRest(),sleeping?'wake':undefined);
- const startGame=async()=>{if(lock.current||questionPending||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip)return;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);try{const message=await owner.current.startPlay();if(!valid(stamp,id))return;if(message)setError(message);else{setPanel('game');setResult(null);setSelected(null);setGamePhase('ready');setGameScore({tries:owner.current.game?.round??0,hits:owner.current.game?.hits??0});if(!owner.current.game?.playing)setMarks({});}}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error)}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
- const choose=async(side:Side)=>{if(lock.current||!owner.current.game?.playing||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip)return;const stamp=epoch.current,id=petId,gameStamp=gameEpoch.current;lock.current=true;setBusy(true);setHeldKey(guided?serverIntro?.key:undefined);setError(null);setSelected(side);setGamePhase('choosing');
+ const startGame=async()=>{if(lock.current||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip)return;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);try{const message=await owner.current.startPlay();if(!valid(stamp,id))return;if(message)setError(message);else{setPanel('game');setResult(null);setSelected(null);setGamePhase('ready');setGameScore({tries:owner.current.game?.round??0,hits:owner.current.game?.hits??0});if(!owner.current.game?.playing)setMarks({});}}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error)}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
+ const choose=async(side:Side)=>{if(lock.current||!owner.current.game?.playing||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip)return;const stamp=epoch.current,id=petId,gameStamp=gameEpoch.current;lock.current=true;setBusy(true);setError(null);setSelected(side);setGamePhase('choosing');
   try{const [reply]=await Promise.all([owner.current.pickSide(side),animate('game_choose',1)]);if(!valid(stamp,id)||gameEpoch.current!==gameStamp)return;if(!reply.result){setError(reply.error||t.error);setGamePhase('ready');setSelected(null);return;}
    const r=reply.result;setResult(r);setGameScore({tries:r.round+1,hits:r.hits});setMarks(old=>({...old,[r.round]:r.hit}));setGamePhase('reveal');await animate(r.hit?'game_win':'game_lose',1);if(!valid(stamp,id)||gameEpoch.current!==gameStamp)return;setGamePhase(r.finished?'done':'ready');if(!r.finished){setResult(null);setSelected(null);}
-  }catch(e){if(valid(stamp,id)&&gameEpoch.current===gameStamp){setError(e instanceof Error?e.message:t.error);setGamePhase('ready');setSelected(null)}}finally{if(valid(stamp,id)){lock.current=false;setBusy(false);setHeldKey(undefined);}}
+  }catch(e){if(valid(stamp,id)&&gameEpoch.current===gameStamp){setError(e instanceof Error?e.message:t.error);setGamePhase('ready');setSelected(null)}}finally{if(valid(stamp,id)){lock.current=false;setBusy(false);}}
  };
  const acknowledge=async(topic:'ATTENDANCE_INTRO'|'REVIEW_SEEN')=>{const stamp=epoch.current,id=petId;if(lock.current)return false;lock.current=true;setBusy(true);setError(null);try{const r=await owner.current.tutorialSeen(topic);if(!valid(stamp,id))return false;if(!r.ok){setError(r.message||t.error);return false;}setPanel(null);return true;}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error);return false;}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
  const finish=async()=>{if(lock.current)return;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);try{const r=await owner.current.finishTutorial();if(!valid(stamp,id))return;if(!r.ok){setError(r.message||t.error);return;}setPanel(null);}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error)}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
@@ -168,14 +146,11 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
   const hide=()=>{if(document.hidden)setSleepFarewell(false)};document.addEventListener('visibilitychange',hide);
   return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',hide)};
  },[petId,sleeping,traveling,grace?.active,grace?.endedAt]);
- const currentTarget=questionPending?null:key==='ATTENDANCE_INTRO'?(panel==='attendance'?'attendance-ack':panel==='finish'?null:'attendance-menu'):key==='FINISH_NOTICE'?'finish':key==='REVIEW_SEEN'?null:panel==='care'?(key==='FEED'?'FEED':key==='SNACK'?'SNACK':key==='CLEAN'?'CLEAN':key==='BATH'?'BATH':key==='GAME'?'GAME':key==='NAP_SLEEP'||key==='NAP_WAKE'?'REST':null):panel==='game'?null:key?'care':null;
- const questionLine=locale==='en'?(key==='FEED'?'Have you eaten?':'Want to play together?'):locale==='ja'?(key==='FEED'?'ごはん、もう食べた？':'一緒に遊ばない？'):(key==='FEED'?'밥은 먹었어?':'같이 놀아 볼래?');
+ const currentTarget=busy?null:key==='ATTENDANCE_INTRO'?(panel==='attendance'?'attendance-ack':panel==='finish'?null:'attendance-menu'):key==='FINISH_NOTICE'?'finish':key==='REVIEW_SEEN'?null:panel==='care'?(key==='FEED'?'FEED':key==='SNACK'?'SNACK':key==='CLEAN'?'CLEAN':key==='BATH'?'BATH':key==='GAME'?'GAME':key==='NAP_SLEEP'||key==='NAP_WAKE'?'REST':null):panel==='game'?null:key?'care':null;
  const gameLine=panel==='game'&&result&&(gamePhase==='reveal'||gamePhase==='done')?(result.finished?(result.win?t.won:t.lost):(result.hit?t.won:locale==='en'?'It was in this hand.':locale==='ja'?'こっちの手だったよ。':'이쪽 손에 있었어.')):null;
- const savedAnswer=key?answers[key]?.line:null;
- const localLine=questionPending?questionLine:fallbackIntroLine(key,locale);
- const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided&&!savedAnswer,questionPending,localLine,!busy&&!gameLine&&!farewell);
- const speech=savedAnswer??gameLine??(farewell&&!sleeping?(live.pet?.firstNightChatGrace?.eligible?t.goodbyeNight:t.goodbye):!sleeping&&guided?stage.line:null);
- const speechSource=savedAnswer?'SERVER_SAVED':gameLine||farewell?'SERVICE_FALLBACK':stage.source;
- return{careUncertain,retryCare,visualTrash:trashOverride??live.pet?.gauges?.trash??0,graceSync,sleepFarewell,graceNotice,gameScore,questionPending,answer,answers,panel,open,close,busy,error,visual,key,guided,currentTarget,care,rest,startGame,choose,result,marks,gamePhase,selected,acknowledge,finish,dismissReview,farewell,closingReview,retryFarewell,speech,speechSource,stageStatus:stage.status,animate,playChatMotion,chatMotionReady};
+ const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided,fallbackIntroLine(key,locale),!busy&&!gameLine&&!farewell);
+ const speech=gameLine??(farewell&&!sleeping?(live.pet?.firstNightChatGrace?.eligible?t.goodbyeNight:t.goodbye):!sleeping&&guided?stage.line:null);
+ const speechSource=gameLine||farewell?'SERVICE_FALLBACK':stage.source;
+ return{careUncertain,retryCare,visualTrash:trashOverride??live.pet?.gauges?.trash??0,graceSync,sleepFarewell,graceNotice,gameScore,panel,open,close,busy,error,visual,key,guided,currentTarget,care,rest,startGame,choose,result,marks,gamePhase,selected,acknowledge,finish,dismissReview,farewell,closingReview,retryFarewell,speech,speechSource,stageStatus:stage.status,animate,playChatMotion,chatMotionReady};
 }
 export type FocusedExperience=ReturnType<typeof useFocusedExperience>;
