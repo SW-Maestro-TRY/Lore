@@ -19,21 +19,23 @@
 .fr-meeting-room{flex:1;min-height:0}.fr-meeting-controls{position:absolute;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:20;border:1px solid #CDBEAC;background:#FFFDF8;border-radius:22px;padding:12px;display:flex;flex-direction:column;gap:8px;max-height:45%;overflow:auto}.fr-meeting-controls form{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important}.fr-meeting-controls form label,.fr-meeting-controls input{grid-column:1/-1}.fr-meeting-controls button{font-size:14px!important;padding:10px 8px!important;min-width:0!important}.fr-meeting-controls>button{width:100%}.fr-meeting-controls p{margin:0;font-size:13px}.fr-meeting-controls:focus-within{bottom:max(8px,env(safe-area-inset-bottom))}
 
 /* During guessing, the room itself is the game surface. */
-.focused-room[data-game-open=true] .fr-dock{display:none}
+.focused-room[data-game-open=true] .fr-dock{visibility:hidden;pointer-events:none}
 .focused-room .fr-game-sheet{background:transparent;border:0;box-shadow:none;padding-bottom:max(5px,env(safe-area-inset-bottom))}
 .focused-room .fr-hands button{border-radius:18px;transition:transform .1s ease,background-color .1s ease,box-shadow .1s ease}
 .focused-room .fr-hands button[data-choosing=true]{transform:translateY(2px) scale(.94);background:#FFFDF899;box-shadow:0 0 0 2px #B9785E}
 @media(prefers-reduced-motion:reduce){.focused-room .fr-hands button{transition:none}}
 
-.focused-room .fr-game-sheet .fr-stamps{position:absolute;left:50%;top:-13px;transform:translateX(-50%)}
+.focused-room .fr-game-sheet .fr-stamps{position:absolute;left:50%;top:8px;transform:translateX(-50%)}
 .focused-room .fr-game-sheet:not([data-game-phase=done]) .fr-game-count p{display:none}
-.focused-room .fr-game-sheet .fr-game-foot>.fr-close{position:absolute;right:0;top:11px;background:transparent;border-color:transparent}
+.focused-room .fr-game-sheet .fr-game-foot>.fr-close{position:absolute;right:10px;top:calc(31px + var(--fr-game-hand)/2 - 22px);background:transparent;border-color:transparent}
 .focused-room .fr-game-sheet .fr-game-foot>.fr-close svg{width:17px;height:17px}
 .focused-room .fr-game-sheet .fr-stamps span[data-result=empty]{border-color:#795C48;opacity:1}
 
-/* Larger hands keep the same room composition and compact game footprint. */
-.focused-room .fr-game-sheet .fr-hands{height:84px;gap:20px}
-.focused-room .fr-game-sheet .fr-hands button{width:84px;height:84px;min-height:84px;flex-shrink:0}
-.focused-room .fr-game-sheet .fr-hands img{width:78px;height:78px}
-.focused-room .fr-game-sheet .fr-game-foot{height:22px;flex-shrink:0}
-.focused-room .fr-game-sheet .fr-game-foot>button:not(.fr-close){position:absolute;right:0;top:11px;width:44px;min-width:44px;min-height:44px;padding:4px;font-size:13px}
+/* The full ordinary five-tile/composer dock is the measured game budget. */
+.focused-room .fr-game-sheet{--fr-game-hand:min(calc((var(--fr-game-width) - 84px)/2),calc(var(--fr-game-height) - 43px));left:var(--fr-game-left);right:auto;top:var(--fr-game-top);bottom:auto;width:var(--fr-game-width);height:var(--fr-game-height);max-height:var(--fr-game-height);padding:0}
+.focused-room .fr-game-sheet .fr-hands{position:absolute;left:10px;top:31px;width:calc(100% - 72px);height:var(--fr-game-hand);gap:12px}
+.focused-room .fr-game-sheet .fr-hands button{width:var(--fr-game-hand);height:var(--fr-game-hand);min-width:44px;min-height:44px;flex-shrink:0}
+.focused-room .fr-game-sheet .fr-hands img{width:var(--fr-game-hand);height:var(--fr-game-hand)}
+.focused-room .fr-game-sheet .fr-game-foot{position:static;height:0}
+.focused-room .fr-game-sheet .fr-game-count p{position:absolute;left:10px;top:8px;max-width:calc(50% - 60px);margin:0}
+.focused-room .fr-game-sheet .fr-game-foot>button:not(.fr-close){position:absolute;right:10px;top:calc(31px + var(--fr-game-hand)/2 - 22px);width:44px;min-width:44px;min-height:44px;padding:4px;font-size:13px}

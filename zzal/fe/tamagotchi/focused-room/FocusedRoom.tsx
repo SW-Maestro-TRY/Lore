@@ -63,7 +63,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const [reply, setReply] = useState<{ petId: number; sessionId: number | null; idx: number; line: string } | null>(null);
   const [size, setSize] = useState({ width: 390, height: 700 });
   const initialHeight=useRef(typeof window==='undefined'?844:window.innerHeight);
-  const host = useRef<HTMLElement>(null), input = useRef<HTMLInputElement>(null);
+  const host = useRef<HTMLElement>(null), input = useRef<HTMLInputElement>(null),dock=useRef<HTMLElement>(null);
+  const [dockBudget,setDockBudget]=useState({left:0,top:0,width:0,height:0});
   const historyButton = useRef<HTMLButtonElement>(null), menuButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const returnFocus=useRef<'history'|'menu'|null>(null);
@@ -72,7 +73,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     if(!x.busy)return;
     const nodes=[...host.current?.querySelectorAll<HTMLElement>('.fr-dock,.fr-header,[data-fr-actor]')??[]];
     const prior=nodes.map(node=>node.inert);nodes.forEach(node=>{node.inert=true});
-    return()=>nodes.forEach((node,i)=>{node.inert=prior[i]});
+    return()=>nodes.forEach((node,i)=>{node.inert=prior[i]||(node.matches('.fr-dock')&&host.current?.dataset.gameOpen==='true')});
   },[x.panel,x.busy]);
 
   useEffect(() => {
@@ -89,6 +90,12 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     measure(); const observer = new ResizeObserver(measure); observer.observe(node);
     return () => observer.disconnect();
   }, []);
+  // Keep the full ordinary dock measurable while its controls are hidden during a game.
+  useLayoutEffect(()=>{
+    const node=dock.current,room=host.current;if(!node||!room)return;
+    const measure=()=>{const bounds=node.getBoundingClientRect(),parent=room.getBoundingClientRect();const next={left:bounds.left-parent.left,top:bounds.top-parent.top,width:bounds.width,height:bounds.height};setDockBudget(previous=>Object.keys(next).every(key=>previous[key as keyof typeof next]===next[key as keyof typeof next])?previous:next)};
+    measure();const observer=new ResizeObserver(measure);observer.observe(node);observer.observe(room);return()=>observer.disconnect();
+  },[x.panel,x.guided,locale]);
   useEffect(() => {
     const viewport = window.visualViewport;
     const fit = () => { host.current?.style.setProperty('--fr-viewport', `${viewport?.height ?? window.innerHeight}px`); };
@@ -144,7 +151,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   };
   const openHistory = () => { input.current?.blur(); setDrawer('history'); void bridgeRef.current?.history(legacy); };
 
-  return <section ref={host} data-dialogue-source={x.speechSource} data-stage-status={x.stageStatus} data-intro-key={x.key??''} onPointerDown={event=>{const target=(event.target as HTMLElement).closest<HTMLElement>('[data-fr-target=true]');if(target)target.dataset.frPressed='true';}} data-game-open={x.panel==='game'?'true':undefined} className={`focused-room ${sleeping ? 'fr-sleeping' : ''}`} data-focused-room data-care-open={x.panel==='care'?'true':undefined} data-compact={compact?'true':undefined} data-pet-id={live.petId ?? ''}>
+  return <section ref={host} data-dialogue-source={x.speechSource} data-stage-status={x.stageStatus} data-intro-key={x.key??''} onPointerDown={event=>{const target=(event.target as HTMLElement).closest<HTMLElement>('[data-fr-target=true]');if(target)target.dataset.frPressed='true';}} data-game-open={x.panel==='game'?'true':undefined} className={`focused-room ${sleeping ? 'fr-sleeping' : ''}`} style={{'--fr-game-left':`${dockBudget.left}px`,'--fr-game-top':`${dockBudget.top}px`,'--fr-game-width':`${dockBudget.width}px`,'--fr-game-height':`${dockBudget.height}px`} as CSSProperties} data-focused-room data-care-open={x.panel==='care'?'true':undefined} data-compact={compact?'true':undefined} data-pet-id={live.petId ?? ''}>
     <div className="fr-scene" ref={scene} data-fr-scene>
       <div className="fr-world" aria-hidden="true">{backgroundUrl&&<img src={backgroundUrl} alt=""/>}</div>
       {!traveling && src && reference.loaded && geometry.loaded && !geometry.failed && <img className="fr-actor" data-fr-actor data-fr-custom-id={activeCustom?.id} data-fr-custom-anchor={customAnchorMode??undefined} data-fr-base-reference-round={activeCustom?.baseReferenceRound??undefined} src={src} alt={pet?.name || '캐릭터'} role="button" aria-label={t.pet} aria-disabled={x.busy||x.guided||x.panel==='game'||sleeping||traveling} tabIndex={x.busy||x.guided||x.panel==='game'||sleeping||traveling?-1:0} onClick={()=>{if(!x.busy&&!x.guided&&x.panel!=='game'&&!sleeping&&!traveling)void x.care('PET')}} onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&!x.busy&&!x.guided&&x.panel!=='game'&&!sleeping&&!traveling){e.preventDefault();void x.care('PET')}}} style={{...actorStyle,visibility:geometry.measured&&(!activeCustom||customReady)?'visible':'hidden',pointerEvents:'auto',cursor:x.busy||x.guided||x.panel==='game'||sleeping||traveling?'default':'pointer'}} />}
@@ -153,7 +160,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     </div>
     <header className="fr-header">
       <div><h1>{pet?.name || '방'}</h1><p>{pet?.daysTogether != null ? locale==='ko'?`함께한 지 ${pet.daysTogether}일`:locale==='en'?`${pet.daysTogether} days together`:`一緒に${pet.daysTogether}日` : ''}</p></div>
-      <div className="fr-header-tools">{pet?.sick&&<button type="button" className="fr-medicine-trigger" data-fr-action="MEDICINE" disabled={x.busy||x.guided||x.panel==='game'||sleeping||traveling} onClick={()=>void x.care('MEDICINE')}>{t.medicine}</button>}<button ref={menuButton} className="fr-icon-button" onClick={() => { input.current?.blur(); setDrawer('menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={t.menu} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button></div>
+      <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" onClick={() => { input.current?.blur(); setDrawer('menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={t.menu} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button></div>
     </header>
     {!traveling && !sleeping && line && <SpeechBubble key={`${live.petId}:${line}`} line={line} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{ left: speechWidth === size.width - 24 ? 12 : speechLeft, top: speechTop, width: speechWidth }} />}
     {x.sleepFarewell&&!traveling&&sleeping&&<SpeechBubble line={locale==='ko'?'나는 이제 졸려서 자러 갈게. 아침에 또 이야기하자.':locale==='en'?'I am sleepy now, so I am going to bed. Let’s talk again in the morning.':'もう眠いから、そろそろ寝るね。また朝に話そう。'} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{left:speechWidth===size.width-24?12:speechLeft,top:speechTop,width:speechWidth}}/>}
@@ -173,14 +180,14 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       {uncertain && <p>{t.uncertain}</p>}
       {blocked === 'loading' && snapshot?.error && <button onClick={() => void bridgeRef.current?.loadContext()}>{t.retry}</button>}
     </div>
-    <footer className="fr-dock" hidden={x.panel==='game'}>
+    <footer ref={dock} className="fr-dock" aria-hidden={x.panel==='game'} inert={x.panel==='game'}>
       <FocusedTiles live={live} x={x} locale={locale} drawerOpen={!!drawer} beforeOpen={()=>{input.current?.blur();setDrawer(null)}}/>
       {x.guided&&x.key==='FINISH_NOTICE'&&!x.panel&&<button className="fr-finish-trigger" data-fr-target="true" onClick={()=>x.open('finish')}>{t.next}</button>}
       {x.guided&&x.key==='REVIEW_SEEN'&&!x.panel&&!x.farewell&&<button onClick={()=>x.open('review')}>{t.review}</button>}
-      {!x.guided&&<form className="fr-composer" onSubmit={send}>
+      {(!x.guided||x.panel==='game')&&<form className="fr-composer" onSubmit={send}>
         <button type="button" ref={historyButton} className="fr-history-icon" onClick={openHistory} disabled={x.busy} aria-label={t.history}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2"/></svg></button>
         <input ref={input} maxLength={CHAT_MAX_CHARS} aria-label={t.input} placeholder={sleeping ? t.sleeping : traveling ? t.traveling : x.guided?t.guide:t.placeholder} value={uncertain ? snapshot?.delivery.text ?? '' : snapshot?.draft ?? ''}
-          disabled={x.graceSync || x.guided || x.busy || !!blocked || sending || uncertain} onChange={event => bridgeRef.current?.setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
+          disabled={x.graceSync || x.guided || x.panel==='game' || x.busy || !!blocked || sending || uncertain} onChange={event => bridgeRef.current?.setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
         <button type="submit" disabled={!canSend}>{uncertain ? t.recheck : sending ? t.busy : t.send}</button>
       </form>}
     </footer>
