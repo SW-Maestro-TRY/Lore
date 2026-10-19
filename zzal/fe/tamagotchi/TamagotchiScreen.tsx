@@ -19,6 +19,7 @@ import { useIsWide } from './useIsWide';
 import Scrapbook, { type SkinProps } from './skins/Scrapbook';
 import Yeoul from './skins/Yeoul';
 import './skin-header.css';
+import AnnouncementsGate from './announcements/AnnouncementsGate';
 
 export type SkinName = 'scrapbook' | 'yeoul';
 
@@ -62,7 +63,9 @@ export default function TamagotchiScreen({ name, focusedRoom = false }: { name: 
         minHeight: focusedRoom?0:360,
       }}
     >
+      <AnnouncementsGate>
       {name === 'yeoul' && focusedRoom ? <Yeoul mode={wide ? 'pc' : 'phone'} focusedRoom /> : <Skin mode={wide ? 'pc' : 'phone'} />}
+      </AnnouncementsGate>
     </div>
   );
 }

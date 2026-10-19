@@ -149,7 +149,7 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale){
  const currentTarget=busy?null:key==='ATTENDANCE_INTRO'?(panel==='attendance'?'attendance-ack':panel==='finish'?null:'attendance-menu'):key==='FINISH_NOTICE'?'finish':key==='REVIEW_SEEN'?null:panel==='care'?(key==='FEED'?'FEED':key==='SNACK'?'SNACK':key==='CLEAN'?'CLEAN':key==='BATH'?'BATH':key==='GAME'?'GAME':key==='NAP_SLEEP'||key==='NAP_WAKE'?'REST':null):panel==='game'?null:key?'care':null;
  const gameLine=panel==='game'?(result&&(gamePhase==='reveal'||gamePhase==='done')?focusedGameLine(locale,result):locale==='en'?'Which hand did I hide it in?':locale==='ja'?'どっちの手に隠したかな？':'어느 손에 숨겼을까?'):null;
  const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided&&panel!=='game',fallbackIntroLine(key,locale),!busy&&!gameLine&&!farewell);
- const speech=gameLine??(farewell&&!sleeping?(live.pet?.firstNightChatGrace?.eligible?t.goodbyeNight:t.goodbye):!sleeping&&guided?stage.line:null);
+ const speech=gameLine??(farewell&&!sleeping?(live.pet?.firstNightChatGrace?.eligible?t.goodbyeNight:t.chatInvite):!sleeping&&guided?stage.line:null);
  const speechSource=gameLine||farewell?'SERVICE_FALLBACK':stage.source;
  return{careUncertain,retryCare,visualTrash:trashOverride??live.pet?.gauges?.trash??0,graceSync,sleepFarewell,graceNotice,gameScore,panel,open,close,busy,error,visual,key,guided,currentTarget,care,rest,startGame,choose,result,marks,gamePhase,selected,acknowledge,finish,dismissReview,farewell,closingReview,retryFarewell,speech,speechSource,stageStatus:stage.status,animate,playChatMotion,chatMotionReady};
 }

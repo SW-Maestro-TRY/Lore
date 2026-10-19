@@ -84,7 +84,9 @@ export default function Yeoul(_props: SkinProps & { focusedRoom?: boolean }) {
    *   (`useHatch.resume` 도 같은 기준으로 제 상태를 안 건드린다 — 두 곳 다 막아야 한다.)
    */
   const era = useRef(0);
-  useEffect(() => { era.current += 1; }, [isAuthenticated]);
+  // A settled auth store can mount this skin after the announcement gate closes.
+  // StrictMode replays effects: invalidate the earlier read and let this generation resume once.
+  useEffect(() => { era.current += 1; asked.current = false; }, [isAuthenticated]);
   useEffect(() => {
     if (!isAuthenticated || asked.current) return;
     asked.current = true;
