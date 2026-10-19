@@ -41,6 +41,7 @@ public class StageSpeechBatchGenerator {
             String system = PromptAssembler.system(first.sheet());
             int extraction = system.indexOf("[의미기억 추출]");
             if (extraction >= 0) system = system.substring(0, extraction);
+            system += PromptAssembler.TUTORIAL_ADDRESS_RULES + "\n";
             system += """
                 [튜토리얼 안내 묶음]
                 아래 장면의 고정 안내를 모두 미리 작성한다. 아직 실제로 말하거나 행동한 기록이 아니다.

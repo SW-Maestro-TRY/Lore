@@ -35,6 +35,14 @@ public final class PromptAssembler {
     /** 시스템 메시지가 [출력] 에 적는 동작 목록. 실제로 고를 수 있는 것은 턴마다 코드가 다시 거른다. */
     public static final List<String> MOTIONS = List.of("hello", "reply", "joy");
 
+    /** 배치와 단일 튜토리얼 생성에 함께 쓰며, 일반 채팅·첫 만남에는 넣지 않는다. */
+    public static final String TUTORIAL_ADDRESS_RULES = """
+            [튜토리얼 호칭]
+            상대를 직접 부르는 의미가 있을 때만 가끔 호칭을 쓰고, 부르지 않아도 된다.
+            문장 끝마다 호칭을 붙이거나 모든 대사를 같은 호명으로 시작하지 않는다.
+            부를 때는 저장된 호칭을 정확히 유지하되, 필요하면 문장 앞에서 선택한 언어(한국어·일본어·영어 등)와 캐릭터 말투에 맞게 자연스럽게 부른다.
+            """;
+
     static final String RULES = """
             [말하는 법]
             - 호칭은 첫 만남에서만 받는다. 대화 중에 이름·호칭을 다시 묻지 않는다. 사용자가 스스로 바꿔 달라고 하면 그 요청에 답한다.
@@ -151,6 +159,10 @@ public final class PromptAssembler {
                             ? "사용자 대답을 요구하지 않고 상태와 마음을 짧게 말한다. "
                             : "사용자 답을 먼저 받아주고 상태와 마음을 짧게 말한다. ");
             b.append("버튼명과 절차를 나열하지 않는다. 사용자 답이나 네 대사를 행동 성공·보상 지급의 증거로 삼지 않는다.\n\n");
+            if (ctx.scene().phase() == ConversationScene.Phase.TUTORIAL
+                    || ctx.scene().phase() == ConversationScene.Phase.TUTORIAL_STAGE) {
+                b.append(TUTORIAL_ADDRESS_RULES).append('\n');
+            }
         }
         PetState st = ctx.state();
         b.append("[지금]\n");
