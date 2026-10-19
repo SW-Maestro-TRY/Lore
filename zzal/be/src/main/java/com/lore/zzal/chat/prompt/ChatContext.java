@@ -49,6 +49,12 @@ public record ChatContext(
 
     public ChatContext withActionOptions(List<ActionOption> options){return new ChatContext(petId,sheet,state,kind,plan,answering,history,options.stream().map(ActionOption::id).toList(),factMemories,List.copyOf(options),scene);}
     public ChatContext withScene(ConversationScene value){return new ChatContext(petId,sheet,state,kind,plan,answering,history,motions,factMemories,actionOptions,value);}
+    /** 명시 장면이 최우선이다. 기존 일반 채팅은 scene 없이 CONTINUOUS 슬롯으로 호출한다. */
+    public boolean ordinaryChat() {
+        return scene != null ? scene.phase() == ConversationScene.Phase.CONTINUOUS
+                : plan.slot() == com.lore.zzal.chat.ChatSlot.CONTINUOUS;
+    }
+
     public String defaultMotion() {
         return motions == null || motions.isEmpty() ? null : motions.getFirst();
     }

@@ -9,8 +9,8 @@ import java.time.Duration;
 public class DiaryModelConfiguration {
     @Bean @ConditionalOnMissingBean(DiaryModel.class)
     public DiaryModel diaryModel(@Value("${app.zzal.openai.api-key:}")String apiKey,
-            @Value("${app.zzal.chat.model:gpt-5-mini}")String model,
-            @Value("${app.zzal.chat.reasoning-effort:minimal}")String effort,
+            @Value("${app.zzal.chat.model:gpt-5.6-luna}")String model,
+            @Value("${app.zzal.chat.reasoning-effort:none}")String effort,
             @Value("${zzal.diary.timeout-ms:15000}")long timeoutMs){
         if(apiKey==null||apiKey.isBlank())throw new IllegalStateException("Diary explicitly enabled but existing ZZAL_OPENAI_API_KEY is missing");
         return new ChatLineDiaryModel(new OpenAiChatLineClient(apiKey,effort),model,Duration.ofMillis(timeoutMs));

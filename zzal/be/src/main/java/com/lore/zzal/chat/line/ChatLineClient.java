@@ -2,6 +2,7 @@ package com.lore.zzal.chat.line;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.List;
 
 /**
  * 대사용 텍스트 호출 한 번. 시험에서는 목으로 갈아끼운다.
@@ -16,6 +17,30 @@ public interface ChatLineClient {
      * @throws Exception 그 밖의 실패. 비용을 알면 {@link BilledException} 으로 감싼다
      */
     Completion complete(String system, String user, String model, Duration timeout) throws Exception;
+
+    /** 이전 어댑터·목은 2메시지 계약으로 동작하며, HTTP 어댑터는 native 이력을 지원한다. */
+    default Completion complete(String system, List<Message> history, String user, String model, Duration timeout)
+            throws Exception {
+        StringBuilder compatible = new StringBuilder();
+        if (!history.isEmpty()) {
+            compatible.append("[지금까지]\n");
+            for (Message message : history) {
+                compatible.append(message.role().equals("assistant") ? "너: " : "상대: ")
+                        .append(message.content()).append('\n');
+            }
+            compatible.append('\n');
+        }
+        return complete(system, compatible.append(user).toString(), model, timeout);
+    }
+
+    record Message(String role, String content) {
+        public Message {
+            if (!"user".equals(role) && !"assistant".equals(role)) {
+                throw new IllegalArgumentException("History role must be user or assistant");
+            }
+            java.util.Objects.requireNonNull(content);
+        }
+    }
 
     /** @param text 모델이 낸 글 그대로(JSON 문자열이어야 한다) */
     record Completion(String text, BigDecimal costUsd, long inputTokens, long outputTokens) {

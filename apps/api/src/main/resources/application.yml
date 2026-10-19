@@ -303,11 +303,11 @@ app:
       #   꺼져 있으면 채팅 자체가 "부름 없음"이다(판을 만들지 않는다 — 튜토리얼 대화 칸도 안 열린다).
       # ★ mode 는 옛 칸이다(아무도 안 읽음). 스위치는 llm 하나다.
       llm: ${ZZAL_CHAT_LLM:true}
-      # gpt-5-mini = 입력 $0.25 · 출력 $2.00 / 1M(2026-10-08). 한 줄 약 $0.001 안팎. 비용은 zzal_chat_session.cost_usd 에 기록.
-      model: ${ZZAL_CHAT_MODEL:gpt-5-mini}
+      # gpt-5.6-luna = 입력 $0.20 · 출력 $1.20 / 1M(2026-10-19). 비용은 zzal_chat_session.cost_usd 에 기록.
+      model: ${ZZAL_CHAT_MODEL:gpt-5.6-luna}
       # 한 번 호출의 시간 제한. 재호출까지 최악 2배.
       timeout-ms: ${ZZAL_CHAT_TIMEOUT_MS:4000}
-      reasoning-effort: ${ZZAL_CHAT_REASONING_EFFORT:minimal}
+      reasoning-effort: ${ZZAL_CHAT_REASONING_EFFORT:none}
       # 대화 한 판의 왕복 상한(#704). 마지막 펫 턴은 닫기 턴. 보상은 판당 1회라 늘려도 친밀도는 안 부푼다.
       max-rounds: ${ZZAL_CHAT_MAX_ROUNDS:5}
 

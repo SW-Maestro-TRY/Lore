@@ -17,9 +17,9 @@ import java.time.Duration;
  *   <li>{@code app.zzal.chat.llm} — <b>기본 true</b>(#709 — 운영은 기존 OpenAI 키 {@code ZZAL_OPENAI_API_KEY} 를 그대로 쓴다,
  *       새 파라미터 없음). 끄는 용도로만 남긴다. <b>꺼져 있으면 채팅 자체가 "부름 없음"</b>(판을 만들지 않는다).
  *       성격별 고정 문형(템플릿)은 지웠다</li>
- *   <li>{@code app.zzal.chat.model} — 기본 gpt-5-mini</li>
+ *   <li>{@code app.zzal.chat.model} — 기본 gpt-5.6-luna</li>
  *   <li>{@code app.zzal.chat.timeout-ms} — 기본 4000. 넘으면 한 번 더, 또 넘으면 중립 닫는 말</li>
- *   <li>{@code app.zzal.chat.reasoning-effort} — 기본 minimal(gpt-5 계열만 보낸다)</li>
+ *   <li>{@code app.zzal.chat.reasoning-effort} — 기본 none(gpt-5 계열만 보낸다)</li>
  * </ul>
  * ★ 일 비용 상한({@code daily-cost-usd})은 #709 에서 지웠다. 현재 지속대화는 횟수·시간 제한이 없으며 이 설정은 현금상한이 아니다.
  *   비용 기록({@code zzal_chat_session.cost_usd})은 그대로 남는다.
@@ -37,9 +37,9 @@ public class ChatLineConfig {
 
     @Bean
     public LineChain lineChain(@Value("${app.zzal.chat.llm:true}") boolean llm,
-                               @Value("${app.zzal.chat.model:gpt-5-mini}") String model,
+                               @Value("${app.zzal.chat.model:gpt-5.6-luna}") String model,
                                @Value("${app.zzal.chat.timeout-ms:4000}") long timeoutMs,
-                               @Value("${app.zzal.chat.reasoning-effort:minimal}") String effort,
+                               @Value("${app.zzal.chat.reasoning-effort:none}") String effort,
                                @Value("${app.zzal.openai.api-key:}") String apiKey,
                                SystemPromptCache systems,
                                ChatLineEvents events,

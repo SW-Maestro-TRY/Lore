@@ -20,9 +20,23 @@ class ConversationScenePromptTest {
   var scenes=List.of(new ConversationScene(ConversationScene.Phase.FIRST_MEETING,null),new ConversationScene(ConversationScene.Phase.TUTORIAL,ConversationScene.Step.FEED),new ConversationScene(ConversationScene.Phase.CONTINUOUS,null));
   for(var scene:scenes){var c=ctx.withScene(scene).withHistory(ctx.history()).withFacts(ctx.factMemories()).withActionOptions(ctx.actionOptions());assertThat(c.scene()).isEqualTo(scene);var line=chain.generate(c,8L);assertThat(line.motion()).isEqualTo("custom:z");}
   assertThat(systems).hasSize(3).allSatisfy(s->{assertThat(s).contains("다른아이","작가님","일본어").doesNotContain("로미");for(var f:fields)assertThat(s).contains(f.rawText());});
-  assertThat(new HashSet<>(systems)).hasSize(1);
+  assertThat(new HashSet<>(systems)).hasSize(2);
+  assertThat(systems.get(0)).isEqualTo(systems.get(1)).doesNotContain("[현재 장면: 일반 채팅]");
+  assertThat(systems.get(2)).contains("[현재 장면: 일반 채팅]", "별도 인물의 예시");
   assertThat(inputs).allSatisfy(s->assertThat(s).contains("차가 좋아","USER","custom:z","revision").doesNotContain("albumOnly-secret"));
   assertThat(inputs.get(1)).contains("TUTORIAL","FEED","행동 성공");
  }
  @Test void malformedServerSceneRejected(){assertThatThrownBy(()->new ConversationScene(ConversationScene.Phase.TUTORIAL,null)).isInstanceOf(IllegalArgumentException.class);assertThatThrownBy(()->new ConversationScene(ConversationScene.Phase.CONTINUOUS,ConversationScene.Step.BATH)).isInstanceOf(IllegalArgumentException.class);}
+ @Test void ordinaryStateIsBackgroundButGuidedScenesKeepTheirPurpose(){
+  var sheet=new PersonaSheet("별이",List.of(),null,null,null,"작가님",false);
+  var ctx=new ChatContext(23L,sheet,new PetState(DayOfWeek.MONDAY,12,0,1,0,1,0,false),SessionKind.BABY,new TurnPlan(TurnType.CONTINUE,2,false,null,true,ChatSlot.CONTINUOUS),null,List.of(new HistoryLine(Speaker.PET,"아까 배가 고팠어"),new HistoryLine(Speaker.USER,"오늘 시험을 봤어")),List.of());
+  var ordinary=PromptAssembler.user(ctx);
+  assertThat(ctx.scene()).isNull();
+  assertThat(ordinary).contains("캐릭터 자신의 상태(사용자의 상태 아님)","포만=배고픔","기분=시무룩","청결=꼬질꼬질","대화의 배경 정보","직접 물었거나","같은 하소연","너: 아까 배가 고팠어","상대: 오늘 시험을 봤어");
+  assertThat(PromptAssembler.system(sheet)).contains("별이","작가님","JSON 한 줄");
+  for(var scene:List.of(new ConversationScene(ConversationScene.Phase.FIRST_MEETING,null),new ConversationScene(ConversationScene.Phase.TUTORIAL_STAGE,ConversationScene.Step.FEED))){
+   assertThat(PromptAssembler.user(ctx.withScene(scene))).contains("캐릭터 자신의 상태","상태와 마음").doesNotContain("대화의 배경 정보");
+  }
+  assertThat(PromptAssembler.user(ctx.withScene(new ConversationScene(ConversationScene.Phase.CONTINUOUS,null)))).contains("대화의 배경 정보");
+ }
 }
