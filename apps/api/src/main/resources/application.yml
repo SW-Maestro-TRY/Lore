@@ -478,6 +478,12 @@ app:
       #   ★ 2026-10-08 60 → 90 — 운영 10/7 실측 응답 39~48초, 60초 제한에 시도 1을 잃었다.
       text-timeout-seconds: ${ZZAL_OPENAI_TEXT_TIMEOUT_SECONDS:90}
 
+    custom:
+      dispatch:
+        # Explicit opt-in; existing custom/real/postprocess/CLI guards must also be enabled.
+        enabled: ${ZZAL_CUSTOM_DISPATCH_ENABLED:false}
+        output-root: ${ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT:}
+
     python:
       # 후처리가 numpy·scipy·pillow 를 쓰므로 그것들이 깔린 파이썬이어야 한다.
       # 서버는 배포 때 만들어지는 가상환경(/opt/lore/venv/bin/python)을 가리킨다.
