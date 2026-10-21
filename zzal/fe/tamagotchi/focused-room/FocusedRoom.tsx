@@ -61,7 +61,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const bridgeRef = useRef<RoomChatBridge | null>(null);
   const [storedSnapshot, setSnapshot] = useState<RoomChatSnapshot | null>(null);
   const [drawer, setDrawer] = useState<'history' | 'menu' | null>(null);
-  const [shareOpen,setShareOpen]=useState(false),[exampleReady,setExampleReady]=useState(false);
+  const [shareOpen,setShareOpen]=useState(false),[exampleReady,setExampleReady]=useState(false),[sleepNotice,setSleepNotice]=useState<string|null>(null);
+  const sleepNoticeTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const scene=useRef<HTMLDivElement>(null);
   const [legacy, setLegacy] = useState(false);
   const [reply, setReply] = useState<{ petId: number; sessionId: number | null; idx: number; line: string } | null>(null);
@@ -113,6 +114,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const snapshot = storedSnapshot?.pet?.petId === live.petId ? storedSnapshot : null;
   const pet = live.pet;
   const sleeping = !!pet?.clock?.sleeping, traveling = !!pet?.trip;
+  const showSleepNotice=(wakeLocked=false)=>{if(sleepNoticeTimer.current)clearTimeout(sleepNoticeTimer.current);setSleepNotice(wakeLocked?(locale==='en'?'You can wake them after 7 a.m.':locale==='ja'?'朝7時を過ぎると起こせます。':'아침 7시가 지나면 깨울 수 있어요.'):(locale==='en'?'This is unavailable while they are asleep.':locale==='ja'?'眠っている間はこの機能を使えません。':'자는 동안에는 이 기능을 사용할 수 없어요.'));sleepNoticeTimer.current=setTimeout(()=>setSleepNotice(null),2200)};
+  useEffect(()=>{setSleepNotice(null);if(sleepNoticeTimer.current)clearTimeout(sleepNoticeTimer.current);return()=>{if(sleepNoticeTimer.current)clearTimeout(sleepNoticeTimer.current)}},[live.petId,sleeping,locale]);
   useEffect(()=>{setReply(null);},[live.chatPresenceRevision,live.chat?.session?.id,sleeping,traveling]);
   const pose = x.sleepFarewell ? 'base' : sleeping ? 'sleep' : pet?.sick ? 'sick' : x.visual.pose;
   const activeCustom=!sleeping&&!traveling?x.visual.custom:null;
@@ -130,7 +133,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const blocked = snapshot ? snapshot.blocked : 'loading';
   const uncertain = snapshot?.delivery.status === 'uncertain';
   const sending = !!snapshot?.sending;
-  const canSend = !x.graceSync && !x.guided && x.panel!=='game' && !x.busy && !blocked && !sending && !!(uncertain ? snapshot?.delivery.text : snapshot?.draft)?.trim();
+  const canSend = !sleeping&&!traveling&&!x.graceSync && !x.guided && x.panel!=='game' && !x.busy && !blocked && !sending && !!(uncertain ? snapshot?.delivery.text : snapshot?.draft)?.trim();
 
   useEffect(()=>{const refresh=(event:Event)=>{const id=(event as CustomEvent<{petId?:number}>).detail?.petId;if(id!=null&&id!==owner.current.petId)return;void bridgeRef.current?.loadContext();};window.addEventListener('zzal-persona-updated',refresh);window.addEventListener('pageshow',refresh);return()=>{window.removeEventListener('zzal-persona-updated',refresh);window.removeEventListener('pageshow',refresh)};},[]);
   const personaIdentity=JSON.stringify([live.petId,pet?.name,pet?.personality,pet?.world]);
@@ -172,7 +175,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     {x.sleepFarewell&&!traveling&&sleeping&&<SpeechBubble line={locale==='ko'?'나는 이제 졸려서 자러 갈게. 아침에 또 이야기하자.':locale==='en'?'I am sleepy now, so I am going to bed. Let’s talk again in the morning.':'もう眠いから、そろそろ寝るね。また朝に話そう。'} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{left:speechWidth===size.width-24?12:speechLeft,top:speechTop,width:speechWidth}}/>}
     {(!src || geometry.failed) && !traveling && <p className="fr-asset-status" role="status">{locale==='en'?'Could not load the character image.':locale==='ja'?'キャラクターの画像を読み込めませんでした。':'캐릭터 그림을 불러오지 못했어요.'}</p>}
     <div className="fr-status" role="status" aria-live="polite">
-      {blocked && (!x.guided||sleeping||traveling) && <p>{blocked==='sleeping'?t.sleeping:blocked==='traveling'?t.traveling:locale==='ko'?blocks[blocked]:t.loading}</p>}
+      {blocked && blocked!=='sleeping' && (!x.guided||sleeping||traveling) && <p>{blocked==='traveling'?t.traveling:locale==='ko'?blocks[blocked]:t.loading}</p>}
       {traveling&&<button type="button" data-fr-call-back disabled={live.calling} onClick={()=>void callBack()} style={{minWidth:44,minHeight:44}}>{live.calling?t.calling:t.callBack}</button>}
       {traveling&&returnError&&<p role="alert">{returnError}</p>}
       {x.graceSync&&!sleeping&&!traveling&&<p>{t.loading} <button onClick={()=>void live.refreshPet()}>{t.retry}</button></p>}
@@ -185,19 +188,20 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       {uncertain && <p>{t.uncertain}</p>}
       {blocked === 'loading' && snapshot?.error && <button onClick={() => void bridgeRef.current?.loadContext()}>{t.retry}</button>}
     </div>
+    {sleepNotice&&<div className="fr-status" data-fr-sleep-notice role="status" style={{bottom:dockBudget.height+8,zIndex:7}}><p>{sleepNotice}</p></div>}
     <footer ref={dock} className="fr-dock" aria-hidden={x.panel==='game'} inert={x.panel==='game'}>
-      {x.key!=='FINISH_NOTICE'&&!x.farewell&&<FocusedTiles live={live} x={x} locale={locale} drawerOpen={!!drawer} beforeOpen={()=>{input.current?.blur();setDrawer(null)}}/>}
+      {(sleeping||x.key!=='FINISH_NOTICE'&&!x.farewell)&&<FocusedTiles live={live} x={x} locale={locale} drawerOpen={!!drawer} onSleepingAction={showSleepNotice} beforeOpen={()=>{input.current?.blur();setDrawer(null)}}/>}
       {x.guided&&x.key==='FINISH_NOTICE'&&!x.panel&&<div data-fr-finish-beat={x.finishBeat}>
         {x.finishBeat===1&&(pet?.attendanceRewards?.background.preview?<figure className="fr-finish-preview"><img data-fr-preview src={assetUrl(pet.attendanceRewards.background.preview.url)} alt={t.preview}/><figcaption>{t.preview}</figcaption></figure>:<p className="fr-finish-preparing" data-fr-preview-pending>{t.preparing}</p>)}
         <button className="fr-finish-trigger" data-fr-action="finish-next" data-fr-target={x.currentTarget==='finish'&&!drawer?'true':undefined} disabled={x.busy||sleeping||traveling||pet?.phase!=='ALIVE'} onClick={x.nextFinish}>{x.busy?t.busy:x.error?t.retry:t.next}</button>
       </div>}
       {x.farewell&&!x.panel&&x.storyPhase!==ENDING_STORY.review&&<button className="fr-finish-trigger" data-fr-story-next={x.storyPhase} data-fr-target={!x.busy&&!sleeping&&!traveling&&pet?.phase==='ALIVE'&&(!isRomiMotionPhase(x.storyPhase)||exampleReady)?'true':undefined} disabled={x.busy||sleeping||traveling||pet?.phase!=='ALIVE'||isRomiMotionPhase(x.storyPhase)&&!exampleReady} onClick={()=>void x.nextStory()}>{x.busy?t.busy:x.error?t.retry:t.next}</button>}
       {x.guided&&x.key==='REVIEW_SEEN'&&!x.panel&&!x.farewell&&<button onClick={()=>x.open('review')}>{t.review}</button>}
-      {(!x.guided||x.panel==='game')&&<form className="fr-composer" onSubmit={send}>
-        <button type="button" ref={historyButton} className="fr-history-icon" onClick={openHistory} disabled={x.busy} aria-label={t.history}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2"/></svg></button>
-        <input ref={input} maxLength={CHAT_MAX_CHARS} aria-label={t.input} placeholder={sleeping ? t.sleeping : traveling ? t.traveling : x.guided?t.guide:t.placeholder} value={uncertain ? snapshot?.delivery.text ?? '' : snapshot?.draft ?? ''}
-          disabled={x.graceSync || x.guided || x.panel==='game' || x.busy || !!blocked || sending || uncertain} onChange={event => bridgeRef.current?.setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
-        <button type="submit" disabled={!canSend}>{uncertain ? t.recheck : sending ? t.busy : t.send}</button>
+      {(!x.guided||x.panel==='game'||sleeping)&&<form className="fr-composer" onSubmit={send}>
+        <button type="button" ref={historyButton} className="fr-history-icon" onClick={()=>sleeping?showSleepNotice():openHistory()} aria-disabled={sleeping||undefined} disabled={x.busy} aria-label={t.history}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2"/></svg></button>
+        <input ref={input} maxLength={CHAT_MAX_CHARS} aria-label={sleeping?`${t.input} · ${t.sleeping}`:t.input} placeholder={sleeping ? (locale==='ko'?'자는 중이에요':locale==='en'?'Asleep':'眠っています') : traveling ? t.traveling : x.guided?t.guide:t.placeholder} value={sleeping?'':uncertain ? snapshot?.delivery.text ?? '' : snapshot?.draft ?? ''}
+          disabled={sleeping || x.graceSync || x.guided || x.panel==='game' || x.busy || !!blocked || sending || uncertain} onChange={event => bridgeRef.current?.setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
+        <button type="submit" aria-disabled={sleeping||undefined} disabled={x.busy||!sleeping&&!canSend} onClick={sleeping?event=>{event.preventDefault();showSleepNotice()}:undefined}>{uncertain ? t.recheck : sending ? t.busy : t.send}</button>
       </form>}
     </footer>
     {drawer && <div className={`fr-modal ${drawer === 'menu' ? 'fr-menu-panel' : ''}`} role="dialog" aria-modal="true" aria-label={drawer === 'history' ? t.history : t.menu} onKeyDown={event => {
