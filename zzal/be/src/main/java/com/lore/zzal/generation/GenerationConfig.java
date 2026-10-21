@@ -61,12 +61,19 @@ public class GenerationConfig {
                                    @Value("${app.zzal.generation.fake-grid-key:}") String fakeGridKey,
                                    @Value("${app.zzal.openai.api-key:}") String apiKey,
                                    @Value("${app.zzal.openai.image-timeout-seconds:90}") int imageTimeoutSeconds,
-                                   S3Storage storage) {
+                                   S3Storage storage, Environment env, PostProcessor post) {
+        boolean fixture = env.getProperty("app.zzal.generation.local-fixture.enabled", Boolean.class, false);
+        if (fixture) com.lore.zzal.generation.client.LocalFixturePostProcessor.requireLocal(env);
         if (real) {
             requireKey(apiKey);
             return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds);
         }
         ImageClient base = new FakeImageClient(delay, fakeGridKey);
+        if (fixture) {
+            if (!(post instanceof com.lore.zzal.generation.client.LocalFixturePostProcessor local))
+                throw new IllegalStateException("Local fixture sheet requires its matching fixture postprocessor");
+            return local.imageClient(wrapFlaky(base));
+        }
         return wrapFlaky(base);
     }
 

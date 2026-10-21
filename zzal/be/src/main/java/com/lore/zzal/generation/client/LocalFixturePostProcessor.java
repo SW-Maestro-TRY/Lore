@@ -26,6 +26,7 @@ public final class LocalFixturePostProcessor implements PostProcessor {
     private final String bucket;
     private final LongPredicate eligible;
     private final Map<String, byte[]> files = new LinkedHashMap<>();
+    private final byte[] sheet;
 
     public static LocalFixturePostProcessor create(Environment env, S3Client storage, ZzalPetRepository pets) {
         requireLocal(env);
@@ -64,7 +65,8 @@ public final class LocalFixturePostProcessor implements PostProcessor {
         try {
             var manifest = new ObjectMapper().readTree(Files.readString(directory.resolve("manifest.json")));
             if (manifest.path("schemaVersion").asInt() != 1) throw new IllegalArgumentException("fixture schema");
-            checkHash(Files.readAllBytes(directory.resolve("sheet.png")), manifest.path("sourceSHA256").asText());
+            sheet = Files.readAllBytes(directory.resolve("sheet.png"));
+            checkHash(sheet, manifest.path("sourceSHA256").asText());
             var names = new ArrayList<>(KEYS.stream().map(k -> k + ".webp").toList());
             names.add("anchors.json");
             for (String name : names) {
@@ -79,6 +81,19 @@ public final class LocalFixturePostProcessor implements PostProcessor {
                 throw new IllegalArgumentException("fixture anchors");
             }
         } catch (Exception e) { throw new IllegalStateException("Invalid local basic8 fixture bundle", e); }
+    }
+
+    /** Only new local hatch sheets use the already pinned same-set source; other fake calls stay fake. */
+    public ImageClient imageClient(ImageClient fallback) {
+        return (prompt, references, outputKey, spec) -> {
+            if (outputKey == null || !outputKey.endsWith("/sheet.png"))
+                return fallback.generate(prompt, references, outputKey, spec);
+            var match = Pattern.compile("images/zzal/pets/([1-9][0-9]*)/sheet\\.png").matcher(outputKey);
+            if (!match.matches() || !eligible.test(Long.parseLong(match.group(1))))
+                throw new IllegalArgumentException("Local fixture sheet only accepts newly created hatch pets");
+            putAbsentOrSame(outputKey, sheet);
+            return new ImageClient.Result(outputKey, java.math.BigDecimal.ZERO);
+        };
     }
 
     @Override public Session open(String prefix, String version) {
@@ -118,7 +133,7 @@ public final class LocalFixturePostProcessor implements PostProcessor {
         if (assertAbsentOrSame(key, bytes)) return;
         try {
             storage.putObject(PutObjectRequest.builder().bucket(bucket).key(key).ifNoneMatch("*")
-                    .contentType(key.endsWith(".json") ? "application/json" : "image/webp")
+                    .contentType(key.endsWith(".json") ? "application/json" : key.endsWith(".png") ? "image/png" : "image/webp")
                     .cacheControl("public, max-age=31536000, immutable").build(), RequestBody.fromBytes(bytes));
         } catch (S3Exception e) {
             if (e.statusCode() != 412 || !assertAbsentOrSame(key, bytes)) throw e;

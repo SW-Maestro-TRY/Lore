@@ -119,6 +119,49 @@ class LocalFixturePostProcessorTest {
         verifyNoInteractions(s3);
     }
 
+    @Test void sheetUsesPinnedSameSetBytesAtExactPetKeyAndNeverOverwrites() throws Exception {
+        bundle(); memoryStorage();
+        var fallback=mock(ImageClient.class);
+        var image=provider().imageClient(fallback);
+        String key="images/zzal/pets/7/sheet.png";
+        var result=image.generate("ignored",List.of("images/source"),key,new ModelSpec("fake",null,null));
+        assertThat(result.imageKey()).isEqualTo(key);assertThat(result.costUsd()).isZero();
+        assertThat(objects.get(key)).isEqualTo(Files.readAllBytes(directory.resolve("sheet.png")));
+        image.generate("ignored",List.of(),key,ModelSpec.of("fake"));
+        verify(s3,times(1)).putObject(any(PutObjectRequest.class),any(RequestBody.class));
+        objects.put(key,new byte[]{99});assertThatThrownBy(()->image.generate("",List.of(),key,ModelSpec.of("fake"))).isInstanceOf(IllegalStateException.class);
+        assertThat(objects.get(key)).containsExactly((byte)99);verifyNoInteractions(fallback);
+    }
+
+    @Test void sheetWrapperKeepsOtherCallsFakeAndRejectsOtherPetWithoutStorage() throws Exception {
+        bundle();var fallback=mock(ImageClient.class);var image=provider().imageClient(fallback);
+        when(fallback.generate(anyString(),anyList(),anyString(),any())).thenReturn(new ImageClient.Result("fake-grid",java.math.BigDecimal.ZERO));
+        assertThat(image.generate("",List.of(),"images/grid.png",ModelSpec.of("fake")).imageKey()).isEqualTo("fake-grid");
+        assertThatThrownBy(()->image.generate("",List.of(),"images/zzal/pets/8/sheet.png",ModelSpec.of("fake"))).isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(s3);
+    }
+
+    @Test void imageConfigIsOptInAndUsesSameGuardedPostprocessor() throws Exception {
+        bundle();var config=new GenerationConfig();var storage=mock(S3Storage.class);var env=local();
+        assertThat(config.imageClient(false,0,"grid","",90,storage,env,provider())).isInstanceOf(FakeImageClient.class);
+        env.withProperty("app.zzal.generation.local-fixture.enabled","true");
+        assertThat(config.imageClient(false,0,"grid","",90,storage,env,provider())).isNotNull();
+        assertThatThrownBy(()->config.imageClient(false,0,"grid","",90,storage,env,new FakePostProcessor(0))).hasMessageContaining("matching fixture");
+        env.withProperty("app.lore.env","prod");assertThatThrownBy(()->config.imageClient(false,0,"grid","",90,storage,env,provider())).isInstanceOf(IllegalStateException.class);
+        verifyNoInteractions(s3);
+    }
+
+    @Test void localSheetWrapperPreservesConfiguredFlakyNonSheetBehavior() throws Exception {
+        bundle();var config=new GenerationConfig();
+        org.springframework.test.util.ReflectionTestUtils.setField(config,"flakyStep","grid");
+        org.springframework.test.util.ReflectionTestUtils.setField(config,"flakyTimes",1);
+        org.springframework.test.util.ReflectionTestUtils.setField(config,"flakyMode","moderation");
+        var image=config.imageClient(false,0,"fake-grid","",90,mock(S3Storage.class),local().withProperty("app.zzal.generation.local-fixture.enabled","true"),provider());
+        assertThatThrownBy(()->image.generate("",List.of(),"images/grid.png",ModelSpec.of("fake"))).hasMessageContaining("moderation_blocked");
+        assertThat(image.generate("",List.of(),"images/grid.png",ModelSpec.of("fake")).imageKey()).isEqualTo("fake-grid");
+        verifyNoInteractions(s3);
+    }
+
     private MockEnvironment local(){var e=new MockEnvironment().withProperty("app.lore.env","dev").withProperty("app.s3.endpoint","http://minio:9000");e.setActiveProfiles("local-existing-assets");return e;}
     private LocalFixturePostProcessor provider(){return new LocalFixturePostProcessor(s3,"test",directory,id->id==7);}
     private void generate(LocalFixturePostProcessor p)throws Exception{try(var session=p.open(prefix,"v1")){session.split("ignored-fake-key",LocalFixturePostProcessor.KEYS,"",1);}}
@@ -136,7 +179,7 @@ class LocalFixturePostProcessorTest {
     }
     private PutObjectResponse store(PutObjectRequest request,RequestBody body)throws Exception{
         assertThat(request.ifNoneMatch()).isEqualTo("*");assertThat(request.bucket()).isEqualTo("test");
-        assertThat(request.contentType()).isEqualTo(request.key().endsWith(".json")?"application/json":"image/webp");
+        assertThat(request.contentType()).isEqualTo(request.key().endsWith(".json")?"application/json":request.key().endsWith(".png")?"image/png":"image/webp");
         try(var stream=body.contentStreamProvider().newStream()){objects.put(request.key(),stream.readAllBytes());}return PutObjectResponse.builder().build();
     }
 }
