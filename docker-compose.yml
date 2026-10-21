@@ -151,6 +151,7 @@ services:
       # 채팅 대사 LLM 스위치(app.zzal.chat.llm, #704·#709). 기본 켜짐 — 키는 위 ZZAL_OPENAI_API_KEY 그대로(새 파라미터 없음).
       # ★ 끄는 용도로만 쓴다. 꺼지면 채팅 부름이 아예 없다(템플릿 삭제) — 튜토리얼 대화 칸도 안 열린다.
       ZZAL_CHAT_LLM: ${ZZAL_CHAT_LLM:-true}
+      ZZAL_CHAT_MAX_ATTEMPTS: ${ZZAL_CHAT_MAX_ATTEMPTS:-2}
       ZZAL_DIARY_ENABLED: ${ZZAL_DIARY_ENABLED:-false}
       ZZAL_DIARY_TIMEOUT_MS: ${ZZAL_DIARY_TIMEOUT_MS:-15000}
       ZZAL_DIARY_SWEEP_MS: ${ZZAL_DIARY_SWEEP_MS:-30000}

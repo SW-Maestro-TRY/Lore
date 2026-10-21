@@ -18,7 +18,8 @@ import java.time.Duration;
  *       새 파라미터 없음). 끄는 용도로만 남긴다. <b>꺼져 있으면 채팅 자체가 "부름 없음"</b>(판을 만들지 않는다).
  *       성격별 고정 문형(템플릿)은 지웠다</li>
  *   <li>{@code app.zzal.chat.model} — 기본 gpt-5.6-luna</li>
- *   <li>{@code app.zzal.chat.timeout-ms} — 기본 4000. 넘으면 한 번 더, 또 넘으면 중립 닫는 말</li>
+ *   <li>{@code app.zzal.chat.timeout-ms} — 기본 4000. 한 번 호출의 상한이며 실패 뒤 재호출은 max-attempts 설정을 따른다</li>
+ *   <li>{@code app.zzal.chat.max-attempts} — 요청당 1~2회, 기본 2. generateOnce 장면은 항상 1회</li>
  *   <li>{@code app.zzal.chat.first-meeting-timeout-ms} — 첫만남 장면만 기본 12000. 호출 횟수·실패 상태는 기존 규칙</li>
  *   <li>{@code app.zzal.chat.reasoning-effort} — 기본 none(gpt-5 계열만 보낸다)</li>
  * </ul>
@@ -39,6 +40,9 @@ public class ChatLineConfig {
     @Value("${app.zzal.chat.max-completion-tokens:#{null}}")
     private Integer maxCompletionTokens;
 
+    @Value("${app.zzal.chat.max-attempts:2}")
+    private int maxAttempts = 2;
+
     @Value("${app.zzal.chat.first-meeting-timeout-ms:12000}")
     private long firstMeetingTimeoutMs = 12_000;
 
@@ -53,7 +57,7 @@ public class ChatLineConfig {
                                @Value("${app.lore.env:}") String loreEnv) {
         if (!llm) {
             log.info("채팅 대사 LLM 꺼짐 — 채팅 부름을 만들지 않습니다(app.zzal.chat.llm=false)");
-            return new LineChain(null, events);
+            return new LineChain(null, events, maxAttempts);
         }
         if (apiKey == null || apiKey.isBlank()) {
             if (isServerEnv(loreEnv)) {
@@ -62,14 +66,14 @@ public class ChatLineConfig {
             }
             log.warn("채팅 LLM 을 켰지만 ZZAL_OPENAI_API_KEY 가 없어 채팅을 끕니다(LORE_ENV={}) — 채팅 부름을 만들지 않습니다. "
                     + "운영·스테이징(LORE_ENV=prod|staging)이면 기동을 막습니다.", loreEnv == null || loreEnv.isBlank() ? "(없음)" : loreEnv.trim());
-            return new LineChain(null, events);
+            return new LineChain(null, events, maxAttempts);
         }
         if (maxCompletionTokens != null && maxCompletionTokens <= 0) throw new IllegalArgumentException("app.zzal.chat.max-completion-tokens must be positive");
         if (firstMeetingTimeoutMs <= 0) throw new IllegalArgumentException("app.zzal.chat.first-meeting-timeout-ms must be positive");
         log.info("채팅 대사 LLM 켜짐 — {} · {}ms", model, timeoutMs);
         LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort, maxCompletionTokens), model,
                 Duration.ofMillis(timeoutMs), Duration.ofMillis(firstMeetingTimeoutMs), systems);
-        return new LineChain(gen, events);
+        return new LineChain(gen, events, maxAttempts);
     }
 
     /** 키 없이 뜨면 안 되는 환경 — 운영·스테이징. */

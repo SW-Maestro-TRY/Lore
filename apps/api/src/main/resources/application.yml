@@ -296,8 +296,8 @@ app:
     # 채팅 대사 — LLM(아래 llm 스위치). 금기(원망·위험 소재)는 지시문 [말하는 법] 이 맡는다(#709).
     chat:
       mode: ${ZZAL_CHAT_MODE:template}
-      # 채팅(#704·#709) — 대사는 LLM 이 낸다. 실패(빈 줄·JSON 깨짐·시간 초과·오류)면 재호출 1회,
-      # 또 실패면 중립 닫는 말 1줄로 판을 닫는다. 성격별 고정 문형(템플릿)·내용 필터·일 비용 상한은 지웠다.
+      # 채팅(#704·#709) — 실패 시 max-attempts까지 호출한다(기본 2회, 1이면 내부 재호출 없음).
+      # 허용된 시도가 모두 실패면 중립 닫는 말 1줄로 판을 닫는다. 성격별 고정 문형(템플릿)·내용 필터·일 비용 상한은 지웠다.
       # ★ 기본 켜짐(#709) — 키는 그림 생성과 같은 ZZAL_OPENAI_API_KEY(운영 SSM /lore/prod/OPENAI_KEY). 새 파라미터 없음.
       #   켜져 있는데 키가 비면 운영·스테이징(app.lore.env=prod|staging)은 기동을 막고, 그 밖은 WARN 뒤 꺼짐. ZZAL_CHAT_LLM=false 는 "끄는 용도" 로만 남긴다 —
       #   꺼져 있으면 채팅 자체가 "부름 없음"이다(판을 만들지 않는다 — 튜토리얼 대화 칸도 안 열린다).
@@ -305,7 +305,9 @@ app:
       llm: ${ZZAL_CHAT_LLM:true}
       # gpt-5.6-luna = 입력 $0.20 · 출력 $1.20 / 1M(2026-10-19). 비용은 zzal_chat_session.cost_usd 에 기록.
       model: ${ZZAL_CHAT_MODEL:gpt-5.6-luna}
-      # 한 번 호출의 시간 제한. 재호출까지 최악 2배.
+      # 일반 생성의 요청당 최대 호출 수. 운영 기본 2회 유지, 검수에서만 1회로 제한 가능.
+      max-attempts: ${ZZAL_CHAT_MAX_ATTEMPTS:2}
+      # 한 번 호출의 시간 제한. 일반 생성은 최악 max-attempts배; stage generateOnce는 항상 1회.
       timeout-ms: ${ZZAL_CHAT_TIMEOUT_MS:4000}
       # 발견·호칭 확인 뒤 인사만 별도 제한. 기존 단계 claim/불확실 결과·재시도 규칙은 유지.
       first-meeting-timeout-ms: ${ZZAL_CHAT_FIRST_MEETING_TIMEOUT_MS:12000}
