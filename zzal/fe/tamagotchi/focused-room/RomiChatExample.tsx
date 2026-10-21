@@ -11,7 +11,8 @@ export function RomiChatExample({phase,locale,onReady}:{phase:number;locale:Zzal
  useLayoutEffect(()=>{setFailed(false);onReady(false);return()=>{if(timer.current)clearTimeout(timer.current)}},[phase,onReady]);
  return <section className="fr-ending-example" data-fr-example-phase={phase} aria-label={words.example}>
   <h2>{words.example}</h2>
-  <><img data-fr-romi-motion key={phase} src={ROMI_CHAT_EXAMPLES[example]} alt={copy.motion} onLoad={()=>{if(currentPhase.current!==phase)return;if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(()=>{if(currentPhase.current===phase)onReady(true)},900)}} onError={()=>{if(currentPhase.current!==phase)return;setFailed(true);onReady(true)}}/>{failed&&<p role="status">{words.motionFailed}</p>}</>
   <div className="fr-example-dialogue"><p><small>{words.user}</small>{copy.userLine}</p><p><small>{words.romi}</small>{copy.romiLine}</p></div>
+  <p className="fr-example-action-label" data-fr-learned-action>{words.learnedAction}</p>
+  <><img data-fr-romi-motion key={phase} src={ROMI_CHAT_EXAMPLES[example]} alt={copy.motion} onLoad={()=>{if(currentPhase.current!==phase)return;if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(()=>{if(currentPhase.current===phase)onReady(true)},900)}} onError={()=>{if(currentPhase.current!==phase)return;setFailed(true);onReady(true)}}/>{failed&&<p role="status">{words.motionFailed}</p>}</>
  </section>;
 }
