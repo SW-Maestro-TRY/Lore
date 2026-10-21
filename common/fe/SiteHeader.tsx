@@ -20,10 +20,30 @@ import styles from "./SiteHeader.module.css";
 
 /** 웹툰 탭의 마이페이지. 화면이 주소를 하나 갖고 있어서 헤더가 그냥 가리킨다. */
 const MY_PAGE = "/webtoon?view=mypage";
+const HEADER_AUTH_COPY = {
+  ko: { login: "로그인", logout: "로그아웃", confirm: "로그아웃 확인", question: "로그아웃할까요?", cancel: "취소" },
+  en: { login: "Log in", logout: "Log out", confirm: "Confirm logout", question: "Log out?", cancel: "Cancel" },
+  ja: { login: "ログイン", logout: "ログアウト", confirm: "ログアウトの確認", question: "ログアウトしますか？", cancel: "キャンセル" },
+} as const;
 
 export default function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const onZzal = pathname === "/zzal" || pathname.startsWith("/zzal/");
+  // Match server/first hydration in Korean, then follow Zzal's selected document language.
+  const [headerLocale, setHeaderLocale] = useState<"ko" | "en" | "ja">("ko");
+  useEffect(() => {
+    if (!onZzal) return;
+    const sync = () => {
+      const language = document.documentElement.lang;
+      setHeaderLocale(language === "en" || language === "ja" ? language : "ko");
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    return () => observer.disconnect();
+  }, [onZzal]);
+  const authCopy = HEADER_AUTH_COPY[onZzal ? headerLocale : "ko"];
 
   /* 웹툰 탭은 헤더에서 **로그인 하나만** 본다. (담당: 하은, #223) */
   const onWebtoon = pathname.startsWith("/webtoon");
@@ -167,20 +187,20 @@ export default function SiteHeader() {
                           data-action="logout"
                           aria-expanded={confirmingLogout}
                           onClick={() => setConfirmingLogout(true)}>
-                    로그아웃
+                    {authCopy.logout}
                   </button>
                   {confirmingLogout && (
-                    <div className={styles.logoutConfirm} role="group" aria-label="로그아웃 확인">
-                      <span className={styles.logoutConfirmText}>로그아웃할까요?</span>
+                    <div className={styles.logoutConfirm} role="group" aria-label={authCopy.confirm}>
+                      <span className={styles.logoutConfirmText}>{authCopy.question}</span>
                       <div className={styles.logoutConfirmActions}>
                         <button type="button" className={styles.logoutConfirmYes}
                                 data-action="logout-confirm" onClick={doSignOut}>
-                          로그아웃
+                          {authCopy.logout}
                         </button>
                         <button type="button" className={styles.logoutConfirmNo}
                                 data-action="logout-cancel" autoFocus
                                 onClick={() => setConfirmingLogout(false)}>
-                          취소
+                          {authCopy.cancel}
                         </button>
                       </div>
                     </div>
@@ -192,7 +212,7 @@ export default function SiteHeader() {
             <button type="button" className={styles.authButton} data-action="login"
                     disabled={loginLocked}
                     onClick={() => setAuthOpen(true)}>
-              로그인
+              {authCopy.login}
             </button>
           )}
         </div>
