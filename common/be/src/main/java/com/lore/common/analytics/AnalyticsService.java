@@ -88,6 +88,12 @@ public class AnalyticsService {
             "step", "count", "seq", "ms",
             "motion", "layer");
 
+    // 행동 속성 10개와 예약 광고 정보 8개의 예산을 분리한다. 기존 행동 값이 밀리지 않는다.
+    private static final Set<String> ATTRIBUTION_KEYS = Set.of(
+            "campaign_id", "adset_id", "ad_id", "ad_platform", "placement", "target_group", "target_market", "ui_lang");
+    private static final Pattern ATTRIBUTION_ID = Pattern.compile("^[0-9]{1,64}$");
+    private static final Pattern ATTRIBUTION_TOKEN = Pattern.compile("^[A-Za-z0-9._-]{1,64}$");
+
     /** 이벤트 이름의 생김새. 화면이 부르는 이름 그대로라 소문자·숫자·밑줄뿐이다. */
     private static final Pattern EVENT_NAME = Pattern.compile("^[a-z][a-z0-9_]{0,59}$");
 
@@ -207,7 +213,7 @@ public class AnalyticsService {
                     e.name(),
                     anonId,
                     userId,
-                    sanitizeProps(e.props()),
+                    sanitizeEventProps(e),
                     sanitizePath(e.path()),
                     referrer,
                     source,
@@ -306,6 +312,17 @@ public class AnalyticsService {
      * <p>문자열이 64자를 넘으면 <b>자르지 않고 버린다.</b> 잘라서 넣으면 이메일 앞부분이나
      * 후기 첫 문장이 그대로 남는다 — 개인정보의 절반은 여전히 개인정보다.
      */
+    static String sanitizeEventProps(EventRequests.Event event) {
+        if (event.props() == null) return null;
+        String path = event.path();
+        boolean zzalPath = path != null && (path.equals("/zzal") || path.startsWith("/zzal/") || path.startsWith("/zzal?"));
+        boolean allowedName = event.name() != null && (event.name().startsWith("zzal_") || event.name().startsWith("auth_"));
+        if (zzalPath && allowedName) return sanitizeProps(event.props());
+        Map<String, Object> legacy = new LinkedHashMap<>(event.props());
+        ATTRIBUTION_KEYS.forEach(legacy::remove);
+        return sanitizeProps(legacy);
+    }
+
     static String sanitizeProps(Map<String, Object> props) {
         if (props == null || props.isEmpty()) return null;
 
@@ -329,6 +346,15 @@ public class AnalyticsService {
                 }
             }
             // null·배열·객체는 여기까지 안 온다. 버린다.
+        }
+
+        // 광고 정보는 별도 검증/예산을 사용한다. 행동 속성의 10개 상한은 그대로다.
+        for (String key : ATTRIBUTION_KEYS) {
+            Object value = props.get(key);
+            if (!(value instanceof String text)) continue;
+            boolean valid = key.equals("ui_lang") ? Set.of("ko", "en", "ja").contains(text)
+                    : (key.endsWith("_id") ? ATTRIBUTION_ID : ATTRIBUTION_TOKEN).matcher(text).matches();
+            if (valid) kept.put(key, text);
         }
 
         if (kept.isEmpty()) return null;

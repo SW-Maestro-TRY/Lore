@@ -22,6 +22,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { API_BASE } from './api/client';
+import { createAttributionReader } from './zzalAttribution';
 
 type Props = Record<string, unknown>;
 
@@ -89,6 +90,7 @@ const ALLOWED_PROP_KEYS = new Set([
 
 /** 서버로 나가는 한 줄. 익명 번호도 기기 정보도 없다 — 그건 서버가 쿠키·헤더로 안다. */
 interface QueuedEvent {
+  origin?: Origin | null;
   name: string;
   ts: number;
   path: string;
@@ -127,11 +129,14 @@ export function track(event: string, props: Props = {}): void {
       const prev = previousAnonId();
       if (prev) ownProps = { ...props, from: prev };
     }
+    const origin = isZzalEvent(event) ? currentOrigin() : undefined;
+    const internalProps = internalZzalProps(event, cleanProps(ownProps));
     queue.push({
+      origin: origin === undefined ? undefined : origin ? { ...origin } : null,
       name: event,
       ts: Date.now(),
       path: currentPath(),
-      props: cleanProps(ownProps),
+      props: internalProps,
     });
 
     // ★ 떠나는 중이면 다음 타이머가 없다. 지금 안 보내면 영영 안 나간다.
@@ -198,16 +203,21 @@ function flush(useBeacon: boolean): Promise<void> {
   const events = queue;
   queue = [];
 
-  const body: Record<string, unknown> = { events };
-  // ★ 유입 출처는 **모든 묶음**에 담는다(2026-10-07). 서버는 묶음 단위로 줄마다 적으므로,
-  //   첫 묶음에만 담으면 뒤에 오는 가입·부화 줄의 source 가 비어 광고 전환이 0 으로 보인다.
-  const origin = currentOrigin();
-  if (origin?.referrer) body.referrer = origin.referrer;
-  if (origin?.source) body.source = origin.source;
-  // 서버가 내려 준 익명 번호 사본을 브라우저 저장소에 옮겨 둔다(쿠키가 지워져도 남게).
+  // 짤 이벤트만 발생 시점의 유입을 고정한다. 다른 도메인은 기존 문서 유입/배치 동작을 유지한다.
+  const groups: { origin: Origin | null | undefined; events: Omit<QueuedEvent, 'origin'>[] }[] = [];
+  for (const { origin: snapshot, ...event } of events) {
+    const origin = snapshot === undefined ? legacyOriginAtFlush() : snapshot;
+    let group = groups[groups.length - 1];
+    if (!group || JSON.stringify(group.origin) !== JSON.stringify(origin)) {
+      group = { origin, events: [] }; groups.push(group);
+    }
+    group.events.push(event);
+  }
   rememberAnonId();
-
-  return send(JSON.stringify(body), useBeacon);
+  return Promise.all(groups.map(({ origin, events }) => send(JSON.stringify({
+    events, ...(origin?.source ? { source: origin.source } : {}),
+    ...(origin?.referrer ? { referrer: origin.referrer } : {}),
+  }), useBeacon))).then(() => undefined);
 }
 
 /**
@@ -257,7 +267,7 @@ function bindFlushListeners(): void {
   if (listenersBound) return;
   listenersBound = true;
   // 유입은 **첫 기록 때** 정한다 — 5초 뒤 첫 전송 때 정하면 그 사이 주소에서 UTM 이 지워질 수 있다.
-  currentOrigin();
+  legacyOriginAtFlush();
 
   window.addEventListener('pagehide', () => {
     leaving = true;
@@ -329,6 +339,12 @@ type Origin = { source?: string; referrer?: string };
 
 /** 이 페이지(문서)에서 정한 유입. 한 번 정하면 같은 페이지 안에서는 다시 안 읽는다. */
 let originMemo: Origin | null | undefined;
+let originQuery: string | undefined;
+let legacyOrigin: Origin | null | undefined;
+function legacyOriginAtFlush(): Origin | null {
+  if (legacyOrigin === undefined) legacyOrigin = currentOrigin();
+  return legacyOrigin;
+}
 
 /**
  * 이번 묶음에 실을 유입.
@@ -343,16 +359,23 @@ let originMemo: Origin | null | undefined;
  * ★ 저장소가 막힌 브라우저(사생활 모드)에서는 1번만 동작한다. 기록이 조금 덜 이어질 뿐 화면은 무사하다.
  */
 function currentOrigin(): Origin | null {
-  if (originMemo !== undefined) return originMemo;
+  const params = new URLSearchParams(window.location.search);
+  const zzalPath = /^\/zzal(?:\/|$)/.test(window.location.pathname);
+  const queryKeys = ['utm_source', 'utm_medium', 'utm_campaign', ...(zzalPath ? ['utm_content', 'utm_term', 'campaign_id', 'adset_id', 'ad_id', 'ad_platform', 'placement', 'target_group', 'target_market'] : [])];
+  const query = JSON.stringify(queryKeys.map(k => params.get(k)));
+  if (originMemo !== undefined && (!zzalPath || query === originQuery)) return originMemo;
+  const firstRead = originQuery === undefined;
+  originQuery = query;
+  const previous = originMemo;
   originMemo = null;
   try {
     const arrived: Origin = {};
     const source = readUtm();
     if (source) arrived.source = source;
-    const referrer = externalReferrer();
+    const referrer = firstRead ? externalReferrer() : undefined;
     if (referrer) arrived.referrer = referrer;
 
-    if (arrived.source || arrived.referrer) {
+    if (arrived.source || arrived.referrer || (queryKeys.length > 3 && queryKeys.some(k => params.has(k)))) {
       const text = JSON.stringify(arrived);
       storeSet('session', ORIGIN_SESSION_KEY, text);
       storeSet('local', ORIGIN_LAST_KEY, text);
@@ -363,6 +386,8 @@ function currentOrigin(): Origin | null {
       return originMemo;
     }
 
+    // 같은 문서에서 UTM 제거는 내부 이동이다. 새 유입으로 이전 정보를 섞지 않는다.
+    if (!firstRead && previous) { originMemo = previous; return originMemo; }
     const visit = readOrigin('session', ORIGIN_SESSION_KEY);
     if (visit) { originMemo = visit; return originMemo; }
 
@@ -478,4 +503,21 @@ function readUtm(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+
+const readAttribution = createAttributionReader();
+function isZzalEvent(event: string) {
+  return /^\/zzal(?:\/|$)/.test(window.location.pathname) && /^(zzal_|auth_)/.test(event);
+}
+function internalZzalProps(event: string, props: Record<string, string | number | boolean> | undefined) {
+  if (!isZzalEvent(event)) return props;
+  try {
+    const url = new URL(window.location.href);
+    const cookie = document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith('lore_locale='))?.slice(12);
+    const uiLang = [url.searchParams.get('lang'), cookie, document.documentElement.lang].find(v => v === 'ko' || v === 'en' || v === 'ja');
+    // 예약 광고 필드는 호출자가 넣은 props가 아니라 URL/저장소 검증기에서만 가져온다.
+    const attribution = readAttribution(url, storeOf('session'), storeOf('local'), !!externalReferrer(), Date.now(), uiLang);
+    return { ...props, ...attribution };
+  } catch { return props; }
 }
