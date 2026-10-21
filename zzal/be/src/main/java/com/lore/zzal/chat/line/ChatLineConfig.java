@@ -35,6 +35,9 @@ public class ChatLineConfig {
 
     private static final Logger log = LoggerFactory.getLogger(ChatLineConfig.class);
 
+    @Value("${app.zzal.chat.max-completion-tokens:#{null}}")
+    private Integer maxCompletionTokens;
+
     @Bean
     public LineChain lineChain(@Value("${app.zzal.chat.llm:true}") boolean llm,
                                @Value("${app.zzal.chat.model:gpt-5.6-luna}") String model,
@@ -57,8 +60,9 @@ public class ChatLineConfig {
                     + "운영·스테이징(LORE_ENV=prod|staging)이면 기동을 막습니다.", loreEnv == null || loreEnv.isBlank() ? "(없음)" : loreEnv.trim());
             return new LineChain(null, events);
         }
+        if (maxCompletionTokens != null && maxCompletionTokens <= 0) throw new IllegalArgumentException("app.zzal.chat.max-completion-tokens must be positive");
         log.info("채팅 대사 LLM 켜짐 — {} · {}ms", model, timeoutMs);
-        LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort), model,
+        LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort, maxCompletionTokens), model,
                 Duration.ofMillis(timeoutMs), systems);
         return new LineChain(gen, events);
     }
