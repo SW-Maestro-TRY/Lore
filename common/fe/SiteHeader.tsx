@@ -207,6 +207,7 @@ export default function SiteHeader() {
 
 
     <AuthModal
+      locale={pathname.startsWith("/zzal") ? "document" : undefined}
       open={authOpen}
       onClose={() => setAuthOpen(false)}
       onSuccess={onWebtoon ? () => router.push(MY_PAGE) : undefined}

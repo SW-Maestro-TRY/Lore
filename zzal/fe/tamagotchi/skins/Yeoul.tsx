@@ -170,6 +170,7 @@ export default function Yeoul(_props: SkinProps & { focusedRoom?: boolean }) {
         {v.screen.egg && <Egg y={y} />}
         {v.screen.onb && <Onboarding y={y} />}
         <AuthModal
+          locale="document"
           open={s.authOpen}
           onClose={actions.closeAuth}
           initialTab={s.authTab}
