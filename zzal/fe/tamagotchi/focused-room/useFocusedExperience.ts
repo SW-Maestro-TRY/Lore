@@ -8,7 +8,7 @@ import type { ZzalLocale } from '../../lib/locale';
 import { CYCLE_MS, cyclesOfAction, situationOfAction, poseOfSituation, stagePlanOf, stageAt, type ActionKey } from '../props/situations';
 import { SITUATION_TABLE } from '../props/table';
 import { focusedCopy, fallbackIntroLine, focusedGameLine, finishDialogueLine } from './focusedCopy';
-import {useTutorialEnding} from './useTutorialEnding';
+import {useTutorialEnding,ENDING_STORY} from './useTutorialEnding';
 import {useFocusedStageSpeech} from './useFocusedStageSpeech';
 import {selectOwnedChatResource,sameChatResource,type FocusedChatResource} from './focusedChatMotion';
 import{selectCarePlayback}from'./focusedCareMotion';
@@ -117,7 +117,7 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale,sampleMode=fals
  const nextFinish=()=>{if(lock.current||key!=='FINISH_NOTICE')return;if(ending.finishBeat===0)ending.nextFinish();else void finish()};
  const dismissReview=()=>{setPanel(null);if(serverIntro?.key==='REVIEW_SEEN'&&!sampleMode)ending.startStory()};
  useEffect(()=>{if(sampleMode||serverIntro?.version!==4||serverIntro.key!=='REVIEW_SEEN'||!ending.ready)return;setPanel(ending.storyPhase<0?'review':null)},[petId,serverIntro?.version,serverIntro?.key,ending.ready,ending.storyPhase,sampleMode]);
- const nextStory=async()=>{if(lock.current||!farewell||sleeping||traveling||owner.current.pet?.phase!=='ALIVE')return;if(ending.storyPhase<3){ending.nextStory();return;}const stamp=epoch.current,id=petId;setClosingReview(true);await acknowledge('REVIEW_SEEN');if(valid(stamp,id))setClosingReview(false)};
+ const nextStory=async()=>{if(lock.current||!farewell||sleeping||traveling||owner.current.pet?.phase!=='ALIVE')return;if(ending.storyPhase<ENDING_STORY.invite){ending.nextStory();return;}const stamp=epoch.current,id=petId;setClosingReview(true);await acknowledge('REVIEW_SEEN');if(valid(stamp,id))setClosingReview(false)};
  // The clock only schedules a read/notice. The server alone grants chat or sleep.
  const grace=live.pet?.firstNightChatGrace;
  useEffect(()=>{
@@ -148,7 +148,7 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale,sampleMode=fals
  const gameLine=panel==='game'?(result&&(gamePhase==='reveal'||gamePhase==='done')?focusedGameLine(locale,result):locale==='en'?'Which hand did I hide it in?':locale==='ja'?'どっちの手に隠したかな？':'어느 손에 숨겼을까?'):null;
  const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided&&panel!=='game'&&key!=='FINISH_NOTICE',fallbackIntroLine(key,locale),!busy&&!gameLine&&!farewell);
  const finishLine=key==='FINISH_NOTICE'?finishDialogueLine(ending.finishBeat,locale,!!live.pet?.attendanceRewards?.background.preview):null;
- const speech=gameLine??(farewell&&!sleeping?(ending.storyPhase===3?t.chatInvite:null):!sleeping&&guided?finishLine??stage.line:null);
+ const speech=gameLine??(farewell&&!sleeping?(ending.storyPhase===ENDING_STORY.invite?t.chatInvite:null):!sleeping&&guided?finishLine??stage.line:null);
  const speechSource=gameLine||farewell||finishLine?'SERVICE_FALLBACK':stage.source;
  return{careUncertain,retryCare,visualTrash:trashOverride??live.pet?.gauges?.trash??0,graceSync,sleepFarewell,graceNotice,gameScore,panel,open,close,busy,error,visual,key,guided,currentTarget,care,rest,startGame,choose,result,marks,gamePhase,selected,acknowledge,finishBeat:ending.finishBeat,nextFinish,dismissReview,farewell,storyPhase:ending.storyPhase,nextStory,closingReview,speech,speechSource,stageStatus:stage.status,animate,playChatMotion,chatMotionReady};
 }
