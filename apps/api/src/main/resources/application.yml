@@ -508,3 +508,12 @@ app:
       # 서버는 배포 때 만들어지는 가상환경(/opt/lore/venv/bin/python)을 가리킨다.
       bin: ${ZZAL_PYTHON_BIN:python3}
       timeout-seconds: 60
+
+# Independent root namespace; explicit opt-in may make paid diary requests.
+zzal:
+  diary:
+    enabled: ${ZZAL_DIARY_ENABLED:false}
+    timeout-ms: ${ZZAL_DIARY_TIMEOUT_MS:15000}
+    sweep-ms: ${ZZAL_DIARY_SWEEP_MS:30000}
+    # Blank preserves the existing provider default; isolated measurement may set 1024.
+    max-completion-tokens: ${ZZAL_DIARY_MAX_COMPLETION_TOKENS:}

@@ -151,6 +151,10 @@ services:
       # 채팅 대사 LLM 스위치(app.zzal.chat.llm, #704·#709). 기본 켜짐 — 키는 위 ZZAL_OPENAI_API_KEY 그대로(새 파라미터 없음).
       # ★ 끄는 용도로만 쓴다. 꺼지면 채팅 부름이 아예 없다(템플릿 삭제) — 튜토리얼 대화 칸도 안 열린다.
       ZZAL_CHAT_LLM: ${ZZAL_CHAT_LLM:-true}
+      ZZAL_DIARY_ENABLED: ${ZZAL_DIARY_ENABLED:-false}
+      ZZAL_DIARY_TIMEOUT_MS: ${ZZAL_DIARY_TIMEOUT_MS:-15000}
+      ZZAL_DIARY_SWEEP_MS: ${ZZAL_DIARY_SWEEP_MS:-30000}
+      ZZAL_DIARY_MAX_COMPLETION_TOKENS: ${ZZAL_DIARY_MAX_COMPLETION_TOKENS:-}
       # ── 리모컨(dev API)·관리자 화면 ──
       # 통로가 없어서 박스 .env 에 값을 넣어도 앱이 못 봤다(dev API 404·관리자 화면 안 열림, 9/22·10/9).
       # 기본은 꺼짐 — 켜는 건 박스 /opt/lore-dev/.env 에서만(ZZAL_DEV_TOOLS=true · ZZAL_ADMIN=true).
