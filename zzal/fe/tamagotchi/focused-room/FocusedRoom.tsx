@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useId, type CSSProperties, type FormEvent } from 'react';
 import { createProductRoomChatBridge, type RoomChatBridge, type RoomChatSnapshot, type RoomChatSource } from '../../lib/roomChatBridge';
 import { assetUrl } from '../../lib/assets';
 import { useSpriteGeometry } from '../../lib/spriteGeometry';
 import type { Live } from '../yeoul/useHatch';
 import './focused-room.css';
 import './korean-font-fix.css';
+import './compact-menu.css';
+import LanguageSelector from '../../LanguageSelector';
 import { useOpenAnnouncements } from '../announcements/AnnouncementsGate';
 import { useZzalLocale } from '../../lib/locale';
 import { CHAT_MAX_CHARS } from '../rules';
@@ -19,7 +21,6 @@ import { focusedCopy } from './focusedCopy';
 import {RomiChatExample,isRomiMotionPhase} from './RomiChatExample';
 import {ENDING_STORY} from './useTutorialEnding';
 import { useAnchors } from '../props/anchors';
-import {useAuth} from '@common/auth/useAuth';
 import FocusedInquiry from './FocusedInquiry';
 import SceneShare from '../yeoul/SceneShare';
 import {useFocusedGeometry} from './useFocusedGeometry';
@@ -77,6 +78,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const [inviteTransfer,setInviteTransfer]=useState<{petId:number;waiting:boolean;error:string|null}|null>(null);
   const historyButton = useRef<HTMLButtonElement>(null), menuButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const menuPanel = useRef<HTMLDivElement>(null);
+  const menuId = useId();
   const returnFocus=useRef<'history'|'menu'|null>(null);
   // An open tile group keeps the composer live; only real playback locks the existing controls.
   useEffect(()=>{
@@ -113,7 +116,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     return () => viewport?.removeEventListener('resize', fit);
   }, []);
   useEffect(() => {
-    if (drawer) closeButton.current?.focus({ preventScroll: true });
+    if (drawer === 'menu') menuPanel.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+    else if (drawer === 'history') closeButton.current?.focus({ preventScroll: true });
   }, [drawer]);
 
   const snapshot = storedSnapshot?.pet?.petId === live.petId ? storedSnapshot : null;
@@ -152,6 +156,19 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   useEffect(()=>{const visibility=()=>{host.current?.setAttribute('data-fr-hidden',String(document.hidden));};visibility();document.addEventListener('visibilitychange',visibility);return()=>document.removeEventListener('visibilitychange',visibility);},[]);
   useEffect(()=>{if(drawer||!returnFocus.current)return;const was=returnFocus.current;returnFocus.current=null;const frame=requestAnimationFrame(()=>(was==='history'?historyButton:menuButton).current?.focus({preventScroll:true}));return()=>cancelAnimationFrame(frame);},[drawer]);
   const closeDrawer = () => { returnFocus.current=drawer;setDrawer(null); };
+  useEffect(() => {
+    if (drawer !== 'menu') return;
+    const dismiss = (event: PointerEvent | FocusEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || menuPanel.current?.contains(target) || menuButton.current?.contains(target)) return;
+      // Preserve the outside control's natural focus/action; only Escape explicitly restores focus.
+      returnFocus.current = null;
+      setDrawer(null);
+    };
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('focusin', dismiss);
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('focusin', dismiss); };
+  }, [drawer]);
   const deliver=async(bridge:RoomChatBridge,petId:number)=>{
     try{
     const result = await bridge?.send();
@@ -206,7 +223,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     </div>
     <header className="fr-header">
       <div><h1>{pet?.name || '방'}</h1><p>{pet?.daysTogether != null ? locale==='ko'?`함께한 지 ${pet.daysTogether}일`:locale==='en'?`${pet.daysTogether} days together`:`一緒に${pet.daysTogether}日` : ''}</p></div>
-      <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" disabled={x.farewell} onClick={() => { input.current?.blur(); setDrawer('menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={t.menu} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button></div>
+      <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" disabled={x.farewell} onClick={() => { input.current?.blur(); returnFocus.current=null; setDrawer(current=>current==='menu'?null:'menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={t.menu} aria-haspopup="dialog" aria-controls={drawer === 'menu' ? menuId : undefined} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button></div>
     </header>
     {!traveling && !sleeping && line && <SpeechBubble key={`${live.petId}:${line}`} wideAbove={x.key==='FINISH_NOTICE'||x.farewell} line={line} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{ left: speechWidth === size.width - 24 ? 12 : speechLeft, top: speechTop, width: speechWidth }} />}
     {x.farewell&&isRomiMotionPhase(x.storyPhase)&&<RomiChatExample phase={x.storyPhase} locale={locale} onReady={setExampleReady}/>}
@@ -243,17 +260,25 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
         <button type="submit" aria-disabled={sleeping||undefined} disabled={x.busy||!sleeping&&!canSend} onClick={sleeping?event=>{event.preventDefault();showSleepNotice()}:undefined}>{uncertain ? t.recheck : sending||transfer?.waiting ? t.busy : t.send}</button>
       </form>}
     </footer>
-    {drawer && <div className={`fr-modal ${drawer === 'menu' ? 'fr-menu-panel' : ''}`} role="dialog" aria-modal="true" aria-label={drawer === 'history' ? t.history : t.menu} onKeyDown={event => {
+    {drawer && <div ref={drawer==='menu'?menuPanel:undefined} id={drawer==='menu'?menuId:undefined} data-fr-menu={drawer==='menu'?'true':undefined} className={`fr-modal ${drawer === 'menu' ? 'fr-menu-panel' : ''}`} role="dialog" aria-modal={drawer==='history'?true:undefined} aria-label={drawer === 'history' ? t.history : t.menu} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); closeDrawer(); }
-      if (event.key === 'Tab') {
+      if (event.key === 'Tab' && drawer === 'history') {
         const buttons = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href]')];
         const first = buttons[0], last = buttons[buttons.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
         else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
       }
     }}>
-      <header><h2>{drawer === 'history' ? t.history : t.menu}</h2><button ref={closeButton} onClick={closeDrawer}>{t.back}</button></header>
-      {drawer === 'menu' ? <nav><button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}</button>{openAnnouncements&&<button data-fr-action="announcements-menu" onClick={()=>{setDrawer(null);openAnnouncements?.(menuButton.current)}}>{locale==='ko'?'공지사항':locale==='en'?'Announcements':'お知らせ'}</button>}<div className="fr-languages" aria-label={locale==='ko'?'화면 언어':locale==='en'?'Interface language':'表示言語'}>{(['ko','en','ja'] as const).map(code=><button key={code} aria-pressed={locale===code} onClick={()=>{document.cookie=`lore_locale=${code}; Path=/; Max-Age=31536000; SameSite=Lax`;dispatchEvent(new Event('zzal-locale-change'));}}>{code==='ko'?'한국어':code==='en'?'English':'日本語'}</button>)}</div>{!sampleMode&&<RoomAccountActions locale={locale}/>}<button data-fr-action="info-menu" onClick={()=>{setDrawer(null);x.open('info')}}>{t.personal}</button><button data-fr-action="help-menu" onClick={()=>{setDrawer(null);x.open('help')}}>{locale==='ko'?'도움말':locale==='en'?'Help':'使い方'}</button>{!sampleMode&&<button data-fr-action="feedback-menu" onClick={()=>{setDrawer(null);x.open('review')}}>{t.review}</button>}<button data-fr-action="scene-menu" onClick={()=>{setDrawer(null);setShareOpen(true)}}>{locale==='ko'?'현재 장면 공유':locale==='en'?'Share this scene':'今のシーンを共有'}</button>{!sampleMode&&<button data-fr-action="inquiry-menu" onClick={()=>{setDrawer(null);x.close();setInquiryOpen(true)}}>{locale==='ko'?'문의하기':locale==='en'?'Contact us':'お問い合わせ'}</button>}{pet?.firstIntro&&pet.firstIntro.version!==4&&!pet.firstIntro.completed&&<><p>{t.legacy}</p><a href="/zzal?room=legacy">{t.oldRoom}</a></>}</nav> : <div className="fr-history">
+      {drawer === 'history' && <header><h2>{t.history}</h2><button ref={closeButton} onClick={closeDrawer}>{t.back}</button></header>}
+      {drawer === 'menu' ? <><nav className="fr-menu-links">
+        <button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}</button>
+        <button data-fr-action="info-menu" onClick={()=>{setDrawer(null);x.open('info')}}>{locale==='ko'?'캐릭터 정보':t.personal}</button>
+        {openAnnouncements&&<button data-fr-action="announcements-menu" onClick={()=>{setDrawer(null);openAnnouncements?.(menuButton.current)}}>{locale==='ko'?'공지사항':locale==='en'?'Announcements':'お知らせ'}</button>}
+        <button data-fr-action="help-menu" onClick={()=>{setDrawer(null);x.open('help')}}>{locale==='ko'?'도움말':locale==='en'?'Help':'使い方'}</button>
+        {!sampleMode&&<button data-fr-action="feedback-menu" onClick={()=>{setDrawer(null);x.open('review')}}>{locale==='ko'?'후기':locale==='en'?'Feedback':'感想'}</button>}
+        <button data-fr-action="scene-menu" onClick={()=>{setDrawer(null);setShareOpen(true)}}>{locale==='ko'?'공유':locale==='en'?'Share':'共有'}</button>
+        {!sampleMode&&<button data-fr-action="inquiry-menu" onClick={()=>{setDrawer(null);x.close();setInquiryOpen(true)}}>{locale==='ko'?'문의하기':locale==='en'?'Contact us':'お問い合わせ'}</button>}
+      </nav><div className="fr-languages"><LanguageSelector/></div></> : <div className="fr-history">
         <div className="fr-history-tabs"><button aria-disabled={snapshot?.historyLoading} aria-pressed={!legacy} onClick={() => { if(snapshot?.historyLoading)return; setLegacy(false); void bridgeRef.current?.history(false); }}>{t.current}</button><button aria-disabled={snapshot?.historyLoading} aria-pressed={legacy} onClick={() => { if(snapshot?.historyLoading)return; setLegacy(true); void bridgeRef.current?.history(true); }}>{t.legacyHistory}</button></div>
         {snapshot?.historyLoading && <p role="status">{t.loading}</p>}
         {snapshot?.error && <p role="status">{snapshot.error}</p>}
@@ -289,5 +314,3 @@ export function SpeechBubble({line,budget,style,previous,next,bounds,wideAbove=f
  });
  return <div ref={root} className="fr-bubble" data-fr-speech data-fr-ending-speech={wideAbove?true:undefined} style={style}><p>{chars.slice(current*capacity,(current+1)*capacity).join('')}</p>{count>1&&<div className="fr-speech-pages"><button aria-label={previous} disabled={current===0} onClick={()=>setPage(current-1)}>{previous}</button><span>{current+1}/{count}</span><button aria-label={next} disabled={current+1===count} onClick={()=>setPage(current+1)}>{next}</button></div>}</div>;
 }
-
-function RoomAccountActions({locale}:{locale:'ko'|'en'|'ja'}){const{signOut}=useAuth(),[confirm,setConfirm]=useState(false),[busy,setBusy]=useState(false);return confirm?<div className="fr-logout"><p>{locale==='ko'?'로그아웃할까요?':locale==='en'?'Sign out?':'ログアウトしますか？'}</p><button disabled={busy} onClick={()=>{setBusy(true);void signOut().then(()=>{location.assign('/zzal')}).finally(()=>setBusy(false))}}>{locale==='ko'?'로그아웃':locale==='en'?'Sign out':'ログアウト'}</button><button disabled={busy} onClick={()=>setConfirm(false)}>{locale==='ko'?'취소':locale==='en'?'Cancel':'キャンセル'}</button></div>:<button onClick={()=>setConfirm(true)}>{locale==='ko'?'로그아웃':locale==='en'?'Sign out':'ログアウト'}</button>;}

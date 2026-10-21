@@ -34,13 +34,11 @@ export default function TamagotchiScreen({ name, focusedRoom = false }: { name: 
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.skin = name;
-    if(focusedRoom)root.dataset.focusedRoom='true';
-    return () => { delete root.dataset.skin;delete root.dataset.focusedRoom; };
-  }, [name,focusedRoom]);
+    return () => { delete root.dataset.skin; };
+  }, [name]);
 
   // 헤더 높이는 화면 폭·글꼴에 따라 달라지므로 값을 박지 않고 재서 쓴다.
   useEffect(() => {
-    if(focusedRoom){box.current?.style.setProperty('--tama-header-h','0px');return;}
     const header = document.querySelector('header');
     if (!header) return;
     const set = () => {

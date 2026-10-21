@@ -16,6 +16,7 @@
 //   「이전」= 앞 칸으로 가며 그 칸의 점이 알에서 칸으로 돌아온다(0.3초). 글·칩은 칸에 그대로 남아 다시 고칠 수 있다.
 'use client';
 
+import LanguageSelector from '../../LanguageSelector';
 import {PersonaQuestionFields} from './PersonaQuestionFields';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RomiSampleRoom from '../focused-room/RomiSampleRoom';
@@ -69,7 +70,16 @@ const STYLE = `
 .pe-sheet{position:relative}
 .pe-keyboard-done{position:absolute;right:16px;top:-49px;z-index:4;height:44px;min-width:52px;border:1px solid #D8C9BD;border-radius:999px;background:#FFFDF8;color:#9C4232;font:700 18px Gaegu}
 
-/* Completed waiting only: the input-stage egg stays at 200px. */
+/* Questions rest at the bottom too; long chip lists scroll inside the sheet.
+   Grow the egg only inside the available stage; the keyboard viewport path keeps its existing 200px egg. */
+.pe-root:not([data-q="done"]):not([data-kb="1"]) .pe-stage{flex:1 0 230px;min-height:230px;container-type:size}
+@supports(height:1cqh){
+.pe-root:not([data-q="done"]):not([data-kb="1"]) [data-part="pe-egg"]{--question-egg:min(340px,calc(100vw - 64px),max(200px,calc(100cqh - 30px)));width:var(--question-egg)!important;height:var(--question-egg)!important;min-height:0!important;max-height:none!important;margin-top:0!important;margin-bottom:0!important}
+}
+.pe-root:not([data-q="done"]):not([data-kb="1"]) .pe-sheet{flex:0 1 auto!important;margin-top:auto!important}
+.pe-root:not([data-q="done"]):not([data-kb="1"]) .pe-scroll{flex:0 1 auto!important}
+
+/* Completed waiting: preserve the approved larger egg. */
 .pe-root[data-waiting="true"] .pe-stage{flex:1 1 auto;min-height:0}
 .pe-root[data-waiting="true"] [data-part="pe-egg"]{--waiting-egg:min(340px,calc(100vw - 64px),max(240px,42vh));width:var(--waiting-egg)!important;height:var(--waiting-egg)!important;min-height:0!important;max-height:none!important;margin-top:0!important;margin-bottom:0!important}
 .pe-root[data-waiting="true"] .pe-sheet{flex:0 0 auto!important;margin-top:auto!important}
@@ -531,7 +541,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
       </span>
 
       {/* 머리줄 — 뒤로 · 언어 선택 */}
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.sm, padding: '6px 14px 0', minHeight: TAP_MIN }}>
+      <div className="pe-language-head" style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.sm, padding: '6px 14px 0', minHeight: TAP_MIN }}>
         {!submitted ? (
           <button
             type="button" onClick={() => void back()} aria-label={tr('이전')} data-action="pe-back" className="onb-back"
@@ -541,9 +551,10 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
           </button>
         ) : <span style={{ width: TAP_MIN }} />}
         <span aria-hidden style={{ flex: 1 }} />
+        {!sampleOpen && <LanguageSelector/>}
       </div>
 
-      {/* 알 무대 — 입력 중에도 같은 크기와 위치. 누르는 자리는 없다(보기만). */}
+      {/* 알 무대 — 질문 중에는 가용 무대 안에서 확대하고 키보드가 열리면 기존 200px를 쓴다. */}
       <div className="pe-stage" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: gap.sm, padding: '0 16px' }}>
         <div
           ref={eggBox} data-part="pe-egg"

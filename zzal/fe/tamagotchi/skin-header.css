@@ -90,6 +90,4 @@
 }
 */
 
-/* Focused full-flow uses the approved full viewport; other domains and legacy stay unchanged. */
-:root[data-focused-room=true] body>header{display:none}
-:root[data-focused-room=true] .tama-fullscreen{height:100dvh;min-height:0}
+/* Focused and legacy both keep the shared SiteHeader. TamagotchiScreen measures its actual height. */

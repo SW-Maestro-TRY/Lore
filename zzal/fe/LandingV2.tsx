@@ -22,6 +22,7 @@
 // 토이 카피(밴워드 없음)·여울 v6 원본 마스코트만(oc-*.webp·IP 금지). 토큰은 여울 ui.ts 재사용.
 "use client";
 
+import LanguageSelector from './LanguageSelector';
 import {useUiText} from './lib/uiCopy';
 import { useEffect, useState } from "react";
 import { C, GAEGU, SANS, radius, shadow, SHELL_MAX, ink, acc } from './tamagotchi/yeoul/ui';
@@ -84,7 +85,7 @@ export function LandingV2Stage({ variant = "page", onStart }: { variant?: "page"
   useEffect(()=>{const q=matchMedia('(prefers-reduced-motion: reduce)');const sync=()=>setReduced(q.matches);sync();q.addEventListener('change',sync);return()=>q.removeEventListener('change',sync)},[]);
   const motions=[['eat','밥을 먹고'],['sleep','졸리고'],['joy','청소하고'],['hello','리듬 타고']] as const;
   return <div className="entry-landing" data-part="approved-entry-landing">
-    <div className="entry-brand"><img src="/zzal-entry/logo-08-transparent.png" alt="캐릭터 키우기 Lore" width="148" height="40"/></div>
+    <div className="entry-brand"><img src="/zzal-entry/logo-08-transparent.png" alt={tr('캐릭터 키우기 Lore')} width="148" height="40"/><LanguageSelector/></div>
     <h1>{tr('그림 속 내 캐릭터에게')}<br/>{tr('하루가 생긴다면?')}</h1>
     <p className="entry-intro">{tr('캐릭터 이미지를 올리고')}<br/>{tr('직접 돌봐주세요')}</p>
     <section className="entry-transformation" aria-label={tr('캐릭터 그림에서 여러 움직임으로')}>
