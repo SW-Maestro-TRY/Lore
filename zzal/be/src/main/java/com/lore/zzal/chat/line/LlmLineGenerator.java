@@ -3,6 +3,7 @@ package com.lore.zzal.chat.line;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.zzal.chat.prompt.ChatContext;
+import com.lore.zzal.chat.prompt.ConversationScene;
 import com.lore.zzal.chat.prompt.PromptAssembler;
 import com.lore.zzal.chat.prompt.SystemPromptCache;
 
@@ -39,14 +40,21 @@ public class LlmLineGenerator implements LineGenerator {
     private final ChatLineClient client;
     private final String model;
     private final Duration timeout;
+    private final Duration firstMeetingTimeout;
     private final SystemPromptCache systems;
     private final ObjectMapper json = new ObjectMapper();
 
     public LlmLineGenerator(ChatLineClient client, String model, Duration timeout, SystemPromptCache systems) {
+        this(client, model, timeout, timeout, systems);
+    }
+
+    public LlmLineGenerator(ChatLineClient client, String model, Duration timeout,
+                            Duration firstMeetingTimeout, SystemPromptCache systems) {
         this.client = client;
         this.systems = systems;
         this.model = model;
         this.timeout = timeout;
+        this.firstMeetingTimeout = firstMeetingTimeout;
     }
 
     @Override
@@ -70,9 +78,11 @@ public class LlmLineGenerator implements LineGenerator {
                 : List.of();
         int promptChars = system.length() + user.length() + history.stream().mapToInt(h -> h.content().length()).sum();
         ChatLineClient.Completion c;
+        Duration requestTimeout = ctx.scene() != null && ctx.scene().phase() == ConversationScene.Phase.FIRST_MEETING
+                ? firstMeetingTimeout : timeout;
         try {
-            c = ordinary ? client.complete(system, history, user, model, timeout)
-                    : client.complete(system, user, model, timeout);
+            c = ordinary ? client.complete(system, history, user, model, requestTimeout)
+                    : client.complete(system, user, model, requestTimeout);
         } catch (TimeoutException e) {
             return LineAttempt.fail(NAME, model,
                     OpenAiChatLineClient.estimate(model, promptChars), "timeout", ms(t0));

@@ -307,6 +307,8 @@ app:
       model: ${ZZAL_CHAT_MODEL:gpt-5.6-luna}
       # 한 번 호출의 시간 제한. 재호출까지 최악 2배.
       timeout-ms: ${ZZAL_CHAT_TIMEOUT_MS:4000}
+      # 발견·호칭 확인 뒤 인사만 별도 제한. 기존 단계 claim/불확실 결과·재시도 규칙은 유지.
+      first-meeting-timeout-ms: ${ZZAL_CHAT_FIRST_MEETING_TIMEOUT_MS:12000}
       reasoning-effort: ${ZZAL_CHAT_REASONING_EFFORT:none}
       # 대화 한 판의 왕복 상한(#704). 마지막 펫 턴은 닫기 턴. 보상은 판당 1회라 늘려도 친밀도는 안 부푼다.
       max-rounds: ${ZZAL_CHAT_MAX_ROUNDS:5}

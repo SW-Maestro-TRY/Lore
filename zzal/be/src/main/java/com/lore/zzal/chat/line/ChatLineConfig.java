@@ -19,6 +19,7 @@ import java.time.Duration;
  *       성격별 고정 문형(템플릿)은 지웠다</li>
  *   <li>{@code app.zzal.chat.model} — 기본 gpt-5.6-luna</li>
  *   <li>{@code app.zzal.chat.timeout-ms} — 기본 4000. 넘으면 한 번 더, 또 넘으면 중립 닫는 말</li>
+ *   <li>{@code app.zzal.chat.first-meeting-timeout-ms} — 첫만남 장면만 기본 12000. 호출 횟수·실패 상태는 기존 규칙</li>
  *   <li>{@code app.zzal.chat.reasoning-effort} — 기본 none(gpt-5 계열만 보낸다)</li>
  * </ul>
  * ★ 일 비용 상한({@code daily-cost-usd})은 #709 에서 지웠다. 현재 지속대화는 횟수·시간 제한이 없으며 이 설정은 현금상한이 아니다.
@@ -37,6 +38,9 @@ public class ChatLineConfig {
 
     @Value("${app.zzal.chat.max-completion-tokens:#{null}}")
     private Integer maxCompletionTokens;
+
+    @Value("${app.zzal.chat.first-meeting-timeout-ms:12000}")
+    private long firstMeetingTimeoutMs = 12_000;
 
     @Bean
     public LineChain lineChain(@Value("${app.zzal.chat.llm:true}") boolean llm,
@@ -61,9 +65,10 @@ public class ChatLineConfig {
             return new LineChain(null, events);
         }
         if (maxCompletionTokens != null && maxCompletionTokens <= 0) throw new IllegalArgumentException("app.zzal.chat.max-completion-tokens must be positive");
+        if (firstMeetingTimeoutMs <= 0) throw new IllegalArgumentException("app.zzal.chat.first-meeting-timeout-ms must be positive");
         log.info("채팅 대사 LLM 켜짐 — {} · {}ms", model, timeoutMs);
         LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort, maxCompletionTokens), model,
-                Duration.ofMillis(timeoutMs), systems);
+                Duration.ofMillis(timeoutMs), Duration.ofMillis(firstMeetingTimeoutMs), systems);
         return new LineChain(gen, events);
     }
 
