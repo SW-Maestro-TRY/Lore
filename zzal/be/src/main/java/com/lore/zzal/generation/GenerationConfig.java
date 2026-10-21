@@ -148,10 +148,14 @@ public class GenerationConfig {
             @Value("${app.zzal.python.bin:python3}") String pythonBin,
             @Value("${app.zzal.pipeline-version:v1}") String configuredVersion,
             @Value("${app.zzal.python.timeout-seconds:60}") int timeout,
-            Environment env) {
+            Environment env, software.amazon.awssdk.services.s3.S3Client s3,
+            com.lore.zzal.pet.ZzalPetRepository pets) {
         // ★ 부팅 때 설정된 버전의 목록이 있는지 확인한다(빠졌으면 설정 이름을 말하며 막힘). 실제 사용 버전은
         //   호출마다 job 에서 온다 — 빈이 만들어질 때의 설정으로 굳어 있던 어긋남을 막는다(#218 리뷰).
         hatchStates(env, configuredVersion);
+        if (env.getProperty("app.zzal.generation.local-fixture.enabled", Boolean.class, false)) {
+            return com.lore.zzal.generation.client.LocalFixturePostProcessor.create(env, s3, pets);
+        }
         if (real) {
             requirePythonPackages(pythonBin);
             requireFakeGridWhenImagesAreFake(env);
