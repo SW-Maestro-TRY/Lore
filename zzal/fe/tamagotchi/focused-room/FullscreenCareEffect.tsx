@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useLayoutEffect,useState} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {stageUrl,type PropStage} from '../props/spec';
 
@@ -7,20 +7,22 @@ import {stageUrl,type PropStage} from '../props/spec';
 // Cover these bounds so transparent edge particles never leave the UI exposed.
 const COVER={bath:{width:782,height:959,bottom:0},dust:{width:558,height:1160,bottom:149}};
 
-/** Only the cleaning/bath screen effects escape the room's clipping and stacking context. */
+/** Cleaning/bath cover their own game room, including its dock, below the platform header. */
 export default function FullscreenCareEffect({effect,stage,stages}:{effect:keyof typeof COVER;stage:PropStage;stages:readonly PropStage[]}){
- const [viewport,setViewport]=useState({left:0,top:0,width:0,height:0});
+ const anchor=useRef<HTMLSpanElement>(null);
+ const [bounds,setBounds]=useState<{room:HTMLElement;width:number;height:number}|null>(null);
  useLayoutEffect(()=>{
-  const view=window.visualViewport;
-  const measure=()=>setViewport({left:view?.offsetLeft??0,top:view?.offsetTop??0,width:view?.width??window.innerWidth,height:view?.height??window.innerHeight});
-  measure();window.addEventListener('resize',measure);view?.addEventListener('resize',measure);view?.addEventListener('scroll',measure);
-  return()=>{window.removeEventListener('resize',measure);view?.removeEventListener('resize',measure);view?.removeEventListener('scroll',measure)};
+  const room=anchor.current?.closest<HTMLElement>('[data-focused-room]');if(!room)return;
+  const measure=()=>{const {width,height}=room.getBoundingClientRect();setBounds(previous=>previous?.room===room&&previous.width===width&&previous.height===height?previous:{room,width,height})};
+  measure();const observer=new ResizeObserver(measure);observer.observe(room);
+  return()=>observer.disconnect();
  },[]);
  useEffect(()=>{for(const value of stages){const image=new Image();image.src=stageUrl(value)}},[stages]);
- if(!viewport.width||!viewport.height||!stage.srcW||!stage.srcH)return null;
- const cover=COVER[effect],scale=Math.max(viewport.width/cover.width,viewport.height/cover.height);
+ const marker=<span ref={anchor} hidden aria-hidden="true"/>;
+ if(!bounds?.width||!bounds.height||!stage.srcW||!stage.srcH)return marker;
+ const cover=COVER[effect],scale=Math.max(bounds.width/cover.width,bounds.height/cover.height);
  const width=stage.srcW*scale,height=stage.srcH*scale;
- return createPortal(<div data-fr-care-effect={effect} data-stage={stage.n} aria-hidden="true" style={{position:'fixed',...viewport,zIndex:2147483646,overflow:'hidden',pointerEvents:'none'}}>
-  <img data-fr-prop={effect} data-stage={stage.n} alt="" src={stageUrl(stage)} onError={event=>{event.currentTarget.hidden=true}} style={{position:'absolute',left:(viewport.width-width)/2,bottom:-cover.bottom*scale,width,height,maxWidth:'none',maxHeight:'none',pointerEvents:'none'}}/>
- </div>,document.body);
+ return <>{marker}{createPortal(<div data-fr-care-effect={effect} data-stage={stage.n} aria-hidden="true" style={{position:'absolute',inset:0,zIndex:2147483646,overflow:'hidden',pointerEvents:'none'}}>
+  <img data-fr-prop={effect} data-stage={stage.n} alt="" src={stageUrl(stage)} onError={event=>{event.currentTarget.hidden=true}} style={{position:'absolute',left:(bounds.width-width)/2,bottom:-cover.bottom*scale,width,height,maxWidth:'none',maxHeight:'none',pointerEvents:'none'}}/>
+ </div>,bounds.room)}</>;
 }
