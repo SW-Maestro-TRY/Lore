@@ -125,7 +125,7 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale,sampleMode=fals
  const nextFinish=()=>{if(lock.current||key!=='FINISH_NOTICE')return;if(ending.finishBeat===0)ending.nextFinish();else void finish()};
  const dismissReview=()=>{setPanel(null);if(serverIntro?.key==='REVIEW_SEEN'&&!sampleMode&&ending.storyPhase===ENDING_STORY.review)ending.finishReview()};
  useEffect(()=>{if(sampleMode||serverIntro?.version!==4||serverIntro.key!=='REVIEW_SEEN'||!ending.ready)return;setPanel(ending.storyPhase===ENDING_STORY.review?'review':null)},[petId,serverIntro?.version,serverIntro?.key,ending.ready,ending.storyPhase,sampleMode]);
- const nextStory=async()=>{if(lock.current||!farewell||ending.storyPhase===ENDING_STORY.review||sleeping||traveling||owner.current.pet?.phase!=='ALIVE')return;if(ending.storyPhase<ENDING_STORY.invite){ending.nextStory();return;}const stamp=epoch.current,id=petId;setClosingReview(true);await acknowledge('REVIEW_SEEN');if(valid(stamp,id))setClosingReview(false)};
+ const nextStory=async()=>{if(lock.current||!farewell||ending.storyPhase===ENDING_STORY.review||sleeping||traveling||owner.current.pet?.phase!=='ALIVE')return false;if(ending.storyPhase<ENDING_STORY.invite){ending.nextStory();return true;}const stamp=epoch.current,id=petId;setClosingReview(true);const confirmed=await acknowledge('REVIEW_SEEN');if(valid(stamp,id))setClosingReview(false);return confirmed&&valid(stamp,id)};
  // The clock only schedules a read/notice. The server alone grants chat or sleep.
  const grace=live.pet?.firstNightChatGrace;
  useEffect(()=>{

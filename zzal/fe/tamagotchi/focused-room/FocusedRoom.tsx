@@ -70,6 +70,9 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const initialHeight=useRef(typeof window==='undefined'?844:window.innerHeight);
   const host = useRef<HTMLElement>(null), input = useRef<HTMLInputElement>(null),dock=useRef<HTMLElement>(null);
   const [dockBudget,setDockBudget]=useState({left:0,top:0,width:0,height:0});
+  const sendLock=useRef(false);
+  const inviteHandoff=useRef<{petId:number;bridge:RoomChatBridge;chat:Live['chat'];ready:boolean}|null>(null);
+  const [inviteTransfer,setInviteTransfer]=useState<{petId:number;waiting:boolean;error:string|null}|null>(null);
   const historyButton = useRef<HTMLButtonElement>(null), menuButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const returnFocus=useRef<'history'|'menu'|null>(null);
@@ -133,7 +136,11 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const blocked = snapshot ? snapshot.blocked : 'loading';
   const uncertain = snapshot?.delivery.status === 'uncertain';
   const sending = !!snapshot?.sending;
-  const canSend = !sleeping&&!traveling&&!x.graceSync && !x.guided && x.panel!=='game' && !x.busy && !blocked && !sending && !!(uncertain ? snapshot?.delivery.text : snapshot?.draft)?.trim();
+  const inviteInput=x.farewell&&x.storyPhase===ENDING_STORY.invite&&!x.panel;
+  const transfer=inviteTransfer?.petId===live.petId?inviteTransfer:null;
+  const inviteRetry=!!transfer?.error;
+  const composerBlocked=!!blocked&&!(blocked==='closed'&&(inviteInput||inviteRetry));
+  const canSend = !sleeping&&!traveling&&!x.graceSync && (!x.guided||inviteInput) && x.panel!=='game' && !x.busy && !composerBlocked && !sending && !transfer?.waiting && !!(uncertain ? snapshot?.delivery.text : snapshot?.draft)?.trim();
 
   useEffect(()=>{const refresh=(event:Event)=>{const id=(event as CustomEvent<{petId?:number}>).detail?.petId;if(id!=null&&id!==owner.current.petId)return;void bridgeRef.current?.loadContext();};window.addEventListener('zzal-persona-updated',refresh);window.addEventListener('pageshow',refresh);return()=>{window.removeEventListener('zzal-persona-updated',refresh);window.removeEventListener('pageshow',refresh)};},[]);
   const personaIdentity=JSON.stringify([live.petId,pet?.name,pet?.personality,pet?.world]);
@@ -143,9 +150,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   useEffect(()=>{const visibility=()=>{host.current?.setAttribute('data-fr-hidden',String(document.hidden));};visibility();document.addEventListener('visibilitychange',visibility);return()=>document.removeEventListener('visibilitychange',visibility);},[]);
   useEffect(()=>{if(drawer||!returnFocus.current)return;const was=returnFocus.current;returnFocus.current=null;const frame=requestAnimationFrame(()=>(was==='history'?historyButton:menuButton).current?.focus({preventScroll:true}));return()=>cancelAnimationFrame(frame);},[drawer]);
   const closeDrawer = () => { returnFocus.current=drawer;setDrawer(null); };
-  const send = async (event: FormEvent) => {
-    event.preventDefault(); if (!canSend) return;
-    const bridge = bridgeRef.current, petId = live.petId;
+  const deliver=async(bridge:RoomChatBridge,petId:number)=>{
+    try{
     const result = await bridge?.send();
     if (result?.reply && bridge === bridgeRef.current && owner.current.petId === petId && petId) {
       if(result.sent&&!result.error)metrics?.chatSaved(result.reply);
@@ -155,6 +161,37 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       const turnIdentity=petTurn?.idx;
       if(result.sent&&!result.error&&result.reply.session?.id!=null&&turnIdentity!=null)x.playChatMotion(result.reply.reactionKey,`${petId}:${result.reply.session?.id??'legacy'}:${turnIdentity}`);
     }
+    }finally{if(bridgeRef.current===bridge&&owner.current.petId===petId)sendLock.current=false;}
+  };
+  const transferFailed=(pending:NonNullable<typeof inviteHandoff.current>)=>{
+    if(inviteHandoff.current!==pending)return;
+    inviteHandoff.current=null;sendLock.current=false;
+    setInviteTransfer({petId:pending.petId,waiting:false,error:locale==='ko'?'대화를 열지 못했어요. 적은 말은 남아 있어요. 보내기를 눌러 다시 확인해 주세요.':locale==='en'?'Chat did not open. Your message is still here. Press Send to try again.':'会話を開けませんでした。入力した内容は残っています。送信を押してもう一度確認してください。'});
+  };
+  useEffect(()=>{const pending=inviteHandoff.current;if(pending&&(pending.petId!==live.petId||sleeping||traveling||pet?.phase!=='ALIVE'))transferFailed(pending);},[live.petId,sleeping,traveling,pet?.phase]);
+  useEffect(()=>()=>{inviteHandoff.current=null;sendLock.current=false;},[live.petId]);
+  useEffect(()=>{
+    const pending=inviteHandoff.current;if(!pending?.ready)return;
+    const timer=setTimeout(()=>transferFailed(pending),6000);return()=>clearTimeout(timer);
+  },[inviteTransfer]);
+  useEffect(()=>{
+    const pending=inviteHandoff.current;if(!pending?.ready||pending.petId!==live.petId||bridgeRef.current!==pending.bridge||sleeping||traveling||pet?.phase!=='ALIVE'||pet.firstIntro?.key!=='COMPLETE'||x.busy)return;
+    const current=pending.bridge.getSnapshot(),session=live.chat?.session;
+    if(live.chat===pending.chat||current.blocked||current.sending||!session||session.closed||!live.chat?.openSlot||current.chat?.session?.id!==session.id)return;
+    inviteHandoff.current=null;setInviteTransfer(null);void deliver(pending.bridge,pending.petId);
+  },[live,snapshot,inviteTransfer,x.busy,sleeping,traveling]);
+  const send = async (event: FormEvent) => {
+    event.preventDefault();if(!canSend||sendLock.current)return;
+    const bridge=bridgeRef.current,petId=live.petId;if(!bridge||!petId)return;
+    sendLock.current=true;
+    if(inviteInput||inviteRetry){
+      const pending={petId,bridge,chat:owner.current.chat,ready:false};inviteHandoff.current=pending;setInviteTransfer({petId,waiting:true,error:null});
+      const confirmed=inviteInput?await x.nextStory():(await owner.current.refreshPet(),true);
+      if(inviteHandoff.current!==pending||bridgeRef.current!==bridge||owner.current.petId!==petId)return;
+      if(!confirmed||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip||owner.current.pet?.phase!=='ALIVE'){transferFailed(pending);return;}
+      pending.ready=true;setInviteTransfer({petId,waiting:true,error:null});return;
+    }
+    await deliver(bridge,petId);
   };
   const openHistory = () => { input.current?.blur(); setDrawer('history'); void bridgeRef.current?.history(legacy); };
 
@@ -174,7 +211,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     {x.sleepFarewell&&!traveling&&sleeping&&<SpeechBubble line={locale==='ko'?'나는 이제 졸려서 자러 갈게. 아침에 또 이야기하자.':locale==='en'?'I am sleepy now, so I am going to bed. Let’s talk again in the morning.':'もう眠いから、そろそろ寝るね。また朝に話そう。'} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{left:speechWidth===size.width-24?12:speechLeft,top:speechTop,width:speechWidth}}/>}
     {(!src || geometry.failed) && !traveling && <p className="fr-asset-status" role="status">{locale==='en'?'Could not load the character image.':locale==='ja'?'キャラクターの画像を読み込めませんでした。':'캐릭터 그림을 불러오지 못했어요.'}</p>}
     <div className="fr-status" role="status" aria-live="polite">
-      {blocked && blocked!=='sleeping' && (!x.guided||sleeping||traveling) && <p>{blocked==='traveling'?t.traveling:locale==='ko'?blocks[blocked]:t.loading}</p>}
+      {blocked && !(inviteInput&&blocked==='closed') && blocked!=='sleeping' && (!x.guided||sleeping||traveling) && <p>{blocked==='traveling'?t.traveling:locale==='ko'?blocks[blocked]:t.loading}</p>}
       {traveling&&<button type="button" data-fr-call-back disabled={live.calling} onClick={()=>void callBack()} style={{minWidth:44,minHeight:44}}>{live.calling?t.calling:t.callBack}</button>}
       {traveling&&returnError&&<p role="alert">{returnError}</p>}
       {x.graceSync&&!sleeping&&!traveling&&<p>{t.loading} <button onClick={()=>void live.refreshPet()}>{t.retry}</button></p>}
@@ -188,19 +225,20 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       {blocked === 'loading' && snapshot?.error && <button onClick={() => void bridgeRef.current?.loadContext()}>{t.retry}</button>}
     </div>
     {sleepNotice&&<div className="fr-status" data-fr-sleep-notice role="status" style={{bottom:dockBudget.height+8,zIndex:7}}><p>{sleepNotice}</p></div>}
+    {transfer?.error&&!x.error&&<div className="fr-status" data-fr-invite-error role="status"><p>{transfer.error}</p></div>}
     <footer ref={dock} className="fr-dock" aria-hidden={x.panel==='game'} inert={x.panel==='game'}>
       {(sleeping||x.key!=='FINISH_NOTICE'&&!x.farewell)&&<FocusedTiles live={live} x={x} locale={locale} drawerOpen={!!drawer} onSleepingAction={showSleepNotice} beforeOpen={()=>{input.current?.blur();setDrawer(null)}}/>}
       {x.guided&&x.key==='FINISH_NOTICE'&&!x.panel&&<div data-fr-finish-beat={x.finishBeat}>
         {x.finishBeat===1&&(pet?.attendanceRewards?.background.preview?<figure className="fr-finish-preview"><img data-fr-preview src={assetUrl(pet.attendanceRewards.background.preview.url)} alt={t.preview}/><figcaption>{t.preview}</figcaption></figure>:null)}
         <button className="fr-finish-trigger" data-fr-action="finish-next" data-fr-target={x.currentTarget==='finish'&&!drawer&&x.stageStatus!=='PREPARING'?'true':undefined} disabled={x.busy||x.stageStatus==='PREPARING'||sleeping||traveling||pet?.phase!=='ALIVE'} onClick={x.nextFinish}>{x.busy?t.busy:x.error?t.retry:t.next}</button>
       </div>}
-      {x.farewell&&!x.panel&&x.storyPhase!==ENDING_STORY.review&&<button className="fr-finish-trigger" data-fr-story-next={x.storyPhase} data-fr-target={!x.busy&&x.stageStatus!=='PREPARING'&&!sleeping&&!traveling&&pet?.phase==='ALIVE'&&(!isRomiMotionPhase(x.storyPhase)||exampleReady)?'true':undefined} disabled={x.busy||x.stageStatus==='PREPARING'||sleeping||traveling||pet?.phase!=='ALIVE'||isRomiMotionPhase(x.storyPhase)&&!exampleReady} onClick={()=>void x.nextStory()}>{x.busy?t.busy:x.error?t.retry:t.next}</button>}
+      {x.farewell&&!x.panel&&x.storyPhase!==ENDING_STORY.review&&x.storyPhase!==ENDING_STORY.invite&&<button className="fr-finish-trigger" data-fr-story-next={x.storyPhase} data-fr-target={!x.busy&&x.stageStatus!=='PREPARING'&&!sleeping&&!traveling&&pet?.phase==='ALIVE'&&(!isRomiMotionPhase(x.storyPhase)||exampleReady)?'true':undefined} disabled={x.busy||x.stageStatus==='PREPARING'||sleeping||traveling||pet?.phase!=='ALIVE'||isRomiMotionPhase(x.storyPhase)&&!exampleReady} onClick={()=>void x.nextStory()}>{x.busy?t.busy:x.error?t.retry:t.next}</button>}
       {x.guided&&x.key==='REVIEW_SEEN'&&!x.panel&&!x.farewell&&<button onClick={()=>x.open('review')}>{t.review}</button>}
-      {(!x.guided||x.panel==='game'||sleeping)&&<form className="fr-composer" onSubmit={send}>
+      {(!x.guided||inviteInput||x.panel==='game'||sleeping)&&<form className="fr-composer" onSubmit={send}>
         <button type="button" ref={historyButton} className="fr-history-icon" onClick={()=>sleeping?showSleepNotice():openHistory()} aria-disabled={sleeping||undefined} disabled={x.busy} aria-label={t.history}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2"/></svg></button>
-        <input ref={input} maxLength={CHAT_MAX_CHARS} aria-label={sleeping?`${t.input} · ${t.sleeping}`:t.input} placeholder={sleeping ? (locale==='ko'?'자는 중이에요':locale==='en'?'Asleep':'眠っています') : traveling ? t.traveling : x.guided?t.guide:t.placeholder} value={sleeping?'':uncertain ? snapshot?.delivery.text ?? '' : snapshot?.draft ?? ''}
-          disabled={sleeping || x.graceSync || x.guided || x.panel==='game' || x.busy || !!blocked || sending || uncertain} onChange={event => bridgeRef.current?.setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
-        <button type="submit" aria-disabled={sleeping||undefined} disabled={x.busy||!sleeping&&!canSend} onClick={sleeping?event=>{event.preventDefault();showSleepNotice()}:undefined}>{uncertain ? t.recheck : sending ? t.busy : t.send}</button>
+        <input ref={input} maxLength={CHAT_MAX_CHARS} aria-label={sleeping?`${t.input} · ${t.sleeping}`:t.input} placeholder={sleeping ? (locale==='ko'?'자는 중이에요':locale==='en'?'Asleep':'眠っています') : traveling ? t.traveling : x.guided&&!inviteInput?t.guide:t.placeholder} value={sleeping?'':uncertain ? snapshot?.delivery.text ?? '' : snapshot?.draft ?? ''}
+          disabled={sleeping || traveling || x.graceSync || x.guided&&!inviteInput || x.panel==='game' || x.busy || composerBlocked || sending || uncertain || transfer?.waiting} onChange={event => bridgeRef.current?.setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} />
+        <button type="submit" aria-disabled={sleeping||undefined} disabled={x.busy||!sleeping&&!canSend} onClick={sleeping?event=>{event.preventDefault();showSleepNotice()}:undefined}>{uncertain ? t.recheck : sending||transfer?.waiting ? t.busy : t.send}</button>
       </form>}
     </footer>
     {drawer && <div className={`fr-modal ${drawer === 'menu' ? 'fr-menu-panel' : ''}`} role="dialog" aria-modal="true" aria-label={drawer === 'history' ? t.history : t.menu} onKeyDown={event => {
