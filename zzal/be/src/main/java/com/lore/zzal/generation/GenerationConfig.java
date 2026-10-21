@@ -46,6 +46,9 @@ import java.util.List;
 @Configuration
 public class GenerationConfig {
 
+    @Value("${app.zzal.openai.identity-max-completion-tokens:#{null}}")
+    private Integer identityMaxCompletionTokens;
+
     @Value("${app.zzal.generation.flaky.fail-step:}")
     private String flakyStep;
 
@@ -95,7 +98,7 @@ public class GenerationConfig {
                                  S3Storage storage) {
         if (real) {
             requireKey(apiKey);
-            return new OpenAiTextClient(storage, apiKey);
+            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens);
         }
         return new FakeTextClient(delay / 3);
     }

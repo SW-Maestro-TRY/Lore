@@ -479,8 +479,25 @@ app:
       # 정체성(identity) 문단 단계의 시간 제한(초). 글 생성(gpt-5)은 이 단계만 쓴다.
       #   ★ 2026-10-08 60 → 90 — 운영 10/7 실측 응답 39~48초, 60초 제한에 시도 1을 잃었다.
       text-timeout-seconds: ${ZZAL_OPENAI_TEXT_TIMEOUT_SECONDS:90}
+      # Optional verification cap; empty keeps the production request unchanged.
+      identity-max-completion-tokens: ${ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS:}
+
+    attendance:
+      # Existing worker guard; enabling custom generation is separate from automatic dispatch.
+      cli-enabled: ${ZZAL_ATTENDANCE_CLI_ENABLED:false}
+      # Publish reviewed assets through each environment's existing same-origin /images route.
+      published-backgrounds: ${ZZAL_PUBLISHED_BACKGROUNDS:[]}
 
     custom:
+      enabled: ${ZZAL_CUSTOM_ENABLED:false}
+      planner-model: ${ZZAL_CUSTOM_PLANNER_MODEL:gpt-5.6-luna}
+      planner-reasoning-effort: ${ZZAL_CUSTOM_PLANNER_REASONING_EFFORT:none}
+      planner-max-completion-tokens: ${ZZAL_CUSTOM_PLANNER_MAX_COMPLETION_TOKENS:6144}
+      planner-timeout-seconds: ${ZZAL_CUSTOM_PLANNER_TIMEOUT_SECONDS:90}
+      provider: ${ZZAL_CUSTOM_PROVIDER:}
+      image-model: ${ZZAL_CUSTOM_IMAGE_MODEL:gpt-image-2}
+      image-size: ${ZZAL_CUSTOM_IMAGE_SIZE:1248x1248}
+      postprocess-version: ${ZZAL_CUSTOM_POSTPROCESS_VERSION:v1}
       dispatch:
         # Explicit opt-in; existing custom/real/postprocess/CLI guards must also be enabled.
         enabled: ${ZZAL_CUSTOM_DISPATCH_ENABLED:false}
