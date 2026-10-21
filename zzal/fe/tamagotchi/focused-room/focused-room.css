@@ -50,3 +50,5 @@
 .fr-game-announcement{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 
 .focused-room .fr-dock button[aria-disabled=true]{opacity:.5;cursor:default}
+
+@media(max-width:360px){.fr-bubble{padding:9px 10px}.fr-bubble p{font-size:20px}}
