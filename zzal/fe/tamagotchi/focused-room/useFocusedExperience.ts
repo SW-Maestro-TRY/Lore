@@ -83,7 +83,14 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale,sampleMode=fals
   if(resource&&!sameChatResource(resource,selectOwnedChatResource(live.pet,resource.id)))cancelVisual.current?.();
  },[live.pet,visual.custom]);
  const open=(next:FocusedPanel)=>{if(lock.current)return;setError(null);setPanel(next);};
- const close=()=>{if(lock.current&&panel!=='game')return;if(panel==='game')gameEpoch.current++;cancelVisual.current?.();setPanel(null);setError(null);};
+ const close=()=>{if(lock.current)return;if(panel==='game')gameEpoch.current++;cancelVisual.current?.();setPanel(null);setError(null);};
+ // Start dismissal after the final reaction, never while a guess/animation still owns the lock.
+ useEffect(()=>{
+  if(panel!=='game'||gamePhase!=='done'||busy||sleeping||traveling)return;
+  const stamp=epoch.current,id=petId,gameStamp=gameEpoch.current;
+  const timer=setTimeout(()=>{if(valid(stamp,id)&&gameEpoch.current===gameStamp&&!lock.current)close()},2500);
+  return()=>clearTimeout(timer);
+ },[panel,gamePhase,busy,petId,live.game?.gameId,sleeping,traveling]);
  const retryingCare=useRef(false);
  const run=async(call:()=>ReturnType<Live['doCare']>,action?:ActionKey)=>{
   if(lock.current||traveling)return;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);setPanel(null);let unresolved=false;
@@ -106,7 +113,7 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale,sampleMode=fals
   return run(()=>owner.current.doCare(action),careAction[action]);
  };
  const rest=()=>run(()=>owner.current.doRest(),sleeping?'wake':undefined);
- const startGame=async()=>{if(lock.current||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip)return;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);try{const message=await owner.current.startPlay();if(!valid(stamp,id))return;if(message)setError(message);else{setPanel('game');setResult(null);setSelected(null);setGamePhase('ready');setGameScore({tries:owner.current.game?.round??0,hits:owner.current.game?.hits??0});if(!owner.current.game?.playing)setMarks({});}}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error)}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
+ const startGame=async()=>{if(lock.current||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip)return;gameEpoch.current++;const stamp=epoch.current,id=petId;lock.current=true;setBusy(true);setError(null);try{const message=await owner.current.startPlay();if(!valid(stamp,id))return;if(message)setError(message);else{setPanel('game');setResult(null);setSelected(null);setGamePhase('ready');setGameScore({tries:owner.current.game?.round??0,hits:owner.current.game?.hits??0});if(!owner.current.game?.playing)setMarks({});}}catch(e){if(valid(stamp,id))setError(e instanceof Error?e.message:t.error)}finally{if(valid(stamp,id)){lock.current=false;setBusy(false)}}};
  const choose=async(side:Side)=>{if(lock.current||!owner.current.game?.playing||owner.current.pet?.clock?.sleeping||owner.current.pet?.trip)return;const stamp=epoch.current,id=petId,gameStamp=gameEpoch.current;lock.current=true;setBusy(true);setError(null);setSelected(side);setGamePhase('choosing');
   try{const reply=await owner.current.pickSide(side);if(!valid(stamp,id)||gameEpoch.current!==gameStamp)return;if(!reply.result){setError(reply.error||t.error);setGamePhase('ready');setSelected(null);return;}
    const r=reply.result;setResult(r);setGameScore({tries:r.round+1,hits:r.hits});setMarks(old=>({...old,[r.round]:r.hit}));setGamePhase('reveal');await animate(r.hit?'game_win':'game_choose',1,true);if(!valid(stamp,id)||gameEpoch.current!==gameStamp)return;setGamePhase(r.finished?'done':'ready');if(!r.finished){setResult(null);setSelected(null);}
