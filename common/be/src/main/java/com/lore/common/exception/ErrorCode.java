@@ -121,6 +121,8 @@ public enum ErrorCode {
     // 후기 (zzal)
     ZZAL_FEEDBACK_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 후기를 남겼어요"),
 
+    ZZAL_INQUIRY_CONFLICT(HttpStatus.CONFLICT, "같은 문의 요청 번호에 다른 내용이 담겨 있어요"),
+
     // 동작 요청 (zzal)
     // ★ 429 가 아니라 409 다 — 이 서비스의 하루 상한은 전부 409 + 전용 코드로 답해 왔고
     //   (부화 DAILY_CAP · 놀이 DAILY_LIMIT), 화면은 상태가 아니라 코드로 갈린다.

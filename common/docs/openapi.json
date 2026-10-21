@@ -1582,6 +1582,23 @@
         },
         "type": "object"
       },
+      "ApiResponseZzalInquiryReceipt": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ZzalInquiryReceipt"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "Art": {
         "properties": {
           "done": {
@@ -6839,6 +6856,57 @@
             "type": "integer"
           }
         },
+        "type": "object"
+      },
+      "ZzalInquiryReceipt": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAt",
+          "id"
+        ],
+        "type": "object"
+      },
+      "ZzalInquirySubmit": {
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "locale": {
+            "enum": [
+              "ko",
+              "en",
+              "ja"
+            ],
+            "type": "string"
+          },
+          "petId": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "locale",
+          "requestId"
+        ],
         "type": "object"
       },
       "ZzalOwnedCustomMotion": {
@@ -12739,6 +12807,83 @@
         ]
       }
     },
+    "/api/zzal/v1/me/inquiries": {
+      "post": {
+        "description": "본문은 앞뒤 공백을 제거한 1~4000자이며 locale은 ko/en/ja다. 소유자는 로그인 계정으로 확정하고 petId는 선택적으로 소유권을 검증한다. 같은 requestId와 같은 정규화 내용의 재전송은 최초 접수를 반환한다. 자동 메일 발송이나 문의 목록 조회는 제공하지 않는다.",
+        "operationId": "submitInquiry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZzalInquirySubmit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "DB에 저장된 접수 번호와 최초 접수 시각"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "본문/언어/UUID/petId 입력 오류"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "없는 펫 또는 남의 펫"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "ZZAL_INQUIRY_CONFLICT: 같은 requestId에 다른 내용"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "문의 접수",
+        "tags": [
+          "문의"
+        ]
+      }
+    },
     "/api/zzal/v1/me/pets": {
       "get": {
         "description": "로그인한 사용자의 캐릭터 목록을 반환한다. 슬롯이 1개이므로 통상 0건 또는 1건이다.\n\n목록이 비어 있으면 온보딩으로, 비어 있지 않으면 캐릭터 화면으로 분기한다.",
@@ -14866,6 +15011,10 @@
     {
       "description": "보고 싶은 동작을 자유 글로 남긴다",
       "name": "동작 요청"
+    },
+    {
+      "description": "로그인 사용자의 비공개 텍스트 문의 접수",
+      "name": "문의"
     },
     {
       "description": "좌우 맞히기와 달리기. 두 게임 합산 하루 3매치이며 취침 시 초기화한다",

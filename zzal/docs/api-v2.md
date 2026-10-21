@@ -630,3 +630,12 @@ care/sleep/wake의 기존 firstIntroStep receipt를 사용한다. 현재 단계�
 첫 튜토리얼 배치는 행동 14개와 마무리 5개를 한 번 생성한다. 기존 행동 캐시만 있는 캐릭터는 명시적인 첫 ending PREPARE에서 마무리 5개만 한 번 생성하고 기존 행동 캐시는 바꾸지 않는다. 마무리 claim이 하나라도 있으면 PENDING/실패/불명확 결과에도 새 배치를 생성하지 않는다. GET은 생성하거나 PET turn을 쓰지 않으며 현재 서버 단계의 활성 발화만 반환한다. 각 화면의 PREPARE가 해당 캐시 한 개만 활성화한다.
 
 생성 실패·기존 설정과의 불일치는 미생성 상태(FAILED/UNCERTAIN/SUPERSEDED)를 유지하고 source=FALLBACK, 현재 DB 호칭·선택 언어의 안전 안내를 반환한다(turnRef는 null일 수 있다). 정상 생성은 READY/source=LLM이며 활성화 뒤 turnRef를 가진다. 로미 대화·움짤 예시는 별도 고정 샘플로 유지하고 실제 사용자 대화/기억으로 생성하거나 주입하지 않는다.
+
+
+### 비공개 문의 접수 (2026-10-21)
+
+POST /api/zzal/v1/me/inquiries는 로그인 계정의 텍스트 문의를 별도 zzal_inquiry DB 테이블에 저장한다. requestId(UUID), body(앞뒤 공백 제거 후 1~4000자), locale(엄격한 소문자 ko/en/ja)은 필수이며 petId는 선택/null이다. petId가 있으면 현재 로그인 계정의 소유권을 상태 변경 없이 읽기 검증한다. 본문에서 소유자 번호나 이메일을 받지 않는다.
+
+200의 data는 {id,createdAt}만 반환하며 DB 저장 성공 뒤에만 접수로 표시한다. unique(user_id,request_id)로 동시/응답 유실 재전송을 보호한다. 같은 정규화 본문·locale·petId면 최초 접수 응답을 반환하고, 같은 UUID에 내용이 달라지면 409 ZZAL_INQUIRY_CONFLICT다. 입력 오류는400, 미로그인은401, 없는/타인 pet은404다. 실패·불확실 결과에서는 동일 내용과 UUID로 재시도하고, 새로운 문의에는 새 UUID를 사용한다.
+
+별점 후기·채팅/기억·분석 이벤트와 섞지 않으며 문의 본문을 로그에 남기지 않는다. 문의 전체 조회/관리자 응답/첨부/S3/자동 메일 발송은 제공하지 않는다. 문의 화면의 연락 이메일 표시는 UI의 별도 고정 정보다. migration은 V20261021_0100__zzal_inquiry.sql이다.

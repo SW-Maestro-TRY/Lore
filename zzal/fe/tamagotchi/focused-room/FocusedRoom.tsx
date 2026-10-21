@@ -20,6 +20,7 @@ import {RomiChatExample,isRomiMotionPhase} from './RomiChatExample';
 import {ENDING_STORY} from './useTutorialEnding';
 import { useAnchors } from '../props/anchors';
 import {useAuth} from '@common/auth/useAuth';
+import FocusedInquiry from './FocusedInquiry';
 import SceneShare from '../yeoul/SceneShare';
 import {useFocusedGeometry} from './useFocusedGeometry';
 
@@ -61,6 +62,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const bridgeRef = useRef<RoomChatBridge | null>(null);
   const [storedSnapshot, setSnapshot] = useState<RoomChatSnapshot | null>(null);
   const [drawer, setDrawer] = useState<'history' | 'menu' | null>(null);
+  const [inquiryOpen,setInquiryOpen]=useState(false);
   const [shareOpen,setShareOpen]=useState(false),[exampleReady,setExampleReady]=useState(false),[sleepNotice,setSleepNotice]=useState<string|null>(null);
   const sleepNoticeTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const scene=useRef<HTMLDivElement>(null);
@@ -251,7 +253,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       }
     }}>
       <header><h2>{drawer === 'history' ? t.history : t.menu}</h2><button ref={closeButton} onClick={closeDrawer}>{t.back}</button></header>
-      {drawer === 'menu' ? <nav><button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}</button>{openAnnouncements&&<button data-fr-action="announcements-menu" onClick={()=>{setDrawer(null);openAnnouncements?.(menuButton.current)}}>{locale==='ko'?'공지사항':locale==='en'?'Announcements':'お知らせ'}</button>}<div className="fr-languages" aria-label={locale==='ko'?'화면 언어':locale==='en'?'Interface language':'表示言語'}>{(['ko','en','ja'] as const).map(code=><button key={code} aria-pressed={locale===code} onClick={()=>{document.cookie=`lore_locale=${code}; Path=/; Max-Age=31536000; SameSite=Lax`;dispatchEvent(new Event('zzal-locale-change'));}}>{code==='ko'?'한국어':code==='en'?'English':'日本語'}</button>)}</div>{!sampleMode&&<RoomAccountActions locale={locale}/>}<button data-fr-action="info-menu" onClick={()=>{setDrawer(null);x.open('info')}}>{t.personal}</button><button data-fr-action="help-menu" onClick={()=>{setDrawer(null);x.open('help')}}>{locale==='ko'?'도움말':locale==='en'?'Help':'使い方'}</button>{!sampleMode&&<button data-fr-action="feedback-menu" onClick={()=>{setDrawer(null);x.open('review')}}>{t.review}</button>}<button data-fr-action="scene-menu" onClick={()=>{setDrawer(null);setShareOpen(true)}}>{locale==='ko'?'현재 장면 공유':locale==='en'?'Share this scene':'今のシーンを共有'}</button>{pet?.firstIntro&&pet.firstIntro.version!==4&&!pet.firstIntro.completed&&<><p>{t.legacy}</p><a href="/zzal?room=legacy">{t.oldRoom}</a></>}</nav> : <div className="fr-history">
+      {drawer === 'menu' ? <nav><button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}</button>{openAnnouncements&&<button data-fr-action="announcements-menu" onClick={()=>{setDrawer(null);openAnnouncements?.(menuButton.current)}}>{locale==='ko'?'공지사항':locale==='en'?'Announcements':'お知らせ'}</button>}<div className="fr-languages" aria-label={locale==='ko'?'화면 언어':locale==='en'?'Interface language':'表示言語'}>{(['ko','en','ja'] as const).map(code=><button key={code} aria-pressed={locale===code} onClick={()=>{document.cookie=`lore_locale=${code}; Path=/; Max-Age=31536000; SameSite=Lax`;dispatchEvent(new Event('zzal-locale-change'));}}>{code==='ko'?'한국어':code==='en'?'English':'日本語'}</button>)}</div>{!sampleMode&&<RoomAccountActions locale={locale}/>}<button data-fr-action="info-menu" onClick={()=>{setDrawer(null);x.open('info')}}>{t.personal}</button><button data-fr-action="help-menu" onClick={()=>{setDrawer(null);x.open('help')}}>{locale==='ko'?'도움말':locale==='en'?'Help':'使い方'}</button>{!sampleMode&&<button data-fr-action="feedback-menu" onClick={()=>{setDrawer(null);x.open('review')}}>{t.review}</button>}<button data-fr-action="scene-menu" onClick={()=>{setDrawer(null);setShareOpen(true)}}>{locale==='ko'?'현재 장면 공유':locale==='en'?'Share this scene':'今のシーンを共有'}</button>{!sampleMode&&<button data-fr-action="inquiry-menu" onClick={()=>{setDrawer(null);x.close();setInquiryOpen(true)}}>{locale==='ko'?'문의하기':locale==='en'?'Contact us':'お問い合わせ'}</button>}{pet?.firstIntro&&pet.firstIntro.version!==4&&!pet.firstIntro.completed&&<><p>{t.legacy}</p><a href="/zzal?room=legacy">{t.oldRoom}</a></>}</nav> : <div className="fr-history">
         <div className="fr-history-tabs"><button aria-disabled={snapshot?.historyLoading} aria-pressed={!legacy} onClick={() => { if(snapshot?.historyLoading)return; setLegacy(false); void bridgeRef.current?.history(false); }}>{t.current}</button><button aria-disabled={snapshot?.historyLoading} aria-pressed={legacy} onClick={() => { if(snapshot?.historyLoading)return; setLegacy(true); void bridgeRef.current?.history(true); }}>{t.legacyHistory}</button></div>
         {snapshot?.historyLoading && <p role="status">{t.loading}</p>}
         {snapshot?.error && <p role="status">{snapshot.error}</p>}
@@ -262,6 +264,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       </div>}
     </div>}
     <FocusedPanels live={live} x={x.panel==='care'?{...x,panel:null}:x} locale={locale} sampleMode={sampleMode}/>
+    <FocusedInquiry open={inquiryOpen} onClose={()=>setInquiryOpen(false)} petId={live.petId} locale={locale}/>
     {shareOpen&&<SceneShare stage={scene.current} logoUrl="/zzal-entry/logo-08-transparent.png" onClose={()=>setShareOpen(false)}/>}
   </section>;
 }

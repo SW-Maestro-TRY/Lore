@@ -2794,6 +2794,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/inquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 문의 접수
+         * @description 본문은 앞뒤 공백을 제거한 1~4000자이며 locale은 ko/en/ja다. 소유자는 로그인 계정으로 확정하고 petId는 선택적으로 소유권을 검증한다. 같은 requestId와 같은 정규화 내용의 재전송은 최초 접수를 반환한다. 자동 메일 발송이나 문의 목록 조회는 제공하지 않는다.
+         */
+        post: operations["submitInquiry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets": {
         parameters: {
             query?: never;
@@ -4294,6 +4314,12 @@ export interface components {
         };
         ApiResponseZzalFirstMeetingView: {
             data?: components["schemas"]["ZzalFirstMeetingView"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseZzalInquiryReceipt: {
+            data?: components["schemas"]["ZzalInquiryReceipt"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -6794,6 +6820,21 @@ export interface components {
             state?: "DISCOVERED" | "ADDRESS" | "READY_TO_ENTER" | "COMPLETE";
             /** Format: int32 */
             version?: number;
+        };
+        ZzalInquiryReceipt: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            id: number;
+        };
+        ZzalInquirySubmit: {
+            body: string;
+            /** @enum {string} */
+            locale: "ko" | "en" | "ja";
+            /** Format: int64 */
+            petId?: number | null;
+            /** Format: uuid */
+            requestId: string;
         };
         ZzalOwnedCustomMotion: {
             albumOnly: boolean;
@@ -10556,6 +10597,66 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseDevPing"];
+                };
+            };
+        };
+    };
+    submitInquiry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZzalInquirySubmit"];
+            };
+        };
+        responses: {
+            /** @description DB에 저장된 접수 번호와 최초 접수 시각 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description 본문/언어/UUID/petId 입력 오류 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description 로그인 필요 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description 없는 펫 또는 남의 펫 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description ZZAL_INQUIRY_CONFLICT: 같은 requestId에 다른 내용 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
                 };
             };
         };
