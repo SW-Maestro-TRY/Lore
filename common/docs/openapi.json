@@ -6583,6 +6583,20 @@
               "null"
             ]
           },
+          "scene": {
+            "description": "마무리 PREPARE_SPEECH의 표시 장면. ACK 및 기존 행동 준비는 생략/null",
+            "enum": [
+              "FINISH_THANKS",
+              "FINISH_TOMORROW",
+              "CHAT_INTRO",
+              "CHAT_MEMORY",
+              "CHAT_INVITE"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "topic": {
             "enum": [
               "FEED",
@@ -6995,7 +7009,12 @@
               "GAME",
               "NAP_SLEEP",
               "NAP_WAKE",
-              "FIRST_MEETING_DISCOVERY"
+              "FIRST_MEETING_DISCOVERY",
+              "FINISH_THANKS",
+              "FINISH_TOMORROW",
+              "CHAT_INTRO",
+              "CHAT_MEMORY",
+              "CHAT_INVITE"
             ],
             "type": "string"
           },
@@ -14600,7 +14619,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/tutorial/seen": {
       "post": {
-        "description": "purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 일곱 행동 topic과 phase를 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.",
+        "description": "purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 행동 topic/phase 또는 마무리 topic/scene(ENTRY)을 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.",
         "operationId": "tutorialSeen",
         "parameters": [
           {

@@ -7,8 +7,9 @@ import type { Side, GuessResult } from '../../lib/game';
 import type { ZzalLocale } from '../../lib/locale';
 import { CYCLE_MS, cyclesOfAction, situationOfAction, poseOfSituation, stagePlanOf, stageAt, type ActionKey } from '../props/situations';
 import { SITUATION_TABLE } from '../props/table';
-import { focusedCopy, fallbackIntroLine, focusedGameLine, finishDialogueLine } from './focusedCopy';
+import { focusedCopy, fallbackIntroLine, focusedGameLine, endingFallbackLine } from './focusedCopy';
 import {useTutorialEnding,ENDING_STORY} from './useTutorialEnding';
+import type {TutorialScene} from '../../lib/tutorialStageSpeech';
 import {useFocusedStageSpeech} from './useFocusedStageSpeech';
 import {selectOwnedChatResource,sameChatResource,type FocusedChatResource} from './focusedChatMotion';
 import{selectCarePlayback}from'./focusedCareMotion';
@@ -153,10 +154,11 @@ export function useFocusedExperience(live:Live,locale:ZzalLocale,sampleMode=fals
  },[petId,sleeping,traveling,grace?.active,grace?.endedAt]);
  const currentTarget=busy?null:key==='ATTENDANCE_INTRO'?(panel==='attendance'?'attendance-ack':'attendance-menu'):key==='FINISH_NOTICE'?'finish':key==='REVIEW_SEEN'?null:panel==='care'?(key==='FEED'?'FEED':key==='SNACK'?'SNACK':key==='CLEAN'?'CLEAN':key==='BATH'?'BATH':key==='GAME'?'GAME':key==='NAP_SLEEP'||key==='NAP_WAKE'?'REST':null):panel==='game'?null:key?'care':null;
  const gameLine=panel==='game'?(result&&(gamePhase==='reveal'||gamePhase==='done')?focusedGameLine(locale,result):locale==='en'?'Which hand did I hide it in?':locale==='ja'?'どっちの手に隠したかな？':'어느 손에 숨겼을까?'):null;
- const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided&&panel!=='game'&&key!=='FINISH_NOTICE',fallbackIntroLine(key,locale),!busy&&!gameLine&&!farewell);
- const finishLine=key==='FINISH_NOTICE'?finishDialogueLine(ending.finishBeat,locale,!!live.pet?.attendanceRewards?.background.preview):null;
- const speech=gameLine??(farewell&&!sleeping?(ending.storyPhase===ENDING_STORY.invite?t.chatInvite:null):!sleeping&&guided?finishLine??stage.line:null);
- const speechSource=gameLine||farewell||finishLine?'SERVICE_FALLBACK':stage.source;
- return{careUncertain,retryCare,visualTrash:trashOverride??live.pet?.gauges?.trash??0,graceSync,sleepFarewell,graceNotice,gameScore,panel,open,close,busy,error,visual,key,guided,currentTarget,care,rest,startGame,choose,result,marks,gamePhase,selected,acknowledge,finishBeat:ending.finishBeat,nextFinish,dismissReview,farewell,storyPhase:ending.storyPhase,nextStory,closingReview,speech,speechSource,stageStatus:stage.status,animate,playChatMotion,chatMotionReady};
+ const stage=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!guided&&panel!=='game'&&key!=='FINISH_NOTICE'&&key!=='REVIEW_SEEN',fallbackIntroLine(key,locale),!busy&&!gameLine&&!farewell);
+ const endingScene:TutorialScene|undefined=key==='FINISH_NOTICE'?(ending.finishBeat===0?'FINISH_THANKS':'FINISH_TOMORROW'):farewell?(ending.storyPhase===ENDING_STORY.intro?'CHAT_INTRO':ending.storyPhase===ENDING_STORY.memory?'CHAT_MEMORY':ending.storyPhase===ENDING_STORY.invite?'CHAT_INVITE':undefined):undefined;
+ const endingSpeech=useFocusedStageSpeech(live,locale,key,serverIntro?.key,!!endingScene&&!panel,endingFallbackLine(endingScene,locale,!!live.pet?.attendanceRewards?.background.preview),!busy&&!gameLine&&!panel,endingScene);
+ const speech=gameLine??(endingScene?endingSpeech.line:farewell?null:!sleeping&&guided?stage.line:null);
+ const speechSource=gameLine?'SERVICE_FALLBACK':endingScene?endingSpeech.source:stage.source;
+ return{careUncertain,retryCare,visualTrash:trashOverride??live.pet?.gauges?.trash??0,graceSync,sleepFarewell,graceNotice,gameScore,panel,open,close,busy,error,visual,key,guided,currentTarget,care,rest,startGame,choose,result,marks,gamePhase,selected,acknowledge,finishBeat:ending.finishBeat,nextFinish,dismissReview,farewell,storyPhase:ending.storyPhase,nextStory,closingReview,speech,speechSource,stageStatus:endingScene?endingSpeech.status:stage.status,animate,playChatMotion,chatMotionReady};
 }
 export type FocusedExperience=ReturnType<typeof useFocusedExperience>;

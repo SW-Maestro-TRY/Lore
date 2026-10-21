@@ -5,8 +5,8 @@ export function savedStageFor(records:readonly StageSpeechView[]|undefined,displ
 }
 export function stageRequestFor(current:string|undefined,previous:string|undefined):{step:TutorialScene;phase:StagePhase}|null{
  if(!current)return null;
- if(previous&&TUTORIAL_SCENES.includes(previous as TutorialScene)&&stageExpectedStep(previous as TutorialScene,'AFTER_ACTION')===current)return{step:previous as TutorialScene,phase:'AFTER_ACTION'};
- return TUTORIAL_SCENES.includes(current as TutorialScene)?{step:current as TutorialScene,phase:'ENTRY'}:null;
+ if(previous&&TUTORIAL_SCENES.includes(previous as typeof TUTORIAL_SCENES[number])&&stageExpectedStep(previous as TutorialScene,'AFTER_ACTION')===current)return{step:previous as TutorialScene,phase:'AFTER_ACTION'};
+ return TUTORIAL_SCENES.includes(current as typeof TUTORIAL_SCENES[number])?{step:current as TutorialScene,phase:'ENTRY'}:null;
 }
 export function stagePresentation(stored:StageSpeechView|undefined,fallback:string|null):SpeechPresentation{
  if(stored?.status==='READY'&&stored.line?.trim()&&stored.turnRef&&stored.source)return{line:stored.line,source:stored.source==='LLM'?'SERVER_LLM':'SERVER_FALLBACK'};

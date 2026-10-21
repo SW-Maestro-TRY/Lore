@@ -3610,7 +3610,7 @@ export interface paths {
         put?: never;
         /**
          * 튜토리얼 확인 또는 장면 대사 준비
-         * @description purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 일곱 행동 topic과 phase를 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.
+         * @description purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 행동 topic/phase 또는 마무리 topic/scene(ENTRY)을 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.
          */
         post: operations["tutorialSeen"];
         delete?: never;
@@ -6708,6 +6708,11 @@ export interface components {
              * @enum {string|null}
              */
             purpose?: "ACKNOWLEDGE" | "PREPARE_SPEECH" | null;
+            /**
+             * @description 마무리 PREPARE_SPEECH의 표시 장면. ACK 및 기존 행동 준비는 생략/null
+             * @enum {string|null}
+             */
+            scene?: "FINISH_THANKS" | "FINISH_TOMORROW" | "CHAT_INTRO" | "CHAT_MEMORY" | "CHAT_INVITE" | null;
             /** @enum {string} */
             topic: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "PET" | "NAP_SLEEP" | "NAP_WAKE" | "ALBUM" | "CHAT" | "PERSONALITY" | "DIARY_INTRO" | "FINISH_NOTICE" | "REVIEW_SEEN" | "COMPLETE" | "ATTENDANCE_INTRO";
         };
@@ -6831,7 +6836,7 @@ export interface components {
             /** @enum {string} */
             status: "PENDING" | "READY" | "FAILED" | "UNCERTAIN" | "SUPERSEDED";
             /** @enum {string} */
-            step: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "NAP_SLEEP" | "NAP_WAKE" | "FIRST_MEETING_DISCOVERY";
+            step: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "NAP_SLEEP" | "NAP_WAKE" | "FIRST_MEETING_DISCOVERY" | "FINISH_THANKS" | "FINISH_TOMORROW" | "CHAT_INTRO" | "CHAT_MEMORY" | "CHAT_INVITE";
             /** Format: int64 */
             turnRef?: number | null;
             /** Format: date-time */

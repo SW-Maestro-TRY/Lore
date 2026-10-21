@@ -621,3 +621,12 @@ care/sleep/wake의 기존 firstIntroStep receipt를 사용한다. 현재 단계�
 기존 tutorial/seen POST에서 v4 허용 topic은 ATTENDANCE_INTRO,REVIEW_SEEN이다. ATTENDANCE_INTRO를본뒤seen으로 FINISH_NOTICE에들어가면 실제발행배경preview준비를기존 AttendanceService에요청한다. FINISH_NOTICE의확인은기존 tutorial/done으로시계를한번시작하고 깨어있는 REVIEW_SEEN으로이동한다. 후기제출/닫기 뒤 깨어있는 짧은 마지막인사를 보여준 다음 자동 seen REVIEW_SEEN으로 COMPLETE(추가확인버튼없음),전송강제없음. pending동안 일반대화/돌봄/게임은열리지않고 정산은멈춘다. v2/v3의ALBUM/PERSONALITY/DIARY_INTRO는해당구버전만유지한다. 새 v4가구14코스를다시요구하지않는다.
 
 마지막 seen 시점의 실제 게임시각이23:00~07:00이면 즉시NIGHT로응답한다. 후기/인사중 나갔다오면 같은 REVIEW_SEEN을재개하며07:00지난후에는소급취침하지않는다. 추가채팅유예없음; 일반19/23/07/10규칙과v2/v3종료동작보존. v4에는새 migration V20261017_0010으로기존CHECK(2,3)를(2,3,4)로확장해야한다. 수동FE타입/DevRemote v4는반영; legacy출석안내실UI/생성OpenAPI스냅샷은별도접합범위다.
+
+
+### 첫 안내 마무리·채팅소개 대사 (2026-10-21)
+
+기존 POST /api/zzal/v1/me/pets/{petId}/tutorial/seen의 PREPARE_SPEECH에 선택 필드 scene을 추가한다. FINISH_NOTICE topic에는 FINISH_THANKS/FINISH_TOMORROW, REVIEW_SEEN topic에는 CHAT_INTRO/CHAT_MEMORY/CHAT_INVITE가 대응하며 모두 phase=ENTRY다. 기존 행동 요청은 scene을 생략하고 기존 topic/phase를 유지한다. ACK는 scene/phase 없이 보내며 진도 전이는 기존 서버 규칙 그대로다. scene은 진도 키가 아닌 표시용 키다.
+
+첫 튜토리얼 배치는 행동 14개와 마무리 5개를 한 번 생성한다. 기존 행동 캐시만 있는 캐릭터는 명시적인 첫 ending PREPARE에서 마무리 5개만 한 번 생성하고 기존 행동 캐시는 바꾸지 않는다. 마무리 claim이 하나라도 있으면 PENDING/실패/불명확 결과에도 새 배치를 생성하지 않는다. GET은 생성하거나 PET turn을 쓰지 않으며 현재 서버 단계의 활성 발화만 반환한다. 각 화면의 PREPARE가 해당 캐시 한 개만 활성화한다.
+
+생성 실패·기존 설정과의 불일치는 미생성 상태(FAILED/UNCERTAIN/SUPERSEDED)를 유지하고 source=FALLBACK, 현재 DB 호칭·선택 언어의 안전 안내를 반환한다(turnRef는 null일 수 있다). 정상 생성은 READY/source=LLM이며 활성화 뒤 turnRef를 가진다. 로미 대화·움짤 예시는 별도 고정 샘플로 유지하고 실제 사용자 대화/기억으로 생성하거나 주입하지 않는다.

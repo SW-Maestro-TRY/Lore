@@ -15,7 +15,7 @@ import { useFocusedExperience } from './useFocusedExperience';
 import { FocusedPanels } from './FocusedPanels';
 import { FocusedProps } from './FocusedProps';
 import FocusedTiles from './FocusedTiles';
-import { focusedCopy, endingCopy } from './focusedCopy';
+import { focusedCopy } from './focusedCopy';
 import {RomiChatExample,isRomiMotionPhase} from './RomiChatExample';
 import {ENDING_STORY} from './useTutorialEnding';
 import { useAnchors } from '../props/anchors';
@@ -169,9 +169,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       <div><h1>{pet?.name || '방'}</h1><p>{pet?.daysTogether != null ? locale==='ko'?`함께한 지 ${pet.daysTogether}일`:locale==='en'?`${pet.daysTogether} days together`:`一緒に${pet.daysTogether}日` : ''}</p></div>
       <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" disabled={x.farewell} onClick={() => { input.current?.blur(); setDrawer('menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={t.menu} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button></div>
     </header>
-    {!traveling && !sleeping && line && <SpeechBubble key={`${live.petId}:${line}`} wideAbove={x.key==='FINISH_NOTICE'||x.farewell&&x.storyPhase===ENDING_STORY.invite} line={line} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{ left: speechWidth === size.width - 24 ? 12 : speechLeft, top: speechTop, width: speechWidth }} />}
-    {x.farewell&&x.storyPhase<ENDING_STORY.memory&&<RomiChatExample phase={x.storyPhase} locale={locale} onReady={setExampleReady}/>}
-    {x.farewell&&x.storyPhase===ENDING_STORY.memory&&<p className="fr-ending-system" data-fr-ending-system role="status">{endingCopy(locale).memory}</p>}
+    {!traveling && !sleeping && line && <SpeechBubble key={`${live.petId}:${line}`} wideAbove={x.key==='FINISH_NOTICE'||x.farewell} line={line} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{ left: speechWidth === size.width - 24 ? 12 : speechLeft, top: speechTop, width: speechWidth }} />}
+    {x.farewell&&isRomiMotionPhase(x.storyPhase)&&<RomiChatExample phase={x.storyPhase} locale={locale} onReady={setExampleReady}/>}
     {x.sleepFarewell&&!traveling&&sleeping&&<SpeechBubble line={locale==='ko'?'나는 이제 졸려서 자러 갈게. 아침에 또 이야기하자.':locale==='en'?'I am sleepy now, so I am going to bed. Let’s talk again in the morning.':'もう眠いから、そろそろ寝るね。また朝に話そう。'} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{left:speechWidth===size.width-24?12:speechLeft,top:speechTop,width:speechWidth}}/>}
     {(!src || geometry.failed) && !traveling && <p className="fr-asset-status" role="status">{locale==='en'?'Could not load the character image.':locale==='ja'?'キャラクターの画像を読み込めませんでした。':'캐릭터 그림을 불러오지 못했어요.'}</p>}
     <div className="fr-status" role="status" aria-live="polite">
@@ -193,9 +192,9 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       {(sleeping||x.key!=='FINISH_NOTICE'&&!x.farewell)&&<FocusedTiles live={live} x={x} locale={locale} drawerOpen={!!drawer} onSleepingAction={showSleepNotice} beforeOpen={()=>{input.current?.blur();setDrawer(null)}}/>}
       {x.guided&&x.key==='FINISH_NOTICE'&&!x.panel&&<div data-fr-finish-beat={x.finishBeat}>
         {x.finishBeat===1&&(pet?.attendanceRewards?.background.preview?<figure className="fr-finish-preview"><img data-fr-preview src={assetUrl(pet.attendanceRewards.background.preview.url)} alt={t.preview}/><figcaption>{t.preview}</figcaption></figure>:<p className="fr-finish-preparing" data-fr-preview-pending>{t.preparing}</p>)}
-        <button className="fr-finish-trigger" data-fr-action="finish-next" data-fr-target={x.currentTarget==='finish'&&!drawer?'true':undefined} disabled={x.busy||sleeping||traveling||pet?.phase!=='ALIVE'} onClick={x.nextFinish}>{x.busy?t.busy:x.error?t.retry:t.next}</button>
+        <button className="fr-finish-trigger" data-fr-action="finish-next" data-fr-target={x.currentTarget==='finish'&&!drawer&&x.stageStatus!=='PREPARING'?'true':undefined} disabled={x.busy||x.stageStatus==='PREPARING'||sleeping||traveling||pet?.phase!=='ALIVE'} onClick={x.nextFinish}>{x.busy?t.busy:x.error?t.retry:t.next}</button>
       </div>}
-      {x.farewell&&!x.panel&&x.storyPhase!==ENDING_STORY.review&&<button className="fr-finish-trigger" data-fr-story-next={x.storyPhase} data-fr-target={!x.busy&&!sleeping&&!traveling&&pet?.phase==='ALIVE'&&(!isRomiMotionPhase(x.storyPhase)||exampleReady)?'true':undefined} disabled={x.busy||sleeping||traveling||pet?.phase!=='ALIVE'||isRomiMotionPhase(x.storyPhase)&&!exampleReady} onClick={()=>void x.nextStory()}>{x.busy?t.busy:x.error?t.retry:t.next}</button>}
+      {x.farewell&&!x.panel&&x.storyPhase!==ENDING_STORY.review&&<button className="fr-finish-trigger" data-fr-story-next={x.storyPhase} data-fr-target={!x.busy&&x.stageStatus!=='PREPARING'&&!sleeping&&!traveling&&pet?.phase==='ALIVE'&&(!isRomiMotionPhase(x.storyPhase)||exampleReady)?'true':undefined} disabled={x.busy||x.stageStatus==='PREPARING'||sleeping||traveling||pet?.phase!=='ALIVE'||isRomiMotionPhase(x.storyPhase)&&!exampleReady} onClick={()=>void x.nextStory()}>{x.busy?t.busy:x.error?t.retry:t.next}</button>}
       {x.guided&&x.key==='REVIEW_SEEN'&&!x.panel&&!x.farewell&&<button onClick={()=>x.open('review')}>{t.review}</button>}
       {(!x.guided||x.panel==='game'||sleeping)&&<form className="fr-composer" onSubmit={send}>
         <button type="button" ref={historyButton} className="fr-history-icon" onClick={()=>sleeping?showSleepNotice():openHistory()} aria-disabled={sleeping||undefined} disabled={x.busy} aria-label={t.history}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7M12 7v5l3 2"/></svg></button>
