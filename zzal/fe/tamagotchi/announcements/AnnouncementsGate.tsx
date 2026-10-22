@@ -11,6 +11,8 @@ const WORDS = {
   en: { title: 'Announcements', close: 'Close', hide: 'Don’t show this announcement again', empty: 'No announcements yet.', back: 'All announcements', storage: 'Could not save in this browser. This announcement may appear on your next visit.' },
   ja: { title: 'お知らせ', close: '閉じる', hide: 'このお知らせを今後表示しない', empty: 'お知らせはまだありません。', back: 'お知らせ一覧', storage: 'このブラウザに保存できませんでした。次回も表示される場合があります。' },
 };
+const AnnouncementsOpen = createContext(false);
+export const useAnnouncementsOpen = () => useContext(AnnouncementsOpen);
 const OpenAnnouncements = createContext<((returnTo?: HTMLElement | null) => void) | null>(null);
 export const useOpenAnnouncements = () => useContext(OpenAnnouncements);
 
@@ -31,21 +33,21 @@ export default function AnnouncementsGate({ children, announcements = ANNOUNCEME
     if (announcements.length && auth.isLoading) return;
     if (checkedScopes.current.has(scope)) return;
     checkedScopes.current.add(scope);
-    const latest = announcements[0];
+    const latest = announcements.find(entry=>entry.automatic!==false);
     let hidden = false;
     try { hidden = !!latest && localStorage.getItem(announcementDismissalKey(latest.id, scope)) === '1'; } catch { /* Storage denial must never block entry. */ }
     if (latest && !hidden) { setSelected(latest); setStartup(!mounted.current); setOpen(true); }
     mounted.current = true; setReady(true);
   }, [announcements, auth.isLoading, scope]);
   const close = () => { setOpen(false); setStartup(false); };
-  return <OpenAnnouncements.Provider value={target => { returnTo.current = target ?? null; setSelected(null); setOpen(true); }}>
+  return <AnnouncementsOpen.Provider value={open}><OpenAnnouncements.Provider value={target => { returnTo.current = target ?? null; setSelected(null); setOpen(true); }}>
     {ready && !startup && children}
     {open && <AnnouncementDialog key={scope} scope={scope} returnTo={returnTo.current} announcements={announcements} selected={selected} onSelect={setSelected} onClose={close} startup={startup} />}
-  </OpenAnnouncements.Provider>;
+  </OpenAnnouncements.Provider></AnnouncementsOpen.Provider>;
 }
 
-function AnnouncementDialog({ announcements, selected, onSelect, onClose, startup, scope, returnTo }: {
-  announcements: readonly Announcement[]; selected: Announcement | null; onSelect: (entry: Announcement | null) => void; onClose: () => void; startup: boolean; scope: string; returnTo: HTMLElement | null;
+export function AnnouncementDialog({ announcements, selected, onSelect, onClose, startup, scope, returnTo,hideControl=true,actionLabel,actionDisabled=false }: {
+  announcements: readonly Announcement[]; selected: Announcement | null; onSelect: (entry: Announcement | null) => void; onClose: () => void; startup: boolean; scope: string; returnTo: HTMLElement | null;hideControl?:boolean;actionLabel?:string;actionDisabled?:boolean;
 }) {
   const locale = useZzalLocale(), words = WORDS[locale];
   const dialog = useRef<HTMLDialogElement>(null), closeButton = useRef<HTMLButtonElement>(null);
@@ -83,7 +85,7 @@ function AnnouncementDialog({ announcements, selected, onSelect, onClose, startu
     if (event.shiftKey && (document.activeElement === first || !event.currentTarget.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   }} onCancel={event => { event.preventDefault(); onClose(); }}>
-    <header className="za-heading"><h2 id="zzal-announcements-title">{words.title}</h2><button ref={closeButton} type="button" onClick={onClose}>{words.close}</button></header>
+    <header className="za-heading"><h2 id="zzal-announcements-title">{words.title}</h2><button ref={closeButton} type="button" onClick={onClose} disabled={actionDisabled}>{actionLabel??words.close}</button></header>
     <div className="za-content">
       {content && selected ? <article key={selected.id}>
         {!startup && <button className="za-back" type="button" onClick={() => onSelect(null)}>{words.back}</button>}
@@ -91,6 +93,6 @@ function AnnouncementDialog({ announcements, selected, onSelect, onClose, startu
         {content.paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
       </article> : announcements.length ? <ul>{announcements.map(entry => <li key={entry.id}><button type="button" onClick={() => onSelect(entry)}><span>{entry.content[locale].title}</span><time dateTime={entry.publishedAt}>{entry.publishedAt.slice(0, 10)}</time></button></li>)}</ul> : <p className="za-empty">{words.empty}</p>}
     </div>
-    {selected && <footer><label className="za-hide"><input type="checkbox" checked={hidden} onChange={event => saveHidden(event.target.checked)} /><span>{words.hide}</span></label>{storageFailed && <p role="status">{words.storage}</p>}</footer>}
+    {selected&&hideControl && <footer><label className="za-hide"><input type="checkbox" checked={hidden} onChange={event => saveHidden(event.target.checked)} /><span>{words.hide}</span></label>{storageFailed && <p role="status">{words.storage}</p>}</footer>}
   </dialog>;
 }

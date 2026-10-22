@@ -1616,6 +1616,23 @@
         },
         "type": "object"
       },
+      "ApiResponseZzalReturningGuideState": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ZzalReturningGuideState"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "Art": {
         "properties": {
           "done": {
@@ -7122,6 +7139,50 @@
         "required": [
           "stageSpeech"
         ],
+        "type": "object"
+      },
+      "ZzalReturningGuideAdvance": {
+        "properties": {
+          "complete": {
+            "type": "boolean"
+          },
+          "expectedPersonaHash": {
+            "maxLength": 64,
+            "minLength": 0,
+            "type": "string"
+          },
+          "step": {
+            "format": "int32",
+            "maximum": 5,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step"
+        ],
+        "type": "object"
+      },
+      "ZzalReturningGuideState": {
+        "properties": {
+          "boundPetId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "step": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "ZzalStageSpeechView": {
@@ -14697,6 +14758,90 @@
         "summary": "성격 등록·수정",
         "tags": [
           "펫"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/returning-guide": {
+      "get": {
+        "description": "계정·안내 버전 단위로 완료 여부를 조회한다. 기존 튜토리얼을 마친 구버전 캐릭터만 대상이며 신규 v4는 제외한다. 조회는 상태를 만들지 않는다.",
+        "operationId": "getReturningGuide",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalReturningGuideState"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "기존 사용자 업데이트 안내 진행 조회",
+        "tags": [
+          "returning-guide-controller"
+        ]
+      },
+      "post": {
+        "description": "0~5단계 진행을 단조 증가로 저장한다. 완료는 5단계와 최신 personaSourceHash 확인이 필요하다. 설정은 변경 없이 확인해도 되며 첫 안내·출석·후기 상태는 수정하지 않는다. 다른 기기에서도 계정당 한 번이다.",
+        "operationId": "advanceReturningGuide",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZzalReturningGuideAdvance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalReturningGuideState"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "기존 사용자 업데이트 안내 진행 저장",
+        "tags": [
+          "returning-guide-controller"
         ]
       }
     },

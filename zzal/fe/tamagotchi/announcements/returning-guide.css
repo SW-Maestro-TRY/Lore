@@ -18,3 +18,6 @@
 .zzal-returning .fr-ending-example h2{font-size:18px}
 .zzal-returning .fr-example-dialogue p{font-size:15px;line-height:1.5}
 @media(max-height:650px){.zzal-returning .fr-ending-example img{height:90px}.returning-content{padding:10px 14px}.zzal-returning header{padding:10px 14px}}
+
+.returning-settings-cover{position:fixed;inset:0;z-index:1000;background:#35271f80;display:grid;place-items:center;overscroll-behavior:contain}
+.returning-settings-cover>.fr-reading-sheet{position:relative;inset:auto;width:calc(100% - 24px);max-width:440px;max-height:calc(100dvh - 24px);overflow:auto;margin:0}

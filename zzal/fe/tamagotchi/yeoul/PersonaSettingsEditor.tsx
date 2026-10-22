@@ -5,7 +5,7 @@ import {usePersonaViewport} from './usePersonaViewport';
 import {interactionMetrics} from '../focused-room/interactionMetrics';
 import {useEffect,useLayoutEffect,useMemo,useRef,useState,type CSSProperties} from 'react';
 import {createPortal} from 'react-dom';
-import type {AuthoredPersona,PersonaSource} from '../../lib/pet';
+import {getAuthoredPersona,type AuthoredPersona,type PersonaSource} from '../../lib/pet';
 import {useSpriteGeometry} from '../../lib/spriteGeometry';
 import {useZzalLocale} from '../../lib/locale';
 import {useLive} from './useHatch';
@@ -23,7 +23,7 @@ export function editablePersona(source:PersonaSource,legacy?:{world?:string|null
  return {version:1,fields:PERSONA_STEPS.flatMap(step=>step.fields).map(field=>source.authoredPersona?.fields.find(f=>f.fieldId===field.key)??{fieldId:field.key as AuthoredPersona['fields'][number]['fieldId'],chips:[],rawText:!source.authoredPersona?preserved[field.key]??'':'',skipped:!(!source.authoredPersona&&preserved[field.key])})};
 }
 /** Editing only uses the existing source patch; no onboarding lifecycle operation is reachable here. */
-export default function PersonaSettingsEditor({source,onClose,onSaved,onReload}:{source:PersonaSource;onClose:()=>void;onSaved:(source:PersonaSource)=>void;onReload:()=>void}){
+export default function PersonaSettingsEditor({source,onClose,onSaved,onReload,allowConfirm=false}:{source:PersonaSource;allowConfirm?:boolean;onClose:()=>void;onSaved:(source:PersonaSource)=>void|Promise<void>;onReload:()=>void}){
  const live=useLive(),locale=useZzalLocale(),copy=locale==='en'?PERSONA_EDITOR_EN:locale==='ja'?PERSONA_EDITOR_JA:PERSONA_EDITOR_KO;
  const labels=locale==='en'?{title:'Edit settings',cancel:'Cancel',previous:'Previous',next:'Next',skip:'Skip',name:'Character name stays the same.',reload:'Load latest settings'}:locale==='ja'?{title:'設定を変更',cancel:'キャンセル',previous:'前へ',next:'次へ',skip:'スキップ',name:'キャラクターの名前はそのままです。',reload:'最新の設定を読み込む'}:{title:'설정 수정',cancel:'취소',previous:'이전',next:'다음',skip:'건너뛰기',name:'캐릭터 이름은 그대로예요.',reload:'최신 설정 불러오기'};
  const metrics=interactionMetrics(live,false,'settings');
@@ -51,7 +51,14 @@ export default function PersonaSettingsEditor({source,onClose,onSaved,onReload}:
 
  useLayoutEffect(()=>{pane.current?.scrollTo({top:0})},[idx]);
  useLayoutEffect(()=>{for(const el of Object.values(texts.current)){if(!el)continue;el.style.height='auto';el.style.height=`${Math.max(88,el.scrollHeight)}px`}},[idx,draft,locale]);
- const save=async()=>{if(lock.current||!dirty||validation||invalidChips||!live.petId)return;metrics.attempt('settings_save');lock.current=true;setBusy(true);setMessage('');setConflict(false);try{const result=await live.updatePersona({...(dirtyFields?{authoredPersona:draft}:{}),...(callMe.trim()&&callMe.trim()!==source.callMe?{callMe:callMe.trim()}:{}),expectedPersonaHash:source.personaSourceHash});metrics.result('settings_save',result.ok?'success':result.status==null?'uncertain':'failure');if(!mounted.current||activePet.current!==identity.current)return;if(!result.ok){setConflict(result.code==='ZZAL_PERSONA_SOURCE_STALE');setMessage(result.code==='ZZAL_PERSONA_SOURCE_STALE'?copy.conflict:result.status==null?copy.uncertain:result.message??copy.failed);return}onSaved({...source,authoredPersona:dirtyFields?draft:source.authoredPersona,callMe:callMe.trim()||source.callMe});}catch{metrics.result('settings_save','uncertain');if(mounted.current&&activePet.current===identity.current)setMessage(copy.uncertain)}finally{lock.current=false;if(mounted.current&&activePet.current===identity.current)setBusy(false)}};
+ const save=async()=>{if(lock.current||(!dirty&&!allowConfirm)||validation||invalidChips||!live.petId)return;metrics.attempt('settings_save');lock.current=true;setBusy(true);setMessage('');setConflict(false);try{
+  if(!dirty&&allowConfirm){
+    const fresh=await getAuthoredPersona(live.petId);
+    if(!mounted.current||activePet.current!==identity.current)return;
+    if(fresh.personaSourceHash!==source.personaSourceHash){setConflict(true);setMessage(copy.conflict);metrics.result('settings_save','failure');return}
+    await onSaved(fresh);metrics.result('settings_save','success');return;
+  }
+  const result=await live.updatePersona({...(dirtyFields?{authoredPersona:draft}:{}),...(callMe.trim()&&callMe.trim()!==source.callMe?{callMe:callMe.trim()}:{}),expectedPersonaHash:source.personaSourceHash});metrics.result('settings_save',result.ok?'success':result.status==null?'uncertain':'failure');if(!mounted.current||activePet.current!==identity.current)return;if(!result.ok){setConflict(result.code==='ZZAL_PERSONA_SOURCE_STALE');setMessage(result.code==='ZZAL_PERSONA_SOURCE_STALE'?copy.conflict:result.status==null?copy.uncertain:result.message??copy.failed);return}const fresh=await getAuthoredPersona(live.petId);if(!mounted.current||activePet.current!==identity.current)return;await onSaved(fresh);}catch{metrics.result('settings_save','uncertain');if(mounted.current&&activePet.current===identity.current)setMessage(copy.uncertain)}finally{lock.current=false;if(mounted.current&&activePet.current===identity.current)setBusy(false)}};
  const next=async()=>{
   if(!step||fxLock.current||busy)return;fxLock.current=true;setBusyFx(true);
   (document.activeElement as HTMLElement|null)?.blur();
@@ -73,7 +80,7 @@ export default function PersonaSettingsEditor({source,onClose,onSaved,onReload}:
   <PersonaQuestionPane paneRef={pane}><div className="pse-question" key={step?.key??'address'}><h3>{step?.q??copy.address}</h3>{step?.sub&&<p>{step.sub}</p>}
    {step?<PersonaQuestionFields step={step} answers={answers} busyFx={busy||busyFx} editing chipRefs={chips} textRefs={texts} setChip={(field:PersonaField,chip:string)=>update(field.key,{chips:pickChips(field,answerOf(answers,field.key).chips,chip)})} setText={(key,text)=>update(key,{rawText:text})}/>:<><label>{copy.address}<input autoComplete="off" data-part="persona-settings-address" aria-label={copy.address} maxLength={20} disabled={busy} value={callMe} onChange={event=>{setCallMe(event.target.value);setMessage('')}} placeholder={copy.unknown}/></label><p>{labels.name} {live.pet?.name}</p>{!source.authoredPersona&&live.pet?.note&&<blockquote>{live.pet.note}</blockquote>}</>}
   </div></PersonaQuestionPane>
-  <PersonaQuestionFooter><p role={message||validation?'alert':'status'} data-part="persona-settings-status">{message||(!step?validation:'')}</p>{(conflict||(dirtyFields&&legacyMissing))&&<button type="button" onClick={()=>{if(window.confirm(copy.replace))onReload()}}>{labels.reload}</button>}<div className="pse-nav"><button type="button" disabled={busy||busyFx||idx===0} onClick={()=>setIdx(n=>n-1)}>{labels.previous}</button><button type="button" className="pse-primary" data-action="persona-settings-next" disabled={busy||busyFx||(!step&&(!dirty||!!validation||invalidChips))} onClick={()=>step?void next():void save()}>{busy?copy.saving:step?labels.next:copy.save}</button>{step&&<button type="button" data-action="persona-settings-skip" disabled={busy||busyFx} onClick={()=>setIdx(n=>n+1)}>{labels.skip}</button>}</div></PersonaQuestionFooter>
+  <PersonaQuestionFooter><p role={message||validation?'alert':'status'} data-part="persona-settings-status">{message||(!step?validation:'')}</p>{(conflict||(dirtyFields&&legacyMissing))&&<button type="button" onClick={()=>{if(window.confirm(copy.replace))onReload()}}>{labels.reload}</button>}<div className="pse-nav"><button type="button" disabled={busy||busyFx||idx===0} onClick={()=>setIdx(n=>n-1)}>{labels.previous}</button><button type="button" className="pse-primary" data-action="persona-settings-next" disabled={busy||busyFx||(!step&&((!dirty&&!allowConfirm)||!!validation||invalidChips))} onClick={()=>step?void next():void save()}>{busy?copy.saving:step?labels.next:!dirty&&allowConfirm?(locale==='en'?'Confirm settings':locale==='ja'?'この設定で続ける':'이 설정으로 시작하기'):copy.save}</button>{step&&<button type="button" data-action="persona-settings-skip" disabled={busy||busyFx} onClick={()=>setIdx(n=>n+1)}>{labels.skip}</button>}</div></PersonaQuestionFooter>
   </PersonaQuestionSheet>
  </div>,document.body);
 }
