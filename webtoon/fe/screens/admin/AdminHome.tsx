@@ -124,6 +124,20 @@ export default function AdminHome({ go }: { go: Go }) {
           </section>
 
           <section className="wt-admin-section">
+            <h2>짤 펫 주인 ↔ 웹툰</h2>
+            <div className="wt-admin-stats">
+              <Stat label="짤 펫 주인 (전체)" value={data.crossover.petOwners} />
+              <Stat label="그중 범위 안 웹툰 화면에 온 계정" value={data.crossover.petOwnersOnWebtoon} />
+              <Stat label="그중 범위 안 웹툰 만든 계정" value={data.crossover.petOwnersCreated} />
+              <Stat label="범위 안 웹툰 만든 계정" value={data.crossover.makersSignedIn} />
+              <Stat label="그중 펫이 있는 계정" value={data.crossover.makersWithPet} />
+            </div>
+            <div className="wt-admin-note">
+              로그인한 계정으로만 잇습니다. 짤의 익명 id 는 웹툰 uid 와 달라서 로그인 안 한 사람은 어느 쪽에서도 넘어온 것을 알 수 없습니다.
+            </div>
+          </section>
+
+          <section className="wt-admin-section">
             <h2>UTM source 별 (상위 10)</h2>
             <SourceTable rows={data.sources} />
           </section>

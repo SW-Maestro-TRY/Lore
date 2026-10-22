@@ -133,6 +133,7 @@ public class AdminLiveController {
         revisions.put("panel", funnelAll.getOrDefault("regen_start", 0L));
         out.put("revisions", revisions);
         out.put("survey", surveyAnswers(fromAt, toAt));
+        out.put("crossover", crossover(fromAt, toAt));
         out.put("sources", sources);
         out.put("mediums", mediums);
         out.put("campaigns", campaigns);
@@ -251,6 +252,41 @@ public class AdminLiveController {
                 .setParameter("from", from)
                 .setParameter("to", to)
                 .getSingleResult();
+        return r == null ? 0L : ((Number) r).longValue();
+    }
+
+    /** #763 — 짤 펫 주인이 웹툰으로 얼마나 넘어오나. 짤은 익명 id 가 달라서(`anon_id` ≠ `lore_uid`)
+     *  로그인한 계정(`user_id`)으로만 이을 수 있다. `zzal_pet` 은 읽기만 한다. */
+    private Map<String, Long> crossover(Instant from, Instant to) {
+        Map<String, Long> out = new LinkedHashMap<>();
+        out.put("petOwners", scalar("select count(distinct user_id) from zzal_pet where user_id is not null"));
+        out.put("petOwnersOnWebtoon", scalar(
+                "select count(distinct e.user_id) from webtoon_event e"
+                        + " where e.user_id in (select user_id from zzal_pet where user_id is not null)"
+                        + "   and e.occurred_at >= :from and e.occurred_at < :to", from, to));
+        out.put("petOwnersCreated", scalar(
+                "select count(distinct j.user_id) from webtoon_job j"
+                        + " where j.user_id in (select user_id from zzal_pet where user_id is not null)"
+                        + "   and j.created_at >= :from and j.created_at < :to", from, to));
+        out.put("makersWithPet", scalar(
+                "select count(distinct j.user_id) from webtoon_job j"
+                        + " where j.user_id is not null"
+                        + "   and j.created_at >= :from and j.created_at < :to"
+                        + "   and exists (select 1 from zzal_pet p where p.user_id = j.user_id)", from, to));
+        out.put("makersSignedIn", scalar(
+                "select count(distinct j.user_id) from webtoon_job j"
+                        + " where j.user_id is not null"
+                        + "   and j.created_at >= :from and j.created_at < :to", from, to));
+        return out;
+    }
+
+    private long scalar(String sql) {
+        Object r = em.createNativeQuery(sql).getSingleResult();
+        return r == null ? 0L : ((Number) r).longValue();
+    }
+
+    private long scalar(String sql, Instant from, Instant to) {
+        Object r = em.createNativeQuery(sql).setParameter("from", from).setParameter("to", to).getSingleResult();
         return r == null ? 0L : ((Number) r).longValue();
     }
 

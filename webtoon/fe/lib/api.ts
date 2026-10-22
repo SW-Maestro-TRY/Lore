@@ -879,6 +879,14 @@ export interface AdminLive {
     createBlocked: number;
   };
   revisions: { story: number; sheet: number; scene: number; panel: number };
+  /** #763 — 짤 펫 주인 ↔ 웹툰. 로그인한 계정으로만 잇는다(짤 익명 id 는 웹툰 uid 와 다름). */
+  crossover: {
+    petOwners: number;
+    petOwnersOnWebtoon: number;
+    petOwnersCreated: number;
+    makersWithPet: number;
+    makersSignedIn: number;
+  };
   survey: Record<string, AdminLiveSurvey>;
   sources: AdminLiveSource[];
   mediums: AdminLiveSource[];
