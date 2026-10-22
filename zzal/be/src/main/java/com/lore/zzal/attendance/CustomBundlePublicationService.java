@@ -75,7 +75,7 @@ public final class CustomBundlePublicationService {
     exact(prefix+"/grid.png",metadata.path("gridImageKey").asText());
     gridHash=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(download(prefix+"/grid.png",temp.resolve("grid.png")))));
    }
-   CustomCanvasTransform.validate(baseAnchors,anchors,metadata,AttendanceService.hash(baseRaw),gridHash);
+   CustomCanvasTransform.validate(baseAnchors,anchors,metadata,AttendanceService.hash(baseRaw),gridHash,frozenPlan);
    validateAnchors(anchors,frozenPlan);
    var verifier=new BundleAssetVerifier(python);verifier.preflight();
    if(manifest.assets()==null||manifest.assets().size()!=8)throw new IllegalStateException("Eight manifest assets required");

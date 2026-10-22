@@ -16,6 +16,7 @@ public final class CustomGridGenerationExecutor implements GenerationExecutor {
   Files.writeString(output.resolve("prompt.txt"),render.prompt());Files.writeString(output.resolve("generation-request.json"),mapper.writeValueAsString(request));
   CustomGridGenerator.Grid grid=null;
   try(var session=post.open(prefix,pipeline)){
+   profile.configurePlan(session,request.frozenPlan());
    profile.seed(session); // frozen base anchors must be available before the image call
    grid=generator.generate(request,render.prompt(),ref,prefix+"/grid.png",output);
    Files.writeString(output.resolve("provider-result.json"),mapper.writeValueAsString(grid)); // preserve returned cost; no invented zero/GenJob ID

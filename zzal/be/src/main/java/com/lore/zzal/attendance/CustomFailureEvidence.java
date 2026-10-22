@@ -28,7 +28,7 @@ public final class CustomFailureEvidence {
   if(text==null)return null;
   // Deliberately return trusted fixed codes only: traceback text can contain credentials or prompts.
   var kept=new LinkedHashSet<String>();
-  for(String code:List.of("POSTPROCESS_CLIP","GRID_STRUCTURE_INVALID","CUSTOM_POSTPROCESS_TIMEOUT","CUSTOM_POSTPROCESS_FAILED"))if(text.contains(code))kept.add(code);
+  for(String code:List.of("POSTPROCESS_CLIP","CUSTOM_MEASUREMENT_AMBIGUOUS","GRID_STRUCTURE_INVALID","CUSTOM_POSTPROCESS_TIMEOUT","CUSTOM_POSTPROCESS_FAILED"))if(text.contains(code))kept.add(code);
   return String.join("\n",kept);
  }
  public static void preserve(S3Storage storage,CustomGenerationRequest request,Path output,PostprocessFailureException failure){

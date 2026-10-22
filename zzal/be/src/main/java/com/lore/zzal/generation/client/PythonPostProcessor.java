@@ -94,6 +94,7 @@ public class PythonPostProcessor implements PostProcessor {
 
         /** 몇 번째 자르기인가. 작업 폴더 안의 이름을 층마다 가르는 데 쓴다. */
         private int call;
+        private Path customPlan;
 
         PythonSession(String outputPrefix, String version) throws IOException {
             this.outputPrefix = outputPrefix;
@@ -131,10 +132,21 @@ public class PythonPostProcessor implements PostProcessor {
             if (outputPrefix.startsWith("images/zzal/custom/")) {
                 if (layer != 2 || postures == null || postures.isBlank())
                     throw new IllegalArgumentException("Custom canvas requires explicit layer2 poses");
+                if (customPlan == null) throw new IllegalArgumentException("Frozen custom motion plan required");
+                args.addAll(List.of("--motion-plan",customPlan.toString()));
                 args.remove("--normalize");
                 args.addAll(List.of("--base-anchors", out.resolve(ANCHORS).toString()));
             }
             run(gridImageKey, keys, args, layer);
+        }
+
+        @Override
+        public void customMotionPlan(String frozenPlanJson) throws Exception {
+            if (!outputPrefix.startsWith("images/zzal/custom/")) throw new IllegalArgumentException("Custom plan cannot change basic postprocessing");
+            var plan=new com.fasterxml.jackson.databind.ObjectMapper().readValue(frozenPlanJson,com.lore.zzal.attendance.CustomMotionPlan.class);
+            if(plan.motions().size()!=8)throw new IllegalArgumentException("Eight frozen custom motions required");
+            customPlan=work.resolve("frozen-motion-plan.json");
+            Files.writeString(customPlan,frozenPlanJson,java.nio.file.StandardOpenOption.CREATE_NEW);
         }
 
         @Override
@@ -348,7 +360,7 @@ public class PythonPostProcessor implements PostProcessor {
         String output=Files.exists(stdout)?Files.readString(stdout):"",errors=Files.exists(stderr)?Files.readString(stderr):"";
         if(!done||process.exitValue()!=0){
             String diagnostic=output+"\n"+errors;
-            var code=!done?PostprocessFailureException.Code.TIMEOUT:diagnostic.contains("POSTPROCESS_CLIP")?PostprocessFailureException.Code.CLIP:diagnostic.contains("GRID_STRUCTURE_INVALID")?PostprocessFailureException.Code.GRID_INVALID:PostprocessFailureException.Code.EXECUTION;
+            var code=!done?PostprocessFailureException.Code.TIMEOUT:diagnostic.contains("CUSTOM_MEASUREMENT_AMBIGUOUS")?PostprocessFailureException.Code.MEASUREMENT_AMBIGUOUS:diagnostic.contains("POSTPROCESS_CLIP")?PostprocessFailureException.Code.CLIP:diagnostic.contains("GRID_STRUCTURE_INVALID")?PostprocessFailureException.Code.GRID_INVALID:PostprocessFailureException.Code.EXECUTION;
             throw new PostprocessFailureException(code,output,errors,new IllegalStateException(!done?"Postprocess timeout":"Postprocess exit "+process.exitValue()));
         }
         log.info("맞춤 후처리 완료 — {}",grid);

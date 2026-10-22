@@ -8,10 +8,11 @@ import numpy as np
 from scipy import ndimage
 from PIL import Image
 import anchors, state8_v5, service_post, gif_out
+import standing_scale
 
 MARGIN=16
 
-def build(grid, output, keys, postures, base_anchors):
+def build(grid, output, keys, postures, base_anchors, motion_plan=None):
     out=Path(output);out.mkdir(parents=True,exist_ok=True)
     base_path=Path(base_anchors);base_bytes=base_path.read_bytes();base=json.loads(base_bytes)
     assert len(keys)==8 and len(set(keys))==8 and 'base'not in keys
@@ -53,9 +54,20 @@ def build(grid, output, keys, postures, base_anchors):
     assert all(im.size==frames[0].size for im in frames)
     standing=[i for i in range(8)if pmap[state8_v5.KEYS[i]]=='standing']
     assert standing,'At least one standing pose required to preserve base head scale'
-    measured=[service_post.measure_body(frames[2*i])for i in standing]
-    assert all(measured),'Standing body measurement required'
-    source_hw=float(np.median([m['hw']for m in measured]));scale=base['Hw']/source_hw
+    normalization=None
+    if motion_plan is not None:
+        plan=json.loads(Path(motion_plan).read_text());plan=plan.get('motionPlan',plan);motions=plan['motions']
+        try:normalization=standing_scale.select(frames,motions,keys,base,plan)
+        except standing_scale.MeasurementAmbiguous as error:
+            (out/'standing-measurement.json').write_text(json.dumps(error.report,ensure_ascii=False,indent=2)+'\n')
+            print('CUSTOM_MEASUREMENT_AMBIGUOUS '+json.dumps(error.report,ensure_ascii=False));raise
+        source_hw=normalization['sourceHeadWidthProxy'];scale=normalization['scale']
+        measured=[{'foot_y':normalization['standingFootSource']}]
+        (out/'standing-measurement.json').write_text(json.dumps(normalization,ensure_ascii=False,indent=2)+'\n')
+    else:
+        measured=[service_post.measure_body(frames[2*i])for i in standing]
+        assert all(measured),'Standing body measurement required'
+        source_hw=float(np.median([m['hw']for m in measured]));scale=base['Hw']/source_hw
     assert math.isfinite(scale)and .25<=scale<=4
     ref_hw,foot=service_post.read_norm_ref(base_path)
     assert ref_hw==base['Hw']and foot is not None
@@ -91,14 +103,16 @@ def build(grid, output, keys, postures, base_anchors):
     data=anchors.build(first,keys,K=base['K'],Hw=base['Hw'],base_key='base')
     data['canvas']={'w':width,'h':height};assert not data.get('missing')
     transform={'version':'CUSTOM_CANVAS_V1','gridSHA256':hashlib.sha256(Path(grid).read_bytes()).hexdigest(),'baseAnchorsSHA256':hashlib.sha256(base_bytes).hexdigest(),'baseCanvas':base['canvas'],'outputCanvas':data['canvas'],'K':base['K'],'Hw':base['Hw'],'sourceHeadWidth':source_hw,'normalizationScale':scale,'baseOffset':{'x':tx,'y':ty},'sharedAffine':{'scale':scale,'dx':dx+tx,'dy':dy+ty},'inputCanvas':{'w':frames[0].width,'h':frames[0].height},'resizedCanvas':{'w':resized[0].width,'h':resized[0].height},'standingFootTarget':target_foot+ty,'standingFootSource':pivot_y,'cellMembership':membership,'crop':crop,'frames':checks,'lostAlphaPixels':sum(crop['lostAlphaPixels'])+sum(c['lostAlphaPixels']for c in checks)}
+    if normalization is not None:
+        transform['version']='CUSTOM_CANVAS_BODY_V2';transform['bodyNormalization']=normalization
     assert transform['lostAlphaPixels']==0
     data['customTransform']=transform;anchors.write(data,out/'anchors.json');(out/'custom-transform.json').write_text(json.dumps(transform,indent=2)+'\n')
     print(json.dumps({'status':'PASS','canvas':data['canvas'],'K':base['K'],'Hw':base['Hw'],'scale':scale,'sharedAffine':transform['sharedAffine'],'lostAlphaPixels':0,'motions':8}))
     return transform
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('grid');ap.add_argument('out');ap.add_argument('--keys',required=True);ap.add_argument('--postures',required=True);ap.add_argument('--base-anchors',required=True);a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('grid');ap.add_argument('out');ap.add_argument('--keys',required=True);ap.add_argument('--postures',required=True);ap.add_argument('--base-anchors',required=True);ap.add_argument('--motion-plan');a=ap.parse_args()
     result=service_post.run_gate(Path(a.grid))
     if result:return result
-    build(Path(a.grid),Path(a.out),a.keys.split(','),a.postures,Path(a.base_anchors));return 0
+    build(Path(a.grid),Path(a.out),a.keys.split(','),a.postures,Path(a.base_anchors),a.motion_plan);return 0
 if __name__=='__main__':sys.exit(main())
