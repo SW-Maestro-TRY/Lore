@@ -414,7 +414,10 @@ function wrapFetch(): void {
       const res = await original.call(window, input, init);
       const ms = Date.now() - t0;
       const where = apiShape(url);
-      if (!res.ok) track("api_error", { where, status: res.status, ms, kind: (init?.method || "GET").toLowerCase() });
+      /* #763 — 로그인 안 한 브라우저의 토큰 갱신 401 은 사용자에게 보이는 오류가 아니다. 운영에서
+         api_error 의 97% 가 이것이라 오류 수를 더럽혀서 안 보낸다. */
+      const silent = res.status === 401 && where.endsWith("auth.refresh");
+      if (!res.ok && !silent) track("api_error", { where, status: res.status, ms, kind: (init?.method || "GET").toLowerCase() });
       else if (ms > SLOW_API_MS) track("api_slow", { where, status: res.status, ms, kind: (init?.method || "GET").toLowerCase() });
       return res;
     } catch (e) {
