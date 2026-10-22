@@ -128,6 +128,12 @@ public class PythonPostProcessor implements PostProcessor {
                 // ★ 빈 값이면 아예 안 넘긴다 — 이 인자를 모르는 스크립트에 넘기면 argparse 가 죽는다.
                 args.addAll(List.of("--postures", postures));
             }
+            if (outputPrefix.startsWith("images/zzal/custom/")) {
+                if (layer != 2 || postures == null || postures.isBlank())
+                    throw new IllegalArgumentException("Custom canvas requires explicit layer2 poses");
+                args.remove("--normalize");
+                args.addAll(List.of("--base-anchors", out.resolve(ANCHORS).toString()));
+            }
             run(gridImageKey, keys, args, layer);
         }
 
@@ -205,7 +211,7 @@ public class PythonPostProcessor implements PostProcessor {
             storage.download(gridImageKey, grid);
 
             FileTime since = stampNow(expected);
-            exec(scripts.script(version, "service_post.py"), grid, out, extraArgs,
+            exec(scripts.script(version, outputPrefix.startsWith("images/zzal/custom/") ? "custom_post.py" : "service_post.py"), grid, out, extraArgs,
                     work.resolve("log%d.txt".formatted(layer)));
 
             List<String> uploaded = new ArrayList<>();

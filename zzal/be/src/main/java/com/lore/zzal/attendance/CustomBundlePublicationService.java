@@ -68,8 +68,14 @@ public final class CustomBundlePublicationService {
    JsonNode metadata=readVerified(evidence.metadataKey(),evidence.metadataHash(),temp.resolve("resource-metadata.json"));JsonNode anchors=readVerified(evidence.anchorsKey(),evidence.anchorsHash(),temp.resolve("anchors.json"));
    if(CustomMotionPlan.CURRENT_VERSION.equals(frozenPlan.version())&&!metadata.has("planVersion")||metadata.has("planVersion")&&!frozenPlan.version().equals(metadata.path("planVersion").asText()))throw new IllegalStateException("Frozen plan version mismatch");
    if(!manifest.requestId().equals(metadata.path("setId").asText())||profile.baseReferenceRound()!=metadata.path("baseReferenceRound").asInt()||!profile.anchorsKey().equals(metadata.path("baseAnchorsKey").asText())||!profile.appearanceVersion().equals(metadata.path("appearancePipelineVersion").asText())||!evidence.anchorsKey().equals(metadata.path("anchorsKey").asText())||metadata.path("resources").size()!=8)throw new IllegalStateException("Resource metadata identity mismatch");
-   JsonNode baseAnchors=json.readTree(Files.readString(download(profile.anchorsKey(),temp.resolve("base-anchors.json"))));
-   for(String keyName:List.of("version","canvas","K","Hw"))if(!Objects.equals(baseAnchors.get(keyName),anchors.get(keyName)))throw new IllegalStateException("Frozen base anchor scale mismatch");
+   String baseRaw=Files.readString(download(profile.anchorsKey(),temp.resolve("base-anchors.json")));
+   JsonNode baseAnchors=json.readTree(baseRaw);
+   String gridHash=null;
+   if(anchors.has("customTransform")||metadata.has("customTransform")){
+    exact(prefix+"/grid.png",metadata.path("gridImageKey").asText());
+    gridHash=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(download(prefix+"/grid.png",temp.resolve("grid.png")))));
+   }
+   CustomCanvasTransform.validate(baseAnchors,anchors,metadata,AttendanceService.hash(baseRaw),gridHash);
    validateAnchors(anchors,frozenPlan);
    var verifier=new BundleAssetVerifier(python);verifier.preflight();
    if(manifest.assets()==null||manifest.assets().size()!=8)throw new IllegalStateException("Eight manifest assets required");
@@ -80,6 +86,7 @@ public final class CustomBundlePublicationService {
     JsonNode resource=metadata.path("resources").get(i);if(resource==null)throw new IllegalStateException("Missing resource metadata");
     if(CustomMotionPlan.CURRENT_VERSION.equals(frozenPlan.version())&&!resource.has("situations")||resource.has("situations")&&!json.valueToTree(motion.situations()).equals(resource.get("situations")))throw new IllegalStateException("Frozen situation metadata mismatch");if(resource==null||!resource.path("motionOrder").isIntegralNumber()||!resource.has("semantic")||!resource.path("albumOnly").isBoolean()||!resource.path("embeddedProps").isBoolean()||!resource.path("suppressRoomProps").isBoolean())throw new IllegalStateException("Explicit resource metadata required");if(resource.path("motionOrder").asInt()!=asset.order||!slot.equals(resource.path("resourceSlotKey").asText())||!slot.equals(resource.path("anchorPoseKey").asText())||!Objects.equals(motion.semantic(),resource.path("semantic").isNull()?null:resource.path("semantic").asText())||motion.albumOnly()!=resource.path("albumOnly").asBoolean()||(!motion.props().isEmpty())!=resource.path("embeddedProps").asBoolean()||!resource.path("suppressRoomProps").asBoolean())throw new IllegalStateException("Frozen motion metadata mismatch");
     String local="motion-"+asset.order+".webp";download(asset.key,temp.resolve(local));verifier.verifyCanvas(new BundleAssetVerifier.Input(asset.order,local,asset.key,asset.hash,asset.review,false),temp,anchors.path("canvas").path("w").asInt(),anchors.path("canvas").path("h").asInt());
+    if(anchors.has("customTransform"))verifier.verifyCustomFrames(temp.resolve(local),anchors.get("customTransform"),asset.order);
    }
    return new Checked(job,assets,sources);
   }finally{try(var walk=Files.walk(temp)){for(Path p:walk.sorted(Comparator.reverseOrder()).toList())Files.deleteIfExists(p);}}

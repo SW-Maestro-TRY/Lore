@@ -24,12 +24,15 @@ public final class CustomGridGenerationExecutor implements GenerationExecutor {
   }
   List<BundleAssetVerifier.Input> assets=new ArrayList<>();var verifier=new BundleAssetVerifier(python);
   for(int i=0;i<8;i++){String key=prefix+"/"+CustomGridPrompt.SLOTS.get(i)+".webp",local="motion-"+(i+1)+".webp";Path target=output.resolve(local);storage.download(key,target);var asset=new BundleAssetVerifier.Input(i+1,local,key,java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(target))),"UNREVIEWED",false);verifier.verify(asset,output);assets.add(asset);}
+  Path anchors=output.resolve("anchors.json");storage.download(prefix+"/anchors.json",anchors);
   List<Map<String,Object>> resources=new ArrayList<>();
   for(var motion:request.frozenPlan().motions().stream().sorted(java.util.Comparator.comparingInt(CustomMotionPlan.Motion::order)).toList()){var resource=new LinkedHashMap<String,Object>();resource.put("motionOrder",motion.order());resource.put("resourceSlotKey",CustomGridPrompt.SLOTS.get(motion.order()-1));resource.put("anchorPoseKey",CustomGridPrompt.SLOTS.get(motion.order()-1));resource.put("semantic",motion.semantic());resource.put("situations",motion.situations());resource.put("albumOnly",motion.albumOnly());resource.put("embeddedProps",!motion.props().isEmpty());resource.put("suppressRoomProps",true);resources.add(resource);}
   Files.writeString(output.resolve("resource-metadata.json"),mapper.writeValueAsString(Map.of("planVersion",request.frozenPlan().version(),"setId",request.requestId().toString(),"baseReferenceRound",profile.baseReferenceRound(),"baseAnchorsKey",profile.anchorsKey(),"anchorsKey",prefix+"/anchors.json","appearancePipelineVersion",profile.appearanceVersion(),"resources",resources)));
-  Path metadata=output.resolve("resource-metadata.json"),anchors=output.resolve("anchors.json");
+  var metadataNode=(com.fasterxml.jackson.databind.node.ObjectNode)mapper.readTree(Files.readString(output.resolve("resource-metadata.json")));
+  var anchorNode=mapper.readTree(Files.readString(anchors));
+  if(anchorNode.has("customTransform")){metadataNode.set("customTransform",anchorNode.get("customTransform"));metadataNode.put("gridImageKey",grid.imageKey());Files.writeString(output.resolve("resource-metadata.json"),mapper.writeValueAsString(metadataNode));}
+  Path metadata=output.resolve("resource-metadata.json");
   storage.upload(prefix+"/resource-metadata.json",metadata,"application/json");
-  storage.download(prefix+"/anchors.json",anchors);
   var publication=new BundleJobWorker.PublicationEvidence("CUSTOM_PUBLICATION_V1",prefix+"/resource-metadata.json",AttendanceService.hash(Files.readString(metadata)),prefix+"/anchors.json",AttendanceService.hash(Files.readString(anchors)));
   var receipt=new BundleJobWorker.Manifest(request.requestId().toString(),assets,request.frozenPlan().selectedSources(),request.requestId().toString(),request.pipelineVersion(),request.quality(),grid.actualQuality(),grid.provider(),grid.model(),publication);
   String bytes=mapper.writeValueAsString(receipt);Files.writeString(output.resolve("manifest.json"),bytes,StandardOpenOption.CREATE_NEW);storage.upload(prefix+"/manifest.json",output.resolve("manifest.json"),"application/json");return bytes;
