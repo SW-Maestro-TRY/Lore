@@ -860,6 +860,12 @@ export interface AdminLive {
   runningJobs: number;
   funnel: {
     landing: number;
+    /** #763 — landing 중 광고(utm_medium cpc · paid 류)로 들어온 브라우저 */
+    landingAd: number;
+    /** #763 — 들어와서 무엇이든 한 브라우저(첫 화면만 보고 나간 것 제외) */
+    engaged: number;
+    /** #763 — engaged 중 광고로 들어온 것 */
+    engagedAd: number;
     newSessions: number;
     returningSessions: number;
     signedIn: number;

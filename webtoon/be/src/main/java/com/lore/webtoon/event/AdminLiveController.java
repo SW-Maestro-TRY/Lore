@@ -104,6 +104,12 @@ public class AdminLiveController {
            - bake: 편집실에서 한 편을 구운 때(완성 신호). */
         Map<String, Long> funnel = new LinkedHashMap<>();
         funnel.put("landing", funnelAll.getOrDefault("session_start", 0L));
+        /* #763 — 광고 클릭이 섞이면 총 유입이 아무것도 말해 주지 않는다(2026-10-15 · 16 자정 8분에
+           구글 광고로 750 브라우저씩 들어와 6초 안에 나감). 광고(utm_medium 이 cpc · paid 류)와
+           그 밖을 나누고, 「실방문」 — 첫 화면만 보고 나간 게 아니라 무엇이든 한 브라우저 — 를 따로 센다. */
+        funnel.put("landingAd", countLandingAd(fromAt, toAt));
+        funnel.put("engaged", countEngaged(fromAt, toAt, false));
+        funnel.put("engagedAd", countEngaged(fromAt, toAt, true));
         funnel.put("newSessions", newSessions);
         funnel.put("returningSessions", returningSessions);
         funnel.put("signedIn", funnelAll.getOrDefault("auth_done", 0L));
@@ -205,6 +211,47 @@ public class AdminLiveController {
         } catch (RuntimeException e) {
             return fallback;
         }
+    }
+
+    /** 유입 출처가 광고인가 — 화면이 보내는 source 는 "utm_source/utm_medium/utm_campaign/utm_content"
+     *  한 줄(track.ts utmLine)이고, 옛 줄은 "utm_medium=cpc&…" 꼴일 수 있어 둘 다 본다. */
+    private static final String AD_SOURCE =
+            "(source ~ '^[^/]*/(cpc|paid|display|ads|ppc)(/|$)' or source ~ 'utm_medium=(cpc|paid|display|ads|ppc)(&|$)')";
+
+    /** 들어온 것 말고는 아무 자국도 안 남기는 이벤트. 이것만 있는 브라우저는 실방문으로 안 센다. */
+    private static final String PASSIVE_NAMES =
+            "('session_start','page_view','page_leave','tab_hidden','tab_back','api_error','api_slow','js_error')";
+
+    /** 범위 안 session_start 중 광고로 들어온 브라우저 수. source 는 첫 묶음에만 실리므로 session_start 줄로 본다. */
+    private long countLandingAd(Instant from, Instant to) {
+        Object r = em.createNativeQuery(
+                        "select count(distinct uid) from webtoon_event"
+                                + " where name = 'session_start'"
+                                + "   and occurred_at >= :from and occurred_at < :to"
+                                + "   and uid is not null and " + AD_SOURCE)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getSingleResult();
+        return r == null ? 0L : ((Number) r).longValue();
+    }
+
+    /** 범위 안에 들어온 브라우저 중, 수동적인 이벤트 말고 무엇이든 한 것(단추 · 작품 열기 · 위저드 …).
+     *  adOnly 면 광고로 들어온 브라우저만. */
+    private long countEngaged(Instant from, Instant to, boolean adOnly) {
+        Object r = em.createNativeQuery(
+                        "select count(distinct s.uid) from"
+                                + " (select distinct uid from webtoon_event"
+                                + "   where name = 'session_start'"
+                                + "     and occurred_at >= :from and occurred_at < :to"
+                                + "     and uid is not null" + (adOnly ? " and " + AD_SOURCE : "") + ") s"
+                                + " where exists (select 1 from webtoon_event e"
+                                + "   where e.uid = s.uid"
+                                + "     and e.occurred_at >= :from and e.occurred_at < :to"
+                                + "     and e.name not in " + PASSIVE_NAMES + ")")
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getSingleResult();
+        return r == null ? 0L : ((Number) r).longValue();
     }
 
     private long countDistinctUidSince(Instant since) {

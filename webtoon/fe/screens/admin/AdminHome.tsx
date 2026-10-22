@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Go } from "../../lib/nav";
-import { adminLive, type AdminLive } from "../../lib/api";
+import { adminLive, type AdminLive, WebtoonApiError } from "../../lib/api";
 import "./AdminHome.css";
 
 const REFRESH_MS = 20_000;
@@ -36,6 +36,8 @@ export default function AdminHome({ go }: { go: Go }) {
   const [data, setData] = useState<AdminLive | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /* #763 — 로그인이 풀리면(401 · 403) 폴링을 멈춘다. 운영에서 풀린 채 20초마다 불러 401 을 2천 줄 남겼다. */
+  const [stopped, setStopped] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,7 +46,12 @@ export default function AdminHome({ go }: { go: Go }) {
       setData(d);
       setErr(null);
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : String(e));
+      if (e instanceof WebtoonApiError && (e.status === 401 || e.status === 403)) {
+        setStopped(true);
+        setErr("로그인이 풀렸습니다. 다시 로그인한 뒤 새로고침하세요.");
+      } else {
+        setErr(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setLoading(false);
     }
@@ -52,9 +59,10 @@ export default function AdminHome({ go }: { go: Go }) {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
+    if (stopped) return;
     const t = setInterval(load, REFRESH_MS);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, stopped]);
 
   const setToday = () => { const t = today(); setFrom(t); setTo(t); };
   const setLast7 = () => {
@@ -105,6 +113,13 @@ export default function AdminHome({ go }: { go: Go }) {
               <Stat label={`최근 ${data.activeMinutes}분 활성`} value={data.activeUids} />
               <Stat label="지금 돌고 있는 작업" value={data.runningJobs} />
               <Stat label="범위 안 총 유입" value={data.funnel.landing} />
+              <Stat label="그중 광고 유입" value={data.funnel.landingAd} />
+              <Stat label="실방문 (무엇이든 한 브라우저)" value={data.funnel.engaged} />
+              <Stat label="광고 중 실방문" value={data.funnel.engagedAd} />
+            </div>
+            <div className="wt-admin-note">
+              광고 유입은 utm_medium 이 cpc · paid · display · ads · ppc 인 것. 실방문은 들어와서 단추 · 작품 열기 · 위저드처럼
+              무엇이든 한 브라우저(첫 화면만 보고 나간 것 제외). 총 유입은 광고 클릭이 섞이면 뜻이 없어져서 실방문을 같이 봅니다.
             </div>
           </section>
 
@@ -183,14 +198,14 @@ export default function AdminHome({ go }: { go: Go }) {
 
 /* 발표 7번 장이 묻는 다섯 가지를 한 표로 — 각 줄에 데이터 출처와 지금 수치, 신호 표시. */
 function HypothesisBoard({ data }: { data: AdminLive }) {
-  const landing = data.funnel.landing;
+  const landing = data.funnel.engaged - data.funnel.engagedAd;
   const createStarted = data.funnel.createStarted;
   const baked = data.funnel.baked;
   const readEnd = data.funnel.readEnd;
   const rows: Array<{ q: string; src: string; result: React.ReactNode; signal: string }> = [
     {
       q: "외부 10명 유입",
-      src: "session_start (전체 범위, 지인/팀원 제외는 UTM 표에서)",
+      src: "실방문 중 광고 아닌 것 (무엇이든 한 브라우저 − 광고 유입, 지인/팀원 제외는 UTM 표에서)",
       result: <><b>{landing}</b>명</>,
       signal: landing >= 10 ? "충분" : landing > 0 ? "모자람" : "없음",
     },
