@@ -1900,7 +1900,7 @@ public class ZzalPet {
         sleepKind = null;
         sleptAt = null;
         if (was == SleepKind.NIGHT) {
-            attendanceNightCycleAt = at;
+            attendanceNightCycleAt = at.truncatedTo(ChronoUnit.MICROS);
             wokeAt = at;
             overslept = !manual;
             judgeLeaving(at);
