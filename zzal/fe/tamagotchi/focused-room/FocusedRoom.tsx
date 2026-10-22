@@ -12,6 +12,7 @@ import LanguageSelector from '../../LanguageSelector';
 import { useOpenAnnouncements } from '../announcements/AnnouncementsGate';
 import { useZzalLocale } from '../../lib/locale';
 import { CHAT_MAX_CHARS } from '../rules';
+import { FLOOR_DIRT_ASSETS } from '../floorDirtAssets';
 import { useFocusedAnalytics } from './useFocusedAnalytics';
 import { useFocusedExperience } from './useFocusedExperience';
 import { FocusedPanels } from './FocusedPanels';
@@ -219,7 +220,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       <div className="fr-world" aria-hidden="true">{backgroundUrl&&<img src={backgroundUrl} alt=""/>}</div>
       {!traveling && src && reference.loaded && geometry.loaded && !geometry.failed && <img className="fr-actor" data-fr-actor data-fr-custom-id={activeCustom?.id} data-fr-custom-anchor={customAnchorMode??undefined} data-fr-base-reference-round={activeCustom?.baseReferenceRound??undefined} src={src} alt={pet?.name || '캐릭터'} role="button" aria-label={t.pet} aria-disabled={x.busy||x.guided||x.panel==='game'||sleeping||traveling} tabIndex={x.busy||x.guided||x.panel==='game'||sleeping||traveling?-1:0} onClick={()=>{if(!x.busy&&!x.guided&&x.panel!=='game'&&!sleeping&&!traveling)void x.care('PET')}} onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&!x.busy&&!x.guided&&x.panel!=='game'&&!sleeping&&!traveling){e.preventDefault();void x.care('PET')}}} style={{...actorStyle,visibility:geometry.measured&&(!activeCustom||customReady)?'visible':'hidden',pointerEvents:'auto',cursor:x.busy||x.guided||x.panel==='game'||sleeping||traveling?'default':'pointer'}} />}
       {!traveling && !activeCustom?.suppressRoomProps && !activeCustom?.embeddedProps && <FocusedProps speechVisible={(!traveling&&!sleeping&&!!line)||(x.sleepFarewell&&!traveling&&sleeping)} renderTrash={false} live={live} visual={{...x.visual,pose}} width={size.width} height={size.height} footFloor={170} actor={{left,top,width,height}}/>}
-      {Array.from({length:Math.max(0,Math.min(4,x.visualTrash))},(_,i)=><img key={i} data-fr-floor-trash src="/images/zzal/assets/trash_1.v1.webp" alt={locale==='ko'?'바닥의 똥':locale==='en'?'Droppings':'床の汚れ'} style={{position:'absolute',zIndex:2,width:37,height:43,left:Math.max(6,Math.min(size.width-43,size.width*[.12,.36,.61,.85][i]-18)),top:Math.max(0,Math.min(foot-27+(i%2?9:0),(dockBudget.height?dockBudget.top:size.height-145)-43-8)),objectFit:'contain',pointerEvents:'none'}}/>)}
+      {Array.from({length:Math.max(0,Math.min(4,x.visualTrash))},(_,i)=><img key={i} data-fr-floor-trash src={FLOOR_DIRT_ASSETS[0]} alt={locale==='ko'?'바닥의 먼지와 부스러기':locale==='en'?'Dust and crumbs on the floor':'床のほこりと食べかす'} style={{position:'absolute',zIndex:2,width:37,height:43,left:Math.max(6,Math.min(size.width-43,size.width*[.12,.36,.61,.85][i]-18)),top:Math.max(0,Math.min(foot-27+(i%2?9:0),(dockBudget.height?dockBudget.top:size.height-145)-43-8)),objectFit:'contain',pointerEvents:'none'}}/>)}
     </div>
     <header className="fr-header">
       <div><h1>{pet?.name || '방'}</h1><p>{pet?.daysTogether != null ? locale==='ko'?`함께한 지 ${pet.daysTogether}일`:locale==='en'?`${pet.daysTogether} days together`:`一緒に${pet.daysTogether}日` : ''}</p></div>
