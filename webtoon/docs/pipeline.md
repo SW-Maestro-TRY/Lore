@@ -110,6 +110,7 @@ PAGE_REVIEW 8번(gpt-4.1), SHEET_IMAGE 1번 · PAGE_IMAGE 9번(gpt-image-2).
 - 코드 기본값은 workers 2 · page-workers 3. 운영은 Parameter Store 에 workers 3 · page-workers 4 를 넣어 두었다
   (2026-10-04, 다음 운영 배포부터). 생성 부하 시험에서 처리량은 page-workers 가 정했고, 장 하나에 파이썬
   프로세스가 하나 떠서(약 150~200MB) 운영 메모리가 상한을 정한다
+- 시험 결과와 값을 정한 이유, 다음에 올릴 단계는 [capacity.md](capacity.md)
 
 ## 모델을 바꾸려면
 
