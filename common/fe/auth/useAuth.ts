@@ -15,7 +15,7 @@
 
 import { useSyncExternalStore } from "react";
 import { ApiError } from "../api/client";
-import { track } from "../analytics";
+import { track, setTelemetryActor } from "../analytics";
 import {
   getMe,
   login as loginApi,
@@ -56,6 +56,7 @@ const listeners = new Set<() => void>();
 
 function setState(next: AuthState): void {
   state = next;
+  setTelemetryActor(next.status === "authenticated" ? "authenticated" : next.status === "anonymous" ? "anonymous" : "unknown", next.user?.userId);
   listeners.forEach((notify) => notify());
 }
 

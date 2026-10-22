@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.*;import static org.mockito.Mockit
 class StageSpeechFlowTest {
  final Instant now=Instant.parse("2026-10-18T03:00:00Z");ZzalPet pet;ChatStores st;StageSpeechService service;StageSpeechTransactions tx;
  ZzalChatDeliveryRepository deliveryRepository;
- final Map<Long,ZzalStageSpeech> stored=new ConcurrentHashMap<>();int calls;Runnable duringCall=()->{};boolean fail;final List<String> prompts=new ArrayList<>();SimpleTransactions manager=new SimpleTransactions();
+ final Map<Long,ZzalStageSpeech> stored=new ConcurrentHashMap<>();BigDecimal providerCost=BigDecimal.ZERO;int calls;Runnable duringCall=()->{};boolean fail;final List<String> prompts=new ArrayList<>();SimpleTransactions manager=new SimpleTransactions();
  @BeforeEach void setup(){
   stored.clear();st=new ChatStores();pet=ZzalPet.draft(1L,"source",now.minusSeconds(60));pet.character("다른아이","",null,"다른세계",null,null,now.minusSeconds(60));ReflectionTestUtils.setField(pet,"id",9L);pet.markAlive("sheet","identity",now);
   pet.beginFirstMeeting();pet.advanceFirstMeeting(FirstMeeting.State.COMPLETE);pet.devSetFirstIntro(4,FirstIntro.Step.SNACK,now);pet.rememberExplicitCallMe("현재호칭");pet.diaryLanguage("ja");
@@ -60,11 +60,213 @@ class StageSpeechFlowTest {
   var response=controller.tutorialSeen(1L,9L,request);assertThat(response.getData()).isInstanceOf(PetController.PreparedStage.class);
   verify(petService,never()).tutorialSeen(any(),any(),any(),any());assertThat(pet.introAt(FirstIntro.Step.SNACK)).isTrue();assertThat(calls).isEqualTo(1);
  }
- @Test void answeredQuestionEntryCannotClaimOrRegenerate(){
+ @Test void oldQuestionReceiptDoesNotBlockActionGuidance(){
   pet.devSetFirstIntro(4,FirstIntro.Step.FEED,now);var request=new com.lore.zzal.chat.dto.ChatRequests.Answer("먹었어",st.sessions.getFirst().getId(),0,UUID.randomUUID(),new com.lore.zzal.chat.dto.ChatRequests.Answer.Tutorial(ConversationScene.Step.FEED,com.lore.zzal.chat.dto.ChatRequests.Answer.AnswerType.SUGGESTED));
   var receipt=new ZzalChatDelivery(9L,ChatSlot.CONTINUOUS,request,"{}",now);
   when(deliveryRepository.latestTutorial(any(),any(),eq("FEED"),any())).thenReturn(List.of(receipt));
-  assertThatThrownBy(()->service.prepare(1L,9L,ConversationScene.Step.FEED,ConversationScene.Beat.ENTRY,now)).isInstanceOf(com.lore.common.exception.BusinessException.class);assertThat(stored).isEmpty();assertThat(calls).isZero();
+  assertThat(service.prepare(1L,9L,ConversationScene.Step.FEED,ConversationScene.Beat.ENTRY,now).status()).isEqualTo(ZzalStageSpeech.Status.READY);
+  assertThat(pet.introAt(FirstIntro.Step.FEED)).isTrue();
+ }
+ StageSpeechService batchService(){
+  ChatLineClient client=(system,input,model,timeout)->{
+   assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();calls++;prompts.add(system+"\n"+input);duringCall.run();
+   if(fail)throw new TimeoutException("synthetic");
+   var speeches=new ArrayList<Map<String,String>>();
+   for(String line:input.split("\n")){String[] parts=line.split(" ");if(parts.length==2&&Set.of("ENTRY","AFTER_ACTION").contains(parts[1]))speeches.add(Map.of("step",parts[0],"phase",parts[1],"line",parts[0]+" "+parts[1]+" 안내","motion","base"));}
+   return new ChatLineClient.Completion(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(Map.of("speeches",speeches)),providerCost,0,0);
+  };
+  return new StageSpeechService(tx,LineChain.off(),new StageSpeechBatchGenerator(client,"spy-only",Duration.ofMillis(100)));
+ }
+ @Test void oneBatchCachesAllScenesButOnlyRequestedCurrentSceneEntersHistory(){
+  var batch=batchService();var view=batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);
+  assertThat(view.turnRef()).isNotNull();assertThat(stored).hasSize(19);assertThat(calls).isEqualTo(1);assertThat(st.turns).hasSize(1);
+  assertThat(stored.values()).filteredOn(r->r.turnRef()==null).hasSize(18).allSatisfy(r->assertThat(r.status()).isEqualTo(ZzalStageSpeech.Status.READY));
+  assertThat(prompts.getFirst()).contains("원문-world","원문-persona","현재호칭","일본어","사용자 일상·끼니·놀이 의향을 묻거나 답변을 기다리지 않는다");
+  assertThat(prompts.getFirst()).doesNotContain("ENTRY의 FEED는 사용자 끼니");
+  assertThat(prompts.getFirst()).contains("다음 행동 부탁을 함께 담는다","FEED 뒤 간식","NAP_SLEEP 뒤 깨워 주기");
+  assertThat(pet.introAt(FirstIntro.Step.SNACK)).isTrue();assertThat(st.sessions.getFirst().getRoundCount()).isZero();
+  assertThat(batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now).turnRef()).isEqualTo(view.turnRef());
+  assertThat(calls).isEqualTo(1);assertThat(st.turns).hasSize(1);
+ }
+ @Test void cachedFutureIsActivatedOnlyAfterServerActionAndGetNeverWritesTurns(){
+  var batch=batchService();batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);
+  assertThatThrownBy(()->batch.prepare(1L,9L,ConversationScene.Step.BATH,ConversationScene.Beat.ENTRY,now)).isInstanceOf(com.lore.common.exception.BusinessException.class);
+  assertThat(st.turns).hasSize(1);
+  pet.advanceFirstIntro(FirstIntro.Step.SNACK);
+  assertThat(batch.read(1L,9L)).allSatisfy(v->{assertThat(v.status()).isEqualTo(ZzalStageSpeech.Status.READY);assertThat(v.turnRef()).isNull();assertThat(v.line()).isNull();});
+  assertThat(st.turns).hasSize(1);
+  var reaction=batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.AFTER_ACTION,now);
+  assertThat(reaction.line()).isEqualTo("SNACK AFTER_ACTION 안내");assertThat(reaction.turnRef()).isNotNull();
+  batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.AFTER_ACTION,now);
+  assertThat(st.turns).hasSize(2);assertThat(calls).isEqualTo(1);assertThat(pet.introAt(FirstIntro.Step.CLEAN)).isTrue();
+ }
+ @Test void batchFailureAndChangedSettingsNeverAutomaticallyRegenerate(){
+  fail=true;var batch=batchService();assertThat(batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now).status()).isEqualTo(ZzalStageSpeech.Status.UNCERTAIN);
+  fail=false;batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);assertThat(calls).isEqualTo(1);assertThat(st.turns).isEmpty();
+  pet.rememberExplicitCallMe("변경호칭");assertThat(batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now).line()).isNull();
+  assertThat(calls).isEqualTo(1);assertThat(st.turns).isEmpty();
+ }
+ @Test void batchDoesNotClaimFutureStatementsAsSaidWhenCurrentStepMovesDuringGeneration(){
+  var batch=batchService();duringCall=()->pet.advanceFirstIntro(FirstIntro.Step.SNACK);
+  var old=batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);
+  assertThat(old.status()).isEqualTo(ZzalStageSpeech.Status.SUPERSEDED);assertThat(old.line()).isNull();assertThat(st.turns).isEmpty();
+  duringCall=()->{};batch.prepare(1L,9L,ConversationScene.Step.CLEAN,ConversationScene.Beat.ENTRY,now);
+  assertThat(st.turns).hasSize(1);assertThat(calls).isEqualTo(1);
+ }
+ @Test void batchConcurrentReloadSeesPendingWithoutBuyingAnotherGeneration()throws Exception{
+  var batch=batchService();var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+  duringCall=()->{entered.countDown();try{release.await(5,TimeUnit.SECONDS);}catch(InterruptedException e){throw new IllegalStateException(e);}};
+  var executor=Executors.newSingleThreadExecutor();
+  try{
+   var first=executor.submit(()->batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now));
+   assertThat(entered.await(5,TimeUnit.SECONDS)).isTrue();
+   assertThat(batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now).status()).isEqualTo(ZzalStageSpeech.Status.PENDING);
+   assertThat(st.turns).isEmpty();assertThat(calls).isEqualTo(1);release.countDown();
+   assertThat(first.get(5,TimeUnit.SECONDS).turnRef()).isNotNull();assertThat(st.turns).hasSize(1);assertThat(calls).isEqualTo(1);
+  }finally{release.countDown();executor.shutdownNow();}
+ }
+ @Test void batchLanguageChangeDuringGenerationHidesEveryLineWithoutRetry(){
+  var batch=batchService();duringCall=()->pet.diaryLanguage("en");
+  var result=batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);
+  assertThat(result.status()).isEqualTo(ZzalStageSpeech.Status.SUPERSEDED);assertThat(result.line()).isNull();
+  assertThat(stored.values()).allSatisfy(row->assertThat(row.status()).isEqualTo(ZzalStageSpeech.Status.SUPERSEDED));
+  duringCall=()->{};batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);
+  assertThat(calls).isEqualTo(1);assertThat(st.turns).isEmpty();
+ }
+ @Test void oldQuestionCacheFallsBackAcrossFollowingStepsWithoutAnotherPaidCall(){
+  prepare();stored.values().forEach(row->ReflectionTestUtils.setField(row,"contextRevision",StageSpeechTransactions.sha("old-question-protocol")));
+  var batch=batchService();assertThat(batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now).line()).isNull();
+  pet.advanceFirstIntro(FirstIntro.Step.SNACK);
+  var next=batch.prepare(1L,9L,ConversationScene.Step.CLEAN,ConversationScene.Beat.ENTRY,now);
+  assertThat(next.status()).isEqualTo(ZzalStageSpeech.Status.FAILED);assertThat(next.line()).isNull();assertThat(calls).isEqualTo(1);assertThat(st.turns).hasSize(1);
+ }
+ @Test void malformedBatchNeverPublishesPartialLinesOrAutomaticallyRetries(){
+  ChatLineClient broken=(system,input,model,timeout)->{calls++;return new ChatLineClient.Completion("{\"speeches\":[]}",BigDecimal.ZERO,0,0);};
+  var batch=new StageSpeechService(tx,LineChain.off(),new StageSpeechBatchGenerator(broken,"spy",Duration.ofMillis(100)));
+  assertThat(batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now).status()).isEqualTo(ZzalStageSpeech.Status.UNCERTAIN);
+  batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);
+  assertThat(calls).isEqualTo(1);assertThat(st.turns).isEmpty();assertThat(stored).hasSize(19);
+ }
+ @Test void tutorialStagePromptDoesNotAskForUserAnswers(){
+  for(var step:List.of(ConversationScene.Step.FEED,ConversationScene.Step.GAME)){
+   pet.devSetFirstIntro(4,FirstIntro.Step.valueOf(step.name()),now);
+   var claim=tx.claim(1L,9L,step,ConversationScene.Beat.ENTRY,now);
+   assertThat(PromptAssembler.user(claim.context())).contains("사용자에게 질문하거나 대답을 요구하지 않는다")
+    .doesNotContain("사용자 끼니","놀이 의향을 짧게 묻는다","사용자 답을 먼저 받아주고");
+  }
+  assertThat(calls).isZero();assertThat(st.turns).isEmpty();
+ }
+ @Test void endingScenesAreFrozenOnceAndOnlyActivatedAtTheirAuthoritativePosition(){
+  providerCost=new BigDecimal("0.002");
+  var batch=batchService();batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);
+  assertThat(stored.values()).filteredOn(r->TutorialEndingSpeech.supports(r.step())).hasSize(5)
+   .allSatisfy(r->{assertThat(r.status()).isEqualTo(ZzalStageSpeech.Status.READY);assertThat(r.turnRef()).isNull();});
+  assertThatThrownBy(()->batch.prepare(1L,9L,ConversationScene.Step.CHAT_INVITE,ConversationScene.Beat.ENTRY,now)).isInstanceOf(com.lore.common.exception.BusinessException.class);
+  pet.devSetFirstIntro(4,FirstIntro.Step.FINISH_NOTICE,now);
+  assertThat(batch.read(1L,9L)).filteredOn(v->TutorialEndingSpeech.supports(v.step())).hasSize(2)
+   .allSatisfy(v->{assertThat(v.line()).isNull();assertThat(v.turnRef()).isNull();});
+  var thanks=batch.prepare(1L,9L,ConversationScene.Step.FINISH_THANKS,ConversationScene.Beat.ENTRY,now);
+  assertThat(thanks.source()).isEqualTo("LLM");assertThat(thanks.turnRef()).isNotNull();
+  assertThat(pet.introAt(FirstIntro.Step.FINISH_NOTICE)).isTrue();
+  batch.prepare(1L,9L,ConversationScene.Step.FINISH_TOMORROW,ConversationScene.Beat.ENTRY,now);
+  pet.devSetFirstIntro(4,FirstIntro.Step.REVIEW_SEEN,now);
+  for(var step:List.of(ConversationScene.Step.CHAT_INTRO,ConversationScene.Step.CHAT_MEMORY,ConversationScene.Step.CHAT_INVITE)){
+   var view=batch.prepare(1L,9L,step,ConversationScene.Beat.ENTRY,now);
+   assertThat(view.source()).isEqualTo("LLM");assertThat(view.turnRef()).isNotNull();
+   assertThat(batch.prepare(1L,9L,step,ConversationScene.Beat.ENTRY,now).turnRef()).isEqualTo(view.turnRef());
+  }
+  assertThat(calls).isEqualTo(1);assertThat(st.turns).hasSize(6).allSatisfy(t->assertThat(t.getSpeaker()).isEqualTo(Speaker.PET));
+  assertThat(st.sessions.getFirst().getCostUsd()).isEqualByComparingTo(providerCost);
+  assertThat(st.sessions.getFirst().getRoundCount()).isZero();assertThat(pet.introAt(FirstIntro.Step.REVIEW_SEEN)).isTrue();
+  assertThat(prompts.getFirst()).contains("FINISH_THANKS","CHAT_MEMORY","CHAT_INVITE","저장된 호칭","현재호칭","마무리·채팅소개 장면에 초기 배고픔");
+  assertThat(prompts.getFirst()).doesNotContain("로미","소매");
+  pet.devSetFirstIntro(4,FirstIntro.Step.COMPLETE,now);
+  assertThatThrownBy(()->batch.prepare(1L,9L,ConversationScene.Step.CHAT_INVITE,ConversationScene.Beat.ENTRY,now)).isInstanceOf(com.lore.common.exception.BusinessException.class);
+  assertThat(batch.read(1L,9L)).isEmpty();
+ }
+ @Test void failedEndingBatchKeepsFailureProvenanceAndUsesLatestDatabaseAddressWithoutRebilling(){
+  var batch=batchService();fail=true;batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);
+  fail=false;pet.devSetFirstIntro(4,FirstIntro.Step.REVIEW_SEEN,now);
+  var failed=batch.prepare(1L,9L,ConversationScene.Step.CHAT_INVITE,ConversationScene.Beat.ENTRY,now);
+  assertThat(failed.status()).isEqualTo(ZzalStageSpeech.Status.UNCERTAIN);assertThat(failed.source()).isEqualTo("FALLBACK");
+  assertThat(failed.line()).startsWith("현재호칭、");assertThat(failed.turnRef()).isNull();
+  pet.rememberExplicitCallMe("새 저장호칭");pet.diaryLanguage("ko");
+  var revised=batch.prepare(1L,9L,ConversationScene.Step.CHAT_INVITE,ConversationScene.Beat.ENTRY,now);
+  assertThat(revised.status()).isEqualTo(ZzalStageSpeech.Status.SUPERSEDED);assertThat(revised.line()).isEqualTo("새 저장호칭, 이제 이야기를 들려줘.");
+  assertThat(revised.source()).isEqualTo("FALLBACK");assertThat(calls).isEqualTo(1);assertThat(st.turns).isEmpty();
+ }
+ @Test void endingRequestIsAdditiveAndCannotAcknowledgeOrSpoofServerTopic(){
+  var purpose=com.lore.zzal.pet.dto.PetRequests.TutorialSeen.TutorialPurpose.PREPARE_SPEECH;
+  var request=new com.lore.zzal.pet.dto.PetRequests.TutorialSeen(FirstIntro.Step.REVIEW_SEEN,purpose,ConversationScene.Beat.ENTRY,com.lore.zzal.pet.dto.PetRequests.TutorialSeen.EndingScene.CHAT_INVITE);
+  assertThat(request.isPrepareValid()).isTrue();
+  assertThat(new com.lore.zzal.pet.dto.PetRequests.TutorialSeen(FirstIntro.Step.FINISH_NOTICE,purpose,ConversationScene.Beat.ENTRY,com.lore.zzal.pet.dto.PetRequests.TutorialSeen.EndingScene.CHAT_INVITE).isPrepareValid()).isFalse();
+  assertThat(new com.lore.zzal.pet.dto.PetRequests.TutorialSeen(FirstIntro.Step.REVIEW_SEEN,null,null,com.lore.zzal.pet.dto.PetRequests.TutorialSeen.EndingScene.CHAT_INVITE).isPrepareValid()).isFalse();
+  assertThat(new com.lore.zzal.pet.dto.PetRequests.TutorialSeen(FirstIntro.Step.REVIEW_SEEN,purpose,ConversationScene.Beat.AFTER_ACTION,com.lore.zzal.pet.dto.PetRequests.TutorialSeen.EndingScene.CHAT_INVITE).isPrepareValid()).isFalse();
+  pet.devSetFirstIntro(4,FirstIntro.Step.REVIEW_SEEN,now);
+  var petService=mock(PetService.class);var controller=new PetController(petService,new MotionCatalog("","","v1"),null,null,null,null);ReflectionTestUtils.setField(controller,"stageSpeeches",batchService());
+  assertThat(controller.tutorialSeen(1L,9L,request).getData()).isInstanceOf(PetController.PreparedStage.class);
+  verify(petService,never()).tutorialSeen(any(),any(),any(),any());assertThat(pet.introAt(FirstIntro.Step.REVIEW_SEEN)).isTrue();
+  assertThat(calls).isEqualTo(1);assertThat(stored).hasSize(19);
+ }
+ @Test void endingSinglePromptHasSceneMeaningButNoCareGaugesAndKeepsCanonicalAddress(){
+  pet.devSetFirstIntro(4,FirstIntro.Step.REVIEW_SEEN,now);
+  service.prepare(1L,9L,ConversationScene.Step.CHAT_MEMORY,ConversationScene.Beat.ENTRY,now);
+  assertThat(prompts.getFirst()).contains("원문-persona","현재호칭","일본어",TutorialEndingSpeech.instruction(ConversationScene.Step.CHAT_MEMORY))
+   .doesNotContain("캐릭터 자신의 상태(사용자의 상태 아님):","ENTRY는 현재 상태와 마음");
+  assertThat(pet.introAt(FirstIntro.Step.REVIEW_SEEN)).isTrue();
+ }
+ StageSpeechService legacyCareCache(){
+  var batch=batchService();batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);
+  stored.values().removeIf(r->TutorialEndingSpeech.supports(r.step()));assertThat(stored).hasSize(14);
+  return batch;
+ }
+ @Test void legacyCareCacheAcquiresOnlyMissingEndingGroupOnceWithoutRewritingCare(){
+  var batch=legacyCareCache();var original=Map.copyOf(stored);
+  batch.prepare(1L,9L,ConversationScene.Step.SNACK,ConversationScene.Beat.ENTRY,now);assertThat(calls).isEqualTo(1);
+  pet.devSetFirstIntro(4,FirstIntro.Step.FINISH_NOTICE,now);
+  var first=batch.prepare(1L,9L,ConversationScene.Step.FINISH_THANKS,ConversationScene.Beat.ENTRY,now);
+  assertThat(first.source()).isEqualTo("LLM");assertThat(first.turnRef()).isNotNull();assertThat(calls).isEqualTo(2);
+  assertThat(stored).hasSize(19);original.forEach((id,row)->assertThat(stored.get(id)).isSameAs(row));
+  assertThat(prompts.getLast()).contains("FINISH_THANKS ENTRY","CHAT_INVITE ENTRY").doesNotContain("FEED ENTRY","SNACK AFTER_ACTION");
+  batch.prepare(1L,9L,ConversationScene.Step.FINISH_TOMORROW,ConversationScene.Beat.ENTRY,now);
+  pet.devSetFirstIntro(4,FirstIntro.Step.REVIEW_SEEN,now);
+  for(var step:List.of(ConversationScene.Step.CHAT_INTRO,ConversationScene.Step.CHAT_MEMORY,ConversationScene.Step.CHAT_INVITE))
+   batch.prepare(1L,9L,step,ConversationScene.Beat.ENTRY,now);
+  assertThat(calls).isEqualTo(2);assertThat(pet.introAt(FirstIntro.Step.REVIEW_SEEN)).isTrue();
+ }
+ @Test void legacyEndingTimeoutKeepsAllFiveClaimsAndNeverBuysAnotherBatch(){
+  var batch=legacyCareCache();pet.devSetFirstIntro(4,FirstIntro.Step.FINISH_NOTICE,now);fail=true;
+  var first=batch.prepare(1L,9L,ConversationScene.Step.FINISH_THANKS,ConversationScene.Beat.ENTRY,now);
+  assertThat(first.status()).isEqualTo(ZzalStageSpeech.Status.UNCERTAIN);assertThat(first.source()).isEqualTo("FALLBACK");assertThat(first.line()).isNotBlank();
+  assertThat(stored).hasSize(19);fail=false;
+  batch.prepare(1L,9L,ConversationScene.Step.FINISH_THANKS,ConversationScene.Beat.ENTRY,now);
+  batch.prepare(1L,9L,ConversationScene.Step.FINISH_TOMORROW,ConversationScene.Beat.ENTRY,now);
+  assertThat(calls).isEqualTo(2);
+ }
+ @Test void legacyEndingConcurrentPrepareRetainsPendingClaimsAndOneProviderAttempt()throws Exception{
+  var batch=legacyCareCache();pet.devSetFirstIntro(4,FirstIntro.Step.FINISH_NOTICE,now);
+  var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+  duringCall=()->{entered.countDown();try{release.await(5,TimeUnit.SECONDS);}catch(InterruptedException e){throw new IllegalStateException(e);}};
+  var executor=Executors.newSingleThreadExecutor();
+  try{
+   var first=executor.submit(()->batch.prepare(1L,9L,ConversationScene.Step.FINISH_THANKS,ConversationScene.Beat.ENTRY,now));
+   assertThat(entered.await(5,TimeUnit.SECONDS)).isTrue();
+   assertThat(batch.prepare(1L,9L,ConversationScene.Step.FINISH_TOMORROW,ConversationScene.Beat.ENTRY,now).status()).isEqualTo(ZzalStageSpeech.Status.PENDING);
+   assertThat(calls).isEqualTo(2);assertThat(stored).hasSize(19);
+   release.countDown();assertThat(first.get(5,TimeUnit.SECONDS).source()).isEqualTo("LLM");assertThat(calls).isEqualTo(2);
+  }finally{release.countDown();executor.shutdownNow();}
+ }
+ @Test void evenOnePreviousEndingClaimOfAnyStatusBlocksAnotherProviderBatch(){
+  var batch=legacyCareCache();pet.devSetFirstIntro(4,FirstIntro.Step.FINISH_NOTICE,now);
+  for(var state:ZzalStageSpeech.Status.values()){
+   stored.values().removeIf(r->TutorialEndingSpeech.supports(r.step()));
+   var claim=tx.claim(1L,9L,ConversationScene.Step.FINISH_THANKS,ConversationScene.Beat.ENTRY,now);
+   var row=stored.get(claim.id());
+   if(state!=ZzalStageSpeech.Status.PENDING)row.complete(row.token(),state,null,"FALLBACK",null,null,null,"synthetic",now);
+   var view=batch.prepare(1L,9L,ConversationScene.Step.FINISH_TOMORROW,ConversationScene.Beat.ENTRY,now);
+   assertThat(view.status()).isEqualTo(ZzalStageSpeech.Status.FAILED);assertThat(view.source()).isEqualTo("FALLBACK");
+   assertThat(view.line()).isNotBlank();assertThat(view.turnRef()).isNull();assertThat(calls).isEqualTo(1);
+  }
  }
  static class SimpleTransactions extends AbstractPlatformTransactionManager {int commits;protected Object doGetTransaction(){return new Object();}protected void doBegin(Object tx,TransactionDefinition def){}protected void doCommit(DefaultTransactionStatus status){commits++;}protected void doRollback(DefaultTransactionStatus status){}}
 }

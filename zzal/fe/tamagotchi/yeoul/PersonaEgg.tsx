@@ -2,7 +2,7 @@
 //
 // 상훈님 원문(10/13): "글이나 칩을 눌러서 제출하면 알에 그런 내용들이 쇽 하고 들어가는 느낌이 좋을 것 같아."
 // 결정(10/13): 알을 화면 위 40% 에 두고 아래에서 한 칸씩 · 핵심은 "사용자가 부화에 개입하고 있다는 느낌" ·
-//   입력 중에 다 구워지면 끊지 않고 알만 크게 몸부림 + "다 됐어요 · 남은 칸은 나중에 해도 돼요" ·
+//   입력 중에 다 구워져도 질문을 이어가며, 마지막 칸 뒤에 만나러 가기를 보여 준다(2026-10-19).
 //   두 시안(dots = 칸마다 색 점이 껍데기에 쌓임 / glow = 빛만)을 `?egg=` 로 바꿔 본다.
 //
 // ★ 칸·칩·순서는 여기 적지 않는다 — `personaSteps.ts` 한 파일의 데이터다.
@@ -16,15 +16,16 @@
 //   「이전」= 앞 칸으로 가며 그 칸의 점이 알에서 칸으로 돌아온다(0.3초). 글·칩은 칸에 그대로 남아 다시 고칠 수 있다.
 'use client';
 
+import LanguageSelector from '../../LanguageSelector';
+import {PersonaQuestionFields} from './PersonaQuestionFields';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RomiSampleRoom from '../focused-room/RomiSampleRoom';
 import { usePersonaViewport } from './usePersonaViewport';
 import { EGG_IMG } from './constants';
 import {useZzalLocale} from '../../lib/locale';
 import {useUiText} from '../../lib/uiCopy';
-import {personaChipLabel} from './personaChipCopy';
 import {personaStepCopy,personaNameCopy} from './personaStepCopy';
-import { C, GAEGU, MONO, TAP_MIN, gap, monoSize, radius, fz, ink, acc } from './ui';
+import { C, GAEGU, TAP_MIN, gap, radius, fz, ink, acc } from './ui';
 import { useLive } from './useHatch';
 import { EGG_CRACK_MS, type Yeoul } from './useYeoul';
 import { once, ztrack } from './funnel';
@@ -69,7 +70,16 @@ const STYLE = `
 .pe-sheet{position:relative}
 .pe-keyboard-done{position:absolute;right:16px;top:-49px;z-index:4;height:44px;min-width:52px;border:1px solid #D8C9BD;border-radius:999px;background:#FFFDF8;color:#9C4232;font:700 18px Gaegu}
 
-/* Completed waiting only: the input-stage egg stays at 200px. */
+/* Questions rest at the bottom too; long chip lists scroll inside the sheet.
+   Grow the egg only inside the available stage; the keyboard viewport path keeps its existing 200px egg. */
+.pe-root:not([data-q="done"]):not([data-kb="1"]) .pe-stage{flex:1 0 230px;min-height:230px;container-type:size}
+@supports(height:1cqh){
+.pe-root:not([data-q="done"]):not([data-kb="1"]) [data-part="pe-egg"]{--question-egg:min(340px,calc(100vw - 64px),max(200px,calc(100cqh - 30px)));width:var(--question-egg)!important;height:var(--question-egg)!important;min-height:0!important;max-height:none!important;margin-top:0!important;margin-bottom:0!important}
+}
+.pe-root:not([data-q="done"]):not([data-kb="1"]) .pe-sheet{flex:0 1 auto!important;margin-top:auto!important}
+.pe-root:not([data-q="done"]):not([data-kb="1"]) .pe-scroll{flex:0 1 auto!important}
+
+/* Completed waiting: preserve the approved larger egg. */
 .pe-root[data-waiting="true"] .pe-stage{flex:1 1 auto;min-height:0}
 .pe-root[data-waiting="true"] [data-part="pe-egg"]{--waiting-egg:min(340px,calc(100vw - 64px),max(240px,42vh));width:var(--waiting-egg)!important;height:var(--waiting-egg)!important;min-height:0!important;max-height:none!important;margin-top:0!important;margin-bottom:0!important}
 .pe-root[data-waiting="true"] .pe-sheet{flex:0 0 auto!important;margin-top:auto!important}
@@ -86,18 +96,6 @@ const STYLE = `
 `;
 
 /** 칩을 `rows` 대로 줄을 나눈다. 수가 모자라면 남은 칩은 마지막 줄에 붙는다. */
-function rowsOf(f: PersonaField): { name: string; chips: readonly string[] }[] {
-  if (!f.chips.length) return [];
-  if (!f.rows || !f.rows.length) return [{ name: '', chips: f.chips }];
-  const out: { name: string; chips: readonly string[] }[] = [];
-  let at = 0;
-  f.rows.forEach((n, i) => {
-    const end = i === f.rows!.length - 1 ? f.chips.length : at + n;
-    if (at < end) out.push({ name: f.rowNames?.[i] ?? '', chips: f.chips.slice(at, end) });
-    at = end;
-  });
-  return out;
-}
 
 /**
  * 글 칸 높이를 **글(없으면 자리표시)이 다 보이게** 맞춘다. textarea 는 자리표시 길이로 저절로 안 늘어나서
@@ -454,16 +452,6 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
     else setIdx(idx + 1);
   }, [step, busyFx, idx, answers, N, tilt, finish]);
 
-  const skipRest = useCallback(() => {
-    if (!step || busyFx) return;
-    ztrack('zzal_persona_q_skipped', { step: idx + 2, type: step.key, action: 'rest' });
-    // 지금 칸과 그 뒤(「이전」으로 되돌려 점이 빠진 칸)에 남은 것은 알에 안 들었으므로 버린다.
-    const next = settledOf(answers, idx);
-    setAnswers(next);
-    setSkipped((sk) => [...sk, ...PERSONA_STEPS.slice(idx).map((st) => st.key).filter((k) => !sk.includes(k))]);
-    finish(next);
-  }, [step, busyFx, idx, answers, finish]);
-
   // ── 만나러 가기 ──
   const meet = useCallback(async () => {
     if (meeting) return;
@@ -493,17 +481,6 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
   const eggAnim = isCrack ? 'yCrack 1.45s cubic-bezier(.36,.07,.19,.97) 1 both'
     : !named ? 'none'
       : baked ? 'yShakeBig 1.35s ease-in-out infinite' : 'yWiggle 2.2s ease-in-out infinite';
-
-  // ── 알 아래 한 줄 ──
-  const left = live.etaSeconds > 0 && !baked && !live.failed
-    ? (live.etaSeconds >= 60 ? `약 ${Math.ceil(live.etaSeconds / 60)}분` : '곧')
-    : '';
-  const status = live.failed
-    ? (live.message ?? '이 그림은 좀 어렵네요')
-    : !named ? '이름을 기다리는 알'
-      : baked ? '다 됐어요'
-        : (live.step ?? '깨어나는 중');
-  const count = named && live.total > 0 ? `${Math.min(live.progress, live.total)} / ${live.total}` : '';
 
   // 글로우 세기 — 넣을수록 조금씩 밝아진다(glow 판의 보상). dots 판은 은은하게 고정.
   const glowBase = variant === 'glow' ? Math.min(0.95, 0.35 + placed.length * 0.09) : 0.18;
@@ -546,7 +523,6 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
   }, [busyFx, submitted, idx, N, actions, variant]);
 
   const stepAnswered = !!step && step.fields.some((f) => hasAnswer(answerOf(answers, f.key))) && step.fields.every(f => f.maxChips == null || answerOf(answers, f.key).chips.length <= f.maxChips);
-  const showReadyNote = baked && named && !isCrack && idx < N;
   const waitingDone = idx >= N;
 
   // ── 화면 ──
@@ -561,11 +537,11 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
       <style>{STYLE}</style>
       {sampleOpen && <div role="dialog" aria-modal="true" aria-label={tr('로미의 방')} style={{position:'absolute',inset:0,zIndex:60,background:C.paper,display:'flex',flexDirection:'column'}}><RomiSampleRoom onBack={closeSample} onReady={live.ready ? () => { closeSample(); void meet(); } : undefined}/></div>}
       <span aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
-        {idx < 0 ? nameCopy.q : step ? `${idx + 2} · ${step.q}` : baked ? tr('다 됐어요. 만나러 갈 수 있어요.') : tr('다 넣었어요. 곧 나와요.')}
+        {idx < 0 ? nameCopy.q : step ? step.q : baked ? tr('다 됐어요. 만나러 갈 수 있어요.') : tr('다 넣었어요. 곧 나와요.')}
       </span>
 
-      {/* 머리줄 — 뒤로 · 묶음 이름 · 나머지는 나중에 */}
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.sm, padding: '6px 14px 0', minHeight: TAP_MIN }}>
+      {/* 머리줄 — 뒤로 · 언어 선택 */}
+      <div className="pe-language-head" style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.sm, padding: '6px 14px 0', minHeight: TAP_MIN }}>
         {!submitted ? (
           <button
             type="button" onClick={() => void back()} aria-label={tr('이전')} data-action="pe-back" className="onb-back"
@@ -574,18 +550,11 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
             <span style={{ border: `1px solid ${C.lineHard}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: fz.md, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</span>
           </button>
         ) : <span style={{ width: TAP_MIN }} />}
-        <span style={{ flex: 1, textAlign: 'center', font: `${monoSize.sm}px ${MONO}`, color: ink(.45) }}>
-          {idx < 0 ? '' : step ? `${step.section} · ${idx + 2}/${N + 1}` : ''}
-        </span>
-        {step && !submitted ? (
-          <button
-            type="button" onClick={skipRest} data-action="pe-skip-rest" disabled={busyFx}
-            style={{ minHeight: TAP_MIN, padding: '0 6px', border: 'none', background: 'none', fontSize: fz.sm, color: C.sub2, textDecoration: 'underline', textUnderlineOffset: 3 }}
-          >{tr('나머지는 나중에')}</button>
-        ) : <span style={{ width: TAP_MIN }} />}
+        <span aria-hidden style={{ flex: 1 }} />
+        {!sampleOpen && <LanguageSelector/>}
       </div>
 
-      {/* 알 무대 — 입력 중에도 같은 크기와 위치. 누르는 자리는 없다(보기만). */}
+      {/* 알 무대 — 질문 중에는 가용 무대 안에서 확대하고 키보드가 열리면 기존 200px를 쓴다. */}
       <div className="pe-stage" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: gap.sm, padding: '0 16px' }}>
         <div
           ref={eggBox} data-part="pe-egg"
@@ -626,23 +595,8 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
             </div>
           </div>
         </div>
-        <span className="pe-status" data-part="pe-status" style={{ display: 'flex', alignItems: 'center', gap: gap.sm, flex: 'none', fontSize: fz.sm, color: live.failed ? C.accent : ink(.58) }}>
-          <span>{tr(status)}</span>
-          {count && <span style={{ font: `${monoSize.xs}px ${MONO}`, color: ink(.4) }}>{count}</span>}
-          {left && <span style={{ color: ink(.45) }}>· {tr(left)}</span>}
-        </span>
+        {live.failed && <span className="pe-status" data-part="pe-status" role="alert" style={{ flex: 'none', fontSize: fz.sm, color: C.accent }}>{tr(live.message ?? '이 그림은 좀 어렵네요')}</span>}
       </div>
-
-      {/* 다 구워졌는데 아직 넣는 중 — 끊지 않고 한 줄만. */}
-      {showReadyNote && !kb && (
-        <div data-part="pe-ready-note" style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.sm, margin: '0 16px', padding: '6px 6px 6px 14px', borderRadius: radius.pill, background: C.paper, border: `1px solid ${C.accentDim}` }}>
-          <span style={{ flex: 1, fontSize: fz.sm, lineHeight: 1.4, color: C.ink }}>{tr('다 됐어요 · 남은 칸은 나중에 해도 돼요')}</span>
-          <button
-            type="button" onClick={meet} data-action="pe-meet" disabled={sending || meeting}
-            style={{ flex: 'none', minHeight: TAP_MIN, padding: '0 16px', borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: fz.md, fontFamily: GAEGU, fontWeight: 700 }}
-          >{tr(sending || meeting ? '깨우는 중…' : '지금 만나러 가기')}</button>
-        </div>
-      )}
 
       {/* 아래 — 질문 한 칸(스크롤) + 단추(고정) */}
       <div className="pe-sheet" style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', background: C.paper, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, boxShadow: `0 -6px 20px ${ink(.06)}`, marginTop: gap.sm }}>
@@ -672,52 +626,8 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
             <>
               <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, lineHeight: 1.25, color: C.ink }}>{step.q}</span>
               {step.sub && <span className="pe-sub" style={{ fontSize: fz.sm, lineHeight: 1.5, color: C.sub2 }}>{step.sub}</span>}
-              {step.fields.map((f) => {
-                const x = answerOf(answers, f.key);
-                const max = f.text?.max ?? 0;
-                return (
-                  <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
-                    {f.label && <span style={{ fontSize: fz.sm, color: C.sub2 }}>{f.label}</span>}
-                    {rowsOf(f).map((g, gi) => (
-                      <div key={gi} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      {g.name && <span style={{ fontSize: fz.xs, color: ink(.5) }}>{g.name}</span>}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
-                        {g.chips.map((c) => {
-                          const on = x.chips.includes(c);
-                          return (
-                            <button
-                              key={c} type="button" className="pe-chip" data-part="pe-chip" data-chip={c} aria-pressed={on}
-                              data-flying={busyFx && on ? '1' : undefined}
-                              ref={(el) => { chipRefs.current[`${f.key}:${c}`] = el; }}
-                              onClick={() => setChip(f, c)} disabled={busyFx || (!on && f.maxChips != null && x.chips.length >= f.maxChips)}
-                              style={{ minHeight: TAP_MIN, padding: '0 15px', borderRadius: radius.pill, border: `${on ? 2 : 1}px solid ${on ? C.accent : C.lineHard}`, background: on ? C.accentSoft : C.paper, fontSize: fz.md, color: on ? C.accent : C.ink }}
-                            >{personaChipLabel(c,locale)}</button>
-                          );
-                        })}
-                      </div>
-                      </div>
-                    ))}
-                    {x.chips.some(c => !f.chips.includes(c)) && <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
-                      <span style={{ width: '100%', fontSize: fz.sm, color: C.sub2 }}>{tr('이전에 선택한 항목이에요. 누르면 선택을 해제해요.')}</span>
-                      {x.chips.filter(c => !f.chips.includes(c)).map(c => <button key={c} type="button" data-part="pe-legacy-chip" aria-pressed="true" onClick={() => setChip(f, c)} disabled={busyFx} style={{ minHeight: TAP_MIN, padding: '0 15px', borderRadius: radius.pill, border: `2px solid ${C.accent}`, background: C.accentSoft, fontSize: fz.md, color: C.accent }}>{c} ×</button>)}
-                    </div>}
-                    {f.maxChips != null && x.chips.length > f.maxChips && <p role="alert" style={{ fontSize: fz.sm, color: C.accent }}>{locale==='en'?`Choose up to ${f.maxChips}. Please review your earlier choices.`:locale==='ja'?`${f.maxChips}つまで選べます。以前の選択を確認してください。`:`성격은 최대 ${f.maxChips}개까지 선택할 수 있어요. 이전 선택을 확인해 주세요.`}</p>}
-                    {f.text && (
-                      // ★ 글 칸은 textarea 다 — 자리표시가 실제 사람이 쓴 세세한 예 2~3개라 길다(칩 어휘 v2).
-                      //   input 이면 320 폭에서 자리표시가 잘린다. Enter/키보드 완료는 입력을 유지하고 키보드만 닫는다.
-                      <textarea
-                        ref={(el) => { textRefs.current[f.key] = el; }}
-                        value={x.text} maxLength={max} placeholder={f.text.ph} rows={1} className="pe-text"
-                        onChange={(e) => setText(f.key, e.target.value.replace(/\n/g, ' '), max)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!e.nativeEvent.isComposing) e.currentTarget.blur(); } }}
-                        data-part="pe-text" data-field={f.key} aria-label={f.label ?? step.q} enterKeyHint="done"
-                        style={{ boxSizing: 'border-box', minHeight: TAP_MIN, padding: '10px 14px', borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: 16, lineHeight: 1.4, color: C.ink, outline: 'none', resize: 'none', fontFamily: 'inherit', opacity: busyFx && x.text.trim() ? 0.35 : 1 }}
-                      />
-                    )}
+              <PersonaQuestionFields step={step} answers={answers} busyFx={busyFx} setChip={setChip} setText={setText} chipRefs={chipRefs} textRefs={textRefs}/>
 
-                  </div>
-                );
-              })}
             </>
           )}
 

@@ -612,7 +612,7 @@ export interface paths {
          *     ★ props 는 허용된 키만 저장된다. 나머지는 조용히 버려진다.
          *       referrer 의 쿼리스트링, User-Agent 원문, IP 는 저장하지 않는다.
          *
-         *     응답은 항상 202 다 — 기록이 실패해도 화면은 계속 돌아야 한다.
+         *     202는 저장된 이벤트와 중복 이벤트의 ID를 확인한다. 저장 실패/비활성은 503, 요청 제한은 429다.
          */
         post: operations["collect_1"];
         delete?: never;
@@ -2794,6 +2794,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/inquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 문의 접수
+         * @description 본문은 앞뒤 공백을 제거한 1~4000자이며 locale은 ko/en/ja다. 소유자는 로그인 계정으로 확정하고 petId는 선택적으로 소유권을 검증한다. 같은 requestId와 같은 정규화 내용의 재전송은 최초 접수를 반환한다. 자동 메일 발송이나 문의 목록 조회는 제공하지 않는다.
+         */
+        post: operations["submitInquiry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets": {
         parameters: {
             query?: never;
@@ -3610,7 +3630,7 @@ export interface paths {
         put?: never;
         /**
          * 튜토리얼 확인 또는 장면 대사 준비
-         * @description purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 일곱 행동 topic과 phase를 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.
+         * @description purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 행동 topic/phase 또는 마무리 topic/scene(ENTRY)을 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.
          */
         post: operations["tutorialSeen"];
         delete?: never;
@@ -4190,6 +4210,12 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseReceipt: {
+            data?: components["schemas"]["Receipt"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseRefundQuote: {
             data?: components["schemas"]["RefundQuote"];
             error?: components["schemas"]["ErrorBody"];
@@ -4294,6 +4320,12 @@ export interface components {
         };
         ApiResponseZzalFirstMeetingView: {
             data?: components["schemas"]["ZzalFirstMeetingView"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseZzalInquiryReceipt: {
+            data?: components["schemas"]["ZzalInquiryReceipt"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -4515,6 +4547,11 @@ export interface components {
             wokeAt?: string;
         };
         CommonEvent: {
+            /** Format: int64 */
+            actor_id?: number;
+            actor_state?: string;
+            context?: string;
+            event_id?: string;
             /**
              * @description 이벤트 이름
              * @example zzal_upload_abandoned
@@ -4534,6 +4571,10 @@ export interface components {
             props?: {
                 [key: string]: unknown;
             };
+            /** Format: int32 */
+            schema_version?: number;
+            session_id?: string;
+            source_screen?: string;
             /**
              * Format: int64
              * @description 화면에서 일어난 시각(epoch ms)
@@ -6261,6 +6302,15 @@ export interface components {
         ReasonRequest: {
             reason?: string;
         };
+        Receipt: {
+            accepted_event_ids?: string[];
+            /** Format: int32 */
+            duplicate_count?: number;
+            /** Format: int32 */
+            persisted_count?: number;
+            rejected_event_ids?: string[];
+            status?: string;
+        };
         ReceiptCounts: {
             /** Format: int64 */
             ambiguousLandings?: number;
@@ -6708,6 +6758,11 @@ export interface components {
              * @enum {string|null}
              */
             purpose?: "ACKNOWLEDGE" | "PREPARE_SPEECH" | null;
+            /**
+             * @description 마무리 PREPARE_SPEECH의 표시 장면. ACK 및 기존 행동 준비는 생략/null
+             * @enum {string|null}
+             */
+            scene?: "FINISH_THANKS" | "FINISH_TOMORROW" | "CHAT_INTRO" | "CHAT_MEMORY" | "CHAT_INVITE" | null;
             /** @enum {string} */
             topic: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "PET" | "NAP_SLEEP" | "NAP_WAKE" | "ALBUM" | "CHAT" | "PERSONALITY" | "DIARY_INTRO" | "FINISH_NOTICE" | "REVIEW_SEEN" | "COMPLETE" | "ATTENDANCE_INTRO";
         };
@@ -6790,6 +6845,21 @@ export interface components {
             /** Format: int32 */
             version?: number;
         };
+        ZzalInquiryReceipt: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            id: number;
+        };
+        ZzalInquirySubmit: {
+            body: string;
+            /** @enum {string} */
+            locale: "ko" | "en" | "ja";
+            /** Format: int64 */
+            petId?: number | null;
+            /** Format: uuid */
+            requestId: string;
+        };
         ZzalOwnedCustomMotion: {
             albumOnly: boolean;
             anchorPoseKey: string;
@@ -6831,7 +6901,7 @@ export interface components {
             /** @enum {string} */
             status: "PENDING" | "READY" | "FAILED" | "UNCERTAIN" | "SUPERSEDED";
             /** @enum {string} */
-            step: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "NAP_SLEEP" | "NAP_WAKE" | "FIRST_MEETING_DISCOVERY";
+            step: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "NAP_SLEEP" | "NAP_WAKE" | "FIRST_MEETING_DISCOVERY" | "FINISH_THANKS" | "FINISH_TOMORROW" | "CHAT_INTRO" | "CHAT_MEMORY" | "CHAT_INVITE";
             /** Format: int64 */
             turnRef?: number | null;
             /** Format: date-time */
@@ -7694,7 +7764,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseVoid"];
+                    "*/*": components["schemas"]["ApiResponseReceipt"];
                 };
             };
         };
@@ -10551,6 +10621,66 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseDevPing"];
+                };
+            };
+        };
+    };
+    submitInquiry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZzalInquirySubmit"];
+            };
+        };
+        responses: {
+            /** @description DB에 저장된 접수 번호와 최초 접수 시각 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description 본문/언어/UUID/petId 입력 오류 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description 로그인 필요 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description 없는 펫 또는 남의 펫 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description ZZAL_INQUIRY_CONFLICT: 같은 requestId에 다른 내용 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
                 };
             };
         };

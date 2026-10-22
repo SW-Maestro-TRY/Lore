@@ -310,7 +310,7 @@ public class PetController {
                 petService.editPersona(userId, petId, request, real), real));
     }
 
-    @Operation(summary="튜토리얼 확인 또는 장면 대사 준비",description="purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 일곱 행동 topic과 phase를 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.")
+    @Operation(summary="튜토리얼 확인 또는 장면 대사 준비",description="purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 행동 topic/phase 또는 마무리 topic/scene(ENTRY)을 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.")
     @ApiResponses({
       @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode="200",description="ACK는 data=Detail, PREPARE_SPEECH는 data={stageSpeech:...}",content=@io.swagger.v3.oas.annotations.media.Content(schema=@io.swagger.v3.oas.annotations.media.Schema(implementation=TutorialSeenSuccessDocumentation.class))),
       @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode="409",description="현재 단계/수면/여행/완료 상태가 요청 목적과 맞지 않음")
@@ -322,7 +322,7 @@ public class PetController {
         if(request!=null&&request.purpose()==PetRequests.TutorialSeen.TutorialPurpose.PREPARE_SPEECH){
             if(!request.isPrepareValid())throw new com.lore.common.exception.BusinessException(com.lore.common.exception.ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
             return ApiResponse.ok(new PreparedStage(stageSpeeches.prepare(userId,petId,
-                com.lore.zzal.chat.prompt.ConversationScene.Step.valueOf(request.topic().name()),request.phase(),real)));
+                request.speechStep(),request.phase(),real)));
         }
         return ApiResponse.ok(detail(petService.tutorialSeen(userId, petId, request == null ? null : request.topic(), real), real));
     }

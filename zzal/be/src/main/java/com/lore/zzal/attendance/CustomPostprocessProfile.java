@@ -11,5 +11,8 @@ public record CustomPostprocessProfile(String sheetImageKey,String anchorsKey,in
   return new CustomPostprocessProfile(sheet,anchors,round,version);
  }
  public void seed(PostProcessor.Session session)throws Exception{session.seedAnchors(anchorsKey);}
+ public void configurePlan(PostProcessor.Session session,CustomMotionPlan plan)throws Exception{
+  session.customMotionPlan(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(java.util.Objects.requireNonNull(plan)));
+ }
  public void split(PostProcessor.Session session,String grid,String postures)throws Exception{session.split(grid,CustomGridPrompt.SLOTS,postures,2);}
 }

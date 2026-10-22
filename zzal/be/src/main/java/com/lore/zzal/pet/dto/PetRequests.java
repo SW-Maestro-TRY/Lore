@@ -80,13 +80,27 @@ public final class PetRequests {
     public record IntroAction(com.lore.zzal.pet.FirstIntro.Step firstIntroStep) { }
 
     public record TutorialSeen(@NotNull com.lore.zzal.pet.FirstIntro.Step topic,@Schema(nullable=true,description="생략/null은 ACKNOWLEDGE") TutorialPurpose purpose,
-            @Schema(nullable=true,description="PREPARE_SPEECH일 때 ENTRY/AFTER_ACTION 필수. ACK에서는 생략/null") com.lore.zzal.chat.prompt.ConversationScene.Beat phase) {
-        public TutorialSeen(com.lore.zzal.pet.FirstIntro.Step topic){this(topic,null,null);}
+            @Schema(nullable=true,description="PREPARE_SPEECH일 때 ENTRY/AFTER_ACTION 필수. ACK에서는 생략/null") com.lore.zzal.chat.prompt.ConversationScene.Beat phase,
+            @Schema(nullable=true,description="마무리 PREPARE_SPEECH의 표시 장면. ACK 및 기존 행동 준비는 생략/null") EndingScene scene) {
+        public TutorialSeen(com.lore.zzal.pet.FirstIntro.Step topic,TutorialPurpose purpose,com.lore.zzal.chat.prompt.ConversationScene.Beat phase){this(topic,purpose,phase,null);}
+        public TutorialSeen(com.lore.zzal.pet.FirstIntro.Step topic){this(topic,null,null,null);}
         public enum TutorialPurpose { ACKNOWLEDGE, PREPARE_SPEECH }
-        @jakarta.validation.constraints.AssertTrue(message="대사 준비에는 허용된 일곱 단계와 장면 박자가 필요합니다")
+        public enum EndingScene {
+            FINISH_THANKS, FINISH_TOMORROW, CHAT_INTRO, CHAT_MEMORY, CHAT_INVITE;
+            public com.lore.zzal.chat.prompt.ConversationScene.Step step(){
+                return com.lore.zzal.chat.prompt.ConversationScene.Step.valueOf(name());
+            }
+        }
+        @jakarta.validation.constraints.AssertTrue(message="대사 준비에는 현재 단계에 맞는 장면과 박자가 필요합니다")
         @com.fasterxml.jackson.annotation.JsonIgnore public boolean isPrepareValid(){
-            if(purpose!=TutorialPurpose.PREPARE_SPEECH)return phase==null;
+            if(purpose!=TutorialPurpose.PREPARE_SPEECH)return phase==null&&scene==null;
+            if(scene!=null)return topic!=null&&com.lore.zzal.chat.prompt.TutorialEndingSpeech.supports(scene.step())
+                    &&phase==com.lore.zzal.chat.prompt.ConversationScene.Beat.ENTRY
+                    &&topic==com.lore.zzal.chat.prompt.TutorialEndingSpeech.position(scene.step());
             return topic!=null&&phase!=null&&java.util.Set.of("FEED","SNACK","CLEAN","BATH","GAME","NAP_SLEEP","NAP_WAKE").contains(topic.name());
+        }
+        @com.fasterxml.jackson.annotation.JsonIgnore public com.lore.zzal.chat.prompt.ConversationScene.Step speechStep(){
+            return scene!=null?scene.step():com.lore.zzal.chat.prompt.ConversationScene.Step.valueOf(topic.name());
         }
     }
 

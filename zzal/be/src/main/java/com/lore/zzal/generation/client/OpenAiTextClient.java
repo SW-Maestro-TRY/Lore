@@ -90,7 +90,7 @@ public class OpenAiTextClient implements TextClient {
     @Override
     public Result generate(String prompt, List<String> refImageKeys, ModelSpec spec) throws Exception {
         Path work = Files.createTempDirectory("zzal-txt-");
-        try {
+        try (var attempt = new ProviderAttempt(usageRecorder, spec.model())) {
             ObjectNode body = json.createObjectNode();
             body.put("model", spec.model());
             if (maxCompletionTokens != null) body.put("max_completion_tokens", maxCompletionTokens);
@@ -121,11 +121,12 @@ public class OpenAiTextClient implements TextClient {
                     .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
                     .build();
 
+            attempt.start();
             HttpResponse<String> res;
             try { res=http.send(req,HttpResponse.BodyHandlers.ofString()); }
-            catch(Exception e){usageRecorder.record(ProviderUsageRecorder.headers(spec.model(),0,null));throw e;}
+            catch(Exception e){attempt.record(ProviderUsageRecorder.headers(spec.model(),0,null));throw e;}
             String requestId=res.headers().firstValue("x-request-id").orElse(null);
-            usageRecorder.record(ProviderUsageRecorder.headers(spec.model(),res.statusCode(),requestId));
+            attempt.record(ProviderUsageRecorder.headers(spec.model(),res.statusCode(),requestId));
             if (res.statusCode() != 200) {
                 throw new IllegalStateException(
                         "문단 생성 실패(HTTP %d): %s".formatted(res.statusCode(), res.body()));
@@ -133,8 +134,9 @@ public class OpenAiTextClient implements TextClient {
 
             // ★★ 여기서부터는 돈이 이미 나간 뒤다 — 이미지 쪽과 같은 이유로 비용을 먼저 계산해 둔다.
             JsonNode payload = json.readTree(res.body());
-            usageRecorder.record(ProviderUsageRecorder.payload(spec.model(),res.statusCode(),requestId,payload));
+            attempt.record(ProviderUsageRecorder.payload(spec.model(),res.statusCode(),requestId,payload));
             BigDecimal cost = cost(payload);
+            attempt.estimatedCost(cost);
             String text;
             try {
                 text = payload.path("choices").path(0).path("message").path("content").asText("").trim();
@@ -149,6 +151,7 @@ public class OpenAiTextClient implements TextClient {
             JsonNode usage = payload.path("usage");
             log.info("정체성 문단 — {}자 · {} · ${} · 토큰 입력 {} · 출력 {}", text.length(), spec.model(), cost,
                     usage.path("prompt_tokens").asLong(0), usage.path("completion_tokens").asLong(0));
+            attempt.success();
             return new Result(text, cost);
         } finally {
             deleteQuietly(work);

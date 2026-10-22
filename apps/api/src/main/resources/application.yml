@@ -296,18 +296,22 @@ app:
     # 채팅 대사 — LLM(아래 llm 스위치). 금기(원망·위험 소재)는 지시문 [말하는 법] 이 맡는다(#709).
     chat:
       mode: ${ZZAL_CHAT_MODE:template}
-      # 채팅(#704·#709) — 대사는 LLM 이 낸다. 실패(빈 줄·JSON 깨짐·시간 초과·오류)면 재호출 1회,
-      # 또 실패면 중립 닫는 말 1줄로 판을 닫는다. 성격별 고정 문형(템플릿)·내용 필터·일 비용 상한은 지웠다.
+      # 채팅(#704·#709) — 실패 시 max-attempts까지 호출한다(기본 2회, 1이면 내부 재호출 없음).
+      # 허용된 시도가 모두 실패면 중립 닫는 말 1줄로 판을 닫는다. 성격별 고정 문형(템플릿)·내용 필터·일 비용 상한은 지웠다.
       # ★ 기본 켜짐(#709) — 키는 그림 생성과 같은 ZZAL_OPENAI_API_KEY(운영 SSM /lore/prod/OPENAI_KEY). 새 파라미터 없음.
       #   켜져 있는데 키가 비면 운영·스테이징(app.lore.env=prod|staging)은 기동을 막고, 그 밖은 WARN 뒤 꺼짐. ZZAL_CHAT_LLM=false 는 "끄는 용도" 로만 남긴다 —
       #   꺼져 있으면 채팅 자체가 "부름 없음"이다(판을 만들지 않는다 — 튜토리얼 대화 칸도 안 열린다).
       # ★ mode 는 옛 칸이다(아무도 안 읽음). 스위치는 llm 하나다.
       llm: ${ZZAL_CHAT_LLM:true}
-      # gpt-5-mini = 입력 $0.25 · 출력 $2.00 / 1M(2026-10-08). 한 줄 약 $0.001 안팎. 비용은 zzal_chat_session.cost_usd 에 기록.
-      model: ${ZZAL_CHAT_MODEL:gpt-5-mini}
-      # 한 번 호출의 시간 제한. 재호출까지 최악 2배.
+      # gpt-5.6-luna = 입력 $0.20 · 출력 $1.20 / 1M(2026-10-19). 비용은 zzal_chat_session.cost_usd 에 기록.
+      model: ${ZZAL_CHAT_MODEL:gpt-5.6-luna}
+      # 일반 생성의 요청당 최대 호출 수. 운영 기본 2회 유지, 검수에서만 1회로 제한 가능.
+      max-attempts: ${ZZAL_CHAT_MAX_ATTEMPTS:2}
+      # 한 번 호출의 시간 제한. 일반 생성은 최악 max-attempts배; stage generateOnce는 항상 1회.
       timeout-ms: ${ZZAL_CHAT_TIMEOUT_MS:4000}
-      reasoning-effort: ${ZZAL_CHAT_REASONING_EFFORT:minimal}
+      # 발견·호칭 확인 뒤 인사만 별도 제한. 기존 단계 claim/불확실 결과·재시도 규칙은 유지.
+      first-meeting-timeout-ms: ${ZZAL_CHAT_FIRST_MEETING_TIMEOUT_MS:12000}
+      reasoning-effort: ${ZZAL_CHAT_REASONING_EFFORT:none}
       # 대화 한 판의 왕복 상한(#704). 마지막 펫 턴은 닫기 턴. 보상은 판당 1회라 늘려도 친밀도는 안 부푼다.
       max-rounds: ${ZZAL_CHAT_MAX_ROUNDS:5}
 
@@ -411,6 +415,13 @@ app:
     #     {prefix}/zzal/events/dt=YYYY-MM-DD/part-{처음id}-{끝id}.jsonl.gz
     #   계정을 옮기는 날 `aws s3 sync s3://옛/{prefix}/ s3://새/{prefix}/` 한 줄이면 끝난다.
     # ★ 서버가 두 대 이상이면 한 대만 켠다(밤 스위프와 같은 규칙).
+    # Internal observations use the existing event archive. No management endpoint is exposed.
+    metrics:
+      spool-directory: ${ZZAL_METRICS_SPOOL_DIRECTORY:}
+      runtime:
+        enabled: ${ZZAL_METRICS_RUNTIME_ENABLED:false}
+        interval-ms: ${ZZAL_METRICS_RUNTIME_INTERVAL_MS:60000}
+        queue-enabled: ${ZZAL_METRICS_QUEUE_ENABLED:true}
     archive:
       enabled: ${ZZAL_ARCHIVE_ENABLED:false}
       bucket: ${ZZAL_ARCHIVE_BUCKET:}
@@ -460,6 +471,12 @@ app:
       # 가짜 이미지 클라이언트가 '격자' 자리에 내놓을 실제 파일.
       # 후처리를 과금 없이 검증하려면 진짜 격자가 필요하다.
       fake-grid-key: ${ZZAL_FAKE_GRID_KEY:}
+      # 명시 local-existing-assets 프로필에서만 기존 샘플 기본8을 저장한다. 실제 생성과 동시 사용 금지.
+      local-fixture:
+        enabled: ${ZZAL_LOCAL_FIXTURE_ENABLED:false}
+        directory: ${ZZAL_LOCAL_FIXTURE_DIRECTORY:}
+        new-pets-since: ${ZZAL_LOCAL_FIXTURE_NEW_PETS_SINCE:}
+        storage-endpoint: ${ZZAL_LOCAL_FIXTURE_STORAGE_ENDPOINT:}
 
     openai:
       # ★ 절대 커밋하지 않는다. 로컬은 ~/.claude/.env, 서버는 /etc/lore/lore.env 에서 주입.
@@ -471,9 +488,41 @@ app:
       # 정체성(identity) 문단 단계의 시간 제한(초). 글 생성(gpt-5)은 이 단계만 쓴다.
       #   ★ 2026-10-08 60 → 90 — 운영 10/7 실측 응답 39~48초, 60초 제한에 시도 1을 잃었다.
       text-timeout-seconds: ${ZZAL_OPENAI_TEXT_TIMEOUT_SECONDS:90}
+      # Optional verification cap; empty keeps the production request unchanged.
+      identity-max-completion-tokens: ${ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS:}
+
+    attendance:
+      # Existing worker guard; enabling custom generation is separate from automatic dispatch.
+      cli-enabled: ${ZZAL_ATTENDANCE_CLI_ENABLED:false}
+      # Publish reviewed assets through each environment's existing same-origin /images route.
+      published-backgrounds: ${ZZAL_PUBLISHED_BACKGROUNDS:[]}
+
+    custom:
+      enabled: ${ZZAL_CUSTOM_ENABLED:false}
+      planner-model: ${ZZAL_CUSTOM_PLANNER_MODEL:gpt-5.6-luna}
+      planner-reasoning-effort: ${ZZAL_CUSTOM_PLANNER_REASONING_EFFORT:none}
+      planner-max-completion-tokens: ${ZZAL_CUSTOM_PLANNER_MAX_COMPLETION_TOKENS:6144}
+      planner-timeout-seconds: ${ZZAL_CUSTOM_PLANNER_TIMEOUT_SECONDS:90}
+      provider: ${ZZAL_CUSTOM_PROVIDER:}
+      image-model: ${ZZAL_CUSTOM_IMAGE_MODEL:gpt-image-2}
+      image-size: ${ZZAL_CUSTOM_IMAGE_SIZE:1248x1248}
+      postprocess-version: ${ZZAL_CUSTOM_POSTPROCESS_VERSION:v1}
+      dispatch:
+        # Explicit opt-in; existing custom/real/postprocess/CLI guards must also be enabled.
+        enabled: ${ZZAL_CUSTOM_DISPATCH_ENABLED:false}
+        output-root: ${ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT:}
 
     python:
       # 후처리가 numpy·scipy·pillow 를 쓰므로 그것들이 깔린 파이썬이어야 한다.
       # 서버는 배포 때 만들어지는 가상환경(/opt/lore/venv/bin/python)을 가리킨다.
       bin: ${ZZAL_PYTHON_BIN:python3}
       timeout-seconds: 60
+
+# Independent root namespace; explicit opt-in may make paid diary requests.
+zzal:
+  diary:
+    enabled: ${ZZAL_DIARY_ENABLED:false}
+    timeout-ms: ${ZZAL_DIARY_TIMEOUT_MS:15000}
+    sweep-ms: ${ZZAL_DIARY_SWEEP_MS:30000}
+    # Blank preserves the existing provider default; isolated measurement may set 1024.
+    max-completion-tokens: ${ZZAL_DIARY_MAX_COMPLETION_TOKENS:}

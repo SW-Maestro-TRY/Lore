@@ -8,7 +8,13 @@ import org.springframework.core.env.Environment;
 @Configuration
 @ConditionalOnProperty(name="app.zzal.custom.enabled",havingValue="true")
 public class CustomProviderConfiguration {
- @Bean public RealCustomBundleService realCustomBundleService(Environment env,CustomPlanningService planning,BundleJobWorker worker,TextClient text,ImageClient images,PostProcessor post,S3Storage storage,CustomBundlePublicationService publication){
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder;
+    private com.lore.zzal.generation.client.ProviderUsageRecorder usage() {
+        return usageRecorder == null ? com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP : usageRecorder.forFeature("custom_planner");
+    }
+
+ @Bean public RealCustomBundleService realCustomBundleService(Environment env,CustomPlanningService planning,BundleJobWorker worker,TextClient unusedSharedText,ImageClient images,PostProcessor post,S3Storage storage,CustomBundlePublicationService publication){
   if(!env.getProperty("app.zzal.generation.real",Boolean.class,false)||!env.getProperty("app.zzal.generation.real-postprocess",Boolean.class,false)||!env.getProperty("app.zzal.attendance.cli-enabled",Boolean.class,false))throw new IllegalStateException("Real custom execution requires explicit real-generation, real-postprocess and worker execution guards");
   String plannerModel=required(env,"app.zzal.custom.planner-model"),provider=required(env,"app.zzal.custom.provider");
   CustomGridGenerator grid=switch(provider){
@@ -17,7 +23,12 @@ public class CustomProviderConfiguration {
    default->throw new IllegalArgumentException("Unknown custom provider; no automatic fallback");
   };
   var executor=new CustomGridGenerationExecutor(grid,post,storage,required(env,"app.zzal.custom.postprocess-version"),env.getProperty("app.zzal.python.bin","python3"));
-  return new RealCustomBundleService(planning,worker,executor,text,plannerModel,java.util.Objects.requireNonNull(publication,"Production custom publisher required"));
+  var planner = new CustomPlannerTextClient(
+      new com.lore.zzal.chat.line.OpenAiChatLineClient(required(env,"app.zzal.openai.api-key"),
+          env.getProperty("app.zzal.custom.planner-reasoning-effort","none"),
+          env.getProperty("app.zzal.custom.planner-max-completion-tokens",Integer.class,6144), usage()),
+      java.time.Duration.ofSeconds(env.getProperty("app.zzal.custom.planner-timeout-seconds",Integer.class,90)));
+  return new RealCustomBundleService(planning,worker,executor,planner,plannerModel,java.util.Objects.requireNonNull(publication,"Production custom publisher required"));
  }
  private static String required(Environment env,String name){String value=env.getProperty(name);if(value==null||value.isBlank())throw new IllegalStateException("Missing explicit custom setting: "+name);return value;}
 }

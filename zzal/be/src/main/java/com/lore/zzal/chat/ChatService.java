@@ -96,6 +96,9 @@ import java.util.function.Supplier;
  */
 @Service
 public class ChatService {
+ @org.springframework.beans.factory.annotation.Autowired
+ private com.lore.zzal.generation.client.PersistentProviderUsageRecorder metrics;
+
 
     private final ZzalChatCallRepository legacy;
     private final ZzalChatSessionRepository sessions;
@@ -253,7 +256,7 @@ public class ChatService {
     }
 
     /** Called only after a locked, confirmed service return. It neither counts an answer nor grants a reward. */
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     public boolean appendReturnGreeting(Long userId, Long petId, Instant realNow) {
         ZzalPet pet=petService.awake(userId,petId,realNow);
         if(!continuousChatAvailable(pet)) return false;
@@ -349,8 +352,7 @@ public class ChatService {
         var session=sessions.findByPetIdAndDayOfAndSlot(pet.getId(),AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS)
             .orElseThrow(()->new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
         var options=com.lore.zzal.attendance.CustomChatActions.allowed(customMotionOwnership==null?List.of():customMotionOwnership.owned(pet.getUserId(),pet.getId()));
-        boolean question=beat==com.lore.zzal.chat.prompt.ConversationScene.Beat.ENTRY && (step==com.lore.zzal.chat.prompt.ConversationScene.Step.FEED||step==com.lore.zzal.chat.prompt.ConversationScene.Step.GAME);
-        var plan=new TurnPlan(TurnType.CONTINUE,session.getRoundCount()+1,question,null,false,ChatSlot.CONTINUOUS);
+        var plan=new TurnPlan(TurnType.CONTINUE,session.getRoundCount()+1,false,null,false,ChatSlot.CONTINUOUS);
         return withFacts(new ChatContext(pet.getId(),sheets.build(pet),PetState.of(pet,now),session.getKind(),plan,null,history(pet,session,now),List.of())
             .withActionOptions(options).withScene(new com.lore.zzal.chat.prompt.ConversationScene(com.lore.zzal.chat.prompt.ConversationScene.Phase.TUTORIAL_STAGE,step,beat)),null);
     }
@@ -371,6 +373,7 @@ public class ChatService {
         if(!session.isOpen(now)||session.getRoundCount()!=expectedRound)throw new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE);
         var previous=recentTurns(session);int idx=previous.isEmpty()?0:previous.getLast().getIdx()+1;
         var user=turns.save(ZzalChatTurn.user(session,idx,text,null,now));
+        if(metrics!=null) metrics.outcome("chat_user_turn","turn-"+user.getId(),pet.getUserId(),pet.getId(),null,"saved");
         session.countUserTurn(text,false);
         var options=com.lore.zzal.attendance.CustomChatActions.allowed(customMotionOwnership==null?List.of():customMotionOwnership.owned(userId,petId));
         var plan=new TurnPlan(TurnType.CONTINUE,session.getRoundCount()+1,false,null,true,ChatSlot.CONTINUOUS);
@@ -399,6 +402,7 @@ public class ChatService {
         int userIdx = session.getSlot() == ChatSlot.CONTINUOUS
                 ? (prev == null ? 0 : prev.getIdx() + 1) : sessionTurns.size();
         ZzalChatTurn userTurn = turns.save(ZzalChatTurn.user(session, userIdx, text, answering, now));
+        if(metrics!=null) metrics.outcome("chat_user_turn","turn-"+userTurn.getId(),pet.getUserId(),pet.getId(),null,"saved");
         sessionTurns.add(userTurn);
         boolean continuous = session.getSlot() == ChatSlot.CONTINUOUS;
         boolean firstAnswer = session.countUserTurn(text, !continuous);

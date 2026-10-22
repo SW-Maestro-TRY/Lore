@@ -31,7 +31,16 @@ class FirstSetPolicyTest {
     if(sql.startsWith("SELECT count(*) FROM zzal_attendance_reward_slot"))return (int)slots.values().stream().filter(s->s.state.equals("ELIGIBLE")&&s.day<=day).count();
    }
    if(method.equals("queryForList"))return jobs>0?List.of(ready?"GENERATED":"PENDING"):List.of();
-   if(method.equals("query"))return List.of();
+   if(method.equals("query")) {
+    if(sql.startsWith("UPDATE zzal_attendance_reward_slot s SET state='GRANTED'")) {
+     assertThat(sql).contains("s.state='ELIGIBLE'","a.auto_check='PASS'","a.published=true","a.human_review<>'REJECTED'","j.manifest_hash IS NOT NULL","RETURNING s.slot_key");
+     var granted=new ArrayList<String>();
+     if(ready) slots.replaceAll((key,old)->{if(key.startsWith("motion-")&&old.state.equals("ELIGIBLE")) {
+      granted.add(key);return new Slot(old.day,"GRANTED","images/"+key,((Timestamp)args[0]).toInstant());}return old;});
+     return granted;
+    }
+    return List.of();
+   }
    if(method.equals("update")) {
     writes.add(sql);
     if(sql.startsWith("INSERT INTO zzal_awake_visit"))return 0; // this fixture's INITIAL cycle already exists

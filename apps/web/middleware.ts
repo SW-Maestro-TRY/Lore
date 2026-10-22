@@ -10,9 +10,11 @@
 // **딱 두 자리만 받는다** — 홈("/")과 /webtoon(webtoon/fe 의 React 화면). /webtoon/works
 // 같은 나머지 자리는 아직 haeun/landing 의 정적 프로토타입이라(webtoon/CLAUDE.md,
 // next.config.mjs 의 rewrites 참고) 언어 접두어를 받을 준비가 안 됐고, piece-maker·zzal 은
-// 이번 작업 범위 밖이다. matcher 를 이 목록으로 좁혀서 다른 주소는 이 파일이 아예
-// 실행되지 않는다.
+// 기존 접두어 정책의 범위 밖이다. 짤은 아래 별도 /zzal?lang= 정책만 추가하며
+// piece-maker와 기존 홈/웹툰 분기는 변경하지 않는다.
 import { NextResponse, type NextRequest } from "next/server";
+
+import { resolveZzalLocale } from '../../zzal/fe/lib/localeRouting';
 
 const LOCALES = ["ko", "en", "ja"] as const;
 type Locale = (typeof LOCALES)[number];
@@ -23,6 +25,15 @@ function isLocale(seg: string): seg is Locale {
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  if (pathname === '/zzal' || pathname.startsWith('/zzal/')) {
+    const locale=resolveZzalLocale(req.nextUrl.searchParams.get('lang'),req.cookies.get('lore_locale')?.value,req.headers.get('accept-language'));
+    const headers=new Headers(req.headers);headers.set('x-lore-locale',locale);
+    const cookies=(req.headers.get('cookie')??'').split(';').map(v=>v.trim()).filter(v=>v&&!v.startsWith('lore_locale='));
+    cookies.push(`lore_locale=${locale}`);headers.set('cookie',cookies.join('; '));
+    const response=NextResponse.next({request:{headers}});
+    response.cookies.set('lore_locale',locale,{path:'/',sameSite:'lax',maxAge:31536000});
+    return response;
+  }
   const [, seg, ...restSegs] = pathname.split("/");
 
   if (isLocale(seg)) {
@@ -50,5 +61,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/ko", "/ko/webtoon", "/en", "/en/webtoon", "/ja", "/ja/webtoon"],
+  matcher: ["/zzal/:path*", "/", "/ko", "/ko/webtoon", "/en", "/en/webtoon", "/ja", "/ja/webtoon"],
 };

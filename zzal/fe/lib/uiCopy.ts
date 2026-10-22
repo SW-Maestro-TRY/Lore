@@ -12,6 +12,25 @@ const KO_COPY:Record<string,string>={
   "이런 그림은 어려워요": "이런 그림은 만들기 어려워요"
 };
 const COPY:Record<string,[string,string]>={
+"그림 속 내 캐릭터에게":["What if your character", "絵の中のキャラクターに"],
+"하루가 생긴다면?":["had a day of their own?", "日常が生まれたら？"],
+"캐릭터 이미지를 올리고":["Upload your character art", "キャラクターの絵をアップロードして"],
+"직접 돌봐주세요":["and care for them yourself", "自分でお世話してみましょう"],
+"캐릭터 그림에서 여러 움직임으로":["From character art to animated motions", "キャラクターの絵から、いろいろな動きへ"],
+"종이에 그린 캐릭터 러프 그림":["A character sketch drawn on paper", "紙に描いたキャラクターのラフ画"],
+"내 캐릭터 그림":["My character art", "自分のキャラクターの絵"],
+"밥을 먹고":["Having a meal", "ごはんを食べて"],
+"졸리고":["Feeling sleepy", "眠くなって"],
+"청소하고":["Cleaning up", "お掃除して"],
+"리듬 타고":["Moving to the beat", "リズムに乗って"],
+"내 그림으로 시작하기":["Start with my drawing", "自分の絵で始める"],
+"캐릭터 키우기 Lore":["Character care · Lore", "キャラクターのお世話 · Lore"],
+"부화를 기다리는 중이에요":["Waiting to hatch", "生まれるのを待っています"],
+"기다리는 동안 로미의 방을 구경하러 가볼까요?":["While you wait, would you like to visit Romi’s room?", "待っている間、ロミの部屋をのぞいてみませんか？"],
+"로미의 방 구경하기":["Visit Romi’s room", "ロミの部屋を見る"],
+"로미의 방":["Romi’s room", "ロミの部屋"],
+"완료":["Done", "完了"],
+
 "최근에 보낸 말":["Recent messages you sent", "最近送った言葉"],
 "캐릭터 정보":["Character info", "キャラクター情報"],
 "지금은 말을 보낼 수 없어요. 방의 상태를 확인해 주세요.":["You can’t send a message right now. Check your character’s status in the room.", "今はメッセージを送れません。部屋でキャラクターの状態を確認してください。"],

@@ -104,8 +104,32 @@ services:
       # ── 돈 나가는 스위치는 기본 꺼짐 ──
       ZZAL_OPENAI_API_KEY: ${OPENAI_KEY:-}
       ZZAL_GENERATION_REAL: ${ZZAL_GENERATION_REAL:-false}
+      ZZAL_PUBLISHED_BACKGROUNDS: ${ZZAL_PUBLISHED_BACKGROUNDS:-[]}
       ZZAL_CHAT_LLM: ${ZZAL_CHAT_LLM:-true}   # 키가 없으면 앱이 스스로 끈다(LORE_ENV=dev 는 기동 막지 않음)
+      ZZAL_CHAT_MAX_ATTEMPTS: ${ZZAL_CHAT_MAX_ATTEMPTS:-2}
+      ZZAL_DIARY_ENABLED: ${ZZAL_DIARY_ENABLED:-false}
+      ZZAL_DIARY_TIMEOUT_MS: ${ZZAL_DIARY_TIMEOUT_MS:-15000}
+      ZZAL_DIARY_SWEEP_MS: ${ZZAL_DIARY_SWEEP_MS:-30000}
+      ZZAL_DIARY_MAX_COMPLETION_TOKENS: ${ZZAL_DIARY_MAX_COMPLETION_TOKENS:-}
       ZZAL_REAL_POSTPROCESS: ${ZZAL_REAL_POSTPROCESS:-false}
+      ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS: ${ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS:-}
+      # Custom generation stays off until all execution/dispatch guards are explicitly approved.
+      ZZAL_ATTENDANCE_CLI_ENABLED: ${ZZAL_ATTENDANCE_CLI_ENABLED:-false}
+      ZZAL_CUSTOM_ENABLED: ${ZZAL_CUSTOM_ENABLED:-false}
+      ZZAL_CUSTOM_PLANNER_MODEL: ${ZZAL_CUSTOM_PLANNER_MODEL:-gpt-5.6-luna}
+      ZZAL_CUSTOM_PLANNER_REASONING_EFFORT: ${ZZAL_CUSTOM_PLANNER_REASONING_EFFORT:-none}
+      ZZAL_CUSTOM_PLANNER_MAX_COMPLETION_TOKENS: ${ZZAL_CUSTOM_PLANNER_MAX_COMPLETION_TOKENS:-6144}
+      ZZAL_CUSTOM_PLANNER_TIMEOUT_SECONDS: ${ZZAL_CUSTOM_PLANNER_TIMEOUT_SECONDS:-90}
+      ZZAL_CUSTOM_PROVIDER: ${ZZAL_CUSTOM_PROVIDER:-}
+      ZZAL_CUSTOM_IMAGE_MODEL: ${ZZAL_CUSTOM_IMAGE_MODEL:-gpt-image-2}
+      ZZAL_CUSTOM_IMAGE_SIZE: ${ZZAL_CUSTOM_IMAGE_SIZE:-1248x1248}
+      ZZAL_CUSTOM_POSTPROCESS_VERSION: ${ZZAL_CUSTOM_POSTPROCESS_VERSION:-v1}
+      ZZAL_CUSTOM_DISPATCH_ENABLED: ${ZZAL_CUSTOM_DISPATCH_ENABLED:-false}
+      ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT: ${ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT:-}
+      ZZAL_METRICS_RUNTIME_ENABLED: ${ZZAL_METRICS_RUNTIME_ENABLED:-true}
+      ZZAL_METRICS_RUNTIME_INTERVAL_MS: ${ZZAL_METRICS_RUNTIME_INTERVAL_MS:-60000}
+      ZZAL_METRICS_QUEUE_ENABLED: ${ZZAL_METRICS_QUEUE_ENABLED:-true}
+      ZZAL_METRICS_SPOOL_DIRECTORY: ${ZZAL_METRICS_SPOOL_DIRECTORY:-/var/lib/lore/metrics-spool}
       # ── 로컬 기본 켜짐: 리모컨(dev API)·관리자 화면 ──
       ZZAL_DEV_TOOLS: ${ZZAL_DEV_TOOLS:-true}
       ZZAL_ADMIN: ${ZZAL_ADMIN:-true}
@@ -130,6 +154,7 @@ services:
       - "127.0.0.1:${API_PORT:?API_PORT 필요}:8080"
     volumes:
       - webtoonwork:/app/webtoon/ai/work
+      - zzalmetrics:/var/lib/lore/metrics-spool
     healthcheck:
       # 런타임 이미지엔 curl 이 없을 수 있어 이미 깔린 python3 로 본다.
       test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/actuator/health', timeout=3).status==200 else 1)"]
@@ -167,6 +192,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  zzalmetrics:
   pgdata:
   miniodata:
   webtoonwork:

@@ -19,6 +19,12 @@ public class BundleJobWorker {
  public BundleJobWorker(JdbcTemplate db,TransactionTemplate tx,AttendanceService attendance,BundleSourcePlan plans,@Value("${app.zzal.python.bin:python3}")String python,@Value("${app.zzal.attendance.cli-enabled:false}")boolean enabled){this.db=db;this.plans=plans;this.tx=tx;this.attendance=attendance;this.python=python;this.enabled=enabled;}
  /** Dry run cannot claim, invoke the CLI or grant. */
  public List<Map<String,Object>> dryRun(){return db.queryForList("SELECT id,pet_id,input_hash,state FROM zzal_custom_bundle_job ORDER BY id");}
+ /** A reserved dispatch token cannot be taken by a different explicit caller before paid planning. */
+ public void requireCompatibleClaim(long jobId,String token){
+  if(token==null||token.isBlank()||token.length()>100)throw new IllegalArgumentException("Invalid claim token");
+  String reserved=db.queryForObject("SELECT claim_token FROM zzal_custom_bundle_job WHERE id=?",String.class,jobId);
+  if(reserved!=null&&!reserved.equals(token))throw new IllegalStateException("Custom job is reserved by another claim token");
+ }
  public boolean run(long jobId,String token,List<String> argv,Path output)throws Exception{return runInternal(jobId,token,argv,null,output);}
  public boolean run(long jobId,String token,GenerationExecutor executor,Path output)throws Exception{return runInternal(jobId,token,null,Objects.requireNonNull(executor),output);}
  private boolean runInternal(long jobId,String token,List<String> argv,GenerationExecutor executor,Path output)throws Exception{
@@ -29,10 +35,15 @@ public class BundleJobWorker {
   boolean typed=plan!=null&&json.readTree(plan).has("motionPlan");
   if(!typed&&executor!=null)throw new IllegalArgumentException("Provider-neutral execution requires typed plan");
   new BundleAssetVerifier(python).preflight();
-  boolean claimed=Boolean.TRUE.equals(tx.execute(s->db.update("UPDATE zzal_custom_bundle_job SET state='CLAIMED',claim_token=?,output_dir=?,cli_started_at=? WHERE id=? AND state='PENDING'",token,output.toAbsolutePath().normalize().toString(),java.sql.Timestamp.from(Instant.now()),jobId)==1));
+  boolean claimed=Boolean.TRUE.equals(tx.execute(s->db.update("UPDATE zzal_custom_bundle_job SET state='CLAIMED',claim_token=?,output_dir=?,cli_started_at=? WHERE id=? AND state='PENDING' AND (claim_token IS NULL OR claim_token=?)",token,output.toAbsolutePath().normalize().toString(),java.sql.Timestamp.from(Instant.now()),jobId,token)==1));
   if(!claimed)return false;
   // Any uncertain execution remains CLAIMED. Never automatically release or replay a paid claim.
-  String receipt=typed?(executor==null?new CliGenerationExecutor(argv):executor).execute(CustomGenerationRequest.from(jobId,snapshot,plan),output):new BundleCommandAdapter().executePlanned(argv,snapshot,plan,output,Duration.ofMinutes(10));
+  String receipt;
+  try{
+   receipt=typed?(executor==null?new CliGenerationExecutor(argv):executor).execute(CustomGenerationRequest.from(jobId,snapshot,plan),output):new BundleCommandAdapter().executePlanned(argv,snapshot,plan,output,Duration.ofMinutes(10));
+  }catch(com.lore.zzal.generation.client.PostprocessFailureException failure){
+   try{db.update("UPDATE zzal_custom_bundle_job SET error_code=? WHERE id=? AND state='CLAIMED' AND claim_token=?",failure.errorCode(),jobId,token);}catch(Exception markerFailure){failure.addSuppressed(markerFailure);}throw failure;
+  }
   complete(jobId,token,receipt,output,Instant.now());return true;
  }
  public static void validateExecutionReceipt(CustomGenerationRequest request,Manifest receipt){

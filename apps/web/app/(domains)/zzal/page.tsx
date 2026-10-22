@@ -15,11 +15,12 @@
 // 글꼴 — 여울 시안은 손글씨(Gaegu)와 고운돋움 두 벌을 쓴다.
 // ★ CSS 의 `@import` 로는 못 받는다. Next 가 여러 CSS 를 이어 붙이면서 @import 가 파일 맨 위를
 //   벗어나면 브라우저가 통째로 무시한다(2026-09-07 실측: 폰트 요청이 아예 안 나갔다).
-//   그래서 next/font 로 받아 CSS 변수로 내려 준다.
+//   짤 전용 local-fonts.css가 로컬 원본을 공급하고 기존 literal family와 CSS 변수를 함께 보존한다.
 import type { Metadata } from 'next';
 import {cookies,headers} from 'next/headers';
 import {ZzalLocaleProvider,type ZzalLocale}from '@zzal/lib/locale';
-import { Gaegu, Gowun_Dodum } from 'next/font/google';
+import '@zzal/local-fonts.css';
+import {resolveZzalLocale} from '@zzal/lib/localeRouting';
 import TamagotchiScreen, { type SkinName } from '@zzal/tamagotchi/TamagotchiScreen';
 
 // 링크 미리보기·검색 결과에 쓰이는 페이지 정보. 공통 레이아웃의 제목·설명은 모든 탭이 같고
@@ -55,8 +56,6 @@ export const metadata: Metadata = {
   },
 };
 
-const gaegu = Gaegu({ subsets: ['latin'], weight: ['400', '700'], variable: '--font-gaegu', display: 'swap' });
-const gowun = Gowun_Dodum({ subsets: ['latin'], weight: '400', variable: '--font-gowun', display: 'swap' });
 
 export default async function Page({
   searchParams,
@@ -64,11 +63,11 @@ export default async function Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const localeValue=(await headers()).get('x-lore-locale')??(await cookies()).get('lore_locale')?.value;
-  const locale:ZzalLocale=localeValue==='en'||localeValue==='ja'?localeValue:'ko';
+  const requestHeaders=await headers();
+  const locale:ZzalLocale=resolveZzalLocale(requestHeaders.get('x-lore-locale'),(await cookies()).get('lore_locale')?.value,requestHeaders.get('accept-language'));
   const skin: SkinName = sp.skin === 'scrapbook' ? 'scrapbook' : 'yeoul';
   return (
-    <div className={`${gaegu.variable} ${gowun.variable}`}>
+    <div className="zzal-local-fonts">
       <ZzalLocaleProvider initialLocale={locale}><TamagotchiScreen name={skin} focusedRoom={sp.room !== 'legacy'} /></ZzalLocaleProvider>
     </div>
   );

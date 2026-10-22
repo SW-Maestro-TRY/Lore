@@ -18,6 +18,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useZzalLocale } from '../../lib/locale';
 import { C, C2, GAEGU, SANS, fz, gap, radius, shadow } from './ui';
 
 /** 창 머리에 붙는 말. 지킬 수 있는 것만 적는다 — 고른 그림은 실제로 `holdUpload` 가 들고 있다. */
@@ -152,6 +153,8 @@ export interface AuthSkinProps {
 }
 
 export default function AuthSkin({ open, thumb, pending }: AuthSkinProps) {
+  const locale = useZzalLocale();
+  const words = locale === 'en' ? {line:'Your drawing is ready. Log in to continue.',note:'Your selected drawing is kept here.',alt:'Your selected drawing'} : locale === 'ja' ? {line:'絵を受け取りました。続けるにはログインしてください。',note:'選んだ絵はそのまま残っています。',alt:'選んだ絵'} : AUTH_INTRO;
   useBodyFlag(open);
   const host = useOverlayHost(open && pending);
   if (!open) return null;
@@ -161,10 +164,10 @@ export default function AuthSkin({ open, thumb, pending }: AuthSkinProps) {
       {host && pending && createPortal(
         <div className="zzal-auth-intro" data-part="auth-intro">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {thumb && <img src={thumb} alt={AUTH_INTRO.alt} />}
+          {thumb && <img src={thumb} alt={words.alt} />}
           <span style={{ display: 'flex', flexDirection: 'column', gap: gap.xs, minWidth: 0 }}>
-            <span className="zzal-auth-line">{AUTH_INTRO.line}</span>
-            <span className="zzal-auth-note">{AUTH_INTRO.note}</span>
+            <span className="zzal-auth-line">{words.line}</span>
+            <span className="zzal-auth-note">{words.note}</span>
           </span>
         </div>,
         host,

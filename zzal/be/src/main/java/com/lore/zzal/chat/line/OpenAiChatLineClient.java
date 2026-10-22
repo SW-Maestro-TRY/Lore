@@ -15,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -24,7 +25,7 @@ import java.util.concurrent.TimeUnit;
  * <h3>★ 단가는 모델마다 다르다</h3>
  * 그림 쪽에서 이미지 단가를 글에 적용해 원가가 3~4배 부푼 적이 있다({@code OpenAiTextClient} 주석).
  * 그래서 모델 이름으로 단가를 찾고, 모르는 모델이면 <b>비싼 쪽(gpt-5)</b>으로 세고 경고를 남긴다 —
- * 비용 기록은 넘치게 세는 쪽이 안전하다. 2026-10-08 공식 가격표 확인(USD / 1M 토큰).
+ * 비용 기록은 넘치게 세는 쪽이 안전하다. 2026-10-08 공식 가격표 확인(USD / 1M 토큰), gpt-5.6-luna는 2026-10-19 확인.
  *
  * <h3>★ 추론 강도</h3>
  * gpt-5 계열은 추론 모델이라 기본 설정이면 짧은 대사에도 몇 초를 생각한다. {@code reasoning_effort}
@@ -39,6 +40,7 @@ public class OpenAiChatLineClient implements ChatLineClient {
     /** {입력, 출력} USD / 1M 토큰. */
     static final Map<String, BigDecimal[]> PRICES = Map.of(
             "gpt-5", new BigDecimal[]{new BigDecimal("1.25"), new BigDecimal("10.00")},
+            "gpt-5.6-luna", new BigDecimal[]{new BigDecimal("0.20"), new BigDecimal("1.20")},
             "gpt-5-mini", new BigDecimal[]{new BigDecimal("0.25"), new BigDecimal("2.00")},
             "gpt-5-nano", new BigDecimal[]{new BigDecimal("0.05"), new BigDecimal("0.40")},
             "gpt-5.4-mini", new BigDecimal[]{new BigDecimal("0.75"), new BigDecimal("4.50")},
@@ -91,6 +93,12 @@ public class OpenAiChatLineClient implements ChatLineClient {
 
     @Override
     public Completion complete(String system, String userText, String model, Duration timeout) throws Exception {
+        return complete(system, List.of(), userText, model, timeout);
+    }
+
+    @Override
+    public Completion complete(String system, List<Message> history, String userText, String model, Duration timeout) throws Exception {
+        try (var attempt = new com.lore.zzal.generation.client.ProviderAttempt(usageRecorder, model)) {
         ObjectNode body = json.createObjectNode();
         body.put("model", model);
         if (maxCompletionTokens != null) body.put("max_completion_tokens", maxCompletionTokens);
@@ -103,6 +111,11 @@ public class OpenAiChatLineClient implements ChatLineClient {
         ObjectNode sys = messages.addObject();
         sys.put("role", "system");
         sys.put("content", system);
+        for (Message message : history) {
+            ObjectNode previous = messages.addObject();
+            previous.put("role", message.role());
+            previous.put("content", message.content());
+        }
         ObjectNode user = messages.addObject();
         user.put("role", "user");
         user.put("content", userText);
@@ -115,39 +128,43 @@ public class OpenAiChatLineClient implements ChatLineClient {
                 .build();
 
         // ★ 전체 시간을 한 번 더 묶는다 — 요청 timeout 은 응답 머리까지만 센다.
+        attempt.start();
         CompletableFuture<HttpResponse<String>> f = http.sendAsync(req, HttpResponse.BodyHandlers.ofString());
         HttpResponse<String> res;
         try {
             res = f.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.TimeoutException e) {
             f.cancel(true);
-            usageRecorder.record(ProviderUsageRecorder.headers(model,0,null));
+            attempt.record(ProviderUsageRecorder.headers(model,0,null));
             throw e;
         } catch (java.util.concurrent.ExecutionException e) {
-            usageRecorder.record(ProviderUsageRecorder.headers(model,0,null));
+            attempt.record(ProviderUsageRecorder.headers(model,0,null));
             if (e.getCause() instanceof java.net.http.HttpTimeoutException) {
                 throw new java.util.concurrent.TimeoutException("응답 시간 초과");
             }
             throw e;
         }
         String requestId=res.headers().firstValue("x-request-id").orElse(null);
-        usageRecorder.record(ProviderUsageRecorder.headers(model,res.statusCode(),requestId));
+        attempt.record(ProviderUsageRecorder.headers(model,res.statusCode(),requestId));
         if (res.statusCode() != 200) {
             // 4xx·5xx 는 돈이 안 나간다(OpenAI 는 실패 요청에 과금하지 않는다).
             throw new IllegalStateException("대사 생성 실패(HTTP %d): %s".formatted(res.statusCode(),
                     res.body().length() > 300 ? res.body().substring(0, 300) : res.body()));
         }
         JsonNode payload = json.readTree(res.body());
-        usageRecorder.record(ProviderUsageRecorder.payload(model,res.statusCode(),requestId,payload));
+        attempt.record(ProviderUsageRecorder.payload(model,res.statusCode(),requestId,payload));
         JsonNode usage = payload.path("usage");
         long in = usage.path("prompt_tokens").asLong(0);
         long out = usage.path("completion_tokens").asLong(0);
         BigDecimal cost = cost(model, in, out);
+        attempt.estimatedCost(cost);
         String text = payload.path("choices").path(0).path("message").path("content").asText("").trim();
         if (text.isBlank()) {
             throw new BilledException("응답에 글이 없습니다", cost);
         }
+        attempt.success();
         return new Completion(text, cost, in, out);
+        }
     }
 
     /** 단가표로 비용. 모르는 모델은 gpt-5 단가(비싼 쪽). */

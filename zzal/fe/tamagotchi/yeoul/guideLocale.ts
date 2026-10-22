@@ -2,12 +2,12 @@ import {guideCopy,guideTopics,type GuideTopic}from './guideTopics';
 import type{ZzalLocale}from '../../lib/locale';
 type GuideCopy={ [K in keyof typeof guideCopy]:string };
 const EN:GuideCopy={open:'Help',title:'How to use',close:'Close',current:'Current status',intro:'Choose a feature to learn more.',sample:'The sample room lets you try things. It is separate from your character’s real records.',unavailable:'Couldn’t check the status. Please check the latest room information.',where:'Where to find it',related:'About this status',traveling:'Away on a trip. Care and conversation resume after returning.',sleeping:'Asleep now. Check the bedroom to see when waking is available.',awake:'Awake now.',food:'{count} meals left',refill:'Next refill in about {minutes} minutes',trash:'{count} piles to clean',bathed:'Already bathed today.',sick:'Feeling sick. Check the medicine button in the room.'};
-const JA:GuideCopy={open:'使い方',title:'使い方',close:'閉じる',current:'今の状態',intro:'気になる機能を選んでください。',sample:'体験ルームでは機能を試せます。あなたのキャラクターの生活記録とは別です。',unavailable:'状態を確認できませんでした。部屋の最新の案内を確認してください。',where:'場所',related:'この状態について',traveling:'旅行中です。帰ってくるとお世話や会話を再開できます。',sleeping:'今は眠っています。起こせるかどうかは寝室で確認できます。',awake:'今は起きています。',food:'ごはん残り{count}個',refill:'次の補充まで約{minutes}分',trash:'片づけるうんち{count}個',bathed:'今日はもうお風呂に入りました。',sick:'具合が悪いようです。部屋の薬ボタンを確認してください。'};
+const JA:GuideCopy={open:'使い方',title:'使い方',close:'閉じる',current:'今の状態',intro:'気になる機能を選んでください。',sample:'体験ルームでは機能を試せます。あなたのキャラクターの生活記録とは別です。',unavailable:'状態を確認できませんでした。部屋の最新の案内を確認してください。',where:'場所',related:'この状態について',traveling:'旅行中です。帰ってくるとお世話や会話を再開できます。',sleeping:'今は眠っています。起こせるかどうかは寝室で確認できます。',awake:'今は起きています。',food:'ごはん残り{count}個',refill:'次の補充まで約{minutes}分',trash:'片づけるほこり{count}個',bathed:'今日はもうお風呂に入りました。',sick:'具合が悪いようです。部屋の薬ボタンを確認してください。'};
 const TOPICS_EN:Record<string,[string,string,string]>={
 food:['Meals and refills','Kitchen','Meals increase fullness. The kitchen shows your remaining food and the next refill. If an action is unavailable, check the reason beside its button.'],
 snack:['Snacks and stomachaches','Kitchen','Snacks are separate from meals. Too many in one day may cause a stomachache. Snacks are unavailable while sick. Other actions do not erase that day’s snack count.'],
 pet:['Petting','Tap your character in the room','Your character reacts to petting. Reactions and the daily number that increases your bond can differ. Repeated taps do not keep earning rewards.'],
-clean:['Cleaning and bathing','Bathroom','Cleaning removes one pile at a time. Bathing removes all piles and is available once a day. A bath is possible even with no piles, but cleaning is not. You cannot bathe again after today’s bath.'],
+clean:['Cleaning and bathing','Bathroom','Cleaning removes one dust pile at a time. Bathing removes all piles and is available once a day. A bath is possible even with no piles, but cleaning is not. You cannot bathe again after today’s bath.'],
 medicine:['Illness and medicine','Medicine button in the room','When your character is sick, check the medicine button in the room. Medicine is available while sick. Check the recovery state afterward.'],
 gauges:['Hunger, mood and cleanliness','Room bubbles and care menus','Room information changes with your character’s condition. Open a menu to see available actions. Reading this guide does not change their condition.'],
 sleep:['Bedtime and waking','Bedroom','Daily times use Korea time. You can put your character to bed from 7 p.m. until before 11 p.m.; they sleep automatically at 11 p.m. You can wake them from 7 a.m. until before 10 a.m.; they wake automatically at 10 a.m. The first guided nap is separate. Check the bedroom’s current information.'],
@@ -32,7 +32,7 @@ const TOPICS_JA:Record<string,[string,string,string]>={
 food:['ごはんと補充','キッチン','ごはんをあげると満腹度が上がります。残りの数と次の補充までの時間はキッチンで確認できます。使えない場合はボタンの横の理由を見てください。'],
 snack:['おやつとお腹の調子','キッチン','おやつはごはんとは別です。同じ日に何度もあげるとお腹をこわすことがあります。具合が悪いときはあげられません。間に別の行動をしても、その日のおやつの回数は残ります。'],
 pet:['なでる','部屋のキャラクターをタップ','なでるとキャラクターが反応します。反応する回数と、その日の親密度に反映される回数は同じとは限りません。何度も押しても報酬が増え続けるわけではありません。'],
-clean:['片づけとお風呂','バスルーム','片づけはうんちを1個ずつ取り除きます。お風呂はすべて片づけられ、1日1回使えます。うんちがなくてもお風呂には入れますが、片づけはできません。今日のお風呂が済んだら、もう一度は使えません。'],
+clean:['片づけとお風呂','バスルーム','片づけはほこりを1個ずつ取り除きます。お風呂はすべて片づけられ、1日1回使えます。ほこりがなくてもお風呂には入れますが、片づけはできません。今日のお風呂が済んだら、もう一度は使えません。'],
 medicine:['病気と薬','部屋の薬ボタン','具合が悪いときは部屋に出る薬ボタンを確認してください。薬は病気のときに使えます。使ったあとに回復した状態を確認できます。'],
 gauges:['空腹・気分・清潔さ','部屋の吹き出しとお世話メニュー','生活の状態によって部屋の案内が変わります。メニューを開くと今できる行動がわかります。説明を読むだけでは状態は変わりません。'],
 sleep:['寝かせる・起こす','寝室','生活時間は韓国時間です。19時から23時前まで寝かせられ、23時に自動で眠ります。朝7時から10時前まで起こせて、10時には自然に起きます。最初のガイド中のお昼寝は別です。寝室の現在の案内を確認してください。'],

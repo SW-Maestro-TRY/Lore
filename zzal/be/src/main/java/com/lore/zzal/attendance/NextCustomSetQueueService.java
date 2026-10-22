@@ -63,7 +63,7 @@ public class NextCustomSetQueueService {
         return new Evaluation(latest,set,NextCustomSetEligibility.evaluate(received,cycles));
     }
     private void validateCommonSnapshot(String snapshot){
-        try{var root=json.readTree(snapshot);if(!BundleCommandAdapter.SHEET_REFERENCE_POLICY.equals(root.path("materialPolicy").asText())||root.path("sheetImageKey").asText().isBlank()||root.path("identity").asText().isBlank()||!root.path("memory").isObject()||root.path("customGridTemplateVersion").asText().isBlank()||root.path("customGridTemplateHash").asText().isBlank())throw new IllegalArgumentException("Current common frozen snapshot required");}
+        try{var root=json.readTree(snapshot);CustomGridPrompt.requireFrozenTemplate(root);if(!root.path("memory").isObject())throw new IllegalArgumentException("Current common frozen snapshot required");}
         catch(com.fasterxml.jackson.core.JsonProcessingException e){throw new IllegalArgumentException("Invalid frozen snapshot",e);}
     }
 }

@@ -12,11 +12,15 @@ public final class CustomGridPrompt {
  /** No fallback to a new template for a historical version/hash. Called before any author/image request. */
  public static void requireFrozenTemplate(com.fasterxml.jackson.databind.JsonNode source){
   if(!BundleCommandAdapter.SHEET_REFERENCE_POLICY.equals(source.path("materialPolicy").asText())||!TEMPLATE_VERSION.equals(source.path("customGridTemplateVersion").asText())||!templateHash().equals(source.path("customGridTemplateHash").asText()))throw new IllegalArgumentException("Frozen sheet/template contract required; historical job is not rewritten");
+  CustomPostprocessProfile.from(source,source.path("appearancePipelineVersion").asText());
+  String sheet=source.path("sheetImageKey").asText();
+  if(!sheet.startsWith("images/")||sheet.startsWith("images/zzal/demo/")||sheet.contains(".."))throw new IllegalArgumentException("Real frozen sheet reference required");
  }
  public static Render render(CustomGenerationRequest request)throws Exception {
   var source=new ObjectMapper().readTree(request.frozenSnapshot());
   requireFrozenTemplate(source);
-  String identity=source.path("identity").asText();if(identity.isBlank())throw new IllegalArgumentException("Frozen identity required");
+  // IdentityStep may intentionally complete with an empty paragraph; match the existing GridStep contract.
+  String identity=source.path("identity").asText("").trim();
   StringBuilder prompt=new StringBuilder();
   List<String> postures=new ArrayList<>();
   for(var m:request.frozenPlan().motions().stream().sorted(Comparator.comparingInt(CustomMotionPlan.Motion::order)).toList()){

@@ -5,23 +5,12 @@
 //
 // 2026-09-04: 콘솔에만 찍던 stub 을 실제 전송으로 채웠다(백엔드 POST /api/v1/events).
 //
-// ─────────────────────────────────────────────────────────────────────────────
-// ★★ 이 파일에서 가장 중요한 것은 "언제 보내느냐" 다
-//
-// useZzalSession.ts 는 `pagehide` 에서 zzal_hatch_abandoned·zzal_upload_abandoned 를 찍는다.
-// 이 서비스에서 가장 알고 싶은 두 지점인데, 하필 브라우저가 페이지를 버리는 순간이다.
-// 그 시점의 평범한 fetch 는 **취소된다** — 요청이 나가지도 못하고 사라진다.
-// navigator.sendBeacon 은 브라우저가 페이지와 무관하게 끝까지 보내 주는 유일한 길이다.
-// 그래서 이건 최적화가 아니라 요구사항이다.
-//
-// ★ 순서 문제까지 함께 막았다
-//   pagehide 리스너는 등록 순서대로 불린다. 이 파일의 리스너가 useZzalSession 보다 먼저
-//   등록되면, 우리가 큐를 비운 뒤에 이탈 이벤트가 큐에 담겨 그대로 사라진다.
-//   그래서 큐에 담을 때도 "지금 떠나는 중인가" 를 보고 즉시 beacon 으로 내보낸다.
-//   (visibilityState 가 hidden 이 되는 것이 pagehide 보다 먼저다.)
-// ─────────────────────────────────────────────────────────────────────────────
+// Events are durable browser observations, not server business receipts. Stable IDs
+// survive retries; only explicit persistence ACK removes them. Beacon is best effort.
+// Browser storage/capacity limits still apply; no absolute delivery guarantee.
 
 import { API_BASE } from './api/client';
+import { createAttributionReader } from './zzalAttribution';
 
 type Props = Record<string, unknown>;
 
@@ -84,18 +73,65 @@ const ALLOWED_PROP_KEYS = new Set([
   'has_image', 'has_keywords', 'has_note', 'has_email',
   'step', 'count', 'seq', 'ms',
   // 도감 저장·공유(zzal_dex_download·zzal_dex_share)의 동작 키·층 — 카탈로그 열거값(#705).
-  'motion', 'layer',
+  'motion', 'layer', 'navigation', 'outcome', 'interaction', 'user_action',
 ]);
 
 /** 서버로 나가는 한 줄. 익명 번호도 기기 정보도 없다 — 그건 서버가 쿠키·헤더로 안다. */
-interface QueuedEvent {
+export type EventContext = { context?: 'real' | 'tutorial' | 'sample'; source_screen?: string };
+type ActorState = 'authenticated' | 'anonymous' | 'unknown';
+let actor: {actor_state: ActorState; actor_id?:number} = {actor_state:'unknown'};
+/** Capture hint only: the server must compare against its verified principal. Never authorization. */
+export function setTelemetryActor(state: ActorState, userId?:number): void {
+  actor = state==='authenticated'&&typeof userId==='number'&&Number.isSafeInteger(userId)&&userId>0 ? {actor_state:state,actor_id:userId} : {actor_state:state==='anonymous'?'anonymous':'unknown'};
+}
+interface QueuedEvent extends EventContext {
+  actor_state?: ActorState;
+  actor_id?: number;
+  event_id: string;
+  session_id: string;
+  schema_version: number;
+  origin?: Origin | null;
   name: string;
   ts: number;
   path: string;
   props?: Record<string, string | number | boolean>;
 }
 
+const QUEUE_PREFIX = 'lore_event_v2:';
+const SESSION_KEY = 'lore_event_session_v2';
+const CAPACITY = 500;
 let queue: QueuedEvent[] = [];
+let inFlight = false;
+let retryMs = FLUSH_MS;
+let sessionId: string | undefined;
+function uuid(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes=crypto.getRandomValues(new Uint8Array(16)); bytes[6]=(bytes[6]&15)|64; bytes[8]=(bytes[8]&63)|128;
+  const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+// One localStorage key per immutable event avoids cross-tab read/modify/write loss.
+// Concurrent drains may resend; server ACK/dedup handles those identical IDs.
+function restoreQueue() {
+  try {
+    const storage = window.localStorage;
+    const known = new Set(queue.map(e => e.event_id));
+    for (let i=0; i<storage.length; i++) {
+      const key=storage.key(i); if (!key?.startsWith(QUEUE_PREFIX)) continue;
+      try {
+        const e=JSON.parse(storage.getItem(key) ?? 'null');
+        if (e && typeof e.event_id==='string' && e.schema_version===2 && typeof e.name==='string' && !known.has(e.event_id)) { queue.push(e); known.add(e.event_id); }
+      } catch {}
+    }
+    queue.sort((a,b)=>a.ts-b.ts);
+  } catch { /* Storage blocked: bounded memory fallback. */ }
+}
+function persistEvent(event: QueuedEvent) { storeSet('local', QUEUE_PREFIX+event.event_id, JSON.stringify(event)); }
+function removeEvent(id: string) { try { window.localStorage.removeItem(QUEUE_PREFIX+id); } catch {} }
+function getSessionId() {
+  if (!sessionId) { sessionId = storeGet('session', SESSION_KEY) || uuid(); storeSet('session', SESSION_KEY, sessionId); }
+  return sessionId;
+}
 let timer: ReturnType<typeof setTimeout> | null = null;
 let listenersBound = false;
 
@@ -112,12 +148,13 @@ let leaving = false;
  * 큐에 담기만 하고, 실제 전송은 5초 / 20건 / 페이지를 떠날 때 한꺼번에 일어난다.
  * 기록 때문에 화면이 한 프레임도 느려지면 안 되기 때문이다.
  */
-export function track(event: string, props: Props = {}): void {
+export function track(event: string, props: Props = {}, context: EventContext = {}): void {
   if (typeof window === 'undefined') return;
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[track]', event, props);
   }
   try {
+    restoreQueue();
     bindFlushListeners();
     // ★ 가입·로그인 성공 줄에는 이 브라우저의 **옛 익명 번호**를 붙인다(쿠키가 지워져 번호가 바뀐 경우).
     //   부르는 쪽(AuthModal)은 그대로 두고 여기서 붙인다 — 화면 41곳의 시그니처를 안 바꾸기 위해서다.
@@ -127,14 +164,26 @@ export function track(event: string, props: Props = {}): void {
       const prev = previousAnonId();
       if (prev) ownProps = { ...props, from: prev };
     }
+    const origin = isZzalEvent(event) ? currentOrigin() : undefined;
+    const internalProps = internalZzalProps(event, cleanProps(ownProps));
     queue.push({
+      event_id: uuid(), session_id: getSessionId(), schema_version: 2, ...actor, ...context,
+      origin: origin === undefined ? undefined : origin ? { ...origin } : null,
       name: event,
       ts: Date.now(),
       path: currentPath(),
-      props: cleanProps(ownProps),
+      props: internalProps,
     });
+    // Bounded browser backlog. Overflow evicts oldest; no delivery guarantee.
+    persistEvent(queue[queue.length-1]);
+    if (queue.length > CAPACITY) {
+      const evicted = queue.splice(0, queue.length-CAPACITY);
+      evicted.forEach(e=>removeEvent(e.event_id));
+      const dropped=Number(storeGet('local','lore_event_overflow_count')||0);
+      storeSet('local','lore_event_overflow_count',String(dropped+evicted.length));
+    }
 
-    // ★ 떠나는 중이면 다음 타이머가 없다. 지금 안 보내면 영영 안 나간다.
+    // Leaving: attempt beacon now; unacknowledged durable records can retry on a later visit.
     if (leaving || document.visibilityState === 'hidden') {
       void flush(true);
     } else if (queue.length >= MAX_QUEUE) {
@@ -143,7 +192,7 @@ export function track(event: string, props: Props = {}): void {
       scheduleFlush();
     }
   } catch {
-    // ★ 기록이 화면을 멈추게 하면 안 된다. 무슨 일이 나도 조용히 버린다.
+    // Telemetry must not break the product; storage/crypto failure can prevent collection.
   }
   // GA4 거울 — 루트 레이아웃이 GA4 를 켰을 때만(NEXT_PUBLIC_GA4_ID) 같은 이벤트를 GA4 로도 보내 자체 수집과 대조한다. send_to 로 광고 계정엔 안 간다.
   try {
@@ -175,7 +224,7 @@ function scheduleFlush(): void {
   timer = setTimeout(() => {
     timer = null;
     void flush(false);
-  }, FLUSH_MS);
+  }, retryMs);
 }
 
 function clearFlushTimer(): void {
@@ -184,65 +233,59 @@ function clearFlushTimer(): void {
   timer = null;
 }
 
-/**
- * 쌓인 것을 한 번에 내보낸다.
- *
- * ★ 큐를 먼저 비우고 보낸다. 전송이 실패해도 다시 담지 않는다 — 다시 담으면 서버가 죽어
- *   있는 동안 큐가 무한히 자라고, 살아난 순간 며칠 지난 이벤트가 한꺼번에 쏟아진다.
- *   행동 기록은 잃어도 되는 것이고, 잃는 쪽이 훨씬 싸다.
+/** Keep stable IDs until the server explicitly acknowledges persistence (including dedup).
+ * Per-event localStorage keys survive tab closure and isolate concurrent writes. Beacon is only a best-effort
+ * unload transport: acceptance by the browser is NOT a persistence acknowledgement.
  */
-function flush(useBeacon: boolean): Promise<void> {
+async function flush(useBeacon: boolean): Promise<void> {
   clearFlushTimer();
-  if (queue.length === 0) return Promise.resolve();
-
-  const events = queue;
-  queue = [];
-
-  const body: Record<string, unknown> = { events };
-  // ★ 유입 출처는 **모든 묶음**에 담는다(2026-10-07). 서버는 묶음 단위로 줄마다 적으므로,
-  //   첫 묶음에만 담으면 뒤에 오는 가입·부화 줄의 source 가 비어 광고 전환이 0 으로 보인다.
-  const origin = currentOrigin();
-  if (origin?.referrer) body.referrer = origin.referrer;
-  if (origin?.source) body.source = origin.source;
-  // 서버가 내려 준 익명 번호 사본을 브라우저 저장소에 옮겨 둔다(쿠키가 지워져도 남게).
-  rememberAnonId();
-
-  return send(JSON.stringify(body), useBeacon);
-}
-
-/**
- * 실제 전송.
- *
- * ★ sendBeacon 을 쓸 때 Blob 의 type 이 곧 Content-Type 이 된다. 안 주면 text/plain 이라
- *   서버가 본문을 JSON 으로 못 읽는다(400).
- * ★ sendBeacon 은 큐가 꽉 차면 false 를 돌려준다. 그때만 keepalive fetch 로 한 번 더 시도한다
- *   (keepalive 는 페이지가 사라져도 요청을 끝까지 보내 준다. 평범한 fetch 는 취소된다).
- */
-function send(payload: string, useBeacon: boolean): Promise<void> {
-  const url = `${API_BASE}${ENDPOINT}`;
-
-  if (useBeacon && typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
-    try {
-      if (navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }))) {
-        return Promise.resolve();
-      }
-    } catch {
-      // 아래 fetch 로 떨어진다.
+  restoreQueue();
+  if (!queue.length || inFlight) return;
+  inFlight = true;
+  const events = queue.slice(0, MAX_QUEUE);
+  const groups: { origin: Origin | null | undefined; events: Omit<QueuedEvent, 'origin'>[] }[] = [];
+  for (const { origin: snapshot, ...event } of events) {
+    const origin = snapshot === undefined ? legacyOriginAtFlush() : snapshot;
+    let group = groups[groups.length - 1];
+    if (!group || JSON.stringify(group.origin) !== JSON.stringify(origin)) {
+      group = { origin, events: [] }; groups.push(group);
     }
+    group.events.push(event);
   }
-
-  // credentials: 'include' — 익명 번호 쿠키(lore_anon_id)와 로그인 쿠키가 함께 실려야
-  // 서버가 "누구인지" 를 안다. 기본값(same-origin)이면 로컬에서 8080 을 따로 띄우는 순간
-  // 쿠키가 안 붙어 매 요청이 새 사람으로 기록된다.
-  return fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: payload,
-    keepalive: true,
-  })
-    .then(() => undefined)
-    .catch(() => undefined);
+  rememberAnonId();
+  let acknowledged = false;
+  try {
+    for (const { origin, events: batch } of groups) {
+      const payload = JSON.stringify({ events: batch, ...(origin?.source ? {source: origin.source} : {}), ...(origin?.referrer ? {referrer: origin.referrer} : {}) });
+      const url = `${API_BASE}${ENDPOINT}`;
+      if (useBeacon && typeof navigator.sendBeacon === 'function') {
+        try { if (navigator.sendBeacon(url, new Blob([payload], {type:'application/json'}))) continue; } catch {}
+      }
+      try {
+        const response = await fetch(url, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:payload, keepalive:true});
+        if (!response.ok) continue;
+        const result = await response.json();
+        const rejected = result?.data?.rejected_event_ids;
+        if (Array.isArray(rejected)) {
+          const sentIds = new Set(batch.map(e=>e.event_id));
+          const invalid = new Set(rejected.filter((id:unknown)=>typeof id==='string'&&sentIds.has(id)));
+          if (invalid.size) {
+            queue=queue.filter(e=>!invalid.has(e.event_id)); invalid.forEach(id=>removeEvent(id as string));
+            storeSet('local','lore_event_rejected_count',String(Number(storeGet('local','lore_event_rejected_count')||0)+invalid.size));
+          }
+        }
+        const ack = result?.data?.accepted_event_ids;
+        if (!Array.isArray(ack)) continue;
+        const sent = new Set(batch.map(e => e.event_id));
+        const accepted = new Set(ack.filter((id: unknown) => typeof id === 'string' && sent.has(id)));
+        if (accepted.size) { queue = queue.filter(e => !accepted.has(e.event_id)); accepted.forEach(id => removeEvent(id as string)); acknowledged = true; }
+      } catch { /* Network/HTTP/invalid ACK: retain the exact events for retry. */ }
+    }
+  } finally {
+    inFlight = false;
+    retryMs = acknowledged ? FLUSH_MS : Math.min(retryMs * 2, 60_000);
+    if (queue.length && !leaving) scheduleFlush();
+  }
 }
 
 /**
@@ -257,8 +300,9 @@ function bindFlushListeners(): void {
   if (listenersBound) return;
   listenersBound = true;
   // 유입은 **첫 기록 때** 정한다 — 5초 뒤 첫 전송 때 정하면 그 사이 주소에서 UTM 이 지워질 수 있다.
-  currentOrigin();
+  legacyOriginAtFlush();
 
+  window.addEventListener('online', () => { retryMs = FLUSH_MS; void flush(false); });
   window.addEventListener('pagehide', () => {
     leaving = true;
     void flush(true);
@@ -274,11 +318,13 @@ function bindFlushListeners(): void {
     //   이라서 이벤트 하나마다 beacon 이 한 번씩 나간다 — 묶어 보내는 의미가 사라진다.
     //   visibilitychange 는 탭 전환에도 오지만 pageshow 는 안 오므로, 되돌리는 자리가 여기여야 한다.
     leaving = false;
+    if (queue.length) scheduleFlush();
   });
 
   // bfcache 로 되살아난 페이지. pagehide 로 켜 둔 값을 되돌린다.
   window.addEventListener('pageshow', () => {
     leaving = false;
+    if (queue.length) scheduleFlush();
   });
 }
 
@@ -329,6 +375,12 @@ type Origin = { source?: string; referrer?: string };
 
 /** 이 페이지(문서)에서 정한 유입. 한 번 정하면 같은 페이지 안에서는 다시 안 읽는다. */
 let originMemo: Origin | null | undefined;
+let originQuery: string | undefined;
+let legacyOrigin: Origin | null | undefined;
+function legacyOriginAtFlush(): Origin | null {
+  if (legacyOrigin === undefined) legacyOrigin = currentOrigin();
+  return legacyOrigin;
+}
 
 /**
  * 이번 묶음에 실을 유입.
@@ -343,16 +395,23 @@ let originMemo: Origin | null | undefined;
  * ★ 저장소가 막힌 브라우저(사생활 모드)에서는 1번만 동작한다. 기록이 조금 덜 이어질 뿐 화면은 무사하다.
  */
 function currentOrigin(): Origin | null {
-  if (originMemo !== undefined) return originMemo;
+  const params = new URLSearchParams(window.location.search);
+  const zzalPath = /^\/zzal(?:\/|$)/.test(window.location.pathname);
+  const queryKeys = ['utm_source', 'utm_medium', 'utm_campaign', ...(zzalPath ? ['utm_content', 'utm_term', 'campaign_id', 'adset_id', 'ad_id', 'ad_platform', 'placement', 'target_group', 'target_market'] : [])];
+  const query = JSON.stringify(queryKeys.map(k => params.get(k)));
+  if (originMemo !== undefined && (!zzalPath || query === originQuery)) return originMemo;
+  const firstRead = originQuery === undefined;
+  originQuery = query;
+  const previous = originMemo;
   originMemo = null;
   try {
     const arrived: Origin = {};
     const source = readUtm();
     if (source) arrived.source = source;
-    const referrer = externalReferrer();
+    const referrer = firstRead ? externalReferrer() : undefined;
     if (referrer) arrived.referrer = referrer;
 
-    if (arrived.source || arrived.referrer) {
+    if (arrived.source || arrived.referrer || (queryKeys.length > 3 && queryKeys.some(k => params.has(k)))) {
       const text = JSON.stringify(arrived);
       storeSet('session', ORIGIN_SESSION_KEY, text);
       storeSet('local', ORIGIN_LAST_KEY, text);
@@ -363,6 +422,8 @@ function currentOrigin(): Origin | null {
       return originMemo;
     }
 
+    // 같은 문서에서 UTM 제거는 내부 이동이다. 새 유입으로 이전 정보를 섞지 않는다.
+    if (!firstRead && previous) { originMemo = previous; return originMemo; }
     const visit = readOrigin('session', ORIGIN_SESSION_KEY);
     if (visit) { originMemo = visit; return originMemo; }
 
@@ -478,4 +539,21 @@ function readUtm(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+
+const readAttribution = createAttributionReader();
+function isZzalEvent(event: string) {
+  return /^\/zzal(?:\/|$)/.test(window.location.pathname) && /^(zzal_|auth_)/.test(event);
+}
+function internalZzalProps(event: string, props: Record<string, string | number | boolean> | undefined) {
+  if (!isZzalEvent(event)) return props;
+  try {
+    const url = new URL(window.location.href);
+    const cookie = document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith('lore_locale='))?.slice(12);
+    const uiLang = [url.searchParams.get('lang'), cookie, document.documentElement.lang].find(v => v === 'ko' || v === 'en' || v === 'ja');
+    // 예약 광고 필드는 호출자가 넣은 props가 아니라 URL/저장소 검증기에서만 가져온다.
+    const attribution = readAttribution(url, storeOf('session'), storeOf('local'), !!externalReferrer(), Date.now(), uiLang);
+    return { ...props, ...attribution };
+  } catch { return props; }
 }

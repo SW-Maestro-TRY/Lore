@@ -35,6 +35,7 @@ import { OnbDevProvider, useOnbFlag, useCharLayout } from './onboardingDev';
 import { holdForPicker, once, releasePicker, ztrack } from './funnel';
 import InAppBanner from '../parts/InAppBanner';
 import PersonaEgg from './PersonaEgg';
+import LanguageSelector from '../../LanguageSelector';
 import {useUiText} from '../../lib/uiCopy';
 import { eggVariant, type EggVariant } from './personaSteps';
 
@@ -469,6 +470,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         <span style={{ flex: 1 }} />
         {/* OB-08 — dots 개수·활성(d.w·d.bg)은 그대로, 모서리만 pill 로 다듬는다. */}
         {o.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 6, borderRadius: fDots ? radius.pill : 3, background: d.bg }} />)}
+        <LanguageSelector/>
       </div>
 
       {/* ★ 칸이 바뀌어도 아래 CTA 버튼은 **같은 DOM 노드**라 포커스가 그대로 남는다 — 눈으로 보는

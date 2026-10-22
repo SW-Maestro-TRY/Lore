@@ -20,10 +20,103 @@ import { LEGAL_LINKS } from "../links";
 import { SessionCheckError, signIn, signUp } from "./useAuth";
 import styles from "./AuthModal.module.css";
 
+
+/** Opt-in copy only. Existing callers keep Korean and the same authentication flow. */
+export type AuthLocale = "ko" | "en" | "ja";
+const AUTH_COPY: Record<"en" | "ja", Record<string, string>> = {
+  "en": {
+    "로그인": "Log in",
+    "회원가입": "Sign up",
+    "이전": "Back",
+    "닫기": "Close",
+    "로그인 또는 회원가입": "Log in or sign up",
+    "닫기 확인": "Confirm closing",
+    "닫을까요? 입력한 내용이 사라져요": "Close this form? Your entries will be lost.",
+    "계속": "Keep editing",
+    "이메일": "Email",
+    "비밀번호": "Password",
+    "비밀번호 확인": "Confirm password",
+    "비밀번호 숨기기": "Hide password",
+    "비밀번호 보기": "Show password",
+    "8자 이상": "At least 8 characters",
+    "약관 동의": "Agreements",
+    "전체 동의": "Agree to all",
+    "[필수]": "[Required]",
+    "[선택]": "[Optional]",
+    "만 14세 이상입니다": "I am 14 or older",
+    "이용약관에 동의합니다": "Terms of Service",
+    "개인정보 처리방침에 동의합니다": "Privacy Policy",
+    "마케팅 정보 수신에 동의합니다": "Receive marketing messages",
+    "보기": "View (Korean)",
+    "처리 중…": "Processing…",
+    "다음": "Next",
+    "가입하고 시작하기": "Sign up and start",
+    "이메일을 입력해 주세요": "Enter your email address.",
+    "이메일 주소를 다시 확인해 주세요": "Check your email address.",
+    "비밀번호는 8자 이상이어야 합니다": "Use at least 8 characters for your password.",
+    "비밀번호는 72자까지 쓸 수 있습니다": "Use no more than 72 characters for your password.",
+    "비밀번호가 서로 다릅니다": "The passwords do not match.",
+    "이메일과 비밀번호를 입력해 주세요": "Enter your email and password.",
+    "만 14세 이상만 가입할 수 있습니다": "You must be 14 or older to sign up.",
+    "필수 약관에 동의해 주세요": "Agree to the required terms to continue.",
+    "가입은 됐어요. 로그인 상태를 확인하지 못했어요 — 로그인을 눌러 다시 시도해 주세요": "Your account was created, but we could not confirm your login. Select Log in to try again.",
+    "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요": "We could not complete the request. Please try again shortly.",
+    "로그인 상태를 확인하지 못했어요. 다시 시도해 주세요": "We could not confirm your login. Please try again.",
+    "이미 가입된 이메일입니다": "This email is already registered. Try logging in.",
+    "이메일 또는 비밀번호가 올바르지 않습니다": "Your email or password is incorrect."
+  },
+  "ja": {
+    "로그인": "ログイン",
+    "회원가입": "新規登録",
+    "이전": "戻る",
+    "닫기": "閉じる",
+    "로그인 또는 회원가입": "ログインまたは新規登録",
+    "닫기 확인": "閉じる確認",
+    "닫을까요? 입력한 내용이 사라져요": "閉じますか？入力内容は失われます。",
+    "계속": "入力を続ける",
+    "이메일": "メールアドレス",
+    "비밀번호": "パスワード",
+    "비밀번호 확인": "パスワードの確認",
+    "비밀번호 숨기기": "パスワードを隠す",
+    "비밀번호 보기": "パスワードを表示",
+    "8자 이상": "8文字以上",
+    "약관 동의": "規約への同意",
+    "전체 동의": "すべてに同意する",
+    "[필수]": "[必須]",
+    "[선택]": "[任意]",
+    "만 14세 이상입니다": "14歳以上です",
+    "이용약관에 동의합니다": "利用規約に同意します",
+    "개인정보 처리방침에 동의합니다": "プライバシーポリシーに同意します",
+    "마케팅 정보 수신에 동의합니다": "マーケティング情報の受信に同意します",
+    "보기": "表示（韓国語）",
+    "처리 중…": "処理中…",
+    "다음": "次へ",
+    "가입하고 시작하기": "登録して始める",
+    "이메일을 입력해 주세요": "メールアドレスを入力してください。",
+    "이메일 주소를 다시 확인해 주세요": "メールアドレスを確認してください。",
+    "비밀번호는 8자 이상이어야 합니다": "パスワードは8文字以上にしてください。",
+    "비밀번호는 72자까지 쓸 수 있습니다": "パスワードは72文字以内にしてください。",
+    "비밀번호가 서로 다릅니다": "パスワードが一致しません。",
+    "이메일과 비밀번호를 입력해 주세요": "メールアドレスとパスワードを入力してください。",
+    "만 14세 이상만 가입할 수 있습니다": "登録には14歳以上である必要があります。",
+    "필수 약관에 동의해 주세요": "必須の規約に同意してください。",
+    "가입은 됐어요. 로그인 상태를 확인하지 못했어요 — 로그인을 눌러 다시 시도해 주세요": "登録は完了しましたが、ログイン状態を確認できませんでした。ログインを押して再試行してください。",
+    "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요": "リクエストを処理できませんでした。少し待ってから再試行してください。",
+    "로그인 상태를 확인하지 못했어요. 다시 시도해 주세요": "ログイン状態を確認できませんでした。もう一度お試しください。",
+    "이미 가입된 이메일입니다": "このメールアドレスは登録済みです。ログインしてください。",
+    "이메일 또는 비밀번호가 올바르지 않습니다": "メールアドレスまたはパスワードが正しくありません。"
+  }
+};
+function authText(locale: AuthLocale, text: string): string {
+  return locale === "ko" ? text : AUTH_COPY[locale][text] ?? text;
+}
+
 export type AuthTab = "login" | "signup";
 
 export interface AuthModalProps {
   open: boolean;
+  /** Zzal opts into its document language; other services retain the Korean default. */
+  locale?: AuthLocale | "document";
   /** 닫기 요청. 성공해서 닫히든 사용자가 물러나든 같은 콜백으로 온다. */
   onClose: () => void;
   /** 열 때 보여줄 탭. 기본은 로그인 — 대부분은 이미 계정이 있는 사람이다. */
@@ -142,16 +235,33 @@ function errorCodeOf(e: unknown): string {
   return "network_error";
 }
 
-function messageOf(e: unknown): string {
-  if (e instanceof SessionCheckError) return e.message;
-  return e instanceof ApiError && e.message ? e.message : FALLBACK_MESSAGE;
+function messageOf(e: unknown, locale: AuthLocale): string {
+  if (locale === "ko") {
+    if (e instanceof SessionCheckError) return e.message;
+    return e instanceof ApiError && e.message ? e.message : FALLBACK_MESSAGE;
+  }
+  if (e instanceof SessionCheckError) return authText(locale, "로그인 상태를 확인하지 못했어요. 다시 시도해 주세요");
+  if (e instanceof ApiError && e.code === "EMAIL_ALREADY_EXISTS") return authText(locale, "이미 가입된 이메일입니다");
+  if (e instanceof ApiError && e.code === "LOGIN_FAILED") return authText(locale, "이메일 또는 비밀번호가 올바르지 않습니다");
+  return authText(locale, FALLBACK_MESSAGE);
 }
 
 /** Tab 순환에 걸릴 것들. 모달 밖으로 포커스가 새는 걸 막는 데 쓴다. */
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export default function AuthModal({ open, onClose, onSuccess, initialTab = "login" }: AuthModalProps) {
+export default function AuthModal({ open, onClose, onSuccess, initialTab = "login", locale = "ko" }: AuthModalProps) {
+  const [documentLocale, setDocumentLocale] = useState<AuthLocale>("ko");
+  useLayoutEffect(() => {
+    if (locale !== "document") return;
+    const sync = () => { const value = document.documentElement.lang; setDocumentLocale(value === "en" || value === "ja" ? value : "ko"); };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    return () => observer.disconnect();
+  }, [locale]);
+  const resolvedLocale = locale === "document" ? documentLocale : locale;
+  const t = (text: string) => authText(resolvedLocale, text);
   const [tab, setTab] = useState<AuthTab>(initialTab);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -699,7 +809,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       track("auth_login_failed", { code: errorCodeOf(e) });
       // 로그인 실패는 대개 비밀번호 오타다 — 비밀번호 칸 밑에 두고 그 칸을 선택해 둔다.
       // (확인 실패(me_failed)도 같은 자리 — 같은 칸에서 다시 누르면 된다.)
-      showError("password", messageOf(e));
+      showError("password", messageOf(e, resolvedLocale));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -765,7 +875,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       }
       track("auth_signup_failed", { code: errorCodeOf(e) });
       // 이미 가입된 이메일은 이메일 칸의 문제다 — 단계형이면 이메일 단계로 돌아간다.
-      showError(errorCodeOf(e) === "EMAIL_ALREADY_EXISTS" ? "email" : "form", messageOf(e));
+      showError(errorCodeOf(e) === "EMAIL_ALREADY_EXISTS" ? "email" : "form", messageOf(e, resolvedLocale));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -848,7 +958,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
       // ★ key 가 오류마다 바뀐다(H14) — 같은 문구가 다시 나와도 새 요소로 붙어 낭독기가 다시 읽고,
       //   위 효과도 다시 돌아 칸 포커스·선택이 돌아온다. 예전엔 같은 값이라 아무 반응이 없어 보였다.
       <p key={errorSeq} ref={errorRef} id={errorId} className={styles.error} role="alert">
-        {formError}
+        {t(formError)}
       </p>
     ) : null;
   const invalid = (spot: ErrorSpot) => Boolean(formError) && errorSpot === spot;
@@ -875,6 +985,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
         className={`${styles.dialog}${stepMode ? ` ${styles.stepMode}` : ""}`}
         data-step-mode={stepMode ? step : undefined}
         role="dialog"
+        lang={resolvedLocale}
         aria-modal="true"
         aria-labelledby={titleId}
         // 폰에서 처음 열 때 포커스를 받는 자리(칸에 주면 키보드 없이 시트가 위로 간다 — 위 효과).
@@ -884,7 +995,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
         <div className={styles.head}>
           {stepMode && stepIndex > 0 && (
             <button type="button" className={styles.stepBack} onClick={goBack}
-                    aria-label="이전" data-action="auth-step-back">
+                    aria-label={t("이전")} data-action="auth-step-back">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M15 5l-7 7 7 7" />
@@ -892,7 +1003,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             </button>
           )}
           <h2 id={titleId} className={styles.title}>
-            {isLogin ? "로그인" : "회원가입"}
+            {isLogin ? t("로그인") : t("회원가입")}
           </h2>
           {stepMode && (
             <span className={styles.progress} data-part="auth-step-progress">
@@ -903,7 +1014,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             type="button"
             className={styles.close}
             onClick={() => requestClose("button")}
-            aria-label="닫기"
+            aria-label={t("닫기")}
           >
             <span aria-hidden="true">×</span>
           </button>
@@ -913,7 +1024,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             ★ 빼지 않고 눈에서만 숨긴다: 피스메이커가 `:has(> [role="tablist"])` 로 이 창을 찾아 옷을
               입히므로(piece-maker.css), 탭이 DOM 에서 빠지면 둘째 단계부터 옷이 벗겨졌다(실측). */}
         <div className={`${styles.tabs}${tabsHidden ? ` ${styles.stepHidden}` : ""}`}
-             role="tablist" aria-label="로그인 또는 회원가입"
+             role="tablist" aria-label={t("로그인 또는 회원가입")}
              aria-hidden={tabsHidden ? true : undefined}>
           <button
             type="button"
@@ -925,7 +1036,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             onClick={() => switchTab("login")}
             tabIndex={tabsHidden ? -1 : undefined}
           >
-            로그인
+            {t("로그인")}
           </button>
           <button
             type="button"
@@ -937,21 +1048,21 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             onClick={() => switchTab("signup")}
             tabIndex={tabsHidden ? -1 : undefined}
           >
-            회원가입
+            {t("회원가입")}
           </button>
         </div>
 
         {confirmClose && (
-          <div className={styles.confirm} role="group" aria-label="닫기 확인" data-part="auth-close-confirm">
-            <p className={styles.confirmText}>닫을까요? 입력한 내용이 사라져요</p>
+          <div className={styles.confirm} role="group" aria-label={t("닫기 확인")} data-part="auth-close-confirm">
+            <p className={styles.confirmText}>{t("닫을까요? 입력한 내용이 사라져요")}</p>
             <div className={styles.confirmActions}>
               <button type="button" className={styles.confirmStay} data-action="auth-close-stay"
                       onClick={() => { setConfirmClose(false); inputOf(step)?.focus({ preventScroll: true }); }}>
-                계속
+                {t("계속")}
               </button>
               <button type="button" className={styles.confirmLeave} data-action="auth-close-leave"
                       onClick={() => requestClose("back")}>
-                닫기
+                {t("닫기")}
               </button>
             </div>
           </div>
@@ -971,7 +1082,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           noValidate
         >
           <label className={`${styles.field}${hiddenUnless("email")}`}>
-            <span className={styles.label}>이메일</span>
+            <span className={styles.label}>{t("이메일")}</span>
             <input
               ref={emailRef}
               {...hiddenProps("email")}
@@ -995,7 +1106,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           {/* 보기 버튼이 들어가서 label 로 감싸지 않고 htmlFor 로 잇는다 —
               label 안의 버튼은 브라우저마다 누름이 입력칸 포커스로 새기도 한다. */}
           <div className={`${styles.field}${hiddenUnless("password")}`}>
-            <label htmlFor={passwordId} className={styles.label}>비밀번호</label>
+            <label htmlFor={passwordId} className={styles.label}>{t("비밀번호")}</label>
             <span className={styles.inputWrap}>
               <input
                 ref={passwordRef}
@@ -1019,7 +1130,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
                 className={styles.reveal}
                 {...hiddenProps("password")}
                 onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                aria-label={showPassword ? t("비밀번호 숨기기") : t("비밀번호 보기")}
                 aria-pressed={showPassword}
               >
                 <EyeIcon open={showPassword} />
@@ -1027,7 +1138,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
             </span>
             {!isLogin && (
               <span id={passwordHintId} className={styles.hint}>
-                {PASSWORD_MIN}자 이상
+                {t(`${PASSWORD_MIN}자 이상`)}
               </span>
             )}
           </div>
@@ -1036,7 +1147,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           {!isLogin && (
             <>
               <label className={`${styles.field}${hiddenUnless("confirm")}`}>
-                <span className={styles.label}>비밀번호 확인</span>
+                <span className={styles.label}>{t("비밀번호 확인")}</span>
                 <input
                   ref={confirmRef}
                   {...hiddenProps("confirm")}
@@ -1056,26 +1167,26 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
               {errorAt("confirm")}
 
               <fieldset className={`${styles.agreements}${hiddenUnless("agree")}`}>
-                <legend className={styles.srOnly}>약관 동의</legend>
+                <legend className={styles.srOnly}>{t("약관 동의")}</legend>
 
                 <label className={`${styles.agreeLabel} ${styles.agreeAll}`}>
                   <input type="checkbox" checked={allAgreed} onChange={toggleAll} />
-                  <span>전체 동의</span>
+                  <span>{t("전체 동의")}</span>
                 </label>
 
                 <div className={styles.agreeRow}>
                   <label className={styles.agreeLabel}>
                     <input type="checkbox" checked={agree.age} onChange={setOne("age")} />
-                    <span className={styles.tagRequired}>[필수]</span>
-                    <span>만 14세 이상입니다</span>
+                    <span className={styles.tagRequired}>{t("[필수]")}</span>
+                    <span>{t("만 14세 이상입니다")}</span>
                   </label>
                 </div>
 
                 <div className={styles.agreeRow}>
                   <label className={styles.agreeLabel}>
                     <input type="checkbox" checked={agree.terms} onChange={setOne("terms")} />
-                    <span className={styles.tagRequired}>[필수]</span>
-                    <span>이용약관에 동의합니다</span>
+                    <span className={styles.tagRequired}>{t("[필수]")}</span>
+                    <span>{t("이용약관에 동의합니다")}</span>
                   </label>
                   {/* 링크를 label 밖에 두는 이유: 안에 있으면 "보기" 를 누른 것이
                       체크 토글로도 읽히는 브라우저가 있다. */}
@@ -1085,15 +1196,15 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    보기
+                    {t("보기")}
                   </a>
                 </div>
 
                 <div className={styles.agreeRow}>
                   <label className={styles.agreeLabel}>
                     <input type="checkbox" checked={agree.privacy} onChange={setOne("privacy")} />
-                    <span className={styles.tagRequired}>[필수]</span>
-                    <span>개인정보 처리방침에 동의합니다</span>
+                    <span className={styles.tagRequired}>{t("[필수]")}</span>
+                    <span>{t("개인정보 처리방침에 동의합니다")}</span>
                   </label>
                   <a
                     className={styles.agreeLink}
@@ -1101,7 +1212,7 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    보기
+                    {t("보기")}
                   </a>
                 </div>
 
@@ -1112,8 +1223,8 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
                       checked={agree.marketing}
                       onChange={setOne("marketing")}
                     />
-                    <span className={styles.tagOptional}>[선택]</span>
-                    <span>마케팅 정보 수신에 동의합니다</span>
+                    <span className={styles.tagOptional}>{t("[선택]")}</span>
+                    <span>{t("마케팅 정보 수신에 동의합니다")}</span>
                   </label>
                 </div>
               </fieldset>
@@ -1127,15 +1238,15 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
           {/* 오류가 아닌 안내(가입 완료). status 로 읽어 주되 오류처럼 다급하게 읽지 않는다. */}
           {!formError && info && (
             <p className={styles.info} role="status">
-              {info}
+              {t(info)}
             </p>
           )}
 
           <button type="submit" className={styles.submit} disabled={submitting}
                   data-action={stepMode && !lastStep ? "auth-step-next" : "auth-submit"}>
-            {submitting ? "처리 중…"
-              : stepMode && !lastStep ? "다음"
-              : isLogin ? "로그인" : "가입하고 시작하기"}
+            {submitting ? t("처리 중…")
+              : stepMode && !lastStep ? t("다음")
+              : isLogin ? t("로그인") : t("가입하고 시작하기")}
           </button>
         </form>
         {debug && <span className={styles.debug} data-part="auth-debug" aria-hidden="true" />}

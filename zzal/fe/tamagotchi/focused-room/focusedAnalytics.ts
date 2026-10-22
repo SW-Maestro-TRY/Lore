@@ -25,15 +25,15 @@ export function createFocusedMetrics({petId,emit=ztrack,now=Date.now,storage}:Op
   const elapsed=(at:number)=>Math.max(0,now()-at);
   const step=(action:string)=>{if(intro?.version!==4||intro.key==='COMPLETE')return;const index=ORDER.indexOf(intro.key);if(index<0)return;send('zzal_tutorial_step',{action,type:intro.key,step:index+1,ms:elapsed(stepAt),from:'focused_v4'})};
   return {
-    enter(type:string){if(entered)return;entered=true;active=true;navigation=['navigate','reload','back_forward'].includes(type)?type:'navigate';roomAt=now();stepAt=now();send('zzal_room_viewed',{action:'enter',type:navigation,from:'focused',ms:0})},
-    leave(){if(!active)return;active=false;send('zzal_room_viewed',{action:'leave',type:navigation,from:'focused',ms:elapsed(roomAt)});step('leave')},
-    resume(){if(!entered||active)return;active=true;roomAt=now();stepAt=now();send('zzal_room_viewed',{action:'resume',type:'visible',from:'focused',ms:0})},
+    enter(type:string){if(entered)return;entered=true;active=true;navigation=['navigate','reload','back_forward'].includes(type)?type:'navigate';roomAt=now();stepAt=now();send('zzal_room_viewed',{action:'enter',type:'real',navigation,from:'focused',ms:0})},
+    leave(){if(!active)return;active=false;send('zzal_room_viewed',{action:'leave',type:'real',navigation,from:'focused',ms:elapsed(roomAt)});step('leave')},
+    resume(){if(!entered||active)return;active=true;roomAt=now();stepAt=now();send('zzal_room_viewed',{action:'resume',type:'real',navigation:'visible',from:'focused',ms:0})},
     observeIntro(next:Intro){
       if(!next)return;
       if(intro?.version===4&&next.version===4&&intro.key!==next.key){
         const before=ORDER.indexOf(intro.key),after=ORDER.indexOf(next.key);
         if(before>=0&&after>before&&claim(`step:${intro.key}`))step('completed');
-        if(intro.key==='REVIEW_SEEN'&&next.key==='COMPLETE'&&next.completed===true&&claim('intro:completed'))send('zzal_tutorial_completed',{action:'completed',type:'v4',from:'focused',count:1});
+        if(intro.key==='REVIEW_SEEN'&&next.key==='COMPLETE'&&next.completed===true&&claim('intro:completed'))send('zzal_tutorial_completion_observed',{action:'observed',type:'v4',from:'focused',count:1});
       }
       if(intro?.key!==next.key||intro?.version!==next.version)stepAt=now();
       intro={...next};

@@ -12,8 +12,8 @@ export type IntroTopic = 'ATTENDANCE_INTRO' | 'ALBUM' | 'PERSONALITY' | 'DIARY_I
 export const FIRST_INTRO_STEPS: Record<FirstIntroKey, TutorStep> = {
   FEED: { at:'room', room:'table', act:'a', done:'FEED', text:"주방에서 밥을 줘 보세요." },
   SNACK: { at:'room', room:'table', act:'b', done:'SNACK', text:"간식을 하나 줘 보세요. 많이 먹으면 배탈이 날 수 있어요." },
-  CLEAN: { at:'room', room:'bath', act:'a', done:'CLEAN', text:"욕실에서 바닥의 똥을 치워 주세요." },
-  BATH: { at:'room', room:'bath', act:'b', done:'BATH', text:"목욕하면 똥 3개도 한 번에 치울 수 있어요. 하루에 한 번 할 수 있으니 지금 해 볼까요?" },
+  CLEAN: { at:'room', room:'bath', act:'a', done:'CLEAN', text:"욕실에서 바닥의 먼지를 치워 주세요." },
+  BATH: { at:'room', room:'bath', act:'b', done:'BATH', text:"목욕하면 먼지 뭉치 3개도 한 번에 치울 수 있어요. 하루에 한 번 할 수 있으니 지금 해 볼까요?" },
   GAME: { at:'room', room:'play', act:'a', done:'GAME', text:"마당에서 좌우 맞히기를 한 판 끝까지 해 보세요." },
   PET: { at:'room', room:null, act:'pet', done:'PET', text:"캐릭터를 눌러 쓰다듬어 주세요." },
   NAP_SLEEP: { at:'room', room:'bed', act:'a', done:'NAP_SLEEP', text:"침실에서 잠깐 재워 보세요. 이번에는 바로 깨울 수 있어요. 평소에는 한국 시간 저녁 7시부터 재울 수 있고, 밤 11시에 자동으로 잠들어요." },

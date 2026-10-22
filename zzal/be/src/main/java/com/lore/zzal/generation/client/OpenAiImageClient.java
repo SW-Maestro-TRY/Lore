@@ -74,7 +74,7 @@ public class OpenAiImageClient implements ImageClient {
     public Result generate(String prompt, List<String> refImageKeys, String outputKey, ModelSpec spec)
             throws Exception {
         Path work = Files.createTempDirectory("zzal-img-");
-        try {
+        try (var attempt = new ProviderAttempt(usageRecorder, spec.model())) {
             // 참조 이미지를 S3 에서 받아 온다(시트 생성이면 원본, 격자면 시트).
             Path[] refs = new Path[refImageKeys.size()];
             for (int i = 0; i < refImageKeys.size(); i++) {
@@ -95,11 +95,12 @@ public class OpenAiImageClient implements ImageClient {
                     .POST(HttpRequest.BodyPublishers.ofByteArray(body))
                     .build();
 
+            attempt.start();
             HttpResponse<String> res;
             try { res = http.send(req, HttpResponse.BodyHandlers.ofString()); }
-            catch (Exception e) { usageRecorder.record(ProviderUsageRecorder.headers(spec.model(),0,null));throw e; }
+            catch (Exception e) { attempt.record(ProviderUsageRecorder.headers(spec.model(),0,null));throw e; }
             String requestId=res.headers().firstValue("x-request-id").orElse(null);
-            usageRecorder.record(ProviderUsageRecorder.headers(spec.model(),res.statusCode(),requestId));
+            attempt.record(ProviderUsageRecorder.headers(spec.model(),res.statusCode(),requestId));
             if (res.statusCode() != 200) {
                 // 본문을 그대로 붙인다 — moderation 차단인지 한도 초과인지가 여기 적혀 있고,
                 // 위층이 그 문구를 보고 실패 종류를 가른다(처방이 정반대라 반드시 구분해야 한다).
@@ -111,8 +112,9 @@ public class OpenAiImageClient implements ImageClient {
             //   그래서 비용을 먼저 계산해 두고, 이 아래에서 터지는 모든 실패에 그 값을 실어 보낸다.
             //   안 그러면 응답 파싱·S3 업로드 실패가 "비용 0" 으로 기록돼 원가가 실제보다 낮게 보인다.
             JsonNode payload = json.readTree(res.body());
-            usageRecorder.record(ProviderUsageRecorder.payload(spec.model(),res.statusCode(),requestId,payload));
+            attempt.record(ProviderUsageRecorder.payload(spec.model(),res.statusCode(),requestId,payload));
             BigDecimal cost = cost(payload);
+            attempt.estimatedCost(cost);
             try {
                 String b64 = payload.path("data").path(0).path("b64_json").asText(null);
                 if (b64 == null || b64.isBlank()) {
@@ -127,6 +129,7 @@ public class OpenAiImageClient implements ImageClient {
             }
 
             log.info("이미지 생성 — {} · {} · ${}", outputKey, spec.model(), cost);
+            attempt.success();
             return new Result(outputKey, cost);
         } finally {
             deleteQuietly(work);

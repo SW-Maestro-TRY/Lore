@@ -11,11 +11,14 @@ public final class RealCustomBundleService {
  public boolean run(long jobId,String claimToken,Path output,Instant now)throws Exception {
   if(publication!=null&&publication.publishGenerated(jobId,now))return true; // Generated recovery is publication-only, with no provider preflight or call.
   executor.preflight(); // capability failure must occur before a potentially paid author call
+  worker.requireCompatibleClaim(jobId,claimToken); // reject another dispatcher token before any paid planning
   Files.createDirectories(output);
   var author=new TextClientCustomAuthor(text,plannerModel,audit->{try{Files.writeString(output.resolve("planner-audit.json"),new ObjectMapper().writeValueAsString(audit),StandardOpenOption.CREATE_NEW);}catch(Exception e){throw new IllegalStateException("Cannot preserve planner provenance",e);}});
+  try(var usage=com.lore.zzal.generation.client.ProviderUsageContext.open("custom_bundle",null,jobId,"custom-"+jobId,1)) {
   planning.prepare(jobId,author,now);
   boolean generated=worker.run(jobId,claimToken,executor,output);
   if(generated&&publication!=null)publication.publishGenerated(jobId,now);
   return generated;
+  }
  }
 }
