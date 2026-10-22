@@ -4568,6 +4568,36 @@
         },
         "type": "object"
       },
+      "LegacyPersonaSource": {
+        "properties": {
+          "genre": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "personalities": {
+            "items": {
+              "enum": [
+                "GENTLE",
+                "LIVELY",
+                "SHY",
+                "CLINGY",
+                "COOL"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tone": {
+            "type": "string"
+          },
+          "world": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "LikeResult": {
         "properties": {
           "liked": {
@@ -4948,6 +4978,9 @@
           },
           "callMe": {
             "type": "string"
+          },
+          "legacySource": {
+            "$ref": "#/components/schemas/LegacyPersonaSource"
           },
           "personaSourceHash": {
             "type": "string"

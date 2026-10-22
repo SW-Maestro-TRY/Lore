@@ -5724,6 +5724,13 @@ export interface components {
             slot?: string;
             userLine?: string;
         };
+        LegacyPersonaSource: {
+            genre?: string;
+            note?: string;
+            personalities?: ("GENTLE" | "LIVELY" | "SHY" | "CLINGY" | "COOL")[];
+            tone?: string;
+            world?: string;
+        };
         LikeResult: {
             liked?: boolean;
             /** Format: int64 */
@@ -5907,6 +5914,7 @@ export interface components {
             addressStatus?: string;
             authoredPersona?: components["schemas"]["AuthoredPersona"];
             callMe?: string;
+            legacySource?: components["schemas"]["LegacyPersonaSource"];
             personaSourceHash?: string;
         };
         /** @description 성격 등록·수정 요청. 수면 중을 포함해 언제든 변경할 수 있다 */

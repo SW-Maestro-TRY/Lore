@@ -175,10 +175,11 @@ public class PetController {
     public ApiResponse<PersonaSource> persona(@LoginUser Long userId, @PathVariable Long petId) {
         ZzalPet pet=petService.get(userId,petId);
         return ApiResponse.ok(new PersonaSource(pet.getAuthoredPersona(),pet.getCallMe(),FirstMeeting.View.of(pet).addressStatus(),
-                com.lore.zzal.pet.persona.PersonaSourceVersion.of(pet)));
+                com.lore.zzal.pet.persona.PersonaSourceVersion.forEditing(pet),
+                com.lore.zzal.pet.persona.LegacyPersonaSource.of(pet)));
     }
 
-    public record PersonaSource(AuthoredPersona authoredPersona,String callMe,String addressStatus,String personaSourceHash) { }
+    public record PersonaSource(AuthoredPersona authoredPersona,String callMe,String addressStatus,String personaSourceHash, com.lore.zzal.pet.persona.LegacyPersonaSource legacySource) { }
 
     @Operation(summary = "부화 진행 조회", description = """
             부화 대기 화면이 주기적으로 폴링하는 API 다. 응답을 가볍게 유지하기 위해

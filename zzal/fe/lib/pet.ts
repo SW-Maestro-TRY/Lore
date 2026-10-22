@@ -902,7 +902,8 @@ export function getAuthoredPersona(petId: number): Promise<PersonaSource> {
   return request(`${PET_BASE}/${petId}/persona`);
 }
 
-export interface PersonaSource { authoredPersona: AuthoredPersona | null; callMe: string | null; addressStatus: string; personaSourceHash: string }
+export interface LegacyPersonaSource { world: string | null; note: string | null; personalities: string[]; tone: string | null; genre: string | null }
+export interface PersonaSource { legacySource?: LegacyPersonaSource | null; authoredPersona: AuthoredPersona | null; callMe: string | null; addressStatus: string; personaSourceHash: string }
 export interface PersonaUpdate { authoredPersona?: AuthoredPersona; callMe?: string; expectedPersonaHash: string }
 export function updatePersonaSource(petId: number, input: PersonaUpdate): Promise<PetDetail> {
  return request(`${PET_BASE}/${petId}/personality`, { method: 'POST', body: input });

@@ -810,7 +810,7 @@ public class PetService {
             throw new BusinessException(ErrorCode.INVALID_INPUT,"부르는 이름을 입력해 주세요");
         if (request.expectedPersonaHash()==null || request.expectedPersonaHash().isBlank())
             throw new BusinessException(ErrorCode.INVALID_INPUT,"현재 설정을 다시 확인해 주세요");
-        String current=com.lore.zzal.pet.persona.PersonaSourceVersion.of(pet);
+        String current=com.lore.zzal.pet.persona.PersonaSourceVersion.forEditing(pet);
         boolean exact=(request.authoredPersona()==null || request.authoredPersona().equals(pet.getAuthoredPersona()))
                 && (request.callMe()==null || (request.callMe().strip().equals(pet.getCallMe()) && "EXPLICIT".equals(pet.getCallMeSource())));
         if (!current.equals(request.expectedPersonaHash())) {

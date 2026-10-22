@@ -16,6 +16,8 @@
 //   「이전」= 앞 칸으로 가며 그 칸의 점이 알에서 칸으로 돌아온다(0.3초). 글·칩은 칸에 그대로 남아 다시 고칠 수 있다.
 'use client';
 
+import {PERSONA_LAYOUT_STYLE,PersonaQuestionSheet,PersonaQuestionPane,PersonaQuestionFooter} from './PersonaQuestionSheet';
+import {flyPieces,reducedMotion,wait,reactPersona} from './personaAbsorption';
 import LanguageSelector from '../../LanguageSelector';
 import {PersonaQuestionFields} from './PersonaQuestionFields';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -64,36 +66,7 @@ const NAV_MAIN = {
   fontSize: fz.xl, fontFamily: GAEGU, fontWeight: 700, whiteSpace: 'nowrap',
 } as const;
 
-const STYLE = `
-.pe-root{position:relative;overflow:hidden;--pe-stage:190px}
-.pe-stage{flex:0 0 var(--pe-stage);min-height:0}
-.pe-sheet{position:relative}
-.pe-keyboard-done{position:absolute;right:16px;top:-49px;z-index:4;height:44px;min-width:52px;border:1px solid #D8C9BD;border-radius:999px;background:#FFFDF8;color:#9C4232;font:700 18px Gaegu}
 
-/* Questions rest at the bottom too; long chip lists scroll inside the sheet.
-   Grow the egg only inside the available stage; the keyboard viewport path keeps its existing 200px egg. */
-.pe-root:not([data-q="done"]):not([data-kb="1"]) .pe-stage{flex:1 0 230px;min-height:230px;container-type:size}
-@supports(height:1cqh){
-.pe-root:not([data-q="done"]):not([data-kb="1"]) [data-part="pe-egg"]{--question-egg:min(340px,calc(100vw - 64px),max(200px,calc(100cqh - 30px)));width:var(--question-egg)!important;height:var(--question-egg)!important;min-height:0!important;max-height:none!important;margin-top:0!important;margin-bottom:0!important}
-}
-.pe-root:not([data-q="done"]):not([data-kb="1"]) .pe-sheet{flex:0 1 auto!important;margin-top:auto!important}
-.pe-root:not([data-q="done"]):not([data-kb="1"]) .pe-scroll{flex:0 1 auto!important}
-
-/* Completed waiting: preserve the approved larger egg. */
-.pe-root[data-waiting="true"] .pe-stage{flex:1 1 auto;min-height:0}
-.pe-root[data-waiting="true"] [data-part="pe-egg"]{--waiting-egg:min(340px,calc(100vw - 64px),max(240px,42vh));width:var(--waiting-egg)!important;height:var(--waiting-egg)!important;min-height:0!important;max-height:none!important;margin-top:0!important;margin-bottom:0!important}
-.pe-root[data-waiting="true"] .pe-sheet{flex:0 0 auto!important;margin-top:auto!important}
-.pe-root[data-waiting="true"] .pe-scroll{flex:0 0 auto!important}
-
-.pe-chip{ position:relative; min-width:44px; transition:opacity .15s; }
-.pe-chip[data-flying="1"]{ opacity:.35; }
-.pe-chip:disabled:not([aria-pressed="true"]){ opacity:.45; }
-.pe-scroll{ -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
-.pe-text::placeholder{ font-size:14px; line-height:1.4; color:rgba(74,64,56,.42); }
-@media (prefers-reduced-motion: reduce){
-  .pe-eggwrap{ animation:none!important; }
-}
-`;
 
 /** 칩을 `rows` 대로 줄을 나눈다. 수가 모자라면 남은 칩은 마지막 줄에 붙는다. */
 
@@ -115,64 +88,6 @@ function fitTextarea(el: HTMLTextAreaElement | null) {
   const h = Math.ceil(m.scrollHeight + padY + bd);
   m.remove();
   el.style.height = `${Math.max(TAP_MIN, h)}px`;
-}
-
-const reducedMotion = () => {
-  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
-};
-
-const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-/** 위로 휘는 곡선 위의 한 점(2차 베지에). 조절점은 출발·도착의 위쪽. */
-function curve(dx: number, dy: number, t: number): [number, number] {
-  const cx = dx * 0.35;
-  const cy = Math.min(0, dy) - 70;
-  const u = 1 - t;
-  return [2 * u * t * cx + t * t * dx, 2 * u * t * cy + t * t * dy];
-}
-
-/**
- * 칩·말 조각 사본을 알까지 날린다. 끝나면 사본을 지운다.
- * @returns 마지막 사본이 알에 닿기 0.1초 전(= 알 반응을 시작할 때)에 풀리는 약속
- */
-function flyPieces(pieces: { rect: DOMRect; label: string }[], to: DOMRect): Promise<void> {
-  const layer = document.createElement('div');
-  layer.setAttribute('data-part', 'pe-fly');
-  layer.setAttribute('aria-hidden', 'true');
-  layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden;';
-  document.body.appendChild(layer);
-  const tx = to.left + to.width / 2;
-  const ty = to.top + to.height * 0.55;
-  pieces.forEach((p, i) => {
-    const el = document.createElement('span');
-    el.textContent = p.label;
-    el.style.cssText = [
-      'position:absolute', `left:${p.rect.left}px`, `top:${p.rect.top}px`,
-      `height:${Math.min(p.rect.height, 44)}px`, 'display:flex', 'align-items:center', 'padding:0 14px',
-      `border-radius:999px`, `border:2px solid ${C.accent}`, `background:${C.accentSoft}`, `color:${C.accent}`,
-      `font-size:${fz.md}px`, 'white-space:nowrap', 'will-change:transform,opacity', 'transform-origin:50% 50%',
-      `box-shadow:0 4px 12px ${ink(.14)}`,
-    ].join(';');
-    layer.appendChild(el);
-    const w = el.getBoundingClientRect().width;
-    const h = el.getBoundingClientRect().height;
-    const dx = tx - (p.rect.left + w / 2);
-    const dy = ty - (p.rect.top + h / 2);
-    const frames: Keyframe[] = [];
-    const N = 10;
-    for (let k = 0; k <= N; k += 1) {
-      const t = k / N;
-      const [x, y] = curve(dx, dy, t);
-      const sc = 1 - 0.65 * t;
-      // 끝 0.1초(= 0.42 의 약 24%)에 투명해진다.
-      const op = t < 0.76 ? 1 : Math.max(0, 1 - (t - 0.76) / 0.24);
-      frames.push({ offset: t, transform: `translate(${x}px,${y}px) scale(${sc})`, opacity: op });
-    }
-    el.animate(frames, { duration: FLY_MS, delay: i * STAGGER_MS, easing: 'cubic-bezier(.5,0,.75,0)', fill: 'both' });
-  });
-  const lastStart = (pieces.length - 1) * STAGGER_MS;
-  setTimeout(() => layer.remove(), lastStart + FLY_MS + 40);
-  return wait(Math.max(0, lastStart + FLY_MS - OVERLAP_MS));
 }
 
 /**
@@ -325,24 +240,9 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
 
   // ── 알 반응 ──
   const react = useCallback(async (color: string, key: string) => {
-    const reduced = reducedMotion();
     setLastColor(color);
-    const base = variant === 'glow' ? 0.5 : 0.18;
-    if (reduced) {
-      halo.current?.animate([{ opacity: base }, { opacity: 0.85 }, { opacity: base }], { duration: REDUCED_GLOW_MS });
-      setPlaced((p) => (p.includes(key) ? p : [...p, key]));
-      await wait(REDUCED_GLOW_MS);
-      return;
-    }
-    eggReact.current?.animate([
-      { transform: 'scale(1,1)' }, { transform: 'scale(1.05,.92)', offset: 0.35 },
-      { transform: 'scale(.98,1.05)', offset: 0.7 }, { transform: 'scale(1,1)' },
-    ], { duration: REACT_MS, easing: 'ease-out' });
-    halo.current?.animate([
-      { opacity: base, transform: 'scale(1)' }, { opacity: 0.95, transform: 'scale(1.16)', offset: 0.4 }, { opacity: base, transform: 'scale(1)' },
-    ], { duration: REACT_MS, easing: 'ease-out' });
     setPlaced((p) => (p.includes(key) ? p : [...p, key]));
-    await wait(REACT_MS);
+    await reactPersona(eggReact.current,halo.current,variant==='glow'?.5:.18);
   }, [variant]);
 
   const tilt = useCallback(async () => {
@@ -534,7 +434,7 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
       data-kb={kb ? '1' : undefined} data-baked={baked ? '1' : undefined}
       style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', background: C.eggBg }}
     >
-      <style>{STYLE}</style>
+      <style>{PERSONA_LAYOUT_STYLE}</style>
       {sampleOpen && <div role="dialog" aria-modal="true" aria-label={tr('로미의 방')} style={{position:'absolute',inset:0,zIndex:60,background:C.paper,display:'flex',flexDirection:'column'}}><RomiSampleRoom onBack={closeSample} onReady={live.ready ? () => { closeSample(); void meet(); } : undefined}/></div>}
       <span aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
         {idx < 0 ? nameCopy.q : step ? step.q : baked ? tr('다 됐어요. 만나러 갈 수 있어요.') : tr('다 넣었어요. 곧 나와요.')}
@@ -599,9 +499,9 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
       </div>
 
       {/* 아래 — 질문 한 칸(스크롤) + 단추(고정) */}
-      <div className="pe-sheet" style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', background: C.paper, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, boxShadow: `0 -6px 20px ${ink(.06)}`, marginTop: gap.sm }}>
+      <PersonaQuestionSheet>
         {kb && <button type="button" className="pe-keyboard-done" onClick={() => (document.activeElement as HTMLElement)?.blur()}>{tr('완료')}</button>}
-        <div ref={sheetRef} className="pe-scroll" style={{ flex: '1 1 auto', minHeight: 0, overflow: 'auto', padding: '16px 20px 8px', display: 'flex', flexDirection: 'column', gap: gap.md }}>
+        <PersonaQuestionPane paneRef={sheetRef}>
           {idx < 0 && (
             <>
               <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, lineHeight: 1.25, color: C.ink }}>{nameCopy.q}</span>
@@ -641,11 +541,11 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
               </span>
             </>
           )}
-        </div>
+        </PersonaQuestionPane>
 
         {/* 단추 — 한 줄: 「이전」 · 「다음」 · 「건너뛰기」(상훈님 10/13 순서 그대로). 높이 52, 320 폭에서도 한 줄.
             빈 칸이면 「다음」은 흐리고 「건너뛰기」에 테두리를 둘러 지금 누를 단추가 하나로 보이게 한다. */}
-        <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 16px', paddingBottom: 'max(14px, env(safe-area-inset-bottom))' }}>
+        <PersonaQuestionFooter>
           {(sendErr || live.error || live.blocked) && (
             <span data-part="pe-error" style={{ fontSize: fz.sm, lineHeight: 1.5, color: live.blocked ? C.sub2 : C.accent, textAlign: 'center', paddingBottom: 4 }}>
               {live.blocked ? `${live.blocked.title} ${live.blocked.body}` : (live.error ?? sendErr)}
@@ -700,8 +600,8 @@ export default function PersonaEgg({ y, variant }: { y: Yeoul; variant: 'dots' |
             )
           )}
           {waitingDone && baked && !isCrack && !meeting && <button type="button" onClick={openSample} data-action="pe-play-sample" style={{minHeight:44,border:`1px solid ${C.lineHard}`,borderRadius:radius.pill,background:C.paper,color:C.accent,fontFamily:GAEGU,fontSize:fz.lg}}>{tr('로미의 방 구경하기')}</button>}
-        </div>
-      </div>
+        </PersonaQuestionFooter>
+      </PersonaQuestionSheet>
     </div>
   );
 }
