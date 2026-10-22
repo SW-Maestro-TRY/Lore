@@ -1,4 +1,5 @@
 'use client';
+import {interactionMetrics} from '../focused-room/interactionMetrics';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { getDiary, readDiary, type DiaryEntry, type DiaryPage } from '../../lib/pet';
 import { useZzalLocale } from '../../lib/locale';
@@ -15,7 +16,7 @@ export function useRewardsCopy() { return copy[useZzalLocale()]; }
 const button: CSSProperties = { minHeight:TAP_MIN, padding:'8px 12px', border:`1px solid ${C.lineHard}`, borderRadius:radius.md, background:C.paper, color:C.ink, font:'inherit', cursor:'pointer', overflowWrap:'anywhere' };
 
 export default function RewardsJournal({ onClose }: { onClose: () => void }) {
-  const live = useLive(); const t = useRewardsCopy(); const locale = useZzalLocale();
+  const live = useLive(); const metrics=interactionMetrics(live,false,'journal'); const t = useRewardsCopy(); const locale = useZzalLocale();
   const [page,setPage] = useState<DiaryPage|null>(null); const [entry,setEntry] = useState<DiaryEntry|null>(null);
   const [busy,setBusy] = useState(false); const [error,setError] = useState(false); const [ackError,setAckError] = useState(false);
   const ackPending = useRef(new Set<number>());
@@ -59,7 +60,7 @@ export default function RewardsJournal({ onClose }: { onClose: () => void }) {
         {hasBirth&&<article data-part="diary-birth-record" style={{padding:'18px 0',borderBottom:`1px solid ${C.lineHard}`}}><time dateTime={bornAt!} style={{fontSize:13,color:C.sub}}>{new Date(bornAt!).toLocaleDateString(locale,{timeZone:'Asia/Seoul'})}</time><h3 style={{fontSize:18,lineHeight:1.5,margin:'8px 0'}}>{birthTitle}</h3><p style={{margin:0,lineHeight:1.7}}>{t.birthStory}</p></article>}
         <div role="status" style={{margin:'12px 0',fontSize:13}}>{page?.unreadCount?t.unread:''}</div>
         {busy&&<p role="status">{t.loading}</p>}{error&&<p role="alert">{t.error} <button style={button} disabled={busy} onClick={()=>void load()}>{t.retry}</button></p>}
-        <div data-part="diary-list" data-tut-hl={diaryIntro?'1':undefined} style={{display:'flex',flexDirection:'column',minHeight:TAP_MIN,gap:10,animation:diaryIntro?'yBlink 1.2s ease-in-out infinite':undefined}}>{!busy&&(petId==null||page?.entries.length===0)&&<p>{page?.pending?t.pending:hasBirth?t.routineEmpty:t.empty}</p>}{page?.entries.map(e=><button key={e.id} style={{...button,textAlign:'left'}} onClick={()=>{setAckError(false);setEntry(e);}}><time dateTime={e.writtenAt}>{new Date(e.writtenAt).toLocaleDateString(locale)}</time>{!e.readAt&&` · ${t.unread}`}<span lang={e.language} style={{display:'block',marginTop:6}}>{e.preview}</span></button>)}</div>
+        <div data-part="diary-list" data-tut-hl={diaryIntro?'1':undefined} style={{display:'flex',flexDirection:'column',minHeight:TAP_MIN,gap:10,animation:diaryIntro?'yBlink 1.2s ease-in-out infinite':undefined}}>{!busy&&(petId==null||page?.entries.length===0)&&<p>{page?.pending?t.pending:hasBirth?t.routineEmpty:t.empty}</p>}{page?.entries.map(e=><button key={e.id} style={{...button,textAlign:'left'}} onClick={()=>{metrics.attempt('journal_open');setAckError(false);setEntry(e);}}><time dateTime={e.writtenAt}>{new Date(e.writtenAt).toLocaleDateString(locale)}</time>{!e.readAt&&` · ${t.unread}`}<span lang={e.language} style={{display:'block',marginTop:6}}>{e.preview}</span></button>)}</div>
         {page?.nextBeforeId!=null&&<button style={{...button,marginTop:12}} disabled={busy} onClick={()=>void load(true)}>{t.more}</button>}
       </>}
     </div>
@@ -68,8 +69,8 @@ export default function RewardsJournal({ onClose }: { onClose: () => void }) {
 
 
 /** Room has no diary lifecycle: simply opening it must never fetch or acknowledge an entry. */
-export function BackgroundRoom({onClose}:{onClose:()=>void}) {
-  const live=useLive(); const t=useRewardsCopy();
+export function BackgroundRoom({onClose,sample=false}:{onClose:()=>void;sample?:boolean}) {
+  const live=useLive(); const metrics=interactionMetrics(live,sample,'background'); const t=useRewardsCopy();
   const rewards=live.pet?.attendanceRewards;
   const current=rewards?.background.selectedKey ?? live.pet?.background ?? 'room';
   const [preview,setPreview]=useState(current);
@@ -81,14 +82,14 @@ export function BackgroundRoom({onClose}:{onClose:()=>void}) {
   const available=choices.some(x=>x.key===preview);
   async function apply(){
     if(lock.current||!available||preview===current)return;
-    lock.current=true;setBusy(true);setError(false);
-    try{await live.changeBackground(preview);}catch{if(active.current)setError(true);}
+    metrics.attempt('background_apply');lock.current=true;setBusy(true);setError(false);
+    try{await live.changeBackground(preview);metrics.result('background_apply','success');}catch{metrics.result('background_apply','failure');if(active.current)setError(true);}
     finally{lock.current=false;if(active.current)setBusy(false);}
   }
   return <section data-part="background-room" style={{position:'absolute',inset:0,zIndex:10,background:C.wallBg,color:C.ink,display:'flex',flexDirection:'column'}}>
     <header style={{padding:'12px 18px',display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}><h2 style={{fontSize:20,margin:0,flex:1}}>{t.backgrounds}</h2><button style={button} onClick={onClose}>{t.back}</button></header>
     <div style={{overflowY:'auto',flex:1,minHeight:0,padding:'4px 18px 18px'}}>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:12}}>{choices.map((b,i)=><button key={b.key} data-background={b.key} aria-pressed={b.key===preview} disabled={busy} style={{...button,minWidth:0,padding:8,borderColor:b.key===preview?C.ink:C.lineHard,borderWidth:b.key===preview?2:1}} onClick={()=>{setPreview(b.key);setError(false);}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:12}}>{choices.map((b,i)=><button key={b.key} data-background={b.key} aria-pressed={b.key===preview} disabled={busy} style={{...button,minWidth:0,padding:8,borderColor:b.key===preview?C.ink:C.lineHard,borderWidth:b.key===preview?2:1}} onClick={()=>{metrics.attempt('background_preview');setPreview(b.key);setError(false);}}>
         {b.url?<img src={b.url} alt="" style={{width:'100%',height:100,objectFit:'cover',display:'block',borderRadius:6,marginBottom:8}}/>:<span style={{display:'block',height:100,background:C.wallBg,borderRadius:6,marginBottom:8}}/>}
         <span>{i===0?t.room:`${t.roomMenu} ${i}`}</span><span style={{display:'block',marginTop:6,minHeight:20}}>{b.key===current?t.selected:b.key===preview?t.preview:''}</span>
       </button>)}</div>

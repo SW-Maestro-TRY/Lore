@@ -45,6 +45,12 @@ import java.util.List;
  */
 @Configuration
 public class GenerationConfig {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder;
+    private com.lore.zzal.generation.client.ProviderUsageRecorder usage() {
+        return usageRecorder == null ? com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP : usageRecorder.forFeature("generation");
+    }
+
 
     @Value("${app.zzal.openai.identity-max-completion-tokens:#{null}}")
     private Integer identityMaxCompletionTokens;
@@ -69,7 +75,7 @@ public class GenerationConfig {
         if (fixture) com.lore.zzal.generation.client.LocalFixturePostProcessor.requireLocal(env);
         if (real) {
             requireKey(apiKey);
-            return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds);
+            return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds, usage());
         }
         ImageClient base = new FakeImageClient(delay, fakeGridKey);
         if (fixture) {
@@ -98,7 +104,7 @@ public class GenerationConfig {
                                  S3Storage storage) {
         if (real) {
             requireKey(apiKey);
-            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens);
+            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens, usage());
         }
         return new FakeTextClient(delay / 3);
     }

@@ -181,6 +181,11 @@ services:
       ZZAL_CUSTOM_POSTPROCESS_VERSION: ${ZZAL_CUSTOM_POSTPROCESS_VERSION:-v1}
       ZZAL_CUSTOM_DISPATCH_ENABLED: ${ZZAL_CUSTOM_DISPATCH_ENABLED:-false}
       ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT: ${ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT:-}
+      # Local observations only; this does not enable paid generation or public management endpoints.
+      ZZAL_METRICS_RUNTIME_ENABLED: ${ZZAL_METRICS_RUNTIME_ENABLED:-true}
+      ZZAL_METRICS_RUNTIME_INTERVAL_MS: ${ZZAL_METRICS_RUNTIME_INTERVAL_MS:-60000}
+      ZZAL_METRICS_QUEUE_ENABLED: ${ZZAL_METRICS_QUEUE_ENABLED:-true}
+      ZZAL_METRICS_SPOOL_DIRECTORY: ${ZZAL_METRICS_SPOOL_DIRECTORY:-/var/lib/lore/metrics-spool}
       # ── 웹툰 만들기 ────────────────────────────────────────────────
       # 하네스를 돌릴 파이썬(lore.webtoon.python.bin). 이미지가 심어 둔 두 번째 가상환경을
       # 가리킨다 — zzal 것(/opt/lore/venv)에는 openai·google-genai·PyYAML 이 없다.
@@ -237,6 +242,7 @@ services:
       # 이야기를 고르던 작업이 배포 뒤에 이어 갈 파일을 잃는다(#500·#503). 그림 원본은
       # S3 에 올린 뒤 RunFiles 가 치우고 글·JSON 만 남는다.
       - webtoonwork:/app/webtoon/ai/work
+      - zzalmetrics:/var/lib/lore/metrics-spool
 
   # ── 프론트엔드 (Next.js standalone) ──────────────────────────────
   web:
@@ -264,6 +270,7 @@ services:
       - "3100:3000"
 
 volumes:
+  zzalmetrics:    # Uncommitted metrics survive container replacement; never served as public assets.
   pgdata:
   miniodata:
   seeddata:        # 씨뿌리기용 내려받기 캐시 — 두 번째 기동부터는 다시 안 받는다

@@ -73,7 +73,7 @@ class LineChainAttemptsTest {
         for(Integer cap:new Integer[]{null,1,2})try(var ctx=new AnnotationConfigApplicationContext()){
             TestPropertySourceUtils.addInlinedPropertiesToEnvironment(ctx,"app.zzal.chat.llm=true","app.zzal.openai.api-key=SYNTHETIC_NOT_A_KEY","app.lore.env=local","app.zzal.chat.max-attempts=${ZZAL_CHAT_MAX_ATTEMPTS:2}");
             if(cap!=null)TestPropertySourceUtils.addInlinedPropertiesToEnvironment(ctx,"ZZAL_CHAT_MAX_ATTEMPTS="+cap);
-            ctx.registerBean(SystemPromptCache.class,SystemPromptCache::new);ctx.registerBean(ChatLineEvents.class,()->mock(ChatLineEvents.class));ctx.register(ChatLineConfig.class);ctx.refresh();
+            ctx.registerBean(SystemPromptCache.class,SystemPromptCache::new);ctx.registerBean(ChatLineEvents.class,()->mock(ChatLineEvents.class));ctx.registerBean(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class, () -> { var r=org.mockito.Mockito.mock(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class); org.mockito.Mockito.when(r.forFeature(org.mockito.ArgumentMatchers.anyString())).thenReturn(com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP); return r; });ctx.registerBean(com.lore.zzal.generation.client.ProviderUsageSpool.class, () -> org.mockito.Mockito.mock(com.lore.zzal.generation.client.ProviderUsageSpool.class));ctx.register(ChatLineConfig.class);ctx.refresh();
             assertThat(ReflectionTestUtils.getField(ctx.getBean(LineChain.class),"maxAttempts")).isEqualTo(cap==null?2:cap);
         }
     }

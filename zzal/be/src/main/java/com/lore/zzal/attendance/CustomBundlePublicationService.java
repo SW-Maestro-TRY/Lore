@@ -13,6 +13,9 @@ import java.util.*;
 /** Storage checks never hold database row locks. Publication and due rights commit together. */
 @Service
 public final class CustomBundlePublicationService {
+ @org.springframework.beans.factory.annotation.Autowired
+ private com.lore.zzal.generation.client.PersistentProviderUsageRecorder metrics;
+
  private final JdbcTemplate db;private final TransactionTemplate tx;private final AttendanceService attendance;private final S3Storage storage;private final String python;private final ObjectMapper json=new ObjectMapper();
  public CustomBundlePublicationService(JdbcTemplate db,TransactionTemplate tx,AttendanceService attendance,S3Storage storage,@Value("${app.zzal.python.bin:python3}")String python){this.db=db;this.tx=tx;this.attendance=attendance;this.storage=storage;this.python=python;}
  private record Job(long petId,String snapshot,String inputHash,String sourcePlan,String sourceHash,String manifestHash,String executionId,String state){}
@@ -30,7 +33,9 @@ public final class CustomBundlePublicationService {
    if(!checked.assets.equals(currentAssets)&&!(currentAssets.size()==8&&currentAssets.stream().allMatch(Asset::published)&&assetEvidence(checked.assets).equals(assetEvidence(currentAssets))))throw new IllegalStateException("Publication evidence changed after preflight");
    int count=db.update("UPDATE zzal_custom_bundle_asset SET published=true WHERE job_id=? AND published=false",jobId);
    if(count!=0&&count!=8)throw new IllegalStateException("Partial publication is not permitted");
-   attendance.grantReady(current.petId,now);return count;
+   attendance.grantReady(current.petId,now);
+   if(count==8 && metrics!=null) metrics.outcome("custom_publication","job-"+jobId,ownerId,current.petId,jobId,"succeeded");
+   return count;
   }));
  }
  /** Trusted generation-job caller only; not an end-user API. Returns false before generation. */

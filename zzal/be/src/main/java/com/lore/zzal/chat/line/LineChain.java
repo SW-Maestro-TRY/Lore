@@ -174,8 +174,13 @@ public class LineChain {
         BigDecimal cost = BigDecimal.ZERO;
         String fails = null;
         String model = null;
+        String requestId = java.util.UUID.randomUUID().toString();
         for (int i = 1; i <= max; i++) {
-            LineAttempt a = llm.generate(ctx);
+            LineAttempt a;
+            try(var usage=com.lore.zzal.generation.client.ProviderUsageContext.open(
+                    ctx.ordinaryChat() ? "ordinary_chat" : "first_meeting",ctx.petId(),null,requestId,i)) {
+                a = llm.generate(ctx);
+            }
             ms += a.millis();
             cost = cost.add(nz(a.costUsd()));
             model = a.model();

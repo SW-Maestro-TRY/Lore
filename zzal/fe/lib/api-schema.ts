@@ -612,7 +612,7 @@ export interface paths {
          *     ★ props 는 허용된 키만 저장된다. 나머지는 조용히 버려진다.
          *       referrer 의 쿼리스트링, User-Agent 원문, IP 는 저장하지 않는다.
          *
-         *     응답은 항상 202 다 — 기록이 실패해도 화면은 계속 돌아야 한다.
+         *     202는 저장된 이벤트와 중복 이벤트의 ID를 확인한다. 저장 실패/비활성은 503, 요청 제한은 429다.
          */
         post: operations["collect_1"];
         delete?: never;
@@ -4210,6 +4210,12 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseReceipt: {
+            data?: components["schemas"]["Receipt"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseRefundQuote: {
             data?: components["schemas"]["RefundQuote"];
             error?: components["schemas"]["ErrorBody"];
@@ -4541,6 +4547,11 @@ export interface components {
             wokeAt?: string;
         };
         CommonEvent: {
+            /** Format: int64 */
+            actor_id?: number;
+            actor_state?: string;
+            context?: string;
+            event_id?: string;
             /**
              * @description 이벤트 이름
              * @example zzal_upload_abandoned
@@ -4560,6 +4571,10 @@ export interface components {
             props?: {
                 [key: string]: unknown;
             };
+            /** Format: int32 */
+            schema_version?: number;
+            session_id?: string;
+            source_screen?: string;
             /**
              * Format: int64
              * @description 화면에서 일어난 시각(epoch ms)
@@ -6287,6 +6302,15 @@ export interface components {
         ReasonRequest: {
             reason?: string;
         };
+        Receipt: {
+            accepted_event_ids?: string[];
+            /** Format: int32 */
+            duplicate_count?: number;
+            /** Format: int32 */
+            persisted_count?: number;
+            rejected_event_ids?: string[];
+            status?: string;
+        };
         ReceiptCounts: {
             /** Format: int64 */
             ambiguousLandings?: number;
@@ -7740,7 +7764,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseVoid"];
+                    "*/*": components["schemas"]["ApiResponseReceipt"];
                 };
             };
         };

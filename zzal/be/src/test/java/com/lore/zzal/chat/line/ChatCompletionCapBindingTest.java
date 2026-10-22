@@ -18,6 +18,11 @@ class ChatCompletionCapBindingTest {
                         "app.zzal.chat.max-completion-tokens=" + cap);
                 context.registerBean(SystemPromptCache.class, SystemPromptCache::new);
                 context.registerBean(ChatLineEvents.class, () -> mock(ChatLineEvents.class));
+                context.registerBean(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class, () -> {
+                    var r=mock(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class);
+                    org.mockito.Mockito.when(r.forFeature(org.mockito.ArgumentMatchers.anyString())).thenReturn(com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP); return r;
+                });
+                context.registerBean(com.lore.zzal.generation.client.ProviderUsageSpool.class, () -> mock(com.lore.zzal.generation.client.ProviderUsageSpool.class));
                 context.register(ChatLineConfig.class);
                 context.refresh();
                 var generator = ReflectionTestUtils.getField(context.getBean(LineChain.class), "llm");

@@ -80,7 +80,9 @@ public class LlmLineGenerator implements LineGenerator {
         ChatLineClient.Completion c;
         Duration requestTimeout = ctx.scene() != null && ctx.scene().phase() == ConversationScene.Phase.FIRST_MEETING
                 ? firstMeetingTimeout : timeout;
-        try {
+        var parentUsage = com.lore.zzal.generation.client.ProviderUsageContext.current();
+        try (var usage = com.lore.zzal.generation.client.ProviderUsageContext.open(
+                ordinary ? "ordinary_chat" : "first_meeting", ctx.petId(), null, parentUsage == null ? null : parentUsage.requestId(), parentUsage == null ? 1 : parentUsage.attempt())) {
             c = ordinary ? client.complete(system, history, user, model, requestTimeout)
                     : client.complete(system, user, model, requestTimeout);
         } catch (TimeoutException e) {

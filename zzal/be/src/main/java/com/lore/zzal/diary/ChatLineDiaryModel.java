@@ -26,7 +26,7 @@ public final class ChatLineDiaryModel implements DiaryModel {
             input.set("frozenSourceData",json.readTree(snapshot));user=json.writeValueAsString(input);
         }catch(Exception malformed){throw new IllegalArgumentException("Invalid frozen diary source",malformed);}
         ChatLineClient.Completion completion;
-        try {
+        try (var usage=com.lore.zzal.generation.client.ProviderUsageContext.open("diary",null,null,receipt.path("executionId").asText(),1)) {
             // Exactly one request. A timeout has an unknown billing outcome and can never trigger another model request.
             completion=client.complete(prompt+"\nTransport format: return exactly one JSON object with a single string field body. Write that body entirely in "+selected+". No markdown fences or other fields.",user,model,timeout);
         }catch(Exception failure){

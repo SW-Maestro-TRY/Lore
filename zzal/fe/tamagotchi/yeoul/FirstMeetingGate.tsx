@@ -1,5 +1,6 @@
 'use client';
 
+import {interactionMetrics} from '../focused-room/interactionMetrics';
 import { useEffect, useState, type ReactNode } from 'react';
 import { advanceFirstMeeting, getFirstMeeting, type FirstMeetingAction, type FirstMeetingStatus } from '../../lib/firstMeeting';
 import FirstMeeting from './FirstMeeting';
@@ -10,6 +11,7 @@ import { C, SANS } from './ui';
 
 /** Only the server decides whether a legacy pet has already completed its first meeting. */
 export default function FirstMeetingGate({ petId, characterName, imageSrc, children,focusedScene=false }: { petId: number; characterName: string; imageSrc?: string; children: ReactNode;focusedScene?:boolean }) {
+  const metrics=interactionMetrics({pet:null},false,'first_meeting','tutorial');
   const locale = useZzalLocale();
   const copy = locale === 'en' ? FIRST_MEETING_EN : locale === 'ja' ? FIRST_MEETING_JA : undefined;
   const gateCopy = locale === 'en' ? { loading: 'Checking your first meeting…', error: 'Couldn’t load your first meeting.', retry: 'Try again' } : locale === 'ja' ? { loading: '初めての出会いを確認しています…', error: '初めての出会いを読み込めませんでした。', retry: 'もう一度確認' } : { loading: '첫 만남을 확인하고 있어요…', error: '첫 만남을 불러오지 못했어요.', retry: '다시 확인하기' };
@@ -25,9 +27,12 @@ export default function FirstMeetingGate({ petId, characterName, imageSrc, child
     }).catch(() => { if (!controller.signal.aborted) setError(true); });
     return () => controller.abort();
   }, [petId, attempt]);
+  useEffect(()=>{if(status)metrics.shown(`first_meeting_${status.state.toLowerCase()}`)},[status?.state]);
   const action = async (payload: FirstMeetingAction) => {
+    metrics.attempt(payload.action.toLowerCase());
     try {
       const next = await advanceFirstMeeting(petId, payload);
+      metrics.result(payload.action.toLowerCase(),'success');
       setStatus(next);
       return next;
     } catch (failure) {
@@ -39,7 +44,8 @@ export default function FirstMeetingGate({ petId, characterName, imageSrc, child
         || (payload.action === 'DEFER_ADDRESS' && confirmed.state === 'READY_TO_ENTER' && (confirmed.addressStatus === 'DEFERRED' || (status?.callMe != null && confirmed.callMe === status.callMe)))
         || (payload.action === 'ENTER_ROOM' && confirmed.state === 'COMPLETE')
       );
-      if (progressed) { setStatus(confirmed); return confirmed; }
+      if (progressed) { metrics.result(payload.action.toLowerCase(),'success'); setStatus(confirmed); return confirmed; }
+      metrics.result(payload.action.toLowerCase(),'uncertain');
       throw failure;
     }
   };

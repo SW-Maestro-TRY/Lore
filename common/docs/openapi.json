@@ -1278,6 +1278,23 @@
         },
         "type": "object"
       },
+      "ApiResponseReceipt": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Receipt"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseRefundQuote": {
         "properties": {
           "data": {
@@ -2197,6 +2214,19 @@
       },
       "CommonEvent": {
         "properties": {
+          "actor_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "actor_state": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
           "name": {
             "description": "이벤트 이름",
             "example": "zzal_upload_abandoned",
@@ -2214,6 +2244,16 @@
               "reason": "limit"
             },
             "type": "object"
+          },
+          "schema_version": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "source_screen": {
+            "type": "string"
           },
           "ts": {
             "description": "화면에서 일어난 시각(epoch ms)",
@@ -5645,6 +5685,34 @@
         },
         "type": "object"
       },
+      "Receipt": {
+        "properties": {
+          "accepted_event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "duplicate_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "persisted_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rejected_event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ReceiptCounts": {
         "properties": {
           "ambiguousLandings": {
@@ -8405,7 +8473,7 @@
     },
     "/api/v1/events": {
       "post": {
-        "description": "화면에서 모은 이벤트를 묶음으로 받는다. 로그인 없이도 받는다.\n\n★ 익명 번호는 본문으로 받지 않는다. 쿠키(lore_anon_id)만 신뢰하고,\n  쿠키가 없으면 이 응답에서 새로 발급한다(별도 발급 API 를 두면 왕복이 한 번 늘어\n  첫 이벤트를 놓친다).\n\n★ props 는 허용된 키만 저장된다. 나머지는 조용히 버려진다.\n  referrer 의 쿼리스트링, User-Agent 원문, IP 는 저장하지 않는다.\n\n응답은 항상 202 다 — 기록이 실패해도 화면은 계속 돌아야 한다.",
+        "description": "화면에서 모은 이벤트를 묶음으로 받는다. 로그인 없이도 받는다.\n\n★ 익명 번호는 본문으로 받지 않는다. 쿠키(lore_anon_id)만 신뢰하고,\n  쿠키가 없으면 이 응답에서 새로 발급한다(별도 발급 API 를 두면 왕복이 한 번 늘어\n  첫 이벤트를 놓친다).\n\n★ props 는 허용된 키만 저장된다. 나머지는 조용히 버려진다.\n  referrer 의 쿼리스트링, User-Agent 원문, IP 는 저장하지 않는다.\n\n202는 저장된 이벤트와 중복 이벤트의 ID를 확인한다. 저장 실패/비활성은 503, 요청 제한은 429다.",
         "operationId": "collect_1",
         "parameters": [
           {
@@ -8432,7 +8500,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseVoid"
+                  "$ref": "#/components/schemas/ApiResponseReceipt"
                 }
               }
             },

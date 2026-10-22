@@ -23,6 +23,7 @@ import {RomiChatExample,isRomiMotionPhase} from './RomiChatExample';
 import {ENDING_STORY} from './useTutorialEnding';
 import { useAnchors } from '../props/anchors';
 import FocusedInquiry from './FocusedInquiry';
+import {interactionMetrics} from './interactionMetrics';
 import SceneShare from '../yeoul/SceneShare';
 import {useFocusedGeometry} from './useFocusedGeometry';
 
@@ -63,6 +64,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const owner = useRef(live); owner.current = live;
   const bridgeRef = useRef<RoomChatBridge | null>(null);
   const [storedSnapshot, setSnapshot] = useState<RoomChatSnapshot | null>(null);
+  const interaction=interactionMetrics(live,sampleMode);
+  useEffect(()=>interaction.shown('room'),[live.petId,sampleMode]);
   const [drawer, setDrawer] = useState<'history' | 'menu' | null>(null);
   const [inquiryOpen,setInquiryOpen]=useState(false);
   const [shareOpen,setShareOpen]=useState(false),[exampleReady,setExampleReady]=useState(false),[sleepNotice,setSleepNotice]=useState<string|null>(null);
@@ -173,6 +176,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const deliver=async(bridge:RoomChatBridge,petId:number)=>{
     try{
     const result = await bridge?.send();
+    interaction.result('chat_send',result?.sent&&!result.error?'success':bridge.getSnapshot().delivery?.status==='uncertain'?'uncertain':'failure');
     if (result?.reply && bridge === bridgeRef.current && owner.current.petId === petId && petId) {
       if(result.sent&&!result.error)metrics?.chatSaved(result.reply);
       const petTurn = [...(result.reply.turns ?? [])].reverse().find(turn => turn.speaker === 'PET');
@@ -181,7 +185,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       const turnIdentity=petTurn?.idx;
       if(result.sent&&!result.error&&result.reply.session?.id!=null&&turnIdentity!=null)x.playChatMotion(result.reply.reactionKey,`${petId}:${result.reply.session?.id??'legacy'}:${turnIdentity}`);
     }
-    }finally{if(bridgeRef.current===bridge&&owner.current.petId===petId)sendLock.current=false;}
+    }catch(error){interaction.result('chat_send','uncertain');throw error;}finally{if(bridgeRef.current===bridge&&owner.current.petId===petId)sendLock.current=false;}
   };
   const transferFailed=(pending:NonNullable<typeof inviteHandoff.current>)=>{
     if(inviteHandoff.current!==pending)return;
@@ -203,7 +207,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const send = async (event: FormEvent) => {
     event.preventDefault();if(!canSend||sendLock.current)return;
     const bridge=bridgeRef.current,petId=live.petId;if(!bridge||!petId)return;
-    sendLock.current=true;
+    interaction.attempt('chat_send');sendLock.current=true;
     if(inviteInput||inviteRetry){
       const pending={petId,bridge,chat:owner.current.chat,ready:false};inviteHandoff.current=pending;setInviteTransfer({petId,waiting:true,error:null});
       const confirmed=inviteInput?await x.nextStory():(await owner.current.refreshPet(),true);
@@ -213,7 +217,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     }
     await deliver(bridge,petId);
   };
-  const openHistory = () => { input.current?.blur(); setDrawer('history'); void bridgeRef.current?.history(legacy); };
+  const openHistory = () => { interaction.attempt('history_open'); input.current?.blur(); setDrawer('history'); void bridgeRef.current?.history(legacy); };
 
   return <section ref={host} data-dialogue-source={x.speechSource} data-stage-status={x.stageStatus} data-intro-key={x.key??''} onPointerDown={event=>{const target=(event.target as HTMLElement).closest<HTMLElement>('[data-fr-target=true]');if(target)target.dataset.frPressed='true';}} onPointerDownCapture={event=>{if(x.panel==='game'&&x.gamePhase==='done'&&!x.busy&&!drawer){event.preventDefault();event.stopPropagation();x.close();}}} onClick={event=>{if(x.panel!=='game'||drawer)return;const target=event.target as HTMLElement;if(target.closest('[data-fr-side],button,a,input,textarea,select')||target.closest('[role=button]')&&!target.closest('[data-fr-actor]'))return;x.close();}} onKeyDown={event=>{if(event.key==='Escape'&&x.panel==='game'&&!drawer){event.preventDefault();event.stopPropagation();x.close();}}} data-game-open={x.panel==='game'?'true':undefined} className={`focused-room ${sleeping ? 'fr-sleeping' : ''}`} style={{'--fr-game-left':`${dockBudget.left}px`,'--fr-game-top':`${dockBudget.top}px`,'--fr-game-width':`${dockBudget.width}px`,'--fr-game-height':`${dockBudget.height}px`} as CSSProperties} data-focused-room data-care-open={x.panel==='care'?'true':undefined} data-compact={compact?'true':undefined} data-pet-id={live.petId ?? ''}>
     <div className="fr-scene" ref={scene} data-fr-scene>
@@ -277,8 +281,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
         {openAnnouncements&&<button data-fr-action="announcements-menu" onClick={()=>{setDrawer(null);openAnnouncements?.(menuButton.current)}}>{locale==='ko'?'공지사항':locale==='en'?'Announcements':'お知らせ'}</button>}
         <button data-fr-action="help-menu" onClick={()=>{setDrawer(null);x.open('help')}}>{locale==='ko'?'도움말':locale==='en'?'Help':'使い方'}</button>
         {!sampleMode&&<button data-fr-action="feedback-menu" onClick={()=>{setDrawer(null);x.open('review')}}>{locale==='ko'?'후기':locale==='en'?'Feedback':'感想'}</button>}
-        <button data-fr-action="scene-menu" onClick={()=>{setDrawer(null);setShareOpen(true)}}>{locale==='ko'?'공유':locale==='en'?'Share':'共有'}</button>
-        {!sampleMode&&<button data-fr-action="inquiry-menu" onClick={()=>{setDrawer(null);x.close();setInquiryOpen(true)}}>{locale==='ko'?'문의하기':locale==='en'?'Contact us':'お問い合わせ'}</button>}
+        <button data-fr-action="scene-menu" onClick={()=>{setDrawer(null);interaction.attempt('scene_open');setShareOpen(true)}}>{locale==='ko'?'공유':locale==='en'?'Share':'共有'}</button>
+        {!sampleMode&&<button data-fr-action="inquiry-menu" onClick={()=>{setDrawer(null);x.close();interaction.attempt('inquiry_open');setInquiryOpen(true)}}>{locale==='ko'?'문의하기':locale==='en'?'Contact us':'お問い合わせ'}</button>}
       </nav><div className="fr-languages"><LanguageSelector/></div></> : <div className="fr-history">
         <div className="fr-history-tabs"><button aria-disabled={snapshot?.historyLoading} aria-pressed={!legacy} onClick={() => { if(snapshot?.historyLoading)return; setLegacy(false); void bridgeRef.current?.history(false); }}>{t.current}</button><button aria-disabled={snapshot?.historyLoading} aria-pressed={legacy} onClick={() => { if(snapshot?.historyLoading)return; setLegacy(true); void bridgeRef.current?.history(true); }}>{t.legacyHistory}</button></div>
         {snapshot?.historyLoading && <p role="status">{t.loading}</p>}
@@ -290,8 +294,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       </div>}
     </div>}
     <FocusedPanels live={live} x={x.panel==='care'?{...x,panel:null}:x} locale={locale} sampleMode={sampleMode}/>
-    <FocusedInquiry open={inquiryOpen} onClose={()=>setInquiryOpen(false)} petId={live.petId} locale={locale}/>
-    {shareOpen&&<SceneShare stage={scene.current} logoUrl="/zzal-entry/logo-08-transparent.png" onClose={()=>setShareOpen(false)}/>}
+    <FocusedInquiry metrics={interactionMetrics(live,sampleMode,'inquiry')} open={inquiryOpen} onClose={()=>setInquiryOpen(false)} petId={live.petId} locale={locale}/>
+    {shareOpen&&<SceneShare metrics={interactionMetrics(live,sampleMode,'scene_share')} stage={scene.current} logoUrl="/zzal-entry/logo-08-transparent.png" onClose={()=>setShareOpen(false)}/>}
   </section>;
 }
 

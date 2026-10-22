@@ -34,6 +34,12 @@ import java.time.Duration;
  */
 @Configuration
 public class ChatLineConfig {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder;
+    private com.lore.zzal.generation.client.ProviderUsageRecorder usage() {
+        return usageRecorder == null ? com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP : usageRecorder.forFeature("chat");
+    }
+
 
     private static final Logger log = LoggerFactory.getLogger(ChatLineConfig.class);
 
@@ -71,7 +77,7 @@ public class ChatLineConfig {
         if (maxCompletionTokens != null && maxCompletionTokens <= 0) throw new IllegalArgumentException("app.zzal.chat.max-completion-tokens must be positive");
         if (firstMeetingTimeoutMs <= 0) throw new IllegalArgumentException("app.zzal.chat.first-meeting-timeout-ms must be positive");
         log.info("채팅 대사 LLM 켜짐 — {} · {}ms", model, timeoutMs);
-        LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort, maxCompletionTokens), model,
+        LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort, maxCompletionTokens, usage()), model,
                 Duration.ofMillis(timeoutMs), Duration.ofMillis(firstMeetingTimeoutMs), systems);
         return new LineChain(gen, events, maxAttempts);
     }

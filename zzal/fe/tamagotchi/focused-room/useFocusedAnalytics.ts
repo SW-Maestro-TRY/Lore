@@ -1,12 +1,13 @@
 import {useEffect,useRef} from 'react';
 import type {Live} from '../yeoul/useHatch';
-import {onLeave} from '../yeoul/funnel';
+import {onLeave,ztrack} from '../yeoul/funnel';
 import {createFocusedMetrics} from './focusedAnalytics';
 
 export function useFocusedAnalytics(live:Live,sampleMode:boolean){
+  const currentLive=useRef(live);currentLive.current=live;
   const petId=!sampleMode&&live.petId&&live.pet?.petId===live.petId&&live.pet.phase==='ALIVE'?live.petId:null;
   const slot=useRef<{petId:number;tracker:ReturnType<typeof createFocusedMetrics>;pending:ReturnType<typeof setTimeout>|null}|null>(null);
-  if(petId&&slot.current?.petId!==petId)slot.current={petId,tracker:createFocusedMetrics({petId}),pending:null};
+  if(petId&&slot.current?.petId!==petId)slot.current={petId,tracker:createFocusedMetrics({petId,emit:(name,props)=>ztrack(name,props,{source_screen:'focused_room',context:currentLive.current.pet?.firstIntro?.version===4&&!currentLive.current.pet.firstIntro.completed?'tutorial':'real'})}),pending:null};
   const tracker=petId?slot.current?.tracker:null;
   useEffect(()=>{
     const current=slot.current;

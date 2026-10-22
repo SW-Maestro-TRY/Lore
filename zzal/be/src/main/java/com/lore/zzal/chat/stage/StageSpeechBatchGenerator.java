@@ -23,8 +23,9 @@ public class StageSpeechBatchGenerator {
     public StageSpeechBatchGenerator(@Value("${app.zzal.chat.llm:true}") boolean enabled,
             @Value("${app.zzal.openai.api-key:}") String key,
             @Value("${app.zzal.chat.model:gpt-5.6-luna}") String model,
-            @Value("${app.zzal.chat.reasoning-effort:none}") String effort) {
-        this(enabled && key != null && !key.isBlank() ? new OpenAiChatLineClient(key, effort, 3200) : null,
+            @Value("${app.zzal.chat.reasoning-effort:none}") String effort,
+            com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder) {
+        this(enabled && key != null && !key.isBlank() ? new OpenAiChatLineClient(key, effort, 3200, usageRecorder.forFeature("tutorial_batch")) : null,
                 model, Duration.ofSeconds(12));
     }
 
@@ -63,7 +64,10 @@ public class StageSpeechBatchGenerator {
             request.append("이 상태는 첫 돌봄 전의 참고값이다. 마무리·채팅소개 장면에 초기 배고픔·청결·돌봄 요구를 반복하거나 옮기지 않는다.\n");
             request.append("현재 캐릭터 상태(미래 행동 완료 사실은 아님): ").append(first.state().labeledWords()).append('\n');
             for (var claim : claims) request.append(claim.context().scene().step()).append(' ').append(claim.context().scene().beat()).append('\n');
-            var response = client.complete(system, request.toString(), model, timeout);
+            ChatLineClient.Completion response;
+            try(var usage=com.lore.zzal.generation.client.ProviderUsageContext.open("tutorial_batch",first.petId(),null,java.util.UUID.randomUUID().toString(),1)) {
+                response = client.complete(system, request.toString(), model, timeout);
+            }
             cost = response.costUsd() == null ? BigDecimal.ZERO : response.costUsd();
             var speeches = json.readTree(response.text()).path("speeches");
             if (!speeches.isArray() || speeches.size() != claims.size()) throw new IllegalArgumentException("batch_shape");

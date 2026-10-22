@@ -415,6 +415,13 @@ app:
     #     {prefix}/zzal/events/dt=YYYY-MM-DD/part-{처음id}-{끝id}.jsonl.gz
     #   계정을 옮기는 날 `aws s3 sync s3://옛/{prefix}/ s3://새/{prefix}/` 한 줄이면 끝난다.
     # ★ 서버가 두 대 이상이면 한 대만 켠다(밤 스위프와 같은 규칙).
+    # Internal observations use the existing event archive. No management endpoint is exposed.
+    metrics:
+      spool-directory: ${ZZAL_METRICS_SPOOL_DIRECTORY:}
+      runtime:
+        enabled: ${ZZAL_METRICS_RUNTIME_ENABLED:false}
+        interval-ms: ${ZZAL_METRICS_RUNTIME_INTERVAL_MS:60000}
+        queue-enabled: ${ZZAL_METRICS_QUEUE_ENABLED:true}
     archive:
       enabled: ${ZZAL_ARCHIVE_ENABLED:false}
       bucket: ${ZZAL_ARCHIVE_BUCKET:}

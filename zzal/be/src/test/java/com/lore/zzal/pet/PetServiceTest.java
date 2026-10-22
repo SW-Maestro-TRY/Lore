@@ -63,6 +63,7 @@ class PetServiceTest {
     private final java.util.List<com.lore.zzal.leave.ZzalPostcard> postcards = new java.util.ArrayList<>();
     private final java.util.List<com.lore.zzal.scene.ZzalScene> scenes = new java.util.ArrayList<>();
     private PetService service;
+    private com.lore.zzal.attendance.AttendanceService attendance;
 
     @BeforeEach
     void setUp() {
@@ -120,6 +121,8 @@ class PetServiceTest {
                 // ★ 상한 다섯은 여기서 보지 않는다 — 목이라 전부 통과한다.
                 //   진짜 판정은 HatchGuardTest(단위)와 HatchLimitsIT(진짜 DB)가 본다.
                 mock(com.lore.zzal.guard.HatchGuard.class));
+        attendance=mock(com.lore.zzal.attendance.AttendanceService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"attendanceService",attendance);
     }
 
     /** T0(정오) 에 부화해 <b>튜토리얼 중</b>인 펫 — 시계가 아직 안 켜졌다. 낮잠 테스트용. */
@@ -410,11 +413,20 @@ class PetServiceTest {
         }
 
         @Test
-        @DisplayName("배경은 2층 4종 전엔 ZZAL_FEATURE_LOCKED")
+        @DisplayName("소유하지 않은 배경은 ZZAL_FEATURE_LOCKED")
         void backgroundLocked() {
             ZzalPet pet = baby();
             assertCode(() -> service.changeBackground(USER_ID, PET_ID, "window_day", T0), ErrorCode.ZZAL_FEATURE_LOCKED);
             assertThat(pet.getBackground()).isEqualTo("room");
+        }
+
+        @Test
+        @DisplayName("소유한 배경은 과거 2층 해금 수와 무관하게 선택된다")
+        void ownedBackgroundCanBeSelected() {
+            ZzalPet pet=baby();
+            when(attendance.ownsBackground(PET_ID,"window_day")).thenReturn(true);
+            service.changeBackground(USER_ID,PET_ID,"window_day",T0);
+            assertThat(pet.getBackground()).isEqualTo("window_day");
         }
 
         @Test

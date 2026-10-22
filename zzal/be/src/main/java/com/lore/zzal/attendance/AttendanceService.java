@@ -13,6 +13,9 @@ import java.util.*;
 /** Caller holds the pet row lock; HTTP visits only persist an outbox, never invoke a paid generator. */
 @Service
 public class AttendanceService {
+ @org.springframework.beans.factory.annotation.Autowired
+ private com.lore.zzal.generation.client.PersistentProviderUsageRecorder metrics;
+
  public static final String PROGRAM="first-v1";
  private static final int[] DAYS={3,4,5,6,7,8,9,10};
  private final JdbcTemplate db;
@@ -97,7 +100,8 @@ public class AttendanceService {
  /** Only published, checked, non-rejected assets become ownership. Repeated delivery preserves the same row. */
  @Transactional
  public void grantReady(Long id,Instant now){
-  db.update("UPDATE zzal_attendance_reward_slot s SET state='GRANTED',asset_id=a.id,asset_key=a.asset_key,granted_at=? FROM zzal_custom_bundle_asset a JOIN zzal_custom_bundle_job j ON j.id=a.job_id WHERE s.pet_id=? AND s.program_version=? AND j.pet_id=s.pet_id AND j.program_version=s.program_version AND j.bundle_version='bundle-1' AND j.state IN ('GENERATED','FAILED') AND (j.state='GENERATED' OR j.source_plan_json IS NULL OR NOT jsonb_exists(j.source_plan_json::jsonb,'motionPlan')) AND j.manifest_hash IS NOT NULL AND s.slot_key='motion-'||a.motion_order AND s.state='ELIGIBLE' AND a.auto_check='PASS' AND a.human_review<>'REJECTED' AND a.published=true",Timestamp.from(now),id,PROGRAM);
+  var granted=db.query("UPDATE zzal_attendance_reward_slot s SET state='GRANTED',asset_id=a.id,asset_key=a.asset_key,granted_at=? FROM zzal_custom_bundle_asset a JOIN zzal_custom_bundle_job j ON j.id=a.job_id WHERE s.pet_id=? AND s.program_version=? AND j.pet_id=s.pet_id AND j.program_version=s.program_version AND j.bundle_version='bundle-1' AND j.state IN ('GENERATED','FAILED') AND (j.state='GENERATED' OR j.source_plan_json IS NULL OR NOT jsonb_exists(j.source_plan_json::jsonb,'motionPlan')) AND j.manifest_hash IS NOT NULL AND s.slot_key='motion-'||a.motion_order AND s.state='ELIGIBLE' AND a.auto_check='PASS' AND a.human_review<>'REJECTED' AND a.published=true RETURNING s.slot_key",(r,n)->r.getString(1),Timestamp.from(now),id,PROGRAM);
+  if(metrics!=null) for(String slot:granted) metrics.outcome("attendance_grant",id+":"+PROGRAM+":"+slot,null,id,null,"granted");
   if(nextSets!=null){
    Long owner=db.queryForObject("SELECT user_id FROM zzal_pet WHERE id=?",Long.class,id);
    nextSets.grantReadyQueued(owner,id,now);

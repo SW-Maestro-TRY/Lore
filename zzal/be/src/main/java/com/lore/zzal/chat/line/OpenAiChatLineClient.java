@@ -98,6 +98,7 @@ public class OpenAiChatLineClient implements ChatLineClient {
 
     @Override
     public Completion complete(String system, List<Message> history, String userText, String model, Duration timeout) throws Exception {
+        try (var attempt = new com.lore.zzal.generation.client.ProviderAttempt(usageRecorder, model)) {
         ObjectNode body = json.createObjectNode();
         body.put("model", model);
         if (maxCompletionTokens != null) body.put("max_completion_tokens", maxCompletionTokens);
@@ -127,39 +128,43 @@ public class OpenAiChatLineClient implements ChatLineClient {
                 .build();
 
         // ★ 전체 시간을 한 번 더 묶는다 — 요청 timeout 은 응답 머리까지만 센다.
+        attempt.start();
         CompletableFuture<HttpResponse<String>> f = http.sendAsync(req, HttpResponse.BodyHandlers.ofString());
         HttpResponse<String> res;
         try {
             res = f.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.TimeoutException e) {
             f.cancel(true);
-            usageRecorder.record(ProviderUsageRecorder.headers(model,0,null));
+            attempt.record(ProviderUsageRecorder.headers(model,0,null));
             throw e;
         } catch (java.util.concurrent.ExecutionException e) {
-            usageRecorder.record(ProviderUsageRecorder.headers(model,0,null));
+            attempt.record(ProviderUsageRecorder.headers(model,0,null));
             if (e.getCause() instanceof java.net.http.HttpTimeoutException) {
                 throw new java.util.concurrent.TimeoutException("응답 시간 초과");
             }
             throw e;
         }
         String requestId=res.headers().firstValue("x-request-id").orElse(null);
-        usageRecorder.record(ProviderUsageRecorder.headers(model,res.statusCode(),requestId));
+        attempt.record(ProviderUsageRecorder.headers(model,res.statusCode(),requestId));
         if (res.statusCode() != 200) {
             // 4xx·5xx 는 돈이 안 나간다(OpenAI 는 실패 요청에 과금하지 않는다).
             throw new IllegalStateException("대사 생성 실패(HTTP %d): %s".formatted(res.statusCode(),
                     res.body().length() > 300 ? res.body().substring(0, 300) : res.body()));
         }
         JsonNode payload = json.readTree(res.body());
-        usageRecorder.record(ProviderUsageRecorder.payload(model,res.statusCode(),requestId,payload));
+        attempt.record(ProviderUsageRecorder.payload(model,res.statusCode(),requestId,payload));
         JsonNode usage = payload.path("usage");
         long in = usage.path("prompt_tokens").asLong(0);
         long out = usage.path("completion_tokens").asLong(0);
         BigDecimal cost = cost(model, in, out);
+        attempt.estimatedCost(cost);
         String text = payload.path("choices").path(0).path("message").path("content").asText("").trim();
         if (text.isBlank()) {
             throw new BilledException("응답에 글이 없습니다", cost);
         }
+        attempt.success();
         return new Completion(text, cost, in, out);
+        }
     }
 
     /** 단가표로 비용. 모르는 모델은 gpt-5 단가(비싼 쪽). */

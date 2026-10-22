@@ -66,7 +66,7 @@ class CustomPlannerTextClientTest {
         assertThatThrownBy(()->new CustomProviderConfiguration().realCustomBundleService(env,null,null,null,mock(ImageClient.class),null,null,mock(CustomBundlePublicationService.class))).hasMessageContaining("positive");
     }
     @Test void identityCapBindingIsOptionalAndTransmittedWithoutChangingTheModel() throws Exception {
-        var runner=new org.springframework.boot.test.context.runner.ApplicationContextRunner().withUserConfiguration(IdentityBinding.class);
+        var runner=new org.springframework.boot.test.context.runner.ApplicationContextRunner().withBean(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class, () -> { var r=org.mockito.Mockito.mock(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class); org.mockito.Mockito.when(r.forFeature(org.mockito.ArgumentMatchers.anyString())).thenReturn(com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP); return r; }).withBean(com.lore.zzal.generation.client.ProviderUsageSpool.class, () -> org.mockito.Mockito.mock(com.lore.zzal.generation.client.ProviderUsageSpool.class)).withUserConfiguration(IdentityBinding.class);
         runner.withPropertyValues("app.zzal.openai.identity-max-completion-tokens=${ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS:}").run(ctx->{
             var owner=ctx.getBean(com.lore.zzal.generation.GenerationConfig.class);
             var client=owner.textClient(true,0,"SYNTHETIC_NOT_A_KEY",mock(com.lore.common.s3.S3Storage.class));
