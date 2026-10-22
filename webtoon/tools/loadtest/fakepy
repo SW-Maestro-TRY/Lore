@@ -1,0 +1,375 @@
+#!/usr/bin/env python3
+"""부하 시험용 가짜 `lore.webtoon.python.bin` — 모델 호출 없이 한 편을 끝까지 돌린다.
+
+서버를 `LORE_WEBTOON_PYTHON_BIN=<이 파일>` 로 띄우면 HarnessProcess 가 부르는
+세 가지가 이렇게 바뀐다.
+
+    <bin> -u run.py <args>            -> 다 만든 작품 하나(템플릿)를 걸음별로 복사해
+                                         되풀이한다. 걸린 시간도 템플릿 meta.json 의
+                                         호출별 seconds × FAKE_SPEED 만큼 잔다.
+    <bin> -u stitch.py <args>         -> **진짜** 스크립트를 진짜 파이썬으로 돌린다
+    <bin> -u s3_upload.py <args>         (이어 붙이기·줄이기의 CPU·메모리도 재려는 것)
+
+모델을 부를 길이 없게 막는다.
+
+  * 모델 열쇠(*API_KEY*, *TOKEN*, OPENAI*, GEMINI*, ...)를 환경에서 지운다.
+  * 이 프로세스와, 진짜로 돌리는 stitch.py·s3_upload.py 안에서 소켓 연결을
+    전부 막는다(연결하려 하면 그 자리에서 예외).
+  * run.py 에 모르는 인자가 오거나 그 밖의 스크립트(character.py 등)가 오면
+    진짜 하네스로 넘기지 않고 **바로 실패한다**(exit 97).
+
+환경변수
+  FAKE_TEMPLATE   다 만든 작품 폴더(pages/·scenes.json·meta.json 이 있어야 함).
+                  기본: 이 파일 옆 template/ 안의 첫 폴더. 읽기만 한다.
+  FAKE_SPEED      템플릿 시간에 곱할 값. 기본 0.1 (1 이면 실제와 비슷)
+  FAKE_STARTUP    걸음마다 더하는 고정 초(파이썬 import 흉내). 기본 0
+  FAKE_REAL_PYTHON  stitch·s3_upload 를 돌릴 진짜 파이썬. 기본: 이 파일을 돌리는 파이썬
+  FAKE_LOG        걸음마다 한 줄(JSON)을 덧붙일 파일. 없으면 안 남긴다
+"""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import shutil
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+FAIL = 97
+
+# ---------------------------------------------------------------- 막기
+
+SECRET_HINTS = ("API_KEY", "TOKEN", "SECRET_KEY", "OPENAI", "GEMINI", "GOOGLE_API",
+                "ANTHROPIC", "OPENROUTER", "LOGFIRE", "PASSWORD")
+# 이미지·S3 쪽은 남겨야 하는 것이 없다 — prepare 는 디스크에만 쓴다. 그래도 AWS 열쇠까지 지운다.
+SECRET_EXACT = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+                "S3_ACCESS_KEY", "S3_SECRET_KEY")
+
+
+def scrub_env() -> list[str]:
+    gone = []
+    for k in list(os.environ):
+        up = k.upper()
+        if up in SECRET_EXACT or any(h in up for h in SECRET_HINTS):
+            os.environ.pop(k, None)
+            gone.append(k)
+    return gone
+
+
+NET_GUARD = r'''
+import socket as _s
+def _no(*a, **k):
+    raise RuntimeError("FAKE HARNESS: network is blocked in load-test mode")
+_s.socket.connect = _no
+_s.socket.connect_ex = _no
+_s.create_connection = _no
+_s.getaddrinfo = _no
+'''
+
+
+def guard_network() -> None:
+    exec(NET_GUARD, {})
+
+
+def die(msg: str) -> None:
+    print(f"FAKE HARNESS: {msg}", flush=True)
+    print(f"FAKE HARNESS: {msg}", file=sys.stderr, flush=True)
+    raise SystemExit(FAIL)
+
+
+# ---------------------------------------------------------------- 진짜로 돌리는 둘
+
+def run_real(script: str, args: list[str]) -> None:
+    real = os.environ.get("FAKE_REAL_PYTHON") or sys.executable
+    if Path(real).resolve() == Path(__file__).resolve():
+        die("FAKE_REAL_PYTHON points at the fake itself")
+    target = Path.cwd() / script
+    if not target.is_file():
+        die(f"{target} not found (cwd={Path.cwd()})")
+    boot = NET_GUARD + (
+        "import sys, runpy\n"
+        f"sys.argv = [{str(target)!r}] + {args!r}\n"
+        f"sys.path.insert(0, {str(target.parent)!r})\n"
+        f"runpy.run_path({str(target)!r}, run_name='__main__')\n")
+    # exec 하지 않고 자식으로 돌려 CPU·메모리를 잰다(표준 입출력은 그대로 물려준다 —
+    # s3_upload 의 stdout JSON 이 서버로 바로 간다).
+    t0 = time.time()
+    pid = os.fork()
+    if pid == 0:
+        os.execv(real, [real, "-u", "-c", boot])
+    _, status, ru = os.wait4(pid, 0)
+    code = os.waitstatus_to_exitcode(status)
+    path = os.environ.get("FAKE_LOG")
+    if path:
+        rid = args[args.index("--run-id") + 1] if "--run-id" in args else (args[-1] if args else "")
+        rec = {"step": script, "run_id": rid, "wall": round(time.time() - t0, 3),
+               "cpu": round(ru.ru_utime + ru.ru_stime, 3),
+               "maxrss_mb": round(ru.ru_maxrss / 1048576, 1),   # macOS: 바이트
+               "end": time.time(), "code": code}
+        with open(path, "a", encoding="utf-8") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            fh.write(json.dumps(rec) + "\n")
+    raise SystemExit(code)
+
+
+# ---------------------------------------------------------------- 템플릿
+
+def template_dir() -> Path:
+    t = os.environ.get("FAKE_TEMPLATE")
+    if t:
+        p = Path(t)
+    else:
+        found = sorted(d for d in (HERE / "template").glob("*") if d.is_dir())
+        if not found:
+            die("no template (set FAKE_TEMPLATE or put a finished run under template/)")
+        p = found[0]
+    for need in ("directions.json", "scenes.json", "sheet.png", "meta.json", "pages"):
+        if not (p / need).exists():
+            die(f"template {p} has no {need}")
+    return p
+
+
+def template_calls(tpl: Path) -> list[dict]:
+    try:
+        return json.loads((tpl / "meta.json").read_text(encoding="utf-8")).get("calls") or []
+    except (OSError, ValueError):
+        return []
+
+
+SPEED = float(os.environ.get("FAKE_SPEED", "0.1"))
+STARTUP = float(os.environ.get("FAKE_STARTUP", "0"))
+
+STORY_STAGES = {"CAST", "PERSONA", "STORY", "STORY_REVIEW", "STORY_DIFF"}
+SHEET_STAGES = {"SHEET", "SHEET_IMAGE"}
+PAGE_STAGES = {"PAGE_IMAGE", "PAGE_REVIEW", "COVER_REVIEW"}
+
+
+def pick_calls(calls: list[dict], stages: set[str], page: int | None = None) -> list[dict]:
+    out = []
+    for c in calls:
+        if c.get("error") or c.get("stage") not in stages:
+            continue
+        if page is not None and c.get("page") != page:
+            continue
+        out.append(c)
+    return out
+
+
+def append_meta(run_dir: Path, calls: list[dict]) -> None:
+    """runmeta.append_call 과 같은 방식(flock) — 장면 프로세스 여럿이 같이 쓴다."""
+    if not calls:
+        return
+    path = run_dir / "meta.json"
+    with open(path, "a+", encoding="utf-8") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            fh.seek(0)
+            text = fh.read().strip()
+            meta = json.loads(text) if text else {}
+            meta.setdefault("run_id", run_dir.name)
+            now = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+            for c in calls:
+                one = dict(c)
+                one["at"] = now
+                one["fake"] = True
+                meta.setdefault("calls", []).append(one)
+            fh.seek(0)
+            fh.truncate()
+            fh.write(json.dumps(meta, ensure_ascii=False, indent=2))
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+def say_calls(calls: list[dict]) -> None:
+    for c in calls:
+        krw = (c.get("cost") or {}).get("total_krw")
+        print(f"  {c.get('stage')}  {c.get('provider')}:{c.get('model')}  "
+              f"₩{krw}  (fake, {c.get('seconds')}s)", flush=True)
+
+
+def nap(calls: list[dict], floor: float = 0.0) -> float:
+    real = sum(float(c.get("seconds") or 0) for c in calls) or floor
+    t = real * SPEED + STARTUP
+    if t > 0:
+        time.sleep(t)
+    return t
+
+
+def copy(tpl: Path, run_dir: Path, *names: str) -> None:
+    for n in names:
+        src = tpl / n
+        if src.is_file():
+            dst = run_dir / n
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dst.with_name(f"{dst.name}.fake-tmp-{os.getpid()}")
+            shutil.copyfile(src, tmp)
+            os.replace(tmp, dst)          # 반쯤 쓴 파일을 서버가 읽지 않게
+
+
+def note_step(step: str, run_id: str, slept: float, t0: float) -> None:
+    path = os.environ.get("FAKE_LOG")
+    if not path:
+        return
+    rec = {"step": step, "run_id": run_id, "slept": round(slept, 3),
+           "wall": round(time.time() - t0, 3), "end": time.time(), "pid": os.getpid()}
+    with open(path, "a", encoding="utf-8") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        fh.write(json.dumps(rec) + "\n")
+
+
+# ---------------------------------------------------------------- run.py 흉내
+
+def parse_run_args(argv: list[str]) -> argparse.Namespace:
+    p = argparse.ArgumentParser(prog="fake run.py", add_help=False)
+    p.add_argument("--run-id", required=True)
+    p.add_argument("--character", type=Path)
+    p.add_argument("--sheet", action="store_true")
+    p.add_argument("--pick", type=int)
+    p.add_argument("--pick-save", action="store_true")
+    p.add_argument("--scenes", action="store_true")
+    p.add_argument("--detail-pages", action="store_true")
+    p.add_argument("--page", type=int, action="append", default=[])
+    p.add_argument("--full-review", action="store_true")
+    p.add_argument("--restory", action="store_true")
+    p.add_argument("--cast-pick", type=int)
+    p.add_argument("--note", default="")
+    try:
+        args, unknown = p.parse_known_args(argv)
+    except SystemExit:
+        die(f"run.py args not understood: {argv}")
+    if unknown:
+        die(f"run.py flags not supported by the fake (refusing to fall back to the real harness): {unknown}")
+    if args.run_id.startswith("-") or "/" in args.run_id or ".." in args.run_id:
+        die(f"bad run id {args.run_id!r}")
+    steps = [args.pick_save, args.scenes, args.detail_pages, args.full_review,
+             args.restory, args.cast_pick is not None]
+    if sum(bool(s) for s in steps) > 1:
+        die(f"more than one step in one call is not supported: {argv}")
+    if args.page and not args.detail_pages:
+        die("--page without --detail-pages")
+    return args
+
+
+def fake_run(argv: list[str]) -> None:
+    args = parse_run_args(argv)
+    runs = os.environ.get("NH_RUNS_DIR")
+    if not runs:
+        die("NH_RUNS_DIR is not set")
+    tpl = template_dir()
+    calls = template_calls(tpl)
+    run_dir = Path(runs) / args.run_id
+    t0 = time.time()
+
+    if args.character is not None:                 # 새 작품 — 이야기, 또는 (같이 띄운) 시트
+        if not args.character.is_file():
+            die(f"character file missing: {args.character}")
+        run_dir.mkdir(parents=True, exist_ok=True)
+        copy(tpl, run_dir, "input.json")
+        print(f"run: {run_dir}", flush=True)
+    elif not run_dir.is_dir():
+        die(f"그런 run 이 없습니다: {run_dir}")
+
+    if args.pick_save:
+        d = json.loads((run_dir / "directions.json").read_text(encoding="utf-8"))
+        chosen = next((x for x in d if x.get("n") == args.pick), d[0])
+        (run_dir / "pick.json").write_text(json.dumps(
+            {"n": chosen["n"], "title": chosen.get("title"), "genre": chosen.get("genre")},
+            ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[방향 선택] {chosen['n']}번 저장했습니다 -> {run_dir / 'pick.json'}", flush=True)
+        slept = nap([], 0)
+        step = "pick-save"
+    elif args.sheet:
+        print("[시트] (fake) 사양을 적고 그리는 중…", flush=True)
+        got = pick_calls(calls, SHEET_STAGES)
+        slept = nap(got, 40)
+        copy(tpl, run_dir, "sheet_spec.json", "sheet_spec_prompt.txt", "sheet_prompt.txt")
+        if not (run_dir / "sheet.png").exists() or args.note:
+            copy(tpl, run_dir, "sheet.png")
+        append_meta(run_dir, got)
+        say_calls(got)
+        print(f"  -> {run_dir / 'sheet.png'}", flush=True)
+        step = "sheet"
+    elif args.character is not None or args.restory or args.cast_pick is not None:
+        print("[이야기] (fake) 인물·이야기 후보를 짓는 중…", flush=True)
+        if args.restory or args.cast_pick is not None:
+            for n in ("pick.json", "story_review.json", "story_diff.json"):
+                (run_dir / n).unlink(missing_ok=True)
+        got = pick_calls(calls, STORY_STAGES)
+        slept = nap(got, 25)
+        copy(tpl, run_dir, "persona.json", "cast.json", "story.md", "story_prompt.txt",
+             "story_review.json", "axes.json", "lore.json")
+        copy(tpl, run_dir, "directions.json")      # 마지막에 — 서버는 이것이 생기면 다음으로 간다
+        append_meta(run_dir, got)
+        say_calls(got)
+        step = "restory" if args.restory else ("cast-pick" if args.cast_pick is not None else "story")
+    elif args.scenes:
+        print("[장면] (fake) 줄거리와 장면을 만듭니다…", flush=True)
+        got = pick_calls(calls, {"SCENE"})
+        slept = nap(got, 30)
+        copy(tpl, run_dir, "scene.md", "scene_prompt.txt", "scenes.json")
+        append_meta(run_dir, got)
+        say_calls(got)
+        step = "scenes"
+    elif args.detail_pages:
+        scenes = json.loads((tpl / "scenes.json").read_text(encoding="utf-8")).get("scenes") or []
+        total = len(scenes) + 1
+        pages = args.page or list(range(1, total + 1))
+        slept = 0.0
+        for no in pages:
+            src = tpl / "pages" / f"page{no:02d}.png"
+            if not src.is_file():
+                die(f"template has no page {no}")
+            label = "표지" if no == 1 else f"장면 {no - 1}/{len(scenes)}"
+            print(f"[{label}] (fake) 그리는 중{' (다시: ' + args.note[:40] + ')' if args.note else ''}…",
+                  flush=True)
+            got = pick_calls(calls, PAGE_STAGES, page=no)
+            slept += nap(got, 40)
+            stem = f"pages/page{no:02d}"
+            copy(tpl, run_dir, f"{stem}.txt", f"{stem}.review.json", f"{stem}.review.txt",
+                 f"{stem}.review_prompt.txt")
+            copy(tpl, run_dir, f"{stem}.png")
+            append_meta(run_dir, got)
+            say_calls(got)
+            print(f"  -> {run_dir / (stem + '.png')}", flush=True)
+        step = "page" + ",".join(str(p) for p in pages)
+    elif args.full_review:
+        print("[전체 검수] (fake) 화 전체를 읽는 중…", flush=True)
+        got = pick_calls(calls, {"FULL_REVIEW"})
+        slept = nap(got, 20)
+        copy(tpl, run_dir, "full_review.json", "full_review.txt")
+        append_meta(run_dir, got)
+        say_calls(got)
+        step = "full-review"
+    else:
+        die(f"nothing to do for run.py {argv}")
+    note_step(step, args.run_id, slept, t0)
+
+
+# ---------------------------------------------------------------- 들머리
+
+def main(argv: list[str]) -> None:
+    scrub_env()
+    guard_network()
+    rest = list(argv)
+    while rest and rest[0] in ("-u", "-B", "-E"):
+        rest.pop(0)
+    if not rest:
+        die("no script given")
+    script, args = rest[0], rest[1:]
+    if script == "run.py":
+        fake_run(args)
+    elif script in ("stitch.py", "s3_upload.py"):
+        if script == "s3_upload.py" and (not args or args[0] != "--prepare"):
+            die("s3_upload.py is only allowed with --prepare (no uploads from python)")
+        run_real(script, args)
+    else:
+        die(f"script {script!r} is not supported by the fake (no model calls allowed)")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
