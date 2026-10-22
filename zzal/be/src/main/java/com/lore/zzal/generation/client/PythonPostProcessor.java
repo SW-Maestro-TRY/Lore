@@ -315,6 +315,7 @@ public class PythonPostProcessor implements PostProcessor {
      */
     protected void exec(String scriptPath, Path grid, Path out, List<String> extraArgs, Path logFile)
             throws IOException, InterruptedException {
+        if (Path.of(scriptPath).getFileName().toString().equals("custom_post.py")) { execCustom(scriptPath, grid, out, extraArgs, logFile); return; }
         List<String> cmd = new ArrayList<>(List.of(pythonPath, scriptPath, grid.toString(), out.toString()));
         cmd.addAll(extraArgs);
         ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -335,6 +336,22 @@ public class PythonPostProcessor implements PostProcessor {
         // info 로 남긴다 — 파이썬의 [정규화] 등 후처리 진단 줄이 서버 로그에 보여야
         // 같은 류(배선 누락으로 조용히 안 도는)를 놓치지 않는다.
         log.info("후처리 로그\n{}", output);
+    }
+
+    private void execCustom(String script,Path grid,Path out,List<String> extra,Path stdout)throws IOException,InterruptedException {
+        var args=new ArrayList<>(List.of(pythonPath,script,grid.toString(),out.toString()));args.addAll(extra);
+        Path stderr=stdout.resolveSibling(stdout.getFileName()+".stderr");Process process;
+        try{process=new ProcessBuilder(args).redirectOutput(stdout.toFile()).redirectError(stderr.toFile()).start();}
+        catch(IOException error){throw new PostprocessFailureException(PostprocessFailureException.Code.EXECUTION,"","",error);}
+        boolean done=process.waitFor(timeoutSeconds,TimeUnit.SECONDS);
+        if(!done){process.destroyForcibly();process.waitFor(5,TimeUnit.SECONDS);}
+        String output=Files.exists(stdout)?Files.readString(stdout):"",errors=Files.exists(stderr)?Files.readString(stderr):"";
+        if(!done||process.exitValue()!=0){
+            String diagnostic=output+"\n"+errors;
+            var code=!done?PostprocessFailureException.Code.TIMEOUT:diagnostic.contains("POSTPROCESS_CLIP")?PostprocessFailureException.Code.CLIP:diagnostic.contains("GRID_STRUCTURE_INVALID")?PostprocessFailureException.Code.GRID_INVALID:PostprocessFailureException.Code.EXECUTION;
+            throw new PostprocessFailureException(code,output,errors,new IllegalStateException(!done?"Postprocess timeout":"Postprocess exit "+process.exitValue()));
+        }
+        log.info("맞춤 후처리 완료 — {}",grid);
     }
 
     private void deleteQuietly(Path dir) {

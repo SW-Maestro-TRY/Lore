@@ -1,27 +1,30 @@
 'use client';
 
-// 관리자 화면 묶음 — 탭 둘: 움짤 검수(기존) · 1·2층 복구(#696, 카드 재설계 #702).
-// 고른 탭은 주소 해시(#layer)로 남긴다 — 새로고침해도 보던 탭에 머문다.
+// 기존 검수·복구와 읽기 전용 맞춤8종 뷰어. 선택한 탭은 주소 해시에 남긴다.
 
 import { useEffect, useState } from 'react';
 import AdminReviewScreen from './AdminReviewScreen';
 import AdminLayerTab from './AdminLayerTab';
+import AdminCustomBundlesTab from './AdminCustomBundlesTab';
 
-type Tab = 'review' | 'layer';
+type Tab = 'review' | 'layer' | 'custom';
 
 export default function AdminScreen() {
   const [tab, setTab] = useState<Tab>('review');
   useEffect(() => {
-    if (window.location.hash === '#layer') setTab('layer');
+    const readHash = () => setTab(window.location.hash === '#layer' ? 'layer' : ['#custom', '#custom-failures'].includes(window.location.hash) ? 'custom' : 'review');
+    readHash();
+    window.addEventListener('hashchange', readHash);
+    return () => window.removeEventListener('hashchange', readHash);
   }, []);
   const go = (t: Tab) => {
     setTab(t);
-    window.history.replaceState(null, '', t === 'layer' ? '#layer' : '#');
+    window.history.replaceState(null, '', t === 'review' ? '#' : `#${t}`);
   };
   return (
     <div style={{ maxWidth: 880, margin: '0 auto', padding: '8px 12px 0' }}>
-      <nav data-part="admin-tabs" style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-        {([['review', '움짤 검수'], ['layer', '1·2층 복구']] as const).map(([t, label]) => (
+      <nav data-part="admin-tabs" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+        {([['review', '움짤 검수'], ['layer', '1·2층 복구'], ['custom', '맞춤8종']] as const).map(([t, label]) => (
           <button
             key={t}
             type="button"
@@ -30,7 +33,7 @@ export default function AdminScreen() {
             data-active={tab === t}
             onClick={() => go(t)}
             style={{
-              padding: '6px 12px', fontSize: 13, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
+              minHeight: 44, padding: '6px 12px', fontSize: 13, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
               border: '1px solid rgba(127,127,127,0.35)', color: 'inherit',
               background: tab === t ? 'rgba(127,127,127,0.18)' : 'transparent',
             }}
@@ -39,7 +42,7 @@ export default function AdminScreen() {
           </button>
         ))}
       </nav>
-      {tab === 'review' ? <AdminReviewScreen /> : <AdminLayerTab />}
+      {tab === 'review' ? <AdminReviewScreen /> : tab === 'layer' ? <AdminLayerTab /> : <AdminCustomBundlesTab />}
     </div>
   );
 }
