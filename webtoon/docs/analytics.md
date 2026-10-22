@@ -32,6 +32,58 @@
 
 같은 사람을 로그인 전후로 잇고 싶으면 `uid` 로 묶습니다(로그인한 뒤의 줄에는 둘 다 있습니다).
 
+### 내부 접속 따로 표시 (관리자 · 멘토 · 지인)
+
+접속자를 셀 때 우리 쪽 접속이 섞이면 실사용자 숫자가 부풀려집니다. 다섯 가지로 나눠 봅니다.
+
+| 구분 | 기준 |
+|---|---|
+| 관리자 | `users.role = 'ADMIN'` 인 계정이 로그인한 적 있는 브라우저(`uid`) |
+| 멘토 | 아래 멘토 목록의 `user_id` 가 로그인한 적 있는 브라우저(`uid`) |
+| 지인 | 아래 지인 목록의 `user_id` 가 로그인한 적 있는 브라우저(`uid`) |
+| 내부 브라우저 | 로그인 없이 쓰는 우리 쪽 브라우저를 아래 목록에 `uid` 로 직접 적은 것 |
+| 외부 | 위 셋이 아닌 나머지 |
+
+- **브라우저(`uid`)로 묶습니다.** 로그인하기 전 줄에는 `user_id` 가 없어서, 계정만 보면 같은
+  브라우저의 로그인 전 방문이 외부로 잡힙니다.
+- 한 브라우저가 여럿에 해당하면 관리자 → 멘토 → 지인 순으로 앞의 것으로 셉니다.
+- 멘토는 SW마에스트로 멘토님 계정입니다. 피드백을 주려고 써 보신 것이라 실사용자에서 빼되, 지인과는 따로 셉니다(멘토 피드백과 지인 반응을 섞지 않으려고).
+- 로그인 없이 랜딩만 보는 우리 쪽 브라우저는 계정으로 가를 수 없어서 `uid` 를 직접 적습니다. `uid` 는 브라우저 저장소(`lore_uid`)에 있는 값이라, 저장소를 지웠거나 다른 기기·브라우저로 보면 새 값이 되므로 알게 될 때마다 더합니다.
+- 지인 목록은 운영 DB `user_id` 기준이고, 알게 될 때마다 아래 `friends` 에 더합니다.
+
+| 지인 | `user_id` | 근거 |
+|---|---|---|
+| 펭귄 만든이 | 80 | 2026-10-08 13:28 에 펭귄 이야기 후보를 만든 계정 |
+| 향이 만든이 | 81 | 2026-10-08 13:17 에 향이 캐릭터를 만든 계정 |
+
+| 멘토 | `user_id` | 근거 |
+|---|---|---|
+| 멘토님 | 135 | 2026-10-10 22:21 춘식이로 웹툰(작업 31 「조회수는 내가 먹는다」)을 만들고, 그 사용 피드백을 따로 남겨 주심 |
+
+| 내부 브라우저 | `uid` | 근거 |
+|---|---|---|
+| 하은 폰(추정) | `umt9v2vvibb0yfz69` | 모바일, 로그인 없이 랜딩만 39줄(10/5 16:29 ~ 10/9 19:59). 하은 님이 본인 것 같다고 함 |
+
+```sql
+-- 날짜만 바꿔 쓴다. 멘토·지인을 더하면 각 in (...) 에 user_id 를, 내부 브라우저를 더하면 uid 목록에 값을 넣는다.
+with internal as (
+  select e.uid, bool_or(u.role = 'ADMIN') as admin, bool_or(u.id in (135)) as mentor,
+         bool_or(u.id in (80, 81)) as friend
+  from webtoon_event e join users u on u.id = e.user_id
+  where u.role = 'ADMIN' or u.id in (135, 80, 81)
+  group by e.uid
+)
+select case when i.admin then '관리자' when i.mentor then '멘토' when i.friend then '지인'
+            when e.uid in ('umt9v2vvibb0yfz69') then '내부 브라우저' else '외부' end as 구분,
+       count(distinct e.uid) as 브라우저
+from webtoon_event e left join internal i on i.uid = e.uid
+where e.name = 'session_start' and e.occurred_at >= timestamptz '2026-10-09 00:00+09'
+group by 1 order by 1;
+```
+
+로그인 세션(`user_refresh_token`)으로 사람을 셀 때도 같은 기준으로 `users.role` 과 위 지인
+`user_id`, 멘토 `user_id` 를 빼서 봅니다.
+
 ## 무엇을 안 남기나
 
 - **사람이 쓴 글**(이름·설명·메모·이야기·고친 본문·이메일)은 값으로 싣지 않습니다.
