@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@common/api/client';
 import { Picture, CARD, STAGE, GRID, THUMB, THUMB_ON, THUMB_IMG, THUMB_CAP, BTN } from './AdminReviewScreen';
+import AdminCustomSequenceViewer from './AdminCustomSequenceViewer';
 import { fetchCustomBundles, type CustomBundle, type CustomBundleFilter } from './customBundleApi';
 
 type Shot = 'motion' | 'grid' | 'source' | 'sheet';
@@ -24,7 +25,8 @@ function Image({ imageKey, label, thumbnail = false }: { imageKey: string; label
       : <Picture src={imageKey} alt={label} style={thumbnail ? THUMB_IMG : { display: 'block', width: '100%', maxHeight: 480, objectFit: 'contain' }} />}
   </div>;
 }
-function BundleViewer({ item }: { item: CustomBundle }) {
+function BundleViewer({ item, sequenceOpen, onSequence }: { item: CustomBundle; sequenceOpen: boolean; onSequence: () => void }) {
+  const sequenceTrigger = useRef<HTMLButtonElement>(null);
   const motions = [...item.motions].sort((a, b) => a.order - b.order);
   const [order, setOrder] = useState(motions.find(m => m.imageKey)?.order ?? motions[0]?.order);
   const [shot, setShot] = useState<Shot>('motion');
@@ -42,6 +44,9 @@ function BundleViewer({ item }: { item: CustomBundle }) {
     {date && <p style={{ margin: '4px 0', fontSize: 12 }}>실패 시각 {Number.isNaN(date.getTime()) ? item.failedAt : date.toLocaleString('ko-KR')}</p>}
     <h4 data-part="custom-motion-title" style={{ margin: '14px 0 4px', fontSize: 15 }}>{motion ? `${motion.order}. ${motion.title}` : '보존된 동작 정보가 없어요.'}</h4>
     {motion && <p style={{ margin: '4px 0', fontSize: 12 }}>{motion.imageKey ? (motion.published ? '등록된 완성본' : '보존된 부분 결과') : '완성본 없음'}{motion.review ? ` · 검수 ${motion.review}` : ''}{motion.autoCheck ? ` · 자동 점검 ${motion.autoCheck}` : ''}</p>}
+    <button ref={sequenceTrigger} type="button" data-action="custom-sequence-open" aria-expanded={sequenceOpen} disabled={!item.setId} onClick={onSequence} style={{ ...button, marginTop: 8 }}>기본→맞춤 이어보기</button>
+    {!item.setId && <p style={{ fontSize: 12 }}>아직 세트가 준비되지 않아 이어볼 수 없어요.</p>}
+    {sequenceOpen && <AdminCustomSequenceViewer key={item.jobId} jobId={item.jobId} titles={Array.from({ length: 8 }, (_, i) => motions.find(m => m.order === i + 1)?.title ?? '')} onClose={() => { onSequence(); requestAnimationFrame(() => sequenceTrigger.current?.focus()); }} />}
     <div data-part="custom-stage" data-shot={selected?.[0] ?? 'none'} style={STAGE}>
       {selected?.[1] ? <Image key={selected[1]} imageKey={selected[1]} label={`${motion?.title ?? '맞춤8종'} ${LABEL[selected[0]]}`} />
         : <p role="status" style={{ padding: 16, lineHeight: 1.6 }}>보존된 이미지가 없어요. 아래 작업 정보로 확인해 주세요.</p>}
@@ -66,6 +71,7 @@ function BundleViewer({ item }: { item: CustomBundle }) {
   </section>;
 }
 export default function AdminCustomBundlesTab() {
+  const [activeSequence, setActiveSequence] = useState<number | null>(null);
   const [filter, setFilter] = useState<CustomBundleFilter>('failed');
   const [items, setItems] = useState<CustomBundle[]>([]);
   const [cursor, setCursor] = useState<number | null>(null);
@@ -78,7 +84,7 @@ export default function AdminCustomBundlesTab() {
     const controller = new AbortController(), seq = ++sequence.current;
     requestRef.current = { controller, seq };
     setLoading(true); setError(null);
-    if (beforeId == null) { setItems([]); setCursor(null); }
+    if (beforeId == null) { setItems([]); setCursor(null); setActiveSequence(null); }
     try {
       const page = await fetchCustomBundles(status, beforeId, controller.signal);
       if (controller.signal.aborted || seq !== sequence.current) return;
@@ -98,7 +104,7 @@ export default function AdminCustomBundlesTab() {
     {loading && <p role="status">불러오는 중이에요.</p>}
     {error && <p role="alert" style={{ lineHeight: 1.6 }}>{error}</p>}
     {!loading && !error && items.length === 0 && <p role="status">{filter === 'failed' ? '확인이 필요한 맞춤8종이 없어요.' : '아직 맞춤8종 작업이 없어요.'}</p>}
-    {items.map(item => <BundleViewer key={item.jobId} item={item} />)}
+    {items.map(item => <BundleViewer key={item.jobId} item={item} sequenceOpen={activeSequence === item.jobId} onSequence={() => setActiveSequence(old => old === item.jobId ? null : item.jobId)} />)}
     {cursor != null && <button type="button" data-action="custom-more" disabled={loading} onClick={() => void load(filter, cursor)} style={button}>이전 작업 더 보기</button>}
   </div>;
 }

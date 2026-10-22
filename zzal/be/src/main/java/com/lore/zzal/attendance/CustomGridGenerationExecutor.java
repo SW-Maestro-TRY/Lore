@@ -39,6 +39,8 @@ public final class CustomGridGenerationExecutor implements GenerationExecutor {
   var metadataNode=(com.fasterxml.jackson.databind.node.ObjectNode)mapper.readTree(Files.readString(output.resolve("resource-metadata.json")));
   var anchorNode=mapper.readTree(Files.readString(anchors));
   if(anchorNode.has("customTransform")){metadataNode.set("customTransform",anchorNode.get("customTransform"));metadataNode.put("gridImageKey",grid.imageKey());Files.writeString(output.resolve("resource-metadata.json"),mapper.writeValueAsString(metadataNode));}
+  metadataNode.set("reviewSequence",CustomReviewSequence.create(storage,request,profile,output,python));
+  Files.writeString(output.resolve("resource-metadata.json"),mapper.writeValueAsString(metadataNode));
   Path metadata=output.resolve("resource-metadata.json");
   storage.upload(prefix+"/resource-metadata.json",metadata,"application/json");
   var publication=new BundleJobWorker.PublicationEvidence("CUSTOM_PUBLICATION_V1",prefix+"/resource-metadata.json",AttendanceService.hash(Files.readString(metadata)),prefix+"/anchors.json",AttendanceService.hash(Files.readString(anchors)));
