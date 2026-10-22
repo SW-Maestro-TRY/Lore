@@ -303,7 +303,6 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
         <button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}</button>
         <button data-fr-action="info-menu" onClick={()=>{setDrawer(null);x.open('info')}}>{locale==='ko'?'캐릭터 정보':t.personal}</button>
         {openAnnouncements&&<button data-fr-action="announcements-menu" onClick={()=>{setDrawer(null);openAnnouncements?.(menuButton.current)}}>{locale==='ko'?'공지사항':locale==='en'?'Announcements':'お知らせ'}</button>}
-        <button data-fr-action="help-menu" onClick={()=>{setDrawer(null);x.open('help')}}>{locale==='ko'?'도움말':locale==='en'?'Help':'使い方'}</button>
         {!sampleMode&&<button data-fr-action="feedback-menu" onClick={()=>{setDrawer(null);x.open('review')}}>{locale==='ko'?'후기':locale==='en'?'Feedback':'感想'}</button>}
         <button data-fr-action="scene-menu" onClick={()=>{setDrawer(null);interaction.attempt('scene_open');setShareOpen(true)}}>{locale==='ko'?'공유':locale==='en'?'Share':'共有'}</button>
         {!sampleMode&&<button data-fr-action="inquiry-menu" onClick={()=>{setDrawer(null);x.close();interaction.attempt('inquiry_open');setInquiryOpen(true)}}>{locale==='ko'?'문의하기':locale==='en'?'Contact us':'お問い合わせ'}</button>}
