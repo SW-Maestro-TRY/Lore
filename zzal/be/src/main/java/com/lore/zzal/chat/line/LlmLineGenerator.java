@@ -3,15 +3,17 @@ package com.lore.zzal.chat.line;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.zzal.chat.prompt.ChatContext;
+import com.lore.zzal.chat.prompt.ConversationScene;
 import com.lore.zzal.chat.prompt.PromptAssembler;
 import com.lore.zzal.chat.prompt.SystemPromptCache;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
- * LLM 생성기 — 시스템 메시지(펫당 캐시) + 사용자 메시지(이번 턴)({@link PromptAssembler}) → OpenAI 1회
+ * LLM 생성기 — 시스템 메시지(펫·장면별 캐시) + 사용자 메시지(이번 턴, 일반 채팅은 native 대화 이력 포함)({@link PromptAssembler}) → OpenAI 1회
  * → JSON {@code {line, motion, call_me, user_said, asked_back}}.
  *
  * <h3>실패하는 길(사유를 남기고 {@link LineChain} 이 한 번 더 부른다)</h3>
@@ -38,14 +40,21 @@ public class LlmLineGenerator implements LineGenerator {
     private final ChatLineClient client;
     private final String model;
     private final Duration timeout;
+    private final Duration firstMeetingTimeout;
     private final SystemPromptCache systems;
     private final ObjectMapper json = new ObjectMapper();
 
     public LlmLineGenerator(ChatLineClient client, String model, Duration timeout, SystemPromptCache systems) {
+        this(client, model, timeout, timeout, systems);
+    }
+
+    public LlmLineGenerator(ChatLineClient client, String model, Duration timeout,
+                            Duration firstMeetingTimeout, SystemPromptCache systems) {
         this.client = client;
         this.systems = systems;
         this.model = model;
         this.timeout = timeout;
+        this.firstMeetingTimeout = firstMeetingTimeout;
     }
 
     @Override
@@ -60,14 +69,25 @@ public class LlmLineGenerator implements LineGenerator {
     @Override
     public LineAttempt generate(ChatContext ctx) {
         long t0 = System.nanoTime();
-        String system = systems.get(ctx.petId(), ctx.sheet());
-        String user = PromptAssembler.user(ctx);
+        boolean ordinary = ctx.ordinaryChat();
+        String system = systems.get(ctx.petId(), ctx.sheet(), ordinary);
+        String user = ordinary ? PromptAssembler.userWithoutHistory(ctx) : PromptAssembler.user(ctx);
+        List<ChatLineClient.Message> history = ordinary && ctx.history() != null
+                ? ctx.history().stream().map(h -> new ChatLineClient.Message(
+                        h.speaker() == com.lore.zzal.chat.session.Speaker.PET ? "assistant" : "user", h.line())).toList()
+                : List.of();
+        int promptChars = system.length() + user.length() + history.stream().mapToInt(h -> h.content().length()).sum();
         ChatLineClient.Completion c;
-        try {
-            c = client.complete(system, user, model, timeout);
+        Duration requestTimeout = ctx.scene() != null && ctx.scene().phase() == ConversationScene.Phase.FIRST_MEETING
+                ? firstMeetingTimeout : timeout;
+        var parentUsage = com.lore.zzal.generation.client.ProviderUsageContext.current();
+        try (var usage = com.lore.zzal.generation.client.ProviderUsageContext.open(
+                ordinary ? "ordinary_chat" : "first_meeting", ctx.petId(), null, parentUsage == null ? null : parentUsage.requestId(), parentUsage == null ? 1 : parentUsage.attempt())) {
+            c = ordinary ? client.complete(system, history, user, model, requestTimeout)
+                    : client.complete(system, user, model, requestTimeout);
         } catch (TimeoutException e) {
             return LineAttempt.fail(NAME, model,
-                    OpenAiChatLineClient.estimate(model, system.length() + user.length()), "timeout", ms(t0));
+                    OpenAiChatLineClient.estimate(model, promptChars), "timeout", ms(t0));
         } catch (ChatLineClient.BilledException e) {
             return LineAttempt.fail(NAME, model, e.costUsd(), "parse", ms(t0));
         } catch (Exception e) {
@@ -85,7 +105,7 @@ public class LlmLineGenerator implements LineGenerator {
             line = clean(n.path("line").asText(""));
             motion = n.path("motion").asText("").strip();
             extract = new LineExtract(field(n, "call_me", CALL_ME_MAX), field(n, "user_said", USER_SAID_MAX),
-                    n.path("asked_back").asBoolean(false));
+                    n.path("asked_back").asBoolean(false), n.has("memory_deltas") ? n.get("memory_deltas").toString() : null);
         } catch (Exception e) {
             return LineAttempt.fail(NAME, model, c.costUsd(), "parse", ms(t0));
         }

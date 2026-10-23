@@ -91,6 +91,17 @@ public class ZzalChatTurn {
     @Column(name = "asked_back")
     private Boolean askedBack;
 
+    @Column(name="recalled_memory_ids",columnDefinition="text")
+    private String recalledMemoryIds;
+
+    public void recordMemoryContext(java.util.List<Long> ids){
+        recalledMemoryIds=ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+    }
+    public java.util.List<Long> recalledMemoryIds(){
+        return recalledMemoryIds==null||recalledMemoryIds.isBlank()?java.util.List.of()
+                :java.util.Arrays.stream(recalledMemoryIds.split(",")).map(Long::valueOf).toList();
+    }
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

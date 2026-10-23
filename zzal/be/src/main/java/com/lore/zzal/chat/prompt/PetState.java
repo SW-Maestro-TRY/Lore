@@ -47,6 +47,14 @@ public record PetState(DayOfWeek weekday, int hour, int minute, int daysTogether
         return sick ? s + " · 아픔" : s;
     }
 
+    /** 캐릭터 자신의 게이지이며 사용자의 몸이나 감정을 나타내지 않는다. */
+    public String labeledWords() {
+        return "포만=" + word(fullness, "배부름", "보통", "배고픔")
+                + " · 기분=" + word(happiness, "좋음", "보통", "시무룩")
+                + " · 청결=" + word(clean, "깨끗함", "보통", "꼬질꼬질")
+                + " · 건강=" + (sick ? "아픔" : "아프지 않음");
+    }
+
     private static String word(int v, String high, String mid, String low) {
         return v >= ZzalRules.GAUGE_MAX ? high : v >= 2 ? mid : low;
     }

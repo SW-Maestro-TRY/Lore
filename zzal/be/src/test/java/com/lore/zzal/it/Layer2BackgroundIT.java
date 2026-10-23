@@ -18,20 +18,15 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * 1층 우선 부화 + 2층 배경 굽기(#696) — 진짜 DB·진짜 이벤트·진짜 실행기(가짜 생성기)로 끝까지.
- *
- * ① 그림 올리고 이름 → 1층 4단계로 ALIVE ② 2층 작업이 nightExecutor 에서 돌아 READY · 새 판(2)
- * ③ job 표에 LAYER2 한 줄(SUCCEEDED) — HATCH 사람 상한 셈과 섞이지 않는다 ④ 응답의 2층 그림 주소가 새 판을 가리킨다.
- */
+/** Real controller/DB/hatch callbacks with a fake generator: basic8 remains, no retired layer2 job. */
 @ZzalIntegrationTest
-@DisplayName("2층 배경 굽기 — 부화(1층) 뒤 READY 까지")
+@DisplayName("해금8 폐기 이후 실제 부화 API·DB 검증")
 class Layer2BackgroundIT extends ZzalItSupport {
 
     @Autowired GenJobRepository jobs;
 
     @Test
-    @DisplayName("★★ 1층으로 살아나고, 2층은 뒤에서 READY · 판 2 · LAYER2 job")
+    @DisplayName("1층 부화 완료 — 기본8 판1 유지, 해금8 작업·주소·진도 신규 노출 없음")
     void hatchThenLayer2Ready() throws Exception {
         Long userId = newUserId();
         MvcResult drafted = postAs(userId, "/api/zzal/v1/me/pets/draft",
@@ -45,16 +40,8 @@ class Layer2BackgroundIT extends ZzalItSupport {
         postAs(userId, "/api/zzal/v1/me/pets/draft/%d/character".formatted(petId), Map.of("name", "여울"));
         await("1층으로 살아나는 것", Duration.ofSeconds(60),
                 () -> petRepository.findById(petId).orElseThrow().getPhase() == PetPhase.ALIVE);
-        await("2층이 READY 가 되는 것", Duration.ofSeconds(60),
-                () -> petRepository.findById(petId).orElseThrow().getLayer2Status() == Layer2Status.READY);
-
-        assertThat(petRepository.findById(petId).orElseThrow().getBasicRound())
-                .as("1층 판 1 → 2층이 새 판 2 를 연다").isEqualTo(2);
-        List<GenJob> layer2 = jobs.findByPetIdOrderByIdAsc(petId).stream()
-                .filter(j -> j.getKind() == GenKind.LAYER2).toList();
-        assertThat(layer2).hasSize(1);
-        assertThat(layer2.get(0).getStatus()).isEqualTo(GenStatus.SUCCEEDED);
-        assertThat(layer2.get(0).getAttempt()).isEqualTo(1);
+        assertThat(petRepository.findById(petId).orElseThrow().getBasicRound()).isEqualTo(1);
+        assertThat(jobs.findByPetIdOrderByIdAsc(petId)).noneMatch(j -> j.getKind() == GenKind.LAYER2);
 
         JsonNode pet = getJson(userId, "/api/zzal/v1/me/pets/%d".formatted(petId)).path("data");
         JsonNode eatRice = null;
@@ -64,7 +51,10 @@ class Layer2BackgroundIT extends ZzalItSupport {
             }
         }
         assertThat(eatRice).isNotNull();
-        assertThat(eatRice.path("basicImageKey").asText()).endsWith("/basic/2/eat_rice.webp");
-        assertThat(pet.path("anchorsKey").asText()).endsWith("/basic/2/anchors.json");
+        assertThat(eatRice.path("basicImageKey").isNull()).isTrue();
+        assertThat(eatRice.path("unlocked").asBoolean()).isFalse();
+        assertThat(eatRice.path("hint").isNull()).isTrue();
+        assertThat(eatRice.path("progress").isNull()).isTrue();
+        assertThat(pet.path("anchorsKey").asText()).endsWith("/basic/1/anchors.json");
     }
 }

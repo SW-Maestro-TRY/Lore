@@ -17,16 +17,21 @@
 //   `useFootPad` 가 그림에서 직접 잰다(못 재면 여울 기준값으로 되돌아간다).
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { grownLinePending } from '../tutorial';
 import { EGG_IMG, POP_LIFT, ROOM_KEYS, SPRITE_FOOT_PAD } from './constants';
 import { onLeave, ztrack } from './funnel';
 import { YEOUL_ANCHORS_URL } from '../constants';
 import { C, C2, GAEGU, LV, MONO, TAP_MIN, gap, monoSize, radius, shadow, fz, ink, acc, paperA, pad } from './ui';
 import Album from './Album';
+import SceneShare from './SceneShare';
+import GuideHelp from './GuideHelp';
+import { useUiText } from '../../lib/uiCopy';
+import { useSpriteEnvelope } from '../../lib/spriteGeometry';
+import { ChatHistory } from './ChatHistory';
 import Panels from './Panels';
 import FeedbackSheet from '../FeedbackSheet';
-import { spriteUrl, useFootPad, useHeadPad, useLive, useSideEdges, yeoulSpriteUrl } from './useHatch';
+import { spriteUrl, useFootPad, useHeadPad, useLive, useSideEdges, useSpritePads, yeoulSpriteUrl } from './useHatch';
 import { useIsWide } from '../useIsWide';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { useAnchors } from '../props/anchors';
@@ -50,6 +55,8 @@ const FEEDBACK_AFTER_CHAT_MS = 30_000;
 
 export default function Room({ y }: { y: Yeoul }) {
   const { s, v, actions } = y;
+  const [sceneShareOpen,setSceneShareOpen]=useState(false);
+  const closeSceneShare=useCallback(()=>setSceneShareOpen(false),[]);
   useRoomFunnel(s.roomSel, v.mini.tutAt, s.sampleMode);
   // 좁은 폰(SE)에서 말풍선이 떴을 때만, 머리 위 공간을 벌기 위해 아이를 소폭 낮춘다(아래 SIL).
   const narrow = useIsWide(NARROW_Q);
@@ -113,6 +120,21 @@ export default function Room({ y }: { y: Yeoul }) {
   // 머리 위 여백·좌우 가장자리도 **그림에서 잰다** — 아래 `headSpan`·`silLeft` 참조.
   const headPad = useHeadPad(charSrc, SPRITE_FOOT_PAD);
   const sideEdges = useSideEdges(charSrc, SPRITE_FOOT_PAD);
+  const spriteGeometry = useSpritePads(charSrc, SPRITE_FOOT_PAD);
+  const referenceSrc = spriteUrl(live, 'base', v.sample.show);
+  const referenceGeometry = useSpritePads(referenceSrc, SPRITE_FOOT_PAD);
+  const poseSources = useMemo(() => Array.from(new Set(['base','eat','joy','sad','sick','pet','hello','sleep', ...(live.pet?.motions ?? []).filter(motion => motion.unlocked).map(motion => motion.key)].map(pose => spriteUrl(live, pose, v.sample.show)))), [live, v.sample.show]);
+
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
+  const [stageWidth, setStageWidth] = useState<number | null>(null);
+  const [stageHeight, setStageHeight] = useState<number | null>(null);
+  const shortStage = (stageHeight ?? 1000) < 240;
+  useLayoutEffect(() => {
+    if (!stageEl) return;
+    const measure = () => { setStageWidth(stageEl.clientWidth); setStageHeight(stageEl.clientHeight); };
+    measure(); const observer = new ResizeObserver(measure); observer.observe(stageEl);
+    return () => observer.disconnect();
+  }, [stageEl]);
 
   // ── 소품 오버레이 ─────────────────────────────────────────────────────
   //
@@ -229,7 +251,7 @@ export default function Room({ y }: { y: Yeoul }) {
   //   깎는 기준을 **가장 큰 자세**로 잡는 이유 — 자세마다 깎으면 자세를 바꿀 때 아이가 출렁여
   //   1)이 깨진다. `HEAD_SAFE` 는 반올림에 먹히지 않도록 두는 최소 여유다.
   //   ★ 배경이 사라지지 않도록 60% 를 넘겨 키우지 말 것 — "방 안에 있다"가 유지돼야 한다(상훈님 지시).
-  const LIFT = `clamp(${compact ? FOOT_FLOOR_SHORT : FOOT_FLOOR}px, 30%, 330px)`;
+  const LIFT = shortStage ? `min(clamp(${compact ? FOOT_FLOOR_SHORT : FOOT_FLOOR}px, 30%, 330px), 45%)` : `clamp(${compact ? FOOT_FLOOR_SHORT : FOOT_FLOOR}px, 30%, 330px)`;
 
   // ★ 크기는 **실루엣 키(K)로 정한다** — 상자를 먼저 정하고 그 안에 그림을 넣지 않는다.
   //   규격의 모든 ratio 가 "화면 키 = K_screen(296px)" 을 전제한다(→ `props/layout.ts` 머리말) —
@@ -258,6 +280,12 @@ export default function Room({ y }: { y: Yeoul }) {
    */
   const byK = (anchors.source === 'server' && poseFromServer(anchors.anchors, v.spriteKey))
     || v.sample.show || charSrc === fallbackSrc;
+  const envelope = useSpriteEnvelope(byK ? [] : poseSources, SPRITE_FOOT_PAD);
+  // On the smallest phones, reserve a stable speech column rather than consume
+  // almost the entire vertical character budget. Both regions remain allocated.
+  const speechColumn = shortStage || (compact && (stageWidth ?? 1000) <= 345);
+  const actorSpace = stageWidth ? (speechColumn ? stageWidth - 132 - 12 - 16 : stageWidth * 0.84) : null;
+  const actorOffset = speechColumn && stageWidth && actorSpace ? stageWidth / 2 - 8 - actorSpace / 2 : 0;
 
   // ★ 말풍선 자리 — **화면 폭으로 가르지 않는다**(2026-09-20 재설계 · 안 1).
   //
@@ -289,25 +317,45 @@ export default function Room({ y }: { y: Yeoul }) {
    *   덜 사는 평소의 변화)는 예전처럼 부드럽게 이어진다 — 그게 이 전환을 둔 이유다.
    */
   const [sizeSettled, setSizeSettled] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setSizeSettled(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
+  const geometryReady = byK || (spriteGeometry.loaded && referenceGeometry.loaded && envelope.ready);
+  useLayoutEffect(() => {
+    setSizeSettled(false);
+    if (!geometryReady) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => setSizeSettled(true)); });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [geometryReady, byK, referenceSrc]);
   // 화면에서의 실루엣 키. **무대의 약 60%** 를 목표로 하되, 머리끝이 무대 위로 안 넘게 남은 높이로 깎는다.
   //   `SIL` 은 가장 큰 자세의 실루엣이 화면에서 가질 높이다(무대 60%, 하한 150px, 머리 공간으로 상한).
   //   K_SCREEN = SIL ÷ (가장 큰 실루엣÷K) — 이렇게 뒤집어야 어떤 자세든 무대 밖으로 안 나간다.
   const silOf = (pad: number) => `min(calc(100% - ${LIFT} - ${pad}px), max(60%, 150px))`;
   const SIL = silOf(HEADROOM);
   const K_SCREEN = `calc(${SIL} / ${fit.tallestPerK.toFixed(4)})`;
+  // An image canvas is not the character: normalize against the base pose's visible
+  // height, keep its pixel scale across poses, and constrain opaque width, not blank canvas.
+  const referenceSpan = Math.max(0.05, 1 - referenceGeometry.top - referenceGeometry.bottom);
+  const poseAspect = spriteGeometry.width / spriteGeometry.height;
+  const boxPerReferenceBody = spriteGeometry.height / (referenceGeometry.height * referenceSpan);
+  const envelopeHPerBox = Math.max(0.05, envelope.maxHeight / spriteGeometry.height);
+  const widthLimit = stageWidth && envelope.ready ? `${(actorSpace! * spriteGeometry.height / envelope.maxWidth).toFixed(2)}px` : '100000px';
+  const anchorLeft = Math.min(...Object.values(anchors.anchors.poses).map(pose => pose.bbox.x));
+  const anchorRight = Math.max(...Object.values(anchors.anchors.poses).map(pose => pose.bbox.x + pose.bbox.w));
+  const anchorMaxWidth = Math.max(1, 2 * Math.max(anchors.anchors.canvas[0] / 2 - anchorLeft, anchorRight - anchors.anchors.canvas[0] / 2));
+  const envelopeCenter = byK ? (anchorLeft + anchorRight) / 2 : (envelope.minLeft + envelope.maxRight) / 2;
+  const canvasCenter = byK ? anchors.anchors.canvas[0] / 2 : spriteGeometry.width / 2;
+  const recenterPerBox = 0; // The common horizontal envelope includes reflected poses around the canvas center.
+  const feetX = byK ? (anchors.anchors.poses[v.spriteKey]?.feet.center_x ?? canvasCenter) : (spriteGeometry.footX ?? canvasCenter);
+  const shadowOffsetPerBox = (feetX - canvasCenter) / (byK ? anchors.anchors.canvas[1] : spriteGeometry.height);
+  const anchoredWidthLimit = stageWidth ? `${(actorSpace! * anchors.anchors.canvas[1] / anchorMaxWidth).toFixed(2)}px` : '100000px';
   const boxHOf = (pad: number) => (byK
-    ? `calc(${silOf(pad)} / ${fit.tallestPerK.toFixed(4)} * ${fit.boxHPerK.toFixed(4)})`
-    : `calc(min(calc(100% - ${LIFT} - ${pad}px), max(64%, 160px)) / ${(1 - footPad).toFixed(4)})`);
+    ? `min(calc(${silOf(pad)} / ${fit.tallestPerK.toFixed(4)} * ${fit.boxHPerK.toFixed(4)}), ${anchoredWidthLimit})`
+    : `min(calc(${silOf(pad)} * ${boxPerReferenceBody.toFixed(4)}), calc(${silOf(pad)} / ${envelopeHPerBox.toFixed(4)}), ${widthLimit})`);
   const CHAR_H = boxHOf(HEADROOM);
   /** 말풍선이 자리를 사기 **전**의 아이 상자. 말풍선 자리 계산의 기준자다(→ `Bubble` 머리말). */
   const CHAR_H_FREE = boxHOf(HEAD_SAFE);
   // 발끝이 발끝선(`LIFT`)에 오게 상자를 내린다. 앵커가 있으면 **그 자세의 발끝**을, 없으면 잰 여백을 쓴다.
   const BELOW_FOOT = byK ? fit.belowFoot : footPad;
-  const CHAR_ASPECT = byK ? fit.aspect.toFixed(6) : '313/350';
+  const CHAR_ASPECT = byK ? fit.aspect.toFixed(6) : poseAspect.toFixed(6);
 
   // ★ 말풍선은 **머리끝 자리**를 계산해 그 옆이나 위에 띄운다(2026-09-16 · 2026-09-20 개정).
   //   머리끝(무대 아래 기준) = 발끝선(LIFT) + 상자세로(CHAR_H) × (그 자세 머리끝→발끝 / 캔버스세로).
@@ -359,7 +407,7 @@ export default function Room({ y }: { y: Yeoul }) {
    *   놓을 필요가 없다 — 요소가 없으면 애초에 다시 그릴 일도 없다.
    * ★ `setState` 는 함수 정체가 안 변하므로 ref 콜백이 매 그림마다 떼었다 붙지 않는다.
    */
-  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
+
   const [charProbeEl, setCharProbeEl] = useState<HTMLDivElement | null>(null);
   /**
    * 이 화면에서 **구르기 안내(졸업) 판이 한 번이라도 떴는가.** 후기 판의 기록 갈래(`reason`)에만 쓴다.
@@ -393,7 +441,7 @@ export default function Room({ y }: { y: Yeoul }) {
       {/* 팝오버가 열려 있으면 무대 아무 데나 눌러 닫을 수 있다. */}
       {v.pop.show && <div onClick={actions.closePop} style={{ position: 'absolute', inset: 0, zIndex: 2 }} />}
 
-      {v.hud.show && <Hud y={y} />}
+      {v.hud.show && <Hud y={y} onShare={()=>setSceneShareOpen(true)} />}
       {v.sample.show && <SampleHud y={y} />}
 
       {/* ★ 후기는 이 한 줄이 전부다 — 띄울지 말지(이미 냈는가 · 아기 시간표 중인가 · 전면 판이
@@ -406,13 +454,14 @@ export default function Room({ y }: { y: Yeoul }) {
       <FeedbackSheet
         petId={!s.sampleMode && live.pet?.phase === 'ALIVE' ? live.petId : null}
         // 아기 시간표는 **서버가 센다**(계약 — 끝나면 블록이 null 이다). 화면이 다시 세지 않는다.
-        tutorialActive={live.pet?.tutorial?.active === true || s.tutorOn}
+        tutorialActive={live.pet?.firstIntro ? live.pet.firstIntro.active : live.pet?.tutorial?.active === true || s.tutorOn}
+        onDismiss={() => { if (live.pet?.firstIntro?.reviewPending) void live.tutorialSeen('REVIEW_SEEN'); }}
         // 전면 판(해금 축하·선물)·앨범 벽·액자·시트(돌봄·놀이 등)·대화·꾸미기가 열려 있는 동안에는
         // 저절로 안 열린다 — 그것들이 닫힌 뒤에 연다(2026-10-09 판으로 바꾸며 시트·대화·꾸미기를 더했다).
         // ★ 2026-10-09 — **구르기 안내(졸업) 판이 뜨기 직전 한 그림**도 막는다(`grownLinePending`).
         //   서버가 튜토리얼을 닫은 그림에서 후기 효과가 졸업 판 효과보다 먼저 돌아, 안 막으면 둘이 같이 뜬다.
         //   순서는 "튜토리얼 완료 → 구르기 안내 판 → 닫은 뒤 후기 판" 이다(상훈님 2026-10-09).
-        hold={!!s.fire || v.wall.show || v.frame.show || !!s.sheet || s.chatOpen || chatJustClosed || s.decoOpen || (live.pet != null && live.petId != null && grownLinePending(live.petId, live.pet))}
+        hold={!!s.fire || v.wall.show || v.frame.show || !!s.sheet || s.chatOpen || chatJustClosed || s.decoOpen || (!live.pet?.firstIntro && live.pet != null && live.petId != null && grownLinePending(live.petId, live.pet))}
         // 기록용 갈래 — 이 화면에서 졸업 판을 닫고 바로 연 것인지, 다시 들어온 사람인지.
         autoReason={giftIntroSeen ? 'after_gift_intro' : 'returning'}
         tone="yeoul"
@@ -453,13 +502,15 @@ export default function Room({ y }: { y: Yeoul }) {
             발끝선보다 한 뼘 위(무대 8%, 28~90px)로 올려 아이가 언제나 바닥에 발을 딛는다. */}
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `calc(${LIFT} + clamp(28px, 8%, 90px))`, background: v.st.floor, borderTop: `1px solid ${ink(.09)}` }} />
 
+        {!s.sampleMode && live.pet?.attendanceRewards?.background.owned.filter(b => b.key === live.pet?.background).map(b => <img key={b.key} data-part="owned-room-background" src={b.url} onError={e=>{e.currentTarget.style.visibility="hidden";}} alt="" style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',pointerEvents:'none'}} />)}
+
         {/* ★ 말풍선 자리 계산의 **기준자**. 눈에 안 보이고 아무것도 안 덮는다.
             말풍선이 아이를 낮추면(위 `HEADROOM`) 아이 상자가 줄어드는데, 그 줄어든 상자로 다시
             자리를 재면 값이 서로를 쫓아 출렁인다. 그래서 **자리를 사기 전 상자**를 따로 하나 둔다. */}
         <div
           ref={setCharProbeEl} aria-hidden data-part="char-probe"
           style={{
-            position: 'absolute', left: '50%', bottom: LIFT, height: CHAR_H_FREE,
+            position: 'absolute', left: `calc(50% + ${actorOffset}px + ${CHAR_H_FREE} * ${recenterPerBox.toFixed(6)})`, bottom: LIFT, height: CHAR_H_FREE,
             aspectRatio: CHAR_ASPECT, transform: 'translateX(-50%)',
             visibility: 'hidden', pointerEvents: 'none',
           }}
@@ -467,12 +518,13 @@ export default function Room({ y }: { y: Yeoul }) {
 
         {/* 그림자 — 캐릭터와 같은 걸음으로 움직인다. */}
         <div style={{
-          position: 'absolute', left: 0, right: 0, // 그림자는 발끝을 따라간다 — 발끝에서 18px 아래가 중심(예전 값과 같다).
+          ...(v.away ? { visibility: 'hidden' as const } : null),
+          position: 'absolute', left: actorOffset, right: -actorOffset, // 그림자는 발끝을 따라간다 — 발끝에서 18px 아래가 중심(예전 값과 같다).
           bottom: `calc(${LIFT} - 30px)`, height: 24,
           display: 'flex', justifyContent: 'center',
-          animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
+          animationName: speechColumn ? 'none' : 'yWander', animationDuration: '21s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite', animationPlayState: v.st.play,
         }}>
-          <span style={{ display: 'block', width: 'min(236px,62%)', height: '100%', borderRadius: '50%', background: ink(.15), filter: 'blur(7px)' }} />
+          <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play }}><span style={{ position: 'relative', left: `calc(${CHAR_H} * ${shadowOffsetPerBox.toFixed(6)})`, display: 'block', width: `clamp(40px, calc(${CHAR_H} * ${(byK ? (fit.silRightUprightPerBoxW - fit.silLeftUprightPerBoxW) * fit.aspect : (referenceGeometry.right - referenceGeometry.left) * referenceGeometry.width / spriteGeometry.height).toFixed(4)}), 236px)`, height: '100%', borderRadius: '50%', background: ink(.15), filter: 'blur(7px)' }} /></div>
         </div>
 
         {/* 아이 — 좌우로 오가고(wander) 가끔 뛴다(hop). 눌러서 쓰다듬는다.
@@ -482,26 +534,31 @@ export default function Room({ y }: { y: Yeoul }) {
           data-part="pet"
           // 지금 어떤 자세를 짓고 있는지. 화면을 밖에서 확인할 때 쓰는 손잡이다(`data-room`·`data-action` 과 같은 쓰임).
           data-sprite={v.spriteKey}
+          data-scale-source={byK ? 'anchors' : spriteGeometry.measured && referenceGeometry.measured ? 'alpha' : 'fallback'}
           hidden={v.hidePet}
-          onClick={(e) => { e.stopPropagation(); actions.onPet(); }}
+          // ★ 여행 중 — 아이 그림만 비우고 상자는 남긴다(가방이 그 상자 폭으로 크기를 잰다). 누르지 못한다.
+          data-away={v.away ? '1' : undefined}
+          aria-hidden={v.away || undefined}
+          onClick={(e) => { e.stopPropagation(); if (!v.away) actions.onPet(); }}
           style={{
-            position: 'absolute', left: 0, right: 0,
+            ...(v.away ? { opacity: 0, pointerEvents: 'none' as const } : null),
+            position: 'absolute', left: actorOffset, right: -actorOffset,
             bottom: `calc(${LIFT} - ${CHAR_H} * ${BELOW_FOOT.toFixed(4)})`,
-            height: CHAR_H, display: 'flex', justifyContent: 'center', zIndex: 2,
+            height: CHAR_H, display: 'flex', justifyContent: 'center', zIndex: 2, pointerEvents: 'none',
             // 말풍선이 뜰 때 아이가 소폭 낮아지는데(BUBBLE_RESERVE), 툭 튀지 않게 부드럽게 잇는다.
             // ★ 단 **첫 그림만 빼고**(→ `sizeSettled`) — 거기선 부드러움이 곧 "아이가 줄어드는 연출"이 된다.
             transition: sizeSettled ? 'height .28s ease, bottom .28s ease' : 'none',
-            animation: 'yWander 21s ease-in-out infinite', animationPlayState: v.st.play,
+            animationName: speechColumn ? 'none' : 'yWander', animationDuration: '21s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite', animationPlayState: v.st.play,
           }}
         >
           {/* ★ 가로는 캔버스 비율로 **따라 나온다**. 여백까지 포함한 판이라 무대보다 넓어질 수 있는데,
               넘치는 몫은 전부 투명 여백이다(여울 base 는 좌우 각 122px). 그래서 안 줄인다 —
               줄이면 그만큼 아이가 작아져 방금 맞춘 K 가 다시 어긋난다. */}
-          <div ref={charBoxRef} style={{ position: 'relative', height: '100%', aspectRatio: CHAR_ASPECT, maxWidth: byK ? 'none' : '88%', flex: 'none' }}>
+          <div ref={charBoxRef} style={{ position: 'relative', pointerEvents: 'auto', height: '100%', aspectRatio: CHAR_ASPECT, maxWidth: 'none', flex: 'none', transform: speechColumn ? `translateX(calc(${CHAR_H} * ${recenterPerBox.toFixed(6)}))` : undefined }}>
             {v.guide.tap && (
               <>
-                <span style={{ position: 'absolute', left: '50%', top: '52%', marginLeft: -70, width: 140, height: 140, borderRadius: '50%', border: `2px solid ${acc(.5)}`, animation: 'yRipple 1.9s ease-out infinite', pointerEvents: 'none' }} />
-                <span style={{
+                <span data-share-exclude style={{ position: 'absolute', left: '50%', top: '52%', marginLeft: -70, width: 140, height: 140, borderRadius: '50%', border: `2px solid ${acc(.5)}`, animation: 'yRipple 1.9s ease-out infinite', pointerEvents: 'none' }} />
+                <span data-share-exclude style={{
                   position: 'absolute', left: '50%', bottom: 18, transform: 'translateX(-50%)',
                   display: 'flex', alignItems: 'center', gap: gap.sm, padding: '5px 12px', borderRadius: radius.pill,
                   background: paperA(.94), border: `1px solid ${acc(.22)}`,
@@ -522,17 +579,18 @@ export default function Room({ y }: { y: Yeoul }) {
                   건드려서(걸음 뒤집기·뜀), 같은 칸에 인라인 `transform` 을 적으면 **애니메이션이 이긴다**
                   (2026-09-22 실측: 0.7 을 줬는데 그림 크기가 그대로였다). */}
             <div style={{
-              width: '100%', height: '100%', transformOrigin: 'bottom center', transition: 'transform .3s ease',
+              width: '100%', height: '100%', transformOrigin: `50% ${((1 - BELOW_FOOT) * 100).toFixed(4)}%`, transition: 'transform .3s ease',
               ...(v.st.charScale === 1 ? null : { transform: `scale(${v.st.charScale})` }),
             }}>
             <div style={{
               width: '100%', height: '100%', animation: 'yFace 21s steps(1,end) infinite', animationPlayState: v.st.play,
             }}>
-              <div style={{ width: '100%', height: '100%', animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: v.st.play }}>
+              <div style={{ width: '100%', height: '100%', animationName: speechColumn ? 'none' : 'yHop', animationDuration: '9.5s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite', animationPlayState: v.st.play }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   key={imgEpoch}
                   src={charSrc} alt=""
+                  crossOrigin={charSrc.startsWith('/') && !charSrc.startsWith('//') ? 'anonymous' : undefined}
                   data-sprite-fallback={charSrc === fallbackSrc && wantSrc !== fallbackSrc ? '1' : undefined}
                   onError={() => {
                     if (charSrc === fallbackSrc) return;   // 여울마저 실패하면 더 갈 곳이 없다
@@ -541,7 +599,7 @@ export default function Room({ y }: { y: Yeoul }) {
                       + '서버가 준 주소인데 파일이 없다는 뜻이라, 부화 생성이 끝났는지 확인해야 합니다.');
                     setBrokenSrc((prev) => new Set(prev).add(charSrc));
                   }}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: 'yBob 4.6s ease-in-out infinite', filter: v.st.charFilter }}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', animation: 'yBob 4.6s ease-in-out infinite', filter: v.st.charFilter, visibility: geometryReady ? 'visible' : 'hidden' }}
                 />
               </div>
             </div>
@@ -569,7 +627,7 @@ export default function Room({ y }: { y: Yeoul }) {
             <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '27%', background: 'linear-gradient(270deg,#3E4A72,#5A6894)', backgroundImage: 'repeating-linear-gradient(90deg,rgba(255,255,255,.16) 0 3px,transparent 3px 26px)', borderLeft: '3px solid #2C3557', boxShadow: '-6px 0 16px rgba(28,34,58,.45)' }} />
             {/* ★ 글씨에 바탕을 깔았다(판정 22) — 흰 글씨만 얹으면 커튼 무늬에 묻힌다.
                 이름을 넣어 누가 자는지 분명히 한다(판정 13). */}
-            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 22, display: 'flex', justifyContent: 'center' }}>
+            <div data-share-exclude style={{ position: 'absolute', left: 0, right: 0, bottom: 22, display: 'flex', justifyContent: 'center' }}>
               <span style={{ padding: '6px 16px', borderRadius: radius.pill, background: 'rgba(28,34,58,.55)', fontFamily: GAEGU, fontSize: fz.h2, color: '#F6EEDD' }}>{v.sleepLine}</span>
             </div>
           </>
@@ -583,14 +641,15 @@ export default function Room({ y }: { y: Yeoul }) {
         <Bubble
           show={v.bub.show} text={v.bub.text} play={v.st.play}
           headSpan={headSpan} faceSpan={Math.max(0, headSpan - headSideDrop)}
-          headSpanReserve={fit.headSpanTallestPerBoxH}
+          headSpanReserve={byK ? fit.headSpanTallestPerBoxH : envelope.maxHeight / spriteGeometry.height}
+          centerOffset={actorOffset} fixedColumn={speechColumn}
           silLeft={silLeft} silRight={silRight} avoid={headSideTaken}
           headBottom={headTopFromBottom} faceBottom={faceFromBottom}
           stage={stageEl} probe={charProbeEl} onHeadroom={setBubbleHeadroom}
         />
 
         {v.hearts.show && (
-          <div data-part="hearts" style={{ position: 'absolute', left: '50%', bottom: '44%', animation: 'yFloatup 1.1s ease forwards', fontSize: fz.h1, letterSpacing: 3, color: '#D97386', textShadow: '0 1px 5px rgba(255,255,255,.8)' }}>
+          <div data-part="hearts" style={{ position: 'absolute', left: `calc(50% + ${actorOffset}px)`, bottom: '44%', animation: 'yFloatup 1.1s ease forwards', fontSize: fz.h1, letterSpacing: 3, color: '#D97386', textShadow: '0 1px 5px rgba(255,255,255,.8)' }}>
             {v.hearts.text}
           </div>
         )}
@@ -620,6 +679,7 @@ export default function Room({ y }: { y: Yeoul }) {
         <Tiles y={y} />
       </div>
 
+      {sceneShareOpen&&<SceneShare stage={stageEl} onClose={closeSceneShare}/>}
       <Album y={y} />
       <Panels y={y} />
     </div>
@@ -679,7 +739,7 @@ function samePlace(a: BubblePlace, b: BubblePlace): boolean {
 }
 
 function Bubble({
-  show, text, play, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid,
+  show, text, play, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid, centerOffset = 0, fixedColumn = false,
   headBottom, faceBottom, stage, probe, onHeadroom,
 }: {
   show: boolean; text: string; play: string;
@@ -692,6 +752,7 @@ function Bubble({
    * 지금 자세로 정하면 누웠을 때 예약이 0 이 되어 아이가 갑자기 커진다(→ `layout.ts` 머리말).
    */
   headSpanReserve: number;
+  centerOffset?: number; fixedColumn?: boolean;
   /**
    * 실루엣 좌·우 가장자리(상자 가로 대비). 아이 옆에 자리가 얼마나 남았는지 재고,
    * **그 자리에 말풍선을 놓을 때도 같은 값을 쓴다** — 자가 둘이면 어긋난 만큼 무대 밖으로 나간다
@@ -713,6 +774,8 @@ function Bubble({
    * 말풍선이 없을 때도, 한 줄일 때도 같은 자리를 사 두려면 재는 자가 변하면 안 된다.
    */
   const reserveRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [textHeightLimit, setTextHeightLimit] = useState<number | null>(null);
   const [place, setPlace] = useState<BubblePlace>({ at: 'above', w: BUBBLE_MAX_W, left: -BUBBLE_MAX_W / 2 });
 
   useLayoutEffect(() => {
@@ -725,6 +788,7 @@ function Bubble({
     const measure = () => {
       const card = cardRef.current;
       const res = reserveRef.current;
+      const textElement = textRef.current;
       if (!res) return;
       const st = stage.getBoundingClientRect();
       const pb = probe.getBoundingClientRect();
@@ -736,11 +800,34 @@ function Bubble({
       //   말풍선이 그냥 들어가 예약이 0 이 되고, 깨는 순간 아이가 108px 튄다(2026-09-22 dev 실측).
       const headTopY = st.height - (lift + pb.height * Math.max(headSpan, headSpanReserve));
       const faceY = st.height - (lift + pb.height * faceSpan);
-      const boxL = (st.width - pb.width) / 2;
+      const boxL = pb.left - st.left;
       // ★★ 실루엣 좌·우는 **이 한 쌍뿐이다**(2026-09-22). 폭을 재는 자와 자리를 잡는 자를 가르면
       //   그 차이가 곧 잘림이 된다 — 실제로 진짜 방(목)에서 오른쪽으로 115px 나갔다(→ `silLeft` 정의).
       const silL = boxL + pb.width * silLeft;
       const silR = boxL + pb.width * silRight;
+
+      // Reserve character space with the stable two-line ruler, but measure the
+      // visible copy at its actual width. A side bubble may need more than two lines.
+      if(textElement)textElement.style.maxHeight='none';
+      const capText=(totalHeight:number)=>{
+        const css=card?getComputedStyle(card):null;
+        const inset=css?parseFloat(css.paddingTop)+parseFloat(css.paddingBottom)+parseFloat(css.borderTopWidth)+parseFloat(css.borderBottomWidth):0;
+        const limit=Math.max(1,totalHeight-inset);
+        if(textElement)textElement.style.maxHeight=`${limit}px`;
+        setTextHeightLimit(previous=>previous===limit?previous:limit);
+      };
+      if (fixedColumn) {
+        // This column is allocated even without speech. A left-heavy hand/prop in
+        // another pose must not send the character back to the 127px vertical deduction.
+        const width = BUBBLE_SIDE_MIN;
+        res.style.width = `${width}px`; if (card) card.style.width = `${width}px`;
+        const maxHeight = Math.max(44, st.height - lift - 2 * BUBBLE_EDGE);
+        capText(maxHeight);
+        const height = Math.min(maxHeight, (card ?? res).offsetHeight);
+        const top = Math.max(BUBBLE_EDGE, Math.min(faceY - height / 2, st.height - lift - BUBBLE_EDGE - height));
+        put({ at: 'side', w: width, side: 'left', left: BUBBLE_EDGE - (st.width / 2 + centerOffset), top: Math.round(top - faceY), tail: Math.max(16, Math.min(height - 16, faceY - top)) });
+        onHeadroom(0); return;
+      }
 
       // 1) 머리 위 — 뜀(HOP)까지 미리 갚아 둔다. 안 그러면 **뛰는 순간에만** 윗변이 잘린다.
       const aboveW = Math.min(BUBBLE_MAX_W, Math.round(st.width - 32));
@@ -750,7 +837,9 @@ function Bubble({
       //   덜 예약하면, 두 줄짜리 말이 오는 순간 아이가 35px 내려앉는다(dev 실측 368 → 335).
       //   두 줄로 잡아 두면 한 줄이든 없든 자리가 같아 **흔들림이 0** 이다. 대가는 아이가 그만큼
       //   늘 작다는 것이고, 상훈님이 그 값을 알고 고르셨다.
-      const aboveH = Math.max(res.offsetHeight, card?.offsetHeight ?? 0);
+      const aboveBudget = Math.max(44, st.height - lift - BUBBLE_GAP - BUBBLE_EDGE - HOP);
+      const aboveH = Math.min(aboveBudget, Math.max(res.offsetHeight, card?.offsetHeight ?? 0));
+      capText(aboveBudget);
       const need = aboveH + BUBBLE_GAP + BUBBLE_EDGE + HOP;
       if (need <= headTopY) {
         put({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
@@ -762,8 +851,8 @@ function Bubble({
       //    ★ 소품이 이미 쓰는 쪽(`avoid`)은 아예 후보에서 뺀다 — 거기 두면 겹친다.
       //    ★ 고르는 기준(여백)은 **무대 크기와 선 자세**만 본다 — 글자 수·자세를 안 보므로
       //      한 매치 동안 말풍선이 좌우로 튀지 않는다.
-      const gapL = silL - WANDER;
-      const gapR = st.width - silR - WANDER;
+      const gapL = silL - (fixedColumn ? 0 : WANDER);
+      const gapR = st.width - silR - (fixedColumn ? 0 : WANDER);
       const cands = (['right', 'left'] as const)
         .filter((c) => c !== avoid)
         .sort((a, b) => (b === 'right' ? gapR : gapL) - (a === 'right' ? gapR : gapL));
@@ -774,6 +863,7 @@ function Bubble({
         // 보이는 말풍선이 없으면 예약 카드로 잰다 — 자리는 같은 자로 재야 뜰 때 안 움직인다.
         const meas = card ?? res;
         meas.style.width = `${sideW}px`;
+        capText(Math.max(44, st.height - 2 * BUBBLE_EDGE - HOP - 4));
         const h = meas.offsetHeight;
         // 옆자리도 같이 뛴다 — 위쪽은 HOP 만큼 더 물리고, 아래는 숨쉬기(yBob 4px)만 본다.
         const topMin = BUBBLE_EDGE + HOP;
@@ -781,14 +871,15 @@ function Bubble({
           Math.max(faceY - h / 2, topMin),
           Math.max(topMin, st.height - BUBBLE_EDGE - 4 - h),
         );
-        const inner = Math.round((side === 'right' ? silR - st.width / 2 : st.width / 2 - silL) + 10);
+        const center = st.width / 2 + centerOffset;
+        const inner = Math.round((side === 'right' ? silR - center : center - silL) + 10);
         // ★★ 마지막 빗장 — 계산이 어디서 어긋나도 **무대 밖으로는 못 나간다**(2026-09-22).
         //   위 `gap` 이 이미 지켜야 하는 값이지만, 자가 하나라도 틀리면 곧장 잘림으로 나타나므로
         //   여기서 한 번 더 물린다. 걸음 진폭(WANDER)까지 남겨 **걸어가도** 안 잘린다.
         //   좌우로 미는 일만 하므로 `side` 가 바뀌지 않는다 — 꼬리는 그대로 아이를 가리킨다.
         const half = st.width / 2;
-        const lo = BUBBLE_EDGE + WANDER - half;
-        const hi = half - (BUBBLE_EDGE + WANDER) - sideW;
+        const lo = BUBBLE_EDGE + (fixedColumn ? 0 : WANDER) - half - centerOffset;
+        const hi = half - (BUBBLE_EDGE + (fixedColumn ? 0 : WANDER)) - sideW - centerOffset;
         const want = side === 'right' ? inner : -(inner + sideW);
         put({
           at: 'side', w: sideW, side,
@@ -803,6 +894,7 @@ function Bubble({
       // 3) 위도 옆도 없다(좁고 짧은 폰) — 그때만 아이가 **딱 모자란 만큼** 자리를 내준다.
       res.style.width = `${aboveW}px`;
       if (card) card.style.width = `${aboveW}px`;
+      capText(aboveBudget);
       put({ at: 'above', w: aboveW, left: -Math.round(aboveW / 2) });
       onHeadroom(Math.ceil(need));
     };
@@ -818,7 +910,7 @@ function Bubble({
     if (cardRef.current) ro.observe(cardRef.current);
     if (reserveRef.current) ro.observe(reserveRef.current);
     return () => ro.disconnect();
-  }, [show, text, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid, stage, probe, onHeadroom]);
+  }, [show, text, headSpan, faceSpan, headSpanReserve, silLeft, silRight, avoid, centerOffset, fixedColumn, stage, probe, onHeadroom]);
 
   const tailBase: React.CSSProperties = {
     position: 'absolute', width: 11, height: 11, background: C.paper,
@@ -826,16 +918,16 @@ function Bubble({
 
   return (
     <div
-      data-part="bubble-box"
+      data-share-exclude data-part="bubble-box"
       style={{
-        position: 'absolute', left: '50%', bottom: place.at === 'above' ? headBottom : faceBottom,
+        position: 'absolute', left: `calc(50% + ${centerOffset}px)`, bottom: place.at === 'above' ? headBottom : faceBottom,
         width: 0, height: 0, zIndex: 3,
-        animation: 'yWander 21s ease-in-out infinite', animationPlayState: play,
+        animationName: fixedColumn ? 'none' : 'yWander', animationDuration: '21s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite', animationPlayState: play,
       }}
     >
       <div style={{
         position: 'absolute', left: 0, bottom: 0, width: 0, height: 0,
-        animation: 'yHop 9.5s ease-in-out infinite', animationPlayState: play,
+        animationName: fixedColumn ? 'none' : 'yHop', animationDuration: '9.5s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite', animationPlayState: play,
       }}>
         {/* ★★ **두 줄짜리 자**(2026-09-22 판정 C·D). 늘 붙어 있고 절대 안 보인다.
             왜 — 아이 크기는 "말풍선이 머리 위에 들어가느냐" 로 정해진다. 그 판단을 **지금 떠 있는
@@ -845,7 +937,7 @@ function Bubble({
             ★ 안 보이는 동안에도 **재야** 하므로 `display:none` 이 아니라 `visibility:hidden` 이다.
             ★ 대가 = 아이가 늘 두 줄만큼 작다. 상훈님이 그 값을 알고 고르셨다(판정 C 1안). */}
         <div
-          ref={reserveRef} data-part="bubble-reserve" aria-hidden
+          ref={reserveRef} data-share-exclude data-part="bubble-reserve" aria-hidden
           style={{
             position: 'absolute', boxSizing: 'border-box', left: place.left, width: place.w,
             bottom: BUBBLE_GAP,
@@ -865,10 +957,11 @@ function Bubble({
               background: C.paper, border: BUBBLE_LINE, borderRadius: radius.md,
               padding: pad.chip, boxShadow: shadow.card,
               textAlign: place.at === 'above' ? 'center' : 'left',
+              overflow: 'visible',
               animation: 'yPop .28s ease',
             }}
           >
-            <span style={{ fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink }}>{text}</span>
+            <span ref={textRef} data-part="bubble-text" tabIndex={0} style={{ display:'block', fontFamily: GAEGU, fontSize: fz.xl, lineHeight: 1.3, color: C.ink, overflowWrap: 'anywhere', maxHeight:textHeightLimit??undefined, overflowY:'auto', overscrollBehavior:'contain' }}>{text}</span>
             {/* 꼬리는 **언제나 아이를 가리킨다** — 위면 아래 한가운데, 옆이면 아이 쪽 옆면 얼굴 높이. */}
             {place.at === 'above' ? (
               <div style={{ ...tailBase, left: '50%', bottom: -6, transform: 'translateX(-50%) rotate(45deg)', borderRight: BUBBLE_LINE, borderBottom: BUBBLE_LINE }} />
@@ -928,11 +1021,12 @@ const slotChip: React.CSSProperties = {
 };
 
 function MedChip({ y }: { y: Yeoul }) {
+  const t = useUiText();
   const { v, actions } = y;
   return (
     <button
       onClick={(e) => { e.stopPropagation(); actions.onMed(); }}
-      disabled={v.medFab.off} data-action="med" aria-label="약 주기"
+      disabled={v.medFab.off} data-action="med" aria-label={t('약 주기')}
       style={{ ...slotChip, position: 'relative', borderColor: C.accent, animation: 'yBlink 1.3s ease-in-out infinite' }}
     >
       <span style={{ position: 'relative', width: 28, height: 15, display: 'block' }}>
@@ -944,9 +1038,10 @@ function MedChip({ y }: { y: Yeoul }) {
 
 /** 잠깐 뜨는 알림 한 줄. 자리는 **부모가 정한다**(→ 위 머리말) — 자기 자리를 스스로 안 고른다. */
 function Toast({ text }: { text: string }) {
+  const t=useUiText();
   return (
     <div style={{ position: 'absolute', left: 0, right: 0, bottom: '100%', marginBottom: 9, zIndex: 7, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
-      <span data-part="toast" style={{ background: ink(.92), color: C2.onDark, borderRadius: radius.pill, padding: '7px 16px', fontSize: fz.sm, animation: 'yFadeIn .2s ease' }}>{text}</span>
+      <span data-part="toast" style={{ background: ink(.92), color: C2.onDark, borderRadius: radius.pill, padding: '7px 16px', fontSize: fz.sm, animation: 'yFadeIn .2s ease' }}>{t(text)}</span>
     </div>
   );
 }
@@ -1006,6 +1101,7 @@ function handSrc(side: 'LEFT' | 'RIGHT', open: boolean, kind: 'candy' | 'empty')
 }
 
 function GuessPanel({ y }: { y: Yeoul }) {
+  const t = useUiText();
   const g = y.v.game;
   return (
     <div
@@ -1026,7 +1122,7 @@ function GuessPanel({ y }: { y: Yeoul }) {
               data-open={open ? '1' : '0'}
               onClick={(e) => { e.stopPropagation(); if (g.can) g.pick(side)(); }}
               disabled={!g.can}
-              aria-label={side === 'LEFT' ? '왼손 고르기' : '오른손 고르기'}
+              aria-label={t(side === 'LEFT' ? '왼손 고르기' : '오른손 고르기')}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 minHeight: 84, padding: '8px 6px', borderRadius: radius.md,
@@ -1069,7 +1165,7 @@ function GuessPanel({ y }: { y: Yeoul }) {
         </div>
         <button
           data-action="guess-quit" onClick={(e) => { e.stopPropagation(); g.quit(); }}
-          aria-label="게임 나가기"
+          aria-label={t('게임 나가기')}
           // ★ 누르는 자리 44px(판정 5). 절대 배치라 **자리를 안 옮기고** 단추만 키운다 —
           //   보이는 동그라미는 26 그대로이고, 오른쪽 끝도 그대로다.
           style={{
@@ -1109,8 +1205,10 @@ function cssText(text: string): React.CSSProperties {
  *   글꼴·크기는 그대로 둔다(손글씨 22px 이 이름에 더 어울린다).
  * ★ 아랫줄은 **며칠째 · 친밀도**만. 이름과 그 뒤 가운뎃점은 뺐다.
  */
-function Hud({ y }: { y: Yeoul }) {
+function Hud({ y,onShare }: { y: Yeoul;onShare:()=>void }) {
+  const t = useUiText();
   const { v, actions } = y;
+  const live = useLive();
   // 좁은 폰에서는 머리 띠(이름 줄·며칠째 줄)를 얇게 줄여 무대에 세로를 돌려준다(데스크톱은 그대로).
   const narrow = useIsWide(NARROW_Q);
   return (
@@ -1119,13 +1217,15 @@ function Hud({ y }: { y: Yeoul }) {
         {/* 이름이 길어도(12자) 아래 버튼과 부딪히지 않게 한 줄로 자른다. */}
         <span data-part="pet-title" style={{
           fontFamily: GAEGU, fontWeight: 700, fontSize: narrow ? fz.xl : fz.h2, lineHeight: 1.2, color: C.ink,
-          maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          maxWidth: '100%', minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{v.pet.name}</span>
+        {!live.pet?.firstIntro?.active&&<button data-action="open-scene-share" onClick={onShare} style={{minHeight:TAP_MIN,minWidth:TAP_MIN,border:0,background:'none',fontSize:14,color:C.ink}}>{t('장면 공유')}</button>}
+        <GuideHelp key={live.petId ?? 'sample'} pet={live.pet} sample={y.s.sampleMode} />
       </div>
       <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: gap.sm, padding: narrow ? '0 16px 5px' : '0 20px 8px' }}>
         <span style={{ fontSize: fz.md, color: '#635A52' }}>{v.pet.dayText}</span>
         <span style={{ fontSize: fz.sm, color: C2.dim }}>·</span>
-        <span style={{ fontSize: fz.md, color: '#635A52' }}>친밀도 {v.pet.bond}%</span>
+        <span style={{ fontSize: fz.md, color: '#635A52' }}>{t('친밀도')} {v.pet.bond}%</span>
         <span style={{ flex: 1 }} />
         {/* ★ 누르는 자리 44px(2026-09-22 판정 5). **보이는 알약은 그대로 두고** 단추만 키운다 —
             머리줄이 두꺼워지면 그만큼 무대가 낮아져 아이가 작아진다. 음수 여백이 제자리를 지킨다. */}
@@ -1151,7 +1251,7 @@ function Hud({ y }: { y: Yeoul }) {
               <span style={{ position: 'absolute', left: 0, top: 5.5, width: 13, height: 2, borderRadius: 2, background: 'currentColor' }} />
               <span style={{ position: 'absolute', left: 5.5, top: 0, width: 2, height: 13, borderRadius: 2, background: 'currentColor', transform: 'rotate(45deg)' }} />
             </span>
-            아이 정보
+            {t('아이 정보')}
           </span>
         </button>
         {/* 조각 도장은 여기 없다 — 좌측 하단 카드가 맡는다(2026-09-07 지시). */}
@@ -1171,6 +1271,7 @@ function Hud({ y }: { y: Yeoul }) {
  *   여백·배경은 진짜 방 HUD 와 같은 값을 쓴다(좌우 20px · 셸 바탕).
  */
 function SampleHud({ y }: { y: Yeoul }) {
+  const t = useUiText();
   const { v } = y;
   // 좁은 폰에서는 띠 여백을 줄여 무대에 세로를 돌려준다(데스크톱은 그대로).
   const narrow = useIsWide(NARROW_Q);
@@ -1183,7 +1284,7 @@ function SampleHud({ y }: { y: Yeoul }) {
           onClick={v.sample.exit} data-part="sample-exit"
           style={{ display: 'flex', alignItems: 'center', minHeight: TAP_MIN, margin: '-10px 0', padding: 0, border: 'none', background: 'none' }}
         >
-          <span style={{ display: 'flex', alignItems: 'center', gap: gap.xs, padding: '5px 11px 5px 9px', borderRadius: radius.pill, border: `1px solid ${C2.lineWarm}`, background: C2.paperWarm, fontSize: fz.sm, lineHeight: 1, color: C2.muted }}>‹ 정보 수정</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: gap.xs, padding: '5px 11px 5px 9px', borderRadius: radius.pill, border: `1px solid ${C2.lineWarm}`, background: C2.paperWarm, fontSize: fz.sm, lineHeight: 1, color: C2.muted }}>{t('‹ 정보 수정')}</span>
         </button>
         <span style={{ flex: 1 }} />
         {/* 알은 여전히 눌러서 알 화면으로 간다. 띠 안으로 들어온 만큼 고리·후광은 걷어냈다. */}
@@ -1201,16 +1302,18 @@ function SampleHud({ y }: { y: Yeoul }) {
                 <img src={EGG_IMG.idle} alt="" style={{ width: 11, height: 13, objectFit: 'contain', display: 'block', animation: v.sample.eggAnim }} />
               </span>
             </span>
-            <span style={{ fontSize: fz.sm, lineHeight: 1, color: C2.muted }}>{v.sample.eggNote}</span>
+            <span style={{ fontSize: fz.sm, lineHeight: 1, color: C2.muted }}>{t(v.sample.eggNote)}</span>
             <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{v.sample.eggCount}</span>
           </span>
         </button>
       </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}><GuideHelp pet={null} sample /></div>
     </div>
   );
 }
 
 function ChatFab({ y }: { y: Yeoul }) {
+  const t = useUiText();
   const { v, actions } = y;
   return (
     <button
@@ -1227,7 +1330,7 @@ function ChatFab({ y }: { y: Yeoul }) {
       // ★★ 2026-09-22 — **`disabled` 를 붙인다.** 이제 이 단추는 튜토리얼 중 **진짜로 안 눌린다**
       //   (상훈님 판정: "나머지는 비활성해서 누르지 않게"). 속성이 사실과 맞으므로 낭독기·자동
       //   검사가 읽는 것도 사실이다 — 예전 금지는 "눌리는데 비활성으로 표시" 하던 경우였다.
-      aria-label="대화하기"
+      aria-label={t('대화하기')}
     >
       <span style={{ position: 'relative', width: 24, height: 24, color: '#5A554E' }}>
         <span style={{ position: 'absolute', left: 1, top: 3, width: 22, height: 15, border: '2px solid currentColor', borderRadius: 8 }} />
@@ -1274,6 +1377,7 @@ function TutChip({ label, onTap, primary = false, ...rest }: {
 }
 
 function MiniCard({ y }: { y: Yeoul }) {
+  const t = useUiText();
   const m = y.v.mini;
   // ★ 펼침은 **훅이 들고 있다**(2026-09-22 판정 K). 여기 두면 카드가 사라졌다 다시 뜰 때마다
   //   접힌 채로 돌아온다 — 팝오버 한 번만 열어도 펼쳐 둔 목록이 닫혔다.
@@ -1285,7 +1389,7 @@ function MiniCard({ y }: { y: Yeoul }) {
     <div
       className="yeoul-mini"
       onClick={(e) => { e.stopPropagation(); if (canOpen) m.toggle(); }}
-      data-part="mini" data-open={open ? '1' : '0'}
+      data-part="mini" data-open={open ? '1' : '0'} data-guide={m.guideKind || undefined}
       style={{
         // ★ 이제 **선반 위 한 칸**이다(2026-09-20) — 구석에 따로 떠 있지 않는다. 펼침은 그대로
         //   위로 자란다(선반이 아래에 붙어 있어 내려갈 곳이 없는 것은 예전과 같다).
@@ -1299,7 +1403,7 @@ function MiniCard({ y }: { y: Yeoul }) {
       {m.isTut && (
         <span data-part="tutor" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
           <span style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm }}>
-            <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.3, color: C.ink }}>{m.tutText}</span>
+            <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.3, color: C.ink, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'normal' }}>{m.tutText}</span>
             <span style={{ flex: 1 }} />
             <span data-part="tut-step" style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2, whiteSpace: 'nowrap' }}>{m.tutStep}</span>
           </span>
@@ -1309,7 +1413,7 @@ function MiniCard({ y }: { y: Yeoul }) {
               안 나면 고장으로 읽힌다. 마지막 칸에서만 "이제 시작할게요" 가 나온다. */}
           {(m.tutPrev.show || m.tutNext.show || m.tutBtn.show || m.tutHint) && (
             <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: gap.xs }}>
-              {m.tutPrev.show && <TutChip label="이전" onTap={m.tutPrev.tap} data-tutor-prev />}
+              {m.tutPrev.show && <TutChip label={t('이전')} onTap={m.tutPrev.tap} data-tutor-prev />}
               {m.tutNext.show && <TutChip label={m.tutNext.label} onTap={m.tutNext.tap} primary data-tutor-next />}
               {m.tutBtn.show && <TutChip label={m.tutBtn.label} onTap={m.tutBtn.tap} data-action="tut-btn" />}
               {m.tutHint && <span style={{ fontSize: fz.sm, color: C.faint2 }}>{m.tutHint}</span>}
@@ -1328,7 +1432,7 @@ function MiniCard({ y }: { y: Yeoul }) {
             <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{m.cond}</span>
           </span>
           <span className={more} data-part="mini-more" style={{ flexDirection: 'column', gap: gap.xs, paddingTop: 2 }}>
-            <span style={{ fontSize: fz.xs, color: C.faint2 }}>배울 것</span>
+            <span style={{ fontSize: fz.xs, color: C.faint2 }}>{t('배울 것')}</span>
             {m.goals.map((g) => (
               <span key={g.name} style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm }}>
                 <span style={{ fontSize: fz.sm, color: g.done ? C.faint2 : C.ink, textDecoration: g.done ? 'line-through' : 'none' }}>{g.name}</span>
@@ -1354,7 +1458,7 @@ function MiniCard({ y }: { y: Yeoul }) {
                   }} />
               ))}
             </span>
-            <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>조각 {m.shardCount}</span>
+            <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{t('조각')} {m.shardCount}</span>
           </span>
           <span className={more} data-part="mini-more" style={{ flexDirection: 'column', gap: gap.xs, paddingTop: 2 }}>
             {m.shards.map((x) => (
@@ -1365,7 +1469,7 @@ function MiniCard({ y }: { y: Yeoul }) {
                 <span style={{ fontSize: fz.xs, color: C.faint2, whiteSpace: 'nowrap' }}>{x.cond}</span>
               </span>
             ))}
-            <span style={{ fontSize: fz.xs, lineHeight: 1.5, color: C.faint2 }}>잠들 때 세어 보고 다시 시작해요</span>
+            <span style={{ fontSize: fz.xs, lineHeight: 1.5, color: C.faint2 }}>{t('잠들 때 세어 보고 다시 시작해요')}</span>
           </span>
         </>
       )}
@@ -1383,6 +1487,7 @@ function MiniCard({ y }: { y: Yeoul }) {
  * ★ 무대의 말풍선과 헷갈리면 안 되므로 카드 꼴(둥근 모서리·그림자)은 그대로 둔다.
  */
 function AskCard({ y }: { y: Yeoul }) {
+  const t = useUiText();
   const a = y.v.ask;
   return (
     <div
@@ -1436,13 +1541,13 @@ function AskCard({ y }: { y: Yeoul }) {
             <button
               onClick={a.confirm} data-ask-confirm
               style={{ flex: 'none', padding: pad.chip, borderRadius: radius.pill, border: 'none', background: C.accent, color: C.accentInk, fontSize: fz.md, whiteSpace: 'nowrap' }}
-            >이렇게 불러 주세요</button>
+            >{t('이렇게 불러 주세요')}</button>
           )}
         </div>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
-        <button onClick={a.skip} data-ask-skip style={{ padding: '4px 2px', border: 'none', background: 'none', fontSize: fz.sm, color: C.faint2 }}>나중에</button>
+        <button onClick={a.skip} data-ask-skip style={{ padding: '4px 2px', border: 'none', background: 'none', fontSize: fz.sm, color: C.faint2 }}>{t('나중에')}</button>
         <span style={{ flex: 1 }} />
         <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint2 }}>{a.step}</span>
       </div>
@@ -1467,13 +1572,21 @@ function AskCard({ y }: { y: Yeoul }) {
  *   보내기로 받으면, 확정 전의 글자로 보내 버린다.
  */
 function ChatBar({ y }: { y: Yeoul }) {
+  const t = useUiText();
   const { v, actions } = y;
   const box = useRef<HTMLInputElement>(null);
   const composing = useRef(false);
-  const send = () => {
+  useEffect(() => {
+    if (!composing.current && v.chat.draft === '' && (!v.chat.delivery || v.chat.delivery.status === 'idle') && box.current) {
+      box.current.value = '';
+    }
+  }, [v.chat.draft, v.chat.delivery?.status]);
+  const send = async () => {
     const el = box.current;
-    actions.onSend(el?.value ?? '');
-    if (el) el.value = '';
+    const text = el?.value ?? '';
+    const completed = await actions.onSend(text);
+    // 성공을 확인하기 전에는 DOM 원문도 보존한다. 기다리는 동안 바뀐 글은 지우지 않는다.
+    if (completed && el && el.value === text) el.value = '';
   };
   return (
     <div
@@ -1487,6 +1600,7 @@ function ChatBar({ y }: { y: Yeoul }) {
           흐려졌다. 아이 말은 **아이 위에** 있어야 "아이가 나한테 말을 건다" 가 된다.
           ★ **내가 쓴 줄은 남긴다** — 이건 아이 말이 아니라 내가 무엇을 보냈는지 확인하는
           유일한 자리다(입력칸은 보내는 순간 비워진다). 판정은 "아이 말은 무대에만" 까지였다. */}
+      {v.chat.historyPetId != null && <ChatHistory key={v.chat.historyPetId} petId={v.chat.historyPetId} />}
       {v.chat.hasMine && (
         <span data-part="chat-mine" style={{ display: 'flex', alignItems: 'center', gap: gap.sm, maxWidth: '82%', padding: '7px 13px', borderRadius: radius.pill, background: C.accentSoft, border: `1px solid ${acc(.22)}`, animation: 'yPopIn .2s cubic-bezier(.2,.9,.25,1)' }}>
           <span style={{ fontFamily: GAEGU, fontSize: fz.lg, lineHeight: 1.2, color: '#8B3A2C' }}>{v.chat.mine}</span>
@@ -1496,8 +1610,9 @@ function ChatBar({ y }: { y: Yeoul }) {
       <div style={{ width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: gap.sm, padding: '7px 7px 7px 15px', borderRadius: radius.pill, background: C.paper, border: `1.5px solid ${C.ink}`, boxShadow: shadow.card }}>
         {/* 열린 부름이 없거나 보내는 중이면 적을 수 없다 — 자리표시글이 이유를 말한다. */}
         <input
-          ref={box} defaultValue="" onChange={(e) => actions.onDraft(e.target.value)} maxLength={CHAT_MAX}
-          placeholder={v.chat.hint} disabled={!v.chat.can} data-part="chat-input"
+          ref={box} defaultValue={v.chat.draft} onChange={(e) => actions.onDraft(e.target.value)} maxLength={CHAT_MAX}
+          placeholder={t(v.chat.hint)} aria-label={t('캐릭터에게 보낼 말')} readOnly={!v.chat.can}
+          disabled={!v.chat.can && v.chat.delivery?.status !== 'sending' && v.chat.delivery?.status !== 'uncertain'} data-part="chat-input"
           onCompositionStart={() => { composing.current = true; }}
           onCompositionEnd={(e) => { composing.current = false; actions.onDraft(e.currentTarget.value); }}
           onKeyDown={(e) => {
@@ -1513,7 +1628,7 @@ function ChatBar({ y }: { y: Yeoul }) {
         />
         {/* ★ 누르는 자리 44px(판정 5) — 동그라미는 28 그대로 두고 단추만 키운다(줄 높이 유지). */}
         <button
-          onClick={actions.closeChat} aria-label="대화 닫기"
+          onClick={actions.closeChat} aria-label={t('대화 닫기')}
           style={{ width: TAP_MIN, height: TAP_MIN, margin: '-8px 0', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', padding: 0 }}
         >
           <span style={{ width: 28, height: 28, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.sm, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</span>
@@ -1525,8 +1640,21 @@ function ChatBar({ y }: { y: Yeoul }) {
             flex: 'none', minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: 'none',
             background: v.chat.canSend ? C.accent : C.off, color: v.chat.canSend ? C.accentInk : C2.dim2, fontSize: fz.md,
           }}
-        >보내기</button>
+        >{t('보내기')}</button>
       </div>
+      {v.chat.delivery?.message && (
+        <div data-part="chat-delivery" style={{ width: '100%', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: gap.sm }}>
+          <span role="status" aria-live="polite" style={{ flex: '1 1 170px', minWidth: 0, color: C.ink, fontSize: fz.sm, lineHeight: 1.4, overflowWrap: 'anywhere' }}>
+            {t(v.chat.delivery.message)}
+          </span>
+          {v.chat.delivery.status === 'uncertain' && (
+            <button data-action="chat-check" onClick={() => { void v.chat.retry(); }}
+              style={{ minWidth: TAP_MIN, minHeight: TAP_MIN, padding: pad.chip, border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, background: C.paper, color: C.ink, fontSize: fz.sm }}>
+              {t('답 확인하기')}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,5 @@
+'use client';
+import {readZzalLocale} from '../../lib/locale';
 // 진짜 서버에 붙는 **한 줄기**만 담당한다 — 그림 올리기 → 초안 → 이름 → 다 될 때까지 지켜보기 →
 // 방 화면에 내 아이 그림 끼우기.
 //
@@ -14,22 +16,29 @@
 //     2) 이름을 받은 순간 `character` → 격자 생성 시작(알이 흔들리는 자리)
 //   사용자가 이름을 짓는 약 74초를 그대로 버는 것이 이 분리의 목적이다.
 //   예전처럼 이름까지 다 받고 한 번에 만들면 그 시간이 통째로 버려진다.
-'use client';
+
+import type { IntroTopic } from './firstIntro';
+import { randomUuid } from '../../lib/randomUuid';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { assetUrl } from '../../lib/assets';
 import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS, GUESS_HAND_PRELOAD } from './constants';
 import {
-  answerChat, care, draftPet, getAlbum, getChat, getHatchProgress, getPet, listPets,
-  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet,
-  type Album, type CareAction, type ChatReply, type ChatState, type CharacterInput,
-  type HatchProgress, type PetDetail, type Personality,
+  setBackground, updatePersonaSource, type PersonaUpdate, type TutorialAnswerMeta, answerChat, care, draftPet, getAuthoredPersona, getAlbum, getChat, getHatchProgress, getPet, listPets,
+  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet, callBack as callBackPet,
+  type Album, type CareAction, type ChatReply, type ChatState, type ChatSlot, type ChatAnswerIdentity, type CharacterInput,
+  type HatchProgress, type PetDetail, type Personality, type CareMotionPlayback,
 } from '../../lib/pet';
 import { abandonGame, getCurrentGame, guess, startGame, type GameState, type GuessResult, type Side } from '../../lib/game';
 import { classifyUploadFailure, uploadFailureLine, uploadImage, type UploadFailure } from '../../lib/upload';
 import { readHatchBlocked, type HatchBlocked } from '../../lib/hatchBlocked';
+import {focusedCopy} from '../focused-room/focusedCopy';
 import { ApiError } from '../../lib/api';
+import {readPendingCare,savePendingCare,clearPendingCare,definiteCareRejection,type PendingCare} from '../../lib/careDelivery';
+import { useSpriteGeometry as useSpritePads } from '../../lib/spriteGeometry';
+import {prepareTutorialStageSpeech,stageExpectedStep,isStageSpeech,type StageSpeechView,type TutorialScene,type StagePhase} from '../../lib/tutorialStageSpeech';
+import { mergeChatSnapshot, nextPresenceEvent, postChatPresence, presenceVisit } from '../../lib/chatPresence';
 import { STAGE, failCode, markUploadStart, once, pickerHolding, reachStage, sinceUpload, ztrack } from './funnel';
 
 /**
@@ -66,6 +75,14 @@ export interface CareOptimistic {
  *   "맛있게 먹었어요" 가 떴다. 안 보낸 것은 `ok:false · message:null` 이라 아무 말도 안 한다.
  */
 export interface CareResult {
+  uncertain?:boolean;
+  careReceipt?:import('../../lib/pet').CareReceipt;
+  motionPlayback?: CareMotionPlayback|null;
+  /** This exact response is carried across React's asynchronous state commit. */
+  responsePet?: PetDetail|null;
+  /** Client delivery identity only; not server exactly-once or a persisted occurrence. */
+  playbackReceiptId?: string;
+  presentationAccepted?: boolean;
   ok: boolean;
   /** 거절이면 화면에 띄울 한 줄. 안 보냈으면 null. */
   message: string | null;
@@ -122,6 +139,7 @@ export interface Live {
   /** 초안이 잡힌 순간부터 있다. 그림을 올리면 바로 생긴다(이름은 아직 없다). */
   petId: number | null;
   pet: PetDetail | null;
+  changeBackground: (key: string) => Promise<void>;
   busy: boolean;
   error: string | null;
   /**
@@ -210,9 +228,23 @@ export interface Live {
    */
   setChar: (input: CharacterInput) => Promise<boolean>;
   /**
+   * 이름을 넣은 순간부터 **알을 지켜보기 시작한다**(알 온보딩 2026-10-13).
+   *
+   * ★ 서버는 그림을 올린 순간부터 이미 굽고 있다(`PetController.character` 머리말). 이름(`setChar`)은
+   *   한 아이에 **한 번만** 받으므로, 이름 직후에 보내 버리면 그 뒤 알에서 받는 칸(세계관·종족…)을
+   *   실을 길이 없다(두 번째는 409). 그래서 이름 직후에는 **진행만 묻고**, 서버 저장은 마지막에 한 번 한다.
+   */
+  watchEarly: () => void;
+  /**
+   * 굽기가 끝났는가 — **이름을 아직 안 보냈어도.** 서버는 이름이 들어와야 살리므로(`completeIfReady`)
+   * 그 전엔 `ready`(ALIVE)가 안 켜진다. 알 화면이 "다 됐어요" 를 말할 근거는 이쪽이다.
+   */
+  baked: boolean;
+  /**
    * 지금 도는 돌보기. 있으면 **버튼을 전부 잠근다** — 계약 10절 "누르면 잠그고 기다린다".
    */
   careing: CareAction | null;
+  careDelivery?:{status:'sending'|'uncertain';action:CareAction;requestId:string;message:string|null}|null;
   /**
    * 눌린 순간 화면에 먼저 얹은 값. 응답이 오면 null 로 돌아간다.
    * 화면(`useYeoul.es`)은 이것을 서버 값 **위에** 얹어 그린다.
@@ -242,6 +274,16 @@ export interface Live {
    *   그 전에 미리 써 버리면 튜토리얼이 영영 안 끝나므로 서버가 409 로 막는다.
    */
   doRest: () => Promise<CareResult>;
+  /** 부르는 중(재회 요청이 나가 있다). 그동안 「불러오기」를 잠근다 — 두 번 눌러 409 를 보지 않게. */
+  calling: boolean;
+  /**
+   * 부르기(재회) — 여행 중인 아이를 데려온다.
+   *
+   * ★ 성공하면 **앨범을 다시 읽어** 실제로 전달된 엽서 장수를 돌려준다. 서버가 부르는 순간 밀린 엽서를
+   *   채우므로(`PetService.callBack`) 부르기 전의 `trip.postcards` 보다 많을 수 있다.
+   *   앨범을 못 읽으면 `postcards` 는 null — 화면은 부르기 전 숫자로 말한다.
+   */
+  callBack: () => Promise<CareResult & { postcards: number | null }>;
   /**
    * 성격·세계관 저장. **튜토리얼 4칸(PERSONALITY)을 넘기는 호출**이기도 하다.
    * 언제든 다시 바꿀 수 있다(정본 0장 6).
@@ -251,12 +293,13 @@ export interface Live {
    * 튜토리얼 마지막 칸. **이 호출이 시계를 켠다** — 이때부터 게이지가 줄고 하루가 흐른다.
    * 9칸을 다 하기 전에 부르면 409 `ZZAL_TUTORIAL_NOT_FINISHED`.
    */
+  updatePersona: (input: PersonaUpdate) => Promise<CareResult>;
   finishTutorial: () => Promise<CareResult>;
   /**
    * 튜토리얼 **4칸을 "확인했다" 로 넘긴다** — 성격을 안 골라도 된다(→ `lib/pet.tutorialSeen`).
    * 성격을 골라 저장하는 길(`savePersonality`)도 같은 칸을 넘기므로, 둘 중 하나만 부른다.
    */
-  tutorialSeen: () => Promise<CareResult>;
+  tutorialSeen: (topic?: IntroTopic) => Promise<CareResult>;
   /**
    * 첫날 축하 판을 **봤다고 서버에 남긴다.**
    *
@@ -271,13 +314,18 @@ export interface Live {
    * 아직 안 읽었거나 서버에 안 붙었으면 null.
    */
   chat: ChatState | null;
+  chatPresenceRevision: number;
+  prepareStageSpeech?: (step:TutorialScene,phase:StagePhase,signal?:AbortSignal)=>Promise<StageSpeechView|null>;
+  readStageSpeeches?: (signal?:AbortSignal)=>Promise<StageSpeechView[]|null>;
+  /** 전송 결과가 불확실하면 원문과 같은 요청을 유지한다. */
+  chatDelivery: { status: 'idle' | 'sending' | 'uncertain' | 'rejected'; text: string; message: string | null };
   /** 답을 보내는 중. 보내기 버튼을 잠근다. */
   chatting: boolean;
   /**
    * 부름에 답한다. 열린 부름이 없으면 아무 일도 안 한다.
    * @returns `error` 가 있으면 띄울 한 줄, 없으면 `reply` 에 아이가 돌려준 말과 반응 동작.
    */
-  sendChat: (text: string) => Promise<{ error: string | null; reply: ChatReply | null }>;
+  sendChat: (text: string, tutorial?: TutorialAnswerMeta) => Promise<{ error: string | null; reply: ChatReply | null }>;
   /**
    * 지금 치고 있는 좌우 맞히기 한 판. 새로고침으로 들어와도 서버가 같은 모양으로 답해서
    * 화면은 "지금 어느 쪽이지" 를 판단하지 않아도 된다.
@@ -338,21 +386,29 @@ export interface Live {
   sendWish: (text: string) => Promise<{ ok: boolean; code: string | null }>;
   /** 두고 간 아이가 있는지 서버에 물어본다. 로그인한 뒤에 한 번만 부른다. */
   resume: () => Promise<'draft' | 'hatching' | 'alive' | null>;
+  /** Dev response without a visiting GET; preserve server state such as a leave notice. */
+  putDetail: (next: PetDetail) => void;
+  refreshPet: () => Promise<void>;
   reset: () => void;
 }
 
 const EMPTY: Live = {
+  changeBackground: async () => {},
   previewUrl: null, imageKey: null, petId: null, pet: null, busy: false, error: null, errorKind: null, blocked: null,
-  draftOnly: false, resumedDraft: false, careing: null, optimistic: null, resting: false, chat: null, chatting: false,
+  draftOnly: false, resumedDraft: false, careing: null, optimistic: null, resting: false, chat: null, chatPresenceRevision: 0, chatting: false,
+  chatDelivery: { status: 'idle', text: '', message: null },
   game: null, guessing: false, album: null, ready: false, petReady: false, failed: false, step: null,
   justUnlocked: [],
   progress: 0, total: 0, etaSeconds: 0, message: null, missingBasics: [],
   img: () => null,
   pendingUpload: false,
   upload: async () => {}, holdUpload: () => {}, resumeUpload: async () => {}, discardUpload: () => {},
-  setChar: async () => false, doCare: async () => ({ ok: false, message: null }),
+  setChar: async () => false, watchEarly: () => {}, baked: false, doCare: async () => ({ ok: false, message: null }),
   doRest: async () => ({ ok: false, message: null }),
+  calling: false,
+  callBack: async () => ({ ok: false, message: null, postcards: null }),
   savePersonality: async () => ({ ok: false, message: null }),
+  updatePersona: async () => ({ ok: false, message: null }),
   finishTutorial: async () => ({ ok: false, message: null }),
   tutorialSeen: async () => ({ ok: false, message: null }),
   markGraduationSeen: async () => {},
@@ -363,7 +419,7 @@ const EMPTY: Live = {
   clearJustUnlocked: () => {}, noteUnlocked: () => {},
   sendWish: async () => ({ ok: false, code: 'no_pet' }),
   loadAlbum: async () => {}, shareMotion: async () => ({ error: null, url: null }),
-  resume: async () => null, reset: () => {},
+  resume: async () => null, reset: () => {}, putDetail: () => {}, refreshPet: async () => {},
 };
 
 export function useHatchState(): Live {
@@ -393,6 +449,9 @@ export function useHatchState(): Live {
   const [pendingUpload, setPendingUpload] = useState(false);
   /** 이름을 보냈는가. 이게 켜져야 굽기가 도는 것이므로 그때부터 진행을 묻는다. */
   const [charSet, setCharSet] = useState(false);
+  /** 이름은 넣었지만 아직 안 보냈다 — 진행만 묻는 중(→ Live.watchEarly). */
+  const [earlyWatch, setEarlyWatch] = useState(false);
+  const watchEarly = useCallback(() => setEarlyWatch(true), []);
   const [hatch, setHatch] = useState<HatchProgress | null>(null);
   const [resumedDraft, setResumedDraft] = useState(false);
   const [careing, setCareing] = useState<CareAction | null>(null);
@@ -402,9 +461,22 @@ export function useHatchState(): Live {
    *   같은 요청이 두 번 나간다. ref 는 그 자리에서 바뀌므로 같은 틱 안에서도 막힌다.
    */
   const careingRef = useRef<CareAction | null>(null);
+  const pendingCareRef=useRef<PendingCare|null>(null);
+  const [careDelivery,setCareDelivery]=useState<Live['careDelivery']>(null);
+  useEffect(()=>{
+    const pending=petId?readPendingCare(petId):null;pendingCareRef.current=pending;careingRef.current=null;
+    setCareing(pending?.action??null);setCareDelivery(pending?{status:'uncertain',action:pending.action,requestId:pending.requestId,message:focusedCopy(readZzalLocale()).carePending}:null);
+  },[petId]);
   const [optimistic, setOptimistic] = useState<CareOptimistic | null>(null);
   const [chat, setChat] = useState<ChatState | null>(null);
+  const [chatPresenceRevision, setChatPresenceRevision] = useState(0);
   const [chatting, setChatting] = useState(false);
+  const [chatDelivery, setChatDelivery] = useState<Live['chatDelivery']>({ status: 'idle', text: '', message: null });
+  // React 상태 반영 전의 연타도 막는다. 응답 유실 뒤에는 같은 요청으로만 결과를 확인한다.
+  const stageRevision=useRef(0);
+  useEffect(()=>{const changed=(event:Event)=>{const id=(event as CustomEvent<{petId?:number}>).detail?.petId;if(id==null||id===petRef.current?.petId)stageRevision.current++;};window.addEventListener('zzal-persona-updated',changed);return()=>window.removeEventListener('zzal-persona-updated',changed)},[]);
+  const chatSendingRef = useRef(false);
+  const pendingChatRef = useRef<({ petId: number; slot: ChatSlot; text: string } & ChatAnswerIdentity) | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
   /**
    * ★ 판을 **그 자리에서** 읽을 자리. `startPlay()` 로 판을 만든 직후 `pickSide` 를 부르면
@@ -416,6 +488,8 @@ export function useHatchState(): Live {
   const [guessing, setGuessing] = useState(false);
   /** 좌우 맞히기 연타 자물쇠. `guessing`(상태)만으로는 같은 틱의 두 번째 클릭을 못 막는다. */
   const guessingRef = useRef(false);
+  const pendingGuessRef=useRef<{petId:number;gameId:number;pick:Side;expectedRound:number;requestId:string}|null>(null);
+  useEffect(()=>{pendingGuessRef.current=null;guessingRef.current=false;setGuessing(false);},[petId]);
   /**
    * 방금 열린 2층 동작 seq 를 **모아 두는 자리**(→ Live.justUnlocked).
    * 화면이 판을 띄우고 비울 때까지 남는다 — 다음 조회가 덮지 못한다.
@@ -483,6 +557,7 @@ export function useHatchState(): Live {
     noteUnlocked(next.justUnlocked ?? []);
     return true;
   }, [noteUnlocked]);
+  const putDetail = useCallback((next: PetDetail) => { putPet(takeSeq(), next); }, [putPet, takeSeq]);
   /** 판도 같은 규칙으로. ref 를 함께 바꿔 **같은 틱에** 읽을 수 있게 한다. */
   const putGame = useCallback((seq: number, next: GameState | null) => {
     if (seq <= appliedGame.current) return false;
@@ -580,24 +655,54 @@ export function useHatchState(): Live {
    *   대사 톤에만 쓰이고, 격자 프롬프트의 정체성 문단은 올린 그림에서 뽑는다.
    *   그래서 말투·장르 칩은 여기 안 싣는다(보낼 자리가 없고, 실어도 그림엔 영향이 없다).
    */
+  const characterSaving = useRef<number | null>(null);
   const setChar = useCallback(async (input: CharacterInput): Promise<boolean> => {
     // 이미 보냈으면 성공으로 친다 — 두 번 보내지 않되 화면은 앞으로 가야 한다.
     if (charSet) return true;
-    if (!petId) return false;
+    if (!petId || characterSaving.current === session.current) return false;
+    characterSaving.current = session.current;
+    const characterEra = session.current;
     setBusy(true);
     setError(null);
     setBlocked(null);
     try {
       const created = await setCharacter(petId, input);
+      if (characterEra !== session.current) return false;
       setCharSet(true);
-      setHatch({
-        phase: created.phase, label: null, progress: 0, total: 0,
+      // ★ 미리 지켜보던 진행(→ watchEarly)이 있으면 **그 숫자를 지우지 않는다** — 0 으로 되돌리면
+      //   알 아래 진행이 한 번 '처음부터' 로 튄다. 단계는 바로 다음 조회가 서버 값으로 덮는다.
+      setHatch((prev) => ({
+        phase: created.phase, label: prev?.label ?? null, progress: prev?.progress ?? 0, total: prev?.total ?? 0,
         estimatedSeconds: created.estimatedSeconds, message: null,
-      });
+      }));
       reachStage(STAGE.baking);
       ztrack('zzal_hatch_started', sinceUpload());
       return true;
     } catch (e) {
+      if (characterEra !== session.current) return false;
+      // A committed request can lose its response; confirm both the phase and exact authored source.
+      // Never interpret 409 alone as success, and never create a replacement pet to recover.
+      if (input.authoredPersona) {
+        try {
+          const [detail, source] = await Promise.all([getPet(petId), getAuthoredPersona(petId)]);
+          if (characterEra !== session.current) return false;
+          const saved = source.authoredPersona;
+          const matches = saved?.version === input.authoredPersona.version
+            && saved.fields.length === input.authoredPersona.fields.length
+            && saved.fields.every((f, i) => {
+              const wanted = input.authoredPersona!.fields[i];
+              return f.fieldId === wanted.fieldId && f.rawText === wanted.rawText
+                && f.skipped === wanted.skipped && JSON.stringify(f.chips) === JSON.stringify(wanted.chips);
+            });
+          if (matches && detail.name === input.name && (detail.phase === 'HATCHING' || detail.phase === 'ALIVE')) {
+            setCharSet(true);
+            putPet(takeSeq(), detail);
+            setHatch({ phase: detail.phase, label: null, progress: 0, total: 0, estimatedSeconds: 0, message: null });
+            return true;
+          }
+        } catch { /* Source cannot be confirmed: keep the draft and original failure visible. */ }
+      }
+
       // 막기는 **이 호출에도** 걸린다 — 돈이 나가기 시작하는 자리가 여기라서다.
       // 어느 걸음에서 막히든 사용자가 보는 안내는 같아야 하므로 두 자리 다 같은 표를 읽는다.
       const stop = readHatchBlocked(e);
@@ -607,9 +712,10 @@ export function useHatchState(): Live {
       ztrack('zzal_hatch_failed', { ...sinceUpload(), reason: `start:${failCode(e)}`.slice(0, 64) });
       return false;
     } finally {
-      setBusy(false);
+      if (characterSaving.current === characterEra) characterSaving.current = null;
+      if (characterEra === session.current) setBusy(false);
     }
-  }, [petId, charSet]);
+  }, [petId, charSet, putPet, takeSeq]);
 
   /**
    * 돌보기 한 번.
@@ -638,27 +744,33 @@ export function useHatchState(): Live {
   }, [petId, takeSeq, putPet]);
 
   const doCare = useCallback(async (action: CareAction): Promise<CareResult> => {
-    if (!petId) return { ok: false, message: null };
-    // 도는 동안 들어온 두 번째 클릭 — **아무 말도 하지 않는다.** 잠긴 버튼이 이미 말하고 있다.
-    if (careingRef.current) return { ok: false, message: null };
-    careingRef.current = action;
-    setCareing(action);
-    setOptimistic(optimisticOf(action, petRef.current));
-    const seq = takeSeq();
-    try {
-      const next = await care(petId, action);
-      putPet(seq, next);
-      setOptimistic(null);
-      return { ok: true, message: null };
-    } catch (e) {
-      setOptimistic(null);
-      const back = takeSeq();
-      try { putPet(back, await getPet(petId)); } catch { /* 이것마저 실패하면 화면은 그대로 둔다 */ }
-      return { ok: false, message: e instanceof Error ? e.message : '지금은 할 수 없어요' };
-    } finally {
-      careingRef.current = null;
-      setCareing(null);
+    if (!petId || careingRef.current) return { ok:false,message:null };
+    let identity=pendingCareRef.current;
+    if(identity&&(identity.petId!==petId||identity.action!==action))return{ok:false,uncertain:true,message:focusedCopy(readZzalLocale()).carePending};
+    if(!identity){
+      const step=petRef.current?.firstIntro?.key;
+      const matching=step&&({FEED:'FEED',SNACK:'SNACK',CLEAN:'CLEAN',BATH:'BATH',PET:'PET'} as Record<string,string>)[step]===action;
+      identity={petId,action,requestId:randomUuid(),...(matching?{firstIntroStep:step}:{})};
+      if(!savePendingCare(identity))return{ok:false,message:focusedCopy(readZzalLocale()).careStorage};
+      pendingCareRef.current=identity;
     }
+    careingRef.current=action;setCareing(action);setOptimistic(null);
+    setCareDelivery({status:'sending',action,requestId:identity.requestId,message:null});
+    const seq=takeSeq(),generation=session.current,controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),30_000);
+    const current=()=>generation===session.current&&pendingCareRef.current===identity&&petRef.current?.petId===petId;
+    const uncertain=(message:string):CareResult=>{setCareDelivery({status:'uncertain',action,requestId:identity!.requestId,message});return{ok:false,uncertain:true,message}};
+    try{
+      const next=await care(identity.petId,identity.action,identity.firstIntroStep,identity.requestId,controller.signal);
+      if(!current())return{ok:false,message:null};
+      const receipt=next.careReceipt;
+      if(!receipt||receipt.requestId!==identity.requestId||receipt.action!==identity.action||!['APPLIED','REPLAYED','NO_OP'].includes(receipt.status))return uncertain(focusedCopy(readZzalLocale()).careUnknown);
+      const accepted=putPet(seq,next);clearPendingCare(identity);pendingCareRef.current=null;setCareDelivery(null);
+      return{ok:true,message:null,presentationAccepted:accepted,motionPlayback:accepted?next.motionPlayback:null,responsePet:accepted?next:null,playbackReceiptId:identity.requestId,careReceipt:receipt};
+    }catch(e){
+      if(!current())return{ok:false,message:null};
+      if(e instanceof ApiError&&definiteCareRejection(e.status,e.code)){clearPendingCare(identity);pendingCareRef.current=null;setCareDelivery(null);return{ok:false,message:e.message,code:e.code,status:e.status};}
+      return uncertain(focusedCopy(readZzalLocale()).careUnknown);
+    }finally{clearTimeout(deadline);if(generation===session.current&&petRef.current?.petId===petId){careingRef.current=null;if(!pendingCareRef.current)setCareing(null);}}
   }, [petId, takeSeq, putPet]);
 
   /**
@@ -679,7 +791,8 @@ export function useHatchState(): Live {
     const seq = takeSeq();
     const asleep = !!petRef.current?.clock?.sleeping;
     try {
-      putPet(seq, await (asleep ? wakePet(petId) : sleepPet(petId)));
+      const step = petRef.current?.firstIntro?.key;
+      putPet(seq, await (asleep ? wakePet(petId, step === 'NAP_WAKE' ? step : undefined) : sleepPet(petId, step === 'NAP_SLEEP' ? step : undefined)));
       return { ok: true, message: null };
     } catch (e) {
       const back = takeSeq();
@@ -690,6 +803,31 @@ export function useHatchState(): Live {
       setResting(false);
     }
   }, [petId, takeSeq, putPet]);
+
+  const [calling, setCalling] = useState(false);
+  const callingRef = useRef(false);
+  useEffect(()=>{callingRef.current=false;setCalling(false);},[petId]);
+  const callBack = useCallback(async (): Promise<CareResult & { postcards: number | null }> => {
+    const generation=session.current,id=petId;
+    const current=()=>generation===session.current&&petRef.current?.petId===id;
+    const stale=()=>({ok:false,message:null,postcards:null});
+    if(!id||callingRef.current||!current())return stale();
+    callingRef.current=true;setCalling(true);const seq=takeSeq();
+    try{
+      const next=await callBackPet(id);if(!current())return stale();putPet(seq,next);
+      let postcards:number|null=null;
+      try{const album=await getAlbum(id);if(!current())return stale();setAlbum(album);postcards=album.postcards.length;}
+      catch{/* Failure to load the album does not undo a confirmed return. */}
+      if(!current())return stale();
+      return {ok:true,message:null,postcards};
+    }catch(error){
+      if(!current())return stale();
+      const back=takeSeq();
+      try{const fresh=await getPet(id);if(!current())return stale();putPet(back,fresh);}catch{/* Preserve the current owner's view on recovery failure. */}
+      if(!current())return stale();
+      return {ok:false,message:error instanceof Error?error.message:'지금은 부를 수 없어요',code:error instanceof ApiError?error.code:null,status:error instanceof ApiError?error.status:undefined,postcards:null};
+    }finally{if(current()){callingRef.current=false;setCalling(false);}}
+  },[petId,takeSeq,putPet]);
 
   /** 서버로 보내고 응답(=최신 상태)을 얹는 작은 틀. 성격 저장·튜토리얼 마무리가 같은 모양이라 묶었다. */
   const send = useCallback(async (call: () => Promise<PetDetail>, fallback: string): Promise<CareResult> => {
@@ -712,12 +850,47 @@ export function useHatchState(): Live {
     send(() => setPersonality(petId as number, personality, world), '성격을 저장하지 못했어요')
   ), [petId, send]);
 
+  const updatePersona = useCallback(async (input: PersonaUpdate): Promise<CareResult> => {
+    if (!petId) return { ok: false, message: '설정을 저장하지 못했어요' };
+    const identity = petId, generation = session.current, seq = takeSeq();
+    try {
+      const next = await updatePersonaSource(identity, input);
+      // A late response from a previous account/pet cannot apply state or notify its replacement.
+      if (generation !== session.current || petRef.current?.petId !== identity) return { ok: false, message: null };
+      putPet(seq, next);
+      // Identifier only. Subscribers reload the authoritative authored source; no raw profile copies.
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('zzal-persona-updated', { detail: { petId: identity } }));
+      return { ok: true, message: null };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : '설정을 저장하지 못했어요',
+        code: e instanceof ApiError ? e.code : null, status: e instanceof ApiError ? e.status : undefined };
+    }
+  }, [petId, putPet, takeSeq]);
+
   const finishTutorial = useCallback(() => (
     send(() => tutorialDone(petId as number), '아직 배울 것이 남았어요')
   ), [petId, send]);
 
-  const seenTutorial = useCallback(() => (
-    send(() => tutorialSeen(petId as number), '지금은 넘어갈 수 없어요')
+  // Explicit stage preparation cannot be parsed as a PetDetail or passed through send()/putPet().
+  const prepareStageSpeech=useCallback(async(step:TutorialScene,phase:StagePhase,signal?:AbortSignal)=>{
+    const id=petId,generation=session.current,revision=stageRevision.current,language=readZzalLocale(),expected=stageExpectedStep(step,phase);
+    if(!id||petRef.current?.firstIntro?.version!==4||petRef.current.firstIntro.key!==expected||petRef.current.clock?.sleeping||petRef.current.trip||!Array.isArray(chat?.stageSpeeches))return null;
+    const prepared=await prepareTutorialStageSpeech(id,step,phase,signal);
+    if(generation!==session.current||revision!==stageRevision.current||language!==readZzalLocale()||petRef.current?.petId!==id||petRef.current.firstIntro?.key!==expected||petRef.current.clock?.sleeping||petRef.current.trip)return null;
+    setChat(previous=>previous?{...previous,stageSpeeches:[...(previous.stageSpeeches??[]).filter(v=>v.id!==prepared.id),prepared]}:previous);
+    return prepared;
+  },[petId,chat?.stageSpeeches]);
+  const readStageSpeeches=useCallback(async(signal?:AbortSignal)=>{
+    const id=petId,generation=session.current,revision=stageRevision.current,language=readZzalLocale(),step=petRef.current?.firstIntro?.key;
+    if(!id||petRef.current?.clock?.sleeping||petRef.current?.trip)return null;
+    const snapshot=await getChat(id,signal);
+    if(generation!==session.current||revision!==stageRevision.current||language!==readZzalLocale()||petRef.current?.petId!==id||petRef.current.firstIntro?.key!==step||petRef.current.clock?.sleeping||petRef.current.trip)return null;
+    const speeches=(snapshot.stageSpeeches??[]).filter(isStageSpeech);
+    setChat(previous=>previous?{...previous,stageSpeeches:speeches}:previous);return speeches;
+  },[petId]);
+
+  const seenTutorial = useCallback((topic?: IntroTopic) => (
+    send(() => tutorialSeen(petId as number, topic), '지금은 넘어갈 수 없어요')
   ), [petId, send]);
 
   /**
@@ -744,42 +917,103 @@ export function useHatchState(): Live {
    *   여기서는 다른 행동과 똑같이 `PetDetail` 하나로 받는다.
    * ★ 답한 뒤 오늘의 부름을 다시 읽는다 — 방금 한 말과 아이가 돌려준 말이 거기 쌓인다.
    */
-  const sendChat = useCallback(async (text: string) => {
-    const slot = chat?.openSlot ?? pet?.chatSummary?.openSlot ?? null;
-    if (!petId || !slot || chatting || !text) return { error: null, reply: null };
+  const sendChat = useCallback(async (text: string, tutorial?: TutorialAnswerMeta) => {
+    if (chatSendingRef.current) return { error: null, reply: null };
+    let pending = pendingChatRef.current;
+    const replaying = pending !== null;
+    if (!pending) {
+      const slot = tutorial ? 'CONTINUOUS' as const : chat?.openSlot ?? pet?.chatSummary?.openSlot ?? null;
+      const active = chat?.session;
+      if (!petId || !slot || !active || active.closed || !text) {
+        const message = '대화 상태가 바뀌었어요. 적은 말은 남겨 둘게요.';
+        setChatDelivery({ status: 'rejected', text, message });
+        return { error: message, reply: null };
+      }
+      pending = { petId, slot, text, sessionId: active.id, expectedRound: active.round, requestId: randomUuid(), ...(tutorial?{tutorial}:{}) };
+      pendingChatRef.current = pending;
+    }
+    // 결과가 불확실한 동안 다른 문장을 같은 요청 ID에 실을 수 없다.
+    if (pending.petId !== petId || (text && text !== pending.text) || JSON.stringify(pending.tutorial??null)!==JSON.stringify(tutorial??null)) {
+      const message = '먼저 보낸 말의 답을 확인해 주세요.';
+      setChatDelivery({ status: 'uncertain', text: pending.text, message });
+      return { error: message, reply: null };
+    }
+    chatSendingRef.current = true;
     setChatting(true);
+    setChatDelivery({ status: 'sending', text: pending.text, message: '생각 중이에요…' });
+    const identity = pending;
+    const generation = session.current;
     const seq = takeSeq();
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 30_000);
     try {
-      const next = await answerChat(petId, slot, text);
-      // ★ 대화형(#704) — 응답에 실린 두 턴(내 말·아이의 다음 말)과 판 상태를 **바로** 얹는다.
-      //   아래 효과가 곧 다시 읽어 맞추지만, 그 사이에도 말풍선이 다음 말로 바뀌어 있어야 한다.
+      const next = await answerChat(identity.petId, identity.slot, identity.text, { sessionId: identity.sessionId, expectedRound: identity.expectedRound, requestId: identity.requestId, ...(identity.tutorial?{tutorial:identity.tutorial}:{}) }, controller.signal);
+      if (generation !== session.current || pendingChatRef.current !== identity) return { error: null, reply: null };
+      // A saved reply from an older tutorial scene must not restore its stale pet/speech over a later scene.
+      if(identity.tutorial && petRef.current?.firstIntro?.key !== identity.tutorial.step){
+        pendingChatRef.current = null;
+        setChatDelivery({ status: 'idle', text: '', message: null });
+        return { error: null, reply: null };
+      }
       const cr = next.chatReply;
       if (cr?.session) {
-        setChat((c) => (c ? {
+        setChat((c) => (c ? mergeChatSnapshot(c, {
           ...c,
           session: cr.session,
-          turns: [...(c.session?.id === cr.session?.id ? (c.turns ?? []) : []), ...(cr.turns ?? [])],
+          stageSpeech: null,
+          turns: Array.from(new Map([...(c.session?.id === cr.session?.id ? (c.turns ?? []) : []), ...(cr.turns ?? [])]
+            .map((t) => [t.idx, t])).values()).sort((a, b) => a.idx - b.idx),
           openSlot: cr.session?.closed ? null : c.openSlot,
-        } : c));
+        }) : c));
       }
-      // `pet` 이 바뀌면 아래 효과가 오늘의 부름을 다시 읽는다 — 여기서 또 부르면 두 번 나간다.
       putPet(seq, next);
-      return { error: null, reply: next.chatReply };
+      pendingChatRef.current = null;
+      setChatDelivery({ status: 'idle', text: '', message: null });
+      if (replaying) {
+        // 멱등 응답은 원래 시점의 snapshot이다. 최신 상태는 별도로 다시 읽는다.
+        const freshSeq = takeSeq();
+        try {
+          const fresh = await getPet(identity.petId, controller.signal);
+          if (generation === session.current) putPet(freshSeq, fresh);
+        } catch { /* 답 자체는 이미 확인했으므로 재전송 상태로 되돌리지 않는다. */ }
+      }
+      return { error: null, reply: cr ?? null };
     } catch (e) {
-      // 슬롯이 닫혔거나(다른 기기에서 답함) 시간이 지난 경우. 지금 참인 것을 다시 받아 그린다.
-      try { setChat(await getChat(petId)); } catch { /* 그래도 안 되면 화면은 그대로 */ }
-      return { error: e instanceof Error ? e.message : '지금은 말을 걸 수 없어요', reply: null };
+      if (generation !== session.current || pendingChatRef.current !== identity) return { error: null, reply: null };
+      // 통신 실패·5xx는 결과가 불확실하다. 같은 ID로 POST해 저장된 응답을 다시 받는다.
+      const rejected = e instanceof ApiError && e.status >= 400 && e.status < 500;
+      if (rejected) {
+        pendingChatRef.current = null;
+        const stale = e.code === 'ZZAL_CHAT_SESSION_STALE';
+        const message = stale ? '대화 상태가 바뀌었어요. 적은 말은 남겨 둘게요.'
+          : e.code === 'ZZAL_CHAT_REQUEST_CONFLICT' ? '보낸 내용을 확인하지 못했어요. 적은 말은 남겨 둘게요.'
+          : e.message;
+        setChatDelivery({ status: 'rejected', text: identity.text, message });
+        try {
+          const current = await getChat(identity.petId, controller.signal);
+          if (generation === session.current) setChat(previous => mergeChatSnapshot(previous, current));
+        } catch { /* 원문과 확정 오류 안내는 그대로 남긴다. */ }
+        return { error: message, reply: null };
+      }
+      const message = '답을 확인하지 못했어요. 이 화면에 적은 내용은 남아 있어요.';
+      setChatDelivery({ status: 'uncertain', text: identity.text, message });
+      return { error: message, reply: null };
     } finally {
-      setChatting(false);
+      clearTimeout(deadline);
+      if (generation === session.current) {
+        chatSendingRef.current = false;
+        setChatting(false);
+      }
     }
-  }, [petId, chat?.openSlot, pet, chatting]);
+  }, [petId, chat, pet, putPet, takeSeq]);
 
   // ── 놀이 · 앨범 · 공유 ──────────────────────────────────────────
   const startPlay = useCallback(async (): Promise<string | null> => {
     if (!petId) return null;
     try {
       // ★ `putGame` 이 ref 도 함께 바꾼다 — 바로 뒤에 `pickSide` 를 불러도 판을 찾을 수 있다.
-      const started = await startGame(petId, 'LEFT_RIGHT');
+      const started = await startGame(petId, 'LEFT_RIGHT', petRef.current?.firstIntro?.key === 'GAME' ? 'GAME' : undefined);
+      pendingGuessRef.current=null;
       putGame(takeSeq(), started);
       // 놀람은 판을 **시작하는 것만으로** 열린다. 게임 응답은 PetDetail 이 아니라 상태 갱신 길을
       // 안 타므로, 여기서 직접 쌓지 않으면 그 판을 영영 못 띄운다.
@@ -805,29 +1039,40 @@ export function useHatchState(): Live {
     // ★ 같은 틱에 두 번 눌러도 한 번만 나간다. 상태(`guessing`)는 다시 그려진 뒤에야 바뀌어서
     //   두 번째 클릭이 그대로 통과했고, 한 번 누른 셈인데 라운드가 두 칸 갔다.
     if (guessingRef.current) return { error: null, result: null };
+    const generation=session.current;
+    const previous=pendingGuessRef.current;
+    const retryLine=readZzalLocale()==='ja'?'前の選択をもう一度押して結果を確認してください。':readZzalLocale()==='en'?'Choose the same side again to check the previous result.':'이전과 같은 쪽을 다시 눌러 결과를 확인해 주세요.';
+    if(previous&&(previous.petId!==petId||previous.gameId!==id))return {error:retryLine,result:null};
+    if(previous&&previous.pick!==side)return {error:retryLine,result:null};
+    const round=gameRef.current?.round;
+    if(!previous&&(round==null||round<0||round>4))return {error:retryLine,result:null};
+    const identity=previous??{petId,gameId:id,pick:side,expectedRound:round!,requestId:randomUuid()};
+    pendingGuessRef.current=identity;
+    const current=()=>generation===session.current&&petRef.current?.petId===identity.petId&&gameRef.current?.gameId===identity.gameId&&pendingGuessRef.current===identity;
     guessingRef.current = true;
     setGuessing(true);
     try {
-      const r = await guess(petId, id, side);
-      // 판이 끝났으면 `playing` 이 꺼진 새 상태를 받아 둔다 — 다음 판은 다시 시작해야 한다.
-      const g = gameRef.current;
-      if (g) {
-        putGame(takeSeq(), { ...g, round: r.nextRound, hits: r.hits, playing: !r.finished, remainingToday: r.remainingToday, runUnlocked: r.runUnlocked });
-      }
-      noteUnlocked(r.justUnlocked ?? []);
-      // 이긴 판은 기분이 오른다. 그 값은 펫 상태에 있으므로 다시 읽어 화면을 맞춘다.
-      if (r.finished) { const seq = takeSeq(); try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 판 결과는 보여 준다 */ } }
-      return { error: null, result: r };
-    } catch (e) {
-      const seq = takeSeq();
-      try { putGame(seq, await getCurrentGame(petId)); } catch { /* 화면은 그대로 둔다 */ }
-      // ★ 판만 다시 읽던 자리다 — **펫도 읽는다**(2026-09-22). 자는 사이에 누른 것이면
-      //   여기서 읽어야 화면이 자는 방으로 바뀐다(전에는 "자고 있어요" 한 줄만 뜨고 그대로였다).
-      await refreshPet();
-      return { error: e instanceof Error ? e.message : '지금은 못 쳐요', result: null };
+      const r = await guess(identity.petId,identity.gameId,identity.pick,{requestId:identity.requestId,expectedRound:identity.expectedRound});
+      if(!current())return {error:null,result:null};
+      if(r.gameId!==identity.gameId||r.round!==identity.expectedRound||r.pick!==identity.pick)return {error:retryLine,result:null};
+      // Current pet authority is refreshed before presenting a recovered round.
+      const next=await getPet(identity.petId);
+      if(!current())return {error:null,result:null};
+      putPet(takeSeq(),next);
+      pendingGuessRef.current=null;
+      const g=gameRef.current;
+      if(g)putGame(takeSeq(),{...g,round:r.nextRound,hits:r.hits,playing:!r.finished,remainingToday:r.remainingToday,runUnlocked:r.runUnlocked});
+      if(next.clock?.sleeping||next.trip)return {error:null,result:null};
+      noteUnlocked(r.justUnlocked??[]);
+      return {error:null,result:r};
+    } catch(e) {
+      if(!current())return {error:null,result:null};
+      const definite=e instanceof ApiError&&[400,401,403,404,409,422].includes(e.status);
+      if(definite){pendingGuessRef.current=null;const seq=takeSeq();try{putGame(seq,await getCurrentGame(petId));}catch{/* no new selection inferred */}await refreshPet();}
+      // No GET-current recovery on uncertain POST: its intentionally inactive result cannot recover a round receipt.
+      return {error:definite?(e instanceof Error?e.message:retryLine):retryLine,result:null};
     } finally {
-      guessingRef.current = false;
-      setGuessing(false);
+      if(generation===session.current&&petRef.current?.petId===petId){guessingRef.current=false;setGuessing(false);}
     }
   }, [petId, takeSeq, putPet, putGame, noteUnlocked, refreshPet]);
 
@@ -852,6 +1097,7 @@ export function useHatchState(): Live {
     abandoningRef.current = true;
     try {
       const r = await abandonGame(petId, id);
+      pendingGuessRef.current=null;
       putGame(takeSeq(), {
         playing: false, gameId: null, kind: null, round: null, hits: null,
         rounds: r.rounds, winAt: r.winAt, remainingToday: r.remainingToday,
@@ -929,10 +1175,13 @@ export function useHatchState(): Live {
         //   "방은 무엇을 보고 그렸나" 가 한 줄로 남는다. 못 받으면 목록 값으로 간다.
         //   ★ 한 벌을 **한꺼번에** 받는다(병렬). 하나씩 받으면 받는 순서대로 화면이 한 칸씩 채워져
         //     결국 같은 튐이 된다.
+        // ★ 여행 중이면 판·부름은 묻지 않는다(2026-10-13 상훈님) — 서버가 409(ZZAL_TRAVELING)로 막는 길이라
+        //   물어도 콘솔에 오류만 남는다. 부르기로 `trip` 이 사라지면 아래 효과들이 다시 읽는다.
+        const away = !!living.trip;
         const [detail, g, c] = await Promise.all([
           getPet(living.petId).catch(() => living),
-          getCurrentGame(living.petId).catch(() => null),
-          getChat(living.petId).catch(() => null),
+          away ? null : getCurrentGame(living.petId).catch(() => null),
+          away ? null : getChat(living.petId).catch(() => null),
         ]);
         if (!mineStill()) return null;
         setPetId(living.petId); setCharSet(true); putPet(takeSeq(), detail);
@@ -951,7 +1200,7 @@ export function useHatchState(): Live {
   // ── 부화 지켜보기 ──────────────────────────────────────────────
   // 무거운 `getPet` 대신 **전용 API** 를 3초마다. 끝나면 스스로 멈춘다.
   const phase = hatch?.phase ?? null;
-  const watching = !!petId && charSet && phase !== 'ALIVE' && phase !== 'FAILED' && phase !== 'DEAD';
+  const watching = !!petId && (charSet || earlyWatch) && phase !== 'ALIVE' && phase !== 'FAILED' && phase !== 'DEAD';
   useEffect(() => {
     if (!watching || !petId) return;
     let alive = true;
@@ -966,7 +1215,9 @@ export function useHatchState(): Live {
     look();
     const t = setInterval(look, 3000);
     return () => { alive = false; clearInterval(t); };
-  }, [watching, petId]);
+    // ★ `charSet` 이 켜지는 순간에도 **곧바로 한 번** 묻는다 — 굽기가 이미 끝난 채 이름이 들어오면
+    //   서버가 그 자리에서 살리는데(completeIfReady), 3초를 더 기다리면 「만나러 가기」가 그만큼 멎는다.
+  }, [watching, petId, charSet]);
 
   // ── 계측: 굽기의 끝(성공·실패)과 굽는 중 이탈 ─────────────────────────
   // ★ 굽는 것을 **이 화면에서 지켜본 아이만** 센다. 이미 함께 사는 아이로 돌아온 사람까지
@@ -1040,20 +1291,77 @@ export function useHatchState(): Live {
   //   가벼운 응답이고 돌보기 한 번에 한 번뿐이라 그만한 값은 한다. 서버가 요약을 맞춰 주면
   //   그때 이 자리를 `chatSummary` 로 되돌린다.
   const living = pet?.phase === 'ALIVE';
+  // ★ 여행 중(`trip`)엔 부름·판을 묻지 않는다(2026-10-13 상훈님) — 서버가 409(ZZAL_TRAVELING)로 막는다.
+  //   60초 맞춤(`refreshPet`)이 `pet` 을 갈아도 아래 두 효과가 이 값에서 멈춘다. 부르기 성공으로
+  //   `trip` 이 null 이 되면 이 값이 바뀌어 두 효과가 다시 돈다(= 조회 재개).
+  //   방이 안 열리는 일이 없게 '읽음' 표시는 세운다 — 전에는 409 로 실패한 뒤 세우던 것과 같다.
+  const traveling = !!pet?.trip;
+  // Service lifecycle only: room/album/chat panel changes are not visits.
+  const presenceBinding = useRef(0);
   useEffect(() => {
     if (!petId || !living) return;
+    const binding = ++presenceBinding.current;
+    const generation = session.current;
+    const key = `zzal:presence:v1:${petId}`;
+    const visit = presenceVisit(key);
+    let disposed = false;
+    const emit = (event: 'ENTER' | 'LEAVE', kind: 'OPEN' | 'RETURN' | 'RELOAD') => {
+      const payload = nextPresenceEvent(key, event, kind);
+      if (!payload) return;
+      if (event === 'ENTER') visit.initial = 'RETURN';
+      const current = () => !disposed && generation === session.current && binding === presenceBinding.current && payload.sequence === visit.sequence;
+      const applyPresence = (result: Awaited<ReturnType<typeof postChatPresence>>) => {
+        if (!current() || event !== 'ENTER') return;
+        if (result.chat) setChat(previous => {
+          const incoming=result.chat!;
+          // Presence owns proactive speech, not the GET-only persisted tutorial receipt projection.
+          // Only the same session may retain that projection; a real GET with [] still clears it.
+          const sameSession=previous?.session?.id!=null&&previous.session.id===incoming.session?.id;
+          return mergeChatSnapshot(previous,{...incoming,tutorialAnswers:sameSession?previous.tutorialAnswers:incoming.tutorialAnswers,stageSpeeches:sameSession?previous.stageSpeeches:incoming.stageSpeeches});
+        });
+        if (result.outcome === 'GENERATED' || result.outcome === 'RESTORED') setChatPresenceRevision(value => value + 1);
+      };
+      void postChatPresence(petId, payload).then(applyPresence).catch(() => {
+        // A single confirmation reuses the exact event identity. Departure never retries.
+        if (event === 'ENTER' && current()) void postChatPresence(petId, payload).then(applyPresence).catch(() => {});
+      });
+    };
+    const visible = () => {
+      if (document.hidden) emit('LEAVE', 'RETURN');
+      else emit('ENTER', 'RETURN');
+    };
+    const hide = () => emit('LEAVE', 'RETURN');
+    const show = () => { if (!document.hidden) emit('ENTER', 'RETURN'); };
+    queueMicrotask(() => { if (!disposed && !document.hidden) emit('ENTER', visit.initial); });
+    document.addEventListener('visibilitychange', visible);
+    window.addEventListener('pagehide', hide);
+    window.addEventListener('pageshow', show);
+    return () => {
+      disposed = true;
+      document.removeEventListener('visibilitychange', visible);
+      window.removeEventListener('pagehide', hide);
+      window.removeEventListener('pageshow', show);
+      // StrictMode's immediate rebind does not represent leaving the service.
+      queueMicrotask(() => { if (binding === presenceBinding.current) emit('LEAVE', 'RETURN'); });
+    };
+  }, [petId, living]);
+
+  useEffect(() => {
+    if (!petId || !living) return;
+    if (traveling) { setChatLoaded(true); return; }
     let alive = true;
     void getChat(petId)
-      .then((c) => { if (alive) setChat(c); })
+      .then((c) => { if (alive) setChat(previous => mergeChatSnapshot(previous, c)); })
       .catch(() => {})
       .finally(() => { if (alive) setChatLoaded(true); });
     return () => { alive = false; };
-  }, [petId, living, pet]);
+  }, [petId, living, pet, traveling]);
 
   // 치던 판과 앨범은 아이가 살아난 뒤 한 번만 읽는다 — 돌보기마다 다시 읽을 값이 아니다.
   // (판은 칠 때마다 응답으로 갱신되고, 앨범은 벽을 열 때 `loadAlbum` 으로 다시 읽는다)
   useEffect(() => {
     if (!petId || !living) return;
+    if (traveling) { setGameLoaded(true); return; }
     let alive = true;
     const seq = takeSeq();
     void getCurrentGame(petId)
@@ -1063,7 +1371,7 @@ export function useHatchState(): Live {
     // 앨범은 기다리지 않는다 — 못 받아도 펫 상태의 같은 18칸으로 **같은 숫자**가 나온다(튀지 않는다).
     void getAlbum(petId).then((a) => { if (alive) setAlbum(a); }).catch(() => {});
     return () => { alive = false; };
-  }, [petId, living, takeSeq, putGame]);
+  }, [petId, living, traveling, takeSeq, putGame]);
 
   /**
    * 기본 8종을 미리 받아 둔다(상훈님 2026-09-10 승인).
@@ -1133,10 +1441,16 @@ export function useHatchState(): Live {
     applied.current = issued.current;
     appliedGame.current = issued.current;
     session.current += 1;
+    callingRef.current=false;setCalling(false);
     setPreviewUrl(null); setImageKey(null); setPetId(null); setPet(null); setError(null); setErrorKind(null); setBlocked(null);
-    setCharSet(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
+    setCharSet(false); setEarlyWatch(false); setHatch(null); setResumedDraft(false); setOptimistic(null);
     setGameLoaded(false); setChatLoaded(false);
     setChat(null); putGame(takeSeq(), null); setAlbum(null);
+    pendingChatRef.current = null;
+    pendingCareRef.current=null;careingRef.current=null;setCareDelivery(null);setCareing(null);
+    chatSendingRef.current = false;
+    setChatting(false);
+    setChatDelivery({ status: 'idle', text: '', message: null });
     // 앞사람의 해금 판이 다음 사람 화면에 뜨면 안 된다.
     setJustUnlocked([]);
   }, [takeSeq, putGame]);
@@ -1147,6 +1461,7 @@ export function useHatchState(): Live {
     draftOnly: !!petId && !charSet,
     resumedDraft: resumedDraft && !charSet,
     ready: phase === 'ALIVE',
+    baked: phase === 'ALIVE' || ((hatch?.total ?? 0) > 0 && (hatch?.progress ?? 0) >= (hatch?.total ?? 0) && phase !== 'FAILED' && phase !== 'DEAD'),
     // 방을 그려도 되는 순간 = 서버가 준 지금 상태(게이지 포함)를 들고 있을 때.
     petReady: pet?.phase === 'ALIVE' && !!pet.gauges && gameLoaded && chatLoaded,
     failed: phase === 'FAILED' || phase === 'DEAD',
@@ -1160,13 +1475,14 @@ export function useHatchState(): Live {
     missingBasics: pet?.phase === 'ALIVE'
       ? BASIC_KEYS.filter((k) => !motionAliases(k).some((a) => pet.motions?.some((m) => m.key === a && m.basicImageKey)))
       : [],
-    careing, optimistic, resting, chat, chatting, game, guessing, album,
+    careing, careDelivery, optimistic, resting, chat, chatPresenceRevision, chatting, chatDelivery, game, guessing, album,
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
     justUnlocked,
-    setChar, doCare, doRest, savePersonality, finishTutorial, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
+    setChar, watchEarly, doCare, doRest, calling, callBack, savePersonality, updatePersona, finishTutorial, prepareStageSpeech, readStageSpeeches, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
+    changeBackground: async (key: string) => { if (petId != null) { const seq = takeSeq(); putPet(seq, await setBackground(petId, key)); } },
     clearJustUnlocked, noteUnlocked,
-    loadAlbum, shareMotion, sendWish, resume, reset,
+    loadAlbum, shareMotion, sendWish, resume, reset, putDetail, refreshPet,
   };
 }
 
@@ -1200,78 +1516,7 @@ export function useLive(): Live {
  *   그 어긋남이 44.5px 이었고, 말풍선이 딱 그만큼 얼굴을 덮었다(진짜 방 1200 에서 24.5px).
  *   발밑을 그림에서 재는 것과 **같은 이유·같은 방법**으로 머리 위도 그림에서 잰다.
  */
-interface SpritePads {
-  /** 위 여백 ÷ 캔버스 세로. */
-  top: number;
-  /** 아래 여백 ÷ 캔버스 세로. */
-  bottom: number;
-  /** 실루엣 **왼쪽 가장자리** ÷ 캔버스 가로. */
-  left: number;
-  /** 실루엣 **오른쪽 가장자리** ÷ 캔버스 가로. */
-  right: number;
-}
-const padCache = new Map<string, SpritePads>();
-
-function useSpritePads(src: string, fallbackBottom: number): SpritePads {
-  const [pads, setPads] = useState(() => padCache.get(src) ?? { top: 0, bottom: fallbackBottom, left: 0, right: 1 });
-
-  useEffect(() => {
-    const cached = padCache.get(src);
-    if (cached !== undefined) { setPads(cached); return; }
-    if (!src) return;
-    // 다른 출처면 어차피 못 읽는다. 조용히 기본값으로 간다.
-    try {
-      if (new URL(src, window.location.href).origin !== window.location.origin) return;
-    } catch { return; }
-    let alive = true;
-    const img = new Image();
-    // 다른 출처의 그림을 캔버스로 읽으려면 이 표시가 있어야 한다(없으면 읽는 순간 막힌다).
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const c = document.createElement('canvas');
-        c.width = img.naturalWidth; c.height = img.naturalHeight;
-        const ctx = c.getContext('2d');
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0);
-        const d = ctx.getImageData(0, 0, c.width, c.height).data;
-        const opaqueRow = (y: number) => {
-          for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 10) return true;
-          return false;
-        };
-        let bottom = -1;
-        // 아래에서 위로 훑다가 처음 만나는 불투명한 줄이 발끝이다.
-        for (let y = c.height - 1; y >= 0 && bottom < 0; y--) if (opaqueRow(y)) bottom = y;
-        if (bottom < 0) return;
-        let top = -1;
-        // 위에서 아래로 훑다가 처음 만나는 불투명한 줄이 정수리다.
-        for (let y = 0; y < c.height && top < 0; y++) if (opaqueRow(y)) top = y;
-        const opaqueCol = (x: number) => {
-          for (let y = 0; y < c.height; y++) if (d[(y * c.width + x) * 4 + 3] > 10) return true;
-          return false;
-        };
-        let left = -1;
-        for (let x = 0; x < c.width && left < 0; x++) if (opaqueCol(x)) left = x;
-        let right = -1;
-        for (let x = c.width - 1; x >= 0 && right < 0; x--) if (opaqueCol(x)) right = x;
-        const next = {
-          top: Math.max(0, top) / c.height,
-          bottom: (c.height - 1 - bottom) / c.height,
-          left: Math.max(0, left) / c.width,
-          right: (right < 0 ? c.width - 1 : right + 1) / c.width,
-        };
-        padCache.set(src, next);
-        if (alive) setPads(next);
-      } catch {
-        // 캔버스를 못 읽는 경우(CORS)엔 기본값 그대로 간다. 화면은 멀쩡히 돈다.
-      }
-    };
-    img.src = src;
-    return () => { alive = false; };
-  }, [src, fallbackBottom]);
-
-  return pads;
-}
+export { useSpriteGeometry as useSpritePads } from '../../lib/spriteGeometry';
 
 export function useFootPad(src: string, fallback: number): number {
   return useSpritePads(src, fallback).bottom;

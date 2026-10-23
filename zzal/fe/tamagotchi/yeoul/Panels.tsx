@@ -8,7 +8,11 @@
 //   내용(제목·본문·버튼)은 부르는 쪽이 넘긴다.
 'use client';
 
+import {useZzalLocale}from '../../lib/locale';
 import { useRef, useState } from 'react';
+import PersonaEditor from './PersonaEditor';
+import { useLive } from './useHatch';
+import {useUiText}from '../../lib/uiCopy';
 import { C, C2, GAEGU, MONO, TAP_MIN, gap, input as inputStyle, monoSize, radius, shadow, fz, ink, pad } from './ui';
 import { CHAT_MAX, type Yeoul } from './useYeoul';
 import { CHAR_TEXT_MAX } from '../../lib/pet';
@@ -24,6 +28,7 @@ export default function Panels({ y }: { y: Yeoul }) {
 }
 
 function Sheet({ y }: { y: Yeoul }) {
+  const tr=useUiText(),locale=useZzalLocale();
   const { v, actions } = y;
   const sh = v.sheet;
   return (
@@ -40,14 +45,14 @@ function Sheet({ y }: { y: Yeoul }) {
         }}
       >
         <div style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 11px', borderBottom: `1px solid ${ink(.07)}` }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: gap.md }}>
-            <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, lineHeight: 1, color: C.ink }}>{sh.title}</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', flexWrap:'wrap',minWidth:0,flex:1,gap:gap.sm }}>
+            <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h2, lineHeight: 1, color: C.ink }}>{tr(sh.title)}</span>
             <span style={{ fontSize: fz.sm, color: C.faint2 }}>{sh.sub}</span>
           </div>
           {/* ★ 누르는 자리 44px(2026-09-22 판정 5) — 동그라미는 27 그대로, 단추만 키우고
               음수 여백으로 머리줄 높이를 지킨다. */}
           <button
-            onClick={actions.closeSheet} aria-label="닫기"
+            onClick={actions.closeSheet} aria-label={tr('닫기')}
             style={{ width: TAP_MIN, height: TAP_MIN, margin: '-8px -8px -8px 0', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', border: 'none', background: 'none', padding: 0 }}
           >
             <span style={{ border: `1px solid ${ink(.13)}`, background: C.slot, borderRadius: radius.pill, width: 27, height: 27, fontSize: fz.sm, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</span>
@@ -57,7 +62,7 @@ function Sheet({ y }: { y: Yeoul }) {
         {/* ★ 아래 여백이 120px 인 이유 — 시트는 화면 아래끝까지 오는데 그 위에 하단 타일(층 6)이
             얹혀 있어, 30px 만 주면 **마지막 내용 92px 이 타일 뒤에 영구히 가린다**(상훈님 판정 2).
             타일 줄 높이(70) + 위아래 여백(10·22) + 숨 쉴 틈만큼 비운다. */}
-        <div style={{ flex: '1 1 auto', overflow: 'auto', padding: '14px 20px 120px', display: 'flex', flexDirection: 'column', gap: gap.lg }}>
+        <div style={{ flex: '1 1 auto',minHeight:0, overflow: 'auto',padding:sh.key==='settings'?'14px 20px max(24px, env(safe-area-inset-bottom))':'14px 20px 120px',scrollPaddingBottom:90, display: 'flex', flexDirection: 'column', gap: gap.lg }}>
           {/* 주방·욕실·침실은 시트가 없다 — 팝오버로 다 된다(상훈님 판정 12). */}
           {sh.key === 'play' && <PlaySheet y={y} />}
           {sh.key === 'notify' && <NotifySheet y={y} />}
@@ -71,6 +76,7 @@ function Sheet({ y }: { y: Yeoul }) {
 // ── 칸별 내용 ───────────────────────────────────────────────────────────
 
 function PlaySheet({ y }: { y: Yeoul }) {
+  const tr=useUiText();
   const { v, actions } = y;
   const p = v.play;
   // ★ 방의 대화 한 줄(`Room.tsx` ChatBar)과 **같은 이유로** 리액트가 입력칸을 붙들지 않는다 —
@@ -88,13 +94,13 @@ function PlaySheet({ y }: { y: Yeoul }) {
     <>
       <div style={{ display: 'flex', gap: gap.sm }}>
         {p.tabs.map((t) => (
-          <button key={t.label} onClick={t.pick} style={{ flex: 1, padding: '9px 4px', borderRadius: radius.pill, border: `1px solid ${t.bd}`, fontSize: fz.md, background: t.bg, color: t.fg }}>{t.label}</button>
+          <button key={tr(t.label)} onClick={t.pick} style={{ flex: 1, padding: '9px 4px', borderRadius: radius.pill, border: `1px solid ${t.bd}`, fontSize: fz.md, background: t.bg, color: t.fg }}>{tr(t.label)}</button>
         ))}
       </div>
 
       {p.isTalk && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: gap.md }}>
-          <span style={{ fontSize: fz.sm, color: C.faint }}>오늘 부름 {p.callsLeft} · 40자 답 · 기억 {p.memCount}</span>
+          <span style={{ fontSize: fz.sm, color: C.faint }}>{tr('대화를 이어가요')} · {tr('한 번에 40자')} · {tr('최근에 보낸 말')} {p.memCount}</span>
           {p.log.map((l, i) => (
             <div key={i} style={{ alignSelf: l.align, maxWidth: '84%', padding: pad.field, borderRadius: l.radius, background: l.bg, color: l.fg, fontSize: fz.md, lineHeight: 1.55 }}>{l.text}</div>
           ))}
@@ -116,7 +122,7 @@ function PlaySheet({ y }: { y: Yeoul }) {
               }}
               style={{ flex: 1, padding: pad.field, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.md, color: C.ink, outline: 'none' }}
             />
-            <button onClick={send} disabled={!p.can} data-action="play-chat-send" style={{ padding: pad.field, borderRadius: radius.pill, border: 'none', background: C.ink, color: C2.onDark, fontSize: fz.md, opacity: p.can ? 1 : 0.45 }}>보내기</button>
+            <button onClick={send} disabled={!p.can} data-action="play-chat-send" style={{ padding: pad.field, borderRadius: radius.pill, border: 'none', background: C.ink, color: C2.onDark, fontSize: fz.md, opacity: p.can ? 1 : 0.45 }}>{tr('보내기')}</button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
             {p.memories.map((m, i) => (
@@ -128,8 +134,8 @@ function PlaySheet({ y }: { y: Yeoul }) {
 
       {p.isRun && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, padding: 17, borderRadius: radius.md, background: C2.paperDim, border: `1px dashed ${ink(.18)}` }}>
-          <span style={{ fontSize: fz.md, color: C.sub2 }}>달리기 · 잠겨 있어요</span>
-          <span style={{ fontSize: fz.md, lineHeight: 1.65, color: ink(.55) }}>{p.runCond}</span>
+          <span style={{ fontSize: fz.md, color: C.sub2 }}>{tr('달리기 · 준비 중')}</span>
+          <span style={{ fontSize: fz.md, lineHeight: 1.65, color: ink(.55) }}>{tr(p.runCond)}</span>
         </div>
       )}
     </>
@@ -137,6 +143,7 @@ function PlaySheet({ y }: { y: Yeoul }) {
 }
 
 function NotifySheet({ y }: { y: Yeoul }) {
+  const tr=useUiText();
   const n = y.v.notif;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: gap.md }}>
@@ -145,12 +152,12 @@ function NotifySheet({ y }: { y: Yeoul }) {
           <span style={{ width: 9, height: 9, flex: 'none', borderRadius: '50%', background: x.dot }} />
           <span style={{ display: 'flex', flexDirection: 'column', gap: gap.xs, flex: 1 }}>
             <span style={{ fontSize: fz.md, color: C.ink }}>{x.text}</span>
-            <span style={{ fontSize: fz.xs, color: C.faint }}>{x.note}</span>
+            <span style={{ fontSize: fz.xs, color: C.faint }}>{tr(x.note)}</span>
           </span>
           <span style={{ fontSize: fz.sm, color: C2.accentInk2 }}>{x.action}</span>
         </button>
       ))}
-      {n.empty && <div style={{ padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center', fontSize: fz.md, color: ink(.55) }}>지금은 기다리는 게 없어요</div>}
+      {n.empty && <div style={{ padding: 22, borderRadius: radius.md, background: C.slotDim, textAlign: 'center', fontSize: fz.md, color: ink(.55) }}>{tr('지금은 기다리는 게 없어요')}</div>}
     </div>
   );
 }
@@ -200,7 +207,10 @@ function CharCard({ g, open, onToggle }: { g: Yeoul['v']['charGroups'][number]; 
 
 /** 아이 정보 — 이름·성격 네 묶음·그 밖에·떠남. 온보딩의 캐릭터 칸과 같은 표를 쓴다. */
 function SettingsSheet({ y }: { y: Yeoul }) {
+  const tr=useUiText();
   const { s, v, actions } = y;
+  const live = useLive();
+  const sourceEditor = !!live.petId && !s.sampleMode;
   /**
    * ★ 묶음 접기(2026-09-21 A-17 · G-5 1안).
    *
@@ -213,14 +223,15 @@ function SettingsSheet({ y }: { y: Yeoul }) {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: gap.lg }}>
+      {sourceEditor ? <PersonaEditor key={live.petId} /> : <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
-        <span style={{ fontSize: fz.sm, color: C.faint }}>이름 · 12자까지</span>
+        <span style={{ fontSize: fz.sm, color: C.faint }}>{tr('이름 · 12자까지')}</span>
         <input value={s.petName} onChange={(e) => actions.onName(e.target.value)} maxLength={12} placeholder="보리"
           style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.lg, color: C.ink, outline: 'none' }} />
       </div>
 
       {v.settings.saveNote && (
-        <span data-note="save" style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.faint }}>{v.settings.saveNote}</span>
+        <span data-note="save" style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.faint }}>{tr(v.settings.saveNote)}</span>
       )}
 
       {v.charGroups.map((g) => (
@@ -228,9 +239,9 @@ function SettingsSheet({ y }: { y: Yeoul }) {
       ))}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
-        <span style={{ fontSize: fz.sm, color: C.faint }}>그 밖에 알려주고 싶은 것</span>
+        <span style={{ fontSize: fz.sm, color: C.faint }}>{tr('그 밖에 알려주고 싶은 것')}</span>
         <input value={v.onb.extraVal} onChange={(e) => v.onb.onExtra(e.target.value)} maxLength={CHAR_TEXT_MAX.extra}
-          placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나"
+          placeholder={tr('좋아하는 것, 버릇, 하면 안 되는 말 아무거나')}
           style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
       </div>
 
@@ -244,7 +255,7 @@ function SettingsSheet({ y }: { y: Yeoul }) {
             display: 'flex', gap: gap.sm, padding: '10px 12px', borderRadius: radius.sm,
             background: C.accentSoft, fontSize: fz.sm, lineHeight: 1.6, color: C.ink,
           }}
-        >{v.settings.save.err}</span>
+        >{tr(v.settings.save.err)}</span>
       )}
       {/* ★ 성격을 서버에 보내는 유일한 자리. 튜토리얼 4칸(PERSONALITY)도 이 버튼으로 넘어간다. */}
       {v.settings.save.show && (
@@ -256,28 +267,31 @@ function SettingsSheet({ y }: { y: Yeoul }) {
             color: v.settings.save.off ? C2.dim2 : C.accentInk,
             cursor: v.settings.save.off ? 'default' : 'pointer',
           }}
-        >{v.settings.save.off ? v.settings.save.why : v.settings.save.label}</button>
+        >{tr(v.settings.save.off ? v.settings.save.why : v.settings.save.label)}</button>
       )}
 
+      </>}
       {v.settings.groups.map((g) => (
-        <div key={g.label} style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
-          <span style={{ fontSize: fz.sm, color: C.faint }}>{g.label}</span>
+        <div key={tr(g.label)} style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
+          <span style={{ fontSize: fz.sm, color: C.faint }}>{tr(g.label)}</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm }}>
             {g.opts.map((o) => (
               // ★ 누르는 자리 44px(판정 5) — 아이 정보 아래쪽 고르는 칸도 같은 규칙.
-              <button key={o.text} onClick={o.pick} style={{ minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{o.text}</button>
+              <button key={o.text} onClick={o.pick} style={{ minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: `${o.bw} solid ${o.bd}`, background: o.bg, fontSize: fz.md, color: o.fg }}>{tr(o.text)}</button>
             ))}
           </div>
         </div>
       ))}
 
+      {!sourceEditor && <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
-        <span style={{ fontSize: fz.sm, color: C.faint }}>떠남</span>
+        <span style={{ fontSize: fz.sm, color: C.faint }}>{tr('떠남')}</span>
         {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 39px) — 바로 위 고르는 칩과 같은 규칙이었는데
             이 한 칸만 빠져 있었다. */}
-        <button onClick={v.settings.toggleLeave} style={{ alignSelf: 'flex-start', minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: `${v.settings.leaveBw} solid ${v.settings.leaveBd}`, background: v.settings.leaveBg, fontSize: fz.md, color: v.settings.leaveFg }}>{v.settings.leaveLabel}</button>
-        <span style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.faint2 }}>떠나도 앨범과 배운 동작은 그대로예요.</span>
+        <button onClick={v.settings.toggleLeave} style={{ alignSelf: 'flex-start', minHeight: TAP_MIN, padding: pad.chip, borderRadius: radius.pill, border: `${v.settings.leaveBw} solid ${v.settings.leaveBd}`, background: v.settings.leaveBg, fontSize: fz.md, color: v.settings.leaveFg }}>{tr(v.settings.leaveLabel)}</button>
+        <span style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.faint2 }}>{tr('떠나도 앨범과 배운 동작은 그대로예요.')}</span>
       </div>
+      </>}
     </div>
   );
 }
@@ -378,6 +392,7 @@ function FirePreview({ p }: { p: NonNullable<Yeoul['s']['fire']>['preview'] }) {
 }
 
 function Fire({ y }: { y: Yeoul }) {
+  const locale=useZzalLocale();
   const f = y.s.fire!;
   // ★ 배경을 누르면 **어느 판이든** 닫힌다(상훈님 판정 22). 예전엔 tapAny 를 준 판만 닫혀서
   //   같은 모양인데 어떤 건 닫히고 어떤 건 안 닫혔다 — 사용자가 규칙을 세울 수 없다.
@@ -385,15 +400,15 @@ function Fire({ y }: { y: Yeoul }) {
   return (
     <div data-part="fire" style={{ position: 'absolute', inset: 0, zIndex: 12, background: ink(.52), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 26, animation: 'yFadeIn .2s ease' }}>
       <div onClick={backdrop} style={{ position: 'absolute', inset: 0 }} />
-      <div style={{ position: 'relative', width: '100%', padding: '24px 22px', borderRadius: radius.xl, background: C.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.lg, animation: 'yPop .3s ease', boxSizing: 'border-box' }}>
+      <div style={{ position: 'relative', width: '100%', ...(f.actions.some(a => a.action === 'intro-done') ? { maxHeight: '100%', overflowY: 'auto' as const } : {}), padding: '24px 22px', borderRadius: radius.xl, background: C.paper, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: gap.lg, animation: 'yPop .3s ease', boxSizing: 'border-box' }}>
         {/* ★★ 옛 **폴라로이드 칸**은 지웠다(2026-09-21 A-09). 그림 대신 빗금 친 색상자와
             "장면 이미지" 라는 글자를 그려, 없는 장면을 있는 것처럼 보이게 하던 자리다.
             그림이 없으면 **칸을 접는다** 가 이 판의 규칙이고(→ `FirePreview`), 진짜 그림이
             생기면 그 칸을 쓰면 된다. 자리표를 다시 만들지 말 것. */}
-        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.2, color: C.ink, textAlign: 'center' }}>{f.title}</span>
+        <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.2, color: C.ink, textAlign: 'center',wordBreak:locale==='ko'?'keep-all':'normal',overflowWrap:'anywhere' }}>{f.title}</span>
         {f.preview && <FirePreview key={f.preview.src} p={f.preview} />}
         {/* ★ `pre-line` — 문구가 줄바꿈(\n)으로 두 마디를 갈라 둔 판이 있다(졸업 판). 없으면 한 덩어리로 붙는다. */}
-        <span style={{ fontSize: fz.md, lineHeight: 1.7, color: ink(.62), textAlign: 'center', whiteSpace: 'pre-line' }}>{f.body}</span>
+        <span style={{ fontSize: fz.md, lineHeight: 1.7, color: ink(.62), textAlign:f.actions.some(a=>a.action==='intro-done')?'left':'center', whiteSpace: 'pre-line',wordBreak:locale==='ko'?'keep-all':'normal',overflowWrap:'anywhere' }}>{f.body}</span>
         {f.wish && <WishBox y={y} />}
         <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, width: '100%', marginTop: 2 }}>
           {f.actions.map((a) => (

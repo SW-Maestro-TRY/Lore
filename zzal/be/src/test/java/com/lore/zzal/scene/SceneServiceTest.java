@@ -324,8 +324,8 @@ class SceneServiceTest {
         return out;
     }
 
-    /** 2층을 전부 연 펫 — 그래도 대기 자세는 하나도 없다(관상용이 3층으로 내려갔다). */
-    private ZzalPet everythingUnlocked() {
+    /** 과거 2층8종 소유를 보존한 펫 — 카운터만으로 신규 해금되지 않으며 대기 자세 풀도 늘지 않는다. */
+    private ZzalPet legacyEverythingOwned() {
         ZzalPet pet = child();
         ReflectionTestUtils.setField(pet, "feeds", 99);
         ReflectionTestUtils.setField(pet, "snacks", 99);
@@ -337,7 +337,10 @@ class SceneServiceTest {
         ReflectionTestUtils.setField(pet, "wakes", 99);
         MotionCatalog catalog = new MotionCatalog("", "", "v1");
         assertThat(com.lore.zzal.pet.UnlockRules.openedLayerTwo(pet, catalog))
-                .as("2층 여덟이 다 열린 상태여야 한다").isEqualTo(8);
+                .as("과거 카운터를 채워도 폐기된 2층은 신규 해금되지 않는다").isZero();
+        ReflectionTestUtils.setField(pet,"legacyLayer2OwnedMask",255);
+        assertThat(com.lore.zzal.pet.UnlockRules.openedLayerTwo(pet, catalog))
+                .as("기존 소유8종은 계속 보존한다").isEqualTo(8);
         return pet;
     }
 
@@ -346,7 +349,7 @@ class SceneServiceTest {
     void idlePoolIsAlwaysBase() {
         // ★ 앉아 쉬기·웃는 대기·갸웃은 사용자 행동에 붙지 않는 관상용이라 3층으로 내려갔다.
         //   그래서 2층을 다 연 사람도 정상 상태의 컷은 기본 자세뿐이다.
-        assertThat(poolOverTheDay(everythingUnlocked(), 200)).containsOnly("base");
+        assertThat(poolOverTheDay(legacyEverythingOwned(), 200)).containsOnly("base");
     }
 
     @Test
@@ -358,7 +361,7 @@ class SceneServiceTest {
     @Test
     @DisplayName("★ 게이지 우선순위가 먼저다 — 2층을 다 열어도 아프면 sick, 슬프면 sad")
     void gaugesWinOverTheIdlePool() {
-        ZzalPet pet = everythingUnlocked();
+        ZzalPet pet = legacyEverythingOwned();
         Instant at = kst("2026-09-06 14:00");
 
         ReflectionTestUtils.setField(pet, "trash", ZzalRules.TRASH_MAX);

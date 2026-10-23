@@ -52,7 +52,7 @@ class PetDetailTest {
     }
 
     @Test
-    @DisplayName("motions 18칸 — 1층 열림·2층 잠김(이름+조건+진행)·선물 2")
+    @DisplayName("호환 18칸 — 기본8 유지·미보유 해금8 조건/진도 없음·기존 선물 슬롯 보존")
     void eighteenMotions() {
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(baby(), null, T0, CATALOG);
         List<PetResponses.Motion> m = d.motions();
@@ -74,8 +74,8 @@ class PetDetailTest {
             assertThat(x.key()).isEqualTo("eat_rice");
             assertThat(x.unlocked()).isFalse();
             assertThat(x.basicImageKey()).isNull();
-            assertThat(x.hint()).isEqualTo("밥 주기 9회");
-            assertThat(x.progress()).isEqualTo(new PetResponses.Progress(0, 9));
+            assertThat(x.hint()).isNull();
+            assertThat(x.progress()).isNull();
         });
         assertThat(m.get(16).seq()).isEqualTo(101);
         assertThat(m.get(16).layer()).isEqualTo("GIFT");
@@ -132,11 +132,11 @@ class PetDetailTest {
         PetResponses.Detail baked = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
         assertThat(baked.motions().get(0).basicImageKey()).isEqualTo("images/zzal/pets/7/basic/1/base.webp");
 
-        // ★ 잠긴 2층도 판만 있으면 주소가 온다 — null 의 뜻은 "안 배웠다" 가 아니라 "그림이 없다" 다.
+        // 미보유 해금8은 판이 있어도 새 사용을 유도하는 주소를 주지 않는다.
         PetResponses.Motion lockedSecondFloor = baked.motions().get(8);
         assertThat(lockedSecondFloor.key()).isEqualTo("eat_rice");
         assertThat(lockedSecondFloor.unlocked()).isFalse();
-        assertThat(lockedSecondFloor.basicImageKey()).isEqualTo("images/zzal/pets/7/basic/1/eat_rice.webp");
+        assertThat(lockedSecondFloor.basicImageKey()).isNull();
     }
 
     @Test
@@ -181,7 +181,7 @@ class PetDetailTest {
         // ★ daysLeft 는 항상 0 — 첫 선물은 날짜가 아니라 튜토리얼 완주로 열린다.
         //   옛 3일 규칙으로 계산한 값을 내려보내면 화면이 뜻 없는 카운트다운을 그린다.
         assertThat(d.firstGift()).isEqualTo(new PetResponses.FirstGift("LOCKED", 0));
-        assertThat(d.chatSummary().nextAt()).isEqualTo(kst("2026-09-05 14:00"));   // 12:00 → 다음 창(낮) 14:00 (#709)
+        assertThat(d.chatSummary().nextAt()).isNull();   // 지속대화는 다음부름 시각이 없다
         assertThat(d.tutorial().active()).isTrue();
         assertThat(d.tutorial().steps().get(0).current()).isTrue();
         assertThat(d.justUnlocked()).isEmpty();
@@ -285,10 +285,9 @@ com.lore.zzal.motion.MotionSource.API,
     }
 
     @Test
-    @DisplayName("★★ 잠긴 2층 여덟 칸은 <b>전부</b> 진행도를 보여준다 — 숨길 이유가 있던 조건이 없어졌다")
+    @DisplayName("미보유 해금8 — 기존 슬롯 형태는 보존하되 신규 조건·진도를 숨긴다")
     void everyLockedLayerTwoShowsProgress() {
-        // 진행도를 감추는 규칙은 "케어 미스 0인 날" 같은 숨은 수치 때문이었다. 지금 2층 여덟은
-        // 전부 사용자가 직접 한 행동(밥·간식·청소·목욕·채팅·쓰다듬·게임·깨우기)이라 감출 것이 없다.
+        // 호환 슬롯을 삭제하지 않되 폐기한 신규 해금 목표를 표시하지 않는다.
         ZzalPet pet = baby();
 
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
@@ -297,8 +296,8 @@ com.lore.zzal.motion.MotionSource.API,
                 .hasSize(8)
                 .allSatisfy(m -> {
                     assertThat(m.unlocked()).as("%s 는 아직 잠겨 있어야 한다", m.key()).isFalse();
-                    assertThat(m.hint()).as("%s 의 조건 문구", m.key()).isNotBlank();
-                    assertThat(m.progress()).as("%s 의 진행도", m.key()).isNotNull();
+                    assertThat(m.hint()).as("폐기된 신규 조건은 안 보낸다: %s", m.key()).isNull();
+                    assertThat(m.progress()).as("폐기된 신규 진도는 안 보낸다: %s", m.key()).isNull();
                 });
     }
 
@@ -335,7 +334,7 @@ com.lore.zzal.motion.MotionSource.API,
     }
 
     @Test
-    @DisplayName("★★ 잠긴 2층도 그림 주소를 내려보낸다 — 화면이 '그림이 없다' 와 '아직 안 배웠다' 를 구분해야 한다")
+    @DisplayName("미보유 해금8은 기본 판이 있어도 그림 주소를 제공하지 않는다")
     void lockedBasicStillCarriesItsImageKey() {
         ZzalPet pet = baby();
         pet.setHatchPipelineVersion("v1");
@@ -344,11 +343,10 @@ com.lore.zzal.motion.MotionSource.API,
         PetResponses.Detail d = PetResponses.Detail.fromWithoutPieces(pet, null, T0, CATALOG);
         PetResponses.Motion eatRice = d.motions().get(8);
 
-        // 2층 8종은 부화 때 1층과 함께 구워진다 — 잠겨 있어도 그림은 이미 있다.
-        // 잠겼다고 null 을 주면 화면이 "1층 + 소품으로 그리자" 를 고를 수 없다.
+        // 옛 판에 파일이 남아 있어도 신규 소유로 간주하지 않는다.
         assertThat(eatRice.key()).isEqualTo("eat_rice");
         assertThat(eatRice.unlocked()).isFalse();
-        assertThat(eatRice.basicImageKey()).isEqualTo("images/zzal/pets/7/basic/2/eat_rice.webp");
+        assertThat(eatRice.basicImageKey()).isNull();
 
         // ★ 선물만 여전히 null — 선물은 기본 그림이 아니라 16프레임 움짤이고 주소가 다른 자리다.
         assertThat(d.motions().get(16).seq()).isEqualTo(101);

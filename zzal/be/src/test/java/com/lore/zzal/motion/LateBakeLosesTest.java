@@ -207,12 +207,28 @@ class LateBakeLosesTest {
         }
 
         @Test
-        @DisplayName("★★ 밤(재우기·스위프)에는 실패한 줄이 다시 큐에 오른다 — 여러 번 굽는 것이 설계다")
+        @DisplayName("폐기한 GIFT 실패는 밤에도 재시도하지 않는다 — 비용·상태 보존")
         void nightRequeuesFailedRows() {
             // 같은 지시문으로 구워도 나오는 것이 매번 다르다. 실패는 끝이 아니라 다음 판의 신호다.
             assertThat(planner.plan(pet, LocalDate.of(2026, 9, 12), NightPlanner.Occasion.NIGHT))
-                    .isEqualTo(1);
-            assertThat(motion.getStatus()).isEqualTo(MotionStatus.QUEUED);
+                    .isZero();
+            assertThat(motion.getStatus()).isEqualTo(MotionStatus.FAILED);
+        }
+
+        @Test
+        @DisplayName("보존 기본1 심화 FAILED의 기존 밤 재시도는 확대 폐지하지 않는다")
+        void retainedBasicOneNightRetryIsUnchanged() {
+            ZzalMotion retained = ZzalMotion.forCatalog(7L,
+                    new MotionCatalog("", "", "v1").bySeq(1).orElseThrow(), T0);
+            retained.failNight();
+            MotionCatalog catalog = mock(MotionCatalog.class);
+            when(catalog.isBakeable(any())).thenReturn(true);
+            when(catalog.gifts()).thenReturn(List.of());
+            ZzalMotionRepository repo = mock(ZzalMotionRepository.class);
+            when(repo.findByPetIdOrderBySeqAsc(anyLong())).thenReturn(List.of(retained));
+            NightPlanner retainedPlanner = new NightPlanner(repo, catalog, mock(PieceService.class));
+            assertThat(retainedPlanner.plan(pet, LocalDate.of(2026, 9, 12), NightPlanner.Occasion.NIGHT)).isEqualTo(1);
+            assertThat(retained.getStatus()).isEqualTo(MotionStatus.QUEUED);
         }
 
         @Test

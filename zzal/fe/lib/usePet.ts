@@ -73,6 +73,8 @@ export interface UsePetResult {
   care: (action: CareAction) => Promise<PetDetail | null>;
   sleep: () => Promise<PetDetail | null>;
   wake: () => Promise<PetDetail | null>;
+  /** 부르기(재회). 응답이 곧 돌아온 아이의 상태다. */
+  callBack: () => Promise<PetDetail | null>;
   setPersonality: (personality: Personality, world?: string) => Promise<PetDetail | null>;
   setBackground: (background: string) => Promise<PetDetail | null>;
   /** 공유 링크. 상태는 pet 으로 자동 갱신되고, 여기서는 붙여넣을 주소만 돌아온다. */
@@ -172,6 +174,7 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
   const care = useCallback((action: CareAction) => act((s, id) => s.care(id, action)), [act]);
   const sleep = useCallback(() => act((s, id) => s.sleep(id)), [act]);
   const wake = useCallback(() => act((s, id) => s.wake(id)), [act]);
+  const callBack = useCallback(() => act((s, id) => s.callBack(id)), [act]);
   const setPersonality = useCallback(
     (p: Personality, world?: string) => act((s, id) => s.setPersonality(id, p, world)),
     [act],
@@ -300,7 +303,8 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
   // ── 부름 대사 ─────────────────────────────────────────────────────────
   // ★ v0 백엔드는 chatSummary.openSlot 을 null 로 준다(PR #216) — 열린 슬롯은 GET /chat 이 정본이다.
   //   그래서 ALIVE 상태가 새로 올 때마다(폴링·행동) 같이 묻는다. 답한 뒤(chat=null)도 다시 묻는다.
-  const aliveStamp = pet?.phase === 'ALIVE' ? pet.serverNow : null;
+  // ★ 여행 중(`trip`)엔 묻지 않는다 — 서버가 409(ZZAL_TRAVELING)로 막는다(2026-10-13). 부르면 다시 묻는다.
+  const aliveStamp = pet?.phase === 'ALIVE' && !pet.trip ? pet.serverNow : null;
   useEffect(() => {
     const s = src.current;
     if (!s || petId === null || !aliveStamp) {
@@ -324,6 +328,6 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
     pet, loading, error, acting,
     justUnlocked, clearJustUnlocked, noteUnlocked, applyExternal,
     chat, chatReply, clearChatReply,
-    reload, care, sleep, wake, setPersonality, setBackground, share, answerChat, markSeen,
+    reload, care, sleep, wake, callBack, setPersonality, setBackground, share, answerChat, markSeen,
   };
 }

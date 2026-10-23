@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>READY 가 되면 열리고 그림 주소가 나간다.</li>
  * </ul>
  */
-@DisplayName("2층 READY 전 — 연습 중 표시")
+@DisplayName("폐기 해금 — READY만으로 새 지급 금지·legacy 보유 유지")
 class Layer2PracticingTest {
 
     private static final Instant T0 = kst("2026-10-08 12:00");
@@ -45,26 +45,26 @@ class Layer2PracticingTest {
     }
 
     @Test
-    @DisplayName("★★ 조건을 채워도 READY 전엔 잠김 — 문구 '연습 중이에요' · 진행도 꽉 참 · 그림 없음")
+    @DisplayName("★★ 조건을 채워도 READY 전엔 잠김 — 신규 유도 문구·진행도·그림 없음")
     void conditionMetButNotReadyIsPracticing() {
         ZzalPet pet = aliveWaitingLayer2();
         for (int i = 0; i < 4; i++) {
             pet.pet(T0);                // 쓰다듬 4회 = petted 조건
         }
         MotionSpec petted = CATALOG.byKey("petted").orElseThrow();
-        assertThat(UnlockRules.conditionMet(pet, petted, CATALOG)).isTrue();
+        assertThat(UnlockRules.conditionMet(pet, petted, CATALOG)).isFalse();
         assertThat(UnlockRules.isUnlocked(pet, petted, CATALOG)).isFalse();
         assertThat(UnlockRules.openedLayerTwo(pet, CATALOG)).isZero();
 
         PetResponses.Motion m = motion(pet, "petted");
         assertThat(m.unlocked()).isFalse();
-        assertThat(m.hint()).isEqualTo(PetResponses.Detail.LAYER2_PRACTICING_HINT);
-        assertThat(m.progress().current()).isEqualTo(m.progress().target());
+        assertThat(m.hint()).isNull();
+        assertThat(m.progress()).isNull();
         assertThat(m.basicImageKey()).isNull();
 
         // 아직 못 채운 칸은 평소 문구 그대로
         PetResponses.Motion wash = motion(pet, "wash");
-        assertThat(wash.hint()).isNotEqualTo(PetResponses.Detail.LAYER2_PRACTICING_HINT).isNotBlank();
+        assertThat(wash.hint()).isNull();
         // 1층은 그대로 열려 있고 그림이 있다
         PetResponses.Motion base = motion(pet, "base");
         assertThat(base.unlocked()).isTrue();
@@ -72,7 +72,7 @@ class Layer2PracticingTest {
     }
 
     @Test
-    @DisplayName("★ READY 가 되면 그 순간부터 열린다 — 그림 주소도 나간다")
+    @DisplayName("★ READY만으로 안 열림 — cutover snapshot 소유만 유지")
     void readyOpens() {
         ZzalPet pet = aliveWaitingLayer2();
         for (int i = 0; i < 4; i++) {
@@ -81,6 +81,9 @@ class Layer2PracticingTest {
         pet.markBasicBaked(2);
         pet.markLayer2Ready(T0);
 
+        assertThat(motion(pet, "petted").unlocked()).isFalse();
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "legacyLayer2OwnedMask",
+                LegacyLayerTwoOwnership.previewOldComputedOwnership(pet, CATALOG));
         PetResponses.Motion m = motion(pet, "petted");
         assertThat(m.unlocked()).isTrue();
         assertThat(m.hint()).isNull();
@@ -96,6 +99,8 @@ class Layer2PracticingTest {
             pet.pet(T0);
         }
         pet.markLayer2Ready(T0);
+        org.springframework.test.util.ReflectionTestUtils.setField(pet, "legacyLayer2OwnedMask",
+                LegacyLayerTwoOwnership.previewOldComputedOwnership(pet, CATALOG));
         pet.flagLayer2("빈 칸");
 
         assertThat(pet.isLayer2Flagged()).isTrue();

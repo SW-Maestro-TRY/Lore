@@ -824,7 +824,7 @@ def expand(im, pad=PAD_ALIGN):
     return out
 
 
-def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=None):
+def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=None, crop_box=None, cell_filter=None):
     grid = Path(grid)
     out = Path(outdir) if outdir else grid.parent
     out.mkdir(parents=True, exist_ok=True)
@@ -901,6 +901,8 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
     for r in range(rows):
         for c in range(cols):
             cell = cut_one(r, c, PAD_CUT_TOP, loss)
+            if cell_filter is not None:
+                cell = cell_filter(cell, (0, PAD_CUT_TOP, W0, PAD_CUT_TOP + int(ch)), r * cols + c + 1)
             cells.append(cell)
             if VERIFY_TOP_PAD:
                 # ★"지워진 것이 남의 조각인지 내 머리카락인지"를 가른다.
@@ -1048,6 +1050,8 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
     uy0 = min(int(np.nonzero(np.array(c)[:, :, 3] > 8)[0].min()) for c in cells)
     top = max(0, min(uy0 - TOP_MARGIN, base_top))
     box = (PAD_ALIGN, top, PAD_ALIGN + W0, base_top + H0)
+    if crop_box is not None:
+        box = crop_box(cells, box)  # Custom-only common canvas; default crop stays byte-identical.
     # ★잘라내기로 버려지는 본체 픽셀을 변별로 센다(2026-10-08) — 끝 닿음 안전망의 판별 근거.
     LAST_CROP_LOSS.clear()
     for c in cells:

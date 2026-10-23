@@ -1,0 +1,42 @@
+package com.lore.zzal.pet.receipt;
+import com.lore.zzal.pet.*;import com.lore.zzal.pet.dto.PetRequests;import com.lore.zzal.attendance.*;
+import org.junit.jupiter.api.*;import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.orm.jpa.*;import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.test.util.ReflectionTestUtils;import java.time.Instant;import java.util.*;
+import static org.mockito.Mockito.*;import static org.assertj.core.api.Assertions.*;
+@EnabledIfEnvironmentVariable(named="LORE_ACTION_RECEIPT_DB_URL",matches="jdbc:postgresql://127\\.0\\.0\\.1:55420/lore_action_receipt_20261018(?:_[0-9]+)?_test")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class CareActionReceiptPostgresTest {
+ final Instant now=Instant.parse("2026-10-18T03:00:00Z");jakarta.persistence.EntityManagerFactory emf;jakarta.persistence.EntityManager em;TransactionTemplate tx;JdbcTemplate jdbc;ZzalPetRepository owners;ActionReceiptRepository receipts;Long petId;Long historicalId;int calls;
+ @BeforeAll void schema()throws Exception{
+  String url=System.getenv("LORE_ACTION_RECEIPT_DB_URL");var ds=new DriverManagerDataSource(url,System.getenv("LORE_TEST_DB_USERNAME"),System.getenv("LORE_TEST_DB_PASSWORD"));jdbc=new JdbcTemplate(ds);
+  org.flywaydb.core.Flyway.configure().dataSource(ds).locations("classpath:db/migration").load().migrate();
+  var f=new LocalContainerEntityManagerFactoryBean();f.setDataSource(ds);f.setPackagesToScan("com.lore.zzal.pet");f.setJpaVendorAdapter(new HibernateJpaVendorAdapter());f.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto","none","hibernate.show_sql","false","hibernate.physical_naming_strategy","org.hibernate.boot.model.naming.PhysicalNamingStrategySnakeCaseImpl"));f.afterPropertiesSet();emf=f.getObject();em=SharedEntityManagerCreator.createSharedEntityManager(emf);tx=new TransactionTemplate(new JpaTransactionManager(emf));var factory=new JpaRepositoryFactory(em);owners=factory.getRepository(ZzalPetRepository.class);receipts=factory.getRepository(ActionReceiptRepository.class);
+  boolean applied=Boolean.TRUE.equals(jdbc.queryForObject("select to_regclass('public.zzal_action_receipt') is not null",Boolean.class));
+  if(!applied){
+   historicalId=tx.execute(status->{var p=ZzalPet.draft(900002L,"images/synthetic/historical",now);ReflectionTestUtils.setField(p,"createdAt",now);ReflectionTestUtils.setField(p,"updatedAt",now);em.persist(p);em.flush();return p.getId();});
+   try(var c=ds.getConnection()){org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(c,new org.springframework.core.io.FileSystemResource(System.getenv("LORE_ACTION_RECEIPT_DDL")));}
+  }else historicalId=jdbc.queryForObject("select min(id) from zzal_pet where source_image_key='images/synthetic/historical'",Long.class);
+
+ }
+ @AfterAll void close(){if(emf!=null)emf.close();}
+ @BeforeEach void seed(){calls=0;petId=tx.execute(s->{var p=ZzalPet.draft(900001L,"images/synthetic/receipt",now);ReflectionTestUtils.setField(p,"createdAt",now);ReflectionTestUtils.setField(p,"updatedAt",now);ReflectionTestUtils.setField(p,"phase",PetPhase.ALIVE);ReflectionTestUtils.setField(p,"hatchedAt",now);ReflectionTestUtils.setField(p,"tutorialStep",99);em.persist(p);em.flush();return p.getId();});}
+ CareActionDeliveryService service(ActionReceiptRepository repository){
+  // Real PetService.care/doCare + real entity PET mutation + real rotation. Settlement/unlock integration is outside this slice.
+  PetService pets=mock(PetService.class,CALLS_REAL_METHODS);ReflectionTestUtils.setField(pets,"pieceService",mock(com.lore.zzal.piece.PieceService.class));
+  var own=mock(CustomMotionOwnershipService.class);when(own.owned(anyLong(),anyLong())).thenReturn(List.of(new OwnedCustomMotion("custom:a",10L,1,"합성","합성","pet",false,"images/synthetic/a.webp",null,"pet",1,true,true,"CUSTOM")));
+  pets.setCareMotionRotationService(new CareMotionRotationService(own));
+  doAnswer(i->{calls++;return owners.findByIdForUpdate(petId).orElseThrow();}).when(pets).alive(anyLong(),anyLong(),any());
+  doAnswer(i->owners.findByIdForUpdate(petId).orElseThrow()).when(pets).refresh(anyLong(),anyLong(),any());
+  doAnswer(i->{((Runnable)i.getArgument(1)).run();return new PetService.Action(i.getArgument(0),List.of());}).when(pets).withUnlockDiff(any(),any());
+  return new CareActionDeliveryService(pets,owners,repository,tools.jackson.databind.json.JsonMapper.builder().build());
+ }
+ PetRequests.Care request(UUID id){return new PetRequests.Care(CareAction.PET,null,id);}
+ @Test void sequentialDuplicatePersistsOneEffectAndOneCursor(){var service=service(receipts);var id=UUID.randomUUID();var first=tx.execute(s->service.care(900001L,petId,request(id),now));var again=tx.execute(s->service.care(900001L,petId,request(id),now));assertThat(again.motionPlayback()).isEqualTo(first.motionPlayback());assertThat(calls).isEqualTo(1);assertThat(jdbc.queryForObject("select pets from zzal_pet where id=?",Integer.class,petId)).isEqualTo(1);assertThat(jdbc.queryForObject("select count(*) from zzal_action_receipt where pet_id=?",Integer.class,petId)).isEqualTo(1);assertThat((Object)tx.execute(s->owners.findById(petId).orElseThrow().careMotionCursor("PET").id())).isEqualTo("base");}
+ @Test void persistedPetUuidRejectsFeedWithoutAnyExtraEffect(){var service=service(receipts);var id=UUID.randomUUID();tx.execute(s->service.care(900001L,petId,request(id),now));assertThatThrownBy(()->tx.execute(s->service.care(900001L,petId,new PetRequests.Care(CareAction.FEED,null,id),now))).isInstanceOf(com.lore.common.exception.BusinessException.class);assertThat(jdbc.queryForObject("select feeds from zzal_pet where id=?",Integer.class,petId)).isZero();assertThat(jdbc.queryForObject("select pets from zzal_pet where id=?",Integer.class,petId)).isEqualTo(1);assertThat(jdbc.queryForObject("select count(*) from zzal_action_receipt where pet_id=?",Integer.class,petId)).isEqualTo(1);}
+ @Test void receiptSaveFailureRollsBackActualEffectAndCursor(){var broken=mock(ActionReceiptRepository.class);when(broken.findByPetIdAndRequestId(any(),any())).thenReturn(Optional.empty());when(broken.saveAndFlush(any())).thenAnswer(i->{em.flush();throw new IllegalStateException("synthetic receipt store failure after effect flush");});var service=service(broken);var id=UUID.randomUUID();assertThatThrownBy(()->tx.execute(s->service.care(900001L,petId,request(id),now))).isInstanceOf(IllegalStateException.class);assertThat(jdbc.queryForObject("select pets from zzal_pet where id=?",Integer.class,petId)).isZero();assertThat((Object)tx.execute(s->owners.findById(petId).orElseThrow().careMotionCursor("PET"))).isNull();assertThat(jdbc.queryForObject("select count(*) from zzal_action_receipt where pet_id=?",Integer.class,petId)).isZero();}
+ @Test void concurrentDuplicateSerializesOnPetLock()throws Exception{var service=service(receipts);var id=UUID.randomUUID();var ready=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);var pool=java.util.concurrent.Executors.newFixedThreadPool(2);try{var a=pool.submit(()->tx.execute(s->{var result=service.care(900001L,petId,request(id),now);ready.countDown();try{release.await();}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}return result.motionPlayback();}));assertThat(ready.await(5,java.util.concurrent.TimeUnit.SECONDS)).isTrue();var b=pool.submit(()->tx.execute(s->service.care(900001L,petId,request(id),now).motionPlayback()));release.countDown();assertThat(a.get(5,java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(b.get(5,java.util.concurrent.TimeUnit.SECONDS));assertThat(jdbc.queryForObject("select pets from zzal_pet where id=?",Integer.class,petId)).isEqualTo(1);assertThat(jdbc.queryForObject("select count(*) from zzal_action_receipt where pet_id=?",Integer.class,petId)).isEqualTo(1);}finally{release.countDown();pool.shutdownNow();}}
+ @Test void migrationDoesNotRewriteHistoricalPetData(){assertThat(jdbc.queryForObject("select source_image_key from zzal_pet where id=?",String.class,historicalId)).isEqualTo("images/synthetic/historical");assertThat((Object)tx.execute(s->owners.findById(petId).orElseThrow().careMotionCursor("PET"))).isNull();}
+}

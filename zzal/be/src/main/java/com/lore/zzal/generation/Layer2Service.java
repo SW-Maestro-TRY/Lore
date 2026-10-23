@@ -74,6 +74,10 @@ public class Layer2Service {
      * ★ 넘기기에 실패해도(실행기 종료 중) 펫은 PENDING 으로 남고, 다음 기동의 {@link Layer2Recovery} 가 줍는다.
      */
     public void schedule(Long petId) {
+        if (!com.lore.zzal.motion.RetiredRewardGeneration.layerTwoAutoEnabled()) {
+            log.info("해금8 신규 자동생성 중단 — petId={}", petId);
+            return;
+        }
         try {
             executor.execute(() -> bake(petId));
         } catch (RuntimeException e) {
@@ -85,6 +89,10 @@ public class Layer2Service {
      * 집고, 굽고, 실패하면 다시 굽고, 다 쓰면 FAILED. <b>이미 굽는 중이거나 READY 면 아무 일도 안 한다.</b>
      */
     public void bake(Long petId) {
+        if (!com.lore.zzal.motion.RetiredRewardGeneration.layerTwoAutoEnabled()) {
+            log.info("해금8 새 시도 중단 — petId={}", petId);
+            return;
+        }
         Instant now = Instant.now();
         if (!layer2.claim(petId, now)) {
             log.info("2층 굽기 건너뜀(이미 굽는 중·READY·살아 있지 않음) — petId={}", petId);
@@ -149,7 +157,8 @@ public class Layer2Service {
                     }
                 }
             }
-            if (attempt >= maxAttempts) {
+            // Let an already running attempt finish; never start another retired grid attempt.
+            if (!com.lore.zzal.motion.RetiredRewardGeneration.layerTwoAutoEnabled() || attempt >= maxAttempts) {
                 log.warn("2층 실패 확정 — petId={} 시도={}회 사유={}", petId, attempt, reason);
                 layer2.failed(petId, reason, Instant.now());
                 alerts.layer2Failed(petId, reason, Instant.now());

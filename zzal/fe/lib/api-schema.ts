@@ -555,7 +555,7 @@ export interface paths {
          *     ★ props 는 허용된 키만 저장된다. 나머지는 조용히 버려진다.
          *       referrer 의 쿼리스트링, User-Agent 원문, IP 는 저장하지 않는다.
          *
-         *     응답은 항상 202 다 — 기록이 실패해도 화면은 계속 돌아야 한다.
+         *     202는 저장된 이벤트와 중복 이벤트의 ID를 확인한다. 저장 실패/비활성은 503, 요청 제한은 429다.
          */
         post: operations["collect_1"];
         delete?: never;
@@ -2480,10 +2480,79 @@ export interface paths {
          * @description 이 펫의 시계를 준 만큼 **앞으로** 민다. 게이지·잠·창·자동 취침이 그 시각 기준으로 정산된다.
          *
          *     - **규칙은 그대로다.** 값을 짧게 바꾸는 것이 아니라 시계만 밀므로 여기서 확인한 동작이 곧 운영 동작이다
-         *     - 응답의 `serverNow` 도 밀린 시계다
+         *     - 응답의 `after.serverNow` 도 밀린 시계다. `effects` 에 이번 점프에서 바뀐 칸(케어 미스·병·떠남·장면·엽서…)이 한 줄씩
+         *     - `visit:false` 면 방문으로 치지 않는다 — 하루씩 여러 번 밀어도 결석 떠남이 난다(기본 true)
          *     - 내 펫만(남의 펫은 404) · 운영에서는 이 API 가 존재하지 않는다
          */
         post: operations["advanceClock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/pets/{petId}/bake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 굽기 시작
+         * @description 부화(다시)·2층(처음부터)·선물/심화 한 판을 운영과 같은 길로 굽는다. real 이 서버 스위치와 다르면 409(과금 스위치 꺼짐 등).
+         *     응답에 예상 비용(부화 $0.19 · 2층/동작 격자 $0.09, 가짜면 0)과 진행 조회 열쇠(jobId).
+         */
+        post: operations["devBake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/pets/{petId}/bake/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 굽기 진행
+         * @description bake 응답의 jobId 로 지금 상태·단계·기록된 비용을 본다.
+         */
+        get: operations["devBakeProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/pets/{petId}/events/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 이벤트 일으키기
+         * @description 운영이 그 일을 일으키는 메서드를 그대로 부른다(시각·조건 무시). 응답 effects 에 그 사이 일어난 일이 한 줄씩.
+         *
+         *     hatch-complete · hatch-fail · tutorial-next · tutorial-skip · tutorial-restart · clock-start · graduation ·
+         *     graduation-reset · care-miss · sick(arg=NEGLECT|DIRTY|UPSET|NATURAL) · recover · sleep · nap · night-settle ·
+         *     wake · wake-auto · leave-notice · visit · trip-start · postcard · call-back · day-plus · scene(arg=1~3) ·
+         *     night-scene · chat-open · chat-close · chat-expire · chat-abandon · game-win · game-lose · today-reset ·
+         *     unlock(arg=all|2층 key) · pieces-open · piece-add(arg=FOOD|PLAY|CLEAN|BOND) · piece-complete ·
+         *     gift-review · gift-open · gift-arrive · gift-view(arg=seq, 기본 첫 선물) · release · revive
+         */
+        post: operations["devEvent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2548,8 +2617,74 @@ export interface paths {
          * 시계 맞추기
          * @description 이 펫의 시계를 특정 시각으로 맞춘다. `at`(ISO) · `sinceHatchMinutes`(부화 뒤 N분) · `localTime`("19:00", 오늘 KST) 중 하나.
          *     과거로도 갈 수 있지만 이미 정산된 것은 되돌리지 않는다 — 과거로 맞추면 그 시각까지 아무것도 안 흐른 것이 된다.
+         *     `visit:false` 면 방문으로 치지 않는다. 응답은 시간 당기기와 같은 모양(effects · before · after · state).
          */
         post: operations["setClock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/pets/{petId}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내부 상태 읽기
+         * @description 리모컨 상태 패널용 — 케어 미스·오늘 한도·평생 횟수·조각 칸·동작 행까지. 방문으로 치지 않는다.
+         */
+        get: operations["devState"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 상태 세팅
+         * @description 준 칸만 값으로 바꾼다(부분 갱신). 검증은 범위만 — 넘으면 400 이고 아무것도 안 바뀐다.
+         *     연쇄(병·떠남)는 돌리지 않는다. 시계를 넘기면 규칙대로 이어진다. 응답의 effects 에 바뀐 칸이 한 줄씩.
+         */
+        patch: operations["devPatchState"];
+        trace?: never;
+    };
+    "/api/zzal/v1/dev/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 개발 도구 켜짐 확인
+         * @description 200 이면 리모컨을 그린다. 꺼진 서버에는 이 주소가 없다(404). 진짜 생성 스위치도 함께 알린다.
+         */
+        get: operations["devPing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/inquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 문의 접수
+         * @description 본문은 앞뒤 공백을 제거한 1~4000자이며 locale은 ko/en/ja다. 소유자는 로그인 계정으로 확정하고 petId는 선택적으로 소유권을 검증한다. 같은 requestId와 같은 정규화 내용의 재전송은 최초 접수를 반환한다. 자동 메일 발송이나 문의 목록 조회는 제공하지 않는다.
+         */
+        post: operations["submitInquiry"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2709,6 +2844,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/call-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 부르기(재회)
+         * @description 여행 중인 캐릭터를 즉시 데려온다. 여행 중 모인 엽서도 이때 한꺼번에 전달된다.
+         *
+         *     - 게이지 전부 2칸 · 케어 미스 0 · 친밀도는 떠나기 전 최고치의 50%
+         *     - 도감·조각·3층 진행은 그대로 보존된다
+         *     - 데려오는 데 값을 매기지 않는다. 여행 중이 아니면 409(ZZAL_NOT_TRAVELING)
+         */
+        post: operations["callBack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/care": {
         parameters: {
             query?: never;
@@ -2751,20 +2910,103 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 오늘의 대화 조회
-         * @description 현재 시점까지 발생한 대화 목록과 응답 가능한 슬롯(openSlot), 최근 응답 5건을 반환한다.
-         *     session·turns 는 지금의 판(열린 판, 없으면 오늘 마지막 판)과 그 판의 턴들이다.
-         *
-         *     하루 대화 창은 KST 10~14시, 14~19시, 19~23시다. 창이 지나면 만료되며 별도 감점은 없다.
-         *     지난 창에는 새 판을 만들지 않는다. 튜토리얼 BABY는 순서로 열리며 만료가 없다.
-         *     BABY 첫 생성 실패는 5분 재시도 대기 후 누적 3회 실패 시 중립 문장으로 열린다.
-         *     첫 답 뒤 10분 동안 말이 없으면 그 판은 닫힌다(ABANDONED).
-         *
-         *     수면 중에도 조회는 가능하지만 openSlot 은 null 이다.
+         * 지속 대화 조회
+         * @description 펫당 한 대화가 계속 이어진다. slot=CONTINUOUS, maxRounds=null이다.
+         *     시간창·왕복횟수·10분 무응답으로 닫지 않는다. 최근40턴은 화면 첫 페이지이며,
+         *     전체 원문은 /history 커서 조회로 읽는다. 수면 중에는 답할 수 없다.
+         *     튜토리얼 첫말 실패 대기·중립 복구는 기존대로다.
          */
         get: operations["calls"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/chat/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 대화 원문 이력
+         * @description 프롬프트 문맥과 별개로 날짜 제한 없이 원문을 커서로 읽는다
+         */
+        get: operations["history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/chat/history/legacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 세션 도입 이전 대화 원문
+         * @description 옛 부름 표의 사용자 답과 펫 원문도 날짜 제한 없이 읽는다
+         */
+        get: operations["legacyHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/chat/memory-facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["memoryFacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/chat/memory-facts/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["retryMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/chat/presence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["presence"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2782,15 +3024,52 @@ export interface paths {
         put?: never;
         /**
          * 대화 응답
-         * @description 열린 대화(판)에 자유 입력 40자로 한 마디 한다. 한 판은 최대 max-rounds 왕복이고, 마지막 펫 턴은
-         *     닫기 턴이다(session.closed=true). 친밀도 +40·응답 카운터는 판당 1회(첫 답)만 센다.
+         * @description 지속 대화에 자유 입력 40자로 한 마디 한다. 왕복·시간창 제한은 없다.
+         *     친밀도·해금 보상은 기존 튜토리얼1회/일상창당1회 규칙을 따로 유지한다.
          *
          *     응답은 변경된 캐릭터 상태(pet)·다음 펫 대사와 반응 동작(chatReply)·판 상태(session)·
          *     이번에 생긴 두 턴(turns = 사용자 턴, 펫 턴)으로 구성한다.
          *
          *     누적 응답 횟수(판 수)는 답하기 동작 해금(4회)에 사용한다.
+         *     새 클라이언트는 sessionId·expectedRound·requestId(UUID)를 함께 보낸다.
+         *     같은 requestId와 같은 요청은 저장된 응답을 재사용하며 턴·왕복·모델 호출을 추가하지 않는다.
+         *     다른 요청에 같은 requestId를 쓰면 ZZAL_CHAT_REQUEST_CONFLICT(409),
+         *     지난 판이나 예상 왕복이 다르면 ZZAL_CHAT_SESSION_STALE(409)이다.
+         *     식별자 셋이 모두 없는 옛 클라이언트는 기존 계약을 유지하며 이 보호의 대상이 아니다.
          */
         post: operations["answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/diary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["zzalDiaryList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/diary/{entryId}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["read"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2825,6 +3104,22 @@ export interface paths {
          *       바꾸면 붙는다. 화면에 "무엇을 드립니다" 라고 쓰지 말 것
          */
         post: operations["submit_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/first-meeting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["firstMeeting"];
+        put?: never;
+        post: operations["firstMeeting_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3080,6 +3375,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/persona": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["persona"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/personality": {
         parameters: {
             query?: never;
@@ -3098,6 +3409,30 @@ export interface paths {
          *     튜토리얼 4단계는 이 API 호출로 완료 처리된다.
          */
         post: operations["personality"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/zzal/v1/me/pets/{petId}/returning-guide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 기존 사용자 업데이트 안내 진행 조회
+         * @description 계정·안내 버전 단위로 완료 여부를 조회한다. 기존 튜토리얼을 마친 구버전 캐릭터만 대상이며 신규 v4는 제외한다. 조회는 상태를 만들지 않는다.
+         */
+        get: operations["getReturningGuide"];
+        put?: never;
+        /**
+         * 기존 사용자 업데이트 안내 진행 저장
+         * @description 0~5단계 진행을 단조 증가로 저장한다. 완료는 5단계와 최신 personaSourceHash 확인이 필요하다. 설정은 변경 없이 확인해도 되며 첫 안내·출석·후기 상태는 수정하지 않는다. 다른 기기에서도 계정당 한 번이다.
+         */
+        post: operations["advanceReturningGuide"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3195,14 +3530,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 아이 정보 확인(튜토리얼 4칸)
-         * @description 튜토리얼 4칸("이 성격이 맞나요")을 넘긴다. 성격을 고치지 않고 아이 정보를 열어 보기만 해도
-         *     넘어간다.
-         *
-         *     화면이 혼자 넘기면 안 된다. 서버가 4칸에 남아 있으면 그다음 행동(청소)이 무시돼
-         *     튜토리얼이 막히고, 첫 흔적이 이 칸을 넘길 때 생기므로 바닥이 깨끗해 5칸(청소)에서 또 막힌다.
-         *
-         *     지금 칸이 4칸이 아니면 ZZAL_TUTORIAL_STEP_MISMATCH 다.
+         * 튜토리얼 확인 또는 장면 대사 준비
+         * @description purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 행동 topic/phase 또는 마무리 topic/scene(ENTRY)을 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.
          */
         post: operations["tutorialSeen"];
         delete?: never;
@@ -3400,16 +3729,21 @@ export interface components {
              * @example 60
              */
             seconds?: number;
+            /**
+             * @description 방문으로 칠까(기본 true). false 면 정산만 하고 방문으로 안 친다 — 결석 떠남 재현용
+             * @example true
+             */
+            visit?: boolean;
         };
         Advanced: {
             /**
              * Format: int32
              * @description 움짤 캔버스 세로(px). width 와 같은 규칙
              */
-            height?: number;
-            imageKey?: string;
+            height?: number | null;
+            imageKey?: string | null;
             /** Format: date-time */
-            revealedAt?: string;
+            revealedAt?: string | null;
             seen?: boolean;
             status?: string;
             /**
@@ -3417,7 +3751,7 @@ export interface components {
              * @description 움짤 캔버스 가로(px). 판마다 다르므로 화면이 상수로 가정하면 안 된다.
              *     맥미니가 올린 재생성본은 서버가 크기를 재지 않아 null 이다
              */
-            width?: number;
+            width?: number | null;
         };
         AgreeRequest: {
             agreed?: boolean;
@@ -3434,6 +3768,7 @@ export interface components {
         };
         /** @description 앨범. 동작 도감과 엽서·장면·첫 심화 동작 정보로 구성한다 */
         Album: {
+            customMotions?: components["schemas"]["ZzalOwnedCustomMotion"][];
             firstGift?: components["schemas"]["FirstGift"];
             motions?: components["schemas"]["Motion"][];
             postcards?: components["schemas"]["Postcard"][];
@@ -3444,8 +3779,21 @@ export interface components {
         };
         /** @description 대화 한 마디. 열린 판에 최대 max-rounds 번, 한 번에 최대 40자 */
         Answer: {
+            /** Format: int32 */
+            expectedRound?: number;
+            /** Format: uuid */
+            requestId?: string;
+            /** Format: int64 */
+            sessionId?: number;
             /** @example 오늘 학교 갔다 왔어 */
             text: string;
+            /** @description 생략/null은 일반채팅. 튜토 답은 sessionId/expectedRound/requestId와 함께 보낸다 */
+            tutorial?: {
+                /** @enum {string} */
+                answerType: "SUGGESTED" | "FREE_TEXT";
+                /** @enum {string} */
+                step: "FEED" | "GAME";
+            } | null;
         };
         /** @description 대화 응답 결과. 변경된 캐릭터 상태·대사·반응 동작, 그리고 판 상태와 이번에 생긴 두 턴(사용자·펫) */
         Answered: {
@@ -3490,6 +3838,12 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseChatPresenceResponse: {
+            data?: components["schemas"]["ChatPresenceResponse"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseCreated: {
             data?: components["schemas"]["Created"];
             error?: components["schemas"]["ErrorBody"];
@@ -3498,6 +3852,36 @@ export interface components {
         };
         ApiResponseDetail: {
             data?: components["schemas"]["Detail"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevBake: {
+            data?: components["schemas"]["DevBake"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevBakeProgress: {
+            data?: components["schemas"]["DevBakeProgress"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevPing: {
+            data?: components["schemas"]["DevPing"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevResult: {
+            data?: components["schemas"]["DevResult"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseDevState: {
+            data?: components["schemas"]["DevState"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -3544,8 +3928,27 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseHistory: {
+            data?: components["schemas"]["History"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseIngested: {
             data?: components["schemas"]["Ingested"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseInteger: {
+            /** Format: int32 */
+            data?: number;
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseLegacyHistory: {
+            data?: components["schemas"]["LegacyHistory"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -3580,6 +3983,12 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseListFactView: {
+            data?: components["schemas"]["FactView"][];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         ApiResponseListMapStringObject: {
             data?: {
                 [key: string]: unknown;
@@ -3602,6 +4011,18 @@ export interface components {
         };
         ApiResponseNotifySettingResult: {
             data?: components["schemas"]["NotifySettingResult"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseObject: {
+            data?: unknown;
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponsePersonaSource: {
+            data?: components["schemas"]["PersonaSource"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -3662,6 +4083,12 @@ export interface components {
         };
         ApiResponsePublic: {
             data?: components["schemas"]["Public"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseReceipt: {
+            data?: components["schemas"]["Receipt"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -3744,6 +4171,36 @@ export interface components {
             message?: string;
             success?: boolean;
         };
+        ApiResponseZzalDiaryEntry: {
+            data?: components["schemas"]["ZzalDiaryEntry"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseZzalDiaryPage: {
+            data?: components["schemas"]["ZzalDiaryPage"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseZzalFirstMeetingView: {
+            data?: components["schemas"]["ZzalFirstMeetingView"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseZzalInquiryReceipt: {
+            data?: components["schemas"]["ZzalInquiryReceipt"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseZzalReturningGuideState: {
+            data?: components["schemas"]["ZzalReturningGuideState"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
         Art: {
             /** Format: int32 */
             done?: number;
@@ -3753,10 +4210,15 @@ export interface components {
             /** Format: int32 */
             total?: number;
         };
-        /** @description 배경 변경 요청. 배경 key 는 화면이 정의하며 서버는 값을 검증하지 않는다 */
+        AuthoredPersona: {
+            fields: components["schemas"]["Field"][];
+            /** Format: int32 */
+            version: number;
+        };
         Background: {
-            /** @example window_day */
-            background: string;
+            owned?: components["schemas"]["OwnedBackground"][];
+            preview?: components["schemas"]["Preview"];
+            selectedKey?: string;
         };
         Balance: {
             /** Format: int32 */
@@ -3792,7 +4254,6 @@ export interface components {
             provider?: string;
             stage?: string;
         };
-        /** @description 돌보기 요청. 수행할 행동만 전달하고 수치 변화는 서버가 결정한다 */
         Care: {
             /**
              * @description FEED(급식) · SNACK(간식) · PET(쓰다듬기) · CLEAN(청소) · BATH(목욕) · MEDICINE(투약)
@@ -3800,6 +4261,13 @@ export interface components {
              * @enum {string}
              */
             action: "FEED" | "SNACK" | "PET" | "CLEAN" | "BATH" | "MEDICINE";
+            /** @enum {string} */
+            firstIntroStep?: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "PET" | "NAP_SLEEP" | "NAP_WAKE" | "ALBUM" | "CHAT" | "PERSONALITY" | "DIARY_INTRO" | "FINISH_NOTICE" | "REVIEW_SEEN" | "COMPLETE" | "ATTENDANCE_INTRO";
+            /**
+             * Format: uuid
+             * @description 동일 행동 재전송에 같은 UUID를 사용한다. 생략/null은 기존 비보호 호출
+             */
+            requestId?: string | null;
         };
         CastRequest: {
             /** Format: int32 */
@@ -3810,6 +4278,8 @@ export interface components {
         };
         /** @description 캐릭터 정보 등록 요청. 이름 외 항목은 선택이다 */
         Character: {
+            /** @description 선택칩·자유글·건너뜀 원문. 기존 personality/note는 호환값이다 */
+            authoredPersona?: components["schemas"]["AuthoredPersona"];
             /**
              * @description 장르. 자유 입력이며 대사 톤에만 사용한다(그림에는 들어가지 않는다)
              * @example 느와르
@@ -3850,13 +4320,17 @@ export interface components {
              */
             world?: string;
         };
-        /** @description 오늘의 대화 목록. openSlot 이 null 이면 현재 응답 가능한 대화가 없다. session·turns 는 지금의 판(열린 판, 없으면 오늘 마지막 판) */
         Chat: {
             calls?: components["schemas"]["ChatCall"][];
             memories?: string[];
             openSlot?: string;
             session?: components["schemas"]["ChatSession"];
+            stageSpeech?: components["schemas"]["StageSpeech"];
+            /** @description 정본 GET chat의 저장 발화 배열이며 []도 권위가 있다. GET은 생성하지 않는다. presence.chat은 이 필드를 투영하지 않으므로 []도 비권위다. 과거 응답은 optional/null 호환 */
+            stageSpeeches?: components["schemas"]["ZzalStageSpeechView"][] | null;
             turns?: components["schemas"]["ChatTurn"][];
+            /** @description 정본 GET chat의 저장 질문답변 배열이며 []도 권위가 있다. presence.chat의 이 필드는 미투영/비권위([]도 가능)라 소비하지 않는다. 과거 응답은 optional/null 호환 */
+            tutorialAnswers?: components["schemas"]["ZzalTutorialAnswer"][] | null;
         };
         /** @description 오늘 온 대화 한 건 */
         ChatCall: {
@@ -3870,6 +4344,22 @@ export interface components {
             reactionKey?: string;
             replyLine?: string;
             slot?: string;
+        };
+        ChatPresenceRequest: {
+            /** @enum {string} */
+            entryKind?: "OPEN" | "RETURN" | "RELOAD";
+            /** @enum {string} */
+            event: "ENTER" | "LEAVE";
+            /** Format: uuid */
+            eventId: string;
+            /** Format: int64 */
+            sequence?: number;
+            /** Format: uuid */
+            visitId: string;
+        };
+        ChatPresenceResponse: {
+            chat?: components["schemas"]["Chat"];
+            outcome?: string;
         };
         /** @description 대화 한 판. closed 면 더 답할 수 없다(상한·만료·이탈) */
         ChatSession: {
@@ -3886,8 +4376,8 @@ export interface components {
         };
         ChatSummary: {
             /** Format: date-time */
-            nextAt?: string;
-            openSlot?: string;
+            nextAt?: string | null;
+            openSlot?: string | null;
         };
         /** @description 대화의 한 마디. speaker = PET · USER, type 은 펫 턴의 종류 */
         ChatTurn: {
@@ -3902,26 +4392,31 @@ export interface components {
         };
         Clock: {
             /** Format: date-time */
-            autoSleepAt?: string;
+            autoSleepAt?: string | null;
             /** Format: date-time */
-            autoWakeAt?: string;
+            autoWakeAt?: string | null;
             canSleep?: boolean;
             canWake?: boolean;
             /** Format: date-time */
-            clockStartedAt?: string;
+            clockStartedAt?: string | null;
             overslept?: boolean;
-            sleepKind?: string;
+            sleepKind?: string | null;
             /** Format: date-time */
-            sleepWindowOpensAt?: string;
+            sleepWindowOpensAt?: string | null;
             sleeping?: boolean;
             /** Format: date-time */
-            sleptAt?: string;
+            sleptAt?: string | null;
             /** Format: date-time */
-            wakeWindowOpensAt?: string;
+            wakeWindowOpensAt?: string | null;
             /** Format: date-time */
             wokeAt?: string;
         };
         CommonEvent: {
+            /** Format: int64 */
+            actor_id?: number;
+            actor_state?: string;
+            context?: string;
+            event_id?: string;
             /**
              * @description 이벤트 이름
              * @example zzal_upload_abandoned
@@ -3941,6 +4436,10 @@ export interface components {
             props?: {
                 [key: string]: unknown;
             };
+            /** Format: int32 */
+            schema_version?: number;
+            session_id?: string;
+            source_screen?: string;
             /**
              * Format: int64
              * @description 화면에서 일어난 시각(epoch ms)
@@ -4033,17 +4532,24 @@ export interface components {
             memo?: string;
             reason?: string;
         };
-        /**
-         * @description 캐릭터 상태 전체. 부화 중과 진행 중을 구분하지 않고 이 응답 하나로 화면을 구성한다.
-         *     phase 가 ALIVE 가 아니면 진행 중 전용 블록은 모두 null 이다
-         */
         Detail: {
             /**
              * @description 자세 앵커 파일의 S3 키. 화면이 소품을 얹을 좌표가 들어 있다.
              *     전체 URL 이 아니라 키다(다른 imageKey 들과 같은 형식).
              *     앵커를 내지 않는 부화 버전이거나 아직 한 판도 안 구웠으면 null
              */
-            anchorsKey?: string;
+            anchorsKey?: string | null;
+            attendanceRewards?: {
+                /** Format: int32 */
+                attendanceDay?: number;
+                background?: components["schemas"]["Background"];
+                customMotions?: components["schemas"]["ZzalOwnedCustomMotion"][];
+                /** Format: int32 */
+                eligibleUnfulfilledCount?: number;
+                firstBundleState?: string;
+                ownedRewards?: components["schemas"]["OwnedReward"][];
+                programVersion?: string;
+            } | null;
             background?: string;
             /**
              * @description 심화 동작 생성 상태. NONE(대기 없음) · QUEUED(당일 야간 생성 예정) · PRACTICING(생성·검수 중).
@@ -4051,23 +4557,48 @@ export interface components {
              * @example NONE
              */
             baking?: string;
+            careReceipt?: {
+                /** @enum {string} */
+                action: "FEED" | "SNACK" | "PET" | "CLEAN" | "BATH" | "MEDICINE";
+                /** Format: uuid */
+                requestId: string;
+                /** @enum {string} */
+                status: "APPLIED" | "REPLAYED" | "NO_OP";
+            } | null;
             chatSummary?: components["schemas"]["ChatSummary"];
             clock?: components["schemas"]["Clock"];
+            /** @description 지급이 확정된 맞춤 동작. resource slot을 행동 의미로 추측하지 않는다 */
+            customMotions?: components["schemas"]["ZzalOwnedCustomMotion"][];
             /** Format: int32 */
             daysTogether?: number;
             /** @description 종료 사유. FAILED·DEAD 일 때만 채워진다 */
-            deathReason?: string;
+            deathReason?: string | null;
             /**
              * Format: int64
              * @description 부화 시작 후 경과 시간(초)
              */
-            elapsedSeconds?: number;
+            elapsedSeconds?: number | null;
             features?: components["schemas"]["Features"];
             firstGift?: components["schemas"]["FirstGift"];
+            firstIntro?: {
+                active?: boolean;
+                completed?: boolean;
+                completedKeys?: ("FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "PET" | "NAP_SLEEP" | "NAP_WAKE" | "ALBUM" | "CHAT" | "PERSONALITY" | "DIARY_INTRO" | "FINISH_NOTICE" | "REVIEW_SEEN" | "COMPLETE" | "ATTENDANCE_INTRO")[];
+                completionWillSleep?: boolean;
+                /** @enum {string} */
+                key?: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "PET" | "NAP_SLEEP" | "NAP_WAKE" | "ALBUM" | "CHAT" | "PERSONALITY" | "DIARY_INTRO" | "FINISH_NOTICE" | "REVIEW_SEEN" | "COMPLETE" | "ATTENDANCE_INTRO";
+                napSleeping?: boolean;
+                reviewPending?: boolean;
+                /** Format: int32 */
+                step?: number;
+                /** Format: int32 */
+                version?: number;
+            } | null;
+            firstNightChatGrace?: components["schemas"]["FirstNightChatGrace"];
             food?: components["schemas"]["Food"];
             gauges?: components["schemas"]["Gauges"];
             /** @description 장르. 말투와 같이 대사 톤에만 쓰인다 */
-            genre?: string;
+            genre?: string | null;
             /**
              * @description 직전 취침 시점에 케어 미스가 없고 게이지 3종이 모두 2 이상이었는지 여부.
              *     조건을 만족하면 조각 1개를 선지급한다. 심화 단계 진입 전에는 항상 false
@@ -4079,7 +4610,7 @@ export interface components {
              *     화면은 이 값이 null 일 때만 축하 창을 띄우고, 닫을 때 POST /{petId}/graduation-seen 을 부른다.
              *     기기가 아니라 캐릭터에 붙는 값이라 새 탭·재시작에도 같은 창이 다시 뜨지 않는다
              */
-            graduationSeenAt?: string;
+            graduationSeenAt?: string | null;
             /** Format: date-time */
             hatchStartedAt?: string;
             /** Format: date-time */
@@ -4093,19 +4624,71 @@ export interface components {
             /** @description 이번 행동으로 해금된 동작 seq. 행동 응답에만 채워진다 */
             justUnlocked?: number[];
             learnedToday?: components["schemas"]["Learned"][];
-            leaving?: components["schemas"]["Leaving"];
+            leaving?: {
+                /** Format: date-time */
+                departsAt?: string;
+                justCancelled?: boolean;
+                /** Format: date-time */
+                noticedAt?: string;
+            } | null;
             /** @description 표시 우선순위: SICK > HUNGRY > SAD > DIRTY > NORMAL */
             mood?: string;
+            motionPlayback?: {
+                /** @enum {string} */
+                basicSemantic: "eat" | "pet" | "base";
+                motionId: string;
+                resource: {
+                    albumOnly: boolean;
+                    anchorPoseKey: string;
+                    anchorsKey: string | null;
+                    /** Format: int32 */
+                    baseReferenceRound: number | null;
+                    description: string;
+                    embeddedProps: boolean;
+                    id: string;
+                    imageKey: string;
+                    /** Format: int32 */
+                    order: number;
+                    /** @enum {string} */
+                    planVersion: "CUSTOM_MOTION_PLAN_V1" | "CUSTOM_MOTION_PLAN_V2";
+                    /** @description 지원 의미: base, eat, joy, sad, sick, pet, hello, sleep. 앨범 전용 자유 행동은 null. 실제 허용값은 서버와 소비자 adapter가 검증한다 */
+                    semantic: string | null;
+                    /** Format: int64 */
+                    setId: number;
+                    /** @description Explicit CARE6 situation tags. V1 is empty; no semantic inference. */
+                    situations: ("FEED" | "SNACK" | "PET" | "CLEAN" | "BATH" | "MEDICINE")[];
+                    /** @enum {string} */
+                    sourceKind: "CUSTOM";
+                    suppressRoomProps: boolean;
+                    title: string;
+                } | null;
+                /** @enum {string} */
+                situationKey: "FEED" | "SNACK" | "PET" | "CLEAN" | "BATH" | "MEDICINE";
+                /** @enum {string} */
+                sourceKind: "BASIC" | "CUSTOM";
+            } | null;
             motions?: components["schemas"]["Motion"][];
             name?: string;
-            note?: string;
-            personality?: string;
+            note?: string | null;
+            personality?: string | null;
             /** Format: int64 */
             petId?: number;
             /** @description DRAFT · HATCHING · ALIVE · FAILED · DEAD */
             phase?: string;
             /** @description 오늘 모은 조각. 심화 단계 진입 전에는 null */
-            pieces?: components["schemas"]["Pieces"];
+            pieces?: {
+                bond?: boolean;
+                bondProgress?: components["schemas"]["Progress"];
+                bonus?: boolean;
+                clean?: boolean;
+                cleanProgress?: components["schemas"]["Progress"];
+                /** Format: int32 */
+                count?: number;
+                food?: boolean;
+                foodProgress?: components["schemas"]["Progress"];
+                play?: boolean;
+                playProgress?: components["schemas"]["Progress"];
+            } | null;
             /** @description 부화 완료 여부 */
             ready?: boolean;
             /**
@@ -4119,19 +4702,379 @@ export interface components {
              * @description 서버 기준 현재 시각. 화면은 기기 시계 대신 이 값을 사용한다
              */
             serverNow?: string;
-            sick?: components["schemas"]["Sick"];
+            sick?: {
+                kind?: string;
+                /** Format: date-time */
+                since?: string;
+            } | null;
             /** @description 현재 수행 중인 생성 단계. 부화 중에만 채워진다 */
-            step?: string;
+            step?: string | null;
             today?: components["schemas"]["ZzalToday"];
             /** @description 말투. 대사 톤에만 쓰이고 그림 생성에는 들어가지 않는다 */
-            tone?: string;
-            trip?: components["schemas"]["Trip"];
+            tone?: string | null;
+            trip?: {
+                /** Format: int32 */
+                postcards?: number;
+                /** Format: date-time */
+                startedAt?: string;
+            } | null;
             /**
              * @description 튜토리얼 진행 상태. 9단계를 모두 완료하면 null 이 되고 clock.clockStartedAt 이 채워진다.
              *     진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다
              */
-            tutorial?: components["schemas"]["Tutorial"];
+            tutorial?: components["schemas"]["Tutorial"] | null;
+            world?: string | null;
+        };
+        /** @description 굽기 시작 결과 */
+        DevBake: {
+            /**
+             * @description 예상 비용(달러). 가짜면 0
+             * @example 0.19
+             */
+            estimatedCostUsd?: number;
+            /**
+             * @description 진행 조회 열쇠(hatch-{genJobId} · layer2-{초} · gift-{seq}-{초})
+             * @example hatch-12
+             */
+            jobId?: string;
+            /** @description hatch · layer2 · gift */
+            kind?: string;
+            /** @description 사람 말 한 줄 */
+            note?: string;
+            /** @description 진짜 그림 생성으로 굽는가 */
+            real?: boolean;
+            /** @description 시작 직후 상태 */
+            result?: components["schemas"]["DevResult"];
+        };
+        /** @description 굽기 진행 */
+        DevBakeProgress: {
+            /** @description 이번 굽기에서 지금까지 기록된 비용(달러) */
+            costUsd?: number;
+            /**
+             * Format: int32
+             * @description 끝난 단계 수(부화만)
+             */
+            done?: number;
+            /** @description 끝났나(성공·실패 모두) */
+            finished?: boolean;
+            jobId?: string;
+            kind?: string;
+            /** @description 지금 상태(부화=phase · 2층=layer2Status · 선물=동작 status) */
+            status?: string;
+            /**
+             * Format: int32
+             * @description 전체 단계 수(부화만)
+             */
+            total?: number;
+        };
+        /** @description 굽기 요청 */
+        DevBakeRequest: {
+            /**
+             * @description hatch · layer2 · gift
+             * @example gift
+             */
+            kind?: string;
+            /**
+             * @description 진짜로 굽는 줄 아는가 — 서버 스위치(ZZAL_GENERATION_REAL)와 같아야 한다
+             * @example false
+             */
+            real?: boolean;
+            /**
+             * Format: int32
+             * @description gift 일 때 동작 seq(없으면 첫 선물)
+             * @example 101
+             */
+            seq?: number;
+        };
+        /** @description 동작 행 세팅 */
+        DevMotionPatch: {
+            /** @description 도착(revealedAt) — true 면 지금, false 면 지운다 */
+            revealed?: boolean;
+            /** @description 열람(seenAt) — true 면 지금, false 면 지운다 */
+            seen?: boolean;
+            /**
+             * Format: int32
+             * @description 카탈로그 seq
+             * @example 101
+             */
+            seq?: number;
+            /** @description NONE · QUEUED · BAKING · REVIEW · LOCAL_REQUESTED · OPEN · FAILED · HOLD */
+            status?: string;
+        };
+        /** @description 개발 리모컨 상태 세팅 — 준 칸만 바꾼다. 범위를 넘으면 400, 연쇄(병·떠남)는 시간이 지나야 이어진다 */
+        DevPetPatch: {
+            /**
+             * Format: int32
+             * @description 부재(깨어 있는) 시간 0~72 — 4시간마다 혼자 논 장면 1컷
+             */
+            absenceHours?: number;
+            /** @description 배경 키(빈 문자열이면 지운다) */
+            background?: string;
+            /**
+             * Format: int32
+             * @description 목욕 횟수
+             */
+            bathCount?: number;
+            /** @description 오늘 보너스 조각 받음 표시 */
+            bonusPiece?: boolean;
+            /** @description 호칭(빈 문자열이면 지운다) */
+            callMe?: string;
+            /**
+             * Format: int32
+             * @description 누적 케어 미스 0~99
+             */
+            careMiss?: number;
+            /**
+             * Format: int32
+             * @description 채팅 답 횟수
+             */
+            chatAnswers?: number;
+            /**
+             * Format: int32
+             * @description 청소 횟수
+             */
+            cleans?: number;
+            /**
+             * Format: int32
+             * @description 함께한 날 1~9999
+             */
+            daysTogether?: number;
+            /**
+             * @description HATCH_FAILED · NEGLECTED · RELEASED (DEAD·FAILED 일 때)
+             * @enum {string}
+             */
+            deathReason?: "HATCH_FAILED" | "NEGLECTED" | "RELEASED";
+            /**
+             * Format: int32
+             * @description 밥 횟수
+             */
+            feeds?: number;
+            /**
+             * @description 가짜 체험 상태: FEED부터 COMPLETE까지 서버 첫 안내 key
+             * @enum {string}
+             */
+            firstIntroKey?: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "PET" | "NAP_SLEEP" | "NAP_WAKE" | "ALBUM" | "CHAT" | "PERSONALITY" | "DIARY_INTRO" | "FINISH_NOTICE" | "REVIEW_SEEN" | "COMPLETE" | "ATTENDANCE_INTRO";
+            /**
+             * Format: int32
+             * @description 첫 안내 버전 2, 3 또는 4. key 없이 바꾸면 현재 key를 보존한다
+             */
+            firstIntroVersion?: number;
+            /**
+             * Format: int32
+             * @description 밥 재고 0~3
+             * @example 3
+             */
+            food?: number;
+            /**
+             * Format: int32
+             * @description 배부름 0~4
+             * @example 4
+             */
+            fullness?: number;
+            /**
+             * Format: int32
+             * @description 게임 시작 횟수
+             */
+            gameStarts?: number;
+            /** @description 장르(빈 문자열이면 지운다) */
+            genre?: string;
+            /** @description 기분 좋은 날 판정 대기(내일 아침 보너스) */
+            goodDayPending?: boolean;
+            /** @description 오늘이 기분 좋은 날 */
+            goodDayToday?: boolean;
+            /** @description 졸업 축하 창을 봤나. false 면 다시 뜬다 */
+            graduationSeen?: boolean;
+            /**
+             * Format: int32
+             * @description 행복 0~4
+             * @example 4
+             */
+            happiness?: number;
+            /** @description 방금 나음 표시(healedAt). true 면 지금, false 면 지운다 */
+            healed?: boolean;
+            /**
+             * Format: int32
+             * @description 친밀도 0~999 (최고치는 따라 올라간다)
+             */
+            intimacy?: number;
+            /**
+             * Format: int32
+             * @description 친밀도 최고치 0~999 (재회 시 50%)
+             */
+            intimacyPeak?: number;
+            /**
+             * Format: int32
+             * @description 어젯밤 케어 미스 스냅샷 0~99
+             */
+            lastNightCareMiss?: number;
+            /**
+             * Format: int32
+             * @description 마지막 방문이 며칠 전인가 0~60(결석 떠남 재현)
+             */
+            lastVisitDaysAgo?: number;
+            /** @description 2층 결함 표시 */
+            layer2Flagged?: boolean;
+            /** @description 2층 굽기 상태 — PENDING · RUNNING · READY · FAILED */
+            layer2Status?: string;
+            /** @description 2층 8종 완주 표시(다음 기상에 3층) */
+            layerTwoDone?: boolean;
+            /** @description 떠남 켜기 */
+            leaveEnabled?: boolean;
+            /** @description 떠남 예고 — true 면 지금 예고, false 면 지운다 */
+            leaveNotice?: boolean;
+            /** @description 예고 막 취소됨 연출 */
+            leavingJustCancelled?: boolean;
+            /**
+             * Format: int32
+             * @description 좌우 맞히기 승수(5 → 달리기)
+             */
+            leftRightWins?: number;
+            /** @description 동작 행 상태 — seq 마다 status·도착·열람 */
+            motions?: components["schemas"]["DevMotionPatch"][];
+            /**
+             * Format: int32
+             * @description 낮잠 횟수 0~1
+             */
+            napCount?: number;
+            /**
+             * Format: int32
+             * @description 자연 발병까지 깨어 있는 분. -1 이면 예약을 지운다
+             */
+            naturalSickInMinutes?: number;
+            /** @description 늦잠 표시 */
+            overslept?: boolean;
+            /**
+             * @description 대표 성격 — GENTLE · LIVELY · SHY · CLINGY
+             * @enum {string}
+             */
+            personality?: "GENTLE" | "LIVELY" | "SHY" | "CLINGY" | "COOL";
+            /**
+             * Format: int32
+             * @description 쓰다듬기 횟수
+             */
+            pets?: number;
+            /**
+             * @description DRAFT · HATCHING · ALIVE · FAILED · DEAD
+             * @enum {string}
+             */
+            phase?: "DRAFT" | "HATCHING" | "ALIVE" | "FAILED" | "DEAD";
+            /** @description 조각 칸별 채움 — FOOD · PLAY · CLEAN · BOND → true/false (3층이 열려 있어야 한다) */
+            pieces?: {
+                [key: string]: boolean;
+            };
+            /** @description 3층(조각) 열림 */
+            piecesEnabled?: boolean;
+            /**
+             * Format: int32
+             * @description 공유 횟수
+             */
+            shares?: number;
+            /**
+             * @description 병 — NONE · NEGLECT · DIRTY · UPSET · NATURAL
+             * @example DIRTY
+             */
+            sick?: string;
+            /**
+             * Format: int32
+             * @description 병이 난 지 몇 시간(깨어 있는 시간 기준 24시간마다 케어 미스). 0~240
+             */
+            sickHoursAgo?: number;
+            /** @description 잠 — NONE · NIGHT · NAP (훅은 안 돈다 — 밤 정산은 events/night-settle) */
+            sleep?: string;
+            /**
+             * Format: int32
+             * @description 재우기+깨우기 횟수
+             */
+            sleepWakeCount?: number;
+            /**
+             * Format: int32
+             * @description 간식 횟수
+             */
+            snacks?: number;
+            /** @description 오늘 목욕했나 */
+            todayBathDone?: boolean;
+            /**
+             * Format: int32
+             * @description 오늘 돌봄 친밀도 0~30
+             */
+            todayCareIntimacy?: number;
+            /**
+             * Format: int32
+             * @description 오늘 케어 미스 0~99
+             */
+            todayCareMiss?: number;
+            /** @description 오늘 한 번이라도 돌봤나(잘 돌본 날 판정) */
+            todayCared?: boolean;
+            /**
+             * Format: int32
+             * @description 오늘 게임 판 수 0~3
+             */
+            todayGames?: number;
+            /**
+             * Format: int32
+             * @description 오늘 쓰다듬기 0~3
+             */
+            todayPetCount?: number;
+            /**
+             * Format: int32
+             * @description 오늘 간식 0~5
+             */
+            todaySnacks?: number;
+            /** @description 말투(빈 문자열이면 지운다) */
+            tone?: string;
+            /**
+             * Format: int32
+             * @description 똥(흔적) 0~4
+             * @example 4
+             */
+            trash?: number;
+            /** @description 여행 중 — true 면 지금 출발(엽서 0), false 면 지운다(재회 값은 events/call-back) */
+            trip?: boolean;
+            /**
+             * Format: int32
+             * @description 튜토리얼 칸 0~9. 9 = 끝(시계가 지금 켜진다), 0~8 = 튜토리얼 중으로 되돌린다
+             * @example 0
+             */
+            tutorialStep?: number;
+            /**
+             * Format: int32
+             * @description 손으로 깨운 횟수
+             */
+            wakes?: number;
+            /** @description 세계관(빈 문자열이면 지운다) */
             world?: string;
+            /**
+             * Format: int32
+             * @description 잘 돌본 날 수 0~999
+             */
+            zeroMissDays?: number;
+        };
+        /** @description 개발 도구 켜짐 확인. 꺼진 서버에는 이 주소가 없다(404) */
+        DevPing: {
+            /** @description 늘 true(꺼져 있으면 응답 자체가 없다) */
+            devTools?: boolean;
+            /** @description 진짜 그림 생성 스위치(ZZAL_GENERATION_REAL). false 면 진짜 굽기를 거절한다 */
+            generationReal?: boolean;
+        };
+        /** @description 리모컨 조작 결과 — 이번에 일어난 일 · 바꾸기 전과 뒤의 캐릭터 상태 · 내부 칸 한 벌 */
+        DevResult: {
+            /** @description 바꾼 뒤 캐릭터 상태(방문 없이 정산한 값) */
+            after?: components["schemas"]["Detail"];
+            /** @description 바꾸기 전 캐릭터 상태 */
+            before?: components["schemas"]["Detail"];
+            /** @description 이번에 일어난 일(바뀐 칸마다 한 줄, '배부름: 3 → 0'). 아무것도 안 바뀌면 빈 목록 */
+            effects?: string[];
+            /** @description 바꾼 뒤 내부 칸 한 벌(케어 미스·오늘 한도·평생 횟수·조각 칸·동작 행 등) */
+            state?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description 내부 칸 한 벌(리모컨 상태 패널) */
+        DevState: {
+            detail?: components["schemas"]["Detail"];
+            state?: {
+                [key: string]: unknown;
+            };
         };
         /** @description 이미지 등록 요청. 이 요청으로 부화 전 단계가 모두 시작된다 */
         Draft: {
@@ -4167,6 +5110,25 @@ export interface components {
             accounts?: number;
             reason?: string;
         };
+        FactView: {
+            content?: string;
+            /** Format: int64 */
+            correctionOf?: number;
+            /** Format: int64 */
+            id?: number;
+            kind?: string;
+            /** Format: date-time */
+            observedAt?: string;
+            operation?: string;
+            /** Format: int32 */
+            revision?: number;
+            sourceQuote?: string;
+            /** Format: int64 */
+            sourceTurnId?: number;
+            status?: string;
+            subject?: string;
+            subjectRef?: string;
+        };
         Features: {
             album?: boolean;
             background?: boolean;
@@ -4175,6 +5137,12 @@ export interface components {
             pieces?: boolean;
             run?: boolean;
             scenes?: boolean;
+        };
+        Field: {
+            chips: string[];
+            fieldId: string;
+            rawText: string;
+            skipped?: boolean;
         };
         /** @description 달리기 종료 요청. 생존 시간 30,000ms 이상이면 승리하며 서버는 상한 60,000ms 만 검증한다 */
         Finish: {
@@ -4189,11 +5157,24 @@ export interface components {
             daysLeft?: number;
             status?: string;
         };
+        /**
+         * @description 캐릭터 상태 전체. 부화 중과 진행 중을 구분하지 않고 이 응답 하나로 화면을 구성한다.
+         *     phase 가 ALIVE 가 아니면 진행 중 전용 블록은 모두 null 이다
+         */
+        FirstNightChatGrace: {
+            active?: boolean;
+            /** Format: date-time */
+            deadlineAt?: string | null;
+            eligible?: boolean;
+            /** Format: date-time */
+            endedAt?: string | null;
+            willSleepAtEnd?: boolean;
+        };
         Food: {
             /** Format: int32 */
             count?: number;
             /** Format: int64 */
-            nextInSeconds?: number;
+            nextInSeconds?: number | null;
         };
         /** @description 복선 카드 한 장. 회수 칸 셋(status · resolvedChapter · resolution)은 독자가 읽은 회차 N 기준으로 가린 값이다 */
         Foreshadowing: {
@@ -4354,11 +5335,21 @@ export interface components {
         /** @description 좌우 맞히기 요청. 선택한 방향만 전달하고 정답 여부는 서버가 판정한다 */
         GuessRequest: {
             /**
+             * Format: int32
+             * @description 선택한 회차(0부터). requestId와 함께 전달
+             */
+            expectedRound?: number;
+            /**
              * @description LEFT(왼쪽) · RIGHT(오른쪽)
              * @example LEFT
              * @enum {string}
              */
             pick: "LEFT" | "RIGHT";
+            /**
+             * Format: uuid
+             * @description 동일 회차 재전송 identity. expectedRound와 함께 전달
+             */
+            requestId?: string;
         };
         /** @description 좌우 맞히기 1회 진행 결과. 방금 진행한 회차의 정답만 포함한다 */
         GuessResult: {
@@ -4456,6 +5447,23 @@ export interface components {
              */
             total?: number;
         };
+        History: {
+            /** Format: int64 */
+            nextBeforeId?: number;
+            turns?: components["schemas"]["HistoryTurn"][];
+        };
+        HistoryTurn: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: int64 */
+            id?: number;
+            /** Format: int32 */
+            idx?: number;
+            line?: string;
+            /** Format: int64 */
+            sessionId?: number;
+            speaker?: string;
+        };
         IngestRequest: {
             calls?: components["schemas"]["Call"][];
             runId: string;
@@ -4471,12 +5479,17 @@ export interface components {
             score?: number;
             tier?: string;
         };
+        /** @description 돌보기 요청. 수행할 행동만 전달하고 수치 변화는 서버가 결정한다 */
+        IntroAction: {
+            /** @enum {string} */
+            firstIntroStep?: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "PET" | "NAP_SLEEP" | "NAP_WAKE" | "ALBUM" | "CHAT" | "PERSONALITY" | "DIARY_INTRO" | "FINISH_NOTICE" | "REVIEW_SEEN" | "COMPLETE" | "ATTENDANCE_INTRO";
+        };
         JobView: {
             art?: components["schemas"]["Art"];
             cast?: {
                 [key: string]: unknown;
             }[];
-            castKind?: string;
+            cast_kind?: string;
             cast_sheets?: {
                 [key: string]: unknown;
             }[];
@@ -4551,12 +5564,29 @@ export interface components {
             /** Format: int32 */
             width?: number;
         };
-        Leaving: {
+        LegacyHistory: {
+            calls?: components["schemas"]["LegacyHistoryCall"][];
+            /** Format: int64 */
+            nextBeforeId?: number;
+        };
+        LegacyHistoryCall: {
             /** Format: date-time */
-            departsAt?: string;
-            justCancelled?: boolean;
+            answeredAt?: string;
             /** Format: date-time */
-            noticedAt?: string;
+            calledAt?: string;
+            /** Format: int64 */
+            id?: number;
+            petLine?: string;
+            replyLine?: string;
+            slot?: string;
+            userLine?: string;
+        };
+        LegacyPersonaSource: {
+            genre?: string;
+            note?: string;
+            personalities?: ("GENTLE" | "LIVELY" | "SHY" | "CLINGY" | "COOL")[];
+            tone?: string;
+            world?: string;
         };
         LikeResult: {
             liked?: boolean;
@@ -4615,12 +5645,17 @@ export interface components {
         /** @description 동작 1건. 18건 고정이며 seq 오름차순으로 반환한다 */
         Motion: {
             advanced?: components["schemas"]["Advanced"];
-            basicImageKey?: string;
-            hint?: string;
+            basicImageKey?: string | null;
+            hint?: string | null;
             key?: string;
             label?: string;
             layer?: string;
-            progress?: components["schemas"]["Progress"];
+            progress?: {
+                /** Format: int32 */
+                current?: number;
+                /** Format: int32 */
+                target?: number;
+            } | null;
             /** Format: int32 */
             seq?: number;
             unlocked?: boolean;
@@ -4649,6 +5684,18 @@ export interface components {
         };
         NotifySettingResult: {
             on?: boolean;
+        };
+        OwnedBackground: {
+            key?: string;
+            url?: string;
+        };
+        OwnedReward: {
+            assetKey?: string;
+            kind?: string;
+            /** Format: int32 */
+            motionOrder?: number;
+            slotKey?: string;
+            url?: string;
         };
         PagesRequest: {
             pages?: components["schemas"]["Upload"][];
@@ -4693,8 +5740,18 @@ export interface components {
             };
             who?: string;
         };
+        PersonaSource: {
+            addressStatus?: string;
+            authoredPersona?: components["schemas"]["AuthoredPersona"];
+            callMe?: string;
+            legacySource?: components["schemas"]["LegacyPersonaSource"];
+            personaSourceHash?: string;
+        };
         /** @description 성격 등록·수정 요청. 수면 중을 포함해 언제든 변경할 수 있다 */
         PersonalityChoice: {
+            authoredPersona?: components["schemas"]["AuthoredPersona"];
+            callMe?: string;
+            expectedPersonaHash?: string;
             /**
              * @description 고른 성격 전부. 맨 앞이 대표이고 대사 톤은 대표만 본다. GENTLE(온순) · LIVELY(활발) · SHY(수줍음) · CLINGY(응석) · COOL(시크)
              * @example [
@@ -5007,19 +6064,6 @@ export interface components {
              */
             viewedAt?: string;
         };
-        Pieces: {
-            bond?: boolean;
-            bondProgress?: components["schemas"]["Progress"];
-            bonus?: boolean;
-            clean?: boolean;
-            cleanProgress?: components["schemas"]["Progress"];
-            /** Format: int32 */
-            count?: number;
-            food?: boolean;
-            foodProgress?: components["schemas"]["Progress"];
-            play?: boolean;
-            playProgress?: components["schemas"]["Progress"];
-        };
         Postcard: {
             /** Format: date-time */
             at?: string;
@@ -5041,6 +6085,10 @@ export interface components {
             domain: string;
         };
         PresignedUpload: {
+            key?: string;
+            url?: string;
+        };
+        Preview: {
             key?: string;
             url?: string;
         };
@@ -5091,6 +6139,15 @@ export interface components {
         };
         ReasonRequest: {
             reason?: string;
+        };
+        Receipt: {
+            accepted_event_ids?: string[];
+            /** Format: int32 */
+            duplicate_count?: number;
+            /** Format: int32 */
+            persisted_count?: number;
+            rejected_event_ids?: string[];
+            status?: string;
         };
         ReceiptCounts: {
             /** Format: int64 */
@@ -5181,7 +6238,14 @@ export interface components {
         };
         Scenes: {
             enabled?: boolean;
-            latest?: components["schemas"]["Scene"];
+            latest?: {
+                /** Format: date-time */
+                at?: string;
+                background?: string;
+                line?: string;
+                motionKey?: string;
+                prop?: string;
+            } | null;
         };
         ScenesRequest: {
             body?: string;
@@ -5209,6 +6273,11 @@ export interface components {
              * @example 40
              */
             sinceHatchMinutes?: number;
+            /**
+             * @description 방문으로 칠까(기본 true). false 면 정산만 한다
+             * @example true
+             */
+            visit?: boolean;
         };
         /** @description 공유 링크 발급 요청 */
         Share: {
@@ -5254,11 +6323,6 @@ export interface components {
             };
             comment?: string;
             run?: string;
-        };
-        Sick: {
-            kind?: string;
-            /** Format: date-time */
-            since?: string;
         };
         /** @description 회원가입 요청 */
         SignUp: {
@@ -5332,8 +6396,16 @@ export interface components {
             /** Format: int32 */
             spent?: number;
         };
+        /** @description 오늘의 대화 목록. openSlot 이 null 이면 현재 응답 가능한 대화가 없다. session·turns 는 지금의 판(열린 판, 없으면 오늘 마지막 판) */
+        StageSpeech: {
+            line?: string;
+            /** Format: int32 */
+            turnIdx?: number;
+        };
         /** @description 매치 시작 요청 */
         Start: {
+            /** @enum {string} */
+            firstIntroStep?: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "PET" | "NAP_SLEEP" | "NAP_WAKE" | "ALBUM" | "CHAT" | "PERSONALITY" | "DIARY_INTRO" | "FINISH_NOTICE" | "REVIEW_SEEN" | "COMPLETE" | "ATTENDANCE_INTRO";
             /**
              * @description LEFT_RIGHT(좌우 맞히기) · RUN(달리기, 좌우 5승 이후 해금)
              * @example LEFT_RIGHT
@@ -5468,12 +6540,6 @@ export interface components {
             purgeAt?: string;
             runId?: string;
         };
-        Trip: {
-            /** Format: int32 */
-            postcards?: number;
-            /** Format: date-time */
-            startedAt?: string;
-        };
         TryRequest: {
             description?: string;
             language?: string;
@@ -5487,6 +6553,25 @@ export interface components {
             /** Format: int32 */
             step?: number;
             steps?: components["schemas"]["TutorialStep"][];
+        };
+        TutorialSeen: {
+            /**
+             * @description PREPARE_SPEECH일 때 ENTRY/AFTER_ACTION 필수. ACK에서는 생략/null
+             * @enum {string|null}
+             */
+            phase?: "ENTRY" | "AFTER_ACTION" | null;
+            /**
+             * @description 생략/null은 ACKNOWLEDGE
+             * @enum {string|null}
+             */
+            purpose?: "ACKNOWLEDGE" | "PREPARE_SPEECH" | null;
+            /**
+             * @description 마무리 PREPARE_SPEECH의 표시 장면. ACK 및 기존 행동 준비는 생략/null
+             * @enum {string|null}
+             */
+            scene?: "FINISH_THANKS" | "FINISH_TOMORROW" | "CHAT_INTRO" | "CHAT_MEMORY" | "CHAT_INVITE" | null;
+            /** @enum {string} */
+            topic: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "PET" | "NAP_SLEEP" | "NAP_WAKE" | "ALBUM" | "CHAT" | "PERSONALITY" | "DIARY_INTRO" | "FINISH_NOTICE" | "REVIEW_SEEN" | "COMPLETE" | "ATTENDANCE_INTRO";
         };
         TutorialStep: {
             current?: boolean;
@@ -5527,6 +6612,123 @@ export interface components {
             public?: boolean;
             runId?: string;
         };
+        ZzalDiaryEntry: {
+            body?: string;
+            /** Format: int64 */
+            id?: number;
+            kind?: string;
+            language?: string;
+            preview?: string;
+            /** Format: date-time */
+            readAt?: string;
+            /** Format: date-time */
+            writtenAt?: string;
+        };
+        ZzalDiaryPage: {
+            entries?: components["schemas"]["ZzalDiaryEntry"][];
+            /** Format: int64 */
+            nextBeforeId?: number;
+            pending?: boolean;
+            /** Format: int32 */
+            unreadCount?: number;
+        };
+        ZzalFirstMeetingRequest: {
+            /** @enum {string} */
+            action: "NEXT" | "SET_ADDRESS" | "DEFER_ADDRESS" | "ENTER_ROOM" | "PREPARE_DISCOVERY";
+            callMe?: string;
+        };
+        ZzalFirstMeetingView: {
+            addressStatus?: string;
+            callMe?: string;
+            discoveryLine?: string;
+            /** @description READY 발견문의 LLM/FALLBACK 출처, 그 외 null */
+            discoverySource?: string | null;
+            /** @description 발견문 준비 상태, 구 응답은 null */
+            discoveryStatus?: string | null;
+            greetingLine?: string;
+            greetingRetryAllowed?: boolean;
+            /** @enum {string} */
+            state?: "DISCOVERED" | "ADDRESS" | "READY_TO_ENTER" | "COMPLETE";
+            /** Format: int32 */
+            version?: number;
+        };
+        ZzalInquiryReceipt: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            id: number;
+        };
+        ZzalInquirySubmit: {
+            body: string;
+            /** @enum {string} */
+            locale: "ko" | "en" | "ja";
+            /** Format: int64 */
+            petId?: number | null;
+            /** Format: uuid */
+            requestId: string;
+        };
+        ZzalOwnedCustomMotion: {
+            albumOnly: boolean;
+            anchorPoseKey: string;
+            anchorsKey: string | null;
+            /** Format: int32 */
+            baseReferenceRound: number | null;
+            description: string;
+            embeddedProps: boolean;
+            id: string;
+            imageKey: string;
+            /** Format: int32 */
+            order: number;
+            /** @enum {string} */
+            planVersion: "CUSTOM_MOTION_PLAN_V1" | "CUSTOM_MOTION_PLAN_V2";
+            /** @description 지원 의미: base, eat, joy, sad, sick, pet, hello, sleep. 앨범 전용 자유 행동은 null. 실제 허용값은 서버와 소비자 adapter가 검증한다 */
+            semantic: string | null;
+            /** Format: int64 */
+            setId: number;
+            /** @description Explicit CARE6 situation tags. V1 is empty; no semantic inference. */
+            situations: ("FEED" | "SNACK" | "PET" | "CLEAN" | "BATH" | "MEDICINE")[];
+            /** @enum {string} */
+            sourceKind: "CUSTOM";
+            suppressRoomProps: boolean;
+            title: string;
+        };
+        ZzalPreparedStage: {
+            stageSpeech: components["schemas"]["ZzalStageSpeechView"];
+        };
+        ZzalReturningGuideAdvance: {
+            complete?: boolean;
+            expectedPersonaHash?: string;
+            /** Format: int32 */
+            step: number;
+        };
+        ZzalReturningGuideState: {
+            /** Format: int64 */
+            boundPetId?: number;
+            completed?: boolean;
+            eligible?: boolean;
+            /** Format: int32 */
+            step?: number;
+            version?: string;
+        };
+        ZzalStageSpeechView: {
+            contextRevision: string;
+            /** Format: int64 */
+            id: number;
+            line?: string | null;
+            motionId?: string | null;
+            /** @enum {string} */
+            phase: "ENTRY" | "AFTER_ACTION";
+            /** @description LLM 또는 FALLBACK, PENDING/숨김은 null */
+            source?: string | null;
+            /** @enum {string} */
+            status: "PENDING" | "READY" | "FAILED" | "UNCERTAIN" | "SUPERSEDED";
+            /** @enum {string} */
+            step: "FEED" | "SNACK" | "CLEAN" | "BATH" | "GAME" | "NAP_SLEEP" | "NAP_WAKE" | "FIRST_MEETING_DISCOVERY" | "FINISH_THANKS" | "FINISH_TOMORROW" | "CHAT_INTRO" | "CHAT_MEMORY" | "CHAT_INVITE";
+            /** Format: int64 */
+            turnRef?: number | null;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         /** @description 오늘 한 일 — 자정에 0 으로 돌아간다 */
         ZzalToday: {
             bathDone?: boolean;
@@ -5538,6 +6740,30 @@ export interface components {
             pets?: number;
             /** Format: int32 */
             snacks?: number;
+        };
+        ZzalTutorialAnswer: {
+            /** @enum {string} */
+            answerType: "SUGGESTED" | "FREE_TEXT";
+            chatReply: components["schemas"]["Reply"];
+            /** Format: int32 */
+            expectedRound: number;
+            /** Format: uuid */
+            requestId: string;
+            /** Format: int64 */
+            sessionId: number;
+            /** @enum {string} */
+            step: "FEED" | "GAME";
+            text: string;
+            turns: components["schemas"]["ChatTurn"][];
+        };
+        ZzalTutorialSeenSuccess: {
+            data: components["schemas"]["Detail"] | components["schemas"]["ZzalPreparedStage"];
+            /** @description 성공 시 null, 실패는 기존 ApiResponse 오류 계약 */
+            error: null;
+            /** @description 성공 시 null */
+            message: null;
+            /** @description 성공 시 true */
+            success: boolean;
         };
     };
     responses: never;
@@ -6286,7 +7512,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseVoid"];
+                    "*/*": components["schemas"]["ApiResponseReceipt"];
                 };
             };
         };
@@ -8826,7 +10052,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
             /** @description 0 이하이거나 30일을 넘김(INVALID_INPUT) */
@@ -8835,7 +10061,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
             /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
@@ -8844,7 +10070,82 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
+                };
+            };
+        };
+    };
+    devBake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevBakeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevBake"];
+                };
+            };
+        };
+    };
+    devBakeProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevBakeProgress"];
+                };
+            };
+        };
+    };
+    devEvent: {
+        parameters: {
+            query?: {
+                /** @description 이벤트 인자 하나(병 종류·조각 칸·장면 수·seq·해금 대상) */
+                arg?: string;
+            };
+            header?: never;
+            path: {
+                petId: number;
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
         };
@@ -8915,7 +10216,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
             /** @description 셋 중 하나가 아님 · 형식 오류 · 부화 전(INVALID_INPUT) */
@@ -8924,7 +10225,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
                 };
             };
             /** @description 없는 펫 또는 남의 펫(ZZAL_PET_NOT_FOUND) */
@@ -8933,7 +10234,135 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
+                };
+            };
+        };
+    };
+    devState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevState"];
+                };
+            };
+        };
+    };
+    devPatchState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DevPetPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevResult"];
+                };
+            };
+        };
+    };
+    devPing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDevPing"];
+                };
+            };
+        };
+    };
+    submitInquiry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZzalInquirySubmit"];
+            };
+        };
+        responses: {
+            /** @description DB에 저장된 접수 번호와 최초 접수 시각 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description 본문/언어/UUID/petId 입력 오류 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description 로그인 필요 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description 없는 펫 또는 남의 펫 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
+                };
+            };
+            /** @description ZZAL_INQUIRY_CONFLICT: 같은 requestId에 다른 내용 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalInquiryReceipt"];
                 };
             };
         };
@@ -9141,6 +10570,46 @@ export interface operations {
             };
         };
     };
+    callBack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 돌아왔음 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+            /** @description 여행 중이 아님(ZZAL_NOT_TRAVELING) 또는 보낸 캐릭터(ZZAL_PET_NOT_ALIVE) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+        };
+    };
     care: {
         parameters: {
             query?: never;
@@ -9174,7 +10643,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiResponseDetail"];
                 };
             };
-            /** @description ZZAL_PET_NOT_ALIVE · ZZAL_PET_SLEEPING · ZZAL_NO_FOOD · ZZAL_CARE_NOT_NEEDED · ZZAL_BATH_DONE_TODAY · ZZAL_SICK_REFUSES */
+            /** @description ZZAL_PET_NOT_ALIVE · ZZAL_PET_SLEEPING · ZZAL_NO_FOOD · ZZAL_CARE_NOT_NEEDED · ZZAL_BATH_DONE_TODAY · ZZAL_SICK_REFUSES · ZZAL_ACTION_REQUEST_CONFLICT */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -9207,13 +10676,137 @@ export interface operations {
             };
         };
     };
+    history: {
+        parameters: {
+            query?: {
+                beforeId?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseHistory"];
+                };
+            };
+        };
+    };
+    legacyHistory: {
+        parameters: {
+            query?: {
+                beforeId?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseLegacyHistory"];
+                };
+            };
+        };
+    };
+    memoryFacts: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListFactView"];
+                };
+            };
+        };
+    };
+    retryMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseInteger"];
+                };
+            };
+        };
+    };
+    presence: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Zzal-Language"?: string;
+            };
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatPresenceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseChatPresenceResponse"];
+                };
+            };
+        };
+    };
     answer: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 petId: number;
-                slot: "BABY" | "MORNING" | "NOON" | "EVENING";
+                slot: "CONTINUOUS" | "BABY" | "MORNING" | "NOON" | "EVENING";
             };
             cookie?: never;
         };
@@ -9239,6 +10832,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseAnswered"];
+                };
+            };
+        };
+    };
+    zzalDiaryList: {
+        parameters: {
+            query?: {
+                beforeId?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalDiaryPage"];
+                };
+            };
+        };
+    };
+    read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+                entryId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalDiaryEntry"];
                 };
             };
         };
@@ -9323,6 +10964,56 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSubmitted"];
+                };
+            };
+        };
+    };
+    firstMeeting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalFirstMeetingView"];
+                };
+            };
+        };
+    };
+    firstMeeting_1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Zzal-Language"?: string;
+            };
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZzalFirstMeetingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalFirstMeetingView"];
                 };
             };
         };
@@ -9675,6 +11366,28 @@ export interface operations {
             };
         };
     };
+    persona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePersonaSource"];
+                };
+            };
+        };
+    };
     personality: {
         parameters: {
             query?: never;
@@ -9697,6 +11410,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+        };
+    };
+    getReturningGuide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalReturningGuideState"];
+                };
+            };
+        };
+    };
+    advanceReturningGuide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZzalReturningGuideAdvance"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalReturningGuideState"];
                 };
             };
         };
@@ -9745,7 +11506,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["IntroAction"];
+            };
+        };
         responses: {
             /** @description 취침 처리 */
             200: {
@@ -9807,24 +11572,28 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TutorialSeen"];
+            };
+        };
         responses: {
-            /** @description 다음 칸으로 */
+            /** @description ACK는 data=Detail, PREPARE_SPEECH는 data={stageSpeech:...} */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ZzalTutorialSeenSuccess"];
                 };
             };
-            /** @description 지금 칸이 아님(ZZAL_TUTORIAL_STEP_MISMATCH) · 이미 끝남(ZZAL_TUTORIAL_ALREADY_DONE) */
+            /** @description 현재 단계/수면/여행/완료 상태가 요청 목적과 맞지 않음 */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseDetail"];
+                    "*/*": components["schemas"]["ApiResponseObject"];
                 };
             };
         };
@@ -9838,7 +11607,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["IntroAction"];
+            };
+        };
         responses: {
             /** @description 기상 처리 */
             200: {

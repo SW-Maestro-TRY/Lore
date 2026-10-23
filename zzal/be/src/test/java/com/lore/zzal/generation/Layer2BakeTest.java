@@ -33,16 +33,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * 1층 우선 부화 + 2층 배경 굽기(#696).
- *
- * <ul>
- *   <li>부화 완료(ALIVE)는 1층에서 — 살아나는 같은 커밋에서 2층이 PENDING 이 되고, 2층 작업이 넘어간다.</li>
- *   <li>2층 작업은 최대 N회. 거부 격자는 보존하고 그 격자만 버린다. 다 쓰면 FAILED + 경보.</li>
- *   <li>바깥 한도(429)면 다시 굽지 않는다.</li>
- * </ul>
+/** Retirement contract: block fresh layer2 claims; preserve the result of an already claimed attempt.
+ * The private continuation is invoked only to model an in-flight cutover, without enabling paid entrypoints.
  */
-@DisplayName("2층 배경 굽기 — 등록·재시도·FAILED 전이")
+@DisplayName("해금8 중단 — 신규 비용 차단·이미 실행중 결과 보존")
 class Layer2BakeTest {
 
     private static final Long PET = 7L;
@@ -95,6 +89,12 @@ class Layer2BakeTest {
                 Runnable::run, 5);
     }
 
+    /** Model an attempt claimed before cutover; no product switch or fresh claim is enabled. */
+    private void finishAlreadyClaimedAttempt() {
+        assertThat(pet.startLayer2Attempt(T0)).isTrue();
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "loop", PET);
+    }
+
     private RunResult ok(StepContext ctx, int round) {
         ctx.putText(Layer2PostStep.NAME, String.valueOf(round));
         return RunResult.ok(ctx, new BigDecimal("0.18"));
@@ -106,11 +106,11 @@ class Layer2BakeTest {
     }
 
     @Test
-    @DisplayName("★ 한 번에 성공 — READY · 판이 올라간다(1층 판 1 → 2) · 경보 없음")
+    @DisplayName("중단 전 이미 실행중 성공 — 결과·판 상승 보존, 새 작업 없음")
     void succeedsFirstTime() {
         when(runner.run(any(), any(), any(), any())).thenAnswer(inv -> ok(inv.getArgument(1), 2));
 
-        service.bake(PET);
+        finishAlreadyClaimedAttempt();
 
         assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
         assertThat(pet.getBasicRound()).isEqualTo(2);
@@ -120,7 +120,7 @@ class Layer2BakeTest {
     }
 
     @Test
-    @DisplayName("★ 시트·문단은 부화 결과를 그대로 쓴다 — 다시 굽지 않는다")
+    @DisplayName("중단 전 이미 실행중 작업은 원래 시트·문단을 유지한다")
     void reusesSheetAndIdentity() {
         List<StepContext> seen = new ArrayList<>();
         when(runner.run(any(), any(), any(), any())).thenAnswer(inv -> {
@@ -128,14 +128,14 @@ class Layer2BakeTest {
             return ok(inv.getArgument(1), 2);
         });
 
-        service.bake(PET);
+        finishAlreadyClaimedAttempt();
 
         assertThat(seen.get(0).image("sheet")).isEqualTo("sheet.png");
         assertThat(seen.get(0).text("identity")).isEqualTo("생김새 문단");
     }
 
     @Test
-    @DisplayName("★★ 게이트 거부 두 번 뒤 성공 — 거부 격자는 보존하고 그 격자만 버린다, 3번째에 READY")
+    @DisplayName("중단 전 실행중 격자 거부 — 원본 보존 후 FAILED, 다음 유료 시도 없음")
     void retriesAfterGridRejection() {
         AtomicInteger call = new AtomicInteger();
         when(runner.run(any(), any(), any(), any())).thenAnswer(inv ->
@@ -144,32 +144,32 @@ class Layer2BakeTest {
         grid2.succeed("images/zzal/pets/7/grid2.png", null, "m", BigDecimal.ZERO, T0);
         when(recorder.loadSucceeded(PET, GenKind.LAYER2)).thenReturn(List.of(grid2));
 
-        service.bake(PET);
+        finishAlreadyClaimedAttempt();
 
-        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.READY);
-        assertThat(pet.getLayer2Attempts()).isEqualTo(3);
-        verify(archive, times(2)).preserve(PET, grid2);
-        verify(recorder, times(2)).discardSucceeded(PET, GenKind.LAYER2, PostProcessStep.GRID2);
-        // 시도마다 LAYER2 job 한 줄 — 사람 상한(HATCH·attempt=1)에 안 섞인다.
-        verify(jobs, times(3)).save(org.mockito.ArgumentMatchers.argThat(j -> j.getKind() == GenKind.LAYER2));
+        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.FAILED);
+        assertThat(pet.getLayer2Attempts()).isEqualTo(1);
+        verify(archive, times(1)).preserve(PET, grid2);
+        verify(recorder, never()).discardSucceeded(PET, GenKind.LAYER2, PostProcessStep.GRID2);
+        // 기존 시도 한 줄만 기록하며 다음 유료 시도는 없다.
+        verify(jobs, times(1)).save(org.mockito.ArgumentMatchers.argThat(j -> j.getKind() == GenKind.LAYER2));
     }
 
     @Test
-    @DisplayName("★★ 다섯 번 다 거부 — FAILED · 마지막 사유는 게이트 줄 · 경보 한 번 · 마지막 격자도 보존(버리지는 않음)")
+    @DisplayName("중단 전 실행중 실패 — 첫 실패에서 종료하고 게이트 사유·격자 보존")
     void failsAfterMaxAttempts() {
         when(runner.run(any(), any(), any(), any())).thenAnswer(inv -> rejected(inv.getArgument(1)));
         GenStepRecord grid2 = GenStepRecord.start(11L, 0, PostProcessStep.GRID2, T0);
         grid2.succeed("images/zzal/pets/7/grid2.png", null, "m", BigDecimal.ZERO, T0);
         when(recorder.loadSucceeded(PET, GenKind.LAYER2)).thenReturn(List.of(grid2));
 
-        service.bake(PET);
+        finishAlreadyClaimedAttempt();
 
         assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.FAILED);
-        assertThat(pet.getLayer2Attempts()).isEqualTo(5);
+        assertThat(pet.getLayer2Attempts()).isEqualTo(1);
         assertThat(pet.getLayer2LastError()).contains("GRID_STRUCTURE_INVALID");
-        verify(runner, times(5)).run(any(), any(), any(), any());
-        verify(archive, times(5)).preserve(PET, grid2);
-        verify(recorder, times(4)).discardSucceeded(PET, GenKind.LAYER2, PostProcessStep.GRID2);
+        verify(runner, times(1)).run(any(), any(), any(), any());
+        verify(archive, times(1)).preserve(PET, grid2);
+        verify(recorder, never()).discardSucceeded(PET, GenKind.LAYER2, PostProcessStep.GRID2);
         verify(alerts, times(1)).layer2Failed(eq(PET), any(), any());
         // 사용자에게는 실패 화면이 없다 — 펫은 살아 있다.
         assertThat(pet.isAlive()).isTrue();
@@ -181,31 +181,28 @@ class Layer2BakeTest {
         when(runner.run(any(), any(), any(), any())).thenAnswer(inv ->
                 RunResult.quotaBlocked(inv.getArgument(1), BigDecimal.ZERO, GenErrorCode.UNKNOWN));
 
-        service.bake(PET);
+        finishAlreadyClaimedAttempt();
 
         assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.FAILED);
         verify(runner, times(1)).run(any(), any(), any(), any());
     }
 
     @Test
-    @DisplayName("★ 이미 굽는 중·READY·FAILED 는 집지 않는다 — 부화 완료 훅이 두 번 불려도 한 번만 굽는다")
+    @DisplayName("신규·READY·FAILED·수동 reset 이후에도 새 해금8 시도를 만들지 않는다")
     void claimsOnlyPending() {
-        when(runner.run(any(), any(), any(), any())).thenAnswer(inv -> ok(inv.getArgument(1), 2));
+        service.schedule(PET);
         service.bake(PET);
-        service.bake(PET);                       // READY — 건너뜀
-        verify(runner, times(1)).run(any(), any(), any(), any());
-
-        pet.flagLayer2("빈 칸");                 // 결함 표시 — READY 그대로, 저절로 다시 굽지 않는다
+        assertThat(pet.getLayer2Status()).isEqualTo(Layer2Status.PENDING);
+        pet.markLayer2Ready(T0);
         service.bake(PET);
-        verify(runner, times(1)).run(any(), any(), any(), any());
-
-        pet.markLayer2Failed("소진", T0);        // FAILED — 저절로 다시 굽지 않는다
+        pet.flagLayer2("기존 결함");
         service.bake(PET);
-        verify(runner, times(1)).run(any(), any(), any(), any());
-
-        pet.resetLayer2(T0);                     // 관리자 재시도 — PENDING 으로 돌리면 다시 집힌다
+        pet.markLayer2Failed("기존 실패", T0);
         service.bake(PET);
-        verify(runner, times(2)).run(any(), any(), any(), any());
+        pet.resetLayer2(T0);
+        service.bake(PET);
+        assertThat(pet.getBasicRound()).isEqualTo(1);
+        org.mockito.Mockito.verifyNoInteractions(runner, layer2, jobs, archive, alerts);
     }
 
     @Test

@@ -15,6 +15,7 @@ import java.time.LocalTime;
  * BABY 는 하루 3회에 안 세지만 친밀도 +40 과 2층 조건 카운터에는 센다.
  */
 public enum ChatSlot {
+    CONTINUOUS(null, null),
     BABY(null, null),
     MORNING(ZzalRules.CHAT_MORNING_OPENS, ZzalRules.CHAT_NOON_OPENS),
     NOON(ZzalRules.CHAT_NOON_OPENS, ZzalRules.CHAT_EVENING_OPENS),

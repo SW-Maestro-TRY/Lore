@@ -74,6 +74,9 @@ public enum ErrorCode {
     ZZAL_NOT_WAKE_TIME(HttpStatus.CONFLICT, "아직 깰 시간이 아니에요"),
     ZZAL_SICK_REFUSES(HttpStatus.CONFLICT, "아파서 지금은 못 해요"),
     ZZAL_BATH_DONE_TODAY(HttpStatus.CONFLICT, "오늘은 이미 씻었어요"),
+    ZZAL_CHAT_SESSION_STALE(HttpStatus.CONFLICT, "대화가 바뀌었어요. 지금 대화를 다시 확인해 주세요"),
+    ZZAL_ACTION_REQUEST_CONFLICT(HttpStatus.CONFLICT, "이 요청 번호는 다른 행동에 사용됐어요"),
+    ZZAL_CHAT_REQUEST_CONFLICT(HttpStatus.CONFLICT, "이 전송 번호는 다른 답에 사용됐어요"),
     ZZAL_CHAT_SLOT_CLOSED(HttpStatus.CONFLICT, "지금은 부르지 않았어요"),
     ZZAL_FEATURE_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않았어요"),
     ZZAL_TRAVELING(HttpStatus.CONFLICT, "여행 중이에요"),
@@ -89,6 +92,7 @@ public enum ErrorCode {
     ZZAL_PET_HATCH_FAILED(HttpStatus.CONFLICT, "이 그림으로는 그리기가 어려웠어요. 다른 그림으로 다시 해 볼까요?"),
     ZZAL_TUTORIAL_NOT_FINISHED(HttpStatus.CONFLICT, "아직 배울 것이 남았어요"),
     ZZAL_TUTORIAL_ALREADY_DONE(HttpStatus.CONFLICT, "이미 다 배웠어요"),
+    ZZAL_PERSONA_SOURCE_STALE(HttpStatus.CONFLICT, "설정이 바뀌었어요. 현재 설정을 다시 확인해 주세요"),
     ZZAL_TUTORIAL_STEP_MISMATCH(HttpStatus.CONFLICT, "지금 배울 차례가 아니에요"),
     ZZAL_REGEN_NOT_REQUESTED(HttpStatus.CONFLICT, "다시 굽기를 요청한 동작이 아니에요"),
     ZZAL_NOT_IN_REVIEW(HttpStatus.CONFLICT, "검수 대기 중인 동작이 아니에요"),
@@ -104,6 +108,7 @@ public enum ErrorCode {
 
     // 후기 (zzal)
     ZZAL_FEEDBACK_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 후기를 남겼어요"),
+    ZZAL_INQUIRY_CONFLICT(HttpStatus.CONFLICT, "같은 문의 요청 번호에 다른 내용이 담겨 있어요"),
 
     // 동작 요청 (zzal)
     // ★ 429 가 아니라 409 다 — 이 서비스의 하루 상한은 전부 409 + 전용 코드로 답해 왔고

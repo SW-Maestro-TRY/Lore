@@ -15,7 +15,7 @@ package com.lore.zzal.chat.line;
  * </ul>
  */
 public enum LineOutcome {
-    OK("ok"), RETRIED_OK("retried_ok"), FAILED_CLOSED("failed_closed"), TRUNCATED("truncated"),
+    OK("ok"), RETRIED_OK("retried_ok"), FAILED_CLOSED("failed_closed"), FAILED_REPLY("failed_reply"), TRUNCATED("truncated"),
     RETRY_WAIT("retry_wait"), BABY_NEUTRAL("baby_neutral");
 
     private final String code;

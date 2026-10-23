@@ -36,7 +36,8 @@ public class PersonaSheetBuilder {
             profileCall = profiles.findById(pet.getUserId()).map(ZzalUserProfile::getCallMe).orElse(null);
         }
         String petCall = blank(pet.getCallMe());
-        String call = petCall != null ? petCall : callMe(profileCall);
+        String call = "DEFERRED".equals(pet.getCallMeSource()) ? "사용자님"
+                : petCall != null ? petCall : callMe(profileCall);
         boolean declined = petCall == null && blank(profileCall) != null && NO_CALL.contains(blank(profileCall));
         return new PersonaSheet(
                 pet.getName() == null ? "" : pet.getName().strip(),
@@ -45,7 +46,9 @@ public class PersonaSheetBuilder {
                 blank(pet.getWorld()),
                 blank(pet.getNote()),
                 call,
-                declined);
+                declined,
+                pet.getAuthoredPersona(),
+                pet.getDiaryLanguage());
     }
 
     /**

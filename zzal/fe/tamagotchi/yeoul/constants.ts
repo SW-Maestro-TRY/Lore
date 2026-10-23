@@ -227,13 +227,13 @@ export const UPLOAD_COPY = {
 export const ONB_COPY: Record<StepKey, readonly [string, string]> = {
   landing: [LANDING_COPY.greeting, LANDING_COPY.sub],
   upload: ['캐릭터 이미지를 업로드해 주세요', '한 장만 올릴 수 있어요. 얼굴이 잘 보이는 그림일수록 좋아요.'],
-  user: ['당신은 어떤 분인가요', '알려주면 아이가 더 살갑게 대해요. 전부 선택이에요.'],
+  user: ['당신은 어떤 분인가요', '모두 선택 항목이에요. 대화에 참고할 내용을 알려 주세요.'],
   char: ['어떤 아이인가요', '이름만 정하면 시작할 수 있어요.'],
   born: ['태어났어요', '이제 이 아이의 첫날이에요.'],
 };
 
 /** 튜토리얼 · 샘플 방(여울이 연습을 시킨다). */
-export interface TutorStep { at: string; room: string | null; act: 'a' | 'pet' | null; done: string; text: string }
+export interface TutorStep { at: string; room: string | null; act: 'a' | 'b' | 'pet' | null; done: string; text: string }
 export const TUTOR: readonly TutorStep[] = [
   { at: '0분', room: null, act: null, done: 'any', text: '안녕하세요, 저는 여울이에요. 당신의 아이가 나올 동안 여기서 연습해요.' },
   { at: '3분', room: null, act: 'pet', done: 'pet', text: '제 몸을 톡 눌러 보세요. 언제든 다시 해도 돼요.' },
@@ -434,7 +434,7 @@ export const TUTOR_ROOM: readonly TutorStep[] = [
   { at: '3칸', room: 'chat', act: null, done: 'CHAT', text: '뭐라고 말을 거네요. 오른쪽 아래 말풍선을 눌러 답해 주세요.' },
   // ★ 정본 §12 는 이 칸을 **"이 성격이 맞나요"**(확인·수정)로 적는다 — 성격은 부화 전 캐릭터
   //   정보 화면에서 이미 받았으므로 여기서 처음 고르는 것이 아니다(정본 1.3·1.6).
-  { at: '4칸', room: 'info', act: null, done: 'PERSONALITY', text: '이 성격이 맞나요. 아이 정보에서 확인해 주세요.' },
+  { at: '4칸', room: 'info', act: null, done: 'PERSONALITY', text: '캐릭터 정보에서 성격과 설정을 확인해 주세요.' },
   // ★ 목욕 규칙도 **욕실 칸**에서(판정 F8). 목욕 버튼이 같은 팝오버에 있다.
   { at: '5칸', room: 'bath', act: 'a', done: 'CLEAN', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요. 목욕은 하루 한 번이에요.' },
   { at: '6칸', room: 'play', act: 'a', done: 'GAME', text: '같이 놀아 볼까요. 마당에서 좌우 맞히기를 한 판 시작해 주세요. 시작하면 오늘 세 판 중 하나예요. 중간에 나가면 그 판은 져요.' },

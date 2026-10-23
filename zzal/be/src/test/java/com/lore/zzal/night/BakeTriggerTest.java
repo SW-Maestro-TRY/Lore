@@ -31,17 +31,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * <b>조건을 채운 그 순간</b> 굽는다(정본 1.8·1.9).
- *
- * <h3>★ 무엇을 지키는 시험인가</h3>
- * <ul>
- *   <li>세 조건이 <b>각자의 순간</b>에 일감을 만든다 — 구르기는 튜토리얼 완주, 나머지는 잠들 때·조각이 찰 때</li>
- *   <li><b>즉시 굽기와 스위프가 같은 줄을 두 번 잡지 않는다.</b> 여기가 뚫리면 한 동작에 돈이 두 번 나간다</li>
- *   <li>구르기가 <b>함께한 날 3일이 아니라 튜토리얼 완주</b>에 걸린다(1.7)</li>
- * </ul>
+/** New GIFT101/102 generation is retired. Preserve claim/release and duplicate protection
+ * for the unchanged basic1..8 operating path; do not enable new advanced journey entry.
  */
-@DisplayName("즉시 굽기 — 조건을 채운 그 순간")
+@DisplayName("선물 신규생성 중단·보존 기본동작 실행기 안전성")
 class BakeTriggerTest {
 
     private static final Instant T0 = kst("2026-09-05 18:00");
@@ -88,6 +81,13 @@ class BakeTriggerTest {
             return 1;
         });
 
+        when(repo.releaseClaim(anyLong())).thenAnswer(i -> {
+            ZzalMotion m = rows.stream().filter(r -> i.getArgument(0).equals(r.getId())).findFirst().orElseThrow();
+            if (m.getStatus() != MotionStatus.BAKING) return 0;
+            ReflectionTestUtils.setField(m, "status", MotionStatus.QUEUED);
+            return 1;
+        });
+
         catalog = mock(MotionCatalog.class);
         when(catalog.gifts()).thenReturn(realCatalog.gifts());
         when(catalog.isBakeable(anyString())).thenReturn(true);
@@ -111,12 +111,13 @@ class BakeTriggerTest {
     class Roll {
 
         @Test
-        @DisplayName("★★ 튜토리얼 완주가 구르기를 굽는다 — 함께한 날 3일이 아니다(1.7)")
+        @DisplayName("튜토리얼 완주가 폐기 GIFT101을 새로 굽지 않는다")
         void bakesOnTutorialDone() {
             trigger.onTutorialDone(pet, T0);
 
-            assertThat(row(101).getStatus()).isEqualTo(MotionStatus.BAKING);
-            verify(motionService).bakeNow(row(101).getId());
+            assertThat(row(101).getStatus()).isEqualTo(MotionStatus.NONE);
+            assertThat(claimed).isEmpty();
+            verify(motionService, never()).bakeNow(anyLong());
         }
 
         @Test
@@ -131,13 +132,14 @@ class BakeTriggerTest {
         }
 
         @Test
-        @DisplayName("두 번 불러도 한 번만 굽는다")
+        @DisplayName("반복 튜토완료 훅에도 새 GIFT101 작업이 없다")
         void idempotent() {
             trigger.onTutorialDone(pet, T0);
             trigger.onTutorialDone(pet, T0);
 
-            verify(motionService).bakeNow(row(101).getId());
-            assertThat(claimed.get(row(101).getId())).isEqualTo(1);
+            verify(motionService, never()).bakeNow(anyLong());
+            assertThat(claimed).isEmpty();
+            assertThat(row(101).getStatus()).isEqualTo(MotionStatus.NONE);
         }
     }
 
@@ -146,12 +148,13 @@ class BakeTriggerTest {
     class FallBack {
 
         @Test
-        @DisplayName("★★ 진 그 순간 굽는다 — 옛 조건(함께한 날 3일)은 그림과 아무 관계가 없었다")
+        @DisplayName("첫 게임 패배가 폐기 GIFT102를 새로 굽지 않는다")
         void bakesOnFirstLoss() {
             trigger.onFirstGameLoss(pet, T0);
 
-            assertThat(row(102).getStatus()).isEqualTo(MotionStatus.BAKING);
-            verify(motionService).bakeNow(row(102).getId());
+            assertThat(row(102).getStatus()).isEqualTo(MotionStatus.NONE);
+            assertThat(claimed).isEmpty();
+            verify(motionService, never()).bakeNow(anyLong());
         }
 
         @Test
@@ -166,26 +169,26 @@ class BakeTriggerTest {
         }
 
         @Test
-        @DisplayName("★★ 두 번 져도 한 번만 굽는다 — 선물은 하나다")
+        @DisplayName("게임 패배가 반복돼도 새 GIFT102 작업이 없다")
         void onlyTheFirstLossCounts() {
             trigger.onFirstGameLoss(pet, T0);
             trigger.onFirstGameLoss(pet, T0.plusSeconds(600));
 
-            verify(motionService).bakeNow(row(102).getId());
-            assertThat(claimed.get(row(102).getId())).isEqualTo(1);
+            verify(motionService, never()).bakeNow(anyLong());
+            assertThat(claimed).isEmpty();
+            assertThat(row(102).getStatus()).isEqualTo(MotionStatus.NONE);
         }
 
         @Test
         @DisplayName("★★ 즉시 굽기가 집은 줄은 스위프가 다시 못 집는다 — 여기가 뚫리면 돈이 두 번 나간다")
         void sweepCannotTakeWhatWeClaimed() {
-            trigger.onFirstGameLoss(pet, T0);
-
-            // 스위프가 같은 줄을 집으려 한다 — 이미 BAKING 이라 0 이 돌아와야 한다.
-            int won = repo.claim(row(102).getId(), Instant.now(), "sweep");
-
+            row(1).failNight();
+            trigger.onSleep(pet, T0);
+            int won = repo.claim(row(1).getId(), Instant.now(), "sweep");
             assertThat(won).isZero();
-            assertThat(claimed.get(row(102).getId())).isEqualTo(1);
-            verify(motionService).bakeNow(row(102).getId());
+            assertThat(claimed.get(row(1).getId())).isEqualTo(1);
+            verify(motionService).bakeNow(row(1).getId());
+            assertThat(row(102).getStatus()).isEqualTo(MotionStatus.NONE);
         }
 
         @Test
@@ -203,6 +206,31 @@ class BakeTriggerTest {
         }
     }
 
+    @Test
+    @DisplayName("보존 기본1 재시도 훅 두 번에도 claim·실행은 한 번")
+    void retainedBasicRetryIsClaimedOnce() {
+        row(1).failNight();
+        trigger.onSleep(pet, T0);
+        trigger.onSleep(pet, T0.plusSeconds(1));
+        assertThat(row(1).getStatus()).isEqualTo(MotionStatus.BAKING);
+        assertThat(claimed.get(row(1).getId())).isEqualTo(1);
+        verify(motionService).bakeNow(row(1).getId());
+    }
+
+    @Test
+    @DisplayName("이미 실행중 GIFT는 취소·삭제하지 않고 새 훅도 추가실행하지 않는다")
+    void leavesAlreadyRunningLegacyGiftIntact() {
+        ReflectionTestUtils.setField(row(101), "status", MotionStatus.BAKING);
+        ReflectionTestUtils.setField(row(102), "status", MotionStatus.BAKING);
+        trigger.onTutorialDone(pet, T0);
+        trigger.onFirstGameLoss(pet, T0);
+        trigger.onSleep(pet, T0);
+        assertThat(row(101).getStatus()).isEqualTo(MotionStatus.BAKING);
+        assertThat(row(102).getStatus()).isEqualTo(MotionStatus.BAKING);
+        assertThat(claimed).isEmpty();
+        verify(motionService, never()).bakeNow(anyLong());
+    }
+
     @Nested
     @DisplayName("실행기가 안 받으면")
     class Rejected {
@@ -214,9 +242,13 @@ class BakeTriggerTest {
                 throw new java.util.concurrent.RejectedExecutionException("종료 중");
             });
 
-            t.onTutorialDone(pet, T0);
+            row(1).failNight();
+            t.onSleep(pet, T0);
 
-            verify(repo).releaseClaim(eq(row(101).getId()));
+            verify(repo).releaseClaim(eq(row(1).getId()));
+            assertThat(row(1).getStatus()).isEqualTo(MotionStatus.QUEUED);
+            verify(motionService, never()).bakeNow(anyLong());
+            assertThat(row(101).getStatus()).isEqualTo(MotionStatus.NONE);
         }
     }
 }

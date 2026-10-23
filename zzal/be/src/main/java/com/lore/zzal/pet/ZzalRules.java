@@ -330,6 +330,8 @@ public final class ZzalRules {
      * ★ 시계가 멈춰 있어 흔적이 시간으로 생기지 않는다. 앞 칸이 끝날 때 직접 만든다.
      */
     public static final int TUTORIAL_FIRST_TRASH = 1;
+    /** The mandatory bath tutorial deliberately shows one bath clearing three messes. */
+    public static final int TUTORIAL_BATH_TRASH = 3;
 
     /**
      * 낮잠(정본 12장 8칸) — 재우면 커튼이 내려오고 <b>곧바로</b> 깨울 수 있다.

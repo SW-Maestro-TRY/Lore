@@ -313,7 +313,8 @@ class HttpContractIT extends ZzalItSupport {
                 Map.of("localTime", "19:00"));
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
 
-        java.time.Instant after = java.time.Instant.parse(body(result).path("data").path("serverNow").asText());
+        // ★ 시계 응답은 리모컨 모양(effects · before · after · state)이다 — 맞춘 뒤의 시각은 after 에 있다.
+        java.time.Instant after = java.time.Instant.parse(body(result).path("data").path("after").path("serverNow").asText());
         assertThat(after.atZone(ZzalRules.ZONE).toLocalDate())
                 .as("서버 날짜를 쓰면 여기서 어제로 되돌아간다. 실제=%s", after)
                 .isEqualTo(petToday);
@@ -333,6 +334,54 @@ class HttpContractIT extends ZzalItSupport {
                 Map.of("minutes", 10)).getResponse().getStatus()).isEqualTo(404);
     }
 
+    // ── 부르기(재회) — 여행 간 아이를 데려오는 문 ─────────────────────────
+
+    /** 이틀 전에 떠난 것으로 둔다 — 출발일 포함 사흘째라 엽서 상한 3장이 쌓일 날짜다. */
+    private void sendOnTrip(Long petId, Instant startedAt) {
+        transactions.executeWithoutResult(status -> {
+            ZzalPet pet = petRepository.findById(petId).orElseThrow();
+            ReflectionTestUtils.setField(pet, "tripStartedAt", startedAt);
+        });
+    }
+
+    @Test
+    @DisplayName("★★ 여행 중 부르기는 200 — 아이가 돌아오고 게이지 2칸, 엽서 3장이 앨범에 전달된다")
+    void callBackBringsTheTravelerHome() throws Exception {
+        Long userId = newUserId();
+        Long petId = playablePet(userId).getId();
+        sendOnTrip(petId, kstToday(ANCHOR_HOUR, 0).minus(Duration.ofDays(2)));
+
+        JsonNode before = getJson(userId, "/api/zzal/v1/me/pets/" + petId).path("data");
+        assertThat(before.path("trip").isObject()).as("부르기 전엔 여행 중이다. 응답=%s", before).isTrue();
+
+        var result = postAs(userId, "/api/zzal/v1/me/pets/%d/call-back".formatted(petId), null);
+
+        assertThat(result.getResponse().getStatus())
+                .as("부르기. 응답=%s", result.getResponse().getContentAsString())
+                .isEqualTo(200);
+        JsonNode data = body(result).path("data");
+        assertThat(data.path("trip").isNull() || data.path("trip").isMissingNode())
+                .as("돌아온 뒤에는 여행 정보가 없다").isTrue();
+        assertThat(data.path("gauges").path("fullness").asInt()).isEqualTo(ZzalRules.REUNION_GAUGE);
+        assertThat(data.path("gauges").path("happiness").asInt()).isEqualTo(ZzalRules.REUNION_GAUGE);
+
+        JsonNode album = getJson(userId, "/api/zzal/v1/me/pets/%d/album".formatted(petId)).path("data");
+        assertThat(album.path("postcards").size())
+                .as("여행 중 모인 엽서가 재회 순간 한꺼번에 전달된다").isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("★ 여행 중이 아닌데 부르면 409 ZZAL_NOT_TRAVELING — 500 이 아니다")
+    void callBackWhenNotTravelingIsConflict() throws Exception {
+        Long userId = newUserId();
+        Long petId = playablePet(userId).getId();
+
+        var result = postAs(userId, "/api/zzal/v1/me/pets/%d/call-back".formatted(petId), null);
+
+        assertThat(result.getResponse().getStatus()).isEqualTo(409);
+        assertThat(errorCode(result)).isEqualTo("ZZAL_NOT_TRAVELING");
+    }
+
     /** 이 시험이 쓰는 주소들이 실제로 등록돼 있는지 — 매핑이 사라지면 위 시험들이 전부 404 로 "통과" 하지 않게. */
     @Test
     @DisplayName("★ 쓰는 주소가 전부 등록돼 있다")
@@ -350,7 +399,13 @@ class HttpContractIT extends ZzalItSupport {
                 "/api/zzal/v1/me/pets/{petId}/games/{gameId}/finish",
                 "/api/zzal/v1/me/pets/{petId}/care",
                 "/api/zzal/v1/me/pets/{petId}/chat/{slot}/answer",
+                "/api/zzal/v1/me/pets/{petId}/call-back",
                 "/api/zzal/v1/dev/pets/{petId}/advance-clock",
-                "/api/zzal/v1/dev/pets/{petId}/set-clock");
+                "/api/zzal/v1/dev/pets/{petId}/set-clock",
+                "/api/zzal/v1/dev/ping",
+                "/api/zzal/v1/dev/pets/{petId}/state",
+                "/api/zzal/v1/dev/pets/{petId}/events/{kind}",
+                "/api/zzal/v1/dev/pets/{petId}/bake",
+                "/api/zzal/v1/dev/pets/{petId}/bake/{jobId}");
     }
 }

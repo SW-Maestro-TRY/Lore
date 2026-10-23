@@ -14,6 +14,12 @@ class TurnPlannerTest {
     private static final Set<QuestionItem> NONE = EnumSet.noneOf(QuestionItem.class);
 
     @Test
+    void continuousFirstDoesNotForceAddressOrProfileQuestion() {
+        var plan = TurnPlanner.first(SessionKind.BABY, java.util.Set.of(), com.lore.zzal.chat.ChatSlot.CONTINUOUS);
+        assertThat(plan.item()).isNull();
+    }
+
+    @Test
     @DisplayName("첫 턴 = 판 종류 — BABY·첫 만남은 '첫 만남', 보통은 '오늘 첫 인사', 오랜만은 질문 없이 '오랜만'")
     void firstTurnByKind() {
         TurnPlan baby = TurnPlanner.first(SessionKind.BABY, NONE);
