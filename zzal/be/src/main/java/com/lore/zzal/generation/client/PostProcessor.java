@@ -69,6 +69,11 @@ public interface PostProcessor {
          *   전에는 1층·2층이 한 세션에서 연달아 돌아 그 파일이 이미 폴더에 있었다. 이제 2층이 따로 돌므로
          *   1층이 올려 둔 그 파일을 같은 자리에 놓는다 — 스크립트는 바뀌지 않는다(같은 바이트가 나온다).
          */
+        /** Frozen custom plan for body-reference selection; implementations may not silently ignore it. */
+        default void customMotionPlan(String frozenPlanJson) throws Exception {
+            throw new UnsupportedOperationException("Frozen custom plan is not supported by this processor");
+        }
+
         default void seedAnchors(String anchorsKey) throws Exception {
         }
 

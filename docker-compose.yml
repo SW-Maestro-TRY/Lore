@@ -124,6 +124,8 @@ services:
       # 플레이스홀더가 안 풀려 기동이 막힌다.
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
       # http(노트북)에서는 Secure 쿠키가 저장 안 되므로 false. https(박스)는 .env 에서 true.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       # 메일 계정을 안 주면 SMTP 헬스 인디케이터가 연결 실패로 DOWN → /actuator/health 가 503 이 된다.

@@ -126,6 +126,12 @@ class ContextLoadsIT extends ZzalItSupport {
         assertThat(context.getBeanNamesForType(DevClockController.class))
                 .as("app.zzal.dev-tools 가 false 면 이 컨트롤러는 빈으로 안 올라온다(주소 자체가 404)")
                 .isNotEmpty();
+        // 리모컨(상태·이벤트·굽기·ping)도 같은 스위치 뒤에 함께 뜬다. 꺼졌을 때 없는 것은 DevToolsOffIT 가 고정한다.
+        for (Class<?> type : List.of(com.lore.zzal.dev.DevStateController.class, com.lore.zzal.dev.DevBakeController.class,
+                com.lore.zzal.dev.DevPingController.class, com.lore.zzal.dev.DevService.class,
+                com.lore.zzal.dev.DevBakeService.class)) {
+            assertThat(context.getBeanNamesForType(type)).as("%s 가 안 떴다", type.getSimpleName()).isNotEmpty();
+        }
     }
 
     @Test

@@ -87,15 +87,15 @@ public final class PetResponses {
      * ★ {@code clockStartedAt} 이 null 이면 <b>아직 튜토리얼 중</b>이라 시간이 흐르지 않는다 —
      *   게이지도, 자동 취침도 없다. 화면은 이 값 하나로 "지금 튜토리얼인가"를 알 수 있다.
      */
-    public record Clock(Instant clockStartedAt, boolean sleeping, String sleepKind, Instant sleptAt, Instant wokeAt,
-                        boolean canSleep, boolean canWake, Instant sleepWindowOpensAt, Instant autoSleepAt,
-                        Instant wakeWindowOpensAt, Instant autoWakeAt, boolean overslept) {
+    public record Clock(@Schema(nullable=true) Instant clockStartedAt, boolean sleeping, @Schema(nullable=true) String sleepKind, @Schema(nullable=true) Instant sleptAt, Instant wokeAt,
+                        boolean canSleep, boolean canWake, @Schema(nullable=true) Instant sleepWindowOpensAt, @Schema(nullable=true) Instant autoSleepAt,
+                        @Schema(nullable=true) Instant wakeWindowOpensAt, @Schema(nullable=true) Instant autoWakeAt, boolean overslept) {
     }
 
     public record Gauges(int fullness, int happiness, int clean, int trash) {
     }
 
-    public record Food(int count, Long nextInSeconds) {
+    public record Food(int count, @Schema(nullable=true) Long nextInSeconds) {
     }
 
     /**
@@ -104,6 +104,7 @@ public final class PetResponses {
      * ★ {@code kind} 는 원인이지만 화면은 대개 안 쓴다 — 설계 규칙은 "아픈 자세 + 해골" 하나로만 보인다.
      *   그래도 내려보내는 이유는 나중에 문구를 나눌 여지를 남기고(배탈 vs 방치), 지원 문의 때 원인을 짚기 위해서다.
      */
+    @Schema(name="Sick",schemaResolution=Schema.SchemaResolution.INLINE)
     public record Sick(Instant since, String kind) {
     }
 
@@ -140,6 +141,7 @@ public final class PetResponses {
      *
      * ★ {@code bonus} 는 기분 좋은 날의 선물 조각을 오늘 받았나.
      */
+    @Schema(name="Pieces",schemaResolution=Schema.SchemaResolution.INLINE)
     public record Pieces(boolean food, boolean play, boolean clean, boolean bond,
                          int count, boolean bonus,
                          Progress foodProgress, Progress playProgress,
@@ -168,6 +170,7 @@ public final class PetResponses {
         }
     }
 
+    @Schema(name="Progress",schemaResolution=Schema.SchemaResolution.INLINE)
     public record Progress(int current, int target) {
     }
 
@@ -187,12 +190,12 @@ public final class PetResponses {
      *   OPEN(도착)                             → OPEN        배웠다
      * </pre>
      */
-    public record Advanced(String status, String imageKey, Instant revealedAt, boolean seen,
-                           @Schema(description = """
+    public record Advanced(String status, @Schema(nullable=true) String imageKey, @Schema(nullable=true) Instant revealedAt, boolean seen,
+                           @Schema(nullable=true,description = """
                                    움짤 캔버스 가로(px). 판마다 다르므로 화면이 상수로 가정하면 안 된다.
                                    맥미니가 올린 재생성본은 서버가 크기를 재지 않아 null 이다""")
                            Integer width,
-                           @Schema(description = "움짤 캔버스 세로(px). width 와 같은 규칙") Integer height) {
+                           @Schema(nullable=true,description = "움짤 캔버스 세로(px). width 와 같은 규칙") Integer height) {
         static final Advanced NONE = new Advanced("NONE", null, null, false, null, null);
 
         /**
@@ -221,7 +224,7 @@ public final class PetResponses {
 
     @Schema(description = "동작 1건. 18건 고정이며 seq 오름차순으로 반환한다")
     public record Motion(int seq, String key, String label, String layer, boolean unlocked,
-                         String basicImageKey, String hint, Progress progress, Advanced advanced) {
+                         @Schema(nullable=true) String basicImageKey, @Schema(nullable=true) String hint, @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) Progress progress, Advanced advanced) {
     }
 
     /** 아침에 도착한 동작 한 건. 가로·세로 규칙은 {@link Advanced} 와 같다. */
@@ -248,7 +251,7 @@ public final class PetResponses {
     public record FirstGift(String status, int daysLeft) {
     }
 
-    public record ChatSummary(String openSlot, Instant nextAt) {
+    public record ChatSummary(@Schema(nullable=true) String openSlot, @Schema(nullable=true) Instant nextAt) {
     }
 
     /**
@@ -256,6 +259,7 @@ public final class PetResponses {
      *
      * ★ 그림 주소가 아니라 재료를 준다. 배경을 바꾸거나 소품 그림이 좋아지면 옛 장면도 같이 좋아진다.
      */
+    @Schema(name="Scene",schemaResolution=Schema.SchemaResolution.INLINE)
     public record Scene(String motionKey, String background, String prop, Instant at, String line) {
 
         public static Scene of(ZzalScene s) {
@@ -264,7 +268,7 @@ public final class PetResponses {
         }
     }
 
-    public record Scenes(boolean enabled, Scene latest) {
+    public record Scenes(boolean enabled, @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) Scene latest) {
     }
 
     public record Features(boolean download, boolean leftRight, boolean run, boolean scenes,
@@ -277,10 +281,12 @@ public final class PetResponses {
      * ★ {@code justCancelled} 는 "방금 돌아와서 취소됐다" — 이번 응답에만 실린다. 그러지 않으면
      *   사용자는 자기가 무엇을 막았는지 영영 모른다(짐 가방이 그냥 사라진다).
      */
+    @Schema(name="Leaving",schemaResolution=Schema.SchemaResolution.INLINE)
     public record Leaving(Instant noticedAt, Instant departsAt, boolean justCancelled) {
     }
 
     /** 여행 중(설계 규칙). {@code postcards} 는 지금까지 온 엽서 수(최대 3) — 내용은 재회 때 전달된다. */
+    @Schema(name="Trip",schemaResolution=Schema.SchemaResolution.INLINE)
     public record Trip(Instant startedAt, int postcards) {
     }
 
@@ -298,7 +304,8 @@ public final class PetResponses {
 
     /** 앨범(api-v2.md 1.6) — 도감 18칸 + 엽서·장면(PR-9·11 전엔 빈 목록) + 첫 심화 기념. */
     @Schema(description = "앨범. 동작 도감과 엽서·장면·첫 심화 동작 정보로 구성한다")
-    public record Album(List<Motion> motions, List<Postcard> postcards, List<Scene> scenes, FirstGift firstGift) {
+    public record Album(List<Motion> motions, List<Postcard> postcards, List<Scene> scenes, FirstGift firstGift, @Schema(requiredMode=Schema.RequiredMode.NOT_REQUIRED) List<com.lore.zzal.attendance.OwnedCustomMotion> customMotions) {
+        public Album(List<Motion> motions,List<Postcard> postcards,List<Scene> scenes,FirstGift firstGift){this(motions,postcards,scenes,firstGift,List.of());}
     }
 
     /**
@@ -316,15 +323,22 @@ public final class PetResponses {
     @Schema(description = """
             캐릭터 상태 전체. 부화 중과 진행 중을 구분하지 않고 이 응답 하나로 화면을 구성한다.
             phase 가 ALIVE 가 아니면 진행 중 전용 블록은 모두 null 이다""")
+    public record FirstNightChatGrace(boolean eligible, boolean active, @Schema(nullable=true) Instant deadlineAt, @Schema(nullable=true) Instant endedAt, boolean willSleepAtEnd) {
+        static FirstNightChatGrace from(ZzalPet pet,Instant now) {
+            return new FirstNightChatGrace(pet.firstNightChatGraceEligible(now),pet.firstNightChatGraceActive(now),
+                    pet.getFirstNightChatDeadlineAt(),pet.getFirstNightChatEndedAt(),pet.firstNightChatGraceActive(now) && com.lore.zzal.pet.AwakeClock.isNight(pet.getFirstNightChatDeadlineAt()));
+        }
+    }
+
     public record Detail(
             Long petId,
             String name,
-            String note,
+            @Schema(nullable=true) String note,
             @Schema(description = "DRAFT · HATCHING · ALIVE · FAILED · DEAD") String phase,
             @Schema(description = "부화 완료 여부") boolean ready,
-            @Schema(description = "현재 수행 중인 생성 단계. 부화 중에만 채워진다") String step,
-            @Schema(description = "부화 시작 후 경과 시간(초)") Long elapsedSeconds,
-            @Schema(description = "종료 사유. FAILED·DEAD 일 때만 채워진다") String deathReason,
+            @Schema(nullable=true,description = "현재 수행 중인 생성 단계. 부화 중에만 채워진다") String step,
+            @Schema(nullable=true,description = "부화 시작 후 경과 시간(초)") Long elapsedSeconds,
+            @Schema(nullable=true,description = "종료 사유. FAILED·DEAD 일 때만 채워진다") String deathReason,
             Instant hatchStartedAt,
             Instant hatchedAt,
             @Schema(description = "서버 기준 현재 시각. 화면은 기기 시계 대신 이 값을 사용한다") Instant serverNow,
@@ -335,14 +349,14 @@ public final class PetResponses {
             Gauges gauges,
             Food food,
             @Schema(description = "표시 우선순위: SICK > HUNGRY > SAD > DIRTY > NORMAL") String mood,
-            Sick sick,
+            @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) Sick sick,
             @Schema(description = """
                     투약으로 방금 회복했는지 여부. 행동 응답에만 채워진다.
                     상태값만으로는 방금 회복한 경우와 원래 정상인 경우를 구분할 수 없으므로 별도로 내려준다""")
             boolean justHealed,
             Intimacy intimacy,
             Today today,
-            @Schema(description = "오늘 모은 조각. 심화 단계 진입 전에는 null") Pieces pieces,
+            @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE,description = "오늘 모은 조각. 심화 단계 진입 전에는 null") Pieces pieces,
             @Schema(description = """
                     직전 취침 시점에 케어 미스가 없고 게이지 3종이 모두 2 이상이었는지 여부.
                     조건을 만족하면 조각 1개를 선지급한다. 심화 단계 진입 전에는 항상 false""")
@@ -362,28 +376,42 @@ public final class PetResponses {
             FirstGift firstGift,
             ChatSummary chatSummary,
             Scenes scenes,
-            String personality,
-            String world,
-            @Schema(description = "말투. 대사 톤에만 쓰이고 그림 생성에는 들어가지 않는다") String tone,
-            @Schema(description = "장르. 말투와 같이 대사 톤에만 쓰인다") String genre,
+            @Schema(nullable=true) String personality,
+            @Schema(nullable=true) String world,
+            @Schema(nullable=true,description = "말투. 대사 톤에만 쓰이고 그림 생성에는 들어가지 않는다") String tone,
+            @Schema(nullable=true,description = "장르. 말투와 같이 대사 톤에만 쓰인다") String genre,
             String background,
-            @Schema(description = """
+            @Schema(nullable=true,description = """
                     자세 앵커 파일의 S3 키. 화면이 소품을 얹을 좌표가 들어 있다.
                     전체 URL 이 아니라 키다(다른 imageKey 들과 같은 형식).
                     앵커를 내지 않는 부화 버전이거나 아직 한 판도 안 구웠으면 null""")
             String anchorsKey,
             Features features,
-            Leaving leaving,
-            Trip trip,
-            @Schema(description = """
+            @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) Leaving leaving,
+            @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) Trip trip,
+            @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE,description = """
                     튜토리얼 진행 상태. 9단계를 모두 완료하면 null 이 되고 clock.clockStartedAt 이 채워진다.
                     진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다""")
             Tutorial tutorial,
-            @Schema(description = """
+            @Schema(nullable=true,description = """
                     튜토리얼 졸업 축하 창을 본 시각. 아직 안 봤으면 null.
                     화면은 이 값이 null 일 때만 축하 창을 띄우고, 닫을 때 POST /{petId}/graduation-seen 을 부른다.
                     기기가 아니라 캐릭터에 붙는 값이라 새 탭·재시작에도 같은 창이 다시 뜨지 않는다""")
-            Instant graduationSeenAt) {
+            Instant graduationSeenAt, @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) com.lore.zzal.pet.FirstIntro.State firstIntro,
+            @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) com.lore.zzal.attendance.AttendanceRewards attendanceRewards, FirstNightChatGrace firstNightChatGrace,
+            @Schema(requiredMode=Schema.RequiredMode.NOT_REQUIRED,nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) com.lore.zzal.pet.CareMotionPlayback motionPlayback,
+            @Schema(requiredMode=Schema.RequiredMode.NOT_REQUIRED,nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) com.lore.zzal.pet.receipt.CareReceipt careReceipt) {
+        public Detail(Long petId, String name, String note, String phase, boolean ready, String step, Long elapsedSeconds, String deathReason, Instant hatchStartedAt, Instant hatchedAt, Instant serverNow, Clock clock, Integer daysTogether, Gauges gauges, Food food, String mood, Sick sick, boolean justHealed, Intimacy intimacy, Today today, Pieces pieces, boolean goodDay, String baking, List<Motion> motions, List<Integer> justUnlocked, boolean sceneNew, List<Learned> learnedToday, FirstGift firstGift, ChatSummary chatSummary, Scenes scenes, String personality, String world, String tone, String genre, String background, String anchorsKey, Features features, Leaving leaving, Trip trip, Tutorial tutorial, Instant graduationSeenAt, com.lore.zzal.pet.FirstIntro.State firstIntro, com.lore.zzal.attendance.AttendanceRewards attendanceRewards, FirstNightChatGrace firstNightChatGrace, com.lore.zzal.pet.CareMotionPlayback motionPlayback) {
+            this(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, null);
+        }
+        public Detail withCareReceipt(com.lore.zzal.pet.receipt.CareReceipt value) {
+            return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, value);
+        }
+
+        @com.fasterxml.jackson.annotation.JsonProperty("customMotions")
+        @Schema(description="지급이 확정된 맞춤 동작. resource slot을 행동 의미로 추측하지 않는다",requiredMode=Schema.RequiredMode.NOT_REQUIRED)
+        public List<com.lore.zzal.attendance.OwnedCustomMotion> customMotions(){return attendanceRewards==null?List.of():attendanceRewards.customMotions();}
+
 
         /**
          * <b>조각 판을 빼고</b> 그린다 — 이름이 그 사실을 말한다.
@@ -410,6 +438,14 @@ public final class PetResponses {
         public static Detail from(ZzalPet pet, String stepLabel, Instant now, MotionCatalog catalog,
                                   Map<Integer, ZzalMotion> rows, List<Integer> justUnlocked,
                                   boolean justHealed, List<ZzalScene> scenes, ZzalPiece piece) {
+            return from(pet,stepLabel,now,catalog,rows,justUnlocked,justHealed,scenes,piece,null);
+        }
+
+        /** Only an action response may carry a selected playback; GET callers use the null overload. */
+        public static Detail from(ZzalPet pet,String stepLabel,Instant now,MotionCatalog catalog,
+                                  Map<Integer,ZzalMotion> rows,List<Integer> justUnlocked,
+                                  boolean justHealed,List<ZzalScene> scenes,ZzalPiece piece,
+                                  com.lore.zzal.pet.CareMotionPlayback motionPlayback) {
             boolean hatching = pet.isHatching();
             boolean alive = pet.isAlive();
             if (!alive) {
@@ -428,7 +464,7 @@ public final class PetResponses {
                         null, null, null, null, null, null, null, null, null, null, null, null, null,
                         // ★ 여기만 ALIVE 전용이 아니다 — 축하를 본 뒤 떠난 아이도 "봤다" 는 사실은 남는다.
                         //   빈 값으로 덮으면 그 화면이 다시 뜰 수 있고, 그건 이 칸이 막으려던 바로 그 일이다.
-                        pet.getGraduationSeenAt());
+                        pet.getGraduationSeenAt(), com.lore.zzal.pet.FirstIntro.of(pet,now), pet.getAttendanceRewards(), FirstNightChatGrace.from(pet,now), alive?motionPlayback:null);
             }
 
             boolean sleeping = pet.isSleeping();
@@ -444,9 +480,10 @@ public final class PetResponses {
                             : pet.isInTutorial() ? null
                             : AwakeClock.sleepWindowOpensAt(now),
                     // 튜토리얼 중이면 자동 취침이 없다 — 시계가 안 돌기 때문이다(설계 규칙).
-                    sleeping || pet.isInTutorial() ? null : AwakeClock.nextAutoSleep(now, null),
-                    sleeping ? AwakeClock.wakeWindowOpensAt(kind, pet.getSleptAt()) : null,
-                    sleeping ? AwakeClock.autoWakeAt(kind, pet.getSleptAt()) : null,
+                    sleeping || pet.isInTutorial() ? null : AwakeClock.nextAutoSleep(now,
+                            pet.firstNightChatGraceActive(now) ? pet.getFirstNightChatDeadlineAt() : null),
+                    sleeping ? (pet.hasFirstIntro() && pet.isInTutorial() && kind == SleepKind.NAP ? now : AwakeClock.wakeWindowOpensAt(kind, pet.getSleptAt())) : null,
+                    sleeping && !(pet.hasFirstIntro() && pet.isInTutorial() && kind == SleepKind.NAP) ? AwakeClock.autoWakeAt(kind, pet.getSleptAt()) : null,
                     pet.isOverslept());
 
             int layerTwoOpen = UnlockRules.openedLayerTwo(pet, catalog);
@@ -455,7 +492,7 @@ public final class PetResponses {
                     true, true,
                     pet.getLeftRightWins() >= ZzalRules.RUN_UNLOCK_LEFT_RIGHT_WINS,
                     pet.isScenesEnabled(),                                  // 장면 — 첫 부재 4시간 뒤 자동
-                    layerTwoOpen >= ZzalRules.BACKGROUND_UNLOCK_LAYER2_OPEN,
+                    pet.getAttendanceRewards()!=null && !pet.getAttendanceRewards().background().owned().isEmpty(),
                     // ★ 앨범은 <b>처음부터</b> 열려 있다(정본 6·16장 "앨범 = 처음부터" · 2026-09-22 상훈님 결정).
                     //   기본 행동 8종부터 담기므로 심화 행동을 기다릴 이유가 없다.
                     //   ★ 옛 값은 {@code "OPEN".equals(firstGift.status())} — 첫 심화가 도착해야 참이었다.
@@ -492,7 +529,7 @@ public final class PetResponses {
                     pet.isSceneJustMade(),
                     learnedToday(catalog, rows),
                     firstGift,
-                    new ChatSummary(null, nextChatAt(pet, now)),           // 부름 — PR-4
+                    new ChatSummary(null, null),           // 부름 — PR-4
                     new Scenes(pet.isScenesEnabled(),
                             scenes.isEmpty() ? null : Scene.of(scenes.get(0))),
                     pet.getPersonality() == null ? null : pet.getPersonality().name(),
@@ -505,7 +542,7 @@ public final class PetResponses {
                     leaving(pet),
                     pet.isTraveling() ? new Trip(pet.getTripStartedAt(), pet.getPostcardCount()) : null,
                     tutorial,
-                    pet.getGraduationSeenAt());
+                    pet.getGraduationSeenAt(), com.lore.zzal.pet.FirstIntro.of(pet,now), pet.getAttendanceRewards(), FirstNightChatGrace.from(pet,now), alive?motionPlayback:null);
         }
 
         /**
@@ -596,7 +633,7 @@ public final class PetResponses {
             return pet.isLeavingJustCancelled() ? new Leaving(null, null, true) : null;
         }
 
-        /** 18칸. 잠긴 칸도 이름+조건(설계 결정). 심화 행동 상태는 zzal_motion 행에서(없으면 NONE). */
+        /** 18칸의 기존 계약을 유지한다. 폐기된 미보유 2층은 새 해금 조건·진행도를 노출하지 않는다. */
         public static List<Motion> motions(ZzalPet pet, MotionCatalog catalog, Map<Integer, ZzalMotion> rows) {
             return catalog.all().stream().map(spec -> {
                 boolean unlocked = UnlockRules.isUnlocked(pet, spec, catalog);
@@ -605,7 +642,8 @@ public final class PetResponses {
                 //   되짚게 해 주는데, 케어 미스는 설계 규칙이 "숨은 수치" 로 못 박은 값이다(#225 리뷰 결정).
                 //   힌트 문구("잘 돌본 날 3번")만 주고 몇 번째인지는 말하지 않는다.
                 boolean hidden = rule.kind() == UnlockRule.Kind.ZERO_MISS_DAYS;
-                Progress progress = !unlocked && rule.hasProgress() && !hidden
+                boolean retiredUnowned = spec.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2 && !unlocked;
+                Progress progress = !retiredUnowned && !unlocked && rule.hasProgress() && !hidden
                         ? new Progress(Math.min(UnlockRules.current(pet, rule.kind(), catalog), rule.target()), rule.target())
                         : null;
                 ZzalMotion row = rows.get(spec.seq());
@@ -616,7 +654,7 @@ public final class PetResponses {
                 boolean practicing = !unlocked && layerTwoWaiting(pet, spec) && UnlockRules.conditionMet(pet, spec, catalog);
                 return new Motion(spec.seq(), spec.key(), spec.label(), spec.layer().name(), unlocked,
                         basicImageKey(pet, spec),
-                        unlocked ? null : practicing ? LAYER2_PRACTICING_HINT : rule.hint(),
+                        unlocked || retiredUnowned ? null : practicing ? LAYER2_PRACTICING_HINT : rule.hint(),
                         progress,
                         advanced);
             }).toList();
@@ -647,7 +685,8 @@ public final class PetResponses {
          * 그래서 갈래를 없애고 <b>판 번호 하나</b>로만 답한다. 옛 규약으로 구워진 펫은 판이 0 이라
          * 여기서 {@code null} 을 받고, 화면이 대체 그림을 띄운다.
          *
-         * <h3>★★ 잠겨 있어도 주소를 준다(명세 7-3)</h3>
+         * <h3>기존 보유 2층만 주소를 보존한다</h3>
+         * 새 보상 전환 후 미보유 BASIC_2는 아래의 옛 일반 규칙과 달리 null이다.
          * 2층 8종은 <b>부화 때 1층과 함께</b> 구워지므로, 잠겨 있어도 그림은 이미 있다.
          * 그런데 잠겼다고 {@code null} 을 주면 화면은 <b>"그림이 없다" 와 "아직 안 배웠다" 를
          * 구분할 수 없다.</b> 화면이 "2층을 안 배웠으니 1층 + 소품으로 그리자" 를 고르려면
@@ -679,6 +718,9 @@ public final class PetResponses {
          *   심화 공유가 기본 그림 경로를 가리키는 버그가 났다.
          */
         static String basicImageKey(ZzalPet pet, MotionSpec spec) {
+            if (spec.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2 && !pet.ownsRetiredLayerTwo(spec.seq())) {
+                return null;
+            }
             if (spec.isGift()) {
                 return null;
             }
@@ -696,7 +738,8 @@ public final class PetResponses {
 
         /** 2층 동작인데 2층 그림이 아직 READY 가 아니다(#696). */
         static boolean layerTwoWaiting(ZzalPet pet, MotionSpec spec) {
-            return spec.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2 && !pet.isLayer2Ready();
+            return spec.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2
+                    && !pet.isLayer2Ready() && !pet.ownsRetiredLayerTwo(spec.seq());
         }
 
         /** 2층 그림이 준비되기 전에 조건을 채운 칸의 문구(#696). 심화 행동의 "아직 연습 중이에요" 와 같은 말이다. */

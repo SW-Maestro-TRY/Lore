@@ -175,7 +175,12 @@ public class GenerationRunner {
         for (Pending p : todo) {
             Long stepId = recorder.startStep(jobId, p.seq(), p.step().name());
             int limit = limitOverrideSeconds > 0 ? limitOverrideSeconds : p.step().limitSeconds();
-            Callable<StepResult> task = () -> p.step().run(ctx);
+            Callable<StepResult> task = () -> {
+                try(var usage = com.lore.zzal.generation.client.ProviderUsageContext.open(
+                        "generation_" + p.step().name(), ctx.petId(), jobId, "step-" + stepId, 1)) {
+                    return p.step().run(ctx);
+                }
+            };
             running.add(new Running(p.step(), stepId, timeoutExecutor.submit(task),
                     System.nanoTime() + TimeUnit.SECONDS.toNanos(limit)));
         }

@@ -168,7 +168,9 @@ class OpenApiSnapshotIT {
                 .isEqualTo("#/components/schemas/CommonEvent");
         assertThat(webtoonBatch.path("properties").path("events").path("items").path("$ref").asText())
                 .isEqualTo("#/components/schemas/WebtoonEvent");
-        assertThat(propertyNames(schemas.path("CommonEvent"))).containsExactlyInAnyOrder("name", "ts", "path", "props");
+        assertThat(propertyNames(schemas.path("CommonEvent"))).containsExactlyInAnyOrder(
+                "name", "ts", "path", "props", "event_id", "schema_version", "session_id",
+                "context", "source_screen", "actor_state", "actor_id");
         assertThat(propertyNames(schemas.path("WebtoonEvent"))).containsExactlyInAnyOrder("name", "ts", "view", "props");
     }
 

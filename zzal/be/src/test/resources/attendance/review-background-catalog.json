@@ -1,0 +1,716 @@
+[
+  {
+    "key": "images/review/backgrounds/01.png",
+    "url": "/images/review/backgrounds/01.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "도심·번화가",
+      "상업 거리·광장",
+      "상점들이 둘러선 보행 광장"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/02.png",
+    "url": "/images/review/backgrounds/02.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "도심·번화가",
+      "교통 거점·도시 구조",
+      "고가 교통로 아래 환승 앞마당"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/03.png",
+    "url": "/images/review/backgrounds/03.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "주거·일상",
+      "실내 주거",
+      "창가가 있는 작은 자취방"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/04.png",
+    "url": "/images/review/backgrounds/04.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "주거·일상",
+      "야외 생활·휴식",
+      "빨래와 작은 텃밭이 있는 옥상"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/05.png",
+    "url": "/images/review/backgrounds/05.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "취향·문화 공간",
+      "독서·카페",
+      "책과 커피가 놓인 독립 서점"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/06.png",
+    "url": "/images/review/backgrounds/06.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "취향·문화 공간",
+      "제작·작업실",
+      "도자기를 말리는 공방"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/07.png",
+    "url": "/images/review/backgrounds/07.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "업무·산업 공간",
+      "사무·직장",
+      "큰 창이 있는 작은 사무실"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/08.png",
+    "url": "/images/review/backgrounds/08.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "업무·산업 공간",
+      "항만·물류",
+      "화물 부두의 정비 마당"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/09.png",
+    "url": "/images/review/backgrounds/09.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "전원·휴양",
+      "전원 주거·과수원",
+      "과수원 옆 시골집 툇마루"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/10.png",
+    "url": "/images/review/backgrounds/10.png",
+    "world": "modern_daily",
+    "tags": [
+      "현대",
+      "전원·휴양",
+      "해변·휴양",
+      "바닷가 캠핑장의 나무 데크"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/11.png",
+    "url": "/images/review/backgrounds/11.png",
+    "world": "역사·시대물",
+    "tags": [
+      "역사·시대물",
+      "서양 중세",
+      "성곽·중세 거점",
+      "돌 성문의 작은 앞마당"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/12.png",
+    "url": "/images/review/backgrounds/12.png",
+    "world": "역사·시대물",
+    "tags": [
+      "역사·시대물",
+      "서양 중세",
+      "시장·중세 생활",
+      "목조 빵집이 있는 장터 골목"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/13.png",
+    "url": "/images/review/backgrounds/13.png",
+    "world": "역사·시대물",
+    "tags": [
+      "역사·시대물",
+      "동아시아 전통",
+      "한국 전통 주거",
+      "한옥 안마당과 장독대"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/14.png",
+    "url": "/images/review/backgrounds/14.png",
+    "world": "역사·시대물",
+    "tags": [
+      "역사·시대물",
+      "동아시아 전통",
+      "일본 전통 상업·강변",
+      "강변 목조 찻집 앞 쉼터"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/15.png",
+    "url": "/images/review/backgrounds/15.png",
+    "world": "역사·시대물",
+    "tags": [
+      "역사·시대물",
+      "기타 지역의 전통·고대",
+      "북아프리카·고대 석조",
+      "고대 이집트 신전의 측면 마당"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/16.png",
+    "url": "/images/review/backgrounds/16.png",
+    "world": "역사·시대물",
+    "tags": [
+      "역사·시대물",
+      "기타 지역의 전통·고대",
+      "남아메리카·고대 산지",
+      "안데스 돌마을의 넓은 테라스"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/17.png",
+    "url": "/images/review/backgrounds/17.png",
+    "world": "역사·시대물",
+    "tags": [
+      "역사·시대물",
+      "근대·산업화 시대",
+      "철도·교통 산업",
+      "증기 철도역의 대합실 앞"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/18.png",
+    "url": "/images/review/backgrounds/18.png",
+    "world": "역사·시대물",
+    "tags": [
+      "역사·시대물",
+      "근대·산업화 시대",
+      "공장·산업 노동",
+      "벽돌 방직공장의 출하 마당"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/19.png",
+    "url": "/images/review/backgrounds/19.png",
+    "world": "역사·시대물",
+    "tags": [
+      "역사·시대물",
+      "20세기 레트로",
+      "1950년대·유럽 생활",
+      "1950년대 유럽 교외 집 앞"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/22.png",
+    "url": "/images/review/backgrounds/22.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "서양 왕국·모험",
+      "길드·여관 실내",
+      "모험가 길드 여관의 난롯가"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/23.png",
+    "url": "/images/review/backgrounds/23.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "마계·악마",
+      "마계 성곽·의례 공간",
+      "뿔 아치가 있는 흑요석 회랑"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/24.png",
+    "url": "/images/review/backgrounds/24.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "마계·악마",
+      "마계 생활·상업",
+      "마계 운하의 계약 상점"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/25.png",
+    "url": "/images/review/backgrounds/25.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "천상·성역",
+      "천상 정원·천사 양식",
+      "날개 아치 아래 구름 정원"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/26.png",
+    "url": "/images/review/backgrounds/26.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "천상·성역",
+      "성역 건축·실내",
+      "빛의 성역 안쪽 예배 홀"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/27.png",
+    "url": "/images/review/backgrounds/27.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "동양 선협·신령",
+      "선경·하늘 산수",
+      "뜬 산을 바라보는 선계 정자"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/28.png",
+    "url": "/images/review/backgrounds/28.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "동양 선협·신령",
+      "귀계·신령 영역",
+      "귀계 강가의 등롱 쉼터"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/30.png",
+    "url": "/images/review/backgrounds/30.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "정령·동화·마법 자연",
+      "마법 호수·수정 식물",
+      "수정 꽃이 피는 호숫가"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/31.png",
+    "url": "/images/review/backgrounds/31.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "현대와 마법의 공존",
+      "현대 상점·생활 마법",
+      "부유 소포가 있는 골목 꽃집"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/32.png",
+    "url": "/images/review/backgrounds/32.png",
+    "world": "판타지",
+    "tags": [
+      "판타지",
+      "현대와 마법의 공존",
+      "현대 작업실·마도 장치",
+      "마법 수선소의 작은 작업실"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/33.png",
+    "url": "/images/review/backgrounds/33.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "미래 일상 도시",
+      "미래 교통·공공 생활",
+      "공중 교통 정류장 광장"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/34.png",
+    "url": "/images/review/backgrounds/34.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "미래 일상 도시",
+      "미래 상점·로봇 생활",
+      "작은 생활 로봇 정비점"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/35.png",
+    "url": "/images/review/backgrounds/35.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "사이버펑크",
+      "네온 상업·골목",
+      "젖은 골목의 데이터 수리점"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/36.png",
+    "url": "/images/review/backgrounds/36.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "사이버펑크",
+      "밀집 고층·네트워크",
+      "고층 연결교의 통신 쉼터"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/37.png",
+    "url": "/images/review/backgrounds/37.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "우주 생활·항해",
+      "우주선·개인 생활",
+      "행성이 보이는 우주선 선실"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/38.png",
+    "url": "/images/review/backgrounds/38.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "우주 생활·항해",
+      "항해 거점·도킹 시설",
+      "화물선의 도킹 전망 통로"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/39.png",
+    "url": "/images/review/backgrounds/39.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "외계 행성·문명",
+      "외계 생태·행성 풍경",
+      "두 개의 달 아래 외계 정원"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/40.png",
+    "url": "/images/review/backgrounds/40.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "외계 행성·문명",
+      "외계 건축·문명",
+      "고리 건축이 있는 외계 광장"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/41.png",
+    "url": "/images/review/backgrounds/41.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "첨단 연구·개척 기지",
+      "생태 연구·장기 거주",
+      "생태 돔의 수경 재배실"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/42.png",
+    "url": "/images/review/backgrounds/42.png",
+    "world": "미래·SF",
+    "tags": [
+      "미래·SF",
+      "첨단 연구·개척 기지",
+      "개척·지표 탐사",
+      "붉은 평원의 작은 탐사 기지"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/43.png",
+    "url": "/images/review/backgrounds/43.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "감시·통제 사회",
+      "통제·공공 공간",
+      "감시탑 아래 배급 광장"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/44.png",
+    "url": "/images/review/backgrounds/44.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "감시·통제 사회",
+      "이동 통제·검문",
+      "검문 게이트 옆 대기 공간"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/45.png",
+    "url": "/images/review/backgrounds/45.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "계층 분리·착취 도시",
+      "수직 계층·주거 분리",
+      "상층 도시 아래의 생활 마당"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/46.png",
+    "url": "/images/review/backgrounds/46.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "계층 분리·착취 도시",
+      "기업 지배·노동 공간",
+      "기업 작업장 뒤 노동자 휴게칸"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/47.png",
+    "url": "/images/review/backgrounds/47.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "문명 붕괴·폐허",
+      "교통 폐허·붕괴 이후",
+      "멈춘 철도 대합실 앞"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/48.png",
+    "url": "/images/review/backgrounds/48.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "문명 붕괴·폐허",
+      "여가 폐허·정지된 문명",
+      "사람이 떠난 유원지 매표소"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/49.png",
+    "url": "/images/review/backgrounds/49.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "감염·봉쇄",
+      "식물 감염·도시 봉쇄",
+      "꽃 바이러스가 번진 가게 앞"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/50.png",
+    "url": "/images/review/backgrounds/50.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "감염·봉쇄",
+      "검역·시설 봉쇄",
+      "밀폐 구역 앞 방역 쉼터"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/51.png",
+    "url": "/images/review/backgrounds/51.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "환경 재난·생존",
+      "건조·물 부족",
+      "모래바람을 막는 집수 마당"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/52.png",
+    "url": "/images/review/backgrounds/52.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "환경 재난·생존",
+      "홍수·수상 생존",
+      "침수 거리의 임시 부두"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/53.png",
+    "url": "/images/review/backgrounds/53.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "재건·회복",
+      "공동체 재건·생활 복구",
+      "수선 중인 동네 공동 마당"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  },
+  {
+    "key": "images/review/backgrounds/54.png",
+    "url": "/images/review/backgrounds/54.png",
+    "world": "디스토피아·아포칼립스",
+    "tags": [
+      "디스토피아·아포칼립스",
+      "재건·회복",
+      "식량 회복·생태 재건",
+      "다시 자라는 도시 온실"
+    ],
+    "published": true,
+    "autoCheck": "PASS",
+    "humanReview": "UNREVIEWED"
+  }
+]

@@ -9,6 +9,7 @@
 //   자리 = 앵커 + ref(bottom|center) + outside + offset{dx,dy,unit}
 //          dx 는 **보는 쪽이 +** · dy 는 아래가 + · offset 은 제 unit 의 **비율**(px 아님)
 //   unit:'screen' 은 비율을 안 쓴다 — `stages[].screen` 의 **무대 558 기준 px** 이 자리를 정한다
+import { FLOOR_DIRT_ASSETS } from '../floorDirtAssets';
 import { SNACK_TMP_FILE, SNACK_TMP_NOTE } from './snack-tmp';
 import type { PropSpec } from './spec';
 
@@ -238,11 +239,11 @@ export const PROP_SPECS: Record<string, PropSpec> = {
       // ★ 1·2단계 내림 0.08 — 아랫변이 발끝선에 딱 붙어 있어 아이가 그 위에 선 것처럼 보였다.
       //   0.08K = 390 화면에서 31.3px(말풍선이 떠 아이가 낮아진 상태에서는 22.7px — 판정 4 추천값).
       //   ⚠️ 1단계만 내리면 1→2 단계에서 위로 튄다. 둘을 같이 내린다.
-      { n: 1, key: "trash_1", ver: 1, file: "trash_1.v1.webp", ratio: 0.301, srcW: 178, srcH: 247, sinkK: 0.08 },
-      { n: 2, key: "trash_2", ver: 1, file: "trash_2.v1.webp", ratio: 0.656, srcW: 435, srcH: 315, sinkK: 0.08 },
-      { n: 3, key: "trash_3", ver: 1, file: "trash_3.v1.webp", ratio: 0.9817, srcW: 557, srcH: 362, sinkK: 0.565 },
+      { n: 1, key: "trash_1", ver: 1, file: FLOOR_DIRT_ASSETS[0], ratio: 0.301, srcW: 178, srcH: 247, sinkK: 0.08 },
+      { n: 2, key: "trash_2", ver: 1, file: FLOOR_DIRT_ASSETS[1], ratio: 0.656, srcW: 435, srcH: 315, sinkK: 0.08 },
+      { n: 3, key: "trash_3", ver: 1, file: FLOOR_DIRT_ASSETS[2], ratio: 0.9817, srcW: 557, srcH: 362, sinkK: 0.565 },
       // ⚠️ 4단계만 옛 비율(덩이가 28% 작다) — 위 머리말 참고. 그림을 다시 뽑으면 1.6224 로 바꾼다.
-      { n: 4, key: "trash_4", ver: 1, file: "trash_4.v1.webp", ratio: 1.169, srcW: 692, srcH: 273, sinkK: 0.423 },
+      { n: 4, key: "trash_4", ver: 1, file: FLOOR_DIRT_ASSETS[3], ratio: 1.169, srcW: 692, srcH: 273, sinkK: 0.423 },
     ],
   },
   /** 아이 밑에 깔린다 — 캐릭터보다 먼저 그린다. 아랫변이 발끝선보다 K×0.02 아래. */

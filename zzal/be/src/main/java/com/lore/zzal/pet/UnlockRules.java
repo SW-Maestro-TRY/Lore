@@ -51,8 +51,8 @@ public final class UnlockRules {
         // ★ 2층은 그림이 다 구워진(READY) 뒤에만 열린다(#696 — 1층 우선 부화).
         //   조건을 먼저 채운 사람에게는 "연습 중" 이고(PetResponses), READY 가 되는 순간 열린다.
         //   카운터는 그대로 쌓인다 — 막는 것은 "열렸다" 는 판정뿐이다.
-        if (spec.layer() == MotionLayer.BASIC_2 && !pet.isLayer2Ready()) {
-            return false;
+        if (spec.layer() == MotionLayer.BASIC_2) {
+            return pet.ownsRetiredLayerTwo(spec.seq());
         }
         return conditionMet(pet, spec, catalog);
     }
@@ -64,6 +64,9 @@ public final class UnlockRules {
     public static boolean conditionMet(ZzalPet pet, MotionSpec spec, MotionCatalog catalog) {
         if (spec.isGift()) {
             return false;
+        }
+        if (spec.layer() == MotionLayer.BASIC_2) {
+            return pet.ownsRetiredLayerTwo(spec.seq());
         }
         UnlockRule rule = spec.unlockRule();
         if (rule.kind() == UnlockRule.Kind.ALWAYS) {

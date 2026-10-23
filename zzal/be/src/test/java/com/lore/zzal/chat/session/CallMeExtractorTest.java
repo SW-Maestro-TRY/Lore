@@ -12,6 +12,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CallMeExtractorTest {
 
     @Test
+    void explicitCorrectionsAreSeparateFromNameMentionsAndOtherSubjects() {
+        assertThat(CallMeExtractor.explicitRequest("나를 민지라고 불러줘")).isEqualTo("민지");
+        assertThat(CallMeExtractor.explicitRequest("나 상훈 말고 수아라고 불러")).isEqualTo("수아");
+        assertThat(CallMeExtractor.explicitRequest("상훈이라고 불러")).isEqualTo("상훈");
+        assertThat(CallMeExtractor.explicitRequest("친구를 민지라고 불러줘")).isNull();
+        assertThat(CallMeExtractor.explicitRequest("네 이름은 우사기야")).isNull();
+        assertThat(CallMeExtractor.explicitRequest("민지")).isNull();
+        assertThat(CallMeExtractor.explicitRequest("음 그냥 상훈님 정도?")).isNull();
+    }
+
+    @Test
     @DisplayName("★ 'X라고 불러 / 불러줘 / 부르면 돼', 'X로 불러' → X · 한 단어 2~6자 → 그 단어 · 나머지는 저장 안 함")
     void patterns() {
         List<String[]> cases = List.of(

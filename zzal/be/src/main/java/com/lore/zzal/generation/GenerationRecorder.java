@@ -24,6 +24,9 @@ import java.util.List;
  */
 @Component
 public class GenerationRecorder {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.generation.client.PersistentProviderUsageRecorder metrics;
+
 
     private final GenJobRepository jobRepository;
     private final GenStepRecordRepository stepRepository;
@@ -88,7 +91,8 @@ public class GenerationRecorder {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void succeedJob(Long jobId, BigDecimal total, Instant now) {
-        jobRepository.findById(jobId).ifPresent(j -> j.succeed(total, now));
+        jobRepository.findById(jobId).ifPresent(j -> { j.succeed(total, now);
+            if(metrics!=null) metrics.outcome("generation_job", "job-"+jobId, null, j.getPetId(), jobId, "succeeded"); });
     }
 
     /**
@@ -106,6 +110,7 @@ public class GenerationRecorder {
             //   따로 커밋하면 살아난 직후 잠깐 2층 8종이 열린 것으로 보이고, 그 그림은 아직 없다.
             if (hatching && p.isAlive()) {
                 p.resetLayer2(now);
+                if(metrics!=null) metrics.outcome("hatch", "pet-"+petId, p.getUserId(), petId, null, "succeeded");
             }
         });
     }
@@ -135,7 +140,8 @@ public class GenerationRecorder {
     /** 이 시도만 실패로 남긴다. 펫을 FAILED 로 만들지는 부르는 쪽이 정한다(재시도가 남았을 수 있다). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void failJob(Long jobId, GenErrorCode code, BigDecimal total) {
-        jobRepository.findById(jobId).ifPresent(j -> j.fail(code, total, Instant.now()));
+        jobRepository.findById(jobId).ifPresent(j -> { j.fail(code, total, Instant.now());
+            if(metrics!=null) metrics.outcome("generation_job", "job-"+jobId, null, j.getPetId(), jobId, "failed"); });
     }
 
 

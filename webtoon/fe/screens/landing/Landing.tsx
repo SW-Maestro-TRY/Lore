@@ -371,7 +371,7 @@ export default function Landing({ go }: { go: Go }) {
             사업자등록번호·통신판매업 신고번호는 등록되면 여기 한 줄 더 붙인다. */}
         <div className="dim wt-landing-biz">
           <span>{t("운영")} {t("TRY팀")}</span>
-          <span>{t("문의")} <a href="mailto:lightbluue6@gmail.com">lightbluue6@gmail.com</a></span>
+          <span>{t("문의")} <a href="mailto:lore@lorecomic.com">lore@lorecomic.com</a></span>
           <span>{t("AI SW MAESTRO 17기 프로젝트")}</span>
         </div>
         <span className="dim wt-landing-copy">{t("© 2026 LORE · TRY팀")}</span>

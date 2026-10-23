@@ -18,7 +18,8 @@ import java.time.Instant;
  * @param sessionId 판(옛 부름이면 null)
  * @param slot      판의 부름. 모르면 null
  */
-public record Memory(String text, String kind, Instant at, Long sessionId, ChatSlot slot) {
+public record Memory(String text, String kind, Instant at, Long sessionId, ChatSlot slot, Long sourceTurnId) {
+    public Memory(String text,String kind,Instant at,Long sessionId,ChatSlot slot){this(text,kind,at,sessionId,slot,null);}
 
     /** 펫(너)이 한 말. */
     public static final String PET_LINE = "pet_line";

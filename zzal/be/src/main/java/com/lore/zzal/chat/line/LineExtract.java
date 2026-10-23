@@ -7,7 +7,8 @@ package com.lore.zzal.chat.line;
  * @param userSaid  이번에 답한 질문 항목에 대한 상대 답의 요지(없으면 null). v2 기억의 재료로 턴 행에 남긴다
  * @param askedBack 상대가 되물었나(코드 정규식과 OR 해 턴 행에 남긴다)
  */
-public record LineExtract(String callMe, String userSaid, boolean askedBack) {
+public record LineExtract(String callMe, String userSaid, boolean askedBack, String memoryDeltas) {
+    public LineExtract(String callMe,String userSaid,boolean askedBack){this(callMe,userSaid,askedBack,null);}
 
     public static final LineExtract NONE = new LineExtract(null, null, false);
 }

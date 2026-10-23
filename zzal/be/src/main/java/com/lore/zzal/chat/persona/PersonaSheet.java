@@ -19,6 +19,7 @@ import java.util.List;
  * @param world          세계관 원문(칩+글). 없으면 null
  * @param note           그 밖에(작가 메모) 원문. 없으면 null
  * @param callMe         아이가 사용자를 부르는 말. 모르면 null
+ * @param preferredResponseLanguage 첫 선발화의 기본 언어. 현재 사용자 언어·명시 전환 요청이 우선한다
  * @param callMeDeclined 사용자가 "이름 없이" 를 골랐다 — 부르지 않지만 다시 묻지도 않는다
  */
 public record PersonaSheet(
@@ -28,7 +29,25 @@ public record PersonaSheet(
         String world,
         String note,
         String callMe,
-        boolean callMeDeclined) {
+        boolean callMeDeclined,
+        com.lore.zzal.pet.persona.AuthoredPersona authoredPersona,
+        String preferredResponseLanguage) {
+
+    public PersonaSheet {
+        preferredResponseLanguage = java.util.Set.of("ko", "ja", "en").contains(
+                preferredResponseLanguage == null ? "" : preferredResponseLanguage) ? preferredResponseLanguage : "ko";
+    }
+
+    public PersonaSheet(String name, List<Personality> personalities, String tone, String world,
+                        String note, String callMe, boolean callMeDeclined,
+                        com.lore.zzal.pet.persona.AuthoredPersona authoredPersona) {
+        this(name, personalities, tone, world, note, callMe, callMeDeclined, authoredPersona, "ko");
+    }
+
+    public PersonaSheet(String name, List<Personality> personalities, String tone, String world,
+                        String note, String callMe, boolean callMeDeclined) {
+        this(name, personalities, tone, world, note, callMe, callMeDeclined, null);
+    }
 
     /** 호칭 질문에 답이 있는가(저장됐거나 사양했다). */
     public boolean callMeSettled() {

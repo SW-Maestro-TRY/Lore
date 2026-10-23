@@ -66,6 +66,23 @@ class ZzalPetTest {
         return kst(kstDateTime);
     }
 
+    @Test
+    @DisplayName("첫 소개에서 목욕 단계에 들어가면 흔적 세 개를 만들고 한 번에 모두 치운다")
+    void firstIntroBathShowsThreeMessesAndClearsThem() {
+        ZzalPet pet = baby();
+        pet.beginFirstMeeting();
+        pet.advanceFirstIntro(FirstIntro.Step.FEED);
+        pet.advanceFirstIntro(FirstIntro.Step.SNACK);
+
+        pet.clean(T0);
+        assertThat(pet.getFirstIntroStep()).isEqualTo(FirstIntro.Step.BATH.ordinal());
+        assertThat(pet.getTrash()).isEqualTo(3);
+
+        pet.bath(T0);
+        assertThat(pet.getTrash()).isZero();
+        assertThat(pet.getFirstIntroStep()).isEqualTo(FirstIntro.Step.GAME.ordinal());
+    }
+
     @Nested
     @DisplayName("게이지 — 깨어 있는 시간으로만 (정본 4·16장)")
     class Gauges {

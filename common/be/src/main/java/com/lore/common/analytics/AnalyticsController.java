@@ -22,23 +22,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 사용자 행동 기록을 받는 곳 (팀 공용).
- *
- * <h3>왜 로그인 없이 열려 있나</h3>
- * 가장 알고 싶은 것이 <b>"가입하지 않고 나간 사람이 어디서 멈췄나"</b> 이기 때문이다.
- * 로그인 뒤에만 받으면 그 답을 영영 못 얻는다. 대신 누구나 부를 수 있는 주소가 되므로
- * 상한(개수·본문 크기·분당 요청)과 허용 키 검사를 {@link AnalyticsService} 가 반드시 한다.
- *
- * <h3>★ 기록이 화면을 멈추게 하면 안 된다</h3>
- * 이 API 는 사실상 <b>실패하지 않는다</b> — 저장에서 무슨 일이 나든 202 를 돌려준다.
- * 화면은 이 응답을 읽지도 않는다(떠나는 순간에는 sendBeacon 이라 읽을 수조차 없다).
- * 여기서 500 을 돌려줘 봐야 그걸 처리하는 코드가 화면에 생기고, 결국 곁다리인 기록이
- * 본 기능을 멈추게 한다. 무슨 일이 있었는지는 서버 로그에만 남긴다.
- * <p>
- * 다만 <b>본문이 규격을 벗어난 경우만</b>은 400 으로 분명히 거절한다. 그건 사용자의 사정이
- * 아니라 부르는 쪽의 버그이거나 일부러 두드리는 것이고, 조용히 삼키면 영영 안 고쳐진다.
- */
+/** Nonblocking client telemetry. A 202 receipt acknowledges committed rows, never an attempted write. */
 @Tag(name = "행동 기록", description = "사용자 행동 수집 (팀 공용, 로그인 불필요)")
 @RestController
 @RequestMapping("/api/v1/events")
@@ -65,15 +49,15 @@ public class AnalyticsController {
             ★ props 는 허용된 키만 저장된다. 나머지는 조용히 버려진다.
               referrer 의 쿼리스트링, User-Agent 원문, IP 는 저장하지 않는다.
 
-            응답은 항상 202 다 — 기록이 실패해도 화면은 계속 돌아야 한다.""")
+            202는 저장된 이벤트와 중복 이벤트의 ID를 확인한다. 저장 실패/비활성은 503, 요청 제한은 429다.""")
     @PostMapping
-    public ResponseEntity<ApiResponse<Void>> collect(@Valid @RequestBody EventRequests.Batch batch,
+    public ResponseEntity<ApiResponse<AnalyticsService.Receipt>> collect(@Valid @RequestBody EventRequests.Batch batch,
                                                      @RequestHeader(value = "User-Agent", required = false) String userAgent,
                                                      HttpServletRequest request,
                                                      HttpServletResponse response) {
         // 꺼져 있으면 쿠키도 발급하지 않는다. "안 모은다" 는 흔적조차 안 남긴다는 뜻이어야 한다.
         if (!analyticsService.isEnabled()) {
-            return ResponseEntity.accepted().body(ApiResponse.ok());
+            return ResponseEntity.status(503).body(ApiResponse.ok(AnalyticsService.Receipt.unavailable("disabled")));
         }
 
         // ★ 본문 크기는 여기서 재지 않는다 — @RequestBody 가 이미 다 읽은 뒤라 늦다.
@@ -88,29 +72,29 @@ public class AnalyticsController {
         anonIdResolver.syncHint(request, response, anonId);
         Long userId = currentUserId();
 
+        AnalyticsService.Receipt receipt;
         try {
-            analyticsService.collect(batch, anonId, userId, userAgent);
-            // ★ 저장과 다른 트랜잭션이어야 해서 여기서 따로 부른다(AnalyticsService#linkIdentity 주석).
+            receipt = analyticsService.collectAcknowledged(batch, anonId, userId, userAgent);
+        } catch (RuntimeException ex) {
+            log.warn("행동 기록 저장 실패 — 재전송 가능, batchSize={}", batch.events().size(), ex);
+            return ResponseEntity.status(503).body(ApiResponse.ok(AnalyticsService.Receipt.unavailable("storage_unavailable")));
+        }
+        if (!receipt.status().equals("persisted")) {
+            return ResponseEntity.status(receipt.status().equals("rate_limited") ? 429 : 503)
+                    .header("Retry-After", "60").body(ApiResponse.ok(receipt));
+        }
+        // Identity linking is best effort and cannot turn a committed receipt into a failed write.
+        try {
             analyticsService.linkIdentity(anonId, userId);
-            // ★ 쿠키가 지워져 번호가 바뀐 브라우저 — 가입·로그인 성공 줄의 from(옛 번호)도 같은 사람으로 잇는다
-            //   (2026-10-07, 화면 common/fe/analytics.ts 가 localStorage 에 남긴 옛 번호를 싣는다).
-            //   로그인한 요청에서만, 번호 모양이 맞을 때만 잇는다 — 비로그인 요청은 userId 가 없어 아무 일도 안 한다.
-            //   본문 값을 믿는 유일한 자리지만, 할 수 있는 일은 "내 계정에 번호 하나를 더 묶기" 뿐이라 남의 기록을 바꾸지 못한다.
             if (userId != null) {
                 for (String previous : AnalyticsService.previousAnonIds(batch, anonId)) {
                     analyticsService.linkIdentity(previous, userId);
                 }
             }
         } catch (RuntimeException ex) {
-            // 여기서 위로 던지면 500 이 나가고, 그걸 본 화면이 재시도를 하게 된다.
-            // 기록은 잃어도 되는 것이라 잃고 만다.
-            log.warn("행동 기록 저장 실패 — 이벤트 {}건을 버린다", batch.events().size(), ex);
+            log.warn("행동 기록 신원 연결 실패 — 이벤트는 저장됨", ex);
         }
-
-        // 202 — "받아 두었다". 실제로 몇 줄이 저장됐는지는 알려주지 않는다.
-        // 몇 개가 버려졌는지를 화면에 알려주면 허용 키 목록을 밖에서 알아낼 수 있고,
-        // 무엇보다 화면이 그 숫자를 보고 무언가 하기 시작한다.
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.ok());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.ok(receipt));
     }
 
     /**

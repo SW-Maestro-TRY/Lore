@@ -136,7 +136,7 @@ class NightSweepTest {
     @Test
     @DisplayName("★ 스위프 비활성이면 아무것도 하지 않는다 — run 도 안 남고 굽지도 않는다")
     void disabledDoesNothing() {
-        queued(1L, 101, 7L);
+        queued(1L, 1, 7L);
         NightSweep s = sweep(false, 200);
         s.sweep();
         s.recoverOnBoot();
@@ -199,7 +199,7 @@ class NightSweepTest {
     }
 
     @Test
-    @DisplayName("★ 우선순위 — 선물(101) > 케어 미스 0인 날 수 > 친밀도 > id")
+    @DisplayName("폐기 GIFT는 제외하고 보존 기본1은 케어 미스 0인 날 수 > 친밀도 > id")
     void priorityOrder() {
         ZzalPet lowPet = pet(1L, 0, 10);
         ZzalPet streakPet = pet(2L, 3, 0);
@@ -210,13 +210,15 @@ class NightSweepTest {
         queued(12L, 101, 1L);        // 선물
         queued(13L, 1, 2L);          // streak
         sweep(true, 200).run(NIGHT, T23, "test");
-        assertThat(baked).containsExactly(12L, 13L, 11L, 10L);
+        assertThat(baked).containsExactly(13L, 11L, 10L);
+        assertThat(motions.get(12L).getStatus()).isEqualTo(MotionStatus.QUEUED);
+        verify(motionRepo, never()).claim(org.mockito.ArgumentMatchers.eq(12L), any(), anyString());
     }
 
     @Test
     @DisplayName("★ 같은 밤을 두 번 돌리면 두 번째는 건너뛴다(run PK) — 재기동 복구가 다시 굽지 않는다")
     void secondRunOfSameNightIsSkipped() {
-        queued(1L, 101, 7L);
+        queued(1L, 1, 7L);
         NightSweep s = sweep(true, 200);
         assertThat(s.run(NIGHT, T23, "scheduled").ran()).isTrue();
         assertThat(baked).hasSize(1);
@@ -261,13 +263,21 @@ class NightSweepTest {
     }
 
     @Test
-    @DisplayName("★ 선물은 이월보다도 먼저 — 우선순위 1순위는 그대로 선물")
+    @DisplayName("폐기 GIFT101/102·해금9는 이월·상한을 차지하지 않고 기존 큐는 보존")
     void giftBeatsCarriedOver() {
         when(petRepo.findAllById(any())).thenReturn(List.of(pet(1L, 0, 0), pet(2L, 0, 0)));
         queued(60L, 1, 1L, NIGHT.minusDays(3));          // 사흘 묵은 이월
-        queued(61L, 101, 2L, NIGHT);                     // 오늘 오른 선물
-        sweep(true, 200).run(NIGHT, T23, "test");
-        assertThat(baked).containsExactly(61L, 60L);
+        queued(61L, 101, 2L, NIGHT);                     // 중단 전에 남은 폐기 선물 큐
+        queued(62L, 102, 2L, NIGHT);
+        queued(63L, 9, 2L, NIGHT);
+        sweep(true, 1).run(NIGHT, T23, "test");
+        assertThat(baked).containsExactly(60L);
+        for (long id : List.of(61L, 62L, 63L)) {
+            assertThat(motions.get(id).getStatus()).isEqualTo(MotionStatus.QUEUED);
+            verify(motionRepo, never()).claim(org.mockito.ArgumentMatchers.eq(id), any(), anyString());
+        }
+        assertThat(runs.get(NIGHT).getClaimed()).isEqualTo(1);
+        assertThat(runs.get(NIGHT).getCarried()).isZero();
     }
 
     @Test

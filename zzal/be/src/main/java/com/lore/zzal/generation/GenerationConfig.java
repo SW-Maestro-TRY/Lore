@@ -45,6 +45,15 @@ import java.util.List;
  */
 @Configuration
 public class GenerationConfig {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder;
+    private com.lore.zzal.generation.client.ProviderUsageRecorder usage() {
+        return usageRecorder == null ? com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP : usageRecorder.forFeature("generation");
+    }
+
+
+    @Value("${app.zzal.openai.identity-max-completion-tokens:#{null}}")
+    private Integer identityMaxCompletionTokens;
 
     @Value("${app.zzal.generation.flaky.fail-step:}")
     private String flakyStep;
@@ -61,12 +70,19 @@ public class GenerationConfig {
                                    @Value("${app.zzal.generation.fake-grid-key:}") String fakeGridKey,
                                    @Value("${app.zzal.openai.api-key:}") String apiKey,
                                    @Value("${app.zzal.openai.image-timeout-seconds:90}") int imageTimeoutSeconds,
-                                   S3Storage storage) {
+                                   S3Storage storage, Environment env, PostProcessor post) {
+        boolean fixture = env.getProperty("app.zzal.generation.local-fixture.enabled", Boolean.class, false);
+        if (fixture) com.lore.zzal.generation.client.LocalFixturePostProcessor.requireLocal(env);
         if (real) {
             requireKey(apiKey);
-            return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds);
+            return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds, usage());
         }
         ImageClient base = new FakeImageClient(delay, fakeGridKey);
+        if (fixture) {
+            if (!(post instanceof com.lore.zzal.generation.client.LocalFixturePostProcessor local))
+                throw new IllegalStateException("Local fixture sheet requires its matching fixture postprocessor");
+            return local.imageClient(wrapFlaky(base));
+        }
         return wrapFlaky(base);
     }
 
@@ -88,7 +104,7 @@ public class GenerationConfig {
                                  S3Storage storage) {
         if (real) {
             requireKey(apiKey);
-            return new OpenAiTextClient(storage, apiKey);
+            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens, usage());
         }
         return new FakeTextClient(delay / 3);
     }
@@ -148,10 +164,14 @@ public class GenerationConfig {
             @Value("${app.zzal.python.bin:python3}") String pythonBin,
             @Value("${app.zzal.pipeline-version:v1}") String configuredVersion,
             @Value("${app.zzal.python.timeout-seconds:60}") int timeout,
-            Environment env) {
+            Environment env, software.amazon.awssdk.services.s3.S3Client s3,
+            com.lore.zzal.pet.ZzalPetRepository pets) {
         // ★ 부팅 때 설정된 버전의 목록이 있는지 확인한다(빠졌으면 설정 이름을 말하며 막힘). 실제 사용 버전은
         //   호출마다 job 에서 온다 — 빈이 만들어질 때의 설정으로 굳어 있던 어긋남을 막는다(#218 리뷰).
         hatchStates(env, configuredVersion);
+        if (env.getProperty("app.zzal.generation.local-fixture.enabled", Boolean.class, false)) {
+            return com.lore.zzal.generation.client.LocalFixturePostProcessor.create(env, s3, pets);
+        }
         if (real) {
             requirePythonPackages(pythonBin);
             requireFakeGridWhenImagesAreFake(env);

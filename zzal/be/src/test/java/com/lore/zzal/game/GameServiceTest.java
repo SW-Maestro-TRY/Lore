@@ -104,8 +104,8 @@ class GameServiceTest {
     }
 
     @Test
-    @DisplayName("★★★ 놀라기(15)는 <b>끝까지 친</b> 네 번째 매치에서 열린다 — 그 응답에 폭죽이 실린다")
-    void theFourthFinishedMatchOpensStartle() {
+    @DisplayName("네 번째 완주도 기록하되 중단된 놀라기(15)를 새로 해금하지 않는다")
+    void fourthFinishedMatchCountsWithoutMintingRetiredStartle() {
         pet.settle(T0);
         GameService.GuessResult last = null;
         for (int match = 1; match <= 4; match++) {
@@ -114,8 +114,9 @@ class GameServiceTest {
         }
 
         assertThat(last.justUnlocked())
-                .as("네 판째 완주가 조건이다 — 폭죽은 그 행동의 응답에 실려야 한다")
-                .containsExactly(15);
+                .as("완주 카운터와 폐기된 신규해금은 분리한다")
+                .isEmpty();
+        assertThat(pet.ownsRetiredLayerTwo(15)).isFalse();
     }
 
     @Test

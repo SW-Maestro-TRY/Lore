@@ -83,6 +83,8 @@ public class BakeTrigger {
      */
     @Transactional
     public void onTutorialDone(ZzalPet pet, Instant now) {
+        // Legacy gift generation is retired; the tutorial/game effect remains independent.
+        if (com.lore.zzal.motion.RetiredRewardGeneration.isRetiredGift(101)) return;
         ZzalMotion gift = firstGiftRow(pet.getId());
         if (gift == null || gift.getStatus() != MotionStatus.NONE) {
             return;
@@ -116,6 +118,8 @@ public class BakeTrigger {
      */
     @Transactional
     public void onFirstGameLoss(ZzalPet pet, Instant now) {
+        // Legacy gift generation is retired; the tutorial/game effect remains independent.
+        if (com.lore.zzal.motion.RetiredRewardGeneration.isRetiredGift(102)) return;
         ZzalMotion gift = secondGiftRow(pet.getId());
         if (gift == null || gift.getStatus() != MotionStatus.NONE) {
             return;     // 이미 굽는 중이거나 받은 사람 — 두 번 주지 않는다
@@ -176,6 +180,7 @@ public class BakeTrigger {
     private List<ZzalMotion> freshlyQueued(Long petId) {
         return motionRepository.findByPetIdOrderBySeqAsc(petId).stream()
                 .filter(m -> m.getStatus() == MotionStatus.QUEUED)
+                .filter(m -> !com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(m.getSeq()))
                 .toList();
     }
 
@@ -212,6 +217,7 @@ public class BakeTrigger {
         //   엔티티로 상태만 바꾸면 두 곳이 동시에 "내가 집었다" 고 볼 수 있다.
         List<Long> ids = rows.stream()
                 .filter(m -> m.getStatus() == MotionStatus.QUEUED)
+                .filter(m -> !com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(m.getSeq()))
                 .map(ZzalMotion::getId)
                 .filter(id -> motionRepository.claim(id, now, server) == 1)
                 .toList();
@@ -251,5 +257,22 @@ public class BakeTrigger {
         } catch (Exception e) {
             return "unknown";
         }
+    }
+
+    /**
+     * dev(리모컨) — 그 줄을 지금 큐에 올리고 집어서 굽는다(선물·심화 아무 seq). 굽기는 운영과 같은 길
+     * ({@code motionService.bakeNow})이고 그림 클라이언트가 가짜면 돈 0, 진짜면 한 판 값이 나간다.
+     *
+     * @return 실제로 집었으면 true. 이미 굽는 중·판정을 지난 줄이면 false
+     */
+    @Transactional
+    public boolean devBake(ZzalMotion row, Instant now) {
+        // 폐기된 구 선물/해금은 개발 리모컨에서도 새로 생성하지 않는다.
+        if (com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(row.getSeq())) return false;
+        if (!row.queue(AwakeClock.dateOf(now))) {
+            return false;
+        }
+        claimAndBake(List.of(row), now);
+        return true;
     }
 }
