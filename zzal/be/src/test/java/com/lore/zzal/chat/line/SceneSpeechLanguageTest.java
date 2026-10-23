@@ -66,6 +66,12 @@ class SceneSpeechLanguageTest {
             calls.incrementAndGet();
             assertSceneLanguage(system, label);
             assertThat(system).doesNotContain("[의미기억 추출]");
+            assertThat(system).contains("모든 speeches[].line은 요청 데이터의 responseLanguage 언어로 작성한다");
+            var request = new com.fasterxml.jackson.databind.ObjectMapper().readTree(user);
+            assertThat(request.path("responseLanguage").asText()).isEqualTo(language);
+            assertThat(request.path("scenes").size()).isEqualTo(1);
+            assertThat(request.path("scenes").get(0).path("step").asText()).isEqualTo("FEED");
+            assertThat(request.path("scenes").get(0).path("phase").asText()).isEqualTo("ENTRY");
             return new ChatLineClient.Completion(
                     "{\"speeches\":[{\"step\":\"FEED\",\"phase\":\"ENTRY\",\"line\":\"stub\"}]}", BigDecimal.ZERO, 0, 0);
         };

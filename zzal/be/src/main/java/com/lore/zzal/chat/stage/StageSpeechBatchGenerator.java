@@ -55,15 +55,22 @@ public class StageSpeechBatchGenerator {
                 캐릭터에게 밥을 챙겨 달라는 직접 행동 요청형 의문문은 허용한다.
                 답변 선택지·버튼명·절차를 나열하지 않는다. 사용자 발언·사용자 사실·완료 이력을 만들지 않는다.
                 GAME AFTER_ACTION은 승리와 패배 모두에 맞는 함께 논 뒤의 중립 반응이다. 승패를 단정하지 않는다.
-                각 대사는 짧은 1~2문장, 보통 40~70자 이내이며 최대 100자다. 같은 설정·저장 호칭·기본 언어를 전 장면에 유지한다.
+                각 대사는 짧은 1~2문장, 보통 40~70자 이내이며 최대 100자다. 같은 설정과 저장 호칭을 전 장면에 유지한다.
+                모든 speeches[].line은 요청 데이터의 responseLanguage 언어로 작성한다(en=English, ja=Japanese, ko=Korean).
                 JSON 객체 {"speeches":[{"step":"요청된 단계","phase":"요청된 박자","line":"대사","motion":"base"}]}만 출력한다.
                 요청된 장면을 순서대로 정확히 한 번씩 전부 반환한다. memory_deltas나 사용자 답은 만들지 않는다.
                 """;
             for (var step : TutorialEndingSpeech.STEPS) system += step.name() + ": " + TutorialEndingSpeech.instruction(step) + "\n";
-            StringBuilder request = new StringBuilder("장면별 의미: FEED=밥, SNACK=간식, CLEAN=바닥 청소, BATH=목욕, GAME=좌우 맞히기 놀이, NAP_SLEEP=낮잠 자기, NAP_WAKE=낮잠에서 깨기.\n");
-            request.append("이 상태는 첫 돌봄 전의 참고값이다. 마무리·채팅소개 장면에 초기 배고픔·청결·돌봄 요구를 반복하거나 옮기지 않는다.\n");
-            request.append("현재 캐릭터 상태(미래 행동 완료 사실은 아님): ").append(first.state().labeledWords()).append('\n');
-            for (var claim : claims) request.append(claim.context().scene().step()).append(' ').append(claim.context().scene().beat()).append('\n');
+            var request = json.createObjectNode();
+            request.put("responseLanguage", first.sheet().preferredResponseLanguage());
+            request.put("sceneGuide", "FEED=밥, SNACK=간식, CLEAN=바닥 청소, BATH=목욕, GAME=좌우 맞히기 놀이, NAP_SLEEP=낮잠 자기, NAP_WAKE=낮잠에서 깨기.");
+            request.put("stateScope", "첫 돌봄 전 캐릭터 자신의 참고 상태다. 미래 행동 완료 사실이 아니다. 마무리·채팅소개 장면에 초기 배고픔·청결·돌봄 요구를 반복하거나 옮기지 않는다.");
+            request.put("initialState", first.state().labeledWords());
+            var scenes = request.putArray("scenes");
+            for (var claim : claims) {
+                var context = claim.context();
+                scenes.addObject().put("step", context.scene().step().name()).put("phase", context.scene().beat().name());
+            }
             ChatLineClient.Completion response;
             try(var usage=com.lore.zzal.generation.client.ProviderUsageContext.open("tutorial_batch",first.petId(),null,java.util.UUID.randomUUID().toString(),1)) {
                 response = client.complete(system, request.toString(), model, timeout);
