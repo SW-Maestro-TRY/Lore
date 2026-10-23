@@ -94,6 +94,7 @@ export const QUALITY_INFO: {
 export const QUALITY_DEFAULT: WizardQuality = "surf";
 
 export interface WizardForm {
+  lorebook?: import("./api").LoreBook | null;
   photos: string[]; // data URL
   /** 「이 캐릭터로 웹툰 만들기」로 들어왔을 때. 서버가 이 번호로 그림을 붙인다 —
    *  브라우저가 그림을 내려받아 다시 올릴 이유가 없다. */

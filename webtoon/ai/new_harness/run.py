@@ -119,6 +119,7 @@ def read_character(path: Path) -> dict:
         "photo_note": doc.get("photo_note"),
         "story": doc.get("story"),
         "card": doc.get("card"),
+        "lorebook": doc.get("lorebook"),
         # 「만들고 싶은 내용이 있어요」(#548) — 더 적은 설정과 제목. 없을 수 있다.
         "settings": doc.get("settings"),
         "title": doc.get("title"),
@@ -151,6 +152,7 @@ def normalize(raw: dict) -> dict:
         "photo_note": str(raw.get("photo_note") or "").strip(),
         "story": str(raw.get("story") or "").strip(),
         "card": card,
+        "lorebook": raw.get("lorebook") if isinstance(raw.get("lorebook"), dict) else {},
         "settings": str(raw.get("settings") or "").strip(),
         "title": str(raw.get("title") or "").strip(),
         "episode": str(raw.get("episode") or "").strip(),
@@ -213,7 +215,7 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     else:
         lines.append("외관: (사진 없음 — 아래 설명에서 읽는다)")
 
-    card = char.get("card") or {}
+    card = charcard.for_story(char)
     if card:
         lines += ["", *charcard.block(card, has_story=bool(user_story(char)))]
 
@@ -232,6 +234,12 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     if with_genre:
         lines += ["", f"장르: {char['genre']}" if char["genre"]
                   else "장르: (없음 — 네가 정한다)"]
+    import userbook
+    book_text = userbook.block(char, char.get("story", ""))
+    if book_text:
+        lines.append(book_text)
+    if char.get("settings"):
+        lines += ["[사용자가 추가한 설정]", str(char["settings"])]
     return "\n".join(lines) + "\n"
 
 
@@ -262,7 +270,7 @@ def seeded_input_block(char: dict) -> str:
     """
     lines = [input_block(char).rstrip("\n")]
     genre = char["genre"]
-    if genre:
+    if genre and not char.get("lorebook"):
         world = world_text_for(genre)
         if world:
             lines += ["", "## 이 세계의 배경 — 적힌 이야기와 부딪히지 않는 곳에서만 쓴다",
@@ -270,7 +278,7 @@ def seeded_input_block(char: dict) -> str:
         lines += genre_lore_section(genre)
     lines += ["", "## 사용자가 적은 이야기 — 이 웹툰의 중심", "",
               f"> {user_story(char)}"]
-    if genre:
+    if genre and not char.get("lorebook"):
         lines += ["", "위의 세계관·전개 문법이 이 이야기와 부딪히면 이 이야기가 이긴다."]
     return "\n".join(lines) + "\n"
 
@@ -292,7 +300,7 @@ def story_input_block(char: dict, run_dir: Path | None = None) -> str:
     """
     block = input_block(char).rstrip("\n")
     genre = char["genre"]
-    if not genre:
+    if not genre or char.get("lorebook"):
         return block + "\n"
     lines = [block]
     world = world_text_for(genre)
@@ -711,7 +719,7 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     # (재료는 세계의 사실이지 성격이 아니라서, 축이 성격으로 새던 문제와 다르다).
     # 세계를 모르면(장르도 카드도 없음) 안 붙는다 — story_prompt 가 방향마다 장르를
     # 스스로 고르는 자리라 어느 세계의 재료를 줄지 알 수 없다.
-    lore_world = lorebook.world_key_for(char["genre"], char.get("card")) if lorebook.enabled() else ""
+    lore_world = lorebook.world_key_for(char["genre"], char.get("card")) if lorebook.enabled() and not char.get("lorebook") else ""
     # 사용자가 적은 것(설명·항목·고른 카드)이 있으면 방향 넷 중 **둘만** 재료를
     # 받는다 — 나머지 둘은 적힌 것만으로 판을 세운다. 사진만 있으면 넷 다 받는다
     # (사용자 결정, 2026-09-30). 어느 둘인지는 무작위다.
@@ -951,7 +959,7 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
         # 줄거리에 적힌 인물도 새로 만들지 않고 페르소나를 세운다.
         lines += ["", "사용자가 적은 이야기:", story_text]
     genre = (char.get("genre") or "").strip()
-    world = world_text_for(genre) if genre else ""
+    world = world_text_for(genre) if genre and not char.get("lorebook") else ""
     if world:
         lines += ["", "## 이 세계의 배경", "", world]
     prompt = compose("cast_prompt", "\n".join(lines) + "\n", lang=lang)
@@ -1486,8 +1494,8 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
     lines += ["", "[캐릭터]", f"{char['name']} — {char.get('description') or ''}".rstrip(" —")]
     # 고른 카드가 있으면 종·세계·정체를 같이 준다(#458) — 원래 설명(사람 ·
     # 대학생 …)만 보고 장면을 짜면 사람이 고른 캐릭터가 아닌 인물로 그린다.
-    if charcard.short(char.get("card") or {}):
-        lines.append(f"- 고른 캐릭터 카드: {charcard.short(char['card'])} (원래 설명과 다르면 카드를 따른다)")
+    if charcard.short(charcard.for_story(char)):
+        lines.append(f"- 고른 캐릭터 카드: {charcard.short(charcard.for_story(char))} (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
     pinned = story_cast(run_dir, direction, char.get("name") or "")
@@ -1501,7 +1509,7 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
     # story_prompt 가 방향마다 장르를 정하므로, 그때는 캐릭터의 장르 칸이
     # 비어 있고 방향 쪽에만 있다.
     genre = (direction.get("genre") or char.get("genre") or "").strip()
-    if genre:
+    if genre and not char.get("lorebook"):
         lines += ["", f"[장르] {genre}",
                   "", "이 화는 위 장르의 작품이다. 장소·소품·옷차림·인물들이 하는 "
                   "일이 그 장르의 것이어야 한다 — 장르를 지우고 아무 데서나 "
@@ -1516,9 +1524,11 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
         lines += genre_lore_section(genre)
     # 이 방향이 서 있던 재료(#502). 이야기 단계에서 배정된 것 + 본문에 등장하는 것.
     # run_dir 이 없거나 lore.json 이 없으면(옛 run) 아무것도 안 붙는다.
-    if run_dir is not None and lorebook.enabled():
+    if run_dir is not None and lorebook.enabled() and not char.get("lorebook"):
         lines += lorebook.scene_block(lorebook.scene_entries(
             run_dir, int(direction.get("n") or 0), direction.get("body") or direction.get("raw", "")))
+    import userbook
+    lines.append(userbook.block(char, direction.get("body", ""), "scene"))
     return "\n".join(lines) + "\n"
 
 
@@ -1886,6 +1896,7 @@ def main(argv=None) -> int:
     p.add_argument("--cast-pick", type=int,
                    help="인물 단계의 답(#534). 현대 로맨스는 고른 상대 번호(1~4), "
                         "사용자가 인물을 적었으면 0(이대로 진행). 그 뒤 이야기 후보 4개를 만든다")
+    p.add_argument("--continuation", type=Path, help="서버가 확인한 연재 기억 사본")
     p.add_argument("--own", action="store_true",
                    help="「만들고 싶은 내용이 있어요」(#548): 적은 내용으로 주인공 카드·인물·본문·시트를 "
                         "동시에 만든다. 후보·고르기 없음. 장면은 --own-scenes 로 따로")
@@ -1970,6 +1981,9 @@ def main(argv=None) -> int:
         char = (read_character(args.character) if args.character
                 else normalize({"name": args.name, "description": args.desc,
                                 "genre": args.genre, "photos": args.photo}))
+        if args.continuation:
+            import continuation
+            char = normalize(continuation.prepare_input(char, continuation.read(args.continuation)))
         bad = gate_input(char)
         if bad:
             raise SystemExit("입력이 모자랍니다:\n  - " + "\n  - ".join(bad))
@@ -1983,6 +1997,10 @@ def main(argv=None) -> int:
         write_json(run_dir / "input.json", char)
         new_run = True
         log(f"run: {run_dir}")
+
+    if args.continuation:
+        import continuation
+        continuation.initialize(run_dir, continuation.read(args.continuation))
 
     # 시트 가져오기는 어느 흐름이든 **가장 먼저** 한다 — 뒤의 단계가 이 시트를
     # 참조로 쓰고, 이미 있으면 시트 단계가 새로 그리지 않는다.

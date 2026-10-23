@@ -364,7 +364,7 @@ public class RunController {
         }
         // 받는 파일 이름은 LORE_제목_1화.png — 옛 브라우저에는 작품 번호(DownloadName).
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null))
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null, episodeOf(meta)))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
@@ -538,8 +538,12 @@ public class RunController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no))
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no, episodeOf(meta)))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
+    private static int episodeOf(Map<String,Object> meta) {
+        return meta.get("episode") instanceof Number n ? n.intValue() : 1;
+    }
+
 }

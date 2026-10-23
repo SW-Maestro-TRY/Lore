@@ -126,7 +126,8 @@ public class MyWebtoonService {
                 if (notes != null) {
                     notes.attach(card);      // 내 목록이라 관리자 처리 사유까지 보인다(#638)
                 }
-                merged.put(runId, card);
+                String cardRunId = String.valueOf(card.getOrDefault("run_id", runId));
+                merged.putIfAbsent(cardRunId, card);
             }
         }
         return new ArrayList<>(merged.values());

@@ -139,24 +139,8 @@
 .wt .wt-result-perpage { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
 .wt .wt-result-perpage input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
 
-/* 「{캐릭터}의 다른 편」 (아트보드 Done) */
 .wt .wt-result-titleacts { display: inline-flex; align-items: center; gap: 8px; }
 .wt .wt-result-suggest { width: 720px; max-width: 100%; padding: 8px 0 24px; }
-.wt .wt-result-others { width: 720px; max-width: 100%; display: flex; flex-direction: column; gap: 12px; padding: 8px 0 24px; }
-.wt .wt-result-others > b { font-size: 16px; }
-.wt .wt-result-others-row { display: flex; gap: 12px; flex-wrap: wrap; }
-.wt .wt-result-other { width: 120px; height: 170px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--water-light); }
-.wt .wt-result-other img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
-.wt .wt-result-other-new {
-  width: 120px; height: 170px; border-radius: 12px; border: 1.5px dashed rgba(15, 51, 63, 0.25); background: none;
-  display: flex; align-items: center; justify-content: center; text-align: center; font-size: 13px; color: var(--ink);
-  font-weight: 700; cursor: pointer; font-family: inherit; line-height: 1.5;
-}
-.wt .wt-result-other-new:hover { border-color: var(--ink); }
-@media (max-width: 767px) {
-  .wt .wt-result-others { width: auto; padding: 4px 0 16px; }
-  .wt .wt-result-other, .wt .wt-result-other-new { width: 96px; height: 136px; }
-}
 
 /* 크게 보기 — 장을 누르면 화면 전체. 폭에 맞추고 세로로 흘린다. */
 .wt .wt-result-zoom {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
-  readAllowance, readResult, rememberRecent, renameRun, type Allowance, type RunCard, type RunResult,
+  readSeries, type SeriesInfo, readAllowance, readResult, rememberRecent, renameRun, type Allowance, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useT } from "../../lib/i18n";
@@ -18,6 +18,8 @@ import LikeButton from "../../ui/LikeButton";
 import ResultSurvey from "./ResultSurvey";
 import EpisodeCommunity from "../../ui/community/EpisodeCommunity";
 import AdminModeration from "./AdminModeration";
+import NextEpisodeDialog from "./NextEpisodeDialog";
+import "./seriesI18n";
 import "./i18n";
 import "./Result.css";
 
@@ -27,11 +29,6 @@ import "./Result.css";
  * 이 브라우저(isMyRun)와 계정 목록(myAccountRuns) 둘 중 하나만 맞아도 된다 —
  * 다른 기기에서 로그인해 열어도 내 작품이 남의 것으로 보이면 안 된다.
  * 완성본을 여는 것만으로는 rememberMyRun 을 하지 않는다(만든 사람만 남긴다). */
-/** 따옴표로 감싼 제목을 벗긴다 (첫 화면·둘러보기와 같은 규칙). */
-function titleOf(r: RunCard): string {
-  return (r.title || "").replace(/^"(.*)"$/, "$1");
-}
-
 export default function Result({ runId, go, authenticated = false }: { runId: string; go: Go; authenticated?: boolean }) {
   const t = useT();
   const [data, setData] = useState<RunResult | null>(null);
@@ -46,8 +43,16 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
      화면에 통째로 맞추면 오히려 작아진다. 폭에 맞추고 세로로 흘린다. */
   const [zoom, setZoom] = useState<number | null>(null);
   const [nextNote, setNextNote] = useState(false);
-  /* 「{캐릭터}의 다른 편」 (아트보드 Done) — 같은 캐릭터로 만든 다른 작품. */
-  const [siblings, setSiblings] = useState<RunCard[]>([]);
+  const [series, setSeries] = useState<SeriesInfo | null>(null);
+  const [seriesError, setSeriesError] = useState(false);
+  const [seriesTick, setSeriesTick] = useState(0);
+  useEffect(() => {
+    let alive=true;
+    setSeries(null); setSeriesError(false);
+    readSeries(runId).then(s=>{if(alive)setSeries(s);}).catch(()=>{if(alive)setSeriesError(true);});
+    return ()=>{alive=false;};
+  },[runId,authenticated,seriesTick]);
+  useEffect(() => { setNextNote(false); setOwnedByAccount(false); }, [runId]);
   /* 「이런 웹툰은 어때요」(#248) — 같은 장르 최신 넷, 없으면 그냥 최신 넷. 점수 없음. */
   const [suggested, setSuggested] = useState<RunCard[]>([]);
   const [liked, setLiked] = useState(false);
@@ -69,11 +74,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   useEffect(() => {
     if (!data) return;
     let alive = true;
-    const who = data.character?.trim();
     browseRuns()
       .then((all) => {
         if (!alive) return;
-        setSiblings(who ? all.filter((r) => r.character?.trim() === who && r.run_id !== runId).slice(0, 3) : []);
         const others = all.filter((r) => r.run_id !== runId).sort((a, b) => b.run_id.localeCompare(a.run_id));
         const same = data.genre ? others.filter((r) => r.genre === data.genre) : [];
         setSuggested((same.length >= 2 ? same : others).slice(0, 4));
@@ -95,6 +98,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   }, [authenticated, runId]);
 
   useEffect(() => {
+    setOwnedByAccount(false);
     if (!authenticated) return;
     let alive = true;
     setAccountChecked(false);
@@ -162,7 +166,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       titleSaving.current = false;
     }
   };
-  const ep = data?.episode || 1;
+  const ep = series?.episode || data?.episode || 1;
   const epLabel = `EP.${String(ep).padStart(2, "0")}`;
 
   const preview = data && data.preview && data.planned_pages > data.page_count
@@ -175,6 +179,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
      만들지 정하는 근거라, 누를 때마다 남긴다(#413). */
   const nextEpisode = (where: string) => {
     track("next_episode_click", { where, mine, run: runId, ep, logged_in: authenticated });
+    const next = series?.chapters.find(c => c.episode > ep);
+    if (next?.run_id) { go("result", {run:next.run_id}); return; }
+    if (next?.job_id) { go("running", {job:next.job_id}); return; }
     setNextNote(true);
   };
 
@@ -235,11 +242,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   }, [zoom]);
 
   useEffect(() => {
-    if (!nextNote) return;
+    if (!nextNote || mine) return;
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setNextNote(false); };
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
-  }, [nextNote]);
+  }, [nextNote, mine]);
 
   /* 누른 장으로 내려간다. 그림이 안 받아졌을 때 자리를 잡으면 높이가 0 이라
      맨 위로 가버린다 — 그 장 위쪽 그림이 다 받아진 뒤에 자리를 잡는다. */
@@ -359,7 +366,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             {mine ? (
               <>
                 <div className="wt-result-acts">
-                  <button type="button" className="btn btn-p wt-result-next-pc" onClick={() => nextEpisode("mine_button")}>{t("다음 편 만들기")}</button>
+                  <button type="button" className="btn btn-p wt-result-next-pc" onClick={() => nextEpisode("mine_button")}>{series?.chapters.some(c=>c.episode>ep) ? t("다음화 보기") : t("다음 편 만들기")}</button>
                   <button type="button" className="btn btn-w" onClick={() => { track("editor_open", { run: runId, where: "result" }); go("editor", { run: runId }); }}>
                     <IconEdit size={18} /> {t("편집실")}
                   </button>
@@ -435,6 +442,19 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </div>
             )}
 
+            {seriesError && <div role="status" className="wt-series-nav">
+              <p>{t("회차 목록을 불러오지 못했습니다")}</p>
+              <button className="btn btn-w" onClick={()=>setSeriesTick(v=>v+1)}>{t("다시 시도")}</button>
+            </div>}
+            {series && series.chapters.length > 1 && <nav className="wt-series-nav" aria-label={t("회차 목록")}>
+              <b>{t("회차 목록")}</b><div className="wt-series-nav-list">
+                {series.chapters.map(c=><button key={c.episode} className={`btn ${c.run_id===runId?"btn-p":"btn-w"}`}
+                  aria-current={c.run_id===runId?"page":undefined}
+                  onClick={()=>c.run_id?go("result",{run:c.run_id}):c.job_id&&go("running",{job:c.job_id})}>
+                    {t(c.run_id?"{n}화":"{n}화 만드는 중",{n:c.episode})}
+                </button>)}
+              </div>
+            </nav>}
             <div className="wt-result-sheet">
               {data.pages.map((pg, i) => {
                 const gap = i === data.pages.length - 1 ? 0 : +pg.gap || 0;
@@ -489,24 +509,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
             {mine && readEnd && <ResultSurvey key={runId} runId={runId} authenticated={authenticated} go={go} />}
 
-            {mine && siblings.length > 0 && (
-              <div className="wt-result-others">
-                <b>{t("{who}의 다른 편", { who: data.character })}</b>
-                <div className="wt-result-others-row">
-                  {siblings.map((r) => (
-                    <button type="button" key={r.run_id} className="wt-result-other"
-                            onClick={() => { track("sibling_open", { run: r.run_id }); go("result", { run: r.run_id }); }} aria-label={titleOf(r)}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={coverUrl(r.run_id, r.cover_page ?? 1, r.cover_episode ?? 1)} alt="" />
-                    </button>
-                  ))}
-                  <button type="button" className="wt-result-other-new" onClick={() => nextEpisode("mine_tile")}>
-                    {t("EP.{n}", { n: ep + 1 })}<br />{t("만들기")}
-                  </button>
-                </div>
-              </div>
-            )}
-
             {suggested.length > 0 && (
               <div className="wt-result-suggest">
                 <RunStrip title={t("이런 웹툰은 어때요")} runs={suggested}
@@ -535,11 +537,12 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
       {/* 다음 편은 아직 없다. 눌렀을 때 줄 끝에 문구만 붙이면 화면 밖이라
           못 보고 다시 누르게 된다 — 가운데에 띄워 한 번에 읽히게 한다. */}
-      {nextNote && (
+      {nextNote && mine && <NextEpisodeDialog key={runId} runId={runId} authenticated={authenticated} go={go} onClose={()=>setNextNote(false)} />}
+      {nextNote && !mine && (
         <div className="modal" onClick={() => setNextNote(false)}>
           <div className="modal-box wt-result-soonbox" role="dialog" aria-modal="true"
                aria-labelledby="wt-soon-title" onClick={(e) => e.stopPropagation()}>
-            <h2 id="wt-soon-title">{t("아직 다음화 기능은 준비 중이에요!")}</h2>
+            <h2 id="wt-soon-title">{t("아직 공개된 다음 화가 없어요.")}</h2>
             {/* 남의 작품에서 다음화를 찾은 사람은 여기서 막히지 않게 만들기로 잇는다(#750). */}
             {!mine && (
               <button type="button" className="btn btn-p" autoFocus
@@ -585,7 +588,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
       {data && mine && (
         <div className="mfoot">
-          <button type="button" className="btn btn-p" onClick={() => nextEpisode("mine_mobile")}>{t("다음 편 만들기")}</button>
+          <button type="button" className="btn btn-p" onClick={() => nextEpisode("mine_mobile")}>{series?.chapters.some(c=>c.episode>ep) ? t("다음화 보기") : t("다음 편 만들기")}</button>
         </div>
       )}
     </div>

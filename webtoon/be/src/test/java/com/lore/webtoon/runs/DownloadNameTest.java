@@ -36,4 +36,8 @@ class DownloadNameTest {
         String longTitle = "가".repeat(60);
         assertThat(DownloadName.clean(longTitle)).hasSize(DownloadName.MAX_TITLE);
     }
+    @org.junit.jupiter.api.Test void usesSeriesEpisodeInDownloadName() {
+        org.assertj.core.api.Assertions.assertThat(DownloadName.name("약속",3,2)).isEqualTo("LORE_약속_2화_3.png");
+    }
+
 }
