@@ -18,6 +18,7 @@ public final class CustomMotionPlanner {
   for(var motion:plan.motions())for(var evidence:motion.selectedSources()){
    var fact=eligible.get(evidence.factId());if(fact==null||fact.path("revision").asInt()!=evidence.revision()||!fact.path("subject").asText().equals(evidence.subject()))throw new IllegalArgumentException("Unknown, excluded or misattributed motion evidence");
   }
+  if(BundleCommandAdapter.SHEET_REFERENCE_POLICY.equals(source.path("materialPolicy").asText()))CustomGridPrompt.validateGrounding(plan);
   return plan;
  }
  static boolean eligible(JsonNode f){return f.path("id").canConvertToLong()&&f.path("revision").asInt()>0&&Set.of("USER","CHARACTER").contains(f.path("subject").asText())&&"ACTIVE".equals(f.path("status").asText())&&"USER_REPORTED".equals(f.path("kind").asText())&&f.path("sourceTurnId").canConvertToLong()&&!f.path("sourceQuote").asText().isBlank();}
