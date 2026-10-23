@@ -3538,6 +3538,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/returning-guide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 기존 사용자 업데이트 안내 진행 조회
+         * @description 계정·안내 버전 단위로 완료 여부를 조회한다. 기존 튜토리얼을 마친 구버전 캐릭터만 대상이며 신규 v4는 제외한다. 조회는 상태를 만들지 않는다.
+         */
+        get: operations["getReturningGuide"];
+        put?: never;
+        /**
+         * 기존 사용자 업데이트 안내 진행 저장
+         * @description 0~5단계 진행을 단조 증가로 저장한다. 완료는 5단계와 최신 personaSourceHash 확인이 필요하다. 설정은 변경 없이 확인해도 되며 첫 안내·출석·후기 상태는 수정하지 않는다. 다른 기기에서도 계정당 한 번이다.
+         */
+        post: operations["advanceReturningGuide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/share": {
         parameters: {
             query?: never;
@@ -4326,6 +4350,12 @@ export interface components {
         };
         ApiResponseZzalInquiryReceipt: {
             data?: components["schemas"]["ZzalInquiryReceipt"];
+            error?: components["schemas"]["ErrorBody"];
+            message?: string;
+            success?: boolean;
+        };
+        ApiResponseZzalReturningGuideState: {
+            data?: components["schemas"]["ZzalReturningGuideState"];
             error?: components["schemas"]["ErrorBody"];
             message?: string;
             success?: boolean;
@@ -5724,6 +5754,13 @@ export interface components {
             slot?: string;
             userLine?: string;
         };
+        LegacyPersonaSource: {
+            genre?: string;
+            note?: string;
+            personalities?: ("GENTLE" | "LIVELY" | "SHY" | "CLINGY" | "COOL")[];
+            tone?: string;
+            world?: string;
+        };
         LikeResult: {
             liked?: boolean;
             /** Format: int64 */
@@ -5907,6 +5944,7 @@ export interface components {
             addressStatus?: string;
             authoredPersona?: components["schemas"]["AuthoredPersona"];
             callMe?: string;
+            legacySource?: components["schemas"]["LegacyPersonaSource"];
             personaSourceHash?: string;
         };
         /** @description 성격 등록·수정 요청. 수면 중을 포함해 언제든 변경할 수 있다 */
@@ -6887,6 +6925,21 @@ export interface components {
         };
         ZzalPreparedStage: {
             stageSpeech: components["schemas"]["ZzalStageSpeechView"];
+        };
+        ZzalReturningGuideAdvance: {
+            complete?: boolean;
+            expectedPersonaHash?: string;
+            /** Format: int32 */
+            step: number;
+        };
+        ZzalReturningGuideState: {
+            /** Format: int64 */
+            boundPetId?: number;
+            completed?: boolean;
+            eligible?: boolean;
+            /** Format: int32 */
+            step?: number;
+            version?: string;
         };
         ZzalStageSpeechView: {
             contextRevision: string;
@@ -11728,6 +11781,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+        };
+    };
+    getReturningGuide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalReturningGuideState"];
+                };
+            };
+        };
+    };
+    advanceReturningGuide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ZzalReturningGuideAdvance"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseZzalReturningGuideState"];
                 };
             };
         };

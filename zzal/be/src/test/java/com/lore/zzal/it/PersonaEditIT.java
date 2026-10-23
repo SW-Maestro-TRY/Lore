@@ -13,7 +13,7 @@ class PersonaEditIT extends ZzalItSupport {
     record Room(Long user,Long pet){String path(){return "/api/zzal/v1/me/pets/"+pet;}}
     private Room room(){Long user=newUserId();Instant at=kstToday(10,0);
         Long id=transactions.execute(tx->{var p=ZzalPet.draft(user,newUploadedImageKey(user),at);
-            p.character("고유캐릭터",null,null,"옛세계",null,null,at);p.markAlive("sheet","identity",at);p.skipTutorial(at);
+            p.character("고유캐릭터","  기존 메모\n보존  ",List.of(Personality.GENTLE,Personality.SHY),"옛세계","조용한 존댓말","일상 판타지",at);p.markAlive("sheet","identity",at);p.skipTutorial(at);
             p.rememberExplicitCallMe("민지");return petRepository.save(p).getId();});pinClock(id,at);return new Room(user,id);}
     private String hash(Room r)throws Exception{return getJson(r.user,r.path()+"/persona").path("data").path("personaSourceHash").asText();}
     private AuthoredPersona source(String raw){return new AuthoredPersona(1,List.of(
@@ -44,6 +44,38 @@ class PersonaEditIT extends ZzalItSupport {
         assertThat(postAs(r.user,r.path()+"/personality",Map.of("callMe"," ","expectedPersonaHash",hash(r))).getResponse().getStatus()).isEqualTo(400);
         assertThat(postAs(newUserId(),r.path()+"/personality",Map.of("callMe","누구","expectedPersonaHash",hash(r))).getResponse().getStatus()).isEqualTo(404);
         assertThat(petRepository.findById(r.pet).orElseThrow().getCallMe()).isEqualTo("민지");
+    }
+    @Test void legacyReadbackAndPartialEditorConversionPreservePromptInputsAndOriginalColumns()throws Exception {
+        var r=room();var response=getJson(r.user,r.path()+"/persona").path("data");
+        var legacy=response.path("legacySource");
+        assertThat(response.path("authoredPersona").isNull()).isTrue();
+        assertThat(legacy.path("personalities").toString()).isEqualTo("[\"GENTLE\",\"SHY\"]");
+        assertThat(legacy.path("note").asText()).isEqualTo("  기존 메모\n보존  ");
+        assertThat(legacy.path("tone").asText()).isEqualTo("조용한 존댓말");
+        assertThat(legacy.path("genre").asText()).isEqualTo("일상 판타지");
+        var before=petRepository.findById(r.pet).orElseThrow();
+        String frozenHash=PersonaSourceVersion.of(before);var clock=before.getClockStartedAt();
+        // Exact legacy editor preload plus one new answer; no inferred chip mapping.
+        var converted=new AuthoredPersona(1,List.of(
+                new AuthoredPersona.Field("world",List.of(),legacy.path("world").asText(),false),
+                new AuthoredPersona.Field("persona",List.of(),"GENTLE · SHY",false),
+                new AuthoredPersona.Field("extra",List.of(),legacy.path("note").asText()+"\n말투: "+legacy.path("tone").asText()+"\n장르: "+legacy.path("genre").asText(),false),
+                new AuthoredPersona.Field("likes",List.of(),"추가한 취향",false)));
+        assertThat(postAs(r.user,r.path()+"/personality",Map.of("authoredPersona",converted,"expectedPersonaHash",response.path("personaSourceHash").asText())).getResponse().getStatus()).isEqualTo(200);
+        var saved=petRepository.findById(r.pet).orElseThrow();
+        assertThat(LegacyPersonaSource.of(saved)).isEqualTo(LegacyPersonaSource.of(before));
+        assertThat(saved.getClockStartedAt()).isEqualTo(clock);assertThat(saved.getFirstIntroStep()).isNull();
+        assertThat(saved.getName()).isEqualTo(before.getName());
+        assertThat(PromptAssembler.system(new PersonaSheetBuilder(null).build(saved))).contains("GENTLE · SHY","조용한 존댓말","일상 판타지","옛세계","추가한 취향");
+        assertThat(frozenHash).isEqualTo(PersonaSourceVersion.of(before)); // captured historical source object unchanged
+    }
+    @Test void competingLegacyEditInvalidatesPreloadedSourceWithoutWritingAuthoredOrAddress()throws Exception {
+        var r=room();String old=hash(r);
+        assertThat(postAs(r.user,r.path()+"/personality",Map.of("personality","COOL","world","다른 탭의 새 세계")).getResponse().getStatus()).isEqualTo(200);
+        assertThat(hash(r)).isNotEqualTo(old);
+        assertThat(postAs(r.user,r.path()+"/personality",Map.of("authoredPersona",source("낡은 편집"),"callMe","새호칭","expectedPersonaHash",old)).getResponse().getStatus()).isEqualTo(409);
+        var pet=petRepository.findById(r.pet).orElseThrow();
+        assertThat(pet.getAuthoredPersona()).isNull();assertThat(pet.getWorld()).isEqualTo("다른 탭의 새 세계");assertThat(pet.getCallMe()).isEqualTo("민지");
     }
     @Test void originalLegacyPersonalityContractStillWorksWithoutResettingSource()throws Exception{
         var r=room();assertThat(postAs(r.user,r.path()+"/personality",Map.of("personality","LIVELY","world","구름위")).getResponse().getStatus()).isEqualTo(200);

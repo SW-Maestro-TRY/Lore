@@ -26,6 +26,9 @@ import FocusedInquiry from './FocusedInquiry';
 import {interactionMetrics} from './interactionMetrics';
 import SceneShare from '../yeoul/SceneShare';
 import {useFocusedGeometry} from './useFocusedGeometry';
+import ReturningGuide,{useReturningGuide} from '../announcements/ReturningGuide';
+import {returningCopy} from '../announcements/returningGuideState';
+import PersonaEditor from '../yeoul/PersonaEditor';
 
 type FocusedLive = Live;
 const blocks: Record<string, string> = {
@@ -50,6 +53,11 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
 }) {
   const locale=useZzalLocale(),t=focusedCopy(locale),x=useFocusedExperience(live,locale,sampleMode);
   const openAnnouncements=useOpenAnnouncements();
+  const returning=useReturningGuide(live.pet,sampleMode),returningWords=returningCopy[locale];
+  const [settingsOwner,setSettingsOwner]=useState<number|null>(null);
+  const [focusAfterSettings,setFocusAfterSettings]=useState(false);
+  const settingsOpen=settingsOwner!==null&&settingsOwner===live.petId;
+  useEffect(()=>{setSettingsOwner(null);setFocusAfterSettings(false)},[live.petId]);
   const metrics=useFocusedAnalytics(live,sampleMode);
   const [returnError,setReturnError]=useState<string|null>(null);
   const returnLock=useRef(false),returnOwner=useRef(live.petId);returnOwner.current=live.petId;
@@ -127,6 +135,15 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const snapshot = storedSnapshot?.pet?.petId === live.petId ? storedSnapshot : null;
   const pet = live.pet;
   const sleeping = !!pet?.clock?.sleeping, traveling = !!pet?.trip;
+  useEffect(()=>{
+    if(!settingsOpen||!host.current)return;
+    const children=[...host.current.children].filter(node=>!node.classList.contains('returning-settings-cover')) as HTMLElement[];
+    const previous=children.map(node=>node.inert),overflow=document.body.style.overflow;children.forEach(node=>{node.inert=true});document.body.style.overflow='hidden';
+    const sheet=host.current.querySelector<HTMLElement>('[data-returning-settings]');sheet?.querySelector<HTMLButtonElement>('button')?.focus();
+    return()=>{children.forEach((node,i)=>{node.inert=previous[i]});document.body.style.overflow=overflow;};
+  },[settingsOpen]);
+  const returnToChat=async(source:import('../../lib/pet').PersonaSource)=>{if(returning.pending&&!await returning.complete(source.personaSourceHash))return;setSettingsOwner(null);setFocusAfterSettings(!sleeping&&!traveling);};
+  const editSettings=()=>{interactionMetrics(live,sampleMode,'settings').attempt('settings_open');setDrawer(null);x.close();setSettingsOwner(live.petId);};
   const showSleepNotice=(wakeLocked=false)=>{if(sleepNoticeTimer.current)clearTimeout(sleepNoticeTimer.current);setSleepNotice(wakeLocked?(locale==='en'?'You can wake them after 7 a.m.':locale==='ja'?'朝7時を過ぎると起こせます。':'아침 7시가 지나면 깨울 수 있어요.'):(locale==='en'?'This is unavailable while they are asleep.':locale==='ja'?'眠っている間はこの機能を使えません。':'자는 동안에는 이 기능을 사용할 수 없어요.'));sleepNoticeTimer.current=setTimeout(()=>setSleepNotice(null),2200)};
   useEffect(()=>{setSleepNotice(null);if(sleepNoticeTimer.current)clearTimeout(sleepNoticeTimer.current);return()=>{if(sleepNoticeTimer.current)clearTimeout(sleepNoticeTimer.current)}},[live.petId,sleeping,locale]);
   useEffect(()=>{setReply(null);},[live.chatPresenceRevision,live.chat?.session?.id,sleeping,traveling]);
@@ -150,6 +167,13 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const transfer=inviteTransfer?.petId===live.petId?inviteTransfer:null;
   const inviteRetry=!!transfer?.error;
   const composerBlocked=!!blocked&&!(blocked==='closed'&&(inviteInput||inviteRetry));
+  useEffect(()=>{
+    if(!focusAfterSettings||settingsOpen||returning.open)return;
+    if(sleeping||traveling){setFocusAfterSettings(false);return;}
+    if(composerBlocked||sending||uncertain||transfer?.waiting||x.busy||x.graceSync||x.panel==='game'||x.guided&&!inviteInput)return;
+    const frame=requestAnimationFrame(()=>{if(input.current&&!input.current.disabled){input.current.focus({preventScroll:true});setFocusAfterSettings(false);}});
+    return()=>cancelAnimationFrame(frame);
+  },[focusAfterSettings,settingsOpen,returning.open,sleeping,traveling,composerBlocked,sending,uncertain,transfer?.waiting,x.busy,x.graceSync,x.panel,x.guided,inviteInput]);
   const canSend = !sleeping&&!traveling&&!x.graceSync && (!x.guided||inviteInput) && x.panel!=='game' && !x.busy && !composerBlocked && !sending && !transfer?.waiting && !!(uncertain ? snapshot?.delivery.text : snapshot?.draft)?.trim();
 
   useEffect(()=>{const refresh=(event:Event)=>{const id=(event as CustomEvent<{petId?:number}>).detail?.petId;if(id!=null&&id!==owner.current.petId)return;void bridgeRef.current?.loadContext();};window.addEventListener('zzal-persona-updated',refresh);window.addEventListener('pageshow',refresh);return()=>{window.removeEventListener('zzal-persona-updated',refresh);window.removeEventListener('pageshow',refresh)};},[]);
@@ -279,7 +303,6 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
         <button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}</button>
         <button data-fr-action="info-menu" onClick={()=>{setDrawer(null);x.open('info')}}>{locale==='ko'?'캐릭터 정보':t.personal}</button>
         {openAnnouncements&&<button data-fr-action="announcements-menu" onClick={()=>{setDrawer(null);openAnnouncements?.(menuButton.current)}}>{locale==='ko'?'공지사항':locale==='en'?'Announcements':'お知らせ'}</button>}
-        <button data-fr-action="help-menu" onClick={()=>{setDrawer(null);x.open('help')}}>{locale==='ko'?'도움말':locale==='en'?'Help':'使い方'}</button>
         {!sampleMode&&<button data-fr-action="feedback-menu" onClick={()=>{setDrawer(null);x.open('review')}}>{locale==='ko'?'후기':locale==='en'?'Feedback':'感想'}</button>}
         <button data-fr-action="scene-menu" onClick={()=>{setDrawer(null);interaction.attempt('scene_open');setShareOpen(true)}}>{locale==='ko'?'공유':locale==='en'?'Share':'共有'}</button>
         {!sampleMode&&<button data-fr-action="inquiry-menu" onClick={()=>{setDrawer(null);x.close();interaction.attempt('inquiry_open');setInquiryOpen(true)}}>{locale==='ko'?'문의하기':locale==='en'?'Contact us':'お問い合わせ'}</button>}
@@ -295,6 +318,8 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     </div>}
     <FocusedPanels live={live} x={x.panel==='care'?{...x,panel:null}:x} locale={locale} sampleMode={sampleMode}/>
     <FocusedInquiry metrics={interactionMetrics(live,sampleMode,'inquiry')} open={inquiryOpen} onClose={()=>setInquiryOpen(false)} petId={live.petId} locale={locale}/>
+    {returning.open&&!settingsOpen&&<ReturningGuide guide={returning} locale={locale} locked={sleeping||traveling} onEdit={editSettings}/>}
+    {settingsOpen&&<div className="returning-settings-cover"><section className="fr-sheet fr-reading-sheet" role="dialog" aria-modal="true" aria-label={returningWords.settings} data-returning-settings onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setSettingsOwner(null)}if(event.key==='Tab'){const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];if(event.shiftKey&&document.activeElement===buttons[0]){event.preventDefault();buttons.at(-1)?.focus()}else if(!event.shiftKey&&document.activeElement===buttons.at(-1)){event.preventDefault();buttons[0]?.focus()}}}}><header><h2>{returningWords.settings}</h2><button type="button" onClick={()=>setSettingsOwner(null)}>{returningWords.close}</button></header><div className="returning-content"><PersonaEditor allowConfirm={returning.pending} onSaved={returnToChat} onClose={()=>setSettingsOwner(null)}/></div></section></div>}
     {shareOpen&&<SceneShare metrics={interactionMetrics(live,sampleMode,'scene_share')} stage={scene.current} logoUrl="/zzal-entry/logo-08-transparent.png" onClose={()=>setShareOpen(false)}/>}
   </section>;
 }

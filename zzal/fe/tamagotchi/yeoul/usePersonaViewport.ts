@@ -2,7 +2,7 @@
 import { useEffect, type RefObject } from 'react';
 
 /** Keep the egg stage fixed; only the question pane yields to the visual keyboard. */
-export function usePersonaViewport(root: RefObject<HTMLDivElement | null>, sheet: RefObject<HTMLDivElement | null>, setKeyboard: (value: boolean) => void) {
+export function usePersonaViewport(root: RefObject<HTMLDivElement | null>, sheet: RefObject<HTMLDivElement | null>, setKeyboard: (value: boolean) => void, mode: 'onboarding'|'dialog' = 'onboarding') {
   useEffect(() => {
     const host = root.current;
     const pane = sheet.current;
@@ -25,9 +25,10 @@ export function usePersonaViewport(root: RefObject<HTMLDivElement | null>, sheet
         }
         host.dataset.small = hostHeight < 600 ? '1' : '0';
         if (keyboard) { host.style.height = `${hostHeight}px`; host.style.flex = 'none'; }
+        if(mode==='dialog'){host.style.height=`${vv?.height??window.innerHeight}px`;host.style.top=`${vv?.offsetTop??0}px`;host.style.left=`${vv?.offsetLeft??0}px`;host.style.width=`${vv?.width??window.innerWidth}px`;}
         setKeyboard(keyboard);
-        pane.style.flex = keyboard ? 'none' : '1 1 auto';
-        pane.style.height = keyboard ? `${Math.max(24, (vv?.offsetTop ?? 0) + (vv?.height ?? window.innerHeight) - pane.getBoundingClientRect().top - 4)}px` : '';
+        pane.style.flex = keyboard && mode==='onboarding' ? 'none' : '1 1 auto';
+        pane.style.height = keyboard && mode==='onboarding' ? `${Math.max(24, (vv?.offsetTop ?? 0) + (vv?.height ?? window.innerHeight) - pane.getBoundingClientRect().top - 4)}px` : '';
         if (!editing || !host.contains(el)) return;
         let caret = el.getBoundingClientRect().top + el.clientHeight / 2;
         if (el instanceof HTMLTextAreaElement) {
@@ -53,5 +54,5 @@ export function usePersonaViewport(root: RefObject<HTMLDivElement | null>, sheet
     events.forEach(event => document.addEventListener(event, update));
     vv?.addEventListener('resize',update); vv?.addEventListener('scroll',update); window.addEventListener('resize',update);
     return () => { observer.disconnect(); cancelAnimationFrame(frame); events.forEach(event => document.removeEventListener(event,update)); vv?.removeEventListener('resize',update); vv?.removeEventListener('scroll',update); window.removeEventListener('resize',update); };
-  }, [root, sheet, setKeyboard]);
+  }, [root, sheet, setKeyboard,mode]);
 }

@@ -37,12 +37,12 @@ export default function FocusedInquiry({open,onClose,petId,locale,metrics=intera
  return <div ref={root} className="fr-sheet fr-reading-sheet fr-inquiry" data-fr-inquiry role="dialog" aria-modal="true" aria-label={t.title} onKeyDown={event=>{if(event.key==='Escape'){event.stopPropagation();onClose()}if(event.key==='Tab'){const controls=[...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],textarea:not(:disabled)')];if(event.shiftKey&&document.activeElement===controls[0]){event.preventDefault();controls.at(-1)?.focus()}else if(!event.shiftKey&&document.activeElement===controls.at(-1)){event.preventDefault();controls[0]?.focus()}}}}>
   <header><h2>{t.title}</h2><button type="button" onClick={onClose}>{t.close}</button></header>
   <div className="fr-sheet-body">
-   <p className="fr-inquiry-email">{t.email} <a href={`mailto:${EMAIL}`}>{EMAIL}</a></p>
    {receipt?<p data-fr-inquiry-saved role="status">{t.saved}</p>:<form onSubmit={event=>{event.preventDefault();void submit()}}>
     <label htmlFor="fr-inquiry-body">{t.body}</label><textarea id="fr-inquiry-body" data-fr-inquiry-body maxLength={4000} value={body} disabled={busy} readOnly={uncertain} onChange={event=>{pending.current=null;setBody(event.target.value);setError(null)}}/>
     {error&&<p className="fr-panel-error" role="alert">{error}</p>}
     <button type="submit" data-fr-inquiry-submit disabled={busy||!body.trim()}>{busy?t.busy:uncertain?t.retry:t.send}</button>
    </form>}
+   <p className="fr-inquiry-email">{t.email} <a href={`mailto:${EMAIL}`}>{EMAIL}</a></p>
   </div>
  </div>;
 }
