@@ -34,13 +34,16 @@ public class BundleJobWorker {
   String plan=plans.requirePlan(jobId,snapshot);
   boolean typed=plan!=null&&json.readTree(plan).has("motionPlan");
   if(!typed&&executor!=null)throw new IllegalArgumentException("Provider-neutral execution requires typed plan");
+  // Validate frozen typed input before recording image execution ownership. No provider call here.
+  CustomGenerationRequest request=typed?CustomGenerationRequest.from(jobId,snapshot,plan):null;
+  if(request!=null&&CustomGenerationRequest.SHEET_PIPELINE.equals(request.pipelineVersion()))CustomGridPrompt.render(request);
   new BundleAssetVerifier(python).preflight();
   boolean claimed=Boolean.TRUE.equals(tx.execute(s->db.update("UPDATE zzal_custom_bundle_job SET state='CLAIMED',claim_token=?,output_dir=?,cli_started_at=? WHERE id=? AND state='PENDING' AND (claim_token IS NULL OR claim_token=?)",token,output.toAbsolutePath().normalize().toString(),java.sql.Timestamp.from(Instant.now()),jobId,token)==1));
   if(!claimed)return false;
   // Any uncertain execution remains CLAIMED. Never automatically release or replay a paid claim.
   String receipt;
   try{
-   receipt=typed?(executor==null?new CliGenerationExecutor(argv):executor).execute(CustomGenerationRequest.from(jobId,snapshot,plan),output):new BundleCommandAdapter().executePlanned(argv,snapshot,plan,output,Duration.ofMinutes(10));
+   receipt=typed?(executor==null?new CliGenerationExecutor(argv):executor).execute(request,output):new BundleCommandAdapter().executePlanned(argv,snapshot,plan,output,Duration.ofMinutes(10));
   }catch(com.lore.zzal.generation.client.PostprocessFailureException failure){
    try{db.update("UPDATE zzal_custom_bundle_job SET error_code=? WHERE id=? AND state='CLAIMED' AND claim_token=?",failure.errorCode(),jobId,token);}catch(Exception markerFailure){failure.addSuppressed(markerFailure);}throw failure;
   }
