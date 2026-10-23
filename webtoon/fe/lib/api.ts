@@ -678,6 +678,8 @@ export interface CharacterCard {
 }
 
 export interface Character {
+  community_public?: boolean;
+  community_blocked?: boolean;
   id: string;
   name: string;
   description: string;
