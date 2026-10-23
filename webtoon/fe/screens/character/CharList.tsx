@@ -10,6 +10,8 @@ import { IconEdit, IconPlus, IconRetry, IconTrash } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import "./i18n";
 import "./CharList.css";
+import CharacterPublication from "../../ui/community/CharacterPublication";
+import PublicCharacterGallery from "../../ui/community/PublicCharacterGallery";
 
 const POLL_MS = 4000;
 
@@ -93,6 +95,7 @@ export default function CharList({ go }: { go: Go }) {
             </div>
           </>
         )}
+      <PublicCharacterGallery key={mine.map((c) => `${c.id}:${c.community_public}`).join(",")} go={go} />
       </div>
       <div className="mfoot wt-ch-list-mnew">
         <button type="button" className="btn btn-p" style={{ height: 52 }} onClick={() => go("try")}><IconPlus size={18} /> {t("새 캐릭터")}</button>
@@ -184,6 +187,7 @@ function Item({ c, go, onPatch, onDrop }: { c: Character; go: Go; onPatch: (c: C
           </>
         )}
         {err && <span className="err">{err}</span>}
+      <CharacterPublication id={c.id} published={!!c.community_public} blocked={!!c.community_blocked} ready={c.status === "ready"} onChange={published=>onPatch({...c,community_public:published})}/>
       </div>
     </div>
   );

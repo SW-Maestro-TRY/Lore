@@ -1,0 +1,222 @@
+.wt-community {
+  margin: 32px 0;
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  text-align: left;
+}
+.wt-community h3 {
+  font-size: 20px;
+  margin: 0 0 10px;
+  letter-spacing: -0.02em;
+}
+.wt-community p {
+  line-height: 1.6;
+  margin: 8px 0 16px;
+}
+.wt-community .muted {
+  color: var(--muted);
+}
+.wt-community-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.wt-community textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.65;
+  caret-color: var(--sea-deep);
+}
+.wt-community textarea:focus-visible,
+.wt-community button:focus-visible,
+.wt-community a:focus-visible {
+  outline: 2px solid var(--sea-deep);
+  outline-offset: 3px;
+}
+.wt-community-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.wt-community-actions .count {
+  margin-right: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.wt-community-error {
+  color: var(--danger, #a32929);
+  line-height: 1.5;
+  margin-top: 12px;
+}
+.wt-comments {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+}
+.wt-comment {
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.wt-comment p {
+  white-space: pre-wrap;
+  margin: 10px 0;
+}
+.wt-comment-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+}
+.wt-comment-meta time {
+  color: var(--muted);
+}
+.wt-comment .btn-ghost {
+  font-size: 13px;
+  min-height: 44px;
+  padding: 4px 8px;
+}
+.wt-community-notices {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+.wt-community-notices li {
+  border-top: 1px solid var(--line);
+  padding: 14px 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.wt-community-notices a {
+  color: var(--ink);
+  flex: 1;
+  line-height: 1.6;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.wt-community-notices time {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wt-community-notices .unread {
+  font-weight: 700;
+}
+.wt-public-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.wt-public-character {
+  min-width: 0;
+}
+.wt-public-character img {
+  width: 100%;
+  aspect-ratio: 4/5;
+  object-fit: cover;
+  background: var(--paper);
+  border-radius: 12px;
+}
+.wt-public-character h4 {
+  margin: 14px 0 6px;
+  font-size: 18px;
+}
+.wt-public-character p {
+  overflow-wrap: anywhere;
+}
+.wt-public-character small {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--muted);
+}
+.wt-publication {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 12px;
+}
+.wt-publication label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.6;
+  font-size: 13px;
+}
+.wt-publication input {
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.wt-publication p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.wt-report {
+  padding: 14px 0;
+}
+.wt-report label {
+  display: block;
+  margin-bottom: 8px;
+}
+.wt-community-attribution {
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 24px;
+}
+.wt-community-attribution a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  color: var(--sea-deep);
+}
+@media (max-width: 680px) {
+  .wt-public-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 12px;
+  }
+  .wt-community {
+    margin: 24px 0;
+    padding: 24px 0;
+  }
+  .wt-community-notices li {
+    flex-wrap: wrap;
+  }
+  .wt-public-character .btn {
+    width: 100%;
+  }
+}
+@media (max-width: 380px) {
+  .wt-public-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wt-community .btn-ghost,
+.wt-publication .btn-ghost {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* 공백이 적은 번역도 카드 안에서 줄바꿈한다. */
+.wt-community,
+.wt-publication {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.wt-community .btn,
+.wt-publication .btn {
+  min-width: 0;
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
