@@ -181,6 +181,12 @@ services:
       ZZAL_CUSTOM_POSTPROCESS_VERSION: ${ZZAL_CUSTOM_POSTPROCESS_VERSION:-v1}
       ZZAL_CUSTOM_DISPATCH_ENABLED: ${ZZAL_CUSTOM_DISPATCH_ENABLED:-false}
       ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT: ${ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT:-}
+      # Explicit one-shot dev recovery; disabled until an approved target is supplied.
+      ZZAL_PUBLICATION_RECOVERY_ENABLED: ${ZZAL_PUBLICATION_RECOVERY_ENABLED:-false}
+      ZZAL_PUBLICATION_RECOVERY_OWNER_ID: ${ZZAL_PUBLICATION_RECOVERY_OWNER_ID:-}
+      ZZAL_PUBLICATION_RECOVERY_JOB_ID: ${ZZAL_PUBLICATION_RECOVERY_JOB_ID:-}
+      ZZAL_PUBLICATION_RECOVERY_OPERATION_ID: ${ZZAL_PUBLICATION_RECOVERY_OPERATION_ID:-}
+      ZZAL_PUBLICATION_RECOVERY_EXPIRES_AT: ${ZZAL_PUBLICATION_RECOVERY_EXPIRES_AT:-}
       # Local observations only; this does not enable paid generation or public management endpoints.
       ZZAL_METRICS_RUNTIME_ENABLED: ${ZZAL_METRICS_RUNTIME_ENABLED:-true}
       ZZAL_METRICS_RUNTIME_INTERVAL_MS: ${ZZAL_METRICS_RUNTIME_INTERVAL_MS:-60000}
@@ -243,6 +249,8 @@ services:
       # S3 에 올린 뒤 RunFiles 가 치우고 글·JSON 만 남는다.
       - webtoonwork:/app/webtoon/ai/work
       - zzalmetrics:/var/lib/lore/metrics-spool
+      # Frozen plans, provider receipts and failed work must survive app replacement.
+      - zzalcustom:/var/lib/lore/custom-bundles
 
   # ── 프론트엔드 (Next.js standalone) ──────────────────────────────
   web:
@@ -270,6 +278,7 @@ services:
       - "3100:3000"
 
 volumes:
+  zzalcustom:     # Private generation work; completed public assets are published to S3/MinIO.
   zzalmetrics:    # Uncommitted metrics survive container replacement; never served as public assets.
   pgdata:
   miniodata:

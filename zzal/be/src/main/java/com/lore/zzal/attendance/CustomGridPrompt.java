@@ -16,6 +16,18 @@ public final class CustomGridPrompt {
   String sheet=source.path("sheetImageKey").asText();
   if(!sheet.startsWith("images/")||sheet.startsWith("images/zzal/demo/")||sheet.contains(".."))throw new IllegalArgumentException("Real frozen sheet reference required");
  }
+ /** Postprocessor crouch includes seated/kneeling silhouettes; keep the authored pose untouched. */
+ static String grounding(String pose){
+  String prefix=pose.split(":",2)[0].strip();
+  return switch(prefix){
+   case "standing","crouch","lying" -> prefix;
+   case "sitting","seated" -> "crouch";
+   default -> throw new IllegalArgumentException("Explicit postprocess grounding required before generation");
+  };
+ }
+ public static void validateGrounding(CustomMotionPlan plan){
+  for(var motion:plan.motions())grounding(motion.pose());
+ }
  public static Render render(CustomGenerationRequest request)throws Exception {
   var source=new ObjectMapper().readTree(request.frozenSnapshot());
   requireFrozenTemplate(source);
@@ -24,7 +36,7 @@ public final class CustomGridPrompt {
   StringBuilder prompt=new StringBuilder();
   List<String> postures=new ArrayList<>();
   for(var m:request.frozenPlan().motions().stream().sorted(Comparator.comparingInt(CustomMotionPlan.Motion::order)).toList()){
-   String posture=m.pose().split(":",2)[0].strip();if(!Set.of("standing","crouch","lying").contains(posture))throw new IllegalArgumentException("Explicit postprocess grounding required before generation");
+   String posture=grounding(m.pose());
    postures.add(SLOTS.get(m.order()-1)+"="+posture);
    prompt.append("Cells ").append(m.order()*2-1).append("-").append(m.order()*2).append(": ").append(new ObjectMapper().writeValueAsString(m)).append('\n');
   }

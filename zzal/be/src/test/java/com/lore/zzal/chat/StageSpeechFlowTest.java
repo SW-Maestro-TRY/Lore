@@ -72,7 +72,7 @@ class StageSpeechFlowTest {
    assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();calls++;prompts.add(system+"\n"+input);duringCall.run();
    if(fail)throw new TimeoutException("synthetic");
    var speeches=new ArrayList<Map<String,String>>();
-   for(String line:input.split("\n")){String[] parts=line.split(" ");if(parts.length==2&&Set.of("ENTRY","AFTER_ACTION").contains(parts[1]))speeches.add(Map.of("step",parts[0],"phase",parts[1],"line",parts[0]+" "+parts[1]+" 안내","motion","base"));}
+   for(var scene:new com.fasterxml.jackson.databind.ObjectMapper().readTree(input).path("scenes")){String step=scene.path("step").asText(),phase=scene.path("phase").asText();speeches.add(Map.of("step",step,"phase",phase,"line",step+" "+phase+" 안내","motion","base"));}
    return new ChatLineClient.Completion(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(Map.of("speeches",speeches)),providerCost,0,0);
   };
   return new StageSpeechService(tx,LineChain.off(),new StageSpeechBatchGenerator(client,"spy-only",Duration.ofMillis(100)));
@@ -227,7 +227,7 @@ class StageSpeechFlowTest {
   var first=batch.prepare(1L,9L,ConversationScene.Step.FINISH_THANKS,ConversationScene.Beat.ENTRY,now);
   assertThat(first.source()).isEqualTo("LLM");assertThat(first.turnRef()).isNotNull();assertThat(calls).isEqualTo(2);
   assertThat(stored).hasSize(19);original.forEach((id,row)->assertThat(stored.get(id)).isSameAs(row));
-  assertThat(prompts.getLast()).contains("FINISH_THANKS ENTRY","CHAT_INVITE ENTRY").doesNotContain("FEED ENTRY","SNACK AFTER_ACTION");
+  assertThat(prompts.getLast()).contains("\"step\":\"FINISH_THANKS\",\"phase\":\"ENTRY\"","\"step\":\"CHAT_INVITE\",\"phase\":\"ENTRY\"").doesNotContain("\"step\":\"FEED\"","\"step\":\"SNACK\"");
   batch.prepare(1L,9L,ConversationScene.Step.FINISH_TOMORROW,ConversationScene.Beat.ENTRY,now);
   pet.devSetFirstIntro(4,FirstIntro.Step.REVIEW_SEEN,now);
   for(var step:List.of(ConversationScene.Step.CHAT_INTRO,ConversationScene.Step.CHAT_MEMORY,ConversationScene.Step.CHAT_INVITE))
