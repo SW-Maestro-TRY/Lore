@@ -177,7 +177,7 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
         desc = (char.get("description") or "").strip()
         # 고른 캐릭터 카드(#458)의 종·세계를 앞에 둔다 — 원래 설명만 보면
         # 카드가 바꿔 놓은 종(사람 → 검은여우)을 놓치고 사람으로 그린다.
-        card = charcard.short(char.get("card") or {})
+        card = charcard.short(charcard.for_story(char))
         desc = f"{card}. {desc}" if card and desc else (card or desc)
     if spec:
         lines.append(imageprompt.sheet_line(spec))
@@ -639,7 +639,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
              or direction.get("plot") or "").strip()
     fixed_names = [x for x in (scene_data.get("fixed") or []) if isinstance(x, str)]
     # 세계 재료(#502) — lore.json 이 있는 run 만. 없으면(옛 run) 프롬프트가 안 바뀐다.
-    lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() else ""
+    lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() and not (char or {}).get("lorebook") else ""
 
     made = []
     for n_ in range(0, len(scenes) + 1):  # 0 = 표지, 1..len(scenes) = 씬
@@ -666,6 +666,11 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
         # 그 사람 말대로 다시 그리는 것이다.
+        import userbook
+        prompt += "\n\n" + userbook.block(char, prompt, "image", (run_dir / "continuation.json").is_file())
+        if (run_dir / "continuation.json").is_file():
+            import continuation
+            prompt += "\n\n" + continuation.memory_block(run_dir)
         if note.strip():
             prompt += "\n\n" + note_block(note)
         # 프롬프트는 **그릴 장의 것만 쓴다.** 장면을 동시에 그리면 프로세스마다

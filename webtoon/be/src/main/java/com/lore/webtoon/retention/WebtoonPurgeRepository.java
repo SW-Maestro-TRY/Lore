@@ -102,6 +102,13 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Query("delete from PushSubscription s where s.userId = :userId")
     int deletePushSubscriptions(@Param("userId") Long userId);
 
+    @Modifying
+    @Query("delete from SeriesDraft d where d.ownerId = :userId")
+    int deleteSeriesDrafts(@Param("userId") Long userId);
+    @Modifying
+    @Query("delete from SeriesChapter c where c.ownerId = :userId")
+    int deleteSeriesChapters(@Param("userId") Long userId);
+
     /* ---- 기간이 지난 것 ---------------------------------------------- */
 
     /**
@@ -148,4 +155,12 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
             where j.finishedAt is not null and j.finishedAt < :cut and j.inputJson is not null
             """)
     int clearOldJobInputs(@Param("cut") Instant cut);
+    @Modifying @Query("delete from LoreExtraction e where e.ownerId=:userId")
+    int deleteLoreExtractions(@Param("userId") Long userId);
+    @Modifying @Query(value="delete from webtoon_lore_quota where owner_id=:userId",nativeQuery=true)
+    int deleteLoreQuota(@Param("userId") Long userId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(value="delete from webtoon_private_lorebook where owner_id=:userId",nativeQuery=true)
+    int deletePrivateLorebooks(@org.springframework.data.repository.query.Param("userId") Long userId);
 }

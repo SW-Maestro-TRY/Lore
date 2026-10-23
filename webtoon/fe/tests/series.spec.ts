@@ -1,0 +1,160 @@
+import {test,expect, type Page} from '@playwright/test';
+import {readFileSync, mkdirSync} from 'node:fs';
+import {resolve} from 'node:path';
+const base=resolve(__dirname,'../../..');
+const ok=(data:unknown)=>({success:true,data,error:null});
+const chapter=(ep:number)=>({episode:ep,run_id:`ep${ep}`,job_id:`job${ep}`,status:'DONE',title:ep===1?'다리 너머의 약속':'조금 일찍 출발한 날'});
+async function stub(page:Page,count=1,authenticated=true) {
+ let submitted:any=null;
+ let draft:any={episode:count+1,fixed_settings:'민수는 높은 곳을 무서워한다. 지수와는 오랜 친구다.\n지수가 감춘 약속은 아직 공개하지 않는다.',progress_state:`현재 시점: ${count}화 종료\n민수는 다리를 피해 돌아가느라 약속에 늦었다. 지수는 이유를 아직 모른다.`,story:'',revision:0,previous_state:'',source_scenes:['민수는 다리 앞에서 멈춘다.','먼 길로 돌아온 민수가 지수에게 사과한다.'],source_run:`ep${count}`,title:'다리 너머의 약속',credit_cost:12,balance:48,blocked:null};
+ const calls:string[]=[];
+ await page.addInitScript(()=>{localStorage.setItem('lore_uid','series-test-browser');localStorage.setItem('lore_my_runs','["ep1","ep2"]');});
+ await page.route('**/api/**',async route=>{
+  const req=route.request(),path=new URL(req.url()).pathname;calls.push(req.method()+' '+path);
+  const send=(body:unknown,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+  if(path==='/api/v1/users/me') return send(authenticated?ok({userId:7,email:'writer@example.test',role:'USER',createdAt:'2026-01-01T00:00:00Z'}):{error:'로그인 필요'},authenticated?200:401);
+  if(path.includes('/auth/refresh')) return send({error:'로그인 필요'},401);
+  if(path==='/api/v1/credits/me') return send(ok({balance:48}));
+  if(path.endsWith('/my/link')) return send(ok({linked:true}));
+  if(path.endsWith('/my/runs')) return send(ok([]));
+  if(path.endsWith('/my/trash')) return send(ok({keepDays:30,runs:[]}));
+  if(path.endsWith('/my/notify-setting')) return send(ok({on:true}));
+  if(path.endsWith('/my/feedback')) return send(ok({done:true,reward:0}));
+  if(path.endsWith('/jobs/mine')) return send({jobs:[],cards:[]});
+  if(path.endsWith('/allowance')) return send({logged_in:true,balance:48,credit_cost:12,qualities:[{key:'wave',label:'파도',credits:12}]});
+  if(path.endsWith('/runs')) return send({runs:[]});
+  if(path.endsWith('/liked')) return send(ok([]));
+  if(/\/runs\/ep\d\/result$/.test(path)) {
+   const ep=Number(path.match(/ep(\d)/)![1]);
+   return send({run_id:`ep${ep}`,character:'민수',title:chapter(ep).title,genre:'일상',style_label:'로맨스',episode:ep,pages:[{no:1,gap:0,width:1,caption:'다리 앞에서 망설이는 민수'}],page_count:1,planned_pages:1,preview:false,example:false});
+  }
+  if(path.includes('/page/')) return route.fulfill({status:200,contentType:'image/jpeg',body:readFileSync(resolve(base,'webtoon/fe/static/entry/webtoon-page.jpg'))});
+  if(/\/series\/ep\d$/.test(path)) return send({episode:Number(path.match(/ep(\d)/)![1]),chapters:Array.from({length:count},(_,i)=>chapter(i+1))});
+  if(path.endsWith('/draft')) {
+   if(req.method()==='POST') {draft={...draft,...req.postDataJSON(),revision:draft.revision+1};return send({revision:draft.revision});}
+   return send(draft);
+  }
+  if(path.endsWith('/next')) {submitted=req.postDataJSON();return send({id:'job-next'});}
+  if(path.endsWith('/jobs/job-next')) return send({id:'job-next',status:'queued',stage:'story',stage_label:'이야기 짓기',say:'준비 중',pct:0,log:[],queue:{ahead:0,minutes:1,line:'곧 시작해요'},elapsed:0,art:null});
+  return send(ok([]));
+ });
+ return {calls,get submitted(){return submitted;}};
+}
+async function openForm(page:Page) {
+ await page.goto('/webtoon?run=ep1');
+ await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
+ await expect(page.getByLabel('고정 설정',{exact:true})).toBeVisible();
+}
+test('고정 설정/진행 상태 수정 → 무료 초안 저장·복원 → 확인 후 생성',async({page},info)=>{
+ const server=await stub(page);
+ await openForm(page);
+ await page.getByLabel('고정 설정',{exact:true}).fill('민수는 고소공포증이 있다. 비밀 약속은 공개하지 않는다.');
+ await page.getByLabel('현재 진행 상태',{exact:true}).fill('다음 날 아침. 민수는 지수에게 사과했고, 지수도 늦은 이유를 알게 됐다.');
+ await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 지난번 일을 기억하고 우회로로 일찍 출발한다.');
+ await expect(page.getByRole('button',{name:'2화 만들기',exact:true})).toBeDisabled();
+ await page.getByRole('button',{name:'초안 저장',exact:true}).click();
+ await expect(page.getByRole('status').filter({hasText:'초안을 저장했어요'})).toBeVisible();
+ expect(server.submitted).toBeNull();
+ await page.getByRole('dialog').getByRole('button',{name:'닫기',exact:true}).click();
+ await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
+ await expect(page.getByLabel('현재 진행 상태',{exact:true})).toHaveValue('다음 날 아침. 민수는 지수에게 사과했고, 지수도 늦은 이유를 알게 됐다.');
+ await page.getByLabel('고정 설정과 현재 진행 상태를 확인했어요.',{exact:true}).check();
+ await page.getByLabel('사용하는 캐릭터·설정·이야기의 권리를 확인했어요.',{exact:true}).check();
+ await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 우회로를 미리 확인하고 일찍 출발한다.');
+ await expect(page.getByLabel('고정 설정과 현재 진행 상태를 확인했어요.',{exact:true})).not.toBeChecked();
+ await page.getByLabel('고정 설정과 현재 진행 상태를 확인했어요.',{exact:true}).check();
+ await page.getByRole('dialog').evaluate(e=>e.scrollTo(0,0));
+ mkdirSync(resolve(base,'.impeccable/review'),{recursive:true});
+ await page.screenshot({path:resolve(base,`.impeccable/review/${info.project.name}.png`),fullPage:true});
+ await page.getByRole('button',{name:'2화 만들기',exact:true}).scrollIntoViewIfNeeded();
+ await page.screenshot({path:resolve(base,`.impeccable/review/${info.project.name}-actions.png`),fullPage:true});
+ await page.getByRole('button',{name:'2화 만들기',exact:true}).click();
+ await expect(page).toHaveURL(/view=running&job=job-next/);
+ expect(server.submitted.fixed_settings).toContain('고소공포증');
+ expect(server.submitted.progress_state).toContain('지수도 늦은 이유');
+ expect(server.submitted.story).toContain('우회로를 미리');
+ expect(server.submitted.revision).toBe(1);
+ expect(server.submitted.confirmed).toBe(true);
+ expect(server.calls.filter(x=>x.endsWith('/next'))).toHaveLength(1);
+});
+test('완성 화면에서 회차 목록과 다음 화 이동',async({page})=>{
+ await stub(page,2);
+ await page.goto('/webtoon?run=ep1');
+ const nav=page.getByRole('navigation',{name:'회차 목록'});
+ await expect(nav).toBeVisible();
+ await nav.getByRole('button',{name:'2화',exact:true}).click();
+ await expect(page).toHaveURL(/run=ep2/);
+ await expect(nav.getByRole('button',{name:'2화',exact:true})).toHaveAttribute('aria-current','page');
+});
+test('로그인 전에는 개인 설정을 요청하지 않음',async({page})=>{
+ const server=await stub(page,1,false);
+ await page.goto('/webtoon?run=ep1');
+ await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
+ await expect(page.getByRole('dialog').getByText('연재 기록을 계정에 보관하려면 로그인해 주세요.')).toBeVisible();
+ expect(server.calls.some(x=>x.endsWith('/draft'))).toBe(false);
+ const dialog=page.getByRole('dialog');
+ await dialog.getByRole('button',{name:'로그인',exact:true}).focus();
+ await page.keyboard.press('Tab');
+ await expect(dialog.getByRole('button',{name:'취소',exact:true})).toBeFocused();
+ await page.keyboard.press('Shift+Tab');
+ await expect(dialog.getByRole('button',{name:'로그인',exact:true})).toBeFocused();
+ await page.keyboard.press('Escape');
+ await expect(dialog).not.toBeVisible();
+ await expect(page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first()).toBeFocused();
+});
+
+test('불러오는 중과 오류 화면에서도 키보드 포커스를 대화상자에 유지',async({page})=>{
+ await stub(page);
+ let release!:()=>void;
+ const pending=new Promise<void>(resolve=>{release=resolve;});
+ await page.route('**/series/ep1/draft',async route=>{
+  await pending;
+  await route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'테스트 불러오기 실패'})});
+ });
+ await page.goto('/webtoon?run=ep1');
+ await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
+ const dialog=page.getByRole('dialog');
+ await expect(dialog.getByRole('status')).toHaveText('앞 화의 기록을 불러오고 있어요');
+ await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeFocused();
+ await page.keyboard.press('Tab');
+ await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeFocused();
+ release();
+ await expect(dialog.getByRole('alert')).toHaveText('테스트 불러오기 실패');
+ await dialog.getByRole('button',{name:'닫기',exact:true}).focus();
+ await page.keyboard.press('Tab');
+ await expect(dialog.getByRole('button',{name:'내 작품으로 이동',exact:true})).toBeFocused();
+ await page.keyboard.press('Shift+Tab');
+ await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeFocused();
+});
+test('저장 중에는 Escape로 닫히지 않고 키보드 포커스가 유지됨',async({page})=>{
+ await stub(page);
+ let release!:()=>void;
+ const pending=new Promise<void>(resolve=>{release=resolve;});
+ await page.route('**/series/ep1/draft',async route=>{
+  if(route.request().method()!=='POST') return route.fallback();
+  await pending;
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({revision:1})});
+ });
+ await openForm(page);
+ await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('조금 일찍 출발한다.');
+ await page.getByRole('button',{name:'초안 저장',exact:true}).click();
+ const dialog=page.getByRole('dialog');
+ await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeDisabled();
+ await page.keyboard.press('Escape');
+ await expect(dialog).toBeVisible();
+ await page.keyboard.press('Tab');
+ expect(await dialog.evaluate(e=>e.contains(document.activeElement))).toBe(true);
+ release();
+ await expect(dialog.getByRole('status')).toContainText('초안을 저장했어요');
+ await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeEnabled();
+});
+
+test('같은 캐릭터의 다른 작품은 다음 회차로 이동하지 않음',async({page})=>{
+ const server=await stub(page,1);
+ await page.route('**/api/**/runs',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({runs:[{run_id:'unrelated',title:'민수의 별개 이야기',character:'민수',episodes:[1],page_count:1}]})}));
+ await openForm(page);
+ await expect(page.getByRole('dialog')).toContainText('2화 이어 만들기');
+ await expect(page).toHaveURL(/run=ep1/);
+ expect(server.calls.some(v=>v.endsWith('/series/ep1/draft'))).toBe(true);
+ expect(server.calls.some(v=>/\/unrelated\/(result|draft|next)$/.test(v))).toBe(false);
+});

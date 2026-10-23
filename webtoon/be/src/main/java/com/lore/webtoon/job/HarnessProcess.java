@@ -243,6 +243,15 @@ public class HarnessProcess {
         return waitWithTimeout(p, reader, 300, "이어 붙이기가 너무 오래 걸립니다");
     }
 
+    /** 짧은 설정 추출 작업. 웹 요청은 결과를 기다리지 않고 작업 번호를 돌려준다. */
+    public int extractLore(Path dir) throws IOException, InterruptedException {
+        ProcessBuilder pb=new ProcessBuilder(python,"-u","lore_extract.py","--input",dir.resolve("input.json").toString(),"--out",dir.resolve("result.json").toString());
+        pb.directory(harnessDir.toFile());pb.redirectErrorStream(true);
+        Process p=pb.start();
+        Thread reader=streamLines(p.getInputStream(),line->{},"설정 추출 프로세스 읽기 실패");
+        return waitWithTimeout(p,reader,90,"설정 정리가 오래 걸려 중단했습니다.");
+    }
+
     /** 스트림을 한 줄씩 읽어 {@code onLine} 으로 흘린다. 빈 줄은 거른다. */
     private Thread streamLines(InputStream in, Consumer<String> onLine, String failMessage) {
         return Thread.ofVirtual().start(() -> {

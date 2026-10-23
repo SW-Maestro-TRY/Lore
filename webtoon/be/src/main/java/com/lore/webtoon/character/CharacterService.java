@@ -62,6 +62,9 @@ import java.util.stream.Stream;
  */
 @Service
 public class CharacterService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.webtoon.community.CommunityCleanup communityCleanup;
+
 
     private static final Logger log = LoggerFactory.getLogger(CharacterService.class);
 
@@ -201,7 +204,7 @@ public class CharacterService {
     public WebtoonCharacter byPublicId(String publicId, Long userId, Collection<String> uids) {
         WebtoonCharacter one = characters.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다"));
-        if (!one.isBuiltin() && !one.madeBy(userId, uids)) {
+        if (!one.isBuiltin() && !one.isCommunityPublic() && !one.madeBy(userId, uids)) {
             // 있는 것을 "권한 없음" 으로 알리면 남의 번호를 하나씩 찔러 볼 수 있다.
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다");
         }
@@ -217,7 +220,7 @@ public class CharacterService {
     public WebtoonCharacter sharedCard(String publicId) {
         WebtoonCharacter one = characters.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다"));
-        if (!one.hasCard()) {
+        if (!one.hasCard() || one.isCommunityBlocked()) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다");
         }
         return one;
@@ -533,6 +536,7 @@ public class CharacterService {
         if (!one.madeBy(userId, uids)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "기본 캐릭터는 지울 수 없습니다");
         }
+        if(communityCleanup!=null) communityCleanup.character(publicId);
         characters.delete(one);
     }
 
