@@ -36,6 +36,7 @@ import { IconUser } from "../../ui/Icons";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
 import AdminSurvey from "./AdminSurvey";
+import CommunityInbox from "../../ui/community/CommunityInbox";
 import "./MyPage.css";
 
 /** 「1:1 문의하기」 창구 셋. 카카오톡 채널 주소는 공용(`CONTACT_CHANNEL`)이고, 인스타·X 는
@@ -359,6 +360,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
       </aside>
 
       <div className="wt-my-main">
+        {isAuthenticated && <CommunityInbox admin={user?.role === "ADMIN"} />}
             {contactOpen && (
               <Dialog title={t("어디로 문의할까요?")} onClose={() => setContactOpen(false)}>
                 <div className="wt-my-contact">

@@ -36,6 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class RunDeleteService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.webtoon.community.CommunityCleanup communityCleanup;
+
 
     private static final Logger log = LoggerFactory.getLogger(RunDeleteService.class);
 
@@ -112,7 +115,7 @@ public class RunDeleteService {
         }
 
         // 2. 딸린 것 → 작품 → 만들기 기록. 외래키가 없어서 순서를 여기서 지킨다.
-        int n = 0;
+        int n = communityCleanup==null ? 0 : communityCleanup.run(runId);
         n += rows.deletePages(runId);
         n += rows.deleteBakedPages(runId);
         n += rows.deleteOverlays(runId);

@@ -239,6 +239,8 @@ public class CharacterController {
 
     private Map<String, Object> view(WebtoonCharacter one, Long me, List<String> uids) {
         Map<String, Object> m = new LinkedHashMap<>();
+        m.put("community_public",one.isCommunityPublic());
+        m.put("community_blocked",one.isCommunityBlocked());
         m.put("id", one.getPublicId());
         m.put("name", one.getName());
         m.put("description", one.getDescription() == null ? "" : one.getDescription());
