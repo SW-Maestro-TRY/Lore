@@ -243,6 +243,8 @@ services:
       # S3 에 올린 뒤 RunFiles 가 치우고 글·JSON 만 남는다.
       - webtoonwork:/app/webtoon/ai/work
       - zzalmetrics:/var/lib/lore/metrics-spool
+      # Frozen plans, provider receipts and failed work must survive app replacement.
+      - zzalcustom:/var/lib/lore/custom-bundles
 
   # ── 프론트엔드 (Next.js standalone) ──────────────────────────────
   web:
@@ -270,6 +272,7 @@ services:
       - "3100:3000"
 
 volumes:
+  zzalcustom:     # Private generation work; completed public assets are published to S3/MinIO.
   zzalmetrics:    # Uncommitted metrics survive container replacement; never served as public assets.
   pgdata:
   miniodata:
