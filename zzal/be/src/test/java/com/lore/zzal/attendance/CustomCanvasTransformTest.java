@@ -30,4 +30,30 @@ class CustomCanvasTransformTest {
  }
  @Test void rejectsReversedAnchorSpans()throws Exception{var f=fixture();var point=(ObjectNode)f.path("anchors").path("poses").path(CustomGridPrompt.SLOTS.get(0)).path("head_side");point.put("left_x",200);point.put("right_x",100);assertThrows(IllegalStateException.class,()->validate(f));}
  @Test void rejectsClaimedEmptyEdgeWithBboxOutsideSafetyMargin()throws Exception{var f=fixture();((ArrayNode)transform(f).path("frames").get(0).path("bbox")).set(0,IntNode.valueOf(15));sync(f);assertThrows(IllegalStateException.class,()->validate(f));}
+ // Regression from staging synthetic pet11/job1 (2026-10-24): crown49.1-Hw144/2=-22.9.
+ @Test void acceptsCanonicalHeadSideProxyBeyondEitherCanvasEdge()throws Exception{
+  var f=fixture();var pose=(ObjectNode)f.path("anchors").path("poses").path("eat_rice");
+  ((ObjectNode)pose.path("head_side")).put("left_x",-22.9);
+  assertDoesNotThrow(()->validate(f));
+  double w=f.path("anchors").path("canvas").path("w").asDouble(),half=f.path("base").path("Hw").asDouble()/2;
+  ((ObjectNode)pose.path("head_side")).put("right_x",w+half);
+  assertDoesNotThrow(()->validate(f));
+ }
+ @Test void rejectsHeadSideProxyBeyondFrozenHwOrNonFinite()throws Exception{
+  for(boolean right:new boolean[]{false,true}){
+   var f=fixture();double half=f.path("base").path("Hw").asDouble()/2,w=f.path("anchors").path("canvas").path("w").asDouble();
+   var point=(ObjectNode)f.path("anchors").path("poses").path("eat_rice").path("head_side");
+   point.put(right?"right_x":"left_x",right?w+half+.1:-half-.1);
+   assertThrows(IllegalStateException.class,()->validate(f));
+   point.put(right?"right_x":"left_x",Double.NaN);
+   assertThrows(IllegalStateException.class,()->validate(f));
+  }
+ }
+ @Test void keepsNonProxyAnchorAndBboxBoundsStrict()throws Exception{
+  for(String field:new String[]{"head_top","hand_front","feet","head_side","bbox"}){
+   var f=fixture();var point=(ObjectNode)f.path("anchors").path("poses").path("eat_rice").path(field);
+   point.put(field.equals("head_top")||field.equals("bbox")?"x":field.equals("head_side")?"y":"left_x",-1);
+   assertThrows(IllegalStateException.class,()->validate(f),field);
+  }
+ }
 }
