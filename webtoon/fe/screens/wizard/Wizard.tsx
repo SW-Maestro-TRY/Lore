@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
-  WebtoonApiError, allowanceLine, listCharacters, notifyByEmail, readAllowance, readCharacter,
+  randomSeed, WebtoonApiError, allowanceLine, listCharacters, notifyByEmail, readAllowance, readCharacter,
   type Allowance, type Character,
 } from "../../lib/api";
 import { startJob } from "../../lib/start";
@@ -25,15 +25,13 @@ import { MobileTop } from "../../ui/TopNav";
 import NotifyAsk, { shouldAskNotify } from "../../ui/NotifyAsk";
 import "./i18n";
 import "./Wizard.css";
+import LorebookAttach from "./LorebookAttach";
+import {invalidateExtracted} from "../../lib/lorebooks";
+import "./loreI18n";
 
 const DRAFT_KEY = "lore_wizard_draft";
-/* 걸음(#548): 1 캐릭터 → 2 어떻게 시작할까(길 고르기) → 3 이야기·장르 / 내 내용 → 4 그림체
-   → 5 방식(아이디어부터만). 「만들고 싶은 내용이 있어요」 길은 항상 확인하고 만들어서 방식
-   걸음이 없고, 만들기 시작은 그림체 걸음에서 한다. */
-const CRUMB = ["캐릭터", "시작", "이야기 · 장르", "그림체", "방식", "만들기", "완성"];
+// 주소의 기존 step 값은 유지하되 시작 방식 선택(step=2)은 건너뛴다.
 const M_TITLE = ["캐릭터", "시작", "이야기 · 장르", "그림체", "방식"];
-const CRUMB_OWN = ["캐릭터", "시작", "내 내용", "그림체", "만들기", "완성"];
-const M_TITLE_OWN = ["캐릭터", "시작", "내 내용", "그림체"];
 
 function loadDraft(): WizardForm {
   const base = emptyWizardForm();
@@ -149,17 +147,56 @@ export default function Wizard({
     const f = loadDraft();
     return mode === "own" ? { ...f, create: "own" } : f;
   });
-  const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p }));
+  const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p,
+    ...(p.story !== undefined && p.story !== f.story && f.lorebook ? {lorebook:invalidateExtracted(f.lorebook)} : {}) }));
   useEffect(() => { saveDraft(form); }, [form]);
-  const own = form.create === "own";
-  const step = own ? Math.min(rawStep, 4) : Math.min(rawStep, 5);
-  const crumb = own ? CRUMB_OWN : CRUMB;
-  const mTitle = own ? M_TITLE_OWN : M_TITLE;
+  const own = false; // 시작 방식은 별도 선택하지 않는다. 입력 내용으로 생성 경로를 정한다.
+  const step = rawStep === 2 ? 3 : Math.min(rawStep,5);
+  const crumb = ["캐릭터","이야기 · 장르","그림체","방식","완성"];
+  const mTitle = M_TITLE;
+  const [lorePending,setLorePending]=useState(false);
+  const [loreHistoryRestoring,setLoreHistoryRestoring]=useState(false);
+  const loreLocked=lorePending||loreHistoryRestoring;
+  // 추출 결과와 확인 중인 편집을 두고 이동하면 로컬 초안이 사라진다.
+  useEffect(()=>{
+    if(!lorePending)return;
+    const url=window.location.href;const state=window.history.state;
+    const marker=crypto.randomUUID();
+    const push=()=>window.history.pushState({...state,loreWizardGuard:marker},"",url);
+    // 현재 주소를 한 칸 더 두어 브라우저 뒤로가기도 같은 화면에 머물게 한다.
+    push();
+    const unload=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue="";};
+    const back=(e:PopStateEvent)=>{e.stopImmediatePropagation();push();};
+    const link=(e:MouseEvent)=>{
+      if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
+      const a=(e.target instanceof Element?e.target.closest("a[href]"):null) as HTMLAnchorElement|null;
+      if(a&&a.target!=="_blank"&&!a.hasAttribute("download")&&a.href!==url){e.preventDefault();e.stopPropagation();}
+    };
+    window.addEventListener("beforeunload",unload);window.addEventListener("popstate",back,true);document.addEventListener("click",link,true);
+    return()=>{
+      window.removeEventListener("beforeunload",unload);window.removeEventListener("popstate",back,true);document.removeEventListener("click",link,true);
+      if(window.history.state?.loreWizardGuard===marker){
+        setLoreHistoryRestoring(true);
+        window.addEventListener("popstate",()=>setLoreHistoryRestoring(false),{once:true});
+        window.history.back();
+      }
+    };
+  },[lorePending]);
+  const [seedBusy,setSeedBusy]=useState(false);
+  const [seedError,setSeedError]=useState("");
 
   /* 걸음 이동을 하나로 모아, 어디서 어디로 왜 넘어갔는지(앞/뒤 · 머문 시간)를 함께 적는다. */
   const stepEnteredAt = useRef<number>(Date.now());
   useEffect(() => { stepEnteredAt.current = Date.now(); }, [step]);
-  const goStep = (n: number) => {
+  const goStep = async (n: number) => {
+    if(loreLocked)return;
+    if(n===2)n=step===1?3:1;
+    if(step===1 && n===3 && !step1Ok) {
+      if(seedBusy)return;setSeedBusy(true);setSeedError("");
+      try {const seed=await randomSeed();patch({name:form.name.trim()||seed.name,character:form.character.trim()||seed.description});}
+      catch(e){setSeedError(errText(e,t("캐릭터를 준비하지 못했어요")));setSeedBusy(false);return;}
+      setSeedBusy(false);
+    }
     const dir = n > step ? "wizard_next" : n < step ? "wizard_back" : "wizard_same";
     track(dir, { from_step: step, to_step: n, dwell_ms: Date.now() - stepEnteredAt.current, mode: own ? "own" : "quick" });
     go("create", { step: n, character: presetCharacterId, mode: own ? "own" : undefined });
@@ -231,7 +268,7 @@ export default function Wizard({
     if (added.length) patch({ photos: [...form.photos, ...added], characterId: undefined, characterArt: undefined });
   };
 
-  const step1Ok = form.name.trim().length > 0 && (form.photos.length > 0 || !!form.characterId);
+  const step1Ok = form.name.trim().length > 0 && (form.photos.length > 0 || !!form.characterId || !!form.character.trim());
 
   /* ---- 2걸음 ---- */
   const genreCustom = form.genre && !GENRE_QUICK.includes(form.genre) ? form.genre : "";
@@ -239,21 +276,6 @@ export default function Wizard({
      「직접 적기」를 고르면 아래에 칸이 하나 열린다. */
   const [genreTyping, setGenreTyping] = useState(false);
   const genreIsCustom = genreTyping || !!genreCustom;
-  /* 「만들고 싶은 내용이 있어요」는 로그인한 사람만(#548) — 장면 확인에서 며칠이고 멈춰 있을 수
-     있어서 브라우저가 바뀌어도 찾아올 수 있어야 한다. 안내는 한 줄만(로그인 창은 공용 헤더 것). */
-  const [createNote, setCreateNote] = useState("");
-  const pickCreate = (c: WizardForm["create"]) => {
-    if (c === "own" && !authenticated) {
-      track("login_prompt", { where: "wizard_create" });
-      setCreateNote(t("로그인하면 내 내용으로 만들 수 있어요"));
-      return;
-    }
-    setCreateNote("");
-    track("start_pick", { path: c, logged_in: !!authenticated });
-    if (form.create !== c) patch({ create: c });
-    go("create", { step: 3, character: presetCharacterId, mode: c === "own" ? "own" : undefined });
-  };
-
   /* ---- 4걸음 (own 길은 3걸음에서 시작한다) ---- */
   const [allow, setAllow] = useState<Allowance | null>(null);
   const lastStep = own ? 4 : 5;
@@ -271,10 +293,11 @@ export default function Wizard({
   /* 「확인하고 만들기」는 게스트도 쓴다(#608). 같은 브라우저에서는 첫 화면의 「만들던 웹툰」이 이어서 찾아 주고,
      브라우저가 바뀌면 못 찾는다 — 그 말은 고르는 곳에 한 줄로 적는다. 「만들고 싶은 내용이 있어요」(own)는
      로그인 전용 그대로다. */
-  const viewMode = form.mode;
+  const usesOwnStory = !!form.story.trim() && authenticated;
+  const viewMode = usesOwnStory ? "expert" : form.mode;
   const pickMode = (m: WizardForm["mode"]) => patch({ mode: m });
-  const ownReady = !own || (form.story.trim().length > 0 && authenticated);
-  const canStart = form.agreeIp && !blockedReason && !starting && step1Ok && ownReady;
+  const ownReady = !form.lorebook || form.lorebook.confirmed;
+  const canStart = form.agreeIp && !blockedReason && !starting && step1Ok && ownReady && !loreLocked;
 
   /* 마지막 걸음까지 와서 막힌 사람 — 무엇에 막혔는지가 크레딧·무료 횟수를 정할 근거다(#413). */
   useEffect(() => {
@@ -312,7 +335,7 @@ export default function Wizard({
     const props = startProps();
     track("create_start", props);
     try {
-      const id = await startJob({ ...form, mode: viewMode }, authenticated, lang);
+      const id = await startJob({ ...form, create:usesOwnStory ? "own" : "quick", mode: viewMode }, authenticated, lang);
       track("create_started", { ...props, job: id });
       metaTrack("StartTrial", { content_type: "webtoon" });
       if (notifyEmail) {
@@ -339,7 +362,7 @@ export default function Wizard({
       : name || "—";
 
   /* ---- 폰 위쪽 줄 ---- */
-  const mBack = step === 1 ? { href: "", onClick: () => go("entry") } : { href: "", onClick: () => goStep(step - 1) };
+  const mBack = step === 1 ? { href: "", onClick: () => go("entry") } : { href: "", onClick: () => goStep(step===3?1:step-1) };
 
   /* 촘촘함 고르기 — quick 길은 4걸음, own 길은 3걸음(그림체 아래)에 같은 것이 뜬다. */
   const qualityPicker = (
@@ -370,7 +393,8 @@ export default function Wizard({
         {!own && <>
           <b>{t("이렇게 만들어요")}</b>
           <div className="kvr"><span className="dim">{t("캐릭터")}</span><span>{characterSummary}</span></div>
-          <div className="kvr"><span className="dim">{t("이야기")}</span><span>{storyShown || t("비움")}</span></div>
+          <div className="kvr"><span className="dim">{t("이야기")}</span><span>{storyShown || "—"}</span></div>
+          {form.lorebook&&<div className="kvr"><span className="dim">{t("설정집")}</span><span>{form.lorebook.name}</span></div>}
           <div className="kvr"><span className="dim">{t("장르")}</span><span>{form.genre.trim() ? t(form.genre.trim()) : t("비움")}</span></div>
           <div className="kvr"><span className="dim">{t("그림체")}</span><span>{styleLabel ? t(styleLabel) : "—"}</span></div>
           <div className="kvr"><span className="dim">{t("촘촘함")}</span><span>{t(quality.label)} · {qualityTime}</span></div>
@@ -414,13 +438,13 @@ export default function Wizard({
   return (
     <div className="wt-wiz">
       {asking && <NotifyAsk time={qualityTime} onStart={(mail) => void begin(mail)} onClose={() => setAsking(false)} />}
-      <MobileTop back={mBack} title={t(mTitle[step - 1])} right={`${step} / ${crumb.length}`} />
+      <MobileTop back={loreLocked?undefined:mBack} title={t(mTitle[step - 1])} right={`${step===1?1:step-1} / 4`} />
       <div className="wt-wiz-mbars" aria-hidden="true">
-        {crumb.map((_, i) => <i key={i} className={i < step ? "on" : ""} />)}
+        {crumb.slice(0,4).map((_, i) => <i key={i} className={i < (step===1?1:step-1) ? "on" : ""} />)}
       </div>
 
       <div className="wt-wrap wt-page">
-        <Crumb at={step - 1} items={crumb} />
+        <Crumb at={step===1?0:step-2} items={crumb} />
 
         {/* ================= 1 · 캐릭터 ================= */}
         {step === 1 && (
@@ -548,44 +572,18 @@ export default function Wizard({
               </div>
             </div>
 
+
+            {seedError&&<p role="alert">{seedError}</p>}
             <div className="wt-wiz-foot">
               {presetCharacterId ? (
                 <button type="button" className="btn btn-w" onClick={() => go("characters")}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 내 캐릭터")}</span></button>
               ) : (
                 <button type="button" className="btn btn-w" onClick={() => go("entry")}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 입구")}</span></button>
               )}
-              <button type="button" className="btn btn-p" disabled={!step1Ok} onClick={() => goStep(2)}>{t("다음")} <IconArrow size={18} /></button>
+              <button type="button" className="btn btn-p" disabled={seedBusy} onClick={() => void goStep(2)}>{t("다음")} <IconArrow size={18} /></button>
             </div>
             <div className="mfoot">
-              <button type="button" className="btn btn-p" disabled={!step1Ok} onClick={() => goStep(2)}>{t("다음")}</button>
-            </div>
-          </>
-        )}
-
-        {/* ================= 2 · 어떻게 시작할까 — 길 고르기(#548) ================= */}
-        {step === 2 && (
-          <>
-            <div className="wt-wiz-body gap48">
-              <div className="wt-wiz-story wt-wiz-story-1col wide">
-                <div className="wt-wiz-head">
-                  <h2>{t("어떻게 시작할까요?")}</h2>
-                </div>
-                {/* 입구 카드와 같은 크기감 — 이 걸음은 이 선택이 전부라 카드가 작으면 빈 화면처럼 보인다(#548). */}
-                <div className="wt-wiz-modes wt-wiz-create">
-                  <button type="button" className={`wt-wiz-mode${!own ? " on" : ""}`} onClick={() => pickCreate("quick")}>
-                    <b>{t("아이디어부터 시작할게요")}</b><span className="muted">{t("캐릭터를 바탕으로 AI 가 스토리를 만들어드려요.")}</span>
-                    <em className="go">{t("AI 와 함께 만들기")} <IconArrow size={16} /></em>
-                  </button>
-                  <button type="button" className={`wt-wiz-mode${own ? " on" : ""}`} onClick={() => pickCreate("own")}>
-                    <b>{t("만들고 싶은 내용이 있어요")}</b><span className="muted">{t("내가 생각한 내용을 바탕으로 장면을 만들고 웹툰으로 완성해요.")}</span>
-                    <em className="go">{t("내 내용으로 시작하기")} <IconArrow size={16} /></em>
-                  </button>
-                </div>
-                {createNote && <span className="err">{createNote}</span>}
-              </div>
-            </div>
-            <div className="wt-wiz-foot">
-              <button type="button" className="btn btn-w" onClick={() => goStep(1)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 캐릭터")}</span></button>
+              <button type="button" className="btn btn-p" disabled={seedBusy} onClick={() => void goStep(2)}>{t("다음")}</button>
             </div>
           </>
         )}
@@ -595,90 +593,37 @@ export default function Wizard({
           <>
             <div className="wt-wiz-body gap48">
               <div className={`wt-wiz-story wt-wiz-story-1col${own ? " wt-wiz-own" : ""}`}>
-                {own ? (
-                  <>
-                    <div className="wt-wiz-head">
-                      <h2>{t("어떤 내용을 만들고 싶나요?")}</h2>
-                    </div>
-                    <div className="fieldset wt-wiz-ownf">
-                      <label htmlFor="wt-wiz-own-story">{t("이야기")} <span className="wt-wiz-req">{t("필수")}</span></label>
-                      <span className="muted lede">{t("짧은 아이디어부터 자세한 시나리오까지 자유롭게 적어 주세요.")}</span>
-                      <div className="wt-wiz-tawrap">
-                        <textarea id="wt-wiz-own-story" className="field wt-wiz-ownbox" value={form.story} maxLength={OWN_STORY_MAX}
-                                  placeholder={t("내가 만들고 싶은 이야기를 적어 주세요")}
-                                  onChange={(e) => patch({ story: e.target.value.slice(0, OWN_STORY_MAX) })} />
-                        <span className="dim wt-wiz-count">{form.story.length} / {OWN_STORY_MAX}</span>
-                      </div>
-                    </div>
-                    <div className="wt-wiz-ownrow">
-                      <div className="fieldset">
-                        <label htmlFor="wt-wiz-genre">{t("장르")}</label>
-                        <select id="wt-wiz-genre" className="field" aria-label={t("장르")}
-                                value={genreIsCustom ? "__custom" : form.genre}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  if (v === "__custom") { setGenreTyping(true); patch({ genre: "" }); }
-                                  else { setGenreTyping(false); patch({ genre: v }); }
-                                }}>
-                          <option value="">{t("안 고르면 이야기에 맞춰 정해요.")}</option>
-                          {GENRE_QUICK.map((g) => <option key={g} value={g}>{t(g)}</option>)}
-                          <option value="__custom">{t("직접 적기")}</option>
-                        </select>
-                        {genreIsCustom && (
-                          <input className="field" value={genreCustom} placeholder={t("목록에 없으면 직접 적기 · 예: 무협 / 로맨스 판타지")} aria-label={t("장르 직접 입력")}
-                                 onChange={(e) => patch({ genre: e.target.value })} />
-                        )}
-                        {form.genre && GENRE_NOTE[form.genre] && (
-                          <span className="dim">{t(GENRE_NOTE[form.genre])}</span>
-                        )}
-                      </div>
-                      <div className="fieldset">
-                        <label htmlFor="wt-wiz-title">{t("제목")} <span className="dim wt-wiz-opt">{t("선택")}</span></label>
-                        <input id="wt-wiz-title" className="field" value={form.title} aria-label={t("제목")}
-                               onChange={(e) => patch({ title: e.target.value })} />
-                        <span className="dim">{t("안 적으면 AI 가 짓습니다")}</span>
-                      </div>
-                    </div>
-                    {/* 설정집(로어북)이 생기기 전의 자리 — 인물·세계·지킬 것을 한 칸에. 안 적어도 된다. */}
-                    <details className="wt-wiz-more">
-                      <summary>{t("설정 더 적기")}</summary>
-                      <textarea className="field wt-wiz-desc" aria-label={t("설정 더 적기")} value={form.settings}
-                                placeholder={t("인물(이름·관계·외형) · 세계(배경·규칙) · 지킬 것")}
-                                onChange={(e) => patch({ settings: e.target.value })} />
-                    </details>
-                  </>
-                ) : (
-                  <>
-                    <div className="wt-wiz-head">
-                      <h2>{t("어떤 이야기를 볼까요?")}</h2>
-                      <span className="muted lede">{t("안 고르면 이야기에 맞춰 정해요.")}</span>
-                    </div>
-                    <div className="wt-wiz-chips">
-                      {GENRE_QUICK.map((g) => (
-                        <button key={g} type="button" className={`chip${form.genre === g ? " on" : ""}`}
-                                onClick={() => patch({ genre: form.genre === g ? "" : g })}>{t(g)}</button>
-                      ))}
-                    </div>
-                    <input className="field" value={genreCustom} placeholder={t("목록에 없으면 직접 적기 · 예: 무협 / 로맨스 판타지")} aria-label={t("장르 직접 입력")}
-                           onChange={(e) => patch({ genre: e.target.value })} />
-                    {form.genre && GENRE_NOTE[form.genre] && (
-                      <div className="wt-wiz-gnote">{t(GENRE_NOTE[form.genre])}</div>
-                    )}
-                    <textarea className="field wt-wiz-storybox" aria-label={t("이야기")} value={form.story}
-                              onChange={(e) => patch({ story: e.target.value })} />
-                  </>
-                )}
+                <div className="wt-wiz-head"><h2>{t("어떤 이야기를 만들까요?")}</h2></div>
+                <div className="fieldset">
+                  <label htmlFor="wt-wiz-story">{t("이야기")} <span className="dim">{t("선택")}</span></label>
+                  <textarea id="wt-wiz-story" className="field wt-wiz-storybox" disabled={loreLocked} value={form.story} maxLength={OWN_STORY_MAX}
+                    placeholder={t("이야기 입력")}
+                    onChange={e=>patch({story:e.target.value})}/>
+                </div>
+                <div inert={loreHistoryRestoring}><LorebookAttach value={form.lorebook} onChange={lorebook=>patch({lorebook})} story={form.story} authenticated={authenticated} onPendingChange={setLorePending}/></div>
+                <div className="fieldset" style={{marginTop:28}}>
+                  <label htmlFor="wt-wiz-genre">{t("장르")} <span className="dim">{t("선택")}</span></label>
+                  <select id="wt-wiz-genre" className="field" value={genreIsCustom?"__custom":form.genre} onChange={e=>{const v=e.target.value;setGenreTyping(v==="__custom");patch({genre:v==="__custom"?"":v});}}>
+                    <option value="">{t("자동")}</option>
+                    {GENRE_QUICK.map(g=><option key={g} value={g}>{t(g)}</option>)}<option value="__custom">{t("직접 적기")}</option>
+                  </select>
+                  {genreIsCustom&&<input className="field" aria-label={t("장르 직접 입력")} value={genreCustom} onChange={e=>patch({genre:e.target.value})}/>}
+                </div>
+                <details className="wt-wiz-more"><summary>{t("제목·추가 설정 적기")}</summary>
+                  <label>{t("제목")}<input className="field" value={form.title} onChange={e=>patch({title:e.target.value})}/></label>
+                  <textarea className="field" aria-label={t("설정 더 적기")} value={form.settings} maxLength={8000} onChange={e=>patch({settings:e.target.value})}/>
+                </details>
               </div>
             </div>
             <div className="wt-wiz-foot">
-              <button type="button" className="btn btn-w" onClick={() => goStep(2)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 시작")}</span></button>
-              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => {
+              <button type="button" className="btn btn-w" disabled={loreLocked} onClick={() => goStep(2)}><IconBack size={16} /> {t("이전")} <span className="dim">{t("· 캐릭터")}</span></button>
+              <button type="button" className="btn btn-p" disabled={loreLocked || !!form.lorebook && !form.lorebook.confirmed} onClick={() => {
                 track("story_input", { genre: form.genre || "", edited: genreIsCustom, name_len: form.story.length, mode: own ? "own" : "quick" });
                 goStep(4);
               }}>{t("다음")} <IconArrow size={18} /></button>
             </div>
             <div className="mfoot">
-              <button type="button" className="btn btn-p" disabled={own && !form.story.trim()} onClick={() => {
+              <button type="button" className="btn btn-p" disabled={loreLocked || !!form.lorebook && !form.lorebook.confirmed} onClick={() => {
                 track("story_input", { genre: form.genre || "", edited: genreIsCustom, name_len: form.story.length, mode: own ? "own" : "quick" });
                 goStep(4);
               }}>{t("다음")}</button>
@@ -751,7 +696,7 @@ export default function Wizard({
                   {/* 바로 만들기 / 확인하고 만들기(#548). 「확인하고」는 이야기·시트·장면에서 멈추고
                       시간이 아니라 사람이 누를 때 진행한다. 게스트도 되지만 이 브라우저에서만 이어 간다(#608). */}
                   <h2>{t("어떻게 만들까요?")}</h2>
-                  <div className="wt-wiz-modes">
+                  {usesOwnStory ? <p>{t("적어 주신 이야기는 장면을 확인하고 고친 뒤 그려요.")}</p> : <div className="wt-wiz-modes">
                     <button type="button" className={`wt-wiz-mode${viewMode === "simple" ? " on" : ""}`} onClick={() => pickMode("simple")}>
                       <b>{t("바로 만들기")}</b><span className="muted">{t("AI 에게 맡기고 빠르게 완성해요. 중간에 확인하지 않아요.")}</span>
                     </button>
@@ -759,6 +704,7 @@ export default function Wizard({
                       <b>{t("확인하고 만들기")}</b><span className="muted">{t("AI 가 만든 이야기와 장면을 확인하고, 원하는 부분을 고친 뒤 만들어요. 나갔다 와도 이어서 할 수 있어요.")}</span>
                     </button>
                   </div>
+                  }
                   {!authenticated && viewMode === "expert" && (
                     <span className="dim">{t("이 브라우저에서만 이어서 할 수 있어요. 다른 기기에서는 작업을 찾지 못해요.")}</span>
                   )}

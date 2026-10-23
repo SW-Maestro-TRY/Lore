@@ -128,3 +128,11 @@ def short(card: dict) -> str:
     if card.get("twist"):
         bits.append(card["twist"])
     return " · ".join(bits)
+
+
+def for_story(char: dict) -> dict:
+    """설정집을 붙인 작품에는 카드의 외형/종만 넘기고 옛 세계 사건은 빼준다."""
+    card = char.get("card") or {}
+    if char.get("lorebook"):
+        return {k: v for k, v in card.items() if k not in ("world", "world_label", "genre", "twist", "fate", "quote")}
+    return card

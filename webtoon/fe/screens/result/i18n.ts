@@ -106,9 +106,6 @@ const dict: Dict = {
   "안 넣음 → 줄거리: {b}": { en: "Not given → plot: {b}", ja: "未入力 → あらすじ: {b}", zh: "未填写 → 剧情: {b}" },
   "사진을 보고 외모를 읽었어요": { en: "Looks were read from your photo", ja: "写真から外見を読み取りました", zh: "外貌来自你的照片" },
   "사진 없음 → 설명으로만": { en: "No photo → from the description only", ja: "写真なし → 説明のみ", zh: "无照片 → 仅凭描述" },
-  "{who}의 다른 편": { en: "Other episodes with {who}", ja: "{who}の他の話", zh: "{who}的其他话" },
-  "EP.{n}": { en: "EP.{n}", ja: "EP.{n}", zh: "EP.{n}" },
-  "만들기": { en: "Create", ja: "作る", zh: "制作" },
   "크게 보기": { en: "View larger", ja: "大きく見る", zh: "放大查看" },
 
   /* ---- 안전 기준에 걸려 빈 장으로 완성(#626) ---- */

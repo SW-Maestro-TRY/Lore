@@ -33,6 +33,7 @@ class RunServiceTest {
     private StoryStore stories;
     private PageStore pages;
     private RunService runs;
+    private com.lore.webtoon.series.SeriesChapterRepository series;
 
     @BeforeEach
     void 세운다() {
@@ -40,6 +41,7 @@ class RunServiceTest {
         jobs = mock(WebtoonJobRepository.class);
         stories = mock(StoryStore.class);
         pages = mock(PageStore.class);
+        series = mock(com.lore.webtoon.series.SeriesChapterRepository.class);
         when(pages.dimensionsOf(org.mockito.ArgumentMatchers.any())).thenReturn(new int[]{0, 0});
         runs = new RunService(works, jobs, stories, pages, mock(com.lore.webtoon.work.RunLikeRepository.class));
     }
@@ -55,6 +57,7 @@ class RunServiceTest {
         when(job.getStyle()).thenReturn("romance_fantasy");
         when(job.getInputJson()).thenReturn("{\"name\":\"유리엘\",\"genre\":\"로판\"}");
         when(jobs.findByPublicId("job-" + runId)).thenReturn(Optional.of(job));
+        when(job.getPublicId()).thenReturn("job-" + runId);
 
         WebtoonStory story = mock(WebtoonStory.class);
         when(story.getTitle()).thenReturn("얼음 왕자의 계약");
@@ -63,6 +66,38 @@ class RunServiceTest {
         when(story.displayPlot()).thenReturn("계약으로 시작된 관계가 진심이 된다");
         when(stories.chosenOf(runId)).thenReturn(Optional.of(story));
         return work;
+    }
+
+    @Test
+    @DisplayName("마이페이지 카드는 같은 연재의 완성 회차를 한 작품으로 묶는다")
+    void 연재_회차를_작품_카드에_묶는다() {
+        WebtoonWork root = 작품("run-1", false);
+        WebtoonWork next = mock(WebtoonWork.class);
+        when(next.getRunId()).thenReturn("run-2");
+        when(next.getJobId()).thenReturn("job-run-2");
+        when(next.isTrashed()).thenReturn(false);
+        when(works.findFirstByRunId("run-2")).thenReturn(Optional.of(next));
+        when(works.findByJobId("job-run-1")).thenReturn(Optional.of(root));
+        when(works.findByJobId("job-run-2")).thenReturn(Optional.of(next));
+        when(pages.pageNumbersOf("run-1")).thenReturn(List.of(1, 2));
+        when(pages.pageNumbersOf("run-2")).thenReturn(List.of(1, 2));
+        WebtoonJob nextJob = mock(WebtoonJob.class);
+        when(nextJob.getPublicId()).thenReturn("job-run-2");
+        when(nextJob.getStyle()).thenReturn("romance_fantasy");
+        when(jobs.findByPublicId("job-run-2")).thenReturn(Optional.of(nextJob));
+        var chapter = mock(com.lore.webtoon.series.SeriesChapter.class);
+        when(chapter.jobId()).thenReturn("job-run-2");
+        when(chapter.rootJob()).thenReturn("job-run-1");
+        when(chapter.episodeNumber()).thenReturn(2);
+        when(series.findById("job-run-2")).thenReturn(Optional.of(chapter));
+        when(series.findByRootJobOrderByEpisodeNumberAsc("job-run-1")).thenReturn(List.of(chapter));
+        runs.setSeries(series);
+
+        Map<String, Object> card = runs.cardOf("run-2");
+
+        assertThat(card).containsEntry("run_id", "run-1")
+                .containsEntry("episodes", List.of(1, 2))
+                .containsEntry("episode_run_ids", Map.of("1", "run-1", "2", "run-2"));
     }
 
     @Test
