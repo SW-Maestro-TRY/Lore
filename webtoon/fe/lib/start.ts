@@ -23,6 +23,7 @@ export async function startJob(form: WizardForm, authenticated: boolean, lang: L
     }
   }
   const got = await createJob({
+    lorebook: form.lorebook || null,
     name: form.name.trim(),
     character: form.character.trim(),
     photo_note: "",
@@ -40,8 +41,8 @@ export async function startJob(form: WizardForm, authenticated: boolean, lang: L
        quick 길은 「확인하고 만들기」(expert)를 골랐을 때만 멈춘다. */
     checkpoints: form.create === "own" || form.mode === "expert",
     mode: form.create,
-    settings: form.create === "own" ? form.settings.trim() : "",
-    title: form.create === "own" ? form.title.trim() : "",
+    settings: form.settings.trim(),
+    title: form.title.trim(),
   });
   return got.id;
 }

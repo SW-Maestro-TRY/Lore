@@ -274,6 +274,7 @@ export interface NhJob {
 }
 
 export interface NhCreateRequest {
+  lorebook?: LoreBook | null;
   name: string;
   character: string;
   photo_note: string;
@@ -446,6 +447,8 @@ export interface RunCard {
   title: string;
   genre: string;
   episodes: number[];
+  /** 연재 회차 버튼이 각 회차 완성본으로 이동할 때 쓰는 run_id. */
+  episode_run_ids?: Record<string, string>;
   next_episode?: number;
   cover_episode?: number;
   cover_page?: number;
@@ -1038,4 +1041,45 @@ export function adminRemovedWorks(): Promise<{ rows: RemovedRow[] }> {
 
 export function adminOwnerCounts(): Promise<{ rows: OwnerCountRow[] }> {
   return call("/admin/works/owners");
+}
+
+
+export interface SeriesChapter {
+  episode: number; run_id: string | null; job_id?: string; status: string; title: string;
+}
+export interface SeriesInfo { episode: number; chapters: SeriesChapter[] }
+export interface SeriesDraft {
+  episode: number; fixed_settings: string; progress_state: string; story: string; revision: number;
+  previous_state: string; source_scenes: string[]; source_run: string; title: string;
+  credit_cost: number; balance: number; blocked: string | null;
+}
+export interface SeriesForm {
+  fixed_settings: string; progress_state: string; story: string; revision: number;
+  confirmed: boolean; agree_ip: boolean; request_token: string;
+}
+export function readSeries(run: string): Promise<SeriesInfo> {
+  return call(`/series/${encodeURIComponent(run)}`);
+}
+export function readSeriesDraft(run: string): Promise<SeriesDraft> {
+  return call(`/series/${encodeURIComponent(run)}/draft`);
+}
+export function saveSeriesDraft(run: string, form: SeriesForm): Promise<{revision: number}> {
+  return post(`/series/${encodeURIComponent(run)}/draft`, {...form, uid: getUid()});
+}
+export function createNextEpisode(run: string, form: SeriesForm): Promise<{id: string}> {
+  return post(`/series/${encodeURIComponent(run)}/next`, {...form, uid: getUid()});
+}
+
+export interface LoreEntry {title:string;content:string;kind:string;keys:string[];always:boolean;enabled:boolean;evidence?:string;}
+export interface LoreBook {library_id?:string;library_owner?:number;books?:LoreBook[];id?:string;name:string;source:string;fixed_settings:string;progress_state:string;entries:LoreEntry[];confirmed:boolean;}
+export interface LoreCatalog {books:LoreBook[];personal_books?:LoreBook[];extract_limit:number;extract_left:number;}
+export interface LoreExtraction {id:string;status:"RUNNING"|"DONE"|"ERROR";book?:LoreBook;error?:string;}
+export function listLorebooks():Promise<LoreCatalog>{return call("/lorebooks");}
+export function extractLorebook(text:string,language:string):Promise<LoreExtraction>{return post("/lorebooks/extract",{text,language,agree_ip:true});}
+export function readLoreExtraction(id:string):Promise<LoreExtraction>{return call(`/lorebooks/extract/${encodeURIComponent(id)}`);}
+
+/** 저장된 사용자 설정집은 현재 로그인 계정만 읽고 쓴다. 공개/공유 인자를 받지 않는다. */
+export function savePrivateLorebook(book:LoreBook):Promise<LoreBook>{
+ const path=book.library_id?`/lorebooks/mine/${encodeURIComponent(book.library_id)}`:"/lorebooks/mine";
+ return call(path,{method:book.library_id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(book)});
 }
