@@ -86,7 +86,11 @@ public final class CustomCanvasTransform {
             require(f.path("edgeContact").isObject(),"Edge evidence missing");for(var side:List.of("L","R","T","B"))require(integer(f.path("edgeContact").path(side).isMissingNode()?com.fasterxml.jackson.databind.node.IntNode.valueOf(0):f.path("edgeContact").path(side),0,side.equals("T")?39:19)>=0,"Frame clips");
         }
         for(String key:CustomGridPrompt.SLOTS){JsonNode pose=anchors.path("poses").path(key);require(pose.isObject(),"Missing custom pose");JsonNode box=pose.path("bbox");double x=number(box.path("x"),0,w),y=number(box.path("y"),0,h),pw=number(box.path("w"),1,w),ph=number(box.path("h"),1,h);require(x+pw<=w&&y+ph<=h,"Pose bbox outside canvas");
-            for(String field:List.of("head_top","head_side","hand_front","feet")){JsonNode point=pose.path(field);require(point.isObject(),"Missing pose anchor");if(point.has("left_x")||point.has("right_x"))require(number(point.path("left_x"),0,w)<=number(point.path("right_x"),0,w),"Reversed pose span");var fields=point.fields();while(fields.hasNext()){var entry=fields.next();number(entry.getValue(),0,entry.getKey().equals("y")?h:w);}}
+            for(String field:List.of("head_top","head_side","hand_front","feet")){JsonNode point=pose.path(field);require(point.isObject(),"Missing pose anchor");// anchors.py uses crown_x +/- frozen Hw/2 for the head-side collision proxy.
+                // This virtual span may extend beyond pixels; actual frame and other anchor bounds stay strict.
+                double headMargin=field.equals("head_side")?number(base.path("Hw"),1,4096)/2:0;
+                if(point.has("left_x")||point.has("right_x"))require(number(point.path("left_x"),-headMargin,w+headMargin)<=number(point.path("right_x"),-headMargin,w+headMargin),"Reversed pose span");
+                var fields=point.fields();while(fields.hasNext()){var entry=fields.next();boolean proxy=field.equals("head_side")&&(entry.getKey().equals("left_x")||entry.getKey().equals("right_x"));number(entry.getValue(),proxy?-headMargin:0,proxy?w+headMargin:entry.getKey().equals("y")?h:w);}}
         }
     }
     private static void validateBody(JsonNode proof,JsonNode base,CustomMotionPlan plan,double scale,double sourceHw,double sourceFoot){
