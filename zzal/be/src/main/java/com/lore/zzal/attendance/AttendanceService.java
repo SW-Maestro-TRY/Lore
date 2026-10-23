@@ -32,14 +32,23 @@ public class AttendanceService {
  private InitialBackground initialBackground(Long petId){
   return db.query("SELECT asset_key,source_cluster_key FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND slot_key='legacy-background' AND state='GRANTED'",(r,n)->new InitialBackground(r.getString(1),r.getString(2)),petId,PROGRAM).stream().findFirst().orElse(null);
  }
- /** Called only by the fresh character submission under its pet lock, never by reconnect/profile edits. */
+ /** Called under the pet lock by character submission and visits; existing ownership is immutable. */
  @Transactional
  public void initializeBackground(ZzalPet pet,Instant now){
   if(initialBackground(pet.getId())!=null)return;
-  if(pet.getBackground()!=null&&!"room".equals(pet.getBackground()))return; // never overwrite a direct/legacy choice
-  backgrounds.select(pet).filter(e->PublishedBackgroundCatalog.clusterKey(e)!=null).ifPresent(e->{
+  String second=db.query("SELECT asset_key FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND slot_key='background' AND state='GRANTED'",(r,n)->r.getString(1),pet.getId(),PROGRAM).stream().findFirst().orElse(null);
+  boolean room=pet.getBackground()==null||"room".equals(pet.getBackground());
+  // A selected pre-program background is already the initial entitlement, not a new reward.
+  if(!room&&!Objects.equals(pet.getBackground(),second)){
+   db.update("INSERT INTO zzal_attendance_reward_slot(pet_id,program_version,slot_key,eligible_day,state,asset_key,granted_at,source_cluster_key) VALUES(?,?,'legacy-background',0,'GRANTED',?,?,?) ON CONFLICT DO NOTHING",pet.getId(),PROGRAM,pet.getBackground(),Timestamp.from(now),backgrounds.clusterOf(pet.getBackground()).orElse(null));
+   return;
+  }
+  // Historical D2 ownership must survive; recover its missing companion, never duplicate it.
+  Optional<PublishedBackgroundCatalog.Entry> candidate=second==null?backgrounds.select(pet)
+   :backgrounds.clusterOf(second).flatMap(cluster->backgrounds.select(pet,second,cluster));
+  candidate.filter(e->PublishedBackgroundCatalog.clusterKey(e)!=null).ifPresent(e->{
    int inserted=db.update("INSERT INTO zzal_attendance_reward_slot(pet_id,program_version,slot_key,eligible_day,state,asset_key,granted_at,source_cluster_key) VALUES(?,?,'legacy-background',0,'GRANTED',?,?,?) ON CONFLICT DO NOTHING",pet.getId(),PROGRAM,e.key(),Timestamp.from(now),PublishedBackgroundCatalog.clusterKey(e));
-   if(inserted==1)pet.changeBackground(e.key());
+   if(inserted==1&&room&&second==null)pet.changeBackground(e.key());
   });
  }
  private Optional<PublishedBackgroundCatalog.Entry> rewardBackground(ZzalPet pet){
@@ -57,14 +66,12 @@ public class AttendanceService {
  @Transactional
  public void observe(ZzalPet pet,Instant now,boolean tutorialCompleted){
   if(!pet.isAlive() || pet.isTraveling()) return;
+  initializeBackground(pet,now);
   if(pet.isInTutorial()){
    if(pet.hasFirstIntro() && pet.introAt(com.lore.zzal.pet.FirstIntro.Step.FINISH_NOTICE)) prepareBackgroundPreview(pet);
    attach(pet);return;
   }
   int day=count(pet.getId());
-  // Preserve the selected pre-program background as ownership before the user can switch away.
-  if(day==0 && pet.getBackground()!=null && !"room".equals(pet.getBackground()))
-   db.update("INSERT INTO zzal_attendance_reward_slot(pet_id,program_version,slot_key,eligible_day,state,asset_key,granted_at) VALUES(?,?,'legacy-background',0,'GRANTED',?,?) ON CONFLICT DO NOTHING",pet.getId(),PROGRAM,pet.getBackground(),Timestamp.from(now));
   if(!tutorialCompleted && pet.isSleeping()) { attach(pet); return; }
   String cycle=pet.getAttendanceNightCycleAt()==null?"INITIAL":"NIGHT:"+pet.getAttendanceNightCycleAt();
   if(day==0 || !tutorialCompleted) {
@@ -82,7 +89,12 @@ public class AttendanceService {
   for(int i=0;i<DAYS.length;i++) if(day>=DAYS[i]) eligible(pet.getId(),"motion-"+(i+1),DAYS[i]);
   if(day>=2){
    var initial=initialBackground(pet.getId());
-   if(initial!=null)db.update("UPDATE zzal_attendance_reward_slot SET asset_key=NULL WHERE pet_id=? AND program_version=? AND slot_key='background' AND state='ELIGIBLE' AND asset_key=?",pet.getId(),PROGRAM,initial.key());
+   if(initial!=null){
+    var preview=db.query("SELECT asset_key FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND slot_key='background' AND state='ELIGIBLE' AND asset_key IS NOT NULL",(r,n)->r.getString(1),pet.getId(),PROGRAM).stream().findFirst();
+    String cluster=initial.cluster()==null?backgrounds.clusterOf(initial.key()).orElse(null):initial.cluster();
+    preview.filter(key->key.equals(initial.key())||cluster==null||!backgrounds.clusterOf(key).filter(cluster::equals).isPresent())
+     .ifPresent(key->db.update("UPDATE zzal_attendance_reward_slot SET asset_key=NULL WHERE pet_id=? AND program_version=? AND slot_key='background' AND state='ELIGIBLE' AND asset_key=?",pet.getId(),PROGRAM,key));
+   }
    rewardBackground(pet).ifPresent(bg->db.update("UPDATE zzal_attendance_reward_slot SET asset_key=? WHERE pet_id=? AND program_version=? AND slot_key='background' AND state='ELIGIBLE' AND asset_key IS NULL",bg.key(),pet.getId(),PROGRAM));
    db.update("UPDATE zzal_attendance_reward_slot SET state='GRANTED',granted_at=? WHERE pet_id=? AND program_version=? AND slot_key='background' AND state='ELIGIBLE' AND asset_key IS NOT NULL",Timestamp.from(now),pet.getId(),PROGRAM);
   }
