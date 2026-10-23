@@ -61,4 +61,11 @@ public interface RunDeleteRepository extends JpaRepository<WebtoonJob, Long> {
     @Modifying
     @Query("delete from WebtoonJob j where j.runId = :runId")
     int deleteJobs(@Param("runId") String runId);
+    @Modifying
+    @Query("delete from SeriesDraft d where d.sourceJob in (select j.publicId from WebtoonJob j where j.runId = :runId)")
+    int deleteSeriesDraft(@Param("runId") String runId);
+    @Modifying
+    @Query("delete from SeriesChapter c where c.jobId in (select j.publicId from WebtoonJob j where j.runId = :runId)")
+    int deleteSeriesChapter(@Param("runId") String runId);
+
 }

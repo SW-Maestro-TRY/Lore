@@ -81,6 +81,11 @@ public class WebtoonPurge implements UserDataPurge {
         }
 
         // 3. 작품·기록·사람에 직접 달린 것.
+        n += rows.deleteLoreExtractions(userId);
+        n += rows.deletePrivateLorebooks(userId);
+        n += rows.deleteLoreQuota(userId);
+        n += rows.deleteSeriesDrafts(userId);
+        n += rows.deleteSeriesChapters(userId);
         n += rows.deleteWorks(userId);
         n += rows.deleteJobs(userId);
         n += rows.deleteCharacters(userId);

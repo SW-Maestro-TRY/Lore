@@ -122,6 +122,8 @@ public class RunDeleteService {
         // 비용 기록(webtoon_usage)은 남긴다. "오늘 얼마 나갔나" 와 상한은 지운 작품의
         // 값까지 더해야 맞고, 작품 id 만 남지 사람을 가리키는 값은 없다. 계정을 지울
         // 때는 WebtoonPurge 가 따로 지운다.
+        n += rows.deleteSeriesDraft(runId);
+        n += rows.deleteSeriesChapter(runId);
         n += rows.deleteWorks(runId);
         n += rows.deleteJobs(runId);
 

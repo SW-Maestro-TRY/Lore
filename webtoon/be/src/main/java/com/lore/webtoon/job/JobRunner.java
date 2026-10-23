@@ -864,9 +864,12 @@ public class JobRunner {
      */
     private void ownStart(Long jobId, WebtoonJob job, Path jobDir, String runId) throws Exception {
         progress.say(jobId, "루가 적어 주신 내용을 읽고 있어요");
-        int code = callHarness(jobId, job, List.of(
-                "--run-id", runId,
+        List<String> args = new ArrayList<>(List.of("--run-id", runId,
                 "--character", jobDir.resolve("character.json").toString(), "--own"));
+        if (Files.isRegularFile(jobDir.resolve("continuation.json"))) {
+            args.add("--continuation"); args.add(jobDir.resolve("continuation.json").toString());
+        }
+        int code = callHarness(jobId, job, args);
         after.cost(runId);
         stopIfCancelled(jobId);
         if (code != 0) {

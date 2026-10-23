@@ -740,11 +740,14 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
     }
   };
 
-  const open = () => go("result", { run: run.run_id });
+  const open = (episode = 1) => {
+    const runId = run.episode_run_ids?.[String(episode)] ?? run.run_id;
+    go("result", { run: runId });
+  };
 
   return (
     <div className="card wt-my-work">
-      <button type="button" className="wt-my-cover" onClick={open} aria-label={run.title || t("제목 없음")}>
+        <button type="button" className="wt-my-cover" onClick={() => open()} aria-label={run.title || t("제목 없음")}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={coverUrl(run.run_id, run.cover_page ?? 1, run.cover_episode ?? 1)} alt="" />
       </button>
@@ -752,7 +755,7 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
       <span className="muted">{[run.character, run.genre && t(run.genre)].filter(Boolean).join(" · ")}</span>
       <div className="wt-my-eps">
         {run.episodes.map((n) => (
-          <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
+          <button key={n} type="button" className="ep" onClick={() => open(n)}>{t("{n}화", { n })}</button>
         ))}
       </div>
       <div className="wt-my-workfoot">

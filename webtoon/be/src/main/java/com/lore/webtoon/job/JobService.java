@@ -136,10 +136,19 @@ public class JobService {
     @Transactional
     public String create(CreateRequest form, Long userId, String browserUid,
                          String guestKey) {
+        return create(form,userId,browserUid,guestKey,null);
+    }
+
+    /** 서버가 소유권을 확인한 연재 기억만 받는다. HTTP 입력으로 직접 노출하지 않는다. */
+    @Transactional
+    public String create(CreateRequest form, Long userId, String browserUid,
+                         String guestKey, Map<String,Object> continuation) {
         if (!form.agreeIp()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "저작권 확인에 동의해야 만들 수 있습니다");
         }
+        var book=com.lore.webtoon.lorebook.LoreBook.clean(form.lorebook(),true);
+        if(!book.isEmpty()) safety.checkText("webtoon-lorebook",book.toString());
         /* 글은 만들기 전에 거른다(#80). 파이썬까지 가서 모델이 거절하면 돈은 이미 나갔고
            사람은 "만들기가 안 된다" 로만 안다. 사진은 아직 안 본다(safety.md). */
         safety.checkText("webtoon-create", form.name(), form.character(), form.genre(), form.story(),
@@ -173,6 +182,13 @@ public class JobService {
 
         String publicId = UUID.randomUUID().toString().replace("-", "").substring(0, 20);
         Path dir = jobsDir.resolve(publicId);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCompletion(int status) {
+                    if (status != STATUS_COMMITTED) discardPreparedJob(dir);
+                }
+            });
+        }
         try {
             Files.createDirectories(dir);
             /* **키가 오면 그쪽을 쓴다.** presign 으로 올리면 사진이 요청 본문에
@@ -196,11 +212,29 @@ public class JobService {
                 photos.add(fromCharacter);
             }
             writeCharacter(dir, form, photos, picked);
-        } catch (IOException e) {
-            log.error("만들기 준비에 실패했습니다 (job={})", publicId, e);
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "만들기를 시작하지 못했습니다");
-        }
-
+            if (continuation != null) {
+                safety.checkText("webtoon-series", String.valueOf(continuation.get("progress_state")));
+                Path source = Path.of(String.valueOf(continuation.get("source_dir")));
+                Path frozen = dir.resolve("continuation-source");
+                Files.createDirectories(frozen);
+                for (String name : List.of("input.json", "persona.json", "cast.json", "cast_pick.json", "sheet.png",
+                        "sheet_spec.json", "lore.json", "directions.json", "pick.json", "scenes.json")) {
+                    if (Files.isRegularFile(source.resolve(name))) Files.copy(source.resolve(name), frozen.resolve(name));
+                }
+                if (Files.isDirectory(source.resolve("sheets"))) {
+                    Files.createDirectories(frozen.resolve("sheets"));
+                    try (var files = Files.list(source.resolve("sheets"))) {
+                        for (Path file : files.filter(Files::isRegularFile).toList()) {
+                            String name = file.getFileName().toString();
+                            if (name.endsWith(".png") || name.endsWith(".spec.json"))
+                                Files.copy(file, frozen.resolve("sheets").resolve(name));
+                        }
+                    }
+                }
+                var packet = new LinkedHashMap<>(continuation);
+                packet.put("source_dir", frozen.toString());
+                mapper.writeValue(dir.resolve("continuation.json").toFile(),packet);
+            }
         /* 그림체는 화면 키(romance)로도, 하네스 이름(romance_fantasy)으로도 받는다.
            「캐릭터 만들어보기」의 카드는 하네스 이름을 들고 있어서 — 한 컷을 그린
            그 그림체 그대로 1화를 그려야 같은 캐릭터로 읽힌다. */
@@ -243,6 +277,21 @@ public class JobService {
             runner.enqueue(id, dir);
         }
         return publicId;
+        } catch (IOException e) {
+            discardPreparedJob(dir);
+            log.error("만들기 준비에 실패했습니다 (job={})", publicId, e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR,"만들기를 시작하지 못했습니다");
+        } catch (RuntimeException e) {
+            discardPreparedJob(dir);
+            throw e;
+        }
+    }
+
+    private void discardPreparedJob(Path dir) {
+        if (!Files.exists(dir)) return;
+        try (var files=Files.walk(dir)) {
+            for (Path file:files.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(file);
+        } catch (IOException cleanup) {log.warn("생성 준비 사본 정리 실패: {}",dir.getFileName(),cleanup);}
     }
 
     /** 이 작업이 만들고 있는 run 번호. 첫 단계가 끝나야 생기므로 없을 수 있다. */
@@ -320,7 +369,7 @@ public class JobService {
                 runner.sheetReady(job.getRunId()),
                 runArt.sheetVersions(job.getRunId()),
                 at == JobStatus.AWAITING_SCENES || ownPause ? castSheetsOf(job) : null,
-                at == JobStatus.AWAITING_SCENES || ownPause || job.isSheetBlocked() ? inputOf(job) : null,
+                at == JobStatus.AWAITING_SCENES || ownPause || job.isSheetBlocked() ? inputsForViewer(job) : null,
                 WebtoonStyles.labelOf(job.getStyle()),
                 STAGE_LABEL.getOrDefault(job.getStage().wire(), job.getStage().wire()),
                 spot,
@@ -729,6 +778,13 @@ public class JobService {
      * 내가 적은 것(#548) — 장면 확인 화면이 보여 준다. 만들 때 남긴 {@code input_json}
      * 에서 글만 꺼내고(사진은 장 수만), 그림체·화질·언어는 작업 줄에서.
      */
+    private Map<String,Object> inputsForViewer(WebtoonJob job) {
+        // 완성본 공개와 생성 입력의 공개는 별개다. 개인 설정집에서 온 고정 설정도 포함될 수 있다.
+        Long owner = job.getUserId();
+        if (owner != null && !owner.equals(com.lore.webtoon.credit.CreditGate.currentUser())) return null;
+        return inputOf(job);
+    }
+
     private Map<String, Object> inputOf(WebtoonJob job) {
         Map<String, Object> out = new LinkedHashMap<>();
         Map<String, Object> saved = Map.of();
@@ -1084,6 +1140,7 @@ public class JobService {
         doc.put("world", Map.of("preset", picked == null ? "" : blank(picked.getWorld()), "text", ""));
         doc.put("story", blank(form.story()));
         // 「만들고 싶은 내용이 있어요」(#548) — 더 적은 설정과 제목. 하네스가 own 길에서 읽는다.
+        doc.put("lorebook", com.lore.webtoon.lorebook.LoreBook.clean(form.lorebook(),true));
         doc.put("settings", blank(form.settings()));
         doc.put("title", blank(form.title()));
         doc.put("episode", blank(form.episode()));
@@ -1139,6 +1196,7 @@ public class JobService {
         doc.put("photo_note", blank(form.photoNote()));
         doc.put("genre", blank(form.genre()));
         doc.put("story", blank(form.story()));
+        doc.put("lorebook", com.lore.webtoon.lorebook.LoreBook.clean(form.lorebook(),true));
         doc.put("settings", blank(form.settings()));
         doc.put("title", blank(form.title()));
         doc.put("episode", blank(form.episode()));
@@ -1218,8 +1276,10 @@ public class JobService {
                                 String settings,
                                 String title,
                                 /* own 길의 「1화에서 보여줄 것」 — 적은 내용 가운데 이번 화에 넣을 부분. 없을 수 있다. */
-                                String episode) {
-
+                                String episode, Map<String,Object> lorebook) {
+        public CreateRequest(String name,String character,String genre,String story,String style,Map<String,String> fields,List<String> photosData,List<String> photoKeys,Boolean agreeIp,Boolean checkpoints,String uid,String characterId,String photoNote,String quality,String language,String mode,String settings,String title,String episode) {
+            this(name,character,genre,story,style,fields,photosData,photoKeys,agreeIp,checkpoints,uid,characterId,photoNote,quality,language,mode,settings,title,episode,null);
+        }
         public CreateRequest {
             agreeIp = agreeIp != null && agreeIp;
         }
