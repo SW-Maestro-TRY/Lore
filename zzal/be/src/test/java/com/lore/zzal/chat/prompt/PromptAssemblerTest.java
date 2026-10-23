@@ -27,24 +27,46 @@ class PromptAssemblerTest {
     }
 
     @Test
-    @DisplayName("★ A — 문서 그대로: 성격 빈 칸은 줄째 빠지고, 말투 없으면 '반말, 짧게', 호칭 모르면 '너'")
+    @DisplayName("★ A — 문서 그대로: 성격 빈 칸은 줄째 빠지고, 말투 없으면 '반말, 짧게', 호칭 미입력이면 사용자님·재질문 없음")
     void systemLikeDoc() {
         String s = PromptAssembler.system(usagi(null));
-        assertThat(s).startsWith("너는 '우사기'다. 작가가 만든 캐릭터이고, 작가와 짧은 대화를 나눈다.\n\n[너에 대해]\n말투: 반말, 짧게\n");
+        assertThat(s).startsWith("너는 '우사기'다. 작가가 만든 캐릭터이고, 작가와 짧은 대화를 나눈다.\n\n");
+        assertThat(s).contains("[너에 대해]\n말투: 반말, 짧게\n");
         assertThat(s).doesNotContain("성격:");
         assertThat(s).doesNotContain("네 모습");                       // #709 — 외형은 그림 생성에만
         assertThat(s).contains("네가 사는 곳: " + USAGI_WORLD + "\n", "작가 메모: 초코비",
-                "상대를 뭐라고 부를지 아직 모른다. '너'라고 한다.\n\n[말하는 법]\n",
-                "- 한 번에 한 줄, 60자 이내. 말만 한다. 지문·괄호·이모지·동작 묘사 금지.",
+                "저장된 호칭이 없으면 '사용자님'이라고 한다. 호칭을 다시 묻지 않는다.\n\n[말하는 법]\n",
+                "- 말만 한다. 지문·괄호·이모지·동작 묘사 금지. ㅋㅋ 같은 웃음 문자는 쓰지 않는다.",
                 "  이름의 유래 지어내기, \"주인님\", 상대의 개인정보 되풀이.",
-                "[출력]\nJSON 한 줄: {\"line\": \"<대사>\", \"motion\": \"<hello, reply, joy 중 하나>\", "
+                "[출력]\nJSON 한 줄: {\"line\": \"<대사>\", \"motion\": \"<이번 턴 [허용 행동 ID]의 id. 없으면 base>\", "
                         + "\"call_me\": \"<상대 말에서 읽은, 상대를 부를 호칭이나 이름. 없으면 null>\", "
                         + "\"user_said\": \"<상대가 [이번 턴]의 '상대가 답한 질문'에 답했으면 그 답의 요지. 없으면 null>\", "
-                        + "\"asked_back\": <상대가 너에게 되물었으면 true, 아니면 false>}\n");
+                        + "\"asked_back\": <상대가 너에게 되물었으면 true, 아니면 false>, \"memory_deltas\": []}\n");
         assertThat(s).doesNotContain("[지금]\n", "[이번 턴]\n종류");   // [지금] 칸 머리(규칙 문장의 "[지금]의" 는 괜찮다)   // 시스템은 턴마다 같아야 캐시가 먹는다
         String named = PromptAssembler.system(new PersonaSheet("서지환", List.of(Personality.COOL, Personality.SHY), "반말 · 무뚝뚝",
                 null, null, "누나", false));
         assertThat(named).startsWith("너는 '서지환'이다.").contains("성격: 시크, 수줍음\n", "말투: 반말 · 무뚝뚝\n", "상대를 부르는 말: 누나\n");
+    }
+
+    @Test
+    @DisplayName("작성 원문이 있으면 이전 말투 기본값과 충돌하지 않고 원문을 전달한다")
+    void authoredPersonaOwnsSpeechStyle() {
+        var authored = new com.lore.zzal.pet.persona.AuthoredPersona(1, List.of(
+                new com.lore.zzal.pet.persona.AuthoredPersona.Field("extra", List.of(),
+                        "항상 존댓말을 쓰되 문장은 길게 이야기한다.", false)));
+        for (String legacyTone : new String[] {null, "반말 · 무뚝뚝"}) {
+            String system = PromptAssembler.system(new PersonaSheet("우사기", List.of(), legacyTone,
+                    null, null, "친구", false, authored));
+            assertThat(system).contains("말투는 작성한 설정 원문을 우선한다.",
+                            "항상 존댓말을 쓰되 문장은 길게 이야기한다.", "상대를 부르는 말: 친구")
+                    .doesNotContain("말투: 반말", "반말, 짧게");
+        }
+    }
+
+    @Test
+    void firstMeetingGreetingHasExplicitPurposeWithoutRepeatingAddressQuestion() {
+        assertThat(PromptAssembler.task(new TurnPlan(TurnType.FIRST_MEET, 1, false, null, false, ChatSlot.CONTINUOUS)))
+                .contains("처음 만나는 순간", "호칭 선택은 이미 확인", "설정의 말투", "이름이나 호칭을 다시 묻지", "일상 질문을 덧붙이지");
     }
 
     @Test
@@ -65,7 +87,9 @@ class PromptAssemblerTest {
         assertThat(u).isEqualTo("""
                 [지금]
                 목요일 밤 9시, 만난 지 4일째.
-                상태: 보통 · 보통 · 보통
+                캐릭터 자신의 상태(사용자의 상태 아님): 포만=보통 · 기분=보통 · 청결=보통 · 건강=아프지 않음
+                이 상태는 대화의 배경 정보이며 매번 말할 주제가 아니다. 사용자의 구체적인 이야기와 감정에 먼저 반응하고, 캐릭터의 설정과 관계에 맞게 편하게 대화를 이어간다. 사용자 주제와 관련 없으면 낮은 게이지를 돌봄 요구나 하소연으로 돌리지 않는다.
+                상태를 직접 물었거나 실제 케어 전후의 맥락, 자연스럽게 관련된 주제에서는 자신의 상태를 짧게 말해도 된다. 사용자가 다시 묻지 않았는데 스스로 이력의 같은 하소연을 되풀이하지 않는다. 캐릭터의 배고픔·청결·기분을 사용자의 상태로 옮겨 말하지 않는다.
 
                 [지금까지]
                 그저께 저녁:
@@ -83,7 +107,7 @@ class PromptAssemblerTest {
                 [이번 턴]
                 종류: 이어 말하기
                 상대가 답한 질문: "좋아하는 것(음식·놀이)"
-                할 일: 상대의 마지막 말을 받아서 한 줄. 질문 금지.
+                할 일: 상대의 마지막 말에서 구체적인 부분을 받아 자연스럽게 반응한다. 짧게 멈추거나 조금 이어도 된다. 질문 금지.
                 """);
         // 기억이 없으면 [지금까지] 칸째 빠진다
         ChatContext empty = new ChatContext(1L, usagi(null), ctx.state(), SessionKind.BABY,
@@ -124,9 +148,9 @@ class PromptAssemblerTest {
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.REUNION, 1, false, null, false, ChatSlot.MORNING)))
                 .isEqualTo("반가워하되 원망 없이. 질문 없음.");
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.CONTINUE, 3, false, null, true)))
-                .isEqualTo("상대의 마지막 말을 받아서 한 줄. 질문 금지. 상대가 물었으니 먼저 답한다.");
+                .isEqualTo("상대의 마지막 말에서 구체적인 부분을 받아 자연스럽게 반응한다. 짧게 멈추거나 조금 이어도 된다. 질문 금지. 상대가 물었으니 먼저 답한다.");
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.CONTINUE, 3, true, QuestionItem.WHO, false)))
-                .isEqualTo("상대의 마지막 말을 받아서 한 줄. 질문 허용. 묻는다면 \"뭐 하는 사람인지\"를 하나 묻는다.");
+                .isEqualTo("상대의 마지막 말에서 구체적인 부분을 받아 자연스럽게 반응한다. 짧게 멈추거나 조금 이어도 된다. 질문 허용. 묻는다면 \"뭐 하는 사람인지\"를 하나 묻는다.");
         assertThat(PromptAssembler.task(new TurnPlan(TurnType.CLOSE, 6, false, null, false)))
                 .isEqualTo("네가 할 일로 돌아가며 끝낸다. 질문 금지. 다음에 또 말 걸겠다는 뜻을 담는다.");
     }
@@ -177,9 +201,9 @@ class PromptAssemblerTest {
     @DisplayName("★ v2.1 [말하는 법] — 설정을 네 사정으로·지어내지 않기·먼저 답하기·되풀이 금지·첫 인사는 시간대 화제")
     void rulesV21() {
         String s = PromptAssembler.system(usagi(null));
-        assertThat(s).contains(
-                "- 네가 사는 곳과 작가 메모를 네 사정으로 삼는다. 사실·인물·사건을 지어내지 않는다.\n",
-                "- 상대 말에 먼저 답한다. 앞에서 한 말을 되풀이하지 않고, 기존 설정 안에서 반응을 달리한다. 첫 인사는 [지금]의 시간대 화제로 연다.\n")
-                .doesNotContain("단어만 쓴다");
+        assertThat(s).contains("ㅋㅋ 같은 웃음 문자는 쓰지 않는다", "작고 소소한 일상은 설정 안에서 말해도 된다",
+                "가족·인간관계·큰 과거 사건", "성격을 극단적으로 연기", "매번 질문으로 끝내지 않는다",
+                "상대가 실제로 한 말의 구체적인 부분", "대화 횟수나 시각 때문에 작별")
+                .doesNotContain("한 번에 한 줄, 60자", "첫 인사는 [지금]의 시간대 화제로 연다");
     }
 }

@@ -86,7 +86,13 @@ public class AnalyticsService {
             "action", "tab", "from", "to", "code", "reason", "type", "stars",
             "has_image", "has_keywords", "has_note", "has_email",
             "step", "count", "seq", "ms",
-            "motion", "layer");
+            "motion", "layer", "navigation", "outcome", "interaction", "user_action");
+
+    // 행동 속성 10개와 예약 광고 정보 8개의 예산을 분리한다. 기존 행동 값이 밀리지 않는다.
+    private static final Set<String> ATTRIBUTION_KEYS = Set.of(
+            "campaign_id", "adset_id", "ad_id", "ad_platform", "placement", "target_group", "target_market", "ui_lang");
+    private static final Pattern ATTRIBUTION_ID = Pattern.compile("^[0-9]{1,64}$");
+    private static final Pattern ATTRIBUTION_TOKEN = Pattern.compile("^[A-Za-z0-9._-]{1,64}$");
 
     /** 이벤트 이름의 생김새. 화면이 부르는 이름 그대로라 소문자·숫자·밑줄뿐이다. */
     private static final Pattern EVENT_NAME = Pattern.compile("^[a-z][a-z0-9_]{0,59}$");
@@ -183,48 +189,85 @@ public class AnalyticsService {
      * @param userAgent 헤더 원문. ★ <b>대분류를 뽑는 데만 쓰고 저장하지 않는다</b>
      * @return 실제로 저장된 줄 수
      */
+    public record Receipt(String status, List<String> accepted_event_ids, List<String> rejected_event_ids,
+                          int persisted_count, int duplicate_count) {
+        public static Receipt unavailable(String status) { return new Receipt(status, List.of(), List.of(), 0, 0); }
+    }
+
+    /** Returned only after the surrounding transaction commits at the controller boundary. */
     @Transactional
-    public int collect(EventRequests.Batch batch, String anonId, Long userId, String userAgent) {
-        if (!enabled) return 0;
-        if (!allowRate(anonId)) {
-            log.debug("행동 기록 과다 — 익명번호 {} 의 이번 분 요청을 버린다", anonId);
-            return 0;
-        }
-
+    public Receipt collectAcknowledged(EventRequests.Batch batch, String anonId, Long userId, String userAgent) {
+        if (!enabled) return Receipt.unavailable("disabled");
+        if (!allowRate(anonId)) return Receipt.unavailable("rate_limited");
         Instant now = Instant.now();
-        String referrer = sanitizeReferrer(batch.referrer());
-        String source = sanitizeSource(batch.source());
-        String device = deviceOf(userAgent);
-
-        List<AnalyticsEvent> rows = new ArrayList<>();
-        int dropped = 0;
+        List<String> accepted = new ArrayList<>();
+        List<String> rejected = new ArrayList<>();
+        int persisted = 0, duplicates = 0;
         for (EventRequests.Event e : batch.events()) {
-            if (e == null || e.name() == null || !EVENT_NAME.matcher(e.name()).matches()) {
-                dropped++;
+            if (!validEnvelope(e)) {
+                if (e != null && e.event_id() != null) rejected.add(e.event_id());
                 continue;
             }
-            rows.add(AnalyticsEvent.of(
-                    e.name(),
-                    anonId,
-                    userId,
-                    sanitizeProps(e.props()),
-                    sanitizePath(e.path()),
-                    referrer,
-                    source,
-                    device,
-                    null,
-                    occurredAt(e.ts(), now),
-                    now));
+            String identityStatus = identityStatus(e,userId);
+            Long attributedUser = identityStatus.equals("matched") || identityStatus.equals("legacy_current") ? userId : null;
+            AnalyticsEvent row = AnalyticsEvent.of(e.name(), anonId, attributedUser, sanitizeEventProps(e),
+                    sanitizePath(e.path()), sanitizeReferrer(batch.referrer()), sanitizeSource(batch.source()),
+                    deviceOf(userAgent), null, eventTime(e, now), now)
+                    .envelope(e.event_id(), e.schema_version(), e.session_id(), e.context(), e.source_screen())
+                    .reportedTime(e.ts(), timestampQuality(e.ts(), now)).identityStatus(identityStatus);
+            if (e.event_id() == null) {
+                eventRepository.save(row);
+                persisted++;
+            } else {
+                int inserted = eventRepository.insertOnce(row);
+                persisted += inserted;
+                duplicates += 1 - inserted;
+                accepted.add(e.event_id());
+            }
         }
+        eventRepository.flush();
+        return new Receipt("persisted", List.copyOf(accepted), List.copyOf(rejected), persisted, duplicates);
+    }
 
-        if (dropped > 0) {
-            log.debug("이름이 규칙에 안 맞아 버린 이벤트 {}건", dropped);
-        }
-        if (!rows.isEmpty()) {
-            eventRepository.saveAll(rows);
-        }
+    /** Compatibility for internal callers; HTTP uses the explicit receipt. */
+    @Transactional
+    public int collect(EventRequests.Batch batch, String anonId, Long userId, String userAgent) {
+        return collectAcknowledged(batch, anonId, userId, userAgent).persisted_count();
+    }
 
-        return rows.size();
+    private static boolean validEnvelope(EventRequests.Event e) {
+        return e != null && e.name() != null && EVENT_NAME.matcher(e.name()).matches()
+                && !e.name().equals("zzal_provider_usage") && !e.name().startsWith("zzal_server_")
+                && (e.actor_state()==null || Set.of("authenticated","anonymous","unknown").contains(e.actor_state()))
+                && (e.actor_id()==null || e.actor_id()>0)
+                && uuidOrNull(e.event_id()) && uuidOrNull(e.session_id())
+                && (e.schema_version() == null || (e.schema_version() > 0 && e.schema_version() <= 1000))
+                && (e.context() == null || Set.of("sample", "tutorial", "real").contains(e.context()))
+                && (e.source_screen() == null || e.source_screen().matches("[a-z][a-z0-9_/-]{0,63}"));
+    }
+
+    private static String identityStatus(EventRequests.Event e,Long currentUserId) {
+        if(e.schema_version()==null || e.schema_version()<2) return "legacy_current";
+        if("anonymous".equals(e.actor_state())) return "anonymous";
+        if(!"authenticated".equals(e.actor_state()) || e.actor_id()==null) return "unverified";
+        return e.actor_id().equals(currentUserId) ? "matched" : "mismatch";
+    }
+
+    private Instant eventTime(EventRequests.Event e, Instant now) {
+        if(e.schema_version()!=null && e.schema_version()>=2 && e.ts()!=null && e.ts()>0
+                && !Instant.ofEpochMilli(e.ts()).isAfter(now.plus(TS_FUTURE_LIMIT))) return Instant.ofEpochMilli(e.ts());
+        return occurredAt(e.ts(),now);
+    }
+    private static String timestampQuality(Long ts, Instant now) {
+        if(ts==null) return "missing";
+        if(ts<=0) return "invalid";
+        Instant value=Instant.ofEpochMilli(ts);
+        if(value.isAfter(now.plus(TS_FUTURE_LIMIT))) return "future";
+        return value.isBefore(now.minus(TS_PAST_LIMIT)) ? "delayed" : "valid";
+    }
+
+    private static boolean uuidOrNull(String value) {
+        return value == null || value.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
     }
 
     // ── 익명 ↔ 로그인 잇기 ─────────────────────────────────────────────────
@@ -306,6 +349,17 @@ public class AnalyticsService {
      * <p>문자열이 64자를 넘으면 <b>자르지 않고 버린다.</b> 잘라서 넣으면 이메일 앞부분이나
      * 후기 첫 문장이 그대로 남는다 — 개인정보의 절반은 여전히 개인정보다.
      */
+    static String sanitizeEventProps(EventRequests.Event event) {
+        if (event.props() == null) return null;
+        String path = event.path();
+        boolean zzalPath = path != null && (path.equals("/zzal") || path.startsWith("/zzal/") || path.startsWith("/zzal?"));
+        boolean allowedName = event.name() != null && (event.name().startsWith("zzal_") || event.name().startsWith("auth_"));
+        if (zzalPath && allowedName) return sanitizeProps(event.props());
+        Map<String, Object> legacy = new LinkedHashMap<>(event.props());
+        ATTRIBUTION_KEYS.forEach(legacy::remove);
+        return sanitizeProps(legacy);
+    }
+
     static String sanitizeProps(Map<String, Object> props) {
         if (props == null || props.isEmpty()) return null;
 
@@ -329,6 +383,15 @@ public class AnalyticsService {
                 }
             }
             // null·배열·객체는 여기까지 안 온다. 버린다.
+        }
+
+        // 광고 정보는 별도 검증/예산을 사용한다. 행동 속성의 10개 상한은 그대로다.
+        for (String key : ATTRIBUTION_KEYS) {
+            Object value = props.get(key);
+            if (!(value instanceof String text)) continue;
+            boolean valid = key.equals("ui_lang") ? Set.of("ko", "en", "ja").contains(text)
+                    : (key.endsWith("_id") ? ATTRIBUTION_ID : ATTRIBUTION_TOKEN).matcher(text).matches();
+            if (valid) kept.put(key, text);
         }
 
         if (kept.isEmpty()) return null;

@@ -47,6 +47,8 @@ export interface DownloadResult {
  * - `layer`  1층=1 · 2층=2 · 선물=`gift`
  */
 export interface DexMeta {
+  context?: 'sample'|'tutorial'|'real';
+  source_screen?: string;
   motion?: string;
   layer?: DexLayer;
 }
@@ -96,7 +98,7 @@ const MAX_NAME = 60;
  * @param baseName 확장자를 뺀 파일 이름. 여기서 다시 걸러 쓴다.
  */
 export async function downloadImage(url: string, baseName: string, meta: DexMeta = {}): Promise<DownloadResult> {
-  track('zzal_dex_download', { action: 'start', ...metaProps(meta) });
+  track('zzal_dex_download', { action: 'start', ...metaProps(meta) }, {context:meta.context,source_screen:meta.source_screen});
   const done = (result: DownloadResult) => finish(result, meta);
 
   if (typeof window === 'undefined') return done({ outcome: 'failed', code: 'no_window' });
@@ -143,7 +145,7 @@ export type FileShareOutcome = 'shared' | 'unsupported' | 'cancelled' | 'failed'
 /** 원본 파일을 공유한다. 취소는 오류가 아니며 미지원 브라우저에서는 저장 후 첨부를 안내한다. */
 export async function shareImageFile(file: File, meta: DexMeta = {}): Promise<FileShareOutcome> {
   const type = typeOfFile(file);
-  track('zzal_dex_share', { action: 'start', ...metaProps(meta), ...(type ? { type } : {}) });
+  track('zzal_dex_share', { action: 'start', ...metaProps(meta), ...(type ? { type } : {}) }, {context:meta.context,source_screen:meta.source_screen});
   const shared = (outcome: FileShareOutcome) => sharedWith(outcome, meta, type);
   try {
     if (!navigator.share || !navigator.canShare?.({ files: [file] })) return shared('unsupported');
@@ -317,7 +319,7 @@ function finish(result: DownloadResult, meta: DexMeta): DownloadResult {
     // ★ `type` 은 서버 analytics 허용 키다(ALLOWED_PROP_KEYS) — 새 키를 만들면 통째로 버려진다.
     ...(result.type ? { type: result.type } : {}),
     ...metaProps(meta),
-  });
+  }, {context:meta.context,source_screen:meta.source_screen});
   return result;
 }
 
@@ -326,12 +328,12 @@ function copiedWith(result: CopyResult, meta: DexMeta): CopyResult {
     action: result.ok ? (result.manual ? 'manual' : 'copied') : 'failed',
     ...(result.code ? { code: result.code } : {}),
     ...metaProps(meta),
-  });
+  }, {context:meta.context,source_screen:meta.source_screen});
   return result;
 }
 
 function sharedWith(outcome: FileShareOutcome, meta: DexMeta, type?: SaveType): FileShareOutcome {
-  track('zzal_dex_share', { action: outcome, ...metaProps(meta), ...(type ? { type } : {}) });
+  track('zzal_dex_share', { action: outcome, ...metaProps(meta), ...(type ? { type } : {}) }, {context:meta.context,source_screen:meta.source_screen});
   return outcome;
 }
 

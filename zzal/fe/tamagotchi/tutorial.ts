@@ -32,7 +32,7 @@ export interface BabyCall {
 export const BABY_CALLS: readonly BabyCall[] = [
   { key: 'FEED', line: '배가 고픈가 봐요', want: 'feed', learns: '게이지·먹기' },
   { key: 'PET', line: '쓰다듬어 주세요', want: 'pet', learns: '교감' },
-  { key: 'CHAT', line: '뭐라고 말을 거네요', want: 'chat', learns: '갸웃 즉시 해금' },
+  { key: 'CHAT', line: '뭐라고 말을 거네요', want: 'chat', learns: '대화' },
   { key: 'PERSONALITY', line: '어떤 아이인가요', want: 'personality', learns: '채팅 톤' },
   { key: 'CLEAN', line: '바닥을 치워 주세요', want: 'clean', learns: '청결' },
   { key: 'GAME', line: '같이 놀아 볼까요', want: 'game', learns: '게임' },

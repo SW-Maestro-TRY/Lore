@@ -223,9 +223,11 @@ class TransactionBoundariesIT extends ZzalItSupport {
 
         bumpClockWithoutSettling(petId, Duration.ofMinutes(40));
 
-        // 아직 도래하지 않은 슬롯 — 닫혀 있다(자고 있으면 수면 거절이지만, 어느 쪽이든 거절이다).
+        // 현재 CONTINUOUS 계약의 없는 판: awake 정산 뒤 거절한다.
+        // 옛 NOON 신규전송은 현재 배달층에서 정산 전에 STALE로 차단하는 별도 경계다.
         MvcResult refused = postAs(userId,
-                "/api/zzal/v1/me/pets/%d/chat/NOON/answer".formatted(petId), Map.of("text", "안녕"));
+                "/api/zzal/v1/me/pets/%d/chat/CONTINUOUS/answer".formatted(petId), Map.of("text", "안녕",
+                        "sessionId",999999L,"expectedRound",0,"requestId",java.util.UUID.randomUUID().toString()));
 
         assertThat(refused.getResponse().getStatus()).isGreaterThanOrEqualTo(400);
         assertThat(errorCode(refused)).isNotNull();

@@ -9,7 +9,7 @@
 // ★ 보낼 수 있는 props 키는 서버 허용 목록(`AnalyticsService.ALLOWED_PROP_KEYS`)뿐이다.
 //   그 밖의 키는 서버가 버린다. 여기서 쓰는 것은 type·count·tab·step·code·reason·action·from·ms.
 // ★ 실패해도 화면에 아무 영향이 없어야 한다 — 전부 try/catch 로 삼킨다.
-import { track } from '@common/analytics';
+import { track, type EventContext } from '@common/analytics';
 
 const T0_KEY = 'zzal_t0';
 const UPLOAD_AT_KEY = 'zzal_upload_at';
@@ -71,11 +71,11 @@ export function sinceUpload(): { ms: number; from?: string } {
 }
 
 /** 이벤트 한 줄. `ms` 를 안 주면 t0 이후 경과가 붙는다. */
-export function ztrack(name: string, props: Record<string, Val> = {}): void {
+export function ztrack(name: string, props: Record<string, Val> = {}, context: EventContext = {}): void {
   try {
     const out: Record<string, string | number | boolean> = { ms: sinceT0() };
     for (const [k, v] of Object.entries(props)) if (v !== undefined) out[k] = v;
-    track(name, out);
+    track(name, out, context);
   } catch {
     // 기록이 화면을 멈추면 안 된다.
   }

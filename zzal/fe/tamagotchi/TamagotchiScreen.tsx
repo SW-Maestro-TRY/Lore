@@ -19,12 +19,13 @@ import { useIsWide } from './useIsWide';
 import Scrapbook, { type SkinProps } from './skins/Scrapbook';
 import Yeoul from './skins/Yeoul';
 import './skin-header.css';
+import AnnouncementsGate from './announcements/AnnouncementsGate';
 
 export type SkinName = 'scrapbook' | 'yeoul';
 
 const SKINS: Record<SkinName, ComponentType<SkinProps>> = { scrapbook: Scrapbook, yeoul: Yeoul };
 
-export default function TamagotchiScreen({ name }: { name: SkinName }) {
+export default function TamagotchiScreen({ name, focusedRoom = false }: { name: SkinName; focusedRoom?: boolean }) {
   const Skin = SKINS[name];
   const wide = useIsWide();
   const box = useRef<HTMLDivElement>(null);
@@ -47,7 +48,7 @@ export default function TamagotchiScreen({ name }: { name: SkinName }) {
     const ro = new ResizeObserver(set);
     ro.observe(header);
     return () => ro.disconnect();
-  }, []);
+  }, [focusedRoom]);
 
   return (
     <div
@@ -57,10 +58,12 @@ export default function TamagotchiScreen({ name }: { name: SkinName }) {
         position: 'relative',
         // 헤더를 뺀 나머지를 채운다. 실측 전에는 0 으로 두어 100dvh 로 시작한다.
         height: 'calc(100dvh - var(--tama-header-h, 0px))',
-        minHeight: 360,
+        minHeight: focusedRoom?0:360,
       }}
     >
-      <Skin mode={wide ? 'pc' : 'phone'} />
+      <AnnouncementsGate>
+      {name === 'yeoul' && focusedRoom ? <Yeoul mode={wide ? 'pc' : 'phone'} focusedRoom /> : <Skin mode={wide ? 'pc' : 'phone'} />}
+      </AnnouncementsGate>
     </div>
   );
 }

@@ -1,0 +1,2 @@
+/* The route now loads the same complete local sources once. Keep Gaegu's original missing-syllable fallback. */
+.focused-room{--font-gaegu:'Gaegu',var(--font-gowun),cursive}

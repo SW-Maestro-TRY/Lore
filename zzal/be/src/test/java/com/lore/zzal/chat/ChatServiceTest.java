@@ -250,7 +250,7 @@ class ChatServiceTest {
         ChatService.Answered a = service.answer(USER, PET, ChatSlot.MORNING, "학교 갔다 왔어", t);
         assertThat(a.replyLine()).isNotBlank();
         assertThat(BanFilter.isBanned(a.replyLine())).isFalse();
-        assertThat(a.reactionKey()).isEqualTo("hello");                  // 답하기(2층)는 채팅 4회라 아직 잠김 → 인사
+        assertThat(a.reactionKey()).isEqualTo("base");                  // 유효 소유 선택이 없으면 base
         assertThat(pet.getIntimacy()).isEqualTo(40);
         assertThat(pet.getChatAnswers()).isEqualTo(1);
         // 대화형(#704) — 같은 판에서 한 마디 더. 대사는 오지만 친밀도·카운터는 그대로다.
@@ -262,8 +262,8 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("★★ 답하기(2층)가 잠긴 동안 반응은 인사(hello) — 쓰다듬 자세(pet)를 주면 화면이 대체표를 못 거친다")
-    void lockedReplyReactsWithHello() {
+    @DisplayName("지급된 맞춤 선택이 없으면 응답과 저장턴 모두 base")
+    void noDeliveredCustomActionFallsBackToBase() {
         pet.choosePersonality(List.of(Personality.LIVELY), null);
         // 이번 답으로 3회 — 답하기 해금(4회)까지 한 번 남았다
         ReflectionTestUtils.setField(pet, "chatAnswers", 2);
@@ -271,28 +271,37 @@ class ChatServiceTest {
         ChatService.Answered a = service.answer(USER, PET, ChatSlot.MORNING, "학교 갔다 왔어", kst("2026-09-05 13:30"));
 
         assertThat(pet.getChatAnswers()).isEqualTo(3);
-        // ★ 정본 6장이 이름으로 못 박은 두 예외 중 하나 — "잠긴 동안 답하기는 인사(hello)".
-        //   서버가 pet 을 주면 화면은 받은 키를 그대로 재생해 자기 대체표를 안 거친다.
-        assertThat(a.reactionKey()).isEqualTo("hello");
+        // 신규 정책: 카운터로 구해금 동작을 자동 선택하지 않는다.
+        assertThat(a.reactionKey()).isEqualTo("base");
         assertThat(st.lastPet(ChatSlot.MORNING).getMotion())
                 .as("저장된 펫 턴도 같은 키여야 한다 — 나중에 다시 그릴 때 갈라지면 안 된다")
-                .isEqualTo("hello");
+                .isEqualTo("base");
     }
 
     @Test
-    @DisplayName("★★★ 해금되는 바로 그 답부터 reply — 네 번째 답의 반응이 옛 동작이면 안 된다")
-    void theUnlockingAnswerAlreadyReactsWithReply() {
+    @DisplayName("기존 보유 reply를 삭제하지 않고 새 유효 선택이 없으면 base를 저장한다")
+    void preservedOwnedReplyIsUsedInAnswerAndSavedTurn() {
         pet.choosePersonality(List.of(Personality.LIVELY), null);
-        // 이번 답이 네 번째 = 답하기가 열리는 그 답
         ReflectionTestUtils.setField(pet, "chatAnswers", 3);
+        ReflectionTestUtils.setField(pet, "legacyLayer2OwnedMask", 1 << (13 - 9));
 
         ChatService.Answered a = service.answer(USER, PET, ChatSlot.MORNING, "네 번째야", kst("2026-09-05 13:30"));
 
         assertThat(pet.getChatAnswers()).isEqualTo(4);
-        // ★ 반응 키를 카운터보다 먼저 고르면 여기서 hello 가 나온다 — 사용자는 "이번에 열렸다"는
-        //   폭죽을 보면서 옛 동작을 본다(연결 감사 F6).
-        assertThat(a.reactionKey()).isEqualTo("reply");
-        assertThat(st.lastPet(ChatSlot.MORNING).getMotion()).isEqualTo("reply");
+        assertThat(pet.ownsRetiredLayerTwo(13)).isTrue(); // 보유권은 유지하며 자동 선택하지 않는다.
+        assertThat(a.reactionKey()).isEqualTo("base");
+        assertThat(st.lastPet(ChatSlot.MORNING).getMotion()).isEqualTo("base");
+    }
+
+    @Test
+    @DisplayName("네 번째 답을 해도 미보유 reply를 새로 해금하지 않는다")
+    void fourthAnswerDoesNotMintRetiredReply() {
+        ReflectionTestUtils.setField(pet, "chatAnswers", 3);
+        ChatService.Answered a=service.answer(USER,PET,ChatSlot.MORNING,"네 번째야",kst("2026-09-05 13:30"));
+        assertThat(pet.getChatAnswers()).isEqualTo(4);
+        assertThat(a.reactionKey()).isEqualTo("base");
+        assertThat(pet.ownsRetiredLayerTwo(13)).isFalse();
+        assertThat(st.lastPet(ChatSlot.MORNING).getMotion()).isEqualTo("base");
     }
 
     @Test

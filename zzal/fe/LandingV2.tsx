@@ -22,7 +22,9 @@
 // 토이 카피(밴워드 없음)·여울 v6 원본 마스코트만(oc-*.webp·IP 금지). 토큰은 여울 ui.ts 재사용.
 "use client";
 
-import { useEffect } from "react";
+import LanguageSelector from './LanguageSelector';
+import {useUiText} from './lib/uiCopy';
+import { useEffect, useState } from "react";
 import { C, GAEGU, SANS, radius, shadow, SHELL_MAX, ink, acc } from './tamagotchi/yeoul/ui';
 import { LANDING_COPY } from "./tamagotchi/yeoul/constants";
 import { YEOUL_MOTION } from "./tamagotchi/constants";
@@ -76,92 +78,23 @@ function StepIcon({ kind }: { kind: "upload" | "egg" | "care" }) {
   );
 }
 
-/**
- * 랜딩 v2 **무대** — 두 자리가 나눠 쓰는 한 벌.
- *
- * `variant`
- *   - `"page"`       : `/zzal/landing` 통짜 페이지. CTA 는 `/zzal` 로 가는 알약 링크, 푸터는 약관+©.
- *   - `"onboarding"` : `/zzal` 온보딩 첫 칸. CTA 는 온보딩 푸터의 `onb-next` 버튼이 이미 들고 있어
- *                      여기선 안 그린다(같은 뜻의 버튼 둘 = taste-lint "CTA 중복"). 푸터는 약관만.
- *
- * 바깥 셸(`.zt-v2root`)은 부르는 쪽이 감싼다 — 온보딩은 제 칸에, 페이지는 `LandingV2` 가.
- */
-export function LandingV2Stage({ variant = "page" }: { variant?: "page" | "onboarding" }) {
-  const onPage = variant === "page";
-  return (
-    <div className="zt-v2col">
-      {/* 히어로 — 종이 액자 속 마스코트 + 인사·설명·CTA. 넓은 화면(통짜 페이지)에선 좌우 2단. */}
-      <div className="zt-v2hero">
-        <section className="zt-v2frame" data-rise style={{ ["--d" as string]: "0ms" }}>
-          <div className="zt-v2slot">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              className="zt-v2mascot"
-              src={YEOUL_MOTION.hello}
-              alt="여울이가 손을 흔들며 인사해요"
-              width={320}
-              height={320}
-            />
-          </div>
-          {/* 예시임을 밝혀 첫 방문자의 "여울=내 캐릭터? 앱 이름?" 혼동을 없앤다(ux-heuristics). */}
-          <span className="zt-v2tag">여울</span>
-        </section>
-
-        <div className="zt-v2intro">
-          <h1 className="zt-v2h1" data-rise style={{ ["--d" as string]: "70ms" }}>
-            {LANDING_COPY.greeting}
-          </h1>
-          <p className="zt-v2sub" data-rise style={{ ["--d" as string]: "130ms" }}>
-            {LANDING_COPY.sub}
-          </p>
-          {onPage && (
-            <a
-              className="zt-v2cta"
-              href={ONBOARDING_HREF}
-              data-rise
-              data-action="landing-v2-cta"
-              style={{ ["--d" as string]: "190ms" }}
-            >
-              {LANDING_COPY.cta}
-            </a>
-          )}
-        </div>
-      </div>
-
-      {/* 이렇게 놀아요 — 조용한 세 박자(가로 3열, 같은 크기 카드 아님·헤어라인/박스 없음). */}
-      <section className="zt-v2steps" aria-labelledby="zt-v2steps-h" data-rise style={{ ["--d" as string]: "260ms" }}>
-        <h2 id="zt-v2steps-h" className="zt-v2h2">
-          이렇게 놀아요
-        </h2>
-        <ol className="zt-v2steplist">
-          {STEPS.map((s, i) => (
-            <li key={s.icon} className="zt-v2step">
-              <span className="zt-v2stepicon">
-                <StepIcon kind={s.icon} />
-                {/* 순번 배지 — <ol> 의 순서를 눈에도 보이게(ux-heuristics F1). 둘째 색 없이 종이·라인·sub2 톤. */}
-                <span className="zt-v2stepnum" aria-hidden="true">{i + 1}</span>
-              </span>
-              <span className="zt-v2steptitle">{s.title}</span>
-              <span className="zt-v2stepdesc">{s.desc}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      {/* 최소 푸터 — 약관/개인정보(실 라우트). 탭 타깃 44px.
-          ★ 온보딩 칸에도 둔다 — 자캐 그림을 맡기는 사람이 가장 먼저 확인하려는 줄이고,
-            taste-lens §3-C 가 "법률 링크 누락"을 전략적 누락으로 센다. ©는 통짜 페이지에만
-            (온보딩은 웹페이지가 아니라 앱 한 통이라 저작권 줄이 자리를 뺏는다). */}
-      <footer className="zt-v2foot" data-rise style={{ ["--d" as string]: "320ms" }}>
-        <nav className="zt-v2footlinks">
-          <a href="/legal/terms">이용약관</a>
-          <span aria-hidden="true">·</span>
-          <a href="/legal/privacy">개인정보처리방침</a>
-        </nav>
-        {onPage && <span className="zt-v2copy">© 2026 zzal</span>}
-      </footer>
-    </div>
-  );
+/** 승인한 그림→네 움직임 구성을 공유한다. 온보딩 CTA는 실제 업로드 단계로 이어진다. */
+export function LandingV2Stage({ variant = "page", onStart }: { variant?: "page" | "onboarding"; onStart?: () => void }) {
+  const tr=useUiText();
+  const [reduced,setReduced]=useState(true);
+  useEffect(()=>{const q=matchMedia('(prefers-reduced-motion: reduce)');const sync=()=>setReduced(q.matches);sync();q.addEventListener('change',sync);return()=>q.removeEventListener('change',sync)},[]);
+  const motions=[['eat','밥을 먹고'],['sleep','졸리고'],['joy','청소하고'],['hello','리듬 타고']] as const;
+  return <div className="entry-landing" data-part="approved-entry-landing">
+    <div className="entry-brand"><img src="/zzal-entry/logo-08-transparent.png" alt={tr('캐릭터 키우기 Lore')} width="148" height="40"/><LanguageSelector/></div>
+    <h1>{tr('그림 속 내 캐릭터에게')}<br/>{tr('하루가 생긴다면?')}</h1>
+    <p className="entry-intro">{tr('캐릭터 이미지를 올리고')}<br/>{tr('직접 돌봐주세요')}</p>
+    <section className="entry-transformation" aria-label={tr('캐릭터 그림에서 여러 움직임으로')}>
+      <figure className="entry-original"><img src="/zzal-entry/sketch-original-half.webp" alt={tr('종이에 그린 캐릭터 러프 그림')} width="553" height="604"/><figcaption>{tr('내 캐릭터 그림')}</figcaption></figure>
+      <svg className="entry-arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12h18m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      <div className="entry-outcomes">{motions.map(([key,label])=><figure key={key}><div className="entry-motion"><img src={`/zzal-entry/${reduced?'character-still.png':key+'.webp'}`} alt={tr(label)} width="313" height="350" data-entry-motion={key}/></div><figcaption>{tr(label)}</figcaption></figure>)}</div>
+    </section>
+    {onStart?<button className="entry-cta" data-action="onb-next" onClick={onStart}>{tr('내 그림으로 시작하기')}</button>:variant==='page'?<a className="entry-cta" href={ONBOARDING_HREF}>{tr('내 그림으로 시작하기')}</a>:null}
+  </div>;
 }
 
 /**
@@ -210,7 +143,7 @@ export default function LandingV2() {
 
 /** 스코프 스타일 한 벌. 두 자리(온보딩 칸·통짜 페이지)가 같은 것을 심는다. */
 export function LandingV2Style() {
-  return <style>{V2_STYLE}</style>;
+  return <style>{V2_STYLE + APPROVED_ENTRY_STYLE}</style>;
 }
 
 /* 스코프 스타일 — .zt-v2root 안에서만. zzal.css 의 옛 변수(--accent #c14a4a 등)에 안 기댄다.
@@ -375,4 +308,14 @@ export const V2_STYLE = `
   .zt-v2page .zt-v2sub{ font-size:16px; }
   .zt-v2page .zt-v2steps{ max-width:620px; }
 }
+`;
+
+export const APPROVED_ENTRY_STYLE = `
+.entry-landing{box-sizing:border-box;width:100%;max-width:460px;margin:0 auto;min-height:0;padding:0 22px max(20px,env(safe-area-inset-bottom));background:#FFFBF4;color:#4A4038;font-family:${SANS};word-break:keep-all;overflow-wrap:break-word}
+.entry-brand{height:65px;display:flex;align-items:center;justify-content:flex-start}.entry-brand img{width:148px;height:40px;object-fit:contain;display:block}
+.entry-landing h1{margin:16px 0 11px;font:700 clamp(28px,7.6vw,36px)/1.2 ${GAEGU};letter-spacing:-.5px}.entry-intro{font-size:clamp(14px,3.8vw,15.5px);line-height:1.6;color:#5C544B;margin:0}
+.entry-transformation{display:grid;grid-template-columns:minmax(0,.8fr) 24px minmax(0,1.5fr);align-items:center;gap:7px;margin:27px -5px 25px}.entry-transformation figure{margin:0;min-width:0;text-align:center}.entry-original>img{display:block;width:100%;height:auto;object-fit:contain;aspect-ratio:553/604}.entry-arrow{width:24px;height:24px;color:#9C4232}.entry-outcomes{display:grid;grid-template-columns:1fr 1fr;gap:13px 6px;min-width:0}.entry-motion{aspect-ratio:.82;background:#F8F2E7;border-radius:20px;overflow:hidden}.entry-motion img{width:100%;height:100%;object-fit:contain;display:block}.entry-transformation figcaption{margin-top:6px;font:700 14px/1.2 ${GAEGU};color:#6B6058}
+.entry-cta{width:100%;min-height:52px;padding:13px;display:flex;align-items:center;justify-content:center;border:0;border-radius:999px;background:#9C4232;color:#FFFDF8;text-decoration:none;font:700 19px/1.2 ${GAEGU};box-shadow:0 4px 12px rgba(74,64,56,.12);cursor:pointer}.entry-cta:focus-visible{outline:2px solid #9C4232;outline-offset:4px}.entry-cta:hover{background:#8c3a2c}
+@media(max-width:350px){.entry-landing{padding-left:18px;padding-right:18px}.entry-brand{height:51px}.entry-brand img{width:126px;height:34px}.entry-transformation{margin-top:20px;margin-bottom:19px}.entry-landing h1{margin-top:10px}}
+@media(max-height:650px){.entry-brand{height:48px}.entry-landing h1{margin-top:8px}.entry-transformation{margin-top:16px;margin-bottom:16px}.entry-outcomes{gap:8px 6px}}
 `;

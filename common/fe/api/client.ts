@@ -169,6 +169,8 @@ export interface RequestOptions {
   body?: unknown;
   /** 화면이 떠날 때 호출을 끊기 위한 것. 폴링·언마운트에서 쓴다. */
   signal?: AbortSignal;
+  /** Optional transport headers supplied by the caller; no domain policy lives here. */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -180,12 +182,14 @@ export interface RequestOptions {
  */
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, signal } = options;
+  const headers = new Headers(options.headers);
+  if (body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
   const send = (): Promise<Response> =>
     fetch(`${API_BASE}${path}`, {
       method,
       credentials: 'include',
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     });

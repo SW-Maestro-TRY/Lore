@@ -66,6 +66,15 @@ public final class EventRequests {
             String path,
 
             @Schema(description = "곁들이는 값. 허용된 키만 저장된다", example = "{\"reason\":\"limit\"}")
-            Map<String, Object> props) {
+            Map<String, Object> props,
+            String event_id, Integer schema_version, String session_id,
+            String context, String source_screen, String actor_state, Long actor_id) {
+        public Event(String name, Long ts, String path, Map<String,Object> props, String eventId, Integer schema,
+                     String session, String context, String screen) {
+            this(name,ts,path,props,eventId,schema,session,context,screen,null,null);
+        }
+        public Event(String name, Long ts, String path, Map<String, Object> props) {
+            this(name, ts, path, props, null, null, null, null, null,null,null);
+        }
     }
 }

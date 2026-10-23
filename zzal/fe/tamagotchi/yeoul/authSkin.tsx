@@ -18,6 +18,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useZzalLocale } from '../../lib/locale';
 import { C, C2, GAEGU, SANS, fz, gap, radius, shadow } from './ui';
 
 /** 창 머리에 붙는 말. 지킬 수 있는 것만 적는다 — 고른 그림은 실제로 `holdUpload` 가 들고 있다. */
@@ -114,6 +115,14 @@ body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"]{
   max-height:min(72dvh, 620px); overflow-y:auto;
 }
 body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"] h2{ letter-spacing:0; }
+/* ★ 키보드가 오르면(공통 창이 오버레이에 data-keyboard 를 켠다) 머리 띠를 접고 창을 보이는 높이 전부로
+   쓴다(2026-10-08 #690 2차). 키보드 위 300~500px 에 그림 띠(약 80px)까지 얹으면 지금 칸·버튼이
+   밀려난다. 그림 띠는 키보드가 내려가면 다시 나온다. */
+body[data-zzal-auth="1"] div[data-keyboard="1"] .zzal-auth-intro{ display:none; }
+body[data-zzal-auth="1"] div[data-keyboard="1"] > [role="dialog"][aria-modal="true"]{
+  max-height:100%; border-radius:${radius.xl}px;
+}
+
 .zzal-auth-intro{
   width:100%; max-width:420px; margin:0 auto; box-sizing:border-box;
   display:flex; align-items:center; gap:${gap.lg}px;
@@ -144,6 +153,8 @@ export interface AuthSkinProps {
 }
 
 export default function AuthSkin({ open, thumb, pending }: AuthSkinProps) {
+  const locale = useZzalLocale();
+  const words = locale === 'en' ? {line:'Your drawing is ready. Log in to continue.',note:'Your selected drawing is kept here.',alt:'Your selected drawing'} : locale === 'ja' ? {line:'絵を受け取りました。続けるにはログインしてください。',note:'選んだ絵はそのまま残っています。',alt:'選んだ絵'} : AUTH_INTRO;
   useBodyFlag(open);
   const host = useOverlayHost(open && pending);
   if (!open) return null;
@@ -153,10 +164,10 @@ export default function AuthSkin({ open, thumb, pending }: AuthSkinProps) {
       {host && pending && createPortal(
         <div className="zzal-auth-intro" data-part="auth-intro">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {thumb && <img src={thumb} alt={AUTH_INTRO.alt} />}
+          {thumb && <img src={thumb} alt={words.alt} />}
           <span style={{ display: 'flex', flexDirection: 'column', gap: gap.xs, minWidth: 0 }}>
-            <span className="zzal-auth-line">{AUTH_INTRO.line}</span>
-            <span className="zzal-auth-note">{AUTH_INTRO.note}</span>
+            <span className="zzal-auth-line">{words.line}</span>
+            <span className="zzal-auth-note">{words.note}</span>
           </span>
         </div>,
         host,

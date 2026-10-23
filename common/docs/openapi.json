@@ -178,6 +178,11 @@
             "example": 60,
             "format": "int64",
             "type": "integer"
+          },
+          "visit": {
+            "description": "방문으로 칠까(기본 true). false 면 정산만 하고 방문으로 안 친다 — 결석 떠남 재현용",
+            "example": true,
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -187,14 +192,23 @@
           "height": {
             "description": "움짤 캔버스 세로(px). width 와 같은 규칙",
             "format": "int32",
-            "type": "integer"
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "imageKey": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "revealedAt": {
             "format": "date-time",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "seen": {
             "type": "boolean"
@@ -205,7 +219,10 @@
           "width": {
             "description": "움짤 캔버스 가로(px). 판마다 다르므로 화면이 상수로 가정하면 안 된다.\n맥미니가 올린 재생성본은 서버가 크기를 재지 않아 null 이다",
             "format": "int32",
-            "type": "integer"
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -256,6 +273,12 @@
       "Album": {
         "description": "앨범. 동작 도감과 엽서·장면·첫 심화 동작 정보로 구성한다",
         "properties": {
+          "customMotions": {
+            "items": {
+              "$ref": "#/components/schemas/ZzalOwnedCustomMotion"
+            },
+            "type": "array"
+          },
           "firstGift": {
             "$ref": "#/components/schemas/FirstGift"
           },
@@ -294,11 +317,51 @@
       "Answer": {
         "description": "대화 한 마디. 열린 판에 최대 max-rounds 번, 한 번에 최대 40자",
         "properties": {
+          "expectedRound": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sessionId": {
+            "format": "int64",
+            "type": "integer"
+          },
           "text": {
             "example": "오늘 학교 갔다 왔어",
             "maxLength": 40,
             "minLength": 0,
             "type": "string"
+          },
+          "tutorial": {
+            "description": "생략/null은 일반채팅. 튜토 답은 sessionId/expectedRound/requestId와 함께 보낸다",
+            "properties": {
+              "answerType": {
+                "enum": [
+                  "SUGGESTED",
+                  "FREE_TEXT"
+                ],
+                "type": "string"
+              },
+              "step": {
+                "enum": [
+                  "FEED",
+                  "GAME"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "answerType",
+              "step"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
           }
         },
         "required": [
@@ -429,6 +492,23 @@
         },
         "type": "object"
       },
+      "ApiResponseChatPresenceResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ChatPresenceResponse"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseCreated": {
         "properties": {
           "data": {
@@ -450,6 +530,91 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Detail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevBake": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevBake"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevBakeProgress": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevBakeProgress"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevPing": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevPing"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevResult": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevResult"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseDevState": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DevState"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -582,10 +747,62 @@
         },
         "type": "object"
       },
+      "ApiResponseHistory": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/History"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseIngested": {
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Ingested"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseInteger": {
+        "properties": {
+          "data": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseLegacyHistory": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LegacyHistory"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -693,6 +910,26 @@
         },
         "type": "object"
       },
+      "ApiResponseListFactView": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/FactView"
+            },
+            "type": "array"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "ApiResponseListMapStringObject": {
         "properties": {
           "data": {
@@ -755,6 +992,38 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/NotifySettingResult"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseObject": {
+        "properties": {
+          "data": { },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponsePersonaSource": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PersonaSource"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -925,6 +1194,23 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Public"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseReceipt": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Receipt"
           },
           "error": {
             "$ref": "#/components/schemas/ErrorBody"
@@ -1157,6 +1443,91 @@
         },
         "type": "object"
       },
+      "ApiResponseZzalDiaryEntry": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ZzalDiaryEntry"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseZzalDiaryPage": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ZzalDiaryPage"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseZzalFirstMeetingView": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ZzalFirstMeetingView"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseZzalInquiryReceipt": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ZzalInquiryReceipt"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ApiResponseZzalReturningGuideState": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ZzalReturningGuideState"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          },
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "Art": {
         "properties": {
           "done": {
@@ -1181,19 +1552,44 @@
         },
         "type": "object"
       },
-      "Background": {
-        "description": "배경 변경 요청. 배경 key 는 화면이 정의하며 서버는 값을 검증하지 않는다",
+      "AuthoredPersona": {
         "properties": {
-          "background": {
-            "example": "window_day",
-            "maxLength": 32,
-            "minLength": 0,
-            "type": "string"
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            },
+            "maxItems": 6,
+            "minItems": 0,
+            "type": "array"
+          },
+          "version": {
+            "format": "int32",
+            "maximum": 1,
+            "minimum": 1,
+            "type": "integer"
           }
         },
         "required": [
-          "background"
+          "fields",
+          "version"
         ],
+        "type": "object"
+      },
+      "Background": {
+        "properties": {
+          "owned": {
+            "items": {
+              "$ref": "#/components/schemas/OwnedBackground"
+            },
+            "type": "array"
+          },
+          "preview": {
+            "$ref": "#/components/schemas/Preview"
+          },
+          "selectedKey": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "Balance": {
@@ -1289,7 +1685,6 @@
         "type": "object"
       },
       "Care": {
-        "description": "돌보기 요청. 수행할 행동만 전달하고 수치 변화는 서버가 결정한다",
         "properties": {
           "action": {
             "description": "FEED(급식) · SNACK(간식) · PET(쓰다듬기) · CLEAN(청소) · BATH(목욕) · MEDICINE(투약)",
@@ -1303,6 +1698,35 @@
             ],
             "example": "FEED",
             "type": "string"
+          },
+          "firstIntroStep": {
+            "enum": [
+              "FEED",
+              "SNACK",
+              "CLEAN",
+              "BATH",
+              "GAME",
+              "PET",
+              "NAP_SLEEP",
+              "NAP_WAKE",
+              "ALBUM",
+              "CHAT",
+              "PERSONALITY",
+              "DIARY_INTRO",
+              "FINISH_NOTICE",
+              "REVIEW_SEEN",
+              "COMPLETE",
+              "ATTENDANCE_INTRO"
+            ],
+            "type": "string"
+          },
+          "requestId": {
+            "description": "동일 행동 재전송에 같은 UUID를 사용한다. 생략/null은 기존 비보호 호출",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1330,6 +1754,10 @@
       "Character": {
         "description": "캐릭터 정보 등록 요청. 이름 외 항목은 선택이다",
         "properties": {
+          "authoredPersona": {
+            "$ref": "#/components/schemas/AuthoredPersona",
+            "description": "선택칩·자유글·건너뜀 원문. 기존 personality/note는 호환값이다"
+          },
           "genre": {
             "description": "장르. 자유 입력이며 대사 톤에만 사용한다(그림에는 들어가지 않는다)",
             "example": "느와르",
@@ -1402,7 +1830,6 @@
         "type": "object"
       },
       "Chat": {
-        "description": "오늘의 대화 목록. openSlot 이 null 이면 현재 응답 가능한 대화가 없다. session·turns 는 지금의 판(열린 판, 없으면 오늘 마지막 판)",
         "properties": {
           "calls": {
             "items": {
@@ -1422,11 +1849,34 @@
           "session": {
             "$ref": "#/components/schemas/ChatSession"
           },
+          "stageSpeech": {
+            "$ref": "#/components/schemas/StageSpeech"
+          },
+          "stageSpeeches": {
+            "description": "정본 GET chat의 저장 발화 배열이며 []도 권위가 있다. GET은 생성하지 않는다. presence.chat은 이 필드를 투영하지 않으므로 []도 비권위다. 과거 응답은 optional/null 호환",
+            "items": {
+              "$ref": "#/components/schemas/ZzalStageSpeechView"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "turns": {
             "items": {
               "$ref": "#/components/schemas/ChatTurn"
             },
             "type": "array"
+          },
+          "tutorialAnswers": {
+            "description": "정본 GET chat의 저장 질문답변 배열이며 []도 권위가 있다. presence.chat의 이 필드는 미투영/비권위([]도 가능)라 소비하지 않는다. 과거 응답은 optional/null 호환",
+            "items": {
+              "$ref": "#/components/schemas/ZzalTutorialAnswer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -1458,6 +1908,54 @@
             "type": "string"
           },
           "slot": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ChatPresenceRequest": {
+        "properties": {
+          "entryKind": {
+            "enum": [
+              "OPEN",
+              "RETURN",
+              "RELOAD"
+            ],
+            "type": "string"
+          },
+          "event": {
+            "enum": [
+              "ENTER",
+              "LEAVE"
+            ],
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sequence": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "visitId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "eventId",
+          "visitId"
+        ],
+        "type": "object"
+      },
+      "ChatPresenceResponse": {
+        "properties": {
+          "chat": {
+            "$ref": "#/components/schemas/Chat"
+          },
+          "outcome": {
             "type": "string"
           }
         },
@@ -1497,10 +1995,16 @@
         "properties": {
           "nextAt": {
             "format": "date-time",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "openSlot": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -1537,11 +2041,17 @@
         "properties": {
           "autoSleepAt": {
             "format": "date-time",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "autoWakeAt": {
             "format": "date-time",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "canSleep": {
             "type": "boolean"
@@ -1551,28 +2061,43 @@
           },
           "clockStartedAt": {
             "format": "date-time",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "overslept": {
             "type": "boolean"
           },
           "sleepKind": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sleepWindowOpensAt": {
             "format": "date-time",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sleeping": {
             "type": "boolean"
           },
           "sleptAt": {
             "format": "date-time",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "wakeWindowOpensAt": {
             "format": "date-time",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "wokeAt": {
             "format": "date-time",
@@ -1583,6 +2108,19 @@
       },
       "CommonEvent": {
         "properties": {
+          "actor_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "actor_state": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
           "name": {
             "description": "이벤트 이름",
             "example": "zzal_upload_abandoned",
@@ -1600,6 +2138,16 @@
               "reason": "limit"
             },
             "type": "object"
+          },
+          "schema_version": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "source_screen": {
+            "type": "string"
           },
           "ts": {
             "description": "화면에서 일어난 시각(epoch ms)",
@@ -1797,11 +2345,50 @@
         "type": "object"
       },
       "Detail": {
-        "description": "캐릭터 상태 전체. 부화 중과 진행 중을 구분하지 않고 이 응답 하나로 화면을 구성한다.\nphase 가 ALIVE 가 아니면 진행 중 전용 블록은 모두 null 이다",
         "properties": {
           "anchorsKey": {
             "description": "자세 앵커 파일의 S3 키. 화면이 소품을 얹을 좌표가 들어 있다.\n전체 URL 이 아니라 키다(다른 imageKey 들과 같은 형식).\n앵커를 내지 않는 부화 버전이거나 아직 한 판도 안 구웠으면 null",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attendanceRewards": {
+            "properties": {
+              "attendanceDay": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "background": {
+                "$ref": "#/components/schemas/Background"
+              },
+              "customMotions": {
+                "items": {
+                  "$ref": "#/components/schemas/ZzalOwnedCustomMotion"
+                },
+                "type": "array"
+              },
+              "eligibleUnfulfilledCount": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "firstBundleState": {
+                "type": "string"
+              },
+              "ownedRewards": {
+                "items": {
+                  "$ref": "#/components/schemas/OwnedReward"
+                },
+                "type": "array"
+              },
+              "programVersion": {
+                "type": "string"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "background": {
             "type": "string"
@@ -1811,11 +2398,54 @@
             "example": "NONE",
             "type": "string"
           },
+          "careReceipt": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "FEED",
+                  "SNACK",
+                  "PET",
+                  "CLEAN",
+                  "BATH",
+                  "MEDICINE"
+                ],
+                "type": "string"
+              },
+              "requestId": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "APPLIED",
+                  "REPLAYED",
+                  "NO_OP"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "action",
+              "requestId",
+              "status"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
           "chatSummary": {
             "$ref": "#/components/schemas/ChatSummary"
           },
           "clock": {
             "$ref": "#/components/schemas/Clock"
+          },
+          "customMotions": {
+            "description": "지급이 확정된 맞춤 동작. resource slot을 행동 의미로 추측하지 않는다",
+            "items": {
+              "$ref": "#/components/schemas/ZzalOwnedCustomMotion"
+            },
+            "type": "array"
           },
           "daysTogether": {
             "format": "int32",
@@ -1823,18 +2453,103 @@
           },
           "deathReason": {
             "description": "종료 사유. FAILED·DEAD 일 때만 채워진다",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "elapsedSeconds": {
             "description": "부화 시작 후 경과 시간(초)",
             "format": "int64",
-            "type": "integer"
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "features": {
             "$ref": "#/components/schemas/Features"
           },
           "firstGift": {
             "$ref": "#/components/schemas/FirstGift"
+          },
+          "firstIntro": {
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "completed": {
+                "type": "boolean"
+              },
+              "completedKeys": {
+                "items": {
+                  "enum": [
+                    "FEED",
+                    "SNACK",
+                    "CLEAN",
+                    "BATH",
+                    "GAME",
+                    "PET",
+                    "NAP_SLEEP",
+                    "NAP_WAKE",
+                    "ALBUM",
+                    "CHAT",
+                    "PERSONALITY",
+                    "DIARY_INTRO",
+                    "FINISH_NOTICE",
+                    "REVIEW_SEEN",
+                    "COMPLETE",
+                    "ATTENDANCE_INTRO"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "completionWillSleep": {
+                "type": "boolean"
+              },
+              "key": {
+                "enum": [
+                  "FEED",
+                  "SNACK",
+                  "CLEAN",
+                  "BATH",
+                  "GAME",
+                  "PET",
+                  "NAP_SLEEP",
+                  "NAP_WAKE",
+                  "ALBUM",
+                  "CHAT",
+                  "PERSONALITY",
+                  "DIARY_INTRO",
+                  "FINISH_NOTICE",
+                  "REVIEW_SEEN",
+                  "COMPLETE",
+                  "ATTENDANCE_INTRO"
+                ],
+                "type": "string"
+              },
+              "napSleeping": {
+                "type": "boolean"
+              },
+              "reviewPending": {
+                "type": "boolean"
+              },
+              "step": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "version": {
+                "format": "int32",
+                "type": "integer"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "firstNightChatGrace": {
+            "$ref": "#/components/schemas/FirstNightChatGrace"
           },
           "food": {
             "$ref": "#/components/schemas/Food"
@@ -1844,7 +2559,10 @@
           },
           "genre": {
             "description": "장르. 말투와 같이 대사 톤에만 쓰인다",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "goodDay": {
             "description": "직전 취침 시점에 케어 미스가 없고 게이지 3종이 모두 2 이상이었는지 여부.\n조건을 만족하면 조각 1개를 선지급한다. 심화 단계 진입 전에는 항상 false",
@@ -1853,7 +2571,10 @@
           "graduationSeenAt": {
             "description": "튜토리얼 졸업 축하 창을 본 시각. 아직 안 봤으면 null.\n화면은 이 값이 null 일 때만 축하 창을 띄우고, 닫을 때 POST /{petId}/graduation-seen 을 부른다.\n기기가 아니라 캐릭터에 붙는 값이라 새 탭·재시작에도 같은 창이 다시 뜨지 않는다",
             "format": "date-time",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "hatchStartedAt": {
             "format": "date-time",
@@ -1885,11 +2606,177 @@
             "type": "array"
           },
           "leaving": {
-            "$ref": "#/components/schemas/Leaving"
+            "properties": {
+              "departsAt": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "justCancelled": {
+                "type": "boolean"
+              },
+              "noticedAt": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "mood": {
             "description": "표시 우선순위: SICK > HUNGRY > SAD > DIRTY > NORMAL",
             "type": "string"
+          },
+          "motionPlayback": {
+            "properties": {
+              "basicSemantic": {
+                "enum": [
+                  "eat",
+                  "pet",
+                  "base"
+                ],
+                "type": "string"
+              },
+              "motionId": {
+                "type": "string"
+              },
+              "resource": {
+                "properties": {
+                  "albumOnly": {
+                    "type": "boolean"
+                  },
+                  "anchorPoseKey": {
+                    "type": "string"
+                  },
+                  "anchorsKey": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "baseReferenceRound": {
+                    "format": "int32",
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "embeddedProps": {
+                    "type": "boolean"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "imageKey": {
+                    "type": "string"
+                  },
+                  "order": {
+                    "format": "int32",
+                    "type": "integer"
+                  },
+                  "planVersion": {
+                    "enum": [
+                      "CUSTOM_MOTION_PLAN_V1",
+                      "CUSTOM_MOTION_PLAN_V2"
+                    ],
+                    "type": "string"
+                  },
+                  "semantic": {
+                    "description": "지원 의미: base, eat, joy, sad, sick, pet, hello, sleep. 앨범 전용 자유 행동은 null. 실제 허용값은 서버와 소비자 adapter가 검증한다",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "setId": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "situations": {
+                    "description": "Explicit CARE6 situation tags. V1 is empty; no semantic inference.",
+                    "items": {
+                      "enum": [
+                        "FEED",
+                        "SNACK",
+                        "PET",
+                        "CLEAN",
+                        "BATH",
+                        "MEDICINE"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "sourceKind": {
+                    "enum": [
+                      "CUSTOM"
+                    ],
+                    "type": "string"
+                  },
+                  "suppressRoomProps": {
+                    "type": "boolean"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "albumOnly",
+                  "anchorPoseKey",
+                  "anchorsKey",
+                  "baseReferenceRound",
+                  "description",
+                  "embeddedProps",
+                  "id",
+                  "imageKey",
+                  "order",
+                  "planVersion",
+                  "semantic",
+                  "setId",
+                  "situations",
+                  "sourceKind",
+                  "suppressRoomProps",
+                  "title"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "situationKey": {
+                "enum": [
+                  "FEED",
+                  "SNACK",
+                  "PET",
+                  "CLEAN",
+                  "BATH",
+                  "MEDICINE"
+                ],
+                "type": "string"
+              },
+              "sourceKind": {
+                "enum": [
+                  "BASIC",
+                  "CUSTOM"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "basicSemantic",
+              "motionId",
+              "resource",
+              "situationKey",
+              "sourceKind"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "motions": {
             "items": {
@@ -1901,10 +2788,16 @@
             "type": "string"
           },
           "note": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "personality": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "petId": {
             "format": "int64",
@@ -1915,8 +2808,44 @@
             "type": "string"
           },
           "pieces": {
-            "$ref": "#/components/schemas/Pieces",
-            "description": "오늘 모은 조각. 심화 단계 진입 전에는 null"
+            "description": "오늘 모은 조각. 심화 단계 진입 전에는 null",
+            "properties": {
+              "bond": {
+                "type": "boolean"
+              },
+              "bondProgress": {
+                "$ref": "#/components/schemas/Progress"
+              },
+              "bonus": {
+                "type": "boolean"
+              },
+              "clean": {
+                "type": "boolean"
+              },
+              "cleanProgress": {
+                "$ref": "#/components/schemas/Progress"
+              },
+              "count": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "food": {
+                "type": "boolean"
+              },
+              "foodProgress": {
+                "$ref": "#/components/schemas/Progress"
+              },
+              "play": {
+                "type": "boolean"
+              },
+              "playProgress": {
+                "$ref": "#/components/schemas/Progress"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "ready": {
             "description": "부화 완료 여부",
@@ -1935,28 +2864,570 @@
             "type": "string"
           },
           "sick": {
-            "$ref": "#/components/schemas/Sick"
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "since": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "step": {
             "description": "현재 수행 중인 생성 단계. 부화 중에만 채워진다",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "today": {
             "$ref": "#/components/schemas/ZzalToday"
           },
           "tone": {
             "description": "말투. 대사 톤에만 쓰이고 그림 생성에는 들어가지 않는다",
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "trip": {
-            "$ref": "#/components/schemas/Trip"
+            "properties": {
+              "postcards": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "startedAt": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "tutorial": {
-            "$ref": "#/components/schemas/Tutorial",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tutorial"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "튜토리얼 진행 상태. 9단계를 모두 완료하면 null 이 되고 clock.clockStartedAt 이 채워진다.\n진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다"
           },
           "world": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "DevBake": {
+        "description": "굽기 시작 결과",
+        "properties": {
+          "estimatedCostUsd": {
+            "description": "예상 비용(달러). 가짜면 0",
+            "example": 0.19,
+            "type": "number"
+          },
+          "jobId": {
+            "description": "진행 조회 열쇠(hatch-{genJobId} · layer2-{초} · gift-{seq}-{초})",
+            "example": "hatch-12",
             "type": "string"
+          },
+          "kind": {
+            "description": "hatch · layer2 · gift",
+            "type": "string"
+          },
+          "note": {
+            "description": "사람 말 한 줄",
+            "type": "string"
+          },
+          "real": {
+            "description": "진짜 그림 생성으로 굽는가",
+            "type": "boolean"
+          },
+          "result": {
+            "$ref": "#/components/schemas/DevResult",
+            "description": "시작 직후 상태"
+          }
+        },
+        "type": "object"
+      },
+      "DevBakeProgress": {
+        "description": "굽기 진행",
+        "properties": {
+          "costUsd": {
+            "description": "이번 굽기에서 지금까지 기록된 비용(달러)",
+            "type": "number"
+          },
+          "done": {
+            "description": "끝난 단계 수(부화만)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "finished": {
+            "description": "끝났나(성공·실패 모두)",
+            "type": "boolean"
+          },
+          "jobId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "description": "지금 상태(부화=phase · 2층=layer2Status · 선물=동작 status)",
+            "type": "string"
+          },
+          "total": {
+            "description": "전체 단계 수(부화만)",
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DevBakeRequest": {
+        "description": "굽기 요청",
+        "properties": {
+          "kind": {
+            "description": "hatch · layer2 · gift",
+            "example": "gift",
+            "type": "string"
+          },
+          "real": {
+            "description": "진짜로 굽는 줄 아는가 — 서버 스위치(ZZAL_GENERATION_REAL)와 같아야 한다",
+            "example": false,
+            "type": "boolean"
+          },
+          "seq": {
+            "description": "gift 일 때 동작 seq(없으면 첫 선물)",
+            "example": 101,
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DevMotionPatch": {
+        "description": "동작 행 세팅",
+        "properties": {
+          "revealed": {
+            "description": "도착(revealedAt) — true 면 지금, false 면 지운다",
+            "type": "boolean"
+          },
+          "seen": {
+            "description": "열람(seenAt) — true 면 지금, false 면 지운다",
+            "type": "boolean"
+          },
+          "seq": {
+            "description": "카탈로그 seq",
+            "example": 101,
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "description": "NONE · QUEUED · BAKING · REVIEW · LOCAL_REQUESTED · OPEN · FAILED · HOLD",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DevPetPatch": {
+        "description": "개발 리모컨 상태 세팅 — 준 칸만 바꾼다. 범위를 넘으면 400, 연쇄(병·떠남)는 시간이 지나야 이어진다",
+        "properties": {
+          "absenceHours": {
+            "description": "부재(깨어 있는) 시간 0~72 — 4시간마다 혼자 논 장면 1컷",
+            "format": "int32",
+            "type": "integer"
+          },
+          "background": {
+            "description": "배경 키(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "bathCount": {
+            "description": "목욕 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "bonusPiece": {
+            "description": "오늘 보너스 조각 받음 표시",
+            "type": "boolean"
+          },
+          "callMe": {
+            "description": "호칭(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "careMiss": {
+            "description": "누적 케어 미스 0~99",
+            "format": "int32",
+            "type": "integer"
+          },
+          "chatAnswers": {
+            "description": "채팅 답 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "cleans": {
+            "description": "청소 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "daysTogether": {
+            "description": "함께한 날 1~9999",
+            "format": "int32",
+            "type": "integer"
+          },
+          "deathReason": {
+            "description": "HATCH_FAILED · NEGLECTED · RELEASED (DEAD·FAILED 일 때)",
+            "enum": [
+              "HATCH_FAILED",
+              "NEGLECTED",
+              "RELEASED"
+            ],
+            "type": "string"
+          },
+          "feeds": {
+            "description": "밥 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "firstIntroKey": {
+            "description": "가짜 체험 상태: FEED부터 COMPLETE까지 서버 첫 안내 key",
+            "enum": [
+              "FEED",
+              "SNACK",
+              "CLEAN",
+              "BATH",
+              "GAME",
+              "PET",
+              "NAP_SLEEP",
+              "NAP_WAKE",
+              "ALBUM",
+              "CHAT",
+              "PERSONALITY",
+              "DIARY_INTRO",
+              "FINISH_NOTICE",
+              "REVIEW_SEEN",
+              "COMPLETE",
+              "ATTENDANCE_INTRO"
+            ],
+            "type": "string"
+          },
+          "firstIntroVersion": {
+            "description": "첫 안내 버전 2, 3 또는 4. key 없이 바꾸면 현재 key를 보존한다",
+            "format": "int32",
+            "type": "integer"
+          },
+          "food": {
+            "description": "밥 재고 0~3",
+            "example": 3,
+            "format": "int32",
+            "type": "integer"
+          },
+          "fullness": {
+            "description": "배부름 0~4",
+            "example": 4,
+            "format": "int32",
+            "type": "integer"
+          },
+          "gameStarts": {
+            "description": "게임 시작 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "genre": {
+            "description": "장르(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "goodDayPending": {
+            "description": "기분 좋은 날 판정 대기(내일 아침 보너스)",
+            "type": "boolean"
+          },
+          "goodDayToday": {
+            "description": "오늘이 기분 좋은 날",
+            "type": "boolean"
+          },
+          "graduationSeen": {
+            "description": "졸업 축하 창을 봤나. false 면 다시 뜬다",
+            "type": "boolean"
+          },
+          "happiness": {
+            "description": "행복 0~4",
+            "example": 4,
+            "format": "int32",
+            "type": "integer"
+          },
+          "healed": {
+            "description": "방금 나음 표시(healedAt). true 면 지금, false 면 지운다",
+            "type": "boolean"
+          },
+          "intimacy": {
+            "description": "친밀도 0~999 (최고치는 따라 올라간다)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "intimacyPeak": {
+            "description": "친밀도 최고치 0~999 (재회 시 50%)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "lastNightCareMiss": {
+            "description": "어젯밤 케어 미스 스냅샷 0~99",
+            "format": "int32",
+            "type": "integer"
+          },
+          "lastVisitDaysAgo": {
+            "description": "마지막 방문이 며칠 전인가 0~60(결석 떠남 재현)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "layer2Flagged": {
+            "description": "2층 결함 표시",
+            "type": "boolean"
+          },
+          "layer2Status": {
+            "description": "2층 굽기 상태 — PENDING · RUNNING · READY · FAILED",
+            "type": "string"
+          },
+          "layerTwoDone": {
+            "description": "2층 8종 완주 표시(다음 기상에 3층)",
+            "type": "boolean"
+          },
+          "leaveEnabled": {
+            "description": "떠남 켜기",
+            "type": "boolean"
+          },
+          "leaveNotice": {
+            "description": "떠남 예고 — true 면 지금 예고, false 면 지운다",
+            "type": "boolean"
+          },
+          "leavingJustCancelled": {
+            "description": "예고 막 취소됨 연출",
+            "type": "boolean"
+          },
+          "leftRightWins": {
+            "description": "좌우 맞히기 승수(5 → 달리기)",
+            "format": "int32",
+            "type": "integer"
+          },
+          "motions": {
+            "description": "동작 행 상태 — seq 마다 status·도착·열람",
+            "items": {
+              "$ref": "#/components/schemas/DevMotionPatch"
+            },
+            "type": "array"
+          },
+          "napCount": {
+            "description": "낮잠 횟수 0~1",
+            "format": "int32",
+            "type": "integer"
+          },
+          "naturalSickInMinutes": {
+            "description": "자연 발병까지 깨어 있는 분. -1 이면 예약을 지운다",
+            "format": "int32",
+            "type": "integer"
+          },
+          "overslept": {
+            "description": "늦잠 표시",
+            "type": "boolean"
+          },
+          "personality": {
+            "description": "대표 성격 — GENTLE · LIVELY · SHY · CLINGY",
+            "enum": [
+              "GENTLE",
+              "LIVELY",
+              "SHY",
+              "CLINGY",
+              "COOL"
+            ],
+            "type": "string"
+          },
+          "pets": {
+            "description": "쓰다듬기 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "phase": {
+            "description": "DRAFT · HATCHING · ALIVE · FAILED · DEAD",
+            "enum": [
+              "DRAFT",
+              "HATCHING",
+              "ALIVE",
+              "FAILED",
+              "DEAD"
+            ],
+            "type": "string"
+          },
+          "pieces": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "description": "조각 칸별 채움 — FOOD · PLAY · CLEAN · BOND → true/false (3층이 열려 있어야 한다)",
+            "type": "object"
+          },
+          "piecesEnabled": {
+            "description": "3층(조각) 열림",
+            "type": "boolean"
+          },
+          "shares": {
+            "description": "공유 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "sick": {
+            "description": "병 — NONE · NEGLECT · DIRTY · UPSET · NATURAL",
+            "example": "DIRTY",
+            "type": "string"
+          },
+          "sickHoursAgo": {
+            "description": "병이 난 지 몇 시간(깨어 있는 시간 기준 24시간마다 케어 미스). 0~240",
+            "format": "int32",
+            "type": "integer"
+          },
+          "sleep": {
+            "description": "잠 — NONE · NIGHT · NAP (훅은 안 돈다 — 밤 정산은 events/night-settle)",
+            "type": "string"
+          },
+          "sleepWakeCount": {
+            "description": "재우기+깨우기 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "snacks": {
+            "description": "간식 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todayBathDone": {
+            "description": "오늘 목욕했나",
+            "type": "boolean"
+          },
+          "todayCareIntimacy": {
+            "description": "오늘 돌봄 친밀도 0~30",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todayCareMiss": {
+            "description": "오늘 케어 미스 0~99",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todayCared": {
+            "description": "오늘 한 번이라도 돌봤나(잘 돌본 날 판정)",
+            "type": "boolean"
+          },
+          "todayGames": {
+            "description": "오늘 게임 판 수 0~3",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todayPetCount": {
+            "description": "오늘 쓰다듬기 0~3",
+            "format": "int32",
+            "type": "integer"
+          },
+          "todaySnacks": {
+            "description": "오늘 간식 0~5",
+            "format": "int32",
+            "type": "integer"
+          },
+          "tone": {
+            "description": "말투(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "trash": {
+            "description": "똥(흔적) 0~4",
+            "example": 4,
+            "format": "int32",
+            "type": "integer"
+          },
+          "trip": {
+            "description": "여행 중 — true 면 지금 출발(엽서 0), false 면 지운다(재회 값은 events/call-back)",
+            "type": "boolean"
+          },
+          "tutorialStep": {
+            "description": "튜토리얼 칸 0~9. 9 = 끝(시계가 지금 켜진다), 0~8 = 튜토리얼 중으로 되돌린다",
+            "example": 0,
+            "format": "int32",
+            "type": "integer"
+          },
+          "wakes": {
+            "description": "손으로 깨운 횟수",
+            "format": "int32",
+            "type": "integer"
+          },
+          "world": {
+            "description": "세계관(빈 문자열이면 지운다)",
+            "type": "string"
+          },
+          "zeroMissDays": {
+            "description": "잘 돌본 날 수 0~999",
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DevPing": {
+        "description": "개발 도구 켜짐 확인. 꺼진 서버에는 이 주소가 없다(404)",
+        "properties": {
+          "devTools": {
+            "description": "늘 true(꺼져 있으면 응답 자체가 없다)",
+            "type": "boolean"
+          },
+          "generationReal": {
+            "description": "진짜 그림 생성 스위치(ZZAL_GENERATION_REAL). false 면 진짜 굽기를 거절한다",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "DevResult": {
+        "description": "리모컨 조작 결과 — 이번에 일어난 일 · 바꾸기 전과 뒤의 캐릭터 상태 · 내부 칸 한 벌",
+        "properties": {
+          "after": {
+            "$ref": "#/components/schemas/Detail",
+            "description": "바꾼 뒤 캐릭터 상태(방문 없이 정산한 값)"
+          },
+          "before": {
+            "$ref": "#/components/schemas/Detail",
+            "description": "바꾸기 전 캐릭터 상태"
+          },
+          "effects": {
+            "description": "이번에 일어난 일(바뀐 칸마다 한 줄, '배부름: 3 → 0'). 아무것도 안 바뀌면 빈 목록",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "state": {
+            "additionalProperties": { },
+            "description": "바꾼 뒤 내부 칸 한 벌(케어 미스·오늘 한도·평생 횟수·조각 칸·동작 행 등)",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "DevState": {
+        "description": "내부 칸 한 벌(리모컨 상태 패널)",
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/Detail"
+          },
+          "state": {
+            "additionalProperties": { },
+            "type": "object"
           }
         },
         "type": "object"
@@ -2030,6 +3501,52 @@
         },
         "type": "object"
       },
+      "FactView": {
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "correctionOf": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "sourceQuote": {
+            "type": "string"
+          },
+          "sourceTurnId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "subjectRef": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Features": {
         "properties": {
           "album": {
@@ -2054,6 +3571,38 @@
             "type": "boolean"
           }
         },
+        "type": "object"
+      },
+      "Field": {
+        "properties": {
+          "chips": {
+            "items": {
+              "maxLength": 100,
+              "minLength": 0,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 0,
+            "type": "array"
+          },
+          "fieldId": {
+            "pattern": "world|job|persona|likes|dislikes|extra",
+            "type": "string"
+          },
+          "rawText": {
+            "maxLength": 10000,
+            "minLength": 0,
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "chips",
+          "fieldId",
+          "rawText"
+        ],
         "type": "object"
       },
       "Finish": {
@@ -2084,6 +3633,35 @@
         },
         "type": "object"
       },
+      "FirstNightChatGrace": {
+        "description": "캐릭터 상태 전체. 부화 중과 진행 중을 구분하지 않고 이 응답 하나로 화면을 구성한다.\nphase 가 ALIVE 가 아니면 진행 중 전용 블록은 모두 null 이다",
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "deadlineAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "endedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "willSleepAtEnd": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "Food": {
         "properties": {
           "count": {
@@ -2092,7 +3670,10 @@
           },
           "nextInSeconds": {
             "format": "int64",
-            "type": "integer"
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -2352,6 +3933,13 @@
       "GuessRequest": {
         "description": "좌우 맞히기 요청. 선택한 방향만 전달하고 정답 여부는 서버가 판정한다",
         "properties": {
+          "expectedRound": {
+            "description": "선택한 회차(0부터). requestId와 함께 전달",
+            "format": "int32",
+            "maximum": 4,
+            "minimum": 0,
+            "type": "integer"
+          },
           "pick": {
             "description": "LEFT(왼쪽) · RIGHT(오른쪽)",
             "enum": [
@@ -2359,6 +3947,11 @@
               "RIGHT"
             ],
             "example": "LEFT",
+            "type": "string"
+          },
+          "requestId": {
+            "description": "동일 회차 재전송 identity. expectedRound와 함께 전달",
+            "format": "uuid",
             "type": "string"
           }
         },
@@ -2493,6 +4086,48 @@
         },
         "type": "object"
       },
+      "History": {
+        "properties": {
+          "nextBeforeId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryTurn"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "HistoryTurn": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "idx": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "line": {
+            "type": "string"
+          },
+          "sessionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "speaker": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "IngestRequest": {
         "properties": {
           "calls": {
@@ -2536,6 +4171,33 @@
         },
         "type": "object"
       },
+      "IntroAction": {
+        "description": "돌보기 요청. 수행할 행동만 전달하고 수치 변화는 서버가 결정한다",
+        "properties": {
+          "firstIntroStep": {
+            "enum": [
+              "FEED",
+              "SNACK",
+              "CLEAN",
+              "BATH",
+              "GAME",
+              "PET",
+              "NAP_SLEEP",
+              "NAP_WAKE",
+              "ALBUM",
+              "CHAT",
+              "PERSONALITY",
+              "DIARY_INTRO",
+              "FINISH_NOTICE",
+              "REVIEW_SEEN",
+              "COMPLETE",
+              "ATTENDANCE_INTRO"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "JobView": {
         "properties": {
           "art": {
@@ -2548,7 +4210,7 @@
             },
             "type": "array"
           },
-          "castKind": {
+          "cast_kind": {
             "type": "string"
           },
           "cast_sheets": {
@@ -2737,17 +4399,75 @@
         },
         "type": "object"
       },
-      "Leaving": {
+      "LegacyHistory": {
         "properties": {
-          "departsAt": {
+          "calls": {
+            "items": {
+              "$ref": "#/components/schemas/LegacyHistoryCall"
+            },
+            "type": "array"
+          },
+          "nextBeforeId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "LegacyHistoryCall": {
+        "properties": {
+          "answeredAt": {
             "format": "date-time",
             "type": "string"
           },
-          "justCancelled": {
-            "type": "boolean"
-          },
-          "noticedAt": {
+          "calledAt": {
             "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "petLine": {
+            "type": "string"
+          },
+          "replyLine": {
+            "type": "string"
+          },
+          "slot": {
+            "type": "string"
+          },
+          "userLine": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LegacyPersonaSource": {
+        "properties": {
+          "genre": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "personalities": {
+            "items": {
+              "enum": [
+                "GENTLE",
+                "LIVELY",
+                "SHY",
+                "CLINGY",
+                "COOL"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tone": {
+            "type": "string"
+          },
+          "world": {
             "type": "string"
           }
         },
@@ -2847,10 +4567,16 @@
             "$ref": "#/components/schemas/Advanced"
           },
           "basicImageKey": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "hint": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "key": {
             "type": "string"
@@ -2862,7 +4588,20 @@
             "type": "string"
           },
           "progress": {
-            "$ref": "#/components/schemas/Progress"
+            "properties": {
+              "current": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "target": {
+                "format": "int32",
+                "type": "integer"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "seq": {
             "format": "int32",
@@ -2932,6 +4671,38 @@
         "properties": {
           "on": {
             "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "OwnedBackground": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OwnedReward": {
+        "properties": {
+          "assetKey": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "motionOrder": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "slotKey": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
           }
         },
         "type": "object"
@@ -3014,9 +4785,42 @@
         },
         "type": "object"
       },
+      "PersonaSource": {
+        "properties": {
+          "addressStatus": {
+            "type": "string"
+          },
+          "authoredPersona": {
+            "$ref": "#/components/schemas/AuthoredPersona"
+          },
+          "callMe": {
+            "type": "string"
+          },
+          "legacySource": {
+            "$ref": "#/components/schemas/LegacyPersonaSource"
+          },
+          "personaSourceHash": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PersonalityChoice": {
         "description": "성격 등록·수정 요청. 수면 중을 포함해 언제든 변경할 수 있다",
         "properties": {
+          "authoredPersona": {
+            "$ref": "#/components/schemas/AuthoredPersona"
+          },
+          "callMe": {
+            "maxLength": 20,
+            "minLength": 0,
+            "type": "string"
+          },
+          "expectedPersonaHash": {
+            "maxLength": 64,
+            "minLength": 0,
+            "type": "string"
+          },
           "personalities": {
             "description": "고른 성격 전부. 맨 앞이 대표이고 대사 톤은 대표만 본다. GENTLE(온순) · LIVELY(활발) · SHY(수줍음) · CLINGY(응석) · COOL(시크)",
             "example": [
@@ -3582,42 +5386,6 @@
         },
         "type": "object"
       },
-      "Pieces": {
-        "properties": {
-          "bond": {
-            "type": "boolean"
-          },
-          "bondProgress": {
-            "$ref": "#/components/schemas/Progress"
-          },
-          "bonus": {
-            "type": "boolean"
-          },
-          "clean": {
-            "type": "boolean"
-          },
-          "cleanProgress": {
-            "$ref": "#/components/schemas/Progress"
-          },
-          "count": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "food": {
-            "type": "boolean"
-          },
-          "foodProgress": {
-            "$ref": "#/components/schemas/Progress"
-          },
-          "play": {
-            "type": "boolean"
-          },
-          "playProgress": {
-            "$ref": "#/components/schemas/Progress"
-          }
-        },
-        "type": "object"
-      },
       "Postcard": {
         "properties": {
           "at": {
@@ -3659,6 +5427,17 @@
         "type": "object"
       },
       "PresignedUpload": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Preview": {
         "properties": {
           "key": {
             "type": "string"
@@ -3751,6 +5530,34 @@
       "ReasonRequest": {
         "properties": {
           "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Receipt": {
+        "properties": {
+          "accepted_event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "duplicate_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "persisted_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rejected_event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
             "type": "string"
           }
         },
@@ -3965,7 +5772,28 @@
             "type": "boolean"
           },
           "latest": {
-            "$ref": "#/components/schemas/Scene"
+            "properties": {
+              "at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "background": {
+                "type": "string"
+              },
+              "line": {
+                "type": "string"
+              },
+              "motionKey": {
+                "type": "string"
+              },
+              "prop": {
+                "type": "string"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           }
         },
         "type": "object"
@@ -4007,6 +5835,11 @@
             "example": 40,
             "format": "int32",
             "type": "integer"
+          },
+          "visit": {
+            "description": "방문으로 칠까(기본 true). false 면 정산만 한다",
+            "example": true,
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -4119,18 +5952,6 @@
             "type": "string"
           },
           "run": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "Sick": {
-        "properties": {
-          "kind": {
-            "type": "string"
-          },
-          "since": {
-            "format": "date-time",
             "type": "string"
           }
         },
@@ -4262,9 +6083,43 @@
         },
         "type": "object"
       },
+      "StageSpeech": {
+        "description": "오늘의 대화 목록. openSlot 이 null 이면 현재 응답 가능한 대화가 없다. session·turns 는 지금의 판(열린 판, 없으면 오늘 마지막 판)",
+        "properties": {
+          "line": {
+            "type": "string"
+          },
+          "turnIdx": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "Start": {
         "description": "매치 시작 요청",
         "properties": {
+          "firstIntroStep": {
+            "enum": [
+              "FEED",
+              "SNACK",
+              "CLEAN",
+              "BATH",
+              "GAME",
+              "PET",
+              "NAP_SLEEP",
+              "NAP_WAKE",
+              "ALBUM",
+              "CHAT",
+              "PERSONALITY",
+              "DIARY_INTRO",
+              "FINISH_NOTICE",
+              "REVIEW_SEEN",
+              "COMPLETE",
+              "ATTENDANCE_INTRO"
+            ],
+            "type": "string"
+          },
           "kind": {
             "description": "LEFT_RIGHT(좌우 맞히기) · RUN(달리기, 좌우 5승 이후 해금)",
             "enum": [
@@ -4512,19 +6367,6 @@
         },
         "type": "object"
       },
-      "Trip": {
-        "properties": {
-          "postcards": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "startedAt": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "TryRequest": {
         "properties": {
           "description": {
@@ -4570,6 +6412,71 @@
             "type": "array"
           }
         },
+        "type": "object"
+      },
+      "TutorialSeen": {
+        "properties": {
+          "phase": {
+            "description": "PREPARE_SPEECH일 때 ENTRY/AFTER_ACTION 필수. ACK에서는 생략/null",
+            "enum": [
+              "ENTRY",
+              "AFTER_ACTION"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "purpose": {
+            "description": "생략/null은 ACKNOWLEDGE",
+            "enum": [
+              "ACKNOWLEDGE",
+              "PREPARE_SPEECH"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scene": {
+            "description": "마무리 PREPARE_SPEECH의 표시 장면. ACK 및 기존 행동 준비는 생략/null",
+            "enum": [
+              "FINISH_THANKS",
+              "FINISH_TOMORROW",
+              "CHAT_INTRO",
+              "CHAT_MEMORY",
+              "CHAT_INVITE"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "topic": {
+            "enum": [
+              "FEED",
+              "SNACK",
+              "CLEAN",
+              "BATH",
+              "GAME",
+              "PET",
+              "NAP_SLEEP",
+              "NAP_WAKE",
+              "ALBUM",
+              "CHAT",
+              "PERSONALITY",
+              "DIARY_INTRO",
+              "FINISH_NOTICE",
+              "REVIEW_SEEN",
+              "COMPLETE",
+              "ATTENDANCE_INTRO"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic"
+        ],
         "type": "object"
       },
       "TutorialStep": {
@@ -4668,6 +6575,421 @@
         },
         "type": "object"
       },
+      "ZzalDiaryEntry": {
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "preview": {
+            "type": "string"
+          },
+          "readAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "writtenAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ZzalDiaryPage": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ZzalDiaryEntry"
+            },
+            "type": "array"
+          },
+          "nextBeforeId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "unreadCount": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ZzalFirstMeetingRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "NEXT",
+              "SET_ADDRESS",
+              "DEFER_ADDRESS",
+              "ENTER_ROOM",
+              "PREPARE_DISCOVERY"
+            ],
+            "type": "string"
+          },
+          "callMe": {
+            "maxLength": 20,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "ZzalFirstMeetingView": {
+        "properties": {
+          "addressStatus": {
+            "type": "string"
+          },
+          "callMe": {
+            "type": "string"
+          },
+          "discoveryLine": {
+            "type": "string"
+          },
+          "discoverySource": {
+            "description": "READY 발견문의 LLM/FALLBACK 출처, 그 외 null",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "discoveryStatus": {
+            "description": "발견문 준비 상태, 구 응답은 null",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "greetingLine": {
+            "type": "string"
+          },
+          "greetingRetryAllowed": {
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "DISCOVERED",
+              "ADDRESS",
+              "READY_TO_ENTER",
+              "COMPLETE"
+            ],
+            "type": "string"
+          },
+          "version": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ZzalInquiryReceipt": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "createdAt",
+          "id"
+        ],
+        "type": "object"
+      },
+      "ZzalInquirySubmit": {
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "locale": {
+            "enum": [
+              "ko",
+              "en",
+              "ja"
+            ],
+            "type": "string"
+          },
+          "petId": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "locale",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "ZzalOwnedCustomMotion": {
+        "properties": {
+          "albumOnly": {
+            "type": "boolean"
+          },
+          "anchorPoseKey": {
+            "type": "string"
+          },
+          "anchorsKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "baseReferenceRound": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "embeddedProps": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "imageKey": {
+            "type": "string"
+          },
+          "order": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "planVersion": {
+            "enum": [
+              "CUSTOM_MOTION_PLAN_V1",
+              "CUSTOM_MOTION_PLAN_V2"
+            ],
+            "type": "string"
+          },
+          "semantic": {
+            "description": "지원 의미: base, eat, joy, sad, sick, pet, hello, sleep. 앨범 전용 자유 행동은 null. 실제 허용값은 서버와 소비자 adapter가 검증한다",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "setId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "situations": {
+            "description": "Explicit CARE6 situation tags. V1 is empty; no semantic inference.",
+            "items": {
+              "enum": [
+                "FEED",
+                "SNACK",
+                "PET",
+                "CLEAN",
+                "BATH",
+                "MEDICINE"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sourceKind": {
+            "enum": [
+              "CUSTOM"
+            ],
+            "type": "string"
+          },
+          "suppressRoomProps": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "albumOnly",
+          "anchorPoseKey",
+          "anchorsKey",
+          "baseReferenceRound",
+          "description",
+          "embeddedProps",
+          "id",
+          "imageKey",
+          "order",
+          "planVersion",
+          "semantic",
+          "setId",
+          "situations",
+          "sourceKind",
+          "suppressRoomProps",
+          "title"
+        ],
+        "type": "object"
+      },
+      "ZzalPreparedStage": {
+        "properties": {
+          "stageSpeech": {
+            "$ref": "#/components/schemas/ZzalStageSpeechView"
+          }
+        },
+        "required": [
+          "stageSpeech"
+        ],
+        "type": "object"
+      },
+      "ZzalReturningGuideAdvance": {
+        "properties": {
+          "complete": {
+            "type": "boolean"
+          },
+          "expectedPersonaHash": {
+            "maxLength": 64,
+            "minLength": 0,
+            "type": "string"
+          },
+          "step": {
+            "format": "int32",
+            "maximum": 5,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step"
+        ],
+        "type": "object"
+      },
+      "ZzalReturningGuideState": {
+        "properties": {
+          "boundPetId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "completed": {
+            "type": "boolean"
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "step": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ZzalStageSpeechView": {
+        "properties": {
+          "contextRevision": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "line": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "motionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phase": {
+            "enum": [
+              "ENTRY",
+              "AFTER_ACTION"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "description": "LLM 또는 FALLBACK, PENDING/숨김은 null",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "READY",
+              "FAILED",
+              "UNCERTAIN",
+              "SUPERSEDED"
+            ],
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "FEED",
+              "SNACK",
+              "CLEAN",
+              "BATH",
+              "GAME",
+              "NAP_SLEEP",
+              "NAP_WAKE",
+              "FIRST_MEETING_DISCOVERY",
+              "FINISH_THANKS",
+              "FINISH_TOMORROW",
+              "CHAT_INTRO",
+              "CHAT_MEMORY",
+              "CHAT_INVITE"
+            ],
+            "type": "string"
+          },
+          "turnRef": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "contextRevision",
+          "id",
+          "phase",
+          "status",
+          "step",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "ZzalToday": {
         "description": "오늘 한 일 — 자정에 0 으로 돌아간다",
         "properties": {
@@ -4691,6 +7013,92 @@
             "type": "integer"
           }
         },
+        "type": "object"
+      },
+      "ZzalTutorialAnswer": {
+        "properties": {
+          "answerType": {
+            "enum": [
+              "SUGGESTED",
+              "FREE_TEXT"
+            ],
+            "type": "string"
+          },
+          "chatReply": {
+            "$ref": "#/components/schemas/Reply"
+          },
+          "expectedRound": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "sessionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "step": {
+            "enum": [
+              "FEED",
+              "GAME"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/ChatTurn"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "answerType",
+          "chatReply",
+          "expectedRound",
+          "requestId",
+          "sessionId",
+          "step",
+          "text",
+          "turns"
+        ],
+        "type": "object"
+      },
+      "ZzalTutorialSeenSuccess": {
+        "properties": {
+          "data": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Detail"
+              },
+              {
+                "$ref": "#/components/schemas/ZzalPreparedStage"
+              }
+            ]
+          },
+          "error": {
+            "description": "성공 시 null, 실패는 기존 ApiResponse 오류 계약",
+            "type": "null"
+          },
+          "message": {
+            "description": "성공 시 null",
+            "type": "null"
+          },
+          "success": {
+            "description": "성공 시 true",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "data",
+          "error",
+          "message",
+          "success"
+        ],
         "type": "object"
       }
     },
@@ -5734,7 +8142,7 @@
     },
     "/api/v1/events": {
       "post": {
-        "description": "화면에서 모은 이벤트를 묶음으로 받는다. 로그인 없이도 받는다.\n\n★ 익명 번호는 본문으로 받지 않는다. 쿠키(lore_anon_id)만 신뢰하고,\n  쿠키가 없으면 이 응답에서 새로 발급한다(별도 발급 API 를 두면 왕복이 한 번 늘어\n  첫 이벤트를 놓친다).\n\n★ props 는 허용된 키만 저장된다. 나머지는 조용히 버려진다.\n  referrer 의 쿼리스트링, User-Agent 원문, IP 는 저장하지 않는다.\n\n응답은 항상 202 다 — 기록이 실패해도 화면은 계속 돌아야 한다.",
+        "description": "화면에서 모은 이벤트를 묶음으로 받는다. 로그인 없이도 받는다.\n\n★ 익명 번호는 본문으로 받지 않는다. 쿠키(lore_anon_id)만 신뢰하고,\n  쿠키가 없으면 이 응답에서 새로 발급한다(별도 발급 API 를 두면 왕복이 한 번 늘어\n  첫 이벤트를 놓친다).\n\n★ props 는 허용된 키만 저장된다. 나머지는 조용히 버려진다.\n  referrer 의 쿼리스트링, User-Agent 원문, IP 는 저장하지 않는다.\n\n202는 저장된 이벤트와 중복 이벤트의 ID를 확인한다. 저장 실패/비활성은 503, 요청 제한은 429다.",
         "operationId": "collect_1",
         "parameters": [
           {
@@ -5761,7 +8169,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseVoid"
+                  "$ref": "#/components/schemas/ApiResponseReceipt"
                 }
               }
             },
@@ -9556,7 +11964,7 @@
     },
     "/api/zzal/v1/dev/pets/{petId}/advance-clock": {
       "post": {
-        "description": "이 펫의 시계를 준 만큼 **앞으로** 민다. 게이지·잠·창·자동 취침이 그 시각 기준으로 정산된다.\n\n- **규칙은 그대로다.** 값을 짧게 바꾸는 것이 아니라 시계만 밀므로 여기서 확인한 동작이 곧 운영 동작이다\n- 응답의 `serverNow` 도 밀린 시계다\n- 내 펫만(남의 펫은 404) · 운영에서는 이 API 가 존재하지 않는다",
+        "description": "이 펫의 시계를 준 만큼 **앞으로** 민다. 게이지·잠·창·자동 취침이 그 시각 기준으로 정산된다.\n\n- **규칙은 그대로다.** 값을 짧게 바꾸는 것이 아니라 시계만 밀므로 여기서 확인한 동작이 곧 운영 동작이다\n- 응답의 `after.serverNow` 도 밀린 시계다. `effects` 에 이번 점프에서 바뀐 칸(케어 미스·병·떠남·장면·엽서…)이 한 줄씩\n- `visit:false` 면 방문으로 치지 않는다 — 하루씩 여러 번 밀어도 결석 떠남이 난다(기본 true)\n- 내 펫만(남의 펫은 404) · 운영에서는 이 API 가 존재하지 않는다",
         "operationId": "advanceClock",
         "parameters": [
           {
@@ -9584,7 +11992,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9594,7 +12002,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9604,7 +12012,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9617,6 +12025,155 @@
           }
         ],
         "summary": "시간 당기기",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/pets/{petId}/bake": {
+      "post": {
+        "description": "부화(다시)·2층(처음부터)·선물/심화 한 판을 운영과 같은 길로 굽는다. real 이 서버 스위치와 다르면 409(과금 스위치 꺼짐 등).\n응답에 예상 비용(부화 $0.19 · 2층/동작 격자 $0.09, 가짜면 0)과 진행 조회 열쇠(jobId).",
+        "operationId": "devBake",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevBakeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevBake"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "굽기 시작",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/pets/{petId}/bake/{jobId}": {
+      "get": {
+        "description": "bake 응답의 jobId 로 지금 상태·단계·기록된 비용을 본다.",
+        "operationId": "devBakeProgress",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevBakeProgress"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "굽기 진행",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/pets/{petId}/events/{kind}": {
+      "post": {
+        "description": "운영이 그 일을 일으키는 메서드를 그대로 부른다(시각·조건 무시). 응답 effects 에 그 사이 일어난 일이 한 줄씩.\n\nhatch-complete · hatch-fail · tutorial-next · tutorial-skip · tutorial-restart · clock-start · graduation ·\ngraduation-reset · care-miss · sick(arg=NEGLECT|DIRTY|UPSET|NATURAL) · recover · sleep · nap · night-settle ·\nwake · wake-auto · leave-notice · visit · trip-start · postcard · call-back · day-plus · scene(arg=1~3) ·\nnight-scene · chat-open · chat-close · chat-expire · chat-abandon · game-win · game-lose · today-reset ·\nunlock(arg=all|2층 key) · pieces-open · piece-add(arg=FOOD|PLAY|CLEAN|BOND) · piece-complete ·\ngift-review · gift-open · gift-arrive · gift-view(arg=seq, 기본 첫 선물) · release · revive",
+        "operationId": "devEvent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "이벤트 인자 하나(병 종류·조각 칸·장면 수·seq·해금 대상)",
+            "in": "query",
+            "name": "arg",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "이벤트 일으키기",
         "tags": [
           "개발용"
         ]
@@ -9709,7 +12266,7 @@
     },
     "/api/zzal/v1/dev/pets/{petId}/set-clock": {
       "post": {
-        "description": "이 펫의 시계를 특정 시각으로 맞춘다. `at`(ISO) · `sinceHatchMinutes`(부화 뒤 N분) · `localTime`(\"19:00\", 오늘 KST) 중 하나.\n과거로도 갈 수 있지만 이미 정산된 것은 되돌리지 않는다 — 과거로 맞추면 그 시각까지 아무것도 안 흐른 것이 된다.",
+        "description": "이 펫의 시계를 특정 시각으로 맞춘다. `at`(ISO) · `sinceHatchMinutes`(부화 뒤 N분) · `localTime`(\"19:00\", 오늘 KST) 중 하나.\n과거로도 갈 수 있지만 이미 정산된 것은 되돌리지 않는다 — 과거로 맞추면 그 시각까지 아무것도 안 흐른 것이 된다.\n`visit:false` 면 방문으로 치지 않는다. 응답은 시간 당기기와 같은 모양(effects · before · after · state).",
         "operationId": "setClock",
         "parameters": [
           {
@@ -9737,7 +12294,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9747,7 +12304,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9757,7 +12314,7 @@
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
                 }
               }
             },
@@ -9772,6 +12329,194 @@
         "summary": "시계 맞추기",
         "tags": [
           "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/pets/{petId}/state": {
+      "get": {
+        "description": "리모컨 상태 패널용 — 케어 미스·오늘 한도·평생 횟수·조각 칸·동작 행까지. 방문으로 치지 않는다.",
+        "operationId": "devState",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevState"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "내부 상태 읽기",
+        "tags": [
+          "개발용"
+        ]
+      },
+      "patch": {
+        "description": "준 칸만 값으로 바꾼다(부분 갱신). 검증은 범위만 — 넘으면 400 이고 아무것도 안 바뀐다.\n연쇄(병·떠남)는 돌리지 않는다. 시계를 넘기면 규칙대로 이어진다. 응답의 effects 에 바뀐 칸이 한 줄씩.",
+        "operationId": "devPatchState",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevPetPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevResult"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "상태 세팅",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/dev/ping": {
+      "get": {
+        "description": "200 이면 리모컨을 그린다. 꺼진 서버에는 이 주소가 없다(404). 진짜 생성 스위치도 함께 알린다.",
+        "operationId": "devPing",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDevPing"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "개발 도구 켜짐 확인",
+        "tags": [
+          "개발용"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/inquiries": {
+      "post": {
+        "description": "본문은 앞뒤 공백을 제거한 1~4000자이며 locale은 ko/en/ja다. 소유자는 로그인 계정으로 확정하고 petId는 선택적으로 소유권을 검증한다. 같은 requestId와 같은 정규화 내용의 재전송은 최초 접수를 반환한다. 자동 메일 발송이나 문의 목록 조회는 제공하지 않는다.",
+        "operationId": "submitInquiry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZzalInquirySubmit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "DB에 저장된 접수 번호와 최초 접수 시각"
+          },
+          "400": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "본문/언어/UUID/petId 입력 오류"
+          },
+          "401": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "로그인 필요"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "없는 펫 또는 남의 펫"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalInquiryReceipt"
+                }
+              }
+            },
+            "description": "ZZAL_INQUIRY_CONFLICT: 같은 requestId에 다른 내용"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "문의 접수",
+        "tags": [
+          "문의"
         ]
       }
     },
@@ -10071,6 +12816,64 @@
         ]
       }
     },
+    "/api/zzal/v1/me/pets/{petId}/call-back": {
+      "post": {
+        "description": "여행 중인 캐릭터를 즉시 데려온다. 여행 중 모인 엽서도 이때 한꺼번에 전달된다.\n\n- 게이지 전부 2칸 · 케어 미스 0 · 친밀도는 떠나기 전 최고치의 50%\n- 도감·조각·3층 진행은 그대로 보존된다\n- 데려오는 데 값을 매기지 않는다. 여행 중이 아니면 409(ZZAL_NOT_TRAVELING)",
+        "operationId": "callBack",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDetail"
+                }
+              }
+            },
+            "description": "돌아왔음"
+          },
+          "404": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDetail"
+                }
+              }
+            },
+            "description": "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)"
+          },
+          "409": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDetail"
+                }
+              }
+            },
+            "description": "여행 중이 아님(ZZAL_NOT_TRAVELING) 또는 보낸 캐릭터(ZZAL_PET_NOT_ALIVE)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "부르기(재회)",
+        "tags": [
+          "펫"
+        ]
+      }
+    },
     "/api/zzal/v1/me/pets/{petId}/care": {
       "post": {
         "description": "수행할 행동만 전달하면 수치 변화와 수행 가능 여부를 서버가 판정한다.\n응답은 변경된 전체 상태이므로 화면은 별도 재조회 없이 그대로 반영한다.\n\n| action | 효과 | 거부 조건 |\n|---|---|---|\n| FEED | 배부름 +1, 재고 -1 | 배부름이 최대치일 때 |\n| SNACK | 행복 +1 | 질병 상태 · 연속 5회 시 배탈 발생 |\n| PET | 친밀도 +5 (하루 3회까지) | 없음 |\n| CLEAN | 흔적 제거 | 이미 청결한 상태일 때 |\n| BATH | 흔적 제거, 행복 +1 | 하루 1회 초과 |\n| MEDICINE | 질병 즉시 치료 | 질병 상태가 아닐 때 |\n\nFEED·CLEAN·BATH·MEDICINE 은 친밀도 +5 를 부여하며 하루 합산 30 이 상한이다.\n\n응답의 justUnlocked 에 이번 행동으로 해금된 동작 seq 가 담긴다.",
@@ -10125,7 +12928,7 @@
                 }
               }
             },
-            "description": "ZZAL_PET_NOT_ALIVE · ZZAL_PET_SLEEPING · ZZAL_NO_FOOD · ZZAL_CARE_NOT_NEEDED · ZZAL_BATH_DONE_TODAY · ZZAL_SICK_REFUSES"
+            "description": "ZZAL_PET_NOT_ALIVE · ZZAL_PET_SLEEPING · ZZAL_NO_FOOD · ZZAL_CARE_NOT_NEEDED · ZZAL_BATH_DONE_TODAY · ZZAL_SICK_REFUSES · ZZAL_ACTION_REQUEST_CONFLICT"
           }
         },
         "security": [
@@ -10141,7 +12944,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/chat": {
       "get": {
-        "description": "현재 시점까지 발생한 대화 목록과 응답 가능한 슬롯(openSlot), 최근 응답 5건을 반환한다.\nsession·turns 는 지금의 판(열린 판, 없으면 오늘 마지막 판)과 그 판의 턴들이다.\n\n하루 대화 창은 KST 10~14시, 14~19시, 19~23시다. 창이 지나면 만료되며 별도 감점은 없다.\n지난 창에는 새 판을 만들지 않는다. 튜토리얼 BABY는 순서로 열리며 만료가 없다.\nBABY 첫 생성 실패는 5분 재시도 대기 후 누적 3회 실패 시 중립 문장으로 열린다.\n첫 답 뒤 10분 동안 말이 없으면 그 판은 닫힌다(ABANDONED).\n\n수면 중에도 조회는 가능하지만 openSlot 은 null 이다.",
+        "description": "펫당 한 대화가 계속 이어진다. slot=CONTINUOUS, maxRounds=null이다.\n시간창·왕복횟수·10분 무응답으로 닫지 않는다. 최근40턴은 화면 첫 페이지이며,\n전체 원문은 /history 커서 조회로 읽는다. 수면 중에는 답할 수 없다.\n튜토리얼 첫말 실패 대기·중립 복구는 기존대로다.",
         "operationId": "calls",
         "parameters": [
           {
@@ -10171,7 +12974,263 @@
             "cookieAuth": [ ]
           }
         ],
-        "summary": "오늘의 대화 조회",
+        "summary": "지속 대화 조회",
+        "tags": [
+          "채팅"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/chat/history": {
+      "get": {
+        "description": "프롬프트 문맥과 별개로 날짜 제한 없이 원문을 커서로 읽는다",
+        "operationId": "history",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "beforeId",
+            "required": false,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 40,
+              "format": "int32",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseHistory"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "대화 원문 이력",
+        "tags": [
+          "채팅"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/chat/history/legacy": {
+      "get": {
+        "description": "옛 부름 표의 사용자 답과 펫 원문도 날짜 제한 없이 읽는다",
+        "operationId": "legacyHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "beforeId",
+            "required": false,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 40,
+              "format": "int32",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseLegacyHistory"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "세션 도입 이전 대화 원문",
+        "tags": [
+          "채팅"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/chat/memory-facts": {
+      "get": {
+        "operationId": "memoryFacts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 40,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseListFactView"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "tags": [
+          "채팅"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/chat/memory-facts/retry": {
+      "post": {
+        "operationId": "retryMemory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseInteger"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "tags": [
+          "채팅"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/chat/presence": {
+      "post": {
+        "operationId": "presence",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Zzal-Language",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatPresenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseChatPresenceResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
         "tags": [
           "채팅"
         ]
@@ -10179,7 +13238,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/chat/{slot}/answer": {
       "post": {
-        "description": "열린 대화(판)에 자유 입력 40자로 한 마디 한다. 한 판은 최대 max-rounds 왕복이고, 마지막 펫 턴은\n닫기 턴이다(session.closed=true). 친밀도 +40·응답 카운터는 판당 1회(첫 답)만 센다.\n\n응답은 변경된 캐릭터 상태(pet)·다음 펫 대사와 반응 동작(chatReply)·판 상태(session)·\n이번에 생긴 두 턴(turns = 사용자 턴, 펫 턴)으로 구성한다.\n\n누적 응답 횟수(판 수)는 답하기 동작 해금(4회)에 사용한다.",
+        "description": "지속 대화에 자유 입력 40자로 한 마디 한다. 왕복·시간창 제한은 없다.\n친밀도·해금 보상은 기존 튜토리얼1회/일상창당1회 규칙을 따로 유지한다.\n\n응답은 변경된 캐릭터 상태(pet)·다음 펫 대사와 반응 동작(chatReply)·판 상태(session)·\n이번에 생긴 두 턴(turns = 사용자 턴, 펫 턴)으로 구성한다.\n\n누적 응답 횟수(판 수)는 답하기 동작 해금(4회)에 사용한다.\n새 클라이언트는 sessionId·expectedRound·requestId(UUID)를 함께 보낸다.\n같은 requestId와 같은 요청은 저장된 응답을 재사용하며 턴·왕복·모델 호출을 추가하지 않는다.\n다른 요청에 같은 requestId를 쓰면 ZZAL_CHAT_REQUEST_CONFLICT(409),\n지난 판이나 예상 왕복이 다르면 ZZAL_CHAT_SESSION_STALE(409)이다.\n식별자 셋이 모두 없는 옛 클라이언트는 기존 계약을 유지하며 이 보호의 대상이 아니다.",
         "operationId": "answer",
         "parameters": [
           {
@@ -10197,6 +13256,7 @@
             "required": true,
             "schema": {
               "enum": [
+                "CONTINUOUS",
                 "BABY",
                 "MORNING",
                 "NOON",
@@ -10246,6 +13306,106 @@
         "summary": "대화 응답",
         "tags": [
           "채팅"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/diary": {
+      "get": {
+        "operationId": "zzalDiaryList",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "beforeId",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalDiaryPage"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "tags": [
+          "diary-controller"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/diary/{entryId}/read": {
+      "post": {
+        "operationId": "read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entryId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalDiaryEntry"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "tags": [
+          "diary-controller"
         ]
       }
     },
@@ -10370,6 +13530,94 @@
         "summary": "후기 남기기",
         "tags": [
           "후기"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/first-meeting": {
+      "get": {
+        "operationId": "firstMeeting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalFirstMeetingView"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "tags": [
+          "펫"
+        ]
+      },
+      "post": {
+        "operationId": "firstMeeting_1",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Zzal-Language",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZzalFirstMeetingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalFirstMeetingView"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "tags": [
+          "펫"
         ]
       }
     },
@@ -10903,6 +14151,42 @@
         ]
       }
     },
+    "/api/zzal/v1/me/pets/{petId}/persona": {
+      "get": {
+        "operationId": "persona",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePersonaSource"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "tags": [
+          "펫"
+        ]
+      }
+    },
     "/api/zzal/v1/me/pets/{petId}/personality": {
       "post": {
         "description": "성격 5종(온순·활발·수줍음·응석·시크)과 세계관 한 줄을 저장한다.\n수면 중을 포함해 언제든 변경할 수 있다.\n\n성격은 대사 톤에만 반영되며 그림 생성에는 사용하지 않는다.\n튜토리얼 4단계는 이 API 호출로 완료 처리된다.",
@@ -10948,6 +14232,90 @@
         "summary": "성격 등록·수정",
         "tags": [
           "펫"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/returning-guide": {
+      "get": {
+        "description": "계정·안내 버전 단위로 완료 여부를 조회한다. 기존 튜토리얼을 마친 구버전 캐릭터만 대상이며 신규 v4는 제외한다. 조회는 상태를 만들지 않는다.",
+        "operationId": "getReturningGuide",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalReturningGuideState"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "기존 사용자 업데이트 안내 진행 조회",
+        "tags": [
+          "returning-guide-controller"
+        ]
+      },
+      "post": {
+        "description": "0~5단계 진행을 단조 증가로 저장한다. 완료는 5단계와 최신 personaSourceHash 확인이 필요하다. 설정은 변경 없이 확인해도 되며 첫 안내·출석·후기 상태는 수정하지 않는다. 다른 기기에서도 계정당 한 번이다.",
+        "operationId": "advanceReturningGuide",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZzalReturningGuideAdvance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseZzalReturningGuideState"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "기존 사용자 업데이트 안내 진행 저장",
+        "tags": [
+          "returning-guide-controller"
         ]
       }
     },
@@ -11024,6 +14392,15 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntroAction"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -11107,7 +14484,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/tutorial/seen": {
       "post": {
-        "description": "튜토리얼 4칸(\"이 성격이 맞나요\")을 넘긴다. 성격을 고치지 않고 아이 정보를 열어 보기만 해도\n넘어간다.\n\n화면이 혼자 넘기면 안 된다. 서버가 4칸에 남아 있으면 그다음 행동(청소)이 무시돼\n튜토리얼이 막히고, 첫 흔적이 이 칸을 넘길 때 생기므로 바닥이 깨끗해 5칸(청소)에서 또 막힌다.\n\n지금 칸이 4칸이 아니면 ZZAL_TUTORIAL_STEP_MISMATCH 다.",
+        "description": "purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 행동 topic/phase 또는 마무리 topic/scene(ENTRY)을 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.",
         "operationId": "tutorialSeen",
         "parameters": [
           {
@@ -11120,26 +14497,35 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TutorialSeen"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ZzalTutorialSeenSuccess"
                 }
               }
             },
-            "description": "다음 칸으로"
+            "description": "ACK는 data=Detail, PREPARE_SPEECH는 data={stageSpeech:...}"
           },
           "409": {
             "content": {
               "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseDetail"
+                  "$ref": "#/components/schemas/ApiResponseObject"
                 }
               }
             },
-            "description": "지금 칸이 아님(ZZAL_TUTORIAL_STEP_MISMATCH) · 이미 끝남(ZZAL_TUTORIAL_ALREADY_DONE)"
+            "description": "현재 단계/수면/여행/완료 상태가 요청 목적과 맞지 않음"
           }
         },
         "security": [
@@ -11147,7 +14533,7 @@
             "cookieAuth": [ ]
           }
         ],
-        "summary": "아이 정보 확인(튜토리얼 4칸)",
+        "summary": "튜토리얼 확인 또는 장면 대사 준비",
         "tags": [
           "펫"
         ]
@@ -11168,6 +14554,15 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntroAction"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -11334,6 +14729,10 @@
       "name": "동작 요청"
     },
     {
+      "description": "로그인 사용자의 비공개 텍스트 문의 접수",
+      "name": "문의"
+    },
+    {
       "description": "좌우 맞히기와 달리기. 두 게임 합산 하루 3매치이며 취침 시 초기화한다",
       "name": "미니게임"
     },
@@ -11358,7 +14757,7 @@
       "name": "인증"
     },
     {
-      "description": "캐릭터가 먼저 말을 걸고 사용자가 응답한다. 하루 3회 + 튜토리얼 1회",
+      "description": "한 대화가 계속 이어진다. 원문 이력과 전송 중복 보호",
       "name": "채팅"
     },
     {

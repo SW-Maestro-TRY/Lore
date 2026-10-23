@@ -1,5 +1,8 @@
 package com.lore.zzal.pet;
 
+import com.lore.zzal.pet.persona.AuthoredPersona;
+import com.lore.zzal.pet.persona.FirstMeeting;
+
 import com.lore.common.analytics.AnonIdResolver;
 import com.lore.common.auth.jwt.LoginUser;
 import com.lore.common.response.ApiResponse;
@@ -41,6 +44,12 @@ import java.util.List;
 public class PetController {
 
     private final PetService petService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.pet.receipt.CareActionRequestService careDeliveries;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.pet.persona.FirstMeetingService firstMeetings;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.chat.stage.StageSpeechService stageSpeeches;
     private final MotionCatalog catalog;
     private final ShareService shareService;
     private final ClientIp clientIp;
@@ -68,7 +77,7 @@ public class PetController {
         ZzalPet pet = action.pet();
         return PetResponses.Detail.from(pet, null, pet.now(real), catalog,
                 petService.motionRows(pet.getId()), action.justUnlocked(), action.justHealed(),
-                petService.scenes(pet.getId()), petService.pieces(pet.getId()));
+                petService.scenes(pet.getId()), petService.pieces(pet.getId()), action.motionPlayback());
     }
 
     @Operation(summary = "이미지 등록", description = """
@@ -139,9 +148,38 @@ public class PetController {
                                                        @Valid @RequestBody PetRequests.Character request) {
         Instant now = Instant.now();
         ZzalPet pet = petService.character(userId, petId, request.name(), request.note(),
-                request.picked(), request.world(), request.tone(), request.genre(), now);
+                request.picked(), request.world(), request.tone(), request.genre(), request.authoredPersona(), now);
         return ApiResponse.ok(PetResponses.Created.from(pet, ZzalRules.HATCH_ESTIMATE.toSeconds()));
     }
+
+    @GetMapping("/{petId}/first-meeting")
+    public ApiResponse<FirstMeeting.View> firstMeeting(
+            @LoginUser Long userId, @PathVariable Long petId) {
+        return ApiResponse.ok(firstMeetings.get(userId, petId));
+    }
+
+    @PostMapping("/{petId}/first-meeting")
+    public ApiResponse<FirstMeeting.View> firstMeeting(
+            @LoginUser Long userId, @PathVariable Long petId,
+            @Valid @RequestBody FirstMeeting.Request request,
+            @org.springframework.web.bind.annotation.RequestHeader(value="X-Zzal-Language",required=false) String language) {
+        if(request.action()==FirstMeeting.Action.PREPARE_DISCOVERY){
+            stageSpeeches.prepareDiscovery(userId,petId,Instant.now(),language);
+            return ApiResponse.ok(firstMeetings.get(userId,petId));
+        }
+        return ApiResponse.ok(firstMeetings.act(userId, petId, request, Instant.now(), language));
+    }
+
+    /** 원문 보존 확인용 조회. 새 원문이 없는 기존 사용자는 null이며 기존 상세 값은 그대로다. */
+    @GetMapping("/{petId}/persona")
+    public ApiResponse<PersonaSource> persona(@LoginUser Long userId, @PathVariable Long petId) {
+        ZzalPet pet=petService.get(userId,petId);
+        return ApiResponse.ok(new PersonaSource(pet.getAuthoredPersona(),pet.getCallMe(),FirstMeeting.View.of(pet).addressStatus(),
+                com.lore.zzal.pet.persona.PersonaSourceVersion.forEditing(pet),
+                com.lore.zzal.pet.persona.LegacyPersonaSource.of(pet)));
+    }
+
+    public record PersonaSource(AuthoredPersona authoredPersona,String callMe,String addressStatus,String personaSourceHash, com.lore.zzal.pet.persona.LegacyPersonaSource legacySource) { }
 
     @Operation(summary = "부화 진행 조회", description = """
             부화 대기 화면이 주기적으로 폴링하는 API 다. 응답을 가볍게 유지하기 위해
@@ -208,13 +246,14 @@ public class PetController {
                     description = "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "ZZAL_PET_NOT_ALIVE · ZZAL_PET_SLEEPING · ZZAL_NO_FOOD · ZZAL_CARE_NOT_NEEDED "
-                            + "· ZZAL_BATH_DONE_TODAY · ZZAL_SICK_REFUSES")})
+                            + "· ZZAL_BATH_DONE_TODAY · ZZAL_SICK_REFUSES · ZZAL_ACTION_REQUEST_CONFLICT")})
     @PostMapping("/{petId}/care")
     public ApiResponse<PetResponses.Detail> care(@LoginUser Long userId,
                                                  @PathVariable Long petId,
                                                  @Valid @RequestBody PetRequests.Care request) {
         Instant real = Instant.now();
-        return ApiResponse.ok(detail(petService.care(userId, petId, request.action(), real), real));
+        var delivered=careDeliveries.careResult(userId,petId,request,real);
+        return ApiResponse.ok(detail(delivered.action(),real).withCareReceipt(delivered.careReceipt()));
     }
 
     // ── 잠 (설계 규칙) ──────────────────────────────────────────────────
@@ -233,9 +272,10 @@ public class PetController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "허용 구간이 아님(ZZAL_NOT_SLEEP_TIME) · 이미 수면 중(ZZAL_PET_SLEEPING)")})
     @PostMapping("/{petId}/sleep")
-    public ApiResponse<PetResponses.Detail> sleep(@LoginUser Long userId, @PathVariable Long petId) {
+    public ApiResponse<PetResponses.Detail> sleep(@LoginUser Long userId, @PathVariable Long petId,
+            @RequestBody(required=false) PetRequests.IntroAction request) {
         Instant real = Instant.now();
-        return ApiResponse.ok(detail(petService.sleep(userId, petId, real), real));
+        return ApiResponse.ok(detail(petService.sleep(userId, petId, request==null?null:request.firstIntroStep(), real), real));
     }
 
     @Operation(summary = "깨우기", description = """
@@ -248,9 +288,10 @@ public class PetController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "수면 상태가 아님(ZZAL_PET_NOT_SLEEPING) · 허용 구간이 아님(ZZAL_NOT_WAKE_TIME)")})
     @PostMapping("/{petId}/wake")
-    public ApiResponse<PetResponses.Detail> wake(@LoginUser Long userId, @PathVariable Long petId) {
+    public ApiResponse<PetResponses.Detail> wake(@LoginUser Long userId, @PathVariable Long petId,
+            @RequestBody(required=false) PetRequests.IntroAction request) {
         Instant real = Instant.now();
-        return ApiResponse.ok(detail(petService.wake(userId, petId, real), real));
+        return ApiResponse.ok(detail(petService.wake(userId, petId, request==null?null:request.firstIntroStep(), real), real));
     }
 
     // ── 성격·배경·공유 (설계 규칙) ───────────────────────────────────
@@ -267,26 +308,36 @@ public class PetController {
                                                         @Valid @RequestBody PetRequests.PersonalityChoice request) {
         Instant real = Instant.now();
         return ApiResponse.ok(detail(
-                petService.choosePersonality(userId, petId, request.picked(), request.world(), real), real));
+                petService.editPersona(userId, petId, request, real), real));
     }
 
-    @Operation(summary = "아이 정보 확인(튜토리얼 4칸)", description = """
-            튜토리얼 4칸("이 성격이 맞나요")을 넘긴다. 성격을 고치지 않고 아이 정보를 열어 보기만 해도
-            넘어간다.
-
-            화면이 혼자 넘기면 안 된다. 서버가 4칸에 남아 있으면 그다음 행동(청소)이 무시돼
-            튜토리얼이 막히고, 첫 흔적이 이 칸을 넘길 때 생기므로 바닥이 깨끗해 5칸(청소)에서 또 막힌다.
-
-            지금 칸이 4칸이 아니면 ZZAL_TUTORIAL_STEP_MISMATCH 다.""")
+    @Operation(summary="튜토리얼 확인 또는 장면 대사 준비",description="purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 행동 topic/phase 또는 마무리 topic/scene(ENTRY)을 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "다음 칸으로"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
-                    description = "지금 칸이 아님(ZZAL_TUTORIAL_STEP_MISMATCH) · 이미 끝남(ZZAL_TUTORIAL_ALREADY_DONE)")})
+      @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode="200",description="ACK는 data=Detail, PREPARE_SPEECH는 data={stageSpeech:...}",content=@io.swagger.v3.oas.annotations.media.Content(schema=@io.swagger.v3.oas.annotations.media.Schema(implementation=TutorialSeenSuccessDocumentation.class))),
+      @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode="409",description="현재 단계/수면/여행/완료 상태가 요청 목적과 맞지 않음")
+    })
     @PostMapping("/{petId}/tutorial/seen")
-    public ApiResponse<PetResponses.Detail> tutorialSeen(@LoginUser Long userId, @PathVariable Long petId) {
+    public ApiResponse<?> tutorialSeen(@LoginUser Long userId, @PathVariable Long petId,
+            @Valid @RequestBody(required = false) PetRequests.TutorialSeen request) {
         Instant real = Instant.now();
-        return ApiResponse.ok(detail(petService.tutorialSeen(userId, petId, real), real));
+        if(request!=null&&request.purpose()==PetRequests.TutorialSeen.TutorialPurpose.PREPARE_SPEECH){
+            if(!request.isPrepareValid())throw new com.lore.common.exception.BusinessException(com.lore.common.exception.ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
+            return ApiResponse.ok(new PreparedStage(stageSpeeches.prepare(userId,petId,
+                request.speechStep(),request.phase(),real)));
+        }
+        return ApiResponse.ok(detail(petService.tutorialSeen(userId, petId, request == null ? null : request.topic(), real), real));
     }
+
+    @io.swagger.v3.oas.annotations.media.Schema(name="ZzalPreparedStage")
+    public record PreparedStage(@io.swagger.v3.oas.annotations.media.Schema(requiredMode=io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED) com.lore.zzal.chat.stage.ZzalStageSpeech.View stageSpeech) {}
+
+    /** Documentation only: the runtime continues to return the existing ApiResponse envelope. */
+    @io.swagger.v3.oas.annotations.media.Schema(name="ZzalTutorialSeenSuccess")
+    public record TutorialSeenSuccessDocumentation(
+      @io.swagger.v3.oas.annotations.media.Schema(requiredMode=io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED,description="성공 시 true") boolean success,
+      @io.swagger.v3.oas.annotations.media.Schema(requiredMode=io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED,anyOf={PetResponses.Detail.class,PreparedStage.class}) Object data,
+      @io.swagger.v3.oas.annotations.media.Schema(requiredMode=io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED,types={"null"},description="성공 시 null") Object message,
+      @io.swagger.v3.oas.annotations.media.Schema(requiredMode=io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED,types={"null"},description="성공 시 null, 실패는 기존 ApiResponse 오류 계약") Object error) {}
 
     @Operation(summary = "배경 변경", description = """
             해금 동작 4종이 열린 뒤부터 사용할 수 있다. 그 전에는 ZZAL_FEATURE_LOCKED 를 반환한다.
@@ -398,6 +449,26 @@ public class PetController {
         return ApiResponse.ok(detail(petService.markSeen(userId, petId, seq, real), real));
     }
 
+    // ── 떠남·재회 (설계 규칙) ──────────────────────────────────────────────
+
+    @Operation(summary = "부르기(재회)", description = """
+            여행 중인 캐릭터를 즉시 데려온다. 여행 중 모인 엽서도 이때 한꺼번에 전달된다.
+
+            - 게이지 전부 2칸 · 케어 미스 0 · 친밀도는 떠나기 전 최고치의 50%
+            - 도감·조각·3층 진행은 그대로 보존된다
+            - 데려오는 데 값을 매기지 않는다. 여행 중이 아니면 409(ZZAL_NOT_TRAVELING)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "돌아왔음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "여행 중이 아님(ZZAL_NOT_TRAVELING) 또는 보낸 캐릭터(ZZAL_PET_NOT_ALIVE)")})
+    @PostMapping("/{petId}/call-back")
+    public ApiResponse<PetResponses.Detail> callBack(@LoginUser Long userId, @PathVariable Long petId) {
+        Instant real = Instant.now();
+        return ApiResponse.ok(detail(petService.callBack(userId, petId, real), real));
+    }
+
     // ── 앨범 (설계 규칙) ─────────────────────────────────────────────────
 
     @Operation(summary = "앨범 조회", description = """
@@ -417,6 +488,6 @@ public class PetController {
                 petService.postcards(petId).stream().map(PetResponses.Postcard::of).toList(),
                 // 혼자 논 장면 보관 3개(설계 규칙). 최근 것부터
                 petService.scenes(petId).stream().map(PetResponses.Scene::of).toList(),
-                d.firstGift()));
+                d.firstGift(),d.customMotions()));
     }
 }

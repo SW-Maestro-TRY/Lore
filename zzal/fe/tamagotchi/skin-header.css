@@ -89,3 +89,5 @@
   }
 }
 */
+
+/* Focused and legacy both keep the shared SiteHeader. TamagotchiScreen measures its actual height. */

@@ -1,0 +1,5 @@
+/* Same original families/weights, self-hosted once for both legacy literals and CSS variables. */
+@font-face{font-family:'Gaegu';font-style:normal;font-weight:400;font-display:swap;src:url('./assets/fonts/gaegu-400.woff2') format('woff2')}
+@font-face{font-family:'Gaegu';font-style:normal;font-weight:700;font-display:swap;src:url('./assets/fonts/gaegu-700.woff2') format('woff2')}
+@font-face{font-family:'Gowun Dodum';font-style:normal;font-weight:400;font-display:swap;src:url('./assets/fonts/gowun-dodum-400.woff2') format('woff2')}
+.zzal-local-fonts{--font-gaegu:'Gaegu';--font-gowun:'Gowun Dodum'}

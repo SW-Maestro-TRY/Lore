@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { track } from '@common/analytics';
+import {useUiText} from '../lib/uiCopy';
 import { ApiError } from '../lib/api';
 import { getMyFeedback, submitFeedback, type FeedbackTag } from '../lib/feedback';
 import { C, C2, GAEGU as Y_GAEGU, TAP_MIN, gap, radius, sel, tapWrap, fz, ink, pad } from './yeoul/ui';
@@ -66,6 +67,8 @@ const CHIPS: { tag: FeedbackTag; label: string }[] = [
 export interface FeedbackSheetProps {
   /** 어느 아이에 대한 후기인가. 없으면(비로그인·아직 아이 없음) 아무것도 안 그린다. */
   petId: number | null;
+  /** Optional intro receipt: closing never requires submitting a review. */
+  onDismiss?: () => void;
   // ★★ 2026-10-09 — `advancedArrived`(첫 심화 행동이 **실제로 공개**됐는가) 조건을 **없앴다.**
   //   상훈님 원문: *"2번을 제거하자. 순수하게 튜토리얼이 끝나면 구르기 창이 뜨고 그 이후에 후기 창을
   //   띄우는 걸로 하자."* 운영 진단(10/8)에서 튜토리얼을 끝낸 20계정 중 공개에 닿은 것이 4계정뿐이었다 —
@@ -146,7 +149,8 @@ function messageOf(e: unknown): string {
   return '보내지 못했습니다';
 }
 
-export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold = false, autoReason, tone = 'scrapbook', preview = false }: FeedbackSheetProps) {
+export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold = false, autoReason, tone = 'scrapbook', preview = false, onDismiss }: FeedbackSheetProps) {
+  const tr=useUiText();
   // 미리보기일 때는 실 아이 대신 가짜 id 를 쓴다 — 아래 판정·렌더는 이 하나만 보면 된다.
   const petId = preview ? PREVIEW_PET_ID : petIdProp;
   /** 서버가 아는 사실 — 이미 냈는가. null 이면 아직 못 물어봤다. */
@@ -228,7 +232,8 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
   const close = useCallback(() => {
     setOpen(false);
     track('zzal_feedback_closed', { from: from.current });
-  }, []);
+    onDismiss?.();
+  }, [onDismiss]);
 
   const toggle = useCallback((tag: FeedbackTag) => {
     setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
@@ -288,36 +293,36 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
             끼어 있던 16px + 여백). 아이가 커 보이던 문제의 실제 해결분이다. */}
       {!submitted && !open && !preview && !tutorialActive && !hold && (
         <button data-action="feedback-open" onClick={openFromDex} style={T.link}>
-          후기 남기기
+          {tr('후기 남기기')}
         </button>
       )}
 
       {open && (
         <div style={T.overlay}>
           <div onClick={close} style={T.dim} />
-          <div style={T.card} role="dialog" aria-label="후기 남기기">
+          <div style={T.card} role="dialog" aria-label={tr('후기 남기기')}>
             {tone === 'scrapbook' && <span style={T.tape} />}
 
             {justSent ? (
               <div style={{ textAlign: 'center' }}>
-                <p style={T.thanksEyebrow}>고마워요</p>
+                <p style={T.thanksEyebrow}>{tr('고마워요')}</p>
                 {/* ★ 여기에 "무엇을 드립니다" 를 쓰지 않는다. 지금은 아무것도 안 나간다. */}
-                <p style={T.thanksBody}>잘 읽고 다음 아이에 반영할게요</p>
-                <button data-action="feedback-done" onClick={close} style={T.send(false)}>닫기</button>
+                <p style={T.thanksBody}>{tr('보내 주신 의견은 개선에 참고할게요.')}</p>
+                <button data-action="feedback-done" onClick={close} style={T.send(false)}>{tr('닫기')}</button>
               </div>
             ) : (
               <>
-                <p style={T.eyebrow}>한 장만</p>
-                <h3 style={T.h3}>{FB_TITLE}</h3>
+                <p style={T.eyebrow}>{tr('한 장만')}</p>
+                <h3 style={T.h3}>{tr(FB_TITLE)}</h3>
 
-                <span style={T.label}>별점</span>
+                <span style={T.label}>{tr('별점')}</span>
                 <div style={{ display: 'flex', gap: gap.xs, margin: '6px 0 16px' }}>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
                       key={n}
                       data-action={`feedback-star-${n}`}
                       onClick={() => setRating(n)}
-                      aria-label={`별점 ${n}점`}
+                      aria-label={tr(`별점 ${n}점`)}
                       style={T.star(n <= rating)}
                     >
                       ★
@@ -326,7 +331,7 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
                 </div>
 
                 <span style={T.label}>
-                  이런 점은 어땠나요 <span style={T.labelHint}>(여러 개)</span>
+                  {tr('이런 점은 어땠나요')} <span style={T.labelHint}>{tr('(여러 개)')}</span>
                 </span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm, margin: '8px 0 16px' }}>
                   {CHIPS.map((c) => (
@@ -341,26 +346,26 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
                       aria-pressed={tags.includes(c.tag)}
                       style={tapWrap(T.chipH)}
                     >
-                      <span style={T.chip(tags.includes(c.tag))}>{c.label}</span>
+                      <span style={T.chip(tags.includes(c.tag))}>{tr(c.label)}</span>
                     </button>
                   ))}
                 </div>
 
-                <span style={T.label}>하고 싶은 말 (선택)</span>
+                <span style={T.label}>{tr('하고 싶은 말 (선택)')}</span>
                 <textarea
                   data-action="feedback-text"
                   value={text}
                   onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT))}
                   rows={3}
-                  placeholder="어떤 점이 좋았는지, 뭐가 아쉬웠는지 편하게 적어주세요"
+                  placeholder={tr('어떤 점이 좋았는지, 뭐가 아쉬웠는지 편하게 적어주세요')}
                   style={T.textarea}
                 />
                 <span style={T.counter}>{text.length} / {MAX_TEXT}</span>
 
-                {error && <p style={T.error}>{error}</p>}
+                {error && <p style={T.error}>{tr(error)}</p>}
 
                 <div style={{ display: 'flex', gap: gap.sm, marginTop: 12 }}>
-                  <button data-action="feedback-close" onClick={close} style={T.ghost}>나중에</button>
+                  <button data-action="feedback-close" onClick={close} style={T.ghost}>{tr('나중에')}</button>
                   {/* 별점 없이는 보낼 수 없다. 누를 수 있을 때는 aria-disabled 를 아예 붙이지
                       않는다 — "false" 를 비활성으로 읽는 도구가 있다(스크랩북의 돌봄 버튼과 같은 규칙). */}
                   <button
@@ -370,7 +375,7 @@ export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold =
                     aria-disabled={busy || rating < 1 ? true : undefined}
                     style={T.send(busy || rating < 1)}
                   >
-                    {busy ? '보내는 중…' : '보내기'}
+                    {tr(busy ? '보내는 중…' : '보내기')}
                   </button>
                 </div>
               </>

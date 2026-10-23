@@ -9,11 +9,11 @@ import java.math.BigDecimal;
 import java.util.Locale;
 
 /**
- * 대사 한 줄 — LLM 을 부르고, 실패하면 <b>한 번 더</b>, 또 실패하면 <b>중립 닫는 말</b>로 판을 닫는다(#709).
+ * 대사 한 줄 — 설정된 횟수까지 LLM 을 부르고, 모두 실패하면 <b>중립 닫는 말</b>로 판을 닫는다(#709). 기본은 2회다.
  *
  * <h3>실패 경로 둘뿐</h3>
  * <ol>
- *   <li>빈 줄·JSON 깨짐·시간 초과·오류 → 재호출 1회 → 또 실패면 {@link #CLOSING_LINE}(성격 없음) + 판 닫기
+ *   <li>빈 줄·JSON 깨짐·시간 초과·오류 → 설정된 최대 횟수(기본 2회)까지 → 모두 실패면 {@link #CLOSING_LINE}(성격 없음) + 판 닫기
  *       ({@link GeneratedLine#closesSession()})</li>
  *   <li>DB 칸(160자) 초과 → 잘라서 저장({@link LineOutcome#TRUNCATED})</li>
  * </ol>
@@ -21,7 +21,7 @@ import java.util.Locale;
  *
  * <h3>★ 튜토리얼 부름(BABY) 첫 턴은 다르다 — {@link #firstBaby}</h3>
  * BABY 는 온보딩 필수 단계(튜토리얼 대화 칸)라 "두 번 실패 → 닫음" 이면 그 사용자는 튜토리얼에서 영구 정지한다.
- * 그래서 BABY 첫 턴만 닫지 않는다 — 두 번 실패면 {@link LineOutcome#RETRY_WAIT}(판은 재시도 대기, 쿨다운 뒤 1회 더),
+ * 그래서 BABY 첫 턴만 닫지 않는다 — 한 요청의 허용 횟수를 모두 실패하면 {@link LineOutcome#RETRY_WAIT}(판은 재시도 대기, 쿨다운 뒤 1회 더),
  * 누적 실패 {@link #BABY_NEUTRAL_AFTER}회면 {@link #BABY_NEUTRAL_LINE} 로 판을 연다({@link LineOutcome#BABY_NEUTRAL}).
  * 그 다음 턴부터는 평소와 같다({@link #generate} — 실패하면 닫는 말).
  *
@@ -38,7 +38,7 @@ public class LineChain {
 
     private static final Logger log = LoggerFactory.getLogger(LineChain.class);
 
-    /** 두 번 다 실패했을 때 나가는 말 — 성격 없음, 아무도 탓하지 않고 판을 닫는다. */
+    /** 허용된 호출이 모두 실패했을 때 나가는 말 — 성격 없음, 아무도 탓하지 않고 판을 닫는다. */
     public static final String CLOSING_LINE = "잠깐 딴생각했어. 이따 또 말 걸게.";
 
     /**
@@ -48,9 +48,9 @@ public class LineChain {
      *    LLM 이 끝내 못 내면(누적 실패 {@link #BABY_NEUTRAL_AFTER}회·LLM 꺼짐) 이 한 줄로라도 판을 열어야 튜토리얼이
      *    진행된다. 다른 고정 문형을 더하지 말 것 — 이 줄 말고는 {@link #CLOSING_LINE}(닫는 말)뿐이다.
      */
-    public static final String BABY_NEUTRAL_LINE = "안녕. 나 여기 처음이야. 뭐라고 부르면 좋을까?";
+    public static final String BABY_NEUTRAL_LINE = "안녕. 여기서 이야기해도 좋아.";
 
-    /** BABY 첫 턴 — 모델 호출 실패가 누적 이만큼이면 {@link #BABY_NEUTRAL_LINE} 로 연다(첫 판 2회 + 쿨다운 뒤 1회). */
+    /** BABY 첫 턴 — 모델 호출 실패가 누적 이만큼이면 {@link #BABY_NEUTRAL_LINE} 로 연다(기본 첫 판 2회 + 쿨다운 뒤 1회; 요청당 상한 1이면 세 요청에 나뉜다). */
     public static final int BABY_NEUTRAL_AFTER = 3;
 
     /** 중립 닫는 말을 낸 곳의 이름(턴·판의 generator 칸). */
@@ -58,10 +58,20 @@ public class LineChain {
 
     private final LineGenerator llm;   // null 이면 꺼짐
     private final ChatLineEvents events;
+    private final int maxAttempts;
 
+    /** Existing callers retain the production default: at most two attempts. */
     public LineChain(LineGenerator llm, ChatLineEvents events) {
+        this(llm, events, 2);
+    }
+
+    public LineChain(LineGenerator llm, ChatLineEvents events, int maxAttempts) {
+        if (maxAttempts < 1 || maxAttempts > 2) {
+            throw new IllegalArgumentException("app.zzal.chat.max-attempts must be 1 or 2");
+        }
         this.llm = llm;
         this.events = events;
+        this.maxAttempts = maxAttempts;
     }
 
     /** 꺼진 사슬 — 채팅은 "부름 없음". */
@@ -73,20 +83,39 @@ public class LineChain {
         return llm != null;
     }
 
+    private static LineOutcome failureOutcome(ChatContext ctx) {
+        return ctx.plan().slot() == com.lore.zzal.chat.ChatSlot.CONTINUOUS
+                ? LineOutcome.FAILED_REPLY : LineOutcome.FAILED_CLOSED;
+    }
+
+    private static String closingLine(ChatContext ctx) {
+        return ctx.plan().slot() == com.lore.zzal.chat.ChatSlot.CONTINUOUS
+                ? "잠깐 말이 잘 안 나왔어." : CLOSING_LINE;
+    }
+
+    /** Explicit stage claim permits exactly one provider attempt; normal dialogue uses its separate configured attempt limit. */
+    public GeneratedLine generateOnce(ChatContext ctx,Long userId){
+        if(llm==null){var off=new GeneratedLine(null,"base",FIXED,null,BigDecimal.ZERO,"llm_off",LineOutcome.RETRY_WAIT,0,0,LineExtract.NONE);done(ctx,off,userId);return off;}
+        Tries t=tries(ctx,1);
+        if(t.last()!=null)return success(ctx,t,userId);
+        GeneratedLine out=new GeneratedLine(closingLine(ctx),ctx.defaultMotion(),FIXED,t.model(),t.cost(),t.fails(),failureOutcome(ctx),t.ms(),t.calls(),LineExtract.NONE);
+        done(ctx,out,userId);return out;
+    }
+
     public GeneratedLine generate(ChatContext ctx, Long userId) {
         if (llm == null) {
             // BABY 중립 판에 답했는데 LLM 이 꺼져 있다 — 모델 없이 닫는 말로 닫는다(보상·튜토리얼 넘김은 이미 났다).
             String motion = ctx.plan().petTurnNo() == 1 ? null : ctx.defaultMotion();
-            GeneratedLine out = new GeneratedLine(CLOSING_LINE, motion, FIXED, null, BigDecimal.ZERO, "llm_off",
-                    LineOutcome.FAILED_CLOSED, 0, 0, LineExtract.NONE);
+            GeneratedLine out = new GeneratedLine(closingLine(ctx), motion, FIXED, null, BigDecimal.ZERO, "llm_off",
+                    failureOutcome(ctx), 0, 0, LineExtract.NONE);
             done(ctx, out, userId);
             return out;
         }
-        Tries t = tries(ctx, 2);
+        Tries t = tries(ctx, maxAttempts);
         if (t.last() == null) {
             String motion = ctx.plan().petTurnNo() == 1 ? null : ctx.defaultMotion();
-            GeneratedLine out = new GeneratedLine(CLOSING_LINE, motion, FIXED, t.model(), t.cost(), t.fails(),
-                    LineOutcome.FAILED_CLOSED, t.ms(), t.calls(), LineExtract.NONE);
+            GeneratedLine out = new GeneratedLine(closingLine(ctx), motion, FIXED, t.model(), t.cost(), t.fails(),
+                    failureOutcome(ctx), t.ms(), t.calls(), LineExtract.NONE);
             done(ctx, out, userId);
             return out;
         }
@@ -97,7 +126,7 @@ public class LineChain {
      * 튜토리얼 부름(BABY)의 <b>첫 턴</b> — 판을 닫지 않는다.
      *
      * <ul>
-     *   <li>처음({@code failedSoFar}=0): 평소처럼 2회까지 부른다. 둘 다 실패 → {@link LineOutcome#RETRY_WAIT}(대사 없음)</li>
+     *   <li>처음({@code failedSoFar}=0): 설정된 상한(기본 2회)까지 부른다. 모두 실패 → {@link LineOutcome#RETRY_WAIT}(대사 없음)</li>
      *   <li>재시도(쿨다운 뒤): <b>1회만</b> 부른다 — 누적 실패가 {@link #BABY_NEUTRAL_AFTER} 에 닿으면
      *       {@link #BABY_NEUTRAL_LINE}({@link LineOutcome#BABY_NEUTRAL})</li>
      * </ul>
@@ -109,7 +138,7 @@ public class LineChain {
         if (llm == null) {
             return babyNeutral(ctx, userId, "llm_off", 0, BigDecimal.ZERO, 0, null);
         }
-        int budget = Math.max(1, Math.min(2, BABY_NEUTRAL_AFTER - failedSoFar - 1));
+        int budget = Math.min(maxAttempts, Math.max(1, Math.min(2, BABY_NEUTRAL_AFTER - failedSoFar - 1)));
         Tries t = tries(ctx, budget);
         if (t.last() != null) {
             return success(ctx, t, userId);
@@ -145,8 +174,13 @@ public class LineChain {
         BigDecimal cost = BigDecimal.ZERO;
         String fails = null;
         String model = null;
+        String requestId = java.util.UUID.randomUUID().toString();
         for (int i = 1; i <= max; i++) {
-            LineAttempt a = llm.generate(ctx);
+            LineAttempt a;
+            try(var usage=com.lore.zzal.generation.client.ProviderUsageContext.open(
+                    ctx.ordinaryChat() ? "ordinary_chat" : "first_meeting",ctx.petId(),null,requestId,i)) {
+                a = llm.generate(ctx);
+            }
             ms += a.millis();
             cost = cost.add(nz(a.costUsd()));
             model = a.model();

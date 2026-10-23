@@ -136,7 +136,7 @@ public abstract class ZzalItSupport {
 
     /** 부화·밤 굽기 실행기가 빌 때까지. 남아 있어도 시험을 깨뜨리지는 않는다(뒷정리일 뿐이다). */
     private void awaitExecutorsIdle() {
-        for (String name : List.of("hatchExecutor", "nightExecutor")) {
+        for (String name : List.of("hatchExecutor", "nightExecutor", "memoryCaptureExecutor")) {
             ThreadPoolTaskExecutor executor = context.getBean(name, ThreadPoolTaskExecutor.class);
             long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
             while (System.nanoTime() < deadline
