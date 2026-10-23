@@ -47,6 +47,9 @@ import java.util.UUID;
  */
 @Service
 public class JobService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.webtoon.community.CharacterUseRecorder communityUses;
+
 
     private static final Logger log = LoggerFactory.getLogger(JobService.class);
 
@@ -171,6 +174,7 @@ public class JobService {
                     "캐릭터를 알 수 있는 것이 하나는 필요합니다 — 이름 · 설명 · 항목 · 사진 중 아무거나요.");
         }
 
+        WebtoonCharacter selected = pickedCharacter(form.characterId(),userId,form.uid());
         String publicId = UUID.randomUUID().toString().replace("-", "").substring(0, 20);
         Path dir = jobsDir.resolve(publicId);
         try {
@@ -184,13 +188,15 @@ public class JobService {
             List<Path> photos = form.photoKeys() != null && !form.photoKeys().isEmpty()
                     ? pullPhotos(dir, form.photoKeys(), userId, guestKey)
                     : savePhotos(dir, form.photosData());
-            WebtoonCharacter picked = pickedCharacter(form.characterId(), userId, form.uid());
+            WebtoonCharacter picked = selected;
             Path fromCharacter = characterArt(dir, picked);
             /* 캐릭터를 골라 왔으면 그 그림을 참조로 붙인다.
              *
              * 화면은 **번호만** 보낸다. 그림은 S3 의 안 열리는 자리에 있고,
              * 브라우저가 그것을 내려받아 base64 로 다시 올리면 같은 그림이
              * 두 번 오간다 — 게다가 그 주소는 CORS 가 안 열려 있다. */
+            if(selected!=null && selected.isCommunityPublic() && fromCharacter==null)
+                throw new BusinessException(ErrorCode.INVALID_INPUT,"캐릭터 그림을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.");
             if (fromCharacter != null) {
                 photos = new ArrayList<>(photos);
                 photos.add(fromCharacter);
@@ -212,6 +218,8 @@ public class JobService {
                 publicId, userId, browserUid, guestKey, style, quality, language,
                 checkpoints, own ? "own" : "quick",
                 inputOf(form), Instant.now()));
+        if(communityUses!=null && selected!=null && selected.isCommunityPublic())
+            communityUses.record(publicId,selected);
 
         /* **장부에도 적는다.**
          *
@@ -911,7 +919,8 @@ public class JobService {
     /**
      * 골라 온 캐릭터의 그림을 작업 폴더에 내려놓는다. 없으면 {@code null}.
      *
-     * 못 가져와도 만들기는 안 막는다. 이름과 설명은 이미 폼에 실려 왔으므로
+     * 내 캐릭터·기본 캐릭터는 기존 폴백을 유지한다. 공개 캐릭터는 create에서 실패를 차단한다.
+     * 이름과 설명은 이미 폼에 실려 왔으므로
      * 그것만으로도 그릴 수 있다 — 여기서 막으면 S3 가 잠깐 흔들릴 때 만들기가
      * 통째로 죽는다.
      */
@@ -933,30 +942,12 @@ public class JobService {
         }
     }
 
-    /**
-     * 골라 온 캐릭터. 없거나 남의 것이면 {@code null}.
-     *
-     * <b>남의 캐릭터는 안 쓴다.</b> 내 것이거나 기본 제공만 — 안 그러면 번호를
-     * 찍어 넣어 남의 캐릭터로 웹툰을 만들 수 있다(그 기능은 #259 에서 따로 다룬다).
-     *
-     * 그림({@link #characterArt})과 카드({@link #writeCharacter})가 같은 캐릭터를
-     * 쓰도록 여기서 한 번만 찾는다. 못 찾아도 만들기는 막지 않는다 — 이름과
-     * 설명은 이미 폼에 실려 왔다.
-     */
+    /** 명시한 캐릭터는 현재 이용 권한을 확인한다. 공개 취소/삭제 시 조용히 새 캐릭터로 바꾸지 않는다. */
     private WebtoonCharacter pickedCharacter(String characterId, Long userId, String uid) {
         if (characterId == null || characterId.isBlank()) {
             return null;
         }
-        try {
-            /* 브라우저도 같이 넘긴다 — 로그인 안 하고 만든 캐릭터는 계정이
-               아니라 이 값으로만 자기 것임을 말할 수 있다. 안 넘기면 방금
-               자기가 만든 캐릭터로 웹툰을 만들려는 순간 "그런 캐릭터가
-               없습니다" 가 뜬다. */
-            return characters.byPublicId(characterId, userId, owner.uidsOf(userId, uid));
-        } catch (Exception e) {                     // noqa: 못 찾아도 만들기는 간다
-            log.warn("고른 캐릭터를 못 찾았습니다 (character={})", characterId, e);
-            return null;
-        }
+        return characters.byPublicId(characterId,userId,owner.uidsOf(userId,uid));
     }
 
     /**
@@ -1131,6 +1122,7 @@ public class JobService {
      */
     private String inputOf(CreateRequest form) {
         Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("character_id",blank(form.characterId()));
         doc.put("name", blank(form.name()));
         doc.put("character", blank(form.character()));
         /* **사진에 붙인 한 마디를 빠뜨리지 않는다.** 하네스는 사진을 읽을 때

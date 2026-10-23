@@ -11,6 +11,13 @@ import java.util.Optional;
 
 public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharacter, Long> {
 
+    @Query("select c from WebtoonCharacter c where c.communityPublic=true and c.communityBlocked=false and c.status=com.lore.webtoon.character.CharacterStatus.READY order by c.id desc")
+    List<WebtoonCharacter> community(org.springframework.data.domain.Pageable page);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from WebtoonCharacter c where c.publicId=:id")
+    Optional<WebtoonCharacter> lockForPublication(@Param("id") String id);
+
     Optional<WebtoonCharacter> findByPublicId(String publicId);
 
     /**

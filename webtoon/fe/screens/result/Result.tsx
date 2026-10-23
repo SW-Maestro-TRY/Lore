@@ -16,6 +16,7 @@ import ShareMenu from "./ShareMenu";
 import RunStrip from "../../ui/RunStrip";
 import LikeButton from "../../ui/LikeButton";
 import ResultSurvey from "./ResultSurvey";
+import EpisodeCommunity from "../../ui/community/EpisodeCommunity";
 import AdminModeration from "./AdminModeration";
 import "./i18n";
 import "./Result.css";
@@ -466,6 +467,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 );
               })}
             </div>
+
+            {data.public !== false && !data.preview && <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} />}
 
             {!mine && (
               /* 끝까지 본 사람에게 「나만의 이야기 만들어 보기」(#669). 마지막 장 바로 아래, 다른 작품 줄보다

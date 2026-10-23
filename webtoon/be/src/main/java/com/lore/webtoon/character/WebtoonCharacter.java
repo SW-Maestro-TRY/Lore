@@ -19,6 +19,7 @@ import java.util.List;
  * 사람이 가지고 노는 캐릭터.
  */
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(
         name = "webtoon_character",
         indexes = {
@@ -161,6 +162,19 @@ public class WebtoonCharacter {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Column(name="community_public", nullable=false, columnDefinition="boolean not null default false")
+    private boolean communityPublic;
+    @Column(name="community_blocked", nullable=false, columnDefinition="boolean not null default false")
+    private boolean communityBlocked;
+    @Column(name="reuse_agreed_at")
+    private Instant reuseAgreedAt;
+    public boolean isCommunityPublic() { return communityPublic && !communityBlocked && status == CharacterStatus.READY; }
+    public boolean isCommunityBlocked() { return communityBlocked; }
+    public void publishForReuse(boolean value, Long owner, Instant at) {
+        if(value) { this.ownerId=owner; this.reuseAgreedAt=at; }
+        this.communityPublic=value; this.updatedAt=at;
+    }
 
     protected WebtoonCharacter() {
     }
