@@ -33,7 +33,8 @@
 .wt .wt-my-head-sub .muted { font-size: 13.5px; }
 .wt .wt-my-head .btn, .wt .wt-my-headacts .btn { height: 42px; font-size: 14px; }
 .wt .wt-my-head-sub .btn { height: 38px; font-size: 13px; }
-.wt .wt-my-headacts { display: flex; gap: 8px; }
+/* 위 「.wt-my-head > div」(세로 쌓기)에 단추 칸도 걸려 PC에서 단추가 세로로 쌓였다 — 단추 칸은 가로 한 줄 */
+.wt .wt-my-head > .wt-my-headacts { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 
 /* 작품 그리드 */
 .wt .wt-my-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -190,3 +191,12 @@
 .wt .wt-my-charcard .wt-my-workfoot .grow { flex: 1; }
 /* 관리자 처리 안내(#638) — 작가에게만 보인다 */
 .wt .wt-my-modnote { display: block; font-size: 12px; line-height: 1.5; color: var(--ink); background: #f1f4f3; border-radius: 8px; padding: 6px 8px; word-break: keep-all; }
+
+/* 내 웹툰 미리보기 — 첫 화면엔 한 줄만(폰은 두 장), 「모두 보기」로 전부 */
+.wt .wt-my-more { align-self: stretch; justify-content: center; gap: 6px; height: 44px; }
+.wt .wt-my-back { background: none; border: 0; padding: 0; margin-bottom: 4px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; text-align: left; }
+.wt .wt-my-back:hover { color: var(--ink); }
+.wt .wt-my-count { font-size: 18px; font-weight: 400; }
+@media (max-width: 767px) {
+  .wt .wt-my-grid.preview > :nth-child(n + 3) { display: none; }
+}
