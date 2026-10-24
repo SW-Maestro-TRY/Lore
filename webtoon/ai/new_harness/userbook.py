@@ -29,6 +29,16 @@ def select(entries, query, budget=BUDGET):
     return [e for i, e in enumerate(entries) if i in chosen]
 
 
+def select_all(entries, budget=BUDGET):
+    out, used = [], 0
+    for e in entries:
+        size = len(str(e.get("content") or ""))
+        if used + size <= budget:
+            out.append(e)
+            used += size
+    return out
+
+
 def progress_parts(book):
     """(덮어쓰기 {고정 항목 id: 지금 상태}, 새 상태 목록)."""
     ids = {str(e.get("id")) for e in book.get("entries", []) if isinstance(e, dict) and e.get("id")}
@@ -48,12 +58,12 @@ def progress_text(rows):
     return "\n".join(f"- {p.get('title', '')}: {p.get('text', '')}" for p in rows)
 
 
-def block(char, context="", stage="story", continuation=False):
+def block(char, context="", stage="story", continuation=False, everything=False):
     book = (char or {}).get("lorebook") or {}
     if not book or not book.get("confirmed"):
         return ""
     if isinstance(book.get("books"), list):
-        parts = [block({"lorebook": child}, context, stage, continuation) for child in book["books"] if isinstance(child, dict)]
+        parts = [block({"lorebook": child}, context, stage, continuation, everything) for child in book["books"] if isinstance(child, dict)]
         return "[함께 붙인 설정집 — 나열된 순서대로 참고한다. 설정이 충돌하면 뒤에 붙인 설정을 우선한다.]\n" + "\n\n".join(p for p in parts if p)
     lines = ["[작가가 확인한 설정집]", "이 설정집은 선택한 작품 세계다. 캐릭터 카드의 옛 세계보다 우선하며 인물의 외형은 유지한다."]
     if not continuation:
@@ -73,7 +83,9 @@ def block(char, context="", stage="story", continuation=False):
     if new:
         lines += ["진행 상태 (연재하면서 바뀐 지금 상태)", progress_text(new)]
         query += "\n" + progress_text(new)
-    chosen = select(keyed, query)
+    # everything: 줄거리 없이 설정집만 붙인 1화 이야기 단계 — 설정집 전체가 요청이라 키워드를 안 보고
+    # 원래 순서대로 예산까지 넣는다.
+    chosen = select_all(keyed) if everything else select(keyed, query)
     if chosen:
         lines.append("설정집 항목")
         for e in chosen:

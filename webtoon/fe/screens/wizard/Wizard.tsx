@@ -293,7 +293,9 @@ export default function Wizard({
   /* 「확인하고 만들기」는 게스트도 쓴다(#608). 같은 브라우저에서는 첫 화면의 「만들던 웹툰」이 이어서 찾아 주고,
      브라우저가 바뀌면 못 찾는다 — 그 말은 고르는 곳에 한 줄로 적는다. 「만들고 싶은 내용이 있어요」(own)는
      로그인 전용 그대로다. */
-  const usesOwnStory = !!form.story.trim() && authenticated;
+  /* 줄거리를 적었거나 설정집을 붙였으면 「내 내용으로 만들기」 길로 간다 — 후보 넷 없이 이야기 하나를
+     확인하고 장면을 확인한 뒤 그린다. 설정집이 곧 그 내용이다(2026-10-24). */
+  const usesOwnStory = (!!form.story.trim() || !!form.lorebook) && authenticated;
   const viewMode = usesOwnStory ? "expert" : form.mode;
   const pickMode = (m: WizardForm["mode"]) => patch({ mode: m });
   const ownReady = !form.lorebook || form.lorebook.confirmed;
@@ -696,7 +698,7 @@ export default function Wizard({
                   {/* 바로 만들기 / 확인하고 만들기(#548). 「확인하고」는 이야기·시트·장면에서 멈추고
                       시간이 아니라 사람이 누를 때 진행한다. 게스트도 되지만 이 브라우저에서만 이어 간다(#608). */}
                   <h2>{t("어떻게 만들까요?")}</h2>
-                  {usesOwnStory ? <p>{t("적어 주신 이야기는 장면을 확인하고 고친 뒤 그려요.")}</p> : <div className="wt-wiz-modes">
+                  {usesOwnStory ? <p>{form.story.trim() ? t("적어 주신 이야기는 장면을 확인하고 고친 뒤 그려요.") : t("붙인 설정집으로 이야기를 세우고, 장면을 확인하고 고친 뒤 그려요.")}</p> : <div className="wt-wiz-modes">
                     <button type="button" className={`wt-wiz-mode${viewMode === "simple" ? " on" : ""}`} onClick={() => pickMode("simple")}>
                       <b>{t("바로 만들기")}</b><span className="muted">{t("AI 에게 맡기고 빠르게 완성해요. 중간에 확인하지 않아요.")}</span>
                     </button>
