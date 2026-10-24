@@ -52,3 +52,45 @@
 .wt .wt-lore-catalog button:disabled {opacity:.55;cursor:default;}
 
 .wt fieldset.wt-lore-editor{border:0;padding:0;margin:0;min-width:0}.wt .wt-lore-private-save{display:flex;align-items:center;gap:12px;margin:16px 0}.wt .wt-lore-panel h4{margin:22px 0 10px}
+
+/* Modal catalog: book content is readable before any edit. */
+.wt .wt-lore-dialog{color:var(--ink);background:var(--paper);width:min(720px,calc(100vw - 32px));max-height:85dvh;border:1px solid var(--line-strong);border-radius:20px;padding:0;overscroll-behavior:contain}.wt .wt-lore-dialog::backdrop{background:#02070cbb;backdrop-filter:blur(4px)}.wt .wt-lore-dialog .wt-lore-panel{margin:0;border:0;background:none;padding:26px}.wt .wt-lore-dialog .wt-lore-panelhead{padding-bottom:20px;position:sticky;top:-26px;background:var(--paper);z-index:1}.wt .wt-lore-dialog .wt-lore-search{font-size:12px;color:var(--muted)}.wt .wt-lore-dialog .wt-lore-catalog{max-height:none;margin:10px 0 22px}.wt .wt-lore-dialog .wt-lore-catalog button{background:var(--water-light);border-color:var(--line-strong)}.wt .wt-lore-dialog .wt-lore-catalog b{font-size:15px}.wt .wt-lore-dialog .wt-lore-catalog span{font-size:12px}.wt .wt-lore-read-meta{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:12px;margin-bottom:22px}.wt .wt-lore-read p{white-space:pre-wrap;font-size:14px;line-height:1.85;overflow-wrap:anywhere}.wt .wt-lore-read section{padding-bottom:22px;border-bottom:1px solid var(--line)}.wt .wt-lore-read-entries details{padding:14px 0;border-bottom:1px solid var(--line)}.wt .wt-lore-read-entries summary{cursor:pointer;font-size:14px;font-weight:650}.wt .wt-lore-read-entries small{display:block;color:var(--dim);font-size:11px;margin:6px 0 12px;font-weight:400}.wt .wt-lore-read .wt-lore-actions{margin-top:26px}.wt .wt-lore-new{height:38px;padding:0 14px;font-size:13px}.wt .wt-lore-from-story{margin-top:24px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:12px}.wt .wt-lore-from-story summary{cursor:pointer}.wt .wt-lore-dialog .wt-lore-extract{margin:0;padding-bottom:0;border:0}.wt .wt-lore-dialog .wt-lore-actions .btn{font-size:13px;padding:0 18px;height:44px}.wt .wt-lore-dialog .wt-lore-editor{padding-top:16px}@media(max-width:600px){.wt .wt-lore-dialog{max-height:90dvh;border-radius:16px}.wt .wt-lore-dialog .wt-lore-panel{padding:20px}.wt .wt-lore-dialog .wt-lore-panelhead{top:-20px}}
+
+.wt .wt-lore-dialog .wt-lore-panelhead{top:0}
+
+/* 새 설정집 작성 — 목록 맨 위의 큰 단추(2026-10-24, 맨 아래에 숨어 있어 못 찾는다는 피드백) */
+.wt .wt-lore-newtop {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 14px; row-gap: 2px;
+  align-items: center; width: 100%; padding: 16px 18px; margin: 4px 0 18px; text-align: left; cursor: pointer;
+  border: 1px solid #e6a39380; border-radius: 14px; background: #e6a39314; color: var(--ink); font: inherit;
+}
+.wt .wt-lore-newtop:hover:not(:disabled) { background: #e6a39324; }
+.wt .wt-lore-newtop > span {
+  grid-row: span 2; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--sea); color: var(--paper); font-size: 22px; font-weight: 700; line-height: 1;
+}
+.wt .wt-lore-newtop b { font-size: 16px; }
+.wt .wt-lore-newtop small { font-size: 13px; color: var(--muted); }
+
+/* 직접 쓰기 화면 맨 위 — AI로 만들기 안내 */
+.wt .wt-lore-ai-offer {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 14px 16px; border-radius: 12px; border: 1px dashed #e6a39380; background: #e6a3930d; margin-bottom: 4px;
+}
+.wt .wt-lore-ai-offer p { margin: 0; font-size: 14px; font-weight: 700; color: var(--ink); }
+
+/* AI로 만들기 화면 */
+.wt .wt-lore-ai { display: grid; gap: 14px; }
+.wt .wt-lore-ai-lede { margin: 0; font-size: 15px; font-weight: 700; color: var(--ink); }
+.wt .wt-lore-ai-text { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+.wt .wt-lore-ai-text textarea { min-height: 260px; font-size: 15px; line-height: 1.8; resize: vertical; }
+.wt .wt-lore-ai-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.wt .wt-lore-ai-count { margin-left: auto; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wt .wt-lore-ai-count.full { color: var(--sea); }
+.wt .wt-lore-ai-note { margin: 0; font-size: 13px; color: var(--sea); }
+.wt .wt-lore-ai-busy { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; color: var(--ink); }
+.wt .wt-lore-ai-left { margin: -4px 0 0; font-size: 12.5px; text-align: right; }
+@media (max-width: 767px) {
+  .wt .wt-lore-ai-text textarea { min-height: 200px; }
+  .wt .wt-lore-ai-count { width: 100%; margin-left: 0; text-align: right; }
+}
