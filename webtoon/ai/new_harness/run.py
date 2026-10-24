@@ -235,7 +235,11 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
         lines += ["", f"장르: {char['genre']}" if char["genre"]
                   else "장르: (없음 — 네가 정한다)"]
     import userbook
-    book_text = userbook.block(char, char.get("story", ""))
+    # 항목은 사용자가 적은 것 전체에 걸린 키워드로 고른다(실험의 「요청」 자리). 바로 만들기는 줄거리가
+    # 비어 있어서 줄거리만 보면 항목이 하나도 안 걸린다.
+    asked = "\n".join([char.get("story", ""), char.get("description", ""), char.get("settings", ""),
+                        *[str(v) for v in (char.get("fields") or {}).values()]])
+    book_text = userbook.block(char, asked)
     if book_text:
         lines.append(book_text)
     if char.get("settings"):

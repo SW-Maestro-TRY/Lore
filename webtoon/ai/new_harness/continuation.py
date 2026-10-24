@@ -143,6 +143,26 @@ def memory_block(run_dir):
     ])
 
 
+def world_lines(run_dir, char, p):
+    """설정집 없이 넘어온 화(정리가 실패했거나 옛 화면)의 세계 — 1화 이야기 단계가 받던 것과 같은 것.
+
+    설정집이 있으면 그쪽에 세계가 들어 있다(world_seed). 없으면 예전에는 2화 이야기 단계에 세계 설명도
+    재료도 안 들어갔다.
+    """
+    if char.get("lorebook"):
+        return []
+    import run as R
+    import lorebook
+    lines = []
+    world = R.world_text_for(char.get("genre", ""))
+    if world:
+        lines += ["## 이 세계의 배경 — 적힌 내용과 부딪히지 않는 곳에서만 쓴다", world]
+    if lorebook.enabled():
+        # initialize 가 앞 화에서 고른 방향의 배정만 1번 자리에 옮겨 둔다.
+        lines += lorebook.scene_block(lorebook.scene_entries(run_dir, 1, p.get("source_body", "")))
+    return lines
+
+
 def story_input(run_dir, char, note=""):
     import own
     p = read(run_dir / "continuation.json")
@@ -154,6 +174,7 @@ def story_input(run_dir, char, note=""):
             [char.get("story", ""), p.get("source_body", ""), *p.get("source_scenes", [])])),
         *own.persona_lines(persona), *own.cast_lines(cast),
         "위 인물 카드의 과거 처지보다 아래의 확인한 현재 상태를 우선한다.", memory_block(run_dir),
+        *world_lines(run_dir, char, p),
         "[앞 화 본문 — 이미 일어난 일. 다시 시작하거나 재현하지 않는다]", p.get("source_body", ""),
         "[앞 화 확정 장면 — 작가가 장면을 수정했다면 본문보다 이 기록을 따른다]",
         *p.get("source_scenes", []),
@@ -212,6 +233,36 @@ def episode_text(packet):
     return "\n".join([f"[{n}화 본문]", body, "", f"[{n}화 확정 장면]", *scenes])
 
 
+def world_seed(source):
+    """1화가 서 있던 세계를 고정 로어북의 첫 항목으로 — 설정집을 안 붙이고 만든 1화만.
+
+    설정집 없이 만든 1화는 장르의 세계 설명(worlds.json)과 고른 방향의 세계 재료(lorebook.json,
+    lore.json 에 배정 기록)로 이야기·장면을 세웠다. 다음 화부터는 연재 설정집이 붙으므로 하네스가
+    세계 설명·재료를 끈다(설정집이 세계를 대신한다는 규칙). 그대로 두면 2화에서 세계가 사라져서,
+    1화가 실제로 쓴 것을 설정집에 옮겨 둔다 — 세계 설명은 항상 켜짐 규칙, 재료는 키워드 항목.
+    사용자가 설정집을 붙여 만든 1화는 그 설정집이 세계라서 옮길 것이 없다.
+    """
+    import run as R
+    import lorebook
+    source = Path(source)
+    original = read(source / "input.json") if (source / "input.json").is_file() else {}
+    if original.get("lorebook"):
+        return []
+    pick, chosen = chosen_direction(source)
+    genre = str(chosen.get("genre") or original.get("genre") or "").strip()
+    out = []
+    world = R.world_text_for(genre)
+    if world:
+        out.append({"id": "R000", "title": "세계 배경", "kind": "rule", "keys": [], "content": world,
+                    "always": True, "enabled": True})
+    if lorebook.enabled():
+        for e in lorebook.scene_entries(source, int(pick or 0), chosen.get("body") or chosen.get("raw") or ""):
+            out.append({"id": "W-" + str(e["id"]), "title": e["name"], "kind": e.get("kind", ""),
+                        "keys": list(e.get("keys") or []) or [e["name"]], "content": e["text"],
+                        "always": False, "enabled": True})
+    return out
+
+
 def stage_digest(packet_path, out_path, dry_run, lang="ko"):
     import run as R
     import lore_extract as X
@@ -220,6 +271,8 @@ def stage_digest(packet_path, out_path, dry_run, lang="ko"):
     out_dir = out_path.parent
     previous = packet.get("previous") or {}
     kept = [e for e in previous.get("entries") or [] if isinstance(e, dict)]
+    if not kept:
+        kept = world_seed(packet["source_dir"])
     rows = X.progress_rows(previous.get("progress"))
     text = episode_text(packet)
     R.write_text(out_dir / "lore_entries_prompt.txt", X.entries_prompt(text, lang))

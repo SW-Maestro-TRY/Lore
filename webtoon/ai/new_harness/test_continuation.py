@@ -74,4 +74,36 @@ class ContinuationTest(unittest.TestCase):
         own.stage_story(other,self.char,True)
         self.assertNotIn("[작가가 확인한 현재 진행 상태",(other/"story_prompt.txt").read_text())
 
+class LegacyEpisodeTest(unittest.TestCase):
+    """후보 넷 중 고르기로 만든 기존 1화 — 인물·세계가 2화로 맞게 넘어가는가."""
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
+        self.src=Path(self.temp.name)/"ep1"; self.src.mkdir()
+        def put(name,value): (self.src/name).write_text(json.dumps(value,ensure_ascii=False),encoding="utf-8")
+        put("input.json",{"name":"민준","description":"신입 헌터","genre":"헌터"})
+        put("cast.json",[{"name":"서이안","look":"은회색 장발"},{"name":"루나","look":"은빛 단발"},{"name":"강도현","look":"붉은 망토"}])
+        put("directions.json",[{"n":1,"title":"게이트","genre":"헌터","body":"민준은 심사장에서 등급 재측정을 받는다.","lead":{"name":"서이안"}},
+                               {"n":2,"title":"다른 후보","body":"루나와 강도현이 나온다."}])
+        put("pick.json",{"n":1})
+        put("scenes.json",{"cast":[{"name":"이안","appearance":"은회색 장발"},{"name":"감독관","appearance":"제복"}],"scenes":[]})
+        put("lore.json",{"world":"hunter_gate","directions":[["hg-inner-time"],["hg-shelter"]]})
+    def test_only_people_in_the_chosen_episode_carry_over(self):
+        names=[c["name"] for c in C.appeared_cast(self.src)]
+        self.assertEqual(names,["서이안","감독관"])   # 「이안」은 서이안과 같은 사람, 루나·강도현은 고르지 않은 후보
+    def test_world_of_the_first_episode_is_seeded_into_the_book(self):
+        seed=C.world_seed(self.src)
+        self.assertEqual(seed[0]["id"],"R000"); self.assertTrue(seed[0]["always"])
+        self.assertIn("W-hg-inner-time",[e["id"] for e in seed]); self.assertNotIn("W-hg-shelter",[e["id"] for e in seed])
+        (self.src/"input.json").write_text(json.dumps({"name":"민준","genre":"헌터","lorebook":{"name":"내 세계","confirmed":True}}),encoding="utf-8")
+        self.assertEqual(C.world_seed(self.src),[])  # 설정집을 붙여 만든 1화는 그 설정집이 세계다
+    def test_digest_dry_run_writes_the_three_experiment_prompts(self):
+        packet=Path(self.temp.name)/"packet.json"; out=Path(self.temp.name)/"digest"/"result.json"; out.parent.mkdir()
+        packet.write_text(json.dumps({"source_dir":str(self.src),"episode_number":1,"source_scenes":["심사장 장면"],"previous":None},ensure_ascii=False))
+        self.assertIsNone(C.stage_digest(packet,out,True))
+        for name,head in (("lore_entries_prompt.txt","로어북 항목으로 뽑는다"),("lore_rules_prompt.txt","규칙만 뽑는다"),("lore_progress_prompt.txt","[현재 진행 상태]")):
+            text=(out.parent/name).read_text()
+            self.assertIn(head,text); self.assertIn("등급 재측정을 받는다",text)
+        self.assertFalse(out.exists())
+
+
 if __name__=="__main__": unittest.main()
