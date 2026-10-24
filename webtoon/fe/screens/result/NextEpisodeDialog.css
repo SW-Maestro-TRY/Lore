@@ -20,6 +20,7 @@
 .wt .wt-series-entries b { font-size:15px; }
 .wt .wt-series-entries p { overflow-wrap:anywhere; }
 .wt .wt-series-entries .btn { min-height:40px; flex-shrink:0; }
+.wt .wt-series-warn { margin-left:8px; font-size:12px; font-weight:700; color:var(--danger, #b42318); }
 .wt .wt-series-new { margin-left:8px; font-size:12px; font-weight:700; color:var(--sea-deep); }
 .wt .wt-series-form .wt-series-evidence { color:var(--muted); font-size:13px; }
 .wt .wt-series-cost { font-weight:700; margin-top:12px; }

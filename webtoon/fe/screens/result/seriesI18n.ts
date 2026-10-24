@@ -170,5 +170,6 @@ registerDict({
   "이야기 내내 지켜지는 규칙이에요. 매 화 전부 들어가요.": {"en": "Rules that hold for the whole story. Every one goes into each episode.", "ja": "物語全体で守られるルールです。毎話すべて入ります。", "zh": "整个故事都遵守的规则，每一话都会全部带入。"},
   "규칙이 없어요.": {"en": "No rules.", "ja": "ルールはありません。", "zh": "没有规则。"},
   "인물·장소·물건 같은 항목이에요. 이번 화에 이름이 나오면 들어가요.": {"en": "People, places and things. An entry is used when its name comes up this episode.", "ja": "人物・場所・物などの項目です。今回名前が出ると入ります。", "zh": "人物、地点、物品等条目。本话出现其名称时才会带入。"},
-  "더 적어 둘 설정 · 선택": {"en": "Anything else to keep · optional", "ja": "ほかに残す設定 · 任意", "zh": "其他要保留的设定 · 可选"}
+  "더 적어 둘 설정 · 선택": {"en": "Anything else to keep · optional", "ja": "ほかに残す設定 · 任意", "zh": "其他要保留的设定 · 可选"},
+  "한자가 섞였어요": {"en": "Contains Chinese characters", "ja": "漢字が混ざっています", "zh": "混入了汉字"}
 });

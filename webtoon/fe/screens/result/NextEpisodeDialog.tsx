@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import AuthModal from "@common/auth/AuthModal";
 import { createNextEpisode, linkThisBrowser, readSeriesDraft, saveSeriesDraft, savePrivateLorebook, startSeriesDigest, type SeriesDraft, type SeriesForm } from "../../lib/api";
-import { useT } from "../../lib/i18n";
+import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
 import { Dialog } from "../../ui/Dialog";
@@ -11,10 +11,15 @@ import { ErrLine, errText } from "../../ui/CreditShort";
 import "./seriesI18n";
 import "./NextEpisodeDialog.css";
 
+/* 한국어로 쓰라고 해도 정리 결과에 한자가 섞여 나온 적이 있다(2026-10-24, 「화면越에서」). 지시문으로는
+   확실히 못 막아서, 그 줄에 표시해 사람이 빼게 한다. 화면이 한국어일 때만 본다. */
+const HANJA = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/;
+
 export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
   runId: string; authenticated: boolean; go: Go; onClose: () => void;
 }) {
   const t = useT();
+  const { lang } = useLang();
   const [data, setData] = useState<SeriesDraft | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -70,7 +75,11 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
     document.body.style.overflow = "hidden";
     if (box) {
       box.tabIndex = -1;
-      if (!box.contains(document.activeElement) || document.activeElement?.matches(":disabled"))
+      if (preparing) {
+        // 앞 화를 정리하는 동안은 칸이 다 잠겨 있어서, 첫 단추(맨 아래 「닫기」)로 가면 창이 끝까지
+        // 내려가 맨 위의 「정리하고 있어요」가 안 보였다. 정리가 끝날 때까지는 창 맨 위에 둔다.
+        box.focus(); box.scrollTop = 0;
+      } else if (!box.contains(document.activeElement) || document.activeElement?.matches(":disabled"))
         (box.querySelector<HTMLElement>("textarea:not(:disabled), button:not(:disabled)") || box).focus();
     }
     const trap = (e: KeyboardEvent) => {
@@ -85,7 +94,7 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
     };
     document.addEventListener("keydown",trap);
     return () => { document.body.style.overflow=oldOverflow; document.removeEventListener("keydown",trap); };
-  }, [!!data, authOpen, authenticated, !!error, busy]);
+  }, [!!data, authOpen, authenticated, !!error, busy, preparing]);
 
   const patch = (key: "fixed_settings" | "progress_state" | "story", value: string) => {
     setData(d => d ? {...d,[key]:value} : d); setSaved(false); setDirty(true);
@@ -159,6 +168,7 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
           const titleOf = (key: string) => data.entries.find(e => e.id === key)?.title;
           const row = ({e,i}: {e: typeof data.entries[number]; i: number}) => <li key={e.id || `${e.title}-${i}`}>
             <div><b>{e.title}</b>{e.new && <small className="wt-series-new">{t("이번 화에서 추가")}</small>}
+              {lang === "ko" && HANJA.test(e.title + e.content) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}
               <p>{e.content}</p>{!!e.keys?.length && !e.always && <p className="wt-series-evidence">{e.keys.join(" · ")}</p>}</div>
             <button type="button" className="btn btn-w" aria-label={t("{name} 빼기",{name:e.title})} onClick={()=>dropEntry(e.id,i)}>{t("빼기")}</button>
           </li>;
@@ -167,7 +177,8 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
             <p className="wt-series-help">{t("앞 화가 끝난 시점의 상태예요. 틀린 줄만 빼 주세요.")}</p>
             {data.progress.length ? <ul className="wt-series-entries">
               {data.progress.map((p,i)=><li key={`${p.key}-${i}`}>
-                <div><b>{titleOf(p.key) || p.title}</b><p>{p.text}</p></div>
+                <div><b>{titleOf(p.key) || p.title}</b>
+                  {lang === "ko" && HANJA.test(p.title + p.text) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}<p>{p.text}</p></div>
                 <button type="button" className="btn btn-w" aria-label={t("{name} 빼기",{name:p.title || p.text})} onClick={()=>dropProgress(i)}>{t("빼기")}</button>
               </li>)}</ul>
               : <textarea id="series-state" className="field" rows={6} maxLength={16000} aria-label={t("현재 진행 상태")}
