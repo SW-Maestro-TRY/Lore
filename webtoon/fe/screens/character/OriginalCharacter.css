@@ -1,0 +1,201 @@
+.wt .wt-original-page {
+  max-width: 900px;
+  gap: 32px;
+}
+.wt .wt-original-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.wt .wt-original-heading h1 {
+  font-size: 28px;
+}
+.wt .wt-original-fields {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 28px;
+}
+.wt .wt-original-image {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3/4;
+  border: 1px dashed var(--line-strong);
+  border-radius: 16px;
+  background: var(--water-light);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.wt .wt-original-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.wt .wt-original-image.has {
+  border-style: solid;
+}
+.wt .wt-original-image span {
+  position: absolute;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #0b1420d9;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.wt .wt-original-text {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.wt .wt-original-text label {
+  display: grid;
+  gap: 10px;
+  font-weight: 650;
+  font-size: 14px;
+}
+.wt .wt-original-text textarea {
+  min-height: 170px;
+  resize: vertical;
+  line-height: 1.7;
+}
+.wt .wt-original-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+  margin-top: 28px;
+}
+.wt .wt-original-actions .btn-p {
+  min-width: 160px;
+}
+.wt .wt-original-delete {
+  width: 100%;
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #e69a9345;
+  border-radius: 10px;
+  background: #d4615710;
+  color: #e5a199;
+  font: 600 14px inherit;
+  cursor: pointer;
+}
+.wt .wt-original-delete:hover {
+  background: #d4615725;
+  border-color: #d98980;
+}
+.wt .wt-danger-fill {
+  background: #b94c45;
+  color: white;
+}
+.wt .wt-original-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 16px;
+}
+.wt .wt-original-delete-confirm > svg {
+  color: #d98980;
+}
+.wt .wt-original-delete-confirm p {
+  color: var(--muted);
+  font-size: 14px;
+}
+.wt .wt-original-delete-confirm .wt-original-actions {
+  width: 100%;
+}
+@media (max-width: 700px) {
+  .wt .wt-original-heading {
+    align-items: flex-start;
+  }
+  .wt .wt-original-heading h1 {
+    font-size: 22px;
+  }
+  .wt .wt-original-heading .btn {
+    font-size: 12px;
+    padding: 0 12px;
+  }
+  .wt .wt-original-fields {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .wt .wt-original-image {
+    width: 160px;
+    justify-self: center;
+  }
+  .wt .wt-original-actions > .btn {
+    flex: 1;
+    min-width: 0;
+  }
+}
+.wt .wt-dialog-box .wt-original-fields {
+  grid-template-columns: 180px 1fr;
+  gap: 24px;
+}
+.wt .wt-dialog-box .wt-original-delete {
+  margin-top: 20px;
+}
+.wt .wt-dialog-box .wt-original-actions {
+  margin-top: 20px;
+  padding-top: 18px;
+}
+@media (max-width: 700px) {
+  .wt .wt-dialog-box .wt-original-fields {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .wt .wt-dialog-box .wt-original-image {
+    width: 120px;
+  }
+  .wt .wt-dialog-box .wt-original-text {
+    gap: 16px;
+  }
+  .wt .wt-dialog-box .wt-original-text textarea {
+    min-height: 120px;
+  }
+  .wt .wt-dialog-box .wt-original-actions {
+    position: sticky;
+    bottom: -24px;
+    background: var(--bg);
+    padding-bottom: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  .wt .wt-dialog-box .wt-original-image {
+    width: 96px;
+  }
+  .wt .wt-dialog-box .wt-original-text textarea {
+    min-height: 112px;
+  }
+  .wt .wt-dialog-box .wt-original-fields {
+    gap: 14px;
+  }
+}
+
+@media (max-width: 700px) {
+  .wt .wt-dialog-box .wt-original-image span {
+    bottom: 6px;
+    right: 6px;
+    padding: 7px;
+    border: 1px solid #ffffff33;
+    border-radius: 7px;
+  }
+  .wt .wt-dialog-box .wt-original-image span b {
+    display: none;
+  }
+}

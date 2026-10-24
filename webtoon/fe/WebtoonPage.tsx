@@ -34,6 +34,7 @@ import Progress from "./screens/progress/Progress";
 import Result from "./screens/result/Result";
 import Editor from "./screens/editor/Editor";
 import Works from "./screens/works/Works";
+import OriginalCharacter from "./screens/character/OriginalCharacter";
 import Photo from "./screens/character/Photo";
 import PhotoResult from "./screens/character/PhotoResult";
 import CharList from "./screens/character/CharList";
@@ -45,6 +46,8 @@ import AdminPayments from "./screens/admin/AdminPayments";
 import AdminHome from "./screens/admin/AdminHome";
 import RevisitPrompt from "./ui/RevisitPrompt";
 import RunningBubble from "./ui/RunningBubble";
+import DevNav from "./ui/DevNav";
+import "./final-theme.css";
 
 export default function WebtoonPage() {
   return (
@@ -89,7 +92,7 @@ function routeOf(search: URLSearchParams): Route {
   if (view === "card" && base.id) return { view: "card", ...base };
   /* 피드백이 마이페이지 창이던 때의 주소 — 다시 온 사람 안내 메일 등에 남아 있을 수 있다. */
   if (view === "mypage" && search.get("tab") === "feedback") return { view: "feedback", ...base };
-  if (view && ["entry", "create", "works", "characters", "try", "mypage", "feedback", "admin", "admin-examples", "admin-works", "admin-payments"].includes(view)) {
+  if (view && ["entry", "create", "works", "character-new", "characters", "try", "mypage", "feedback", "admin", "admin-examples", "admin-works", "admin-payments"].includes(view)) {
     return { view: view as View, ...base };
   }
   if (run) return { view: "result", ...base };
@@ -237,6 +240,7 @@ function WebtoonScreens() {
 
   return (
     <div ref={rootRef} className="wt" onContextMenu={guardImage} onDragStart={guardImage}>
+      <DevNav />
       {route.view === "landing" && <Landing go={go} />}
       {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
@@ -250,6 +254,7 @@ function WebtoonScreens() {
       {route.view === "editor" && route.run && <Editor runId={route.run} go={go} authStatus={authStatus} />}
       {route.view === "works" && <Works go={go} authenticated={authenticated} />}
       {route.view === "characters" && <CharList go={go} />}
+      {route.view === "character-new" && <OriginalCharacter go={go} authenticated={authenticated} />}
       {route.view === "try" && <Photo go={go} authenticated={authenticated} />}
       {route.view === "card" && route.id && (
         <PhotoResult id={route.id} shared={false} go={go} authenticated={authenticated} />

@@ -13,6 +13,7 @@ import { IconClose, IconEdit, IconMenu } from "../../ui/Icons";
 import ShareMenu from "../result/ShareMenu";
 import "./i18n";
 import "./Editor.css";
+import "./EditorFinal.css";
 
 /* 편집실 — 캔버스 Editor(PC). 폰은 같은 구성을 세로로 무너뜨린다.
  *
@@ -260,6 +261,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
         <main className="ed-stage wt-ed-stage" id="stageCol">
           <div className="ep-tabs wt-ed-eptabs" id="edEpTabs" hidden />
           <div id="scenes" className="wt-ed-scenes" />
+          <div id="regenAskHome" hidden />
           <p className="ed-foot-note wt-ed-footnote" id="edFootNote" />
         </main>
 
@@ -296,42 +298,6 @@ export default function Editor({ runId, go, authStatus = "loading" }:
 
       {/* 다시 그리기 창 — 장마다 있는 「다시 그리기」를 누르면 뜨는 팝업. 항목(칩)은 엔진이 /config 에서
           받아 채우고, 고른 항목과 적은 말이 둘 다 그리는 프롬프트에 들어간다(#548). id 는 엔진이 쓴다. */}
-      <div className="ask modal" id="regenAsk" hidden>
-        <div className="ask-box modal-box" role="dialog" aria-modal="true" aria-labelledby="regenAskTitle">
-          <h2 id="regenAskTitle">{t("다시 그리기")}</h2>
-          <p className="ask-sub" id="regenAskSub" />
-          <p className="ask-unsafe" id="regenAskUnsafe" hidden>
-            {t("이 장은 이미지 안전 기준에 걸려 비워 둔 장이에요. 노출이나 선정적인 부분을 바꿔 장면 설명을 고쳐 주세요. 다시 그리기는 무료예요.")}
-          </p>
-          {/* 장면 설명 고치기(#626) — 엔진이 채우고, 바뀐 칸만 보낸다 */}
-          <div className="wt-ed-sceneedit" id="regenAskSceneEdit" hidden>
-            <label className="wt-ed-askfield">
-              <span>{t("장소와 상황")}</span>
-              <textarea id="regenAskWhere" rows={2} maxLength={600} className="field" />
-            </label>
-            <label className="wt-ed-askfield">
-              <span>{t("벌어지는 일")}</span>
-              <textarea id="regenAskWhat" rows={3} maxLength={900} className="field" />
-            </label>
-          </div>
-          <p className="ask-scene" id="regenAskScene" hidden />
-          <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
-          <div className="fb-tags" id="regenAskTags" />
-          <label className="wt-ed-askfield">
-            <span>{t("더 하고 싶은 말")}</span>
-            <textarea id="regenAskText" rows={3} maxLength={500} className="field"
-                      placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
-          </label>
-          <label className="check-line">
-            <input type="checkbox" id="regenAskTextless" />
-            <span>{t("말풍선 없이 그림만")}</span>
-          </label>
-          <div className="ask-actions">
-            <button type="button" className="btn btn-w" id="regenAskCancel">{t("취소")}</button>
-            <button type="button" className="btn btn-p" id="regenAskGo">{t("이 장면 다시 그리기")}</button>
-          </div>
-        </div>
-      </div>
       <div className="toast wt-ed-toast" id="toast" hidden />
       {creditShort !== null && (
         /* 장 다시 그리기를 눌렀는데 크레딧이 모자랄 때(#548) */

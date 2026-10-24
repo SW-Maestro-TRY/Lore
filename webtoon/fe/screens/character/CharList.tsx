@@ -1,194 +1,222 @@
 "use client";
-
-/* 내 캐릭터 목록 — CharList.dc.html / MCharList.dc.html. 이 브라우저(또는 계정)가
- * 만든 것만 보인다. 기본 제공 캐릭터는 위자드가 따로 보여 준다. */
 import { useEffect, useState } from "react";
-import { listCharacters, removeCharacter, renameCharacter, type Character, type CharacterList as List } from "../../lib/api";
+import { useAuth } from "@common/auth/useAuth";
+import {
+  listCharacters,
+  type Character,
+  type CharacterList,
+} from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
-import { IconEdit, IconPlus, IconRetry, IconTrash } from "../../ui/Icons";
-import { MobileTop } from "../../ui/TopNav";
-import "./i18n";
-import "./CharList.css";
+import { IconEdit, IconPlus, IconClose } from "../../ui/Icons";
+import { Dialog } from "../../ui/Dialog";
+import { CharacterEditDialog } from "./OriginalCharacter";
 import CharacterPublication from "../../ui/community/CharacterPublication";
 import PublicCharacterGallery from "../../ui/community/PublicCharacterGallery";
-
-const POLL_MS = 4000;
-
+import "./i18n";
+import "./CharListFinal.css";
 export default function CharList({ go }: { go: Go }) {
-  const t = useT();
-  const [list, setList] = useState<List | null>(null);
-  const [err, setErr] = useState("");
-  const [tryN, setTryN] = useState(0);
-
+  const t = useT(),
+    auth = useAuth();
+  const [list, setList] = useState<CharacterList | null>(null),
+    [error, setError] = useState(""),
+    [attempt, setAttempt] = useState(0);
+  const [selected, setSelected] = useState<Character | null>(null),
+    [editing, setEditing] = useState<Character | null>(null),
+    [publication, setPublication] = useState<Character | null>(null);
   useEffect(() => {
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    setErr("");
-    const tick = async () => {
+    let alive = true,
+      timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
       try {
-        const l = await listCharacters();
+        const result = await listCharacters();
         if (!alive) return;
-        setList(l);
-        /* 그리는 중인 것이 있으면 끝날 때까지 다시 읽는다 */
-        if (l.characters.some((c) => c.mine && c.status === "drawing")) timer = setTimeout(tick, POLL_MS);
+        setList(result);
+        setError("");
+        if (result.characters.some((c) => c.mine && c.status === "drawing"))
+          timer = setTimeout(load, 4000);
       } catch (e) {
-        if (!alive) return;
-        setErr(e instanceof Error ? e.message : t("목록을 못 불러왔습니다"));
+        if (alive)
+          setError(
+            e instanceof Error ? e.message : t("목록을 불러오지 못했습니다"),
+          );
       }
     };
-    void tick();
-    return () => { alive = false; if (timer) clearTimeout(timer); };
-  }, [tryN]);
-
-  const mine = (list?.characters || []).filter((c) => c.mine && !c.builtin);
-
-  const patch = (c: Character) =>
-    setList((l) => l && { ...l, characters: l.characters.map((x) => (x.id === c.id ? c : x)) });
-  const drop = (id: string) =>
-    setList((l) => l && { ...l, characters: l.characters.filter((x) => x.id !== id) });
-
+    void load();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [attempt]);
+  const mine = (list?.characters || []).filter((c) => c.mine && !c.builtin),
+    examples = (list?.characters || []).filter((c) => c.builtin),
+    items = mine.length ? mine : examples;
+  const patch = (c: Character) => {
+    setList((v) =>
+      v
+        ? { ...v, characters: v.characters.map((x) => (x.id === c.id ? c : x)) }
+        : v,
+    );
+    if (selected?.id === c.id) setSelected(c);
+    if (publication?.id === c.id) setPublication(c);
+  };
   return (
-    <>
-      <MobileTop back={{ href: "/webtoon?view=entry", onClick: () => go("entry") }} title={t("내 캐릭터")} />
-      <div className="wt-wrap wt-page">
-        <div className="wt-ch-list-head">
-          <div>
-            <span className="num">{t("내 캐릭터")}</span>
-            <h2>{t("누구로 웹툰을 만들까요?")}</h2>
-            {/* 아트보드는 PC 와 폰의 문구가 다르다 — 폰은 짧게. */}
-            <span className="muted wt-ch-list-lede">{t("사진이 있으면 사진으로, 없으면 설명만으로도 만들 수 있어요.")}</span>
-            <span className="muted wt-ch-list-lede-m">{t("사진으로도, 설명만으로도 만들 수 있어요.")}</span>
-          </div>
-          {list && list.free_per_day > 0 && (
-            <span className="chip">{t("오늘 {n}개까지 무료", { n: list.free_per_day })}</span>
-          )}
+    <div className="wt-wrap wt-page wt-characters-final">
+      <div className="wt-characters-heading">
+        <h1>{mine.length ? t("내 캐릭터") : t("캐릭터 예시")}</h1>
+        <button
+          className="btn btn-p btn-sm"
+          onClick={() => go("character-new")}
+        >
+          <IconPlus size={17} />
+          {t("새 캐릭터")}
+        </button>
+      </div>
+      {error ? (
+        <div role="alert">
+          {error}
+          <button
+            className="btn-ghost"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            {t("다시 시도")}
+          </button>
         </div>
-
-        {err ? (
-          <div className="wt-ch-list-empty">
-            <span className="err">{err}</span>
-            <button type="button" className="btn btn-w btn-sm" onClick={() => setTryN((n) => n + 1)}><IconRetry size={16} /> {t("다시 시도")}</button>
-          </div>
-        ) : !list ? (
-          <>
-            <h3 className="wt-ch-list-h3">{t("내 캐릭터")}</h3>
-            <div className="wt-ch-grid">
-              {[0, 1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 320, borderRadius: 16 }} />)}
-            </div>
-          </>
-        ) : mine.length === 0 ? (
-          <div className="wt-ch-list-empty">
-            <span className="muted">{t("아직 만든 캐릭터가 없어요.")}</span>
-            <button type="button" className="btn btn-p" onClick={() => go("try")}>{t("캐릭터 만들어보기")}</button>
-          </div>
-        ) : (
-          <>
-            <h3 className="wt-ch-list-h3">{t("내 캐릭터")}</h3>
-            <div className="wt-ch-grid">
-              {mine.map((c) => (
-                <Item key={c.id} c={c} go={go} onPatch={patch} onDrop={drop} />
-              ))}
-              <button type="button" className="wt-ch-new" onClick={() => go("try")}>
-                <IconPlus size={30} strokeWidth={1.2} />{t("새 캐릭터")}
-              </button>
-            </div>
-          </>
-        )}
-      <PublicCharacterGallery key={mine.map((c) => `${c.id}:${c.community_public}`).join(",")} go={go} />
-      </div>
-      <div className="mfoot wt-ch-list-mnew">
-        <button type="button" className="btn btn-p" style={{ height: 52 }} onClick={() => go("try")}><IconPlus size={18} /> {t("새 캐릭터")}</button>
-      </div>
-    </>
-  );
-}
-
-function Item({ c, go, onPatch, onDrop }: { c: Character; go: Go; onPatch: (c: Character) => void; onDrop: (id: string) => void }) {
-  const t = useT();
-  const [mode, setMode] = useState<"view" | "edit" | "confirm">("view");
-  const [name, setName] = useState(c.name);
-  const [desc, setDesc] = useState(c.description);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const save = async () => {
-    setBusy(true);
-    setErr("");
-    try {
-      const got = await renameCharacter(c.id, name.trim() || c.name, desc.trim());
-      onPatch({ ...c, ...got, name: got?.name ?? (name.trim() || c.name), description: got?.description ?? desc.trim() });
-      setMode("view");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : t("저장하지 못했습니다"));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const remove = async () => {
-    setBusy(true);
-    setErr("");
-    try {
-      await removeCharacter(c.id);
-      onDrop(c.id);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : t("지우지 못했습니다"));
-      setBusy(false);
-      setMode("view");
-    }
-  };
-
-  const line = t(c.card?.twist || c.description);
-
-  return (
-    <div className="card wt-ch-item">
-      {c.status === "ready" && c.art_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={c.art_url} alt={t(c.name)} />
-      ) : c.status === "error" ? (
-        <div className="wt-ch-item-box failed">{t("못 그렸어요")}{c.error ? ` — ${t(c.error)}` : ""}</div>
+      ) : !list ? (
+        <div className="wt-character-posters" aria-busy="true">
+          {[0, 1, 2].map((i) => (
+            <div
+              className="skeleton"
+              key={i}
+              style={{ height: 300, borderRadius: 14 }}
+            />
+          ))}
+        </div>
       ) : (
-        <div className="wt-ch-item-box drawing">{t("그리는 중…")}<br />{t("1분쯤 걸려요")}</div>
+        <div
+          className={
+            mine.length ? "wt-character-posters" : "wt-character-examples"
+          }
+        >
+          {items.map((c) => (
+            <article className="wt-character-poster" key={c.id}>
+              <button
+                className="wt-character-open"
+                onClick={() => setSelected(c)}
+              >
+                <div className="wt-character-portrait">
+                  {c.art_url ? (
+                    <img src={c.art_url} alt="" />
+                  ) : (
+                    <span>
+                      {c.status === "drawing" ? t("만드는 중") : t("생성 실패")}
+                    </span>
+                  )}
+                </div>
+                <div className="wt-character-caption">
+                  <h2>{c.builtin ? t(c.name) : c.name}</h2>
+                  <p>{c.builtin ? t(c.description) : c.description}</p>
+                </div>
+              </button>
+              {c.mine && !c.builtin && (
+                <div className="wt-character-controls">
+                  <button
+                    className={`wt-character-visibility${c.community_public ? " public" : ""}`}
+                    onClick={() => setPublication(c)}
+                  >
+                    {c.community_public ? t("공개") : t("비공개")}
+                  </button>
+                  <button
+                    className="wt-character-edit"
+                    aria-label={t("{name} 수정", { name: c.name })}
+                    disabled={c.status === "drawing"}
+                    onClick={() => setEditing(c)}
+                  >
+                    <IconEdit size={15} />
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
       )}
-      <div className="wt-ch-item-body">
-        {mode === "edit" ? (
-          <div className="wt-ch-item-edit">
-            <input className="field" value={name} placeholder={t("이름")} aria-label={t("이름")} onChange={(e) => setName(e.target.value)} />
-            <input className="field" value={desc} placeholder={t("설명")} aria-label={t("설명")} onChange={(e) => setDesc(e.target.value)} />
-            <div className="wt-ch-item-acts">
-              <button type="button" className="btn btn-p grow" disabled={busy} onClick={() => void save()}>{t("저장")}</button>
-              <button type="button" className="btn btn-w" disabled={busy} onClick={() => { setName(c.name); setDesc(c.description); setMode("view"); }}>{t("취소")}</button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <b className="wt-ch-item-name">
-              {t(c.name)}
-              {c.card?.world_label && <span className="badge" style={{ border: "1px solid var(--line-strong)" }}>{t(c.card.world_label)}</span>}
-              <button type="button" className="icon-btn" aria-label={t("이름·설명 고치기")} onClick={() => setMode("edit")}><IconEdit size={15} /></button>
-            </b>
-            {line && <span className="muted wt-ch-item-desc">{line}</span>}
-            {mode === "confirm" ? (
-              <div className="wt-ch-item-acts">
-                <span className="muted" style={{ fontSize: 12.5, alignSelf: "center" }}>{t("정말 지울까요?")}</span>
-                <button type="button" className="btn btn-p" disabled={busy} onClick={() => void remove()}>{t("지우기")}</button>
-                <button type="button" className="btn btn-w" disabled={busy} onClick={() => setMode("view")}>{t("취소")}</button>
-              </div>
-            ) : c.status === "drawing" ? (
-              <div className="wt-ch-item-acts"><span className="btn wait grow">{t("그리는 중…")}</span></div>
-            ) : (
-              <div className="wt-ch-item-acts">
-                <button type="button" className="btn btn-p grow" onClick={() => go("create", { step: 1, character: c.id })}>{t("이 캐릭터로 웹툰")}</button>
-                {c.card && <button type="button" className="btn btn-w" onClick={() => go("card", { id: c.id })}>{t("카드 보기")}</button>}
-                <button type="button" className="btn btn-w" aria-label={t("지우기")} onClick={() => setMode("confirm")}><IconTrash size={15} /> {t("지우기")}</button>
-              </div>
+      <PublicCharacterGallery
+        key={mine.map((c) => `${c.id}:${c.community_public}`).join(",")}
+        go={go}
+      />
+      {selected && (
+        <Dialog title={selected.name} onClose={() => setSelected(null)}>
+          <div className="wt-character-detail">
+            {selected.art_url && (
+              <img src={selected.art_url} alt={selected.name} />
             )}
-          </>
-        )}
-        {err && <span className="err">{err}</span>}
-      <CharacterPublication id={c.id} published={!!c.community_public} blocked={!!c.community_blocked} ready={c.status === "ready"} onChange={published=>onPatch({...c,community_public:published})}/>
-      </div>
+            <p>{selected.description}</p>
+            {selected.error && <p role="alert">{selected.error}</p>}
+            <button
+              className="btn btn-p"
+              disabled={selected.status !== "ready"}
+              onClick={() => go("create", { step: 1, character: selected.id })}
+            >
+              {t("이 캐릭터로 웹툰 만들기")}
+            </button>
+            {selected.card && (
+              <button
+                className="btn btn-w"
+                onClick={() => go("card", { id: selected.id })}
+              >
+                {t("카드 보기")}
+              </button>
+            )}
+            <button className="btn-ghost" onClick={() => setSelected(null)}>
+              {t("닫기")}
+            </button>
+          </div>
+        </Dialog>
+      )}
+      {editing && (
+        <CharacterEditDialog
+          character={editing}
+          authenticated={auth.status === "authenticated"}
+          onClose={() => setEditing(null)}
+          onSaved={(c) => {
+            patch(c);
+            setEditing(null);
+          }}
+          onDeleted={() => {
+            setList((v) =>
+              v
+                ? {
+                    ...v,
+                    characters: v.characters.filter((c) => c.id !== editing.id),
+                  }
+                : v,
+            );
+            setEditing(null);
+            if (selected?.id === editing.id) setSelected(null);
+          }}
+        />
+      )}
+      {publication && (
+        <Dialog title={t("공개 설정")} onClose={() => setPublication(null)}>
+          <CharacterPublication
+            id={publication.id}
+            published={!!publication.community_public}
+            blocked={!!publication.community_blocked}
+            ready={publication.status === "ready"}
+            original={
+              publication.source === "upload" ||
+              publication.source === "replaced_upload"
+            }
+            onChange={(value) => {
+              patch({ ...publication, community_public: value });
+              setPublication(null);
+            }}
+          />
+          <button className="btn-ghost" onClick={() => setPublication(null)}>
+            {t("닫기")}
+          </button>
+        </Dialog>
+      )}
     </div>
   );
 }

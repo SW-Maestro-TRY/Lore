@@ -13,6 +13,7 @@ import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.webtoon.safety.SafetyGuard;
 import com.lore.webtoon.character.CharacterOwner;
+import com.lore.webtoon.character.CharacterSource;
 import com.lore.webtoon.character.CharacterService;
 import com.lore.webtoon.character.WebtoonCharacter;
 import com.lore.webtoon.push.JobPush;
@@ -211,7 +212,7 @@ public class JobService {
              * 화면은 **번호만** 보낸다. 그림은 S3 의 안 열리는 자리에 있고,
              * 브라우저가 그것을 내려받아 base64 로 다시 올리면 같은 그림이
              * 두 번 오간다 — 게다가 그 주소는 CORS 가 안 열려 있다. */
-            if(selected!=null && selected.isCommunityPublic() && fromCharacter==null)
+            if(selected!=null && (selected.isCommunityPublic() || selected.getSource()==CharacterSource.UPLOAD || selected.getSource()==CharacterSource.REPLACED_UPLOAD) && fromCharacter==null)
                 throw new BusinessException(ErrorCode.INVALID_INPUT,"캐릭터 그림을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.");
             if (fromCharacter != null) {
                 photos = new ArrayList<>(photos);
@@ -810,6 +811,7 @@ public class JobService {
         out.put("episode", str(saved.get("episode")));
         out.put("settings", str(saved.get("settings")));
         out.put("title", str(saved.get("title")));
+        if (saved.get("lorebook") instanceof Map<?, ?> book && !book.isEmpty()) out.put("lorebook", book);
         Object photos = saved.get("photos");
         out.put("photos", photos instanceof Number n ? n.intValue() : 0);
         out.put("style", job.getStyle());
@@ -989,9 +991,10 @@ public class JobService {
             if (bytes == null || bytes.length == 0) {
                 return null;
             }
-            Path out = dir.resolve("charart.png");
-            Files.write(out, bytes);
-            return out;
+            // 원본 보관본은 그대로 두고 생성 참조 파일만 실제 포맷/5MB 제한에 맞춘다.
+            BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
+            if (image == null) return null;
+            return PhotoFile.write(shrink(image), dir, "charart");
         } catch (Exception e) {                     // noqa: 못 붙여도 만들기는 간다
             log.warn("고른 캐릭터의 그림을 못 붙였습니다 (character={})", one.getPublicId(), e);
             return null;
@@ -1128,7 +1131,10 @@ public class JobService {
            썼는데 그 말이 어디에도 안 닿는다(화면은 받아서 보내고 있었다). */
         doc.put("photo_note", blank(form.photoNote()));
         doc.put("genre", blank(form.genre()));
-        doc.put("world", Map.of("preset", picked == null ? "" : blank(picked.getWorld()), "text", ""));
+        boolean useCard = picked != null
+                && picked.getSource() != com.lore.webtoon.character.CharacterSource.UPLOAD
+                && picked.getSource() != com.lore.webtoon.character.CharacterSource.REPLACED_UPLOAD;
+        doc.put("world", Map.of("preset", useCard ? blank(picked.getWorld()) : "", "text", ""));
         doc.put("story", blank(form.story()));
         // 「만들고 싶은 내용이 있어요」(#548) — 더 적은 설정과 제목. 하네스가 own 길에서 읽는다.
         doc.put("lorebook", com.lore.webtoon.lorebook.LoreBook.clean(form.lorebook(),true));
@@ -1136,7 +1142,7 @@ public class JobService {
         doc.put("title", blank(form.title()));
         doc.put("episode", blank(form.episode()));
         doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
-        if (picked != null) {
+        if (useCard) {
             doc.put("card", cardOf(picked));
         }
         if (photos.size() == 1) {
@@ -1195,7 +1201,10 @@ public class JobService {
         doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
         doc.put("style", blank(form.style()));
         doc.put("fields", form.fields() == null ? Map.of() : form.fields());
-        doc.put("photos", form.photosData() == null ? 0 : form.photosData().size());
+        int photoCount = form.photosData() == null ? 0 : form.photosData().size();
+        if (form.photoKeys() != null) photoCount += form.photoKeys().size();
+        if (notBlank(form.characterId())) photoCount = Math.max(1, photoCount);
+        doc.put("photos", photoCount);
         try {
             return mapper.writeValueAsString(doc);
         } catch (IOException e) {

@@ -20,6 +20,10 @@ export const IconShare = (p: P) => base(p, <><circle cx="18" cy="5" r="3" /><cir
 export const IconDownload = (p: P) => base(p, <><path d="M12 4v12M6 10l6 6 6-6" /><path d="M4 20h16" /></>);
 export const IconUpload = (p: P) => base(p, <><path d="M12 16V4M6 10l6-6 6 6" /><path d="M4 20h16" /></>);
 export const IconRetry = (p: P) => base(p, <><path d="M20 12a8 8 0 1 1-2.3-5.7" /><path d="M20 4v5h-5" /></>);
+/** 소식(알림) — 종 */
+export const IconBell = (p: P) => base(p, <><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15z" /><path d="M10 20a2 2 0 0 0 4 0" /></>);
+/** 카드 뒤집기 — 오른쪽으로 가는 화살표 위, 왼쪽으로 가는 화살표 아래 */
+export const IconFlip = (p: P) => base(p, <><path d="M4 8h14" /><path d="M14 4l4 4-4 4" /><path d="M20 16H6" /><path d="M10 12l-4 4 4 4" /></>);
 export const IconZoom = (p: P) => base(p, <><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3M11 8v6M8 11h6" /></>);
 export const IconUser = (p: P) => base(p, <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></>);
 export const IconDice = (p: P) => base(p, <><rect x="4" y="4" width="16" height="16" rx="3" /><circle cx="9" cy="9" r="1.2" fill="currentColor" /><circle cx="15" cy="15" r="1.2" fill="currentColor" /><circle cx="15" cy="9" r="1.2" fill="currentColor" /><circle cx="9" cy="15" r="1.2" fill="currentColor" /></>);
