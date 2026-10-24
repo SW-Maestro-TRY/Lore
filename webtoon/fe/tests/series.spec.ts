@@ -61,7 +61,10 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  // 개발 모드는 effect 를 두 번 돌린다. 서버의 정리 시작은 같은 앞 화에 한 번만 돈다(SeriesDigestService.start).
  expect(server.calls.filter(x=>x.endsWith('/series/ep1/digest')).length).toBeGreaterThan(0);
  await expect(page.getByText('1화가 끝난 저녁, 민수는 지수에게 사과했다.')).toBeVisible();
+ // 규칙·항목은 접혀 있다(수십 개가 될 수 있어서). 펼쳐서 본다.
+ await page.getByText('세계 규칙',{exact:true}).click();
  await expect(page.getByText('지수가 감춘 약속은 아직 공개하지 않는다')).toBeVisible();
+ await page.getByText('설정집 항목',{exact:true}).click();
  await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toBeVisible();
  // 항목을 빼면 그 항목을 덮어쓰던 진행 상태 줄도 같이 빠진다.
  await page.getByRole('button',{name:'다리 빼기',exact:true}).last().click();
@@ -110,11 +113,12 @@ test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',as
 test('완성 화면에서 회차 목록과 다음 화 이동',async({page})=>{
  await stub(page,2);
  await page.goto('/webtoon?run=ep1');
- const nav=page.getByRole('navigation',{name:'회차 목록'});
- await expect(nav).toBeVisible();
- await nav.getByRole('button',{name:'2화',exact:true}).click();
+ // 새 디자인(#780): 회차 목록은 「회차 목록」 단추로 여는 창이다.
+ await page.getByRole('button',{name:'회차 목록'}).filter({visible:true}).first().click();
+ await page.getByRole('dialog',{name:'회차 목록'}).getByRole('button',{name:/^2화/}).click();
  await expect(page).toHaveURL(/run=ep2/);
- await expect(nav.getByRole('button',{name:'2화',exact:true})).toHaveAttribute('aria-current','page');
+ await page.getByRole('button',{name:'회차 목록'}).filter({visible:true}).first().click();
+ await expect(page.getByRole('dialog',{name:'회차 목록'}).getByRole('button',{name:/^2화/})).toHaveAttribute('aria-current','page');
 });
 test('로그인 전에는 개인 설정을 요청하지 않음',async({page})=>{
  const server=await stub(page,1,false);
@@ -124,8 +128,9 @@ test('로그인 전에는 개인 설정을 요청하지 않음',async({page})=>{
  expect(server.calls.some(x=>x.endsWith('/draft'))).toBe(false);
  const dialog=page.getByRole('dialog');
  await dialog.getByRole('button',{name:'로그인',exact:true}).focus();
+ // 마지막 단추에서 Tab 은 창 머리의 X(닫기)로 돈다(새 디자인 공용 창).
  await page.keyboard.press('Tab');
- await expect(dialog.getByRole('button',{name:'취소',exact:true})).toBeFocused();
+ await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeFocused();
  await page.keyboard.press('Shift+Tab');
  await expect(dialog.getByRole('button',{name:'로그인',exact:true})).toBeFocused();
  await page.keyboard.press('Escape');

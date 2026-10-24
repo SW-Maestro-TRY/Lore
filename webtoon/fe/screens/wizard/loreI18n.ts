@@ -327,5 +327,6 @@ registerDict({
  "내 설정집에 저장":{en:"Save to my lorebooks",ja:"自分の設定集に保存",zh:"保存到我的设定集"},
  "저장한 설정집이 없어요":{en:"No saved lorebooks",ja:"保存した設定集はありません",zh:"暂无已保存的设定集"},
  "설정집을 저장하지 못했어요":{en:"Could not save your lorebook",ja:"設定集を保存できませんでした",zh:"无法保存设定集"},
-  "붙인 설정집으로 이야기를 세우고, 장면을 확인한 뒤 그립니다.": {"en": "We build the story from your lorebook, then you check the scenes before drawing.", "ja": "付けた設定集で物語を組み、場面を確認してから描きます。", "zh": "用附加的设定集构建故事，确认场景后再绘制。"}
+  "붙인 설정집으로 이야기를 세우고, 장면을 확인한 뒤 그립니다.": {"en": "We build the story from your lorebook, then you check the scenes before drawing.", "ja": "付けた設定集で物語を組み、場面を確認してから描きます。", "zh": "用附加的设定集构建故事，确认场景后再绘制。"},
+  "고른 장르의 설정집": {"en": "Lorebook for the chosen genre", "ja": "選んだジャンルの設定集", "zh": "所选类型的设定集"}
 });

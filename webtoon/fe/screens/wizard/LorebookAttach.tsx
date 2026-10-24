@@ -93,7 +93,7 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
 
   </div>
   {!!books.length&&<ul className="wt-lore-attached-list">{books.map((book,index)=><li className="wt-lore-attached" key={index}>
-   <button type="button" disabled={busy} onClick={()=>edit(index)}><b>{book.name||t("내 설정집")}</b>{!book.confirmed&&<span>{t("설정을 다시 확인해 주세요")}</span>}</button>
+   <button type="button" disabled={busy} onClick={()=>edit(index)}><b>{book.name||t("내 설정집")}</b>{book.source==="genre"&&book.confirmed&&<span>{t("고른 장르의 설정집")}</span>}{!book.confirmed&&<span>{t("설정을 다시 확인해 주세요")}</span>}</button>
    <button type="button" className="wt-lore-remove" aria-label={t("{name} 설정집 빼기",{name:book.name})} disabled={busy} onClick={()=>remove(index)}>{t("빼기")}</button>
   </li>)}</ul>}
   {undo&&<button type="button" className="btn-ghost" disabled={busy} onClick={()=>{setWorking({...undo.book,confirmed:false});setEditMode(false);setInsertAt(undo.index);setEditing(-1);setOpen(true);setUndo(null);}}>{t("방금 뺀 설정집 다시 붙이기")}</button>}

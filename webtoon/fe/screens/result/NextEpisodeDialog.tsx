@@ -76,7 +76,7 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
     if (box) {
       box.tabIndex = -1;
       if (preparing) {
-        // 앞 화를 정리하는 동안은 칸이 다 잠겨 있어서, 첫 단추(맨 아래 「닫기」)로 가면 창이 끝까지
+        // 앞 화를 정리하는 동안은 칸이 다 잠겨 있어서, 첫 단추가 맨 아래에 있으면 창이 끝까지
         // 내려가 맨 위의 「정리하고 있어요」가 안 보였다. 정리가 끝날 때까지는 창 맨 위에 둔다.
         box.focus(); box.scrollTop = 0;
       } else if (!box.contains(document.activeElement) || document.activeElement?.matches(":disabled"))
@@ -154,7 +154,6 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
     </> : !data ? <>
       {error ? <><p role="alert">{error}</p><button className="btn btn-w" onClick={()=>go("mypage")}>{t("내 작품으로 이동")}</button><button className="btn btn-w" onClick={()=>setRetry(v=>v+1)}>{t("다시 시도")}</button></>
         : <p role="status">{t("앞 화의 기록을 불러오고 있어요")}</p>}
-      <button className="btn btn-w" onClick={close}>{t("닫기")}</button>
     </> : <form className="wt-series-form" onSubmit={e=>{e.preventDefault(); void submit(true);}}>
       <p className="wt-series-source">{data.title} · {t("{n}화에서 이어집니다",{n:data.episode-1})}</p>
       {preparing && <p role="status" className="wt-series-digest">{t("앞 화를 읽고 설정과 진행 상태를 정리하고 있어요. 잠시만 기다려 주세요.")}</p>}
@@ -162,6 +161,11 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
         <p>{data.digest.error || t("앞 화를 정리하지 못했어요")}</p>
         <button type="button" className="btn btn-w" onClick={()=>void redigest()}>{t("다시 정리하기")}</button></div>}
       <fieldset disabled={busy || preparing}>
+        {/* 사람이 할 일은 이번 화 내용 하나라 맨 위에 둔다. 정리본은 그 아래에서 틀린 줄만 뺀다. */}
+        <label htmlFor="series-story">{t("이번 화에서 일어날 일")}</label>
+        <p id="series-story-help">{t("앞 화 이후의 전개를 적어 주세요. 캐릭터 시트와 그림체는 앞 화에서 이어받습니다.")}</p>
+        <textarea id="series-story" className="field" rows={4} maxLength={20000} required aria-describedby="series-story-help"
+          value={data.story} onChange={e=>patch("story",e.target.value)} />
         {(() => {
           const rules = data.entries.map((e,i)=>({e,i})).filter(({e})=>e.always);
           const items = data.entries.map((e,i)=>({e,i})).filter(({e})=>!e.always);
@@ -170,7 +174,7 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
             <div><b>{e.title}</b>{e.new && <small className="wt-series-new">{t("이번 화에서 추가")}</small>}
               {lang === "ko" && HANJA.test(e.title + e.content) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}
               <p>{e.content}</p>{!!e.keys?.length && !e.always && <p className="wt-series-evidence">{e.keys.join(" · ")}</p>}</div>
-            <button type="button" className="btn btn-w" aria-label={t("{name} 빼기",{name:e.title})} onClick={()=>dropEntry(e.id,i)}>{t("빼기")}</button>
+            <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:e.title})} onClick={()=>dropEntry(e.id,i)}>{t("빼기")}</button>
           </li>;
           return <>
             <span className="wt-series-label">{t("현재 진행 상태")}</span>
@@ -179,18 +183,21 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
               {data.progress.map((p,i)=><li key={`${p.key}-${i}`}>
                 <div><b>{titleOf(p.key) || p.title}</b>
                   {lang === "ko" && HANJA.test(p.title + p.text) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}<p>{p.text}</p></div>
-                <button type="button" className="btn btn-w" aria-label={t("{name} 빼기",{name:p.title || p.text})} onClick={()=>dropProgress(i)}>{t("빼기")}</button>
+                <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:p.title || p.text})} onClick={()=>dropProgress(i)}>{t("빼기")}</button>
               </li>)}</ul>
               : <textarea id="series-state" className="field" rows={6} maxLength={16000} aria-label={t("현재 진행 상태")}
                   value={data.progress_state} onChange={e=>patch("progress_state",e.target.value)} />}
 
-            <span className="wt-series-label">{t("세계 규칙")}</span>
-            <p className="wt-series-help">{t("이야기 내내 지켜지는 규칙이에요. 매 화 전부 들어가요.")}</p>
-            {rules.length ? <ul className="wt-series-entries">{rules.map(row)}</ul> : <p className="wt-series-help">{t("규칙이 없어요.")}</p>}
-
-            <span className="wt-series-label">{t("설정집 항목")}</span>
-            <p className="wt-series-help">{t("인물·장소·물건 같은 항목이에요. 이번 화에 이름이 나오면 들어가요.")}</p>
-            {items.length ? <ul className="wt-series-entries">{items.map(row)}</ul> : <p className="wt-series-help">{t("설정집 항목이 없어요.")}</p>}
+            {/* 규칙·항목은 수십 개가 될 수 있어 접어 둔다. 한자가 섞인 줄이 있으면 펼쳐서 보이게 한다. */}
+            {[{key:"rules", title:t("세계 규칙"), help:t("이야기 내내 지켜지는 규칙이에요. 매 화 전부 들어가요."), list:rules, empty:t("규칙이 없어요.")},
+              {key:"items", title:t("설정집 항목"), help:t("인물·장소·물건 같은 항목이에요. 이번 화에 이름이 나오면 들어가요."), list:items, empty:t("설정집 항목이 없어요.")}]
+              .map(g => <details key={g.key} className="wt-series-group"
+                  open={lang === "ko" && g.list.some(({e}) => HANJA.test(e.title + e.content)) || undefined}>
+                <summary><b>{g.title}</b> <span>{t("{n}개",{n:g.list.length})}</span>
+                  {!!g.list.filter(({e})=>e.new).length && <small className="wt-series-new">{t("이번 화에서 추가 {n}개",{n:g.list.filter(({e})=>e.new).length})}</small>}</summary>
+                <p className="wt-series-help">{g.help}</p>
+                {g.list.length ? <ul className="wt-series-entries">{g.list.map(row)}</ul> : <p className="wt-series-help">{g.empty}</p>}
+              </details>)}
           </>;
         })()}
         <div><button type="button" className="btn btn-w" disabled={bookSaved} onClick={()=>void saveBook()}>
@@ -209,10 +216,6 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
             : <p>{t("저장된 장면 기록이 없어요. 앞 화를 확인하고 진행 상태를 직접 적어 주세요.")}</p>}
         </details>
 
-        <label htmlFor="series-story">{t("이번 화에서 일어날 일")}</label>
-        <p id="series-story-help">{t("앞 화 이후의 전개를 적어 주세요. 캐릭터 시트와 그림체는 앞 화에서 이어받습니다.")}</p>
-        <textarea id="series-story" className="field" rows={4} maxLength={20000} required aria-describedby="series-story-help"
-          value={data.story} onChange={e=>patch("story",e.target.value)} />
         <label className="wt-series-check"><input type="checkbox" checked={agree} onChange={e=>setAgree(e.target.checked)} />
           <span>{t("사용하는 캐릭터·설정·이야기의 권리를 확인했어요.")}</span></label>
       </fieldset>
@@ -222,7 +225,7 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
       {error && <div role="alert"><ErrLine text={error}/></div>}
       {saved && <p role="status">{t("초안을 저장했어요. 다시 열어 이어서 수정할 수 있어요.")}</p>}
       <div className="wt-series-actions">
-        <button type="button" className="btn btn-w" disabled={busy} onClick={close}>{t("닫기")}</button>
+        {/* 닫기는 창 머리의 X 하나다(새 디자인 공용 창). */}
         <button type="button" className="btn btn-w" disabled={busy || preparing} onClick={()=>void submit(false)}>{t("초안 저장")}</button>
         <button type="submit" className="btn btn-p" disabled={busy || preparing || !agree || !data.story.trim() || (!data.progress.length && !data.progress_state.trim()) || !!data.blocked}>
           {busy ? t("처리 중…") : t("{n}화 만들기",{n:data.episode})}</button>

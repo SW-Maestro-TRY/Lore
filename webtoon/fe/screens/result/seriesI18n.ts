@@ -171,5 +171,7 @@ registerDict({
   "규칙이 없어요.": {"en": "No rules.", "ja": "ルールはありません。", "zh": "没有规则。"},
   "인물·장소·물건 같은 항목이에요. 이번 화에 이름이 나오면 들어가요.": {"en": "People, places and things. An entry is used when its name comes up this episode.", "ja": "人物・場所・物などの項目です。今回名前が出ると入ります。", "zh": "人物、地点、物品等条目。本话出现其名称时才会带入。"},
   "더 적어 둘 설정 · 선택": {"en": "Anything else to keep · optional", "ja": "ほかに残す設定 · 任意", "zh": "其他要保留的设定 · 可选"},
-  "한자가 섞였어요": {"en": "Contains Chinese characters", "ja": "漢字が混ざっています", "zh": "混入了汉字"}
+  "한자가 섞였어요": {"en": "Contains Chinese characters", "ja": "漢字が混ざっています", "zh": "混入了汉字"},
+  "{n}개": {"en": "{n}", "ja": "{n}件", "zh": "{n}条"},
+  "이번 화에서 추가 {n}개": {"en": "{n} new this episode", "ja": "今回追加 {n}件", "zh": "本话新增{n}条"}
 });

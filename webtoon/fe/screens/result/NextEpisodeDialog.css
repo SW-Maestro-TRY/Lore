@@ -19,7 +19,11 @@
 .wt .wt-series-entries li > div { min-width:0; }
 .wt .wt-series-entries b { font-size:15px; }
 .wt .wt-series-entries p { overflow-wrap:anywhere; }
-.wt .wt-series-entries .btn { min-height:40px; flex-shrink:0; }
+.wt .wt-series-entries .btn-ghost { flex-shrink:0; min-height:36px; padding:0 10px; }
+.wt .wt-series-group { border:1px solid var(--line); border-radius:12px; padding:12px; }
+.wt .wt-series-group summary { cursor:pointer; font-size:15px; }
+.wt .wt-series-group summary span { color:var(--muted); font-size:14px; margin-left:4px; }
+.wt .wt-series-group[open] summary { margin-bottom:8px; }
 .wt .wt-series-warn { margin-left:8px; font-size:12px; font-weight:700; color:var(--gold); }
 .wt .wt-series-new { margin-left:8px; font-size:12px; font-weight:700; color:var(--sea-deep); }
 .wt .wt-series-form .wt-series-evidence { color:var(--muted); font-size:13px; }
