@@ -36,7 +36,7 @@ import { IconUser } from "../../ui/Icons";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
 import AdminSurvey from "./AdminSurvey";
-import CommunityInbox from "../../ui/community/CommunityInbox";
+import CommunityBell from "../../ui/community/CommunityBell";
 import "./MyPage.css";
 
 /** 「1:1 문의하기」 창구 셋. 카카오톡 채널 주소는 공용(`CONTACT_CHANNEL`)이고, 인스타·X 는
@@ -146,6 +146,9 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
      같은 레일 안에서 본문만 바꾼다 — 나중에 칸이 늘면 그때 공용 탭
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
   const [tab, setTab] = useState<"works" | "chars" | "settings">(initialTab === "settings" ? "settings" : "works");
+  /* 내 웹툰은 첫 화면에 한 줄만 — 내 캐릭터처럼 「모두 보기」를 눌러야 전부 펼친다 */
+  const [allWorks, setAllWorks] = useState(false);
+  const WORKS_PREVIEW = 3;
   const [contactOpen, setContactOpen] = useState(false);
   const [surveyStatus, setSurveyStatus] = useState<SurveyStatus | null>(null);
   useEffect(() => {
@@ -318,7 +321,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
 
         <div className="card rail wt-my-menu">
           <small>{t("만든 것")}</small>
-          <button type="button" className={tab === "works" ? "on" : ""} onClick={() => setTab("works")}>
+          <button type="button" className={tab === "works" ? "on" : ""} onClick={() => { setTab("works"); setAllWorks(false); }}>
             {t("내 웹툰")} <span className="dim">{runs.length}</span>
           </button>
           <small>{t("재료")}</small>
@@ -360,7 +363,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
       </aside>
 
       <div className="wt-my-main">
-        {isAuthenticated && <CommunityInbox admin={user?.role === "ADMIN"} />}
             {contactOpen && (
               <Dialog title={t("어디로 문의할까요?")} onClose={() => setContactOpen(false)}>
                 <div className="wt-my-contact">
@@ -395,9 +397,16 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           <>
             <div className="wt-my-head">
               <div>
-                <h2>{t("내 웹툰")}</h2>
+                {allWorks && (
+                  <button type="button" className="wt-my-back" onClick={() => setAllWorks(false)}>
+                    ← {t("내 작업실")}
+                  </button>
+                )}
+                <h2>{t("내 웹툰")} {allWorks && <span className="dim wt-my-count">{runs.length}</span>}</h2>
               </div>
               <div className="wt-my-headacts">
+                {/* 소식(알림 · 구독 중 · 신고)은 맨 위 칸 대신 종 단추 하나로 */}
+                {isAuthenticated && <CommunityBell admin={user?.role === "ADMIN"} />}
                 <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
                 <button type="button" className="btn btn-p" onClick={() => go("entry")}>{t("새 웹툰 만들기")}</button>
               </div>
@@ -423,8 +432,8 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               </div>
             )}
             {!runsFailed && runs.length > 0 && (
-              <div className="wt-my-grid">
-                {runs.map((r) => (
+              <div className={`wt-my-grid${allWorks ? "" : " preview"}`}>
+                {(allWorks ? runs : runs.slice(0, WORKS_PREVIEW)).map((r) => (
                   <WorkCard key={r.run_id} run={r} go={go} keepDays={keepDays}
                             onDeleted={() => {
                               setRuns((list) => list.filter((x) => x.run_id !== r.run_id));
@@ -433,8 +442,13 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 ))}
               </div>
             )}
+            {!allWorks && !runsFailed && runs.length > WORKS_PREVIEW && (
+              <button type="button" className="btn btn-w wt-my-more" onClick={() => { setAllWorks(true); window.scrollTo({ top: 0 }); }}>
+                {t("내 웹툰 모두 보기")} <span className="dim">{runs.length}</span>
+              </button>
+            )}
 
-
+            {!allWorks && <>
             {active.length > 0 && (
               /* 만드는 중(#548) — 「최근 본 웹툰」 자리. 표지 한 줄과 같은 크기로, 눌러서 이어 만든다. */
               <div className="wt-my-strip">
@@ -482,6 +496,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 <b>+</b>{t("만들기")}
               </button>
             </div>
+            </>}
           </>
         )}
 

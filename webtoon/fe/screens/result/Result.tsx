@@ -10,8 +10,9 @@ import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { metaTrack, metaTrackCustom } from "../../lib/metaPixel";
 import type { Go } from "../../lib/nav";
-import { IconChevronUp, IconClose, IconDownload, IconEdit } from "../../ui/Icons";
+import { IconChevronUp, IconClose, IconDownload, IconEdit, IconMenu } from "../../ui/Icons";
 import { Crumb, MobileTop } from "../../ui/TopNav";
+import { Dialog } from "../../ui/Dialog";
 import ShareMenu from "./ShareMenu";
 import RunStrip from "../../ui/RunStrip";
 import LikeButton from "../../ui/LikeButton";
@@ -22,6 +23,7 @@ import NextEpisodeDialog from "./NextEpisodeDialog";
 import "./seriesI18n";
 import "./i18n";
 import "./Result.css";
+import "./ResultFinal.css";
 
 /* 완성본 — 캔버스 Done(내 작품) · DoneOther(남의 작품) · MDone(폰).
  *
@@ -46,13 +48,15 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const [series, setSeries] = useState<SeriesInfo | null>(null);
   const [seriesError, setSeriesError] = useState(false);
   const [seriesTick, setSeriesTick] = useState(0);
+  const [chaptersOpen, setChaptersOpen] = useState(false);
+  const [cover, setCover] = useState<string | null>(null);
   useEffect(() => {
     let alive=true;
     setSeries(null); setSeriesError(false);
     readSeries(runId).then(s=>{if(alive)setSeries(s);}).catch(()=>{if(alive)setSeriesError(true);});
     return ()=>{alive=false;};
   },[runId,authenticated,seriesTick]);
-  useEffect(() => { setNextNote(false); setOwnedByAccount(false); }, [runId]);
+  useEffect(() => { setNextNote(false); setChaptersOpen(false); setCover(null); setOwnedByAccount(false); }, [runId]);
   /* 「이런 웹툰은 어때요」(#248) — 같은 장르 최신 넷, 없으면 그냥 최신 넷. 점수 없음. */
   const [suggested, setSuggested] = useState<RunCard[]>([]);
   const [liked, setLiked] = useState(false);
@@ -82,6 +86,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
         setSuggested((same.length >= 2 ? same : others).slice(0, 4));
         const me = all.find((r) => r.run_id === runId);
         setLikes(me?.likes ?? 0);
+        if (me?.cover_page) setCover(coverUrl(runId, me.cover_page, me.cover_episode || 1));
       })
       .catch(() => { /* 없으면 줄 자체를 안 그린다 */ });
     return () => { alive = false; };
@@ -259,13 +264,13 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   }, [zoom, zoomLoaded, above]);
 
   return (
-    <div className="wt-result">
+    <div className="wt-result wt-result-final">
       {/* 아트보드 MDone 의 위쪽 줄에는 뒤로 가기가 없다 — 제목과 회차뿐이다. */}
       <MobileTop title={data?.title || t("완성")}
                  right={data ? [data.character, epLabel].filter(Boolean).join(" · ") : ""} />
 
       <div className="wt-wrap wt-page wt-result-page">
-        <Crumb items={[t("캐릭터"), t("이야기"), t("완성")]} at={2} />
+        <button className="btn-ghost wt-reader-back" onClick={() => go("works")}>{t("둘러보기")}</button>
 
         {failed && (
           <div className="wt-result-state">
@@ -289,6 +294,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
         {data && (
           <div className="wt-result-body">
+            <div className="wt-reader-intro">
+            <img className="wt-reader-cover" src={cover || pageUrl(runId, data.pages[0]?.no || 1, 320)} alt={t("{title} 표지", {title:data.title})} />
+            <div className="wt-reader-intro-content">
             <div className="wt-result-head">
               <div className="wt-result-titlerow">
                 {/* 2026-09-23 에 이 화면의 고치기 폼을 지웠다가, 제목 옆 연필 하나로 다시 둔다(#78).
@@ -412,6 +420,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </div>
             )}
 
+            </div></div>
+
             {isAdmin && !mine && (
               /* 관리자 처리(#638) — 비공개 · 경고 · 삭제. 서버도 관리자만 받는다(ModerationController). */
               <AdminModeration runId={runId} go={go} onChanged={() => setTick((n) => n + 1)} />
@@ -446,15 +456,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               <p>{t("회차 목록을 불러오지 못했습니다")}</p>
               <button className="btn btn-w" onClick={()=>setSeriesTick(v=>v+1)}>{t("다시 시도")}</button>
             </div>}
-            {series && series.chapters.length > 1 && <nav className="wt-series-nav" aria-label={t("회차 목록")}>
-              <b>{t("회차 목록")}</b><div className="wt-series-nav-list">
-                {series.chapters.map(c=><button key={c.episode} className={`btn ${c.run_id===runId?"btn-p":"btn-w"}`}
-                  aria-current={c.run_id===runId?"page":undefined}
-                  onClick={()=>c.run_id?go("result",{run:c.run_id}):c.job_id&&go("running",{job:c.job_id})}>
-                    {t(c.run_id?"{n}화":"{n}화 만드는 중",{n:c.episode})}
-                </button>)}
-              </div>
-            </nav>}
+            <div className="wt-reader-chapterline"><b>{t("{n}화", {n:ep})}</b><button className="btn-ghost" onClick={()=>setChaptersOpen(true)}><IconMenu size={16}/>{t("회차 목록")}</button></div>
             <div className="wt-result-sheet">
               {data.pages.map((pg, i) => {
                 const gap = i === data.pages.length - 1 ? 0 : +pg.gap || 0;
@@ -488,24 +490,17 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               })}
             </div>
 
-            {data.public !== false && !data.preview && <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} />}
-
-            {!mine && (
-              /* 끝까지 본 사람에게 「나만의 이야기 만들어 보기」(#669). 마지막 장 바로 아래, 다른 작품 줄보다
-                 먼저 둔다 — 멘토링(10/12)에서 흰 카드가 「다음화 보기」에 묻혀 시선이 지나간다고 했다(#750).
-                 캐릭터 번호는 결과에 안 실려 있어서(아직) 1걸음을 그냥 연다 — 거기서 자기 캐릭터를
-                 고르거나 체험 캐릭터로 시작한다. */
-              <div className="wt-result-remix">
-                <b>{t("나만의 웹툰 1화 만들어 보기")}</b>
-                <span className="wt-result-remix-sub">{t("다 봤다면, 당신의 캐릭터로 당신의 1화를 만들어 보세요.")}</span>
-                {freeLeft > 0 && (
-                  <span className="wt-result-remix-free">{t("가입 없이 오늘 {n}편 무료", { n: freeLeft })}</span>
-                )}
-                <button type="button" className="btn btn-w" onClick={() => startMaking("end_card")}>
-                  {t("웹툰 만들기 시작")}
-                </button>
-              </div>
-            )}
+            {data.public !== false && !data.preview ? (
+              <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated}
+                title={data.title} cover={cover || pageUrl(runId,data.pages[0]?.no || 1,320)}>
+                <div className="wt-reader-endnav">
+                  {(mine || series?.chapters.some(c=>c.episode>ep)) ? <button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t(series?.chapters.some(c=>c.episode>ep)?"다음화 보기":"다음 편 만들기")}</button> : <span className="wt-reader-no-next">{t("공개된 다음 화가 없습니다.")}</span>}
+                  <button className="btn btn-w" onClick={()=>setChaptersOpen(true)}><IconMenu size={17}/>{t("회차 목록")}</button>
+                  {mine && <button className="btn btn-w" onClick={()=>go("editor",{run:runId})}><IconEdit size={17}/>{t("편집실")}</button>}
+                </div>
+                {!mine && <section className="wt-reader-create"><div><h2>{t("작품이")}<br/>{t("즐거우셨나요?")}</h2><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t("직접 웹툰 만들기")}</button>{freeLeft>0 && <small>{t("가입 없이 오늘 {n}편 무료",{n:freeLeft})}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,320)} alt=""/></section>}
+              </EpisodeCommunity>
+            ) : <div className="wt-reader-endnav"><button className="btn btn-w" onClick={()=>setChaptersOpen(true)}>{t("회차 목록")}</button>{mine&&<button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>}</div>}
 
             {mine && readEnd && <ResultSurvey key={runId} runId={runId} authenticated={authenticated} go={go} />}
 
@@ -516,24 +511,17 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </div>
             )}
 
-            {/* 「맨 위로」가 가운데, 「다음화 보기」가 오른쪽. 가운데를 진짜
-                가운데에 두려면 좌우 칸의 폭이 같아야 해서 격자로 짠다 —
-                한 줄 flex 로는 오른쪽 단추 폭만큼 밀린다. */}
-
-            {!mine && (
-              <div className="wt-result-foot">
-                <button type="button" className="btn-ghost wt-result-top" onClick={toTop}>
-                  <IconChevronUp size={16} /> {t("맨 위로")}
-                </button>
-                <button type="button" className="btn btn-w wt-result-next" onClick={() => nextEpisode("other_foot")}>
-                  {t("다음화 보기")}
-                </button>
-              </div>
-            )}
+            <div className="wt-reader-bottom"><button className="btn btn-w" onClick={()=>go("works")}>{t("다른 웹툰 보기")}</button><button className="btn-ghost" onClick={toTop}><IconChevronUp size={16}/>{t("맨 위로")}</button></div>
 
           </div>
         )}
       </div>
+
+      {chaptersOpen && <Dialog title={t("회차 목록")} onClose={()=>setChaptersOpen(false)}>
+        <div className="wt-reader-chapters">
+          {seriesError ? <><p className="err">{t("회차 목록을 불러오지 못했습니다")}</p><button className="btn btn-w" onClick={()=>setSeriesTick(v=>v+1)}>{t("다시 시도")}</button></> : !series ? <p role="status">{t("불러오는 중…")}</p> : (series.chapters.length ? series.chapters : [{episode:ep,run_id:runId,status:"DONE",title:data?.title||""}]).map(c=><button key={c.episode} className={c.run_id===runId?"current":""} aria-current={c.run_id===runId?"page":undefined} onClick={()=>{setChaptersOpen(false);if(c.run_id)go("result",{run:c.run_id});else if("job_id" in c&&c.job_id)go("running",{job:c.job_id});}}><span>{t("{n}화",{n:c.episode})}</span><b>{c.title||data?.title}</b><small>{t(c.run_id===runId?"읽는 중":c.run_id?"읽기":"만드는 중")}</small></button>)}
+        </div>
+      </Dialog>}
 
       {/* 다음 편은 아직 없다. 눌렀을 때 줄 끝에 문구만 붙이면 화면 밖이라
           못 보고 다시 누르게 된다 — 가운데에 띄워 한 번에 읽히게 한다. */}

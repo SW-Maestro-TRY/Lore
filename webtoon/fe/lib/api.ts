@@ -209,6 +209,7 @@ export interface NhDirection {
 
 /** 만들기에서 적은 것(#548). 이야기·제목은 장면 확인 화면의 「이야기 (고치기)」가 고치고, 여기서는 보기만 한다. */
 export interface NhJobInput {
+  lorebook?: LoreBook | null;
   name: string;
   description: string;
   genre: string;
@@ -687,7 +688,7 @@ export interface Character {
   name: string;
   description: string;
   art_url: string | null;
-  source: "photo" | "prompt" | "builtin";
+  source: "photo" | "prompt" | "builtin" | "upload" | "replaced_upload";
   status: "drawing" | "ready" | "error";
   error: string | null;
   builtin: boolean;
@@ -754,6 +755,13 @@ export function tryCharacter(body: {
 /** 직접 만들기(초상 한 장) — 백로그이지만 서버 길은 남아 있다. */
 export function createCharacter(body: { name: string; description: string; photos_data?: string[]; photo_keys?: string[]; style?: string; language?: string }) {
   return post<Character>("/characters", body);
+}
+
+/** 업로드 원본 등록/교체. AI 캐릭터 뽑기와 분리한다. */
+export function saveOriginalCharacter(body: {name:string;description:string;photo_keys:string[]}, id?:string) {
+  return call<Character>(id ? `/characters/${encodeURIComponent(id)}/original` : "/characters/original", {
+    method: id ? "PATCH" : "POST", headers: {"Content-Type":"application/json"}, body:JSON.stringify(body),
+  });
 }
 
 export function renameCharacter(id: string, name: string, description: string) {

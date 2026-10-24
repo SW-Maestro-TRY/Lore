@@ -100,7 +100,7 @@ class JobServiceLorebookTest {
    assertThat((Object)org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"inputsForViewer",job)).isNull();
    auth.when(com.lore.webtoon.credit.CreditGate::currentUser).thenReturn(7L);
    Map<String,Object> input=org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"inputsForViewer",job);
-   assertThat(input).containsEntry("settings","개인 설정집에서 온 비밀 설정").doesNotContainKey("lorebook");
+   assertThat(input).containsEntry("settings","개인 설정집에서 온 비밀 설정").containsEntry("lorebook",Map.of("name","개인 책"));
   }
  }
 }

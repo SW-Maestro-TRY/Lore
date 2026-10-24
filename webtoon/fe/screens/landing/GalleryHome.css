@@ -1,0 +1,568 @@
+.wt .wt-gallery-home {
+  background: var(--paper);
+  color: var(--ink);
+}
+.wt .wt-gallery-inner {
+  max-width: 1080px;
+  margin: auto;
+  padding: 28px 32px 0;
+}
+.wt .wt-gallery-home figure {
+  margin: 0;
+}
+.wt .wt-gallery-home button {
+  font-family: inherit;
+}
+.wt .wt-gallery-hero {
+  display: grid;
+  grid-template-columns: 3fr 1fr 1fr;
+  grid-template-rows: 210px 250px;
+  gap: 12px;
+}
+.wt .wt-gallery-main {
+  grid-row: span 2;
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+}
+.wt .wt-gallery-main > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 24%;
+}
+.wt .wt-gallery-main:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    #06101f05 8%,
+    #06101f55 40%,
+    #06101ff2 100%
+  );
+}
+.wt .wt-gallery-copy {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 32px;
+  z-index: 1;
+}
+.wt .wt-gallery-copy > span {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: #f4c3b7;
+}
+.wt .wt-gallery-copy h1 {
+  font-size: 46px;
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+  margin: 14px 0 24px;
+}
+.wt .wt-gallery-sub {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #d8dde4;
+  max-width: 300px;
+  margin: -10px 0 22px;
+}
+.wt .wt-gallery-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.wt .wt-gallery-cta .btn {
+  width: 210px;
+  height: 49px;
+}
+.wt .wt-gallery-panel,
+.wt .wt-gallery-cover {
+  position: relative;
+  border: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  padding: 0;
+  cursor: pointer;
+  background: var(--water-light);
+  color: var(--ink);
+}
+.wt .wt-gallery-panel {
+  grid-column: span 2;
+}
+.wt .wt-gallery-panel img,
+.wt .wt-gallery-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.wt .wt-gallery-panel img {
+  object-position: center 31%;
+}
+.wt .wt-gallery-panel span,
+.wt .wt-gallery-cover span {
+  position: absolute;
+  inset: auto 0 0;
+  text-align: left;
+  padding: 35px 12px 12px;
+  background: linear-gradient(transparent, #06101fee);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.wt .wt-gallery-panel small,
+.wt .wt-gallery-cover small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.wt .wt-gallery-section {
+  padding-top: 72px;
+}
+.wt .wt-gallery-heading {
+  margin-bottom: 24px;
+}
+.wt .wt-gallery-heading > span {
+  font-size: 11px;
+  color: var(--sea);
+  display: block;
+  margin-bottom: 10px;
+}
+.wt .wt-gallery-heading h2 {
+  font-size: 32px;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+.wt .wt-gallery-consistency {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.wt .wt-gallery-sheet {
+  position: relative;
+  aspect-ratio: 1.8;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #fff;
+}
+.wt .wt-gallery-sheet img {
+  position: absolute;
+  width: 166.667%;
+  max-width: none;
+  left: 0;
+  top: 0;
+}
+.wt .wt-gallery-faces {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.wt .wt-gallery-faces figure {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.wt .wt-gallery-faces img {
+  position: absolute;
+  width: 300%;
+  max-width: none;
+  height: auto;
+}
+.wt .wt-gallery-faces .face-reunion img {
+  left: -73%;
+  top: -26%;
+}
+.wt .wt-gallery-faces .face-confront img {
+  left: -51%;
+  top: -196%;
+}
+.wt .wt-gallery-faces .face-memory img {
+  width: 341.33%;
+  left: -85%;
+  top: -43.33%;
+}
+.wt .wt-gallery-faces .face-carriage img {
+  width: 292.57%;
+  left: -57.14%;
+  top: -10%;
+}
+.wt .wt-gallery-home figcaption {
+  position: absolute;
+  left: 9px;
+  top: 9px;
+  background: #07101fd9;
+  color: white;
+  font-size: 10px;
+  border-radius: 5px;
+  padding: 5px 7px;
+}
+/* 그리기 전에 장면부터 확인 — 왼쪽 그림, 오른쪽 장면 줄(누르면 그림이 바뀐다) */
+.wt .wt-gallery-storyboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+}
+.wt .wt-gallery-prev {
+  position: sticky;
+  top: calc(var(--lore-header-h, 64px) + 20px);
+  border-radius: 14px;
+  overflow: hidden;
+  aspect-ratio: 4/3;
+  background: var(--water-light);
+}
+.wt .wt-gallery-prev img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: wt-gallery-fade 0.25s ease;
+}
+@keyframes wt-gallery-fade { from { opacity: 0.2; } to { opacity: 1; } }
+.wt .wt-gallery-script {
+  display: grid;
+  border-top: 1px solid var(--line-strong);
+}
+.wt .wt-gallery-script button {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 4px 10px;
+  text-align: left;
+  padding: 18px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.wt .wt-gallery-script .n {
+  font-size: 12px;
+  padding-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.wt .wt-gallery-script b {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.wt .wt-gallery-script q {
+  grid-column: 2;
+  font-size: 14px;
+  quotes: "\201C" "\201D";
+}
+.wt .wt-gallery-script button[aria-current="true"] { color: var(--ink); }
+.wt .wt-gallery-script button[aria-current="true"] .n { color: var(--sea); }
+
+/* 아쉬운 장면만 다시 그려요 — 왼쪽 컷, 오른쪽 이유 고르기·더 하고 싶은 말·다시 그리기 */
+.wt .wt-gallery-redraw {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--water-light);
+}
+.wt .wt-gallery-redo-pic {
+  position: relative;
+  min-height: 420px;
+  background: #000;
+}
+.wt .wt-gallery-redo-pic img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.wt .wt-gallery-redo-pic.busy::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, #e6a39359 50%, transparent 70%) 0 0 / 250% 100%;
+  animation: wt-gallery-sweep 1s linear infinite;
+}
+@keyframes wt-gallery-sweep { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+.wt .wt-gallery-redo-form {
+  padding: 32px;
+  display: grid;
+  gap: 14px;
+  align-content: center;
+}
+.wt .wt-gallery-redo-form h3 { font-size: 16px; font-weight: 700; }
+.wt .wt-gallery-redo-form .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt .wt-gallery-redo-form .chip {
+  padding: 7px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--line-strong);
+  background: none;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.wt .wt-gallery-redo-form .chip[aria-pressed="true"] { border-color: var(--sea); color: var(--ink); background: #e6a39324; }
+.wt .wt-gallery-redo-form label { display: grid; gap: 6px; }
+.wt .wt-gallery-redo-form label span { font-size: 12px; color: var(--muted); }
+.wt .wt-gallery-redo-form textarea { min-height: 62px; resize: vertical; font-size: 14px; padding: 10px; }
+.wt .wt-gallery-redo-form .acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.wt .wt-gallery-redo-form .acts .btn { height: 44px; padding: 0 18px; font-size: 14px; }
+.wt .wt-gallery-redo-form .acts small { color: var(--muted); font-size: 12px; }
+.wt .wt-gallery-prev figcaption,
+.wt .wt-gallery-redo-pic figcaption { position: absolute; top: 10px; left: 10px; z-index: 1; }
+
+/* 자주 묻는 것 */
+.wt .wt-gallery-faq {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 40px;
+  padding: 24px 0 56px;
+}
+.wt .wt-gallery-faq .faq { display: grid; }
+.wt .wt-gallery-faq details { border-bottom: 1px solid var(--line-strong); }
+.wt .wt-gallery-faq summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 2px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+.wt .wt-gallery-faq summary::-webkit-details-marker { display: none; }
+.wt .wt-gallery-faq summary::after { content: "+"; font-weight: 400; font-size: 20px; line-height: 1; opacity: 0.6; transition: transform 0.2s; }
+.wt .wt-gallery-faq details[open] summary::after { transform: rotate(45deg); }
+.wt .wt-gallery-faq p { padding: 0 2px 16px; font-size: 14px; line-height: 1.75; color: var(--muted); max-width: 62ch; }
+.wt .wt-gallery-works {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.wt .wt-gallery-works button {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.wt .wt-gallery-works img {
+  width: 100%;
+  aspect-ratio: 3/4;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 12px;
+}
+.wt .wt-gallery-works b {
+  display: block;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-top: 12px;
+}
+.wt .wt-gallery-works span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.wt .wt-gallery-bottom {
+  margin: 64px 0 48px;
+  background: #142337;
+  border: 1px solid var(--line-strong);
+  padding: 34px 36px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+.wt .wt-gallery-bottom h2 {
+  font-size: 32px;
+  line-height: 1.25;
+}
+.wt .wt-gallery-bottom .btn {
+  min-width: 220px;
+  height: 52px;
+}
+.wt .wt-gallery-resume {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: var(--water-light);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  padding: 15px 18px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wt .wt-gallery-resume span {
+  color: var(--sea);
+  font-size: 12px;
+}
+@media (max-width: 767px) {
+  .wt .wt-gallery-inner {
+    padding: 16px 20px 0;
+  }
+  .wt .wt-gallery-hero {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 420px 180px 210px;
+    gap: 8px;
+  }
+  .wt .wt-gallery-main {
+    grid-column: span 2;
+    grid-row: auto;
+  }
+  .wt .wt-gallery-copy {
+    padding: 25px;
+  }
+  .wt .wt-gallery-copy h1 {
+    font-size: 38px;
+  }
+  .wt .wt-gallery-cta .btn {
+    width: 200px;
+    height: 46px;
+  }
+  .wt .wt-gallery-section {
+    padding-top: 48px;
+  }
+  .wt .wt-gallery-heading h2 {
+    font-size: 27px;
+  }
+  .wt .wt-gallery-consistency {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .wt .wt-gallery-storyboard { grid-template-columns: 1fr; gap: 14px; }
+  .wt .wt-gallery-prev { position: relative; top: 0; }
+  .wt .wt-gallery-script button { grid-template-columns: 30px minmax(0, 1fr); padding: 14px 4px; }
+  .wt .wt-gallery-redraw { grid-template-columns: 1fr; }
+  .wt .wt-gallery-redo-pic { min-height: 0; aspect-ratio: 5/4; }
+  .wt .wt-gallery-redo-form { padding: 18px; }
+  .wt .wt-gallery-faq { grid-template-columns: 1fr; gap: 8px; }
+  .wt .wt-gallery-works {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 12px;
+  }
+  .wt .wt-gallery-bottom {
+    flex-direction: column;
+    text-align: center;
+    padding: 30px 20px;
+    margin-top: 48px;
+  }
+  .wt .wt-gallery-bottom h2 {
+    font-size: 27px;
+  }
+  .wt .wt-gallery-bottom .btn {
+    width: 100%;
+    max-width: 280px;
+  }
+}
+
+/* 다른 장르의 웹툰 — 네 편이 한꺼번에 오른쪽에서 밀려 들어온다(책장 넘기듯, 칸마다 살짝 늦게) */
+.wt .wt-gallery-works { overflow: hidden; }
+.wt .wt-gallery-works.turn button { animation: wt-gallery-turn 0.7s cubic-bezier(.2,.7,.2,1) both; }
+.wt .wt-gallery-works.turn button:nth-child(2) { animation-delay: .05s; }
+.wt .wt-gallery-works.turn button:nth-child(3) { animation-delay: .1s; }
+.wt .wt-gallery-works.turn button:nth-child(4) { animation-delay: .15s; }
+@keyframes wt-gallery-turn { from { opacity: 0; transform: translateX(48px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wt .wt-gallery-works.turn button { animation: none; } }
+
+/* 서비스 소개(E안) — 왼쪽 폰, 오른쪽 글. 폰 화면에서는 글이 위, 폰이 가운데 */
+/* PC — 다른 구역처럼 폭을 꽉 채운다: 왼쪽 절반 글, 오른쪽 절반은 은은한 판 위 가운데에 폰 */
+/* PC — 위 첫 화면과 사이를 넓혀 글·폰을 더 아래에(하은, 2026-10-24) */
+.wt .wt-intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: stretch; padding-top: 140px; }
+/* 왼쪽 끝선에 바로 붙지 않게 살짝 안쪽으로(폰 오른쪽 여백과 비슷하게) */
+.wt .wt-intro-copy { align-self: center; padding-left: 48px; }
+.wt .wt-intro.wide .wt-intro-copy { padding-left: 16px; }
+/* 폰은 오른쪽 칸의 오른쪽 끝 — 글 왼쪽 끝과 폰 오른쪽 끝이 구역 양 끝선에 맞아 한쪽으로 치우쳐 보이지 않는다 */
+.wt .wt-intro-stage { order: 2; display: grid; align-items: center; justify-items: end; padding: 8px 0; }
+/* ② 전체 폭 — 판 하나가 글과 폰을 함께 감싼다 */
+.wt .wt-intro.wide { padding: 48px 56px; margin-top: 72px; border-radius: 20px; border: 1px solid var(--line-strong);
+  background: radial-gradient(circle at 75% 50%, #e6a3931f, transparent 55%), var(--water-light); }
+.wt .wt-intro.wide .wt-intro-stage { padding: 0; }
+/* 폰 자리 — 오른쪽 끝에 붙이지도, 반쪽 칸 가운데(왼쪽으로 치우쳐 보임)에 두지도 않고 그 사이 */
+.wt .wt-intro-stage .wt-intro-phone { margin-right: 64px; }
+.wt .wt-intro.wide .wt-intro-stage .wt-intro-phone { margin-right: 40px; }
+.wt .wt-intro-phone {
+  position: relative; width: 210px; height: 427px; border-radius: 32px; background: #05080d; padding: 9px; justify-self: end;
+  box-shadow: 0 30px 60px #0009, inset 0 0 0 1.5px #ffffff22;
+}
+.wt .wt-intro-phone::before {
+  content: ""; position: absolute; top: 16px; left: 50%; width: 62px; height: 17px; margin-left: -31px; border-radius: 12px; background: #000; z-index: 2;
+}
+.wt .wt-intro-screen { width: 100%; height: 100%; border-radius: 24px; overflow-y: auto; background: #fff; scrollbar-width: none; overscroll-behavior: contain; }
+.wt .wt-intro-screen::-webkit-scrollbar { display: none; }
+.wt .wt-intro-screen img { display: block; width: 100%; height: auto; }
+/* 글 — 왼쪽 절반을 다 쓰게 크게. 단계 셋은 가로로 나란히(절반 폭 끝까지) */
+.wt .wt-intro .wt-gallery-heading h2 { font-size: 46px; line-height: 1.18; letter-spacing: -0.04em; }
+.wt .wt-intro .wt-gallery-heading > span { font-size: 13px; }
+.wt .wt-intro-sub { font-size: 18px; line-height: 1.7; color: var(--muted); margin: -6px 0 34px; }
+.wt .wt-intro-steps { list-style: none; margin: 0; padding: 22px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; border-top: 1px solid var(--line-strong); }
+.wt .wt-intro-steps li { display: grid; gap: 10px; align-content: start; }
+.wt .wt-intro-steps li > span {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font-size: 14px; font-weight: 700; color: var(--sea);
+}
+.wt .wt-intro-steps b { display: block; font-size: 17px; }
+.wt .wt-intro-steps small { display: block; color: var(--dim); font-size: 13.5px; line-height: 1.55; margin-top: 4px; }
+@media (max-width: 767px) {
+  .wt .wt-intro { grid-template-columns: 1fr; gap: 28px; justify-items: center; padding-top: 48px; }
+  .wt .wt-intro-stage { justify-self: stretch; justify-items: center; padding: 0; }
+  .wt .wt-intro.wide { padding: 28px 18px; margin-top: 48px; }
+  .wt .wt-intro-copy { order: -1; justify-self: stretch; }
+  .wt .wt-intro-phone, .wt .wt-intro.wide .wt-intro-phone, .wt .wt-intro-stage .wt-intro-phone, .wt .wt-intro.wide .wt-intro-stage .wt-intro-phone { width: 200px; height: 406px; border-radius: 30px; padding: 8px; margin: 0 auto; justify-self: center; }
+  .wt .wt-intro-phone::before { top: 14px; width: 58px; height: 16px; margin-left: -29px; }
+  .wt .wt-intro-screen { border-radius: 23px; }
+  .wt .wt-intro-sub { font-size: 14.5px; }
+  /* 폰은 가운데 놓인 폰 그림에 맞춰 글도 가운데 — 단계 셋은 줄 모양을 둔 채 묶음째 가운데 */
+  .wt .wt-intro-copy, .wt .wt-intro.wide .wt-intro-copy { padding-left: 0; }
+  .wt .wt-intro-copy { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .wt .wt-intro .wt-gallery-heading h2 { font-size: 30px; }
+  .wt .wt-intro-sub { font-size: 15px; margin-bottom: 26px; }
+  .wt .wt-intro-steps { grid-template-columns: 1fr; gap: 14px; padding-top: 0; border-top: 0; justify-self: center; width: max-content; max-width: 100%; text-align: left; }
+  .wt .wt-intro-steps li { grid-template-columns: 34px minmax(0, 1fr); gap: 12px; }
+  .wt .wt-intro-steps b { font-size: 16px; margin-top: 5px; }
+}
+
+/* 맨 아래 시작 구역(B안) — 후보 띠(haeun/cta-2026-10-24/candidates.html)와 같은 비율·같은 기준으로 그린다.
+ * 구역 높이를 가로의 38%(폰은 127%)로 둬서 후보에서 본 자르는 자리가 그대로 보이고,
+ * 글씨는 가운데가 기본 · 그림마다 오른쪽/왼쪽/아래로. 패딩 %는 구역 가로 기준이라 후보 띠와 같은 비율로 떨어진다. */
+.wt .wt-cta { position: relative; margin: 72px calc(50% - 50vw) 0; height: clamp(380px, 38vw, 600px); display: grid; place-items: center; text-align: center; overflow: hidden; }
+.wt .wt-cta-bg { position: absolute; inset: 0; }
+/* 그림은 바뀌기만 하고 움직이지 않는다 — 넘어가는 효과도, 천천히 커지는 효과도 없다 */
+.wt .wt-cta-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: var(--pos); opacity: 0; }
+.wt .wt-cta-bg img.on { opacity: 1; }
+.wt .wt-cta::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, var(--paper) 0%, #0a132000 22%, #0a132066 50%, #0a132000 78%, var(--paper) 100%); }
+.wt .wt-cta-in { position: relative; z-index: 1; padding: 0 20px; }
+/* 단추(72)+간격(28)만큼 내리면 제목 줄이 구역 가운데에 오는데, 글과 단추 묶음이 아래로 처져 보여서 60px 덜 내린다 */
+.wt .wt-cta-in { margin-top: 40px; }
+/* 글씨 크기도 후보 띠와 같은 비율(띠 가로 1000 에 40px = 4%) */
+.wt .wt-cta-in h2 { font-size: clamp(30px, 4vw, 60px); line-height: 1.3; letter-spacing: -0.03em; margin: 0 0 28px; text-shadow: 0 2px 14px #0000008c; }
+/* 유리 단추 — 뒤 그림이 비쳐 그림을 덜 가리고, 올리면 크림색으로 채워진다 */
+.wt .wt-cta-in .btn { display: inline-flex; align-items: center; gap: 12px; height: 72px; padding: 0 46px; border-radius: 999px; font-size: 21px; font-weight: 800;
+  color: #fff; background: #ffffff1f; border: 1.5px solid #ffffff66; backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 10px 34px #00000055, inset 0 1px 0 #ffffff55; text-shadow: 0 1px 8px #00000066; transition: background .25s, color .25s; }
+.wt .wt-cta-in .btn:hover { background: #eceae5; color: #101925; text-shadow: none; }
+@media (min-width: 768px) {
+  .wt .wt-cta.x-right { justify-items: end; text-align: right; }
+  .wt .wt-cta.x-right .wt-cta-in { padding-right: var(--xpad, 9%); }
+  .wt .wt-cta.x-left { justify-items: start; text-align: left; }
+  .wt .wt-cta.x-left .wt-cta-in { padding-left: var(--xpad, 9%); }
+  .wt .wt-cta.y-low { align-items: end; }
+  /* 후보 띠에는 단추가 없다 — 단추+간격(100px)만큼 빼서 제목 줄이 같은 높이에 오게 */
+  .wt .wt-cta.y-low .wt-cta-in { margin-top: 0; padding-bottom: max(16px, calc(var(--ypad, 9%) - 100px)); }
+}
+@media (max-width: 767px) {
+  .wt .wt-cta { margin-top: 48px; height: 127vw; }
+  .wt .wt-cta-bg img { object-position: var(--mpos, var(--pos)); }
+  .wt .wt-cta-in { width: 100%; margin-top: 90px; }
+  .wt .wt-cta-in h2 { font-size: 8.2vw; line-height: 1.35; }
+  .wt .wt-cta-in .btn { width: 100%; justify-content: center; height: 62px; font-size: 18px; }
+  .wt .wt-cta.my-low { align-items: end; }
+  .wt .wt-cta.my-low .wt-cta-in { margin-top: 0; padding-bottom: max(16px, calc(var(--mypad, 12%) - 90px)); }
+  .wt .wt-cta.my-top { align-items: start; }
+  .wt .wt-cta.my-top .wt-cta-in { margin-top: 0; padding-top: var(--mypad, 12%); }
+}

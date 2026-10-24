@@ -3,9 +3,24 @@ import { useT } from "../../lib/i18n";
 import "./i18n";
 import { useEffect, useState } from "react";
 import * as api from "../../lib/community";
-import { browseRuns, type RunCard } from "../../lib/api";
+import { browseRuns, coverUrl, type RunCard } from "../../lib/api";
 import "./Community.css";
-export default function CommunityInbox({ admin = false }: { admin?: boolean }) {
+
+/* 소식 — 내 작업실의 종 단추(CommunityBell)를 누르면 뜨는 작은 창의 내용.
+ * 예전에는 「기다리던 이야기」라는 큰 칸으로 맨 위에 늘 펼쳐져 있었는데, 소식이 없을 때도
+ * 자리를 크게 차지해서 뜬금없다는 피드백(2026-10-24)으로 탭 셋(알림 · 구독 중 · 신고)으로 접었다.
+ * 읽음 처리 · 구독 취소 · 신고 처리는 예전 그대로다. */
+type Tab = "notices" | "following" | "reports";
+
+/** 표지 — 못 불러오면 자리만 남긴다 */
+function Cover({ run }: { run: string | null }) {
+  const [broken, setBroken] = useState(false);
+  if (!run || broken) return <span className="wt-community-cover" aria-hidden="true" />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img className="wt-community-cover" src={coverUrl(run, 1)} alt="" loading="lazy" onError={() => setBroken(true)} />;
+}
+
+export default function CommunityInbox({ admin = false, onUnread }: { admin?: boolean; onUnread?: (n: number) => void }) {
   const t = useT();
   const [items, setItems] = useState<api.Notice[]>([]);
   const [following, setFollowing] = useState<api.Followed[]>([]);
@@ -15,6 +30,7 @@ export default function CommunityInbox({ admin = false }: { admin?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
+  const [tab, setTab] = useState<Tab>("notices");
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -31,6 +47,7 @@ export default function CommunityInbox({ admin = false }: { admin?: boolean }) {
           setWorks(w);
           setReports(r);
           setError("");
+          onUnread?.(n.filter((x) => !x.read_at).length);
         }
       })
       .catch((e) => {
@@ -42,6 +59,7 @@ export default function CommunityInbox({ admin = false }: { admin?: boolean }) {
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, admin]);
   async function act(f: () => Promise<unknown>) {
     setBusy(true);
@@ -57,100 +75,100 @@ export default function CommunityInbox({ admin = false }: { admin?: boolean }) {
   }
   const title = (run: string | null) =>
     works.find((w) => w.run_id === run)?.title || t("구독한 작품");
+  const unread = items.filter((n) => !n.read_at);
+  const when = (iso: string) => new Date(iso).toLocaleString(undefined, { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
   return (
-    <section className="wt-community" aria-label={t("구독과 알림")}>
-      {busy && <p role="status">{t("처리 중이에요…")}</p>}
+    <section className="wt-community" aria-label={t("소식")}>
       <div className="wt-community-head">
-        <h3>{t("기다리던 이야기")}</h3>
-        <button
-          type="button"
-          className="btn btn-w btn-sm"
-          disabled={loading || busy}
-          onClick={() => setTick((t) => t + 1)}
-        >
-          {t("새로고침")}
+        <b>{t("소식")}</b>
+        {tab === "notices" && unread.length > 0 && (
+          <button type="button" className="wt-community-link" disabled={busy}
+                  onClick={() => void act(() => Promise.all(unread.map((n) => api.readNotice(n.id))))}>
+            {t("모두 읽음")}
+          </button>
+        )}
+      </div>
+      <div className="wt-community-tabs" role="tablist" aria-label={t("소식")}>
+        <button type="button" role="tab" aria-selected={tab === "notices"} className={tab === "notices" ? "on" : ""} onClick={() => setTab("notices")}>
+          {t("알림")}{unread.length > 0 && ` ${unread.length}`}
         </button>
+        <button type="button" role="tab" aria-selected={tab === "following"} className={tab === "following" ? "on" : ""} onClick={() => setTab("following")}>
+          {t("구독 중")}{following.length > 0 && ` ${following.length}`}
+        </button>
+        {admin && (
+          <button type="button" role="tab" aria-selected={tab === "reports"} className={tab === "reports" ? "on" : ""} onClick={() => setTab("reports")}>
+            {t("신고")}{reports.length > 0 && ` ${reports.length}`}
+          </button>
+        )}
       </div>
       {error && (
         <p role="alert" className="wt-community-error">
-          {t(error)}
+          {t(error)}{" "}
+          <button type="button" className="wt-community-link" onClick={() => setTick((x) => x + 1)}>{t("다시 시도")}</button>
         </p>
       )}
-      {loading && <p role="status">{t("소식을 불러오는 중…")}</p>}
-      <h4>
-        {t("알림")}{" "}
-        {items.filter((n) => !n.read_at).length > 0 &&
-          t("· 읽지 않음 {n}", { n: items.filter((n) => !n.read_at).length })}
-      </h4>
-      {!loading && !items.length && !error && (
-        <p className="muted">
-          {t(
-            "아직 새 소식이 없어요. 구독한 작품의 새 화와 내 작품 댓글, 캐릭터로 만든 작품을 여기서 알려 드려요.",
-          )}
-        </p>
+      {loading && <p role="status" className="muted">{t("소식을 불러오는 중…")}</p>}
+      {busy && <p role="status" className="muted">{t("처리 중이에요…")}</p>}
+
+      {!loading && tab === "notices" && (
+        !items.length && !error ? (
+          <p className="muted wt-community-empty">
+            {t("아직 새 소식이 없어요. 구독한 작품의 새 화와 내 작품 댓글, 캐릭터로 만든 작품을 여기서 알려 드려요.")}
+          </p>
+        ) : (
+          <ul className="wt-community-notices">
+            {items.map((n) => (
+              <li key={n.id} className={!n.read_at ? "unread" : ""}>
+                <a href={`/webtoon?run=${encodeURIComponent(n.run_id)}`}
+                   onClick={() => { void api.readNotice(n.id).catch(() => {}); }}>
+                  <Cover run={n.run_id} />
+                  <span>
+                    <b>{t(n.message)}</b>
+                    <time dateTime={n.created_at}>{when(n.created_at)}</time>
+                  </span>
+                </a>
+                {!n.read_at && (
+                  <button type="button" className="wt-community-link" disabled={busy}
+                          onClick={() => void act(() => api.readNotice(n.id))}>
+                    {t("읽음 표시")}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
       )}
-      <ul className="wt-community-notices">
-        {items.map((n) => (
-          <li key={n.id}>
-            <a
-              className={!n.read_at ? "unread" : ""}
-              href={`/webtoon?run=${encodeURIComponent(n.run_id)}`}
-              onClick={() => {
-                void api.readNotice(n.id).catch(() => {});
-              }}
-            >
-              {t(n.message)}
-              <time dateTime={n.created_at}>
-                {new Date(n.created_at).toLocaleString()}
-              </time>
-            </a>
-            {!n.read_at && (
-              <button
-                type="button"
-                className="btn-ghost"
-                disabled={busy}
-                onClick={() => void act(() => api.readNotice(n.id))}
-              >
-                {t("읽음 표시")}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <h4>{t("구독 중인 작품")}</h4>
-      {!loading && !following.length && !error && (
-        <p className="muted">
-          {t("마음에 드는 작품에서 ‘작품 구독’을 눌러 보세요.")}
-        </p>
+
+      {!loading && tab === "following" && (
+        !following.length && !error ? (
+          <p className="muted wt-community-empty">{t("마음에 드는 작품에서 ‘작품 구독’을 눌러 보세요.")}</p>
+        ) : (
+          <ul className="wt-community-notices">
+            {following.map((s) => (
+              <li key={s.root_job}>
+                {s.available && s.run_id ? (
+                  <a href={`/webtoon?run=${encodeURIComponent(s.run_id)}`}>
+                    <Cover run={s.run_id} />
+                    <span><b>{title(s.run_id)}</b></span>
+                  </a>
+                ) : (
+                  <span className="wt-community-gone"><Cover run={null} /><span>{t("현재 공개되지 않은 작품")}</span></span>
+                )}
+                <button type="button" className="wt-community-link" disabled={busy}
+                        onClick={() => void act(() => api.unfollowRoot(s.root_job))}>
+                  {t("구독 취소")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
       )}
-      <ul className="wt-community-notices">
-        {following.map((s) => (
-          <li key={s.root_job}>
-            {s.available && s.run_id ? (
-              <a href={`/webtoon?run=${encodeURIComponent(s.run_id)}`}>
-                {title(s.run_id)}
-              </a>
-            ) : (
-              <span>{t("현재 공개되지 않은 작품")}</span>
-            )}
-            <button
-              type="button"
-              className="btn-ghost"
-              disabled={busy}
-              onClick={() => void act(() => api.unfollowRoot(s.root_job))}
-            >
-              {t("구독 취소")}
-            </button>
-          </li>
-        ))}
-      </ul>
-      {admin && (
-        <>
-          <h4>
-            {t("커뮤니티 신고")}
-            {reports.length > 0 && `· ${reports.length}`}
-          </h4>
-          {reports.map((r) => (
+
+      {!loading && admin && tab === "reports" && (
+        !reports.length ? (
+          <p className="muted wt-community-empty">{t("처리할 신고가 없어요.")}</p>
+        ) : (
+          reports.map((r) => (
             <div className="wt-comment" key={r.id}>
               <b>
                 {r.kind === "comment" ? t("댓글") : t("캐릭터")}
@@ -162,26 +180,18 @@ export default function CommunityInbox({ admin = false }: { admin?: boolean }) {
                 {r.reason}
               </p>
               <div className="wt-community-actions">
-                <button
-                  className="btn btn-w btn-sm"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void act(() => api.resolveReport(r.id, true))}
-                >
+                <button className="btn btn-w btn-sm" type="button" disabled={busy}
+                        onClick={() => void act(() => api.resolveReport(r.id, true))}>
                   {busy ? t("처리 중…") : t("숨기고 처리 완료")}
                 </button>
-                <button
-                  className="btn-ghost"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void act(() => api.resolveReport(r.id, false))}
-                >
+                <button className="btn-ghost" type="button" disabled={busy}
+                        onClick={() => void act(() => api.resolveReport(r.id, false))}>
                   {busy ? t("처리 중…") : t("조치 없이 처리 완료")}
                 </button>
               </div>
             </div>
-          ))}
-        </>
+          ))
+        )
       )}
     </section>
   );

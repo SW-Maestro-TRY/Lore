@@ -1,17 +1,18 @@
 "use client";
 import { useT } from "../../lib/i18n";
 import "./i18n";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import * as api from "../../lib/community";
 import { track } from "../../lib/track";
 import ReportForm from "./ReportForm";
 import "./Community.css";
 export default function EpisodeCommunity({
   runId,
-  authenticated,
+  authenticated, title, cover, children,
 }: {
   runId: string;
   authenticated: boolean;
+  title?: string; cover?: string; children?: ReactNode;
 }) {
   const t = useT();
   const [state, setState] = useState<api.Subscription | null>(null);
@@ -121,19 +122,8 @@ export default function EpisodeCommunity({
         </div>
       ))}
       <div className="wt-community-head">
-        <div>
-          <h3>{t("다음 이야기도 함께해요")}</h3>
-          <p className="muted">
-            {t("구독하면 새 화 소식을 마이페이지 알림에서 볼 수 있어요.")}
-          </p>
-          {state && (
-            <span className="muted">
-              {t("{n}명이 이 작품을 기다려요", {
-                n: state.subscribers.toLocaleString(),
-              })}
-            </span>
-          )}
-        </div>
+        {cover && <img className="wt-community-cover" src={cover} alt=""/>}
+        <div className="wt-community-series"><h3>{title || t("작품 구독")}</h3><span className="muted">{t("{n}화",{n:state?.episode||1})}{state && ` · ${t("구독 {n}",{n:state.subscribers.toLocaleString()})}`}</span></div>
         <button
           type="button"
           className={`btn ${state?.subscribed ? "btn-w" : "btn-p"}`}
@@ -158,18 +148,14 @@ export default function EpisodeCommunity({
           {busy
             ? t("처리 중…")
             : state?.subscribed
-              ? t("구독 취소")
-              : t("작품 구독")}
+              ? t("구독 중")
+              : t("구독")}
         </button>
       </div>
-      <h3>{t("{n}화 이야기", { n: state?.episode || 1 })}</h3>
-      <p className="muted">
-        {t(
-          "인상 깊은 장면이나 다음 화에 대한 기대를 나눠 주세요. 스포일러가 포함될 수 있어요.",
-        )}
-      </p>
+      {children}
+      <h3 className="wt-comments-title">{t("댓글")} <span>{rows.length}{more?"+":""}</span></h3>
       {authenticated ? (
-        <form onSubmit={submit}>
+        <form className="wt-comment-compose" onSubmit={submit}>
           <label className="sr-only" htmlFor="episode-comment">
             {t("회차 댓글")}
           </label>
@@ -180,7 +166,7 @@ export default function EpisodeCommunity({
             onChange={(e) => setBody(e.target.value)}
             maxLength={1000}
             required
-            placeholder={t("이 화는 어땠나요?")}
+            placeholder={t("댓글 입력")}
           />
           <div className="wt-community-actions">
             <span className="count muted">{body.length} / 1,000</span>
@@ -188,7 +174,7 @@ export default function EpisodeCommunity({
               className="btn btn-p btn-sm"
               disabled={busy || !body.trim() || !state}
             >
-              {busy ? t("처리 중…") : t("댓글 남기기")}
+              {busy ? t("처리 중…") : t("등록")}
             </button>
           </div>
         </form>
@@ -213,10 +199,10 @@ export default function EpisodeCommunity({
         </div>
       )}
       {loading ? (
-        <p role="status">{t("대화를 불러오는 중…")}</p>
+        <p role="status">{t("댓글 불러오는 중…")}</p>
       ) : !rows.length && !error ? (
         <p className="muted">
-          {t("아직 댓글이 없어요. 첫 감상을 남겨 주세요.")}
+          {t("아직 댓글이 없습니다.")}
         </p>
       ) : null}
       <ol className="wt-comments">
