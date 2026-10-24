@@ -42,7 +42,7 @@ import FeedbackPage from "./screens/feedback/FeedbackPage";
 import AdminExamples from "./screens/admin/AdminExamples";
 import AdminWorks from "./screens/admin/AdminWorks";
 import AdminPayments from "./screens/admin/AdminPayments";
-import AdminHome from "./screens/admin/AdminHome";
+import AdminDashboard from "./screens/admin/AdminDashboard";
 import RevisitPrompt from "./ui/RevisitPrompt";
 import RunningBubble from "./ui/RunningBubble";
 
@@ -63,7 +63,7 @@ interface Route {
   job?: string;
   run?: string;
   id?: string;
-  tab?: "settings";
+  tab?: "settings" | "works" | "characters";
   /** 만들기 화면의 길(#548). own = 「만들고 싶은 내용이 있어요」. */
   mode?: "own";
 }
@@ -81,7 +81,7 @@ function routeOf(search: URLSearchParams): Route {
     job: search.get("job") || undefined,
     run,
     id: search.get("id") || undefined,
-    tab: search.get("tab") === "settings" ? ("settings" as const) : undefined,
+    tab: (["settings", "works", "characters"] as const).find((t) => t === search.get("tab")),
     mode: search.get("mode") === "own" ? ("own" as const) : undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
@@ -257,9 +257,9 @@ function WebtoonScreens() {
       {route.view === "sharedCard" && route.id && (
         <PhotoResult id={route.id} shared go={go} authenticated={authenticated} />
       )}
-      {route.view === "mypage" && <MyPage go={go} initialTab={route.tab} />}
+      {route.view === "mypage" && <MyPage go={go} initialTab={route.tab === "settings" ? "settings" : undefined} />}
       {route.view === "feedback" && <FeedbackPage go={go} />}
-      {route.view === "admin" && <AdminHome go={go} />}
+      {route.view === "admin" && <AdminDashboard go={go} tab={route.tab} />}
       {route.view === "admin-examples" && <AdminExamples go={go} />}
       {route.view === "admin-works" && <AdminWorks go={go} />}
       {route.view === "admin-payments" && <AdminPayments go={go} />}

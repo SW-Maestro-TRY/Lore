@@ -580,12 +580,12 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               </div>
             )}
             {isAuthenticated && user?.role === "ADMIN" && (
-              /* 관리자만 — 실시간 유입·작품 관리·예시 작품 관리로 들어가는 홈. 설문은 그 아래 그대로. */
+              /* 관리자만 — 관리자 대시보드(#779)로 들어가는 입구. 설문은 그 아래 그대로. */
               <div className="card wt-my-setting">
                 <div className="wt-my-setting-row">
                   <div>
-                    <b>{t("관리자 홈")}</b>
-                    <span className="muted">{t("실시간 유입과 UTM 출처 · 작품 관리 · 예시 작품 관리로 가는 자리. 관리자만 보여요.")}</span>
+                    <b>{t("관리자 대시보드")}</b>
+                    <span className="muted">{t("우리 쪽 접속을 뺀 지표 · 비공개까지 모든 작품과 캐릭터 · 작품 처리 · 예시 작품 · 결제로 가는 자리. 관리자만 보여요.")}</span>
                   </div>
                   <button type="button" className="btn btn-w" onClick={() => go("admin")}>{t("열기")}</button>
                 </div>
