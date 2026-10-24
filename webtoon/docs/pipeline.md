@@ -124,3 +124,19 @@ cd webtoon/ai/new_harness && python3 run.py --plan
 서버는 하네스를 띄울 때 자기 환경변수를 그대로 물려준다 — 운영은 Parameter Store `/lore/prod/<이름>` 에 넣으면
 다음 배포 때 들어간다(이름은 소문자 · 밑줄, 환경변수로는 대문자). dev 는 박스 `.env` 와 `docker-compose.yml` 의
 `environment:` 둘 다 필요하다([server.md](server.md)).
+
+### OpenRouter 로 돌리기
+
+같은 OpenAI 모델(gpt-5.1 · gpt-4.1 · gpt-image-2)을 OpenRouter 를 거쳐 부를 수 있다. 환경변수 둘이면 글과
+그림이 함께 넘어간다.
+
+```
+NH_PROVIDER=openrouter
+OPENROUTER_API_KEY=...        # 서버에는 HAEUN_OPENROUTER_API_KEY
+```
+
+- 모델 이름은 앞에 `openai/` 가 붙는다(`openai/gpt-5.1`). 단계별 기본값은 `llm.py` 의 `STAGE_DEFAULT_MODELS` 가 알아서 붙인다.
+- 그림은 OpenRouter 의 `POST /images` 로 그린다. 크기 대신 비율을 받아서 페이지는 `2:3`, 시트는 `3:2` 로 보낸다
+  (OpenAI 의 1024x1536 · 1536x1024 와 같은 모양). 화질(low · medium · high)과 참고 그림은 그대로 넘어간다.
+- 비용은 응답의 `usage.cost`(실제 청구액, USD)를 그대로 남긴다. `cost_basis` 가 `billed` 로 찍힌다.
+- 입력 글 검사(moderation)는 OpenRouter 에 없어서 OpenAI 키(`WEBTOON_API_KEY`)로 그대로 한다.
