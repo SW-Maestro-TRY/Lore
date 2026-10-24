@@ -62,6 +62,7 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
     @Query("""
            select count(c) from WebtoonCharacter c
             where (c.ownerId = :userId or c.browserUid in :uids)
+              and c.source <> com.lore.webtoon.character.CharacterSource.UPLOAD
               and c.createdAt >= :since
            """)
     long madeSince(@Param("userId") Long userId,

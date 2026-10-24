@@ -38,8 +38,10 @@ webtoon/ai/
    타입 오류가 머지된 뒤 dev 배포에서야 터집니다(2026-09-24, #397). → [dev.md](docs/rules/dev.md)
 3. **커밋에 `Co-Authored-By` · `Claude-Session:` 을 붙이지 않습니다.** 형식은
    `[#이슈번호] 설명`. → [commit-pr.md](docs/rules/commit-pr.md)
-4. **작업 하나에 이슈 하나 · `feature/` 브랜치 하나 · develop 으로 PR 하나.** 이슈·PR
-   제목은 명사로 끝냅니다. → [issues.md](docs/rules/issues.md)
+4. **작업 하나에 이슈 하나 · `feature/` 브랜치 하나. PR 은 묶음 브랜치로 하나만 냅니다.**
+   끝난 작업 브랜치를 `feature/batch-날짜` 에 로컬에서 합쳐 develop 으로 PR 하나를 내고,
+   본문에 이슈마다 `Closes #번호` 를 적습니다. 이슈·PR 제목은 명사로 끝냅니다.
+   → [issues.md](docs/rules/issues.md), [commit-pr.md](docs/rules/commit-pr.md)
 5. **파일을 고치는 작업은 워크트리를 파서 합니다.** 원본 폴더에서 바로 고치지 않습니다.
    다만 캡처·비교 페이지처럼 사용자에게 보여줄 결과물은 워크트리가 아니라 원본 저장소의
    `haeun/` 에 저장합니다. → [worktree.md](docs/rules/worktree.md)

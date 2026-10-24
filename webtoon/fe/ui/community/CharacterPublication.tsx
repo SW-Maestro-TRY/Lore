@@ -6,12 +6,14 @@ import { publishCharacter, errorText } from "../../lib/community";
 import "./Community.css";
 export default function CharacterPublication({
   id,
+  original = false,
   published,
   blocked,
   ready,
   onChange,
 }: {
   id: string;
+  original?: boolean;
   published: boolean;
   blocked: boolean;
   ready: boolean;
@@ -58,7 +60,7 @@ export default function CharacterPublication({
         <>
           <p>
             {t(
-              "공개하면 이름·설명·캐릭터 그림이 보이고, 누구나 LORE 안에서 웹툰 생성에 사용할 수 있어요. 공개를 취소해도 이미 생성한 작품은 남아요. 원본 사진은 공개하지 않으며, 그림 파일의 별도 이용 권한을 주는 것은 아니에요.",
+              original ? "공개하면 올린 원본 이미지와 이름·설정이 보이고, 누구나 LORE 안에서 웹툰 생성에 사용할 수 있어요. 공개를 취소해도 이미 생성한 작품은 남아요." : "공개하면 이름·설명·캐릭터 그림이 보이고, 누구나 LORE 안에서 웹툰 생성에 사용할 수 있어요. 공개를 취소해도 이미 생성한 작품은 남아요. 원본 사진은 공개하지 않으며, 그림 파일의 별도 이용 권한을 주는 것은 아니에요.",
             )}
           </p>
           <label>
