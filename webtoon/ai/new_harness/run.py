@@ -1897,6 +1897,9 @@ def main(argv=None) -> int:
                    help="인물 단계의 답(#534). 현대 로맨스는 고른 상대 번호(1~4), "
                         "사용자가 인물을 적었으면 0(이대로 진행). 그 뒤 이야기 후보 4개를 만든다")
     p.add_argument("--continuation", type=Path, help="서버가 확인한 연재 기억 사본")
+    p.add_argument("--series-digest", type=Path,
+                   help="끝난 회차를 읽어 연재 설정집(고정 설정·항목·진행 상태)을 정리한다. --out 에 쓴다")
+    p.add_argument("--out", type=Path, help="--series-digest 결과를 쓸 곳")
     p.add_argument("--own", action="store_true",
                    help="「만들고 싶은 내용이 있어요」(#548): 적은 내용으로 주인공 카드·인물·본문·시트를 "
                         "동시에 만든다. 후보·고르기 없음. 장면은 --own-scenes 로 따로")
@@ -1942,6 +1945,13 @@ def main(argv=None) -> int:
     if not args.lang:
         env_lang = (llm.env("NH_LANG") or "").strip()
         args.lang = env_lang if env_lang in lang_mod.LANG_NAMES else "ko"
+
+    if args.series_digest:
+        import continuation
+        if not args.out:
+            raise SystemExit("--series-digest 에는 --out 이 필요합니다")
+        continuation.stage_digest(args.series_digest, args.out, args.dry_run, lang=args.lang)
+        return 0
 
     if args.plan:
         rows = llm.plan()

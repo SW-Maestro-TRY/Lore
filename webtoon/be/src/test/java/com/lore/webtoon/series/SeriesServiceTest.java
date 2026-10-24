@@ -30,10 +30,13 @@ class SeriesServiceTest {
     CreditGate gate=mock(CreditGate.class);
     CreditService credits=mock(CreditService.class);
     SeriesBilling billing=mock(SeriesBilling.class);
-    SeriesService service=new SeriesService(drafts,chapters,jobs,creator,ledger,stories,art,queue,guard,gate,billing);
+    SeriesDigestService digests=mock(SeriesDigestService.class);
+    SeriesService service=new SeriesService(drafts,chapters,jobs,creator,ledger,stories,art,queue,guard,gate,billing,digests);
     @TempDir Path dir;
     WebtoonJob source;
     @BeforeEach void setup() throws Exception {
+        when(digests.result(anyString())).thenReturn(Optional.empty());
+        when(digests.view(anyString())).thenReturn(Map.of("status","NONE"));
         source=WebtoonJob.seeded("job1","browser","run1","romance_fantasy",
             "{\"name\":\"민수\",\"character\":\"높은 곳을 무서워한다\",\"settings\":\"비밀을 밝히지 않는다\"}",Instant.now());
         var work=mock(WebtoonWork.class);
@@ -52,7 +55,7 @@ class SeriesServiceTest {
         when(creator.create(any(),eq(7L),anyString(),isNull(),anyMap())).thenReturn("job2");
     }
     SeriesService.Form form(long revision) {
-        return new SeriesService.Form("높은 곳을 무서워함. 비밀은 공개하지 않음.","늦었던 일을 기억하며 우회로를 알고 있다.","다음 약속에는 일찍 출발한다.",revision,true,true,"request1","browser");
+        return new SeriesService.Form("높은 곳을 무서워함. 비밀은 공개하지 않음.","늦었던 일을 기억하며 우회로를 알고 있다.","다음 약속에는 일찍 출발한다.",revision,true,true,"request1","browser",null,null);
     }
     @Test void requiresAccountAndOwnershipBeforeReturningPrivateMemory() {
         assertThatThrownBy(()->service.draft("run1",null)).isInstanceOf(BusinessException.class);
@@ -121,10 +124,10 @@ class SeriesServiceTest {
         when(pending.getStatus()).thenReturn(JobStatus.ERROR);
         assertThat(service.createNext("run1",7L,form(0))).containsEntry("id","job2");
     }
-    @Test void missingSheetAndMissingConfirmationCannotStartOrCharge() throws Exception {
+    @Test void missingSheetAndMissingRightsCannotStartOrCharge() throws Exception {
         var f=form(0);
-        var unconfirmed=new SeriesService.Form(f.fixed_settings(),f.progress_state(),f.story(),0,false,true,"request1","browser");
-        assertThatThrownBy(()->service.createNext("run1",7L,unconfirmed)).hasMessageContaining("확인");
+        var noRights=new SeriesService.Form(f.fixed_settings(),f.progress_state(),f.story(),0,true,false,"request1","browser",null,null);
+        assertThatThrownBy(()->service.createNext("run1",7L,noRights)).hasMessageContaining("저작권");
         Files.delete(dir.resolve("sheet.png"));
         assertThatThrownBy(()->service.createNext("run1",7L,f)).hasMessageContaining("시트");
         verifyNoInteractions(creator,credits);
@@ -175,7 +178,7 @@ class SeriesServiceTest {
             assertThat(draft).containsEntry("episode",n);
             if(n>2) assertThat(draft).containsEntry("fixed_settings","fixed-"+(n-1)).containsEntry("previous_state","state-"+(n-1));
             when(creator.create(any(),eq(7L),anyString(),isNull(),anyMap())).thenReturn(id);
-            var f=new SeriesService.Form("fixed-"+n,"state-"+n,"request-"+n,0,true,true,"token-"+n,"browser");
+            var f=new SeriesService.Form("fixed-"+n,"state-"+n,"request-"+n,0,true,true,"token-"+n,"browser",null,null);
             assertThat(service.createNext(before,7L,f)).containsEntry("id",id);
             var c=saved.get(id);
             assertThat(c.rootJob).isEqualTo("job1");assertThat(c.sourceJob).isEqualTo("job"+(n-1));
@@ -226,4 +229,37 @@ class SeriesServiceTest {
         verify(jobs,never()).findByPublicId("job2");
     }
 
+    @Test void digestFillsFieldsSoNobodyHasToSummarise() {
+        when(digests.result("job1")).thenReturn(Optional.of(Map.of(
+            "entries",List.of(Map.of("id","L0001","title","다리","content","민수가 피하는 다리","new",true)),
+            "progress",List.of(Map.of("key","P001","title","약속","text","민수는 약속에 늦었다")))));
+        var d=service.draft("run1",7L);
+        assertThat(d.get("entries").toString()).contains("다리");
+        assertThat(d.get("progress").toString()).contains("민수는 약속에 늦었다");
+        assertThat(d.get("progress_state")).isEqualTo("");
+    }
+    @Test void progressRowsGoIntoBookNotTwiceIntoMemory() {
+        var f=form(0);
+        var rows=List.<Map<String,Object>>of(Map.of("key","P001","title","약속","text","민수는 약속에 늦었다"));
+        service.createNext("run1",7L,new SeriesService.Form(f.fixed_settings(),"",f.story(),0,true,true,"request1","browser",List.of(),rows));
+        var req=ArgumentCaptor.forClass(JobService.CreateRequest.class);
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String,Object>> state=ArgumentCaptor.forClass(Map.class);
+        verify(creator).create(req.capture(),eq(7L),anyString(),isNull(),state.capture());
+        assertThat(req.getValue().lorebook().get("progress").toString()).contains("민수는 약속에 늦었다");
+        assertThat(state.getValue().get("progress_state")).isEqualTo("");
+    }
+    @Test void keptEntriesGoIntoNextEpisodeBook() {
+        var e=List.<Map<String,Object>>of(Map.of("title","다리","content","민수가 피하는 다리","kind","장소","keys",List.of("다리"),"always",false,"enabled",true));
+        var f=form(0);
+        service.createNext("run1",7L,new SeriesService.Form(f.fixed_settings(),f.progress_state(),f.story(),0,false,true,"request1","browser",e,null));
+        var req=ArgumentCaptor.forClass(JobService.CreateRequest.class);
+        verify(creator).create(req.capture(),eq(7L),anyString(),isNull(),anyMap());
+        assertThat(req.getValue().lorebook()).containsEntry("confirmed",true);
+        assertThat(req.getValue().lorebook().get("entries").toString()).contains("민수가 피하는 다리");
+    }
+    @Test void digestStartsFreeForOwnersLatestEpisode() {
+        when(digests.start(eq("job1"),eq(7L),anyMap(),anyString())).thenReturn(Map.of("status","RUNNING"));
+        assertThat(service.startDigest("run1",7L)).containsEntry("status","RUNNING");
+        verifyNoInteractions(creator,credits,billing);
+    }
 }

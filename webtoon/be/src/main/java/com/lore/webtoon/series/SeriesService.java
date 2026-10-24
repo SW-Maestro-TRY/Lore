@@ -30,17 +30,20 @@ public class SeriesService {
     private final SpendGuard guard;
     private final CreditGate gate;
     private final SeriesBilling billing;
+    private final SeriesDigestService digests;
     private final ObjectMapper json = new ObjectMapper();
 
     public SeriesService(SeriesDraftRepository drafts, SeriesChapterRepository chapters,
             WebtoonJobRepository jobs, JobService creator, WorkLedger ledger, StoryStore stories,
-            RunArt art, JobQueue queue, SpendGuard guard, CreditGate gate, SeriesBilling billing) {
+            RunArt art, JobQueue queue, SpendGuard guard, CreditGate gate, SeriesBilling billing,
+            SeriesDigestService digests) {
         this.drafts=drafts; this.chapters=chapters; this.jobs=jobs; this.creator=creator;
         this.ledger=ledger; this.stories=stories; this.art=art; this.queue=queue;
-        this.guard=guard; this.gate=gate; this.billing=billing;
+        this.guard=guard; this.gate=gate; this.billing=billing; this.digests=digests;
     }
     public record Form(String fixed_settings, String progress_state, String story, long revision,
-                       boolean confirmed, boolean agree_ip, String request_token, String uid) {}
+                       boolean confirmed, boolean agree_ip, String request_token, String uid,
+                       List<Map<String,Object>> entries, List<Map<String,Object>> progress) {}
 
     private WebtoonJob source(String run, Long user, boolean own) {
         if (own && user == null) throw new BusinessException(ErrorCode.UNAUTHORIZED, "연재를 이어가려면 로그인해 주세요.");
@@ -83,6 +86,51 @@ public class SeriesService {
         if (end.length() > MEMORY_MAX - 100) end = ""; // 긴 원문은 참고 기록에 그대로 제공한다.
         return "현재 시점: " + number(source) + "화 종료\n\n마지막 장면 기록 (확인하고 현재 상태로 정리해 주세요):\n" + end;
     }
+    /**
+     * 앞 화까지 이어 온 2층 로어북 — 고정 로어북(entries: 키워드 항목 + 항상 켜짐 규칙)과 진행 상태(progress).
+     * 1화에 붙인 설정집이거나 앞 회차에서 넘긴 연재 설정집이다.
+     */
+    private Map<String,Object> sourceBook(WebtoonJob source) {
+        var out = new LinkedHashMap<String,Object>();
+        out.put("entries", new ArrayList<>()); out.put("progress", new ArrayList<>());
+        var input = obj(source.getInputJson());
+        if (!(input.get("lorebook") instanceof Map<?,?> raw) || raw.isEmpty()) return out;
+        try {
+            var book = com.lore.webtoon.lorebook.LoreBook.clean(json.convertValue(raw, new TypeReference<Map<String,Object>>() {}), false);
+            out.put("entries", new ArrayList<>((List<?>) book.getOrDefault("entries", List.of())));
+            out.put("progress", new ArrayList<>((List<?>) book.getOrDefault("progress", List.of())));
+        } catch (RuntimeException e) { /* 읽지 못한 옛 설정집은 빈 것으로 본다 */ }
+        return out;
+    }
+    /** 정리에 넘길 「지금까지 확정된 것」. 로어북도 앞 회차도 없는 1화는 고정 설정을 비워 정리가 새로 쓰게 한다. */
+    private Map<String,Object> previous(WebtoonJob source) {
+        Map<String,Object> saved = memory(source);
+        var input = obj(source.getInputJson());
+        boolean book = input.get("lorebook") instanceof Map<?,?> b && !b.isEmpty();
+        var out = new LinkedHashMap<String,Object>();
+        out.put("fixed_settings", saved.containsKey("fixed_settings") || book ? initialFixed(source) : "");
+        out.put("progress_state", str(saved.get("progress_state")));
+        out.putAll(sourceBook(source));
+        return out;
+    }
+    private Map<String,Object> digestPacket(WebtoonJob source, String run) {
+        var packet = new LinkedHashMap<String,Object>();
+        packet.put("source_dir", art.dir(run).toAbsolutePath().toString());
+        packet.put("episode_number", number(source));
+        packet.put("source_scenes", stories.scenesOf(run));
+        packet.put("previous", previous(source));
+        return packet;
+    }
+    /** 앞 화 정리를 시작한다. 크레딧은 받지 않는다 — 다음 화 크레딧에 들어 있다. */
+    @Transactional
+    public Map<String,Object> startDigest(String run, Long user) {
+        var source = source(run,user,true);
+        mustBeLatest(source);
+        if (!Files.isRegularFile(art.dir(run).resolve("directions.json")) && stories.scenesOf(run).isEmpty())
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "앞 화의 이야기 기록을 찾지 못해 정리할 수 없어요. 직접 적어 주세요.");
+        return digests.start(source.getPublicId(), user, digestPacket(source, run),
+                com.lore.webtoon.job.WebtoonLanguage.normalize(source.getLanguage()));
+    }
     private WebtoonJob liveSuccessor(WebtoonJob source) {
         return chapters.findByRootJobOrderByEpisodeNumberAsc(rootOf(source)).stream()
             .filter(c -> c.episodeNumber > number(source))
@@ -107,10 +155,26 @@ public class SeriesService {
         WebtoonJob source = source(run,user,true);
         mustBeLatest(source);
         SeriesDraft d = drafts.findById(source.getPublicId()).orElse(null);
+        var digest = d == null ? digests.result(source.getPublicId()).orElse(null) : null;
         var out = new LinkedHashMap<String,Object>();
         out.put("episode", number(source)+1);
-        out.put("fixed_settings", d == null ? initialFixed(source) : d.fixedSettings);
-        out.put("progress_state", d == null ? initialState(source) : d.progressState);
+        if (d != null) {
+            out.put("fixed_settings", d.fixedSettings);
+            out.put("progress_state", d.progressState);
+            out.putAll(carries(d) ? sourceBook(source) : book(d.entriesJson));
+        } else if (digest != null) {
+            // 앞 화를 읽고 갱신한 2층 로어북으로 채운다. 사람은 틀린 줄만 뺀다(실험과 같다).
+            var carried = previous(source);
+            out.put("fixed_settings", str(carried.get("fixed_settings")));
+            out.put("progress_state", "");
+            out.put("entries", digest.getOrDefault("entries", List.of()));
+            out.put("progress", digest.getOrDefault("progress", List.of()));
+        } else {
+            out.put("fixed_settings", initialFixed(source));
+            out.put("progress_state", initialState(source));
+            out.putAll(sourceBook(source));
+        }
+        out.put("digest", d == null ? digests.view(source.getPublicId()) : Map.of("status","SAVED"));
         out.put("story", d == null ? "" : d.nextStory);
         out.put("revision", d == null ? 0 : d.revision);
         out.put("previous_state", str(memory(source).get("progress_state")));
@@ -121,6 +185,37 @@ public class SeriesService {
         out.put("blocked", guard.whyBlocked(queue.reserved()));
         out.put("title", stories.chosenOf(run).map(s -> s.displayTitle()).orElse(""));
         return out;
+    }
+    /** 항목을 따로 고르지 않은 초안 — 앞 화의 설정집을 그대로 넘긴다. */
+    static final String CARRY = "carry";
+    private static boolean carries(SeriesDraft d) { return d.entriesJson == null || CARRY.equals(d.entriesJson); }
+    /** 저장한 초안의 {entries, progress}. */
+    private Map<String,Object> book(String value) {
+        var out = new LinkedHashMap<String,Object>();
+        out.put("entries", new ArrayList<>()); out.put("progress", new ArrayList<>());
+        try {
+            var got = json.readValue(value, new TypeReference<Map<String,Object>>() {});
+            if (got.get("entries") instanceof List<?> e) out.put("entries", e);
+            if (got.get("progress") instanceof List<?> p) out.put("progress", p);
+        } catch (Exception e) { /* 빈 것으로 본다 */ }
+        return out;
+    }
+    /** 사람이 남긴 항목·진행 상태. 다음 화 생성에 들어가는 모양(LoreBook)으로 거른다 — 크기 제한도 거기서 본다. */
+    private Map<String,Object> bookOf(Form form) {
+        var raw = new LinkedHashMap<String,Object>();
+        raw.put("name","연재 설정집"); raw.put("confirmed", true);
+        raw.put("entries", form.entries() == null ? List.of() : form.entries());
+        raw.put("progress", form.progress() == null ? List.of() : form.progress());
+        var clean = com.lore.webtoon.lorebook.LoreBook.clean(raw, true);
+        var out = new LinkedHashMap<String,Object>();
+        out.put("entries", clean.get("entries")); out.put("progress", clean.get("progress"));
+        return out;
+    }
+    private static String progressText(Object rows) {
+        if (!(rows instanceof List<?> list)) return "";
+        var out = new ArrayList<String>();
+        for (Object row : list) if (row instanceof Map<?,?> p) out.add("- " + str(p.get("title")) + ": " + str(p.get("text")));
+        return String.join("\n", out);
     }
     static String checked(String value, int max, String label, boolean required) {
         String text = value == null ? "" : value.trim();
@@ -136,6 +231,17 @@ public class SeriesService {
         d.fixedSettings=checked(form.fixed_settings(),MEMORY_MAX,"고정 설정",false);
         d.progressState=checked(form.progress_state(),MEMORY_MAX,"진행 상태",false);
         d.nextStory=checked(form.story(),20000,"이번 화 이야기",false);
+        // 항목을 안 보낸 요청(옛 화면)은 앞 화의 설정집을 그대로 넘긴다.
+        try {
+            if (form.entries()==null && form.progress()==null) d.entriesJson=CARRY;
+            else {
+                var kept = bookOf(form);
+                d.entriesJson=json.writeValueAsString(kept);
+                // 진행 상태를 줄로 받았으면 글 칸은 그 줄로 채워 둔다 — 회차 기록(앞 화 상태 참고)에 남는다.
+                if (d.progressState.isBlank()) d.progressState=progressText(kept.get("progress"));
+            }
+        }
+        catch (java.io.IOException e) { throw new BusinessException(ErrorCode.INTERNAL_ERROR); }
         d.revision++;
         return drafts.save(d);
     }
@@ -154,9 +260,8 @@ public class SeriesService {
             return Map.of("id",existing.get().jobId);
         }
         mustBeLatest(source);
-        if (!form.confirmed() || !form.agree_ip())
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "설정·진행 상태와 저작권을 확인해 주세요.");
-        checked(form.progress_state(),MEMORY_MAX,"진행 상태",true);
+        if (!form.agree_ip())
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "저작권을 확인해 주세요.");
         checked(form.story(),20000,"이번 화 이야기",true);
         String blocked=guard.whyBlocked(queue.reserved());
         if (blocked != null) throw new BusinessException(ErrorCode.INVALID_INPUT,blocked);
@@ -167,11 +272,15 @@ public class SeriesService {
         if (!Files.isRegularFile(sourceDir.resolve("sheet.png")))
             throw new BusinessException(ErrorCode.INVALID_INPUT,"앞 화의 캐릭터 시트를 찾지 못했어요. 다음 화를 시작하지 않았습니다.");
         var d=save(source,form,user);
+        if (d.progressState.isBlank())
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "앞 화가 끝난 진행 상태가 비어 있어요. 앞 화 정리를 다시 해 주세요.");
         var input=obj(source.getInputJson());
+        boolean progressInBook = !carries(d) && !progressText(book(d.entriesJson).get("progress")).isBlank();
         var state=new LinkedHashMap<String,Object>();
         state.put("source_run",run); state.put("source_dir",sourceDir.toAbsolutePath().toString());
         state.put("episode_number",number(source)+1);
-        state.put("fixed_settings",d.fixedSettings); state.put("progress_state",d.progressState);
+        // 진행 상태가 설정집 줄로 가면 하네스가 설정집에서 넣는다 — 같은 것을 두 번 넣지 않는다.
+        state.put("fixed_settings",d.fixedSettings); state.put("progress_state",progressInBook ? "" : d.progressState);
         state.put("source_scenes",stories.scenesOf(run)); state.put("request",d.nextStory);
         state.put("revision",d.revision);
         Map<String,String> fields = new LinkedHashMap<>();
@@ -180,7 +289,7 @@ public class SeriesService {
         var req=new JobService.CreateRequest(str(input.get("name")),str(input.get("character")),
                 str(input.get("genre")),d.nextStory,source.getStyle(),fields,List.of(),List.of(),true,
                 true,checked(form.uid(),64,"브라우저 번호",true),null,"",source.getQuality(),
-                source.getLanguage(),"own",d.fixedSettings,"","", input.get("lorebook") instanceof Map<?,?> b ? json.convertValue(b,new TypeReference<Map<String,Object>>() {}) : null);
+                source.getLanguage(),"own",d.fixedSettings,"","", seriesBook(source, d));
         String id=creator.create(req,user,req.uid(),null,state);
         try {
             var chapter = new SeriesChapter(id,rootOf(source),source.getPublicId(),number(source)+1,token,json.writeValueAsString(state));
@@ -201,6 +310,27 @@ public class SeriesService {
         queue.remember(id,queue.ahead());
         if (!ledger.isPublic(run)) ledger.setPublicByJob(id,false);
         return Map.of("id",id);
+    }
+    /**
+     * 다음 화에 붙일 설정집. 사람이 남긴 항목이 다음 화에 들어가고, 그 화의 입력에 남아 그다음 화로
+     * 이어진다(이 회차가 다음 회차의 앞 화가 되면 sourceBook 이 여기서 읽는다).
+     */
+    private Map<String,Object> seriesBook(WebtoonJob source, SeriesDraft d) {
+        var input = obj(source.getInputJson());
+        Map<String,Object> carried = input.get("lorebook") instanceof Map<?,?> b && !b.isEmpty()
+                ? json.convertValue(b, new TypeReference<Map<String,Object>>() {}) : null;
+        if (carries(d)) return carried;
+        var kept = book(d.entriesJson);
+        if (((List<?>) kept.get("entries")).isEmpty() && ((List<?>) kept.get("progress")).isEmpty() && carried == null) return null;
+        var book = new LinkedHashMap<String,Object>();
+        book.put("name", stories.chosenOf(source.getRunId()).map(s -> s.displayTitle()).filter(t -> !t.isBlank()).orElse("연재") + " 설정집");
+        book.put("source", "series");
+        book.put("fixed_settings", d.fixedSettings.length() > 8000 ? d.fixedSettings.substring(0, 8000) : d.fixedSettings);
+        book.put("progress_state", "");
+        book.put("entries", kept.get("entries"));
+        book.put("progress", kept.get("progress"));
+        book.put("confirmed", true);
+        return book;
     }
     @Transactional(readOnly=true)
     public Map<String,Object> chapters(String run, Long user) {

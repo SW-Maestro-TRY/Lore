@@ -24,6 +24,10 @@ public class SeriesController {
     public Map<String,Object> save(@PathVariable String runId, @RequestBody SeriesService.Form form) {
         return series.saveDraft(runId, CreditGate.currentUser(), form);
     }
+    @PostMapping("/{runId}/digest")
+    public Map<String,Object> digest(@PathVariable String runId) {
+        return series.startDigest(runId, CreditGate.currentUser());
+    }
     @PostMapping("/{runId}/next")
     public Map<String,Object> next(@PathVariable String runId, @RequestBody SeriesService.Form form) {
         return series.createNext(runId, CreditGate.currentUser(), form);

@@ -1048,14 +1048,18 @@ export interface SeriesChapter {
   episode: number; run_id: string | null; job_id?: string; status: string; title: string;
 }
 export interface SeriesInfo { episode: number; chapters: SeriesChapter[] }
+/** 앞 화 정리(다음 화 버튼을 누르면 AI 가 앞 화를 읽고 칸을 채운다). SAVED 는 사람이 초안을 저장한 뒤. */
+export interface SeriesDigestState { status: "NONE"|"RUNNING"|"DONE"|"ERROR"|"SAVED"; error?: string }
+export interface SeriesEntry extends LoreEntry { new?: boolean }
 export interface SeriesDraft {
   episode: number; fixed_settings: string; progress_state: string; story: string; revision: number;
+  entries: SeriesEntry[]; progress: LoreProgress[]; digest: SeriesDigestState;
   previous_state: string; source_scenes: string[]; source_run: string; title: string;
   credit_cost: number; balance: number; blocked: string | null;
 }
 export interface SeriesForm {
   fixed_settings: string; progress_state: string; story: string; revision: number;
-  confirmed: boolean; agree_ip: boolean; request_token: string;
+  confirmed: boolean; agree_ip: boolean; request_token: string; entries: SeriesEntry[]; progress: LoreProgress[];
 }
 export function readSeries(run: string): Promise<SeriesInfo> {
   return call(`/series/${encodeURIComponent(run)}`);
@@ -1066,12 +1070,17 @@ export function readSeriesDraft(run: string): Promise<SeriesDraft> {
 export function saveSeriesDraft(run: string, form: SeriesForm): Promise<{revision: number}> {
   return post(`/series/${encodeURIComponent(run)}/draft`, {...form, uid: getUid()});
 }
+export function startSeriesDigest(run: string): Promise<SeriesDigestState> {
+  return post(`/series/${encodeURIComponent(run)}/digest`, {});
+}
 export function createNextEpisode(run: string, form: SeriesForm): Promise<{id: string}> {
   return post(`/series/${encodeURIComponent(run)}/next`, {...form, uid: getUid()});
 }
 
-export interface LoreEntry {title:string;content:string;kind:string;keys:string[];always:boolean;enabled:boolean;evidence?:string;}
-export interface LoreBook {library_id?:string;library_owner?:number;books?:LoreBook[];id?:string;name:string;source:string;fixed_settings:string;progress_state:string;entries:LoreEntry[];confirmed:boolean;}
+export interface LoreEntry {id?:string;title:string;content:string;kind:string;keys:string[];always:boolean;enabled:boolean;evidence?:string;}
+export interface LoreBook {library_id?:string;library_owner?:number;books?:LoreBook[];id?:string;name:string;source:string;fixed_settings:string;progress_state:string;entries:LoreEntry[];progress?:LoreProgress[];confirmed:boolean;}
+/** 진행 상태 한 줄. key 가 항목 id 면 그 항목을 「→ 지금:」으로 덮어쓴다(2층 로어북). */
+export interface LoreProgress {key:string;title:string;text:string;}
 export interface LoreCatalog {books:LoreBook[];personal_books?:LoreBook[];extract_limit:number;extract_left:number;}
 export interface LoreExtraction {id:string;status:"RUNNING"|"DONE"|"ERROR";book?:LoreBook;error?:string;}
 export function listLorebooks():Promise<LoreCatalog>{return call("/lorebooks");}

@@ -83,7 +83,7 @@ def content_block(char: dict) -> list[str]:
     return lines
 
 
-def input_block(char: dict, *, continuation: bool = False) -> str:
+def input_block(char: dict, *, continuation: bool = False, context: str | None = None) -> str:
     """own 길의 「이번 입력」 — `run.input_block` 과 다르다.
 
     카드는 이 인물이 누구인지(종·세계)만 준다. 카드의 「이 세계에서 어떤 사람인가」·
@@ -116,7 +116,7 @@ def input_block(char: dict, *, continuation: bool = False) -> str:
               "비밀을 더하지 않고, 적힌 성격을 뒤집지 않는다."]
     lines += ["", f"장르: {char['genre']}" if char.get("genre") else "장르: (없음 — 적은 내용에서 읽는다)"]
     import userbook
-    lines.append(userbook.block(char, char.get("story", ""), continuation=continuation))
+    lines.append(userbook.block(char, char.get("story", "") if context is None else context, continuation=continuation))
     return "\n".join(lines) + "\n"
 
 
@@ -472,7 +472,9 @@ def scenes_input(run_dir: Path, char: dict, note: str = "") -> str:
     direction = R.direction_of(run_dir) or {}
     cast = R.read_json(run_dir / "cast.json") if (run_dir / "cast.json").exists() else []
     persona = R.read_json(run_dir / "persona.json") if (run_dir / "persona.json").exists() else None
-    lines = ["# 이번 입력", "", "[본문 — 적은 내용을 1화로 세운 것]", direction.get("title", ""), "",
+    heading = (f"[본문 — 이번 {(R.read_json(run_dir / 'continuation.json') or {}).get('episode_number', 2)}화]"
+               if (run_dir / "continuation.json").is_file() else "[본문 — 적은 내용을 1화로 세운 것]")
+    lines = ["# 이번 입력", "", heading, direction.get("title", ""), "",
              direction.get("body") or direction.get("raw", "")]
     lines += character_lines(char)
     lines += persona_lines(persona if isinstance(persona, dict) else None)

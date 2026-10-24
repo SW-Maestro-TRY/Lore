@@ -315,10 +315,10 @@ registerDict({
     "ja": "{name}を外す",
     "zh": "移除{name}"
   },
-  "설정집은 합쳐서 16,000자까지예요.": {
-    "en": "Combined lorebooks can contain up to 16,000 characters.",
-    "ja": "設定集合計で16,000文字までです。",
-    "zh": "设定集合计最多16,000个字符。"
+  "설정집은 합쳐서 80,000자까지예요.": {
+    "en": "Combined lorebooks can contain up to 80,000 characters.",
+    "ja": "設定集合計で80,000文字までです。",
+    "zh": "设定集合计最多80,000个字符。"
   }
 });
 

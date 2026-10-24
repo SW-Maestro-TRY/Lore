@@ -6,7 +6,12 @@ const ok=(data:unknown)=>({success:true,data,error:null});
 const chapter=(ep:number)=>({episode:ep,run_id:`ep${ep}`,job_id:`job${ep}`,status:'DONE',title:ep===1?'다리 너머의 약속':'조금 일찍 출발한 날'});
 async function stub(page:Page,count=1,authenticated=true) {
  let submitted:any=null;
- let draft:any={episode:count+1,fixed_settings:'민수는 높은 곳을 무서워한다. 지수와는 오랜 친구다.\n지수가 감춘 약속은 아직 공개하지 않는다.',progress_state:`현재 시점: ${count}화 종료\n민수는 다리를 피해 돌아가느라 약속에 늦었다. 지수는 이유를 아직 모른다.`,story:'',revision:0,previous_state:'',source_scenes:['민수는 다리 앞에서 멈춘다.','먼 길로 돌아온 민수가 지수에게 사과한다.'],source_run:`ep${count}`,title:'다리 너머의 약속',credit_cost:12,balance:48,blocked:null};
+ let draft:any={episode:count+1,fixed_settings:'민수는 높은 곳을 무서워한다. 지수와는 오랜 친구다.\n지수가 감춘 약속은 아직 공개하지 않는다.',progress_state:`현재 시점: ${count}화 종료\n민수는 다리를 피해 돌아가느라 약속에 늦었다. 지수는 이유를 아직 모른다.`,story:'',revision:0,previous_state:'',source_scenes:['민수는 다리 앞에서 멈춘다.','먼 길로 돌아온 민수가 지수에게 사과한다.'],source_run:`ep${count}`,title:'다리 너머의 약속',credit_cost:12,balance:48,blocked:null,entries:[],progress:[],digest:{status:'NONE'}};
+ // 앞 화 정리(모델 호출)는 여기서 흉내만 낸다 — 정리를 시키면 다음 조회에서 정리본으로 채워진다.
+ const digested={fixed_settings:'',progress_state:'',
+  entries:[{id:'L0001',title:'다리',kind:'place',content:'민수가 피해 가는 강 위의 다리',keys:['다리'],always:false,enabled:true,new:true},
+           {id:'R001',title:'지수의 약속',kind:'rule',content:'지수가 감춘 약속은 아직 공개하지 않는다',keys:[],always:true,enabled:true,new:true}],
+  progress:[{key:'P001',title:'시점',text:`${count}화가 끝난 저녁, 민수는 지수에게 사과했다.`},{key:'L0001',title:'다리',text:'민수는 이제 다리 앞에서 멈추지 않는다'}]};
  const calls:string[]=[];
  await page.addInitScript(()=>{localStorage.setItem('lore_uid','series-test-browser');localStorage.setItem('lore_my_runs','["ep1","ep2"]');});
  await page.route('**/api/**',async route=>{
@@ -24,14 +29,18 @@ async function stub(page:Page,count=1,authenticated=true) {
   if(path.endsWith('/allowance')) return send({logged_in:true,balance:48,credit_cost:12,qualities:[{key:'wave',label:'파도',credits:12}]});
   if(path.endsWith('/runs')) return send({runs:[]});
   if(path.endsWith('/liked')) return send(ok([]));
+  if(path.endsWith('/subscription')) return send(ok({subscribed:false,subscribers:0,episode:1}));
+  if(path.endsWith('/attribution')) return send(ok([]));
   if(/\/runs\/ep\d\/result$/.test(path)) {
    const ep=Number(path.match(/ep(\d)/)![1]);
    return send({run_id:`ep${ep}`,character:'민수',title:chapter(ep).title,genre:'일상',style_label:'로맨스',episode:ep,pages:[{no:1,gap:0,width:1,caption:'다리 앞에서 망설이는 민수'}],page_count:1,planned_pages:1,preview:false,example:false});
   }
   if(path.includes('/page/')) return route.fulfill({status:200,contentType:'image/jpeg',body:readFileSync(resolve(base,'webtoon/fe/static/entry/webtoon-page.jpg'))});
   if(/\/series\/ep\d$/.test(path)) return send({episode:Number(path.match(/ep(\d)/)![1]),chapters:Array.from({length:count},(_,i)=>chapter(i+1))});
+  if(path.endsWith('/digest')) {draft={...draft,digest:{status:'RUNNING'}};return send(draft.digest);}
   if(path.endsWith('/draft')) {
-   if(req.method()==='POST') {draft={...draft,...req.postDataJSON(),revision:draft.revision+1};return send({revision:draft.revision});}
+   if(req.method()==='POST') {draft={...draft,...req.postDataJSON(),revision:draft.revision+1,digest:{status:'SAVED'}};return send({revision:draft.revision});}
+   if(draft.digest.status==='RUNNING') draft={...draft,...digested,digest:{status:'DONE'}};
    return send(draft);
   }
   if(path.endsWith('/next')) {submitted=req.postDataJSON();return send({id:'job-next'});}
@@ -43,12 +52,36 @@ async function stub(page:Page,count=1,authenticated=true) {
 async function openForm(page:Page) {
  await page.goto('/webtoon?run=ep1');
  await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
- await expect(page.getByLabel('고정 설정',{exact:true})).toBeVisible();
+ await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeVisible();
+ await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeEnabled({timeout:15000});
 }
-test('고정 설정/진행 상태 수정 → 무료 초안 저장·복원 → 확인 후 생성',async({page},info)=>{
+test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기 → 이번 화만 적고 생성',async({page})=>{
  const server=await stub(page);
  await openForm(page);
+ // 개발 모드는 effect 를 두 번 돌린다. 서버의 정리 시작은 같은 앞 화에 한 번만 돈다(SeriesDigestService.start).
+ expect(server.calls.filter(x=>x.endsWith('/series/ep1/digest')).length).toBeGreaterThan(0);
+ await expect(page.getByText('1화가 끝난 저녁, 민수는 지수에게 사과했다.')).toBeVisible();
+ await expect(page.getByText('지수가 감춘 약속은 아직 공개하지 않는다')).toBeVisible();
+ await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toBeVisible();
+ // 항목을 빼면 그 항목을 덮어쓰던 진행 상태 줄도 같이 빠진다.
+ await page.getByRole('button',{name:'다리 빼기',exact:true}).last().click();
+ await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toHaveCount(0);
+ await expect(page.getByText('민수는 이제 다리 앞에서 멈추지 않는다')).toHaveCount(0);
+ await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 우회로를 미리 확인하고 일찍 출발한다.');
+ await page.getByLabel('사용하는 캐릭터·설정·이야기의 권리를 확인했어요.',{exact:true}).check();
+ await page.getByRole('button',{name:'2화 만들기',exact:true}).click();
+ await expect(page).toHaveURL(/view=running&job=job-next/);
+ expect(server.submitted.entries.map((e:any)=>e.title)).toEqual(['지수의 약속']);
+ expect(server.submitted.progress.map((p:any)=>p.key)).toEqual(['P001']);
+});
+test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',async({page},info)=>{
+ const server=await stub(page);
+ await openForm(page);
+ await page.getByText('더 적어 둘 설정 · 선택',{exact:true}).click();
  await page.getByLabel('고정 설정',{exact:true}).fill('민수는 고소공포증이 있다. 비밀 약속은 공개하지 않는다.');
+ // 진행 상태 줄을 다 빼면 글 칸이 나온다(정리가 실패했을 때와 같은 칸).
+ await page.getByRole('button',{name:'시점 빼기',exact:true}).click();
+ await page.getByRole('button',{name:'다리 빼기',exact:true}).last().click();
  await page.getByLabel('현재 진행 상태',{exact:true}).fill('다음 날 아침. 민수는 지수에게 사과했고, 지수도 늦은 이유를 알게 됐다.');
  await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 지난번 일을 기억하고 우회로로 일찍 출발한다.');
  await expect(page.getByRole('button',{name:'2화 만들기',exact:true})).toBeDisabled();
@@ -58,11 +91,8 @@ test('고정 설정/진행 상태 수정 → 무료 초안 저장·복원 → �
  await page.getByRole('dialog').getByRole('button',{name:'닫기',exact:true}).click();
  await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
  await expect(page.getByLabel('현재 진행 상태',{exact:true})).toHaveValue('다음 날 아침. 민수는 지수에게 사과했고, 지수도 늦은 이유를 알게 됐다.');
- await page.getByLabel('고정 설정과 현재 진행 상태를 확인했어요.',{exact:true}).check();
  await page.getByLabel('사용하는 캐릭터·설정·이야기의 권리를 확인했어요.',{exact:true}).check();
  await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 우회로를 미리 확인하고 일찍 출발한다.');
- await expect(page.getByLabel('고정 설정과 현재 진행 상태를 확인했어요.',{exact:true})).not.toBeChecked();
- await page.getByLabel('고정 설정과 현재 진행 상태를 확인했어요.',{exact:true}).check();
  await page.getByRole('dialog').evaluate(e=>e.scrollTo(0,0));
  mkdirSync(resolve(base,'.impeccable/review'),{recursive:true});
  await page.screenshot({path:resolve(base,`.impeccable/review/${info.project.name}.png`),fullPage:true});

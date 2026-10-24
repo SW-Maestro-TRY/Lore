@@ -5,6 +5,7 @@
 """
 from pathlib import Path
 import json
+import re
 import shutil
 
 FILES = ("input.json", "persona.json", "cast.json", "sheet.png", "sheet_spec.json", "lore.json")
@@ -30,6 +31,76 @@ def prepare_input(char, packet):
     return merged
 
 
+def chosen_direction(source):
+    """앞 화에서 고른 이야기. 후보 넷 중 하나를 고른 화(바로 만들기)든 하나뿐인 화든 같다."""
+    source = Path(source)
+    directions = read(source / "directions.json") if (source / "directions.json").is_file() else []
+    pick = read(source / "pick.json").get("n", 1) if (source / "pick.json").is_file() else 1
+    return pick, next((d for d in directions if isinstance(d, dict) and d.get("n") == pick), {})
+
+
+def appeared_cast(source):
+    """앞 화에 실제로 나온 사람만. 주인공은 뺀다.
+
+    바로 만들기(후보 넷 중 고르기)의 cast.json 에는 **후보마다의 상대역이 다 들어 있다.**
+    고른 이야기에 안 나온 사람까지 넘기면 다음 화가 그 사람을 이미 만난 인물로 쓴다
+    (run 20261001T191238-4f6203: 1화에는 서이안만 나왔는데 루나·강도현·차유빈이 넘어갔다).
+    그래서 고른 이야기의 상대역(lead), 본문에 이름이 나온 사람, 확정 장면의 등장인물만 남기고,
+    같은 사람이 다른 이름(「루시앙 드 라비에」·「루시앙」)으로 두 번 들어가지 않게 합친다.
+    """
+    import run as R
+    source = Path(source)
+    original = read(source / "input.json") if (source / "input.json").is_file() else {}
+    hero = str(original.get("name") or "").strip()
+    _, chosen = chosen_direction(source)
+    cast = read(source / "cast.json") if (source / "cast.json").is_file() else []
+    cast = [c for c in cast if isinstance(c, dict) and str(c.get("name") or "").strip()] if isinstance(cast, list) else []
+    cast_pick = read(source / "cast_pick.json") if (source / "cast_pick.json").is_file() else {}
+    scene_cast = [c for c in ((read(source / "scenes.json") if (source / "scenes.json").is_file() else {}) or {}).get("cast", [])
+                  if isinstance(c, dict) and str(c.get("name") or "").strip()]
+
+    def same(a, b):
+        return R._same_person(a, b) or R._same_person(b, a)
+
+    def is_hero(name):
+        # 한쪽으로만 본다 — 「한결 엄마」는 주인공 「한결」이 아니다.
+        return bool(hero) and R._same_person(name, hero)
+
+    keep = []
+    def add(c):
+        name = str(c.get("name") or "").strip()
+        if is_hero(name):
+            return
+        hit = next((k for k in keep if same(k["name"], name)), None)
+        if hit is None:
+            keep.append({**c, "name": name, "look": c.get("look") or c.get("appearance") or ""})
+        elif not hit.get("look") and (c.get("look") or c.get("appearance")):
+            hit["look"] = c.get("look") or c.get("appearance")
+
+    if cast_pick.get("name") and not cast_pick.get("all"):
+        # 인물 단계에서 상대를 고른 화. 고른 사람과 사용자가 적은 사람만 이 화의 인물이다.
+        for c in cast:
+            if c.get("name") == cast_pick["name"] or c.get("from_input") is True:
+                add(c)
+    elif cast_pick.get("all") or (source / "continuation.json").is_file():
+        # 2화 이후의 cast.json 은 앞 회차들에 이미 나온 사람만 모아 둔 것이다 — 이번 화에 안 나왔다고 빼지 않는다.
+        for c in cast:
+            add(c)
+    else:
+        lead = chosen.get("lead") if isinstance(chosen.get("lead"), dict) else {}
+        text = " ".join(str(chosen.get(k) or "") for k in ("title", "intro", "body", "raw"))
+        for c in cast:
+            name = str(c.get("name")).strip()
+            words = [w for w in re.split(r"[\s·]+", name) if len(w) >= 2]
+            words += [w[1:] for w in words if len(w) == 3]      # 성을 뺀 이름
+            if (lead.get("name") and same(name, str(lead["name"]))) or c.get("from_input") is True \
+                    or any(same(str(k.get("name")), name) for k in scene_cast) or any(w in text for w in words):
+                add(c)
+    for c in scene_cast:
+        add(c)
+    return keep
+
+
 def initialize(run_dir, packet):
     source = Path(packet["source_dir"])
     if source.resolve() == Path(run_dir).resolve():
@@ -45,24 +116,8 @@ def initialize(run_dir, packet):
         for item in (source / "sheets").iterdir():
             if item.is_file() and (item.suffix == ".png" or item.name.endswith(".spec.json")):
                 shutil.copy2(item, run_dir / "sheets" / item.name)
-    existing = read(source / "cast.json") if (source / "cast.json").is_file() else []
-    existing = existing if isinstance(existing, list) else []
-    cast_pick = read(source / "cast_pick.json") if (source / "cast_pick.json").is_file() else {}
-    if cast_pick.get("name") and not cast_pick.get("all"):
-        existing = [c for c in existing if c.get("name") == cast_pick["name"] or c.get("from_input") is True]
-    by_name = {str(c.get("name") or "").strip(): c for c in existing if isinstance(c, dict) and c.get("name")}
-    scene_data = read(source / "scenes.json") if (source / "scenes.json").is_file() else {}
-    protagonist = str((read(source / "input.json") if (source / "input.json").is_file() else {}).get("name") or "")
-    for c in scene_data.get("cast", []):
-        if not isinstance(c, dict):
-            continue
-        name = str(c.get("name") or "").strip()
-        if name and name != protagonist and name not in by_name:
-            by_name[name] = {**c, "look": c.get("appearance") or c.get("look") or ""}
-    (run_dir / "cast.json").write_text(json.dumps(list(by_name.values()), ensure_ascii=False), encoding="utf-8")
-    directions = read(source / "directions.json") if (source / "directions.json").is_file() else []
-    pick = read(source / "pick.json").get("n", 1) if (source / "pick.json").is_file() else 1
-    chosen = next((d for d in directions if d.get("n") == pick), {})
+    (run_dir / "cast.json").write_text(json.dumps(appeared_cast(source), ensure_ascii=False), encoding="utf-8")
+    pick, chosen = chosen_direction(source)
     packet = {**packet, "source_body": chosen.get("body") or chosen.get("raw") or ""}
     (run_dir / "continuation.json").write_text(json.dumps(packet, ensure_ascii=False, indent=2), encoding="utf-8")
     if (source / "lore.json").is_file():
@@ -75,11 +130,14 @@ def initialize(run_dir, packet):
 
 def memory_block(run_dir):
     p = read(run_dir / "continuation.json")
-    return "\n".join([
-        f"이번 회차: {p['episode_number']}화",
-        "[고정 설정 — 항상 지킬 사실·제약·정보 공개 규칙]", p.get("fixed_settings", ""),
-        "[작가가 확인한 현재 진행 상태 — 이번 화 시작 시점]", p.get("progress_state", ""),
-        "현재 시점·관계·완료 사건은 이 진행 상태를 따른다. 고정 설정의 불변 제약은 유지한다.",
+    # 설정집(2층 로어북)으로 넘어온 연재는 고정 설정·진행 상태가 설정집 쪽에 있다 — 빈 칸은 안 적는다.
+    lines = [f"이번 회차: {p['episode_number']}화"]
+    if str(p.get("fixed_settings") or "").strip():
+        lines += ["[고정 설정 — 항상 지킬 사실·제약·정보 공개 규칙]", p["fixed_settings"]]
+    if str(p.get("progress_state") or "").strip():
+        lines += ["[작가가 확인한 현재 진행 상태 — 이번 화 시작 시점]", p["progress_state"]]
+    return "\n".join(lines + [
+        "현재 시점·관계·완료 사건은 진행 상태를 따른다. 고정 설정과 세계 규칙의 불변 제약은 유지한다.",
         "설정은 인물의 선택과 결과에 반영한다. 설정집을 대사나 나레이션으로 나열하지 않는다.",
         "작가만 아는 비밀과 인물이 아는 정보, 독자에게 공개해도 되는 정보를 구분한다.",
     ])
@@ -91,7 +149,10 @@ def story_input(run_dir, char, note=""):
     cast = read(run_dir / "cast.json") if (run_dir / "cast.json").is_file() else []
     persona = read(run_dir / "persona.json") if (run_dir / "persona.json").is_file() else {}
     return "\n".join([
-        own.input_block(char, continuation=True), *own.persona_lines(persona), *own.cast_lines(cast),
+        # 설정집 항목은 실험처럼 이번 요청 + 앞 화 원문에 걸린 키워드로 고른다.
+        own.input_block(char, continuation=True, context="\n".join(
+            [char.get("story", ""), p.get("source_body", ""), *p.get("source_scenes", [])])),
+        *own.persona_lines(persona), *own.cast_lines(cast),
         "위 인물 카드의 과거 처지보다 아래의 확인한 현재 상태를 우선한다.", memory_block(run_dir),
         "[앞 화 본문 — 이미 일어난 일. 다시 시작하거나 재현하지 않는다]", p.get("source_body", ""),
         "[앞 화 확정 장면 — 작가가 장면을 수정했다면 본문보다 이 기록을 따른다]",
@@ -125,3 +186,53 @@ def stage_story(run_dir, char, dry_run, note="", lang="ko"):
     R.write_json(run_dir / "directions.json", [d])
     R.write_json(run_dir / "pick.json", {"n": 1, "title": d.get("title", ""), "genre": d["genre"]})
     return d
+
+
+# --------------------------------------------------------------------- 회차 정리
+#
+# 다음 화 버튼을 누르면 끝난 화를 읽고 2층 로어북을 갱신한다(orv-experiment 와 같은 방식, lore_extract).
+# - 고정 로어북: 이 화 원문에서 항목·규칙을 뽑아, 이미 있는 것과 제목이 같지 않은 것만 「추가」로 붙인다.
+# - 진행 상태: 지금까지의 진행 상태와 이 화 본문을 주고, 바뀐 것·지울 것만 받아 합친다.
+# 사람은 틀린 줄을 빼기만 한다(화면). 이미 있는 항목·진행 상태를 모델이 통째로 다시 쓰지 않는다.
+
+def digest_source(packet):
+    """정리할 이번 화 원문 — 고른 본문과 확정 장면."""
+    _, chosen = chosen_direction(packet["source_dir"])
+    body = chosen.get("body") or chosen.get("raw") or ""
+    scenes = [str(s) for s in packet.get("source_scenes") or []]
+    if not scenes:
+        data = read(Path(packet["source_dir"]) / "scenes.json") if (Path(packet["source_dir"]) / "scenes.json").is_file() else {}
+        scenes = [json.dumps(s, ensure_ascii=False) for s in (data or {}).get("scenes", [])]
+    return body, scenes
+
+
+def episode_text(packet):
+    n = packet.get("episode_number") or 1
+    body, scenes = digest_source(packet)
+    return "\n".join([f"[{n}화 본문]", body, "", f"[{n}화 확정 장면]", *scenes])
+
+
+def stage_digest(packet_path, out_path, dry_run, lang="ko"):
+    import run as R
+    import lore_extract as X
+    packet = read(packet_path)
+    out_path = Path(out_path)
+    out_dir = out_path.parent
+    previous = packet.get("previous") or {}
+    kept = [e for e in previous.get("entries") or [] if isinstance(e, dict)]
+    rows = X.progress_rows(previous.get("progress"))
+    text = episode_text(packet)
+    R.write_text(out_dir / "lore_entries_prompt.txt", X.entries_prompt(text, lang))
+    R.write_text(out_dir / "lore_rules_prompt.txt", X.rules_prompt(text, lang))
+    R.write_text(out_dir / "lore_progress_prompt.txt", X.progress_prompt(rows, text, lang))
+    if dry_run:
+        return None
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        added = pool.submit(X.extract, text, out_dir, lang, kept)
+        progress = pool.submit(X.update_progress, rows, text, out_dir, lang)
+        added, (merged, changes, removed) = added.result(), progress.result()
+    result = {"entries": kept + [{**e, "new": True} for e in added], "progress": merged,
+              "progress_changes": changes, "progress_removed": removed}
+    R.write_json(out_path, result)
+    return result

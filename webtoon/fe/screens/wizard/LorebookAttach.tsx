@@ -69,7 +69,7 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
   const book={...working,name:working.name.trim()||t("내 설정집"),confirmed:true};
   const next=[...books];if(editing<0)next.splice(insertAt??next.length,0,book);else next[editing]=book;
   const packed=packBooks(next)!;
-  if(next.length>24||packed.fixed_settings.length+packed.progress_state.length+packed.entries.reduce((n,e)=>n+e.content.length,0)>16000){setError(t("설정집은 합쳐서 16,000자까지예요."));return;}
+  if(next.length>24||packed.fixed_settings.length+packed.progress_state.length+packed.entries.reduce((n,e)=>n+e.content.length,0)>80000){setError(t("설정집은 합쳐서 80,000자까지예요."));return;}
   onChange(packed);setUndo(null);setWorking(null);setEditing(-1);close();
  };
  return <section className="wt-lore" aria-label={t("설정집")}>
@@ -119,8 +119,8 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
     {!!working.entries.length&&<details className="wt-lore-entries"><summary>{t("세부 설정 {n}개 확인·수정",{n:working.entries.length})}</summary>
      {working.entries.map((e,i)=><details key={i}><summary>{e.title}</summary>
       <label><input type="checkbox" checked={e.enabled} onChange={ev=>patch({entries:working.entries.map((v,j)=>j===i?{...v,enabled:ev.target.checked}:v)})}/>{t("이 설정 사용")}</label>
-      <textarea className="field" aria-label={e.title} rows={4} maxLength={2000} value={e.content} onChange={ev=>patch({entries:working.entries.map((v,j)=>j===i?{...v,content:ev.target.value}:v)})}/>
-      <label>{t("참고 키워드")}<input className="field" value={e.keys.join(", ")} onChange={ev=>patch({entries:working.entries.map((v,j)=>j===i?{...v,keys:ev.target.value.split(",").map(k=>k.trim()).filter(Boolean).slice(0,12)}:v)})}/></label>
+      <textarea className="field" aria-label={e.title} rows={4} maxLength={6000} value={e.content} onChange={ev=>patch({entries:working.entries.map((v,j)=>j===i?{...v,content:ev.target.value}:v)})}/>
+      <label>{t("참고 키워드")}<input className="field" value={e.keys.join(", ")} onChange={ev=>patch({entries:working.entries.map((v,j)=>j===i?{...v,keys:ev.target.value.split(",").map(k=>k.trim()).filter(Boolean).slice(0,40)}:v)})}/></label>
       <label><input type="checkbox" checked={e.always} onChange={ev=>patch({entries:working.entries.map((v,j)=>j===i?{...v,always:ev.target.checked}:v)})}/>{t("항상 참고하기")}</label>
       {e.evidence&&<blockquote><span>{t("원문 근거")}</span>{e.evidence}</blockquote>}
      </details>)}
