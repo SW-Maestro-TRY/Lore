@@ -102,6 +102,25 @@ public class CharacterController {
         return view(made, me, who.uidsOf(me, uid));
     }
 
+    @Operation(summary = "내 캐릭터 원본 등록", description = "이미지와 설정을 그대로 비공개 저장합니다. AI 생성/크레딧 차감 없음.")
+    @PostMapping("/original")
+    public Map<String, Object> original(@RequestBody CreateRequest form,
+            @RequestHeader(value = UID_HEADER, required = false) String uid, HttpServletRequest request) {
+        Long me = CreditGate.currentUser();
+        return view(characters.importOriginal(me, uid, form.name(), form.description(),
+                form.photosData(), form.photoKeys(), guests.keyOf(request)), me, who.uidsOf(me, uid));
+    }
+
+    @Operation(summary = "내 캐릭터 이미지와 설정 수정")
+    @PatchMapping("/{publicId}/original")
+    public Map<String, Object> updateOriginal(@PathVariable String publicId, @RequestBody CreateRequest form,
+            @RequestHeader(value = UID_HEADER, required = false) String uid, HttpServletRequest request) {
+        Long me = CreditGate.currentUser();
+        List<String> uids = who.uidsOf(me, uid);
+        return view(characters.updateOriginal(publicId, me, uids, form.name(), form.description(),
+                form.photosData(), form.photoKeys(), guests.keyOf(request)), me, uids);
+    }
+
     @Operation(summary = "캐릭터 만들어보기", description = """
             뭐든 넣으면 그대로 그 세계관 웹툰의 한 컷이 된다. 사진·설명·이름·세계관 전부
             **선택** — 아무것도 없이 보내면 「랜덤으로 만들어보기」다.
@@ -261,7 +280,7 @@ public class CharacterController {
         }
         // 한 컷으로 만든 것만 카드가 있다. 없으면 칸 자체를 안 보낸다 — 화면이
         // "card 가 있나" 로 두 종류를 가른다.
-        if (one.hasCard()) {
+        if (one.hasCard() && one.getSource() != CharacterSource.UPLOAD && one.getSource() != CharacterSource.REPLACED_UPLOAD) {
             Map<String, Object> card = new LinkedHashMap<>();
             card.put("world", one.getWorld() == null ? "" : one.getWorld());
             card.put("world_label", one.getWorldLabel() == null ? "" : one.getWorldLabel());

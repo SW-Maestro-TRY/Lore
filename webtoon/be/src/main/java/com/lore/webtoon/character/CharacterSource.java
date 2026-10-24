@@ -8,4 +8,8 @@ public enum CharacterSource {
     PROMPT,
     /** 우리가 올려 둔 것. 처음 온 사람이 만들 것이 없어도 바로 고를 수 있게. */
     BUILTIN,
+    /** 사용자가 올린 이미지와 설정을 그대로 보관한다. AI 호출 없음. */
+    UPLOAD,
+    /** AI로 생성한 뒤 사용자가 원본 이미지로 교체. 생성 무료 횟수는 유지한다. */
+    REPLACED_UPLOAD,
 }

@@ -7,8 +7,10 @@
  * 바탕을 누르거나 Esc 를 누르면 닫힌다. 일하는 중(busy)에는 안 닫힌다 — 지우는
  * 도중에 닫히면 끝났는지 모른 채 화면이 사라진다.
  */
-import { useEffect, useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import "./Dialog.css";
+import {IconClose} from "./Icons";
+import {useT} from "../lib/i18n";
 
 export function Dialog({ title, sub, onClose, busy, wide, children }: {
   /** 없으면 제목 줄 없이 바로 내용부터 */
@@ -21,9 +23,14 @@ export function Dialog({ title, sub, onClose, busy, wide, children }: {
   children?: ReactNode;
 }) {
   const id = useId();
+  const t = useT();
+  const box=useRef<HTMLDivElement>(null);
+  useEffect(()=>{const previous=document.activeElement as HTMLElement|null;box.current?.querySelector<HTMLElement>("button,input,textarea,select,[tabindex]")?.focus();return()=>previous?.focus();},[]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
+      if (e.key === "Escape" && !busy) { e.preventDefault();onClose(); }
+      if(e.key==="Tab"&&box.current){const nodes=Array.from(box.current.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[tabindex="0"]')).filter(n=>n.offsetParent!==null);if(!nodes.length){e.preventDefault();return;}const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&(document.activeElement===first||!box.current.contains(document.activeElement))){e.preventDefault();last.focus();}else if(!e.shiftKey&&(document.activeElement===last||!box.current.contains(document.activeElement))){e.preventDefault();first.focus();}}
+
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -31,9 +38,9 @@ export function Dialog({ title, sub, onClose, busy, wide, children }: {
 
   return (
     <div className="wt-dialog" onClick={() => { if (!busy) onClose(); }}>
-      <div className={`wt-dialog-box${wide ? " wide" : ""}`} role="dialog" aria-modal="true"
+      <div ref={box} className={`wt-dialog-box${wide ? " wide" : ""}`} role="dialog" aria-modal="true"
            aria-labelledby={title ? id : undefined} onClick={(e) => e.stopPropagation()}>
-        {title && <h2 id={id}>{title}</h2>}
+        <div className="wt-dialog-heading">{title && <h2 id={id}>{title}</h2>}<button type="button" className="wt-dialog-close" aria-label={t("닫기")} disabled={busy} onClick={onClose}><IconClose size={18}/></button></div>
         {sub && <p className="wt-dialog-sub">{sub}</p>}
         {children}
       </div>

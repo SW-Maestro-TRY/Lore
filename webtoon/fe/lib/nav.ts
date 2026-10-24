@@ -2,7 +2,7 @@
  *
  *   /webtoon                       첫 화면
  *   /webtoon?view=entry            입구 (내 캐릭터로 웹툰 / 캐릭터 만들어보기)
- *   /webtoon?view=create&step=1    웹툰 만들기 1~5 (&character=<id> 로 캐릭터를 골라 들어옴)
+ *   /webtoon?view=create&step=1    웹툰 만들기 1~2 (&character=<id> 로 캐릭터를 골라 들어옴)
  *   /webtoon?view=running&job=<id> 만드는 중 (시트 확인 · 이야기 고르기 · 그리는 중)
  *   /webtoon?run=<id>              완성본 (공유 링크가 이 길이다)
  *   /webtoon?view=editor&run=<id>  편집실
@@ -13,7 +13,7 @@
  *   /webtoon?card=<id>             공유된 카드 (남이 봄)
  *   /webtoon?view=mypage           마이페이지
  *   /webtoon?view=feedback         피드백 보내기 (예전 주소 view=mypage&tab=feedback 도 여기로)
- *   /webtoon?view=admin            관리자 홈 — 실시간 유입 · 바로가기 · UTM 링크 (관리자만)
+ *   /webtoon?view=admin            관리자 대시보드 — 개요 · 작품(&tab=works) · 캐릭터(&tab=characters) (관리자만, #779)
  *   /webtoon?view=admin-examples   예시 작품 관리 (관리자만, #619)
  *   /webtoon?view=admin-works      작품 관리 — 처리 기록 · 관리자 휴지통 (관리자만, #638)
  *   /webtoon?view=admin-payments   결제 관리 — 충전 주문 · 환불 (관리자만, #155)
@@ -23,7 +23,7 @@
 
 export type View =
   | "landing" | "entry" | "create" | "running" | "result" | "editor" | "works"
-  | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin" | "admin-examples" | "admin-works" | "admin-payments";
+  | "character-new" | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin" | "admin-examples" | "admin-works" | "admin-payments";
 
 export interface GoParams {
   step?: number;
@@ -31,8 +31,8 @@ export interface GoParams {
   job?: string;
   run?: string;
   id?: string;
-  /** 마이페이지에서 처음 열 칸. 진행 화면의 「설정에서 끌 수 있어요」가 설정 칸으로 바로 보낸다. */
-  tab?: "settings";
+  /** 처음 열 칸. 마이페이지는 설정 칸(진행 화면의 「설정에서 끌 수 있어요」), 관리자 대시보드는 작품 · 캐릭터 칸. */
+  tab?: "settings" | "works" | "characters";
   /** 만들기 화면이 어느 길인가(#548). own = 「만들고 싶은 내용이 있어요」. 없으면 아이디어부터. */
   mode?: "own";
 }

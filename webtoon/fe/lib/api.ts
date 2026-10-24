@@ -209,6 +209,7 @@ export interface NhDirection {
 
 /** 만들기에서 적은 것(#548). 이야기·제목은 장면 확인 화면의 「이야기 (고치기)」가 고치고, 여기서는 보기만 한다. */
 export interface NhJobInput {
+  lorebook?: LoreBook | null;
   name: string;
   description: string;
   genre: string;
@@ -687,7 +688,7 @@ export interface Character {
   name: string;
   description: string;
   art_url: string | null;
-  source: "photo" | "prompt" | "builtin";
+  source: "photo" | "prompt" | "builtin" | "upload" | "replaced_upload";
   status: "drawing" | "ready" | "error";
   error: string | null;
   builtin: boolean;
@@ -754,6 +755,13 @@ export function tryCharacter(body: {
 /** 직접 만들기(초상 한 장) — 백로그이지만 서버 길은 남아 있다. */
 export function createCharacter(body: { name: string; description: string; photos_data?: string[]; photo_keys?: string[]; style?: string; language?: string }) {
   return post<Character>("/characters", body);
+}
+
+/** 업로드 원본 등록/교체. AI 캐릭터 뽑기와 분리한다. */
+export function saveOriginalCharacter(body: {name:string;description:string;photo_keys:string[]}, id?:string) {
+  return call<Character>(id ? `/characters/${encodeURIComponent(id)}/original` : "/characters/original", {
+    method: id ? "PATCH" : "POST", headers: {"Content-Type":"application/json"}, body:JSON.stringify(body),
+  });
 }
 
 export function renameCharacter(id: string, name: string, description: string) {
@@ -835,77 +843,103 @@ export function adminSurveyRows(limit = 200): Promise<SurveyRow[]> {
   return call(`/admin/feedback?limit=${limit}`);
 }
 
-/* ---- 관리자 실시간 집계 — 관리자만 ---------------------------------------- */
+/* ---- 관리자 대시보드(#779) — 관리자만 ---------------------------------------- */
 
-export interface AdminLiveSource {
+/** 누구를 세나 — external(기본)은 관리자 · 멘토 · 지인을 뺀다. */
+export type AdminWho = "external" | "internal" | "all";
+
+export interface AdminKpi {
   key: string;
-  visitors: number;
-  started: number;
-  baked: number;
+  label: string;
+  definition: string;
+  base: number;
+  hit: number;
+  /** 분모가 0이면 null */
+  pct: number | null;
+  note?: string;
 }
 
-export interface AdminLiveRefHost {
-  host: string;
-  visitors: number;
-}
-
-export interface AdminLiveEvent {
-  name: string;
-  uids: number;
-  total: number;
-}
-
-export interface AdminLiveSurvey { positive: number; total: number }
-
-export interface AdminLive {
+export interface AdminOverview {
   from: string;
   to: string;
-  activeMinutes: number;
-  activeUids: number;
-  runningJobs: number;
-  funnel: {
-    landing: number;
-    /** #763 — landing 중 광고(utm_medium cpc · paid 류)로 들어온 브라우저 */
-    landingAd: number;
-    /** #763 — 들어와서 무엇이든 한 브라우저(첫 화면만 보고 나간 것 제외) */
-    engaged: number;
-    /** #763 — engaged 중 광고로 들어온 것 */
-    engagedAd: number;
-    newSessions: number;
-    returningSessions: number;
-    signedIn: number;
+  who: AdminWho;
+  totals: {
+    visitors: number;
+    signups: number;
     createStarted: number;
-    baked: number;
-    readEnd: number;
-    nextEpisodeClicked: number;
-    kakaoShared: number;
-    downloadClicked: number;
-    createFailed: number;
-    createBlocked: number;
+    jobs: number;
+    jobsDone: number;
+    jobsFailed: number;
+    makersDone: number;
   };
-  revisions: { story: number; sheet: number; scene: number; panel: number };
-  /** #763 — 짤 펫 주인 ↔ 웹툰. 로그인한 계정으로만 잇는다(짤 익명 id 는 웹툰 uid 와 다름). */
-  crossover: {
-    petOwners: number;
-    petOwnersOnWebtoon: number;
-    petOwnersCreated: number;
-    makersWithPet: number;
-    makersSignedIn: number;
-  };
-  survey: Record<string, AdminLiveSurvey>;
-  sources: AdminLiveSource[];
-  mediums: AdminLiveSource[];
-  campaigns: AdminLiveSource[];
-  refHosts: AdminLiveRefHost[];
-  events: AdminLiveEvent[];
+  kpi: AdminKpi[];
+  daily: { day: string; visitors: number; createStarted: number; jobsDone: number }[];
+  /** 같은 기간 우리 쪽(관리자 · 멘토 · 지인) 방문 사람 수 */
+  internalVisitors: number;
+  /** 지금 줄 서 있거나 돌거나 사람을 기다리는 작업 */
+  runningJobs: number;
 }
 
-export function adminLive(from?: string, to?: string): Promise<AdminLive> {
-  const q = new URLSearchParams();
-  if (from) q.set("from", from);
-  if (to) q.set("to", to);
-  const s = q.toString();
-  return call<AdminLive>(`/admin/live${s ? "?" + s : ""}`);
+export function adminOverview(from: string, to: string, who: AdminWho): Promise<AdminOverview> {
+  const q = new URLSearchParams({ from, to, who });
+  return call<AdminOverview>(`/admin/dash/overview?${q}`);
+}
+
+export interface AdminPage<T> { rows: T[]; total: number; page: number; pageSize: number }
+
+export type AdminWorkState = "public" | "private" | "hidden" | "removed" | "trash";
+
+export interface AdminWorkRow {
+  run_id: string;
+  title: string | null;
+  owner_email: string | null;
+  guest: boolean;
+  state: AdminWorkState;
+  moderation_reason: string | null;
+  created_at: string;
+  pages: number;
+  cover_url: string | null;
+}
+
+export function adminWorkList(filter: string, q: string, page: number): Promise<AdminPage<AdminWorkRow>> {
+  const p = new URLSearchParams({ filter, q, page: String(page) });
+  return call(`/admin/dash/works?${p}`);
+}
+
+export interface AdminCharacterRow {
+  id: string;
+  name: string;
+  owner_email: string | null;
+  guest: boolean;
+  source: string | null;
+  status: string | null;
+  shared: boolean;
+  blocked: boolean;
+  world: string | null;
+  genre: string | null;
+  created_at: string;
+  art_url: string | null;
+  description: string | null;
+}
+
+export interface AdminCharacterDetail extends AdminCharacterRow {
+  error: string | null;
+  species: string | null;
+  role: string | null;
+  twist: string | null;
+  quote: string | null;
+  style: string | null;
+  asked_name: string | null;
+  asked_world: string | null;
+}
+
+export function adminCharacterList(filter: string, q: string, page: number): Promise<AdminPage<AdminCharacterRow>> {
+  const p = new URLSearchParams({ filter, q, page: String(page) });
+  return call(`/admin/dash/characters?${p}`);
+}
+
+export function adminCharacter(id: string): Promise<AdminCharacterDetail> {
+  return call(`/admin/dash/characters/${encodeURIComponent(id)}`);
 }
 
 /* ---- 예시 작품 관리(#614 · #619) — 관리자만 ---------------------------------------- */

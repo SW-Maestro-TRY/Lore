@@ -1,0 +1,148 @@
+/* The editor canvas remains white; its controls use the approved gallery tokens. */
+.wt .wt-ed {
+  zoom: 1;
+  background: var(--paper);
+}
+.wt .wt-ed-top,
+.wt .wt-ed-left,
+.wt .wt-ed-dock {
+  background: var(--bg);
+  border-color: var(--line);
+}
+.wt .wt-ed-stage {
+  background: #070e18;
+  padding: 28px;
+}
+.wt .wt-ed .credit,
+.wt .wt-ed .btn-quiet,
+.wt .wt-ed .ep-tab,
+.wt .wt-ed .dock-item,
+.wt .wt-ed .fb-tag {
+  background: var(--water-light);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.wt .wt-ed .btn-primary,
+.wt .wt-ed .ep-tab[aria-current="true"],
+.wt .wt-ed .dock-tab.is-on,
+.wt .wt-ed .fb-tag[aria-pressed="true"],
+.wt .wt-ed-workstoggle[aria-expanded="true"],
+.wt .wt-ed-dockopen {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.wt .wt-ed .btn-primary:hover:not(:disabled) {
+  background: var(--sea);
+  color: var(--paper);
+}
+.wt .wt-ed .scene {
+  background: var(--bg);
+  border-radius: 12px;
+  border-color: var(--line);
+  overflow: hidden;
+  box-shadow: 0 16px 40px #0003;
+}
+.wt .wt-ed .scene.is-active {
+  border-color: var(--sea);
+}
+.wt .wt-ed .scene-head,
+.wt .wt-ed .scene-tools {
+  padding: 12px 16px;
+}
+.wt .wt-ed .scene-note {
+  padding: 4px 16px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.wt .wt-ed .scene-gap {
+  background: var(--paper);
+  border-color: var(--line-strong);
+}
+.wt .wt-ed .dock-item .prev {
+  color: #111;
+}
+.wt .wt-ed .dock-item .prev .bub {
+  color: #111;
+}
+.wt .wt-ed .wt-ed-regen-inline {
+  width: auto;
+  max-width: none;
+  margin: 0 16px 16px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+.wt .wt-ed-regen-inline h2 {
+  font-size: 17px;
+}
+.wt .wt-ed-regen-inline .wt-ed-regen-box {
+  gap: 16px;
+}
+.wt .wt-ed .fb-tag {
+  height: auto;
+  min-height: 34px;
+  font-size: 12px;
+}
+.wt .wt-ed-creditshort-x {
+  background: var(--water-light);
+}
+.wt .wt-ed .item-bar .ib.is-on {
+  color: var(--paper);
+}
+@media (max-width: 879px) {
+  .wt .wt-ed-stage {
+    padding: 16px 12px 90px;
+  }
+  .wt .wt-ed-strip {
+    padding: 10px 16px;
+  }
+  .wt .wt-ed-left {
+    padding: 16px;
+  }
+  .wt .wt-ed-sceneinfo {
+    max-height: 240px;
+    overflow: auto;
+  }
+  .wt .wt-ed .scene-head {
+    font-size: 12px;
+  }
+  .wt .wt-ed .wt-ed-regen-inline {
+    margin: 0 10px 10px;
+    padding: 16px;
+  }
+  .wt .wt-ed-chips {
+    gap: 8px;
+  }
+  .wt .wt-ed-bake,
+  .wt .wt-ed-done {
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}
+
+.wt .wt-ed .scene {
+  overflow: clip;
+}
+.wt .wt-ed .scene-tools:has([aria-expanded="true"]) {
+  position: sticky;
+  top: calc(var(--lore-header-h, 64px) + 72px);
+  z-index: 20;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.wt .wt-ed [data-act="regen"] {
+  scroll-margin-top: calc(var(--lore-header-h, 64px) + 88px);
+}
+.wt .wt-ed-regen-inline .ask-scene {
+  display: none;
+}
+.wt .wt-ed-dock {
+  overflow-x: hidden;
+}
+.wt .wt-ed .wt-share-trigger {
+  background: var(--water-light);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.wt .wt-ed-regen-box .fb-lead:has(+ .fb-tags:empty) { display: none; }

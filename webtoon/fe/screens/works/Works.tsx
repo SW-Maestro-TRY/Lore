@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, recentRuns, setVisibility,
+  browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, setVisibility,
   type RunCard,
 } from "../../lib/api";
 import { useT } from "../../lib/i18n";
@@ -11,13 +11,13 @@ import { louArt } from "../../lib/louArt";
 import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
 import LikeButton from "../../ui/LikeButton";
-import RunStrip from "../../ui/RunStrip";
 import { STYLE_INFO } from "../../lib/wizardData";
 import FilterCombo from "./FilterCombo";
 import { GENRE_ORDER, genreBucket } from "./genreBucket";
 import "../wizard/i18n";
 import "./i18n";
 import "./Works.css";
+import "./WorksFinal.css";
 
 /* 둘러보기 — 캔버스 Works · WorksEmpty · WorksError · MWorks.
  *
@@ -67,13 +67,6 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   }, [authenticated, runs]);
 
   const mineOf = (r: RunCard) => isMyRun(r.run_id) || accountRuns.includes(r.run_id);
-
-  /* 최근 본 웹툰(#247) — 브라우저에 남은 번호를 목록에서 찾아 표지 한 줄로. */
-  const recent = useMemo(() => {
-    if (!runs) return [];
-    const byId = new Map(runs.map((r) => [r.run_id, r]));
-    return recentRuns().map((id) => byId.get(id)).filter((r): r is RunCard => !!r).slice(0, 10);
-  }, [runs]);
 
   /* 칩: 전체 · 내 작품 · 찜. 그 옆에 그림체 칸 · 장르 칸 — 셋은 겹쳐 걸린다.
      전에는 장르·그림체도 칩으로 늘어놨는데, 장르가 작품마다 모델이 적은 글이라
@@ -173,19 +166,14 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
       <div className="wt-wrap wt-page wt-works-page">
         <div className="wt-works-head">
           <div className="wt-works-title">
-            <h2>{t("다른 사람들의 웹툰")}</h2>
+            <h2>{t("웹툰 둘러보기")}</h2>
           </div>
           <div className="wt-works-headacts">
-            <button type="button" className="btn btn-p wt-works-create" onClick={() => go("entry")}>{t("내 웹툰 만들기")}</button>
+            <button type="button" className="btn btn-p wt-works-create" onClick={() => go("create",{step:1})}>{t("내 웹툰 만들기")}</button>
           </div>
         </div>
 
-        {recent.length > 0 && filter === "all" && !style && !genre && !query && (
-          <div className="wt-works-recent">
-            <RunStrip title={t("최근 본 웹툰")} runs={recent}
-                      onOpen={(r) => { track("recent_open", { run: r.run_id }); go("result", { run: r.run_id }); }} />
-          </div>
-        )}
+        {/* 「최근 본 웹툰」 줄은 뺐다 — 목록 위에 표지 줄이 하나 더 있으니 정신없다는 피드백(2026-10-24) */}
 
         <div className="wt-works-finds">
           <input className="field wt-works-search" type="search" value={query} placeholder={t("제목·캐릭터·장르로 찾기")}
@@ -230,7 +218,7 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
             <h2>{t("아직 구경할 웹툰이 없어요")}</h2>
             <span className="muted">{t("첫 작품이 이 자리에 걸립니다. 캐릭터 하나와 이야기 한 줄이면 10분 안에 한 편이 나와요.")}</span>
             <div className="wt-works-stateacts">
-              <button type="button" className="btn btn-p" onClick={() => go("entry")}>{t("내 캐릭터로 웹툰 만들기")}</button>
+              <button type="button" className="btn btn-p" onClick={() => go("create",{step:1})}>{t("내 캐릭터로 웹툰 만들기")}</button>
             </div>
           </div>
         )}

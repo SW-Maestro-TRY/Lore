@@ -49,28 +49,38 @@
 - 한 브라우저가 여럿에 해당하면 관리자 → 멘토 → 지인 순으로 앞의 것으로 셉니다.
 - 멘토는 SW마에스트로 멘토님 계정입니다. 피드백을 주려고 써 보신 것이라 실사용자에서 빼되, 지인과는 따로 셉니다(멘토 피드백과 지인 반응을 섞지 않으려고).
 - 로그인 없이 랜딩만 보는 우리 쪽 브라우저는 계정으로 가를 수 없어서 `uid` 를 직접 적습니다. `uid` 는 브라우저 저장소(`lore_uid`)에 있는 값이라, 저장소를 지웠거나 다른 기기·브라우저로 보면 새 값이 되므로 알게 될 때마다 더합니다.
-- 지인 목록은 운영 DB `user_id` 기준이고, 알게 될 때마다 아래 `friends` 에 더합니다.
+- 멘토 · 지인 명단은 운영 DB 표 `webtoon_internal_user`(`user_id`, `kind` = `MENTOR` · `FRIEND`)에
+  있습니다(#778). 쿼리에 번호를 직접 적지 않고 이 표와 잇습니다. 이름 · 이메일은 표에 없고
+  `users` 와 이어서 봅니다. 아래 목록은 표에 넣은 근거를 남겨 두는 것입니다.
+- 알게 될 때마다 운영에 한 줄 넣고 아래 목록에도 근거를 더합니다. 이메일은 저장소에 적지
+  않습니다.
+
+  ```sh
+  webtoon/tools/examples/db-sql.sh prod "insert into webtoon_internal_user (user_id, kind) values (<번호>, 'MENTOR') on conflict do nothing" --write
+  ```
 
 | 지인 | `user_id` | 근거 |
 |---|---|---|
-| 펭귄 만든이 | 80 | 2026-10-08 13:28 에 펭귄 이야기 후보를 만든 계정 |
-| 향이 만든이 | 81 | 2026-10-08 13:17 에 향이 캐릭터를 만든 계정 |
+| 펭귄 만든이 | 80 | 2026-10-08 13:28 에 펭귄 이야기 후보를 만든 계정. 지인용 링크(`friends/friend/sprint-0928`)로 들어옴 |
+| 향이 만든이 | 81 | 2026-10-08 13:17 에 향이 캐릭터를 만든 계정. 지인용 링크(`friends/friend/sprint-0928`)로 들어옴 |
 
 | 멘토 | `user_id` | 근거 |
 |---|---|---|
 | 멘토님 | 135 | 2026-10-10 22:21 춘식이로 웹툰(작업 31 「조회수는 내가 먹는다」)을 만들고, 그 사용 피드백을 따로 남겨 주심 |
+| 멘토님 | 163 | 2026-10-24 가입. 「슈퍼 세컨드브레인」을 만든 계정 |
 
 | 내부 브라우저 | `uid` | 근거 |
 |---|---|---|
 | 하은 폰(추정) | `umt9v2vvibb0yfz69` | 모바일, 로그인 없이 랜딩만 39줄(10/5 16:29 ~ 10/9 19:59). 하은 님이 본인 것 같다고 함 |
 
 ```sql
--- 날짜만 바꿔 쓴다. 멘토·지인을 더하면 각 in (...) 에 user_id 를, 내부 브라우저를 더하면 uid 목록에 값을 넣는다.
+-- 날짜만 바꿔 쓴다. 멘토·지인은 webtoon_internal_user 에서 읽고, 내부 브라우저를 더하면 uid 목록에 값을 넣는다.
 with internal as (
-  select e.uid, bool_or(u.role = 'ADMIN') as admin, bool_or(u.id in (135)) as mentor,
-         bool_or(u.id in (80, 81)) as friend
+  select e.uid, bool_or(u.role = 'ADMIN') as admin,
+         bool_or(iu.kind = 'MENTOR') as mentor, bool_or(iu.kind = 'FRIEND') as friend
   from webtoon_event e join users u on u.id = e.user_id
-  where u.role = 'ADMIN' or u.id in (135, 80, 81)
+  left join webtoon_internal_user iu on iu.user_id = u.id
+  where u.role = 'ADMIN' or iu.user_id is not null
   group by e.uid
 )
 select case when i.admin then '관리자' when i.mentor then '멘토' when i.friend then '지인'
@@ -81,8 +91,22 @@ where e.name = 'session_start' and e.occurred_at >= timestamptz '2026-10-09 00:0
 group by 1 order by 1;
 ```
 
-로그인 세션(`user_refresh_token`)으로 사람을 셀 때도 같은 기준으로 `users.role` 과 위 지인
-`user_id`, 멘토 `user_id` 를 빼서 봅니다.
+로그인 세션(`user_refresh_token`)으로 사람을 셀 때도 같은 기준으로 `users.role` 과
+`webtoon_internal_user` 의 `user_id` 를 빼서 봅니다.
+
+다른 쿼리에서 셀 사람을 고를 때는 아래 조건 하나를 `where` 에 붙입니다(`e` = `webtoon_event`).
+로그인 전 줄까지 가르려고 `user_id` 가 아니라 브라우저(`uid`)로 봅니다.
+
+| 보기 | 붙이는 조건 |
+|---|---|
+| 전체 | 없음 |
+| 멘토 · 지인 제외 | `and not exists (select 1 from webtoon_event x join webtoon_internal_user i on i.user_id = x.user_id where x.uid = e.uid or x.user_id = e.user_id)` |
+| 멘토 · 지인만 | `and exists (select 1 from webtoon_event x join webtoon_internal_user i on i.user_id = x.user_id where x.uid = e.uid or x.user_id = e.user_id)` |
+
+`not in` 으로 쓰지 않습니다. `uid` 는 빈 값일 수 있어서, 목록에 빈 값이 하나라도 섞이면 결과가
+0 줄이 됩니다.
+
+아래 「자주 보는 숫자」의 쿼리는 전체 기준입니다. 멘토 · 지인을 빼려면 이 조건을 붙입니다.
 
 ## 무엇을 안 남기나
 
