@@ -163,6 +163,23 @@ function toError(res: Response, envelope: Envelope<unknown> | null): ApiError {
   return new ApiError(res.status, code, message);
 }
 
+// ── zzal 시간대 헤더 ────────────────────────────────────────────────────
+// zzal 서버는 펫의 시간대를 생성 때(또는 아직 모르는 펫의 첫 요청에서) 한 번 적는다.
+// 그래서 /api/zzal/ 요청에만 기기의 IANA 시간대를 싣는다. 웹툰·공통 요청에는 안 싣는다.
+// 값은 세션(페이지)마다 한 번 읽는다. 시간대 이름만 보내고 기기 시각은 보내지 않는다(시각은 늘 serverNow).
+const ZZAL_PREFIX = '/api/zzal/';
+const ZZAL_TZ_HEADER = 'X-Zzal-Tz';
+let deviceTz: string | null | undefined;
+function deviceTimeZone(): string | null {
+  if (deviceTz !== undefined) return deviceTz;
+  try {
+    deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    deviceTz = null;
+  }
+  return deviceTz;
+}
+
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   /** 그대로 JSON 으로 직렬화해 보낸다. 없으면 본문 없이 보낸다. */
@@ -184,6 +201,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const { method = 'GET', body, signal } = options;
   const headers = new Headers(options.headers);
   if (body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  if (path.startsWith(ZZAL_PREFIX) && !headers.has(ZZAL_TZ_HEADER)) {
+    const tz = deviceTimeZone();
+    if (tz) headers.set(ZZAL_TZ_HEADER, tz);
+  }
 
   const send = (): Promise<Response> =>
     fetch(`${API_BASE}${path}`, {

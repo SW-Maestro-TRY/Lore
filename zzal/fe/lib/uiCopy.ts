@@ -1,5 +1,6 @@
 'use client';
 import {useZzalLocale,type ZzalLocale}from './locale';
+import {windowUiText}from './windowCopy';
 /** UI strings only. Never pass conversation turns, authored source, names, or diary text here. */
 const KO_COPY:Record<string,string>={
 "한 장만":"사용 후기",
@@ -266,7 +267,9 @@ const COPY:Record<string,[string,string]>={
  '친밀도':['Bond','親密度'],'배부름':['Fullness','満腹度'],'기분':['Mood','気分'],'단정함':['Cleanliness','清潔さ'],'다시 확인하기':['Check again','もう一度確認'],'다시 시도':['Try again','もう一度試す']
 };
 export function uiText(value:string,locale:ZzalLocale):string{
- if(!value)return value;if(locale==='ko')return KO_COPY[value]??value;const i=locale==='en'?0:1;if(COPY[value])return COPY[value][i];
+ if(!value)return value;
+ // 재우기·깨우기 창 문구 — 한국 사용자가 아니면 아이의 시간대로 다시 쓴다(lib/windowCopy.ts). 한국 사용자는 null → 아래 옛 표.
+ const zoned=windowUiText(value,locale);if(zoned!==null)return zoned;if(locale==='ko')return KO_COPY[value]??value;const i=locale==='en'?0:1;if(COPY[value])return COPY[value][i];
  if(value.endsWith('처럼 · 40자까지'))return i===0?'Message (up to 40 characters)':'ひとこと（40文字まで）';
  let m=value.match(/^별점 (\d+)점$/);if(m)return i===0?`${m[1]} stars`:`評価${m[1]}点`;
  m=value.match(/^(\d+)일째$/);if(m)return i===0?`Day ${m[1]}`:`${m[1]}日目`;
