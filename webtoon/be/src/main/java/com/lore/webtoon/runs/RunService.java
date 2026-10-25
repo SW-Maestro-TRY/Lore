@@ -396,6 +396,8 @@ public class RunService {
             scene.put("w", dim[0]);
             scene.put("h", dim[1]);
             scene.put("cuts", List.of(cut));
+            // 표지 뒤 기본 여백 — 편집실이 고친 값이 없을 때 보여 줄 단(OverlayStore.COVER_GAP_STEP)
+            scene.put("gap_step", no == 1 ? OverlayStore.COVER_GAP_STEP : 0);
             sceneList.add(scene);
         }
 
