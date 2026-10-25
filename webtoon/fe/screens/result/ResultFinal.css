@@ -425,7 +425,7 @@
 .wt .wt-reader-cover { width: 260px; }
 
 /* 찜 옆 댓글 수 */
-.wt .wt-result-like { align-items: center; gap: 6px; }
+.wt .wt-result-like { align-items: center; gap: 6px; flex-wrap: wrap; }
 .wt .wt-result-commentcount {
   display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 10px;
   border: 0; border-radius: 999px; background: transparent; color: var(--ink);
@@ -448,3 +448,35 @@
 .wt .wt-result-final button.wt-reader-back { font-size: 17px; height: 46px; padding: 0 20px 0 14px; }
 .wt .wt-result-final button.wt-reader-back span { font-size: 26px; margin-top: -2px; }
 @media (max-width: 767px) { .wt .wt-result-final button.wt-reader-back { font-size: 16px; height: 42px; } }
+
+/* 공유는 찜·댓글 옆 작은 알약으로 */
+.wt .wt-result-shareinline {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border: 1px solid var(--line-strong); border-radius: 999px; background: transparent; color: var(--ink);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.wt .wt-result-shareinline:hover { background: var(--water-light); }
+.wt .wt-result-final .wt-result-acts-other:empty { display: none; }
+
+/* PC 는 웹툰을 넓게 — 720px 은 PC 로 보기엔 작다는 피드백(2026-10-25) */
+@media (min-width: 768px) {
+  .wt .wt-result-final .wt-result-page { max-width: 980px; }
+  .wt .wt-result-sheet,
+  .wt .wt-reader-chapterline,
+  .wt .wt-reader-bottom,
+  .wt .wt-result-final .wt-community { width: 920px; }
+  .wt .wt-reader-intro { max-width: 100%; }
+  .wt .wt-reader-intro { grid-template-columns: 280px minmax(0, 1fr); gap: 30px; }
+  .wt .wt-reader-cover { width: 280px; }
+  .wt .wt-result-final .wt-result-titlemid { font-size: 26px; }
+  .wt .wt-result-genre { font-size: 13px; }
+  .wt .wt-result-final .wt-result-meta { font-size: 14.5px; }
+}
+
+/* 「1화 · 회차 목록」 줄 글자가 너무 작다는 피드백 */
+.wt .wt-reader-chapterline b { font-size: 19px; }
+.wt .wt-reader-chapterline .btn-ghost { font-size: 16px; font-weight: 700; padding: 8px 4px; }
+@media (max-width: 767px) {
+  .wt .wt-reader-chapterline b { font-size: 17px; }
+  .wt .wt-reader-chapterline .btn-ghost { font-size: 15px; }
+}

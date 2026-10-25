@@ -372,6 +372,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                         onClick={() => document.querySelector(".wt-comments-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
                   <IconComment size={16} /> {comments ?? 0}
                 </button>
+                {/* 남의 작품은 공유를 찜·댓글 옆에 둔다(2026-10-25). 내 작품은 아래 단추 줄에 있다. */}
+                {!mine && data.public !== false && (
+                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character}
+                             className="wt-result-shareinline" label={t("공유하기")} />
+                )}
               </span>
 
               {!mine && fromLink && (
@@ -453,8 +458,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
                 )}
-                {data.public !== false && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character}
-                                                      className="btn wt-result-sharewide" label={t("공유하기")} />}
               </div>
             )}
 
@@ -507,7 +510,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 return (
                   <div key={pg.no} className="wt-result-pg" ref={i === data.pages.length - 1 ? endRef : undefined}
                        style={{
-                         ...(gap ? { marginBottom: `${(gap * 100).toFixed(2)}%` } : {}),
+                         /* 장 사이 여백은 비우지 않고 흰 칸으로 — 바깥 바탕(남색)이 비치면 작품이 끊겨 보인다(2026-10-25).
+                            내려받는 파일(EpisodeExport)도 흰 여백이다. padding 의 % 도 폭 기준이라 같은 눈금이다. */
+                         ...(gap ? { paddingBottom: `${(gap * 100).toFixed(2)}%`, background: "#fff" } : {}),
                          ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
                        }}>
                     <button type="button" className="wt-result-peek" aria-label={t("크게 보기")}
@@ -598,7 +603,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               return (
                 <div key={pg.no} id={`wt-zoom-${pg.no}`}
                      style={{
-                       ...(gap ? { marginBottom: `${(gap * 100).toFixed(2)}%` } : {}),
+                       /* 장 사이 여백은 비우지 않고 흰 칸으로 — 바깥 바탕(남색)이 비치면 작품이 끊겨 보인다(2026-10-25).
+                            내려받는 파일(EpisodeExport)도 흰 여백이다. padding 의 % 도 폭 기준이라 같은 눈금이다. */
+                         ...(gap ? { paddingBottom: `${(gap * 100).toFixed(2)}%`, background: "#fff" } : {}),
                        ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
                      }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
