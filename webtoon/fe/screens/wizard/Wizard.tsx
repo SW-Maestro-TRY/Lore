@@ -122,6 +122,9 @@ function CardRail({ small, children }: { small?: boolean; children: React.ReactN
   );
 }
 
+const TITLE_MAX = 60;
+const SETTINGS_MAX = 8000;
+
 export default function Wizard({
   step: rawStep, presetCharacterId, go, authenticated, mode,
 }: { step: number; presetCharacterId?: string; go: Go; authenticated: boolean; mode?: "own" }) {
@@ -428,7 +431,13 @@ export default function Wizard({
   return <div className="wt-wiz wt-wiz-final">
     {legacyOpen&&<Dialog wide title={t("이전 캐릭터 저장")} busy={legacyBusy} onClose={()=>setLegacyOpen(false)}><CharacterForm initialDraft={{name:form.name,description:form.character,image:form.photos[0]||""}} authenticated={authenticated} onBusyChange={setLegacyBusy} onClose={()=>setLegacyOpen(false)} onSaved={c=>{setChars(cs=>[c,...(cs||[])]);pickChar(c);setLegacyOpen(false);}}/></Dialog>}
     {asking&&<NotifyAsk time={qualityTime} onStart={mail=>void begin(mail)} onClose={()=>setAsking(false)}/>}
-    {editingCharacter&&<CharacterEditDialog character={editingCharacter} authenticated={authenticated} onClose={()=>setEditingCharacter(null)} onSaved={c=>{setChars(cs=>cs?.map(x=>x.id===c.id?c:x)||[c]);if(presetChar?.id===c.id)setPresetChar(c);if(form.characterId===c.id)pickChar(c);setEditingCharacter(null);}} onDeleted={()=>{if(form.characterId===editingCharacter.id)unpick();if(presetChar?.id===editingCharacter.id)setPresetChar(null);setChars(cs=>cs?.filter(c=>c.id!==editingCharacter.id)||[]);setEditingCharacter(null);}}/>}
+    {editingCharacter?.builtin&&<CharacterEditDialog localOnly character={editingCharacter} authenticated={authenticated} onClose={()=>setEditingCharacter(null)} onDeleted={()=>setEditingCharacter(null)} onSaved={c=>{
+      /* 예시 캐릭터 — 그 캐릭터를 고르고 이름·설정만 이번 요청에 바꿔 싣는다 */
+      characterRevision.current++;
+      patch({ characterId: c.id, characterArt: c.art_url || undefined, photos: [], name: c.name, character: c.description || "" });
+      setEditingCharacter(null);
+    }}/>}
+    {editingCharacter&&!editingCharacter.builtin&&<CharacterEditDialog character={editingCharacter} authenticated={authenticated} onClose={()=>setEditingCharacter(null)} onSaved={c=>{setChars(cs=>cs?.map(x=>x.id===c.id?c:x)||[c]);if(presetChar?.id===c.id)setPresetChar(c);if(form.characterId===c.id)pickChar(c);setEditingCharacter(null);}} onDeleted={()=>{if(form.characterId===editingCharacter.id)unpick();if(presetChar?.id===editingCharacter.id)setPresetChar(null);setChars(cs=>cs?.filter(c=>c.id!==editingCharacter.id)||[]);setEditingCharacter(null);}}/>}
     <div className="wt-wrap wt-page">
       <nav className="wt-create-steps" aria-label={t("만들기 단계")}><button type="button" aria-current={step===1?"step":undefined} disabled={loreLocked} onClick={()=>void goStep(1)}><i>1</i>{t("캐릭터 · 이야기")}</button><button type="button" aria-current={step===2?"step":undefined} disabled={!step1Ok||loreLocked} onClick={()=>void goStep(2)}><i>2</i>{t("그림체 · 방식")}</button></nav>
       <h1>{t("웹툰 만들기")}</h1>
@@ -438,7 +447,8 @@ export default function Wizard({
             {legacyCharacter&&<div className="wt-create-character"><button type="button" className="wt-create-pick" onClick={()=>setLegacyOpen(true)}>{form.photos[0]?<img src={form.photos[0]} alt=""/>:<span className="wt-create-draft-icon"><IconEdit size={26}/></span>}<b>{form.name||t("이전 캐릭터")}</b><small>{t("저장 전 확인")}</small></button></div>}
             {chars===null?[0,1].map(i=><div key={i} className="wt-create-character skeleton"/>):available.map(c=><div className={`wt-create-character${form.characterId===c.id?" on":""}`} key={c.id}>
               <button type="button" className="wt-create-pick" aria-pressed={form.characterId===c.id} onClick={()=>pickChar(c)}><img src={c.art_url||""} alt=""/><b>{c.builtin?t(c.name):c.name}</b>{form.characterId===c.id&&<span className="wt-create-selected"><IconCheck size={13}/></span>}</button>
-              {c.mine&&!c.builtin&&<button type="button" className="wt-create-pencil" aria-label={t("{name} 수정",{name:c.name})} onClick={()=>setEditingCharacter(c)}><IconEdit size={15}/></button>}
+              {/* 예시 캐릭터도 연필을 띄운다 — 고친 것은 저장하지 않고 이번 요청에만 쓴다(2026-10-25) */}
+              {((c.mine&&!c.builtin)||c.builtin)&&<button type="button" className="wt-create-pencil" aria-label={t("{name} 수정",{name:c.builtin?t(c.name):c.name})} onClick={()=>setEditingCharacter(c.builtin?{...c,name:form.characterId===c.id&&form.name?form.name:t(c.name),description:form.characterId===c.id?form.character:t(c.description||"")}:c)}><IconEdit size={15}/></button>}
             </div>)}
           </CardRail>
           {charsErr&&<div role="alert">{charsErr}<button className="btn-ghost" onClick={loadChars}>{t("다시 시도")}</button></div>}
@@ -447,7 +457,12 @@ export default function Wizard({
           <div inert={loreHistoryRestoring}><LorebookAttach value={form.lorebook} onChange={lorebook=>patch({lorebook})} story={form.story} authenticated={authenticated} onPendingChange={setLorePending}/></div>
         </section>
         <section className="wt-create-genre"><h2>{t("장르")}</h2><div className="wt-create-genres"><button type="button" aria-pressed={!form.genre&&!genreTyping} onClick={()=>{setGenreTyping(false);patch({genre:""});}}>{t("자동")}</button>{GENRE_QUICK.map(g=><button type="button" key={g} aria-pressed={form.genre===g} onClick={()=>{setGenreTyping(false);patch({genre:g});}}>{t(g)}</button>)}<button type="button" aria-pressed={genreIsCustom} onClick={()=>setGenreTyping(true)}>{t("직접 입력")}</button></div>{genreIsCustom&&<input className="field" aria-label={t("장르 직접 입력")} value={form.genre} onChange={e=>patch({genre:e.target.value})}/>}</section>
-        <details className="wt-wiz-more"><summary>{t("제목 · 추가 설정")}</summary><label>{t("제목")}<input className="field" value={form.title} onChange={e=>patch({title:e.target.value})}/></label><textarea className="field" aria-label={t("추가 설정")} value={form.settings} maxLength={8000} onChange={e=>patch({settings:e.target.value})}/></details>
+        {/* 칸마다 이름과 글자 수를 둔다(2026-10-25) — 추가 설정은 이름 없는 빈 네모라 무엇을 적는 칸인지 몰랐다.
+            제목은 완성본에서 고칠 때와 같은 60자, 추가 설정은 서버가 받는 8,000자. */}
+        <details className="wt-wiz-more"><summary>{t("제목 · 추가 설정")}</summary>
+          <label className="wt-wiz-morefield"><span>{t("제목")}<small>{form.title.length} / {TITLE_MAX}</small></span><input className="field" value={form.title} maxLength={TITLE_MAX} placeholder={t("비워 두면 이야기에 맞춰 지어 드려요")} onChange={e=>patch({title:e.target.value})}/></label>
+          <label className="wt-wiz-morefield"><span>{t("추가 설정")}<small>{form.settings.length.toLocaleString()} / {SETTINGS_MAX.toLocaleString()}</small></span><textarea className="field" value={form.settings} maxLength={SETTINGS_MAX} placeholder={t("세계관 규칙·말투·꼭 들어갈 장면처럼 더 알려 주고 싶은 것")} onChange={e=>patch({settings:e.target.value})}/></label>
+        </details>
         <div className="wt-create-footer"><button type="button" className="btn btn-p" disabled={!step1Ok||loreLocked||!!form.lorebook&&!form.lorebook.confirmed} onClick={next}>{t("다음")}</button></div>
       </div>:<div className="wt-create-content wt-create-options">
         <section><h2>{t("그림체")}</h2><div className="wt-wiz-styles">{STYLE_INFO.map(([key,label])=><button type="button" key={key} className={`wt-wiz-style${form.style===key?" on":""}`} aria-pressed={form.style===key} onClick={()=>{track("style_pick",{style:key});patch({style:key});}}><img src={STYLE_THUMB[key]||`/static/samples/ex-${key}-1.jpg`} alt=""/><b>{t(label)}</b>{form.style===key&&<CheckMark/>}</button>)}</div></section>

@@ -8,11 +8,13 @@ import ReportForm from "./ReportForm";
 import "./Community.css";
 export default function EpisodeCommunity({
   runId,
-  authenticated, title, cover, children,
+  authenticated, title, cover, children, total,
 }: {
   runId: string;
   authenticated: boolean;
   title?: string; cover?: string; children?: ReactNode;
+  /** 공개된 회차 수 — 카드에 「총 N화」로 적는다 */
+  total?: number;
 }) {
   const t = useT();
   const [state, setState] = useState<api.Subscription | null>(null);
@@ -123,7 +125,7 @@ export default function EpisodeCommunity({
       ))}
       <div className="wt-community-head">
         {cover && <img className="wt-community-cover" src={cover} alt=""/>}
-        <div className="wt-community-series"><h3>{title || t("작품 구독")}</h3><span className="muted">{t("{n}화",{n:state?.episode||1})}{state && ` · ${t("구독 {n}",{n:state.subscribers.toLocaleString()})}`}</span></div>
+        <div className="wt-community-series"><h3>{title || t("작품 구독")}</h3><span className="muted">{t("총 {n}화",{n:total||state?.episode||1})}{state && ` · ${t("구독자 {n}명",{n:state.subscribers.toLocaleString()})}`}</span></div>
         <button
           type="button"
           className={`btn ${state?.subscribed ? "btn-w" : "btn-p"}`}
@@ -149,7 +151,7 @@ export default function EpisodeCommunity({
             ? t("처리 중…")
             : state?.subscribed
               ? t("구독 중")
-              : t("구독")}
+              : `+ ${t("구독")}`}
         </button>
       </div>
       {children}

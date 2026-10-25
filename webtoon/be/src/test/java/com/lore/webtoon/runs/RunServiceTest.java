@@ -101,6 +101,42 @@ class RunServiceTest {
     }
 
     @Test
+    @DisplayName("둘러보기도 연재를 1화 카드 하나로 묶고, 비공개 회차는 번호를 싣지 않는다")
+    void 둘러보기는_연재를_묶는다() {
+        WebtoonWork root = 작품("run-1", true);
+        WebtoonWork two = 작품("run-2", true);
+        WebtoonWork three = 작품("run-3", false);
+        when(works.findByJobId("job-run-1")).thenReturn(Optional.of(root));
+        when(works.findByJobId("job-run-2")).thenReturn(Optional.of(two));
+        when(works.findByJobId("job-run-3")).thenReturn(Optional.of(three));
+        for (String r : List.of("run-1", "run-2", "run-3")) {
+            when(pages.pageNumbersOf(r)).thenReturn(List.of(1, 2));
+        }
+        var c2 = mock(com.lore.webtoon.series.SeriesChapter.class);
+        when(c2.jobId()).thenReturn("job-run-2");
+        when(c2.rootJob()).thenReturn("job-run-1");
+        when(c2.episodeNumber()).thenReturn(2);
+        var c3 = mock(com.lore.webtoon.series.SeriesChapter.class);
+        when(c3.jobId()).thenReturn("job-run-3");
+        when(c3.rootJob()).thenReturn("job-run-1");
+        when(c3.episodeNumber()).thenReturn(3);
+        when(series.findById("job-run-1")).thenReturn(Optional.empty());
+        when(series.findById("job-run-2")).thenReturn(Optional.of(c2));
+        when(series.findById("job-run-3")).thenReturn(Optional.of(c3));
+        when(series.findByRootJobOrderByEpisodeNumberAsc("job-run-1")).thenReturn(List.of(c2, c3));
+        runs.setSeries(series);
+        // 공개된 것만 둘러보기에 온다 — 2화가 1화보다 먼저 와도 카드는 하나다.
+        when(works.onGallery()).thenReturn(List.of(two, root));
+
+        List<Map<String, Object>> cards = runs.browse();
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.getFirst()).containsEntry("run_id", "run-1")
+                .containsEntry("episodes", List.of(1, 2))
+                .containsEntry("episode_run_ids", Map.of("1", "run-1", "2", "run-2"));
+    }
+
+    @Test
     @DisplayName("목록 카드를 DB 만으로 채운다 — 그림체 딱지까지")
     void 목록() {
         /* 짜 넣는 것을 먼저 다 만들고 나서 stub 한다 — when(...) 안에서 또

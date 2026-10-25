@@ -16,3 +16,5 @@
 .wt .wt-dialog-actions .btn { flex: 1; height: 46px; font-size: 14px; }
 
 .wt .wt-dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}.wt .wt-dialog-heading h2{margin:0}.wt .wt-dialog-close{display:grid;place-items:center;width:34px;height:34px;flex:none;border:1px solid var(--line-strong);border-radius:9px;color:var(--muted);background:transparent;cursor:pointer}.wt .wt-dialog-close:hover{color:var(--ink);background:var(--water)}
+/* 제목이 닫기 단추보다 위로 떠 보였다 — 다른 규칙이 h2 에 준 아래 여백을 여기서 없앤다(2026-10-25) */
+.wt .wt-dialog-box .wt-dialog-heading h2 { margin: 0; line-height: 1.3; }

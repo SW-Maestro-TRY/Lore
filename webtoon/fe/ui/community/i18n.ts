@@ -1,5 +1,8 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 const dict: Dict = {
+  "총 {n}화": { en: "{n} episodes", ja: "全{n}話", zh: "共 {n} 话" },
+  "구독자 {n}명": { en: "{n} subscribers", ja: "購読者 {n}人", zh: "{n} 位订阅者" },
+
   "작품 구독과 회차 댓글": {
     en: "Follow and discuss this episode",
     ja: "作品のフォローと各話のコメント",

@@ -4,6 +4,9 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "예시 캐릭터는 저장되지 않아요. 고친 이름·설정은 이번 웹툰에만 쓰여요.": { en: "Sample characters aren't saved. Your edits apply to this webtoon only.", ja: "サンプルキャラクターは保存されません。編集はこのウェブトゥーンにだけ使われます。", zh: "示例角色不会保存，修改只用于这次的网络漫画。" },
+  "이번 웹툰에만 적용": { en: "Use for this webtoon only", ja: "今回のウェブトゥーンにだけ適用", zh: "仅用于这次" },
+
   /* ---- 공통 · 빵부스러기 · 상단 ---- */
   "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
   "캐릭터 카드": { en: "Character card", ja: "キャラクターカード", zh: "角色卡" },

@@ -12,7 +12,12 @@ import "./Community.css";
 export default function CommunityBell({ admin = false }: { admin?: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
+  const [unread, setUnreadState] = useState(0);
+  /* 헤더 이름의 빨간 점도 같이 맞춘다(common/fe/SiteHeader) */
+  const setUnread = (n: number) => {
+    setUnreadState(n);
+    window.dispatchEvent(new CustomEvent("lore:notices-changed", { detail: n }));
+  };
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   // 닫혀 있을 때도 숫자는 보여야 한다 — 알림만 가볍게 한 번 읽는다

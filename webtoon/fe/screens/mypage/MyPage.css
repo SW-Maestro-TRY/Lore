@@ -151,8 +151,8 @@
     width: auto; flex: 0 0 auto; gap: 6px; padding: 8px 12px; border-radius: 999px;
     border: 1px solid var(--line-strong);
   }
-  .wt .wt-my-menu button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
-  .wt .wt-my-menu button.on .dim { color: rgba(255, 255, 255, 0.75); }
+  .wt .wt-my-menu button.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .wt .wt-my-menu button.on .dim { color: var(--paper); opacity: .7; }
   .wt .wt-my-lang { padding: 10px 14px; }
   /* 제목과 단추가 한 줄에서 겹쳐 보인다 — 폰에서는 위아래로 나눈다. */
   .wt .wt-my-head { flex-direction: column; align-items: stretch; gap: 10px; }

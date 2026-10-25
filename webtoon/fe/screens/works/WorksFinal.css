@@ -105,29 +105,17 @@
     padding: 14px 0 22px;
   }
   .wt .wt-works-grid {
-    gap: 0;
+    gap: 22px 12px;
   }
   .wt .wt-works-card {
-    gap: 17px;
-    padding: 20px 0;
-    border-bottom: 1px solid var(--line-strong);
-  }
-  .wt .wt-works-card:first-child {
-    padding-top: 0;
-  }
-  .wt .wt-works-cover {
-    width: 105px;
-  }
-  .wt .wt-works-info {
-    justify-content: flex-start;
-    padding-top: 4px;
-    gap: 9px;
+    gap: 8px;
   }
   .wt .wt-works-titlerow > b {
-    font-size: 16px;
+    font-size: 14px;
+    line-height: 1.4;
   }
-  .wt .wt-works-eprow {
-    margin-top: auto;
+  .wt .wt-works-sub {
+    font-size: 11.5px;
   }
   .wt .wt-works-search {
     grid-column: 1/-1;

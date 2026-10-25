@@ -24,6 +24,7 @@ export function CharacterForm({
   onDeleted,
   onClose,
   onBusyChange,
+  localOnly = false,
 }: {
   character?: Character;
   initialDraft?: { name: string; description: string; image: string };
@@ -32,6 +33,8 @@ export function CharacterForm({
   onDeleted?: () => void;
   onClose: () => void;
   onBusyChange?: (value: boolean) => void;
+  /** 예시 캐릭터 — 고친 것을 저장하지 않고 이번 웹툰 요청에만 쓴다(2026-10-25). 그림은 못 바꾼다. */
+  localOnly?: boolean;
 }) {
   const t = useT(),
     file = useRef<HTMLInputElement>(null);
@@ -52,6 +55,7 @@ export function CharacterForm({
   }, [busy, onBusyChange]);
   const save = async () => {
     if (busy || !name.trim() || (!photo && !character)) return;
+    if (localOnly && character) { onSaved({ ...character, name: name.trim(), description }); return; }
     setBusy(true);
     setError("");
     try {
@@ -119,17 +123,17 @@ export function CharacterForm({
             <button
               type="button"
               className={`wt-original-image${photo || character?.art_url ? " has" : ""}`}
-              disabled={busy}
+              disabled={busy || localOnly}
               onClick={() => file.current?.click()}
               aria-label={t("캐릭터 이미지 선택")}
             >
               {photo || character?.art_url ? (
                 <>
                   <img src={photo || character?.art_url || ""} alt={name} />
-                  <span>
+                  {!localOnly && <span>
                     <IconEdit size={15} />
                     <b>{t("이미지 변경")}</b>
-                  </span>
+                  </span>}
                 </>
               ) : (
                 <>
@@ -185,7 +189,7 @@ export function CharacterForm({
             </div>
           </div>
           <ErrLine text={error} />
-          {character && onDeleted && (
+          {character && onDeleted && !localOnly && (
             <button
               type="button"
               className="wt-original-delete"
@@ -197,6 +201,7 @@ export function CharacterForm({
             </button>
           )}
           <div className="wt-original-actions">
+            {localOnly && <p className="wt-original-localnote">{t("예시 캐릭터는 저장되지 않아요. 고친 이름·설정은 이번 웹툰에만 쓰여요.")}</p>}
             <button
               type="button"
               className="btn btn-w"
@@ -213,7 +218,9 @@ export function CharacterForm({
             >
               {reading ? t("이미지 읽는 중…") : busy
                 ? t("저장 중…")
-                : character
+                : localOnly
+                  ? t("이번 웹툰에만 적용")
+                  : character
                   ? t("저장")
                   : t("캐릭터 만들기")}
             </button>
@@ -226,6 +233,7 @@ export function CharacterForm({
 export function CharacterEditDialog(props: {
   character: Character;
   authenticated: boolean;
+  localOnly?: boolean;
   onSaved: (c: Character) => void;
   onDeleted: () => void;
   onClose: () => void;

@@ -272,3 +272,25 @@ html[data-wt-header="lift"] body:has(.wt) header[class*="SiteHeader_header"] {
   --header-bg: #142233f2;
   --border: #ffffff1f;
 }
+
+/* ── 어두운 테마에서 흰 바탕·흰 글자를 직접 박은 규칙 정리(2026-10-25) ──────────
+   옛 밝은 테마 CSS 는 바탕을 #fff, 글자를 #fff 로 직접 적은 곳이 있다. 어두운 테마는
+   --ink 를 밝은 색으로 바꾸므로 「흰 바탕 + 밝은 글자」나 「밝은 바탕 + 흰 글자」가 된다.
+   여기 없는 것은 각 화면의 *Final.css 가 이미 덮어쓰고 있다. */
+:root .wt .pill,
+:root .wt .tile,
+:root .wt .toast,
+:root .wt .wt-my-draftchip.wait,
+:root .wt .wt-landing-step-no,
+:root .wt .wt-landing-step-btn,
+:root .wt .wt-dash-state.is-private,
+:root .wt .wt-survey-opts button.on { background: var(--ink); color: var(--paper); }
+:root .wt .opt,
+:root .wt .wt-survey-opts button,
+:root .wt .wt-lore-catalog button,
+:root .wt .wt-dash-state,
+:root .wt .wt-landing-step-chips span,
+:root .wt .wt-landing-need { background: var(--water-light); color: var(--ink); }
+/* 밝은 그림·말풍선 위의 글은 일부러 흰 판이라 글자를 짙게 둔다 */
+:root .wt .wt-landing-bubble,
+:root .wt .wt-landing-scenebox { color: #17202c; }

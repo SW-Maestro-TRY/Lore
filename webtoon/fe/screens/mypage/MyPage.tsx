@@ -176,7 +176,8 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
     const ids = recentRuns();
     if (ids.length === 0) { setRecent([]); return; }
     browseRuns().then((all) => {
-      const byId = new Map(all.map((r) => [r.run_id, r]));
+      // 연재는 1화 카드 하나로 묶여 온다 — 2화 이후를 봤어도 그 카드로 찾는다.
+      const byId = new Map(all.flatMap((r) => [r.run_id, ...Object.values(r.episode_run_ids || {})].map((id) => [id, r] as const)));
       setRecent(ids.map((id) => byId.get(id)).filter((r): r is RunCard => !!r).slice(0, 10));
     }).catch(() => setRecent([]));
   }, []);

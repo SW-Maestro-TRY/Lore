@@ -12,6 +12,7 @@ import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
 import LikeButton from "../../ui/LikeButton";
 import { STYLE_INFO } from "../../lib/wizardData";
+import FeaturedBanner from "./FeaturedBanner";
 import FilterCombo from "./FilterCombo";
 import { GENRE_ORDER, genreBucket } from "./genreBucket";
 import "../wizard/i18n";
@@ -153,7 +154,8 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     <div className="wt-works-chips">
       <button type="button" className={`chip${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>{t("전체")}</button>
       {chip("mine", t("내 작품"))}
-      {authenticated && chip("liked", t("찜"))}
+      {/* 좋아요한 작품 — 로그인 전에도 칸은 보인다(2026-10-25). 누르면 로그인 안내가 나온다. */}
+      {chip("liked", t("좋아요"))}
       <button type="button" className="chip wt-works-sort" onClick={() => setNewest((v) => !v)}
               aria-label={newest ? t("최신순 — 누르면 오래된순") : t("오래된순 — 누르면 최신순")}>
         {newest ? t("최신순") : t("오래된순")} <IconChevronDown size={14} />
@@ -168,12 +170,11 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
           <div className="wt-works-title">
             <h2>{t("웹툰 둘러보기")}</h2>
           </div>
-          <div className="wt-works-headacts">
-            <button type="button" className="btn btn-p wt-works-create" onClick={() => go("create",{step:1})}>{t("내 웹툰 만들기")}</button>
-          </div>
         </div>
 
         {/* 「최근 본 웹툰」 줄은 뺐다 — 목록 위에 표지 줄이 하나 더 있으니 정신없다는 피드백(2026-10-24) */}
+
+        <FeaturedBanner go={go} />
 
         <div className="wt-works-finds">
           <input className="field wt-works-search" type="search" value={query} placeholder={t("제목·캐릭터·장르로 찾기")}
@@ -227,13 +228,17 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
           <div className="wt-works-state wt-works-state-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={louArt("empty")} alt="" style={{ width: 140 }} />
-            <h2>{filter === "liked" && !query ? t("아직 찜한 웹툰이 없어요") : t("찾는 웹툰이 없어요")}</h2>
-            <span className="muted">{filter === "liked" && !query ? t("마음에 드는 작품의 하트를 누르면 여기에 모여요.") : t("다른 말로 찾아보거나 고른 조건을 풀어 보세요.")}</span>
+            <h2>{filter === "liked" && !query ? (authenticated ? t("아직 좋아요한 웹툰이 없어요") : t("로그인하면 좋아요한 웹툰을 모아 볼 수 있어요")) : t("찾는 웹툰이 없어요")}</h2>
+            <span className="muted">{filter === "liked" && !query ? (authenticated ? t("마음에 드는 작품의 하트를 누르면 여기에 모여요.") : t("화면 위 로그인 단추를 눌러 주세요.")) : t("다른 말로 찾아보거나 고른 조건을 풀어 보세요.")}</span>
           </div>
         )}
 
         {shown && shown.length > 0 && (
           <div className="wt-works-grid">
+            {/* 만들기 입구는 목록 첫 칸 — 제목 옆 큰 단추는 홀로 떠 있어 뜬금없다는 피드백(2026-10-25) */}
+            {filter !== "liked" && <button type="button" className="wt-works-make" onClick={() => { track("works_create", { where: "grid" }); go("create", { step: 1 }); }}>
+              <span className="wt-works-make-cover"><i aria-hidden="true">+</i><b>{t("내 웹툰 만들기")}</b><small>{t("내 캐릭터로 한 편")}</small></span>
+            </button>}
             {shown.map((r) => (
               <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated}
                         liked={likedIds.has(r.run_id)}
@@ -255,9 +260,11 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
   const eps = run.episodes || [];
   const first = eps[0] || 1;
   const [likes, setLikes] = useState(run.likes ?? 0);
-  const open = () => {
-    track("works_open", { run: run.run_id, mine, where: "works" });
-    go("result", { run: run.run_id });
+  /* 연재는 카드 하나에 회차 단추가 붙는다 — 단추는 그 회차를, 표지는 1화를 연다. */
+  const open = (episode?: number) => {
+    const target = (episode && run.episode_run_ids?.[String(episode)]) || run.run_id;
+    track("works_open", { run: target, mine, where: "works", ep: episode ?? first });
+    go("result", { run: target });
   };
 
   const sub = [run.character, ...new Set([run.genre, run.style_label].filter((s): s is string => !!s).map((s) => t(s)))].filter(Boolean).join(" · ");
@@ -284,7 +291,7 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
 
   return (
     <div className="card wt-works-card">
-      <button type="button" className="wt-works-cover" onClick={open} aria-label={t("{title} 열기", { title: run.title || run.run_id })}>
+      <button type="button" className="wt-works-cover" onClick={() => open()} aria-label={t("{title} 열기", { title: run.title || run.run_id })}>
         {run.cover_page ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt={run.title || ""} />
@@ -304,9 +311,10 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
         <div className="wt-works-eprow">
           {eps.length > 0 && (
             <div className="wt-works-eps">
-              {eps.map((n) => (
-                <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
-              ))}
+              {/* 회차가 많으면 1화 · … · 마지막 화만 — 23화 연재가 단추 23개로 카드를 덮지 않게. */}
+              {(eps.length > 3 ? [eps[0], -1, eps[eps.length - 1]] : eps).map((n) => n < 0
+                ? <span key="more" className="ep-more" aria-hidden="true">…</span>
+                : <button key={n} type="button" className="ep" onClick={() => open(n)}>{t("{n}화", { n })}</button>)}
             </div>
           )}
           {mine && authenticated && (
