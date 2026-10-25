@@ -547,9 +547,15 @@ public class JobRunner {
                 return -1;
             }
         }));
-        int code = callHarness(jobId, job, List.of(
-                "--run-id", runId,
+        /* 「바로 만들기」(사람이 안 고른다) + 줄거리 빈칸이면 후보 넷 대신 하나만 짓는다 — 고를 사람이
+           없는데 넷을 짓고 검수해 하나를 버리지 않는다(2026-10-24). 하네스가 run 폴더에 남겨 인물 고르기
+           뒤·다시 만들기도 하나로 간다. */
+        List<String> storyArgs = new ArrayList<>(List.of("--run-id", runId,
                 "--character", jobDir.resolve("character.json").toString()));
+        if (!job.isCheckpoints() && storyBlank(character)) {
+            storyArgs.add("--one");
+        }
+        int code = callHarness(jobId, job, storyArgs);
         /* **성공을 보기 전에 값부터 적는다.** 이 걸음이 죽어도 이야기 넷을 쓴
            값은 이미 나갔다. 이제 어느 작품인지 알고 있으므로 짐작하지 않는다. */
         after.cost(runId);
@@ -577,6 +583,15 @@ public class JobRunner {
             return;
         }
         afterStory(jobId, job, runId);
+    }
+
+    /** character.json 의 줄거리가 비었나. 못 읽으면 비지 않은 것으로 본다(예전처럼 넷을 짓는다). */
+    private boolean storyBlank(Path character) {
+        try {
+            return mapper.readTree(character.toFile()).path("story").asText("").isBlank();
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /** 이야기 후보가 나온 뒤 — DB 에 담고, 사람이 고르거나 서버가 고른다. */
