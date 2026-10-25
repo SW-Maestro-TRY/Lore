@@ -260,8 +260,8 @@ public class SeriesService {
             return Map.of("id",existing.get().jobId);
         }
         mustBeLatest(source);
-        if (!form.agree_ip())
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "저작권을 확인해 주세요.");
+        // 권리 확인은 1화를 만들 때(만들기 화면의 저작권 확인) 같은 캐릭터·설정으로 받았다. 다음 화는 그 확인을
+        // 잇는다 — 새로 올리는 사진·파일이 없고, 이번 화에 적는 글은 사용자가 직접 쓴 것이다.
         checked(form.story(),20000,"이번 화 이야기",true);
         String blocked=guard.whyBlocked(queue.reserved());
         if (blocked != null) throw new BusinessException(ErrorCode.INVALID_INPUT,blocked);

@@ -19,7 +19,6 @@ import LikeButton from "../../ui/LikeButton";
 import ResultSurvey from "./ResultSurvey";
 import EpisodeCommunity from "../../ui/community/EpisodeCommunity";
 import AdminModeration from "./AdminModeration";
-import NextEpisodeDialog from "./NextEpisodeDialog";
 import "./seriesI18n";
 import "./i18n";
 import "./Result.css";
@@ -187,6 +186,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     const next = series?.chapters.find(c => c.episode > ep);
     if (next?.run_id) { go("result", {run:next.run_id}); return; }
     if (next?.job_id) { go("running", {job:next.job_id}); return; }
+    if (mine) { go("next", {run: runId}); return; }
     setNextNote(true);
   };
 
@@ -525,7 +525,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
       {/* 다음 편은 아직 없다. 눌렀을 때 줄 끝에 문구만 붙이면 화면 밖이라
           못 보고 다시 누르게 된다 — 가운데에 띄워 한 번에 읽히게 한다. */}
-      {nextNote && mine && <NextEpisodeDialog key={runId} runId={runId} authenticated={authenticated} go={go} onClose={()=>setNextNote(false)} />}
       {nextNote && !mine && (
         <div className="modal" onClick={() => setNextNote(false)}>
           <div className="modal-box wt-result-soonbox" role="dialog" aria-modal="true"

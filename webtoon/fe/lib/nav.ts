@@ -22,7 +22,7 @@
  * 기댄다. 상태만 바꾸면 뒤로가기가 웹툰 탭을 통째로 빠져나간다. */
 
 export type View =
-  | "landing" | "entry" | "create" | "running" | "result" | "editor" | "works"
+  | "landing" | "entry" | "create" | "running" | "result" | "editor" | "next" | "works"
   | "character-new" | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin" | "admin-examples" | "admin-works" | "admin-payments";
 
 export interface GoParams {

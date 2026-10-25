@@ -1093,7 +1093,7 @@ export interface SeriesDraft {
 }
 export interface SeriesForm {
   fixed_settings: string; progress_state: string; story: string; revision: number;
-  confirmed: boolean; agree_ip: boolean; request_token: string; entries: SeriesEntry[]; progress: LoreProgress[];
+  confirmed: boolean; request_token: string; entries: SeriesEntry[]; progress: LoreProgress[];
 }
 export function readSeries(run: string): Promise<SeriesInfo> {
   return call(`/series/${encodeURIComponent(run)}`);

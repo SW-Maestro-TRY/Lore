@@ -33,6 +33,7 @@ import Wizard from "./screens/wizard/Wizard";
 import Progress from "./screens/progress/Progress";
 import Result from "./screens/result/Result";
 import Editor from "./screens/editor/Editor";
+import NextEpisodePage from "./screens/result/NextEpisodePage";
 import Works from "./screens/works/Works";
 import OriginalCharacter from "./screens/character/OriginalCharacter";
 import Photo from "./screens/character/Photo";
@@ -89,6 +90,7 @@ function routeOf(search: URLSearchParams): Route {
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
+  if (view === "next" && run) return { view: "next", ...base };
   if (view === "card" && base.id) return { view: "card", ...base };
   /* 피드백이 마이페이지 창이던 때의 주소 — 다시 온 사람 안내 메일 등에 남아 있을 수 있다. */
   if (view === "mypage" && search.get("tab") === "feedback") return { view: "feedback", ...base };
@@ -252,6 +254,7 @@ function WebtoonScreens() {
       )}
       {route.view === "result" && route.run && <Result runId={route.run} go={go} authenticated={authenticated} />}
       {route.view === "editor" && route.run && <Editor runId={route.run} go={go} authStatus={authStatus} />}
+      {route.view === "next" && route.run && <NextEpisodePage key={route.run} runId={route.run} go={go} authenticated={authenticated} />}
       {route.view === "works" && <Works go={go} authenticated={authenticated} />}
       {route.view === "characters" && <CharList go={go} />}
       {route.view === "character-new" && <OriginalCharacter go={go} authenticated={authenticated} />}
