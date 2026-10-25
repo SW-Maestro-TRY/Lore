@@ -105,6 +105,17 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
       progress: id ? d.progress.filter(p => p.key !== id) : d.progress} : d);
     setSaved(false); setBookSaved(false); setDirty(true);
   };
+  /* 항목 이름 고치기 — AI가 지은 세계 이름 등을 이 창에서 바로 바꾼다. 새 이름은 키워드에도 넣어
+     다음 화에서 그 이름이 나오면 이 항목이 걸리게 한다(옛 이름 키워드는 뺀다). */
+  const [renaming, setRenaming] = useState<{i: number; title: string} | null>(null);
+  const renameEntry = (i: number, title: string) => {
+    const name = title.trim();
+    setRenaming(null);
+    if (!name) return;
+    setData(d => d ? {...d, entries: d.entries.map((e, n) => n !== i || e.title === name ? e : {...e, title: name, named: false,
+      keys: [name, ...(e.keys || []).filter(k => k !== e.title && k !== name)]})} : d);
+    setSaved(false); setBookSaved(false); setDirty(true);
+  };
   const dropProgress = (i: number) => {
     setData(d => d ? {...d, progress: d.progress.filter((_, n) => n !== i)} : d); setSaved(false); setBookSaved(false); setDirty(true);
   };
@@ -172,13 +183,28 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
           const added = items.filter(({e})=>e.new).length, grown = items.filter(({e})=>e.updated).length;
           const titleOf = (key: string) => data.entries.find(e => e.id === key)?.title;
           const row = ({e,i}: {e: typeof data.entries[number]; i: number}) => <li key={e.id || `${e.title}-${i}`}>
-            <div><b>{e.title}</b>{e.always && <small className="wt-series-always">{t("항상 참고")}</small>}
+            <div>{renaming?.i === i
+                // 창 전체가 <form> 이라 안에 form 을 또 두지 않는다 — Enter 는 여기서 받아 바깥 제출로 안 넘긴다.
+                ? <div className="wt-series-rename">
+                    <input className="field" aria-label={t("{name} 새 이름",{name:e.title})} maxLength={100} autoFocus value={renaming.title}
+                      onChange={ev => setRenaming({i, title: ev.target.value})}
+                      onKeyDown={ev => {
+                        if (ev.key === "Enter") { ev.preventDefault(); renameEntry(i, renaming.title); }
+                        if (ev.key === "Escape") { ev.stopPropagation(); setRenaming(null); }
+                      }} />
+                    <button type="button" className="btn btn-w btn-sm" onClick={() => renameEntry(i, renaming.title)}>{t("확인")}</button>
+                    <button type="button" className="btn-ghost" onClick={() => setRenaming(null)}>{t("취소")}</button>
+                  </div>
+                : <b>{e.title}</b>}{e.always && <small className="wt-series-always">{t("항상 참고")}</small>}
               {e.named && <small className="wt-series-warn">{t("AI가 지은 이름")}</small>}
               {e.new && <small className="wt-series-new">{t("이번 화에서 추가")}</small>}
               {e.updated && <small className="wt-series-new">{t("이번 화에서 보탬")}</small>}
               {lang === "ko" && HANJA.test(e.title + e.content) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}
               <p className="wt-series-content">{e.content}</p>{!!e.keys?.length && !e.always && <p className="wt-series-evidence">{e.keys.join(" · ")}</p>}</div>
-            <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:e.title})} onClick={()=>dropEntry(e.id,i)}>{t("빼기")}</button>
+            <span className="wt-series-entry-actions">
+              <button type="button" className="btn-ghost" aria-label={t("{name} 이름 고치기",{name:e.title})} onClick={()=>setRenaming({i, title:e.title})}>{t("이름 고치기")}</button>
+              <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:e.title})} onClick={()=>dropEntry(e.id,i)}>{t("빼기")}</button>
+            </span>
           </li>;
           return <>
             <span className="wt-series-label">{t("현재 진행 상태")}</span>

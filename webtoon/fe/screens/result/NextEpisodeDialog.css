@@ -37,7 +37,13 @@
 .wt .wt-series-nav { padding:16px 0; border-block:1px solid var(--line); margin-block:20px; }
 .wt .wt-series-nav-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
 .wt .wt-series-nav-list button { min-height:44px; }
+.wt .wt-series-rename { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.wt .wt-series-rename .field { flex:1 1 160px; min-width:0; }
+.wt .wt-series-entry-actions { display:flex; gap:4px; flex-shrink:0; align-self:flex-start; }
 @media(max-width:600px) {
+  /* 버튼 둘이 제목·표시 옆을 차지하지 않게 설정집 항목은 버튼을 아래 줄로 */
+  .wt .wt-series-entries li:has(.wt-series-entry-actions) { flex-direction:column; gap:4px; }
+  .wt .wt-series-entry-actions { align-self:flex-end; }
  .wt .wt-dialog-box:has(.wt-series-form) { border-radius:16px; padding:20px 16px; }
  .wt .wt-series-form textarea { font-size:16px; }
  .wt .wt-series-actions .btn-p { flex-basis:100%; }

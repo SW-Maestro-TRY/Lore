@@ -66,6 +66,14 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  await expect(page.getByText('지수가 감춘 약속은 아직 공개하지 않는다')).toBeVisible();
  await expect(page.getByText('항상 참고',{exact:true}).first()).toBeVisible();
  await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toBeVisible();
+ // 이름 고치기 — Escape 는 고치기만 취소하고 창은 그대로, 확인하면 새 이름이 키워드에도 들어간다.
+ await page.getByRole('button',{name:'지수의 약속 이름 고치기',exact:true}).click();
+ await page.getByLabel('지수의 약속 새 이름',{exact:true}).press('Escape');
+ await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'지수의 약속 이름 고치기',exact:true}).click();
+ await page.getByLabel('지수의 약속 새 이름',{exact:true}).fill('지수의 비밀 약속');
+ await page.getByRole('button',{name:'확인',exact:true}).click();
+ await expect(page.getByText('지수의 비밀 약속',{exact:true})).toBeVisible();
  // 항목을 빼면 그 항목을 덮어쓰던 진행 상태 줄도 같이 빠진다.
  await page.getByRole('button',{name:'다리 빼기',exact:true}).last().click();
  await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toHaveCount(0);
@@ -74,7 +82,8 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  await page.getByLabel('사용하는 캐릭터·설정·이야기의 권리를 확인했어요.',{exact:true}).check();
  await page.getByRole('button',{name:'2화 만들기',exact:true}).click();
  await expect(page).toHaveURL(/view=running&job=job-next/);
- expect(server.submitted.entries.map((e:any)=>e.title)).toEqual(['지수의 약속']);
+ expect(server.submitted.entries.map((e:any)=>e.title)).toEqual(['지수의 비밀 약속']);
+ expect(server.submitted.entries[0].keys).toEqual(['지수의 비밀 약속']);
  expect(server.submitted.progress.map((p:any)=>p.key)).toEqual(['P001']);
 });
 test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',async({page},info)=>{
