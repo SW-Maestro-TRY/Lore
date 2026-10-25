@@ -144,3 +144,7 @@
   border-radius:14px; background:transparent; color:var(--ink); font-size:16px; font-weight:700; cursor:pointer; }
 .wt .wt-lore-add:hover { border-color:var(--muted); background:rgba(255,255,255,.03); }
 @media(max-width:600px){ .wt .wt-lore-entry-head { flex-wrap:wrap; } .wt .wt-lore-entry-title { flex-basis:100%; } .wt .wt-lore-editor .wt-lore-always { margin-right:auto; } }
+.wt .wt-lore-editor .wt-lore-actions { align-items:center; }
+.wt .wt-lore-editor .wt-lore-save { margin-left:auto; }
+.wt .wt-lore-saved { margin-left:auto; font-size:14px; color:var(--muted); }
+.wt .wt-lore-saved + .wt-lore-save { margin-left:0; }

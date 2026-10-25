@@ -15,7 +15,8 @@ async function setup(page:Page,empty=false){
  if(p==='/api/v1/credits/me')return send(ok({balance:48}));
  if(p.endsWith('/allowance'))return send({logged_in:true,balance:48,credit_cost:12,qualities:[{key:'wave',credits:12}]});
  if(p.endsWith('/lorebooks'))return send({books,personal_books:personal,extract_limit:3,extract_left:3});
- if(p.endsWith('/lorebooks/mine')){const book={...route.request().postDataJSON(),library_id:'my-book',library_owner:7};personal=[book];return send(book);}
+ // 내 설정집 저장 — 새로 만들면 새 번호, 번호가 있으면 그 책을 고친다(PrivateLorebookService 와 같다).
+ if(p.includes('/lorebooks/mine')&&route.request().method()!=='GET'){const tail=p.split('/').pop()!;const id=tail==='mine'?`my-${personal.length+1}`:decodeURIComponent(tail);const book={...route.request().postDataJSON(),library_id:id,library_owner:7};personal=[...personal.filter(b=>b.library_id!==id),book];return send(book);}
  if(p.endsWith('/lorebooks/extract'))return send({id:'extract-test',status:'RUNNING'});
  if(p.endsWith('/lorebooks/extract/extract-test'))return send({status:'DONE',book:{name:'다리 너머의 약속',source:'extracted',fixed_settings:'민수는 높은 곳을 무서워한다.',progress_state:'',entries:[],confirmed:false}});
  if(p.endsWith('/characters/random'))return send({name:'민수',description:'다정한 청년'});
@@ -26,7 +27,7 @@ async function setup(page:Page,empty=false){
  if(p.endsWith('/jobs/mine'))return send({jobs:[],cards:[]});
  if(p.endsWith('/runs'))return send({runs:[]});
  return send(ok([]));});
- return {get sent(){return sent;}};
+ return {get sent(){return sent;},get personal(){return personal;}};
 }
 const next=async(page:Page)=>page.getByRole('button',{name:'다음',exact:true}).filter({visible:true}).first().click();
 async function finish(page:Page){await next(page);await expect(page).toHaveURL(/step=2/);await page.getByLabel('저작권 확인',{exact:true}).check();await page.getByRole('button',{name:'웹툰 만들기',exact:true}).filter({visible:true}).first().click();await expect(page).toHaveURL(/job=created-book/);}
@@ -77,7 +78,10 @@ test('설정집 도움말, 직접 적어 붙이기·빼기·복원',async({page}
 test('붙인 설정집은 생성 요청에 들어가 내 내용 길로 가고, 빼면 남지 않음',async({page})=>{
  const server=await setup(page);await page.goto('/webtoon?view=create&step=1');
  await writeBook(page,'다리 앞의 민수','주인공은 높은 곳을 무서워한다.');await finish(page);
- expect(server.sent.lorebook.confirmed).toBe(true);expect(contents(server.sent.lorebook)).toEqual(['주인공은 높은 곳을 무서워한다.']);expect(server.sent.lorebook.entries[0].keys).toEqual(['기본']);expect(server.sent.mode).toBe('own');
+ expect(server.sent.lorebook.confirmed).toBe(true);expect(contents(server.sent.lorebook)).toEqual(['주인공은 높은 곳을 무서워한다.']);expect(server.sent.lorebook.entries[0].keys).toEqual(['기본']);
+ // 확인하고 붙이면 내 설정집에도 저장된다.
+ expect(server.personal.map((b:any)=>b.name)).toEqual(['다리 앞의 민수']);expect(server.sent.lorebook.library_id).toBe('my-1');
+expect(server.sent.mode).toBe('own');
  // 만들기를 시작하면 초안이 비워진다 — 다시 붙였다가 빼고 만든다.
  await page.goto('/webtoon?view=create&step=1');await writeBook(page,'다리 앞의 민수','주인공은 높은 곳을 무서워한다.');await page.getByRole('button',{name:/설정집 빼기/}).click();await finish(page);
  expect(server.sent.lorebook).toBeNull();expect(server.sent.mode).toBe('quick');

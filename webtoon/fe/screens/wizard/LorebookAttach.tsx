@@ -88,9 +88,16 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
   catch(e){if(active.current&&seq===refreshSequence.current)setError(errText(e,t("설정집을 저장하지 못했어요")));}
   finally{if(active.current)setSaving(false);}
  };
- const attach=()=>{
-  if(!working)return;
-  const book={...tidy(working),name:working.name.trim()||t("내 설정집"),confirmed:true};
+ const attach=async()=>{
+  if(!working||saving)return;
+  let book={...tidy(working),name:working.name.trim()||t("내 설정집"),confirmed:true};
+  // 쓰거나 고친 설정집은 붙이면서 내 설정집에도 저장한다(로그인했을 때). 저장이 안 되면 붙이지 않고 알린다.
+  if(authenticated&&editMode){
+   setSaving(true);setError("");
+   try{book={...await savePrivateLorebook(book),confirmed:true};void refresh();}
+   catch(e){if(active.current){setError(errText(e,t("설정집을 저장하지 못했어요")));setSaving(false);}return;}
+   if(!active.current)return;setSaving(false);
+  }
   const next=[...books];if(editing<0)next.splice(insertAt??next.length,0,book);else next[editing]=book;
   const packed=packBooks(next)!;
   if(next.length>24||packed.fixed_settings.length+packed.progress_state.length+packed.entries.reduce((n,e)=>n+e.content.length,0)>80000){setError(t("설정집은 합쳐서 80,000자까지예요."));return;}
@@ -159,25 +166,26 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
     </div>}
     <label>{t("설정집 이름")}<input className="field" maxLength={100} value={working.name} onChange={e=>patch({name:e.target.value})}/></label>
     {working.source==="extracted"&&<p className="wt-lore-reviewnote">{t("AI 초안")}</p>}
-    <div className="wt-lore-entries-head"><h4>{t("항목")} <span>{t("{n}개",{n:working.entries.length})}</span></h4>
-     <p className="muted">{t("인물·조직·장소·세계마다 하나씩 적어요. 키워드가 이야기에 나오면 AI가 그 항목을 읽고, 「항상 참고」 항목은 매번 읽어요.")}</p></div>
+    <div className="wt-lore-entries-head"><h4>{t("로어북")} <span>· {t("{n}개 항목",{n:working.entries.length})}</span></h4></div>
     <ol className="wt-lore-entry-list">
      {working.entries.map((e,i)=>{const set=(v:Partial<typeof e>)=>patch({entries:working.entries.map((x,j)=>j===i?{...x,...v}:x)});const name=e.title.trim()||t("항목 {n}",{n:i+1});return <li key={i} className="wt-lore-entry">
       <div className="wt-lore-entry-head">
-       <input className="field wt-lore-entry-title" aria-label={t("항목 이름")} placeholder={t("항목 이름 · 인물, 조직, 장소, 세계…")} maxLength={100} value={e.title} onChange={ev=>set({title:ev.target.value})}/>
+       <input className="field wt-lore-entry-title" aria-label={t("항목 이름")} placeholder={t("이름 (예: 김시하)")} maxLength={100} value={e.title} onChange={ev=>set({title:ev.target.value})}/>
        <label className="wt-lore-always"><input type="checkbox" checked={e.always} onChange={ev=>set({always:ev.target.checked})}/>{t("항상 참고")}</label>
        <button type="button" className="wt-lore-icon" aria-label={t("{name} 삭제",{name})} title={t("항목 삭제")} onClick={()=>patch({entries:working.entries.filter((_,j)=>j!==i)})}><IconMinus size={18}/></button>
       </div>
-      <textarea className="field" aria-label={t("{name} 내용",{name})} placeholder={t("이 대상이 누구·무엇인지, 이어 쓸 때 지켜야 할 것")} rows={4} maxLength={6000} value={e.content} onChange={ev=>set({content:ev.target.value})}/>
-      {!e.always&&<input className="field wt-lore-entry-keys" aria-label={t("{name} 키워드",{name})} placeholder={t("키워드 · 이 말이 나오면 읽어요 · 쉼표로 나눠요")} value={e.keys.join(", ")}
+      <textarea className="field" aria-label={t("{name} 내용",{name})} placeholder={t("설정 내용")} rows={4} maxLength={6000} value={e.content} onChange={ev=>set({content:ev.target.value})}/>
+      {!e.always&&<input className="field wt-lore-entry-keys" aria-label={t("{name} 키워드",{name})} placeholder={t("키워드 (쉼표로 구분)")} value={e.keys.join(", ")}
         onChange={ev=>set({keys:ev.target.value.split(",").map(k=>k.trim()).filter(Boolean).slice(0,40)})}/>}
       {e.evidence&&<blockquote><span>{t("원문 근거")}</span>{e.evidence}</blockquote>}
      </li>;})}
     </ol>
     <button type="button" className="wt-lore-add" onClick={()=>patch({entries:[...working.entries,emptyEntry()]})}><IconPlus size={18}/>{t("항목 추가")}</button>
     {!!working.progress_state&&<label>{t("시작 시점 · 예전 설정집에만 있어요")}<textarea className="field" rows={3} maxLength={8000} value={working.progress_state} onChange={e=>patch({progress_state:e.target.value})}/></label>}
-    <div className="wt-lore-private-save"><button type="button" className="btn btn-w" disabled={busy||saving||!working.name.trim()} onClick={()=>void saveMine()}>{saving?t("저장 중…"):t("내 설정집에 저장")}</button>{saved&&<span role="status">{t("저장했어요")}</span>}</div>
-    <div className="wt-lore-actions"><button type="button" className="btn btn-w" onClick={()=>{setWorking(beforeEdit.current);setEditMode(false);if(!beforeEdit.current){setEditing(-1);setInsertAt(null);}}}>{beforeEdit.current?t("수정 취소"):t("취소")}</button><button type="button" className="btn btn-p" disabled={busy||!working.fixed_settings.trim()&&!working.entries.some(e=>e.enabled&&e.content.trim())} onClick={attach}>{t("확인하고 붙이기")}</button></div>
+    <div className="wt-lore-actions"><button type="button" className="btn btn-w" onClick={()=>{setWorking(beforeEdit.current);setEditMode(false);if(!beforeEdit.current){setEditing(-1);setInsertAt(null);}}}>{beforeEdit.current?t("수정 취소"):t("취소")}</button>
+     {saved&&<span role="status" className="wt-lore-saved">{t("저장했어요")}</span>}
+     <button type="button" className="btn btn-w wt-lore-save" disabled={busy||saving||!working.name.trim()} onClick={()=>void saveMine()}>{saving?t("저장 중…"):t("내 설정집에 저장")}</button>
+     <button type="button" className="btn btn-p" disabled={busy||saving||!working.fixed_settings.trim()&&!working.entries.some(e=>e.enabled&&e.content.trim())} onClick={()=>void attach()}>{t("확인하고 붙이기")}</button></div>
    </fieldset>}
    {error&&<p role="alert">{error} {!catalog&&<button type="button" onClick={()=>{setError("");void refresh();}}>{t("다시 시도")}</button>}</p>}
   </div></dialog>}
