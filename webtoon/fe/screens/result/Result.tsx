@@ -537,8 +537,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated}
                 title={data.title} cover={cover || pageUrl(runId,data.pages[0]?.no || 1,320)}>
                 <div className="wt-reader-endnav">
-                  {(mine || series?.chapters.some(c=>c.episode>ep)) ? <button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t(series?.chapters.some(c=>c.episode>ep)?"다음화 보기":"다음 편 만들기")}</button> : <span className="wt-reader-no-next">{t("공개된 다음 화가 없습니다.")}</span>}
+                  {/* 회차 목록은 왼쪽, 다음화는 오른쪽 — 읽는 흐름이 앞으로 가는 쪽(2026-10-25) */}
                   <button className="btn btn-w" onClick={()=>setChaptersOpen(true)}><IconMenu size={17}/>{t("회차 목록")}</button>
+                  {(mine || series?.chapters.some(c=>c.episode>ep)) ? <button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t(series?.chapters.some(c=>c.episode>ep)?"다음화 보기":"다음 편 만들기")}</button> : <span className="wt-reader-no-next">{t("공개된 다음 화가 없습니다.")}</span>}
                   {mine && <button className="btn btn-w" onClick={()=>go("editor",{run:runId})}><IconEdit size={17}/>{t("편집실")}</button>}
                 </div>
                 {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{t("가입 없이 무료로 시작")}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></section>}
