@@ -112,7 +112,9 @@ public class SeriesDigestService {
             rows.finish(sourceJob, "ERROR", null, "앞 화를 정리하지 못했어요. 다시 시도하거나 직접 적어 주세요.");
         } finally {
             if (dir != null) {
-                try { usage.ingestMetaFile("series-digest-" + sourceJob, dir.resolve("meta.json")); }
+                // 정리할 때마다 따로 적는다. 같은 앞 화를 다시 정리하면(실패 뒤 재시도 등) 이름이 같아
+                // (run_id, seq) 가 이미 있다고 보고 새 호출 비용을 건너뛰었다 — 하루 지출 상한도 덜 셌다.
+                try { usage.ingestMetaFile("series-digest-" + sourceJob + "-" + System.currentTimeMillis(), dir.resolve("meta.json")); }
                 catch (Exception e) { log.warn("앞 화 정리 비용 기록 실패 (source={})", sourceJob, e); }
                 try (var files = Files.walk(dir)) {
                     for (Path p : files.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(p);
