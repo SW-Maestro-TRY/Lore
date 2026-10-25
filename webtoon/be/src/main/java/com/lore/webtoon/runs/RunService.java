@@ -62,6 +62,10 @@ public class RunService {
     private final PageStore pages;
     private final RunLikeRepository likes;
     private com.lore.webtoon.series.SeriesChapterRepository series;
+    private OverlayStore overlays;
+    /* 편집실에서 고친 여백을 공개본에 싣는다. 검사에서 손으로 만들 때는 없어도 된다(여백 0). */
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setOverlays(OverlayStore overlays) { this.overlays = overlays; }
     @org.springframework.beans.factory.annotation.Autowired
     public void setSeries(com.lore.webtoon.series.SeriesChapterRepository series) { this.series=series; }
     private String rootJobOf(WebtoonJob job) {
