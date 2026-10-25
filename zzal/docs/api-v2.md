@@ -15,8 +15,8 @@
 | 인증 | HttpOnly 쿠키 JWT. 모든 v2 경로는 로그인 필요 |
 | 경로 | `/api/zzal/v1/me/pets` 밑. 내 것은 `me`, 남의 펫은 **404**(`ZZAL_PET_NOT_FOUND`) — 403은 "그 번호의 펫이 있다"를 알려준다 |
 | 행동 응답 | **모든 행동(POST)의 응답 = `PetDetail` 최신 상태.** 누른 뒤 다시 조회하지 않는다 |
-| 시각 | ISO-8601 UTC(`2026-09-05T10:00:00Z`). 화면은 `serverNow`와의 차이로만 시간을 다루고, **기기 시계·시간대를 쓰지 않는다** |
-| 시간대 | 서버 계산은 KST(Asia/Seoul) 고정. 창(19:00·23:00·07:00·10:00)은 KST 벽시계 |
+| 시각 | ISO-8601 UTC(`2026-09-05T10:00:00Z`). 화면은 `serverNow`와의 차이로만 시간을 다루고, **기기 시계를 쓰지 않는다**. 기기에서 읽는 것은 시간대 **이름**뿐이다(아래 줄) |
+| 시간대 | **펫마다 하나**(2026-10-26). 화면은 `/api/zzal/` 요청마다 헤더 `X-Zzal-Tz: <IANA 이름>`(기기의 `Intl…resolvedOptions().timeZone`)을 싣는다. 서버는 펫 **생성 때**, 또는 아직 모르는(NULL) 펫의 **첫 요청**에서 한 번 `zzal_pet.time_zone` 에 적고 **다시 바꾸지 않는다**(못 읽는 값은 버린다 → NULL). NULL 은 `Asia/Seoul` 로 읽는다. `PetDetail.timeZone`(그 값, 없으면 Asia/Seoul) · `PetDetail.rulesTimeZone`(서버가 창을 재는 시간대) 두 칸이 내려간다. 창(19:00·23:00·07:00·10:00·부름 10/14/19시)은 `rulesTimeZone` 의 벽시계다. **1단계 서버는 `rulesTimeZone` 이 늘 Asia/Seoul** — 화면은 창 시각을 `timeZone` 으로 바꿔 보여 준다. 부화 하루 상한·운영 경보·S3 보관·관리자 화면은 KST 그대로 |
 | 이미지 키 | `images/…` 뒷부분만. 화면이 `assetUrl()`로 CDN을 앞에 붙인다 |
 | 서버 정본 | 수치는 저장하지 않고 조회 때 계산(lazy settle). 낙관적 업데이트 금지 |
 | 케어 미스 | **어디에도 내려가지 않는다.** 보이는 신호는 `leaving`(짐 가방)뿐 |
@@ -84,8 +84,8 @@
 
 | 호출 | 조건(정본 2·12·16장) | 거절 |
 |---|---|---|
-| `POST /{id}/sleep` | **낮잠**: 아기 60분 안(한 번). **밤잠**: 60분 뒤 KST 19:00~23:00. 아기 60분 안에는 밤잠 없음 | `ZZAL_NOT_SLEEP_TIME` `ZZAL_PET_SLEEPING` `ZZAL_TRAVELING` |
-| `POST /{id}/wake` | **밤잠**: KST 07:00~10:00. **낮잠**: 재운 지 5분 뒤 | `ZZAL_NOT_WAKE_TIME` `ZZAL_PET_NOT_SLEEPING` |
+| `POST /{id}/sleep` | **낮잠**: 아기 60분 안(한 번). **밤잠**: 60분 뒤 19:00~23:00(`rulesTimeZone` 벽시계). 아기 60분 안에는 밤잠 없음 | `ZZAL_NOT_SLEEP_TIME` `ZZAL_PET_SLEEPING` `ZZAL_TRAVELING` |
+| `POST /{id}/wake` | **밤잠**: 07:00~10:00(`rulesTimeZone` 벽시계). **낮잠**: 재운 지 5분 뒤 | `ZZAL_NOT_WAKE_TIME` `ZZAL_PET_NOT_SLEEPING` |
 
 - 자동 취침 23:00, 자동 기상 10:00(늦잠, `clock.overslept=true`), 낮잠 자동 기상 10분. 자동은 보상 없음(플랜 해석 기본값).
 - 사용자 재우기 = 행복 +1·친밀도 +10 / 사용자 깨우기 = 친밀도 +10.
@@ -208,6 +208,8 @@
   "hatchedAt": "2026-09-05T09:02:23Z",
 
   "serverNow": "2026-09-05T09:30:00Z",   // ★ 필수. 이 펫의 시계(dev 오프셋 포함)
+  "timeZone": "Asia/Seoul",              // 이 펫의 시간대(표시용). 모르면 Asia/Seoul
+  "rulesTimeZone": "Asia/Seoul",         // 창을 재는 시간대. 1단계는 늘 Asia/Seoul
 
   // ── 이하 ALIVE 전용 ─────────────────────────────────────────
   "clock": {
@@ -218,8 +220,8 @@
     "wokeAt": "2026-09-05T09:02:23Z",    // 오늘 기상 시각(부화 당일은 부화 시각)
     "canSleep": false,                   // 지금 재우기 버튼이 눌리는가
     "canWake": false,                    // 지금 깨우기 버튼이 눌리는가
-    "sleepWindowOpensAt": "2026-09-05T10:00:00Z", // 다음 재우기 창 시작(KST 19:00). 낮잠 가능이면 serverNow
-    "autoSleepAt": "2026-09-05T14:00:00Z",        // 자동 취침(KST 23:00). 아기 60분 유예 반영
+    "sleepWindowOpensAt": "2026-09-05T10:00:00Z", // 다음 재우기 창 시작(rulesTimeZone 19:00). 낮잠 가능이면 serverNow
+    "autoSleepAt": "2026-09-05T14:00:00Z",        // 자동 취침(rulesTimeZone 23:00). 아기 60분 유예 반영
     "wakeWindowOpensAt": null,           // 자는 중일 때: 깨우기 창 시작(밤 07:00 / 낮잠 +5분)
     "autoWakeAt": null,                  // 자는 중일 때: 자동 기상(밤 10:00 / 낮잠 +10분)
     "overslept": false                   // 오늘 10:00 자동 기상이었는가. 다음 잠까지 유지
@@ -453,7 +455,7 @@
 | 호출 | 요청 | 비고 |
 |---|---|---|
 | `POST /advance-clock` | `{seconds?, minutes?}` | 오프셋에 더한다(≤30일). 규칙은 한 글자도 안 바뀐다 |
-| `POST /set-clock` | `{at?: ISO} \| {sinceHatchMinutes?: int} \| {localTime?: "HH:mm"}` | 펫 시계를 그 시각으로. 셋 중 하나. `localTime`은 오늘(KST) 그 시각 |
+| `POST /set-clock` | `{at?: ISO} \| {sinceHatchMinutes?: int} \| {localTime?: "HH:mm"}` | 펫 시계를 그 시각으로. 셋 중 하나. `localTime`은 오늘(`rulesTimeZone`) 그 시각 |
 | `POST /night-sweep` | | 이 펫에 대해 23:00 스위프를 지금 실행(큐 등록·굽기) |
 | `POST /force-open/{seq}` | | 그 동작의 심화 행동을 가짜 imageKey로 즉시 검수 통과(`OPEN`). **도착은 규칙 그대로** — 깨어 있으면 그 응답에서, 자는 중이면 깨어난 뒤 첫 조회에서 |
 

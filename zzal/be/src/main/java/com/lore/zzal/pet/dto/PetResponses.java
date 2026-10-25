@@ -400,12 +400,30 @@ public final class PetResponses {
             Instant graduationSeenAt, @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) com.lore.zzal.pet.FirstIntro.State firstIntro,
             @Schema(nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) com.lore.zzal.attendance.AttendanceRewards attendanceRewards, FirstNightChatGrace firstNightChatGrace,
             @Schema(requiredMode=Schema.RequiredMode.NOT_REQUIRED,nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) com.lore.zzal.pet.CareMotionPlayback motionPlayback,
-            @Schema(requiredMode=Schema.RequiredMode.NOT_REQUIRED,nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) com.lore.zzal.pet.receipt.CareReceipt careReceipt) {
+            @Schema(requiredMode=Schema.RequiredMode.NOT_REQUIRED,nullable=true,schemaResolution=Schema.SchemaResolution.INLINE) com.lore.zzal.pet.receipt.CareReceipt careReceipt,
+            @Schema(description = """
+                    이 캐릭터의 시간대(IANA 이름, 예 America/Los_Angeles). 화면이 날짜·시각을 보여 줄 때 쓴다.
+                    아직 관측하지 못했으면 Asia/Seoul. 생성 때 또는 첫 요청의 X-Zzal-Tz 헤더로 한 번 정해지고 바뀌지 않는다""",
+                    example = "Asia/Seoul") String timeZone,
+            @Schema(description = """
+                    서버가 창(재우기 19시·자동 취침 23시·깨우기 7시·자동 기상 10시·부름 10/14/19시)을 계산하는 시간대.
+                    화면은 창 시각을 이 시간대로 읽고 timeZone 으로 바꿔 보여 준다. 둘이 같으면 바꿀 것이 없다""",
+                    example = "Asia/Seoul") String rulesTimeZone) {
         public Detail(Long petId, String name, String note, String phase, boolean ready, String step, Long elapsedSeconds, String deathReason, Instant hatchStartedAt, Instant hatchedAt, Instant serverNow, Clock clock, Integer daysTogether, Gauges gauges, Food food, String mood, Sick sick, boolean justHealed, Intimacy intimacy, Today today, Pieces pieces, boolean goodDay, String baking, List<Motion> motions, List<Integer> justUnlocked, boolean sceneNew, List<Learned> learnedToday, FirstGift firstGift, ChatSummary chatSummary, Scenes scenes, String personality, String world, String tone, String genre, String background, String anchorsKey, Features features, Leaving leaving, Trip trip, Tutorial tutorial, Instant graduationSeenAt, com.lore.zzal.pet.FirstIntro.State firstIntro, com.lore.zzal.attendance.AttendanceRewards attendanceRewards, FirstNightChatGrace firstNightChatGrace, com.lore.zzal.pet.CareMotionPlayback motionPlayback) {
-            this(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, null);
+            this(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, null, null, null);
         }
         public Detail withCareReceipt(com.lore.zzal.pet.receipt.CareReceipt value) {
-            return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, value);
+            return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, value, timeZone, rulesTimeZone);
+        }
+
+        /** 시간대 두 칸을 채운 사본. {@link #from} 의 모든 갈래가 이것을 지난다. */
+        public Detail withTimeZones(String zone, String rulesZone) {
+            return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, careReceipt, zone, rulesZone);
+        }
+
+        /** 규칙 시간대 — 1단계는 서버 규칙이 아직 KST 라 늘 Asia/Seoul. */
+        static String rulesZoneOf(ZzalPet pet) {
+            return ZzalRules.ZONE.getId();
         }
 
         @com.fasterxml.jackson.annotation.JsonProperty("customMotions")
@@ -446,6 +464,14 @@ public final class PetResponses {
                                   Map<Integer,ZzalMotion> rows,List<Integer> justUnlocked,
                                   boolean justHealed,List<ZzalScene> scenes,ZzalPiece piece,
                                   com.lore.zzal.pet.CareMotionPlayback motionPlayback) {
+            return build(pet,stepLabel,now,catalog,rows,justUnlocked,justHealed,scenes,piece,motionPlayback)
+                    .withTimeZones(pet.zone().getId(), rulesZoneOf(pet));
+        }
+
+        private static Detail build(ZzalPet pet,String stepLabel,Instant now,MotionCatalog catalog,
+                                    Map<Integer,ZzalMotion> rows,List<Integer> justUnlocked,
+                                    boolean justHealed,List<ZzalScene> scenes,ZzalPiece piece,
+                                    com.lore.zzal.pet.CareMotionPlayback motionPlayback) {
             boolean hatching = pet.isHatching();
             boolean alive = pet.isAlive();
             if (!alive) {

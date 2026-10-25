@@ -626,6 +626,15 @@ public class ZzalPet {
     @Column
     private Instant lastSeenAt;
 
+    // ── 시간대 (2026-10-26) ────────────────────────────────────────────
+
+    /**
+     * 이 펫의 시간대(IANA 이름). NULL = 아직 관측 못 함 → {@link #zone()} 은 KST.
+     * 생성 때 또는 NULL 인 펫의 첫 요청에서 한 번 적히고 그 뒤로 안 바뀐다({@link PetTimeZones}).
+     */
+    @Column(name = "time_zone", length = PetTimeZones.MAX_LENGTH)
+    private String timeZone;
+
     // ── 성격·꾸미기 (설계 규칙) ────────────────────────────────────────
 
     @Enumerated(EnumType.STRING)
@@ -713,6 +722,35 @@ public class ZzalPet {
         pet.hatchStartedAt = now;
         pet.background = "room";
         return pet;
+    }
+
+    /** {@link #draft(Long, String, Instant)} + 생성 요청의 시간대. 못 읽었으면 NULL 로 남아 다음 요청이 채운다. */
+    public static ZzalPet draft(Long userId, String sourceImageKey, Instant now, java.time.ZoneId zone) {
+        ZzalPet pet = draft(userId, sourceImageKey, now);
+        pet.observeTimeZone(zone);
+        return pet;
+    }
+
+    /**
+     * 시간대를 <b>한 번만</b> 적는다. 이미 적혀 있거나 {@code zone} 이 null 이면 아무것도 안 하고 false.
+     *
+     * ★ 덮어쓰지 않는 이유 — 하루 중간에 바뀌면 23시가 두 번 오거나 안 오고, 날짜로 찾는 기록
+     *   (채팅 세션 {@code dateOf(hatchedAt)}·밤 굽기 {@code night_of}·출석·함께한 날)이 그날 하루 어긋난다.
+     */
+    public boolean observeTimeZone(java.time.ZoneId zone) {
+        if (timeZone != null || zone == null) return false;
+        this.timeZone = zone.getId();
+        return true;
+    }
+
+    /** 규칙에 쓰는 시간대. 아직 관측 못 했으면 KST. */
+    public java.time.ZoneId zone() {
+        return PetTimeZones.effective(timeZone);
+    }
+
+    /** 저장된 값 그대로(NULL 가능). */
+    public String getTimeZone() {
+        return timeZone;
     }
 
     /**

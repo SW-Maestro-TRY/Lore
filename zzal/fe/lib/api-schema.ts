@@ -4692,6 +4692,12 @@ export interface components {
             /** @description 부화 완료 여부 */
             ready?: boolean;
             /**
+             * @description 서버가 창(재우기 19시·자동 취침 23시·깨우기 7시·자동 기상 10시·부름 10/14/19시)을 계산하는 시간대.
+             *     화면은 창 시각을 이 시간대로 읽고 timeZone 으로 바꿔 보여 준다. 둘이 같으면 바꿀 것이 없다
+             * @example Asia/Seoul
+             */
+            rulesTimeZone?: string;
+            /**
              * @description 이번 조회에서 새 장면이 기록되었는지 여부. 재방문 첫 화면이 1회 표시하는 데 사용한다.
              *     다음 조회부터는 false 다
              */
@@ -4709,6 +4715,12 @@ export interface components {
             } | null;
             /** @description 현재 수행 중인 생성 단계. 부화 중에만 채워진다 */
             step?: string | null;
+            /**
+             * @description 이 캐릭터의 시간대(IANA 이름, 예 America/Los_Angeles). 화면이 날짜·시각을 보여 줄 때 쓴다.
+             *     아직 관측하지 못했으면 Asia/Seoul. 생성 때 또는 첫 요청의 X-Zzal-Tz 헤더로 한 번 정해지고 바뀌지 않는다
+             * @example Asia/Seoul
+             */
+            timeZone?: string;
             today?: components["schemas"]["ZzalToday"];
             /** @description 말투. 대사 톤에만 쓰이고 그림 생성에는 들어가지 않는다 */
             tone?: string | null;
