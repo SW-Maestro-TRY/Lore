@@ -113,12 +113,13 @@
 }
 .wt .wt-reader-create {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 170px;
+  /* 표지를 키웠다(2026-10-25) — 170px 이면 무슨 작품인지 안 보인다는 피드백 */
+  grid-template-columns: minmax(0, 1fr) 240px;
   background: #182333;
   border-radius: 12px;
   overflow: hidden;
   margin: 28px 0 40px;
-  min-height: 218px;
+  min-height: 300px;
 }
 .wt .wt-reader-create > div {
   padding: 28px 32px;
@@ -126,11 +127,23 @@
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 22px;
+  gap: 16px;
 }
 .wt .wt-reader-create h2 {
-  font-size: 28px;
-  line-height: 1.3;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+.wt .wt-reader-create p {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 6px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--muted);
   word-break: keep-all;
 }
 .wt .wt-reader-create .btn {
@@ -326,15 +339,18 @@
     width: calc(100% + 40px);
   }
   .wt .wt-reader-create {
-    grid-template-columns: minmax(0, 1fr) 116px;
-    min-height: 206px;
+    grid-template-columns: minmax(0, 1fr) 132px;
+    min-height: 240px;
   }
   .wt .wt-reader-create > div {
     padding: 24px 18px;
     gap: 20px;
   }
   .wt .wt-reader-create h2 {
-    font-size: 23px;
+    font-size: 19px;
+  }
+  .wt .wt-reader-create p {
+    font-size: 12.5px;
   }
   .wt .wt-reader-create .btn {
     min-width: 0;
@@ -363,3 +379,33 @@
     z-index: 100;
   }
 }
+
+/* 작품 머리 — 표지 왼쪽, 오른쪽에 장르 · 제목 · 「캐릭터 · N화」 · 찜 · 넓은 공유(2026-10-25).
+   표지는 키우되 시안보다 작게, 제목·여백은 줄였다. */
+.wt .wt-reader-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; font-size: 13px; }
+.wt .wt-reader-back span { font-size: 18px; line-height: 1; }
+.wt .wt-reader-intro { grid-template-columns: 200px minmax(0, 1fr); gap: 22px; align-items: start; }
+.wt .wt-reader-cover { width: 200px; border-radius: 12px; }
+.wt .wt-reader-intro-content { gap: 12px; padding-top: 4px; }
+.wt .wt-result-final .wt-result-head { gap: 6px; }
+.wt .wt-result-genre { font-size: 12px; font-weight: 700; color: var(--sea); }
+.wt .wt-result-final .wt-result-titlemid { font-size: 21px; line-height: 1.35; }
+.wt .wt-result-final .wt-result-meta { font-size: 13px; line-height: 1.5; }
+.wt .wt-result-like { display: flex; margin-top: 2px; }
+.wt .wt-result-final .wt-result-acts-other { display: grid; gap: 8px; }
+.wt .wt-result-final .wt-result-acts-other .wt-share { display: block; }
+.wt .wt-result-final .wt-result-acts .wt-result-sharewide {
+  width: 100%; height: 42px; justify-content: center; border-radius: 10px;
+  background: var(--water-light); color: var(--ink); border: 0; font-size: 13.5px;
+}
+@media (max-width: 767px) {
+  /* 폰도 옆으로 — 표지를 작게 왼쪽에 두고 정보를 옆에 */
+  .wt .wt-reader-intro { grid-template-columns: 112px minmax(0, 1fr); gap: 14px; }
+  .wt .wt-reader-cover { width: 112px; justify-self: start; }
+  .wt .wt-result-final .wt-result-head { text-align: left; }
+  .wt .wt-result-final .wt-result-titlemid { font-size: 17px; text-align: left; }
+  .wt .wt-result-final .wt-result-titlerow { align-items: flex-start; }
+  .wt .wt-result-final .wt-result-acts-other { justify-content: stretch; }
+}
+.wt .wt-result-final .wt-result-acts.wt-result-acts-other { display: grid; grid-template-columns: 1fr; width: 100%; }
+.wt .wt-result-final .wt-result-acts-other > .wt-share { display: block; width: 100%; }

@@ -31,6 +31,22 @@ import "./ResultFinal.css";
  * 이 브라우저(isMyRun)와 계정 목록(myAccountRuns) 둘 중 하나만 맞아도 된다 —
  * 다른 기기에서 로그인해 열어도 내 작품이 남의 것으로 보이면 안 된다.
  * 완성본을 여는 것만으로는 rememberMyRun 을 하지 않는다(만든 사람만 남긴다). */
+/* 다 읽은 뒤 「직접 만들기」 칸의 문구 셋(2026-10-25). 작품마다 하나로 고정해
+ * 같은 화를 다시 열어도 문구가 바뀌지 않게 한다(run 번호로 고른다). */
+const END_COPIES = [
+  { title: ["이번엔, 당신의 이야기가", "웹툰이 될 차례."],
+    body: ["상상만 하던 캐릭터와 이야기를", "AI로 나만의 웹툰으로 만들어보세요."], cta: "내 웹툰 만들기" },
+  { title: ["내 캐릭터가", "웹툰 속 주인공이 된다면?"],
+    body: ["머릿속에만 있던 내 캐릭터,", "이제 웹툰 속에서 만나보세요."], cta: "내 캐릭터로 시작하기" },
+  { title: ["상상만 하던 이야기를", "이제 눈으로 만나보세요."],
+    body: ["내가 만든 세계와 캐릭터가", "하나의 웹툰으로 완성되는 순간."], cta: "내 이야기 시작하기" },
+];
+function endCopyOf(runId: string) {
+  let h = 0;
+  for (const ch of runId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return END_COPIES[h % END_COPIES.length];
+}
+
 export default function Result({ runId, go, authenticated = false }: { runId: string; go: Go; authenticated?: boolean }) {
   const t = useT();
   const [data, setData] = useState<RunResult | null>(null);
@@ -129,6 +145,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     return () => { alive = false; };
   }, [mine, authenticated]);
   const freeLeft = allow && !allow.logged_in && !allow.blocked ? allow.free_left ?? 0 : 0;
+  const endCopy = endCopyOf(runId);
   /* 광고·SNS 링크(UTM)를 달고 이 화면으로 바로 들어왔나. 첫 그림 뒤에 읽는다 —
      서버가 그린 화면과 첫 그림이 달라지면 안 된다. */
   const [fromLink, setFromLink] = useState(false);
@@ -179,8 +196,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const preview = data && data.preview && data.planned_pages > data.page_count
     ? "" : "";
   const tags = (r: RunResult) => [...new Set([r.genre, r.style_label].filter((s): s is string => !!s).map((s) => t(s)))];
-  const metaPc = data ? [data.character, epLabel, ...tags(data)].filter(Boolean).join(" · ") : "";
-  const metaM = data ? tags(data).filter(Boolean).join(" · ") : "";
+  /* 작품 머리(2026-10-25): 장르는 제목 위 작은 줄로, 제목 아래는 「캐릭터 · N화」만. */
+  const genreLine = data ? tags(data).join(" · ") : "";
+  const metaPc = data ? [data.character, t("{n}화", { n: ep })].filter(Boolean).join(" · ") : "";
+  const metaM = metaPc;
 
   /* 다음 편은 아직 없다. 그래도 누가 어느 버튼에서 얼마나 찾는지가 이 기능을 언제
      만들지 정하는 근거라, 누를 때마다 남긴다(#413). */
@@ -272,7 +291,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                  right={data ? [data.character, epLabel].filter(Boolean).join(" · ") : ""} />
 
       <div className="wt-wrap wt-page wt-result-page">
-        <button className="btn-ghost wt-reader-back" onClick={() => go("works")}>{t("둘러보기")}</button>
+        <button className="btn-ghost wt-reader-back" onClick={() => go("works")}><span aria-hidden="true">‹</span> {t("둘러보기")}</button>
 
         {failed && (
           <div className="wt-result-state">
@@ -300,6 +319,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             <img className="wt-reader-cover" src={cover || pageUrl(runId, data.pages[0]?.no || 1, 320)} alt={t("{title} 표지", {title:data.title})} />
             <div className="wt-reader-intro-content">
             <div className="wt-result-head">
+              {genreLine && <span className="wt-result-genre">{genreLine}</span>}
               <div className="wt-result-titlerow">
                 {/* 2026-09-23 에 이 화면의 고치기 폼을 지웠다가, 제목 옆 연필 하나로 다시 둔다(#78).
                     제목 글자 자체가 줄 정중앙에 오도록, 연필은 제목 옆이 아니라 좋아요·공유와
@@ -328,8 +348,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                       <IconEdit size={15} />
                     </button>
                   )}
-                  <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
-                              onChange={(on, n) => { setLiked(on); setLikes(n); }} />
                 </span>
               </div>
 
@@ -337,6 +355,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 <span className="wt-result-meta-pc">{metaPc}</span>
                 <span className="wt-result-meta-m">{metaM}</span>
                 {preview && <span className="dim"> · {preview}</span>}
+              </span>
+              <span className="wt-result-like">
+                <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
+                            onChange={(on, n) => { setLiked(on); setLikes(n); }} />
               </span>
 
               {!mine && fromLink && (
@@ -405,7 +427,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </>
             ) : (
               /* 남의 작품도 내려받기·공유는 제목 옆이 아니라 제목 아래 줄에 — 내 작품과 같은 자리. */
-              <div className="wt-result-acts">
+              <div className="wt-result-acts wt-result-acts-other">
                 {/* 관리자 계정은 남의 작품도 편집실에서 열 수 있다(운영 확인용) — 서버도 같은 규칙(RunController.mustOwn). */}
                 {isAdmin && (
                   <button type="button" className="btn btn-w" onClick={() => { track("editor_open", { run: runId, where: "result_admin" }); go("editor", { run: runId }); }}>
@@ -418,7 +440,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
                 )}
-                {data.public !== false && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
+                {data.public !== false && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character}
+                                                      className="btn wt-result-sharewide" label={t("공유하기")} />}
               </div>
             )}
 
@@ -500,7 +523,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   <button className="btn btn-w" onClick={()=>setChaptersOpen(true)}><IconMenu size={17}/>{t("회차 목록")}</button>
                   {mine && <button className="btn btn-w" onClick={()=>go("editor",{run:runId})}><IconEdit size={17}/>{t("편집실")}</button>}
                 </div>
-                {!mine && <section className="wt-reader-create"><div><h2>{t("작품이")}<br/>{t("즐거우셨나요?")}</h2><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t("직접 웹툰 만들기")}</button>{freeLeft>0 && <small>{t("가입 없이 오늘 {n}편 무료",{n:freeLeft})}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,320)} alt=""/></section>}
+                {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{t("가입 없이 무료로 시작")}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></section>}
               </EpisodeCommunity>
             ) : <div className="wt-reader-endnav"><button className="btn btn-w" onClick={()=>setChaptersOpen(true)}>{t("회차 목록")}</button>{mine&&<button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>}</div>}
 
