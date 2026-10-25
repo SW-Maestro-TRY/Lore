@@ -517,6 +517,7 @@ export function mountEditor(
   let askCtx = null;                 // { no, btn, cost }
 
   let unsafePages = new Set();   // 안전 기준에 걸려 빈 장으로 둔 장 번호(#626)
+  let runRegenCost = null;       // 이 작품의 한 장 다시 그리기 값(#787). 못 읽으면 계정 기본값을 쓴다
   let sceneTags = [];                // /api/config 의 feedback_tags.scene
 
   async function loadSceneTags() {
@@ -559,9 +560,12 @@ export function mountEditor(
     if (RUN_ID && !unsafePages.has(no)) {
       btn.disabled = true;
       try {
-        const allowance = await readAllowance();
-        if (typeof allowance.regen_cost !== "number") throw new Error(tr("크레딧 정보를 불러오지 못했습니다. 다시 눌러 주세요."));
-        cost = allowance.regen_cost;
+        if (runRegenCost != null) cost = runRegenCost;
+        else {
+          const allowance = await readAllowance();
+          if (typeof allowance.regen_cost !== "number") throw new Error(tr("크레딧 정보를 불러오지 못했습니다. 다시 눌러 주세요."));
+          cost = allowance.regen_cost;
+        }
       } catch (err) { if (btn.isConnected) toast(err.message); return; }
       finally { btn.disabled = false; }
       if (!btn.isConnected) return;
@@ -1640,7 +1644,12 @@ export function mountEditor(
         /* 안전 기준에 걸려 빈 장으로 둔 장(#626) — 그 장은 안내를 얹고 다시 그리기가 무료다. */
         try {
           const r = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/result`);
-          if (r.ok) unsafePages = new Set(((await r.json()).unsafe_pages || []).map(Number));
+          if (r.ok) {
+            const found = await r.json();
+            unsafePages = new Set((found.unsafe_pages || []).map(Number));
+            /* 한 장 다시 그리기 값은 작품의 화질을 따른다(#787) — 너울은 4. */
+            if (typeof found.regen_cost === "number") runRegenCost = found.regen_cost;
+          }
         } catch { /* 못 읽어도 편집은 된다 */ }
       }
     } catch (err) {

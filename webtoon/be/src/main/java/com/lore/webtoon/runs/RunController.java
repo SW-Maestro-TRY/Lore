@@ -306,6 +306,8 @@ public class RunController {
         found.put("public", ledger.isOpen(runId));
         /* 안전 검사에 걸려 빈 장으로 둔 장들(#626) — 화면이 그 자리에 안내를 얹는다. */
         found.put("unsafe_pages", regen.unsafePages(runId));
+        /* 이 작품의 한 장 다시 그리기 값(#787) — 화질마다 달라서 작품과 같이 준다. */
+        found.put("regen_cost", regenCost(runId));
         /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
         if (admins.current()) {
             RunService.Inputs inputs = runs.inputsOf(runId);
@@ -385,6 +387,11 @@ public class RunController {
 
     /* ---- 다시 그리기 ------------------------------------------------------- */
 
+    /** 이 작품의 한 장을 다시 그리는 값. 작품을 만든 화질을 따른다(#787). */
+    private int regenCost(String runId) {
+        return com.lore.webtoon.job.WebtoonQuality.regenCreditsOf(regen.qualityOf(runId));
+    }
+
     /**
      * 이 장을 다시 그린다. <b>여기서부터 실제로 돈이 나간다.</b>
      *
@@ -403,7 +410,8 @@ public class RunController {
            줄을 세운 뒤에 뺀다. 먼저 빼면 시작이 실패했을 때 낸 것만 사라진다.
            같은 ref 로 두 번 불려도 한 번만 빠진다(CreditGate.charge). */
         /* 안전 검사에 걸려 빈 장으로 완성된 장은 다시 그리기가 무료다(#626) — 크레딧은 처음에 그대로 받았다. */
-        int cost = regen.isUnsafe(runId, no) ? 0 : credits.regenCost();
+        /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 4다(#787). */
+        int cost = regen.isUnsafe(runId, no) ? 0 : regenCost(runId);
         String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
         if (blocked != null) {
             throw new BusinessException(CreditGate.notEnough(), blocked);
