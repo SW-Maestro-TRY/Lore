@@ -20,6 +20,7 @@ import {
 import type { PetDetail } from '../../lib/pet';
 import {FIRST_INTRO_KEYS,FIRST_INTRO_V4_KEYS} from './firstIntro';
 import { C, MONO, TAP_MIN, chipTone, fz, gap, monoSize, radius } from './ui';
+import { formatInZone, getRulesZone } from '../../lib/kst';
 
 /**
  * 이 서버에 dev 도구가 켜져 있나 — `GET /api/zzal/v1/dev/ping` 이 200 이면 그 답, 아니면 null.
@@ -418,7 +419,7 @@ function ClockTab({ petId, pet, busy, run, onDetail, toast, setBusy }: {
   const [noVisit, setNoVisit] = useState(false);
   const base = pet?.serverNow ? Date.parse(pet.serverNow) : Date.now();
   const clock = pet?.serverNow
-    ? new Date(pet.serverNow).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short' })
+    ? formatInZone(pet.serverNow, 'ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short' }, getRulesZone())
     : '—';
   const jump = (label: string, minutes: number) => run(label, () => advanceClock(petId, minutes, !noVisit));
   const at = (hhmm: string) => run(`${hhmm}로`, () => setClockAt(petId, new Date(nextLocalAt(base, hhmm)).toISOString(), !noVisit));
