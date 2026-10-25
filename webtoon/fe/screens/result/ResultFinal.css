@@ -595,3 +595,8 @@
 }
 @media (max-width: 767px) { .wt .wt-reader-epthumb { width: 80px; height: 58px; border-radius: 12px; } }
 .wt .wt-reader-epthumb { object-position: 50% 28%; }
+/* 「이런 웹툰은 어때요」 한 단계 작게 — 넷이 꽉 차니 너무 크다는 피드백 */
+.wt .wt-result-suggest .wt-strip-row { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.wt .wt-result-suggest .wt-strip-title { font-size: 20px; }
+.wt .wt-result-suggest .wt-strip-name { font-size: 14px; }
+@media (max-width: 767px) { .wt .wt-result-suggest .wt-strip-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .wt .wt-result-suggest .wt-strip-name { font-size: 12.5px; } }
