@@ -288,3 +288,21 @@
 @media (max-width: 767px) {
   .wt .wt-my-grid.preview > :nth-child(n + 3) { display: none; }
 }
+
+/* 문의 창 손질(2026-10-26) — 뒤로 가기를 제목 앞에, 파일칸은 단추와 개수만 */
+.wt .wt-dialog-titlewrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.wt .wt-dialog-back {
+  display: grid; place-items: center; width: 30px; height: 30px; flex: none; margin-left: -6px; padding: 0;
+  border: 0; border-radius: 8px; background: transparent; color: #c3d0df; font: inherit; font-size: 26px; line-height: 1; cursor: pointer;
+}
+.wt .wt-dialog-back:hover { background: #24344a; color: #fff; }
+.wt .wt-dialog-box.wt-contact-dialog .wt-dialog-titlewrap:has(.wt-dialog-back) h2 { transform: none; }
+.wt .wt-contact-fileinput { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.wt .wt-contact-pick { display: flex; align-items: center; gap: 10px; margin-top: 2px; font-size: 13px; color: #c2cddd; }
+.wt .wt-contact-pickbtn {
+  display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 1px solid #52647b; border-radius: 8px;
+  color: #edf1f7; background: #293b52; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.wt .wt-contact-pickbtn:hover { background: #33475f; }
+.wt .wt-contact-attachments:has(.wt-contact-fileinput:focus-visible) .wt-contact-pickbtn { outline: 2px solid #b8e8d5; outline-offset: 2px; }
+.wt .wt-dialog-box.wt-contact-dialog .wt-dialog-heading:has(.wt-dialog-back) { margin-bottom: 14px; }
