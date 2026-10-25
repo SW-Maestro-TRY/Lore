@@ -12,11 +12,12 @@ BUDGET = 30000
 
 
 def select(entries, query, budget=BUDGET):
-    """실험의 select 그대로. 키워드가 많이 걸린 항목부터, 같으면 원래 순서, budget 자까지."""
+    """실험의 select 그대로. 키워드가 많이 걸린 항목부터, 같으면 원래 순서, budget 자까지.
+    항목 이름도 늘 키워드로 친다 — 이름이 나왔는데 키워드에 안 적었다고 안 읽히면 안 된다(2026-10-26)."""
     folded = str(query or "").casefold()
     ranked = []
     for i, e in enumerate(entries):
-        keys = {str(k).strip() for k in e.get("keys", []) if str(k).strip()}
+        keys = {str(k).strip() for k in [*(e.get("keys") or []), e.get("title") or ""] if str(k).strip()}
         hits = sum(k.casefold() in folded for k in keys)
         if hits:
             ranked.append((-hits, i, e))

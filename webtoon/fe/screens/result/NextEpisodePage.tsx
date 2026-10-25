@@ -81,8 +81,8 @@ export default function NextEpisodePage({runId, authenticated, go}: {
       progress: id ? d.progress.filter(p => p.key !== id) : d.progress} : d);
     setSaved(false); setBookSaved(false); setDirty(true);
   };
-  /* 고치기 — 설정집 항목은 이름·내용·키워드, 진행 상태 줄은 제목·내용. 항목 이름을 바꾸면 새 이름을 키워드
-     앞에 넣고 옛 이름은 뺀다 — 다음 화에서 새 이름이 나오면 이 항목이 걸리게. 고정 항목을 덮어쓰는 진행 상태 줄은
+  /* 고치기 — 설정집 항목은 이름·내용·키워드, 진행 상태 줄은 제목·내용. 항목 이름은 늘 키워드로 쳐서 새 이름이
+     나오면 걸린다. 고정 항목을 덮어쓰는 진행 상태 줄은
      제목이 그 항목 이름이라 내용만 고친다. */
   type Editing = {kind: "entry" | "progress"; i: number; title: string; text: string; keys: string; lockTitle?: boolean};
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -94,7 +94,8 @@ export default function NextEpisodePage({runId, authenticated, go}: {
     if (kind === "entry") setData(d => d ? {...d, entries: d.entries.map((e, n) => {
       if (n !== i) return e;
       const typed = editing.keys.split(",").map(k => k.trim()).filter(Boolean);
-      const keys = e.title === title ? typed : [title, ...typed.filter(k => k !== e.title && k !== title)];
+      // 이름은 하네스가 늘 키워드로 친다(userbook.select). 옛 이름이 키워드에 남아 있으면 뺀다.
+      const keys = typed.filter(k => e.title === title || k !== e.title);
       return {...e, title, content: text, keys: keys.slice(0, 40), ...(e.title !== title ? {named: false} : {})};
     })} : d);
     else setData(d => d ? {...d, progress: d.progress.map((p, n) => n !== i ? p : {...p, title: editing.lockTitle ? p.title : title, text})} : d);

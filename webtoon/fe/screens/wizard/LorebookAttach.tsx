@@ -15,9 +15,8 @@ const AI_MAX=20000;
    받지 않는다(1화는 진행 상태 없이 시작 — orv-experiment 와 같다). 옛 설정집에 이미 적힌 것만 보이고 지울 수 있다. */
 const emptyEntry=()=>({kind:"setting",title:"",content:"",keys:[] as string[],enabled:true,always:false});
 const blank=():LoreBook=>({name:"",source:"manual",fixed_settings:"",progress_state:"",entries:[emptyEntry()],confirmed:false});
-// 빈 항목은 버리고, 키워드를 안 적은 항목은 이름을 키워드로 — 키워드가 없으면 그 항목은 한 번도 안 읽힌다.
-const tidy=(b:LoreBook):LoreBook=>({...b,entries:b.entries.filter(e=>e.title.trim()||e.content.trim())
-  .map(e=>({...e,title:e.title.trim(),keys:e.keys.length||e.always||!e.title.trim()?e.keys:[e.title.trim()]}))});
+// 빈 항목은 버린다. 항목 이름은 하네스가 늘 키워드로 치니(userbook.select) 키워드 칸에 옮겨 적지 않는다.
+const tidy=(b:LoreBook):LoreBook=>({...b,entries:b.entries.filter(e=>e.title.trim()||e.content.trim()).map(e=>({...e,title:e.title.trim()}))});
 const asEntries=(b:LoreBook):LoreBook=>!b.fixed_settings.trim()?b:{...b,fixed_settings:"",
   entries:[{kind:"world",title:b.name.trim()||"기본 설정",content:b.fixed_settings.trim(),keys:[],enabled:true,always:true},...b.entries]};
 export default function LorebookAttach({value,onChange,story,authenticated,onPendingChange}:{value?:LoreBook|null;onChange:(v:LoreBook|null)=>void;story:string;authenticated:boolean;onPendingChange?:(pending:boolean)=>void}) {

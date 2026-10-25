@@ -49,6 +49,11 @@ class UserbookTest(unittest.TestCase):
   named=[{**book[0]}]  # 이미 이름이 있는 세계는 다시 이름을 바꾸지 않는다
   _,_,again=lore_extract.book_entries([{'title':'다른 이름','type':'world','named':True,'text':'새 사실'}],named)
   self.assertEqual(again,{})
+ def test_entry_name_always_counts_as_keyword(self):
+  rows=[{'title':'김시하','keys':['선배'],'content':'출판사 편집자'}]
+  self.assertEqual(userbook.select(rows,'김시하가 웃었다'),rows)
+  self.assertEqual(userbook.select(rows,'선배가 웃었다'),rows)
+  self.assertEqual(userbook.select(rows,'아무도 없다'),[])
  def test_progress_merge_matches_experiment(self):
   rows=[{'key':'P001','title':'위치','text':'다리 앞'},{'key':'L0001','title':'열쇠','text':'민수가 갖고 있다'}]
   merged=lore_extract.merge_progress(rows,[{'key':'','title':'약속','text':'내일 만나기로 했다'},{'key':'L0001','title':'열쇠','text':'잃어버렸다'}],['P001'])

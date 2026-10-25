@@ -75,7 +75,7 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  await expect(page.getByText('지수가 감춘 약속은 아직 공개하지 않는다')).toBeVisible();
  await expect(page.getByText('항상 참고',{exact:true}).first()).toBeVisible();
  await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toBeVisible();
- // 고치기 — 취소하면 그대로, 확인하면 바뀐다. 항목 이름을 바꾸면 새 이름이 키워드에도 들어간다.
+ // 고치기 — 취소하면 그대로, 확인하면 바뀐다.
  await page.getByRole('button',{name:'지수의 약속 고치기',exact:true}).click();
  await page.getByLabel('지수의 약속 이름',{exact:true}).fill('버릴 이름');
  await page.getByRole('button',{name:'취소',exact:true}).click();
@@ -102,7 +102,7 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  expect(server.submitted.entries[0].content).toContain('3화까지');
  expect(server.submitted.progress[0].text).toBe('1화가 끝난 밤, 민수는 지수에게 사과했다.');
  expect(server.submitted.entries.map((e:any)=>e.title)).toEqual(['지수의 비밀 약속']);
- expect(server.submitted.entries[0].keys).toEqual(['지수의 비밀 약속']);
+ expect(server.submitted.entries[0].keys).toEqual([]);
  expect(server.submitted.progress.map((p:any)=>p.key)).toEqual(['P001']);
 });
 test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',async({page},info)=>{

@@ -78,7 +78,7 @@ test('설정집 도움말, 직접 적어 붙이기·빼기·복원',async({page}
 test('붙인 설정집은 생성 요청에 들어가 내 내용 길로 가고, 빼면 남지 않음',async({page})=>{
  const server=await setup(page);await page.goto('/webtoon?view=create&step=1');
  await writeBook(page,'다리 앞의 민수','주인공은 높은 곳을 무서워한다.');await finish(page);
- expect(server.sent.lorebook.confirmed).toBe(true);expect(contents(server.sent.lorebook)).toEqual(['주인공은 높은 곳을 무서워한다.']);expect(server.sent.lorebook.entries[0].keys).toEqual(['기본']);
+ expect(server.sent.lorebook.confirmed).toBe(true);expect(contents(server.sent.lorebook)).toEqual(['주인공은 높은 곳을 무서워한다.']);expect(server.sent.lorebook.entries[0].keys).toEqual([]);
  // 확인하고 붙이면 내 설정집에도 저장된다.
  expect(server.personal.map((b:any)=>b.name)).toEqual(['다리 앞의 민수']);expect(server.sent.lorebook.library_id).toBe('my-1');
 expect(server.sent.mode).toBe('own');
