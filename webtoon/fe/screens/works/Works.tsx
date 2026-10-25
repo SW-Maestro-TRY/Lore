@@ -169,9 +169,6 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
           <div className="wt-works-title">
             <h2>{t("웹툰 둘러보기")}</h2>
           </div>
-          <div className="wt-works-headacts">
-            <button type="button" className="btn btn-p wt-works-create" onClick={() => go("create",{step:1})}>{t("내 웹툰 만들기")}</button>
-          </div>
         </div>
 
         {/* 「최근 본 웹툰」 줄은 뺐다 — 목록 위에 표지 줄이 하나 더 있으니 정신없다는 피드백(2026-10-24) */}
@@ -237,6 +234,10 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
 
         {shown && shown.length > 0 && (
           <div className="wt-works-grid">
+            {/* 만들기 입구는 목록 첫 칸 — 제목 옆 큰 단추는 홀로 떠 있어 뜬금없다는 피드백(2026-10-25) */}
+            <button type="button" className="wt-works-make" onClick={() => { track("works_create", { where: "grid" }); go("create", { step: 1 }); }}>
+              <span className="wt-works-make-cover"><i aria-hidden="true">+</i><b>{t("내 웹툰 만들기")}</b><small>{t("내 캐릭터로 한 편")}</small></span>
+            </button>
             {shown.map((r) => (
               <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated}
                         liked={likedIds.has(r.run_id)}

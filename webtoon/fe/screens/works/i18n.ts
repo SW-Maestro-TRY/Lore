@@ -2,6 +2,7 @@ import { registerDict, type Dict } from "../../lib/i18n";
 
 /* 둘러보기 — 화면의 한국어 원문이 키다. 작품 제목·장르·그림체 라벨은 서버 값이라 여기 없다. */
 const dict: Dict = {
+  "내 캐릭터로 한 편": { en: "An episode with my character", ja: "自分のキャラクターで一話", zh: "用我的角色做一话" },
   "{title} 1화 읽기": { en: "Read episode 1 of {title}", ja: "{title} 第1話を読む", zh: "阅读 {title} 第1话" },
   "슈퍼": { en: "Super", ja: "スーパー", zh: "超级" },
   "세컨드브레인": { en: "Second Brain", ja: "セカンドブレイン", zh: "第二大脑" },
