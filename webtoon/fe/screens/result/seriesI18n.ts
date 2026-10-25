@@ -160,6 +160,7 @@ registerDict({
   "이번 화에서 추가": {"en": "New this episode", "ja": "今回追加", "zh": "本话新增"},
   "{name} 빼기": {"en": "Remove {name}", "ja": "{name}を外す", "zh": "移除{name}"},
   "빼기": {"en": "Remove", "ja": "外す", "zh": "移除"},
+  "AI가 지은 이름": {"en": "Name made by AI", "ja": "AIが付けた名前", "zh": "AI 起的名字"},
   "항상 참고": {"en": "Always on", "ja": "常に参照", "zh": "始终参考"},
   "이번 화에서 보탬": {"en": "Added this episode", "ja": "今回の話で追記", "zh": "本话补充"},
   "이번 화에서 보탬 {n}개": {"en": "{n} updated this episode", "ja": "今回の話で追記 {n}件", "zh": "本话补充 {n} 条"},

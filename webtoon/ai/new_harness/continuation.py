@@ -283,8 +283,8 @@ def stage_digest(packet_path, out_path, dry_run, lang="ko"):
     with ThreadPoolExecutor(max_workers=2) as pool:
         added = pool.submit(X.extract, text, out_dir, lang, kept)
         progress = pool.submit(X.update_progress, rows, text, out_dir, lang)
-        (rows_new, more), (merged, changes, removed) = added.result(), progress.result()
-    result = {"entries": X.apply_book(kept, rows_new, more), "progress": merged,
+        (rows_new, more, renamed), (merged, changes, removed) = added.result(), progress.result()
+    result = {"entries": X.apply_book(kept, rows_new, more, renamed), "progress": merged,
               "progress_changes": changes, "progress_removed": removed}
     R.write_json(out_path, result)
     return result

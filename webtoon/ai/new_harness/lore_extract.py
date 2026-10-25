@@ -58,12 +58,16 @@ def progress_prompt(rows: list[dict], new_text: str, lang: str = "ko") -> str:
             + "\n\n[새 화 본문]\n" + new_text + "\n")
 
 
+# 1화가 설정집 없이 장르의 세계 설명만으로 섰을 때 그 세계 항목의 제목(continuation.world_seed). 이름이 아니다.
+GENERIC_WORLD = "세계 배경"
+
+
 def _norm(title) -> str:
     return re.sub(r"\s+", "", str(title or "")).casefold()
 
 
-def book_entries(entries: list, existing: list | None = None) -> tuple[list[dict], dict[str, str]]:
-    """뽑은 항목을 제품 설정집 항목으로. (새 항목, {이미 있는 항목 id: 덧붙일 사실}).
+def book_entries(entries: list, existing: list | None = None) -> tuple[list[dict], dict[str, str], dict[str, dict]]:
+    """뽑은 항목을 제품 설정집 항목으로. (새 항목, {이미 있는 항목 id: 덧붙일 사실}, {세계 항목 id: 새 이름}).
 
     같은 제목은 하나로 합친다(실험의 extract_rules 와 같다). 이미 있는 항목(existing)과 제목이 같으면 새로
     만들지 않고 그 항목에 덧붙일 사실로 돌려준다. 새 항목 id 는 L0001… 이고 이미 있는 번호 다음부터 잇는다 —
@@ -72,12 +76,20 @@ def book_entries(entries: list, existing: list | None = None) -> tuple[list[dict
     existing = [e for e in existing or [] if isinstance(e, dict)]
     known = {_norm(e.get("title")): str(e.get("id") or "") for e in existing}
     n = max([int(m.group(1)) for e in existing for m in [re.match(r"L(\d+)$", str(e.get("id") or ""))] if m], default=0)
-    out, seen, more = [], {}, {}
+    out, seen, more, renamed = [], {}, {}, {}
     for e in entries or []:
         if not isinstance(e, dict) or not str(e.get("text") or "").strip() or not _norm(e.get("title")):
             continue
         key, text = _norm(e["title"]), str(e["text"]).strip()
         keys = [str(k).strip() for k in (e.get("keys") if isinstance(e.get("keys"), list) else []) if str(k).strip()]
+        # 세계 항목은 하나다. 1화에서 옮겨 온 세계(continuation.world_seed)가 있으면 새로 만들지 않고 거기에
+        # 덧붙이고, 그 세계에 아직 이름이 없었으면(GENERIC_WORLD) 이번에 뽑은 이름으로 바꾼다.
+        world = next((x for x in existing if x.get("kind") == "world"), None) if e.get("type") == "world" else None
+        if world is not None and world.get("id"):
+            more[world["id"]] = (more[world["id"]] + "\n" if world["id"] in more else "") + text
+            if world.get("title") == GENERIC_WORLD:
+                renamed[world["id"]] = {"title": str(e["title"]).strip(), "keys": keys, "named": e.get("named") is True}
+            continue
         if key in known and known[key]:
             more[known[key]] = (more[known[key]] + "\n" if known[key] in more else "") + text
             continue
@@ -91,15 +103,28 @@ def book_entries(entries: list, existing: list | None = None) -> tuple[list[dict
         row = {"id": f"L{n:04d}", "title": str(e["title"]).strip(), "kind": str(e.get("type") or "").strip(),
                "keys": keys or [str(e["title"]).strip()], "content": text,
                "always": e.get("always") is True, "enabled": True}
+        if e.get("type") == "world" and e.get("named") is True:
+            row["named"] = True
         seen[key] = row
         out.append(row)
-    return out, more
+    return out, more, renamed
 
 
-def apply_book(existing: list, rows: list, more: dict) -> list[dict]:
-    """이미 있는 항목에 새 사실을 덧붙이고(updated) 새 항목을 뒤에 붙인다(new)."""
-    kept = [{**e, "content": str(e.get("content") or "").rstrip() + "\n" + more[str(e.get("id"))], "updated": True}
-            if str(e.get("id") or "") in more else e for e in existing or [] if isinstance(e, dict)]
+def apply_book(existing: list, rows: list, more: dict, renamed: dict | None = None) -> list[dict]:
+    """이미 있는 항목에 새 사실을 덧붙이고(updated), 이름 없던 세계에 이름을 달고, 새 항목을 뒤에 붙인다(new)."""
+    renamed = renamed or {}
+    kept = []
+    for e in existing or []:
+        if not isinstance(e, dict):
+            continue
+        i = str(e.get("id") or "")
+        if i in more:
+            e = {**e, "content": str(e.get("content") or "").rstrip() + "\n" + more[i], "updated": True}
+        if i in renamed:
+            r = renamed[i]
+            e = {**e, "title": r["title"], "keys": list(dict.fromkeys([*(e.get("keys") or []), r["title"], *r["keys"]])),
+                 **({"named": True} if r["named"] else {})}
+        kept.append(e)
     return kept + [{**r, "new": True} for r in rows]
 
 
@@ -125,7 +150,7 @@ def progress_rows(progress) -> list[dict]:
             for p in progress or [] if isinstance(p, dict) and str(p.get("text") or "").strip()]
 
 
-def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None = None) -> tuple[list[dict], dict[str, str]]:
+def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None = None) -> tuple[list[dict], dict[str, str], dict[str, dict]]:
     """고정 로어북 — 대상마다 항목 하나. 이미 있는 대상은 새 사실만 돌려준다."""
     existing = [e for e in existing or [] if isinstance(e, dict)]
     got = _call(book_prompt(source, lang, existing), out_dir, "LORE_BOOK").get("entries", [])
@@ -146,7 +171,7 @@ def main():
     args = parser.parse_args()
     data = json.loads(args.input.read_text())
     lang = str(data.get("language") or "ko")
-    entries, _ = extract(data["text"], args.out.parent, lang)
+    entries, _, _ = extract(data["text"], args.out.parent, lang)
     book = {"name": "내 이야기의 설정", "source": "extracted", "confirmed": False,
             "fixed_settings": "", "progress_state": "", "entries": entries, "progress": []}
     args.out.write_text(json.dumps(book, ensure_ascii=False), encoding="utf-8")

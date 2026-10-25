@@ -173,6 +173,7 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
           const titleOf = (key: string) => data.entries.find(e => e.id === key)?.title;
           const row = ({e,i}: {e: typeof data.entries[number]; i: number}) => <li key={e.id || `${e.title}-${i}`}>
             <div><b>{e.title}</b>{e.always && <small className="wt-series-always">{t("항상 참고")}</small>}
+              {e.named && <small className="wt-series-warn">{t("AI가 지은 이름")}</small>}
               {e.new && <small className="wt-series-new">{t("이번 화에서 추가")}</small>}
               {e.updated && <small className="wt-series-new">{t("이번 화에서 보탬")}</small>}
               {lang === "ko" && HANJA.test(e.title + e.content) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}

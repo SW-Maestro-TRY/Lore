@@ -1084,7 +1084,7 @@ export interface SeriesChapter {
 export interface SeriesInfo { episode: number; chapters: SeriesChapter[] }
 /** 앞 화 정리(다음 화 버튼을 누르면 AI 가 앞 화를 읽고 칸을 채운다). SAVED 는 사람이 초안을 저장한 뒤. */
 export interface SeriesDigestState { status: "NONE"|"RUNNING"|"DONE"|"ERROR"|"SAVED"; error?: string }
-export interface SeriesEntry extends LoreEntry { new?: boolean; updated?: boolean }
+export interface SeriesEntry extends LoreEntry { new?: boolean; updated?: boolean; named?: boolean }
 export interface SeriesDraft {
   episode: number; fixed_settings: string; progress_state: string; story: string; revision: number;
   entries: SeriesEntry[]; progress: LoreProgress[]; digest: SeriesDigestState;

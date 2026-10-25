@@ -87,7 +87,7 @@ public class SeriesService {
         return "현재 시점: " + number(source) + "화 종료\n\n마지막 장면 기록 (확인하고 현재 상태로 정리해 주세요):\n" + end;
     }
     /**
-     * 앞 화까지 이어 온 2층 로어북 — 고정 로어북(entries: 키워드 항목 + 항상 켜짐 규칙)과 진행 상태(progress).
+     * 앞 화까지 이어 온 2층 로어북 — 고정 로어북(entries: 키워드 항목, 세계 항목은 항상 켜짐)과 진행 상태(progress).
      * 1화에 붙인 설정집이거나 앞 회차에서 넘긴 연재 설정집이다.
      */
     private Map<String,Object> sourceBook(WebtoonJob source) {
