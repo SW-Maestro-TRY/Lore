@@ -148,3 +148,7 @@
 .wt .wt-lore-editor .wt-lore-save { margin-left:auto; }
 .wt .wt-lore-saved { margin-left:auto; font-size:14px; color:var(--muted); }
 .wt .wt-lore-saved + .wt-lore-save { margin-left:0; }
+/* AI로 만들기 — 「글 파일 올리기」는 「이야기」 줄 오른쪽, 창 제목과 안내 사이를 좁힌다 */
+.wt .wt-lore-ai-texthead { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.wt .wt-lore-ai-texthead label { font-size:15px; color:var(--muted); }
+.wt .wt-lore-dialog .wt-lore-panelhead { padding-bottom:8px; }

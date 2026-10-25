@@ -136,10 +136,11 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
     {!authenticated&&<p className="muted wt-lore-guest">{t("로그인하면 만든 설정집을 저장해 두고 다시 쓸 수 있어요.")}</p>}
    </>:editMode&&aiMode?<div className="wt-lore-ai">
     <p className="wt-lore-ai-lede">{t("긴 스토리를 올려주시면 AI가 자동으로 설정집을 만들어요!")}</p>
-    <label className="wt-lore-ai-text"><span>{t("이야기")}</span>
-     <textarea className="field" rows={12} maxLength={AI_MAX} value={aiText} disabled={busy} placeholder={t("소설·대본·지금까지의 줄거리를 붙여 넣어 주세요")} onChange={e=>{setAiText(e.target.value);setAiNote("");}}/></label>
+    <div className="wt-lore-ai-text">
+     <div className="wt-lore-ai-texthead"><label htmlFor="wt-lore-ai-text">{t("이야기")}</label>
+      <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={()=>aiFile.current?.click()}>{t("글 파일 올리기")}</button></div>
+     <textarea id="wt-lore-ai-text" className="field" rows={12} maxLength={AI_MAX} value={aiText} disabled={busy} placeholder={t("소설·대본·지금까지의 줄거리를 붙여 넣어 주세요")} onChange={e=>{setAiText(e.target.value);setAiNote("");}}/></div>
     <div className="wt-lore-ai-tools">
-     <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={()=>aiFile.current?.click()}>{t("글 파일 올리기")}</button>
      <input ref={aiFile} type="file" accept=".txt,.md,text/plain" hidden onChange={e=>{void readFile(e.target.files?.[0]);e.target.value="";}}/>
      {story.trim().length>0&&<button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={()=>{setAiText(story.trim().slice(0,AI_MAX));setAiNote("");}}>{t("적어 둔 이야기 가져오기")}</button>}
      <span className={`wt-lore-ai-count${aiText.length>=AI_MAX?" full":""}`}>{aiText.length.toLocaleString()} / {AI_MAX.toLocaleString()}{t("자")}</span>
