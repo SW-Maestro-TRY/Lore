@@ -211,3 +211,6 @@
   .wt .wt-original-actions .wt-original-localnote { flex: 1 1 100%; margin-bottom: 4px; }
 }
 .wt .wt-original-image.has { padding: 0; }
+/* 안내는 구분선 바로 아래 한 줄, 단추는 그 아래 오른쪽 */
+.wt .wt-original-actions { flex-wrap: wrap; }
+.wt .wt-original-actions .wt-original-localnote { flex: 1 1 100%; margin: -6px 0 6px; }
