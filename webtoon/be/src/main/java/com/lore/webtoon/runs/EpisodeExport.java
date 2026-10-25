@@ -97,6 +97,13 @@ public class EpisodeExport {
     private final PageStore pages;
     private final BakeService bakery;
     private final S3Storage storage;
+    /* 편집실에서 고친 여백(장 뒤의 쉼). 검사에서 손으로 만들 때는 없어도 된다 — 그러면 여백 없이 잇는다. */
+    private OverlayStore overlays;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setOverlays(OverlayStore overlays) {
+        this.overlays = overlays;
+    }
     private Font base;
     private BufferedImage lou;
     private boolean louTried;
@@ -109,12 +116,14 @@ public class EpisodeExport {
 
     /** 이 작품 한 편. 그림이 없으면 {@code null} — 부르는 쪽이 404 를 낸다. */
     public byte[] png(String runId) {
-        List<BufferedImage> sheets = load(runId);
-        if (sheets.isEmpty()) {
+        Map<Integer, BufferedImage> loaded = load(runId);
+        if (loaded.isEmpty()) {
             return null;
         }
-        BufferedImage out = stitch(sheets);
-        stampEachSheet(out, sheets);
+        List<BufferedImage> sheets = new ArrayList<>(loaded.values());
+        int[] gaps = gapsPx(runId, new ArrayList<>(loaded.keySet()), sheets);
+        BufferedImage out = stitch(sheets, gaps);
+        stampEachSheet(out, sheets, gaps);
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
             ImageIO.write(out, "png", bytes);
             return bytes.toByteArray();
@@ -179,8 +188,8 @@ public class EpisodeExport {
      * 것이 가장 알아채기 어려운 실패다 — 화면에서 본 것과 받은 파일이 다르면
      * 사람은 자기가 저장을 안 한 줄 안다.
      */
-    private List<BufferedImage> load(String runId) {
-        List<BufferedImage> out = new ArrayList<>();
+    private Map<Integer, BufferedImage> load(String runId) {
+        Map<Integer, BufferedImage> out = new java.util.LinkedHashMap<>();
         Map<Integer, String> keys = new java.util.LinkedHashMap<>(pages.keysOf(runId));
         keys.putAll(bakery.keysOf(runId));
         for (Map.Entry<Integer, String> one : keys.entrySet()) {
@@ -190,7 +199,7 @@ public class EpisodeExport {
                 storage.download(one.getValue(), tmp);
                 BufferedImage img = ImageIO.read(tmp.toFile());
                 if (img != null) {
-                    out.add(img);
+                    out.put(one.getKey(), img);
                 } else {
                     log.warn("장을 못 읽었습니다 (run={}, 장={})", runId, one.getKey());
                 }
@@ -225,18 +234,56 @@ public class EpisodeExport {
      * {@code stitch.py} 와 같은 규칙이다.
      */
     static BufferedImage stitch(List<BufferedImage> sheets) {
+        return stitch(sheets, new int[sheets.size()]);
+    }
+
+    /**
+     * 장 뒤마다 {@code gaps[i]} 픽셀을 흰 여백으로 비우고 잇는다. 마지막 장 뒤는
+     * 비우지 않는다 — 공개본 화면({@code Result.tsx})과 같은 규칙이다.
+     */
+    static BufferedImage stitch(List<BufferedImage> sheets, int[] gaps) {
         int width = sheets.stream().mapToInt(BufferedImage::getWidth).max().orElse(1);
-        int height = sheets.stream().mapToInt(BufferedImage::getHeight).sum();
+        int height = sheets.stream().mapToInt(BufferedImage::getHeight).sum() + sumGaps(gaps, sheets.size());
         BufferedImage out = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = out.createGraphics();
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, width, height);
         int y = 0;
-        for (BufferedImage one : sheets) {
+        for (int i = 0; i < sheets.size(); i++) {
+            BufferedImage one = sheets.get(i);
             g.drawImage(one, (width - one.getWidth()) / 2, y, null);
-            y += one.getHeight();
+            y += one.getHeight() + gapAfter(gaps, i, sheets.size());
         }
         g.dispose();
+        return out;
+    }
+
+    private static int gapAfter(int[] gaps, int i, int count) {
+        return i < count - 1 && gaps != null && i < gaps.length ? Math.max(0, gaps[i]) : 0;
+    }
+
+    private static int sumGaps(int[] gaps, int count) {
+        int sum = 0;
+        for (int i = 0; i < count; i++) {
+            sum += gapAfter(gaps, i, count);
+        }
+        return sum;
+    }
+
+    /**
+     * 편집실에서 고친 여백을 픽셀로. 여백은 지면 폭의 몇 배라, 이을 때 쓰는
+     * 폭(가장 넓은 장)에 곱한다 — 화면이 여백을 폭 기준 %로 그리는 것과 같다.
+     */
+    private int[] gapsPx(String runId, List<Integer> numbers, List<BufferedImage> sheets) {
+        int[] out = new int[numbers.size()];
+        if (overlays == null) {
+            return out;
+        }
+        Map<Integer, Integer> steps = overlays.gapsOf(runId, 1);
+        int width = sheets.stream().mapToInt(BufferedImage::getWidth).max().orElse(1);
+        for (int i = 0; i < numbers.size(); i++) {
+            out[i] = (int) Math.round(width * OverlayStore.gapRatio(steps.getOrDefault(numbers.get(i), 0)));
+        }
         return out;
     }
 
@@ -249,13 +296,18 @@ public class EpisodeExport {
      * 표시가 안 딸려 간다. 컷별 내려받기도 같은 함수를 장 하나로 부른다.
      */
     void stampEachSheet(BufferedImage canvas, List<BufferedImage> sheets) {
+        stampEachSheet(canvas, sheets, new int[sheets.size()]);
+    }
+
+    void stampEachSheet(BufferedImage canvas, List<BufferedImage> sheets, int[] gaps) {
         Graphics2D g = canvas.createGraphics();
         int width = canvas.getWidth();
         int y = 0;
-        for (BufferedImage one : sheets) {
+        for (int i = 0; i < sheets.size(); i++) {
+            BufferedImage one = sheets.get(i);
             int w = one.getWidth(), h = one.getHeight();
             stamp(g, (width - w) / 2, y, w, h);
-            y += h;
+            y += h + gapAfter(gaps, i, sheets.size());
         }
         g.dispose();
     }

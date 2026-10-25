@@ -58,19 +58,19 @@
 
 .wt .wt-lore-dialog .wt-lore-panelhead{top:0}
 
-/* 새 설정집 작성 — 목록 맨 위의 큰 단추(2026-10-24, 맨 아래에 숨어 있어 못 찾는다는 피드백) */
+/* 새 설정집 작성 — 목록 맨 위의 큰 단추(2026-10-24, 맨 아래에 숨어 있어 못 찾는다는 피드백).
+   아래 설명 줄은 뺐다(2026-10-25) — 들어가면 직접 쓰기·AI 만들기가 바로 보인다. */
 .wt .wt-lore-newtop {
-  display: grid; grid-template-columns: 40px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 14px; row-gap: 2px;
+  display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 14px;
   align-items: center; width: 100%; padding: 16px 18px; margin: 4px 0 18px; text-align: left; cursor: pointer;
   border: 1px solid #e6a39380; border-radius: 14px; background: #e6a39314; color: var(--ink); font: inherit;
 }
 .wt .wt-lore-newtop:hover:not(:disabled) { background: #e6a39324; }
 .wt .wt-lore-newtop > span {
-  grid-row: span 2; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
   background: var(--sea); color: var(--paper); font-size: 22px; font-weight: 700; line-height: 1;
 }
 .wt .wt-lore-newtop b { font-size: 16px; }
-.wt .wt-lore-newtop small { font-size: 13px; color: var(--muted); }
 
 /* 직접 쓰기 화면 맨 위 — AI로 만들기 안내 */
 .wt .wt-lore-ai-offer {
