@@ -507,3 +507,30 @@
   .wt .wt-reader-endnav > .btn-w { flex: 1 1 0; padding: 0 10px; }
   .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 160px; min-height: 280px; }
 }
+
+/* 댓글·「이런 웹툰은 어때요」 — 글자를 키우고, 추천 줄을 웹툰·댓글과 같은 폭에 맞춘다(2026-10-25).
+   추천 줄은 720px 에 남아 있어 넓어진 읽기 칸(920px)과 왼쪽 끝이 어긋났다. */
+.wt .wt-comments-title { font-size: 22px; gap: 10px; }
+.wt .wt-comments-title span { font-size: 17px; }
+.wt .wt-community > p, .wt .wt-community-login { font-size: 15px; }
+.wt .wt-comment-meta b { font-size: 15px; }
+.wt .wt-comment-meta time { font-size: 13px; }
+.wt .wt-comment > p { font-size: 16px; line-height: 1.7; }
+.wt .wt-comment-compose textarea { font-size: 15px; }
+.wt .wt-result-suggest { width: 920px; max-width: 100%; padding: 28px 0 24px; }
+.wt .wt-result-suggest .wt-strip { gap: 14px; }
+.wt .wt-result-suggest .wt-strip-title { font-size: 22px; }
+.wt .wt-result-suggest .wt-strip-row {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; overflow: visible;
+}
+.wt .wt-result-suggest .wt-strip-item { width: auto; }
+.wt .wt-result-suggest .wt-strip-item img,
+.wt .wt-result-suggest .wt-strip-nocover { width: 100%; height: auto; aspect-ratio: 2 / 3; border-radius: 10px; }
+.wt .wt-result-suggest .wt-strip-name { font-size: 15px; margin-top: 4px; }
+@media (max-width: 767px) {
+  .wt .wt-comments-title { font-size: 19px; }
+  .wt .wt-comment > p { font-size: 15px; }
+  .wt .wt-result-suggest .wt-strip-title { font-size: 19px; }
+  .wt .wt-result-suggest .wt-strip-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .wt .wt-result-suggest .wt-strip-name { font-size: 14px; }
+}
