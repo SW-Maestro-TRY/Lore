@@ -1098,6 +1098,11 @@ export interface SeriesForm {
 export function readSeries(run: string): Promise<SeriesInfo> {
   return call(`/series/${encodeURIComponent(run)}`);
 }
+/** 써 두고 아직 만들지 않은 다음 화 초안 — 마이페이지 「만드는 중」. */
+export interface SeriesDraftCard { run: string; episode: number; title: string; story: string }
+export function mySeriesDrafts(): Promise<SeriesDraftCard[]> {
+  return call("/series/drafts");
+}
 export function readSeriesDraft(run: string): Promise<SeriesDraft> {
   return call(`/series/${encodeURIComponent(run)}/draft`);
 }

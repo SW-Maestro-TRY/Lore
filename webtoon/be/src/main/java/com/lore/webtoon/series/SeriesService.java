@@ -41,8 +41,9 @@ public class SeriesService {
         this.ledger=ledger; this.stories=stories; this.art=art; this.queue=queue;
         this.guard=guard; this.gate=gate; this.billing=billing; this.digests=digests;
     }
+    /** agree_ip 는 옛 화면만 보낸다 — 다음 화는 1화의 권리 확인을 잇는다(createNext). 안 보내도 되게 Boolean. */
     public record Form(String fixed_settings, String progress_state, String story, long revision,
-                       boolean confirmed, boolean agree_ip, String request_token, String uid,
+                       boolean confirmed, Boolean agree_ip, String request_token, String uid,
                        List<Map<String,Object>> entries, List<Map<String,Object>> progress) {}
 
     private WebtoonJob source(String run, Long user, boolean own) {
@@ -184,6 +185,26 @@ public class SeriesService {
         out.put("balance", gate.balanceOf(user));
         out.put("blocked", guard.whyBlocked(queue.reserved()));
         out.put("title", stories.chosenOf(run).map(s -> s.displayTitle()).orElse(""));
+        return out;
+    }
+    /** 마이페이지 「만드는 중」 — 써 두고 아직 만들지 않은 다음 화 초안. 다음 화를 이미 만들었거나 앞 화가
+     *  휴지통·관리자 제한이면 뺀다. 표지는 화면이 내 작품 목록에서 찾는다. */
+    @Transactional(readOnly=true)
+    public List<Map<String,Object>> myDrafts(Long user) {
+        if (user == null) return List.of();
+        var out = new ArrayList<Map<String,Object>>();
+        for (SeriesDraft d : drafts.findByOwnerId(user)) {
+            WebtoonJob job = jobs.findByPublicId(d.sourceJob).orElse(null);
+            if (job == null || job.getRunId() == null || job.getStatus() != JobStatus.DONE || liveSuccessor(job) != null) continue;
+            var work = ledger.find(job.getRunId());
+            if (work.isEmpty() || work.get().isTrashed() || work.get().isRemovedByAdmin()) continue;
+            var row = new LinkedHashMap<String,Object>();
+            row.put("run", job.getRunId());
+            row.put("episode", number(job) + 1);
+            row.put("title", stories.chosenOf(job.getRunId()).map(s -> s.displayTitle()).orElse(""));
+            row.put("story", d.nextStory.length() > 80 ? d.nextStory.substring(0, 80) : d.nextStory);
+            out.add(row);
+        }
         return out;
     }
     /** 항목을 따로 고르지 않은 초안 — 앞 화의 설정집을 그대로 넘긴다. */

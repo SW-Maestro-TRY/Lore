@@ -24,7 +24,7 @@ import {
   browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, type NhActiveCard, myLikes, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
-  mySurveyStatus, type SurveyStatus,
+  mySurveyStatus, type SurveyStatus, mySeriesDrafts, type SeriesDraftCard,
 } from "../../lib/api";
 import { activeJobLabel, activeJobTitle } from "../../lib/jobLabel";
 import type { Go } from "../../lib/nav";
@@ -49,6 +49,7 @@ const CONTACT_LINKS: { key: string; label: string; href: string }[] = [
 
 registerDict({
   "마이페이지": { en: "My page", ja: "マイページ", zh: "我的页面" },
+  "{n}화 초안": { en: "Episode {n} draft", ja: "第{n}話の下書き", zh: "第{n}话草稿" },
   "관리자 비공개": { en: "Hidden by admin", ja: "管理者が非公開", zh: "管理员设为不公开" },
   "관리자가 비공개 처리했어요.": { en: "An admin made this private.", ja: "管理者が非公開にしました。", zh: "管理员已设为不公开。" },
   "관리자가 삭제 처리했어요.": { en: "An admin removed this work.", ja: "管理者が削除しました。", zh: "管理员已删除这部作品。" },
@@ -228,6 +229,15 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
       setActiveCards(Object.fromEntries((r.cards ?? []).map((c) => [c.id, c])));
     }).catch(() => setActive([]));
   }, []);
+
+  /* 다음 화 초안 — 「다음 편 만들기」에서 써 두고 아직 만들지 않은 것. 만드는 중에 같이 둔다. */
+  const [seriesDrafts, setSeriesDrafts] = useState<SeriesDraftCard[]>([]);
+  useEffect(() => {
+    if (!isAuthenticated) { setSeriesDrafts([]); return; }
+    let alive = true;
+    mySeriesDrafts().then((r) => { if (alive) setSeriesDrafts(r ?? []); }).catch(() => { if (alive) setSeriesDrafts([]); });
+    return () => { alive = false; };
+  }, [isAuthenticated]);
 
   /* 휴지통(#157) — 지운 작품은 영구 삭제 전까지 여기서 되살린다. 지우기가
      로그인한 사람만 되므로 휴지통도 로그인했을 때만 읽는다. */
@@ -449,15 +459,19 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             )}
 
             {!allWorks && <>
-            {active.length > 0 && (
+            {(active.length > 0 || seriesDrafts.length > 0) && (
               /* 만드는 중(#548) — 「최근 본 웹툰」 자리. 표지 한 줄과 같은 크기로, 눌러서 이어 만든다. */
               <div className="wt-my-strip">
                 <div className="wt-strip">
-                  <b className="wt-strip-title">{t("만드는 중")} <span className="dim wt-my-draftcount">{active.length}</span></b>
+                  <b className="wt-strip-title">{t("만드는 중")} <span className="dim wt-my-draftcount">{active.length + seriesDrafts.length}</span></b>
                   <div className="wt-strip-row">
                     {active.map((j) => (
                       <DraftCard key={j.id} job={j} card={activeCards[j.id]}
                                  onOpen={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }} />
+                    ))}
+                    {seriesDrafts.map((d) => (
+                      <SeriesDraftItem key={d.run} draft={d} cover={runs.find((r) => r.run_id === d.run)}
+                                       onOpen={() => { track("resume_series_draft", { run: d.run, ep: d.episode }); go("next", { run: d.run }); }} />
                     ))}
                   </div>
                 </div>
@@ -684,6 +698,24 @@ const MOCK_DRAFTS: { jobs: NhJob[]; cards: NhActiveCard[] } = (() => {
 
 /* 만드는 중 카드(#548) — 시트가 있으면 시트, 없으면 루. 상태는 그림 위 작은 딱지로,
    사람이 답할 차례면 진하게. 아래에 캐릭터 · 길 · 마지막으로 손댄 때. */
+/** 다음 화 초안 카드 — 앞 화 표지에 「N화 초안」 표시, 누르면 다음 화 이어 만들기 페이지로. */
+function SeriesDraftItem({ draft, cover, onOpen }: { draft: SeriesDraftCard; cover?: RunCard; onOpen: () => void }) {
+  const t = useT();
+  const label = t("{n}화 초안", { n: draft.episode });
+  return (
+    <button type="button" className="wt-strip-item wt-my-draft" onClick={onOpen} aria-label={`${draft.title || t("제목 짓기 전")} · ${label} · ${t("이어서 만들기")}`}>
+      <span className="wt-my-draftcover">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={cover ? coverUrl(draft.run, cover.cover_page ?? 1, cover.cover_episode ?? 1) : louArt("generating")} alt="" className={cover ? "" : "lou"} />
+        <span className="wt-my-draftchip wait">{label}</span>
+      </span>
+      <span className={`wt-strip-name${draft.title ? "" : " dim"}`}>{draft.title || t("제목 짓기 전")}</span>
+      {draft.story && <span className="wt-my-draftmeta">{draft.story}</span>}
+      <span className="wt-my-draftgo">{t("이어서 만들기")} ›</span>
+    </button>
+  );
+}
+
 function DraftCard({ job, card, onOpen }: { job: NhJob; card?: NhActiveCard; onOpen: () => void }) {
   const t = useT();
   const title = activeJobTitle(job);

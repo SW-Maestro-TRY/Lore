@@ -82,6 +82,20 @@ class SeriesServiceTest {
         verify(jobs,times(2)).lockByPublicId("job1");
         verifyNoInteractions(creator,credits);
     }
+    @Test void myDraftsListUnsentNextEpisodesOnly() {
+        var d=new SeriesDraft("job1"); d.ownerId=7L; d.nextStory="민수는 일찍 출발한다.";
+        when(drafts.findByOwnerId(7L)).thenReturn(List.of(d));
+        when(stories.chosenOf("run1")).thenReturn(Optional.empty());
+        var rows=service.myDrafts(7L);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0)).containsEntry("run","run1").containsEntry("episode",2).containsEntry("story","민수는 일찍 출발한다.");
+        assertThat(service.myDrafts(null)).isEmpty();
+        // 다음 화를 이미 만들었으면 초안을 보여 주지 않는다.
+        var next=mock(WebtoonJob.class); when(next.getStatus()).thenReturn(JobStatus.RUNNING);
+        when(jobs.findByPublicId("job2")).thenReturn(Optional.of(next));
+        when(chapters.findByRootJobOrderByEpisodeNumberAsc("job1")).thenReturn(List.of(new SeriesChapter("job2","job1","job1",2,"r","{}")));
+        assertThat(service.myDrafts(7L)).isEmpty();
+    }
     @Test void nextEpisodeFreezesTwoLayersAndInheritsStyleWithAccountCharge() {
         assertThat(service.createNext("run1",7L,form(0))).containsEntry("id","job2");
         var cap=ArgumentCaptor.forClass(SeriesChapter.class); verify(chapters).save(cap.capture());

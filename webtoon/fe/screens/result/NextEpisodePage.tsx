@@ -7,6 +7,7 @@ import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
 import { ErrLine, errText } from "../../ui/CreditShort";
+import { IconChevronLeft, IconEdit, IconMinus } from "../../ui/Icons";
 import "./seriesI18n";
 import "./NextEpisodePage.css";
 
@@ -152,7 +153,7 @@ export default function NextEpisodePage({runId, authenticated, go}: {
   };
   if (authOpen) return <AuthModal open onClose={()=>setAuthOpen(false)} />;
   return <div className="wt-wrap wt-page wt-series-page">
-    <button type="button" className="btn-ghost wt-series-back" onClick={back}>← {t("돌아가기")}</button>
+    <button type="button" className="wt-series-back" onClick={back}><IconChevronLeft size={22}/>{t("웹툰 보기")}</button>
     <h1>{data ? t("{n}화 이어 만들기",{n:data.episode}) : t("다음 화 이어 만들기")}</h1>
     <p className="wt-series-lede">{t("앞 화를 읽고 설정과 진행 상태를 정리해 두었어요.")}</p>
     {!authenticated ? <>
@@ -176,21 +177,19 @@ export default function NextEpisodePage({runId, authenticated, go}: {
         {(() => {
           // 항상 참고하는 항목(세계 자체)을 앞에 둔다. 같은 목록 안에서 표시만 다르다.
           const items = data.entries.map((e,i)=>({e,i})).sort((a,b)=>Number(!!b.e.always)-Number(!!a.e.always));
-          const added = items.filter(({e})=>e.new).length, grown = items.filter(({e})=>e.updated).length;
           const titleOf = (key: string) => data.entries.find(e => e.id === key)?.title;
           const row = ({e,i}: {e: typeof data.entries[number]; i: number}) => <li key={e.id || `${e.title}-${i}`}>
             {editing?.kind === "entry" && editing.i === i ? editor(e.title) : <>
-            <div><b>{e.title}</b>{e.always && <small className="wt-series-always">{t("항상 참고")}</small>}
+            <div><div className="wt-series-title"><b>{e.title}</b>{e.always && <small className="wt-series-always">{t("항상 참고")}</small>}
               {e.named && <small className="wt-series-warn">{t("AI가 지은 이름")}</small>}
-              {e.new && <small className="wt-series-new">{t("이번 화에서 추가")}</small>}
-              {e.updated && <small className="wt-series-new">{t("이번 화에서 보탬")}</small>}
               {lang === "ko" && HANJA.test(e.title + e.content) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}
+              <span className="wt-series-entry-actions">
+                <button type="button" className="wt-series-icon" aria-label={t("{name} 고치기",{name:e.title})} title={t("고치기")}
+                  onClick={()=>setEditing({kind:"entry", i, title:e.title, text:e.content, keys:(e.keys||[]).join(", ")})}><IconEdit size={17}/></button>
+                <button type="button" className="wt-series-icon" aria-label={t("{name} 빼기",{name:e.title})} title={t("빼기")} onClick={()=>dropEntry(e.id,i)}><IconMinus size={17}/></button>
+              </span></div>
               <p className="wt-series-content">{e.content}</p>{!!e.keys?.length && !e.always && <p className="wt-series-evidence">{e.keys.join(" · ")}</p>}</div>
-            <span className="wt-series-entry-actions">
-              <button type="button" className="btn-ghost" aria-label={t("{name} 고치기",{name:e.title})}
-                onClick={()=>setEditing({kind:"entry", i, title:e.title, text:e.content, keys:(e.keys||[]).join(", ")})}>{t("고치기")}</button>
-              <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:e.title})} onClick={()=>dropEntry(e.id,i)}>{t("빼기")}</button>
-            </span></>}
+            </>}
           </li>;
           return <>
             {/* 진행 상태·설정집 항목은 길어서 접어 둔다. 한자가 섞인 줄이 있으면 펼쳐서 보이게 한다. */}
@@ -199,22 +198,22 @@ export default function NextEpisodePage({runId, authenticated, go}: {
               {data.progress.length ? <ul className="wt-series-entries">
                 {data.progress.map((p,i)=>{ const name = titleOf(p.key) || p.title; return <li key={`${p.key}-${i}`}>
                   {editing?.kind === "progress" && editing.i === i ? editor(name) : <>
-                  <div><b>{name}</b>
-                    {lang === "ko" && HANJA.test(p.title + p.text) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}<p className="wt-series-content">{p.text}</p></div>
-                  <span className="wt-series-entry-actions">
-                    <button type="button" className="btn-ghost" aria-label={t("{name} 고치기",{name})}
-                      onClick={()=>setEditing({kind:"progress", i, title:p.title, text:p.text, keys:"", lockTitle: !!titleOf(p.key)})}>{t("고치기")}</button>
-                    <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:p.title || p.text})} onClick={()=>dropProgress(i)}>{t("빼기")}</button>
-                  </span></>}
+                  <div><div className="wt-series-title"><b>{name}</b>
+                    {lang === "ko" && HANJA.test(p.title + p.text) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}
+                    <span className="wt-series-entry-actions">
+                      <button type="button" className="wt-series-icon" aria-label={t("{name} 고치기",{name})} title={t("고치기")}
+                        onClick={()=>setEditing({kind:"progress", i, title:p.title, text:p.text, keys:"", lockTitle: !!titleOf(p.key)})}><IconEdit size={17}/></button>
+                      <button type="button" className="wt-series-icon" aria-label={t("{name} 빼기",{name:p.title || p.text})} title={t("빼기")} onClick={()=>dropProgress(i)}><IconMinus size={17}/></button>
+                    </span></div>
+                    <p className="wt-series-content">{p.text}</p></div>
+                  </>}
                 </li>; })}</ul>
                 : <textarea id="series-state" className="field" rows={6} maxLength={16000} aria-label={t("현재 진행 상태")}
                     value={data.progress_state} onChange={e=>patch("progress_state",e.target.value)} />}
             </details>
 
             <details className="wt-series-group" open={lang === "ko" && items.some(({e}) => HANJA.test(e.title + e.content)) || undefined}>
-              <summary><b>{t("설정집 항목")}</b> <span>{t("{n}개",{n:items.length})}</span>
-                {!!added && <small className="wt-series-new">{t("이번 화에서 추가 {n}개",{n:added})}</small>}
-                {!!grown && <small className="wt-series-new">{t("이번 화에서 보탬 {n}개",{n:grown})}</small>}</summary>
+              <summary><b>{t("설정집 항목")}</b> <span>{t("{n}개",{n:items.length})}</span></summary>
               <p className="wt-series-help">{t("인물·조직·장소 같은 항목이에요. 이번 화에 이름이 나오면 들어가고, 「항상 참고」 항목은 매번 들어가요.")}</p>
               {items.length ? <ul className="wt-series-entries">{items.map(row)}</ul> : <p className="wt-series-help">{t("설정집 항목이 없어요.")}</p>}
               <div className="wt-series-book-save"><button type="button" className="btn btn-w" disabled={bookSaved} onClick={()=>void saveBook()}>
@@ -224,7 +223,7 @@ export default function NextEpisodePage({runId, authenticated, go}: {
         })()}
 
         <details className="wt-series-reference" open={!!data.fixed_settings.trim() || undefined}>
-          <summary>{t("더 적어 둘 설정 · 선택")}</summary>
+          <summary>{t("더 적어 둘 설정")}<small className="wt-series-optional">{t("(선택)")}</small></summary>
           <textarea id="series-fixed" className="field" rows={4} maxLength={16000} aria-label={t("고정 설정")}
             value={data.fixed_settings} onChange={e=>patch("fixed_settings",e.target.value)} />
         </details>

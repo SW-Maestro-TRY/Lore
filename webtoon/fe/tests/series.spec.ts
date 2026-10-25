@@ -108,7 +108,7 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
 test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',async({page},info)=>{
  const server=await stub(page);
  await openForm(page);
- await page.getByText('더 적어 둘 설정 · 선택',{exact:true}).click();
+ await page.locator('summary',{hasText:'더 적어 둘 설정'}).click();
  await page.getByLabel('고정 설정',{exact:true}).fill('민수는 고소공포증이 있다. 비밀 약속은 공개하지 않는다.');
  await page.getByText('현재 진행 상태',{exact:true}).click();
  // 진행 상태 줄을 다 빼면 글 칸이 나온다(정리가 실패했을 때와 같은 칸).
@@ -122,7 +122,7 @@ test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',as
  await expect(page.getByRole('status').filter({hasText:'초안을 저장했어요'})).toBeVisible();
  expect(server.submitted).toBeNull();
  // 돌아갔다가 다시 들어오면 저장한 초안이 그대로다.
- await page.getByRole('button',{name:/돌아가기/}).click();
+ await page.getByRole('button',{name:'웹툰 보기'}).click();
  await expect(page).toHaveURL(/run=ep1/);await expect(page).not.toHaveURL(/view=next/);
  await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
  await page.getByText('현재 진행 상태',{exact:true}).click();
@@ -189,7 +189,7 @@ test('저장 중에는 칸과 단추가 잠기고 돌아가기도 막힘',async(
  await page.getByRole('button',{name:'초안 저장',exact:true}).click();
  await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeDisabled();
  await expect(page.locator('.wt-series-actions button[type=submit]')).toBeDisabled();
- await page.getByRole('button',{name:/돌아가기/}).click();
+ await page.getByRole('button',{name:'웹툰 보기'}).click();
  await expect(page).toHaveURL(/view=next/);
  release();
  await expect(page.getByRole('status').filter({hasText:'초안을 저장했어요'})).toBeVisible();
