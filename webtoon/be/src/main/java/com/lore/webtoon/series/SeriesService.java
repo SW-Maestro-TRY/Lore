@@ -262,7 +262,8 @@ public class SeriesService {
         mustBeLatest(source);
         // 권리 확인은 1화를 만들 때(만들기 화면의 저작권 확인) 같은 캐릭터·설정으로 받았다. 다음 화는 그 확인을
         // 잇는다 — 새로 올리는 사진·파일이 없고, 이번 화에 적는 글은 사용자가 직접 쓴 것이다.
-        checked(form.story(),20000,"이번 화 이야기",true);
+        // 이번 화 내용은 비워도 된다 — 비우면 하네스가 앞 화가 남긴 일에서 다음 사건을 정한다(continuation.story_input).
+        checked(form.story(),20000,"이번 화 이야기",false);
         String blocked=guard.whyBlocked(queue.reserved());
         if (blocked != null) throw new BusinessException(ErrorCode.INVALID_INPUT,blocked);
         int cost=WebtoonQuality.creditsOf(source.getQuality());

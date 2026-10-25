@@ -75,21 +75,32 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  await expect(page.getByText('지수가 감춘 약속은 아직 공개하지 않는다')).toBeVisible();
  await expect(page.getByText('항상 참고',{exact:true}).first()).toBeVisible();
  await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toBeVisible();
- // 이름 고치기 — Escape 는 고치기만 취소하고 창은 그대로, 확인하면 새 이름이 키워드에도 들어간다.
- await page.getByRole('button',{name:'지수의 약속 이름 고치기',exact:true}).click();
- await page.getByLabel('지수의 약속 새 이름',{exact:true}).press('Escape');
- await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'지수의 약속 이름 고치기',exact:true}).click();
- await page.getByLabel('지수의 약속 새 이름',{exact:true}).fill('지수의 비밀 약속');
+ // 고치기 — 취소하면 그대로, 확인하면 바뀐다. 항목 이름을 바꾸면 새 이름이 키워드에도 들어간다.
+ await page.getByRole('button',{name:'지수의 약속 고치기',exact:true}).click();
+ await page.getByLabel('지수의 약속 이름',{exact:true}).fill('버릴 이름');
+ await page.getByRole('button',{name:'취소',exact:true}).click();
+ await expect(page.getByText('지수의 약속',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'지수의 약속 고치기',exact:true}).click();
+ await page.getByLabel('지수의 약속 이름',{exact:true}).fill('지수의 비밀 약속');
+ await page.getByLabel('지수의 약속 내용',{exact:true}).fill('지수가 감춘 약속은 3화까지 공개하지 않는다');
  await page.getByRole('button',{name:'확인',exact:true}).click();
  await expect(page.getByText('지수의 비밀 약속',{exact:true})).toBeVisible();
+ // 진행 상태 줄도 고친다.
+ await page.getByRole('button',{name:'시점 고치기',exact:true}).click();
+ await page.getByLabel('시점 내용',{exact:true}).fill('1화가 끝난 밤, 민수는 지수에게 사과했다.');
+ await page.getByRole('button',{name:'확인',exact:true}).click();
+ await expect(page.getByText('1화가 끝난 밤, 민수는 지수에게 사과했다.')).toBeVisible();
  // 항목을 빼면 그 항목을 덮어쓰던 진행 상태 줄도 같이 빠진다.
  await page.getByRole('button',{name:'다리 빼기',exact:true}).last().click();
  await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toHaveCount(0);
  await expect(page.getByText('민수는 이제 다리 앞에서 멈추지 않는다')).toHaveCount(0);
- await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 우회로를 미리 확인하고 일찍 출발한다.');
+ // 이번 화 칸은 비워도 만들 수 있다(비우면 앞 화에서 이어 자동으로).
+ await expect(page.getByText('비워 두면 앞 화에서 이어지는 이야기를 자동으로 만들어요.')).toBeVisible();
  await page.getByRole('button',{name:/^2화 만들기/}).click();
  await expect(page).toHaveURL(/view=running&job=job-next/);
+ expect(server.submitted.story).toBe('');
+ expect(server.submitted.entries[0].content).toContain('3화까지');
+ expect(server.submitted.progress[0].text).toBe('1화가 끝난 밤, 민수는 지수에게 사과했다.');
  expect(server.submitted.entries.map((e:any)=>e.title)).toEqual(['지수의 비밀 약속']);
  expect(server.submitted.entries[0].keys).toEqual(['지수의 비밀 약속']);
  expect(server.submitted.progress.map((p:any)=>p.key)).toEqual(['P001']);

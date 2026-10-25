@@ -124,10 +124,9 @@ class SeriesServiceTest {
         when(pending.getStatus()).thenReturn(JobStatus.ERROR);
         assertThat(service.createNext("run1",7L,form(0))).containsEntry("id","job2");
     }
-    @Test void missingSheetAndMissingRightsCannotStartOrCharge() throws Exception {
+    // 권리 확인은 1화 만들기에서 받은 것을 잇는다 — 다음 화는 다시 묻지 않는다. 시트가 없으면 시작하지 않는다.
+    @Test void missingSheetCannotStartOrCharge() throws Exception {
         var f=form(0);
-        var noRights=new SeriesService.Form(f.fixed_settings(),f.progress_state(),f.story(),0,true,false,"request1","browser",null,null);
-        assertThatThrownBy(()->service.createNext("run1",7L,noRights)).hasMessageContaining("저작권");
         Files.delete(dir.resolve("sheet.png"));
         assertThatThrownBy(()->service.createNext("run1",7L,f)).hasMessageContaining("시트");
         verifyNoInteractions(creator,credits);

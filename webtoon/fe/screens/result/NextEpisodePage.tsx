@@ -74,23 +74,44 @@ export default function NextEpisodePage({runId, authenticated, go}: {
   const patch = (key: "fixed_settings" | "progress_state" | "story", value: string) => {
     setData(d => d ? {...d,[key]:value} : d); setSaved(false); setDirty(true);
   };
-  // 사람은 틀린 줄을 빼기만 한다(실험과 같다). 고쳐 쓰기·더하기는 하지 않는다.
+  // 정리본의 줄은 사람이 빼거나 고친다.
   const dropEntry = (id: string | undefined, i: number) => {
     setData(d => d ? {...d, entries: d.entries.filter((e, n) => id ? e.id !== id : n !== i),
       progress: id ? d.progress.filter(p => p.key !== id) : d.progress} : d);
     setSaved(false); setBookSaved(false); setDirty(true);
   };
-  /* 항목 이름 고치기 — AI가 지은 세계 이름 등을 이 창에서 바로 바꾼다. 새 이름은 키워드에도 넣어
-     다음 화에서 그 이름이 나오면 이 항목이 걸리게 한다(옛 이름 키워드는 뺀다). */
-  const [renaming, setRenaming] = useState<{i: number; title: string} | null>(null);
-  const renameEntry = (i: number, title: string) => {
-    const name = title.trim();
-    setRenaming(null);
-    if (!name) return;
-    setData(d => d ? {...d, entries: d.entries.map((e, n) => n !== i || e.title === name ? e : {...e, title: name, named: false,
-      keys: [name, ...(e.keys || []).filter(k => k !== e.title && k !== name)]})} : d);
+  /* 고치기 — 설정집 항목은 이름·내용·키워드, 진행 상태 줄은 제목·내용. 항목 이름을 바꾸면 새 이름을 키워드
+     앞에 넣고 옛 이름은 뺀다 — 다음 화에서 새 이름이 나오면 이 항목이 걸리게. 고정 항목을 덮어쓰는 진행 상태 줄은
+     제목이 그 항목 이름이라 내용만 고친다. */
+  type Editing = {kind: "entry" | "progress"; i: number; title: string; text: string; keys: string; lockTitle?: boolean};
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const saveEdit = () => {
+    if (!editing) return;
+    const {kind, i} = editing, title = editing.title.trim(), text = editing.text.trim();
+    setEditing(null);
+    if (!text || (!title && !editing.lockTitle)) return;
+    if (kind === "entry") setData(d => d ? {...d, entries: d.entries.map((e, n) => {
+      if (n !== i) return e;
+      const typed = editing.keys.split(",").map(k => k.trim()).filter(Boolean);
+      const keys = e.title === title ? typed : [title, ...typed.filter(k => k !== e.title && k !== title)];
+      return {...e, title, content: text, keys: keys.slice(0, 40), ...(e.title !== title ? {named: false} : {})};
+    })} : d);
+    else setData(d => d ? {...d, progress: d.progress.map((p, n) => n !== i ? p : {...p, title: editing.lockTitle ? p.title : title, text})} : d);
     setSaved(false); setBookSaved(false); setDirty(true);
   };
+  const editor = (label: string) => editing && <div className="wt-series-edit">
+    {/* 페이지 전체가 <form> 이라 안에 form 을 또 두지 않는다. */}
+    {!editing.lockTitle && <label>{t("이름")}<input className="field" aria-label={t("{name} 이름",{name:label})} maxLength={100} autoFocus value={editing.title}
+      onChange={ev => setEditing({...editing, title: ev.target.value})} /></label>}
+    <label>{t("내용")}<textarea className="field" aria-label={t("{name} 내용",{name:label})} rows={5} maxLength={6000} autoFocus={editing.lockTitle} value={editing.text}
+      onChange={ev => setEditing({...editing, text: ev.target.value})} /></label>
+    {editing.kind === "entry" && <label>{t("참고 키워드 · 쉼표로 나눠요")}<input className="field" aria-label={t("{name} 키워드",{name:label})} value={editing.keys}
+      onChange={ev => setEditing({...editing, keys: ev.target.value})} /></label>}
+    <div className="wt-series-edit-actions">
+      <button type="button" className="btn-ghost" onClick={() => setEditing(null)}>{t("취소")}</button>
+      <button type="button" className="btn btn-w btn-sm" onClick={saveEdit}>{t("확인")}</button>
+    </div>
+  </div>;
   const dropProgress = (i: number) => {
     setData(d => d ? {...d, progress: d.progress.filter((_, n) => n !== i)} : d); setSaved(false); setBookSaved(false); setDirty(true);
   };
@@ -133,7 +154,7 @@ export default function NextEpisodePage({runId, authenticated, go}: {
   return <div className="wt-wrap wt-page wt-series-page">
     <button type="button" className="btn-ghost wt-series-back" onClick={back}>← {t("돌아가기")}</button>
     <h1>{data ? t("{n}화 이어 만들기",{n:data.episode}) : t("다음 화 이어 만들기")}</h1>
-    <p className="wt-series-lede">{t("앞 화를 읽고 설정과 진행 상태를 정리해 두었어요. 이번 화에서 일어날 일만 적어 주세요.")}</p>
+    <p className="wt-series-lede">{t("앞 화를 읽고 설정과 진행 상태를 정리해 두었어요.")}</p>
     {!authenticated ? <>
       <p>{t("연재 기록을 계정에 보관하려면 로그인해 주세요.")}</p>
       <div className="wt-series-actions"><button className="btn btn-p" onClick={()=>setAuthOpen(true)}>{t("로그인")}</button></div>
@@ -148,47 +169,44 @@ export default function NextEpisodePage({runId, authenticated, go}: {
       <fieldset disabled={busy || preparing}>
         {/* 사람이 할 일은 이번 화 내용 하나라 맨 위에 둔다. 정리본은 그 아래에서 틀린 줄만 뺀다. */}
         <label htmlFor="series-story">{t("이번 화에서 일어날 일")}</label>
-        <textarea id="series-story" className="field" rows={5} maxLength={20000} required
+        <textarea id="series-story" className="field" rows={5} maxLength={20000} aria-describedby="series-story-note"
+          placeholder={t("예: 다음 날, 주인공은 앞 화에서 남은 일을 해결하려고 그 사람을 다시 찾아간다.")}
           value={data.story} onChange={e=>patch("story",e.target.value)} />
+        <p id="series-story-note" className="wt-series-note">{t("비워 두면 앞 화에서 이어지는 이야기를 자동으로 만들어요.")}</p>
         {(() => {
           // 항상 참고하는 항목(세계 자체)을 앞에 둔다. 같은 목록 안에서 표시만 다르다.
           const items = data.entries.map((e,i)=>({e,i})).sort((a,b)=>Number(!!b.e.always)-Number(!!a.e.always));
           const added = items.filter(({e})=>e.new).length, grown = items.filter(({e})=>e.updated).length;
           const titleOf = (key: string) => data.entries.find(e => e.id === key)?.title;
           const row = ({e,i}: {e: typeof data.entries[number]; i: number}) => <li key={e.id || `${e.title}-${i}`}>
-            <div>{renaming?.i === i
-                // 창 전체가 <form> 이라 안에 form 을 또 두지 않는다 — Enter 는 여기서 받아 바깥 제출로 안 넘긴다.
-                ? <div className="wt-series-rename">
-                    <input className="field" aria-label={t("{name} 새 이름",{name:e.title})} maxLength={100} autoFocus value={renaming.title}
-                      onChange={ev => setRenaming({i, title: ev.target.value})}
-                      onKeyDown={ev => {
-                        if (ev.key === "Enter") { ev.preventDefault(); renameEntry(i, renaming.title); }
-                        if (ev.key === "Escape") { ev.stopPropagation(); setRenaming(null); }
-                      }} />
-                    <button type="button" className="btn btn-w btn-sm" onClick={() => renameEntry(i, renaming.title)}>{t("확인")}</button>
-                    <button type="button" className="btn-ghost" onClick={() => setRenaming(null)}>{t("취소")}</button>
-                  </div>
-                : <b>{e.title}</b>}{e.always && <small className="wt-series-always">{t("항상 참고")}</small>}
+            {editing?.kind === "entry" && editing.i === i ? editor(e.title) : <>
+            <div><b>{e.title}</b>{e.always && <small className="wt-series-always">{t("항상 참고")}</small>}
               {e.named && <small className="wt-series-warn">{t("AI가 지은 이름")}</small>}
               {e.new && <small className="wt-series-new">{t("이번 화에서 추가")}</small>}
               {e.updated && <small className="wt-series-new">{t("이번 화에서 보탬")}</small>}
               {lang === "ko" && HANJA.test(e.title + e.content) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}
               <p className="wt-series-content">{e.content}</p>{!!e.keys?.length && !e.always && <p className="wt-series-evidence">{e.keys.join(" · ")}</p>}</div>
             <span className="wt-series-entry-actions">
-              <button type="button" className="btn-ghost" aria-label={t("{name} 이름 고치기",{name:e.title})} onClick={()=>setRenaming({i, title:e.title})}>{t("이름 고치기")}</button>
+              <button type="button" className="btn-ghost" aria-label={t("{name} 고치기",{name:e.title})}
+                onClick={()=>setEditing({kind:"entry", i, title:e.title, text:e.content, keys:(e.keys||[]).join(", ")})}>{t("고치기")}</button>
               <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:e.title})} onClick={()=>dropEntry(e.id,i)}>{t("빼기")}</button>
-            </span>
+            </span></>}
           </li>;
           return <>
             {/* 진행 상태·설정집 항목은 길어서 접어 둔다. 한자가 섞인 줄이 있으면 펼쳐서 보이게 한다. */}
             <details className="wt-series-group" open={lang === "ko" && data.progress.some(p => HANJA.test(p.title + p.text)) || undefined}>
               <summary><b>{t("현재 진행 상태")}</b> {!!data.progress.length && <span>{t("{n}개",{n:data.progress.length})}</span>}</summary>
               {data.progress.length ? <ul className="wt-series-entries">
-                {data.progress.map((p,i)=><li key={`${p.key}-${i}`}>
-                  <div><b>{titleOf(p.key) || p.title}</b>
-                    {lang === "ko" && HANJA.test(p.title + p.text) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}<p>{p.text}</p></div>
-                  <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:p.title || p.text})} onClick={()=>dropProgress(i)}>{t("빼기")}</button>
-                </li>)}</ul>
+                {data.progress.map((p,i)=>{ const name = titleOf(p.key) || p.title; return <li key={`${p.key}-${i}`}>
+                  {editing?.kind === "progress" && editing.i === i ? editor(name) : <>
+                  <div><b>{name}</b>
+                    {lang === "ko" && HANJA.test(p.title + p.text) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}<p className="wt-series-content">{p.text}</p></div>
+                  <span className="wt-series-entry-actions">
+                    <button type="button" className="btn-ghost" aria-label={t("{name} 고치기",{name})}
+                      onClick={()=>setEditing({kind:"progress", i, title:p.title, text:p.text, keys:"", lockTitle: !!titleOf(p.key)})}>{t("고치기")}</button>
+                    <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:p.title || p.text})} onClick={()=>dropProgress(i)}>{t("빼기")}</button>
+                  </span></>}
+                </li>; })}</ul>
                 : <textarea id="series-state" className="field" rows={6} maxLength={16000} aria-label={t("현재 진행 상태")}
                     value={data.progress_state} onChange={e=>patch("progress_state",e.target.value)} />}
             </details>
@@ -216,7 +234,7 @@ export default function NextEpisodePage({runId, authenticated, go}: {
       {saved && <p role="status">{t("초안을 저장했어요. 다시 열어 이어서 수정할 수 있어요.")}</p>}
       <div className="wt-series-actions">
         <button type="button" className="btn btn-w" disabled={busy || preparing} onClick={()=>void submit(false)}>{t("초안 저장")}</button>
-        <button type="submit" className="btn btn-p" disabled={busy || preparing || !data.story.trim() || (!data.progress.length && !data.progress_state.trim()) || !!data.blocked}>
+        <button type="submit" className="btn btn-p" disabled={busy || preparing || (!data.progress.length && !data.progress_state.trim()) || !!data.blocked}>
           {busy ? t("처리 중…") : <>{t("{n}화 만들기",{n:data.episode})} <span className="wt-series-price">-{t("{n} 크레딧",{n:data.credit_cost})}</span></>}</button>
       </div>
     </form>}

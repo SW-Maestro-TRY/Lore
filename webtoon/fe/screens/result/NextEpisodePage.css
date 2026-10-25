@@ -1,36 +1,37 @@
 .wt .wt-series-page.wt-page { max-width:820px; padding-top:24px; }
 .wt .wt-series-back { min-height:36px; padding:0 4px; margin-bottom:12px; color:var(--muted); }
 .wt .wt-series-page h1 { font-size:28px; margin:0 0 6px; }
-.wt .wt-series-lede { margin:0 0 20px; font-size:14px; color:var(--muted); }
-.wt .wt-series-form { display:flex; flex-direction:column; gap:12px; color:var(--ink); }
-.wt .wt-series-form fieldset { border:0; padding:0; margin:0; min-width:0; display:flex; flex-direction:column; gap:8px; }
-.wt .wt-series-form > fieldset > label { font-size:16px; font-weight:700; }
+.wt .wt-series-lede { margin:0 0 24px; font-size:16px; line-height:1.7; color:var(--muted); }
+.wt .wt-series-form { display:flex; flex-direction:column; gap:16px; color:var(--ink); }
+.wt .wt-series-form fieldset { border:0; padding:0; margin:0; min-width:0; display:flex; flex-direction:column; gap:12px; }
+.wt .wt-series-form > fieldset > label { font-size:17px; font-weight:700; }
 /* 이번 화 칸 아래 접는 칸들은 서로 같은 간격 */
-.wt .wt-series-form > fieldset > textarea { margin-bottom:8px; }
-.wt .wt-series-form p { margin:0; font-size:14px; line-height:1.65; }
-.wt .wt-series-form textarea { width:100%; min-height:112px; resize:vertical; line-height:1.7; font-size:15px; }
+.wt .wt-series-note { color:var(--muted); font-size:15px; margin:-4px 0 8px; }
+.wt .wt-series-form p { margin:0; font-size:16px; line-height:1.8; }
+.wt .wt-series-form textarea { width:100%; min-height:120px; resize:vertical; line-height:1.8; font-size:16px; }
 .wt .wt-series-form textarea:focus-visible, .wt .wt-series-reference summary:focus-visible { outline:2px solid var(--sea-deep); outline-offset:3px; }
-.wt .wt-series-reference { padding:12px; border:1px solid var(--line); border-radius:12px; }
-.wt .wt-series-reference summary { cursor:pointer; font-size:14px; font-weight:600; }
+.wt .wt-series-reference { padding:16px 18px; border:1px solid var(--line); border-radius:12px; }
+.wt .wt-series-reference summary { cursor:pointer; font-size:17px; font-weight:700; }
 .wt .wt-series-reference p { white-space:pre-wrap; overflow-wrap:anywhere; padding-block:8px; }
 .wt .wt-series-form .wt-series-label { font-size:16px; font-weight:700; margin-top:20px; }
 .wt .wt-series-digest { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:12px; border:1px solid var(--line); border-radius:12px; }
-.wt .wt-series-entries { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-.wt .wt-series-entries li { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; padding:12px; border:1px solid var(--line); border-radius:12px; }
-.wt .wt-series-entries li > div { min-width:0; }
-.wt .wt-series-entries b { font-size:15px; }
+.wt .wt-series-entries { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
+.wt .wt-series-entries li { display:flex; gap:24px; align-items:flex-start; justify-content:space-between; padding:18px 20px; border:1px solid var(--line); border-radius:12px; }
+/* 글 줄이 상자 오른쪽 끝까지 가면 읽기 어렵다 — 한 줄 길이를 줄인다 */
+.wt .wt-series-entries li > div:not(.wt-series-edit) { min-width:0; max-width:60ch; display:flex; flex-direction:column; gap:6px; }
+.wt .wt-series-entries b { font-size:17px; }
 .wt .wt-series-entries p { overflow-wrap:anywhere; }
-.wt .wt-series-entries .btn-ghost { flex-shrink:0; min-height:36px; padding:0 10px; }
-.wt .wt-series-group { border:1px solid var(--line); border-radius:12px; padding:12px; }
-.wt .wt-series-group summary { cursor:pointer; font-size:15px; }
-.wt .wt-series-group summary span { color:var(--muted); font-size:14px; margin-left:4px; }
-.wt .wt-series-group[open] summary { margin-bottom:8px; }
-.wt .wt-series-warn { margin-left:8px; font-size:12px; font-weight:700; color:var(--gold); }
-.wt .wt-series-new { margin-left:8px; font-size:12px; font-weight:700; color:var(--sea-deep); }
-.wt .wt-series-always { margin-left:8px; font-size:12px; font-weight:700; color:var(--gold); }
+.wt .wt-series-entries .btn-ghost { flex-shrink:0; min-height:40px; padding:0 12px; font-size:15px; }
+.wt .wt-series-group { border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+.wt .wt-series-group summary { cursor:pointer; font-size:17px; }
+.wt .wt-series-group summary span { color:var(--muted); font-size:15px; margin-left:4px; }
+.wt .wt-series-group[open] summary { margin-bottom:14px; }
+.wt .wt-series-warn { margin-left:8px; font-size:13px; font-weight:700; color:var(--gold); }
+.wt .wt-series-new { margin-left:8px; font-size:13px; font-weight:700; color:var(--sea-deep); }
+.wt .wt-series-always { margin-left:8px; font-size:13px; font-weight:700; color:var(--gold); }
 /* 항목 내용의 줄바꿈을 살린다 */
 .wt .wt-series-content { white-space:pre-line; }
-.wt .wt-series-form .wt-series-evidence { color:var(--muted); font-size:13px; }
+.wt .wt-series-form .wt-series-evidence { color:var(--muted); font-size:14px; }
 .wt .wt-series-actions { display:flex; flex-wrap:wrap; gap:8px; padding-top:12px; }
 .wt .wt-series-actions .btn { min-height:44px; }
 .wt .wt-series-actions .btn-p { margin-left:auto; }
@@ -39,8 +40,10 @@
 .wt .wt-series-nav { padding:16px 0; border-block:1px solid var(--line); margin-block:20px; }
 .wt .wt-series-nav-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
 .wt .wt-series-nav-list button { min-height:44px; }
-.wt .wt-series-rename { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
-.wt .wt-series-rename .field { flex:1 1 160px; min-width:0; }
+.wt .wt-series-edit { flex:1; display:flex; flex-direction:column; gap:12px; min-width:0; }
+.wt .wt-series-edit label { display:flex; flex-direction:column; gap:6px; font-size:15px; font-weight:600; color:var(--muted); }
+.wt .wt-series-edit .field { width:100%; font-size:16px; }
+.wt .wt-series-edit-actions { display:flex; justify-content:flex-end; gap:8px; }
 .wt .wt-series-entry-actions { display:flex; gap:4px; flex-shrink:0; align-self:flex-start; }
 @media(max-width:600px) {
   /* 버튼 둘이 제목·표시 옆을 차지하지 않게 설정집 항목은 버튼을 아래 줄로 */
@@ -51,3 +54,4 @@
  .wt .wt-series-form textarea { font-size:16px; }
  .wt .wt-series-actions .btn-p { flex-basis:100%; }
 }
+.wt .wt-series-help { color:var(--muted); font-size:15px; }
