@@ -14,6 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import TabLink from "./TabLink";
 import AuthModal from "./auth/AuthModal";
 import { creditBalance } from "./api/credits";
+import { request } from "./api/client";
 import { useAuth } from "./auth/useAuth";
 import { TABS } from "./links";
 import styles from "./SiteHeader.module.css";
@@ -58,6 +59,27 @@ export default function SiteHeader() {
     if (isAuthenticated) creditBalance().catch(() => { /* 못 받아도 화면엔 영향 없다 */ });
   }, [isAuthenticated]);
   const [authOpen, setAuthOpen] = useState(false);
+
+  /* 웹툰 소식(구독한 작품의 새 화 · 내 작품 댓글 등)에 안 읽은 것이 있으면 이름에 빨간 점(2026-10-25).
+     소식 창은 마이페이지 안에 있어서, 헤더에 표시가 없으면 소식이 온 줄 모른다.
+     마이페이지에서 읽으면 `lore:notices-changed` 로 알려 준다(CommunityBell). */
+  const [hasUnread, setHasUnread] = useState(false);
+  useEffect(() => {
+    if (!isAuthenticated || !onWebtoon) { setHasUnread(false); return; }
+    let alive = true;
+    const check = () => {
+      request<{ read_at: string | null }[]>("/api/webtoon/v1/community/notices")
+        .then((list) => { if (alive) setHasUnread(list.some((n) => !n.read_at)); })
+        .catch(() => { /* 못 받으면 점을 안 띄울 뿐이다 */ });
+    };
+    check();
+    const onChanged = (e: Event) => {
+      const n = (e as CustomEvent<number>).detail;
+      if (typeof n === "number") setHasUnread(n > 0); else check();
+    };
+    window.addEventListener("lore:notices-changed", onChanged);
+    return () => { alive = false; window.removeEventListener("lore:notices-changed", onChanged); };
+  }, [isAuthenticated, onWebtoon, pathname]);
 
   /* ★ 로그아웃은 한 번 묻는다(2026-10-08 #690). 운영에서 선물 화면을 닫으려다 헤더 "로그아웃" 을
      누르고 1초 뒤 같은 자리의 "로그인" 을 다시 누른 사람이 있었다(10/7 실측). 브라우저 confirm 은
@@ -174,8 +196,10 @@ export default function SiteHeader() {
                로그인한 사람이 자기 이름을 누르는 것은 어디서나 "내 자리로"
                라는 뜻이라, 라벨을 따로 달지 않아도 읽힌다. */
             onWebtoon ? (
-              <Link href={MY_PAGE} className={styles.authButton} title={user?.email}>
+              <Link href={MY_PAGE} className={`${styles.authButton} ${styles.authWithDot}`} title={user?.email}
+                    aria-label={hasUnread ? `${displayName} · 안 읽은 소식 있음` : undefined}>
                 {displayName}
+                {hasUnread && <span className={styles.unreadDot} aria-hidden="true" />}
               </Link>
             ) : (
               <>

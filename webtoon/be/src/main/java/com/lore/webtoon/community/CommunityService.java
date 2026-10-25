@@ -71,6 +71,11 @@ public class CommunityService {
             where run_id=? and not deleted and not hidden and id<? order by id desc limit 30
             """,me==null?-1:me,run,before<=0?Long.MAX_VALUE:before);
     }
+    /** 이 회차의 보이는 댓글 수 — 작품 머리의 찜 옆에 적는다. 목록은 30개씩 끊어 와서 그 길이로는 못 센다. */
+    public long commentCount(String run) {
+        readable(run);
+        return db.queryForObject("select count(*) from webtoon_comment where run_id=? and not deleted and not hidden",Long.class,run);
+    }
     @Transactional
     public Map<String,Object> addComment(String run,Long me,String body) {
         login(me); var work=readable(run); body=text(body,1000);

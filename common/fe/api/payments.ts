@@ -7,7 +7,7 @@
 import { request } from "./client";
 
 export interface CreditPack {
-  /** 서버 상품 이름(MINI · SMALL · MID · BIG). 주문할 때 이것만 보낸다 — 금액은 서버가 정한다. */
+  /** 서버 상품 이름(TINY · MINI · SMALL · MID · BIG). 주문할 때 이것만 보낸다 — 금액은 서버가 정한다. */
   code: string;
   credits: number;
   won: number;
