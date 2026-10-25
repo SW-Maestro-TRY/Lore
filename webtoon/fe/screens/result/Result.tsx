@@ -10,7 +10,8 @@ import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { metaTrack, metaTrackCustom } from "../../lib/metaPixel";
 import type { Go } from "../../lib/nav";
-import { IconChevronUp, IconClose, IconDownload, IconEdit, IconMenu } from "../../ui/Icons";
+import { IconChevronRight, IconChevronUp, IconClose, IconComment, IconDownload, IconEdit, IconMenu } from "../../ui/Icons";
+import { commentCount } from "../../lib/community";
 import { Crumb, MobileTop } from "../../ui/TopNav";
 import { Dialog } from "../../ui/Dialog";
 import ShareMenu from "./ShareMenu";
@@ -31,6 +32,18 @@ import "./ResultFinal.css";
  * 이 브라우저(isMyRun)와 계정 목록(myAccountRuns) 둘 중 하나만 맞아도 된다 —
  * 다른 기기에서 로그인해 열어도 내 작품이 남의 것으로 보이면 안 된다.
  * 완성본을 여는 것만으로는 rememberMyRun 을 하지 않는다(만든 사람만 남긴다). */
+/* 다 읽은 뒤 「직접 만들기」 칸의 문구 셋(2026-10-25). 열 때마다 무작위로 하나 —
+ * 새로고침하면 바뀔 수도, 그대로일 수도 있다. */
+const END_COPIES = [
+  { title: ["이번엔, 당신의 이야기가", "웹툰이 될 차례."],
+    body: ["상상만 하던 캐릭터와 이야기를", "AI로 나만의 웹툰으로 만들어보세요."], cta: "내 웹툰 만들기" },
+  { title: ["내 캐릭터가", "웹툰 속 주인공이 된다면?"],
+    body: ["머릿속에만 있던 내 캐릭터,", "이제 웹툰 속에서 만나보세요."], cta: "내 캐릭터로 시작하기" },
+  { title: ["상상만 하던 이야기를", "이제 눈으로 만나보세요."],
+    body: ["내가 만든 세계와 캐릭터가", "하나의 웹툰으로 완성되는 순간."], cta: "내 이야기 시작하기" },
+];
+
+
 export default function Result({ runId, go, authenticated = false }: { runId: string; go: Go; authenticated?: boolean }) {
   const t = useT();
   const [data, setData] = useState<RunResult | null>(null);
@@ -61,6 +74,14 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const [suggested, setSuggested] = useState<RunCard[]>([]);
   const [liked, setLiked] = useState(false);
   const [likes, setLikes] = useState<number | null>(null);
+  /* 찜 옆 댓글 수 — 누르면 아래 댓글로 내려간다(2026-10-25) */
+  const [comments, setComments] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setComments(null);
+    commentCount(runId).then((r) => { if (alive) setComments(r.count); }).catch(() => {});
+    return () => { alive = false; };
+  }, [runId]);
   /* 끝까지 읽었나 — 읽은 뒤에만 짧은 설문(#471)을 띄운다. */
   const [readEnd, setReadEnd] = useState(false);
 
@@ -81,7 +102,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     browseRuns()
       .then((all) => {
         if (!alive) return;
-        const others = all.filter((r) => r.run_id !== runId).sort((a, b) => b.run_id.localeCompare(a.run_id));
+        // 둘러보기는 연재를 1화 카드 하나로 묶는다 — 지금 읽는 회차가 든 카드는 추천에서 뺀다.
+        const inSeries = (r: RunCard) => r.run_id === runId || Object.values(r.episode_run_ids || {}).includes(runId);
+        const others = all.filter((r) => !inSeries(r)).sort((a, b) => b.run_id.localeCompare(a.run_id));
         const same = data.genre ? others.filter((r) => r.genre === data.genre) : [];
         setSuggested((same.length >= 2 ? same : others).slice(0, 4));
         const me = all.find((r) => r.run_id === runId);
@@ -127,6 +150,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     return () => { alive = false; };
   }, [mine, authenticated]);
   const freeLeft = allow && !allow.logged_in && !allow.blocked ? allow.free_left ?? 0 : 0;
+  /* 서버 렌더와 어긋나지 않게 화면에 붙은 뒤에 고른다 */
+  const [endCopyIdx, setEndCopyIdx] = useState(0);
+  useEffect(() => { setEndCopyIdx(Math.floor(Math.random() * END_COPIES.length)); }, [runId]);
+  const endCopy = END_COPIES[endCopyIdx];
   /* 광고·SNS 링크(UTM)를 달고 이 화면으로 바로 들어왔나. 첫 그림 뒤에 읽는다 —
      서버가 그린 화면과 첫 그림이 달라지면 안 된다. */
   const [fromLink, setFromLink] = useState(false);
@@ -172,13 +199,17 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     }
   };
   const ep = series?.episode || data?.episode || 1;
+  /* 회차 목록 — 연재가 아니면 이 화 하나 */
+  const chapterRows = series?.chapters.length ? series.chapters : [{ episode: ep, run_id: runId, status: "DONE", title: data?.title || "" }];
   const epLabel = `EP.${String(ep).padStart(2, "0")}`;
 
   const preview = data && data.preview && data.planned_pages > data.page_count
     ? "" : "";
   const tags = (r: RunResult) => [...new Set([r.genre, r.style_label].filter((s): s is string => !!s).map((s) => t(s)))];
-  const metaPc = data ? [data.character, epLabel, ...tags(data)].filter(Boolean).join(" · ") : "";
-  const metaM = data ? tags(data).filter(Boolean).join(" · ") : "";
+  /* 작품 머리(2026-10-25): 장르는 제목 위 작은 줄로, 제목 아래는 「캐릭터 · N화」만. */
+  const genreLine = data ? tags(data).join(" · ") : "";
+  const metaPc = data ? [data.character, t("{n}화", { n: ep })].filter(Boolean).join(" · ") : "";
+  const metaM = metaPc;
 
   /* 다음 편은 아직 없다. 그래도 누가 어느 버튼에서 얼마나 찾는지가 이 기능을 언제
      만들지 정하는 근거라, 누를 때마다 남긴다(#413). */
@@ -270,7 +301,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                  right={data ? [data.character, epLabel].filter(Boolean).join(" · ") : ""} />
 
       <div className="wt-wrap wt-page wt-result-page">
-        <button className="btn-ghost wt-reader-back" onClick={() => go("works")}>{t("둘러보기")}</button>
+        <button className="btn-ghost wt-reader-back" onClick={() => go("works")}><span aria-hidden="true">‹</span> {t("둘러보기")}</button>
 
         {failed && (
           <div className="wt-result-state">
@@ -298,6 +329,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             <img className="wt-reader-cover" src={cover || pageUrl(runId, data.pages[0]?.no || 1, 320)} alt={t("{title} 표지", {title:data.title})} />
             <div className="wt-reader-intro-content">
             <div className="wt-result-head">
+              {genreLine && <span className="wt-result-genre">{genreLine}</span>}
               <div className="wt-result-titlerow">
                 {/* 2026-09-23 에 이 화면의 고치기 폼을 지웠다가, 제목 옆 연필 하나로 다시 둔다(#78).
                     제목 글자 자체가 줄 정중앙에 오도록, 연필은 제목 옆이 아니라 좋아요·공유와
@@ -326,8 +358,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                       <IconEdit size={15} />
                     </button>
                   )}
-                  <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
-                              onChange={(on, n) => { setLiked(on); setLikes(n); }} />
                 </span>
               </div>
 
@@ -335,6 +365,19 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 <span className="wt-result-meta-pc">{metaPc}</span>
                 <span className="wt-result-meta-m">{metaM}</span>
                 {preview && <span className="dim"> · {preview}</span>}
+              </span>
+              <span className="wt-result-like">
+                <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
+                            onChange={(on, n) => { setLiked(on); setLikes(n); }} />
+                <button type="button" className="wt-result-commentcount" aria-label={t("댓글 {n}개 — 댓글로 가기", { n: comments ?? 0 })}
+                        onClick={() => document.querySelector(".wt-comments-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                  <IconComment size={16} /> {comments ?? 0}
+                </button>
+                {/* 남의 작품은 공유를 찜·댓글 옆에 둔다(2026-10-25). 내 작품은 아래 단추 줄에 있다. */}
+                {!mine && data.public !== false && (
+                  <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character}
+                             className="wt-result-shareinline" label={t("공유하기")} />
+                )}
               </span>
 
               {!mine && fromLink && (
@@ -403,7 +446,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               </>
             ) : (
               /* 남의 작품도 내려받기·공유는 제목 옆이 아니라 제목 아래 줄에 — 내 작품과 같은 자리. */
-              <div className="wt-result-acts">
+              <div className="wt-result-acts wt-result-acts-other">
                 {/* 관리자 계정은 남의 작품도 편집실에서 열 수 있다(운영 확인용) — 서버도 같은 규칙(RunController.mustOwn). */}
                 {isAdmin && (
                   <button type="button" className="btn btn-w" onClick={() => { track("editor_open", { run: runId, where: "result_admin" }); go("editor", { run: runId }); }}>
@@ -416,7 +459,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
                 )}
-                {data.public !== false && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
               </div>
             )}
 
@@ -469,7 +511,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                 return (
                   <div key={pg.no} className="wt-result-pg" ref={i === data.pages.length - 1 ? endRef : undefined}
                        style={{
-                         ...(gap ? { marginBottom: `${(gap * 100).toFixed(2)}%` } : {}),
+                         /* 장 사이 여백은 비우지 않고 흰 칸으로 — 바깥 바탕(남색)이 비치면 작품이 끊겨 보인다(2026-10-25).
+                            내려받는 파일(EpisodeExport)도 흰 여백이다. padding 의 % 도 폭 기준이라 같은 눈금이다. */
+                         ...(gap ? { paddingBottom: `${(gap * 100).toFixed(2)}%`, background: "#fff" } : {}),
                          ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
                        }}>
                     <button type="button" className="wt-result-peek" aria-label={t("크게 보기")}
@@ -491,14 +535,33 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             </div>
 
             {data.public !== false && !data.preview ? (
-              <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated}
+              <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} total={chapterRows.length}
                 title={data.title} cover={cover || pageUrl(runId,data.pages[0]?.no || 1,320)}>
-                <div className="wt-reader-endnav">
-                  {(mine || series?.chapters.some(c=>c.episode>ep)) ? <button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t(series?.chapters.some(c=>c.episode>ep)?"다음화 보기":"다음 편 만들기")}</button> : <span className="wt-reader-no-next">{t("공개된 다음 화가 없습니다.")}</span>}
-                  <button className="btn btn-w" onClick={()=>setChaptersOpen(true)}><IconMenu size={17}/>{t("회차 목록")}</button>
-                  {mine && <button className="btn btn-w" onClick={()=>go("editor",{run:runId})}><IconEdit size={17}/>{t("편집실")}</button>}
+                {/* 회차 목록을 바로 펼쳐 둔다(2026-10-25) — 창을 열어야 보이면 몇 화까지 있는지 모른다. */}
+                <div className="wt-reader-eplist">
+                  <div className="wt-reader-eplist-head"><h3>{t("회차 목록")}</h3><span>{t("총 {n}화",{n:chapterRows.length})}</span></div>
+                  <ul>
+                    {chapterRows.map(c => (
+                      <li key={c.episode}>
+                        <button type="button" className={c.run_id===runId?"current":""} aria-current={c.run_id===runId?"page":undefined}
+                                onClick={()=>{ if (c.run_id && c.run_id!==runId) go("result",{run:c.run_id}); }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          {c.run_id ? <img className="wt-reader-epthumb" src={pageUrl(c.run_id, 1, 320)} alt="" loading="lazy"/>
+                                    : <span className="wt-reader-epthumb" aria-hidden="true"/>}
+                          <span><b>{t("{n}화",{n:c.episode})}</b><small>{c.title||data.title}</small></span>
+                          {c.run_id===runId ? <em>{t("읽는 중")}</em> : <IconChevronRight size={18}/>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {series?.chapters.some(c=>c.episode>ep)
+                    ? <button className="btn btn-p wt-reader-nextwide" onClick={()=>nextEpisode("reading_end")}>{t("다음화 보기")}</button>
+                    : mine
+                      ? <button className="btn btn-p wt-reader-nextwide" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>
+                      : <div className="wt-reader-wait"><b>{t("다음 이야기를 기다려 주세요")}</b><span>{t("아직 공개된 다음 회차가 없어요.")}</span></div>}
+                  {mine && <button className="btn btn-w wt-reader-editwide" onClick={()=>go("editor",{run:runId})}><IconEdit size={17}/>{t("편집실")}</button>}
                 </div>
-                {!mine && <section className="wt-reader-create"><div><h2>{t("작품이")}<br/>{t("즐거우셨나요?")}</h2><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t("직접 웹툰 만들기")}</button>{freeLeft>0 && <small>{t("가입 없이 오늘 {n}편 무료",{n:freeLeft})}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,320)} alt=""/></section>}
+                {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{t("가입 없이 무료로 시작")}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></section>}
               </EpisodeCommunity>
             ) : <div className="wt-reader-endnav"><button className="btn btn-w" onClick={()=>setChaptersOpen(true)}>{t("회차 목록")}</button>{mine&&<button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>}</div>}
 
@@ -560,7 +623,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               return (
                 <div key={pg.no} id={`wt-zoom-${pg.no}`}
                      style={{
-                       ...(gap ? { marginBottom: `${(gap * 100).toFixed(2)}%` } : {}),
+                       /* 장 사이 여백은 비우지 않고 흰 칸으로 — 바깥 바탕(남색)이 비치면 작품이 끊겨 보인다(2026-10-25).
+                            내려받는 파일(EpisodeExport)도 흰 여백이다. padding 의 % 도 폭 기준이라 같은 눈금이다. */
+                         ...(gap ? { paddingBottom: `${(gap * 100).toFixed(2)}%`, background: "#fff" } : {}),
                        ...(w !== 1 ? { width: `${(w * 100).toFixed(2)}%`, marginInline: "auto" } : {}),
                      }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}

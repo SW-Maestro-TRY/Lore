@@ -319,3 +319,13 @@
 .wt .wt-wiz-dots button { background: #ffffff70; }
 .wt .wt-wiz-dots button:hover { background: #ffffffb0; }
 .wt .wt-wiz-dots button.on { background: var(--ink); }
+
+/* 그림체 칸을 작게(2026-10-25) — 한 줄 셋이면 그림 하나가 화면 반을 차지했다. PC 한 줄 여섯, 폰 셋. */
+.wt .wt-create-options .wt-wiz-styles { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; max-width: 860px; margin-inline: 0; }
+.wt .wt-create-options .wt-wiz-style { padding-bottom: 9px; border-radius: 12px; }
+.wt .wt-create-options .wt-wiz-style b { margin-top: 7px; padding: 0 9px; font-size: 13px; }
+.wt .wt-create-options .wt-wiz-style .wt-wiz-check { top: 6px; right: 6px; transform: scale(.85); }
+@media (max-width: 767px) {
+  .wt .wt-create-options .wt-wiz-styles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .wt .wt-create-options .wt-wiz-style b { font-size: 12px; padding: 0 6px; }
+}

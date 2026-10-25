@@ -54,6 +54,15 @@
   display: flex;
   flex-direction: column;
   border-radius: 18px;
+  /* 이 창은 색을 직접 들고 간다(2026-10-25). 웹툰 화면은 --bg 만 어둡게 덮고
+     --text 는 공용 값(짙은 색)이 그대로라, 웹툰에서 열면 어두운 바탕에 어두운
+     글자가 됐다. 결제 화면은 어디서 열든 흰 판으로 같게 보인다. */
+  --bg: #ffffff;
+  --text: #17121f;
+  --text-muted: #6b6577;
+  --border-strong: rgba(23, 18, 31, 0.12);
+  --sea-sand: #f6f4f9;
+  --cm-accent: #5b2be8;
   background: var(--bg);
   color: var(--text);
   box-shadow: 0 18px 48px rgba(15, 51, 63, .28);
@@ -187,73 +196,87 @@
 }
 
 /* ── 충전 ───────────────────────────────────────────────────────── */
-.credit-notice {
-  margin: 0 18px 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  /* 이 팔레트는 이름이 뒤집혀 있다 — `--ink*` 가 **바탕**이고 글자는
-     `--text` · `--muted` · `--dim` 이다(style.css 머리말 참고). 처음에
-     --ink-2 를 글자색으로 썼다가 흰 바탕에 흰 글씨가 됐다. */
-  background: var(--sea-sand);
-  color: var(--text);
-  font-size: 13.5px;
-  line-height: 1.5;
-}
-/* 전역 a 리셋(color: inherit; text-decoration: none)이 여기서 링크를
-   글자 속에 숨겨 버린다 — 눌러야 하는 자리라 따로 드러낸다. */
-.credit-notice a {
-  color: var(--accent-webtoon);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
 
 .credit-packs {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+/* 상품 한 줄 = 고르는 칸(라디오). 고른 것만 테두리가 진해진다. */
 .credit-pack {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   border-radius: 14px;
+  cursor: pointer;
+}
+.credit-pack.is-on {
+  border-color: var(--cm-accent);
+  background: rgba(91, 43, 232, 0.05);
+}
+.credit-pack input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.credit-pack:has(input:focus-visible) {
+  outline: 2px solid var(--cm-accent);
+  outline-offset: 2px;
 }
 
 .credit-pack-amount {
   flex: none;
-  font-size: 15px;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 .credit-pack-amount b {
+  margin-right: 1px;
   font-size: 20px;
+  color: var(--text);
 }
 
 .credit-pack-price {
-  flex: 1 1 auto;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.3;
+}
+.credit-pack-price b {
+  font-size: 15px;
+}
+.credit-pack-price small {
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 11.5px;
 }
 
 .credit-pack-note {
   flex: none;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--border-strong);
-  color: var(--text-muted);
-  font-size: 11.5px;
+  background: var(--cm-accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.credit-hint {
-  margin: 14px 0 0;
-  color: var(--text-muted);
-  font-size: 13px;
-  text-align: center;
+/* 결제 금액 — 고른 상품의 값을 한 번 더 크게 */
+.credit-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding: 12px 2px 4px;
+  border-top: 1px solid var(--border-strong);
+  font-size: 14px;
+}
+.credit-total b {
+  font-size: 22px;
 }
 
 /* 단추 — 이 창은 웹툰·공용 마이페이지 어디서든 열리는데, 두 곳의 .btn 모양이
@@ -281,9 +304,15 @@
   border-color: var(--text);
 }
 .credit-btn-primary {
-  background: var(--btn-primary-bg, #17121f);
-  color: var(--btn-primary-fg, #fff);
+  background: var(--cm-accent, #17121f);
+  color: #fff;
   border: 1.5px solid transparent;
+}
+.credit-btn-block {
+  width: 100%;
+  height: 48px;
+  margin-top: 4px;
+  font-size: 15px;
 }
 
 /* 결제 단계 — 번호 받기 · 기다리기 · 끝 */
@@ -352,7 +381,7 @@
   width: 18px;
   height: 18px;
   margin: 0;
-  accent-color: var(--btn-primary-bg, #17121f);
+  accent-color: var(--cm-accent, #17121f);
 }
 .credit-pay-status {
   margin: 0;
@@ -385,14 +414,6 @@
     border-radius: 20px 20px 0 0;
   }
 
-  /* 상품 한 줄이 좁아서 넘친다 — 이름과 값을 위에, 단추를 아래에. */
-  .credit-pack {
-    flex-wrap: wrap;
-  }
-
-  .credit-pack .credit-btn {
-    flex: 1 1 100%;
-  }
 
   .credit-pay-acts .credit-btn {
     flex: 1 1 0;
@@ -617,4 +638,23 @@
   .me-nav-a.on span { color: var(--text-subtle); }
 
   .me-top h2 { font-size: 1.3rem; }
+}
+
+/* 충전 창 글자색 고정(2026-10-25) — 웹툰 화면의 b · label 규칙(어두운 테마용 밝은 글자)이
+   흰 판 안까지 내려와 가격·「휴대폰 번호」·동의 문구가 흐려졌다. 창 안에서 다시 정한다. */
+.credit-modal-box b,
+.credit-modal-box .credit-pack-price b,
+.credit-modal-box .credit-total b,
+.credit-modal-box .credit-refund-ok,
+.credit-modal-box h3 {
+  color: var(--text);
+}
+.credit-modal-box .credit-pay-label,
+.credit-modal-box .credit-pack-price small,
+.credit-modal-box .credit-pay-fine,
+.credit-modal-box .credit-refund p {
+  color: var(--text-muted);
+}
+.credit-modal-box .credit-pack-note {
+  color: #fff;
 }

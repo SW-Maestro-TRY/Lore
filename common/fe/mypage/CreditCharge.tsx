@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CONTACT_CHANNEL, SELLER_READY, sellerLine } from "../links";
+import { SELLER_READY, sellerLine } from "../links";
 import { ApiError } from "../api/client";
 import { notifyCreditsChanged } from "../api/credits";
 import {
@@ -23,9 +23,12 @@ import "./mypage.css";
  * 화면이 금액을 보내게 되고, 그러면 아무 값으로나 살 수 있다. 값은 아직 확정
  * 가격이 아니다.
  *
- * 서버가 ready=false 를 주면(페이앱 연동값이 없는 서버) 예전처럼 상품만 보여 주고
- * 1:1 문의를 안내한다. 「충전」 단추 자체를 없애면 크레딧이 모자란 사람이 어디로
- * 가야 하는지 모르게 된다.
+ * 실제 결제 화면처럼 한 장에 다 둔다 — 상품 고르기 · 결제 금액 · 휴대폰 번호 ·
+ * 환불 기준 확인 · 「N원 결제하기」(2026-10-25). 단계를 나눠 상품만 먼저 보여 주던
+ * 때는 「준비 중」 안내가 맨 위를 차지해 결제 화면으로 안 보였다.
+ *
+ * 서버가 ready=false 를 주면(페이앱 연동값이 아직 없는 서버) 화면은 똑같이 그리고,
+ * 「결제하기」를 눌렀을 때만 아직 결제를 받을 수 없다고 말한다.
  *
  * 결제는 새 창에서 한다. 이 창은 그동안 주문 상태를 묻다가 PAID 가 되면 잔액을
  * 새로 읽게 알린다. 크레딧은 페이앱 → 서버 통보로만 들어가고, 이 창이 넣지 않는다.
@@ -33,7 +36,6 @@ import "./mypage.css";
 
 type Step =
   | { kind: "pick" }
-  | { kind: "phone"; pack: CreditPack }
   | { kind: "wait"; pack: CreditPack; orderNo: string; payUrl: string }
   | { kind: "done"; order: PayOrder }
   | { kind: "cancelled" };
@@ -49,6 +51,7 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [step, setStep] = useState<Step>({ kind: "pick" });
   const [phone, setPhone] = useState("");
+  const [picked, setPicked] = useState<string | null>(null);
   /* 결제 직전에 두 가지를 확인받는다 — 쓴 크레딧은 환불되지 않는다는 환불 기준(이용약관 13조 8항,
      디지털 콘텐츠의 청약철회를 제한하려면 결제 전에 알려야 한다)과, 휴대폰 번호를 결제대행사에
      넘기는 것(개인정보처리방침 제1조 2-1·제7조). 확인해야 「결제하기」가 눌린다. */
@@ -65,7 +68,12 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     let alive = true;
     payCatalog()
-      .then((c) => { if (alive) setCatalog(c); })
+      .then((c) => {
+        if (!alive) return;
+        setCatalog(c);
+        /* 처음에는 「가장 많이 고르는 것」을 골라 둔다 — 없으면 첫 상품 */
+        setPicked((cur) => cur ?? (c.packages.find((p) => p.note)?.code ?? c.packages[0]?.code ?? null));
+      })
       .catch(() => { if (alive) setLoadFailed(true); });
     return () => { alive = false; };
   }, []);
@@ -120,7 +128,7 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
       win?.close();
       if (e instanceof ApiError && e.code === "PAYMENT_NOT_READY") {
         setCatalog((c) => (c ? { ...c, ready: false } : c));
-        setStep({ kind: "pick" });
+        setError("지금은 결제를 받을 수 없어요. 결제 연결을 마무리하고 있어요.");
       } else {
         setError(e instanceof ApiError ? e.message : "결제창을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.");
       }
@@ -130,6 +138,7 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
   }, [phone]);
 
   const ready = catalog?.ready === true;
+  const pack = catalog?.packages.find((p) => p.code === picked) ?? null;
   const phoneOk = PHONE_RE.test(phone.replace(/[^0-9]/g, ""));
   const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
@@ -145,60 +154,38 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
           </button>
         </header>
 
-        {/* 결제를 못 받는 서버면 제일 먼저 말한다. 상품을 고른 뒤에 "그런데 안 됩니다" 를
-            만나면 고른 시간이 헛것이 된다. */}
-        {(loadFailed || (catalog && !ready)) && (
-          <p className="credit-notice">
-            <b>결제 안내</b>
-            <br />
-            아직 정식 결제 기능을 준비 중이에요!
-            <br />
-            크레딧이 필요하신 경우{" "}
-            <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">
-              <b>1:1 문의하기</b>
-            </a>
-            를 남겨주시면 결제 방법을 안내해 드릴게요. :)
-          </p>
-        )}
-
         <div className="credit-modal-body">
           {step.kind === "pick" && (
-            <>
-              <ul className="credit-packs">
-                {(catalog?.packages ?? []).map((pack) => (
-                  <li key={pack.code} className="credit-pack">
-                    <span className="credit-pack-amount">
-                      <b>{pack.credits}</b> C
-                    </span>
-                    <span className="credit-pack-price">{won(pack.won)}</span>
-                    {pack.note && <span className="credit-pack-note">{pack.note}</span>}
-                    <button
-                      type="button"
-                      className="credit-btn credit-btn-quiet"
-                      disabled={!ready}
-                      onClick={() => { setError(null); setAgreed(false); setStep({ kind: "phone", pack }); }}
-                    >
-                      {ready ? "충전" : "준비 중"}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {!ready && (
-                <p className="credit-hint">
-                  지금은 가입할 때와 날마다 드리는 무료 크레딧으로 만들 수 있어요.
-                </p>
-              )}
-            </>
-          )}
-
-          {step.kind === "phone" && (
             <form
               className="credit-pay"
-              onSubmit={(e) => { e.preventDefault(); if (phoneOk && agreed && !busy) void pay(step.pack); }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!pack) return;
+                if (!ready) { setError("지금은 결제를 받을 수 없어요. 결제 연결을 마무리하고 있어요."); return; }
+                if (phoneOk && agreed && !busy) void pay(pack);
+              }}
             >
-              <p className="credit-pay-what">
-                <b>{step.pack.credits}C</b> · {won(step.pack.won)}
-              </p>
+              {loadFailed && <p className="credit-pay-error" role="alert">상품을 불러오지 못했어요. 창을 닫았다가 다시 열어 주세요.</p>}
+              <div className="credit-packs" role="radiogroup" aria-label="충전할 크레딧">
+                {(catalog?.packages ?? []).map((p) => (
+                  <label key={p.code} className={`credit-pack${p.code === picked ? " is-on" : ""}`}>
+                    <input type="radio" name="credit-pack" value={p.code} checked={p.code === picked}
+                           onChange={() => { setPicked(p.code); setError(null); }} />
+                    <span className="credit-pack-amount"><b>{p.credits}</b>C</span>
+                    {p.note && <span className="credit-pack-note">{p.note}</span>}
+                    <span className="credit-pack-price">
+                      <b>{won(p.won)}</b>
+                      <small>1C당 {Math.round(p.won / p.credits).toLocaleString("ko-KR")}원</small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="credit-total">
+                <span>결제 금액</span>
+                <b>{pack ? won(pack.won) : "—"}</b>
+              </div>
+
               <label className="credit-pay-label" htmlFor="credit-phone">휴대폰 번호</label>
               <input
                 id="credit-phone"
@@ -209,7 +196,6 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
                 placeholder="01012345678"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                autoFocus
               />
               {/* 번호를 왜 묻는지 한 줄. 결제대행사 필수값이고 우리는 안 남긴다. */}
               <p className="credit-pay-fine">
@@ -228,14 +214,10 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
               </div>
               {SELLER_READY && <p className="credit-pay-fine">{sellerLine()}</p>}
               {error && <p className="credit-pay-error" role="alert">{error}</p>}
-              <div className="credit-pay-acts">
-                <button type="button" className="credit-btn credit-btn-quiet" onClick={() => setStep({ kind: "pick" })}>
-                  다른 상품
-                </button>
-                <button type="submit" className="credit-btn credit-btn-primary" disabled={!phoneOk || !agreed || busy}>
-                  {busy ? "결제창 여는 중…" : "결제하기"}
-                </button>
-              </div>
+              <button type="submit" className="credit-btn credit-btn-primary credit-btn-block"
+                      disabled={!pack || !phoneOk || !agreed || busy}>
+                {busy ? "결제창 여는 중…" : pack ? `${won(pack.won)} 결제하기` : "결제하기"}
+              </button>
             </form>
           )}
 

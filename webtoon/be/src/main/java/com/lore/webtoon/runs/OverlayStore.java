@@ -45,6 +45,12 @@ public class OverlayStore {
      */
     static final double[] GAP_RATIO = {0, 0.07, 0.26, 0.62};
 
+    /**
+     * 표지(1장) 뒤 기본 여백 단(2026-10-25). 표지와 첫 장면이 붙어 있으면 표지가 첫 컷처럼
+     * 읽힌다. 편집실에서 그 자리를 고쳤으면(붙임 포함) 고친 값이 이긴다.
+     */
+    static final int COVER_GAP_STEP = 1;
+
     /** 이 단의 여백이 폭의 몇 배인가. 모르는 단은 0(붙임). */
     public static double gapRatio(int step) {
         return step >= 0 && step < GAP_RATIO.length ? GAP_RATIO[step] : 0;
@@ -83,6 +89,7 @@ public class OverlayStore {
                 // 장 번호가 아닌 칸은 건너뛴다
             }
         });
+        out.putIfAbsent(1, COVER_GAP_STEP);
         return out;
     }
 

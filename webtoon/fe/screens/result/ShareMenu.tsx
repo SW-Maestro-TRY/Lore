@@ -16,6 +16,7 @@ export default function ShareMenu({
   character,
   className = "btn btn-w",
   iconOnly = false,
+  label,
 }: {
   runId: string;
   episode?: number;
@@ -23,6 +24,8 @@ export default function ShareMenu({
   character?: string;
   className?: string;
   iconOnly?: boolean;
+  /** 단추 글자. 없으면 「공유」 */
+  label?: string;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -70,7 +73,7 @@ export default function ShareMenu({
     <span className="wt-share">
       <button type="button" className={className} onClick={start} aria-expanded={open}
               aria-label={t("공유")} title={t("공유")}>
-        <IconShare size={iconOnly ? 18 : 18} />{!iconOnly && ` ${t("공유")}`}
+        <IconShare size={iconOnly ? 18 : 18} />{!iconOnly && ` ${label ?? t("공유")}`}
       </button>
       {open && (
         <span className="wt-share-list" role="menu">
