@@ -10,7 +10,7 @@ import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { metaTrack, metaTrackCustom } from "../../lib/metaPixel";
 import type { Go } from "../../lib/nav";
-import { IconChevronUp, IconClose, IconComment, IconDownload, IconEdit, IconMenu } from "../../ui/Icons";
+import { IconChevronRight, IconChevronUp, IconClose, IconComment, IconDownload, IconEdit, IconMenu } from "../../ui/Icons";
 import { commentCount } from "../../lib/community";
 import { Crumb, MobileTop } from "../../ui/TopNav";
 import { Dialog } from "../../ui/Dialog";
@@ -32,8 +32,8 @@ import "./ResultFinal.css";
  * 이 브라우저(isMyRun)와 계정 목록(myAccountRuns) 둘 중 하나만 맞아도 된다 —
  * 다른 기기에서 로그인해 열어도 내 작품이 남의 것으로 보이면 안 된다.
  * 완성본을 여는 것만으로는 rememberMyRun 을 하지 않는다(만든 사람만 남긴다). */
-/* 다 읽은 뒤 「직접 만들기」 칸의 문구 셋(2026-10-25). 작품마다 하나로 고정해
- * 같은 화를 다시 열어도 문구가 바뀌지 않게 한다(run 번호로 고른다). */
+/* 다 읽은 뒤 「직접 만들기」 칸의 문구 셋(2026-10-25). 열 때마다 무작위로 하나 —
+ * 새로고침하면 바뀔 수도, 그대로일 수도 있다. */
 const END_COPIES = [
   { title: ["이번엔, 당신의 이야기가", "웹툰이 될 차례."],
     body: ["상상만 하던 캐릭터와 이야기를", "AI로 나만의 웹툰으로 만들어보세요."], cta: "내 웹툰 만들기" },
@@ -42,11 +42,7 @@ const END_COPIES = [
   { title: ["상상만 하던 이야기를", "이제 눈으로 만나보세요."],
     body: ["내가 만든 세계와 캐릭터가", "하나의 웹툰으로 완성되는 순간."], cta: "내 이야기 시작하기" },
 ];
-function endCopyOf(runId: string) {
-  let h = 0;
-  for (const ch of runId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return END_COPIES[h % END_COPIES.length];
-}
+
 
 export default function Result({ runId, go, authenticated = false }: { runId: string; go: Go; authenticated?: boolean }) {
   const t = useT();
@@ -154,7 +150,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     return () => { alive = false; };
   }, [mine, authenticated]);
   const freeLeft = allow && !allow.logged_in && !allow.blocked ? allow.free_left ?? 0 : 0;
-  const endCopy = endCopyOf(runId);
+  /* 서버 렌더와 어긋나지 않게 화면에 붙은 뒤에 고른다 */
+  const [endCopyIdx, setEndCopyIdx] = useState(0);
+  useEffect(() => { setEndCopyIdx(Math.floor(Math.random() * END_COPIES.length)); }, [runId]);
+  const endCopy = END_COPIES[endCopyIdx];
   /* 광고·SNS 링크(UTM)를 달고 이 화면으로 바로 들어왔나. 첫 그림 뒤에 읽는다 —
      서버가 그린 화면과 첫 그림이 달라지면 안 된다. */
   const [fromLink, setFromLink] = useState(false);
@@ -200,6 +199,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     }
   };
   const ep = series?.episode || data?.episode || 1;
+  /* 회차 목록 — 연재가 아니면 이 화 하나 */
+  const chapterRows = series?.chapters.length ? series.chapters : [{ episode: ep, run_id: runId, status: "DONE", title: data?.title || "" }];
   const epLabel = `EP.${String(ep).padStart(2, "0")}`;
 
   const preview = data && data.preview && data.planned_pages > data.page_count
@@ -534,13 +535,31 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             </div>
 
             {data.public !== false && !data.preview ? (
-              <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated}
+              <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} total={chapterRows.length}
                 title={data.title} cover={cover || pageUrl(runId,data.pages[0]?.no || 1,320)}>
-                <div className="wt-reader-endnav">
-                  {/* 회차 목록은 왼쪽, 다음화는 오른쪽 — 읽는 흐름이 앞으로 가는 쪽(2026-10-25) */}
-                  <button className="btn btn-w" onClick={()=>setChaptersOpen(true)}><IconMenu size={17}/>{t("회차 목록")}</button>
-                  {(mine || series?.chapters.some(c=>c.episode>ep)) ? <button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t(series?.chapters.some(c=>c.episode>ep)?"다음화 보기":"다음 편 만들기")}</button> : <span className="wt-reader-no-next">{t("공개된 다음 화가 없습니다.")}</span>}
-                  {mine && <button className="btn btn-w" onClick={()=>go("editor",{run:runId})}><IconEdit size={17}/>{t("편집실")}</button>}
+                {/* 회차 목록을 바로 펼쳐 둔다(2026-10-25) — 창을 열어야 보이면 몇 화까지 있는지 모른다. */}
+                <div className="wt-reader-eplist">
+                  <div className="wt-reader-eplist-head"><h3>{t("회차 목록")}</h3><span>{t("총 {n}화",{n:chapterRows.length})}</span></div>
+                  <ul>
+                    {chapterRows.map(c => (
+                      <li key={c.episode}>
+                        <button type="button" className={c.run_id===runId?"current":""} aria-current={c.run_id===runId?"page":undefined}
+                                onClick={()=>{ if (c.run_id && c.run_id!==runId) go("result",{run:c.run_id}); }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          {c.run_id ? <img className="wt-reader-epthumb" src={pageUrl(c.run_id, 1, 320)} alt="" loading="lazy"/>
+                                    : <span className="wt-reader-epthumb" aria-hidden="true"/>}
+                          <span><b>{t("{n}화",{n:c.episode})}</b><small>{c.title||data.title}</small></span>
+                          {c.run_id===runId ? <em>{t("읽는 중")}</em> : <IconChevronRight size={18}/>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {series?.chapters.some(c=>c.episode>ep)
+                    ? <button className="btn btn-p wt-reader-nextwide" onClick={()=>nextEpisode("reading_end")}>{t("다음화 보기")}</button>
+                    : mine
+                      ? <button className="btn btn-p wt-reader-nextwide" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>
+                      : <div className="wt-reader-wait"><b>{t("다음 이야기를 기다려 주세요")}</b><span>{t("아직 공개된 다음 회차가 없어요.")}</span></div>}
+                  {mine && <button className="btn btn-w wt-reader-editwide" onClick={()=>go("editor",{run:runId})}><IconEdit size={17}/>{t("편집실")}</button>}
                 </div>
                 {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{t("가입 없이 무료로 시작")}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></section>}
               </EpisodeCommunity>
