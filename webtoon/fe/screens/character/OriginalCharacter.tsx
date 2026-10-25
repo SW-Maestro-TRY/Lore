@@ -188,7 +188,6 @@ export function CharacterForm({
               </label>
             </div>
           </div>
-          {localOnly && <p className="wt-original-localnote">{t("예시 캐릭터는 저장되지 않아요. 고친 이름·설정은 이번 웹툰에만 쓰여요.")}</p>}
           <ErrLine text={error} />
           {character && onDeleted && !localOnly && (
             <button
@@ -202,6 +201,7 @@ export function CharacterForm({
             </button>
           )}
           <div className="wt-original-actions">
+            {localOnly && <p className="wt-original-localnote">{t("예시 캐릭터는 저장되지 않아요. 고친 이름·설정은 이번 웹툰에만 쓰여요.")}</p>}
             <button
               type="button"
               className="btn btn-w"
