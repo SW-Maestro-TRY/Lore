@@ -10,7 +10,8 @@ import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { metaTrack, metaTrackCustom } from "../../lib/metaPixel";
 import type { Go } from "../../lib/nav";
-import { IconChevronUp, IconClose, IconDownload, IconEdit, IconMenu } from "../../ui/Icons";
+import { IconChevronUp, IconClose, IconComment, IconDownload, IconEdit, IconMenu } from "../../ui/Icons";
+import { commentCount } from "../../lib/community";
 import { Crumb, MobileTop } from "../../ui/TopNav";
 import { Dialog } from "../../ui/Dialog";
 import ShareMenu from "./ShareMenu";
@@ -77,6 +78,14 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const [suggested, setSuggested] = useState<RunCard[]>([]);
   const [liked, setLiked] = useState(false);
   const [likes, setLikes] = useState<number | null>(null);
+  /* 찜 옆 댓글 수 — 누르면 아래 댓글로 내려간다(2026-10-25) */
+  const [comments, setComments] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setComments(null);
+    commentCount(runId).then((r) => { if (alive) setComments(r.count); }).catch(() => {});
+    return () => { alive = false; };
+  }, [runId]);
   /* 끝까지 읽었나 — 읽은 뒤에만 짧은 설문(#471)을 띄운다. */
   const [readEnd, setReadEnd] = useState(false);
 
@@ -359,6 +368,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               <span className="wt-result-like">
                 <LikeButton runId={runId} liked={liked} count={likes ?? undefined} authenticated={authenticated}
                             onChange={(on, n) => { setLiked(on); setLikes(n); }} />
+                <button type="button" className="wt-result-commentcount" aria-label={t("댓글 {n}개 — 댓글로 가기", { n: comments ?? 0 })}
+                        onClick={() => document.querySelector(".wt-comments-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                  <IconComment size={16} /> {comments ?? 0}
+                </button>
               </span>
 
               {!mine && fromLink && (

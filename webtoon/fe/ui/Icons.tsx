@@ -39,4 +39,5 @@ export const IconTrash = (p: P) => base(p, <><path d="M4 7h16M10 11v6M14 11v6" /
 export const IconMail = (p: P) => base(p, <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></>);
 export const IconPlay = (p: P) => base(p, <path d="M8 5v14l11-7z" />);
 export const IconGrid = (p: P) => base(p, <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>);
+export const IconComment = (p: P) => base(p, <path d="M20 12a7.5 7.5 0 0 1-10.9 6.7L4.5 20l1.3-4.1A7.5 7.5 0 1 1 20 12z" />);
 export const IconMenu = (p: P) => base(p, <path d="M4 7h16M4 12h16M4 17h16" />);

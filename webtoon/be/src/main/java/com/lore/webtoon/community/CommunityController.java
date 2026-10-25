@@ -21,6 +21,7 @@ public class CommunityController {
     @GetMapping("/subscriptions") public ApiResponse<?> subscriptions() { return ApiResponse.ok(service.subscriptions(me())); }
     @DeleteMapping("/subscriptions/{root}") public ApiResponse<?> unsubscribeRoot(@PathVariable String root) { service.unsubscribeRoot(root,me()); return ApiResponse.ok(Map.of("ok",true)); }
     @GetMapping("/runs/{run}/comments") public ApiResponse<?> comments(@PathVariable String run,@RequestParam(defaultValue="0") long before) { return ApiResponse.ok(service.comments(run,me(),before)); }
+    @GetMapping("/runs/{run}/comments/count") public ApiResponse<?> commentCount(@PathVariable String run) { return ApiResponse.ok(Map.of("count",service.commentCount(run))); }
     @PostMapping("/runs/{run}/comments") public ApiResponse<?> comment(@PathVariable String run,@RequestBody Text body) { return ApiResponse.ok(service.addComment(run,me(),body.body())); }
     @PutMapping("/comments/{id}") public ApiResponse<?> edit(@PathVariable long id,@RequestBody Text body) { service.editComment(id,me(),body.body()); return ApiResponse.ok(Map.of("ok",true)); }
     @DeleteMapping("/comments/{id}") public ApiResponse<?> delete(@PathVariable long id) { service.deleteComment(id,me()); return ApiResponse.ok(Map.of("ok",true)); }
