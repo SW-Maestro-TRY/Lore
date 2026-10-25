@@ -275,8 +275,9 @@ def stage_digest(packet_path, out_path, dry_run, lang="ko"):
         kept = world_seed(packet["source_dir"])
     rows = X.progress_rows(previous.get("progress"))
     text = episode_text(packet)
-    R.write_text(out_dir / "lore_entries_prompt.txt", X.entries_prompt(text, lang))
-    R.write_text(out_dir / "lore_rules_prompt.txt", X.rules_prompt(text, lang))
+    # 항목 프롬프트는 실제로는 새로 뽑은 규칙까지 보고 만든다(X.extract). 미리 적어 두는 것은 이미 있는 설정만.
+    R.write_text(out_dir / "lore_entries_prompt.txt", X.entries_prompt(text, lang, kept))
+    R.write_text(out_dir / "lore_rules_prompt.txt", X.rules_prompt(text, lang, kept))
     R.write_text(out_dir / "lore_progress_prompt.txt", X.progress_prompt(rows, text, lang))
     if dry_run:
         return None

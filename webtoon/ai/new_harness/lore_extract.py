@@ -2,7 +2,7 @@
 
 orv-experiment(전독시×차시연 실험)와 같은 구조다.
 - 고정 로어북 = 키워드 항목(prompt/lore/entries_prompt) + 항상 켜짐 규칙(prompt/lore/rules_prompt).
-  둘은 따로 뽑는다. 항목은 키워드가 걸릴 때만, 규칙은 매 화 전부 들어간다(userbook.block).
+  규칙을 먼저 뽑고 항목은 그 규칙을 보며 뽑는다. 항목은 키워드가 걸릴 때만, 규칙은 매 화 전부 들어간다(userbook.block).
 - 진행 상태 = 고정 로어북 위에 덮어쓰는 층(prompt/lore/progress_prompt). 화가 끝날 때마다 바뀐 것과
   지울 것만 받아 합친다. key 가 고정 항목 id 면 그 항목의 「→ 지금:」 덮어쓰기, 그 밖은 새 상태다.
 
@@ -12,7 +12,6 @@ orv-experiment(전독시×차시연 실험)와 같은 구조다.
 import argparse
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import llm
@@ -42,12 +41,19 @@ def _call(prompt: str, out_dir: Path, stage: str) -> dict:
     return _json(text)
 
 
-def entries_prompt(source: str, lang: str = "ko") -> str:
-    return _prompt("lore/entries_prompt", lang) + source + "\n"
+def known_block(known) -> str:
+    """이미 있는 설정 — 규칙·항목 프롬프트가 같은 것을 다시 뽑지 않게 원문 뒤에 붙인다."""
+    rows = [f"- {'[규칙] ' if e.get('always') else ''}{e.get('title', '')}: {e.get('content') or e.get('text') or ''}"
+            for e in known or [] if isinstance(e, dict) and str(e.get("title") or "").strip()]
+    return "\n[이미 있는 설정]\n" + ("\n".join(rows) if rows else "(없음)") + "\n"
 
 
-def rules_prompt(source: str, lang: str = "ko") -> str:
-    return _prompt("lore/rules_prompt", lang) + source + "\n"
+def entries_prompt(source: str, lang: str = "ko", known=None) -> str:
+    return _prompt("lore/entries_prompt", lang) + source + "\n" + known_block(known)
+
+
+def rules_prompt(source: str, lang: str = "ko", known=None) -> str:
+    return _prompt("lore/rules_prompt", lang) + source + "\n" + known_block(known)
 
 
 def progress_prompt(rows: list[dict], new_text: str, lang: str = "ko") -> str:
@@ -133,11 +139,13 @@ def progress_rows(progress) -> list[dict]:
 
 
 def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None = None) -> list[dict]:
-    """고정 로어북 — 항목과 규칙을 나란히 뽑는다."""
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        got_entries = pool.submit(_call, entries_prompt(source, lang), out_dir, "LORE_ENTRIES")
-        got_rules = pool.submit(_call, rules_prompt(source, lang), out_dir, "LORE_RULES")
-        entries, rules = got_entries.result().get("entries", []), got_rules.result().get("rules", [])
+    """고정 로어북 — 규칙을 먼저 뽑고, 그 규칙과 이미 있는 설정을 보여 주며 항목을 뽑는다.
+    규칙이 설명한 작동 방식이 항목에 되풀이되지 않게 하려고 차례로 부른다."""
+    existing = [e for e in existing or [] if isinstance(e, dict)]
+    rules = _call(rules_prompt(source, lang, existing), out_dir, "LORE_RULES").get("rules", [])
+    shown = existing + [{"title": r.get("title"), "content": r.get("text"), "always": True}
+                        for r in rules if isinstance(r, dict)]
+    entries = _call(entries_prompt(source, lang, shown), out_dir, "LORE_ENTRIES").get("entries", [])
     return book_entries(entries, rules, existing)
 
 
