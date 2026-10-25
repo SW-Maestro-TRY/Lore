@@ -117,6 +117,10 @@ def _pick(stage: str, suffix: str, fallbacks: tuple) -> tuple[str, str]:
 #
 # 로컬에서 gemini 로 돌리고 싶으면 .env 에 NH_PROVIDER=gemini 를 적으면 된다 —
 # 설정이 있는 쪽이 언제나 이긴다.
+#
+# 같은 OpenAI 모델을 OpenRouter 를 거쳐 부르려면 NH_PROVIDER=openrouter 와
+# OPENROUTER_API_KEY 를 준다. 글·그림이 함께 넘어가고, 단계별 모델은 아래
+# STAGE_DEFAULT_MODELS 의 openrouter 칸(openai/ 를 붙인 같은 이름)을 쓴다.
 DEFAULT_PROVIDER = "openai"
 
 
@@ -179,6 +183,9 @@ STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
                         ("SCENE", "openai"): "gpt-5.1",
                         ("NARRATION", "openai"): "gpt-5.1",
                         ("FULL_REVIEW", "openai"): "gpt-5.1"}
+# OpenRouter 로 부를 때도 같은 모델이다. 이름 앞에 회사 이름만 붙는다.
+STAGE_DEFAULT_MODELS.update({(stage, "openrouter"): f"openai/{name}"
+                             for (stage, _), name in list(STAGE_DEFAULT_MODELS.items())})
 
 
 def model_for(stage: str, provider: str) -> str:
