@@ -3,6 +3,11 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "제목 · 추가 설정": { en: "Title · extra settings", ja: "タイトル · 追加設定", zh: "标题 · 附加设定" },
+  "추가 설정": { en: "Extra settings", ja: "追加設定", zh: "附加设定" },
+  "비워 두면 이야기에 맞춰 지어 드려요": { en: "Leave blank and we'll name it to fit the story", ja: "空欄なら物語に合わせて付けます", zh: "留空则按故事为你起名" },
+  "세계관 규칙·말투·꼭 들어갈 장면처럼 더 알려 주고 싶은 것": { en: "Anything else — world rules, speech style, a scene that must appear", ja: "世界観のルール・口調・必ず入れたい場面など", zh: "世界规则、说话方式、一定要有的场景等" },
+
   /* ---- 빵부스러기 · 폰 제목 ---- */
   "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
   "이야기 · 장르": { en: "Story · Genre", ja: "ストーリー · ジャンル", zh: "故事 · 题材" },
