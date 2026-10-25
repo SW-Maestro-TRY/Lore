@@ -34,10 +34,17 @@ const STORY='민수는 높은 곳을 무서워한다. 친구와 약속한 날, �
 const DRAFT_DONE={status:'DONE',book:{name:'다리 너머의 약속',source:'extracted',fixed_settings:'민수는 높은 곳을 무서워한다.',progress_state:'',entries:[],confirmed:false}};
 const advance=(page:Page)=>page.getByRole('button',{name:'다음',exact:true}).filter({visible:true}).first();
 const attached=(page:Page)=>page.locator('.wt-lore-attached-list li');
-// 새 설정집 작성 → 이름·고정 설정 → 확인하고 붙이기
+// 붙인 설정집의 항목 내용 전부(여러 권이면 합쳐서)
+const contents=(lb:any):string[]=>(lb.books?lb.books.flatMap((b:any)=>b.entries):lb.entries).map((e:any)=>e.content);
+// 새 설정집은 빈 항목 하나로 시작한다 — 이름·내용을 적는다.
+async function fillEntry(page:Page,title:string,content:string){
+ await page.getByRole('textbox',{name:'항목 이름',exact:true}).last().fill(title);
+ await page.getByRole('textbox',{name:`${title} 내용`,exact:true}).fill(content);
+}
+// 새 설정집 작성 → 이름·항목 → 확인하고 붙이기
 async function writeBook(page:Page,name:string,fixed:string){
  await page.getByRole('button',{name:'+ 설정집',exact:true}).click();await page.getByRole('button',{name:/새 설정집 작성/}).click();
- await page.getByRole('textbox',{name:'설정집 이름',exact:true}).fill(name);await page.getByRole('textbox',{name:'고정 설정',exact:true}).fill(fixed);
+ await page.getByRole('textbox',{name:'설정집 이름',exact:true}).fill(name);await fillEntry(page,'기본',fixed);
  await page.getByRole('button',{name:'확인하고 붙이기'}).click();
 }
 // 새 설정집 작성 → AI로 만들기 → 적어 둔 이야기 가져오기 → 권리 확인 → 만들기
@@ -70,7 +77,7 @@ test('설정집 도움말, 직접 적어 붙이기·빼기·복원',async({page}
 test('붙인 설정집은 생성 요청에 들어가 내 내용 길로 가고, 빼면 남지 않음',async({page})=>{
  const server=await setup(page);await page.goto('/webtoon?view=create&step=1');
  await writeBook(page,'다리 앞의 민수','주인공은 높은 곳을 무서워한다.');await finish(page);
- expect(server.sent.lorebook.confirmed).toBe(true);expect(server.sent.lorebook.fixed_settings).toBe('주인공은 높은 곳을 무서워한다.');expect(server.sent.mode).toBe('own');
+ expect(server.sent.lorebook.confirmed).toBe(true);expect(contents(server.sent.lorebook)).toEqual(['주인공은 높은 곳을 무서워한다.']);expect(server.sent.lorebook.entries[0].keys).toEqual(['기본']);expect(server.sent.mode).toBe('own');
  // 만들기를 시작하면 초안이 비워진다 — 다시 붙였다가 빼고 만든다.
  await page.goto('/webtoon?view=create&step=1');await writeBook(page,'다리 앞의 민수','주인공은 높은 곳을 무서워한다.');await page.getByRole('button',{name:/설정집 빼기/}).click();await finish(page);
  expect(server.sent.lorebook).toBeNull();expect(server.sent.mode).toBe('quick');
@@ -111,14 +118,14 @@ test('설정집 여러 개 추가·개별 수정·제거·복원 후 모두 생�
  await expect(attached(page)).toHaveCount(2);await expect(advance(page)).toBeEnabled();
  await page.reload();await expect(attached(page)).toHaveCount(2);
  await attached(page).first().getByRole('button').first().click();await page.getByRole('button',{name:'수정',exact:true}).click();
- await page.getByRole('textbox',{name:'고정 설정',exact:true}).fill('도시에는 밤마다 문이 열린다.');await page.getByRole('button',{name:'확인하고 붙이기'}).click();
+ await page.getByRole('textbox',{name:'기본 내용',exact:true}).fill('도시에는 밤마다 문이 열린다.');await page.getByRole('button',{name:'확인하고 붙이기'}).click();
  await expect(attached(page)).toHaveCount(2);
  await attached(page).first().getByRole('button',{name:/설정집 빼기/}).click();
  await expect(attached(page)).toHaveCount(1);await expect(page.locator('.wt-lore-attached-list')).toContainText('민수의 집');
  await page.getByRole('button',{name:'방금 뺀 설정집 다시 붙이기'}).click();await page.getByRole('button',{name:'이 설정집 사용'}).click();await expect(attached(page)).toHaveCount(2);
  await expect(attached(page).first()).toContainText('밤의 도시');
  await page.addStyleTag({content:'nextjs-portal{display:none}'});await page.screenshot({path:resolve(base,`.impeccable/review/lore-multiple-${info.project.name}.png`),fullPage:true});
- await finish(page);expect(server.sent.lorebook.books).toHaveLength(2);expect(server.sent.lorebook.fixed_settings).toContain('도시에는 밤마다 문이 열린다.');expect(server.sent.lorebook.fixed_settings).toContain('민수는 고양이와 산다.');
+ await finish(page);expect(server.sent.lorebook.books).toHaveLength(2);expect(contents(server.sent.lorebook)).toEqual(['도시에는 밤마다 문이 열린다.','민수는 고양이와 산다.']);
 });
 test('AI 초안 만드는 중과 검토 중에는 단계 이동·원문 변경을 막고 브라우저 뒤로가기도 보존',async({page})=>{
  await setup(page);let complete=false;
@@ -135,19 +142,19 @@ test('설정집 수정은 붙이거나 닫기 전까지 진행할 수 없고 닫
  const server=await setup(page);await page.goto('/webtoon?view=create&step=1');
  await page.getByRole('button',{name:'+ 설정집',exact:true}).click();await page.getByRole('button',{name:/새 설정집 작성/}).click();
  await expect(advance(page)).toBeDisabled();
- await page.getByRole('textbox',{name:'설정집 이름',exact:true}).fill('다리 앞의 민수');await page.getByRole('textbox',{name:'고정 설정',exact:true}).fill('주인공은 높은 곳을 무서워한다.');
+ await page.getByRole('textbox',{name:'설정집 이름',exact:true}).fill('다리 앞의 민수');await fillEntry(page,'기본','주인공은 높은 곳을 무서워한다.');
  await page.getByRole('button',{name:'확인하고 붙이기'}).click();await expect(advance(page)).toBeEnabled();
  await attached(page).first().getByRole('button').first().click();await page.getByRole('button',{name:'수정',exact:true}).click();
- await page.getByRole('textbox',{name:'고정 설정',exact:true}).fill('취소할 변경');await expect(advance(page)).toBeDisabled();
+ await page.getByRole('textbox',{name:'기본 내용',exact:true}).fill('취소할 변경');await expect(advance(page)).toBeDisabled();
  await page.getByRole('button',{name:'설정집 닫기',exact:true}).click();await expect(advance(page)).toBeEnabled();
- await finish(page);expect(server.sent.lorebook.fixed_settings).toBe('주인공은 높은 곳을 무서워한다.');
+ await finish(page);expect(contents(server.sent.lorebook)).toEqual(['주인공은 높은 곳을 무서워한다.']);
 });
 test('내 설정집에 저장하고 목록에서 다시 불러오기',async({page})=>{
  await setup(page);await page.goto('/webtoon?view=create&step=1');
  await page.getByRole('button',{name:'+ 설정집',exact:true}).click();await expect(page.getByText('저장한 설정집이 없어요')).toBeVisible();
  await page.getByRole('button',{name:/새 설정집 작성/}).click();
  await page.getByRole('textbox',{name:'설정집 이름',exact:true}).fill('내 도시 설정');
- await page.getByRole('textbox',{name:'고정 설정',exact:true}).fill('도시의 시계는 밤에 멈춘다.');
+ await fillEntry(page,'도시','도시의 시계는 밤에 멈춘다.');
  await page.getByRole('button',{name:'내 설정집에 저장',exact:true}).click();
  await expect(page.locator('.wt-lore-read')).toContainText('도시의 시계는 밤에 멈춘다.');
  await page.getByRole('button',{name:'목록으로',exact:true}).click();

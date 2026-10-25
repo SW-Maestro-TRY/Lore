@@ -94,3 +94,53 @@
   .wt .wt-lore-ai-text textarea { min-height: 200px; }
   .wt .wt-lore-ai-count { width: 100%; margin-left: 0; text-align: right; }
 }
+
+/* 설정집 창 — 닫기는 X 아이콘 하나로 제목과 한 줄에, 글자는 페이지 본문 크기로(2026-10-26) */
+.wt .wt-lore-dialog { font-size:16px; }
+.wt .wt-lore-dialog .wt-lore-panelhead, .wt .wt-lore-help .wt-lore-panelhead { align-items:center; }
+.wt .wt-lore-dialog .wt-lore-panelhead h3 { font-size:22px; line-height:1.3; }
+.wt .wt-lore-close { flex-shrink:0; width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; padding:0;
+  border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--ink); cursor:pointer; }
+.wt .wt-lore-close:hover:not(:disabled) { border-color:var(--muted); }
+.wt .wt-lore-close:disabled { opacity:.4; cursor:default; }
+.wt .wt-lore-close:focus-visible { outline:2px solid var(--sea-deep); outline-offset:2px; }
+.wt .wt-lore-dialog .wt-lore-panel h4 { font-size:17px; }
+.wt .wt-lore-dialog .wt-lore-panel p, .wt .wt-lore-dialog .muted { font-size:15px; }
+.wt .wt-lore-dialog .wt-lore-newtop b { font-size:18px; }
+.wt .wt-lore-dialog .wt-lore-newtop small { font-size:15px; }
+.wt .wt-lore-dialog .wt-lore-search { font-size:14px; }
+.wt .wt-lore-dialog .wt-lore-catalog b { font-size:17px; }
+.wt .wt-lore-dialog .wt-lore-catalog span { font-size:14px; }
+.wt .wt-lore-dialog .wt-lore-read p { font-size:16px; }
+.wt .wt-lore-dialog .wt-lore-read-meta { font-size:14px; }
+.wt .wt-lore-dialog .wt-lore-read-entries summary { font-size:16px; }
+.wt .wt-lore-dialog .wt-lore-read-entries small { font-size:13px; }
+.wt .wt-lore-dialog .wt-lore-actions .btn { font-size:15px; }
+.wt .wt-lore-dialog .wt-lore-editor label { font-size:15px; }
+.wt .wt-lore-dialog .wt-lore-ai-offer p, .wt .wt-lore-dialog .wt-lore-ai-lede { font-size:17px; }
+.wt .wt-lore-dialog .wt-lore-ai-text { font-size:15px; }
+.wt .wt-lore-dialog .wt-lore-ai-text textarea { font-size:16px; }
+.wt .wt-lore-dialog .wt-lore-ai-count, .wt .wt-lore-dialog .wt-lore-ai-left { font-size:14px; }
+.wt .wt-lore-dialog .wt-lore-ai-note, .wt .wt-lore-dialog .wt-lore-ai-busy { font-size:15px; }
+.wt .wt-lore-dialog .wt-lore-reviewnote { font-size:14px; }
+
+/* 설정집 편집 — 항목 카드 목록이 본문이다(2026-10-26 다시 짬) */
+.wt .wt-lore-entries-head h4 { margin:8px 0 6px; font-size:18px; }
+.wt .wt-lore-entries-head h4 span { font-size:15px; font-weight:500; color:var(--muted); margin-left:4px; }
+.wt .wt-lore-entries-head p { margin:0; }
+.wt .wt-lore-entry-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:12px; }
+.wt .wt-lore-entry { display:flex; flex-direction:column; gap:10px; padding:16px; border:1px solid var(--line); border-radius:14px; }
+.wt .wt-lore-entry-head { display:flex; align-items:center; gap:10px; }
+.wt .wt-lore-entry-title { flex:1; min-width:0; font-size:17px; font-weight:700; }
+.wt .wt-lore-editor .wt-lore-always { flex-direction:row; align-items:center; gap:6px; font-size:14px; font-weight:600; white-space:nowrap; cursor:pointer; color:var(--muted); }
+.wt .wt-lore-always input { width:18px; height:18px; accent-color:var(--sea); }
+.wt .wt-lore-entry textarea { min-height:100px; font-size:16px; }
+.wt .wt-lore-entry-keys { font-size:15px; }
+.wt .wt-lore-entry blockquote { margin:0; font-size:14px; color:var(--muted); }
+.wt .wt-lore-icon { flex-shrink:0; width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; padding:0;
+  border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--ink); cursor:pointer; }
+.wt .wt-lore-icon:hover { border-color:var(--muted); }
+.wt .wt-lore-add { display:flex; align-items:center; justify-content:center; gap:8px; min-height:52px; border:1.5px dashed var(--line-strong);
+  border-radius:14px; background:transparent; color:var(--ink); font-size:16px; font-weight:700; cursor:pointer; }
+.wt .wt-lore-add:hover { border-color:var(--muted); background:rgba(255,255,255,.03); }
+@media(max-width:600px){ .wt .wt-lore-entry-head { flex-wrap:wrap; } .wt .wt-lore-entry-title { flex-basis:100%; } .wt .wt-lore-editor .wt-lore-always { margin-right:auto; } }
