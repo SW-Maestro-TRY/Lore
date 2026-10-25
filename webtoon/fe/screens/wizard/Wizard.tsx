@@ -129,10 +129,19 @@ export default function Wizard({
   const { lang } = useLang();
   /* 어느 길인가(#548)는 2걸음에서 고른다(form.create). 주소의 `mode=own` 은 미리 골라 둔
      것일 뿐이다. own 길은 걸음이 셋이라 4는 3으로 본다. */
+  /* 초안(sessionStorage)은 화면이 뜬 뒤에 읽는다. 첫 렌더에서 읽으면 초안을 모르는 서버 HTML 과 어긋나고,
+     React 는 그 어긋난 속성(꺼진 「다음」 등)을 고치지 않아 새로고침하면 버튼이 먹통이 됐다. */
   const [form, setForm] = useState<WizardForm>(() => {
-    const f = loadDraft();
+    const f = emptyWizardForm();
     return mode === "own" ? { ...f, create: "own" } : f;
   });
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  useEffect(() => {
+    const f = loadDraft();
+    setForm(mode === "own" ? { ...f, create: "own" } : f);
+    setDraftLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p,
     ...(p.story !== undefined && p.story !== f.story && f.lorebook ? {lorebook:invalidateExtracted(f.lorebook)} : {}) }));
 
@@ -157,7 +166,7 @@ export default function Wizard({
       return {...f, lorebook: packBooks(next)};
     });
   }, [form.genre, genreBooks]);
-  useEffect(() => { saveDraft(form); }, [form]);
+  useEffect(() => { if (draftLoaded) saveDraft(form); }, [form, draftLoaded]);
   const own = false; // 시작 방식은 별도 선택하지 않는다. 입력 내용으로 생성 경로를 정한다.
   const step = rawStep >= 4 || rawStep === 2 ? 2 : 1;
   const [lorePending,setLorePending]=useState(false);
