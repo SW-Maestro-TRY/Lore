@@ -123,7 +123,7 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
     <button type="button" className="wt-lore-close" aria-label={t("설정집 닫기")} title={t("닫기")} disabled={busy||saving} onClick={close}><IconClose size={20}/></button></div>
    {busy&&!(editMode&&aiMode)&&<p role="status">{t("설정 추출 중…")}</p>}
    {!working?<>
-    <button type="button" className="wt-lore-newtop" disabled={busy} onClick={startNew}><span aria-hidden="true">+</span><b>{t("새 설정집 작성")}</b><small>{t("직접 적거나, 긴 이야기를 올려 AI로 만들 수 있어요")}</small></button>
+    <button type="button" className="wt-lore-newtop" disabled={busy} onClick={startNew}><span aria-hidden="true">+</span><b>{t("새 설정집 작성")}</b></button>
     {authenticated&&!!catalog?.personal_books?.length&&<label className="wt-lore-search">{t("설정집 찾기")}<input className="field" value={search} placeholder={t("설정집 찾기")} onChange={e=>setSearch(e.target.value)}/></label>}
 
     {authenticated&&<><h4>{t("내 설정집")}</h4><div className="wt-lore-catalog wt-lore-personal">

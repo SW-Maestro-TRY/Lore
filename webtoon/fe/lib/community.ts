@@ -57,6 +57,8 @@ export const follow = (run: string, on: boolean) =>
   });
 export const comments = (run: string, before = 0) =>
   request<Comment[]>(`${runPath(run)}/comments?before=${before}`);
+export const commentCount = (run: string) =>
+  request<{ count: number }>(`${runPath(run)}/comments/count`);
 export const addComment = (run: string, body: string) =>
   request<{ id: number }>(`${runPath(run)}/comments`, {
     method: "POST",

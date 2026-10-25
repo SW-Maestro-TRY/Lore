@@ -337,8 +337,8 @@ public class RegenService {
         return runner.runDir(runId).resolve("pages").resolve("versions");
     }
 
-    /** 남겨 둔 화질. 없으면(옛 작품) 기본값으로 떨어진다. */
-    private String qualityOf(String runId) {
+    /** 남겨 둔 화질. 없으면(옛 작품) 기본값으로 떨어진다. 다시 그리기 값도 이걸 본다(#787). */
+    String qualityOf(String runId) {
         try {
             return Files.readString(runner.runDir(runId).resolve("quality.txt")).strip();
         } catch (IOException e) {

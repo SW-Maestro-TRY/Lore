@@ -261,3 +261,18 @@
   }
 }
 
+
+/* 이름 옆 안 읽은 소식 점(웹툰 탭) */
+.authWithDot {
+  position: relative;
+}
+.unreadDot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff4d4f;
+  box-shadow: 0 0 0 2px var(--bg, #0a1320);
+}

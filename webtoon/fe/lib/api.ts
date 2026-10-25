@@ -117,6 +117,27 @@ function post<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+export type WebtoonContactCategory = "WEBTOON" | "ACCOUNT_CREDITS" | "ERROR" | "OTHER";
+
+/** 웹툰 문의를 운영 메일로 보낸다. 답장 주소와 본문은 서버가 길이와 형식을 다시 확인한다. */
+export function sendWebtoonContact(input: {
+  email: string;
+  category: WebtoonContactCategory;
+  message: string;
+  privacyConsent: boolean;
+  files: File[];
+  website?: string;
+}): Promise<{ sent: boolean }> {
+  const body = new FormData();
+  body.append("email", input.email);
+  body.append("category", input.category);
+  body.append("message", input.message);
+  body.append("privacyConsent", String(input.privacyConsent));
+  body.append("website", input.website || "");
+  input.files.forEach((file) => body.append("files", file));
+  return call("/contact", { method: "POST", body });
+}
+
 /* ---- 만들기 전에: 무엇으로 만드나 ----------------------------------------- */
 
 export interface Allowance {
@@ -518,6 +539,8 @@ export function coverUrl(runId: string, page: number, episode = 1): string {
 }
 
 export interface RunResult {
+  /** 이 회차의 찜 수 */
+  likes?: number;
   run_id: string;
   character: string;
   title: string;

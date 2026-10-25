@@ -12,7 +12,7 @@ import "./Dialog.css";
 import {IconClose} from "./Icons";
 import {useT} from "../lib/i18n";
 
-export function Dialog({ title, sub, onClose, busy, wide, children }: {
+export function Dialog({ title, sub, onClose, busy, wide, className, onBack, backLabel, children }: {
   /** 없으면 제목 줄 없이 바로 내용부터 */
   title?: string;
   sub?: ReactNode;
@@ -20,6 +20,11 @@ export function Dialog({ title, sub, onClose, busy, wide, children }: {
   busy?: boolean;
   /** 목록을 담는 창이면 조금 넓게 */
   wide?: boolean;
+  /** 화면별 시각 맥락이 필요한 경우에만 쓰는 추가 클래스 */
+  className?: string;
+  /** 있으면 제목 앞에 「‹」 뒤로 가기 — 창 안에서 한 단계 들어간 화면(예: 이메일 문의) */
+  onBack?: () => void;
+  backLabel?: string;
   children?: ReactNode;
 }) {
   const id = useId();
@@ -38,9 +43,9 @@ export function Dialog({ title, sub, onClose, busy, wide, children }: {
 
   return (
     <div className="wt-dialog" onClick={() => { if (!busy) onClose(); }}>
-      <div ref={box} className={`wt-dialog-box${wide ? " wide" : ""}`} role="dialog" aria-modal="true"
+      <div ref={box} className={`wt-dialog-box${wide ? " wide" : ""}${className ? ` ${className}` : ""}`} role="dialog" aria-modal="true"
            aria-labelledby={title ? id : undefined} onClick={(e) => e.stopPropagation()}>
-        <div className="wt-dialog-heading">{title && <h2 id={id}>{title}</h2>}<button type="button" className="wt-dialog-close" aria-label={t("닫기")} disabled={busy} onClick={onClose}><IconClose size={18}/></button></div>
+        <div className="wt-dialog-heading">{(onBack || title) && <div className="wt-dialog-titlewrap">{onBack && <button type="button" className="wt-dialog-back" aria-label={backLabel || t("뒤로")} disabled={busy} onClick={onBack}><span aria-hidden="true">‹</span></button>}{title && <h2 id={id}>{title}</h2>}</div>}<button type="button" className="wt-dialog-close" aria-label={t("닫기")} disabled={busy} onClick={onClose}><IconClose size={18}/></button></div>
         {sub && <p className="wt-dialog-sub">{sub}</p>}
         {children}
       </div>
