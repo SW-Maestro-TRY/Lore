@@ -153,6 +153,9 @@ registerDict({
   "문의가 전달됐어요. 적어 주신 이메일로 답변드릴게요.": { en: "Your inquiry was sent. We'll reply to the email you provided.", ja: "お問い合わせを送信しました。ご記入のメールアドレスに返信します。", zh: "咨询已发送。我们会回复到您填写的邮箱。" },
   "보내지 못했어요. 잠시 뒤 다시 시도해 주세요.": { en: "Couldn't send your message. Please try again shortly.", ja: "送信できませんでした。しばらくしてからもう一度お試しください。", zh: "发送失败，请稍后重试。" },
   "문의 내용은 3,000자까지 적을 수 있어요.": { en: "Your message can be up to 3,000 characters.", ja: "お問い合わせ内容は3,000文字までです。", zh: "咨询内容最多可输入 3,000 个字符。" },
+  "파일 선택": { en: "Choose files", ja: "ファイルを選択", zh: "选择文件" },
+  "{n}개 첨부됨": { en: "{n} attached", ja: "{n}件添付済み", zh: "已附加 {n} 个" },
+  "첨부한 파일 없음": { en: "No files attached", ja: "添付ファイルなし", zh: "没有附件" },
   "문의로 돌아가기": { en: "Back to contact options", ja: "お問い合わせ方法に戻る", zh: "返回联系选项" },
   "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
   "인스타그램": { en: "Instagram", ja: "インスタグラム", zh: "Instagram" },
@@ -416,7 +419,10 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               <Dialog className="wt-contact-dialog"
                       title={t(contactCompose ? "이메일 문의" : "무엇을 도와드릴까요?")}
                       sub={contactCompose ? undefined : t("LORE 이용 중 궁금한 점이 있으신가요?")}
-                      busy={contactBusy} onClose={() => setContactOpen(false)}>
+                      busy={contactBusy} onClose={() => setContactOpen(false)}
+                      /* 뒤로 가기는 제목 앞에 — 제목 아래 한 줄을 따로 차지해 어색했다(2026-10-26) */
+                      onBack={contactCompose && !contactSent ? () => setContactCompose(false) : undefined}
+                      backLabel={t("문의로 돌아가기")}>
                 {!contactCompose ? (
                   <div className="wt-my-contact">
                     <a className="wt-contact-row" href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer"
@@ -460,10 +466,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                       .catch(() => setContactError(t("보내지 못했어요. 잠시 뒤 다시 시도해 주세요.")))
                       .finally(() => setContactBusy(false));
                   }}>
-                    <button type="button" className="wt-contact-back" aria-label={t("문의로 돌아가기")}
-                            onClick={() => setContactCompose(false)} disabled={contactBusy}>
-                      <span aria-hidden="true">&lt;</span>
-                    </button>
                     <label htmlFor="wt-contact-email">{t("답변 받을 이메일")}</label>
                     <input id="wt-contact-email" type="email" autoComplete="email" maxLength={254} required
                            value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} />
@@ -483,7 +485,12 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                     <div className="wt-contact-attachments">
                       <label htmlFor="wt-contact-files">{t("첨부 파일")}</label>
                       <small>{t("이미지 또는 PDF · 최대 3개, 파일당 1MB")}</small>
-                      <input id="wt-contact-files" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" multiple
+                      {/* 기본 파일칸은 감추고 단추와 개수만 보인다 — 고른 뒤에도 「선택된 파일 없음」이 남아 헷갈렸다(2026-10-26) */}
+                      <span className="wt-contact-pick">
+                        <label htmlFor="wt-contact-files" className="wt-contact-pickbtn">{t("파일 선택")}</label>
+                        <span>{contactFiles.length ? t("{n}개 첨부됨", { n: contactFiles.length }) : t("첨부한 파일 없음")}</span>
+                      </span>
+                      <input id="wt-contact-files" className="wt-contact-fileinput" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" multiple
                         onChange={(event) => {
                           const selected = Array.from(event.target.files || []);
                           const next = [...contactFiles, ...selected];
