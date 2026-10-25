@@ -81,7 +81,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     browseRuns()
       .then((all) => {
         if (!alive) return;
-        const others = all.filter((r) => r.run_id !== runId).sort((a, b) => b.run_id.localeCompare(a.run_id));
+        // 둘러보기는 연재를 1화 카드 하나로 묶는다 — 지금 읽는 회차가 든 카드는 추천에서 뺀다.
+        const inSeries = (r: RunCard) => r.run_id === runId || Object.values(r.episode_run_ids || {}).includes(runId);
+        const others = all.filter((r) => !inSeries(r)).sort((a, b) => b.run_id.localeCompare(a.run_id));
         const same = data.genre ? others.filter((r) => r.genre === data.genre) : [];
         setSuggested((same.length >= 2 ? same : others).slice(0, 4));
         const me = all.find((r) => r.run_id === runId);

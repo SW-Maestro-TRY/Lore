@@ -12,6 +12,7 @@ import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
 import LikeButton from "../../ui/LikeButton";
 import { STYLE_INFO } from "../../lib/wizardData";
+import FeaturedBanner from "./FeaturedBanner";
 import FilterCombo from "./FilterCombo";
 import { GENRE_ORDER, genreBucket } from "./genreBucket";
 import "../wizard/i18n";
@@ -175,6 +176,8 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
 
         {/* 「최근 본 웹툰」 줄은 뺐다 — 목록 위에 표지 줄이 하나 더 있으니 정신없다는 피드백(2026-10-24) */}
 
+        <FeaturedBanner go={go} />
+
         <div className="wt-works-finds">
           <input className="field wt-works-search" type="search" value={query} placeholder={t("제목·캐릭터·장르로 찾기")}
                  aria-label={t("제목·캐릭터·장르로 찾기")} onChange={(e) => setQuery(e.target.value)} />
@@ -255,9 +258,11 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
   const eps = run.episodes || [];
   const first = eps[0] || 1;
   const [likes, setLikes] = useState(run.likes ?? 0);
-  const open = () => {
-    track("works_open", { run: run.run_id, mine, where: "works" });
-    go("result", { run: run.run_id });
+  /* 연재는 카드 하나에 회차 단추가 붙는다 — 단추는 그 회차를, 표지는 1화를 연다. */
+  const open = (episode?: number) => {
+    const target = (episode && run.episode_run_ids?.[String(episode)]) || run.run_id;
+    track("works_open", { run: target, mine, where: "works", ep: episode ?? first });
+    go("result", { run: target });
   };
 
   const sub = [run.character, ...new Set([run.genre, run.style_label].filter((s): s is string => !!s).map((s) => t(s)))].filter(Boolean).join(" · ");
@@ -284,7 +289,7 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
 
   return (
     <div className="card wt-works-card">
-      <button type="button" className="wt-works-cover" onClick={open} aria-label={t("{title} 열기", { title: run.title || run.run_id })}>
+      <button type="button" className="wt-works-cover" onClick={() => open()} aria-label={t("{title} 열기", { title: run.title || run.run_id })}>
         {run.cover_page ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt={run.title || ""} />
@@ -304,9 +309,10 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
         <div className="wt-works-eprow">
           {eps.length > 0 && (
             <div className="wt-works-eps">
-              {eps.map((n) => (
-                <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
-              ))}
+              {/* 회차가 많으면 1화 · … · 마지막 화만 — 23화 연재가 단추 23개로 카드를 덮지 않게. */}
+              {(eps.length > 3 ? [eps[0], -1, eps[eps.length - 1]] : eps).map((n) => n < 0
+                ? <span key="more" className="ep-more" aria-hidden="true">…</span>
+                : <button key={n} type="button" className="ep" onClick={() => open(n)}>{t("{n}화", { n })}</button>)}
             </div>
           )}
           {mine && authenticated && (

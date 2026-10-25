@@ -83,13 +83,14 @@ public class RunService {
                 .orElse(work);
     }
 
-    private List<Integer> episodesOf(String rootJob) {
+    private List<Integer> episodesOf(String rootJob, boolean publicOnly) {
         List<Integer> episodes = new ArrayList<>();
         episodes.add(1);
         if (series == null || rootJob == null) return episodes;
         for (var chapter : series.findByRootJobOrderByEpisodeNumberAsc(rootJob)) {
             if (works.findByJobId(chapter.jobId())
                     .filter(work -> work.getRunId() != null && !work.isTrashed())
+                    .filter(work -> !publicOnly || work.isPublic())
                     .filter(work -> !pages.pageNumbersOf(work.getRunId()).isEmpty())
                     .isPresent()) {
                 episodes.add(chapter.episodeNumber());
@@ -99,13 +100,14 @@ public class RunService {
     }
 
     /** 연재 카드에서 회차 버튼이 실제 작품을 열 수 있도록 회차별 run_id 를 붙인다. */
-    private Map<String, String> episodeRunIdsOf(String rootJob, String rootRunId) {
+    private Map<String, String> episodeRunIdsOf(String rootJob, String rootRunId, boolean publicOnly) {
         Map<String, String> runIds = new LinkedHashMap<>();
         runIds.put("1", rootRunId);
         if (series == null || rootJob == null) return runIds;
         for (var chapter : series.findByRootJobOrderByEpisodeNumberAsc(rootJob)) {
             works.findByJobId(chapter.jobId())
                     .filter(work -> work.getRunId() != null && !work.isTrashed())
+                    .filter(work -> !publicOnly || work.isPublic())
                     .filter(work -> !pages.pageNumbersOf(work.getRunId()).isEmpty())
                     .ifPresent(work -> runIds.put(String.valueOf(chapter.episodeNumber()), work.getRunId()));
         }
@@ -133,7 +135,35 @@ public class RunService {
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> browse() {
-        return cardsOf(works.onGallery(), false);
+        /* 연재는 카드 하나로 묶는다 — 회차마다 카드가 따로 뜨면 한 작품이 여러 작품처럼
+           보인다. 1화 카드에 공개된 회차 번호를 모으고, 회차 단추가 그 회차를 연다.
+           1화가 비공개·삭제면 묶을 자리가 없으니 회차를 따로 둔다. */
+        List<Map<String, Object>> out = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (WebtoonWork one : works.onGallery()) {
+            Map<String, Object> card = galleryCard(one);
+            if (card != null && seen.add(String.valueOf(card.get("run_id")))) {
+                out.add(card);
+            }
+        }
+        return out;
+    }
+
+    private Map<String, Object> galleryCard(WebtoonWork work) {
+        if (work.isTrashed()) {
+            return null;
+        }
+        WebtoonJob job = jobs.findByPublicId(work.getJobId()).orElse(null);
+        String rootJob = rootJobOf(job);
+        if (rootJob == null) {
+            return cardIgnoringTrash(work, false, false, false);
+        }
+        WebtoonWork root = rootJob.equals(work.getJobId()) ? work : works.findByJobId(rootJob)
+                .filter(r -> r.getRunId() != null && !r.isTrashed() && r.isPublic())
+                .orElse(null);
+        return root == null
+                ? cardIgnoringTrash(work, false, false, false)
+                : cardIgnoringTrash(root, false, true, true);
     }
 
     /**
@@ -215,6 +245,12 @@ public class RunService {
     }
 
     private Map<String, Object> cardIgnoringTrash(WebtoonWork work, boolean withPublic, boolean groupSeries) {
+        return cardIgnoringTrash(work, withPublic, groupSeries, false);
+    }
+
+    /** {@code publicOnly} — 남이 보는 목록이라 비공개 회차는 번호도 안 싣는다. */
+    private Map<String, Object> cardIgnoringTrash(WebtoonWork work, boolean withPublic, boolean groupSeries,
+                                                  boolean publicOnly) {
         String runId = work.getRunId();
         List<Integer> numbers = pages.pageNumbersOf(runId);
         if (numbers.isEmpty()) {
@@ -230,9 +266,9 @@ public class RunService {
                 .orElse(NO_TITLE));
         card.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         // 연재는 첫 작품 카드 하나에 완성된 회차 번호를 모아 보여 준다.
-        card.put("episodes", groupSeries ? episodesOf(rootJobOf(job)) : List.of(episodeOf(job)));
+        card.put("episodes", groupSeries ? episodesOf(rootJobOf(job), publicOnly) : List.of(episodeOf(job)));
         card.put("episode_run_ids", groupSeries
-                ? episodeRunIdsOf(rootJobOf(job), runId)
+                ? episodeRunIdsOf(rootJobOf(job), runId, publicOnly)
                 : Map.of(String.valueOf(episodeOf(job)), runId));
         card.put("episode", episodeOf(job));
         card.put("cover_episode", 1);
