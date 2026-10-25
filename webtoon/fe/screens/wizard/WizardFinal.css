@@ -329,3 +329,22 @@
   .wt .wt-create-options .wt-wiz-styles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .wt .wt-create-options .wt-wiz-style b { font-size: 12px; padding: 0 6px; }
 }
+
+/* ── 글자 크기 통일(2026-10-25) ───────────────────────────────────────
+   1단계 「어떤 이야기인가요?」는 h2 안의 label 이 14px 로 작아져 있었고, 「제목 · 추가 설정」도
+   본문 크기였다. 2단계의 「그림체 · 그리기 방식 · 생성 방식」(18px · 800)에 모두 맞춘다.
+   본문 글(동의 문구 · 약관 요약)은 14px 로 맞춘다. */
+.wt .wt-create-content h2,
+.wt .wt-create-content h2 label { font-size: 18px; font-weight: 800; color: var(--ink); }
+.wt .wt-create-content .wt-wiz-more summary { font-size: 18px; font-weight: 800; color: var(--ink); padding: 16px 0; }
+.wt .wt-create-genres button { font-size: 15px; padding: 9px 15px; }
+.wt .wt-wiz-agree { font-size: 14px; }
+.wt .wt-wiz-agree i { font-size: 12px; }
+.wt .wt-wiz-terms { font-size: 14px; }
+.wt .wt-wiz-terms ul { font-size: 13.5px; }
+/* 「이용약관 요약 보기」의 ▶ 가 위 체크박스보다 왼쪽으로 나와 있었다 — 체크박스 칸 왼쪽 끝에 맞춘다 */
+.wt .wt-wiz-terms summary { padding-left: 4px; }
+@media (max-width: 767px) {
+  .wt .wt-create-content h2, .wt .wt-create-content h2 label, .wt .wt-create-content .wt-wiz-more summary { font-size: 17px; }
+  .wt .wt-create-genres button { font-size: 14px; padding: 8px 13px; }
+}

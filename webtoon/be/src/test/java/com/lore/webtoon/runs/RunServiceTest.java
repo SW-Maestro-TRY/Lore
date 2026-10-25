@@ -137,6 +137,28 @@ class RunServiceTest {
     }
 
     @Test
+    @DisplayName("1화에 그림이 없으면 공개된 회차를 따로 낸다 — 연재가 통째로 사라지면 안 된다")
+    void 그림_없는_1화() {
+        WebtoonWork root = 작품("run-1", true);
+        WebtoonWork two = 작품("run-2", true);
+        when(works.findByJobId("job-run-1")).thenReturn(Optional.of(root));
+        when(works.findByJobId("job-run-2")).thenReturn(Optional.of(two));
+        when(pages.pageNumbersOf("run-1")).thenReturn(List.of());
+        when(pages.pageNumbersOf("run-2")).thenReturn(List.of(1, 2));
+        var c2 = mock(com.lore.webtoon.series.SeriesChapter.class);
+        when(c2.jobId()).thenReturn("job-run-2");
+        when(c2.rootJob()).thenReturn("job-run-1");
+        when(c2.episodeNumber()).thenReturn(2);
+        when(series.findById("job-run-1")).thenReturn(Optional.empty());
+        when(series.findById("job-run-2")).thenReturn(Optional.of(c2));
+        when(series.findByRootJobOrderByEpisodeNumberAsc("job-run-1")).thenReturn(List.of(c2));
+        runs.setSeries(series);
+        when(works.onGallery()).thenReturn(List.of(two, root));
+
+        assertThat(runs.browse()).extracting(c -> c.get("run_id")).containsExactly("run-2");
+    }
+
+    @Test
     @DisplayName("목록 카드를 DB 만으로 채운다 — 그림체 딱지까지")
     void 목록() {
         /* 짜 넣는 것을 먼저 다 만들고 나서 stub 한다 — when(...) 안에서 또
