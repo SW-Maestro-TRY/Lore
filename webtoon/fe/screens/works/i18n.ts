@@ -2,6 +2,10 @@ import { registerDict, type Dict } from "../../lib/i18n";
 
 /* 둘러보기 — 화면의 한국어 원문이 키다. 작품 제목·장르·그림체 라벨은 서버 값이라 여기 없다. */
 const dict: Dict = {
+  "좋아요": { en: "Liked", ja: "いいね", zh: "喜欢" },
+  "아직 좋아요한 웹툰이 없어요": { en: "No liked webtoons yet", ja: "まだいいねしたウェブトゥーンがありません", zh: "还没有喜欢的网络漫画" },
+  "로그인하면 좋아요한 웹툰을 모아 볼 수 있어요": { en: "Log in to see the webtoons you liked", ja: "ログインするといいねしたウェブトゥーンをまとめて見られます", zh: "登录后可以查看你喜欢的网络漫画" },
+  "화면 위 로그인 단추를 눌러 주세요.": { en: "Tap the log in button at the top.", ja: "画面上のログインボタンを押してください。", zh: "请点击页面上方的登录按钮。" },
   "내 캐릭터로 한 편": { en: "An episode with my character", ja: "自分のキャラクターで一話", zh: "用我的角色做一话" },
   "{title} 1화 읽기": { en: "Read episode 1 of {title}", ja: "{title} 第1話を読む", zh: "阅读 {title} 第1话" },
   "슈퍼": { en: "Super", ja: "スーパー", zh: "超级" },

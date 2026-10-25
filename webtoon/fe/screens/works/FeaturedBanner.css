@@ -60,3 +60,15 @@
   .wt .wt-featured-tags li { font-size: 10.5px; }
   .wt .wt-featured-count { margin-top: 2px; font-size: 11.5px; }
 }
+/* 링크 기본 호버(글자색·밑줄)가 띠 글자에 먹던 것을 막는다 — 띠는 마우스를 올려도 그대로(2026-10-25) */
+.wt a.wt-featured,
+.wt a.wt-featured:hover,
+.wt a.wt-featured:focus,
+.wt a.wt-featured:active { color: var(--ft-ink); text-decoration: none; }
+.wt a.wt-featured:hover .wt-featured-title,
+.wt a.wt-featured:hover .wt-featured-lines,
+.wt a.wt-featured:hover .wt-featured-tags li { color: var(--ft-ink); text-decoration: none; }
+.wt a.wt-featured:hover .wt-featured-kicker,
+.wt a.wt-featured:hover .wt-featured-count,
+.wt a.wt-featured:hover .wt-featured-title b i { color: var(--ft-mint); }
+.wt a.wt-featured:hover .wt-featured-count small { color: var(--ft-muted); }

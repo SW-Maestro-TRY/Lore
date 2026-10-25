@@ -154,7 +154,8 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     <div className="wt-works-chips">
       <button type="button" className={`chip${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>{t("전체")}</button>
       {chip("mine", t("내 작품"))}
-      {authenticated && chip("liked", t("찜"))}
+      {/* 좋아요한 작품 — 로그인 전에도 칸은 보인다(2026-10-25). 누르면 로그인 안내가 나온다. */}
+      {chip("liked", t("좋아요"))}
       <button type="button" className="chip wt-works-sort" onClick={() => setNewest((v) => !v)}
               aria-label={newest ? t("최신순 — 누르면 오래된순") : t("오래된순 — 누르면 최신순")}>
         {newest ? t("최신순") : t("오래된순")} <IconChevronDown size={14} />
@@ -227,17 +228,17 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
           <div className="wt-works-state wt-works-state-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={louArt("empty")} alt="" style={{ width: 140 }} />
-            <h2>{filter === "liked" && !query ? t("아직 찜한 웹툰이 없어요") : t("찾는 웹툰이 없어요")}</h2>
-            <span className="muted">{filter === "liked" && !query ? t("마음에 드는 작품의 하트를 누르면 여기에 모여요.") : t("다른 말로 찾아보거나 고른 조건을 풀어 보세요.")}</span>
+            <h2>{filter === "liked" && !query ? (authenticated ? t("아직 좋아요한 웹툰이 없어요") : t("로그인하면 좋아요한 웹툰을 모아 볼 수 있어요")) : t("찾는 웹툰이 없어요")}</h2>
+            <span className="muted">{filter === "liked" && !query ? (authenticated ? t("마음에 드는 작품의 하트를 누르면 여기에 모여요.") : t("화면 위 로그인 단추를 눌러 주세요.")) : t("다른 말로 찾아보거나 고른 조건을 풀어 보세요.")}</span>
           </div>
         )}
 
         {shown && shown.length > 0 && (
           <div className="wt-works-grid">
             {/* 만들기 입구는 목록 첫 칸 — 제목 옆 큰 단추는 홀로 떠 있어 뜬금없다는 피드백(2026-10-25) */}
-            <button type="button" className="wt-works-make" onClick={() => { track("works_create", { where: "grid" }); go("create", { step: 1 }); }}>
+            {filter !== "liked" && <button type="button" className="wt-works-make" onClick={() => { track("works_create", { where: "grid" }); go("create", { step: 1 }); }}>
               <span className="wt-works-make-cover"><i aria-hidden="true">+</i><b>{t("내 웹툰 만들기")}</b><small>{t("내 캐릭터로 한 편")}</small></span>
-            </button>
+            </button>}
             {shown.map((r) => (
               <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated}
                         liked={likedIds.has(r.run_id)}
