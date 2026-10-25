@@ -108,7 +108,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
         const same = data.genre ? others.filter((r) => r.genre === data.genre) : [];
         setSuggested((same.length >= 2 ? same : others).slice(0, 4));
         const me = all.find((r) => r.run_id === runId);
-        setLikes(me?.likes ?? 0);
+        // 묶인 연재의 2화 이후는 둘러보기 카드에 없다 — 완성본 응답의 수를 쓴다
+        setLikes(me?.likes ?? data.likes ?? 0);
         if (me?.cover_page) setCover(coverUrl(runId, me.cover_page, me.cover_episode || 1));
       })
       .catch(() => { /* 없으면 줄 자체를 안 그린다 */ });
@@ -535,11 +536,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             </div>
 
             {data.public !== false && !data.preview ? (
-              <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} total={chapterRows.length}
+              <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} total={chapterRows.filter(c => c.run_id).length}
                 title={data.title} cover={cover || pageUrl(runId,data.pages[0]?.no || 1,320)}>
                 {/* 회차 목록을 바로 펼쳐 둔다(2026-10-25) — 창을 열어야 보이면 몇 화까지 있는지 모른다. */}
                 <div className="wt-reader-eplist">
-                  <div className="wt-reader-eplist-head"><h3>{t("회차 목록")}</h3><span>{t("총 {n}화",{n:chapterRows.length})}</span></div>
+                  <div className="wt-reader-eplist-head"><h3>{t("회차 목록")}</h3><span>{t("총 {n}화",{n:chapterRows.filter(c => c.run_id).length})}</span></div>
                   <ul>
                     {chapterRows.map(c => (
                       <li key={c.episode}>
