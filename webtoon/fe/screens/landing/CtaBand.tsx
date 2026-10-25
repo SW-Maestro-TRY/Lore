@@ -11,7 +11,7 @@ import { useT } from "../../lib/i18n";
  * 마우스를 올리거나 움직임 줄이기를 켜 두면 바뀌지 않는다. */
 type Slide = { src: string; pos: string; mpos: string; x?: "right" | "left"; xpad?: string; y?: "low"; ypad?: string; my?: "low" | "top"; mypad?: string };
 const LIST: Slide[] = [
-  { src: "cat-fall.jpg", pos: "center 35%", mpos: "75% 50%", my: "low", mypad: "18%" },
+  { src: "cat-fall.jpg", pos: "center 22%", mpos: "75% 50%", my: "low", mypad: "18%" },
   { src: "kain.jpg", pos: "50% 36.9%", mpos: "99.1% 50%" },
   { src: "prince.jpg", pos: "50% 14.1%", mpos: "26.4% 50%", x: "right", xpad: "14%" },
   { src: "rose-table.jpg", pos: "center 30%", mpos: "100% 25%", my: "low", mypad: "18%" },

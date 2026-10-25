@@ -527,9 +527,10 @@
 }
 
 /* 맨 아래 시작 구역(B안) — 후보 띠(haeun/cta-2026-10-24/candidates.html)와 같은 비율·같은 기준으로 그린다.
- * 구역 높이를 가로의 38%(폰은 127%)로 둬서 후보에서 본 자르는 자리가 그대로 보이고,
+ * 구역 높이는 가로의 26%(폰은 95%). 처음엔 후보 띠와 같은 38%(폰 127%)였는데 그림과 글씨가
+ * 화면을 다 덮어 부담스럽다는 의견으로 줄였다(2026-10-24). 자르는 자리는 줄인 높이에서 다시 봤고,
  * 글씨는 가운데가 기본 · 그림마다 오른쪽/왼쪽/아래로. 패딩 %는 구역 가로 기준이라 후보 띠와 같은 비율로 떨어진다. */
-.wt .wt-cta { position: relative; margin: 72px calc(50% - 50vw) 0; height: clamp(380px, 38vw, 600px); display: grid; place-items: center; text-align: center; overflow: hidden; }
+.wt .wt-cta { position: relative; margin: 72px calc(50% - 50vw) 0; height: clamp(280px, 26vw, 420px); display: grid; place-items: center; text-align: center; overflow: hidden; }
 .wt .wt-cta-bg { position: absolute; inset: 0; }
 /* 그림은 바뀌기만 하고 움직이지 않는다 — 넘어가는 효과도, 천천히 커지는 효과도 없다 */
 .wt .wt-cta-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: var(--pos); opacity: 0; }
@@ -537,12 +538,12 @@
 .wt .wt-cta::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(180deg, var(--paper) 0%, #0a132000 22%, #0a132066 50%, #0a132000 78%, var(--paper) 100%); }
 .wt .wt-cta-in { position: relative; z-index: 1; padding: 0 20px; }
-/* 단추(72)+간격(28)만큼 내리면 제목 줄이 구역 가운데에 오는데, 글과 단추 묶음이 아래로 처져 보여서 60px 덜 내린다 */
-.wt .wt-cta-in { margin-top: 40px; }
-/* 글씨 크기도 후보 띠와 같은 비율(띠 가로 1000 에 40px = 4%) */
-.wt .wt-cta-in h2 { font-size: clamp(30px, 4vw, 60px); line-height: 1.3; letter-spacing: -0.03em; margin: 0 0 28px; text-shadow: 0 2px 14px #0000008c; }
+/* 단추(56)+간격(20)만큼 내리면 제목 줄이 구역 가운데에 오는데, 글과 단추 묶음이 아래로 처져 보여서 46px 덜 내린다 */
+.wt .wt-cta-in { margin-top: 30px; }
+/* 글씨는 아래 구역 제목(46px)보다 작게 — 마지막 띠가 페이지에서 가장 큰 글씨가 되지 않게 */
+.wt .wt-cta-in h2 { font-size: clamp(24px, 2.6vw, 40px); line-height: 1.3; letter-spacing: -0.03em; margin: 0 0 20px; text-shadow: 0 2px 14px #0000008c; }
 /* 유리 단추 — 뒤 그림이 비쳐 그림을 덜 가리고, 올리면 크림색으로 채워진다 */
-.wt .wt-cta-in .btn { display: inline-flex; align-items: center; gap: 12px; height: 72px; padding: 0 46px; border-radius: 999px; font-size: 21px; font-weight: 800;
+.wt .wt-cta-in .btn { display: inline-flex; align-items: center; gap: 12px; height: 56px; padding: 0 34px; border-radius: 999px; font-size: 17px; font-weight: 800;
   color: #fff; background: #ffffff1f; border: 1.5px solid #ffffff66; backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
   box-shadow: 0 10px 34px #00000055, inset 0 1px 0 #ffffff55; text-shadow: 0 1px 8px #00000066; transition: background .25s, color .25s; }
 .wt .wt-cta-in .btn:hover { background: #eceae5; color: #101925; text-shadow: none; }
@@ -552,17 +553,17 @@
   .wt .wt-cta.x-left { justify-items: start; text-align: left; }
   .wt .wt-cta.x-left .wt-cta-in { padding-left: var(--xpad, 9%); }
   .wt .wt-cta.y-low { align-items: end; }
-  /* 후보 띠에는 단추가 없다 — 단추+간격(100px)만큼 빼서 제목 줄이 같은 높이에 오게 */
-  .wt .wt-cta.y-low .wt-cta-in { margin-top: 0; padding-bottom: max(16px, calc(var(--ypad, 9%) - 100px)); }
+  /* 후보 띠에는 단추가 없다 — 단추+간격(76px)만큼 빼서 제목 줄이 같은 높이에 오게 */
+  .wt .wt-cta.y-low .wt-cta-in { margin-top: 0; padding-bottom: max(16px, calc(var(--ypad, 9%) - 76px)); }
 }
 @media (max-width: 767px) {
-  .wt .wt-cta { margin-top: 48px; height: 127vw; }
+  .wt .wt-cta { margin-top: 48px; height: 95vw; }
   .wt .wt-cta-bg img { object-position: var(--mpos, var(--pos)); }
-  .wt .wt-cta-in { width: 100%; margin-top: 90px; }
-  .wt .wt-cta-in h2 { font-size: 8.2vw; line-height: 1.35; }
-  .wt .wt-cta-in .btn { width: 100%; justify-content: center; height: 62px; font-size: 18px; }
+  .wt .wt-cta-in { width: 100%; margin-top: 66px; }
+  .wt .wt-cta-in h2 { font-size: 6.4vw; line-height: 1.35; }
+  .wt .wt-cta-in .btn { width: 100%; justify-content: center; height: 52px; font-size: 16px; }
   .wt .wt-cta.my-low { align-items: end; }
-  .wt .wt-cta.my-low .wt-cta-in { margin-top: 0; padding-bottom: max(16px, calc(var(--mypad, 12%) - 90px)); }
+  .wt .wt-cta.my-low .wt-cta-in { margin-top: 0; padding-bottom: max(16px, calc(var(--mypad, 12%) - 66px)); }
   .wt .wt-cta.my-top { align-items: start; }
   .wt .wt-cta.my-top .wt-cta-in { margin-top: 0; padding-top: var(--mypad, 12%); }
 }
