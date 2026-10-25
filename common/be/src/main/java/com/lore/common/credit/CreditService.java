@@ -35,9 +35,10 @@ public class CreditService {
        어느 것으로 만들지 못 고른다 — 표시가 없으면 인자 없는 생성자를 찾다가
        서버가 아예 안 뜬다. 검사로는 안 잡힌다: 검사는 이 클래스를 손으로
        만들므로 스프링이 고를 일이 없다. */
+    /* 가입 지급은 웹툰 파도 한 편 값과 같게 둔다 — 가입만 해도 한 편은 만들 수 있게(#787). */
     @Autowired
     public CreditService(CreditEventRepository events, CreditLedger ledger,
-                         @Value("${lore.credit.welcome:12}") int welcome,
+                         @Value("${lore.credit.welcome:15}") int welcome,
                          @Value("${lore.credit.daily:20}") int daily) {
         this(events, ledger, welcome, daily, Clock.system(ZONE));
     }
