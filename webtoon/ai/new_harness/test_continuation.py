@@ -96,11 +96,11 @@ class LegacyEpisodeTest(unittest.TestCase):
         self.assertIn("W-hg-inner-time",[e["id"] for e in seed]); self.assertNotIn("W-hg-shelter",[e["id"] for e in seed])
         (self.src/"input.json").write_text(json.dumps({"name":"민준","genre":"헌터","lorebook":{"name":"내 세계","confirmed":True}}),encoding="utf-8")
         self.assertEqual(C.world_seed(self.src),[])  # 설정집을 붙여 만든 1화는 그 설정집이 세계다
-    def test_digest_dry_run_writes_the_three_experiment_prompts(self):
+    def test_digest_dry_run_writes_the_book_and_progress_prompts(self):
         packet=Path(self.temp.name)/"packet.json"; out=Path(self.temp.name)/"digest"/"result.json"; out.parent.mkdir()
         packet.write_text(json.dumps({"source_dir":str(self.src),"episode_number":1,"source_scenes":["심사장 장면"],"previous":None},ensure_ascii=False))
         self.assertIsNone(C.stage_digest(packet,out,True))
-        for name,head in (("lore_entries_prompt.txt","로어북 항목으로 뽑는다"),("lore_rules_prompt.txt","규칙만 뽑는다"),("lore_progress_prompt.txt","[현재 진행 상태]")):
+        for name,head in (("lore_book_prompt.txt","대상 하나가 항목 하나다"),("lore_progress_prompt.txt","[현재 진행 상태]")):
             text=(out.parent/name).read_text()
             self.assertIn(head,text); self.assertIn("등급 재측정을 받는다",text)
         self.assertFalse(out.exists())

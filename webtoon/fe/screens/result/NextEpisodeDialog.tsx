@@ -167,13 +167,16 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
         <textarea id="series-story" className="field" rows={4} maxLength={20000} required aria-describedby="series-story-help"
           value={data.story} onChange={e=>patch("story",e.target.value)} />
         {(() => {
-          const rules = data.entries.map((e,i)=>({e,i})).filter(({e})=>e.always);
-          const items = data.entries.map((e,i)=>({e,i})).filter(({e})=>!e.always);
+          // 항상 참고하는 항목(세계 자체)을 앞에 둔다. 같은 목록 안에서 표시만 다르다.
+          const items = data.entries.map((e,i)=>({e,i})).sort((a,b)=>Number(!!b.e.always)-Number(!!a.e.always));
+          const added = items.filter(({e})=>e.new).length, grown = items.filter(({e})=>e.updated).length;
           const titleOf = (key: string) => data.entries.find(e => e.id === key)?.title;
           const row = ({e,i}: {e: typeof data.entries[number]; i: number}) => <li key={e.id || `${e.title}-${i}`}>
-            <div><b>{e.title}</b>{e.new && <small className="wt-series-new">{t("이번 화에서 추가")}</small>}
+            <div><b>{e.title}</b>{e.always && <small className="wt-series-always">{t("항상 참고")}</small>}
+              {e.new && <small className="wt-series-new">{t("이번 화에서 추가")}</small>}
+              {e.updated && <small className="wt-series-new">{t("이번 화에서 보탬")}</small>}
               {lang === "ko" && HANJA.test(e.title + e.content) && <small className="wt-series-warn">{t("한자가 섞였어요")}</small>}
-              <p>{e.content}</p>{!!e.keys?.length && !e.always && <p className="wt-series-evidence">{e.keys.join(" · ")}</p>}</div>
+              <p className="wt-series-content">{e.content}</p>{!!e.keys?.length && !e.always && <p className="wt-series-evidence">{e.keys.join(" · ")}</p>}</div>
             <button type="button" className="btn-ghost" aria-label={t("{name} 빼기",{name:e.title})} onClick={()=>dropEntry(e.id,i)}>{t("빼기")}</button>
           </li>;
           return <>
@@ -188,16 +191,14 @@ export default function NextEpisodeDialog({runId, authenticated, go, onClose}: {
               : <textarea id="series-state" className="field" rows={6} maxLength={16000} aria-label={t("현재 진행 상태")}
                   value={data.progress_state} onChange={e=>patch("progress_state",e.target.value)} />}
 
-            {/* 규칙·항목은 수십 개가 될 수 있어 접어 둔다. 한자가 섞인 줄이 있으면 펼쳐서 보이게 한다. */}
-            {[{key:"rules", title:t("세계 규칙"), help:t("이야기 내내 지켜지는 규칙이에요. 매 화 전부 들어가요."), list:rules, empty:t("규칙이 없어요.")},
-              {key:"items", title:t("설정집 항목"), help:t("인물·장소·물건 같은 항목이에요. 이번 화에 이름이 나오면 들어가요."), list:items, empty:t("설정집 항목이 없어요.")}]
-              .map(g => <details key={g.key} className="wt-series-group"
-                  open={lang === "ko" && g.list.some(({e}) => HANJA.test(e.title + e.content)) || undefined}>
-                <summary><b>{g.title}</b> <span>{t("{n}개",{n:g.list.length})}</span>
-                  {!!g.list.filter(({e})=>e.new).length && <small className="wt-series-new">{t("이번 화에서 추가 {n}개",{n:g.list.filter(({e})=>e.new).length})}</small>}</summary>
-                <p className="wt-series-help">{g.help}</p>
-                {g.list.length ? <ul className="wt-series-entries">{g.list.map(row)}</ul> : <p className="wt-series-help">{g.empty}</p>}
-              </details>)}
+            {/* 항목은 수십 개가 될 수 있어 접어 둔다. 한자가 섞인 줄이 있으면 펼쳐서 보이게 한다. */}
+            <details className="wt-series-group" open={lang === "ko" && items.some(({e}) => HANJA.test(e.title + e.content)) || undefined}>
+              <summary><b>{t("설정집 항목")}</b> <span>{t("{n}개",{n:items.length})}</span>
+                {!!added && <small className="wt-series-new">{t("이번 화에서 추가 {n}개",{n:added})}</small>}
+                {!!grown && <small className="wt-series-new">{t("이번 화에서 보탬 {n}개",{n:grown})}</small>}</summary>
+              <p className="wt-series-help">{t("인물·조직·장소 같은 항목이에요. 이번 화에 이름이 나오면 들어가고, 「항상 참고」 항목은 매번 들어가요.")}</p>
+              {items.length ? <ul className="wt-series-entries">{items.map(row)}</ul> : <p className="wt-series-help">{t("설정집 항목이 없어요.")}</p>}
+            </details>
           </>;
         })()}
         <div><button type="button" className="btn btn-w" disabled={bookSaved} onClick={()=>void saveBook()}>

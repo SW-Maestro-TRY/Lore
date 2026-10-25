@@ -26,6 +26,9 @@
 .wt .wt-series-group[open] summary { margin-bottom:8px; }
 .wt .wt-series-warn { margin-left:8px; font-size:12px; font-weight:700; color:var(--gold); }
 .wt .wt-series-new { margin-left:8px; font-size:12px; font-weight:700; color:var(--sea-deep); }
+.wt .wt-series-always { margin-left:8px; font-size:12px; font-weight:700; color:var(--gold); }
+/* 항목 내용의 줄바꿈을 살린다 */
+.wt .wt-series-content { white-space:pre-line; }
 .wt .wt-series-form .wt-series-evidence { color:var(--muted); font-size:13px; }
 .wt .wt-series-cost { font-weight:700; margin-top:12px; }
 .wt .wt-series-actions { display:flex; flex-wrap:wrap; gap:8px; padding-top:12px; }

@@ -1,7 +1,7 @@
 """작가가 붙이고 확인한 설정집. 빼면 어느 단계에도 남기지 않는다.
 
 orv-experiment 의 2층 로어북과 같은 방식으로 넣는다(`world_block`).
-- 항상 켜짐 규칙(always) — 매번 전부.
+- 항상 켜짐 항목(always, 세계 자체를 설명하는 항목) — 매번 전부.
 - 키워드 항목 — 이번 글에 키워드가 많이 걸린 항목부터 BUDGET 자까지. 하나도 안 걸리면 안 넣는다.
 - 진행 상태 — 고정 항목 id 를 key 로 가진 줄은 그 항목이 골라졌을 때 「→ 지금:」으로 붙고, 나머지는
   [진행 상태] 로 매번 전부 들어간다. 진행 상태의 글도 항목 고르기에 쓴다.
@@ -77,7 +77,7 @@ def block(char, context="", stage="story", continuation=False, everything=False)
     rules = [e for e in active if e.get("always")]
     keyed = [e for e in active if not e.get("always")]
     if rules:
-        lines += ["세계 규칙 (이야기 전체에서 지켜지는 규칙)"] + [f"- {e.get('title', '')}: {e.get('content', '')}" for e in rules]
+        lines += ["항상 참고하는 설정 (이야기의 세계)"] + [f"- {e.get('title', '')}: {e.get('content', '')}" for e in rules]
     over, new = progress_parts(book)
     query = str(context or "")
     if new:

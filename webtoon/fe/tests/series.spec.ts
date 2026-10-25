@@ -61,10 +61,10 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  // 개발 모드는 effect 를 두 번 돌린다. 서버의 정리 시작은 같은 앞 화에 한 번만 돈다(SeriesDigestService.start).
  expect(server.calls.filter(x=>x.endsWith('/series/ep1/digest')).length).toBeGreaterThan(0);
  await expect(page.getByText('1화가 끝난 저녁, 민수는 지수에게 사과했다.')).toBeVisible();
- // 규칙·항목은 접혀 있다(수십 개가 될 수 있어서). 펼쳐서 본다.
- await page.getByText('세계 규칙',{exact:true}).click();
- await expect(page.getByText('지수가 감춘 약속은 아직 공개하지 않는다')).toBeVisible();
+ // 항목은 한 목록에 접혀 있다(수십 개가 될 수 있어서). 펼쳐서 본다. 항상 참고 항목은 표시가 붙는다.
  await page.getByText('설정집 항목',{exact:true}).click();
+ await expect(page.getByText('지수가 감춘 약속은 아직 공개하지 않는다')).toBeVisible();
+ await expect(page.getByText('항상 참고',{exact:true}).first()).toBeVisible();
  await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toBeVisible();
  // 항목을 빼면 그 항목을 덮어쓰던 진행 상태 줄도 같이 빠진다.
  await page.getByRole('button',{name:'다리 빼기',exact:true}).last().click();
