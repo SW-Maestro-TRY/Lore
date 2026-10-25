@@ -38,6 +38,14 @@ import java.util.stream.Collectors;
 /**
  * 23:00 밤 스위프 — <b>유일한 {@code @Scheduled}</b>(플랜 T1 핵심 판단 2).
  *
+ * <h3>★ 2026-10-26 시간대 2단계 — 15분마다, 시간대마다</h3>
+ * 펫마다 시간대가 있어 "23:00" 이 시간대마다 다른 순간이다. 그래서 15분마다 깨어, 지금 밤 창(23:00~10:00)에 든
+ * 시간대마다 그 시간대의 밤 한 판을 돈다. 시간대 오프셋은 전부 15분의 배수라(+5:30·+5:45 포함) 15분 눈금이면
+ * 어느 시간대의 23:00 도 정각에 잡힌다. 판의 키는 {@code (night_of, time_zone)}, 펫 단위 멱등은
+ * {@code zzal_pet.last_swept_night_of} — 같은 펫의 같은 밤(현지 날짜)은 한 번만 돈다.
+ * 한국 펫(시간대 NULL 포함)은 지금까지처럼 KST 23:00 첫 눈금에 한 번 돈다. 굽기 상한 K 는 판마다가 아니라
+ * <b>KST 하루</b>(10:00~다음 날 10:00)에 시작한 판들의 합으로 센다 — 하루 비용 상한이 시간대 수만큼 불지 않게.
+ *
  * <h3>하는 일</h3>
  * <ol>
  *   <li>{@code zzal_night_run(night_of PK)} 를 먼저 꽂는다 — 못 꽂으면(이미 있음) 다른 서버가 돌렸거나 이미 돈 밤이다</li>
@@ -110,6 +118,9 @@ public class NightSweep {
         this.server = hostname();
     }
 
+    /** 스케줄 눈금이 본 덜 끝난 판을 "다른 곳에서 도는 중" 으로 보고 물러나는 시간. 이보다 오래됐으면 죽은 흔적이다. */
+    static final java.time.Duration STALE_RUN = java.time.Duration.ofMinutes(30);
+
     /** 결과 — 이 밤에 새로 올린 수·집은 수·이월 수. dev 응답·로그용. */
     public record Result(LocalDate nightOf, boolean ran, int queued, int claimed, int carried) {
         static Result skipped(LocalDate nightOf) {
@@ -119,17 +130,20 @@ public class NightSweep {
 
     // ── 트리거 ────────────────────────────────────────────────────────────
 
-    @Scheduled(cron = "0 0 23 * * *", zone = "Asia/Seoul")
+    /**
+     * 15분 눈금. 지금 밤 창(23:00~10:00)에 든 시간대마다 그 밤의 판을 돈다.
+     * 이미 끝난 판이면 아무것도 안 한다(옛 하루 한 번 스위프와 같다 — 남은 큐 줍기는 기동 복구만 한다).
+     */
+    @Scheduled(cron = "0 */15 * * * *", zone = "Asia/Seoul")
     public void sweep() {
         if (!enabled) {
             return;
         }
-        Instant now = Instant.now();
-        run(nightOf(now), now, "scheduled");
+        tick(Instant.now(), "scheduled");
     }
 
     /**
-     * 기동 복구 — 23:00~10:00 사이에 떴고 그 밤의 run 이 없거나 안 끝났으면 이어서.
+     * 기동 복구 — 밤 창 안의 시간대마다, 그 밤의 판이 없거나 안 끝났으면 이어서, 끝났으면 남은 큐만.
      * 스위프가 꺼진 서버는 아무것도 하지 않는다(다른 서버가 돈다).
      */
     @EventListener(ApplicationReadyEvent.class)
@@ -138,40 +152,86 @@ public class NightSweep {
         if (!enabled) {
             return;
         }
-        Instant now = Instant.now();
-        LocalDate night = nightWindowOf(now);
-        if (night == null) {
-            return;
+        tick(Instant.now(), "boot-recovery");
+    }
+
+    /** 한 눈금 — 살아 있는 펫들의 시간대(+ 늘 서울) 중 지금 밤 창에 든 것마다 {@link #run}. */
+    List<Result> tick(Instant now, String trigger) {
+        List<Result> out = new java.util.ArrayList<>();
+        for (java.time.ZoneId zone : zonesToVisit()) {
+            LocalDate night = nightWindowOf(now, zone);
+            if (night != null) {
+                out.add(run(night, zone, now, trigger));
+            }
         }
-        run(night, now, "boot-recovery");
+        return out;
+    }
+
+    /**
+     * 돌 시간대 — 살아 있는 펫의 시간대 전부, 그리고 <b>늘 서울</b>.
+     * ★ 서울을 늘 넣는 이유 — 옛 스위프는 펫이 없어도 KST 23:00 에 판을 열어 이월된 큐를 집었다. 그 리듬을 그대로 둔다.
+     */
+    java.util.Set<java.time.ZoneId> zonesToVisit() {
+        java.util.Set<java.time.ZoneId> zones = new java.util.LinkedHashSet<>();
+        zones.add(ZzalRules.ZONE);
+        for (ZzalPet p : petRepository.findByPhase(PetPhase.ALIVE)) {
+            zones.add(p.zone());
+        }
+        return zones;
     }
 
     // ── 본체 ──────────────────────────────────────────────────────────────
 
-    /**
-     * 한 밤을 돈다. 두 번 불러도 같은 밤을 두 번 계획하지 않는다(run PK).
-     */
+    /** 서울의 한 밤 — 옛 호출처·시험용. */
     public Result run(LocalDate nightOf, Instant now, String trigger) {
-        ZzalNightRun run = runRepository.findById(nightOf).orElse(null);
+        return run(nightOf, ZzalRules.ZONE, now, trigger);
+    }
+
+    /**
+     * 한 시간대의 한 밤을 돈다. 두 번 불러도 같은 밤을 두 번 계획하지 않는다(run PK + 펫 단위 last_swept_night_of).
+     */
+    public Result run(LocalDate nightOf, java.time.ZoneId zone, Instant now, String trigger) {
+        ZzalNightRun.Key key = new ZzalNightRun.Key(nightOf, zone.getId());
+        ZzalNightRun run = runRepository.findById(key).orElse(null);
+        boolean boot = "boot-recovery".equals(trigger);
         if (run != null && run.isFinished()) {
-            return claimLeftovers(nightOf, now, trigger);
+            // ★ 15분 눈금이 끝난 판을 볼 때마다 남은 큐를 집으면 K 가 눈금마다 다시 찬다(하루 상한이 무너진다).
+            //   남은 큐 줍기는 옛 스위프처럼 기동 복구에서만 한다.
+            return boot ? claimLeftovers(key, now, trigger) : Result.skipped(nightOf);
         }
-        if (run == null && !startRun(nightOf, now)) {
-            log.info("밤 스위프 건너뜀 — nightOf={} 이미 다른 곳이 돌렸다(run PK). trigger={}", nightOf, trigger);
+        if (run != null && !boot && run.getStartedAt().isAfter(now.minus(STALE_RUN))) {
+            // 막 시작한 판 — 다른 스레드(기동 복구)나 다른 서버가 도는 중이다. 겹쳐 돌면 상한 계산이 둘이 된다.
+            return Result.skipped(nightOf);
+        }
+        if (run == null && !startRun(key, now)) {
+            log.info("밤 스위프 건너뜀 — nightOf={} zone={} 이미 다른 곳이 돌렸다(run PK). trigger={}", nightOf, zone, trigger);
             return Result.skipped(nightOf);
         }
         if (run != null) {
-            log.warn("밤 스위프 이어서 — nightOf={} 도중에 멈춘 run 이 있다(계획을 다시 돌린다 — plan 은 멱등). trigger={}",
-                    nightOf, trigger);
+            log.warn("밤 스위프 이어서 — nightOf={} zone={} 도중에 멈춘 run 이 있다(남은 펫만 계획한다). trigger={}",
+                    nightOf, zone, trigger);
         }
 
         // ★ 이어받기에서도 계획을 돈다. 계획 도중에 죽었으면 뒤쪽 펫들은 아직 큐에 오르지 못했고,
-        //   건너뛰면 그 펫들은 그 밤을 통째로 빠진다(리뷰 중-2). plan 은 이미 오른 행을 다시 올리지 않는다.
-        int queued = planAll(nightOf, now);
-        int[] counts = claimAndBake(now, maxBakes);
-        finishRun(nightOf, now, queued, counts[0], counts[1]);
-        log.info("밤 스위프 끝 — nightOf={} 등록={} 집기={} 이월={} trigger={}", nightOf, queued, counts[0], counts[1], trigger);
+        //   건너뛰면 그 펫들은 그 밤을 통째로 빠진다(리뷰 중-2). 이미 돈 펫은 last_swept_night_of 가 건너뛴다.
+        int queued = planAll(nightOf, zone, now);
+        int[] counts = claimAndBake(now, budget(now));
+        finishRun(key, now, queued, counts[0], counts[1]);
+        log.info("밤 스위프 끝 — nightOf={} zone={} 등록={} 집기={} 이월={} trigger={}",
+                nightOf, zone, queued, counts[0], counts[1], trigger);
         return new Result(nightOf, true, queued, counts[0], counts[1]);
+    }
+
+    /**
+     * 이번 판이 집을 수 있는 수 — K 에서 <b>같은 KST 하루</b>(10:00~다음 날 10:00)에 시작한 판들이 이미 집은 수를 뺀다.
+     * 한국 펫만 있으면 하루에 판이 하나라 옛날과 같이 K 다.
+     */
+    int budget(Instant now) {
+        LocalDate day = nightOf(now);
+        Instant from = day.atTime(ZzalRules.AUTO_WAKE_AT).atZone(ZzalRules.ZONE).toInstant();
+        Instant to = day.plusDays(1).atTime(ZzalRules.AUTO_WAKE_AT).atZone(ZzalRules.ZONE).toInstant();
+        long used = runRepository.sumClaimedStartedBetween(from, to);
+        return (int) Math.max(0, maxBakes - used);
     }
 
     /**
@@ -181,14 +241,15 @@ public class NightSweep {
      *   이다(굽기는 밤새 돈다). 그래서 끝난 run 뒤에도 회수된 자리({@code StuckMotionRecovery} 가 되돌린 것)가 생길 수 있고,
      *   그때 아무도 안 집으면 그 행은 다음 밤까지 그대로 기다린다(리뷰 중-3).
      */
-    private Result claimLeftovers(LocalDate nightOf, Instant now, String trigger) {
+    private Result claimLeftovers(ZzalNightRun.Key key, Instant now, String trigger) {
+        LocalDate nightOf = key.nightOf();
         int[] counts = claimAndBake(now, maxBakes);
         if (counts[0] == 0) {
             log.info("밤 스위프 건너뜀 — nightOf={} 이미 끝난 밤이고 남은 큐도 없다. trigger={}", nightOf, trigger);
             return Result.skipped(nightOf);
         }
         tx.execute(status -> {
-            runRepository.findById(nightOf).ifPresent(r -> r.addClaimed(counts[0]));
+            runRepository.findById(key).ifPresent(r -> r.addClaimed(counts[0]));
             return null;
         });
         log.warn("끝난 밤의 남은 큐를 집었다 — nightOf={} 집기={} 이월={} trigger={}", nightOf, counts[0], counts[1], trigger);
@@ -203,7 +264,7 @@ public class NightSweep {
      *    이월분까지 집어 가므로 <b>진짜 밤의 통계·상한과는 별개</b>다. 운영 판정은 언제나 {@link #run} 쪽이다.
      */
     public Result sweepPet(ZzalPet pet, Instant petNow) {
-        LocalDate nightOf = AwakeClock.dateOf(petNow);
+        LocalDate nightOf = AwakeClock.dateOf(petNow, pet.zone());
         int queued = planner.plan(pet, nightOf, NightPlanner.Occasion.NIGHT);
         List<ZzalMotion> mine = motionRepository.findByPetIdAndStatus(pet.getId(), com.lore.zzal.motion.MotionStatus.QUEUED);
         int claimed = 0;
@@ -218,31 +279,49 @@ public class NightSweep {
     // ── 단계 ──────────────────────────────────────────────────────────────
 
     /** run 행을 꽂는다. PK 충돌이면 false — 다른 서버가 먼저 꽂았다. */
-    boolean startRun(LocalDate nightOf, Instant now) {
+    boolean startRun(ZzalNightRun.Key key, Instant now) {
         try {
-            tx.execute(status -> runRepository.saveAndFlush(ZzalNightRun.start(nightOf, now, server)));
+            tx.execute(status -> runRepository.saveAndFlush(ZzalNightRun.start(key.nightOf(), key.timeZone(), now, server)));
             return true;
         } catch (DataIntegrityViolationException e) {
             return false;
         }
     }
 
-    void finishRun(LocalDate nightOf, Instant now, int queued, int claimed, int carried) {
+    void finishRun(ZzalNightRun.Key key, Instant now, int queued, int claimed, int carried) {
         tx.execute(status -> {
-            runRepository.findById(nightOf).ifPresent(r -> r.finish(now, queued, claimed, carried));
+            runRepository.findById(key).ifPresent(r -> r.finish(now, queued, claimed, carried));
             return null;
         });
     }
 
-    /** ALIVE 펫 전부 — 정산(23:00 자동 취침 포함) 뒤 계획. 펫마다 트랜잭션 하나(한 펫이 실패해도 다른 펫은 간다). */
+    /** 서울의 ALIVE 펫 전부 — 옛 호출처·시험용. */
     int planAll(LocalDate nightOf, Instant now) {
-        List<Long> ids = petRepository.findByPhase(PetPhase.ALIVE).stream().map(ZzalPet::getId).toList();
+        return planAll(nightOf, ZzalRules.ZONE, now);
+    }
+
+    /**
+     * 그 시간대의 ALIVE 펫 전부 — 정산(23:00 자동 취침 포함) 뒤 계획. 펫마다 트랜잭션 하나(한 펫이 실패해도 다른 펫은 간다).
+     *
+     * ★★ 펫 단위 멱등 — {@code last_swept_night_of} 가 이 밤 이상이면 건너뛴다. 잠근 <b>뒤에</b> 다시 본다
+     *   (두 스레드가 같은 펫을 동시에 집어도 한 번만 돈다). 시간대를 막 관측한 펫(예: KST 밤을 돈 뒤 미 서부가 된 펫)이
+     *   같은 날짜의 현지 밤을 또 도는 것도 이것이 막는다.
+     */
+    int planAll(LocalDate nightOf, java.time.ZoneId zone, Instant now) {
+        List<Long> ids = petRepository.findByPhase(PetPhase.ALIVE).stream()
+                .filter(p -> p.zone().equals(zone) && !p.sweptNight(nightOf))
+                .map(ZzalPet::getId).toList();
         int queued = 0;
         for (Long id : ids) {
             try {
                 queued += tx.execute(status -> petRepository.findByIdForUpdate(id).map(pet -> {
+                    if (!pet.zone().equals(zone) || pet.sweptNight(nightOf)) {
+                        return 0;
+                    }
                     pet.settle(pet.now(now));
-                    return planner.plan(pet, nightOf, NightPlanner.Occasion.NIGHT);
+                    int q = planner.plan(pet, nightOf, NightPlanner.Occasion.NIGHT);
+                    pet.markSwept(nightOf);
+                    return q;
                 }).orElse(0));
             } catch (RuntimeException e) {
                 log.error("밤 계획 실패 — petId={} (다음 펫으로)", id, e);
@@ -324,7 +403,7 @@ public class NightSweep {
     // ── 시각 ──────────────────────────────────────────────────────────────
 
     /**
-     * 이 순간이 속한 밤(23:00 이 속한 KST 날짜). 23:00 정각에 부르면 오늘.
+     * 이 순간이 속한 밤(23:00 이 속한 KST 날짜). 23:00 정각에 부르면 오늘. 운영(경보·상한)용 — KST 고정.
      *
      * ★ 경보({@code ZzalAlerts.nightBakeFailed})도 이 자를 쓴다 — 새벽 1시의 실패는 <b>어제 밤</b>의
      *   실패다. 거기서 날짜를 따로 계산하면 같은 규칙이 두 벌이 되고, 둘이 어긋나도 아무 소리가 안 난다.
@@ -334,14 +413,20 @@ public class NightSweep {
         return z.toLocalTime().isBefore(ZzalRules.AUTO_WAKE_AT) ? z.toLocalDate().minusDays(1) : z.toLocalDate();
     }
 
-    /** 23:00~10:00 창 안이면 그 밤, 아니면 null. */
+    /** 23:00~10:00 창 안이면 그 밤(KST), 아니면 null. */
     static LocalDate nightWindowOf(Instant now) {
-        LocalTime t = now.atZone(ZzalRules.ZONE).toLocalTime();
+        return nightWindowOf(now, ZzalRules.ZONE);
+    }
+
+    /** 그 시간대의 23:00~10:00 창 안이면 그 밤(그 시간대의 날짜), 아니면 null. */
+    static LocalDate nightWindowOf(Instant now, java.time.ZoneId zone) {
+        ZonedDateTime z = now.atZone(zone);
+        LocalTime t = z.toLocalTime();
         if (!t.isBefore(ZzalRules.AUTO_SLEEP_AT)) {
-            return now.atZone(ZzalRules.ZONE).toLocalDate();
+            return z.toLocalDate();
         }
         if (t.isBefore(ZzalRules.AUTO_WAKE_AT)) {
-            return now.atZone(ZzalRules.ZONE).toLocalDate().minusDays(1);
+            return z.toLocalDate().minusDays(1);
         }
         return null;
     }

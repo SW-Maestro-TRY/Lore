@@ -326,7 +326,7 @@ public final class PetResponses {
     public record FirstNightChatGrace(boolean eligible, boolean active, @Schema(nullable=true) Instant deadlineAt, @Schema(nullable=true) Instant endedAt, boolean willSleepAtEnd) {
         static FirstNightChatGrace from(ZzalPet pet,Instant now) {
             return new FirstNightChatGrace(pet.firstNightChatGraceEligible(now),pet.firstNightChatGraceActive(now),
-                    pet.getFirstNightChatDeadlineAt(),pet.getFirstNightChatEndedAt(),pet.firstNightChatGraceActive(now) && com.lore.zzal.pet.AwakeClock.isNight(pet.getFirstNightChatDeadlineAt()));
+                    pet.getFirstNightChatDeadlineAt(),pet.getFirstNightChatEndedAt(),pet.firstNightChatGraceActive(now) && com.lore.zzal.pet.AwakeClock.isNight(pet.getFirstNightChatDeadlineAt(), pet.zone()));
         }
     }
 
@@ -421,9 +421,9 @@ public final class PetResponses {
             return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, careReceipt, zone, rulesZone);
         }
 
-        /** 규칙 시간대 — 1단계는 서버 규칙이 아직 KST 라 늘 Asia/Seoul. */
+        /** 규칙 시간대 — 2단계부터 서버 규칙이 펫 시간대를 쓴다. 표시 시간대와 같다. */
         static String rulesZoneOf(ZzalPet pet) {
-            return ZzalRules.ZONE.getId();
+            return pet.zone().getId();
         }
 
         @com.fasterxml.jackson.annotation.JsonProperty("customMotions")
@@ -504,12 +504,12 @@ public final class PetResponses {
                     sleeping ? null
                             : pet.sleepKindAvailable(now) == SleepKind.NAP ? now
                             : pet.isInTutorial() ? null
-                            : AwakeClock.sleepWindowOpensAt(now),
+                            : AwakeClock.sleepWindowOpensAt(now, pet.zone()),
                     // 튜토리얼 중이면 자동 취침이 없다 — 시계가 안 돌기 때문이다(설계 규칙).
                     sleeping || pet.isInTutorial() ? null : AwakeClock.nextAutoSleep(now,
-                            pet.firstNightChatGraceActive(now) ? pet.getFirstNightChatDeadlineAt() : null),
-                    sleeping ? (pet.hasFirstIntro() && pet.isInTutorial() && kind == SleepKind.NAP ? now : AwakeClock.wakeWindowOpensAt(kind, pet.getSleptAt())) : null,
-                    sleeping && !(pet.hasFirstIntro() && pet.isInTutorial() && kind == SleepKind.NAP) ? AwakeClock.autoWakeAt(kind, pet.getSleptAt()) : null,
+                            pet.firstNightChatGraceActive(now) ? pet.getFirstNightChatDeadlineAt() : null, pet.zone()),
+                    sleeping ? (pet.hasFirstIntro() && pet.isInTutorial() && kind == SleepKind.NAP ? now : AwakeClock.wakeWindowOpensAt(kind, pet.getSleptAt(), pet.zone())) : null,
+                    sleeping && !(pet.hasFirstIntro() && pet.isInTutorial() && kind == SleepKind.NAP) ? AwakeClock.autoWakeAt(kind, pet.getSleptAt(), pet.zone()) : null,
                     pet.isOverslept());
 
             int layerTwoOpen = UnlockRules.openedLayerTwo(pet, catalog);
@@ -771,11 +771,12 @@ public final class PetResponses {
         /** 2층 그림이 준비되기 전에 조건을 채운 칸의 문구(#696). 심화 행동의 "아직 연습 중이에요" 와 같은 말이다. */
         public static final String LAYER2_PRACTICING_HINT = "연습 중이에요";
 
-        /** 다음 부름 시각 — 오늘(KST) 부름 창이 열리는 10:00 / 14:00 / 19:00 중 지금 이후 가장 가까운 것(#709). */
+        /** 다음 부름 시각 — 오늘(펫 시간대) 부름 창이 열리는 10:00 / 14:00 / 19:00 중 지금 이후 가장 가까운 것(#709). */
         static Instant nextChatAt(ZzalPet pet, Instant now) {
-            java.time.LocalDate today = AwakeClock.dateOf(now);
+            java.time.ZoneId zone = pet.zone();
+            java.time.LocalDate today = AwakeClock.dateOf(now, zone);
             return Stream.of(ZzalRules.CHAT_MORNING_OPENS, ZzalRules.CHAT_NOON_OPENS, ZzalRules.CHAT_EVENING_OPENS)
-                    .map(t -> today.atTime(t).atZone(ZzalRules.ZONE).toInstant())
+                    .map(t -> today.atTime(t).atZone(zone).toInstant())
                     .filter(t -> t.isAfter(now))
                     .min(Instant::compareTo)
                     .orElse(null);

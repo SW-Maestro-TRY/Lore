@@ -58,8 +58,8 @@ class PetTimeZoneIT extends ZzalItSupport {
         assertThat(stored(petId)).isEqualTo("America/Los_Angeles");
         assertThat(first.path("timeZone").asText()).isEqualTo("America/Los_Angeles");
         assertThat(first.path("rulesTimeZone").asText())
-                .as("1단계 — 서버 규칙은 아직 KST 다. 화면은 이 차이로 창 시각을 바꿔 보여 준다")
-                .isEqualTo("Asia/Seoul");
+                .as("2단계 — 서버 규칙도 펫 시간대다. 화면은 바꿀 것이 없다(1단계에서는 Asia/Seoul 이었다)")
+                .isEqualTo("America/Los_Angeles");
 
         JsonNode again = detailWithTz(userId, petId, "Asia/Tokyo");
         assertThat(stored(petId)).as("한 번 적힌 값은 안 바뀐다").isEqualTo("America/Los_Angeles");
