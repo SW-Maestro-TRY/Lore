@@ -164,9 +164,10 @@ public class JobService {
            같은 브라우저에서는 「만들던 웹툰」이 uid 로 이어서 찾아 준다. 브라우저가 바뀌면 못 찾는다. */
         boolean own = "own".equalsIgnoreCase(form.mode());
         boolean checkpoints = own || form.checkpoints() == null || form.checkpoints();
-        if (own && !notBlank(form.story())) {
+        /* 설정집을 붙였으면 줄거리가 없어도 own 길로 간다 — 설정집이 그 내용이다(2026-10-24 사용자 결정). */
+        if (own && !notBlank(form.story()) && (form.lorebook() == null || form.lorebook().isEmpty())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
-                    "만들고 싶은 내용을 적어 주세요 — 짧은 아이디어 한 줄도 괜찮아요.");
+                    "만들고 싶은 내용을 적거나 설정집을 붙여 주세요 — 짧은 아이디어 한 줄도 괜찮아요.");
         }
         if (form.story() != null && form.story().length() > OWN_STORY_MAX) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,

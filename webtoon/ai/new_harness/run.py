@@ -235,7 +235,13 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
         lines += ["", f"장르: {char['genre']}" if char["genre"]
                   else "장르: (없음 — 네가 정한다)"]
     import userbook
-    book_text = userbook.block(char, char.get("story", ""))
+    # 항목은 사용자가 적은 것 전체에 걸린 키워드로 고른다(실험의 「요청」 자리). 바로 만들기는 줄거리가
+    # 비어 있어서 줄거리만 보면 항목이 하나도 안 걸린다.
+    asked = "\n".join([char.get("story", ""), char.get("description", ""), char.get("settings", ""),
+                        *[str(v) for v in (char.get("fields") or {}).values()]])
+    # 줄거리가 없으면(장르만 고른 바로 만들기 — 장르 설정집이 저절로 붙는다) 설정집 전체가 요청이라
+    # 키워드를 보지 않고 예산 안에서 다 넣는다(own 의 설정집만 붙인 1화와 같다).
+    book_text = userbook.block(char, asked, everything=not user_story(char))
     if book_text:
         lines.append(book_text)
     if char.get("settings"):
@@ -1105,7 +1111,7 @@ def _story_in_two(run_dir: Path, char: dict, prompt: str, cast: list[dict]) -> l
 
 def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
                 review: bool | None = None, diff: bool | None = None,
-                lang: str = "ko") -> list[dict]:
+                lang: str = "ko", one: bool = False) -> list[dict]:
     """이야기 후보 4개. 다 쓰고 나서 **한 번 더 독자의 눈으로 읽는다.**
 
     review : 후보 하나하나를 검수한다(storycheck). 사람이 고르는 화면에
@@ -1121,8 +1127,16 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     # 사람이 줄거리를 적었으면 그 줄거리가 중심이다 — 프롬프트도, 입력
     # 블록도 따로 간다(seeded_input_block 참고). 안 적었으면 예전 그대로.
     seeded = bool(user_story(char))
+    # one: 「바로 만들기」(사람이 안 고른다) + 줄거리 빈칸 — 고를 사람이 없으니 후보 넷 대신 하나만 만든다
+    # (사용자 결정 2026-10-24). 방향별 압력·재료는 넷이 서로 다르게 하려는 장치라 하나일 때는 안 붙인다.
+    # 처음 부를 때 받은 --one 은 run 폴더에 남긴다 — 인물 고르기 뒤(--cast-pick)·다시 만들기도 같은 길로 간다.
+    one = (one or (run_dir / "one.json").exists()) and not seeded
+    if one and not (run_dir / "one.json").exists():
+        write_json(run_dir / "one.json", {"one": True})
     if seeded:
         block = seeded_input_block(char).rstrip("\n")
+    elif one:
+        block = story_input_block(char, run_dir).rstrip("\n")
     else:
         block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
     # 인물을 먼저 뽑고 거기에 사건을 붙인다(#532·#534). 줄거리를 적은 경우도
@@ -1154,11 +1168,11 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         if kind == "confirm":
             block += "\n" + ensemble_cast_block(made)
         elif kind == "pick":
-            cast = [answer] * 4
+            cast = [answer] * (1 if one else 4)
             block += "\n" + chosen_cast_block(answer)
         elif made:
             # 다른 장르 — 보여 주지 않고 후보마다 재료로 붙인다(방향 n 은 인물 n).
-            cast = [made[i % len(made)] for i in range(4)]
+            cast = [made[i % len(made)] for i in range(1 if one else 4)]
             block += "\n" + cast_block(cast)
     note = (note or "").strip()
     if note:
@@ -1167,17 +1181,17 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         # 여기서 따로 붙인다(캐릭터 파일을 고치면 다음 시도에도 계속 남는다).
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
                  f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
-    prompt = compose("story_prompt_seeded" if seeded else "story_prompt", block, lang=lang)
+    prompt = compose("story_prompt_seeded" if seeded else "story_prompt_one" if one else "story_prompt", block, lang=lang)
     write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
         return []
 
-    if cast and story_split() == 2:
+    if cast and story_split() == 2 and not one:
         directions = _story_in_two(run_dir, char, prompt, cast)
     else:
         call = llm.Call("STORY")
-        log(f"[이야기] {call.describe()} 로 후보 4개를 만듭니다…")
+        log(f"[이야기] {call.describe()} 로 {'이야기 하나를' if one else '후보 4개를'} 만듭니다…")
         try:
             text, meta = call(prompt, images=llm.load_images(char["photos"]))
         except BaseException as exc:                                  # noqa: BLE001 — SystemExit 도 남긴다(#531)
@@ -1186,20 +1200,21 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         write_text(run_dir / "story.md", text)
         record(run_dir, meta)
         directions = parse_directions(text)
-    directions = shuffle_directions(directions)
+    directions = directions[:1] if one else shuffle_directions(directions)
     for d in directions:
         n = d.get("n")
         if cast and isinstance(n, int) and n > 0:
             d["lead"] = cast[(n - 1) % len(cast)]   # 이 후보의 상대 인물(#532)
-    if len(directions) != 4:
-        warn(f"방향을 {len(directions)}개만 읽었습니다 (4개여야 합니다). "
+    if len(directions) != (1 if one else 4):
+        warn(f"방향을 {len(directions)}개 읽었습니다 ({1 if one else 4}개여야 합니다). "
              f"원문은 {run_dir / 'story.md'} 에 그대로 있습니다.")
     write_json(run_dir / "directions.json", directions)
 
     # 검수는 후보를 쓴 **뒤**다. 앞에 두면(만들면서 같이 보게 하면) 만드는
     # 쪽과 보는 쪽이 한 호출에 섞여서, 자기가 방금 만든 것은 그럴듯해
     # 보인다 — stage_review 가 따로 있던 이유와 같다.
-    if (storycheck.enabled() if review is None else review) and directions:
+    # 하나만 만들면 고를 것이 없어 후보 검수(사람이 고르는 화면에 붙는 판정)를 건너뛴다.
+    if (storycheck.enabled() if review is None else review) and directions and not one:
         _, rmeta = storycheck.review_directions(run_dir, char, directions)
         if rmeta:
             record(run_dir, rmeta)
@@ -1207,7 +1222,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     # 넷이 서로 다른가는 후보 하나하나를 보는 것과 다른 질문이라, 따로
     # 붙였다(storydiff 문서 참고) — 기본 꺼짐이라 지금은 켜기 전까지
     # 아무 run 에도 안 걸린다.
-    if (storydiff.enabled() if diff is None else diff) and directions:
+    if (storydiff.enabled() if diff is None else diff) and directions and not one:
         _, dmeta = storydiff.diff_directions(run_dir, char, directions)
         if dmeta:
             record(run_dir, dmeta)
@@ -1896,7 +1911,12 @@ def main(argv=None) -> int:
     p.add_argument("--cast-pick", type=int,
                    help="인물 단계의 답(#534). 현대 로맨스는 고른 상대 번호(1~4), "
                         "사용자가 인물을 적었으면 0(이대로 진행). 그 뒤 이야기 후보 4개를 만든다")
+    p.add_argument("--one", action="store_true",
+                   help="이야기 후보를 넷이 아니라 하나만 만든다(「바로 만들기」 + 줄거리 빈칸)")
     p.add_argument("--continuation", type=Path, help="서버가 확인한 연재 기억 사본")
+    p.add_argument("--series-digest", type=Path,
+                   help="끝난 회차를 읽어 연재 설정집(고정 설정·항목·진행 상태)을 정리한다. --out 에 쓴다")
+    p.add_argument("--out", type=Path, help="--series-digest 결과를 쓸 곳")
     p.add_argument("--own", action="store_true",
                    help="「만들고 싶은 내용이 있어요」(#548): 적은 내용으로 주인공 카드·인물·본문·시트를 "
                         "동시에 만든다. 후보·고르기 없음. 장면은 --own-scenes 로 따로")
@@ -1942,6 +1962,13 @@ def main(argv=None) -> int:
     if not args.lang:
         env_lang = (llm.env("NH_LANG") or "").strip()
         args.lang = env_lang if env_lang in lang_mod.LANG_NAMES else "ko"
+
+    if args.series_digest:
+        import continuation
+        if not args.out:
+            raise SystemExit("--series-digest 에는 --out 이 필요합니다")
+        continuation.stage_digest(args.series_digest, args.out, args.dry_run, lang=args.lang)
+        return 0
 
     if args.plan:
         rows = llm.plan()
@@ -2052,7 +2079,7 @@ def main(argv=None) -> int:
             (run_dir / "story_diff.json").unlink(missing_ok=True)
             stage_story(run_dir, char, args.dry_run, note=args.note,
                         review=False if args.no_story_review else None,
-                        lang=args.lang)
+                        lang=args.lang, one=args.one)
         if args.story_review:
             storycheck.review_run(run_dir, dry_run=args.dry_run,
                                   on_call=lambda meta: record(run_dir, meta))
@@ -2082,7 +2109,7 @@ def main(argv=None) -> int:
     if new_run:
         directions = stage_story(run_dir, char, args.dry_run, note=args.note,
                                  review=False if args.no_story_review else None,
-                                 lang=args.lang)
+                                 lang=args.lang, one=args.one)
         if args.dry_run:
             return 0
         show_directions(directions)

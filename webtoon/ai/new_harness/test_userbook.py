@@ -28,10 +28,29 @@ class UserbookTest(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    p=Path(d);R.write_json(p/'scenes.json',{'scenes':[{'n':1,'scene':'열쇠를 줍는다'}]})
    with patch.object(R,'direction_of',return_value={'n':1,'body':'열쇠를 줍는다'}):self.assertIn('열쇠는 밤에만 빛난다',own.rescene_input(p,self.char,1,[],''))
- def test_extraction_rejects_invented_evidence_and_remains_draft(self):
-  result=lore_extract.normalize({'fixed_settings':'민수는 소년이다','entries':[{'title':'원문','content':'소년','keys':['민수'],'evidence':'민수는 소년이다'},{'title':'환각','content':'날 수 있다','evidence':'날 수 있다'}]},'민수는 소년이다. 다리를 건넜다.')
-  self.assertFalse(result['confirmed']);self.assertEqual(len(result['entries']),1)
-  with self.assertRaises(ValueError):lore_extract.normalize({'entries':'wrong'},'')
+ def test_extraction_splits_entries_and_rules_and_merges_same_title(self):
+  rows=lore_extract.book_entries([{'title':'열쇠','keys':['열쇠'],'type':'item','text':'밤에만 빛난다'},{'title':'열 쇠','keys':['은열쇠'],'type':'item','text':'민수가 주웠다'},{'title':'빈 것','text':''}],
+                                 [{'title':'비밀','text':'민수는 정체를 말할 수 없다'}])
+  self.assertEqual([r['id'] for r in rows],['L0001','R001'])
+  self.assertEqual(rows[0]['content'],'밤에만 빛난다 / 민수가 주웠다');self.assertEqual(rows[0]['keys'],['열쇠','은열쇠'])
+  self.assertTrue(rows[1]['always']);self.assertFalse(rows[0]['always'])
+  more=lore_extract.book_entries([{'title':'열쇠','text':'중복'},{'title':'문','keys':['문'],'text':'새 항목'}],[],rows)
+  self.assertEqual([(r['id'],r['title']) for r in more],[('L0002','문')])
+ def test_progress_merge_matches_experiment(self):
+  rows=[{'key':'P001','title':'위치','text':'다리 앞'},{'key':'L0001','title':'열쇠','text':'민수가 갖고 있다'}]
+  merged=lore_extract.merge_progress(rows,[{'key':'','title':'약속','text':'내일 만나기로 했다'},{'key':'L0001','title':'열쇠','text':'잃어버렸다'}],['P001'])
+  self.assertEqual([(r['key'],r['text']) for r in merged],[('L0001','잃어버렸다'),('P001','내일 만나기로 했다')])  # 실험처럼 남은 P 개수 다음 번호
+ def test_rules_always_entries_ranked_and_progress_overrides(self):
+  book={'confirmed':True,'entries':[{'id':'L0001','title':'열쇠','content':'밤에만 빛난다','keys':['열쇠']},
+        {'id':'L0002','title':'문','content':'열쇠로 열린다','keys':['문','열쇠']},{'id':'L0003','title':'바다','content':'멀다','keys':['바다']},
+        {'id':'R001','title':'비밀','content':'정체를 말할 수 없다','keys':[],'always':True}],
+        'progress':[{'key':'L0001','title':'열쇠','text':'부서졌다'},{'key':'P001','title':'위치','text':'문 앞'}]}
+  text=userbook.block({'lorebook':book},'열쇠를 들고',continuation=True)
+  self.assertIn('정체를 말할 수 없다',text);self.assertIn('→ 지금: 부서졌다',text);self.assertIn('- 위치: 문 앞',text)
+  self.assertNotIn('멀다',text)
+  self.assertIn('열쇠로 열린다',text)  # 순위는 예산 안에 넣을 순서만 정하고, 넣는 순서는 원래 순서다(실험과 같다)
+  self.assertEqual([e['id'] for e in userbook.select(book['entries'][:3],'열쇠 문',budget=10)],['L0002'])
+  self.assertNotIn('밤에만',userbook.block({'lorebook':{**book,'progress':[]}},'아무 상관 없는 글'))
  def test_collection_uses_all_books_and_detach_removes_only_one(self):
   second={**self.book,'fixed_settings':'두번째 세계 규칙','entries':[]}
   char={'lorebook':{'confirmed':True,'books':[self.book,second]}}

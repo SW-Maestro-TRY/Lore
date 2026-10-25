@@ -70,6 +70,9 @@ def content_block(char: dict) -> list[str]:
     「1화에서 보여줄 것」(이번 화에 넣을 부분). 1화 범위가 따로 적혀 있으면 그것을
     가장 뒤에 둔다 — 이번 화의 본문·장면은 그 범위만 다루고, 나머지는 배경이다.
     """
+    if not R.user_story(char):
+        # 줄거리 없이 설정집만 붙인 1화 — 붙인 설정집이 이 웹툰의 중심이다(input_block 의 설정집 절).
+        return ["", "## 사용자가 적은 내용 — 없음. 위에 붙인 설정집과 주인공 설명이 전부다."]
     lines = ["", "## 사용자가 적은 내용 — 이 웹툰의 중심", ""]
     title = str(char.get("title") or "").strip()
     if title:
@@ -83,7 +86,7 @@ def content_block(char: dict) -> list[str]:
     return lines
 
 
-def input_block(char: dict, *, continuation: bool = False) -> str:
+def input_block(char: dict, *, continuation: bool = False, context: str | None = None) -> str:
     """own 길의 「이번 입력」 — `run.input_block` 과 다르다.
 
     카드는 이 인물이 누구인지(종·세계)만 준다. 카드의 「이 세계에서 어떤 사람인가」·
@@ -116,7 +119,12 @@ def input_block(char: dict, *, continuation: bool = False) -> str:
               "비밀을 더하지 않고, 적힌 성격을 뒤집지 않는다."]
     lines += ["", f"장르: {char['genre']}" if char.get("genre") else "장르: (없음 — 적은 내용에서 읽는다)"]
     import userbook
-    lines.append(userbook.block(char, char.get("story", ""), continuation=continuation))
+    if context is None:
+        # 항목은 사용자가 적은 것 전체에 걸린 키워드로 고른다. 줄거리 없이 설정집만 붙였으면 설정집 전체가
+        # 요청이라 키워드를 보지 않고 예산 안에서 다 넣는다.
+        context = "\n".join([char.get("story", ""), char.get("description", ""), char.get("settings", ""),
+                             *[str(v) for v in (char.get("fields") or {}).values()]]) if R.user_story(char) else None
+    lines.append(userbook.block(char, context, continuation=continuation, everything=context is None))
     return "\n".join(lines) + "\n"
 
 
@@ -242,7 +250,10 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: 
     note = (note or "").strip()
     if note:
         lines += ["", "## 이번에 다시 세우며 반영할 것 — 사용자가 남긴 말", note]
-    prompt = R.compose("own/story_prompt", "\n".join(lines + content_block(char)) + "\n", lang=lang)
+    # 줄거리 없이 설정집만 붙였으면 설정집 위에서 1화를 세운다(사용자 결정 2026-10-24: 로어북이 있으면
+    # 「내 내용으로 만들기」 길로 간다).
+    template = "own/story_prompt" if R.user_story(char) else "own/story_prompt_book"
+    prompt = R.compose(template, "\n".join(lines + content_block(char)) + "\n", lang=lang)
     R.write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
@@ -472,7 +483,9 @@ def scenes_input(run_dir: Path, char: dict, note: str = "") -> str:
     direction = R.direction_of(run_dir) or {}
     cast = R.read_json(run_dir / "cast.json") if (run_dir / "cast.json").exists() else []
     persona = R.read_json(run_dir / "persona.json") if (run_dir / "persona.json").exists() else None
-    lines = ["# 이번 입력", "", "[본문 — 적은 내용을 1화로 세운 것]", direction.get("title", ""), "",
+    heading = (f"[본문 — 이번 {(R.read_json(run_dir / 'continuation.json') or {}).get('episode_number', 2)}화]"
+               if (run_dir / "continuation.json").is_file() else "[본문 — 적은 내용을 1화로 세운 것]")
+    lines = ["# 이번 입력", "", heading, direction.get("title", ""), "",
              direction.get("body") or direction.get("raw", "")]
     lines += character_lines(char)
     lines += persona_lines(persona if isinstance(persona, dict) else None)
@@ -539,8 +552,8 @@ def run_own(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> None:
     첫 실행에서 본문을 안 보여 주고 장면까지 갔더니, 적은 내용에 없는 장면이 들어온 것을
     장면 확인에서야 봤다(2026-10-01).
     """
-    if not R.user_story(char):
-        raise SystemExit("적은 내용이 없습니다 — 「만들고 싶은 내용이 있어요」는 내용이 있어야 합니다.")
+    if not R.user_story(char) and not (char.get("lorebook") or {}).get("confirmed"):
+        raise SystemExit("적은 내용이 없습니다 — 「만들고 싶은 내용이 있어요」는 내용이나 확인한 설정집이 있어야 합니다.")
     if (run_dir / "continuation.json").is_file():
         if not (run_dir / "sheet.png").is_file():
             raise ValueError("앞 화의 시트가 없습니다")

@@ -151,5 +151,27 @@ registerDict({
     "en": "Could not load episodes.",
     "ja": "話一覧を読み込めませんでした。",
     "zh": "无法加载回目列表。"
-  }
+  },
+  "앞 화를 읽고 설정과 진행 상태를 정리해 두었어요. 이번 화에서 일어날 일만 적어 주세요.": {"en": "We read the previous episode and filled in the settings and current state. Just describe what happens this time.", "ja": "前話を読んで設定と進行状況をまとめました。今回の展開だけ書いてください。", "zh": "已读取前一话并整理好设定与进度，只需填写本话的情节。"},
+  "앞 화를 읽고 설정과 진행 상태를 정리하고 있어요. 잠시만 기다려 주세요.": {"en": "Reading the previous episode to sort out settings and state. One moment.", "ja": "前話を読んで設定と進行状況をまとめています。少しお待ちください。", "zh": "正在读取前一话并整理设定与进度，请稍候。"},
+  "앞 화를 정리하지 못했어요": {"en": "Couldn't summarize the previous episode.", "ja": "前話をまとめられませんでした。", "zh": "无法整理前一话。"},
+  "다시 정리하기": {"en": "Try again", "ja": "もう一度まとめる", "zh": "重新整理"},
+  "설정집 항목": {"en": "Lorebook entries", "ja": "設定集の項目", "zh": "设定集条目"},
+  "이번 화에서 추가": {"en": "New this episode", "ja": "今回追加", "zh": "本话新增"},
+  "{name} 빼기": {"en": "Remove {name}", "ja": "{name}を外す", "zh": "移除{name}"},
+  "빼기": {"en": "Remove", "ja": "外す", "zh": "移除"},
+  "설정집 항목이 없어요.": {"en": "No lorebook entries.", "ja": "設定集の項目はありません。", "zh": "没有设定集条目。"},
+  "내 설정집에 저장했어요": {"en": "Saved to my lorebooks", "ja": "自分の設定集に保存しました", "zh": "已保存到我的设定集"},
+  "내 설정집으로 저장": {"en": "Save to my lorebooks", "ja": "自分の設定集に保存", "zh": "保存到我的设定集"},
+  "설정집을 저장하지 못했어요": {"en": "Couldn't save the lorebook.", "ja": "設定集を保存できませんでした。", "zh": "无法保存设定集。"},
+  "연재": {"en": "Series", "ja": "連載", "zh": "连载"},
+  "앞 화가 끝난 시점의 상태예요. 틀린 줄만 빼 주세요.": {"en": "Where things stand at the end of the previous episode. Remove only the wrong lines.", "ja": "前話が終わった時点の状態です。違う行だけ外してください。", "zh": "这是前一话结束时的状态。只需移除不对的行。"},
+  "세계 규칙": {"en": "World rules", "ja": "世界のルール", "zh": "世界规则"},
+  "이야기 내내 지켜지는 규칙이에요. 매 화 전부 들어가요.": {"en": "Rules that hold for the whole story. Every one goes into each episode.", "ja": "物語全体で守られるルールです。毎話すべて入ります。", "zh": "整个故事都遵守的规则，每一话都会全部带入。"},
+  "규칙이 없어요.": {"en": "No rules.", "ja": "ルールはありません。", "zh": "没有规则。"},
+  "인물·장소·물건 같은 항목이에요. 이번 화에 이름이 나오면 들어가요.": {"en": "People, places and things. An entry is used when its name comes up this episode.", "ja": "人物・場所・物などの項目です。今回名前が出ると入ります。", "zh": "人物、地点、物品等条目。本话出现其名称时才会带入。"},
+  "더 적어 둘 설정 · 선택": {"en": "Anything else to keep · optional", "ja": "ほかに残す設定 · 任意", "zh": "其他要保留的设定 · 可选"},
+  "한자가 섞였어요": {"en": "Contains Chinese characters", "ja": "漢字が混ざっています", "zh": "混入了汉字"},
+  "{n}개": {"en": "{n}", "ja": "{n}件", "zh": "{n}条"},
+  "이번 화에서 추가 {n}개": {"en": "{n} new this episode", "ja": "今回追加 {n}件", "zh": "本话新增{n}条"}
 });
