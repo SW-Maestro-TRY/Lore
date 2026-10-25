@@ -128,7 +128,7 @@ class RunServiceTest {
         assertThat(sheets).extracting(p -> p.get("caption"))
                 .containsExactly("", "첫 장면", "둘째 장면");
         assertThat(sheets).allSatisfy(p -> assertThat(p)
-                .containsEntry("gap", 0).containsEntry("width", 1));
+                .containsEntry("gap", 0.0).containsEntry("width", 1));
         assertThat(out).containsEntry("logline", "계약으로 시작된 관계가 진심이 된다")
                 .containsEntry("page_count", 3)
                 // 이 길에는 「앞 몇 장만」이 없다 — 둘이 같아야 화면이 그 말을 안 적는다.
@@ -166,6 +166,23 @@ class RunServiceTest {
     }
 
     @Test
+    @DisplayName("편집실에서 고친 여백이 공개본 장 사이 간격으로 나간다")
+    void 고친_여백() {
+        작품("run-1", true);
+        when(pages.pageNumbersOf("run-1")).thenReturn(List.of(1, 2, 3));
+        when(stories.scenesOf("run-1")).thenReturn(List.of());
+        OverlayStore overlays = mock(OverlayStore.class);
+        when(overlays.gapsOf("run-1", 1)).thenReturn(Map.of(1, 3, 2, 1));
+        runs.setOverlays(overlays);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> sheets =
+                (List<Map<String, Object>>) runs.result("run-1").get("pages");
+
+        assertThat(sheets).extracting(p -> p.get("gap")).containsExactly(0.62, 0.07, 0.0);
+    }
+
+    @Test
     @DisplayName("그림이 없으면 완성본도 없다 — 부르는 쪽이 404 를 낸다")
     void 없는_완성본() {
         when(pages.pageNumbersOf(anyString())).thenReturn(List.of());
@@ -186,7 +203,7 @@ class RunServiceTest {
                 .containsEntry("title", "얼음 왕자의 계약")
                 .containsEntry("episode", 1)
                 .containsEntry("episodes", List.of(1))
-                .containsEntry("gap_scale", Map.of())
+                .containsEntry("gap_scale", Map.of("0", 0.0, "1", 0.07, "2", 0.26, "3", 0.62))
                 .containsEntry("page_count", 3);
 
         @SuppressWarnings("unchecked")

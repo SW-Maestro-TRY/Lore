@@ -61,6 +61,10 @@ public class RunService {
     private final StoryStore stories;
     private final PageStore pages;
     private final RunLikeRepository likes;
+    private OverlayStore overlays;
+    /* 편집실에서 고친 여백을 공개본에 싣는다. 검사에서 손으로 만들 때는 없어도 된다(여백 0). */
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setOverlays(OverlayStore overlays) { this.overlays = overlays; }
     private final ObjectMapper mapper = new ObjectMapper();
 
     public RunService(WebtoonWorkRepository works, WebtoonJobRepository jobs,
@@ -188,10 +192,9 @@ public class RunService {
     /**
      * 완성본 한 편. 없으면 {@code null} — 부르는 쪽이 404 를 낸다.
      *
-     * {@code gap} 과 {@code width} 는 늘 0 과 1 이다. 이 하네스는 페이지 한
-     * 장이 카드 한 장이라 여백·지면 폭 개념이 없다({@code stitch.py} 가 그냥
-     * 이어 붙인다). 화면은 옛 흐름과 같은 코드로 그리므로 값을 비워 두지 않고
-     * 그 뜻대로 채워 준다.
+     * {@code width} 는 늘 1 이다. 이 하네스는 페이지 한 장이 카드 한 장이라
+     * 지면 폭 개념이 없다. {@code gap}(장 뒤 여백, 폭의 몇 배)은 하네스가 안
+     * 정하고 <b>편집실에서 사람이 고친 값</b>만 있다 — 안 고친 장은 0 이다.
      */
     @Transactional(readOnly = true)
     public Map<String, Object> result(String runId) {
@@ -208,11 +211,13 @@ public class RunService {
         Optional<WebtoonStory> chosen = stories.chosenOf(runId);
         List<String> scenes = stories.scenesOf(runId);
 
+        /* 여백은 편집실에서 사람이 고친 것만 있다 — 하네스는 장 사이를 그냥 잇는다. */
+        Map<Integer, Integer> gaps = overlays == null ? Map.of() : overlays.gapsOf(runId, 1);
         List<Map<String, Object>> sheets = new ArrayList<>();
         for (int no : numbers) {
             Map<String, Object> one = new LinkedHashMap<>();
             one.put("no", no);
-            one.put("gap", 0);
+            one.put("gap", OverlayStore.gapRatio(gaps.getOrDefault(no, 0)));
             one.put("width", 1);
             one.put("caption", captionOf(scenes, no));
             sheets.add(one);
@@ -311,9 +316,12 @@ public class RunService {
         // 한 편짜리다 — 이어그리기가 붙으면 여기가 늘어난다(카드가 쓰는 것과 같은 값).
         out.put("episode", 1);
         out.put("episodes", List.of(1));
-        // gap·width 개념이 없는 것과 같은 이유(result() 머리말) — 편집실도
-        // 손볼 여백이 없으니 빈 채로 준다.
-        out.put("gap_scale", Map.of());
+        // 여백 눈금 — 편집실이 그리는 간격과 공개본·내려받은 파일의 간격이 같은 표를 본다.
+        Map<String, Double> scale = new LinkedHashMap<>();
+        for (int i = 0; i < OverlayStore.GAP_RATIO.length; i++) {
+            scale.put(String.valueOf(i), OverlayStore.GAP_RATIO[i]);
+        }
+        out.put("gap_scale", scale);
         out.put("scenes", sceneList);
         out.put("page_count", numbers.size());
         return out;

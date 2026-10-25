@@ -54,7 +54,7 @@ public class CreditGate {
 
     @Autowired
     public CreditGate(CreditService credits,
-                      @Value("${lore.credit.cost-per-episode:12}") int cost,
+                      @Value("${lore.credit.cost-per-episode:15}") int cost,
                       @Value("${lore.credit.cost-per-regen:3}") int regenCost) {
         this.credits = credits;
         this.cost = cost;
@@ -92,7 +92,7 @@ public class CreditGate {
     }
 
     /**
-     * 값을 지정해서 묻는다 — 웹툰 한 편(12) · 캐릭터 한 장(2) · 장 다시 그리기(3)는
+     * 값을 지정해서 묻는다 — 웹툰 한 편(파도 15) · 캐릭터 한 장(2) · 장 다시 그리기(3, 너울 4)는
      * 값이 다르다.
      */
     public String whyBlocked(Long userId, int need) {
