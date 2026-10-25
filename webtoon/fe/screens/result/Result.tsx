@@ -108,7 +108,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
         const same = data.genre ? others.filter((r) => r.genre === data.genre) : [];
         setSuggested((same.length >= 2 ? same : others).slice(0, 4));
         const me = all.find((r) => r.run_id === runId);
-        setLikes(me?.likes ?? 0);
+        // 묶인 연재의 2화 이후는 둘러보기 카드에 없다 — 완성본 응답의 수를 쓴다
+        setLikes(me?.likes ?? data.likes ?? 0);
         if (me?.cover_page) setCover(coverUrl(runId, me.cover_page, me.cover_episode || 1));
       })
       .catch(() => { /* 없으면 줄 자체를 안 그린다 */ });
@@ -535,11 +536,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             </div>
 
             {data.public !== false && !data.preview ? (
-              <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} total={chapterRows.length}
+              <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} total={chapterRows.filter(c => c.run_id).length}
                 title={data.title} cover={cover || pageUrl(runId,data.pages[0]?.no || 1,320)}>
                 {/* 회차 목록을 바로 펼쳐 둔다(2026-10-25) — 창을 열어야 보이면 몇 화까지 있는지 모른다. */}
                 <div className="wt-reader-eplist">
-                  <div className="wt-reader-eplist-head"><h3>{t("회차 목록")}</h3><span>{t("총 {n}화",{n:chapterRows.length})}</span></div>
+                  <div className="wt-reader-eplist-head"><h3>{t("회차 목록")}</h3><span>{t("총 {n}화",{n:chapterRows.filter(c => c.run_id).length})}</span></div>
                   <ul>
                     {chapterRows.map(c => (
                       <li key={c.episode}>
@@ -554,12 +555,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                       </li>
                     ))}
                   </ul>
-                  {series?.chapters.some(c=>c.episode>ep)
-                    ? <button className="btn btn-p wt-reader-nextwide" onClick={()=>nextEpisode("reading_end")}>{t("다음화 보기")}</button>
-                    : mine
-                      ? <button className="btn btn-p wt-reader-nextwide" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>
-                      : <div className="wt-reader-wait"><b>{t("다음 이야기를 기다려 주세요")}</b><span>{t("아직 공개된 다음 회차가 없어요.")}</span></div>}
-                  {mine && <button className="btn btn-w wt-reader-editwide" onClick={()=>go("editor",{run:runId})}><IconEdit size={17}/>{t("편집실")}</button>}
+                  {/* 다음 화는 목록에서 바로 고른다 — 아래 단추 줄(다음화 보기 · 편집실)은 겹쳐서 뺐다(2026-10-25).
+                      다음 화가 없고 내 작품도 아니면 기다려 달라는 한 줄만 둔다. */}
+                  {!series?.chapters.some(c=>c.episode>ep) && !mine &&
+                    <div className="wt-reader-wait"><b>{t("다음 이야기를 기다려 주세요")}</b><span>{t("아직 공개된 다음 회차가 없어요.")}</span></div>}
                 </div>
                 {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{t("가입 없이 무료로 시작")}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></section>}
               </EpisodeCommunity>

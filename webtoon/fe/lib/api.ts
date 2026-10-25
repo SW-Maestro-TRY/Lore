@@ -539,6 +539,8 @@ export function coverUrl(runId: string, page: number, episode = 1): string {
 }
 
 export interface RunResult {
+  /** 이 회차의 찜 수 */
+  likes?: number;
   run_id: string;
   character: string;
   title: string;

@@ -140,30 +140,39 @@ public class RunService {
            1화가 비공개·삭제면 묶을 자리가 없으니 회차를 따로 둔다. */
         List<Map<String, Object>> out = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
+        /* 1화 카드는 연재마다 한 번만 만든다 — 회차마다 다시 만들면 23화 연재 하나에
+           회차 조회가 수천 번 나간다. 1화에 그림이 없어 카드가 안 나오면(null) 기억해 두고
+           회차를 따로 낸다. */
+        Map<String, Map<String, Object>> rootCards = new java.util.HashMap<>();
         for (WebtoonWork one : works.onGallery()) {
-            Map<String, Object> card = galleryCard(one);
+            if (one.isTrashed()) {
+                continue;
+            }
+            WebtoonJob job = jobs.findByPublicId(one.getJobId()).orElse(null);
+            String rootJob = rootJobOf(job);
+            WebtoonWork root = rootJob == null ? null
+                    : rootJob.equals(one.getJobId()) ? one
+                    : works.findByJobId(rootJob)
+                        .filter(r -> r.getRunId() != null && !r.isTrashed() && r.isPublic())
+                        .orElse(null);
+            Map<String, Object> card = null;
+            if (root != null) {
+                card = rootCards.computeIfAbsent(rootJob, k -> {
+                    Map<String, Object> c = cardIgnoringTrash(root, false, true, true);
+                    return c == null ? Map.of() : c;
+                });
+                if (card.isEmpty()) {
+                    card = null;
+                }
+            }
+            if (card == null) {
+                card = cardIgnoringTrash(one, false, false, false);
+            }
             if (card != null && seen.add(String.valueOf(card.get("run_id")))) {
                 out.add(card);
             }
         }
         return out;
-    }
-
-    private Map<String, Object> galleryCard(WebtoonWork work) {
-        if (work.isTrashed()) {
-            return null;
-        }
-        WebtoonJob job = jobs.findByPublicId(work.getJobId()).orElse(null);
-        String rootJob = rootJobOf(job);
-        if (rootJob == null) {
-            return cardIgnoringTrash(work, false, false, false);
-        }
-        WebtoonWork root = rootJob.equals(work.getJobId()) ? work : works.findByJobId(rootJob)
-                .filter(r -> r.getRunId() != null && !r.isTrashed() && r.isPublic())
-                .orElse(null);
-        return root == null
-                ? cardIgnoringTrash(work, false, false, false)
-                : cardIgnoringTrash(root, false, true, true);
     }
 
     /**
@@ -326,6 +335,8 @@ public class RunService {
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
         out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));
         out.put("episode", episodeOf(job));
+        /* 이 회차의 찜 수 — 둘러보기는 연재를 1화 카드로 묶어서 2화 이후의 수를 거기서 못 얻는다 */
+        out.put("likes", likes.countByRunId(runId));
         out.put("pages", sheets);
         out.put("page_count", numbers.size());
         /* 그리기로 한 장 수와 실제로 그린 장 수가 같다 — 이 길은 한 편을
