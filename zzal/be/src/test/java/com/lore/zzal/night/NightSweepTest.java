@@ -73,7 +73,8 @@ class NightSweepTest {
         executor = Runnable::run;                                  // 동기 실행기 — 굽기 호출 순서를 그대로 본다
 
         // run 표 — PK 충돌을 흉내 낸다
-        when(runRepo.findById(any())).thenAnswer(inv -> Optional.ofNullable(runs.get(inv.getArgument(0))));
+        // ★ 2단계 — 키가 (night_of, time_zone) 이 됐다. 이 시험은 서울 한 시간대만 쓰므로 날짜로 찾는다.
+        when(runRepo.findById(any())).thenAnswer(inv -> Optional.ofNullable(runs.get(inv.<ZzalNightRun.Key>getArgument(0).nightOf())));
         when(runRepo.saveAndFlush(any())).thenAnswer(inv -> {
             ZzalNightRun r = inv.getArgument(0);
             if (runs.putIfAbsent(r.getNightOf(), r) != null) {

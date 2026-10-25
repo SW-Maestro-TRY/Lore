@@ -83,7 +83,7 @@ public class SceneService {
         for (int i = made; i >= 1; i--) {
             // 마지막 컷이 "가장 최근" 이 되도록 뒤에서부터 되짚는다. ★ 벽시계가 아니라 <b>깨어 있는 시간</b>으로 —
             //   그냥 4시간씩 빼면 자는 새벽 3시에 논 장면이 만들어지고, 화면은 그 시각으로 빛을 정한다.
-            Instant at = awakeMinus(now, ZzalRules.SCENE_ABSENCE_CHUNK.getSeconds() * (i - 1L));
+            Instant at = awakeMinus(now, ZzalRules.SCENE_ABSENCE_CHUNK.getSeconds() * (i - 1L), pet.zone());
             save(pet, at, false);
         }
         trim(pet.getId());              // ★ 컷마다가 아니라 한 번만
@@ -136,29 +136,38 @@ public class SceneService {
      *   이 창 밖이면 <b>확실히 자고 있었다</b>. 근사치이되 "밤에 논 그림" 은 확실히 막는다.
      */
     static Instant awakeMinus(Instant at, long seconds) {
-        Instant cur = lastAwakeMoment(at);
+        return awakeMinus(at, seconds, ZzalRules.ZONE);
+    }
+
+    /** {@link #awakeMinus(Instant, long)} — 그 펫의 시간대 벽시계로. */
+    static Instant awakeMinus(Instant at, long seconds, java.time.ZoneId zone) {
+        Instant cur = lastAwakeMoment(at, zone);
         while (seconds > 0) {
-            Instant dayStart = cur.atZone(ZzalRules.ZONE).toLocalDate()
-                    .atTime(ZzalRules.AUTO_WAKE_AT).atZone(ZzalRules.ZONE).toInstant();
+            Instant dayStart = cur.atZone(zone).toLocalDate()
+                    .atTime(ZzalRules.AUTO_WAKE_AT).atZone(zone).toInstant();
             long available = Duration.between(dayStart, cur).getSeconds();
             if (available >= seconds) {
                 return cur.minusSeconds(seconds);
             }
             seconds -= available;
-            cur = lastAwakeMoment(dayStart.minusSeconds(1));    // 전날 밤의 마지막 깨어 있던 순간으로
+            cur = lastAwakeMoment(dayStart.minusSeconds(1), zone);    // 전날 밤의 마지막 깨어 있던 순간으로
         }
         return cur;
     }
 
     /** 그 순간이 이미 낮이면 그대로, 밤이면 <b>그 직전의 깨어 있던 순간</b>(그날 23:00 또는 전날 23:00). */
     static Instant lastAwakeMoment(Instant at) {
-        java.time.ZonedDateTime z = at.atZone(ZzalRules.ZONE);
+        return lastAwakeMoment(at, ZzalRules.ZONE);
+    }
+
+    static Instant lastAwakeMoment(Instant at, java.time.ZoneId zone) {
+        java.time.ZonedDateTime z = at.atZone(zone);
         java.time.LocalTime t = z.toLocalTime();
         if (t.isBefore(ZzalRules.AUTO_WAKE_AT)) {
-            return z.toLocalDate().minusDays(1).atTime(ZzalRules.AUTO_SLEEP_AT).atZone(ZzalRules.ZONE).toInstant();
+            return z.toLocalDate().minusDays(1).atTime(ZzalRules.AUTO_SLEEP_AT).atZone(zone).toInstant();
         }
         if (!t.isBefore(ZzalRules.AUTO_SLEEP_AT)) {
-            return z.toLocalDate().atTime(ZzalRules.AUTO_SLEEP_AT).atZone(ZzalRules.ZONE).toInstant();
+            return z.toLocalDate().atTime(ZzalRules.AUTO_SLEEP_AT).atZone(zone).toInstant();
         }
         return at;
     }
@@ -239,7 +248,7 @@ public class SceneService {
      *   놓인 그림이 된다.
      */
     String prop(ZzalPet pet, Instant at) {
-        long day = at.atZone(ZzalRules.ZONE).toLocalDate().toEpochDay();
+        long day = at.atZone(pet.zone()).toLocalDate().toEpochDay();
         return PROPS.get((int) Chance.pick(PROPS.size(), "scene-prop", pet.chanceSeed(), day));
     }
 

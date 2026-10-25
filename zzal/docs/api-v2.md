@@ -16,7 +16,7 @@
 | 경로 | `/api/zzal/v1/me/pets` 밑. 내 것은 `me`, 남의 펫은 **404**(`ZZAL_PET_NOT_FOUND`) — 403은 "그 번호의 펫이 있다"를 알려준다 |
 | 행동 응답 | **모든 행동(POST)의 응답 = `PetDetail` 최신 상태.** 누른 뒤 다시 조회하지 않는다 |
 | 시각 | ISO-8601 UTC(`2026-09-05T10:00:00Z`). 화면은 `serverNow`와의 차이로만 시간을 다루고, **기기 시계를 쓰지 않는다**. 기기에서 읽는 것은 시간대 **이름**뿐이다(아래 줄) |
-| 시간대 | **펫마다 하나**(2026-10-26). 화면은 `/api/zzal/` 요청마다 헤더 `X-Zzal-Tz: <IANA 이름>`(기기의 `Intl…resolvedOptions().timeZone`)을 싣는다. 서버는 펫 **생성 때**, 또는 아직 모르는(NULL) 펫의 **첫 요청**에서 한 번 `zzal_pet.time_zone` 에 적고 **다시 바꾸지 않는다**(못 읽는 값은 버린다 → NULL). NULL 은 `Asia/Seoul` 로 읽는다. `PetDetail.timeZone`(그 값, 없으면 Asia/Seoul) · `PetDetail.rulesTimeZone`(서버가 창을 재는 시간대) 두 칸이 내려간다. 창(19:00·23:00·07:00·10:00·부름 10/14/19시)은 `rulesTimeZone` 의 벽시계다. **1단계 서버는 `rulesTimeZone` 이 늘 Asia/Seoul** — 화면은 창 시각을 `timeZone` 으로 바꿔 보여 준다. 부화 하루 상한·운영 경보·S3 보관·관리자 화면은 KST 그대로 |
+| 시간대 | **펫마다 하나**(2026-10-26). 화면은 `/api/zzal/` 요청마다 헤더 `X-Zzal-Tz: <IANA 이름>`(기기의 `Intl…resolvedOptions().timeZone`)을 싣는다. 서버는 펫 **생성 때**, 또는 아직 모르는(NULL) 펫의 **첫 요청**에서 한 번 `zzal_pet.time_zone` 에 적고 **다시 바꾸지 않는다**(못 읽는 값은 버린다 → NULL). NULL 은 `Asia/Seoul` 로 읽는다. `PetDetail.timeZone`(그 값, 없으면 Asia/Seoul) · `PetDetail.rulesTimeZone`(서버가 창을 재는 시간대) 두 칸이 내려간다. 창(19:00·23:00·07:00·10:00·부름 10/14/19시)은 `rulesTimeZone` 의 벽시계다. **2단계부터 `rulesTimeZone` = `timeZone`**(서버 규칙이 펫 시간대의 벽시계로 돈다 — 창·자동 취침/기상·부름·함께한 날·밤 굽기·지시문 시각). 1단계 서버는 `rulesTimeZone` 이 늘 Asia/Seoul 이었고, 화면은 둘이 다르면 창 시각을 `timeZone` 으로 바꿔 보여 준다(그래서 화면은 두 단계 어느 서버와도 맞다). 연속 대화·튜토리얼 부름 판의 `day_of` 열쇠는 부화일(KST)로 고정한다 — 시간대를 처음 관측해도 같은 판을 찾는다. 부화 하루 상한·운영 경보·S3 보관·관리자 화면은 KST 그대로 |
 | 이미지 키 | `images/…` 뒷부분만. 화면이 `assetUrl()`로 CDN을 앞에 붙인다 |
 | 서버 정본 | 수치는 저장하지 않고 조회 때 계산(lazy settle). 낙관적 업데이트 금지 |
 | 케어 미스 | **어디에도 내려가지 않는다.** 보이는 신호는 `leaving`(짐 가방)뿐 |
@@ -209,7 +209,7 @@
 
   "serverNow": "2026-09-05T09:30:00Z",   // ★ 필수. 이 펫의 시계(dev 오프셋 포함)
   "timeZone": "Asia/Seoul",              // 이 펫의 시간대(표시용). 모르면 Asia/Seoul
-  "rulesTimeZone": "Asia/Seoul",         // 창을 재는 시간대. 1단계는 늘 Asia/Seoul
+  "rulesTimeZone": "Asia/Seoul",         // 창을 재는 시간대. 2단계부터 timeZone 과 같다(1단계는 늘 Asia/Seoul)
 
   // ── 이하 ALIVE 전용 ─────────────────────────────────────────
   "clock": {
@@ -456,7 +456,7 @@
 |---|---|---|
 | `POST /advance-clock` | `{seconds?, minutes?}` | 오프셋에 더한다(≤30일). 규칙은 한 글자도 안 바뀐다 |
 | `POST /set-clock` | `{at?: ISO} \| {sinceHatchMinutes?: int} \| {localTime?: "HH:mm"}` | 펫 시계를 그 시각으로. 셋 중 하나. `localTime`은 오늘(`rulesTimeZone`) 그 시각 |
-| `POST /night-sweep` | | 이 펫에 대해 23:00 스위프를 지금 실행(큐 등록·굽기) |
+| `POST /night-sweep` | | 이 펫에 대해 밤 스위프를 지금 실행(큐 등록·굽기). 밤 날짜는 펫 시간대 |
 | `POST /force-open/{seq}` | | 그 동작의 심화 행동을 가짜 imageKey로 즉시 검수 통과(`OPEN`). **도착은 규칙 그대로** — 깨어 있으면 그 응답에서, 자는 중이면 깨어난 뒤 첫 조회에서 |
 
 응답은 전부 `PetDetail`.
@@ -472,7 +472,7 @@
 | `hatch.states.v1` / `.v2` / `.v4` | 8종 / 16 key / 16 key | 후처리가 만들어야 하는 파일 이름(버전별). `.v4` 가 교체된 16종이고 **순서가 `MotionCatalog` 와 같아야 한다** |
 | `advanced-motions` | (빈) | 3층 큐에 오를 수 있는 key 목록(지시문 있는 것만). 3층이 아직 없어 비어 있다 |
 | `gift-motions` | `roll,fall_back` | 선물 key 목록 |
-| `night.sweep-enabled` | false | 23:00 스위프 켜기(서버 여러 대면 한 대만) |
+| `night.sweep-enabled` | false | 밤 스위프 켜기(15분 눈금, 시간대마다 현지 23:00 — 서버 여러 대면 한 대만) |
 | `night.max-bakes` | 200 | 밤 굽기 상한 K |
 | `night.local-regen-max` | 2 | 로컬 재생성 최대 횟수 |
 | `chat.mode` | template | template · llm |
@@ -579,7 +579,7 @@
 | 부화 파이프라인 v2 | `PipelineRegistry` HATCH v2 = sheet→identity→grid→grid2→post(`basic/{key}.webp`, `--keys`). `prompt/v2/*.txt`가 없으면 **v1로 기동하고 부팅 로그에 경고**, 기록도 v1 | PR-5 |
 | 5 관리자 | **v2 동작** — `/api/zzal/v1/admin/motions` 5개(`pending`·`verdict`·`regen-requests`·`upload`·`night/summary`). 주소 앞머리는 `/api/zzal/v1` 그대로다 | PR-7 |
 | 6 개발 도구 | `advance-clock`·`set-clock`·**`night-sweep`(이 펫만 계획→집기→굽기, run 기록 없음)**·**`force-open/{seq}`**(가짜 검수 통과, 도착은 규칙대로) | PR-2·6·7 |
-| 밤 굽기 큐 | **동작** — 23:00 `NightSweep`(`sweep-enabled` 기본 false·서버 한 대만), `zzal_night_run(night_of PK)`, 첫 심화(3일째·케어 미스 0)·FAILED 재등록, 우선순위 선물>케어미스0일수>친밀도>id, K=200 이월, claim `UPDATE…WHERE QUEUED`, 기동 복구(23~10시 창). 굽기는 `MotionService.bakeNow` — **API 1회 → 게이트 → REVIEW / FAIL이면 LOCAL_REQUESTED**. 굽기 중 예외는 `FAILED`, 집힌 채 멈춘 자리는 기동 복구가 `QUEUED`로 회수 | PR-6·7 |
+| 밤 굽기 큐 | **동작** — 15분 눈금 `NightSweep`(시간대마다 현지 23:00 에 그 시간대 펫만, `sweep-enabled` 기본 false·서버 한 대만), `zzal_night_run((night_of, time_zone) PK)` + 펫 단위 멱등 `zzal_pet.last_swept_night_of`, K 는 KST 하루(10:00~10:00)에 시작한 판들의 합, 첫 심화(3일째·케어 미스 0)·FAILED 재등록, 우선순위 선물>케어미스0일수>친밀도>id, K=200 이월, claim `UPDATE…WHERE QUEUED`, 기동 복구(23~10시 창). 굽기는 `MotionService.bakeNow` — **API 1회 → 게이트 → REVIEW / FAIL이면 LOCAL_REQUESTED**. 굽기 중 예외는 `FAILED`, 집힌 채 멈춘 자리는 기동 복구가 `QUEUED`로 회수 | PR-6·7 |
 | 후기 | v1 경로 `/api/zzal/v1/me/pets/{id}/feedback` 유지 | (변경 없음) |
 
 ## 변경 기록

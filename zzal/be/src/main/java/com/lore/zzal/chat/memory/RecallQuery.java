@@ -13,6 +13,15 @@ import java.time.Instant;
  * @param now      펫 시계의 지금
  * @param slot     이번 부름
  * @param userText 이번에 사용자가 한 말(부름을 만들 때는 null)
+ * @param zone     "최근 N일" 의 날짜 경계를 자를 시간대(펫 시간대). 없으면 KST
  */
-public record RecallQuery(Instant now, ChatSlot slot, String userText) {
+public record RecallQuery(Instant now, ChatSlot slot, String userText, java.time.ZoneId zone) {
+
+    public RecallQuery {
+        if (zone == null) zone = com.lore.zzal.pet.ZzalRules.ZONE;
+    }
+
+    public RecallQuery(Instant now, ChatSlot slot, String userText) {
+        this(now, slot, userText, null);
+    }
 }
