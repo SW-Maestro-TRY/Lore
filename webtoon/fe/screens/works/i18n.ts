@@ -2,6 +2,14 @@ import { registerDict, type Dict } from "../../lib/i18n";
 
 /* 둘러보기 — 화면의 한국어 원문이 키다. 작품 제목·장르·그림체 라벨은 서버 값이라 여기 없다. */
 const dict: Dict = {
+  "{title} 1화 읽기": { en: "Read episode 1 of {title}", ja: "{title} 第1話を読む", zh: "阅读 {title} 第1话" },
+  "슈퍼": { en: "Super", ja: "スーパー", zh: "超级" },
+  "세컨드브레인": { en: "Second Brain", ja: "セカンドブレイン", zh: "第二大脑" },
+  "선택은 완벽했다.": { en: "Every choice was perfect.", ja: "選択は完璧だった。", zh: "选择完美无缺。" },
+  "내 것이었을까.": { en: "But was it mine?", ja: "それは自分のものだったのか。", zh: "可那是我的吗？" },
+  "근미래 SF": { en: "Near-future SF", ja: "近未来SF", zh: "近未来科幻" },
+  "기업 드라마": { en: "Corporate drama", ja: "企業ドラマ", zh: "职场剧" },
+  "AI": { en: "AI", ja: "AI", zh: "AI" },
   "둘러보기": { en: "Browse", ja: "見て回る", zh: "浏览" },
   "다른 사람들의 웹툰": { en: "Webtoons by others", ja: "みんなのウェブトゥーン", zh: "大家的网络漫画" },
   "내 웹툰 만들기": { en: "Make my webtoon", ja: "自分のウェブトゥーンを作る", zh: "制作我的网络漫画" },

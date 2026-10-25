@@ -1,0 +1,62 @@
+/* 둘러보기 대표작 띠 — 시안 webtoon/docs/img_1.png. 왼쪽 어두운 칸에 글, 오른쪽에 그림.
+   색은 시안에서 뽑았다(바탕 #0d1119, 강조 민트). 다크·라이트 화면 모두 같은 색 —
+   띠 하나가 그림과 한 덩어리로 보여야 해서 테마를 따르지 않는다. */
+.wt .wt-featured {
+  --ft-bg: #0d1119; --ft-ink: #f2f5f8; --ft-muted: #9aa6b4; --ft-mint: #6fe3cb;
+  position: relative; display: grid; grid-template-columns: minmax(280px, 34%) 1fr;
+  min-height: 220px; margin: 4px 0 24px; border-radius: 14px; overflow: hidden;
+  background: var(--ft-bg); color: var(--ft-ink); text-decoration: none; cursor: pointer;
+  isolation: isolate;
+}
+.wt .wt-featured:focus-visible { outline: 2px solid var(--ft-mint); outline-offset: 3px; }
+.wt .wt-featured-art {
+  grid-column: 2; grid-row: 1; width: 100%; height: 100%; min-height: 220px; max-height: 240px;
+  object-fit: cover; object-position: 30% 22%; display: block;
+}
+/* 눌러도 모양이 바뀌지 않는다 — 띠 전체가 링크라 호버·누름 효과가 오히려 거슬린다(2026-10-25) */
+.wt .wt-featured, .wt .wt-featured:hover, .wt .wt-featured:active { -webkit-tap-highlight-color: transparent; }
+/* 글 칸과 그림 사이 이음매를 지운다 — 그림 왼쪽 끝을 바탕색으로 녹인다 */
+.wt .wt-featured::after {
+  content: ""; grid-column: 2; grid-row: 1; z-index: 1; pointer-events: none;
+  background: linear-gradient(90deg, var(--ft-bg) 0%, rgba(13, 17, 25, .55) 14%, rgba(13, 17, 25, 0) 34%);
+}
+.wt .wt-featured-copy {
+  grid-column: 1; grid-row: 1; z-index: 2; display: flex; flex-direction: column; justify-content: center;
+  gap: 9px; padding: 22px 18px 20px 32px;
+}
+.wt .wt-featured-kicker {
+  display: inline-flex; align-items: center; gap: 10px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: .18em; color: var(--ft-mint);
+}
+.wt .wt-featured-kicker i { width: 6px; height: 6px; border-radius: 50%; background: var(--ft-mint); }
+.wt .wt-featured-title { margin: 0; display: flex; flex-direction: column; line-height: 1.08; letter-spacing: -.03em; }
+.wt .wt-featured-title span { font-size: 22px; font-weight: 800; }
+.wt .wt-featured-title b { font-size: clamp(28px, 2.8vw, 38px); font-weight: 900; white-space: nowrap; }
+.wt .wt-featured-title b i { color: var(--ft-mint); font-style: normal; }
+.wt .wt-featured-lines { margin: 2px 0 0; display: flex; flex-direction: column; font-size: 14px; line-height: 1.5; color: var(--ft-ink); }
+.wt .wt-featured-tags { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.wt .wt-featured-tags li {
+  font-size: 11px; padding: 4px 8px; border: 1px solid rgba(242, 245, 248, .28); border-radius: 4px; color: var(--ft-ink);
+}
+.wt .wt-featured-count {
+  display: inline-flex; align-items: center; gap: 12px; margin-top: 2px; font-size: 12px;
+  letter-spacing: .08em; color: var(--ft-mint); font-variant-numeric: tabular-nums;
+}
+.wt .wt-featured-count i { width: 30px; height: 1px; background: var(--ft-mint); }
+.wt .wt-featured-count small { font-size: 9px; letter-spacing: .16em; color: var(--ft-muted); }
+
+/* 폰: 그림을 위에 깔고 글을 그 아래쪽 어둠 위에 얹는다 — 옆으로 나눌 폭이 없다. */
+@media (max-width: 767px) {
+  .wt .wt-featured { display: block; min-height: 0; margin: 0 0 18px; border-radius: 12px; }
+  .wt .wt-featured-art { position: absolute; inset: 0; min-height: 0; max-height: none; object-position: 62% 18%; }
+  .wt .wt-featured::after {
+    position: absolute; inset: 0;
+    background: linear-gradient(0deg, var(--ft-bg) 8%, rgba(13, 17, 25, .78) 46%, rgba(13, 17, 25, .1) 78%);
+  }
+  .wt .wt-featured-copy { position: relative; gap: 7px; padding: 104px 16px 14px; }
+  .wt .wt-featured-title span { font-size: 18px; }
+  .wt .wt-featured-title b { font-size: 26px; }
+  .wt .wt-featured-lines { font-size: 13.5px; }
+  .wt .wt-featured-tags li { font-size: 10.5px; }
+  .wt .wt-featured-count { margin-top: 2px; font-size: 11.5px; }
+}
