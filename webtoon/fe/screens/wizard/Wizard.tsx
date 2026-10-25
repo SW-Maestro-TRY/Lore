@@ -6,8 +6,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
-  WebtoonApiError, allowanceLine, listCharacters, notifyByEmail, readAllowance, readCharacter,
-  type Allowance, type Character,
+  WebtoonApiError, allowanceLine, listCharacters, listLorebooks, notifyByEmail, readAllowance, readCharacter,
+  type Allowance, type Character, type LoreBook,
 } from "../../lib/api";
 import { startJob } from "../../lib/start";
 import {
@@ -27,7 +27,7 @@ import {CharacterEditDialog,CharacterForm} from "../character/OriginalCharacter"
 import "./WizardFinal.css";
 import LorebookAttach from "./LorebookAttach";
 import {Dialog} from "../../ui/Dialog";
-import {invalidateExtracted} from "../../lib/lorebooks";
+import {attachedBooks, bookForGenre, invalidateExtracted, packBooks} from "../../lib/lorebooks";
 import "./loreI18n";
 
 const DRAFT_KEY = "lore_wizard_draft";
@@ -129,13 +129,44 @@ export default function Wizard({
   const { lang } = useLang();
   /* 어느 길인가(#548)는 2걸음에서 고른다(form.create). 주소의 `mode=own` 은 미리 골라 둔
      것일 뿐이다. own 길은 걸음이 셋이라 4는 3으로 본다. */
+  /* 초안(sessionStorage)은 화면이 뜬 뒤에 읽는다. 첫 렌더에서 읽으면 초안을 모르는 서버 HTML 과 어긋나고,
+     React 는 그 어긋난 속성(꺼진 「다음」 등)을 고치지 않아 새로고침하면 버튼이 먹통이 됐다. */
   const [form, setForm] = useState<WizardForm>(() => {
-    const f = loadDraft();
+    const f = emptyWizardForm();
     return mode === "own" ? { ...f, create: "own" } : f;
   });
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  useEffect(() => {
+    const f = loadDraft();
+    setForm(mode === "own" ? { ...f, create: "own" } : f);
+    setDraftLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p,
     ...(p.story !== undefined && p.story !== f.story && f.lorebook ? {lorebook:invalidateExtracted(f.lorebook)} : {}) }));
-  useEffect(() => { saveDraft(form); }, [form]);
+
+  /* 장르를 고르면 그 장르의 준비된 설정집이 저절로 붙는다(2026-10-24). 장르를 바꾸면 바꿔 끼우고,
+     「자동」으로 돌리면 뗀다. 사용자가 붙인 설정집은 건드리지 않고 그 뒤에 둔다 — 뒤에 붙인 것이
+     우선이라 사용자 설정이 장르 설정을 이긴다. 장르 설정집만 붙었으면 줄거리를 적은 것으로 치지 않는다
+     (usesOwnStory) — 장르만 고른 사람은 지금처럼 후보를 고르거나 바로 만든다. */
+  const [genreBooks, setGenreBooks] = useState<LoreBook[]>([]);
+  useEffect(() => {
+    let alive = true;
+    listLorebooks().then(c => { if (alive) setGenreBooks(c.books.filter(b => b.source === "preset")); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (!genreBooks.length) return;
+    setForm(f => {
+      const mine = attachedBooks(f.lorebook).filter(b => b.source !== "genre");
+      const was = attachedBooks(f.lorebook).find(b => b.source === "genre");
+      const hit = bookForGenre(genreBooks, f.genre);
+      if ((was?.id || "") === (hit?.id || "")) return f;
+      const next = hit ? [{...hit, source: "genre", confirmed: true}, ...mine] : mine;
+      return {...f, lorebook: packBooks(next)};
+    });
+  }, [form.genre, genreBooks]);
+  useEffect(() => { if (draftLoaded) saveDraft(form); }, [form, draftLoaded]);
   const own = false; // 시작 방식은 별도 선택하지 않는다. 입력 내용으로 생성 경로를 정한다.
   const step = rawStep >= 4 || rawStep === 2 ? 2 : 1;
   const [lorePending,setLorePending]=useState(false);
@@ -273,7 +304,10 @@ export default function Wizard({
   /* 「확인하고 만들기」는 게스트도 쓴다(#608). 같은 브라우저에서는 첫 화면의 「만들던 웹툰」이 이어서 찾아 주고,
      브라우저가 바뀌면 못 찾는다 — 그 말은 고르는 곳에 한 줄로 적는다. 「만들고 싶은 내용이 있어요」(own)는
      로그인 전용 그대로다. */
-  const usesOwnStory = !!form.story.trim() && authenticated;
+  /* 줄거리를 적었거나 설정집을 붙였으면 「내 내용으로 만들기」 길로 간다 — 후보 넷 없이 이야기 하나를
+     확인하고 장면을 확인한 뒤 그린다. 설정집이 곧 그 내용이다(2026-10-24). 장르를 골라 저절로 붙은
+     장르 설정집은 여기에 안 친다. */
+  const usesOwnStory = (!!form.story.trim() || attachedBooks(form.lorebook).some(b => b.source !== "genre")) && authenticated;
   const viewMode = usesOwnStory ? "expert" : form.mode;
   const pickMode = (m: WizardForm["mode"]) => patch({ mode: m });
   const ownReady = !form.lorebook || form.lorebook.confirmed;
@@ -418,7 +452,7 @@ export default function Wizard({
       </div>:<div className="wt-create-content wt-create-options">
         <section><h2>{t("그림체")}</h2><div className="wt-wiz-styles">{STYLE_INFO.map(([key,label])=><button type="button" key={key} className={`wt-wiz-style${form.style===key?" on":""}`} aria-pressed={form.style===key} onClick={()=>{track("style_pick",{style:key});patch({style:key});}}><img src={STYLE_THUMB[key]||`/static/samples/ex-${key}-1.jpg`} alt=""/><b>{t(label)}</b>{form.style===key&&<CheckMark/>}</button>)}</div></section>
         <section><h2>{t("그리기 방식")}</h2>{qualityPicker}</section>
-        <section><h2>{t("생성 방식")}</h2>{usesOwnStory?<p className="muted">{t("입력한 이야기의 장면을 확인한 뒤 그립니다.")}</p>:<div className="wt-wiz-modes"><button type="button" className={`wt-wiz-mode${viewMode==="simple"?" on":""}`} onClick={()=>pickMode("simple")}><b>{t("바로 만들기")}</b><span>{t("중간 확인 없이 완성")}</span></button><button type="button" className={`wt-wiz-mode${viewMode==="expert"?" on":""}`} onClick={()=>pickMode("expert")}><b>{t("확인하고 만들기")}</b><span>{t("이야기와 장면 확인 후 생성")}</span></button></div>}</section>
+        <section><h2>{t("생성 방식")}</h2>{usesOwnStory?<p className="muted">{form.story.trim()?t("입력한 이야기의 장면을 확인한 뒤 그립니다."):t("붙인 설정집으로 이야기를 세우고, 장면을 확인한 뒤 그립니다.")}</p>:<div className="wt-wiz-modes"><button type="button" className={`wt-wiz-mode${viewMode==="simple"?" on":""}`} onClick={()=>pickMode("simple")}><b>{t("바로 만들기")}</b><span>{t("중간 확인 없이 완성")}</span></button><button type="button" className={`wt-wiz-mode${viewMode==="expert"?" on":""}`} onClick={()=>pickMode("expert")}><b>{t("확인하고 만들기")}</b><span>{t("이야기와 장면 확인 후 생성")}</span></button></div>}</section>
         {sidePanel}
       </div>}
     </div>

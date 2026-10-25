@@ -7,7 +7,13 @@ class LoreBookTest {
  @Test void detachedBookLeavesNothing(){assertThat(LoreBook.clean(null,true)).isEmpty();assertThat(LoreBook.clean(Map.of(),true)).isEmpty();}
  @Test void unconfirmedBookCannotGenerate(){assertThatThrownBy(()->LoreBook.clean(Map.of("fixed_settings","test"),true)).isInstanceOf(BusinessException.class);}
  @Test void onlyAllowedDataSurvives(){var b=LoreBook.clean(Map.of("confirmed",true,"path","/tmp/other","fixed_settings"," world ","entries",List.of(Map.of("title","a","content","b","enabled",false))),true);assertThat(b).doesNotContainKey("path");assertThat(b.get("fixed_settings")).isEqualTo("world");assertThat((List<?>)b.get("entries")).hasSize(1);}
- @Test void budgetAndEntryBoundsAreEnforced(){assertThatThrownBy(()->LoreBook.clean(Map.of("fixed_settings","x".repeat(8001)),false)).isInstanceOf(BusinessException.class);assertThatThrownBy(()->LoreBook.clean(Map.of("entries",Collections.nCopies(25,Map.of())),false)).isInstanceOf(BusinessException.class);}
+ @Test void budgetAndEntryBoundsAreEnforced(){assertThatThrownBy(()->LoreBook.clean(Map.of("fixed_settings","x".repeat(8001)),false)).isInstanceOf(BusinessException.class);assertThatThrownBy(()->LoreBook.clean(Map.of("entries",Collections.nCopies(401,Map.of())),false)).isInstanceOf(BusinessException.class);}
+ @Test void idsAndProgressRowsSurvive(){
+  var b=LoreBook.clean(Map.of("confirmed",true,"entries",List.of(Map.of("id","L0001","title","열쇠","content","밤에만 빛난다","keys",List.of("열쇠"))),
+    "progress",List.of(Map.of("key","L0001","title","열쇠","text","부서졌다"),Map.of("key","P001","title","빈 줄","text"," "))),true);
+  assertThat(((Map<?,?>)((List<?>)b.get("entries")).get(0)).get("id")).isEqualTo("L0001");
+  assertThat((List<?>)b.get("progress")).hasSize(1);
+ }
  @Test void collectionPreservesEachBookAndCombinesAllSettings(){
   var a=Map.<String,Object>of("name","세계","fixed_settings","밤에는 마법 금지","confirmed",true);
   var b=Map.<String,Object>of("name","인물","fixed_settings","주인공은 고소공포증","confirmed",true);
@@ -18,6 +24,6 @@ class LoreBookTest {
   assertThatThrownBy(()->LoreBook.clean(Map.of("books",List.of(Map.of("fixed_settings","draft")),"confirmed",true),true)).isInstanceOf(BusinessException.class);
   assertThatThrownBy(()->LoreBook.clean(Map.of("books",List.of(Map.of("books",List.of())),"confirmed",true),true)).isInstanceOf(BusinessException.class);
  }
- @Test void collectionHasSharedBudget(){var b=Map.<String,Object>of("name","test","fixed_settings","x".repeat(8000),"confirmed",true);assertThatThrownBy(()->LoreBook.clean(Map.of("books",List.of(b,b),"confirmed",true),true)).isInstanceOf(BusinessException.class);}
+ @Test void collectionHasSharedBudget(){var b=Map.<String,Object>of("name","test","fixed_settings","x".repeat(8000),"confirmed",true);assertThatThrownBy(()->LoreBook.clean(Map.of("books",Collections.nCopies(11,b),"confirmed",true),true)).isInstanceOf(BusinessException.class);}
 
 }

@@ -252,6 +252,17 @@ public class HarnessProcess {
         return waitWithTimeout(p,reader,90,"설정 정리가 오래 걸려 중단했습니다.");
     }
 
+    /** 끝난 회차를 읽어 연재 설정집을 정리한다(다음 화 버튼). 결과는 {@code dir/result.json}. */
+    public int seriesDigest(Path dir, String lang) throws IOException, InterruptedException {
+        ProcessBuilder pb = new ProcessBuilder(python, "-u", "run.py", "--series-digest", dir.resolve("packet.json").toString(),
+                "--out", dir.resolve("result.json").toString(), "--lang", lang);
+        pb.directory(harnessDir.toFile()); pb.redirectErrorStream(true);
+        pb.environment().put("NH_RUNS_DIR", runsDir.toString());
+        Process p = pb.start();
+        Thread reader = streamLines(p.getInputStream(), line -> log.info("[회차 정리] {}", line), "회차 정리 출력을 읽다 끊겼습니다");
+        return waitWithTimeout(p, reader, 240, "앞 화 정리가 너무 오래 걸려 중단했습니다.");
+    }
+
     /** 스트림을 한 줄씩 읽어 {@code onLine} 으로 흘린다. 빈 줄은 거른다. */
     private Thread streamLines(InputStream in, Consumer<String> onLine, String failMessage) {
         return Thread.ofVirtual().start(() -> {
