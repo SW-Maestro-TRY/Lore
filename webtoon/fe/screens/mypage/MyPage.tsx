@@ -21,7 +21,7 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, type NhActiveCard, myLikes, myTrash, readAllowance, recentRuns,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myLikes, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
   mySurveyStatus, type SurveyStatus,
@@ -32,20 +32,20 @@ import PushOptIn from "../../ui/PushOptIn";
 import RunStrip from "../../ui/RunStrip";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
-import { IconUser } from "../../ui/Icons";
+import { IconCheck, IconChevronRight, IconMail, IconUser } from "../../ui/Icons";
+import { InstagramMark, KakaoTalkMark, XMark } from "../../ui/BrandMarks";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
 import AdminSurvey from "./AdminSurvey";
 import CommunityBell from "../../ui/community/CommunityBell";
 import "./MyPage.css";
 
-/** 「1:1 문의하기」 창구 셋. 카카오톡 채널 주소는 공용(`CONTACT_CHANNEL`)이고, 인스타·X 는
- *  이 화면에서만 쓰는 웹툰 SNS 계정이라 여기 둔다. */
-const CONTACT_LINKS: { key: string; label: string; href: string }[] = [
-  { key: "kakao", label: "카카오톡", href: CONTACT_CHANNEL },
-  { key: "instagram", label: "인스타그램", href: "https://www.instagram.com/lorecomic_/" },
-  { key: "x", label: "X", href: "https://x.com/lorecomic_" },
-];
+/** 공용 카카오 채널과 이 서비스의 공식 SNS 계정. */
+const CONTACT_LINKS = [
+  { key: "instagram", label: "Instagram", href: "https://www.instagram.com/lorecomic_/" },
+  { key: "x", label: "X (Twitter)", href: "https://x.com/lorecomic_" },
+] as const;
+const WEBTOON_SUPPORT_EMAIL = "lore@lorecomic.com";
 
 registerDict({
   "마이페이지": { en: "My page", ja: "マイページ", zh: "我的页面" },
@@ -118,11 +118,45 @@ registerDict({
   "충전": { en: "Top up", ja: "チャージ", zh: "充值" },
   "내역": { en: "History", ja: "履歴", zh: "记录" },
   "1:1 문의하기": { en: "Contact us", ja: "1:1お問い合わせ", zh: "1:1 咨询" },
-  "어디로 문의할까요?": { en: "Where would you like to reach us?", ja: "どちらにお問い合わせしますか？", zh: "想通过哪个渠道联系我们？" },
+  "무엇을 도와드릴까요?": { en: "How can we help?", ja: "どのようなお手伝いが必要ですか？", zh: "有什么可以帮您？" },
+  "LORE 이용 중 궁금한 점이 있으신가요?": { en: "Questions about using LORE?", ja: "LOREの利用についてご質問はありますか？", zh: "使用 LORE 时有疑问吗？" },
+  "카카오톡 문의": { en: "Contact on KakaoTalk", ja: "KakaoTalkでお問い合わせ", zh: "通过 KakaoTalk 联系" },
+  "채팅으로 편하게 문의하기": { en: "Chat with us", ja: "チャットで気軽にお問い合わせ", zh: "通过聊天轻松咨询" },
+  "이메일 문의": { en: "Email inquiry", ja: "メールでお問い合わせ", zh: "邮件咨询" },
+  "문의 이메일": { en: "Contact email", ja: "お問い合わせメール", zh: "联系邮箱" },
+  "오류 제보 · 계정·크레딧 · 기타 문의": { en: "Report a problem, account and credits, or anything else", ja: "不具合・アカウント・その他のお問い合わせ", zh: "问题反馈、账号与点数或其他咨询" },
+  "LORE의 소식도 만나보세요": { en: "Follow LORE", ja: "LOREの最新情報", zh: "关注 LORE 动态" },
+  "문의 유형": { en: "Topic", ja: "お問い合わせの種類", zh: "咨询类型" },
+  "웹툰 제작": { en: "Webtoon creation", ja: "ウェブトゥーン制作", zh: "漫画制作" },
+  "계정·크레딧": { en: "Account and credits", ja: "アカウント・クレジット", zh: "账号与点数" },
+  "오류 제보": { en: "Report a problem", ja: "不具合の報告", zh: "问题反馈" },
+  "기타 문의": { en: "Something else", ja: "その他", zh: "其他" },
+  "답변 받을 이메일": { en: "Email for our reply", ja: "返信先メールアドレス", zh: "接收回复的邮箱" },
+  "문의 내용을 적어 주세요": { en: "Write your message", ja: "お問い合わせ内容をご記入ください", zh: "请填写咨询内容" },
+  "예: 크레딧을 충전했는데 반영되지 않아요. 결제한 시간과 화면에 나온 내용을 적어 주세요.": { en: "Example: My credits haven't appeared after a top-up. Please include when you paid and what the screen shows.", ja: "例：チャージしたクレジットが反映されません。決済した時刻と画面に表示された内容をご記入ください。", zh: "例如：充值后点数没有到账。请填写付款时间和页面显示的内容。" },
+  "문의 내용은 5자 이상 적어 주세요.": { en: "Please write at least 5 characters.", ja: "5文字以上でご記入ください。", zh: "请至少输入 5 个字符。" },
+  "첨부 파일": { en: "Attachments", ja: "添付ファイル", zh: "附件" },
+  "이미지 또는 PDF · 최대 3개, 파일당 1MB": { en: "Images or PDF · up to 3 files, 1MB each", ja: "画像またはPDF・最大3件、1件1MB", zh: "图片或 PDF · 最多 3 个，每个 1MB" },
+  "파일을 선택해 주세요": { en: "Choose files", ja: "ファイルを選択", zh: "选择文件" },
+  "첨부 파일은 최대 3개까지 올릴 수 있어요.": { en: "You can attach up to 3 files.", ja: "添付ファイルは最大3件までです。", zh: "最多可上传 3 个附件。" },
+  "파일 하나는 1MB 이하로 첨부해 주세요.": { en: "Each file must be 1MB or smaller.", ja: "ファイルは1件1MB以下にしてください。", zh: "单个文件不能超过 1MB。" },
+  "첨부 파일 전체 용량은 3MB 이하로 올려 주세요.": { en: "Attachments must total 3MB or less.", ja: "添付ファイルの合計は3MB以下にしてください。", zh: "附件总大小不能超过 3MB。" },
+  "PNG, JPG, WEBP 이미지와 PDF 파일만 첨부할 수 있어요.": { en: "Only PNG, JPG, WEBP images and PDF files are allowed.", ja: "PNG、JPG、WEBP画像とPDFのみ添付できます。", zh: "仅支持 PNG、JPG、WEBP 图片和 PDF 文件。" },
+  "삭제": { en: "Remove", ja: "削除", zh: "删除" },
+  "개인정보 수집 및 이용 동의 (필수)": { en: "Personal information consent (required)", ja: "個人情報の収集・利用への同意（必須）", zh: "个人信息收集与使用同意（必填）" },
+  "수집 항목: 이메일 주소, 문의 내용, 첨부 파일 · 이용 목적: 문의 확인 및 답변 · 보유 기간: 문의 해결 후 1년": { en: "Items: email address, message, attachments · Purpose: review and reply · Retention: 1 year after resolution", ja: "項目：メールアドレス、お問い合わせ内容、添付ファイル・目的：確認と返信・保管期間：解決後1年間", zh: "收集项目：邮箱、咨询内容、附件 · 用途：确认并回复 · 保存期限：问题解决后 1 年" },
+  "위 내용에 동의합니다. (필수)": { en: "I agree to the above. (Required)", ja: "上記に同意します。（必須）", zh: "我同意以上内容。（必填）" },
+  "개인정보 수집 및 이용에 동의해 주세요.": { en: "Please agree to the collection and use of personal information.", ja: "個人情報の収集・利用に同意してください。", zh: "请同意收集和使用个人信息。" },
+  "자세히 보기": { en: "Learn more", ja: "詳しく見る", zh: "了解详情" },
+  "문의 보내기": { en: "Send inquiry", ja: "問い合わせを送信", zh: "发送咨询" },
+  "보내는 중…": { en: "Sending…", ja: "送信中…", zh: "发送中…" },
+  "문의가 전달됐어요. 적어 주신 이메일로 답변드릴게요.": { en: "Your inquiry was sent. We'll reply to the email you provided.", ja: "お問い合わせを送信しました。ご記入のメールアドレスに返信します。", zh: "咨询已发送。我们会回复到您填写的邮箱。" },
+  "보내지 못했어요. 잠시 뒤 다시 시도해 주세요.": { en: "Couldn't send your message. Please try again shortly.", ja: "送信できませんでした。しばらくしてからもう一度お試しください。", zh: "发送失败，请稍后重试。" },
+  "문의 내용은 3,000자까지 적을 수 있어요.": { en: "Your message can be up to 3,000 characters.", ja: "お問い合わせ内容は3,000文字までです。", zh: "咨询内容最多可输入 3,000 个字符。" },
+  "문의로 돌아가기": { en: "Back to contact options", ja: "お問い合わせ方法に戻る", zh: "返回联系选项" },
   "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
   "인스타그램": { en: "Instagram", ja: "インスタグラム", zh: "Instagram" },
   "이용약관": { en: "Terms of use", ja: "利用規約", zh: "使用条款" },
-  "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },
   "목록을 가져오지 못했어요": { en: "Couldn't load the list", ja: "一覧を読み込めませんでした", zh: "无法加载列表" },
   "서버가 떠 있는지 확인해 주세요": { en: "Please check that the server is running", ja: "サーバーが起動しているか確認してください", zh: "请确认服务器是否已启动" },
   "내 캐릭터로 웹툰 만들기": { en: "Make a webtoon with my character", ja: "マイキャラクターでウェブトゥーンを作る", zh: "用我的角色制作漫画" },
@@ -150,6 +184,16 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   const [allWorks, setAllWorks] = useState(false);
   const WORKS_PREVIEW = 3;
   const [contactOpen, setContactOpen] = useState(false);
+  const [contactCompose, setContactCompose] = useState(false);
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactCategory, setContactCategory] = useState<WebtoonContactCategory>("WEBTOON");
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactWebsite, setContactWebsite] = useState("");
+  const [contactFiles, setContactFiles] = useState<File[]>([]);
+  const [contactPrivacyConsent, setContactPrivacyConsent] = useState(false);
+  const [contactBusy, setContactBusy] = useState(false);
+  const [contactError, setContactError] = useState("");
+  const [contactSent, setContactSent] = useState(false);
   const [surveyStatus, setSurveyStatus] = useState<SurveyStatus | null>(null);
   useEffect(() => {
     if (!isAuthenticated) { setSurveyStatus(null); return; }
@@ -343,7 +387,11 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             </>
           )}
           <small>{t("계정")}</small>
-          <button type="button" onClick={() => { track("contact_open", { where: "mypage" }); setContactOpen(true); }}>
+          <button type="button" onClick={() => {
+            track("contact_open", { where: "mypage" });
+            setContactEmail(user?.email ?? ""); setContactMessage(""); setContactError("");
+            setContactCategory("WEBTOON"); setContactCompose(false); setContactSent(false); setContactOpen(true);
+          }}>
             {t("1:1 문의하기")}
           </button>
           <button type="button" onClick={() => { track("feedback_open", { where: "mypage" }); go("feedback"); }}>
@@ -365,15 +413,114 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
 
       <div className="wt-my-main">
             {contactOpen && (
-              <Dialog title={t("어디로 문의할까요?")} onClose={() => setContactOpen(false)}>
-                <div className="wt-my-contact">
-                  {CONTACT_LINKS.map((c) => (
-                    <a key={c.key} className="btn btn-w" href={c.href} target="_blank" rel="noopener noreferrer"
-                       onClick={() => { track("contact_pick", { where: "mypage", channel: c.key }); setContactOpen(false); }}>
-                      {t(c.label)}
+              <Dialog className="wt-contact-dialog"
+                      title={t(contactCompose ? "이메일 문의" : "무엇을 도와드릴까요?")}
+                      sub={contactCompose ? undefined : t("LORE 이용 중 궁금한 점이 있으신가요?")}
+                      busy={contactBusy} onClose={() => setContactOpen(false)}>
+                {!contactCompose ? (
+                  <div className="wt-my-contact">
+                    <a className="wt-contact-row" href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer"
+                       onClick={() => { track("contact_pick", { where: "mypage", channel: "kakao" }); setContactOpen(false); }}>
+                      <span className="wt-contact-rowmark kakao"><KakaoTalkMark size={22} /></span>
+                      <span className="wt-contact-rowcopy"><b>{t("카카오톡 문의")}</b><small>{t("채팅으로 편하게 문의하기")}</small></span>
+                      <IconChevronRight size={19} />
                     </a>
-                  ))}
-                </div>
+                    <button type="button" className="wt-contact-row" onClick={() => {
+                      track("contact_pick", { where: "mypage", channel: "email" });
+                      setContactError(""); setContactCompose(true);
+                    }}>
+                      <span className="wt-contact-rowmark mail"><IconMail size={21} /></span>
+                      <span className="wt-contact-rowcopy"><b>{t("이메일 문의")}</b><small>{WEBTOON_SUPPORT_EMAIL}</small></span>
+                      <IconChevronRight size={19} />
+                    </button>
+                    <p className="wt-contact-social-label">{t("LORE의 소식도 만나보세요")}</p>
+                    <div className="wt-contact-socials">
+                      {CONTACT_LINKS.map((c) => (
+                        <a key={c.key} href={c.href} target="_blank" rel="noopener noreferrer"
+                           onClick={() => { track("contact_pick", { where: "mypage", channel: c.key }); setContactOpen(false); }}>
+                          {c.key === "instagram" ? <InstagramMark size={23} /> : <XMark size={22} />}
+                          <span>{c.label}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : contactSent ? (
+                  <div className="wt-contact-success" role="status">
+                    <span className="wt-contact-successmark"><IconCheck size={22} /></span>
+                    <b>{t("문의가 전달됐어요. 적어 주신 이메일로 답변드릴게요.")}</b>
+                    <button type="button" className="btn btn-w" onClick={() => setContactOpen(false)}>{t("닫기")}</button>
+                  </div>
+                ) : (
+                  <form className="wt-contact-form" onSubmit={(event) => {
+                    event.preventDefault();
+                    if (contactBusy || !contactEmail.trim() || contactMessage.trim().length < 5 || contactMessage.length > 3000 || !contactPrivacyConsent) return;
+                    setContactBusy(true); setContactError("");
+                    void sendWebtoonContact({ email: contactEmail.trim(), category: contactCategory, message: contactMessage.trim(), privacyConsent: contactPrivacyConsent, files: contactFiles, website: contactWebsite })
+                      .then(() => { setContactSent(true); track("contact_sent", { where: "mypage", channel: "email" }); })
+                      .catch(() => setContactError(t("보내지 못했어요. 잠시 뒤 다시 시도해 주세요.")))
+                      .finally(() => setContactBusy(false));
+                  }}>
+                    <button type="button" className="wt-contact-back" aria-label={t("문의로 돌아가기")}
+                            onClick={() => setContactCompose(false)} disabled={contactBusy}>
+                      <span aria-hidden="true">&lt;</span>
+                    </button>
+                    <label htmlFor="wt-contact-email">{t("답변 받을 이메일")}</label>
+                    <input id="wt-contact-email" type="email" autoComplete="email" maxLength={254} required
+                           value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} />
+                    <label htmlFor="wt-contact-category">{t("문의 유형")}</label>
+                    <select id="wt-contact-category" value={contactCategory}
+                            onChange={(event) => setContactCategory(event.target.value as WebtoonContactCategory)}>
+                      <option value="WEBTOON">{t("웹툰 제작")}</option>
+                      <option value="ACCOUNT_CREDITS">{t("계정·크레딧")}</option>
+                      <option value="ERROR">{t("오류 제보")}</option>
+                      <option value="OTHER">{t("기타 문의")}</option>
+                    </select>
+                    <label htmlFor="wt-contact-message">{t("문의 내용을 적어 주세요")}</label>
+                    <textarea id="wt-contact-message" rows={5} maxLength={3000} required
+                              value={contactMessage} placeholder={t("예: 크레딧을 충전했는데 반영되지 않아요. 결제한 시간과 화면에 나온 내용을 적어 주세요.")}
+                              onChange={(event) => setContactMessage(event.target.value)} />
+                    <div className="wt-contact-formfoot"><span>{contactMessage.length.toLocaleString()} / 3,000</span></div>
+                    <div className="wt-contact-attachments">
+                      <label htmlFor="wt-contact-files">{t("첨부 파일")}</label>
+                      <small>{t("이미지 또는 PDF · 최대 3개, 파일당 1MB")}</small>
+                      <input id="wt-contact-files" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" multiple
+                        onChange={(event) => {
+                          const selected = Array.from(event.target.files || []);
+                          const next = [...contactFiles, ...selected];
+                          let issue = "";
+                          if (next.length > 3) issue = t("첨부 파일은 최대 3개까지 올릴 수 있어요.");
+                          else if (next.some((file) => file.size > 1024 * 1024)) issue = t("파일 하나는 1MB 이하로 첨부해 주세요.");
+                          else if (next.reduce((sum, file) => sum + file.size, 0) > 3 * 1024 * 1024) issue = t("첨부 파일 전체 용량은 3MB 이하로 올려 주세요.");
+                          else if (next.some((file) => !["image/png", "image/jpeg", "image/webp", "application/pdf"].includes(file.type))) issue = t("PNG, JPG, WEBP 이미지와 PDF 파일만 첨부할 수 있어요.");
+                          setContactError(issue);
+                          if (!issue) setContactFiles(next);
+                          event.target.value = "";
+                        }} />
+                      {contactFiles.length > 0 && <ul className="wt-contact-filelist">{contactFiles.map((file, index) => (
+                        <li key={`${file.name}-${file.lastModified}-${index}`}><span>{file.name}</span><button type="button" onClick={() => setContactFiles((files) => files.filter((_, i) => i !== index))}>{t("삭제")}</button></li>
+                      ))}</ul>}
+                    </div>
+                    <fieldset className="wt-contact-consent">
+                      <legend>{t("개인정보 수집 및 이용 동의 (필수)")}</legend>
+                      <p>{t("수집 항목: 이메일 주소, 문의 내용, 첨부 파일 · 이용 목적: 문의 확인 및 답변 · 보유 기간: 문의 해결 후 1년")}</p>
+                      <div className="wt-contact-consent-row">
+                        <label><input type="checkbox" required checked={contactPrivacyConsent}
+                          onChange={(event) => setContactPrivacyConsent(event.target.checked)} />
+                          <span>{t("위 내용에 동의합니다. (필수)")}</span></label>
+                        <a href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer">{t("자세히 보기")}</a>
+                      </div>
+                    </fieldset>
+                    <input className="wt-contact-honeypot" type="text" name="website" tabIndex={-1} autoComplete="off"
+                           aria-hidden="true" value={contactWebsite} onChange={(event) => setContactWebsite(event.target.value)} />
+                    {contactError && <p className="wt-contact-error" role="alert">{contactError}</p>}
+                    {contactMessage.trim().length > 0 && contactMessage.trim().length < 5 &&
+                      <p className="wt-contact-error">{t("문의 내용은 5자 이상 적어 주세요.")}</p>}
+                    <button type="submit" className="wt-contact-submit" disabled={contactBusy || !contactEmail.trim() || contactMessage.trim().length < 5 || contactMessage.length > 3000 || !contactPrivacyConsent}>
+                      {contactBusy ? t("보내는 중…") : t("문의 보내기")}
+                    </button>
+                  </form>
+                )}
+                <div className="wt-contact-address"><IconMail size={15} /><span>{t("문의 이메일")}</span><b>{WEBTOON_SUPPORT_EMAIL}</b></div>
               </Dialog>
             )}
             {trashOpen && (
