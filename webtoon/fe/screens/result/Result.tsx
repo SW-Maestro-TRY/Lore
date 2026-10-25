@@ -555,11 +555,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                       </li>
                     ))}
                   </ul>
-                  {series?.chapters.some(c=>c.episode>ep)
-                    ? <button className="btn btn-p wt-reader-nextwide" onClick={()=>nextEpisode("reading_end")}>{t("다음화 보기")}</button>
-                    : mine
-                      ? <button className="btn btn-p wt-reader-nextwide" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>
-                      : <div className="wt-reader-wait"><b>{t("다음 이야기를 기다려 주세요")}</b><span>{t("아직 공개된 다음 회차가 없어요.")}</span></div>}
+                  {/* 다음 화는 목록에서 바로 고른다 — 아래 단추 줄(다음화 보기 · 편집실)은 겹쳐서 뺐다(2026-10-25).
+                      다음 화가 없고 내 작품도 아니면 기다려 달라는 한 줄만 둔다. */}
+                  {!series?.chapters.some(c=>c.episode>ep) && !mine &&
+                    <div className="wt-reader-wait"><b>{t("다음 이야기를 기다려 주세요")}</b><span>{t("아직 공개된 다음 회차가 없어요.")}</span></div>}
                 </div>
                 {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{t("가입 없이 무료로 시작")}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></section>}
               </EpisodeCommunity>
