@@ -19,6 +19,8 @@ import { useIsWide } from './useIsWide';
 import Scrapbook, { type SkinProps } from './skins/Scrapbook';
 import Yeoul from './skins/Yeoul';
 import './skin-header.css';
+import './shell.css';
+import { useVisualViewport } from '@common/viewport/useVisualViewport';
 import AnnouncementsGate from './announcements/AnnouncementsGate';
 
 export type SkinName = 'scrapbook' | 'yeoul';
@@ -29,6 +31,8 @@ export default function TamagotchiScreen({ name, focusedRoom = false }: { name: 
   const Skin = SKINS[name];
   const wide = useIsWide();
   const box = useRef<HTMLDivElement>(null);
+  // 키보드가 오르면 셸이 보이는 영역(--vvh·--vvt)을 따라간다 — shell.css 머리말.
+  useVisualViewport();
 
   // 이 시안의 표시를 <html> 에 심는다(헤더 색은 안 바꾼다 — skin-header.css 머리말). 나갈 때 지운다.
   useEffect(() => {
@@ -54,12 +58,6 @@ export default function TamagotchiScreen({ name, focusedRoom = false }: { name: 
     <div
       ref={box}
       className="tama-fullscreen"
-      style={{
-        position: 'relative',
-        // 헤더를 뺀 나머지를 채운다. 실측 전에는 0 으로 두어 100dvh 로 시작한다.
-        height: 'calc(100dvh - var(--tama-header-h, 0px))',
-        minHeight: focusedRoom?0:360,
-      }}
     >
       <AnnouncementsGate>
       {name === 'yeoul' && focusedRoom ? <Yeoul mode={wide ? 'pc' : 'phone'} focusedRoom /> : <Skin mode={wide ? 'pc' : 'phone'} />}
