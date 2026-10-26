@@ -20,8 +20,8 @@
 |---|---|---|---|---|
 | `lore.webtoon.workers` | 만들기 작업을 몇 편 나란히 돌리나 | 2 | **3** | 2 |
 | `lore.webtoon.page-workers` | 장 그림을 서버 전체에서 몇 장 동시에 그리나 | 3 | **4** | 3 |
-| `lore.webtoon.spend.daily-krw` | 하루 지출 상한(원) | 40,000 | **0 = 꺼짐** (10/25 07:40 부터, 그 전 13,000) | 40,000 |
-| `lore.webtoon.spend.daily-runs` | 하루 편수 상한 | 30 | **0 = 꺼짐** (10/25 부터) | 30 |
+| `lore.webtoon.spend.daily-krw` | 하루 지출 상한(원) | 40,000 | **50,000** (10/26 저녁 설정 · 다음 배포부터. 10/25 07:40~ 0 = 꺼짐, 그 전 13,000) | 40,000 |
+| `lore.webtoon.spend.daily-runs` | 하루 편수 상한 | 30 | **30** (10/26 저녁 설정 · 다음 배포부터. 10/25~ 0 = 꺼짐) | 30 |
 
 - 코드 기본값: `JobRunner.java:215-216`, `SpendGuard.java:38-39`.
 - 운영 값은 Parameter Store `/lore/prod/lore_webtoon_workers` · `lore_webtoon_page_workers` ·
