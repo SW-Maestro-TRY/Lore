@@ -51,6 +51,27 @@ class JobEtaTest {
     }
 
     @Test
+    @DisplayName("대기 줄 계산 — 앞사람이 남긴 일을 일꾼 몫과 그림 자리 몫으로 나눈다")
+    void 남은_일_나누기() {
+        Instant t0 = Instant.parse("2026-10-26T13:00:00Z");
+        WebtoonJob waiting = job(t0);                       // 줄에 막 선 편 — 장 수 모름(8장으로 어림)
+        JobEta.Parts fresh = JobEta.parts(waiting, 없음, t0);
+        assertThat(fresh.line()).isEqualTo(JobEta.STORY + JobEta.SHEET + JobEta.SCENES + JobEta.REVIEW + JobEta.FINISH);
+        assertThat(fresh.page()).isEqualTo(JobEta.GUESS_PAGES * JobEta.PAGE);
+
+        WebtoonJob drawing = job(t0);
+        drawing.moveTo(JobStatus.RUNNING, JobStage.PAGES, t0);
+        var 셋_그림 = new JobProgress.Snapshot(List.of(), "", 3, 8, 0, List.of(), List.of(), 0, t0);
+        JobEta.Parts mid = JobEta.parts(drawing, 셋_그림, t0.plusSeconds(200));
+        assertThat(mid.page()).isEqualTo(5 * JobEta.PAGE);              // 남은 다섯 장만
+        assertThat(mid.line()).isEqualTo(JobEta.REVIEW + JobEta.FINISH);
+
+        WebtoonJob over = job(t0);
+        over.moveTo(JobStatus.DONE, JobStage.BIND, t0);
+        assertThat(JobEta.parts(over, 없음, t0)).isEqualTo(new JobEta.Parts(0, 0));
+    }
+
+    @Test
     @DisplayName("그림을 그리기 시작할 때 남은 시간은 「1분」이 아니다")
     void 그리기_시작() {
         Instant t0 = Instant.parse("2026-09-30T13:00:00Z");
