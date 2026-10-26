@@ -31,7 +31,7 @@ import { MobileTop } from "../../ui/TopNav";
 import LouPlay from "./LouPlay";
 import QueueDialog, { isQueued, markQueueSeen, queueSeen } from "../../ui/QueueDialog";
 import { Dialog } from "../../ui/Dialog";
-import { LouSwim } from "../../ui/LouLoading";
+import { LouWork } from "../../ui/LouLoading";
 import "./i18n";
 import "./Progress.css";
 import "./ProgressFinal.css";
@@ -1415,7 +1415,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               {pane === "working" && job && (
                 <>
                   <div className="working-card">
-                    <LouSwim size={112} />
+                    <LouWork stage={cur === 0 ? "story" : cur === 1 ? "sheet" : "board"} size={120} />
                     <h2>{stateName}</h2>
                     <p>{cur === 0 ? t("입력한 이야기와 설정을 바탕으로 작성 중") : cur === 1 ? t("외형과 설정을 시트로 정리 중") : t("이야기를 페이지별 장면으로 나누는 중")}{leftText && ` · ${leftText}`}</p>
                     <p className="dim working-bg">{t("백그라운드에서 작업 중이라 나갔다 들어와도 작업이 이어져요.")}</p>
