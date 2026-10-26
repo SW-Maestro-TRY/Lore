@@ -682,6 +682,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const noCredit = balance != null && balance < 1;
   /* own 길의 1화 다시 만들기 — 첫 번째는 무료, 그다음부터 1크레딧(#548) */
   const storyPaid = ownJob && (job?.story?.redraws ?? 0) >= 1;
+  /* 시트 다시 만들기 — 첫 번째는 무료, 옛 시트가 하나라도 있으면 1크레딧(서버 resheetCost 와 같다). 게스트는 무료 */
+  const sheetPaid = !!job?.notice?.logged_in && (job?.sheet_versions ?? 0) >= 1;
+  const sheetRetryLabel = (base: string) => sheetPaid ? t("{label} -{n} 크레딧", { label: t(base), n: 1 }) : t("{label} · 무료", { label: t(base) });
 
   /* 그려진 장이 늘 때마다 그 자리로 스크롤한다 — 전에는 새 장이 그려져도
      화면이 그대로라 "진짜 만들고 있는 게 맞나" 라는 의심으로 이어졌다
@@ -1633,7 +1636,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       <input className="field" value={sheetNote} placeholder={t("고칠 점을 적고 다시 만들기 · 예: 머리를 더 길게")} aria-label={t("다시 만들기 메모")}
                              onChange={(e) => setSheetNote(e.target.value)} />
                       <button type="button" className="btn btn-w" disabled={busy} onClick={retrySheet}>
-                        <IconRetry size={18} /> {t("다시 만들기")}
+                        <IconRetry size={18} /> {sheetRetryLabel("다시 만들기")}
                       </button>
                     </div>
                   )}
@@ -1770,7 +1773,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
             <textarea rows={5} value={sheetNote} placeholder={t("예: 머리를 더 길게")} onChange={(e) => setSheetNote(e.target.value)} />
           </label>
           <div className="actions">
-            <button type="button" className="primary" disabled={busy || !sheetNote.trim()} onClick={() => { setSheetAsk(false); retrySheet(); }}>{t("수정 요청")}</button>
+            <button type="button" className="primary" disabled={busy || !sheetNote.trim()} onClick={() => { setSheetAsk(false); retrySheet(); }}>{sheetRetryLabel("수정 요청")}</button>
           </div>
         </Dialog>
       )}
@@ -1860,13 +1863,15 @@ function PageFilm({ jobId, art, minutesLeft, onZoom }: {
         <div className="stage empty"><div className="main wait"><span className="spin" /><em>{t("1쪽을 그리고 있어요")}</em></div></div>
       )}
       <div className="strip">
-        {done.map((no) => (
+        {/* 쪽 번호 순서 그대로 — 동시에 그려 1쪽이 늦게 끝나도 자리는 맨 앞이다(끝에 붙이면 「2 3 1」로 읽혔다) */}
+        {Array.from({ length: Math.max(art.total, done.length) }, (_, i) => i + 1).map((no) => done.includes(no) ? (
           <button key={no} type="button" aria-pressed={no === cur} onClick={() => setPicked(no)} aria-label={t("{n}쪽 보기", { n: no })}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={jobPageUrl(jobId, no, 260)} alt="" /><span>{no}</span>
           </button>
+        ) : (
+          <div key={no} className="next"><span className="spin" /><span>{t("{n}쪽", { n: no })}</span></div>
         ))}
-        {coming != null && <div className="next"><span className="spin" /><span>{t("{n}쪽", { n: coming })}</span></div>}
       </div>
       <div className="status">
         <b>{done.length}<small>{t("/ {n}쪽 완료", { n: art.total })}</small></b>

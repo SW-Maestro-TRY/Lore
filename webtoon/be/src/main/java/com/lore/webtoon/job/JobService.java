@@ -375,7 +375,9 @@ public class JobService {
                    에서 읽기만 할 수 있게. 고치는 칸은 화면이 awaiting_scenes 일 때만 연다. 파일이 아직 없거나(장면을
                    나누기 전) 치워졌으면 빈 목록이다. */
                 runner.scenesOf(job.getId(), job.getRunId()),
-                ownPause ? runner.storyOf(job.getRunId()) : null,
+                /* 내 내용 길의 본문은 확인 자리가 아니어도 싣는다 — 장면을 나누거나 그리는 동안 걸음 1을 눌러도
+                   원고 그대로 읽게. 안 실으면 화면이 바로 만들기용 「고른 이야기」 카드로 떨어졌다(2026-10-26). */
+                job.isOwn() ? runner.storyOf(job.getRunId()) : null,
                 runner.sheetReady(job.getRunId()),
                 runArt.sheetVersions(job.getRunId()),
                 at == JobStatus.AWAITING_SCENES || ownPause ? castSheetsOf(job) : null,
@@ -616,6 +618,13 @@ public class JobService {
      * 다시 만들기를 눌러도 같은 그림이 그대로 있고, 사람은 눌렀는데 아무 일도
      * 안 일어난 것으로 본다. (파이썬 쪽 `_clear_sheet` 과 같은 규칙이다.)
      */
+    /** 시트 다시 만들기 값 — 보관한 옛 시트가 없으면(처음 다시 만드는 것) 무료, 있으면 1크레딧. */
+    @Transactional(readOnly = true)
+    public int resheetCost(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        return job.getRunId() != null && runArt.sheetVersions(job.getRunId()) >= 1 ? 1 : 0;
+    }
+
     public void retrySheet(String publicId, String note) {
         WebtoonJob job = store.byPublicId(publicId);
         JobStatus at = job.getStatus();

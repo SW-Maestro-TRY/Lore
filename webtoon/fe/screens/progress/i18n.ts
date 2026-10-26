@@ -39,6 +39,8 @@ const dict: Dict = {
   "지금 판이 아니에요": { en: "This isn't the current version", ja: "現在の版ではありません", zh: "这不是当前版本" },
   "이 판으로 되돌리기": { en: "Restore this version", ja: "この版に戻す", zh: "恢复为此版本" },
   "되돌리지 못했어요": { en: "Couldn't restore", ja: "戻せませんでした", zh: "未能恢复" },
+  "{label} -{n} 크레딧": { en: "{label} −{n} credit", ja: "{label} −{n}クレジット", zh: "{label} −{n} 积分" },
+  "{label} · 무료": { en: "{label} · free", ja: "{label} · 無料", zh: "{label} · 免费" },
   "다시 뽑기 · 1크레딧": { en: "Redraw · 1 credit", ja: "引き直す · 1クレジット", zh: "重抽 · 1 积分" },
   "다시 뽑기 · 무료": { en: "Redraw · free", ja: "引き直す · 無料", zh: "重抽 · 免费" },
   "{ep}화를 다시 만들면 장면도 새 {ep}화로 다시 나눠요.": { en: "Rewriting episode {ep} also re-splits the scenes.", ja: "第{ep}話を作り直すと場面も分け直します。", zh: "重新生成第 {ep} 话后，场景也会重新划分。" },

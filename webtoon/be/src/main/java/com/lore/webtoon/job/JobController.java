@@ -452,7 +452,21 @@ public class JobController {
                                      @RequestBody(required = false) SheetDecision body) {
         String decision = body == null ? null : body.decision();
         if ("retry".equalsIgnoreCase(decision)) {
-            jobs.retrySheet(id, body.note());
+            Long me = CreditGate.currentUser();
+            /* 시트 다시 만들기도 첫 번째는 무료, 그다음부터 1크레딧(이야기·장면 다시 뽑기와 같다). 먼저 받고, 못 시작하면 돌려준다. */
+            int cost = me == null ? 0 : jobs.resheetCost(id);
+            String ref = id + ":resheet:" + System.currentTimeMillis();
+            if (cost > 0) {
+                credits.requireEnough(me, cost);
+                credits.charge(me, cost, ref, "캐릭터 시트 다시 만들기");
+            }
+            try {
+                jobs.retrySheet(id, body.note());
+            } catch (RuntimeException e) {
+                if (cost > 0) credits.refund(me, ref);
+                throw e;
+            }
+            return Map.of("ok", true, "cost", cost);
         } else {
             jobs.approveSheet(id);
         }

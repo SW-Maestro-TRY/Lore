@@ -930,6 +930,96 @@ public class JobRunner {
         });
     }
 
+    /**
+     * 서버가 다시 뜰 때 끊긴 작업을 멈춘 걸음부터 다시 줄에 세운다(2026-10-26). 이미 받은 요청은 끝까지 만든다.
+     *
+     * 그린 장·나눈 장면·시트는 파일로 남아 있어 그대로 쓴다 — 그린 장은 다시 안 그린다({@link #pageDrawn}).
+     * 사람이 확인할 자리 직전에 끊겼으면 그 자리로 돌린다. 이어 갈 수 없으면 false 를 돌려주고, 부르는 쪽
+     * ({@code StaleJobs})이 예전처럼 끊긴 것으로 적고 값을 돌려준다.
+     */
+    public boolean resumeInterrupted(WebtoonJob job) {
+        Long id = job.getId();
+        String runId = job.getRunId();
+        JobStage stage = job.getStage() == null ? JobStage.STORY : job.getStage();
+        if (runId == null) {
+            Path dir = jobsDir.resolve(job.getPublicId());
+            if (stage != JobStage.STORY || !Files.isDirectory(dir)) {
+                return false;
+            }
+            store.queued(id, JobStage.STORY);
+            enqueue(id, dir);
+            return true;
+        }
+        Path run = runDir(runId);
+        if (!Files.isDirectory(run)) {
+            return false;
+        }
+        switch (stage) {
+            case STORY -> {
+                /* 번호가 있으면 이야기를 다시 짓던 중이었다 — 있던 이야기로 고르는(확인하는) 자리로 돌린다. */
+                if (directionsOf(runId).isEmpty()) {
+                    return false;
+                }
+                store.awaiting(id, JobStatus.AWAITING_PICK, JobStage.STORY);
+            }
+            case SHEET -> {
+                if (job.isOwn()) {
+                    redrawSheet(id, "", JobStatus.AWAITING_SCENES);
+                } else {
+                    resumeAfterPick(id);     // 시트가 이미 있으면 하네스가 그냥 넘어간다
+                }
+            }
+            case PAGES, BIND -> {
+                boolean scenes = Files.isRegularFile(run.resolve("scenes.json"));
+                if (stage == JobStage.PAGES && !anyPageDrawn(runId) && (job.isOwn() || job.isCheckpoints())) {
+                    /* 그리기 전 — 장면을 나누던 중이었다. 다 나눴으면 장면 확인 자리로, 아니면 다시 나눈다. */
+                    if (scenes) {
+                        store.awaiting(id, JobStatus.AWAITING_SCENES, JobStage.PAGES);
+                    } else if (job.isOwn()) {
+                        ownScenes(id);
+                    } else {
+                        store.queued(id, JobStage.PAGES);
+                        line.submit(() -> {
+                            try {
+                                scenesAfterSheet(id);
+                            } catch (Exception e) {
+                                fail(id, e);
+                            }
+                        });
+                    }
+                    return true;
+                }
+                store.queued(id, JobStage.PAGES);
+                line.submit(() -> {
+                    try {
+                        pages(id);
+                    } catch (Exception e) {
+                        fail(id, e);
+                    }
+                });
+            }
+        }
+        return true;
+    }
+
+    /** 이 장을 이미 그렸나 — 그림이 있고 안전 검사에 걸린 표시가 없으면. 끊긴 작업을 이어 그릴 때 건너뛴다. */
+    boolean pageDrawn(String runId, int page) {
+        return Files.isRegularFile(runsDir.resolve(runId).resolve("pages").resolve("page%02d.png".formatted(page)))
+                && !Files.isRegularFile(unsafeMarker(runId, page));
+    }
+
+    private boolean anyPageDrawn(String runId) {
+        Path dir = runsDir.resolve(runId).resolve("pages");
+        if (!Files.isDirectory(dir)) {
+            return false;
+        }
+        try (var found = Files.list(dir)) {
+            return found.anyMatch(p -> p.getFileName().toString().matches("^page\\d+\\.png$"));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /** 「이대로 웹툰 만들기」 — 장면 확인을 끝내고 그림으로. */
     public void resumeAfterScenes(Long jobId) {
         store.queued(jobId, JobStage.PAGES);
@@ -1512,6 +1602,12 @@ public class JobRunner {
                     return;
                 }
                 try {
+                    if (pageDrawn(job.getRunId(), page)) {
+                        /* 이미 그린 장 — 서버가 다시 떠서 이어 그리는 중이다. 그림 값을 두 번 내지 않는다. */
+                        drawn.incrementAndGet();
+                        progress.drewPage(jobId, page, pages);
+                        return;
+                    }
                     progress.startedPage(jobId, page);
                     int code = callHarness(jobId, job,
                             List.of("--run-id", job.getRunId(), "--detail-pages",
