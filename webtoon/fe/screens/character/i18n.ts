@@ -190,6 +190,12 @@ const dict: Dict = {
     en: "The character image was flagged by the image safety filter. Rerolling with the same input will be flagged again. Please try again with a different photo or description.",
     ja: "キャラクター画像が画像の安全基準に引っかかりました。同じ内容で引き直すとまた引っかかります。別の写真か説明に変えて作り直してください。",
     zh: "角色图片未通过图片安全标准。用相同内容重新抽取还会被拦截。请换一张照片或修改描述后重新制作。" },
+  /* ---- 빠졌던 번역 ---- */
+  "{name} 수정": { en: "Edit {name}", ja: "{name}を編集", zh: "编辑 {name}" },
+  "공개 설정": { en: "Visibility", ja: "公開設定", zh: "公开设置" },
+  "목록을 불러오지 못했습니다": { en: "Couldn't load the list", ja: "一覧を読み込めませんでした", zh: "无法加载列表" },
+  "생성 실패": { en: "Creation failed", ja: "生成失敗", zh: "生成失败" },
+  "이 캐릭터로 웹툰 만들기": { en: "Make a webtoon with this character", ja: "このキャラクターでウェブトゥーンを作る", zh: "用这个角色制作漫画" },
 };
 
 registerDict(dict);

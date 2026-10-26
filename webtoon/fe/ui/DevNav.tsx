@@ -8,6 +8,15 @@ import "./DevNav.css";
 const RUN = "20261003T213320-5297d4"; // 그림까지 다 있는 예시 작품 「가면을 쓰고 온 옛 약혼자」
 
 const GROUPS: { title: string; items: [string, string][] }[] = [
+  /* 맨 위 — 아래 묶음들이 길어서 스크롤해야 보였다(2026-10-26) */
+  {
+    title: "루 로딩 (서버·과금 없이)",
+    items: [
+      ["만드는 중 카드", "/webtoon?view=running&job=mock-running"],
+      ["순서 기다림", "/webtoon?view=running&job=mock-queued"],
+      ["다음 화 · 앞 화 정리 중", "/webtoon?view=next&run=mock-digest"],
+    ],
+  },
   {
     title: "기본 화면",
     items: [

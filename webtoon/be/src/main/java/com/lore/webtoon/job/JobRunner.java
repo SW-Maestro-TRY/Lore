@@ -916,6 +916,12 @@ public class JobRunner {
         stories.save(runId, directions);
         store.pick(jobId, 1);
         stories.choose(runId, 1);
+        /* 「바로 만들기」 — 이야기·캐릭터 확인 없이 장면으로 간다. 시트가 안 나왔으면(안전 검사 등) 사람이 봐야 해서
+           예전처럼 이야기 확인에서 멈춘다. */
+        if (!job.isCheckpoints() && sheetReady(runId)) {
+            ownScenes(jobId);
+            return;
+        }
         store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
     }
 
@@ -936,6 +942,10 @@ public class JobRunner {
                     throw harnessFailed(job.getRunId(), "장면을 나누지 못했습니다");
                 }
                 dropPhotos(jobId);               // 시트가 확정됐다 — 사진을 다시 읽을 일이 없다
+                if (!job.isCheckpoints()) {
+                    pages(jobId);                // 「바로 만들기」 — 장면 확인 없이 그린다
+                    return;
+                }
                 store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
             } catch (Exception e) {
                 fail(jobId, e);
@@ -973,6 +983,10 @@ public class JobRunner {
                 if (directionsOf(runId).isEmpty()) {
                     return false;
                 }
+                if (job.isOwn() && !job.isCheckpoints() && sheetReady(runId)) {
+                    ownScenes(id);           // 「바로 만들기」 — 확인 자리 없이 장면으로
+                    return true;
+                }
                 store.awaiting(id, JobStatus.AWAITING_PICK, JobStage.STORY);
             }
             case SHEET -> {
@@ -985,7 +999,9 @@ public class JobRunner {
             }
             case PAGES, BIND -> {
                 boolean scenes = Files.isRegularFile(run.resolve("scenes.json"));
-                if (stage == JobStage.PAGES && !anyPageDrawn(runId) && (job.isOwn() || job.isCheckpoints())) {
+                /* 「바로 만들기」 own 길이 장면을 다 나눴으면 확인 없이 그리러 간다(아래). */
+                boolean drawNow = scenes && job.isOwn() && !job.isCheckpoints();
+                if (stage == JobStage.PAGES && !anyPageDrawn(runId) && (job.isOwn() || job.isCheckpoints()) && !drawNow) {
                     /* 그리기 전 — 장면을 나누던 중이었다. 다 나눴으면 장면 확인 자리로, 아니면 다시 나눈다. */
                     if (scenes) {
                         store.awaiting(id, JobStatus.AWAITING_SCENES, JobStage.PAGES);

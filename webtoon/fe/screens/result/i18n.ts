@@ -58,6 +58,7 @@ const dict: Dict = {
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   "저장하지 못했습니다": { en: "Couldn't save.", ja: "保存できませんでした", zh: "无法保存" },
   "제목 고치기": { en: "Edit title", ja: "タイトルを直す", zh: "修改标题" },
+  "소제목 고치기": { en: "Edit episode title", ja: "サブタイトルを直す", zh: "修改副标题" },
   "다음 편 만들기": { en: "Make the next episode", ja: "次の話を作る", zh: "制作下一话" },
   "편집실": { en: "Editor", ja: "編集室", zh: "编辑室" },
   "내려받기": { en: "Download", ja: "ダウンロード", zh: "下载" },
@@ -156,6 +157,9 @@ const dict: Dict = {
     zh: "{pages}的场景未通过图片安全标准，已留作空白页。请在编辑室修改该场景描述后重新绘制。重新绘制空白页免费。" },
   "편집실에서 다시 그리기": { en: "Redraw in the editor", ja: "編集室で描き直す", zh: "在编辑室重新绘制" },
   "이 장면은 이미지 안전 기준에 걸려 아직 그리지 못했어요": { en: "This scene was flagged by the image safety filter and hasn't been drawn yet", ja: "この場面は画像の安全基準に引っかかり、まだ描けていません", zh: "此场景未通过图片安全标准，尚未绘制" },
+  /* ---- 빠졌던 번역 ---- */
+  "다른 웹툰 보기": { en: "See other webtoons", ja: "ほかのウェブトゥーンを見る", zh: "看看其他漫画" },
+  "읽는 중": { en: "Reading", ja: "閲覧中", zh: "阅读中" },
 };
 
 registerDict(dict);

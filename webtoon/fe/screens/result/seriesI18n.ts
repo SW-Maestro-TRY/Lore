@@ -153,7 +153,14 @@ registerDict({
     "zh": "无法加载回目列表。"
   },
   "앞 화를 읽고 설정과 진행 상태를 정리해 두었어요. 이번 화에서 일어날 일만 적어 주세요.": {"en": "We read the previous episode and filled in the settings and current state. Just describe what happens this time.", "ja": "前話を読んで設定と進行状況をまとめました。今回の展開だけ書いてください。", "zh": "已读取前一话并整理好设定与进度，只需填写本话的情节。"},
-  "앞 화를 읽고 설정과 진행 상태를 정리하고 있어요. 잠시만 기다려 주세요.": {"en": "Reading the previous episode to sort out settings and state. One moment.", "ja": "前話を読んで設定と進行状況をまとめています。少しお待ちください。", "zh": "正在读取前一话并整理设定与进度，请稍候。"},
+  "앞 화를 읽고 설정과 진행 상태를 정리하고 있어요.": {"en": "Reading the previous episode to sort out settings and state.", "ja": "前話を読んで設定と進行状況をまとめています。", "zh": "正在读取前一话并整理设定与进度。"},
+  "앞 화 본문과 장면을 읽는 중": {"en": "Reading the previous episode and its scenes", "ja": "前話の本文と場面を読んでいます", "zh": "正在阅读前一话的正文和场景"},
+  "등장인물의 겉모습과 관계를 정리하는 중": {"en": "Noting each character's look and relationships", "ja": "登場人物の外見と関係をまとめています", "zh": "正在整理人物的外貌与关系"},
+  "세계와 설정을 설정집 항목으로 적는 중": {"en": "Writing the world and settings into lorebook entries", "ja": "世界と設定を設定集の項目に書いています", "zh": "正在把世界与设定写成设定集条目"},
+  "앞 화가 끝난 장면과 남은 일을 진행 상태로 적는 중": {"en": "Recording where the episode ended and what's left", "ja": "前話の終わりと残ったことを進行状況に書いています", "zh": "正在记录前一话的结尾和未完成的事"},
+  "정리가 끝나면 저장돼요": {"en": "Saved once the summary is ready", "ja": "整理が終わると保存されます", "zh": "整理完成后会保存"},
+  "그동안 이번 화에서 일어날 일을 적어 두세요.": {"en": "Meanwhile, you can write what happens this episode.", "ja": "その間に今回の話で起こることを書いておきましょう。", "zh": "这期间可以先写下这一话要发生的事。"},
+  "백그라운드에서 진행돼서 나갔다 와도 이어져요.": {"en": "It runs in the background, so you can leave and come back.", "ja": "バックグラウンドで進むので、離れて戻ってきても続きます。", "zh": "在后台进行，离开再回来也会继续。"},
   "앞 화를 정리하지 못했어요": {"en": "Couldn't summarize the previous episode.", "ja": "前話をまとめられませんでした。", "zh": "无法整理前一话。"},
   "다시 정리하기": {"en": "Try again", "ja": "もう一度まとめる", "zh": "重新整理"},
   "설정집 항목": {"en": "Lorebook entries", "ja": "設定集の項目", "zh": "设定集条目"},
@@ -193,5 +200,8 @@ registerDict({
   "더 적어 둘 설정 · 선택": {"en": "Anything else to keep · optional", "ja": "ほかに残す設定 · 任意", "zh": "其他要保留的设定 · 可选"},
   "한자가 섞였어요": {"en": "Contains Chinese characters", "ja": "漢字が混ざっています", "zh": "混入了汉字"},
   "{n}개": {"en": "{n}", "ja": "{n}件", "zh": "{n}条"},
-  "이번 화에서 추가 {n}개": {"en": "{n} new this episode", "ja": "今回追加 {n}件", "zh": "本话新增{n}条"}
+  "이번 화에서 추가 {n}개": {"en": "{n} new this episode", "ja": "今回追加 {n}件", "zh": "本话新增{n}条"},
+  "로그인": {"en": "Log in", "ja": "ログイン", "zh": "登录"},
+  "자동 저장됨": {"en": "Autosaved", "ja": "自動保存済み", "zh": "已自动保存"},
+  "저장 중…": {"en": "Saving…", "ja": "保存中…", "zh": "保存中…"},
 });
