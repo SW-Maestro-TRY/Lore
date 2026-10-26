@@ -155,6 +155,7 @@ function Overview() {
             <Stat label="새로 가입" value={t.signups} />
             <Stat label="만들기를 시작한 사람" value={t.createStarted} />
             <Stat label="완성된 웹툰" value={t.jobsDone} sub={`시작된 작업 ${t.jobs}개 · 실패 ${t.jobsFailed}개`} />
+            <Stat label="결제하기를 누른 사람" value={t.chargeSubmit} sub={`${t.chargeSubmitClicks}번 누름 · 충전 창 연 사람 ${t.chargeOpen}명`} />
             <Stat label="지금 진행 중인 작업" value={data.runningJobs} sub="기간과 상관없이 지금" />
           </div>
 

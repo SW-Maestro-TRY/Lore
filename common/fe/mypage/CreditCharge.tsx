@@ -46,7 +46,11 @@ const POLL_LIMIT_MS = 15 * 60_000;
 
 const PHONE_RE = /^01[016789][0-9]{7,8}$/;
 
-export default function CreditCharge({ onClose }: { onClose: () => void }) {
+/** 행동 기록을 받을 곳. 결제창은 common 이라 도메인의 기록 함수를 직접 부르지 않고,
+ *  여는 쪽(웹툰 마이페이지·크레딧 부족 안내)이 자기 track 을 넘긴다. 안 넘기면 안 남긴다. */
+export type ChargeEvent = (name: string, props: Record<string, string | number | boolean>) => void;
+
+export default function CreditCharge({ onClose, onEvent }: { onClose: () => void; onEvent?: ChargeEvent }) {
   const [catalog, setCatalog] = useState<PayCatalog | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [step, setStep] = useState<Step>({ kind: "pick" });
@@ -161,6 +165,9 @@ export default function CreditCharge({ onClose }: { onClose: () => void }) {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!pack) return;
+                /* 「N원 결제하기」를 누른 수 — 실제로 돈을 내려는 사람의 수라 결제가 아직 안 열렸어도 남긴다
+                   (ok=false). 열렸을 때 결제창이 실제로 열렸는지는 서버 주문 기록으로 센다. */
+                if (phoneOk && agreed && !busy) onEvent?.("charge_submit", { pick: pack.code, cost: pack.won, count: pack.credits, ok: ready });
                 if (!ready) { setError("지금은 결제를 받을 수 없어요. 결제 연결을 마무리하고 있어요."); return; }
                 if (phoneOk && agreed && !busy) void pay(pack);
               }}
