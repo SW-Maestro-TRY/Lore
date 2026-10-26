@@ -306,3 +306,34 @@
 .wt .wt-contact-pickbtn:hover { background: #33475f; }
 .wt .wt-contact-attachments:has(.wt-contact-fileinput:focus-visible) .wt-contact-pickbtn { outline: 2px solid #b8e8d5; outline-offset: 2px; }
 .wt .wt-dialog-box.wt-contact-dialog .wt-dialog-heading:has(.wt-dialog-back) { margin-bottom: 14px; }
+
+/* 내 웹툰 카드의 삭제 — 빨간색. 누르면 휴지통으로 옮길지 한 번 더 묻는다. */
+.wt .wt-my-delete { background: transparent; color: #e0787a; border: 1px solid rgba(224, 120, 122, 0.55); }
+.wt .wt-my-delete:hover:not(:disabled) { background: #bd6567; border-color: #bd6567; color: #fff; }
+
+/* 찜한 웹툰 · 댓글 단 웹툰 카드 — 카드 전체가 누르는 자리 */
+.wt .wt-my-runcard { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.wt .wt-my-runcard .wt-my-cover { pointer-events: none; }
+
+/* 헤더 줄의 「삭제」는 옆 단추들과 같은 높이 */
+.wt .wt-my-deletebig { height: 42px; padding: 0 18px; font-size: 14px; }
+.wt .wt-my-deletebig:disabled { opacity: .45; cursor: default; }
+
+/* 내 캐릭터 카드 — 아래에 「수정」과 「이 캐릭터로 웹툰 만들기」 */
+.wt .wt-my-charfoot { gap: 8px; }
+.wt .wt-my-charfoot .grow { flex: 1; }
+
+/* 삭제 고르기 — 카드마다 오른쪽 위 휴지통 표시. 고르면 빨갛게 */
+.wt .wt-my-charcard { position: relative; }
+.wt .wt-my-pick {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  background: rgba(10, 16, 24, .72); color: #e6ebf0; border: 1px solid rgba(255, 255, 255, .28); cursor: pointer;
+}
+.wt .wt-my-pick.on { background: #bd6567; border-color: #bd6567; color: #fff; }
+.wt .wt-my-charcard.picked { outline: 2px solid #bd6567; outline-offset: -2px; }
+
+/* 휴지통 화면 — 웹툰 · 캐릭터 두 칸 */
+.wt .wt-my-trashsec { margin-top: 18px; }
+.wt .wt-my-trashsec h3 { font-size: 16px; font-weight: 700; margin: 0 0 8px; display: flex; gap: 8px; align-items: baseline; }
+.wt .wt-my-trashsec h3 .dim { font-size: 12.5px; font-weight: 500; }

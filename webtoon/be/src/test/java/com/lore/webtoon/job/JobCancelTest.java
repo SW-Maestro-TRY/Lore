@@ -103,8 +103,9 @@ class JobCancelTest {
 
         verify(store).failed(eq(1L), eq(JobRunner.CANCELLED), any(), any());
         verify(credits).refund(any(), eq("job-1"));
-        // 그리기 직전에 더 받은 장 값도 한 번만 돌려준다
+        // 그리기 직전에 더 받은 장 값 · 「이어서 만들기」로 다시 낸 값도 한 번만 돌려준다
         verify(credits).refund(any(), eq("pages:job-1"));
+        verify(credits).refund(any(), eq("job-1:resume"));
     }
 
     @Test

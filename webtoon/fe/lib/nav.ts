@@ -22,7 +22,7 @@
  * 기댄다. 상태만 바꾸면 뒤로가기가 웹툰 탭을 통째로 빠져나간다. */
 
 export type View =
-  | "landing" | "entry" | "create" | "running" | "result" | "editor" | "works"
+  | "landing" | "entry" | "create" | "running" | "result" | "editor" | "next" | "works"
   | "character-new" | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin" | "admin-examples" | "admin-works" | "admin-payments";
 
 export interface GoParams {
@@ -32,7 +32,7 @@ export interface GoParams {
   run?: string;
   id?: string;
   /** 처음 열 칸. 마이페이지는 설정 칸(진행 화면의 「설정에서 끌 수 있어요」), 관리자 대시보드는 작품 · 캐릭터 칸. */
-  tab?: "settings" | "works" | "characters";
+  tab?: "settings" | "works" | "characters" | "contact";
   /** 만들기 화면이 어느 길인가(#548). own = 「만들고 싶은 내용이 있어요」. 없으면 아이디어부터. */
   mode?: "own";
 }

@@ -404,6 +404,30 @@ public class WebtoonJob {
         this.updatedAt = at;
     }
 
+    /** 이어서 만들 수 있는 실패를 얼마 동안 「만드는 중」에 남겨 두나. */
+    static final java.time.Duration RESUMABLE_FOR = java.time.Duration.ofDays(14);
+
+    /**
+     * 이어서 만들 수 있는 실패인가(2026-10-26) — 서버 재시작이나 우리 쪽 오류(모델 오류 · 요청 글이 너무 김 등)로 멈췄고
+     * 작품 폴더가 있다. 안전 기준 · 사진 없음 · 글 모델 거절 · 그만두기는 고쳐서 새로 만들어야 하므로 빠진다.
+     * 화면이 「만드는 중」에 남기고 「이어서 만들기」를 띄운다. 그린 장 · 장면 · 이야기는 다시 안 만든다.
+     */
+    public boolean isResumable() {
+        return status == JobStatus.ERROR && runId != null
+                && ("server_restart".equals(failCode) || "error".equals(failCode))
+                && (finishedAt == null || finishedAt.isAfter(Instant.now().minus(RESUMABLE_FOR)));
+    }
+
+    /** 끊겼던 작업을 이어서 만든다 — 실패 표시와 돌려준 표시를 지우고 줄에 다시 선다. 실패 원문은 개발자용으로 남긴다. */
+    void reopened(Instant at) {
+        this.status = JobStatus.QUEUED;
+        this.error = null;
+        this.refunded = null;
+        this.finishedAt = null;
+        this.failCode = null;
+        this.updatedAt = at;
+    }
+
     /** 시트가 안전 검사에 걸려 고쳐 주기를 기다리는 중인가. */
     public boolean isSheetBlocked() {
         return status == JobStatus.AWAITING_SHEET && "image_safety".equals(failCode) && error != null;

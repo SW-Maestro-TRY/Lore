@@ -82,6 +82,20 @@ class SeriesServiceTest {
         verify(jobs,times(2)).lockByPublicId("job1");
         verifyNoInteractions(creator,credits);
     }
+    @Test void myDraftsListUnsentNextEpisodesOnly() {
+        var d=new SeriesDraft("job1"); d.ownerId=7L; d.nextStory="민수는 일찍 출발한다.";
+        when(drafts.findByOwnerId(7L)).thenReturn(List.of(d));
+        when(stories.chosenOf("run1")).thenReturn(Optional.empty());
+        var rows=service.myDrafts(7L);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0)).containsEntry("run","run1").containsEntry("episode",2).containsEntry("story","민수는 일찍 출발한다.");
+        assertThat(service.myDrafts(null)).isEmpty();
+        // 다음 화를 이미 만들었으면 초안을 보여 주지 않는다.
+        var next=mock(WebtoonJob.class); when(next.getStatus()).thenReturn(JobStatus.RUNNING);
+        when(jobs.findByPublicId("job2")).thenReturn(Optional.of(next));
+        when(chapters.findByRootJobOrderByEpisodeNumberAsc("job1")).thenReturn(List.of(new SeriesChapter("job2","job1","job1",2,"r","{}")));
+        assertThat(service.myDrafts(7L)).isEmpty();
+    }
     @Test void nextEpisodeFreezesTwoLayersAndInheritsStyleWithAccountCharge() {
         assertThat(service.createNext("run1",7L,form(0))).containsEntry("id","job2");
         var cap=ArgumentCaptor.forClass(SeriesChapter.class); verify(chapters).save(cap.capture());
@@ -124,10 +138,9 @@ class SeriesServiceTest {
         when(pending.getStatus()).thenReturn(JobStatus.ERROR);
         assertThat(service.createNext("run1",7L,form(0))).containsEntry("id","job2");
     }
-    @Test void missingSheetAndMissingRightsCannotStartOrCharge() throws Exception {
+    // 권리 확인은 1화 만들기에서 받은 것을 잇는다 — 다음 화는 다시 묻지 않는다. 시트가 없으면 시작하지 않는다.
+    @Test void missingSheetCannotStartOrCharge() throws Exception {
         var f=form(0);
-        var noRights=new SeriesService.Form(f.fixed_settings(),f.progress_state(),f.story(),0,true,false,"request1","browser",null,null);
-        assertThatThrownBy(()->service.createNext("run1",7L,noRights)).hasMessageContaining("저작권");
         Files.delete(dir.resolve("sheet.png"));
         assertThatThrownBy(()->service.createNext("run1",7L,f)).hasMessageContaining("시트");
         verifyNoInteractions(creator,credits);

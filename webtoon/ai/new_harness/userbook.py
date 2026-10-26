@@ -1,7 +1,7 @@
 """작가가 붙이고 확인한 설정집. 빼면 어느 단계에도 남기지 않는다.
 
 orv-experiment 의 2층 로어북과 같은 방식으로 넣는다(`world_block`).
-- 항상 켜짐 규칙(always) — 매번 전부.
+- 항상 켜짐 항목(always, 세계 자체를 설명하는 항목) — 매번 전부.
 - 키워드 항목 — 이번 글에 키워드가 많이 걸린 항목부터 BUDGET 자까지. 하나도 안 걸리면 안 넣는다.
 - 진행 상태 — 고정 항목 id 를 key 로 가진 줄은 그 항목이 골라졌을 때 「→ 지금:」으로 붙고, 나머지는
   [진행 상태] 로 매번 전부 들어간다. 진행 상태의 글도 항목 고르기에 쓴다.
@@ -12,11 +12,12 @@ BUDGET = 30000
 
 
 def select(entries, query, budget=BUDGET):
-    """실험의 select 그대로. 키워드가 많이 걸린 항목부터, 같으면 원래 순서, budget 자까지."""
+    """실험의 select 그대로. 키워드가 많이 걸린 항목부터, 같으면 원래 순서, budget 자까지.
+    항목 이름도 늘 키워드로 친다 — 이름이 나왔는데 키워드에 안 적었다고 안 읽히면 안 된다(2026-10-26)."""
     folded = str(query or "").casefold()
     ranked = []
     for i, e in enumerate(entries):
-        keys = {str(k).strip() for k in e.get("keys", []) if str(k).strip()}
+        keys = {str(k).strip() for k in [*(e.get("keys") or []), e.get("title") or ""] if str(k).strip()}
         hits = sum(k.casefold() in folded for k in keys)
         if hits:
             ranked.append((-hits, i, e))
@@ -58,12 +59,13 @@ def progress_text(rows):
     return "\n".join(f"- {p.get('title', '')}: {p.get('text', '')}" for p in rows)
 
 
-def block(char, context="", stage="story", continuation=False, everything=False):
+def block(char, context="", stage="story", continuation=False, everything=False, budget=BUDGET):
     book = (char or {}).get("lorebook") or {}
     if not book or not book.get("confirmed"):
         return ""
     if isinstance(book.get("books"), list):
-        parts = [block({"lorebook": child}, context, stage, continuation, everything) for child in book["books"] if isinstance(child, dict)]
+        share = max(0, budget // max(1, len(book["books"])))
+        parts = [block({"lorebook": child}, context, stage, continuation, everything, share) for child in book["books"] if isinstance(child, dict)]
         return "[함께 붙인 설정집 — 나열된 순서대로 참고한다. 설정이 충돌하면 뒤에 붙인 설정을 우선한다.]\n" + "\n\n".join(p for p in parts if p)
     lines = ["[작가가 확인한 설정집]", "이 설정집은 선택한 작품 세계다. 캐릭터 카드의 옛 세계보다 우선하며 인물의 외형은 유지한다."]
     if not continuation:
@@ -77,7 +79,7 @@ def block(char, context="", stage="story", continuation=False, everything=False)
     rules = [e for e in active if e.get("always")]
     keyed = [e for e in active if not e.get("always")]
     if rules:
-        lines += ["세계 규칙 (이야기 전체에서 지켜지는 규칙)"] + [f"- {e.get('title', '')}: {e.get('content', '')}" for e in rules]
+        lines += ["항상 참고하는 설정 (이야기의 세계)"] + [f"- {e.get('title', '')}: {e.get('content', '')}" for e in rules]
     over, new = progress_parts(book)
     query = str(context or "")
     if new:
@@ -85,7 +87,7 @@ def block(char, context="", stage="story", continuation=False, everything=False)
         query += "\n" + progress_text(new)
     # everything: 줄거리 없이 설정집만 붙인 1화 이야기 단계 — 설정집 전체가 요청이라 키워드를 안 보고
     # 원래 순서대로 예산까지 넣는다.
-    chosen = select_all(keyed) if everything else select(keyed, query)
+    chosen = select_all(keyed, budget) if everything else select(keyed, query, budget)
     if chosen:
         lines.append("설정집 항목")
         for e in chosen:

@@ -102,6 +102,20 @@ class StaleJobsTest {
         assertThat(ok.getStatus()).isEqualTo(JobStatus.ERROR);
     }
 
+    @Test
+    @DisplayName("이어 갈 수 있으면 끊긴 것으로 적지 않고 값도 안 돌려준다 — 이미 받은 요청은 끝까지 만든다")
+    void 이어_갈_수_있으면_잇는다() {
+        WebtoonJob job = running("job-resume");
+        when(jobs.findByStatusOrderByIdAsc(JobStatus.RUNNING)).thenReturn(List.of(job));
+        when(runner.resumeInterrupted(job)).thenReturn(true);
+
+        stale.sweep();
+
+        assertThat(job.getStatus()).isEqualTo(JobStatus.RUNNING);
+        verify(runner, never()).refund(any());
+        verify(notice, never()).failed(any(), any(), any());
+    }
+
     /* **이 자리의 알림이 제일 중요하다.** 다른 실패는 사람이 화면 앞에
        있을 때 나지만, 이건 그 사람이 이미 나간 뒤에 난다 — 「나갔다 와도
        이어집니다」를 믿고 나갔는데 안 이어진 경우다. */

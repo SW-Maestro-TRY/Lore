@@ -204,7 +204,8 @@ public class CharacterService {
     public WebtoonCharacter byPublicId(String publicId, Long userId, Collection<String> uids) {
         WebtoonCharacter one = characters.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다"));
-        if (!one.isBuiltin() && !one.isCommunityPublic() && !one.madeBy(userId, uids)) {
+        /* 휴지통에 든 캐릭터는 없는 것으로 본다 — 웹툰 만들기에도 못 고른다. 되살리기는 CharacterTrash 가 따로 찾는다. */
+        if (one.isTrashed() || !one.isBuiltin() && !one.isCommunityPublic() && !one.madeBy(userId, uids)) {
             // 있는 것을 "권한 없음" 으로 알리면 남의 번호를 하나씩 찔러 볼 수 있다.
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다");
         }
@@ -220,7 +221,7 @@ public class CharacterService {
     public WebtoonCharacter sharedCard(String publicId) {
         WebtoonCharacter one = characters.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다"));
-        if (!one.hasCard() || one.isCommunityBlocked() || one.getSource() == CharacterSource.UPLOAD || one.getSource() == CharacterSource.REPLACED_UPLOAD) {
+        if (one.isTrashed() || !one.hasCard() || one.isCommunityBlocked() || one.getSource() == CharacterSource.UPLOAD || one.getSource() == CharacterSource.REPLACED_UPLOAD) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다");
         }
         return one;
@@ -635,7 +636,15 @@ public class CharacterService {
         if (!one.madeBy(userId, uids)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "기본 캐릭터는 지울 수 없습니다");
         }
-        if(communityCleanup!=null) communityCleanup.character(publicId);
+        /* 바로 없애지 않고 휴지통에 넣는다(2026-10-26) — 15일 뒤 CharacterTrash 가 영구 삭제한다. */
+        one.trash(Instant.now(clock));
+        characters.save(one);
+    }
+
+    /** 휴지통에서 보관 기간이 지난 것을 영구 삭제한다 — 공개 목록 정리까지. 그림은 S3 에 둔다(만든 웹툰이 보고 있다). */
+    @Transactional
+    public void purge(WebtoonCharacter one) {
+        if (communityCleanup != null) communityCleanup.character(one.getPublicId());
         characters.delete(one);
     }
 

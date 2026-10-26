@@ -10,7 +10,7 @@ import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { metaTrack, metaTrackCustom } from "../../lib/metaPixel";
 import type { Go } from "../../lib/nav";
-import { IconChevronRight, IconChevronUp, IconClose, IconComment, IconDownload, IconEdit, IconMenu } from "../../ui/Icons";
+import { IconChevronRight, IconChevronUp, IconClose, IconComment, IconDownload, IconEdit, IconMenu, IconPlus } from "../../ui/Icons";
 import { commentCount } from "../../lib/community";
 import { Crumb, MobileTop } from "../../ui/TopNav";
 import ShareMenu from "./ShareMenu";
@@ -19,7 +19,6 @@ import LikeButton from "../../ui/LikeButton";
 import ResultSurvey from "./ResultSurvey";
 import EpisodeCommunity from "../../ui/community/EpisodeCommunity";
 import AdminModeration from "./AdminModeration";
-import NextEpisodeDialog from "./NextEpisodeDialog";
 import PendingPages from "./PendingPages";
 import "./seriesI18n";
 import "./i18n";
@@ -227,6 +226,16 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
             </button>
           </li>
         ))}
+        {/* 내 작품의 마지막 화를 보고 있으면 목록 끝에서 바로 다음 화를 만든다(2026-10-26) */}
+        {mine && !series?.chapters.some(c=>c.episode>ep) && (
+          <li>
+            <button type="button" className="wt-reader-epnew" onClick={()=>nextEpisode(top ? "episode_list_top" : "episode_list")}>
+              <span className="wt-reader-epthumb wt-reader-epplus" aria-hidden="true"><IconPlus size={20}/></span>
+              <span><b>{t("{n}화 만들기",{n:ep+1})}</b><small>{t("이어서 다음 화를 만들어요")}</small></span>
+              <IconChevronRight size={18}/>
+            </button>
+          </li>
+        )}
       </ul>
       {/* 다음 화는 목록에서 바로 고른다 — 아래 단추 줄(다음화 보기 · 편집실)은 겹쳐서 뺐다(2026-10-25).
           다음 화가 없고 내 작품도 아니면 기다려 달라는 한 줄만 둔다. */}
@@ -251,6 +260,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     const next = series?.chapters.find(c => c.episode > ep);
     if (next?.run_id) { go("result", {run:next.run_id}); return; }
     if (next?.job_id) { go("running", {job:next.job_id}); return; }
+    if (mine) { go("next", {run: runId}); return; }
     setNextNote(true);
   };
 
@@ -598,7 +608,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
       {/* 다음 편은 아직 없다. 눌렀을 때 줄 끝에 문구만 붙이면 화면 밖이라
           못 보고 다시 누르게 된다 — 가운데에 띄워 한 번에 읽히게 한다. */}
-      {nextNote && mine && <NextEpisodeDialog key={runId} runId={runId} authenticated={authenticated} go={go} onClose={()=>setNextNote(false)} />}
       {nextNote && !mine && (
         <div className="modal" onClick={() => setNextNote(false)}>
           <div className="modal-box wt-result-soonbox" role="dialog" aria-modal="true"

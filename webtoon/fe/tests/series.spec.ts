@@ -49,9 +49,13 @@ async function stub(page:Page,count=1,authenticated=true) {
  });
  return {calls,get submitted(){return submitted;}};
 }
+// 다음 화 이어 만들기는 창이 아니라 페이지다(?view=next&run=앞 화).
 async function openForm(page:Page) {
  await page.goto('/webtoon?run=ep1');
+ // next dev 에만 뜨는 「DEV 화면」 단추가 폰 너비에서 아래 단추를 가린다(배포 빌드에는 없다).
+ await page.addStyleTag({content:'.wt-devnav{display:none}'});
  await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
+ await expect(page).toHaveURL(/view=next&run=ep1/);
  await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeVisible();
  await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeEnabled({timeout:15000});
 }
@@ -60,48 +64,77 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  await openForm(page);
  // 개발 모드는 effect 를 두 번 돌린다. 서버의 정리 시작은 같은 앞 화에 한 번만 돈다(SeriesDigestService.start).
  expect(server.calls.filter(x=>x.endsWith('/series/ep1/digest')).length).toBeGreaterThan(0);
+ // 진행 상태와 설정집 항목은 접혀 있다. 펼쳐서 본다. 만들기 단추 안에 크레딧이 들어 있다.
+ await expect(page.getByText('1화가 끝난 저녁, 민수는 지수에게 사과했다.')).toBeHidden();
+ await page.getByText('현재 진행 상태',{exact:true}).click();
  await expect(page.getByText('1화가 끝난 저녁, 민수는 지수에게 사과했다.')).toBeVisible();
- // 규칙·항목은 접혀 있다(수십 개가 될 수 있어서). 펼쳐서 본다.
- await page.getByText('세계 규칙',{exact:true}).click();
- await expect(page.getByText('지수가 감춘 약속은 아직 공개하지 않는다')).toBeVisible();
+ await expect(page.getByRole('button',{name:/^2화 만들기/})).toContainText('-12 크레딧');
+ await expect(page.getByText('사용하는 캐릭터·설정·이야기의 권리를 확인했어요.')).toHaveCount(0);
+ // 항목은 한 목록에 접혀 있다(수십 개가 될 수 있어서). 펼쳐서 본다. 항상 참고 항목은 표시가 붙는다.
  await page.getByText('설정집 항목',{exact:true}).click();
+ await expect(page.getByText('지수가 감춘 약속은 아직 공개하지 않는다')).toBeVisible();
+ await expect(page.getByText('항상 참고',{exact:true}).first()).toBeVisible();
  await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toBeVisible();
+ // 고치기 — 취소하면 그대로, 확인하면 바뀐다.
+ await page.getByRole('button',{name:'지수의 약속 고치기',exact:true}).click();
+ await page.getByLabel('지수의 약속 이름',{exact:true}).fill('버릴 이름');
+ await page.getByRole('button',{name:'취소',exact:true}).click();
+ await expect(page.getByText('지수의 약속',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'지수의 약속 고치기',exact:true}).click();
+ await page.getByLabel('지수의 약속 이름',{exact:true}).fill('지수의 비밀 약속');
+ await page.getByLabel('지수의 약속 내용',{exact:true}).fill('지수가 감춘 약속은 3화까지 공개하지 않는다');
+ await page.getByRole('button',{name:'확인',exact:true}).click();
+ await expect(page.getByText('지수의 비밀 약속',{exact:true})).toBeVisible();
+ // 진행 상태 줄도 고친다.
+ await page.getByRole('button',{name:'시점 고치기',exact:true}).click();
+ await page.getByLabel('시점 내용',{exact:true}).fill('1화가 끝난 밤, 민수는 지수에게 사과했다.');
+ await page.getByRole('button',{name:'확인',exact:true}).click();
+ await expect(page.getByText('1화가 끝난 밤, 민수는 지수에게 사과했다.')).toBeVisible();
  // 항목을 빼면 그 항목을 덮어쓰던 진행 상태 줄도 같이 빠진다.
  await page.getByRole('button',{name:'다리 빼기',exact:true}).last().click();
  await expect(page.getByText('민수가 피해 가는 강 위의 다리')).toHaveCount(0);
  await expect(page.getByText('민수는 이제 다리 앞에서 멈추지 않는다')).toHaveCount(0);
- await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 우회로를 미리 확인하고 일찍 출발한다.');
- await page.getByLabel('사용하는 캐릭터·설정·이야기의 권리를 확인했어요.',{exact:true}).check();
- await page.getByRole('button',{name:'2화 만들기',exact:true}).click();
+ // 이번 화 칸은 비워도 만들 수 있다(비우면 앞 화에서 이어 자동으로).
+ await expect(page.getByText('비워 두면 앞 화에서 이어지는 이야기를 자동으로 만들어요.')).toBeVisible();
+ await page.getByRole('button',{name:/^2화 만들기/}).click();
  await expect(page).toHaveURL(/view=running&job=job-next/);
- expect(server.submitted.entries.map((e:any)=>e.title)).toEqual(['지수의 약속']);
+ expect(server.submitted.story).toBe('');
+ expect(server.submitted.entries[0].content).toContain('3화까지');
+ expect(server.submitted.progress[0].text).toBe('1화가 끝난 밤, 민수는 지수에게 사과했다.');
+ expect(server.submitted.entries.map((e:any)=>e.title)).toEqual(['지수의 비밀 약속']);
+ expect(server.submitted.entries[0].keys).toEqual([]);
  expect(server.submitted.progress.map((p:any)=>p.key)).toEqual(['P001']);
 });
-test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',async({page},info)=>{
+test('정리본을 고쳐 쓰기 → 자동 초안 저장·복원 → 생성',async({page},info)=>{
  const server=await stub(page);
  await openForm(page);
- await page.getByText('더 적어 둘 설정 · 선택',{exact:true}).click();
+ await page.locator('summary',{hasText:'더 적어 둘 설정'}).click();
  await page.getByLabel('고정 설정',{exact:true}).fill('민수는 고소공포증이 있다. 비밀 약속은 공개하지 않는다.');
+ await page.getByText('현재 진행 상태',{exact:true}).click();
  // 진행 상태 줄을 다 빼면 글 칸이 나온다(정리가 실패했을 때와 같은 칸).
  await page.getByRole('button',{name:'시점 빼기',exact:true}).click();
  await page.getByRole('button',{name:'다리 빼기',exact:true}).last().click();
  await page.getByLabel('현재 진행 상태',{exact:true}).fill('다음 날 아침. 민수는 지수에게 사과했고, 지수도 늦은 이유를 알게 됐다.');
  await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 지난번 일을 기억하고 우회로로 일찍 출발한다.');
- await expect(page.getByRole('button',{name:'2화 만들기',exact:true})).toBeDisabled();
- await page.getByRole('button',{name:'초안 저장',exact:true}).click();
- await expect(page.getByRole('status').filter({hasText:'초안을 저장했어요'})).toBeVisible();
+ // 권리 확인 칸이 없다 — 1화에서 받은 확인을 잇는다. 이번 화와 진행 상태가 있으면 바로 만들 수 있다.
+ await expect(page.getByRole('button',{name:/^2화 만들기/})).toBeEnabled();
+ // 「초안 저장」 단추 없이 고친 것이 잠깐 뒤 저절로 초안으로 저장된다(2026-10-26)
+ await expect(page.getByRole('status').filter({hasText:'자동 저장됨'})).toBeVisible();
  expect(server.submitted).toBeNull();
- await page.getByRole('dialog').getByRole('button',{name:'닫기',exact:true}).click();
+ await expect(page.getByRole('button',{name:'내 설정집으로 저장'})).toHaveCount(0);
+ // 돌아갔다가 다시 들어오면 저장한 초안이 그대로다.
+ await page.getByRole('button',{name:'웹툰 보기'}).click();
+ await expect(page).toHaveURL(/run=ep1/);await expect(page).not.toHaveURL(/view=next/);
  await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
+ await page.getByText('현재 진행 상태',{exact:true}).click();
  await expect(page.getByLabel('현재 진행 상태',{exact:true})).toHaveValue('다음 날 아침. 민수는 지수에게 사과했고, 지수도 늦은 이유를 알게 됐다.');
- await page.getByLabel('사용하는 캐릭터·설정·이야기의 권리를 확인했어요.',{exact:true}).check();
  await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 우회로를 미리 확인하고 일찍 출발한다.');
- await page.getByRole('dialog').evaluate(e=>e.scrollTo(0,0));
+ await page.evaluate(()=>window.scrollTo(0,0));
  mkdirSync(resolve(base,'.impeccable/review'),{recursive:true});
  await page.screenshot({path:resolve(base,`.impeccable/review/${info.project.name}.png`),fullPage:true});
- await page.getByRole('button',{name:'2화 만들기',exact:true}).scrollIntoViewIfNeeded();
+ await page.getByRole('button',{name:/^2화 만들기/}).scrollIntoViewIfNeeded();
  await page.screenshot({path:resolve(base,`.impeccable/review/${info.project.name}-actions.png`),fullPage:true});
- await page.getByRole('button',{name:'2화 만들기',exact:true}).click();
+ await page.getByRole('button',{name:/^2화 만들기/}).click();
  await expect(page).toHaveURL(/view=running&job=job-next/);
  expect(server.submitted.fixed_settings).toContain('고소공포증');
  expect(server.submitted.progress_state).toContain('지수도 늦은 이유');
@@ -113,32 +146,21 @@ test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',as
 test('완성 화면에서 회차 목록과 다음 화 이동',async({page})=>{
  await stub(page,2);
  await page.goto('/webtoon?run=ep1');
- // 새 디자인(#780): 회차 목록은 「회차 목록」 단추로 여는 창이다.
- await page.getByRole('button',{name:'회차 목록'}).filter({visible:true}).first().click();
- await page.getByRole('dialog',{name:'회차 목록'}).getByRole('button',{name:/^2화/}).click();
+ // #820: 회차 목록은 창이 아니라 본문 아래에 늘 펼쳐 둔 목록이다(위쪽 「회차 목록」 단추는 같은 목록을 펼친다).
+ const list=page.locator('.wt-reader-eplist:not(.top)');
+ await list.getByRole('button',{name:/^2화/}).click();
  await expect(page).toHaveURL(/run=ep2/);
- await page.getByRole('button',{name:'회차 목록'}).filter({visible:true}).first().click();
- await expect(page.getByRole('dialog',{name:'회차 목록'}).getByRole('button',{name:/^2화/})).toHaveAttribute('aria-current','page');
+ await expect(page.locator('.wt-reader-eplist:not(.top)').getByRole('button',{name:/^2화/})).toHaveAttribute('aria-current','page');
 });
 test('로그인 전에는 개인 설정을 요청하지 않음',async({page})=>{
  const server=await stub(page,1,false);
- await page.goto('/webtoon?run=ep1');
- await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
- await expect(page.getByRole('dialog').getByText('연재 기록을 계정에 보관하려면 로그인해 주세요.')).toBeVisible();
+ await page.goto('/webtoon?view=next&run=ep1');
+ await expect(page.getByText('연재 기록을 계정에 보관하려면 로그인해 주세요.')).toBeVisible();
+ await expect(page.getByRole('button',{name:'로그인',exact:true}).last()).toBeVisible();
  expect(server.calls.some(x=>x.endsWith('/draft'))).toBe(false);
- const dialog=page.getByRole('dialog');
- await dialog.getByRole('button',{name:'로그인',exact:true}).focus();
- // 마지막 단추에서 Tab 은 창 머리의 X(닫기)로 돈다(새 디자인 공용 창).
- await page.keyboard.press('Tab');
- await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeFocused();
- await page.keyboard.press('Shift+Tab');
- await expect(dialog.getByRole('button',{name:'로그인',exact:true})).toBeFocused();
- await page.keyboard.press('Escape');
- await expect(dialog).not.toBeVisible();
- await expect(page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first()).toBeFocused();
 });
 
-test('불러오는 중과 오류 화면에서도 키보드 포커스를 대화상자에 유지',async({page})=>{
+test('불러오는 중과 오류 화면 — 다시 시도와 내 작품 이동',async({page})=>{
  await stub(page);
  let release!:()=>void;
  const pending=new Promise<void>(resolve=>{release=resolve;});
@@ -146,22 +168,14 @@ test('불러오는 중과 오류 화면에서도 키보드 포커스를 대화�
   await pending;
   await route.fulfill({status:500,contentType:'application/json',body:JSON.stringify({error:'테스트 불러오기 실패'})});
  });
- await page.goto('/webtoon?run=ep1');
- await page.getByRole('button',{name:'다음 편 만들기',exact:true}).filter({visible:true}).first().click();
- const dialog=page.getByRole('dialog');
- await expect(dialog.getByRole('status')).toHaveText('앞 화의 기록을 불러오고 있어요');
- await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeFocused();
- await page.keyboard.press('Tab');
- await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeFocused();
+ await page.goto('/webtoon?view=next&run=ep1');
+ await expect(page.getByRole('status').filter({hasText:'앞 화의 기록을 불러오고 있어요'})).toBeVisible();
  release();
- await expect(dialog.getByRole('alert')).toHaveText('테스트 불러오기 실패');
- await dialog.getByRole('button',{name:'닫기',exact:true}).focus();
- await page.keyboard.press('Tab');
- await expect(dialog.getByRole('button',{name:'내 작품으로 이동',exact:true})).toBeFocused();
- await page.keyboard.press('Shift+Tab');
- await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeFocused();
+ await expect(page.getByRole('alert').filter({hasText:'테스트 불러오기 실패'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'다시 시도',exact:true})).toBeVisible();
+ await expect(page.getByRole('button',{name:'내 작품으로 이동',exact:true})).toBeVisible();
 });
-test('저장 중에는 Escape로 닫히지 않고 키보드 포커스가 유지됨',async({page})=>{
+test('고치면 잠깐 뒤 저절로 초안 저장 — 저장 중·저장됨 표시',async({page})=>{
  await stub(page);
  let release!:()=>void;
  const pending=new Promise<void>(resolve=>{release=resolve;});
@@ -172,23 +186,16 @@ test('저장 중에는 Escape로 닫히지 않고 키보드 포커스가 유지�
  });
  await openForm(page);
  await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('조금 일찍 출발한다.');
- await page.getByRole('button',{name:'초안 저장',exact:true}).click();
- const dialog=page.getByRole('dialog');
- await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeDisabled();
- await page.keyboard.press('Escape');
- await expect(dialog).toBeVisible();
- await page.keyboard.press('Tab');
- expect(await dialog.evaluate(e=>e.contains(document.activeElement))).toBe(true);
+ await expect(page.locator('.wt-series-autosave')).toHaveText('저장 중…');
  release();
- await expect(dialog.getByRole('status')).toContainText('초안을 저장했어요');
- await expect(dialog.getByRole('button',{name:'닫기',exact:true})).toBeEnabled();
+ await expect(page.getByRole('status').filter({hasText:'자동 저장됨'})).toBeVisible();
 });
 
 test('같은 캐릭터의 다른 작품은 다음 회차로 이동하지 않음',async({page})=>{
  const server=await stub(page,1);
  await page.route('**/api/**/runs',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({runs:[{run_id:'unrelated',title:'민수의 별개 이야기',character:'민수',episodes:[1],page_count:1}]})}));
  await openForm(page);
- await expect(page.getByRole('dialog')).toContainText('2화 이어 만들기');
+ await expect(page.getByRole('heading',{name:'2화 이어 만들기'})).toBeVisible();
  await expect(page).toHaveURL(/run=ep1/);
  expect(server.calls.some(v=>v.endsWith('/series/ep1/draft'))).toBe(true);
  expect(server.calls.some(v=>/\/unrelated\/(result|draft|next)$/.test(v))).toBe(false);

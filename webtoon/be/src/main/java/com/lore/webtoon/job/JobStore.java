@@ -57,6 +57,14 @@ public class JobStore {
         return jobs.findById(id).orElse(null);
     }
 
+    /** 끊겼던 작업을 이어서 만든다 — 바로 커밋해서, 줄에서 꺼낸 일꾼이 끝난 작업으로 보지 않게. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public WebtoonJob reopened(Long id) {
+        WebtoonJob job = jobs.findById(id).orElseThrow();
+        job.reopened(Instant.now());
+        return jobs.save(job);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public WebtoonJob running(Long id, JobStage stage) {
         WebtoonJob job = jobs.findById(id).orElseThrow();

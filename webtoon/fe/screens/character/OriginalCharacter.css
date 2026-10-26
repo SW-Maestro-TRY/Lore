@@ -176,8 +176,9 @@
 }
 
 @media (max-width: 700px) {
+  /* 폰에서 사진이 너무 작았다(96px) — 화면 폭의 절반쯤으로(2026-10-26) */
   .wt .wt-dialog-box .wt-original-image {
-    width: 96px;
+    width: min(200px, 55vw);
   }
   .wt .wt-dialog-box .wt-original-text textarea {
     min-height: 112px;

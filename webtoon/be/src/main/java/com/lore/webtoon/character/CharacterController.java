@@ -54,14 +54,41 @@ public class CharacterController {
     private final ShareReward shareReward;
     private final Admins admins;
     private final GuestGate guests;
+    private final CharacterTrash trash;
 
     public CharacterController(CharacterService characters, CharacterOwner who, ShareReward shareReward,
-                               Admins admins, GuestGate guests) {
+                               Admins admins, GuestGate guests, CharacterTrash trash) {
         this.characters = characters;
         this.who = who;
         this.shareReward = shareReward;
         this.admins = admins;
         this.guests = guests;
+        this.trash = trash;
+    }
+
+    @Operation(summary = "캐릭터 휴지통", description = """
+            지운 캐릭터 — 최근에 지운 것부터. 보관 기간(keep_days, 15일)이 지나면 영구 삭제된다. 카드마다
+            deleted_at · purge_at 이 붙는다.""")
+    @GetMapping("/trash")
+    public Map<String, Object> trashed(@RequestHeader(value = UID_HEADER, required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        List<String> uids = who.uidsOf(me, uid);
+        List<Map<String, Object>> cards = new java.util.ArrayList<>();
+        for (WebtoonCharacter one : trash.trashOf(me, uids)) {
+            Map<String, Object> card = new java.util.LinkedHashMap<>(view(one, me, uids));
+            card.put("deleted_at", one.getDeletedAt().toString());
+            card.put("purge_at", trash.purgeAt(one.getDeletedAt()).toString());
+            cards.add(card);
+        }
+        return Map.of("keep_days", trash.keepDays(), "characters", cards);
+    }
+
+    @Operation(summary = "휴지통에서 되살리기")
+    @PostMapping("/{publicId}/restore")
+    public Map<String, Object> restore(@PathVariable String publicId,
+                                       @RequestHeader(value = UID_HEADER, required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        return Map.of("ok", true, "restored", trash.restore(publicId, me, who.uidsOf(me, uid)));
     }
 
     @Operation(summary = "고를 수 있는 캐릭터", description = """
@@ -231,14 +258,14 @@ public class CharacterController {
     }
 
     @Operation(summary = "지우기", description = """
-            그림은 S3 에 그대로 둔다 — 이 캐릭터로 이미 만든 웹툰이 그것을 보고 있다.""")
+            휴지통에 넣는다(15일 보관 뒤 영구 삭제). 그림은 S3 에 그대로 둔다 — 이 캐릭터로 이미 만든 웹툰이 그것을 보고 있다.""")
     @DeleteMapping("/{publicId}")
     public Map<String, Object> remove(
             @PathVariable String publicId,
             @RequestHeader(value = UID_HEADER, required = false) String uid) {
         Long me = CreditGate.currentUser();
         characters.remove(publicId, me, who.uidsOf(me, uid));
-        return Map.of("ok", true);
+        return Map.of("ok", true, "keep_days", trash.keepDays());
     }
 
     /**
@@ -262,7 +289,8 @@ public class CharacterController {
         m.put("community_blocked",one.isCommunityBlocked());
         m.put("id", one.getPublicId());
         m.put("name", one.getName());
-        m.put("description", one.getDescription() == null ? "" : one.getDescription());
+        // 비어 있으면 AI 뽑기 카드의 상세 설정으로 — 수정 창과 웹툰 만들기가 이 글을 쓴다(2026-10-26)
+        m.put("description", one.settingsText());
         m.put("art_url", characters.artUrl(one));
         m.put("source", one.getSource().name().toLowerCase());
         m.put("status", one.getStatus().name().toLowerCase());
