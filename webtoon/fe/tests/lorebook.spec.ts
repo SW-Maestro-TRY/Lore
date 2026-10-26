@@ -55,24 +55,24 @@ async function startExtract(page:Page){
  await page.getByLabel('입력한 글을 사용할 권리가 있어요.').check();await page.getByRole('button',{name:'AI로 설정집 만들기',exact:true}).click();
 }
 
-test('설정집 도움말, 직접 적어 붙이기·빼기·복원',async({page},info)=>{
+test('설정집 도움말(팝업), 직접 적어 붙이기·빼기',async({page},info)=>{
  await setup(page);await page.goto('/webtoon?view=create&step=1');
  await expect(page.getByRole('heading',{name:'어떤 이야기인가요?'})).toBeVisible();
  const help=page.getByRole('button',{name:'설정집이란?',exact:true});
  await help.click();await expect(help).toHaveAttribute('aria-expanded','true');
- await expect(page.getByRole('region',{name:'설정집이란?'})).toContainText('진행 상태');
+ await expect(page.getByRole('dialog',{name:'설정집이란?'})).toContainText('진행 상태');
  mkdirSync(resolve(base,'.impeccable/review'),{recursive:true});
  await page.addStyleTag({content:"nextjs-portal{display:none}"});
  await page.screenshot({path:resolve(base,`.impeccable/review/lore-help-${info.project.name}.png`),fullPage:true});
- await page.getByRole('button',{name:'설정집 설명 닫기'}).click();await expect(help).toBeFocused();
+ await page.getByRole('dialog',{name:'설정집이란?'}).getByRole('button',{name:/닫기/}).first().click();await expect(help).toBeFocused();
  await writeBook(page,'다리 앞의 민수','주인공은 높은 곳을 무서워한다.');
  await expect(attached(page)).toHaveCount(1);
  await page.screenshot({path:resolve(base,`.impeccable/review/lore-attached-${info.project.name}.png`),fullPage:true});
- await page.getByRole('button',{name:/설정집 빼기/}).click();await expect(attached(page)).toHaveCount(0);
- await page.getByRole('button',{name:'방금 뺀 설정집 다시 붙이기'}).click();
- await expect(page.locator('.wt-lore-read')).toContainText('주인공은 높은 곳을 무서워한다.');
- await page.getByRole('button',{name:'이 설정집 사용'}).click();await expect(attached(page)).toHaveCount(1);
+ // 붙인 설정집 아래 설명 한 줄(세계 항목 내용) — 「고른 장르의 설정집」·「다시 붙이기」는 없다(2026-10-26)
+ await expect(attached(page)).toContainText('주인공은 높은 곳을 무서워한다.');
  expect(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('lore_wizard_draft')!).lorebook.confirmed)).toBe(true);
+ await page.getByRole('button',{name:/설정집 빼기/}).click();await expect(attached(page)).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'방금 뺀 설정집 다시 붙이기'})).toHaveCount(0);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 test('붙인 설정집은 생성 요청에 들어가 내 내용 길로 가고, 빼면 남지 않음',async({page})=>{
@@ -89,7 +89,7 @@ expect(server.sent.mode).toBe('own');
 test('장르를 고르면 그 장르 설정집이 붙고, 자동으로 돌리면 떨어지며 방식 선택은 남음',async({page})=>{
  const server=await setup(page);await page.goto('/webtoon?view=create&step=1');
  await page.locator('.wt-create-genres').getByRole('button',{name:'무협',exact:true}).click();
- await expect(attached(page)).toHaveCount(1);await expect(attached(page)).toContainText('고른 장르의 설정집');
+ await expect(attached(page)).toHaveCount(1);await expect(attached(page)).not.toContainText('고른 장르의 설정집');
  await next(page);await expect(page).toHaveURL(/step=2/);await expect(page.getByRole('button',{name:/바로 만들기/})).toBeVisible();
  await page.getByRole('button',{name:/캐릭터 · 이야기/}).click();
  await page.locator('.wt-create-genres').getByRole('button',{name:'자동',exact:true}).click();await expect(attached(page)).toHaveCount(0);
@@ -116,7 +116,7 @@ test('AI 초안 실패 안내 후 다시 시도할 수 있음',async({page},info
  await expect(page.getByRole('alert').filter({hasText:'설정을 정리하지 못했어요'})).toBeVisible();await expect(make).toBeEnabled();
  await page.screenshot({path:resolve(base,`.impeccable/review/lore-error-${info.project.name}.png`),fullPage:true});
 });
-test('설정집 여러 개 추가·개별 수정·제거·복원 후 모두 생성에 전달',async({page},info)=>{
+test('설정집 여러 개 추가·개별 수정 후 모두 생성에 전달',async({page},info)=>{
  const server=await setup(page);await page.goto('/webtoon?view=create&step=1');
  await writeBook(page,'밤의 도시','도시에는 밤마다 비가 온다.');await writeBook(page,'민수의 집','민수는 고양이와 산다.');
  await expect(attached(page)).toHaveCount(2);await expect(advance(page)).toBeEnabled();
@@ -124,10 +124,6 @@ test('설정집 여러 개 추가·개별 수정·제거·복원 후 모두 생�
  await attached(page).first().getByRole('button').first().click();await page.getByRole('button',{name:'수정',exact:true}).click();
  await page.getByRole('textbox',{name:'기본 내용',exact:true}).fill('도시에는 밤마다 문이 열린다.');await page.getByRole('button',{name:'확인하고 붙이기'}).click();
  await expect(attached(page)).toHaveCount(2);
- await attached(page).first().getByRole('button',{name:/설정집 빼기/}).click();
- await expect(attached(page)).toHaveCount(1);await expect(page.locator('.wt-lore-attached-list')).toContainText('민수의 집');
- await page.getByRole('button',{name:'방금 뺀 설정집 다시 붙이기'}).click();await page.getByRole('button',{name:'이 설정집 사용'}).click();await expect(attached(page)).toHaveCount(2);
- await expect(attached(page).first()).toContainText('밤의 도시');
  await page.addStyleTag({content:'nextjs-portal{display:none}'});await page.screenshot({path:resolve(base,`.impeccable/review/lore-multiple-${info.project.name}.png`),fullPage:true});
  await finish(page);expect(server.sent.lorebook.books).toHaveLength(2);expect(contents(server.sent.lorebook)).toEqual(['도시에는 밤마다 문이 열린다.','민수는 고양이와 산다.']);
 });

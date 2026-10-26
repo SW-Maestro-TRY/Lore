@@ -5,6 +5,7 @@ import {attachedBooks,packBooks} from "../../lib/lorebooks";
 import {useLang,useT} from "../../lib/i18n";
 import {IconClose,IconMinus,IconPlus} from "../../ui/Icons";
 import {errText} from "../../ui/CreditShort";
+import {Dialog} from "../../ui/Dialog";
 import AuthModal from "@common/auth/AuthModal";
 import {useAuth} from "@common/auth/useAuth";
 import "./loreI18n";
@@ -28,7 +29,7 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
  const [editMode,setEditMode]=useState(false);const beforeEdit=useRef<LoreBook|null>(null);
  const dialog=useRef<HTMLDialogElement>(null);
  const [editing,setEditing]=useState(-1);const [insertAt,setInsertAt]=useState<number|null>(null);
- const [working,setWorking]=useState<LoreBook|null>(null),[undo,setUndo]=useState<{book:LoreBook;index:number}|null>(null);
+ const [working,setWorking]=useState<LoreBook|null>(null);
  const [error,setError]=useState(""),[busy,setBusy]=useState(false),[auth,setAuth]=useState(false),[rights,setRights]=useState(false);
  const [extractId,setExtractId]=useState("");
  /* AI로 만들기 — 긴 이야기를 붙여 넣거나 글 파일을 올리면 AI가 설정집 초안을 만든다(서버 한도 20,000자) */
@@ -45,7 +46,7 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
   const signingIn=previousOwner.current===null&&identity!==null;
   previousOwner.current=identity;
   const kept=books.filter(b=>!b.library_id||b.library_owner===owner&&owner!==undefined);
-  if(switched && !(signingIn && working && !working.library_id)){setWorking(null);setUndo(null);setExtractId("");setBusy(false);setOpen(false);}
+  if(switched && !(signingIn && working && !working.library_id)){setWorking(null);setExtractId("");setBusy(false);setOpen(false);}
   if(kept.length!==books.length)onChange(packBooks(kept));
   return()=>{refreshSequence.current++;};
  },[authenticated,owner,account.status]);
@@ -78,7 +79,7 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
   if(text.length>AI_MAX){setAiText(text.slice(0,AI_MAX));setAiNote(t("앞 {n}자만 넣었어요",{n:AI_MAX.toLocaleString()}));}else setAiText(text);
  };
  const patch=(p:Partial<LoreBook>)=>{setSaved(false);setWorking(w=>w?{...w,...p,confirmed:false}:w);};
- const remove=(index:number)=>{setUndo({book:books[index],index});onChange(packBooks(books.filter((_,i)=>i!==index)));setWorking(null);setEditing(-1);setOpen(false);};
+ const remove=(index:number)=>{onChange(packBooks(books.filter((_,i)=>i!==index)));setWorking(null);setEditing(-1);setOpen(false);};
  const saveMine=async()=>{
   if(!authenticated){setAuth(true);return;}
   if(!working||saving)return;
@@ -100,8 +101,10 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
   const next=[...books];if(editing<0)next.splice(insertAt??next.length,0,book);else next[editing]=book;
   const packed=packBooks(next)!;
   if(next.length>24||packed.fixed_settings.length+packed.progress_state.length+packed.entries.reduce((n,e)=>n+e.content.length,0)>80000){setError(t("설정집은 합쳐서 80,000자까지예요."));return;}
-  onChange(packed);setUndo(null);setWorking(null);setEditing(-1);close();
+  onChange(packed);setWorking(null);setEditing(-1);close();
  };
+ /* 붙인 설정집 아래 한 줄 설명 — 세계 항목(항상 참고) 내용, 없으면 고정 설정, 없으면 첫 항목. 길면 화면이 한 줄로 자른다 */
+ const bookSummary=(book:LoreBook)=>{const world=book.entries?.find(e=>e.always&&e.content?.trim());return (world?.content||book.fixed_settings||book.entries?.find(e=>e.content?.trim())?.content||"").replace(/\s+/g," ").trim();};
  return <section className="wt-lore" aria-label={t("설정집")}>
   <div className="wt-lore-attachline">
    <button ref={trigger} type="button" className="btn btn-w" disabled={busy} onClick={()=>edit()}>+ {t("설정집")}</button>
@@ -109,15 +112,14 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
 
   </div>
   {!!books.length&&<ul className="wt-lore-attached-list">{books.map((book,index)=><li className="wt-lore-attached" key={index}>
-   <button type="button" disabled={busy} onClick={()=>edit(index)}><b>{book.name||t("내 설정집")}</b>{book.source==="genre"&&book.confirmed&&<span>{t("고른 장르의 설정집")}</span>}{!book.confirmed&&<span>{t("설정을 다시 확인해 주세요")}</span>}</button>
+   <button type="button" disabled={busy} onClick={()=>edit(index)}><b>{book.name||t("내 설정집")}</b>{!book.confirmed?<span className="warn">{t("설정을 다시 확인해 주세요")}</span>:bookSummary(book)&&<span className="desc">{bookSummary(book)}</span>}</button>
    <button type="button" className="wt-lore-remove" aria-label={t("{name} 설정집 빼기",{name:book.name})} disabled={busy} onClick={()=>remove(index)}>{t("빼기")}</button>
   </li>)}</ul>}
-  {undo&&<button type="button" className="btn-ghost" disabled={busy} onClick={()=>{setWorking({...undo.book,confirmed:false});setEditMode(false);setInsertAt(undo.index);setEditing(-1);setOpen(true);setUndo(null);}}>{t("방금 뺀 설정집 다시 붙이기")}</button>}
-  {help&&<div id={helpId} className="wt-lore-help" role="region" aria-label={t("설정집이란?")} onKeyDown={e=>{if(e.key==="Escape"){e.stopPropagation();setHelp(false);helpButton.current?.focus();}}}>
-   <div className="wt-lore-panelhead"><h3>{t("설정집이란?")}</h3><button type="button" className="wt-lore-close" aria-label={t("설정집 설명 닫기")} title={t("닫기")} onClick={()=>{setHelp(false);helpButton.current?.focus();}}><IconClose size={18}/></button></div>
+  {/* 설정집 설명 — 칸 아래에 펼치지 않고 팝업으로(2026-10-26) */}
+  {help&&<Dialog title={t("설정집이란?")} className="wt-lore-helpdialog" onClose={()=>{setHelp(false);helpButton.current?.focus();}}><div id={helpId} className="wt-lore-help">
    <p>{t("로어북이라고도 해요. 등장인물과 세계관, 지금까지의 이야기를 기억해 다음 화에도 이어 주는 설정집이에요.")}</p>
    <dl><div><dt>{t("고정 설정")}</dt><dd>{t("계속 지킬 인물·세계의 규칙. 예: 주인공은 높은 곳을 무서워해요.")}</dd></div><div><dt>{t("진행 상태")}</dt><dd>{t("이야기에 따라 달라지는 현재 상황. 예: 친구에게 비밀을 털어놓았어요.")}</dd></div></dl>
-  </div>}
+  </div></Dialog>}
   {open&&<dialog ref={dialog} className="wt-lore-dialog" aria-label={t("설정집")} onCancel={e=>{e.preventDefault();if(!busy&&!saving)close();}}><div className="wt-lore-panel" ref={panel}>
    <div className="wt-lore-panelhead"><div><h3>{working?(editMode&&aiMode?t("AI로 설정집 만들기"):working.name||t("새 설정집")):t("설정집")}</h3></div>
     <button type="button" className="wt-lore-close" aria-label={t("설정집 닫기")} title={t("닫기")} disabled={busy||saving} onClick={close}><IconClose size={20}/></button></div>
