@@ -39,9 +39,12 @@ public class CommentedRunService {
                 where user_id=? and not deleted and not hidden
                 group by run_id order by max(created_at) desc limit ?""", String.class, userId, LIMIT);
         List<Map<String, Object>> out = new ArrayList<>();
+        // 연재는 카드 하나 — 여러 화에 댓글을 달았어도 한 번만 싣는다(1화 카드는 한 번만 만든다).
+        Map<String, Map<String, Object>> roots = new java.util.HashMap<>();
+        java.util.Set<Object> seen = new java.util.HashSet<>();
         for (String runId : ids) {
-            Map<String, Object> card = runs.cardOf(runId);
-            if (card != null) {
+            Map<String, Object> card = runs.cardOf(runId, roots);
+            if (card != null && seen.add(card.get("run_id"))) {
                 out.add(card);
             }
         }
