@@ -810,8 +810,20 @@ export function renameCharacter(id: string, name: string, description: string) {
   });
 }
 
+/** 지우기 — 바로 없애지 않고 휴지통에 넣는다(keep_days 일 보관 뒤 영구 삭제). */
 export function removeCharacter(id: string) {
-  return call<{ ok: boolean }>(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return call<{ ok: boolean; keep_days?: number }>(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export type TrashCharacter = Character & { deleted_at: string; purge_at: string };
+
+/** 캐릭터 휴지통 — 최근에 지운 것부터. */
+export function characterTrash(): Promise<{ keep_days: number; characters: TrashCharacter[] }> {
+  return call("/characters/trash");
+}
+
+export function restoreCharacter(id: string) {
+  return post<{ ok: boolean; restored: boolean }>(`/characters/${encodeURIComponent(id)}/restore`, {});
 }
 
 /* ---- 편집실 설정 ------------------------------------------------------------ */

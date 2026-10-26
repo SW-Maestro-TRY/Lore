@@ -22,7 +22,7 @@ import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
   browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myCommented, myLikes, myTrash, readAllowance, recentRuns,
-  readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
+  readNotifySetting, restoreRun, removeCharacter, characterTrash, restoreCharacter, type TrashCharacter, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
   mySurveyStatus, type SurveyStatus, mySeriesDrafts, type SeriesDraftCard,
 } from "../../lib/api";
@@ -32,7 +32,8 @@ import PushOptIn from "../../ui/PushOptIn";
 import RunStrip from "../../ui/RunStrip";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
-import { IconCheck, IconChevronRight, IconMail, IconUser } from "../../ui/Icons";
+import { IconCheck, IconChevronRight, IconMail, IconTrash, IconUser } from "../../ui/Icons";
+import { CharacterEditDialog } from "../character/OriginalCharacter";
 import { InstagramMark, KakaoTalkMark, XMark } from "../../ui/BrandMarks";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
@@ -186,8 +187,13 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
   /* home = 마이페이지 첫 화면(웹툰 몇 개 · 만드는 중 · 찜 · 내 캐릭터). 왼쪽 「웹툰」 묶음의 네 칸
      (내 웹툰 · 내 캐릭터 · 찜한 웹툰 · 댓글 단 웹툰)은 각각 전부 펼친 목록이다 — 웹툰이 많아져도 첫 화면은 그대로. */
-  const [tab, setTab] = useState<"home" | "works" | "chars" | "liked" | "commented" | "settings">(initialTab === "settings" ? "settings" : "home");
+  const [tab, setTab] = useState<"home" | "works" | "chars" | "liked" | "commented" | "settings" | "trash">(initialTab === "settings" ? "settings" : "home");
   const allWorks = tab === "works";
+  /* 왼쪽 메뉴로 화면을 바꾸면 맨 위부터 — 그리고 나서 높이가 바뀌어도 위에서 시작한다 */
+  useEffect(() => {
+    const id = requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+    return () => cancelAnimationFrame(id);
+  }, [tab]);
   const WORKS_PREVIEW = 3;
   const [contactOpen, setContactOpen] = useState(false);
   const [contactCompose, setContactCompose] = useState(false);
@@ -299,7 +305,42 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
      로그인한 사람만 되므로 휴지통도 로그인했을 때만 읽는다. */
   const [trash, setTrash] = useState<TrashCard[]>([]);
   const [keepDays, setKeepDays] = useState(30);
-  const [trashOpen, setTrashOpen] = useState(false);
+  /* 캐릭터 휴지통(2026-10-26) — 웹툰 휴지통과 같은 화면에 둔다. 웹툰 30일 · 캐릭터 15일. */
+  const [charTrash, setCharTrash] = useState<TrashCharacter[]>([]);
+  const [charKeepDays, setCharKeepDays] = useState(15);
+  const loadChars = useCallback(async () => {
+    try {
+      const l = await listCharacters();
+      setChars(l.characters.filter((c) => c.mine));
+    } catch { /* 못 받으면 있던 목록을 둔다 */ }
+  }, []);
+  /* 내 캐릭터 고치기 · 지우기 — 「삭제」를 누르면 카드마다 휴지통 표시가 생기고, 고른 것을 한 번에 휴지통으로 */
+  const [editingChar, setEditingChar] = useState<Character | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [askRemove, setAskRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeErr, setRemoveErr] = useState("");
+  const removePicked = async () => {
+    setRemoving(true);
+    setRemoveErr("");
+    const failed: string[] = [];
+    for (const id of picked) {
+      try { await removeCharacter(id); } catch { failed.push(id); }
+    }
+    track("character_delete", { n: picked.length - failed.length, where: "mypage" });
+    await loadChars();
+    await loadTrash();
+    setRemoving(false);
+    if (failed.length) {
+      setPicked(failed);
+      setRemoveErr(t("{n}개는 지우지 못했어요", { n: failed.length }));
+      return;
+    }
+    setAskRemove(false);
+    setPicking(false);
+    setPicked([]);
+  };
   const loadTrash = useCallback(async () => {
     if (!isAuthenticated) { setTrash([]); return; }
     try {
@@ -309,10 +350,17 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
     } catch {
       setTrash([]);
     }
+    try {
+      const got = await characterTrash();
+      setCharTrash(got.characters);
+      setCharKeepDays(got.keep_days);
+    } catch {
+      setCharTrash([]);
+    }
   }, [isAuthenticated]);
   useEffect(() => { void loadTrash(); }, [loadTrash]);
   useEffect(() => {
-    listCharacters().then((l) => setChars(l.characters.filter((c) => c.mine))).catch(() => {});
+    void loadChars();
     readAllowance().then(setAllowance).catch(() => {});
     if (isAuthenticated) {
       creditBalance().then((b) => { setCredits(b.balance); setPaidCredits(b.paid ?? 0); }).catch(() => {});
@@ -410,9 +458,9 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 {t("설정")}
               </button>
               {/* 휴지통(#157) — 지운 웹툰은 창으로 따로 연다. */}
-              <button type="button" className="wt-my-trashmenu"
-                      onClick={() => { void loadTrash(); setTrashOpen(true); track("trash_open", { where: "mypage" }); }}>
-                {t("휴지통")} <span className="dim">{trash.length}</span>
+              <button type="button" className={`wt-my-trashmenu${tab === "trash" ? " on" : ""}`}
+                      onClick={() => { void loadTrash(); setTab("trash"); window.scrollTo({ top: 0 }); track("trash_open", { where: "mypage" }); }}>
+                {t("휴지통")} <span className="dim">{trash.length + charTrash.length}</span>
               </button>
             </>
           )}
@@ -557,24 +605,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 <div className="wt-contact-address"><IconMail size={15} /><span>{t("문의 이메일")}</span><b>{WEBTOON_SUPPORT_EMAIL}</b></div>
               </Dialog>
             )}
-            {trashOpen && (
-              <Dialog title={t("휴지통")} wide onClose={() => setTrashOpen(false)}
-                      sub={t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}>
-                {trash.length === 0 ? (
-                  <p className="wt-my-trashempty muted">{t("휴지통이 비어 있어요.")}</p>
-                ) : (
-                  <div className="wt-my-trash">
-                    {trash.map((r) => (
-                      <TrashRow key={r.run_id} run={r}
-                                onRestored={() => { void loadRuns(); void loadTrash(); }} />
-                    ))}
-                  </div>
-                )}
-                <div className="wt-dialog-actions">
-                  <button type="button" className="btn btn-w" onClick={() => setTrashOpen(false)}>{t("닫기")}</button>
-                </div>
-              </Dialog>
-            )}
         {(tab === "home" || tab === "works") && (
           <>
             <div className="wt-my-head">
@@ -681,6 +711,41 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           </>
         )}
 
+        {tab === "trash" && (
+          /* 휴지통 — 팝업이 아니라 마이페이지 화면(2026-10-26). 웹툰 {keepDays}일 · 캐릭터 {charKeepDays}일 보관 뒤 영구 삭제. */
+          <>
+            <div className="wt-my-head">
+              <div>
+                <h2>{t("휴지통")} <span className="dim wt-my-count">{trash.length + charTrash.length}</span></h2>
+              </div>
+            </div>
+            <section className="wt-my-trashsec">
+              <h3>{t("웹툰")} <span className="dim">{t("{n}일 보관", { n: keepDays })}</span></h3>
+              {trash.length === 0 ? (
+                <p className="wt-my-trashempty muted">{t("휴지통에 든 웹툰이 없어요.")}</p>
+              ) : (
+                <div className="wt-my-trash">
+                  {trash.map((r) => (
+                    <TrashRow key={r.run_id} run={r} onRestored={() => { void loadRuns(); void loadTrash(); }} />
+                  ))}
+                </div>
+              )}
+            </section>
+            <section className="wt-my-trashsec">
+              <h3>{t("캐릭터")} <span className="dim">{t("{n}일 보관", { n: charKeepDays })}</span></h3>
+              {charTrash.length === 0 ? (
+                <p className="wt-my-trashempty muted">{t("휴지통에 든 캐릭터가 없어요.")}</p>
+              ) : (
+                <div className="wt-my-trash">
+                  {charTrash.map((c) => (
+                    <CharTrashRow key={c.id} character={c} onRestored={() => { void loadChars(); void loadTrash(); }} />
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
         {(tab === "liked" || tab === "commented") && (
           /* 찜한 웹툰 · 댓글 단 웹툰 — 전부 펼친 목록. 누르면 그 웹툰으로 간다. */
           <>
@@ -726,7 +791,22 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 <h2>{t("내 캐릭터")} <span className="dim wt-my-count">{chars.length}</span></h2>
               </div>
               <div className="wt-my-headacts">
-                <button type="button" className="btn btn-p" onClick={() => go("character-new")}>{t("새 캐릭터 만들기")}</button>
+                {picking ? (
+                  <>
+                    <button type="button" className="btn btn-w" onClick={() => { setPicking(false); setPicked([]); }}>{t("취소")}</button>
+                    <button type="button" className="btn wt-my-delete wt-my-deletebig" disabled={picked.length === 0}
+                            onClick={() => { setRemoveErr(""); setAskRemove(true); }}>
+                      {picked.length > 0 ? t("{n}개 삭제", { n: picked.length }) : t("삭제")}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="btn btn-p" onClick={() => go("character-new")}>{t("새 캐릭터 만들기")}</button>
+                    {chars.length > 0 && (
+                      <button type="button" className="btn wt-my-delete wt-my-deletebig" onClick={() => { setPicking(true); setPicked([]); }}>{t("삭제")}</button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
             {chars.length === 0 ? (
@@ -738,7 +818,14 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             ) : (
               <div className="wt-my-grid">
                 {chars.map((c) => (
-                  <div key={c.id} className="card wt-my-work wt-my-charcard">
+                  <div key={c.id} className={`card wt-my-work wt-my-charcard${picked.includes(c.id) ? " picked" : ""}`}>
+                    {picking && (
+                      <button type="button" className={`wt-my-pick${picked.includes(c.id) ? " on" : ""}`}
+                              aria-pressed={picked.includes(c.id)} aria-label={t("{name} 삭제할 것으로 고르기", { name: c.name })}
+                              onClick={() => setPicked((l) => l.includes(c.id) ? l.filter((x) => x !== c.id) : [...l, c.id])}>
+                        <IconTrash size={16} />
+                      </button>
+                    )}
                     <span className="wt-my-cover">
                       {c.art_url ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
@@ -754,15 +841,29 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                     <span className="muted">
                       {[c.card?.world_label, c.card?.species, ago(c.created_at, t)].filter(Boolean).join(" · ")}
                     </span>
-                    <div className="wt-my-workfoot">
-                      <button type="button" className="btn btn-p btn-sm grow" disabled={c.status !== "ready"}
-                              onClick={() => go("create", { step: 1, character: c.id })}>{t("이 캐릭터로 웹툰")}</button>
+                    <div className="wt-my-workfoot wt-my-charfoot">
+                      <button type="button" className="btn btn-w wt-my-edit" disabled={picking} onClick={() => setEditingChar(c)}>{t("수정")}</button>
+                      <button type="button" className="btn btn-p wt-my-edit grow" disabled={picking || c.status !== "ready"}
+                              onClick={() => go("create", { step: 1, character: c.id })}>{t("이 캐릭터로 웹툰 만들기")}</button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </>
+        )}
+
+        {editingChar && (
+          <CharacterEditDialog character={editingChar} authenticated={isAuthenticated}
+                               onClose={() => setEditingChar(null)}
+                               onSaved={(c) => { setChars((l) => l.map((x) => x.id === c.id ? c : x)); setEditingChar(null); }}
+                               onDeleted={() => { setEditingChar(null); void loadChars(); void loadTrash(); }} />
+        )}
+        {askRemove && (
+          <ConfirmDialog title={t("정말 삭제하시겠습니까?")}
+                         sub={<>{t("{n}개를 휴지통으로 옮겨요.", { n: picked.length })}<br />{t("휴지통에 {n}일간 보관됩니다.", { n: charKeepDays })}</>}
+                         confirmLabel={t("삭제")} cancelLabel={t("취소")} busy={removing}
+                         error={removeErr} onConfirm={() => void removePicked()} onClose={() => { setAskRemove(false); setRemoveErr(""); }} />
         )}
 
         {tab === "settings" && (
@@ -879,6 +980,37 @@ function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void 
   );
 }
 
+
+function CharTrashRow({ character, onRestored }: { character: TrashCharacter; onRestored: () => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const left = Math.max(0, Math.ceil((new Date(character.purge_at).getTime() - Date.now()) / 86_400_000));
+  const restore = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await restoreCharacter(character.id);
+      track("character_restore", { character: character.id, where: "mypage" });
+      onRestored();
+    } catch (e) {
+      setErr((e as Error).message || t("되살리지 못했습니다"));
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="wt-my-trashrow">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {character.art_url ? <img src={character.art_url} alt="" /> : <span className="wt-my-trashimg" aria-hidden="true" />}
+      <div className="wt-my-trashtext">
+        <b>{character.name}</b>
+        <span className="muted">{left > 0 ? t("{n}일 뒤 영구 삭제", { n: left }) : t("오늘 영구 삭제")}</span>
+        {err && <span className="wt-my-err">{err}</span>}
+      </div>
+      <button type="button" className="btn btn-w" disabled={busy} onClick={() => void restore()}>{t("되살리기")}</button>
+    </div>
+  );
+}
 
 /* 「만드는 중」 화면 확인용 가짜 작업 셋 — 장면 확인 · 그리는 중 · 이야기 고르기. */
 const MOCK_DRAFTS: { jobs: NhJob[]; cards: NhActiveCard[] } = (() => {
@@ -1034,8 +1166,8 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
         </span>
       )}
       {confirming && (
-        <ConfirmDialog title={t("휴지통으로 옮길까요?")}
-                       sub={<><b>{run.title || t("제목 없음")}</b><br />{t("{n}일 안에는 휴지통에서 되살릴 수 있어요.", { n: keepDays })}</>}
+        <ConfirmDialog title={t("정말 삭제하시겠습니까?")}
+                       sub={<><b>{run.title || t("제목 없음")}</b><br />{t("휴지통에 {n}일간 보관됩니다.", { n: keepDays })}</>}
                        confirmLabel={t("삭제")} cancelLabel={t("취소")} busy={busy}
                        error={err} onConfirm={() => void remove()} onClose={() => { setConfirming(false); setErr(""); }} />
       )}

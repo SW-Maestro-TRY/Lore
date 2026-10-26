@@ -163,6 +163,15 @@ public class WebtoonCharacter {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** 휴지통에 넣은 때(2026-10-26). 비어 있으면 살아 있다 — {@link CharacterTrash} 가 15일 뒤 영구 삭제한다. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    public boolean isTrashed() { return deletedAt != null; }
+    public Instant getDeletedAt() { return deletedAt; }
+    public void trash(Instant at) { this.deletedAt = at; this.updatedAt = at; }
+    public void untrash(Instant at) { this.deletedAt = null; this.updatedAt = at; }
+
     @Column(name="community_public", nullable=false, columnDefinition="boolean not null default false")
     private boolean communityPublic;
     @Column(name="community_blocked", nullable=false, columnDefinition="boolean not null default false")
