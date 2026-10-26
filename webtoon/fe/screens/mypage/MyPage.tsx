@@ -177,6 +177,20 @@ registerDict({
     zh: "你要的漫画做好后，我们会发邮件到你的账号邮箱。以访客身份填写的地址不受此设置影响，仍会照常发送。",
   },
   "바꾸지 못했어요": { en: "Couldn't change it", ja: "変更できませんでした", zh: "无法更改" },
+  "{name} 삭제할 것으로 고르기": { en: "Select {name} to delete", ja: "{name}を削除対象に選ぶ", zh: "选择删除 {name}" },
+  "{n}개는 지우지 못했어요": { en: "Couldn't delete {n}", ja: "{n}件は削除できませんでした", zh: "有 {n} 项未能删除" },
+  "{n}개를 휴지통으로 옮겨요.": { en: "Moves {n} items to the trash.", ja: "{n}件をゴミ箱に移します。", zh: "将 {n} 项移到回收站。" },
+  "{n}일 보관": { en: "Kept {n} days", ja: "{n}日間保管", zh: "保留 {n} 天" },
+  "관리자 대시보드": { en: "Admin dashboard", ja: "管理者ダッシュボード", zh: "管理员面板" },
+  "내 웹툰 모두 보기": { en: "See all my webtoons", ja: "マイウェブトゥーンをすべて見る", zh: "查看我的全部漫画" },
+  "수정": { en: "Edit", ja: "編集", zh: "编辑" },
+  "열기": { en: "Open", ja: "開く", zh: "打开" },
+  "우리 쪽 접속을 뺀 지표 · 비공개까지 모든 작품과 캐릭터 · 작품 처리 · 예시 작품 · 결제로 가는 자리. 관리자만 보여요.": { en: "Metrics excluding our own visits · all works and characters, including private ones · moderation · sample works · payment funnel. Visible to admins only.", ja: "社内アクセスを除いた指標・非公開を含むすべての作品とキャラクター・作品の処理・サンプル作品・決済への導線。管理者にのみ表示されます。", zh: "排除内部访问的指标 · 包括私密在内的全部作品和角色 · 作品处理 · 示例作品 · 支付入口。仅管理员可见。" },
+  "이 캐릭터로 웹툰 만들기": { en: "Make a webtoon with this character", ja: "このキャラクターでウェブトゥーンを作る", zh: "用这个角色制作漫画" },
+  "정말 삭제하시겠습니까?": { en: "Are you sure you want to delete?", ja: "本当に削除しますか？", zh: "确定要删除吗？" },
+  "휴지통에 {n}일간 보관됩니다.": { en: "It stays in the trash for {n} days.", ja: "ゴミ箱に{n}日間保管されます。", zh: "将在回收站保留 {n} 天。" },
+  "휴지통에 든 웹툰이 없어요.": { en: "No webtoons in the trash.", ja: "ゴミ箱にウェブトゥーンはありません。", zh: "回收站里没有漫画。" },
+  "휴지통에 든 캐릭터가 없어요.": { en: "No characters in the trash.", ja: "ゴミ箱にキャラクターはありません。", zh: "回收站里没有角色。" },
 });
 
 export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" | "contact" }) {
@@ -785,7 +799,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                       ) : <span className="wt-my-charnoimg" aria-hidden="true" />}
                     </span>
                     <b>{r.title || t("제목 없음")}</b>
-                    <span className="muted">{[r.character, r.genre && t(r.genre)].filter(Boolean).join(" · ")}</span>
+                    <span className="muted">{[r.subtitle && `${t("{n}화", { n: r.episode ?? 1 })} · ${r.subtitle}`, r.character, r.genre && t(r.genre)].filter(Boolean).join(" · ")}</span>
                   </button>
                 ))}
               </div>
@@ -981,6 +995,7 @@ function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void 
       {run.cover_url ? <img src={run.cover_url} alt="" /> : <span className="wt-my-trashimg" aria-hidden="true" />}
       <div className="wt-my-trashtext">
         <b>{run.title || t("제목 없음")}</b>
+        {run.subtitle && <span className="muted">{t("{n}화", { n: run.episode ?? 1 })} · {run.subtitle}</span>}
         <span className="muted">{left > 0 ? t("{n}일 뒤 영구 삭제", { n: left }) : t("오늘 영구 삭제")}</span>
         {removedByAdmin && (
           /* 관리자가 삭제 처리한 작품(#638) — 작가는 못 되살린다(서버 RunTrash.restore 도 막는다). */

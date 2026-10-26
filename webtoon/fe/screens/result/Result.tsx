@@ -110,7 +110,24 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
         if (!alive) return;
         // 둘러보기는 연재를 1화 카드 하나로 묶는다 — 지금 읽는 회차가 든 카드는 추천에서 뺀다.
         const inSeries = (r: RunCard) => r.run_id === runId || Object.values(r.episode_run_ids || {}).includes(runId);
-        const others = all.filter((r) => !inSeries(r)).sort((a, b) => b.run_id.localeCompare(a.run_id));
+        /* 연재 기능 전에 「같은 이름 N화 — 소제목」으로 화마다 따로 만든 작품은 묶이지 않아서, 한 작품의 회차 넷이
+           추천을 다 차지했다(2026-10-26). 제목의 「N화」 앞 이름이 같으면 같은 작품으로 보고 가장 앞 화 하나만 둔다. */
+        const nameOf = (title: string) => {
+          const m = /^(.+?)\s+(\d+)\s*화(?:\s|$|[—\-–:·])/.exec(title.trim());
+          return m ? { name: m[1].trim(), ep: Number(m[2]) } : null;
+        };
+        const mine = nameOf(data.title);
+        const firstOf = new Map<string, RunCard>();
+        const kept: RunCard[] = [];
+        for (const r of all) {
+          if (inSeries(r)) continue;
+          const named = nameOf(r.title || "");
+          if (!named) { kept.push(r); continue; }
+          if (mine && named.name === mine.name) continue;         // 지금 읽는 작품의 다른 화
+          const had = firstOf.get(named.name);
+          if (!had || named.ep < (nameOf(had.title || "")?.ep ?? Infinity)) firstOf.set(named.name, r);
+        }
+        const others = [...kept, ...firstOf.values()].sort((a, b) => b.run_id.localeCompare(a.run_id));
         const same = data.genre ? others.filter((r) => r.genre === data.genre) : [];
         setSuggested((same.length >= 2 ? same : others).slice(0, 4));
         const me = all.find((r) => r.run_id === runId);
@@ -193,11 +210,12 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     if (titleDraft === null || !data || titleSaving.current) return;
     const want = titleDraft.trim();
     setTitleDraft(null);
-    if (!want || want === data.title) return;
+    if (!want || want === (data.subtitle ?? data.title)) return;
     titleSaving.current = true;
     try {
       const out = await renameRun(runId, want);
-      setData((d) => (d ? { ...d, title: out.title } : d));
+      // 연재 2화부터 고치는 것은 이 화의 소제목이다 — 작품 제목은 1화에서 고친다
+      setData((d) => (d ? (d.subtitle != null ? { ...d, subtitle: out.title } : { ...d, title: out.title }) : d));
       setTitleErr(false);
     } catch {
       setTitleErr(true);
@@ -205,6 +223,17 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       titleSaving.current = false;
     }
   };
+  const titleInput = (label: string) => (
+    <input className="wt-result-titleinput" value={titleDraft ?? ""} autoFocus maxLength={60}
+           aria-label={label}
+           onChange={(e) => setTitleDraft(e.target.value)}
+           onBlur={() => void saveTitle()}
+           onKeyDown={(e) => {
+             // 한글을 조합하는 중의 Enter 는 글자 확정이다 — 그때는 저장하지 않는다.
+             if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void saveTitle(); }
+             else if (e.key === "Escape") setTitleDraft(null);
+           }} />
+  );
   const ep = series?.episode || data?.episode || 1;
   /* 회차 목록 — 연재가 아니면 이 화 하나 */
   const chapterRows = series?.chapters.length ? series.chapters : [{ episode: ep, run_id: runId, status: "DONE", title: data?.title || "" }];
@@ -250,7 +279,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const tags = (r: RunResult) => [...new Set([r.genre, r.style_label].filter((s): s is string => !!s).map((s) => t(s)))];
   /* 작품 머리(2026-10-25): 장르는 제목 위 작은 줄로, 제목 아래는 「캐릭터 · N화」만. */
   const genreLine = data ? tags(data).join(" · ") : "";
-  const metaPc = data ? [data.character, t("{n}화", { n: ep })].filter(Boolean).join(" · ") : "";
+  // 연재 2화부터는 「N화」가 소제목 줄에 있다 — 여기서 또 적지 않는다
+  const metaPc = data ? [data.character, data.subtitle == null && t("{n}화", { n: ep })].filter(Boolean).join(" · ") : "";
   const metaM = metaPc;
 
   /* 다음 편은 아직 없다. 그래도 누가 어느 버튼에서 얼마나 찾는지가 이 기능을 언제
@@ -378,32 +408,31 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                     제목 글자 자체가 줄 정중앙에 오도록, 연필은 제목 옆이 아니라 좋아요·공유와
                     함께 오른쪽 끝(wt-result-titleacts)으로 보낸다. */}
                 <h2 className="wt-result-titlemid">
-                  {titleDraft !== null ? (
-                    <input className="wt-result-titleinput" value={titleDraft} autoFocus maxLength={60}
-                           aria-label={t("제목 고치기")}
-                           onChange={(e) => setTitleDraft(e.target.value)}
-                           onBlur={() => void saveTitle()}
-                           onKeyDown={(e) => {
-                             // 한글을 조합하는 중의 Enter 는 글자 확정이다 — 그때는 저장하지 않는다.
-                             if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); void saveTitle(); }
-                             else if (e.key === "Escape") setTitleDraft(null);
-                           }} />
-                  ) : (
+                  {titleDraft !== null && data.subtitle == null ? titleInput(t("제목 고치기")) : (
                     <span className="wt-result-titletext">{data.title}</span>
                   )}
-                  {titleErr && <span className="err wt-result-titleerr">{t("저장하지 못했습니다")}</span>}
+                  {titleErr && data.subtitle == null && <span className="err wt-result-titleerr">{t("저장하지 못했습니다")}</span>}
                 </h2>
                 <span className="wt-result-titleacts">
                   {/* 제목 바꾸기는 편집실과 같은 주소라 로그인해야 된다(401) — 로그인한 주인에게만 연필. */}
                   {mine && authenticated && titleDraft === null && (
-                    <button type="button" className="icon-btn wt-result-titleedit" aria-label={t("제목 고치기")}
-                            title={t("제목 고치기")} onClick={() => { setTitleErr(false); setTitleDraft(data.title); }}>
+                    <button type="button" className="icon-btn wt-result-titleedit" aria-label={data.subtitle != null ? t("소제목 고치기") : t("제목 고치기")}
+                            title={data.subtitle != null ? t("소제목 고치기") : t("제목 고치기")}
+                            onClick={() => { setTitleErr(false); setTitleDraft(data.subtitle ?? data.title); }}>
                       <IconEdit size={15} />
                     </button>
                   )}
                 </span>
               </div>
 
+              {/* 연재 2화부터 — 작품 제목 아래에 「N화 소제목」(2026-10-26) */}
+              {data.subtitle != null && (
+                <p className="wt-result-subtitle">
+                  <b>{t("{n}화", { n: ep })}</b>
+                  {titleDraft !== null ? titleInput(t("소제목 고치기")) : <span>{data.subtitle}</span>}
+                  {titleErr && <span className="err wt-result-titleerr">{t("저장하지 못했습니다")}</span>}
+                </p>
+              )}
               <span className="muted wt-result-meta">
                 <span className="wt-result-meta-pc">{metaPc}</span>
                 <span className="wt-result-meta-m">{metaM}</span>

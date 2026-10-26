@@ -90,7 +90,7 @@ test('장르를 고르면 그 장르 설정집이 붙고, 자동으로 돌리면
  const server=await setup(page);await page.goto('/webtoon?view=create&step=1');
  await page.locator('.wt-create-genres').getByRole('button',{name:'무협',exact:true}).click();
  await expect(attached(page)).toHaveCount(1);await expect(attached(page)).not.toContainText('고른 장르의 설정집');
- await next(page);await expect(page).toHaveURL(/step=2/);await expect(page.getByRole('button',{name:/바로 만들기/})).toBeVisible();
+ await next(page);await expect(page).toHaveURL(/step=2/);await expect(page.getByRole('switch',{name:/바로 만들기/})).toBeVisible();
  await page.getByRole('button',{name:/캐릭터 · 이야기/}).click();
  await page.locator('.wt-create-genres').getByRole('button',{name:'자동',exact:true}).click();await expect(attached(page)).toHaveCount(0);
  await page.locator('.wt-create-genres').getByRole('button',{name:'무협',exact:true}).click();await finish(page);

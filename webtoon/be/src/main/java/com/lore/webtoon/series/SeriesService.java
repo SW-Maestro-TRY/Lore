@@ -44,7 +44,15 @@ public class SeriesService {
     /** agree_ip 는 옛 화면만 보낸다 — 다음 화는 1화의 권리 확인을 잇는다(createNext). 안 보내도 되게 Boolean. */
     public record Form(String fixed_settings, String progress_state, String story, long revision,
                        boolean confirmed, Boolean agree_ip, String request_token, String uid,
-                       List<Map<String,Object>> entries, List<Map<String,Object>> progress) {}
+                       List<Map<String,Object>> entries, List<Map<String,Object>> progress,
+                       /* false 면 「바로 만들기」 — 이야기·캐릭터·장면 확인 없이 끝까지. 안 보내면 확인하며 만든다. */
+                       Boolean checkpoints) {
+        public Form(String fixed_settings, String progress_state, String story, long revision,
+                    boolean confirmed, Boolean agree_ip, String request_token, String uid,
+                    List<Map<String,Object>> entries, List<Map<String,Object>> progress) {
+            this(fixed_settings, progress_state, story, revision, confirmed, agree_ip, request_token, uid, entries, progress, null);
+        }
+    }
 
     private WebtoonJob source(String run, Long user, boolean own) {
         if (own && user == null) throw new BusinessException(ErrorCode.UNAUTHORIZED, "연재를 이어가려면 로그인해 주세요.");
@@ -58,6 +66,11 @@ public class SeriesService {
     }
     private String rootOf(WebtoonJob job) {
         return chapters.findById(job.getPublicId()).map(c -> c.rootJob).orElse(job.getPublicId());
+    }
+    /** 작품 제목 — 연재는 1화 제목 하나다(2026-10-26). 화마다 지은 제목은 소제목이다. */
+    private String workTitle(WebtoonJob job) {
+        String run = jobs.findByPublicId(rootOf(job)).map(WebtoonJob::getRunId).orElse(job.getRunId());
+        return run == null ? "" : stories.chosenOf(run).map(s -> s.displayTitle()).orElse("");
     }
     private int number(WebtoonJob job) {
         return chapters.findById(job.getPublicId()).map(c -> c.episodeNumber).orElse(1);
@@ -184,7 +197,7 @@ public class SeriesService {
         out.put("credit_cost", WebtoonQuality.creditsOf(source.getQuality()));
         out.put("balance", gate.balanceOf(user));
         out.put("blocked", guard.whyBlocked(queue.reserved()));
-        out.put("title", stories.chosenOf(run).map(s -> s.displayTitle()).orElse(""));
+        out.put("title", workTitle(source));
         return out;
     }
     /** 마이페이지 「만드는 중」 — 써 두고 아직 만들지 않은 다음 화 초안. 다음 화를 이미 만들었거나 앞 화가
@@ -201,7 +214,7 @@ public class SeriesService {
             var row = new LinkedHashMap<String,Object>();
             row.put("run", job.getRunId());
             row.put("episode", number(job) + 1);
-            row.put("title", stories.chosenOf(job.getRunId()).map(s -> s.displayTitle()).orElse(""));
+            row.put("title", workTitle(job));
             row.put("story", d.nextStory.length() > 80 ? d.nextStory.substring(0, 80) : d.nextStory);
             out.add(row);
         }
@@ -310,7 +323,7 @@ public class SeriesService {
             savedFields.forEach((k,v) -> fields.put(str(k),str(v)));
         var req=new JobService.CreateRequest(str(input.get("name")),str(input.get("character")),
                 str(input.get("genre")),d.nextStory,source.getStyle(),fields,List.of(),List.of(),true,
-                true,checked(form.uid(),64,"브라우저 번호",true),null,"",source.getQuality(),
+                form.checkpoints() == null || form.checkpoints(),checked(form.uid(),64,"브라우저 번호",true),null,"",source.getQuality(),
                 source.getLanguage(),"own",d.fixedSettings,"","", seriesBook(source, d));
         String id=creator.create(req,user,req.uid(),null,state);
         try {
@@ -345,7 +358,8 @@ public class SeriesService {
         var kept = book(d.entriesJson);
         if (((List<?>) kept.get("entries")).isEmpty() && ((List<?>) kept.get("progress")).isEmpty() && carried == null) return null;
         var book = new LinkedHashMap<String,Object>();
-        book.put("name", stories.chosenOf(source.getRunId()).map(s -> s.displayTitle()).filter(t -> !t.isBlank()).orElse("연재") + " 설정집");
+        String title = workTitle(source);
+        book.put("name", (title.isBlank() ? "연재" : title) + " 설정집");
         book.put("source", "series");
         book.put("fixed_settings", d.fixedSettings);
         book.put("progress_state", "");

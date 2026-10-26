@@ -23,8 +23,9 @@ const dict: Dict = {
   "내 작품": { en: "My works", ja: "自分の作品", zh: "我的作品" },
   "최신순": { en: "Newest first", ja: "新しい順", zh: "最新优先" },
   "오래된순": { en: "Oldest first", ja: "古い順", zh: "最早优先" },
-  "최신순 — 누르면 오래된순": { en: "Newest first — tap for oldest first", ja: "新しい順 — 押すと古い順", zh: "最新优先 — 点击改为最早优先" },
-  "오래된순 — 누르면 최신순": { en: "Oldest first — tap for newest first", ja: "古い順 — 押すと新しい順", zh: "最早优先 — 点击改为最新优先" },
+  "조회순": { en: "Most viewed", ja: "閲覧数順", zh: "浏览最多" },
+  "좋아요순": { en: "Most liked", ja: "いいね順", zh: "点赞最多" },
+  "정렬": { en: "Sort", ja: "並び替え", zh: "排序" },
   "목록을 가져오지 못했어요": { en: "Couldn't load the list.", ja: "一覧を取得できませんでした", zh: "无法获取列表" },
   "서버에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요 — 만들어 둔 작품은 그대로 있어요.": {
     en: "We couldn't reach the server. Please try again in a moment — your works are safe.",
@@ -70,6 +71,8 @@ const dict: Dict = {
   "최근 본 웹툰": { en: "Recently read", ja: "最近読んだ作品", zh: "最近看过" },
   "로그인하면 공개 여부를 바꿀 수 있어요": { en: "Sign in to change who can see it", ja: "ログインすると公開設定を変えられます", zh: "登录后可更改公开设置" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  /* ---- 빠졌던 번역 ---- */
+  "웹툰 둘러보기": { en: "Browse webtoons", ja: "ウェブトゥーンを見て回る", zh: "浏览漫画" },
 };
 
 registerDict(dict);

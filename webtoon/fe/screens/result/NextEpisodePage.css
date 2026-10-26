@@ -68,3 +68,8 @@
 
 /* 자동 저장 표시 — 만들기 단추 왼쪽에 작게(2026-10-26) */
 .wt .wt-series-autosave { margin-right: auto; font-size: 13px; color: var(--muted); align-self: center; }
+
+/* 앞 화 정리 중 — 루 로딩 카드가 폭을 다 쓴다(바깥 상자 없이) */
+.wt .wt-series-loading { margin-bottom: 18px; }
+.wt .wt-series-loading .wt-lou-loading { width: 100%; box-sizing: border-box; }
+.wt .wt-series-direct{margin-top:18px}

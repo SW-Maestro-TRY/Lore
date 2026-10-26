@@ -163,7 +163,8 @@ public class JobService {
            크레딧이 얽혀서 로그인한 사람만 받는다. 「확인하고 만들기」(quick)는 게스트도 받는다(#608) —
            같은 브라우저에서는 「만들던 웹툰」이 uid 로 이어서 찾아 준다. 브라우저가 바뀌면 못 찾는다. */
         boolean own = "own".equalsIgnoreCase(form.mode());
-        boolean checkpoints = own || form.checkpoints() == null || form.checkpoints();
+        /* own 길도 「바로 만들기」를 고르면 확인 자리 없이 끝까지 간다(2026-10-26) — 안 보내면 예전처럼 멈춘다. */
+        boolean checkpoints = form.checkpoints() == null || form.checkpoints();
         /* 설정집을 붙였으면 줄거리가 없어도 own 길로 간다 — 설정집이 그 내용이다(2026-10-24 사용자 결정). */
         if (own && !notBlank(form.story()) && (form.lorebook() == null || form.lorebook().isEmpty())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
@@ -357,6 +358,21 @@ public class JobService {
      * @param watching 진행 화면이 앞에 떠서 묻는 것인가. 참이면 잠깐 동안 이 작업의
      *                 푸시를 안 보낸다 — 이미 보고 있는 사람에게 알림은 소음이다(#599)
      */
+    private com.lore.webtoon.story.SeriesTitles seriesTitles;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSeriesTitles(com.lore.webtoon.story.SeriesTitles seriesTitles) { this.seriesTitles = seriesTitles; }
+
+    /** 내 내용 길의 본문 — 연재 2화부터는 작품 제목(series_title)을 같이 싣는다. 화의 제목은 소제목이다. */
+    private Map<String, Object> storyFor(WebtoonJob job) {
+        if (!job.isOwn()) return null;
+        Map<String, Object> story = runner.storyOf(job.getRunId());
+        String series = story == null || seriesTitles == null ? null : seriesTitles.of(job.getPublicId());
+        if (series == null) return story;
+        Map<String, Object> out = new java.util.LinkedHashMap<>(story);
+        out.put("series_title", series);
+        return out;
+    }
+
     @Transactional(readOnly = true)
     public JobView view(String publicId, boolean watching) {
         WebtoonJob job = store.byPublicId(publicId);
@@ -382,7 +398,7 @@ public class JobService {
                 runner.scenesOf(job.getId(), job.getRunId()),
                 /* 내 내용 길의 본문은 확인 자리가 아니어도 싣는다 — 장면을 나누거나 그리는 동안 걸음 1을 눌러도
                    원고 그대로 읽게. 안 실으면 화면이 바로 만들기용 「고른 이야기」 카드로 떨어졌다(2026-10-26). */
-                job.isOwn() ? runner.storyOf(job.getRunId()) : null,
+                storyFor(job),
                 runner.sheetReady(job.getRunId()),
                 runArt.sheetVersions(job.getRunId()),
                 at == JobStatus.AWAITING_SCENES || ownPause ? castSheetsOf(job) : null,

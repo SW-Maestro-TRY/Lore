@@ -90,6 +90,14 @@ class LegacyEpisodeTest(unittest.TestCase):
     def test_only_people_in_the_chosen_episode_carry_over(self):
         names=[c["name"] for c in C.appeared_cast(self.src)]
         self.assertEqual(names,["서이안","감독관"])   # 「이안」은 서이안과 같은 사람, 루나·강도현은 고르지 않은 후보
+    def test_drawn_scene_look_wins_over_card_look(self):
+        # 그림은 장면 단계의 외모로 그려졌다 — 인물 카드와 다르면 장면 쪽을 넘긴다(2026-10-26)
+        R.write_json(self.src/"cast.json",[{"name":"서이안","look":"갈색 단발","voice":"느긋함"}])
+        R.write_json(self.src/"scenes.json",{"cast":[{"name":"이안","appearance":"짧은 검은 머리"}],"scenes":[]})
+        got=C.appeared_cast(self.src)
+        self.assertEqual([(c["name"],c["look"]) for c in got],[("서이안","짧은 검은 머리")])
+        self.assertEqual(got[0]["voice"],"느긋함")              # 카드의 다른 칸은 그대로
+        self.assertIn("- 서이안: 짧은 검은 머리",C.cast_looks(self.src))
     def test_world_of_the_first_episode_is_seeded_into_the_book(self):
         seed=C.world_seed(self.src)
         self.assertEqual(seed[0]["id"],"R000"); self.assertTrue(seed[0]["always"])

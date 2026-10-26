@@ -108,6 +108,8 @@ export interface WizardForm {
   style: string;
   quality: WizardQuality;
   mode: WizardMode;
+  /** 내 이야기(own) 길의 「바로 만들기」 — 켜면 확인 자리 없이 끝까지. quick 길은 mode 를 쓴다. */
+  ownDirect?: boolean;
   agreeIp: boolean;
   /** 어느 길인가(#548). 입구에서 고른 카드가 정한다. */
   create: WizardCreate;

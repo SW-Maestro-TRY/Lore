@@ -204,6 +204,18 @@ const dict: Dict = {
   "AI 가 만든 이야기와 장면을 확인하고, 원하는 부분을 고친 뒤 만들어요. 나갔다 와도 이어서 할 수 있어요.": { en: "Check the story and scenes AI made, fix what you want, then make it. You can leave and come back.", ja: "AI が作ったストーリーと場面を確認し、直したいところを直してから作ります。離れても続きからできます。", zh: "确认 AI 写的故事和场景，修改想改的部分再制作。离开后也能继续。" },
   "이 브라우저에서만 이어서 할 수 있어요. 다른 기기에서는 작업을 찾지 못해요.": { en: "You can only continue on this browser. Other devices can't find this job.", ja: "このブラウザでのみ続けられます。他の端末では作業が見つかりません。", zh: "只能在此浏览器继续，其他设备找不到这个作业。" },
   "· 내 내용": { en: "· My content", ja: "· 自分の内容", zh: "· 我的内容" },
+  /* ---- 빠졌던 번역 ---- */
+  "{name} 수정": { en: "Edit {name}", ja: "{name}を編集", zh: "编辑 {name}" },
+  "그림체 · 방식": { en: "Art style · Options", ja: "画風 · 進め方", zh: "画风 · 方式" },
+  "다시 확인": { en: "Check again", ja: "再確認", zh: "重新确认" },
+  "만들기 단계": { en: "Creation steps", ja: "作成ステップ", zh: "制作步骤" },
+  "생성 방식": { en: "Creation mode", ja: "生成方式", zh: "生成方式" },
+  "어떤 이야기인가요?": { en: "What's the story?", ja: "どんなストーリーですか？", zh: "是什么样的故事？" },
+  "이전 캐릭터": { en: "Previous character", ja: "前のキャラクター", zh: "上一个角色" },
+  "저장 전 확인": { en: "Review before saving", ja: "保存前の確認", zh: "保存前确认" },
+  "직접 입력": { en: "Enter manually", ja: "直接入力", zh: "手动输入" },
+  "캐릭터 · 이야기": { en: "Character · Story", ja: "キャラクター · ストーリー", zh: "角色 · 故事" },
+  "크레딧 정보를 불러오지 못했어요. 다시 확인해 주세요.": { en: "Couldn't load your credit info. Please check again.", ja: "クレジット情報を読み込めませんでした。もう一度確認してください。", zh: "无法加载积分信息，请重新确认。" },
 };
 
 registerDict(dict);
