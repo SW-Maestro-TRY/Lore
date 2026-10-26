@@ -343,7 +343,7 @@
 .wt .wt-wiz-terms { font-size: 14px; }
 .wt .wt-wiz-terms ul { font-size: 13.5px; }
 /* 「이용약관 요약 보기」의 ▶ 가 위 체크박스보다 왼쪽으로 나와 있었다 — 체크박스 칸 왼쪽 끝에 맞춘다 */
-.wt .wt-wiz-terms summary { padding-left: 4px; }
+.wt .wt-wiz-terms summary { padding-left: 10px; } /* 너무 왼쪽에 붙어 있었다 — 살짝 띄움(2026-10-26) */
 @media (max-width: 767px) {
   .wt .wt-create-content h2, .wt .wt-create-content h2 label, .wt .wt-create-content .wt-wiz-more summary { font-size: 17px; }
   .wt .wt-create-genres button { font-size: 14px; padding: 8px 13px; }
