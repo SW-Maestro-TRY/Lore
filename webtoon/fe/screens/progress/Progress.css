@@ -425,3 +425,7 @@
   .wt .wt-prog-sceneretry { padding: 14px; }
   .wt .wt-prog-sceneretry .acts .btn { flex: 1; }
 }
+
+/* 조연 시트 뽑기 — 값이 적힌 단추를 카드 아래에 꽉 차게(2026-10-26) */
+.wt .wt-prog-castsheet { display: flex; flex-direction: column; }
+.wt .wt-prog-castsheet .wt-prog-castsheet-go { margin-top: auto; align-self: stretch; height: 40px; justify-content: center; font-size: 14px; }

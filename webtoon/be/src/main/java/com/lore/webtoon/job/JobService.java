@@ -364,7 +364,8 @@ public class JobService {
         JobStatus at = job.getStatus();
         /* own 길(#548)은 이야기 확인(AWAITING_PICK)과 장면 확인(AWAITING_SCENES) 두 자리에서 멈추고,
            두 화면 다 인물·주인공 카드·본문·시트·내가 적은 것을 보여 준다. */
-        boolean ownPause = job.isOwn() && (at == JobStatus.AWAITING_PICK || at == JobStatus.AWAITING_SCENES);
+        /* 내 내용 길은 이야기 확인 · 시트 확인 · 장면 확인에서 멈춘다 — 시트 확인에서도 인물(조연 시트 뽑기)을 보여 준다 */
+        boolean ownPause = job.isOwn() && (at == JobStatus.AWAITING_PICK || at == JobStatus.AWAITING_SHEET || at == JobStatus.AWAITING_SCENES);
         boolean castPause = at == JobStatus.AWAITING_CAST || at == JobStatus.AWAITING_SCENES || ownPause;
         return JobView.of(job, now,
                 store.directionsOf(job.getId()),

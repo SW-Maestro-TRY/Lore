@@ -649,7 +649,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const storyCheck = ownJob && status === "awaiting_pick";
   const mineOk = !!input;
   /* 조연 시트(#548) — 주인공 시트는 무료, 다른 인물은 한 명에 1크레딧. 장면 확인·이야기 확인 차례에. */
-  const castOk = status === "awaiting_scenes" || storyCheck;
+  const castOk = status === "awaiting_scenes" || storyCheck || (ownJob && status === "awaiting_sheet");
   const castSheets = job?.cast_sheets ?? [];
   const castSheetOf = (name: string) => castSheets.find((c) => c.name === name);
   const [castSheetV, setCastSheetV] = useState(0);
@@ -759,7 +759,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     else if (at === "play") pane = "play";
     else if (at === "mine") pane = "mine";
     else if (at !== cur) pane = (["story-view", "sheet-view", "scenes-view", "pages-view", "drawing"] as Pane[])[at];
-    else if (status === "awaiting_sheet") pane = job.sheet_blocked ? "sheet-fix" : "sheet";
+    /* 내 내용 길의 시트 확인은 걸음 2 화면 그대로(조연 시트까지) — 단순한 시트 화면을 쓰면 아래 인물들이 사라졌다(2026-10-26) */
+    else if (status === "awaiting_sheet") pane = job.sheet_blocked ? "sheet-fix" : ownJob ? "sheet-view" : "sheet";
     else if (status === "awaiting_cast") pane = "cast";
     else if (status === "awaiting_scenes") pane = "scenes";
     /* 장면을 다 나눴지만 첫 장이 그려지기 전이면 걸음 3 이 아직 「지금 단계」다 — 그래도 눌렀으면 장면을 읽게 한다(#601). */
@@ -994,6 +995,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     if (pane === "cast") return (
       <><span>{t("{n}명", { n: cast.length + (job.persona ? 1 : 0) })}</span>
         <button type="button" className="primary" disabled={busy || castSel == null} onClick={confirmCast}>{castConfirm ? t("캐릭터 확인 완료") : castButton}</button></>
+    );
+    if (pane === "sheet-view" && status === "awaiting_sheet") return (
+      <><span>{t("캐릭터 시트 1장")}</span>
+        <button type="button" className="primary" disabled={busy} onClick={approveSheet}>{t("이 시트로 계속하기")}</button></>
     );
     if (pane === "sheet") return (
       <><span>{t("캐릭터 시트 1장")}</span>
@@ -1640,6 +1645,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       </div>
                     </div>
                   )}
+                  {status === "awaiting_sheet" && (
+                    /* 시트 확인 자리 — 전처럼 「수정 요청」 단추가 고칠 점을 적는 창을 연다(2026-10-26) */
+                    <button type="button" className="secondary wt-prog-sheetask" disabled={busy} onClick={() => setSheetAsk(true)}>{t("수정 요청")}</button>
+                  )}
                   {status === "awaiting_scenes" && (
                     /* 장면 확인 동안은 여기서 시트를 다시 만들 수 있다(#548). */
                     <div className="wt-prog-acts">
@@ -1655,7 +1664,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <>
                       <div className="wt-prog-pageshead" style={{ marginTop: 8 }}>
                         <b>{t("다른 인물도 시트로 뽑기")}</b>
-                        <span className="dim">{t("한 명에 1크레딧")}</span>
                       </div>
                       <div className="wt-prog-dirs">
                         {cast.map((c, i) => {
@@ -1674,8 +1682,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                                 <div className="wt-prog-sheetwait small"><span className="spin" /> {t("그리는 중")}</div>
                               ) : castOk ? (
                                 <>
-                                  <button type="button" className="btn btn-w btn-sm" disabled={!!castBusy || noCredit} onClick={() => void drawCastSheet(c.name)}>
-                                    {t("시트 뽑기 · 1크레딧")}
+                                  {/* 조연 시트는 한 명에 1크레딧(서버 JobController 「조연 시트」) — 단추에 값을 같이 적는다 */}
+                                  <button type="button" className="btn btn-p wt-prog-castsheet-go" disabled={!!castBusy || noCredit} onClick={() => void drawCastSheet(c.name)}>
+                                    {t("{label} -{n} 크레딧", { label: t("시트 뽑기"), n: 1 })}
                                   </button>
                                   {noCredit && <span className="err">{t("크레딧이 부족해요")}</span>}
                                 </>
