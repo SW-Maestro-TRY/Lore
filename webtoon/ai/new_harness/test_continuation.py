@@ -96,14 +96,34 @@ class LegacyEpisodeTest(unittest.TestCase):
         self.assertIn("W-hg-inner-time",[e["id"] for e in seed]); self.assertNotIn("W-hg-shelter",[e["id"] for e in seed])
         (self.src/"input.json").write_text(json.dumps({"name":"민준","genre":"헌터","lorebook":{"name":"내 세계","confirmed":True}}),encoding="utf-8")
         self.assertEqual(C.world_seed(self.src),[])  # 설정집을 붙여 만든 1화는 그 설정집이 세계다
-    def test_digest_dry_run_writes_the_three_experiment_prompts(self):
+    def test_digest_dry_run_writes_the_book_and_progress_prompts(self):
         packet=Path(self.temp.name)/"packet.json"; out=Path(self.temp.name)/"digest"/"result.json"; out.parent.mkdir()
         packet.write_text(json.dumps({"source_dir":str(self.src),"episode_number":1,"source_scenes":["심사장 장면"],"previous":None},ensure_ascii=False))
         self.assertIsNone(C.stage_digest(packet,out,True))
-        for name,head in (("lore_entries_prompt.txt","로어북 항목으로 뽑는다"),("lore_rules_prompt.txt","규칙만 뽑는다"),("lore_progress_prompt.txt","[현재 진행 상태]")):
+        for name,head in (("lore_book_prompt.txt","대상 하나가 항목 하나다"),("lore_progress_prompt.txt","[현재 진행 상태]")):
             text=(out.parent/name).read_text()
             self.assertIn(head,text); self.assertIn("등급 재측정을 받는다",text)
         self.assertFalse(out.exists())
+
+    def test_carried_entries_without_ids_get_ids_so_digest_adds_to_them(self):
+        # 1화에 붙인 설정집 항목은 번호가 없다 — 번호를 달아야 같은 대상이 새 항목으로 또 생기지 않는다
+        packet=Path(self.temp.name)/"packet.json"; out=Path(self.temp.name)/"digest2"/"result.json"; out.parent.mkdir()
+        book={"entries":[{"title":"사역마 배정식","content":"입학 첫날 사역마가 학생을 고른다.","keys":["사역마"],"always":False}],"progress":[]}
+        packet.write_text(json.dumps({"source_dir":str(self.src),"episode_number":1,"source_scenes":["심사장 장면"],"previous":book},ensure_ascii=False))
+        C.stage_digest(packet,out,True)
+        import lore_extract as X
+        rows,more,_=X.book_entries([{"title":"사역마 배정식","type":"item","text":"사역마는 기다리다 지치기도 한다."}],
+                                   [{**book["entries"][0],"id":"K001"}])
+        self.assertEqual(rows,[]); self.assertIn("K001",more)
+        self.assertIn("[이미 있는 설정]\n- 사역마 배정식",(out.parent/"lore_book_prompt.txt").read_text())
+
+    def test_scene_field_written_on_following_lines_is_kept(self):
+        # 「인물의 행동과 표정:」 아래 여러 줄로 쓴 대사가 빈칸이 되던 것(2026-10-26)
+        import run as R
+        text="장면 1:\n직전 상태: 앞\n장소와 상황: 복도\n벌어지는 일: 목소리\n인물의 행동과 표정:\n- 교사: 문고리를 잡는다.\n- 복도 끝: \"여기 맞죠?\"\n겉모습·소지품·동행: 시트 그대로\n끝나는 상태: 돌아본다\n나레이션: 통금 뒤\n"
+        got=R.parse_scenes(text)["scenes"][0]
+        self.assertIn("\"여기 맞죠?\"",got["acting"]); self.assertIn("문고리",got["acting"])
+        self.assertEqual(got["look"],"시트 그대로"); self.assertEqual(got["narration"],["통금 뒤"])
 
 
 if __name__=="__main__": unittest.main()

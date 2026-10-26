@@ -283,7 +283,9 @@ public class JobRunner {
     public void resumeAfterPick(Long jobId) {
         WebtoonJob job = store.byId(jobId);
         if (job != null && job.isOwn()) {
-            ownScenes(jobId);                 // 시트는 --own 이 이미 그렸다 — 바로 장면으로
+            /* 시트는 --own 이 이미 그렸다. 바로 장면으로 가지 않고 캐릭터 그리기(시트 확인)를 한 번 보여 준다
+               (2026-10-26) — 「계속하기」를 누르면 resumeAfterSheet 가 장면을 나눈다. */
+            store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
             return;
         }
         store.queued(jobId, JobStage.SHEET);
@@ -358,6 +360,10 @@ public class JobRunner {
     /** 사람이 시트를 확인했다. 마지막 걸음으로. */
     public void resumeAfterSheet(Long jobId) {
         WebtoonJob now = store.byId(jobId);
+        if (now != null && now.isOwn()) {
+            ownScenes(jobId);                 // 내 내용 길 — 시트를 확인했으니 장면을 나누고 장면 확인에서 멈춘다
+            return;
+        }
         if (now != null && now.isCheckpoints() && !now.isOwn()) {
             /* 「확인하고 만들기」(#604) — 시트를 확정하면 장면 확인으로 간다. 사진은 아직 둔다:
                장면 확인에서도 시트를 다시 만들 수 있고, 다시 만들기는 사진부터 사양을 다시 쓴다.
@@ -930,6 +936,115 @@ public class JobRunner {
         });
     }
 
+    /**
+     * 서버가 다시 뜰 때 끊긴 작업을 멈춘 걸음부터 다시 줄에 세운다(2026-10-26). 이미 받은 요청은 끝까지 만든다.
+     *
+     * 그린 장·나눈 장면·시트는 파일로 남아 있어 그대로 쓴다 — 그린 장은 다시 안 그린다({@link #pageDrawn}).
+     * 사람이 확인할 자리 직전에 끊겼으면 그 자리로 돌린다. 이어 갈 수 없으면 false 를 돌려주고, 부르는 쪽
+     * ({@code StaleJobs})이 예전처럼 끊긴 것으로 적고 값을 돌려준다.
+     */
+    public boolean resumeInterrupted(WebtoonJob job) {
+        Long id = job.getId();
+        String runId = job.getRunId();
+        JobStage stage = job.getStage() == null ? JobStage.STORY : job.getStage();
+        if (runId == null) {
+            Path dir = jobsDir.resolve(job.getPublicId());
+            if (stage != JobStage.STORY || !Files.isDirectory(dir)) {
+                return false;
+            }
+            store.queued(id, JobStage.STORY);
+            enqueue(id, dir);
+            return true;
+        }
+        Path run = runDir(runId);
+        if (!Files.isDirectory(run)) {
+            return false;
+        }
+        switch (stage) {
+            case STORY -> {
+                /* 번호가 있으면 이야기를 다시 짓던 중이었다 — 있던 이야기로 고르는(확인하는) 자리로 돌린다. */
+                if (directionsOf(runId).isEmpty()) {
+                    return false;
+                }
+                store.awaiting(id, JobStatus.AWAITING_PICK, JobStage.STORY);
+            }
+            case SHEET -> {
+                if (job.isOwn()) {
+                    /* 장면을 이미 나눴으면 장면 확인에서, 아니면 시트 확인에서 다시 그렸다 */
+                    redrawSheet(id, "", Files.isRegularFile(run.resolve("scenes.json")) ? JobStatus.AWAITING_SCENES : JobStatus.AWAITING_SHEET);
+                } else {
+                    resumeAfterPick(id);     // 시트가 이미 있으면 하네스가 그냥 넘어간다
+                }
+            }
+            case PAGES, BIND -> {
+                boolean scenes = Files.isRegularFile(run.resolve("scenes.json"));
+                if (stage == JobStage.PAGES && !anyPageDrawn(runId) && (job.isOwn() || job.isCheckpoints())) {
+                    /* 그리기 전 — 장면을 나누던 중이었다. 다 나눴으면 장면 확인 자리로, 아니면 다시 나눈다. */
+                    if (scenes) {
+                        store.awaiting(id, JobStatus.AWAITING_SCENES, JobStage.PAGES);
+                    } else if (job.isOwn()) {
+                        ownScenes(id);
+                    } else {
+                        store.queued(id, JobStage.PAGES);
+                        line.submit(() -> {
+                            try {
+                                scenesAfterSheet(id);
+                            } catch (Exception e) {
+                                fail(id, e);
+                            }
+                        });
+                    }
+                    return true;
+                }
+                store.queued(id, JobStage.PAGES);
+                line.submit(() -> {
+                    try {
+                        pages(id);
+                    } catch (Exception e) {
+                        fail(id, e);
+                    }
+                });
+            }
+        }
+        return true;
+    }
+
+    /** 이 장을 이미 그렸나 — 그림이 있고 안전 검사에 걸린 표시가 없으면. 끊긴 작업을 이어 그릴 때 건너뛴다. */
+    boolean pageDrawn(String runId, int page) {
+        return Files.isRegularFile(runsDir.resolve(runId).resolve("pages").resolve("page%02d.png".formatted(page)))
+                && !Files.isRegularFile(unsafeMarker(runId, page));
+    }
+
+    /**
+     * 폴더에 남은 그림으로 센 진행 — 서버가 다시 떠서 메모리의 진행이 비었을 때 화면이 그린 장을 다시
+     * 보여 주게(실패 화면·이어 그리는 중). 장면을 안 나눴으면 {@code null}.
+     */
+    public JobView.Art artOnDisk(WebtoonJob job) {
+        if (job.getRunId() == null || !Files.isRegularFile(runsDir.resolve(job.getRunId()).resolve("scenes.json"))) {
+            return null;
+        }
+        int total = pageCount(job);
+        List<Integer> drawn = new ArrayList<>();
+        for (int n = 1; n <= total; n++) {
+            if (pageDrawn(job.getRunId(), n)) {
+                drawn.add(n);
+            }
+        }
+        return total <= 0 || drawn.isEmpty() ? null : new JobView.Art(drawn.size(), total, 0, drawn);
+    }
+
+    private boolean anyPageDrawn(String runId) {
+        Path dir = runsDir.resolve(runId).resolve("pages");
+        if (!Files.isDirectory(dir)) {
+            return false;
+        }
+        try (var found = Files.list(dir)) {
+            return found.anyMatch(p -> p.getFileName().toString().matches("^page\\d+\\.png$"));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /** 「이대로 웹툰 만들기」 — 장면 확인을 끝내고 그림으로. */
     public void resumeAfterScenes(Long jobId) {
         store.queued(jobId, JobStage.PAGES);
@@ -1293,6 +1408,19 @@ public class JobRunner {
     }
 
     /** own 길의 본문(#548) — {title, body}. 없으면 {@code null}. */
+    /** 몇 화인가 — 다음 화 작업은 폴더에 continuation.json(episode_number)이 있다. 없거나 못 읽으면 1화. */
+    public int episodeOf(String runId) {
+        if (runId == null || runId.isBlank()) return 1;
+        Path file = runDir(runId).resolve("continuation.json");
+        if (!Files.isRegularFile(file)) return 1;
+        try {
+            Object n = mapper.readValue(file.toFile(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { }).get("episode_number");
+            return n instanceof Number num && num.intValue() > 0 ? num.intValue() : 1;
+        } catch (Exception e) {
+            return 1;
+        }
+    }
+
     public Map<String, Object> storyOf(String runId) {
         List<Map<String, Object>> directions = directionsOf(runId);
         if (directions.isEmpty()) {
@@ -1498,6 +1626,12 @@ public class JobRunner {
                     return;
                 }
                 try {
+                    if (pageDrawn(job.getRunId(), page)) {
+                        /* 이미 그린 장 — 서버가 다시 떠서 이어 그리는 중이다. 그림 값을 두 번 내지 않는다. */
+                        drawn.incrementAndGet();
+                        progress.drewPage(jobId, page, pages);
+                        return;
+                    }
                     progress.startedPage(jobId, page);
                     int code = callHarness(jobId, job,
                             List.of("--run-id", job.getRunId(), "--detail-pages",
@@ -2342,9 +2476,12 @@ public class JobRunner {
             if (job == null) {
                 return Refunded.NONE;
             }
-            /* 그리기 직전에 더 받은 장 값도 같이 돌려준다 — 못 만들었으니 그 장도 안 그렸다. */
-            int extra = credits.refund(job.getUserId(), extraPagesRef(job));
-            if (credits.refund(job.getUserId(), job.getPublicId()) > 0 || extra > 0) {
+            /* 그리기 직전에 더 받은 장 값(develop #809), 끊겼다가 「이어서 만들기」로 다시 낸 값(ref 「…:resume」)도
+               같이 돌려준다 — 못 만들었으니 그만큼 안 그렸다. */
+            int back = credits.refund(job.getUserId(), job.getPublicId())
+                    + credits.refund(job.getUserId(), job.getPublicId() + ":resume")
+                    + credits.refund(job.getUserId(), extraPagesRef(job));
+            if (back > 0) {
                 return Refunded.CREDIT;
             }
             if (guests.refundKey(job.getGuestKey())) {

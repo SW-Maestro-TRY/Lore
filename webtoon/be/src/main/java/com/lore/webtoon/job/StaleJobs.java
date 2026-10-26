@@ -70,7 +70,19 @@ public class StaleJobs {
         if (ghosts.isEmpty()) {
             return;
         }
+        int resumed = 0;
         for (WebtoonJob job : ghosts) {
+            /* 이미 받은 요청은 끝까지 만든다(2026-10-26) — 멈춘 걸음부터 다시 줄에 세우고, 그린 장은 다시 안
+               그린다. 이어 갈 수 없을 때만 아래처럼 끊긴 것으로 적는다. */
+            try {
+                if (runner.resumeInterrupted(job)) {
+                    resumed++;
+                    log.warn("끊긴 작업을 멈춘 걸음부터 이어 갑니다 (job={}, 걸음={})", job.getPublicId(), job.getStage());
+                    continue;
+                }
+            } catch (RuntimeException e) {      // noqa: 이어 가지 못하면 예전처럼 치운다
+                log.error("끊긴 작업을 이어 가지 못했습니다 (job={})", job.getPublicId(), e);
+            }
             try {
                 bury(job);
                 /* **여기가 알림이 제일 필요한 자리다.** 다른 실패는 사람이
@@ -86,8 +98,8 @@ public class StaleJobs {
                 log.error("끊긴 작업을 못 치웠습니다 (job={})", job.getPublicId(), e);
             }
         }
-        log.warn("서버가 죽을 때 돌던 작업 {}개를 끊긴 것으로 적었습니다 — 줄에서 뺍니다",
-                ghosts.size());
+        log.warn("서버가 죽을 때 돌던 작업 {}개 — {}개는 이어 가고 나머지는 끊긴 것으로 적었습니다",
+                ghosts.size(), resumed);
     }
 
     /**

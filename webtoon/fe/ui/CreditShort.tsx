@@ -7,6 +7,7 @@
  */
 import { useState } from "react";
 import CreditCharge from "@common/mypage/CreditCharge";
+import PayNotReady from "./PayNotReady";
 import { registerDict, useT } from "../lib/i18n";
 import { track } from "../lib/track";
 import "./CreditShort.css";
@@ -33,6 +34,7 @@ function needHave(raw: string): { n: string; m: string } | null {
 export default function CreditShort({ raw = "", onCharged }: { raw?: string; onCharged?: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [notReady, setNotReady] = useState(false);
   const nm = needHave(raw);
   return (
     <span className="wt-credit-short" role="status">
@@ -41,7 +43,11 @@ export default function CreditShort({ raw = "", onCharged }: { raw?: string; onC
         {nm && <small>{t("필요 {n} · 보유 {m}", { n: nm.n, m: nm.m })}</small>}
       </span>
       <button type="button" className="btn btn-p btn-sm" onClick={() => { track("charge_open", { where: "credit_short" }); setOpen(true); }}>{t("충전하기")}</button>
-      {open && <CreditCharge onClose={() => { setOpen(false); onCharged?.(); }} onEvent={(n, p) => track(n, { ...p, where: "credit_short" })} />}
+      {open && <CreditCharge onClose={() => { setOpen(false); onCharged?.(); }} onEvent={(n, p) => track(n, { ...p, where: "credit_short" })}
+                             onNotReady={() => setNotReady(true)} />}
+      {/* 결제가 아직 안 열렸으면 1:1 문의 안내 — 이메일 문의는 마이페이지 문의 창으로 */}
+      {notReady && <PayNotReady where="credit_short" onClose={() => setNotReady(false)}
+                                onEmail={() => { window.location.href = "/webtoon?view=mypage&tab=contact"; }} />}
     </span>
   );
 }

@@ -103,7 +103,12 @@ public record JobView(
         /* 고쳐서 다시 그리기를 몇 번 더 할 수 있나 */
         int sheet_fix_left,
         /* 안전 검사에 걸려 빈 장으로 완성된 장 번호들(#626). 없으면 빈 목록 */
-        List<Integer> unsafe_pages) {
+        List<Integer> unsafe_pages,
+        /* 몇 화인가 — 다음 화로 만든 작업은 2 이상(continuation.json). 진행 화면이 「N화 만들기」로 쓴다 */
+        int episode,
+        /* 서버 재시작으로 끊겨 「이어서 만들기」를 할 수 있나, 그때 받는 크레딧(돌려준 값만큼, 아니면 0) */
+        boolean resumable,
+        int resume_cost) {
 
     /**
      * @param total      0 이면 아직 몇 장인지 모른다 — 그때는 통째로 안 보낸다.
@@ -158,7 +163,8 @@ public record JobView(
                       int sheetVersions, List<Map<String, Object>> castSheets, Map<String, Object> input,
                       String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
-                      String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages) {
+                      String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages, int episode,
+                      Art diskArt, int resumeCost) {
         int stageIndex = job.getStage().order();
         if (eta == null) {
             eta = JobEta.of(job, now, 1, spot == null ? 0 : spot.seconds(), Instant.now());
@@ -199,12 +205,15 @@ public record JobView(
                 new Notice(job.getUserId() != null, notifyEmail, job.getNotifiedAt() != null),
                 eta.minutes(),
                 pct,
-                now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage(), drawn) : null,
+                now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage(), drawn) : diskArt,
                 now.redraw().isEmpty() ? null : new Redraw(now.redraw(), now.redrawDone()),
                 now.log(),
                 eta.work(),
                 job.isSheetBlocked(),
                 sheetFixLeft,
-                unsafePages == null ? List.of() : unsafePages);
+                unsafePages == null ? List.of() : unsafePages,
+                episode,
+                job.isResumable(),
+                resumeCost);
     }
 }

@@ -314,7 +314,9 @@ public class JobService {
     public List<JobView> activeOf(Long userId, Collection<String> uids) {
         return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
                         JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST,
-                        JobStatus.AWAITING_SCENES)).stream()
+                        JobStatus.AWAITING_SCENES, JobStatus.ERROR)).stream()
+                /* 실패 중에서는 이어서 만들 수 있는 것만 「만드는 중」에 남긴다(2026-10-26) */
+                .filter(job -> job.getStatus() != JobStatus.ERROR || job.isResumable())
                 .map(job -> view(job.getPublicId()))
                 .toList();
     }
@@ -327,7 +329,9 @@ public class JobService {
     public List<Map<String, Object>> activeCardsOf(Long userId, Collection<String> uids) {
         return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
                         JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST,
-                        JobStatus.AWAITING_SCENES)).stream()
+                        JobStatus.AWAITING_SCENES, JobStatus.ERROR)).stream()
+                /* 실패 중에서는 이어서 만들 수 있는 것만 「만드는 중」에 남긴다(2026-10-26) */
+                .filter(job -> job.getStatus() != JobStatus.ERROR || job.isResumable())
                 .map(job -> {
                     Map<String, Object> one = new LinkedHashMap<>();
                     one.put("id", job.getPublicId());
@@ -364,7 +368,8 @@ public class JobService {
         JobStatus at = job.getStatus();
         /* own 길(#548)은 이야기 확인(AWAITING_PICK)과 장면 확인(AWAITING_SCENES) 두 자리에서 멈추고,
            두 화면 다 인물·주인공 카드·본문·시트·내가 적은 것을 보여 준다. */
-        boolean ownPause = job.isOwn() && (at == JobStatus.AWAITING_PICK || at == JobStatus.AWAITING_SCENES);
+        /* 내 내용 길은 이야기 확인 · 시트 확인 · 장면 확인에서 멈춘다 — 시트 확인에서도 인물(조연 시트 뽑기)을 보여 준다 */
+        boolean ownPause = job.isOwn() && (at == JobStatus.AWAITING_PICK || at == JobStatus.AWAITING_SHEET || at == JobStatus.AWAITING_SCENES);
         boolean castPause = at == JobStatus.AWAITING_CAST || at == JobStatus.AWAITING_SCENES || ownPause;
         return JobView.of(job, now,
                 store.directionsOf(job.getId()),
@@ -375,7 +380,9 @@ public class JobService {
                    에서 읽기만 할 수 있게. 고치는 칸은 화면이 awaiting_scenes 일 때만 연다. 파일이 아직 없거나(장면을
                    나누기 전) 치워졌으면 빈 목록이다. */
                 runner.scenesOf(job.getId(), job.getRunId()),
-                ownPause ? runner.storyOf(job.getRunId()) : null,
+                /* 내 내용 길의 본문은 확인 자리가 아니어도 싣는다 — 장면을 나누거나 그리는 동안 걸음 1을 눌러도
+                   원고 그대로 읽게. 안 실으면 화면이 바로 만들기용 「고른 이야기」 카드로 떨어졌다(2026-10-26). */
+                job.isOwn() ? runner.storyOf(job.getRunId()) : null,
                 runner.sheetReady(job.getRunId()),
                 runArt.sheetVersions(job.getRunId()),
                 at == JobStatus.AWAITING_SCENES || ownPause ? castSheetsOf(job) : null,
@@ -385,7 +392,11 @@ public class JobService {
                 spot,
                 notice.addressOf(job), queue.etaOf(job, now, spot),
                 job.isSheetBlocked() ? Math.max(0, SHEET_FIX_MAX - sheetFixesOf(job)) : 0,
-                at == JobStatus.DONE ? runner.unsafePages(job.getRunId()) : List.of());
+                at == JobStatus.DONE ? runner.unsafePages(job.getRunId()) : List.of(),
+                runner.episodeOf(job.getRunId()),
+                /* 진행이 메모리에 없으면(서버가 다시 떴다) 폴더의 그림으로 — 그린 장을 화면에서 다시 본다 */
+                now.total() > 0 ? null : runner.artOnDisk(job),
+                resumeCost(job));
     }
 
     /**
@@ -615,6 +626,47 @@ public class JobService {
      * 다시 만들기를 눌러도 같은 그림이 그대로 있고, 사람은 눌렀는데 아무 일도
      * 안 일어난 것으로 본다. (파이썬 쪽 `_clear_sheet` 과 같은 규칙이다.)
      */
+    /** 끊긴 작업을 이어서 만들 때 받는 값 — 크레딧을 돌려줬으면 그만큼 다시, 아니면 0. */
+    int resumeCost(WebtoonJob job) {
+        return job.isResumable() && job.getRefunded() == Refunded.CREDIT
+                ? WebtoonQuality.creditsOf(job.getQuality()) : 0;
+    }
+
+    /** 이어서 만들 수 있는 내 작업인지 확인하고 값을 알려 준다. 게스트는 안 된다. */
+    @Transactional(readOnly = true)
+    public int resumeCheck(String publicId, Long me) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (me == null || !me.equals(job.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작업만 이어서 만들 수 있어요.");
+        }
+        if (!job.isResumable()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이어서 만들 수 있는 작업이 아니에요.");
+        }
+        return resumeCost(job);
+    }
+
+    /**
+     * 서버 재시작으로 끊긴 작업을 멈춘 걸음부터 이어서 만든다(2026-10-26). 그린 장은 다시 안 그린다.
+     * 값은 부르는 쪽(컨트롤러)이 먼저 받는다.
+     */
+    public void resumeStopped(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (!job.isResumable()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이어서 만들 수 있는 작업이 아니에요.");
+        }
+        job = store.reopened(job.getId());
+        if (!runner.resumeInterrupted(job)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이 작업은 이어서 만들 수 없어요. 다시 만들어 주세요.");
+        }
+    }
+
+    /** 시트 다시 만들기 값 — 보관한 옛 시트가 없으면(처음 다시 만드는 것) 무료, 있으면 1크레딧. */
+    @Transactional(readOnly = true)
+    public int resheetCost(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        return job.getRunId() != null && runArt.sheetVersions(job.getRunId()) >= 1 ? 1 : 0;
+    }
+
     public void retrySheet(String publicId, String note) {
         WebtoonJob job = store.byPublicId(publicId);
         JobStatus at = job.getStatus();
@@ -1117,7 +1169,11 @@ public class JobService {
                                 WebtoonCharacter picked) throws IOException {
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("name", blank(form.name()));
-        doc.put("character", blank(form.character()));
+        /* 고른 캐릭터의 설정 글이 안 왔으면(AI 뽑기 캐릭터는 설명 칸이 비어 있었다) 그 캐릭터가 가진 상세 설정으로.
+           코드가 지어낸 기본값이 아니라 그 캐릭터의 것이다(2026-10-26). */
+        String character = form.character();
+        if ((character == null || character.isBlank()) && picked != null) character = picked.settingsText();
+        doc.put("character", blank(character));
         Map<String, String> fields = new LinkedHashMap<>();
         if (form.fields() != null) {
             form.fields().forEach((k, v) -> {

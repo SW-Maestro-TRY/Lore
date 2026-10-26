@@ -2,6 +2,8 @@ import { registerDict, type Dict } from "../../lib/i18n";
 
 /* 완성본 · 공유 — 화면의 한국어 원문이 키다. 서버가 만든 글(제목·오류 본문)은 여기 없다. */
 const dict: Dict = {
+  "{n}화 만들기": { en: "Make episode {n}", ja: "第{n}話を作る", zh: "制作第 {n} 话" },
+  "이어서 다음 화를 만들어요": { en: "Continue with the next episode", ja: "続きの話を作ります", zh: "继续制作下一话" },
   /* ---- Result ---- */
   /* ---- 크레딧이 모자라 남겨 둔 뒷장면(PendingPages) ---- */
   "크레딧이 모자라요!": { en: "Not enough credits!", ja: "クレジットが足りません！", zh: "积分不够！" },
