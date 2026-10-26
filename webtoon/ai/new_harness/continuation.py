@@ -98,6 +98,13 @@ def appeared_cast(source):
                 add(c)
     for c in scene_cast:
         add(c)
+    # 그림은 장면 단계가 적은 외모(scenes.json cast.appearance)로 그려졌다. 인물 카드(cast.json)의 생김새와 다르면
+    # 장면 쪽이 실제로 독자가 본 모습이다 — 다음 화도 그 모습으로 그린다(2026-10-26, 카드는 갈색 머리 · 그림은 검은 머리).
+    for k in keep:
+        drawn = next((str(c.get("appearance") or "").strip() for c in scene_cast
+                      if same(str(c.get("name")), k["name"]) and str(c.get("appearance") or "").strip()), "")
+        if drawn:
+            k["look"] = drawn
     return keep
 
 
@@ -238,9 +245,8 @@ def cast_looks(source_dir):
     persona = read(source / "persona.json") if (source / "persona.json").is_file() else None
     if isinstance(persona, dict):
         people.append(persona)
-    cast = read(source / "cast.json") if (source / "cast.json").is_file() else None
-    if isinstance(cast, list):
-        people += [c for c in cast if isinstance(c, dict)]
+    # 등장인물은 다음 화로 넘기는 것과 같은 목록 — 이 화에 실제로 나온 사람, 그림에 쓴 외모 우선(appeared_cast)
+    people += appeared_cast(source)
     rows = []
     for c in people:
         name, look = str(c.get("name") or "").strip(), str(c.get("look") or "").strip()

@@ -69,6 +69,15 @@ class JobFailureTest {
     }
 
     @Test
+    @DisplayName("그림 요청 글이 너무 길면 그 이유만 한 문장으로 — 앞 문장에 이어 붙이면 화면이 번역하지 못한다")
+    void 너무_긴_요청() {
+        String said = new JobFailure("PAGE_IMAGE", "error", List.of(), "400 string_above_max_length")
+                .humanMessage("3번째 장을 그리지 못했습니다");
+
+        assertThat(said).startsWith("그림 요청 글이 너무 길어").doesNotContain("3번째");
+    }
+
+    @Test
     @DisplayName("알아볼 수 없는 실패는 어디서 멈췄는지만 말한다")
     void 모르는_실패() {
         String said = new JobFailure("SHEET", "error", List.of(), "boom")
