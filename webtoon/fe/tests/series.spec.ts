@@ -105,7 +105,7 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  expect(server.submitted.entries[0].keys).toEqual([]);
  expect(server.submitted.progress.map((p:any)=>p.key)).toEqual(['P001']);
 });
-test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',async({page},info)=>{
+test('정리본을 고쳐 쓰기 → 자동 초안 저장·복원 → 생성',async({page},info)=>{
  const server=await stub(page);
  await openForm(page);
  await page.locator('summary',{hasText:'더 적어 둘 설정'}).click();
@@ -118,9 +118,10 @@ test('정리본을 고쳐 쓰기 → 무료 초안 저장·복원 → 생성',as
  await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('민수는 지난번 일을 기억하고 우회로로 일찍 출발한다.');
  // 권리 확인 칸이 없다 — 1화에서 받은 확인을 잇는다. 이번 화와 진행 상태가 있으면 바로 만들 수 있다.
  await expect(page.getByRole('button',{name:/^2화 만들기/})).toBeEnabled();
- await page.getByRole('button',{name:'초안 저장',exact:true}).click();
- await expect(page.getByRole('status').filter({hasText:'초안을 저장했어요'})).toBeVisible();
+ // 「초안 저장」 단추 없이 고친 것이 잠깐 뒤 저절로 초안으로 저장된다(2026-10-26)
+ await expect(page.getByRole('status').filter({hasText:'자동 저장됨'})).toBeVisible();
  expect(server.submitted).toBeNull();
+ await expect(page.getByRole('button',{name:'내 설정집으로 저장'})).toHaveCount(0);
  // 돌아갔다가 다시 들어오면 저장한 초안이 그대로다.
  await page.getByRole('button',{name:'웹툰 보기'}).click();
  await expect(page).toHaveURL(/run=ep1/);await expect(page).not.toHaveURL(/view=next/);
@@ -175,7 +176,7 @@ test('불러오는 중과 오류 화면 — 다시 시도와 내 작품 이동',
  await expect(page.getByRole('button',{name:'다시 시도',exact:true})).toBeVisible();
  await expect(page.getByRole('button',{name:'내 작품으로 이동',exact:true})).toBeVisible();
 });
-test('저장 중에는 칸과 단추가 잠기고 돌아가기도 막힘',async({page})=>{
+test('고치면 잠깐 뒤 저절로 초안 저장 — 저장 중·저장됨 표시',async({page})=>{
  await stub(page);
  let release!:()=>void;
  const pending=new Promise<void>(resolve=>{release=resolve;});
@@ -186,14 +187,9 @@ test('저장 중에는 칸과 단추가 잠기고 돌아가기도 막힘',async(
  });
  await openForm(page);
  await page.getByLabel('이번 화에서 일어날 일',{exact:true}).fill('조금 일찍 출발한다.');
- await page.getByRole('button',{name:'초안 저장',exact:true}).click();
- await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeDisabled();
- await expect(page.locator('.wt-series-actions button[type=submit]')).toBeDisabled();
- await page.getByRole('button',{name:'웹툰 보기'}).click();
- await expect(page).toHaveURL(/view=next/);
+ await expect(page.locator('.wt-series-autosave')).toHaveText('저장 중…');
  release();
- await expect(page.getByRole('status').filter({hasText:'초안을 저장했어요'})).toBeVisible();
- await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeEnabled();
+ await expect(page.getByRole('status').filter({hasText:'자동 저장됨'})).toBeVisible();
 });
 
 test('같은 캐릭터의 다른 작품은 다음 회차로 이동하지 않음',async({page})=>{

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import AuthModal from "@common/auth/AuthModal";
-import { createNextEpisode, linkThisBrowser, readSeriesDraft, saveSeriesDraft, savePrivateLorebook, startSeriesDigest, type SeriesDraft, type SeriesForm } from "../../lib/api";
+import { createNextEpisode, linkThisBrowser, readSeriesDraft, saveSeriesDraft, startSeriesDigest, type SeriesDraft, type SeriesForm } from "../../lib/api";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
@@ -27,7 +27,6 @@ export default function NextEpisodePage({runId, authenticated, go}: {
   const [busy, setBusy] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [bookSaved, setBookSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const token = useRef("");
@@ -79,7 +78,7 @@ export default function NextEpisodePage({runId, authenticated, go}: {
   const dropEntry = (id: string | undefined, i: number) => {
     setData(d => d ? {...d, entries: d.entries.filter((e, n) => id ? e.id !== id : n !== i),
       progress: id ? d.progress.filter(p => p.key !== id) : d.progress} : d);
-    setSaved(false); setBookSaved(false); setDirty(true);
+    setSaved(false); setDirty(true);
   };
   /* 고치기 — 설정집 항목은 이름·내용·키워드, 진행 상태 줄은 제목·내용. 항목 이름은 늘 키워드로 쳐서 새 이름이
      나오면 걸린다. 고정 항목을 덮어쓰는 진행 상태 줄은
@@ -99,7 +98,7 @@ export default function NextEpisodePage({runId, authenticated, go}: {
       return {...e, title, content: text, keys: keys.slice(0, 40), ...(e.title !== title ? {named: false} : {})};
     })} : d);
     else setData(d => d ? {...d, progress: d.progress.map((p, n) => n !== i ? p : {...p, title: editing.lockTitle ? p.title : title, text})} : d);
-    setSaved(false); setBookSaved(false); setDirty(true);
+    setSaved(false); setDirty(true);
   };
   const editor = (label: string) => editing && <div className="wt-series-edit">
     {/* 페이지 전체가 <form> 이라 안에 form 을 또 두지 않는다. */}
@@ -115,19 +114,34 @@ export default function NextEpisodePage({runId, authenticated, go}: {
     </div>
   </div>;
   const dropProgress = (i: number) => {
-    setData(d => d ? {...d, progress: d.progress.filter((_, n) => n !== i)} : d); setSaved(false); setBookSaved(false); setDirty(true);
+    setData(d => d ? {...d, progress: d.progress.filter((_, n) => n !== i)} : d); setSaved(false); setDirty(true);
   };
-  const saveBook = async () => {
-    if (!data) return;
-    try {
-      await savePrivateLorebook({name: `${data.title || t("연재")} ${t("설정집")}`, source: "series", fixed_settings: data.fixed_settings,
-        progress_state: "", entries: data.entries.map(({new: _n, ...e}) => e), progress: data.progress, confirmed: true});
-      setBookSaved(true); track("series_book_save", {run: runId, ep: data.episode});
-    } catch (e) { setError(errText(e, t("설정집을 저장하지 못했어요"))); }
+  /* 자동 저장(2026-10-26) — 고치기 · 빼기 · 글을 적으면 잠깐 뒤 초안으로 저장한다. 「초안 저장」·「내 설정집으로 저장」
+     단추는 없다. 만들기를 누르면 저장 중인 것을 기다렸다가 보낸다(판 번호가 어긋나지 않게). */
+  const pendingSave = useRef<Promise<void> | null>(null);
+  const autoSave = () => {
+    if (!data) return Promise.resolve();
+    const form: SeriesForm = {
+      fixed_settings:data.fixed_settings, progress_state:data.progress_state, story:data.story,
+      revision:data.revision, confirmed:true, request_token:token.current, entries:data.entries, progress:data.progress,
+    };
+    const run = saveSeriesDraft(runId, form).then(result => {
+      setData(d => d ? {...d, revision: result.revision} : d); setSaved(true); setDirty(false);
+      track("series_memory_save", {run: runId, ep: data.episode, auto: true});
+    }).catch(e => { setError(errText(e, t("저장하지 못했습니다"))); })
+      .finally(() => { if (pendingSave.current === run) pendingSave.current = null; });
+    pendingSave.current = run;
+    return run;
   };
+  useEffect(() => {
+    if (!dirty || !data || busy || editing || pendingSave.current) return;
+    const timer = window.setTimeout(() => { void autoSave(); }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [dirty, data, busy, editing]);
   const submit = async (generate: boolean) => {
     if (!data || submitting.current) return;
     submitting.current=true; setBusy(true); setError(""); setSaved(false);
+    if (pendingSave.current) await pendingSave.current;
     const form: SeriesForm = {
       fixed_settings:data.fixed_settings, progress_state:data.progress_state, story:data.story,
       revision:data.revision, confirmed:true, request_token:token.current, entries:data.entries, progress:data.progress,
@@ -217,8 +231,6 @@ export default function NextEpisodePage({runId, authenticated, go}: {
               <summary><b>{t("설정집 항목")}</b> <span>{t("{n}개",{n:items.length})}</span></summary>
               <p className="wt-series-help">{t("인물·조직·장소 같은 항목이에요. 이번 화에 이름이 나오면 들어가고, 「항상 참고」 항목은 매번 들어가요.")}</p>
               {items.length ? <ul className="wt-series-entries">{items.map(row)}</ul> : <p className="wt-series-help">{t("설정집 항목이 없어요.")}</p>}
-              <div className="wt-series-book-save"><button type="button" className="btn btn-w" disabled={bookSaved} onClick={()=>void saveBook()}>
-                {bookSaved ? t("내 설정집에 저장했어요") : t("내 설정집으로 저장")}</button></div>
             </details>
           </>;
         })()}
@@ -231,9 +243,8 @@ export default function NextEpisodePage({runId, authenticated, go}: {
       </fieldset>
       {data.blocked && <p role="status">{data.blocked}</p>}
       {error && <div role="alert"><ErrLine text={error}/></div>}
-      {saved && <p role="status">{t("초안을 저장했어요. 다시 열어 이어서 수정할 수 있어요.")}</p>}
       <div className="wt-series-actions">
-        <button type="button" className="btn btn-w" disabled={busy || preparing} onClick={()=>void submit(false)}>{t("초안 저장")}</button>
+        <span className="wt-series-autosave" role="status">{dirty ? t("저장 중…") : saved ? t("자동 저장됨") : ""}</span>
         <button type="submit" className="btn btn-p" disabled={busy || preparing || (!data.progress.length && !data.progress_state.trim()) || !!data.blocked}>
           {busy ? t("처리 중…") : <>{t("{n}화 만들기",{n:data.episode})} <span className="wt-series-price">-{t("{n} 크레딧",{n:data.credit_cost})}</span></>}</button>
       </div>

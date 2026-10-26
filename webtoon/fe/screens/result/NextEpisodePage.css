@@ -65,3 +65,6 @@
 .wt .wt-series-title small { margin-left:0; }
 .wt .wt-series-entries li > div:not(.wt-series-edit) { gap:8px; }
 .wt .wt-series-optional { margin-left:10px; font-size:13px; font-weight:500; color:var(--muted); }
+
+/* 자동 저장 표시 — 만들기 단추 왼쪽에 작게(2026-10-26) */
+.wt .wt-series-autosave { margin-right: auto; font-size: 13px; color: var(--muted); align-self: center; }
