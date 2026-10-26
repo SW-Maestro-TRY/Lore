@@ -358,6 +358,19 @@ const dict: Dict = {
     en: "The AI decided part of what you wrote can't be made. Please change any sexual or graphic violent expressions and try again.",
     ja: "書いていただいた内容の一部を、AIが作れない内容と判断しました。性的または残酷な表現を変えて作り直してください。",
     zh: "AI 判断您写的内容中有无法制作的部分。请修改色情或残忍的表达后重新制作。" },
+  /* 서버가 보내는 실패 이유 중 사전에 없던 것(2026-10-26) — JobRunner.harnessFailed · JobFailure.humanMessage.
+     숫자·이름이 낀 문장은 {n}·{name} 자리로 맞춰 번역된다(lib/i18n.tsx patternsOf). */
+  "고른 인물로 이야기 후보를 만들지 못했습니다": { en: "Couldn't write story options with the chosen character.", ja: "選んだ人物でストーリー候補を作れませんでした。", zh: "无法用所选人物生成故事候选。" },
+  "본문을 못 읽었습니다": { en: "Couldn't read the story text.", ja: "本文を読み取れませんでした。", zh: "无法读取正文。" },
+  "이야기를 다시 만들지 못했습니다": { en: "Couldn't rewrite the story.", ja: "ストーリーを作り直せませんでした。", zh: "无法重新生成故事。" },
+  "장면을 다시 나누지 못했습니다": { en: "Couldn't split the scenes again.", ja: "シーンを分け直せませんでした。", zh: "无法重新划分场景。" },
+  "적어 주신 내용으로 이야기를 세우지 못했습니다": { en: "Couldn't build a story from what you wrote.", ja: "書いていただいた内容でストーリーを組み立てられませんでした。", zh: "无法根据你写的内容构建故事。" },
+  "그림 요청 글이 너무 길어 그림 모델이 받지 않았어요. 붙인 설정집이 아주 길면 생길 수 있어요 — 설정집 항목을 조금 줄여 다시 만들어 주세요.": { en: "The drawing request was too long for the image model. This can happen when the attached lorebook is very long — trim a few lorebook entries and try again.", ja: "描画リクエストが長すぎて画像モデルが受け付けませんでした。添付した設定集がとても長いと起こることがあります — 設定集の項目を少し減らして作り直してください。", zh: "绘图请求太长，图像模型未能接受。附加的设定集很长时可能出现这种情况 — 请精简一些设定集条目后重新生成。" },
+  "{n}번째 장을 그리지 못했습니다": { en: "Couldn't draw page {n}.", ja: "{n}ページ目を描けませんでした。", zh: "无法绘制第{n}页。" },
+  "조연 시트를 그리지 못했습니다: {name}": { en: "Couldn't draw the character sheet for {name}.", ja: "{name}のキャラクターシートを描けませんでした。", zh: "无法绘制{name}的角色设定图。" },
+  "작업을 찾지 못했습니다": { en: "Couldn't find this job.", ja: "作業が見つかりませんでした。", zh: "找不到该任务。" },
+  "장면을 저장하지 못했습니다": { en: "Couldn't save the scenes.", ja: "シーンを保存できませんでした。", zh: "无法保存场景。" },
+  "그 장면은 이미 다시 짓는 중입니다": { en: "That scene is already being rewritten.", ja: "そのシーンはすでに作り直し中です。", zh: "该场景已在重新生成中。" },
 };
 
 registerDict(dict);
