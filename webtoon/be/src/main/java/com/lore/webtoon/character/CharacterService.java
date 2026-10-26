@@ -623,6 +623,61 @@ public class CharacterService {
         return characters.save(one);
     }
 
+    /** 카드의 「자리의 무게」로 받을 수 있는 값 — 하네스가 굴리는 네 가지(화면은 주연·조연·단역·엑스트라로 보인다). */
+    static final java.util.Set<String> ROLE_TIERS = java.util.Set.of("중심", "곁", "스쳐감", "뜬금");
+
+    /**
+     * AI 캐릭터 카드 고치기 — 이름·설정 글과 카드 칸(세계관 · 장르 · 종 · 역할 · 반전 · 운명 · 대사)을 한 번에.
+     *
+     * 사용자가 고친 값이 그대로 저장되고, 이 캐릭터로 웹툰을 만들 때 그 값만 하네스에 간다
+     * ({@code JobService.writeCharacter}). 비운 칸은 비운 채로 둔다 — AI 가 지은 원래 값으로 채우지 않는다.
+     *
+     * @param description null 이면 설정 글을 그대로 둔다
+     */
+    @Transactional
+    public WebtoonCharacter editCard(String publicId, Long userId, Collection<String> uids,
+                                     String name, String description, WebtoonCharacter.CardEdit edit) {
+        WebtoonCharacter one = byPublicId(publicId, userId, uids);
+        if (!one.madeBy(userId, uids)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "내 캐릭터만 수정할 수 있습니다");
+        }
+        if (one.getStatus() == CharacterStatus.DRAWING) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "만드는 중인 캐릭터입니다");
+        }
+        if (!one.hasCard() || one.getSource() == CharacterSource.UPLOAD
+                || one.getSource() == CharacterSource.REPLACED_UPLOAD) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "카드가 있는 AI 캐릭터만 카드를 고칠 수 있습니다");
+        }
+        WebtoonCharacter.CardEdit e = edit == null
+                ? new WebtoonCharacter.CardEdit(null, null, null, null, null, null, null, null, null) : edit;
+        if (name != null && name.trim().length() > 60 || description != null && description.length() > 8000) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이름은 60자, 캐릭터 설정은 8,000자까지 입력해 주세요");
+        }
+        if (e.roleTier() != null && !e.roleTier().isBlank() && !ROLE_TIERS.contains(e.roleTier().strip())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "비중은 주연·조연·단역·엑스트라 가운데서 골라 주세요");
+        }
+        if (e.world() != null && !e.world().isBlank() && !e.world().strip().equals(one.getWorld())
+                && worlds().stream().noneMatch(w -> w.get("key").equals(e.world().strip()))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 세계관이 없습니다");
+        }
+        if (safety != null) {
+            List<String> texts = new ArrayList<>(java.util.Arrays.asList(name, description, e.worldLabel(),
+                    e.genre(), e.species(), e.role(), e.twist()));
+            if (e.fate() != null) texts.addAll(e.fate());
+            if (e.dialogue() != null) {
+                e.dialogue().stream().filter(java.util.Objects::nonNull).forEach(d -> {
+                    texts.add(d.who());
+                    texts.add(d.text());
+                });
+            }
+            safety.checkText("character-card-edit", texts.toArray(String[]::new));
+        }
+        Instant now = Instant.now(clock);
+        one.rename(name == null ? null : name.trim(), description == null ? one.getDescription() : description, now);
+        one.editCard(e, now);
+        return characters.save(one);
+    }
+
     /**
      * 지운다.
      *
