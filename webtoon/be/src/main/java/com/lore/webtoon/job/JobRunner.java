@@ -1533,7 +1533,7 @@ public class JobRunner {
            job에서 "3장씩 동시에"가 한 번도 안 탄 것을 확인). */
         ensureScenes(jobId, job);
 
-        drawPages(jobId, job);
+        drawPages(jobId, job, paidPages(job, pageCount(job)));
 
         /* **페이지를 다 그렸다고 100% 가 아니다.** 검수·합본·업로드가 아직
            남았는데 `pages` 단계의 frac 은 이미 1.0 이라, 여기서 단계를 안
@@ -1598,10 +1598,9 @@ public class JobRunner {
      * 안 탔다 — 실측으로 확인(2026-09-16, 첫 실사용 job이 계속 순차로만
      * 돌았다). 지금은 `ensureScenes()`가 그 자리를 대신한다.
      */
-    private void drawPages(Long jobId, WebtoonJob job) throws Exception {
-        int pages = pageCount(job);             // 표지 1장 + 장면 수
+    private void drawPages(Long jobId, WebtoonJob job, int pages) throws Exception {
         if (pages <= 1 || pageWorkers <= 1) {
-            drawInOneProcess(jobId, job);
+            drawInOneProcess(jobId, job, pages);
             return;
         }
 
@@ -1735,7 +1734,7 @@ public class JobRunner {
      * 비워 둔 장 자리에 그림 대신 들어갈 빈 장. 글자는 넣지 않는다 — 서버에 한글 글꼴이 없을 수 있고,
      * 안내 문구는 화면이 그 위에 네 언어로 얹는다. 크기는 다른 장과 맞춘다.
      */
-    void writeBlankPage(String runId, int page) {
+    public void writeBlankPage(String runId, int page) {
         Path dir = runsDir.resolve(runId).resolve("pages");
         Path out = dir.resolve("page%02d.png".formatted(page));
         int w = 1024;
@@ -1769,10 +1768,64 @@ public class JobRunner {
                 + "다시 그려 주세요. 빈 장 다시 그리기는 무료예요.";
     }
 
-    /** 예전 길 — 한 프로세스가 표지부터 마지막 장까지 차례로 그린다. */
-    private void drawInOneProcess(Long jobId, WebtoonJob job) throws Exception {
-        int code = callHarness(jobId, job,
-                List.of("--run-id", job.getRunId(), "--detail-pages"));
+    /**
+     * 이번에 몇 장까지 그리나 — 표지를 포함한 장 수.
+     *
+     * 한 편 값은 {@link WebtoonQuality#BASE_PAGES} 장까지다. 장면이 그보다 많으면 넘는 장마다
+     * {@link WebtoonQuality#extraPageCreditsOf} 를 <b>그리기 직전에</b> 받고, 잔액이 닿는 데까지만 그린다.
+     * 나머지 장은 그리지 않은 채 완성하고, 결과 화면에서 크레딧이 생기면 이어 그린다
+     * ({@code RunController} 의 이어 그리기). 게스트는 계정 크레딧이 없어 기본 장까지만이다.
+     *
+     * 받은 값은 작업이 실패하면 한 편 값과 같이 돌려준다({@link #refund}).
+     */
+    int paidPages(WebtoonJob job, int total) {
+        int base = WebtoonQuality.BASE_PAGES;
+        if (total <= base) {
+            return total;
+        }
+        int per = WebtoonQuality.extraPageCreditsOf(job.getQuality());
+        Long user = job.getUserId();
+        int afford = user == null ? 0 : Math.min(total - base, credits.balanceOf(user) / per);
+        if (afford > 0) {
+            credits.charge(user, afford * per, extraPagesRef(job), "추가 " + afford + "장");
+        }
+        log.info("장면이 {}장이라 기본 {}장에 {}장을 더 그립니다 (job={}, 남는 장 {})",
+                total, base, afford, job.getId(), total - base - afford);
+        return base + afford;
+    }
+
+    /** 디스크에 그려진 장 중 가장 뒤 번호. 모르면 0. */
+    private int drawnPages(String runId) {
+        Path dir = runsDir.resolve(runId).resolve("pages");
+        if (!Files.isDirectory(dir)) {
+            return 0;
+        }
+        try (var found = Files.list(dir)) {
+            return found.map(p -> p.getFileName().toString())
+                    .map(java.util.regex.Pattern.compile("^page(\\d+)\\.png$")::matcher)
+                    .filter(java.util.regex.Matcher::matches)
+                    .mapToInt(m -> Integer.parseInt(m.group(1)))
+                    .max().orElse(0);
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    /** 만들 때 더 받은 장 값을 적는 ref. 돌려줄 때 같은 값으로 찾는다. */
+    static String extraPagesRef(WebtoonJob job) {
+        return "pages:" + job.getPublicId();
+    }
+
+    /** 예전 길 — 한 프로세스가 표지부터 차례로 그린다. 받은 장까지만 그린다. */
+    private void drawInOneProcess(Long jobId, WebtoonJob job, int pages) throws Exception {
+        List<String> args = new ArrayList<>(List.of("--run-id", job.getRunId(), "--detail-pages"));
+        if (pages > 0 && pages < pageCount(job)) {
+            for (int n = 1; n <= pages; n++) {
+                args.add("--page");
+                args.add(String.valueOf(n));
+            }
+        }
+        int code = callHarness(jobId, job, args);
         after.cost(job.getRunId());
         stopIfCancelled(jobId);
         if (code != 0) {
@@ -1862,7 +1915,8 @@ public class JobRunner {
     private void runFullReviewLoop(Long jobId, WebtoonJob job) {
         // 페이지 -> 이 루프 안에서 다시 그린 횟수.
         Map<Integer, Integer> redrawn = new HashMap<>();
-        int pages = pageCount(job);             // 표지 1장 + 장면 수. 모르면 0
+        /* 실제로 그린 장까지만 — 크레딧이 모자라 뒤 장을 아직 안 그렸으면 거기는 다시 그리지 않는다. */
+        int pages = drawnPages(job.getRunId());
         for (int round = 1; round <= MAX_FULL_REVIEW_ROUNDS; round++) {
             if (cancelled.contains(jobId)) {
                 return;
@@ -2422,9 +2476,11 @@ public class JobRunner {
             if (job == null) {
                 return Refunded.NONE;
             }
-            /* 끊겼다가 「이어서 만들기」로 다시 낸 값(ref 「…:resume」)도 같이 돌려준다. */
+            /* 그리기 직전에 더 받은 장 값(develop #809), 끊겼다가 「이어서 만들기」로 다시 낸 값(ref 「…:resume」)도
+               같이 돌려준다 — 못 만들었으니 그만큼 안 그렸다. */
             int back = credits.refund(job.getUserId(), job.getPublicId())
-                    + credits.refund(job.getUserId(), job.getPublicId() + ":resume");
+                    + credits.refund(job.getUserId(), job.getPublicId() + ":resume")
+                    + credits.refund(job.getUserId(), extraPagesRef(job));
             if (back > 0) {
                 return Refunded.CREDIT;
             }

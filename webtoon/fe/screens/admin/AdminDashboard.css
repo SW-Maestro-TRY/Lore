@@ -18,7 +18,7 @@
 .wt .wt-dash-search .btn-sm { height: 38px; }
 .wt .wt-dash-note { font-size: 13px; margin: 0; }
 
-.wt .wt-dash-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-dash-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .wt .wt-dash-stat { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
 .wt .wt-dash-stat > span:first-child { font-size: 13px; }
 .wt .wt-dash-stat b { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }

@@ -42,4 +42,6 @@ export const IconPlay = (p: P) => base(p, <path d="M8 5v14l11-7z" />);
 export const IconGrid = (p: P) => base(p, <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>);
 export const IconComment = (p: P) => base(p, <path d="M20 12a7.5 7.5 0 0 1-10.9 6.7L4.5 20l1.3-4.1A7.5 7.5 0 1 1 20 12z" />);
 export const IconBook = (p: P) => base(p, <><path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5z" /><path d="M12 6.5V19" /></>);
+/** 잠긴 장 — 자물쇠 */
+export const IconLock = (p: P) => base(p, <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>);
 export const IconMenu = (p: P) => base(p, <path d="M4 7h16M4 12h16M4 17h16" />);

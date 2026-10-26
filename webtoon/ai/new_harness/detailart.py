@@ -795,7 +795,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         if not do_review:
             continue
         # 표지는 이야기의 한 순간이 아니라 "이어지는가" 를 볼 것이 없다. 대신
-        # 표지 모양인가(칸 하나 · 글상자 없음 · 제목 그대로)를 본다(covercheck).
+        # 표지 모양인가(칸 하나 · 말풍선 없음 · 제목 그대로)를 본다(covercheck).
         if n_ == 0:
             for attempt in range(tries + 1):
                 got, rmeta = covercheck.review_cover(

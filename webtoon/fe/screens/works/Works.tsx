@@ -174,7 +174,7 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
 
         {/* 「최근 본 웹툰」 줄은 뺐다 — 목록 위에 표지 줄이 하나 더 있으니 정신없다는 피드백(2026-10-24) */}
 
-        <FeaturedBanner go={go} />
+        <FeaturedBanner />
 
         <div className="wt-works-finds">
           <input className="field wt-works-search" type="search" value={query} placeholder={t("제목·캐릭터·장르로 찾기")}

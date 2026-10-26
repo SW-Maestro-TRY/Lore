@@ -149,7 +149,7 @@ export interface Allowance {
   free_per_day?: number;
   balance?: number;
   blocked?: string | null;
-  qualities?: { key: string; label: string; credits: number }[];
+  qualities?: { key: string; label: string; credits: number; base_pages?: number; extra_page_credits?: number }[];
   quality_default?: string;
 }
 
@@ -568,6 +568,15 @@ export interface RunResult {
   inputs?: RunInputs;
   /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 크레딧이 모자라 아직 안 그린 장 번호들 — 한 편 값은 기본 장 수(base_pages)까지다 */
+  pending_pages?: number[];
+  /** 남은 장의 장면 한 줄 — 잠긴 장을 웹툰 흐름 안에서 「다음 장면」으로 보여 준다 */
+  pending_scenes?: { no: number; caption: string }[];
+  /** 기본 장 수를 넘는 장 하나 값(이 작품의 화질 기준) */
+  extra_page_credits?: number;
+  base_pages?: number;
+  /** 남은 장 중 지금 그리는 중인 장 번호 */
+  drawing_pages?: number[];
   /** 관리자 처리(#638) — 주인과 관리자에게만 온다. */
   moderation?: ModerationNote;
   /** 남이 열 수 있나(#638). false 면 공유 링크가 받은 사람에게 404 라 공유 버튼을 감춘다. */
@@ -586,6 +595,24 @@ export interface RunInputs {
 
 export function readResult(runId: string): Promise<RunResult> {
   return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`);
+}
+
+/** 장 하나를 그리는 일의 진행 — 편집실 다시 그리기와 같은 모양이다. */
+export interface PageDrawStatus {
+  id: string;
+  page: number;
+  status: "queued" | "running" | "done" | "error" | "cancelled" | string;
+  error?: string | null;
+}
+
+/** 남겨 둔 장을 잔액이 닿는 데까지 앞에서부터 이어 그린다. 한 장도 못 그리면 402(크레딧이 모자라요). */
+export function continuePages(runId: string, count?: number): Promise<{ started: PageDrawStatus[]; left: number }> {
+  return post(`/runs/${encodeURIComponent(runId)}/continue`, count ? { count } : undefined);
+}
+
+/** 장 하나를 그리는 일이 어디까지 왔나. */
+export function pageDrawStatus(id: string): Promise<PageDrawStatus> {
+  return call<PageDrawStatus>(`/regens/${encodeURIComponent(id)}`);
 }
 
 export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
@@ -917,6 +944,10 @@ export interface AdminOverview {
     visitors: number;
     signups: number;
     createStarted: number;
+    /** 충전 창을 연 사람 · 「N원 결제하기」를 누른 사람 · 누른 횟수 */
+    chargeOpen: number;
+    chargeSubmit: number;
+    chargeSubmitClicks: number;
     jobs: number;
     jobsDone: number;
     jobsFailed: number;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
   readSeries, type SeriesInfo, readAllowance, readResult, rememberRecent, renameRun, type Allowance, type RunCard, type RunResult,
@@ -13,13 +13,13 @@ import type { Go } from "../../lib/nav";
 import { IconChevronRight, IconChevronUp, IconClose, IconComment, IconDownload, IconEdit, IconMenu } from "../../ui/Icons";
 import { commentCount } from "../../lib/community";
 import { Crumb, MobileTop } from "../../ui/TopNav";
-import { Dialog } from "../../ui/Dialog";
 import ShareMenu from "./ShareMenu";
 import RunStrip from "../../ui/RunStrip";
 import LikeButton from "../../ui/LikeButton";
 import ResultSurvey from "./ResultSurvey";
 import EpisodeCommunity from "../../ui/community/EpisodeCommunity";
 import AdminModeration from "./AdminModeration";
+import PendingPages from "./PendingPages";
 import "./seriesI18n";
 import "./i18n";
 import "./Result.css";
@@ -59,8 +59,9 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const [nextNote, setNextNote] = useState(false);
   const [series, setSeries] = useState<SeriesInfo | null>(null);
   const [seriesError, setSeriesError] = useState(false);
+  /* 위쪽 「회차 목록」 — 누르면 단추 아래에 펼치고 다시 누르면 접는다 */
+  const [epOpen, setEpOpen] = useState(false);
   const [seriesTick, setSeriesTick] = useState(0);
-  const [chaptersOpen, setChaptersOpen] = useState(false);
   const [cover, setCover] = useState<string | null>(null);
   useEffect(() => {
     let alive=true;
@@ -68,7 +69,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     readSeries(runId).then(s=>{if(alive)setSeries(s);}).catch(()=>{if(alive)setSeriesError(true);});
     return ()=>{alive=false;};
   },[runId,authenticated,seriesTick]);
-  useEffect(() => { setNextNote(false); setChaptersOpen(false); setCover(null); setOwnedByAccount(false); }, [runId]);
+  useEffect(() => { setNextNote(false); setEpOpen(false); setCover(null); setOwnedByAccount(false); }, [runId]);
   /* 「이런 웹툰은 어때요」(#248) — 같은 장르 최신 넷, 없으면 그냥 최신 넷. 점수 없음. */
   const [suggested, setSuggested] = useState<RunCard[]>([]);
   const [liked, setLiked] = useState(false);
@@ -94,6 +95,12 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       .catch((e: Error) => { if (alive) setFailed(e.message || t("작품을 열지 못했습니다")); });
     return () => { alive = false; };
   }, [runId, tick]);
+
+  /* 화면을 비우지 않고 다시 읽는다 — 남은 장을 이어 그리는 동안 그린 장이 붙는 것을 보여 준다.
+     tick 으로 다시 읽으면 화면이 비었다 다시 그려져 읽던 자리를 잃는다. */
+  const refreshResult = useCallback(() => {
+    readResult(runId).then(setData).catch(() => { /* 다음 번에 다시 */ });
+  }, [runId]);
 
   useEffect(() => {
     if (!data) return;
@@ -201,6 +208,31 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
   const ep = series?.episode || data?.episode || 1;
   /* 회차 목록 — 연재가 아니면 이 화 하나 */
   const chapterRows = series?.chapters.length ? series.chapters : [{ episode: ep, run_id: runId, status: "DONE", title: data?.title || "" }];
+  /* 회차 목록 — 창으로 띄우지 않는다(2026-10-25 · 26). 본문 아래에는 늘 펼쳐 두고(몇 화까지 있는지
+     보이게), 위쪽 「회차 목록」 단추는 같은 목록을 단추 바로 아래에 펼쳤다 접는다. */
+  const epList = (top = false) => (
+    <div className={`wt-reader-eplist${top ? " top" : ""}`} id={top ? "wt-eplist-top" : undefined}>
+      <div className="wt-reader-eplist-head"><h3>{t("회차 목록")}</h3><span>{t("총 {n}화",{n:chapterRows.filter(c => c.run_id).length})}</span></div>
+      <ul>
+        {chapterRows.map(c => (
+          <li key={c.episode}>
+            <button type="button" className={c.run_id===runId?"current":""} aria-current={c.run_id===runId?"page":undefined}
+                    onClick={()=>{ if (c.run_id && c.run_id!==runId) go("result",{run:c.run_id}); else if (top && !c.run_id && "job_id" in c && c.job_id) go("running",{job:c.job_id}); }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {c.run_id ? <img className="wt-reader-epthumb" src={pageUrl(c.run_id, 1, 320)} alt="" loading="lazy"/>
+                        : <span className="wt-reader-epthumb" aria-hidden="true"/>}
+              <span><b>{t("{n}화",{n:c.episode})}</b><small>{c.title||data?.title}</small></span>
+              {c.run_id===runId ? <em>{t("읽는 중")}</em> : <IconChevronRight size={18}/>}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {/* 다음 화는 목록에서 바로 고른다 — 아래 단추 줄(다음화 보기 · 편집실)은 겹쳐서 뺐다(2026-10-25).
+          다음 화가 없고 내 작품도 아니면 기다려 달라는 한 줄만 둔다. */}
+      {!series?.chapters.some(c=>c.episode>ep) && !mine &&
+        <div className="wt-reader-wait"><b>{t("다음 이야기를 기다려 주세요")}</b><span>{t("아직 공개된 다음 회차가 없어요.")}</span></div>}
+    </div>
+  );
   const epLabel = `EP.${String(ep).padStart(2, "0")}`;
 
   const preview = data && data.preview && data.planned_pages > data.page_count
@@ -499,7 +531,8 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               <p>{t("회차 목록을 불러오지 못했습니다")}</p>
               <button className="btn btn-w" onClick={()=>setSeriesTick(v=>v+1)}>{t("다시 시도")}</button>
             </div>}
-            <div className="wt-reader-chapterline"><b>{t("{n}화", {n:ep})}</b><button className="btn-ghost" onClick={()=>setChaptersOpen(true)}><IconMenu size={16}/>{t("회차 목록")}</button></div>
+            <div className="wt-reader-chapterline"><b>{t("{n}화", {n:ep})}</b><button className="btn-ghost" aria-expanded={epOpen} aria-controls="wt-eplist-top" onClick={()=>setEpOpen(v=>!v)}><IconMenu size={16}/>{t("회차 목록")}</button></div>
+            {epOpen && epList(true)}
             <div className="wt-result-sheet">
               {data.pages.map((pg, i) => {
                 const gap = i === data.pages.length - 1 ? 0 : +pg.gap || 0;
@@ -533,36 +566,19 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   </div>
                 );
               })}
+              {mine && (data.pending_pages?.length ?? 0) > 0 && (
+                /* 크레딧이 모자라 뒤 장을 아직 안 그렸다 — 그린 장 바로 뒤에 잠긴 장으로 이어 붙인다 */
+                <PendingPages runId={runId} data={data} onRefresh={refreshResult} />
+              )}
             </div>
 
             {data.public !== false && !data.preview ? (
               <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} total={chapterRows.filter(c => c.run_id).length}
                 title={data.title} cover={cover || pageUrl(runId,data.pages[0]?.no || 1,320)}>
-                {/* 회차 목록을 바로 펼쳐 둔다(2026-10-25) — 창을 열어야 보이면 몇 화까지 있는지 모른다. */}
-                <div className="wt-reader-eplist">
-                  <div className="wt-reader-eplist-head"><h3>{t("회차 목록")}</h3><span>{t("총 {n}화",{n:chapterRows.filter(c => c.run_id).length})}</span></div>
-                  <ul>
-                    {chapterRows.map(c => (
-                      <li key={c.episode}>
-                        <button type="button" className={c.run_id===runId?"current":""} aria-current={c.run_id===runId?"page":undefined}
-                                onClick={()=>{ if (c.run_id && c.run_id!==runId) go("result",{run:c.run_id}); }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          {c.run_id ? <img className="wt-reader-epthumb" src={pageUrl(c.run_id, 1, 320)} alt="" loading="lazy"/>
-                                    : <span className="wt-reader-epthumb" aria-hidden="true"/>}
-                          <span><b>{t("{n}화",{n:c.episode})}</b><small>{c.title||data.title}</small></span>
-                          {c.run_id===runId ? <em>{t("읽는 중")}</em> : <IconChevronRight size={18}/>}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  {/* 다음 화는 목록에서 바로 고른다 — 아래 단추 줄(다음화 보기 · 편집실)은 겹쳐서 뺐다(2026-10-25).
-                      다음 화가 없고 내 작품도 아니면 기다려 달라는 한 줄만 둔다. */}
-                  {!series?.chapters.some(c=>c.episode>ep) && !mine &&
-                    <div className="wt-reader-wait"><b>{t("다음 이야기를 기다려 주세요")}</b><span>{t("아직 공개된 다음 회차가 없어요.")}</span></div>}
-                </div>
-                {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{t("가입 없이 무료로 시작")}</small>}</div><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></section>}
+                {epList()}
+                {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{t("가입 없이 무료로 시작")}</small>}</div><div className="wt-reader-create-art"><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></div></section>}
               </EpisodeCommunity>
-            ) : <div className="wt-reader-endnav"><button className="btn btn-w" onClick={()=>setChaptersOpen(true)}>{t("회차 목록")}</button>{mine&&<button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>}</div>}
+            ) : <div className="wt-reader-endnav"><button className="btn btn-w" onClick={()=>{ setEpOpen(true); requestAnimationFrame(()=>document.getElementById("wt-eplist-top")?.scrollIntoView({behavior:"smooth",block:"start"})); }}>{t("회차 목록")}</button>{mine&&<button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>}</div>}
 
             {mine && readEnd && <ResultSurvey key={runId} runId={runId} authenticated={authenticated} go={go} />}
 
@@ -579,11 +595,6 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
         )}
       </div>
 
-      {chaptersOpen && <Dialog title={t("회차 목록")} onClose={()=>setChaptersOpen(false)}>
-        <div className="wt-reader-chapters">
-          {seriesError ? <><p className="err">{t("회차 목록을 불러오지 못했습니다")}</p><button className="btn btn-w" onClick={()=>setSeriesTick(v=>v+1)}>{t("다시 시도")}</button></> : !series ? <p role="status">{t("불러오는 중…")}</p> : (series.chapters.length ? series.chapters : [{episode:ep,run_id:runId,status:"DONE",title:data?.title||""}]).map(c=><button key={c.episode} className={c.run_id===runId?"current":""} aria-current={c.run_id===runId?"page":undefined} onClick={()=>{setChaptersOpen(false);if(c.run_id)go("result",{run:c.run_id});else if("job_id" in c&&c.job_id)go("running",{job:c.job_id});}}><span>{t("{n}화",{n:c.episode})}</span><b>{c.title||data?.title}</b><small>{t(c.run_id===runId?"읽는 중":c.run_id?"읽기":"만드는 중")}</small></button>)}
-        </div>
-      </Dialog>}
 
       {/* 다음 편은 아직 없다. 눌렀을 때 줄 끝에 문구만 붙이면 화면 밖이라
           못 보고 다시 누르게 된다 — 가운데에 띄워 한 번에 읽히게 한다. */}

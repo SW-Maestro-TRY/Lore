@@ -146,12 +146,11 @@ test('정리본을 고쳐 쓰기 → 자동 초안 저장·복원 → 생성',as
 test('완성 화면에서 회차 목록과 다음 화 이동',async({page})=>{
  await stub(page,2);
  await page.goto('/webtoon?run=ep1');
- // 새 디자인(#780): 회차 목록은 「회차 목록」 단추로 여는 창이다.
- await page.getByRole('button',{name:'회차 목록'}).filter({visible:true}).first().click();
- await page.getByRole('dialog',{name:'회차 목록'}).getByRole('button',{name:/^2화/}).click();
+ // #820: 회차 목록은 창이 아니라 본문 아래에 늘 펼쳐 둔 목록이다(위쪽 「회차 목록」 단추는 같은 목록을 펼친다).
+ const list=page.locator('.wt-reader-eplist:not(.top)');
+ await list.getByRole('button',{name:/^2화/}).click();
  await expect(page).toHaveURL(/run=ep2/);
- await page.getByRole('button',{name:'회차 목록'}).filter({visible:true}).first().click();
- await expect(page.getByRole('dialog',{name:'회차 목록'}).getByRole('button',{name:/^2화/})).toHaveAttribute('aria-current','page');
+ await expect(page.locator('.wt-reader-eplist:not(.top)').getByRole('button',{name:/^2화/})).toHaveAttribute('aria-current','page');
 });
 test('로그인 전에는 개인 설정을 요청하지 않음',async({page})=>{
  const server=await stub(page,1,false);

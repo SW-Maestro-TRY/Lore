@@ -140,19 +140,36 @@
   align-items: start;
 }
 .wt .wt-gallery-sheet {
-  position: relative;
-  aspect-ratio: 1.8;
+  margin: 0;
   overflow: hidden;
   border-radius: 14px;
   background: #fff;
+  color: #1d2430;
 }
-.wt .wt-gallery-sheet img {
+.wt .wt-sheet-board { position: relative; }
+.wt .wt-sheet-board img { display: block; width: 100%; height: auto; }
+.wt .wt-sheet-tag {
   position: absolute;
-  width: 166.667%;
-  max-width: none;
-  left: 0;
-  top: 0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(29, 36, 48, 0.78);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
 }
+.wt .wt-sheet-hex {
+  position: absolute;
+  top: 95.6%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgba(29, 36, 48, 0.72);
+  font-variant-numeric: tabular-nums;
+}
+.wt .wt-sheet-hex.dark { color: rgba(255, 255, 255, 0.9); }
 .wt .wt-gallery-faces {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -310,14 +327,40 @@
 .wt .wt-gallery-prev figcaption,
 .wt .wt-gallery-redo-pic figcaption { position: absolute; top: 10px; left: 10px; z-index: 1; }
 
-/* 자주 묻는 것 */
+/* 자주 묻는 질문 */
 .wt .wt-gallery-faq {
   display: grid;
   grid-template-columns: 1fr 2fr;
   gap: 40px;
-  padding: 24px 0 56px;
+  padding: 64px 0 72px;
 }
 .wt .wt-gallery-faq .faq { display: grid; }
+/* 분류는 제목 아래 세로 목록 — 고른 줄만 왼쪽 막대와 굵은 글씨 */
+.wt .wt-gallery-faq .faq-side .wt-gallery-heading { margin-bottom: 0; }
+.wt .wt-gallery-faq .faq-cats { display: grid; justify-items: start; gap: 2px; margin-top: 40px; }
+.wt .wt-gallery-faq .faq-cats button {
+  position: relative;
+  padding: 9px 0;
+  border: 0;
+  background: none;
+  font-size: 16px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.wt .wt-gallery-faq .faq-cats button::before {
+  content: "";
+  position: absolute;
+  left: -14px; top: 50%;
+  width: 3px; height: 0;
+  border-radius: 2px;
+  background: var(--sea);
+  transform: translateY(-50%);
+  transition: height 0.15s;
+}
+.wt .wt-gallery-faq .faq-cats button:hover { color: var(--ink); }
+.wt .wt-gallery-faq .faq-cats button[aria-selected="true"] { color: var(--ink); font-weight: 700; }
+.wt .wt-gallery-faq .faq-cats button[aria-selected="true"]::before { height: 18px; }
 .wt .wt-gallery-faq details { border-bottom: 1px solid var(--line-strong); }
 .wt .wt-gallery-faq summary {
   list-style: none;
@@ -383,25 +426,6 @@
   min-width: 220px;
   height: 52px;
 }
-.wt .wt-gallery-resume {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  background: var(--water-light);
-  color: var(--ink);
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  padding: 15px 18px;
-  margin-bottom: 18px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.wt .wt-gallery-resume span {
-  color: var(--sea);
-  font-size: 12px;
-}
 @media (max-width: 767px) {
   .wt .wt-gallery-inner {
     padding: 16px 20px 0;
@@ -435,6 +459,9 @@
     grid-template-columns: 1fr;
     gap: 10px;
   }
+  /* 폰 — 이름표는 작게, 색 코드는 칸보다 길어서 숨긴다(색 칸은 그림에 남는다) */
+  .wt .wt-sheet-tag { padding: 2px 5px; font-size: 9px; border-radius: 3px; }
+  .wt .wt-sheet-hex { display: none; }
   .wt .wt-gallery-storyboard { grid-template-columns: 1fr; gap: 14px; }
   .wt .wt-gallery-prev { position: relative; top: 0; }
   .wt .wt-gallery-script button { grid-template-columns: 30px minmax(0, 1fr); padding: 14px 4px; }
@@ -442,6 +469,18 @@
   .wt .wt-gallery-redo-pic { min-height: 0; aspect-ratio: 5/4; }
   .wt .wt-gallery-redo-form { padding: 18px; }
   .wt .wt-gallery-faq { grid-template-columns: 1fr; gap: 8px; }
+  /* 폰은 제목 아래 가로 줄 — 고른 칸만 밑줄 */
+  .wt .wt-gallery-faq .faq-cats {
+    display: flex; gap: 20px; margin: 20px 0 4px;
+    border-bottom: 1px solid var(--line-strong);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .wt .wt-gallery-faq .faq-cats button { padding: 10px 0 12px; font-size: 15px; white-space: nowrap; }
+  .wt .wt-gallery-faq .faq-cats button::before {
+    left: 0; right: 0; top: auto; bottom: -1px;
+    width: auto; height: 0; transform: none;
+  }
+  .wt .wt-gallery-faq .faq-cats button[aria-selected="true"]::before { height: 2px; }
   .wt .wt-gallery-works {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 24px 12px;
