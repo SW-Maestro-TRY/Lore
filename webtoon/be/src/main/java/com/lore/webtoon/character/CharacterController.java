@@ -289,7 +289,8 @@ public class CharacterController {
         m.put("community_blocked",one.isCommunityBlocked());
         m.put("id", one.getPublicId());
         m.put("name", one.getName());
-        m.put("description", one.getDescription() == null ? "" : one.getDescription());
+        // 비어 있으면 AI 뽑기 카드의 상세 설정으로 — 수정 창과 웹툰 만들기가 이 글을 쓴다(2026-10-26)
+        m.put("description", one.settingsText());
         m.put("art_url", characters.artUrl(one));
         m.put("source", one.getSource().name().toLowerCase());
         m.put("status", one.getStatus().name().toLowerCase());

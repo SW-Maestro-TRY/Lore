@@ -1164,7 +1164,11 @@ public class JobService {
                                 WebtoonCharacter picked) throws IOException {
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("name", blank(form.name()));
-        doc.put("character", blank(form.character()));
+        /* 고른 캐릭터의 설정 글이 안 왔으면(AI 뽑기 캐릭터는 설명 칸이 비어 있었다) 그 캐릭터가 가진 상세 설정으로.
+           코드가 지어낸 기본값이 아니라 그 캐릭터의 것이다(2026-10-26). */
+        String character = form.character();
+        if ((character == null || character.isBlank()) && picked != null) character = picked.settingsText();
+        doc.put("character", blank(character));
         Map<String, String> fields = new LinkedHashMap<>();
         if (form.fields() != null) {
             form.fields().forEach((k, v) -> {
