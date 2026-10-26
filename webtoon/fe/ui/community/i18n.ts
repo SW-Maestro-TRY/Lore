@@ -104,7 +104,7 @@ const dict: Dict = {
     ja: "・自分",
     zh: "· 我",
   },
-  수정됨: {
+  "수정됨": {
     en: "Edited",
     ja: "編集済み",
     zh: "已编辑",
@@ -124,7 +124,7 @@ const dict: Dict = {
     ja: "キャンセル",
     zh: "取消",
   },
-  수정: {
+  "수정": {
     en: "Edit",
     ja: "編集",
     zh: "编辑",
@@ -144,7 +144,7 @@ const dict: Dict = {
     ja: "削除",
     zh: "删除",
   },
-  신고: {
+  "신고": {
     en: "Report",
     ja: "通報",
     zh: "举报",
@@ -179,7 +179,7 @@ const dict: Dict = {
     ja: "お知らせを読み込み中…",
     zh: "正在加载消息…",
   },
-  알림: {
+  "알림": {
     en: "Notifications",
     ja: "お知らせ",
     zh: "通知",
@@ -220,7 +220,7 @@ const dict: Dict = {
     ja: "コミュニティの通報",
     zh: "社区举报",
   },
-  댓글: {
+  "댓글": {
     en: "Comment",
     ja: "コメント",
     zh: "评论",
@@ -427,5 +427,15 @@ const dict: Dict = {
     ja: "処理できませんでした。もう一度お試しください。",
     zh: "请求未能完成，请重试。",
   },
+  /* ---- 빠졌던 번역 ---- */
+  "구독": { en: "Subscribe", ja: "購読", zh: "订阅" },
+  "구독 중": { en: "Subscribed", ja: "購読中", zh: "已订阅" },
+  "댓글 불러오는 중…": { en: "Loading comments…", ja: "コメントを読み込み中…", zh: "正在加载评论…" },
+  "댓글 입력": { en: "Write a comment", ja: "コメントを入力", zh: "输入评论" },
+  "등록": { en: "Post", ja: "投稿", zh: "发布" },
+  "아직 댓글이 없습니다.": { en: "No comments yet.", ja: "まだコメントはありません。", zh: "还没有评论。" },
+  "모두 읽음": { en: "Mark all read", ja: "すべて既読", zh: "全部已读" },
+  "소식": { en: "Updates", ja: "お知らせ", zh: "动态" },
+  "처리할 신고가 없어요.": { en: "No reports to handle.", ja: "対応する通報はありません。", zh: "没有待处理的举报。" },
 };
 registerDict(dict);

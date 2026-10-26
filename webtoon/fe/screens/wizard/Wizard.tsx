@@ -10,6 +10,7 @@ import {
   type Allowance, type Character, type LoreBook,
 } from "../../lib/api";
 import { startJob } from "../../lib/start";
+import DirectSwitch from "../../ui/DirectSwitch";
 import {
   GENRE_QUICK, OWN_STORY_MAX, QUALITY_INFO, STYLE_INFO,
   emptyWizardForm, type WizardForm, type WizardQuality,
@@ -311,7 +312,7 @@ export default function Wizard({
      확인하고 장면을 확인한 뒤 그린다. 설정집이 곧 그 내용이다(2026-10-24). 장르를 골라 저절로 붙은
      장르 설정집은 여기에 안 친다. */
   const usesOwnStory = (!!form.story.trim() || attachedBooks(form.lorebook).some(b => b.source !== "genre")) && authenticated;
-  const viewMode = usesOwnStory ? "expert" : form.mode;
+  const viewMode = usesOwnStory ? (form.ownDirect ? "simple" : "expert") : form.mode;
   const pickMode = (m: WizardForm["mode"]) => patch({ mode: m });
   const ownReady = !form.lorebook || form.lorebook.confirmed;
   // 그림체는 안 골라도 된다 — 비워 보내면 서버가 기본 그림체(일반 웹툰)로 그린다
@@ -473,8 +474,8 @@ export default function Wizard({
       </div>:<div className="wt-create-content wt-create-options">
         <section><h2>{t("그림체")}</h2><div className="wt-wiz-styles">{STYLE_INFO.map(([key,label])=><button type="button" key={key} className={`wt-wiz-style${form.style===key?" on":""}`} aria-pressed={form.style===key} onClick={()=>{track("style_pick",{style:key});patch({style:key});}}><img src={STYLE_THUMB[key]||`/static/samples/ex-${key}-1.jpg`} alt=""/><b>{t(label)}</b>{form.style===key&&<CheckMark/>}</button>)}</div></section>
         <section><h2>{t("그리기 방식")}</h2><p className="dim hint wt-wiz-qualityhint">{t("시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.")}</p>{qualityPicker}</section>
-        {/* 고를 것이 없는 길(내 이야기·설정집)은 설명 문장뿐이라 칸째 안 보인다(2026-10-26) */}
-        {!usesOwnStory&&<section><h2>{t("생성 방식")}</h2><div className="wt-wiz-modes"><button type="button" className={`wt-wiz-mode${viewMode==="simple"?" on":""}`} onClick={()=>pickMode("simple")}><b>{t("바로 만들기")}</b><span>{t("중간 확인 없이 완성")}</span></button><button type="button" className={`wt-wiz-mode${viewMode==="expert"?" on":""}`} onClick={()=>pickMode("expert")}><b>{t("확인하고 만들기")}</b><span>{t("이야기와 장면 확인 후 생성")}</span></button></div></section>}
+        {/* 두 길 모두 「바로 만들기」 하나로 고른다(2026-10-26) — 내 이야기 길도 확인 없이 끝까지 갈 수 있다. */}
+        <section><h2>{t("생성 방식")}</h2><DirectSwitch on={viewMode==="simple"} onChange={on=>usesOwnStory?patch({ownDirect:on}):pickMode(on?"simple":"expert")}/></section>
         {sidePanel}
       </div>}
     </div>

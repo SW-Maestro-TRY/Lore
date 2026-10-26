@@ -200,16 +200,16 @@ const dict: Dict = {
   },
 
   "크레딧은 무엇이고, 돈이 드나요?": { en: "What are credits, and does it cost money?", ja: "クレジットとは何ですか？お金はかかりますか？", zh: "积分是什么？需要付费吗？" },
-  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **15크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **15크레딧**(가장 높은 화질 「너울」은 25), 컷 하나 다시 그리기는 **3크레딧**(「너울」로 만든 작품은 4), 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.** **지금은 모든 기능이 무료**이고, 결제 수단을 넣는 곳도 없어요. 크레딧을 돈으로 사는 기능은 아직 준비 중입니다. 유료 기능이 생기면 미리 공지하고 안내해 드릴게요.": {
-    en: "They're the in-service unit that gets used up when you generate something. You get **15 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **15 credits** (25 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits** (4 for Swell episodes), and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.** **Everything is free right now**, and there's nowhere to enter payment details. Buying credits isn't available yet. If paid features arrive, we'll announce them in advance.",
-    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**15クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**15クレジット**（最高画質「うねり」は25）、コマ1枚の描き直しは**3クレジット**（「うねり」で作った作品は4）、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。****現在はすべての機能が無料**で、支払い情報を入力する場所もありません。クレジットの購入はまだ準備中です。有料機能を始める際は、事前にお知らせします。",
-    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**15 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**15 积分**（最高画质「涌浪」为 25），重画一格是**3 积分**（「涌浪」作品为 4），创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。****目前所有功能都免费**，也没有输入付款信息的地方。积分购买功能还在准备中。如果将来推出付费功能，我们会提前公告。",
+  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **15크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **15크레딧**(가장 높은 화질 「너울」은 30), 컷 하나 다시 그리기는 **3크레딧**(「너울」로 만든 작품은 4), 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.** **지금은 모든 기능이 무료**이고, 결제 수단을 넣는 곳도 없어요. 크레딧을 돈으로 사는 기능은 아직 준비 중입니다. 유료 기능이 생기면 미리 공지하고 안내해 드릴게요.": {
+    en: "They're the in-service unit that gets used up when you generate something. You get **15 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **15 credits** (30 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits** (4 for Swell episodes), and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.** **Everything is free right now**, and there's nowhere to enter payment details. Buying credits isn't available yet. If paid features arrive, we'll announce them in advance.",
+    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**15クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**15クレジット**（最高画質「うねり」は30）、コマ1枚の描き直しは**3クレジット**（「うねり」で作った作品は4）、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。****現在はすべての機能が無料**で、支払い情報を入力する場所もありません。クレジットの購入はまだ準備中です。有料機能を始める際は、事前にお知らせします。",
+    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**15 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**15 积分**（最高画质「涌浪」为 30），重画一格是**3 积分**（「涌浪」作品为 4），创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。****目前所有功能都免费**，也没有输入付款信息的地方。积分购买功能还在准备中。如果将来推出付费功能，我们会提前公告。",
   },
   "크레딧은 무엇인가요?": { en: "What are credits?", ja: "クレジットとは何ですか？", zh: "积分是什么？" },
-  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **15크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **15크레딧**(가장 높은 화질 「너울」은 25), 컷 하나 다시 그리기는 **3크레딧**(「너울」로 만든 작품은 4), 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.**": {
-    en: "They're the in-service unit that gets used up when you generate something. You get **15 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **15 credits** (25 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits** (4 for Swell episodes), and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.**",
-    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**15クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**15クレジット**（最高画質「うねり」は25）、コマ1枚の描き直しは**3クレジット**（「うねり」で作った作品は4）、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。**",
-    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**15 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**15 积分**（最高画质「涌浪」为 25），重画一格是**3 积分**（「涌浪」作品为 4），创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。**",
+  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **15크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **15크레딧**(가장 높은 화질 「너울」은 30), 컷 하나 다시 그리기는 **3크레딧**(「너울」로 만든 작품은 4), 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.**": {
+    en: "They're the in-service unit that gets used up when you generate something. You get **15 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **15 credits** (30 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits** (4 for Swell episodes), and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.**",
+    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**15クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**15クレジット**（最高画質「うねり」は30）、コマ1枚の描き直しは**3クレジット**（「うねり」で作った作品は4）、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。**",
+    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**15 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**15 积分**（最高画质「涌浪」为 30），重画一格是**3 积分**（「涌浪」作品为 4），创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。**",
   },
 
   "돈을 내야 하나요?": { en: "Do I have to pay?", ja: "お金はかかりますか？", zh: "需要付费吗？" },
@@ -356,6 +356,36 @@ const dict: Dict = {
   },
   "몽이": { en: "Mongi", ja: "モンイ", zh: "蒙伊" },
   "세이엘": { en: "Seiel", ja: "セイエル", zh: "赛伊尔" },
+  /* ---- 빠졌던 번역 ---- */
+  "AI 웹툰 스튜디오": { en: "AI webtoon studio", ja: "AIウェブトゥーンスタジオ", zh: "AI 漫画工作室" },
+  "같은 얼굴,": { en: "Same face,", ja: "同じ顔のまま、", zh: "同一张脸，" },
+  "그리기 전에": { en: "Before drawing,", ja: "描く前に", zh: "绘制之前，" },
+  "내 캐릭터로": { en: "With my character,", ja: "自分のキャラクターで", zh: "用我的角色" },
+  "다른 장르의 웹툰": { en: "Webtoons in other genres", ja: "ほかのジャンルのウェブトゥーン", zh: "其他题材的漫画" },
+  "다시 그려요": { en: "get redrawn", ja: "描き直します", zh: "重新绘制" },
+  "마지막 컷까지": { en: "to the last panel", ja: "最後のコマまで", zh: "直到最后一格" },
+  "선택한 장면": { en: "Selected scene", ja: "選んだ場面", zh: "选中的场景" },
+  "아쉬운 장면만": { en: "Only the scenes you don't like", ja: "気に入らない場面だけ", zh: "只把不满意的场景" },
+  "원래 컷 보기": { en: "See original panel", ja: "元のコマを見る", zh: "查看原画格" },
+  "웹툰 둘러보기": { en: "Browse webtoons", ja: "ウェブトゥーンを見て回る", zh: "浏览漫画" },
+  "웹툰 속 캐릭터": { en: "Characters in the webtoons", ja: "ウェブトゥーンのキャラクター", zh: "漫画里的角色" },
+  "장면 {n}": { en: "Scene {n}", ja: "場面 {n}", zh: "场景 {n}" },
+  "장면과 대사": { en: "Scenes and dialogue", ja: "場面とセリフ", zh: "场景与台词" },
+  "장면부터 확인": { en: "check the scenes first", ja: "まず場面を確認", zh: "先确认场景" },
+  "캐릭터 일관성": { en: "Character consistency", ja: "キャラクターの一貫性", zh: "角色一致性" },
+  "캐릭터를 넣으면, 그 캐릭터가 주인공인 웹툰이 나와요.": { en: "Add a character, and you get a webtoon starring that character.", ja: "キャラクターを入れると、そのキャラクターが主人公のウェブトゥーンができます。", zh: "放入角色，就会生成以该角色为主角的漫画。" },
+  "1화를 시작하세요": { en: "start episode 1", ja: "第1話を始めましょう", zh: "开始第 1 话" },
+  "당신의 캐릭터로": { en: "With your character,", ja: "あなたのキャラクターで", zh: "用你的角色" },
+  "LORE 웹툰": { en: "LORE Webtoon", ja: "LOREウェブトゥーン", zh: "LORE 漫画" },
+  "그 캐릭터로 그린 웹툰이 나와요.": { en: "you get a webtoon drawn with that character.", ja: "そのキャラクターで描いたウェブトゥーンができます。", zh: "就会生成用该角色画的漫画。" },
+  "그리기 전에 장면을 고칠 수 있어요": { en: "You can edit scenes before drawing", ja: "描く前に場面を直せます", zh: "绘制前可以修改场景" },
+  "내 캐릭터가 주인공인": { en: "Starring my character:", ja: "自分のキャラクターが主人公の", zh: "以我的角色为主角的" },
+  "사진이나 설정, 내가 만든 캐릭터": { en: "A photo, details, or a character you made", ja: "写真や設定、自分で作ったキャラクター", zh: "照片、设定或自己创作的角色" },
+  "이야기 적기": { en: "Write the story", ja: "ストーリーを書く", zh: "写故事" },
+  "장면 확인하고 그리기": { en: "Check scenes, then draw", ja: "場面を確認して描く", zh: "确认场景后绘制" },
+  "캐릭터 넣기": { en: "Add a character", ja: "キャラクターを入れる", zh: "放入角色" },
+  "캐릭터와 하고 싶은 이야기를 넣으면,": { en: "Add a character and the story you want,", ja: "キャラクターと描きたいストーリーを入れると、", zh: "放入角色和想讲的故事，" },
+  "하고 싶은 장면이나 줄거리": { en: "Scenes or a plot you have in mind", ja: "描きたい場面やあらすじ", zh: "想要的场景或剧情" },
 };
 
 registerDict(dict);

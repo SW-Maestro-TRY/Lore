@@ -208,6 +208,13 @@ public class JobRunner {
     /** 사람이 올린 사진과 입력이 있는 자리. 시트가 나오면 사진을 여기서 지운다. */
     private final Path jobsDir;
     private final ObjectMapper mapper = new ObjectMapper();
+    /** 운영 알림(#831). 생성자를 늘리지 않으려고 따로 받는다 — 없으면 알리지 않는다. */
+    private com.lore.webtoon.ops.OpsAlert opsAlert;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setOpsAlert(com.lore.webtoon.ops.OpsAlert opsAlert) {
+        this.opsAlert = opsAlert;
+    }
 
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
                      StoryStore stories, AfterRun after, WorkLedger works,
@@ -909,6 +916,12 @@ public class JobRunner {
         stories.save(runId, directions);
         store.pick(jobId, 1);
         stories.choose(runId, 1);
+        /* 「바로 만들기」 — 이야기·캐릭터 확인 없이 장면으로 간다. 시트가 안 나왔으면(안전 검사 등) 사람이 봐야 해서
+           예전처럼 이야기 확인에서 멈춘다. */
+        if (!job.isCheckpoints() && sheetReady(runId)) {
+            ownScenes(jobId);
+            return;
+        }
         store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
     }
 
@@ -929,6 +942,10 @@ public class JobRunner {
                     throw harnessFailed(job.getRunId(), "장면을 나누지 못했습니다");
                 }
                 dropPhotos(jobId);               // 시트가 확정됐다 — 사진을 다시 읽을 일이 없다
+                if (!job.isCheckpoints()) {
+                    pages(jobId);                // 「바로 만들기」 — 장면 확인 없이 그린다
+                    return;
+                }
                 store.awaiting(jobId, JobStatus.AWAITING_SCENES, JobStage.PAGES);
             } catch (Exception e) {
                 fail(jobId, e);
@@ -966,6 +983,10 @@ public class JobRunner {
                 if (directionsOf(runId).isEmpty()) {
                     return false;
                 }
+                if (job.isOwn() && !job.isCheckpoints() && sheetReady(runId)) {
+                    ownScenes(id);           // 「바로 만들기」 — 확인 자리 없이 장면으로
+                    return true;
+                }
                 store.awaiting(id, JobStatus.AWAITING_PICK, JobStage.STORY);
             }
             case SHEET -> {
@@ -978,7 +999,9 @@ public class JobRunner {
             }
             case PAGES, BIND -> {
                 boolean scenes = Files.isRegularFile(run.resolve("scenes.json"));
-                if (stage == JobStage.PAGES && !anyPageDrawn(runId) && (job.isOwn() || job.isCheckpoints())) {
+                /* 「바로 만들기」 own 길이 장면을 다 나눴으면 확인 없이 그리러 간다(아래). */
+                boolean drawNow = scenes && job.isOwn() && !job.isCheckpoints();
+                if (stage == JobStage.PAGES && !anyPageDrawn(runId) && (job.isOwn() || job.isCheckpoints()) && !drawNow) {
                     /* 그리기 전 — 장면을 나누던 중이었다. 다 나눴으면 장면 확인 자리로, 아니면 다시 나눈다. */
                     if (scenes) {
                         store.awaiting(id, JobStatus.AWAITING_SCENES, JobStage.PAGES);
@@ -2347,7 +2370,51 @@ public class JobRunner {
         why = why.withTail(tailOf(jobId));
         log.error("만들기가 실패했습니다 (job={}, 걸음={}, 종류={}, 분류={})",
                 jobId, why.stage(), why.code(), why.categories(), e);
+        alertFailed(jobId, why, e);
         stop(jobId, humanReason(e), why);
+    }
+
+    /**
+     * 실패를 운영 채널에 알린다(#831). 모델 크레딧 · 한도가 바닥난 실패는 모든 작업이 같이 막히므로
+     * 급한 것으로 올린다. 알림이 실패해도 실패 처리는 그대로 간다.
+     */
+    private void alertFailed(Long jobId, JobFailure why, Exception e) {
+        if (opsAlert == null) {
+            return;
+        }
+        try {
+            WebtoonJob job = store.byId(jobId);
+            String id = job == null ? String.valueOf(jobId) : job.getPublicId();
+            String detail = why.detail() == null ? String.valueOf(e.getMessage()) : why.detail();
+            String first = detail.lines().findFirst().orElse("");
+            if (first.length() > 400) {
+                first = first.substring(0, 400) + "…";
+            }
+            String body = "작업 " + id + " · 걸음 " + why.stage() + " · 종류 " + why.code()
+                    + (why.categories().isEmpty() ? "" : " · 분류 " + why.categories())
+                    + "\n" + first;
+            if (outOfCredits(detail)) {
+                opsAlert.send(com.lore.webtoon.ops.OpsAlert.Level.URGENT, "model-credits",
+                        "모델 크레딧·한도 소진 — 생성이 모두 막혀요", body
+                                + "\n충전: OpenAI https://platform.openai.com/settings/organization/billing/overview"
+                                + " · OpenRouter https://openrouter.ai/settings/credits");
+            } else {
+                opsAlert.send(com.lore.webtoon.ops.OpsAlert.Level.ERROR, "job-fail:" + why.stage() + ":" + why.code(),
+                        "생성 실패 — " + why.stage() + " / " + why.code(), body);
+            }
+        } catch (RuntimeException ignored) {     // noqa: 알림 때문에 실패 처리를 멈추지 않는다
+            log.warn("실패 알림을 꾸리지 못했습니다 (job={})", jobId);
+        }
+    }
+
+    /** OpenAI · OpenRouter 가 돈이 없다고 거절했나. 10/25 실제 문구: "You have no credits remaining". */
+    public static boolean outOfCredits(String detail) {
+        if (detail == null) {
+            return false;
+        }
+        String d = detail.toLowerCase(java.util.Locale.ROOT);
+        return d.contains("no credits") || d.contains("insufficient_quota") || d.contains("insufficient credits")
+                || d.contains("exceeded your current quota") || d.contains("error code: 402");
     }
 
     /**

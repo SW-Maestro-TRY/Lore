@@ -80,6 +80,11 @@ IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE", "CAST_SHEET_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
 DEFAULT_MAX_TOKENS = story.env_int("NH_MAX_TOKENS", 16000)
+# 단계별 답 길이 상한. 「내 내용」 장면 나누기는 긴 이야기에서 16,000 의 94%(14,994)까지 찼다(2026-10-25 운영
+# Logfire) — 조금만 길면 JSON 이 중간에 끊긴다. 상한은 쓴 만큼만 값이 나가므로 넉넉히 둔다.
+STAGE_MAX_TOKENS = {"SCENE": 32000}
+# 그래도 끊기면 상한을 두 배로 한 번만 다시 부른다. 이 값 위로는 올리지 않는다(gpt-5.1 최대 출력 128k 안).
+RETRY_MAX_TOKENS = 64000
 DEFAULT_TEMPERATURE = story.env_float("NH_TEMPERATURE", 0.9)
 
 
@@ -255,13 +260,22 @@ class Call:
         temp = DEFAULT_TEMPERATURE if temperature is None else temperature
         started = time.monotonic()
         at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+        limit = max_tokens or STAGE_MAX_TOKENS.get(self.stage) or DEFAULT_MAX_TOKENS
         text, usage, stop = self.backend.complete(
             self.model,
             prompt,
             temp if self.temp_ok else None,
-            max_tokens or DEFAULT_MAX_TOKENS,
+            limit,
             images=images or None,
         )
+        if stop == "max_tokens" and limit < RETRY_MAX_TOKENS:
+            # 끊긴 답은 JSON 이 깨져 그 걸음이 실패하거나 장면이 빠진다. 경고만 하고 쓰면 안 된다.
+            story.warn(f"[{self.stage}] 응답이 길이 제한({limit})에서 끊겨 상한을 올려 한 번 다시 부릅니다.")
+            first = usage
+            limit = min(limit * 2, RETRY_MAX_TOKENS)
+            text, usage, stop = self.backend.complete(
+                self.model, prompt, temp if self.temp_ok else None, limit, images=images or None)
+            usage = _add_usage(first, usage)
         cost = story.cost_of(self.model, usage)
         # 원화도 같이 박는다 — 그림 호출(cost.cost_fields)은 이미 넣고 있어서,
         # 글만 빠지면 한 run 의 비용을 더할 때 두 단위가 섞인다. 환율은 호출
@@ -287,9 +301,18 @@ class Call:
             "cost": cost,
         }
         if stop == "max_tokens":
-            story.warn(f"[{self.stage}] 응답이 길이 제한에서 끊겼습니다 "
-                       f"(NH_MAX_TOKENS={max_tokens or DEFAULT_MAX_TOKENS}).")
+            story.warn(f"[{self.stage}] 응답이 길이 제한에서 끊겼습니다 (상한 {limit}).")
         return text, meta
+
+
+def _add_usage(a: dict, b: dict) -> dict:
+    """두 번 부른 몫을 한 호출로 합친다 — 끊겨서 버린 첫 호출 값도 실제로 나간 돈이다."""
+    out = dict(b or {})
+    for k, v in (a or {}).items():
+        if isinstance(v, (int, float)) and isinstance(out.get(k, 0), (int, float)):
+            out[k] = (out.get(k) or 0) + v
+    out["retried_for_length"] = True
+    return out
 
 
 STAGE_LABEL = {

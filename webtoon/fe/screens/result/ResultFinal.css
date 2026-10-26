@@ -623,3 +623,12 @@
 /* 회차 목록 끝 「N화 만들기」 — 점선 칸으로 다른 회차와 구분(2026-10-26) */
 .wt .wt-reader-eplist li button.wt-reader-epnew { border: 1px dashed var(--line-strong); background: transparent; }
 .wt .wt-reader-eplist li button > .wt-reader-epplus { flex: none; display: grid; place-items: center; color: var(--sea); }
+/* 연재 2화부터 작품 제목 아래 「N화 소제목」(2026-10-26) */
+.wt .wt-result-subtitle {
+  display: flex; align-items: baseline; gap: 10px; margin: -6px 0 2px; min-width: 0;
+  font-size: 17px; line-height: 1.45; color: var(--ink);
+}
+.wt .wt-result-subtitle b { flex: none; color: var(--sea); font-weight: 800; }
+.wt .wt-result-subtitle span:not(.err) { min-width: 0; overflow-wrap: anywhere; }
+.wt .wt-result-subtitle .wt-result-titleinput { flex: 1; min-width: 0; font-size: 16px; }
+@media (max-width: 640px) { .wt .wt-result-subtitle { font-size: 15px; margin-top: -4px; } }

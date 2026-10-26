@@ -31,6 +31,7 @@ import { MobileTop } from "../../ui/TopNav";
 import LouPlay from "./LouPlay";
 import QueueDialog, { isQueued, markQueueSeen, queueSeen } from "../../ui/QueueDialog";
 import { Dialog } from "../../ui/Dialog";
+import { LouWork } from "../../ui/LouLoading";
 import "./i18n";
 import "./Progress.css";
 import "./ProgressFinal.css";
@@ -230,10 +231,16 @@ function Crumb({ items }: { items: string[] }) {
 
 /* 서버 없이 눌러 보는 자리(#548) — job 번호가 `mock-scenes`(아이디어부터) 또는 `mock-scenes-own`
    (내 내용)이면 장면 확인, `mock-story-own` 이면 own 길의 이야기 확인(awaiting_pick) 화면을
-   서버 없이 보여 준다. `mock-queued` 는 앞에 세 명이 있어 순서를 기다리는 작업(대기 팝업, #641).
+   서버 없이 보여 준다. `mock-queued` 는 앞에 세 명이 있어 순서를 기다리는 작업(대기 팝업, #641),
+   `mock-running` 은 이야기를 짓는 중인 작업(루 로딩).
    실제 작업 번호와는 겹치지 않는다. */
-const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued"];
+const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued", "mock-running"];
 function mockScenesJob(id: string): NhJob {
+  /* 이야기를 짓는 중 — 「만드는 중」 카드의 루 로딩을 과금 없이 본다(2026-10-26) */
+  if (id === "mock-running") {
+    return { ...mockScenesJob("mock-scenes-own"), id, status: "running", pick: null, scenes: [], story: null, stage: "story",
+             stage_index: 0, stage_label: "", queue: null, minutes_left: 7, pct: 12, sheet_ready: false };
+  }
   if (id === "mock-queued") {
     return { ...mockScenesJob("mock-scenes"), id, status: "queued", pick: null, scenes: [], stage: "story", stage_index: 0,
              stage_label: "", queue: { ahead: 3, minutes: 12, line: "" }, minutes_left: 22, pct: 0, sheet_ready: false };
@@ -825,7 +832,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     : cur === SCENES ? t("이야기를 장면으로 나누고 있어요")
     : cur === 1 ? t("캐릭터를 그리고 있어요")
     : t("{ep}화 이야기를 만들고 있어요", { ep });
-  const workTitle = job?.story?.title || chosen?.title || "";
+  /* 연재 2화부터 작품 제목은 1화 제목이고, 이 화가 지은 제목은 소제목이다(2026-10-26) */
+  const workTitle = job?.story?.series_title || job?.story?.title || chosen?.title || "";
+  const titleLabel = job?.story?.series_title ? t("소제목") : t("제목");
   /* 인물 확인은 시안에서 「캐릭터 그리기」 걸음이다 */
   const railStep = status === "awaiting_cast" ? 1 : status === "done" ? REVIEW + 1 : cur;
   const railState = (i: number): "complete" | "active" | "" => (i < railStep || (i === 1 && storyCheck) ? "complete" : i === railStep ? "active" : "");
@@ -1406,7 +1415,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               {pane === "working" && job && (
                 <>
                   <div className="working-card">
-                    <i className="spinner" aria-hidden="true" />
+                    <LouWork stage={cur === 0 ? "story" : cur === 1 ? "sheet" : "board"} size={120} />
                     <h2>{stateName}</h2>
                     <p>{cur === 0 ? t("입력한 이야기와 설정을 바탕으로 작성 중") : cur === 1 ? t("외형과 설정을 시트로 정리 중") : t("이야기를 페이지별 장면으로 나누는 중")}{leftText && ` · ${leftText}`}</p>
                     <p className="dim working-bg">{t("백그라운드에서 작업 중이라 나갔다 들어와도 작업이 이어져요.")}</p>
@@ -1541,7 +1550,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <div className="text-stats">{t("{n}자", { n: storyDraft.body.length.toLocaleString() })} · {t("전체 원문")}</div>
                     {storyEditing ? (
                       <>
-                        <input className="long-title" value={storyDraft.title} aria-label={t("제목")} placeholder={t("제목")} onChange={(e) => editStory({ title: e.target.value })} />
+                        <input className="long-title" value={storyDraft.title} aria-label={titleLabel} placeholder={titleLabel} onChange={(e) => editStory({ title: e.target.value })} />
                         <StoryArea value={storyDraft.body} label={t("이야기 본문")} onChange={(v) => editStory({ body: v })} />
                         <div className="editing-actions">
                           <button type="button" className="secondary" onClick={() => { editStory({ title: job.story!.title, body: job.story!.body }); setStoryEditing(false); }}>{t("취소")}</button>
@@ -1596,7 +1605,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <div className="text-stats">{t("{n}자", { n: ((status === "awaiting_scenes" && storyDraft.body) || job.story.body).length.toLocaleString() })} · {t("전체 원문")}</div>
                     {storyOpen && status === "awaiting_scenes" ? (
                       <>
-                        <input className="long-title" value={storyDraft.title} aria-label={t("제목")} onChange={(e) => editStory({ title: e.target.value })} />
+                        <input className="long-title" value={storyDraft.title} aria-label={titleLabel} onChange={(e) => editStory({ title: e.target.value })} />
                         <StoryArea value={storyDraft.body} label={t("이야기 본문")} onChange={(v) => editStory({ body: v })} />
                         <div className="editing-actions"><button type="button" className="primary" onClick={() => setStoryOpen(false)}>{t("수정 완료")}</button></div>
                       </>

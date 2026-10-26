@@ -44,7 +44,7 @@ class WebtoonQualityTest {
     void 너울만_비싸다() {
         assertThat(WebtoonQuality.creditsOf("wave")).isEqualTo(15);
         assertThat(WebtoonQuality.creditsOf("surf")).isEqualTo(15);
-        assertThat(WebtoonQuality.creditsOf("swell")).isEqualTo(25);
+        assertThat(WebtoonQuality.creditsOf("swell")).isEqualTo(30);
     }
 
     @Test

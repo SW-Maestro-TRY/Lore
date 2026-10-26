@@ -107,4 +107,5 @@ registerDict({
   },
   "진행 화면 보기": { en: "See progress", ja: "進行画面を見る", zh: "查看进度" },
   "여기서 기다리기": { en: "Wait here", ja: "ここで待つ", zh: "在这里等" },
+  "웹툰 둘러보기": { en: "Browse webtoons", ja: "ウェブトゥーンを見て回る", zh: "浏览漫画" },
 });

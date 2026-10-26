@@ -1,0 +1,35 @@
+/* 루 로딩 — 지금 하는 일을 하는 루 그림이 둥실 떠 있고, 오른쪽 위로 물방울이 올라간다. */
+.wt .wt-lou-work { position: relative; display: inline-block; flex: none; margin-bottom: 8px; }
+.wt .wt-lou-work img {
+  width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 24%;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .35), 0 0 0 1px rgba(255, 255, 255, .08);
+  animation: wt-lou-float 3.2s ease-in-out infinite;
+}
+.wt .wt-lou-work i {
+  position: absolute; right: 8%; bottom: 30%; width: 9%; height: 9%; border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle at 35% 35%, #fff 0 18%, rgba(173, 225, 245, .85) 40%, rgba(120, 200, 235, .35) 100%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .5) inset;
+  animation: wt-lou-bubble 2.8s ease-in infinite;
+}
+.wt .wt-lou-work i.b2 { right: 18%; width: 6%; height: 6%; animation-delay: .9s; }
+.wt .wt-lou-work i.b3 { right: 4%; width: 7%; height: 7%; animation-delay: 1.8s; }
+@keyframes wt-lou-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes wt-lou-bubble {
+  0% { opacity: 0; transform: translateY(0) scale(.6); }
+  15% { opacity: .95; }
+  100% { opacity: 0; transform: translateY(-260%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt .wt-lou-work img { animation: none; }
+  .wt .wt-lou-work i { display: none; }
+}
+
+.wt .wt-lou-loading {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
+  padding: 22px 18px 20px; border-radius: 16px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line);
+}
+.wt .wt-lou-loading-title { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.5; }
+.wt .wt-lou-loading-line { font-size: 14px; color: var(--sea, #8fd3e8); animation: wt-lou-line .5s ease both; }
+.wt .wt-lou-loading-note { font-size: 13px; color: var(--muted); line-height: 1.5; }
+@keyframes wt-lou-line { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wt .wt-lou-loading-line { animation: none; } }

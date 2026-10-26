@@ -98,6 +98,13 @@ class RunServiceTest {
         assertThat(card).containsEntry("run_id", "run-1")
                 .containsEntry("episodes", List.of(1, 2))
                 .containsEntry("episode_run_ids", Map.of("1", "run-1", "2", "run-2"));
+
+        // 목록용(마이페이지 · 찜 · 댓글): 같은 연재의 다른 화는 들고 있던 1화 카드를 그대로 받는다
+        Map<String, Map<String, Object>> roots = new java.util.HashMap<>();
+        Map<String, Object> first = runs.cardOf("run-2", roots);
+        assertThat(first).containsEntry("run_id", "run-1");
+        assertThat(runs.cardOf("run-1", roots)).isSameAs(first);
+        assertThat(roots).hasSize(1);
     }
 
     @Test
@@ -156,6 +163,29 @@ class RunServiceTest {
         when(works.onGallery()).thenReturn(List.of(two, root));
 
         assertThat(runs.browse()).extracting(c -> c.get("run_id")).containsExactly("run-2");
+    }
+
+    @Test
+    @DisplayName("연재 2화는 작품 제목이 1화 제목이고, 이 화가 지은 제목은 소제목이다")
+    void 연재_소제목() {
+        WebtoonWork root = 작품("run-1", true);
+        WebtoonWork two = 작품("run-2", true);
+        WebtoonStory own = mock(WebtoonStory.class);
+        when(own.displayTitle()).thenReturn("교무실 앞에서 울린 이름");
+        when(stories.chosenOf("run-2")).thenReturn(Optional.of(own));
+        when(works.findByJobId("job-run-1")).thenReturn(Optional.of(root));
+        when(pages.pageNumbersOf("run-2")).thenReturn(List.of(1, 2));
+        var c2 = mock(com.lore.webtoon.series.SeriesChapter.class);
+        when(c2.rootJob()).thenReturn("job-run-1");
+        when(series.findById("job-run-1")).thenReturn(Optional.empty());
+        when(series.findById("job-run-2")).thenReturn(Optional.of(c2));
+        runs.setSeries(series);
+        when(two.getDeletedAt()).thenReturn(java.time.Instant.now());
+
+        Map<String, Object> card = runs.trashCards(List.of(two)).getFirst();
+
+        assertThat(card).containsEntry("title", "얼음 왕자의 계약")
+                .containsEntry("subtitle", "교무실 앞에서 울린 이름");
     }
 
     @Test

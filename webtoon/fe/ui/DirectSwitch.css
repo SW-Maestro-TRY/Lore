@@ -1,0 +1,46 @@
+/* 「바로 만들기」 스위치 — DirectSwitch.tsx */
+.wt .wt-direct {
+  width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px;
+  padding: 16px 18px; border-radius: 16px; text-align: left; font-family: inherit; color: var(--ink);
+  background: var(--water-light, var(--bg)); border: 1px solid var(--line-strong, rgba(15, 51, 63, 0.12));
+  cursor: pointer; transition: border-color .2s, background .2s;
+}
+.wt .wt-direct:hover:not(:disabled) { border-color: var(--sea); }
+.wt .wt-direct:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+.wt .wt-direct:disabled { opacity: .55; cursor: default; }
+.wt .wt-direct.on { border-color: var(--sea); background: color-mix(in srgb, var(--sea) 7%, var(--water-light, var(--bg))); }
+.wt .wt-direct-head { display: flex; align-items: flex-start; gap: 16px; }
+.wt .wt-direct-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.wt .wt-direct-text b { font-size: 16px; font-weight: 800; }
+.wt .wt-direct-desc { font-size: 13px; line-height: 1.55; color: var(--muted); }
+/* 스위치 */
+.wt .wt-direct-knob {
+  flex-shrink: 0; position: relative; width: 46px; height: 26px; border-radius: 999px; margin-top: 1px;
+  background: var(--line-strong, #ffffff26); transition: background .2s;
+}
+.wt .wt-direct-knob i {
+  position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--ink); box-shadow: 0 1px 3px #0005; transition: transform .2s;
+}
+.wt .wt-direct.on .wt-direct-knob { background: var(--sea); }
+.wt .wt-direct.on .wt-direct-knob i { transform: translateX(20px); background: #fff; }
+/* 멈추는 자리 줄 — 꺼짐: 세 칸이 또렷(여기서 멈춘다) · 켜짐: 세 칸을 긋고 흐리게(건너뛴다) */
+.wt .wt-direct-steps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wt .wt-direct-stop {
+  position: relative; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--line-strong, #ffffff26); color: var(--ink); transition: color .2s, opacity .2s;
+}
+.wt .wt-direct-stop:not(:last-child)::after {
+  content: ""; position: absolute; right: -7px; top: 50%; width: 6px; height: 1px; background: var(--line-strong, #ffffff26);
+}
+.wt .wt-direct-stop.end { border-color: var(--sea); color: var(--sea); }
+.wt .wt-direct.on .wt-direct-stop:not(.end) { color: var(--dim, var(--muted)); text-decoration: line-through; opacity: .6; }
+@media (max-width: 640px) {
+  .wt .wt-direct { padding: 14px 16px; gap: 12px; }
+  .wt .wt-direct-text b { font-size: 15px; }
+  .wt .wt-direct-desc { font-size: 12.5px; }
+  .wt .wt-direct-stop { font-size: 11.5px; padding: 3px 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt .wt-direct, .wt .wt-direct-knob, .wt .wt-direct-knob i, .wt .wt-direct-stop { transition: none; }
+}

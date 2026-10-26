@@ -9,12 +9,29 @@ import {
   type Character,
 } from "../../lib/api";
 import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
-import { useT } from "../../lib/i18n";
+import { registerDict, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconPlus, IconEdit, IconTrash, IconClose } from "../../ui/Icons";
 import { Dialog } from "../../ui/Dialog";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import "./OriginalCharacter.css";
+
+registerDict({
+  "AI 캐릭터 뽑기": { en: "Generate an AI character", ja: "AIキャラクターを作る", zh: "AI 生成角色" },
+  "삭제 중…": { en: "Deleting…", ja: "削除中…", zh: "删除中…" },
+  "삭제하기": { en: "Delete", ja: "削除する", zh: "删除" },
+  "삭제하지 못했습니다": { en: "Couldn't delete", ja: "削除できませんでした", zh: "删除失败" },
+  "이미 만든 웹툰은 유지됩니다.": { en: "Webtoons you've already made will be kept.", ja: "すでに作ったウェブトゥーンは残ります。", zh: "已制作的漫画会保留。" },
+  "이미지 변경": { en: "Change image", ja: "画像を変更", zh: "更换图片" },
+  "이미지 올리기": { en: "Upload image", ja: "画像をアップロード", zh: "上传图片" },
+  "이미지 읽는 중…": { en: "Reading image…", ja: "画像を読み込み中…", zh: "正在读取图片…" },
+  "이미지를 읽지 못했습니다": { en: "Couldn't read the image", ja: "画像を読み込めませんでした", zh: "无法读取图片" },
+  "저장 중…": { en: "Saving…", ja: "保存中…", zh: "保存中…" },
+  "캐릭터 설정": { en: "Character details", ja: "キャラクター設定", zh: "角色设定" },
+  "캐릭터 수정": { en: "Edit character", ja: "キャラクターを編集", zh: "编辑角色" },
+  "캐릭터 이미지 선택": { en: "Choose character image", ja: "キャラクター画像を選択", zh: "选择角色图片" },
+  "캐릭터를 삭제할까요?": { en: "Delete this character?", ja: "キャラクターを削除しますか？", zh: "要删除这个角色吗？" },
+});
 
 export function CharacterForm({
   character,
