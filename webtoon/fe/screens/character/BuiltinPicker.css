@@ -1,0 +1,71 @@
+/* 예시 캐릭터 고르기 창 — 만들기 1걸음 캐릭터 카드(WizardFinal.css .wt-create-character)와 같은 모양 */
+.wt .wt-builtin-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.wt .wt-builtin-card {
+  position: relative;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--water-light);
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.wt .wt-builtin-card.skeleton {
+  aspect-ratio: 3/4;
+  cursor: default;
+}
+.wt .wt-builtin-card.on {
+  border-color: var(--sea);
+  box-shadow: 0 0 0 1px var(--sea);
+}
+.wt .wt-builtin-card img {
+  width: 100%;
+  aspect-ratio: 3/4;
+  object-fit: cover;
+  object-position: center 25%;
+  display: block;
+}
+.wt .wt-builtin-card b {
+  font-size: 14px;
+  display: block;
+  padding: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt .wt-builtin-selected {
+  position: absolute;
+  bottom: 9px;
+  right: 8px;
+  border-radius: 50%;
+  width: 21px;
+  height: 21px;
+  background: var(--sea);
+  color: #0a1420;
+  display: grid;
+  place-items: center;
+}
+.wt .wt-builtin-err {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+@media (max-width: 700px) {
+  .wt .wt-builtin-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .wt .wt-builtin-card b {
+    font-size: 12px;
+  }
+}

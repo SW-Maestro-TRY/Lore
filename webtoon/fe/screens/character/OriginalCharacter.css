@@ -11,6 +11,12 @@
 .wt .wt-original-heading h1 {
   font-size: 28px;
 }
+.wt .wt-original-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .wt .wt-original-fields {
   display: grid;
   grid-template-columns: 220px 1fr;
