@@ -490,7 +490,9 @@ def scenes_input(run_dir: Path, char: dict, note: str = "") -> str:
     lines += character_lines(char)
     lines += persona_lines(persona if isinstance(persona, dict) else None)
     lines += cast_lines(cast if isinstance(cast, list) else [])
-    lines += settings_block(char)
+    if not (run_dir / "continuation.json").is_file():
+        # 연재는 아래 연재 기억(continuation.memory_block)이 같은 고정 설정을 넣는다 — 두 번 넣지 않는다(2026-10-26).
+        lines += settings_block(char)
     genre = (direction.get("genre") or char.get("genre") or "").strip()
     if genre:
         lines += ["", f"[장르] {genre}"]
@@ -720,7 +722,8 @@ def rescene_input(run_dir: Path, char: dict, n: int, reasons: list[str], note: s
         lines += [f"- {c.get('name')} — {c.get('appearance')}" for c in parsed["cast"] if isinstance(c, dict)]
     if parsed.get("fixed"):
         lines += ["", "## 이 화의 고정 설정"] + [f"- {f}" for f in parsed["fixed"]]
-    lines += settings_block(char)
+    if not (run_dir / "continuation.json").is_file():
+        lines += settings_block(char)       # 연재는 연재 기억이 넣는다 — 위 scenes_input 과 같은 이유
     import userbook
     lines.append(userbook.block(char, direction.get("body") or direction.get("raw", ""), "scene", (run_dir / "continuation.json").is_file()))
     genre = (direction.get("genre") or char.get("genre") or "").strip()
