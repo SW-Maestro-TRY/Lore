@@ -620,3 +620,4 @@
   .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) auto; }
   .wt .wt-reader-create > img { height: 176px; margin: 20px 16px 20px 0; }
 }
+.wt .wt-reader-eplist { scroll-margin-top: calc(var(--lore-header-h, 64px) + 16px); }
