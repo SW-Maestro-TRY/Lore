@@ -515,6 +515,9 @@ class OpenAIBackend(Backend):
         # 프롬프트에 'json' 이 없으면 JSON 모드를 켤 수 없다 (API 가 거부한다).
         if OPENAI_JSON_MODE and "json" in prompt.lower():
             kwargs["response_format"] = {"type": "json_object"}
+        extra = self.extra_body()
+        if extra:
+            kwargs["extra_body"] = extra
 
         resp = self.client.chat.completions.create(**kwargs)
         choice = resp.choices[0]
@@ -544,6 +547,28 @@ class OpenAIBackend(Backend):
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
+def _openai_extra_body(self):
+    """요청 본문에 더 실을 것. OpenAI 직접은 없다."""
+    return None
+
+
+OpenAIBackend.extra_body = _openai_extra_body
+
+
+def run_session_id() -> str:
+    """이 프로세스가 맡은 작품 번호 — 같은 작품의 호출을 한 묶음으로 보이게 하는 열쇠.
+
+    `NH_SESSION_ID` 가 있으면 그것, 없으면 명령줄의 `--run-id` 값, 그것도 없으면 이 프로세스 번호.
+    """
+    sid = env("NH_SESSION_ID")
+    if sid:
+        return sid[:256]
+    argv = sys.argv
+    if "--run-id" in argv and argv.index("--run-id") + 1 < len(argv):
+        return argv[argv.index("--run-id") + 1][:256]
+    return f"pid-{os.getpid()}"
+
+
 class OpenRouterBackend(OpenAIBackend):
     """OpenRouter 를 거친 OpenAI 모델. 요청 모양은 OpenAI 와 같다.
 
@@ -556,6 +581,21 @@ class OpenRouterBackend(OpenAIBackend):
     def __init__(self, api_key: str = None, base_url: str = None, max_retries: int = 3):
         super().__init__(api_key=api_key, base_url=base_url or OPENROUTER_BASE_URL,
                          max_retries=max_retries)
+
+    def extra_body(self):
+        """캐시를 지키려고 붙이는 것(2026-10-26).
+
+        OpenRouter 는 같은 모델을 여러 업체(OpenAI 직접 · Azure 등)에 나눠 보낸다. 업체가 바뀌면 그쪽엔 캐시가
+        없어 프롬프트 캐시(운영에서 장 단계 입력의 65%)가 다시 처음부터 쌓인다. 그래서
+          - `provider.only` 로 OpenAI 직접 서버로만 보낸다(`OPENROUTER_PROVIDER_ONLY`, `any` 면 끔)
+          - `session_id` 로 한 작품의 호출을 같은 곳에 붙인다(첫 요청부터 고정, 10분 쉬면 풀림)
+        https://openrouter.ai/docs/features/prompt-caching
+        """
+        body = {"session_id": run_session_id()}
+        only = [p.strip() for p in str(env("OPENROUTER_PROVIDER_ONLY", "openai")).split(",") if p.strip()]
+        if only and only != ["any"]:
+            body["provider"] = {"only": only}
+        return body
 
     def billed_usd(self, usage):
         value = getattr(usage, "cost", None)

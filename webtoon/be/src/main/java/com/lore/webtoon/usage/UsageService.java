@@ -98,7 +98,7 @@ public class UsageService {
                     runId, seq,
                     blankTo(c.stage(), "(모름)"), blankTo(c.provider(), "(모름)"),
                     blankTo(c.model(), "(모름)"),
-                    c.inputTokens(), c.outputTokens(),
+                    c.inputTokens(), c.outputTokens(), c.cachedTokens(),
                     c.costUsd(), c.costKrw(), c.costBasis(),
                     cut(c.error()),
                     c.calledAt() == null ? Instant.now() : c.calledAt()));
@@ -134,6 +134,8 @@ public class UsageService {
                     one.path("model").asText(""),
                     used.path("input").asLong(0),
                     used.path("output").asLong(0),
+                    // 글 호출은 cache_read, 그림 호출(cost.cost_fields)은 tokens_cached 로 적는다
+                    used.path("cache_read").asLong(used.path("tokens_cached").asLong(0)),
                     cost.path("total").asDouble(0),
                     cost.path("total_krw").asLong(0),
                     cost.path("cost_basis").asText(null),
@@ -242,7 +244,7 @@ public class UsageService {
      * 파일을 다시 빚지 않아도 되게.
      */
     public record Call(String stage, String provider, String model,
-                       long inputTokens, long outputTokens,
+                       long inputTokens, long outputTokens, long cachedTokens,
                        double costUsd, long costKrw, String costBasis,
                        String error, Instant calledAt) {
     }
