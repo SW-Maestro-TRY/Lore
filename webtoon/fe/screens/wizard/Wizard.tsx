@@ -20,11 +20,12 @@ import { useLang, useT } from "../../lib/i18n";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { metaTrack } from "../../lib/metaPixel";
-import { IconCheck, IconChevronLeft, IconEdit, IconPlus } from "../../ui/Icons";
+import { IconCheck, IconChevronLeft, IconEdit, IconPlus, IconUser } from "../../ui/Icons";
 import NotifyAsk, { shouldAskNotify } from "../../ui/NotifyAsk";
 import "./i18n";
 import "./Wizard.css";
 import {CharacterEditDialog,CharacterForm} from "../character/OriginalCharacter";
+import {BuiltinPicker} from "../character/BuiltinPicker";
 import "./WizardFinal.css";
 import LorebookAttach from "./LorebookAttach";
 import {Dialog} from "../../ui/Dialog";
@@ -251,6 +252,7 @@ export default function Wizard({
 
   const [editingCharacter,setEditingCharacter]=useState<Character|null>(null);
   const [legacyOpen,setLegacyOpen]=useState(false);
+  const [pickingBuiltin,setPickingBuiltin]=useState(false);
   const [legacyBusy,setLegacyBusy]=useState(false);
   const legacyCharacter=!form.characterId && !!(form.name || form.character || form.photos.length);
   const mine = useMemo(() => (chars || []).filter((c) => c.mine && !c.builtin), [chars]);
@@ -433,10 +435,16 @@ export default function Wizard({
       </div>
     </div>
   );
-  const available = presetChar && ![...mine,...builtins].some(c=>c.id===presetChar.id) ? [presetChar,...(mine.length?mine:builtins)] : mine.length?mine:builtins;
+  /* 내 캐릭터가 있으면 줄에는 내 것만 — 예시 캐릭터는 「예시 캐릭터」 칸에서 따로 고른다.
+     거기서(또는 「새 캐릭터 만들기」 화면에서) 고른 예시 캐릭터는 줄 맨 앞에 붙여 골라진 게 보이게 한다. */
+  const shown = mine.length?mine:builtins;
+  const pickedBuiltin = form.characterId && !shown.some(c=>c.id===form.characterId) ? builtins.find(c=>c.id===form.characterId) : undefined;
+  const presetExtra = presetChar && !shown.some(c=>c.id===presetChar.id) && presetChar.id!==pickedBuiltin?.id ? presetChar : undefined;
+  const available = [pickedBuiltin,presetExtra,...shown].filter((c):c is Character=>!!c);
   const next=()=>{track("story_input",{genre:form.genre||"",edited:genreIsCustom,name_len:form.story.length,mode:"quick"});void goStep(2);};
   return <div className="wt-wiz wt-wiz-final">
     {legacyOpen&&<Dialog wide title={t("이전 캐릭터 저장")} busy={legacyBusy} onClose={()=>setLegacyOpen(false)}><CharacterForm initialDraft={{name:form.name,description:form.character,image:form.photos[0]||""}} authenticated={authenticated} onBusyChange={setLegacyBusy} onClose={()=>setLegacyOpen(false)} onSaved={c=>{setChars(cs=>[c,...(cs||[])]);pickChar(c);setLegacyOpen(false);}}/></Dialog>}
+    {pickingBuiltin&&<BuiltinPicker characters={builtins} selectedId={form.characterId} onClose={()=>setPickingBuiltin(false)} onPick={c=>{pickChar(c);setPickingBuiltin(false);}}/>}
     {asking&&<NotifyAsk time={qualityTime} onStart={mail=>void begin(mail)} onClose={()=>setAsking(false)}/>}
     {editingCharacter?.builtin&&<CharacterEditDialog localOnly character={editingCharacter} authenticated={authenticated} onClose={()=>setEditingCharacter(null)} onDeleted={()=>setEditingCharacter(null)} onSaved={c=>{
       /* 예시 캐릭터 — 그 캐릭터를 고르고 이름·설정만 이번 요청에 바꿔 싣는다 */
@@ -451,6 +459,7 @@ export default function Wizard({
       {step===1?<div className="wt-create-content">
         <section className="wt-create-characters"><h2>{t("누가 주인공인가요?")}</h2>
           <CardRail><button type="button" className="wt-create-new" onClick={()=>go("character-new")}><IconPlus size={26}/><b>{t("새 캐릭터 만들기")}</b></button>
+            {mine.length>0&&<button type="button" className="wt-create-new" onClick={()=>setPickingBuiltin(true)}><IconUser size={26}/><b>{t("예시 캐릭터")}</b></button>}
             {legacyCharacter&&<div className="wt-create-character"><button type="button" className="wt-create-pick" onClick={()=>setLegacyOpen(true)}>{form.photos[0]?<img src={form.photos[0]} alt=""/>:<span className="wt-create-draft-icon"><IconEdit size={26}/></span>}<b>{form.name||t("이전 캐릭터")}</b><small>{t("저장 전 확인")}</small></button></div>}
             {chars===null?[0,1].map(i=><div key={i} className="wt-create-character skeleton"/>):available.map(c=><div className={`wt-create-character${form.characterId===c.id?" on":""}`} key={c.id}>
               <button type="button" className="wt-create-pick" aria-pressed={form.characterId===c.id} onClick={()=>pickChar(c)}><img src={c.art_url||""} alt=""/><b>{c.builtin?t(c.name):c.name}</b>{form.characterId===c.id&&<span className="wt-create-selected"><IconCheck size={13}/></span>}</button>
