@@ -262,6 +262,28 @@ public class RunService {
     }
 
     /**
+     * 목록 하나를 만들 때 쓰는 {@link #cardOf(String)} — 연재 1화 카드를 {@code roots} 에 들고 있다가
+     * 같은 연재의 다른 화에서는 그 카드를 그대로 준다(2026-10-27).
+     *
+     * 마이페이지는 작품마다 카드를 만든 뒤 같은 연재를 하나로 합친다. 연재 카드는 만들 때마다 회차를
+     * 전부 조회하므로, 34화 연재(멘토님 「슈퍼 세컨드브레인」)면 34 × 34 번 조회가 나갔다.
+     * 둘러보기({@link #browse()})의 rootCards 와 같은 방법이다. {@code roots} 는 부르는 쪽이 한 번 쓰고 버린다.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> cardOf(String runId, Map<String, Map<String, Object>> roots) {
+        WebtoonWork work = works.findFirstByRunId(runId).orElse(null);
+        if (work == null || work.isTrashed()) {
+            return null;
+        }
+        WebtoonWork root = rootWorkOf(work);
+        String key = root.getRunId();
+        if (!roots.containsKey(key)) {
+            roots.put(key, cardIgnoringTrash(root, false, true));
+        }
+        return roots.get(key);
+    }
+
+    /**
      * 휴지통에 든 작품인가(#157). 들었으면 결과·회차·장 주소가 모두 없는 작품처럼
      * 404 를 낸다 — 공유 링크로 들어온 사람에게도 지운 작품이 안 보여야 한다.
      */

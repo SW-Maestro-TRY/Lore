@@ -56,7 +56,7 @@ class MyWebtoonServiceTest {
         pageStore = mock(PageStore.class);
         /* 카드 만드는 규칙은 여기서 볼 것이 아니다(RunServiceTest 가 본다). */
         runService = mock(RunService.class);
-        when(runService.cardOf(anyString())).thenReturn(null);
+        when(runService.cardOf(anyString(), any())).thenReturn(null);
         when(ledger.runIdsOf(anyLong())).thenReturn(List.of());
         /* 다시 올리기가 실제로 무엇을 하는지는 여기서 볼 것이 아니다
            (AfterRunTest 가 본다). 여기서 보는 것은 **누가 부를 수 있나** 다. */
@@ -68,7 +68,7 @@ class MyWebtoonServiceTest {
     private void 작품이_있다(Long userId, String... runIds) {
         when(ledger.runIdsOf(userId)).thenReturn(List.of(runIds));
         for (String runId : runIds) {
-            when(runService.cardOf(runId)).thenReturn(Map.of("run_id", runId));
+            when(runService.cardOf(eq(runId), any())).thenReturn(Map.of("run_id", runId));
         }
     }
 
@@ -87,8 +87,8 @@ class MyWebtoonServiceTest {
     @DisplayName("같은 작품이 두 번 나와도 한 줄만 남는다")
     void 겹치는_것을_거른다() {
         when(ledger.runIdsOf(7L)).thenReturn(List.of("r1", "r1", "r2"));
-        when(runService.cardOf("r1")).thenReturn(Map.of("run_id", "r1"));
-        when(runService.cardOf("r2")).thenReturn(Map.of("run_id", "r2"));
+        when(runService.cardOf(eq("r1"), any())).thenReturn(Map.of("run_id", "r1"));
+        when(runService.cardOf(eq("r2"), any())).thenReturn(Map.of("run_id", "r2"));
 
         assertThat(service.myRuns(7L)).extracting(m -> m.get("run_id"))
                 .containsExactly("r1", "r2");
@@ -98,9 +98,9 @@ class MyWebtoonServiceTest {
     @DisplayName("한 편을 못 읽어도 나머지는 준다")
     void 하나가_실패해도_나머지는_남는다() {
         when(ledger.runIdsOf(7L)).thenReturn(List.of("r1", "깨진것"));
-        when(runService.cardOf("r1")).thenReturn(Map.of("run_id", "r1"));
+        when(runService.cardOf(eq("r1"), any())).thenReturn(Map.of("run_id", "r1"));
         // 카드를 못 만들면 null 이 온다 — 그 한 편만 빠지고 목록은 살아야 한다.
-        when(runService.cardOf("깨진것")).thenReturn(null);
+        when(runService.cardOf(eq("깨진것"), any())).thenReturn(null);
 
         assertThat(service.myRuns(7L)).extracting(m -> m.get("run_id")).containsExactly("r1");
     }
