@@ -98,6 +98,13 @@ class RunServiceTest {
         assertThat(card).containsEntry("run_id", "run-1")
                 .containsEntry("episodes", List.of(1, 2))
                 .containsEntry("episode_run_ids", Map.of("1", "run-1", "2", "run-2"));
+
+        // 목록용(마이페이지 · 찜 · 댓글): 같은 연재의 다른 화는 들고 있던 1화 카드를 그대로 받는다
+        Map<String, Map<String, Object>> roots = new java.util.HashMap<>();
+        Map<String, Object> first = runs.cardOf("run-2", roots);
+        assertThat(first).containsEntry("run_id", "run-1");
+        assertThat(runs.cardOf("run-1", roots)).isSameAs(first);
+        assertThat(roots).hasSize(1);
     }
 
     @Test
