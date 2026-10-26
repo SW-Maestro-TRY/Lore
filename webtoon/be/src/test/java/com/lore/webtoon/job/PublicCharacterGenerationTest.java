@@ -99,6 +99,33 @@ class PublicCharacterGenerationTest {
         assertThat(input.path("world").path("preset").asText()).isEmpty();
     }
 
+    @Test void editedCardGoesToHarnessAsEditedWithoutTheOriginalAiText() throws Exception {
+        var c=WebtoonCharacter.drawing("public-character",2L,"uid","몽이","",Instant.now());
+        c.drewPanel("private/art.png",CharacterSource.PROMPT,
+                new WebtoonCharacter.Card("romance_novel","로판","로맨스","악역 영애","곁","원래 AI 반전","몽이: 멍!",
+                        List.of(new WebtoonCharacter.DialogueLine("몽이",true,"left","멍!")),
+                        List.of("황태자와 춤을 춘다","파혼 소식"),"romance_fantasy",false,"강아지"),Instant.now());
+        c.editCard(new WebtoonCharacter.CardEdit(null,null,null,null,"사서","중심","고친 소개",
+                List.of("도서관을 지킨다"),List.of()),Instant.now());
+        when(characters.byPublicId(eq("public-character"),eq(2L),any())).thenReturn(c);
+        when(art.read("private/art.png")).thenReturn(imageBytes("png"));
+        when(jobs.save(any())).thenAnswer(i->i.getArgument(0));
+        // 화면이 고치기 전에 받아 둔 설정 글(원래 AI 반전이 든)을 보내도 저장된 값이 이긴다
+        var form=new JobService.CreateRequest("몽이","로판 · 로맨스\n원래 AI 반전","일상","내 이야기","frost",null,null,null,true,true,
+                "uid","public-character",null,null,"ko","quick","","","");
+        String job=service.create(form,2L,"uid",null);
+        String json=java.nio.file.Files.readString(dir.resolve(job).resolve("character.json"));
+        var input=new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+        var card=input.path("card");
+        assertThat(card.path("twist").asText()).isEqualTo("고친 소개");
+        assertThat(card.path("role").asText()).isEqualTo("사서");
+        assertThat(card.path("quote").asText()).isEmpty();
+        assertThat(card.path("fate")).hasSize(1);
+        assertThat(card.path("fate").get(0).asText()).isEqualTo("도서관을 지킨다");
+        assertThat(json).doesNotContain("원래 AI 반전").doesNotContain("황태자").doesNotContain("악역 영애");
+        assertThat(input.path("character").asText()).contains("고친 소개");
+    }
+
     private byte[] imageBytes(String format) throws Exception {
         var image=new java.awt.image.BufferedImage(20,20,java.awt.image.BufferedImage.TYPE_INT_RGB);
         var out=new java.io.ByteArrayOutputStream();

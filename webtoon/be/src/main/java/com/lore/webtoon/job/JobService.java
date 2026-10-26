@@ -362,6 +362,22 @@ public class JobService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setSeriesTitles(com.lore.webtoon.story.SeriesTitles seriesTitles) { this.seriesTitles = seriesTitles; }
 
+    private com.lore.webtoon.series.SeriesChapterRepository chapters;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setChapters(com.lore.webtoon.series.SeriesChapterRepository chapters) { this.chapters = chapters; }
+
+    /**
+     * 몇 화인가 — 연재 표가 먼저다(2026-10-27). 작품 폴더의 continuation.json 은 이야기를 쓰기 시작해야
+     * 생겨서, 그 전(줄 서기 · 이야기 쓰는 중)에는 2화를 만들어도 진행 화면이 「1화 만들기」로 떴다.
+     */
+    private int episodeOf(WebtoonJob job) {
+        if (chapters != null) {
+            java.util.Optional<Integer> n = chapters.episodeOf(job.getPublicId());
+            if (n.isPresent() && n.get() > 0) return n.get();
+        }
+        return runner.episodeOf(job.getRunId());
+    }
+
     /** 내 내용 길의 본문 — 연재 2화부터는 작품 제목(series_title)을 같이 싣는다. 화의 제목은 소제목이다. */
     private Map<String, Object> storyFor(WebtoonJob job) {
         if (!job.isOwn()) return null;
@@ -409,7 +425,7 @@ public class JobService {
                 notice.addressOf(job), queue.etaOf(job, now, spot),
                 job.isSheetBlocked() ? Math.max(0, SHEET_FIX_MAX - sheetFixesOf(job)) : 0,
                 at == JobStatus.DONE ? runner.unsafePages(job.getRunId()) : List.of(),
-                runner.episodeOf(job.getRunId()),
+                episodeOf(job),
                 /* 진행이 메모리에 없으면(서버가 다시 떴다) 폴더의 그림으로 — 그린 장을 화면에서 다시 본다 */
                 now.total() > 0 ? null : runner.artOnDisk(job),
                 resumeCost(job));
@@ -1189,6 +1205,13 @@ public class JobService {
            코드가 지어낸 기본값이 아니라 그 캐릭터의 것이다(2026-10-26). */
         String character = form.character();
         if ((character == null || character.isBlank()) && picked != null) character = picked.settingsText();
+        /* 사용자가 카드를 고친 캐릭터는 저장된 값이 원본이다. 화면이 들고 있던 설정 글은 고치기 전에 받아 둔
+           것일 수 있어서(초안 · 다른 탭), 그걸 그대로 쓰면 지운 AI 내용이 다시 들어간다. */
+        if (picked != null && !picked.isBuiltin() && picked.isCardEdited()
+                && picked.getSource() != com.lore.webtoon.character.CharacterSource.UPLOAD
+                && picked.getSource() != com.lore.webtoon.character.CharacterSource.REPLACED_UPLOAD) {
+            character = picked.settingsText();
+        }
         doc.put("character", blank(character));
         Map<String, String> fields = new LinkedHashMap<>();
         if (form.fields() != null) {
