@@ -189,58 +189,9 @@ final class JobEta {
         return Math.max(0, all - job.pausedSecondsAt(until));
     }
 
-    /**
-     * 앞사람 한 편이 <b>남긴 일</b>을 둘로 나눈다(대기 줄 계산용, 2026-10-26).
-     *
-     * <ul>
-     *   <li>{@code line} — 일꾼({@code workers}) 하나가 붙어서 하는 일: 이야기 · 시트 · 장면 나누기 · 검수 · 마무리</li>
-     *   <li>{@code page} — 그림 자리 <b>하나</b> 기준으로 그 편의 남은 장을 다 그리는 시간(장 수 × 한 장)</li>
-     * </ul>
-     *
-     * 전에는 앞사람마다 「지금 그리는 편 수로 나눈 그림 자리」로 남은 시간을 셌다. 그러면 그림 자리 경합이
-     * 앞사람 하나하나에 한 번, 다시 일꾼 수로 나눌 때 또 한 번 들어가서 줄이 길수록 실제보다 커졌고,
-     * 그리는 편 수가 바뀔 때마다 앞사람이 줄어도 남은 시간이 늘었다(로컬 12명 시험: 앞 11명 18분 → 앞 6명 22분).
-     */
-    record Parts(long line, long page) {
-    }
-
-    static Parts parts(WebtoonJob job, JobProgress.Snapshot now, Instant at) {
-        JobStatus status = job.getStatus();
-        if (status == null || status.isOver()) {
-            return new Parts(0, 0);
-        }
-        double f = QUALITY.getOrDefault(WebtoonQuality.normalize(job.getQuality()), 1.0);
-        JobStage stage = job.getStage() == null ? JobStage.STORY : job.getStage();
-        int pages = now != null && now.total() > 0 ? now.total() : GUESS_PAGES;
-        boolean running = status == JobStatus.RUNNING;
-        long inStage = running ? seconds(job.getStageAt(), at) : 0;
-        long line = 0;
-        long page = 0;
-        for (JobStage one : JobStage.values()) {
-            if (one.order() < stage.order()) {
-                continue;
-            }
-            boolean here = one == stage;
-            switch (one) {
-                case STORY -> line += Math.max(0, STORY - (here ? inStage : 0));
-                case SHEET -> line += Math.max(0, Math.round(SHEET * f) - (here ? inStage : 0));
-                case PAGES -> {
-                    if (here && running && now != null && now.total() > 0) {
-                        page += Math.max(0, now.total() - now.done()) * Math.round(PAGE * f);
-                    } else {
-                        line += here && running ? Math.max(0, SCENES - inStage) : SCENES;
-                        page += (long) pages * Math.round(PAGE * f);
-                    }
-                }
-                case BIND -> {
-                    if (here && running && now != null) {
-                        page += Math.max(0, now.redraw().size() - now.redrawDone()) * Math.round(REDRAW * f);
-                    }
-                    line += REVIEW + FINISH;
-                }
-            }
-        }
-        return new Parts(line, page);
+    /** 화질에 따른 그림 걸음 비율(파도 1). 대기 줄 굴리기({@link JobLineSim})가 쓴다. */
+    static double factor(WebtoonJob job) {
+        return QUALITY.getOrDefault(WebtoonQuality.normalize(job.getQuality()), 1.0);
     }
 
     /** 그 걸음 하나를 처음부터 끝까지 하는 시간. */
