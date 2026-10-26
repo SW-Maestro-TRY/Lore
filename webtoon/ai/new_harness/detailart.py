@@ -83,8 +83,6 @@ PAGE_DIR = "pages"
 
 # 그림 모델(OpenAI images.edit)이 받는 프롬프트 최대 길이 — 넘으면 400 으로 그 장이 실패한다.
 IMAGE_PROMPT_MAX = 32000
-# 다시 그릴 때 검수 메모가 프롬프트 뒤에 더 붙는다 — 그 자리를 남겨 둔다.
-PROMPT_HEADROOM = 3000
 
 
 def fit_extra(extra: str, scene_text: str, room: int, run_dir: Path, dry_run: bool = False) -> str:
@@ -708,14 +706,29 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             import continuation
             memory = continuation.memory_block(run_dir)
         note_text = note_block(note) if note.strip() else ""
-        book = userbook.block(char, scene_text, "image", cont)
+        # 키워드 항목은 한도 안에 남는 자리만큼만 고른다(돈 안 듦). 항상 참고 · 진행 상태는 늘 넣는다.
+        room0 = IMAGE_PROMPT_MAX - len(prompt) - len(note_text) - len(memory) - 8
+        fixed = userbook.block(char, scene_text, "image", cont, budget=0)          # 항상 참고 · 진행 상태만
+        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)))
         extra = "\n\n".join(x for x in (book, memory) if x)
-        # 그림 모델 한도를 넘으면 설정집 · 연재 기억만 AI 로 한 번 줄여 보낸다(2026-10-26). 그림체 · 인물 · 이 장면
-        # 지시 · 사람이 적은 말은 그대로 둔다. 다시 그리기 때 붙는 검수 메모 자리(PROMPT_HEADROOM)도 남긴다.
-        room = IMAGE_PROMPT_MAX - PROMPT_HEADROOM - len(prompt) - len(note_text) - 6
-        if extra and len(extra) > room:
-            extra = fit_extra(extra, scene_text, room, run_dir, dry_run)
-        prompt += ("\n\n" + extra if extra else "") + ("\n\n" + note_text if note_text else "")
+        base_prompt = prompt
+
+        def assemble(more: str = "") -> str:
+            """그림 모델에 보낼 글. 한도(32,000자)를 실제로 넘을 때만 설정집 · 연재 기억을 AI 로 한 번 줄인다
+            (2026-10-26) — 그림체 · 인물 · 이 장면 지시 · 사람이 적은 말 · 검수 메모는 그대로 둔다. 안 넘으면 부르지 않는다."""
+            nonlocal_extra = extra
+            whole = base_prompt + ("\n\n" + nonlocal_extra if nonlocal_extra else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
+            if len(whole) <= IMAGE_PROMPT_MAX or not nonlocal_extra:
+                return whole
+            room = IMAGE_PROMPT_MAX - len(base_prompt) - len(note_text) - len(more) - 8
+            short = fit_extra(nonlocal_extra, scene_text, room, run_dir, dry_run)
+            return base_prompt + ("\n\n" + short if short else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
+
+        # 줄이기(AI 호출)는 이 프로세스가 실제로 그릴 장에만 — 장을 동시에 그리면 프로세스마다 이 반복문을 다 돌아서,
+        # 모든 장을 줄이면 같은 호출이 장 수의 제곱만큼 나갔다(2026-10-26, 6장에 36번 · 947원).
+        if only and page_no not in only:
+            continue
+        prompt = assemble()
         # 프롬프트는 **그릴 장의 것만 쓴다.** 장면을 동시에 그리면 프로세스마다
         # 이 반복문을 다 도는데, 자기가 안 그릴 장의 파일까지 쓰면 여럿이 같은
         # 파일에 동시에 써서 반 토막이 남는다.
@@ -797,7 +810,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 log(f"  [표지 검수] 다시 그립니다 ({attempt + 1}/{tries})")
                 archive_page(run_dir, page_no)
                 out.unlink(missing_ok=True)
-                again = prompt + "\n\n" + covercheck.redraw_block(got)
+                again = assemble(covercheck.redraw_block(got))
                 (dest / f"page01.redraw{attempt + 1}.txt").write_text(again, encoding="utf-8")
                 try:
                     meta = imagegen.paint(STAGE, again, out, refs=refs,
@@ -853,7 +866,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             log(f"  [검수] 다시 그립니다 ({attempt + 1}/{tries})")
             archive_page(run_dir, page_no)
             out.unlink(missing_ok=True)
-            again = prompt + "\n\n" + pagecheck.redraw_block(got)
+            again = assemble(pagecheck.redraw_block(got))
             (dest / f"page{page_no:02d}.redraw{attempt + 1}.txt").write_text(
                 again, encoding="utf-8")
             try:
