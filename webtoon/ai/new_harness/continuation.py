@@ -228,10 +228,35 @@ def digest_source(packet):
     return body, scenes
 
 
+def cast_looks(source_dir):
+    """이번 화를 그릴 때 쓴 인물의 겉모습 — 주인공(persona.json)과 등장인물(cast.json)의 이름 · 성별 · 생김새.
+
+    본문과 장면 글에는 겉모습이 거의 없어서, 정리가 인물 항목을 만들어도 다음 화 그림이 그 인물을 다른
+    모습으로 그렸다(2026-10-26, 마법학교 2화). 그림을 세운 기록을 그대로 원문에 붙인다."""
+    source = Path(source_dir)
+    people = []
+    persona = read(source / "persona.json") if (source / "persona.json").is_file() else None
+    if isinstance(persona, dict):
+        people.append(persona)
+    cast = read(source / "cast.json") if (source / "cast.json").is_file() else None
+    if isinstance(cast, list):
+        people += [c for c in cast if isinstance(c, dict)]
+    rows = []
+    for c in people:
+        name, look = str(c.get("name") or "").strip(), str(c.get("look") or "").strip()
+        if not name or not look:
+            continue
+        gender = str(c.get("gender") or "").strip()
+        rows.append(f"- {name}{f' ({gender})' if gender else ''}: {look}")
+    return rows
+
+
 def episode_text(packet):
     n = packet.get("episode_number") or 1
     body, scenes = digest_source(packet)
-    return "\n".join([f"[{n}화 본문]", body, "", f"[{n}화 확정 장면]", *scenes])
+    looks = cast_looks(packet["source_dir"])
+    return "\n".join([f"[{n}화 본문]", body, "", f"[{n}화 확정 장면]", *scenes,
+                      *(["", f"[{n}화 등장인물의 겉모습 — 그림이 이 모습으로 그려졌다]", *looks] if looks else [])])
 
 
 def world_seed(source):
