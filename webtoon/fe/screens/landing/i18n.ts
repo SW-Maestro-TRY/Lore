@@ -286,6 +286,12 @@ const dict: Dict = {
   "크레딧·결제": { en: "Credits & payment", ja: "クレジット・決済", zh: "积分与支付" },
   "작품 관리": { en: "Your works", ja: "作品の管理", zh: "作品管理" },
 
+  /* ---- 캐릭터 일관성 — 시트 머리줄 · 구역 이름 ---- */
+  "전신 · 다섯 방향": { en: "Full body · 5 angles", ja: "全身・5方向", zh: "全身 · 五个角度" },
+  "얼굴 각도": { en: "Face angles", ja: "顔の角度", zh: "脸部角度" },
+  "표정": { en: "Expressions", ja: "表情", zh: "表情" },
+  "디테일": { en: "Details", ja: "ディテール", zh: "细节" },
+
   "LORE 웹툰 스튜디오": { en: "LORE Webtoon Studio", ja: "LORE ウェブトゥーンスタジオ", zh: "LORE 漫画工作室" },
   "이용약관": { en: "Terms of Service", ja: "利用規約", zh: "服务条款" },
   "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },

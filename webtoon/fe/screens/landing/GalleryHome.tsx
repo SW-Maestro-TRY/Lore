@@ -32,6 +32,11 @@ const storyRows = [
   { img: "seiel/ball3.jpg", where: "세이엘 클로즈업", what: "숙련된 미소를 짓는다", line: "완벽한 약혼녀로 서 있었다." },
   { img: "seiel/ball4.jpg", where: "두 사람의 옆얼굴", what: "속마음이 드러난다", line: "모두 계획된 역할이었다." },
 ];
+/* 시트 맨 아래 색 칸 여섯 — [가운데 x(%), 그림에서 뽑은 색, 어두운 칸이라 흰 글씨인가] */
+const SHEET_COLORS: [number, string, boolean][] = [
+  [9.4, "#F9C6CD", false], [21.8, "#B8303F", true], [33.2, "#FDF0EF", false],
+  [44.3, "#56345E", true], [55.3, "#FEFEFE", false], [66.5, "#A51F2F", true],
+];
 const REDRAW_REASONS = ["캐릭터가 이상해요", "표정이 안 맞아요", "포즈가 어색해요", "배경이 이상해요"];
 /* 자주 묻는 질문 — 기능 소개 말고, 쓰기 전·결제 전에 실제로 걱정하는 것(비용·시간·실패·공개·권리).
  * 답은 이용약관 13조(크레딧)·12조(공개)·11조(이용 범위)와 지금 코드 값에 맞춘다.
@@ -164,12 +169,25 @@ export default function GalleryHome({
             </h2>
           </div>
           <div className="wt-gallery-consistency">
+            {/* 시트 그림 한 장을 통째로 보여 주고, 그 위에 시트 머리줄 · 구역 이름 · 색 코드를 얹는다.
+                전에는 그림을 키워 왼쪽 위 전신만 잘라 보여서 시트가 아니라 인물 그림처럼 보였다.
+                구역 자리(%)는 sheet.png(1536x1024)의 칸 배치를 잰 값이다. */}
             <figure className="wt-gallery-sheet">
-              <img
-                src={asset("masked-fiance/sheet.png")}
-                alt={t("로젤 캐릭터 시트")}
-              />
-              <figcaption>{t("캐릭터 시트 · 로젤")}</figcaption>
+              <figcaption className="wt-sheet-head">
+                <span>CHARACTER SHEET</span>
+                <b>{t("로젤")}</b>
+                <small>{t("로맨스 판타지")} · {t("가면을 쓰고 온 옛 약혼자")}</small>
+              </figcaption>
+              <div className="wt-sheet-board">
+                <img src={asset("masked-fiance/sheet.png")} alt={t("로젤 캐릭터 시트")} />
+                <span className="wt-sheet-tag" style={{ left: "1%", top: "1.5%" }}>{t("전신 · 다섯 방향")}</span>
+                <span className="wt-sheet-tag" style={{ left: "1%", top: "51%" }}>{t("얼굴 각도")}</span>
+                <span className="wt-sheet-tag" style={{ left: "1%", top: "72.5%" }}>{t("표정")}</span>
+                <span className="wt-sheet-tag" style={{ left: "56%", top: "51%" }}>{t("디테일")}</span>
+                {SHEET_COLORS.map(([x, hex, dark]) => (
+                  <span key={x} className={`wt-sheet-hex${dark ? " dark" : ""}`} style={{ left: `${x}%` }}>{hex}</span>
+                ))}
+              </div>
             </figure>
             <div className="wt-gallery-faces">
               {[
