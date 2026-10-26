@@ -213,6 +213,9 @@ services:
       # 있으면 검수 네 단계(이야기·장·표지·화 전체)가 Gemini 로 간다(llm.py
       # STAGE_DEFAULT_PROVIDERS). 비우면 검수도 NH_PROVIDER 를 따른다.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # 운영 알림 디스코드 웹훅(#831, webtoon/be/.../ops/OpsAlert). 비우면 알림만 꺼진다.
+      LORE_WEBTOON_ALERT_DISCORD_WEBHOOK: ${LORE_WEBTOON_ALERT_DISCORD_WEBHOOK:-}
+      LORE_WEBTOON_ALERT_ENV: ${LORE_WEBTOON_ALERT_ENV:-dev}
       NH_STORY_AXES: ${NH_STORY_AXES:-}
       NH_STORY_ENGINES: ${NH_STORY_ENGINES:-}
       # 하네스가 다 그린 그림을 올리고 비용을 적을 때 서버에 대는 한 마디
