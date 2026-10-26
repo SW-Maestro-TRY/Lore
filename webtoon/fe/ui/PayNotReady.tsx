@@ -16,18 +16,15 @@ const SUPPORT_EMAIL = "lore@lorecomic.com";
 
 registerDict({
   "결제 준비 중": { en: "Payments coming soon", ja: "決済準備中", zh: "支付准备中" },
-  "현재 결제 서비스가 아직 준비 중에 있어요. 1:1 문의하기를 통해 결제 문의를 진행해 주세요!": {
-    en: "Payments aren't available yet. Please contact us 1:1 about payments!",
-    ja: "現在、決済サービスはまだ準備中です。1:1お問い合わせから決済についてご相談ください！",
-    zh: "支付服务仍在准备中。请通过一对一咨询联系我们处理支付问题！",
-  },
+  "현재 결제 서비스가 아직 준비 중에 있어요.": { en: "Payments aren't available yet.", ja: "現在、決済サービスはまだ準備中です。", zh: "支付服务仍在准备中。" },
+  "1:1 문의하기를 통해 결제 문의를 진행해 주세요!": { en: "Please contact us 1:1 about payments!", ja: "1:1お問い合わせから決済についてご相談ください！", zh: "请通过一对一咨询联系我们处理支付问题！" },
 });
 
 export default function PayNotReady({ where, onEmail, onClose }: { where: string; onEmail: () => void; onClose: () => void }) {
   const t = useT();
   return (
     <Dialog className="wt-contact-dialog" title={t("결제 준비 중")} onClose={onClose}
-            sub={t("현재 결제 서비스가 아직 준비 중에 있어요. 1:1 문의하기를 통해 결제 문의를 진행해 주세요!")}>
+            sub={<>{t("현재 결제 서비스가 아직 준비 중에 있어요.")}<br />{t("1:1 문의하기를 통해 결제 문의를 진행해 주세요!")}</>}>
       <div className="wt-my-contact">
         <a className="wt-contact-row" href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer"
            onClick={() => { track("contact_pick", { where, channel: "kakao", reason: "pay_not_ready" }); onClose(); }}>
