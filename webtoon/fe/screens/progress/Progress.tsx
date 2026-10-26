@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
   cancelJob, continueScenes, decideSheet, fixSheet, jobPageUrl, uploadDataUrlsAsGuest, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
-  castSheetImageUrl, readAllowance, requestCastSheet, restoreScene, restoreSheet, resumeJob, retryScene, saveScenes, savePerson, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
+  castSheetImageUrl, readAllowance, requestCastSheet, restoreScene, restoreSheet, retryScene, saveScenes, savePerson, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
 import { readPhoto } from "../../lib/photoFile";
 import { useAuth } from "@common/auth/useAuth";
@@ -964,11 +964,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     track("queue_popup_wait", { job: jobId, ahead: job?.queue?.ahead });
     browseWorks();
   };
-  const resumeAfterRestart = () => {
-    if (!job) return;
-    track("resume_after_restart", { job: job.id });
-    void send(() => resumeJob(job.id));
-  };
   const remakeAfterFail = () => {
     track("remake_after_fail", { job: jobId });
     go("create", { step: 1 });
@@ -1085,14 +1080,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               )}
               <ErrLine text={actErr} />
               <div className="actions">
-                {job.resumable ? (
-                  /* 서버 재시작으로 끊긴 작업 — 멈춘 걸음부터 이어 간다. 그린 쪽은 그대로 쓴다. */
-                  <button type="button" className="primary" disabled={busy} onClick={resumeAfterRestart}>
-                    {(job.resume_cost ?? 0) > 0 ? t("{label} -{n} 크레딧", { label: t("이어서 만들기"), n: job.resume_cost ?? 0 }) : t("이어서 만들기")}
-                  </button>
-                ) : (
-                  <button type="button" className="primary" onClick={remakeAfterFail}>{t("다시 만들기")}</button>
-                )}
+                {/* 서버 재시작은 실패가 아니다 — 서버가 다시 뜨며 멈춘 걸음부터 이어 간다(StaleJobs). 이 창은 정말
+                    다시 만들어야 할 때만 뜬다. */}
+                <button type="button" className="primary" onClick={remakeAfterFail}>{t("다시 만들기")}</button>
                 <button type="button" className="secondary" onClick={() => go("landing")}>{t("홈으로 가기")}</button>
               </div>
             </div>
