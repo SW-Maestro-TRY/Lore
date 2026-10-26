@@ -15,6 +15,7 @@ import { IconPlus, IconEdit, IconTrash, IconClose } from "../../ui/Icons";
 import { Dialog } from "../../ui/Dialog";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import "./OriginalCharacter.css";
+import { BuiltinPicker } from "./BuiltinPicker";
 
 registerDict({
   "AI 캐릭터 뽑기": { en: "Generate an AI character", ja: "AIキャラクターを作る", zh: "AI 生成角色" },
@@ -261,13 +262,23 @@ export default function OriginalCharacter({
   authenticated: boolean;
 }) {
   const t = useT();
+  /* 예시 캐릭터 — 내 캐릭터가 있으면 만들기 1걸음 줄에 안 나와서 여기서도 고를 수 있게 둔다.
+     고르면 만들기 1걸음으로 돌아가 그 캐릭터가 골라져 있다(저장하지 않는다). */
+  const [pickingBuiltin, setPickingBuiltin] = useState(false);
   return (
     <section className="wt-wrap wt-page wt-original-page">
+      {pickingBuiltin && <BuiltinPicker onClose={() => setPickingBuiltin(false)}
+        onPick={(c) => go("create", { step: 1, character: c.id })} />}
       <div className="wt-original-heading">
         <h1>{t("새 캐릭터 만들기")}</h1>
-        <button className="btn btn-w btn-sm" onClick={() => go("try")}>
-          {t("AI 캐릭터 뽑기")}
-        </button>
+        <div className="wt-original-heading-actions">
+          <button className="btn btn-w btn-sm" onClick={() => setPickingBuiltin(true)}>
+            {t("예시 캐릭터")}
+          </button>
+          <button className="btn btn-w btn-sm" onClick={() => go("try")}>
+            {t("AI 캐릭터 뽑기")}
+          </button>
+        </div>
       </div>
       <CharacterForm
         authenticated={authenticated}
