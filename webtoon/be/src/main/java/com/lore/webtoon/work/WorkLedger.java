@@ -181,6 +181,12 @@ public class WorkLedger {
         return works.findFirstByRunId(runId);
     }
 
+    /** 다음 화는 앞 화의 비공개 상태를 이어받는다. */
+    @Transactional
+    public void setPublicByJob(String jobId, boolean value) {
+        works.findByJobId(jobId).ifPresent(work -> { work.setPublic(value); works.save(work); });
+    }
+
     /** 지금 공개인가. 모르는 작품은 공개로 본다(위 mayRead 와 같은 이유). */
     @Transactional(readOnly = true)
     public boolean isPublic(String runId) {

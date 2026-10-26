@@ -23,6 +23,7 @@ export async function startJob(form: WizardForm, authenticated: boolean, lang: L
     }
   }
   const got = await createJob({
+    lorebook: form.lorebook || null,
     name: form.name.trim(),
     character: form.character.trim(),
     photo_note: "",
@@ -36,12 +37,11 @@ export async function startJob(form: WizardForm, authenticated: boolean, lang: L
     photo_keys: keys,
     character_id: form.characterId,
     agree_ip: form.agreeIp,
-    /* own 길(#548)은 항상 확인하고 만든다 — 장면 확인에서 멈추는 것이 그 길의 전제다.
-       quick 길은 「확인하고 만들기」(expert)를 골랐을 때만 멈춘다. */
-    checkpoints: form.create === "own" || form.mode === "expert",
+    /* 「바로 만들기」를 끄면(expert) 이야기·캐릭터·장면 확인에서 멈춘다. own 길도 켤 수 있다(2026-10-26). */
+    checkpoints: form.mode === "expert",
     mode: form.create,
-    settings: form.create === "own" ? form.settings.trim() : "",
-    title: form.create === "own" ? form.title.trim() : "",
+    settings: form.settings.trim(),
+    title: form.title.trim(),
   });
   return got.id;
 }

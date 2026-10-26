@@ -24,6 +24,7 @@ import "./webtoon.css";
 import { hrefOf, type Go, type View } from "./lib/nav";
 import { linkThisBrowser } from "./lib/api";
 import { installAutoTrack, navCause, screenProps, setView, takeDepth, track } from "./lib/track";
+import { metaTrack } from "./lib/metaPixel";
 import { LangProvider, useLang } from "./lib/i18n";
 import { syncPush } from "./lib/push";
 import Landing from "./screens/landing/Landing";
@@ -32,7 +33,9 @@ import Wizard from "./screens/wizard/Wizard";
 import Progress from "./screens/progress/Progress";
 import Result from "./screens/result/Result";
 import Editor from "./screens/editor/Editor";
+import NextEpisodePage from "./screens/result/NextEpisodePage";
 import Works from "./screens/works/Works";
+import OriginalCharacter from "./screens/character/OriginalCharacter";
 import Photo from "./screens/character/Photo";
 import PhotoResult from "./screens/character/PhotoResult";
 import CharList from "./screens/character/CharList";
@@ -40,9 +43,12 @@ import MyPage from "./screens/mypage/MyPage";
 import FeedbackPage from "./screens/feedback/FeedbackPage";
 import AdminExamples from "./screens/admin/AdminExamples";
 import AdminWorks from "./screens/admin/AdminWorks";
-import AdminHome from "./screens/admin/AdminHome";
+import AdminPayments from "./screens/admin/AdminPayments";
+import AdminDashboard from "./screens/admin/AdminDashboard";
 import RevisitPrompt from "./ui/RevisitPrompt";
 import RunningBubble from "./ui/RunningBubble";
+import DevNav from "./ui/DevNav";
+import "./final-theme.css";
 
 export default function WebtoonPage() {
   return (
@@ -61,7 +67,7 @@ interface Route {
   job?: string;
   run?: string;
   id?: string;
-  tab?: "settings";
+  tab?: "settings" | "works" | "characters" | "contact";
   /** 만들기 화면의 길(#548). own = 「만들고 싶은 내용이 있어요」. */
   mode?: "own";
 }
@@ -79,15 +85,16 @@ function routeOf(search: URLSearchParams): Route {
     job: search.get("job") || undefined,
     run,
     id: search.get("id") || undefined,
-    tab: search.get("tab") === "settings" ? ("settings" as const) : undefined,
+    tab: (["settings", "works", "characters", "contact"] as const).find((t) => t === search.get("tab")),
     mode: search.get("mode") === "own" ? ("own" as const) : undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
+  if (view === "next" && run) return { view: "next", ...base };
   if (view === "card" && base.id) return { view: "card", ...base };
   /* 피드백이 마이페이지 창이던 때의 주소 — 다시 온 사람 안내 메일 등에 남아 있을 수 있다. */
   if (view === "mypage" && search.get("tab") === "feedback") return { view: "feedback", ...base };
-  if (view && ["entry", "create", "works", "characters", "try", "mypage", "feedback", "admin", "admin-examples", "admin-works"].includes(view)) {
+  if (view && ["entry", "create", "works", "character-new", "characters", "try", "mypage", "feedback", "admin", "admin-examples", "admin-works", "admin-payments"].includes(view)) {
     return { view: view as View, ...base };
   }
   if (run) return { view: "result", ...base };
@@ -198,6 +205,7 @@ function WebtoonScreens() {
       ...navCause(true, firstView.current),   // 어떻게 왔나 — load · click(via) · history · auto
     });
     firstView.current = false;
+    metaTrack("PageView");  // 메타 픽셀(#751) — 운영 호스트에서만 켜진다
   }, [route.view, route.step, route.run, authReady]);
 
   /* 누른 것 · 입력 칸 · 오류 · API 실패 · 탭 숨김을 화면마다 달지 않고 한 번에 켠다(track.ts 「자동 기록」). */
@@ -234,6 +242,7 @@ function WebtoonScreens() {
 
   return (
     <div ref={rootRef} className="wt" onContextMenu={guardImage} onDragStart={guardImage}>
+      <DevNav />
       {route.view === "landing" && <Landing go={go} />}
       {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
@@ -245,8 +254,10 @@ function WebtoonScreens() {
       )}
       {route.view === "result" && route.run && <Result runId={route.run} go={go} authenticated={authenticated} />}
       {route.view === "editor" && route.run && <Editor runId={route.run} go={go} authStatus={authStatus} />}
+      {route.view === "next" && route.run && <NextEpisodePage key={route.run} runId={route.run} go={go} authenticated={authenticated} />}
       {route.view === "works" && <Works go={go} authenticated={authenticated} />}
       {route.view === "characters" && <CharList go={go} />}
+      {route.view === "character-new" && <OriginalCharacter go={go} authenticated={authenticated} />}
       {route.view === "try" && <Photo go={go} authenticated={authenticated} />}
       {route.view === "card" && route.id && (
         <PhotoResult id={route.id} shared={false} go={go} authenticated={authenticated} />
@@ -254,11 +265,12 @@ function WebtoonScreens() {
       {route.view === "sharedCard" && route.id && (
         <PhotoResult id={route.id} shared go={go} authenticated={authenticated} />
       )}
-      {route.view === "mypage" && <MyPage go={go} initialTab={route.tab} />}
+      {route.view === "mypage" && <MyPage go={go} initialTab={route.tab === "settings" ? "settings" : route.tab === "contact" ? "contact" : undefined} />}
       {route.view === "feedback" && <FeedbackPage go={go} />}
-      {route.view === "admin" && <AdminHome go={go} />}
+      {route.view === "admin" && <AdminDashboard go={go} tab={route.tab} />}
       {route.view === "admin-examples" && <AdminExamples go={go} />}
       {route.view === "admin-works" && <AdminWorks go={go} />}
+      {route.view === "admin-payments" && <AdminPayments go={go} />}
       <RevisitPrompt authenticated={authenticated} view={route.view} go={go} />
       {/* 만드는 중이면 어느 화면에서든 돌아갈 동그라미(#507) */}
       <RunningBubble view={route.view} runId={route.run} go={go} />

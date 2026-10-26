@@ -189,6 +189,11 @@ final class JobEta {
         return Math.max(0, all - job.pausedSecondsAt(until));
     }
 
+    /** 화질에 따른 그림 걸음 비율(파도 1). 대기 줄 굴리기({@link JobLineSim})가 쓴다. */
+    static double factor(WebtoonJob job) {
+        return QUALITY.getOrDefault(WebtoonQuality.normalize(job.getQuality()), 1.0);
+    }
+
     /** 그 걸음 하나를 처음부터 끝까지 하는 시간. */
     private static long whole(JobStage stage, int pages, int slots, double f) {
         return switch (stage) {

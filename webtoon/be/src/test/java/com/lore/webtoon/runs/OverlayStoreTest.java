@@ -135,4 +135,11 @@ class OverlayStoreTest {
 
         assertThat(store.count(data)).isEqualTo(3);
     }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("표지 뒤에는 고친 것이 없어도 기본 여백이 있다")
+    void 표지_뒤_기본_여백() {
+        org.assertj.core.api.Assertions.assertThat(store.gapsOf("run-1", 1))
+                .containsEntry(1, OverlayStore.COVER_GAP_STEP);
+    }
 }

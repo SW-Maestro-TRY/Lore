@@ -19,6 +19,7 @@ import java.util.List;
  * 사람이 가지고 노는 캐릭터.
  */
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(
         name = "webtoon_character",
         indexes = {
@@ -152,6 +153,13 @@ public class WebtoonCharacter {
     @Column(columnDefinition = "text")
     private String fate;
 
+    /**
+     * 사용자가 카드를 고친 때. 비어 있으면 AI 가 지은 그대로다.
+     * 반전 한 줄을 지워도 카드로 남게 하는 표시이기도 하다 — 전에는 twist 가 비면 카드가 없는 것으로 봤다.
+     */
+    @Column(name = "card_edited_at")
+    private Instant cardEditedAt;
+
     /** 그린 그림체(prompt/style 의 이름). 1화를 같은 그림체로 그리려고 남긴다. */
     @Column(length = 40)
     private String style;
@@ -161,6 +169,28 @@ public class WebtoonCharacter {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** 휴지통에 넣은 때(2026-10-26). 비어 있으면 살아 있다 — {@link CharacterTrash} 가 15일 뒤 영구 삭제한다. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    public boolean isTrashed() { return deletedAt != null; }
+    public Instant getDeletedAt() { return deletedAt; }
+    public void trash(Instant at) { this.deletedAt = at; this.updatedAt = at; }
+    public void untrash(Instant at) { this.deletedAt = null; this.updatedAt = at; }
+
+    @Column(name="community_public", nullable=false, columnDefinition="boolean not null default false")
+    private boolean communityPublic;
+    @Column(name="community_blocked", nullable=false, columnDefinition="boolean not null default false")
+    private boolean communityBlocked;
+    @Column(name="reuse_agreed_at")
+    private Instant reuseAgreedAt;
+    public boolean isCommunityPublic() { return communityPublic && !communityBlocked && status == CharacterStatus.READY; }
+    public boolean isCommunityBlocked() { return communityBlocked; }
+    public void publishForReuse(boolean value, Long owner, Instant at) {
+        if(value) { this.ownerId=owner; this.reuseAgreedAt=at; }
+        this.communityPublic=value; this.updatedAt=at;
+    }
 
     protected WebtoonCharacter() {
     }
@@ -241,14 +271,77 @@ public class WebtoonCharacter {
             return new DialogueLine(p[0], "1".equals(p[1]), p[2], p[3]);
         }
 
-        private static String clean(String s) {
+        static String clean(String s) {
             return s == null ? "" : s.replace('\t', ' ').replace('\n', ' ').trim();
         }
     }
 
-    /** 카드가 있나 — 「캐릭터 만들어보기」로 만든 것인가. */
+    /** 카드가 있나 — 「캐릭터 만들어보기」로 만든 것인가. 사용자가 고친 카드는 칸을 다 비워도 카드다. */
     public boolean hasCard() {
-        return twist != null && !twist.isBlank();
+        return twist != null && !twist.isBlank() || cardEditedAt != null;
+    }
+
+    /** 사용자가 카드를 고쳤나. 고쳤으면 웹툰 만들기에 이 캐릭터에 저장된 값만 간다(JobService.writeCharacter). */
+    public boolean isCardEdited() {
+        return cardEditedAt != null;
+    }
+
+    public Instant getCardEditedAt() {
+        return cardEditedAt;
+    }
+
+    /** 카드에서 사용자가 고칠 수 있는 칸. <b>null 은 그대로 두라는 뜻</b>이고, 빈 값·빈 목록은 그 칸을 지운다. */
+    public record CardEdit(String world, String worldLabel, String genre, String species, String role,
+                           String roleTier, String twist, List<String> fate, List<DialogueEdit> dialogue) {
+    }
+
+    /** 고친 대사 한 줄 — 누가, 무슨 말. 말이 비면 그 줄은 지운 것이다. */
+    public record DialogueEdit(String who, String text) {
+    }
+
+    /**
+     * 사용자가 고친 카드를 그대로 얹는다. AI 가 지은 값으로 되돌리거나 섞지 않는다 — 비운 칸은 빈 칸으로 남는다.
+     *
+     * 대사는 줄마다 누가·무슨 말만 받는다. 이 캐릭터의 말인지(mine)와 서 있는 쪽(side)은 같은 자리의 원래 줄이
+     * 같은 사람이면 그대로 잇고, 아니면 이름이 이 캐릭터와 같거나 비었을 때 이 캐릭터의 말로 본다.
+     * 하네스가 읽는 옛 칸(quote)도 같은 줄로 다시 쓴다(「누구: 말」 줄바꿈, 하네스 character.dialogue_text 와 같은 모양).
+     */
+    public void editCard(CardEdit e, Instant at) {
+        if (e.world() != null) this.world = cut(e.world().strip(), 80);
+        if (e.worldLabel() != null) this.worldLabel = cut(e.worldLabel().strip(), 20);
+        if (e.genre() != null) this.genre = cut(e.genre().strip(), 40);
+        if (e.species() != null) this.species = cut(e.species().strip(), 40);
+        if (e.role() != null) this.roleName = cut(e.role().strip(), 40);
+        if (e.roleTier() != null) this.roleTier = cut(e.roleTier().strip(), 20);
+        if (e.twist() != null) this.twist = cut(e.twist().strip(), 300);
+        if (e.fate() != null) {
+            List<String> lines = e.fate().stream().filter(java.util.Objects::nonNull)
+                    .map(l -> l.replace('\n', ' ').strip()).filter(l -> !l.isEmpty()).toList();
+            this.fate = lines.isEmpty() ? null : String.join("\n", lines);
+        }
+        if (e.dialogue() != null) {
+            List<DialogueLine> old = dialogueLines();
+            List<DialogueLine> lines = new java.util.ArrayList<>();
+            for (DialogueEdit d : e.dialogue()) {
+                if (d == null) continue;
+                String who = DialogueLine.clean(d.who());
+                String text = DialogueLine.clean(d.text());
+                if (text.isEmpty()) continue;
+                int i = lines.size();
+                DialogueLine before = i < old.size() ? old.get(i) : null;
+                boolean same = before != null && DialogueLine.clean(before.who()).equals(who);
+                boolean mine = same ? before.mine() : who.isEmpty() || who.equals(DialogueLine.clean(name));
+                String side = same && !before.side().isBlank() ? before.side() : "center";
+                lines.add(new DialogueLine(who, mine, side, text));
+            }
+            this.dialogue = lines.isEmpty() ? null
+                    : lines.stream().map(DialogueLine::pack).collect(java.util.stream.Collectors.joining("\n"));
+            this.quote = lines.isEmpty() ? null : cut(lines.stream()
+                    .map(l -> l.who().isEmpty() ? l.text() : l.who() + ": " + l.text())
+                    .collect(java.util.stream.Collectors.joining("\n")), 300);
+        }
+        this.cardEditedAt = at;
+        this.updatedAt = at;
     }
 
     /** 운명 줄들. 없으면 빈 목록. */
@@ -401,6 +494,32 @@ public class WebtoonCharacter {
 
     public String getDescription() {
         return description;
+    }
+
+    /**
+     * 캐릭터 설정 글 — 사람이 적은 설명. 비어 있으면 AI 뽑기 카드가 세운 상세 설정(세계 · 장르 / 역할 · 종 /
+     * 소개)으로 채운다(2026-10-26). 뽑기 캐릭터는 설명 칸이 비어 있어서 수정 창에도, 웹툰 만들기에도 아무
+     * 설정이 안 넘어갔다. 화면은 이 글을 설명으로 받아 수정 창에 보이고 웹툰을 만들 때 그대로 보낸다.
+     * 대사 · 운명(한 장면의 사건)은 넣지 않는다 — 웹툰 이야기를 그 장면으로 끌고 간다.
+     */
+    public String settingsText() {
+        if (description != null && !description.isBlank()) {
+            return description;
+        }
+        if (!hasCard()) {
+            return "";
+        }
+        List<String> lines = new java.util.ArrayList<>();
+        String place = joinNonBlank(" · ", worldLabel, genre);
+        String who = joinNonBlank(" · ", roleName, species);
+        if (!place.isEmpty()) lines.add(place);
+        if (!who.isEmpty()) lines.add(who);
+        if (twist != null && !twist.isBlank()) lines.add(twist.strip());
+        return String.join("\n", lines);
+    }
+
+    private static String joinNonBlank(String sep, String... parts) {
+        return String.join(sep, Arrays.stream(parts).filter(p -> p != null && !p.isBlank()).map(String::strip).toList());
     }
 
     public String getArtKey() {

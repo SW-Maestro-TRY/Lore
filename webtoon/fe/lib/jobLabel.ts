@@ -12,6 +12,7 @@ export function activeJobLabel(job: NhJob, t: Tr): string {
     case "awaiting_cast": return t("인물 확인 중");
     case "awaiting_sheet": return job.sheet_blocked ? t("캐릭터 다시 그려 주세요") : t("캐릭터 확인 중");
     case "awaiting_scenes": return t("장면 확인 중");
+    case "error": return t("멈춤 · 이어서 만들기");
     default:
       return job.art?.total
         ? t("{done} / {total}장", { done: job.art.done, total: job.art.total })
@@ -27,6 +28,7 @@ export function activeJobTitle(job: NhJob): string {
 }
 
 registerDict({
+  "멈춤 · 이어서 만들기": { en: "Stopped · continue", ja: "停止 · 続きから作る", zh: "已暂停 · 继续制作" },
   "이야기 확인 중": { en: "Checking the story", ja: "ストーリー確認中", zh: "正在确认故事" },
   "이야기 고르는 중": { en: "Picking a story", ja: "ストーリー選択中", zh: "正在选故事" },
   "인물 확인 중": { en: "Checking the characters", ja: "登場人物を確認中", zh: "正在确认人物" },

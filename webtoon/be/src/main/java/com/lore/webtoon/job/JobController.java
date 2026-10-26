@@ -452,7 +452,21 @@ public class JobController {
                                      @RequestBody(required = false) SheetDecision body) {
         String decision = body == null ? null : body.decision();
         if ("retry".equalsIgnoreCase(decision)) {
-            jobs.retrySheet(id, body.note());
+            Long me = CreditGate.currentUser();
+            /* 시트 다시 만들기도 첫 번째는 무료, 그다음부터 1크레딧(이야기·장면 다시 뽑기와 같다). 먼저 받고, 못 시작하면 돌려준다. */
+            int cost = me == null ? 0 : jobs.resheetCost(id);
+            String ref = id + ":resheet:" + System.currentTimeMillis();
+            if (cost > 0) {
+                credits.requireEnough(me, cost);
+                credits.charge(me, cost, ref, "캐릭터 시트 다시 만들기");
+            }
+            try {
+                jobs.retrySheet(id, body.note());
+            } catch (RuntimeException e) {
+                if (cost > 0) credits.refund(me, ref);
+                throw e;
+            }
+            return Map.of("ok", true, "cost", cost);
         } else {
             jobs.approveSheet(id);
         }
@@ -468,6 +482,27 @@ public class JobController {
         Long me = CreditGate.currentUser();
         jobs.fixSheet(id, body, me, me == null ? guests.keyOf(request) : null);
         return Map.of("ok", true);
+    }
+
+    @Operation(summary = "끊긴 만들기 이어서 하기",
+            description = "서버 재시작으로 끊긴 내 작업을 멈춘 걸음부터 이어 간다(2026-10-26). 그린 장은 다시 안 그린다. "
+                    + "끊길 때 크레딧을 돌려줬으면 그만큼 다시 받는다.")
+    @PostMapping("/jobs/{id}/resume")
+    public Map<String, Object> resume(@PathVariable String id) {
+        Long me = CreditGate.currentUser();
+        int cost = jobs.resumeCheck(id, me);
+        String ref = id + ":resume";
+        if (cost > 0) {
+            credits.requireEnough(me, cost);
+            credits.charge(me, cost, ref, "끊긴 만들기 이어서");
+        }
+        try {
+            jobs.resumeStopped(id);
+        } catch (RuntimeException e) {
+            if (cost > 0) credits.refund(me, ref);
+            throw e;
+        }
+        return Map.of("ok", true, "cost", cost);
     }
 
     /** 본문이 없으면(옛 이름으로 부르면) 그대로 진행으로 본다. */

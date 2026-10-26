@@ -44,6 +44,7 @@ SRCS=(
   "$HERE/static/badges:badges"
   "$HERE/static/entry:entry"
   "$HERE/static/last:last"
+  "$HERE/static/gallery:gallery"
 )
 
 for pair in "${SRCS[@]}"; do

@@ -35,6 +35,64 @@
   width: 720px; max-width: 100%; display: flex; flex-direction: column; gap: 0;
   background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; margin-top: 8px;
 }
+/* 크레딧이 모자라 아직 안 그린 뒷장면 — 마지막 장 바로 아래, 빈 장 안내보다 차분하게 */
+/* 잠긴 뒷장면 — 따로 떼지 않고 웹툰 장면처럼 그린 장 바로 뒤에 이어 붙는다.
+   장마다 그 장면 한 줄을 웹툰 내레이션 상자로 두고, 그 아래 열기 단추 하나. 시안은 a·b·c. */
+.wt .wt-lock { position: relative; background: #fff; color: #1d2b33; }
+.wt .wt-lock-pg {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 22px; min-height: clamp(360px, 62vw, 620px); padding: 48px 8%; box-sizing: border-box; overflow: hidden;
+}
+/* 웹툰 내레이션 상자 — 그린 장의 상자와 같은 모양(흰 바탕, 검은 테두리, 가운데 정렬) */
+.wt .wt-lock-narr {
+  position: relative; margin: 0; max-width: 30em; padding: 14px 20px; background: #fff; border: 2px solid #1d1d1d;
+  font-size: clamp(14px, 1.9vw, 17px); line-height: 1.7; text-align: center; color: #1d1d1d; word-break: keep-all;
+}
+/* 장면 설명은 길다 — 앞 두 줄만 보이고 끝이 흐려지게 해 「뒤가 궁금한」 미리보기로 쓴다 */
+.wt .wt-lock-narr > span {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 50%, transparent 98%); mask-image: linear-gradient(#000 50%, transparent 98%);
+}
+.wt .wt-lock-act { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.wt .wt-lock-btn {
+  appearance: none; display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 56px; min-width: 260px; padding: 0 30px;
+  border-radius: 999px; border: 0; background: #1d2b33; color: #fff; font: inherit; font-size: 17px; font-weight: 800; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(29, 43, 51, 0.22);
+}
+.wt .wt-lock-btn:disabled { background: #e3e8ea; color: #6b7a7f; box-shadow: none; cursor: not-allowed; }
+.wt .wt-lock-hint { font-size: 13.5px; color: #5b6b70; line-height: 1.5; max-width: 28em; }
+.wt .wt-lock-hint.is-short { color: #a3361f; font-weight: 700; font-size: 13.5px; }
+.wt .wt-lock-now { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; color: #1d2b33; }
+.wt .wt-lock-spin { width: 20px; height: 20px; border-radius: 50%; border: 3px solid #dfe6e8; border-top-color: #1d2b33; animation: wt-lock-turn 0.9s linear infinite; }
+@keyframes wt-lock-turn { to { transform: rotate(360deg); } }
+
+/* a. 흐린 다음 장면 — 바로 앞 장 그림을 흐리게 깔아 이야기가 이어지는데 아직 안 보이는 느낌 */
+.wt .wt-lock-a .wt-lock-pg { background: #eef1f4; }
+.wt .wt-lock-ghost {
+  position: absolute; inset: -40px; width: calc(100% + 80px); height: calc(100% + 80px); object-fit: cover;
+  filter: blur(18px) saturate(1.05); opacity: 0.85; transform: scale(1.05);
+}
+.wt .wt-lock-a .wt-lock-pg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(255,255,255,0.15), rgba(255,255,255,0.45)); }
+.wt .wt-lock-a .wt-lock-narr, .wt .wt-lock-a .wt-lock-act { z-index: 1; }
+.wt .wt-lock-a .wt-lock-pg + .wt-lock-pg { border-top: 6px solid #fff; }
+
+/* b. 콘티 — 아직 먹선을 안 넣은 밑그림 칸. 연필 선 같은 옅은 칸 틀 위에 내레이션이 얹힌다 */
+.wt .wt-lock-conti { position: absolute; inset: 6% 7%; display: grid; grid-template-columns: 1fr 1.2fr; grid-template-rows: 1fr 1.3fr; gap: 14px; }
+.wt .wt-lock-conti i { border: 1.5px dashed #c3ccd0; border-radius: 3px; background: repeating-linear-gradient(-45deg, transparent 0 10px, rgba(195, 204, 208, 0.18) 10px 11px); }
+.wt .wt-lock-conti i:first-child { grid-column: 1 / 3; }
+.wt .wt-lock-b .wt-lock-narr, .wt .wt-lock-b .wt-lock-act { z-index: 1; }
+.wt .wt-lock-b .wt-lock-act { background: #fff; padding: 6px 10px; border-radius: 14px; }
+
+/* c. 이어지는 여백 — 마지막 장이 흰 여백으로 스며들고, 장면 글만 옅게 이어진다 */
+.wt .wt-lock-fade { position: absolute; left: 0; right: 0; top: -140px; height: 140px; background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+.wt .wt-lock-c .wt-lock-pg { min-height: clamp(280px, 44vw, 440px); }
+.wt .wt-lock-c .wt-lock-narr { border-color: #c9d0d3; color: #6b7a7f; }
+.wt .wt-lock-c .wt-lock-pg:not(:first-of-type) .wt-lock-narr { filter: blur(2.5px); }
+.wt .wt-lock-c .wt-lock-btn { background: #fff; color: #1d2b33; border: 1.5px solid #1d2b33; box-shadow: none; }
+.wt .wt-lock-c .wt-lock-btn:disabled { border-color: #e3e8ea; }
+
+.wt .wt-lock-pg.is-drawing .wt-lock-narr { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) { .wt .wt-lock-spin { animation: none; } }
 .wt .wt-result-pg { position: relative; }
 .wt .wt-result-pg img { width: 100%; display: block; }
 .wt .wt-result-peek {
@@ -49,15 +107,32 @@
 }
 .wt .wt-result-pg:hover .wt-result-pgdl, .wt .wt-result-pgdl:focus-visible { opacity: 1; }
 
+/* 남의 작품 끝의 만들기 영역(#750). 이 화면에서 가장 눈에 띄는 것이어야 해서 바다색으로
+   채운다 — 흰 카드였을 때는 아래 「다음화 보기」 단추에 묻혔다. */
 .wt .wt-result-remix {
   width: 720px; max-width: 100%;
-  margin: 24px 0 16px; padding: 20px 22px;
-  border: 1px solid var(--line); border-radius: 12px; background: var(--paper);
+  margin: 28px 0 20px; padding: 26px 22px;
+  border-radius: 14px; background: var(--sea); color: #fff;
   display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
 }
-.wt .wt-result-remix b { font-size: 17px; }
-.wt .wt-result-remix .muted { font-size: 13px; }
-.wt .wt-result-remix .btn { margin-top: 6px; align-self: stretch; }
+.wt .wt-result-remix b { font-size: 20px; }
+.wt .wt-result-remix-sub { font-size: 14px; color: rgba(255, 255, 255, 0.9); }
+.wt .wt-result-remix-free {
+  font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2); color: #fff;
+}
+.wt .wt-result-remix .btn { margin-top: 8px; align-self: stretch; border-color: #fff; color: var(--sea-deep); font-weight: 800; }
+
+/* 광고·SNS 링크를 달고 바로 들어온 사람에게만 보이는 한 줄(#750). 제목 바로 아래. */
+/* 머리 칸은 내용 폭을 따라 줄어드는 칸이라, 안에 720px 짜리를 두면 폰에서 화면 밖으로 넓어진다 —
+   머리 칸을 본문 폭에 맞추고 이 줄은 최대 720px 로 둔다. */
+.wt .wt-result-head:has(.wt-result-linkbar) { align-self: stretch; }
+.wt .wt-result-linkbar {
+  width: 100%; max-width: 720px; margin-top: 6px; padding: 10px 12px 10px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  border: 1px solid var(--water); border-radius: 12px; background: var(--water-light);
+  font-size: 14px; color: var(--sea-deep); text-align: left;
+}
 @media (min-width: 720px) {
   .wt .wt-result-remix { align-items: center; text-align: center; }
   .wt .wt-result-remix .btn { align-self: center; min-width: 220px; }
@@ -81,7 +156,7 @@
 .wt .wt-share { position: relative; display: inline-flex; }
 .wt .wt-share-list {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; display: flex; flex-direction: column;
-  min-width: 140px; padding: 6px; border-radius: 12px; background: #fff; border: 1px solid var(--line-strong);
+  min-width: 140px; padding: 6px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line-strong);
   box-shadow: 0 10px 30px rgba(15, 51, 63, 0.14);
 }
 .wt .wt-share-one {
@@ -122,24 +197,8 @@
 .wt .wt-result-perpage { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
 .wt .wt-result-perpage input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
 
-/* 「{캐릭터}의 다른 편」 (아트보드 Done) */
 .wt .wt-result-titleacts { display: inline-flex; align-items: center; gap: 8px; }
 .wt .wt-result-suggest { width: 720px; max-width: 100%; padding: 8px 0 24px; }
-.wt .wt-result-others { width: 720px; max-width: 100%; display: flex; flex-direction: column; gap: 12px; padding: 8px 0 24px; }
-.wt .wt-result-others > b { font-size: 16px; }
-.wt .wt-result-others-row { display: flex; gap: 12px; flex-wrap: wrap; }
-.wt .wt-result-other { width: 120px; height: 170px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--water-light); }
-.wt .wt-result-other img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
-.wt .wt-result-other-new {
-  width: 120px; height: 170px; border-radius: 12px; border: 1.5px dashed rgba(15, 51, 63, 0.25); background: none;
-  display: flex; align-items: center; justify-content: center; text-align: center; font-size: 13px; color: var(--ink);
-  font-weight: 700; cursor: pointer; font-family: inherit; line-height: 1.5;
-}
-.wt .wt-result-other-new:hover { border-color: var(--ink); }
-@media (max-width: 767px) {
-  .wt .wt-result-others { width: auto; padding: 4px 0 16px; }
-  .wt .wt-result-other, .wt .wt-result-other-new { width: 96px; height: 136px; }
-}
 
 /* 크게 보기 — 장을 누르면 화면 전체. 폭에 맞추고 세로로 흘린다. */
 .wt .wt-result-zoom {

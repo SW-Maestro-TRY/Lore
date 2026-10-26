@@ -17,6 +17,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -88,8 +89,8 @@ class RunLikeServiceTest {
     void likedCardsSkipGone() {
         when(likes.runIdsLikedBy(7L)).thenReturn(List.of("r1", "gone"));
         Map<String, Object> card = new LinkedHashMap<>(Map.of("run_id", "r1"));
-        when(runs.cardOf("r1")).thenReturn(card);
-        when(runs.cardOf("gone")).thenReturn(null);
+        when(runs.cardOf(eq("r1"), any())).thenReturn(card);
+        when(runs.cardOf(eq("gone"), any())).thenReturn(null);
 
         List<Map<String, Object>> out = service.likedCards(7L);
         assertThat(out).hasSize(1);

@@ -35,7 +35,7 @@ class UsageMetaFileTest {
                 {"run_id":"abc","calls":[
                   {"stage":"SHEET","provider":"openai","model":"gpt-4.1",
                    "at":"2026-09-26T13:20:32+09:00","seconds":1.2,
-                   "usage":{"input":100,"output":50},
+                   "usage":{"input":100,"output":50,"cache_read":64},
                    "cost":{"total":0.0006,"total_krw":1}},
                   {"stage":"SHEET_IMAGE","provider":"openai","model":"gpt-image-2",
                    "usage":null,"stop":null,
@@ -53,6 +53,7 @@ class UsageMetaFileTest {
         List<UsageRecord> rows = got.getValue();
         assertThat(rows).extracting(UsageRecord::getRunId).containsOnly("char-abc");
         assertThat(rows).extracting(UsageRecord::getCostKrw).containsExactly(1L, 0L);
+        assertThat(rows).extracting(UsageRecord::getCachedTokens).containsExactly(64L, 0L);
         assertThat(rows).extracting(UsageRecord::getStage).containsExactly("SHEET", "SHEET_IMAGE");
         assertThat(rows.get(0).getCalledAt()).isEqualTo(Instant.parse("2026-09-26T04:20:32Z"));
     }

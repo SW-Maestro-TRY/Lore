@@ -117,36 +117,21 @@ public class MyWebtoonService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> myRuns(Long userId) {
         Map<String, Map<String, Object>> merged = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> roots = new java.util.HashMap<>();   // 연재 1화 카드는 한 번만 만든다
         for (String runId : ledger.runIdsOf(userId)) {
             if (runId == null || merged.containsKey(runId)) {
                 continue;
             }
-            Map<String, Object> card = cardOf(runId);
+            Map<String, Object> card = runs.cardOf(runId, roots);
             if (card != null) {
                 if (notes != null) {
                     notes.attach(card);      // 내 목록이라 관리자 처리 사유까지 보인다(#638)
                 }
-                merged.put(runId, card);
+                String cardRunId = String.valueOf(card.getOrDefault("run_id", runId));
+                merged.putIfAbsent(cardRunId, card);
             }
         }
         return new ArrayList<>(merged.values());
-    }
-
-    /**
-     * 작품 하나의 카드. 내용(제목·표지·장 수)은 여전히 하네스가 안다 — DB 가
-     * 아는 것은 <b>누구 것인가</b> 뿐이다.
-     *
-     * @return 못 읽으면 {@code null}. 그 한 편만 빠지고 나머지는 보여준다
-     */
-    private Map<String, Object> cardOf(String runId) {
-        /* DB 가 아는 것으로만 만든다. 제목·줄거리는 여기 있고, 표지와 장 수는
-           그림 쪽(webtoon_page)이 안다.
-
-           예전에는 DB 에 없으면 하네스에게 물었다(`/api/runs/{id}/result`).
-           2026-09-12에 걷어냈다 — 그 길은 serve.py 가 떠 있어야만 되는데,
-           이제 파이썬은 서버가 아니라 CLI 파이프라인으로만 쓴다. DB 에 없는
-           옛 작품은 목록에 안 뜬다. */
-        return runs.cardOf(runId);
     }
 
     /**

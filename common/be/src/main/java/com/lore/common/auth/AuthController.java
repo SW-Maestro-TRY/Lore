@@ -32,10 +32,14 @@ public class AuthController {
 
     /**
      * 가입 때 동의하는 약관 판. 게시 중인 이용약관·개인정보처리방침의 「부칙」 시행일과
-     * 같은 문자열이어야 한다(`webtoon/docs/legal/` 작업본 머리말). 문서를 고치면 이 값을
-     * 올리고 재동의를 받는다.
+     * 같은 문자열이어야 한다(`webtoon/docs/legal/` 작업본 머리말). 문서를 고치면 이 값을 올린다.
+     *
+     * 2026-10-21 판(유료 크레딧 충전 도입, #155): 이미 가입한 회원에게는 이용약관 제3조대로
+     * 시행 7일 전 공지로 갈음한다(이용자에게 불리한 개정이 아니다 — 원하는 사람만 사는 새 상품).
+     * 결제 때 결제대행사로 넘기는 휴대폰 번호는 충전 창에서 결제 직전에 따로 동의받는다.
      */
-    private static final String CURRENT_TERMS_VERSION = "2026-10-01";
+    // 같은 2026-10-21 판에 개인정보처리방침의 외부 측정 도구(Google·Clarity·Meta 픽셀) 고지도 함께 넣었다(#752).
+    private static final String CURRENT_TERMS_VERSION = "2026-10-21";
 
     private final AuthService authService;
     private final AuthCookies cookies;

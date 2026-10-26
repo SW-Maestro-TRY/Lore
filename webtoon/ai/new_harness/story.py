@@ -3,7 +3,7 @@
 new_harness 가 import 해서 빌려 쓰는 라이브러리 (직접 실행하지 않는다).
 
 빌려 가는 것은 두 가지다.
-  - 모델 호출 계층: OpenAI · Gemini · Anthropic 백엔드(make_backend), 환경변수 읽기,
+  - 모델 호출 계층: OpenAI · OpenRouter · Gemini · Anthropic 백엔드(make_backend), 환경변수 읽기,
     JSON 응답 파싱(extract_json · ParseFailure), 단가표로 비용 계산(cost_of · cost_text)
   - 캐릭터 시트 그림 생성: make_sheet_painter · charsheet_source · charsheet_unit_cost
     (이미지 프로바이더는 image_backend_ready 로 확인)
@@ -34,6 +34,11 @@ try:
     import anthropic
 except ImportError:  # pragma: no cover
     anthropic = None
+
+try:
+    import requests
+except ImportError:  # pragma: no cover
+    requests = None
 
 try:
     from google import genai as google_genai
@@ -147,6 +152,17 @@ PROVIDERS = {
         # 추론 계열은 temperature 를 받지 않는다 (기본값 1 고정).
         "no_temperature": ("o1", "o3", "o4", "gpt-5"),
     },
+    # OpenRouter 를 거쳐 같은 OpenAI 모델을 부른다. 주소만 다르고 요청 모양은
+    # OpenAI 와 같아서 글은 OpenAIBackend 를 그대로 빌린다. 모델 이름에
+    # 「openai/」 를 붙여야 한다 — OpenRouter 는 회사 이름까지가 모델 이름이다.
+    "openrouter": {
+        "key_var": "OPENROUTER_API_KEY",
+        "model_var": "OPENROUTER_MODEL",
+        "judge_var": "OPENROUTER_JUDGE_MODEL",
+        "base_url_var": "OPENROUTER_BASE_URL",
+        "default_model": "openai/gpt-4.1",
+        "no_temperature": ("openai/o1", "openai/o3", "openai/o4", "openai/gpt-5"),
+    },
     "anthropic": {
         "key_var": "ANTHROPIC_API_KEY",
         "model_var": "ANTHROPIC_MODEL",
@@ -247,6 +263,9 @@ def price_for(model: str, prices: dict = None) -> dict:
         return None
     if name in table:
         return table[name]
+    # OpenRouter 이름(openai/gpt-5.1)은 회사 이름을 떼면 같은 모델이다. 단가도 같다.
+    if "/" in name:
+        return price_for(name.split("/", 1)[1], prices)
     # 날짜 고정본 → 기본 이름. 가장 긴 것부터 본다.
     for base in sorted(table, key=len, reverse=True):
         if name.startswith(base) and _DATE_SUFFIX_RE.match(name[len(base):]):
@@ -266,16 +285,26 @@ def cost_text(usd, note: str = "") -> str:
 
 
 def cost_of(model: str, tokens: dict, prices: dict = None) -> dict:
-    """토큰 dict -> 항목별 USD. 단가를 모르면 None (0 이 아니다)."""
+    """토큰 dict -> 항목별 USD. 단가를 모르면 None (0 이 아니다).
+
+    OpenRouter 처럼 응답이 실제 청구액(billed_usd)을 알려 주면 합계는 그 값을
+    쓴다. 단가표로 다시 계산한 값은 어림이고, 청구액은 실제로 나간 돈이다.
+    """
+    billed = tokens.get("billed_usd") if isinstance(tokens, dict) else None
     rate = price_for(model, prices)
     if not rate:
-        return None
+        if billed is None:
+            return None
+        return {"total": round(float(billed), 8), "cost_basis": "billed"}
     out = {}
     for f in COST_FIELDS:
         per_mtok = rate.get(f)
         n = int(tokens.get(f, 0) or 0)
         out[f] = round(n * float(per_mtok or 0.0) / 1_000_000, 8)
     out["total"] = round(sum(out[f] for f in COST_FIELDS), 8)
+    if billed is not None:
+        out["total"] = round(float(billed), 8)
+        out["cost_basis"] = "billed"
     return out
 
 # ---------------------------------------------------------------- utilities
@@ -454,6 +483,9 @@ class Backend:
 
 class OpenAIBackend(Backend):
     name = "openai"
+    # 답 길이 상한의 이름. OpenAI 는 새 이름(max_completion_tokens)을 쓰고,
+    # OpenRouter 는 옛 이름(max_tokens)을 받는다.
+    max_tokens_field = "max_completion_tokens"
 
     def __init__(self, api_key: str = None, base_url: str = None, max_retries: int = 3):
         if openai is None:
@@ -476,13 +508,16 @@ class OpenAIBackend(Backend):
         kwargs = dict(
             model=model,
             messages=[{"role": "user", "content": content}],
-            max_completion_tokens=max_tokens,
         )
+        kwargs[self.max_tokens_field] = max_tokens
         if temperature is not None:
             kwargs["temperature"] = temperature
         # 프롬프트에 'json' 이 없으면 JSON 모드를 켤 수 없다 (API 가 거부한다).
         if OPENAI_JSON_MODE and "json" in prompt.lower():
             kwargs["response_format"] = {"type": "json_object"}
+        extra = self.extra_body()
+        if extra:
+            kwargs["extra_body"] = extra
 
         resp = self.client.chat.completions.create(**kwargs)
         choice = resp.choices[0]
@@ -497,8 +532,76 @@ class OpenAIBackend(Backend):
             "cache_read": getattr(details, "cached_tokens", 0) or 0 if details else 0,
             "cache_write": 0,
         }
+        billed = self.billed_usd(u)
+        if billed is not None:
+            usage["billed_usd"] = billed
         stop = "max_tokens" if choice.finish_reason == "length" else choice.finish_reason
         return text, usage, stop
+
+    def billed_usd(self, usage):
+        """응답이 알려 준 실제 청구액(USD). OpenAI 는 안 알려 준다."""
+        return None
+
+
+# OpenRouter 의 주소. OPENROUTER_BASE_URL 로 바꿀 수 있다.
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+def _openai_extra_body(self):
+    """요청 본문에 더 실을 것. OpenAI 직접은 없다."""
+    return None
+
+
+OpenAIBackend.extra_body = _openai_extra_body
+
+
+def run_session_id() -> str:
+    """이 프로세스가 맡은 작품 번호 — 같은 작품의 호출을 한 묶음으로 보이게 하는 열쇠.
+
+    `NH_SESSION_ID` 가 있으면 그것, 없으면 명령줄의 `--run-id` 값, 그것도 없으면 이 프로세스 번호.
+    """
+    sid = env("NH_SESSION_ID")
+    if sid:
+        return sid[:256]
+    argv = sys.argv
+    if "--run-id" in argv and argv.index("--run-id") + 1 < len(argv):
+        return argv[argv.index("--run-id") + 1][:256]
+    return f"pid-{os.getpid()}"
+
+
+class OpenRouterBackend(OpenAIBackend):
+    """OpenRouter 를 거친 OpenAI 모델. 요청 모양은 OpenAI 와 같다.
+
+    다른 점은 둘이다. 답 길이 상한을 max_tokens 로 받고, 응답의 usage.cost 에
+    실제로 청구한 금액(USD)을 담아 준다. 그 금액을 그대로 비용으로 남긴다.
+    """
+    name = "openrouter"
+    max_tokens_field = "max_tokens"
+
+    def __init__(self, api_key: str = None, base_url: str = None, max_retries: int = 3):
+        super().__init__(api_key=api_key, base_url=base_url or OPENROUTER_BASE_URL,
+                         max_retries=max_retries)
+
+    def extra_body(self):
+        """캐시를 지키려고 붙이는 것(2026-10-26).
+
+        OpenRouter 는 같은 모델을 여러 업체(OpenAI 직접 · Azure 등)에 나눠 보낸다. 업체가 바뀌면 그쪽엔 캐시가
+        없어 프롬프트 캐시(운영에서 장 단계 입력의 65%)가 다시 처음부터 쌓인다. 그래서
+          - `provider.only` 로 OpenAI 직접 서버로만 보낸다(`OPENROUTER_PROVIDER_ONLY`, `any` 면 끔)
+          - `session_id` 로 한 작품의 호출을 같은 곳에 붙인다(첫 요청부터 고정, 10분 쉬면 풀림)
+        https://openrouter.ai/docs/features/prompt-caching
+        """
+        body = {"session_id": run_session_id()}
+        only = [p.strip() for p in str(env("OPENROUTER_PROVIDER_ONLY", "openai")).split(",") if p.strip()]
+        if only and only != ["any"]:
+            body["provider"] = {"only": only}
+        return body
+
+    def billed_usd(self, usage):
+        value = getattr(usage, "cost", None)
+        if value is None:
+            value = (getattr(usage, "model_extra", None) or {}).get("cost")
+        return float(value) if isinstance(value, (int, float)) else None
 
 
 class AnthropicBackend(Backend):
@@ -659,6 +762,7 @@ def _gemini_retryable(err: Exception) -> bool:
 BACKENDS = {
     "gemini": GeminiBackend,
     "openai": OpenAIBackend,
+    "openrouter": OpenRouterBackend,
     "anthropic": AnthropicBackend,
 }
 
@@ -689,9 +793,10 @@ CHARSHEET_RATIOS = {         # Gemini 용 (비율). 시트는 가로로 넓어�
 # 시트는 **컷과 같은 모델**로 뽑는다. 다른 모델로 뽑으면 같은 스타일 문구를 넣어도
 # 그림체가 어긋나서, 그 시트를 레퍼런스로 쓰는 의미가 없어진다.
 # (실제로 gpt-image-1 은 얼굴 비율이 크고 이목구비가 웹툰 양식이 아니었다.)
-IMAGE_PROVIDERS = ("gemini", "openai")
+IMAGE_PROVIDERS = ("gemini", "openai", "openrouter")
 DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image"
 DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-2"      # gpt-image-1 은 2026-10-23 종료
+DEFAULT_OPENROUTER_IMAGE_MODEL = "openai/gpt-image-2"
 # 1536x1024 medium 기준 장당 단가. 다른 품질은 요금표가 달라서 적지 않는다 —
 # 모르는 숫자를 적어 두면 비용 표시가 거짓말이 된다. .env 로 덮어쓸 수 있다.
 OPENAI_IMAGE_COST_USD = {"medium": 0.041}
@@ -883,6 +988,18 @@ def charsheet_source(p1: dict) -> dict:
 
 def image_backend_ready(provider: str) -> tuple:
     """(쓸 수 있는가, 모델 이름, 안내문). 키가 없으면 --dry-run 만 가능하다."""
+    if provider == "openrouter":
+        model = env("OPENROUTER_IMAGE_MODEL", DEFAULT_OPENROUTER_IMAGE_MODEL)
+        if requests is None:
+            return False, model, "requests 패키지가 없습니다.  pip install requests"
+        if not env("OPENROUTER_API_KEY"):
+            return False, model, (
+                "OPENROUTER_API_KEY 가 없습니다.\n"
+                "  .env 에 아래를 넣으세요:\n"
+                "    OPENROUTER_API_KEY=...\n"
+                "  키 없이 프롬프트만 뽑으려면 --dry-run 을 붙이세요.")
+        return True, model, ""
+
     if provider == "openai":
         model = env("OPENAI_IMAGE_MODEL", DEFAULT_OPENAI_IMAGE_MODEL)
         if openai is None:
@@ -960,6 +1077,12 @@ def make_sheet_painter(provider: str, model: str, quality: str,
     받아 적는다. photos 가 있으면 텍스트 사양과 나란히 첨부한다.
     """
     photos = photos or []
+    if provider == "openrouter":
+        def paint_openrouter(prompt: str, kind: str) -> tuple[bytes, dict]:
+            return generate_sheet_image_openrouter(
+                model, prompt, CHARSHEET_SIZES[kind], quality, photos)
+        return paint_openrouter, "openrouter"
+
     if provider == "openai":
         client = openai.OpenAI(api_key=env("OPENAI_API_KEY"),
                                base_url=env("OPENAI_BASE_URL") or None)
@@ -1159,6 +1282,102 @@ def generate_sheet_image_openai(client, model: str, prompt: str, size: str,
     raise RuntimeError(f"응답에 이미지 데이터가 없습니다: {str(item)[:500]}")
 
 
+def _aspect_of(size: str) -> str:
+    """OpenAI 픽셀 크기(1536x1024) -> OpenRouter 비율(3:2).
+
+    OpenRouter 의 gpt-image-2 는 픽셀이 아니라 비율만 받는다. 우리가 쓰는
+    세 크기는 3:2 · 2:3 · 1:1 로 그대로 옮겨진다. 이미 비율이면 그대로 둔다.
+    """
+    text = str(size or "").strip()
+    if ":" in text:
+        return text
+    w, _, h = text.lower().partition("x")
+    try:
+        w, h = int(w), int(h)
+    except ValueError:
+        return "auto"
+    import math
+    g = math.gcd(w, h) or 1
+    return f"{w // g}:{h // g}"
+
+
+# 다시 보내도 되는 응답. 429 는 잠깐 쉬라는 뜻이고, 502 는 OpenRouter 가
+# "그림을 다 못 받았다(청구 안 함)" 고 할 때 쓴다.
+OPENROUTER_RETRY_STATUS = (429, 500, 502, 503, 504)
+
+
+def generate_sheet_image_openrouter(model: str, prompt: str, size: str, quality: str,
+                                    photos: list[Path] | None = None) -> tuple[bytes, dict]:
+    """OpenRouter 의 그림 API 로 한 장. (PNG 바이트, meta). 못 받으면 RuntimeError.
+
+    OpenAI 의 images.generate / images.edit 와 다른 점:
+      - 주소가 하나(POST /images)다. 참고 그림은 input_references 에 data URL 로 넣는다.
+      - 크기 대신 비율(aspect_ratio)을 받는다.
+      - usage.cost 에 실제 청구액(USD)을 담아 준다. 그 값을 비용으로 쓴다.
+
+    거절·오류 응답은 본문을 그대로 예외 메시지에 싣는다 — failure.py 가 그 말로
+    안전 검사 거절인지 가른다.
+    """
+    photos = photos or []
+    base = (env("OPENROUTER_BASE_URL") or OPENROUTER_BASE_URL).rstrip("/")
+    body = {"model": model, "prompt": prompt, "n": 1,
+            "aspect_ratio": _aspect_of(size)}
+    if quality:
+        body["quality"] = quality
+    if photos:
+        refs = []
+        for ph in photos:
+            img = load_image(ph)
+            refs.append({"type": "image_url", "image_url": {
+                "url": f"data:{img['mime']};base64,{img['b64']}"}})
+        body["input_references"] = refs
+    headers = {"Authorization": f"Bearer {env('OPENROUTER_API_KEY')}",
+               "Content-Type": "application/json"}
+    timeout = env_float("OPENROUTER_IMAGE_TIMEOUT", 600.0)
+    tries = max(1, env_int("OPENROUTER_IMAGE_TRIES", 3))
+
+    resp = None
+    for attempt in range(1, tries + 1):
+        try:
+            resp = requests.post(f"{base}/images", headers=headers, json=body,
+                                 timeout=timeout)
+        except requests.ConnectionError as e:
+            if attempt == tries:
+                raise RuntimeError(f"OpenRouter 에 연결하지 못했습니다: {e}") from e
+            time.sleep(2 ** attempt)
+            continue
+        if resp.status_code in OPENROUTER_RETRY_STATUS and attempt < tries:
+            time.sleep(2 ** attempt)
+            continue
+        break
+    if not resp.ok:
+        raise RuntimeError(f"OpenRouter 그림 요청 실패 ({resp.status_code}): {resp.text[:800]}")
+
+    data = resp.json()
+    items = data.get("data") or []
+    item = items[0] if items else None
+    if not item or not item.get("b64_json"):
+        raise RuntimeError(f"응답에 이미지가 없습니다: {json.dumps(data, ensure_ascii=False)[:500]}")
+    raw = base64.b64decode(item["b64_json"])
+    media = item.get("media_type") or "image/png"
+    if media != "image/png":
+        # 파이프라인은 .png 로 저장하고 PNG 로 읽는다. 다른 형식이면 여기서 바꾼다.
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.open(io.BytesIO(raw)).save(buf, format="PNG")
+        raw = buf.getvalue()
+    usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
+    meta = {
+        "revised_prompt": item.get("revised_prompt"),
+        "usage": usage and json.dumps(usage),
+        "usage_dict": usage,
+        "media_type": media,
+        "aspect_ratio": body["aspect_ratio"],
+    }
+    return raw, meta
+
+
 def charsheet_unit_cost(provider: str, quality: str) -> tuple:
     """장당 단가와 그 근거. 모르면 (0.0, 사유).
 
@@ -1168,7 +1387,7 @@ def charsheet_unit_cost(provider: str, quality: str) -> tuple:
     unit = env_float("IMAGE_COST_USD", 0.0) or env_float("OPENAI_IMAGE_COST_USD", 0.0)
     if unit:
         return unit, ".env 의 IMAGE_COST_USD"
-    if provider == "openai":
+    if provider in ("openai", "openrouter"):
         unit = OPENAI_IMAGE_COST_USD.get(quality, 0.0)
         return unit, (f"1536x1024 {quality} 기준" if unit
                       else f"{quality} 품질의 단가를 모릅니다")

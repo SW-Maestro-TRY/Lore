@@ -56,3 +56,8 @@
   .wt .wt-ch-new { display: none; }
   .wt .wt-ch-list-mnew { display: flex; }
 }
+
+/* 공개 설정을 포함한 긴 번역도 모바일 카드 폭을 유지한다. */
+.wt .wt-ch-list-head > div { min-width: 0; max-width: 100%; }
+.wt .wt-ch-list-head h2 { overflow-wrap: anywhere; }
+.wt .wt-ch-item .wt-ch-item-acts .btn { min-width: 0; max-width: 100%; height: auto; min-height: 34px; white-space: normal; overflow-wrap: anywhere; }

@@ -13,6 +13,10 @@ public interface WebtoonJobRepository extends JpaRepository<WebtoonJob, Long> {
 
     Optional<WebtoonJob> findByPublicId(String publicId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select j from WebtoonJob j where j.publicId = :publicId")
+    Optional<WebtoonJob> lockByPublicId(@Param("publicId") String publicId);
+
     /** 차례를 기다리는 것들. 먼저 온 것부터. */
     List<WebtoonJob> findByStatusOrderByIdAsc(JobStatus status);
 

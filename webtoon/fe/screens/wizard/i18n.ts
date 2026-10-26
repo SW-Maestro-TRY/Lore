@@ -3,6 +3,16 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "한 편은 {base}장까지예요. 이야기가 길어 장면이 더 많으면 한 장에 {per}크레딧이 더 들고, 크레딧이 모자라면 {base}장까지 먼저 그린 뒤 나머지는 나중에 이어 그릴 수 있어요.": {
+    en: "An episode includes up to {base} pages. If a longer story needs more scenes, each extra page costs {per} credits; if you're short, we'll draw the first {base} pages and you can continue the rest later.",
+    ja: "1話は{base}ページまでです。話が長くて場面が増えると1ページ{per}クレジットかかり、足りない場合は{base}ページまで先に描いて、残りは後から続けて描けます。",
+    zh: "每话包含 {base} 页。故事较长、场景更多时，每多一页需 {per} 积分；积分不够时会先画前 {base} 页，剩下的之后可以接着画。",
+  },
+  "제목 · 추가 설정": { en: "Title · extra settings", ja: "タイトル · 追加設定", zh: "标题 · 附加设定" },
+  "추가 설정": { en: "Extra settings", ja: "追加設定", zh: "附加设定" },
+  "비워 두면 이야기에 맞춰 지어 드려요": { en: "Leave blank and we'll name it to fit the story", ja: "空欄なら物語に合わせて付けます", zh: "留空则按故事为你起名" },
+  "세계관 규칙·말투·꼭 들어갈 장면처럼 더 알려 주고 싶은 것": { en: "Anything else — world rules, speech style, a scene that must appear", ja: "世界観のルール・口調・必ず入れたい場面など", zh: "世界规则、说话方式、一定要有的场景等" },
+
   /* ---- 빵부스러기 · 폰 제목 ---- */
   "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
   "이야기 · 장르": { en: "Story · Genre", ja: "ストーリー · ジャンル", zh: "故事 · 题材" },
@@ -143,7 +153,7 @@ const dict: Dict = {
   "LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.": { en: "LORE is not responsible for copyright disputes over generated results.", ja: "LOREは生成された結果物の著作権紛争について責任を負いません。", zh: "LORE 对生成结果的版权纠纷不承担责任。" },
   "시작하는 중": { en: "Starting", ja: "開始中", zh: "正在开始" },
   "웹툰 만들기": { en: "Create webtoon", ja: "ウェブトゥーンを作る", zh: "制作条漫" },
-  "시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸려요.": { en: "Times assume an empty queue. It takes longer if others are ahead of you.", ja: "時間は待ち行列が空のときの目安です。前に人がいるとさらにかかります。", zh: "时间以队列为空时为准。前面有人的话会更久。" },
+  "시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.": { en: "Times assume an empty queue. It may take longer if others are ahead of you.", ja: "時間は待ち行列が空のときの目安です。前に人がいるとさらにかかることがあります。", zh: "时间以队列为空时为准。前面有人的话会更久。" },
   "{time} · 앞에 사람이 있으면 더 걸려요": { en: "{time} · longer if others are ahead", ja: "{time} · 前に人がいるとさらにかかります", zh: "{time} · 前面有人会更久" },
 
   /* 화질 (lib/wizardData QUALITY_INFO) — lede 의 " · " 는 앞부분만 잘라 쓰므로 유지 */
@@ -194,6 +204,18 @@ const dict: Dict = {
   "AI 가 만든 이야기와 장면을 확인하고, 원하는 부분을 고친 뒤 만들어요. 나갔다 와도 이어서 할 수 있어요.": { en: "Check the story and scenes AI made, fix what you want, then make it. You can leave and come back.", ja: "AI が作ったストーリーと場面を確認し、直したいところを直してから作ります。離れても続きからできます。", zh: "确认 AI 写的故事和场景，修改想改的部分再制作。离开后也能继续。" },
   "이 브라우저에서만 이어서 할 수 있어요. 다른 기기에서는 작업을 찾지 못해요.": { en: "You can only continue on this browser. Other devices can't find this job.", ja: "このブラウザでのみ続けられます。他の端末では作業が見つかりません。", zh: "只能在此浏览器继续，其他设备找不到这个作业。" },
   "· 내 내용": { en: "· My content", ja: "· 自分の内容", zh: "· 我的内容" },
+  /* ---- 빠졌던 번역 ---- */
+  "{name} 수정": { en: "Edit {name}", ja: "{name}を編集", zh: "编辑 {name}" },
+  "그림체 · 방식": { en: "Art style · Options", ja: "画風 · 進め方", zh: "画风 · 方式" },
+  "다시 확인": { en: "Check again", ja: "再確認", zh: "重新确认" },
+  "만들기 단계": { en: "Creation steps", ja: "作成ステップ", zh: "制作步骤" },
+  "생성 방식": { en: "Creation mode", ja: "生成方式", zh: "生成方式" },
+  "어떤 이야기인가요?": { en: "What's the story?", ja: "どんなストーリーですか？", zh: "是什么样的故事？" },
+  "이전 캐릭터": { en: "Previous character", ja: "前のキャラクター", zh: "上一个角色" },
+  "저장 전 확인": { en: "Review before saving", ja: "保存前の確認", zh: "保存前确认" },
+  "직접 입력": { en: "Enter manually", ja: "直接入力", zh: "手动输入" },
+  "캐릭터 · 이야기": { en: "Character · Story", ja: "キャラクター · ストーリー", zh: "角色 · 故事" },
+  "크레딧 정보를 불러오지 못했어요. 다시 확인해 주세요.": { en: "Couldn't load your credit info. Please check again.", ja: "クレジット情報を読み込めませんでした。もう一度確認してください。", zh: "无法加载积分信息，请重新确认。" },
 };
 
 registerDict(dict);

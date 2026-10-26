@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.job.WebtoonJob;
 import com.lore.webtoon.job.WebtoonJobRepository;
+import com.lore.webtoon.job.WebtoonQuality;
 import com.lore.webtoon.job.WebtoonStyles;
 import com.lore.webtoon.story.StoryStore;
 import com.lore.webtoon.story.WebtoonStory;
@@ -61,10 +62,86 @@ public class RunService {
     private final StoryStore stories;
     private final PageStore pages;
     private final RunLikeRepository likes;
+    private com.lore.webtoon.series.SeriesChapterRepository series;
     private OverlayStore overlays;
     /* 편집실에서 고친 여백을 공개본에 싣는다. 검사에서 손으로 만들 때는 없어도 된다(여백 0). */
     @org.springframework.beans.factory.annotation.Autowired
     public void setOverlays(OverlayStore overlays) { this.overlays = overlays; }
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSeries(com.lore.webtoon.series.SeriesChapterRepository series) { this.series=series; }
+    private RunViews views;
+    /* 둘러보기 조회순(2026-10-26). 검사에서 손으로 만들 때는 없어도 된다(조회수 0). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setViews(RunViews views) { this.views = views; }
+    private String rootJobOf(WebtoonJob job) {
+        if (job == null || series == null) return job == null ? null : job.getPublicId();
+        return series.findById(job.getPublicId()).map(com.lore.webtoon.series.SeriesChapter::rootJob)
+                .orElse(job.getPublicId());
+    }
+
+    private WebtoonWork rootWorkOf(WebtoonWork work) {
+        WebtoonJob job = jobs.findByPublicId(work.getJobId()).orElse(null);
+        String rootJob = rootJobOf(job);
+        if (rootJob == null || rootJob.equals(work.getJobId())) return work;
+        return works.findByJobId(rootJob)
+                .filter(root -> root.getRunId() != null && !root.isTrashed())
+                .orElse(work);
+    }
+
+    private List<Integer> episodesOf(String rootJob, boolean publicOnly) {
+        List<Integer> episodes = new ArrayList<>();
+        episodes.add(1);
+        if (series == null || rootJob == null) return episodes;
+        for (var chapter : series.findByRootJobOrderByEpisodeNumberAsc(rootJob)) {
+            if (works.findByJobId(chapter.jobId())
+                    .filter(work -> work.getRunId() != null && !work.isTrashed())
+                    .filter(work -> !publicOnly || work.isPublic())
+                    .filter(work -> !pages.pageNumbersOf(work.getRunId()).isEmpty())
+                    .isPresent()) {
+                episodes.add(chapter.episodeNumber());
+            }
+        }
+        return episodes;
+    }
+
+    /** 연재 카드에서 회차 버튼이 실제 작품을 열 수 있도록 회차별 run_id 를 붙인다. */
+    private Map<String, String> episodeRunIdsOf(String rootJob, String rootRunId, boolean publicOnly) {
+        Map<String, String> runIds = new LinkedHashMap<>();
+        runIds.put("1", rootRunId);
+        if (series == null || rootJob == null) return runIds;
+        for (var chapter : series.findByRootJobOrderByEpisodeNumberAsc(rootJob)) {
+            works.findByJobId(chapter.jobId())
+                    .filter(work -> work.getRunId() != null && !work.isTrashed())
+                    .filter(work -> !publicOnly || work.isPublic())
+                    .filter(work -> !pages.pageNumbersOf(work.getRunId()).isEmpty())
+                    .ifPresent(work -> runIds.put(String.valueOf(chapter.episodeNumber()), work.getRunId()));
+        }
+        return runIds;
+    }
+    /**
+     * 연재 2화부터의 작품 제목 — 1화 제목이다(2026-10-26). 화마다 AI 가 새 제목을 지어서 같은 작품이 화마다
+     * 다른 이름으로 보였다. 이 화가 지은 제목은 소제목(subtitle)으로 옮긴다. 연재가 아니거나 1화면 null.
+     */
+    private String seriesTitleOf(WebtoonJob job) {
+        String root = rootJobOf(job);
+        if (job == null || root == null || root.equals(job.getPublicId())) return null;
+        return works.findByJobId(root).map(WebtoonWork::getRunId).filter(java.util.Objects::nonNull)
+                .flatMap(stories::chosenOf).map(WebtoonStory::displayTitle)
+                .filter(t -> !t.isBlank()).orElse(null);
+    }
+
+    /** title 을 작품 제목으로, 이 화의 제목을 subtitle 로 — 연재 2화부터만. */
+    private void putSeriesTitle(Map<String, Object> out, WebtoonJob job) {
+        String series = seriesTitleOf(job);
+        if (series != null) {
+            out.put("subtitle", out.get("title"));
+            out.put("title", series);
+        }
+    }
+
+    private int episodeOf(WebtoonJob job) {
+        return job == null || series == null ? 1 : series.episodeOf(job.getPublicId()).orElse(1);
+    }
     private final ObjectMapper mapper = new ObjectMapper();
 
     public RunService(WebtoonWorkRepository works, WebtoonJobRepository jobs,
@@ -84,7 +161,61 @@ public class RunService {
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> browse() {
-        return cardsOf(works.onGallery(), false);
+        /* 연재는 카드 하나로 묶는다 — 회차마다 카드가 따로 뜨면 한 작품이 여러 작품처럼
+           보인다. 1화 카드에 공개된 회차 번호를 모으고, 회차 단추가 그 회차를 연다.
+           1화가 비공개·삭제면 묶을 자리가 없으니 회차를 따로 둔다. */
+        List<Map<String, Object>> out = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        /* 1화 카드는 연재마다 한 번만 만든다 — 회차마다 다시 만들면 23화 연재 하나에
+           회차 조회가 수천 번 나간다. 1화에 그림이 없어 카드가 안 나오면(null) 기억해 두고
+           회차를 따로 낸다. */
+        Map<String, Map<String, Object>> rootCards = new java.util.HashMap<>();
+        for (WebtoonWork one : works.onGallery()) {
+            if (one.isTrashed()) {
+                continue;
+            }
+            WebtoonJob job = jobs.findByPublicId(one.getJobId()).orElse(null);
+            String rootJob = rootJobOf(job);
+            WebtoonWork root = rootJob == null ? null
+                    : rootJob.equals(one.getJobId()) ? one
+                    : works.findByJobId(rootJob)
+                        .filter(r -> r.getRunId() != null && !r.isTrashed() && r.isPublic())
+                        .orElse(null);
+            Map<String, Object> card = null;
+            if (root != null) {
+                card = rootCards.computeIfAbsent(rootJob, k -> {
+                    Map<String, Object> c = cardIgnoringTrash(root, false, true, true);
+                    return c == null ? Map.of() : c;
+                });
+                if (card.isEmpty()) {
+                    card = null;
+                }
+            }
+            if (card == null) {
+                card = cardIgnoringTrash(one, false, false, false);
+            }
+            if (card != null && seen.add(String.valueOf(card.get("run_id")))) {
+                out.add(card);
+            }
+        }
+        putViews(out);
+        return out;
+    }
+
+    /** 조회수 — 연재 카드는 실린 회차를 본 수를 더한다. 1화 카드는 묶음 사이에 같이 쓰므로 새 지도로 바꿔 싣는다. */
+    private void putViews(List<Map<String, Object>> cards) {
+        Map<String, Long> seenBy = views == null ? Map.of() : views.all();
+        for (int i = 0; i < cards.size(); i++) {
+            Map<String, Object> card = new LinkedHashMap<>(cards.get(i));
+            java.util.Collection<?> runIds = card.get("episode_run_ids") instanceof Map<?, ?> m && !m.isEmpty()
+                    ? m.values() : List.of(card.get("run_id"));
+            long n = 0;
+            for (Object id : runIds) {
+                n += seenBy.getOrDefault(String.valueOf(id), 0L);
+            }
+            card.put("views", n);
+            cards.set(i, card);
+        }
     }
 
     /**
@@ -104,9 +235,10 @@ public class RunService {
 
     private List<Map<String, Object>> cardsOf(List<WebtoonWork> found, boolean withPublic) {
         List<Map<String, Object>> out = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
         for (WebtoonWork one : found) {
-            Map<String, Object> card = card(one, withPublic);
-            if (card != null) {
+            Map<String, Object> card = card(one, withPublic, withPublic);
+            if (card != null && (!withPublic || seen.add(String.valueOf(card.get("run_id"))))) {
                 out.add(card);
             }
         }
@@ -125,8 +257,30 @@ public class RunService {
     @Transactional(readOnly = true)
     public Map<String, Object> cardOf(String runId) {
         return works.findFirstByRunId(runId)
-                .map(work -> card(work, false))
+                .map(work -> card(work, false, true))
                 .orElse(null);
+    }
+
+    /**
+     * 목록 하나를 만들 때 쓰는 {@link #cardOf(String)} — 연재 1화 카드를 {@code roots} 에 들고 있다가
+     * 같은 연재의 다른 화에서는 그 카드를 그대로 준다(2026-10-27).
+     *
+     * 마이페이지는 작품마다 카드를 만든 뒤 같은 연재를 하나로 합친다. 연재 카드는 만들 때마다 회차를
+     * 전부 조회하므로, 34화 연재(멘토님 「슈퍼 세컨드브레인」)면 34 × 34 번 조회가 나갔다.
+     * 둘러보기({@link #browse()})의 rootCards 와 같은 방법이다. {@code roots} 는 부르는 쪽이 한 번 쓰고 버린다.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> cardOf(String runId, Map<String, Map<String, Object>> roots) {
+        WebtoonWork work = works.findFirstByRunId(runId).orElse(null);
+        if (work == null || work.isTrashed()) {
+            return null;
+        }
+        WebtoonWork root = rootWorkOf(work);
+        String key = root.getRunId();
+        if (!roots.containsKey(key)) {
+            roots.put(key, cardIgnoringTrash(root, false, true));
+        }
+        return roots.get(key);
     }
 
     /**
@@ -153,14 +307,24 @@ public class RunService {
     }
 
     /** 카드 하나. 그림이 없으면 {@code null} — 목록에 안 올린다. */
-    private Map<String, Object> card(WebtoonWork work, boolean withPublic) {
+    private Map<String, Object> card(WebtoonWork work, boolean withPublic, boolean groupSeries) {
         if (work.isTrashed()) {
             return null;
         }
-        return cardIgnoringTrash(work, withPublic);
+        return cardIgnoringTrash(groupSeries ? rootWorkOf(work) : work, withPublic, groupSeries);
     }
 
     private Map<String, Object> cardIgnoringTrash(WebtoonWork work, boolean withPublic) {
+        return cardIgnoringTrash(work, withPublic, false);
+    }
+
+    private Map<String, Object> cardIgnoringTrash(WebtoonWork work, boolean withPublic, boolean groupSeries) {
+        return cardIgnoringTrash(work, withPublic, groupSeries, false);
+    }
+
+    /** {@code publicOnly} — 남이 보는 목록이라 비공개 회차는 번호도 안 싣는다. */
+    private Map<String, Object> cardIgnoringTrash(WebtoonWork work, boolean withPublic, boolean groupSeries,
+                                                  boolean publicOnly) {
         String runId = work.getRunId();
         List<Integer> numbers = pages.pageNumbersOf(runId);
         if (numbers.isEmpty()) {
@@ -174,9 +338,14 @@ public class RunService {
         card.put("character", characterOf(job));
         card.put("title", chosen.map(WebtoonStory::displayTitle).filter(s -> !s.isBlank())
                 .orElse(NO_TITLE));
+        putSeriesTitle(card, job);
         card.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
-        // 한 편짜리다 — 이어그리기가 붙으면 여기가 늘어난다.
-        card.put("episodes", List.of(1));
+        // 연재는 첫 작품 카드 하나에 완성된 회차 번호를 모아 보여 준다.
+        card.put("episodes", groupSeries ? episodesOf(rootJobOf(job), publicOnly) : List.of(episodeOf(job)));
+        card.put("episode_run_ids", groupSeries
+                ? episodeRunIdsOf(rootJobOf(job), runId, publicOnly)
+                : Map.of(String.valueOf(episodeOf(job)), runId));
+        card.put("episode", episodeOf(job));
         card.put("cover_episode", 1);
         card.put("cover_page", numbers.getFirst());
         card.put("page_count", numbers.size());
@@ -196,6 +365,29 @@ public class RunService {
      * 지면 폭 개념이 없다. {@code gap}(장 뒤 여백, 폭의 몇 배)은 하네스가 안
      * 정하고 <b>편집실에서 사람이 고친 값</b>만 있다 — 안 고친 장은 0 이다.
      */
+    /**
+     * 아직 안 그린 장 번호 — 장면은 있는데 그림이 없는 장. 표지가 1장이고 장면 n 은 n+1 장이다.
+     * 장면을 모르면(옛 작품) 빈 목록이다.
+     */
+    static List<Integer> pendingPages(List<Integer> drawn, List<String> scenes) {
+        List<Integer> out = new ArrayList<>();
+        if (scenes == null || scenes.isEmpty()) {
+            return out;
+        }
+        for (int no = 1; no <= scenes.size() + 1; no++) {
+            if (!drawn.contains(no)) {
+                out.add(no);
+            }
+        }
+        return out;
+    }
+
+    /** 이 작품에서 아직 안 그린 장 번호. 이어 그리기가 본다. */
+    @Transactional(readOnly = true)
+    public List<Integer> pendingPages(String runId) {
+        return pendingPages(pages.pageNumbersOf(runId), stories.scenesOf(runId));
+    }
+
     @Transactional(readOnly = true)
     public Map<String, Object> result(String runId) {
         List<Integer> numbers = pages.pageNumbersOf(runId);
@@ -228,16 +420,29 @@ public class RunService {
         out.put("character", characterOf(job));
         out.put("title", chosen.map(WebtoonStory::displayTitle).filter(s -> !s.isBlank())
                 .orElse(NO_TITLE));
+        putSeriesTitle(out, job);
         out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
         out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));
-        out.put("episode", 1);
+        out.put("episode", episodeOf(job));
+        /* 이 회차의 찜 수 — 둘러보기는 연재를 1화 카드로 묶어서 2화 이후의 수를 거기서 못 얻는다 */
+        out.put("likes", likes.countByRunId(runId));
         out.put("pages", sheets);
         out.put("page_count", numbers.size());
-        /* 그리기로 한 장 수와 실제로 그린 장 수가 같다 — 이 길은 한 편을
-           끝까지 그리거나 실패하거나 둘 중 하나이고, 앞 몇 장만 그리는
-           「미리보기」가 없다. 화면은 이 둘이 다를 때만 "앞 몇 장만" 을 적는다. */
-        out.put("planned_pages", numbers.size());
+        /* 그리기로 한 장 수(표지 + 장면 수)와 실제로 그린 장 수. 한 편 값은 기본 장 수까지라, 크레딧이
+           모자라면 뒤 장을 안 그린 채 완성한다 — 그 장 번호와 한 장 값을 같이 줘서 화면이 「이어 그리기」를
+           띄운다. 「미리보기」(preview)는 여전히 없다 — 공유·공개는 그린 장만으로 그대로 한다. */
+        List<Integer> pending = pendingPages(numbers, scenes);
+        out.put("planned_pages", numbers.size() + pending.size());
+        out.put("pending_pages", pending);
+        /* 잠긴 장도 웹툰 흐름 안에서 「다음 장면」으로 보이게 — 그린 장의 caption 과 같은 장면 한 줄이다 */
+        List<Map<String, Object>> pendingScenes = new ArrayList<>();
+        for (int no : pending) {
+            pendingScenes.add(Map.of("no", no, "caption", captionOf(scenes, no)));
+        }
+        out.put("pending_scenes", pendingScenes);
+        out.put("extra_page_credits", WebtoonQuality.extraPageCreditsOf(job == null ? null : job.getQuality()));
+        out.put("base_pages", WebtoonQuality.BASE_PAGES);
         out.put("preview", false);
         out.put("example", ExampleWorks.isExample(work));
         return out;
@@ -302,6 +507,8 @@ public class RunService {
             scene.put("w", dim[0]);
             scene.put("h", dim[1]);
             scene.put("cuts", List.of(cut));
+            // 표지 뒤 기본 여백 — 편집실이 고친 값이 없을 때 보여 줄 단(OverlayStore.COVER_GAP_STEP)
+            scene.put("gap_step", no == 1 ? OverlayStore.COVER_GAP_STEP : 0);
             sceneList.add(scene);
         }
 
@@ -314,7 +521,7 @@ public class RunService {
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
         out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));
         // 한 편짜리다 — 이어그리기가 붙으면 여기가 늘어난다(카드가 쓰는 것과 같은 값).
-        out.put("episode", 1);
+        out.put("episode", episodeOf(job));
         out.put("episodes", List.of(1));
         // 여백 눈금 — 편집실이 그리는 간격과 공개본·내려받은 파일의 간격이 같은 표를 본다.
         Map<String, Double> scale = new LinkedHashMap<>();

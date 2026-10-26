@@ -80,6 +80,35 @@ STAGE = "PAGE_IMAGE"
 PAGE_DIR = "pages"
 
 
+
+# 그림 모델(OpenAI images.edit)이 받는 프롬프트 최대 길이 — 넘으면 400 으로 그 장이 실패한다.
+IMAGE_PROMPT_MAX = 32000
+
+
+def fit_extra(extra: str, scene_text: str, room: int, run_dir: Path, dry_run: bool = False) -> str:
+    """설정집 · 연재 기억이 그림 모델 한도를 넘길 때 — AI 로 이 장면에 필요한 것만 남겨 줄인다(2026-10-26).
+
+    줄여도 넘치거나 AI 를 못 부르면 앞에서부터 자른다(그래도 그 장이 실패하는 것보다 낫다)."""
+    if room <= 0:
+        return ""
+    if not dry_run:
+        try:
+            import llm
+            import run as R
+            ask = (R.load_prompt("lore/shrink_prompt").replace("{{LIMIT}}", str(room))
+                   + "\n[이 장면]\n" + scene_text + "\n\n[줄일 글]\n" + extra + "\n")
+            call = llm.Call("STORY")
+            text, meta = call(ask)
+            meta["stage"] = "PROMPT_SHRINK"
+            R.record(run_dir, meta)
+            text = text.strip()
+            if text and len(text) <= room:
+                log(f"  설정집이 길어 그림 요청 글을 줄였습니다 ({len(extra)}자 → {len(text)}자)")
+                return text
+        except Exception as exc:  # noqa: 줄이기가 실패해도 그리기는 이어 간다
+            log(f"  설정집 줄이기 실패 — 앞에서부터 자릅니다: {exc}")
+    return extra[:room]
+
 def log(msg: str) -> None:
     print(msg, flush=True)
 
@@ -177,7 +206,7 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
         desc = (char.get("description") or "").strip()
         # 고른 캐릭터 카드(#458)의 종·세계를 앞에 둔다 — 원래 설명만 보면
         # 카드가 바꿔 놓은 종(사람 → 검은여우)을 놓치고 사람으로 그린다.
-        card = charcard.short(char.get("card") or {})
+        card = charcard.short(charcard.for_story(char))
         desc = f"{card}. {desc}" if card and desc else (card or desc)
     if spec:
         lines.append(imageprompt.sheet_line(spec))
@@ -320,8 +349,12 @@ def narration_of(scenes: list[dict], scene_no: int) -> list[str] | None:
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
                           has_prev: bool, fixed_names=(), lang: str = "ko", lore: str = "",
-                          cast_sheet_names=()) -> str:
+                          cast_sheet_names=(), narration_none: bool = False) -> str:
     """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
+
+    narration_none : 나레이션 단계(run.stage_narration)가 따로 돌았으면 참. 그때 나레이션이
+    빈 장은 「이 장은 나레이션 없음」으로 그린다. 거짓(옛 run)이면 예전처럼 빈 장의
+    나레이션을 그림 모델이 정한다.
 
     fixed_names : scenes.json 의 「이 화의 고정 설정」. 인물 절 바로 뒤에 붙는다
     (`fixed_block`). 없으면(옛 run) 아무것도 안 붙는다.
@@ -447,6 +480,13 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
                   "위에서 아래로 놓는다. 여기 없는 나레이션 문장은 새로 만들지 않는다 — "
                   "위 글을 다 빼도 된다. 앞의 「나레이션 상자를 최소 1개 넣는다」보다 "
                   "이것이 먼저다.", ""]
+    elif narration_none and fixed == []:
+        # 나레이션 단계가 이 장은 상자가 필요 없다고 판단한 경우. 이 줄이 없으면 앞의
+        # 「나레이션 상자를 최소 1개 넣는다」만 남아 그림 모델이 나레이션을 지어 넣는다 —
+        # 격언투 상자가 붙던 바로 그 경로다(위 주석, 2026-10-13 그려서 확인).
+        lines += ["[나레이션 — 이 장은 없다]",
+                  "  이 장에는 나레이션 상자를 넣지 않는다. 그림과 말풍선으로만 전한다. "
+                  "앞의 「나레이션 상자를 최소 1개 넣는다」보다 이것이 먼저다.", ""]
     lines += [
         (f"[이 화가 열리는 자리 — 여기서부터 그린다] {opens}" if first else
          f"[여기서부터 그린다 — 앞 장이 끝난 자리다] {opens}"),
@@ -628,9 +668,10 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
              or direction.get("plot") or "").strip()
     fixed_names = [x for x in (scene_data.get("fixed") or []) if isinstance(x, str)]
     # 세계 재료(#502) — lore.json 이 있는 run 만. 없으면(옛 run) 프롬프트가 안 바뀐다.
-    lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() else ""
+    lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() and not (char or {}).get("lorebook") else ""
 
     made = []
+    one = {}
     for n_ in range(0, len(scenes) + 1):  # 0 = 표지, 1..len(scenes) = 씬
         page_no = n_ + 1
         if n_ == 0:
@@ -650,13 +691,44 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             prompt = imageprompt.apply_style_sections(
                 build_continue_prompt(direction, scenes, char, spec, cast,
                                       scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
-                                      lang=lang, lore=lore, cast_sheet_names=page_cast),
+                                      lang=lang, lore=lore, cast_sheet_names=page_cast, narration_none=bool(scene_data.get("narration_stage"))),
                 style).replace("{style}", imageprompt.load_style(style))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
         # 그 사람 말대로 다시 그리는 것이다.
-        if note.strip():
-            prompt += "\n\n" + note_block(note)
+        import userbook
+        # 설정집 항목은 이 장의 장면 글로 고른다 — 그림체 설명까지 든 프롬프트 전체로 고르면 거의 모든 항목이 걸려
+        # 그림 모델 한도(32,000자)를 넘겼다(2026-10-26, 마법학교 2화 2쪽 실패). 표지는 소개 글로.
+        scene_text = intro if n_ == 0 else " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends"))
+        cont = (run_dir / "continuation.json").is_file()
+        memory = ""
+        if cont:
+            import continuation
+            memory = continuation.memory_block(run_dir)
+        note_text = note_block(note) if note.strip() else ""
+        # 키워드 항목은 한도 안에 남는 자리만큼만 고른다(돈 안 듦). 항상 참고 · 진행 상태는 늘 넣는다.
+        room0 = IMAGE_PROMPT_MAX - len(prompt) - len(note_text) - len(memory) - 8
+        fixed = userbook.block(char, scene_text, "image", cont, budget=0)          # 항상 참고 · 진행 상태만
+        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)))
+        extra = "\n\n".join(x for x in (book, memory) if x)
+        base_prompt = prompt
+
+        def assemble(more: str = "") -> str:
+            """그림 모델에 보낼 글. 한도(32,000자)를 실제로 넘을 때만 설정집 · 연재 기억을 AI 로 한 번 줄인다
+            (2026-10-26) — 그림체 · 인물 · 이 장면 지시 · 사람이 적은 말 · 검수 메모는 그대로 둔다. 안 넘으면 부르지 않는다."""
+            nonlocal_extra = extra
+            whole = base_prompt + ("\n\n" + nonlocal_extra if nonlocal_extra else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
+            if len(whole) <= IMAGE_PROMPT_MAX or not nonlocal_extra:
+                return whole
+            room = IMAGE_PROMPT_MAX - len(base_prompt) - len(note_text) - len(more) - 8
+            short = fit_extra(nonlocal_extra, scene_text, room, run_dir, dry_run)
+            return base_prompt + ("\n\n" + short if short else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
+
+        # 줄이기(AI 호출)는 이 프로세스가 실제로 그릴 장에만 — 장을 동시에 그리면 프로세스마다 이 반복문을 다 돌아서,
+        # 모든 장을 줄이면 같은 호출이 장 수의 제곱만큼 나갔다(2026-10-26, 6장에 36번 · 947원).
+        if only and page_no not in only:
+            continue
+        prompt = assemble()
         # 프롬프트는 **그릴 장의 것만 쓴다.** 장면을 동시에 그리면 프로세스마다
         # 이 반복문을 다 도는데, 자기가 안 그릴 장의 파일까지 쓰면 여럿이 같은
         # 파일에 동시에 써서 반 토막이 남는다.
@@ -723,7 +795,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         if not do_review:
             continue
         # 표지는 이야기의 한 순간이 아니라 "이어지는가" 를 볼 것이 없다. 대신
-        # 표지 모양인가(칸 하나 · 글상자 없음 · 제목 그대로)를 본다(covercheck).
+        # 표지 모양인가(칸 하나 · 말풍선 없음 · 제목 그대로)를 본다(covercheck).
         if n_ == 0:
             for attempt in range(tries + 1):
                 got, rmeta = covercheck.review_cover(
@@ -738,7 +810,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 log(f"  [표지 검수] 다시 그립니다 ({attempt + 1}/{tries})")
                 archive_page(run_dir, page_no)
                 out.unlink(missing_ok=True)
-                again = prompt + "\n\n" + covercheck.redraw_block(got)
+                again = assemble(covercheck.redraw_block(got))
                 (dest / f"page01.redraw{attempt + 1}.txt").write_text(again, encoding="utf-8")
                 try:
                     meta = imagegen.paint(STAGE, again, out, refs=refs,
@@ -794,7 +866,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             log(f"  [검수] 다시 그립니다 ({attempt + 1}/{tries})")
             archive_page(run_dir, page_no)
             out.unlink(missing_ok=True)
-            again = prompt + "\n\n" + pagecheck.redraw_block(got)
+            again = assemble(pagecheck.redraw_block(got))
             (dest / f"page{page_no:02d}.redraw{attempt + 1}.txt").write_text(
                 again, encoding="utf-8")
             try:

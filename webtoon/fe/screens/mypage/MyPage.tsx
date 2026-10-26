@@ -14,17 +14,18 @@
  * (`@common/mypage/MyPage`)를 빌려 쓸 때 그 껍데기가 고정으로 주던 것이다.
  * 리라이트하며 디자인 캔버스에 없어서 빠졌는데, 실제 서비스에 필요한
  * 자리라 여기서 직접 붙였다(2026-09-19, 사용자 지적). */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
 import { creditBalance } from "@common/api/credits";
 import CreditCharge from "@common/mypage/CreditCharge";
+import PayNotReady from "../../ui/PayNotReady";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, type NhActiveCard, myLikes, myTrash, readAllowance, recentRuns,
-  readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myCommented, myLikes, myTrash, readAllowance, recentRuns,
+  readNotifySetting, restoreRun, removeCharacter, characterTrash, restoreCharacter, type TrashCharacter, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
-  mySurveyStatus, type SurveyStatus,
+  mySurveyStatus, type SurveyStatus, mySeriesDrafts, type SeriesDraftCard,
 } from "../../lib/api";
 import { activeJobLabel, activeJobTitle } from "../../lib/jobLabel";
 import type { Go } from "../../lib/nav";
@@ -32,22 +33,25 @@ import PushOptIn from "../../ui/PushOptIn";
 import RunStrip from "../../ui/RunStrip";
 import { LangSwitch, registerDict, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
-import { IconUser } from "../../ui/Icons";
+import { IconCheck, IconChevronRight, IconMail, IconTrash, IconUser } from "../../ui/Icons";
+import { CharacterEditDialog } from "../character/OriginalCharacter";
+import { InstagramMark, KakaoTalkMark, XMark } from "../../ui/BrandMarks";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { louArt } from "../../lib/louArt";
 import AdminSurvey from "./AdminSurvey";
+import CommunityBell from "../../ui/community/CommunityBell";
 import "./MyPage.css";
 
-/** 「1:1 문의하기」 창구 셋. 카카오톡 채널 주소는 공용(`CONTACT_CHANNEL`)이고, 인스타·X 는
- *  이 화면에서만 쓰는 웹툰 SNS 계정이라 여기 둔다. */
-const CONTACT_LINKS: { key: string; label: string; href: string }[] = [
-  { key: "kakao", label: "카카오톡", href: CONTACT_CHANNEL },
-  { key: "instagram", label: "인스타그램", href: "https://www.instagram.com/lorecomic_/" },
-  { key: "x", label: "X", href: "https://x.com/lorecomic_" },
-];
+/** 공용 카카오 채널과 이 서비스의 공식 SNS 계정. */
+const CONTACT_LINKS = [
+  { key: "instagram", label: "Instagram", href: "https://www.instagram.com/lorecomic_/" },
+  { key: "x", label: "X (Twitter)", href: "https://x.com/lorecomic_" },
+] as const;
+const WEBTOON_SUPPORT_EMAIL = "lore@lorecomic.com";
 
 registerDict({
   "마이페이지": { en: "My page", ja: "マイページ", zh: "我的页面" },
+  "{n}화 초안": { en: "Episode {n} draft", ja: "第{n}話の下書き", zh: "第{n}话草稿" },
   "관리자 비공개": { en: "Hidden by admin", ja: "管理者が非公開", zh: "管理员设为不公开" },
   "관리자가 비공개 처리했어요.": { en: "An admin made this private.", ja: "管理者が非公開にしました。", zh: "管理员已设为不公开。" },
   "관리자가 삭제 처리했어요.": { en: "An admin removed this work.", ja: "管理者が削除しました。", zh: "管理员已删除这部作品。" },
@@ -56,8 +60,6 @@ registerDict({
   "로그인 안 함": { en: "Not signed in", ja: "未ログイン", zh: "未登录" },
   "크레딧": { en: "Credits", ja: "クレジット", zh: "点数" },
   "한 편 {n} C": { en: "{n} C per episode", ja: "1話 {n} C", zh: "每话 {n} C" },
-  "만든 것": { en: "MADE", ja: "作ったもの", zh: "已创作" },
-  "재료": { en: "MATERIALS", ja: "素材", zh: "素材" },
   "계정": { en: "ACCOUNT", ja: "アカウント", zh: "账号" },
   "내 웹툰": { en: "My webtoons", ja: "マイウェブトゥーン", zh: "我的漫画" },
   "모두 보기": { en: "See all", ja: "すべて見る", zh: "查看全部" },
@@ -77,6 +79,13 @@ registerDict({
   "탈퇴하기": { en: "Delete", ja: "退会する", zh: "注销" },
   "정말 탈퇴할까요? 되돌릴 수 없어요.": { en: "Really delete your account? This can't be undone.", ja: "本当に退会しますか？元に戻せません。", zh: "确定要注销吗？此操作无法撤销。" },
   "탈퇴": { en: "Delete account", ja: "退会", zh: "注销" },
+  "충전한 크레딧이 남아 있어요": { en: "You still have purchased credits", ja: "購入したクレジットが残っています", zh: "你还有已购买的点数" },
+  "탈퇴하면 환불받을 수 없어요. 먼저 1:1 문의로 환불을 신청해 주세요.": {
+    en: "They can't be refunded after you delete your account. Please request a refund via 1:1 support first.",
+    ja: "退会すると返金できません。先に1:1お問い合わせから返金を申請してください。",
+    zh: "注销后将无法退款。请先通过1:1咨询申请退款。",
+  },
+  "환불 신청하기": { en: "Request a refund", ja: "返金を申請する", zh: "申请退款" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   "지우기": { en: "Delete", ja: "削除", zh: "删除" },
   "휴지통": { en: "Trash", ja: "ゴミ箱", zh: "回收站" },
@@ -95,6 +104,9 @@ registerDict({
   "둘러보기": { en: "Browse", ja: "見てまわる", zh: "浏览" },
   "새 웹툰 만들기": { en: "New webtoon", ja: "新しいウェブトゥーン", zh: "新建漫画" },
   "최근 본 웹툰": { en: "Recently read", ja: "最近読んだ作品", zh: "最近看过" },
+  "웹툰": { en: "WEBTOONS", ja: "ウェブトゥーン", zh: "漫画" },
+  "댓글 단 웹툰": { en: "Commented webtoons", ja: "コメントした作品", zh: "评论过的漫画" },
+  "아직 댓글을 단 웹툰이 없어요.": { en: "You haven't commented on any webtoon yet.", ja: "まだコメントした作品がありません。", zh: "还没有评论过的漫画。" },
   "찜한 웹툰": { en: "Saved webtoons", ja: "お気に入りの作品", zh: "收藏的漫画" },
   "아직 찜한 웹툰이 없어요. 둘러보기에서 하트를 눌러 보세요.": { en: "Nothing saved yet. Tap a heart in Browse.", ja: "まだお気に入りがありません。見て回るでハートを押してみてください。", zh: "还没有收藏。去浏览里点个爱心吧。" },
   "캐릭터 탭으로": { en: "Go to characters", ja: "キャラクタータブへ", zh: "前往角色页" },
@@ -110,11 +122,48 @@ registerDict({
   "충전": { en: "Top up", ja: "チャージ", zh: "充值" },
   "내역": { en: "History", ja: "履歴", zh: "记录" },
   "1:1 문의하기": { en: "Contact us", ja: "1:1お問い合わせ", zh: "1:1 咨询" },
-  "어디로 문의할까요?": { en: "Where would you like to reach us?", ja: "どちらにお問い合わせしますか？", zh: "想通过哪个渠道联系我们？" },
+  "무엇을 도와드릴까요?": { en: "How can we help?", ja: "どのようなお手伝いが必要ですか？", zh: "有什么可以帮您？" },
+  "LORE 이용 중 궁금한 점이 있으신가요?": { en: "Questions about using LORE?", ja: "LOREの利用についてご質問はありますか？", zh: "使用 LORE 时有疑问吗？" },
+  "카카오톡 문의": { en: "Contact on KakaoTalk", ja: "KakaoTalkでお問い合わせ", zh: "通过 KakaoTalk 联系" },
+  "채팅으로 편하게 문의하기": { en: "Chat with us", ja: "チャットで気軽にお問い合わせ", zh: "通过聊天轻松咨询" },
+  "이메일 문의": { en: "Email inquiry", ja: "メールでお問い合わせ", zh: "邮件咨询" },
+  "문의 이메일": { en: "Contact email", ja: "お問い合わせメール", zh: "联系邮箱" },
+  "오류 제보 · 계정·크레딧 · 기타 문의": { en: "Report a problem, account and credits, or anything else", ja: "不具合・アカウント・その他のお問い合わせ", zh: "问题反馈、账号与点数或其他咨询" },
+  "LORE의 소식도 만나보세요": { en: "Follow LORE", ja: "LOREの最新情報", zh: "关注 LORE 动态" },
+  "문의 유형": { en: "Topic", ja: "お問い合わせの種類", zh: "咨询类型" },
+  "웹툰 제작": { en: "Webtoon creation", ja: "ウェブトゥーン制作", zh: "漫画制作" },
+  "계정·크레딧": { en: "Account and credits", ja: "アカウント・クレジット", zh: "账号与点数" },
+  "오류 제보": { en: "Report a problem", ja: "不具合の報告", zh: "问题反馈" },
+  "기타 문의": { en: "Something else", ja: "その他", zh: "其他" },
+  "답변 받을 이메일": { en: "Email for our reply", ja: "返信先メールアドレス", zh: "接收回复的邮箱" },
+  "문의 내용을 적어 주세요": { en: "Write your message", ja: "お問い合わせ内容をご記入ください", zh: "请填写咨询内容" },
+  "예: 크레딧을 충전했는데 반영되지 않아요. 결제한 시간과 화면에 나온 내용을 적어 주세요.": { en: "Example: My credits haven't appeared after a top-up. Please include when you paid and what the screen shows.", ja: "例：チャージしたクレジットが反映されません。決済した時刻と画面に表示された内容をご記入ください。", zh: "例如：充值后点数没有到账。请填写付款时间和页面显示的内容。" },
+  "문의 내용은 5자 이상 적어 주세요.": { en: "Please write at least 5 characters.", ja: "5文字以上でご記入ください。", zh: "请至少输入 5 个字符。" },
+  "첨부 파일": { en: "Attachments", ja: "添付ファイル", zh: "附件" },
+  "이미지 또는 PDF · 최대 3개, 파일당 1MB": { en: "Images or PDF · up to 3 files, 1MB each", ja: "画像またはPDF・最大3件、1件1MB", zh: "图片或 PDF · 最多 3 个，每个 1MB" },
+  "파일을 선택해 주세요": { en: "Choose files", ja: "ファイルを選択", zh: "选择文件" },
+  "첨부 파일은 최대 3개까지 올릴 수 있어요.": { en: "You can attach up to 3 files.", ja: "添付ファイルは最大3件までです。", zh: "最多可上传 3 个附件。" },
+  "파일 하나는 1MB 이하로 첨부해 주세요.": { en: "Each file must be 1MB or smaller.", ja: "ファイルは1件1MB以下にしてください。", zh: "单个文件不能超过 1MB。" },
+  "첨부 파일 전체 용량은 3MB 이하로 올려 주세요.": { en: "Attachments must total 3MB or less.", ja: "添付ファイルの合計は3MB以下にしてください。", zh: "附件总大小不能超过 3MB。" },
+  "PNG, JPG, WEBP 이미지와 PDF 파일만 첨부할 수 있어요.": { en: "Only PNG, JPG, WEBP images and PDF files are allowed.", ja: "PNG、JPG、WEBP画像とPDFのみ添付できます。", zh: "仅支持 PNG、JPG、WEBP 图片和 PDF 文件。" },
+  "삭제": { en: "Remove", ja: "削除", zh: "删除" },
+  "개인정보 수집 및 이용 동의 (필수)": { en: "Personal information consent (required)", ja: "個人情報の収集・利用への同意（必須）", zh: "个人信息收集与使用同意（必填）" },
+  "수집 항목: 이메일 주소, 문의 내용, 첨부 파일 · 이용 목적: 문의 확인 및 답변 · 보유 기간: 문의 해결 후 1년": { en: "Items: email address, message, attachments · Purpose: review and reply · Retention: 1 year after resolution", ja: "項目：メールアドレス、お問い合わせ内容、添付ファイル・目的：確認と返信・保管期間：解決後1年間", zh: "收集项目：邮箱、咨询内容、附件 · 用途：确认并回复 · 保存期限：问题解决后 1 年" },
+  "위 내용에 동의합니다. (필수)": { en: "I agree to the above. (Required)", ja: "上記に同意します。（必須）", zh: "我同意以上内容。（必填）" },
+  "개인정보 수집 및 이용에 동의해 주세요.": { en: "Please agree to the collection and use of personal information.", ja: "個人情報の収集・利用に同意してください。", zh: "请同意收集和使用个人信息。" },
+  "자세히 보기": { en: "Learn more", ja: "詳しく見る", zh: "了解详情" },
+  "문의 보내기": { en: "Send inquiry", ja: "問い合わせを送信", zh: "发送咨询" },
+  "보내는 중…": { en: "Sending…", ja: "送信中…", zh: "发送中…" },
+  "문의가 전달됐어요. 적어 주신 이메일로 답변드릴게요.": { en: "Your inquiry was sent. We'll reply to the email you provided.", ja: "お問い合わせを送信しました。ご記入のメールアドレスに返信します。", zh: "咨询已发送。我们会回复到您填写的邮箱。" },
+  "보내지 못했어요. 잠시 뒤 다시 시도해 주세요.": { en: "Couldn't send your message. Please try again shortly.", ja: "送信できませんでした。しばらくしてからもう一度お試しください。", zh: "发送失败，请稍后重试。" },
+  "문의 내용은 3,000자까지 적을 수 있어요.": { en: "Your message can be up to 3,000 characters.", ja: "お問い合わせ内容は3,000文字までです。", zh: "咨询内容最多可输入 3,000 个字符。" },
+  "파일 선택": { en: "Choose files", ja: "ファイルを選択", zh: "选择文件" },
+  "{n}개 첨부됨": { en: "{n} attached", ja: "{n}件添付済み", zh: "已附加 {n} 个" },
+  "첨부한 파일 없음": { en: "No files attached", ja: "添付ファイルなし", zh: "没有附件" },
+  "문의로 돌아가기": { en: "Back to contact options", ja: "お問い合わせ方法に戻る", zh: "返回联系选项" },
   "카카오톡": { en: "KakaoTalk", ja: "カカオトーク", zh: "KakaoTalk" },
   "인스타그램": { en: "Instagram", ja: "インスタグラム", zh: "Instagram" },
   "이용약관": { en: "Terms of use", ja: "利用規約", zh: "使用条款" },
-  "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },
   "목록을 가져오지 못했어요": { en: "Couldn't load the list", ja: "一覧を読み込めませんでした", zh: "无法加载列表" },
   "서버가 떠 있는지 확인해 주세요": { en: "Please check that the server is running", ja: "サーバーが起動しているか確認してください", zh: "请确认服务器是否已启动" },
   "내 캐릭터로 웹툰 만들기": { en: "Make a webtoon with my character", ja: "マイキャラクターでウェブトゥーンを作る", zh: "用我的角色制作漫画" },
@@ -128,17 +177,58 @@ registerDict({
     zh: "你要的漫画做好后，我们会发邮件到你的账号邮箱。以访客身份填写的地址不受此设置影响，仍会照常发送。",
   },
   "바꾸지 못했어요": { en: "Couldn't change it", ja: "変更できませんでした", zh: "无法更改" },
+  "{name} 삭제할 것으로 고르기": { en: "Select {name} to delete", ja: "{name}を削除対象に選ぶ", zh: "选择删除 {name}" },
+  "{n}개는 지우지 못했어요": { en: "Couldn't delete {n}", ja: "{n}件は削除できませんでした", zh: "有 {n} 项未能删除" },
+  "{n}개를 휴지통으로 옮겨요.": { en: "Moves {n} items to the trash.", ja: "{n}件をゴミ箱に移します。", zh: "将 {n} 项移到回收站。" },
+  "{n}일 보관": { en: "Kept {n} days", ja: "{n}日間保管", zh: "保留 {n} 天" },
+  "관리자 대시보드": { en: "Admin dashboard", ja: "管理者ダッシュボード", zh: "管理员面板" },
+  "내 웹툰 모두 보기": { en: "See all my webtoons", ja: "マイウェブトゥーンをすべて見る", zh: "查看我的全部漫画" },
+  "수정": { en: "Edit", ja: "編集", zh: "编辑" },
+  "열기": { en: "Open", ja: "開く", zh: "打开" },
+  "우리 쪽 접속을 뺀 지표 · 비공개까지 모든 작품과 캐릭터 · 작품 처리 · 예시 작품 · 결제로 가는 자리. 관리자만 보여요.": { en: "Metrics excluding our own visits · all works and characters, including private ones · moderation · sample works · payment funnel. Visible to admins only.", ja: "社内アクセスを除いた指標・非公開を含むすべての作品とキャラクター・作品の処理・サンプル作品・決済への導線。管理者にのみ表示されます。", zh: "排除内部访问的指标 · 包括私密在内的全部作品和角色 · 作品处理 · 示例作品 · 支付入口。仅管理员可见。" },
+  "이 캐릭터로 웹툰 만들기": { en: "Make a webtoon with this character", ja: "このキャラクターでウェブトゥーンを作る", zh: "用这个角色制作漫画" },
+  "정말 삭제하시겠습니까?": { en: "Are you sure you want to delete?", ja: "本当に削除しますか？", zh: "确定要删除吗？" },
+  "휴지통에 {n}일간 보관됩니다.": { en: "It stays in the trash for {n} days.", ja: "ゴミ箱に{n}日間保管されます。", zh: "将在回收站保留 {n} 天。" },
+  "휴지통에 든 웹툰이 없어요.": { en: "No webtoons in the trash.", ja: "ゴミ箱にウェブトゥーンはありません。", zh: "回收站里没有漫画。" },
+  "휴지통에 든 캐릭터가 없어요.": { en: "No characters in the trash.", ja: "ゴミ箱にキャラクターはありません。", zh: "回收站里没有角色。" },
 });
 
-export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" }) {
+export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" | "contact" }) {
   const t = useT();
   const { user, isAuthenticated, signOut } = useAuth();
 
   /* 지금은 "내 웹툰"과 "설정" 딱 둘뿐이라 화면을 아예 나누지는 않고
      같은 레일 안에서 본문만 바꾼다 — 나중에 칸이 늘면 그때 공용 탭
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
-  const [tab, setTab] = useState<"works" | "chars" | "settings">(initialTab === "settings" ? "settings" : "works");
+  /* home = 마이페이지 첫 화면(웹툰 몇 개 · 만드는 중 · 찜 · 내 캐릭터). 왼쪽 「웹툰」 묶음의 네 칸
+     (내 웹툰 · 내 캐릭터 · 찜한 웹툰 · 댓글 단 웹툰)은 각각 전부 펼친 목록이다 — 웹툰이 많아져도 첫 화면은 그대로. */
+  const [tab, setTab] = useState<"home" | "works" | "chars" | "liked" | "commented" | "settings" | "trash">(initialTab === "settings" ? "settings" : "home");
+  const allWorks = tab === "works";
+  /* 왼쪽 메뉴로 화면을 바꾸면 맨 위부터 — 그리고 나서 높이가 바뀌어도 위에서 시작한다 */
+  useEffect(() => {
+    const id = requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+    return () => cancelAnimationFrame(id);
+  }, [tab]);
+  const WORKS_PREVIEW = 3;
   const [contactOpen, setContactOpen] = useState(false);
+  const [contactCompose, setContactCompose] = useState(false);
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactCategory, setContactCategory] = useState<WebtoonContactCategory>("WEBTOON");
+  const [contactMessage, setContactMessage] = useState("");
+  const [contactWebsite, setContactWebsite] = useState("");
+  const [contactFiles, setContactFiles] = useState<File[]>([]);
+  const [contactPrivacyConsent, setContactPrivacyConsent] = useState(false);
+  const [contactBusy, setContactBusy] = useState(false);
+  const [contactError, setContactError] = useState("");
+  const [contactSent, setContactSent] = useState(false);
+  /* ?tab=contact — 결제 준비 중 안내의 「이메일 문의」가 다른 화면에서 여기로 보낸다. 결제·크레딧 분류로 바로 연다. */
+  const contactAsked = useRef(false);
+  useEffect(() => {
+    if (initialTab !== "contact" || contactAsked.current) return;
+    contactAsked.current = true;
+    setContactCategory("ACCOUNT_CREDITS"); setContactError(""); setContactSent(false); setContactCompose(true); setContactOpen(true);
+  }, [initialTab]);
+  useEffect(() => { if (initialTab === "contact" && user?.email) setContactEmail((e) => e || user.email || ""); }, [initialTab, user?.email]);
   const [surveyStatus, setSurveyStatus] = useState<SurveyStatus | null>(null);
   useEffect(() => {
     if (!isAuthenticated) { setSurveyStatus(null); return; }
@@ -152,7 +242,10 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
      따로 만들 것이 아니다). 잔액도 헤더와 같은 `/credits/me` 를 읽어야 두
      자리가 같은 값을 말한다. */
   const [credits, setCredits] = useState<number | null>(null);
+  /* 남은 유료 크레딧. 탈퇴하면 소멸하고 환불도 못 받으므로(이용약관 13조 7항) 확인 단계에서 먼저 알린다. */
+  const [paidCredits, setPaidCredits] = useState(0);
   const [creditModal, setCreditModal] = useState<"charge" | "history" | null>(null);
+  const [payNotReady, setPayNotReady] = useState(false);
 
   const [allowance, setAllowance] = useState<Allowance | null>(null);
 
@@ -163,13 +256,20 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
     const ids = recentRuns();
     if (ids.length === 0) { setRecent([]); return; }
     browseRuns().then((all) => {
-      const byId = new Map(all.map((r) => [r.run_id, r]));
+      // 연재는 1화 카드 하나로 묶여 온다 — 2화 이후를 봤어도 그 카드로 찾는다.
+      const byId = new Map(all.flatMap((r) => [r.run_id, ...Object.values(r.episode_run_ids || {})].map((id) => [id, r] as const)));
       setRecent(ids.map((id) => byId.get(id)).filter((r): r is RunCard => !!r).slice(0, 10));
     }).catch(() => setRecent([]));
   }, []);
   useEffect(() => {
     if (!isAuthenticated) { setLiked([]); return; }
     myLikes().then(setLiked).catch(() => setLiked([]));
+  }, [isAuthenticated]);
+  /* 댓글 단 웹툰 — 계정 것이라 로그인했을 때만 */
+  const [commented, setCommented] = useState<RunCard[]>([]);
+  useEffect(() => {
+    if (!isAuthenticated) { setCommented([]); return; }
+    myCommented().then(setCommented).catch(() => setCommented([]));
   }, [isAuthenticated]);
 
   /* 내 작품 — 로그인했으면 계정 것과 이 브라우저 것을 합친다(기기를 바꾸면
@@ -216,11 +316,55 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
     }).catch(() => setActive([]));
   }, []);
 
+  /* 다음 화 초안 — 「다음 편 만들기」에서 써 두고 아직 만들지 않은 것. 만드는 중에 같이 둔다. */
+  const [seriesDrafts, setSeriesDrafts] = useState<SeriesDraftCard[]>([]);
+  useEffect(() => {
+    if (!isAuthenticated) { setSeriesDrafts([]); return; }
+    let alive = true;
+    mySeriesDrafts().then((r) => { if (alive) setSeriesDrafts(r ?? []); }).catch(() => { if (alive) setSeriesDrafts([]); });
+    return () => { alive = false; };
+  }, [isAuthenticated]);
+
   /* 휴지통(#157) — 지운 작품은 영구 삭제 전까지 여기서 되살린다. 지우기가
      로그인한 사람만 되므로 휴지통도 로그인했을 때만 읽는다. */
   const [trash, setTrash] = useState<TrashCard[]>([]);
   const [keepDays, setKeepDays] = useState(30);
-  const [trashOpen, setTrashOpen] = useState(false);
+  /* 캐릭터 휴지통(2026-10-26) — 웹툰 휴지통과 같은 화면에 둔다. 웹툰 30일 · 캐릭터 15일. */
+  const [charTrash, setCharTrash] = useState<TrashCharacter[]>([]);
+  const [charKeepDays, setCharKeepDays] = useState(15);
+  const loadChars = useCallback(async () => {
+    try {
+      const l = await listCharacters();
+      setChars(l.characters.filter((c) => c.mine));
+    } catch { /* 못 받으면 있던 목록을 둔다 */ }
+  }, []);
+  /* 내 캐릭터 고치기 · 지우기 — 「삭제」를 누르면 카드마다 휴지통 표시가 생기고, 고른 것을 한 번에 휴지통으로 */
+  const [editingChar, setEditingChar] = useState<Character | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [askRemove, setAskRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeErr, setRemoveErr] = useState("");
+  const removePicked = async () => {
+    setRemoving(true);
+    setRemoveErr("");
+    const failed: string[] = [];
+    for (const id of picked) {
+      try { await removeCharacter(id); } catch { failed.push(id); }
+    }
+    track("character_delete", { n: picked.length - failed.length, where: "mypage" });
+    await loadChars();
+    await loadTrash();
+    setRemoving(false);
+    if (failed.length) {
+      setPicked(failed);
+      setRemoveErr(t("{n}개는 지우지 못했어요", { n: failed.length }));
+      return;
+    }
+    setAskRemove(false);
+    setPicking(false);
+    setPicked([]);
+  };
   const loadTrash = useCallback(async () => {
     if (!isAuthenticated) { setTrash([]); return; }
     try {
@@ -230,12 +374,21 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
     } catch {
       setTrash([]);
     }
+    try {
+      const got = await characterTrash();
+      setCharTrash(got.characters);
+      setCharKeepDays(got.keep_days);
+    } catch {
+      setCharTrash([]);
+    }
   }, [isAuthenticated]);
   useEffect(() => { void loadTrash(); }, [loadTrash]);
   useEffect(() => {
-    listCharacters().then((l) => setChars(l.characters.filter((c) => c.mine))).catch(() => {});
+    void loadChars();
     readAllowance().then(setAllowance).catch(() => {});
-    if (isAuthenticated) creditBalance().then((b) => setCredits(b.balance)).catch(() => {});
+    if (isAuthenticated) {
+      creditBalance().then((b) => { setCredits(b.balance); setPaidCredits(b.paid ?? 0); }).catch(() => {});
+    }
   }, [isAuthenticated]);
 
   /* 설정 탭 — 웹툰 완성 메일. 안 건드렸으면 서버가 켜진 채로 준다. */
@@ -305,14 +458,23 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
         )}
 
         <div className="card rail wt-my-menu">
-          <small>{t("만든 것")}</small>
-          <button type="button" className={tab === "works" ? "on" : ""} onClick={() => setTab("works")}>
+          <small>{t("웹툰")}</small>
+          <button type="button" className={tab === "works" ? "on" : ""} onClick={() => { setTab("works"); window.scrollTo({ top: 0 }); }}>
             {t("내 웹툰")} <span className="dim">{runs.length}</span>
           </button>
-          <small>{t("재료")}</small>
-          <button type="button" className={tab === "chars" ? "on" : ""} onClick={() => setTab("chars")}>
+          <button type="button" className={tab === "chars" ? "on" : ""} onClick={() => { setTab("chars"); window.scrollTo({ top: 0 }); }}>
             {t("내 캐릭터")} <span className="dim">{chars.length}</span>
           </button>
+          {isAuthenticated && (
+            <>
+              <button type="button" className={tab === "liked" ? "on" : ""} onClick={() => { setTab("liked"); window.scrollTo({ top: 0 }); }}>
+                {t("찜한 웹툰")} <span className="dim">{liked.length}</span>
+              </button>
+              <button type="button" className={tab === "commented" ? "on" : ""} onClick={() => { setTab("commented"); window.scrollTo({ top: 0 }); }}>
+                {t("댓글 단 웹툰")} <span className="dim">{commented.length}</span>
+              </button>
+            </>
+          )}
           {isAuthenticated && (
             <>
               <small>{t("설정")}</small>
@@ -320,14 +482,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 {t("설정")}
               </button>
               {/* 휴지통(#157) — 지운 웹툰은 창으로 따로 연다. */}
-              <button type="button" className="wt-my-trashmenu"
-                      onClick={() => { void loadTrash(); setTrashOpen(true); track("trash_open", { where: "mypage" }); }}>
-                {t("휴지통")} <span className="dim">{trash.length}</span>
+              <button type="button" className={`wt-my-trashmenu${tab === "trash" ? " on" : ""}`}
+                      onClick={() => { void loadTrash(); setTab("trash"); window.scrollTo({ top: 0 }); track("trash_open", { where: "mypage" }); }}>
+                {t("휴지통")} <span className="dim">{trash.length + charTrash.length}</span>
               </button>
             </>
           )}
           <small>{t("계정")}</small>
-          <button type="button" onClick={() => { track("contact_open", { where: "mypage" }); setContactOpen(true); }}>
+          <button type="button" onClick={() => {
+            track("contact_open", { where: "mypage" });
+            setContactEmail(user?.email ?? ""); setContactMessage(""); setContactError("");
+            setContactCategory("WEBTOON"); setContactCompose(false); setContactSent(false); setContactOpen(true);
+          }}>
             {t("1:1 문의하기")}
           </button>
           <button type="button" onClick={() => { track("feedback_open", { where: "mypage" }); go("feedback"); }}>
@@ -349,42 +515,129 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
 
       <div className="wt-my-main">
             {contactOpen && (
-              <Dialog title={t("어디로 문의할까요?")} onClose={() => setContactOpen(false)}>
-                <div className="wt-my-contact">
-                  {CONTACT_LINKS.map((c) => (
-                    <a key={c.key} className="btn btn-w" href={c.href} target="_blank" rel="noopener noreferrer"
-                       onClick={() => { track("contact_pick", { where: "mypage", channel: c.key }); setContactOpen(false); }}>
-                      {t(c.label)}
+              <Dialog className="wt-contact-dialog"
+                      title={t(contactCompose ? "이메일 문의" : "무엇을 도와드릴까요?")}
+                      sub={contactCompose ? undefined : t("LORE 이용 중 궁금한 점이 있으신가요?")}
+                      busy={contactBusy} onClose={() => setContactOpen(false)}
+                      /* 뒤로 가기는 제목 앞에 — 제목 아래 한 줄을 따로 차지해 어색했다(2026-10-26) */
+                      onBack={contactCompose && !contactSent ? () => setContactCompose(false) : undefined}
+                      backLabel={t("문의로 돌아가기")}>
+                {!contactCompose ? (
+                  <div className="wt-my-contact">
+                    <a className="wt-contact-row" href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer"
+                       onClick={() => { track("contact_pick", { where: "mypage", channel: "kakao" }); setContactOpen(false); }}>
+                      <span className="wt-contact-rowmark kakao"><KakaoTalkMark size={22} /></span>
+                      <span className="wt-contact-rowcopy"><b>{t("카카오톡 문의")}</b><small>{t("채팅으로 편하게 문의하기")}</small></span>
+                      <IconChevronRight size={19} />
                     </a>
-                  ))}
-                </div>
-              </Dialog>
-            )}
-            {trashOpen && (
-              <Dialog title={t("휴지통")} wide onClose={() => setTrashOpen(false)}
-                      sub={t("지운 웹툰은 {n}일 동안 여기 있다가 영구 삭제돼요.", { n: keepDays })}>
-                {trash.length === 0 ? (
-                  <p className="wt-my-trashempty muted">{t("휴지통이 비어 있어요.")}</p>
-                ) : (
-                  <div className="wt-my-trash">
-                    {trash.map((r) => (
-                      <TrashRow key={r.run_id} run={r}
-                                onRestored={() => { void loadRuns(); void loadTrash(); }} />
-                    ))}
+                    <button type="button" className="wt-contact-row" onClick={() => {
+                      track("contact_pick", { where: "mypage", channel: "email" });
+                      setContactError(""); setContactCompose(true);
+                    }}>
+                      <span className="wt-contact-rowmark mail"><IconMail size={21} /></span>
+                      <span className="wt-contact-rowcopy"><b>{t("이메일 문의")}</b><small>{WEBTOON_SUPPORT_EMAIL}</small></span>
+                      <IconChevronRight size={19} />
+                    </button>
+                    <p className="wt-contact-social-label">{t("LORE의 소식도 만나보세요")}</p>
+                    <div className="wt-contact-socials">
+                      {CONTACT_LINKS.map((c) => (
+                        <a key={c.key} href={c.href} target="_blank" rel="noopener noreferrer"
+                           onClick={() => { track("contact_pick", { where: "mypage", channel: c.key }); setContactOpen(false); }}>
+                          {c.key === "instagram" ? <InstagramMark size={23} /> : <XMark size={22} />}
+                          <span>{c.label}</span>
+                        </a>
+                      ))}
+                    </div>
                   </div>
+                ) : contactSent ? (
+                  <div className="wt-contact-success" role="status">
+                    <span className="wt-contact-successmark"><IconCheck size={22} /></span>
+                    <b>{t("문의가 전달됐어요. 적어 주신 이메일로 답변드릴게요.")}</b>
+                    <button type="button" className="btn btn-w" onClick={() => setContactOpen(false)}>{t("닫기")}</button>
+                  </div>
+                ) : (
+                  <form className="wt-contact-form" onSubmit={(event) => {
+                    event.preventDefault();
+                    if (contactBusy || !contactEmail.trim() || contactMessage.trim().length < 5 || contactMessage.length > 3000 || !contactPrivacyConsent) return;
+                    setContactBusy(true); setContactError("");
+                    void sendWebtoonContact({ email: contactEmail.trim(), category: contactCategory, message: contactMessage.trim(), privacyConsent: contactPrivacyConsent, files: contactFiles, website: contactWebsite })
+                      .then(() => { setContactSent(true); track("contact_sent", { where: "mypage", channel: "email" }); })
+                      .catch(() => setContactError(t("보내지 못했어요. 잠시 뒤 다시 시도해 주세요.")))
+                      .finally(() => setContactBusy(false));
+                  }}>
+                    <label htmlFor="wt-contact-email">{t("답변 받을 이메일")}</label>
+                    <input id="wt-contact-email" type="email" autoComplete="email" maxLength={254} required
+                           value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} />
+                    <label htmlFor="wt-contact-category">{t("문의 유형")}</label>
+                    <select id="wt-contact-category" value={contactCategory}
+                            onChange={(event) => setContactCategory(event.target.value as WebtoonContactCategory)}>
+                      <option value="WEBTOON">{t("웹툰 제작")}</option>
+                      <option value="ACCOUNT_CREDITS">{t("계정·크레딧")}</option>
+                      <option value="ERROR">{t("오류 제보")}</option>
+                      <option value="OTHER">{t("기타 문의")}</option>
+                    </select>
+                    <label htmlFor="wt-contact-message">{t("문의 내용을 적어 주세요")}</label>
+                    <textarea id="wt-contact-message" rows={5} maxLength={3000} required
+                              value={contactMessage} placeholder={t("예: 크레딧을 충전했는데 반영되지 않아요. 결제한 시간과 화면에 나온 내용을 적어 주세요.")}
+                              onChange={(event) => setContactMessage(event.target.value)} />
+                    <div className="wt-contact-formfoot"><span>{contactMessage.length.toLocaleString()} / 3,000</span></div>
+                    <div className="wt-contact-attachments">
+                      <label htmlFor="wt-contact-files">{t("첨부 파일")}</label>
+                      <small>{t("이미지 또는 PDF · 최대 3개, 파일당 1MB")}</small>
+                      {/* 기본 파일칸은 감추고 단추와 개수만 보인다 — 고른 뒤에도 「선택된 파일 없음」이 남아 헷갈렸다(2026-10-26) */}
+                      <span className="wt-contact-pick">
+                        <label htmlFor="wt-contact-files" className="wt-contact-pickbtn">{t("파일 선택")}</label>
+                        <span>{contactFiles.length ? t("{n}개 첨부됨", { n: contactFiles.length }) : t("첨부한 파일 없음")}</span>
+                      </span>
+                      <input id="wt-contact-files" className="wt-contact-fileinput" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" multiple
+                        onChange={(event) => {
+                          const selected = Array.from(event.target.files || []);
+                          const next = [...contactFiles, ...selected];
+                          let issue = "";
+                          if (next.length > 3) issue = t("첨부 파일은 최대 3개까지 올릴 수 있어요.");
+                          else if (next.some((file) => file.size > 1024 * 1024)) issue = t("파일 하나는 1MB 이하로 첨부해 주세요.");
+                          else if (next.reduce((sum, file) => sum + file.size, 0) > 3 * 1024 * 1024) issue = t("첨부 파일 전체 용량은 3MB 이하로 올려 주세요.");
+                          else if (next.some((file) => !["image/png", "image/jpeg", "image/webp", "application/pdf"].includes(file.type))) issue = t("PNG, JPG, WEBP 이미지와 PDF 파일만 첨부할 수 있어요.");
+                          setContactError(issue);
+                          if (!issue) setContactFiles(next);
+                          event.target.value = "";
+                        }} />
+                      {contactFiles.length > 0 && <ul className="wt-contact-filelist">{contactFiles.map((file, index) => (
+                        <li key={`${file.name}-${file.lastModified}-${index}`}><span>{file.name}</span><button type="button" onClick={() => setContactFiles((files) => files.filter((_, i) => i !== index))}>{t("삭제")}</button></li>
+                      ))}</ul>}
+                    </div>
+                    <fieldset className="wt-contact-consent">
+                      <legend>{t("개인정보 수집 및 이용 동의 (필수)")}</legend>
+                      <p>{t("수집 항목: 이메일 주소, 문의 내용, 첨부 파일 · 이용 목적: 문의 확인 및 답변 · 보유 기간: 문의 해결 후 1년")}</p>
+                      <div className="wt-contact-consent-row">
+                        <label><input type="checkbox" required checked={contactPrivacyConsent}
+                          onChange={(event) => setContactPrivacyConsent(event.target.checked)} />
+                          <span>{t("위 내용에 동의합니다. (필수)")}</span></label>
+                        <a href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer">{t("자세히 보기")}</a>
+                      </div>
+                    </fieldset>
+                    <input className="wt-contact-honeypot" type="text" name="website" tabIndex={-1} autoComplete="off"
+                           aria-hidden="true" value={contactWebsite} onChange={(event) => setContactWebsite(event.target.value)} />
+                    {contactError && <p className="wt-contact-error" role="alert">{contactError}</p>}
+                    {contactMessage.trim().length > 0 && contactMessage.trim().length < 5 &&
+                      <p className="wt-contact-error">{t("문의 내용은 5자 이상 적어 주세요.")}</p>}
+                    <button type="submit" className="wt-contact-submit" disabled={contactBusy || !contactEmail.trim() || contactMessage.trim().length < 5 || contactMessage.length > 3000 || !contactPrivacyConsent}>
+                      {contactBusy ? t("보내는 중…") : t("문의 보내기")}
+                    </button>
+                  </form>
                 )}
-                <div className="wt-dialog-actions">
-                  <button type="button" className="btn btn-w" onClick={() => setTrashOpen(false)}>{t("닫기")}</button>
-                </div>
+                <div className="wt-contact-address"><IconMail size={15} /><span>{t("문의 이메일")}</span><b>{WEBTOON_SUPPORT_EMAIL}</b></div>
               </Dialog>
             )}
-        {tab === "works" && (
+        {(tab === "home" || tab === "works") && (
           <>
             <div className="wt-my-head">
               <div>
-                <h2>{t("내 웹툰")}</h2>
+                <h2>{t("내 웹툰")} {allWorks && <span className="dim wt-my-count">{runs.length}</span>}</h2>
               </div>
               <div className="wt-my-headacts">
+                {/* 소식(알림 · 구독 중 · 신고)은 맨 위 칸 대신 종 단추 하나로 */}
+                {isAuthenticated && <CommunityBell admin={user?.role === "ADMIN"} />}
                 <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
                 <button type="button" className="btn btn-p" onClick={() => go("entry")}>{t("새 웹툰 만들기")}</button>
               </div>
@@ -410,8 +663,8 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               </div>
             )}
             {!runsFailed && runs.length > 0 && (
-              <div className="wt-my-grid">
-                {runs.map((r) => (
+              <div className={`wt-my-grid${allWorks ? "" : " preview"}`}>
+                {(allWorks ? runs : runs.slice(0, WORKS_PREVIEW)).map((r) => (
                   <WorkCard key={r.run_id} run={r} go={go} keepDays={keepDays}
                             onDeleted={() => {
                               setRuns((list) => list.filter((x) => x.run_id !== r.run_id));
@@ -420,17 +673,26 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 ))}
               </div>
             )}
+            {!allWorks && !runsFailed && runs.length > WORKS_PREVIEW && (
+              <button type="button" className="btn btn-w wt-my-more" onClick={() => { setTab("works"); window.scrollTo({ top: 0 }); }}>
+                {t("내 웹툰 모두 보기")} <span className="dim">{runs.length}</span>
+              </button>
+            )}
 
-
-            {active.length > 0 && (
+            {!allWorks && <>
+            {(active.length > 0 || seriesDrafts.length > 0) && (
               /* 만드는 중(#548) — 「최근 본 웹툰」 자리. 표지 한 줄과 같은 크기로, 눌러서 이어 만든다. */
               <div className="wt-my-strip">
                 <div className="wt-strip">
-                  <b className="wt-strip-title">{t("만드는 중")} <span className="dim wt-my-draftcount">{active.length}</span></b>
+                  <b className="wt-strip-title">{t("만드는 중")} <span className="dim wt-my-draftcount">{active.length + seriesDrafts.length}</span></b>
                   <div className="wt-strip-row">
                     {active.map((j) => (
                       <DraftCard key={j.id} job={j} card={activeCards[j.id]}
                                  onOpen={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }} />
+                    ))}
+                    {seriesDrafts.map((d) => (
+                      <SeriesDraftItem key={d.run} draft={d} cover={runs.find((r) => r.run_id === d.run)}
+                                       onOpen={() => { track("resume_series_draft", { run: d.run, ep: d.episode }); go("next", { run: d.run }); }} />
                     ))}
                   </div>
                 </div>
@@ -465,10 +727,83 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                   <b>{c.name}</b>
                 </button>
               ))}
-              <button type="button" className="wt-my-char-new" onClick={() => go("try")}>
+              <button type="button" className="wt-my-char-new" onClick={() => go("character-new")}>
                 <b>+</b>{t("만들기")}
               </button>
             </div>
+            </>}
+          </>
+        )}
+
+        {tab === "trash" && (
+          /* 휴지통 — 팝업이 아니라 마이페이지 화면(2026-10-26). 웹툰 {keepDays}일 · 캐릭터 {charKeepDays}일 보관 뒤 영구 삭제. */
+          <>
+            <div className="wt-my-head">
+              <div>
+                <h2>{t("휴지통")} <span className="dim wt-my-count">{trash.length + charTrash.length}</span></h2>
+              </div>
+            </div>
+            <section className="wt-my-trashsec">
+              <h3>{t("웹툰")} <span className="dim">{t("{n}일 보관", { n: keepDays })}</span></h3>
+              {trash.length === 0 ? (
+                <p className="wt-my-trashempty muted">{t("휴지통에 든 웹툰이 없어요.")}</p>
+              ) : (
+                <div className="wt-my-trash">
+                  {trash.map((r) => (
+                    <TrashRow key={r.run_id} run={r} onRestored={() => { void loadRuns(); void loadTrash(); }} />
+                  ))}
+                </div>
+              )}
+            </section>
+            <section className="wt-my-trashsec">
+              <h3>{t("캐릭터")} <span className="dim">{t("{n}일 보관", { n: charKeepDays })}</span></h3>
+              {charTrash.length === 0 ? (
+                <p className="wt-my-trashempty muted">{t("휴지통에 든 캐릭터가 없어요.")}</p>
+              ) : (
+                <div className="wt-my-trash">
+                  {charTrash.map((c) => (
+                    <CharTrashRow key={c.id} character={c} onRestored={() => { void loadChars(); void loadTrash(); }} />
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {(tab === "liked" || tab === "commented") && (
+          /* 찜한 웹툰 · 댓글 단 웹툰 — 전부 펼친 목록. 누르면 그 웹툰으로 간다. */
+          <>
+            <div className="wt-my-head">
+              <div>
+                <h2>{tab === "liked" ? t("찜한 웹툰") : t("댓글 단 웹툰")} <span className="dim wt-my-count">{(tab === "liked" ? liked : commented).length}</span></h2>
+              </div>
+              <div className="wt-my-headacts">
+                <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
+              </div>
+            </div>
+            {(tab === "liked" ? liked : commented).length === 0 ? (
+              <div className="wt-my-empty">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={louArt("empty")} alt="" aria-hidden="true" />
+                <b>{tab === "liked" ? t("아직 찜한 웹툰이 없어요. 둘러보기에서 하트를 눌러 보세요.") : t("아직 댓글을 단 웹툰이 없어요.")}</b>
+              </div>
+            ) : (
+              <div className="wt-my-grid">
+                {(tab === "liked" ? liked : commented).map((r) => (
+                  <button type="button" key={r.run_id} className="card wt-my-work wt-my-runcard"
+                          onClick={() => { track("works_open", { run: r.run_id, where: tab === "liked" ? "mypage_likes" : "mypage_commented" }); go("result", { run: r.run_id }); }}>
+                    <span className="wt-my-cover">
+                      {r.cover_page ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" />
+                      ) : <span className="wt-my-charnoimg" aria-hidden="true" />}
+                    </span>
+                    <b>{r.title || t("제목 없음")}</b>
+                    <span className="muted">{[r.subtitle && `${t("{n}화", { n: r.episode ?? 1 })} · ${r.subtitle}`, r.character, r.genre && t(r.genre)].filter(Boolean).join(" · ")}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         )}
 
@@ -477,10 +812,25 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           <>
             <div className="wt-my-head">
               <div>
-                <h2>{t("내 캐릭터")}</h2>
+                <h2>{t("내 캐릭터")} <span className="dim wt-my-count">{chars.length}</span></h2>
               </div>
               <div className="wt-my-headacts">
-                <button type="button" className="btn btn-p" onClick={() => go("try")}>{t("새 캐릭터 만들기")}</button>
+                {picking ? (
+                  <>
+                    <button type="button" className="btn btn-w" onClick={() => { setPicking(false); setPicked([]); }}>{t("취소")}</button>
+                    <button type="button" className="btn wt-my-delete wt-my-deletebig" disabled={picked.length === 0}
+                            onClick={() => { setRemoveErr(""); setAskRemove(true); }}>
+                      {picked.length > 0 ? t("{n}개 삭제", { n: picked.length }) : t("삭제")}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="btn btn-p" onClick={() => go("character-new")}>{t("새 캐릭터 만들기")}</button>
+                    {chars.length > 0 && (
+                      <button type="button" className="btn wt-my-delete wt-my-deletebig" onClick={() => { setPicking(true); setPicked([]); }}>{t("삭제")}</button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
             {chars.length === 0 ? (
@@ -492,7 +842,14 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             ) : (
               <div className="wt-my-grid">
                 {chars.map((c) => (
-                  <div key={c.id} className="card wt-my-work wt-my-charcard">
+                  <div key={c.id} className={`card wt-my-work wt-my-charcard${picked.includes(c.id) ? " picked" : ""}`}>
+                    {picking && (
+                      <button type="button" className={`wt-my-pick${picked.includes(c.id) ? " on" : ""}`}
+                              aria-pressed={picked.includes(c.id)} aria-label={t("{name} 삭제할 것으로 고르기", { name: c.name })}
+                              onClick={() => setPicked((l) => l.includes(c.id) ? l.filter((x) => x !== c.id) : [...l, c.id])}>
+                        <IconTrash size={16} />
+                      </button>
+                    )}
                     <span className="wt-my-cover">
                       {c.art_url ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
@@ -508,15 +865,29 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                     <span className="muted">
                       {[c.card?.world_label, c.card?.species, ago(c.created_at, t)].filter(Boolean).join(" · ")}
                     </span>
-                    <div className="wt-my-workfoot">
-                      <button type="button" className="btn btn-p btn-sm grow" disabled={c.status !== "ready"}
-                              onClick={() => go("create", { step: 1, character: c.id })}>{t("이 캐릭터로 웹툰")}</button>
+                    <div className="wt-my-workfoot wt-my-charfoot">
+                      <button type="button" className="btn btn-w wt-my-edit" disabled={picking} onClick={() => setEditingChar(c)}>{t("수정")}</button>
+                      <button type="button" className="btn btn-p wt-my-edit grow" disabled={picking || c.status !== "ready"}
+                              onClick={() => go("create", { step: 1, character: c.id })}>{t("이 캐릭터로 웹툰 만들기")}</button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </>
+        )}
+
+        {editingChar && (
+          <CharacterEditDialog character={editingChar} authenticated={isAuthenticated}
+                               onClose={() => setEditingChar(null)}
+                               onSaved={(c) => { setChars((l) => l.map((x) => x.id === c.id ? c : x)); setEditingChar(null); }}
+                               onDeleted={() => { setEditingChar(null); void loadChars(); void loadTrash(); }} />
+        )}
+        {askRemove && (
+          <ConfirmDialog title={t("정말 삭제하시겠습니까?")}
+                         sub={<>{t("{n}개를 휴지통으로 옮겨요.", { n: picked.length })}<br />{t("휴지통에 {n}일간 보관됩니다.", { n: charKeepDays })}</>}
+                         confirmLabel={t("삭제")} cancelLabel={t("취소")} busy={removing}
+                         error={removeErr} onConfirm={() => void removePicked()} onClose={() => { setAskRemove(false); setRemoveErr(""); }} />
         )}
 
         {tab === "settings" && (
@@ -552,6 +923,12 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 </div>
                 {withdrawMode === "confirm" && (
                   <div className="wt-my-withdraw-confirm">
+                    {paidCredits > 0 && (
+                      <span className="wt-my-err" role="alert">
+                        {t("충전한 크레딧이 남아 있어요")} ({paidCredits}C). {t("탈퇴하면 환불받을 수 없어요. 먼저 1:1 문의로 환불을 신청해 주세요.")}{" "}
+                        <a href={CONTACT_CHANNEL} target="_blank" rel="noopener noreferrer">{t("환불 신청하기")}</a>
+                      </span>
+                    )}
                     <span className="muted">{t("정말 탈퇴할까요? 되돌릴 수 없어요.")}</span>
                     <button type="button" className="btn btn-p" disabled={withdrawBusy} onClick={() => void withdraw()}>{t("탈퇴")}</button>
                     <button type="button" className="btn btn-w" disabled={withdrawBusy} onClick={() => setWithdrawMode("idle")}>{t("취소")}</button>
@@ -561,12 +938,12 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               </div>
             )}
             {isAuthenticated && user?.role === "ADMIN" && (
-              /* 관리자만 — 실시간 유입·작품 관리·예시 작품 관리로 들어가는 홈. 설문은 그 아래 그대로. */
+              /* 관리자만 — 관리자 대시보드(#779)로 들어가는 입구. 설문은 그 아래 그대로. */
               <div className="card wt-my-setting">
                 <div className="wt-my-setting-row">
                   <div>
-                    <b>{t("관리자 홈")}</b>
-                    <span className="muted">{t("실시간 유입과 UTM 출처 · 작품 관리 · 예시 작품 관리로 가는 자리. 관리자만 보여요.")}</span>
+                    <b>{t("관리자 대시보드")}</b>
+                    <span className="muted">{t("우리 쪽 접속을 뺀 지표 · 비공개까지 모든 작품과 캐릭터 · 작품 처리 · 예시 작품 · 결제로 가는 자리. 관리자만 보여요.")}</span>
                   </div>
                   <button type="button" className="btn btn-w" onClick={() => go("admin")}>{t("열기")}</button>
                 </div>
@@ -577,7 +954,14 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
         )}
       </div>
 
-      {creditModal === "charge" && <CreditCharge onClose={() => setCreditModal(null)} />}
+      {creditModal === "charge" && <CreditCharge onClose={() => setCreditModal(null)} onEvent={(n, p) => track(n, { ...p, where: "mypage" })}
+                                                onNotReady={() => setPayNotReady(true)} />}
+      {payNotReady && <PayNotReady where="mypage" onClose={() => setPayNotReady(false)} onEmail={() => {
+        /* 이메일 문의는 마이페이지 문의 창(결제·크레딧 분류)으로 바로 */
+        setPayNotReady(false); setCreditModal(null);
+        setContactEmail(user?.email ?? ""); setContactMessage(""); setContactError("");
+        setContactCategory("ACCOUNT_CREDITS"); setContactSent(false); setContactCompose(true); setContactOpen(true);
+      }} />}
       {creditModal === "history" && <CreditHistory onClose={() => setCreditModal(null)} />}
     </div>
   );
@@ -611,6 +995,7 @@ function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void 
       {run.cover_url ? <img src={run.cover_url} alt="" /> : <span className="wt-my-trashimg" aria-hidden="true" />}
       <div className="wt-my-trashtext">
         <b>{run.title || t("제목 없음")}</b>
+        {run.subtitle && <span className="muted">{t("{n}화", { n: run.episode ?? 1 })} · {run.subtitle}</span>}
         <span className="muted">{left > 0 ? t("{n}일 뒤 영구 삭제", { n: left }) : t("오늘 영구 삭제")}</span>
         {removedByAdmin && (
           /* 관리자가 삭제 처리한 작품(#638) — 작가는 못 되살린다(서버 RunTrash.restore 도 막는다). */
@@ -627,6 +1012,37 @@ function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void 
   );
 }
 
+
+function CharTrashRow({ character, onRestored }: { character: TrashCharacter; onRestored: () => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const left = Math.max(0, Math.ceil((new Date(character.purge_at).getTime() - Date.now()) / 86_400_000));
+  const restore = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await restoreCharacter(character.id);
+      track("character_restore", { character: character.id, where: "mypage" });
+      onRestored();
+    } catch (e) {
+      setErr((e as Error).message || t("되살리지 못했습니다"));
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="wt-my-trashrow">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {character.art_url ? <img src={character.art_url} alt="" /> : <span className="wt-my-trashimg" aria-hidden="true" />}
+      <div className="wt-my-trashtext">
+        <b>{character.name}</b>
+        <span className="muted">{left > 0 ? t("{n}일 뒤 영구 삭제", { n: left }) : t("오늘 영구 삭제")}</span>
+        {err && <span className="wt-my-err">{err}</span>}
+      </div>
+      <button type="button" className="btn btn-w" disabled={busy} onClick={() => void restore()}>{t("되살리기")}</button>
+    </div>
+  );
+}
 
 /* 「만드는 중」 화면 확인용 가짜 작업 셋 — 장면 확인 · 그리는 중 · 이야기 고르기. */
 const MOCK_DRAFTS: { jobs: NhJob[]; cards: NhActiveCard[] } = (() => {
@@ -650,6 +1066,24 @@ const MOCK_DRAFTS: { jobs: NhJob[]; cards: NhActiveCard[] } = (() => {
 
 /* 만드는 중 카드(#548) — 시트가 있으면 시트, 없으면 루. 상태는 그림 위 작은 딱지로,
    사람이 답할 차례면 진하게. 아래에 캐릭터 · 길 · 마지막으로 손댄 때. */
+/** 다음 화 초안 카드 — 앞 화 표지에 「N화 초안」 표시, 누르면 다음 화 이어 만들기 페이지로. */
+function SeriesDraftItem({ draft, cover, onOpen }: { draft: SeriesDraftCard; cover?: RunCard; onOpen: () => void }) {
+  const t = useT();
+  const label = t("{n}화 초안", { n: draft.episode });
+  return (
+    <button type="button" className="wt-strip-item wt-my-draft" onClick={onOpen} aria-label={`${draft.title || t("제목 짓기 전")} · ${label} · ${t("이어서 만들기")}`}>
+      <span className="wt-my-draftcover">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={cover ? coverUrl(draft.run, cover.cover_page ?? 1, cover.cover_episode ?? 1) : louArt("generating")} alt="" className={cover ? "" : "lou"} />
+        <span className="wt-my-draftchip wait">{label}</span>
+      </span>
+      <span className={`wt-strip-name${draft.title ? "" : " dim"}`}>{draft.title || t("제목 짓기 전")}</span>
+      {draft.story && <span className="wt-my-draftmeta">{draft.story}</span>}
+      <span className="wt-my-draftgo">{t("이어서 만들기")} ›</span>
+    </button>
+  );
+}
+
 function DraftCard({ job, card, onOpen }: { job: NhJob; card?: NhActiveCard; onOpen: () => void }) {
   const t = useT();
   const title = activeJobTitle(job);
@@ -723,11 +1157,14 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
     }
   };
 
-  const open = () => go("result", { run: run.run_id });
+  const open = (episode = 1) => {
+    const runId = run.episode_run_ids?.[String(episode)] ?? run.run_id;
+    go("result", { run: runId });
+  };
 
   return (
     <div className="card wt-my-work">
-      <button type="button" className="wt-my-cover" onClick={open} aria-label={run.title || t("제목 없음")}>
+        <button type="button" className="wt-my-cover" onClick={() => open()} aria-label={run.title || t("제목 없음")}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={coverUrl(run.run_id, run.cover_page ?? 1, run.cover_episode ?? 1)} alt="" />
       </button>
@@ -735,7 +1172,7 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
       <span className="muted">{[run.character, run.genre && t(run.genre)].filter(Boolean).join(" · ")}</span>
       <div className="wt-my-eps">
         {run.episodes.map((n) => (
-          <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
+          <button key={n} type="button" className="ep" onClick={() => open(n)}>{t("{n}화", { n })}</button>
         ))}
       </div>
       <div className="wt-my-workfoot">
@@ -748,8 +1185,8 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
           <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
             {t("편집실")}
           </button>
-          <button type="button" className="btn btn-w wt-my-edit" disabled={busy} onClick={() => setConfirming(true)}>
-            {t("지우기")}
+          <button type="button" className="btn wt-my-edit wt-my-delete" disabled={busy} onClick={() => setConfirming(true)}>
+            {t("삭제")}
           </button>
         </span>
       </div>
@@ -761,9 +1198,9 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
         </span>
       )}
       {confirming && (
-        <ConfirmDialog title={t("휴지통으로 옮길까요?")}
-                       sub={<><b>{run.title || t("제목 없음")}</b><br />{t("{n}일 안에는 휴지통에서 되살릴 수 있어요.", { n: keepDays })}</>}
-                       confirmLabel={t("지우기")} cancelLabel={t("취소")} busy={busy}
+        <ConfirmDialog title={t("정말 삭제하시겠습니까?")}
+                       sub={<><b>{run.title || t("제목 없음")}</b><br />{t("휴지통에 {n}일간 보관됩니다.", { n: keepDays })}</>}
+                       confirmLabel={t("삭제")} cancelLabel={t("취소")} busy={busy}
                        error={err} onConfirm={() => void remove()} onClose={() => { setConfirming(false); setErr(""); }} />
       )}
       {err && <span className="wt-my-err">{err}</span>}

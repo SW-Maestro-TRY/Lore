@@ -54,14 +54,41 @@ public class CharacterController {
     private final ShareReward shareReward;
     private final Admins admins;
     private final GuestGate guests;
+    private final CharacterTrash trash;
 
     public CharacterController(CharacterService characters, CharacterOwner who, ShareReward shareReward,
-                               Admins admins, GuestGate guests) {
+                               Admins admins, GuestGate guests, CharacterTrash trash) {
         this.characters = characters;
         this.who = who;
         this.shareReward = shareReward;
         this.admins = admins;
         this.guests = guests;
+        this.trash = trash;
+    }
+
+    @Operation(summary = "캐릭터 휴지통", description = """
+            지운 캐릭터 — 최근에 지운 것부터. 보관 기간(keep_days, 15일)이 지나면 영구 삭제된다. 카드마다
+            deleted_at · purge_at 이 붙는다.""")
+    @GetMapping("/trash")
+    public Map<String, Object> trashed(@RequestHeader(value = UID_HEADER, required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        List<String> uids = who.uidsOf(me, uid);
+        List<Map<String, Object>> cards = new java.util.ArrayList<>();
+        for (WebtoonCharacter one : trash.trashOf(me, uids)) {
+            Map<String, Object> card = new java.util.LinkedHashMap<>(view(one, me, uids));
+            card.put("deleted_at", one.getDeletedAt().toString());
+            card.put("purge_at", trash.purgeAt(one.getDeletedAt()).toString());
+            cards.add(card);
+        }
+        return Map.of("keep_days", trash.keepDays(), "characters", cards);
+    }
+
+    @Operation(summary = "휴지통에서 되살리기")
+    @PostMapping("/{publicId}/restore")
+    public Map<String, Object> restore(@PathVariable String publicId,
+                                       @RequestHeader(value = UID_HEADER, required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        return Map.of("ok", true, "restored", trash.restore(publicId, me, who.uidsOf(me, uid)));
     }
 
     @Operation(summary = "고를 수 있는 캐릭터", description = """
@@ -100,6 +127,25 @@ public class CharacterController {
                 me, uid, form.name(), form.description(), form.photosData(), form.photoKeys(),
                 guests.keyOf(request), form.style(), form.language());
         return view(made, me, who.uidsOf(me, uid));
+    }
+
+    @Operation(summary = "내 캐릭터 원본 등록", description = "이미지와 설정을 그대로 비공개 저장합니다. AI 생성/크레딧 차감 없음.")
+    @PostMapping("/original")
+    public Map<String, Object> original(@RequestBody CreateRequest form,
+            @RequestHeader(value = UID_HEADER, required = false) String uid, HttpServletRequest request) {
+        Long me = CreditGate.currentUser();
+        return view(characters.importOriginal(me, uid, form.name(), form.description(),
+                form.photosData(), form.photoKeys(), guests.keyOf(request)), me, who.uidsOf(me, uid));
+    }
+
+    @Operation(summary = "내 캐릭터 이미지와 설정 수정")
+    @PatchMapping("/{publicId}/original")
+    public Map<String, Object> updateOriginal(@PathVariable String publicId, @RequestBody CreateRequest form,
+            @RequestHeader(value = UID_HEADER, required = false) String uid, HttpServletRequest request) {
+        Long me = CreditGate.currentUser();
+        List<String> uids = who.uidsOf(me, uid);
+        return view(characters.updateOriginal(publicId, me, uids, form.name(), form.description(),
+                form.photosData(), form.photoKeys(), guests.keyOf(request)), me, uids);
     }
 
     @Operation(summary = "캐릭터 만들어보기", description = """
@@ -211,15 +257,36 @@ public class CharacterController {
                     me, uids);
     }
 
+    @Operation(summary = "AI 캐릭터 카드 고치기", description = """
+            「캐릭터 만들어보기」로 만든 카드의 이름 · 설정 글과 카드 칸(세계관 · 장르 · 종 · 역할 · 비중 ·
+            반전 한 줄 · 운명 · 대사)을 한 번에 고친다. 보내지 않은 칸(null)은 그대로 두고, 빈 문자열 ·
+            빈 목록은 그 칸을 지운다. 고친 값이 그대로 저장되고, 이 캐릭터로 웹툰을 만들 때 그 값만 들어간다.
+            카드가 없는 캐릭터(사진으로 올린 것 · 초상 한 장)는 400.""")
+    @PatchMapping("/{publicId}/card")
+    public Map<String, Object> editCard(
+            @PathVariable String publicId,
+            @RequestBody CardEditRequest form,
+            @RequestHeader(value = UID_HEADER, required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        List<String> uids = who.uidsOf(me, uid);
+        List<WebtoonCharacter.DialogueEdit> dialogue = form.dialogue() == null ? null
+                : form.dialogue().stream().filter(java.util.Objects::nonNull)
+                        .map(d -> new WebtoonCharacter.DialogueEdit(d.who(), d.text())).toList();
+        WebtoonCharacter.CardEdit edit = new WebtoonCharacter.CardEdit(form.world(), form.worldLabel(),
+                form.genre(), form.species(), form.role(), form.roleTier(), form.twist(), form.fate(), dialogue);
+        WebtoonCharacter one = characters.editCard(publicId, me, uids, form.name(), form.description(), edit);
+        return withInputs(view(one, me, uids), one);
+    }
+
     @Operation(summary = "지우기", description = """
-            그림은 S3 에 그대로 둔다 — 이 캐릭터로 이미 만든 웹툰이 그것을 보고 있다.""")
+            휴지통에 넣는다(15일 보관 뒤 영구 삭제). 그림은 S3 에 그대로 둔다 — 이 캐릭터로 이미 만든 웹툰이 그것을 보고 있다.""")
     @DeleteMapping("/{publicId}")
     public Map<String, Object> remove(
             @PathVariable String publicId,
             @RequestHeader(value = UID_HEADER, required = false) String uid) {
         Long me = CreditGate.currentUser();
         characters.remove(publicId, me, who.uidsOf(me, uid));
-        return Map.of("ok", true);
+        return Map.of("ok", true, "keep_days", trash.keepDays());
     }
 
     /**
@@ -239,9 +306,15 @@ public class CharacterController {
 
     private Map<String, Object> view(WebtoonCharacter one, Long me, List<String> uids) {
         Map<String, Object> m = new LinkedHashMap<>();
+        m.put("community_public",one.isCommunityPublic());
+        m.put("community_blocked",one.isCommunityBlocked());
         m.put("id", one.getPublicId());
         m.put("name", one.getName());
-        m.put("description", one.getDescription() == null ? "" : one.getDescription());
+        // 비어 있으면 AI 뽑기 카드의 상세 설정으로 — 수정 창과 웹툰 만들기가 이 글을 쓴다(2026-10-26)
+        m.put("description", one.settingsText());
+        // 카드 캐릭터는 수정 창이 카드 칸과 사람이 적은 설정 글을 따로 보여 준다 — 위 description 은 비어 있으면
+        // 카드 칸을 이어 붙인 글이라, 그걸 설정 글 칸에 넣고 저장하면 카드 내용이 두 곳에 갇힌다.
+        if (one.hasCard()) m.put("own_description", one.getDescription() == null ? "" : one.getDescription());
         m.put("art_url", characters.artUrl(one));
         m.put("source", one.getSource().name().toLowerCase());
         m.put("status", one.getStatus().name().toLowerCase());
@@ -259,7 +332,7 @@ public class CharacterController {
         }
         // 한 컷으로 만든 것만 카드가 있다. 없으면 칸 자체를 안 보낸다 — 화면이
         // "card 가 있나" 로 두 종류를 가른다.
-        if (one.hasCard()) {
+        if (one.hasCard() && one.getSource() != CharacterSource.UPLOAD && one.getSource() != CharacterSource.REPLACED_UPLOAD) {
             Map<String, Object> card = new LinkedHashMap<>();
             card.put("world", one.getWorld() == null ? "" : one.getWorld());
             card.put("world_label", one.getWorldLabel() == null ? "" : one.getWorldLabel());
@@ -268,7 +341,8 @@ public class CharacterController {
             card.put("role_tier", one.getRoleTier() == null ? "" : one.getRoleTier());
             card.put("lucky", one.isLucky());
             card.put("species", one.getSpecies() == null ? "" : one.getSpecies());
-            card.put("twist", one.getTwist());
+            // 사용자가 반전 한 줄을 지운 카드도 있다 — 화면은 문자열로 받는다
+            card.put("twist", one.getTwist() == null ? "" : one.getTwist());
             card.put("quote", one.getQuote() == null ? "" : one.getQuote());
             List<Map<String, Object>> dialogue = new ArrayList<>();
             for (WebtoonCharacter.DialogueLine line : one.dialogueLines()) {
@@ -282,6 +356,7 @@ public class CharacterController {
             card.put("dialogue", dialogue);
             card.put("fate", one.fateLines());
             card.put("style", one.getStyle() == null ? "" : one.getStyle());
+            card.put("edited", one.isCardEdited());
             m.put("card", card);
         }
         return m;
@@ -314,6 +389,21 @@ public class CharacterController {
                              @com.fasterxml.jackson.annotation.JsonAlias("photoKeys")
                              List<String> photoKeys,
                              String world, String language) {
+    }
+
+    /** 카드 고치기 입력. null 은 그대로 두라는 뜻이다. */
+    public record CardEditRequest(String name, String description, String world,
+                                  @com.fasterxml.jackson.annotation.JsonProperty("world_label")
+                                  @com.fasterxml.jackson.annotation.JsonAlias("worldLabel")
+                                  String worldLabel,
+                                  String genre, String species, String role,
+                                  @com.fasterxml.jackson.annotation.JsonProperty("role_tier")
+                                  @com.fasterxml.jackson.annotation.JsonAlias("roleTier")
+                                  String roleTier,
+                                  String twist, List<String> fate, List<DialogueEditRequest> dialogue) {
+    }
+
+    public record DialogueEditRequest(String who, String text) {
     }
 
     public record CreateRequest(String name, String description,

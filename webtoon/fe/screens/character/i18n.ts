@@ -4,6 +4,9 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "예시 캐릭터는 저장되지 않아요. 고친 이름·설정은 이번 웹툰에만 쓰여요.": { en: "Sample characters aren't saved. Your edits apply to this webtoon only.", ja: "サンプルキャラクターは保存されません。編集はこのウェブトゥーンにだけ使われます。", zh: "示例角色不会保存，修改只用于这次的网络漫画。" },
+  "이번 웹툰에만 적용": { en: "Use for this webtoon only", ja: "今回のウェブトゥーンにだけ適用", zh: "仅用于这次" },
+
   /* ---- 공통 · 빵부스러기 · 상단 ---- */
   "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
   "캐릭터 카드": { en: "Character card", ja: "キャラクターカード", zh: "角色卡" },
@@ -187,6 +190,12 @@ const dict: Dict = {
     en: "The character image was flagged by the image safety filter. Rerolling with the same input will be flagged again. Please try again with a different photo or description.",
     ja: "キャラクター画像が画像の安全基準に引っかかりました。同じ内容で引き直すとまた引っかかります。別の写真か説明に変えて作り直してください。",
     zh: "角色图片未通过图片安全标准。用相同内容重新抽取还会被拦截。请换一张照片或修改描述后重新制作。" },
+  /* ---- 빠졌던 번역 ---- */
+  "{name} 수정": { en: "Edit {name}", ja: "{name}を編集", zh: "编辑 {name}" },
+  "공개 설정": { en: "Visibility", ja: "公開設定", zh: "公开设置" },
+  "목록을 불러오지 못했습니다": { en: "Couldn't load the list", ja: "一覧を読み込めませんでした", zh: "无法加载列表" },
+  "생성 실패": { en: "Creation failed", ja: "生成失敗", zh: "生成失败" },
+  "이 캐릭터로 웹툰 만들기": { en: "Make a webtoon with this character", ja: "このキャラクターでウェブトゥーンを作る", zh: "用这个角色制作漫画" },
 };
 
 registerDict(dict);

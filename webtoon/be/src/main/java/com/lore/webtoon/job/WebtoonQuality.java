@@ -65,12 +65,15 @@ public final class WebtoonQuality {
      * 3,600원으로 한 편에 600원 손해)이었다. 부가세·결제 수수료를 빼고도
      * 남도록 파도·물결 15, 너울 25.
      *
+     * 2026-10-26 너울을 30 으로 올렸다. 외부 작품 너울 원가가 8~14장에 3,200~5,700원이라 25(5,000원)는
+     * 부가세·결제 수수료를 빼면 약 4,390원만 남아 장이 많은 편은 손해였다. 30(6,000원)이면 약 5,270원.
+     *
      * (크레딧 숫자 자체는 아직 검증 전 목업이다. 대외에 판매가로 말하지 않는다.)
      */
     private static final Map<String, Integer> CREDITS = Map.of(
             "wave",  15,
             "surf",  15,
-            "swell", 25);
+            "swell", 30);
 
     /**
      * 편집실에서 한 장을 다시 그리는 크레딧. 작품을 만든 화질을 따른다(#787).
@@ -84,19 +87,46 @@ public final class WebtoonQuality {
             "swell", 4);
 
     /**
-     * 한 편에 실제로 나가는 <b>AI 원가(원)</b>. 2026-09-13 실측이다.
+     * 한 편 값({@link #creditsOf})에 들어 있는 장 수 — 표지를 포함한다.
+     *
+     * 원가는 장 수에 거의 정비례한다(장마다 그림 · 장 검수 · 자동 재그림이 붙는다). 2026-10-26 운영
+     * 완성본 46편으로 재 보니 한 장에 너울 약 640원 · 파도 약 320원이었고, 너울 25(5,000원)는
+     * 8장까지 본전이었다. 길게 적은 내용은 장면이 많아져 20장을 넘기도 했다. 그래서 한 편 값은
+     * 8장까지이고, 그 뒤 장은 장마다 따로 받는다({@link #extraPageCreditsOf}). 크레딧이 모자라면
+     * 8장까지만 그려 완성하고, 나머지는 결과 화면에서 이어 그린다.
+     */
+    public static final int BASE_PAGES = 8;
+
+    /**
+     * 기본 장 수를 넘는 장 하나에 드는 크레딧. 한 장 원가에 부가세 · 결제 수수료를 얹어도 남게 잡았다
+     * (너울 약 640원 → 4 = 800원, 파도 약 320원 → 2 = 400원, 물결은 파도보다 싸서 같은 2).
+     */
+    private static final Map<String, Integer> EXTRA_PAGE_CREDITS = Map.of(
+            "wave",  2,
+            "surf",  2,
+            "swell", 4);
+
+    /** 이 화질로 만든 작품에서 기본 장 수를 넘는 장 하나에 드는 크레딧. */
+    public static int extraPageCreditsOf(String key) {
+        return EXTRA_PAGE_CREDITS.getOrDefault(normalize(key), EXTRA_PAGE_CREDITS.get(DEFAULT_QUALITY));
+    }
+
+    /**
+     * 한 편에 실제로 나가는 <b>AI 원가(원)</b>. 2026-10-26 운영 실측이다.
      *
      * 크레딧(받는 값)과 다르다 — 이것은 <b>우리가 내는 값</b>이고, 하루 지출
      * 상한을 지킬 때 쓴다({@code SpendGuard}). 아직 안 끝난 작업이 얼마를 쓸지
      * 미리 잡아 두려면 그 작업의 화질을 알아야 한다.
      *
-     * 파도는 세 편 평균으로 검산했다(1,183 · 1,043 · 1,108 → 평균 1,111원).
-     * 토큰 단가는 기계와 무관해서 <b>시간과 달리 잘 맞는다.</b>
+     * 10/13 이후 완성본으로 다시 쟀다(webtoon_usage). 파도 5편 평균 2,351원, 물결 1편 1,114원.
+     * 너울은 기본 장 수({@link #BASE_PAGES}) 8장 + 표지에 장당 약 640원을 곱하고 글 몫을 더했다.
+     * 9/13 값(물결 702 · 파도 1,111 · 너울 2,269)은 검수·나레이션 단계가 붙기 전이라 실제의
+     * 절반 아래였고, 그만큼 상한이 늦게 걸렸다. 다시 잴 때는 haeun/funnel-2026-10-26 의 쿼리를 쓴다.
      */
     private static final Map<String, Integer> KRW = Map.of(
-            "wave",   702,
-            "surf",  1111,
-            "swell", 2269);
+            "wave",  1200,
+            "surf",  2400,
+            "swell", 6000);
 
     /** 이 화질로 한 편 만들 때 우리가 내는 값(원). 상한을 지킬 때 쓴다. */
     public static int expectedKrw(String key) {
@@ -141,7 +171,9 @@ public final class WebtoonQuality {
                 .map(k -> Map.<String, Object>of(
                         "key", k,
                         "label", labelOf(k),
-                        "credits", creditsOf(k)))
+                        "credits", creditsOf(k),
+                        "base_pages", BASE_PAGES,
+                        "extra_page_credits", extraPageCreditsOf(k)))
                 .toList();
     }
 }

@@ -2,6 +2,20 @@ import { registerDict, type Dict } from "../../lib/i18n";
 
 /* 둘러보기 — 화면의 한국어 원문이 키다. 작품 제목·장르·그림체 라벨은 서버 값이라 여기 없다. */
 const dict: Dict = {
+  "총 {n}화": { en: "{n} episodes", ja: "全{n}話", zh: "共 {n} 话" },
+  "좋아요": { en: "Liked", ja: "いいね", zh: "喜欢" },
+  "아직 좋아요한 웹툰이 없어요": { en: "No liked webtoons yet", ja: "まだいいねしたウェブトゥーンがありません", zh: "还没有喜欢的网络漫画" },
+  "로그인하면 좋아요한 웹툰을 모아 볼 수 있어요": { en: "Log in to see the webtoons you liked", ja: "ログインするといいねしたウェブトゥーンをまとめて見られます", zh: "登录后可以查看你喜欢的网络漫画" },
+  "화면 위 로그인 단추를 눌러 주세요.": { en: "Tap the log in button at the top.", ja: "画面上のログインボタンを押してください。", zh: "请点击页面上方的登录按钮。" },
+  "내 캐릭터로 한 편": { en: "An episode with my character", ja: "自分のキャラクターで一話", zh: "用我的角色做一话" },
+  "{title} 1화 읽기": { en: "Read episode 1 of {title}", ja: "{title} 第1話を読む", zh: "阅读 {title} 第1话" },
+  "슈퍼": { en: "Super", ja: "スーパー", zh: "超级" },
+  "세컨드브레인": { en: "Second Brain", ja: "セカンドブレイン", zh: "第二大脑" },
+  "선택은 완벽했다.": { en: "Every choice was perfect.", ja: "選択は完璧だった。", zh: "选择完美无缺。" },
+  "내 것이었을까.": { en: "But was it mine?", ja: "それは自分のものだったのか。", zh: "可那是我的吗？" },
+  "근미래 SF": { en: "Near-future SF", ja: "近未来SF", zh: "近未来科幻" },
+  "기업 드라마": { en: "Corporate drama", ja: "企業ドラマ", zh: "职场剧" },
+  "AI": { en: "AI", ja: "AI", zh: "AI" },
   "둘러보기": { en: "Browse", ja: "見て回る", zh: "浏览" },
   "다른 사람들의 웹툰": { en: "Webtoons by others", ja: "みんなのウェブトゥーン", zh: "大家的网络漫画" },
   "내 웹툰 만들기": { en: "Make my webtoon", ja: "自分のウェブトゥーンを作る", zh: "制作我的网络漫画" },
@@ -9,8 +23,9 @@ const dict: Dict = {
   "내 작품": { en: "My works", ja: "自分の作品", zh: "我的作品" },
   "최신순": { en: "Newest first", ja: "新しい順", zh: "最新优先" },
   "오래된순": { en: "Oldest first", ja: "古い順", zh: "最早优先" },
-  "최신순 — 누르면 오래된순": { en: "Newest first — tap for oldest first", ja: "新しい順 — 押すと古い順", zh: "最新优先 — 点击改为最早优先" },
-  "오래된순 — 누르면 최신순": { en: "Oldest first — tap for newest first", ja: "古い順 — 押すと新しい順", zh: "最早优先 — 点击改为最新优先" },
+  "조회순": { en: "Most viewed", ja: "閲覧数順", zh: "浏览最多" },
+  "좋아요순": { en: "Most liked", ja: "いいね順", zh: "点赞最多" },
+  "정렬": { en: "Sort", ja: "並び替え", zh: "排序" },
   "목록을 가져오지 못했어요": { en: "Couldn't load the list.", ja: "一覧を取得できませんでした", zh: "无法获取列表" },
   "서버에 닿지 못했어요. 잠시 뒤 다시 시도해 주세요 — 만들어 둔 작품은 그대로 있어요.": {
     en: "We couldn't reach the server. Please try again in a moment — your works are safe.",
@@ -56,6 +71,8 @@ const dict: Dict = {
   "최근 본 웹툰": { en: "Recently read", ja: "最近読んだ作品", zh: "最近看过" },
   "로그인하면 공개 여부를 바꿀 수 있어요": { en: "Sign in to change who can see it", ja: "ログインすると公開設定を変えられます", zh: "登录后可更改公开设置" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  /* ---- 빠졌던 번역 ---- */
+  "웹툰 둘러보기": { en: "Browse webtoons", ja: "ウェブトゥーンを見て回る", zh: "浏览漫画" },
 };
 
 registerDict(dict);

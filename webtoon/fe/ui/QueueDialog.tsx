@@ -43,12 +43,13 @@ function startOf(job: NhJob): number {
   return now;
 }
 
-export default function QueueDialog({ job, onWait, onOpenProgress }: {
+export default function QueueDialog({ job, onWait, onOpenProgress, onBrowse }: {
   job: NhJob;
-  /** 「여기서 기다리기」 — 닫고 둘러보게 한다 */
+  /** 「여기서 기다리기」와 닫기는 현재 화면을 유지한다. */
   onWait: () => void;
   /** 있으면 「진행 화면 보기」 단추를 둔다(진행 원에서 열었을 때) */
   onOpenProgress?: () => void;
+  onBrowse?: () => void;
 }) {
   const t = useT();
   const ahead = job.queue?.ahead ?? 0;
@@ -88,7 +89,8 @@ export default function QueueDialog({ job, onWait, onOpenProgress }: {
         {onOpenProgress && (
           <button type="button" className="btn btn-w" onClick={onOpenProgress}>{t("진행 화면 보기")}</button>
         )}
-        <button type="button" className="btn btn-p" onClick={onWait}>{t("여기서 기다리기")}</button>
+        <button type="button" className={`btn ${onBrowse ? "btn-w" : "btn-p"}`} onClick={onWait}>{t("여기서 기다리기")}</button>
+        {onBrowse && <button type="button" className="btn btn-p" onClick={onBrowse}>{t("웹툰 둘러보기")}</button>}
       </div>
     </Dialog>
   );
@@ -105,4 +107,5 @@ registerDict({
   },
   "진행 화면 보기": { en: "See progress", ja: "進行画面を見る", zh: "查看进度" },
   "여기서 기다리기": { en: "Wait here", ja: "ここで待つ", zh: "在这里等" },
+  "웹툰 둘러보기": { en: "Browse webtoons", ja: "ウェブトゥーンを見て回る", zh: "浏览漫画" },
 });

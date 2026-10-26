@@ -94,6 +94,12 @@ public record JobFailure(String stage, String code, List<String> categories, Str
      * ({@code webtoon/fe/screens/progress/i18n.ts})에 그대로 키로 있어야 번역된다.
      */
     String humanMessage(String fallback) {
+        if (detail != null && detail.contains("string_above_max_length")) {
+            /* 그림 요청 글이 모델 한도를 넘었다(2026-10-26) — 하네스가 한 번 줄여 다시 보내고도 넘친 경우다.
+               앞 문장(fallback)에 이어 붙이면 화면 사전의 키와 달라져 번역이 안 된다 — 한 문장으로 따로 보낸다. */
+            return "그림 요청 글이 너무 길어 그림 모델이 받지 않았어요. 붙인 설정집이 아주 길면 생길 수 있어요 — "
+                    + "설정집 항목을 조금 줄여 다시 만들어 주세요.";
+        }
         if ("photo_missing".equals(code)) {
             return "올린 사진을 찾지 못했어요. 사진을 다시 올려 새로 만들어 주세요.";
         }
