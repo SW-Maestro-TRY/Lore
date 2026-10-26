@@ -467,7 +467,8 @@ export default function Wizard({
       </div>:<div className="wt-create-content wt-create-options">
         <section><h2>{t("그림체")}</h2><div className="wt-wiz-styles">{STYLE_INFO.map(([key,label])=><button type="button" key={key} className={`wt-wiz-style${form.style===key?" on":""}`} aria-pressed={form.style===key} onClick={()=>{track("style_pick",{style:key});patch({style:key});}}><img src={STYLE_THUMB[key]||`/static/samples/ex-${key}-1.jpg`} alt=""/><b>{t(label)}</b>{form.style===key&&<CheckMark/>}</button>)}</div></section>
         <section><h2>{t("그리기 방식")}</h2>{qualityPicker}</section>
-        <section><h2>{t("생성 방식")}</h2>{usesOwnStory?<p className="muted">{form.story.trim()?t("입력한 이야기의 장면을 확인한 뒤 그립니다."):t("붙인 설정집으로 이야기를 세우고, 장면을 확인한 뒤 그립니다.")}</p>:<div className="wt-wiz-modes"><button type="button" className={`wt-wiz-mode${viewMode==="simple"?" on":""}`} onClick={()=>pickMode("simple")}><b>{t("바로 만들기")}</b><span>{t("중간 확인 없이 완성")}</span></button><button type="button" className={`wt-wiz-mode${viewMode==="expert"?" on":""}`} onClick={()=>pickMode("expert")}><b>{t("확인하고 만들기")}</b><span>{t("이야기와 장면 확인 후 생성")}</span></button></div>}</section>
+        {/* 고를 것이 없는 길(내 이야기·설정집)은 설명 문장뿐이라 칸째 안 보인다(2026-10-26) */}
+        {!usesOwnStory&&<section><h2>{t("생성 방식")}</h2><div className="wt-wiz-modes"><button type="button" className={`wt-wiz-mode${viewMode==="simple"?" on":""}`} onClick={()=>pickMode("simple")}><b>{t("바로 만들기")}</b><span>{t("중간 확인 없이 완성")}</span></button><button type="button" className={`wt-wiz-mode${viewMode==="expert"?" on":""}`} onClick={()=>pickMode("expert")}><b>{t("확인하고 만들기")}</b><span>{t("이야기와 장면 확인 후 생성")}</span></button></div></section>}
         {sidePanel}
       </div>}
     </div>
