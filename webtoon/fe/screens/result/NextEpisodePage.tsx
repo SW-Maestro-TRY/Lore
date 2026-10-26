@@ -8,6 +8,8 @@ import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import { IconChevronLeft, IconEdit, IconMinus } from "../../ui/Icons";
+import LouLoading from "../../ui/LouLoading";
+import DirectSwitch from "../../ui/DirectSwitch";
 import "./seriesI18n";
 import "./NextEpisodePage.css";
 
@@ -25,6 +27,8 @@ export default function NextEpisodePage({runId, authenticated, go}: {
   const [data, setData] = useState<SeriesDraft | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  /* 「바로 만들기」(2026-10-26) — 켜면 이야기·캐릭터·장면 확인 없이 끝까지 만든다. 기본은 확인하며 만들기. */
+  const [direct, setDirect] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [retry, setRetry] = useState(0);
   const [dirty, setDirty] = useState(false);
@@ -53,6 +57,7 @@ export default function NextEpisodePage({runId, authenticated, go}: {
     let alive = true;
     const timer = window.setInterval(() => {
       readSeriesDraft(runId).then(got => {
+        // 정리하는 동안 적어 둔 이번 화는 그대로 둔다
         if (alive && got.digest?.status !== "RUNNING") setData(d => d ? {...got, story: d.story} : got);
       }).catch(() => {});
     }, 3000);
@@ -134,10 +139,11 @@ export default function NextEpisodePage({runId, authenticated, go}: {
     return run;
   };
   useEffect(() => {
-    if (!dirty || !data || busy || editing || pendingSave.current) return;
+    // 정리 중에는 저장하지 않는다 — 빈 정리본으로 초안이 먼저 생기면 정리 결과를 덮는다. 끝나면 이어서 저장된다.
+    if (!dirty || !data || busy || editing || preparing || pendingSave.current) return;
     const timer = window.setTimeout(() => { void autoSave(); }, 1200);
     return () => window.clearTimeout(timer);
-  }, [dirty, data, busy, editing]);
+  }, [dirty, data, busy, editing, preparing]);
   const submit = async (generate: boolean) => {
     if (!data || submitting.current) return;
     submitting.current=true; setBusy(true); setError(""); setSaved(false);
@@ -148,8 +154,8 @@ export default function NextEpisodePage({runId, authenticated, go}: {
     };
     try {
       if (generate) {
-        const result=await createNextEpisode(runId,form);
-        track("series_episode_start",{run:runId,job:result.id,ep:data.episode,cost:data.credit_cost});
+        const result=await createNextEpisode(runId,{...form, checkpoints: !direct});
+        track("series_episode_start",{run:runId,job:result.id,ep:data.episode,cost:data.credit_cost,direct});
         go("running",{job:result.id},{replace:true});
       } else {
         const result=await saveSeriesDraft(runId,form);
@@ -170,19 +176,25 @@ export default function NextEpisodePage({runId, authenticated, go}: {
   return <div className="wt-wrap wt-page wt-series-page">
     <button type="button" className="wt-series-back" onClick={back}><IconChevronLeft size={22}/>{t("웹툰 보기")}</button>
     <h1>{data ? t("{n}화 이어 만들기",{n:data.episode}) : t("다음 화 이어 만들기")}</h1>
-    <p className="wt-series-lede">{t("앞 화를 읽고 설정과 진행 상태를 정리해 두었어요.")}</p>
+    {/* 정리하는 동안에는 아래 루 로딩이 같은 말을 한다 — 「정리해 두었어요」는 끝난 뒤에만 */}
+    {!(data?.digest?.status === "RUNNING") && <p className="wt-series-lede">{t("앞 화를 읽고 설정과 진행 상태를 정리해 두었어요.")}</p>}
     {!authenticated ? <>
       <p>{t("연재 기록을 계정에 보관하려면 로그인해 주세요.")}</p>
       <div className="wt-series-actions"><button className="btn btn-p" onClick={()=>setAuthOpen(true)}>{t("로그인")}</button></div>
     </> : !data ? <>
       {error ? <><p role="alert">{error}</p><button className="btn btn-w" onClick={()=>go("mypage")}>{t("내 작품으로 이동")}</button><button className="btn btn-w" onClick={()=>setRetry(v=>v+1)}>{t("다시 시도")}</button></>
-        : <p role="status">{t("앞 화의 기록을 불러오고 있어요")}</p>}
+        : <LouLoading title={t("앞 화의 기록을 불러오고 있어요")} size={104} />}
     </> : <form className="wt-series-form" onSubmit={e=>{e.preventDefault(); void submit(true);}}>
-      {preparing && <p role="status" className="wt-series-digest">{t("앞 화를 읽고 설정과 진행 상태를 정리하고 있어요. 잠시만 기다려 주세요.")}</p>}
+      {/* 정리는 서버에서 따로 돈다(SeriesDigestService) — 기다리게 막지 않고, 그동안 이번 화 칸은 적을 수 있다(2026-10-26) */}
+      {preparing && <div className="wt-series-loading">
+        <LouLoading title={t("앞 화를 읽고 설정과 진행 상태를 정리하고 있어요.")}
+                    lines={[t("앞 화 본문과 장면을 읽는 중"), t("등장인물의 겉모습과 관계를 정리하는 중"), t("세계와 설정을 설정집 항목으로 적는 중"), t("앞 화가 끝난 장면과 남은 일을 진행 상태로 적는 중")]}
+                    note={<>{t("백그라운드에서 진행돼서 나갔다 와도 이어져요.")}<br />{t("그동안 이번 화에서 일어날 일을 적어 두세요.")}</>} />
+      </div>}
       {data.digest?.status === "ERROR" && <div role="alert" className="wt-series-digest">
         <p>{data.digest.error || t("앞 화를 정리하지 못했어요")}</p>
         <button type="button" className="btn btn-w" onClick={()=>void redigest()}>{t("다시 정리하기")}</button></div>}
-      <fieldset disabled={busy || preparing}>
+      <fieldset disabled={busy}>
         {/* 사람이 할 일은 이번 화 내용 하나라 맨 위에 둔다. 정리본은 그 아래에서 틀린 줄만 뺀다. */}
         <label htmlFor="series-story">{t("이번 화에서 일어날 일")}</label>
         <textarea id="series-story" className="field" rows={5} maxLength={20000} aria-describedby="series-story-note"
@@ -190,6 +202,8 @@ export default function NextEpisodePage({runId, authenticated, go}: {
           value={data.story} onChange={e=>patch("story",e.target.value)} />
         <p id="series-story-note" className="wt-series-note">{t("비워 두면 앞 화에서 이어지는 이야기를 자동으로 만들어요.")}</p>
         {(() => {
+          // 정리가 끝나기 전에는 진행 상태 · 설정집 항목이 아직 없다 — 끝나면 저절로 채워진다.
+          if (preparing) return null;
           // 항상 참고하는 항목(세계 자체)을 앞에 둔다. 같은 목록 안에서 표시만 다르다.
           const items = data.entries.map((e,i)=>({e,i})).sort((a,b)=>Number(!!b.e.always)-Number(!!a.e.always));
           const titleOf = (key: string) => data.entries.find(e => e.id === key)?.title;
@@ -241,10 +255,11 @@ export default function NextEpisodePage({runId, authenticated, go}: {
             value={data.fixed_settings} onChange={e=>patch("fixed_settings",e.target.value)} />
         </details>
       </fieldset>
+      <div className="wt-series-direct"><DirectSwitch on={direct} disabled={busy} onChange={setDirect}/></div>
       {data.blocked && <p role="status">{data.blocked}</p>}
       {error && <div role="alert"><ErrLine text={error}/></div>}
       <div className="wt-series-actions">
-        <span className="wt-series-autosave" role="status">{dirty ? t("저장 중…") : saved ? t("자동 저장됨") : ""}</span>
+        <span className="wt-series-autosave" role="status">{dirty ? (preparing ? t("정리가 끝나면 저장돼요") : t("저장 중…")) : saved ? t("자동 저장됨") : ""}</span>
         <button type="submit" className="btn btn-p" disabled={busy || preparing || (!data.progress.length && !data.progress_state.trim()) || !!data.blocked}>
           {busy ? t("처리 중…") : <>{t("{n}화 만들기",{n:data.episode})} <span className="wt-series-price">-{t("{n} 크레딧",{n:data.credit_cost})}</span></>}</button>
       </div>

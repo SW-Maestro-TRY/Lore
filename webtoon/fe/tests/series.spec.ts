@@ -50,7 +50,7 @@ async function stub(page:Page,count=1,authenticated=true) {
  return {calls,get submitted(){return submitted;}};
 }
 // 다음 화 이어 만들기는 창이 아니라 페이지다(?view=next&run=앞 화).
-async function openForm(page:Page) {
+async function openForm(page:Page,waitDigest=true) {
  await page.goto('/webtoon?run=ep1');
  // next dev 에만 뜨는 「DEV 화면」 단추가 폰 너비에서 아래 단추를 가린다(배포 빌드에는 없다).
  await page.addStyleTag({content:'.wt-devnav{display:none}'});
@@ -58,7 +58,29 @@ async function openForm(page:Page) {
  await expect(page).toHaveURL(/view=next&run=ep1/);
  await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeVisible();
  await expect(page.getByLabel('이번 화에서 일어날 일',{exact:true})).toBeEnabled({timeout:15000});
+ // 정리는 백그라운드라 칸은 바로 열린다 — 정리가 끝날 때까지 기다린다(정리 중 안내가 사라짐)
+ if(waitDigest) await expect(page.getByRole('status').filter({hasText:'백그라운드에서 진행돼서'})).toHaveCount(0,{timeout:15000});
 }
+test('정리하는 동안에도 이번 화 칸은 적을 수 있고, 끝나면 정리본이 채워지며 적은 글은 남음',async({page})=>{
+ await stub(page);
+ // 정리가 끝나기 전까지는 RUNNING 만 준다(백그라운드 정리, 2026-10-26)
+ let done=false;
+ await page.route('**/series/ep1/draft',async route=>{
+  if(done||route.request().method()!=='GET') return route.fallback();
+  await route.fulfill({contentType:'application/json',body:JSON.stringify({episode:2,fixed_settings:'',progress_state:'',story:'',revision:0,previous_state:'',source_scenes:[],source_run:'ep1',title:'다리 너머의 약속',credit_cost:12,balance:48,blocked:null,entries:[],progress:[],digest:{status:'RUNNING'}})});
+ });
+ await openForm(page,false);
+ await expect(page.getByRole('status').filter({hasText:'백그라운드에서 진행돼서 나갔다 와도 이어져요.'})).toBeVisible();
+ const story=page.getByLabel('이번 화에서 일어날 일',{exact:true});
+ await expect(story).toBeEnabled();
+ await story.fill('조금 일찍 출발한다.');
+ await expect(page.getByText('현재 진행 상태',{exact:true})).toHaveCount(0);
+ await page.waitForTimeout(700);
+ await page.screenshot({path:resolve(base,`.impeccable/review/series-digest-loading-${test.info().project.name}.png`)});
+ done=true;
+ await expect(page.getByText('현재 진행 상태',{exact:true})).toBeVisible({timeout:15000});
+ await expect(story).toHaveValue('조금 일찍 출발한다.');
+});
 test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기 → 이번 화만 적고 생성',async({page})=>{
  const server=await stub(page);
  await openForm(page);
@@ -104,6 +126,24 @@ test('다음 화 버튼 → 앞 화 정리로 칸이 채워짐 → 항목 빼기
  expect(server.submitted.entries.map((e:any)=>e.title)).toEqual(['지수의 비밀 약속']);
  expect(server.submitted.entries[0].keys).toEqual([]);
  expect(server.submitted.progress.map((p:any)=>p.key)).toEqual(['P001']);
+ // 「바로 만들기」를 안 켰으면 확인하며 만든다
+ expect(server.submitted.checkpoints).toBe(true);
+});
+test('「바로 만들기」를 켜면 확인 자리 없이 끝까지 만들도록 보냄',async({page},info)=>{
+ const server=await stub(page);
+ await openForm(page);
+ const sw=page.getByRole('switch',{name:/바로 만들기/});
+ await expect(sw).toHaveAttribute('aria-checked','false');
+ await expect(sw).toContainText('이야기 · 캐릭터 · 장면마다 멈춰서 보여 드려요.');
+ await sw.click();
+ await expect(sw).toHaveAttribute('aria-checked','true');
+ await expect(sw).toContainText('중간에 묻지 않고 끝까지 만들어요.');
+ await sw.scrollIntoViewIfNeeded();
+ mkdirSync(resolve(base,'.impeccable/review'),{recursive:true});
+ await page.screenshot({path:resolve(base,`.impeccable/review/series-direct-${info.project.name}.png`)});
+ await page.getByRole('button',{name:/^2화 만들기/}).click();
+ await expect(page).toHaveURL(/view=running&job=job-next/);
+ expect(server.submitted.checkpoints).toBe(false);
 });
 test('정리본을 고쳐 쓰기 → 자동 초안 저장·복원 → 생성',async({page},info)=>{
  const server=await stub(page);

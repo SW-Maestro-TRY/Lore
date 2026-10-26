@@ -318,7 +318,7 @@ export interface NhCreateRequest {
   agree_ip: boolean;
   checkpoints: boolean;
   character_id?: string;
-  /** 어느 길로 만드나(#548). own 이면 checkpoints 는 항상 true 로 보낸다. */
+  /** 어느 길로 만드나(#548). */
   mode?: NhMode;
   /** own 길의 「설정 더 적기」 — 인물·세계·지킬 것을 한 칸에 적은 자유 글. 없으면 빈 문자열. */
   settings?: string;
@@ -1175,6 +1175,8 @@ export interface SeriesDraft {
 export interface SeriesForm {
   fixed_settings: string; progress_state: string; story: string; revision: number;
   confirmed: boolean; request_token: string; entries: SeriesEntry[]; progress: LoreProgress[];
+  /** false 면 「바로 만들기」 — 확인 자리 없이 끝까지. 만들기 요청에만 싣는다. */
+  checkpoints?: boolean;
 }
 export function readSeries(run: string): Promise<SeriesInfo> {
   return call(`/series/${encodeURIComponent(run)}`);

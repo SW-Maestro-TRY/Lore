@@ -109,7 +109,31 @@ class JobResumeTest {
     @DisplayName("장면을 다 나눈 뒤 확인 전에 끊겼으면 장면 확인 자리로 — 확인 안 한 장면으로 그리지 않는다")
     void 장면_확인_전() throws Exception {
         장면(작품("run-1"));
+        WebtoonJob job = 끊긴("run-1", JobStage.PAGES, true, true);
+
+        assertThat(runner.resumeInterrupted(job)).isTrue();
+
+        verify(store).awaiting(1L, JobStatus.AWAITING_SCENES, JobStage.PAGES);
+        verify(store, never()).queued(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("「바로 만들기」로 장면을 다 나눈 뒤 끊겼으면 확인 자리 없이 그리러 간다")
+    void 바로_만들기_장면_뒤() throws Exception {
+        장면(작품("run-1"));
         WebtoonJob job = 끊긴("run-1", JobStage.PAGES, true, false);
+
+        assertThat(runner.resumeInterrupted(job)).isTrue();
+
+        verify(store).queued(1L, JobStage.PAGES);
+        verify(store, never()).awaiting(anyLong(), any(), any());
+    }
+
+    @Test
+    @DisplayName("확인하며 만드는 내 이야기 길은 장면을 다 나눴으면 장면 확인에서 기다린다")
+    void 확인하며_장면_뒤() throws Exception {
+        장면(작품("run-1"));
+        WebtoonJob job = 끊긴("run-1", JobStage.PAGES, true, true);
 
         assertThat(runner.resumeInterrupted(job)).isTrue();
 

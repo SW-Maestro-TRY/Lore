@@ -44,7 +44,15 @@ public class SeriesService {
     /** agree_ip 는 옛 화면만 보낸다 — 다음 화는 1화의 권리 확인을 잇는다(createNext). 안 보내도 되게 Boolean. */
     public record Form(String fixed_settings, String progress_state, String story, long revision,
                        boolean confirmed, Boolean agree_ip, String request_token, String uid,
-                       List<Map<String,Object>> entries, List<Map<String,Object>> progress) {}
+                       List<Map<String,Object>> entries, List<Map<String,Object>> progress,
+                       /* false 면 「바로 만들기」 — 이야기·캐릭터·장면 확인 없이 끝까지. 안 보내면 확인하며 만든다. */
+                       Boolean checkpoints) {
+        public Form(String fixed_settings, String progress_state, String story, long revision,
+                    boolean confirmed, Boolean agree_ip, String request_token, String uid,
+                    List<Map<String,Object>> entries, List<Map<String,Object>> progress) {
+            this(fixed_settings, progress_state, story, revision, confirmed, agree_ip, request_token, uid, entries, progress, null);
+        }
+    }
 
     private WebtoonJob source(String run, Long user, boolean own) {
         if (own && user == null) throw new BusinessException(ErrorCode.UNAUTHORIZED, "연재를 이어가려면 로그인해 주세요.");
@@ -310,7 +318,7 @@ public class SeriesService {
             savedFields.forEach((k,v) -> fields.put(str(k),str(v)));
         var req=new JobService.CreateRequest(str(input.get("name")),str(input.get("character")),
                 str(input.get("genre")),d.nextStory,source.getStyle(),fields,List.of(),List.of(),true,
-                true,checked(form.uid(),64,"브라우저 번호",true),null,"",source.getQuality(),
+                form.checkpoints() == null || form.checkpoints(),checked(form.uid(),64,"브라우저 번호",true),null,"",source.getQuality(),
                 source.getLanguage(),"own",d.fixedSettings,"","", seriesBook(source, d));
         String id=creator.create(req,user,req.uid(),null,state);
         try {
