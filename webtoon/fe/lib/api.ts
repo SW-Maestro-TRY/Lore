@@ -594,8 +594,8 @@ export interface PageDrawStatus {
 }
 
 /** 남겨 둔 장을 잔액이 닿는 데까지 앞에서부터 이어 그린다. 한 장도 못 그리면 402(크레딧이 모자라요). */
-export function continuePages(runId: string): Promise<{ started: PageDrawStatus[]; left: number }> {
-  return post(`/runs/${encodeURIComponent(runId)}/continue`);
+export function continuePages(runId: string, count?: number): Promise<{ started: PageDrawStatus[]; left: number }> {
+  return post(`/runs/${encodeURIComponent(runId)}/continue`, count ? { count } : undefined);
 }
 
 /** 장 하나를 그리는 일이 어디까지 왔나. */

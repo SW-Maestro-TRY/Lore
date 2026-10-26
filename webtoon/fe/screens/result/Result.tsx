@@ -540,12 +540,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   </div>
                 );
               })}
+              {mine && (data.pending_pages?.length ?? 0) > 0 && (
+                /* 크레딧이 모자라 뒤 장을 아직 안 그렸다 — 그린 장 바로 뒤에 잠긴 장으로 이어 붙인다 */
+                <PendingPages runId={runId} data={data} onRefresh={refreshResult} />
+              )}
             </div>
-
-            {mine && (data.pending_pages?.length ?? 0) > 0 && (
-              /* 크레딧이 모자라 뒤 장을 아직 안 그렸다 — 다음 날 매일 지급으로 이어 그린다 */
-              <PendingPages runId={runId} data={data} onRefresh={refreshResult} />
-            )}
 
             {data.public !== false && !data.preview ? (
               <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} total={chapterRows.filter(c => c.run_id).length}

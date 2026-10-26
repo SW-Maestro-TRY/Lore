@@ -401,7 +401,9 @@ public class RunController {
      */
     @Operation(summary = "남은 장 이어 그리기", description = "잔액이 닿는 장까지만 앞에서부터. 장마다 id 로 진행을 물어야 한다.")
     @PostMapping("/{runId}/continue")
-    public ResponseEntity<Map<String, Object>> continuePages(@PathVariable String runId) {
+    public ResponseEntity<Map<String, Object>> continuePages(@PathVariable String runId,
+                                                             @RequestBody(required = false)
+                                                             Map<String, Object> body) {
         Long userId = mustOwn(runId);
         /* 이미 그리는 중인 장은 빼고 센다 — 화면을 새로 열어 단추를 또 눌러도 같은 장을 두 번 받지 않는다. */
         List<Integer> drawing = regen.drawingPages(runId);
@@ -411,7 +413,17 @@ public class RunController {
         }
         int per = com.lore.webtoon.job.WebtoonQuality.extraPageCreditsOf(regen.qualityOf(runId));
         int have = credits.balanceToday(userId);
-        int afford = Math.min(pending.size(), have / per);
+        /* 「여기까지 열기」는 앞에서부터 count 장 — 그 장 수 값이 다 있어야 연다. 고른 만큼이 아니면 사람이 낸 값과 열린 장이 어긋난다.
+           count 가 없으면 잔액이 닿는 데까지 연다. */
+        int want = body != null && body.get("count") instanceof Number n ? Math.min(n.intValue(), pending.size()) : pending.size();
+        if (want <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "열 장 수가 없어요");
+        }
+        if (body != null && body.get("count") != null && have < want * per) {
+            throw new BusinessException(CreditGate.notEnough(),
+                    "크레딧이 모자라요 (" + want + "장 " + (want * per) + " · 보유 " + have + ")");
+        }
+        int afford = Math.min(want, have / per);
         if (afford <= 0) {
             throw new BusinessException(CreditGate.notEnough(),
                     "크레딧이 모자라요 (한 장 " + per + " · 보유 " + have + ")");

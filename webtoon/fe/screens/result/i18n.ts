@@ -4,34 +4,27 @@ import { registerDict, type Dict } from "../../lib/i18n";
 const dict: Dict = {
   /* ---- Result ---- */
   /* ---- 크레딧이 모자라 남겨 둔 뒷장면(PendingPages) ---- */
-  "뒷장면 {n}장이 남았어요": { en: "{n} more pages to go", ja: "残り{n}ページあります", zh: "还剩 {n} 页" },
-  "한 편은 {base}장까지 기본으로 그려요. 그 뒤 장면은 한 장에 {per}크레딧이에요.": {
-    en: "Each episode includes up to {base} pages. Pages after that cost {per} credits each.",
-    ja: "1話は{base}ページまで基本で描きます。それ以降は1ページ{per}クレジットです。",
-    zh: "每话默认画到第 {base} 页，之后每页 {per} 积分。",
-  },
-  "{n}장을 그리는 중이에요. 한 장에 1~2분 걸려요.": {
-    en: "Drawing {n} pages. Each page takes 1–2 minutes.",
-    ja: "{n}ページを描いています。1ページに1〜2分かかります。",
-    zh: "正在画 {n} 页，每页需要 1～2 分钟。",
-  },
   "크레딧이 모자라요! 매일 무료 크레딧이 채워지면 내일 이어서 그릴 수 있어요.": {
     en: "Not enough credits! Free credits refill every day, so you can continue tomorrow.",
     ja: "クレジットが足りません！毎日無料クレジットが補充されるので、明日続きを描けます。",
     zh: "积分不够！每天会补充免费积分，明天就能接着画。",
   },
-  "나머지 {n}장은 크레딧이 채워지면 이어서 그릴 수 있어요.": {
-    en: "You can draw the remaining {n} pages once your credits refill.",
-    ja: "残りの{n}ページはクレジットが補充されたら続けて描けます。",
-    zh: "剩下的 {n} 页等积分补充后可以接着画。",
+  "뒷장면 {n}장이 잠겨 있어요": { en: "{n} more pages are locked", ja: "残り{n}ページはロック中です", zh: "后面还有 {n} 页未解锁" },
+  "한 편은 {base}장까지 기본이에요. 그 뒤 장면은 한 장에 {per}크레딧으로 열 수 있어요.": {
+    en: "An episode includes up to {base} pages. Each page after that unlocks for {per} credits.",
+    ja: "1話は{base}ページまでが基本です。その後のページは1ページ{per}クレジットで開けます。",
+    zh: "一话默认包含 {base} 页，之后每页用 {per} 积分解锁。",
   },
+  "보유 {n}크레딧": { en: "{n} credits", ja: "所持 {n}クレジット", zh: "持有 {n} 积分" },
+  "그리는 중이에요": { en: "Drawing…", ja: "描いています", zh: "正在绘制" },
+  "한 장에 1~2분 걸려요": { en: "Takes 1–2 minutes per page", ja: "1ページ1〜2分かかります", zh: "每页需要 1～2 分钟" },
+  "{per}크레딧": { en: "{per} credits", ja: "{per}クレジット", zh: "{per} 积分" },
+  "여는 중…": { en: "Unlocking…", ja: "開いています…", zh: "正在解锁…" },
+  "크레딧이 모자라요": { en: "Not enough credits", ja: "クレジット不足", zh: "积分不足" },
+  "매일 무료 크레딧이 채워지면 내일 열 수 있어요": { en: "Free credits refill daily, so you can unlock it tomorrow", ja: "毎日無料クレジットが補充されるので、明日開けます", zh: "每天会补充免费积分，明天就能解锁" },
+  "이 장면 열기": { en: "Unlock this page", ja: "このページを開く", zh: "解锁这一页" },
+  "여기까지 {n}장 열기 · {c}크레딧": { en: "Unlock {n} pages up to here · {c} credits", ja: "ここまで{n}ページ開く · {c}クレジット", zh: "解锁到这里共 {n} 页 · {c} 积分" },
   "이어 그리지 못했습니다": { en: "Couldn't continue drawing.", ja: "続きを描けませんでした", zh: "无法继续绘制" },
-  "시작하는 중…": { en: "Starting…", ja: "開始しています…", zh: "正在开始…" },
-  "이어 그리기 · 한 장 {per}크레딧": {
-    en: "Keep drawing · {per} credits per page",
-    ja: "続きを描く · 1ページ{per}クレジット",
-    zh: "继续画 · 每页 {per} 积分",
-  },
   "관리자가 이 작품을 비공개 처리했어요. 다른 사람에게는 보이지 않아요.": {
     en: "An admin has made this work private. Other people can't see it.",
     ja: "管理者がこの作品を非公開にしました。ほかの人には表示されません。",
