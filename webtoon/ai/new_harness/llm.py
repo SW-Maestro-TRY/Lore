@@ -195,7 +195,7 @@ def image_default(provider: str) -> str:
 # 올라도 편당 차이는 작다. 8장짜리 화를 22장으로 읽은 적이 있어서 없는 쪽
 # 번호는 fullreview.parse 가 버린다.
 #
-# 표지 검수(COVER_REVIEW)는 칸·글상자를 세고 제목을 옮겨 적기만 하는 일이라
+# 표지 검수(COVER_REVIEW)는 칸·말풍선을 세고 제목을 옮겨 적기만 하는 일이라
 # 기본 모델(gpt-4.1) 그대로 둔다(2026-09-30 결정).
 #
 # **인물(CAST)도 gpt-5.1 이다(#532).** 이야기 후보의 인물이 라벨만 붙은 채
@@ -309,7 +309,7 @@ STAGE_LABEL = {
     "CAST_SHEET_IMAGE": "조연 시트 그림",
     "PAGE_IMAGE": "페이지 그림",
     "PAGE_REVIEW": "그림 검수 (장마다)",
-    "COVER_REVIEW": "표지 검수 (칸 하나 · 글상자 없음 · 제목 그대로)",
+    "COVER_REVIEW": "표지 검수 (칸 하나 · 말풍선 없음 · 제목 그대로)",
     "FULL_REVIEW": "화 전체 검수 (다 그린 뒤 처음부터 끝까지)",
 }
 
