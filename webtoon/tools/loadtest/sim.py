@@ -39,6 +39,18 @@ REAL = {"story": 11.0, "sheet": 41.0, "pick_save": 1.0, "scenes": 32.0,
         "pages": [43.07, 39.05, 38.90, 42.90, 38.56, 45.19, 41.96, 38.03],
         "pre_review": 10.0, "full_review": 20.0, "stitch": 6.0, "upload": 3.0}
 
+# 2026-10-26 운영 실측(#646 재측정) — 다른 작업과 겹치지 않은 외부 작품만(webtoon_job paused_seconds=0,
+# 멘토 연재 제외) webtoon_usage 의 호출 시각으로 걸음별 길이를 쟀다(haeun/funnel-2026-10-26/stage-times.sql).
+#   파도 5편: 이야기(STORY·CAST·PERSONA·STORY_REVIEW) 50~79s, 장면→첫 장 56~128s,
+#     장 그림+검수 154~207s(장 호출 9~13번, page-workers 4) → 한 장 약 65s, 전체 검수 13~17s,
+#     끝(이어 붙이기·올리기·DB) 38~77s. 한 편 전체 5.9~9.2분.
+#   너울 1편: 장 8번 285s → 한 장 약 140s(page-workers 4 로 2바퀴), 한 편 7.9분.
+#   장 수는 이제 기본 8장 + 표지(#814 BASE_PAGES).
+REAL_1026 = {"story": 65.0, "sheet": 41.0, "pick_save": 1.0, "scenes": 75.0,
+             "pages": [65.0] * 9,
+             "pre_review": 10.0, "full_review": 15.0, "stitch": 35.0, "upload": 15.0}
+REAL_1026_SWELL = dict(REAL_1026, pages=[140.0] * 9)
+
 # 가짜 하네스 FAKE_SPEED=0.1 로 잰 것과 맞춰 보는 용도(시뮬레이터 검증).
 #   fakepy 는 이야기를 호출 합계(24s)로 자므로 2.4s, 시트 4.1s, 장면 3.2s, 장 ~4s,
 #   전체 검수 2.0s, stitch 2.0s · prepare 0.4s · 올리기 0.4s(Mac 실측)
@@ -146,9 +158,13 @@ class Sim:
         for dur in self.d["pages"]:
             self.paint(dur, one_done)
 
-    def run(self, n):
+    def run(self, n, spread=0.0):
+        """spread 초 동안 고르게 나눠 들어온다(0 이면 한꺼번에)."""
         for i in range(n):
-            self.start(i)
+            if spread:
+                self.at(spread * i / n, lambda i=i: self.start(i))
+            else:
+                self.start(i)
         while self.ev:
             self.t, _, fn = heapq.heappop(self.ev)
             fn()
@@ -167,14 +183,14 @@ def summarize(res, n):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--profile", choices=["real", "fast"], default="real")
+    ap.add_argument("--profile", choices=["real", "real1026", "real1026-swell", "fast"], default="real1026")
     ap.add_argument("--workers", default="2,3,4,6")
     ap.add_argument("--page-workers", default="3,4,6")
     ap.add_argument("--n", default="1,2,5,10,20")
     ap.add_argument("--think", type=float, default=0.0, help="확인 자리마다 사람이 누르기까지 초")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    d = REAL if a.profile == "real" else FAST
+    d = {"real": REAL, "real1026": REAL_1026, "real1026-swell": REAL_1026_SWELL, "fast": FAST}[a.profile]
     rows = []
     for w in map(int, a.workers.split(",")):
         for p in map(int, a.page_workers.split(",")):
@@ -185,7 +201,7 @@ def main():
     if a.json:
         print(json.dumps(rows, ensure_ascii=False))
         return
-    unit = 60 if a.profile == "real" else 1
+    unit = 1 if a.profile == "fast" else 60
     lab = "분" if unit == 60 else "초"
     print(f"W P  N  전체중앙({lab}) 마지막사람({lab}) 줄대기중앙 줄대기최대 처리량(편/시)")
     for r in rows:
