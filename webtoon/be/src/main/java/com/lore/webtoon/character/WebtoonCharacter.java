@@ -163,6 +163,15 @@ public class WebtoonCharacter {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** 휴지통에 넣은 때(2026-10-26). 비어 있으면 살아 있다 — {@link CharacterTrash} 가 15일 뒤 영구 삭제한다. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    public boolean isTrashed() { return deletedAt != null; }
+    public Instant getDeletedAt() { return deletedAt; }
+    public void trash(Instant at) { this.deletedAt = at; this.updatedAt = at; }
+    public void untrash(Instant at) { this.deletedAt = null; this.updatedAt = at; }
+
     @Column(name="community_public", nullable=false, columnDefinition="boolean not null default false")
     private boolean communityPublic;
     @Column(name="community_blocked", nullable=false, columnDefinition="boolean not null default false")
@@ -415,6 +424,32 @@ public class WebtoonCharacter {
 
     public String getDescription() {
         return description;
+    }
+
+    /**
+     * 캐릭터 설정 글 — 사람이 적은 설명. 비어 있으면 AI 뽑기 카드가 세운 상세 설정(세계 · 장르 / 역할 · 종 /
+     * 소개)으로 채운다(2026-10-26). 뽑기 캐릭터는 설명 칸이 비어 있어서 수정 창에도, 웹툰 만들기에도 아무
+     * 설정이 안 넘어갔다. 화면은 이 글을 설명으로 받아 수정 창에 보이고 웹툰을 만들 때 그대로 보낸다.
+     * 대사 · 운명(한 장면의 사건)은 넣지 않는다 — 웹툰 이야기를 그 장면으로 끌고 간다.
+     */
+    public String settingsText() {
+        if (description != null && !description.isBlank()) {
+            return description;
+        }
+        if (!hasCard()) {
+            return "";
+        }
+        List<String> lines = new java.util.ArrayList<>();
+        String place = joinNonBlank(" · ", worldLabel, genre);
+        String who = joinNonBlank(" · ", roleName, species);
+        if (!place.isEmpty()) lines.add(place);
+        if (!who.isEmpty()) lines.add(who);
+        if (twist != null && !twist.isBlank()) lines.add(twist.strip());
+        return String.join("\n", lines);
+    }
+
+    private static String joinNonBlank(String sep, String... parts) {
+        return String.join(sep, Arrays.stream(parts).filter(p -> p != null && !p.isBlank()).map(String::strip).toList());
     }
 
     public String getArtKey() {

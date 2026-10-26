@@ -270,6 +270,11 @@ export interface NhJob {
   sheet_fix_left?: number;
   /** 다 만들었지만 이미지 안전 기준에 걸려 빈 장으로 둔 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 몇 화인가 — 다음 화로 만든 작업이면 2 이상. 없으면 1화 */
+  episode?: number;
+  /** 서버 재시작으로 끊겨 「이어서 만들기」를 할 수 있나, 그때 받는 크레딧(0 이면 무료) */
+  resumable?: boolean;
+  resume_cost?: number;
   /** 보관된 옛 시트 수(#548). 다시 만들 때마다 전 것이 1, 2, … 로 남고 sheetVersionUrl 로 본다. */
   sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
@@ -353,6 +358,11 @@ export function readJob(id: string, opts?: { watching?: boolean }): Promise<NhJo
 export interface NhActiveCard { id: string; name: string; created_at: string | null; updated_at: string | null }
 export function myActiveJobs(): Promise<{ jobs: NhJob[]; cards?: NhActiveCard[] }> {
   return call<{ jobs: NhJob[]; cards?: NhActiveCard[] }>(`/nh/jobs/mine?uid=${encodeURIComponent(getUid())}`);
+}
+
+/** 서버 재시작으로 끊긴 작업을 멈춘 걸음부터 이어서 만든다 — 그린 장은 다시 안 그린다. */
+export function resumeJob(id: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/resume`, {});
 }
 
 export function decideSheet(id: string, decision: "approve" | "retry", note = "") {
@@ -648,6 +658,11 @@ export function myLikes(): Promise<RunCard[]> {
   return appRequest<RunCard[]>("/api/webtoon/v1/my/likes");
 }
 
+/** 내가 댓글 단 웹툰 — 최근에 단 것부터. 모양은 둘러보기 카드와 같다. */
+export function myCommented(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/commented");
+}
+
 /** 이 목록 중 내가 찜한 작품 번호. 둘러보기 카드에 하트를 칠할 때. */
 export function likedAmong(runIds: string[]): Promise<string[]> {
   if (runIds.length === 0) return Promise.resolve([]);
@@ -822,8 +837,20 @@ export function renameCharacter(id: string, name: string, description: string) {
   });
 }
 
+/** 지우기 — 바로 없애지 않고 휴지통에 넣는다(keep_days 일 보관 뒤 영구 삭제). */
 export function removeCharacter(id: string) {
-  return call<{ ok: boolean }>(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return call<{ ok: boolean; keep_days?: number }>(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export type TrashCharacter = Character & { deleted_at: string; purge_at: string };
+
+/** 캐릭터 휴지통 — 최근에 지운 것부터. */
+export function characterTrash(): Promise<{ keep_days: number; characters: TrashCharacter[] }> {
+  return call("/characters/trash");
+}
+
+export function restoreCharacter(id: string) {
+  return post<{ ok: boolean; restored: boolean }>(`/characters/${encodeURIComponent(id)}/restore`, {});
 }
 
 /* ---- 편집실 설정 ------------------------------------------------------------ */
@@ -1138,7 +1165,7 @@ export interface SeriesChapter {
 export interface SeriesInfo { episode: number; chapters: SeriesChapter[] }
 /** 앞 화 정리(다음 화 버튼을 누르면 AI 가 앞 화를 읽고 칸을 채운다). SAVED 는 사람이 초안을 저장한 뒤. */
 export interface SeriesDigestState { status: "NONE"|"RUNNING"|"DONE"|"ERROR"|"SAVED"; error?: string }
-export interface SeriesEntry extends LoreEntry { new?: boolean }
+export interface SeriesEntry extends LoreEntry { new?: boolean; updated?: boolean; named?: boolean }
 export interface SeriesDraft {
   episode: number; fixed_settings: string; progress_state: string; story: string; revision: number;
   entries: SeriesEntry[]; progress: LoreProgress[]; digest: SeriesDigestState;
@@ -1147,10 +1174,15 @@ export interface SeriesDraft {
 }
 export interface SeriesForm {
   fixed_settings: string; progress_state: string; story: string; revision: number;
-  confirmed: boolean; agree_ip: boolean; request_token: string; entries: SeriesEntry[]; progress: LoreProgress[];
+  confirmed: boolean; request_token: string; entries: SeriesEntry[]; progress: LoreProgress[];
 }
 export function readSeries(run: string): Promise<SeriesInfo> {
   return call(`/series/${encodeURIComponent(run)}`);
+}
+/** 써 두고 아직 만들지 않은 다음 화 초안 — 마이페이지 「만드는 중」. */
+export interface SeriesDraftCard { run: string; episode: number; title: string; story: string }
+export function mySeriesDrafts(): Promise<SeriesDraftCard[]> {
+  return call("/series/drafts");
 }
 export function readSeriesDraft(run: string): Promise<SeriesDraft> {
   return call(`/series/${encodeURIComponent(run)}/draft`);

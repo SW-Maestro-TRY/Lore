@@ -4,7 +4,7 @@ import java.util.*;
 /**
  * 생성 입력에 보관하는 설정집 사본. 식별자/경로를 실행 인자로 해석하지 않는다.
  *
- * <p>2층 로어북(orv-experiment 와 같다): 고정 로어북 = 키워드 항목 + 항상 켜짐 규칙(always),
+ * <p>2층 로어북(orv-experiment 와 같다): 고정 로어북 = 대상마다 하나인 키워드 항목, 그중 세계 항목은 항상 켜짐(always),
  * 진행 상태 = progress 줄 목록(key 가 항목 id 면 그 항목의 「→ 지금:」 덮어쓰기). 글에서 뽑으면 항목이
  * 수십 개가 되므로 개수·글자 상한은 넉넉히 둔다 — 생성에 넣을 양은 하네스가 키워드로 고르며 자른다.
  */
@@ -36,6 +36,7 @@ public final class LoreBook {
     row.put("title",text(e.get("title"),100));row.put("content",text(e.get("content"),6000));
     row.put("kind",text(e.get("kind"),30));row.put("evidence",text(e.get("evidence"),600));
     row.put("always",Boolean.TRUE.equals(e.get("always")));row.put("enabled",!Boolean.FALSE.equals(e.get("enabled")));
+    if(Boolean.TRUE.equals(e.get("named"))) row.put("named",true); // AI 가 지은 세계 이름 — 사람이 알아보고 고칠 수 있게 남긴다
     var keys=new ArrayList<String>();
     if(e.get("keys") instanceof List<?> k) {if(k.size()>40) throw new BusinessException(ErrorCode.INVALID_INPUT,"키워드는 40개까지예요.");for(Object v:k) keys.add(text(v,50));}
     row.put("keys",keys);entries.add(row);total+=row.get("content").toString().length();

@@ -1,8 +1,9 @@
 """글에서 2층 로어북을 뽑는다. 웹툰 생성이나 자동 확정은 하지 않는다.
 
-orv-experiment(전독시×차시연 실험)와 같은 구조다.
-- 고정 로어북 = 키워드 항목(prompt/lore/entries_prompt) + 항상 켜짐 규칙(prompt/lore/rules_prompt).
-  규칙을 먼저 뽑고 항목은 그 규칙을 보며 뽑는다. 항목은 키워드가 걸릴 때만, 규칙은 매 화 전부 들어간다(userbook.block).
+orv-experiment(전독시×차시연 실험)와 같은 2층 구조다.
+- 고정 로어북 = 대상 하나에 항목 하나(prompt/lore/book_prompt). 세계·조직이 돌아가는 방식은 그 세계·조직
+  항목에, 인물의 비밀은 그 인물 항목에 넣는다 — 추상 규칙만 따로 떼지 않는다. 항목은 키워드가 걸릴 때만
+  들어가고, 세계 자체를 설명하는 항목만 항상 켜짐(always)으로 매번 들어간다(userbook.block).
 - 진행 상태 = 고정 로어북 위에 덮어쓰는 층(prompt/lore/progress_prompt). 화가 끝날 때마다 바뀐 것과
   지울 것만 받아 합친다. key 가 고정 항목 id 면 그 항목의 「→ 지금:」 덮어쓰기, 그 밖은 새 상태다.
 
@@ -42,18 +43,18 @@ def _call(prompt: str, out_dir: Path, stage: str) -> dict:
 
 
 def known_block(known) -> str:
-    """이미 있는 설정 — 규칙·항목 프롬프트가 같은 것을 다시 뽑지 않게 원문 뒤에 붙인다."""
-    rows = [f"- {'[규칙] ' if e.get('always') else ''}{e.get('title', '')}: {e.get('content') or e.get('text') or ''}"
+    """이미 있는 설정 — 같은 대상을 새 항목으로 다시 만들지 않고 새 사실만 덧붙이게 원문 뒤에 붙인다."""
+    def tag(e):
+        if e.get("kind") == "world" and e.get("title") == GENERIC_WORLD:
+            return "[항상 · 세계 · 아직 이름 없음] "
+        return "[항상] " if e.get("always") else ""
+    rows = [f"- {tag(e)}{e.get('title', '')}: {e.get('content') or e.get('text') or ''}"
             for e in known or [] if isinstance(e, dict) and str(e.get("title") or "").strip()]
     return "\n[이미 있는 설정]\n" + ("\n".join(rows) if rows else "(없음)") + "\n"
 
 
-def entries_prompt(source: str, lang: str = "ko", known=None) -> str:
-    return _prompt("lore/entries_prompt", lang) + source + "\n" + known_block(known)
-
-
-def rules_prompt(source: str, lang: str = "ko", known=None) -> str:
-    return _prompt("lore/rules_prompt", lang) + source + "\n" + known_block(known)
+def book_prompt(source: str, lang: str = "ko", known=None) -> str:
+    return _prompt("lore/book_prompt", lang) + source + "\n" + known_block(known)
 
 
 def progress_prompt(rows: list[dict], new_text: str, lang: str = "ko") -> str:
@@ -61,59 +62,74 @@ def progress_prompt(rows: list[dict], new_text: str, lang: str = "ko") -> str:
             + "\n\n[새 화 본문]\n" + new_text + "\n")
 
 
+# 1화가 설정집 없이 장르의 세계 설명만으로 섰을 때 그 세계 항목의 제목(continuation.world_seed). 이름이 아니다.
+GENERIC_WORLD = "세계 배경"
+
+
 def _norm(title) -> str:
     return re.sub(r"\s+", "", str(title or "")).casefold()
 
 
-def book_entries(entries: list, rules: list, existing: list | None = None) -> list[dict]:
-    """뽑은 항목·규칙을 제품 설정집 항목으로. 같은 제목은 하나로 합친다(실험의 extract_rules 와 같다).
+def book_entries(entries: list, existing: list | None = None) -> tuple[list[dict], dict[str, str], dict[str, dict]]:
+    """뽑은 항목을 제품 설정집 항목으로. (새 항목, {이미 있는 항목 id: 덧붙일 사실}, {세계 항목 id: 새 이름}).
 
-    id 는 항목 L0001…, 규칙 R001… — 진행 상태가 이 id 로 항목을 덮어쓴다. 이미 있는 항목(existing)과
-    제목이 같은 것은 새로 만들지 않고, 번호는 이미 있는 것 다음부터 잇는다.
+    같은 제목은 하나로 합친다(실험의 extract_rules 와 같다). 이미 있는 항목(existing)과 제목이 같으면 새로
+    만들지 않고 그 항목에 덧붙일 사실로 돌려준다. 새 항목 id 는 L0001… 이고 이미 있는 번호 다음부터 잇는다 —
+    진행 상태가 이 id 로 항목을 덮어쓴다.
     """
     existing = [e for e in existing or [] if isinstance(e, dict)]
-    known = {_norm(e.get("title")) for e in existing}
-
-    def last(prefix):
-        nums = [int(m.group(1)) for e in existing
-                for m in [re.match(prefix + r"(\d+)$", str(e.get("id") or ""))] if m]
-        return max(nums, default=0)
-
-    n_entry, n_rule = last("L"), last("R")
-    out, seen = [], {}
+    known = {_norm(e.get("title")): str(e.get("id") or "") for e in existing}
+    n = max([int(m.group(1)) for e in existing for m in [re.match(r"L(\d+)$", str(e.get("id") or ""))] if m], default=0)
+    out, seen, more, renamed = [], {}, {}, {}
     for e in entries or []:
         if not isinstance(e, dict) or not str(e.get("text") or "").strip() or not _norm(e.get("title")):
             continue
-        key = _norm(e["title"])
-        if key in known:
-            continue
+        key, text = _norm(e["title"]), str(e["text"]).strip()
         keys = [str(k).strip() for k in (e.get("keys") if isinstance(e.get("keys"), list) else []) if str(k).strip()]
+        # 세계 항목은 하나다. 1화에서 옮겨 온 세계(continuation.world_seed)가 있으면 새로 만들지 않고 거기에
+        # 덧붙이고, 그 세계에 아직 이름이 없었으면(GENERIC_WORLD) 이번에 뽑은 이름으로 바꾼다.
+        world = next((x for x in existing if x.get("kind") == "world"), None) if e.get("type") == "world" else None
+        if world is not None and world.get("id"):
+            more[world["id"]] = (more[world["id"]] + "\n" if world["id"] in more else "") + text
+            if world.get("title") == GENERIC_WORLD:
+                renamed[world["id"]] = {"title": str(e["title"]).strip(), "keys": keys, "named": e.get("named") is True}
+            continue
+        if key in known and known[key]:
+            more[known[key]] = (more[known[key]] + "\n" if known[key] in more else "") + text
+            continue
         if key in seen:
             hit = seen[key]
-            hit["content"] += " / " + str(e["text"]).strip()
+            hit["content"] += "\n" + text
             hit["keys"] += [k for k in keys if k not in hit["keys"]]
+            hit["always"] = hit["always"] or e.get("always") is True
             continue
-        n_entry += 1
-        row = {"id": f"L{n_entry:04d}", "title": str(e["title"]).strip(), "kind": str(e.get("type") or "").strip(),
-               "keys": keys or [str(e["title"]).strip()], "content": str(e["text"]).strip(),
-               "always": False, "enabled": True}
+        n += 1
+        row = {"id": f"L{n:04d}", "title": str(e["title"]).strip(), "kind": str(e.get("type") or "").strip(),
+               "keys": keys or [str(e["title"]).strip()], "content": text,
+               "always": e.get("always") is True, "enabled": True}
+        if e.get("type") == "world" and e.get("named") is True:
+            row["named"] = True
         seen[key] = row
         out.append(row)
-    for r in rules or []:
-        if not isinstance(r, dict) or not str(r.get("text") or "").strip() or not _norm(r.get("title")):
+    return out, more, renamed
+
+
+def apply_book(existing: list, rows: list, more: dict, renamed: dict | None = None) -> list[dict]:
+    """이미 있는 항목에 새 사실을 덧붙이고(updated), 이름 없던 세계에 이름을 달고, 새 항목을 뒤에 붙인다(new)."""
+    renamed = renamed or {}
+    kept = []
+    for e in existing or []:
+        if not isinstance(e, dict):
             continue
-        key = "rule:" + _norm(r["title"])
-        if _norm(r["title"]) in known:
-            continue
-        if key in seen:
-            seen[key]["content"] += " / " + str(r["text"]).strip()
-            continue
-        n_rule += 1
-        row = {"id": f"R{n_rule:03d}", "title": str(r["title"]).strip(), "kind": "rule", "keys": [],
-               "content": str(r["text"]).strip(), "always": True, "enabled": True}
-        seen[key] = row
-        out.append(row)
-    return out
+        i = str(e.get("id") or "")
+        if i in more:
+            e = {**e, "content": str(e.get("content") or "").rstrip() + "\n" + more[i], "updated": True}
+        if i in renamed:
+            r = renamed[i]
+            e = {**e, "title": r["title"], "keys": list(dict.fromkeys([*(e.get("keys") or []), r["title"], *r["keys"]])),
+                 **({"named": True} if r["named"] else {})}
+        kept.append(e)
+    return kept + [{**r, "new": True} for r in rows]
 
 
 def merge_progress(rows: list[dict], changes: list, removed: list) -> list[dict]:
@@ -138,15 +154,11 @@ def progress_rows(progress) -> list[dict]:
             for p in progress or [] if isinstance(p, dict) and str(p.get("text") or "").strip()]
 
 
-def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None = None) -> list[dict]:
-    """고정 로어북 — 규칙을 먼저 뽑고, 그 규칙과 이미 있는 설정을 보여 주며 항목을 뽑는다.
-    규칙이 설명한 작동 방식이 항목에 되풀이되지 않게 하려고 차례로 부른다."""
+def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None = None) -> tuple[list[dict], dict[str, str], dict[str, dict]]:
+    """고정 로어북 — 대상마다 항목 하나. 이미 있는 대상은 새 사실만 돌려준다."""
     existing = [e for e in existing or [] if isinstance(e, dict)]
-    rules = _call(rules_prompt(source, lang, existing), out_dir, "LORE_RULES").get("rules", [])
-    shown = existing + [{"title": r.get("title"), "content": r.get("text"), "always": True}
-                        for r in rules if isinstance(r, dict)]
-    entries = _call(entries_prompt(source, lang, shown), out_dir, "LORE_ENTRIES").get("entries", [])
-    return book_entries(entries, rules, existing)
+    got = _call(book_prompt(source, lang, existing), out_dir, "LORE_BOOK").get("entries", [])
+    return book_entries(got, existing)
 
 
 def update_progress(rows: list[dict], new_text: str, out_dir: Path, lang: str = "ko") -> tuple[list, list, list]:
@@ -163,7 +175,7 @@ def main():
     args = parser.parse_args()
     data = json.loads(args.input.read_text())
     lang = str(data.get("language") or "ko")
-    entries = extract(data["text"], args.out.parent, lang)
+    entries, _, _ = extract(data["text"], args.out.parent, lang)
     book = {"name": "내 이야기의 설정", "source": "extracted", "confirmed": False,
             "fixed_settings": "", "progress_state": "", "entries": entries, "progress": []}
     args.out.write_text(json.dumps(book, ensure_ascii=False), encoding="utf-8")

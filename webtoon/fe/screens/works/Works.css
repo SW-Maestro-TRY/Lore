@@ -121,3 +121,6 @@
   .wt .wt-works-make-cover b { font-size: 13.5px; }
   .wt .wt-works-make-cover small { font-size: 11px; }
 }
+
+/* 회차 수 — 단추 대신 글자 한 줄(2026-10-26) */
+.wt .wt-works-epcount { font-size: 12.5px; align-self: center; }

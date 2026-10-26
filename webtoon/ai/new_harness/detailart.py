@@ -80,6 +80,35 @@ STAGE = "PAGE_IMAGE"
 PAGE_DIR = "pages"
 
 
+
+# 그림 모델(OpenAI images.edit)이 받는 프롬프트 최대 길이 — 넘으면 400 으로 그 장이 실패한다.
+IMAGE_PROMPT_MAX = 32000
+
+
+def fit_extra(extra: str, scene_text: str, room: int, run_dir: Path, dry_run: bool = False) -> str:
+    """설정집 · 연재 기억이 그림 모델 한도를 넘길 때 — AI 로 이 장면에 필요한 것만 남겨 줄인다(2026-10-26).
+
+    줄여도 넘치거나 AI 를 못 부르면 앞에서부터 자른다(그래도 그 장이 실패하는 것보다 낫다)."""
+    if room <= 0:
+        return ""
+    if not dry_run:
+        try:
+            import llm
+            import run as R
+            ask = (R.load_prompt("lore/shrink_prompt").replace("{{LIMIT}}", str(room))
+                   + "\n[이 장면]\n" + scene_text + "\n\n[줄일 글]\n" + extra + "\n")
+            call = llm.Call("STORY")
+            text, meta = call(ask)
+            meta["stage"] = "PROMPT_SHRINK"
+            R.record(run_dir, meta)
+            text = text.strip()
+            if text and len(text) <= room:
+                log(f"  설정집이 길어 그림 요청 글을 줄였습니다 ({len(extra)}자 → {len(text)}자)")
+                return text
+        except Exception as exc:  # noqa: 줄이기가 실패해도 그리기는 이어 간다
+            log(f"  설정집 줄이기 실패 — 앞에서부터 자릅니다: {exc}")
+    return extra[:room]
+
 def log(msg: str) -> None:
     print(msg, flush=True)
 
@@ -642,6 +671,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() and not (char or {}).get("lorebook") else ""
 
     made = []
+    one = {}
     for n_ in range(0, len(scenes) + 1):  # 0 = 표지, 1..len(scenes) = 씬
         page_no = n_ + 1
         if n_ == 0:
@@ -667,12 +697,38 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
         # 그 사람 말대로 다시 그리는 것이다.
         import userbook
-        prompt += "\n\n" + userbook.block(char, prompt, "image", (run_dir / "continuation.json").is_file())
-        if (run_dir / "continuation.json").is_file():
+        # 설정집 항목은 이 장의 장면 글로 고른다 — 그림체 설명까지 든 프롬프트 전체로 고르면 거의 모든 항목이 걸려
+        # 그림 모델 한도(32,000자)를 넘겼다(2026-10-26, 마법학교 2화 2쪽 실패). 표지는 소개 글로.
+        scene_text = intro if n_ == 0 else " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends"))
+        cont = (run_dir / "continuation.json").is_file()
+        memory = ""
+        if cont:
             import continuation
-            prompt += "\n\n" + continuation.memory_block(run_dir)
-        if note.strip():
-            prompt += "\n\n" + note_block(note)
+            memory = continuation.memory_block(run_dir)
+        note_text = note_block(note) if note.strip() else ""
+        # 키워드 항목은 한도 안에 남는 자리만큼만 고른다(돈 안 듦). 항상 참고 · 진행 상태는 늘 넣는다.
+        room0 = IMAGE_PROMPT_MAX - len(prompt) - len(note_text) - len(memory) - 8
+        fixed = userbook.block(char, scene_text, "image", cont, budget=0)          # 항상 참고 · 진행 상태만
+        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)))
+        extra = "\n\n".join(x for x in (book, memory) if x)
+        base_prompt = prompt
+
+        def assemble(more: str = "") -> str:
+            """그림 모델에 보낼 글. 한도(32,000자)를 실제로 넘을 때만 설정집 · 연재 기억을 AI 로 한 번 줄인다
+            (2026-10-26) — 그림체 · 인물 · 이 장면 지시 · 사람이 적은 말 · 검수 메모는 그대로 둔다. 안 넘으면 부르지 않는다."""
+            nonlocal_extra = extra
+            whole = base_prompt + ("\n\n" + nonlocal_extra if nonlocal_extra else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
+            if len(whole) <= IMAGE_PROMPT_MAX or not nonlocal_extra:
+                return whole
+            room = IMAGE_PROMPT_MAX - len(base_prompt) - len(note_text) - len(more) - 8
+            short = fit_extra(nonlocal_extra, scene_text, room, run_dir, dry_run)
+            return base_prompt + ("\n\n" + short if short else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
+
+        # 줄이기(AI 호출)는 이 프로세스가 실제로 그릴 장에만 — 장을 동시에 그리면 프로세스마다 이 반복문을 다 돌아서,
+        # 모든 장을 줄이면 같은 호출이 장 수의 제곱만큼 나갔다(2026-10-26, 6장에 36번 · 947원).
+        if only and page_no not in only:
+            continue
+        prompt = assemble()
         # 프롬프트는 **그릴 장의 것만 쓴다.** 장면을 동시에 그리면 프로세스마다
         # 이 반복문을 다 도는데, 자기가 안 그릴 장의 파일까지 쓰면 여럿이 같은
         # 파일에 동시에 써서 반 토막이 남는다.
@@ -754,7 +810,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                 log(f"  [표지 검수] 다시 그립니다 ({attempt + 1}/{tries})")
                 archive_page(run_dir, page_no)
                 out.unlink(missing_ok=True)
-                again = prompt + "\n\n" + covercheck.redraw_block(got)
+                again = assemble(covercheck.redraw_block(got))
                 (dest / f"page01.redraw{attempt + 1}.txt").write_text(again, encoding="utf-8")
                 try:
                     meta = imagegen.paint(STAGE, again, out, refs=refs,
@@ -810,7 +866,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             log(f"  [검수] 다시 그립니다 ({attempt + 1}/{tries})")
             archive_page(run_dir, page_no)
             out.unlink(missing_ok=True)
-            again = prompt + "\n\n" + pagecheck.redraw_block(got)
+            again = assemble(pagecheck.redraw_block(got))
             (dest / f"page{page_no:02d}.redraw{attempt + 1}.txt").write_text(
                 again, encoding="utf-8")
             try:

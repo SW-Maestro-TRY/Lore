@@ -50,7 +50,11 @@ const PHONE_RE = /^01[016789][0-9]{7,8}$/;
  *  여는 쪽(웹툰 마이페이지·크레딧 부족 안내)이 자기 track 을 넘긴다. 안 넘기면 안 남긴다. */
 export type ChargeEvent = (name: string, props: Record<string, string | number | boolean>) => void;
 
-export default function CreditCharge({ onClose, onEvent }: { onClose: () => void; onEvent?: ChargeEvent }) {
+/**
+ * @param onNotReady 결제가 아직 안 열렸을 때(PAYMENT_NOT_READY) 부를 함수. 주면 창 안 오류 한 줄 대신 부른 쪽이
+ *                   안내를 띄운다(웹툰은 1:1 문의 안내 팝업, 2026-10-26). 안 주면 예전처럼 한 줄을 적는다.
+ */
+export default function CreditCharge({ onClose, onEvent, onNotReady }: { onClose: () => void; onEvent?: ChargeEvent; onNotReady?: () => void }) {
   const [catalog, setCatalog] = useState<PayCatalog | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [step, setStep] = useState<Step>({ kind: "pick" });
@@ -132,14 +136,15 @@ export default function CreditCharge({ onClose, onEvent }: { onClose: () => void
       win?.close();
       if (e instanceof ApiError && e.code === "PAYMENT_NOT_READY") {
         setCatalog((c) => (c ? { ...c, ready: false } : c));
-        setError("지금은 결제를 받을 수 없어요. 결제 연결을 마무리하고 있어요.");
+        if (onNotReady) onNotReady();
+        else setError("지금은 결제를 받을 수 없어요. 결제 연결을 마무리하고 있어요.");
       } else {
         setError(e instanceof ApiError ? e.message : "결제창을 열지 못했어요. 잠시 뒤 다시 시도해 주세요.");
       }
     } finally {
       setBusy(false);
     }
-  }, [phone]);
+  }, [phone, onNotReady]);
 
   const ready = catalog?.ready === true;
   const pack = catalog?.packages.find((p) => p.code === picked) ?? null;
@@ -168,7 +173,7 @@ export default function CreditCharge({ onClose, onEvent }: { onClose: () => void
                 /* 「N원 결제하기」를 누른 수 — 실제로 돈을 내려는 사람의 수라 결제가 아직 안 열렸어도 남긴다
                    (ok=false). 열렸을 때 결제창이 실제로 열렸는지는 서버 주문 기록으로 센다. */
                 if (phoneOk && agreed && !busy) onEvent?.("charge_submit", { pick: pack.code, cost: pack.won, count: pack.credits, ok: ready });
-                if (!ready) { setError("지금은 결제를 받을 수 없어요. 결제 연결을 마무리하고 있어요."); return; }
+                if (!ready) { if (onNotReady) onNotReady(); else setError("지금은 결제를 받을 수 없어요. 결제 연결을 마무리하고 있어요."); return; }
                 if (phoneOk && agreed && !busy) void pay(pack);
               }}
             >

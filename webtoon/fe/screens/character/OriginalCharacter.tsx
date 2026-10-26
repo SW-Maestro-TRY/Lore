@@ -189,17 +189,7 @@ export function CharacterForm({
             </div>
           </div>
           <ErrLine text={error} />
-          {character && onDeleted && !localOnly && (
-            <button
-              type="button"
-              className="wt-original-delete"
-              disabled={busy}
-              onClick={() => setConfirmDelete(true)}
-            >
-              <IconTrash size={17} />
-              {t("캐릭터 삭제")}
-            </button>
-          )}
+          {/* 수정 창에는 삭제를 두지 않는다 — 지우기는 마이페이지 「내 캐릭터」의 「삭제」에서 골라서(휴지통 15일) */}
           <div className="wt-original-actions">
             {localOnly && <p className="wt-original-localnote">{t("예시 캐릭터는 저장되지 않아요. 고친 이름·설정은 이번 웹툰에만 쓰여요.")}</p>}
             <button

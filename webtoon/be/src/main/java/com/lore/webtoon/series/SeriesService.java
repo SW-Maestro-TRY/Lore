@@ -41,8 +41,9 @@ public class SeriesService {
         this.ledger=ledger; this.stories=stories; this.art=art; this.queue=queue;
         this.guard=guard; this.gate=gate; this.billing=billing; this.digests=digests;
     }
+    /** agree_ip 는 옛 화면만 보낸다 — 다음 화는 1화의 권리 확인을 잇는다(createNext). 안 보내도 되게 Boolean. */
     public record Form(String fixed_settings, String progress_state, String story, long revision,
-                       boolean confirmed, boolean agree_ip, String request_token, String uid,
+                       boolean confirmed, Boolean agree_ip, String request_token, String uid,
                        List<Map<String,Object>> entries, List<Map<String,Object>> progress) {}
 
     private WebtoonJob source(String run, Long user, boolean own) {
@@ -87,7 +88,7 @@ public class SeriesService {
         return "현재 시점: " + number(source) + "화 종료\n\n마지막 장면 기록 (확인하고 현재 상태로 정리해 주세요):\n" + end;
     }
     /**
-     * 앞 화까지 이어 온 2층 로어북 — 고정 로어북(entries: 키워드 항목 + 항상 켜짐 규칙)과 진행 상태(progress).
+     * 앞 화까지 이어 온 2층 로어북 — 고정 로어북(entries: 키워드 항목, 세계 항목은 항상 켜짐)과 진행 상태(progress).
      * 1화에 붙인 설정집이거나 앞 회차에서 넘긴 연재 설정집이다.
      */
     private Map<String,Object> sourceBook(WebtoonJob source) {
@@ -186,6 +187,26 @@ public class SeriesService {
         out.put("title", stories.chosenOf(run).map(s -> s.displayTitle()).orElse(""));
         return out;
     }
+    /** 마이페이지 「만드는 중」 — 써 두고 아직 만들지 않은 다음 화 초안. 다음 화를 이미 만들었거나 앞 화가
+     *  휴지통·관리자 제한이면 뺀다. 표지는 화면이 내 작품 목록에서 찾는다. */
+    @Transactional(readOnly=true)
+    public List<Map<String,Object>> myDrafts(Long user) {
+        if (user == null) return List.of();
+        var out = new ArrayList<Map<String,Object>>();
+        for (SeriesDraft d : drafts.findByOwnerId(user)) {
+            WebtoonJob job = jobs.findByPublicId(d.sourceJob).orElse(null);
+            if (job == null || job.getRunId() == null || job.getStatus() != JobStatus.DONE || liveSuccessor(job) != null) continue;
+            var work = ledger.find(job.getRunId());
+            if (work.isEmpty() || work.get().isTrashed() || work.get().isRemovedByAdmin()) continue;
+            var row = new LinkedHashMap<String,Object>();
+            row.put("run", job.getRunId());
+            row.put("episode", number(job) + 1);
+            row.put("title", stories.chosenOf(job.getRunId()).map(s -> s.displayTitle()).orElse(""));
+            row.put("story", d.nextStory.length() > 80 ? d.nextStory.substring(0, 80) : d.nextStory);
+            out.add(row);
+        }
+        return out;
+    }
     /** 항목을 따로 고르지 않은 초안 — 앞 화의 설정집을 그대로 넘긴다. */
     static final String CARRY = "carry";
     private static boolean carries(SeriesDraft d) { return d.entriesJson == null || CARRY.equals(d.entriesJson); }
@@ -260,9 +281,10 @@ public class SeriesService {
             return Map.of("id",existing.get().jobId);
         }
         mustBeLatest(source);
-        if (!form.agree_ip())
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "저작권을 확인해 주세요.");
-        checked(form.story(),20000,"이번 화 이야기",true);
+        // 권리 확인은 1화를 만들 때(만들기 화면의 저작권 확인) 같은 캐릭터·설정으로 받았다. 다음 화는 그 확인을
+        // 잇는다 — 새로 올리는 사진·파일이 없고, 이번 화에 적는 글은 사용자가 직접 쓴 것이다.
+        // 이번 화 내용은 비워도 된다 — 비우면 하네스가 앞 화가 남긴 일에서 다음 사건을 정한다(continuation.story_input).
+        checked(form.story(),20000,"이번 화 이야기",false);
         String blocked=guard.whyBlocked(queue.reserved());
         if (blocked != null) throw new BusinessException(ErrorCode.INVALID_INPUT,blocked);
         int cost=WebtoonQuality.creditsOf(source.getQuality());

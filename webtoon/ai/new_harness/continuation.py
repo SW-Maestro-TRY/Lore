@@ -137,7 +137,7 @@ def memory_block(run_dir):
     if str(p.get("progress_state") or "").strip():
         lines += ["[작가가 확인한 현재 진행 상태 — 이번 화 시작 시점]", p["progress_state"]]
     return "\n".join(lines + [
-        "현재 시점·관계·완료 사건은 진행 상태를 따른다. 고정 설정과 세계 규칙의 불변 제약은 유지한다.",
+        "현재 시점·관계·완료 사건은 진행 상태를 따른다. 고정 설정과 항상 참고하는 설정의 제약은 유지한다.",
         "설정은 인물의 선택과 결과에 반영한다. 설정집을 대사나 나레이션으로 나열하지 않는다.",
         "작가만 아는 비밀과 인물이 아는 정보, 독자에게 공개해도 되는 정보를 구분한다.",
     ])
@@ -178,7 +178,8 @@ def story_input(run_dir, char, note=""):
         "[앞 화 본문 — 이미 일어난 일. 다시 시작하거나 재현하지 않는다]", p.get("source_body", ""),
         "[앞 화 확정 장면 — 작가가 장면을 수정했다면 본문보다 이 기록을 따른다]",
         *p.get("source_scenes", []),
-        "[이번 화에서 새로 전개할 내용]", char.get("story", ""),
+        "[이번 화에서 새로 전개할 내용]", char.get("story", "").strip()
+        or "(작가가 비워 두었다 — 진행 상태의 아직 끝나지 않은 일에서 이어지는 다음 사건을 정한다.)",
         "[이번 수정 요청]", note or "",
     ])
 
@@ -227,10 +228,35 @@ def digest_source(packet):
     return body, scenes
 
 
+def cast_looks(source_dir):
+    """이번 화를 그릴 때 쓴 인물의 겉모습 — 주인공(persona.json)과 등장인물(cast.json)의 이름 · 성별 · 생김새.
+
+    본문과 장면 글에는 겉모습이 거의 없어서, 정리가 인물 항목을 만들어도 다음 화 그림이 그 인물을 다른
+    모습으로 그렸다(2026-10-26, 마법학교 2화). 그림을 세운 기록을 그대로 원문에 붙인다."""
+    source = Path(source_dir)
+    people = []
+    persona = read(source / "persona.json") if (source / "persona.json").is_file() else None
+    if isinstance(persona, dict):
+        people.append(persona)
+    cast = read(source / "cast.json") if (source / "cast.json").is_file() else None
+    if isinstance(cast, list):
+        people += [c for c in cast if isinstance(c, dict)]
+    rows = []
+    for c in people:
+        name, look = str(c.get("name") or "").strip(), str(c.get("look") or "").strip()
+        if not name or not look:
+            continue
+        gender = str(c.get("gender") or "").strip()
+        rows.append(f"- {name}{f' ({gender})' if gender else ''}: {look}")
+    return rows
+
+
 def episode_text(packet):
     n = packet.get("episode_number") or 1
     body, scenes = digest_source(packet)
-    return "\n".join([f"[{n}화 본문]", body, "", f"[{n}화 확정 장면]", *scenes])
+    looks = cast_looks(packet["source_dir"])
+    return "\n".join([f"[{n}화 본문]", body, "", f"[{n}화 확정 장면]", *scenes,
+                      *(["", f"[{n}화 등장인물의 겉모습 — 그림이 이 모습으로 그려졌다]", *looks] if looks else [])])
 
 
 def world_seed(source):
@@ -239,7 +265,7 @@ def world_seed(source):
     설정집 없이 만든 1화는 장르의 세계 설명(worlds.json)과 고른 방향의 세계 재료(lorebook.json,
     lore.json 에 배정 기록)로 이야기·장면을 세웠다. 다음 화부터는 연재 설정집이 붙으므로 하네스가
     세계 설명·재료를 끈다(설정집이 세계를 대신한다는 규칙). 그대로 두면 2화에서 세계가 사라져서,
-    1화가 실제로 쓴 것을 설정집에 옮겨 둔다 — 세계 설명은 항상 켜짐 규칙, 재료는 키워드 항목.
+    1화가 실제로 쓴 것을 설정집에 옮겨 둔다 — 세계 설명은 항상 켜짐 세계 항목, 재료는 키워드 항목.
     사용자가 설정집을 붙여 만든 1화는 그 설정집이 세계라서 옮길 것이 없다.
     """
     import run as R
@@ -253,7 +279,7 @@ def world_seed(source):
     out = []
     world = R.world_text_for(genre)
     if world:
-        out.append({"id": "R000", "title": "세계 배경", "kind": "rule", "keys": [], "content": world,
+        out.append({"id": "R000", "title": "세계 배경", "kind": "world", "keys": [], "content": world,
                     "always": True, "enabled": True})
     if lorebook.enabled():
         for e in lorebook.scene_entries(source, int(pick or 0), chosen.get("body") or chosen.get("raw") or ""):
@@ -271,13 +297,14 @@ def stage_digest(packet_path, out_path, dry_run, lang="ko"):
     out_dir = out_path.parent
     previous = packet.get("previous") or {}
     kept = [e for e in previous.get("entries") or [] if isinstance(e, dict)]
+    # 1화에 붙인 설정집 항목은 번호가 없다. 번호가 없으면 정리가 이미 있는 대상에 새 사실을 덧붙이지 못하고
+    # 같은 대상을 새 항목으로 또 만들었다(2026-10-26, 마법학교 설정집). 여기서 K 번호를 단다.
+    kept = [e if str(e.get("id") or "").strip() else {**e, "id": f"K{i + 1:03d}"} for i, e in enumerate(kept)]
     if not kept:
         kept = world_seed(packet["source_dir"])
     rows = X.progress_rows(previous.get("progress"))
     text = episode_text(packet)
-    # 항목 프롬프트는 실제로는 새로 뽑은 규칙까지 보고 만든다(X.extract). 미리 적어 두는 것은 이미 있는 설정만.
-    R.write_text(out_dir / "lore_entries_prompt.txt", X.entries_prompt(text, lang, kept))
-    R.write_text(out_dir / "lore_rules_prompt.txt", X.rules_prompt(text, lang, kept))
+    R.write_text(out_dir / "lore_book_prompt.txt", X.book_prompt(text, lang, kept))
     R.write_text(out_dir / "lore_progress_prompt.txt", X.progress_prompt(rows, text, lang))
     if dry_run:
         return None
@@ -285,8 +312,8 @@ def stage_digest(packet_path, out_path, dry_run, lang="ko"):
     with ThreadPoolExecutor(max_workers=2) as pool:
         added = pool.submit(X.extract, text, out_dir, lang, kept)
         progress = pool.submit(X.update_progress, rows, text, out_dir, lang)
-        added, (merged, changes, removed) = added.result(), progress.result()
-    result = {"entries": kept + [{**e, "new": True} for e in added], "progress": merged,
+        (rows_new, more, renamed), (merged, changes, removed) = added.result(), progress.result()
+    result = {"entries": X.apply_book(kept, rows_new, more, renamed), "progress": merged,
               "progress_changes": changes, "progress_removed": removed}
     R.write_json(out_path, result)
     return result

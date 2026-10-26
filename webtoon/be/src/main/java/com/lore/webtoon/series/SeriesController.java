@@ -12,6 +12,10 @@ import java.util.Map;
 public class SeriesController {
     private final SeriesService series;
     public SeriesController(SeriesService series) { this.series=series; }
+    @GetMapping("/drafts")
+    public java.util.List<Map<String,Object>> drafts() {
+        return series.myDrafts(CreditGate.currentUser());
+    }
     @GetMapping("/{runId}")
     public Map<String,Object> chapters(@PathVariable String runId) {
         return series.chapters(runId, CreditGate.currentUser());

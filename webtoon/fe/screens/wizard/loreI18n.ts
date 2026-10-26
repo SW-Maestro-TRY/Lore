@@ -1,5 +1,23 @@
 import {registerDict} from "../../lib/i18n";
 registerDict({
+  "로어북": {"en": "Lorebook", "ja": "ロアブック", "zh": "设定书"},
+  "{n}개 항목": {"en": "{n} entries", "ja": "{n}件の項目", "zh": "{n} 个条目"},
+  "이름 (예: 김시하)": {"en": "Name (e.g. Kim Siha)", "ja": "名前（例：キム・シハ）", "zh": "名称（例：金时夏）"},
+  "설정 내용": {"en": "Details", "ja": "設定内容", "zh": "设定内容"},
+  "키워드 (쉼표로 구분)": {"en": "Keywords (comma-separated)", "ja": "キーワード（カンマ区切り）", "zh": "关键词（用逗号分隔）"},
+  "항목": {"en": "Entries", "ja": "項目", "zh": "条目"},
+  "{n}개": {"en": "{n}", "ja": "{n}件", "zh": "{n} 个"},
+  "인물·조직·장소·세계마다 하나씩 적어요. 키워드가 이야기에 나오면 AI가 그 항목을 읽고, 「항상 참고」 항목은 매번 읽어요.": {"en": "Write one entry per person, group, place or world. The AI reads an entry when its keywords come up; \"Always on\" entries are read every time.", "ja": "人物・組織・場所・世界ごとに1つずつ書きます。キーワードが物語に出るとAIがその項目を読み、「常に参照」は毎回読みます。", "zh": "每个人物、组织、地点、世界各写一条。关键词出现在故事里时 AI 会读取该条目，「始终参考」的条目每次都会读取。"},
+  "항목 {n}": {"en": "Entry {n}", "ja": "項目{n}", "zh": "条目 {n}"},
+  "항목 이름 · 인물, 조직, 장소, 세계…": {"en": "Entry name · person, group, place, world…", "ja": "項目名・人物、組織、場所、世界…", "zh": "条目名称 · 人物、组织、地点、世界…"},
+  "항상 참고": {"en": "Always on", "ja": "常に参照", "zh": "始终参考"},
+  "{name} 삭제": {"en": "Delete {name}", "ja": "{name}を削除", "zh": "删除 {name}"},
+  "{name} 내용": {"en": "{name} content", "ja": "{name}の内容", "zh": "{name} 的内容"},
+  "{name} 키워드": {"en": "{name} keywords", "ja": "{name}のキーワード", "zh": "{name} 的关键词"},
+  "이 대상이 누구·무엇인지, 이어 쓸 때 지켜야 할 것": {"en": "Who or what this is, and what to keep when continuing", "ja": "この対象が誰・何か、続きを書くときに守ること", "zh": "这个对象是谁/是什么，续写时要遵守的内容"},
+  "키워드 · 이 말이 나오면 읽어요 · 쉼표로 나눠요": {"en": "Keywords · read when these come up · separate with commas", "ja": "キーワード・この言葉が出ると読みます・カンマ区切り", "zh": "关键词 · 出现这些词时读取 · 用逗号分隔"},
+  "시작 시점 · 예전 설정집에만 있어요": {"en": "Starting point · only in older lorebooks", "ja": "開始時点・以前の設定集のみ", "zh": "开始时间点 · 仅旧设定集有"},
+  "닫기": {"en": "Close", "ja": "閉じる", "zh": "关闭"},
   "30자 이상 적으면 정리할 수 있어요.": {
     "en": "Enter at least 30 characters to extract settings.",
     "ja": "30文字以上で設定を整理できます。",
