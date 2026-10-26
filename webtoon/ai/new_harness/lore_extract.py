@@ -44,7 +44,11 @@ def _call(prompt: str, out_dir: Path, stage: str) -> dict:
 
 def known_block(known) -> str:
     """이미 있는 설정 — 같은 대상을 새 항목으로 다시 만들지 않고 새 사실만 덧붙이게 원문 뒤에 붙인다."""
-    rows = [f"- {'[항상] ' if e.get('always') else ''}{e.get('title', '')}: {e.get('content') or e.get('text') or ''}"
+    def tag(e):
+        if e.get("kind") == "world" and e.get("title") == GENERIC_WORLD:
+            return "[항상 · 세계 · 아직 이름 없음] "
+        return "[항상] " if e.get("always") else ""
+    rows = [f"- {tag(e)}{e.get('title', '')}: {e.get('content') or e.get('text') or ''}"
             for e in known or [] if isinstance(e, dict) and str(e.get("title") or "").strip()]
     return "\n[이미 있는 설정]\n" + ("\n".join(rows) if rows else "(없음)") + "\n"
 
