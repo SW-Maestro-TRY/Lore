@@ -67,7 +67,7 @@ interface Route {
   job?: string;
   run?: string;
   id?: string;
-  tab?: "settings" | "works" | "characters";
+  tab?: "settings" | "works" | "characters" | "contact";
   /** 만들기 화면의 길(#548). own = 「만들고 싶은 내용이 있어요」. */
   mode?: "own";
 }
@@ -85,7 +85,7 @@ function routeOf(search: URLSearchParams): Route {
     job: search.get("job") || undefined,
     run,
     id: search.get("id") || undefined,
-    tab: (["settings", "works", "characters"] as const).find((t) => t === search.get("tab")),
+    tab: (["settings", "works", "characters", "contact"] as const).find((t) => t === search.get("tab")),
     mode: search.get("mode") === "own" ? ("own" as const) : undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
@@ -265,7 +265,7 @@ function WebtoonScreens() {
       {route.view === "sharedCard" && route.id && (
         <PhotoResult id={route.id} shared go={go} authenticated={authenticated} />
       )}
-      {route.view === "mypage" && <MyPage go={go} initialTab={route.tab === "settings" ? "settings" : undefined} />}
+      {route.view === "mypage" && <MyPage go={go} initialTab={route.tab === "settings" ? "settings" : route.tab === "contact" ? "contact" : undefined} />}
       {route.view === "feedback" && <FeedbackPage go={go} />}
       {route.view === "admin" && <AdminDashboard go={go} tab={route.tab} />}
       {route.view === "admin-examples" && <AdminExamples go={go} />}

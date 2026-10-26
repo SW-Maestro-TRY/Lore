@@ -14,10 +14,11 @@
  * (`@common/mypage/MyPage`)를 빌려 쓸 때 그 껍데기가 고정으로 주던 것이다.
  * 리라이트하며 디자인 캔버스에 없어서 빠졌는데, 실제 서비스에 필요한
  * 자리라 여기서 직접 붙였다(2026-09-19, 사용자 지적). */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
 import { creditBalance } from "@common/api/credits";
 import CreditCharge from "@common/mypage/CreditCharge";
+import PayNotReady from "../../ui/PayNotReady";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
@@ -178,7 +179,7 @@ registerDict({
   "바꾸지 못했어요": { en: "Couldn't change it", ja: "変更できませんでした", zh: "无法更改" },
 });
 
-export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" }) {
+export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" | "contact" }) {
   const t = useT();
   const { user, isAuthenticated, signOut } = useAuth();
 
@@ -206,6 +207,14 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   const [contactBusy, setContactBusy] = useState(false);
   const [contactError, setContactError] = useState("");
   const [contactSent, setContactSent] = useState(false);
+  /* ?tab=contact — 결제 준비 중 안내의 「이메일 문의」가 다른 화면에서 여기로 보낸다. 결제·크레딧 분류로 바로 연다. */
+  const contactAsked = useRef(false);
+  useEffect(() => {
+    if (initialTab !== "contact" || contactAsked.current) return;
+    contactAsked.current = true;
+    setContactCategory("ACCOUNT_CREDITS"); setContactError(""); setContactSent(false); setContactCompose(true); setContactOpen(true);
+  }, [initialTab]);
+  useEffect(() => { if (initialTab === "contact" && user?.email) setContactEmail((e) => e || user.email || ""); }, [initialTab, user?.email]);
   const [surveyStatus, setSurveyStatus] = useState<SurveyStatus | null>(null);
   useEffect(() => {
     if (!isAuthenticated) { setSurveyStatus(null); return; }
@@ -222,6 +231,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   /* 남은 유료 크레딧. 탈퇴하면 소멸하고 환불도 못 받으므로(이용약관 13조 7항) 확인 단계에서 먼저 알린다. */
   const [paidCredits, setPaidCredits] = useState(0);
   const [creditModal, setCreditModal] = useState<"charge" | "history" | null>(null);
+  const [payNotReady, setPayNotReady] = useState(false);
 
   const [allowance, setAllowance] = useState<Allowance | null>(null);
 
@@ -930,7 +940,14 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
         )}
       </div>
 
-      {creditModal === "charge" && <CreditCharge onClose={() => setCreditModal(null)} onEvent={(n, p) => track(n, { ...p, where: "mypage" })} />}
+      {creditModal === "charge" && <CreditCharge onClose={() => setCreditModal(null)} onEvent={(n, p) => track(n, { ...p, where: "mypage" })}
+                                                onNotReady={() => setPayNotReady(true)} />}
+      {payNotReady && <PayNotReady where="mypage" onClose={() => setPayNotReady(false)} onEmail={() => {
+        /* 이메일 문의는 마이페이지 문의 창(결제·크레딧 분류)으로 바로 */
+        setPayNotReady(false); setCreditModal(null);
+        setContactEmail(user?.email ?? ""); setContactMessage(""); setContactError("");
+        setContactCategory("ACCOUNT_CREDITS"); setContactSent(false); setContactCompose(true); setContactOpen(true);
+      }} />}
       {creditModal === "history" && <CreditHistory onClose={() => setCreditModal(null)} />}
     </div>
   );
