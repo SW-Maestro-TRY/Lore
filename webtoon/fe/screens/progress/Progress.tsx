@@ -652,10 +652,19 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const [castBusy, setCastBusy] = useState("");
   const [castErr, setCastErr] = useState("");
   const [balance, setBalance] = useState<number | null>(null);
+  /* 한 편 값은 기본 장 수까지다 — 넘는 장의 값(화질마다 다르다)은 서버가 정한 표에서 읽는다. */
+  const [pagePrice, setPagePrice] = useState<{ base: number; per: number } | null>(null);
   useEffect(() => {
     if (!castOk || isMock) return;
-    readAllowance().then((a) => setBalance(a.balance ?? null)).catch(() => setBalance(null));
-  }, [castOk, isMock]);
+    const quality = input?.quality;
+    readAllowance().then((a) => {
+      setBalance(a.balance ?? null);
+      const q = a.qualities?.find((x) => x.key === quality);
+      setPagePrice(q?.base_pages && q.extra_page_credits ? { base: q.base_pages, per: q.extra_page_credits } : null);
+    }).catch(() => setBalance(null));
+  }, [castOk, isMock, input?.quality]);
+  /* 표지 1장 + 장면 수 중 기본 장 수를 넘는 장 */
+  const extraPages = pagePrice ? Math.max(0, scenes.length + 1 - pagePrice.base) : 0;
   const castReadyCount = castSheets.filter((c) => c.ready).length;
   const castReadyRef = useRef(0);
   useEffect(() => {
@@ -995,7 +1004,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         <button type="button" className="primary" disabled={busy || !(job.sheet_fix_left ?? 0)} onClick={submitFix}>{t("캐릭터만 다시 그리기")}</button></span></>
     );
     if (pane === "scenes") return (
-      <><span>{t("{n}개 장면", { n: scenes.length })}{saveState === "saving" ? ` · ${t("저장하는 중")}` : saveState === "saved" ? ` · ${t("저장됨")}` : saveState === "failed" ? ` · ${t("저장하지 못했습니다")}` : ""}</span>
+      <><span>{t("{n}개 장면", { n: scenes.length })}{saveState === "saving" ? ` · ${t("저장하는 중")}` : saveState === "saved" ? ` · ${t("저장됨")}` : saveState === "failed" ? ` · ${t("저장하지 못했습니다")}` : ""}
+        {extraPages > 0 && pagePrice && (
+          /* 표지 1장 + 장면 수가 기본 장 수를 넘으면, 넘는 장은 그리기 직전에 장마다 받는다(잔액이 닿는 데까지). */
+          <small className="wt-prog-extra">{t("기본 {base}장을 넘는 {m}장은 한 장에 {per}크레딧이에요.", { base: pagePrice.base, m: extraPages, per: pagePrice.per })}
+            {balance !== null && balance < extraPages * pagePrice.per ? ` ${t("크레딧이 모자라면 앞 {base}장까지 먼저 그리고, 나머지는 완성본에서 이어 그릴 수 있어요.", { base: pagePrice.base })}` : ""}</small>
+        )}</span>
         <button type="button" className="primary" disabled={busy} onClick={continueAll}>{t("이 장면으로 그리기")}</button></>
     );
     return null;

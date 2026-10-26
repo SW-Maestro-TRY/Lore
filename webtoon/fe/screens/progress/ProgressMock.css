@@ -66,6 +66,7 @@
 .wt .wt-progx .scene-paging span { font-size:12px;color:#acb9cd }
 .wt .wt-progx .confirm-bar { position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;padding:16px 0;margin-top:20px;gap:16px;background:#0b1422f5;border-top:1px solid #ffffff12;z-index:3;backdrop-filter:blur(10px) }
 .wt .wt-progx .confirm-bar>span { font-size:12px;color:#9eadc0 }
+.wt .wt-progx .confirm-bar .wt-prog-extra { display:block;margin-top:4px;font-size:12px;line-height:1.5;color:#d7e2ee }
 .wt .wt-progx .confirm-bar button { font-size:13px;min-height:46px }
 .wt .wt-progx .long-editor, .wt .wt-progx .prose-field textarea { width:100%;background:#08111f;color:#e4eaf2;border:1px solid #4b5b73;border-radius:7px;padding:16px;font-size:14px;line-height:1.95;resize:vertical }
 .wt .wt-progx .long-editor { min-height:550px;field-sizing:content }

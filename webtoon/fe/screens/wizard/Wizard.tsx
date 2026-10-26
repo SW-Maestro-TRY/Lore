@@ -391,6 +391,13 @@ export default function Wizard({
           </button>
         );
       })}
+      {(() => {
+        /* 한 편 값은 기본 장 수까지 — 넘는 장은 그리기 직전에 장마다 받고, 모자라면 앞 장까지만 먼저 그린다 */
+        const q = allow?.qualities?.find((x) => x.key === form.quality);
+        return q?.base_pages && q.extra_page_credits ? (
+          <p className="muted wt-wiz-qnote">{t("한 편은 {base}장까지예요. 이야기가 길어 장면이 더 많으면 한 장에 {per}크레딧이 더 들고, 크레딧이 모자라면 {base}장까지 먼저 그린 뒤 나머지는 나중에 이어 그릴 수 있어요.", { base: q.base_pages, per: q.extra_page_credits })}</p>
+        ) : null;
+      })()}
     </div>
   );
 
