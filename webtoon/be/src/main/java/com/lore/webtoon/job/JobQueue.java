@@ -114,18 +114,23 @@ public class JobQueue {
 
         Instant now = Instant.now();
         int ahead = 0;
-        long work = 0;
+        long lineWork = 0;
+        long pageWork = 0;
         for (WebtoonJob one : line) {
             if (one.getId().equals(job.getId())) {
                 break;
             }
             ahead++;
-            work += remainingOf(one, now);
+            JobEta.Parts left = JobEta.parts(one, progress.of(one.getId()), now);
+            lineWork += left.line();
+            pageWork += left.page();
         }
-        /* **나란히 도는 수로 나눈다.** 앞에 둘이 있어도 둘이 같이 돌면 내
-           차례는 한 편 뒤다. 안 나누면 기다리는 사람에게 실제의 두 배를
-           적어 주게 되고, 그건 더 빨리 나가게 만든다. */
-        return new Spot(ahead, work / Math.max(1, runner.workers()));
+        /* **일은 두 줄로 나뉘어 돈다**(2026-10-26). 이야기·시트·장면·검수는 일꾼(workers)이 나눠 하고,
+           장 그림은 서버 전체의 그림 자리(page-workers)가 나눠 그린다. 둘은 나란히 돌므로 더 막히는
+           쪽이 내 차례를 정한다. 줄이 길면 거의 늘 그림 자리다(capacity.md 「속도는 page-workers 가 정한다」). */
+        long seconds = Math.max(lineWork / Math.max(1, runner.workers()),
+                pageWork / Math.max(1, runner.pageWorkers()));
+        return new Spot(ahead, seconds);
     }
 
     /**
@@ -156,11 +161,6 @@ public class JobQueue {
         return (int) Math.max(1, runner.pageWorkers() / sharing);
     }
 
-    /** 앞사람 한 편이 <b>앞으로</b> 얼마나 더 걸릴까(초). 예상을 넘겼으면 마무리 몫만 센다. */
-    private long remainingOf(WebtoonJob one, Instant now) {
-        JobEta.Eta eta = JobEta.of(one, progress.of(one.getId()), slotsFor(one), 0, now);
-        return eta.left() < 0 ? JobEta.FINISH : eta.left();
-    }
 
     /**
      * 줄에서의 자리.
