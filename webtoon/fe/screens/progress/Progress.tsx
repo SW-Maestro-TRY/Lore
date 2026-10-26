@@ -41,7 +41,7 @@ const CRUMB = ["캐릭터 · 이야기", "그림체 · 방식", "만들기"];
 /* 「만들고 싶은 내용이 있어요」 길(#548)은 방식 걸음이 없다. */
 const CRUMB_OWN = CRUMB;
 /* 확정 시안(progress-stages.js)의 왼쪽 걸음 이름 */
-const RAIL_STEPS = ["1화 생성하기", "캐릭터 그리기", "장면 나누기", "페이지 그리기", "검수하기"];
+const RAIL_STEPS = ["{ep}화 생성하기", "캐릭터 그리기", "장면 나누기", "페이지 그리기", "검수하기"];
 const STEPS: { key: string; title: string; desc: string }[] = [
   { key: "story", title: "이야기", desc: "1화 이야기와 인물을 씁니다" },
   { key: "sheet", title: "캐릭터", desc: "앞·옆·뒤 모습과 표정을 한 장에" },
@@ -285,6 +285,7 @@ const HOLE = "\u2063";
 export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const t = useT();
   const [job, setJob] = useState<NhJob | null>(null);
+  const ep = job?.episode ?? 1;
   const [loadErr, setLoadErr] = useState("");
   const [misses, setMisses] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -795,10 +796,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   /* 확정 시안의 왼쪽 줄 — 큰 제목은 지금 상태를 그대로 말한다 */
   const stateName = !job ? "" : status === "error"
       ? (art && art.done > 0 && art.done < art.total ? t("{n}쪽을 완성하지 못했어요", { n: nextPage(art) }) : t("웹툰을 완성하지 못했어요"))
-    : status === "done" ? t("1화가 완성됐어요")
+    : status === "done" ? t("{ep}화가 완성됐어요", { ep })
     : offline ? t("연결을 다시 확인하고 있어요")
     : queued ? t("생성 순서를 기다리고 있어요")
-    : status === "awaiting_pick" ? (ownJob || confirming ? t("1화 이야기를 확인해 주세요") : t("1화 이야기를 골라 주세요"))
+    : status === "awaiting_pick" ? (ownJob || confirming ? t("{ep}화 이야기를 확인해 주세요", { ep }) : t("{ep}화 이야기를 골라 주세요", { ep }))
     : status === "awaiting_cast" ? t("캐릭터 설정을 확인해 주세요")
     : status === "awaiting_sheet" ? (job.sheet_blocked ? t("캐릭터를 다시 그려 주세요") : t("캐릭터 시트를 확인해 주세요"))
     : status === "awaiting_scenes" ? t("장면을 확인해 주세요")
@@ -807,7 +808,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     : art ? t("{n}쪽을 그리고 있어요", { n: nextPage(art) })
     : cur === SCENES ? t("이야기를 장면으로 나누고 있어요")
     : cur === 1 ? t("캐릭터를 그리고 있어요")
-    : t("1화 이야기를 만들고 있어요");
+    : t("{ep}화 이야기를 만들고 있어요", { ep });
   const workTitle = job?.story?.title || chosen?.title || "";
   /* 인물 확인은 시안에서 「캐릭터 그리기」 걸음이다 */
   const railStep = status === "awaiting_cast" ? 1 : status === "done" ? REVIEW + 1 : cur;
@@ -1027,7 +1028,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       <div className="real-layout">
         <aside className="progress-rail">
           <div className="rail-heading">
-            <div className="eyebrow"><i className="dot" />{t("1화 만들기")}</div>
+            <div className="eyebrow"><i className="dot" />{t("{ep}화 만들기", { ep })}</div>
             {job ? <h1>{stateName}</h1> : <h1><span className="skeleton" style={{ display: "inline-block", width: 180, height: 28, borderRadius: 6 }} /></h1>}
             {workTitle && <p className="work-title">{workTitle}</p>}
           </div>
@@ -1039,7 +1040,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   <button type="button" disabled={!canView(i)} aria-current={st === "active" ? "step" : undefined}
                           onClick={() => setTab(tab === i ? null : i)}>
                     <span className="number">{st === "complete" ? "✓" : i + 1}</span>
-                    <span>{t(name)}</span>
+                    <span>{t(name, { ep })}</span>
                     {st === "active" && <i />}
                   </button>
                 </li>
@@ -1329,7 +1330,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
               {pane === "confirm" && selectedDir && (
                 <article className="manuscript">
-                  <div className="document-heading"><div><span>{t("1화 이야기")}{selectedDir.genre ? ` · ${selectedDir.genre}` : ""}</span><h2>{selectedDir.title}</h2></div></div>
+                  <div className="document-heading"><div><span>{t("{ep}화 이야기", { ep })}{selectedDir.genre ? ` · ${selectedDir.genre}` : ""}</span><h2>{selectedDir.title}</h2></div></div>
                   <div className="text-stats">{t("{n}자", { n: body.length.toLocaleString() })} · {t("마음에 안 드는 부분은 직접 고쳐도 돼요.")}</div>
                   <textarea className="long-editor" value={body} aria-label={t("이야기 본문")} onChange={(e) => setBody(e.target.value)} />
                 </article>
@@ -1396,7 +1397,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       <img className="lou work" src="/static/lou/logo-1-discover.png" alt="" />
                       <div>
                         <b>{t("감독 루 · 전체 검수")}</b>
-                        <small>{redraw ? t("걸린 쪽을 다시 그리고 있어요 · {done} / {n}쪽", { done: redraw.done, n: redraw.pages.length }) : t("1화를 처음부터 끝까지 이어서 보고 있어요")}</small>
+                        <small>{redraw ? t("걸린 쪽을 다시 그리고 있어요 · {done} / {n}쪽", { done: redraw.done, n: redraw.pages.length }) : t("{ep}화를 처음부터 끝까지 이어서 보고 있어요", { ep })}</small>
                       </div>
                       <span className={`rv-pill ${bossState}`}><i className="sp" />{redraw ? t("다시 그리는 중") : t("검수 중")}</span>
                     </div>
@@ -1426,8 +1427,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <div className="completed-work">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {job.run_id && <img src={jobPageUrl(job.id, 1, 520)} alt="" />}
-                  <h2>{workTitle || t("1화")}</h2>
-                  <p>{t("1화")}{art ? ` · ${t("{n}쪽", { n: art.total })}` : ""}</p>
+                  <h2>{workTitle || t("{ep}화", { ep })}</h2>
+                  <p>{t("{ep}화", { ep })}{art ? ` · ${t("{n}쪽", { n: art.total })}` : ""}</p>
                   <div className="actions">
                     {job.run_id && <button type="button" className="secondary" onClick={() => go("editor", { run: job.run_id! })}>{t("편집실")}</button>}
                     {job.run_id && <button type="button" className="primary" onClick={() => go("result", { run: job.run_id! })}>{t("웹툰 보기")}</button>}
@@ -1473,7 +1474,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                 <>
                   <article className="manuscript">
                     <div className="document-heading">
-                      <div><span>{t("1화 이야기")}</span><h2>{storyDraft.title || job.story.title}</h2></div>
+                      <div><span>{t("{ep}화 이야기", { ep })}</span><h2>{storyDraft.title || job.story.title}</h2></div>
                       {!storyEditing && (
                         <span className="heading-tools">
                           <button type="button" className="edit-button" onClick={() => { setStoryEditing(true); setStoryRetryOpen(false); }}><IconEdit size={16} />{t("수정")}</button>
@@ -1483,11 +1484,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     </div>
                     {storyRetryOpen && !storyEditing && (
                       <div className="retry-box">
-                        <textarea rows={2} value={dirNote} placeholder={t("바라는 점을 적고 1화 다시 만들기")} aria-label={t("다시 만들기 메모")} onChange={(e) => setDirNote(e.target.value)} />
+                        <textarea rows={2} value={dirNote} placeholder={t("바라는 점을 적고 {ep}화 다시 만들기", { ep })} aria-label={t("다시 만들기 메모")} onChange={(e) => setDirNote(e.target.value)} />
                         <div className="editing-actions">
                           <button type="button" className="secondary" onClick={() => setStoryRetryOpen(false)}>{t("닫기")}</button>
                           <button type="button" className="primary" disabled={busy || (storyPaid && noCredit)} onClick={() => { setStoryRetryOpen(false); retryStory(); }}>
-                            {storyPaid ? t("1화 다시 만들기 · 1크레딧") : t("1화 다시 만들기 · 무료")}</button>
+                            {storyPaid ? t("{ep}화 다시 만들기 · 1크레딧", { ep }) : t("{ep}화 다시 만들기 · 무료", { ep })}</button>
                         </div>
                       </div>
                     )}
@@ -1528,7 +1529,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   {/* 지나온 걸음 다시 보기 — 서버가 준 실제 1화 이야기(고친 것이 있으면 그것). 장면 확인 동안만 고칠 수 있다. */}
                   <article className="manuscript">
                     <div className="document-heading">
-                      <div><span>{t("1화 이야기")}</span><h2>{(status === "awaiting_scenes" && storyDraft.title) || job.story.title}</h2></div>
+                      <div><span>{t("{ep}화 이야기", { ep })}</span><h2>{(status === "awaiting_scenes" && storyDraft.title) || job.story.title}</h2></div>
                       {status === "awaiting_scenes" && !storyOpen && (
                         <span className="heading-tools">
                           <button type="button" className="edit-button" onClick={() => { setStoryOpen(true); setStoryRetryOpen(false); }}><IconEdit size={16} />{t("수정")}</button>
@@ -1538,11 +1539,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     </div>
                     {storyRetryOpen && status === "awaiting_scenes" && (
                       <div className="retry-box">
-                        <textarea rows={2} value={dirNote} placeholder={t("1화를 다시 만들면 장면도 새 1화로 다시 나눠요. 바라는 점을 적어 주세요")} aria-label={t("바라는 점을 적어 주세요")} onChange={(e) => setDirNote(e.target.value)} />
+                        <textarea rows={2} value={dirNote} placeholder={t("{ep}화를 다시 만들면 장면도 새 {ep}화로 다시 나눠요. 바라는 점을 적어 주세요", { ep })} aria-label={t("바라는 점을 적어 주세요")} onChange={(e) => setDirNote(e.target.value)} />
                         <div className="editing-actions">
                           <button type="button" className="secondary" disabled={busy} onClick={() => setStoryRetryOpen(false)}>{t("닫기")}</button>
                           <button type="button" className="primary" disabled={busy || (storyPaid && noCredit)} onClick={() => { setStoryRetryOpen(false); retryStory(); }}>
-                            {storyPaid ? t("1화 다시 만들기 · 1크레딧") : t("1화 다시 만들기 · 무료")}</button>
+                            {storyPaid ? t("{ep}화 다시 만들기 · 1크레딧", { ep }) : t("{ep}화 다시 만들기 · 무료", { ep })}</button>
                         </div>
                       </div>
                     )}
@@ -1754,7 +1755,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={jobPageUrl(job.id, (art.pages && art.pages[0]) || 1, 260)} alt="" />
             )}
-            <div><b>{workTitle || t("1화")}</b><span>{t("1화")} · {stateName}</span></div>
+            <div><b>{workTitle || t("{ep}화", { ep })}</b><span>{t("{ep}화", { ep })} · {stateName}</span></div>
           </div>
           <p className="muted">{t("진행 중인 생성을 중단합니다.")} {t("중단하면 사용한 크레딧과 무료 횟수가 반환됩니다.")}</p>
           <div className="actions">

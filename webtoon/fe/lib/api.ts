@@ -270,6 +270,8 @@ export interface NhJob {
   sheet_fix_left?: number;
   /** 다 만들었지만 이미지 안전 기준에 걸려 빈 장으로 둔 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 몇 화인가 — 다음 화로 만든 작업이면 2 이상. 없으면 1화 */
+  episode?: number;
   /** 보관된 옛 시트 수(#548). 다시 만들 때마다 전 것이 1, 2, … 로 남고 sheetVersionUrl 로 본다. */
   sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */

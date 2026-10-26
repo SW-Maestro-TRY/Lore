@@ -1293,6 +1293,19 @@ public class JobRunner {
     }
 
     /** own 길의 본문(#548) — {title, body}. 없으면 {@code null}. */
+    /** 몇 화인가 — 다음 화 작업은 폴더에 continuation.json(episode_number)이 있다. 없거나 못 읽으면 1화. */
+    public int episodeOf(String runId) {
+        if (runId == null || runId.isBlank()) return 1;
+        Path file = runDir(runId).resolve("continuation.json");
+        if (!Files.isRegularFile(file)) return 1;
+        try {
+            Object n = mapper.readValue(file.toFile(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { }).get("episode_number");
+            return n instanceof Number num && num.intValue() > 0 ? num.intValue() : 1;
+        } catch (Exception e) {
+            return 1;
+        }
+    }
+
     public Map<String, Object> storyOf(String runId) {
         List<Map<String, Object>> directions = directionsOf(runId);
         if (directions.isEmpty()) {

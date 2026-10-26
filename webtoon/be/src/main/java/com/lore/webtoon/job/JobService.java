@@ -385,7 +385,8 @@ public class JobService {
                 spot,
                 notice.addressOf(job), queue.etaOf(job, now, spot),
                 job.isSheetBlocked() ? Math.max(0, SHEET_FIX_MAX - sheetFixesOf(job)) : 0,
-                at == JobStatus.DONE ? runner.unsafePages(job.getRunId()) : List.of());
+                at == JobStatus.DONE ? runner.unsafePages(job.getRunId()) : List.of(),
+                runner.episodeOf(job.getRunId()));
     }
 
     /**
