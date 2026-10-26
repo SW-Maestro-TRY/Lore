@@ -362,6 +362,22 @@ public class JobService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setSeriesTitles(com.lore.webtoon.story.SeriesTitles seriesTitles) { this.seriesTitles = seriesTitles; }
 
+    private com.lore.webtoon.series.SeriesChapterRepository chapters;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setChapters(com.lore.webtoon.series.SeriesChapterRepository chapters) { this.chapters = chapters; }
+
+    /**
+     * 몇 화인가 — 연재 표가 먼저다(2026-10-27). 작품 폴더의 continuation.json 은 이야기를 쓰기 시작해야
+     * 생겨서, 그 전(줄 서기 · 이야기 쓰는 중)에는 2화를 만들어도 진행 화면이 「1화 만들기」로 떴다.
+     */
+    private int episodeOf(WebtoonJob job) {
+        if (chapters != null) {
+            java.util.Optional<Integer> n = chapters.episodeOf(job.getPublicId());
+            if (n.isPresent() && n.get() > 0) return n.get();
+        }
+        return runner.episodeOf(job.getRunId());
+    }
+
     /** 내 내용 길의 본문 — 연재 2화부터는 작품 제목(series_title)을 같이 싣는다. 화의 제목은 소제목이다. */
     private Map<String, Object> storyFor(WebtoonJob job) {
         if (!job.isOwn()) return null;
@@ -409,7 +425,7 @@ public class JobService {
                 notice.addressOf(job), queue.etaOf(job, now, spot),
                 job.isSheetBlocked() ? Math.max(0, SHEET_FIX_MAX - sheetFixesOf(job)) : 0,
                 at == JobStatus.DONE ? runner.unsafePages(job.getRunId()) : List.of(),
-                runner.episodeOf(job.getRunId()),
+                episodeOf(job),
                 /* 진행이 메모리에 없으면(서버가 다시 떴다) 폴더의 그림으로 — 그린 장을 화면에서 다시 본다 */
                 now.total() > 0 ? null : runner.artOnDisk(job),
                 resumeCost(job));
