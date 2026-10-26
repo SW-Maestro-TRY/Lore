@@ -579,11 +579,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           <>
             <div className="wt-my-head">
               <div>
-                {allWorks && (
-                  <button type="button" className="wt-my-back" onClick={() => setTab("home")}>
-                    ← {t("내 작업실")}
-                  </button>
-                )}
                 <h2>{t("내 웹툰")} {allWorks && <span className="dim wt-my-count">{runs.length}</span>}</h2>
               </div>
               <div className="wt-my-headacts">
@@ -691,7 +686,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           <>
             <div className="wt-my-head">
               <div>
-                <button type="button" className="wt-my-back" onClick={() => setTab("home")}>← {t("내 작업실")}</button>
                 <h2>{tab === "liked" ? t("찜한 웹툰") : t("댓글 단 웹툰")} <span className="dim wt-my-count">{(tab === "liked" ? liked : commented).length}</span></h2>
               </div>
               <div className="wt-my-headacts">
@@ -729,7 +723,6 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           <>
             <div className="wt-my-head">
               <div>
-                <button type="button" className="wt-my-back" onClick={() => setTab("home")}>← {t("내 작업실")}</button>
                 <h2>{t("내 캐릭터")} <span className="dim wt-my-count">{chars.length}</span></h2>
               </div>
               <div className="wt-my-headacts">
