@@ -477,6 +477,9 @@ app:
       text-timeout-seconds: ${ZZAL_OPENAI_TEXT_TIMEOUT_SECONDS:90}
       # Optional verification cap; empty keeps the production request unchanged.
       identity-max-completion-tokens: ${ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS:}
+      # 정체성(gpt-5) 호출의 reasoning_effort. minimal/low/medium/high, 비우면 안 보낸다(모델 기본 medium).
+      #   ★ 2026-10-27 기본 low — 출력 약 1,900토큰 중 약 1,800이 생각 토큰, 10/26 OpenAI 지연 때 90초 초과 11건.
+      identity-reasoning-effort: ${ZZAL_OPENAI_IDENTITY_REASONING_EFFORT:low}
 
     attendance:
       # Existing worker guard; enabling custom generation is separate from automatic dispatch.
