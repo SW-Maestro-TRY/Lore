@@ -283,7 +283,9 @@ public class JobRunner {
     public void resumeAfterPick(Long jobId) {
         WebtoonJob job = store.byId(jobId);
         if (job != null && job.isOwn()) {
-            ownScenes(jobId);                 // 시트는 --own 이 이미 그렸다 — 바로 장면으로
+            /* 시트는 --own 이 이미 그렸다. 바로 장면으로 가지 않고 캐릭터 그리기(시트 확인)를 한 번 보여 준다
+               (2026-10-26) — 「계속하기」를 누르면 resumeAfterSheet 가 장면을 나눈다. */
+            store.awaiting(jobId, JobStatus.AWAITING_SHEET, JobStage.SHEET);
             return;
         }
         store.queued(jobId, JobStage.SHEET);
@@ -358,6 +360,10 @@ public class JobRunner {
     /** 사람이 시트를 확인했다. 마지막 걸음으로. */
     public void resumeAfterSheet(Long jobId) {
         WebtoonJob now = store.byId(jobId);
+        if (now != null && now.isOwn()) {
+            ownScenes(jobId);                 // 내 내용 길 — 시트를 확인했으니 장면을 나누고 장면 확인에서 멈춘다
+            return;
+        }
         if (now != null && now.isCheckpoints() && !now.isOwn()) {
             /* 「확인하고 만들기」(#604) — 시트를 확정하면 장면 확인으로 간다. 사진은 아직 둔다:
                장면 확인에서도 시트를 다시 만들 수 있고, 다시 만들기는 사진부터 사양을 다시 쓴다.
@@ -964,7 +970,8 @@ public class JobRunner {
             }
             case SHEET -> {
                 if (job.isOwn()) {
-                    redrawSheet(id, "", JobStatus.AWAITING_SCENES);
+                    /* 장면을 이미 나눴으면 장면 확인에서, 아니면 시트 확인에서 다시 그렸다 */
+                    redrawSheet(id, "", Files.isRegularFile(run.resolve("scenes.json")) ? JobStatus.AWAITING_SCENES : JobStatus.AWAITING_SHEET);
                 } else {
                     resumeAfterPick(id);     // 시트가 이미 있으면 하네스가 그냥 넘어간다
                 }

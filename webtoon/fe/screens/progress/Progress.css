@@ -402,3 +402,26 @@
 .wt .wt-prog-fix .fieldset b { font-size: 14px; }
 .wt .wt-prog-fixthumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .wt .wt-prog-fixthumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+
+/* 장면 다시 뽑기 칸 다시 그림(2026-10-26) — 장면 글 아래에 묻혀 보이던 것을 한 장의 카드로. 이유는 둥근 칩(줄 바꿈),
+   메모 칸, 오른쪽 아래에 닫기 · 다시 뽑기 단추. */
+.wt .wt-prog-sceneretry {
+  gap: 14px; margin: 4px 0 14px; padding: 16px 18px 16px;
+  border: 1px solid var(--line-strong); border-radius: 14px; background: rgba(255, 255, 255, .03);
+}
+.wt .wt-prog-sceneretry > b { font-size: 14px; }
+.wt .wt-prog-sceneretry .chips { gap: 8px; }
+.wt .wt-prog-sceneretry .chip {
+  height: 34px; padding: 0 14px; border-radius: 999px; font-size: 13px;
+  border: 1px solid var(--line-strong); background: transparent; color: var(--ink); cursor: pointer;
+}
+.wt .wt-prog-sceneretry .chip:hover { border-color: var(--muted); }
+.wt .wt-prog-sceneretry .chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.wt .wt-prog-scene .wt-prog-sceneretry textarea.field { min-height: 84px; border-radius: 10px; }
+.wt .wt-prog-sceneretry .acts { gap: 8px; }
+.wt .wt-prog-sceneretry .acts .btn { height: 40px; padding: 0 18px; font-size: 14px; }
+.wt .wt-prog-sceneretry .acts .wt-err, .wt .wt-prog-sceneretry .acts [role="alert"] { margin-right: auto; }
+@media (max-width: 600px) {
+  .wt .wt-prog-sceneretry { padding: 14px; }
+  .wt .wt-prog-sceneretry .acts .btn { flex: 1; }
+}

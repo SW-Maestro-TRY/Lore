@@ -829,6 +829,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   /* 아직 안 지난 걸음은 누를 것이 없다 — 검수는 검수 중일 때만 열린다. */
   const canView = (i: number) => {
     if (!job) return false;
+    /* 지금 걸음은 언제든 누를 수 있다 — 지난 걸음(캐릭터 시트 등)을 보러 갔다가 장면을 나누는 중인 지금 화면으로
+       돌아올 길이 없었다(장면이 아직 없으면 걸음 3 이 안 눌렸다, 2026-10-26). */
+    if (i === cur) return true;
     if (i === 0) return dirs.length > 0;
     if (i === 1) return cur > 1 || status === "awaiting_sheet" || storyCheck;
     /* 장면 걸음은 장면이 하나라도 있으면 언제든 — 지금 걸음이면 장면 확인 화면으로 돌아오고,
@@ -1248,11 +1251,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                                         onChange={(e) => setSceneRetry((o) => ({ ...o, [s.n]: { ...retry, note: e.target.value } }))} />
                               <div className="acts">
                                 <ErrLine text={sceneRetryErr[s.n] ?? ""} />
-                                <button type="button" className="btn btn-w btn-sm" disabled={busy} onClick={() => openSceneRetry(s.n)}>{t("닫기")}</button>
-                                {/* 장면마다 첫 번째는 무료, 같은 장면을 또 뽑으면 1크레딧(#548) */}
-                                <button type="button" className="btn btn-p btn-sm" disabled={busy || ((s.history?.length ?? 0) >= 1 && noCredit)}
+                                <button type="button" className="btn btn-w" disabled={busy} onClick={() => openSceneRetry(s.n)}>{t("닫기")}</button>
+                                {/* 장면마다 첫 번째는 무료, 같은 장면을 또 뽑으면 1크레딧(#548). 값은 시트 다시 만들기와 같은 꼴로 */}
+                                <button type="button" className="btn btn-p" disabled={busy || ((s.history?.length ?? 0) >= 1 && noCredit)}
                                         onClick={() => void sendSceneRetry(s.n)}>
-                                  {(s.history?.length ?? 0) >= 1 ? t("다시 뽑기 · 1크레딧") : t("다시 뽑기 · 무료")}
+                                  {(s.history?.length ?? 0) >= 1 ? t("{label} -{n} 크레딧", { label: t("다시 뽑기"), n: 1 }) : t("{label} · 무료", { label: t("다시 뽑기") })}
                                 </button>
                               </div>
                             </div>
@@ -1370,6 +1373,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <i className="spinner" aria-hidden="true" />
                     <h2>{stateName}</h2>
                     <p>{cur === 0 ? t("입력한 이야기와 설정을 바탕으로 작성 중") : cur === 1 ? t("외형과 설정을 시트로 정리 중") : t("이야기를 페이지별 장면으로 나누는 중")}{leftText && ` · ${leftText}`}</p>
+                    <p className="dim working-bg">{t("백그라운드에서 작업 중이라 나갔다 들어와도 작업이 이어져요.")}</p>
                   </div>
                   {cur === 0 && (input?.story || job.story?.body || chosen?.body) && (
                     <details className="input-preview">

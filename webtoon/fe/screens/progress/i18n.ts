@@ -41,6 +41,7 @@ const dict: Dict = {
   "되돌리지 못했어요": { en: "Couldn't restore", ja: "戻せませんでした", zh: "未能恢复" },
   "{label} -{n} 크레딧": { en: "{label} −{n} credit", ja: "{label} −{n}クレジット", zh: "{label} −{n} 积分" },
   "이어서 만들기": { en: "Continue", ja: "続きから作る", zh: "继续制作" },
+  "백그라운드에서 작업 중이라 나갔다 들어와도 작업이 이어져요.": { en: "This runs in the background, so you can leave and come back — it keeps going.", ja: "バックグラウンドで作業中なので、離れて戻ってきても続きます。", zh: "在后台进行中，离开后再回来也会继续。" },
   "{label} · 무료": { en: "{label} · free", ja: "{label} · 無料", zh: "{label} · 免费" },
   "다시 뽑기 · 1크레딧": { en: "Redraw · 1 credit", ja: "引き直す · 1クレジット", zh: "重抽 · 1 积分" },
   "다시 뽑기 · 무료": { en: "Redraw · free", ja: "引き直す · 無料", zh: "重抽 · 免费" },
