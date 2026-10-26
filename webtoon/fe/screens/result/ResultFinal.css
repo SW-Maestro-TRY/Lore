@@ -601,23 +601,48 @@
 .wt .wt-result-suggest .wt-strip-name { font-size: 14px; }
 @media (max-width: 767px) { .wt .wt-result-suggest .wt-strip-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .wt .wt-result-suggest .wt-strip-name { font-size: 12.5px; } }
 
-/* 만들기 칸 표지 — 넓은 칸에 맞춰 위쪽만 자르던 것을 표지 비율(2:3) 그대로 세워 넣는다(2026-10-26).
-   칸 높이는 글 쪽이 정하는 그대로이고, 표지는 그 안에 책 표지처럼 여백을 두고 선다. */
-.wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-.wt .wt-reader-create > img {
+/* 만들기 칸 표지 — 넓은 칸에 맞춰 위쪽만 자르던 것을 그만둔다(2026-10-26).
+   오른쪽 칸은 표지를 흐리게 깔아 칸 전체를 채우고, 그 위에 표지를 2:3 그대로 세운다.
+   칸 높이는 글 쪽이 정하는 그대로다. */
+.wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 360px; align-items: stretch; }
+.wt .wt-reader-create-art {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 24px 0;
+}
+.wt .wt-reader-create-art::before {
+  content: "";
+  position: absolute;
+  inset: -40px;
+  background: var(--art) center / cover no-repeat;
+  filter: blur(26px) saturate(1.1) brightness(0.6);
+}
+/* 글 칸 쪽 경계를 칸 바탕색으로 녹인다 */
+.wt .wt-reader-create-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #182333 0%, rgba(24, 35, 51, 0) 38%);
+}
+.wt .wt-reader-create-art > img {
+  position: relative;
+  z-index: 1;
   width: auto;
-  height: 248px;
-  min-height: 0;
+  height: 252px;
   aspect-ratio: 2 / 3;
   object-fit: cover;
   object-position: 50% 0;
-  margin: 26px 30px 26px 0;
-  border: 0;
   border-radius: 6px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5);
 }
 @media (max-width: 767px) {
-  .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) auto; }
-  .wt .wt-reader-create > img { height: 176px; margin: 20px 16px 20px 0; }
+  .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 132px; }
+  .wt .wt-reader-create-art { padding: 18px 0; }
+  .wt .wt-reader-create-art > img { height: 156px; }
 }
-.wt .wt-reader-eplist { scroll-margin-top: calc(var(--lore-header-h, 64px) + 16px); }
+/* 위쪽 「회차 목록」 단추로 펼친 목록 — 본문 그림과 띄운다. 「다음 이야기를 기다려 주세요」는 아래 목록에만 */
+.wt .wt-reader-eplist.top { align-self: stretch; width: 100%; margin: 4px 0 28px; scroll-margin-top: calc(var(--lore-header-h, 64px) + 16px); }
+.wt .wt-reader-eplist.top .wt-reader-wait { display: none; }
