@@ -560,6 +560,8 @@ export interface RunResult {
   unsafe_pages?: number[];
   /** 크레딧이 모자라 아직 안 그린 장 번호들 — 한 편 값은 기본 장 수(base_pages)까지다 */
   pending_pages?: number[];
+  /** 남은 장의 장면 한 줄 — 잠긴 장을 웹툰 흐름 안에서 「다음 장면」으로 보여 준다 */
+  pending_scenes?: { no: number; caption: string }[];
   /** 기본 장 수를 넘는 장 하나 값(이 작품의 화질 기준) */
   extra_page_credits?: number;
   base_pages?: number;

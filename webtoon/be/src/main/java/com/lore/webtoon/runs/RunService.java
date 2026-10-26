@@ -369,6 +369,12 @@ public class RunService {
         List<Integer> pending = pendingPages(numbers, scenes);
         out.put("planned_pages", numbers.size() + pending.size());
         out.put("pending_pages", pending);
+        /* 잠긴 장도 웹툰 흐름 안에서 「다음 장면」으로 보이게 — 그린 장의 caption 과 같은 장면 한 줄이다 */
+        List<Map<String, Object>> pendingScenes = new ArrayList<>();
+        for (int no : pending) {
+            pendingScenes.add(Map.of("no", no, "caption", captionOf(scenes, no)));
+        }
+        out.put("pending_scenes", pendingScenes);
         out.put("extra_page_credits", WebtoonQuality.extraPageCreditsOf(job == null ? null : job.getQuality()));
         out.put("base_pages", WebtoonQuality.BASE_PAGES);
         out.put("preview", false);
