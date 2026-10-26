@@ -117,5 +117,13 @@ class LegacyEpisodeTest(unittest.TestCase):
         self.assertEqual(rows,[]); self.assertIn("K001",more)
         self.assertIn("[이미 있는 설정]\n- 사역마 배정식",(out.parent/"lore_book_prompt.txt").read_text())
 
+    def test_scene_field_written_on_following_lines_is_kept(self):
+        # 「인물의 행동과 표정:」 아래 여러 줄로 쓴 대사가 빈칸이 되던 것(2026-10-26)
+        import run as R
+        text="장면 1:\n직전 상태: 앞\n장소와 상황: 복도\n벌어지는 일: 목소리\n인물의 행동과 표정:\n- 교사: 문고리를 잡는다.\n- 복도 끝: \"여기 맞죠?\"\n겉모습·소지품·동행: 시트 그대로\n끝나는 상태: 돌아본다\n나레이션: 통금 뒤\n"
+        got=R.parse_scenes(text)["scenes"][0]
+        self.assertIn("\"여기 맞죠?\"",got["acting"]); self.assertIn("문고리",got["acting"])
+        self.assertEqual(got["look"],"시트 그대로"); self.assertEqual(got["narration"],["통금 뒤"])
+
 
 if __name__=="__main__": unittest.main()

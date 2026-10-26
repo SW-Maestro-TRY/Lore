@@ -619,3 +619,7 @@
 /* 위쪽 「회차 목록」 단추로 펼친 목록 — 본문 그림과 띄운다. 「다음 이야기를 기다려 주세요」는 아래 목록에만 */
 .wt .wt-reader-eplist.top { align-self: stretch; width: 100%; margin: 4px 0 28px; scroll-margin-top: calc(var(--lore-header-h, 64px) + 16px); }
 .wt .wt-reader-eplist.top .wt-reader-wait { display: none; }
+
+/* 회차 목록 끝 「N화 만들기」 — 점선 칸으로 다른 회차와 구분(2026-10-26) */
+.wt .wt-reader-eplist li button.wt-reader-epnew { border: 1px dashed var(--line-strong); background: transparent; }
+.wt .wt-reader-eplist li button > .wt-reader-epplus { flex: none; display: grid; place-items: center; color: var(--sea); }

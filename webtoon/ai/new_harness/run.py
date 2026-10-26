@@ -1584,10 +1584,17 @@ def parse_scenes(text: str) -> dict:
         end = section_end(m.start(), end)
         body = text[m.end():end]
         fields = {}
+        last = None
         for line in body.splitlines():
             fm = SCENE_FIELD_RE.match(line)
             if fm:
-                fields[fm.group(1)] = fm.group(2).strip()
+                last = fm.group(1)
+                fields[last] = fm.group(2).strip()
+            elif last and line.strip():
+                # 라벨 아래 여러 줄로 쓴 칸(「인물의 행동과 표정:」 다음 줄부터 「- 인물: …"대사"…」)도 그 칸이다.
+                # 같은 줄만 읽던 때는 이 칸이 통째로 비어 대사 · 표정이 그림 단계에 안 갔고, 그림 모델이
+                # 말풍선을 지어냈다(2026-10-26, 마법학교 2화 「선생님…! 도와주세요!」).
+                fields[last] = (fields[last] + "\n" + line.strip()).strip()
         scenes.append({
             "n": int(m.group(1)),
             "prev": fields.get("직전 상태", ""),
