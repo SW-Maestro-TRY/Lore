@@ -70,6 +70,8 @@ const dict: Dict = {
   "최근 본 웹툰": { en: "Recently read", ja: "最近読んだ作品", zh: "最近看过" },
   "로그인하면 공개 여부를 바꿀 수 있어요": { en: "Sign in to change who can see it", ja: "ログインすると公開設定を変えられます", zh: "登录后可更改公开设置" },
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
+  /* ---- 빠졌던 번역 ---- */
+  "웹툰 둘러보기": { en: "Browse webtoons", ja: "ウェブトゥーンを見て回る", zh: "浏览漫画" },
 };
 
 registerDict(dict);

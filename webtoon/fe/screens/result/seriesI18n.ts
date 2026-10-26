@@ -200,5 +200,8 @@ registerDict({
   "더 적어 둘 설정 · 선택": {"en": "Anything else to keep · optional", "ja": "ほかに残す設定 · 任意", "zh": "其他要保留的设定 · 可选"},
   "한자가 섞였어요": {"en": "Contains Chinese characters", "ja": "漢字が混ざっています", "zh": "混入了汉字"},
   "{n}개": {"en": "{n}", "ja": "{n}件", "zh": "{n}条"},
-  "이번 화에서 추가 {n}개": {"en": "{n} new this episode", "ja": "今回追加 {n}件", "zh": "本话新增{n}条"}
+  "이번 화에서 추가 {n}개": {"en": "{n} new this episode", "ja": "今回追加 {n}件", "zh": "本话新增{n}条"},
+  "로그인": {"en": "Log in", "ja": "ログイン", "zh": "登录"},
+  "자동 저장됨": {"en": "Autosaved", "ja": "自動保存済み", "zh": "已自动保存"},
+  "저장 중…": {"en": "Saving…", "ja": "保存中…", "zh": "保存中…"},
 });

@@ -110,7 +110,24 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
         if (!alive) return;
         // 둘러보기는 연재를 1화 카드 하나로 묶는다 — 지금 읽는 회차가 든 카드는 추천에서 뺀다.
         const inSeries = (r: RunCard) => r.run_id === runId || Object.values(r.episode_run_ids || {}).includes(runId);
-        const others = all.filter((r) => !inSeries(r)).sort((a, b) => b.run_id.localeCompare(a.run_id));
+        /* 연재 기능 전에 「같은 이름 N화 — 소제목」으로 화마다 따로 만든 작품은 묶이지 않아서, 한 작품의 회차 넷이
+           추천을 다 차지했다(2026-10-26). 제목의 「N화」 앞 이름이 같으면 같은 작품으로 보고 가장 앞 화 하나만 둔다. */
+        const nameOf = (title: string) => {
+          const m = /^(.+?)\s+(\d+)\s*화(?:\s|$|[—\-–:·])/.exec(title.trim());
+          return m ? { name: m[1].trim(), ep: Number(m[2]) } : null;
+        };
+        const mine = nameOf(data.title);
+        const firstOf = new Map<string, RunCard>();
+        const kept: RunCard[] = [];
+        for (const r of all) {
+          if (inSeries(r)) continue;
+          const named = nameOf(r.title || "");
+          if (!named) { kept.push(r); continue; }
+          if (mine && named.name === mine.name) continue;         // 지금 읽는 작품의 다른 화
+          const had = firstOf.get(named.name);
+          if (!had || named.ep < (nameOf(had.title || "")?.ep ?? Infinity)) firstOf.set(named.name, r);
+        }
+        const others = [...kept, ...firstOf.values()].sort((a, b) => b.run_id.localeCompare(a.run_id));
         const same = data.genre ? others.filter((r) => r.genre === data.genre) : [];
         setSuggested((same.length >= 2 ? same : others).slice(0, 4));
         const me = all.find((r) => r.run_id === runId);
