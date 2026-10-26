@@ -8,6 +8,7 @@
 import { useState } from "react";
 import CreditCharge from "@common/mypage/CreditCharge";
 import { registerDict, useT } from "../lib/i18n";
+import { track } from "../lib/track";
 import "./CreditShort.css";
 
 registerDict({
@@ -39,8 +40,8 @@ export default function CreditShort({ raw = "", onCharged }: { raw?: string; onC
         <b>{t("크레딧 잔액이 부족해요")}</b>
         {nm && <small>{t("필요 {n} · 보유 {m}", { n: nm.n, m: nm.m })}</small>}
       </span>
-      <button type="button" className="btn btn-p btn-sm" onClick={() => setOpen(true)}>{t("충전하기")}</button>
-      {open && <CreditCharge onClose={() => { setOpen(false); onCharged?.(); }} />}
+      <button type="button" className="btn btn-p btn-sm" onClick={() => { track("charge_open", { where: "credit_short" }); setOpen(true); }}>{t("충전하기")}</button>
+      {open && <CreditCharge onClose={() => { setOpen(false); onCharged?.(); }} onEvent={(n, p) => track(n, { ...p, where: "credit_short" })} />}
     </span>
   );
 }
