@@ -890,6 +890,10 @@ export interface AdminOverview {
     visitors: number;
     signups: number;
     createStarted: number;
+    /** 충전 창을 연 사람 · 「N원 결제하기」를 누른 사람 · 누른 횟수 */
+    chargeOpen: number;
+    chargeSubmit: number;
+    chargeSubmitClicks: number;
     jobs: number;
     jobsDone: number;
     jobsFailed: number;

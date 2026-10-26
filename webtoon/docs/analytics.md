@@ -226,7 +226,7 @@ group by 1 order by 1;
 | 저장 | 없음 | 완성본은 만들면 자동으로 남아서 「저장」 동작이 따로 없습니다. 가장 가까운 것은 찜(`like_toggle`)과 편집실의 이미지로 뽑기(`bake`) |
 | 다운로드 | `download_click`(`webtoon/fe/screens/result/Result.tsx:295,333`) | 있음 — 누른 것까지만 압니다 |
 | 공유 | `share_click`(`webtoon/fe/screens/result/ShareMenu.tsx:44,50`) · `card_share` | 있음 — 누른 것까지만 압니다 |
-| 크레딧 충전 | `charge_open`(`webtoon/fe/screens/mypage/MyPage.tsx:228`) | 일부 — 충전 창을 연 것만. 실제 충전은 결제가 없어 일어나지 않습니다 |
+| 크레딧 충전 | `charge_open` · `charge_submit` | 창을 연 사람과 「결제하기」를 누른 사람·횟수. 실제 결제 완료는 서버 주문 기록(`common/be/.../payment/`)으로 센다 |
 | 결제 | 없음 | PG 전이라 없습니다(#155) |
 
 ## 유입 경로 (UTM) — 광고·홍보 링크 규칙
@@ -292,7 +292,8 @@ group by 1 order by 1;
 | `swap_survey_view` · `swap_survey` | 종이 바뀐 카드(#331)의 설문 팝업이 뜸 · 답함 (다 그려지고 5초 뒤, 카드마다 한 번) | `character`, `result`: confused(당황했어요) · fine(괜찮았어요) |
 | `limit_view` | 하루 몫이 다 됨 | `kind`: character |
 | `regen_start` · `regen_result` · `regen_revert` · `bake` | 편집실 다시 그리기 · 결과 · 판 되돌리기 · 이미지로 뽑기 | `cut`, `count`(태그 수), `has_note`, `status`, `n`(판) |
-| `charge_open` | 마이페이지에서 충전 창을 엶 | `where` |
+| `charge_open` | 충전 창을 엶 | `where`: mypage · credit_short(크레딧 부족 안내) |
+| `charge_submit` | 충전 창의 「N원 결제하기」를 누름. 결제가 아직 안 열렸어도 남는다 — 관리자 개요의 「결제하기를 누른 사람」 | `where`, `pick`(상품 코드), `cost`(원), `count`(크레딧), `ok`(그때 결제가 열려 있었나) |
 | `feedback_view` · `feedback_submit` · `feedback_skip` | 설문이 뜸 · 보냄 · 건너뜀 (#471, [validation.md](validation.md)). 답 자체는 `webtoon_feedback` 표에 있다 | `where`: result · mypage, `run`, `count`(문항 수), `ok`(보상을 받았나) |
 | `feedback_open` | 마이페이지 「피드백 보내기」를 엶 | `where` |
 | `feedback_prompt_view` · `feedback_prompt_click` | 다시 온 사람 안내가 뜸 · 「설문하러 가기」를 누름 | `where`(그때 보던 화면) |

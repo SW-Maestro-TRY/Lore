@@ -90,6 +90,11 @@ public class AdminOverview {
         totals.put("visitors", people("session_start", from, to, who));
         totals.put("signups", signups(from, to, who));
         totals.put("createStarted", people("create_started", from, to, who));
+        // 결제 — 충전 창을 연 사람, 「N원 결제하기」를 누른 사람과 누른 횟수. 누름은 결제가 아직 안 열렸어도
+        // 남는다(ok=false) — 실제로 돈을 내려던 사람의 수가 궁금한 것이라서다.
+        totals.put("chargeOpen", people("charge_open", from, to, who));
+        totals.put("chargeSubmit", people("charge_submit", from, to, who));
+        totals.put("chargeSubmitClicks", count("charge_submit", from, to, who));
         Object[] jobs = row(INNER + """
                 select count(*),
                        count(*) filter (where j.status = 'DONE'),
@@ -121,6 +126,13 @@ public class AdminOverview {
     private long people(String name, Instant from, Instant to, Who who) {
         return num(single(INNER + """
                 select count(distinct coalesce(e.user_id::text, e.uid)) from webtoon_event e
+                where e.name = :name and e.occurred_at >= :from and e.occurred_at < :to
+                """ + eventCut(who), from, to, "name", name));
+    }
+
+    private long count(String name, Instant from, Instant to, Who who) {
+        return num(single(INNER + """
+                select count(*) from webtoon_event e
                 where e.name = :name and e.occurred_at >= :from and e.occurred_at < :to
                 """ + eventCut(who), from, to, "name", name));
     }

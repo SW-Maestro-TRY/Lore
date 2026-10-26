@@ -766,7 +766,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
         )}
       </div>
 
-      {creditModal === "charge" && <CreditCharge onClose={() => setCreditModal(null)} />}
+      {creditModal === "charge" && <CreditCharge onClose={() => setCreditModal(null)} onEvent={(n, p) => track(n, { ...p, where: "mypage" })} />}
       {creditModal === "history" && <CreditHistory onClose={() => setCreditModal(null)} />}
     </div>
   );
