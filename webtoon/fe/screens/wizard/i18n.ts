@@ -148,7 +148,7 @@ const dict: Dict = {
   "LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.": { en: "LORE is not responsible for copyright disputes over generated results.", ja: "LOREは生成された結果物の著作権紛争について責任を負いません。", zh: "LORE 对生成结果的版权纠纷不承担责任。" },
   "시작하는 중": { en: "Starting", ja: "開始中", zh: "正在开始" },
   "웹툰 만들기": { en: "Create webtoon", ja: "ウェブトゥーンを作る", zh: "制作条漫" },
-  "시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸려요.": { en: "Times assume an empty queue. It takes longer if others are ahead of you.", ja: "時間は待ち行列が空のときの目安です。前に人がいるとさらにかかります。", zh: "时间以队列为空时为准。前面有人的话会更久。" },
+  "시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.": { en: "Times assume an empty queue. It may take longer if others are ahead of you.", ja: "時間は待ち行列が空のときの目安です。前に人がいるとさらにかかることがあります。", zh: "时间以队列为空时为准。前面有人的话会更久。" },
   "{time} · 앞에 사람이 있으면 더 걸려요": { en: "{time} · longer if others are ahead", ja: "{time} · 前に人がいるとさらにかかります", zh: "{time} · 前面有人会更久" },
 
   /* 화질 (lib/wizardData QUALITY_INFO) — lede 의 " · " 는 앞부분만 잘라 쓰므로 유지 */

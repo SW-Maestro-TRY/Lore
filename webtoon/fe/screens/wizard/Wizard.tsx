@@ -465,7 +465,7 @@ export default function Wizard({
         <div className="wt-create-footer"><button type="button" className="btn btn-p" disabled={!step1Ok||loreLocked||!!form.lorebook&&!form.lorebook.confirmed} onClick={next}>{t("다음")}</button></div>
       </div>:<div className="wt-create-content wt-create-options">
         <section><h2>{t("그림체")}</h2><div className="wt-wiz-styles">{STYLE_INFO.map(([key,label])=><button type="button" key={key} className={`wt-wiz-style${form.style===key?" on":""}`} aria-pressed={form.style===key} onClick={()=>{track("style_pick",{style:key});patch({style:key});}}><img src={STYLE_THUMB[key]||`/static/samples/ex-${key}-1.jpg`} alt=""/><b>{t(label)}</b>{form.style===key&&<CheckMark/>}</button>)}</div></section>
-        <section><h2>{t("그리기 방식")}</h2>{qualityPicker}<p className="dim hint wt-wiz-qualityhint">{t("시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸려요.")}</p></section>
+        <section><h2>{t("그리기 방식")}</h2><p className="dim hint wt-wiz-qualityhint">{t("시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.")}</p>{qualityPicker}</section>
         {/* 고를 것이 없는 길(내 이야기·설정집)은 설명 문장뿐이라 칸째 안 보인다(2026-10-26) */}
         {!usesOwnStory&&<section><h2>{t("생성 방식")}</h2><div className="wt-wiz-modes"><button type="button" className={`wt-wiz-mode${viewMode==="simple"?" on":""}`} onClick={()=>pickMode("simple")}><b>{t("바로 만들기")}</b><span>{t("중간 확인 없이 완성")}</span></button><button type="button" className={`wt-wiz-mode${viewMode==="expert"?" on":""}`} onClick={()=>pickMode("expert")}><b>{t("확인하고 만들기")}</b><span>{t("이야기와 장면 확인 후 생성")}</span></button></div></section>}
         {sidePanel}
