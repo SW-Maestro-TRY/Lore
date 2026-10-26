@@ -601,47 +601,20 @@
 .wt .wt-result-suggest .wt-strip-name { font-size: 14px; }
 @media (max-width: 767px) { .wt .wt-result-suggest .wt-strip-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .wt .wt-result-suggest .wt-strip-name { font-size: 12.5px; } }
 
-/* 만들기 칸 표지 — 넓은 칸에 맞춰 위쪽만 자르던 것을 그만둔다(2026-10-26).
-   오른쪽 칸은 표지를 흐리게 깔아 칸 전체를 채우고, 그 위에 표지를 2:3 그대로 세운다.
-   칸 높이는 글 쪽이 정하는 그대로다. */
-.wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 360px; align-items: stretch; }
-.wt .wt-reader-create-art {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  padding: 24px 0;
-}
-.wt .wt-reader-create-art::before {
-  content: "";
-  position: absolute;
-  inset: -40px;
-  background: var(--art) center / cover no-repeat;
-  filter: blur(26px) saturate(1.1) brightness(0.6);
-}
-/* 글 칸 쪽 경계를 칸 바탕색으로 녹인다 */
-.wt .wt-reader-create-art::after {
-  content: "";
+/* 만들기 칸 표지 — 칸 오른쪽을 꽉 채운다(2026-10-26). 표지는 세로 2:3 이라 조금 잘리지만,
+   칸 폭을 좁혀(380 → 300px) 위쪽만 남던 것보다 덜 잘리게 한다. 칸 높이는 글 쪽이 정하는 그대로다. */
+.wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 300px; }
+.wt .wt-reader-create-art { position: relative; overflow: hidden; border-left: 1px solid var(--line); }
+.wt .wt-reader-create-art > img {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, #182333 0%, rgba(24, 35, 51, 0) 38%);
-}
-.wt .wt-reader-create-art > img {
-  position: relative;
-  z-index: 1;
-  width: auto;
-  height: 252px;
-  aspect-ratio: 2 / 3;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  object-position: 50% 0;
-  border-radius: 6px;
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5);
+  object-position: 50% 12%;
 }
 @media (max-width: 767px) {
-  .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 132px; }
-  .wt .wt-reader-create-art { padding: 18px 0; }
-  .wt .wt-reader-create-art > img { height: 156px; }
+  .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 140px; }
 }
 /* 위쪽 「회차 목록」 단추로 펼친 목록 — 본문 그림과 띄운다. 「다음 이야기를 기다려 주세요」는 아래 목록에만 */
 .wt .wt-reader-eplist.top { align-self: stretch; width: 100%; margin: 4px 0 28px; scroll-margin-top: calc(var(--lore-header-h, 64px) + 16px); }
