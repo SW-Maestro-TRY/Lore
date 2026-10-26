@@ -125,6 +125,46 @@ public class RegenService {
         return id;
     }
 
+    /**
+     * 아직 안 그린 장을 그린다 — 크레딧이 모자라 뒤 장을 남긴 채 완성한 작품을 이어 그릴 때.
+     *
+     * 다시 그리기와 같은 줄 · 같은 길({@link #run})로 그린다. 장면은 이미 {@code scenes.json} 에 있고
+     * 하네스는 그 장 파일이 없으면 그린다. 다른 점은 <b>그 장이 아직 없어야 한다</b>는 것뿐이다.
+     *
+     * @throws NoSuchElementException 이미 그린 장이거나, 그 작품에 그런 장면이 없을 때
+     */
+    @Transactional
+    public String startPending(String runId, int pageNo, List<Integer> pending) {
+        if (!pending.contains(pageNo)) {
+            throw new NoSuchElementException("이어 그릴 장이 아닙니다");
+        }
+        String id = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        regens.save(PageRegen.queued(id, runId, pageNo, "", Instant.now()));
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    runner.enqueue(() -> run(id));
+                }
+            });
+        } else {
+            runner.enqueue(() -> run(id));
+        }
+        return id;
+    }
+
+    /**
+     * 지금 줄에 있거나 그리는 중인 장 번호. 서버가 다시 뜨면 그리던 것은 끊기고 기록은 「그리는 중」으로
+     * 남으므로, 한 시간이 지난 것은 끝난 것으로 본다(한 장은 1~2분이다).
+     */
+    @Transactional(readOnly = true)
+    public List<Integer> drawingPages(String runId) {
+        return regens.findByRunIdAndStatusInAndCreatedAtAfter(runId,
+                        List.of(RegenStatus.QUEUED.wire(), RegenStatus.RUNNING.wire()),
+                        Instant.now().minus(java.time.Duration.ofHours(1)))
+                .stream().map(PageRegen::getPageNo).distinct().sorted().toList();
+    }
+
     /** 편집실(진행 화면)이 읽는 모양 — 파이썬의 {@code regen_status}와 같다. */
     @Transactional(readOnly = true)
     public Map<String, Object> statusOf(String id) {
@@ -243,6 +283,8 @@ public class RegenService {
            표시를 남기는데, 원래 그림은 그대로이므로 그 표시는 지워야 한다 — 안 지우면 멀쩡한 장이
            「빈 장」으로 보이고 다시 그리기가 공짜가 된다. */
         boolean wasUnsafe = runner.isUnsafePage(runId, no);
+        /* 아직 안 그린 장을 이어 그리는 것인가 — 크레딧이 모자라 남겨 둔 장(startPending). */
+        boolean wasDrawn = pages.pageNumbersOf(runId).contains(no);
 
         try {
             /* **참조할 그림부터 되살린다.** 이어그리기는 직전 장 그림을 붙여
@@ -254,7 +296,7 @@ public class RegenService {
 
             List<String> args = new ArrayList<>(List.of("--run-id", runId, "--page",
                     String.valueOf(no)));
-            if (!Files.isRegularFile(runner.runDir(runId).resolve("pages.json"))) {
+            if (!wasDrawn || !Files.isRegularFile(runner.runDir(runId).resolve("pages.json"))) {
                 args.add("--detail-pages");
             }
             if (one.getNote() != null && !one.getNote().isBlank()) {
@@ -280,6 +322,14 @@ public class RegenService {
                실패해도 나간 값은 나갔다 — 성공 여부를 보기 전에 적는다. 겹치는 줄은
                (작품, 몇 번째)로 걸러진다. */
             after.cost(runId);
+            if (code != 0 && runner.isUnsafePage(runId, no) && !wasDrawn) {
+                /* 이어 그리던 장이 걸렸다 — 원래 그림이 없으니 다른 장처럼 빈 장으로 두고(#626) 편집실에서
+                   장면을 고쳐 무료로 다시 그리게 한다. 값은 돌려준다. */
+                runner.writeBlankPage(runId, no);
+                reupload(runId);
+                fail(id, "이 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 편집실에서 장면 설명을 고쳐 다시 그려 주세요.");
+                return;
+            }
             if (code != 0 && runner.isUnsafePage(runId, no)) {
                 boolean sexual = unsafeSexual(runId, no);
                 if (!wasUnsafe) {
@@ -291,7 +341,8 @@ public class RegenService {
                 return;
             }
             if (code != 0 || !Files.isRegularFile(dest)) {
-                fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
+                fail(id, wasDrawn ? "다시 그리지 못했습니다 — 원래 그림은 그대로입니다"
+                        : "이 장을 그리지 못했습니다 — 크레딧은 돌려드렸어요");
                 return;
             }
             reupload(runId);

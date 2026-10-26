@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
   readSeries, type SeriesInfo, readAllowance, readResult, rememberRecent, renameRun, type Allowance, type RunCard, type RunResult,
@@ -21,6 +21,7 @@ import ResultSurvey from "./ResultSurvey";
 import EpisodeCommunity from "../../ui/community/EpisodeCommunity";
 import AdminModeration from "./AdminModeration";
 import NextEpisodeDialog from "./NextEpisodeDialog";
+import PendingPages from "./PendingPages";
 import "./seriesI18n";
 import "./i18n";
 import "./Result.css";
@@ -95,6 +96,12 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
       .catch((e: Error) => { if (alive) setFailed(e.message || t("작품을 열지 못했습니다")); });
     return () => { alive = false; };
   }, [runId, tick]);
+
+  /* 화면을 비우지 않고 다시 읽는다 — 남은 장을 이어 그리는 동안 그린 장이 붙는 것을 보여 준다.
+     tick 으로 다시 읽으면 화면이 비었다 다시 그려져 읽던 자리를 잃는다. */
+  const refreshResult = useCallback(() => {
+    readResult(runId).then(setData).catch(() => { /* 다음 번에 다시 */ });
+  }, [runId]);
 
   useEffect(() => {
     if (!data) return;
@@ -533,6 +540,10 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   </div>
                 );
               })}
+              {mine && (data.pending_pages?.length ?? 0) > 0 && (
+                /* 크레딧이 모자라 뒤 장을 아직 안 그렸다 — 그린 장 바로 뒤에 잠긴 장으로 이어 붙인다 */
+                <PendingPages runId={runId} data={data} onRefresh={refreshResult} />
+              )}
             </div>
 
             {data.public !== false && !data.preview ? (

@@ -96,4 +96,19 @@ class WebtoonQualityTest {
                 .as("imagegen.py 의 DEFAULT_IMAGE_QUALITY 가 '%s' 여야 합니다", want)
                 .contains("DEFAULT_IMAGE_QUALITY = \"" + want + "\"");
     }
+
+    @Test
+    @DisplayName("한 편 값은 8장까지이고, 넘는 장은 너울 4 · 파도·물결 2 — 화면에도 같은 값이 간다")
+    void 넘는_장_값() {
+        assertThat(WebtoonQuality.BASE_PAGES).isEqualTo(8);
+        assertThat(WebtoonQuality.extraPageCreditsOf("wave")).isEqualTo(2);
+        assertThat(WebtoonQuality.extraPageCreditsOf("surf")).isEqualTo(2);
+        assertThat(WebtoonQuality.extraPageCreditsOf("swell")).isEqualTo(4);
+        assertThat(WebtoonQuality.extraPageCreditsOf("")).isEqualTo(2);
+        for (Map<String, Object> one : WebtoonQuality.choices()) {
+            String key = (String) one.get("key");
+            assertThat(one.get("extra_page_credits")).isEqualTo(WebtoonQuality.extraPageCreditsOf(key));
+            assertThat(one.get("base_pages")).isEqualTo(WebtoonQuality.BASE_PAGES);
+        }
+    }
 }

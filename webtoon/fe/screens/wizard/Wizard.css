@@ -118,6 +118,7 @@
 .wt .wt-wiz-opts > div { display: flex; flex-direction: column; gap: 10px; }
 .wt .wt-wiz-opts h2 { font-size: 28px; }
 .wt .wt-wiz-qs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-wiz-qnote { grid-column: 1 / -1; flex-basis: 100%; margin: 0; font-size: 13px; line-height: 1.55; }
 .wt .wt-wiz-q {
   text-decoration: none; color: var(--ink); display: flex; flex-direction: column; gap: 8px; padding: 22px 24px; border-radius: 16px;
   background: var(--bg); border: 1px solid rgba(15, 51, 63, 0.12); cursor: pointer; font-family: inherit; text-align: left;
