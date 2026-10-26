@@ -272,6 +272,9 @@ def stage_digest(packet_path, out_path, dry_run, lang="ko"):
     out_dir = out_path.parent
     previous = packet.get("previous") or {}
     kept = [e for e in previous.get("entries") or [] if isinstance(e, dict)]
+    # 1화에 붙인 설정집 항목은 번호가 없다. 번호가 없으면 정리가 이미 있는 대상에 새 사실을 덧붙이지 못하고
+    # 같은 대상을 새 항목으로 또 만들었다(2026-10-26, 마법학교 설정집). 여기서 K 번호를 단다.
+    kept = [e if str(e.get("id") or "").strip() else {**e, "id": f"K{i + 1:03d}"} for i, e in enumerate(kept)]
     if not kept:
         kept = world_seed(packet["source_dir"])
     rows = X.progress_rows(previous.get("progress"))

@@ -105,5 +105,17 @@ class LegacyEpisodeTest(unittest.TestCase):
             self.assertIn(head,text); self.assertIn("등급 재측정을 받는다",text)
         self.assertFalse(out.exists())
 
+    def test_carried_entries_without_ids_get_ids_so_digest_adds_to_them(self):
+        # 1화에 붙인 설정집 항목은 번호가 없다 — 번호를 달아야 같은 대상이 새 항목으로 또 생기지 않는다
+        packet=Path(self.temp.name)/"packet.json"; out=Path(self.temp.name)/"digest2"/"result.json"; out.parent.mkdir()
+        book={"entries":[{"title":"사역마 배정식","content":"입학 첫날 사역마가 학생을 고른다.","keys":["사역마"],"always":False}],"progress":[]}
+        packet.write_text(json.dumps({"source_dir":str(self.src),"episode_number":1,"source_scenes":["심사장 장면"],"previous":book},ensure_ascii=False))
+        C.stage_digest(packet,out,True)
+        import lore_extract as X
+        rows,more,_=X.book_entries([{"title":"사역마 배정식","type":"item","text":"사역마는 기다리다 지치기도 한다."}],
+                                   [{**book["entries"][0],"id":"K001"}])
+        self.assertEqual(rows,[]); self.assertIn("K001",more)
+        self.assertIn("[이미 있는 설정]\n- 사역마 배정식",(out.parent/"lore_book_prompt.txt").read_text())
+
 
 if __name__=="__main__": unittest.main()
