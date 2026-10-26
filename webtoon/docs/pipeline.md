@@ -143,3 +143,6 @@ OPENROUTER_API_KEY=...        # 서버에는 HAEUN_OPENROUTER_API_KEY
   (OpenAI 의 1024x1536 · 1536x1024 와 같은 모양). 화질(low · medium · high)과 참고 그림은 그대로 넘어간다.
 - 비용은 응답의 `usage.cost`(실제 청구액, USD)를 그대로 남긴다. `cost_basis` 가 `billed` 로 찍힌다.
 - 입력 글 검사(moderation)는 OpenRouter 에 없어서 OpenAI 키(`WEBTOON_API_KEY`)로 그대로 한다.
+- **환경별 지금 설정(2026-10-26~):** 로컬(루트 `.env`)과 dev(박스 `.env`)는 `openrouter`, staging·운영은 `openai`.
+  dev 는 `docker-compose.yml` 의 `environment:` 에 `OPENROUTER_API_KEY` · `GEMINI_API_KEY` 통로가 있다.
+  되돌리려면 `NH_PROVIDER=openai` 로 바꾸고 app 을 다시 띄운다(돌고 있는 작업이 없을 때).
