@@ -755,6 +755,8 @@ export interface CharacterCard {
   fate: string[];
   /** 하네스 그림체 이름(romance_fantasy …). 1화를 같은 그림체로 그릴 때 그대로 보낸다. */
   style: string;
+  /** 사용자가 카드를 고쳤나. 고쳤으면 웹툰 만들기에 고친 값만 들어간다. */
+  edited?: boolean;
 }
 
 export interface Character {
@@ -773,6 +775,8 @@ export interface Character {
   /** 관리자가 열 때만 온다(#428) — 사람이 넣은 이름·세계관 그대로(#329). 안 넣었으면 빈 문자열. */
   inputs?: { name: string; world: string };
   card?: CharacterCard;
+  /** 카드 캐릭터에만 온다 — 사람이 적은 설정 글 그대로. description 은 이것이 비면 카드 칸을 이어 붙인 글이다. */
+  own_description?: string;
   /** 내 카드에만 온다(#332) — 공유 링크로 남이 몇 명 봤고, 무료 횟수를 몇 번 돌려받았나. */
   share_visits?: number;
   share_bonus?: number;
@@ -845,6 +849,29 @@ export function renameCharacter(id: string, name: string, description: string) {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, description }),
+  });
+}
+
+/** AI 캐릭터 카드 고치기 — 이름·설정 글과 카드 칸을 한 번에. 빈 값·빈 목록은 그 칸을 지운다. */
+export interface CardEdit {
+  name: string;
+  description: string;
+  world: string;
+  world_label: string;
+  genre: string;
+  species: string;
+  role: string;
+  role_tier: string;
+  twist: string;
+  fate: string[];
+  dialogue: { who: string; text: string }[];
+}
+
+export function editCharacterCard(id: string, body: CardEdit) {
+  return call<Character>(`/characters/${encodeURIComponent(id)}/card`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 }
 
