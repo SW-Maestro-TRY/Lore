@@ -169,15 +169,10 @@ export default function GalleryHome({
             </h2>
           </div>
           <div className="wt-gallery-consistency">
-            {/* 시트 그림 한 장을 통째로 보여 주고, 그 위에 시트 머리줄 · 구역 이름 · 색 코드를 얹는다.
+            {/* 시트 그림 한 장을 통째로 보여 주고, 그 위에 구역 이름 · 색 코드를 얹는다.
                 전에는 그림을 키워 왼쪽 위 전신만 잘라 보여서 시트가 아니라 인물 그림처럼 보였다.
                 구역 자리(%)는 sheet.png(1536x1024)의 칸 배치를 잰 값이다. */}
             <figure className="wt-gallery-sheet">
-              <figcaption className="wt-sheet-head">
-                <span>CHARACTER SHEET</span>
-                <b>{t("로젤")}</b>
-                <small>{t("로맨스 판타지")} · {t("가면을 쓰고 온 옛 약혼자")}</small>
-              </figcaption>
               <div className="wt-sheet-board">
                 <img src={asset("masked-fiance/sheet.png")} alt={t("로젤 캐릭터 시트")} />
                 <span className="wt-sheet-tag" style={{ left: "1%", top: "1.5%" }}>{t("전신 · 다섯 방향")}</span>

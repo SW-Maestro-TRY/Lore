@@ -146,23 +146,6 @@
   background: #fff;
   color: #1d2430;
 }
-/* 시트 머리줄 — 실제 설정화 표지처럼 영문 머리말 · 이름 · 작품 */
-.wt .wt-gallery-home .wt-sheet-head {
-  /* 이 화면의 figcaption 기본(그림 위 검은 꼬리표)을 되돌린다 */
-  position: static;
-  background: none;
-  color: inherit;
-  font-size: inherit;
-  border-radius: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 14px 18px 12px;
-  border-bottom: 1px solid #e7e2ea;
-}
-.wt .wt-sheet-head span { font-size: 11px; font-weight: 800; letter-spacing: 0.16em; color: #56345e; }
-.wt .wt-sheet-head b { font-size: 18px; letter-spacing: -0.02em; }
-.wt .wt-sheet-head small { margin-left: auto; font-size: 12px; color: #7a7383; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wt .wt-sheet-board { position: relative; }
 .wt .wt-sheet-board img { display: block; width: 100%; height: auto; }
 .wt .wt-sheet-tag {
@@ -476,11 +459,7 @@
     grid-template-columns: 1fr;
     gap: 10px;
   }
-  /* 폰 — 시트 머리줄은 한 줄, 작품 이름은 빼고, 색 코드는 칸보다 길어서 숨긴다(색 칸은 그림에 남는다) */
-  .wt .wt-gallery-home .wt-sheet-head { gap: 8px; padding: 10px 12px 9px; }
-  .wt .wt-sheet-head span { font-size: 9px; letter-spacing: 0.12em; white-space: nowrap; }
-  .wt .wt-sheet-head b { font-size: 15px; }
-  .wt .wt-sheet-head small { display: none; }
+  /* 폰 — 이름표는 작게, 색 코드는 칸보다 길어서 숨긴다(색 칸은 그림에 남는다) */
   .wt .wt-sheet-tag { padding: 2px 5px; font-size: 9px; border-radius: 3px; }
   .wt .wt-sheet-hex { display: none; }
   .wt .wt-gallery-storyboard { grid-template-columns: 1fr; gap: 14px; }
