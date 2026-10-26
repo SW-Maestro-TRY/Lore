@@ -495,6 +495,8 @@ export interface RunCard {
   public?: boolean;
   /** 찜 수(#247). 서버가 카드마다 붙인다. */
   likes?: number;
+  /** 본 사람 수 — 둘러보기 목록에만 온다(조회순 정렬). 연재는 회차를 더한 값. */
+  views?: number;
   /** 내가 찜했나. 찜 목록(/my/likes)에서만 서버가 붙이고, 둘러보기는 likedAmong 으로 화면이 채운다. */
   liked?: boolean;
   /** 관리자 처리(#638) — 내 목록 · 휴지통에서만 온다. */

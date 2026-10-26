@@ -69,6 +69,10 @@ public class RunService {
     public void setOverlays(OverlayStore overlays) { this.overlays = overlays; }
     @org.springframework.beans.factory.annotation.Autowired
     public void setSeries(com.lore.webtoon.series.SeriesChapterRepository series) { this.series=series; }
+    private RunViews views;
+    /* 둘러보기 조회순(2026-10-26). 검사에서 손으로 만들 때는 없어도 된다(조회수 0). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setViews(RunViews views) { this.views = views; }
     private String rootJobOf(WebtoonJob job) {
         if (job == null || series == null) return job == null ? null : job.getPublicId();
         return series.findById(job.getPublicId()).map(com.lore.webtoon.series.SeriesChapter::rootJob)
@@ -194,7 +198,24 @@ public class RunService {
                 out.add(card);
             }
         }
+        putViews(out);
         return out;
+    }
+
+    /** 조회수 — 연재 카드는 실린 회차를 본 수를 더한다. 1화 카드는 묶음 사이에 같이 쓰므로 새 지도로 바꿔 싣는다. */
+    private void putViews(List<Map<String, Object>> cards) {
+        Map<String, Long> seenBy = views == null ? Map.of() : views.all();
+        for (int i = 0; i < cards.size(); i++) {
+            Map<String, Object> card = new LinkedHashMap<>(cards.get(i));
+            java.util.Collection<?> runIds = card.get("episode_run_ids") instanceof Map<?, ?> m && !m.isEmpty()
+                    ? m.values() : List.of(card.get("run_id"));
+            long n = 0;
+            for (Object id : runIds) {
+                n += seenBy.getOrDefault(String.valueOf(id), 0L);
+            }
+            card.put("views", n);
+            cards.set(i, card);
+        }
     }
 
     /**

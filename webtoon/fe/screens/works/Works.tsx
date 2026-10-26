@@ -30,6 +30,9 @@ import "./WorksFinal.css";
  *
  * 찾기·칩(찜)·그림체 칸·장르 칸은 전부 화면에서 거른다(#248). 목록이 작아서 서버에
  * 묻는 것보다 받은 것을 거르는 편이 빠르고, 검색어는 서버에 남지 않는다. */
+type SortKey = "views" | "likes" | "newest" | "oldest";
+const SORTS: [SortKey, string][] = [["views", "조회순"], ["likes", "좋아요순"], ["newest", "최신순"], ["oldest", "오래된순"]];
+
 export default function Works({ go, authenticated }: { go: Go; authenticated: boolean }) {
   const t = useT();
   const [runs, setRuns] = useState<RunCard[] | null>(null);
@@ -72,11 +75,12 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   /* 칩: 전체 · 내 작품 · 찜. 그 옆에 그림체 칸 · 장르 칸 — 셋은 겹쳐 걸린다.
      전에는 장르·그림체도 칩으로 늘어놨는데, 장르가 작품마다 모델이 적은 글이라
      작품 수만큼 칩이 생기고 영어도 섞였다. 장르는 genreBucket 으로 묶는다.
-     정렬: 최신순 ↔ 오래된순 (run_id 가 시각으로 시작한다). */
+     정렬: 기본은 조회순(2026-10-26), 좋아요순 · 최신순 · 오래된순도 고른다. 같으면 최신 것이 앞
+     (run_id 가 시각으로 시작한다). */
   const [filter, setFilter] = useState<"all" | "mine" | "liked">("all");
   const [style, setStyle] = useState("");
   const [genre, setGenre] = useState("");
-  const [newest, setNewest] = useState(true);
+  const [sort, setSort] = useState<SortKey>("views");
   const [query, setQuery] = useState("");
 
   /* 칩과 검색어까지 건 목록 — 두 칸은 여기서 서로를 건다. */
@@ -127,8 +131,15 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     let list = base;
     if (style) list = list.filter((r) => r.style_label === style);
     if (genre) list = list.filter((r) => genreBucket(r.genre) === genre);
-    return [...list].sort((a, b) => (newest ? b.run_id.localeCompare(a.run_id) : a.run_id.localeCompare(b.run_id)));
-  }, [base, style, genre, newest]);
+    const latest = (a: RunCard, b: RunCard) => b.run_id.localeCompare(a.run_id);
+    const by: Record<SortKey, (a: RunCard, b: RunCard) => number> = {
+      views: (a, b) => (b.views || 0) - (a.views || 0) || latest(a, b),
+      likes: (a, b) => (b.likes || 0) - (a.likes || 0) || latest(a, b),
+      newest: latest,
+      oldest: (a, b) => a.run_id.localeCompare(b.run_id),
+    };
+    return [...list].sort(by[sort]);
+  }, [base, style, genre, sort]);
 
   /* 검색은 결과 수만 남긴다 — 무엇을 쳤는지는 서버에 보내지 않는다(#413). */
   useEffect(() => {
@@ -156,10 +167,13 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
       {chip("mine", t("내 작품"))}
       {/* 좋아요한 작품 — 로그인 전에도 칸은 보인다(2026-10-25). 누르면 로그인 안내가 나온다. */}
       {chip("liked", t("좋아요"))}
-      <button type="button" className="chip wt-works-sort" onClick={() => setNewest((v) => !v)}
-              aria-label={newest ? t("최신순 — 누르면 오래된순") : t("오래된순 — 누르면 최신순")}>
-        {newest ? t("최신순") : t("오래된순")} <IconChevronDown size={14} />
-      </button>
+      <label className="chip wt-works-sort">
+        <select value={sort} aria-label={t("정렬")}
+                onChange={(e) => { const v = e.target.value as SortKey; track("works_filter", { filter: "sort", target: v }); setSort(v); }}>
+          {SORTS.map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}
+        </select>
+        <IconChevronDown size={14} />
+      </label>
     </div>
   );
 
