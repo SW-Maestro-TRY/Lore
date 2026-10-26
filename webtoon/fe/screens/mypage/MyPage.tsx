@@ -673,7 +673,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                   <b>{c.name}</b>
                 </button>
               ))}
-              <button type="button" className="wt-my-char-new" onClick={() => go("try")}>
+              <button type="button" className="wt-my-char-new" onClick={() => go("character-new")}>
                 <b>+</b>{t("만들기")}
               </button>
             </div>
@@ -726,7 +726,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 <h2>{t("내 캐릭터")} <span className="dim wt-my-count">{chars.length}</span></h2>
               </div>
               <div className="wt-my-headacts">
-                <button type="button" className="btn btn-p" onClick={() => go("try")}>{t("새 캐릭터 만들기")}</button>
+                <button type="button" className="btn btn-p" onClick={() => go("character-new")}>{t("새 캐릭터 만들기")}</button>
               </div>
             </div>
             {chars.length === 0 ? (
