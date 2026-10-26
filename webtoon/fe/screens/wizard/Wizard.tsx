@@ -433,7 +433,12 @@ export default function Wizard({
       </div>
     </div>
   );
-  const available = presetChar && ![...mine,...builtins].some(c=>c.id===presetChar.id) ? [presetChar,...(mine.length?mine:builtins)] : mine.length?mine:builtins;
+  /* 내 캐릭터가 있으면 줄에는 내 것만 — 예시 캐릭터는 「새 캐릭터 만들기」 화면의 「예시 캐릭터」 단추에서 고른다.
+     줄에는 따로 칸을 두지 않는다(2026-10-27, 줄이 어수선하다는 피드백). 거기서 고른 예시 캐릭터는 줄 맨 앞에 붙여 골라진 게 보이게 한다. */
+  const shown = mine.length?mine:builtins;
+  const pickedBuiltin = form.characterId && !shown.some(c=>c.id===form.characterId) ? builtins.find(c=>c.id===form.characterId) : undefined;
+  const presetExtra = presetChar && !shown.some(c=>c.id===presetChar.id) && presetChar.id!==pickedBuiltin?.id ? presetChar : undefined;
+  const available = [pickedBuiltin,presetExtra,...shown].filter((c):c is Character=>!!c);
   const next=()=>{track("story_input",{genre:form.genre||"",edited:genreIsCustom,name_len:form.story.length,mode:"quick"});void goStep(2);};
   return <div className="wt-wiz wt-wiz-final">
     {legacyOpen&&<Dialog wide title={t("이전 캐릭터 저장")} busy={legacyBusy} onClose={()=>setLegacyOpen(false)}><CharacterForm initialDraft={{name:form.name,description:form.character,image:form.photos[0]||""}} authenticated={authenticated} onBusyChange={setLegacyBusy} onClose={()=>setLegacyOpen(false)} onSaved={c=>{setChars(cs=>[c,...(cs||[])]);pickChar(c);setLegacyOpen(false);}}/></Dialog>}
