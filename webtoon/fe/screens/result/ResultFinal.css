@@ -600,3 +600,23 @@
 .wt .wt-result-suggest .wt-strip-title { font-size: 20px; }
 .wt .wt-result-suggest .wt-strip-name { font-size: 14px; }
 @media (max-width: 767px) { .wt .wt-result-suggest .wt-strip-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .wt .wt-result-suggest .wt-strip-name { font-size: 12.5px; } }
+
+/* 만들기 칸 표지 — 넓은 칸에 맞춰 위쪽만 자르던 것을 표지 비율(2:3) 그대로 세워 넣는다(2026-10-26).
+   칸 높이는 글 쪽이 정하는 그대로이고, 표지는 그 안에 책 표지처럼 여백을 두고 선다. */
+.wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.wt .wt-reader-create > img {
+  width: auto;
+  height: 248px;
+  min-height: 0;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  object-position: 50% 0;
+  margin: 26px 30px 26px 0;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+@media (max-width: 767px) {
+  .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) auto; }
+  .wt .wt-reader-create > img { height: 176px; margin: 20px 16px 20px 0; }
+}
