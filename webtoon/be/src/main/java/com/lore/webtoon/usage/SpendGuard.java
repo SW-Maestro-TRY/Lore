@@ -47,6 +47,23 @@ public class SpendGuard {
         this.clock = clock;
     }
 
+    /** 운영 알림(#831). 상한에 걸리면 사용자가 막힌 것이라 운영자가 알아야 한다. 없으면 알리지 않는다. */
+    private com.lore.webtoon.ops.OpsAlert opsAlert;
+
+    @Autowired(required = false)
+    void setOpsAlert(com.lore.webtoon.ops.OpsAlert opsAlert) {
+        this.opsAlert = opsAlert;
+    }
+
+    private void alertBlocked(String what, long now, long cap) {
+        if (opsAlert != null) {
+            opsAlert.send(com.lore.webtoon.ops.OpsAlert.Level.WARN, "spend-cap:" + what,
+                    "하루 " + what + " 상한에 걸려 만들기가 막혔어요",
+                    "오늘 " + now + " / 상한 " + cap + " (예약 포함). 올리려면 Parameter Store lore_webtoon_spend_daily_"
+                            + ("편수".equals(what) ? "runs" : "krw") + " → 배포나 재시작");
+        }
+    }
+
     /** 오늘 자정부터 지금까지. */
     private Instant startOfToday() {
         return LocalDate.now(clock).atStartOfDay(ZONE).toInstant();
@@ -90,6 +107,7 @@ public class SpendGuard {
         if (dailyRuns > 0 && runs >= dailyRuns) {
             log.warn("일일 편수 상한에 걸렸습니다 ({}/{}편 · 예약 {}편)",
                     runs, dailyRuns, reserved.runs());
+            alertBlocked("편수", runs, dailyRuns);
             return "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.";
         }
 
@@ -97,6 +115,7 @@ public class SpendGuard {
         if (dailyKrw > 0 && krw >= dailyKrw) {
             log.warn("일일 금액 상한에 걸렸습니다 ({}/{}원 · 예약 {}원)",
                     krw, dailyKrw, reserved.krw());
+            alertBlocked("금액", krw, dailyKrw);
             return "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.";
         }
         return null;
@@ -116,6 +135,7 @@ public class SpendGuard {
         long krw = usage.krwBetween(from, Instant.now(clock));
         if (dailyKrw > 0 && krw >= dailyKrw) {
             log.warn("일일 금액 상한에 걸렸습니다 — 캐릭터 ({}/{}원)", krw, dailyKrw);
+            alertBlocked("금액", krw, dailyKrw);
             return "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.";
         }
         return null;

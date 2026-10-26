@@ -347,7 +347,7 @@ public class SeriesService {
         var book = new LinkedHashMap<String,Object>();
         book.put("name", stories.chosenOf(source.getRunId()).map(s -> s.displayTitle()).filter(t -> !t.isBlank()).orElse("연재") + " 설정집");
         book.put("source", "series");
-        book.put("fixed_settings", d.fixedSettings.length() > 8000 ? d.fixedSettings.substring(0, 8000) : d.fixedSettings);
+        book.put("fixed_settings", d.fixedSettings);
         book.put("progress_state", "");
         book.put("entries", kept.get("entries"));
         book.put("progress", kept.get("progress"));
