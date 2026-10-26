@@ -1189,6 +1189,13 @@ public class JobService {
            코드가 지어낸 기본값이 아니라 그 캐릭터의 것이다(2026-10-26). */
         String character = form.character();
         if ((character == null || character.isBlank()) && picked != null) character = picked.settingsText();
+        /* 사용자가 카드를 고친 캐릭터는 저장된 값이 원본이다. 화면이 들고 있던 설정 글은 고치기 전에 받아 둔
+           것일 수 있어서(초안 · 다른 탭), 그걸 그대로 쓰면 지운 AI 내용이 다시 들어간다. */
+        if (picked != null && !picked.isBuiltin() && picked.isCardEdited()
+                && picked.getSource() != com.lore.webtoon.character.CharacterSource.UPLOAD
+                && picked.getSource() != com.lore.webtoon.character.CharacterSource.REPLACED_UPLOAD) {
+            character = picked.settingsText();
+        }
         doc.put("character", blank(character));
         Map<String, String> fields = new LinkedHashMap<>();
         if (form.fields() != null) {
