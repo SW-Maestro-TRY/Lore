@@ -3,6 +3,17 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  /* ---- 장면 확인 — 기본 장 수를 넘는 장 ---- */
+  "기본 {base}장을 넘는 {m}장은 한 장에 {per}크레딧이에요.": {
+    en: "The {m} pages beyond the included {base} cost {per} credits each.",
+    ja: "基本の{base}ページを超える{m}ページは、1ページ{per}クレジットです。",
+    zh: "超过默认 {base} 页的 {m} 页，每页 {per} 积分。",
+  },
+  "크레딧이 모자라면 앞 {base}장까지 먼저 그리고, 나머지는 완성본에서 이어 그릴 수 있어요.": {
+    en: "If you run short on credits, we'll draw the first {base} pages now and you can continue the rest from the finished episode.",
+    ja: "クレジットが足りない場合は最初の{base}ページまで先に描き、残りは完成ページから続けて描けます。",
+    zh: "积分不够时会先画前 {base} 页，剩下的可以在成品页接着画。",
+  },
   /* ---- 빵부스러기 · 공통 ---- */
   "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
   "이야기 · 장르": { en: "Story · Genre", ja: "ストーリー · ジャンル", zh: "故事 · 题材" },
@@ -16,10 +27,10 @@ const dict: Dict = {
   "크게 보기": { en: "View larger", ja: "拡大表示", zh: "放大查看" },
 
   /* ---- 왼쪽 줄 단계 ---- */
-  "1화": { en: "Episode 1", ja: "第1話", zh: "第 1 话" },
-  "1화를 확인해 주세요": { en: "Check episode 1", ja: "第1話を確認してください", zh: "请确认第 1 话" },
-  "1화 다시 만들기": { en: "Rewrite episode 1", ja: "第1話を作り直す", zh: "重新生成第 1 话" },
-  "바라는 점을 적고 1화 다시 만들기": { en: "Add a note and rewrite episode 1", ja: "要望を書いて第1話を作り直す", zh: "写下要求后重新生成第 1 话" },
+  "{ep}화": { en: "Episode {ep}", ja: "第{ep}話", zh: "第 {ep} 话" },
+  "{ep}화를 확인해 주세요": { en: "Check episode {ep}", ja: "第{ep}話を確認してください", zh: "请确认第 {ep} 话" },
+  "{ep}화 다시 만들기": { en: "Rewrite episode {ep}", ja: "第{ep}話を作り直す", zh: "重新生成第 {ep} 话" },
+  "바라는 점을 적고 {ep}화 다시 만들기": { en: "Add a note and rewrite episode {ep}", ja: "要望を書いて第{ep}話を作り直す", zh: "写下要求后重新生成第 {ep} 话" },
   "생김새": { en: "Looks", ja: "見た目", zh: "外貌" },
   "성격": { en: "Personality", ja: "性格", zh: "性格" },
   "말투": { en: "Voice", ja: "話し方", zh: "说话方式" },
@@ -39,14 +50,20 @@ const dict: Dict = {
   "지금 판이 아니에요": { en: "This isn't the current version", ja: "現在の版ではありません", zh: "这不是当前版本" },
   "이 판으로 되돌리기": { en: "Restore this version", ja: "この版に戻す", zh: "恢复为此版本" },
   "되돌리지 못했어요": { en: "Couldn't restore", ja: "戻せませんでした", zh: "未能恢复" },
+  "{label} -{n} 크레딧": { en: "{label} −{n} credit", ja: "{label} −{n}クレジット", zh: "{label} −{n} 积分" },
+  "새로 만들기": { en: "Start over", ja: "最初から作る", zh: "重新制作" },
+  "이어서 만들기": { en: "Continue", ja: "続きから作る", zh: "继续制作" },
+  "백그라운드에서 작업 중이라 나갔다 들어와도 작업이 이어져요.": { en: "This runs in the background, so you can leave and come back — it keeps going.", ja: "バックグラウンドで作業中なので、離れて戻ってきても続きます。", zh: "在后台进行中，离开后再回来也会继续。" },
+  "시트 뽑기": { en: "Draw sheet", ja: "シートを作る", zh: "生成设定图" },
+  "{label} · 무료": { en: "{label} · free", ja: "{label} · 無料", zh: "{label} · 免费" },
   "다시 뽑기 · 1크레딧": { en: "Redraw · 1 credit", ja: "引き直す · 1クレジット", zh: "重抽 · 1 积分" },
   "다시 뽑기 · 무료": { en: "Redraw · free", ja: "引き直す · 無料", zh: "重抽 · 免费" },
-  "1화를 다시 만들면 장면도 새 1화로 다시 나눠요.": { en: "Rewriting episode 1 also re-splits the scenes.", ja: "第1話を作り直すと場面も分け直します。", zh: "重新生成第 1 话后，场景也会重新划分。" },
+  "{ep}화를 다시 만들면 장면도 새 {ep}화로 다시 나눠요.": { en: "Rewriting episode {ep} also re-splits the scenes.", ja: "第{ep}話を作り直すと場面も分け直します。", zh: "重新生成第 {ep} 话后，场景也会重新划分。" },
   "바라는 점을 적어 주세요": { en: "Tell us what you want", ja: "希望を書いてください", zh: "请写下你的要求" },
-  "1화 다시 만들기 · 1크레딧": { en: "Rewrite episode 1 · 1 credit", ja: "第1話を作り直す · 1クレジット", zh: "重新生成第 1 话 · 1 积分" },
-  "1화 다시 만들기 · 무료": { en: "Rewrite episode 1 · free", ja: "第1話を作り直す · 無料", zh: "重新生成第 1 话 · 免费" },
-  "1화 생성하기": { en: "Writing episode 1", ja: "第1話を作る", zh: "生成第 1 话" },
-  "1화 이야기와 인물을 씁니다": { en: "Writes the episode-1 story and characters", ja: "第1話のストーリーと登場人物を書きます", zh: "编写第 1 话的故事和人物" },
+  "{ep}화 다시 만들기 · 1크레딧": { en: "Rewrite episode {ep} · 1 credit", ja: "第{ep}話を作り直す · 1クレジット", zh: "重新生成第 {ep} 话 · 1 积分" },
+  "{ep}화 다시 만들기 · 무료": { en: "Rewrite episode {ep} · free", ja: "第{ep}話を作り直す · 無料", zh: "重新生成第 {ep} 话 · 免费" },
+  "{ep}화 생성하기": { en: "Writing episode {ep}", ja: "第{ep}話を作る", zh: "生成第 {ep} 话" },
+  "{ep}화 이야기와 인물을 씁니다": { en: "Writes the episode-{ep} story and characters", ja: "第{ep}話のストーリーと登場人物を書きます", zh: "编写第 {ep} 话的故事和人物" },
   "캐릭터 그리기": { en: "Drawing the character", ja: "キャラクターを描く", zh: "绘制角色" },
   "앞·옆·뒤 모습과 표정을 한 장에": { en: "Front, side, back and expressions on one sheet", ja: "正面・横・後ろ姿と表情を一枚に", zh: "正面、侧面、背面与表情画在一张上" },
   "회차 짜기": { en: "Planning the episode", ja: "話の構成", zh: "编排本话" },
@@ -143,7 +160,7 @@ const dict: Dict = {
   "내 이야기 · {title}": { en: "My story · {title}", ja: "私のストーリー · {title}", zh: "我的故事 · {title}" },
   "이미 그리는 중이라 바꿀 수 없어요.": { en: "Already drawing, so it can't be changed.", ja: "すでに描いているため変えられません。", zh: "已经在绘制，无法更改。" },
   "이야기를 확인해 주세요": { en: "Check the story", ja: "ストーリーを確認してください", zh: "请确认故事" },
-  "AI가 적은 내용을 1화 이야기로 다듬었어요.": { en: "AI shaped what you wrote into an episode-1 story.", ja: "AIが書いた内容を第1話のストーリーにまとめました。", zh: "AI 把你写的内容整理成了第 1 话的故事。" },
+  "AI가 적은 내용을 {ep}화 이야기로 다듬었어요.": { en: "AI shaped what you wrote into an episode-{ep} story.", ja: "AIが書いた内容を第{ep}話のストーリーにまとめました。", zh: "AI 把你写的内容整理成了第 {ep} 话的故事。" },
   "원하는 내용이 있다면 자유롭게 수정해 주세요.": { en: "Feel free to edit anything you want.", ja: "望む内容があれば自由に直してください。", zh: "如有想要的内容，请随意修改。" },
   "이대로 장면 나누기": { en: "Split into scenes as is", ja: "このまま場面に分ける", zh: "就这样划分场景" },
   "이야기 다시 만들기": { en: "Remake the story", ja: "ストーリーを作り直す", zh: "重新生成故事" },

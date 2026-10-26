@@ -1,0 +1,296 @@
+/* 글씨체(2026-10-24) — 화면은 LINE Seed KR, 읽는 글(장면·이야기·인물 설명)은 마루부리.
+ * 기본 고딕(Noto Sans KR)이 AI 화면처럼 보인다는 피드백. 공용 헤더는 .wt 밖이라 그대로다. */
+@font-face { font-family: "LINE Seed KR"; src: url("./assets/fonts/LINESeedKR-Regular.woff2") format("woff2"); font-weight: 100 549; font-display: swap; }
+@font-face { font-family: "LINE Seed KR"; src: url("./assets/fonts/LINESeedKR-Bold.woff2") format("woff2"); font-weight: 550 900; font-display: swap; }
+@font-face { font-family: "MaruBuri"; src: url("./assets/fonts/MaruBuri-Regular.woff2") format("woff2"); font-weight: 100 499; font-display: swap; }
+@font-face { font-family: "MaruBuri"; src: url("./assets/fonts/MaruBuri-SemiBold.woff2") format("woff2"); font-weight: 500 649; font-display: swap; }
+@font-face { font-family: "MaruBuri"; src: url("./assets/fonts/MaruBuri-Bold.woff2") format("woff2"); font-weight: 650 900; font-display: swap; }
+
+/* Final gallery palette. Scoped to the webtoon body; SiteHeader stays untouched. */
+.wt {
+  --font-ui: "LINE Seed KR", var(--font-noto-sans-kr, "Noto Sans KR"), system-ui, sans-serif;
+  --font-read: "MaruBuri", "LINE Seed KR", serif;
+  font-family: var(--font-ui);
+  --ink: #f3f2ef;
+  --sea: #e6a393;
+  --sea-deep: #efb6a7;
+  --water: #1b2939;
+  --water-light: #111e2d;
+  --paper: #0a1320;
+  --bg: #101c2a;
+  --bg-2: #142333;
+  --muted: #a5b1c0;
+  --dim: #8997a9;
+  --line: #ffffff12;
+  --line-strong: #ffffff26;
+  --gold: #d2b27c;
+  zoom: 1;
+  min-height: calc(100dvh - var(--lore-header-h, 64px));
+  color-scheme: dark;
+  font-size: 14px;
+}
+.wt .wt-wrap {
+  max-width: 1160px;
+}
+.wt .btn {
+  border-radius: 11px;
+  font-size: 14px;
+  height: 46px;
+  letter-spacing: -0.02em;
+}
+.wt .btn-p {
+  background: #eceae5;
+  color: #101925;
+}
+.wt .btn-p:hover:not(:disabled) {
+  background: #fff;
+  color: #101925;
+}
+.wt .btn-w {
+  background: #ffffff0f;
+  border: 1px solid #ffffff4d;
+  color: var(--ink);
+}
+.wt .btn-w:hover:not(:disabled) {
+  background: var(--water-light);
+  color: var(--ink);
+  border-color: #ffffff55;
+}
+.wt .btn-sm {
+  height: 36px;
+  font-size: 12px;
+  padding: 0 14px;
+}
+.wt .btn-ghost {
+  font-size: 13px;
+}
+/* 언어 고르기 — 기본 .tag 가 흰 바탕에 밝은 글자라 남색 위에서 글자가 안 보였다 */
+.wt .tag { background: transparent; border-color: #ffffff40; color: var(--muted); }
+.wt .tag.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+/* 회차 표시(1화 …)와 켜고 끄는 스위치 — 기본 스타일이 흰 바탕·흰 손잡이라 남색 위에서 안 보였다 */
+.wt .ep { background: transparent; border-color: #ffffff40; color: var(--ink); }
+.wt .ep:hover { border-color: #ffffff80; }
+.wt .ep.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.wt .sw { background: var(--sea); }
+.wt .sw i { background: var(--paper); }
+.wt .sw.off { background: #ffffff26; }
+.wt .sw.off i { background: var(--muted); }
+.wt .field {
+  background: var(--water-light);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.wt .field:focus {
+  border-color: var(--sea);
+  outline: 2px solid #e6a39324;
+  outline-offset: 1px;
+}
+.wt .field::placeholder {
+  color: #738296;
+}
+.wt .card,
+.wt .ccard,
+.wt .wt-dialog-box {
+  background: var(--bg);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.wt .wt-dialog-box {
+  border: 1px solid var(--line-strong);
+  max-height: 90dvh;
+  overflow: auto;
+}
+.wt .wt-dialog-box h2 {
+  font-size: 22px;
+  margin-bottom: 24px;
+}
+.wt .chip {
+  color: var(--ink);
+  background: var(--water-light);
+  border-color: var(--line-strong);
+}
+.wt .chip.on {
+  background: var(--water);
+  border-color: var(--sea);
+}
+.wt .mfoot {
+  background: #0a1320ed;
+  border-color: var(--line-strong);
+  backdrop-filter: blur(12px);
+}
+.wt .wt-wiz-style,
+.wt .wt-wiz-q,
+.wt .wt-wiz-mode,
+.wt .wt-wiz-sum {
+  background: var(--water-light);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.wt .wt-wiz-style.on,
+.wt .wt-wiz-q.on,
+.wt .wt-wiz-mode.on {
+  background: #e6a39310;
+  border-color: var(--sea);
+}
+.wt .wt-wiz-q i {
+  background: var(--water);
+  color: var(--sea);
+}
+.wt .wt-wiz-sum {
+  padding: 22px;
+  border-radius: 14px;
+}
+.wt .wt-wiz-check {
+  background: var(--sea);
+  color: #111a26;
+}
+.wt .wt-wiz-agree input {
+  accent-color: var(--sea);
+}
+.wt .wt-wiz-terms {
+  color: var(--muted);
+}
+.wt .wt-wiz-block {
+  background: #d77e6a15;
+  color: #f0b1a2;
+}
+.wt .err {
+  color: #f0a79c;
+}
+.wt .ok {
+  color: #8bc9b2;
+}
+.wt .wt-lore-panel {
+  background: var(--bg);
+}
+.wt :focus-visible {
+  outline: 2px solid var(--sea);
+  outline-offset: 3px;
+}
+.wt .wt-prog-dir,
+.wt .wt-prog-scene,
+.wt .wt-prog-card,
+.wt .wt-prog-story,
+.wt .wt-prog-mine,
+.wt .wt-prog-notify,
+.wt .wt-prog-minetab {
+  background: var(--bg);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.wt .wt-prog-scene .row .tools button[aria-label],
+.wt .wt-prog-cast .row .tools button {
+  background: var(--water-light);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.wt .wt-prog-step .no {
+  background: var(--water-light);
+  color: var(--dim);
+}
+.wt .wt-prog-step.cur .no {
+  background: var(--sea);
+  color: #101925;
+}
+.wt .wt-prog-step.done .no {
+  background: #83c8b520;
+  color: #9dd2c0;
+}
+.wt .wt-prog-step.viewing {
+  background: var(--water-light);
+}
+.wt .wt-prog-slot {
+  background: var(--water-light);
+  color: var(--muted);
+  border-color: var(--line-strong);
+}
+.wt .wt-prog-minetab .ic {
+  background: var(--water-light);
+  color: var(--muted);
+}
+.wt .wt-prog-bar {
+  background: var(--water);
+}
+.wt .wt-prog-bar i {
+  background: var(--sea);
+}
+@media (max-width: 767px) {
+  .wt .wt-page {
+    padding: 24px 20px 90px;
+  }
+  .wt .wt-dialog-box {
+    width: calc(100vw - 32px);
+    padding: 24px;
+  }
+  .wt .btn {
+    white-space: normal;
+  }
+  .wt .wt-wiz-final .wt-page {
+    padding-bottom: 36px;
+  }
+}
+
+.wt .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.wt .icon-btn {
+  background: var(--water-light);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.wt .mtop { background: var(--paper); border-color: var(--line-strong); color: var(--ink); }
+.wt .skeleton { background: linear-gradient(90deg,var(--water-light) 25%,var(--water) 50%,var(--water-light) 75%); background-size: 200% 100%; }
+@media (prefers-reduced-motion: reduce) { .wt .skeleton { animation: none; } }
+
+/* 공용 헤더 — 웹툰 탭에서만 남색으로(2026-10-24). 흰 반투명 헤더가 남색 본문 위에서 떠 보였다.
+ * common/ 은 건드리지 않고, 웹툰 본문(.wt)이 있는 화면에서 헤더가 쓰는 색 변수만 바꾼다.
+ * ① 본문과 같은 남색(기본) · ② 한 단계 밝은 남색(html[data-wt-header="lift"]) — 고르면 하나만 남긴다. */
+body:has(.wt) header[class*="SiteHeader_header"] {
+  --header-bg: #0a1320f2;
+  --text: #f3f2ef;
+  --text-muted: #a5b1c0;
+  --border: #ffffff14;
+  --border-strong: #ffffff33;
+  --surface-hover: #ffffff12;
+  --surface-2: #ffffff1c;
+  --card: #101c2a;
+  color-scheme: dark;
+}
+html[data-wt-header="lift"] body:has(.wt) header[class*="SiteHeader_header"] {
+  --header-bg: #142233f2;
+  --border: #ffffff1f;
+}
+
+/* ── 어두운 테마에서 흰 바탕·흰 글자를 직접 박은 규칙 정리(2026-10-25) ──────────
+   옛 밝은 테마 CSS 는 바탕을 #fff, 글자를 #fff 로 직접 적은 곳이 있다. 어두운 테마는
+   --ink 를 밝은 색으로 바꾸므로 「흰 바탕 + 밝은 글자」나 「밝은 바탕 + 흰 글자」가 된다.
+   여기 없는 것은 각 화면의 *Final.css 가 이미 덮어쓰고 있다. */
+:root .wt .pill,
+:root .wt .tile,
+:root .wt .toast,
+:root .wt .wt-my-draftchip.wait,
+:root .wt .wt-landing-step-no,
+:root .wt .wt-landing-step-btn,
+:root .wt .wt-dash-state.is-private,
+:root .wt .wt-survey-opts button.on { background: var(--ink); color: var(--paper); }
+:root .wt .opt,
+:root .wt .wt-survey-opts button,
+:root .wt .wt-lore-catalog button,
+:root .wt .wt-dash-state,
+:root .wt .wt-landing-step-chips span,
+:root .wt .wt-landing-need { background: var(--water-light); color: var(--ink); }
+/* 밝은 그림·말풍선 위의 글은 일부러 흰 판이라 글자를 짙게 둔다 */
+:root .wt .wt-landing-bubble,
+:root .wt .wt-landing-scenebox { color: #17202c; }

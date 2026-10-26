@@ -14,7 +14,7 @@
 셋 다 **셀 수 있는 것**만 본다.
 
 - 칸이 하나인가 (만화 페이지처럼 나뉘지 않았는가)
-- 말풍선·나레이션 상자·효과음이 없는가
+- 말풍선이 없는가 (나레이션 상자·효과음·그림 속 화면 글자는 괜찮다 — 2026-10-26)
 - 제목이 적힌 글자 그대로 들어가 있는가
 
 모델에게는 판정을 안 묻는다 — 개수와 보이는 글자만 받고, 통과인지는
@@ -76,7 +76,7 @@ def _norm(s: str) -> str:
 def judge(facts: dict, title: str) -> list[dict]:
     """센 값 -> 지적 목록. 비어 있으면 통과다.
 
-    facts : {"panels", "boxes", "title_text"} — 검수 모델이 센 것.
+    facts : {"panels", "bubbles", "title_text"} — 검수 모델이 센 것.
     title : 이 작품의 제목(directions.json 의 고른 방향).
 
     못 센 값(-1)은 지적하지 않는다 — 판정 근거가 없는 것을 불합격으로 두면
@@ -87,10 +87,13 @@ def judge(facts: dict, title: str) -> list[dict]:
     if panels > 1:
         issues.append({"kind": "칸", "what": f"표지가 칸 {panels}개로 나뉜 만화 페이지로 "
                        "그려졌다. 표지는 칸을 나누지 않은 그림 한 장이다."})
-    boxes = _int(facts.get("boxes"))
-    if boxes > 0:
-        issues.append({"kind": "글상자", "what": f"표지에 말풍선·나레이션 상자·효과음이 "
-                       f"{boxes}개 있다. 표지에는 제목 말고 글을 넣지 않는다."})
+    # 표지에서 막는 글은 말풍선뿐이다(2026-10-26). 나레이션 상자 · 효과음 · 그림 속 화면(홀로그램
+    # 창 같은 것)까지 세었더니, 인물 옆에 떠 있는 화면 세 개를 글상자로 세어 멀쩡한 표지를
+    # 다시 그렸다. 누가 말하는 표지만 표지가 아니다.
+    bubbles = _int(facts.get("bubbles"))
+    if bubbles > 0:
+        issues.append({"kind": "말풍선", "what": f"표지에 말풍선이 {bubbles}개 있다. "
+                       "표지에는 말풍선을 넣지 않는다."})
     want = _norm(title)
     got = _norm(_text(facts.get("title_text")))
     if want and not got:
@@ -106,7 +109,7 @@ def parse(text: str, title: str) -> dict:
     obj = story.extract_json(text)
     if not isinstance(obj, dict):
         raise story.ParseFailure("표지 검수 결과가 JSON 객체가 아닙니다.")
-    facts = {"panels": _int(obj.get("panels")), "boxes": _int(obj.get("boxes")),
+    facts = {"panels": _int(obj.get("panels")), "bubbles": _int(obj.get("bubbles")),
              "title_text": _text(obj.get("title_text")), "what": _text(obj.get("what"))}
     issues = judge(facts, title)
     return {"verdict": "재생성" if issues else "통과", **facts, "issues": issues}
@@ -207,8 +210,8 @@ def review_cover(run_dir: Path, title: str, *, dry_run: bool = False,
 
     (dest / f"page01.review{suffix}.json").write_text(
         json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
-    log(f"  [표지 검수] {review['verdict']} · 칸 {review['panels']} · 글상자 "
-        f"{review['boxes']} · 제목 「{review['title_text']}」")
+    log(f"  [표지 검수] {review['verdict']} · 칸 {review['panels']} · 말풍선 "
+        f"{review['bubbles']} · 제목 「{review['title_text']}」")
     for one in review["issues"]:
         log(f"    - {one['kind']}: {one['what']}")
     return review, meta

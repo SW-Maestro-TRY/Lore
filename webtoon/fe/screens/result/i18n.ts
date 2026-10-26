@@ -2,7 +2,27 @@ import { registerDict, type Dict } from "../../lib/i18n";
 
 /* 완성본 · 공유 — 화면의 한국어 원문이 키다. 서버가 만든 글(제목·오류 본문)은 여기 없다. */
 const dict: Dict = {
+  "{n}화 만들기": { en: "Make episode {n}", ja: "第{n}話を作る", zh: "制作第 {n} 话" },
+  "이어서 다음 화를 만들어요": { en: "Continue with the next episode", ja: "続きの話を作ります", zh: "继续制作下一话" },
   /* ---- Result ---- */
+  /* ---- 크레딧이 모자라 남겨 둔 뒷장면(PendingPages) ---- */
+  "크레딧이 모자라요!": { en: "Not enough credits!", ja: "クレジットが足りません！", zh: "积分不够！" },
+  "매일 무료 크레딧이 채워지면 내일 이어서 그릴 수 있어요.": {
+    en: "Free credits refill every day, so you can continue tomorrow.",
+    ja: "毎日無料クレジットが補充されるので、明日続きを描けます。",
+    zh: "每天会补充免费积分，明天就能接着画。",
+  },
+  "다음 장면": { en: "Next scene", ja: "次の場面", zh: "下一个场景" },
+  "그리는 중이에요 · 1~2분": { en: "Drawing · 1–2 min", ja: "描いています · 1〜2分", zh: "正在绘制 · 1～2 分钟" },
+  "이 장면 열기 · {c}크레딧": { en: "Unlock this scene · {c} credits", ja: "この場面を開く · {c}クレジット", zh: "解锁这个场景 · {c} 积分" },
+  "기본 {base}장 뒤로는 한 장에 {per}크레딧 · 보유 {n}": {
+    en: "After the first {base} pages, each page is {per} credits · You have {n}",
+    ja: "基本{base}ページ以降は1ページ{per}クレジット · 所持 {n}",
+    zh: "前 {base} 页之后每页 {per} 积分 · 持有 {n}",
+  },
+  "여는 중…": { en: "Unlocking…", ja: "開いています…", zh: "正在解锁…" },
+  "여기까지 {n}장 열기 · {c}크레딧": { en: "Unlock {n} pages up to here · {c} credits", ja: "ここまで{n}ページ開く · {c}クレジット", zh: "解锁到这里共 {n} 页 · {c} 积分" },
+  "이어 그리지 못했습니다": { en: "Couldn't continue drawing.", ja: "続きを描けませんでした", zh: "无法继续绘制" },
   "관리자가 이 작품을 비공개 처리했어요. 다른 사람에게는 보이지 않아요.": {
     en: "An admin has made this work private. Other people can't see it.",
     ja: "管理者がこの作品を非公開にしました。ほかの人には表示されません。",
@@ -54,6 +74,42 @@ const dict: Dict = {
   "이 장 내려받기": { en: "Download this page", ja: "このページをダウンロード", zh: "下载这一页" },
   "다음화 보기": { en: "Next episode", ja: "次の話を見る", zh: "看下一话" },
   "맨 위로": { en: "Back to top", ja: "一番上へ", zh: "回到顶部" },
+  "나만의 웹툰 1화 만들어 보기": { en: "Make your own episode 1", ja: "自分だけのウェブトゥーン第1話を作ってみる", zh: "制作属于你的第1话" },
+  "다 봤다면, 당신의 캐릭터로 당신의 1화를 만들어 보세요.": {
+    en: "Finished reading? Make your own episode 1 with your character.",
+    ja: "読み終えたら、あなたのキャラクターであなたの第1話を作ってみましょう。",
+    zh: "看完了吗？用你的角色制作你的第1话吧。",
+  },
+  "댓글 {n}개 — 댓글로 가기": { en: "{n} comments — go to comments", ja: "コメント{n}件 — コメントへ", zh: "{n} 条评论 — 前往评论" },
+  "총 {n}화": { en: "{n} episodes", ja: "全{n}話", zh: "共 {n} 话" },
+  "다음 이야기를 기다려 주세요": { en: "Stay tuned for the next story", ja: "次の物語をお待ちください", zh: "敬请期待下一个故事" },
+  "아직 공개된 다음 회차가 없어요.": { en: "No next episode has been published yet.", ja: "まだ公開された次の話はありません。", zh: "还没有公开的下一话。" },
+  "공유하기": { en: "Share", ja: "シェアする", zh: "分享" },
+  "가입 없이 무료로 시작": { en: "Start free, no sign-up", ja: "登録なしで無料スタート", zh: "无需注册，免费开始" },
+  "이번엔, 당신의 이야기가": { en: "This time, it's your story's", ja: "今度は、あなたの物語が", zh: "这一次，轮到你的故事" },
+  "웹툰이 될 차례.": { en: "turn to become a webtoon.", ja: "ウェブトゥーンになる番。", zh: "变成网络漫画了。" },
+  "상상만 하던 캐릭터와 이야기를": { en: "The characters and stories you've only imagined —", ja: "想像するだけだったキャラクターと物語を", zh: "把只存在于想象中的角色和故事" },
+  "AI로 나만의 웹툰으로 만들어보세요.": { en: "turn them into your own webtoon with AI.", ja: "AIで自分だけのウェブトゥーンにしてみましょう。", zh: "用 AI 做成你自己的网络漫画吧。" },
+  "내 웹툰 만들기": { en: "Make my webtoon", ja: "自分のウェブトゥーンを作る", zh: "制作我的网络漫画" },
+  "내 캐릭터가": { en: "What if your character", ja: "自分のキャラクターが", zh: "如果我的角色" },
+  "웹툰 속 주인공이 된다면?": { en: "became the lead of a webtoon?", ja: "ウェブトゥーンの主人公になったら？", zh: "成为网络漫画的主角？" },
+  "머릿속에만 있던 내 캐릭터,": { en: "The character that lived only in your head —", ja: "頭の中にだけいた自分のキャラクター、", zh: "只存在于脑海中的我的角色，" },
+  "이제 웹툰 속에서 만나보세요.": { en: "meet them in a webtoon now.", ja: "今度はウェブトゥーンの中で会ってみましょう。", zh: "现在就在网络漫画里见面吧。" },
+  "내 캐릭터로 시작하기": { en: "Start with my character", ja: "自分のキャラクターで始める", zh: "用我的角色开始" },
+  "상상만 하던 이야기를": { en: "The story you've only imagined —", ja: "想像するだけだった物語を", zh: "只在想象中的故事" },
+  "이제 눈으로 만나보세요.": { en: "see it with your own eyes.", ja: "今度は目で見てみましょう。", zh: "现在亲眼看看吧。" },
+  "내가 만든 세계와 캐릭터가": { en: "The moment your world and characters", ja: "自分が作った世界とキャラクターが", zh: "我创造的世界和角色" },
+  "하나의 웹툰으로 완성되는 순간.": { en: "come together as one webtoon.", ja: "ひとつのウェブトゥーンとして完成する瞬間。", zh: "完成为一部网络漫画的瞬间。" },
+  "내 이야기 시작하기": { en: "Start my story", ja: "自分の物語を始める", zh: "开始我的故事" },
+  "가입 없이 오늘 {n}편 무료": { en: "{n} free today, no sign-up", ja: "登録なしで今日{n}話無料", zh: "无需注册，今天免费{n}话" },
+  "웹툰 만들기 시작": { en: "Start making a webtoon", ja: "ウェブトゥーンを作り始める", zh: "开始制作网络漫画" },
+  "LORE 에서 만든 웹툰이에요. 내 캐릭터로도 한 편 만들 수 있어요.": {
+    en: "This webtoon was made on LORE. You can make one with your own character too.",
+    ja: "LORE で作ったウェブトゥーンです。自分のキャラクターでも1話作れます。",
+    zh: "这是用 LORE 制作的网络漫画。你也可以用自己的角色制作一话。",
+  },
+  "내 캐릭터로 만들기": { en: "Make with my character", ja: "自分のキャラで作る", zh: "用我的角色制作" },
+  "내 캐릭터로 1화 만들기": { en: "Make episode 1 with my character", ja: "自分のキャラで第1話を作る", zh: "用我的角色制作第1话" },
 
   /* ---- ShareMenu ---- */
   "공유": { en: "Share", ja: "共有", zh: "分享" },
@@ -91,9 +147,6 @@ const dict: Dict = {
   "안 넣음 → 줄거리: {b}": { en: "Not given → plot: {b}", ja: "未入力 → あらすじ: {b}", zh: "未填写 → 剧情: {b}" },
   "사진을 보고 외모를 읽었어요": { en: "Looks were read from your photo", ja: "写真から外見を読み取りました", zh: "外貌来自你的照片" },
   "사진 없음 → 설명으로만": { en: "No photo → from the description only", ja: "写真なし → 説明のみ", zh: "无照片 → 仅凭描述" },
-  "{who}의 다른 편": { en: "Other episodes with {who}", ja: "{who}の他の話", zh: "{who}的其他话" },
-  "EP.{n}": { en: "EP.{n}", ja: "EP.{n}", zh: "EP.{n}" },
-  "만들기": { en: "Create", ja: "作る", zh: "制作" },
   "크게 보기": { en: "View larger", ja: "大きく見る", zh: "放大查看" },
 
   /* ---- 안전 기준에 걸려 빈 장으로 완성(#626) ---- */

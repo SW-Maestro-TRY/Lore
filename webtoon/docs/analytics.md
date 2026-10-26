@@ -32,6 +32,82 @@
 
 같은 사람을 로그인 전후로 잇고 싶으면 `uid` 로 묶습니다(로그인한 뒤의 줄에는 둘 다 있습니다).
 
+### 내부 접속 따로 표시 (관리자 · 멘토 · 지인)
+
+접속자를 셀 때 우리 쪽 접속이 섞이면 실사용자 숫자가 부풀려집니다. 다섯 가지로 나눠 봅니다.
+
+| 구분 | 기준 |
+|---|---|
+| 관리자 | `users.role = 'ADMIN'` 인 계정이 로그인한 적 있는 브라우저(`uid`) |
+| 멘토 | 아래 멘토 목록의 `user_id` 가 로그인한 적 있는 브라우저(`uid`) |
+| 지인 | 아래 지인 목록의 `user_id` 가 로그인한 적 있는 브라우저(`uid`) |
+| 내부 브라우저 | 로그인 없이 쓰는 우리 쪽 브라우저를 아래 목록에 `uid` 로 직접 적은 것 |
+| 외부 | 위 셋이 아닌 나머지 |
+
+- **브라우저(`uid`)로 묶습니다.** 로그인하기 전 줄에는 `user_id` 가 없어서, 계정만 보면 같은
+  브라우저의 로그인 전 방문이 외부로 잡힙니다.
+- 한 브라우저가 여럿에 해당하면 관리자 → 멘토 → 지인 순으로 앞의 것으로 셉니다.
+- 멘토는 SW마에스트로 멘토님 계정입니다. 피드백을 주려고 써 보신 것이라 실사용자에서 빼되, 지인과는 따로 셉니다(멘토 피드백과 지인 반응을 섞지 않으려고).
+- 로그인 없이 랜딩만 보는 우리 쪽 브라우저는 계정으로 가를 수 없어서 `uid` 를 직접 적습니다. `uid` 는 브라우저 저장소(`lore_uid`)에 있는 값이라, 저장소를 지웠거나 다른 기기·브라우저로 보면 새 값이 되므로 알게 될 때마다 더합니다.
+- 멘토 · 지인 명단은 운영 DB 표 `webtoon_internal_user`(`user_id`, `kind` = `MENTOR` · `FRIEND`)에
+  있습니다(#778). 쿼리에 번호를 직접 적지 않고 이 표와 잇습니다. 이름 · 이메일은 표에 없고
+  `users` 와 이어서 봅니다. 아래 목록은 표에 넣은 근거를 남겨 두는 것입니다.
+- 알게 될 때마다 운영에 한 줄 넣고 아래 목록에도 근거를 더합니다. 이메일은 저장소에 적지
+  않습니다.
+
+  ```sh
+  webtoon/tools/examples/db-sql.sh prod "insert into webtoon_internal_user (user_id, kind) values (<번호>, 'MENTOR') on conflict do nothing" --write
+  ```
+
+| 지인 | `user_id` | 근거 |
+|---|---|---|
+| 펭귄 만든이 | 80 | 2026-10-08 13:28 에 펭귄 이야기 후보를 만든 계정. 지인용 링크(`friends/friend/sprint-0928`)로 들어옴 |
+| 향이 만든이 | 81 | 2026-10-08 13:17 에 향이 캐릭터를 만든 계정. 지인용 링크(`friends/friend/sprint-0928`)로 들어옴 |
+
+| 멘토 | `user_id` | 근거 |
+|---|---|---|
+| 멘토님 | 135 | 2026-10-10 22:21 춘식이로 웹툰(작업 31 「조회수는 내가 먹는다」)을 만들고, 그 사용 피드백을 따로 남겨 주심 |
+| 멘토님 | 163 | 2026-10-24 가입. 「슈퍼 세컨드브레인」을 만든 계정 |
+
+| 내부 브라우저 | `uid` | 근거 |
+|---|---|---|
+| 하은 폰(추정) | `umt9v2vvibb0yfz69` | 모바일, 로그인 없이 랜딩만 39줄(10/5 16:29 ~ 10/9 19:59). 하은 님이 본인 것 같다고 함 |
+
+```sql
+-- 날짜만 바꿔 쓴다. 멘토·지인은 webtoon_internal_user 에서 읽고, 내부 브라우저를 더하면 uid 목록에 값을 넣는다.
+with internal as (
+  select e.uid, bool_or(u.role = 'ADMIN') as admin,
+         bool_or(iu.kind = 'MENTOR') as mentor, bool_or(iu.kind = 'FRIEND') as friend
+  from webtoon_event e join users u on u.id = e.user_id
+  left join webtoon_internal_user iu on iu.user_id = u.id
+  where u.role = 'ADMIN' or iu.user_id is not null
+  group by e.uid
+)
+select case when i.admin then '관리자' when i.mentor then '멘토' when i.friend then '지인'
+            when e.uid in ('umt9v2vvibb0yfz69') then '내부 브라우저' else '외부' end as 구분,
+       count(distinct e.uid) as 브라우저
+from webtoon_event e left join internal i on i.uid = e.uid
+where e.name = 'session_start' and e.occurred_at >= timestamptz '2026-10-09 00:00+09'
+group by 1 order by 1;
+```
+
+로그인 세션(`user_refresh_token`)으로 사람을 셀 때도 같은 기준으로 `users.role` 과
+`webtoon_internal_user` 의 `user_id` 를 빼서 봅니다.
+
+다른 쿼리에서 셀 사람을 고를 때는 아래 조건 하나를 `where` 에 붙입니다(`e` = `webtoon_event`).
+로그인 전 줄까지 가르려고 `user_id` 가 아니라 브라우저(`uid`)로 봅니다.
+
+| 보기 | 붙이는 조건 |
+|---|---|
+| 전체 | 없음 |
+| 멘토 · 지인 제외 | `and not exists (select 1 from webtoon_event x join webtoon_internal_user i on i.user_id = x.user_id where x.uid = e.uid or x.user_id = e.user_id)` |
+| 멘토 · 지인만 | `and exists (select 1 from webtoon_event x join webtoon_internal_user i on i.user_id = x.user_id where x.uid = e.uid or x.user_id = e.user_id)` |
+
+`not in` 으로 쓰지 않습니다. `uid` 는 빈 값일 수 있어서, 목록에 빈 값이 하나라도 섞이면 결과가
+0 줄이 됩니다.
+
+아래 「자주 보는 숫자」의 쿼리는 전체 기준입니다. 멘토 · 지인을 빼려면 이 조건을 붙입니다.
+
 ## 무엇을 안 남기나
 
 - **사람이 쓴 글**(이름·설명·메모·이야기·고친 본문·이메일)은 값으로 싣지 않습니다.
@@ -150,7 +226,7 @@
 | 저장 | 없음 | 완성본은 만들면 자동으로 남아서 「저장」 동작이 따로 없습니다. 가장 가까운 것은 찜(`like_toggle`)과 편집실의 이미지로 뽑기(`bake`) |
 | 다운로드 | `download_click`(`webtoon/fe/screens/result/Result.tsx:295,333`) | 있음 — 누른 것까지만 압니다 |
 | 공유 | `share_click`(`webtoon/fe/screens/result/ShareMenu.tsx:44,50`) · `card_share` | 있음 — 누른 것까지만 압니다 |
-| 크레딧 충전 | `charge_open`(`webtoon/fe/screens/mypage/MyPage.tsx:228`) | 일부 — 충전 창을 연 것만. 실제 충전은 결제가 없어 일어나지 않습니다 |
+| 크레딧 충전 | `charge_open` · `charge_submit` | 창을 연 사람과 「결제하기」를 누른 사람·횟수. 실제 결제 완료는 서버 주문 기록(`common/be/.../payment/`)으로 센다 |
 | 결제 | 없음 | PG 전이라 없습니다(#155) |
 
 ## 유입 경로 (UTM) — 광고·홍보 링크 규칙
@@ -200,6 +276,7 @@
 | `job_cancel` | 만들기 중단 | `status`, `count`(그린 장), `page`(전체 장) |
 | `remake_after_fail` | 실패 화면에서 다시 만들기 | `job` |
 | **`next_episode_click`** | 다음화 단추 (아직 준비 중 창이 뜸) | `where`: mine_button(PC 내 작품) · mine_mobile(폰 내 작품) · mine_tile(다른 편 줄의 EP.n 만들기) · other_foot(남의 작품 「다음화 보기」), `mine`, `run`, `ep`, `logged_in` |
+| **`remix_cta_click`** | 남의 작품 완성본에서 만들기로 넘어가는 단추(#669, #750) | `where`: end_card(마지막 장 아래 바다색 영역) · link_bar(UTM 을 달고 바로 들어온 사람에게만 뜨는 제목 아래 줄) · next_note(「다음화 보기」 준비 중 창), `source`(보던 작품 run), `logged_in`, `free_left`(게스트 남은 무료 편수) |
 | `read_end` | 완성본을 끝까지 내림 (작품당 한 번) | `run`, `mine`, `ep`, `page` |
 | `share_click` | 완성본 공유 | `target`: native · menu · kakao · x · line · postype · copy |
 | `download_click` · `download_per_page_open` | 내려받기 | `kind`: episode · page, `page` |
@@ -215,7 +292,8 @@
 | `swap_survey_view` · `swap_survey` | 종이 바뀐 카드(#331)의 설문 팝업이 뜸 · 답함 (다 그려지고 5초 뒤, 카드마다 한 번) | `character`, `result`: confused(당황했어요) · fine(괜찮았어요) |
 | `limit_view` | 하루 몫이 다 됨 | `kind`: character |
 | `regen_start` · `regen_result` · `regen_revert` · `bake` | 편집실 다시 그리기 · 결과 · 판 되돌리기 · 이미지로 뽑기 | `cut`, `count`(태그 수), `has_note`, `status`, `n`(판) |
-| `charge_open` | 마이페이지에서 충전 창을 엶 | `where` |
+| `charge_open` | 충전 창을 엶 | `where`: mypage · credit_short(크레딧 부족 안내) |
+| `charge_submit` | 충전 창의 「N원 결제하기」를 누름. 결제가 아직 안 열렸어도 남는다 — 관리자 개요의 「결제하기를 누른 사람」 | `where`, `pick`(상품 코드), `cost`(원), `count`(크레딧), `ok`(그때 결제가 열려 있었나) |
 | `feedback_view` · `feedback_submit` · `feedback_skip` | 설문이 뜸 · 보냄 · 건너뜀 (#471, [validation.md](validation.md)). 답 자체는 `webtoon_feedback` 표에 있다 | `where`: result · mypage, `run`, `count`(문항 수), `ok`(보상을 받았나) |
 | `feedback_open` | 마이페이지 「피드백 보내기」를 엶 | `where` |
 | `feedback_prompt_view` · `feedback_prompt_click` | 다시 온 사람 안내가 뜸 · 「설문하러 가기」를 누름 | `where`(그때 보던 화면) |

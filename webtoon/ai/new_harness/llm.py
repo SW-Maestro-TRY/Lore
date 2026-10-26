@@ -75,7 +75,7 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "SCENE", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
                "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "COVER_REVIEW", "CAST", "PERSONA",
-               "FULL_REVIEW", "CAST_SHEET")
+               "FULL_REVIEW", "CAST_SHEET", "NARRATION")
 IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE", "CAST_SHEET_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
@@ -117,12 +117,43 @@ def _pick(stage: str, suffix: str, fallbacks: tuple) -> tuple[str, str]:
 #
 # 로컬에서 gemini 로 돌리고 싶으면 .env 에 NH_PROVIDER=gemini 를 적으면 된다 —
 # 설정이 있는 쪽이 언제나 이긴다.
+#
+# 같은 OpenAI 모델을 OpenRouter 를 거쳐 부르려면 NH_PROVIDER=openrouter 와
+# OPENROUTER_API_KEY 를 준다. 글·그림이 함께 넘어가고, 단계별 모델은 아래
+# STAGE_DEFAULT_MODELS 의 openrouter 칸(openai/ 를 붙인 같은 이름)을 쓴다.
 DEFAULT_PROVIDER = "openai"
+
+
+# **검수는 gemini 가 한다(2026-10-26).** 이야기 검수 · 장 검수 · 표지 검수 · 화 전체 검수 넷.
+# 글을 짓는 쪽(OpenAI)과 다른 모델이 읽어야 같은 버릇을 같이 놓치지 않는다는 판단이다.
+#
+# 순서: `<단계>_PROVIDER` > 이 표 > `NH_PROVIDER` · `PROVIDER` > DEFAULT_PROVIDER.
+# 이 표가 전체 설정(NH_PROVIDER)보다 앞이다 — dev 박스는 NH_PROVIDER=openai 를 적어 두고
+# 있어서(infra/dev/env.example) 뒤에 두면 검수가 영영 안 넘어간다.
+#
+# **gemini 키가 없으면 이 표를 건너뛴다.** 서버에 키(HAEUN_GEMINI_API_KEY)를 넣기
+# 전에 배포돼도 검수 단계에서 키 없음으로 만들기 전체가 죽지 않고, 전처럼 돈다.
+STAGE_DEFAULT_PROVIDERS = {"STORY_REVIEW": "gemini", "PAGE_REVIEW": "gemini",
+                           "COVER_REVIEW": "gemini", "FULL_REVIEW": "gemini"}
+
+
+def _has_key(provider: str) -> bool:
+    return bool(env(story.PROVIDERS[provider]["key_var"]))
+
+
+def _stage_default_provider(stage: str) -> str:
+    """이 단계에 코드로 정해 둔 프로바이더. 키가 없으면 빈 값."""
+    name = STAGE_DEFAULT_PROVIDERS.get(stage.upper(), "")
+    return name if name and _has_key(name) else ""
 
 
 def provider_for(stage: str) -> str:
     """이 단계가 쓸 프로바이더. 모르는 이름이면 거기서 멈춘다."""
-    name, where = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
+    name, where = _pick(stage, "PROVIDER", ())
+    if not name:
+        name = _stage_default_provider(stage)
+    if not name:
+        name, where = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
     name = (name or DEFAULT_PROVIDER).lower()
     allowed = IMAGE_PROVIDERS if stage.upper() in IMAGE_STAGES else PROVIDERS
     if name not in allowed:
@@ -164,7 +195,7 @@ def image_default(provider: str) -> str:
 # 올라도 편당 차이는 작다. 8장짜리 화를 22장으로 읽은 적이 있어서 없는 쪽
 # 번호는 fullreview.parse 가 버린다.
 #
-# 표지 검수(COVER_REVIEW)는 칸·글상자를 세고 제목을 옮겨 적기만 하는 일이라
+# 표지 검수(COVER_REVIEW)는 칸·말풍선을 세고 제목을 옮겨 적기만 하는 일이라
 # 기본 모델(gpt-4.1) 그대로 둔다(2026-09-30 결정).
 #
 # **인물(CAST)도 gpt-5.1 이다(#532).** 이야기 후보의 인물이 라벨만 붙은 채
@@ -177,7 +208,11 @@ STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
                         ("CAST", "openai"): "gpt-5.1",
                         ("PERSONA", "openai"): "gpt-5.1",
                         ("SCENE", "openai"): "gpt-5.1",
+                        ("NARRATION", "openai"): "gpt-5.1",
                         ("FULL_REVIEW", "openai"): "gpt-5.1"}
+# OpenRouter 로 부를 때도 같은 모델이다. 이름 앞에 회사 이름만 붙는다.
+STAGE_DEFAULT_MODELS.update({(stage, "openrouter"): f"openai/{name}"
+                             for (stage, _), name in list(STAGE_DEFAULT_MODELS.items())})
 
 
 def model_for(stage: str, provider: str) -> str:
@@ -185,7 +220,11 @@ def model_for(stage: str, provider: str) -> str:
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
         return model or image_default(provider)
-    model, _ = _pick(stage, "MODEL", ("NH_MODEL",))
+    model, where = _pick(stage, "MODEL", ("NH_MODEL",))
+    # 전체 모델 설정(NH_MODEL)은 전체 프로바이더의 모델 이름이다. 검수처럼 코드가 다른
+    # 프로바이더로 돌린 단계에 그 이름을 넘기면 없는 모델이 된다.
+    if where == "NH_MODEL" and provider == _stage_default_provider(stage):
+        model = ""
     return (model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider))
             or story.default_model_for(provider))
 
@@ -270,7 +309,7 @@ STAGE_LABEL = {
     "CAST_SHEET_IMAGE": "조연 시트 그림",
     "PAGE_IMAGE": "페이지 그림",
     "PAGE_REVIEW": "그림 검수 (장마다)",
-    "COVER_REVIEW": "표지 검수 (칸 하나 · 글상자 없음 · 제목 그대로)",
+    "COVER_REVIEW": "표지 검수 (칸 하나 · 말풍선 없음 · 제목 그대로)",
     "FULL_REVIEW": "화 전체 검수 (다 그린 뒤 처음부터 끝까지)",
 }
 
@@ -280,7 +319,11 @@ def plan() -> list[dict]:
     out = []
     for stage in STAGES:
         provider = provider_for(stage)
-        _, pfrom = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
+        _, pfrom = _pick(stage, "PROVIDER", ())
+        if not pfrom and _stage_default_provider(stage):
+            pfrom = "검수는 gemini (llm.py STAGE_DEFAULT_PROVIDERS)"
+        if not pfrom:
+            _, pfrom = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
         _, mfrom = _pick(stage, "MODEL",
                          ("NH_IMAGE_MODEL",) if stage in IMAGE_STAGES else ("NH_MODEL",))
         out.append({

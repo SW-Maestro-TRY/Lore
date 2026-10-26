@@ -54,7 +54,7 @@ public class CreditGate {
 
     @Autowired
     public CreditGate(CreditService credits,
-                      @Value("${lore.credit.cost-per-episode:12}") int cost,
+                      @Value("${lore.credit.cost-per-episode:15}") int cost,
                       @Value("${lore.credit.cost-per-regen:3}") int regenCost) {
         this.credits = credits;
         this.cost = cost;
@@ -69,6 +69,15 @@ public class CreditGate {
     /** 이 사람의 잔액. 로그인 안 했으면 0 — 게스트는 크레딧으로 안 센다. */
     public int balanceOf(Long userId) {
         return userId == null ? 0 : credits.balance(userId);
+    }
+
+    /**
+     * 오늘 몫(가입 · 매일 지급)을 먼저 채우고 본 잔액. 남은 장 이어 그리기처럼 「다음 날 와서 이어 한다」는
+     * 일이 이걸 본다 — 매일 지급은 잔액을 물을 때 채워지므로, 머리 잔액을 아직 안 읽은 채 단추를 누르면
+     * 오늘 몫이 빠진 잔액으로 「모자라요」가 뜬다.
+     */
+    public int balanceToday(Long userId) {
+        return userId == null ? 0 : credits.balanceWithDaily(userId);
     }
 
     /** 지금 로그인한 사람. 안 했으면 {@code null}. */
@@ -92,7 +101,7 @@ public class CreditGate {
     }
 
     /**
-     * 값을 지정해서 묻는다 — 웹툰 한 편(12) · 캐릭터 한 장(2) · 장 다시 그리기(3)는
+     * 값을 지정해서 묻는다 — 웹툰 한 편(파도 15) · 캐릭터 한 장(2) · 장 다시 그리기(3, 너울 4)는
      * 값이 다르다.
      */
     public String whyBlocked(Long userId, int need) {

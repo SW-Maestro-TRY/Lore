@@ -36,6 +36,9 @@ import java.util.Set;
  */
 @Component
 public class WebtoonPurge implements UserDataPurge {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.webtoon.community.CommunityCleanup communityCleanup;
+
 
     private final WebtoonPurgeRepository rows;
     private final RunLikeRepository likes;
@@ -70,6 +73,10 @@ public class WebtoonPurge implements UserDataPurge {
 
         // 2. 작품에 딸린 것.
         int n = 0;
+        if(communityCleanup!=null) {
+            for(String run:runIds) n+=communityCleanup.run(run);
+            n+=communityCleanup.user(userId);
+        }
         if (!runIds.isEmpty()) {
             n += rows.deletePages(runIds);
             n += rows.deleteBakedPages(runIds);
@@ -81,6 +88,11 @@ public class WebtoonPurge implements UserDataPurge {
         }
 
         // 3. 작품·기록·사람에 직접 달린 것.
+        n += rows.deleteLoreExtractions(userId);
+        n += rows.deletePrivateLorebooks(userId);
+        n += rows.deleteLoreQuota(userId);
+        n += rows.deleteSeriesDrafts(userId);
+        n += rows.deleteSeriesChapters(userId);
         n += rows.deleteWorks(userId);
         n += rows.deleteJobs(userId);
         n += rows.deleteCharacters(userId);

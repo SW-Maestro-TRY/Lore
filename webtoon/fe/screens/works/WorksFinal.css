@@ -1,0 +1,167 @@
+/* Browsing keeps the existing search, genre/style facets and owner controls. */
+.wt .wt-works-page {
+  padding-top: 36px;
+  gap: 0;
+}
+.wt .wt-works-head {
+  align-items: center;
+  margin-bottom: 28px;
+}
+.wt .wt-works-title h2 {
+  font-size: 28px;
+  letter-spacing: -0.04em;
+}
+.wt .wt-works-finds {
+  margin: 0;
+  gap: 10px;
+}
+.wt .wt-works-finds .field {
+  height: 44px;
+}
+.wt .wt-works-chips {
+  padding: 18px 0 22px;
+  margin: 0;
+  gap: 8px;
+}
+.wt .wt-works-chips .chip {
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  height: 34px;
+}
+.wt .wt-works-chips .chip.on {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.wt .wt-works-grid {
+  gap: 30px 22px;
+}
+.wt .wt-works-card {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  gap: 11px;
+}
+.wt .wt-works-cover {
+  border-radius: 9px;
+  transition: filter 0.2s;
+}
+.wt .wt-works-cover:hover {
+  filter: brightness(1.08);
+}
+.wt .wt-works-titlerow {
+  align-items: flex-start;
+  gap: 6px;
+}
+.wt .wt-works-titlerow > b {
+  line-height: 1.5;
+  font-size: 15px;
+}
+.wt .wt-works-sub {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.wt .wt-works-eps .ep {
+  color: var(--ink);
+  background: var(--water-light);
+  border-color: var(--line-strong);
+}
+.wt .wt-works-recent {
+  padding-bottom: 30px;
+  margin-top: 0;
+}
+.wt .wt-works-sort {
+  color: var(--muted);
+}
+.wt .wt-works-pub {
+  gap: 8px;
+}
+.wt .wt-works-nocover {
+  background: var(--water-light);
+}
+
+/* 카드 제목은 유지하고, 제목 아래 작품 정보와 찜 수를 읽기 쉽게 한다. */
+.wt .wt-works-card {
+  gap: 5px;
+}
+.wt .wt-works-card .wt-works-sub {
+  font-size: 15px;
+  line-height: 1.5;
+}
+.wt .wt-works-card .wt-like.sm .wt-like-btn {
+  min-height: 30px;
+  height: 30px;
+  padding: 0 9px;
+  font-size: 15px;
+}
+.wt .wt-works-card .wt-like.sm .wt-like-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.wt .wt-works-card .wt-works-eps .ep {
+  min-height: 30px;
+  font-size: 14px;
+}
+
+@media (max-width: 767px) {
+  .wt .wt-works-head {
+    margin-bottom: 22px;
+    align-items: center;
+  }
+  .wt .wt-works-title h2 {
+    font-size: 22px;
+  }
+  .wt .wt-works-create {
+    height: 36px;
+    min-width: 0;
+    font-size: 12px;
+    padding: 0 12px;
+  }
+  .wt .wt-works-finds {
+    gap: 8px;
+  }
+  .wt .wt-works-finds .field {
+    height: 40px;
+  }
+  .wt .wt-works-chips {
+    padding: 14px 0 22px;
+  }
+  .wt .wt-works-grid {
+    gap: 22px 12px;
+  }
+  .wt .wt-works-card {
+    gap: 8px;
+  }
+  .wt .wt-works-titlerow > b {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .wt .wt-works-sub {
+    font-size: 11.5px;
+  }
+  .wt .wt-works-search {
+    grid-column: 1/-1;
+  }
+  .wt .wt-works-card {
+    gap: 4px;
+  }
+  .wt .wt-works-card .wt-works-sub {
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+  .wt .wt-works-card .wt-like.sm .wt-like-btn {
+    min-height: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+  .wt .wt-works-card .wt-like.sm .wt-like-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+  .wt .wt-works-card .wt-works-eps .ep {
+    min-height: 28px;
+    font-size: 13px;
+  }
+}

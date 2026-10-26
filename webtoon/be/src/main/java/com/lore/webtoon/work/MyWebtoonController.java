@@ -47,13 +47,15 @@ public class MyWebtoonController {
     private final NotifySettingService notifySettings;
     private final RunLikeService likes;
     private final RunTrash trash;
+    private final CommentedRunService commented;
 
     public MyWebtoonController(MyWebtoonService service, NotifySettingService notifySettings,
-                               RunLikeService likes, RunTrash trash) {
+                               RunLikeService likes, RunTrash trash, CommentedRunService commented) {
         this.service = service;
         this.notifySettings = notifySettings;
         this.likes = likes;
         this.trash = trash;
+        this.commented = commented;
     }
 
     @Operation(summary = "찜하기", description = """
@@ -75,6 +77,13 @@ public class MyWebtoonController {
     @GetMapping("/likes")
     public ApiResponse<List<Map<String, Object>>> likes(@LoginUser Long userId) {
         return ApiResponse.ok(likes.likedCards(userId));
+    }
+
+    @Operation(summary = "내가 댓글 단 웹툰", description = """
+            최근에 댓글을 단 것부터. 모양은 둘러보기 목록과 같다. 지운·가려진 댓글만 남은 작품은 빠진다.""")
+    @GetMapping("/commented")
+    public ApiResponse<List<Map<String, Object>>> commented(@LoginUser Long userId) {
+        return ApiResponse.ok(commented.commentedCards(userId));
     }
 
     @Operation(summary = "이 목록 중 내가 찜한 것", description = """

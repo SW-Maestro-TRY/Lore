@@ -1,0 +1,78 @@
+/* 관리자 대시보드(#779). 카드 · 단추 · 딱지는 웹툰 탭 것을 그대로 쓰고, 여기는 배치만 정한다. */
+.wt .wt-dash-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wt .wt-dash-links { display: flex; gap: 8px; flex-wrap: wrap; }
+.wt .wt-dash-links .btn-sm { height: 36px; padding: 0 14px; font-size: 13px; }
+
+.wt .wt-dash-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.wt .wt-dash-tab { background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 10px 14px;
+  font: inherit; font-size: 15px; font-weight: 700; color: var(--dim); cursor: pointer; }
+.wt .wt-dash-tab.on { color: var(--ink); border-bottom-color: var(--ink); }
+
+.wt .wt-dash-filters { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wt .wt-dash-seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.wt .wt-dash-seg .tag, .wt .wt-dash-range .tag { cursor: pointer; }
+.wt .wt-dash-range { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wt .wt-dash-range .field { height: 36px; width: 150px; padding: 0 10px; font-size: 14px; }
+.wt .wt-dash-search { display: flex; gap: 6px; }
+.wt .wt-dash-search .field { height: 38px; width: 260px; font-size: 14px; }
+.wt .wt-dash-search .btn-sm { height: 38px; }
+.wt .wt-dash-note { font-size: 13px; margin: 0; }
+
+.wt .wt-dash-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-dash-stat { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-dash-stat > span:first-child { font-size: 13px; }
+.wt .wt-dash-stat b { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.wt .wt-dash-stat-sub { font-size: 12px; }
+
+.wt .wt-dash-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-dash-kpi { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; }
+.wt .wt-dash-kpi b { font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.wt .wt-dash-kpi-base { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wt .wt-dash-kpi-def { font-size: 12px; line-height: 1.5; }
+
+.wt .wt-dash-daily td { font-variant-numeric: tabular-nums; }
+.wt .wt-dash-bar { display: inline-block; width: 120px; height: 8px; margin-right: 10px; border-radius: 4px; background: var(--water-light); vertical-align: middle; overflow: hidden; }
+.wt .wt-dash-bar i { display: block; height: 100%; background: var(--sea); border-radius: 4px; }
+
+.wt .wt-dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+.wt .wt-dash-grid[aria-busy="true"] { opacity: 0.55; }
+.wt .wt-dash-item { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px; text-align: left;
+  font: inherit; color: var(--ink); cursor: pointer; border: 1px solid var(--line); min-width: 0; }
+.wt .wt-dash-item:hover { border-color: var(--ink); }
+.wt .wt-dash-work-img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; object-position: top; border-radius: 8px; background: var(--paper); display: block; }
+.wt .wt-dash-char-img { width: 100%; aspect-ratio: 1; object-fit: cover; object-position: top; border-radius: 8px; background: var(--paper); display: block; }
+.wt .wt-dash-noimg { display: grid; place-items: center; color: var(--dim); font-size: 13px; }
+.wt .wt-dash-item-title { font-size: 14px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-dash-item-sub { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-dash-tags { position: absolute; top: 16px; left: 16px; display: flex; gap: 4px; }
+.wt .wt-dash-item > .wt-dash-state { position: absolute; top: 16px; left: 16px; }
+.wt .wt-dash-state { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(15, 51, 63, 0.18); }
+.wt .wt-dash-state.is-private { background: var(--ink); color: #fff; }
+.wt .wt-dash-state.is-hidden { background: #a1732e; color: #fff; }
+.wt .wt-dash-state.is-removed, .wt .wt-dash-state.is-trash { background: #b23a2e; color: #fff; }
+
+.wt .wt-dash-pager { display: flex; align-items: center; justify-content: center; gap: 12px; }
+
+.wt .wt-dash-char { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: start; }
+.wt .wt-dash-char > img, .wt .wt-dash-char > .wt-dash-noimg { width: 100%; aspect-ratio: 1; object-fit: cover; object-position: top; border-radius: 10px; background: var(--paper); }
+.wt .wt-dash-char dl { margin: 0; display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow: auto; }
+.wt .wt-dash-char dl > div { display: grid; grid-template-columns: 96px 1fr; gap: 10px; font-size: 14px; }
+.wt .wt-dash-char dt { color: var(--muted); font-weight: 600; }
+.wt .wt-dash-char dd { margin: 0; white-space: pre-wrap; word-break: break-word; line-height: 1.55; }
+.wt .wt-dash-dialog-acts { display: flex; justify-content: flex-end; margin-top: 14px; }
+
+@media (max-width: 900px) {
+  .wt .wt-dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wt .wt-dash-kpis { grid-template-columns: 1fr; }
+}
+@media (max-width: 767px) {
+  .wt .wt-dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wt .wt-dash-search, .wt .wt-dash-search .field { width: 100%; }
+  .wt .wt-dash-bar { width: 60px; }
+  .wt .wt-dash-char { grid-template-columns: 1fr; }
+  .wt .wt-dash-char > img, .wt .wt-dash-char > .wt-dash-noimg { max-width: 240px; }
+  .wt .wt-dash-char dl { max-height: none; }
+}
+
+/* 캐릭터 상세는 글이 길어서 확인 창보다 넓게 연다 */
+.wt .wt-dialog-box:has(.wt-dash-char) { width: min(880px, calc(100vw - 32px)); max-width: none; }

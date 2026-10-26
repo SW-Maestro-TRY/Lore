@@ -117,6 +117,27 @@ function post<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+export type WebtoonContactCategory = "WEBTOON" | "ACCOUNT_CREDITS" | "ERROR" | "OTHER";
+
+/** 웹툰 문의를 운영 메일로 보낸다. 답장 주소와 본문은 서버가 길이와 형식을 다시 확인한다. */
+export function sendWebtoonContact(input: {
+  email: string;
+  category: WebtoonContactCategory;
+  message: string;
+  privacyConsent: boolean;
+  files: File[];
+  website?: string;
+}): Promise<{ sent: boolean }> {
+  const body = new FormData();
+  body.append("email", input.email);
+  body.append("category", input.category);
+  body.append("message", input.message);
+  body.append("privacyConsent", String(input.privacyConsent));
+  body.append("website", input.website || "");
+  input.files.forEach((file) => body.append("files", file));
+  return call("/contact", { method: "POST", body });
+}
+
 /* ---- 만들기 전에: 무엇으로 만드나 ----------------------------------------- */
 
 export interface Allowance {
@@ -128,7 +149,7 @@ export interface Allowance {
   free_per_day?: number;
   balance?: number;
   blocked?: string | null;
-  qualities?: { key: string; label: string; credits: number }[];
+  qualities?: { key: string; label: string; credits: number; base_pages?: number; extra_page_credits?: number }[];
   quality_default?: string;
 }
 
@@ -209,6 +230,7 @@ export interface NhDirection {
 
 /** 만들기에서 적은 것(#548). 이야기·제목은 장면 확인 화면의 「이야기 (고치기)」가 고치고, 여기서는 보기만 한다. */
 export interface NhJobInput {
+  lorebook?: LoreBook | null;
   name: string;
   description: string;
   genre: string;
@@ -248,6 +270,11 @@ export interface NhJob {
   sheet_fix_left?: number;
   /** 다 만들었지만 이미지 안전 기준에 걸려 빈 장으로 둔 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 몇 화인가 — 다음 화로 만든 작업이면 2 이상. 없으면 1화 */
+  episode?: number;
+  /** 서버 재시작으로 끊겨 「이어서 만들기」를 할 수 있나, 그때 받는 크레딧(0 이면 무료) */
+  resumable?: boolean;
+  resume_cost?: number;
   /** 보관된 옛 시트 수(#548). 다시 만들 때마다 전 것이 1, 2, … 로 남고 sheetVersionUrl 로 본다. */
   sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
@@ -274,6 +301,7 @@ export interface NhJob {
 }
 
 export interface NhCreateRequest {
+  lorebook?: LoreBook | null;
   name: string;
   character: string;
   photo_note: string;
@@ -330,6 +358,11 @@ export function readJob(id: string, opts?: { watching?: boolean }): Promise<NhJo
 export interface NhActiveCard { id: string; name: string; created_at: string | null; updated_at: string | null }
 export function myActiveJobs(): Promise<{ jobs: NhJob[]; cards?: NhActiveCard[] }> {
   return call<{ jobs: NhJob[]; cards?: NhActiveCard[] }>(`/nh/jobs/mine?uid=${encodeURIComponent(getUid())}`);
+}
+
+/** 서버 재시작으로 끊긴 작업을 멈춘 걸음부터 이어서 만든다 — 그린 장은 다시 안 그린다. */
+export function resumeJob(id: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/resume`, {});
 }
 
 export function decideSheet(id: string, decision: "approve" | "retry", note = "") {
@@ -446,6 +479,8 @@ export interface RunCard {
   title: string;
   genre: string;
   episodes: number[];
+  /** 연재 회차 버튼이 각 회차 완성본으로 이동할 때 쓰는 run_id. */
+  episode_run_ids?: Record<string, string>;
   next_episode?: number;
   cover_episode?: number;
   cover_page?: number;
@@ -514,6 +549,8 @@ export function coverUrl(runId: string, page: number, episode = 1): string {
 }
 
 export interface RunResult {
+  /** 이 회차의 찜 수 */
+  likes?: number;
   run_id: string;
   character: string;
   title: string;
@@ -531,6 +568,15 @@ export interface RunResult {
   inputs?: RunInputs;
   /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 크레딧이 모자라 아직 안 그린 장 번호들 — 한 편 값은 기본 장 수(base_pages)까지다 */
+  pending_pages?: number[];
+  /** 남은 장의 장면 한 줄 — 잠긴 장을 웹툰 흐름 안에서 「다음 장면」으로 보여 준다 */
+  pending_scenes?: { no: number; caption: string }[];
+  /** 기본 장 수를 넘는 장 하나 값(이 작품의 화질 기준) */
+  extra_page_credits?: number;
+  base_pages?: number;
+  /** 남은 장 중 지금 그리는 중인 장 번호 */
+  drawing_pages?: number[];
   /** 관리자 처리(#638) — 주인과 관리자에게만 온다. */
   moderation?: ModerationNote;
   /** 남이 열 수 있나(#638). false 면 공유 링크가 받은 사람에게 404 라 공유 버튼을 감춘다. */
@@ -549,6 +595,24 @@ export interface RunInputs {
 
 export function readResult(runId: string): Promise<RunResult> {
   return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`);
+}
+
+/** 장 하나를 그리는 일의 진행 — 편집실 다시 그리기와 같은 모양이다. */
+export interface PageDrawStatus {
+  id: string;
+  page: number;
+  status: "queued" | "running" | "done" | "error" | "cancelled" | string;
+  error?: string | null;
+}
+
+/** 남겨 둔 장을 잔액이 닿는 데까지 앞에서부터 이어 그린다. 한 장도 못 그리면 402(크레딧이 모자라요). */
+export function continuePages(runId: string, count?: number): Promise<{ started: PageDrawStatus[]; left: number }> {
+  return post(`/runs/${encodeURIComponent(runId)}/continue`, count ? { count } : undefined);
+}
+
+/** 장 하나를 그리는 일이 어디까지 왔나. */
+export function pageDrawStatus(id: string): Promise<PageDrawStatus> {
+  return call<PageDrawStatus>(`/regens/${encodeURIComponent(id)}`);
 }
 
 export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
@@ -592,6 +656,11 @@ export function unlikeRun(runId: string): Promise<LikeResult> {
 /** 내가 찜한 작품. 최근에 찜한 것부터. */
 export function myLikes(): Promise<RunCard[]> {
   return appRequest<RunCard[]>("/api/webtoon/v1/my/likes");
+}
+
+/** 내가 댓글 단 웹툰 — 최근에 단 것부터. 모양은 둘러보기 카드와 같다. */
+export function myCommented(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/commented");
 }
 
 /** 이 목록 중 내가 찜한 작품 번호. 둘러보기 카드에 하트를 칠할 때. */
@@ -678,11 +747,13 @@ export interface CharacterCard {
 }
 
 export interface Character {
+  community_public?: boolean;
+  community_blocked?: boolean;
   id: string;
   name: string;
   description: string;
   art_url: string | null;
-  source: "photo" | "prompt" | "builtin";
+  source: "photo" | "prompt" | "builtin" | "upload" | "replaced_upload";
   status: "drawing" | "ready" | "error";
   error: string | null;
   builtin: boolean;
@@ -751,6 +822,13 @@ export function createCharacter(body: { name: string; description: string; photo
   return post<Character>("/characters", body);
 }
 
+/** 업로드 원본 등록/교체. AI 캐릭터 뽑기와 분리한다. */
+export function saveOriginalCharacter(body: {name:string;description:string;photo_keys:string[]}, id?:string) {
+  return call<Character>(id ? `/characters/${encodeURIComponent(id)}/original` : "/characters/original", {
+    method: id ? "PATCH" : "POST", headers: {"Content-Type":"application/json"}, body:JSON.stringify(body),
+  });
+}
+
 export function renameCharacter(id: string, name: string, description: string) {
   return call<Character>(`/characters/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -759,8 +837,20 @@ export function renameCharacter(id: string, name: string, description: string) {
   });
 }
 
+/** 지우기 — 바로 없애지 않고 휴지통에 넣는다(keep_days 일 보관 뒤 영구 삭제). */
 export function removeCharacter(id: string) {
-  return call<{ ok: boolean }>(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return call<{ ok: boolean; keep_days?: number }>(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export type TrashCharacter = Character & { deleted_at: string; purge_at: string };
+
+/** 캐릭터 휴지통 — 최근에 지운 것부터. */
+export function characterTrash(): Promise<{ keep_days: number; characters: TrashCharacter[] }> {
+  return call("/characters/trash");
+}
+
+export function restoreCharacter(id: string) {
+  return post<{ ok: boolean; restored: boolean }>(`/characters/${encodeURIComponent(id)}/restore`, {});
 }
 
 /* ---- 편집실 설정 ------------------------------------------------------------ */
@@ -830,63 +920,107 @@ export function adminSurveyRows(limit = 200): Promise<SurveyRow[]> {
   return call(`/admin/feedback?limit=${limit}`);
 }
 
-/* ---- 관리자 실시간 집계 — 관리자만 ---------------------------------------- */
+/* ---- 관리자 대시보드(#779) — 관리자만 ---------------------------------------- */
 
-export interface AdminLiveSource {
+/** 누구를 세나 — external(기본)은 관리자 · 멘토 · 지인을 뺀다. */
+export type AdminWho = "external" | "internal" | "all";
+
+export interface AdminKpi {
   key: string;
-  visitors: number;
-  started: number;
-  baked: number;
+  label: string;
+  definition: string;
+  base: number;
+  hit: number;
+  /** 분모가 0이면 null */
+  pct: number | null;
+  note?: string;
 }
 
-export interface AdminLiveRefHost {
-  host: string;
-  visitors: number;
-}
-
-export interface AdminLiveEvent {
-  name: string;
-  uids: number;
-  total: number;
-}
-
-export interface AdminLiveSurvey { positive: number; total: number }
-
-export interface AdminLive {
+export interface AdminOverview {
   from: string;
   to: string;
-  activeMinutes: number;
-  activeUids: number;
-  runningJobs: number;
-  funnel: {
-    landing: number;
-    newSessions: number;
-    returningSessions: number;
-    signedIn: number;
+  who: AdminWho;
+  totals: {
+    visitors: number;
+    signups: number;
     createStarted: number;
-    baked: number;
-    readEnd: number;
-    nextEpisodeClicked: number;
-    kakaoShared: number;
-    downloadClicked: number;
-    createFailed: number;
-    createBlocked: number;
+    /** 충전 창을 연 사람 · 「N원 결제하기」를 누른 사람 · 누른 횟수 */
+    chargeOpen: number;
+    chargeSubmit: number;
+    chargeSubmitClicks: number;
+    jobs: number;
+    jobsDone: number;
+    jobsFailed: number;
+    makersDone: number;
   };
-  revisions: { story: number; sheet: number; scene: number; panel: number };
-  survey: Record<string, AdminLiveSurvey>;
-  sources: AdminLiveSource[];
-  mediums: AdminLiveSource[];
-  campaigns: AdminLiveSource[];
-  refHosts: AdminLiveRefHost[];
-  events: AdminLiveEvent[];
+  kpi: AdminKpi[];
+  daily: { day: string; visitors: number; createStarted: number; jobsDone: number }[];
+  /** 같은 기간 우리 쪽(관리자 · 멘토 · 지인) 방문 사람 수 */
+  internalVisitors: number;
+  /** 지금 줄 서 있거나 돌거나 사람을 기다리는 작업 */
+  runningJobs: number;
 }
 
-export function adminLive(from?: string, to?: string): Promise<AdminLive> {
-  const q = new URLSearchParams();
-  if (from) q.set("from", from);
-  if (to) q.set("to", to);
-  const s = q.toString();
-  return call<AdminLive>(`/admin/live${s ? "?" + s : ""}`);
+export function adminOverview(from: string, to: string, who: AdminWho): Promise<AdminOverview> {
+  const q = new URLSearchParams({ from, to, who });
+  return call<AdminOverview>(`/admin/dash/overview?${q}`);
+}
+
+export interface AdminPage<T> { rows: T[]; total: number; page: number; pageSize: number }
+
+export type AdminWorkState = "public" | "private" | "hidden" | "removed" | "trash";
+
+export interface AdminWorkRow {
+  run_id: string;
+  title: string | null;
+  owner_email: string | null;
+  guest: boolean;
+  state: AdminWorkState;
+  moderation_reason: string | null;
+  created_at: string;
+  pages: number;
+  cover_url: string | null;
+}
+
+export function adminWorkList(filter: string, q: string, page: number): Promise<AdminPage<AdminWorkRow>> {
+  const p = new URLSearchParams({ filter, q, page: String(page) });
+  return call(`/admin/dash/works?${p}`);
+}
+
+export interface AdminCharacterRow {
+  id: string;
+  name: string;
+  owner_email: string | null;
+  guest: boolean;
+  source: string | null;
+  status: string | null;
+  shared: boolean;
+  blocked: boolean;
+  world: string | null;
+  genre: string | null;
+  created_at: string;
+  art_url: string | null;
+  description: string | null;
+}
+
+export interface AdminCharacterDetail extends AdminCharacterRow {
+  error: string | null;
+  species: string | null;
+  role: string | null;
+  twist: string | null;
+  quote: string | null;
+  style: string | null;
+  asked_name: string | null;
+  asked_world: string | null;
+}
+
+export function adminCharacterList(filter: string, q: string, page: number): Promise<AdminPage<AdminCharacterRow>> {
+  const p = new URLSearchParams({ filter, q, page: String(page) });
+  return call(`/admin/dash/characters?${p}`);
+}
+
+export function adminCharacter(id: string): Promise<AdminCharacterDetail> {
+  return call(`/admin/dash/characters/${encodeURIComponent(id)}`);
 }
 
 /* ---- 예시 작품 관리(#614 · #619) — 관리자만 ---------------------------------------- */
@@ -1022,4 +1156,59 @@ export function adminRemovedWorks(): Promise<{ rows: RemovedRow[] }> {
 
 export function adminOwnerCounts(): Promise<{ rows: OwnerCountRow[] }> {
   return call("/admin/works/owners");
+}
+
+
+export interface SeriesChapter {
+  episode: number; run_id: string | null; job_id?: string; status: string; title: string;
+}
+export interface SeriesInfo { episode: number; chapters: SeriesChapter[] }
+/** 앞 화 정리(다음 화 버튼을 누르면 AI 가 앞 화를 읽고 칸을 채운다). SAVED 는 사람이 초안을 저장한 뒤. */
+export interface SeriesDigestState { status: "NONE"|"RUNNING"|"DONE"|"ERROR"|"SAVED"; error?: string }
+export interface SeriesEntry extends LoreEntry { new?: boolean; updated?: boolean; named?: boolean }
+export interface SeriesDraft {
+  episode: number; fixed_settings: string; progress_state: string; story: string; revision: number;
+  entries: SeriesEntry[]; progress: LoreProgress[]; digest: SeriesDigestState;
+  previous_state: string; source_scenes: string[]; source_run: string; title: string;
+  credit_cost: number; balance: number; blocked: string | null;
+}
+export interface SeriesForm {
+  fixed_settings: string; progress_state: string; story: string; revision: number;
+  confirmed: boolean; request_token: string; entries: SeriesEntry[]; progress: LoreProgress[];
+}
+export function readSeries(run: string): Promise<SeriesInfo> {
+  return call(`/series/${encodeURIComponent(run)}`);
+}
+/** 써 두고 아직 만들지 않은 다음 화 초안 — 마이페이지 「만드는 중」. */
+export interface SeriesDraftCard { run: string; episode: number; title: string; story: string }
+export function mySeriesDrafts(): Promise<SeriesDraftCard[]> {
+  return call("/series/drafts");
+}
+export function readSeriesDraft(run: string): Promise<SeriesDraft> {
+  return call(`/series/${encodeURIComponent(run)}/draft`);
+}
+export function saveSeriesDraft(run: string, form: SeriesForm): Promise<{revision: number}> {
+  return post(`/series/${encodeURIComponent(run)}/draft`, {...form, uid: getUid()});
+}
+export function startSeriesDigest(run: string): Promise<SeriesDigestState> {
+  return post(`/series/${encodeURIComponent(run)}/digest`, {});
+}
+export function createNextEpisode(run: string, form: SeriesForm): Promise<{id: string}> {
+  return post(`/series/${encodeURIComponent(run)}/next`, {...form, uid: getUid()});
+}
+
+export interface LoreEntry {id?:string;title:string;content:string;kind:string;keys:string[];always:boolean;enabled:boolean;evidence?:string;}
+export interface LoreBook {library_id?:string;library_owner?:number;books?:LoreBook[];id?:string;name:string;source:string;fixed_settings:string;progress_state:string;entries:LoreEntry[];progress?:LoreProgress[];confirmed:boolean;}
+/** 진행 상태 한 줄. key 가 항목 id 면 그 항목을 「→ 지금:」으로 덮어쓴다(2층 로어북). */
+export interface LoreProgress {key:string;title:string;text:string;}
+export interface LoreCatalog {books:LoreBook[];personal_books?:LoreBook[];extract_limit:number;extract_left:number;}
+export interface LoreExtraction {id:string;status:"RUNNING"|"DONE"|"ERROR";book?:LoreBook;error?:string;}
+export function listLorebooks():Promise<LoreCatalog>{return call("/lorebooks");}
+export function extractLorebook(text:string,language:string):Promise<LoreExtraction>{return post("/lorebooks/extract",{text,language,agree_ip:true});}
+export function readLoreExtraction(id:string):Promise<LoreExtraction>{return call(`/lorebooks/extract/${encodeURIComponent(id)}`);}
+
+/** 저장된 사용자 설정집은 현재 로그인 계정만 읽고 쓴다. 공개/공유 인자를 받지 않는다. */
+export function savePrivateLorebook(book:LoreBook):Promise<LoreBook>{
+ const path=book.library_id?`/lorebooks/mine/${encodeURIComponent(book.library_id)}`:"/lorebooks/mine";
+ return call(path,{method:book.library_id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(book)});
 }

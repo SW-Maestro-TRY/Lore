@@ -37,6 +37,24 @@ public class OverlayStore {
     private static final int TEXT_MAX = 400;
 
     private final OverlayRepository overlays;
+
+    /**
+     * 여백 단(0~3) → 지면 폭의 몇 배. 편집실이 보여 주는 눈금과 같아야 한다
+     * ({@code editorCore.ts gapScale}, 하네스 {@code strip.GAP_RATIO} 기본값).
+     * 한쪽만 바꾸면 편집실에서 본 여백과 공개본·내려받은 파일의 여백이 달라진다.
+     */
+    static final double[] GAP_RATIO = {0, 0.07, 0.26, 0.62};
+
+    /**
+     * 표지(1장) 뒤 기본 여백 단(2026-10-25). 표지와 첫 장면이 붙어 있으면 표지가 첫 컷처럼
+     * 읽힌다. 편집실에서 그 자리를 고쳤으면(붙임 포함) 고친 값이 이긴다.
+     */
+    static final int COVER_GAP_STEP = 1;
+
+    /** 이 단의 여백이 폭의 몇 배인가. 모르는 단은 0(붙임). */
+    public static double gapRatio(int step) {
+        return step >= 0 && step < GAP_RATIO.length ? GAP_RATIO[step] : 0;
+    }
     private final ObjectMapper mapper = new ObjectMapper();
 
     public OverlayStore(OverlayRepository overlays) {
@@ -49,6 +67,30 @@ public class OverlayStore {
         return overlays.findByRunIdAndEpisode(runId, episode)
                 .map(one -> parse(one.getDataJson()))
                 .orElseGet(this::empty);
+    }
+
+    /**
+     * 사람이 편집실에서 고친 여백. {장 번호: 단(0~3)} — 안 고친 장은 없다.
+     *
+     * 저장만 되고 아무도 안 읽어서, 편집실에서 벌려 둔 여백이 공개본과
+     * 내려받은 파일에서 사라져 있었다.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Integer, Integer> gapsOf(String runId, int episode) {
+        java.util.Map<Integer, Integer> out = new java.util.HashMap<>();
+        JsonNode gaps = read(runId, episode).path("gaps");
+        gaps.fieldNames().forEachRemaining(key -> {
+            try {
+                int g = gaps.path(key).asInt(-1);
+                if (g >= 0 && g < GAP_RATIO.length) {
+                    out.put(Integer.parseInt(key), g);
+                }
+            } catch (NumberFormatException ignored) {
+                // 장 번호가 아닌 칸은 건너뛴다
+            }
+        });
+        out.putIfAbsent(1, COVER_GAP_STEP);
+        return out;
     }
 
     /**

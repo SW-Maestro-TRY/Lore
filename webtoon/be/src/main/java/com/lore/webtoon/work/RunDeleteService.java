@@ -36,6 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class RunDeleteService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.webtoon.community.CommunityCleanup communityCleanup;
+
 
     private static final Logger log = LoggerFactory.getLogger(RunDeleteService.class);
 
@@ -112,7 +115,7 @@ public class RunDeleteService {
         }
 
         // 2. 딸린 것 → 작품 → 만들기 기록. 외래키가 없어서 순서를 여기서 지킨다.
-        int n = 0;
+        int n = communityCleanup==null ? 0 : communityCleanup.run(runId);
         n += rows.deletePages(runId);
         n += rows.deleteBakedPages(runId);
         n += rows.deleteOverlays(runId);
@@ -122,6 +125,8 @@ public class RunDeleteService {
         // 비용 기록(webtoon_usage)은 남긴다. "오늘 얼마 나갔나" 와 상한은 지운 작품의
         // 값까지 더해야 맞고, 작품 id 만 남지 사람을 가리키는 값은 없다. 계정을 지울
         // 때는 WebtoonPurge 가 따로 지운다.
+        n += rows.deleteSeriesDraft(runId);
+        n += rows.deleteSeriesChapter(runId);
         n += rows.deleteWorks(runId);
         n += rows.deleteJobs(runId);
 

@@ -21,6 +21,7 @@
 import { louArt } from "./louArt";
 import { sceneParts, sceneShort } from "./sceneText";
 import { track } from "./track";
+import { readAllowance } from "./api";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
@@ -279,6 +280,7 @@ export function mountEditor(
   }
 
   function render() {
+    if (askCtx) closeAsk();
     const ep = data.episode || EPISODE;
     $("#edTitle").textContent = data.title;
     // 한 컬럼 머리에 들어가야 해서 한 줄로 줄인다 — 한 장에 몇 컷인지는 그림을
@@ -470,6 +472,7 @@ export function mountEditor(
   }
 
   function setActive(no) {
+    if (askCtx && askCtx.no !== no) closeAsk();
     activeScene = no;
     $$(".scene").forEach(el => el.classList.toggle("is-active", +el.dataset.scene === no));
     $("#activeSceneLabel").textContent = tr("{n}번째 장", { n: no });
@@ -489,9 +492,36 @@ export function mountEditor(
    * 번 멈춰서 항목·말·글자 여부를 받고, 취소할 길을 준다. 다 비워 둔 채 눌러도
    * 된다 — 그러면 같은 조건으로 한 번 더 그린다. */
 
+  // The engine owns this form just as it owns scene cards. Move it under the
+  // selected page's button, keeping React's own nodes in their original parents.
+  const regenForm = document.createElement("div");
+  regenForm.id = "regenAsk";
+  regenForm.className = "wt-ed-regen-inline";
+  regenForm.hidden = true;
+  regenForm.innerHTML = `
+    <div class="wt-ed-regen-box" role="region" aria-labelledby="regenAskTitle">
+      <div class="wt-ed-regen-head">
+        <h2 id="regenAskTitle"></h2>
+        <button type="button" class="wt-ed-regen-close" id="regenAskCancel" aria-label="${esc(tr("닫기"))}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
+      <p class="ask-sub" id="regenAskSub" hidden>${esc(tr("샘플이라 실제로 그리지는 않습니다 — 화면만 흉내 냅니다."))}</p>
+      <p class="ask-unsafe" id="regenAskUnsafe" hidden>${esc(tr("안전 기준에 걸린 장면입니다. 장면 설명을 수정한 뒤 무료로 다시 그릴 수 있습니다."))}</p>
+      <div class="wt-ed-sceneedit" id="regenAskSceneEdit" hidden>
+        <label class="wt-ed-askfield"><span>${esc(tr("장소와 상황"))}</span><textarea id="regenAskWhere" rows="2" maxlength="600" class="field"></textarea></label>
+        <label class="wt-ed-askfield"><span>${esc(tr("벌어지는 일"))}</span><textarea id="regenAskWhat" rows="3" maxlength="900" class="field"></textarea></label>
+      </div>
+      <div class="ask-scene" id="regenAskScene" hidden></div>
+      <p class="fb-lead">${esc(tr("수정할 부분"))}</p><div class="fb-tags" id="regenAskTags"></div>
+      <label class="wt-ed-askfield"><span>${esc(tr("수정 요청"))}</span><textarea id="regenAskText" rows="3" maxlength="500" class="field"></textarea></label>
+      <label class="check-line"><input type="checkbox" id="regenAskTextless"><span>${esc(tr("말풍선 없이 그림만"))}</span></label>
+      <div class="ask-actions"><button type="button" class="btn btn-primary" id="regenAskGo">${esc(tr("다시 그리기"))}</button></div>
+    </div>`;
+  $("#regenAskHome").append(regenForm);
+
   let askCtx = null;                 // { no, btn, cost }
 
   let unsafePages = new Set();   // 안전 기준에 걸려 빈 장으로 둔 장 번호(#626)
+  let runRegenCost = null;       // 이 작품의 한 장 다시 그리기 값(#787). 못 읽으면 계정 기본값을 쓴다
   let sceneTags = [];                // /api/config 의 feedback_tags.scene
 
   async function loadSceneTags() {
@@ -529,13 +559,28 @@ export function mountEditor(
     return String(c.description || "").trim();
   }
 
-  function askRegen(no, btn, cost) {
+  async function askRegen(no, btn, cost) {
+    if (askCtx?.no === no && !$("#regenAsk").hidden) { closeAsk(); return; }
+    if (RUN_ID && !unsafePages.has(no)) {
+      btn.disabled = true;
+      try {
+        if (runRegenCost != null) cost = runRegenCost;
+        else {
+          const allowance = await readAllowance();
+          if (typeof allowance.regen_cost !== "number") throw new Error(tr("크레딧 정보를 불러오지 못했습니다. 다시 눌러 주세요."));
+          cost = allowance.regen_cost;
+        }
+      } catch (err) { if (btn.isConnected) toast(err.message); return; }
+      finally { btn.disabled = false; }
+      if (!btn.isConnected) return;
+    }
+    if (askCtx) closeAsk();
     askCtx = { no, btn, cost };
+    btn.closest(".scene-tools").insertAdjacentElement("afterend", regenForm);
     const st = sc(no);
-    $("#regenAskTitle").textContent = tr("{n}번째 장 다시 그리기", { n: no });
-    $("#regenAskSub").textContent = RUN_ID
-      ? tr("이 장만 새로 굽습니다. 지금 그림은 지난 판으로 남아서 언제든 되돌릴 수 있습니다.")
-      : tr("샘플이라 실제로 그리지는 않습니다 — 화면만 흉내 냅니다.");
+    $("#regenAskTitle").textContent = tr("{n}쪽 다시 그리기", { n: no });
+    $("#regenAskSub").hidden = !!RUN_ID;
+    $("#regenAskGo").textContent = `${tr("다시 그리기")} · ${unsafePages.has(no) ? tr("무료") : `−${cost} ${tr("크레딧")}`}`;
     paintAskTags();
     // 장 밑에 이미 적어 둔 것이 있으면 그대로 실어 준다. 여기서 고쳐도 되고,
     // 다 지우고 눌러도 된다.
@@ -568,11 +613,15 @@ export function mountEditor(
     $("#regenAskText").value = "";
     $("#regenAskTextless").checked = !!st.noBubble;
     $("#regenAsk").hidden = false;
-    $("#regenAskText").focus();
+    btn.setAttribute("aria-expanded", "true");
+    btn.setAttribute("aria-controls", "regenAsk");
+    regenForm.scrollIntoView({behavior:"smooth",block:"start"});
   }
 
   function closeAsk() {
-    $("#regenAsk").hidden = true;
+    askCtx?.btn?.setAttribute("aria-expanded", "false");
+    regenForm.hidden = true;
+    $("#regenAskHome")?.append(regenForm);
     askCtx = null;
   }
 
@@ -1598,7 +1647,12 @@ export function mountEditor(
         /* 안전 기준에 걸려 빈 장으로 둔 장(#626) — 그 장은 안내를 얹고 다시 그리기가 무료다. */
         try {
           const r = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/result`);
-          if (r.ok) unsafePages = new Set(((await r.json()).unsafe_pages || []).map(Number));
+          if (r.ok) {
+            const found = await r.json();
+            unsafePages = new Set((found.unsafe_pages || []).map(Number));
+            /* 한 장 다시 그리기 값은 작품의 화질을 따른다(#787) — 너울은 4. */
+            if (typeof found.regen_cost === "number") runRegenCost = found.regen_cost;
+          }
         } catch { /* 못 읽어도 편집은 된다 */ }
       }
     } catch (err) {
@@ -1712,11 +1766,13 @@ export function mountEditor(
 
     // 다시 그리기 확인 창. 바깥을 눌러도 닫힌다 — 실수로 연 것을 닫는 데
     // 단추를 찾아야 하면 그 자체가 성가시다.
-    $("#regenAskCancel").addEventListener("click", closeAsk);
-    $("#regenAskGo").addEventListener("click", confirmAsk);
-    $("#regenAsk").addEventListener("click", e => {
-      if (e.target.id === "regenAsk") closeAsk();
+    $("#regenAskCancel").addEventListener("click", () => {
+      const trigger = askCtx?.btn;
+      closeAsk();
+      trigger?.focus({ preventScroll: true });
     });
+    $("#regenAskGo").addEventListener("click", confirmAsk);
+
 
     on(document, "keydown", e => {
       // 확인 창이 열려 있으면 그 창부터 받는다 — 뒤에 있는 선택 해제나 삭제가
@@ -1738,6 +1794,7 @@ export function mountEditor(
   })();
 
   return () => {
+    regenForm.remove();
     for (const [t, type, fn] of bound) t.removeEventListener(type, fn);
     clearTimeout(pushT);
   };

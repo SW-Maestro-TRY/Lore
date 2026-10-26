@@ -36,14 +36,15 @@ Parameter Store). 모델은 전부 OpenAI 다.
 | 1 | `PERSONA` | 사용자가 적은 캐릭터로 주인공 카드 | **gpt-5.1** | 1 |
 | 1 | `CAST` | 주인공과 얽힐 인물 넷 | **gpt-5.1** | 1 (PERSONA 와 동시) |
 | 2 | `STORY` | 이야기 후보 4개 | **gpt-5.1** | 1 · 다시 짓기마다 1 |
-| 3 | `STORY_REVIEW` | 이야기 후보 검수 — 고르기 전에 후보마다 어디서 걸리는지 | gpt-4.1 | 1 |
+| 3 | `STORY_REVIEW` | 이야기 후보 검수 — 고르기 전에 후보마다 어디서 걸리는지 | **gemini-3.5-flash**¹ | 1 |
 | 1~2 와 동시 | `SHEET` | 캐릭터 시트 사양(사진 · 설명 → 글) | gpt-4.1 | 1 · 다시 그리기마다 1 |
 | 1~2 와 동시 | `SHEET_IMAGE` | 캐릭터 시트 그림 | **gpt-image-2** | 1 (안전 기준에 걸리면 스스로 1번 더) |
 | 4 | `SCENE` | 고른 이야기를 장면으로 나누기(장면마다 장소 · 벌어지는 일 · 나레이션) | **gpt-5.1** | 1 |
+| 4 | `NARRATION` | 장면 글을 받은 뒤 나레이션 상자만 따로 — 그림·말풍선으로 안 되는 사실만, 빈 장은 「없음」으로 그림 단계에 (#758) | **gpt-5.1** | 1 (끄기 `NH_NARRATION_STAGE=0`, 내 내용으로 길은 안 돎) |
 | 5 | `PAGE_IMAGE` | 장 그림(표지 1장 + 장면 수) | **gpt-image-2** | 장 수 + 다시 그린 수 |
-| 5 | `PAGE_REVIEW` | 장 검수 — 장마다 그린 직후 | gpt-4.1 | 표지 뺀 장 수 + 다시 그린 수 |
-| 5 | `COVER_REVIEW` | 표지 검수 — 칸 하나 · 글상자 없음 · 제목 그대로 | gpt-4.1 | 1 + 다시 그린 수 |
-| 6 | `FULL_REVIEW` | 화 전체 검수 — 다 그린 뒤 처음부터 끝까지 한 번에 | **gpt-5.1** | 1 ~ 3 |
+| 5 | `PAGE_REVIEW` | 장 검수 — 장마다 그린 직후 | **gemini-3.5-flash**¹ | 표지 뺀 장 수 + 다시 그린 수 |
+| 5 | `COVER_REVIEW` | 표지 검수 — 칸 하나 · 글상자 없음 · 제목 그대로 | **gemini-3.5-flash**¹ | 1 + 다시 그린 수 |
+| 6 | `FULL_REVIEW` | 화 전체 검수 — 다 그린 뒤 처음부터 끝까지 한 번에 | **gemini-3.5-flash**¹ | 1 ~ 3 |
 | 옵션 | `CAST_SHEET` · `CAST_SHEET_IMAGE` | 조연 시트(사양 · 그림, 크레딧 1) | gpt-4.1 · gpt-image-2 | 사람이 누를 때 |
 | 끔 | `STORY_DIFF` | 후보 넷이 서로 다른가 | gpt-4.1 | 기본 꺼짐(`NH_STORY_DIFF`) |
 
@@ -53,7 +54,10 @@ PAGE_REVIEW 8번(gpt-4.1), SHEET_IMAGE 1번 · PAGE_IMAGE 9번(gpt-image-2).
 
 **자주 헷갈리는 것**
 
-- 화 전체 검수는 4.1 이 아니라 **gpt-5.1** 이다. 4.1 을 쓰는 검수는 이야기 검수 · 장 검수 · 표지 검수다.
+- **검수 넷(이야기 · 장 · 표지 · 화 전체)은 gemini 다(2026-10-26).** ¹ gemini 키(`GEMINI_API_KEY`, 서버에는
+  `HAEUN_GEMINI_API_KEY`)가 있을 때만이다. 키가 없으면 전처럼 OpenAI 로 돈다 — 이야기 · 장 · 표지 검수는
+  gpt-4.1, 화 전체 검수는 gpt-5.1. 정하는 곳은 `llm.py` 의 `STAGE_DEFAULT_PROVIDERS` 이고, 단계별
+  `<단계>_PROVIDER` 를 적으면 그쪽이 이긴다. 전체 설정 `NH_PROVIDER` · `NH_MODEL` 보다는 이 표가 앞이다.
 - 캐릭터 시트는 **이야기와 나란히** 그리지만, 시트 사양(글)은 gpt-5.1 이 아니라 **gpt-4.1** 이다.
 - 명령줄로 직접 돌린 작품(`run.py --no-story-review`)에는 이야기 검수 기록이 없다. 서버로 만든 작품은
   `NH_STORY_REVIEW` 기본 켜짐이라 늘 돈다.
@@ -73,10 +77,10 @@ PAGE_REVIEW 8번(gpt-4.1), SHEET_IMAGE 1번 · PAGE_IMAGE 9번(gpt-image-2).
 
 | 검수 | 모델 | 무엇을 보나 | 걸리면 |
 |---|---|---|---|
-| 이야기 검수 `STORY_REVIEW` | gpt-4.1 | 후보마다 그림으로 옮겼을 때 어디서 막히는가 | **아무것도 막지 않는다.** 판정이 고르는 화면에 붙고, 바로 만들기는 통과한 후보 중에서 고른다 |
-| 장 검수 `PAGE_REVIEW` | gpt-4.1 | 그 장만 보고 독자가 이해하는가(최우선) · 말풍선 화자 · 대사 · 앞 장과 이어지는가 · 연출 · 나레이션이 끝까지 맺어졌는가. 나레이션 첫 줄이 앞 장으로 되돌아가는지는 검수가 적은 값으로 코드가 판정 | `critical` 이면 그 장을 지우고 지적을 붙여 다시 그림 — 장마다 **1번까지**(`NH_PAGE_REVIEW_RETRY`) |
-| 표지 검수 `COVER_REVIEW` | gpt-4.1 | 칸 하나 · 글상자 없음 · 제목 그대로 | 다시 그림 |
-| 화 전체 검수 `FULL_REVIEW` | gpt-5.1 | 장 하나로는 안 보이는 것 — 같은 자세 반복, 앞뒤 모순, 흐름 | `critical` 이고 다시 그려 고쳐지는 것만 그 장을 다시 그림 — 장마다 **2번까지**, 전체 **3바퀴까지**(`JobRunner.MAX_PAGE_REDRAWS` · `MAX_FULL_REVIEW_ROUNDS`). 못 고쳐도 만들기는 성공으로 간다 |
+| 이야기 검수 `STORY_REVIEW` | gemini-3.5-flash¹ | 후보마다 그림으로 옮겼을 때 어디서 막히는가 | **아무것도 막지 않는다.** 판정이 고르는 화면에 붙고, 바로 만들기는 통과한 후보 중에서 고른다 |
+| 장 검수 `PAGE_REVIEW` | gemini-3.5-flash¹ | 그 장만 보고 독자가 이해하는가(최우선) · 말풍선 화자 · 대사 · 앞 장과 이어지는가 · 연출 · 나레이션이 끝까지 맺어졌는가. 나레이션 첫 줄이 앞 장으로 되돌아가는지는 검수가 적은 값으로 코드가 판정 | `critical` 이면 그 장을 지우고 지적을 붙여 다시 그림 — 장마다 **1번까지**(`NH_PAGE_REVIEW_RETRY`) |
+| 표지 검수 `COVER_REVIEW` | gemini-3.5-flash¹ | 칸 하나 · 글상자 없음 · 제목 그대로 | 다시 그림 |
+| 화 전체 검수 `FULL_REVIEW` | gemini-3.5-flash¹ | 장 하나로는 안 보이는 것 — 같은 자세 반복, 앞뒤 모순, 흐름 | `critical` 이고 다시 그려 고쳐지는 것만 그 장을 다시 그림 — 장마다 **2번까지**, 전체 **3바퀴까지**(`JobRunner.MAX_PAGE_REDRAWS` · `MAX_FULL_REVIEW_ROUNDS`). 못 고쳐도 만들기는 성공으로 간다 |
 
 **검수가 아직 안 보는 것**
 
@@ -109,6 +113,7 @@ PAGE_REVIEW 8번(gpt-4.1), SHEET_IMAGE 1번 · PAGE_IMAGE 9번(gpt-image-2).
 - 코드 기본값은 workers 2 · page-workers 3. 운영은 Parameter Store 에 workers 3 · page-workers 4 를 넣어 두었다
   (2026-10-04, 다음 운영 배포부터). 생성 부하 시험에서 처리량은 page-workers 가 정했고, 장 하나에 파이썬
   프로세스가 하나 떠서(약 150~200MB) 운영 메모리가 상한을 정한다
+- 시험 결과와 값을 정한 이유, 다음에 올릴 단계는 [capacity.md](capacity.md)
 
 ## 모델을 바꾸려면
 
@@ -122,3 +127,19 @@ cd webtoon/ai/new_harness && python3 run.py --plan
 서버는 하네스를 띄울 때 자기 환경변수를 그대로 물려준다 — 운영은 Parameter Store `/lore/prod/<이름>` 에 넣으면
 다음 배포 때 들어간다(이름은 소문자 · 밑줄, 환경변수로는 대문자). dev 는 박스 `.env` 와 `docker-compose.yml` 의
 `environment:` 둘 다 필요하다([server.md](server.md)).
+
+### OpenRouter 로 돌리기
+
+같은 OpenAI 모델(gpt-5.1 · gpt-4.1 · gpt-image-2)을 OpenRouter 를 거쳐 부를 수 있다. 환경변수 둘이면 글과
+그림이 함께 넘어간다.
+
+```
+NH_PROVIDER=openrouter
+OPENROUTER_API_KEY=...        # 서버에는 HAEUN_OPENROUTER_API_KEY
+```
+
+- 모델 이름은 앞에 `openai/` 가 붙는다(`openai/gpt-5.1`). 단계별 기본값은 `llm.py` 의 `STAGE_DEFAULT_MODELS` 가 알아서 붙인다.
+- 그림은 OpenRouter 의 `POST /images` 로 그린다. 크기 대신 비율을 받아서 페이지는 `2:3`, 시트는 `3:2` 로 보낸다
+  (OpenAI 의 1024x1536 · 1536x1024 와 같은 모양). 화질(low · medium · high)과 참고 그림은 그대로 넘어간다.
+- 비용은 응답의 `usage.cost`(실제 청구액, USD)를 그대로 남긴다. `cost_basis` 가 `billed` 로 찍힌다.
+- 입력 글 검사(moderation)는 OpenRouter 에 없어서 OpenAI 키(`WEBTOON_API_KEY`)로 그대로 한다.

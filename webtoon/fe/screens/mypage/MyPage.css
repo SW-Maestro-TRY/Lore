@@ -33,7 +33,8 @@
 .wt .wt-my-head-sub .muted { font-size: 13.5px; }
 .wt .wt-my-head .btn, .wt .wt-my-headacts .btn { height: 42px; font-size: 14px; }
 .wt .wt-my-head-sub .btn { height: 38px; font-size: 13px; }
-.wt .wt-my-headacts { display: flex; gap: 8px; }
+/* 위 「.wt-my-head > div」(세로 쌓기)에 단추 칸도 걸려 PC에서 단추가 세로로 쌓였다 — 단추 칸은 가로 한 줄 */
+.wt .wt-my-head > .wt-my-headacts { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 
 /* 작품 그리드 */
 .wt .wt-my-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -63,9 +64,96 @@
 }
 .wt .wt-my-err { font-size: 11.5px; color: var(--gold); }
 
-/* 1:1 문의 창구 선택(카카오톡·인스타그램·X) — 「1:1 문의하기」 메뉴로 여는 창(ui/Dialog) 안 */
-.wt .wt-my-contact { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
-.wt .wt-my-contact .btn { height: 46px; text-decoration: none; }
+/* 문의 창 — 바다의 가장 깊은 색으로 채널과 작성 흐름을 한눈에 묶는다. */
+.wt .wt-dialog-box.wt-contact-dialog {
+  width: min(520px, 100%); gap: 8px; padding: 22px 20px 20px; overflow: hidden;
+  color: #f5f7fa; background: #101d2d; border-color: #23334a;
+  box-shadow: 0 24px 72px rgba(3, 10, 20, .42);
+}
+.wt .wt-dialog-box.wt-contact-dialog .wt-dialog-heading { margin-bottom: 0; }
+.wt .wt-dialog-box.wt-contact-dialog h2 { color: #f5f7fa; font-size: 21px; transform: translateY(8px); }
+.wt .wt-dialog-box.wt-contact-dialog .wt-dialog-sub { color: #c2cddd; font-size: 14px; }
+.wt .wt-dialog-box.wt-contact-dialog .wt-dialog-close { color: #aebbd0; border-color: #35445a; }
+.wt .wt-dialog-box.wt-contact-dialog .wt-dialog-close:hover { color: #fff; background: #24344a; }
+.wt .wt-my-contact { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.wt .wt-contact-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 62px;
+  padding: 10px 13px; border: 1px solid transparent; border-radius: 13px;
+  color: #f7f8fb; background: #223146; font: inherit; text-align: left;
+  text-decoration: none; cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease;
+}
+.wt .wt-contact-row:hover { background: #2a3b53; border-color: #40536d; transform: translateY(-1px); }
+.wt .wt-contact-row:focus-visible, .wt .wt-contact-socials a:focus-visible,
+.wt .wt-contact-back:focus-visible, .wt .wt-contact-submit:focus-visible {
+  outline: 2px solid #9ab8ff; outline-offset: 2px;
+}
+.wt .wt-contact-rowmark { width: 24px; height: 24px; display: grid; place-items: center; flex: 0 0 24px; }
+.wt .wt-contact-rowmark.mail { color: #b9c8ff; }
+.wt .wt-contact-rowcopy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.wt .wt-contact-rowcopy b { font-size: 16px; font-weight: 700; }
+.wt .wt-contact-rowcopy small { color: #c2cddd; font-size: 13px; line-height: 1.4; }
+.wt .wt-contact-row > svg:last-child { color: #aebbd0; flex: 0 0 auto; }
+.wt .wt-contact-social-label { color: #c2cddd; font-size: 16px; text-align: center; margin: 11px 0 2px; }
+.wt .wt-contact-socials { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.wt .wt-contact-socials a {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+  min-height: 72px; padding: 9px 10px; border: 1px solid transparent; border-radius: 13px;
+  color: #f7f8fb; background: #223146; font-size: 14px; text-decoration: none;
+  transition: background .16s ease, border-color .16s ease, transform .16s ease;
+}
+.wt .wt-contact-socials a:hover { background: #2a3b53; border-color: #40536d; transform: translateY(-1px); }
+.wt .wt-contact-socials a:last-child svg { color: #fff; }
+.wt .wt-contact-form { display: flex; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  flex-direction: column; gap: 7px; margin-top: -5px; }
+.wt .wt-contact-form label { margin-top: 5px; color: #edf1f7; font-size: 14px; font-weight: 650; }
+.wt .wt-contact-form input:not(.wt-contact-honeypot):not([type="checkbox"]):not([type="file"]), .wt .wt-contact-form select,
+.wt .wt-contact-form textarea {
+  width: 100%; min-height: 42px; box-sizing: border-box; padding: 10px 12px;
+  border: 1px solid #40516a; border-radius: 9px; color: #f5f7fa; background: #19283a;
+  font: inherit; font-size: 15px;
+}
+.wt .wt-contact-form select { appearance: auto; }
+.wt .wt-contact-form textarea { min-height: 112px; resize: vertical; line-height: 1.55; }
+.wt .wt-contact-form input::placeholder, .wt .wt-contact-form textarea::placeholder { color: #aebbd0; }
+.wt .wt-contact-form input:focus-visible, .wt .wt-contact-form select:focus-visible,
+.wt .wt-contact-form textarea:focus-visible { outline: 2px solid #9ab8ff; outline-offset: 1px; border-color: #9ab8ff; }
+.wt .wt-contact-formfoot { display: flex; flex-direction: column; gap: 4px; color: #c2cddd; font-size: 12.5px; line-height: 1.5; }
+.wt .wt-contact-formfoot span { align-self: flex-end; font-variant-numeric: tabular-nums; }
+.wt .wt-contact-attachments { display: flex; flex-direction: column; gap: 5px; }
+.wt .wt-contact-attachments label { margin: 0; }
+.wt .wt-contact-attachments small, .wt .wt-contact-consent p { margin: 0; color: #c2cddd; font-size: 12.5px; line-height: 1.5; }
+.wt .wt-contact-attachments input[type="file"] { min-height: 42px; padding: 7px; color: #c2cddd; font-size: 13px; }
+.wt .wt-contact-attachments input[type="file"]::file-selector-button { min-height: 27px; margin-right: 9px; padding: 3px 9px;
+  border: 1px solid #52647b; border-radius: 6px; color: #edf1f7; background: #293b52; font: inherit; cursor: pointer; }
+.wt .wt-contact-filelist { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.wt .wt-contact-filelist li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px;
+  color: #edf1f7; font-size: 12.5px; }
+.wt .wt-contact-filelist li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-contact-filelist button { flex: 0 0 auto; border: 0; color: #c2cddd; background: none; font: inherit; text-decoration: underline; cursor: pointer; }
+.wt .wt-contact-consent { display: flex; flex-direction: column; gap: 7px; width: 100%; min-width: 0; box-sizing: border-box;
+  margin: 3px 0 0; padding: 10px 11px; border: 1px solid #40516a; border-radius: 9px; }
+.wt .wt-contact-consent legend { padding: 0 4px; color: #edf1f7; font-size: 13px; font-weight: 700; }
+.wt .wt-contact-consent label { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: #f5f7fa; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.wt .wt-contact-consent input { flex: 0 0 auto; width: 17px; height: 17px; min-height: 17px; margin: 1px 0 0; accent-color: #b8e8d5; }
+.wt .wt-contact-consent-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+.wt .wt-contact-consent-row a { color: #b9c8ff; font-size: 12.5px; white-space: nowrap; }
+.wt .wt-contact-back { display: inline-flex; align-items: center; align-self: flex-start; justify-content: center;
+  width: 20px; height: 22px; margin-top: -2px; padding: 0; border: 0; color: #c3d0df; background: transparent;
+  font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
+.wt .wt-contact-honeypot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.wt .wt-contact-error { margin: 0; color: #ffb4a9; font-size: 13px; line-height: 1.5; }
+.wt .wt-contact-submit { min-height: 44px; margin-top: 5px; border: 0; border-radius: 10px; color: #10212e;
+  background: #b8e8d5; font: inherit; font-size: 15px; font-weight: 750; cursor: pointer; }
+.wt .wt-contact-submit:hover:not(:disabled) { background: #d0f3e5; }
+.wt .wt-contact-submit:disabled { color: #bac6d0; background: #344458; cursor: not-allowed; }
+.wt .wt-contact-success { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 4px 4px; text-align: center; }
+.wt .wt-contact-successmark { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; color: #10212e; background: #b8e8d5; }
+.wt .wt-contact-success b { max-width: 32ch; color: #f5f7fa; font-size: 16px; line-height: 1.6; }
+.wt .wt-contact-success .btn { width: 100%; min-height: 42px; color: #f5f7fa; border-color: #40516a; background: #223146; }
+.wt .wt-contact-address { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 5px; padding-top: 11px;
+  border-top: 1px solid #34445a; color: #c3d0df; font-size: 13px; line-height: 1.45; flex: 0 0 auto; }
+.wt .wt-contact-address svg { color: #b9c8ff; flex: 0 0 auto; }
+.wt .wt-contact-address b { color: #f5f7fa; font-weight: 700; }
 
 /* 휴지통(#157) — 사이드바 「휴지통」 메뉴로 여는 창(ui/Dialog) 안 */
 .wt .wt-my-trash { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
@@ -94,6 +182,8 @@
 .wt .wt-my-withdraw { flex-shrink: 0; }
 .wt .wt-my-withdraw-confirm { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 .wt .wt-my-withdraw-confirm .muted { font-size: 12.5px; }
+.wt .wt-my-withdraw-confirm .wt-my-err { flex: 1 1 100%; font-size: 12.5px; line-height: 1.5; }
+.wt .wt-my-withdraw-confirm .wt-my-err a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 /* 작품 목록이 실패했거나(에러) 아직 없을 때(빈 목록). 둘을 가른다 —
    실패를 "그냥 없음"으로 보이게 두면 웹툰이 사라진 것처럼 읽힌다. */
@@ -128,6 +218,7 @@
 .wt .wt-my-char-new:hover { border-color: var(--ink); }
 
 @media (max-width: 767px) {
+  .wt .wt-dialog-box.wt-contact-dialog { padding: 20px 16px 16px; border-radius: 16px; }
   /* 폰은 왼쪽 줄을 그대로 쌓지 않는다 — 아트보드 MMyPage 처럼 계정·크레딧을
      한 줄로 눕히고 메뉴를 가로 칩 줄로 접는다. 그대로 쌓으면 키 큰 카드 넷을
      지나야 작품이 나온다. */
@@ -148,8 +239,8 @@
     width: auto; flex: 0 0 auto; gap: 6px; padding: 8px 12px; border-radius: 999px;
     border: 1px solid var(--line-strong);
   }
-  .wt .wt-my-menu button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
-  .wt .wt-my-menu button.on .dim { color: rgba(255, 255, 255, 0.75); }
+  .wt .wt-my-menu button.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .wt .wt-my-menu button.on .dim { color: var(--paper); opacity: .7; }
   .wt .wt-my-lang { padding: 10px 14px; }
   /* 제목과 단추가 한 줄에서 겹쳐 보인다 — 폰에서는 위아래로 나눈다. */
   .wt .wt-my-head { flex-direction: column; align-items: stretch; gap: 10px; }
@@ -188,3 +279,61 @@
 .wt .wt-my-charcard .wt-my-workfoot .grow { flex: 1; }
 /* 관리자 처리 안내(#638) — 작가에게만 보인다 */
 .wt .wt-my-modnote { display: block; font-size: 12px; line-height: 1.5; color: var(--ink); background: #f1f4f3; border-radius: 8px; padding: 6px 8px; word-break: keep-all; }
+
+/* 내 웹툰 미리보기 — 첫 화면엔 한 줄만(폰은 두 장), 「모두 보기」로 전부 */
+.wt .wt-my-more { align-self: stretch; justify-content: center; gap: 6px; height: 44px; }
+.wt .wt-my-back { background: none; border: 0; padding: 0; margin-bottom: 4px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; text-align: left; }
+.wt .wt-my-back:hover { color: var(--ink); }
+.wt .wt-my-count { font-size: 18px; font-weight: 400; }
+@media (max-width: 767px) {
+  .wt .wt-my-grid.preview > :nth-child(n + 3) { display: none; }
+}
+
+/* 문의 창 손질(2026-10-26) — 뒤로 가기를 제목 앞에, 파일칸은 단추와 개수만 */
+.wt .wt-dialog-titlewrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.wt .wt-dialog-back {
+  display: grid; place-items: center; width: 30px; height: 30px; flex: none; margin-left: -6px; padding: 0;
+  border: 0; border-radius: 8px; background: transparent; color: #c3d0df; font: inherit; font-size: 26px; line-height: 1; cursor: pointer;
+}
+.wt .wt-dialog-back:hover { background: #24344a; color: #fff; }
+.wt .wt-dialog-box.wt-contact-dialog .wt-dialog-titlewrap:has(.wt-dialog-back) h2 { transform: none; }
+.wt .wt-contact-fileinput { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.wt .wt-contact-pick { display: flex; align-items: center; gap: 10px; margin-top: 2px; font-size: 13px; color: #c2cddd; }
+.wt .wt-contact-pickbtn {
+  display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 1px solid #52647b; border-radius: 8px;
+  color: #edf1f7; background: #293b52; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.wt .wt-contact-pickbtn:hover { background: #33475f; }
+.wt .wt-contact-attachments:has(.wt-contact-fileinput:focus-visible) .wt-contact-pickbtn { outline: 2px solid #b8e8d5; outline-offset: 2px; }
+.wt .wt-dialog-box.wt-contact-dialog .wt-dialog-heading:has(.wt-dialog-back) { margin-bottom: 14px; }
+
+/* 내 웹툰 카드의 삭제 — 빨간색. 누르면 휴지통으로 옮길지 한 번 더 묻는다. */
+.wt .wt-my-delete { background: transparent; color: #e0787a; border: 1px solid rgba(224, 120, 122, 0.55); }
+.wt .wt-my-delete:hover:not(:disabled) { background: #bd6567; border-color: #bd6567; color: #fff; }
+
+/* 찜한 웹툰 · 댓글 단 웹툰 카드 — 카드 전체가 누르는 자리 */
+.wt .wt-my-runcard { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.wt .wt-my-runcard .wt-my-cover { pointer-events: none; }
+
+/* 헤더 줄의 「삭제」는 옆 단추들과 같은 높이 */
+.wt .wt-my-deletebig { height: 42px; padding: 0 18px; font-size: 14px; }
+.wt .wt-my-deletebig:disabled { opacity: .45; cursor: default; }
+
+/* 내 캐릭터 카드 — 아래에 「수정」과 「이 캐릭터로 웹툰 만들기」 */
+.wt .wt-my-charfoot { gap: 8px; }
+.wt .wt-my-charfoot .grow { flex: 1; }
+
+/* 삭제 고르기 — 카드마다 오른쪽 위 휴지통 표시. 고르면 빨갛게 */
+.wt .wt-my-charcard { position: relative; }
+.wt .wt-my-pick {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  background: rgba(10, 16, 24, .72); color: #e6ebf0; border: 1px solid rgba(255, 255, 255, .28); cursor: pointer;
+}
+.wt .wt-my-pick.on { background: #bd6567; border-color: #bd6567; color: #fff; }
+.wt .wt-my-charcard.picked { outline: 2px solid #bd6567; outline-offset: -2px; }
+
+/* 휴지통 화면 — 웹툰 · 캐릭터 두 칸 */
+.wt .wt-my-trashsec { margin-top: 18px; }
+.wt .wt-my-trashsec h3 { font-size: 16px; font-weight: 700; margin: 0 0 8px; display: flex; gap: 8px; align-items: baseline; }
+.wt .wt-my-trashsec h3 .dim { font-size: 12.5px; font-weight: 500; }

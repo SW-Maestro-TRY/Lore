@@ -11,7 +11,7 @@
 .wt .wt-ch-photo-sub { display: none; }
 .wt .wt-ch-drop {
   position: relative; height: 260px; border-radius: 16px; border: 2px dashed rgba(15, 51, 63, 0.22);
-  background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 10px; overflow: hidden;
 }
 .wt .wt-ch-drop b { font-size: 16px; }
@@ -32,7 +32,7 @@
 .wt .wt-ch-combo-list {
   position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30;
   max-height: 260px; overflow-y: auto; margin: 0; padding: 6px; list-style: none;
-  background: #fff; border: 1px solid var(--line-strong); border-radius: 12px;
+  background: var(--bg); border: 1px solid var(--line-strong); border-radius: 12px;
   box-shadow: 0 10px 30px rgba(15, 51, 63, 0.14);
 }
 .wt .wt-ch-combo-one {
@@ -51,7 +51,7 @@
 /* 한도 소진 — Limit.dc.html / MLimit.dc.html */
 .wt .wt-ch-limit { flex-grow: 1; display: flex; align-items: center; justify-content: center; }
 .wt .wt-ch-limit-box {
-  width: 520px; padding: 36px; border-radius: 22px; background: #fff; border: 1px solid var(--line);
+  width: 520px; padding: 36px; border-radius: 22px; background: var(--bg); border: 1px solid var(--line);
   display: flex; flex-direction: column; gap: 14px; align-items: center; text-align: center;
   box-shadow: 0 14px 36px rgba(15, 51, 63, 0.10);
 }

@@ -1,0 +1,268 @@
+/* The editor canvas remains white; its controls use the approved gallery tokens. */
+.wt .wt-ed {
+  zoom: 1;
+  background: var(--paper);
+}
+.wt .wt-ed-top,
+.wt .wt-ed-left,
+.wt .wt-ed-dock {
+  background: var(--bg);
+  border-color: var(--line);
+}
+.wt .wt-ed-stage {
+  background: #070e18;
+  padding: 28px;
+}
+.wt .wt-ed .credit,
+.wt .wt-ed .btn-quiet,
+.wt .wt-ed .ep-tab,
+.wt .wt-ed .dock-item,
+.wt .wt-ed .fb-tag {
+  background: var(--water-light);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.wt .wt-ed .btn-primary,
+.wt .wt-ed .ep-tab[aria-current="true"],
+.wt .wt-ed .dock-tab.is-on,
+.wt .wt-ed .fb-tag[aria-pressed="true"],
+.wt .wt-ed-workstoggle[aria-expanded="true"],
+.wt .wt-ed-dockopen {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.wt .wt-ed .btn-primary:hover:not(:disabled) {
+  background: var(--sea);
+  color: var(--paper);
+}
+.wt .wt-ed .scene {
+  background: var(--bg);
+  border-radius: 12px;
+  border-color: var(--line);
+  overflow: hidden;
+  box-shadow: 0 16px 40px #0003;
+}
+.wt .wt-ed .scene.is-active {
+  border-color: var(--sea);
+}
+.wt .wt-ed .scene-head,
+.wt .wt-ed .scene-tools {
+  padding: 12px 16px;
+}
+.wt .wt-ed .scene-note {
+  padding: 4px 16px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.wt .wt-ed .scene-gap {
+  background: var(--paper);
+  border-color: var(--line-strong);
+}
+.wt .wt-ed .dock-item .prev {
+  color: #111;
+}
+.wt .wt-ed .dock-item .prev .bub {
+  color: #111;
+}
+.wt .wt-ed .wt-ed-regen-inline {
+  width: auto;
+  max-width: none;
+  margin: 0 16px 16px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+.wt .wt-ed-regen-inline h2 {
+  font-size: 17px;
+}
+.wt .wt-ed-regen-inline .wt-ed-regen-box {
+  gap: 16px;
+}
+.wt .wt-ed .fb-tag {
+  height: auto;
+  min-height: 34px;
+  font-size: 12px;
+}
+.wt .wt-ed-creditshort-x {
+  background: var(--water-light);
+}
+.wt .wt-ed .item-bar .ib.is-on {
+  color: var(--paper);
+}
+@media (max-width: 879px) {
+  .wt .wt-ed-stage {
+    padding: 16px 12px 90px;
+  }
+  .wt .wt-ed-strip {
+    padding: 10px 16px;
+  }
+  .wt .wt-ed-left {
+    padding: 16px;
+  }
+  .wt .wt-ed-sceneinfo {
+    max-height: 240px;
+    overflow: auto;
+  }
+  .wt .wt-ed .scene-head {
+    font-size: 12px;
+  }
+  .wt .wt-ed .wt-ed-regen-inline {
+    margin: 0 10px 10px;
+    padding: 16px;
+  }
+  .wt .wt-ed-chips {
+    gap: 8px;
+  }
+  .wt .wt-ed-bake,
+  .wt .wt-ed-done {
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}
+
+.wt .wt-ed .scene {
+  overflow: clip;
+}
+.wt .wt-ed .scene-tools:has([aria-expanded="true"]) {
+  display: none;
+}
+.wt .wt-ed [data-act="regen"] {
+  scroll-margin-top: calc(var(--lore-header-h, 64px) + 88px);
+}
+.wt .wt-ed-regen-inline .ask-scene {
+  display: none;
+}
+.wt .wt-ed-dock {
+  overflow-x: hidden;
+}
+.wt .wt-ed .wt-share-trigger {
+  background: var(--water-light);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.wt .wt-ed-regen-box .fb-lead:has(+ .fb-tags:empty) { display: none; }
+
+/* 편집실 가독성 — 제목과 장면 글자를 눈에 띄게 키우고, 편집 간격은 한 번만 준다. */
+.wt .wt-ed {
+  font-size: 16px;
+}
+
+.wt .wt-ed-strip {
+  gap: 14px;
+  padding: 12px 20px;
+  min-height: 68px;
+}
+.wt .wt-ed-titlerow h1 { font-size: 21px; line-height: 1.3; }
+.wt .wt-ed-title #edMeta { font-size: 15px; line-height: 1.45; }
+.wt .wt-ed-workstoggle,
+.wt .wt-ed-overlaytoggle,
+.wt .wt-ed-bake,
+.wt .wt-ed-done { font-size: 15px; }
+.wt .wt-ed .credit { font-size: 15px; }
+.wt .wt-ed .credit-unit,
+.wt .wt-ed .credit-more,
+.wt .wt-ed-ledgerbtn { font-size: 13px; }
+
+.wt .wt-ed-lefthead { font-size: 16px; }
+.wt .wt-ed .work-name { font-size: 16px; }
+.wt .wt-ed .work-sub { font-size: 14px; }
+.wt .wt-ed-pagegrid { gap: 8px; }
+.wt .wt-ed-thumb { height: 72px; }
+.wt .wt-ed-thumb span { font-size: 13px; }
+.wt .wt-ed-sceneinfo { gap: 2px; padding-top: 10px; margin-top: 4px; }
+.wt .wt-ed-sceneparts { gap: 12px; padding: 4px 10px 8px; }
+.wt .wt-ed-sceneparts .part { gap: 4px; }
+.wt .wt-ed-sceneparts .part span { font-size: 16px; }
+.wt .wt-ed-sceneparts .part p { font-size: 17px; line-height: 1.65; }
+
+.wt .wt-ed-stage { gap: 10px; padding: 24px; }
+.wt .wt-ed .ep-tab { height: 38px; font-size: 15px; }
+.wt .wt-ed-footnote { display: none; }
+.wt .wt-ed-done { display: none !important; }
+.wt .wt-ed .scene { margin-bottom: 12px; padding-bottom: 6px; }
+.wt .wt-ed .scene-head { gap: 8px; padding: 10px 14px 6px; font-size: 16px; }
+.wt .wt-ed .scene-no { font-size: 16px; }
+.wt .wt-ed .ver,
+.wt .wt-ed .flag { font-size: 15px; }
+.wt .wt-ed .scene-note { margin: 8px 14px 0; font-size: 16px; line-height: 1.65; }
+.wt .wt-ed .scene-tools { gap: 6px; padding: 8px 14px 0; }
+.wt .wt-ed .scene-tools .btn { height: 40px; font-size: 15px; padding: 0 15px; }
+.wt .wt-ed .cost { font-size: 15px; padding: 3px 8px; }
+.wt .wt-ed .scene-gap { min-height: 38px; margin-bottom: 8px; }
+.wt .wt-ed .scene-gap > span { font-size: 15px; }
+.wt .wt-ed .gap-steps { gap: 8px; }
+.wt .wt-ed .gap-dot { width: 13px; height: 13px; }
+
+/* 이전 판은 안내 문구 없이 큰 썸네일만 보여 준다. */
+.wt .wt-ed .ver-strip-label { display: none; }
+.wt .wt-ed .page-versions { gap: 10px; padding: 10px 14px 4px; }
+.wt .wt-ed .ver-strip { gap: 8px; }
+.wt .wt-ed .ver-thumb { width: 68px; height: 90px; }
+.wt .wt-ed .ver-thumb .ver-label { display: none; }
+
+.wt .wt-ed-dock { gap: 12px; padding: 14px; }
+.wt .wt-ed .dock-tab { height: 40px; font-size: 15px; padding: 0 12px; }
+.wt .wt-ed-dockbody { gap: 8px; }
+.wt .wt-ed-dockgrid { gap: 8px; }
+.wt .wt-ed .dock-item { min-height: 60px; gap: 5px; padding: 8px 6px; }
+.wt .wt-ed .dock-item span { font-size: 15px; }
+.wt .wt-ed .dock-props-head { font-size: 15px; }
+.wt .wt-ed-ledger li,
+.wt .wt-ed .dock-ledger li { font-size: 13px; }
+
+/* 다시 그리기 폼의 기본 문단 여백과 flex 간격이 겹쳐 생기던 큰 공백을 한 번만 준다. */
+.wt .wt-ed .wt-ed-regen-inline {
+  margin: 4px 14px 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+}
+.wt .wt-ed-regen-inline .wt-ed-regen-box { gap: 10px; }
+.wt .wt-ed-regen-inline { scroll-margin-top: calc(var(--lore-header-h, 64px) + 88px); }
+.wt .wt-ed-regen-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wt .wt-ed-regen-close { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; }
+.wt .wt-ed-regen-close:hover { color: var(--ink); background: var(--line); }
+.wt .wt-ed-regen-close:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+.wt .wt-ed-regen-inline h2 { margin: 0; font-size: 20px; line-height: 1.35; }
+.wt .wt-ed-regen-inline .ask-sub { margin: 0; font-size: 15px; line-height: 1.45; }
+.wt .wt-ed-regen-inline .ask-unsafe { margin: 0; font-size: 15px; line-height: 1.5; }
+.wt .wt-ed .wt-ed-regen-inline .fb-lead { margin: 2px 0 0; font-size: 16px; line-height: 1.4; }
+.wt .wt-ed-regen-inline .fb-tags { gap: 6px; }
+.wt .wt-ed .wt-ed-regen-inline .fb-tag {
+  min-height: 38px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.wt .wt-ed-askfield { gap: 4px; }
+.wt .wt-ed-askfield > span { font-size: 16px; line-height: 1.4; }
+.wt .wt-ed-askfield textarea.field { min-height: 104px; font-size: 16px; line-height: 1.55; padding: 10px 12px; }
+.wt .wt-ed #regenAskWhere,
+.wt .wt-ed #regenAskWhat { line-height: 1.7; }
+.wt .wt-ed #regenAskWhere { min-height: 160px; }
+.wt .wt-ed #regenAskWhat { min-height: 240px; }
+.wt .wt-ed-regen-inline .check-line { gap: 8px; font-size: 15px; }
+.wt .wt-ed .wt-ed-regen-inline .ask-actions { gap: 8px; margin-top: 2px; }
+.wt .wt-ed .wt-ed-regen-inline .ask-actions .btn { min-height: 44px; height: auto; font-size: 15px; }
+
+.wt .wt-ed .ask-box h2 { font-size: 20px; }
+.wt .wt-ed .ask-sub,
+.wt .wt-ed .ask-scene-part { font-size: 15px; }
+.wt .wt-ed .fb-lead { font-size: 16px; }
+.wt .wt-ed .fb-tag { min-height: 40px; padding: 8px 12px; font-size: 15px; }
+.wt .wt-ed .check-line { min-height: 40px; font-size: 15px; }
+
+@media (max-width: 879px) {
+  .wt .wt-ed-strip { gap: 8px; padding: 10px 14px; }
+  .wt .wt-ed-titlerow h1 { font-size: 20px; }
+  .wt .wt-ed-left { padding: 14px; }
+  .wt .wt-ed-stage { gap: 8px; padding: 14px 12px 88px; }
+  .wt .wt-ed .scene-head { font-size: 15px; }
+  .wt .wt-ed .scene-tools .btn { font-size: 15px; }
+  .wt .wt-ed-dock { padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .wt .wt-ed .dock-item span { font-size: 14px; }
+  .wt .wt-ed .wt-ed-regen-inline { margin: 4px 8px 10px; padding: 14px; }
+  .wt .wt-ed-regen-inline .wt-ed-regen-box { gap: 9px; }
+  .wt .wt-ed .wt-ed-regen-inline .fb-tag { min-height: 40px; }
+}

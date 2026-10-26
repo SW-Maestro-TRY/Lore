@@ -92,16 +92,35 @@
   .wt .wt-works-chips { margin: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .wt .wt-works-chips::-webkit-scrollbar { display: none; }
   .wt .wt-works-chips .chip { height: 32px; font-size: 12px; padding: 0 12px; flex-shrink: 0; }
-  .wt .wt-works-grid { grid-template-columns: 1fr; gap: 14px; }
-  /* 정사각형에 가까운 표지 카드(위/아래로 이미지+글) 대신, 왼쪽에 세로로
-     긴 표지 + 오른쪽에 정보가 있는 가로형 리스트 한 줄로 바꾼다 — 표지가
-     잘리고 정사각형이라 안 좋다는 피드백(2026-09-23). */
-  .wt .wt-works-card { flex-direction: row; align-items: stretch; gap: 12px; padding: 0; border: 0; background: none; }
-  .wt .wt-works-cover { width: 108px; flex-shrink: 0; border-radius: 10px; }
-  .wt .wt-works-info { display: flex; flex-direction: column; gap: 4px; justify-content: center; min-width: 0; flex-grow: 1; }
-  .wt .wt-works-titlerow > b { font-size: 15px; }
+  /* 폰도 PC 와 같은 카드 — 2:3 표지 아래 제목(2026-10-25). 가로형 글줄은 웹툰
+     서비스처럼 안 보인다는 피드백. 예전에 가로형으로 바꾼 이유(정사각 표지가
+     잘림)는 표지 칸이 2:3 으로 바뀌면서(2026-10-01) 없어졌다. 두 줄로 작게. */
+  .wt .wt-works-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 12px; }
+  .wt .wt-works-titlerow > b { font-size: 14px; }
   .wt .wt-works-state { padding: 30px 0 40px; }
   .wt .wt-works-state h2 { font-size: 24px; }
   .wt .wt-works-state .muted { font-size: 14px; }
 }
 
+.wt .wt-works-eps .ep-more { align-self: center; color: var(--muted); font-size: 12px; }
+
+/* 목록 첫 칸의 만들기 카드 — 표지 칸과 같은 2:3 */
+.wt .wt-works-make { padding: 0; border: 0; background: none; text-align: center; cursor: pointer; font: inherit; color: var(--ink); align-self: start; }
+.wt .wt-works-make-cover {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; aspect-ratio: 2 / 3; border-radius: 9px; border: 1.5px dashed var(--line-strong);
+  background: var(--water-light);
+}
+.wt .wt-works-make-cover i {
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--sea); color: #17202c; font-style: normal; font-size: 24px; font-weight: 700; line-height: 1;
+}
+.wt .wt-works-make-cover b { font-size: 15px; }
+.wt .wt-works-make-cover small { font-size: 12px; color: var(--muted); }
+@media (max-width: 767px) {
+  .wt .wt-works-make-cover b { font-size: 13.5px; }
+  .wt .wt-works-make-cover small { font-size: 11px; }
+}
+
+/* 회차 수 — 단추 대신 글자 한 줄(2026-10-26) */
+.wt .wt-works-epcount { font-size: 12.5px; align-self: center; }

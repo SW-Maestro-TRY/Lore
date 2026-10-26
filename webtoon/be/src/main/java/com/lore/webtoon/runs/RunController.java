@@ -306,6 +306,10 @@ public class RunController {
         found.put("public", ledger.isOpen(runId));
         /* 안전 검사에 걸려 빈 장으로 둔 장들(#626) — 화면이 그 자리에 안내를 얹는다. */
         found.put("unsafe_pages", regen.unsafePages(runId));
+        /* 이 작품의 한 장 다시 그리기 값(#787) — 화질마다 달라서 작품과 같이 준다. */
+        found.put("regen_cost", regenCost(runId));
+        /* 남은 장 중 지금 그리는 중인 장 — 화면이 「그리는 중」을 띄우고 다 될 때까지 다시 묻는다. */
+        found.put("drawing_pages", regen.drawingPages(runId));
         /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
         if (admins.current()) {
             RunService.Inputs inputs = runs.inputsOf(runId);
@@ -364,7 +368,7 @@ public class RunController {
         }
         // 받는 파일 이름은 LORE_제목_1화.png — 옛 브라우저에는 작품 번호(DownloadName).
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null))
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null, episodeOf(meta)))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
@@ -383,7 +387,64 @@ public class RunController {
         return t == null ? "" : String.valueOf(t);
     }
 
+    /* ---- 남은 장 이어 그리기 ------------------------------------------------- */
+
+    /**
+     * 크레딧이 모자라 안 그리고 남겨 둔 장을 이어 그린다. <b>여기서부터 실제로 돈이 나간다.</b>
+     *
+     * 한 편 값은 기본 장 수까지라({@code WebtoonQuality.BASE_PAGES}), 장면이 더 많은데 잔액이 모자라면
+     * 앞 장까지만 그려 완성한다. 다음 날 매일 지급으로 잔액이 생기면 여기서 이어 그린다 — 잔액이 닿는
+     * 장까지만 앞에서부터 그리고, 한 장도 못 그리면 402(크레딧이 모자라요)다.
+     *
+     * 장마다 다시 그리기와 같은 줄에 선다. 화면은 돌려받은 번호마다 {@code GET /regens/{id}} 를 묻는다.
+     * 장마다 따로 받고, 그 장을 못 그리면 그 장 값만 돌려준다.
+     */
+    @Operation(summary = "남은 장 이어 그리기", description = "잔액이 닿는 장까지만 앞에서부터. 장마다 id 로 진행을 물어야 한다.")
+    @PostMapping("/{runId}/continue")
+    public ResponseEntity<Map<String, Object>> continuePages(@PathVariable String runId,
+                                                             @RequestBody(required = false)
+                                                             Map<String, Object> body) {
+        Long userId = mustOwn(runId);
+        /* 이미 그리는 중인 장은 빼고 센다 — 화면을 새로 열어 단추를 또 눌러도 같은 장을 두 번 받지 않는다. */
+        List<Integer> drawing = regen.drawingPages(runId);
+        List<Integer> pending = runs.pendingPages(runId).stream().filter(n -> !drawing.contains(n)).toList();
+        if (pending.isEmpty()) {
+            return ResponseEntity.ok(Map.of("started", List.of(), "left", 0));
+        }
+        int per = com.lore.webtoon.job.WebtoonQuality.extraPageCreditsOf(regen.qualityOf(runId));
+        int have = credits.balanceToday(userId);
+        /* 「여기까지 열기」는 앞에서부터 count 장 — 그 장 수 값이 다 있어야 연다. 고른 만큼이 아니면 사람이 낸 값과 열린 장이 어긋난다.
+           count 가 없으면 잔액이 닿는 데까지 연다. */
+        int want = body != null && body.get("count") instanceof Number n ? Math.min(n.intValue(), pending.size()) : pending.size();
+        if (want <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "열 장 수가 없어요");
+        }
+        if (body != null && body.get("count") != null && have < want * per) {
+            throw new BusinessException(CreditGate.notEnough(),
+                    "크레딧이 모자라요 (" + want + "장 " + (want * per) + " · 보유 " + have + ")");
+        }
+        int afford = Math.min(want, have / per);
+        if (afford <= 0) {
+            throw new BusinessException(CreditGate.notEnough(),
+                    "크레딧이 모자라요 (한 장 " + per + " · 보유 " + have + ")");
+        }
+        List<Map<String, Object>> started = new ArrayList<>();
+        for (int no : pending.subList(0, afford)) {
+            String id = regen.startPending(runId, no, pending);
+            String ref = "pages:" + runId + ":" + no + ":" + id;
+            credits.charge(userId, per, ref, "남은 장 이어 그리기");
+            regen.charged(id, userId, ref);           // 못 그리면 그 장 값을 돌려준다
+            started.add(regen.statusOf(id));
+        }
+        return ResponseEntity.ok(Map.of("started", started, "left", pending.size() - afford));
+    }
+
     /* ---- 다시 그리기 ------------------------------------------------------- */
+
+    /** 이 작품의 한 장을 다시 그리는 값. 작품을 만든 화질을 따른다(#787). */
+    private int regenCost(String runId) {
+        return com.lore.webtoon.job.WebtoonQuality.regenCreditsOf(regen.qualityOf(runId));
+    }
 
     /**
      * 이 장을 다시 그린다. <b>여기서부터 실제로 돈이 나간다.</b>
@@ -403,7 +464,8 @@ public class RunController {
            줄을 세운 뒤에 뺀다. 먼저 빼면 시작이 실패했을 때 낸 것만 사라진다.
            같은 ref 로 두 번 불려도 한 번만 빠진다(CreditGate.charge). */
         /* 안전 검사에 걸려 빈 장으로 완성된 장은 다시 그리기가 무료다(#626) — 크레딧은 처음에 그대로 받았다. */
-        int cost = regen.isUnsafe(runId, no) ? 0 : credits.regenCost();
+        /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 4다(#787). */
+        int cost = regen.isUnsafe(runId, no) ? 0 : regenCost(runId);
         String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
         if (blocked != null) {
             throw new BusinessException(CreditGate.notEnough(), blocked);
@@ -538,8 +600,12 @@ public class RunController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no))
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no, episodeOf(meta)))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
+    private static int episodeOf(Map<String,Object> meta) {
+        return meta.get("episode") instanceof Number n ? n.intValue() : 1;
+    }
+
 }

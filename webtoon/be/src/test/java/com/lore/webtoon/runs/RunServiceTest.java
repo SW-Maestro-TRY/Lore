@@ -33,6 +33,7 @@ class RunServiceTest {
     private StoryStore stories;
     private PageStore pages;
     private RunService runs;
+    private com.lore.webtoon.series.SeriesChapterRepository series;
 
     @BeforeEach
     void 세운다() {
@@ -40,6 +41,7 @@ class RunServiceTest {
         jobs = mock(WebtoonJobRepository.class);
         stories = mock(StoryStore.class);
         pages = mock(PageStore.class);
+        series = mock(com.lore.webtoon.series.SeriesChapterRepository.class);
         when(pages.dimensionsOf(org.mockito.ArgumentMatchers.any())).thenReturn(new int[]{0, 0});
         runs = new RunService(works, jobs, stories, pages, mock(com.lore.webtoon.work.RunLikeRepository.class));
     }
@@ -55,6 +57,7 @@ class RunServiceTest {
         when(job.getStyle()).thenReturn("romance_fantasy");
         when(job.getInputJson()).thenReturn("{\"name\":\"유리엘\",\"genre\":\"로판\"}");
         when(jobs.findByPublicId("job-" + runId)).thenReturn(Optional.of(job));
+        when(job.getPublicId()).thenReturn("job-" + runId);
 
         WebtoonStory story = mock(WebtoonStory.class);
         when(story.getTitle()).thenReturn("얼음 왕자의 계약");
@@ -63,6 +66,96 @@ class RunServiceTest {
         when(story.displayPlot()).thenReturn("계약으로 시작된 관계가 진심이 된다");
         when(stories.chosenOf(runId)).thenReturn(Optional.of(story));
         return work;
+    }
+
+    @Test
+    @DisplayName("마이페이지 카드는 같은 연재의 완성 회차를 한 작품으로 묶는다")
+    void 연재_회차를_작품_카드에_묶는다() {
+        WebtoonWork root = 작품("run-1", false);
+        WebtoonWork next = mock(WebtoonWork.class);
+        when(next.getRunId()).thenReturn("run-2");
+        when(next.getJobId()).thenReturn("job-run-2");
+        when(next.isTrashed()).thenReturn(false);
+        when(works.findFirstByRunId("run-2")).thenReturn(Optional.of(next));
+        when(works.findByJobId("job-run-1")).thenReturn(Optional.of(root));
+        when(works.findByJobId("job-run-2")).thenReturn(Optional.of(next));
+        when(pages.pageNumbersOf("run-1")).thenReturn(List.of(1, 2));
+        when(pages.pageNumbersOf("run-2")).thenReturn(List.of(1, 2));
+        WebtoonJob nextJob = mock(WebtoonJob.class);
+        when(nextJob.getPublicId()).thenReturn("job-run-2");
+        when(nextJob.getStyle()).thenReturn("romance_fantasy");
+        when(jobs.findByPublicId("job-run-2")).thenReturn(Optional.of(nextJob));
+        var chapter = mock(com.lore.webtoon.series.SeriesChapter.class);
+        when(chapter.jobId()).thenReturn("job-run-2");
+        when(chapter.rootJob()).thenReturn("job-run-1");
+        when(chapter.episodeNumber()).thenReturn(2);
+        when(series.findById("job-run-2")).thenReturn(Optional.of(chapter));
+        when(series.findByRootJobOrderByEpisodeNumberAsc("job-run-1")).thenReturn(List.of(chapter));
+        runs.setSeries(series);
+
+        Map<String, Object> card = runs.cardOf("run-2");
+
+        assertThat(card).containsEntry("run_id", "run-1")
+                .containsEntry("episodes", List.of(1, 2))
+                .containsEntry("episode_run_ids", Map.of("1", "run-1", "2", "run-2"));
+    }
+
+    @Test
+    @DisplayName("둘러보기도 연재를 1화 카드 하나로 묶고, 비공개 회차는 번호를 싣지 않는다")
+    void 둘러보기는_연재를_묶는다() {
+        WebtoonWork root = 작품("run-1", true);
+        WebtoonWork two = 작품("run-2", true);
+        WebtoonWork three = 작품("run-3", false);
+        when(works.findByJobId("job-run-1")).thenReturn(Optional.of(root));
+        when(works.findByJobId("job-run-2")).thenReturn(Optional.of(two));
+        when(works.findByJobId("job-run-3")).thenReturn(Optional.of(three));
+        for (String r : List.of("run-1", "run-2", "run-3")) {
+            when(pages.pageNumbersOf(r)).thenReturn(List.of(1, 2));
+        }
+        var c2 = mock(com.lore.webtoon.series.SeriesChapter.class);
+        when(c2.jobId()).thenReturn("job-run-2");
+        when(c2.rootJob()).thenReturn("job-run-1");
+        when(c2.episodeNumber()).thenReturn(2);
+        var c3 = mock(com.lore.webtoon.series.SeriesChapter.class);
+        when(c3.jobId()).thenReturn("job-run-3");
+        when(c3.rootJob()).thenReturn("job-run-1");
+        when(c3.episodeNumber()).thenReturn(3);
+        when(series.findById("job-run-1")).thenReturn(Optional.empty());
+        when(series.findById("job-run-2")).thenReturn(Optional.of(c2));
+        when(series.findById("job-run-3")).thenReturn(Optional.of(c3));
+        when(series.findByRootJobOrderByEpisodeNumberAsc("job-run-1")).thenReturn(List.of(c2, c3));
+        runs.setSeries(series);
+        // 공개된 것만 둘러보기에 온다 — 2화가 1화보다 먼저 와도 카드는 하나다.
+        when(works.onGallery()).thenReturn(List.of(two, root));
+
+        List<Map<String, Object>> cards = runs.browse();
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.getFirst()).containsEntry("run_id", "run-1")
+                .containsEntry("episodes", List.of(1, 2))
+                .containsEntry("episode_run_ids", Map.of("1", "run-1", "2", "run-2"));
+    }
+
+    @Test
+    @DisplayName("1화에 그림이 없으면 공개된 회차를 따로 낸다 — 연재가 통째로 사라지면 안 된다")
+    void 그림_없는_1화() {
+        WebtoonWork root = 작품("run-1", true);
+        WebtoonWork two = 작품("run-2", true);
+        when(works.findByJobId("job-run-1")).thenReturn(Optional.of(root));
+        when(works.findByJobId("job-run-2")).thenReturn(Optional.of(two));
+        when(pages.pageNumbersOf("run-1")).thenReturn(List.of());
+        when(pages.pageNumbersOf("run-2")).thenReturn(List.of(1, 2));
+        var c2 = mock(com.lore.webtoon.series.SeriesChapter.class);
+        when(c2.jobId()).thenReturn("job-run-2");
+        when(c2.rootJob()).thenReturn("job-run-1");
+        when(c2.episodeNumber()).thenReturn(2);
+        when(series.findById("job-run-1")).thenReturn(Optional.empty());
+        when(series.findById("job-run-2")).thenReturn(Optional.of(c2));
+        when(series.findByRootJobOrderByEpisodeNumberAsc("job-run-1")).thenReturn(List.of(c2));
+        runs.setSeries(series);
+        when(works.onGallery()).thenReturn(List.of(two, root));
+
+        assertThat(runs.browse()).extracting(c -> c.get("run_id")).containsExactly("run-2");
     }
 
     @Test
@@ -128,7 +221,7 @@ class RunServiceTest {
         assertThat(sheets).extracting(p -> p.get("caption"))
                 .containsExactly("", "첫 장면", "둘째 장면");
         assertThat(sheets).allSatisfy(p -> assertThat(p)
-                .containsEntry("gap", 0).containsEntry("width", 1));
+                .containsEntry("gap", 0.0).containsEntry("width", 1));
         assertThat(out).containsEntry("logline", "계약으로 시작된 관계가 진심이 된다")
                 .containsEntry("page_count", 3)
                 // 이 길에는 「앞 몇 장만」이 없다 — 둘이 같아야 화면이 그 말을 안 적는다.
@@ -166,6 +259,23 @@ class RunServiceTest {
     }
 
     @Test
+    @DisplayName("편집실에서 고친 여백이 공개본 장 사이 간격으로 나간다")
+    void 고친_여백() {
+        작품("run-1", true);
+        when(pages.pageNumbersOf("run-1")).thenReturn(List.of(1, 2, 3));
+        when(stories.scenesOf("run-1")).thenReturn(List.of());
+        OverlayStore overlays = mock(OverlayStore.class);
+        when(overlays.gapsOf("run-1", 1)).thenReturn(Map.of(1, 3, 2, 1));
+        runs.setOverlays(overlays);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> sheets =
+                (List<Map<String, Object>>) runs.result("run-1").get("pages");
+
+        assertThat(sheets).extracting(p -> p.get("gap")).containsExactly(0.62, 0.07, 0.0);
+    }
+
+    @Test
     @DisplayName("그림이 없으면 완성본도 없다 — 부르는 쪽이 404 를 낸다")
     void 없는_완성본() {
         when(pages.pageNumbersOf(anyString())).thenReturn(List.of());
@@ -186,7 +296,7 @@ class RunServiceTest {
                 .containsEntry("title", "얼음 왕자의 계약")
                 .containsEntry("episode", 1)
                 .containsEntry("episodes", List.of(1))
-                .containsEntry("gap_scale", Map.of())
+                .containsEntry("gap_scale", Map.of("0", 0.0, "1", 0.07, "2", 0.26, "3", 0.62))
                 .containsEntry("page_count", 3);
 
         @SuppressWarnings("unchecked")
@@ -247,5 +357,17 @@ class RunServiceTest {
         assertThat(runs.result("run-1")).isNull();
         assertThat(runs.episode("run-1", 1)).isNull();
         assertThat(runs.cardOf("run-1")).isNull();
+    }
+
+    @Test
+    @DisplayName("장면은 있는데 그림이 없는 장을 이어 그릴 장으로 준다 — 표지가 1장, 장면 n 은 n+1 장")
+    void 안_그린_장() {
+        List<String> scenes = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i", "j");   // 장면 10 = 11장
+
+        assertThat(RunService.pendingPages(List.of(1, 2, 3, 4, 5, 6, 7, 8), scenes))
+                .containsExactly(9, 10, 11);
+        assertThat(RunService.pendingPages(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), scenes)).isEmpty();
+        // 장면을 모르는 옛 작품은 이어 그릴 것이 없다
+        assertThat(RunService.pendingPages(List.of(1, 2, 3), List.of())).isEmpty();
     }
 }

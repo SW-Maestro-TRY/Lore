@@ -3,6 +3,16 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "한 편은 {base}장까지예요. 이야기가 길어 장면이 더 많으면 한 장에 {per}크레딧이 더 들고, 크레딧이 모자라면 {base}장까지 먼저 그린 뒤 나머지는 나중에 이어 그릴 수 있어요.": {
+    en: "An episode includes up to {base} pages. If a longer story needs more scenes, each extra page costs {per} credits; if you're short, we'll draw the first {base} pages and you can continue the rest later.",
+    ja: "1話は{base}ページまでです。話が長くて場面が増えると1ページ{per}クレジットかかり、足りない場合は{base}ページまで先に描いて、残りは後から続けて描けます。",
+    zh: "每话包含 {base} 页。故事较长、场景更多时，每多一页需 {per} 积分；积分不够时会先画前 {base} 页，剩下的之后可以接着画。",
+  },
+  "제목 · 추가 설정": { en: "Title · extra settings", ja: "タイトル · 追加設定", zh: "标题 · 附加设定" },
+  "추가 설정": { en: "Extra settings", ja: "追加設定", zh: "附加设定" },
+  "비워 두면 이야기에 맞춰 지어 드려요": { en: "Leave blank and we'll name it to fit the story", ja: "空欄なら物語に合わせて付けます", zh: "留空则按故事为你起名" },
+  "세계관 규칙·말투·꼭 들어갈 장면처럼 더 알려 주고 싶은 것": { en: "Anything else — world rules, speech style, a scene that must appear", ja: "世界観のルール・口調・必ず入れたい場面など", zh: "世界规则、说话方式、一定要有的场景等" },
+
   /* ---- 빵부스러기 · 폰 제목 ---- */
   "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
   "이야기 · 장르": { en: "Story · Genre", ja: "ストーリー · ジャンル", zh: "故事 · 题材" },
@@ -143,7 +153,7 @@ const dict: Dict = {
   "LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.": { en: "LORE is not responsible for copyright disputes over generated results.", ja: "LOREは生成された結果物の著作権紛争について責任を負いません。", zh: "LORE 对生成结果的版权纠纷不承担责任。" },
   "시작하는 중": { en: "Starting", ja: "開始中", zh: "正在开始" },
   "웹툰 만들기": { en: "Create webtoon", ja: "ウェブトゥーンを作る", zh: "制作条漫" },
-  "시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸려요.": { en: "Times assume an empty queue. It takes longer if others are ahead of you.", ja: "時間は待ち行列が空のときの目安です。前に人がいるとさらにかかります。", zh: "时间以队列为空时为准。前面有人的话会更久。" },
+  "시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.": { en: "Times assume an empty queue. It may take longer if others are ahead of you.", ja: "時間は待ち行列が空のときの目安です。前に人がいるとさらにかかることがあります。", zh: "时间以队列为空时为准。前面有人的话会更久。" },
   "{time} · 앞에 사람이 있으면 더 걸려요": { en: "{time} · longer if others are ahead", ja: "{time} · 前に人がいるとさらにかかります", zh: "{time} · 前面有人会更久" },
 
   /* 화질 (lib/wizardData QUALITY_INFO) — lede 의 " · " 는 앞부분만 잘라 쓰므로 유지 */

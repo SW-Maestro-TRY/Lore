@@ -1,0 +1,625 @@
+/* Approved reader: cover first, episode controls, one subscription row and comments. */
+.wt .wt-result-final .wt-result-page {
+  max-width: 880px;
+  width: 100%;
+  padding-top: 30px;
+}
+.wt .wt-reader-back {
+  align-self: flex-start;
+  margin-bottom: 24px;
+}
+.wt .wt-reader-intro {
+  display: grid;
+  grid-template-columns: 164px minmax(0, 1fr);
+  gap: 28px;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 20px;
+}
+.wt .wt-reader-cover {
+  width: 164px;
+  aspect-ratio: 2/3;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 10px;
+  background: var(--water-light);
+}
+.wt .wt-reader-intro-content {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+.wt .wt-result-final .wt-result-head {
+  align-items: stretch;
+  text-align: left;
+}
+.wt .wt-result-final .wt-result-titlerow {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+}
+.wt .wt-result-final .wt-result-titlemid {
+  flex: 1;
+  font-size: 28px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow: visible;
+}
+.wt .wt-result-final .wt-result-titletext {
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.wt .wt-result-final .wt-result-titleacts {
+  flex: none;
+}
+.wt .wt-result-final .wt-result-meta {
+  line-height: 1.8;
+  font-size: 12px;
+}
+.wt .wt-result-final .wt-result-acts {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.wt .wt-result-final .wt-result-acts .btn {
+  height: 40px;
+  font-size: 13px;
+  padding: 0 14px;
+}
+.wt .wt-result-final .wt-result-dlrow {
+  justify-content: flex-start;
+  margin: 0;
+}
+.wt .wt-result-final .wt-result-sheet {
+  border-radius: 0;
+  border: 0;
+  margin: 0;
+}
+.wt .wt-reader-chapterline {
+  width: 720px;
+  max-width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--line-strong);
+  padding: 16px 0;
+}
+.wt .wt-reader-chapterline .btn-ghost {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.wt .wt-reader-endnav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 0 0 26px;
+  border-bottom: 1px solid var(--line-strong);
+}
+.wt .wt-reader-endnav > .btn-p {
+  flex: 1 0 100%;
+}
+.wt .wt-reader-endnav > .btn-w {
+  flex: 1;
+  background: var(--water-light);
+  border: 0;
+}
+.wt .wt-reader-no-next {
+  flex: 1 0 100%;
+  padding: 12px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.wt .wt-reader-create {
+  display: grid;
+  /* 표지를 키웠다(2026-10-25) — 170px 이면 무슨 작품인지 안 보인다는 피드백 */
+  grid-template-columns: minmax(0, 1fr) 240px;
+  background: #182333;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 28px 0 40px;
+  min-height: 300px;
+}
+.wt .wt-reader-create > div {
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px;
+}
+.wt .wt-reader-create h2 {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+.wt .wt-reader-create p {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 6px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  word-break: keep-all;
+}
+.wt .wt-reader-create .btn {
+  background: var(--sea);
+  color: #17202c;
+  min-width: 200px;
+}
+.wt .wt-reader-create small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.wt .wt-reader-create > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 20%;
+  border-left: 1px solid var(--line);
+}
+.wt .wt-reader-bottom {
+  width: 720px;
+  max-width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0 32px;
+}
+.wt .wt-reader-chapters {
+  display: grid;
+  gap: 6px;
+}
+.wt .wt-reader-chapters > button {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  padding: 18px 14px;
+  border-radius: 9px;
+  background: var(--water-light);
+  color: var(--ink);
+  border: 1px solid transparent;
+  font-size: 13px;
+}
+.wt .wt-reader-chapters > button.current {
+  border-color: var(--sea);
+}
+.wt .wt-reader-chapters small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.wt .wt-share-list,
+.wt .wt-result-soonbox,
+.wt .wt-works-combo-list {
+  background: var(--bg);
+  color: var(--ink);
+}
+.wt .wt-result-pgdl {
+  background: #101c2aef;
+  color: var(--ink);
+}
+.wt .wt-result-titleinput {
+  background: var(--water-light);
+  color: var(--ink);
+}
+.wt .wt-result-final .wt-community {
+  width: 720px;
+  max-width: 100%;
+  margin: 32px 0 0;
+  padding: 0;
+  border: 0;
+}
+.wt .wt-community-head {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.wt .wt-community-cover {
+  width: 50px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: none;
+}
+.wt .wt-community-series {
+  flex: 1;
+  min-width: 0;
+}
+.wt .wt-community-series h3 {
+  font-size: 18px;
+  line-height: 1.45;
+  margin-bottom: 6px;
+  word-break: keep-all;
+}
+.wt .wt-community-series > span {
+  font-size: 12px;
+}
+.wt .wt-community-head > .btn {
+  flex: none;
+  min-width: 74px;
+  padding: 8px 14px;
+  font-size: 12px;
+  height: 38px;
+  min-height: 38px;
+}
+.wt .wt-comments-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 18px;
+  margin-top: 36px;
+}
+.wt .wt-comments-title span {
+  color: var(--dim);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.wt .wt-comment-compose {
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--water-light);
+  overflow: hidden;
+  margin-top: 18px;
+}
+.wt .wt-comment-compose:focus-within {
+  border-color: var(--sea);
+}
+.wt .wt-comment-compose textarea {
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: none;
+  min-height: 88px;
+  padding: 16px;
+}
+.wt .wt-comment-compose .wt-community-actions {
+  padding: 0 12px 12px;
+  margin: 0;
+}
+.wt .wt-comment-compose .btn {
+  min-height: 34px;
+  padding: 6px 16px;
+}
+.wt .wt-community-error {
+  color: #efa99c;
+}
+.wt .wt-comment-meta b {
+  font-size: 13px;
+}
+.wt .wt-comment-meta time {
+  font-size: 11px;
+  margin-left: auto;
+}
+.wt .wt-comment > p {
+  font-size: 14px;
+  line-height: 1.75;
+}
+.wt .wt-comment > .wt-community-actions {
+  justify-content: flex-end;
+}
+.wt .wt-comments {
+  margin-top: 20px;
+}
+@media (max-width: 767px) {
+  .wt .wt-reader-intro {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .wt .wt-reader-cover {
+    width: 148px;
+    justify-self: center;
+  }
+  .wt .wt-result-final .wt-result-titlemid {
+    font-size: 23px;
+    text-align: center;
+  }
+  .wt .wt-result-final .wt-result-titlerow {
+    align-items: center;
+  }
+  .wt .wt-result-final .wt-result-titleacts {
+    position: relative;
+  }
+  .wt .wt-result-final .wt-result-head {
+    text-align: center;
+  }
+  .wt .wt-result-final .wt-result-acts,
+  .wt .wt-result-final .wt-result-dlrow {
+    justify-content: center;
+  }
+  .wt .wt-result-final .wt-result-sheet {
+    max-width: none;
+    width: calc(100% + 40px);
+  }
+  .wt .wt-reader-create {
+    grid-template-columns: minmax(0, 1fr) 132px;
+    min-height: 240px;
+  }
+  .wt .wt-reader-create > div {
+    padding: 24px 18px;
+    gap: 20px;
+  }
+  .wt .wt-reader-create h2 {
+    font-size: 19px;
+  }
+  .wt .wt-reader-create p {
+    font-size: 12.5px;
+  }
+  .wt .wt-reader-create .btn {
+    min-width: 0;
+    width: 100%;
+    font-size: 12px;
+    padding-inline: 10px;
+  }
+  .wt .wt-community-series h3 {
+    font-size: 16px;
+  }
+  .wt .wt-community-cover {
+    width: 44px;
+    height: 62px;
+  }
+  .wt .wt-community-head {
+    gap: 12px;
+  }
+  .wt .wt-reader-chapters > button {
+    grid-template-columns: 32px 1fr;
+    gap: 8px;
+  }
+  .wt .wt-reader-chapters small {
+    grid-column: 2;
+  }
+  .wt .wt-result-final .wt-result-zoom {
+    z-index: 100;
+  }
+}
+
+/* 작품 머리 — 표지 왼쪽, 오른쪽에 장르 · 제목 · 「캐릭터 · N화」 · 찜 · 넓은 공유(2026-10-25).
+   표지는 키우되 시안보다 작게, 제목·여백은 줄였다. */
+.wt .wt-reader-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px; font-size: 13px; }
+.wt .wt-reader-back span { font-size: 18px; line-height: 1; }
+.wt .wt-reader-intro { grid-template-columns: 200px minmax(0, 1fr); gap: 22px; align-items: start; }
+.wt .wt-reader-cover { width: 200px; border-radius: 12px; }
+.wt .wt-reader-intro-content { gap: 12px; padding-top: 4px; }
+.wt .wt-result-final .wt-result-head { gap: 6px; }
+.wt .wt-result-genre { font-size: 12px; font-weight: 700; color: var(--sea); }
+.wt .wt-result-final .wt-result-titlemid { font-size: 21px; line-height: 1.35; }
+.wt .wt-result-final .wt-result-meta { font-size: 13px; line-height: 1.5; }
+.wt .wt-result-like { display: flex; margin-top: 2px; }
+.wt .wt-result-final .wt-result-acts-other { display: grid; gap: 8px; }
+.wt .wt-result-final .wt-result-acts-other .wt-share { display: block; }
+.wt .wt-result-final .wt-result-acts .wt-result-sharewide {
+  width: 100%; height: 42px; justify-content: center; border-radius: 10px;
+  background: var(--water-light); color: var(--ink); border: 0; font-size: 13.5px;
+}
+@media (max-width: 767px) {
+  /* 폰도 옆으로 — 표지를 작게 왼쪽에 두고 정보를 옆에 */
+  .wt .wt-reader-intro { grid-template-columns: 112px minmax(0, 1fr); gap: 14px; }
+  .wt .wt-reader-cover { width: 112px; justify-self: start; }
+  .wt .wt-result-final .wt-result-head { text-align: left; }
+  .wt .wt-result-final .wt-result-titlemid { font-size: 17px; text-align: left; }
+  .wt .wt-result-final .wt-result-titlerow { align-items: flex-start; }
+  .wt .wt-result-final .wt-result-acts-other { justify-content: stretch; }
+}
+.wt .wt-result-final .wt-result-acts.wt-result-acts-other { display: grid; grid-template-columns: 1fr; width: 100%; }
+.wt .wt-result-final .wt-result-acts-other > .wt-share { display: block; width: 100%; }
+
+/* 다 읽은 뒤 「다음화 보기」와 「회차 목록」을 한 줄에 — 다음화가 넓게(2026-10-25) */
+.wt .wt-reader-endnav { flex-wrap: nowrap; }
+.wt .wt-reader-endnav > .btn-p { flex: 2 1 0; min-width: 0; height: 50px; font-size: 15px; }
+.wt .wt-reader-endnav > .btn-w { flex: 1 1 0; min-width: 0; height: 50px; }
+.wt .wt-reader-endnav > .wt-reader-no-next { flex: 2 1 0; }
+
+/* 「‹ 둘러보기」가 너무 작다는 피드백 — 누르기 쉬운 크기로 */
+.wt .wt-reader-back { font-size: 16px; font-weight: 600; padding: 8px 12px 8px 4px; margin-bottom: 14px; gap: 8px; }
+.wt .wt-reader-back span { font-size: 24px; }
+
+/* 표지를 한 번 더 키운다 */
+.wt .wt-reader-intro { grid-template-columns: 260px minmax(0, 1fr); gap: 26px; }
+.wt .wt-reader-cover { width: 260px; }
+
+/* 찜 옆 댓글 수 */
+.wt .wt-result-like { align-items: center; gap: 6px; flex-wrap: wrap; }
+.wt .wt-result-commentcount {
+  display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 10px;
+  border: 0; border-radius: 999px; background: transparent; color: var(--ink);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.wt .wt-result-commentcount:hover { background: var(--water-light); }
+
+@media (max-width: 767px) {
+  .wt .wt-reader-intro { grid-template-columns: 140px minmax(0, 1fr); gap: 14px; }
+  .wt .wt-reader-cover { width: 140px; }
+  .wt .wt-reader-back { font-size: 15px; }
+  .wt .wt-reader-endnav > .btn-p, .wt .wt-reader-endnav > .btn-w { height: 46px; font-size: 13.5px; }
+}
+.wt .wt-reader-back {
+  height: 42px; padding: 0 18px 0 12px; border-radius: 999px; background: var(--water-light);
+  color: var(--ink); font-size: 16px; font-weight: 700;
+}
+.wt .wt-reader-back:hover { background: var(--line-strong); }
+@media (max-width: 767px) { .wt .wt-reader-back { height: 40px; font-size: 15px; } }
+.wt .wt-result-final button.wt-reader-back { font-size: 17px; height: 46px; padding: 0 20px 0 14px; }
+.wt .wt-result-final button.wt-reader-back span { font-size: 26px; margin-top: -2px; }
+@media (max-width: 767px) { .wt .wt-result-final button.wt-reader-back { font-size: 16px; height: 42px; } }
+
+/* 공유는 찜·댓글 옆 작은 알약으로 */
+.wt .wt-result-shareinline {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border: 1px solid var(--line-strong); border-radius: 999px; background: transparent; color: var(--ink);
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.wt .wt-result-shareinline:hover { background: var(--water-light); }
+.wt .wt-result-final .wt-result-acts-other:empty { display: none; }
+
+/* PC 는 웹툰을 넓게 — 720px 은 PC 로 보기엔 작다는 피드백(2026-10-25) */
+@media (min-width: 768px) {
+  .wt .wt-result-final .wt-result-page { max-width: 980px; }
+  .wt .wt-result-sheet,
+  .wt .wt-reader-chapterline,
+  .wt .wt-reader-bottom,
+  .wt .wt-result-final .wt-community { width: 920px; }
+  .wt .wt-reader-intro { max-width: 100%; }
+  .wt .wt-reader-intro { grid-template-columns: 280px minmax(0, 1fr); gap: 30px; }
+  .wt .wt-reader-cover { width: 280px; }
+  .wt .wt-result-final .wt-result-titlemid { font-size: 26px; }
+  .wt .wt-result-genre { font-size: 13px; }
+  .wt .wt-result-final .wt-result-meta { font-size: 14.5px; }
+}
+
+/* 「1화 · 회차 목록」 줄 글자가 너무 작다는 피드백 */
+.wt .wt-reader-chapterline b { font-size: 19px; }
+.wt .wt-reader-chapterline .btn-ghost { font-size: 16px; font-weight: 700; padding: 8px 4px; }
+@media (max-width: 767px) {
+  .wt .wt-reader-chapterline b { font-size: 17px; }
+  .wt .wt-reader-chapterline .btn-ghost { font-size: 15px; }
+}
+
+/* 작품 구독 줄 — 글자가 작아 묻힌다는 피드백, 흰 카드로 띄운다(2026-10-25) */
+.wt .wt-result-final .wt-community-head {
+  padding: 18px 20px; border-radius: 14px; background: #fff; gap: 16px;
+}
+.wt .wt-result-final .wt-community-cover { width: 64px; height: 90px; border-radius: 8px; }
+.wt .wt-result-final .wt-community-series h3 { font-size: 21px; margin-bottom: 4px; color: #17202c; }
+.wt .wt-result-final .wt-community-series > span { font-size: 14.5px; color: #5f6b7a; }
+.wt .wt-result-final .wt-community-head > .btn { height: 46px; min-width: 96px; padding: 0 20px; font-size: 15px; font-weight: 700; }
+.wt .wt-result-final .wt-community-head > .btn-w { background: #eef1f5; color: #17202c; border: 0; }
+.wt .wt-result-final .wt-community-head > .btn-p { background: #17202c; color: #fff; }
+.wt .wt-reader-no-next { text-align: right; }
+@media (max-width: 767px) {
+  .wt .wt-result-final .wt-community-head { padding: 14px; gap: 12px; }
+  .wt .wt-result-final .wt-community-cover { width: 52px; height: 74px; }
+  .wt .wt-result-final .wt-community-series h3 { font-size: 17px; }
+  .wt .wt-result-final .wt-community-series > span { font-size: 13px; }
+  .wt .wt-result-final .wt-community-head > .btn { height: 42px; min-width: 76px; font-size: 14px; padding: 0 14px; }
+}
+.wt .wt-reader-endnav > .btn { white-space: nowrap; }
+
+/* 다 읽은 뒤 만들기 칸 표지 — 한 번 더 키운다(2026-10-25) */
+.wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 320px; min-height: 400px; }
+@media (max-width: 767px) {
+  .wt .wt-reader-endnav > .btn-w { flex: 1 1 0; padding: 0 10px; }
+  .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 160px; min-height: 280px; }
+}
+
+/* 댓글·「이런 웹툰은 어때요」 — 글자를 키우고, 추천 줄을 웹툰·댓글과 같은 폭에 맞춘다(2026-10-25).
+   추천 줄은 720px 에 남아 있어 넓어진 읽기 칸(920px)과 왼쪽 끝이 어긋났다. */
+.wt .wt-comments-title { font-size: 22px; gap: 10px; }
+.wt .wt-comments-title span { font-size: 17px; }
+.wt .wt-community > p, .wt .wt-community-login { font-size: 15px; }
+.wt .wt-comment-meta b { font-size: 15px; }
+.wt .wt-comment-meta time { font-size: 13px; }
+.wt .wt-comment > p { font-size: 16px; line-height: 1.7; }
+.wt .wt-comment-compose textarea { font-size: 15px; }
+.wt .wt-result-suggest { width: 920px; max-width: 100%; padding: 28px 0 24px; }
+.wt .wt-result-suggest .wt-strip { gap: 14px; }
+.wt .wt-result-suggest .wt-strip-title { font-size: 22px; }
+.wt .wt-result-suggest .wt-strip-row {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; overflow: visible;
+}
+.wt .wt-result-suggest .wt-strip-item { width: auto; }
+.wt .wt-result-suggest .wt-strip-item img,
+.wt .wt-result-suggest .wt-strip-nocover { width: 100%; height: auto; aspect-ratio: 2 / 3; border-radius: 10px; }
+.wt .wt-result-suggest .wt-strip-name { font-size: 15px; margin-top: 4px; }
+@media (max-width: 767px) {
+  .wt .wt-comments-title { font-size: 19px; }
+  .wt .wt-comment > p { font-size: 15px; }
+  .wt .wt-result-suggest .wt-strip-title { font-size: 19px; }
+  .wt .wt-result-suggest .wt-strip-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .wt .wt-result-suggest .wt-strip-name { font-size: 14px; }
+}
+
+/* ── 구독 카드 · 회차 목록 (보낸 시안대로, 2026-10-25) ───────────────────────
+   흰 카드는 되돌리고 어두운 카드에 산호색 「＋ 구독」. 회차 목록은 펼쳐 둔다. */
+.wt .wt-result-final .wt-community-head { background: #1a2433; padding: 16px 18px; border-radius: 16px; }
+.wt .wt-result-final .wt-community-cover { width: 70px; height: 92px; border-radius: 12px; }
+.wt .wt-result-final .wt-community-series h3 { color: var(--ink); font-size: 20px; }
+.wt .wt-result-final .wt-community-series > span { color: var(--muted); font-size: 14.5px; }
+.wt .wt-result-final .wt-community-head > .btn-p { background: var(--sea); color: #17202c; border-radius: 14px; }
+.wt .wt-result-final .wt-community-head > .btn-w { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); border-radius: 14px; }
+.wt .wt-reader-eplist { display: flex; flex-direction: column; gap: 12px; margin-top: 26px; }
+.wt .wt-reader-eplist-head { display: flex; align-items: baseline; justify-content: space-between; }
+.wt .wt-reader-eplist-head h3 { margin: 0; font-size: 20px; }
+.wt .wt-reader-eplist-head span { font-size: 14px; color: var(--muted); }
+.wt .wt-reader-eplist ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+.wt .wt-reader-eplist li button {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px 18px; border: 0; border-radius: 14px;
+  background: #1a2433; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.wt .wt-reader-eplist li button:hover { background: #212d3f; }
+.wt .wt-reader-eplist li button > svg:first-child { color: var(--sea); flex: none; }
+.wt .wt-reader-eplist li button > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wt .wt-reader-eplist li b { font-size: 16.5px; }
+.wt .wt-reader-eplist li small { font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wt .wt-reader-eplist li button > svg:last-child { color: var(--muted); flex: none; }
+.wt .wt-reader-eplist li em { font-style: normal; font-size: 13px; font-weight: 700; color: var(--sea); flex: none; }
+.wt .wt-reader-eplist li button.current { box-shadow: inset 0 0 0 1.5px var(--sea); cursor: default; }
+.wt .wt-reader-nextwide, .wt .wt-reader-editwide { width: 100%; height: 52px; font-size: 16px; border-radius: 14px; }
+.wt .wt-reader-wait { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 0 6px; text-align: center; }
+.wt .wt-reader-wait b { font-size: 16px; font-weight: 600; color: var(--ink); }
+.wt .wt-reader-wait span { font-size: 13.5px; color: var(--muted); }
+.wt .wt-reader-eplist + .wt-reader-create { margin-top: 32px; }
+
+/* 만들기 칸 — 표지는 넓게, 칸 높이는 그대로(표지 위쪽만 보이게 자른다) */
+.wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; height: 300px; }
+.wt .wt-reader-create > img { object-position: 50% 12%; }
+@media (max-width: 767px) {
+  .wt .wt-result-final .wt-community-cover { width: 56px; height: 74px; }
+  .wt .wt-result-final .wt-community-series h3 { font-size: 17px; }
+  .wt .wt-reader-eplist li button { padding: 14px; }
+  .wt .wt-reader-eplist li b { font-size: 15.5px; }
+  .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 150px; height: 260px; }
+}
+/* 칸 높이는 글 쪽이 정하고, 표지는 그 높이를 채운다(높이 0 + 최소 100% — 그림 자체 높이로 칸이 늘지 않게) */
+.wt .wt-reader-create { height: auto; }
+.wt .wt-reader-create > img { height: 0; min-height: 100%; }
+.wt .wt-reader-create > div { padding-block: 34px; }
+@media (max-width: 767px) { .wt .wt-reader-create { height: auto; } .wt .wt-reader-create > div { padding-block: 22px; } }
+
+/* 회차 줄 — 회차 그림 썸네일 + 선으로 나눈 목록(보낸 시안, 2026-10-25) */
+.wt .wt-reader-eplist-head { padding-bottom: 14px; border-bottom: 1px solid var(--line-strong); }
+.wt .wt-reader-eplist ul { gap: 0; }
+.wt .wt-reader-eplist li { border-bottom: 1px solid var(--line-strong); }
+.wt .wt-reader-eplist li button { background: transparent; border-radius: 0; padding: 14px 4px; gap: 16px; }
+.wt .wt-reader-eplist li button:hover { background: #ffffff08; }
+.wt .wt-reader-eplist li button.current { box-shadow: none; background: #e6a39312; }
+.wt .wt-reader-epthumb {
+  flex: none; width: 96px; height: 70px; border-radius: 14px; object-fit: cover; object-position: 50% 20%;
+  background: var(--water-light); display: block;
+}
+@media (max-width: 767px) { .wt .wt-reader-epthumb { width: 80px; height: 58px; border-radius: 12px; } }
+.wt .wt-reader-epthumb { object-position: 50% 28%; }
+/* 「이런 웹툰은 어때요」 한 단계 작게 — 넷이 꽉 차니 너무 크다는 피드백 */
+.wt .wt-result-suggest .wt-strip-row { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+.wt .wt-result-suggest .wt-strip-title { font-size: 20px; }
+.wt .wt-result-suggest .wt-strip-name { font-size: 14px; }
+@media (max-width: 767px) { .wt .wt-result-suggest .wt-strip-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; } .wt .wt-result-suggest .wt-strip-name { font-size: 12.5px; } }
+
+/* 만들기 칸 표지 — 칸 오른쪽을 꽉 채운다(2026-10-26). 표지는 세로 2:3 이라 조금 잘리지만,
+   칸 폭을 좁혀(380 → 300px) 위쪽만 남던 것보다 덜 잘리게 한다. 칸 높이는 글 쪽이 정하는 그대로다. */
+.wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 300px; }
+.wt .wt-reader-create-art { position: relative; overflow: hidden; border-left: 1px solid var(--line); }
+.wt .wt-reader-create-art > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 12%;
+}
+@media (max-width: 767px) {
+  .wt .wt-reader-create { grid-template-columns: minmax(0, 1fr) 140px; }
+}
+/* 위쪽 「회차 목록」 단추로 펼친 목록 — 본문 그림과 띄운다. 「다음 이야기를 기다려 주세요」는 아래 목록에만 */
+.wt .wt-reader-eplist.top { align-self: stretch; width: 100%; margin: 4px 0 28px; scroll-margin-top: calc(var(--lore-header-h, 64px) + 16px); }
+.wt .wt-reader-eplist.top .wt-reader-wait { display: none; }
+
+/* 회차 목록 끝 「N화 만들기」 — 점선 칸으로 다른 회차와 구분(2026-10-26) */
+.wt .wt-reader-eplist li button.wt-reader-epnew { border: 1px dashed var(--line-strong); background: transparent; }
+.wt .wt-reader-eplist li button > .wt-reader-epplus { flex: none; display: grid; place-items: center; color: var(--sea); }

@@ -193,23 +193,23 @@ const dict: Dict = {
   },
 
   "마음에 들지 않으면 다시 만들 수 있나요?": { en: "Can I redo it if I don't like it?", ja: "気に入らなければ作り直せますか？", zh: "不满意可以重做吗？" },
-  "네. **「2번 확인하며」**를 고르면 캐릭터 시트와 이야기 단계에서 확인하고 다시 만들 수 있어요. 이야기를 다시 지을 때는 크레딧이 더 들지 않고, 원하는 방향을 메모로 적어 줄 수 있습니다. 완성한 뒤에는 편집실에서 마음에 안 드는 장면만 골라 다시 그릴 수 있어요(**한 장면 3크레딧**).": {
-    en: "Yes. If you choose **\"Check twice along the way\"**, you can review and redo the character sheet and story steps. Rewriting the story costs no extra credits, and you can leave a note about the direction you want. After it's finished, you can pick just the scenes you don't like and redraw them in the editing room (**3 credits per scene**).",
-    ja: "はい。**「2回確認しながら」**を選ぶと、キャラクターシートと物語の段階で確認して作り直せます。物語を作り直すときは追加のクレジットはかからず、希望の方向をメモで伝えられます。完成後は、気に入らない場面だけを選んで編集室で描き直せます（**1場面3クレジット**）。",
-    zh: "可以。选择**「确认两次」**的话，能在角色设定表和故事阶段确认后重做。重写故事不会额外扣积分，还能留言说明想要的方向。完成之后，可以在编辑室只挑不满意的场景重新绘制（**每个场景 3 积分**）。",
+  "네. **「2번 확인하며」**를 고르면 캐릭터 시트와 이야기 단계에서 확인하고 다시 만들 수 있어요. 이야기를 다시 지을 때는 크레딧이 더 들지 않고, 원하는 방향을 메모로 적어 줄 수 있습니다. 완성한 뒤에는 편집실에서 마음에 안 드는 장면만 골라 다시 그릴 수 있어요(**한 장면 3크레딧, 「너울」은 4크레딧**).": {
+    en: "Yes. If you choose **\"Check twice along the way\"**, you can review and redo the character sheet and story steps. Rewriting the story costs no extra credits, and you can leave a note about the direction you want. After it's finished, you can pick just the scenes you don't like and redraw them in the editing room (**3 credits per scene, 4 for Swell**).",
+    ja: "はい。**「2回確認しながら」**を選ぶと、キャラクターシートと物語の段階で確認して作り直せます。物語を作り直すときは追加のクレジットはかからず、希望の方向をメモで伝えられます。完成後は、気に入らない場面だけを選んで編集室で描き直せます（**1場面3クレジット、「うねり」は4**）。",
+    zh: "可以。选择**「确认两次」**的话，能在角色设定表和故事阶段确认后重做。重写故事不会额外扣积分，还能留言说明想要的方向。完成之后，可以在编辑室只挑不满意的场景重新绘制（**每个场景 3 积分，「涌浪」为 4**）。",
   },
 
   "크레딧은 무엇이고, 돈이 드나요?": { en: "What are credits, and does it cost money?", ja: "クレジットとは何ですか？お金はかかりますか？", zh: "积分是什么？需要付费吗？" },
-  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **12크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **12크레딧**(가장 높은 화질 「너울」은 18), 컷 하나 다시 그리기는 **3크레딧**, 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.** **지금은 모든 기능이 무료**이고, 결제 수단을 넣는 곳도 없어요. 크레딧을 돈으로 사는 기능은 아직 준비 중입니다. 유료 기능이 생기면 미리 공지하고 안내해 드릴게요.": {
-    en: "They're the in-service unit that gets used up when you generate something. You get **12 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **12 credits** (18 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits**, and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.** **Everything is free right now**, and there's nowhere to enter payment details. Buying credits isn't available yet. If paid features arrive, we'll announce them in advance.",
-    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**12クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**12クレジット**（最高画質「うねり」は18）、コマ1枚の描き直しは**3クレジット**、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。****現在はすべての機能が無料**で、支払い情報を入力する場所もありません。クレジットの購入はまだ準備中です。有料機能を始める際は、事前にお知らせします。",
-    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**12 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**12 积分**（最高画质「涌浪」为 18），重画一格是**3 积分**，创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。****目前所有功能都免费**，也没有输入付款信息的地方。积分购买功能还在准备中。如果将来推出付费功能，我们会提前公告。",
+  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **15크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **15크레딧**(가장 높은 화질 「너울」은 25), 컷 하나 다시 그리기는 **3크레딧**(「너울」로 만든 작품은 4), 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.** **지금은 모든 기능이 무료**이고, 결제 수단을 넣는 곳도 없어요. 크레딧을 돈으로 사는 기능은 아직 준비 중입니다. 유료 기능이 생기면 미리 공지하고 안내해 드릴게요.": {
+    en: "They're the in-service unit that gets used up when you generate something. You get **15 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **15 credits** (25 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits** (4 for Swell episodes), and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.** **Everything is free right now**, and there's nowhere to enter payment details. Buying credits isn't available yet. If paid features arrive, we'll announce them in advance.",
+    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**15クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**15クレジット**（最高画質「うねり」は25）、コマ1枚の描き直しは**3クレジット**（「うねり」で作った作品は4）、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。****現在はすべての機能が無料**で、支払い情報を入力する場所もありません。クレジットの購入はまだ準備中です。有料機能を始める際は、事前にお知らせします。",
+    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**15 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**15 积分**（最高画质「涌浪」为 25），重画一格是**3 积分**（「涌浪」作品为 4），创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。****目前所有功能都免费**，也没有输入付款信息的地方。积分购买功能还在准备中。如果将来推出付费功能，我们会提前公告。",
   },
   "크레딧은 무엇인가요?": { en: "What are credits?", ja: "クレジットとは何ですか？", zh: "积分是什么？" },
-  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **12크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **12크레딧**(가장 높은 화질 「너울」은 18), 컷 하나 다시 그리기는 **3크레딧**, 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.**": {
-    en: "They're the in-service unit that gets used up when you generate something. You get **12 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **12 credits** (18 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits**, and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.**",
-    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**12クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**12クレジット**（最高画質「うねり」は18）、コマ1枚の描き直しは**3クレジット**、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。**",
-    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**12 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**12 积分**（最高画质「涌浪」为 18），重画一格是**3 积分**，创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。**",
+  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **15크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **15크레딧**(가장 높은 화질 「너울」은 25), 컷 하나 다시 그리기는 **3크레딧**(「너울」로 만든 작품은 4), 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.**": {
+    en: "They're the in-service unit that gets used up when you generate something. You get **15 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **15 credits** (25 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits** (4 for Swell episodes), and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.**",
+    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**15クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**15クレジット**（最高画質「うねり」は25）、コマ1枚の描き直しは**3クレジット**（「うねり」で作った作品は4）、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。**",
+    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**15 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**15 积分**（最高画质「涌浪」为 25），重画一格是**3 积分**（「涌浪」作品为 4），创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。**",
   },
 
   "돈을 내야 하나요?": { en: "Do I have to pay?", ja: "お金はかかりますか？", zh: "需要付费吗？" },
@@ -262,6 +262,36 @@ const dict: Dict = {
   },
 
   /* ---- 푸터 ---- */
+  /* ---- 푸터 네 칸 · 자주 묻는 질문 분류 (2026-10-26) ---- */
+  "내 캐릭터가 주인공인 웹툰을 만드는 곳": { en: "Where your character becomes the lead of a webtoon", ja: "自分のキャラクターが主人公のウェブトゥーンを作る場所", zh: "让你的角色成为漫画主角的地方" },
+  "서비스": { en: "Service", ja: "サービス", zh: "服务" },
+  "둘러보기": { en: "Browse", ja: "見て回る", zh: "浏览" },
+  "내 웹툰": { en: "My webtoons", ja: "マイウェブトゥーン", zh: "我的漫画" },
+  "자주 묻는 질문": { en: "FAQ", ja: "よくある質問", zh: "常见问题" },
+  "법적 고지": { en: "Legal", ja: "法的情報", zh: "法律信息" },
+  "고객지원": { en: "Support", ja: "サポート", zh: "客户支持" },
+  "대표": { en: "CEO", ja: "代表", zh: "负责人" },
+  "주소": { en: "Address", ja: "住所", zh: "地址" },
+  "전화": { en: "Phone", ja: "電話", zh: "电话" },
+  "이메일": { en: "Email", ja: "メール", zh: "邮箱" },
+  "통신판매업": { en: "Mail-order reg.", ja: "通信販売業", zh: "通信销售业" },
+  "© 2026 LORE · TRY팀. All rights reserved.": { en: "© 2026 LORE · Team TRY. All rights reserved.", ja: "© 2026 LORE · TRYチーム. All rights reserved.", zh: "© 2026 LORE · TRY 团队. All rights reserved." },
+  "LORE는 AI 창작 도구를 제공해요. 올린 사진·그림과 만든 작품의 저작권 관련 책임은 이용자에게 있어요.": {
+    en: "LORE provides AI creative tools. Users are responsible for copyright matters concerning the photos and drawings they upload and the works they make.",
+    ja: "LOREはAI創作ツールを提供します。アップロードした写真・絵と作った作品の著作権に関する責任は利用者にあります。",
+    zh: "LORE 提供 AI 创作工具。上传的照片、图片以及所做作品的著作权相关责任由用户承担。",
+  },
+  "주요": { en: "Top", ja: "主な質問", zh: "主要" },
+  "이용 안내": { en: "Using LORE", ja: "ご利用案内", zh: "使用指南" },
+  "크레딧·결제": { en: "Credits & payment", ja: "クレジット・決済", zh: "积分与支付" },
+  "작품 관리": { en: "Your works", ja: "作品の管理", zh: "作品管理" },
+
+  /* ---- 캐릭터 일관성 — 시트 머리줄 · 구역 이름 ---- */
+  "전신 · 다섯 방향": { en: "Full body · 5 angles", ja: "全身・5方向", zh: "全身 · 五个角度" },
+  "얼굴 각도": { en: "Face angles", ja: "顔の角度", zh: "脸部角度" },
+  "표정": { en: "Expressions", ja: "表情", zh: "表情" },
+  "디테일": { en: "Details", ja: "ディテール", zh: "细节" },
+
   "LORE 웹툰 스튜디오": { en: "LORE Webtoon Studio", ja: "LORE ウェブトゥーンスタジオ", zh: "LORE 漫画工作室" },
   "이용약관": { en: "Terms of Service", ja: "利用規約", zh: "服务条款" },
   "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },

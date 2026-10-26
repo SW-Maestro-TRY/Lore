@@ -2,7 +2,7 @@
 .wt .wt-notify-picks { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .wt .wt-notify-pick {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; cursor: pointer;
-  padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink);
+  padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink);
   transition: border-color .15s ease, background .15s ease;
 }
 .wt .wt-notify-pick b { font-size: 15px; }

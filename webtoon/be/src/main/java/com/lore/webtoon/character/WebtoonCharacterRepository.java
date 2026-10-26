@@ -11,6 +11,13 @@ import java.util.Optional;
 
 public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharacter, Long> {
 
+    @Query("select c from WebtoonCharacter c where c.communityPublic=true and c.communityBlocked=false and c.deletedAt is null and c.status=com.lore.webtoon.character.CharacterStatus.READY order by c.id desc")
+    List<WebtoonCharacter> community(org.springframework.data.domain.Pageable page);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from WebtoonCharacter c where c.publicId=:id")
+    Optional<WebtoonCharacter> lockForPublication(@Param("id") String id);
+
     Optional<WebtoonCharacter> findByPublicId(String publicId);
 
     /**
@@ -24,9 +31,10 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
      */
     @Query("""
            select c from WebtoonCharacter c
-            where c.source = com.lore.webtoon.character.CharacterSource.BUILTIN
-               or c.ownerId = :userId
-               or c.browserUid in :uids
+            where c.deletedAt is null
+              and (c.source = com.lore.webtoon.character.CharacterSource.BUILTIN
+                   or c.ownerId = :userId
+                   or c.browserUid in :uids)
             order by case when c.source
                      = com.lore.webtoon.character.CharacterSource.BUILTIN
                      then 1 else 0 end, c.id desc
@@ -40,6 +48,20 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
      * <b>심은 표시로 찾는다.</b> 주인이 비었나로 찾으면 게스트가 같은 이름을
      * 쓴 캐릭터를 집어서 우리가 그 사람 것을 고쳐 버린다.
      */
+    /** 내 휴지통 — 최근에 지운 것부터. */
+    @Query("""
+           select c from WebtoonCharacter c
+            where c.deletedAt is not null
+              and (c.ownerId = :userId or c.browserUid in :uids)
+            order by c.deletedAt desc
+           """)
+    List<WebtoonCharacter> trashOf(@Param("userId") Long userId,
+                                   @Param("uids") Collection<String> uids);
+
+    /** 보관 기간이 지난 휴지통 캐릭터. */
+    @Query("select c from WebtoonCharacter c where c.deletedAt is not null and c.deletedAt < :cut")
+    List<WebtoonCharacter> trashedBefore(@Param("cut") Instant cut);
+
     Optional<WebtoonCharacter> findFirstBySourceAndName(CharacterSource source, String name);
 
     /**
@@ -55,6 +77,7 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
     @Query("""
            select count(c) from WebtoonCharacter c
             where (c.ownerId = :userId or c.browserUid in :uids)
+              and c.source <> com.lore.webtoon.character.CharacterSource.UPLOAD
               and c.createdAt >= :since
            """)
     long madeSince(@Param("userId") Long userId,

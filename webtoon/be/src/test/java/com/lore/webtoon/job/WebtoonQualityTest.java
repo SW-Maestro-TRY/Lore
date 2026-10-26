@@ -42,9 +42,19 @@ class WebtoonQualityTest {
     @Test
     @DisplayName("너울만 더 받는다 — 원가가 2.4배라 같은 값이면 한 편마다 손해다")
     void 너울만_비싸다() {
-        assertThat(WebtoonQuality.creditsOf("wave")).isEqualTo(12);
-        assertThat(WebtoonQuality.creditsOf("surf")).isEqualTo(12);
-        assertThat(WebtoonQuality.creditsOf("swell")).isEqualTo(18);
+        assertThat(WebtoonQuality.creditsOf("wave")).isEqualTo(15);
+        assertThat(WebtoonQuality.creditsOf("surf")).isEqualTo(15);
+        assertThat(WebtoonQuality.creditsOf("swell")).isEqualTo(25);
+    }
+
+    @Test
+    @DisplayName("다시 그리기도 너울만 더 받는다 — 한 장 원가가 3크레딧을 넘는다(#787)")
+    void 너울_다시_그리기만_비싸다() {
+        assertThat(WebtoonQuality.regenCreditsOf("wave")).isEqualTo(3);
+        assertThat(WebtoonQuality.regenCreditsOf("surf")).isEqualTo(3);
+        assertThat(WebtoonQuality.regenCreditsOf("swell")).isEqualTo(4);
+        // 화질을 모르는 옛 작품은 기본(파도) 값 — 0이면 공짜로 다시 그려진다.
+        assertThat(WebtoonQuality.regenCreditsOf("")).isEqualTo(3);
     }
 
     @Test
@@ -55,7 +65,7 @@ class WebtoonQualityTest {
         }
         assertThat(WebtoonQuality.normalize(null)).isEqualTo(WebtoonQuality.DEFAULT_QUALITY);
         // 기본으로 돌아갔으면 값도 기본값이어야 한다 — 0원이 되면 공짜로 만들어진다.
-        assertThat(WebtoonQuality.creditsOf(null)).isEqualTo(12);
+        assertThat(WebtoonQuality.creditsOf(null)).isEqualTo(15);
     }
 
     @Test
@@ -85,5 +95,20 @@ class WebtoonQualityTest {
         assertThat(src)
                 .as("imagegen.py 의 DEFAULT_IMAGE_QUALITY 가 '%s' 여야 합니다", want)
                 .contains("DEFAULT_IMAGE_QUALITY = \"" + want + "\"");
+    }
+
+    @Test
+    @DisplayName("한 편 값은 8장까지이고, 넘는 장은 너울 4 · 파도·물결 2 — 화면에도 같은 값이 간다")
+    void 넘는_장_값() {
+        assertThat(WebtoonQuality.BASE_PAGES).isEqualTo(8);
+        assertThat(WebtoonQuality.extraPageCreditsOf("wave")).isEqualTo(2);
+        assertThat(WebtoonQuality.extraPageCreditsOf("surf")).isEqualTo(2);
+        assertThat(WebtoonQuality.extraPageCreditsOf("swell")).isEqualTo(4);
+        assertThat(WebtoonQuality.extraPageCreditsOf("")).isEqualTo(2);
+        for (Map<String, Object> one : WebtoonQuality.choices()) {
+            String key = (String) one.get("key");
+            assertThat(one.get("extra_page_credits")).isEqualTo(WebtoonQuality.extraPageCreditsOf(key));
+            assertThat(one.get("base_pages")).isEqualTo(WebtoonQuality.BASE_PAGES);
+        }
     }
 }

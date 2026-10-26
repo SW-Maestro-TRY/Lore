@@ -106,6 +106,25 @@ class EpisodeExportTest {
     }
 
     @Test
+    @DisplayName("편집실에서 벌린 여백만큼 장 사이를 비운다 — 마지막 장 뒤는 안 비운다")
+    void 고친_여백을_비운다() throws IOException {
+        sheet(1, 800, 500, Color.BLACK);
+        sheet(2, 800, 400, Color.BLACK);
+        sheet(3, 800, 300, Color.BLACK);
+        OverlayStore overlays = mock(OverlayStore.class);
+        // 1장 뒤는 「크게 쉼」(폭의 0.62배), 3장 뒤(마지막)도 적어 두지만 안 비운다.
+        when(overlays.gapsOf("run-1", 1)).thenReturn(Map.of(1, 3, 3, 2));
+        export.setOverlays(overlays);
+
+        BufferedImage out = exported();
+
+        int gap = (int) Math.round(800 * 0.62);
+        assertThat(out.getHeight()).isEqualTo(500 + gap + 400 + 300);
+        // 여백 자리는 흰색이다
+        assertThat(painted(out, 0, 500, 100, 500 + gap, 0xFFFFFF)).isFalse();
+    }
+
+    @Test
     @DisplayName("장마다 오른쪽 아래에 도장을 찍는다 — 한 장만 잘라 가도 딸려 가야 한다")
     void 장마다_찍는다() throws IOException {
         sheet(1, 800, 500, Color.WHITE);

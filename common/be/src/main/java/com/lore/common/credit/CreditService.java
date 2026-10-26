@@ -35,9 +35,10 @@ public class CreditService {
        어느 것으로 만들지 못 고른다 — 표시가 없으면 인자 없는 생성자를 찾다가
        서버가 아예 안 뜬다. 검사로는 안 잡힌다: 검사는 이 클래스를 손으로
        만들므로 스프링이 고를 일이 없다. */
+    /* 가입 지급은 웹툰 파도 한 편 값과 같게 둔다 — 가입만 해도 한 편은 만들 수 있게(#787). */
     @Autowired
     public CreditService(CreditEventRepository events, CreditLedger ledger,
-                         @Value("${lore.credit.welcome:12}") int welcome,
+                         @Value("${lore.credit.welcome:15}") int welcome,
                          @Value("${lore.credit.daily:20}") int daily) {
         this(events, ledger, welcome, daily, Clock.system(ZONE));
     }
@@ -55,6 +56,20 @@ public class CreditService {
     @Transactional(readOnly = true)
     public int balance(Long userId) {
         return events.balanceOf(userId);
+    }
+
+    /**
+     * 잔액을 무료 몫과 산 몫으로 나눠 센다. <b>무료부터 쓰는</b> 규칙으로 센다({@link CreditPools}).
+     *
+     * 환불할 때 "남은 유료 크레딧" 이 이 값의 {@code paid} 다. 산 적이 없는 사람은
+     * 장부를 다시 읽지 않는다(대부분이 그렇다).
+     */
+    @Transactional(readOnly = true)
+    public CreditPools.Split split(Long userId) {
+        if (!events.existsByUserIdAndReason(userId, CreditReason.PURCHASE)) {
+            return new CreditPools.Split(events.balanceOf(userId), 0);
+        }
+        return CreditPools.replay(events.allOf(userId));
     }
 
     /**
@@ -163,6 +178,25 @@ public class CreditService {
         }
         return ledger.write(userId, paid, CreditReason.REFUND, where, refId,
                 why == null || why.isBlank() ? CreditReason.REFUND.label() : why) ? paid : 0;
+    }
+
+    /**
+     * 충전한 것을 도로 뺀다 — 결제가 취소됐을 때(#155).
+     *
+     * {@link #spend} 와 달리 <b>모자라도 뺀다.</b> 충전분을 이미 써 버린 뒤 결제를
+     * 취소하면 잔액이 0 아래로 내려가는데, 그게 맞는 기록이다 — 막으면 낸 돈은
+     * 돌려받고 받은 크레딧은 그대로 남는다. 0 아래인 동안은 spend 가 막는다.
+     *
+     * @param refId 무엇을 취소한 것인가. 같은 값으로 두 번 불려도 한 번만 빠진다
+     * @return 이번에 실제로 뺀 양 (이미 뺐으면 0)
+     */
+    @Transactional
+    public int reclaim(Long userId, int amount, String refId, String why) {
+        if (amount <= 0) {
+            return 0;
+        }
+        return ledger.write(userId, -amount, CreditReason.ADJUST, CreditDomain.COMMON, refId,
+                why == null || why.isBlank() ? CreditReason.ADJUST.label() : why) ? amount : 0;
     }
 
     /** 최근 내역. 잔액과 같은 자료에서 나오므로 둘이 어긋날 수 없다. */
