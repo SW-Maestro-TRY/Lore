@@ -311,7 +311,7 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
         <div className="wt-works-eprow">
           {eps.length > 0 && (
             /* 회차 단추 대신 「총 N화」 글자만 — 연재가 길어지면 단추가 카드를 덮는다(2026-10-26). 회차는 표지를 눌러 들어가서 고른다. */
-            <span className="muted wt-works-epcount">{t("총 {n}화", { n: eps.length })}</span>
+            <span className="wt-works-epcount">{t("총 {n}화", { n: eps.length })}</span>
           )}
           {mine && authenticated && (
             <span className="wt-works-pub">

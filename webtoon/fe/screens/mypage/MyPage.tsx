@@ -785,7 +785,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                       ) : <span className="wt-my-charnoimg" aria-hidden="true" />}
                     </span>
                     <b>{r.title || t("제목 없음")}</b>
-                    <span className="muted">{[r.character, r.genre && t(r.genre)].filter(Boolean).join(" · ")}</span>
+                    <span className="muted">{[r.subtitle && `${t("{n}화", { n: r.episode ?? 1 })} · ${r.subtitle}`, r.character, r.genre && t(r.genre)].filter(Boolean).join(" · ")}</span>
                   </button>
                 ))}
               </div>
@@ -981,6 +981,7 @@ function TrashRow({ run, onRestored }: { run: TrashCard; onRestored: () => void 
       {run.cover_url ? <img src={run.cover_url} alt="" /> : <span className="wt-my-trashimg" aria-hidden="true" />}
       <div className="wt-my-trashtext">
         <b>{run.title || t("제목 없음")}</b>
+        {run.subtitle && <span className="muted">{t("{n}화", { n: run.episode ?? 1 })} · {run.subtitle}</span>}
         <span className="muted">{left > 0 ? t("{n}일 뒤 영구 삭제", { n: left }) : t("오늘 영구 삭제")}</span>
         {removedByAdmin && (
           /* 관리자가 삭제 처리한 작품(#638) — 작가는 못 되살린다(서버 RunTrash.restore 도 막는다). */

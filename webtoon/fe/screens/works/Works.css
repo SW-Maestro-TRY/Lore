@@ -123,4 +123,8 @@
 }
 
 /* 회차 수 — 단추 대신 글자 한 줄(2026-10-26) */
-.wt .wt-works-epcount { font-size: 12.5px; align-self: center; }
+/* 「총 N화」 — 흐린 12.5px 이라 안 보였다(2026-10-26). 밝은 글자의 작은 딱지로 */
+.wt .wt-works-epcount {
+  align-self: center; font-size: 13px; font-weight: 700; line-height: 1; color: var(--ink);
+  padding: 4px 9px; border-radius: 999px; background: #ffffff1f;
+}

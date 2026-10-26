@@ -259,7 +259,8 @@ export interface NhJob {
   /** 장면 확인 차례(awaiting_scenes)에만 — 장면 초안 목록(#548). */
   scenes?: NhScene[] | null;
   /** own 길에서 장면 확인 차례에만 — 적은 내용을 1화 본문으로 다듬은 것(#548). */
-  story?: { title: string; body: string; /** own 길에서 1화를 다시 만든 횟수(#548) — 첫 번째는 무료 */ redraws?: number } | null;
+  story?: { title: string; body: string; /** own 길에서 1화를 다시 만든 횟수(#548) — 첫 번째는 무료 */ redraws?: number;
+    /** 연재 2화부터 작품 제목(1화 제목). 이때 title 은 이 화의 소제목이다. */ series_title?: string } | null;
   /** 장면 확인 차례에만 — 사람이 만들기에서 적은 것 그대로(#548). 「내가 적은 것」 카드가 보여 준다. */
   input?: NhJobInput | null;
   /** 시트가 다 그려졌나. 그림체를 바꾸면 다시 그리는 동안 false(#548). 없으면 그려진 것으로 본다. */
@@ -476,7 +477,12 @@ export function jobPageUrl(jobId: string, no: number, width = 260): string {
 export interface RunCard {
   run_id: string;
   character: string;
+  /** 작품 제목 — 연재 2화부터는 1화 제목이다. */
   title: string;
+  /** 연재 2화부터 이 화의 소제목. */
+  subtitle?: string;
+  /** 이 카드가 몇 화인가 — 연재로 묶은 카드는 1. */
+  episode?: number;
   genre: string;
   episodes: number[];
   /** 연재 회차 버튼이 각 회차 완성본으로 이동할 때 쓰는 run_id. */
@@ -553,7 +559,10 @@ export interface RunResult {
   likes?: number;
   run_id: string;
   character: string;
+  /** 작품 제목 — 연재 2화부터는 1화 제목이다. 이 화의 제목은 subtitle. */
   title: string;
+  /** 연재 2화부터 이 화의 소제목. 제목 고치기는 이것을 고친다. */
+  subtitle?: string;
   genre: string;
   style_label: string;
   logline: string;

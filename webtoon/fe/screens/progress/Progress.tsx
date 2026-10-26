@@ -826,7 +826,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     : cur === SCENES ? t("이야기를 장면으로 나누고 있어요")
     : cur === 1 ? t("캐릭터를 그리고 있어요")
     : t("{ep}화 이야기를 만들고 있어요", { ep });
-  const workTitle = job?.story?.title || chosen?.title || "";
+  /* 연재 2화부터 작품 제목은 1화 제목이고, 이 화가 지은 제목은 소제목이다(2026-10-26) */
+  const workTitle = job?.story?.series_title || job?.story?.title || chosen?.title || "";
+  const titleLabel = job?.story?.series_title ? t("소제목") : t("제목");
   /* 인물 확인은 시안에서 「캐릭터 그리기」 걸음이다 */
   const railStep = status === "awaiting_cast" ? 1 : status === "done" ? REVIEW + 1 : cur;
   const railState = (i: number): "complete" | "active" | "" => (i < railStep || (i === 1 && storyCheck) ? "complete" : i === railStep ? "active" : "");
@@ -1542,7 +1544,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <div className="text-stats">{t("{n}자", { n: storyDraft.body.length.toLocaleString() })} · {t("전체 원문")}</div>
                     {storyEditing ? (
                       <>
-                        <input className="long-title" value={storyDraft.title} aria-label={t("제목")} placeholder={t("제목")} onChange={(e) => editStory({ title: e.target.value })} />
+                        <input className="long-title" value={storyDraft.title} aria-label={titleLabel} placeholder={titleLabel} onChange={(e) => editStory({ title: e.target.value })} />
                         <StoryArea value={storyDraft.body} label={t("이야기 본문")} onChange={(v) => editStory({ body: v })} />
                         <div className="editing-actions">
                           <button type="button" className="secondary" onClick={() => { editStory({ title: job.story!.title, body: job.story!.body }); setStoryEditing(false); }}>{t("취소")}</button>
@@ -1597,7 +1599,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <div className="text-stats">{t("{n}자", { n: ((status === "awaiting_scenes" && storyDraft.body) || job.story.body).length.toLocaleString() })} · {t("전체 원문")}</div>
                     {storyOpen && status === "awaiting_scenes" ? (
                       <>
-                        <input className="long-title" value={storyDraft.title} aria-label={t("제목")} onChange={(e) => editStory({ title: e.target.value })} />
+                        <input className="long-title" value={storyDraft.title} aria-label={titleLabel} onChange={(e) => editStory({ title: e.target.value })} />
                         <StoryArea value={storyDraft.body} label={t("이야기 본문")} onChange={(v) => editStory({ body: v })} />
                         <div className="editing-actions"><button type="button" className="primary" onClick={() => setStoryOpen(false)}>{t("수정 완료")}</button></div>
                       </>

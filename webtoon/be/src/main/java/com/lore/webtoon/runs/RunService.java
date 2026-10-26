@@ -114,6 +114,27 @@ public class RunService {
         }
         return runIds;
     }
+    /**
+     * 연재 2화부터의 작품 제목 — 1화 제목이다(2026-10-26). 화마다 AI 가 새 제목을 지어서 같은 작품이 화마다
+     * 다른 이름으로 보였다. 이 화가 지은 제목은 소제목(subtitle)으로 옮긴다. 연재가 아니거나 1화면 null.
+     */
+    private String seriesTitleOf(WebtoonJob job) {
+        String root = rootJobOf(job);
+        if (job == null || root == null || root.equals(job.getPublicId())) return null;
+        return works.findByJobId(root).map(WebtoonWork::getRunId).filter(java.util.Objects::nonNull)
+                .flatMap(stories::chosenOf).map(WebtoonStory::displayTitle)
+                .filter(t -> !t.isBlank()).orElse(null);
+    }
+
+    /** title 을 작품 제목으로, 이 화의 제목을 subtitle 로 — 연재 2화부터만. */
+    private void putSeriesTitle(Map<String, Object> out, WebtoonJob job) {
+        String series = seriesTitleOf(job);
+        if (series != null) {
+            out.put("subtitle", out.get("title"));
+            out.put("title", series);
+        }
+    }
+
     private int episodeOf(WebtoonJob job) {
         return job == null || series == null ? 1 : series.episodeOf(job.getPublicId()).orElse(1);
     }
@@ -274,6 +295,7 @@ public class RunService {
         card.put("character", characterOf(job));
         card.put("title", chosen.map(WebtoonStory::displayTitle).filter(s -> !s.isBlank())
                 .orElse(NO_TITLE));
+        putSeriesTitle(card, job);
         card.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         // 연재는 첫 작품 카드 하나에 완성된 회차 번호를 모아 보여 준다.
         card.put("episodes", groupSeries ? episodesOf(rootJobOf(job), publicOnly) : List.of(episodeOf(job)));
@@ -355,6 +377,7 @@ public class RunService {
         out.put("character", characterOf(job));
         out.put("title", chosen.map(WebtoonStory::displayTitle).filter(s -> !s.isBlank())
                 .orElse(NO_TITLE));
+        putSeriesTitle(out, job);
         out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
         out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));

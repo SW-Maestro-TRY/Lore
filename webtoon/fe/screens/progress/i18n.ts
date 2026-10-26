@@ -328,6 +328,7 @@ const dict: Dict = {
   "설정": { en: "Settings", ja: "設定", zh: "设定" },
   "촘촘함": { en: "Detail", ja: "描き込み", zh: "精细度" },
   "제목": { en: "Title", ja: "タイトル", zh: "标题" },
+  "소제목": { en: "Episode title", ja: "サブタイトル", zh: "副标题" },
   "루가 읽어낸 인물": { en: "Characters LOU read from your content", ja: "ルーが読み取った人物", zh: "LOU 读出的人物" },
   "캐릭터 시트": { en: "Character sheet", ja: "キャラクターシート", zh: "角色设定图" },
   "내 내용": { en: "My content", ja: "自分の内容", zh: "我的内容" },

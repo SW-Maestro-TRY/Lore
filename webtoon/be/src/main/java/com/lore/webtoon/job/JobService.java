@@ -358,6 +358,21 @@ public class JobService {
      * @param watching 진행 화면이 앞에 떠서 묻는 것인가. 참이면 잠깐 동안 이 작업의
      *                 푸시를 안 보낸다 — 이미 보고 있는 사람에게 알림은 소음이다(#599)
      */
+    private com.lore.webtoon.story.SeriesTitles seriesTitles;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSeriesTitles(com.lore.webtoon.story.SeriesTitles seriesTitles) { this.seriesTitles = seriesTitles; }
+
+    /** 내 내용 길의 본문 — 연재 2화부터는 작품 제목(series_title)을 같이 싣는다. 화의 제목은 소제목이다. */
+    private Map<String, Object> storyFor(WebtoonJob job) {
+        if (!job.isOwn()) return null;
+        Map<String, Object> story = runner.storyOf(job.getRunId());
+        String series = story == null || seriesTitles == null ? null : seriesTitles.of(job.getPublicId());
+        if (series == null) return story;
+        Map<String, Object> out = new java.util.LinkedHashMap<>(story);
+        out.put("series_title", series);
+        return out;
+    }
+
     @Transactional(readOnly = true)
     public JobView view(String publicId, boolean watching) {
         WebtoonJob job = store.byPublicId(publicId);
@@ -383,7 +398,7 @@ public class JobService {
                 runner.scenesOf(job.getId(), job.getRunId()),
                 /* 내 내용 길의 본문은 확인 자리가 아니어도 싣는다 — 장면을 나누거나 그리는 동안 걸음 1을 눌러도
                    원고 그대로 읽게. 안 실으면 화면이 바로 만들기용 「고른 이야기」 카드로 떨어졌다(2026-10-26). */
-                job.isOwn() ? runner.storyOf(job.getRunId()) : null,
+                storyFor(job),
                 runner.sheetReady(job.getRunId()),
                 runArt.sheetVersions(job.getRunId()),
                 at == JobStatus.AWAITING_SCENES || ownPause ? castSheetsOf(job) : null,
