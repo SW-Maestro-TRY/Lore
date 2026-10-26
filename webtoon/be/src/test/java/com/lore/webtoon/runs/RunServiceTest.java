@@ -358,4 +358,16 @@ class RunServiceTest {
         assertThat(runs.episode("run-1", 1)).isNull();
         assertThat(runs.cardOf("run-1")).isNull();
     }
+
+    @Test
+    @DisplayName("장면은 있는데 그림이 없는 장을 이어 그릴 장으로 준다 — 표지가 1장, 장면 n 은 n+1 장")
+    void 안_그린_장() {
+        List<String> scenes = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i", "j");   // 장면 10 = 11장
+
+        assertThat(RunService.pendingPages(List.of(1, 2, 3, 4, 5, 6, 7, 8), scenes))
+                .containsExactly(9, 10, 11);
+        assertThat(RunService.pendingPages(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), scenes)).isEmpty();
+        // 장면을 모르는 옛 작품은 이어 그릴 것이 없다
+        assertThat(RunService.pendingPages(List.of(1, 2, 3), List.of())).isEmpty();
+    }
 }

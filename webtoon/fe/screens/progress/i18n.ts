@@ -3,6 +3,17 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  /* ---- 장면 확인 — 기본 장 수를 넘는 장 ---- */
+  "기본 {base}장을 넘는 {m}장은 한 장에 {per}크레딧이에요.": {
+    en: "The {m} pages beyond the included {base} cost {per} credits each.",
+    ja: "基本の{base}ページを超える{m}ページは、1ページ{per}クレジットです。",
+    zh: "超过默认 {base} 页的 {m} 页，每页 {per} 积分。",
+  },
+  "크레딧이 모자라면 앞 {base}장까지 먼저 그리고, 나머지는 완성본에서 이어 그릴 수 있어요.": {
+    en: "If you run short on credits, we'll draw the first {base} pages now and you can continue the rest from the finished episode.",
+    ja: "クレジットが足りない場合は最初の{base}ページまで先に描き、残りは完成ページから続けて描けます。",
+    zh: "积分不够时会先画前 {base} 页，剩下的可以在成品页接着画。",
+  },
   /* ---- 빵부스러기 · 공통 ---- */
   "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
   "이야기 · 장르": { en: "Story · Genre", ja: "ストーリー · ジャンル", zh: "故事 · 题材" },
