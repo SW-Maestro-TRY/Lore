@@ -431,6 +431,7 @@ const dict: Dict = {
   "이야기를 장면으로 나누고 있어요": { en: "Splitting the story into scenes", ja: "ストーリーを場面に分けています", zh: "正在把故事拆分成场景" },
   "이야기를 페이지별 장면으로 나누는 중": { en: "Splitting the story into scenes by page", ja: "ストーリーをページごとの場面に分けています", zh: "正在按页把故事拆分成场景" },
   "이전 장면": { en: "Previous scene", ja: "前の場面", zh: "上一个场景" },
+  "입력한 내용": { en: "What you entered", ja: "入力した内容", zh: "你输入的内容" },
   "입력한 이야기와 설정을 바탕으로 작성 중": { en: "Writing from your story and settings", ja: "入力したストーリーと設定をもとに作成中", zh: "正在根据你输入的故事和设定编写" },
   "장면 {n}": { en: "Scene {n}", ja: "場面 {n}", zh: "场景 {n}" },
   "장면 고르기": { en: "Choose scenes", ja: "場面を選ぶ", zh: "选择场景" },
