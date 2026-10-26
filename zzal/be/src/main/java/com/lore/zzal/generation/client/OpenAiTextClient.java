@@ -53,6 +53,14 @@ public class OpenAiTextClient implements TextClient {
     private final URI endpoint;
     private final Duration timeout;
     private final Integer maxCompletionTokens;
+    /**
+     * 정체성 호출의 reasoning_effort. null 이면 보내지 않는다(모델 기본값 medium).
+     *
+     * ★ 2026-10-27 추가 — 출력 약 1,900토큰 중 약 1,800이 생각 토큰이었고, OpenAI 가 느려진 10/26 에
+     *   90초 제한을 넘겨 부화가 연달아 끊겼다. 모델(gpt-5)은 그대로 두고 생각 길이만 줄인다.
+     *   설정 {@code app.zzal.openai.identity-reasoning-effort}, 기본 low, 비우면 안 보낸다.
+     */
+    private final String reasoningEffort;
     private final ProviderUsageRecorder usageRecorder;
     private final ObjectMapper json = new ObjectMapper();
 
@@ -65,7 +73,10 @@ public class OpenAiTextClient implements TextClient {
         this(storage, apiKey, maxCompletionTokens, ProviderUsageRecorder.NO_OP);
     }
     public OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
-        this(storage, apiKey, maxCompletionTokens, HttpClient.newBuilder()
+        this(storage, apiKey, maxCompletionTokens, null, recorder);
+    }
+    public OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,String reasoningEffort,ProviderUsageRecorder recorder) {
+        this(storage, apiKey, maxCompletionTokens, reasoningEffort, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(20)).followRedirects(HttpClient.Redirect.NEVER).build(),
                 URI.create(ENDPOINT), Duration.ofSeconds(120),recorder);
     }
@@ -75,6 +86,10 @@ public class OpenAiTextClient implements TextClient {
         this(storage,apiKey,maxCompletionTokens,http,endpoint,timeout,ProviderUsageRecorder.NO_OP);
     }
     OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,HttpClient http,URI endpoint,Duration timeout,ProviderUsageRecorder recorder) {
+        this(storage,apiKey,maxCompletionTokens,null,http,endpoint,timeout,recorder);
+    }
+    OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,String reasoningEffort,HttpClient http,URI endpoint,Duration timeout,ProviderUsageRecorder recorder) {
+        this.reasoningEffort = normalizeReasoningEffort(reasoningEffort);
         this.usageRecorder=java.util.Objects.requireNonNull(recorder);
         if (maxCompletionTokens != null && maxCompletionTokens <= 0) {
             throw new IllegalArgumentException("maxCompletionTokens must be positive");
@@ -94,6 +109,10 @@ public class OpenAiTextClient implements TextClient {
             ObjectNode body = json.createObjectNode();
             body.put("model", spec.model());
             if (maxCompletionTokens != null) body.put("max_completion_tokens", maxCompletionTokens);
+            // 채팅 클라이언트(OpenAiChatLineClient)와 같은 규칙 — gpt-5 계열에만 보낸다.
+            if (reasoningEffort != null && spec.model().startsWith("gpt-5")) {
+                body.put("reasoning_effort", reasoningEffort);
+            }
 
             ArrayNode messages = body.putArray("messages");
             ObjectNode user = messages.addObject();
@@ -149,13 +168,29 @@ public class OpenAiTextClient implements TextClient {
 
             // 입력 토큰 수로 그림이 실제로 실렸는지 가늠한다(글만이면 수백, 그림이 붙으면 그보다 크게 뛴다).
             JsonNode usage = payload.path("usage");
-            log.info("정체성 문단 — {}자 · {} · ${} · 토큰 입력 {} · 출력 {}", text.length(), spec.model(), cost,
+            log.info("정체성 문단 — {}자 · {} · effort {} · ${} · 토큰 입력 {} · 출력 {}", text.length(), spec.model(),
+                    reasoningEffort == null ? "default" : reasoningEffort, cost,
                     usage.path("prompt_tokens").asLong(0), usage.path("completion_tokens").asLong(0));
             attempt.success();
             return new Result(text, cost);
         } finally {
             deleteQuietly(work);
         }
+    }
+
+    /** 허용값. 그 외는 기동 시 막는다 — 오타가 실제 호출 때 400 으로야 드러나면 늦다. */
+    public static final List<String> REASONING_EFFORTS = List.of("minimal", "low", "medium", "high");
+
+    /** 빈 값 → null(안 보냄). 허용값이 아니면 설정 이름을 말하는 예외. */
+    public static String normalizeReasoningEffort(String value) {
+        if (value == null || value.isBlank()) return null;
+        String v = value.strip();
+        if (!REASONING_EFFORTS.contains(v)) {
+            throw new IllegalArgumentException(
+                    "app.zzal.openai.identity-reasoning-effort 값이 잘못됐습니다: '%s' (허용: %s, 비우면 안 보냄)"
+                            .formatted(v, String.join("/", REASONING_EFFORTS)));
+        }
+        return v;
     }
 
     private BigDecimal cost(JsonNode payload) {

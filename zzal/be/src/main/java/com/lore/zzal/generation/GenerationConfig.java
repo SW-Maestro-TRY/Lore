@@ -55,6 +55,10 @@ public class GenerationConfig {
     @Value("${app.zzal.openai.identity-max-completion-tokens:#{null}}")
     private Integer identityMaxCompletionTokens;
 
+    /** 정체성(gpt-5) 호출의 reasoning_effort. 기본 low, 비우면 안 보낸다(모델 기본 medium). 2026-10-27. */
+    @Value("${app.zzal.openai.identity-reasoning-effort:low}")
+    private String identityReasoningEffort;
+
     @Value("${app.zzal.generation.flaky.fail-step:}")
     private String flakyStep;
 
@@ -102,9 +106,11 @@ public class GenerationConfig {
                                  @Value("${app.zzal.generation.fake-delay-ms:4000}") int delay,
                                  @Value("${app.zzal.openai.api-key:}") String apiKey,
                                  S3Storage storage) {
+        // 가짜 모드에서도 값을 검사한다 — dev 에서 통과한 오타가 운영에서야 터지지 않게.
+        String effort = OpenAiTextClient.normalizeReasoningEffort(identityReasoningEffort);
         if (real) {
             requireKey(apiKey);
-            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens, usage());
+            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens, effort, usage());
         }
         return new FakeTextClient(delay / 3);
     }
