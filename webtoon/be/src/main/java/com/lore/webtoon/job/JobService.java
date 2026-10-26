@@ -314,7 +314,9 @@ public class JobService {
     public List<JobView> activeOf(Long userId, Collection<String> uids) {
         return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
                         JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST,
-                        JobStatus.AWAITING_SCENES)).stream()
+                        JobStatus.AWAITING_SCENES, JobStatus.ERROR)).stream()
+                /* 실패 중에서는 이어서 만들 수 있는 것만 「만드는 중」에 남긴다(2026-10-26) */
+                .filter(job -> job.getStatus() != JobStatus.ERROR || job.isResumable())
                 .map(job -> view(job.getPublicId()))
                 .toList();
     }
@@ -327,7 +329,9 @@ public class JobService {
     public List<Map<String, Object>> activeCardsOf(Long userId, Collection<String> uids) {
         return jobs.activeOf(userId, uids, List.of(JobStatus.QUEUED, JobStatus.RUNNING,
                         JobStatus.AWAITING_SHEET, JobStatus.AWAITING_PICK, JobStatus.AWAITING_CAST,
-                        JobStatus.AWAITING_SCENES)).stream()
+                        JobStatus.AWAITING_SCENES, JobStatus.ERROR)).stream()
+                /* 실패 중에서는 이어서 만들 수 있는 것만 「만드는 중」에 남긴다(2026-10-26) */
+                .filter(job -> job.getStatus() != JobStatus.ERROR || job.isResumable())
                 .map(job -> {
                     Map<String, Object> one = new LinkedHashMap<>();
                     one.put("id", job.getPublicId());
@@ -624,7 +628,7 @@ public class JobService {
      */
     /** 끊긴 작업을 이어서 만들 때 받는 값 — 크레딧을 돌려줬으면 그만큼 다시, 아니면 0. */
     int resumeCost(WebtoonJob job) {
-        return job.isStoppedByRestart() && job.getRefunded() == Refunded.CREDIT
+        return job.isResumable() && job.getRefunded() == Refunded.CREDIT
                 ? WebtoonQuality.creditsOf(job.getQuality()) : 0;
     }
 
@@ -635,7 +639,7 @@ public class JobService {
         if (me == null || !me.equals(job.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작업만 이어서 만들 수 있어요.");
         }
-        if (!job.isStoppedByRestart()) {
+        if (!job.isResumable()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "이어서 만들 수 있는 작업이 아니에요.");
         }
         return resumeCost(job);
@@ -647,7 +651,7 @@ public class JobService {
      */
     public void resumeStopped(String publicId) {
         WebtoonJob job = store.byPublicId(publicId);
-        if (!job.isStoppedByRestart()) {
+        if (!job.isResumable()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "이어서 만들 수 있는 작업이 아니에요.");
         }
         job = store.reopened(job.getId());

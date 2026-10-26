@@ -213,7 +213,7 @@ public record JobView(
                 sheetFixLeft,
                 unsafePages == null ? List.of() : unsafePages,
                 episode,
-                job.isStoppedByRestart(),
+                job.isResumable(),
                 resumeCost);
     }
 }

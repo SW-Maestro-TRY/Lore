@@ -87,7 +87,7 @@ export default function GalleryHome({
     let alive = true;
     myActiveJobs()
       .then((r) => {
-        if (alive) setJob(r.jobs?.[0] || null);
+        if (alive) setJob(r.jobs?.find((x) => x.status !== "error") || null);
       })
       .catch(() => {});
     return () => {

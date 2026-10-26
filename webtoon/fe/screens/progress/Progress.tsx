@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
   cancelJob, continueScenes, decideSheet, fixSheet, jobPageUrl, uploadDataUrlsAsGuest, notifyByEmail, pickCast, pickDirection, readJob, retryDirections,
-  castSheetImageUrl, readAllowance, requestCastSheet, restoreScene, restoreSheet, retryScene, saveScenes, savePerson, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
+  castSheetImageUrl, readAllowance, requestCastSheet, restoreScene, restoreSheet, resumeJob, retryScene, saveScenes, savePerson, sheetImageUrl, sheetVersionUrl, type NhCast, type NhDirection, type NhJob, type NhPersona, type NhScene, type SceneRetryReason, rememberMyRun } from "../../lib/api";
 import { MASCOT_LINES } from "../../lib/progressData";
 import { readPhoto } from "../../lib/photoFile";
 import { useAuth } from "@common/auth/useAuth";
@@ -971,6 +971,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     track("queue_popup_wait", { job: jobId, ahead: job?.queue?.ahead });
     browseWorks();
   };
+  const resumeAfterFail = () => {
+    if (!job) return;
+    track("resume_after_fail", { job: job.id });
+    void send(() => resumeJob(job.id));
+  };
   const remakeAfterFail = () => {
     track("remake_after_fail", { job: jobId });
     go("create", { step: 1 });
@@ -1091,9 +1096,18 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               )}
               <ErrLine text={actErr} />
               <div className="actions">
-                {/* 서버 재시작은 실패가 아니다 — 서버가 다시 뜨며 멈춘 걸음부터 이어 간다(StaleJobs). 이 창은 정말
-                    다시 만들어야 할 때만 뜬다. */}
-                <button type="button" className="primary" onClick={remakeAfterFail}>{t("다시 만들기")}</button>
+                {/* 우리 쪽 오류로 멈춘 작업(2026-10-26)은 멈춘 걸음부터 이어 간다 — 그린 쪽 · 장면 · 이야기는 그대로.
+                    끊길 때 돌려준 크레딧만큼 다시 받는다. 안전 기준 등 고쳐야 하는 실패는 다시 만들기만. */}
+                {job.resumable ? (
+                  <>
+                    <button type="button" className="primary" disabled={busy} onClick={resumeAfterFail}>
+                      {(job.resume_cost ?? 0) > 0 ? t("{label} -{n} 크레딧", { label: t("이어서 만들기"), n: job.resume_cost ?? 0 }) : t("이어서 만들기")}
+                    </button>
+                    <button type="button" className="secondary" onClick={remakeAfterFail}>{t("새로 만들기")}</button>
+                  </>
+                ) : (
+                  <button type="button" className="primary" onClick={remakeAfterFail}>{t("다시 만들기")}</button>
+                )}
                 <button type="button" className="secondary" onClick={() => go("landing")}>{t("홈으로 가기")}</button>
               </div>
             </div>

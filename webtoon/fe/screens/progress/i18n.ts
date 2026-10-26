@@ -40,6 +40,7 @@ const dict: Dict = {
   "이 판으로 되돌리기": { en: "Restore this version", ja: "この版に戻す", zh: "恢复为此版本" },
   "되돌리지 못했어요": { en: "Couldn't restore", ja: "戻せませんでした", zh: "未能恢复" },
   "{label} -{n} 크레딧": { en: "{label} −{n} credit", ja: "{label} −{n}クレジット", zh: "{label} −{n} 积分" },
+  "새로 만들기": { en: "Start over", ja: "最初から作る", zh: "重新制作" },
   "이어서 만들기": { en: "Continue", ja: "続きから作る", zh: "继续制作" },
   "백그라운드에서 작업 중이라 나갔다 들어와도 작업이 이어져요.": { en: "This runs in the background, so you can leave and come back — it keeps going.", ja: "バックグラウンドで作業中なので、離れて戻ってきても続きます。", zh: "在后台进行中，离开后再回来也会继续。" },
   "시트 뽑기": { en: "Draw sheet", ja: "シートを作る", zh: "生成设定图" },
