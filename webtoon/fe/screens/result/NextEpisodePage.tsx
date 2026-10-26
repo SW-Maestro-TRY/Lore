@@ -42,6 +42,13 @@ export default function NextEpisodePage({runId, authenticated, go}: {
     setError("");
     setData(null);
     (async () => {
+      /* 개발 메뉴의 「앞 화 정리 중」 — 서버·과금 없이 정리 중 화면(루 로딩)을 끝없이 보여 준다(2026-10-26) */
+      if (runId === "mock-digest") {
+        if (alive) { setData({ episode: 2, fixed_settings: "", progress_state: "", story: "", revision: 0, entries: [], progress: [],
+          digest: { status: "RUNNING" }, previous_state: "", source_scenes: [], source_run: runId, title: "밤에 노래하는 학교",
+          credit_cost: 15, balance: 48, blocked: null }); token.current = crypto.randomUUID(); }
+        return;
+      }
       await linkThisBrowser();
       let got = await readSeriesDraft(runId);
       // 처음 열면 앞 화를 읽고 정리부터 시킨다. 사람이 앞 화를 다시 읽고 요약하지 않게 하려는 것이다.
@@ -53,7 +60,7 @@ export default function NextEpisodePage({runId, authenticated, go}: {
 
   const preparing = data?.digest?.status === "RUNNING";
   useEffect(() => {
-    if (!preparing) return;
+    if (!preparing || runId === "mock-digest") return;
     let alive = true;
     const timer = window.setInterval(() => {
       readSeriesDraft(runId).then(got => {

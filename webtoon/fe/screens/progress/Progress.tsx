@@ -231,10 +231,16 @@ function Crumb({ items }: { items: string[] }) {
 
 /* 서버 없이 눌러 보는 자리(#548) — job 번호가 `mock-scenes`(아이디어부터) 또는 `mock-scenes-own`
    (내 내용)이면 장면 확인, `mock-story-own` 이면 own 길의 이야기 확인(awaiting_pick) 화면을
-   서버 없이 보여 준다. `mock-queued` 는 앞에 세 명이 있어 순서를 기다리는 작업(대기 팝업, #641).
+   서버 없이 보여 준다. `mock-queued` 는 앞에 세 명이 있어 순서를 기다리는 작업(대기 팝업, #641),
+   `mock-running` 은 이야기를 짓는 중인 작업(루 로딩).
    실제 작업 번호와는 겹치지 않는다. */
-const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued"];
+const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued", "mock-running"];
 function mockScenesJob(id: string): NhJob {
+  /* 이야기를 짓는 중 — 「만드는 중」 카드의 루 로딩을 과금 없이 본다(2026-10-26) */
+  if (id === "mock-running") {
+    return { ...mockScenesJob("mock-scenes-own"), id, status: "running", pick: null, scenes: [], story: null, stage: "story",
+             stage_index: 0, stage_label: "", queue: null, minutes_left: 7, pct: 12, sheet_ready: false };
+  }
   if (id === "mock-queued") {
     return { ...mockScenesJob("mock-scenes"), id, status: "queued", pick: null, scenes: [], stage: "story", stage_index: 0,
              stage_label: "", queue: { ahead: 3, minutes: 12, line: "" }, minutes_left: 22, pct: 0, sheet_ready: false };

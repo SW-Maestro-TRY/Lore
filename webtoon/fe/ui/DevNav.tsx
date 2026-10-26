@@ -42,6 +42,14 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
     ].map(([label, s]) => [label, `/webtoon?view=running&job=fixture-${s}`] as [string, string]),
   },
   {
+    title: "루 로딩 (서버·과금 없이)",
+    items: [
+      ["만드는 중 카드", "/webtoon?view=running&job=mock-running"],
+      ["순서 기다림", "/webtoon?view=running&job=mock-queued"],
+      ["다음 화 · 앞 화 정리 중", "/webtoon?view=next&run=mock-digest"],
+    ],
+  },
+  {
     title: "진행 화면 · 긴 글 (그림 없음)",
     items: [
       ["긴 이야기 확인", "/webtoon?view=running&job=fixture-long-story"],
