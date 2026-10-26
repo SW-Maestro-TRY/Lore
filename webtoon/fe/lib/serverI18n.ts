@@ -122,6 +122,8 @@ const dict: Dict = {
   "기타": { en: "Other", ja: "その他", zh: "其他" },
 
   /* ---- 바로 써 볼 수 있는 캐릭터 (character/BuiltinCharacters) ---- */
+  "클로에": { en: "Chloe", ja: "クロエ", zh: "克洛伊" },
+  "겨울 무도회에서도 레이스 부채를 놓지 않는다. 숨이 가빠지면 부채부터 펼친다.": { en: "Never lets go of her lace fan, even at the winter ball. When her breath grows short, the fan comes open first.", ja: "冬の舞踏会でもレースの扇を手放さない。息が苦しくなると、まず扇を広げる。", zh: "即使在冬季舞会上也不放下蕾丝扇。一旦呼吸急促，先把扇子展开。" },
   "하린": { en: "Harin", ja: "ハリン", zh: "夏琳" },
   "국밥집 창가 자리가 자기 자리인 줄 안다. 누구에게나 잘 웃는데 정작 자기 얘기는 안 한다.": { en: "Acts like the window seat at the gukbap place is hers. Smiles at everyone, but never talks about herself.", ja: "クッパ屋の窓際の席を自分の席だと思っている。誰にでもよく笑うのに、自分の話はしない。", zh: "把汤饭店靠窗的位子当成自己的专座。对谁都笑，却从不谈自己。" },
   "리스엘": { en: "Riselle", ja: "リセル", zh: "莉丝艾尔" },
