@@ -392,6 +392,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const status = job?.status;
 
   useEffect(() => { if (status === "awaiting_sheet") setSheetV((v) => v + 1); }, [status]);
+  /* 걸음이 넘어가면(그림 → 검수처럼 상태는 그대로 running 인 채) 보던 걸음에 붙잡히지 않고 지금 화면으로 —
+     페이지 그리기를 보고 있으면 다 그려도 검수로 안 넘어갔다(2026-10-26). */
+  useEffect(() => { setTab(null); }, [cur]);
   /* 화면이 본 상태가 바뀔 때마다 한 줄. 작업의 실제 성패와 걸린 시간은 서버의
      webtoon_job 에 있다 — 여기는 「사람이 화면을 보고 있는 동안 무엇을 봤나」다. */
   useEffect(() => {
@@ -1844,9 +1847,14 @@ function PageFilm({ jobId, art, minutesLeft, onZoom }: {
   const done = (art.pages && art.pages.length ? [...art.pages] : Array.from({ length: art.done }, (_, i) => i + 1)).sort((a, b) => a - b);
   const [picked, setPicked] = useState<number | null>(null);
   const cur = picked != null && done.includes(picked) ? picked : done[done.length - 1];
-  const at = done.indexOf(cur);
-  const prev = at > 0 ? done[at - 1] : null, next = at >= 0 && at < done.length - 1 ? done[at + 1] : null;
-  const coming = done.length < art.total ? nextPage(art) : null;
+  /* 양옆은 쪽 번호로 바로 앞 · 바로 뒤 쪽이다 — 그린 순서로 고르면 4 · 6 · 5 처럼 섞여 보였다(2026-10-26).
+     아직 안 그린 쪽은 그 자리에서 돈다. */
+  const total = Math.max(art.total, done[done.length - 1] ?? 0);
+  const prevNo = cur > 1 ? cur - 1 : null, nextNo = cur < total ? cur + 1 : null;
+  const prev = prevNo != null && done.includes(prevNo) ? prevNo : null;
+  const next = nextNo != null && done.includes(nextNo) ? nextNo : null;
+  const coming = next == null && nextNo != null ? nextNo : null;
+  const pending = prev == null && prevNo != null ? prevNo : null;
   const side = (no: number | null, where: "l" | "r") => no != null ? (
     <button type="button" className={`side ${where}`} onClick={() => setPicked(no)} aria-label={t("{n}쪽 보기", { n: no })}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1854,6 +1862,8 @@ function PageFilm({ jobId, art, minutesLeft, onZoom }: {
     </button>
   ) : where === "r" && coming != null ? (
     <div className="side r wait" aria-hidden="true"><span className="spin" /><em>{t("{n}쪽", { n: coming })}</em></div>
+  ) : where === "l" && pending != null ? (
+    <div className="side l wait" aria-hidden="true"><span className="spin" /><em>{t("{n}쪽", { n: pending })}</em></div>
   ) : <div className="side none" aria-hidden="true" />;
   return (
     <div className="wt-prog-film">
