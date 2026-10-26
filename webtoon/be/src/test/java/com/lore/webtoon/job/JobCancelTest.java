@@ -102,7 +102,8 @@ class JobCancelTest {
         runner.cancel(1L);
 
         verify(store).failed(eq(1L), eq(JobRunner.CANCELLED), any(), any());
-        verify(credits).refund(any(), anyString());
+        // 작업 값 한 번(+ 「이어서 만들기」로 다시 낸 값 자리 한 번) — 두 번째 누름은 아무것도 안 돌려준다
+        verify(credits).refund(any(), org.mockito.ArgumentMatchers.argThat((String r) -> !r.endsWith(":resume")));
     }
 
     @Test

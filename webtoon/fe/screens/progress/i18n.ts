@@ -40,6 +40,7 @@ const dict: Dict = {
   "이 판으로 되돌리기": { en: "Restore this version", ja: "この版に戻す", zh: "恢复为此版本" },
   "되돌리지 못했어요": { en: "Couldn't restore", ja: "戻せませんでした", zh: "未能恢复" },
   "{label} -{n} 크레딧": { en: "{label} −{n} credit", ja: "{label} −{n}クレジット", zh: "{label} −{n} 积分" },
+  "이어서 만들기": { en: "Continue", ja: "続きから作る", zh: "继续制作" },
   "{label} · 무료": { en: "{label} · free", ja: "{label} · 無料", zh: "{label} · 免费" },
   "다시 뽑기 · 1크레딧": { en: "Redraw · 1 credit", ja: "引き直す · 1クレジット", zh: "重抽 · 1 积分" },
   "다시 뽑기 · 무료": { en: "Redraw · free", ja: "引き直す · 無料", zh: "重抽 · 免费" },

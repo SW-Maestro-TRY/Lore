@@ -272,6 +272,9 @@ export interface NhJob {
   unsafe_pages?: number[];
   /** 몇 화인가 — 다음 화로 만든 작업이면 2 이상. 없으면 1화 */
   episode?: number;
+  /** 서버 재시작으로 끊겨 「이어서 만들기」를 할 수 있나, 그때 받는 크레딧(0 이면 무료) */
+  resumable?: boolean;
+  resume_cost?: number;
   /** 보관된 옛 시트 수(#548). 다시 만들 때마다 전 것이 1, 2, … 로 남고 sheetVersionUrl 로 본다. */
   sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
@@ -355,6 +358,11 @@ export function readJob(id: string, opts?: { watching?: boolean }): Promise<NhJo
 export interface NhActiveCard { id: string; name: string; created_at: string | null; updated_at: string | null }
 export function myActiveJobs(): Promise<{ jobs: NhJob[]; cards?: NhActiveCard[] }> {
   return call<{ jobs: NhJob[]; cards?: NhActiveCard[] }>(`/nh/jobs/mine?uid=${encodeURIComponent(getUid())}`);
+}
+
+/** 서버 재시작으로 끊긴 작업을 멈춘 걸음부터 이어서 만든다 — 그린 장은 다시 안 그린다. */
+export function resumeJob(id: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/resume`, {});
 }
 
 export function decideSheet(id: string, decision: "approve" | "retry", note = "") {

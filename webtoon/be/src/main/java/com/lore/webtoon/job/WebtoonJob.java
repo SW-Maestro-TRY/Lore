@@ -404,6 +404,21 @@ public class WebtoonJob {
         this.updatedAt = at;
     }
 
+    /** 서버 재시작으로 끊긴 작업인가 — 화면이 「이어서 만들기」를 띄운다(2026-10-26). */
+    public boolean isStoppedByRestart() {
+        return status == JobStatus.ERROR && "server_restart".equals(failCode);
+    }
+
+    /** 끊겼던 작업을 이어서 만든다 — 실패 표시와 돌려준 표시를 지우고 줄에 다시 선다. 실패 원문은 개발자용으로 남긴다. */
+    void reopened(Instant at) {
+        this.status = JobStatus.QUEUED;
+        this.error = null;
+        this.refunded = null;
+        this.finishedAt = null;
+        this.failCode = null;
+        this.updatedAt = at;
+    }
+
     /** 시트가 안전 검사에 걸려 고쳐 주기를 기다리는 중인가. */
     public boolean isSheetBlocked() {
         return status == JobStatus.AWAITING_SHEET && "image_safety".equals(failCode) && error != null;

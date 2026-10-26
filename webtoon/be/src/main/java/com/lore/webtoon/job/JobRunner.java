@@ -1008,6 +1008,24 @@ public class JobRunner {
                 && !Files.isRegularFile(unsafeMarker(runId, page));
     }
 
+    /**
+     * 폴더에 남은 그림으로 센 진행 — 서버가 다시 떠서 메모리의 진행이 비었을 때 화면이 그린 장을 다시
+     * 보여 주게(실패 화면·이어 그리는 중). 장면을 안 나눴으면 {@code null}.
+     */
+    public JobView.Art artOnDisk(WebtoonJob job) {
+        if (job.getRunId() == null || !Files.isRegularFile(runsDir.resolve(job.getRunId()).resolve("scenes.json"))) {
+            return null;
+        }
+        int total = pageCount(job);
+        List<Integer> drawn = new ArrayList<>();
+        for (int n = 1; n <= total; n++) {
+            if (pageDrawn(job.getRunId(), n)) {
+                drawn.add(n);
+            }
+        }
+        return total <= 0 || drawn.isEmpty() ? null : new JobView.Art(drawn.size(), total, 0, drawn);
+    }
+
     private boolean anyPageDrawn(String runId) {
         Path dir = runsDir.resolve(runId).resolve("pages");
         if (!Files.isDirectory(dir)) {
@@ -2397,7 +2415,10 @@ public class JobRunner {
             if (job == null) {
                 return Refunded.NONE;
             }
-            if (credits.refund(job.getUserId(), job.getPublicId()) > 0) {
+            /* 끊겼다가 「이어서 만들기」로 다시 낸 값(ref 「…:resume」)도 같이 돌려준다. */
+            int back = credits.refund(job.getUserId(), job.getPublicId())
+                    + credits.refund(job.getUserId(), job.getPublicId() + ":resume");
+            if (back > 0) {
                 return Refunded.CREDIT;
             }
             if (guests.refundKey(job.getGuestKey())) {

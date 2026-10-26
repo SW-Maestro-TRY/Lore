@@ -484,6 +484,27 @@ public class JobController {
         return Map.of("ok", true);
     }
 
+    @Operation(summary = "끊긴 만들기 이어서 하기",
+            description = "서버 재시작으로 끊긴 내 작업을 멈춘 걸음부터 이어 간다(2026-10-26). 그린 장은 다시 안 그린다. "
+                    + "끊길 때 크레딧을 돌려줬으면 그만큼 다시 받는다.")
+    @PostMapping("/jobs/{id}/resume")
+    public Map<String, Object> resume(@PathVariable String id) {
+        Long me = CreditGate.currentUser();
+        int cost = jobs.resumeCheck(id, me);
+        String ref = id + ":resume";
+        if (cost > 0) {
+            credits.requireEnough(me, cost);
+            credits.charge(me, cost, ref, "끊긴 만들기 이어서");
+        }
+        try {
+            jobs.resumeStopped(id);
+        } catch (RuntimeException e) {
+            if (cost > 0) credits.refund(me, ref);
+            throw e;
+        }
+        return Map.of("ok", true, "cost", cost);
+    }
+
     /** 본문이 없으면(옛 이름으로 부르면) 그대로 진행으로 본다. */
     public record SheetDecision(String decision, String note) {
     }

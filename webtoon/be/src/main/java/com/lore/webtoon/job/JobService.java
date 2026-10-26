@@ -388,7 +388,10 @@ public class JobService {
                 notice.addressOf(job), queue.etaOf(job, now, spot),
                 job.isSheetBlocked() ? Math.max(0, SHEET_FIX_MAX - sheetFixesOf(job)) : 0,
                 at == JobStatus.DONE ? runner.unsafePages(job.getRunId()) : List.of(),
-                runner.episodeOf(job.getRunId()));
+                runner.episodeOf(job.getRunId()),
+                /* 진행이 메모리에 없으면(서버가 다시 떴다) 폴더의 그림으로 — 그린 장을 화면에서 다시 본다 */
+                now.total() > 0 ? null : runner.artOnDisk(job),
+                resumeCost(job));
     }
 
     /**
@@ -618,6 +621,40 @@ public class JobService {
      * 다시 만들기를 눌러도 같은 그림이 그대로 있고, 사람은 눌렀는데 아무 일도
      * 안 일어난 것으로 본다. (파이썬 쪽 `_clear_sheet` 과 같은 규칙이다.)
      */
+    /** 끊긴 작업을 이어서 만들 때 받는 값 — 크레딧을 돌려줬으면 그만큼 다시, 아니면 0. */
+    int resumeCost(WebtoonJob job) {
+        return job.isStoppedByRestart() && job.getRefunded() == Refunded.CREDIT
+                ? WebtoonQuality.creditsOf(job.getQuality()) : 0;
+    }
+
+    /** 이어서 만들 수 있는 내 작업인지 확인하고 값을 알려 준다. 게스트는 안 된다. */
+    @Transactional(readOnly = true)
+    public int resumeCheck(String publicId, Long me) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (me == null || !me.equals(job.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작업만 이어서 만들 수 있어요.");
+        }
+        if (!job.isStoppedByRestart()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이어서 만들 수 있는 작업이 아니에요.");
+        }
+        return resumeCost(job);
+    }
+
+    /**
+     * 서버 재시작으로 끊긴 작업을 멈춘 걸음부터 이어서 만든다(2026-10-26). 그린 장은 다시 안 그린다.
+     * 값은 부르는 쪽(컨트롤러)이 먼저 받는다.
+     */
+    public void resumeStopped(String publicId) {
+        WebtoonJob job = store.byPublicId(publicId);
+        if (!job.isStoppedByRestart()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이어서 만들 수 있는 작업이 아니에요.");
+        }
+        job = store.reopened(job.getId());
+        if (!runner.resumeInterrupted(job)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이 작업은 이어서 만들 수 없어요. 다시 만들어 주세요.");
+        }
+    }
+
     /** 시트 다시 만들기 값 — 보관한 옛 시트가 없으면(처음 다시 만드는 것) 무료, 있으면 1크레딧. */
     @Transactional(readOnly = true)
     public int resheetCost(String publicId) {
