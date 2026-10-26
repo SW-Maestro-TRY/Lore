@@ -262,6 +262,30 @@ const dict: Dict = {
   },
 
   /* ---- 푸터 ---- */
+  /* ---- 푸터 네 칸 · 자주 묻는 질문 분류 (2026-10-26) ---- */
+  "내 캐릭터가 주인공인 웹툰을 만드는 곳": { en: "Where your character becomes the lead of a webtoon", ja: "自分のキャラクターが主人公のウェブトゥーンを作る場所", zh: "让你的角色成为漫画主角的地方" },
+  "서비스": { en: "Service", ja: "サービス", zh: "服务" },
+  "둘러보기": { en: "Browse", ja: "見て回る", zh: "浏览" },
+  "내 웹툰": { en: "My webtoons", ja: "マイウェブトゥーン", zh: "我的漫画" },
+  "자주 묻는 질문": { en: "FAQ", ja: "よくある質問", zh: "常见问题" },
+  "법적 고지": { en: "Legal", ja: "法的情報", zh: "法律信息" },
+  "고객지원": { en: "Support", ja: "サポート", zh: "客户支持" },
+  "대표": { en: "CEO", ja: "代表", zh: "负责人" },
+  "주소": { en: "Address", ja: "住所", zh: "地址" },
+  "전화": { en: "Phone", ja: "電話", zh: "电话" },
+  "이메일": { en: "Email", ja: "メール", zh: "邮箱" },
+  "통신판매업": { en: "Mail-order reg.", ja: "通信販売業", zh: "通信销售业" },
+  "© 2026 LORE · TRY팀. All rights reserved.": { en: "© 2026 LORE · Team TRY. All rights reserved.", ja: "© 2026 LORE · TRYチーム. All rights reserved.", zh: "© 2026 LORE · TRY 团队. All rights reserved." },
+  "LORE는 AI 창작 도구를 제공해요. 올린 사진·그림과 만든 작품의 저작권 관련 책임은 이용자에게 있어요.": {
+    en: "LORE provides AI creative tools. Users are responsible for copyright matters concerning the photos and drawings they upload and the works they make.",
+    ja: "LOREはAI創作ツールを提供します。アップロードした写真・絵と作った作品の著作権に関する責任は利用者にあります。",
+    zh: "LORE 提供 AI 创作工具。上传的照片、图片以及所做作品的著作权相关责任由用户承担。",
+  },
+  "주요": { en: "Top", ja: "主な質問", zh: "主要" },
+  "이용 안내": { en: "Using LORE", ja: "ご利用案内", zh: "使用指南" },
+  "크레딧·결제": { en: "Credits & payment", ja: "クレジット・決済", zh: "积分与支付" },
+  "작품 관리": { en: "Your works", ja: "作品の管理", zh: "作品管理" },
+
   "LORE 웹툰 스튜디오": { en: "LORE Webtoon Studio", ja: "LORE ウェブトゥーンスタジオ", zh: "LORE 漫画工作室" },
   "이용약관": { en: "Terms of Service", ja: "利用規約", zh: "服务条款" },
   "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },
