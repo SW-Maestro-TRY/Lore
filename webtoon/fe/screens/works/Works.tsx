@@ -310,12 +310,8 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
         <span className="muted wt-works-sub">{sub}</span>
         <div className="wt-works-eprow">
           {eps.length > 0 && (
-            <div className="wt-works-eps">
-              {/* 회차가 많으면 1화 · … · 마지막 화만 — 23화 연재가 단추 23개로 카드를 덮지 않게. */}
-              {(eps.length > 3 ? [eps[0], -1, eps[eps.length - 1]] : eps).map((n) => n < 0
-                ? <span key="more" className="ep-more" aria-hidden="true">…</span>
-                : <button key={n} type="button" className="ep" onClick={() => open(n)}>{t("{n}화", { n })}</button>)}
-            </div>
+            /* 회차 단추 대신 「총 N화」 글자만 — 연재가 길어지면 단추가 카드를 덮는다(2026-10-26). 회차는 표지를 눌러 들어가서 고른다. */
+            <span className="muted wt-works-epcount">{t("총 {n}화", { n: eps.length })}</span>
           )}
           {mine && authenticated && (
             <span className="wt-works-pub">
