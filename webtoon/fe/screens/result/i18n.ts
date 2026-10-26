@@ -3,6 +3,35 @@ import { registerDict, type Dict } from "../../lib/i18n";
 /* 완성본 · 공유 — 화면의 한국어 원문이 키다. 서버가 만든 글(제목·오류 본문)은 여기 없다. */
 const dict: Dict = {
   /* ---- Result ---- */
+  /* ---- 크레딧이 모자라 남겨 둔 뒷장면(PendingPages) ---- */
+  "뒷장면 {n}장이 남았어요": { en: "{n} more pages to go", ja: "残り{n}ページあります", zh: "还剩 {n} 页" },
+  "한 편은 {base}장까지 기본으로 그려요. 그 뒤 장면은 한 장에 {per}크레딧이에요.": {
+    en: "Each episode includes up to {base} pages. Pages after that cost {per} credits each.",
+    ja: "1話は{base}ページまで基本で描きます。それ以降は1ページ{per}クレジットです。",
+    zh: "每话默认画到第 {base} 页，之后每页 {per} 积分。",
+  },
+  "{n}장을 그리는 중이에요. 한 장에 1~2분 걸려요.": {
+    en: "Drawing {n} pages. Each page takes 1–2 minutes.",
+    ja: "{n}ページを描いています。1ページに1〜2分かかります。",
+    zh: "正在画 {n} 页，每页需要 1～2 分钟。",
+  },
+  "크레딧이 모자라요! 매일 무료 크레딧이 채워지면 내일 이어서 그릴 수 있어요.": {
+    en: "Not enough credits! Free credits refill every day, so you can continue tomorrow.",
+    ja: "クレジットが足りません！毎日無料クレジットが補充されるので、明日続きを描けます。",
+    zh: "积分不够！每天会补充免费积分，明天就能接着画。",
+  },
+  "나머지 {n}장은 크레딧이 채워지면 이어서 그릴 수 있어요.": {
+    en: "You can draw the remaining {n} pages once your credits refill.",
+    ja: "残りの{n}ページはクレジットが補充されたら続けて描けます。",
+    zh: "剩下的 {n} 页等积分补充后可以接着画。",
+  },
+  "이어 그리지 못했습니다": { en: "Couldn't continue drawing.", ja: "続きを描けませんでした", zh: "无法继续绘制" },
+  "시작하는 중…": { en: "Starting…", ja: "開始しています…", zh: "正在开始…" },
+  "이어 그리기 · 한 장 {per}크레딧": {
+    en: "Keep drawing · {per} credits per page",
+    ja: "続きを描く · 1ページ{per}クレジット",
+    zh: "继续画 · 每页 {per} 积分",
+  },
   "관리자가 이 작품을 비공개 처리했어요. 다른 사람에게는 보이지 않아요.": {
     en: "An admin has made this work private. Other people can't see it.",
     ja: "管理者がこの作品を非公開にしました。ほかの人には表示されません。",

@@ -71,6 +71,15 @@ public class CreditGate {
         return userId == null ? 0 : credits.balance(userId);
     }
 
+    /**
+     * 오늘 몫(가입 · 매일 지급)을 먼저 채우고 본 잔액. 남은 장 이어 그리기처럼 「다음 날 와서 이어 한다」는
+     * 일이 이걸 본다 — 매일 지급은 잔액을 물을 때 채워지므로, 머리 잔액을 아직 안 읽은 채 단추를 누르면
+     * 오늘 몫이 빠진 잔액으로 「모자라요」가 뜬다.
+     */
+    public int balanceToday(Long userId) {
+        return userId == null ? 0 : credits.balanceWithDaily(userId);
+    }
+
     /** 지금 로그인한 사람. 안 했으면 {@code null}. */
     public static Long currentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

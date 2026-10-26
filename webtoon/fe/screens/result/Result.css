@@ -35,6 +35,12 @@
   width: 720px; max-width: 100%; display: flex; flex-direction: column; gap: 0;
   background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; margin-top: 8px;
 }
+/* 크레딧이 모자라 아직 안 그린 뒷장면 — 마지막 장 바로 아래, 빈 장 안내보다 차분하게 */
+.wt .wt-result-pending { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; align-self: stretch; box-sizing: border-box; width: 100%; padding: 16px 18px; margin: 16px 0; border-radius: 12px; background: #f1f4f3; color: #1d2b33; line-height: 1.6; }
+.wt .wt-result-pending > b { font-size: 16px; }
+.wt .wt-result-pending p { margin: 0; }
+.wt .wt-result-pending-now { color: #5b6b70; }
+.wt .wt-result-pending-short { color: #8a2b1d; font-weight: 600; }
 .wt .wt-result-pg { position: relative; }
 .wt .wt-result-pg img { width: 100%; display: block; }
 .wt .wt-result-peek {

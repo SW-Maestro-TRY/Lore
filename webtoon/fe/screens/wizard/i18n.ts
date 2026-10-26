@@ -3,6 +3,11 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "한 편은 {base}장까지예요. 이야기가 길어 장면이 더 많으면 한 장에 {per}크레딧이 더 들고, 크레딧이 모자라면 {base}장까지 먼저 그린 뒤 나머지는 나중에 이어 그릴 수 있어요.": {
+    en: "An episode includes up to {base} pages. If a longer story needs more scenes, each extra page costs {per} credits; if you're short, we'll draw the first {base} pages and you can continue the rest later.",
+    ja: "1話は{base}ページまでです。話が長くて場面が増えると1ページ{per}クレジットかかり、足りない場合は{base}ページまで先に描いて、残りは後から続けて描けます。",
+    zh: "每话包含 {base} 页。故事较长、场景更多时，每多一页需 {per} 积分；积分不够时会先画前 {base} 页，剩下的之后可以接着画。",
+  },
   "제목 · 추가 설정": { en: "Title · extra settings", ja: "タイトル · 追加設定", zh: "标题 · 附加设定" },
   "추가 설정": { en: "Extra settings", ja: "追加設定", zh: "附加设定" },
   "비워 두면 이야기에 맞춰 지어 드려요": { en: "Leave blank and we'll name it to fit the story", ja: "空欄なら物語に合わせて付けます", zh: "留空则按故事为你起名" },

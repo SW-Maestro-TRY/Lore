@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.job.WebtoonJob;
 import com.lore.webtoon.job.WebtoonJobRepository;
+import com.lore.webtoon.job.WebtoonQuality;
 import com.lore.webtoon.job.WebtoonStyles;
 import com.lore.webtoon.story.StoryStore;
 import com.lore.webtoon.story.WebtoonStory;
@@ -299,6 +300,29 @@ public class RunService {
      * 지면 폭 개념이 없다. {@code gap}(장 뒤 여백, 폭의 몇 배)은 하네스가 안
      * 정하고 <b>편집실에서 사람이 고친 값</b>만 있다 — 안 고친 장은 0 이다.
      */
+    /**
+     * 아직 안 그린 장 번호 — 장면은 있는데 그림이 없는 장. 표지가 1장이고 장면 n 은 n+1 장이다.
+     * 장면을 모르면(옛 작품) 빈 목록이다.
+     */
+    static List<Integer> pendingPages(List<Integer> drawn, List<String> scenes) {
+        List<Integer> out = new ArrayList<>();
+        if (scenes == null || scenes.isEmpty()) {
+            return out;
+        }
+        for (int no = 1; no <= scenes.size() + 1; no++) {
+            if (!drawn.contains(no)) {
+                out.add(no);
+            }
+        }
+        return out;
+    }
+
+    /** 이 작품에서 아직 안 그린 장 번호. 이어 그리기가 본다. */
+    @Transactional(readOnly = true)
+    public List<Integer> pendingPages(String runId) {
+        return pendingPages(pages.pageNumbersOf(runId), stories.scenesOf(runId));
+    }
+
     @Transactional(readOnly = true)
     public Map<String, Object> result(String runId) {
         List<Integer> numbers = pages.pageNumbersOf(runId);
@@ -339,10 +363,14 @@ public class RunService {
         out.put("likes", likes.countByRunId(runId));
         out.put("pages", sheets);
         out.put("page_count", numbers.size());
-        /* 그리기로 한 장 수와 실제로 그린 장 수가 같다 — 이 길은 한 편을
-           끝까지 그리거나 실패하거나 둘 중 하나이고, 앞 몇 장만 그리는
-           「미리보기」가 없다. 화면은 이 둘이 다를 때만 "앞 몇 장만" 을 적는다. */
-        out.put("planned_pages", numbers.size());
+        /* 그리기로 한 장 수(표지 + 장면 수)와 실제로 그린 장 수. 한 편 값은 기본 장 수까지라, 크레딧이
+           모자라면 뒤 장을 안 그린 채 완성한다 — 그 장 번호와 한 장 값을 같이 줘서 화면이 「이어 그리기」를
+           띄운다. 「미리보기」(preview)는 여전히 없다 — 공유·공개는 그린 장만으로 그대로 한다. */
+        List<Integer> pending = pendingPages(numbers, scenes);
+        out.put("planned_pages", numbers.size() + pending.size());
+        out.put("pending_pages", pending);
+        out.put("extra_page_credits", WebtoonQuality.extraPageCreditsOf(job == null ? null : job.getQuality()));
+        out.put("base_pages", WebtoonQuality.BASE_PAGES);
         out.put("preview", false);
         out.put("example", ExampleWorks.isExample(work));
         return out;

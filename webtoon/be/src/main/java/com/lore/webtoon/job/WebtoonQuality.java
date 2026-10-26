@@ -84,6 +84,31 @@ public final class WebtoonQuality {
             "swell", 4);
 
     /**
+     * 한 편 값({@link #creditsOf})에 들어 있는 장 수 — 표지를 포함한다.
+     *
+     * 원가는 장 수에 거의 정비례한다(장마다 그림 · 장 검수 · 자동 재그림이 붙는다). 2026-10-26 운영
+     * 완성본 46편으로 재 보니 한 장에 너울 약 640원 · 파도 약 320원이었고, 너울 25(5,000원)는
+     * 8장까지 본전이었다. 길게 적은 내용은 장면이 많아져 20장을 넘기도 했다. 그래서 한 편 값은
+     * 8장까지이고, 그 뒤 장은 장마다 따로 받는다({@link #extraPageCreditsOf}). 크레딧이 모자라면
+     * 8장까지만 그려 완성하고, 나머지는 결과 화면에서 이어 그린다.
+     */
+    public static final int BASE_PAGES = 8;
+
+    /**
+     * 기본 장 수를 넘는 장 하나에 드는 크레딧. 한 장 원가에 부가세 · 결제 수수료를 얹어도 남게 잡았다
+     * (너울 약 640원 → 4 = 800원, 파도 약 320원 → 2 = 400원, 물결은 파도보다 싸서 같은 2).
+     */
+    private static final Map<String, Integer> EXTRA_PAGE_CREDITS = Map.of(
+            "wave",  2,
+            "surf",  2,
+            "swell", 4);
+
+    /** 이 화질로 만든 작품에서 기본 장 수를 넘는 장 하나에 드는 크레딧. */
+    public static int extraPageCreditsOf(String key) {
+        return EXTRA_PAGE_CREDITS.getOrDefault(normalize(key), EXTRA_PAGE_CREDITS.get(DEFAULT_QUALITY));
+    }
+
+    /**
      * 한 편에 실제로 나가는 <b>AI 원가(원)</b>. 2026-09-13 실측이다.
      *
      * 크레딧(받는 값)과 다르다 — 이것은 <b>우리가 내는 값</b>이고, 하루 지출
@@ -141,7 +166,9 @@ public final class WebtoonQuality {
                 .map(k -> Map.<String, Object>of(
                         "key", k,
                         "label", labelOf(k),
-                        "credits", creditsOf(k)))
+                        "credits", creditsOf(k),
+                        "base_pages", BASE_PAGES,
+                        "extra_page_credits", extraPageCreditsOf(k)))
                 .toList();
     }
 }
