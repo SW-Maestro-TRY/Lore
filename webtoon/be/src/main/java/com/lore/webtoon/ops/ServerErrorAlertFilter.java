@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.DispatcherServlet;
@@ -19,21 +20,25 @@ import org.springframework.web.servlet.DispatcherServlet;
  *
  * 주소 안의 작품 · 작업 번호는 묶는 열쇠에서 지운다. 안 지우면 작품마다 다른 열쇠가 되어 같은 버그가
  * 작품 수만큼 따로 울린다.
+ *
+ * 알림기는 {@code ObjectProvider} 로 받는다. 화면 단위 검사({@code @WebMvcTest})는 필터를 끌어오지만
+ * 알림기는 안 끌어와서, 바로 받으면 웹툰 화면 검사가 전부 문맥을 못 띄운다. 없으면 아무것도 안 한다.
  */
 @Component
 public class ServerErrorAlertFilter extends OncePerRequestFilter {
 
     private static final Pattern IDS = Pattern.compile("/(?:[0-9]{8}T[0-9]{6}-[0-9a-f]{6}|example-[^/]+|[0-9a-f]{20}|[0-9]+)(?=/|$)");
 
-    private final OpsAlert alert;
+    private final ObjectProvider<OpsAlert> alerts;
 
-    public ServerErrorAlertFilter(OpsAlert alert) {
-        this.alert = alert;
+    public ServerErrorAlertFilter(ObjectProvider<OpsAlert> alerts) {
+        this.alerts = alerts;
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !alert.enabled() || !request.getRequestURI().startsWith("/api/webtoon/");
+        OpsAlert alert = alerts.getIfAvailable();
+        return alert == null || !alert.enabled() || !request.getRequestURI().startsWith("/api/webtoon/");
     }
 
     @Override
@@ -54,6 +59,10 @@ public class ServerErrorAlertFilter extends OncePerRequestFilter {
     private void report(HttpServletRequest req, int status, Throwable e) {
         String path = shape(req.getRequestURI());
         String what = e == null ? "(예외 정보 없음)" : e.getClass().getSimpleName() + ": " + firstLine(e.getMessage());
+        OpsAlert alert = alerts.getIfAvailable();
+        if (alert == null) {
+            return;
+        }
         alert.send(OpsAlert.Level.ERROR, "http" + status + ":" + req.getMethod() + path,
                 "서버 오류 " + status + " — " + req.getMethod() + " " + path, what);
     }
