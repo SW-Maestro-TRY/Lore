@@ -631,6 +631,11 @@ export function myLikes(): Promise<RunCard[]> {
   return appRequest<RunCard[]>("/api/webtoon/v1/my/likes");
 }
 
+/** 내가 댓글 단 웹툰 — 최근에 단 것부터. 모양은 둘러보기 카드와 같다. */
+export function myCommented(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/commented");
+}
+
 /** 이 목록 중 내가 찜한 작품 번호. 둘러보기 카드에 하트를 칠할 때. */
 export function likedAmong(runIds: string[]): Promise<string[]> {
   if (runIds.length === 0) return Promise.resolve([]);

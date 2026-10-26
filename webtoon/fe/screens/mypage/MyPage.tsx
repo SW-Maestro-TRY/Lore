@@ -21,7 +21,7 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myLikes, myTrash, readAllowance, recentRuns,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myCommented, myLikes, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, setNotifySetting, setVisibility, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
   mySurveyStatus, type SurveyStatus, mySeriesDrafts, type SeriesDraftCard,
@@ -58,8 +58,6 @@ registerDict({
   "로그인 안 함": { en: "Not signed in", ja: "未ログイン", zh: "未登录" },
   "크레딧": { en: "Credits", ja: "クレジット", zh: "点数" },
   "한 편 {n} C": { en: "{n} C per episode", ja: "1話 {n} C", zh: "每话 {n} C" },
-  "만든 것": { en: "MADE", ja: "作ったもの", zh: "已创作" },
-  "재료": { en: "MATERIALS", ja: "素材", zh: "素材" },
   "계정": { en: "ACCOUNT", ja: "アカウント", zh: "账号" },
   "내 웹툰": { en: "My webtoons", ja: "マイウェブトゥーン", zh: "我的漫画" },
   "모두 보기": { en: "See all", ja: "すべて見る", zh: "查看全部" },
@@ -104,6 +102,9 @@ registerDict({
   "둘러보기": { en: "Browse", ja: "見てまわる", zh: "浏览" },
   "새 웹툰 만들기": { en: "New webtoon", ja: "新しいウェブトゥーン", zh: "新建漫画" },
   "최근 본 웹툰": { en: "Recently read", ja: "最近読んだ作品", zh: "最近看过" },
+  "웹툰": { en: "WEBTOONS", ja: "ウェブトゥーン", zh: "漫画" },
+  "댓글 단 웹툰": { en: "Commented webtoons", ja: "コメントした作品", zh: "评论过的漫画" },
+  "아직 댓글을 단 웹툰이 없어요.": { en: "You haven't commented on any webtoon yet.", ja: "まだコメントした作品がありません。", zh: "还没有评论过的漫画。" },
   "찜한 웹툰": { en: "Saved webtoons", ja: "お気に入りの作品", zh: "收藏的漫画" },
   "아직 찜한 웹툰이 없어요. 둘러보기에서 하트를 눌러 보세요.": { en: "Nothing saved yet. Tap a heart in Browse.", ja: "まだお気に入りがありません。見て回るでハートを押してみてください。", zh: "还没有收藏。去浏览里点个爱心吧。" },
   "캐릭터 탭으로": { en: "Go to characters", ja: "キャラクタータブへ", zh: "前往角色页" },
@@ -183,9 +184,10 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   /* 지금은 "내 웹툰"과 "설정" 딱 둘뿐이라 화면을 아예 나누지는 않고
      같은 레일 안에서 본문만 바꾼다 — 나중에 칸이 늘면 그때 공용 탭
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
-  const [tab, setTab] = useState<"works" | "chars" | "settings">(initialTab === "settings" ? "settings" : "works");
-  /* 내 웹툰은 첫 화면에 한 줄만 — 내 캐릭터처럼 「모두 보기」를 눌러야 전부 펼친다 */
-  const [allWorks, setAllWorks] = useState(false);
+  /* home = 마이페이지 첫 화면(웹툰 몇 개 · 만드는 중 · 찜 · 내 캐릭터). 왼쪽 「웹툰」 묶음의 네 칸
+     (내 웹툰 · 내 캐릭터 · 찜한 웹툰 · 댓글 단 웹툰)은 각각 전부 펼친 목록이다 — 웹툰이 많아져도 첫 화면은 그대로. */
+  const [tab, setTab] = useState<"home" | "works" | "chars" | "liked" | "commented" | "settings">(initialTab === "settings" ? "settings" : "home");
+  const allWorks = tab === "works";
   const WORKS_PREVIEW = 3;
   const [contactOpen, setContactOpen] = useState(false);
   const [contactCompose, setContactCompose] = useState(false);
@@ -232,6 +234,12 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   useEffect(() => {
     if (!isAuthenticated) { setLiked([]); return; }
     myLikes().then(setLiked).catch(() => setLiked([]));
+  }, [isAuthenticated]);
+  /* 댓글 단 웹툰 — 계정 것이라 로그인했을 때만 */
+  const [commented, setCommented] = useState<RunCard[]>([]);
+  useEffect(() => {
+    if (!isAuthenticated) { setCommented([]); return; }
+    myCommented().then(setCommented).catch(() => setCommented([]));
   }, [isAuthenticated]);
 
   /* 내 작품 — 로그인했으면 계정 것과 이 브라우저 것을 합친다(기기를 바꾸면
@@ -378,14 +386,23 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
         )}
 
         <div className="card rail wt-my-menu">
-          <small>{t("만든 것")}</small>
-          <button type="button" className={tab === "works" ? "on" : ""} onClick={() => { setTab("works"); setAllWorks(false); }}>
+          <small>{t("웹툰")}</small>
+          <button type="button" className={tab === "works" ? "on" : ""} onClick={() => { setTab("works"); window.scrollTo({ top: 0 }); }}>
             {t("내 웹툰")} <span className="dim">{runs.length}</span>
           </button>
-          <small>{t("재료")}</small>
-          <button type="button" className={tab === "chars" ? "on" : ""} onClick={() => setTab("chars")}>
+          <button type="button" className={tab === "chars" ? "on" : ""} onClick={() => { setTab("chars"); window.scrollTo({ top: 0 }); }}>
             {t("내 캐릭터")} <span className="dim">{chars.length}</span>
           </button>
+          {isAuthenticated && (
+            <>
+              <button type="button" className={tab === "liked" ? "on" : ""} onClick={() => { setTab("liked"); window.scrollTo({ top: 0 }); }}>
+                {t("찜한 웹툰")} <span className="dim">{liked.length}</span>
+              </button>
+              <button type="button" className={tab === "commented" ? "on" : ""} onClick={() => { setTab("commented"); window.scrollTo({ top: 0 }); }}>
+                {t("댓글 단 웹툰")} <span className="dim">{commented.length}</span>
+              </button>
+            </>
+          )}
           {isAuthenticated && (
             <>
               <small>{t("설정")}</small>
@@ -558,12 +575,12 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 </div>
               </Dialog>
             )}
-        {tab === "works" && (
+        {(tab === "home" || tab === "works") && (
           <>
             <div className="wt-my-head">
               <div>
                 {allWorks && (
-                  <button type="button" className="wt-my-back" onClick={() => setAllWorks(false)}>
+                  <button type="button" className="wt-my-back" onClick={() => setTab("home")}>
                     ← {t("내 작업실")}
                   </button>
                 )}
@@ -608,7 +625,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               </div>
             )}
             {!allWorks && !runsFailed && runs.length > WORKS_PREVIEW && (
-              <button type="button" className="btn btn-w wt-my-more" onClick={() => { setAllWorks(true); window.scrollTo({ top: 0 }); }}>
+              <button type="button" className="btn btn-w wt-my-more" onClick={() => { setTab("works"); window.scrollTo({ top: 0 }); }}>
                 {t("내 웹툰 모두 보기")} <span className="dim">{runs.length}</span>
               </button>
             )}
@@ -669,12 +686,51 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           </>
         )}
 
+        {(tab === "liked" || tab === "commented") && (
+          /* 찜한 웹툰 · 댓글 단 웹툰 — 전부 펼친 목록. 누르면 그 웹툰으로 간다. */
+          <>
+            <div className="wt-my-head">
+              <div>
+                <button type="button" className="wt-my-back" onClick={() => setTab("home")}>← {t("내 작업실")}</button>
+                <h2>{tab === "liked" ? t("찜한 웹툰") : t("댓글 단 웹툰")} <span className="dim wt-my-count">{(tab === "liked" ? liked : commented).length}</span></h2>
+              </div>
+              <div className="wt-my-headacts">
+                <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
+              </div>
+            </div>
+            {(tab === "liked" ? liked : commented).length === 0 ? (
+              <div className="wt-my-empty">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={louArt("empty")} alt="" aria-hidden="true" />
+                <b>{tab === "liked" ? t("아직 찜한 웹툰이 없어요. 둘러보기에서 하트를 눌러 보세요.") : t("아직 댓글을 단 웹툰이 없어요.")}</b>
+              </div>
+            ) : (
+              <div className="wt-my-grid">
+                {(tab === "liked" ? liked : commented).map((r) => (
+                  <button type="button" key={r.run_id} className="card wt-my-work wt-my-runcard"
+                          onClick={() => { track("works_open", { run: r.run_id, where: tab === "liked" ? "mypage_likes" : "mypage_commented" }); go("result", { run: r.run_id }); }}>
+                    <span className="wt-my-cover">
+                      {r.cover_page ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" />
+                      ) : <span className="wt-my-charnoimg" aria-hidden="true" />}
+                    </span>
+                    <b>{r.title || t("제목 없음")}</b>
+                    <span className="muted">{[r.character, r.genre && t(r.genre)].filter(Boolean).join(" · ")}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
         {tab === "chars" && (
           /* 내 캐릭터(#548) — 내 웹툰처럼 마이페이지 안에서 카드로 본다. 캐릭터 탭으로 나가지 않는다. */
           <>
             <div className="wt-my-head">
               <div>
-                <h2>{t("내 캐릭터")}</h2>
+                <button type="button" className="wt-my-back" onClick={() => setTab("home")}>← {t("내 작업실")}</button>
+                <h2>{t("내 캐릭터")} <span className="dim wt-my-count">{chars.length}</span></h2>
               </div>
               <div className="wt-my-headacts">
                 <button type="button" className="btn btn-p" onClick={() => go("try")}>{t("새 캐릭터 만들기")}</button>
@@ -972,8 +1028,8 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
           <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
             {t("편집실")}
           </button>
-          <button type="button" className="btn btn-w wt-my-edit" disabled={busy} onClick={() => setConfirming(true)}>
-            {t("지우기")}
+          <button type="button" className="btn wt-my-edit wt-my-delete" disabled={busy} onClick={() => setConfirming(true)}>
+            {t("삭제")}
           </button>
         </span>
       </div>
@@ -987,7 +1043,7 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
       {confirming && (
         <ConfirmDialog title={t("휴지통으로 옮길까요?")}
                        sub={<><b>{run.title || t("제목 없음")}</b><br />{t("{n}일 안에는 휴지통에서 되살릴 수 있어요.", { n: keepDays })}</>}
-                       confirmLabel={t("지우기")} cancelLabel={t("취소")} busy={busy}
+                       confirmLabel={t("삭제")} cancelLabel={t("취소")} busy={busy}
                        error={err} onConfirm={() => void remove()} onClose={() => { setConfirming(false); setErr(""); }} />
       )}
       {err && <span className="wt-my-err">{err}</span>}

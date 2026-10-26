@@ -306,3 +306,11 @@
 .wt .wt-contact-pickbtn:hover { background: #33475f; }
 .wt .wt-contact-attachments:has(.wt-contact-fileinput:focus-visible) .wt-contact-pickbtn { outline: 2px solid #b8e8d5; outline-offset: 2px; }
 .wt .wt-dialog-box.wt-contact-dialog .wt-dialog-heading:has(.wt-dialog-back) { margin-bottom: 14px; }
+
+/* 내 웹툰 카드의 삭제 — 빨간색. 누르면 휴지통으로 옮길지 한 번 더 묻는다. */
+.wt .wt-my-delete { background: transparent; color: #e0787a; border: 1px solid rgba(224, 120, 122, 0.55); }
+.wt .wt-my-delete:hover:not(:disabled) { background: #bd6567; border-color: #bd6567; color: #fff; }
+
+/* 찜한 웹툰 · 댓글 단 웹툰 카드 — 카드 전체가 누르는 자리 */
+.wt .wt-my-runcard { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.wt .wt-my-runcard .wt-my-cover { pointer-events: none; }
