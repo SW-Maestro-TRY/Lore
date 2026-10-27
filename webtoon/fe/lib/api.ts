@@ -497,6 +497,8 @@ export interface RunCard {
   likes?: number;
   /** 본 사람 수 — 둘러보기 목록에만 온다(조회순 정렬). 연재는 회차를 더한 값. */
   views?: number;
+  /** 인기순 자리 — 관리자가 정한다. 작을수록 앞, 비어 있으면 정해진 것들 뒤(조회순). 둘러보기 목록에만 온다. */
+  rank?: number | null;
   /** 내가 찜했나. 찜 목록(/my/likes)에서만 서버가 붙이고, 둘러보기는 likedAmong 으로 화면이 채운다. */
   liked?: boolean;
   /** 관리자 처리(#638) — 내 목록 · 휴지통에서만 온다. */
@@ -1114,6 +1116,15 @@ export function adminUpdateExample(runId: string, body: { example?: boolean; pub
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+/** 둘러보기 인기순 자리를 정한다(관리자). null 이면 비운다. */
+export function adminSetBrowseRank(runId: string, rank: number | null): Promise<{ run_id: string; rank: number | null }> {
+  return call<{ run_id: string; rank: number | null }>(`/admin/browse-rank/${encodeURIComponent(runId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rank }),
   });
 }
 
