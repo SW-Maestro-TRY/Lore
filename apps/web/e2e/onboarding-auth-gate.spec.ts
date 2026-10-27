@@ -12,6 +12,9 @@
 //   자동 재시도하는 `expect` 로 건다 — 부하가 걸린 날에만 깨지는 검사는 아무도 안 믿는다.
 import { expect, test, type Page } from '@playwright/test';
 
+// 문구(닫기·8자 이상)를 한국어로 본다 — 브라우저 기본 en-US 면 짤이 영어 화면을 고른다.
+test.use({ locale: 'ko-KR' });
+
 /** 1×1 PNG. 올라간 본문이 **고른 그 파일**인지 바이트로 대조하려고 상수로 둔다. */
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -33,6 +36,8 @@ interface Stub {
   /** S3 로 PUT 된 본문들. 길이 대조용. */
   put: Buffer[];
   draft: number;
+  signup: number;
+  login: number;
 }
 
 /**
@@ -40,7 +45,7 @@ interface Stub {
  * **어느 호출이 언제 나갔는가** 뿐이다.
  */
 async function stubServer(page: Page, authed: boolean): Promise<Stub> {
-  const s: Stub = { authed, presign: 0, put: [], draft: 0 };
+  const s: Stub = { authed, presign: 0, put: [], draft: 0, signup: 0, login: 0 };
 
   await page.route('**/api/v1/users/me', (r) =>
     r.fulfill(s.authed
@@ -50,7 +55,9 @@ async function stubServer(page: Page, authed: boolean): Promise<Stub> {
   // 401 을 만나면 클라이언트가 한 번 갱신을 시도한다. 여기서 끊어야 비로그인으로 확정된다.
   await page.route('**/api/v1/auth/refresh', (r) => r.fulfill(json(fail('INVALID_REFRESH_TOKEN', '만료'), 401)));
 
-  await page.route('**/api/v1/auth/login', (r) => { s.authed = true; return r.fulfill(json(ok(null))); });
+  await page.route('**/api/v1/auth/login', (r) => { s.login += 1; s.authed = true; return r.fulfill(json(ok(null))); });
+  // 가입은 계정만 만든다(서버 정책: 토큰 없음). 로그인 상태는 이어지는 로그인 호출이 만든다.
+  await page.route('**/api/v1/auth/signup', (r) => { s.signup += 1; return r.fulfill(json(ok(null))); });
 
   await page.route('**/api/v1/uploads/presign', (r) => {
     s.presign += 1;
@@ -142,8 +149,11 @@ test('로그인하면 고른 그 파일 그대로 이어서 올라간다', async
   await pickImage(page);
   await expect(dialog(page)).toBeVisible();
 
-  // 창은 가입 탭으로 열린다. 여기서는 이미 계정이 있는 사람으로 보고 로그인 탭에서 들어간다.
-  await dialog(page).getByRole('tab', { name: '로그인' }).click();
+  // 창은 가입 탭으로 열린다. 여기서는 이미 계정이 있는 사람으로 보고 로그인으로 들어간다.
+  // ★ 폰(단계형)은 탭 두 칸 대신 아래 한 줄 "이미 계정이 있어요 · 로그인"(2026-10-26). 넓은 화면은 탭 그대로.
+  const switchLine = page.locator('[data-action="auth-switch-tab"]');
+  if (await switchLine.count()) await switchLine.click();
+  else await dialog(page).getByRole('tab', { name: '로그인' }).click();
   await dialog(page).locator('input[type="email"]').fill('e2e@zzal.kr');
   await dialog(page).locator('input[type="password"]').first().fill('passw0rd!');
 
@@ -190,4 +200,73 @@ test('로그인한 채로 들어오면 올리기까지 가입 창이 한 번도 
   await expect(onb(page)).toHaveAttribute('data-step', 'char');
   await page.locator('button.onb-back').click();
   await expect(onb(page)).toHaveAttribute('data-step', 'upload');
+});
+
+// ★ 폰 단계형 가입(2026-10-26): 이메일 → 비밀번호+확인 → 약관 = 3단계.
+//   빈 칸 "다음" 은 꾸중 대신 그 칸으로 데려가고(포커스), 8자 전 "다음" 은 넘어가지 않으며,
+//   확인 불일치는 그 단계 안에서 확인 칸만 비운다. 가입이 끝나면 비밀번호를 다시 치지 않고 로그인된다.
+test.describe('폰 단계형 가입', () => {
+  test.use({ viewport: { width: 375, height: 667 }, hasTouch: true });
+
+  test('3단계로 가입하고, 막힌 칸으로 데려가며, 가입 뒤 바로 로그인돼 고른 파일이 올라간다', async ({ page }) => {
+    const s = await stubServer(page, false);
+    await openOnboarding(page, s);
+    await next(page).click();
+    await pickImage(page);
+    await expect(dialog(page)).toBeVisible();
+    const step = page.locator('[data-part="auth-step-progress"]');
+    const go = page.locator('[data-action="auth-step-next"], [data-action="auth-submit"]');
+    const email = dialog(page).locator('input[type="email"]');
+    const pw = dialog(page).locator('input[autocomplete="new-password"]').nth(0);
+    const confirm = dialog(page).locator('input[autocomplete="new-password"]').nth(1);
+    await expect(step).toHaveText('1 / 3');
+    await expect(email).toBeFocused();
+
+    // 빈 칸 "다음": 빨간 오류 없이 회색 안내 + 이메일 칸 포커스, 단계 그대로.
+    await go.click();
+    await expect(step).toHaveText('1 / 3');
+    await expect(email).toBeFocused();
+    await expect(dialog(page).locator('[role="alert"]')).toHaveCount(0);
+    await expect(page.locator('[data-part="auth-soft-hint"]')).toBeVisible();
+
+    await email.fill('new@zzal.kr');
+    await go.click();
+    await expect(step).toHaveText('2 / 3');
+    await expect(pw).toBeFocused();
+    await expect(confirm).toBeVisible();
+    await expect(page.locator('[data-part="auth-password-rule"]')).toHaveText('8자 이상');
+
+    // 8자 전 "다음": 넘어가지 않는다.
+    await pw.fill('abc');
+    await go.click();
+    await expect(step).toHaveText('2 / 3');
+    await expect(pw).toBeFocused();
+    await expect(page.locator('[data-part="auth-password-rule"]')).toHaveAttribute('data-state', 'blocked');
+
+    // 불일치: 같은 단계에서 확인 칸만 비우고 거기로.
+    await pw.fill('passw0rd!');
+    await expect(page.locator('[data-part="auth-password-rule"]')).toHaveAttribute('data-state', 'ok');
+    await confirm.fill('passw0rd?');
+    await go.click();
+    await expect(step).toHaveText('2 / 3');
+    await expect(confirm).toBeFocused();
+    await expect(confirm).toHaveValue('');
+    await expect(pw).toHaveValue('passw0rd!');
+    await expect(dialog(page).locator('[role="alert"]')).toHaveText('비밀번호가 서로 다릅니다');
+
+    await confirm.fill('passw0rd!');
+    await go.click();
+    await expect(step).toHaveText('3 / 3');
+    await dialog(page).getByText('전체 동의').click();
+
+    const presigned = page.waitForRequest((r) => r.url().includes('/api/v1/uploads/presign'));
+    await go.click();
+    await presigned;
+    // 가입 한 번 + 이어지는 로그인 한 번. 사람은 비밀번호를 다시 치지 않았다.
+    await expect.poll(() => s.signup).toBe(1);
+    await expect.poll(() => s.login).toBe(1);
+    await expect.poll(() => s.put.length).toBe(1);
+    expect(s.put[0].equals(PNG)).toBe(true);
+    await expect(dialog(page)).toHaveCount(0);
+  });
 });
