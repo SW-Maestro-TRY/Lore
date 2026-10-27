@@ -8,6 +8,7 @@ export function interactionMetrics(live: Pick<Live,'pet'>, sample=false, screen=
  return {
   shown:(action:string)=>emit('zzal_ui_shown',{action,user_action:false}),
   attempt:(action:string)=>emit('zzal_user_action',{action,outcome:'attempt',user_action:true}),
-  result:(action:string,outcome:'success'|'failure'|'uncertain'|'no_op')=>emit('zzal_action_result',{action,outcome,user_action:false}),
+  // detail keys must stay inside the server allowlist (AnalyticsService.ALLOWED_PROP_KEYS): fixed codes only, never user text.
+  result:(action:string,outcome:'success'|'failure'|'uncertain'|'no_op',detail?:{code?:string|null;reason?:string})=>emit('zzal_action_result',{action,outcome,user_action:false,...(detail?.code?{code:detail.code}:{}),...(detail?.reason?{reason:detail.reason}:{})}),
  };
 }
