@@ -584,6 +584,8 @@ export interface RunResult {
   inputs?: RunInputs;
   /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 그 장마다 걸린 이유(선정성·폭력·잔혹 …) — 장 번호 → 사람이 읽는 말(2026-10-27) */
+  unsafe_reasons?: Record<string, string>;
   /** 크레딧이 모자라 아직 안 그린 장 번호들 — 한 편 값은 기본 장 수(base_pages)까지다 */
   pending_pages?: number[];
   /** 남은 장의 장면 한 줄 — 잠긴 장을 웹툰 흐름 안에서 「다음 장면」으로 보여 준다 */
