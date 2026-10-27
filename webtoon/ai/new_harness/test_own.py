@@ -126,6 +126,51 @@ def test_rescene_same_scene_twice_keeps_others():
     assert [h["ver"] for h in scenes[2]["history"]] == [1, 2, 3] and scenes[2]["ver"] == 4
 
 
+def test_cast_expands_when_nothing_written():
+    """적은 내용 없이 설정집·설명뿐이면 인물 단계가 새로 세운 사람도 남기고, 이야기가 그 사람들로 쓴다.
+    적은 내용이 있으면 예전처럼 적힌 사람만 남긴다."""
+    cast_answer = json.dumps({"cast": [
+        {"name": "하린", "role": "신입생", "from_input": True, "gender": "여성 · 열다섯 살", "look": "단발"},
+        {"name": "카렐", "role": "순찰 교사", "from_input": "false", "gender": "남성 · 마흔대", "look": "회색 망토"}]},
+        ensure_ascii=False)
+    prompts = []
+
+    class FakeCall:
+        provider = model = "fake"
+
+        def __init__(self, stage):
+            self.stage = stage
+
+        def describe(self):
+            return "fake"
+
+        def __call__(self, prompt, **kw):
+            prompts.append((self.stage, prompt))
+            if self.stage == "CAST":
+                return cast_answer, {"calls": []}
+            return "## 방향 1 — 제목\n장르: 판타지\n\n소개:\n소개.\n\n본문:\n본문.\n", {"calls": []}
+
+    real, real_record = own.llm.Call, R.record
+    own.llm.Call, R.record = FakeCall, (lambda run_dir, meta: None)
+    try:
+        book = {"name": "오은솔", "description": "신입생 주인공을 돕는 기숙사 선배", "genre": "마법학교",
+                "photos": [], "fields": {}, "story": ""}
+        d = Path(tempfile.mkdtemp())
+        own._cast_then_story(d, book, False, "ko")
+        assert [c["name"] for c in R.read_json(d / "cast.json")] == ["하린", "카렐"]
+        story_prompt = next(p for s, p in prompts if s == "STORY")
+        assert "이 이야기의 인물들" in story_prompt and "카렐" in story_prompt and "성별·나이대: 여성" in story_prompt
+        cast_prompt = next(p for s, p in prompts if s == "CAST")
+        assert "1화에 주인공과 얽힐 사람을 세운다" in cast_prompt
+
+        written = {**book, "story": "은솔이 신입생을 데리고 복도를 걷는다"}
+        d2 = Path(tempfile.mkdtemp())
+        own.stage_cast(d2, written, False, "ko")
+        assert [c["name"] for c in R.read_json(d2 / "cast.json")] == ["하린"]     # 새로 세운 카렐은 뺀다
+    finally:
+        own.llm.Call, R.record = real, real_record
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
