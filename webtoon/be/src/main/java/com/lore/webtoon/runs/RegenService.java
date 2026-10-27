@@ -103,13 +103,22 @@ public class RegenService {
      */
     @Transactional
     public String start(String runId, int pageNo, String note) {
+        return start(runId, pageNo, note, null);
+    }
+
+    /**
+     * 화질을 골라 다시 그린다. {@code quality} 가 비었으면 작품을 만든 화질 그대로다.
+     * 너울 작품의 한 장을 파도로 다시 그리면 값도 파도 값이다 — 값은 부르는 쪽이 같은 화질로 받는다.
+     */
+    @Transactional
+    public String start(String runId, int pageNo, String note, String quality) {
         if (!pages.pageNumbersOf(runId).contains(pageNo)) {
             throw new NoSuchElementException("그 페이지가 없습니다");
         }
         String id = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String clean = note == null ? "" : note.strip();
         regens.save(PageRegen.queued(id, runId, pageNo,
-                clean.substring(0, Math.min(500, clean.length())), Instant.now()));
+                clean.substring(0, Math.min(500, clean.length())), quality, Instant.now()));
         /* **커밋된 뒤에 줄에 넣는다(#626).** 줄이 놀고 있으면 바로 run() 이 도는데, 그때는 이 기록이
            아직 커밋 전이라 안 보인다 — run() 은 못 찾으면 조용히 끝나서 화면이 「대기 중」에 영영 머물렀다. */
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -310,9 +319,11 @@ public class RegenService {
             }
             /* **같은 화질로 다시 그린다.** 안 넘기면 이 장만 하네스 기본값으로
                나와서 한 편 안에서 밀도가 갈린다 — 그림체를 맞추는 것과 같은
-               이유다. 옛 작업은 화질이 없어서 기본값으로 돌아간다. */
+               이유다. 옛 작업은 화질이 없어서 기본값으로 돌아간다.
+               편집실에서 화질을 따로 골랐으면 그것으로 그린다 — 사람이 값을 보고 고른 것이다. */
+            String quality = one.getQuality() == null ? qualityOf(runId) : one.getQuality();
             env.put("OPENAI_IMAGE_QUALITY",
-                    com.lore.webtoon.job.WebtoonQuality.harnessValue(qualityOf(runId)));
+                    com.lore.webtoon.job.WebtoonQuality.harnessValue(quality));
 
             /* 다시 그리기는 취소 대상이 아니라 번호를 안 준다 — 작업이 아니라
                편집실에서 한 장을 고치는 일이고, 멈추는 길이 따로 없다. */

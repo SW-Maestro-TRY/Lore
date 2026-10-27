@@ -39,6 +39,13 @@ public class PageRegen {
     @Column(length = 500)
     private String note;
 
+    /**
+     * 이 장을 무슨 화질로 다시 그리나. 편집실에서 작품과 다른 화질을 골랐을 때만 적는다 —
+     * 비었으면 작품을 만든 화질 그대로다(옛 기록도 그렇게 읽힌다).
+     */
+    @Column(length = 10)
+    private String quality;
+
     @Column(nullable = false, length = 20)
     private String status;
 
@@ -56,7 +63,12 @@ public class PageRegen {
     }
 
     static PageRegen queued(String id, String runId, int pageNo, String note, Instant at) {
+        return queued(id, runId, pageNo, note, null, at);
+    }
+
+    static PageRegen queued(String id, String runId, int pageNo, String note, String quality, Instant at) {
         PageRegen one = new PageRegen();
+        one.quality = quality == null || quality.isBlank() ? null : quality;
         one.id = id;
         one.runId = runId;
         one.pageNo = pageNo;
@@ -88,6 +100,10 @@ public class PageRegen {
 
     public int getPageNo() {
         return pageNo;
+    }
+
+    public String getQuality() {
+        return quality;
     }
 
     public String getNote() {
