@@ -68,13 +68,13 @@ h1 span{display:block}
 <section class="topcta"><a class="btn" href="https://lorecomic.com/webtoon?view=create&step=1&quick=1&style=webtoon&utm_source=meta&utm_medium=paid&utm_campaign=meta-r1&utm_content=ruda-reel">내 캐릭터로 웹툰 만들기</a><p class="facts">가입 없이 무료 2편 · 한 편 약 8분</p></section>
 <section class="work">
 <div class="wt"><p class="genre">판타지</p><h2>봉인의 기억</h2><p class="meta">루다 · 1화 · 7장</p></div>
-<div class="pages"><img src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/1?w=1080" alt="봉인의 기억 1화 1장"  width="1080">
-<img src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/2?w=1080" alt="봉인의 기억 1화 2장"  width="1080">
-<img src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/3?w=1080" alt="봉인의 기억 1화 3장" loading=lazy width="1080">
-<img src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/4?w=1080" alt="봉인의 기억 1화 4장" loading=lazy width="1080">
-<img src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/5?w=1080" alt="봉인의 기억 1화 5장" loading=lazy width="1080">
-<img src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/6?w=1080" alt="봉인의 기억 1화 6장" loading=lazy width="1080">
-<img src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/7?w=1080" alt="봉인의 기억 1화 7장" loading=lazy width="1080"></div>
+<div class="pages"><img id="p1" src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/1?w=1080" alt="봉인의 기억 1화 1장"  width="1080">
+<img id="p2" src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/2?w=1080" alt="봉인의 기억 1화 2장"  width="1080">
+<img id="p3" src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/3?w=1080" alt="봉인의 기억 1화 3장" loading=lazy width="1080">
+<img id="p4" src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/4?w=1080" alt="봉인의 기억 1화 4장" loading=lazy width="1080">
+<img id="p5" src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/5?w=1080" alt="봉인의 기억 1화 5장" loading=lazy width="1080">
+<img id="p6" src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/6?w=1080" alt="봉인의 기억 1화 6장" loading=lazy width="1080">
+<img id="p7" src="/api/webtoon/v1/runs/20261001T042205-c6b570/page/7?w=1080" alt="봉인의 기억 1화 7장" loading=lazy width="1080"></div>
 </section>
 <section class="end" id="end">
 <h3>이런 웹툰을 직접 만들 수 있어요.</h3><p>캐릭터와 이야기를 넣으면 AI가 웹툰으로 만들어줘요.</p>
@@ -88,5 +88,8 @@ h1 span{display:block}
 (function(){var s=document.getElementById('sticky'),end=document.getElementById('end'),hero=document.getElementById('hero');
 var endSeen=false;if('IntersectionObserver' in window){new IntersectionObserver(function(es){es.forEach(function(e){endSeen=e.isIntersecting;upd();})},{threshold:.15}).observe(end);}
 function upd(){var past=hero.getBoundingClientRect().bottom<0;s.classList.toggle('on',past&&!endSeen);}
-window.addEventListener('scroll',upd,{passive:true});upd();})();
+window.addEventListener('scroll',upd,{passive:true});upd();
+/* 장면 광고: ?page=N 이면 광고에서 본 장부터 — 그림을 다 받게 하고 두 번 내린다(앞 장 높이가 늦게 잡힌다) */
+var m=/[?&]page=(\d+)/.exec(location.search);if(m){var el=document.getElementById('p'+m[1]);if(el){document.querySelectorAll('.pages img').forEach(function(i){i.loading='eager';});
+var go=function(){el.scrollIntoView({block:'start'});};go();setTimeout(go,700);setTimeout(go,1800);}}})();
 </script></body></html>
