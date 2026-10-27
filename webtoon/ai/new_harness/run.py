@@ -1638,8 +1638,8 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     record(run_dir, meta)
 
     parsed = pin_cast_looks(parse_scenes(text), story_cast(run_dir, direction, (char or {}).get("name") or ""))
-    if len(parsed["scenes"]) < 4:
-        warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (4개 이상이어야 합니다). "
+    if len(parsed["scenes"]) < 3:
+        warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (3개 이상이어야 합니다). "
              f"원문은 {run_dir / 'scene.md'} 에 그대로 있습니다.")
     if parsed["scenes"] and narration_stage_enabled():
         parsed = stage_narration(run_dir, char, direction, parsed, lang=lang)
