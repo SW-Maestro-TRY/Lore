@@ -163,12 +163,35 @@ def test_cast_expands_when_nothing_written():
         cast_prompt = next(p for s, p in prompts if s == "CAST")
         assert "1화에 주인공과 얽힐 사람을 세운다" in cast_prompt
 
-        written = {**book, "story": "은솔이 신입생을 데리고 복도를 걷는다"}
+        # 원고(MANUSCRIPT_MIN 자 이상)를 적었으면 예전처럼 적힌 사람만 남긴다
+        manuscript = {**book, "story": "은솔이 신입생을 데리고 복도를 걷는다. " * 60}
+        assert own.is_manuscript(manuscript) and not own.expands_cast(manuscript)
         d2 = Path(tempfile.mkdtemp())
-        own.stage_cast(d2, written, False, "ko")
+        own.stage_cast(d2, manuscript, False, "ko")
         assert [c["name"] for c in R.read_json(d2 / "cast.json")] == ["하린"]     # 새로 세운 카렐은 뺀다
     finally:
         own.llm.Call, R.record = real, real_record
+
+
+def test_short_story_is_a_direction_not_a_manuscript():
+    """짧게 적은 글은 원고가 아니라 방향이다(2026-10-27) — 설정집 위에서 세우는 프롬프트로 가고, 적은 글은
+    「방향」으로 붙으며, 인물 단계가 사람을 세운다. 길게 적은 글은 지금처럼 그대로 세운다."""
+    short = {"name": "지윤", "description": "창가 자리를 독차지하는 대학원생", "genre": "일상",
+             "photos": [], "fields": {}, "story": "취준생 이야기"}
+    long = {**short, "story": "지윤이 창가에 앉아 채용 공고를 본다. " * 60}
+    assert not own.is_manuscript(short) and own.expands_cast(short)
+    assert own.is_manuscript(long) and not own.expands_cast(long)
+
+    d = Path(tempfile.mkdtemp())
+    own.stage_story(d, short, True, lang="ko")
+    prompt = (d / "story_prompt.txt").read_text(encoding="utf-8")
+    assert "원고를 적지 않았다" in prompt and "방향이다" in prompt and "취준생 이야기" in prompt
+    assert "그대로** 웹툰 1화 분량" not in prompt
+
+    d2 = Path(tempfile.mkdtemp())
+    own.stage_story(d2, long, True, lang="ko")
+    prompt2 = (d2 / "story_prompt.txt").read_text(encoding="utf-8")
+    assert "그대로** 웹툰 1화 분량" in prompt2 and "이 웹툰의 중심" in prompt2
 
 
 if __name__ == "__main__":
