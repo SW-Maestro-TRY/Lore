@@ -72,6 +72,9 @@ interface Route {
   mode?: "own";
   /** 완성본을 열 때 먼저 보일 장(2026-10-27). */
   page?: number;
+  /** 만들기 빠른 시작 · 그림체 기본값(2026-10-27, 광고 랜딩이 보낸다). */
+  quick?: boolean;
+  style?: string;
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -90,6 +93,8 @@ function routeOf(search: URLSearchParams): Route {
     tab: (["settings", "works", "characters", "contact"] as const).find((t) => t === search.get("tab")),
     mode: search.get("mode") === "own" ? ("own" as const) : undefined,
     page: Math.max(0, Number(search.get("page") || 0) || 0) || undefined,
+    quick: search.get("quick") === "1" || undefined,
+    style: search.get("style") || undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
@@ -250,7 +255,7 @@ function WebtoonScreens() {
       {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
         <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated}
-                mode={route.mode} />
+                mode={route.mode} quick={route.quick} presetStyle={route.style} />
       )}
       {route.view === "running" && route.job && (
         <Progress jobId={route.job} go={go} />

@@ -216,6 +216,14 @@ public class WebtoonCharacter {
                 CharacterSource.PROMPT, CharacterStatus.DRAWING, at);
     }
 
+    /** 이름·설명만 적은 캐릭터 — 그림은 아직 없다. 첫 웹툰이 다 만들어지면 그 작품의 캐릭터 시트를
+     *  카드 그림으로 쓴다({@code CharacterService.adoptSheetArt}, 2026-10-27). */
+    public static WebtoonCharacter described(String publicId, Long ownerId, String browserUid,
+                                             String name, String description, Instant at) {
+        return new WebtoonCharacter(publicId, ownerId, browserUid, name, description,
+                CharacterSource.PROMPT, CharacterStatus.READY, at);
+    }
+
     /** 기본 제공. 주인이 없다 — 누구나 골라 쓴다. */
     public static WebtoonCharacter builtin(String publicId, String name, String description,
                                            Instant at) {
