@@ -274,12 +274,50 @@ public class CharacterService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "브라우저를 확인할 수 없습니다");
         }
         validateOriginal(name, description);
-        String key = storeOriginal(userId, guestKey, photos, keys);
         Instant now = Instant.now(clock);
+        boolean noPhoto = (photos == null || photos.isEmpty()) && (keys == null || keys.isEmpty());
+        if (noPhoto) {
+            /* 이름·설명만으로 저장한다(2026-10-27) — 광고로 와서 「설정 한 줄」만 있는 사람의 길. 카드 그림은
+               첫 웹툰이 다 만들어질 때 그 작품의 캐릭터 시트로 채운다(AfterRun → adoptSheetArt). 설명이 비면
+               그릴 근거가 없으니 받지 않는다. */
+            if (description == null || description.isBlank()) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "캐릭터 이미지 한 장을 올리거나, 캐릭터 설명을 적어 주세요");
+            }
+            return characters.save(WebtoonCharacter.described(UUID.randomUUID().toString().replace("-", ""),
+                    userId, userId == null ? uid : null, name.trim(), description, now));
+        }
+        String key = storeOriginal(userId, guestKey, photos, keys);
         WebtoonCharacter one = WebtoonCharacter.drawing(UUID.randomUUID().toString().replace("-", ""),
                 userId, userId == null ? uid : null, name.trim(), description, now);
         one.drewArt(key, CharacterSource.UPLOAD, now);
         return characters.save(one);
+    }
+
+    /**
+     * 그림 없이 저장한 캐릭터({@link WebtoonCharacter#described})에 첫 작품의 캐릭터 시트를 카드 그림으로
+     * 넣는다(2026-10-27). 이미 그림이 있으면 아무것도 안 한다. 작품은 이미 다 만들어진 뒤라 여기서 죽지 않는다.
+     */
+    @Transactional
+    public void adoptSheetArt(String characterPublicId, Path sheetPng) {
+        if (characterPublicId == null || characterPublicId.isBlank() || sheetPng == null || !Files.isRegularFile(sheetPng)) {
+            return;
+        }
+        WebtoonCharacter one = characters.findByPublicId(characterPublicId).orElse(null);
+        if (one == null || (one.getArtKey() != null && !one.getArtKey().isBlank())) {
+            return;
+        }
+        try {
+            byte[] bytes = Files.readAllBytes(sheetPng);
+            String key = art.upload(bytes, "image/png", false);
+            if (key == null) {
+                return;
+            }
+            one.drewArt(key, CharacterSource.PROMPT, Instant.now(clock));
+            characters.save(one);
+            log.info("캐릭터 카드 그림을 작품 시트로 채웠습니다 (character={})", characterPublicId);
+        } catch (Exception e) {                     // noqa: 카드 그림을 못 넣어도 작품은 다 됐다
+            log.warn("캐릭터 시트를 카드 그림으로 못 넣었습니다 (character={})", characterPublicId, e);
+        }
     }
 
     /** 소유권 확인 뒤 새 이미지를 보관한다. 예전 이미지는 기존 웹툰이 쓰므로 유지한다. */

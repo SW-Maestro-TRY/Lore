@@ -723,7 +723,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               {chars.map((c) => (
                 <button type="button" key={c.id} className="wt-my-char" onClick={() => setTab("chars")}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={c.art_url || ""} alt="" />
+                  {c.art_url ? <img src={c.art_url} alt="" /> : <span className="wt-create-noart" aria-hidden="true">{(c.name || "?").slice(0, 1)}</span>}
                   <b>{c.name}</b>
                 </button>
               ))}

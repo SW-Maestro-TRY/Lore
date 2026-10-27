@@ -38,6 +38,10 @@ export interface GoParams {
   mode?: "own";
   /** 완성본을 열 때 먼저 보일 장 — 장면형 광고가 광고에서 본 장부터 열리게 보낸다(2026-10-27). */
   page?: number;
+  /** 만들기 1걸음의 빠른 시작(2026-10-27) — 광고로 온 사람은 카드 고르기 대신 이름·설명 두 칸부터. */
+  quick?: boolean;
+  /** 2걸음 그림체 기본값 — 광고 작품의 그림체를 넘긴다(바꿀 수 있다). STYLE_INFO 의 키. */
+  style?: string;
 }
 
 export function hrefOf(view: View, p: GoParams = {}): string {
@@ -55,6 +59,8 @@ export function hrefOf(view: View, p: GoParams = {}): string {
   if (p.id) q.set("id", p.id);
   if (p.tab) q.set("tab", p.tab);
   if (p.mode) q.set("mode", p.mode);
+  if (p.quick) q.set("quick", "1");
+  if (p.style) q.set("style", p.style);
   return `/webtoon?${q}`;
 }
 

@@ -65,4 +65,27 @@ class CharacterOriginalTest {
   assertThat(result.getSource()).isEqualTo(CharacterSource.REPLACED_UPLOAD);assertThat(result.getArtKey()).isNotEqualTo("old");assertThat(result.isCommunityPublic()).isFalse();verifyNoInteractions(maker,credit);
   assertThatThrownBy(()->service.sharedCard("id")).isInstanceOf(BusinessException.class);
  }
+
+ /* 2026-10-27 — 광고로 와서 「설정 한 줄」만 있는 사람: 사진 없이 이름·설명만으로 저장되고, 그림은 첫 작품의 시트로 채운다. */
+ @Test void original_without_photo_saves_described_character(){
+  var c=service.importOriginal(42L,"browser","맥짐","다 마신 캔커피. 먹을 것 앞에서는 의리도 원칙도 없다.",List.of(),List.of(),"guest");
+  assertThat(c.getArtKey()).isNull();
+  assertThat(c.getStatus()).isEqualTo(CharacterStatus.READY);
+  assertThat(c.getSource()).isEqualTo(CharacterSource.PROMPT);
+  verify(art,never()).upload(any(),any(),anyBoolean());
+ }
+ @Test void original_without_photo_and_description_is_rejected(){
+  assertThatThrownBy(()->service.importOriginal(42L,"browser","맥짐","",List.of(),List.of(),"guest")).isInstanceOf(BusinessException.class);
+ }
+ @Test void adopt_sheet_fills_missing_art_once() throws Exception{
+  var c=service.importOriginal(42L,"browser","맥짐","다 마신 캔커피",List.of(),List.of(),"guest");
+  when(repo.findByPublicId(c.getPublicId())).thenReturn(Optional.of(c));
+  Path sheet=dir.resolve("sheet.png");
+  java.nio.file.Files.write(sheet,Base64.getDecoder().decode(PNG.substring(PNG.indexOf(',')+1)));
+  service.adoptSheetArt(c.getPublicId(),sheet);
+  assertThat(c.getArtKey()).isEqualTo("private/webtoon/char/original.png");
+  assertThat(c.getSource()).isEqualTo(CharacterSource.PROMPT);
+  service.adoptSheetArt(c.getPublicId(),sheet);                       // 이미 그림이 있으면 다시 올리지 않는다
+  verify(art,times(1)).upload(any(),eq("image/png"),eq(false));
+ }
 }
