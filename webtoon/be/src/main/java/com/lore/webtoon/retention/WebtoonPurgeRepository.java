@@ -49,6 +49,14 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Query("select c.artKey from WebtoonCharacter c where c.ownerId = :userId and c.artKey is not null")
     List<String> characterKeys(@Param("userId") Long userId);
 
+    /**
+     * 조연 시트(#548). 만들기 기록 번호로 묶여 있으므로 그 작품들의 만들기 기록으로 찾는다 —
+     * 게스트로 시작해 나중에 계정에 이어진 작품도 작품 번호로는 잡힌다.
+     */
+    @Query("select c.s3Key from WebtoonCastSheet c where c.s3Key is not null"
+            + " and c.jobId in (select j.publicId from WebtoonJob j where j.runId in :runIds)")
+    List<String> castSheetKeys(@Param("runIds") List<String> runIds);
+
     /* ---- 작품에 딸린 것 ---------------------------------------------- */
 
     @Modifying
@@ -58,6 +66,11 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Modifying
     @Query("delete from BakedPage b where b.runId in :runIds")
     int deleteBakedPages(@Param("runIds") List<String> runIds);
+
+    /** 조연 시트 행 — 인물 이름이 들어 있다. 만들기 기록보다 먼저 지운다(그 번호로 찾는다). */
+    @Modifying
+    @Query("delete from WebtoonCastSheet c where c.jobId in (select j.publicId from WebtoonJob j where j.runId in :runIds)")
+    int deleteCastSheets(@Param("runIds") List<String> runIds);
 
     @Modifying
     @Query("delete from WebtoonOverlay o where o.runId in :runIds")
