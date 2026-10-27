@@ -1645,7 +1645,7 @@ public class JobRunner {
                 /* 이미 어긋났으면 시작하지 않는다 — 한 장이 실패했는데 남은
                    장을 계속 그리면 어차피 못 쓸 화에 그림 값만 더 나간다. 안전 검사에
                    걸린 장이 너무 많아도(살려 완성할 수 없으니) 멈춘다. */
-                if (failed.get() != null || unsafe.size() > MAX_UNSAFE_PAGES || cancelled.contains(jobId)) {
+                if (failed.get() != null || cancelled.contains(jobId)) {
                     return;
                 }
                 try {
@@ -1689,12 +1689,13 @@ public class JobRunner {
             throw bad instanceof Cancelled || bad instanceof HarnessFailed ? bad
                     : new IllegalStateException("그림을 만들지 못했습니다", bad);
         }
-        if (unsafe.size() > MAX_UNSAFE_PAGES) {
-            /* 너무 많이 걸렸다 — 빈 장투성이로 완성하는 것보다 실패로 돌려주고 환급하는 것이 낫다. */
+        if (!unsafe.isEmpty() && drawn.get() == 0) {
+            /* 한 장도 못 그렸다 — 살릴 것이 없으니 실패로 돌려주고 환급한다. 한 장이라도 그렸으면 몇 장이 걸렸든
+               걸린 장만 비워 두고 완성한다(2026-10-27 하은: 걸린 부분만 멈추고 마이페이지에서 고쳐 이어 만들기). */
             JobFailure first = JobFailure.read(runsDir.resolve(job.getRunId())).orElse(null);
-            String why = "장면 " + unsafe.size() + "장이 이미지 안전 기준" + (first != null && first.sexual() ? "(선정성)" : "")
-                    + "에 걸렸어요. 한 번 더 그려 봤지만 같았어요. 이야기 속 노출이나 선정적인 장면이 원인일 수 있으니, "
-                    + "다른 이야기로 다시 만들어 주세요.";
+            String why = "모든 장면이 이미지 안전 기준" + (first != null && first.sexual() ? "(선정성)" : "")
+                    + "에 걸렸어요. 한 번 더 그려 봤지만 같았어요. 이야기 속 노출이나 선정적·잔혹한 장면이 원인일 수 있으니, "
+                    + "표현을 바꿔 다시 만들어 주세요.";
             throw new HarnessFailed(why, first);
         }
         for (int page : unsafe) {
@@ -1702,8 +1703,6 @@ public class JobRunner {
         }
     }
 
-    /** 안전 검사에 걸려 비워 둔 장을 몇 장까지 살려 완성하나(#626). 그보다 많으면 실패로 돌려준다. */
-    static final int MAX_UNSAFE_PAGES = 2;
 
     /** 하네스가 남기는 「이 장은 안전 검사에 걸렸다」 표시({@code failure.page_file}). */
     public Path unsafeMarker(String runId, int page) {
@@ -1734,6 +1733,39 @@ public class JobRunner {
     /** 이 장이 안전 검사에 걸려 비워 둔 장인가. 편집실이 다시 그리기 값을 안 받는 근거다. */
     public boolean isUnsafePage(String runId, int page) {
         return runId != null && Files.isRegularFile(unsafeMarker(runId, page));
+    }
+
+    /** 그림 안전 검사 분류 → 사람이 읽는 말. 모르는 분류는 「안전 기준」. */
+    static String reasonOf(java.util.Collection<String> categories) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        for (String c : categories) {
+            String s = c.toLowerCase(java.util.Locale.ROOT);
+            if (s.contains("minor")) out.add("미성년 관련");
+            else if (s.contains("sexual") || s.contains("nudity")) out.add("선정성");
+            else if (s.contains("self-harm") || s.contains("self_harm")) out.add("자해");
+            else if (s.contains("violence") || s.contains("gore")) out.add("폭력·잔혹");
+            else if (s.contains("hate")) out.add("혐오");
+            else if (s.contains("harass")) out.add("괴롭힘");
+            else if (s.contains("illicit") || s.contains("illegal")) out.add("불법 행위");
+        }
+        return out.isEmpty() ? "안전 기준" : String.join("·", out);
+    }
+
+    /** 비워 둔 장마다 걸린 이유(#626 · 2026-10-27). 화면이 쪽 번호 옆에 보여 준다. */
+    public java.util.Map<Integer, String> unsafeReasons(String runId) {
+        java.util.Map<Integer, String> out = new java.util.LinkedHashMap<>();
+        for (int page : unsafePages(runId)) {
+            List<String> cats = new ArrayList<>();
+            try {
+                for (JsonNode c : mapper.readTree(unsafeMarker(runId, page).toFile()).path("categories")) {
+                    cats.add(c.asText());
+                }
+            } catch (IOException e) {
+                // 못 읽으면 「안전 기준」
+            }
+            out.put(page, reasonOf(cats));
+        }
+        return out;
     }
 
     /** 걸린 장들 중 선정성이 있었나 — 안내 문구를 고른다. */
@@ -1784,10 +1816,9 @@ public class JobRunner {
 
     /** 장면 일부가 빠진 채 완성됐을 때 사람에게 할 말(#626). 문장은 화면 사전에도 키로 있다. */
     String partialMessage(String runId) {
-        List<Integer> missing = unsafePages(runId);
-        String which = String.join(", ", missing.stream().map(p -> p + "쪽").toList());
-        return which + " 장면이 이미지 안전 기준" + (unsafeSexual(runId) ? "(선정성)" : "")
-                + "에 걸려 빈 장으로 두었어요. 나머지는 완성됐어요. 마이페이지 내 웹툰의 편집실에서 그 장면 설명을 고쳐 "
+        String which = String.join(", ", unsafeReasons(runId).entrySet().stream()
+                .map(e -> e.getKey() + "쪽(" + e.getValue() + ")").toList());
+        return which + " 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 나머지는 완성됐어요. 마이페이지 내 웹툰의 편집실에서 그 장면 설명을 고쳐 "
                 + "다시 그려 주세요. 빈 장 다시 그리기는 무료예요.";
     }
 

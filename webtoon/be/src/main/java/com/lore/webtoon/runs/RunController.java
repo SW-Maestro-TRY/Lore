@@ -306,6 +306,8 @@ public class RunController {
         found.put("public", ledger.isOpen(runId));
         /* 안전 검사에 걸려 빈 장으로 둔 장들(#626) — 화면이 그 자리에 안내를 얹는다. */
         found.put("unsafe_pages", regen.unsafePages(runId));
+        /* 그 장마다 걸린 이유(선정성·폭력·잔혹 …) — 무엇을 고치면 되는지 알린다(2026-10-27). */
+        found.put("unsafe_reasons", regen.unsafeReasons(runId));
         /* 이 작품의 한 장 다시 그리기 값(#787) — 화질마다 달라서 작품과 같이 준다. */
         found.put("regen_cost", regenCost(runId));
         /* 다시 그리기 창의 화질 고르개 — 작품 화질이 처음 골라져 있고, 낮추면 값도 내려간다. */

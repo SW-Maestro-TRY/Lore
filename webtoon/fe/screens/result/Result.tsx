@@ -598,7 +598,10 @@ export default function Result({ runId, go, authenticated = false, page }: { run
               /* 안전 기준에 걸려 빈 장으로 완성됐다(#626) — 어디를 어떻게 고치면 되는지 */
               <div className="wt-result-unsafe" role="status">
                 <p>{t("{pages} 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 편집실에서 그 장면 설명을 고쳐 다시 그려 주세요. 빈 장 다시 그리기는 무료예요.",
-                  { pages: (data.unsafe_pages ?? []).map((n) => t("{n}쪽", { n })).join(", ") })}</p>
+                  { pages: (data.unsafe_pages ?? []).map((n) => {
+                    const why = data.unsafe_reasons?.[String(n)];
+                    return t("{n}쪽", { n }) + (why ? `(${why})` : "");
+                  }).join(", ") })}</p>
                 <button type="button" className="btn btn-p btn-sm"
                         onClick={() => { track("editor_open", { run: runId, where: "result_unsafe" }); go("editor", { run: runId }); }}>
                   <IconEdit size={16} /> {t("편집실에서 다시 그리기")}

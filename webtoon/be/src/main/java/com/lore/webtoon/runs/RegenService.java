@@ -431,6 +431,10 @@ public class RegenService {
     /* ---- 안전 검사로 비워 둔 장(#626) ---- */
 
     /** 안전 검사에 걸려 빈 장으로 둔 장 번호들. 결과 화면·편집실이 안내를 띄운다. */
+    public java.util.Map<Integer, String> unsafeReasons(String runId) {
+        return runner.unsafeReasons(runId);
+    }
+
     public List<Integer> unsafePages(String runId) {
         return runner.unsafePages(runId);
     }
