@@ -4,12 +4,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 시계 — 두 시각 사이를 <b>KST 경계</b>로 잘라 "깨어 있는 구간" 과 "경계 이벤트" 를 돌려준다.
+ * 시계 — 두 시각 사이를 <b>펫 시간대의 경계</b>(기본 KST)로 잘라 "깨어 있는 구간" 과 "경계 이벤트" 를 돌려준다.
  * 순수 자바. 스프링도 DB 도 펫도 모른다.
  *
  * <h3>★ 왜 이게 따로 있는가 — 서버가 죽어 있어도, 사흘 만에 와도 같은 결과</h3>
@@ -88,13 +89,18 @@ public final class AwakeClock {
      * (그래야 23:00 정각에 조회해도 잠든 상태로 보인다).
      */
     public static Walk walk(State start, Instant from, Instant to) {
+        return walk(start, from, to, ZzalRules.ZONE);
+    }
+
+    /** {@link #walk(State, Instant, Instant)} — 경계를 {@code zone} 의 벽시계로 자른다(펫의 시간대). */
+    public static Walk walk(State start, Instant from, Instant to, ZoneId zone) {
         List<Segment> segments = new ArrayList<>();
         State state = start;
         Instant cursor = from;
 
         while (cursor.isBefore(to)) {
             if (state.isAwake()) {
-                Instant sleepAt = nextAutoSleep(cursor, state.babyUntil());
+                Instant sleepAt = nextAutoSleep(cursor, state.babyUntil(), zone);
                 if (!sleepAt.isAfter(to)) {
                     segments.add(new Segment(cursor, sleepAt, null, Event.AUTO_SLEEP));
                     state = State.asleep(SleepKind.NIGHT, sleepAt, state.babyUntil());
@@ -104,7 +110,7 @@ public final class AwakeClock {
                     cursor = to;
                 }
             } else {
-                Instant wakeAt = autoWakeAt(state.sleeping(), state.sleptAt());
+                Instant wakeAt = autoWakeAt(state.sleeping(), state.sleptAt(), zone);
                 Event event = state.sleeping() == SleepKind.NAP ? Event.NAP_AUTO_WAKE : Event.AUTO_WAKE;
                 if (!wakeAt.isAfter(to)) {
                     segments.add(new Segment(cursor, wakeAt, state.sleeping(), event));
@@ -117,7 +123,7 @@ public final class AwakeClock {
             }
         }
         // 정확히 to 에서 잠들어야 하는 경우(위 루프는 cursor < to 일 때만 돈다).
-        if (state.isAwake() && cursor.equals(to) && nextAutoSleep(to, state.babyUntil()).equals(to)) {
+        if (state.isAwake() && cursor.equals(to) && nextAutoSleep(to, state.babyUntil(), zone).equals(to)) {
             segments.add(new Segment(to, to, null, Event.AUTO_SLEEP));
             state = State.asleep(SleepKind.NIGHT, to, state.babyUntil());
         }
@@ -125,6 +131,10 @@ public final class AwakeClock {
     }
 
     // ── 경계 계산 ─────────────────────────────────────────────────────────
+    //
+    // ★ 시간대 인자가 없는 판은 KST(ZzalRules.ZONE) — 시험·운영용(부화 상한 등)이 그대로 쓴다.
+    //   펫 규칙은 전부 {@code ZzalPet.zone()} 을 넘기는 판을 쓴다(2026-10-26 시간대 2단계).
+    //   계산은 ZonedDateTime 이라 서머타임 날(23·25시간)에도 "그날 19:00" 이 정확하다 — 24시간 덧셈을 쓰지 않는다.
 
     /**
      * 깨어 있는 펫이 다음에 저절로 잠드는 시각.
@@ -132,70 +142,108 @@ public final class AwakeClock {
      * <ul>
      *   <li>아기 60분 동안은 안 잔다 → 출발점을 {@code babyUntil} 로 민다</li>
      *   <li>그 시점이 이미 밤(23:00~07:00)이면 <b>그 자리에서</b> 잠든다 — "이미 23시가 지났으면 그때 잠든다"(16장)</li>
-     *   <li>아니면 다음 KST 23:00</li>
+     *   <li>아니면 다음 23:00(그 시간대 벽시계)</li>
      * </ul>
      */
     public static Instant nextAutoSleep(Instant from, Instant babyUntil) {
-        Instant start = babyUntil != null && from.isBefore(babyUntil) ? babyUntil : from;
-        if (isNight(start)) {
-            return start;
-        }
-        ZonedDateTime z = start.atZone(ZzalRules.ZONE);
-        ZonedDateTime today = z.toLocalDate().atTime(ZzalRules.AUTO_SLEEP_AT).atZone(ZzalRules.ZONE);
-        return (today.toInstant().isBefore(start) ? today.plusDays(1) : today).toInstant();
+        return nextAutoSleep(from, babyUntil, ZzalRules.ZONE);
     }
 
-    /** 자고 있는 펫이 저절로 깨는 시각 — 밤잠은 처음 맞는 KST 10:00, 낮잠은 10분 뒤. */
+    public static Instant nextAutoSleep(Instant from, Instant babyUntil, ZoneId zone) {
+        Instant start = babyUntil != null && from.isBefore(babyUntil) ? babyUntil : from;
+        if (isNight(start, zone)) {
+            return start;
+        }
+        ZonedDateTime z = start.atZone(zone);
+        ZonedDateTime today = z.toLocalDate().atTime(ZzalRules.AUTO_SLEEP_AT).atZone(zone);
+        return (today.toInstant().isBefore(start) ? nextDay(today, ZzalRules.AUTO_SLEEP_AT, zone) : today).toInstant();
+    }
+
+    /** 자고 있는 펫이 저절로 깨는 시각 — 밤잠은 처음 맞는 10:00, 낮잠은 10분 뒤. */
     public static Instant autoWakeAt(SleepKind kind, Instant sleptAt) {
+        return autoWakeAt(kind, sleptAt, ZzalRules.ZONE);
+    }
+
+    public static Instant autoWakeAt(SleepKind kind, Instant sleptAt, ZoneId zone) {
         if (kind == SleepKind.NAP) {
             return sleptAt.plus(ZzalRules.NAP_AUTO_WAKE_AFTER);
         }
-        ZonedDateTime z = sleptAt.atZone(ZzalRules.ZONE);
-        ZonedDateTime today = z.toLocalDate().atTime(ZzalRules.AUTO_WAKE_AT).atZone(ZzalRules.ZONE);
+        ZonedDateTime z = sleptAt.atZone(zone);
+        ZonedDateTime today = z.toLocalDate().atTime(ZzalRules.AUTO_WAKE_AT).atZone(zone);
         // 잠든 시각보다 뒤인 첫 10:00. 23:30 에 잠들면 다음 날, 00:30 에 잠들면 같은 날.
-        return (today.toInstant().isAfter(sleptAt) ? today : today.plusDays(1)).toInstant();
+        return (today.toInstant().isAfter(sleptAt) ? today : nextDay(today, ZzalRules.AUTO_WAKE_AT, zone)).toInstant();
     }
 
-    /** 사용자가 깨울 수 있는 창이 열리는 시각 — 밤잠은 KST 07:00, 낮잠은 5분 뒤. */
+    /** 사용자가 깨울 수 있는 창이 열리는 시각 — 밤잠은 07:00, 낮잠은 5분 뒤. */
     public static Instant wakeWindowOpensAt(SleepKind kind, Instant sleptAt) {
+        return wakeWindowOpensAt(kind, sleptAt, ZzalRules.ZONE);
+    }
+
+    public static Instant wakeWindowOpensAt(SleepKind kind, Instant sleptAt, ZoneId zone) {
         if (kind == SleepKind.NAP) {
             return sleptAt.plus(ZzalRules.NAP_WAKE_AFTER);
         }
-        Instant autoWake = autoWakeAt(kind, sleptAt);
-        LocalDate day = autoWake.atZone(ZzalRules.ZONE).toLocalDate();
-        return day.atTime(ZzalRules.WAKE_WINDOW_OPENS).atZone(ZzalRules.ZONE).toInstant();
+        Instant autoWake = autoWakeAt(kind, sleptAt, zone);
+        LocalDate day = autoWake.atZone(zone).toLocalDate();
+        return day.atTime(ZzalRules.WAKE_WINDOW_OPENS).atZone(zone).toInstant();
     }
 
-    /** 다음 재우기 창(KST 19:00)이 열리는 시각. 이미 창 안이면 {@code now}. */
+    /** 다음 재우기 창(19:00)이 열리는 시각. 이미 창 안이면 {@code now}. */
     public static Instant sleepWindowOpensAt(Instant now) {
-        if (inSleepWindow(now)) {
+        return sleepWindowOpensAt(now, ZzalRules.ZONE);
+    }
+
+    public static Instant sleepWindowOpensAt(Instant now, ZoneId zone) {
+        if (inSleepWindow(now, zone)) {
             return now;
         }
-        ZonedDateTime z = now.atZone(ZzalRules.ZONE);
-        ZonedDateTime today = z.toLocalDate().atTime(ZzalRules.SLEEP_WINDOW_OPENS).atZone(ZzalRules.ZONE);
-        return (today.toInstant().isAfter(now) ? today : today.plusDays(1)).toInstant();
+        ZonedDateTime z = now.atZone(zone);
+        ZonedDateTime today = z.toLocalDate().atTime(ZzalRules.SLEEP_WINDOW_OPENS).atZone(zone);
+        return (today.toInstant().isAfter(now) ? today : nextDay(today, ZzalRules.SLEEP_WINDOW_OPENS, zone)).toInstant();
     }
 
-    /** 사용자 재우기 창 — KST 19:00 이상 23:00 미만. */
+    /** 사용자 재우기 창 — 19:00 이상 23:00 미만. */
     public static boolean inSleepWindow(Instant at) {
-        LocalTime t = at.atZone(ZzalRules.ZONE).toLocalTime();
+        return inSleepWindow(at, ZzalRules.ZONE);
+    }
+
+    public static boolean inSleepWindow(Instant at, ZoneId zone) {
+        LocalTime t = at.atZone(zone).toLocalTime();
         return !t.isBefore(ZzalRules.SLEEP_WINDOW_OPENS) && t.isBefore(ZzalRules.AUTO_SLEEP_AT);
     }
 
-    /** 사용자 깨우기 창(밤잠) — KST 07:00 이상 10:00 미만. */
+    /** 사용자 깨우기 창(밤잠) — 07:00 이상 10:00 미만. */
     public static boolean inWakeWindow(Instant at) {
-        LocalTime t = at.atZone(ZzalRules.ZONE).toLocalTime();
+        return inWakeWindow(at, ZzalRules.ZONE);
+    }
+
+    public static boolean inWakeWindow(Instant at, ZoneId zone) {
+        LocalTime t = at.atZone(zone).toLocalTime();
         return !t.isBefore(ZzalRules.WAKE_WINDOW_OPENS) && t.isBefore(ZzalRules.AUTO_WAKE_AT);
     }
 
-    /** 밤 — KST 23:00 이상 또는 07:00 미만. 깨어 있으면 안 되는 시간. */
+    /** 밤 — 23:00 이상 또는 07:00 미만. 깨어 있으면 안 되는 시간. */
     public static boolean isNight(Instant at) {
-        LocalTime t = at.atZone(ZzalRules.ZONE).toLocalTime();
+        return isNight(at, ZzalRules.ZONE);
+    }
+
+    public static boolean isNight(Instant at, ZoneId zone) {
+        LocalTime t = at.atZone(zone).toLocalTime();
         return !t.isBefore(ZzalRules.AUTO_SLEEP_AT) || t.isBefore(ZzalRules.WAKE_WINDOW_OPENS);
     }
 
-    /** 오늘(KST) 날짜. "그날 처음 열었나" 판정에 쓴다. */
+    /** 오늘(KST) 날짜. 운영용·옛 호출처. 펫 규칙은 {@link #dateOf(Instant, ZoneId)}. */
     public static LocalDate dateOf(Instant at) {
         return at.atZone(ZzalRules.ZONE).toLocalDate();
+    }
+
+    /** 그 시간대의 오늘 날짜. "그날 처음 열었나" 판정에 쓴다. */
+    public static LocalDate dateOf(Instant at, ZoneId zone) {
+        return at.atZone(zone).toLocalDate();
+    }
+
+    /** 다음 날 같은 벽시계 시각 — 24시간 덧셈이 아니라 달력 하루(서머타임 날 23·25시간). */
+    private static ZonedDateTime nextDay(ZonedDateTime today, LocalTime at, ZoneId zone) {
+        return today.toLocalDate().plusDays(1).atTime(at).atZone(zone);
     }
 }

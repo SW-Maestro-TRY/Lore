@@ -11,6 +11,7 @@ import './compact-menu.css';
 import LanguageSelector from '../../LanguageSelector';
 import { useOpenAnnouncements } from '../announcements/AnnouncementsGate';
 import { useZzalLocale } from '../../lib/locale';
+import { getDisplayZone } from '../../lib/kst';
 import { CHAT_MAX_CHARS } from '../rules';
 import { FLOOR_DIRT_ASSETS } from '../floorDirtAssets';
 import { useFocusedAnalytics } from './useFocusedAnalytics';
@@ -39,7 +40,7 @@ const blocks: Record<string, string> = {
 };
 const dateTime = (value: string,locale:string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' });
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: getDisplayZone() });
 };
 
 /** The service root owns useHatchState. This view never creates presence/polling/UUID owners. */
@@ -121,12 +122,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     const measure=()=>{const bounds=node.getBoundingClientRect(),parent=room.getBoundingClientRect();const next={left:bounds.left-parent.left,top:bounds.top-parent.top,width:bounds.width,height:bounds.height};setDockBudget(previous=>Object.keys(next).every(key=>previous[key as keyof typeof next]===next[key as keyof typeof next])?previous:next)};
     measure();const observer=new ResizeObserver(measure);observer.observe(node);observer.observe(room);return()=>observer.disconnect();
   },[x.panel,x.guided,locale]);
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    const fit = () => { host.current?.style.setProperty('--fr-viewport', `${viewport?.height ?? window.innerHeight}px`); };
-    fit(); viewport?.addEventListener('resize', fit);
-    return () => viewport?.removeEventListener('resize', fit);
-  }, []);
+  // 키보드 높이는 셸이 맡는다(zzal/fe/tamagotchi/shell.css · common/fe/viewport/useVisualViewport.ts).
   useEffect(() => {
     if (drawer === 'menu') menuPanel.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
     else if (drawer === 'history') closeButton.current?.focus({ preventScroll: true });
@@ -318,7 +314,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     </div>}
     <FocusedPanels live={live} x={x.panel==='care'?{...x,panel:null}:x} locale={locale} sampleMode={sampleMode}/>
     <FocusedInquiry metrics={interactionMetrics(live,sampleMode,'inquiry')} open={inquiryOpen} onClose={()=>setInquiryOpen(false)} petId={live.petId} locale={locale}/>
-    {returning.open&&!settingsOpen&&<ReturningGuide guide={returning} locale={locale} locked={sleeping||traveling} onEdit={editSettings}/>}
+    {returning.open&&!settingsOpen&&!traveling&&<ReturningGuide guide={returning} locale={locale} locked={sleeping||traveling} onEdit={editSettings}/>}
     {settingsOpen&&<div className="returning-settings-cover"><section className="fr-sheet fr-reading-sheet" role="dialog" aria-modal="true" aria-label={returningWords.settings} data-returning-settings onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setSettingsOwner(null)}if(event.key==='Tab'){const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];if(event.shiftKey&&document.activeElement===buttons[0]){event.preventDefault();buttons.at(-1)?.focus()}else if(!event.shiftKey&&document.activeElement===buttons.at(-1)){event.preventDefault();buttons[0]?.focus()}}}}><header><h2>{returningWords.settings}</h2><button type="button" onClick={()=>setSettingsOwner(null)}>{returningWords.close}</button></header><div className="returning-content"><PersonaEditor allowConfirm={returning.pending} onSaved={returnToChat} onClose={()=>setSettingsOwner(null)}/></div></section></div>}
     {shareOpen&&<SceneShare metrics={interactionMetrics(live,sampleMode,'scene_share')} stage={scene.current} logoUrl="/zzal-entry/logo-08-transparent.png" onClose={()=>setShareOpen(false)}/>}
   </section>;

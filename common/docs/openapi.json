@@ -2851,6 +2851,11 @@
             "description": "부화 완료 여부",
             "type": "boolean"
           },
+          "rulesTimeZone": {
+            "description": "서버가 창(재우기 19시·자동 취침 23시·깨우기 7시·자동 기상 10시·부름 10/14/19시)을 계산하는 시간대.\n화면은 창 시각을 이 시간대로 읽고 timeZone 으로 바꿔 보여 준다. 둘이 같으면 바꿀 것이 없다",
+            "example": "Asia/Seoul",
+            "type": "string"
+          },
           "sceneNew": {
             "description": "이번 조회에서 새 장면이 기록되었는지 여부. 재방문 첫 화면이 1회 표시하는 데 사용한다.\n다음 조회부터는 false 다",
             "type": "boolean"
@@ -2884,6 +2889,11 @@
               "string",
               "null"
             ]
+          },
+          "timeZone": {
+            "description": "이 캐릭터의 시간대(IANA 이름, 예 America/Los_Angeles). 화면이 날짜·시각을 보여 줄 때 쓴다.\n아직 관측하지 못했으면 Asia/Seoul. 생성 때 또는 첫 요청의 X-Zzal-Tz 헤더로 한 번 정해지고 바뀌지 않는다",
+            "example": "Asia/Seoul",
+            "type": "string"
           },
           "today": {
             "$ref": "#/components/schemas/ZzalToday"
@@ -7950,8 +7960,18 @@
     },
     "/api/v1/auth/signup": {
       "post": {
-        "description": "이메일·비밀번호로 가입한다. **토큰을 발급하지 않으므로 로그인 상태가 되지 않는다.**\n화면은 가입 뒤 로그인 화면으로 보낸다.\n\n방금 정한 비밀번호를 한 번 더 입력하게 하는 셈이지만, 그 자리에서 비밀번호가\n맞는지 확인된다. 오타를 낸 채 가입한 사용자가 다음 접속에서야 들어오지 못하는\n상황을 막는다.\n\n필수 동의는 AGE_14 · TERMS · PRIVACY 세 가지다. MARKETING 은 선택이며\nfalse 도 기록으로 남긴다 — 묻지 않은 것과 거부한 것은 다른 사실이다.",
+        "description": "이메일·비밀번호로 가입한다. **성공하면 로그인과 같은 토큰 2종이 쿠키로 발급되어\n바로 로그인 상태가 된다**(2026-10-08 변경 — 예전에는 가입 뒤 로그인을 한 번 더 했다).\n\n필수 동의는 AGE_14 · TERMS · PRIVACY 세 가지다. MARKETING 은 선택이며\nfalse 도 기록으로 남긴다 — 묻지 않은 것과 거부한 것은 다른 사실이다.",
         "operationId": "signUp",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "User-Agent",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -7971,7 +7991,7 @@
                 }
               }
             },
-            "description": "가입 성공"
+            "description": "가입 성공(로그인 쿠키 발급)"
           },
           "400": {
             "content": {
@@ -14379,7 +14399,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/sleep": {
       "post": {
-        "description": "KST 19:00~23:00 구간에 수행한다. 23:00 까지 수행하지 않으면 자동으로 수면 상태가 되며,\n자동 취침에는 보상이 없다. 수동 취침은 행복 +1, 친밀도 +10 을 부여한다.\n\n수면 중에는 게이지 감소가 멈추고 재고만 충전된다. 야간 취침은 하루의 경계이며\n이 시점에 일일 카운터 초기화와 케어 미스 판정이 함께 수행된다.\n\n튜토리얼 진행 중에는 8단계 차례에만 수행할 수 있고 낮잠으로 처리한다.\n낮잠은 대기 없이 즉시 기상할 수 있으며 보상은 없다.",
+        "description": "캐릭터 시간대(rulesTimeZone)의 19:00~23:00 구간에 수행한다. 23:00 까지 수행하지 않으면 자동으로 수면 상태가 되며,\n자동 취침에는 보상이 없다. 수동 취침은 행복 +1, 친밀도 +10 을 부여한다.\n\n수면 중에는 게이지 감소가 멈추고 재고만 충전된다. 야간 취침은 하루의 경계이며\n이 시점에 일일 카운터 초기화와 케어 미스 판정이 함께 수행된다.\n\n튜토리얼 진행 중에는 8단계 차례에만 수행할 수 있고 낮잠으로 처리한다.\n낮잠은 대기 없이 즉시 기상할 수 있으며 보상은 없다.",
         "operationId": "sleep",
         "parameters": [
           {
@@ -14541,7 +14561,7 @@
     },
     "/api/zzal/v1/me/pets/{petId}/wake": {
       "post": {
-        "description": "KST 07:00~10:00 구간에 수행한다. 10:00 까지 수행하지 않으면 자동으로 기상 처리되며,\n이 경우 overslept 가 true 로 표시되고 보상이 없다. 수동 기상은 친밀도 +10 을 부여한다.\n\n튜토리얼 낮잠은 시간 제약 없이 즉시 기상할 수 있으며 보상은 없다.",
+        "description": "캐릭터 시간대(rulesTimeZone)의 07:00~10:00 구간에 수행한다. 10:00 까지 수행하지 않으면 자동으로 기상 처리되며,\n이 경우 overslept 가 true 로 표시되고 보상이 없다. 수동 기상은 친밀도 +10 을 부여한다.\n\n튜토리얼 낮잠은 시간 제약 없이 즉시 기상할 수 있으며 보상은 없다.",
         "operationId": "wake",
         "parameters": [
           {
