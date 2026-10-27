@@ -56,12 +56,14 @@ public class LeaveService {
             return 0;
         }
         Instant start = pet.getTripStartedAt();
+        java.time.ZoneId zone = pet.zone();
         long elapsedDays = ChronoUnit.DAYS.between(
-                start.atZone(ZzalRules.ZONE).toLocalDate(), now.atZone(ZzalRules.ZONE).toLocalDate()) + 1;
+                start.atZone(zone).toLocalDate(), now.atZone(zone).toLocalDate()) + 1;
         int target = (int) Math.min(ZzalRules.POSTCARD_MAX, Math.max(0, elapsedDays));
         int made = 0;
         for (int seq = pet.getPostcardCount() + 1; seq <= target; seq++) {
-            Instant at = start.plus(Duration.ofDays(seq - 1L));
+            // ★ 달력 하루씩 민다(24시간 덧셈이 아니다) — 서머타임 날에도 "그날의 같은 시각" 이다.
+            Instant at = start.atZone(zone).plusDays(seq - 1L).toInstant();
             if (at.isAfter(now)) {
                 at = now;                       // 아직 안 온 날짜로는 안 적는다
             }

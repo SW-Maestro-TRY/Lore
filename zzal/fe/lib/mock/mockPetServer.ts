@@ -40,9 +40,9 @@ import { BACKGROUNDS, DEFAULT_BACKGROUND, MOTIONS, SPECIAL_ADV } from '../../tam
 import { BABY_CALLS } from '../../tamagotchi/tutorial';
 import { clampChat, templateCall, templateReply } from '../../tamagotchi/chat';
 import type { PetSource } from '../petSource';
-import { DAY_MS, HOUR_MS, at, dayIndex, timeOfDay } from '../kst';
+import { DAY_MS, HOUR_MS, addDays, at, dayIndex, getRulesZone, offsetAt, timeOfDay } from '../kst';
 
-// ── 시계(KST 고정) — 경계 산수는 lib/kst.ts 한 벌을 훅과 같이 쓴다 ─────────
+// ── 시계(규칙 시간대, 기본 서울) — 경계 산수는 lib/kst.ts 한 벌을 훅과 같이 쓴다 ─────────
 
 const tod = timeOfDay;
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -65,12 +65,18 @@ export class MockClock {
   }
 }
 
-/** `?clock=2026-09-05T10:30` — 시간대 표기가 없으면 KST 로 읽는다. 못 읽으면 null. */
+/** `?clock=2026-09-05T10:30` — 시간대 표기가 없으면 규칙 시간대(기본 KST)의 벽시계로 읽는다. 못 읽으면 null. */
 export function parseClockParam(raw: string | null): number | null {
   if (!raw) return null;
-  const s = /[zZ]|[+-]\d\d:?\d\d$/.test(raw) ? raw : `${raw}+09:00`;
-  const ms = Date.parse(s);
-  return Number.isFinite(ms) ? ms : null;
+  if (/[zZ]|[+-]\d\d:?\d\d$/.test(raw)) {
+    const ms = Date.parse(raw);
+    return Number.isFinite(ms) ? ms : null;
+  }
+  const asUtc = Date.parse(`${raw}Z`);
+  if (!Number.isFinite(asUtc)) return null;
+  // 벽시계 → 순간: 그 근처의 오프셋을 두 번 맞춘다(서울이면 늘 −9h, 옛 `+09:00` 과 같다).
+  const first = asUtc - offsetAt(asUtc, getRulesZone());
+  return asUtc - offsetAt(first, getRulesZone());
 }
 
 // ── 상태 ─────────────────────────────────────────────────────────────────
@@ -843,7 +849,7 @@ export class MockPetServer implements PetSource {
    */
   private autoWakeAt(r: Row): number {
     const sameDay = at(r.sleptAt, WAKE_WINDOW.to);
-    return r.sleptAt < sameDay ? sameDay : sameDay + DAY_MS;
+    return r.sleptAt < sameDay ? sameDay : addDays(sameDay, 1);
   }
 
   private tickAwake(r: Row, from: number, to: number): void {
@@ -1133,7 +1139,7 @@ export class MockPetServer implements PetSource {
     // ★ 낮잠은 튜토리얼 8번째 칸(NAP)에서 한 번만. 그 전에 미리 재우면 8번 칸을 할 수가 없어
     //   튜토리얼이 영영 안 끝난다 — 그래서 칸이 왔을 때만 열어 준다.
     const napOk = inTutorial && this.currentStepKey(r) === 'NAP' && r.counters.napCount === 0;
-    const opens = h < SLEEP_WINDOW.from * HOUR_MS ? at(now, SLEEP_WINDOW.from) : at(now, SLEEP_WINDOW.from) + DAY_MS;
+    const opens = h < SLEEP_WINDOW.from * HOUR_MS ? at(now, SLEEP_WINDOW.from) : addDays(at(now, SLEEP_WINDOW.from), 1);
     return {
       clockStartedAt: startedAt, sleeping: false, sleepKind: null, sleptAt: null, wokeAt: iso(r.dayBase),
       canSleep: napOk || (!inTutorial && inWindow), canWake: false,
@@ -1382,6 +1388,8 @@ export class MockPetServer implements PetSource {
       deathReason: r.phase === 'DEAD' ? 'RELEASED' : r.phase === 'FAILED' ? 'HATCH_FAILED' : null,
       hatchStartedAt: iso(r.hatchStartedAt), hatchedAt: r.hatchedAt === null ? null : iso(r.hatchedAt),
       serverNow: iso(now),
+      // 목 서버는 규칙·표시 시간대를 같게 둔다(2단계 서버와 같은 모양). 기본 서울.
+      timeZone: getRulesZone(), rulesTimeZone: getRulesZone(),
       clock: alive ? this.clockOf(r, now) : null,
       daysTogether: alive ? r.daysTogether : null,
       gauges: alive ? { fullness: r.fullness, happiness: r.happiness, clean: MAX_TRASH - r.trash, trash: r.trash } : null,
@@ -1504,7 +1512,7 @@ export class MockPetServer implements PetSource {
       g.fullness = 2; g.happiness = 3; g.trash = 1; g.food = 3; g.intimacy = 700;
       g.daysTogether = 5;
       const ten3 = at(now, 10);
-      g.dayBase = ten3 <= now ? ten3 : ten3 - DAY_MS;
+      g.dayBase = ten3 <= now ? ten3 : addDays(ten3, -1);
       this.finishTutorial(g, g.hatchedAt ?? now);
       g.settledAt = now;
       g.lastVisitDay = dayIndex(now);
@@ -1528,7 +1536,7 @@ export class MockPetServer implements PetSource {
       g.daysTogether = 3;
       // 오늘 10:00 기상. ★ 아직 10시 전이면 어제 10:00 이다 — 기상 시각이 미래면 시계가 뒤집힌다.
       const ten = at(now, 10);
-      g.dayBase = ten <= now ? ten : ten - DAY_MS;
+      g.dayBase = ten <= now ? ten : addDays(ten, -1);
       this.finishTutorial(g, g.hatchedAt ?? now);
       g.settledAt = now;
       g.lastVisitDay = dayIndex(now);

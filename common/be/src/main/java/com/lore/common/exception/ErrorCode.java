@@ -120,6 +120,7 @@ public enum ErrorCode {
 
     // 후기 (zzal)
     ZZAL_FEEDBACK_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 후기를 남겼어요"),
+
     ZZAL_INQUIRY_CONFLICT(HttpStatus.CONFLICT, "같은 문의 요청 번호에 다른 내용이 담겨 있어요"),
 
     // 동작 요청 (zzal)

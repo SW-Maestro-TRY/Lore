@@ -158,7 +158,7 @@ public class DevClockController {
                 LocalTime t = LocalTime.parse(request.localTime());
                 // ★ "오늘" 은 서버 날짜가 아니라 이 펫의 시계 날짜다 — 이미 내일로 밀어 둔 펫에 "19:00" 을 주면
                 //   내일 19:00 이어야 한다(리뷰 주입 E: 서버 날짜를 써서 어제로 되돌아갔다).
-                target = AwakeClock.dateOf(current.now(real)).atTime(t).atZone(ZzalRules.ZONE).toInstant();
+                target = AwakeClock.dateOf(current.now(real), current.zone()).atTime(t).atZone(current.zone()).toInstant();
             } catch (DateTimeParseException e) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT, "localTime 은 HH:mm 형식이에요");
             }

@@ -16,7 +16,7 @@
 // ★ CSS 의 `@import` 로는 못 받는다. Next 가 여러 CSS 를 이어 붙이면서 @import 가 파일 맨 위를
 //   벗어나면 브라우저가 통째로 무시한다(2026-09-07 실측: 폰트 요청이 아예 안 나갔다).
 //   짤 전용 local-fonts.css가 로컬 원본을 공급하고 기존 literal family와 CSS 변수를 함께 보존한다.
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import {cookies,headers} from 'next/headers';
 import {ZzalLocaleProvider,type ZzalLocale}from '@zzal/lib/locale';
 import '@zzal/local-fonts.css';
@@ -56,6 +56,14 @@ export const metadata: Metadata = {
   },
 };
 
+
+// ★ 짤에만 interactive-widget=resizes-content(2026-10-26). 안드로이드 크롬이 키보드만큼 화면(레이아웃)을
+//   줄이게 한다. 전역에 두면 모든 화면이 바뀌어 #690 때 일부러 뺐다 — 여기 한 라우트로 좁힌다.
+//   사파리·인스타 인앱(WKWebView)은 이 값을 무시한다. 그쪽은 셸이 보이는 영역을 따라간다(shell.css).
+export const viewport: Viewport = {
+  themeColor: '#ffffff',
+  interactiveWidget: 'resizes-content',
+};
 
 export default async function Page({
   searchParams,
