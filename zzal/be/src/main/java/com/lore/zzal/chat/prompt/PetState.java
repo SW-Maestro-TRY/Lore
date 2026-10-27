@@ -25,9 +25,10 @@ public record PetState(DayOfWeek weekday, int hour, int minute, int daysTogether
                        int clean, boolean sick) {
 
     public static PetState of(ZzalPet pet, Instant now) {
-        ZonedDateTime t = now.atZone(ZzalRules.ZONE);
+        // ★ 아이가 말하는 "목요일 밤 11시" 는 사용자의 벽시계다(펫 시간대, 2단계).
+        ZonedDateTime t = now.atZone(pet.zone());
         int days = pet.getHatchedAt() == null ? 1
-                : (int) ChronoUnit.DAYS.between(AwakeClock.dateOf(pet.getHatchedAt()), AwakeClock.dateOf(now)) + 1;
+                : (int) ChronoUnit.DAYS.between(AwakeClock.dateOf(pet.getHatchedAt(), pet.zone()), AwakeClock.dateOf(now, pet.zone())) + 1;
         return new PetState(t.getDayOfWeek(), t.getHour(), t.getMinute(), Math.max(1, days),
                 pet.getFullness(), pet.getHappiness(), pet.getClean(), pet.isSick());
     }

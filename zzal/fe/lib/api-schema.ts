@@ -3477,7 +3477,7 @@ export interface paths {
         put?: never;
         /**
          * 재우기
-         * @description KST 19:00~23:00 구간에 수행한다. 23:00 까지 수행하지 않으면 자동으로 수면 상태가 되며,
+         * @description 캐릭터 시간대(rulesTimeZone)의 19:00~23:00 구간에 수행한다. 23:00 까지 수행하지 않으면 자동으로 수면 상태가 되며,
          *     자동 취침에는 보상이 없다. 수동 취침은 행복 +1, 친밀도 +10 을 부여한다.
          *
          *     수면 중에는 게이지 감소가 멈추고 재고만 충전된다. 야간 취침은 하루의 경계이며
@@ -3551,7 +3551,7 @@ export interface paths {
         put?: never;
         /**
          * 깨우기
-         * @description KST 07:00~10:00 구간에 수행한다. 10:00 까지 수행하지 않으면 자동으로 기상 처리되며,
+         * @description 캐릭터 시간대(rulesTimeZone)의 07:00~10:00 구간에 수행한다. 10:00 까지 수행하지 않으면 자동으로 기상 처리되며,
          *     이 경우 overslept 가 true 로 표시되고 보상이 없다. 수동 기상은 친밀도 +10 을 부여한다.
          *
          *     튜토리얼 낮잠은 시간 제약 없이 즉시 기상할 수 있으며 보상은 없다.
@@ -4692,6 +4692,12 @@ export interface components {
             /** @description 부화 완료 여부 */
             ready?: boolean;
             /**
+             * @description 서버가 창(재우기 19시·자동 취침 23시·깨우기 7시·자동 기상 10시·부름 10/14/19시)을 계산하는 시간대.
+             *     화면은 창 시각을 이 시간대로 읽고 timeZone 으로 바꿔 보여 준다. 둘이 같으면 바꿀 것이 없다
+             * @example Asia/Seoul
+             */
+            rulesTimeZone?: string;
+            /**
              * @description 이번 조회에서 새 장면이 기록되었는지 여부. 재방문 첫 화면이 1회 표시하는 데 사용한다.
              *     다음 조회부터는 false 다
              */
@@ -4709,6 +4715,12 @@ export interface components {
             } | null;
             /** @description 현재 수행 중인 생성 단계. 부화 중에만 채워진다 */
             step?: string | null;
+            /**
+             * @description 이 캐릭터의 시간대(IANA 이름, 예 America/Los_Angeles). 화면이 날짜·시각을 보여 줄 때 쓴다.
+             *     아직 관측하지 못했으면 Asia/Seoul. 생성 때 또는 첫 요청의 X-Zzal-Tz 헤더로 한 번 정해지고 바뀌지 않는다
+             * @example Asia/Seoul
+             */
+            timeZone?: string;
             today?: components["schemas"]["ZzalToday"];
             /** @description 말투. 대사 톤에만 쓰이고 그림 생성에는 들어가지 않는다 */
             tone?: string | null;
