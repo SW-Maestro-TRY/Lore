@@ -160,6 +160,18 @@ def base_block(char: dict) -> list[str]:
     return [input_block(char).rstrip("\n"), *settings_block(char)]
 
 
+def check_lines(char: dict) -> list[str]:
+    """원고가 없을 때 입력 맨 끝(방향 바로 앞)에 다시 두는 점검 — 모델은 뒤에 온 것을 더 세게 듣는다.
+
+    같은 말이 프롬프트 머리에도 있지만, 사건을 세게 터뜨리는 모델일수록 머리의 규칙은 흘리고 주인공을
+    사건이 덮치게 쓴다(2026-10-27, 96개 후보 중 Gemini 는 끝에서 주인공이 당하는 쪽 18 · 행위자 10).
+    """
+    return ["", "## 다 쓰고 나서 다시 본다",
+            "- 마지막에 터지는 일은 주인공이 한 행동 때문에 터진다. 상대가 주인공을 붙잡거나 밀어붙이거나 대신 "
+            "해 주는 것으로 끝나면 주인공이 끌려간 것이다 — 다시 짠다.",
+            "- 주인공이 원하는 것, 그것을 방해하는 것, 주인공의 반응이 다 있는가. 사건은 하나로 끝나지 않고 이어지는가."]
+
+
 def genre_lines(char: dict) -> list[str]:
     """원고가 없을 때 이야기 단계에 주는 장르 자료 — 빠른 길의 줄거리 씨앗 입력(run.seeded_input_block)과
     같은 둘이다. 세계 문단은 설정집이 없을 때만(설정집이 그 세계다), 전개 문법은 장르가 있으면 늘.
@@ -332,7 +344,8 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: 
     cast = R.read_json(run_dir / "cast.json") if (run_dir / "cast.json").is_file() else None
     if expands_cast(char) and isinstance(cast, list) and cast:
         lines += cast_lines(cast)               # 인물 단계가 먼저 세운 사람들로 1화를 쓴다(run_own 순서)
-    prompt = R.compose(template, "\n".join(lines + content_block(char)) + "\n", lang=lang)
+    tail = check_lines(char) if not is_manuscript(char) else []
+    prompt = R.compose(template, "\n".join(lines + tail + content_block(char)) + "\n", lang=lang)
     R.write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         log(f"[이야기] 프롬프트만 썼습니다 -> {run_dir / 'story_prompt.txt'}")
