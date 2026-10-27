@@ -34,7 +34,8 @@
   filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 8px 14px #0006);
 }
 .wt-ev-witch .wt-ev-hat {
-  position: absolute; left: 4%; top: -13%; width: 76%; transform: rotate(-12deg);
+  /* 챙 가운데(viewBox 80,114)를 정수리 아래 이마 머리선에 맞춘다. 값은 전부 그림 상자에 대한 % 라 배너 · 이벤트 페이지 · 폰 너비가 같이 맞는다 */
+  position: absolute; left: 20.8%; top: -11.5%; width: 53.8%; transform-origin: 50% 81.4%; transform: rotate(-6deg);
   filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff);
 }
 
@@ -91,9 +92,9 @@
   box-shadow: 0 30px 60px #000a; animation: wt-ev-rise .5s cubic-bezier(.22, 1, .36, 1);
 }
 .wt-ev-pop-ph { position: relative; height: 190px; overflow: hidden; background: radial-gradient(80% 70% at 50% 20%, var(--ev-bg2), var(--ev-bg) 75%); }
-.wt-ev-pop-ph .wt-ev-bust { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); width: 150px; }
+.wt-ev-pop-ph .wt-ev-bust { position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%); width: 150px; }
 .wt-ev-pop-ph .wt-ev-bust img { width: 100%; display: block; filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
-.wt-ev-pop-ph .wt-ev-bust .wt-ev-hat { position: absolute; left: 6%; top: -27%; width: 80%; transform: rotate(9deg); filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
+.wt-ev-pop-ph .wt-ev-bust .wt-ev-hat { position: absolute; left: -0.8%; top: -48%; width: 100%; transform-origin: 50% 80.7%; transform: rotate(-2deg); filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
 .wt-ev-pop-ph img.wt-ev-kv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-pop-ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, #14102a 100%); }
 .wt-ev-pop-day {
