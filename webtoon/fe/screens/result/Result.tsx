@@ -155,7 +155,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     let alive = true;
     setAccountChecked(false);
     myAccountRuns()
-      .then((got) => { if (alive) setOwnedByAccount(got.some((r) => r.run_id === runId)); })
+      /* 내 목록은 연재를 1화 카드 하나로 묶어 준다(MyWebtoonService.myRuns) — 2화 이후 결과 페이지에서는 run_id 가
+         카드의 run_id 와 달라 「내 작품」이 아니게 돼 「다음 편 만들기」가 사라졌다(2026-10-27 밤에 노래하는 학교 2화).
+         카드가 들고 있는 회차별 run 까지 본다. */
+      .then((got) => { if (alive) setOwnedByAccount(got.some((r) => r.run_id === runId
+        || Object.values(r.episode_run_ids || {}).includes(runId))); })
       .catch(() => { /* 브라우저 것만 쓴다 */ })
       .finally(() => { if (alive) setAccountChecked(true); });
     return () => { alive = false; };
