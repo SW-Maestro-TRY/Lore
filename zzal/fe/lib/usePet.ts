@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from './api';
-import { ms } from './kst';
+import { ms, setPetZones } from './kst';
 import type { CareAction, ChatSlot, ChatState, PetDetail, Personality, ShareKind } from './pet';
 import type { PetSource } from './petSource';
 
@@ -126,6 +126,8 @@ export function usePet(source: PetSource | null, petId: number | null): UsePetRe
   const apply = useCallback((seq: number, next: PetDetail) => {
     if (seq <= applied.current) return;
     applied.current = seq;
+    // 시간대는 펫마다 한 번 정해지고 안 바뀐다 — 매 응답에서 같은 값을 다시 넣을 뿐이다.
+    setPetZones(next);
     setPet(next);
     setError(null);
     // ALIVE 가 아니면 null 이다(계약 2절). 빈 배열로 읽는다.

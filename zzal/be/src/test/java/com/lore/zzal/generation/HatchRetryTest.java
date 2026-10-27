@@ -124,6 +124,57 @@ class HatchRetryTest {
                 .thenAnswer(inv -> RunResult.failed(null, BigDecimal.ZERO, code));
     }
 
+    /** 운영 기본 상한(3, 2026-10-27)으로 만든 서비스. 나머지는 setUp 과 같다. */
+    private HatchService serviceWithLimit(int limit) {
+        ZzalPetRepository petRepository = mock(ZzalPetRepository.class);
+        ZzalPet pet = ZzalPet.draft(1L, "images/zzal/src", T0);
+        pet.character("여울", null, null, null, null, null, T0);
+        when(petRepository.findById(PET)).thenReturn(Optional.of(pet));
+        return new HatchService(runner, recorder, jobRepository, registry, petRepository,
+                quotaBreaker, blockLog, mock(ZzalAlerts.class), limit, mock(MotionSeeder.class));
+    }
+
+    /** 실행기에 넘어간 StepContext 의 시도 차수들. */
+    private List<Integer> capturedAttempts() {
+        List<Integer> attempts = new ArrayList<>();
+        when(runner.run(anyLong(), any(), any(), any())).thenAnswer(inv -> {
+            attempts.add(((StepContext) inv.getArgument(1)).attempt());
+            return RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.TIMEOUT);
+        });
+        return attempts;
+    }
+
+    @Test
+    @DisplayName("★★ 상한 3(2026-10-27 운영 기본) — 세 번 실패하면 FAILED 확정, 네 번째는 없다. 단계엔 차수 1·2·3 이 넘어간다")
+    void limitThreeFailsAfterThreeAttempts() {
+        HatchService three = serviceWithLimit(3);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.TIMEOUT);
+        List<Integer> attempts = capturedAttempts();
+
+        three.hatch(job.getId(), PET, V);
+
+        assertThat(jobs.stream().map(GenJob::getAttempt).toList()).containsExactly(1, 2, 3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+        assertThat(attempts).as("정체성 단계가 effort 를 고르는 차수").containsExactly(1, 2, 3);
+    }
+
+    @Test
+    @DisplayName("★ 관리자 재굽기(attempt 0)는 단계에 차수 1 로 넘어간다 — 시도 1 과 같은 effort(기본)")
+    void adminRehatchPassesAttemptOneToSteps() {
+        HatchService three = serviceWithLimit(3);
+        GenJob job = jobRepository.save(GenJob.start(PET, GenKind.HATCH, GenJob.ADMIN_REHATCH_ATTEMPT, V, T0));
+        job.markRunning(T0);
+        job.fail(GenErrorCode.TIMEOUT, BigDecimal.ZERO, T0);
+        List<Integer> attempts = capturedAttempts();
+
+        three.hatch(job.getId(), PET, V);
+
+        assertThat(attempts).containsExactly(1, 2, 3);
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
     @Test
     @DisplayName("★ 계속 실패하면 상한(5)까지 굽고 멈춘다 — 새 job 4개, 실행기 5회, 실패 확정 1번")
     void keepsRetryingUpToTheLimit() {

@@ -42,7 +42,12 @@ public class RecentDaysMemory implements MemoryProvider {
 
     /** 기억이 시작되는 시각 — (오늘 − 2일) 0시, 한국 날짜. */
     public static Instant since(Instant now) {
-        return AwakeClock.dateOf(now).minusDays(ZzalRules.CHAT_MEMORY_DAYS - 1L).atStartOfDay(ZzalRules.ZONE).toInstant();
+        return since(now, ZzalRules.ZONE);
+    }
+
+    /** 기억이 시작되는 시각 — (오늘 − 2일) 0시, 그 시간대(펫 시간대)의 날짜. */
+    public static Instant since(Instant now, java.time.ZoneId zone) {
+        return AwakeClock.dateOf(now, zone).minusDays(ZzalRules.CHAT_MEMORY_DAYS - 1L).atStartOfDay(zone).toInstant();
     }
 
     @Override
@@ -50,7 +55,7 @@ public class RecentDaysMemory implements MemoryProvider {
         List<ZzalChatTurn> ts;
         if (query.slot() == ChatSlot.CONTINUOUS) {
             ts = new ArrayList<>(turns.findTop40ByPetIdAndCreatedAtBetweenOrderByCreatedAtDescIdDesc(petId,
-                    since(query.now()), query.now()));
+                    since(query.now(), query.zone()), query.now()));
             java.util.Collections.reverse(ts);
             int chars = 0;
             for (int i = ts.size() - 1; i >= 0; i--) {
@@ -58,7 +63,7 @@ public class RecentDaysMemory implements MemoryProvider {
                 if (chars > 6000) { ts = new ArrayList<>(ts.subList(i + 1, ts.size())); break; }
             }
         } else {
-            ts = turns.findByPetIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAscIdAsc(petId, since(query.now()));
+            ts = turns.findByPetIdAndCreatedAtGreaterThanEqualOrderByCreatedAtAscIdAsc(petId, since(query.now(), query.zone()));
         }
         if (ts.isEmpty()) {
             return List.of();

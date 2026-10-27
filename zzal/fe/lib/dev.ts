@@ -5,6 +5,7 @@
 // 기존 시계 호출부는 visit 인자 생략 시 after만 받는 호환 계약을 유지한다.
 import { request, type RequestOptions } from './api';
 import { PET_BASE, type PetDetail } from './pet';
+import { addDays, at } from './kst';
 
 /** 리모컨 조작 한 번의 결과(백엔드 `DevResponses.DevResult`). */
 export interface DevResult {
@@ -84,15 +85,14 @@ export function setClockAt(petId: number, atIso: string, visit = true): Promise<
 }
 
 /**
- * `nowMs` 다음에 KST `HH:mm` 이 오는 순간(ms). 오늘 그 시각이 이미 지났으면 **내일** 그 시각이다.
+ * `nowMs` 다음에 규칙 시간대(기본 KST) `HH:mm` 이 오는 순간(ms). 오늘 그 시각이 이미 지났으면 **내일** 그 시각이다.
  * ★ 기준은 **서버 시각**(`serverNow`)이다 — 기기 시계를 쓰면 폰이 빠른 사람만 400 을 받는다.
  */
 export function nextLocalAt(nowMs: number, hhmm: string): number {
   const [hh, mm] = hhmm.split(':').map(Number);
-  const KST = 9 * 3_600_000;
-  const dayStartUtc = Math.floor((nowMs + KST) / 86_400_000) * 86_400_000 - KST;
-  const target = dayStartUtc + (hh * 60 + mm) * 60_000;
-  return target > nowMs ? target : target + 86_400_000;
+  // 규칙 시간대(서버가 창을 재는 벽시계)의 HH:mm. 서머타임 날에도 맞도록 덧셈 대신 lib/kst 를 쓴다.
+  const target = at(nowMs, hh, mm);
+  return target > nowMs ? target : addDays(target, 1);
 }
 
 /**

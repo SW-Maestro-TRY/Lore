@@ -18,9 +18,10 @@ public class ChatRewardLedger {
     }
     public boolean claim(ZzalPet pet,ZzalChatSession session,java.time.Instant now) {
         boolean baby=pet.isInTutorial();
-        ChatSlot slot=baby?ChatSlot.BABY:ChatSlot.windowAt(now.atZone(ZzalRules.ZONE).toLocalTime());
+        ChatSlot slot=baby?ChatSlot.BABY:ChatSlot.windowAt(now.atZone(pet.zone()).toLocalTime());
         if(slot==null) return false;
-        java.time.LocalDate day=AwakeClock.dateOf(baby?pet.getHatchedAt():now);
+        // 튜토리얼 부름은 부화일 열쇠(KST 고정, ChatSessionKeys), 평소 부름은 펫 시간대의 오늘.
+        java.time.LocalDate day=baby?com.lore.zzal.chat.ChatSessionKeys.hatchDay(pet):AwakeClock.dateOf(now,pet.zone());
         if(rewards.existsByPetIdAndDayOfAndSlot(pet.getId(),day,slot)) return false;
         if(legacy.findByPetIdAndDayOfAndSlot(pet.getId(),day,slot)
                 .map(ZzalChatSession::isRewardGiven).orElse(false)) return false;
