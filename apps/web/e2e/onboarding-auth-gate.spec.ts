@@ -56,8 +56,8 @@ async function stubServer(page: Page, authed: boolean): Promise<Stub> {
   await page.route('**/api/v1/auth/refresh', (r) => r.fulfill(json(fail('INVALID_REFRESH_TOKEN', '만료'), 401)));
 
   await page.route('**/api/v1/auth/login', (r) => { s.login += 1; s.authed = true; return r.fulfill(json(ok(null))); });
-  // 가입은 계정만 만든다(서버 정책: 토큰 없음). 로그인 상태는 이어지는 로그인 호출이 만든다.
-  await page.route('**/api/v1/auth/signup', (r) => { s.signup += 1; return r.fulfill(json(ok(null))); });
+  // 가입하면 바로 로그인된다(서버가 가입 응답에 로그인과 같은 쿠키를 준다, #690).
+  await page.route('**/api/v1/auth/signup', (r) => { s.signup += 1; s.authed = true; return r.fulfill(json(ok(null))); });
 
   await page.route('**/api/v1/uploads/presign', (r) => {
     s.presign += 1;
@@ -262,9 +262,9 @@ test.describe('폰 단계형 가입', () => {
     const presigned = page.waitForRequest((r) => r.url().includes('/api/v1/uploads/presign'));
     await go.click();
     await presigned;
-    // 가입 한 번 + 이어지는 로그인 한 번. 사람은 비밀번호를 다시 치지 않았다.
+    // 가입 한 번으로 로그인까지 된다. 로그인 요청은 따로 나가지 않는다(두 번 나가면 안 된다).
     await expect.poll(() => s.signup).toBe(1);
-    await expect.poll(() => s.login).toBe(1);
+    expect(s.login).toBe(0);
     await expect.poll(() => s.put.length).toBe(1);
     expect(s.put[0].equals(PNG)).toBe(true);
     await expect(dialog(page)).toHaveCount(0);

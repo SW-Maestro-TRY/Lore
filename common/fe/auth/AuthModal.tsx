@@ -50,7 +50,6 @@ const AUTH_COPY: Record<"en" | "ja", Record<string, string>> = {
     "마케팅 정보 수신에 동의합니다": "Receive marketing messages",
     "보기": "View (Korean)",
     "처리 중…": "Processing…",
-    "가입됐어요. 방금 만든 비밀번호로 로그인해 주세요": "Your account is ready. Log in with the password you just created.",
     "다음": "Next",
     "가입하고 시작하기": "Sign up and start",
     "이메일을 입력해 주세요": "Enter your email address.",
@@ -95,7 +94,6 @@ const AUTH_COPY: Record<"en" | "ja", Record<string, string>> = {
     "마케팅 정보 수신에 동의합니다": "マーケティング情報の受信に同意します",
     "보기": "表示（韓国語）",
     "처리 중…": "処理中…",
-    "가입됐어요. 방금 만든 비밀번호로 로그인해 주세요": "登録できました。設定したパスワードでログインしてください。",
     "다음": "次へ",
     "가입하고 시작하기": "登録して始める",
     "이메일을 입력해 주세요": "メールアドレスを入力してください。",
@@ -327,7 +325,8 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
 
   // 열릴 때마다 처음 상태로 되돌린다. 지난번에 치다 만 비밀번호가 남아 있으면 안 된다.
   // ★ useLayoutEffect 인 이유(2026-10-08 #690) — useEffect 면 다시 연 첫 화면 한 장이 **지난 상태로**
-  //   그려진 뒤에 지워져, 다시 열린 화면에 지난 입력이 잠깐 비칠 수 있다. 그리기 전에 되돌린다.
+  //   그려진 뒤에 지워진다. 가입하면 창이 가입 탭인 채 닫히게 되면서(바로 로그인), 다음에 열 때
+  //   그 한 장에 가입 탭과 지난 비밀번호가 비쳤다(e2e 실측). 그리기 전에 되돌린다.
   useLayoutEffect(() => {
     if (!open) return;
     setTab(initialTab);
@@ -731,32 +730,26 @@ export default function AuthModal({ open, onClose, onSuccess, initialTab = "logi
         },
       });
       track("auth_signup_succeeded");
+      // ★ 가입하면 바로 로그인된다(2026-10-08 #690 — 서버가 로그인과 같은 쿠키를 준다).
+      //   로그인 탭으로 옮겨 비밀번호를 다시 치게 하던 단계는 없앴다. 창을 닫는다.
+      //   auth_login_* 이벤트는 이 경로에서 안 찍힌다(가입 = 가입 성공 하나).
+      await popOwnHistory();
+      onSuccess?.("signup");
+      onClose();
     } catch (e) {
+      if (e instanceof SessionCheckError) {
+        // ★ 가입 자체는 됐다 — 다시 가입하면 "이미 가입된 이메일" 을 듣는다. 가입 성공으로 세고,
+        //   로그인 탭(이메일·비밀번호 유지)으로 옮겨 그대로 로그인만 다시 누르게 한다(H16).
+        track("auth_signup_succeeded");
+        track("auth_login_failed", { code: e.code });
+        setTab("login");
+        setStep("password");
+        showError("password", "가입은 됐어요. 로그인 상태를 확인하지 못했어요 — 로그인을 눌러 다시 시도해 주세요");
+        return;
+      }
       track("auth_signup_failed", { code: errorCodeOf(e) });
       // 이미 가입된 이메일은 이메일 칸의 문제다 — 단계형이면 이메일 단계로 돌아간다.
       showError(errorCodeOf(e) === "EMAIL_ALREADY_EXISTS" ? "email" : "form", messageOf(e, resolvedLocale));
-      submittingRef.current = false;
-      setSubmitting(false);
-      return;
-    }
-
-    // ★ 가입 뒤 바로 로그인(2026-10-26 결정 4, 화면만). 서버 가입 정책(가입은 토큰을 안 준다)은 그대로 두고,
-    //   방금 친 이메일·비밀번호로 로그인 요청을 한 번 이어서 보낸다. 사람은 비밀번호를 다시 치지 않는다.
-    //   실패하면 예전처럼 로그인 단계로 넘기되 비밀번호를 비우지 않아 [로그인] 한 번이면 된다.
-    track("auth_login_submitted", { reason: "after_signup" });
-    try {
-      await signIn({ email: trimmedEmail, password });
-      track("auth_login_succeeded", { reason: "after_signup" });
-      await popOwnHistory();
-      onSuccess?.("login");
-      onClose();
-    } catch (e) {
-      track("auth_login_failed", { code: errorCodeOf(e), reason: "after_signup" });
-      setTab("login");
-      setStep("password");
-      setPasswordConfirm("");
-      setInfo("가입은 됐어요. 로그인 상태를 확인하지 못했어요 — 로그인을 눌러 다시 시도해 주세요");
-      onSuccess?.("signup");
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
