@@ -86,6 +86,27 @@ def content_block(char: dict) -> list[str]:
     return lines
 
 
+# 카드의 자리(character.ROLE_TIERS)가 「중심」이 아니면 이 캐릭터 말고 이야기의 중심 인물이 따로 있다.
+# 카드 설명은 그 사람을 「신입생 주인공」처럼 역할로만 부르는데, 어느 단계도 그 사람을 세우지 않아
+# 이름·성별 없이 흘러가거나 이 캐릭터와 섞였다(2026-10-27 오은솔 「곁」 카드 — 이야기가 은솔을 신입생으로 썼다).
+SIDE_TIERS = {"곁": "그 곁의 비중 있는 자리", "스쳐감": "한두 장면 스쳐 가는 자리", "뜬금": "아무도 주인공이라 생각하지 않는 자리"}
+
+
+def side_role_lines(char: dict) -> list[str]:
+    """카드가 중심 자리가 아닐 때 붙는 줄. 중심 카드거나 카드가 없으면 []."""
+    card = char.get("card") or {}
+    tier = str(card.get("role_tier") or "").strip()
+    if tier not in SIDE_TIERS:
+        return []
+    role = str(card.get("role") or "").strip()
+    who = f"{char['name']}({role})" if role else char["name"]
+    return ["", f"## {char['name']}의 자리 — 이야기의 중심 인물은 따로 있다",
+            f"{who}은(는) 이 이야기의 중심 인물이 아니라 {SIDE_TIERS[tier]}에 선다. 설명이 「주인공」이라고 "
+            f"부르는 사람은 {char['name']}이 아닌 다른 사람이다 — {char['name']}의 자리·나이·처지는 설명 그대로 두고, "
+            f"그 사람의 자리로 옮기지 않는다. 이 웹툰은 {char['name']}을 따라가고, 그 중심 인물은 "
+            f"{char['name']}과 함께 나오는 인물이다."]
+
+
 def input_block(char: dict, *, continuation: bool = False, context: str | None = None) -> str:
     """own 길의 「이번 입력」 — `run.input_block` 과 다르다.
 
@@ -117,6 +138,7 @@ def input_block(char: dict, *, continuation: bool = False, context: str | None =
         lines += ["", "설명: (없음)"]
     lines += ["", "이 인물의 성격·처지는 위 설명과 아래 적은 것이 전부다. 적히지 않은 성격·과거·"
               "비밀을 더하지 않고, 적힌 성격을 뒤집지 않는다."]
+    lines += side_role_lines(char)
     lines += ["", f"장르: {char['genre']}" if char.get("genre") else "장르: (없음 — 적은 내용에서 읽는다)"]
     import userbook
     if context is None:
@@ -142,11 +164,21 @@ def character_lines(char: dict) -> list[str]:
         lines.append("- 고른 캐릭터 카드: " + " · ".join(bits) + " (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
-    return lines
+    return lines + side_role_lines(char)
+
+
+def expands_cast(char: dict) -> bool:
+    """인물을 넓혀 세우는가. 줄거리 없이 설정집·설명만 있으면 그렇다.
+
+    자세히 적은 사람은 적힌 인물만 그대로 세운다. 적은 것이 없으면 1화에 주인공과 얽힐 사람을
+    인물 단계가 세운다 — 이름·성별·생김새가 없는 「신입생」이 이야기·장면을 지나 연재 기억까지
+    그대로 갔다(2026-10-27 「밤에 노래하는 학교」, 인물 단계 결과가 빈 목록이었다).
+    """
+    return not R.user_story(char)
 
 
 def cast_lines(cast: list[dict]) -> list[str]:
-    out = ["", "## 적은 내용에서 읽어낸 인물들 — 이름·생김새·말투를 바꾸지 않는다"]
+    out = ["", "## 이 이야기의 인물들 — 이름·성별·생김새·말투를 바꾸지 않는다"]
     if not cast:
         return out + ["(주인공 말고는 없다)"]
     for c in cast:
@@ -204,7 +236,9 @@ def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") ->
 
 def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> list[dict]:
     """적은 내용에서 주인공 아닌 인물을 읽어낸다. 0~4명. 새 인물은 코드에서도 뺀다."""
-    prompt = R.compose("own/cast_prompt", "\n".join(base_block(char) + content_block(char)) + "\n", lang=lang)
+    mode = (["", "## 이번에 할 일 — 적은 내용이 없다. 1화에 주인공과 얽힐 사람을 세운다 (아래 「적은 내용이 없을 때」)"]
+            if expands_cast(char) else [])
+    prompt = R.compose("own/cast_prompt", "\n".join(base_block(char) + content_block(char) + mode) + "\n", lang=lang)
     R.write_text(run_dir / "cast_prompt.txt", prompt)
     if dry_run:
         log(f"[인물] 프롬프트만 썼습니다 -> {run_dir / 'cast_prompt.txt'}")
@@ -229,11 +263,14 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
     seen: set[str] = set()
     cast = [c for c in cast if not (str(c.get("name")).strip() in seen
                                     or seen.add(str(c.get("name")).strip()))]
-    # 이 길에서는 적힌 사람만이다. 모델이 더한 사람은 뺀다.
-    extra = [c["name"] for c in cast if not R.from_input(c)]
-    if extra:
-        log(f"[인물] 적은 내용에 없는 인물은 뺍니다: {', '.join(extra)}")
-    cast = [c for c in cast if R.from_input(c)][:4]
+    # 적은 내용이 있으면 적힌 사람만이다. 모델이 더한 사람은 뺀다. 적은 것이 없으면(설정집·설명뿐)
+    # 1화에 얽힐 사람을 인물 단계가 세우는 자리라 새로 세운 사람도 남긴다(expands_cast).
+    if not expands_cast(char):
+        extra = [c["name"] for c in cast if not R.from_input(c)]
+        if extra:
+            log(f"[인물] 적은 내용에 없는 인물은 뺍니다: {', '.join(extra)}")
+        cast = [c for c in cast if R.from_input(c)]
+    cast = cast[:4]
     R.write_json(run_dir / "cast.json", cast)
     return cast
 
@@ -253,6 +290,9 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: 
     # 줄거리 없이 설정집만 붙였으면 설정집 위에서 1화를 세운다(사용자 결정 2026-10-24: 로어북이 있으면
     # 「내 내용으로 만들기」 길로 간다).
     template = "own/story_prompt" if R.user_story(char) else "own/story_prompt_book"
+    cast = R.read_json(run_dir / "cast.json") if (run_dir / "cast.json").is_file() else None
+    if expands_cast(char) and isinstance(cast, list) and cast:
+        lines += cast_lines(cast)               # 인물 단계가 먼저 세운 사람들로 1화를 쓴다(run_own 순서)
     prompt = R.compose(template, "\n".join(lines + content_block(char)) + "\n", lang=lang)
     R.write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
@@ -547,8 +587,17 @@ def stage_scenes(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang:
 
 # --------------------------------------------------------------------- 묶음
 
-def run_own(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> None:
+def _cast_then_story(run_dir: Path, char: dict, dry_run: bool, lang: str) -> None:
+    """적은 내용이 없을 때 — 인물을 먼저 세우고 그 사람들로 1화를 쓴다(expands_cast)."""
+    stage_cast(run_dir, char, dry_run, lang)
+    stage_story(run_dir, char, dry_run, lang=lang)
+
+
+def run_own(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko", sheet: bool = True) -> None:
     """PERSONA ∥ CAST ∥ STORY ∥ SHEET. 자바가 `--own` 으로 부르고, 끝나면 이야기 확인 자리에서 멈춘다.
+
+    적은 내용 없이 설정집·설명뿐이면 CAST → STORY 는 차례로 돈다 — 이야기가 인물 단계가 세운
+    이름·성별·생김새로 쓰게 하려고. `sheet=False` 는 시트 그림 없이 글 단계만(시험용).
 
     장면은 여기서 안 나눈다 — 사용자가 본문을 보고(고치고) 넘긴 뒤 `--own-scenes` 다.
     첫 실행에서 본문을 안 보여 주고 장면까지 갔더니, 적은 내용에 없는 장면이 들어온 것을
@@ -563,12 +612,14 @@ def run_own(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> None:
         return
     log("[내 내용으로] 주인공 카드·인물·본문·시트를 동시에 만듭니다…")
     with ThreadPoolExecutor(max_workers=4) as pool:
-        jobs = {
-            "persona": pool.submit(stage_persona, run_dir, char, dry_run, lang),
-            "cast": pool.submit(stage_cast, run_dir, char, dry_run, lang),
-            "story": pool.submit(stage_story, run_dir, char, dry_run, lang=lang),
-            "sheet": pool.submit(stage_sheet, run_dir, char, dry_run),
-        }
+        jobs = {"persona": pool.submit(stage_persona, run_dir, char, dry_run, lang)}
+        if expands_cast(char):
+            jobs["story"] = pool.submit(_cast_then_story, run_dir, char, dry_run, lang)
+        else:
+            jobs["cast"] = pool.submit(stage_cast, run_dir, char, dry_run, lang)
+            jobs["story"] = pool.submit(stage_story, run_dir, char, dry_run, lang=lang)
+        if sheet:
+            jobs["sheet"] = pool.submit(stage_sheet, run_dir, char, dry_run)
         errors: dict[str, BaseException] = {}
         for name, fut in jobs.items():
             try:

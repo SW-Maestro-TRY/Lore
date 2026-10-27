@@ -1008,7 +1008,7 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
     return cast
 
 
-CAST_FIELDS = (("look", "생김새·인상"), ("gap", "갭"), ("voice", "말투"),
+CAST_FIELDS = (("gender", "성별·나이대"), ("look", "생김새·인상"), ("gap", "갭"), ("voice", "말투"),
                ("line", "대표 대사"), ("tie", "주인공과의 얽힘"), ("wants", "원하거나 숨기는 것"))
 
 
