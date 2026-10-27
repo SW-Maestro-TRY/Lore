@@ -441,7 +441,10 @@ public class CharacterService {
         }
         // 글은 그리기 전에 거른다(#80). 사진은 아직 안 본다(safety.md).
         if (safety != null) {
-            safety.checkText(world == null ? "character-create" : "character-try", name, description, world);
+            safety.checkFields(world == null ? "character-create" : "character-try",
+                    com.lore.webtoon.safety.SafetyGuard.Field.of("이름", name),
+                    com.lore.webtoon.safety.SafetyGuard.Field.of("캐릭터 설명", description),
+                    com.lore.webtoon.safety.SafetyGuard.Field.of("세계관", world));
         }
         List<String> photos = (photoDataUrls == null ? List.<String>of() : photoDataUrls).stream()
                 .filter(s -> s != null && !s.isBlank())
