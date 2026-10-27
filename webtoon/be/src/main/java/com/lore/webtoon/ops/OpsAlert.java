@@ -151,10 +151,11 @@ public class OpsAlert {
             b.append(" _(앞 알림 뒤로 ").append(skipped).append("번 더)_");
         }
         if (body != null && !body.isBlank()) {
-            // 「충전:」 줄은 코드 블록 밖에 둔다 — 안에 두면 디스코드에서 링크가 안 눌린다.
+            // 「충전:」 · 「관리:」 줄은 코드 블록 밖에 둔다 — 안에 두면 디스코드에서 링크가 안 눌린다.
             StringBuilder code = new StringBuilder();
             StringBuilder links = new StringBuilder();
-            body.strip().lines().forEach(line -> (line.startsWith("충전:") ? links : code).append(line).append('\n'));
+            body.strip().lines().forEach(line -> (line.startsWith("충전:") || line.startsWith("관리:") ? links : code)
+                    .append(line).append('\n'));
             if (!code.isEmpty()) {
                 b.append("\n```\n").append(code).append("```");
             }

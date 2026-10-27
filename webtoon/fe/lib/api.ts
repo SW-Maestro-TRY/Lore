@@ -1009,6 +1009,43 @@ export function adminOverview(from: string, to: string, who: AdminWho): Promise<
   return call<AdminOverview>(`/admin/dash/overview?${q}`);
 }
 
+/* ---- 오늘 생성 상한(#617) — 관리자만. 서버를 다시 띄우지 않고 오늘(한국 자정까지)만 바꾼다 ---------- */
+
+export interface AdminSpendPair { krw: number; runs: number }
+
+export interface AdminSpend {
+  /** 한국 날짜 */
+  day: string;
+  /** 오늘 적힌 돈 · 편수 */
+  used: AdminSpendPair;
+  /** 아직 안 끝난 작업이 쓸 몫 — 상한은 이것까지 더해서 본다 */
+  reserved: AdminSpendPair;
+  /** 지금 쓰는 상한 */
+  cap: AdminSpendPair;
+  /** 설정값(Parameter Store) — 자정이 지나면 돌아갈 값 */
+  defaults: AdminSpendPair;
+  /** 오늘만 바꾼 값. 없으면 설정값을 쓰는 중 */
+  today: { krw: number | null; runs: number | null; setBy: number | null; setAt: string } | null;
+  /** 지금 새로 만들면 막히는가 */
+  blocked: boolean;
+}
+
+export function adminSpend(): Promise<AdminSpend> {
+  return call<AdminSpend>("/admin/spend");
+}
+
+export function adminSetSpend(krw: number, runs: number): Promise<AdminSpend> {
+  return call<AdminSpend>("/admin/spend", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ krw, runs }),
+  });
+}
+
+export function adminClearSpend(): Promise<AdminSpend> {
+  return call<AdminSpend>("/admin/spend", { method: "DELETE" });
+}
+
 export interface AdminPage<T> { rows: T[]; total: number; page: number; pageSize: number }
 
 export type AdminWorkState = "public" | "private" | "hidden" | "removed" | "trash";
