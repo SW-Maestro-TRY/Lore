@@ -8,4 +8,7 @@ public interface PageRegenRepository extends JpaRepository<PageRegen, String> {
     java.util.List<PageRegen> findByRunIdAndStatusInAndCreatedAtAfter(String runId,
                                                                       java.util.Collection<String> statuses,
                                                                       java.time.Instant after);
+
+    /** 모든 작품에서 아직 안 끝난 그리기 — 서버가 뜰 때 앞선 목숨이 남긴 것을 치운다(#864). */
+    java.util.List<PageRegen> findByStatusIn(java.util.Collection<String> statuses);
 }

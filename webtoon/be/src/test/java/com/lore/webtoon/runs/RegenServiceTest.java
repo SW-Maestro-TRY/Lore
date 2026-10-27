@@ -95,10 +95,17 @@ class RegenServiceTest {
         step.getValue().run();
     }
 
+    /** 컨트롤러와 같은 순서로 시작한다 — 기록을 만들고 줄에 넣는다(값은 이 검사에서 안 받는다). */
+    private String 시작(String note, String quality, Long payer) {
+        String id = service.queue("run-1", 1, note, quality, payer);
+        service.go(id);
+        return id;
+    }
+
     @Test
     @DisplayName("없는 페이지는 시작도 안 한다")
     void 없는_페이지() {
-        assertThatThrownBy(() -> service.start("run-1", 9, "note"))
+        assertThatThrownBy(() -> service.queue("run-1", 9, "note", null, 7L))
                 .isInstanceOf(NoSuchElementException.class);
         verify(runner, never()).enqueue(any(Runnable.class));
     }
@@ -106,13 +113,45 @@ class RegenServiceTest {
     @Test
     @DisplayName("시작하면 하네스 줄에 태운다 — 다른 이미지 호출과 동시에 안 돈다")
     void 큐에_태운다() {
-        String id = service.start("run-1", 1, "왼쪽이 주인공");
+        String id = 시작("왼쪽이 주인공", null, null);
 
         verify(runner).enqueue(any(Runnable.class));
         Map<String, Object> status = service.statusOf(id);
         assertThat(status.get("status")).isEqualTo("queued");
         assertThat(status.get("note")).isEqualTo("왼쪽이 주인공");
         assertThat(status.get("page")).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("기록만 만들어서는 줄에 안 들어간다 — 값을 받은 뒤에 넣어야 받기 전에 실패하는 일이 없다(#864)")
+    void 기록만으로는_안_그린다() {
+        String id = service.queue("run-1", 1, "", null, 7L);
+
+        verify(runner, never()).enqueue(any(Runnable.class));
+        PageRegen one = regens.findById(id).orElseThrow();
+        assertThat(one.getPaidBy()).isEqualTo(7L);
+        assertThat(one.getPaidRef()).isEqualTo("regen:run-1:1:" + id);
+    }
+
+    @Test
+    @DisplayName("무료(빈 장) 다시 그리기는 낸 사람을 안 적는다")
+    void 무료는_안_적는다() {
+        String id = service.queue("run-1", 1, "", null, null);
+
+        PageRegen one = regens.findById(id).orElseThrow();
+        assertThat(one.getPaidBy()).isNull();
+        assertThat(one.getPaidRef()).isNull();
+    }
+
+    @Test
+    @DisplayName("이어 그리기도 낸 사람과 그 장 장부 번호를 적는다")
+    void 이어_그리기도_적는다() {
+        String id = service.queuePending("run-1", 4, List.of(4, 5), 7L);
+
+        PageRegen one = regens.findById(id).orElseThrow();
+        assertThat(one.getPaidBy()).isEqualTo(7L);
+        assertThat(one.getPaidRef()).isEqualTo("pages:run-1:4:" + id);
+        verify(runner, never()).enqueue(any(Runnable.class));
     }
 
     @Test
@@ -124,12 +163,12 @@ class RegenServiceTest {
         ArgumentCaptor<Map<String, String>> env = ArgumentCaptor.forClass(Map.class);
         when(harness.run(any(), any(), env.capture(), any())).thenReturn(0);
 
-        service.start("run-1", 1, "", "surf");
+        시작("", "surf", null);
         큐를_바로_돌린다();
         assertThat(env.getValue().get("OPENAI_IMAGE_QUALITY")).isEqualTo("medium");
 
         org.mockito.Mockito.clearInvocations(runner);
-        service.start("run-1", 1, "");
+        시작("", null, null);
         큐를_바로_돌린다();
         assertThat(env.getValue().get("OPENAI_IMAGE_QUALITY")).isEqualTo("high");
     }
@@ -144,10 +183,11 @@ class RegenServiceTest {
             return 0;
         });
 
-        String id = service.start("run-1", 1, "");
+        String id = 시작("", null, 7L);
         큐를_바로_돌린다();
 
         assertThat(service.statusOf(id).get("status")).isEqualTo("done");
+        verify(credits, never()).refund(any(), anyString());   // 잘 그렸으면 받은 값은 그대로다
         assertThat(service.versionsOf("run-1", 1)).hasSize(1);
         // 지운 파일이 옛 그림이었는지 — 판본으로 옮겨졌는지 내용으로 확인한다.
         Path v1 = runsDir.resolve("run-1/pages/versions/page01.v1.png");
@@ -162,8 +202,7 @@ class RegenServiceTest {
         페이지파일(1, "지켜야 할 그림".getBytes());
         when(harness.run(any(), any(), anyMap(), any())).thenReturn(1);   // exit != 0
 
-        String id = service.start("run-1", 1, "");
-        service.charged(id, 7L, "regen:run-1:1:" + id);
+        String id = 시작("", null, 7L);
         큐를_바로_돌린다();
 
         Map<String, Object> status = service.statusOf(id);
@@ -182,12 +221,33 @@ class RegenServiceTest {
         Files.writeString(runsDir.resolve("run-1/pages.json"), "[]");
         when(harness.run(any(), any(), anyMap(), any())).thenReturn(1);
 
-        service.start("run-1", 1, "");
+        시작("", null, null);
         큐를_바로_돌린다();
 
         ArgumentCaptor<List<String>> args = ArgumentCaptor.forClass(List.class);
         verify(harness).run(any(), args.capture(), anyMap(), any());
         assertThat(args.getValue()).doesNotContain("--detail-pages");
+    }
+
+    @Test
+    @DisplayName("서버가 뜰 때 줄에 있거나 그리던 것은 끊긴 것으로 적고, 낸 값이 있으면 돌려준다(#864)")
+    void 기동_때_끊긴_것을_치운다() {
+        String paid = service.queue("run-1", 1, "", null, 7L);
+        String free = service.queue("run-1", 2, "", null, null);
+        PageRegen running = regens.findById(paid).orElseThrow();
+        running.move(RegenStatus.RUNNING, java.time.Instant.now());
+        PageRegen queued = regens.findById(free).orElseThrow();
+        when(regens.findByStatusIn(any())).thenReturn(List.of(running, queued));
+        when(credits.refund(7L, "regen:run-1:1:" + paid)).thenReturn(3);
+
+        service.buryInterrupted();
+
+        verify(credits).refund(7L, "regen:run-1:1:" + paid);
+        assertThat(service.statusOf(paid).get("status")).isEqualTo("error");
+        assertThat(service.statusOf(paid).get("error")).isEqualTo(RegenService.INTERRUPTED + " — 크레딧은 돌려드렸어요");
+        assertThat(service.statusOf(free).get("status")).isEqualTo("error");
+        assertThat(service.statusOf(free).get("error")).isEqualTo(RegenService.INTERRUPTED + " — 다시 눌러 주세요");
+        verify(runner, never()).enqueue(any(Runnable.class));   // 뒤늦게 그리지 않는다 — 그 사이 고친 장을 덮는다
     }
 
     @Test
