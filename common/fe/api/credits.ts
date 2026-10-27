@@ -14,6 +14,32 @@ export interface CreditBalance {
   balance: number;
   /** 그중 충전으로 산 몫. 쓸 때는 무료로 받은 몫부터 빠지므로, 환불할 수 있는 크레딧이 이것이다. */
   paid: number;
+  /** 7일 연속 출석 카드(#862). 옛 서버는 안 준다. */
+  attendance?: Attendance;
+}
+
+/**
+ * 7일 연속 출석 카드. 받는 날마다 그날 몫 — 1·2·3·5·6일째 2C, 4일째 5C, 7일째 10C(한 주 25C).
+ * 하루 쉬면 1일째부터(한국 시각 자정 기준). 테마는 겉만 다르고 일차는 이어진다.
+ */
+export interface Attendance {
+  /** 이벤트가 열렸나. 열리기 전에는 받기를 눌러도 안 찍힌다. */
+  open: boolean;
+  theme: "HALLOWEEN" | "MASQUERADE";
+  /** 오늘 받았나. */
+  claimed: boolean;
+  /** 오늘이 카드의 몇 일째인가 — 받았으면 받은 일차, 안 받았으면 받으면 될 일차. */
+  today: number;
+  /** 오늘 받는(받은) 크레딧. */
+  reward: number;
+  /** 지금 카드에 채워진 칸 수(0~7). */
+  stamped: number;
+  /** 내일부터 처음 오는 큰 보상(4일째 · 7일째). `inDays` 1 이 내일. */
+  next: { day: number; amount: number; inDays: number } | null;
+  /** 일곱 칸의 보상. */
+  rewards: { day: number; amount: number }[];
+  /** 이번 받기로 들어온 크레딧. 상태만 물었으면 0. */
+  granted: number;
 }
 
 /** 내역 한 줄. `delta` 는 받으면 양수, 쓰면 음수다. */
@@ -28,9 +54,14 @@ export interface CreditLine {
   at: string;
 }
 
-/** 지금 잔액. 오늘 몫까지 챙겨 준 다음의 값이라 따로 「받기」를 부를 필요가 없다. */
+/** 지금 잔액과 출석 카드. 가입 축하는 여기서 챙겨진다 — 출석은 {@link claimAttendance} 로 받는다. */
 export function creditBalance(): Promise<CreditBalance> {
   return request<CreditBalance>("/api/v1/credits/me");
+}
+
+/** 오늘 출석을 받는다. 같은 날 몇 번을 불러도 한 번만 찍히고 보상도 한 번만 들어간다. */
+export function claimAttendance(): Promise<{ attendance: Attendance; balance: number }> {
+  return request<{ attendance: Attendance; balance: number }>("/api/v1/credits/me/attendance", { method: "POST" });
 }
 
 /** 최근 내역. 잔액과 같은 자료에서 나오므로 둘이 어긋날 수 없다. */

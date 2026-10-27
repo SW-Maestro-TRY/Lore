@@ -27,8 +27,9 @@ import java.util.List;
  * 크레딧 API. 전부 로그인이 필요하다 — 계정에 붙는 값이다.
  *
  * <b>지급·차감 주소는 밖에 안 낸다.</b> 크레딧을 늘리는 길이 바깥에 하나라도
- * 있으면 그 길로 무한히 늘릴 수 있다. 지급은 안에서(가입·날마다·결제) 일어나고,
- * 차감은 만들기가 부른다. 밖에서 부를 수 있는 것은 <b>보는 것</b>뿐이다.
+ * 있으면 그 길로 무한히 늘릴 수 있다. 지급은 안에서(가입·출석·결제) 일어나고,
+ * 차감은 만들기가 부른다. 출석 받기({@code POST /me/attendance})는 부르는 쪽이
+ * 금액도 refId 도 못 정하고 하루 한 번만 찍히므로 이 원칙에 어긋나지 않는다.
  *
  * 충전(결제)은 아직 없다 — #155.
  *
@@ -95,22 +96,50 @@ import java.util.List;
 public class CreditController {
 
     private final CreditService credits;
+    private final CreditAttendanceService attendance;
     private final UserRepository users;
 
-    public CreditController(CreditService credits, UserRepository users) {
+    public CreditController(CreditService credits, CreditAttendanceService attendance,
+                            UserRepository users) {
         this.credits = credits;
+        this.attendance = attendance;
         this.users = users;
     }
 
     @Operation(summary = "내 크레딧 잔액", description = """
-            오늘 몫까지 챙겨 준 다음의 잔액이다 — 따로 「받기」를 누르지 않아도 된다.
-            받으러 눌러야 하는 무료 크레딧은 안 누른 사람에게는 없는 것과 같다.
+            가입 축하까지 챙겨 준 다음의 잔액이다.
 
-            paid 는 그중 충전으로 산 몫이다. 쓸 때는 무료로 받은 몫부터 빠진다.""")
+            paid 는 그중 충전으로 산 몫이다. 쓸 때는 무료로 받은 몫부터 빠진다.
+
+            attendance 는 7일 연속 출석 카드다 — 오늘 받았는지(claimed), 오늘이 몇 일째인지
+            (today), 오늘 몫(reward), 채운 칸(stamped), 다음 큰 보상(next, 4일째 · 7일째),
+            일곱 칸 보상(rewards), 화면 겉(theme: HALLOWEEN · MASQUERADE).
+            보기만 하고 찍지는 않는다. 찍는 것은 POST /me/attendance.""")
     @GetMapping("/me")
     public ApiResponse<Balance> balance(@LoginUser Long userId) {
         int balance = credits.balanceWithDaily(userId);
-        return ApiResponse.ok(new Balance(balance, credits.split(userId).paid()));
+        return ApiResponse.ok(new Balance(balance, credits.split(userId).paid(),
+                attendance.status(userId)));
+    }
+
+    @Operation(summary = "오늘 출석 받기", description = """
+            오늘 출석을 찍고 그날 몫을 그 자리에서 준다 — 1·2·3·5·6일째 2C, 4일째 5C, 7일째 10C(한 주 25C).
+
+            · 하루 한 번. 같은 날 몇 번을 불러도 한 번만 찍히고 보상도 한 번만 들어간다
+            · 하루라도 빠지면 1일째부터. 날짜는 한국 시각 자정에 바뀐다
+            · 이벤트가 열리기 전(open=false)에는 찍히지 않고 상태만 돌려준다
+            · granted 가 이번에 들어온 크레딧, balance 가 받은 뒤 잔액""")
+    @PostMapping("/me/attendance")
+    public ApiResponse<Attended> attend(@Parameter(hidden = true) @LoginUser Long userId) {
+        CreditAttendanceService.Status status = attendance.claim(userId);
+        return ApiResponse.ok(new Attended(status, credits.balanceWithDaily(userId)));
+    }
+
+    /**
+     * @param attendance 받은 뒤 출석 카드. {@code granted} 가 이번에 들어온 크레딧
+     * @param balance    받은 뒤 잔액
+     */
+    public record Attended(CreditAttendanceService.Status attendance, int balance) {
     }
 
     @Operation(summary = "내 크레딧 내역", description = """
@@ -240,8 +269,9 @@ public class CreditController {
     /**
      * @param balance 지금 쓸 수 있는 크레딧
      * @param paid    그중 돈 내고 산 몫(무료부터 쓰는 규칙으로 센 것). 환불할 때 돌려줄 수 있는 크레딧이다
+     * @param attendance 7일 연속 출석 카드
      */
-    public record Balance(int balance, int paid) {
+    public record Balance(int balance, int paid, CreditAttendanceService.Status attendance) {
     }
 
     /**

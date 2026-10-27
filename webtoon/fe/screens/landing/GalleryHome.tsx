@@ -6,6 +6,7 @@ import { track } from "../../lib/track";
 import "./GalleryHome.css";
 import IntroReel from "./IntroReel";
 import CtaBand from "./CtaBand";
+import { EventBanner } from "../event/EventBits";
 const asset = (path: string) => `/static/gallery/${path}`;
 /* 「다른 장르의 웹툰」 — 예시 작품에서 장르가 겹치지 않게 여덟 편. 표지는 각 작품 1쪽 */
 const works = [
@@ -45,7 +46,7 @@ const FAQ_CATS = ["이용 안내", "크레딧·결제", "작품 관리"] as cons
 type FaqCat = (typeof FAQ_CATS)[number];
 const faqs: { cat: FaqCat; q: string; a: string; top?: boolean }[] = [
   { cat: "이용 안내", top: true, q: "LORE는 무료로 이용할 수 있나요?",
-    a: "네. 가입하면 웹툰 한 편을 만들 수 있는 15크레딧을 드리고, 로그인해 있으면 날마다 무료 크레딧이 자동으로 채워져요. 가입하지 않아도 하루 2편까지 만들어 볼 수 있어요." },
+    a: "네. 가입하면 웹툰 한 편을 만들 수 있는 15크레딧을 드리고, 출석하면 매일 2크레딧(4일째 5 · 7일째 10크레딧)을 더 드려요. 일주일 다 오면 25크레딧이에요. 가입하지 않아도 하루 2편까지 만들어 볼 수 있어요." },
   { cat: "이용 안내", top: true, q: "웹툰 한 편을 만드는 데 얼마나 걸리나요?",
     a: "고른 화질에 따라 약 6~15분 걸려요(물결 6분 · 파도 8분 · 너울 15분). 앞에 기다리는 작업이 있으면 조금 더 걸리고, 진행 화면에서 지금 단계와 대기 순번을 볼 수 있어요." },
   { cat: "이용 안내", top: true, q: "웹툰을 만들다가 나가도 괜찮나요?",
@@ -118,6 +119,8 @@ export default function GalleryHome({
   return (
     <div className="wt-gallery-home">
       <div className="wt-gallery-inner">
+        {/* 출석 이벤트(#862) — 할로윈 · 가면무도회. 열리기 전에는 안 보인다 */}
+        <EventBanner go={go} />
         <section className="wt-gallery-hero">
           <div className="wt-gallery-main">
             {/* 확정 시안(남색·코랄)의 첫 칸 — 그림체 「게임 원화」 예시 그림 */}

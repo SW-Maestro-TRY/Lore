@@ -21,8 +21,8 @@ export const JUDGE_TEXT = {
   brokenResult: "판정은 끝났지만 근거 카드를 확인할 수 없어 보여 드리지 못합니다.",
   cardsFailed: "카드를 불러오지 못해 판정을 맡길 수 없습니다.",
   failed: (reason: string) => `판정을 맡기지 못했습니다. ${reason} 입력을 유지한 채 다시 시도할 수 있습니다.`,
-  /** 402 — 서버 문구(필요 · 보유)를 그대로 앞세운다. 매일 몫의 수는 공통 정책이라 적지 않는다. */
-  insufficient: (reason: string) => `${reason}. 크레딧은 매일 다시 채워집니다. 입력은 그대로 있습니다.`,
+  /** 402 — 서버 문구(필요 · 보유)를 그대로 앞세운다. 매일 무료 크레딧은 없어졌다(2026-10-27, 공통 출석 이벤트로 바뀜). */
+  insufficient: (reason: string) => `${reason}. 출석 이벤트로 크레딧을 받을 수 있습니다. 입력은 그대로 있습니다.`,
   /** 판정 단추 옆의 값과 잔액. */
   price: (credits: number) => `판정 1회 ${credits}크레딧`,
   balance: (credits: number) => `내 크레딧 ${credits}`,
