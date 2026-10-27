@@ -232,10 +232,21 @@ function Crumb({ items }: { items: string[] }) {
 /* 서버 없이 눌러 보는 자리(#548) — job 번호가 `mock-scenes`(아이디어부터) 또는 `mock-scenes-own`
    (내 내용)이면 장면 확인, `mock-story-own` 이면 own 길의 이야기 확인(awaiting_pick) 화면을
    서버 없이 보여 준다. `mock-queued` 는 앞에 세 명이 있어 순서를 기다리는 작업(대기 팝업, #641),
-   `mock-running` 은 이야기를 짓는 중인 작업(루 로딩).
+   `mock-running` 은 이야기를 짓는 중인 작업(루 로딩), `mock-pick-guest` 는 게스트가 후보 넷 중 고르는
+   화면(30초 안내, #851).
    실제 작업 번호와는 겹치지 않는다. */
-const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued", "mock-running"];
+const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued", "mock-running", "mock-pick-guest"];
 function mockScenesJob(id: string): NhJob {
+  /* 게스트의 이야기 고르기 — 서버가 남은 초를 주면 확인 줄에 「{n}초 안에 안 고르면 1번으로」가 뜬다(#851) */
+  if (id === "mock-pick-guest") {
+    const base = mockScenesJob("mock-scenes");
+    const body = base.directions[0].body;
+    return { ...base, id, status: "awaiting_pick", pick: null, scenes: [], story: null, stage: "story", stage_index: 0,
+             stage_label: "이야기 고르기", pct: 25, pick_seconds_left: 30,
+             notice: { logged_in: false, email: null, sent: false },
+             directions: ["우산을 건넨 날", "교정지 위의 이름", "비 오는 날의 마감", "작가님은 모르는 일"].map((title, i) =>
+               ({ n: i + 1, title, genre: "현대 로맨스", intro: "", body, plot: "", scenes: [] })) };
+  }
   /* 이야기를 짓는 중 — 「만드는 중」 카드의 루 로딩을 과금 없이 본다(2026-10-26) */
   if (id === "mock-running") {
     return { ...mockScenesJob("mock-scenes-own"), id, status: "running", pick: null, scenes: [], story: null, stage: "story",
@@ -312,6 +323,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
      다시 그린다. 3초 폴링 사이에도 멈추지 않고, 새로 받으면 서버 값에 다시 맞춘다.
      사람이 답할 차례에는 서버 값이 멈춰 있으므로 시계도 멈춘다(#509). */
   const clockBase = useRef<{ elapsed: number; at: number; ticking: boolean } | null>(null);
+  /* 게스트의 고르기 마감(#851) — 서버가 준 남은 초를 받은 시각에 더한 것. 없으면 끝없이 기다린다. */
+  const pickDeadline = useRef<number | null>(null);
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((n) => n + 1), 1000);
@@ -321,7 +334,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const isMock = MOCK_IDS.includes(jobId);
   const pull = useCallback(async () => {
     if (isMock) {
-      setJob((prev) => prev ?? mockScenesJob(jobId));
+      const mock = mockScenesJob(jobId);
+      if (pickDeadline.current == null && mock.pick_seconds_left != null) pickDeadline.current = Date.now() + mock.pick_seconds_left * 1000;
+      setJob((prev) => prev ?? mock);
       stopped.current = true;
       return;
     }
@@ -331,6 +346,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       const got = await readJob(jobId, { watching: document.visibilityState === "visible" });
       clockBase.current = { elapsed: got.elapsed ?? 0, at: Date.now(),
                             ticking: got.status === "queued" || got.status === "running" };
+      /* 게스트의 고르기 30초(#851) — 서버가 준 남은 초를 받은 시각 기준으로 센다. 화면이 앞에 있는 동안은
+         3초마다 다시 채워져 사실상 줄지 않고, 뒤로 보내거나 닫으면 그때부터 준다. */
+      pickDeadline.current = got.pick_seconds_left == null ? null : Date.now() + got.pick_seconds_left * 1000;
       setJob(got);
       setMisses(0);
       setLoadErr("");
@@ -715,6 +733,9 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
   const clock = clockBase.current;
   const elapsedSec = clock ? Math.floor(clock.elapsed + (clock.ticking ? (Date.now() - clock.at) / 1000 : 0)) : 0;
+  /* 게스트가 이야기 고르기에서 앞으로 몇 초(#851). 1초마다 다시 그리는 tick 에 얹혀 줄어든다. */
+  const pickLeft = status === "awaiting_pick" && pickDeadline.current != null
+    ? Math.max(0, Math.ceil((pickDeadline.current - Date.now()) / 1000)) : null;
   const elapsedText = fmtClock(elapsedSec);
 
   const dirs: NhDirection[] = useMemo(() => job?.directions ?? [], [job?.directions]);
@@ -1008,7 +1029,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         <button type="button" className="primary" disabled={busy || storyEditing} onClick={confirmStory}>{t("이 이야기로 계속하기")}</button></>
     );
     if (pane === "making") return (
-      <><span>{t("후보 {n}개", { n: dirs.length })}</span>
+      <><span>{t("후보 {n}개", { n: dirs.length })}{pickLeft != null && <small className="wt-prog-extra">{t("{n}초 안에 안 고르면 1번으로 만들어요", { n: pickLeft })}</small>}</span>
         <button type="button" className="primary" disabled={busy || selected == null} onClick={startConfirm}>{t("선택 완료")}</button></>
     );
     if (pane === "confirm") return (
