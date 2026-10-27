@@ -73,6 +73,11 @@ def content_block(char: dict) -> list[str]:
     if not R.user_story(char):
         # 줄거리 없이 설정집만 붙인 1화 — 붙인 설정집이 이 웹툰의 중심이다(input_block 의 설정집 절).
         return ["", "## 사용자가 적은 내용 — 없음. 위에 붙인 설정집과 주인공 설명이 전부다."]
+    if not is_manuscript(char):
+        # 짧게 적은 글은 원고가 아니라 방향이다(2026-10-27). 적힌 낱말·설정은 지키되 본문에 되풀이하지 않고,
+        # 그 방향 안에서 사건을 세운다 — 일곱 글자를 적었더니 그 일곱 글자가 본문에 그대로 반복됐다.
+        return ["", "## 사용자가 적은 내용 — 방향이다. 적힌 낱말·설정은 지키되 그대로 옮겨 적지 않고, "
+                    "이 방향 안에서 1화의 사건을 세운다", "", R.user_story(char)]
     lines = ["", "## 사용자가 적은 내용 — 이 웹툰의 중심", ""]
     title = str(char.get("title") or "").strip()
     if title:
@@ -167,14 +172,29 @@ def character_lines(char: dict) -> list[str]:
     return lines + side_role_lines(char)
 
 
-def expands_cast(char: dict) -> bool:
-    """인물을 넓혀 세우는가. 줄거리 없이 설정집·설명만 있으면 그렇다.
+MANUSCRIPT_MIN = 1000
+"""이 글자 수부터 적은 내용을 원고로 본다(2026-10-27 하은 결정).
 
-    자세히 적은 사람은 적힌 인물만 그대로 세운다. 적은 것이 없으면 1화에 주인공과 얽힐 사람을
+운영에서 사람들이 실제로 적은 글은 300자 미만(한 문장짜리 아이디어)과 1,800자 이상(원고·기획서)
+으로 갈리고 가운데가 비어 있었다. 짧은 글을 원고로 다루면 그 문장을 본문에 되풀이하는 것으로
+끝난다 — 「취준생 이야기」 일곱 글자가 메모장 제목으로 다섯 장면 내내 반복됐다. 가운데 구간의
+사례가 쌓이면 이 값을 옮긴다.
+"""
+
+
+def is_manuscript(char: dict) -> bool:
+    """적은 내용이 원고인가(그대로 세운다) — 아니면 방향이다(사건을 채운다)."""
+    return len(R.user_story(char)) >= MANUSCRIPT_MIN
+
+
+def expands_cast(char: dict) -> bool:
+    """인물을 넓혀 세우는가. 원고가 없으면(안 적었거나 방향만 적었으면) 그렇다.
+
+    원고에 자세히 적힌 사람은 적힌 인물만 그대로 세운다. 원고가 없으면 1화에 주인공과 얽힐 사람을
     인물 단계가 세운다 — 이름·성별·생김새가 없는 「신입생」이 이야기·장면을 지나 연재 기억까지
     그대로 갔다(2026-10-27 「밤에 노래하는 학교」, 인물 단계 결과가 빈 목록이었다).
     """
-    return not R.user_story(char)
+    return not is_manuscript(char)
 
 
 def cast_lines(cast: list[dict]) -> list[str]:
@@ -236,7 +256,8 @@ def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") ->
 
 def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> list[dict]:
     """적은 내용에서 주인공 아닌 인물을 읽어낸다. 0~4명. 새 인물은 코드에서도 뺀다."""
-    mode = (["", "## 이번에 할 일 — 적은 내용이 없다. 1화에 주인공과 얽힐 사람을 세운다 (아래 「적은 내용이 없을 때」)"]
+    mode = (["", "## 이번에 할 일 — 원고가 없다(안 적었거나 방향만 적었다). 1화에 주인공과 얽힐 사람을 세운다 "
+                 "(아래 「원고가 없을 때」)"]
             if expands_cast(char) else [])
     prompt = R.compose("own/cast_prompt", "\n".join(base_block(char) + content_block(char) + mode) + "\n", lang=lang)
     R.write_text(run_dir / "cast_prompt.txt", prompt)
@@ -287,9 +308,9 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: 
     note = (note or "").strip()
     if note:
         lines += ["", "## 이번에 다시 세우며 반영할 것 — 사용자가 남긴 말", note]
-    # 줄거리 없이 설정집만 붙였으면 설정집 위에서 1화를 세운다(사용자 결정 2026-10-24: 로어북이 있으면
-    # 「내 내용으로 만들기」 길로 간다).
-    template = "own/story_prompt" if R.user_story(char) else "own/story_prompt_book"
+    # 원고(MANUSCRIPT_MIN 자 이상)는 그대로 세운다. 줄거리 없이 설정집만 붙였거나(사용자 결정 2026-10-24)
+    # 방향만 짧게 적었으면(2026-10-27) 설정집·방향 위에서 1화의 사건을 세운다.
+    template = "own/story_prompt" if is_manuscript(char) else "own/story_prompt_book"
     cast = R.read_json(run_dir / "cast.json") if (run_dir / "cast.json").is_file() else None
     if expands_cast(char) and isinstance(cast, list) and cast:
         lines += cast_lines(cast)               # 인물 단계가 먼저 세운 사람들로 1화를 쓴다(run_own 순서)
@@ -588,7 +609,7 @@ def stage_scenes(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang:
 # --------------------------------------------------------------------- 묶음
 
 def _cast_then_story(run_dir: Path, char: dict, dry_run: bool, lang: str) -> None:
-    """적은 내용이 없을 때 — 인물을 먼저 세우고 그 사람들로 1화를 쓴다(expands_cast)."""
+    """원고가 없을 때(안 적었거나 방향만) — 인물을 먼저 세우고 그 사람들로 1화를 쓴다(expands_cast)."""
     stage_cast(run_dir, char, dry_run, lang)
     stage_story(run_dir, char, dry_run, lang=lang)
 
