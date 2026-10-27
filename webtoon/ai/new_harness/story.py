@@ -515,7 +515,7 @@ class OpenAIBackend(Backend):
         # 프롬프트에 'json' 이 없으면 JSON 모드를 켤 수 없다 (API 가 거부한다).
         if OPENAI_JSON_MODE and "json" in prompt.lower():
             kwargs["response_format"] = {"type": "json_object"}
-        extra = self.extra_body()
+        extra = self.extra_body(model)
         if extra:
             kwargs["extra_body"] = extra
 
@@ -547,7 +547,7 @@ class OpenAIBackend(Backend):
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
-def _openai_extra_body(self):
+def _openai_extra_body(self, model: str = ""):
     """요청 본문에 더 실을 것. OpenAI 직접은 없다."""
     return None
 
@@ -582,7 +582,7 @@ class OpenRouterBackend(OpenAIBackend):
         super().__init__(api_key=api_key, base_url=base_url or OPENROUTER_BASE_URL,
                          max_retries=max_retries)
 
-    def extra_body(self):
+    def extra_body(self, model: str = ""):
         """캐시를 지키려고 붙이는 것(2026-10-26).
 
         OpenRouter 는 같은 모델을 여러 업체(OpenAI 직접 · Azure 등)에 나눠 보낸다. 업체가 바뀌면 그쪽엔 캐시가
@@ -593,7 +593,10 @@ class OpenRouterBackend(OpenAIBackend):
         """
         body = {"session_id": run_session_id()}
         only = [p.strip() for p in str(env("OPENROUTER_PROVIDER_ONLY", "openai")).split(",") if p.strip()]
-        if only and only != ["any"]:
+        # 「OpenAI 직접 서버만」은 OpenAI 모델일 때 얘기다. google/… 같은 다른 회사 모델에 그대로 걸면
+        # OpenRouter 가 보낼 곳이 없다고 404 를 낸다(2026-10-27 장면 단계 gemini). 그때는 제한을 안 건다.
+        other_company = bool(model) and "/" in model and not model.startswith("openai/")
+        if only and only != ["any"] and not other_company:
             body["provider"] = {"only": only}
         return body
 
