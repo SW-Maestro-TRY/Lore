@@ -22,7 +22,7 @@ class BundleSourcePlanPostgresTest {
   var ds=new DriverManagerDataSource(System.getenv("LORE_BUNDLE_SOURCE_DB_URL"),System.getenv("LORE_TEST_DB_USERNAME"),System.getenv("LORE_TEST_DB_PASSWORD"));
   db=new JdbcTemplate(ds);tx=new TransactionTemplate(new DataSourceTransactionManager(ds));plans=new BundleSourcePlan(db);
   assertThat(db.queryForObject("SELECT count(*) FROM information_schema.tables WHERE table_schema='public'",Integer.class)).isZero();
-  db.execute("CREATE TABLE zzal_pet(id bigint PRIMARY KEY)");
+  db.execute("CREATE TABLE zzal_pet(id bigint PRIMARY KEY,diary_language varchar(12) NOT NULL DEFAULT 'ko')");
   try(var c=ds.getConnection()){ScriptUtils.executeSqlScript(c,new ClassPathResource("db/migration/V20261016_2290__zzal_attendance_rewards.sql"));ScriptUtils.executeSqlScript(c,new ClassPathResource("db/migration/V20261017_0040__zzal_custom_bundle_memory_sources.sql"));}
  }
  @BeforeEach void reset(){db.execute("TRUNCATE zzal_custom_bundle_source,zzal_custom_bundle_job,zzal_pet RESTART IDENTITY CASCADE");db.update("INSERT INTO zzal_pet(id) VALUES(1)");}
@@ -67,6 +67,18 @@ class BundleSourcePlanPostgresTest {
   assertThat(request.frozenPlan().motions()).hasSize(8);assertThat(request.quality()).isEqualTo("medium");
   assertThat(service.prepare(j,c->{throw new AssertionError("must reuse frozen plan");},NOW)).isEqualTo(CustomPlannerTest.fixture());assertThat(calls.get()).isEqualTo(1);
   assertThat(plans.requirePlan(j,v3)).isEqualTo(frozen);assertThat(state(j)).isEqualTo("RESERVED");
+ }
+ @Test void foreignLanguageTitlesAreRejectedAsNamedFailureWithoutReservation(){
+  long j=job("lang");String v3=CustomPlannerTest.SNAPSHOT;
+  db.update("UPDATE zzal_custom_bundle_job SET snapshot_json=?,input_hash=? WHERE id=?",v3,AttendanceService.hash(v3),j);
+  var service=new CustomPlanningService(db,plans);var calls=new java.util.concurrent.atomic.AtomicInteger();
+  assertThatThrownBy(()->transaction(()->service.prepare(j,c->{calls.incrementAndGet();assertThat(c.instructions()).contains("OUTPUT LANGUAGE: ko");return CustomPlannerTest.retitled("Chocolate Victory Pose");},NOW))).isInstanceOf(CustomMotionPlanner.LanguageMismatch.class);
+  assertThat(db.queryForObject("SELECT error_code FROM zzal_custom_bundle_job WHERE id=?",String.class,j)).isEqualTo("PLAN_LANGUAGE_MISMATCH");
+  assertThat(db.queryForObject("SELECT count(*) FROM zzal_custom_bundle_source WHERE job_id=?",Integer.class,j)).isZero();
+  assertThatThrownBy(()->service.prepare(j,c->{calls.incrementAndGet();return CustomPlannerTest.fixture();},NOW)).hasMessage("PLANNING_ALREADY_CLAIMED");assertThat(calls.get()).isEqualTo(1);
+  db.update("UPDATE zzal_pet SET diary_language='en' WHERE id=1");db.update("UPDATE zzal_custom_bundle_job SET error_code=NULL WHERE id=?",j);
+  transaction(()->service.prepare(j,c->{assertThat(c.instructions()).contains("OUTPUT LANGUAGE: en");return CustomPlannerTest.retitled("Chocolate Victory Pose");},NOW));
+  assertThat(db.queryForObject("SELECT error_code FROM zzal_custom_bundle_job WHERE id=?",String.class,j)).isNull();
  }
  @Test void typedPlannerExcludesUsedSourcesAndCannotRewriteHistoricalPlan(){
   long old=job("old");reserve(old,11);transaction(()->plans.complete(old,SNAPSHOT,List.of(new BundleSourcePlan.Source(11L,1)),true,NOW));

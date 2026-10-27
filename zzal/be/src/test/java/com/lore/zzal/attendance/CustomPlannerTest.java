@@ -15,6 +15,23 @@ class CustomPlannerTest {
  @Test void plansVariedActionsAndKeepsUserAttribution()throws Exception {
   var plan=new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),context->{assertThat(context.instructions()).contains("never turn them into CHARACTER facts");assertThat(context.availableMemory()).hasSize(1);return fixture();});assertThat(plan.selectedSources()).containsExactly(new BundleSourcePlan.Source(11L,1));assertThat(plan.motions().get(0).selectedSources().get(0).subject()).isEqualTo("USER");
  }
+ static CustomMotionPlan retitled(String... titles){var m=fixture().motions();var out=new ArrayList<CustomMotionPlan.Motion>();for(int i=0;i<8;i++){var o=m.get(i);out.add(new CustomMotionPlan.Motion(o.order(),titles[i%titles.length],o.action(),o.rationale(),o.basis(),o.selectedSources(),o.semantic(),o.albumOnly(),o.pose(),o.props(),o.staging()));}return new CustomMotionPlan(CustomMotionPlan.VERSION,out);}
+ @Test void newPlanningTellsAuthorThePetLanguage()throws Exception {
+  new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),"ko",c->{assertThat(c.instructions()).contains("never turn them into CHARACTER facts").contains("OUTPUT LANGUAGE: ko").contains("Korean (한국어)").contains("title");return fixture();});
+  new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),"ja",c->{assertThat(c.instructions()).contains("OUTPUT LANGUAGE: ja").contains("Japanese");return retitled("窓の外を見る","こっそり乾杯");});
+  new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),null,c->{assertThat(c.instructions()).isEqualTo(CustomMotionPlanner.INSTRUCTIONS);return fixture();});
+  assertThat(CustomMotionPlanner.languageInstruction("xx")).contains("OUTPUT LANGUAGE: ko");
+ }
+ @Test void englishTitlesAreRejectedForKoreanPetButKoreanTitlesPass()throws Exception {
+  var english=retitled("Chocolate Victory Pose","Cloudbound Leap");
+  assertThatThrownBy(()->new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),"ko",c->english)).isInstanceOf(CustomMotionPlanner.LanguageMismatch.class).hasMessageContaining("pet language ko");
+  assertThat(new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),"ko",c->retitled("초콜릿 승리 포즈","구름 위로 점프")).motions()).hasSize(8);
+  assertThat(new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),"en",c->english).motions()).hasSize(8);
+  assertThatThrownBy(()->new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),"en",c->fixture())).isInstanceOf(CustomMotionPlanner.LanguageMismatch.class);
+  assertThatThrownBy(()->new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),"ja",c->english)).isInstanceOf(CustomMotionPlanner.LanguageMismatch.class);
+  // Frozen historical plans are revalidated without the language gate, so existing English plans keep publishing.
+  assertThat(new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),c->english).motions()).hasSize(8);
+ }
  @Test void rejectsPreviouslyUsedEvidenceAndWrongSubject(){
   String episode=AttendanceService.hash("50|나는 커피를 좋아해");assertThatThrownBy(()->new CustomMotionPlanner().plan(SNAPSHOT,Set.of(episode),c->fixture())).hasMessage("Unknown, excluded or misattributed motion evidence");
   var old=fixture().motions().get(0);var wrong=new CustomMotionPlan.Motion(1,old.title(),old.action(),old.rationale(),old.basis(),List.of(new CustomMotionPlan.Evidence(11L,1,"CHARACTER")),null,true,old.pose(),old.props(),old.staging());var list=new ArrayList<>(fixture().motions());list.set(0,wrong);assertThatThrownBy(()->new CustomMotionPlanner().plan(SNAPSHOT,Set.of(),c->new CustomMotionPlan(CustomMotionPlan.VERSION,list))).hasMessage("Unknown, excluded or misattributed motion evidence");
