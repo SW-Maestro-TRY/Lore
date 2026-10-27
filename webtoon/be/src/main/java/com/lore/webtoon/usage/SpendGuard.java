@@ -55,12 +55,107 @@ public class SpendGuard {
         this.opsAlert = opsAlert;
     }
 
+    /** 그날만 바꾼 상한(관리자 화면, #617). 없으면 설정값만 쓴다. */
+    private SpendOverrides overrides;
+
+    @Autowired(required = false)
+    void setOverrides(SpendOverrides overrides) {
+        this.overrides = overrides;
+    }
+
+    /** 알림에 붙일 관리자 화면 주소의 앞부분. */
+    private String site = "https://lorecomic.com";
+
+    @Value("${lore.webtoon.site-url:https://lorecomic.com}")
+    void setSite(String site) {
+        this.site = site == null || site.isBlank() ? this.site : site.replaceAll("/+$", "");
+    }
+
+    /** 오늘 처음 걸린 날. 그날 첫 번째만 사람을 부른다(@here). */
+    private volatile LocalDate pinged;
+
+    /*
+     * 상한에 걸렸다고 알린다. <b>그날 처음 걸린 것만 급한 것(@here)으로 보낸다</b> — 더 받을지 사람이 정해야
+     * 하는 순간이라 폰이 울려야 한다. 그 뒤는 지금처럼 10분에 한 번 조용히 「그 사이 N번 더」로 묶인다
+     * (막힌 사람 수를 세는 자리다). 올리는 길은 관리자 화면이다 — 서버를 다시 띄우지 않는다.
+     */
     private void alertBlocked(String what, long now, long cap) {
-        if (opsAlert != null) {
+        if (opsAlert == null) {
+            return;
+        }
+        LocalDate day = LocalDate.ofInstant(clock.instant(), ZONE);
+        boolean first = !day.equals(pinged);
+        pinged = day;
+        String body = "오늘 " + now + " / 상한 " + cap + " (아직 안 끝난 작업 몫 포함). 더 받으려면 관리자 화면 개요의 "
+                + "「오늘 생성 상한」에서 오늘만 올리세요 — 서버를 다시 띄우지 않아도 됩니다.\n관리: " + site + "/webtoon?view=admin";
+        if (first) {
+            opsAlert.send(com.lore.webtoon.ops.OpsAlert.Level.URGENT, "spend-cap-first:" + day,
+                    "하루 " + what + " 상한에 걸려 만들기가 막혔어요 — 오늘 처음", body);
+        } else {
             opsAlert.send(com.lore.webtoon.ops.OpsAlert.Level.WARN, "spend-cap:" + what,
-                    "하루 " + what + " 상한에 걸려 만들기가 막혔어요",
-                    "오늘 " + now + " / 상한 " + cap + " (예약 포함). 올리려면 Parameter Store lore_webtoon_spend_daily_"
-                            + ("편수".equals(what) ? "runs" : "krw") + " → 배포나 재시작");
+                    "하루 " + what + " 상한에 걸려 만들기가 막혔어요", body);
+        }
+    }
+
+    /**
+     * 오늘 쓰는 상한 — 그날만 바꾼 값이 있으면 그것, 아니면 설정값.
+     *
+     * @param runs        편수 상한 (0 이면 안 셈)
+     * @param krw         금액 상한(원, 0 이면 안 셈)
+     * @param defaultRuns 설정값 — 자정이 지나면 돌아갈 값
+     * @param defaultKrw  설정값
+     * @param today       오늘만 바꾼 값. 없으면 null
+     */
+    public record Caps(long runs, long krw, long defaultRuns, long defaultKrw, SpendOverrides.DayCap today) {
+    }
+
+    public Caps caps() {
+        SpendOverrides.DayCap o = overrides == null ? null : overrides.today();
+        if (o == null) {
+            return new Caps(dailyRuns, dailyKrw, dailyRuns, dailyKrw, null);
+        }
+        return new Caps(o.runs() == null ? dailyRuns : o.runs(), o.krw() == null ? dailyKrw : o.krw(),
+                dailyRuns, dailyKrw, o);
+    }
+
+    /**
+     * 오늘(한국 자정까지)만 상한을 바꾼다 — 관리자 화면. 서버를 다시 띄우지 않고 바로 적용된다.
+     * 운영 채널에 누가 무엇을 바꿨는지 남긴다.
+     */
+    public Caps setToday(long krw, long runs, Long by) {
+        if (overrides == null) {
+            throw new IllegalStateException("오늘만 바꾸는 저장소가 없습니다");
+        }
+        Caps before = caps();
+        overrides.set(krw, runs, by);
+        Caps after = caps();
+        announce(before, after, by, "오늘 생성 상한을 바꿨어요");
+        return after;
+    }
+
+    /** 오늘 바꾼 것을 무르고 설정값으로 돌아간다. */
+    public Caps clearToday(Long by) {
+        if (overrides == null) {
+            throw new IllegalStateException("오늘만 바꾸는 저장소가 없습니다");
+        }
+        Caps before = caps();
+        overrides.clear(by);
+        Caps after = caps();
+        announce(before, after, by, "오늘 생성 상한을 기본값으로 돌렸어요");
+        return after;
+    }
+
+    private void announce(Caps before, Caps after, Long by, String title) {
+        log.warn("{} — 금액 {} → {}원 · 편수 {} → {}편 (관리자 {})", title,
+                before.krw(), after.krw(), before.runs(), after.runs(), by);
+        if (opsAlert != null) {
+            opsAlert.send(com.lore.webtoon.ops.OpsAlert.Level.OK,
+                    "spend-override:" + after.krw() + ":" + after.runs() + ":" + (after.today() == null),
+                    title,
+                    "금액 " + before.krw() + " → " + after.krw() + "원 · 편수 " + before.runs() + " → " + after.runs() + "편"
+                            + (after.today() == null ? "" : " · 오늘 자정(한국 시각)까지, 그 뒤 기본값 "
+                            + after.defaultKrw() + "원 · " + after.defaultRuns() + "편")
+                            + " · 관리자 #" + by);
         }
     }
 
@@ -102,20 +197,21 @@ public class SpendGuard {
     public String whyBlocked(Reserved reserved) {
         Instant from = startOfToday();
         Instant now = Instant.now(clock);
+        Caps caps = caps();
 
         long runs = usage.runsBetween(from, now) + reserved.runs();
-        if (dailyRuns > 0 && runs >= dailyRuns) {
+        if (caps.runs() > 0 && runs >= caps.runs()) {
             log.warn("일일 편수 상한에 걸렸습니다 ({}/{}편 · 예약 {}편)",
-                    runs, dailyRuns, reserved.runs());
-            alertBlocked("편수", runs, dailyRuns);
+                    runs, caps.runs(), reserved.runs());
+            alertBlocked("편수", runs, caps.runs());
             return "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.";
         }
 
         long krw = usage.krwBetween(from, now) + reserved.krw();
-        if (dailyKrw > 0 && krw >= dailyKrw) {
+        if (caps.krw() > 0 && krw >= caps.krw()) {
             log.warn("일일 금액 상한에 걸렸습니다 ({}/{}원 · 예약 {}원)",
-                    krw, dailyKrw, reserved.krw());
-            alertBlocked("금액", krw, dailyKrw);
+                    krw, caps.krw(), reserved.krw());
+            alertBlocked("금액", krw, caps.krw());
             return "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.";
         }
         return null;
@@ -133,9 +229,10 @@ public class SpendGuard {
     public String whyBlockedByMoney() {
         Instant from = startOfToday();
         long krw = usage.krwBetween(from, Instant.now(clock));
-        if (dailyKrw > 0 && krw >= dailyKrw) {
-            log.warn("일일 금액 상한에 걸렸습니다 — 캐릭터 ({}/{}원)", krw, dailyKrw);
-            alertBlocked("금액", krw, dailyKrw);
+        long cap = caps().krw();
+        if (cap > 0 && krw >= cap) {
+            log.warn("일일 금액 상한에 걸렸습니다 — 캐릭터 ({}/{}원)", krw, cap);
+            alertBlocked("금액", krw, cap);
             return "오늘 만들 수 있는 몫이 다 찼어요 — 내일 다시 와 주세요.";
         }
         return null;
@@ -156,8 +253,36 @@ public class SpendGuard {
     public Today today() {
         Instant from = startOfToday();
         Instant now = Instant.now(clock);
-        return new Today(usage.runsBetween(from, now), dailyRuns,
-                usage.krwBetween(from, now), dailyKrw);
+        Caps caps = caps();
+        return new Today(usage.runsBetween(from, now), caps.runs(),
+                usage.krwBetween(from, now), caps.krw());
+    }
+
+    /**
+     * 관리자 화면용 — 오늘 쓴 것 · 아직 안 끝난 몫 · 상한 · 막혔는지. <b>알림을 보내지 않는다</b>
+     * ({@link #whyBlocked(Reserved)} 는 막히면 알린다 — 관리자가 화면을 볼 때마다 알림이 가면 안 된다).
+     */
+    @Transactional(readOnly = true)
+    public Status status(Reserved reserved) {
+        Instant from = startOfToday();
+        Instant now = Instant.now(clock);
+        Caps caps = caps();
+        long runs = usage.runsBetween(from, now);
+        long krw = usage.krwBetween(from, now);
+        boolean blocked = (caps.runs() > 0 && runs + reserved.runs() >= caps.runs())
+                || (caps.krw() > 0 && krw + reserved.krw() >= caps.krw());
+        return new Status(LocalDate.ofInstant(now, ZONE), runs, krw, reserved, caps, blocked);
+    }
+
+    /**
+     * @param day      한국 날짜
+     * @param runs     오늘 만든 편수(적힌 것)
+     * @param krw      오늘 나간 돈(원, 적힌 것)
+     * @param reserved 아직 안 끝난 작업이 쓸 몫 — 상한은 이것까지 더해서 본다
+     * @param caps     오늘 쓰는 상한
+     * @param blocked  지금 새로 만들면 막히는가
+     */
+    public record Status(LocalDate day, long runs, long krw, Reserved reserved, Caps caps, boolean blocked) {
     }
 
     /**
