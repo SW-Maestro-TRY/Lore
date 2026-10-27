@@ -432,7 +432,7 @@ export function mountEditor(
              뜨기 전까지 높이가 0 이라 카드가 납작해졌다가 튄다. -->
         <img src="${rawImg(s)}" alt="${tr("{n}번째 장", { n: s.no })}" width="${s.w}" height="${s.h}" loading="lazy">
         <div class="overlay" data-overlay></div>
-        ${unsafePages.has(s.no) ? `<div class="unsafe-note">${tr("이미지 안전 기준에 걸려 비워 둔 장이에요. 장면 설명을 고쳐 다시 그려 주세요.")}</div>` : ""}
+        ${unsafePages.has(s.no) ? `<div class="unsafe-note">${tr("이미지 안전 기준에 걸려 비워 둔 장이에요. 장면 설명을 고쳐 다시 그려 주세요.")}${unsafeReasons[String(s.no)] ? ` (${unsafeReasons[String(s.no)]})` : ""}</div>` : ""}
       </div>
 
       ${sceneNote(s) ? `<p class="scene-note">${esc(sceneShort(sceneNote(s)))}</p>` : ""}
@@ -528,6 +528,7 @@ export function mountEditor(
   let askCtx = null;                 // { no, btn, cost }
 
   let unsafePages = new Set();   // 안전 기준에 걸려 빈 장으로 둔 장 번호(#626)
+  let unsafeReasons = {};        // 그 장마다 걸린 이유(2026-10-27)
   let runRegenCost = null;       // 이 작품의 한 장 다시 그리기 값(#787). 못 읽으면 계정 기본값을 쓴다
   /* 다시 그리기 화질 고르개 — 작품 화질과 화질마다의 값. 서버가 안 주면(옛 서버·샘플) 고르개를 감춘다. */
   let runQuality = null;
@@ -1703,6 +1704,7 @@ export function mountEditor(
           if (r.ok) {
             const found = await r.json();
             unsafePages = new Set((found.unsafe_pages || []).map(Number));
+            unsafeReasons = found.unsafe_reasons || {};
             /* 한 장 다시 그리기 값은 작품의 화질을 따른다(#787) — 너울은 6. 화질을 낮춰 고르면 그 값이다. */
             if (typeof found.regen_cost === "number") runRegenCost = found.regen_cost;
             if (typeof found.quality === "string") runQuality = found.quality;
