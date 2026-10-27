@@ -57,6 +57,12 @@ class OpenRouterBody(unittest.TestCase):
         self.assertEqual(body["session_id"], "run-1")
         self.assertEqual(body["provider"], {"only": ["openai"]})
 
+    def test_other_company_model_is_not_pinned_to_openai(self):
+        """google/… 모델에 provider.only=openai 를 걸면 OpenRouter 가 404 를 낸다(2026-10-27 장면 단계)."""
+        body = story.OpenRouterBackend.extra_body(None, "google/gemini-3.8-flash")
+        self.assertNotIn("provider", body)
+        self.assertIn("provider", story.OpenRouterBackend.extra_body(None, "openai/gpt-5.1"))
+
     def test_openai_direct_sends_nothing_extra(self):
         self.assertIsNone(story.OpenAIBackend.extra_body(None))
 
