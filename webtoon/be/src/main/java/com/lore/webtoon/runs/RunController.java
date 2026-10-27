@@ -308,6 +308,9 @@ public class RunController {
         found.put("unsafe_pages", regen.unsafePages(runId));
         /* 이 작품의 한 장 다시 그리기 값(#787) — 화질마다 달라서 작품과 같이 준다. */
         found.put("regen_cost", regenCost(runId));
+        /* 다시 그리기 창의 화질 고르개 — 작품 화질이 처음 골라져 있고, 낮추면 값도 내려간다. */
+        found.put("quality", com.lore.webtoon.job.WebtoonQuality.normalize(regen.qualityOf(runId)));
+        found.put("regen_choices", com.lore.webtoon.job.WebtoonQuality.regenChoices());
         /* 남은 장 중 지금 그리는 중인 장 — 화면이 「그리는 중」을 띄우고 다 될 때까지 다시 묻는다. */
         found.put("drawing_pages", regen.drawingPages(runId));
         /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
@@ -464,8 +467,13 @@ public class RunController {
            줄을 세운 뒤에 뺀다. 먼저 빼면 시작이 실패했을 때 낸 것만 사라진다.
            같은 ref 로 두 번 불려도 한 번만 빠진다(CreditGate.charge). */
         /* 안전 검사에 걸려 빈 장으로 완성된 장은 다시 그리기가 무료다(#626) — 크레딧은 처음에 그대로 받았다. */
-        /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 4다(#787). */
-        int cost = regen.isUnsafe(runId, no) ? 0 : regenCost(runId);
+        /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 6이다(#787).
+           편집실에서 화질을 골라 보냈으면 그 화질 값이다 — 너울 작품도 이 장만 파도로 그리면 파도 값. */
+        String asked = body == null || body.get("quality") == null ? null : String.valueOf(body.get("quality"));
+        String quality = com.lore.webtoon.job.WebtoonQuality.isKnown(asked)
+                ? com.lore.webtoon.job.WebtoonQuality.normalize(asked) : null;
+        int cost = regen.isUnsafe(runId, no) ? 0
+                : quality == null ? regenCost(runId) : com.lore.webtoon.job.WebtoonQuality.regenCreditsOf(quality);
         String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
         if (blocked != null) {
             throw new BusinessException(CreditGate.notEnough(), blocked);
@@ -487,7 +495,7 @@ public class RunController {
             } catch (java.io.IOException e) {
                 throw new BusinessException(com.lore.common.exception.ErrorCode.INTERNAL_ERROR, "장면 설명을 저장하지 못했습니다");
             }
-            String id = regen.start(runId, no, note);
+            String id = regen.start(runId, no, note, quality);
             if (cost > 0) {
                 String ref = "regen:" + runId + ":" + no + ":" + id;
                 credits.charge(userId, cost, ref, "장 다시 그리기");

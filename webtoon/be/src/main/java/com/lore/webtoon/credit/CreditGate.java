@@ -101,7 +101,7 @@ public class CreditGate {
     }
 
     /**
-     * 값을 지정해서 묻는다 — 웹툰 한 편(파도 15) · 캐릭터 한 장(2) · 장 다시 그리기(3, 너울 4)는
+     * 값을 지정해서 묻는다 — 웹툰 한 편(파도 15) · 캐릭터 한 장(2) · 장 다시 그리기(3, 너울 6)는
      * 값이 다르다.
      */
     public String whyBlocked(Long userId, int need) {

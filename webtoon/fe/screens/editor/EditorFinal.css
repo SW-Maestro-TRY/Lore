@@ -266,3 +266,29 @@
   .wt .wt-ed-regen-inline .wt-ed-regen-box { gap: 9px; }
   .wt .wt-ed .wt-ed-regen-inline .fb-tag { min-height: 40px; }
 }
+
+/* 다시 그리기 화질 — 화질마다 특징과 값을 붙인 세 칸. 아래에 고른 화질의 설명, 너울이면 낮추면 싸진다는 한 줄. */
+.wt .wt-ed-regenq { display: flex; flex-direction: column; gap: 8px; }
+.wt .wt-ed-regenq[hidden] { display: none; }
+.wt .wt-ed-regenq .fb-lead { margin: 0; }
+.wt .wt-ed-regenq-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.wt .wt-ed-regenq-opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  min-height: 58px; padding: 10px 12px; box-sizing: border-box;
+  border: 1px solid var(--line-strong); border-radius: 10px;
+  background: transparent; color: var(--muted); text-align: left; cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.wt .wt-ed-regenq-opt:hover { border-color: var(--ink); color: var(--ink); }
+.wt .wt-ed-regenq-opt[aria-checked="true"] { border-color: var(--sea); background: #e6a39314; color: var(--ink); }
+.wt .wt-ed-regenq-opt:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+.wt .wt-ed-regenq-opt .q-name { font-size: 14px; font-weight: 600; }
+.wt .wt-ed-regenq-opt .q-tag { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.wt .wt-ed-regenq-opt .q-name small { margin-left: 2px; font-size: 11px; font-weight: 500; color: var(--muted); }
+.wt .wt-ed-regenq-opt .q-cost { margin-top: 4px; font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+.wt .wt-ed-regenq-opt .q-cost small { margin-left: 1px; font-size: 12px; font-weight: 600; }
+.wt .wt-ed-regenq-opt[aria-checked="true"] .q-cost { color: var(--sea); }
+.wt .wt-ed-regenq-desc { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink); }
+.wt .wt-ed-regenq-desc:empty { display: none; }
+.wt .wt-ed-regenq-hint { margin: 0; font-size: 13px; line-height: 1.55; color: var(--sea); }
+.wt .wt-ed-regenq-hint[hidden] { display: none; }

@@ -116,6 +116,25 @@ class RegenServiceTest {
     }
 
     @Test
+    @DisplayName("화질을 고르면 그 화질로 그리고, 안 고르면 작품 화질 그대로다")
+    void 고른_화질로_그린다() throws Exception {
+        Files.writeString(runsDir.resolve("run-1").resolve("quality.txt"), "swell");
+        페이지파일(1, "옛 그림".getBytes());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> env = ArgumentCaptor.forClass(Map.class);
+        when(harness.run(any(), any(), env.capture(), any())).thenReturn(0);
+
+        service.start("run-1", 1, "", "surf");
+        큐를_바로_돌린다();
+        assertThat(env.getValue().get("OPENAI_IMAGE_QUALITY")).isEqualTo("medium");
+
+        org.mockito.Mockito.clearInvocations(runner);
+        service.start("run-1", 1, "");
+        큐를_바로_돌린다();
+        assertThat(env.getValue().get("OPENAI_IMAGE_QUALITY")).isEqualTo("high");
+    }
+
+    @Test
     @DisplayName("성공하면 지금 그림을 판본으로 남기고, 다시 올리고, 구운 것을 지운다")
     void 성공하면_판본을_남긴다() throws Exception {
         페이지파일(1, "옛 그림".getBytes());
