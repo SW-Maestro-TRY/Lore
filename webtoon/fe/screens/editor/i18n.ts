@@ -57,6 +57,26 @@ const dict: Dict = {
   "더 하고 싶은 말": { en: "Anything else", ja: "ほかに伝えたいこと", zh: "还想补充的" },
   "더 하고 싶은 말 · 예: 우산을 들고 있게": { en: "Anything else · e.g. holding an umbrella", ja: "ほかに伝えたいこと · 例: 傘を持たせて", zh: "还想补充的 · 例如：让他拿着伞" },
   "말풍선 없이 그림만": { en: "Picture only, no bubbles", ja: "吹き出しなしで絵だけ", zh: "只要画面，不要气泡" },
+  /* 다시 그리기 화질 고르개 — 이름은 만들기 화면과 같다 */
+  "화질": { en: "Quality", ja: "画質", zh: "画质" },
+  "물결": { en: "Ripple", ja: "さざ波", zh: "涟漪" },
+  "파도": { en: "Wave", ja: "波", zh: "波浪" },
+  "너울": { en: "Swell", ja: "うねり", zh: "涌浪" },
+  "이 작품": { en: "this work", ja: "この作品", zh: "本作" },
+  "화질을 {q}로 낮추면 {n}크레딧으로 다시 그릴 수 있어요.": {
+    en: "Lower the quality to {q} to redraw for {n} credits.",
+    ja: "画質を{q}に下げると{n}クレジットで描き直せます。",
+    zh: "把画质降到{q}，只需 {n} 积分即可重画。",
+  },
+  /* 화질마다 무엇이 다른지 — 만들기 화면(lib/wizardData QUALITY_INFO)과 같은 글 */
+  "가장 빠른 생성": { en: "Fastest", ja: "最速", zh: "最快" },
+  "자연스러운 디테일": { en: "Natural detail", ja: "自然なディテール", zh: "自然细节" },
+  "가장 섬세한 표현": { en: "Most detailed", ja: "最も繊細", zh: "最精细" },
+  "굵고 단순한 선으로 가볍게 표현해요.": { en: "Bold, simple lines with a light touch.", ja: "太くシンプルな線で軽やかに表現します。", zh: "用粗而简洁的线条轻快呈现。" },
+  "배경과 소품은 필요한 만큼만 담아요.": { en: "Backgrounds and props only as needed.", ja: "背景と小物は必要な分だけ描きます。", zh: "背景与道具只画必要的部分。" },
+  "인물과 배경을 가장 자연스럽게 표현해요.": { en: "Characters and backgrounds at their most natural.", ja: "人物と背景を最も自然に表現します。", zh: "人物与背景最自然的呈现。" },
+  "가는 선과 풍부한 디테일로 표현해요.": { en: "Fine lines and rich detail.", ja: "細い線と豊かなディテールで表現します。", zh: "用细线与丰富的细节呈现。" },
+  "배경과 소품까지 깊이 있게 담아내요.": { en: "Backgrounds and props rendered in depth.", ja: "背景と小物まで深く描き込みます。", zh: "背景与道具也深入刻画。" },
   "실제로 다시 그립니다 — 1~2분과 생성 비용이 듭니다.": {
     en: "This really redraws the panel — it takes 1–2 minutes and costs credits.",
     ja: "実際に描き直します — 1〜2分と生成コストがかかります。",
