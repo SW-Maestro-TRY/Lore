@@ -30,6 +30,7 @@ import {useFocusedGeometry} from './useFocusedGeometry';
 import ReturningGuide,{useReturningGuide} from '../announcements/ReturningGuide';
 import {returningCopy} from '../announcements/returningGuideState';
 import PersonaEditor from '../yeoul/PersonaEditor';
+import {NewDot,giftArrivedLine,newBadgeCounts,newBadgeLabel} from './newBadges';
 
 type FocusedLive = Live;
 const blocks: Record<string, string> = {
@@ -151,7 +152,17 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const latestPet = [...turns].reverse().find(turn => turn.speaker === 'PET');
   const activeReply = reply?.petId === live.petId && reply.sessionId === (snapshot?.chat?.session?.id ?? null) && (!latestPet || latestPet.idx <= reply.idx) ? reply.line : null;
   const roomBlocked=snapshot ? snapshot.blocked : 'loading';
-  const line=(x.guided||x.panel==='game')?x.speech:!roomBlocked?(snapshot?.stageSpeech?.line||activeReply||null):null;
+  // ★ 새 일지·새 선물 점 — 수는 서버가 센다. 샘플 방·튜토리얼 안내 중에는 0.
+  const badges=newBadgeCounts(pet,sampleMode||x.guided);
+  const badgeTotal=badges.rewards+badges.diary;
+  const badgeSeen=useRef<{petId:number|null;total:number}>({petId:null,total:0});
+  useEffect(()=>{const id=live.petId??null,prev=badgeSeen.current.petId===id?badgeSeen.current.total:0;badgeSeen.current={petId:id,total:badgeTotal};if(badgeTotal>0&&prev===0)interaction.shown('new_badge');},[live.petId,badgeTotal]);
+  // ★ 선물이 처음 보이는 순간(0→양수, 또는 수가 늘 때) 아이가 고정 문구 한마디. 출석을 열어 수가 0이 되면 내린다.
+  const [gift,setGift]=useState<{petId:number|null;count:number}|null>(null);
+  const giftShown=useRef<{petId:number|null;count:number}>({petId:null,count:0});
+  useEffect(()=>{const id=live.petId??null,prev=giftShown.current.petId===id?giftShown.current.count:0;giftShown.current={petId:id,count:badges.rewards};if(badges.rewards===0)setGift(null);else if(badges.rewards>prev)setGift({petId:id,count:badges.rewards});},[live.petId,badges.rewards]);
+  const giftLine=gift&&gift.petId===(live.petId??null)&&badges.rewards>0?giftArrivedLine(locale):null;
+  const line=(x.guided||x.panel==='game')?x.speech:!roomBlocked?(activeReply||giftLine||snapshot?.stageSpeech?.line||null):null;
   const speechLeft = left + alphaRight + 8;
   const speechWidth = size.width - speechLeft - 12 >= 100 ? Math.min(230, size.width - speechLeft - 12) : size.width - 24;
   const speechTop = Math.max(size.height < 460 ? 72 : 92, Math.min(top + geometry.top * geometry.height * scale + 8, size.height - 320));
@@ -248,7 +259,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     </div>
     <header className="fr-header">
       <div><h1>{pet?.name || '방'}</h1><p>{pet?.daysTogether != null ? locale==='ko'?`함께한 지 ${pet.daysTogether}일`:locale==='en'?`${pet.daysTogether} days together`:`一緒に${pet.daysTogether}日` : ''}</p></div>
-      <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" disabled={x.farewell} onClick={() => { input.current?.blur(); returnFocus.current=null; setDrawer(current=>current==='menu'?null:'menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={t.menu} aria-haspopup="dialog" aria-controls={drawer === 'menu' ? menuId : undefined} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button></div>
+      <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" disabled={x.farewell} onClick={() => { input.current?.blur(); returnFocus.current=null; setDrawer(current=>current==='menu'?null:'menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={badges.rewards>0?`${t.menu} · ${newBadgeLabel(locale,badges.rewards)}`:t.menu} data-fr-new={badges.rewards>0?'rewards':undefined} aria-haspopup="dialog" aria-controls={drawer === 'menu' ? menuId : undefined} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg>{badges.rewards>0&&<span className="fr-new-dot" data-fr-new-dot aria-hidden="true"/>}</button></div>
     </header>
     {!traveling && !sleeping && line && <SpeechBubble key={`${live.petId}:${line}`} wideAbove={x.key==='FINISH_NOTICE'||x.farewell} line={line} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{ left: speechWidth === size.width - 24 ? 12 : speechLeft, top: speechTop, width: speechWidth }} />}
     {x.farewell&&isRomiMotionPhase(x.storyPhase)&&<RomiChatExample phase={x.storyPhase} locale={locale} onReady={setExampleReady}/>}
@@ -296,7 +307,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     }}>
       {drawer === 'history' && <header><h2>{t.history}</h2><button ref={closeButton} onClick={closeDrawer}>{t.back}</button></header>}
       {drawer === 'menu' ? <><nav className="fr-menu-links">
-        <button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}</button>
+        <button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} data-fr-new={badges.rewards>0?'rewards':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}<NewDot count={badges.rewards} locale={locale}/></button>
         <button data-fr-action="info-menu" onClick={()=>{setDrawer(null);x.open('info')}}>{locale==='ko'?'캐릭터 정보':t.personal}</button>
         {openAnnouncements&&<button data-fr-action="announcements-menu" onClick={()=>{setDrawer(null);openAnnouncements?.(menuButton.current)}}>{locale==='ko'?'공지사항':locale==='en'?'Announcements':'お知らせ'}</button>}
         {!sampleMode&&<button data-fr-action="feedback-menu" onClick={()=>{setDrawer(null);x.open('review')}}>{locale==='ko'?'후기':locale==='en'?'Feedback':'感想'}</button>}

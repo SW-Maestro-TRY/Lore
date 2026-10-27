@@ -909,6 +909,19 @@ public class PetService {
         pet.markGraduationSeen(pet.now(realNow));
     }
 
+    /**
+     * 출석 선물 화면을 열었다고 적는다 — 그 시각까지 지급된 선물은 더 이상 "새 선물"(빨간 점)이 아니다.
+     *
+     * ★ 졸업 축하와 같은 이유로 수면·여행 중에도 받는다. 아이를 돌보는 호출이 아니라 화면이 무엇을
+     *   보여 줬는지 적는 호출이다. 시각은 펫 시계(pet.now)로 — 지급 시각(granted_at)과 같은 시계라야 비교가 맞는다.
+     */
+    @Transactional
+    public void markRewardsSeen(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (attendanceService != null) attendanceService.markRewardsSeen(pet, pet.now(realNow));
+        else pet.markRewardsSeen(pet.now(realNow));
+    }
+
     /** 배경 바꾸기 — 2층 4종이 열린 뒤(설계 규칙). 값은 검증하지 않는다(해석 6). */
     @Transactional(noRollbackFor = BusinessException.class)
     public Action changeBackground(Long userId, Long petId, String background, Instant realNow) {

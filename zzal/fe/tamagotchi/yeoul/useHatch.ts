@@ -26,7 +26,7 @@ import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS, GUESS_HAND_PRELOAD } from './constants';
 import {
   setBackground, updatePersonaSource, type PersonaUpdate, type TutorialAnswerMeta, answerChat, care, draftPet, getAuthoredPersona, getAlbum, getChat, getHatchProgress, getPet, listPets,
-  graduationSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet, callBack as callBackPet,
+  graduationSeen, rewardsSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet, callBack as callBackPet,
   type Album, type CareAction, type ChatReply, type ChatState, type ChatSlot, type ChatAnswerIdentity, type CharacterInput,
   type HatchProgress, type PetDetail, type Personality, type CareMotionPlayback,
 } from '../../lib/pet';
@@ -310,6 +310,11 @@ export interface Live {
    */
   markGraduationSeen: () => Promise<void>;
   /**
+   * 출석 선물 화면을 **봤다고 서버에 남기고** 상태를 다시 읽는다 — 메뉴·「출석」의 빨간 점이 지워진다.
+   * ★ 던지지 않는다(markGraduationSeen 과 같은 이유). 못 남기면 점이 남을 뿐이다.
+   */
+  markRewardsSeen: () => Promise<void>;
+  /**
    * 오늘의 부름과 기억. **대사는 전부 여기서 온다** — 화면이 지어내지 않는다(상훈님 지시).
    * 아직 안 읽었거나 서버에 안 붙었으면 null.
    */
@@ -412,6 +417,7 @@ const EMPTY: Live = {
   finishTutorial: async () => ({ ok: false, message: null }),
   tutorialSeen: async () => ({ ok: false, message: null }),
   markGraduationSeen: async () => {},
+  markRewardsSeen: async () => {},
   sendChat: async () => ({ error: null, reply: null }),
   startPlay: async () => null,
   pickSide: async () => ({ error: null, result: null }),
@@ -908,6 +914,15 @@ export function useHatchState(): Live {
       const seq = takeSeq();
       try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 기록은 남았다 */ }
     } catch { /* 못 남겼으면 다음에 한 번 더 뜬다 — 화면은 그대로 간다 */ }
+  }, [petId, takeSeq, putPet]);
+
+  const markRewardsSeen = useCallback(async () => {
+    if (!petId) return;
+    try {
+      await rewardsSeen(petId);
+      const seq = takeSeq();
+      try { putPet(seq, await getPet(petId)); } catch { /* 못 읽어도 기록은 남았다 — 다음 조회에서 점이 빠진다 */ }
+    } catch { /* 못 남겼으면 점이 남는다 — 다음에 열면 또 보낸다 */ }
   }, [petId, takeSeq, putPet]);
 
   /**
@@ -1479,7 +1494,7 @@ export function useHatchState(): Live {
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
     justUnlocked,
-    setChar, watchEarly, doCare, doRest, calling, callBack, savePersonality, updatePersona, finishTutorial, prepareStageSpeech, readStageSpeeches, tutorialSeen: seenTutorial, markGraduationSeen, sendChat, startPlay, pickSide, abandonPlay,
+    setChar, watchEarly, doCare, doRest, calling, callBack, savePersonality, updatePersona, finishTutorial, prepareStageSpeech, readStageSpeeches, tutorialSeen: seenTutorial, markGraduationSeen, markRewardsSeen, sendChat, startPlay, pickSide, abandonPlay,
     changeBackground: async (key: string) => { if (petId != null) { const seq = takeSeq(); putPet(seq, await setBackground(petId, key)); } },
     clearJustUnlocked, noteUnlocked,
     loadAlbum, shareMotion, sendWish, resume, reset, putDetail, refreshPet,

@@ -469,6 +469,10 @@ export interface PetDetail {
    *   조이지 않으면 위 `!= null` 판정이 타입상 죽은 가지로 읽힌다.
    */
   graduationSeenAt?: components['schemas']['Detail']['graduationSeenAt'] | null;
+  /** 출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수 — 0보다 크면 메뉴·「출석」에 빨간 점. 배포 전 서버면 안 온다(=0). */
+  newRewardCount?: components['schemas']['Detail']['newRewardCount'];
+  /** 안 읽은 일지 수 — 0보다 크면 「앨범」·「일지」에 빨간 점. 배포 전 서버면 안 온다(=0). */
+  unreadDiaryCount?: components['schemas']['Detail']['unreadDiaryCount'];
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */
@@ -829,6 +833,16 @@ export function graduationSeen(
   petId: operations['graduationSeen']['parameters']['path']['petId'],
 ): Promise<void> {
   return request<void>(`${PET_BASE}/${petId}/graduation-seen`, { method: 'POST' });
+}
+
+/**
+ * 출석 선물 화면을 열었다고 남긴다 — 그 뒤 상태 조회의 `newRewardCount` 가 0이 된다.
+ * ★ 졸업 축하(`graduationSeen`)와 같은 모양 — 본문 없는 204, 멱등, 응답을 파싱하지 않는다.
+ */
+export function rewardsSeen(
+  petId: operations['rewardsSeen']['parameters']['path']['petId'],
+): Promise<void> {
+  return request<void>(`${PET_BASE}/${petId}/rewards/seen`, { method: 'POST' });
 }
 
 /** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */

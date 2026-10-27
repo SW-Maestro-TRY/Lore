@@ -163,4 +163,22 @@ for order in range(1,9):
   assertThat(jdbc.queryForObject("SELECT count(*) FROM zzal_attendance_reward_slot WHERE slot_key='motion-5' AND state='GRANTED'",Integer.class)).isEqualTo(1);
   assertThat(jdbc.queryForObject("SELECT count(*) FROM zzal_custom_bundle_job",Integer.class)).isEqualTo(1);
  }
+ /** Red dot: a grant counts as new until the gifts screen is opened; the initial legacy background never does. */
+ @Test void newRewardCountClearsOnSeenAndReturnsOnNextGrant(){
+  Long owner=newUserId();var p=make(owner,T,false);
+  jdbc.update("INSERT INTO zzal_attendance_reward_slot(pet_id,program_version,slot_key,eligible_day,state,asset_key,granted_at) VALUES(?,?,'legacy-background',0,'GRANTED','forest',?) ON CONFLICT DO NOTHING",p.getId(),AttendanceService.PROGRAM,java.sql.Timestamp.from(T));
+  var first=petService.refresh(owner,p.getId(),T);
+  assertThat(first.getAttendanceRewards().newRewardCount()).as("legacy background is not a new gift").isZero();
+  jdbc.update("INSERT INTO zzal_attendance_reward_slot(pet_id,program_version,slot_key,eligible_day,state,asset_key,granted_at) VALUES(?,?,'motion-1',3,'GRANTED','images/fixture/m1.webp',?)",p.getId(),AttendanceService.PROGRAM,java.sql.Timestamp.from(T.plusSeconds(10)));
+  assertThat(petService.refresh(owner,p.getId(),T.plusSeconds(20)).getAttendanceRewards().newRewardCount()).as("after grant").isEqualTo(1);
+  petService.markRewardsSeen(owner,p.getId(),T.plusSeconds(30));
+  petService.markRewardsSeen(owner,p.getId(),T.plusSeconds(25)); // a late retry never rewinds
+  var seen=petService.refresh(owner,p.getId(),T.plusSeconds(40));
+  assertThat(seen.getAttendanceRewards().newRewardCount()).as("after seen").isZero();
+  assertThat(seen.getRewardsSeenAt()).isEqualTo(T.plusSeconds(30));
+  jdbc.update("INSERT INTO zzal_attendance_reward_slot(pet_id,program_version,slot_key,eligible_day,state,asset_key,granted_at) VALUES(?,?,'motion-2',4,'GRANTED','images/fixture/m2.webp',?)",p.getId(),AttendanceService.PROGRAM,java.sql.Timestamp.from(T.plusSeconds(50)));
+  var next=petService.refresh(owner,p.getId(),T.plusSeconds(60));
+  assertThat(next.getAttendanceRewards().newRewardCount()).as("after next grant").isEqualTo(1);
+  assertThat(next.getAttendanceRewards().unreadDiaryCount()).isZero();
+ }
 }

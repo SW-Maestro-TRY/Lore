@@ -401,6 +401,26 @@ public class PetController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "출석 선물 봤음", description = """
+            출석 선물 화면을 열었음을 기록한다. 본문이 없고 **204** 로 답한다.
+
+            상태 조회 응답의 `attendanceRewards.newRewardCount`(와 같은 값인 최상위 `newRewardCount`)는
+            이 시각 뒤에 지급된 선물만 센다. 화면은 이 값이 0보다 크면 메뉴 단추와 「출석」 항목에 빨간 점을 그리고,
+            출석 화면을 열면 이 호출을 보낸 뒤 상태를 다시 읽어 점을 지운다.
+
+            **같은 요청을 몇 번 보내도 결과가 같다** — 시각은 앞으로만 간다. 수면 중·여행 중에도 호출할 수 있다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "기록됨(본문 없음)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "로그인이 필요함"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)")})
+    @PostMapping("/{petId}/rewards/seen")
+    public ResponseEntity<Void> rewardsSeen(@LoginUser Long userId, @PathVariable Long petId) {
+        petService.markRewardsSeen(userId, petId, Instant.now());
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "공유 링크 발급", description = """
             해금된 동작에 대해 공유 주소를 발급하고 공유 횟수를 증가시킨다.
             응답에는 링크와 변경된 상태가 함께 담긴다.

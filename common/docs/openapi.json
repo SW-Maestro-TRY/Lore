@@ -2375,6 +2375,11 @@
               "firstBundleState": {
                 "type": "string"
               },
+              "newRewardCount": {
+                "description": "출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수(처음 받은 기본 배경 제외). 0보다 크면 화면이 빨간 점을 그린다. POST /{petId}/rewards/seen 이 0으로 돌린다",
+                "format": "int32",
+                "type": "integer"
+              },
               "ownedRewards": {
                 "items": {
                   "$ref": "#/components/schemas/OwnedReward"
@@ -2383,6 +2388,11 @@
               },
               "programVersion": {
                 "type": "string"
+              },
+              "unreadDiaryCount": {
+                "description": "아직 안 읽은 일지 수. GET /{petId}/diary 의 unreadCount 와 같은 기준(READY·read_at 없음)",
+                "format": "int32",
+                "type": "integer"
               }
             },
             "type": [
@@ -2787,6 +2797,11 @@
           "name": {
             "type": "string"
           },
+          "newRewardCount": {
+            "description": "attendanceRewards.newRewardCount 와 같다 — 출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수. 출석 정보가 없으면 0",
+            "format": "int32",
+            "type": "integer"
+          },
           "note": {
             "type": [
               "string",
@@ -2931,6 +2946,11 @@
               }
             ],
             "description": "튜토리얼 진행 상태. 9단계를 모두 완료하면 null 이 되고 clock.clockStartedAt 이 채워진다.\n진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다"
+          },
+          "unreadDiaryCount": {
+            "description": "attendanceRewards.unreadDiaryCount 와 같다 — 안 읽은 일지 수. 출석 정보가 없으면 0",
+            "format": "int32",
+            "type": "integer"
           },
           "world": {
             "type": [
@@ -14336,6 +14356,43 @@
         "summary": "기존 사용자 업데이트 안내 진행 저장",
         "tags": [
           "returning-guide-controller"
+        ]
+      }
+    },
+    "/api/zzal/v1/me/pets/{petId}/rewards/seen": {
+      "post": {
+        "description": "출석 선물 화면을 열었음을 기록한다. 본문이 없고 **204** 로 답한다.\n\n상태 조회 응답의 `attendanceRewards.newRewardCount`(와 같은 값인 최상위 `newRewardCount`)는\n이 시각 뒤에 지급된 선물만 센다. 화면은 이 값이 0보다 크면 메뉴 단추와 「출석」 항목에 빨간 점을 그리고,\n출석 화면을 열면 이 호출을 보낸 뒤 상태를 다시 읽어 점을 지운다.\n\n**같은 요청을 몇 번 보내도 결과가 같다** — 시각은 앞으로만 간다. 수면 중·여행 중에도 호출할 수 있다.",
+        "operationId": "rewardsSeen",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "petId",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "기록됨(본문 없음)"
+          },
+          "401": {
+            "description": "로그인이 필요함"
+          },
+          "404": {
+            "description": "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": [ ]
+          }
+        ],
+        "summary": "출석 선물 봤음",
+        "tags": [
+          "펫"
         ]
       }
     },

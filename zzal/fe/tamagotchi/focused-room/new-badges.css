@@ -1,0 +1,3 @@
+/* 새 일지·새 선물 점(newBadges.tsx). 단추 안쪽 오른쪽 위 — 단추 밖으로 나가면 좁은 폰에서 잘리거나 옆 칸과 겹친다. */
+.focused-room [data-fr-new]{position:relative}
+.focused-room .fr-new-dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:#D93A2B;box-shadow:0 0 0 2px #FFFDF8;pointer-events:none}

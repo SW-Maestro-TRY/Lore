@@ -414,6 +414,16 @@ public class ZzalPet {
     public com.lore.zzal.attendance.AttendanceRewards getAttendanceRewards(){return attendanceRewards;}
     public void setAttendanceRewards(com.lore.zzal.attendance.AttendanceRewards value){attendanceRewards=value;}
 
+    /** 출석 선물 화면을 마지막으로 연 시각. 그 뒤에 지급된 선물이 "새 선물"(빨간 점)이다. 열어 본 적 없으면 null. */
+    @jakarta.persistence.Column(name="rewards_seen_at")
+    private Instant rewardsSeenAt;
+    public Instant getRewardsSeenAt(){return rewardsSeenAt;}
+    /** 앞으로만 간다 — 늦게 도착한 재시도가 더 이른 시각으로 되감아 이미 본 선물을 다시 "새것"으로 만들지 않게. */
+    public void markRewardsSeen(Instant at){
+        Instant t=at.truncatedTo(ChronoUnit.MICROS);
+        if(rewardsSeenAt==null||t.isAfter(rewardsSeenAt))rewardsSeenAt=t;
+    }
+
 
     /**
      * 밤 장면을 <b>아직 안 만든 잠</b>의 잠든 시각. 잠드는 순간 적어 두고, 다음 정산·조회에서 쓴 뒤 지운다.

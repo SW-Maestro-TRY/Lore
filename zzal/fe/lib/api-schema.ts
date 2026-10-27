@@ -3435,6 +3435,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/rewards/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 출석 선물 봤음
+         * @description 출석 선물 화면을 열었음을 기록한다. 본문이 없고 **204** 로 답한다.
+         *
+         *     상태 조회 응답의 `attendanceRewards.newRewardCount`(와 같은 값인 최상위 `newRewardCount`)는
+         *     이 시각 뒤에 지급된 선물만 센다. 화면은 이 값이 0보다 크면 메뉴 단추와 「출석」 항목에 빨간 점을 그리고,
+         *     출석 화면을 열면 이 호출을 보낸 뒤 상태를 다시 읽어 점을 지운다.
+         *
+         *     **같은 요청을 몇 번 보내도 결과가 같다** — 시각은 앞으로만 간다. 수면 중·여행 중에도 호출할 수 있다.
+         */
+        post: operations["rewardsSeen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/share": {
         parameters: {
             query?: never;
@@ -4543,8 +4569,18 @@ export interface components {
                 /** Format: int32 */
                 eligibleUnfulfilledCount?: number;
                 firstBundleState?: string;
+                /**
+                 * Format: int32
+                 * @description 출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수(처음 받은 기본 배경 제외). 0보다 크면 화면이 빨간 점을 그린다. POST /{petId}/rewards/seen 이 0으로 돌린다
+                 */
+                newRewardCount?: number;
                 ownedRewards?: components["schemas"]["OwnedReward"][];
                 programVersion?: string;
+                /**
+                 * Format: int32
+                 * @description 아직 안 읽은 일지 수. GET /{petId}/diary 의 unreadCount 와 같은 기준(READY·read_at 없음)
+                 */
+                unreadDiaryCount?: number;
             } | null;
             background?: string;
             /**
@@ -4665,6 +4701,11 @@ export interface components {
             } | null;
             motions?: components["schemas"]["Motion"][];
             name?: string;
+            /**
+             * Format: int32
+             * @description attendanceRewards.newRewardCount 와 같다 — 출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수. 출석 정보가 없으면 0
+             */
+            newRewardCount?: number;
             note?: string | null;
             personality?: string | null;
             /** Format: int64 */
@@ -4731,6 +4772,11 @@ export interface components {
              *     진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다
              */
             tutorial?: components["schemas"]["Tutorial"] | null;
+            /**
+             * Format: int32
+             * @description attendanceRewards.unreadDiaryCount 와 같다 — 안 읽은 일지 수. 출석 정보가 없으면 0
+             */
+            unreadDiaryCount?: number;
             world?: string | null;
         };
         /** @description 굽기 시작 결과 */
@@ -11469,6 +11515,40 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseZzalReturningGuideState"];
                 };
+            };
+        };
+    };
+    rewardsSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 기록됨(본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 로그인이 필요함 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

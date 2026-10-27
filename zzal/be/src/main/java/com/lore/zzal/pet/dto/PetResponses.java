@@ -430,6 +430,14 @@ public final class PetResponses {
         @Schema(description="지급이 확정된 맞춤 동작. resource slot을 행동 의미로 추측하지 않는다",requiredMode=Schema.RequiredMode.NOT_REQUIRED)
         public List<com.lore.zzal.attendance.OwnedCustomMotion> customMotions(){return attendanceRewards==null?List.of():attendanceRewards.customMotions();}
 
+        @com.fasterxml.jackson.annotation.JsonProperty("newRewardCount")
+        @Schema(description="attendanceRewards.newRewardCount 와 같다 — 출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수. 출석 정보가 없으면 0",requiredMode=Schema.RequiredMode.NOT_REQUIRED)
+        public int newRewardCount(){return attendanceRewards==null?0:attendanceRewards.newRewardCount();}
+
+        @com.fasterxml.jackson.annotation.JsonProperty("unreadDiaryCount")
+        @Schema(description="attendanceRewards.unreadDiaryCount 와 같다 — 안 읽은 일지 수. 출석 정보가 없으면 0",requiredMode=Schema.RequiredMode.NOT_REQUIRED)
+        public int unreadDiaryCount(){return attendanceRewards==null?0:attendanceRewards.unreadDiaryCount();}
+
 
         /**
          * <b>조각 판을 빼고</b> 그린다 — 이름이 그 사실을 말한다.

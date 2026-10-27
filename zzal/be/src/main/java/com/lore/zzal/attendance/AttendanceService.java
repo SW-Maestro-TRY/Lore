@@ -127,7 +127,28 @@ public class AttendanceService {
   int attendanceDay=count(pet.getId());
   int pending=db.queryForObject("SELECT count(*) FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND state='ELIGIBLE' AND eligible_day<=?",Integer.class,pet.getId(),PROGRAM,attendanceDay);
   var preview=db.query("SELECT asset_key FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND slot_key='background' AND state='ELIGIBLE' AND asset_key IS NOT NULL",(r,n)->new AttendanceRewards.Preview(r.getString(1),backgrounds.url(r.getString(1))),pet.getId(),PROGRAM).stream().findFirst().orElse(null);
-  return new AttendanceRewards(PROGRAM,attendanceDay,states.isEmpty()?"NONE":states.getFirst(),pending,owned,new AttendanceRewards.Background(pet.getBackground(),owned.stream().filter(x->x.kind().equals("BACKGROUND")).map(x->new AttendanceRewards.OwnedBackground(x.assetKey(),x.url())).toList(),preview),customMotions==null?List.of():customMotions.owned(pet.getUserId(),pet.getId()));
+  return new AttendanceRewards(PROGRAM,attendanceDay,states.isEmpty()?"NONE":states.getFirst(),pending,owned,new AttendanceRewards.Background(pet.getBackground(),owned.stream().filter(x->x.kind().equals("BACKGROUND")).map(x->new AttendanceRewards.OwnedBackground(x.assetKey(),x.url())).toList(),preview),customMotions==null?List.of():customMotions.owned(pet.getUserId(),pet.getId()),newRewardCount(pet),unreadDiaryCount(pet.getId()));
+ }
+ /** Gifts granted after the owner last opened the gifts screen. The initial legacy background is an entitlement, not a gift. */
+ int newRewardCount(ZzalPet pet){
+  Instant seen=pet.getRewardsSeenAt();
+  String base="SELECT count(*) FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND state='GRANTED' AND slot_key<>'legacy-background' AND granted_at IS NOT NULL";
+  return seen==null?db.queryForObject(base,Integer.class,pet.getId(),PROGRAM)
+   :db.queryForObject(base+" AND granted_at>?",Integer.class,pet.getId(),PROGRAM,Timestamp.from(seen));
+ }
+ /** Same rule as the diary list's unreadCount (READY and unread). */
+ private int unreadDiaryCount(Long petId){
+  return db.queryForObject("SELECT count(*) FROM zzal_diary_entry WHERE pet_id=? AND status='READY' AND read_at IS NULL",Integer.class,petId);
+ }
+ /**
+  * The owner opened the gifts screen. Never moves backwards, and never before the newest grant it could have shown:
+  * a worker may stamp granted_at with the real clock while the pet runs on a dev-offset clock.
+  */
+ public void markRewardsSeen(ZzalPet pet,Instant now){
+  Timestamp latest=db.queryForObject("SELECT max(granted_at) FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND state='GRANTED'",Timestamp.class,pet.getId(),PROGRAM);
+  Instant newest=latest==null?null:latest.toInstant();
+  pet.markRewardsSeen(newest!=null&&newest.isAfter(now)?newest:now);
+  attach(pet);
  }
  static Integer rewardMotionOrder(String slot){
   if(slot==null)return null;
