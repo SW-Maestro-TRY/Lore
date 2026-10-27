@@ -20,6 +20,7 @@ import {
 } from "../../lib/api";
 import type { Go } from "../../lib/nav";
 import { Dialog } from "../../ui/Dialog";
+import SpendCap from "./SpendCap";
 import "./AdminExamples.css";
 import "./AdminDashboard.css";
 
@@ -124,6 +125,7 @@ function Overview() {
 
   return (
     <>
+      <SpendCap />
       <section className="card wt-adm-card">
         <div className="wt-dash-filters">
           <div className="wt-dash-seg" role="group" aria-label="누구를 셀까">

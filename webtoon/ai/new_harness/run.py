@@ -281,10 +281,11 @@ def seeded_input_block(char: dict) -> str:
         if world:
             lines += ["", "## 이 세계의 배경 — 적힌 이야기와 부딪히지 않는 곳에서만 쓴다",
                       "", world]
-        lines += genre_lore_section(genre)
+    if genre:
+        lines += genre_lore_section(genre)      # 설정집이 있어도 전개 문법은 준다(story_input_block 참고)
     lines += ["", "## 사용자가 적은 이야기 — 이 웹툰의 중심", "",
               f"> {user_story(char)}"]
-    if genre and not char.get("lorebook"):
+    if genre:
         lines += ["", "위의 세계관·전개 문법이 이 이야기와 부딪히면 이 이야기가 이긴다."]
     return "\n".join(lines) + "\n"
 
@@ -306,16 +307,20 @@ def story_input_block(char: dict, run_dir: Path | None = None) -> str:
     """
     block = input_block(char).rstrip("\n")
     genre = char["genre"]
-    if not genre or char.get("lorebook"):
+    if not genre:
         return block + "\n"
     lines = [block]
-    world = world_text_for(genre)
-    if world:
-        lines += ["", "## 이 세계의 배경 — 이 안에서 무엇이 벌어질지는 정해져 있지 않다", "", world]
-    cards = genre_samples_for(genre, run_dir=run_dir)
-    if cards:
-        lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
-                  "", GENRE_SAMPLE_NOTE, "", cards]
+    # 설정집이 붙어 있으면 세계 문단과 기준 샘플은 안 준다 — 설정집이 그 세계다. 전개 문법은 설정집과
+    # 상관없는 장르의 재미라 늘 준다(2026-10-27). 전에는 설정집이 있으면 셋 다 뺐는데, 화면이 장르를 고르면
+    # 준비 설정집을 저절로 붙이므로(2026-10-24) 장르를 고른 작품 전부가 전개 문법 없이 돌고 있었다.
+    if not char.get("lorebook"):
+        world = world_text_for(genre)
+        if world:
+            lines += ["", "## 이 세계의 배경 — 이 안에서 무엇이 벌어질지는 정해져 있지 않다", "", world]
+        cards = genre_samples_for(genre, run_dir=run_dir)
+        if cards:
+            lines += ["", "## 이 장르의 기준 샘플 (사람이 검수해 서비스에 나간 카드)",
+                      "", GENRE_SAMPLE_NOTE, "", cards]
     lines += genre_lore_section(genre)
     return "\n".join(lines) + "\n"
 
@@ -1008,7 +1013,7 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
     return cast
 
 
-CAST_FIELDS = (("look", "생김새·인상"), ("gap", "갭"), ("voice", "말투"),
+CAST_FIELDS = (("gender", "성별·나이대"), ("look", "생김새·인상"), ("gap", "갭"), ("voice", "말투"),
                ("line", "대표 대사"), ("tie", "주인공과의 얽힘"), ("wants", "원하거나 숨기는 것"))
 
 
@@ -1638,8 +1643,8 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     record(run_dir, meta)
 
     parsed = pin_cast_looks(parse_scenes(text), story_cast(run_dir, direction, (char or {}).get("name") or ""))
-    if len(parsed["scenes"]) < 4:
-        warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (4개 이상이어야 합니다). "
+    if len(parsed["scenes"]) < 3:
+        warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (3개 이상이어야 합니다). "
              f"원문은 {run_dir / 'scene.md'} 에 그대로 있습니다.")
     if parsed["scenes"] and narration_stage_enabled():
         parsed = stage_narration(run_dir, char, direction, parsed, lang=lang)

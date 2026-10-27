@@ -36,6 +36,7 @@ DST="$ROOT/apps/web/public/static"
 #   badges  후원 기관 배지. 화면에만 쓰이므로 webtoon/fe 가 원본이다.
 #   entry   입구 화면 카드 그림. 화면에만 쓰이므로 webtoon/fe 가 원본이다.
 #   last    첫 화면 마지막 안내 구역의 웹툰 컷. 같은 이유로 webtoon/fe 가 원본이다.
+#   event   출석 이벤트 배너·팝업·이벤트 페이지 그림(#862). 같은 이유로 webtoon/fe 가 원본이다.
 #
 # 예시 작품은 여기 없다 — DB 에 심고 그림은 창고에 올린다(ExampleWorks).
 SRCS=(
@@ -45,6 +46,7 @@ SRCS=(
   "$HERE/static/entry:entry"
   "$HERE/static/last:last"
   "$HERE/static/gallery:gallery"
+  "$HERE/static/event:event"
 )
 
 for pair in "${SRCS[@]}"; do

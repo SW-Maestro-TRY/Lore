@@ -7,10 +7,10 @@ const dict: Dict = {
   /* ---- Result ---- */
   /* ---- 크레딧이 모자라 남겨 둔 뒷장면(PendingPages) ---- */
   "크레딧이 모자라요!": { en: "Not enough credits!", ja: "クレジットが足りません！", zh: "积分不够！" },
-  "매일 무료 크레딧이 채워지면 내일 이어서 그릴 수 있어요.": {
-    en: "Free credits refill every day, so you can continue tomorrow.",
-    ja: "毎日無料クレジットが補充されるので、明日続きを描けます。",
-    zh: "每天会补充免费积分，明天就能接着画。",
+  "출석 이벤트로 크레딧을 받으면 이어서 그릴 수 있어요.": {
+    en: "Collect credits from the check-in event to keep drawing.",
+    ja: "出席イベントでクレジットをもらうと続きを描けます。",
+    zh: "通过签到活动领取积分后就能接着画。",
   },
   "다음 장면": { en: "Next scene", ja: "次の場面", zh: "下一个场景" },
   "그리는 중이에요 · 1~2분": { en: "Drawing · 1–2 min", ja: "描いています · 1〜2分", zh: "正在绘制 · 1～2 分钟" },

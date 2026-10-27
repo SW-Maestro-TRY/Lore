@@ -38,6 +38,8 @@ import Works from "./screens/works/Works";
 import OriginalCharacter from "./screens/character/OriginalCharacter";
 import Photo from "./screens/character/Photo";
 import PhotoResult from "./screens/character/PhotoResult";
+import EventPage from "./screens/event/EventPage";
+import { AttendancePopup } from "./screens/event/EventBits";
 import CharList from "./screens/character/CharList";
 import MyPage from "./screens/mypage/MyPage";
 import FeedbackPage from "./screens/feedback/FeedbackPage";
@@ -70,6 +72,11 @@ interface Route {
   tab?: "settings" | "works" | "characters" | "contact";
   /** 만들기 화면의 길(#548). own = 「만들고 싶은 내용이 있어요」. */
   mode?: "own";
+  /** 완성본을 열 때 먼저 보일 장(2026-10-27). */
+  page?: number;
+  /** 만들기 빠른 시작 · 그림체 기본값(2026-10-27, 광고 랜딩이 보낸다). */
+  quick?: boolean;
+  style?: string;
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -87,6 +94,9 @@ function routeOf(search: URLSearchParams): Route {
     id: search.get("id") || undefined,
     tab: (["settings", "works", "characters", "contact"] as const).find((t) => t === search.get("tab")),
     mode: search.get("mode") === "own" ? ("own" as const) : undefined,
+    page: Math.max(0, Number(search.get("page") || 0) || 0) || undefined,
+    quick: search.get("quick") === "1" || undefined,
+    style: search.get("style") || undefined,
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
@@ -94,7 +104,7 @@ function routeOf(search: URLSearchParams): Route {
   if (view === "card" && base.id) return { view: "card", ...base };
   /* 피드백이 마이페이지 창이던 때의 주소 — 다시 온 사람 안내 메일 등에 남아 있을 수 있다. */
   if (view === "mypage" && search.get("tab") === "feedback") return { view: "feedback", ...base };
-  if (view && ["entry", "create", "works", "character-new", "characters", "try", "mypage", "feedback", "admin", "admin-examples", "admin-works", "admin-payments"].includes(view)) {
+  if (view && ["entry", "create", "works", "character-new", "characters", "try", "mypage", "feedback", "event", "admin", "admin-examples", "admin-works", "admin-payments"].includes(view)) {
     return { view: view as View, ...base };
   }
   if (run) return { view: "result", ...base };
@@ -247,12 +257,12 @@ function WebtoonScreens() {
       {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
         <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated}
-                mode={route.mode} />
+                mode={route.mode} quick={route.quick} presetStyle={route.style} />
       )}
       {route.view === "running" && route.job && (
         <Progress jobId={route.job} go={go} />
       )}
-      {route.view === "result" && route.run && <Result runId={route.run} go={go} authenticated={authenticated} />}
+      {route.view === "result" && route.run && <Result runId={route.run} go={go} authenticated={authenticated} page={route.page} />}
       {route.view === "editor" && route.run && <Editor runId={route.run} go={go} authStatus={authStatus} />}
       {route.view === "next" && route.run && <NextEpisodePage key={route.run} runId={route.run} go={go} authenticated={authenticated} />}
       {route.view === "works" && <Works go={go} authenticated={authenticated} />}
@@ -267,11 +277,14 @@ function WebtoonScreens() {
       )}
       {route.view === "mypage" && <MyPage go={go} initialTab={route.tab === "settings" ? "settings" : route.tab === "contact" ? "contact" : undefined} />}
       {route.view === "feedback" && <FeedbackPage go={go} />}
+      {route.view === "event" && <EventPage go={go} authenticated={authenticated} />}
       {route.view === "admin" && <AdminDashboard go={go} tab={route.tab} />}
       {route.view === "admin-examples" && <AdminExamples go={go} />}
       {route.view === "admin-works" && <AdminWorks go={go} />}
       {route.view === "admin-payments" && <AdminPayments go={go} />}
       <RevisitPrompt authenticated={authenticated} view={route.view} go={go} />
+      {/* 출석 이벤트 — 로그인한 사람에게 하루 한 번(#862) */}
+      <AttendancePopup authenticated={authenticated} view={route.view} go={go} />
       {/* 만드는 중이면 어느 화면에서든 돌아갈 동그라미(#507) */}
       <RunningBubble view={route.view} runId={route.run} go={go} />
     </div>

@@ -277,6 +277,7 @@ group by 1 order by 1;
 | `remake_after_fail` | 실패 화면에서 다시 만들기 | `job` |
 | **`next_episode_click`** | 다음화 단추 (아직 준비 중 창이 뜸) | `where`: mine_button(PC 내 작품) · mine_mobile(폰 내 작품) · mine_tile(다른 편 줄의 EP.n 만들기) · other_foot(남의 작품 「다음화 보기」), `mine`, `run`, `ep`, `logged_in` |
 | **`remix_cta_click`** | 남의 작품 완성본에서 만들기로 넘어가는 단추(#669, #750) | `where`: end_card(마지막 장 아래 바다색 영역) · link_bar(UTM 을 달고 바로 들어온 사람에게만 뜨는 제목 아래 줄) · next_note(「다음화 보기」 준비 중 창), `source`(보던 작품 run), `logged_in`, `free_left`(게스트 남은 무료 편수) |
+| `quick_character_saved` | 빠른 시작(광고 랜딩 → `quick=1`)에서 이름·설명만 적고 「다음」을 눌러 캐릭터가 저장됨(2026-10-27). 그림은 첫 작품의 시트로 채워진다 | `character`, `logged_in` |
 | `read_end` | 완성본을 끝까지 내림 (작품당 한 번) | `run`, `mine`, `ep`, `page` |
 | `share_click` | 완성본 공유 | `target`: native · menu · kakao · x · line · postype · copy |
 | `download_click` · `download_per_page_open` | 내려받기 | `kind`: episode · page, `page` |

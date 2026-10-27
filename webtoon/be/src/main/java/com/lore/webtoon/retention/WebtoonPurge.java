@@ -66,6 +66,7 @@ public class WebtoonPurge implements UserDataPurge {
         if (!runIds.isEmpty()) {
             keys.addAll(rows.pageKeys(runIds));
             keys.addAll(rows.bakedKeys(runIds));
+            keys.addAll(rows.castSheetKeys(runIds));
         }
         if (hasBucket && !keys.isEmpty()) {
             storage.delete(keys);
@@ -80,6 +81,7 @@ public class WebtoonPurge implements UserDataPurge {
         if (!runIds.isEmpty()) {
             n += rows.deletePages(runIds);
             n += rows.deleteBakedPages(runIds);
+            n += rows.deleteCastSheets(runIds);   // 만들기 기록(3번에서 지움)의 번호로 찾으므로 그보다 먼저
             n += rows.deleteOverlays(runIds);
             n += rows.deleteRegens(runIds);
             n += rows.deleteStories(runIds);

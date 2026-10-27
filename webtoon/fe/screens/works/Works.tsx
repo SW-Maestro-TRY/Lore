@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, setVisibility,
+  adminSetBrowseRank, browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, setVisibility,
   type RunCard,
 } from "../../lib/api";
+import { useAuth } from "@common/auth/useAuth";
 import { useT } from "../../lib/i18n";
 import { labelToken, track } from "../../lib/track";
 import { louArt } from "../../lib/louArt";
@@ -30,11 +31,14 @@ import "./WorksFinal.css";
  *
  * 찾기·칩(찜)·그림체 칸·장르 칸은 전부 화면에서 거른다(#248). 목록이 작아서 서버에
  * 묻는 것보다 받은 것을 거르는 편이 빠르고, 검색어는 서버에 남지 않는다. */
-type SortKey = "views" | "likes" | "newest" | "oldest";
-const SORTS: [SortKey, string][] = [["views", "조회순"], ["likes", "좋아요순"], ["newest", "최신순"], ["oldest", "오래된순"]];
+type SortKey = "popular" | "views" | "likes" | "newest" | "oldest";
+/* 인기순 = 관리자가 정한 자리(rank)가 먼저, 그 뒤는 조회순. 기본 정렬이다(2026-10-27). */
+const SORTS: [SortKey, string][] = [["popular", "인기순"], ["views", "조회순"], ["likes", "좋아요순"], ["newest", "최신순"], ["oldest", "오래된순"]];
 
 export default function Works({ go, authenticated }: { go: Go; authenticated: boolean }) {
   const t = useT();
+  const { user: me } = useAuth();
+  const isAdmin = authenticated && me?.role === "ADMIN";
   const [runs, setRuns] = useState<RunCard[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
@@ -75,12 +79,12 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
   /* 칩: 전체 · 내 작품 · 찜. 그 옆에 그림체 칸 · 장르 칸 — 셋은 겹쳐 걸린다.
      전에는 장르·그림체도 칩으로 늘어놨는데, 장르가 작품마다 모델이 적은 글이라
      작품 수만큼 칩이 생기고 영어도 섞였다. 장르는 genreBucket 으로 묶는다.
-     정렬: 기본은 조회순(2026-10-26), 좋아요순 · 최신순 · 오래된순도 고른다. 같으면 최신 것이 앞
+     정렬: 기본은 인기순(관리자 자리 → 조회순, 2026-10-27), 조회순 · 좋아요순 · 최신순 · 오래된순도 고른다. 같으면 최신 것이 앞
      (run_id 가 시각으로 시작한다). */
   const [filter, setFilter] = useState<"all" | "mine" | "liked">("all");
   const [style, setStyle] = useState("");
   const [genre, setGenre] = useState("");
-  const [sort, setSort] = useState<SortKey>("views");
+  const [sort, setSort] = useState<SortKey>("popular");
   const [query, setQuery] = useState("");
 
   /* 칩과 검색어까지 건 목록 — 두 칸은 여기서 서로를 건다. */
@@ -132,7 +136,15 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     if (style) list = list.filter((r) => r.style_label === style);
     if (genre) list = list.filter((r) => genreBucket(r.genre) === genre);
     const latest = (a: RunCard, b: RunCard) => b.run_id.localeCompare(a.run_id);
+    const byViews = (a: RunCard, b: RunCard) => (b.views || 0) - (a.views || 0) || latest(a, b);
     const by: Record<SortKey, (a: RunCard, b: RunCard) => number> = {
+      popular: (a, b) => {
+        const ra = a.rank ?? null, rb = b.rank ?? null;
+        if (ra != null && rb != null) return ra - rb || byViews(a, b);
+        if (ra != null) return -1;
+        if (rb != null) return 1;
+        return byViews(a, b);
+      },
       views: (a, b) => (b.views || 0) - (a.views || 0) || latest(a, b),
       likes: (a, b) => (b.likes || 0) - (a.likes || 0) || latest(a, b),
       newest: latest,
@@ -255,6 +267,8 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
             </button>}
             {shown.map((r) => (
               <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated}
+                        admin={isAdmin}
+                        onRank={(rank) => setRuns((was) => was && was.map((x) => (x.run_id === r.run_id ? { ...x, rank } : x)))}
                         liked={likedIds.has(r.run_id)}
                         onLiked={(on) => setLikedIds((was) => { const next = new Set(was); if (on) next.add(r.run_id); else next.delete(r.run_id); return next; })} />
             ))}
@@ -266,9 +280,10 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
 }
 
 /* 지우기는 둘러보기에 두지 않는다 — 내 작품을 지우는 곳은 마이페이지 하나(#157). */
-function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
+function WorkCard({ run, mine, go, authenticated, liked, onLiked, admin, onRank }: {
   run: RunCard; mine: boolean; go: Go; authenticated: boolean;
   liked: boolean; onLiked: (on: boolean) => void;
+  admin: boolean; onRank: (rank: number | null) => void;
 }) {
   const t = useT();
   const eps = run.episodes || [];
@@ -335,8 +350,44 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
             </span>
           )}
         </div>
+        {admin && <RankEditor run={run} onRank={onRank} />}
         {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
       </div>
     </div>
+  );
+}
+
+/* 관리자만 보는 인기순 자리 칸 — 숫자를 넣고 Enter 나 칸 밖을 누르면 저장, 비우면 자리 해제.
+   작을수록 앞이고, 자리가 없는 작품은 정해진 것들 뒤에 조회순으로 선다. */
+function RankEditor({ run, onRank }: { run: RunCard; onRank: (rank: number | null) => void }) {
+  const t = useT();
+  const [draft, setDraft] = useState(run.rank != null ? String(run.rank) : "");
+  const [state, setState] = useState<"" | "saving" | "saved" | "error">("");
+  useEffect(() => { setDraft(run.rank != null ? String(run.rank) : ""); }, [run.rank]);
+  const save = async () => {
+    const text = draft.trim();
+    const want = text === "" ? null : Number(text);
+    if (want !== null && (!Number.isInteger(want) || want < 1 || want > 9999)) { setState("error"); return; }
+    if (want === (run.rank ?? null)) return;
+    setState("saving");
+    try {
+      const out = await adminSetBrowseRank(run.run_id, want);
+      onRank(out.rank);
+      setState("saved");
+    } catch {
+      setState("error");
+    }
+  };
+  return (
+    <label className="wt-works-rank" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 6 }}>
+      <span className="muted">{t("인기순 자리")}</span>
+      <input className="field" type="number" min={1} max={9999} inputMode="numeric" value={draft}
+             placeholder={t("없음")} aria-label={t("인기순 자리")} style={{ width: 72, padding: "4px 6px", fontSize: 12 }}
+             onChange={(e) => { setDraft(e.target.value); setState(""); }}
+             onBlur={save} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+      {state === "saving" && <span className="muted">{t("저장 중")}</span>}
+      {state === "saved" && <span className="muted">{t("저장됨")}</span>}
+      {state === "error" && <span className="err">{t("1~9999 숫자만")}</span>}
+    </label>
   );
 }

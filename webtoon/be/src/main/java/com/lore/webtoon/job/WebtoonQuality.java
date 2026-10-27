@@ -80,11 +80,15 @@ public final class WebtoonQuality {
      *
      * 너울은 한 장 원가가 640원까지 나와 3(600원)으로는 손해라 4다.
      * 물결·파도는 3으로 남는다.
+     *
+     * 2026-10-27 너울을 6 으로 올렸다. 다시 그리기를 많이 하는 연재(멘토 34화)는 장당 원가가
+     * 1,324원이었는데 4(부가세·결제 수수료를 빼면 약 930원)로는 다시 그릴수록 손해였다.
+     * 6이면 약 1,400원이다. 편집실은 이 장만 낮은 화질로 다시 그리게 고를 수 있다({@link #regenChoices}).
      */
     private static final Map<String, Integer> REGEN_CREDITS = Map.of(
             "wave",  3,
             "surf",  3,
-            "swell", 4);
+            "swell", 6);
 
     /**
      * 한 편 값({@link #creditsOf})에 들어 있는 장 수 — 표지를 포함한다.
@@ -100,11 +104,12 @@ public final class WebtoonQuality {
     /**
      * 기본 장 수를 넘는 장 하나에 드는 크레딧. 한 장 원가에 부가세 · 결제 수수료를 얹어도 남게 잡았다
      * (너울 약 640원 → 4 = 800원, 파도 약 320원 → 2 = 400원, 물결은 파도보다 싸서 같은 2).
+     * 2026-10-27 너울을 6 으로 올렸다 — 다시 그리기와 같은 이유(장이 많고 꼼꼼한 연재는 장당 1,324원).
      */
     private static final Map<String, Integer> EXTRA_PAGE_CREDITS = Map.of(
             "wave",  2,
             "surf",  2,
-            "swell", 4);
+            "swell", 6);
 
     /** 이 화질로 만든 작품에서 기본 장 수를 넘는 장 하나에 드는 크레딧. */
     public static int extraPageCreditsOf(String key) {
@@ -163,6 +168,24 @@ public final class WebtoonQuality {
     /** 이 화질로 만든 작품의 한 장을 다시 그릴 때 드는 크레딧. */
     public static int regenCreditsOf(String key) {
         return REGEN_CREDITS.getOrDefault(normalize(key), REGEN_CREDITS.get(DEFAULT_QUALITY));
+    }
+
+    /**
+     * 화면이 받은 화질 이름이 아는 것인가. {@link #normalize} 는 모르는 값을 기본으로 돌리는데,
+     * 다시 그리기에서는 「안 골랐다」와 「파도를 골랐다」를 갈라야 해서 따로 묻는다.
+     */
+    public static boolean isKnown(String key) {
+        return key != null && HARNESS.containsKey(key.trim().toLowerCase());
+    }
+
+    /** 편집실 다시 그리기 창의 화질 고르개. 화질마다 한 장 다시 그리는 값. 순서가 곧 화면 순서다. */
+    public static java.util.List<Map<String, Object>> regenChoices() {
+        return java.util.List.of("wave", "surf", "swell").stream()
+                .map(k -> Map.<String, Object>of(
+                        "key", k,
+                        "label", labelOf(k),
+                        "credits", regenCreditsOf(k)))
+                .toList();
     }
 
     /** 화면이 고르개를 그릴 때 쓰는 목록. 순서가 곧 화면 순서다. */
