@@ -53,14 +53,6 @@ public class OpenAiTextClient implements TextClient {
     private final URI endpoint;
     private final Duration timeout;
     private final Integer maxCompletionTokens;
-    /**
-     * 정체성 호출의 reasoning_effort. null 이면 보내지 않는다(모델 기본값 medium).
-     *
-     * ★ 2026-10-27 추가 — 출력 약 1,900토큰 중 약 1,800이 생각 토큰이었고, OpenAI 가 느려진 10/26 에
-     *   90초 제한을 넘겨 부화가 연달아 끊겼다. 모델(gpt-5)은 그대로 두고 생각 길이만 줄인다.
-     *   설정 {@code app.zzal.openai.identity-reasoning-effort}, 기본 low, 비우면 안 보낸다.
-     */
-    private final String reasoningEffort;
     private final ProviderUsageRecorder usageRecorder;
     private final ObjectMapper json = new ObjectMapper();
 
@@ -73,10 +65,7 @@ public class OpenAiTextClient implements TextClient {
         this(storage, apiKey, maxCompletionTokens, ProviderUsageRecorder.NO_OP);
     }
     public OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
-        this(storage, apiKey, maxCompletionTokens, null, recorder);
-    }
-    public OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,String reasoningEffort,ProviderUsageRecorder recorder) {
-        this(storage, apiKey, maxCompletionTokens, reasoningEffort, HttpClient.newBuilder()
+        this(storage, apiKey, maxCompletionTokens, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(20)).followRedirects(HttpClient.Redirect.NEVER).build(),
                 URI.create(ENDPOINT), Duration.ofSeconds(120),recorder);
     }
@@ -86,10 +75,6 @@ public class OpenAiTextClient implements TextClient {
         this(storage,apiKey,maxCompletionTokens,http,endpoint,timeout,ProviderUsageRecorder.NO_OP);
     }
     OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,HttpClient http,URI endpoint,Duration timeout,ProviderUsageRecorder recorder) {
-        this(storage,apiKey,maxCompletionTokens,null,http,endpoint,timeout,recorder);
-    }
-    OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,String reasoningEffort,HttpClient http,URI endpoint,Duration timeout,ProviderUsageRecorder recorder) {
-        this.reasoningEffort = normalizeReasoningEffort(reasoningEffort);
         this.usageRecorder=java.util.Objects.requireNonNull(recorder);
         if (maxCompletionTokens != null && maxCompletionTokens <= 0) {
             throw new IllegalArgumentException("maxCompletionTokens must be positive");
@@ -104,6 +89,16 @@ public class OpenAiTextClient implements TextClient {
 
     @Override
     public Result generate(String prompt, List<String> refImageKeys, ModelSpec spec) throws Exception {
+        return generate(prompt, refImageKeys, spec, null);
+    }
+
+    /**
+     * @param reasoningEffort null 이면 보내지 않는다(모델 기본 medium). 허용값은 {@link #REASONING_EFFORTS}.
+     *        정체성 단계가 시도 차수에 따라 고른다(IdentityStep, 2026-10-27).
+     */
+    @Override
+    public Result generate(String prompt, List<String> refImageKeys, ModelSpec spec, String reasoningEffort) throws Exception {
+        reasoningEffort = normalizeReasoningEffort(reasoningEffort);
         Path work = Files.createTempDirectory("zzal-txt-");
         try (var attempt = new ProviderAttempt(usageRecorder, spec.model())) {
             ObjectNode body = json.createObjectNode();
@@ -187,7 +182,7 @@ public class OpenAiTextClient implements TextClient {
         String v = value.strip();
         if (!REASONING_EFFORTS.contains(v)) {
             throw new IllegalArgumentException(
-                    "app.zzal.openai.identity-reasoning-effort 값이 잘못됐습니다: '%s' (허용: %s, 비우면 안 보냄)"
+                    "app.zzal.openai.identity-reasoning-effort-by-attempt 값이 잘못됐습니다: '%s' (허용: %s, 비우면 안 보냄)"
                             .formatted(v, String.join("/", REASONING_EFFORTS)));
         }
         return v;
