@@ -38,6 +38,8 @@ import Works from "./screens/works/Works";
 import OriginalCharacter from "./screens/character/OriginalCharacter";
 import Photo from "./screens/character/Photo";
 import PhotoResult from "./screens/character/PhotoResult";
+import EventPage from "./screens/event/EventPage";
+import { AttendancePopup } from "./screens/event/EventBits";
 import CharList from "./screens/character/CharList";
 import MyPage from "./screens/mypage/MyPage";
 import FeedbackPage from "./screens/feedback/FeedbackPage";
@@ -94,7 +96,7 @@ function routeOf(search: URLSearchParams): Route {
   if (view === "card" && base.id) return { view: "card", ...base };
   /* 피드백이 마이페이지 창이던 때의 주소 — 다시 온 사람 안내 메일 등에 남아 있을 수 있다. */
   if (view === "mypage" && search.get("tab") === "feedback") return { view: "feedback", ...base };
-  if (view && ["entry", "create", "works", "character-new", "characters", "try", "mypage", "feedback", "admin", "admin-examples", "admin-works", "admin-payments"].includes(view)) {
+  if (view && ["entry", "create", "works", "character-new", "characters", "try", "mypage", "feedback", "event", "admin", "admin-examples", "admin-works", "admin-payments"].includes(view)) {
     return { view: view as View, ...base };
   }
   if (run) return { view: "result", ...base };
@@ -267,11 +269,14 @@ function WebtoonScreens() {
       )}
       {route.view === "mypage" && <MyPage go={go} initialTab={route.tab === "settings" ? "settings" : route.tab === "contact" ? "contact" : undefined} />}
       {route.view === "feedback" && <FeedbackPage go={go} />}
+      {route.view === "event" && <EventPage go={go} authenticated={authenticated} />}
       {route.view === "admin" && <AdminDashboard go={go} tab={route.tab} />}
       {route.view === "admin-examples" && <AdminExamples go={go} />}
       {route.view === "admin-works" && <AdminWorks go={go} />}
       {route.view === "admin-payments" && <AdminPayments go={go} />}
       <RevisitPrompt authenticated={authenticated} view={route.view} go={go} />
+      {/* 출석 이벤트 — 로그인한 사람에게 하루 한 번(#862) */}
+      <AttendancePopup authenticated={authenticated} view={route.view} go={go} />
       {/* 만드는 중이면 어느 화면에서든 돌아갈 동그라미(#507) */}
       <RunningBubble view={route.view} runId={route.run} go={go} />
     </div>

@@ -1,0 +1,227 @@
+/* 출석 이벤트 — 홈 배너 · 첫 진입 팝업 · 이벤트 페이지(#862).
+ * 시안(haeun/이벤트-크레딧-2026-10-27/할로윈-B-완성.html · 가면무도회-A-완성.html)의 값을 옮겼다.
+ * 테마는 루트의 data-theme 하나로 갈린다 — 같은 마크업에 색·글꼴만 바뀐다. */
+
+.wt-ev-root[data-theme="HALLOWEEN"] {
+  --ev-bg: #2b1740; --ev-bg2: #5a2a7a; --ev-acc: #ff7b2e; --ev-pop: #ffd166; --ev-ink: #1a1120;
+  --ev-cream: #fff6ec; --ev-on-pop: #2b1740; --ev-sub: #e8d8f8;
+  --ev-display: "Titan One", "Archivo Variable", system-ui, sans-serif;
+  --ev-round: "Jua", "Noto Sans KR Variable", system-ui, sans-serif;
+  --ev-btn-bg: var(--ev-acc); --ev-btn-fg: #fff;
+}
+.wt-ev-root[data-theme="MASQUERADE"] {
+  --ev-bg: #14102a; --ev-bg2: #2a1a48; --ev-acc: #e9c46a; --ev-pop: #f6e0a4; --ev-ink: #1a1326;
+  --ev-cream: #f8f1e4; --ev-on-pop: #2a1a0a; --ev-sub: #d9d0e8;
+  --ev-display: "Cinzel", Georgia, serif;
+  --ev-round: "Gowun Batang", "Noto Sans KR Variable", serif;
+  --ev-btn-bg: var(--ev-bg); --ev-btn-fg: var(--ev-pop);
+}
+
+.wt-ev-root { color: var(--ev-cream); }
+.wt-ev-root .ic { display: block; width: 100%; height: 100%; overflow: visible; }
+.wt-ev-root i { font-style: normal; }
+
+@keyframes wt-ev-rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes wt-ev-pop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .wt-ev-root *, .wt-ev-root { animation: none !important; transition: none !important; }
+}
+
+/* ── 리셰트 + 모자 (할로윈) ───────────────────────────── */
+.wt-ev-witch { position: relative; }
+.wt-ev-witch img {
+  height: 100%; display: block;
+  filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 8px 14px #0006);
+}
+.wt-ev-witch .wt-ev-hat {
+  position: absolute; left: 4%; top: -13%; width: 76%; transform: rotate(-12deg);
+  filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff);
+}
+
+/* ── 홈 배너 ───────────────────────────────────────── */
+.wt-ev-banner {
+  position: relative; display: flex; align-items: center; gap: 16px; width: 100%;
+  min-height: 112px; margin: 0 0 18px; padding: 14px 18px 14px 132px; border-radius: 18px; overflow: hidden;
+  background: var(--ev-bg); text-align: left; cursor: pointer; border: 0;
+  box-shadow: 0 10px 24px #0003;
+}
+.wt-ev-banner::before {
+  content: ""; position: absolute; inset: 0; background: var(--ev-acc);
+  clip-path: polygon(0 0, 120px 0, 96px 100%, 0 100%);
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-banner::before {
+  background: url("/static/event/masquerade-hero.jpg") 50% 18% / cover;
+  clip-path: none; opacity: .38;
+}
+.wt-ev-banner .wt-ev-witch { position: absolute; left: 24px; bottom: -4px; height: 112px; z-index: 1; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-banner .wt-ev-witch { display: none; }
+.wt-ev-banner-t { position: relative; z-index: 2; flex: 1; min-width: 0; }
+.wt-ev-banner-t strong {
+  display: block; font-family: var(--ev-display); font-weight: 400; font-size: 26px; line-height: 1;
+  color: var(--ev-acc); text-shadow: 0 3px 0 var(--ev-ink);
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-banner-t strong { font-weight: 700; letter-spacing: .14em; font-size: 20px; text-shadow: none; }
+.wt-ev-banner-t strong i { color: var(--ev-pop); }
+.wt-ev-banner-t b { display: block; margin-top: 6px; font-family: var(--ev-round); font-weight: 400; font-size: 17px; color: #fff; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-banner-t b { font-weight: 700; }
+.wt-ev-banner-t span { display: block; margin-top: 4px; font-size: 12.5px; color: var(--ev-sub); }
+.wt-ev-banner-go {
+  position: relative; z-index: 2; flex: none; height: 40px; padding: 0 18px; border-radius: 99px;
+  background: var(--ev-pop); color: var(--ev-on-pop); font-weight: 900; font-size: 14px;
+  display: flex; align-items: center; box-shadow: 0 8px 18px #0005;
+}
+@media (max-width: 560px) {
+  .wt-ev-banner { padding: 12px 14px 12px 104px; min-height: 104px; }
+  .wt-ev-banner::before { clip-path: polygon(0 0, 92px 0, 72px 100%, 0 100%); }
+  .wt-ev-banner .wt-ev-witch { left: 14px; height: 100px; }
+  .wt-ev-banner-t strong { font-size: 20px; }
+  .wt-ev-banner-t b { font-size: 15px; }
+  .wt-ev-banner-t span { display: none; }
+  .wt-ev-banner-go { display: none; }
+}
+
+/* ── 첫 진입 팝업 ──────────────────────────────────── */
+.wt-ev-dim {
+  position: fixed; inset: 0; z-index: 90; background: #000000a6;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.wt-ev-pop {
+  width: min(320px, 100%); border-radius: 24px; overflow: hidden; background: var(--ev-cream); color: var(--ev-bg);
+  box-shadow: 0 30px 60px #000a; animation: wt-ev-rise .5s cubic-bezier(.22, 1, .36, 1);
+}
+.wt-ev-pop-ph { position: relative; height: 190px; overflow: hidden; background: radial-gradient(80% 70% at 50% 20%, var(--ev-bg2), var(--ev-bg) 75%); }
+.wt-ev-pop-ph .wt-ev-bust { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); width: 150px; }
+.wt-ev-pop-ph .wt-ev-bust img { width: 100%; display: block; filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
+.wt-ev-pop-ph .wt-ev-bust .wt-ev-hat { position: absolute; left: 6%; top: -27%; width: 80%; transform: rotate(9deg); filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff); }
+.wt-ev-pop-ph img.wt-ev-kv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-pop-ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, #14102a 100%); }
+.wt-ev-pop-day {
+  position: absolute; left: 14px; top: 14px; z-index: 2; background: var(--ev-pop); color: var(--ev-on-pop);
+  font-size: 12px; font-weight: 900; padding: 5px 10px; border-radius: 99px; letter-spacing: .06em;
+}
+.wt-ev-pop-ttl {
+  position: absolute; right: 14px; top: 12px; z-index: 2; font-family: var(--ev-display); font-size: 16px;
+  color: var(--ev-acc); text-shadow: 0 2px 0 var(--ev-ink);
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-pop-ttl { font-size: 11px; letter-spacing: .2em; color: var(--ev-pop); text-shadow: none; background: #14102acc; padding: 4px 9px; border-radius: 99px; }
+.wt-ev-pop-ttl i { color: var(--ev-pop); }
+.wt-ev-pop-bd { padding: 18px 18px 16px; text-align: center; }
+.wt-ev-pop-bd h2 { font-family: var(--ev-round); font-weight: 400; font-size: 21px; line-height: 1.25; margin: 0; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-pop-bd h2 { font-weight: 700; font-size: 20px; }
+.wt-ev-pop-bd p { margin: 6px 0 0; font-size: 13px; color: #6b5a7a; line-height: 1.5; }
+.wt-ev-dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
+.wt-ev-dots > span { width: 32px; height: 19px; }
+.wt-ev-dots > span.off { opacity: .25; }
+.wt-ev-pop-btn {
+  display: block; width: 100%; height: 48px; border-radius: 14px; border: 0; cursor: pointer;
+  background: var(--ev-btn-bg); color: var(--ev-btn-fg); font-size: 16px; font-weight: 900; margin-top: 14px;
+}
+.wt-ev-pop-btn:disabled { opacity: .6; cursor: default; }
+.wt-ev-pop-skip { display: block; margin: 10px auto 0; font-size: 12px; color: #9a8aa8; text-decoration: underline; background: none; border: 0; cursor: pointer; }
+.wt-ev-pop-err { margin-top: 8px; font-size: 12.5px; color: #c0392b; }
+
+/* ── 이벤트 페이지 ─────────────────────────────────── */
+.wt-ev-page {
+  position: relative; max-width: 480px; margin: 0 auto; min-height: 100vh;
+  background: var(--ev-bg); color: var(--ev-cream);
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-page { background: linear-gradient(180deg, var(--ev-bg) 0%, #1b1436 50%, var(--ev-bg) 100%); color: #f4ecf8; }
+.wt-ev-hero { position: relative; height: 430px; overflow: hidden; background: radial-gradient(70% 60% at 50% 30%, var(--ev-bg2) 0%, var(--ev-bg) 70%); }
+.wt-ev-hero .wt-ev-ov { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, var(--ev-bg) 100%); z-index: 1; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-hero .wt-ev-ov { background: linear-gradient(180deg, #14102a33 0%, #14102a11 35%, #14102acc 70%, var(--ev-bg) 100%); }
+.wt-ev-hero img.wt-ev-kv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; filter: saturate(.9); }
+.wt-ev-hero .wt-ev-witch { position: absolute; right: 10px; top: 40px; height: 290px; z-index: 1; }
+.wt-ev-hero-t { position: absolute; left: 18px; right: 150px; bottom: 22px; z-index: 3; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-hero-t { right: 18px; }
+.wt-ev-badge {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 99px;
+  font-size: 11.5px; font-weight: 800; letter-spacing: .03em; background: var(--ev-pop); color: var(--ev-on-pop);
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-badge { background: #e9c46a22; color: var(--ev-pop); border: 1px solid #e9c46a66; }
+.wt-ev-eyebrow { display: block; margin-top: 12px; font-family: var(--ev-display); color: var(--ev-acc); font-size: 15px; letter-spacing: .06em; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-eyebrow { font-size: 13px; letter-spacing: .22em; font-weight: 700; }
+.wt-ev-hero h1 { font-family: var(--ev-round); font-weight: 400; font-size: 32px; line-height: 1.12; margin: 6px 0 0; color: inherit; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-hero h1 { font-weight: 700; font-size: 33px; }
+.wt-ev-hero h1 em { font-style: normal; color: var(--ev-pop); }
+.wt-ev-period { margin-top: 12px; font-size: 13px; font-weight: 700; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.wt-ev-period b { color: var(--ev-pop); }
+.wt-ev-period span { opacity: .75; font-weight: 600; }
+.wt-ev-sec { padding: 28px 18px 0; }
+.wt-ev-pill { display: inline-block; font-size: 11px; font-weight: 900; letter-spacing: .14em; padding: 5px 10px; border-radius: 4px; background: var(--ev-acc); color: var(--ev-on-pop); }
+.wt-ev-sec h2 { font-size: 21px; font-weight: 900; margin: 10px 0 0; letter-spacing: -.02em; color: inherit; }
+.wt-ev-s { font-size: 13px; opacity: .78; margin: 4px 0 0; line-height: 1.5; }
+.wt-ev-strip {
+  margin-top: 16px; border-radius: 18px; padding: 14px 10px 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  background: #ffffff0d; border: 2px dashed #ffffff22;
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-strip { background: #ffffff0a; border: 1px solid #e9c46a33; }
+.wt-ev-tk {
+  position: relative; border-radius: 14px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center;
+  gap: 6px; min-height: 96px; justify-content: center; text-align: center; background: #ffffff0a;
+}
+.wt-ev-tk .wt-ev-icw { width: 40px; height: 40px; display: grid; place-items: center; }
+.wt-ev-tk b { font-size: 11px; font-weight: 800; letter-spacing: .08em; opacity: .8; }
+.wt-ev-tk small { font-size: 11.5px; font-weight: 800; line-height: 1.2; min-height: 14px; }
+.wt-ev-tk.got { background: #ff7b2e22; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-tk.got { background: #e9c46a14; outline: 1px solid #e9c46a55; }
+.wt-ev-tk.today { outline: 2px solid var(--ev-pop); }
+.wt-ev-tk.today::after {
+  content: "TODAY"; position: absolute; left: 50%; top: -8px; transform: translateX(-50%); font-size: 9.5px; font-weight: 900;
+  letter-spacing: .1em; padding: 2px 7px; border-radius: 99px; background: var(--ev-pop); color: var(--ev-on-pop);
+}
+.wt-ev-tk.big { grid-column: span 2; background: linear-gradient(135deg, #ff7b2e33, #ffd16622); }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-tk.big { background: linear-gradient(135deg, #e9c46a22, #a0304f33); }
+.wt-ev-tk.big .wt-ev-icw { width: 56px; height: 52px; }
+.wt-ev-tk.big small { color: var(--ev-pop); font-size: 13px; }
+.wt-ev-tk.new .wt-ev-icw { animation: wt-ev-pop .5s cubic-bezier(.22, 1, .36, 1); }
+.wt-ev-cta {
+  display: block; width: 100%; height: 54px; border-radius: 14px; border: 0; cursor: pointer; font-size: 16px; font-weight: 900; margin-top: 16px;
+  background: var(--ev-acc); color: var(--ev-on-pop); box-shadow: 0 10px 24px #0004;
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-cta { background: linear-gradient(180deg, var(--ev-pop), var(--ev-acc)); }
+.wt-ev-cta.done { opacity: .55; box-shadow: none; cursor: default; }
+.wt-ev-ev2 { margin-top: 14px; border-radius: 14px; padding: 16px; display: flex; align-items: center; gap: 14px; background: #ffffff0d; }
+.wt-ev-ev2 .n {
+  flex: none; width: 64px; height: 64px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 21px; font-weight: 900; line-height: 1; background: var(--ev-acc); color: var(--ev-on-pop);
+}
+.wt-ev-ev2 .n small { font-size: 10.5px; opacity: .85; margin-top: 3px; }
+.wt-ev-ev2 b { display: block; font-size: 15px; font-weight: 800; }
+.wt-ev-ev2 span { font-size: 12.5px; opacity: .75; }
+.wt-ev-how { margin-top: 14px; border-radius: 14px; padding: 14px 16px; display: grid; gap: 10px; background: #ffffff0d; list-style: none; }
+.wt-ev-how li { display: flex; gap: 12px; align-items: center; font-size: 13.5px; font-weight: 600; }
+.wt-ev-how i {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 900;
+  background: var(--ev-pop); color: var(--ev-on-pop);
+}
+.wt-ev-notice { margin-top: 28px; padding: 18px 18px 110px; font-size: 11.5px; line-height: 1.8; opacity: .78; }
+.wt-ev-notice b { display: block; opacity: 1; margin-bottom: 4px; font-size: 12px; }
+.wt-ev-notice ul { list-style: none; margin: 0; padding: 0; }
+.wt-ev-sticky { position: sticky; bottom: 0; z-index: 5; padding: 12px 18px 16px; background: linear-gradient(180deg, transparent, var(--ev-bg) 30%); }
+.wt-ev-sticky button {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 54px; border-radius: 14px; border: 0; cursor: pointer;
+  font-size: 16px; font-weight: 900; background: var(--ev-pop); color: var(--ev-on-pop); box-shadow: 0 10px 24px #0006;
+}
+.wt-ev-sticky button.done { background: #ffffff22; color: var(--ev-sub); box-shadow: none; }
+.wt-ev-err { margin: 10px 0 0; font-size: 13px; color: #ffb4a8; }
+.wt-ev-closed { padding: 40px 18px; text-align: center; font-size: 14px; opacity: .85; }
+
+/* 7일 완료 */
+.wt-ev-fin { position: fixed; inset: 0; z-index: 95; background: #000000b3; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.wt-ev-fin-box {
+  width: min(360px, 100%); border-radius: 24px; background: var(--ev-cream); color: var(--ev-bg); text-align: center;
+  padding: 26px 20px 20px; animation: wt-ev-rise .5s cubic-bezier(.22, 1, .36, 1);
+}
+.wt-ev-fin-box .big { width: 120px; height: 100px; margin: 0 auto; }
+.wt-ev-fin-box h2 { font-family: var(--ev-round); font-weight: 400; font-size: 24px; margin: 10px 0 0; line-height: 1.2; color: inherit; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-fin-box h2 { font-weight: 700; font-size: 23px; }
+.wt-ev-fin-box p { margin: 8px 0 0; font-size: 13.5px; color: #6b5a7a; line-height: 1.5; white-space: pre-line; }
+.wt-ev-fin-box .amt { display: inline-block; margin-top: 12px; background: var(--ev-pop); color: var(--ev-on-pop); font-size: 20px; font-weight: 900; padding: 8px 18px; border-radius: 99px; }
+.wt-ev-fin-box .go { display: block; width: 100%; height: 50px; border-radius: 14px; border: 0; cursor: pointer; background: var(--ev-btn-bg); color: var(--ev-btn-fg); font-size: 16px; font-weight: 900; margin-top: 16px; }
+.wt-ev-fin-box .later { display: block; margin: 10px auto 0; font-size: 12px; color: #9a8aa8; text-decoration: underline; background: none; border: 0; cursor: pointer; }
+
+.wt-ev-toast {
+  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 99; background: #fff; color: #1a1120;
+  border-radius: 14px; padding: 12px 18px; font-size: 14px; font-weight: 800; white-space: nowrap; box-shadow: 0 12px 30px #0006;
+  animation: wt-ev-rise .35s cubic-bezier(.22, 1, .36, 1);
+}
