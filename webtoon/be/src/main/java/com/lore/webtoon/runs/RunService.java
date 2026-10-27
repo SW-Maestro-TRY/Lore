@@ -170,6 +170,8 @@ public class RunService {
            회차 조회가 수천 번 나간다. 1화에 그림이 없어 카드가 안 나오면(null) 기억해 두고
            회차를 따로 낸다. */
         Map<String, Map<String, Object>> rootCards = new java.util.HashMap<>();
+        /* 인기순 자리(관리자가 정함) — 카드를 낸 작품의 값을 카드 번호로 모아 뒤에서 싣는다. */
+        Map<String, Integer> rankOf = new java.util.HashMap<>();
         for (WebtoonWork one : works.onGallery()) {
             if (one.isTrashed()) {
                 continue;
@@ -191,14 +193,22 @@ public class RunService {
                     card = null;
                 }
             }
+            WebtoonWork from = root;
             if (card == null) {
                 card = cardIgnoringTrash(one, false, false, false);
+                from = one;
             }
             if (card != null && seen.add(String.valueOf(card.get("run_id")))) {
                 out.add(card);
+                if (from != null && from.getBrowseRank() != null) {
+                    rankOf.put(String.valueOf(card.get("run_id")), from.getBrowseRank());
+                }
             }
         }
         putViews(out);
+        for (Map<String, Object> card : out) {           // putViews 가 카드마다 새 지도로 바꿔 둬서 고쳐 써도 된다
+            card.put("rank", rankOf.get(String.valueOf(card.get("run_id"))));
+        }
         return out;
     }
 
