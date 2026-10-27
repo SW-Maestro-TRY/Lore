@@ -116,6 +116,10 @@ const nextConfig = {
         { source: '/partners', destination: '/partners/index.html' },
         // 웹툰 서비스 소개 페이지. 위와 같은 한 장짜리 정적 HTML 이고, 협업 문의는 /partners 로 보낸다.
         { source: '/about', destination: '/about/index.html' },
+        // 광고 랜딩(2026-10-27, 담당: 하은). 광고 소재마다 한 장 — 넣은 설정 → 나온 1화 → 만들기.
+        // 위와 같은 한 장짜리 정적 HTML(public/lp/<소재>/index.html)이고 그림은 /api/webtoon/v1/runs/… 를 그대로 쓴다.
+        // 소재 이름은 메타 광고의 utm_content 와 같다(can · richet · ruda …). 홈이 아니라 여기로 떨어뜨린다 — 권병민 멘토 10/12.
+        { source: '/lp/:slug', destination: '/lp/:slug/index.html' },
       ],
     };
   },

@@ -74,6 +74,7 @@ final class NoticeMail {
             text.append("\n「").append(n).append("」").append(iGa(n)).append(" 지금 당신을 기다리고 있어요.\n");
         }
         text.append("\n웹툰 보러가기 → ").append(link).append("\n\n");
+        text.append("다 보셨다면 같은 캐릭터로 다음 편도 이어서 만들 수 있어요 — 완성본의 「다음 편 만들기」를 눌러 주세요.\n\n");
         text.append("루와 함께,\n당신의 캐릭터로 새로운 이야기를 만들어보세요. ✨\n");
         text.append(textFooter());
 
@@ -91,6 +92,7 @@ final class NoticeMail {
             html.append(p("<b>「" + esc(n) + "」</b>" + iGa(n) + " 지금 당신을 기다리고 있어요."));
         }
         html.append(button("웹툰 보러가기 →", link));
+        html.append(p("다 보셨다면 같은 캐릭터로 <b>다음 편</b>도 이어서 만들 수 있어요 — 완성본의 「다음 편 만들기」를 눌러 주세요."));
         html.append(p("루와 함께,<br>당신의 캐릭터로 새로운 이야기를 만들어보세요. ✨"));
         return new Body(text.toString(), page(mintHead(cover, site), html.toString(), site));
     }
