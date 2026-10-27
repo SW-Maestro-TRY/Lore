@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
-  WebtoonApiError, allowanceLine, listCharacters, listLorebooks, notifyByEmail, readAllowance, readCharacter,
+  WebtoonApiError, allowanceLine, listCharacters, listLorebooks, notifyByEmail, readAllowance, readCharacter, saveOriginalCharacter,
   type Allowance, type Character, type LoreBook,
 } from "../../lib/api";
 import { startJob } from "../../lib/start";
@@ -127,8 +127,12 @@ const TITLE_MAX = 60;
 const SETTINGS_MAX = 8000;
 
 export default function Wizard({
-  step: rawStep, presetCharacterId, go, authenticated, mode,
-}: { step: number; presetCharacterId?: string; go: Go; authenticated: boolean; mode?: "own" }) {
+  step: rawStep, presetCharacterId, go, authenticated, mode, quick, presetStyle,
+}: { step: number; presetCharacterId?: string; go: Go; authenticated: boolean; mode?: "own";
+     /** 빠른 시작(2026-10-27) — 광고 랜딩에서 온 사람. 1걸음이 이름·설명 두 칸으로 시작한다. */
+     quick?: boolean;
+     /** 2걸음 그림체 기본값(광고 작품의 그림체). 바꿀 수 있다. */
+     presetStyle?: string }) {
   const t = useT();
   const { lang } = useLang();
   /* 어느 길인가(#548)는 2걸음에서 고른다(form.create). 주소의 `mode=own` 은 미리 골라 둔
@@ -146,6 +150,11 @@ export default function Wizard({
     setDraftLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  /* 광고 작품의 그림체를 기본으로(2026-10-27) — 광고에서 본 그림체 그대로 시작하되 2걸음에서 바꿀 수 있다. */
+  useEffect(() => {
+    if (!presetStyle || !STYLE_INFO.some(([k]) => k === presetStyle)) return;
+    setForm((f) => ({ ...f, style: presetStyle }));
+  }, [presetStyle]);
   const patch = (p: Partial<WizardForm>) => setForm((f) => ({ ...f, ...p,
     ...(p.story !== undefined && p.story !== f.story && f.lorebook ? {lorebook:invalidateExtracted(f.lorebook)} : {}) }));
 
@@ -210,7 +219,7 @@ export default function Wizard({
     if(n===2 && !step1Ok)return;
     const dir = n > step ? "wizard_next" : n < step ? "wizard_back" : "wizard_same";
     track(dir, { from_step: step, to_step: n, dwell_ms: Date.now() - stepEnteredAt.current, mode: own ? "own" : "quick" });
-    go("create", { step: n, character: form.characterId || undefined, mode: own ? "own" : undefined });
+    go("create", { step: n, character: form.characterId || undefined, mode: own ? "own" : undefined, quick: quick || undefined });
   };
 
   /* ---- 1걸음 ---- */
@@ -219,7 +228,8 @@ export default function Wizard({
   const loadChars = () => {
     setCharsErr("");
     listCharacters()
-      .then((got) => setChars(got.characters.filter((c) => c.status === "ready" && !!c.art_url)))
+      // 그림 없이 저장한 내 캐릭터(이름·설명만)도 고를 수 있다 — 그림은 첫 작품의 시트로 채워진다(2026-10-27)
+      .then((got) => setChars(got.characters.filter((c) => c.status === "ready" && (!!c.art_url || c.mine))))
       .catch((e: Error) => { setChars([]); setCharsErr(e.message || t("캐릭터를 불러오지 못했습니다")); });
   };
   useEffect(() => { if (step === 1) loadChars(); }, [step]);
@@ -274,7 +284,9 @@ export default function Wizard({
     if (presetCharacterId) go("create", { step: 1, mode: own ? "own" : undefined });
   };
 
-  const step1Ok = form.name.trim().length > 0 && !!form.characterId;
+  /* 빠른 시작: 카드 없이 이름·설명만 적어도 넘어간다 — 「다음」에서 캐릭터를 저장해 「내 캐릭터」에 남긴다(2026-10-27). */
+  const quickTyped = !!quick && !form.characterId && form.name.trim().length > 0 && form.character.trim().length > 0;
+  const step1Ok = (form.name.trim().length > 0 && !!form.characterId) || quickTyped;
 
   /* ---- 2걸음 ---- */
   const genreCustom = form.genre && !GENRE_QUICK.includes(form.genre) ? form.genre : "";
@@ -439,7 +451,25 @@ export default function Wizard({
   const pickedBuiltin = form.characterId && !shown.some(c=>c.id===form.characterId) ? builtins.find(c=>c.id===form.characterId) : undefined;
   const presetExtra = presetChar && !shown.some(c=>c.id===presetChar.id) && presetChar.id!==pickedBuiltin?.id ? presetChar : undefined;
   const available = [pickedBuiltin,presetExtra,...shown].filter((c):c is Character=>!!c);
-  const next=()=>{track("story_input",{genre:form.genre||"",edited:genreIsCustom,name_len:form.story.length,mode:"quick"});void goStep(2);};
+  const [quickSaving,setQuickSaving]=useState(false);
+  const [quickErr,setQuickErr]=useState("");
+  const next=async()=>{
+    track("story_input",{genre:form.genre||"",edited:genreIsCustom,name_len:form.story.length,mode:"quick"});
+    if(quickTyped){
+      /* 이름·설명만 적고 넘어가는 길(2026-10-27) — 캐릭터를 먼저 저장해 「내 캐릭터」에 남긴다. 그림은 첫 작품의 시트로 채워진다. */
+      setQuickSaving(true);setQuickErr("");
+      try{
+        const c=await saveOriginalCharacter({name:form.name.trim(),description:form.character.trim(),photo_keys:[]});
+        track("quick_character_saved",{character:c.id,logged_in:authenticated});
+        setChars(cs=>[c,...(cs||[]).filter(x=>x.id!==c.id)]);
+        pickChar(c);
+        go("create",{step:2,character:c.id,mode:own?"own":undefined,quick:true});
+      }catch(e){setQuickErr(errText(e,t("캐릭터를 저장하지 못했습니다")));}
+      finally{setQuickSaving(false);}
+      return;
+    }
+    void goStep(2);
+  };
   return <div className="wt-wiz wt-wiz-final">
     {legacyOpen&&<Dialog wide title={t("이전 캐릭터 저장")} busy={legacyBusy} onClose={()=>setLegacyOpen(false)}><CharacterForm initialDraft={{name:form.name,description:form.character,image:form.photos[0]||""}} authenticated={authenticated} onBusyChange={setLegacyBusy} onClose={()=>setLegacyOpen(false)} onSaved={c=>{setChars(cs=>[c,...(cs||[])]);pickChar(c);setLegacyOpen(false);}}/></Dialog>}
     {asking&&<NotifyAsk time={qualityTime} onStart={mail=>void begin(mail)} onClose={()=>setAsking(false)}/>}
@@ -454,11 +484,18 @@ export default function Wizard({
       <nav className="wt-create-steps" aria-label={t("만들기 단계")}><button type="button" aria-current={step===1?"step":undefined} disabled={loreLocked} onClick={()=>void goStep(1)}><i>1</i>{t("캐릭터 · 이야기")}</button><button type="button" aria-current={step===2?"step":undefined} disabled={!step1Ok||loreLocked} onClick={()=>void goStep(2)}><i>2</i>{t("그림체 · 방식")}</button></nav>
       <h1>{t("웹툰 만들기")}</h1>
       {step===1?<div className="wt-create-content">
-        <section className="wt-create-characters"><h2>{t("누가 주인공인가요?")}</h2>
+        {quick&&!form.characterId&&<section className="wt-create-quick">
+          <h2>{t("주인공을 한 줄로 적어 주세요")}</h2>
+          <label className="wt-wiz-morefield"><span>{t("이름")}<small>{form.name.length} / 60</small></span><input className="field" value={form.name} maxLength={60} disabled={loreLocked||quickSaving} onChange={e=>patch({name:e.target.value})}/></label>
+          <label className="wt-wiz-morefield"><span>{t("캐릭터 설명")}<small>{form.character.length.toLocaleString()} / 8,000</small></span><textarea className="field" rows={3} value={form.character} maxLength={8000} disabled={loreLocked||quickSaving} placeholder={t("성격 · 외형 · 상황, 한 줄이면 돼요")} onChange={e=>patch({character:e.target.value})}/></label>
+          <p className="dim hint">{t("적은 캐릭터는 내 캐릭터에 남고, 그림은 첫 웹툰의 캐릭터 시트로 채워져요. 사진이 있으면 아래 「새 캐릭터 만들기」에서 올려요.")}</p>
+          {quickErr&&<ErrLine text={quickErr}/>}
+        </section>}
+        <section className="wt-create-characters"><h2>{t(quick&&!form.characterId?"또는 캐릭터 카드를 골라요":"누가 주인공인가요?")}</h2>
           <CardRail><button type="button" className="wt-create-new" onClick={()=>go("character-new")}><IconPlus size={26}/><b>{t("새 캐릭터 만들기")}</b></button>
-            {legacyCharacter&&<div className="wt-create-character"><button type="button" className="wt-create-pick" onClick={()=>setLegacyOpen(true)}>{form.photos[0]?<img src={form.photos[0]} alt=""/>:<span className="wt-create-draft-icon"><IconEdit size={26}/></span>}<b>{form.name||t("이전 캐릭터")}</b><small>{t("저장 전 확인")}</small></button></div>}
+            {legacyCharacter&&!quick&&<div className="wt-create-character"><button type="button" className="wt-create-pick" onClick={()=>setLegacyOpen(true)}>{form.photos[0]?<img src={form.photos[0]} alt=""/>:<span className="wt-create-draft-icon"><IconEdit size={26}/></span>}<b>{form.name||t("이전 캐릭터")}</b><small>{t("저장 전 확인")}</small></button></div>}
             {chars===null?[0,1].map(i=><div key={i} className="wt-create-character skeleton"/>):available.map(c=><div className={`wt-create-character${form.characterId===c.id?" on":""}`} key={c.id}>
-              <button type="button" className="wt-create-pick" aria-pressed={form.characterId===c.id} onClick={()=>pickChar(c)}><img src={c.art_url||""} alt=""/><b>{c.builtin?t(c.name):c.name}</b>{form.characterId===c.id&&<span className="wt-create-selected"><IconCheck size={13}/></span>}</button>
+              <button type="button" className="wt-create-pick" aria-pressed={form.characterId===c.id} onClick={()=>pickChar(c)}>{c.art_url?<img src={c.art_url} alt=""/>:<span className="wt-create-noart" aria-hidden="true">{(c.name||"?").slice(0,1)}</span>}<b>{c.builtin?t(c.name):c.name}</b>{form.characterId===c.id&&<span className="wt-create-selected"><IconCheck size={13}/></span>}</button>
               {/* 예시 캐릭터도 연필을 띄운다 — 고친 것은 저장하지 않고 이번 요청에만 쓴다(2026-10-25) */}
               {((c.mine&&!c.builtin)||c.builtin)&&<button type="button" className="wt-create-pencil" aria-label={t("{name} 수정",{name:c.builtin?t(c.name):c.name})} onClick={()=>setEditingCharacter(c.builtin?{...c,name:form.characterId===c.id&&form.name?form.name:t(c.name),description:form.characterId===c.id?form.character:t(c.description||"")}:c)}><IconEdit size={15}/></button>}
             </div>)}
@@ -475,7 +512,7 @@ export default function Wizard({
           <label className="wt-wiz-morefield"><span>{t("제목")}<small>{form.title.length} / {TITLE_MAX}</small></span><input className="field" value={form.title} maxLength={TITLE_MAX} placeholder={t("비워 두면 이야기에 맞춰 지어 드려요")} onChange={e=>patch({title:e.target.value})}/></label>
           <label className="wt-wiz-morefield"><span>{t("추가 설정")}<small>{form.settings.length.toLocaleString()} / {SETTINGS_MAX.toLocaleString()}</small></span><textarea className="field" value={form.settings} maxLength={SETTINGS_MAX} placeholder={t("세계관 규칙·말투·꼭 들어갈 장면처럼 더 알려 주고 싶은 것")} onChange={e=>patch({settings:e.target.value})}/></label>
         </details>
-        <div className="wt-create-footer"><button type="button" className="btn btn-p" disabled={!step1Ok||loreLocked||!!form.lorebook&&!form.lorebook.confirmed} onClick={next}>{t("다음")}</button></div>
+        <div className="wt-create-footer"><button type="button" className="btn btn-p" disabled={!step1Ok||loreLocked||quickSaving||!!form.lorebook&&!form.lorebook.confirmed} onClick={()=>void next()}>{quickSaving?t("캐릭터 저장 중…"):t("다음")}</button></div>
       </div>:<div className="wt-create-content wt-create-options">
         <section><h2>{t("그림체")}</h2><div className="wt-wiz-styles">{STYLE_INFO.map(([key,label])=><button type="button" key={key} className={`wt-wiz-style${form.style===key?" on":""}`} aria-pressed={form.style===key} onClick={()=>{track("style_pick",{style:key});patch({style:key});}}><img src={STYLE_THUMB[key]||`/static/samples/ex-${key}-1.jpg`} alt=""/><b>{t(label)}</b>{form.style===key&&<CheckMark/>}</button>)}</div></section>
         <section><h2>{t("그리기 방식")}</h2><p className="dim hint wt-wiz-qualityhint">{t("시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.")}</p>{qualityPicker}</section>

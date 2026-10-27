@@ -36,13 +36,19 @@ export interface GoParams {
   tab?: "settings" | "works" | "characters" | "contact";
   /** 만들기 화면이 어느 길인가(#548). own = 「만들고 싶은 내용이 있어요」. 없으면 아이디어부터. */
   mode?: "own";
+  /** 완성본을 열 때 먼저 보일 장 — 장면형 광고가 광고에서 본 장부터 열리게 보낸다(2026-10-27). */
+  page?: number;
+  /** 만들기 1걸음의 빠른 시작(2026-10-27) — 광고로 온 사람은 카드 고르기 대신 이름·설명 두 칸부터. */
+  quick?: boolean;
+  /** 2걸음 그림체 기본값 — 광고 작품의 그림체를 넘긴다(바꿀 수 있다). STYLE_INFO 의 키. */
+  style?: string;
 }
 
 export function hrefOf(view: View, p: GoParams = {}): string {
   const q = new URLSearchParams();
   switch (view) {
     case "landing": return "/webtoon";
-    case "result": if (p.run) q.set("run", p.run); return `/webtoon?${q}`;
+    case "result": if (p.run) q.set("run", p.run); if (p.page) q.set("page", String(p.page)); return `/webtoon?${q}`;
     case "sharedCard": if (p.id) q.set("card", p.id); return `/webtoon?${q}`;
     default: q.set("view", view);
   }
@@ -53,6 +59,8 @@ export function hrefOf(view: View, p: GoParams = {}): string {
   if (p.id) q.set("id", p.id);
   if (p.tab) q.set("tab", p.tab);
   if (p.mode) q.set("mode", p.mode);
+  if (p.quick) q.set("quick", "1");
+  if (p.style) q.set("style", p.style);
   return `/webtoon?${q}`;
 }
 
