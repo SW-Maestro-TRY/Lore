@@ -366,6 +366,11 @@ public class JobService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setChapters(com.lore.webtoon.series.SeriesChapterRepository chapters) { this.chapters = chapters; }
 
+    /** 게스트의 이야기 고르기 30초 시계(#851). 시험에서는 없을 수 있다 — 그러면 남은 초를 안 보낸다. */
+    private CheckpointTimeouts timeouts;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTimeouts(CheckpointTimeouts timeouts) { this.timeouts = timeouts; }
+
     /**
      * 몇 화인가 — 연재 표가 먼저다(2026-10-27). 작품 폴더의 continuation.json 은 이야기를 쓰기 시작해야
      * 생겨서, 그 전(줄 서기 · 이야기 쓰는 중)에는 2화를 만들어도 진행 화면이 「1화 만들기」로 떴다.
@@ -392,9 +397,14 @@ public class JobService {
     @Transactional(readOnly = true)
     public JobView view(String publicId, boolean watching) {
         WebtoonJob job = store.byPublicId(publicId);
+        Instant asked = Instant.now();
         if (watching) {
             push.seen(job.getId());
+            /* 게스트가 고르기 화면을 앞에 두고 있다 — 30초 시계를 다시 0 으로(#851). 화면이 앞에 있을 때만
+               watching 으로 묻기 때문에, 닫거나 뒤로 보내면 이 신호가 끊기고 그때부터 센다. */
+            if (timeouts != null) timeouts.seen(job, asked);
         }
+        Integer pickSecondsLeft = timeouts == null ? null : timeouts.guestPickSecondsLeft(job, asked);
         JobProgress.Snapshot now = progress.of(job.getId());
         JobQueue.Spot spot = queue.spotOf(job);
         JobStatus at = job.getStatus();
@@ -428,7 +438,8 @@ public class JobService {
                 episodeOf(job),
                 /* 진행이 메모리에 없으면(서버가 다시 떴다) 폴더의 그림으로 — 그린 장을 화면에서 다시 본다 */
                 now.total() > 0 ? null : runner.artOnDisk(job),
-                resumeCost(job));
+                resumeCost(job),
+                pickSecondsLeft);
     }
 
     /**
