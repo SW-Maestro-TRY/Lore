@@ -9,7 +9,7 @@ import { useAuth } from "@common/auth/useAuth";
 import type { Attendance } from "@common/api/credits";
 import type { Go, View } from "../../lib/nav";
 import { track } from "../../lib/track";
-import { Hat, THEMES, popLine, type EventTheme } from "./theme";
+import { Hat, PopHat, THEMES, type EventTheme } from "./theme";
 import { useAttendance } from "./useAttendance";
 import "./event.css";
 
@@ -76,6 +76,8 @@ export function AttendancePopup({ authenticated, view, go }: { authenticated: bo
   const { card, busy, error, claim } = useAttendance(authenticated);
   const [shown, setShown] = useState(false);
   const [done, setDone] = useState<Attendance | null>(null);
+  /* 받기를 누른 직후의 카드. 팝업이 닫히기 전에 도장을 찍어 보이려고 둔다 */
+  const [justGot, setJustGot] = useState<Attendance | null>(null);
 
   useEffect(() => {
     if (!card || shown || QUIET.includes(view)) return;
@@ -94,8 +96,11 @@ export function AttendancePopup({ authenticated, view, go }: { authenticated: bo
     const th = THEMES[done.theme];
     return <div className="wt-ev-root" data-theme={th.key}><div className="wt-ev-toast" role="status">{th.toast(done.today, done.granted)}</div></div>;
   }
-  if (!shown || !card || card.claimed) return null;
+  if (!shown || !card || (card.claimed && !justGot)) return null;
   const th = THEMES[card.theme];
+  const stamped = justGot ? justGot.stamped : card.stamped;
+  /* 칸마다의 크레딧은 서버 값을 그대로 쓴다 — 보상을 바꿔도 화면이 따라간다 */
+  const amt = (d: number) => card.rewards.find((r) => r.day === d)?.amount ?? 0;
   const close = () => setShown(false);
   const skip = () => {
     try { localStorage.setItem(SKIP_KEY, todayKst()); } catch { /* 다음에 또 뜰 뿐 */ }
@@ -106,9 +111,13 @@ export function AttendancePopup({ authenticated, view, go }: { authenticated: bo
     track("event_popup_claim", { theme: card.theme, day: card.today });
     const after = await claim();
     if (!after) return;
-    close();
-    if (after.today === 7) go("event");      // 7일째는 이벤트 페이지의 완료 창으로
-    else setDone(after);
+    /* 오늘 칸에 도장이 찍히는 것을 잠깐 보여 주고 닫는다 */
+    setJustGot(after);
+    window.setTimeout(() => {
+      close();
+      if (after.today === 7) go("event");      // 7일째는 이벤트 페이지의 완료 창으로
+      else setDone(after);
+    }, 900);
   };
   return (
     <div className="wt-ev-root" data-theme={th.key}>
@@ -120,7 +129,7 @@ export function AttendancePopup({ authenticated, view, go }: { authenticated: bo
               <div className="wt-ev-bust">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={th.art.pop} alt="" />
-                <Hat />
+                <PopHat />
               </div>
             ) : (
               /* eslint-disable-next-line @next/next/no-img-element */
@@ -130,13 +139,35 @@ export function AttendancePopup({ authenticated, view, go }: { authenticated: bo
             <span className="wt-ev-pop-ttl">{th.title}</span>
           </div>
           <div className="wt-ev-pop-bd">
-            <h2 id="wt-ev-pop-title">{th.popTitle}</h2>
-            <p>{popLine(th, card)}</p>
-            <div className="wt-ev-dots" aria-hidden="true">
-              {[1, 2, 3, 4, 5, 6, 7].map((d) => <span key={d} className={d <= card.stamped ? "" : "off"}>{th.dot(d)}</span>)}
+            <h2 id="wt-ev-pop-title">{th.popTitle(card.reward ?? amt(card.today))}</h2>
+            {/* 도장 카드 — 7칸, 칸마다 그날 받는 크레딧. 4일째 · 7일째는 크게. 받은 칸에는 도장이 찍힌다 */}
+            <div className="wt-ev-card" role="img"
+                 aria-label={`${th.item} 카드 ${stamped}칸 채움 · 날마다 ${amt(1)}크레딧 · 4일째 ${amt(4)}크레딧 · 7일째 ${amt(7)}크레딧`}>
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+                const got = d <= stamped;
+                const cls = `wt-ev-slot${d === 4 ? " gift" : ""}${d === 7 ? " big" : ""}${got ? " got" : ""}`
+                  + `${d === stamped && justGot ? " new" : ""}${!got && d === card.today ? " today" : ""}`;
+                return (
+                  <div key={d} className={cls}>
+                    <div className="wt-ev-slot-face">
+                      {d === 4 ? <b className="wt-ev-slot-amt">{amt(4)}C</b>
+                        : d === 7 ? (
+                          <>
+                            <span className="wt-ev-slot-ic">{th.finIcon}</span>
+                            <b className="wt-ev-slot-free">{amt(7)}C<span>다 모으면 웹툰 한 편</span></b>
+                          </>
+                        ) : (
+                          <>{th.dot(d)}<i className="wt-ev-slot-c">{amt(d)}C</i></>
+                        )}
+                    </div>
+                    {got && <span className="wt-ev-slot-stamp">{th.stamp}</span>}
+                    <small>{d}</small>
+                  </div>
+                );
+              })}
             </div>
-            <button type="button" className="wt-ev-pop-btn" autoFocus disabled={busy} onClick={take}>
-              {busy ? "받는 중…" : `${th.item} 받기`}
+            <button type="button" className="wt-ev-pop-btn" autoFocus disabled={busy || !!justGot} onClick={take}>
+              {justGot ? (justGot.granted > 0 ? `+${justGot.granted}크레딧 받았어요` : "받았어요") : busy ? "받는 중…" : `${th.item} 받기`}
             </button>
             {error && <p className="wt-ev-pop-err">{error}</p>}
             <button type="button" className="wt-ev-pop-skip" onClick={skip}>오늘 그만 보기</button>

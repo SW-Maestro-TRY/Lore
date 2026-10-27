@@ -36,6 +36,9 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
   }, [card?.claimed, card?.today, card?.stamped]);
 
   const stamped = card?.stamped ?? 0;
+  /* 칸마다의 크레딧 — 로그인 전(카드 없음)에는 지금 정한 값을 보여 준다 */
+  const amt = (d: number) => card?.rewards.find((r) => r.day === d)?.amount ?? (d === 4 ? 5 : d === 7 ? 10 : 2);
+  const total = [1, 2, 3, 4, 5, 6, 7].reduce((n, d) => n + amt(d), 0);
   const claimed = card?.claimed ?? false;
   const closed = card != null && !card.open;
   const full = claimed && stamped === 7;
@@ -53,7 +56,7 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
 
   const cta = !authenticated ? "로그인하고 받기"
     : closed ? "10.28부터 받을 수 있어요"
-    : full ? `이번 주 ${th.item} 다 모았어요`
+    : full ? `${th.key === "HALLOWEEN" ? "🎃" : "✦"} 웹툰 만들러 가기`
     : claimed ? `오늘 ${th.item} 받음`
     : busy ? "받는 중…" : `오늘 ${th.item} 받기`;
   const sticky = !authenticated ? `${th.key === "HALLOWEEN" ? "🍬" : "✦"} 로그인하고 받기`
@@ -78,7 +81,7 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
           </div>
         </div>
 
-        <section className="wt-ev-sec">
+        <section className="wt-ev-sec ev1">
           <span className="wt-ev-pill">EVENT 1</span>
           <h2>{th.ev1Title}</h2>
           <p className="wt-ev-s">{th.ev1Desc}</p>
@@ -86,21 +89,26 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
             {[1, 2, 3, 4, 5, 6, 7].map((d) => {
               const got = d <= stamped;
               const today = authenticated && !claimed && !closed && d === stamped + 1;
-              const sub = d === 4 ? "+5C" : d === 7 ? "+20C · 웹툰 한 편" : got ? "받음" : "";
+              const sub = got ? `+${amt(d)}C 받음` : d === 7 ? `+${amt(d)}C · 이번 주 ${total}C` : `+${amt(d)}C`;
               return (
                 <div key={d} className={`wt-ev-tk${got ? " got" : ""}${today ? " today" : ""}${d === 7 ? " big" : ""}${fresh === d ? " new" : ""}`}>
-                  <div className="wt-ev-icw">{th.token(d, got)}</div>
+                  <div className="wt-ev-icw">
+                    {got && d !== 4 && d !== 7 ? <span className="wt-ev-stamp">{th.stamp}</span> : th.token(d)}
+                    {got && (d === 4 || d === 7) && <span className="wt-ev-stamp-mini">{th.stamp}</span>}
+                  </div>
                   <b>DAY {d}</b>
                   <small>{sub}</small>
                 </div>
               );
             })}
           </div>
-          <button type="button" className={`wt-ev-cta${claimed || closed ? " done" : ""}`} disabled={busy} onClick={take}>{cta}</button>
+          {/* 7일을 다 모았으면 만들기로 — PC 에서는 하단 고정 단추를 숨겨서 이 단추가 그 길을 맡는다 */}
+          <button type="button" className={`wt-ev-cta${(claimed && !full) || closed ? " done" : ""}`} disabled={busy}
+                  onClick={full ? () => go("create", { step: 1 }) : take}>{cta}</button>
           {error && <p className="wt-ev-err">{error}</p>}
         </section>
 
-        <section className="wt-ev-sec">
+        <section className="wt-ev-sec ev2">
           <span className="wt-ev-pill">EVENT 2</span>
           <h2>{th.ev2Title}</h2>
           <div className="wt-ev-ev2">
@@ -109,7 +117,7 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
           </div>
         </section>
 
-        <section className="wt-ev-sec">
+        <section className="wt-ev-sec how">
           <span className="wt-ev-pill">HOW TO</span>
           <h2>참여 방법</h2>
           <ol className="wt-ev-how">
@@ -143,7 +151,7 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
             <div className="big">{th.finIcon}</div>
             <h2 id="wt-ev-fin-title">{th.finTitle}</h2>
             <p>{th.finDesc}</p>
-            <span className="amt">+20 크레딧</span>
+            <span className="amt">+{amt(7)} 크레딧 · 이번 주 {total}크레딧</span>
             <button type="button" className="go" autoFocus onClick={() => { track("event_fin_create", { theme: th.key }); go("create", { step: 1 }); }}>내 캐릭터로 웹툰 만들기</button>
             <button type="button" className="later" onClick={() => setFin(false)}>나중에</button>
           </div>

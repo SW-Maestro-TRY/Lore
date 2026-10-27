@@ -19,8 +19,8 @@ export interface CreditBalance {
 }
 
 /**
- * 7일 연속 출석 카드. 4일째 5C · 7일째 20C, 하루 쉬면 1일째부터(한국 시각 자정 기준).
- * 테마는 겉만 다르고 일차는 이어진다.
+ * 7일 연속 출석 카드. 받는 날마다 그날 몫 — 1·2·3·5·6일째 2C, 4일째 5C, 7일째 10C(한 주 25C).
+ * 하루 쉬면 1일째부터(한국 시각 자정 기준). 테마는 겉만 다르고 일차는 이어진다.
  */
 export interface Attendance {
   /** 이벤트가 열렸나. 열리기 전에는 받기를 눌러도 안 찍힌다. */
@@ -30,10 +30,13 @@ export interface Attendance {
   claimed: boolean;
   /** 오늘이 카드의 몇 일째인가 — 받았으면 받은 일차, 안 받았으면 받으면 될 일차. */
   today: number;
+  /** 오늘 받는(받은) 크레딧. */
+  reward: number;
   /** 지금 카드에 채워진 칸 수(0~7). */
   stamped: number;
-  /** 앞으로 받을 첫 보상. `inDays` 0 이면 오늘 받기로 받는다. */
+  /** 내일부터 처음 오는 큰 보상(4일째 · 7일째). `inDays` 1 이 내일. */
   next: { day: number; amount: number; inDays: number } | null;
+  /** 일곱 칸의 보상. */
   rewards: { day: number; amount: number }[];
   /** 이번 받기로 들어온 크레딧. 상태만 물었으면 0. */
   granted: number;

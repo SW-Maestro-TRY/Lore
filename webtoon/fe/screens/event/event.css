@@ -53,7 +53,8 @@
   background: url("/static/event/masquerade-hero.jpg") 50% 18% / cover;
   clip-path: none; opacity: .38;
 }
-.wt-ev-banner .wt-ev-witch { position: absolute; left: 24px; bottom: -4px; height: 112px; z-index: 1; }
+/* 다리를 자르고 크게 — 모자 끝까지 배너 안에 들어온다 */
+.wt-ev-banner .wt-ev-witch { position: absolute; left: 20px; bottom: -100px; height: 180px; z-index: 1; }
 .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-banner .wt-ev-witch { display: none; }
 .wt-ev-banner-t { position: relative; z-index: 2; flex: 1; min-width: 0; }
 .wt-ev-banner-t strong {
@@ -73,7 +74,7 @@
 @media (max-width: 560px) {
   .wt-ev-banner { padding: 12px 14px 12px 104px; min-height: 104px; }
   .wt-ev-banner::before { clip-path: polygon(0 0, 92px 0, 72px 100%, 0 100%); }
-  .wt-ev-banner .wt-ev-witch { left: 14px; height: 100px; }
+  .wt-ev-banner .wt-ev-witch { left: 10px; bottom: -92px; height: 166px; }
   .wt-ev-banner-t strong { font-size: 20px; }
   .wt-ev-banner-t b { font-size: 15px; }
   .wt-ev-banner-t span { display: none; }
@@ -92,7 +93,7 @@
 .wt-ev-pop-ph { position: relative; height: 190px; overflow: hidden; background: radial-gradient(80% 70% at 50% 20%, var(--ev-bg2), var(--ev-bg) 75%); }
 .wt-ev-pop-ph .wt-ev-bust { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); width: 150px; }
 .wt-ev-pop-ph .wt-ev-bust img { width: 100%; display: block; filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
-.wt-ev-pop-ph .wt-ev-bust .wt-ev-hat { position: absolute; left: 6%; top: -27%; width: 80%; transform: rotate(9deg); filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff); }
+.wt-ev-pop-ph .wt-ev-bust .wt-ev-hat { position: absolute; left: 6%; top: -27%; width: 80%; transform: rotate(9deg); filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
 .wt-ev-pop-ph img.wt-ev-kv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-pop-ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, #14102a 100%); }
 .wt-ev-pop-day {
@@ -109,9 +110,45 @@
 .wt-ev-pop-bd h2 { font-family: var(--ev-round); font-weight: 400; font-size: 21px; line-height: 1.25; margin: 0; }
 .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-pop-bd h2 { font-weight: 700; font-size: 20px; }
 .wt-ev-pop-bd p { margin: 6px 0 0; font-size: 13px; color: #6b5a7a; line-height: 1.5; }
-.wt-ev-dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
-.wt-ev-dots > span { width: 32px; height: 19px; }
-.wt-ev-dots > span.off { opacity: .25; }
+/* 도장 카드 — 윗줄 1·2·3·4(5C), 아랫줄 5·6·7(넓게, 10C · 다 모으면 웹툰 한 편). 칸마다 그날 크레딧 */
+.wt-ev-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; }
+.wt-ev-slot {
+  position: relative; height: 56px; border-radius: 14px; display: grid; place-items: center;
+  background: #2b17400a; border: 2px dashed #2b174038;
+}
+.wt-ev-slot.big { grid-column: span 2; }
+.wt-ev-slot-face { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; height: 100%; padding: 5px; }
+.wt-ev-slot-face > .ic { width: 42px; height: 26px; }
+.wt-ev-slot small {
+  position: absolute; left: 6px; top: 4px; font-size: 10px; font-weight: 900; color: #2b174080; line-height: 1;
+}
+.wt-ev-slot-amt {
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--ev-pop); color: var(--ev-on-pop); font-size: 15px; font-weight: 900; letter-spacing: -.02em;
+  box-shadow: inset 0 -3px 0 #0002;
+}
+.wt-ev-slot-ic { width: 32px; height: 32px; flex: none; }
+.wt-ev-slot-ic .ic { width: 100%; height: 100%; }
+.wt-ev-slot-free { font-size: 15px; font-weight: 900; line-height: 1.1; text-align: left; color: var(--ev-bg); }
+.wt-ev-slot-free span { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 800; line-height: 1.2; color: #6b5a7a; }
+/* 사탕 칸 — 사탕 아래 그날 크레딧 */
+.wt-ev-slot:not(.gift):not(.big) .wt-ev-slot-face { flex-direction: column; gap: 1px; padding-top: 8px; }
+.wt-ev-slot:not(.gift):not(.big) .wt-ev-slot-face > .ic { width: 36px; height: 22px; }
+.wt-ev-slot-c { font-style: normal; font-size: 11px; font-weight: 900; color: var(--ev-bg); line-height: 1; }
+.wt-ev-slot.gift, .wt-ev-slot.big { border-style: solid; border-color: #ff7b2e66; background: #ff7b2e14; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-slot.gift, .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-slot.big { border-color: #e9c46a99; background: #e9c46a1f; }
+.wt-ev-slot.today { border: 2px solid var(--ev-acc); background: #fff; box-shadow: 0 0 0 3px #ff7b2e2e; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-slot.today { box-shadow: 0 0 0 3px #e9c46a40; }
+/* 받은 칸: 그림은 흐리게 두고 위에 도장을 크게 */
+.wt-ev-slot.got .wt-ev-slot-face { opacity: .28; }
+.wt-ev-slot-stamp {
+  position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px; padding: 6px;
+  border-radius: 50%; background: var(--ev-bg); border: 2px solid var(--ev-acc); display: grid; place-items: center;
+  transform: rotate(-12deg); box-shadow: 0 3px 0 #0003;
+}
+.wt-ev-slot-stamp .ic { width: 100%; height: 100%; }
+.wt-ev-slot.new .wt-ev-slot-stamp { animation: wt-ev-stamp .45s cubic-bezier(.22, 1, .36, 1); }
+@keyframes wt-ev-stamp { 0% { transform: scale(1.8) rotate(-12deg); opacity: 0; } 60% { transform: scale(.9) rotate(-12deg); opacity: 1; } 100% { transform: scale(1) rotate(-12deg); } }
 .wt-ev-pop-btn {
   display: block; width: 100%; height: 48px; border-radius: 14px; border: 0; cursor: pointer;
   background: var(--ev-btn-bg); color: var(--ev-btn-fg); font-size: 16px; font-weight: 900; margin-top: 14px;
@@ -163,6 +200,20 @@
 .wt-ev-tk b { font-size: 11px; font-weight: 800; letter-spacing: .08em; opacity: .8; }
 .wt-ev-tk small { font-size: 11.5px; font-weight: 800; line-height: 1.2; min-height: 14px; }
 .wt-ev-tk.got { background: #ff7b2e22; }
+/* 받은 칸의 도장. 보상 칸(4·7일째)은 보상 아이콘을 두고 귀퉁이에 작은 도장을 붙인다 */
+.wt-ev-tk .wt-ev-icw { position: relative; }
+.wt-ev-stamp {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; padding: 6px;
+  background: var(--ev-bg); border: 2px solid var(--ev-acc); transform: rotate(-10deg); box-shadow: 0 3px 0 #0003;
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-stamp { background: var(--ev-bg2); border: 2px solid var(--ev-acc); }
+.wt-ev-stamp-mini {
+  position: absolute; right: -10px; bottom: -6px; width: 22px; height: 22px; border-radius: 50%; padding: 3px;
+  background: var(--ev-bg); border: 1px solid var(--ev-acc); transform: rotate(-10deg); box-shadow: 0 2px 0 #0003; display: grid; place-items: center;
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-stamp-mini { background: var(--ev-bg2); border: 1px solid var(--ev-acc); }
+.wt-ev-tk:not(.got) .wt-ev-icw .ic { opacity: .9; }
+.wt-ev-tk.new .wt-ev-stamp, .wt-ev-tk.new .wt-ev-stamp-mini { animation: wt-ev-stamp .45s cubic-bezier(.22, 1, .36, 1); }
 .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-tk.got { background: #e9c46a14; outline: 1px solid #e9c46a55; }
 .wt-ev-tk.today { outline: 2px solid var(--ev-pop); }
 .wt-ev-tk.today::after {
@@ -205,6 +256,62 @@
 .wt-ev-sticky button.done { background: #ffffff22; color: var(--ev-sub); box-shadow: none; }
 .wt-ev-err { margin: 10px 0 0; font-size: 13px; color: #ffb4a8; }
 .wt-ev-closed { padding: 40px 18px; text-align: center; font-size: 14px; opacity: .85; }
+
+/* PC — 폰 너비(480px 한 줄)는 그대로 두고, 768px 부터는 머리 그림을 넓게 깔고
+   그 아래에 출석 카드(한 줄 7칸 · 받기 단추는 제목 오른쪽), 다시 그 아래에 가입 선물 · 참여 방법을
+   같은 높이 두 칸으로 놓는다. 내용이 다른 둘을 좌우로 세우면 위아래 끝이 안 맞아서 이렇게 나눴다.
+   하단 고정 단추는 본문 단추와 겹쳐서 숨긴다.
+   여백·글자는 clamp 로 폭에 맞춰 늘고 준다(768px 노트북 반 화면 ~ 1440px 전체 화면) */
+@media (min-width: 768px) {
+  .wt-ev-page {
+    --ev-pad: clamp(24px, 4vw, 48px);
+    width: min(1016px, calc(100% - 40px)); max-width: none; min-height: 0; margin: 28px auto 56px;
+    border-radius: 28px; overflow: hidden;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: clamp(16px, 2.4vw, 24px);
+    grid-template-areas: "hero hero" "ev1 ev1" "ev2 how" "notice notice";
+    box-shadow: 0 24px 60px #0006;
+  }
+  .wt-ev-hero { grid-area: hero; height: clamp(320px, 34vw, 380px); background: radial-gradient(55% 85% at 78% 30%, var(--ev-bg2) 0%, var(--ev-bg) 72%); }
+  .wt-ev-hero .wt-ev-witch { right: clamp(28px, 7vw, 96px); top: 84px; height: clamp(440px, 46vw, 520px); }
+  .wt-ev-hero-t { left: var(--ev-pad); right: auto; bottom: clamp(28px, 4vw, 44px); max-width: 520px; }
+  .wt-ev-hero h1 { font-size: clamp(36px, 4.2vw, 46px); }
+  .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-hero h1 { font-size: clamp(34px, 4vw, 44px); }
+  .wt-ev-eyebrow { font-size: 18px; }
+  .wt-ev-period { font-size: 14px; }
+  .wt-ev-sec.ev1 {
+    grid-area: ev1; padding: 36px var(--ev-pad) 0;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; align-items: start;
+    grid-template-areas: "pill cta" "h2 cta" "desc cta" "strip strip" "err err";
+  }
+  .wt-ev-sec.ev1 > .wt-ev-pill { grid-area: pill; justify-self: start; }
+  .wt-ev-sec.ev1 > h2 { grid-area: h2; }
+  .wt-ev-sec.ev1 > .wt-ev-s { grid-area: desc; }
+  .wt-ev-sec.ev1 > .wt-ev-strip { grid-area: strip; grid-template-columns: repeat(8, minmax(0, 1fr)); margin-top: 18px; }
+  .wt-ev-sec.ev1 > .wt-ev-cta { grid-area: cta; align-self: end; width: clamp(220px, 26vw, 300px); margin-top: 0; }
+  .wt-ev-sec.ev1 > .wt-ev-err { grid-area: err; }
+  /* 가입 선물 · 참여 방법 — 머리(알약 · 제목) 높이가 같고 카드는 늘어나서 아래 끝이 맞는다 */
+  .wt-ev-sec.ev2 { grid-area: ev2; padding: 32px 0 0 var(--ev-pad); display: flex; flex-direction: column; }
+  .wt-ev-sec.how { grid-area: how; padding: 32px var(--ev-pad) 0 0; display: flex; flex-direction: column; }
+  .wt-ev-sec.ev2 > .wt-ev-pill, .wt-ev-sec.how > .wt-ev-pill { align-self: flex-start; }
+  .wt-ev-sec.ev2 > .wt-ev-ev2, .wt-ev-sec.how > .wt-ev-how { flex: 1; margin-top: 14px; }
+  .wt-ev-sec.how > .wt-ev-how { align-content: center; }
+  .wt-ev-sec h2 { font-size: 24px; }
+  .wt-ev-s { font-size: 14px; }
+  .wt-ev-strip { gap: 10px; padding: 16px 12px 12px; }
+  .wt-ev-tk { min-height: 112px; }
+  .wt-ev-tk .wt-ev-icw { width: 48px; height: 48px; }
+  .wt-ev-tk.big .wt-ev-icw { width: 64px; height: 60px; }
+  .wt-ev-tk b { font-size: 12px; }
+  .wt-ev-tk small { font-size: 12.5px; }
+  .wt-ev-stamp { width: 48px; height: 48px; }
+  .wt-ev-notice { grid-area: notice; margin-top: 32px; padding: 20px var(--ev-pad) 36px; font-size: 12px; }
+  .wt-ev-sticky { display: none; }
+  /* 가면무도회 머리 그림은 오른쪽에 두고 왼쪽으로 어둡게 번지게 — 글이 그림 위에 얹히지 않게 */
+  .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-hero img.wt-ev-kv { left: auto; right: 0; width: 58%; object-position: 50% 15%; }
+  .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-hero .wt-ev-ov {
+    background: linear-gradient(90deg, var(--ev-bg) 38%, #14102a99 55%, transparent 80%), linear-gradient(180deg, transparent 60%, var(--ev-bg) 100%);
+  }
+}
 
 /* 7일 완료 */
 .wt-ev-fin { position: fixed; inset: 0; z-index: 95; background: #000000b3; display: flex; align-items: center; justify-content: center; padding: 24px; }
