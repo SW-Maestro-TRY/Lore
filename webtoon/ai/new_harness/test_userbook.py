@@ -11,7 +11,10 @@ class UserbookTest(unittest.TestCase):
   self.assertEqual(userbook.block({}), '');self.assertEqual(userbook.block({'lorebook':{**self.book,'confirmed':False}}),'')
   self.assertNotIn('삭제된 정보',userbook.block(self.char,'열쇠'))
  def test_quick_seeded_cast_and_scene_exclude_other_world(self):
-  with tempfile.TemporaryDirectory() as d,patch.object(R,'world_text_for',side_effect=AssertionError('old world')),patch.object(R,'genre_lore_section',side_effect=AssertionError('old lore')),patch.object(R,'genre_samples_for',side_effect=AssertionError('old sample')):
+  # 설정집이 붙어 있으면 세계 문단·기준 샘플은 안 준다(설정집이 그 세계다). 전개 문법은 설정집과 상관없는 장르의
+  # 재미라 계속 준다(2026-10-27) — 화면이 장르를 고르면 준비 설정집을 저절로 붙여서, 빼면 어느 작품에도 안 실린다.
+  with tempfile.TemporaryDirectory() as d,patch.object(R,'world_text_for',side_effect=AssertionError('old world')),patch.object(R,'genre_lore_section',return_value=['', '## 전개 문법', '장르 문법']),patch.object(R,'genre_samples_for',side_effect=AssertionError('old sample')):
+   self.assertIn('장르 문법',R.story_input_block(self.char))
    self.assertIn('주인공은 날지 못한다',R.story_input_block(self.char))
    self.assertIn('주인공은 날지 못한다',R.seeded_input_block(self.char))
    R.stage_cast(Path(d),self.char,True)
