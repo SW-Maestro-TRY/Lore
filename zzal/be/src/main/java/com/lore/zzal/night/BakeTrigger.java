@@ -94,7 +94,7 @@ public class BakeTrigger {
                     pet.getId(), gift.getName());
             return;
         }
-        if (!gift.queue(AwakeClock.dateOf(now))) {
+        if (!gift.queue(AwakeClock.dateOf(now, pet.zone()))) {
             return;     // 이미 굽는 중이거나 판정을 지난 자리 — 되돌리면 두 번 굽는다
         }
         log.info("튜토리얼 완주 보상 큐 등록 — petId={} key={}", pet.getId(), gift.getName());
@@ -129,7 +129,7 @@ public class BakeTrigger {
                     pet.getId(), gift.getName());
             return;
         }
-        if (!gift.queue(AwakeClock.dateOf(now))) {
+        if (!gift.queue(AwakeClock.dateOf(now, pet.zone()))) {
             return;
         }
         log.info("첫 패배 선물 큐 등록 — petId={} key={}", pet.getId(), gift.getName());
@@ -144,7 +144,7 @@ public class BakeTrigger {
     @Transactional
     public void onSleep(ZzalPet pet, Instant now) {
         // ★ 밤 리듬 — 여기가 실패한 줄을 다시 굽는 하루 한 번의 자리다(NightPlanner.Occasion).
-        int queued = planner.plan(pet, AwakeClock.dateOf(now), NightPlanner.Occasion.NIGHT);
+        int queued = planner.plan(pet, AwakeClock.dateOf(now, pet.zone()), NightPlanner.Occasion.NIGHT);
         if (queued > 0) {
             claimAndBake(freshlyQueued(pet.getId()), now);
         }
@@ -170,7 +170,7 @@ public class BakeTrigger {
     public void onPieceComplete(ZzalPet pet, Instant now) {
         // ★★ 여기는 낮에도 돈다 — 방금 찬 조각의 새 동작만 올리고, <b>실패한 줄은 건드리지 않는다.</b>
         //   같은 지시문으로 여러 번 굽는 것이 설계지만 그 리듬은 밤 한 번이다(NightPlanner.Occasion).
-        int queued = planner.plan(pet, AwakeClock.dateOf(now), NightPlanner.Occasion.PIECE);
+        int queued = planner.plan(pet, AwakeClock.dateOf(now, pet.zone()), NightPlanner.Occasion.PIECE);
         if (queued > 0) {
             claimAndBake(freshlyQueued(pet.getId()), now);
         }
@@ -269,6 +269,7 @@ public class BakeTrigger {
     public boolean devBake(ZzalMotion row, Instant now) {
         // 폐기된 구 선물/해금은 개발 리모컨에서도 새로 생성하지 않는다.
         if (com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(row.getSeq())) return false;
+        // dev 전용 — 펫을 안 받으므로 날짜는 KST(운영 판정과 무관한 확인용 칸이다).
         if (!row.queue(AwakeClock.dateOf(now))) {
             return false;
         }

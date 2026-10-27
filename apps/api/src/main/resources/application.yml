@@ -225,8 +225,10 @@ app:
     pipeline-version: ${ZZAL_PIPELINE_VERSION:v1}
     motion-pipeline-version: ${ZZAL_MOTION_PIPELINE_VERSION:v1}
     # 부화 한 마리를 몇 번까지 굽나(첫 시도 포함). ★ 2026-10-07 2 → 5 — 운영 10/6 부화 32건 중 8건 실패,
-    #   대부분 게이트 오판·한 장만 깨진 격자라 다시 구우면 되는 실패였다. 5번 다 실패하면 지금처럼 FAILED + 경보.
-    max-hatch-attempts: ${ZZAL_MAX_HATCH_ATTEMPTS:5}
+    #   대부분 게이트 오판·한 장만 깨진 격자라 다시 구우면 되는 실패였다.
+    #   ★ 2026-10-27 5 → 3 — 상훈님 "안 되는 거 계속해서 뭐하냐". 10/26 펫 177·179 는 5번 다 TIMEOUT 이었다.
+    #   3번 다 실패하면 FAILED + 경보. (2층 max-attempts 는 아래 자기 기본 5 를 그대로 둔다.)
+    max-hatch-attempts: ${ZZAL_MAX_HATCH_ATTEMPTS:3}
     # 2층(격자 2장) 배경 굽기(#696 — 부화는 1층에서 끝나고 2층은 뒤에서 굽는다).
     layer2:
       # 한 번의 2층 작업이 몇 번까지 굽나(첫 시도 포함). 다 실패하면 2층 FAILED + 경보 — 사용자 화면은
@@ -398,7 +400,7 @@ app:
       to: ${ZZAL_ALERT_TO:}
       # 누적 비용을 얼마 단위로 알릴까(달러). 잔액 $70 기준 $10 이면 일곱 번 안에 다 쓴다.
       cost-step-usd: ${ZZAL_ALERT_COST_STEP_USD:10}
-      # 몇 번 연달아 실패하면 알릴까. 한 마리가 안에서 최대 5번 굽는다(max-hatch-attempts).
+      # 몇 번 연달아 실패하면 알릴까. 한 마리가 안에서 최대 3번 굽는다(max-hatch-attempts, 2026-10-27 5 → 3).
       hatch-fail-streak: ${ZZAL_ALERT_HATCH_FAIL_STREAK:3}
 
     # 행동 기록 보관 — 하루 한 번(KST 05:10) zzal_event 를 S3 로 베껴 둔다 (2026-09-14).
@@ -490,6 +492,11 @@ app:
       text-timeout-seconds: ${ZZAL_OPENAI_TEXT_TIMEOUT_SECONDS:90}
       # Optional verification cap; empty keeps the production request unchanged.
       identity-max-completion-tokens: ${ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS:}
+      # 정체성(gpt-5) 호출의 reasoning_effort 를 부화 시도 차수별로(쉼표 목록, 첫 칸 = 시도 1).
+      #   빈 칸 = 보내지 않음(모델 기본 medium). 차수가 목록보다 크면 마지막 값. 전체를 비우면 언제나 안 보냄.
+      #   허용값 minimal/low/medium/high — 그 외는 기동 실패. gpt-5 에는 none 이 없어 최저는 minimal.
+      #   ★ 2026-10-27 기본 ",low,minimal" — 시도 1 은 지금 그대로, 실패해 다시 구우면 생각을 줄여 빨리 끝낸다.
+      identity-reasoning-effort-by-attempt: ${ZZAL_OPENAI_IDENTITY_REASONING_EFFORT_BY_ATTEMPT:,low,minimal}
 
     attendance:
       # Existing worker guard; enabling custom generation is separate from automatic dispatch.

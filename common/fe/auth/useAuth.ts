@@ -111,13 +111,13 @@ function getServerSnapshot(): AuthState {
   return INITIAL;
 }
 
-/** 서버에 다시 물어 상태를 맞춘다. 로그인·로그아웃이 상태를 갱신하며, 가입은 로그인 단계로 이어진다. */
+/** 서버에 다시 물어 상태를 맞춘다. 보통은 로그인·가입·로그아웃이 알아서 부른다. */
 export function reloadMe(): Promise<void> {
   return load(true);
 }
 
 /**
- * 로그인 요청은 됐는데 **내 정보(/users/me)로 확인이 안 되는** 경우(합본 H16).
+ * 로그인·가입은 됐는데 **내 정보(/users/me)로 확인이 안 되는** 경우(합본 H16).
  * 쿠키가 저장되지 않았거나(인앱 쿠키 차단·http) 서버가 잠깐 실패한 경우다. 예전엔 이걸 삼키고
  * 성공으로 닫아, 헤더는 그대로 "로그인" 이고 여울 그림도 안 올라갔다.
  */
@@ -147,9 +147,13 @@ export async function signIn(input: LoginInput): Promise<void> {
   await confirmSession();
 }
 
-/** 가입은 계정만 생성한다. 기존 main 정책대로 로그인은 별도 단계다. */
+/**
+ * 가입. **성공하면 바로 로그인 상태가 된다**(2026-10-08 #690 — 서버가 로그인과 같은 쿠키 2종을 준다).
+ * 로그인과 마찬가지로 내 정보까지 다시 받아 채운다 — 안 그러면 헤더가 여전히 "로그인" 을 그린다.
+ */
 export async function signUp(input: SignUpInput): Promise<void> {
   await signUpApi(input);
+  await confirmSession();
 }
 
 /**

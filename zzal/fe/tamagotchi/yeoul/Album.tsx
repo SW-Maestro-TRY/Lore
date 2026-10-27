@@ -15,6 +15,7 @@ import { motionByKey } from '../constants';
 import { ACCENT, C, C2, GAEGU, TAP_MIN, gap, radius, fz, ink, paperA } from './ui';
 import { spriteUrl, useLive } from './useHatch';
 import type { Yeoul } from './useYeoul';
+import { formatInZone } from '../../lib/kst';
 
 /** 앨범에서는 서버가 준 심화 원본이 먼저다. 다른 자세/샘플로 대체해서 저장하지 않는다. */
 function albumImageUrl(live: ReturnType<typeof useLive>, key: string): string | null {
@@ -46,7 +47,7 @@ const PLACE: Record<string, string> = { sea: '바다', forest: '숲', city: '도
 function postcardDay(at: string): string {
   const t = new Date(at);
   if (Number.isNaN(t.getTime())) return '';
-  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' }).format(t);
+  return formatInZone(t, 'ko-KR', { month: 'long', day: 'numeric' }); // 아이의 시간대(옛: Asia/Seoul 고정)
 }
 
 /**
