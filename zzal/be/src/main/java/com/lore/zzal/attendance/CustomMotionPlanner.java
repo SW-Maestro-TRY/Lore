@@ -9,19 +9,24 @@ public final class CustomMotionPlanner {
  /** Pet languages the product writes in; anything else falls back to Korean like ZzalPet#getDiaryLanguage. */
  public static final Set<String> LANGUAGES=Set.of("ko","ja","en");
  static String language(String value){return value!=null&&LANGUAGES.contains(value)?value:"ko";}
- /** Author-facing language line. Titles are shown to the owner as-is, so they must be in the pet's language. */
+ /**
+  * Author-facing language line. Generation text feeds the English grid prompt verbatim, so it stays English;
+  * only the owner-visible title is written in the pet's language. One call returns both.
+  */
  public static String languageInstruction(String language){
   String name=switch(language(language)){case "ja"->"Japanese (日本語)";case "en"->"English";default->"Korean (한국어)";};
-  return "OUTPUT LANGUAGE: "+language(language)+". Write every title, action, pose text after its prefix, props, staging and rationale in "+name+". Titles are shown to the owner verbatim, so a title in any other language is rejected. Keep JSON keys, enum values and the pose prefix (standing:/crouch:/lying:) in English.";
+  return "OUTPUT LANGUAGE: title="+language(language)+", everything else=en. Write action, pose, props, staging and rationale in plain English only (no Korean, Japanese or Chinese characters); they are inserted into an English image prompt. Keep the pose prefix standing:/crouch:/lying:. Write ONLY title in "+name+": a short natural name shown to the owner verbatim. A title in another language, or non-English generation text, is rejected.";
  }
- /** Deterministic script check on titles only; null when the title matches the pet language. */
+ private static boolean script(String t,Character.UnicodeScript... scripts){var set=Set.of(scripts);return t!=null&&t.codePoints().anyMatch(c->set.contains(Character.UnicodeScript.of(c)));}
+ private static boolean cjk(String t){return script(t,Character.UnicodeScript.HANGUL,Character.UnicodeScript.HIRAGANA,Character.UnicodeScript.KATAKANA,Character.UnicodeScript.HAN);}
+ /** Deterministic script check: title in the pet language, generation text free of CJK; null when both hold. */
  static String languageMismatch(CustomMotionPlan plan,String language){
   String lang=language(language);
-  for(var m:plan.motions()){String t=m.title();boolean hangul=t.codePoints().anyMatch(c->Character.UnicodeScript.of(c)==Character.UnicodeScript.HANGUL);
-   boolean kana=t.codePoints().anyMatch(c->{var s=Character.UnicodeScript.of(c);return s==Character.UnicodeScript.HIRAGANA||s==Character.UnicodeScript.KATAKANA;});
-   boolean han=t.codePoints().anyMatch(c->Character.UnicodeScript.of(c)==Character.UnicodeScript.HAN);
+  for(var m:plan.motions()){String t=m.title();
+   boolean hangul=script(t,Character.UnicodeScript.HANGUL),kana=script(t,Character.UnicodeScript.HIRAGANA,Character.UnicodeScript.KATAKANA),han=script(t,Character.UnicodeScript.HAN);
    boolean ok=switch(lang){case "ja"->kana||han;case "en"->!hangul&&!kana;default->hangul;};
-   if(!ok)return "Motion title language does not match pet language "+lang+": order "+m.order();}
+   if(!ok)return "Motion title language does not match pet language "+lang+": order "+m.order();
+   if(cjk(m.action())||cjk(m.pose())||cjk(m.staging())||m.props().stream().anyMatch(CustomMotionPlanner::cjk))return "Motion generation text must be English: order "+m.order();}
   return null;
  }
  @FunctionalInterface public interface Author {CustomMotionPlan propose(Context context)throws Exception;}

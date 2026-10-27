@@ -62,22 +62,22 @@ class BundleSourcePlanPostgresTest {
   long j=job("typed");String v3=CustomPlannerTest.SNAPSHOT;
   db.update("UPDATE zzal_custom_bundle_job SET snapshot_json=?,input_hash=? WHERE id=?",v3,AttendanceService.hash(v3),j);
   var service=new CustomPlanningService(db,plans);var calls=new java.util.concurrent.atomic.AtomicInteger();
-  transaction(()->service.prepare(j,c->{calls.incrementAndGet();return CustomPlannerTest.fixture();},NOW));
+  transaction(()->service.prepare(j,c->{calls.incrementAndGet();return CustomPlannerTest.englishFixture();},NOW));
   String frozen=plans.requirePlan(j,v3);var request=CustomGenerationRequest.from(j,v3,frozen);
   assertThat(request.frozenPlan().motions()).hasSize(8);assertThat(request.quality()).isEqualTo("medium");
-  assertThat(service.prepare(j,c->{throw new AssertionError("must reuse frozen plan");},NOW)).isEqualTo(CustomPlannerTest.fixture());assertThat(calls.get()).isEqualTo(1);
+  assertThat(service.prepare(j,c->{throw new AssertionError("must reuse frozen plan");},NOW)).isEqualTo(CustomPlannerTest.englishFixture());assertThat(calls.get()).isEqualTo(1);
   assertThat(plans.requirePlan(j,v3)).isEqualTo(frozen);assertThat(state(j)).isEqualTo("RESERVED");
  }
  @Test void foreignLanguageTitlesAreRejectedAsNamedFailureWithoutReservation(){
   long j=job("lang");String v3=CustomPlannerTest.SNAPSHOT;
   db.update("UPDATE zzal_custom_bundle_job SET snapshot_json=?,input_hash=? WHERE id=?",v3,AttendanceService.hash(v3),j);
   var service=new CustomPlanningService(db,plans);var calls=new java.util.concurrent.atomic.AtomicInteger();
-  assertThatThrownBy(()->transaction(()->service.prepare(j,c->{calls.incrementAndGet();assertThat(c.instructions()).contains("OUTPUT LANGUAGE: ko");return CustomPlannerTest.retitled("Chocolate Victory Pose");},NOW))).isInstanceOf(CustomMotionPlanner.LanguageMismatch.class);
+  assertThatThrownBy(()->transaction(()->service.prepare(j,c->{calls.incrementAndGet();assertThat(c.instructions()).contains("title=ko");return CustomPlannerTest.retitled("Chocolate Victory Pose");},NOW))).isInstanceOf(CustomMotionPlanner.LanguageMismatch.class);
   assertThat(db.queryForObject("SELECT error_code FROM zzal_custom_bundle_job WHERE id=?",String.class,j)).isEqualTo("PLAN_LANGUAGE_MISMATCH");
   assertThat(db.queryForObject("SELECT count(*) FROM zzal_custom_bundle_source WHERE job_id=?",Integer.class,j)).isZero();
-  assertThatThrownBy(()->service.prepare(j,c->{calls.incrementAndGet();return CustomPlannerTest.fixture();},NOW)).hasMessage("PLANNING_ALREADY_CLAIMED");assertThat(calls.get()).isEqualTo(1);
+  assertThatThrownBy(()->service.prepare(j,c->{calls.incrementAndGet();return CustomPlannerTest.englishFixture();},NOW)).hasMessage("PLANNING_ALREADY_CLAIMED");assertThat(calls.get()).isEqualTo(1);
   db.update("UPDATE zzal_pet SET diary_language='en' WHERE id=1");db.update("UPDATE zzal_custom_bundle_job SET error_code=NULL WHERE id=?",j);
-  transaction(()->service.prepare(j,c->{assertThat(c.instructions()).contains("OUTPUT LANGUAGE: en");return CustomPlannerTest.retitled("Chocolate Victory Pose");},NOW));
+  transaction(()->service.prepare(j,c->{assertThat(c.instructions()).contains("title=en");return CustomPlannerTest.retitled("Chocolate Victory Pose");},NOW));
   assertThat(db.queryForObject("SELECT error_code FROM zzal_custom_bundle_job WHERE id=?",String.class,j)).isNull();
  }
  @Test void typedPlannerExcludesUsedSourcesAndCannotRewriteHistoricalPlan(){
@@ -103,14 +103,14 @@ class BundleSourcePlanPostgresTest {
  @Test void sameJobConcurrentPlanningCallsAuthorOnlyOnce()throws Exception {
   long j=job("concurrent-plan");db.update("UPDATE zzal_custom_bundle_job SET snapshot_json=? WHERE id=?",CustomPlannerTest.SNAPSHOT,j);
   var service=new CustomPlanningService(db,plans);var entered=new CountDownLatch(1);var release=new CountDownLatch(1);var calls=new java.util.concurrent.atomic.AtomicInteger();var pool=Executors.newFixedThreadPool(2);
-  try{var first=pool.submit(()->{transaction(()->service.prepare(j,c->{calls.incrementAndGet();entered.countDown();if(!release.await(10,TimeUnit.SECONDS))throw new IllegalStateException("timeout");return CustomPlannerTest.fixture();},NOW));return true;});assertThat(entered.await(5,TimeUnit.SECONDS)).isTrue();
-   assertThatThrownBy(()->service.prepare(j,c->{calls.incrementAndGet();return CustomPlannerTest.fixture();},NOW)).hasMessage("PLANNING_ALREADY_CLAIMED");release.countDown();assertThat(first.get(10,TimeUnit.SECONDS)).isTrue();assertThat(calls.get()).isEqualTo(1);
+  try{var first=pool.submit(()->{transaction(()->service.prepare(j,c->{calls.incrementAndGet();entered.countDown();if(!release.await(10,TimeUnit.SECONDS))throw new IllegalStateException("timeout");return CustomPlannerTest.englishFixture();},NOW));return true;});assertThat(entered.await(5,TimeUnit.SECONDS)).isTrue();
+   assertThatThrownBy(()->service.prepare(j,c->{calls.incrementAndGet();return CustomPlannerTest.englishFixture();},NOW)).hasMessage("PLANNING_ALREADY_CLAIMED");release.countDown();assertThat(first.get(10,TimeUnit.SECONDS)).isTrue();assertThat(calls.get()).isEqualTo(1);
   }finally{release.countDown();pool.shutdownNow();}
  }
  @Test void failedAuthorIsNotAutomaticallyInvokedAgain(){
   long j=job("uncertain-plan");db.update("UPDATE zzal_custom_bundle_job SET snapshot_json=? WHERE id=?",CustomPlannerTest.SNAPSHOT,j);var service=new CustomPlanningService(db,plans);var calls=new java.util.concurrent.atomic.AtomicInteger();
   assertThatThrownBy(()->service.prepare(j,c->{calls.incrementAndGet();throw new IllegalStateException("unknown result");},NOW)).hasMessage("unknown result");
-  assertThatThrownBy(()->service.prepare(j,c->{calls.incrementAndGet();return CustomPlannerTest.fixture();},NOW)).hasMessage("PLANNING_ALREADY_CLAIMED");assertThat(calls.get()).isEqualTo(1);
+  assertThatThrownBy(()->service.prepare(j,c->{calls.incrementAndGet();return CustomPlannerTest.englishFixture();},NOW)).hasMessage("PLANNING_ALREADY_CLAIMED");assertThat(calls.get()).isEqualTo(1);
  }
  @Test void uncertainClaimAndFailedOutputRetainReservation(){
   long j=job("one");reserve(j,11);db.update("UPDATE zzal_custom_bundle_job SET state='CLAIMED' WHERE id=?",j);
