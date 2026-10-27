@@ -34,7 +34,7 @@
 .wt .wt-ch-res-share { position: relative; flex-grow: 1; display: flex; }
 .wt .wt-ch-res-share .btn { width: 100%; }
 .wt .wt-ch-res-menu {
-  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 4; background: #fff; border: 1px solid var(--line-strong);
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 4; background: var(--bg-2); border: 1px solid var(--line-strong);
   border-radius: 14px; padding: 6px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(15, 51, 63, 0.14);
 }
 .wt .wt-ch-res-menu button {
