@@ -1477,11 +1477,17 @@ def resolve_genre_templates(genre: str) -> list:
     if not g:
         return []
 
-    preset = (table.get("_preset_map") or {}).get(g.lower())
+    preset_map = table.get("_preset_map") or {}
+    preset = preset_map.get(g.lower())
     if preset:
         return [k for k in preset if k in names]
     if g in names:
         return [g]
+    # 자유 입력 안에 별칭이 들어 있으면 그 조합을 쓴다 — 「마법학교 · 판타지」가 판타지 템플릿(최종결전)까지
+    # 끌고 오지 않게(2026-10-27). 긴 별칭이 먼저다.
+    for alias in sorted(preset_map, key=len, reverse=True):
+        if alias and alias in g.lower():
+            return [k for k in preset_map[alias] if k in names]
     # 자유 입력("로맨스 판타지", "헌터물 스릴러") 안에 장르명이 들어 있는 경우.
     hits = [k for k in names if k in g]
     return hits
