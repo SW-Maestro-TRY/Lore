@@ -109,6 +109,7 @@ public class RunDeleteService {
         // 1. 그림 먼저. 키는 행에만 있다.
         List<String> keys = new ArrayList<>(rows.pageKeys(runId));
         keys.addAll(rows.bakedKeys(runId));
+        keys.addAll(rows.castSheetKeys(runId));
         int images = 0;
         if (hasBucket && !keys.isEmpty()) {
             images = storage.delete(keys);
@@ -127,6 +128,7 @@ public class RunDeleteService {
         // 때는 WebtoonPurge 가 따로 지운다.
         n += rows.deleteSeriesDraft(runId);
         n += rows.deleteSeriesChapter(runId);
+        n += rows.deleteCastSheets(runId);   // 만들기 기록 번호로 찾으므로 그보다 먼저
         n += rows.deleteWorks(runId);
         n += rows.deleteJobs(runId);
 

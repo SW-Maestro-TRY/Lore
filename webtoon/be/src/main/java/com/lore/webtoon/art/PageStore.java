@@ -41,6 +41,14 @@ public class PageStore {
         this.baked = baked;
     }
 
+    /* 새 그림으로 바뀐 옛 그림을 적어 둘 대기열 — 7일 뒤 ArtDiscardSweep 이 지운다. 세터인 이유는 위와 같다. */
+    private ArtDiscards discards;
+
+    @Autowired(required = false)
+    void setDiscards(ArtDiscards discards) {
+        this.discards = discards;
+    }
+
     @Autowired
     public PageStore(WebtoonPageRepository pages, PrivateArt art,
                      @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally) {
@@ -58,6 +66,10 @@ public class PageStore {
     /**
      * 올린 것을 적는다. 같은 자리(작품·장·폭)가 이미 있으면 주소만 바꾼다 —
      * 다시 구운 그림이 올라온 것이므로 옛 주소를 들고 있으면 안 된다.
+     *
+     * 바뀐 옛 그림은 대기열에 적는다. 그림은 올릴 때마다 새 이름을 받으므로, 여기서 옛
+     * 이름을 놓치면 그 그림을 가리키는 곳이 어디에도 안 남는다 — 작품을 지워도, 탈퇴해도
+     * 안 지워진다. 다시 그리기는 한 장만 고쳐도 그 작품의 장 전부를 다시 올리므로 쌓이는 양이 크다.
      *
      * @return 이번에 새로 적은 줄 수 (바꾼 것은 안 센다)
      */
@@ -84,8 +96,12 @@ public class PageStore {
             }
             var found = pages.findByRunIdAndPageNoAndWidth(runId, one.pageNo(), one.width());
             if (found.isPresent()) {
+                String old = found.get().getS3Key();
                 found.get().movedTo(one.key(), one.bytes(), now);
                 pages.save(found.get());
+                if (discards != null && old != null && !old.equals(one.key())) {
+                    discards.discard(old, ArtDiscards.REPLACED, now);
+                }
             } else {
                 pages.save(WebtoonPage.of(runId, one.pageNo(), one.width(),
                                           one.key(), one.bytes(), now));

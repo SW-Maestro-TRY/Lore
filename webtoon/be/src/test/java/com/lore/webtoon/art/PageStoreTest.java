@@ -16,6 +16,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -84,6 +86,31 @@ class PageStoreTest {
 
         assertThat(rows).hasSize(1);            // 줄이 늘지 않는다
         assertThat(store.urlOf("run-1", 2, 1080)).endsWith("/new.jpg");
+    }
+
+    @Test
+    @DisplayName("주소가 바뀌면 옛 그림을 버릴 대기열에 적는다 — 안 적으면 아무 데서도 안 가리켜 영영 남는다")
+    void 바뀐_옛_그림은_대기열로() {
+        ArtDiscards discards = mock(ArtDiscards.class);
+        store.setDiscards(discards);
+
+        store.record("run-1", List.of(up(2, 1080, "images/webtoon/old.jpg")));
+        verify(discards, never()).discard(anyString(), anyString(), any());   // 처음 적을 때는 버릴 것이 없다
+
+        store.record("run-1", List.of(up(2, 1080, "images/webtoon/new.jpg")));
+        verify(discards).discard("images/webtoon/old.jpg", ArtDiscards.REPLACED, FIXED.instant());
+    }
+
+    @Test
+    @DisplayName("같은 주소로 다시 적으면 아무것도 안 버린다 — 지금 쓰는 그림을 지우게 된다")
+    void 같은_주소면_안_버린다() {
+        ArtDiscards discards = mock(ArtDiscards.class);
+        store.setDiscards(discards);
+
+        store.record("run-1", List.of(up(2, 1080, "images/webtoon/same.jpg")));
+        store.record("run-1", List.of(up(2, 1080, "images/webtoon/same.jpg")));
+
+        verify(discards, never()).discard(anyString(), anyString(), any());
     }
 
     @Test

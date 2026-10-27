@@ -53,6 +53,14 @@ public class BakeService {
         this.ledger = ledger;
     }
 
+    /* 다시 굽거나 거둔 옛 구운 그림을 적어 둘 대기열 — 7일 뒤 ArtDiscardSweep 이 지운다. */
+    private com.lore.webtoon.art.ArtDiscards discards;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDiscards(com.lore.webtoon.art.ArtDiscards discards) {
+        this.discards = discards;
+    }
+
     public BakeService(PageStore pages, BakedPageRepository baked, OverlayStore overlays,
                        BubbleArtist artist, S3Storage storage) {
         this.pages = pages;
@@ -130,10 +138,23 @@ public class BakeService {
         return pages.widthsOf(runId).getOrDefault(no, 1080);
     }
 
+    /** 구운 줄을 적는다. 다시 구운 것이면 옛 구운 그림은 대기열로 — 굽기마다 새 이름으로 올라간다. */
     private void record(String runId, int no, int width, String key) {
         baked.findByRunIdAndPageNoAndWidth(runId, no, width)
-                .ifPresentOrElse(one -> one.movedTo(key, Instant.now()),
+                .ifPresentOrElse(one -> {
+                            String old = one.getS3Key();
+                            one.movedTo(key, Instant.now());
+                            if (!key.equals(old)) {
+                                discard(old, com.lore.webtoon.art.ArtDiscards.REPLACED);
+                            }
+                        },
                         () -> baked.save(BakedPage.of(runId, no, width, key, Instant.now())));
+    }
+
+    private void discard(String key, String reason) {
+        if (discards != null) {
+            discards.discard(key, reason, Instant.now());
+        }
     }
 
     /**
@@ -149,11 +170,14 @@ public class BakeService {
         dropBaked(runId, pageNo);
     }
 
-    /** 이번에 얹은 것이 하나도 없으면 구운 줄을 거둔다 — 옛 말풍선이 되살아나면 안 된다. */
+    /** 이번에 얹은 것이 하나도 없으면 구운 줄을 거둔다 — 옛 말풍선이 되살아나면 안 된다. 그림은 대기열로. */
     private void dropBaked(String runId, int no) {
         baked.findByRunIdOrderByPageNoAscWidthAsc(runId).stream()
                 .filter(one -> one.getPageNo() == no)
-                .forEach(baked::delete);
+                .forEach(one -> {
+                    baked.delete(one);
+                    discard(one.getS3Key(), com.lore.webtoon.art.ArtDiscards.DROPPED);
+                });
     }
 
     /* ---- 보는 쪽이 묻는 것 ------------------------------------------------- */

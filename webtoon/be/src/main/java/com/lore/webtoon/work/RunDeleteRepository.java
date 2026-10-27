@@ -25,6 +25,11 @@ public interface RunDeleteRepository extends JpaRepository<WebtoonJob, Long> {
     @Query("select b.s3Key from BakedPage b where b.runId = :runId")
     List<String> bakedKeys(@Param("runId") String runId);
 
+    /** 조연 시트(#548). 만들기 기록 번호로 묶여 있어서, 만들기 기록을 지우기 전에 모은다. */
+    @Query("select c.s3Key from WebtoonCastSheet c where c.s3Key is not null"
+            + " and c.jobId in (select j.publicId from WebtoonJob j where j.runId = :runId)")
+    List<String> castSheetKeys(@Param("runId") String runId);
+
     /* ---- 작품에 딸린 것 ---------------------------------------------- */
 
     @Modifying
@@ -67,5 +72,9 @@ public interface RunDeleteRepository extends JpaRepository<WebtoonJob, Long> {
     @Modifying
     @Query("delete from SeriesChapter c where c.jobId in (select j.publicId from WebtoonJob j where j.runId = :runId)")
     int deleteSeriesChapter(@Param("runId") String runId);
+    /** 조연 시트 행 — 인물 이름이 들어 있다. 만들기 기록보다 먼저 지운다(그 번호로 찾는다). */
+    @Modifying
+    @Query("delete from WebtoonCastSheet c where c.jobId in (select j.publicId from WebtoonJob j where j.runId = :runId)")
+    int deleteCastSheets(@Param("runId") String runId);
 
 }
