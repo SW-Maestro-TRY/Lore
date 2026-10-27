@@ -11,6 +11,7 @@ import './compact-menu.css';
 import LanguageSelector from '../../LanguageSelector';
 import { useOpenAnnouncements } from '../announcements/AnnouncementsGate';
 import { useZzalLocale } from '../../lib/locale';
+import { getDisplayZone } from '../../lib/kst';
 import { CHAT_MAX_CHARS } from '../rules';
 import { FLOOR_DIRT_ASSETS } from '../floorDirtAssets';
 import { useFocusedAnalytics } from './useFocusedAnalytics';
@@ -39,7 +40,7 @@ const blocks: Record<string, string> = {
 };
 const dateTime = (value: string,locale:string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' });
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: getDisplayZone() });
 };
 
 /** The service root owns useHatchState. This view never creates presence/polling/UUID owners. */
