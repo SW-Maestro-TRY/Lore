@@ -160,6 +160,21 @@ def base_block(char: dict) -> list[str]:
     return [input_block(char).rstrip("\n"), *settings_block(char)]
 
 
+def genre_lines(char: dict) -> list[str]:
+    """원고가 없을 때 이야기 단계에 주는 장르 자료 — 빠른 길의 줄거리 씨앗 입력(run.seeded_input_block)과
+    같은 둘이다. 세계 문단은 설정집이 없을 때만(설정집이 그 세계다), 전개 문법은 장르가 있으면 늘.
+    기준 샘플 카드는 안 준다 — 다른 주인공의 사건이라 방향 옆에 두면 소재가 섞여 든다."""
+    genre = (char.get("genre") or "").strip()
+    if not genre:
+        return []
+    lines: list[str] = []
+    world = "" if char.get("lorebook") else R.world_text_for(genre)
+    if world:
+        lines += ["", "## 이 세계의 배경 — 이 안에서 무엇이 벌어질지는 정해져 있지 않다", "", world]
+    lines += R.genre_lore_section(genre)
+    return lines
+
+
 def character_lines(char: dict) -> list[str]:
     """장면 단계의 「[캐릭터]」 절. 카드는 종·세계만(`input_block` 과 같은 이유)."""
     lines = ["", "[캐릭터]", f"{char['name']} — {char.get('description') or ''}".rstrip(" —")]
@@ -309,8 +324,11 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: 
     if note:
         lines += ["", "## 이번에 다시 세우며 반영할 것 — 사용자가 남긴 말", note]
     # 원고(MANUSCRIPT_MIN 자 이상)는 그대로 세운다. 줄거리 없이 설정집만 붙였거나(사용자 결정 2026-10-24)
-    # 방향만 짧게 적었으면(2026-10-27) 설정집·방향 위에서 1화의 사건을 세운다.
+    # 방향만 짧게 적었으면(2026-10-27) 설정집·방향 위에서 1화의 사건을 세운다 — 그때는 빠른 길처럼
+    # 장르의 세계 문단과 전개 문법을 준다. 원고 길에는 안 준다(적힌 글이 판이라 다른 소재가 섞여 든다).
     template = "own/story_prompt" if is_manuscript(char) else "own/story_prompt_book"
+    if not is_manuscript(char):
+        lines += genre_lines(char)
     cast = R.read_json(run_dir / "cast.json") if (run_dir / "cast.json").is_file() else None
     if expands_cast(char) and isinstance(cast, list) and cast:
         lines += cast_lines(cast)               # 인물 단계가 먼저 세운 사람들로 1화를 쓴다(run_own 순서)
