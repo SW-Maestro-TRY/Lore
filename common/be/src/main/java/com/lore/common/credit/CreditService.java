@@ -36,10 +36,13 @@ public class CreditService {
        서버가 아예 안 뜬다. 검사로는 안 잡힌다: 검사는 이 클래스를 손으로
        만들므로 스프링이 고를 일이 없다. */
     /* 가입 지급은 웹툰 파도 한 편 값과 같게 둔다 — 가입만 해도 한 편은 만들 수 있게(#787). */
+    /* 매일 무료는 기본 0 이다(2026-10-27). 날마다 20C 를 주면 하루 한 편 이하로 쓰는
+       사람은 돈을 낼 일이 없어서, 7일 연속 출석({@link CreditAttendanceService})으로
+       바꿨다. 다시 켜려면 lore.credit.daily 에 값을 넣는다. */
     @Autowired
     public CreditService(CreditEventRepository events, CreditLedger ledger,
                          @Value("${lore.credit.welcome:15}") int welcome,
-                         @Value("${lore.credit.daily:20}") int daily) {
+                         @Value("${lore.credit.daily:0}") int daily) {
         this(events, ledger, welcome, daily, Clock.system(ZONE));
     }
 
@@ -73,11 +76,10 @@ public class CreditService {
     }
 
     /**
-     * 오늘 몫까지 챙겨 준 다음의 잔액.
+     * 가입 축하(와 켜져 있으면 오늘 몫)까지 챙겨 준 다음의 잔액.
      *
-     * 화면이 잔액을 물을 때마다 부른다 — 따로 "받기" 단추를 두지 않는다.
-     * 받으러 눌러야 하는 무료 크레딧은 안 누른 사람에게는 없는 것과 같고,
-     * 그 단추를 누르는 일 자체가 사람이 할 일이 아니다.
+     * 화면이 잔액을 물을 때마다 부른다. 매일 몫은 기본이 꺼짐(0)이라 지금은 가입
+     * 축하만 챙긴다 — 출석 보상은 「받기」를 눌러야 들어간다({@link CreditAttendanceService}).
      */
     @Transactional
     public int balanceWithDaily(Long userId) {
