@@ -13,6 +13,9 @@ public interface WebtoonJobRepository extends JpaRepository<WebtoonJob, Long> {
 
     Optional<WebtoonJob> findByPublicId(String publicId);
 
+    /** 이 작품을 만든 가장 최근 작업 — 다 만들어진 뒤 어떤 캐릭터로 만들었는지 볼 때(AfterRun, 2026-10-27). */
+    Optional<WebtoonJob> findFirstByRunIdOrderByIdDesc(String runId);
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select j from WebtoonJob j where j.publicId = :publicId")
     Optional<WebtoonJob> lockByPublicId(@Param("publicId") String publicId);
