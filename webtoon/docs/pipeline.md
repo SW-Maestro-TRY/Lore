@@ -39,7 +39,7 @@ Parameter Store). 모델은 전부 OpenAI 다.
 | 3 | `STORY_REVIEW` | 이야기 후보 검수 — 고르기 전에 후보마다 어디서 걸리는지 | **gemini-3.5-flash**¹ | 1 |
 | 1~2 와 동시 | `SHEET` | 캐릭터 시트 사양(사진 · 설명 → 글) | gpt-4.1 | 1 · 다시 그리기마다 1 |
 | 1~2 와 동시 | `SHEET_IMAGE` | 캐릭터 시트 그림 | **gpt-image-2** | 1 (안전 기준에 걸리면 스스로 1번 더) |
-| 4 | `SCENE` | 고른 이야기를 장면으로 나누기(장면마다 장소 · 벌어지는 일 · 나레이션) | **gpt-5.1** | 1 |
+| 4 | `SCENE` | 고른 이야기를 장면으로 나누기(장면마다 장소 · 벌어지는 일 · 나레이션) — 장면 하나는 중심 사건 하나 | **google/gemini-3.8-flash** (OpenRouter)² | 1 |
 | 4 | `NARRATION` | 장면 글을 받은 뒤 나레이션 상자만 따로 — 그림·말풍선으로 안 되는 사실만, 빈 장은 「없음」으로 그림 단계에 (#758) | **gpt-5.1** | 1 (끄기 `NH_NARRATION_STAGE=0`, 내 내용으로 길은 안 돎) |
 | 5 | `PAGE_IMAGE` | 장 그림(표지 1장 + 장면 수) | **gpt-image-2** | 장 수 + 다시 그린 수 |
 | 5 | `PAGE_REVIEW` | 장 검수 — 장마다 그린 직후 | **gemini-3.5-flash**¹ | 표지 뺀 장 수 + 다시 그린 수 |
@@ -56,7 +56,11 @@ PAGE_REVIEW 8번(gpt-4.1), SHEET_IMAGE 1번 · PAGE_IMAGE 9번(gpt-image-2).
 
 - **검수 넷(이야기 · 장 · 표지 · 화 전체)은 gemini 다(2026-10-26).** ¹ gemini 키(`GEMINI_API_KEY`, 서버에는
   `HAEUN_GEMINI_API_KEY`)가 있을 때만이다. 키가 없으면 전처럼 OpenAI 로 돈다 — 이야기 · 장 · 표지 검수는
-  gpt-4.1, 화 전체 검수는 gpt-5.1. 정하는 곳은 `llm.py` 의 `STAGE_DEFAULT_PROVIDERS` 이고, 단계별
+  gpt-4.1, 화 전체 검수는 gpt-5.1.
+- **장면 나누기는 OpenRouter 의 google/gemini-3.8-flash 다(2026-10-27, 기준은 `story-principles.md`).** ² `OPENROUTER_API_KEY`
+  가 있을 때만이다. 비교 실험을 전부 OpenRouter 로 했기 때문에 그 길 그대로 두었고, Gemini 직접 API 는
+  시험하지 않았다. 키가 없으면(지금 운영) 전처럼 gpt-5.1 이다. 운영을 바꾸려면 OpenRouter 키를 넣는
+  결정이 먼저다. 정하는 곳은 `llm.py` 의 `STAGE_DEFAULT_PROVIDERS` 이고, 단계별
   `<단계>_PROVIDER` 를 적으면 그쪽이 이긴다. 전체 설정 `NH_PROVIDER` · `NH_MODEL` 보다는 이 표가 앞이다.
 - 캐릭터 시트는 **이야기와 나란히** 그리지만, 시트 사양(글)은 gpt-5.1 이 아니라 **gpt-4.1** 이다.
 - 명령줄로 직접 돌린 작품(`run.py --no-story-review`)에는 이야기 검수 기록이 없다. 서버로 만든 작품은

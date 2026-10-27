@@ -218,6 +218,12 @@ services:
       LORE_WEBTOON_ALERT_ENV: ${LORE_WEBTOON_ALERT_ENV:-dev}
       NH_STORY_AXES: ${NH_STORY_AXES:-}
       NH_STORY_ENGINES: ${NH_STORY_ENGINES:-}
+      # 단계별 모델 덮어쓰기(new_harness/llm.py 의 <단계>_PROVIDER·<단계>_MODEL). dev 에서 이야기·인물만
+      # Gemini 로 보려고 연 통로(2026-10-27). 비우면 NH_PROVIDER 와 단계 기본값을 따른다.
+      STORY_PROVIDER: ${STORY_PROVIDER:-}
+      STORY_MODEL: ${STORY_MODEL:-}
+      CAST_PROVIDER: ${CAST_PROVIDER:-}
+      CAST_MODEL: ${CAST_MODEL:-}
       # 하네스가 다 그린 그림을 올리고 비용을 적을 때 서버에 대는 한 마디
       # (lore.webtoon.internal-token · upload/s3_upload.py). 비우면 S3 에는 올라가도
       # 주소가 DB 에 안 적힌다.
