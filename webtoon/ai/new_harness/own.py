@@ -609,8 +609,8 @@ def stage_scenes(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang:
     R.write_text(run_dir / "scene.md", text)
     R.record(run_dir, meta)
     parsed = R.parse_scenes(text)
-    if len(parsed["scenes"]) < 4:
-        warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (4개 이상이어야 합니다). "
+    if len(parsed["scenes"]) < 3:
+        warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (3개 이상이어야 합니다). "
              f"원문은 {run_dir / 'scene.md'} 에 그대로 있습니다.")
     R.write_json(run_dir / "scenes.json", parsed)
     if (run_dir / "continuation.json").is_file():
