@@ -112,7 +112,8 @@ public class CreditController {
             paid 는 그중 충전으로 산 몫이다. 쓸 때는 무료로 받은 몫부터 빠진다.
 
             attendance 는 7일 연속 출석 카드다 — 오늘 받았는지(claimed), 오늘이 몇 일째인지
-            (today), 채운 칸(stamped), 다음 보상(next), 화면 겉(theme: HALLOWEEN · MASQUERADE).
+            (today), 오늘 몫(reward), 채운 칸(stamped), 다음 큰 보상(next, 4일째 · 7일째),
+            일곱 칸 보상(rewards), 화면 겉(theme: HALLOWEEN · MASQUERADE).
             보기만 하고 찍지는 않는다. 찍는 것은 POST /me/attendance.""")
     @GetMapping("/me")
     public ApiResponse<Balance> balance(@LoginUser Long userId) {
@@ -122,7 +123,7 @@ public class CreditController {
     }
 
     @Operation(summary = "오늘 출석 받기", description = """
-            오늘 출석을 찍는다. 4일째면 5C, 7일째면 20C 가 그 자리에서 들어간다.
+            오늘 출석을 찍고 그날 몫을 그 자리에서 준다 — 1·2·3·5·6일째 2C, 4일째 5C, 7일째 10C(한 주 25C).
 
             · 하루 한 번. 같은 날 몇 번을 불러도 한 번만 찍히고 보상도 한 번만 들어간다
             · 하루라도 빠지면 1일째부터. 날짜는 한국 시각 자정에 바뀐다

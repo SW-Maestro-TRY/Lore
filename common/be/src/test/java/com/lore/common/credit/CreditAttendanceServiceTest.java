@@ -79,7 +79,7 @@ class CreditAttendanceServiceTest {
     private CreditAttendanceService service(LocalDate day) {
         Clock clock = on(day);
         CreditService credits = new CreditService(events, new CreditLedger(events, clock), 15, 0, clock);
-        return new CreditAttendanceService(days, credits, 5, 20, OPENS, HALLOWEEN_UNTIL, clock);
+        return new CreditAttendanceService(days, credits, 2, 5, 10, OPENS, HALLOWEEN_UNTIL, clock);
     }
 
     private int balance() {
@@ -92,13 +92,17 @@ class CreditAttendanceServiceTest {
     }
 
     @Test
-    @DisplayName("7일 연속이면 4일째 5C, 7일째 20C — 열쇠는 카드 시작일로")
+    @DisplayName("7일 연속이면 날마다 2C, 4일째 5C, 7일째 10C — 한 주 25C, 열쇠는 카드 시작일로")
     void 칠일_연속() {
+        List<Integer> each = new ArrayList<>();
         for (int i = 0; i < 7; i++) {
-            service(OPENS.plusDays(i)).claim(ME);
+            each.add(service(OPENS.plusDays(i)).claim(ME).granted());
         }
+        assertThat(each).containsExactly(2, 2, 2, 5, 2, 2, 10);
         assertThat(balance()).isEqualTo(25);
-        assertThat(rewardKeys()).containsExactly("attend-2026-10-28-d4", "attend-2026-10-28-d7");
+        assertThat(rewardKeys()).containsExactly(
+                "attend-2026-10-28-d1", "attend-2026-10-28-d2", "attend-2026-10-28-d3", "attend-2026-10-28-d4",
+                "attend-2026-10-28-d5", "attend-2026-10-28-d6", "attend-2026-10-28-d7");
     }
 
     @Test
@@ -114,7 +118,7 @@ class CreditAttendanceServiceTest {
         assertThat(again.granted()).isZero();
         assertThat(again.today()).isEqualTo(4);
         assertThat(attendRows).hasSize(4);
-        assertThat(balance()).isEqualTo(5);
+        assertThat(balance()).isEqualTo(2 + 2 + 2 + 5);
     }
 
     @Test
@@ -131,7 +135,10 @@ class CreditAttendanceServiceTest {
         for (int i = 1; i < 4; i++) {
             service(back.plusDays(i)).claim(ME);
         }
-        assertThat(rewardKeys()).containsExactly("attend-2026-11-01-d4");
+        assertThat(rewardKeys()).filteredOn(k -> k.startsWith("attend-2026-11-01-"))
+                .containsExactly("attend-2026-11-01-d1", "attend-2026-11-01-d2",
+                        "attend-2026-11-01-d3", "attend-2026-11-01-d4");
+        assertThat(rewardKeys()).filteredOn(k -> k.startsWith("attend-2026-10-28-")).hasSize(3);
     }
 
     @Test
@@ -154,13 +161,14 @@ class CreditAttendanceServiceTest {
         var s = service(OPENS).status(ME);
         assertThat(s.claimed()).isFalse();
         assertThat(s.today()).isEqualTo(1);
+        assertThat(s.reward()).isEqualTo(2);
         assertThat(s.next()).isEqualTo(new CreditAttendanceService.Next(4, 5, 3));
         assertThat(attendRows).isEmpty();
         assertThat(creditRows).isEmpty();
     }
 
     @Test
-    @DisplayName("다음 보상까지 남은 날 — 받은 뒤엔 내일부터 센다")
+    @DisplayName("다음 큰 보상(4일째 · 7일째)은 내일부터 센다 — 오늘 몫은 reward 로 따로")
     void 다음_보상() {
         for (int i = 0; i < 3; i++) {
             service(OPENS.plusDays(i)).claim(ME);
@@ -168,9 +176,10 @@ class CreditAttendanceServiceTest {
         // 3일째 받은 날: 내일 4일째 5C
         assertThat(service(OPENS.plusDays(2)).status(ME).next())
                 .isEqualTo(new CreditAttendanceService.Next(4, 5, 1));
-        // 다음 날 받기 전: 오늘 받으면 5C
-        assertThat(service(OPENS.plusDays(3)).status(ME).next())
-                .isEqualTo(new CreditAttendanceService.Next(4, 5, 0));
+        // 다음 날 받기 전: 오늘 몫은 5C, 다음 큰 보상은 사흘 뒤 7일째 10C
+        var day4 = service(OPENS.plusDays(3)).status(ME);
+        assertThat(day4.reward()).isEqualTo(5);
+        assertThat(day4.next()).isEqualTo(new CreditAttendanceService.Next(7, 10, 3));
     }
 
     @Test
@@ -218,7 +227,7 @@ class CreditAttendanceServiceTest {
 
         var s = service(day4).claim(ME);
         assertThat(s.granted()).isEqualTo(5);
-        assertThat(rewardKeys()).containsExactly("attend-2026-10-28-d4");
+        assertThat(rewardKeys()).contains("attend-2026-10-28-d4");
     }
 
     @Test
