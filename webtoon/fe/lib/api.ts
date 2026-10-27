@@ -281,6 +281,9 @@ export interface NhJob {
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
   cast_sheets?: { name: string; ready: boolean }[] | null;
   pick: number | null;
+  /** 게스트가 이야기 고르기에서 앞으로 몇 초 안에 골라야 하나(#851). 화면이 앞에 떠 있는 동안은 묻을 때마다
+      다시 채워진다. 로그인했거나 고르는 자리가 아니면 없다 — 끝없이 기다린다. */
+  pick_seconds_left?: number | null;
   style: string;
   style_label: string;
   stage: string;

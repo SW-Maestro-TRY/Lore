@@ -64,6 +64,11 @@ public record JobView(
         String say,
         boolean checkpoints,
         /**
+         * 게스트가 이야기 고르기에서 앞으로 몇 초 안에 골라야 하나(#851). 화면이 앞에 떠 있는 동안은
+         * 묻을 때마다 다시 채워진다. 로그인한 사람이거나 고르는 자리가 아니면 {@code null} — 끝이 없다.
+         */
+        Integer pick_seconds_left,
+        /**
          * 줄에서의 자리. <b>내 차례면 {@code null}</b> — 적을 것이 없다.
          *
          * 이게 없을 때 화면은 「루가 그림을 그리고 있어요」만 보여 줬고,
@@ -164,7 +169,7 @@ public record JobView(
                       String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
                       String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages, int episode,
-                      Art diskArt, int resumeCost) {
+                      Art diskArt, int resumeCost, Integer pickSecondsLeft) {
         int stageIndex = job.getStage().order();
         if (eta == null) {
             eta = JobEta.of(job, now, 1, spot == null ? 0 : spot.seconds(), Instant.now());
@@ -200,6 +205,7 @@ public record JobView(
                 stageLabel,
                 now.say(),
                 job.isCheckpoints(),
+                pickSecondsLeft,
                 spot == null ? null
                         : new Queue(spot.ahead(), spot.minutes(), spot.line()),
                 new Notice(job.getUserId() != null, notifyEmail, job.getNotifiedAt() != null),
