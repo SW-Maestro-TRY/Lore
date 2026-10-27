@@ -10,3 +10,6 @@
 .wt .wt-notify-pick:hover:not(:disabled) { border-color: var(--sea); background: var(--water-light); }
 .wt .wt-notify-pick:disabled { cursor: not-allowed; opacity: .55; }
 .wt .wt-notify-email { width: 100%; margin-top: 6px; }
+/* 2026-10-27 한 화면 구성 — 푸시 단추 아래 「이메일로 받을게요」 글자 단추 */
+.wt .wt-notify-alt { display: block; margin: 10px auto 0; padding: 4px 8px; border: 0; background: none; color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.wt .wt-notify-alt:disabled { opacity: .55; cursor: default; }

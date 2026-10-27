@@ -36,13 +36,15 @@ export interface GoParams {
   tab?: "settings" | "works" | "characters" | "contact";
   /** 만들기 화면이 어느 길인가(#548). own = 「만들고 싶은 내용이 있어요」. 없으면 아이디어부터. */
   mode?: "own";
+  /** 완성본을 열 때 먼저 보일 장 — 장면형 광고가 광고에서 본 장부터 열리게 보낸다(2026-10-27). */
+  page?: number;
 }
 
 export function hrefOf(view: View, p: GoParams = {}): string {
   const q = new URLSearchParams();
   switch (view) {
     case "landing": return "/webtoon";
-    case "result": if (p.run) q.set("run", p.run); return `/webtoon?${q}`;
+    case "result": if (p.run) q.set("run", p.run); if (p.page) q.set("page", String(p.page)); return `/webtoon?${q}`;
     case "sharedCard": if (p.id) q.set("card", p.id); return `/webtoon?${q}`;
     default: q.set("view", view);
   }
