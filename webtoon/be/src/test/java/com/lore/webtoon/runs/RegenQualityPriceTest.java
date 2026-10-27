@@ -44,7 +44,8 @@ class RegenQualityPriceTest {
                 new UsernamePasswordAuthenticationToken(7L, null, List.of()));
         when(ledger.mayChange("r1", 7L)).thenReturn(true);
         when(regen.qualityOf("r1")).thenReturn("swell");
-        when(regen.start(anyString(), org.mockito.ArgumentMatchers.anyInt(), anyString(), org.mockito.ArgumentMatchers.any()))
+        when(regen.queue(anyString(), org.mockito.ArgumentMatchers.anyInt(), anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()))
                 .thenReturn("g1");
         when(regen.statusOf("g1")).thenReturn(new HashMap<>());
     }
@@ -59,8 +60,19 @@ class RegenQualityPriceTest {
     void 낮추면_싸다() {
         controller.regen("r1", 2, Map.of("feedback", "", "quality", "surf"));
 
-        verify(regen).start("r1", 2, "", "surf");
+        verify(regen).queue("r1", 2, "", "surf", 7L);
         verify(credits).charge(eq(7L), eq(3), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("낸 사람을 기록에 적고 → 받고 → 줄에 넣는다 — 받기 전에 그리기 시작하지 않는다(#864)")
+    void 받은_뒤에_줄에_넣는다() {
+        controller.regen("r1", 2, Map.of("feedback", ""));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(regen, credits);
+        order.verify(regen).queue(eq("r1"), eq(2), anyString(), isNull(), eq(7L));
+        order.verify(credits).charge(eq(7L), eq(6), eq("regen:r1:2:g1"), anyString());
+        order.verify(regen).go("g1");
     }
 
     @Test
@@ -70,7 +82,7 @@ class RegenQualityPriceTest {
         verify(credits).charge(eq(7L), eq(6), anyString(), anyString());
 
         controller.regen("r1", 3, Map.of("feedback", "", "quality", "high"));
-        verify(regen).start(eq("r1"), eq(3), anyString(), isNull());
+        verify(regen).queue(eq("r1"), eq(3), anyString(), isNull(), eq(7L));
         verify(credits, org.mockito.Mockito.times(2)).charge(eq(7L), eq(6), anyString(), anyString());
     }
 }

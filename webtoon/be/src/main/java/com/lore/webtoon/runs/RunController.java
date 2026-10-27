@@ -433,10 +433,10 @@ public class RunController {
         }
         List<Map<String, Object>> started = new ArrayList<>();
         for (int no : pending.subList(0, afford)) {
-            String id = regen.startPending(runId, no, pending);
-            String ref = "pages:" + runId + ":" + no + ":" + id;
-            credits.charge(userId, per, ref, "남은 장 이어 그리기");
-            regen.charged(id, userId, ref);           // 못 그리면 그 장 값을 돌려준다
+            /* 낸 사람을 기록에 적고 → 받고 → 줄에 넣는다(#864). 못 그리면 기록에 적힌 대로 그 장 값을 돌려준다. */
+            String id = regen.queuePending(runId, no, pending, userId);
+            credits.charge(userId, per, RegenService.pagesRef(runId, no, id), "남은 장 이어 그리기");
+            regen.go(id);
             started.add(regen.statusOf(id));
         }
         return ResponseEntity.ok(Map.of("started", started, "left", pending.size() - afford));
@@ -464,7 +464,8 @@ public class RunController {
         Long userId = mustOwn(runId);
         /* 화면이 단추에 값을 적어 놓고 실제로는 안 받고 있었다. 만들기·캐릭터와
            같은 규칙으로 여기서도 받는다 — **시작하기 전에** 낼 수 있는지 보고,
-           줄을 세운 뒤에 뺀다. 먼저 빼면 시작이 실패했을 때 낸 것만 사라진다.
+           기록을 만든 뒤에 빼고, 뺀 뒤에 줄에 넣는다(#864). 기록보다 먼저 빼면 기록이
+           실패했을 때 낸 것만 사라지고, 줄에 먼저 넣으면 받기 전에 실패했을 때 돌려줄 줄이 없다.
            같은 ref 로 두 번 불려도 한 번만 빠진다(CreditGate.charge). */
         /* 안전 검사에 걸려 빈 장으로 완성된 장은 다시 그리기가 무료다(#626) — 크레딧은 처음에 그대로 받았다. */
         /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 6이다(#787).
@@ -495,12 +496,12 @@ public class RunController {
             } catch (java.io.IOException e) {
                 throw new BusinessException(com.lore.common.exception.ErrorCode.INTERNAL_ERROR, "장면 설명을 저장하지 못했습니다");
             }
-            String id = regen.start(runId, no, note, quality);
+            /* 낸 사람은 기록에 적는다 — 실패하면, 서버가 다시 떠도, 그걸로 돌려준다(#626, #864). */
+            String id = regen.queue(runId, no, note, quality, cost > 0 ? userId : null);
             if (cost > 0) {
-                String ref = "regen:" + runId + ":" + no + ":" + id;
-                credits.charge(userId, cost, ref, "장 다시 그리기");
-                regen.charged(id, userId, ref);           // 실패하면 돌려준다(#626)
+                credits.charge(userId, cost, RegenService.regenRef(runId, no, id), "장 다시 그리기");
             }
+            regen.go(id);
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
