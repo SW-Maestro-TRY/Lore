@@ -1,6 +1,6 @@
 // 맞춤 동작 영어 원제 표시 사전 시험 — `node --test zzal/fe/tests/custom-motion-titles.test.cjs`
 //
-// 1. 사전에 있는 영어 원제는 ko/ja 화면에서 번역되고, en 화면에서는 원문 그대로.
+// 1. 사전에 있는 저장 제목(영어·한국어)은 현재 locale 제목으로 바뀌고, 같은 언어 화면에서는 원문 그대로.
 // 2. 사전에 없는 제목(새 계획의 한국어 제목 포함)은 어느 언어든 원문 그대로.
 // 3. 포커스 앨범 목록이 locale을 받으면 맞춤 동작 이름을 번역해 내보낸다.
 const {test}=require('node:test');
@@ -14,7 +14,7 @@ const root=path.resolve(__dirname,'../../..');
 function load(rel,modules={}){
   const src=fs.readFileSync(path.join(root,rel),'utf8');
   const out=ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-  const context={exports:{},Object,Array,Set,String,require:name=>{if(name in modules)return modules[name];throw new Error('unexpected import '+name)}};
+  const context={exports:{},Object,Array,Set,Map,String,require:name=>{if(name in modules)return modules[name];throw new Error('unexpected import '+name)}};
   vm.runInNewContext(out,context);
   return context.exports;
 }
@@ -24,6 +24,12 @@ test('사전에 있는 영어 원제는 ko·ja로 번역된다',()=>{
   assert.equal(titles.localizeCustomMotionTitle('Chocolate Victory Pose','ko'),'초콜릿 승리 포즈');
   assert.equal(titles.localizeCustomMotionTitle('Quiet Window Watch','ja'),'静かに窓の外を見る');
   assert.equal(titles.localizeCustomMotionTitle('Chocolate Victory Pose','en'),'Chocolate Victory Pose');
+});
+
+test('한국어 원제는 영어·일본어 화면에서 번역된다',()=>{
+  assert.equal(titles.localizeCustomMotionTitle('잔해 위의 당당한 경계','en'),'Proud Watch on the Rubble');
+  assert.equal(titles.localizeCustomMotionTitle('비밀 간식 보물찾기','ja'),'ひみつのおやつ宝探し');
+  assert.equal(titles.localizeCustomMotionTitle('비밀 간식 보물찾기','ko'),'비밀 간식 보물찾기');
 });
 
 test('사전에 없는 제목은 원문 그대로',()=>{
