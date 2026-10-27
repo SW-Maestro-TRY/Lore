@@ -31,19 +31,29 @@ import "./ResultFinal.css";
  * 이 브라우저(isMyRun)와 계정 목록(myAccountRuns) 둘 중 하나만 맞아도 된다 —
  * 다른 기기에서 로그인해 열어도 내 작품이 남의 것으로 보이면 안 된다.
  * 완성본을 여는 것만으로는 rememberMyRun 을 하지 않는다(만든 사람만 남긴다). */
-/* 다 읽은 뒤 「직접 만들기」 칸의 문구 셋(2026-10-25). 열 때마다 무작위로 하나 —
- * 새로고침하면 바뀔 수도, 그대로일 수도 있다. */
-const END_COPIES = [
-  { title: ["이번엔, 당신의 이야기가", "웹툰이 될 차례."],
-    body: ["상상만 하던 캐릭터와 이야기를", "AI로 나만의 웹툰으로 만들어보세요."], cta: "내 웹툰 만들기" },
-  { title: ["내 캐릭터가", "웹툰 속 주인공이 된다면?"],
-    body: ["머릿속에만 있던 내 캐릭터,", "이제 웹툰 속에서 만나보세요."], cta: "내 캐릭터로 시작하기" },
-  { title: ["상상만 하던 이야기를", "이제 눈으로 만나보세요."],
-    body: ["내가 만든 세계와 캐릭터가", "하나의 웹툰으로 완성되는 순간."], cta: "내 이야기 시작하기" },
-];
+/* 다 읽은 뒤 「직접 만들기」 칸의 문구 — 10/24 감상 끝 제안 확정안. 2026-10-25 에 세 벌 중 무작위로
+ * 보여 주던 것을 한 벌로 고정했다(2026-10-27): 광고 소재끼리 비교할 때 문구가 흔들리면 안 되고,
+ * 멘토 지적(10/12)대로 "여기서 직접 만들 수 있다" 한 가지만 또렷하게 말한다. */
+const END_COPY = {
+  title: ["이런 웹툰을", "직접 만들 수 있어요."],
+  body: ["캐릭터와 이야기를 넣으면", "AI가 웹툰으로 만들어줘요."],
+  cta: "웹툰 만들기",
+};
+
+/* 광고 소재(utm_content)별 띠 첫 줄 — 광고에서 본 말이 첫 화면에 이어지게(권병민 멘토 10/12).
+ * 소재 이름은 메타 광고의 utm_content 와 같다(haeun/ads-2026-10-27/소재-문구-고르기.html).
+ * 없는 소재는 공통 문구. */
+const AD_BAR: Record<string, string> = {
+  "can-reel": "다 마신 캔커피 한 줄로 나온 1화예요. 내 설정도 적은 그대로 한 화로.",
+  "richet-reel": "성격 두 줄을 적은 그대로 그린 로판 1화예요. 내 캐릭터도 캐붕 없이 한 화.",
+  "ruda-reel": "한 줄 설정으로 나온 1화예요. 커뮤가 끝난 우리애도 여기서 이어서.",
+  "fox-reel": "설명 두 줄 그대로 나온 게임 판타지 1화예요. 내 설정도 적은 그대로 한 화로.",
+  "jia-reel": "사진 한 장과 성격 한 줄로 나온 로판 1화예요. 내 사진으로도 한 화.",
+  "doyun-reel": "한 줄 설정으로 나온 헌터물 1화예요. 내 설정도 적은 그대로 한 화로.",
+};
 
 
-export default function Result({ runId, go, authenticated = false }: { runId: string; go: Go; authenticated?: boolean }) {
+export default function Result({ runId, go, authenticated = false, page }: { runId: string; go: Go; authenticated?: boolean; page?: number }) {
   const t = useT();
   const [data, setData] = useState<RunResult | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -155,7 +165,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     let alive = true;
     setAccountChecked(false);
     myAccountRuns()
-      .then((got) => { if (alive) setOwnedByAccount(got.some((r) => r.run_id === runId)); })
+      /* 내 목록은 연재를 1화 카드 하나로 묶어 준다(MyWebtoonService.myRuns) — 2화 이후 결과 페이지에서는 run_id 가
+         카드의 run_id 와 달라 「내 작품」이 아니게 돼 「다음 편 만들기」가 사라졌다(2026-10-27 밤에 노래하는 학교 2화).
+         카드가 들고 있는 회차별 run 까지 본다. */
+      .then((got) => { if (alive) setOwnedByAccount(got.some((r) => r.run_id === runId
+        || Object.values(r.episode_run_ids || {}).includes(runId))); })
       .catch(() => { /* 브라우저 것만 쓴다 */ })
       .finally(() => { if (alive) setAccountChecked(true); });
     return () => { alive = false; };
@@ -168,19 +182,34 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
      정한다(GuestGate) — 화면에 숫자를 박지 않는다. */
   const [allow, setAllow] = useState<Allowance | null>(null);
   useEffect(() => {
-    if (mine) return;
+    /* 내 작품에서도 읽는다(2026-10-27) — 「다음 편 만들기」 아래에 오늘 남은 무료 몫·내일 몫을 적는다. */
     let alive = true;
     readAllowance().then((a) => { if (alive) setAllow(a); }).catch(() => {});
     return () => { alive = false; };
   }, [mine, authenticated]);
   const freeLeft = allow && !allow.logged_in && !allow.blocked ? allow.free_left ?? 0 : 0;
-  /* 서버 렌더와 어긋나지 않게 화면에 붙은 뒤에 고른다 */
-  const [endCopyIdx, setEndCopyIdx] = useState(0);
-  useEffect(() => { setEndCopyIdx(Math.floor(Math.random() * END_COPIES.length)); }, [runId]);
-  const endCopy = END_COPIES[endCopyIdx];
+  const endCopy = END_COPY;
+  /* 내 작품의 「다음 편 만들기」 아래 한 줄 — 돌아올 이유(2026-10-27). 게스트 몫은 00시에 다시 채워진다(GuestGate).
+     로그인한 사람은 잔액만 적는다(매일 무료 크레딧은 10/27 폐지 결정 — 출석 이벤트가 들어오면 그 문구로). */
+  const tomorrow = allow
+    ? (allow.blocked ? t("오늘은 만들기가 마감됐어요 · 내일 00시에 다시 열려요")
+      : !allow.logged_in
+        ? (freeLeft > 0
+          ? t("오늘 무료 {n}편 남았어요 · 내일 00시에 {m}편이 다시 채워져요", { n: freeLeft, m: allow.free_per_day ?? 2 })
+          : t("오늘 무료 {m}편을 다 썼어요 · 내일 00시에 다시 채워져요 · 로그인하면 바로 한 편 더", { m: allow.free_per_day ?? 2 }))
+        : t("내 크레딧 {b}C · 한 편 {c}C", { b: allow.balance ?? 0, c: allow.credit_cost }))
+    : null;
   /* 광고·SNS 링크(UTM)를 달고 이 화면으로 바로 들어왔나. 첫 그림 뒤에 읽는다 —
-     서버가 그린 화면과 첫 그림이 달라지면 안 된다. */
+     서버가 그린 화면과 첫 그림이 달라지면 안 된다. 소재 이름(utm_content)은 띠 문구를 고른다. */
   const [fromLink, setFromLink] = useState(false);
+  const [adKey, setAdKey] = useState("");
+  /* 장면형 광고는 광고에서 본 장부터 열리게 ?page=N 을 붙여 보낸다 — 첫 그림이 그려진 뒤 한 번만 그 장으로 내린다. */
+  const jumped = useRef("");
+  useEffect(() => {
+    if (!data || !page || page < 2 || jumped.current === runId) return;
+    jumped.current = runId;
+    requestAnimationFrame(() => document.getElementById(`wt-page-${page}`)?.scrollIntoView({ block: "start" }));
+  }, [data, page, runId]);
   /* 메타 픽셀(#751) — 남의 작품 완성본에 도착. 광고는 예시 작품으로 보내서 이것이 광고의 첫 도착이다.
      내 것인지는 계정 목록을 받은 뒤에 바뀔 수 있어, 그 확인이 끝나기 전에는 보내지 않는다. */
   const viewSent = useRef("");
@@ -191,7 +220,11 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
     metaTrack("ViewContent", { content_type: "webtoon", content_ids: [runId] });
   }, [data, mine, runId, authenticated, accountChecked]);
   useEffect(() => {
-    try { setFromLink(new URLSearchParams(location.search).has("utm_source")); } catch { /* 없음 */ }
+    try {
+      const q = new URLSearchParams(location.search);
+      setFromLink(q.has("utm_source"));
+      setAdKey((q.get("utm_content") || "").toLowerCase());
+    } catch { /* 없음 */ }
   }, []);
   const startMaking = (where: string) => {
     track("remix_cta_click", { source: runId, where, logged_in: authenticated, free_left: freeLeft || undefined });
@@ -454,9 +487,15 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
               {!mine && fromLink && (
                 <div className="wt-result-linkbar">
-                  <span>{t("LORE 에서 만든 웹툰이에요. 내 캐릭터로도 한 편 만들 수 있어요.")}</span>
-                  <button type="button" className="btn btn-p btn-sm" onClick={() => startMaking("link_bar")}>
-                    {t("내 캐릭터로 만들기")}
+                  <span>
+                    <b>{t(AD_BAR[adKey] || "LORE 에서 만든 웹툰이에요. 내 캐릭터로도 한 편 만들 수 있어요.")}</b>
+                    <small>{allow?.blocked ? t("오늘은 만들기가 마감됐어요 · 내일 00시에 다시 열려요")
+                      : freeLeft > 0 ? t("가입 없이 무료 {n}편 · 한 편 약 8분", { n: freeLeft })
+                      : allow && !allow.logged_in ? t("오늘 무료 몫을 다 썼어요 · 로그인하면 이어서")
+                      : t("한 편 약 8분")}</small>
+                  </span>
+                  <button type="button" className="btn btn-p" onClick={() => startMaking("link_bar")}>
+                    {t("내 캐릭터로 웹툰 만들기")}
                   </button>
                 </div>
               )}
@@ -508,6 +547,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                   {/* 비공개 작품은 공유 버튼을 감춘다(#638) — 링크를 받은 사람은 404 를 본다. */}
                   {data.public !== false && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
                 </div>
+                {tomorrow && <p className="wt-result-tomorrow">{tomorrow}</p>}
                 <div className="wt-result-dlrow">
                   <label className="wt-result-perpage">
                     <input type="checkbox" checked={perPage} aria-label={t("컷별로 내려받기")}
@@ -582,7 +622,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
                        alt={pg.caption || t("{n}쪽", { n: pg.no })} loading="lazy" />
                 );
                 return (
-                  <div key={pg.no} className="wt-result-pg" ref={i === data.pages.length - 1 ? endRef : undefined}
+                  <div key={pg.no} id={`wt-page-${pg.no}`} className="wt-result-pg" ref={i === data.pages.length - 1 ? endRef : undefined}
                        style={{
                          /* 장 사이 여백은 비우지 않고 흰 칸으로 — 바깥 바탕(남색)이 비치면 작품이 끊겨 보인다(2026-10-25).
                             내려받는 파일(EpisodeExport)도 흰 여백이다. padding 의 % 도 폭 기준이라 같은 눈금이다. */
@@ -615,7 +655,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
               <EpisodeCommunity key={runId} runId={runId} authenticated={authenticated} total={chapterRows.filter(c => c.run_id).length}
                 title={data.title} cover={cover || pageUrl(runId,data.pages[0]?.no || 1,320)}>
                 {epList()}
-                {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{t("가입 없이 무료로 시작")}</small>}</div><div className="wt-reader-create-art"><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></div></section>}
+                {!mine && <section className="wt-reader-create"><div><h2>{endCopy.title.map((l)=><span key={l}>{t(l)}</span>)}</h2><p>{endCopy.body.map((l)=><span key={l}>{t(l)}</span>)}</p><button className="btn btn-p" onClick={()=>startMaking("end_card")}>{t(endCopy.cta)}</button>{freeLeft>0 && <small>{fromLink ? t("가입 없이 무료 {n}편 · 한 편 약 8분", { n: freeLeft }) : t("가입 없이 무료로 시작")}</small>}</div><div className="wt-reader-create-art"><img src={cover || pageUrl(runId,data.pages[0]?.no || 1,1080)} alt=""/></div></section>}
               </EpisodeCommunity>
             ) : <div className="wt-reader-endnav"><button className="btn btn-w" onClick={()=>{ setEpOpen(true); requestAnimationFrame(()=>document.getElementById("wt-eplist-top")?.scrollIntoView({behavior:"smooth",block:"start"})); }}>{t("회차 목록")}</button>{mine&&<button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>}</div>}
 
@@ -689,6 +729,7 @@ export default function Result({ runId, go, authenticated = false }: { runId: st
 
       {data && mine && (
         <div className="mfoot">
+          {tomorrow && <p className="wt-result-tomorrow">{tomorrow}</p>}
           <button type="button" className="btn btn-p" onClick={() => nextEpisode("mine_mobile")}>{series?.chapters.some(c=>c.episode>ep) ? t("다음화 보기") : t("다음 편 만들기")}</button>
         </div>
       )}

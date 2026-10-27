@@ -138,8 +138,15 @@ DEFAULT_PROVIDER = "openai"
 #
 # **gemini 키가 없으면 이 표를 건너뛴다.** 서버에 키(HAEUN_GEMINI_API_KEY)를 넣기
 # 전에 배포돼도 검수 단계에서 키 없음으로 만들기 전체가 죽지 않고, 전처럼 돈다.
+#
+# **장면(SCENE)은 OpenRouter 의 google/gemini-3.8-flash 다(2026-10-27).** 같은 이야기 5개를 두 모델로 나눠
+# 보니 gemini 가 장면을 중심 사건 하나씩으로 묶고 마지막을 가장 큰 일이 터진 순간에서 멈췄다. gpt-5.1 은
+# 한 사건을 두세 장으로 쪼개고 이동만 하는 장을 따로 두었다(haeun/story-lab-2026-10-27/scene). 값은 1/4.
+# 비교는 전부 OpenRouter 로 했으므로 운영도 그 길 그대로다 — Gemini 직접 API 는 시험하지 않았다.
+# OpenRouter 키가 없으면 전처럼 NH_PROVIDER(운영은 openai) 의 gpt-5.1 로 돈다.
 STAGE_DEFAULT_PROVIDERS = {"STORY_REVIEW": "gemini", "PAGE_REVIEW": "gemini",
-                           "COVER_REVIEW": "gemini", "FULL_REVIEW": "gemini"}
+                           "COVER_REVIEW": "gemini", "FULL_REVIEW": "gemini",
+                           "SCENE": "openrouter"}
 
 
 def _has_key(provider: str) -> bool:
@@ -218,6 +225,8 @@ STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
 # OpenRouter 로 부를 때도 같은 모델이다. 이름 앞에 회사 이름만 붙는다.
 STAGE_DEFAULT_MODELS.update({(stage, "openrouter"): f"openai/{name}"
                              for (stage, _), name in list(STAGE_DEFAULT_MODELS.items())})
+# 장면만 예외 — 위 비교에 쓴 모델 그대로(STAGE_DEFAULT_PROVIDERS 의 SCENE 참고).
+STAGE_DEFAULT_MODELS[("SCENE", "openrouter")] = "google/gemini-3.8-flash"
 
 
 def model_for(stage: str, provider: str) -> str:

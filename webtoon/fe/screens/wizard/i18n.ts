@@ -219,3 +219,17 @@ const dict: Dict = {
 };
 
 registerDict(dict);
+
+/* 빠른 시작(2026-10-27) */
+registerDict({
+  "주인공을 한 줄로 적어 주세요": { en: "Describe your main character in a line", ja: "主人公を一行で書いてください", zh: "用一句话写下主角" },
+  "또는 캐릭터 카드를 골라요": { en: "Or pick a character card", ja: "またはキャラクターカードを選ぶ", zh: "或者选一张角色卡" },
+  "성격 · 외형 · 상황, 한 줄이면 돼요": { en: "Personality, looks, situation — one line is enough", ja: "性格・外見・状況、一行で十分です", zh: "性格、外貌、处境，一句话就够" },
+  "적은 캐릭터는 내 캐릭터에 남고, 그림은 첫 웹툰의 캐릭터 시트로 채워져요. 사진이 있으면 아래 「새 캐릭터 만들기」에서 올려요.": {
+    en: "The character is saved to My characters; its picture is filled in from your first webtoon's character sheet. Have a photo? Upload it under \"New character\" below.",
+    ja: "書いたキャラクターはマイキャラクターに残り、絵は最初のウェブトゥーンのキャラクターシートで埋まります。写真があれば下の「新しいキャラクター」でアップロードしてください。",
+    zh: "写下的角色会保存在我的角色里，图片会用第一部漫画的角色设定图填上。有照片的话，在下方「新建角色」上传。",
+  },
+  "캐릭터 저장 중…": { en: "Saving character…", ja: "キャラクターを保存中…", zh: "正在保存角色…" },
+  "캐릭터를 저장하지 못했습니다": { en: "Couldn't save the character", ja: "キャラクターを保存できませんでした", zh: "无法保存角色" },
+});

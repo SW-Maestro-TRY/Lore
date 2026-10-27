@@ -119,7 +119,7 @@ export default function PendingPages({ runId, data, onRefresh }: {
                     <small className="wt-lock-hint">{t("기본 {base}장 뒤로는 한 장에 {per}크레딧 · 보유 {n}", { base: data.base_pages ?? 8, per, n: balance })}</small>
                   )}
                   {!ok && (first || canOpen(1)) && (
-                    <small className="wt-lock-hint is-short">{t("크레딧이 모자라요!")}<br />{t("매일 무료 크레딧이 채워지면 내일 이어서 그릴 수 있어요.")}</small>
+                    <small className="wt-lock-hint is-short">{t("크레딧이 모자라요!")}<br />{t("출석 이벤트로 크레딧을 받으면 이어서 그릴 수 있어요.")}</small>
                   )}
                   {first && failed && <small className="wt-lock-hint is-short">{failed}</small>}
                 </>

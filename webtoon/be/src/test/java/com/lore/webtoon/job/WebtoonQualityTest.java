@@ -52,9 +52,21 @@ class WebtoonQualityTest {
     void 너울_다시_그리기만_비싸다() {
         assertThat(WebtoonQuality.regenCreditsOf("wave")).isEqualTo(3);
         assertThat(WebtoonQuality.regenCreditsOf("surf")).isEqualTo(3);
-        assertThat(WebtoonQuality.regenCreditsOf("swell")).isEqualTo(4);
+        assertThat(WebtoonQuality.regenCreditsOf("swell")).isEqualTo(6);
         // 화질을 모르는 옛 작품은 기본(파도) 값 — 0이면 공짜로 다시 그려진다.
         assertThat(WebtoonQuality.regenCreditsOf("")).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("다시 그리기 화질 고르개는 화질마다 그 값을 싣는다 — 낮추면 싸진다")
+    void 다시_그리기_고르개() {
+        for (Map<String, Object> one : WebtoonQuality.regenChoices()) {
+            assertThat(one.get("credits")).isEqualTo(WebtoonQuality.regenCreditsOf((String) one.get("key")));
+        }
+        assertThat(WebtoonQuality.regenCreditsOf("surf")).isLessThan(WebtoonQuality.regenCreditsOf("swell"));
+        assertThat(WebtoonQuality.isKnown(" Swell ")).isTrue();
+        assertThat(WebtoonQuality.isKnown("high")).isFalse();
+        assertThat(WebtoonQuality.isKnown(null)).isFalse();
     }
 
     @Test
@@ -98,12 +110,12 @@ class WebtoonQualityTest {
     }
 
     @Test
-    @DisplayName("한 편 값은 8장까지이고, 넘는 장은 너울 4 · 파도·물결 2 — 화면에도 같은 값이 간다")
+    @DisplayName("한 편 값은 8장까지이고, 넘는 장은 너울 6 · 파도·물결 2 — 화면에도 같은 값이 간다")
     void 넘는_장_값() {
         assertThat(WebtoonQuality.BASE_PAGES).isEqualTo(8);
         assertThat(WebtoonQuality.extraPageCreditsOf("wave")).isEqualTo(2);
         assertThat(WebtoonQuality.extraPageCreditsOf("surf")).isEqualTo(2);
-        assertThat(WebtoonQuality.extraPageCreditsOf("swell")).isEqualTo(4);
+        assertThat(WebtoonQuality.extraPageCreditsOf("swell")).isEqualTo(6);
         assertThat(WebtoonQuality.extraPageCreditsOf("")).isEqualTo(2);
         for (Map<String, Object> one : WebtoonQuality.choices()) {
             String key = (String) one.get("key");

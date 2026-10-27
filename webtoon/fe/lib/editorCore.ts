@@ -22,6 +22,7 @@ import { louArt } from "./louArt";
 import { sceneParts, sceneShort } from "./sceneText";
 import { track } from "./track";
 import { readAllowance } from "./api";
+import { QUALITY_INFO } from "./wizardData";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
@@ -514,6 +515,12 @@ export function mountEditor(
       <p class="fb-lead">${esc(tr("수정할 부분"))}</p><div class="fb-tags" id="regenAskTags"></div>
       <label class="wt-ed-askfield"><span>${esc(tr("수정 요청"))}</span><textarea id="regenAskText" rows="3" maxlength="500" class="field"></textarea></label>
       <label class="check-line"><input type="checkbox" id="regenAskTextless"><span>${esc(tr("말풍선 없이 그림만"))}</span></label>
+      <div class="wt-ed-regenq" id="regenAskQuality" hidden>
+        <p class="fb-lead">${esc(tr("화질"))}</p>
+        <div class="wt-ed-regenq-opts" id="regenAskQOpts" role="radiogroup" aria-label="${esc(tr("화질"))}"></div>
+        <p class="wt-ed-regenq-desc" id="regenAskQDesc"></p>
+        <p class="wt-ed-regenq-hint" id="regenAskQHint"></p>
+      </div>
       <div class="ask-actions"><button type="button" class="btn btn-primary" id="regenAskGo">${esc(tr("다시 그리기"))}</button></div>
     </div>`;
   $("#regenAskHome").append(regenForm);
@@ -522,6 +529,9 @@ export function mountEditor(
 
   let unsafePages = new Set();   // 안전 기준에 걸려 빈 장으로 둔 장 번호(#626)
   let runRegenCost = null;       // 이 작품의 한 장 다시 그리기 값(#787). 못 읽으면 계정 기본값을 쓴다
+  /* 다시 그리기 화질 고르개 — 작품 화질과 화질마다의 값. 서버가 안 주면(옛 서버·샘플) 고르개를 감춘다. */
+  let runQuality = null;
+  let regenChoices = [];
   let sceneTags = [];                // /api/config 의 feedback_tags.scene
 
   async function loadSceneTags() {
@@ -559,6 +569,45 @@ export function mountEditor(
     return String(c.description || "").trim();
   }
 
+  /* 화질 고르개와 단추 값. 칸마다 무엇이 다른지(만들기 화면과 같은 설명)를 적고, 고른 화질의 설명을
+     아래에 푼다. 너울 작품이면 「낮추면 싸진다」를 고르기 전부터 적어 둔다 — 값이 단추에만 있으면
+     6크레딧을 보고 그냥 닫는다. 안전 기준에 걸린 장은 무료라 고르개가 없다. */
+  function paintAskQuality() {
+    const box = $("#regenAskQuality");
+    const free = unsafePages.has(askCtx.no);
+    const show = !free && !!runQuality && regenChoices.length > 1;
+    box.hidden = !show;
+    if (show) {
+      const cheapest = Math.min(...regenChoices.map(c => c.credits));
+      $("#regenAskQOpts").innerHTML = regenChoices.map(c => {
+        const on = c.key === askCtx.quality;
+        const mine = c.key === runQuality;
+        const info = QUALITY_INFO.find(q => q.key === c.key);
+        const tag = info ? info.lede.split(" · ")[1] || "" : "";
+        return `<button type="button" class="wt-ed-regenq-opt" role="radio" aria-checked="${on}" data-q="${esc(c.key)}"
+          aria-label="${esc(`${tr(c.label)} · ${c.credits} ${tr("크레딧")}`)}">
+          <span class="q-name">${esc(tr(c.label))}${mine ? ` <small>${esc(tr("이 작품"))}</small>` : ""}</span>
+          ${tag ? `<span class="q-tag">${esc(tr(tag))}</span>` : ""}
+          <span class="q-cost">${c.credits}<small>C</small></span>
+        </button>`;
+      }).join("");
+      const picked = regenChoices.find(c => c.key === askCtx.quality);
+      const info = picked && QUALITY_INFO.find(q => q.key === picked.key);
+      $("#regenAskQDesc").textContent = info ? info.desc.map(d => tr(d)).join(" ") : "";
+      const hint = $("#regenAskQHint");
+      if (picked && picked.credits > cheapest) {
+        const low = regenChoices.find(c => c.credits === cheapest && c.key === "surf") || regenChoices.find(c => c.credits === cheapest);
+        hint.textContent = tr("화질을 {q}로 낮추면 {n}크레딧으로 다시 그릴 수 있어요.", { q: tr(low.label), n: cheapest });
+      } else {
+        hint.textContent = "";
+      }
+      hint.hidden = !hint.textContent;
+      const c = regenChoices.find(x => x.key === askCtx.quality);
+      if (c) askCtx.cost = c.credits;
+    }
+    $("#regenAskGo").textContent = `${tr("다시 그리기")} · ${free ? tr("무료") : `−${askCtx.cost} ${tr("크레딧")}`}`;
+  }
+
   async function askRegen(no, btn, cost) {
     if (askCtx?.no === no && !$("#regenAsk").hidden) { closeAsk(); return; }
     if (RUN_ID && !unsafePages.has(no)) {
@@ -575,12 +624,12 @@ export function mountEditor(
       if (!btn.isConnected) return;
     }
     if (askCtx) closeAsk();
-    askCtx = { no, btn, cost };
+    askCtx = { no, btn, cost, quality: runQuality };
     btn.closest(".scene-tools").insertAdjacentElement("afterend", regenForm);
     const st = sc(no);
     $("#regenAskTitle").textContent = tr("{n}쪽 다시 그리기", { n: no });
     $("#regenAskSub").hidden = !!RUN_ID;
-    $("#regenAskGo").textContent = `${tr("다시 그리기")} · ${unsafePages.has(no) ? tr("무료") : `−${cost} ${tr("크레딧")}`}`;
+    paintAskQuality();
     paintAskTags();
     // 장 밑에 이미 적어 둔 것이 있으면 그대로 실어 준다. 여기서 고쳐도 되고,
     // 다 지우고 눌러도 된다.
@@ -646,8 +695,12 @@ export function mountEditor(
     st.noBubble = textless; save();
     const el = $(`#scene-${no}`);
     $("[data-nobub]", el).hidden = !textless;
+    /* 작품과 다른 화질을 골랐을 때만 싣는다 — 안 실으면 서버가 작품 화질 값을 받는다. */
+    const quality = askCtx.quality && askCtx.quality !== runQuality && !unsafePages.has(no) ? askCtx.quality : null;
     closeAsk();
-    regen(no, btn, cost, Object.keys(scene).length ? { feedback, textless, tags, scene } : { feedback, textless, tags });
+    const body = Object.keys(scene).length ? { feedback, textless, tags, scene } : { feedback, textless, tags };
+    if (quality) body.quality = quality;
+    regen(no, btn, cost, body);
   }
 
   function regen(no, btn, cost, body) {
@@ -1650,8 +1703,10 @@ export function mountEditor(
           if (r.ok) {
             const found = await r.json();
             unsafePages = new Set((found.unsafe_pages || []).map(Number));
-            /* 한 장 다시 그리기 값은 작품의 화질을 따른다(#787) — 너울은 4. */
+            /* 한 장 다시 그리기 값은 작품의 화질을 따른다(#787) — 너울은 6. 화질을 낮춰 고르면 그 값이다. */
             if (typeof found.regen_cost === "number") runRegenCost = found.regen_cost;
+            if (typeof found.quality === "string") runQuality = found.quality;
+            if (Array.isArray(found.regen_choices)) regenChoices = found.regen_choices;
           }
         } catch { /* 못 읽어도 편집은 된다 */ }
       }
@@ -1772,6 +1827,12 @@ export function mountEditor(
       trigger?.focus({ preventScroll: true });
     });
     $("#regenAskGo").addEventListener("click", confirmAsk);
+    $("#regenAskQOpts").addEventListener("click", (e) => {
+      const opt = e.target.closest("[data-q]");
+      if (!opt || !askCtx) return;
+      askCtx.quality = opt.dataset.q;
+      paintAskQuality();
+    });
 
 
     on(document, "keydown", e => {

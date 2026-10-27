@@ -2297,6 +2297,10 @@ public class JobRunner {
      * <b>아무거나 고르지 않는다.</b> 하네스가 후보마다 검수를 남기는데
      * ({@code story_review.json}), 통과한 것 중에서 고른다. 통과한 것이 없으면
      * 전부에서 고른다 — 그때는 무엇을 골라도 같은 처지다.
+     *
+     * <b>통과한 것 중 첫 번째다(#851, 2026-10-27).</b> 전에는 무작위였는데, 같은 입력이
+     * 돌릴 때마다 다른 이야기가 되고 「왜 이 이야기가 됐나」를 설명할 수 없었다. 운영에서
+     * 고른 번호가 1~4 로 고르게 퍼진 것도 사람이 고른 게 아니라 이 무작위였다.
      */
     int autoPick(String runId, int howMany) {
         List<Integer> passed = new ArrayList<>();
@@ -2311,7 +2315,7 @@ public class JobRunner {
                 passed.add(n);
             }
         }
-        return passed.get((int) (Math.random() * passed.size()));
+        return passed.get(0);
     }
 
     /**

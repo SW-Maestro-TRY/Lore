@@ -308,6 +308,9 @@ public class RunController {
         found.put("unsafe_pages", regen.unsafePages(runId));
         /* 이 작품의 한 장 다시 그리기 값(#787) — 화질마다 달라서 작품과 같이 준다. */
         found.put("regen_cost", regenCost(runId));
+        /* 다시 그리기 창의 화질 고르개 — 작품 화질이 처음 골라져 있고, 낮추면 값도 내려간다. */
+        found.put("quality", com.lore.webtoon.job.WebtoonQuality.normalize(regen.qualityOf(runId)));
+        found.put("regen_choices", com.lore.webtoon.job.WebtoonQuality.regenChoices());
         /* 남은 장 중 지금 그리는 중인 장 — 화면이 「그리는 중」을 띄우고 다 될 때까지 다시 묻는다. */
         found.put("drawing_pages", regen.drawingPages(runId));
         /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
@@ -430,10 +433,10 @@ public class RunController {
         }
         List<Map<String, Object>> started = new ArrayList<>();
         for (int no : pending.subList(0, afford)) {
-            String id = regen.startPending(runId, no, pending);
-            String ref = "pages:" + runId + ":" + no + ":" + id;
-            credits.charge(userId, per, ref, "남은 장 이어 그리기");
-            regen.charged(id, userId, ref);           // 못 그리면 그 장 값을 돌려준다
+            /* 낸 사람을 기록에 적고 → 받고 → 줄에 넣는다(#864). 못 그리면 기록에 적힌 대로 그 장 값을 돌려준다. */
+            String id = regen.queuePending(runId, no, pending, userId);
+            credits.charge(userId, per, RegenService.pagesRef(runId, no, id), "남은 장 이어 그리기");
+            regen.go(id);
             started.add(regen.statusOf(id));
         }
         return ResponseEntity.ok(Map.of("started", started, "left", pending.size() - afford));
@@ -461,11 +464,17 @@ public class RunController {
         Long userId = mustOwn(runId);
         /* 화면이 단추에 값을 적어 놓고 실제로는 안 받고 있었다. 만들기·캐릭터와
            같은 규칙으로 여기서도 받는다 — **시작하기 전에** 낼 수 있는지 보고,
-           줄을 세운 뒤에 뺀다. 먼저 빼면 시작이 실패했을 때 낸 것만 사라진다.
+           기록을 만든 뒤에 빼고, 뺀 뒤에 줄에 넣는다(#864). 기록보다 먼저 빼면 기록이
+           실패했을 때 낸 것만 사라지고, 줄에 먼저 넣으면 받기 전에 실패했을 때 돌려줄 줄이 없다.
            같은 ref 로 두 번 불려도 한 번만 빠진다(CreditGate.charge). */
         /* 안전 검사에 걸려 빈 장으로 완성된 장은 다시 그리기가 무료다(#626) — 크레딧은 처음에 그대로 받았다. */
-        /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 4다(#787). */
-        int cost = regen.isUnsafe(runId, no) ? 0 : regenCost(runId);
+        /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 6이다(#787).
+           편집실에서 화질을 골라 보냈으면 그 화질 값이다 — 너울 작품도 이 장만 파도로 그리면 파도 값. */
+        String asked = body == null || body.get("quality") == null ? null : String.valueOf(body.get("quality"));
+        String quality = com.lore.webtoon.job.WebtoonQuality.isKnown(asked)
+                ? com.lore.webtoon.job.WebtoonQuality.normalize(asked) : null;
+        int cost = regen.isUnsafe(runId, no) ? 0
+                : quality == null ? regenCost(runId) : com.lore.webtoon.job.WebtoonQuality.regenCreditsOf(quality);
         String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
         if (blocked != null) {
             throw new BusinessException(CreditGate.notEnough(), blocked);
@@ -487,12 +496,12 @@ public class RunController {
             } catch (java.io.IOException e) {
                 throw new BusinessException(com.lore.common.exception.ErrorCode.INTERNAL_ERROR, "장면 설명을 저장하지 못했습니다");
             }
-            String id = regen.start(runId, no, note);
+            /* 낸 사람은 기록에 적는다 — 실패하면, 서버가 다시 떠도, 그걸로 돌려준다(#626, #864). */
+            String id = regen.queue(runId, no, note, quality, cost > 0 ? userId : null);
             if (cost > 0) {
-                String ref = "regen:" + runId + ":" + no + ":" + id;
-                credits.charge(userId, cost, ref, "장 다시 그리기");
-                regen.charged(id, userId, ref);           // 실패하면 돌려준다(#626)
+                credits.charge(userId, cost, RegenService.regenRef(runId, no, id), "장 다시 그리기");
             }
+            regen.go(id);
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));

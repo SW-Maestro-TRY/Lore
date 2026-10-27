@@ -120,6 +120,12 @@ services:
       NH_PROVIDER: ${NH_PROVIDER:-}
       NH_STORY_AXES: ${NH_STORY_AXES:-}
       NH_STORY_ENGINES: ${NH_STORY_ENGINES:-}
+      # 단계별 모델 덮어쓰기(new_harness/llm.py 의 <단계>_PROVIDER·<단계>_MODEL). dev 에서 이야기·인물만
+      # Gemini 로 보려고 연 통로(2026-10-27). 비우면 NH_PROVIDER 와 단계 기본값을 따른다.
+      STORY_PROVIDER: ${STORY_PROVIDER:-}
+      STORY_MODEL: ${STORY_MODEL:-}
+      CAST_PROVIDER: ${CAST_PROVIDER:-}
+      CAST_MODEL: ${CAST_MODEL:-}
       # 메일 계정(선택). 비워도 뜨도록 빈 기본값을 준다 — 안 주면 yml 의 ${MAIL_USERNAME}
       # 플레이스홀더가 안 풀려 기동이 막힌다.
       MAIL_USERNAME: ${MAIL_USERNAME:-}

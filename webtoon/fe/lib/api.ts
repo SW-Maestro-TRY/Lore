@@ -281,6 +281,9 @@ export interface NhJob {
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
   cast_sheets?: { name: string; ready: boolean }[] | null;
   pick: number | null;
+  /** 게스트가 이야기 고르기에서 앞으로 몇 초 안에 골라야 하나(#851). 화면이 앞에 떠 있는 동안은 묻을 때마다
+      다시 채워진다. 로그인했거나 고르는 자리가 아니면 없다 — 끝없이 기다린다. */
+  pick_seconds_left?: number | null;
   style: string;
   style_label: string;
   stage: string;
@@ -497,6 +500,8 @@ export interface RunCard {
   likes?: number;
   /** 본 사람 수 — 둘러보기 목록에만 온다(조회순 정렬). 연재는 회차를 더한 값. */
   views?: number;
+  /** 인기순 자리 — 관리자가 정한다. 작을수록 앞, 비어 있으면 정해진 것들 뒤(조회순). 둘러보기 목록에만 온다. */
+  rank?: number | null;
   /** 내가 찜했나. 찜 목록(/my/likes)에서만 서버가 붙이고, 둘러보기는 likedAmong 으로 화면이 채운다. */
   liked?: boolean;
   /** 관리자 처리(#638) — 내 목록 · 휴지통에서만 온다. */
@@ -1004,6 +1009,43 @@ export function adminOverview(from: string, to: string, who: AdminWho): Promise<
   return call<AdminOverview>(`/admin/dash/overview?${q}`);
 }
 
+/* ---- 오늘 생성 상한(#617) — 관리자만. 서버를 다시 띄우지 않고 오늘(한국 자정까지)만 바꾼다 ---------- */
+
+export interface AdminSpendPair { krw: number; runs: number }
+
+export interface AdminSpend {
+  /** 한국 날짜 */
+  day: string;
+  /** 오늘 적힌 돈 · 편수 */
+  used: AdminSpendPair;
+  /** 아직 안 끝난 작업이 쓸 몫 — 상한은 이것까지 더해서 본다 */
+  reserved: AdminSpendPair;
+  /** 지금 쓰는 상한 */
+  cap: AdminSpendPair;
+  /** 설정값(Parameter Store) — 자정이 지나면 돌아갈 값 */
+  defaults: AdminSpendPair;
+  /** 오늘만 바꾼 값. 없으면 설정값을 쓰는 중 */
+  today: { krw: number | null; runs: number | null; setBy: number | null; setAt: string } | null;
+  /** 지금 새로 만들면 막히는가 */
+  blocked: boolean;
+}
+
+export function adminSpend(): Promise<AdminSpend> {
+  return call<AdminSpend>("/admin/spend");
+}
+
+export function adminSetSpend(krw: number, runs: number): Promise<AdminSpend> {
+  return call<AdminSpend>("/admin/spend", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ krw, runs }),
+  });
+}
+
+export function adminClearSpend(): Promise<AdminSpend> {
+  return call<AdminSpend>("/admin/spend", { method: "DELETE" });
+}
+
 export interface AdminPage<T> { rows: T[]; total: number; page: number; pageSize: number }
 
 export type AdminWorkState = "public" | "private" | "hidden" | "removed" | "trash";
@@ -1114,6 +1156,15 @@ export function adminUpdateExample(runId: string, body: { example?: boolean; pub
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+/** 둘러보기 인기순 자리를 정한다(관리자). null 이면 비운다. */
+export function adminSetBrowseRank(runId: string, rank: number | null): Promise<{ run_id: string; rank: number | null }> {
+  return call<{ run_id: string; rank: number | null }>(`/admin/browse-rank/${encodeURIComponent(runId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rank }),
   });
 }
 

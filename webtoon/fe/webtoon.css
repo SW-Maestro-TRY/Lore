@@ -254,3 +254,10 @@ main:has(> .wt) { --main-max: none; --main-pad-x: 0px; --main-pad-y: 0px; }
   .wt .mfoot .btn { width: 100%; }
   .wt .btn { height: 48px; font-size: var(--fs-base); }
 }
+
+/* 그림 없이 저장한 캐릭터 카드(이름·설명만, 2026-10-27) — 첫 글자로 자리를 채운다. 첫 작품이 끝나면 시트 그림이 들어온다. */
+.wt .wt-create-noart { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 3/4; background: var(--water-light); color: var(--sea); font-size: 40px; font-weight: 800; }
+/* 빠른 시작(2026-10-27) — 광고로 와서 이름·설명만 적는 칸 */
+.wt .wt-create-quick { margin-bottom: 22px; }
+.wt .wt-create-quick .wt-wiz-morefield { display: block; margin-top: 10px; }
+.wt .wt-create-quick .hint { margin-top: 8px; }
