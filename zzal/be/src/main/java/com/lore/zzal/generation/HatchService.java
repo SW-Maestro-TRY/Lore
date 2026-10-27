@@ -66,7 +66,7 @@ public class HatchService {
                         QuotaBreaker quotaBreaker,
                         HatchBlockLog blockLog,
                         ZzalAlerts alerts,
-                        @Value("${app.zzal.max-hatch-attempts:5}") int maxAttempts,
+                        @Value("${app.zzal.max-hatch-attempts:3}") int maxAttempts,
                         MotionSeeder motionSeeder,
                         @Value("${app.zzal.hatch-retry.discard-only-failed-grid:true}") boolean discardOnlyFailedGrid,
                         @Value("${app.zzal.hatch-retry.discard-on-postprocess-crash:true}") boolean discardOnPostprocessCrash,
@@ -99,7 +99,9 @@ public class HatchService {
 
     @Async("hatchExecutor")
     public void hatch(Long jobId, Long petId, String version) {
-        RunResult result = runAttempt(jobId, petId, version);
+        // 시도 차수를 단계에 넘긴다 — 정체성 단계가 차수별로 reasoning_effort 를 고른다(2026-10-27).
+        int firstAttempt = jobRepository.findById(jobId).map(j -> Math.max(1, j.getAttempt())).orElse(1);
+        RunResult result = runAttempt(jobId, petId, version, firstAttempt);
         if (result != null && result.success()) {
             return;
         }
@@ -162,7 +164,7 @@ public class HatchService {
             GenJob retry = jobRepository.save(
                     GenJob.start(petId, GenKind.HATCH, attempt, version, Instant.now()));
             log.info("재시도 — petId={} attempt={}/{}", petId, attempt, maxAttempts);
-            result = runAttempt(retry.getId(), petId, version);
+            result = runAttempt(retry.getId(), petId, version, attempt);
             if (result == null) {
                 recorder.markPetFailed(petId);
                 alerts.hatchFinallyFailed(petId, Instant.now());
@@ -248,14 +250,14 @@ public class HatchService {
      *         성공 여부만이 아니라 <b>왜 실패했는가</b>(격자 자체가 못 쓸 물건인가)를
      *         부르는 쪽이 알아야 재시도 전에 무엇을 폐기할지 정할 수 있다.
      */
-    private RunResult runAttempt(Long jobId, Long petId, String version) {
+    private RunResult runAttempt(Long jobId, Long petId, String version, int attempt) {
         ZzalPet pet = petRepository.findById(petId).orElse(null);
         if (pet == null) {
             log.warn("펫이 없습니다 — petId={}", petId);
             return null;
         }
 
-        StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version);
+        StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version).attempt(attempt);
         ctx.putImage("source", pet.getSourceImageKey());
 
         RunResult r = runner.run(jobId, ctx,
