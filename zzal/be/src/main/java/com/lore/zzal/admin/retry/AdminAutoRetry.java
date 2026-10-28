@@ -122,9 +122,16 @@ public class AdminAutoRetry implements HatchFailureListener {
     }
 
     private boolean insert(AdminRetryKind kind, long targetId, long petId, Instant now) {
-        return jdbc.update("""
+        var ids = jdbc.queryForList("""
                 INSERT INTO zzal_admin_retry (kind, target_id, pet_id, auto, requested_at)
-                VALUES (?, ?, ?, true, ?) ON CONFLICT DO NOTHING
-                """, kind.name(), targetId, petId, Timestamp.from(now)) == 1;
+                VALUES (?, ?, ?, true, ?) ON CONFLICT DO NOTHING RETURNING id
+                """, Long.class, kind.name(), targetId, petId, Timestamp.from(now));
+        if (ids.isEmpty()) {
+            return false;
+        }
+        if (kind == AdminRetryKind.CUSTOM) {
+            AdminCustomJobMarker.mark(jdbc, targetId, ids.getFirst()); // PENDING 이면 디스패처가 건너뛰게(수정 6)
+        }
+        return true;
     }
 }

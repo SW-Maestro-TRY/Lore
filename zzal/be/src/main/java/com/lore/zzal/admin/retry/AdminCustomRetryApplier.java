@@ -121,6 +121,7 @@ public class AdminCustomRetryApplier {
         String note = body == null ? null : body.note();
         if (files.isEmpty()) {
             deliver(retryId, AdminRetryResult.NONE, note, null, now);
+            AdminCustomJobMarker.release(db, r.getTargetId(), retryId);
             return new CandidatesResult(retryId, AdminRetryResult.NONE.name(), List.of(), "NO_FILES", false);
         }
         validatePaths(files);
@@ -149,6 +150,7 @@ public class AdminCustomRetryApplier {
         }
         if (mismatch != null) {
             deliver(retryId, AdminRetryResult.NONE, clip("manifest 불일치: " + mismatch, 2000), null, now);
+            AdminCustomJobMarker.release(db, job.id(), retryId);
             log.info("맞춤 재시도 결과 거부 — retry={} job={} : {}", retryId, job.id(), mismatch);
             return new CandidatesResult(retryId, AdminRetryResult.NONE.name(), List.of(), mismatch, false);
         }
@@ -271,6 +273,7 @@ public class AdminCustomRetryApplier {
                 if (row.isOpen()) {
                     row.applyFailed(clip(reason, NOTE_HEAD), now);
                 }
+                AdminCustomJobMarker.release(db, job.id(), r.getId());
             }));
             log.warn("맞춤 재시도 반영 실패 — retry={} job={} : {}", r.getId(), job.id(), reason);
             if (e instanceof BusinessException be) {

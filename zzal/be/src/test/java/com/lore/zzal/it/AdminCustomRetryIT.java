@@ -432,4 +432,30 @@ class AdminCustomRetryIT extends ZzalItSupport {
         assertThat(jdbc.queryForObject("select state from zzal_custom_bundle_job where id = ?", String.class, o[1]))
                 .isEqualTo("CLAIMED");
     }
+
+    @Test
+    @DisplayName("★ PENDING 잡에 러너 요청이 열리면 claim_token 에 표식(디스패처가 건너뜀, state 는 그대로) — 취소 · 결과 없음이면 되돌림")
+    void pendingJob_markedWhileRequestOpen_releasedOnClose() throws Exception {
+        setUpAdmin();
+        long[] o = orphan("PENDING", "PLANNING_IN_PROGRESS", null);
+        var v = retryService.request(admin, "CUSTOM", o[1], null, now);
+        var job = jdbc.queryForMap("select state, claim_token from zzal_custom_bundle_job where id = ?", o[1]);
+        assertThat(job.get("state")).isEqualTo("PENDING");
+        assertThat(job.get("claim_token")).isEqualTo("admin-retry-" + v.id());
+        // 디스패처가 집는 조건(CustomBundleDispatcher: state=PENDING AND claim_token IS NULL AND error_code IS NULL)에서 빠진다
+        assertThat(jdbc.queryForObject("select count(*) from zzal_custom_bundle_job where id = ? and state = 'PENDING' "
+                + "and claim_token is null", Integer.class, o[1])).isZero();
+        // 목록 사유는 그대로 계획 중 멈춤(표식을 디스패치로 읽지 않는다)
+        assertThat(retryService.pending(admin, now).getFirst().custom().state()).isEqualTo("PENDING");
+
+        retryService.cancel(admin, v.id(), now.plusSeconds(1));
+        assertThat(jdbc.queryForObject("select claim_token from zzal_custom_bundle_job where id = ?", String.class, o[1])).isNull();
+
+        // 다시 요청 → 러너가 결과 없음(NONE) → 되돌림
+        long id = claimed(o[1]);
+        assertThat(jdbc.queryForObject("select claim_token from zzal_custom_bundle_job where id = ?", String.class, o[1]))
+                .isEqualTo("admin-retry-" + id);
+        applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, Map.of(), "못 만듦"), now.plusSeconds(3));
+        assertThat(jdbc.queryForObject("select claim_token from zzal_custom_bundle_job where id = ?", String.class, o[1])).isNull();
+    }
 }

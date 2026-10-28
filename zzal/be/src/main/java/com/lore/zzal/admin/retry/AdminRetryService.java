@@ -131,6 +131,9 @@ public class AdminRetryService {
             layerService.requestRegen(adminId, id, 1, now);
         }
         AdminRetry saved = save(draft);
+        if (k == AdminRetryKind.CUSTOM && AdminCustomJobMarker.mark(jdbc, id, saved.getId())) {
+            log.info("PENDING 맞춤 잡에 재시도 표식 — job={} retry={}", id, saved.getId());
+        }
         log.info("관리자 재시도 요청 — {} {} retry={} (admin={})", k, id, saved.getId(), adminId);
         return RetryView.of(saved);
     }
@@ -195,6 +198,8 @@ public class AdminRetryService {
         });
         if (r.getKind() == AdminRetryKind.HATCH) {
             layerService.cancelRegen(adminId, r.getTargetId(), 1);
+        } else {
+            AdminCustomJobMarker.release(jdbc, r.getTargetId(), r.getId());
         }
         log.info("관리자 재시도 취소 — retry={} (admin={})", retryId, adminId);
         return RetryView.of(r);

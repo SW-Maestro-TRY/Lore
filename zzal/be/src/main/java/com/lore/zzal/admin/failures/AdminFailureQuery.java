@@ -64,6 +64,9 @@ public class AdminFailureQuery {
     private final AdminRetryRepository retries;
     private final int hatchGraceMinutes;
     private final int customGraceMinutes;
+    /** CLAIMED 고아로 볼 CLI 시작 뒤 시간 — 워커 한 번의 최대 시간(10분, CliGenerationExecutor)의 두 배. */
+    @Value("${app.zzal.admin.failures.custom-orphan-minutes:20}")
+    private int customOrphanMinutes = 20;
 
     public AdminFailureQuery(NamedParameterJdbcTemplate db, HatchService hatchService, AdminRetryRepository retries,
                              @Value("${app.zzal.admin.failures.hatch-grace-minutes:${app.zzal.recovery.grace-minutes:12}}")
@@ -200,7 +203,7 @@ public class AdminFailureQuery {
                 AND v.observed_at < :cutoff
             )
             SELECT d.pet_id, d.bundle_version, min(d.eligible_at) AS first_due_at, count(*) AS missing,
-                   p.name, p.user_id, j.id AS job_id, j.state, j.error_code, j.claim_token IS NOT NULL AS dispatched,
+                   p.name, p.user_id, j.id AS job_id, j.state, j.error_code, j.claim_token, j.cli_started_at,
                    j.manifest_hash,
                    (SELECT count(*) FROM zzal_custom_bundle_asset a
                      WHERE a.job_id = j.id AND a.published AND a.auto_check = 'PASS'
@@ -216,7 +219,12 @@ public class AdminFailureQuery {
             """;
 
     private record CustomRaw(long petId, String bundle, Instant firstDueAt, String name, long userId, Long jobId,
-                             String state, String error, boolean dispatched, String manifest, int publishedPass) {
+                             String state, String error, String claimToken, Instant cliStartedAt, String manifest,
+                             int publishedPass) {
+        /** 서버 디스패처가 집었나 — 관리자 재시도 표식(admin-retry-…)은 디스패치가 아니다. */
+        boolean dispatched() {
+            return claimToken != null && !claimToken.startsWith("admin-retry-");
+        }
     }
 
     public List<FailureRow> customFailures(Instant from, Instant now) {
@@ -237,10 +245,11 @@ public class AdminFailureQuery {
         List<CustomRaw> raws = db.query(CUSTOM_SQL, params, (rs, n) -> new CustomRaw(
                 rs.getLong("pet_id"), rs.getString("bundle_version"), instant(rs, "first_due_at"),
                 rs.getString("name"), rs.getLong("user_id"), (Long) rs.getObject("job_id", Long.class),
-                rs.getString("state"), rs.getString("error_code"), rs.getBoolean("dispatched"),
-                rs.getString("manifest_hash"), rs.getInt("published_pass")));
+                rs.getString("state"), rs.getString("error_code"), rs.getString("claim_token"),
+                instant(rs, "cli_started_at"), rs.getString("manifest_hash"), rs.getInt("published_pass")));
 
-        List<CustomRaw> kept = raws.stream().filter(r -> !awaitingVisit(r)).toList();
+        Instant orphanCutoff = now.minus(Duration.ofMinutes(customOrphanMinutes));
+        List<CustomRaw> kept = raws.stream().filter(r -> !awaitingVisit(r) && !stillBaking(r, orphanCutoff)).toList();
         Map<Long, List<AdminRetry>> history = history(AdminRetryKind.CUSTOM,
                 kept.stream().map(CustomRaw::jobId).filter(java.util.Objects::nonNull).toList());
 
@@ -277,6 +286,12 @@ public class AdminFailureQuery {
             return "게시만 다시 필요";
         }
         return "반영할 수 없는 잡 상태(%s/%s)".formatted(r.state(), r.error());
+    }
+
+    /** CLAIMED 인데 CLI 가 워커 최대 시간 안에 시작했다 — 아직 굽는 중이지 고아가 아니다(수정 6). */
+    private static boolean stillBaking(CustomRaw r, Instant orphanCutoff) {
+        return "CLAIMED".equals(r.state()) && r.error() == null && r.cliStartedAt() != null
+                && r.cliStartedAt().isAfter(orphanCutoff);
     }
 
     /** 게시까지 끝난 세트 — 사용자가 다음에 오면 grantReady 가 준다. */

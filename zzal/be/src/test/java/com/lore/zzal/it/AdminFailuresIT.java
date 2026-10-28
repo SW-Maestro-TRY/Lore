@@ -951,4 +951,25 @@ class AdminFailuresIT extends ZzalItSupport {
         }
         assertThat(retries.count()).isZero();
     }
+
+    // ── 수정 6: CLAIMED 고아는 워커 최대 시간 뒤에만 ───────────────────────────────
+
+    @Test
+    @DisplayName("맞춤 — CLAIMED 인데 CLI 가 막 시작했으면(워커 최대 시간 안) 굽는 중이라 실패가 아니고, 오래됐으면 고아")
+    void customFailures_claimedOrphanNeedsOldCliStart() {
+        setUpPet();
+        ZzalPet baking = alive();
+        visits(baking.getId(), 3, ago(120));
+        slot(baking.getId(), "motion-1", 3);
+        Long fresh = customJob(baking.getId(), "bundle-1", "CLAIMED", null, "tok", null, "{}");
+        jdbc.update("update zzal_custom_bundle_job set cli_started_at = ? where id = ?", ts(ago(5)), fresh);
+        ZzalPet stuck = alive();
+        visits(stuck.getId(), 3, ago(120));
+        slot(stuck.getId(), "motion-1", 3);
+        Long old = customJob(stuck.getId(), "bundle-1", "CLAIMED", null, "tok", null, "{}");
+        jdbc.update("update zzal_custom_bundle_job set cli_started_at = ? where id = ?", ts(ago(25)), old);
+
+        assertThat(customRows()).extracting(FailureRow::id).containsExactly(old);
+        assertThat(customRows().getFirst().reasonCode()).isEqualTo("CLAIMED_ORPHAN");
+    }
 }
