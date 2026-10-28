@@ -152,8 +152,10 @@ public class BubbleArtist {
         // 외침은 뾰족한 만큼 안쪽이 좁다(안쪽 반지름이 바깥의 0.8).
         double spread = round ? Math.sqrt(2) / ("shout".equals(variant) ? 0.8 : 1.0) : 1.0;
 
+        /* 나레이션은 가장 낮은 높이를 두지 않는다(target 무한대) — 길게 늘여 쓰는 띠라서
+           폭을 따라 높이까지 커지면 빈칸만 많은 상자가 된다. 화면(editorCore.paintShape)과 같다. */
         Fit fit = fit(item.path("text").asText(""), font, boxW, padX, padY, spread,
-                "narration".equals(variant) ? 4.0 : 2.4);
+                "narration".equals(variant) ? Double.POSITIVE_INFINITY : 2.4);
 
         boolean tailed = TAILED.contains(variant) && !"none".equals(item.path("tail").asText());
         double tipX = fit.w * item.path("tx").asDouble(22) / 100.0;

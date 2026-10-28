@@ -932,7 +932,7 @@ export function mountEditor(
        굽는 쪽(overlay.py 의 _fit, BubbleArtist.fit)도 같은 규칙이라 화면과
        내려받은 그림이 안 갈린다. */
     const full = el.clientWidth || bub.offsetWidth;
-    const target = v === "narration" ? 4.0 : 2.4;
+    const target = 2.4;
 
     /* 타원은 글 상자보다 √2 만큼 크다. 글 상자를 그대로 타원 크기로 쓰면
        네 모서리가 선 밖으로 나간다 — 그걸 피하려고 폭을 키우다 보니 예전
@@ -947,8 +947,11 @@ export function mountEditor(
 
     const sw = 2.5;
     const ew = full;
-    // 글이 짧다고 납작한 국수 가락이 되지는 않게 가장 낮은 높이를 둔다.
-    const eh = Math.max(h * spread, full / target);
+    /* 글이 짧다고 납작한 국수 가락이 되지는 않게 가장 낮은 높이를 둔다.
+       **나레이션은 빼고** 글 높이에 맞춘다 — 나레이션 상자는 장을 가로지르는 띠로
+       길게 늘여 쓰는데, 폭에 비례해 높이까지 커지면 넓힐수록 빈칸만 많은 상자가
+       됐다(2026-10-28 제보, 「나레이션 말풍선 길이 조절」). 굽는 쪽(BubbleArtist)도 같다. */
+    const eh = v === "narration" ? h : Math.max(h * spread, full / target);
 
     /* **고른 표시와 손잡이는 <u>보이는 풍선</u>을 감싸야 한다.**
        예전에는 항목 상자가 글 상자 크기였다 — 타원은 그보다 √2 만큼 크니까,
@@ -1200,9 +1203,15 @@ export function mountEditor(
           it.w = Math.max(5, Math.min(96, ow + (west ? -dx : dx)));
           /* **글자도 폭을 따라 큰다.** 크기 손잡이인데 풍선만 커지고 글은
              그대로면, 늘릴수록 글이 작아 보인다(실제 제보). 통째로 키우고
-             줄이는 것이 손잡이가 뜻하는 바다. */
-          it.size = Math.max(6, Math.min(70, Math.round(osize * it.w / Math.max(1, ow))));
-          paintFont(el, it);
+             줄이는 것이 손잡이가 뜻하는 바다.
+
+             **나레이션만은 폭만 바뀐다.** 나레이션 상자는 장 위아래를 가로지르는
+             띠로 쓰는 일이 많아서, 넓히면 글자까지 커져 버리면 원하는 길이로 맞출
+             수가 없다(2026-10-28 제보). 글자 크기는 ᴀ⁻ ᴀ⁺ 단추로 따로 고친다. */
+          if (!(it.type === "bubble" && it.variant === "narration")) {
+            it.size = Math.max(6, Math.min(70, Math.round(osize * it.w / Math.max(1, ow))));
+            paintFont(el, it);
+          }
           // 잡지 않은 쪽 변은 제자리에 둔다. 폭은 바로 알 수 있고, 높이는
           // 글이 다시 흐른 뒤에야 알 수 있으니 모양을 그린 다음에 잰다.
           if (west) it.x = ox + (ow - it.w);
