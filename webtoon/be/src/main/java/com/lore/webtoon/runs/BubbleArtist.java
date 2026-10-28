@@ -310,8 +310,14 @@ public class BubbleArtist {
         return new Fit(boxW, h, lines);
     }
 
-    /** 폭에 맞춰 줄을 나눈다. 한국어는 어절에서 끊고, 한 어절이 넘치면 글자로 자른다. */
-    private static List<String> wrap(String text, FontMetrics fm, int maxW) {
+    /**
+     * 폭에 맞춰 줄을 나눈다. 한국어는 어절에서 끊고, 한 어절이 넘치면 글자로 자른다.
+     *
+     * 사람이 친 띄어쓰기는 그대로 둔다 — 편집실 화면이 줄바꿈과 연속 공백을 그대로
+     * 보여 주므로(Editor.css 의 white-space: pre-wrap) 구운 그림도 같아야 한다.
+     * 예전에는 줄 맨 앞의 띄어쓰기가 빠졌다.
+     */
+    static List<String> wrap(String text, FontMetrics fm, int maxW) {
         List<String> out = new ArrayList<>();
         for (String para : text.split("\n")) {
             if (para.isBlank()) {
@@ -319,8 +325,12 @@ public class BubbleArtist {
                 continue;
             }
             StringBuilder line = new StringBuilder();
+            // 줄을 시작했는가. 빈 어절(연속 공백)도 시작으로 친다 — line.isEmpty() 로
+            // 가르면 맨 앞 공백이 붙을 자리가 없어 사라진다.
+            boolean started = false;
             for (String word : para.split(" ")) {
-                String trial = line.isEmpty() ? word : line + " " + word;
+                String trial = started ? line + " " + word : word;
+                started = true;
                 if (fm.stringWidth(trial) <= maxW || line.isEmpty()) {
                     if (fm.stringWidth(trial) > maxW && line.isEmpty()) {
                         // 한 어절이 폭을 넘으면 글자 단위로 쪼갠다.
