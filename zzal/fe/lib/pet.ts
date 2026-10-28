@@ -473,6 +473,8 @@ export interface PetDetail {
   newRewardCount?: components['schemas']['Detail']['newRewardCount'];
   /** 안 읽은 일지 수 — 0보다 크면 「앨범」·「일지」에 빨간 점. 배포 전 서버면 안 온다(=0). */
   unreadDiaryCount?: components['schemas']['Detail']['unreadDiaryCount'];
+  /** 아직 안 본 운영팀 답장 수(계정 기준) — 0보다 크면 메뉴·「문의하기」에 점. 배포 전 서버면 안 온다(=0). 손으로 쓴 칸(api-schema 미갱신). */
+  unreadInquiryReplyCount?: number;
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */

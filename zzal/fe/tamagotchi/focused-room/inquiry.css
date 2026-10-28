@@ -1,2 +1,19 @@
 .fr-inquiry .fr-sheet-body{display:flex;flex-direction:column;flex:1;min-height:0}
 .fr-inquiry .fr-inquiry-email{margin:auto 0 0;padding-top:12px;font-size:13px;overflow-wrap:anywhere;text-align:right}.fr-inquiry .fr-inquiry-email a{display:inline-flex;align-items:center;min-height:44px;padding:0;border-radius:0;text-decoration:underline;text-underline-offset:3px}.fr-inquiry textarea:focus-visible{outline:2px solid var(--fr-accent);outline-offset:3px}.fr-inquiry textarea{min-height:120px}.fr-inquiry [data-fr-inquiry-saved]{padding:10px 0}.fr-inquiry form>button{width:100%}
+/* 대화 기록형(목업 34-2). 답장은 「로어 운영팀」 시스템 문구 — 캐릭터 말풍선 모양을 쓰지 않는다. */
+.fr-inquiry .fr-inquiry-thread{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:18px}
+.fr-inquiry .fr-inquiry-thread li{display:flex;flex-direction:column;gap:6px;min-width:0}
+.fr-inquiry .fr-inquiry-meta{margin:0;font-size:12px;line-height:1.5;color:#8A7C70;display:flex;align-items:center;flex-wrap:wrap;gap:0 4px}
+.fr-inquiry .fr-inquiry-meta--team{margin-top:6px}
+.fr-inquiry .fr-inquiry-meta svg{width:13px;height:13px;margin-right:2px;fill:none;stroke:#9C4232;stroke-width:1.6;stroke-linejoin:round}
+.fr-inquiry .fr-inquiry-mine{margin:0;padding:10px 12px;border-radius:10px;background:#F2EDE6;font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.fr-inquiry .fr-inquiry-reply{margin:0;padding:10px 12px 10px 13px;border:1px solid #E2D8CC;border-left:4px solid #9C4232;border-radius:10px;background:#FFFDF8;font-size:14px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.fr-inquiry .fr-inquiry-more{margin-top:18px;padding-top:14px;border-top:1px solid #E5DDD2;display:flex;flex-direction:column;gap:8px}
+.fr-inquiry .fr-inquiry-more textarea{min-height:88px}
+.fr-inquiry .fr-inquiry-more>button{width:100%}
+.fr-inquiry .fr-inquiry-notice{margin:10px 0 0;font-size:12px;line-height:1.5;color:#6b6058;text-align:center;overflow-wrap:anywhere}
+.fr-inquiry .fr-inquiry-notice span{display:inline-block;width:6px;height:6px;margin:0 6px 1px 0;border-radius:50%;background:#D9677F;vertical-align:middle}
+.fr-inquiry .fr-inquiry-loading{margin:0;padding:10px 0;font-size:13px;color:#8A7C70}
+.fr-inquiry .fr-inquiry-reload{min-height:44px;padding:0 6px;background:transparent;border:0;text-decoration:underline;text-underline-offset:3px}
+.fr-inquiry .fr-sheet-body{overflow-y:auto}
+.fr-inquiry .fr-sheet-body>*{flex-shrink:0}

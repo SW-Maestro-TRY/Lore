@@ -8,3 +8,5 @@
 /* 28-D: 항목 안 오른쪽 끝·세로 가운데, 지름 9, 테 없음. 글자가 점과 겹치지 않게 오른쪽 여백을 늘린다. */
 .focused-room .fr-new-dot--item{top:50%;right:12px;width:9px;height:9px;margin-top:-4.5px;background:#D9677F}
 .focused-room button[data-fr-new][data-fr-new]:has(> .fr-new-dot--item){padding-right:29px}
+/* 34-2: 문의 화면 「로어 운영팀 · 시각」 줄 끝 — 같은 9px 분홍 점을 글줄 안에. */
+.fr-new-dot--inline{position:static!important;display:inline-block;vertical-align:middle;width:9px;height:9px;margin-left:6px;border-radius:50%;background:#D9677F}
