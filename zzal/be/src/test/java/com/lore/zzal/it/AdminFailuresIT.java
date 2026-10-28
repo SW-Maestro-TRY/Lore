@@ -844,4 +844,83 @@ class AdminFailuresIT extends ZzalItSupport {
                 .get("/api/zzal/v1/admin/failures").with(asUser(admin))).andReturn();
         assertThat(res.getResponse().getStatus()).isEqualTo(404);
     }
+
+    // ── 수정 9: 멈춘 알도 러너 길 ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("★ 멈춘 알 재시도 — 굽던 잡을 실패로 닫고 알도 FAILED(사망 사유 기록), 러너 요청 · LOCAL_REQUESTED, 새 잡 없음")
+    void request_stuckHatch_closesAndRequestsRunner() {
+        setUpPet();
+        Long pet = egg("HATCHING", "콩이");
+        Long job = hatchJob(pet, 1, "RUNNING", null, ago(30), ago(30), null);
+        RetryView v = retryService.request(admin, "HATCH", pet, "멈춤", now);
+
+        assertThat(v.result()).isNull();
+        assertThat(jdbc.queryForObject("select phase from zzal_pet where id = ?", String.class, pet)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("select death_reason from zzal_pet where id = ?", String.class, pet)).isEqualTo("HATCH_FAILED");
+        assertThat(jdbc.queryForObject("select status from zzal_gen_job where id = ?", String.class, job)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("select layer1_regen_requested_at is not null from zzal_pet where id = ?",
+                Boolean.class, pet)).isTrue();
+        assertThat(jdbc.queryForObject("select count(*) from zzal_gen_job where pet_id = ?", Integer.class, pet))
+                .as("서버에서 굽지 않는다").isEqualTo(1);
+        assertThat(retryService.pending(admin, now)).extracting(PendingItem::retryId).containsExactly(v.id());
+    }
+
+    @Test
+    @DisplayName("★ 멈춘 알 재시도 — 동시에 두 번 눌러도 요청은 하나(두 번째는 409)")
+    void request_stuckHatch_concurrentTwice_oneRow() throws Exception {
+        setUpPet();
+        Long pet = egg("HATCHING", "콩이");
+        hatchJob(pet, 1, "RUNNING", null, ago(30), ago(30), null);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try {
+            List<java.util.concurrent.Future<Object>> results = new java.util.ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    try {
+                        return retryService.request(admin, "HATCH", pet, null, now);
+                    } catch (BusinessException e) {
+                        return e.getErrorCode();
+                    }
+                }));
+            }
+            start.countDown();
+            List<Object> out = new java.util.ArrayList<>();
+            for (var f : results) {
+                out.add(f.get(30, java.util.concurrent.TimeUnit.SECONDS));
+            }
+            assertThat(out).filteredOn(o -> o instanceof RetryView).hasSize(1);
+            assertThat(out).filteredOn(o -> o instanceof ErrorCode).hasSize(1)
+                    .allSatisfy(o -> assertThat(((ErrorCode) o).getStatus().value()).isEqualTo(409));
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(retries.count()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select phase from zzal_pet where id = ?", String.class, pet)).isEqualTo("FAILED");
+    }
+
+    @Test
+    @DisplayName("멈춘 알 재시도 — 시도 상한(3회)에 닿은 알도 같은 길(새 시도 없음), 단계가 방금 돌았으면 아직 굽는 중이라 거부")
+    void request_stuckHatch_atAttemptCap_andRecentStepRejected() {
+        setUpPet();
+        Long pet = egg("HATCHING", "콩이");
+        hatchJob(pet, 1, "FAILED", "UNKNOWN", ago(60), ago(60), ago(55));
+        hatchJob(pet, 2, "FAILED", "UNKNOWN", ago(50), ago(50), ago(45));
+        Long third = hatchJob(pet, 3, "RUNNING", null, ago(40), ago(40), null);
+        retryService.request(admin, "HATCH", pet, null, now);
+        assertThat(jdbc.queryForObject("select status from zzal_gen_job where id = ?", String.class, third)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("select count(*) from zzal_gen_job where pet_id = ?", Integer.class, pet)).isEqualTo(3);
+
+        // 잡 칸은 30분 전이지만 단계가 3분 전에 시작했다 → 아직 굽는 중
+        Long busy = egg("HATCHING", "별이");
+        Long job = hatchJob(busy, 1, "RUNNING", null, ago(30), ago(30), null);
+        jdbc.update("insert into zzal_gen_step (job_id, seq, name, status, started_at) values (?, 2, 'grid', 'RUNNING', ?)",
+                job, ts(ago(3)));
+        assertThat(hatchRows()).extracting(FailureRow::id).doesNotContain(busy);
+        assertThatThrownBy(() -> retryService.request(admin, "HATCH", busy, null, now))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
+        assertThat(jdbc.queryForObject("select phase from zzal_pet where id = ?", String.class, busy)).isEqualTo("HATCHING");
+    }
 }

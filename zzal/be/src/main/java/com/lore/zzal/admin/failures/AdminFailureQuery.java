@@ -79,7 +79,7 @@ public class AdminFailureQuery {
     // ── 부화 ──────────────────────────────────────────────────────────────
 
     private static final String HATCH_SQL = """
-            WITH j AS (
+            WITH j0 AS (
               SELECT pet_id,
                      count(*)                                              AS attempts,
                      coalesce(sum(total_cost_usd), 0)                      AS cost,
@@ -89,6 +89,15 @@ public class AdminFailureQuery {
                      (array_agg(error_code ORDER BY id DESC))[1]           AS last_error,
                      (array_agg(pipeline_version ORDER BY id DESC))[1]     AS version
               FROM zzal_gen_job WHERE kind = 'HATCH' GROUP BY pet_id
+            ), st AS (
+              -- ★ 단계 기록까지 본다 — 잡 칸이 안 바뀌어도 단계가 방금 돌았으면 아직 굽는 중이다.
+              SELECT g.pet_id, max(greatest(coalesce(s.finished_at, 'epoch'), s.started_at)) AS step_activity
+              FROM zzal_gen_step s JOIN zzal_gen_job g ON g.id = s.job_id
+              WHERE g.kind = 'HATCH' GROUP BY g.pet_id
+            ), j AS (
+              SELECT j0.pet_id, j0.attempts, j0.cost, j0.last_failed_at, j0.last_job_id, j0.last_error, j0.version,
+                     greatest(j0.last_activity, coalesce(st.step_activity, 'epoch')) AS last_activity
+              FROM j0 LEFT JOIN st ON st.pet_id = j0.pet_id
             )
             SELECT p.id, p.name, p.user_id, p.phase, j.attempts, j.cost, j.last_activity, j.last_failed_at,
                    j.last_error, j.version,
@@ -143,9 +152,8 @@ public class AdminFailureQuery {
         for (HatchRaw r : kept) {
             boolean failed = "FAILED".equals(r.phase());
             String code = failed ? (r.lastError() != null ? r.lastError() : "UNKNOWN") : STUCK;
-            // ★ 멈춘 알은 실패로 닫지 않고 서버에서 이어서 굽는다(결정 2) — 이름이 없어도 된다.
-            //   FAILED 알은 1층 복구(맥미니)로 살리므로 이름이 있어야 한다.
-            boolean revivable = !failed || named(r.name());
+            // ★ 멈춘 알도 FAILED 알과 같은 러너 길이다(재시도하면 실패로 닫고 1층 복구) — 이름이 있어야 살린다.
+            boolean revivable = named(r.name());
             String stage = r.failedStep() != null ? r.failedStep() : (failed ? null : "멈춤(서버 재시작 추정)");
             boolean named = named(r.name());
             List<AdminRetry> h = history.getOrDefault(r.petId(), List.of());

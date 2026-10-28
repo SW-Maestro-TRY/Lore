@@ -88,7 +88,7 @@ public final class AdminFailureResponses {
             Map.entry("TIMEOUT", "생성이 시간 안에 끝나지 않음"),
             Map.entry("MODERATION_BLOCKED", "그림 안전 검사에 걸림"),
             Map.entry("UNKNOWN", "알 수 없는 오류로 실패"),
-            Map.entry("STUCK", "부화 중 멈춤 — 재시도하면 성공한 단계를 이어받아 서버에서 이어서 굽기(예상 비용 표시)"),
+            Map.entry("STUCK", "부화 중 멈춤 — 기동 복구·주기 복구 대상. 재시도하면 실패로 닫고 맥미니 러너로"),
             // 맞춤
             Map.entry("NO_JOB", "출석 보상 자격은 생겼는데 맞춤 잡이 없음"),
             Map.entry("NOT_DISPATCHED", "잡이 만들어졌지만 아직 굽기로 보내지 않음"),

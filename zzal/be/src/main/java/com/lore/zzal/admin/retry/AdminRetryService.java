@@ -60,6 +60,10 @@ public class AdminRetryService {
     private final HatchService hatchService;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.generation.GenerationRecorder recorder;
+    @org.springframework.beans.factory.annotation.Value("${app.zzal.admin.failures.hatch-grace-minutes:${app.zzal.recovery.grace-minutes:12}}")
+    private int hatchGraceMinutes;
 
     public AdminRetryService(AdminGuard adminGuard, AdminCaller caller, AdminFailureQuery query,
                              AdminRetryRepository retries, AdminRunnerClock clock, AdminLayerService layerService,
@@ -120,7 +124,7 @@ public class AdminRetryService {
         AdminRetry draft = manual(k, id, row.petId(), memo, adminId, now);
 
         if (k == AdminRetryKind.HATCH && "STUCK".equals(row.reasonCode())) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "멈춘 알은 아직 재시도할 수 없습니다");
+            return stuck(adminId, draft, now);
         }
         if (k == AdminRetryKind.HATCH) {
             // 기존 1층 LOCAL_REQUESTED 길을 그대로 쓴다 — 지금 러너도 이 표시를 본다(설계 1절).
@@ -128,6 +132,49 @@ public class AdminRetryService {
         }
         AdminRetry saved = save(draft);
         log.info("관리자 재시도 요청 — {} {} retry={} (admin={})", k, id, saved.getId(), adminId);
+        return RetryView.of(saved);
+    }
+
+    /**
+     * 멈춘 알(수정 9) — 서버에서 이어서 굽지 않는다. 잠금 안에서 아직도 멈춰 있는지(잡 · 단계 활동이 유예보다 오래됨)
+     * 다시 보고, 끝나지 않은 마지막 잡을 실패로 닫고, 알을 조건부로 FAILED 로 바꾼 뒤(1행일 때만 진행 — 동시 두 번 방지)
+     * FAILED 알과 같은 러너 길(요청 행 + LOCAL_REQUESTED)로 보낸다. 사망 사유 · 자동 CLI 훅은 markPetFailed 가 맡는다.
+     */
+    private RetryView stuck(Long adminId, AdminRetry draft, Instant now) {
+        long petId = draft.getTargetId();
+        AdminRetry saved = tx.execute(s -> {
+            jdbc.queryForList("SELECT id FROM zzal_pet WHERE id = ? FOR UPDATE", petId);
+            if (retries.findOpen(AdminRetryKind.HATCH, petId).isPresent()) {
+                throw new BusinessException(ErrorCode.ADMIN_RETRY_OPEN);
+            }
+            java.sql.Timestamp last = jdbc.queryForObject("""
+                    SELECT greatest(
+                             (SELECT max(greatest(coalesce(finished_at, 'epoch'), coalesce(running_at, 'epoch'), started_at))
+                                FROM zzal_gen_job WHERE pet_id = ? AND kind = 'HATCH'),
+                             (SELECT max(greatest(coalesce(st.finished_at, 'epoch'), st.started_at))
+                                FROM zzal_gen_step st JOIN zzal_gen_job g ON g.id = st.job_id
+                               WHERE g.pet_id = ? AND g.kind = 'HATCH'))
+                    """, java.sql.Timestamp.class, petId, petId);
+            if (last == null || !last.toInstant().isBefore(now.minus(java.time.Duration.ofMinutes(hatchGraceMinutes)))) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "아직 굽는 중입니다(마지막 활동이 유예 안)");
+            }
+            // 끝나지 않은 마지막 잡을 닫는다(이미 끝났으면 0행 — 그대로 진행).
+            int closedJobs = jdbc.update("""
+                    UPDATE zzal_gen_job SET status = 'FAILED', error_code = coalesce(error_code, 'UNKNOWN'), finished_at = ?
+                    WHERE id = (SELECT max(id) FROM zzal_gen_job WHERE pet_id = ? AND kind = 'HATCH')
+                      AND status IN ('QUEUED', 'RUNNING')
+                    """, java.sql.Timestamp.from(now), petId);
+            int closed = jdbc.update("UPDATE zzal_pet SET phase = 'FAILED' WHERE id = ? AND phase IN ('DRAFT', 'HATCHING')", petId);
+            if (closed != 1) {
+                throw new BusinessException(ErrorCode.ADMIN_RETRY_CLOSED);
+            }
+            log.info("멈춘 알을 실패로 닫음 — petId={} 닫은 잡 {}건 (admin={})", petId, closedJobs, adminId);
+            return save(draft);
+        });
+        // 사망 사유 · 실패 훅(자동 CLI 는 열린 요청이 있어 만들지 않는다)
+        recorder.markPetFailed(petId);
+        layerService.requestRegen(adminId, petId, 1, now);
+        log.info("관리자 재시도 요청(멈춘 알) — petId={} retry={} (admin={})", petId, saved.getId(), adminId);
         return RetryView.of(saved);
     }
 
