@@ -358,11 +358,19 @@ public class AdminLayerService {
 
     // ── 업로드 주소 ──────────────────────────────────────────────────────
 
-    /** 후보 격자를 올릴 presign(#702). 관리자 줄에 있어 봇 토큰으로도 부른다. png 만. */
+    /** presign 허용 형식 — 순서는 오류 문구에 그대로 나온다. */
+    static final List<String> PRESIGN_TYPES = List.of("image/png", "image/webp", "image/gif", "application/json");
+
+    /**
+     * 후보 파일을 올릴 presign(#702). 관리자 줄에 있어 봇 토큰으로도 부른다.
+     * 1·2층 격자(png)와 맞춤 후보 세트(webp·gif·json)를 받는다. 1·2층 candidates 는 여전히 격자 png 만
+     * 후처리 게이트를 통과한다 — 형식을 넓혀도 층 후보로 쓸 수 있는 것은 바뀌지 않는다.
+     */
     public S3Service.PresignedUpload presign(Long adminUserId, String contentType) {
         adminGuard.require(adminUserId);
-        if (!"image/png".equals(contentType)) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "후보 격자는 image/png 만 받습니다");
+        if (contentType == null || !PRESIGN_TYPES.contains(contentType)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "후보 파일은 %s 만 받습니다".formatted(String.join(", ", PRESIGN_TYPES)));
         }
         return s3Service.createUploadUrl(adminUserId, "zzal", contentType);
     }

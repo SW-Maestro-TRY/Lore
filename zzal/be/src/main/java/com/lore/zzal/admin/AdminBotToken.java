@@ -35,6 +35,12 @@ public class AdminBotToken {
     /** 요청 헤더 이름. */
     public static final String HEADER = "X-Admin-Token";
 
+    /**
+     * 봇 토큰으로 들어온 요청에만 붙는 권한 표식. 쿠키 로그인과 가르는 유일한 근거다 —
+     * bot-user-id 가 관리자 본인 계정일 수 있어 사용자 번호로는 가르지 않는다({@link AdminCaller}).
+     */
+    public static final String BOT_AUTHORITY = "ZZAL_ADMIN_BOT";
+
     /** 이보다 짧으면 끈다. */
     static final int MIN_LENGTH = 32;
 

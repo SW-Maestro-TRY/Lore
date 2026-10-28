@@ -45,9 +45,11 @@ import java.util.List;
 public class AdminLayerController {
 
     private final AdminLayerService service;
+    private final AdminCaller caller;
 
-    public AdminLayerController(AdminLayerService service) {
+    public AdminLayerController(AdminLayerService service, AdminCaller caller) {
         this.service = service;
+        this.caller = caller;
     }
 
     /** 후보 격자 키(presign 으로 올린 것). */
@@ -63,10 +65,10 @@ public class AdminLayerController {
     public record PresignRequest(@NotBlank String contentType) {
     }
 
-    @Operation(summary = "후보 격자 업로드 주소", description = """
+    @Operation(summary = "후보 파일 업로드 주소", description = """
             관리자(또는 봇 토큰)가 후보 격자를 올릴 자리. 공통 presign(`/api/v1/uploads/presign`)과 같은 표를 쓰지만
             이 주소는 관리자 줄에 있어 봇 토큰으로도 부를 수 있다. 키의 주인 = 부른 관리자(봇이면 토큰에 묶인 번호).
-            `image/png` 만 받는다.""")
+            `image/png`(1·2층 격자)와 `image/webp`·`image/gif`·`application/json`(맞춤 후보 세트)을 받는다.""")
     @PostMapping("/uploads/presign")
     public ApiResponse<com.lore.common.s3.S3Service.PresignedUpload> presign(@LoginUser Long userId,
                                                                             @Valid @RequestBody PresignRequest body) {
@@ -111,6 +113,7 @@ public class AdminLayerController {
     @PostMapping("/pets/{petId}/layer2/pick")
     public ApiResponse<AdminLayerService.Picked> layer2Pick(@LoginUser Long userId, @PathVariable Long petId,
                                                            @Valid @RequestBody PickRequest body) {
+        caller.requireHuman(); // 사용자 화면을 바꾸는 고르기는 사람만(결정 9) — 봇 토큰은 403
         return ApiResponse.ok(service.pick(userId, petId, 2, body.candidateId(), Instant.now()));
     }
 
@@ -152,6 +155,7 @@ public class AdminLayerController {
     @PostMapping("/pets/{petId}/layer1/pick")
     public ApiResponse<AdminLayerService.Picked> layer1Pick(@LoginUser Long userId, @PathVariable Long petId,
                                                            @Valid @RequestBody PickRequest body) {
+        caller.requireHuman(); // 사용자 화면을 바꾸는 고르기는 사람만(결정 9) — 봇 토큰은 403
         return ApiResponse.ok(service.pick(userId, petId, 1, body.candidateId(), Instant.now()));
     }
 }
