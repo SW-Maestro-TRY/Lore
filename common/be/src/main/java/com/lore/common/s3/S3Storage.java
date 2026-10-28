@@ -7,6 +7,9 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -62,6 +65,24 @@ public class S3Storage {
             throw new UncheckedIOException(e);
         }
         client.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build(), to);
+    }
+
+    /**
+     * 그 키에 객체가 있나. 없으면 false, 그 밖의 오류(권한 · 네트워크)는 그대로 던진다 —
+     * "모르겠다" 를 "없다" 로 읽으면 덮어쓰기 전 백업을 건너뛰게 된다.
+     */
+    public boolean exists(String key) {
+        try {
+            client.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());
+            return true;
+        } catch (NoSuchKeyException e) {
+            return false;
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                return false;
+            }
+            throw e;
+        }
     }
 
     public void upload(String key, Path from, String contentType) {

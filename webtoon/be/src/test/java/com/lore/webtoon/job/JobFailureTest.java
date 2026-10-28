@@ -149,7 +149,7 @@ class JobFailureTest {
         assertThat(runner.isUnsafePage("run-2", 5)).isFalse();
         assertThat(runner.unsafePages("없는-작품")).isEmpty();
         assertThat(runner.partialMessage("run-2"))
-                .startsWith("4쪽, 6쪽 장면이 이미지 안전 기준(선정성)에 걸려 빈 장으로")
+                .startsWith("4쪽(선정성), 6쪽(안전 기준) 장면이 이미지 안전 기준에 걸려 빈 장으로")
                 .contains("무료");
     }
 }

@@ -6,10 +6,13 @@
  * 기다리기 시작하는 이 순간에 묻는다. 무엇을 골라도 생성은 그대로 시작한다 — 묻는 것 때문에 만들기가
  * 막히면 안 된다. 바탕을 누르거나 Esc 를 누르면 시작하지 않고 닫는다(아직 고치고 싶은 사람).
  *
- *   묻기       완성되면 알림을 보내드릴까요?      [괜찮아요] [알림 받을게요]
- *   고르기     어떻게 알려 드릴까요?            푸시 알림 / 이메일 알림 / 둘 다
+ *   묻기       완성되면 이 기기로 알려 드릴까요?   [괜찮아요] [알림 허용하기]  (아래 작게: 이메일로 받을게요)
+ *              푸시를 못 받는 브라우저(아이폰 사파리 탭 · 지원 안 함)면 첫 단추가 이메일
  *   이메일     (게스트만) 메일 주소 칸           로그인한 사람은 계정 메일로 가니 건너뛴다
- *   푸시       브라우저 허용 안내 → 허용 요청     거부됨 · 아이폰(홈 화면에 추가해야 됨)은 안내만
+ *
+ * 2026-10-27: 「알림 받을게요 → 어떻게 → 허용」 세 화면이던 것을 한 화면으로 줄였다 — 광고로 온 사람의 첫 생성에서
+ * 알림을 고른 사람이 23일 동안 13명뿐이었다. 첫 단추가 바로 브라우저 허용 창을 연다. 막혀 있으면(거부됨) 같은
+ * 화면에 푸는 법을 적고 다시 누를 수 있다.
  *
  * 처음 한 번만 묻는다 — 답하면(괜찮아요 포함) 이 브라우저에서는 다시 안 묻는다. 이 기기 알림이 이미 켜져 있어도 안 묻는다. 게스트도 기기 알림을 받는다 —
  * 서버가 브라우저 단위로 보낸다(JobPush.recipientsOf). */
@@ -22,7 +25,7 @@ import { track } from "../lib/track";
 import { Dialog } from "./Dialog";
 import "./NotifyAsk.css";
 
-type Step = "ask" | "pick" | "email" | "push";
+type Step = "ask" | "email";
 
 const LOOKS_LIKE = /^[^@\s]+@[^@\s.]+\.[^@\s]+$/;
 
@@ -63,49 +66,44 @@ export default function NotifyAsk({ time, onStart, onClose }: {
   const loggedIn = status === "authenticated";
   const [step, setStep] = useState<Step>("ask");
   const [push, setPush] = useState<PushState>("loading");
-  const [wantPush, setWantPush] = useState(false);
   const [email, setEmail] = useState("");
   const [emailErr, setEmailErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { void pushState().then(setPush).catch(() => setPush("off")); }, []);
-  const canPush = push === "ready" || push === "denied" || push === "ios-install";
 
-  const finish = (mail: string | null) => {
+  const finish = (mail: string | null, viaPush: boolean) => {
     markAnswered();
-    track("notify_ask_done", { push: wantPush, email: !!mail || (loggedIn && step !== "ask"), logged_in: loggedIn });
+    track("notify_ask_done", { push: viaPush, email: !!mail || (loggedIn && !viaPush), logged_in: loggedIn });
     onStart(mail);
   };
 
-  /* 고른 뒤 다음 걸음 — 메일(게스트) → 푸시 → 시작 */
-  const choose = (kind: "push" | "email" | "both") => {
-    track("notify_ask_pick", { kind, logged_in: loggedIn });
-    const p = kind !== "email";
-    const m = kind !== "push";
-    setWantPush(p);
-    if (m && loggedIn) {
-      /* 로그인한 사람은 계정 메일로 간다. 마이페이지에서 꺼 뒀으면 다시 켠다 — 지금 받겠다고 골랐다. */
+  /* 메일로 받기 — 로그인한 사람은 계정 메일로 가니 바로 시작(마이페이지에서 꺼 뒀으면 다시 켠다), 게스트는 주소 칸으로 */
+  const mailOnly = () => {
+    track("notify_ask_pick", { kind: "email", logged_in: loggedIn });
+    if (loggedIn) {
       void setNotifySetting(true).catch(() => { /* 못 켜도 시작은 한다 */ });
+      finish(null, false);
+      return;
     }
-    if (m && !loggedIn) { setStep("email"); return; }
-    if (p) { setStep("push"); return; }
-    finish(null);
+    setStep("email");
   };
 
   const emailNext = () => {
     const v = email.trim();
     if (!LOOKS_LIKE.test(v)) { setEmailErr(t("메일 주소를 다시 확인해 주세요")); return; }
-    if (wantPush) { setStep("push"); return; }
-    finish(v);
+    finish(v, false);
   };
 
+  /* 첫 단추 — 바로 브라우저 허용 창. 허용되면 시작, 거부되면 같은 화면에 푸는 법이 뜬다. */
   const allow = async () => {
+    track("notify_ask_pick", { kind: "push", logged_in: loggedIn });
     setBusy(true);
     try {
       const s = await enablePush(lang);
       setPush(s);
       track("notify_ask_push", { result: s });
-      if (s === "on") finish(email.trim() || null);
+      if (s === "on") finish(null, true);
     } catch {
       setPush("off");
     } finally {
@@ -113,37 +111,39 @@ export default function NotifyAsk({ time, onStart, onClose }: {
     }
   };
 
-  const mailLater = email.trim() || null;
+  /* 푸시 단추를 보여 줄 수 있나 — 지원하고(ready) 또는 막혀 있어 풀 수 있는(denied) 때. 아이폰 사파리 탭은 안내만. */
+  const pushButton = push === "ready" || push === "denied";
 
   if (step === "ask") {
     return (
-      <Dialog title={t("완성되면 알림을 보내드릴까요?")}
-              sub={t("한 편에 {time} 걸려요. 화면을 닫고 다른 일을 하셔도 괜찮아요.", { time })} onClose={onClose}>
+      <Dialog title={pushButton ? t("완성되면 이 기기로 알려 드릴까요?") : t("완성되면 알려 드릴까요?")}
+              sub={t("한 편에 {time} 걸려요. 화면을 닫고 다른 일을 하셔도 괜찮아요.", { time })} onClose={onClose} busy={busy}>
+        {push === "denied" && (
+          <p className="wt-dialog-sub">{t("이 사이트 알림이 막혀 있어요. 주소창 왼쪽의 자물쇠 → 알림에서 「허용」으로 바꾼 뒤 다시 눌러 주세요.")}</p>
+        )}
+        {push === "ios-install" && (
+          <p className="wt-dialog-sub">
+            {t("아이폰은 홈 화면에 추가해야 알림을 받을 수 있어요.")}<br />
+            {t("사파리 아래 공유 버튼 → 「홈 화면에 추가」 → 홈 화면의 LORE 로 다시 열기")}
+          </p>
+        )}
         <div className="wt-dialog-actions">
-          <button type="button" className="btn btn-w" onClick={() => { markAnswered(); track("notify_ask_skip"); onStart(null); }}>{t("괜찮아요")}</button>
-          <button type="button" className="btn btn-p" onClick={() => setStep("pick")}>{t("알림 받을게요")}</button>
+          <button type="button" className="btn btn-w" disabled={busy} onClick={() => { markAnswered(); track("notify_ask_skip"); onStart(null); }}>{t("괜찮아요")}</button>
+          {pushButton ? (
+            <button type="button" className="btn btn-p" disabled={busy} onClick={() => void allow()}>
+              {busy ? t("기다리는 중…") : t("알림 허용하기")}
+            </button>
+          ) : (
+            <button type="button" className="btn btn-p" disabled={busy || push === "loading"} onClick={mailOnly}>
+              {loggedIn && user?.email ? t("{email} 로 받을게요", { email: user.email }) : t("이메일로 받을게요")}
+            </button>
+          )}
         </div>
-      </Dialog>
-    );
-  }
-
-  if (step === "pick") {
-    return (
-      <Dialog title={t("어떻게 알려 드릴까요?")} onClose={onClose}>
-        <div className="wt-notify-picks">
-          <button type="button" className="wt-notify-pick" disabled={!canPush} onClick={() => choose("push")}>
-            <b>{t("푸시 알림")}</b>
-            <span>{canPush ? t("이 기기 화면에 바로 떠요") : t("이 브라우저는 푸시 알림을 받을 수 없어요")}</span>
+        {pushButton && (
+          <button type="button" className="wt-notify-alt" disabled={busy} onClick={mailOnly}>
+            {loggedIn && user?.email ? t("{email} 로 받을게요", { email: user.email }) : t("이메일로 받을게요")}
           </button>
-          <button type="button" className="wt-notify-pick" onClick={() => choose("email")}>
-            <b>{t("이메일 알림")}</b>
-            <span>{loggedIn && user?.email ? t("{email} 로 보내 드려요", { email: user.email }) : t("메일 주소를 적어 주시면 보내 드려요")}</span>
-          </button>
-          <button type="button" className="wt-notify-pick" disabled={!canPush} onClick={() => choose("both")}>
-            <b>{t("둘 다")}</b>
-            <span>{t("푸시와 이메일로 함께 알려 드려요")}</span>
-          </button>
-        </div>
+        )}
       </Dialog>
     );
   }
@@ -157,45 +157,22 @@ export default function NotifyAsk({ time, onStart, onClose }: {
                onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) emailNext(); }} />
         {emailErr && <p className="wt-dialog-err">{emailErr}</p>}
         <div className="wt-dialog-actions">
-          <button type="button" className="btn btn-w" onClick={() => setStep("pick")}>{t("뒤로")}</button>
-          <button type="button" className="btn btn-p" disabled={!email.trim()} onClick={emailNext}>{wantPush ? t("다음") : t("이 주소로 받고 시작하기")}</button>
+          <button type="button" className="btn btn-w" onClick={() => setStep("ask")}>{t("뒤로")}</button>
+          <button type="button" className="btn btn-p" disabled={!email.trim()} onClick={emailNext}>{t("이 주소로 받고 시작하기")}</button>
         </div>
       </Dialog>
     );
   }
 
-  /* 푸시 안내 */
-  return (
-    <Dialog title={t("이 기기로 알림 받기")} onClose={onClose} busy={busy}>
-      {push === "ready" && (
-        <p className="wt-dialog-sub">{t("「알림 허용하기」를 누르면 브라우저가 알림을 받을지 물어요. 「허용」을 눌러 주세요.")}</p>
-      )}
-      {push === "denied" && (
-        <p className="wt-dialog-sub">{t("이 사이트 알림이 막혀 있어요. 주소창 왼쪽의 자물쇠 → 알림에서 「허용」으로 바꾼 뒤 다시 눌러 주세요.")}</p>
-      )}
-      {push === "ios-install" && (
-        <p className="wt-dialog-sub">
-          {t("아이폰은 홈 화면에 추가해야 알림을 받을 수 있어요.")}<br />
-          {t("사파리 아래 공유 버튼 → 「홈 화면에 추가」 → 홈 화면의 LORE 로 다시 열기")}
-        </p>
-      )}
-      {push === "off" && <p className="wt-dialog-sub">{t("이 브라우저는 푸시 알림을 받을 수 없어요")}</p>}
-      <div className="wt-dialog-actions">
-        <button type="button" className="btn btn-w" disabled={busy} onClick={() => finish(mailLater)}>
-          {mailLater || loggedIn ? t("메일로만 받고 시작") : t("그냥 시작하기")}
-        </button>
-        {(push === "ready" || push === "denied") && (
-          <button type="button" className="btn btn-p" disabled={busy} onClick={() => void allow()}>
-            {busy ? t("기다리는 중…") : t("알림 허용하기")}
-          </button>
-        )}
-      </div>
-    </Dialog>
-  );
+  return null;
 }
 
 registerDict({
   "완성되면 알림을 보내드릴까요?": { en: "Should we notify you when it's done?", ja: "完成したら通知をお送りしましょうか？", zh: "完成后要给你发送通知吗？" },
+  "완성되면 이 기기로 알려 드릴까요?": { en: "Notify you on this device when it's done?", ja: "完成したらこの端末に通知しましょうか？", zh: "完成后在这台设备上通知你？" },
+  "완성되면 알려 드릴까요?": { en: "Notify you when it's done?", ja: "完成したらお知らせしましょうか？", zh: "完成后通知你吗？" },
+  "이메일로 받을게요": { en: "Email me instead", ja: "メールで受け取る", zh: "用邮件接收" },
+  "{email} 로 받을게요": { en: "Send it to {email}", ja: "{email} で受け取る", zh: "发送到 {email}" },
   "한 편에 {time} 걸려요. 화면을 닫고 다른 일을 하셔도 괜찮아요.": {
     en: "One episode takes {time}. Feel free to close this and do something else.",
     ja: "1話に{time}かかります。画面を閉じてほかのことをしていても大丈夫です。",

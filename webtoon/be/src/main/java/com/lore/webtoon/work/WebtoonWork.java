@@ -117,6 +117,10 @@ public class WebtoonWork {
     @Column(name = "example_order")
     private Integer exampleOrder;
 
+    /** 둘러보기 「인기순」에서의 자리. 관리자가 정한다. 작을수록 앞, 비어 있으면 정해진 것들 뒤(조회순). */
+    @Column(name = "browse_rank")
+    private Integer browseRank;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -216,6 +220,15 @@ public class WebtoonWork {
 
     public Integer getExampleOrder() {
         return exampleOrder;
+    }
+
+    public Integer getBrowseRank() {
+        return browseRank;
+    }
+
+    /** 인기순 자리를 정하거나(숫자) 비운다(null). 관리자만 부른다({@code BrowseRankAdminController}). */
+    void setBrowseRank(Integer rank) {
+        this.browseRank = rank;
     }
 
     /** 예시로 지정하거나 해제한다. 해제하면 순서도 비운다. */

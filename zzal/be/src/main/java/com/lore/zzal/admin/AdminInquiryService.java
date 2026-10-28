@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * 관리자 — 문의 답장·후기 보기. 잠금은 다른 관리자 화면과 같은 세 겹(스위치·{@link AdminGuard}·noindex)에
- * 하나를 더한다 — <b>봇 토큰으로는 못 부른다</b>({@link AdminBotToken#requireHuman()}). 답장은 사용자에게 나가는 글이고,
+ * 하나를 더한다 — <b>봇 토큰으로는 못 부른다</b>({@link AdminCaller#requireHuman()}). 답장은 사용자에게 나가는 글이고,
  * 문의·후기 본문은 사용자가 쓴 글이라 사람이 직접 볼 때만 연다.
  */
 @Service
@@ -23,15 +23,17 @@ public class AdminInquiryService {
     static final int MAX_DAYS = 365;
 
     private final AdminGuard guard;
+    private final AdminCaller caller;
     private final InquiryRepository inquiries;
 
-    public AdminInquiryService(AdminGuard guard, InquiryRepository inquiries) {
+    public AdminInquiryService(AdminGuard guard, AdminCaller caller, InquiryRepository inquiries) {
         this.guard = guard;
+        this.caller = caller;
         this.inquiries = inquiries;
     }
 
     private void require(Long userId) {
-        AdminBotToken.requireHuman();
+        caller.requireHuman();
         if (userId == null) throw new BusinessException(ErrorCode.UNAUTHORIZED);
         guard.require(userId);
     }

@@ -73,13 +73,15 @@ webtoon/ai/
 | [env-diff.md](docs/env-diff.md) | 세 환경이 실제로 무엇이 다른가 | 대조표 · **dev 에서는 안 드러나고 승격 때 걸리는 것**(설정 주입 경로, venv 실패가 배포를 안 멈춤, 마이그레이션 순서, MinIO 의존 등) · 승격 점검표 |
 | [examples-runbook.md](docs/examples-runbook.md) | 예시 작품 올리는 법 — 이어서 할 때 | 환경별 지금 상태 · 관리자 계정 위치(`webtoon/account/admin-accounts.txt`) · 도구 `webtoon/tools/examples/`(make-admin · push · list · set · pull · db-sql) · 새 환경 채우기 · 한 편 더하기 · 빼기 · 순서 · 막힐 때 |
 | [images.md](docs/images.md) | 화면에 그림 넣는 법 | 정적 그림은 원본 폴더에 넣음(`apps/web/public/static/` 금지) · 예시 작품·예시 캐릭터는 부팅 때 한 번 심고 그 뒤로는 DB 가 원본 · 온보딩 목업 상수 · 둘러보기 공개 · 예시 `run_id` 하드코딩 자리 |
+| [story-principles.md](docs/story-principles.md) | 이야기 생성 기준 — 프롬프트를 고치거나 결과를 평가할 때 | 세 가지 붕괴(캐릭터 가장 엄격 · 설정은 확장 허용 · 이야기는 인과) · 우선순위 · 단계마다 지키는 것과 채우는 것 · 장면의 정의 · 모델 고르는 기준 · 캐릭터 정보 세 층 · 지금 어느 프롬프트에 있나 |
 | [pipeline.md](docs/pipeline.md) | 웹툰 한 편이 만들어지는 순서와 단계별 모델 | 만드는 순서(이야기 · 시트 나란히 → 장면 → 장 그림 · 장 검수 → 화 전체 검수) · 단계별 모델(gpt-5.1 · gpt-4.1 · gpt-image-2)과 실제 기록 · 길마다 멈추는 자리 · 검수 세 가지가 보는 것과 다시 그리는 횟수 · 그림 품질 · 동시 작업 수 · 모델 바꾸는 법 |
 | [full-review-design.md](docs/full-review-design.md) | 완성된 화 전체를 다시 읽는 검수 설계 | 장 단위 검수로 못 잡는 장거리 문제 · 판정(`fullreview.py`)과 재생성 루프(`JobRunner.runFullReviewLoop`) 구현 상태 |
 | [mentoring-followup-2026-09-19.md](docs/mentoring-followup-2026-09-19.md) | 0911 멘토링 후속 과제 진행 기록 | 과제 11개별로 한 것 → 실측 결과 → 남은 것 |
 | [brand/](docs/brand/README.md) | 서비스를 뭐라고 소개하나 | 한 줄 정의·가치·핵심 경험 · 메인 타겟과 유입 타겟 · 문제 인식 · 문장 층위와 소개서 순서 · 지금 되는 기능과 실측 시간. 소개서·랜딩·광고 문구를 쓸 때 먼저 읽음 |
 | [validation.md](docs/validation.md) | 사용자 검증 설계 | 이번 스프린트 가설(H1~H4)과 판단 기준 · 사용자 여정 단계별로 세는 이벤트와 물어볼 것 · 완성 직후 설문(S1~S6)과 인터뷰 질문 · 메시지별 UTM 링크 규칙 · 결과별 다음 행동. 사용자를 받기 전과 결과를 판정할 때 읽음 |
+| [storage.md](docs/storage.md) | 저장·파기 규칙 — 무엇을 어디에 두고 언제 누가 지우나 | 앱이 지우는 것과 시각·스위치 · 옛 그림 대기열(`webtoon_art_discard`) · 주인 없는 그림 관리자 점검 · S3 버킷별 규칙 · 백업·로그·외부 추적의 기한 |
 | [safety.md](docs/safety.md) | 콘텐츠 안전 — 무엇을 막고 어디서 막나 | 금지 분류표 · 입력 글은 서버가 moderation 으로 거름(무료) · 사진·생성 글은 아직 안 봄 · 검사 서비스가 죽었을 때 기본 통과 · 사용자 문구 · 미성년 · 신고 절차와 관리자 처리(비공개 · 경고 · 삭제, #638) |
-| [capacity.md](docs/capacity.md) | 운영 용량 — 사용자가 몰리면 어디서 막히나 | 보기·진행 화면 부하와 생성 줄 부하 시험 결과(그래프) · 동시 작업 수(운영 workers 3 · page-workers 4)를 정한 이유와 다음 단계 · 돈 상한(하루 13,000원 · OpenAI 월 $350) · 밀렸을 때 알림 팝업 · 대기 팝업 · 알림(캡처) · 오류가 났을 때 지금 있는 장치 · 시험 도구 `webtoon/tools/loadtest/` |
+| [capacity.md](docs/capacity.md) | 운영 용량 — 사용자가 몰리면 어디서 막히나 | 보기·진행 화면 부하와 생성 줄 부하 시험 결과(그래프) · 동시 작업 수(운영 workers 3 · page-workers 4)를 정한 이유와 다음 단계 · 돈 상한(하루 50,000원 · 30편) · 밀렸을 때 알림 팝업 · 대기 팝업 · 알림(캡처) · 오류가 났을 때 지금 있는 장치 · **사용자가 몰렸을 때 막히는 순서 · 신호별로 할 일 · 상한 바꾸는 명령** · 시험 도구 `webtoon/tools/loadtest/` |
 | [legal/](docs/legal/) | 이용약관·개인정보처리방침 작업본 | 법률 검토 전 초안 · 판 번호는 `user_agreement.version` 과 같아야 함 · 게시본은 `게시본-뽑기.py` 로 뽑음(작업본을 화면에 직접 쓰지 않음) |
 | [backend.md](docs/backend.md) | **낡은 문서** | serve.py 프록시 시절 설명입니다. 그 구조는 2026-09-12에 지웠으니 지금 백엔드 설명으로 읽지 않습니다 |
 

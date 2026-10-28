@@ -11,11 +11,11 @@
 //   둘 다 넣을 수 없어서 이 자리는 껍데기로 남기고 알맹이는 @zzal/admin 에 둔다.
 //   (라우팅 파일에 화면 로직을 안 두는 것은 /zzal 과 같은 규칙이기도 하다)
 import type { Metadata } from 'next';
-// #696 — 탭 묶음(움짤 검수 · 2층 실패·대기). 검수 화면은 그대로 첫 탭이다.
+// 탭 묶음 — 작업(실패 추적·재시도, 기본) · 움짤 검수 · 1·2층 복구 · 맞춤8종.
 import AdminScreen from '@zzal/admin/AdminScreen';
 
 export const metadata: Metadata = {
-  title: '움짤 검수',
+  title: '관리자 작업',
   // index: false 만으로는 부족하다. follow 까지 막아야 이 화면에서 나가는 링크를 타고
   // 크롤러가 관리자 주소 체계를 훑는 일이 없다.
   robots: { index: false, follow: false, nocache: true },

@@ -45,6 +45,7 @@ public class AfterRun {
     private final RunFiles files;
     private final WorkLedger works;
     private final HarnessProcess harness;
+    private final com.lore.webtoon.character.CharacterService characters;
     private final Path runsDir;
     /**
      * 한 번 봐 둔 작품과 그 결과. <b>망가진 작품에 매번 파이썬을 띄우지 않으려는
@@ -63,7 +64,7 @@ public class AfterRun {
 
     public AfterRun(UsageService usage, PageUploader uploader, PageStore pages,
                     WebtoonJobRepository jobs, WorkLedger works, HarnessProcess harness,
-                    RunFiles files) {
+                    RunFiles files, com.lore.webtoon.character.CharacterService characters) {
         this.usage = usage;
         this.uploader = uploader;
         this.pages = pages;
@@ -71,6 +72,7 @@ public class AfterRun {
         this.files = files;
         this.works = works;
         this.harness = harness;
+        this.characters = characters;
         /* **자리는 HarnessProcess 하나가 정한다.** 여기서 기본값을 또 적으면
            넷이 같은 문자열을 따로 갖게 되고, 한쪽만 안 고치는 순간 그 걸음만
            다른 폴더를 본다 — 실제로 AfterRun 이 그래서 비용을 하나도 못 적었다
@@ -81,7 +83,38 @@ public class AfterRun {
     /** 다 끝났다. 남길 것을 남긴다. */
     public void finish(String runId, java.util.function.Consumer<String> onLine) {
         cost(runId);
+        adoptSheet(runId);
         uploadArt(runId, onLine);
+    }
+
+    /**
+     * 이름·설명만 적고 시작한 캐릭터는 카드 그림이 없다 — 다 만들어진 첫 작품의 캐릭터 시트를 카드 그림으로
+     * 넣는다(2026-10-27). {@link #uploadArt} 보다 먼저 한다: 올린 뒤에는 서버 사본(sheet.png)을 치운다.
+     * 그림이 이미 있는 캐릭터(사진으로 등록 · AI 뽑기 · 예시)는 그대로다.
+     */
+    private void adoptSheet(String runId) {
+        try {
+            String characterId = jobs.findFirstByRunIdOrderByIdDesc(runId)
+                    .map(WebtoonJob::getInputJson).map(AfterRun::characterIdOf).orElse("");
+            if (characterId.isBlank()) {
+                return;
+            }
+            characters.adoptSheetArt(characterId, runsDir.resolve(runId).resolve("sheet.png"));
+        } catch (Exception e) {                     // noqa: 카드 그림은 덤이다 — 작품을 실패로 만들지 않는다
+            log.warn("캐릭터 카드 그림을 못 채웠습니다 (run={})", runId, e);
+        }
+    }
+
+    /** 작업 입력(JSON)에 적힌 고른 캐릭터 번호. 없으면 빈 문자열. */
+    static String characterIdOf(String inputJson) {
+        if (inputJson == null || inputJson.isBlank()) {
+            return "";
+        }
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readTree(inputJson).path("character_id").asText("");
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     /**

@@ -47,8 +47,11 @@ public class AdminController {
 
     private final AdminService adminService;
 
-    public AdminController(AdminService adminService) {
+    private final AdminCaller caller;
+
+    public AdminController(AdminService adminService, AdminCaller caller) {
         this.adminService = adminService;
+        this.caller = caller;
     }
 
     @Operation(summary = "검수 대기 목록", description = """
@@ -82,6 +85,7 @@ public class AdminController {
     public ApiResponse<Void> verdict(@LoginUser Long userId,
                                      @PathVariable Long motionId,
                                      @Valid @RequestBody AdminRequests.Verdict request) {
+        caller.requireHuman(); // 판정은 사용자 화면을 바꾼다 — 사람만(봇 토큰 403)
         adminService.review(userId, motionId, request.verdict(), request.note(), request.candidateId());
         return ApiResponse.ok();
     }
@@ -112,6 +116,7 @@ public class AdminController {
     public ApiResponse<Void> upload(@LoginUser Long userId,
                                     @PathVariable Long motionId,
                                     @Valid @RequestBody AdminRequests.Upload request) {
+        caller.requireHuman(); // 봇 토큰 403
         adminService.upload(userId, motionId, request.candidates());
         return ApiResponse.ok();
     }
