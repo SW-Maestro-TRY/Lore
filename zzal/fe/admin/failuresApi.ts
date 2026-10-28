@@ -20,8 +20,6 @@ export type RequestState =
   | 'NONE' | 'WAITING' | 'BAKING' | 'CANDIDATES' | 'NO_CANDIDATES' | 'CANCELLED' | 'APPLIED' | 'APPLY_FAILED';
 /** 자동 CLI 요청의 최신 상태. */
 export type AutoCliState = 'NONE' | 'BAKING' | 'RECOVERED' | 'FAILED';
-/** 재시도가 가는 길. RUNNER = 맥미니(과금 없음), SERVER_* = 서버에서 굽는다(과금). */
-export type RetryMode = 'RUNNER' | 'SERVER_RESUME' | 'SERVER_REHATCH';
 
 /** 실패 한 줄(서버 AdminFailureResponses.FailureRow). 이메일은 없다 — 사용자는 id 로만. */
 export interface FailureRow {
@@ -125,24 +123,6 @@ export interface RetryView {
   requestedAt: string;
   pickedAt: string | null;
   result: string | null;
-  mode: RetryMode;
-  /** 서버에서 굽기를 시작했으면 그 HATCH 잡 id. */
-  jobId: number | null;
-  /** 서버에서 굽는 길의 예상 비용(달러). 러너 길은 null. */
-  estimatedCostUsd: number | null;
-}
-
-/** 서버 AdminRetryService.HatchEstimate — 이어서 굽기 · 재굽기 확인 창에 쓴다. */
-export interface HatchEstimate {
-  petId: number;
-  phase: string;
-  resumeSteps: string[];
-  resumeCostUsd: number;
-  rehatchSteps: string[];
-  rehatchCostUsd: number;
-  /** 비용 기록이 없어 합에서 빠진 단계. */
-  unknownSteps: string[];
-  basis: string;
 }
 
 /** 서버 AdminFailureController.RetryRunnerView. */
@@ -160,18 +140,9 @@ export function fetchFailureDetail(kind: FailureKind, id: number, signal?: Abort
   return request<FailureDetail>(`${FAILURES_PATH}/${kind}/${id}`, { signal });
 }
 
-export function fetchEstimate(id: number): Promise<HatchEstimate> {
-  return request<HatchEstimate>(`${FAILURES_PATH}/HATCH/${id}/estimate`);
-}
-
-/** 재시도 요청. 멈춘 알이면 서버에서 이어서 굽는다(과금) — 부르기 전에 fetchEstimate 로 확인을 받는다. */
+/** 재시도 요청 — 맥미니 러너 몫으로 연다(과금 없음). */
 export function requestRetry(kind: FailureKind, id: number, memo: string): Promise<RetryView> {
   return request<RetryView>(`${FAILURES_PATH}/${kind}/${id}/retry`, { method: 'POST', body: { memo } });
-}
-
-/** 서버 재굽기(FAILED 알, 과금). 부르기 전에 fetchEstimate 로 확인을 받는다. */
-export function requestRehatch(id: number, memo: string): Promise<RetryView> {
-  return request<RetryView>(`${FAILURES_PATH}/HATCH/${id}/rehatch`, { method: 'POST', body: { memo } });
 }
 
 export function cancelRetry(retryId: number): Promise<RetryView> {

@@ -6,7 +6,7 @@
 //   2. 상세는 그림 4칸 · 문단 없음 표시 · 재시도는 메모를 싣는다(경로 /failures/{kind}/{id}/retry).
 //   3. 러너가 꺼져 있으면 빨강 "꺼짐", 재시도 뒤 "러너가 켜지면 집습니다".
 //   4. 후보 고르기는 확인 창 뒤 POST /retry/{id}/pick {choice}.
-//   5. 서버에서 굽는 길(재굽기)은 /estimate 금액을 확인 창에 보여 준 뒤에만 부른다 — 취소하면 안 부른다.
+//   5. 재시도는 맥미니 러너 길 하나(서버에서 굽는 버튼은 없다).
 //   6. 기존 탭(움짤 검수 · 1·2층 복구 · 맞춤8종)은 그대로 있고 해시로도 열린다.
 //   7. 320 · 390 · 1280 에서 가로로 넘치지 않고, 보이는 버튼은 전부 44px 이상.
 //
@@ -117,6 +117,8 @@ test('상세 그림 4칸과 문단 없음', async ({ page: p }) => {
   await expect(p.locator('[data-part=identity-missing]')).toBeVisible();
   await expect(p.locator('[data-part=error-detail]')).toContainText('시간 초과');
   await expect(p.locator('[data-part=step][data-status=FAILED]')).toHaveCount(1);
+  // 서버에서 굽는 버튼은 없다(과금 길 제거, 2026-10-28)
+  await expect(p.locator('[data-action=failure-rehatch], [data-action=failure-resume]')).toHaveCount(0);
 });
 
 test('재시도는 메모를 싣는다', async ({ page: p }) => {
@@ -126,7 +128,7 @@ test('재시도는 메모를 싣는다', async ({ page: p }) => {
   await p.route(/\/failures\/HATCH\/177\/retry$/, (r: Route) => {
     body = r.request().postDataJSON();
     path = new URL(r.request().url()).pathname;
-    return r.fulfill(ok({ id: 9, kind: 'HATCH', targetId: 177, auto: false, memo: '격자 3번 칸 비어 있음', requestedAt: '2026-10-28T03:11:00Z', pickedAt: null, result: null, mode: 'RUNNER', jobId: null, estimatedCostUsd: null }));
+    return r.fulfill(ok({ id: 9, kind: 'HATCH', targetId: 177, auto: false, memo: '격자 3번 칸 비어 있음', requestedAt: '2026-10-28T03:11:00Z', pickedAt: null, result: null }));
   });
   await open(p);
   await p.locator('[data-part=failure-row][data-id="177"]').click();
@@ -140,7 +142,7 @@ test('재시도는 메모를 싣는다', async ({ page: p }) => {
 
 test('러너 꺼짐 안내', async ({ page: p }) => {
   await stub(p, { runner: { lastSeenAt: '2026-10-28T02:28:00Z', minutesAgo: 42, stale: true } });
-  await p.route(/\/failures\/HATCH\/177\/retry$/, (r) => r.fulfill(ok({ id: 9, kind: 'HATCH', targetId: 177, auto: false, memo: '', requestedAt: '2026-10-28T03:11:00Z', pickedAt: null, result: null, mode: 'RUNNER', jobId: null, estimatedCostUsd: null })));
+  await p.route(/\/failures\/HATCH\/177\/retry$/, (r) => r.fulfill(ok({ id: 9, kind: 'HATCH', targetId: 177, auto: false, memo: '', requestedAt: '2026-10-28T03:11:00Z', pickedAt: null, result: null })));
   await open(p);
   const badge = p.locator('[data-part=runner]');
   await expect(badge).toHaveAttribute('data-state', 'stale');
@@ -174,7 +176,7 @@ test('후보 고르기 경로', async ({ page: p }) => {
   let sent: unknown = null;
   await p.route(/\/api\/zzal\/v1\/admin\/retry\/9\/pick$/, (route) => {
     sent = route.request().postDataJSON();
-    return route.fulfill(ok({ id: 9, kind: 'HATCH', targetId: 177, auto: false, memo: null, requestedAt: '2026-10-28T03:11:00Z', pickedAt: '2026-10-28T03:12:00Z', result: 'APPLIED', mode: 'RUNNER', jobId: null, estimatedCostUsd: null }));
+    return route.fulfill(ok({ id: 9, kind: 'HATCH', targetId: 177, auto: false, memo: null, requestedAt: '2026-10-28T03:11:00Z', pickedAt: '2026-10-28T03:12:00Z', result: 'APPLIED' }));
   });
   await open(p);
   await p.locator('[data-part=failure-row][data-id="177"]').click();
@@ -187,35 +189,6 @@ test('후보 고르기 경로', async ({ page: p }) => {
   expect(dialogs).toHaveLength(1);
   expect(dialogs[0]).toContain('사용자 화면이 바뀝니다');
   expect(sent).toEqual({ choice: 'abc-1' });
-});
-
-test('서버 재굽기는 예상 비용 확인 창 뒤에만 부른다', async ({ page: p }) => {
-  await stub(p);
-  await p.route(/\/failures\/HATCH\/177\/estimate$/, (r) => r.fulfill(ok({
-    petId: 177, phase: 'FAILED', resumeSteps: ['grid', 'grid2', 'postprocess'], resumeCostUsd: 0.18,
-    rehatchSteps: ['grid', 'grid2', 'postprocess'], rehatchCostUsd: 0.18, unknownSteps: ['postprocess'], basis: '평균',
-  })));
-  let rehatched = 0;
-  await p.route(/\/failures\/HATCH\/177\/rehatch$/, (r) => {
-    rehatched++;
-    return r.fulfill(ok({ id: 10, kind: 'HATCH', targetId: 177, auto: false, memo: null, requestedAt: '2026-10-28T03:11:00Z', pickedAt: '2026-10-28T03:11:00Z', result: 'APPLIED', mode: 'SERVER_REHATCH', jobId: 402, estimatedCostUsd: 0.18 }));
-  });
-  await open(p);
-  await p.locator('[data-part=failure-row][data-id="177"]').click();
-
-  const messages: string[] = [];
-  let accept = false;
-  p.on('dialog', (d) => { messages.push(d.message()); void (accept ? d.accept() : d.dismiss()); });
-  await p.locator('[data-action=failure-rehatch]').click();
-  await expect.poll(() => messages.length).toBe(1);
-  expect(messages[0]).toContain('$0.18');
-  expect(messages[0]).toContain('이미지 API 비용');
-  expect(rehatched).toBe(0);
-
-  accept = true;
-  await p.locator('[data-action=failure-rehatch]').click();
-  await expect(p.locator('[data-part=action-msg]')).toContainText('재굽기 시작 — 잡 402');
-  expect(rehatched).toBe(1);
 });
 
 test('기존 탭은 그대로 있고 해시로도 열린다', async ({ page: p }) => {

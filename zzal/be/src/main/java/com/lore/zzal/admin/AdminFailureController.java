@@ -16,7 +16,6 @@ import com.lore.zzal.admin.retry.AdminRetry;
 import com.lore.zzal.admin.retry.AdminRetryKind;
 import com.lore.zzal.admin.retry.AdminRetryRepository;
 import com.lore.zzal.admin.retry.AdminRetryService;
-import com.lore.zzal.admin.retry.AdminRetryService.HatchEstimate;
 import com.lore.zzal.admin.retry.AdminRetryService.PendingItem;
 import com.lore.zzal.admin.retry.AdminRetryService.RetryView;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,9 +41,7 @@ import java.util.List;
  * <pre>
  *   GET  /api/zzal/v1/admin/failures?days=7                 실패 목록 + 머리 숫자 + 시간대 칸(쿠키 · 봇)
  *   GET  /api/zzal/v1/admin/failures/{kind}/{id}            상세(쿠키 · 봇)
- *   GET  /api/zzal/v1/admin/failures/HATCH/{id}/estimate    서버에서 굽는 길의 예상 비용(쿠키 · 봇)
  *   POST /api/zzal/v1/admin/failures/{kind}/{id}/retry      재시도 요청 {memo}(쿠키만)
- *   POST /api/zzal/v1/admin/failures/HATCH/{id}/rehatch     서버 재굽기 {memo}(쿠키만, 과금)
  *   POST /api/zzal/v1/admin/retry/{id}/cancel               취소(쿠키만)
  *   GET  /api/zzal/v1/admin/retry/pending                   러너 대기 목록 — 러너 확인 시각 기록(봇 · 쿠키)
  *   POST /api/zzal/v1/admin/retry/{id}/claim                러너가 집음 + 재료(봇 · 쿠키)
@@ -53,9 +50,8 @@ import java.util.List;
  *   GET  /api/zzal/v1/admin/runner                          러너 마지막 확인(쿠키 · 봇)
  * </pre>
  *
- * ★ 봇 토큰이 할 수 있는 일은 목록 읽기 · 집기 · 후보 올리기뿐이다. 요청 · 취소 · 재굽기 · 고르기는 사람만(설계 6절).
- * ★ 이어서 굽기 · 재굽기는 서버에서 이미지 API 를 부른다(과금) — 응답에 예상 비용({@code estimatedCostUsd})을 싣고,
- *   화면은 누르기 전에 {@code /estimate} 로 금액을 보여 확인을 받는다.
+ * ★ 봇 토큰이 할 수 있는 일은 목록 읽기 · 집기 · 후보 올리기뿐이다. 요청 · 취소 · 고르기는 사람만(설계 6절).
+ * ★ 재시도는 맥미니 러너 길 하나다 — 서버에서 이미지 API 를 부르는 길은 없다(과금 없음).
  */
 @Tag(name = "관리자", description = "밤에 구운 움짤 검수. 운영에서는 꺼져 있어 존재하지 않는다")
 @RestController
@@ -112,30 +108,12 @@ public class AdminFailureController {
         return ApiResponse.ok(details.detail(userId, kind, id, Instant.now()));
     }
 
-    @Operation(summary = "서버에서 굽는 길의 예상 비용", description = """
-            이어서 굽기(멈춘 알) · 재굽기(FAILED 알)가 돌릴 단계와 예상 비용. 최근 성공 단계 평균의 합이다.""")
-    @GetMapping("/failures/{kind}/{id}/estimate")
-    public ApiResponse<HatchEstimate> estimate(@LoginUser Long userId, @PathVariable String kind, @PathVariable long id) {
-        requireHatch(kind);
-        return ApiResponse.ok(retryService.estimate(userId, id));
-    }
-
     @Operation(summary = "재시도 요청", description = """
-            FAILED 알 · 맞춤 잡은 맥미니 러너 몫으로 요청을 연다(과금 없음). 멈춘 알은 서버에서 이어서 굽는다(과금 —
-            응답의 estimatedCostUsd). 같은 대상에 열린 요청이 있으면 409(ADMIN_RETRY_OPEN). 봇 토큰은 403.""")
+            맥미니 러너 몫으로 요청을 연다(과금 없음). 같은 대상에 열린 요청이 있으면 409(ADMIN_RETRY_OPEN). 봇 토큰은 403.""")
     @PostMapping("/failures/{kind}/{id}/retry")
     public ApiResponse<RetryView> retry(@LoginUser Long userId, @PathVariable String kind, @PathVariable long id,
                                         @Valid @RequestBody(required = false) RetryMemoRequest body) {
         return ApiResponse.ok(retryService.request(userId, kind, id, body == null ? null : body.memo(), Instant.now()));
-    }
-
-    @Operation(summary = "서버 재굽기", description = """
-            FAILED 알을 격자부터 서버에서 다시 굽는다(과금 — 응답의 estimatedCostUsd). 열린 러너 요청이 있으면 409. 봇 토큰은 403.""")
-    @PostMapping("/failures/{kind}/{id}/rehatch")
-    public ApiResponse<RetryView> rehatch(@LoginUser Long userId, @PathVariable String kind, @PathVariable long id,
-                                          @Valid @RequestBody(required = false) RetryMemoRequest body) {
-        requireHatch(kind);
-        return ApiResponse.ok(retryService.rehatch(userId, id, body == null ? null : body.memo(), Instant.now()));
     }
 
     @Operation(summary = "재시도 취소", description = "열린 요청만. 닫힌 요청이면 409(ADMIN_RETRY_CLOSED). 봇 토큰은 403.")
@@ -187,7 +165,7 @@ public class AdminFailureController {
         AdminRetry after = row(id);
         return ApiResponse.ok(new RetryView(after.getId(), after.getKind().name(), after.getTargetId(), after.isAuto(),
                 after.getMemo(), after.getRequestedAt(), after.getPickedAt(),
-                after.getResult() == null ? null : after.getResult().name(), "RUNNER", null, null));
+                after.getResult() == null ? null : after.getResult().name()));
     }
 
     @Operation(summary = "러너 마지막 확인", description = "10분 넘게 안 보이면 stale=true.")
@@ -208,11 +186,5 @@ public class AdminFailureController {
     private AdminRetry row(long id) {
         return retries.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "재시도 요청이 없습니다: " + id));
-    }
-
-    private static void requireHatch(String kind) {
-        if (AdminFailureQuery.parseKind(kind) != AdminRetryKind.HATCH) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "부화(HATCH)에만 있는 동작입니다");
-        }
     }
 }

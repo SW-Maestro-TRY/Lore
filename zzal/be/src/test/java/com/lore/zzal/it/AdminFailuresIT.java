@@ -583,7 +583,6 @@ class AdminFailuresIT extends ZzalItSupport {
         Long pet = failedEgg();
         RetryView v = retryService.request(admin, "HATCH", pet, "  격자 3번 칸 비어 있음\u0007 ", now);
 
-        assertThat(v.mode()).isEqualTo("RUNNER");
         assertThat(v.result()).isNull();
         AdminRetry row = retries.findById(v.id()).orElseThrow();
         assertThat(row.getMemo()).isEqualTo("격자 3번 칸 비어 있음");
@@ -711,55 +710,6 @@ class AdminFailuresIT extends ZzalItSupport {
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString());
         assertThat(item.custom().state()).isEqualTo("CLAIMED");
         assertThat(item.hatch()).isNull();
-    }
-
-    @Test
-    @DisplayName("★ 멈춘 알 — 실패로 닫지 않고 서버에서 이어서 굽기(새 HATCH 잡 · 기록 행은 닫힘 · 러너 몫 아님 · 예상 비용)")
-    void request_stuckHatch_resumesOnServer() {
-        setUpPet();
-        Long pet = egg("HATCHING", "콩이");
-        Long job = hatchJob(pet, 1, "RUNNING", null, ago(30), ago(30), null);
-        stepWith(job, 1, "sheet", "SUCCEEDED", "images/zzal/pets/%d/sheet.png".formatted(pet), null);
-        // 비용 표본 — 다른 알의 성공 단계
-        Long other = egg("FAILED", "표본");
-        Long sample = hatchJob(other, 1, "FAILED", "TIMEOUT", ago(200), ago(200), ago(190));
-        for (String name : List.of("identity", "grid")) {
-            stepWith(sample, name.equals("identity") ? 2 : 3, name, "SUCCEEDED", null, null);
-        }
-
-        RetryView v = retryService.request(admin, "HATCH", pet, "이어서", now);
-        assertThat(v.mode()).isEqualTo("SERVER_RESUME");
-        assertThat(v.jobId()).isNotNull();
-        assertThat(v.result()).isEqualTo("APPLIED");
-        assertThat(v.estimatedCostUsd()).isNotNull().isPositive();
-        assertThat(jdbc.queryForObject("select attempt from zzal_gen_job where id = ?", Integer.class, v.jobId()))
-                .isEqualTo(2);
-        assertThat(jdbc.queryForObject("select phase from zzal_pet where id = ?", String.class, pet))
-                .as("실패로 닫지 않는다").isNotEqualTo("FAILED");
-        assertThat(retries.findById(v.id()).orElseThrow().getAppliedChoice()).isEqualTo("SERVER_RESUME");
-        assertThat(retryService.pending(admin, now)).isEmpty();
-    }
-
-    @Test
-    @DisplayName("재굽기(결정 10) — FAILED 알을 서버에서 격자부터, 기록 행과 예상 비용 · 열린 러너 요청이 있으면 409")
-    void rehatch_failedPet_startsAndRecords() {
-        setUpPet();
-        Long busy = failedEgg();
-        retryService.request(admin, "HATCH", busy, null, now);
-        assertThatThrownBy(() -> retryService.rehatch(admin, busy, null, now))
-                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ADMIN_RETRY_OPEN));
-
-        Long pet = failedEgg();
-        var estimate = retryService.estimate(admin, pet);
-        assertThat(estimate.rehatchSteps()).contains("grid").doesNotContain("sheet");
-        assertThat(estimate.resumeSteps()).doesNotContain("sheet");
-
-        RetryView v = retryService.rehatch(admin, pet, "격자 다시", now);
-        assertThat(v.mode()).isEqualTo("SERVER_REHATCH");
-        assertThat(v.jobId()).isNotNull();
-        assertThat(jdbc.queryForObject("select attempt from zzal_gen_job where id = ?", Integer.class, v.jobId()))
-                .isZero();
-        assertThat(retries.findById(v.id()).orElseThrow().getMemo()).isEqualTo("격자 다시");
     }
 
     // ── 작업 1.6: 러너 결과 등록 + 부화 반영 ──────────────────────────────────

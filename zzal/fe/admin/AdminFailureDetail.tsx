@@ -12,11 +12,9 @@ import { REQUEST_LABEL, when } from './AdminFailureRow';
 import {
   cancelRetry,
   explain,
-  fetchEstimate,
   fetchFailureDetail,
   FAILURES_PATH,
   pickRetry,
-  requestRehatch,
   requestRetry,
   type FailureDetail,
   type FailureRow,
@@ -208,22 +206,16 @@ function latestOpen(detail: FailureDetail) {
   return detail.retries.find((r) => r.result == null || r.result === 'CANDIDATES') ?? null;
 }
 
-function money(v: number | null | undefined): string {
-  return v == null ? '알 수 없음' : `$${v.toFixed(2)}`;
-}
-
 /**
  * 재시도 · 취소 · 후보 고르기(결정 3·4).
  *
  * ★ 사용자 화면을 바꾸는 버튼은 "이걸로"(부화) · "이걸로 지급"(맞춤) 둘이다 — 둘 다 확인 창을 한 번 거친다.
- * ★ 서버에서 굽는 두 길(멈춘 알 "이어서 굽기" · FAILED 알 "서버 재굽기")은 이미지 API 비용이 든다 —
- *   /estimate 금액을 확인 창에 보여 준 뒤에만 부른다. "맥미니로 재시도"는 과금이 없다.
+ * ★ 재시도는 "맥미니로 재시도" 하나다(과금 없음). 서버에서 굽는 길은 두지 않는다(2026-10-28 결정).
  */
 function DetailActions({ row, detail, runner, onChanged }: { row: FailureRow; detail: FailureDetail; runner: RunnerView | null; onChanged: () => void }) {
   const [memo, setMemo] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null);
-  const stuck = row.kind === 'HATCH' && row.reasonCode === 'STUCK';
   const open = latestOpen(detail);
   const openId = row.openRetryId ?? open?.id ?? null;
   const failedNote = detail.retries.find((r) => r.result === 'APPLY_FAILED')?.note ?? null;
@@ -241,22 +233,6 @@ function DetailActions({ row, detail, runner, onChanged }: { row: FailureRow; de
     } finally {
       setBusy(false);
     }
-  }
-
-  /** 서버에서 굽는 길 — 예상 비용을 보여 확인을 받는다. 취소하면 아무것도 부르지 않는다. */
-  async function serverBake(kind: 'resume' | 'rehatch') {
-    await run(async () => {
-      const est = await fetchEstimate(row.id);
-      const steps = kind === 'resume' ? est.resumeSteps : est.rehatchSteps;
-      const cost = kind === 'resume' ? est.resumeCostUsd : est.rehatchCostUsd;
-      const title = kind === 'resume' ? '서버에서 이어서 굽기(성공한 단계는 이어받음)' : '서버 재굽기(격자부터 다시)';
-      const unknown = est.unknownSteps.length ? `\n비용 기록 없는 단계: ${est.unknownSteps.join(', ')}` : '';
-      if (!window.confirm(`${title}\n예상 비용 ${money(cost)} — 이미지 API 비용이 듭니다.\n단계: ${steps.join(', ') || '없음'}${unknown}\n진행할까요?`)) {
-        return null;
-      }
-      const v = kind === 'resume' ? await requestRetry(row.kind, row.id, memo.trim()) : await requestRehatch(row.id, memo.trim());
-      return `${kind === 'resume' ? '이어서 굽기' : '재굽기'} 시작 — 잡 ${v.jobId ?? '?'} · 예상 ${money(v.estimatedCostUsd)}`;
-    });
   }
 
   return (
@@ -332,11 +308,6 @@ function DetailActions({ row, detail, runner, onChanged }: { row: FailureRow; de
           <div style={{ ...DIM, fontSize: 11, textAlign: 'right' }} data-part="memo-left">{500 - memo.length}자 남음</div>
           {!row.revivable && row.blockedReason && <p data-part="blocked" style={{ fontSize: 12, color: BAD, margin: '4px 0 0' }}>{row.blockedReason}</p>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-            {stuck ? (
-              <button type="button" data-action="failure-resume" disabled={busy || !row.revivable} onClick={() => void serverBake('resume')} style={{ ...BTN, minHeight: 44 }}>
-                서버에서 이어서 굽기(비용 확인)
-              </button>
-            ) : (
               <button
                 type="button"
                 data-action="failure-retry"
@@ -351,12 +322,6 @@ function DetailActions({ row, detail, runner, onChanged }: { row: FailureRow; de
               >
                 맥미니로 재시도
               </button>
-            )}
-            {row.kind === 'HATCH' && !stuck && (
-              <button type="button" data-action="failure-rehatch" disabled={busy} onClick={() => void serverBake('rehatch')} style={{ ...BTN, minHeight: 44 }}>
-                서버 재굽기(비용 확인)
-              </button>
-            )}
           </div>
         </>
       )}

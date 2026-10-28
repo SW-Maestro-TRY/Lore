@@ -105,7 +105,6 @@ class AdminFailureControllerIT extends ZzalItSupport {
 
         MvcResult ok = postAs(BOT, BASE + "/failures/HATCH/%d/retry".formatted(pet), Map.of("memo", "격자 3번"));
         assertThat(ok.getResponse().getStatus()).isEqualTo(200);
-        assertThat(body(ok).path("data").path("mode").asText()).isEqualTo("RUNNER");
         MvcResult again = postAs(BOT, BASE + "/failures/HATCH/%d/retry".formatted(pet), Map.of("memo", "또"));
         assertThat(again.getResponse().getStatus()).isEqualTo(409);
         assertThat(errorCode(again)).isEqualTo("ADMIN_RETRY_OPEN");
@@ -170,18 +169,6 @@ class AdminFailureControllerIT extends ZzalItSupport {
         JsonNode fresh = body(botGet("/runner")).path("data");
         assertThat(fresh.path("stale").asBoolean()).isFalse();
         assertThat(fresh.path("minutesAgo").asLong()).isZero();
-    }
-
-    @Test
-    @DisplayName("예상 비용 — 재굽기 확인 창에 쓸 금액과 단계")
-    void controller_estimate() throws Exception {
-        bot();
-        Long pet = failedEgg();
-        JsonNode e = getJson(BOT, BASE + "/failures/HATCH/%d/estimate".formatted(pet)).path("data");
-        assertThat(e.path("rehatchSteps").toString()).contains("grid");
-        assertThat(e.has("rehatchCostUsd")).isTrue();
-        assertThat(getJson(BOT, BASE + "/failures/CUSTOM/1/estimate").path("error").path("code").asText())
-                .isEqualTo("INVALID_INPUT");
     }
 
     @Test
