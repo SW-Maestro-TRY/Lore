@@ -179,6 +179,12 @@ public class AdminRetry {
         }
     }
 
+    /** 반영됨 + 사유 한 줄(다른 길로 복구됨 · 서버에서 이어서 굽기 시작 등). */
+    public void applied(Long by, String choice, String note, Instant now) {
+        applied(by, choice, now);
+        this.note = clip(note, NOTE_MAX);
+    }
+
     /** 반영 실패 — 사유는 note 에 남긴다. */
     public void applyFailed(String note, Instant now) {
         requireOpen();

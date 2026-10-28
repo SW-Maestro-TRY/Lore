@@ -55,7 +55,7 @@ public class AdminRehatchService {
     private static final Logger log = LoggerFactory.getLogger(AdminRehatchService.class);
 
     /** 재굽기 때 버리는 단계 — 격자 두 장. 나머지 성공 단계(시트·문단)는 이어받는다. */
-    static final Set<String> DISCARDED_STEPS = Set.of(GridStep.NAME, PostProcessStep.GRID2);
+    public static final Set<String> DISCARDED_STEPS = Set.of(GridStep.NAME, PostProcessStep.GRID2);
 
     private final AdminGuard adminGuard;
     private final ZzalPetRepository petRepository;
