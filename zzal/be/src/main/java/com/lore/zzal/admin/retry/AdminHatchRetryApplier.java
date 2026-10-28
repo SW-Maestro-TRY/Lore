@@ -85,6 +85,8 @@ public class AdminHatchRetryApplier {
 
         if (grids.isEmpty()) {
             AdminRetry closed = deliver(retryId, AdminRetryResult.NONE, note, null, now);
+            // 1층 다시 만들기 표시도 거둔다 — 남아 있으면 옛 러너가 같은 알을 또 굽는다.
+            layerService.cancelRegen(callerId, closed.getTargetId(), 1);
             log.info("부화 재시도 결과 없음 — retry={} pet={}", retryId, closed.getTargetId());
             return new CandidatesResult(retryId, AdminRetryResult.NONE.name(), List.of(), null, false);
         }
@@ -139,6 +141,7 @@ public class AdminHatchRetryApplier {
         AdminLayerService.Candidate pass = baked.stream().filter(c -> "PASS".equals(c.gate())).findFirst().orElse(null);
         if (pass == null) {
             deliver(retryId, AdminRetryResult.NONE, note == null ? "자동: 게이트 통과 후보 없음" : note, keys, now);
+            layerService.cancelRegen(callerId, petId, 1); // 옛 러너가 또 굽지 않게
             log.info("자동 CLI 결과 — 통과 후보 없음 retry={} pet={}", retryId, petId);
             return new CandidatesResult(retryId, AdminRetryResult.NONE.name(), baked, null, false);
         }

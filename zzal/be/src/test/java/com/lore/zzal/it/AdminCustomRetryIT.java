@@ -530,4 +530,22 @@ class AdminCustomRetryIT extends ZzalItSupport {
         assertThat(jdbc.queryForObject("select count(*) from zzal_custom_bundle_source where job_id = ?", Integer.class, o[1]))
                 .isZero();
     }
+
+    @Test
+    @DisplayName("러너 결과 — 검수 묶음의 manifest(review/sequence-v1/manifest.json)도 선택 파일로 받고, 그 밖의 review 경로는 400")
+    void customCandidates_acceptsReviewSequenceManifest() throws Exception {
+        setUpAdmin();
+        long[] o = orphan("CLAIMED", null, PLAN);
+        long id = claimed(o[1]);
+        Map<String, String> bad = files(o[1], PLAN, null, false);
+        bad.put("review/sequence-v1/notes.json", upload("{}"));
+        assertThatThrownBy(() -> applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, bad, null), now))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
+
+        Map<String, String> ok = files(o[1], PLAN, null, false);
+        ok.put("review/sequence-v1/manifest.json", upload("{\"frames\":2}"));
+        ok.put("review/sequence-v1/frame-01.png", upload("f1"));
+        var result = applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, ok, null), now);
+        assertThat(result.result()).isEqualTo("CANDIDATES");
+    }
 }

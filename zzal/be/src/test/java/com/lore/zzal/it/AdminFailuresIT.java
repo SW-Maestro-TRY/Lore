@@ -1016,4 +1016,17 @@ class AdminFailuresIT extends ZzalItSupport {
         assertThat(retries.findById(id).orElseThrow().getAppliedChoice()).isNull();
         assertThat(retryService.cancel(admin, id, now.plusSeconds(3)).result()).isEqualTo("CANCELLED");
     }
+
+    @Test
+    @DisplayName("★ 러너가 결과 없음(NONE)으로 닫으면 1층 다시 만들기 표시도 거둔다 — 옛 러너가 같은 알을 또 굽지 않게")
+    void hatchCandidates_none_clearsLayer1Regen() {
+        setUpPet();
+        Long pet = sheetlessEgg();
+        long id = claimedHatchRetry(pet);
+        assertThat(jdbc.queryForObject("select layer1_regen_requested_at is not null from zzal_pet where id = ?",
+                Boolean.class, pet)).isTrue();
+        hatchApplier.hatchCandidates(admin, id, new RetryCandidatesRequest(List.of(), null, null, null, "못 만듦"), now);
+        assertThat(jdbc.queryForObject("select layer1_regen_requested_at is null from zzal_pet where id = ?",
+                Boolean.class, pet)).isTrue();
+    }
 }

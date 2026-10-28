@@ -60,6 +60,8 @@ public class AdminCustomRetryApplier {
     /** 계획 없는 잡(계획 중 멈춤)일 때만 — 러너가 만든 계획 원문(결정 5). */
     static final String SOURCE_PLAN = "source-plan.json";
     static final Pattern FRAME = Pattern.compile("review/sequence-v1/frame-\\d{2}\\.png");
+    /** 검수 이어보기 묶음의 목록 파일 — 러너가 프레임과 같이 올린다(선택). */
+    static final String REVIEW_MANIFEST = "review/sequence-v1/manifest.json";
     static final String BACKUP_PREFIX = "zzal-review/custom-bundle-failures/";
     static final int NOTE_HEAD = 300;
 
@@ -68,7 +70,7 @@ public class AdminCustomRetryApplier {
 
     static {
         List<String> req = new ArrayList<>(List.of(MANIFEST, METADATA, ANCHORS, GRID));
-        Set<String> opt = new LinkedHashSet<>(List.of(SOURCE_PLAN));
+        Set<String> opt = new LinkedHashSet<>(List.of(SOURCE_PLAN, REVIEW_MANIFEST));
         for (String slot : CustomGridPrompt.SLOTS) {
             req.add(slot + ".webp");
             opt.add(slot + ".gif");
