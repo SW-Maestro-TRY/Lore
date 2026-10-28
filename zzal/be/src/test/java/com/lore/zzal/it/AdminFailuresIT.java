@@ -523,7 +523,8 @@ class AdminFailuresIT extends ZzalItSupport {
         assertThat(d.images().inputKey()).isEqualTo("images/zzal/in.png");
         assertThat(d.images().sheetKey()).isEqualTo("images/zzal/sheet.png");
         assertThat(d.images().gridKeys()).containsExactly("images/zzal/custom/" + requestId + "/grid.png");
-        assertThat(d.images().resultKeys()).hasSize(8).containsEntry("1", "images/zzal/custom/r/1.webp");
+        // 그림 주소에 asset_hash 앞 8자를 붙인다 — 같은 키를 덮어써도 브라우저 · CDN 캐시가 새 그림을 받게(수정 3)
+        assertThat(d.images().resultKeys()).hasSize(8).containsEntry("1", "images/zzal/custom/r/1.webp?v=x");
         assertThat(d.steps()).extracting(s -> s.name()).containsExactly("접수", "계획", "그림", "후처리·게시");
         assertThat(d.identityMissing()).isFalse();
     }

@@ -190,6 +190,11 @@ app:
     content-bucket: ${CONTENT_S3_BUCKET:}
     presign-expiry-minutes: ${S3_PRESIGN_EXPIRY:10}
 
+  # CDN(CloudFront) — 같은 S3 키를 덮어쓴 뒤 캐시를 무효화할 배포 ID. 비우면 무효화를 건너뛴다(dev 는 CloudFront 없음).
+  #   ★ 서버 IAM 역할에 cloudfront:CreateInvalidation 권한이 있어야 한다(없으면 경고 로그만).
+  cdn:
+    distribution-id: ${CLOUDFRONT_DISTRIBUTION_ID:}
+
   # 인증 (2026-09-01)
   #
   # ★ JWT_SECRET 이 유출되면 아무 사용자로든 토큰을 위조할 수 있다. 운영은 /etc/lore/lore.env

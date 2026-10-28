@@ -87,6 +87,8 @@ public class AdminCustomRetryApplier {
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final ObjectMapper json = new ObjectMapper();
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.common.s3.CdnInvalidator cdn;
 
     public AdminCustomRetryApplier(AdminGuard adminGuard, AdminCaller caller, AdminRetryRepository retries,
                                    S3Service s3Service, S3Storage storage, BundleSourcePlan plans,
@@ -268,6 +270,7 @@ public class AdminCustomRetryApplier {
             // ★ 이번 호출이 실제로 덮어쓴 경우에만 되돌린다.
             if (wrote) {
                 restore(prefix, backup, backedUp);
+                cdn.invalidate(List.of("/" + prefix + "*")); // 잠깐 올라갔던 새 그림이 캐시에 남지 않게
             }
             tx.executeWithoutResult(s -> retries.findByIdForUpdate(r.getId()).ifPresent(row -> {
                 if (row.isOpen()) {
@@ -286,6 +289,8 @@ public class AdminCustomRetryApplier {
                 row.applied(by, "custom", now);
             }
         }));
+        // 같은 키를 덮어썼다 — CDN 이 옛 그림을 계속 주지 않게(수정 3). 실패해도 반영은 그대로다.
+        cdn.invalidate(List.of("/" + prefix + "*"));
         log.info("맞춤 재시도 반영 — retry={} job={} requestId={} (by={})", r.getId(), job.id(), requestId, by);
     }
 

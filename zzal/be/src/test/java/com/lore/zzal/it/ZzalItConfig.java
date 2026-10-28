@@ -50,6 +50,22 @@ import static org.mockito.Mockito.mock;
 @TestConfiguration(proxyBeanMethods = false)
 public class ZzalItConfig {
 
+    /** CDN 무효화 — 바깥(CloudFront)으로 안 나가고, 무엇을 무효화하려 했는지만 적어 둔다. */
+    @Bean
+    @Primary
+    public RecordingCdnInvalidator recordingCdnInvalidator() {
+        return new RecordingCdnInvalidator();
+    }
+
+    public static class RecordingCdnInvalidator implements com.lore.common.s3.CdnInvalidator {
+        public final java.util.List<String> paths = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        public void invalidate(java.util.List<String> keysOrPatterns) {
+            paths.addAll(keysOrPatterns);
+        }
+    }
+
     /** 서버가 만든 그림을 올리고 받는 자리 — 메모리로. */
     @Bean
     @Primary

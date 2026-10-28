@@ -162,10 +162,13 @@ public class AdminFailureDetailService {
         Map<String, String> results = new LinkedHashMap<>();
         int published = 0;
         for (Map<String, Object> a : jdbc.queryForList("""
-                SELECT motion_order, asset_key, published FROM zzal_custom_bundle_asset WHERE job_id = ?
+                SELECT motion_order, asset_key, asset_hash, published FROM zzal_custom_bundle_asset WHERE job_id = ?
                 ORDER BY motion_order
                 """, jobId)) {
-            results.put(String.valueOf(a.get("motion_order")), (String) a.get("asset_key"));
+            // ★ asset_hash 앞 8자를 ?v= 로 — 같은 키를 덮어써도 브라우저 · CDN 캐시가 새 그림을 받는다(수정 3).
+            String hash = String.valueOf(a.get("asset_hash"));
+            results.put(String.valueOf(a.get("motion_order")),
+                    a.get("asset_key") + "?v=" + hash.substring(0, Math.min(8, hash.length())));
             if (Boolean.TRUE.equals(a.get("published"))) {
                 published++;
             }

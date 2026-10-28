@@ -62,6 +62,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
     @Autowired AdminRetryRepository retries;
     @Autowired AttendanceService attendance;
     @Autowired S3Storage storage;
+    @Autowired ZzalItConfig.RecordingCdnInvalidator cdn;
 
     private final Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
     private static final String PLAN = "{\"motionPlan\":{\"version\":\"v1\"}}";
@@ -80,6 +81,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
         // ★ 메모리 S3 는 시험 사이에 안 비워지고, 표는 번호까지 처음으로 돌아간다 — 같은 잡 번호 · 같은 requestId 가
         //   앞 시험의 객체를 보게 된다. 그래서 여기서 비운다.
         ((ZzalItConfig.InMemoryS3Storage) storage).clear();
+        cdn.paths.clear();
         admin = newUserId();
         jdbc.update("update users set role = 'ADMIN' where id = ?", admin);
     }
@@ -259,6 +261,8 @@ class AdminCustomRetryIT extends ZzalItSupport {
         assertThat(row.getResult()).isEqualTo(AdminRetryResult.APPLIED);
         assertThat(row.getAppliedBy()).isEqualTo(admin);
         assertThat(row.getAppliedChoice()).isEqualTo("custom");
+        // ★ 같은 키를 덮어썼다 — CDN 이 옛 그림을 계속 주지 않게 그 자리를 무효화한다(수정 3)
+        assertThat(cdn.paths).contains("/images/zzal/custom/" + rid + "/*");
     }
 
     @Test
