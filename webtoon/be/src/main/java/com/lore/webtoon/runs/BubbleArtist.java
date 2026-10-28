@@ -178,20 +178,9 @@ public class BubbleArtist {
 
     private Tile bubble(JsonNode item, double boxW, double scale, double fs) {
         String variant = item.path("variant").asText("normal");
-        boolean round = !"narration".equals(variant);
-        boolean shout = "shout".equals(variant);
         List<Font> faces = sized(faces(item.path("font").asText("")), fs);
-        /* 안쪽 여백 — 화면(Editor.css 의 .bub 0.55em 0.85em, .bub-shout 1.1em 1.2em)과 같다.
-           예전에는 외침도 보통 말풍선 여백으로 재서, 외침의 글 폭이 화면보다 넓게 잡혔다. */
-        double padX = fs * (shout ? 1.2 : 0.85), padY = fs * (shout ? 1.1 : 0.55);
         int stroke = (int) Math.max(2, 2.5 * scale);
-        // 외침은 뾰족한 만큼 안쪽이 좁다(안쪽 반지름이 바깥의 0.8).
-        double spread = round ? Math.sqrt(2) / (shout ? 0.8 : 1.0) : 1.0;
-
-        /* 나레이션은 가장 낮은 높이를 두지 않는다(target 무한대) — 길게 늘여 쓰는 띠라서
-           폭을 따라 높이까지 커지면 빈칸만 많은 상자가 된다. 화면(editorCore.paintShape)과 같다. */
-        Fit fit = fit(item.path("text").asText(""), faces, boxW, padX, padY, spread,
-                "narration".equals(variant) ? Double.POSITIVE_INFINITY : 2.4);
+        Fit fit = fit(item, faces, boxW);
 
         boolean tailed = TAILED.contains(variant) && !"none".equals(item.path("tail").asText());
         double tipX = fit.w * item.path("tx").asDouble(22) / 100.0;
@@ -247,7 +236,7 @@ public class BubbleArtist {
             TextLayout tl = layout(line, faces);
             // 가운데 맞춤은 줄 끝 공백을 빼고 잰다 — 화면도 줄 끝에 걸친 공백은 셈에 넣지 않는다.
             double x = "narration".equals(variant)
-                    ? offX + padX
+                    ? offX + fit.padX
                     : offX + (fit.w - tl.getVisibleAdvance()) / 2.0;
             tl.draw(g, (float) x, (float) (top + i * lh + base));
         }
@@ -318,7 +307,8 @@ public class BubbleArtist {
 
     /* ---- 글 넣기 ---------------------------------------------------------- */
 
-    private record Fit(double w, double h, List<String> lines) {
+    /** 풍선 크기(폭·높이), 안쪽 가로 여백, 그리고 끊어 놓은 줄들. */
+    record Fit(double w, double h, double padX, List<String> lines) {
     }
 
     /**
@@ -337,14 +327,26 @@ public class BubbleArtist {
      * 글 상자 높이에 배율을 곱한다. 예전에는 여백을 빼고 곱해서 여러 줄짜리 풍선이 화면보다
      * 조금 납작했다.
      */
-    private Fit fit(String text, List<Font> faces, double boxW, double padX, double padY,
-                    double spread, double target) {
-        double lh = faces.get(0).getSize2D() * 1.35;
+    Fit fit(JsonNode item, List<Font> faces, double boxW) {
+        String variant = item.path("variant").asText("normal");
+        boolean round = !"narration".equals(variant);
+        boolean shout = "shout".equals(variant);
+        double fs = faces.get(0).getSize2D();
+        /* 안쪽 여백 — 화면(Editor.css 의 .bub 0.55em 0.85em, .bub-shout 1.1em 1.2em)과 같다.
+           예전에는 외침도 보통 말풍선 여백으로 재서, 외침의 글 폭이 화면보다 넓게 잡혔다. */
+        double padX = fs * (shout ? 1.2 : 0.85), padY = fs * (shout ? 1.1 : 0.55);
+        // 외침은 뾰족한 만큼 안쪽이 좁다(안쪽 반지름이 바깥의 0.8).
+        double spread = round ? Math.sqrt(2) / (shout ? 0.8 : 1.0) : 1.0;
+        /* 나레이션은 가장 낮은 높이를 두지 않는다(target 무한대) — 길게 늘여 쓰는 띠라서
+           폭을 따라 높이까지 커지면 빈칸만 많은 상자가 된다. 화면(editorCore.paintShape)과 같다. */
+        double target = "narration".equals(variant) ? Double.POSITIVE_INFINITY : 2.4;
+
+        double lh = fs * 1.35;
         double inner = Math.max(10, boxW / spread - padX * 2);
-        List<String> lines = wrap(text, s -> width(s, faces), inner);
+        List<String> lines = wrap(item.path("text").asText(""), s -> width(s, faces), inner);
         double h = Math.max((lh * lines.size() + padY * 2) * spread,
                 boxW / Math.max(0.1, target));
-        return new Fit(boxW, h, lines);
+        return new Fit(boxW, h, padX, lines);
     }
 
     /**
