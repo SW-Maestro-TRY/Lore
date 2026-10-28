@@ -96,10 +96,11 @@ public class AdminFailureQuery {
                      WHERE s.job_id = j.last_job_id AND s.status = 'FAILED'
                      ORDER BY s.seq DESC, s.id DESC LIMIT 1)               AS failed_step
             FROM zzal_pet p JOIN j ON j.pet_id = p.id
-            WHERE (p.phase = 'FAILED' AND coalesce(j.last_failed_at, j.last_activity) >= :from)
+            WHERE (:target < 0 OR p.id = :target)
+              AND ((p.phase = 'FAILED' AND coalesce(j.last_failed_at, j.last_activity) >= :from)
                OR (p.phase IN ('DRAFT', 'HATCHING')
                    AND j.last_activity < :cutoff
-                   AND j.last_activity >= :from)
+                   AND j.last_activity >= :from))
             ORDER BY coalesce(j.last_failed_at, j.last_activity) DESC, p.id DESC
             """;
 
@@ -109,7 +110,17 @@ public class AdminFailureQuery {
     }
 
     public List<FailureRow> hatchFailures(Instant from, Instant now) {
+        return hatchFailures(from, now, -1);
+    }
+
+    /** 그 펫이 지금 부화 실패 목록 조건에 드는가(기간 제한 없음). 재시도 요청·상세가 쓴다. */
+    public java.util.Optional<FailureRow> hatchRow(long petId, Instant now) {
+        return hatchFailures(Instant.EPOCH, now, petId).stream().findFirst();
+    }
+
+    private List<FailureRow> hatchFailures(Instant from, Instant now, long target) {
         var params = new MapSqlParameterSource()
+                .addValue("target", target)
                 .addValue("from", Timestamp.from(from))
                 .addValue("cutoff", Timestamp.from(now.minus(Duration.ofMinutes(hatchGraceMinutes))));
         List<HatchRaw> raws = db.query(HATCH_SQL, params, (rs, n) -> new HatchRaw(
@@ -132,16 +143,23 @@ public class AdminFailureQuery {
         for (HatchRaw r : kept) {
             boolean failed = "FAILED".equals(r.phase());
             String code = failed ? (r.lastError() != null ? r.lastError() : "UNKNOWN") : STUCK;
+            // ★ 멈춘 알은 실패로 닫지 않고 서버에서 이어서 굽는다(결정 2) — 이름이 없어도 된다.
+            //   FAILED 알은 1층 복구(맥미니)로 살리므로 이름이 있어야 한다.
+            boolean revivable = !failed || named(r.name());
             String stage = r.failedStep() != null ? r.failedStep() : (failed ? null : "멈춤(서버 재시작 추정)");
-            boolean named = r.name() != null && !r.name().isBlank();
+            boolean named = named(r.name());
             List<AdminRetry> h = history.getOrDefault(r.petId(), List.of());
             rows.add(new FailureRow("HATCH", r.petId(), r.petId(), named ? r.name() : null, r.userId(),
                     failed && r.lastFailedAt() != null ? r.lastFailedAt() : r.lastActivity(),
                     code, stage, AdminFailureResponses.reasonText(code),
                     r.attempts(), r.cost(), autoCli(h), request(h), openId(h),
-                    named, named ? null : NAMELESS));
+                    revivable, revivable ? null : NAMELESS));
         }
         return rows;
+    }
+
+    private static boolean named(String name) {
+        return name != null && !name.isBlank();
     }
 
     /** 단계를 다 끝낸 알은 멈춘 것이 아니라 이름을 기다리는 중이다. 모르는 버전이면 판정할 수 없어 남긴다. */
@@ -183,6 +201,7 @@ public class AdminFailureQuery {
             JOIN zzal_pet p ON p.id = d.pet_id AND p.phase = 'ALIVE'
             LEFT JOIN zzal_custom_bundle_job j
               ON j.pet_id = d.pet_id AND j.program_version = :program AND j.bundle_version = d.bundle_version
+            WHERE (:target < 0 OR j.id = :target)
             GROUP BY d.pet_id, d.bundle_version, p.name, p.user_id, j.id
             HAVING min(d.eligible_at) >= :from
             ORDER BY min(d.eligible_at) DESC, d.pet_id DESC
@@ -193,7 +212,17 @@ public class AdminFailureQuery {
     }
 
     public List<FailureRow> customFailures(Instant from, Instant now) {
+        return customFailures(from, now, -1);
+    }
+
+    /** 그 맞춤 잡이 지금 맞춤 실패 목록 조건에 드는가(기간 제한 없음). */
+    public java.util.Optional<FailureRow> customRow(long jobId, Instant now) {
+        return customFailures(Instant.EPOCH, now, jobId).stream().findFirst();
+    }
+
+    private List<FailureRow> customFailures(Instant from, Instant now, long target) {
         var params = new MapSqlParameterSource()
+                .addValue("target", target)
                 .addValue("program", PROGRAM)
                 .addValue("from", Timestamp.from(from))
                 .addValue("cutoff", Timestamp.from(now.minus(Duration.ofMinutes(customGraceMinutes))));
@@ -351,6 +380,41 @@ public class AdminFailureQuery {
 
     private static Long openId(List<AdminRetry> newestFirst) {
         return newestFirst.stream().filter(AdminRetry::isOpen).map(AdminRetry::getId).findFirst().orElse(null);
+    }
+
+    // ── 공용 ──────────────────────────────────────────────────────────────
+
+    /** 경로의 kind 문자열. HATCH · CUSTOM 말고는 INVALID_INPUT. */
+    public static AdminRetryKind parseKind(String kind) {
+        if ("HATCH".equals(kind)) {
+            return AdminRetryKind.HATCH;
+        }
+        if ("CUSTOM".equals(kind)) {
+            return AdminRetryKind.CUSTOM;
+        }
+        throw new BusinessException(ErrorCode.INVALID_INPUT, "kind 는 HATCH 또는 CUSTOM 입니다: " + kind);
+    }
+
+    /**
+     * 맞춤 결과가 놓이는 자리의 requestId — {@code CustomGenerationRequest.from(jobId, snapshot, plan).requestId()}
+     * 와 같은 식(잡 id + 계획 원문 sha256). from() 은 계획 모양까지 검증해 깨진 계획이면 던지므로, 상세·러너 재료는
+     * 같은 식만 따로 계산한다. 계획이 없으면 null.
+     */
+    public static String customRequestId(long jobId, String sourcePlanJson) {
+        if (sourcePlanJson == null) {
+            return null;
+        }
+        return java.util.UUID.nameUUIDFromBytes((jobId + ":" + sha256(sourcePlanJson))
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    }
+
+    public static String sha256(String value) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     // ── 잔손 ──────────────────────────────────────────────────────────────

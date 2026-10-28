@@ -2,7 +2,9 @@ package com.lore.zzal.it;
 
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
+import com.lore.zzal.admin.failures.AdminFailureDetailService;
 import com.lore.zzal.admin.failures.AdminFailureQuery;
+import com.lore.zzal.admin.failures.AdminFailureResponses.FailureDetail;
 import com.lore.zzal.admin.failures.AdminFailureResponses.FailurePage;
 import com.lore.zzal.admin.failures.AdminFailureResponses.FailureRow;
 import com.lore.zzal.admin.retry.AdminRetry;
@@ -40,6 +42,7 @@ class AdminFailuresIT extends ZzalItSupport {
 
     @Autowired AdminRetryRepository retries;
     @Autowired AdminFailureQuery failures;
+    @Autowired AdminFailureDetailService details;
     @Autowired PipelineRegistry registry;
 
     private Long admin;
@@ -440,5 +443,102 @@ class AdminFailuresIT extends ZzalItSupport {
         assertThat(row.autoCli()).isEqualTo("FAILED");
         assertThat(row.request()).isEqualTo("WAITING");
         assertThat(row.openRetryId()).isEqualTo(manual.getId());
+    }
+
+    // ── 작업 1.4: 실패 상세 ─────────────────────────────────────────────────
+
+    private void stepWith(Long jobId, int seq, String name, String status, String key, String text) {
+        jdbc.update("""
+                insert into zzal_gen_step (job_id, seq, name, status, started_at, finished_at, output_key, output_text,
+                                           cost_usd, model)
+                values (?, ?, ?, ?, ?, ?, ?, ?, 0.02, 'gpt-image-2')
+                """, jobId, seq, name, status, ts(ago(50)), ts(ago(49)), key, text);
+    }
+
+    @Test
+    @DisplayName("상세(부화) — 시트는 성공한 sheet 단계 기록의 output_key, 단계 타임라인과 입력 그림")
+    void detail_hatch_returnsSheetFromSucceededStep() {
+        setUpPet();
+        Long pet = egg("FAILED", "몽이");
+        Long job = hatchJob(pet, 1, "FAILED", "TIMEOUT", ago(40), ago(40), ago(30));
+        stepWith(job, 1, "sheet", "SUCCEEDED", "images/zzal/pets/%d/sheet.png".formatted(pet), null);
+        stepWith(job, 2, "identity", "SUCCEEDED", null, "(정체성 문단)");
+        stepWith(job, 3, "grid", "FAILED", null, "격자 시간 초과");
+
+        FailureDetail d = details.detail(admin, "HATCH", pet, now);
+        assertThat(d.row()).isNotNull();
+        assertThat(d.row().id()).isEqualTo(pet);
+        assertThat(d.images().sheetKey()).isEqualTo("images/zzal/pets/%d/sheet.png".formatted(pet));
+        assertThat(d.images().inputKey()).startsWith("images/zzal/");
+        assertThat(d.images().identityText()).isEqualTo("(정체성 문단)");
+        assertThat(d.images().resultKeys()).isEmpty();
+        assertThat(d.identityMissing()).isFalse();
+        assertThat(d.steps()).extracting(s -> s.name()).containsExactly("sheet", "identity", "grid");
+        assertThat(d.steps().get(2).durationMs()).isEqualTo(60_000L);
+        assertThat(d.errorDetail()).isEqualTo("격자 시간 초과");
+        assertThat(d.retries()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("상세(부화) — 정체성 성공 기록이 없거나 빈 문단이면 identityMissing")
+    void detail_hatch_flagsMissingIdentity() {
+        setUpPet();
+        Long pet = egg("FAILED", "몽이");
+        Long job = hatchJob(pet, 1, "FAILED", "UNKNOWN", ago(40), ago(40), ago(30));
+        stepWith(job, 1, "sheet", "SUCCEEDED", "images/zzal/pets/%d/sheet.png".formatted(pet), null);
+        assertThat(details.detail(admin, "HATCH", pet, now).identityMissing()).isTrue();
+
+        stepWith(job, 2, "identity", "SUCCEEDED", null, "  ");
+        assertThat(details.detail(admin, "HATCH", pet, now).identityMissing()).isTrue();
+    }
+
+    @Test
+    @DisplayName("상세(맞춤) — 격자는 images/zzal/custom/{requestId}/grid.png, 결과는 자산 8개 키")
+    void detail_custom_returnsGridUnderRequestPrefix() {
+        setUpPet();
+        ZzalPet pet = alive();
+        visits(pet.getId(), 3, ago(120));
+        slot(pet.getId(), "motion-1", 3);
+        String plan = "{\"motionPlan\":{}}";
+        Long job = customJob(pet.getId(), "bundle-1", "CLAIMED", null, "tok", null, plan);
+        jdbc.update("update zzal_custom_bundle_job set snapshot_json = ? where id = ?",
+                "{\"sourceImageKey\":\"images/zzal/in.png\",\"sheetImageKey\":\"images/zzal/sheet.png\",\"identity\":\"문단\"}",
+                job);
+        publishedAssets(job);
+
+        FailureDetail d = details.detail(admin, "CUSTOM", job, now);
+        String requestId = java.util.UUID.nameUUIDFromBytes((job + ":" + sha256(plan))
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        assertThat(d.row().reasonCode()).isEqualTo("CLAIMED_ORPHAN");
+        assertThat(d.images().inputKey()).isEqualTo("images/zzal/in.png");
+        assertThat(d.images().sheetKey()).isEqualTo("images/zzal/sheet.png");
+        assertThat(d.images().gridKeys()).containsExactly("images/zzal/custom/" + requestId + "/grid.png");
+        assertThat(d.images().resultKeys()).hasSize(8).containsEntry("1", "images/zzal/custom/r/1.webp");
+        assertThat(d.steps()).extracting(s -> s.name()).containsExactly("접수", "계획", "그림", "후처리·게시");
+        assertThat(d.identityMissing()).isFalse();
+    }
+
+    @Test
+    @DisplayName("상세 — kind 가 HATCH·CUSTOM 이 아니면 INVALID_INPUT, 없는 id 는 NOT_FOUND")
+    void detail_unknownKind_400() {
+        setUpPet();
+        assertThatThrownBy(() -> details.detail(admin, "LAYER2", 1L, now))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT);
+        assertThatThrownBy(() -> details.detail(admin, "HATCH", 999_999L, now))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode().getStatus().value()).isEqualTo(404);
+        assertThatThrownBy(() -> details.detail(admin, "CUSTOM", 999_999L, now))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode().getStatus().value()).isEqualTo(404);
+    }
+
+    static String sha256(String v) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(v.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

@@ -49,6 +49,38 @@ public final class AdminFailureResponses {
     public record HourBucket(Instant hour, int hatch, int custom) {
     }
 
+    // ── 상세 ──────────────────────────────────────────────────────────────
+
+    /**
+     * 그림 재료.
+     *
+     * @param gridKeys         부화 = 성공한 격자 단계의 키(grid · grid2), 맞춤 = custom/{requestId}/grid.png
+     * @param rejectedGridKeys 부화 = 보존함(rejected/)의 격자, 맞춤 = 빈 목록
+     * @param resultKeys       부화 = 기본 16종(key → webp), 맞춤 = 자산(motion_order → asset_key)
+     */
+    public record Images(String inputKey, String sheetKey, List<String> gridKeys, List<String> rejectedGridKeys,
+                         Map<String, String> resultKeys, String identityText) {
+    }
+
+    /** 단계 하나. 맞춤은 잡 칸에서 읽은 고정 4단(접수 · 계획 · 그림 · 후처리·게시)이라 attempt·model·비용이 비어 있다. */
+    public record Step(long jobId, int attempt, String name, String status, String model,
+                       String errorCode, Instant startedAt, Instant finishedAt, Long durationMs, BigDecimal costUsd) {
+    }
+
+    public record RetryHistory(long id, boolean auto, String memo, Instant requestedAt, Instant pickedAt,
+                               Instant finishedAt, String result, String note, Map<String, Object> candidates,
+                               Instant appliedAt, String appliedChoice) {
+    }
+
+    /**
+     * @param row             지금 실패 목록에 들어 있으면 그 줄, 이미 복구됐으면 null
+     * @param errorDetail     부화 = 마지막 실패 단계의 출력 문장, 맞춤 = 잡 error_code 의 사람 말
+     * @param identityMissing 정체성 문단이 없거나 비었다(러너가 문단부터 만들어야 한다)
+     */
+    public record FailureDetail(FailureRow row, Images images, List<Step> steps, List<RetryHistory> retries,
+                                String errorDetail, boolean identityMissing) {
+    }
+
     // ── 이유 코드 → 사람 말 ─────────────────────────────────────────────────
 
     private static final Map<String, String> REASONS = Map.ofEntries(
@@ -56,7 +88,7 @@ public final class AdminFailureResponses {
             Map.entry("TIMEOUT", "생성이 시간 안에 끝나지 않음"),
             Map.entry("MODERATION_BLOCKED", "그림 안전 검사에 걸림"),
             Map.entry("UNKNOWN", "알 수 없는 오류로 실패"),
-            Map.entry("STUCK", "부화 중 멈춤 — 재시도하면 실패로 닫고 이어서 굽기"),
+            Map.entry("STUCK", "부화 중 멈춤 — 재시도하면 성공한 단계를 이어받아 서버에서 이어서 굽기(예상 비용 표시)"),
             // 맞춤
             Map.entry("NO_JOB", "출석 보상 자격은 생겼는데 맞춤 잡이 없음"),
             Map.entry("NOT_DISPATCHED", "잡이 만들어졌지만 아직 굽기로 보내지 않음"),

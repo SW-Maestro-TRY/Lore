@@ -243,7 +243,7 @@ public class AdminLayerService {
      * 보존된 격자 키 — {@code rejected/} 아래 그 층의 것({@code -grid.png}·{@code -grid2.png}).
      * ★ 보존 키는 DB 에 안 남는다(RejectedGridArchive 주석) — S3 를 직접 훑는다. 실패해도 목록은 나간다.
      */
-    private List<String> rejectedKeys(Long petId, int layer) {
+    public List<String> rejectedKeys(Long petId, int layer) {
         String suffix = layer == 1 ? "-grid.png" : "-grid2.png";
         try {
             return s3Client.listObjectsV2(ListObjectsV2Request.builder()
