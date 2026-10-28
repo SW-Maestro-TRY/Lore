@@ -438,6 +438,10 @@ public final class PetResponses {
         @Schema(description="attendanceRewards.unreadDiaryCount 와 같다 — 안 읽은 일지 수. 출석 정보가 없으면 0",requiredMode=Schema.RequiredMode.NOT_REQUIRED)
         public int unreadDiaryCount(){return attendanceRewards==null?0:attendanceRewards.unreadDiaryCount();}
 
+        @com.fasterxml.jackson.annotation.JsonProperty("unreadInquiryReplyCount")
+        @Schema(description="attendanceRewards.unreadInquiryReplyCount 와 같다 — 아직 안 본 운영팀 답장 수(계정 기준). 출석 정보가 없으면 0",requiredMode=Schema.RequiredMode.NOT_REQUIRED)
+        public int unreadInquiryReplyCount(){return attendanceRewards==null?0:attendanceRewards.unreadInquiryReplyCount();}
+
 
         /**
          * <b>조각 판을 빼고</b> 그린다 — 이름이 그 사실을 말한다.

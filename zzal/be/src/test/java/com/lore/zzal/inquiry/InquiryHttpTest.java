@@ -49,11 +49,24 @@ class InquiryHttpTest {
         return mvc.perform(post(path).with(authentication(new UsernamePasswordAuthenticationToken(71L, null, List.of())))
                 .contentType("application/json").content(json.writeValueAsBytes(body)));
     }
-    @Test void realSecurityRequiresLoginAndDoesNotExposeAnInquiryList() throws Exception {
+    @Test void realSecurityRequiresLoginForSubmitListAndSeen() throws Exception {
         mvc.perform(post(path).contentType("application/json").content(json.writeValueAsBytes(payload("문의"))))
                 .andExpect(status().isUnauthorized());
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mvc.perform(post(path + "/5/seen")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
+    }
+    @Test void listIsTheOwnersOnlyAndSeenIsNoContent() throws Exception {
+        when(service.listMine(71L)).thenReturn(List.of());
         mvc.perform(get(path).with(authentication(new UsernamePasswordAuthenticationToken(71L, null, List.of()))))
-                .andExpect(status().isMethodNotAllowed());
+                .andExpect(status().isOk());
+        verify(service).listMine(71L);
+        mvc.perform(post(path + "/5/seen").with(authentication(new UsernamePasswordAuthenticationToken(71L, null, List.of()))))
+                .andExpect(status().isNoContent());
+        verify(service).markSeen(eq(71L), eq(5L), any());
+    }
+    @Test void parentIdMustBePositive() throws Exception {
+        var bad=payload("문의");bad.put("parentId",0);send(bad).andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
     @Test void httpValidationTrimsBeforeLengthChecksAndResponseContainsOnlyReceipt() throws Exception {

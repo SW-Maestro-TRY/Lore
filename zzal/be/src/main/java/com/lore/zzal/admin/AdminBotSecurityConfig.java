@@ -97,7 +97,7 @@ public class AdminBotSecurityConfig {
             if (presented != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 token.authenticate(presented).ifPresentOrElse(userId -> {
                     var auth = new UsernamePasswordAuthenticationToken(userId, null,
-                            List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                            List.of(new SimpleGrantedAuthority("ROLE_USER"), new SimpleGrantedAuthority(AdminBotToken.AUTHORITY)));
                     SecurityContextHolder.getContext().setAuthentication(auth);
                 }, () -> log.warn("관리자 봇 토큰이 맞지 않음 — {} {}", request.getMethod(), request.getRequestURI()));
             }

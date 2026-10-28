@@ -31,6 +31,7 @@ class FirstSetPolicyTest {
     // Red-dot counters (view): new gifts since the never-opened gifts screen, and unread diary entries.
     if(sql.startsWith("SELECT count(*) FROM zzal_attendance_reward_slot")&&sql.contains("state='GRANTED'"))return (int)slots.values().stream().filter(s->s.state.equals("GRANTED")).count();
     if(sql.startsWith("SELECT count(*) FROM zzal_diary_entry"))return 0;
+    if(sql.startsWith("SELECT count(*) FROM zzal_inquiry"))return 0;
     if(sql.startsWith("SELECT count(*) FROM zzal_attendance_reward_slot"))return (int)slots.values().stream().filter(s->s.state.equals("ELIGIBLE")&&s.day<=day).count();
    }
    if(method.equals("queryForList"))return jobs>0?List.of(ready?"GENERATED":"PENDING"):List.of();

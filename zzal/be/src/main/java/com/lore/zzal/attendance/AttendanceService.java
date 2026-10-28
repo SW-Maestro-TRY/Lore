@@ -127,7 +127,7 @@ public class AttendanceService {
   int attendanceDay=count(pet.getId());
   int pending=db.queryForObject("SELECT count(*) FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND state='ELIGIBLE' AND eligible_day<=?",Integer.class,pet.getId(),PROGRAM,attendanceDay);
   var preview=db.query("SELECT asset_key FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND slot_key='background' AND state='ELIGIBLE' AND asset_key IS NOT NULL",(r,n)->new AttendanceRewards.Preview(r.getString(1),backgrounds.url(r.getString(1))),pet.getId(),PROGRAM).stream().findFirst().orElse(null);
-  return new AttendanceRewards(PROGRAM,attendanceDay,states.isEmpty()?"NONE":states.getFirst(),pending,owned,new AttendanceRewards.Background(pet.getBackground(),owned.stream().filter(x->x.kind().equals("BACKGROUND")).map(x->new AttendanceRewards.OwnedBackground(x.assetKey(),x.url())).toList(),preview),customMotions==null?List.of():customMotions.owned(pet.getUserId(),pet.getId()),newRewardCount(pet),unreadDiaryCount(pet.getId()));
+  return new AttendanceRewards(PROGRAM,attendanceDay,states.isEmpty()?"NONE":states.getFirst(),pending,owned,new AttendanceRewards.Background(pet.getBackground(),owned.stream().filter(x->x.kind().equals("BACKGROUND")).map(x->new AttendanceRewards.OwnedBackground(x.assetKey(),x.url())).toList(),preview),customMotions==null?List.of():customMotions.owned(pet.getUserId(),pet.getId()),newRewardCount(pet),unreadDiaryCount(pet.getId()),unreadInquiryReplyCount(pet.getUserId()));
  }
  /** Gifts granted after the owner last opened the gifts screen. The initial legacy background is an entitlement, not a gift. */
  int newRewardCount(ZzalPet pet){
@@ -135,6 +135,13 @@ public class AttendanceService {
   String base="SELECT count(*) FROM zzal_attendance_reward_slot WHERE pet_id=? AND program_version=? AND state='GRANTED' AND slot_key<>'legacy-background' AND granted_at IS NOT NULL";
   return seen==null?db.queryForObject(base,Integer.class,pet.getId(),PROGRAM)
    :db.queryForObject(base+" AND granted_at>?",Integer.class,pet.getId(),PROGRAM,Timestamp.from(seen));
+ }
+ /**
+  * Operator replies the owner has not opened yet (account-wide, not per pet — an inquiry belongs to the account).
+  * Lives here only so the red-dot counts ride the same pet status read as gifts and diaries.
+  */
+ private int unreadInquiryReplyCount(Long userId){
+  return userId==null?0:db.queryForObject("SELECT count(*) FROM zzal_inquiry WHERE user_id=? AND reply_text IS NOT NULL AND reply_seen_at IS NULL",Integer.class,userId);
  }
  /** Same rule as the diary list's unreadCount (READY and unread). */
  private int unreadDiaryCount(Long petId){

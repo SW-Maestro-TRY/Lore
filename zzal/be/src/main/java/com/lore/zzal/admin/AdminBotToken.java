@@ -35,6 +35,19 @@ public class AdminBotToken {
     /** 요청 헤더 이름. */
     public static final String HEADER = "X-Admin-Token";
 
+    /**
+     * 봇 토큰으로 들어온 요청에 붙는 표식. 사람만 해야 하는 일(문의 답장처럼 사용자에게 나가는 글)은
+     * {@link #requireHuman()} 으로 이 표식이 있으면 막는다.
+     */
+    public static final String AUTHORITY = "ZZAL_ADMIN_BOT";
+
+    /** 지금 요청이 봇 토큰으로 들어왔으면 403(ADMIN_ONLY). 쿠키 로그인이면 통과. */
+    public static void requireHuman() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getAuthorities().stream().anyMatch(a -> AUTHORITY.equals(a.getAuthority())))
+            throw new com.lore.common.exception.BusinessException(com.lore.common.exception.ErrorCode.ADMIN_ONLY);
+    }
+
     /** 이보다 짧으면 끈다. */
     static final int MIN_LENGTH = 32;
 
