@@ -59,7 +59,7 @@ import java.util.List;
 @ConditionalOnProperty(name = "app.zzal.admin.enabled", havingValue = "true")
 public class AdminFailureController {
 
-    /** 러너가 이보다 오래 안 보이면 멈춘 것으로 본다(맥미니 주기 10분). */
+    /** 러너가 이보다 오래 안 보이면 멈춘 것으로 본다(맥미니 주기 2분 — 여러 번 거른 뒤에야 꺼짐으로 본다). */
     static final Duration RUNNER_STALE = Duration.ofMinutes(10);
 
     private final AdminGuard adminGuard;
