@@ -10,10 +10,17 @@ import org.springframework.stereotype.Service;
 import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Shape;
+import java.awt.font.GlyphVector;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Path2D;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.awt.image.ConvolveOp;
+import java.awt.image.Kernel;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,45 +51,40 @@ import java.util.Map;
  *
  * 예전에는 그림 아래에 「LORE / 루와 함께 만든 웹툰 / 작품 · 1화」 띠를 덧대고
  * 장마다 반투명 「LORE」를 따로 찍었다. 글자가 네 군데에 흩어져 싸구려처럼
- * 보인다는 평(2026-10-01)으로 띠를 없애고, 웹툰 사이트들이 찍는 것처럼
- * 장마다 오른쪽 아래에 루 + 글 두 줄짜리 작은 도장 하나만 찍는다. 장마다
- * 찍는 이유는 한 장만 잘라 퍼뜨려도 딸려 가야 해서다.
+ * 보인다는 평(2026-10-01)으로 띠를 없애고 장마다 오른쪽 아래에 루 + 글 두 줄
+ * 도장을 찍었다. 그 도장도 그림이 튀고 못생겼다는 사용자 피드백(2026-10-28)으로
+ * 지금은 옅은 「LORE」 네 글자만 찍는다. 장마다 찍는 이유는 한 장만 잘라
+ * 퍼뜨려도 딸려 가야 해서다.
  *
- * <h2>그림과 글꼴은 jar 에 실린 것을 쓴다</h2>
+ * <h2>글꼴은 jar 에 실린 것을 쓴다</h2>
  *
- * 배포 서버에는 저장소 폴더도 한글 글꼴도 없다. 작업 폴더 상대경로로 루를
- * 찾거나 시스템 글꼴에 기대면 서버에서는 루 없이 네모 글자만 나간다(실제로
- * 그랬다).
- * 그래서 루는 하네스 리소스({@code webtoon/ai/assets/lou}, build.gradle 의
- * {@code processResources} 가 담는다)에서, 글꼴은 {@code webtoon/fonts/}(OFL 의
- * Jua)에서 읽는다. 둘 다 못 읽어도 내려받기는 돼야 한다 — 그림 하나 때문에
- * 막히면 안 된다.
+ * 배포 서버에는 저장소 폴더도 글꼴도 없다. 시스템 글꼴에 기대면 서버에서는
+ * 기본 글꼴로 떨어진다. 그래서 글꼴은 {@code webtoon/fonts/}(OFL 의 SUIT)에서
+ * 읽는다. 못 읽어도 내려받기는 돼야 한다 — 글꼴 하나 때문에 막히면 안 된다.
  */
 @Service
 public class EpisodeExport {
 
     private static final Logger log = LoggerFactory.getLogger(EpisodeExport.class);
 
-    /* ---- 브랜드 — web/style.css 의 --sea-* 와 같은 값이다 ------------------ */
-    private static final Color SEA_DEEP = new Color(63, 111, 102);
-    private static final String WORDMARK = "LORECOMIC";
-    /**
-     * 워드마크 위 한 줄. 비우면 루와 LORECOMIC 만 찍힌다 — 2026-10-01 시안에서
-     * 이 둘(c: 문구 있음 / g: 문구 없음) 중 c 로 정했고, g 는 여기를 비우면 된다.
-     */
-    private static final String TAGLINE = "내 캐릭터로 만드는 웹툰";
+    /* ---- 도장 — 2026-10-28 시안 C(오른쪽 아래 · 옅게)로 정했다 -------------- */
+    private static final String WORDMARK = "LORE";
 
-    /* 도장 크기는 장 폭에 비례한다 — 800px 짜리와 2000px 짜리에 같은 픽셀을
+    /* 글자 크기·여백은 장 폭에 비례한다 — 800px 짜리와 2000px 짜리에 같은 픽셀을
        쓰면 한쪽은 안 보이고 한쪽은 뒤덮는다. */
-    private static final double STAMP_RATIO = 0.17;
-    private static final int STAMP_MIN = 90, STAMP_MAX = 420;
-    /** 0~1. 그림을 읽는 데 방해가 안 될 만큼만. */
-    private static final float STAMP_ALPHA = 0.82f;
+    private static final double MARK_RATIO = 0.036;
+    private static final int MARK_MIN = 12;
+    private static final double MARK_PAD = 0.03;
+    /** 글자 사이 간격(글자 크기의 몇 배). */
+    private static final float MARK_TRACKING = 0.18f;
+    /** 0~1. 그림을 읽는 데 방해가 안 될 만큼만 — 흰 글자는 옅게, 그림자는 더 옅게. */
+    private static final float MARK_ALPHA = 0.55f;
+    private static final float SHADOW_ALPHA = 0.25f;
+    /** 그림자 번짐(글자 크기의 몇 배). 밝은 장에서도 글자 테두리가 보이게 하는 몫이다. */
+    private static final float SHADOW_BLUR = 0.12f;
 
-    /** 도장에 앉는 루(하트 든 것). jar 리소스 경로 — 저장소에서 바로 돌릴 때는 같은 상대경로가 파일로 있다. */
-    private static final String LOU = "webtoon/ai/assets/lou/logo-1-happy.png";
-    /** 한글 글꼴. jar 리소스. */
-    private static final String FONT = "webtoon/fonts/Jua-Regular.ttf";
+    /** 도장 글꼴. jar 리소스. */
+    private static final String FONT = "webtoon/fonts/SUIT-Bold.ttf";
 
     /**
      * jar 에 글꼴이 없을 때 볼 시스템 글꼴 후보. 하네스({@code webtoon-harness/strip.py})가
@@ -105,8 +107,6 @@ public class EpisodeExport {
         this.overlays = overlays;
     }
     private Font base;
-    private BufferedImage lou;
-    private boolean louTried;
 
     public EpisodeExport(PageStore pages, BakeService bakery, S3Storage storage) {
         this.pages = pages;
@@ -313,111 +313,67 @@ public class EpisodeExport {
     }
 
     /**
-     * 도장 하나 — 위에 루, 아래에 글 두 줄(소개 · LORECOMIC)을 가운데 맞춰 세로로
-     * 쌓고, 장의 오른쪽 아래 구석에 반투명으로 얹는다. 글자는 흰 속에 짙은
-     * 테두리라 어두운 장에서도 흰 장에서도 읽힌다.
+     * 도장 하나 — 「LORE」 네 글자를 장의 오른쪽 아래 구석에 옅게 얹는다.
+     * 흰 글자 밑에 번진 그림자를 깔아, 흰 장에서도 어두운 장에서도 글자
+     * 테두리가 보이게 한다. 짙은 테두리를 긋던 예전 도장은 그림 위에서 튀었다.
      *
-     * 크기는 장 폭에 비례한다(폭의 17%). 800px 짜리와 2000px 짜리에 같은 픽셀을
-     * 쓰면 한쪽은 안 보이고 한쪽은 뒤덮는다.
+     * 크기는 장 폭에 비례한다(글자 높이가 폭의 3.6%).
      */
     private void stamp(Graphics2D g, int x0, int y0, int bw, int bh) {
-        int s = clamp(bw * STAMP_RATIO, STAMP_MIN, STAMP_MAX);
-        int pad = Math.max(8, (int) (bw * 0.015));
-
-        BufferedImage lou = lou();
-        int louH = lou == null ? 0 : (int) (s * 0.42);
-        int louW = lou == null ? 0 : Math.max(1, louH * lou.getWidth() / Math.max(1, lou.getHeight()));
-
-        Font tagFont = font(Math.max(9, (int) (s * 0.16)));
-        Font markFont = font(Math.max(11, (int) (s * 0.24)));
-        FontMetrics tm = g.getFontMetrics(tagFont);
-        FontMetrics mm = g.getFontMetrics(markFont);
-        boolean tag = !TAGLINE.isBlank();
-        int tagH = tag ? (int) (tm.getAscent() * 1.15) : 0;
-        int markH = (int) (mm.getAscent() * 1.15);
-        int blockW = Math.max(louW, Math.max(tag ? tm.stringWidth(TAGLINE) : 0, mm.stringWidth(WORDMARK)));
-        int blockH = louH + (lou == null ? 0 : 2) + tagH + markH;
-
-        int cx = x0 + bw - pad - blockW / 2;      // 덩어리의 가운데 x
-        int top = y0 + bh - pad - blockH;
-
-        java.awt.Composite was = g.getComposite();
-        g.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, STAMP_ALPHA));
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
 
-        int y = top;
-        if (lou != null) {
-            g.drawImage(lou, cx - louW / 2, y, louW, louH, null);
-            y += louH + 2;
-        }
-        float stroke = Math.max(1.5f, s / 85f);
-        if (tag) {
-            outlinedText(g, TAGLINE, tagFont, cx, y + tm.getAscent(), stroke);
-            y += tagH;
-        }
-        outlinedText(g, WORDMARK, markFont, cx, y + mm.getAscent(), stroke);
-        g.setComposite(was);
+        Font font = font(Math.max(MARK_MIN, (int) Math.round(bw * MARK_RATIO)));
+        Shape word = tracked(g, WORDMARK, font, font.getSize2D() * MARK_TRACKING);
+        Rectangle2D b = word.getBounds2D();
+        int pad = Math.max(6, (int) Math.round(bw * MARK_PAD));
+        Shape placed = AffineTransform
+                .getTranslateInstance(x0 + bw - pad - b.getMaxX(), y0 + bh - pad - b.getMaxY())
+                .createTransformedShape(word);
+
+        float sigma = Math.max(1.5f, font.getSize2D() * SHADOW_BLUR);
+        Rectangle r = placed.getBounds();
+        r.grow((int) Math.ceil(sigma * 3) + 2, (int) Math.ceil(sigma * 3) + 2);
+        BufferedImage shadow = new BufferedImage(r.width, r.height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D sg = shadow.createGraphics();
+        sg.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        sg.translate(-r.x, -r.y);
+        sg.setColor(new Color(0, 0, 0, Math.round(255 * SHADOW_ALPHA)));
+        sg.fill(placed);
+        sg.dispose();
+        g.drawImage(blur(shadow, sigma), r.x, r.y, null);
+
+        g.setColor(new Color(255, 255, 255, Math.round(255 * MARK_ALPHA)));
+        g.fill(placed);
     }
 
-    /** 가운데(cx) 맞춘 글자 — 짙은 테두리를 먼저 긋고 흰 속을 채운다. */
-    private static void outlinedText(Graphics2D g, String text, Font font, int cx, int baseline, float stroke) {
-        java.awt.font.GlyphVector gv = font.createGlyphVector(g.getFontRenderContext(), text);
-        java.awt.Shape shape = gv.getOutline();
-        double w = shape.getBounds2D().getWidth();
-        java.awt.geom.AffineTransform at = java.awt.geom.AffineTransform.getTranslateInstance(cx - w / 2, baseline);
-        shape = at.createTransformedShape(shape);
-        g.setStroke(new java.awt.BasicStroke(stroke * 2, java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
-        g.setColor(SEA_DEEP);
-        g.draw(shape);
-        g.setColor(Color.WHITE);
-        g.fill(shape);
+    /** 글자 사이를 {@code track} 만큼 벌린 글자 모양. 기준선이 y=0 이다. */
+    private static Shape tracked(Graphics2D g, String text, Font font, float track) {
+        Path2D out = new Path2D.Float();
+        double x = 0;
+        for (int i = 0; i < text.length(); i++) {
+            GlyphVector gv = font.createGlyphVector(g.getFontRenderContext(), text.substring(i, i + 1));
+            out.append(AffineTransform.getTranslateInstance(x, 0).createTransformedShape(gv.getOutline()), false);
+            x += gv.getLogicalBounds().getWidth() + track;
+        }
+        return out;
     }
 
-    /**
-     * 도장에 앉힐 루. 한 번만 읽어 둔다. 못 읽으면 {@code null} — 글자만 나간다.
-     *
-     * 원본은 투명 여백이 있어 그대로 앉히면 작게 보인다 — 투명하지 않은 부분만
-     * 잘라 둔다.
-     */
-    private synchronized BufferedImage lou() {
-        if (louTried) {
-            return lou;
+    /** 가우스 번짐 — 가로·세로로 한 번씩. 가장자리는 비워 두고 부르므로 그대로 둔다. */
+    static BufferedImage blur(BufferedImage src, float sigma) {
+        int r = (int) Math.ceil(sigma * 3);
+        float[] k = new float[r * 2 + 1];
+        float sum = 0;
+        for (int i = -r; i <= r; i++) {
+            k[i + r] = (float) Math.exp(-(i * i) / (2.0 * sigma * sigma));
+            sum += k[i + r];
         }
-        louTried = true;
-        try (InputStream in = open(LOU)) {
-            BufferedImage raw = in == null ? null : ImageIO.read(in);
-            lou = raw == null ? null : trimTransparent(raw);
-        } catch (IOException | RuntimeException e) {
-            log.debug("도장에 앉힐 루를 못 읽었습니다", e);
+        for (int i = 0; i < k.length; i++) {
+            k[i] /= sum;
         }
-        if (lou == null) {
-            log.warn("도장에 앉힐 루 그림을 못 찾았습니다 ({}) — 글자만 찍습니다", LOU);
-        }
-        return lou;
-    }
-
-    /** 투명(알파 0)인 테두리를 잘라 낸다. 전부 투명하면 그대로 돌려준다. */
-    static BufferedImage trimTransparent(BufferedImage img) {
-        if (!img.getColorModel().hasAlpha()) {
-            return img;
-        }
-        int w = img.getWidth(), h = img.getHeight();
-        int x0 = w, y0 = h, x1 = -1, y1 = -1;
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                if (((img.getRGB(x, y) >>> 24) & 0xFF) > 8) {
-                    x0 = Math.min(x0, x); x1 = Math.max(x1, x);
-                    y0 = Math.min(y0, y); y1 = Math.max(y1, y);
-                }
-            }
-        }
-        if (x1 < x0 || y1 < y0) {
-            return img;
-        }
-        return img.getSubimage(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        BufferedImage h = new ConvolveOp(new Kernel(k.length, 1, k), ConvolveOp.EDGE_NO_OP, null).filter(src, null);
+        return new ConvolveOp(new Kernel(1, k.length, k), ConvolveOp.EDGE_NO_OP, null).filter(h, null);
     }
 
     /**
@@ -441,7 +397,7 @@ public class EpisodeExport {
     /* ---- 글꼴 ------------------------------------------------------------- */
 
     /**
-     * 한글 글꼴. jar 의 Jua 를 먼저 보고, 없으면 시스템 글꼴, 그것도 없으면
+     * 도장 글꼴. jar 의 SUIT 를 먼저 보고, 없으면 시스템 글꼴, 그것도 없으면
      * 기본 글꼴로 떨어진다 — 표시가 예뻐지지 않을 뿐이고, <b>글꼴 하나 때문에
      * 내려받기가 막히면 안 된다.</b>
      */
@@ -470,13 +426,10 @@ public class EpisodeExport {
             }
         }
         if (base == null) {
-            log.warn("한글 글꼴을 못 찾았습니다 — 도장을 기본 글꼴로 찍습니다");
+            log.warn("도장 글꼴을 못 찾았습니다 — 기본 글꼴로 찍습니다");
             base = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
         }
         return base.deriveFont(Font.PLAIN, (float) size);
     }
 
-    private static int clamp(double value, int lo, int hi) {
-        return Math.max(lo, Math.min(hi, (int) Math.round(value)));
-    }
 }
