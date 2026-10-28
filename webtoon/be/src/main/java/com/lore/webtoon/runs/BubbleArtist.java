@@ -3,6 +3,7 @@ package com.lore.webtoon.runs;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.awt.BasicStroke;
@@ -18,6 +19,8 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -50,7 +53,17 @@ public class BubbleArtist {
     private static final List<String> TAILED =
             List.of("normal", "shout", "whisper", "thought");
 
-    /** 하네스가 찾는 곳과 같은 목록 — 다른 글꼴로 그리면 화면과 어긋난다. */
+    /**
+     * 한글 글꼴. jar 리소스 — 내려받기 도장({@link EpisodeExport})이 쓰는 것과 같은 Jua(OFL).
+     *
+     * 배포 서버(도커 이미지)에는 한글 시스템 글꼴이 하나도 없다. 그래서 아래 시스템 목록만
+     * 보던 때는 서버에서 기본 글꼴로 떨어져 내려받은 그림의 말풍선 글이 전부 네모(□)로
+     * 나갔다(2026-10-28 사용자 제보). 노트북은 시스템 글꼴이 있어서 이 문제가 안 보였다.
+     * jar 에 실린 글꼴을 먼저 보면 어느 환경에서 구워도 같은 글꼴로 나온다.
+     */
+    private static final String FONT = "webtoon/fonts/Jua-Regular.ttf";
+
+    /** jar 글꼴을 못 읽을 때만 볼 시스템 글꼴 후보. 하네스(strip.py)가 찾는 곳과 같은 목록이다. */
     private static final String[] FONTS = {
             "C:\\Windows\\Fonts\\malgun.ttf",
             "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
@@ -436,8 +449,38 @@ public class BubbleArtist {
 
     /* ---- 글꼴 ------------------------------------------------------------- */
 
-    /** 한글 글꼴. 못 찾으면 시스템 기본으로 — 글꼴 하나 때문에 굽기가 막히면 안 된다. */
-    private Font font(int size, boolean bold) {
+    /**
+     * jar 리소스를 연다. 저장소에서 바로 돌릴 때(검사·bootRun)는 같은 상대경로가 파일로
+     * 있으니 위로 올라가며 찾는다 — {@link EpisodeExport} 와 같은 방식이다.
+     */
+    private static InputStream open(String path) throws IOException {
+        ClassPathResource res = new ClassPathResource(path);
+        if (res.exists()) {
+            return res.getInputStream();
+        }
+        for (Path up = Path.of("").toAbsolutePath(); up != null; up = up.getParent()) {
+            Path cand = up.resolve(path);
+            if (Files.isRegularFile(cand)) {
+                return Files.newInputStream(cand);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 한글 글꼴. jar 의 Jua 를 먼저 보고, 없으면 시스템 글꼴, 그것도 없으면 기본 글꼴로
+     * 떨어진다 — <b>글꼴 하나 때문에 굽기가 막히면 안 된다.</b>
+     */
+    synchronized Font font(int size, boolean bold) {
+        if (base == null) {
+            try (InputStream in = open(FONT)) {
+                if (in != null) {
+                    base = Font.createFont(Font.TRUETYPE_FONT, in);
+                }
+            } catch (Exception e) {     // noqa: 시스템 글꼴을 본다
+                log.debug("글꼴을 못 읽었습니다 ({})", FONT, e);
+            }
+        }
         if (base == null) {
             for (String cand : FONTS) {
                 Path p = Path.of(cand);
@@ -451,10 +494,10 @@ public class BubbleArtist {
                     log.debug("글꼴을 못 읽었습니다 ({})", cand, e);
                 }
             }
-            if (base == null) {
-                log.warn("한글 글꼴을 못 찾았습니다 — 기본 글꼴로 그립니다");
-                base = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
-            }
+        }
+        if (base == null) {
+            log.warn("한글 글꼴을 못 찾았습니다 — 기본 글꼴로 그립니다");
+            base = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
         }
         return base.deriveFont(bold ? Font.BOLD : Font.PLAIN, (float) size);
     }
