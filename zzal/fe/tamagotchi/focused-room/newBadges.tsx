@@ -22,13 +22,16 @@ export function newBadgeLabel(locale:ZzalLocale,count:number){
  return locale==='en'?`${count} new`:locale==='ja'?`新着${count}件`:`새 항목 ${count}개`;
 }
 
-/** 8px 빨간 원. 단추 안 오른쪽 위에 붙는다 — 단추는 data-fr-new 로 기준 상자가 된다. */
-export function NewDot({count,locale}:{count:number;locale:ZzalLocale}){
- if(count<=0)return null;
- return <span className="fr-new-dot" data-fr-new-dot role="img" aria-label={newBadgeLabel(locale,count)}/>;
-}
+/**
+ * 점 자리 세 가지(2026-10-28 상훈님 확정 — 목업 27-B·28-D).
+ * - tile: 방 타일(앨범 칸 등) 오른쪽 위 모서리에 걸친 큰 점(27-B).
+ * - menu: 우상단 메뉴 단추 모서리에 걸친 큰 점(28-D). 단추 쪽은 FocusedRoom 이 같은 클래스로 직접 그린다.
+ * - item: 메뉴·목록 항목 안 오른쪽 끝, 세로 가운데의 작은 점(28-D).
+ * ★ 점만 그린다. 새것이 왔다는 문구(시스템 알림·캐릭터 대사)는 붙이지 않는다 — 출석은 "조용한 수령".
+ */
+export type NewDotPlace='tile'|'menu'|'item';
 
-/** 선물이 도착한 순간 아이가 하는 한마디. 생성 호출 없는 고정 문구다(과금 0). */
-export function giftArrivedLine(locale:ZzalLocale){
- return locale==='en'?'A gift has arrived. Could you check it in Attendance?':locale==='ja'?'贈り物が届いたよ。出席で見てくれる？':'선물이 도착했어. 출석에서 봐 줄래?';
+export function NewDot({count,locale,place}:{count:number;locale:ZzalLocale;place:NewDotPlace}){
+ if(count<=0)return null;
+ return <span className={`fr-new-dot fr-new-dot--${place}`} data-fr-new-dot data-fr-new-place={place} role="img" aria-label={newBadgeLabel(locale,count)}/>;
 }
