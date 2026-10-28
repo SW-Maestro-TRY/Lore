@@ -923,4 +923,32 @@ class AdminFailuresIT extends ZzalItSupport {
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
         assertThat(jdbc.queryForObject("select phase from zzal_pet where id = ?", String.class, busy)).isEqualTo("HATCHING");
     }
+
+    // ── 수정 2: 재시도 대상 = 반영할 수 있는 잡 상태 ─────────────────────────────
+
+    @Test
+    @DisplayName("맞춤 — 다 만들었지만 미게시(GENERATED)는 목록에 보이되 재시도 거부(게시만 다시 필요), 다른 FAILED 도 거부")
+    void customRetry_onlyApplicableJobStates() {
+        setUpPet();
+        ZzalPet a = alive();
+        visits(a.getId(), 3, ago(120));
+        slot(a.getId(), "motion-1", 3);
+        Long generated = customJob(a.getId(), "bundle-1", "GENERATED", null, "tok", "m-hash", "{}");
+        ZzalPet b = alive();
+        visits(b.getId(), 3, ago(120));
+        slot(b.getId(), "motion-1", 3);
+        Long otherFail = customJob(b.getId(), "bundle-1", "FAILED", "CUSTOM_POSTPROCESS_CRASH", "tok", null, "{}");
+
+        FailureRow g = customRows().stream().filter(r -> r.id() == generated).findFirst().orElseThrow();
+        assertThat(g.reasonCode()).isEqualTo("NOT_PUBLISHED");
+        assertThat(g.revivable()).isFalse();
+        assertThat(g.blockedReason()).isEqualTo("게시만 다시 필요");
+        FailureRow f = customRows().stream().filter(r -> r.id() == otherFail).findFirst().orElseThrow();
+        assertThat(f.revivable()).isFalse();
+        for (Long job : List.of(generated, otherFail)) {
+            assertThatThrownBy(() -> retryService.request(admin, "CUSTOM", job, null, now))
+                    .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
+        }
+        assertThat(retries.count()).isZero();
+    }
 }

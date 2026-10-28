@@ -252,9 +252,31 @@ public class AdminFailureQuery {
             rows.add(new FailureRow("CUSTOM", hasJob ? r.jobId() : 0L, r.petId(), blankToNull(r.name()), r.userId(),
                     r.firstDueAt(), code, r.state(), AdminFailureResponses.reasonText(code),
                     h.size() + 1, null, autoCli(h), request(h), openId(h),
-                    hasJob, hasJob ? null : NO_JOB_BLOCKED));
+                    applicable(r.state(), r.error()), blocked(r)));
         }
         return rows;
+    }
+
+    /**
+     * 러너 결과를 반영할 수 있는 잡 상태 — 반영(AdminCustomRetryApplier)이 받는 것과 같은 조건(수정 2).
+     * CLAIMED · PENDING · FAILED(ASSET_CHECK_FAILED). 그 밖은 목록에 보이되 재시도를 받지 않는다.
+     */
+    public static boolean applicable(String state, String error) {
+        return "CLAIMED".equals(state) || "PENDING".equals(state)
+                || ("FAILED".equals(state) && "ASSET_CHECK_FAILED".equals(error));
+    }
+
+    private static String blocked(CustomRaw r) {
+        if (r.jobId() == null) {
+            return NO_JOB_BLOCKED;
+        }
+        if (applicable(r.state(), r.error())) {
+            return null;
+        }
+        if ("GENERATED".equals(r.state())) {
+            return "게시만 다시 필요";
+        }
+        return "반영할 수 없는 잡 상태(%s/%s)".formatted(r.state(), r.error());
     }
 
     /** 게시까지 끝난 세트 — 사용자가 다음에 오면 grantReady 가 준다. */

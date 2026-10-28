@@ -338,4 +338,17 @@ class AdminCustomRetryIT extends ZzalItSupport {
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
         assertThat(new String(other.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8)).isNotEqualTo(PLAN);
     }
+
+    @Test
+    @DisplayName("러너 결과 — 그 사이 잡이 반영할 수 없는 상태가 됐으면 400, 행은 그대로")
+    void customCandidates_rejectsInapplicableJobState() throws Exception {
+        setUpAdmin();
+        long[] o = orphan("CLAIMED", null, PLAN);
+        long id = claimed(o[1]);
+        jdbc.update("update zzal_custom_bundle_job set state = 'GENERATED', manifest_hash = 'x' where id = ?", o[1]);
+        assertThatThrownBy(() -> applier.customCandidates(admin, id,
+                new RetryCandidatesRequest(null, null, null, files(o[1], PLAN, null, false), null), now))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
+        assertThat(retries.findById(id).orElseThrow().getResult()).isNull();
+    }
 }

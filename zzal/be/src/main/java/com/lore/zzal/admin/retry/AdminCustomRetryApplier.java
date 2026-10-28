@@ -125,6 +125,10 @@ public class AdminCustomRetryApplier {
         }
         validatePaths(files);
         Job job = job(r.getTargetId());
+        if (!AdminFailureQuery.applicable(job.state(), job.error())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "반영할 수 없는 잡 상태입니다(%s/%s)".formatted(job.state(), job.error()));
+        }
 
         // 업로드 키는 이 호출자가 발급받은 안 쓴 키만.
         tx.executeWithoutResult(s -> files.values().forEach(k -> s3Service.consume(callerId, k, now)));
@@ -264,8 +268,7 @@ public class AdminCustomRetryApplier {
                 """, job.id());
         String state = (String) current.get("state");
         String error = (String) current.get("error_code");
-        boolean allowed = "CLAIMED".equals(state) || "PENDING".equals(state)
-                || ("FAILED".equals(state) && "ASSET_CHECK_FAILED".equals(error));
+        boolean allowed = AdminFailureQuery.applicable(state, error);
         if (!allowed) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "반영할 수 없는 잡 상태입니다(%s/%s)".formatted(state, error));
