@@ -177,8 +177,10 @@
 @media (pointer: coarse) { .wt .wt-ed .item-bar .ib { min-width: 38px; height: 38px; font-size: 15px; } }
 
 /* white-space: pre-wrap — 사람이 친 줄바꿈과 연속 공백을 그대로 보인다. 없으면 저장은 되는데
-   화면에서만 한 칸으로 뭉쳐 보였다(2026-10-28 제보). 굽는 쪽(BubbleArtist.wrap)도 같이 지킨다. */
-.wt .wt-ed .bub { position: relative; z-index: 1; color: #111; text-align: center; padding: 0.55em 0.85em; font-weight: 600; box-sizing: border-box; word-break: keep-all; white-space: pre-wrap; width: fit-content; max-width: 100%; }
+   화면에서만 한 칸으로 뭉쳐 보였다(2026-10-28 제보). 굽는 쪽(BubbleArtist.wrap)도 같이 지킨다.
+   overflow-wrap: break-word — 한 어절이 한 줄보다 길면 글자로 자른다. 없으면 「끄아아아악」 같은
+   긴 어절이 풍선 밖으로 삐져나갔다. 굽는 쪽도 같은 자리에서 자른다. */
+.wt .wt-ed .bub { position: relative; z-index: 1; color: #111; text-align: center; padding: 0.55em 0.85em; font-weight: 600; box-sizing: border-box; word-break: keep-all; overflow-wrap: break-word; white-space: pre-wrap; width: fit-content; max-width: 100%; }
 .wt .wt-ed .bub-svg { position: absolute; pointer-events: none; overflow: visible; z-index: 0; }
 .wt .wt-ed .bub-svg .bs > * { fill: #fff; stroke: #111; stroke-width: 5; }
 .wt .wt-ed .bub-svg .bs-shout > * { stroke-width: 6; }

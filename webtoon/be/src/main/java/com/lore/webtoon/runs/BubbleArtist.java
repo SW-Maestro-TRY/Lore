@@ -9,10 +9,13 @@ import org.springframework.stereotype.Service;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
-import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.Shape;
+import java.awt.font.FontRenderContext;
+import java.awt.font.LineMetrics;
+import java.awt.font.TextAttribute;
+import java.awt.font.TextLayout;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Area;
 import java.awt.geom.Ellipse2D;
@@ -23,8 +26,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.AttributedString;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.ToDoubleFunction;
 
 /**
  * 편집실에서 얹은 것을 <b>그림에 실제로 그린다</b> — 말풍선 · 스티커 · 효과음.
@@ -54,23 +61,34 @@ public class BubbleArtist {
             List.of("normal", "shout", "whisper", "thought");
 
     /**
-     * 한글 글꼴. jar 리소스 — 내려받기 도장({@link EpisodeExport})이 쓰는 것과 같은 Jua(OFL).
+     * 말풍선 글꼴 — 편집실 화면과 <b>같은 파일</b>인 LINE Seed KR 의 굵은 꼴(OFL, jar 리소스).
      *
-     * 배포 서버(도커 이미지)에는 한글 시스템 글꼴이 하나도 없다. 그래서 아래 시스템 목록만
-     * 보던 때는 서버에서 기본 글꼴로 떨어져 내려받은 그림의 말풍선 글이 전부 네모(□)로
-     * 나갔다(2026-10-28 사용자 제보). 노트북은 시스템 글꼴이 있어서 이 문제가 안 보였다.
-     * jar 에 실린 글꼴을 먼저 보면 어느 환경에서 구워도 같은 글꼴로 나온다.
+     * 편집실은 말풍선 글을 이 글꼴의 굵은 꼴로 보여 준다(Editor.css 의 .bub 굵기 600 을
+     * final-theme.css 가 Bold 파일로 잇는다). 예전에는 Jua 로 구워서 화면과 내려받은 그림의
+     * 글자 모양이 달랐고, 글자 폭이 다르니 줄이 바뀌는 자리도 달랐다(2026-10-28). 같은
+     * 파일로 그려야 폭과 줄바꿈까지 같다.
+     *
+     * 배포 서버(도커 이미지)에는 한글 시스템 글꼴이 하나도 없다. jar 에 실은 글꼴을 먼저
+     * 보므로 어느 환경에서 구워도 같은 글꼴로 나온다.
      */
-    private static final String FONT = "webtoon/fonts/Jua-Regular.ttf";
+    private static final String FONT = "webtoon/fonts/LINESeedKR-Bold.ttf";
 
-    /** jar 글꼴을 못 읽을 때만 볼 시스템 글꼴 후보. 하네스(strip.py)가 찾는 곳과 같은 목록이다. */
-    private static final String[] FONTS = {
+    /** jar 글꼴에 없는 글자를 넘겨받을 시스템 글꼴. 하네스(strip.py)가 찾는 곳과 같은 목록이다. */
+    private static final String[] SYSTEM_FONTS = {
             "C:\\Windows\\Fonts\\malgun.ttf",
             "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
             "/System/Library/Fonts/AppleSDGothicNeo.ttc",
     };
 
-    private Font base;
+    /**
+     * 글자를 재고 그리는 기준 — 화면(크롬)처럼 글자 폭을 반올림하지 않는다. 반올림하면 글자마다
+     * 폭이 조금씩 붙어서 한 줄 길이가 화면과 몇 %씩 달라지고, 줄이 바뀌는 자리가 어긋난다.
+     */
+    private static final FontRenderContext FRC = new FontRenderContext(null,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+
+    /** 읽은 글꼴(크기 1). 못 읽은 것도 null 로 남겨 매번 다시 열지 않는다. */
+    private final Map<String, Font> loaded = new HashMap<>();
 
     /**
      * 한 장에 얹은 것을 다 그린다. -> 그려진 새 그림 (원본은 안 건드린다)
@@ -108,8 +126,10 @@ public class BubbleArtist {
 
     private void one(Graphics2D g, int pageW, int pageH, JsonNode item, double scale) {
         String type = item.path("type").asText("");
-        int size = (int) Math.max(7, item.path("size").asDouble(15) * scale);
-        int boxW = (int) Math.max(8, pageW * item.path("w").asDouble(40) / 100.0);
+        /* 글자 크기와 폭은 소수점까지 그대로 쓴다. 정수로 자르면 글자가 화면보다 작아져서
+           (15px 를 1.42배 하면 21.3px 인데 21px 로 그렸다) 줄바꿈이 어긋났다. */
+        double size = Math.max(7, item.path("size").asDouble(15) * scale);
+        double boxW = Math.max(8, pageW * item.path("w").asDouble(40) / 100.0);
 
         Tile tile = switch (type) {
             case "bubble" -> bubble(item, boxW, scale, size);
@@ -143,18 +163,21 @@ public class BubbleArtist {
 
     /* ---- 말풍선 ----------------------------------------------------------- */
 
-    private Tile bubble(JsonNode item, int boxW, double scale, int fs) {
+    private Tile bubble(JsonNode item, double boxW, double scale, double fs) {
         String variant = item.path("variant").asText("normal");
         boolean round = !"narration".equals(variant);
-        Font font = font(fs, "shout".equals(variant));
-        int padX = (int) (fs * 0.85), padY = (int) (fs * 0.55);
+        boolean shout = "shout".equals(variant);
+        List<Font> faces = sized(faces(), fs);
+        /* 안쪽 여백 — 화면(Editor.css 의 .bub 0.55em 0.85em, .bub-shout 1.1em 1.2em)과 같다.
+           예전에는 외침도 보통 말풍선 여백으로 재서, 외침의 글 폭이 화면보다 넓게 잡혔다. */
+        double padX = fs * (shout ? 1.2 : 0.85), padY = fs * (shout ? 1.1 : 0.55);
         int stroke = (int) Math.max(2, 2.5 * scale);
         // 외침은 뾰족한 만큼 안쪽이 좁다(안쪽 반지름이 바깥의 0.8).
-        double spread = round ? Math.sqrt(2) / ("shout".equals(variant) ? 0.8 : 1.0) : 1.0;
+        double spread = round ? Math.sqrt(2) / (shout ? 0.8 : 1.0) : 1.0;
 
         /* 나레이션은 가장 낮은 높이를 두지 않는다(target 무한대) — 길게 늘여 쓰는 띠라서
            폭을 따라 높이까지 커지면 빈칸만 많은 상자가 된다. 화면(editorCore.paintShape)과 같다. */
-        Fit fit = fit(item.path("text").asText(""), font, boxW, padX, padY, spread,
+        Fit fit = fit(item.path("text").asText(""), faces, boxW, padX, padY, spread,
                 "narration".equals(variant) ? Double.POSITIVE_INFINITY : 2.4);
 
         boolean tailed = TAILED.contains(variant) && !"none".equals(item.path("tail").asText());
@@ -169,14 +192,11 @@ public class BubbleArtist {
         double y1 = tailed ? Math.max(fit.h, tipY) + m : fit.h + m;
 
         int offX = (int) -x0, offY = (int) -y0;
-        int tw = (int) (x1 - x0), th = (int) (y1 - y0);
+        int tw = (int) Math.ceil(x1 - x0), th = (int) Math.ceil(y1 - y0);
         BufferedImage tile = new BufferedImage(Math.max(1, tw), Math.max(1, th),
                 BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = tile.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
-                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        hints(g);
 
         double cx = offX + fit.w / 2.0, cy = offY + fit.h / 2.0;
         double a = fit.w / 2.0, b = fit.h / 2.0;
@@ -202,17 +222,21 @@ public class BubbleArtist {
         g.draw(shape);
 
         // 글 — 나레이션만 왼쪽 정렬이다 (화면 CSS 의 text-align: left).
-        g.setFont(font);
         g.setColor(INK);
-        FontMetrics fm = g.getFontMetrics();
-        int lh = Math.max(1, (int) (fs * 1.35));
-        double top = offY + (fit.h - lh * fit.lines.size()) / 2.0 + fm.getAscent();
+        double lh = fs * 1.35;
+        double base = baseline(faces.get(0), lh);
+        double top = offY + (fit.h - lh * fit.lines.size()) / 2.0;
         for (int i = 0; i < fit.lines.size(); i++) {
             String line = fit.lines.get(i);
+            if (line.isEmpty()) {
+                continue;
+            }
+            TextLayout tl = layout(line, faces);
+            // 가운데 맞춤은 줄 끝 공백을 빼고 잰다 — 화면도 줄 끝에 걸친 공백은 셈에 넣지 않는다.
             double x = "narration".equals(variant)
                     ? offX + padX
-                    : offX + (fit.w - fm.stringWidth(line)) / 2.0;
-            g.drawString(line, (float) x, (float) (top + i * lh));
+                    : offX + (fit.w - tl.getVisibleAdvance()) / 2.0;
+            tl.draw(g, (float) x, (float) (top + i * lh + base));
         }
         g.dispose();
         return new Tile(tile, offX, offY);
@@ -266,7 +290,7 @@ public class BubbleArtist {
 
     /** 속마음 — 세모가 아니라 점점 작아지는 동그라미 둘. 가장자리에서 출발한다. */
     private static Shape thoughtDots(double cx, double cy, double a, double b,
-                                     double tipX, double tipY, int fs) {
+                                     double tipX, double tipY, double fs) {
         double t = Math.atan2((tipY - cy) / Math.max(1e-6, b), (tipX - cx) / Math.max(1e-6, a));
         double ex = cx + a * Math.cos(t), ey = cy + b * Math.sin(t);
         double dx = tipX - ex, dy = tipY - ey;
@@ -281,7 +305,7 @@ public class BubbleArtist {
 
     /* ---- 글 넣기 ---------------------------------------------------------- */
 
-    private record Fit(int w, int h, List<String> lines) {
+    private record Fit(double w, double h, List<String> lines) {
     }
 
     /**
@@ -295,31 +319,32 @@ public class BubbleArtist {
      * 글은 그 폭 안에서 줄바꿈될 뿐이고, 높이만 글에 맞춰 늘어난다. 다만 글이
      * 짧다고 납작한 국수 가락이 되지는 않게 가장 낮은 높이를 둔다 —
      * 폭÷{@code target} 보다 낮아지지 않는다. 화면과 같은 규칙이다.
+     *
+     * 높이는 글 상자(줄들과 위아래 여백)를 {@code spread} 배 한 것이다. 화면은 여백까지 든
+     * 글 상자 높이에 배율을 곱한다. 예전에는 여백을 빼고 곱해서 여러 줄짜리 풍선이 화면보다
+     * 조금 납작했다.
      */
-    private Fit fit(String text, Font font, int boxW, int padX, int padY,
+    private Fit fit(String text, List<Font> faces, double boxW, double padX, double padY,
                     double spread, double target) {
-        BufferedImage probe = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = probe.createGraphics();
-        g.setFont(font);
-        FontMetrics fm = g.getFontMetrics();
-        int lh = Math.max(1, (int) (font.getSize() * 1.35));
-
-        int inner = Math.max(10, (int) (boxW / spread) - padX * 2);
-        List<String> lines = wrap(text, fm, inner);
-        int h = Math.max((int) (lh * lines.size() * spread) + padY * 2,
-                (int) (boxW / Math.max(0.1, target)));
-        g.dispose();
+        double lh = faces.get(0).getSize2D() * 1.35;
+        double inner = Math.max(10, boxW / spread - padX * 2);
+        List<String> lines = wrap(text, s -> width(s, faces), inner);
+        double h = Math.max((lh * lines.size() + padY * 2) * spread,
+                boxW / Math.max(0.1, target));
         return new Fit(boxW, h, lines);
     }
 
     /**
-     * 폭에 맞춰 줄을 나눈다. 한국어는 어절에서 끊고, 한 어절이 넘치면 글자로 자른다.
+     * 폭에 맞춰 줄을 나눈다 — 화면의 .bub(Editor.css: word-break: keep-all,
+     * white-space: pre-wrap, overflow-wrap: break-word)와 같은 규칙이다.
      *
-     * 사람이 친 띄어쓰기는 그대로 둔다 — 편집실 화면이 줄바꿈과 연속 공백을 그대로
-     * 보여 주므로(Editor.css 의 white-space: pre-wrap) 구운 그림도 같아야 한다.
-     * 예전에는 줄 맨 앞의 띄어쓰기가 빠졌다.
+     * 한국어도 어절(띄어쓰기)에서만 끊고, 한 어절이 한 줄보다 길 때만 글자로 자른다. 사람이
+     * 친 줄바꿈과 줄 맨 앞·어절 사이의 연속 공백은 그대로 둔다. 공백은 줄을 넘기지 않는다 —
+     * 화면은 줄 끝에 걸친 공백을 폭에 넣지 않는다.
+     *
+     * {@code width} 는 글 한 줄의 폭(px)이다. 그리는 글꼴로 재야 화면과 같은 자리에서 끊긴다.
      */
-    static List<String> wrap(String text, FontMetrics fm, int maxW) {
+    static List<String> wrap(String text, ToDoubleFunction<String> width, double maxW) {
         List<String> out = new ArrayList<>();
         for (String para : text.split("\n")) {
             if (para.isBlank()) {
@@ -333,25 +358,30 @@ public class BubbleArtist {
             for (String word : para.split(" ")) {
                 String trial = started ? line + " " + word : word;
                 started = true;
-                if (fm.stringWidth(trial) <= maxW || line.isEmpty()) {
-                    if (fm.stringWidth(trial) > maxW && line.isEmpty()) {
-                        // 한 어절이 폭을 넘으면 글자 단위로 쪼갠다.
-                        StringBuilder piece = new StringBuilder();
-                        for (char c : word.toCharArray()) {
-                            if (fm.stringWidth(piece.toString() + c) > maxW
-                                    && !piece.isEmpty()) {
-                                out.add(piece.toString());
-                                piece.setLength(0);
-                            }
-                            piece.append(c);
-                        }
-                        line = new StringBuilder(piece);
+                if (word.isEmpty() || width.applyAsDouble(trial) <= maxW) {
+                    line = new StringBuilder(trial);
+                    continue;
+                }
+                if (!line.toString().isBlank()) {
+                    // 이 어절부터 다음 줄로. 걸쳐 있던 공백은 앞 줄 끝에서 뗀다.
+                    out.add(line.toString().replaceAll(" +$", ""));
+                    trial = word;
+                    if (width.applyAsDouble(word) <= maxW) {
+                        line = new StringBuilder(word);
                         continue;
                     }
-                    line = new StringBuilder(trial);
-                } else {
-                    out.add(line.toString());
-                    line = new StringBuilder(word);
+                }
+                // 한 어절이 한 줄보다 길다 — 들어가는 만큼씩 글자로 자른다.
+                line = new StringBuilder();
+                for (int i = 0; i < trial.length(); ) {
+                    int cp = trial.codePointAt(i);
+                    i += Character.charCount(cp);
+                    if (!line.isEmpty()
+                            && width.applyAsDouble(line + Character.toString(cp)) > maxW) {
+                        out.add(line.toString());
+                        line = new StringBuilder();
+                    }
+                    line.appendCodePoint(cp);
                 }
             }
             out.add(line.toString());
@@ -363,15 +393,15 @@ public class BubbleArtist {
 
     /** 이모지 스티커. 글꼴이 이모지를 못 그리면 네모가 나오므로 크기만 맞춘다. */
     private Tile sticker(JsonNode item, double scale) {
-        int fs = (int) Math.max(8, item.path("size").asDouble(16) * 2.2 * scale);
+        double fs = Math.max(8, item.path("size").asDouble(16) * 2.2 * scale);
         String text = item.path("text").asText("");
         if (text.startsWith(LOU_PREFIX)) {
-            Tile lou = louSticker(text.substring(LOU_PREFIX.length()), fs);
+            Tile lou = louSticker(text.substring(LOU_PREFIX.length()), (int) fs);
             if (lou != null) {
                 return lou;
             }
         }
-        return text(text, font(fs, false), PAPER, null, 0);
+        return text(text, sized(faces(), fs), PAPER, null, 0);
     }
 
     /** 루 고래 스티커(#548) — 화면과 같은 이름의 그림(webtoon/ai/assets/lou)을 높이 1.5em 로. */
@@ -410,35 +440,32 @@ public class BubbleArtist {
      * 레터링은 그림의 일부다. 선이 가늘면 밝은 배경에서 글자가 그냥 사라진다.
      */
     private Tile sfx(JsonNode item, double scale) {
-        int fs = (int) Math.max(8, item.path("size").asDouble(16) * 2 * scale);
+        double fs = Math.max(8, item.path("size").asDouble(16) * 2 * scale);
         int sw = (int) Math.max(3, fs * 0.13);
-        return text(item.path("text").asText(""), font(fs, true), PAPER, INK, sw);
+        // 굵기는 글꼴 파일 그대로다 — 화면도 굵은 꼴을 그대로 쓰고 가짜 굵게를 만들지 않는다.
+        return text(item.path("text").asText(""), sized(faces(), fs), PAPER, INK, sw);
     }
 
     /** 글자 한 덩어리. {@code stroke} 가 0 이면 테두리 없이 그대로. */
-    private Tile text(String s, Font font, Color fill, Color outline, int stroke) {
-        BufferedImage probe = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D pg = probe.createGraphics();
-        pg.setFont(font);
-        FontMetrics fm = pg.getFontMetrics();
-        int w = fm.stringWidth(s) + stroke * 4 + 4;
-        int h = fm.getHeight() + stroke * 4 + Math.max(2, (int) (font.getSize() * 0.09));
-        pg.dispose();
+    private Tile text(String s, List<Font> faces, Color fill, Color outline, int stroke) {
+        if (s.isEmpty()) {
+            return null;
+        }
+        TextLayout tl = layout(s, faces);
+        double fs = faces.get(0).getSize2D();
+        int w = (int) Math.ceil(tl.getAdvance()) + stroke * 4 + 4;
+        int h = (int) Math.ceil(tl.getAscent() + tl.getDescent() + tl.getLeading())
+                + stroke * 4 + Math.max(2, (int) (fs * 0.09));
 
         BufferedImage tile = new BufferedImage(Math.max(1, w), Math.max(1, h),
                 BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = tile.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
-                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        g.setFont(font);
-        float x = stroke * 2 + 2, y = stroke * 2 + g.getFontMetrics().getAscent();
+        hints(g);
+        float x = stroke * 2 + 2, y = stroke * 2 + tl.getAscent();
 
         if (outline != null && stroke > 0) {
-            int drop = Math.max(2, (int) (font.getSize() * 0.09));
-            Shape glyph = g.getFont().createGlyphVector(g.getFontRenderContext(), s)
-                    .getOutline(x, y);
+            int drop = Math.max(2, (int) (fs * 0.09));
+            Shape glyph = tl.getOutline(AffineTransform.getTranslateInstance(x, y));
             g.setStroke(new BasicStroke(stroke * 2f, BasicStroke.CAP_ROUND,
                     BasicStroke.JOIN_ROUND));
             // 그림자 먼저 — 같은 글자를 아래로 밀어 검게만.
@@ -453,7 +480,7 @@ public class BubbleArtist {
             g.fill(glyph);
         } else {
             g.setColor(INK);
-            g.drawString(s, x, y);
+            tl.draw(g, x, y);
         }
         g.dispose();
         return new Tile(tile, 0, 0);
@@ -480,37 +507,130 @@ public class BubbleArtist {
     }
 
     /**
-     * 한글 글꼴. jar 의 Jua 를 먼저 보고, 없으면 시스템 글꼴, 그것도 없으면 기본 글꼴로
-     * 떨어진다 — <b>글꼴 하나 때문에 굽기가 막히면 안 된다.</b>
+     * 말풍선 글꼴들(크기 1) — 기본 글꼴(jar), 시스템 글꼴, 자바 기본 글꼴 순이다.
+     *
+     * 앞의 글꼴에 없는 글자만 뒤의 글꼴로 그린다({@link #layout}). 화면도 글꼴에 없는 글자는
+     * 다음 글꼴로 넘긴다. <b>글꼴 하나 때문에 굽기가 막히면 안 된다</b> — 아무것도 못 읽으면
+     * 자바 기본 글꼴로라도 그린다.
      */
-    synchronized Font font(int size, boolean bold) {
-        if (base == null) {
-            try (InputStream in = open(FONT)) {
-                if (in != null) {
-                    base = Font.createFont(Font.TRUETYPE_FONT, in);
-                }
-            } catch (Exception e) {     // noqa: 시스템 글꼴을 본다
-                log.debug("글꼴을 못 읽었습니다 ({})", FONT, e);
+    List<Font> faces() {
+        List<Font> out = new ArrayList<>();
+        Font jar = jarFont(FONT);
+        if (jar != null) {
+            out.add(jar);
+        }
+        for (String cand : SYSTEM_FONTS) {
+            Font f = systemFont(cand);
+            if (f != null) {
+                out.add(f);
             }
         }
-        if (base == null) {
-            for (String cand : FONTS) {
-                Path p = Path.of(cand);
-                if (!Files.isRegularFile(p)) {
-                    continue;
-                }
-                try {
-                    base = Font.createFont(Font.TRUETYPE_FONT, p.toFile());
-                    break;
-                } catch (Exception e) {     // noqa: 다음 후보를 본다
-                    log.debug("글꼴을 못 읽었습니다 ({})", cand, e);
-                }
+        out.add(new Font(Font.SANS_SERIF, Font.PLAIN, 1));
+        return out;
+    }
+
+    /** jar 글꼴 하나(크기 1). 못 읽으면 null 이고 한 번만 알린다. */
+    private synchronized Font jarFont(String path) {
+        if (loaded.containsKey(path)) {
+            return loaded.get(path);
+        }
+        Font font = null;
+        try (InputStream in = open(path)) {
+            if (in != null) {
+                font = Font.createFont(Font.TRUETYPE_FONT, in);
+            }
+        } catch (Exception e) {     // noqa: 다음 글꼴로 그린다
+            log.debug("글꼴을 못 읽었습니다 ({})", path, e);
+        }
+        if (font == null) {
+            log.warn("말풍선 글꼴을 못 읽었습니다 ({}) — 다음 글꼴로 그립니다", path);
+        }
+        loaded.put(path, font);
+        return font;
+    }
+
+    /** 시스템 글꼴 파일 하나(크기 1). 없으면 null — 배포 서버에는 하나도 없는 것이 보통이다. */
+    private synchronized Font systemFont(String path) {
+        if (loaded.containsKey(path)) {
+            return loaded.get(path);
+        }
+        Font font = null;
+        Path p = Path.of(path);
+        if (Files.isRegularFile(p)) {
+            try {
+                font = Font.createFont(Font.TRUETYPE_FONT, p.toFile());
+            } catch (Exception e) {     // noqa: 다음 후보를 본다
+                log.debug("글꼴을 못 읽었습니다 ({})", path, e);
             }
         }
-        if (base == null) {
-            log.warn("한글 글꼴을 못 찾았습니다 — 기본 글꼴로 그립니다");
-            base = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
+        loaded.put(path, font);
+        return font;
+    }
+
+    /**
+     * 이 크기로 맞춘 글꼴들. 커닝과 합자를 켠다 — 화면(크롬)이 기본으로 켜는 것이라, 끄면
+     * 글자 사이가 달라져 줄 길이가 화면과 어긋난다.
+     */
+    static List<Font> sized(List<Font> faces, double size) {
+        Map<TextAttribute, Object> attrs = Map.of(
+                TextAttribute.SIZE, (float) size,
+                TextAttribute.KERNING, TextAttribute.KERNING_ON,
+                TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON);
+        List<Font> out = new ArrayList<>(faces.size());
+        for (Font f : faces) {
+            out.add(f.deriveFont(attrs));
         }
-        return base.deriveFont(bold ? Font.BOLD : Font.PLAIN, (float) size);
+        return out;
+    }
+
+    /** 글 한 줄을 놓는다. 글자마다 그것을 그릴 수 있는 첫 글꼴이 맡는다. */
+    static TextLayout layout(String s, List<Font> faces) {
+        AttributedString as = new AttributedString(s);
+        int i = 0;
+        while (i < s.length()) {
+            Font f = faceFor(s.codePointAt(i), faces);
+            int j = i + Character.charCount(s.codePointAt(i));
+            while (j < s.length() && faceFor(s.codePointAt(j), faces) == f) {
+                j += Character.charCount(s.codePointAt(j));
+            }
+            as.addAttribute(TextAttribute.FONT, f, i, j);
+            i = j;
+        }
+        return new TextLayout(as.getIterator(), FRC);
+    }
+
+    /** 이 글자를 그릴 수 있는 첫 글꼴. 아무도 못 그리면 첫 글꼴이다. */
+    private static Font faceFor(int cp, List<Font> faces) {
+        for (Font f : faces) {
+            if (f.canDisplay(cp)) {
+                return f;
+            }
+        }
+        return faces.get(0);
+    }
+
+    /** 글 한 줄의 폭(px, 소수점까지). */
+    static double width(String s, List<Font> faces) {
+        return s.isEmpty() ? 0 : layout(s, faces).getAdvance();
+    }
+
+    /**
+     * 줄 맨 위에서 글자 바닥선까지. 화면(CSS)은 줄 높이(1.35em)에서 글꼴 높이를 뺀 나머지를
+     * 위아래로 반씩 나눠 글자를 줄 가운데에 놓는다 — 줄 높이는 첫 글꼴로 잡는다. 예전에는
+     * 나누지 않고 줄 맨 위에 붙였다.
+     */
+    private static double baseline(Font font, double lh) {
+        LineMetrics lm = font.getLineMetrics("가", FRC);
+        return (lh - lm.getAscent() - lm.getDescent()) / 2 + lm.getAscent();
+    }
+
+    /** 그리는 쪽 설정. 재는 쪽({@link #FRC})과 같아야 잰 폭대로 찍힌다. */
+    private static void hints(Graphics2D g) {
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS,
+                RenderingHints.VALUE_FRACTIONALMETRICS_ON);
     }
 }
