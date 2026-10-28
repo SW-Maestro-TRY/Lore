@@ -255,6 +255,23 @@ public class ZzalItConfig {
             }
         }
 
+        @Override
+        public boolean exists(String key) {
+            return objects.containsKey(key);
+        }
+
+        @Override
+        public int delete(List<String> keys) {
+            int n = 0;
+            for (String k : keys) {
+                if (k != null && !k.isBlank()) {
+                    objects.remove(k);
+                    n++;
+                }
+            }
+            return n;
+        }
+
         /** 시험이 "무엇이 올라갔나" 를 물을 수 있게. */
         public boolean has(String key) {
             return objects.containsKey(key);

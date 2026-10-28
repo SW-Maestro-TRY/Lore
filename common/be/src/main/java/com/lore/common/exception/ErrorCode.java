@@ -143,6 +143,7 @@ public enum ErrorCode {
     ADMIN_ONLY(HttpStatus.FORBIDDEN, "관리자만 볼 수 있어요"),
     ADMIN_RETRY_OPEN(HttpStatus.CONFLICT, "이미 열린 재시도 요청이 있어요. 취소한 뒤 다시 누르세요"),
     ADMIN_RETRY_CLOSED(HttpStatus.CONFLICT, "이미 집혔거나 끝난 재시도 요청이에요"),
+    ADMIN_RETRY_ALREADY_GRANTED(HttpStatus.CONFLICT, "이미 사용자에게 지급된 세트라 바꿀 수 없어요"),
 
     // 복선 카드 (piece-maker) — 2026-09-22. 카드 API 셋(GET /api/piece-maker/v1/public/cards/**)이 쓴다.
     // ★ 회차(chapter)의 400 만 코드를 따로 둔다 — 화면은 이 코드를 보면 저장해 둔 "판정 기준" 회차를 되돌린다.
