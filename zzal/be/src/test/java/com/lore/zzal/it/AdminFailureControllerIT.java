@@ -181,4 +181,34 @@ class AdminFailureControllerIT extends ZzalItSupport {
         assertThat(jdbc.queryForObject("select phase from zzal_pet where id = ?", String.class, pet)).isEqualTo("FAILED");
         assertThat(jdbc.queryForObject("select count(*) from zzal_admin_retry", Integer.class)).isZero();
     }
+
+    @Test
+    @DisplayName("★ 옛 재굽기 — 봇 토큰은 403(알은 FAILED 그대로), 쿠키 관리자는 403 이 아님")
+    void botCannotRehatch() throws Exception {
+        bot();
+        Long pet = failedEgg();
+        MvcResult byBot = botPost("/pets/%d/rehatch".formatted(pet), null);
+        assertThat(byBot.getResponse().getStatus()).isEqualTo(403);
+        assertThat(errorCode(byBot)).isEqualTo("FORBIDDEN");
+        assertThat(jdbc.queryForObject("select phase from zzal_pet where id = ?", String.class, pet)).isEqualTo("FAILED");
+        assertThat(postAs(BOT, BASE + "/pets/%d/rehatch".formatted(pet), null).getResponse().getStatus()).isNotEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("★ 움짤 검수 판정 — 봇 토큰은 403")
+    void botCannotVerdict() throws Exception {
+        bot();
+        MvcResult byBot = botPost("/motions/1/verdict", "{\"verdict\":\"OK\"}");
+        assertThat(byBot.getResponse().getStatus()).isEqualTo(403);
+        assertThat(errorCode(byBot)).isEqualTo("FORBIDDEN");
+    }
+
+    @Test
+    @DisplayName("★ 움짤 후보 올리기 — 봇 토큰은 403")
+    void botCannotUploadMotion() throws Exception {
+        bot();
+        MvcResult byBot = botPost("/motions/1/upload", "{\"candidates\":[{\"imageKey\":\"images/zzal/x.webp\"}]}");
+        assertThat(byBot.getResponse().getStatus()).isEqualTo(403);
+        assertThat(errorCode(byBot)).isEqualTo("FORBIDDEN");
+    }
 }

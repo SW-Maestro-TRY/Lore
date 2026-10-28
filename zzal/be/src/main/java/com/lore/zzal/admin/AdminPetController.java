@@ -28,8 +28,11 @@ public class AdminPetController {
 
     private final AdminRehatchService rehatchService;
 
-    public AdminPetController(AdminRehatchService rehatchService) {
+    private final AdminCaller caller;
+
+    public AdminPetController(AdminRehatchService rehatchService, AdminCaller caller) {
         this.rehatchService = rehatchService;
+        this.caller = caller;
     }
 
     @Operation(summary = "부화 실패 재굽기", description = """
@@ -50,6 +53,7 @@ public class AdminPetController {
                     description = "실패한 알이 아님(ZZAL_PET_ALREADY_HATCHING) · 주인 자리가 참(ZZAL_PET_LIMIT_REACHED)")})
     @PostMapping("/{petId}/rehatch")
     public ApiResponse<AdminRehatchService.Rehatch> rehatch(@LoginUser Long userId, @PathVariable Long petId) {
+        caller.requireHuman(); // 서버 재굽기는 과금 — 사람만(봇 토큰 403)
         return ApiResponse.ok(rehatchService.rehatch(userId, petId, Instant.now()));
     }
 }
