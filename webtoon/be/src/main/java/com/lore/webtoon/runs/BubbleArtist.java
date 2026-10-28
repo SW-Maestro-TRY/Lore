@@ -3,6 +3,7 @@ package com.lore.webtoon.runs;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.awt.BasicStroke;
@@ -18,6 +19,8 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -50,7 +53,17 @@ public class BubbleArtist {
     private static final List<String> TAILED =
             List.of("normal", "shout", "whisper", "thought");
 
-    /** 하네스가 찾는 곳과 같은 목록 — 다른 글꼴로 그리면 화면과 어긋난다. */
+    /**
+     * 한글 글꼴. jar 리소스 — 내려받기 도장({@link EpisodeExport})이 쓰는 것과 같은 Jua(OFL).
+     *
+     * 배포 서버(도커 이미지)에는 한글 시스템 글꼴이 하나도 없다. 그래서 아래 시스템 목록만
+     * 보던 때는 서버에서 기본 글꼴로 떨어져 내려받은 그림의 말풍선 글이 전부 네모(□)로
+     * 나갔다(2026-10-28 사용자 제보). 노트북은 시스템 글꼴이 있어서 이 문제가 안 보였다.
+     * jar 에 실린 글꼴을 먼저 보면 어느 환경에서 구워도 같은 글꼴로 나온다.
+     */
+    private static final String FONT = "webtoon/fonts/Jua-Regular.ttf";
+
+    /** jar 글꼴을 못 읽을 때만 볼 시스템 글꼴 후보. 하네스(strip.py)가 찾는 곳과 같은 목록이다. */
     private static final String[] FONTS = {
             "C:\\Windows\\Fonts\\malgun.ttf",
             "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
@@ -139,8 +152,10 @@ public class BubbleArtist {
         // 외침은 뾰족한 만큼 안쪽이 좁다(안쪽 반지름이 바깥의 0.8).
         double spread = round ? Math.sqrt(2) / ("shout".equals(variant) ? 0.8 : 1.0) : 1.0;
 
+        /* 나레이션은 가장 낮은 높이를 두지 않는다(target 무한대) — 길게 늘여 쓰는 띠라서
+           폭을 따라 높이까지 커지면 빈칸만 많은 상자가 된다. 화면(editorCore.paintShape)과 같다. */
         Fit fit = fit(item.path("text").asText(""), font, boxW, padX, padY, spread,
-                "narration".equals(variant) ? 4.0 : 2.4);
+                "narration".equals(variant) ? Double.POSITIVE_INFINITY : 2.4);
 
         boolean tailed = TAILED.contains(variant) && !"none".equals(item.path("tail").asText());
         double tipX = fit.w * item.path("tx").asDouble(22) / 100.0;
@@ -297,8 +312,14 @@ public class BubbleArtist {
         return new Fit(boxW, h, lines);
     }
 
-    /** 폭에 맞춰 줄을 나눈다. 한국어는 어절에서 끊고, 한 어절이 넘치면 글자로 자른다. */
-    private static List<String> wrap(String text, FontMetrics fm, int maxW) {
+    /**
+     * 폭에 맞춰 줄을 나눈다. 한국어는 어절에서 끊고, 한 어절이 넘치면 글자로 자른다.
+     *
+     * 사람이 친 띄어쓰기는 그대로 둔다 — 편집실 화면이 줄바꿈과 연속 공백을 그대로
+     * 보여 주므로(Editor.css 의 white-space: pre-wrap) 구운 그림도 같아야 한다.
+     * 예전에는 줄 맨 앞의 띄어쓰기가 빠졌다.
+     */
+    static List<String> wrap(String text, FontMetrics fm, int maxW) {
         List<String> out = new ArrayList<>();
         for (String para : text.split("\n")) {
             if (para.isBlank()) {
@@ -306,8 +327,12 @@ public class BubbleArtist {
                 continue;
             }
             StringBuilder line = new StringBuilder();
+            // 줄을 시작했는가. 빈 어절(연속 공백)도 시작으로 친다 — line.isEmpty() 로
+            // 가르면 맨 앞 공백이 붙을 자리가 없어 사라진다.
+            boolean started = false;
             for (String word : para.split(" ")) {
-                String trial = line.isEmpty() ? word : line + " " + word;
+                String trial = started ? line + " " + word : word;
+                started = true;
                 if (fm.stringWidth(trial) <= maxW || line.isEmpty()) {
                     if (fm.stringWidth(trial) > maxW && line.isEmpty()) {
                         // 한 어절이 폭을 넘으면 글자 단위로 쪼갠다.
@@ -436,8 +461,38 @@ public class BubbleArtist {
 
     /* ---- 글꼴 ------------------------------------------------------------- */
 
-    /** 한글 글꼴. 못 찾으면 시스템 기본으로 — 글꼴 하나 때문에 굽기가 막히면 안 된다. */
-    private Font font(int size, boolean bold) {
+    /**
+     * jar 리소스를 연다. 저장소에서 바로 돌릴 때(검사·bootRun)는 같은 상대경로가 파일로
+     * 있으니 위로 올라가며 찾는다 — {@link EpisodeExport} 와 같은 방식이다.
+     */
+    private static InputStream open(String path) throws IOException {
+        ClassPathResource res = new ClassPathResource(path);
+        if (res.exists()) {
+            return res.getInputStream();
+        }
+        for (Path up = Path.of("").toAbsolutePath(); up != null; up = up.getParent()) {
+            Path cand = up.resolve(path);
+            if (Files.isRegularFile(cand)) {
+                return Files.newInputStream(cand);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 한글 글꼴. jar 의 Jua 를 먼저 보고, 없으면 시스템 글꼴, 그것도 없으면 기본 글꼴로
+     * 떨어진다 — <b>글꼴 하나 때문에 굽기가 막히면 안 된다.</b>
+     */
+    synchronized Font font(int size, boolean bold) {
+        if (base == null) {
+            try (InputStream in = open(FONT)) {
+                if (in != null) {
+                    base = Font.createFont(Font.TRUETYPE_FONT, in);
+                }
+            } catch (Exception e) {     // noqa: 시스템 글꼴을 본다
+                log.debug("글꼴을 못 읽었습니다 ({})", FONT, e);
+            }
+        }
         if (base == null) {
             for (String cand : FONTS) {
                 Path p = Path.of(cand);
@@ -451,10 +506,10 @@ public class BubbleArtist {
                     log.debug("글꼴을 못 읽었습니다 ({})", cand, e);
                 }
             }
-            if (base == null) {
-                log.warn("한글 글꼴을 못 찾았습니다 — 기본 글꼴로 그립니다");
-                base = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
-            }
+        }
+        if (base == null) {
+            log.warn("한글 글꼴을 못 찾았습니다 — 기본 글꼴로 그립니다");
+            base = new Font(Font.SANS_SERIF, Font.PLAIN, 12);
         }
         return base.deriveFont(bold ? Font.BOLD : Font.PLAIN, (float) size);
     }

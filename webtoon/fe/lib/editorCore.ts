@@ -21,7 +21,7 @@
 import { louArt } from "./louArt";
 import { sceneParts, sceneShort } from "./sceneText";
 import { track } from "./track";
-import { readAllowance } from "./api";
+import { authFetch, readAllowance } from "./api";
 import { QUALITY_INFO } from "./wizardData";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
@@ -218,7 +218,7 @@ export function mountEditor(
     paintSaved("saving");
     let ok = false;
     try {
-      const res = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
+      const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(overlayPayload()) });
       ok = res.ok;
@@ -472,11 +472,39 @@ export function mountEditor(
     setActive(activeScene);
   }
 
-  function setActive(no) {
-    if (askCtx && askCtx.no !== no) closeAsk();
+  /* follow: 스크롤을 따라 저절로 바뀐 것인가. 그때는 열어 둔 다시 그리기 창을 닫지
+     않는다 — 창은 자기 장 번호를 따로 들고 있고, 창을 쓰다 조금 내려 본 것뿐인데
+     창이 닫히면 적던 글이 날아간다. 사람이 다른 장을 눌렀을 때만 닫는다. */
+  function setActive(no, follow = false) {
+    if (!follow && askCtx && askCtx.no !== no) closeAsk();
     activeScene = no;
     $$(".scene").forEach(el => el.classList.toggle("is-active", +el.dataset.scene === no));
     $("#activeSceneLabel").textContent = tr("{n}번째 장", { n: no });
+  }
+
+  /* ---- 지금 장은 화면 가운데를 따라간다 -----------------------------------
+   *
+   * 예전에는 장을 눌러야만 「지금 장」이 바뀌었다. 그래서 스크롤로 아래 장까지 내려가
+   * 말풍선을 넣으면 1번(또는 마지막으로 누른) 장에 붙고, 화면이 그 장으로 튀어
+   * 올라갔다(2026-10-28 사용자 제보: 「스크롤 내리고 말풍선 추가 누르면 다시 위로
+   * 올라가요 · 선택 장이 따라 내려가면 좋겠어요」). 이제 스크롤할 때마다 화면 세로
+   * 가운데에 걸친 장(없으면 가장 가까운 장)을 지금 장으로 삼는다. */
+  let followRaf = 0;
+  function followScroll() {
+    if (followRaf) return;
+    followRaf = requestAnimationFrame(() => {
+      followRaf = 0;
+      const mid = window.innerHeight / 2;
+      let best = null, bestGap = Infinity;
+      for (const el of $$(".scene")) {
+        const r = el.getBoundingClientRect();
+        if (!r.height) continue;
+        const gap = mid < r.top ? r.top - mid : mid > r.bottom ? mid - r.bottom : 0;
+        if (gap < bestGap) { bestGap = gap; best = el; }
+      }
+      const no = best ? +best.dataset.scene : 0;
+      if (no && no !== activeScene) setActive(no, true);
+    });
   }
 
   /* ------------------------------------------------------------------ 다시 그리기
@@ -537,7 +565,7 @@ export function mountEditor(
 
   async function loadSceneTags() {
     try {
-      const cfg = await (await fetch(`${API}/config`)).json();
+      const cfg = await (await authFetch(`${API}/config`)).json();
       sceneTags = (cfg.feedback_tags || {}).scene || [];
     } catch { /* 못 받으면 자유 입력만 남는다 — 다시 그리기 자체는 막지 않는다 */ }
   }
@@ -742,7 +770,7 @@ export function mountEditor(
       has_note: !!body.feedback, result: body.textless ? "textless" : "text" });
     let job;
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API}/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/regen${epq()}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body) });
@@ -763,7 +791,7 @@ export function mountEditor(
     while (true) {
       await new Promise(r => setTimeout(r, 2000));
       let s;
-      try { s = await (await fetch(`${API}/regens/${job.id}`)).json(); }
+      try { s = await (await authFetch(`${API}/regens/${job.id}`)).json(); }
       catch { continue; }                       // 잠깐 끊겨도 다음 번에 이어진다
       if (msg && s.note) msg.innerHTML =
         `${tr("{n}번째 장을 다시 그리는 중…", { n: no })}<br><small class="veil-what">${esc(s.note.slice(0, 90))}</small>`;
@@ -802,7 +830,7 @@ export function mountEditor(
     if (!slot || !RUN_ID) return;
     if (!versions) {
       try {
-        versions = (await (await fetch(
+        versions = (await (await authFetch(
           `${API}/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/versions${epq()}`)).json()).versions;
       } catch { return; }
     }
@@ -826,7 +854,7 @@ export function mountEditor(
       track("regen_revert", { run: RUN_ID, cut: no, n: Number(b.dataset.v) });
       b.disabled = true;
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `${API}/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/revert${epq()}`,
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ version: Number(b.dataset.v) }) });
@@ -904,7 +932,7 @@ export function mountEditor(
        굽는 쪽(overlay.py 의 _fit, BubbleArtist.fit)도 같은 규칙이라 화면과
        내려받은 그림이 안 갈린다. */
     const full = el.clientWidth || bub.offsetWidth;
-    const target = v === "narration" ? 4.0 : 2.4;
+    const target = 2.4;
 
     /* 타원은 글 상자보다 √2 만큼 크다. 글 상자를 그대로 타원 크기로 쓰면
        네 모서리가 선 밖으로 나간다 — 그걸 피하려고 폭을 키우다 보니 예전
@@ -919,8 +947,11 @@ export function mountEditor(
 
     const sw = 2.5;
     const ew = full;
-    // 글이 짧다고 납작한 국수 가락이 되지는 않게 가장 낮은 높이를 둔다.
-    const eh = Math.max(h * spread, full / target);
+    /* 글이 짧다고 납작한 국수 가락이 되지는 않게 가장 낮은 높이를 둔다.
+       **나레이션은 빼고** 글 높이에 맞춘다 — 나레이션 상자는 장을 가로지르는 띠로
+       길게 늘여 쓰는데, 폭에 비례해 높이까지 커지면 넓힐수록 빈칸만 많은 상자가
+       됐다(2026-10-28 제보, 「나레이션 말풍선 길이 조절」). 굽는 쪽(BubbleArtist)도 같다. */
+    const eh = v === "narration" ? h : Math.max(h * spread, full / target);
 
     /* **고른 표시와 손잡이는 <u>보이는 풍선</u>을 감싸야 한다.**
        예전에는 항목 상자가 글 상자 크기였다 — 타원은 그보다 √2 만큼 크니까,
@@ -1038,9 +1069,18 @@ export function mountEditor(
 
   function addItem(type, variant, text) {
     const no = activeScene, st = sc(no);
+    /* 새 것은 **지금 보고 있는 자리**에 놓는다. 장이 길면 30% 자리가 화면 밖일 수
+       있어서, 그 장에서 화면 세로 가운데가 걸친 높이를 기준으로 삼는다. 여러 개를
+       잇달아 넣으면 겹치지 않게 조금씩 내려 놓는다. */
+    let y0 = 30;
+    const wrapBox = $(`#scene-${no} [data-wrap]`)?.getBoundingClientRect();
+    if (wrapBox && wrapBox.height > 0) {
+      const mid = (window.innerHeight / 2 - wrapBox.top) / wrapBox.height * 100;
+      y0 = Math.max(2, Math.min(80, mid - 6));
+    }
     const it = {
       id: `i${++uid}`, type, variant, text,
-      x: 22, y: 30 + (st.items.length % 5) * 9, w: type === "bubble" ? 44 : 16,
+      x: 22, y: Math.min(92, y0 + (st.items.length % 5) * 4), w: type === "bubble" ? 44 : 16,
       size: type === "bubble" ? 15 : 16, rot: type === "sfx" ? -7 : 0,
       tail: type === "bubble" ? "left" : "none",
       // 꼬리 끝. 사람이 끌어 옮기는 값이라 처음 자리는 흔한 자리(왼쪽 아래)다.
@@ -1049,7 +1089,9 @@ export function mountEditor(
     st.items.push(it); save();
     sel = { sceneNo: no, id: it.id };
     paintItems(no); paintProps();
-    document.getElementById(`scene-${no}`).scrollIntoView({ behavior: "smooth", block: "center" });
+    // 장 가운데로 옮기지 않는다 — 긴 장에서는 그게 곧 「위로 튀는」 것이었다. 넣은
+    // 것이 화면 밖일 때만 보이는 만큼 움직인다.
+    $(`#scene-${no} .item[data-id="${it.id}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function findItem() {
@@ -1161,9 +1203,15 @@ export function mountEditor(
           it.w = Math.max(5, Math.min(96, ow + (west ? -dx : dx)));
           /* **글자도 폭을 따라 큰다.** 크기 손잡이인데 풍선만 커지고 글은
              그대로면, 늘릴수록 글이 작아 보인다(실제 제보). 통째로 키우고
-             줄이는 것이 손잡이가 뜻하는 바다. */
-          it.size = Math.max(6, Math.min(70, Math.round(osize * it.w / Math.max(1, ow))));
-          paintFont(el, it);
+             줄이는 것이 손잡이가 뜻하는 바다.
+
+             **나레이션만은 폭만 바뀐다.** 나레이션 상자는 장 위아래를 가로지르는
+             띠로 쓰는 일이 많아서, 넓히면 글자까지 커져 버리면 원하는 길이로 맞출
+             수가 없다(2026-10-28 제보). 글자 크기는 ᴀ⁻ ᴀ⁺ 단추로 따로 고친다. */
+          if (!(it.type === "bubble" && it.variant === "narration")) {
+            it.size = Math.max(6, Math.min(70, Math.round(osize * it.w / Math.max(1, ow))));
+            paintFont(el, it);
+          }
           // 잡지 않은 쪽 변은 제자리에 둔다. 폭은 바로 알 수 있고, 높이는
           // 글이 다시 흐른 뒤에야 알 수 있으니 모양을 그린 다음에 잰다.
           if (west) it.x = ox + (ow - it.w);
@@ -1345,6 +1393,7 @@ export function mountEditor(
       tailed ? `<span class="ib-sep"></span>` +
                tailBtn("left", "◀") + tailBtn("right", "▶") + tailBtn("none", "✕") : "",
       `<span class="ib-sep"></span>`,
+      b("dup", "⧉", tr("복제")),
       b("del", "🗑", tr("삭제"), "is-danger"),
     ].join("");
   }
@@ -1369,7 +1418,14 @@ export function mountEditor(
     const box = layer.getBoundingClientRect();
     const r = el.getBoundingClientRect();
     const above = r.top - box.top > 46;
-    bar.style.left = `${((r.left + r.width / 2 - box.left) / box.width) * 100}%`;
+    /* 줄은 말풍선 가운데 위에 뜨는데, 말풍선이 가장자리에 붙어 있으면 줄이 그림 밖으로
+       나간다. 폰은 단추가 커서(38px) 줄이 그림 폭에 가깝고, 끝 단추(글자 작게·삭제)가
+       화면 밖에 걸릴 수 있다. 줄 전체가 그림 안에 들도록 가운데를 안쪽으로 당긴다 —
+       그림이 줄보다 좁으면 그림 가운데에 둔다. */
+    const half = bar.offsetWidth / 2;
+    let cx = r.left + r.width / 2 - box.left;
+    cx = box.width > half * 2 ? Math.min(box.width - half, Math.max(half, cx)) : box.width / 2;
+    bar.style.left = `${(cx / box.width) * 100}%`;
     bar.style.top = above
       ? `${((r.top - box.top) / box.height) * 100}%`
       : `${((r.bottom - box.top) / box.height) * 100}%`;
@@ -1395,6 +1451,17 @@ export function mountEditor(
     },
     bigger: () => bumpSize(+2),
     smaller: () => bumpSize(-2),
+    /* 복제 — 같은 모양·글·크기를 그대로 하나 더. 원래 것과 딱 겹치면 복제가 됐는지
+       안 보이므로 오른쪽 아래로 조금 비켜 놓고, 새 것을 고른 상태로 둔다(바로 끌어
+       옮길 수 있게). 같은 꼴의 말풍선을 한 장에 여러 개 늘어놓을 때 쓴다(제보 「말풍선 복사」). */
+    dup: () => {
+      const it = findItem(); if (!it) return;
+      const no = sel.sceneNo, st = sc(no);
+      const copy = { ...it, id: `i${++uid}`, x: Math.min(90, it.x + 3), y: Math.min(94, it.y + 4) };
+      st.items.push(copy);
+      sel = { sceneNo: no, id: copy.id };
+      save(); paintItems(no);
+    },
     del: () => {
       const it = findItem(); if (!it) return;
       const st = sc(sel.sceneNo);
@@ -1452,7 +1519,7 @@ export function mountEditor(
       if (want === (data.title || "") || saving) { h.textContent = data.title; return; }
       saving = true;
       try {
-        const res = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/title`, {
+        const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/title`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ episode: EPISODE, title: want }),
         });
@@ -1606,12 +1673,12 @@ export function mountEditor(
 
     let runs = null;                    // null = 못 물어봄, [] = 물어봤는데 없음
     try {
-      const mine = (await (await fetch(
+      const mine = (await (await authFetch(
         `${API}/runs?mine=1&uid=${encodeURIComponent(uid)}`)).json()).runs || [];
       // 계정 것은 쿠키로 판단한다. 로그인 안 했으면 빈 목록이라 그냥 넘어간다.
       let account = [];
       try {
-        const res = await fetch("/api/webtoon/v1/my/runs", { credentials: "same-origin" });
+        const res = await authFetch("/api/webtoon/v1/my/runs", { credentials: "same-origin" });
         if (res.ok) {
           const body = await res.json();
           account = Array.isArray(body) ? body : (body.runs || body.data || []);
@@ -1694,13 +1761,13 @@ export function mountEditor(
     const src = RUN_ID ? `${API}/runs/${encodeURIComponent(RUN_ID)}/episode${epq()}`
                        : "/static/samples/mock.json";
     try {
-      const res = await fetch(src);
+      const res = await authFetch(src);
       if (!res.ok) throw new Error(await res.text());
       data = await res.json();
       if (RUN_ID) {
         /* 안전 기준에 걸려 빈 장으로 둔 장(#626) — 그 장은 안내를 얹고 다시 그리기가 무료다. */
         try {
-          const r = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/result`);
+          const r = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/result`);
           if (r.ok) {
             const found = await r.json();
             unsafePages = new Set((found.unsafe_pages || []).map(Number));
@@ -1746,7 +1813,7 @@ export function mountEditor(
     // 작업이 통신 한 번 실패했다고 사라지면 안 된다.
     if (RUN_ID) {
       try {
-        const got = await (await fetch(
+        const got = await (await authFetch(
           `${API}/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`)).json();
         for (const [no, sp] of Object.entries(got.scenes || {})) {
           if (Array.isArray(sp.items)) sc(Number(no)).items = sp.items.map(
@@ -1783,6 +1850,8 @@ export function mountEditor(
     wireDockDrag();
     // 그림 바깥을 누르면 선택이 풀린다. 손잡이 줄이 그림 위에 떠 있어서, 풀
     // 길이 없으면 다 끝낸 뒤에도 줄이 계속 그림을 가린다.
+    on(window, "scroll", followScroll);
+    on(window, "resize", followScroll);
     on(document, "pointerdown", e => {
       if (!sel) return;
       if (e.target.closest(".item, .item-bar, .dock-item, #edDock")) return;
@@ -1807,7 +1876,7 @@ export function mountEditor(
       btn.textContent = tr("굽는 중…");
       clearTimeout(pushT);
       try {
-        const res = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/bake${epq()}`,
+        const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/bake${epq()}`,
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(overlayPayload()) });
         const out = await res.json();
@@ -1857,6 +1926,7 @@ export function mountEditor(
   })();
 
   return () => {
+    if (followRaf) cancelAnimationFrame(followRaf);
     regenForm.remove();
     for (const [t, type, fn] of bound) t.removeEventListener(type, fn);
     clearTimeout(pushT);
