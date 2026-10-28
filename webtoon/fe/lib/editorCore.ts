@@ -472,11 +472,39 @@ export function mountEditor(
     setActive(activeScene);
   }
 
-  function setActive(no) {
-    if (askCtx && askCtx.no !== no) closeAsk();
+  /* follow: 스크롤을 따라 저절로 바뀐 것인가. 그때는 열어 둔 다시 그리기 창을 닫지
+     않는다 — 창은 자기 장 번호를 따로 들고 있고, 창을 쓰다 조금 내려 본 것뿐인데
+     창이 닫히면 적던 글이 날아간다. 사람이 다른 장을 눌렀을 때만 닫는다. */
+  function setActive(no, follow = false) {
+    if (!follow && askCtx && askCtx.no !== no) closeAsk();
     activeScene = no;
     $$(".scene").forEach(el => el.classList.toggle("is-active", +el.dataset.scene === no));
     $("#activeSceneLabel").textContent = tr("{n}번째 장", { n: no });
+  }
+
+  /* ---- 지금 장은 화면 가운데를 따라간다 -----------------------------------
+   *
+   * 예전에는 장을 눌러야만 「지금 장」이 바뀌었다. 그래서 스크롤로 아래 장까지 내려가
+   * 말풍선을 넣으면 1번(또는 마지막으로 누른) 장에 붙고, 화면이 그 장으로 튀어
+   * 올라갔다(2026-10-28 사용자 제보: 「스크롤 내리고 말풍선 추가 누르면 다시 위로
+   * 올라가요 · 선택 장이 따라 내려가면 좋겠어요」). 이제 스크롤할 때마다 화면 세로
+   * 가운데에 걸친 장(없으면 가장 가까운 장)을 지금 장으로 삼는다. */
+  let followRaf = 0;
+  function followScroll() {
+    if (followRaf) return;
+    followRaf = requestAnimationFrame(() => {
+      followRaf = 0;
+      const mid = window.innerHeight / 2;
+      let best = null, bestGap = Infinity;
+      for (const el of $$(".scene")) {
+        const r = el.getBoundingClientRect();
+        if (!r.height) continue;
+        const gap = mid < r.top ? r.top - mid : mid > r.bottom ? mid - r.bottom : 0;
+        if (gap < bestGap) { bestGap = gap; best = el; }
+      }
+      const no = best ? +best.dataset.scene : 0;
+      if (no && no !== activeScene) setActive(no, true);
+    });
   }
 
   /* ------------------------------------------------------------------ 다시 그리기
@@ -1038,9 +1066,18 @@ export function mountEditor(
 
   function addItem(type, variant, text) {
     const no = activeScene, st = sc(no);
+    /* 새 것은 **지금 보고 있는 자리**에 놓는다. 장이 길면 30% 자리가 화면 밖일 수
+       있어서, 그 장에서 화면 세로 가운데가 걸친 높이를 기준으로 삼는다. 여러 개를
+       잇달아 넣으면 겹치지 않게 조금씩 내려 놓는다. */
+    let y0 = 30;
+    const wrapBox = $(`#scene-${no} [data-wrap]`)?.getBoundingClientRect();
+    if (wrapBox && wrapBox.height > 0) {
+      const mid = (window.innerHeight / 2 - wrapBox.top) / wrapBox.height * 100;
+      y0 = Math.max(2, Math.min(80, mid - 6));
+    }
     const it = {
       id: `i${++uid}`, type, variant, text,
-      x: 22, y: 30 + (st.items.length % 5) * 9, w: type === "bubble" ? 44 : 16,
+      x: 22, y: Math.min(92, y0 + (st.items.length % 5) * 4), w: type === "bubble" ? 44 : 16,
       size: type === "bubble" ? 15 : 16, rot: type === "sfx" ? -7 : 0,
       tail: type === "bubble" ? "left" : "none",
       // 꼬리 끝. 사람이 끌어 옮기는 값이라 처음 자리는 흔한 자리(왼쪽 아래)다.
@@ -1049,7 +1086,9 @@ export function mountEditor(
     st.items.push(it); save();
     sel = { sceneNo: no, id: it.id };
     paintItems(no); paintProps();
-    document.getElementById(`scene-${no}`).scrollIntoView({ behavior: "smooth", block: "center" });
+    // 장 가운데로 옮기지 않는다 — 긴 장에서는 그게 곧 「위로 튀는」 것이었다. 넣은
+    // 것이 화면 밖일 때만 보이는 만큼 움직인다.
+    $(`#scene-${no} .item[data-id="${it.id}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function findItem() {
@@ -1783,6 +1822,8 @@ export function mountEditor(
     wireDockDrag();
     // 그림 바깥을 누르면 선택이 풀린다. 손잡이 줄이 그림 위에 떠 있어서, 풀
     // 길이 없으면 다 끝낸 뒤에도 줄이 계속 그림을 가린다.
+    on(window, "scroll", followScroll);
+    on(window, "resize", followScroll);
     on(document, "pointerdown", e => {
       if (!sel) return;
       if (e.target.closest(".item, .item-bar, .dock-item, #edDock")) return;
@@ -1857,6 +1898,7 @@ export function mountEditor(
   })();
 
   return () => {
+    if (followRaf) cancelAnimationFrame(followRaf);
     regenForm.remove();
     for (const [t, type, fn] of bound) t.removeEventListener(type, fn);
     clearTimeout(pushT);
