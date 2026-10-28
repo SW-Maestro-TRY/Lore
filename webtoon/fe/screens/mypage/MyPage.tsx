@@ -31,9 +31,9 @@ import { activeJobLabel, activeJobTitle } from "../../lib/jobLabel";
 import type { Go } from "../../lib/nav";
 import PushOptIn from "../../ui/PushOptIn";
 import RunStrip from "../../ui/RunStrip";
-import { LangSwitch, registerDict, useT } from "../../lib/i18n";
+import { LANGS, LangSwitch, registerDict, useLang, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
-import { IconCheck, IconChevronRight, IconMail, IconTrash, IconUser } from "../../ui/Icons";
+import { IconBook, IconCheck, IconChevronLeft, IconChevronRight, IconComment, IconEdit, IconFace, IconGear, IconGlobe, IconHeart, IconHelp, IconLogout, IconMail, IconTrash, IconUser } from "../../ui/Icons";
 import { CharacterEditDialog } from "../character/OriginalCharacter";
 import { InstagramMark, KakaoTalkMark, XMark } from "../../ui/BrandMarks";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
@@ -193,16 +193,21 @@ registerDict({
   "휴지통에 든 캐릭터가 없어요.": { en: "No characters in the trash.", ja: "ゴミ箱にキャラクターはありません。", zh: "回收站里没有角色。" },
 });
 
+const TAB_TITLE = {
+  works: "내 웹툰", chars: "내 캐릭터", liked: "찜한 웹툰", commented: "댓글 단 웹툰", settings: "설정", trash: "휴지통", lang: "언어",
+} as const;
+
 export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" | "contact" }) {
   const t = useT();
   const { user, isAuthenticated, signOut } = useAuth();
+  const { lang } = useLang();
 
   /* 지금은 "내 웹툰"과 "설정" 딱 둘뿐이라 화면을 아예 나누지는 않고
      같은 레일 안에서 본문만 바꾼다 — 나중에 칸이 늘면 그때 공용 탭
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
   /* home = 마이페이지 첫 화면(웹툰 몇 개 · 만드는 중 · 찜 · 내 캐릭터). 왼쪽 「웹툰」 묶음의 네 칸
      (내 웹툰 · 내 캐릭터 · 찜한 웹툰 · 댓글 단 웹툰)은 각각 전부 펼친 목록이다 — 웹툰이 많아져도 첫 화면은 그대로. */
-  const [tab, setTab] = useState<"home" | "works" | "chars" | "liked" | "commented" | "settings" | "trash">(initialTab === "settings" ? "settings" : "home");
+  const [tab, setTab] = useState<"home" | "works" | "chars" | "liked" | "commented" | "settings" | "trash" | "lang">(initialTab === "settings" ? "settings" : "home");
   const allWorks = tab === "works";
   /* 왼쪽 메뉴로 화면을 바꾸면 맨 위부터 — 그리고 나서 높이가 바뀌어도 위에서 시작한다 */
   useEffect(() => {
@@ -436,9 +441,28 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
     }
   };
 
-  
+  /* 만드는 중(#548) — 넓은 화면은 첫 화면에만. 폰 첫 화면은 목록 메뉴뿐이라(시안 1) 「내 웹툰」 화면에도 띄운다. */
+  const draftsStrip = (active.length > 0 || seriesDrafts.length > 0) && (
+    /* 만드는 중(#548) — 「최근 본 웹툰」 자리. 표지 한 줄과 같은 크기로, 눌러서 이어 만든다. */
+    <div className={`wt-my-strip${allWorks ? " wt-my-phoneonly" : ""}`}>
+      <div className="wt-strip">
+        <b className="wt-strip-title">{t("만드는 중")} <span className="dim wt-my-draftcount">{active.length + seriesDrafts.length}</span></b>
+        <div className="wt-strip-row">
+          {active.map((j) => (
+            <DraftCard key={j.id} job={j} card={activeCards[j.id]}
+                       onOpen={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }} />
+          ))}
+          {seriesDrafts.map((d) => (
+            <SeriesDraftItem key={d.run} draft={d} cover={runs.find((r) => r.run_id === d.run)}
+                             onOpen={() => { track("resume_series_draft", { run: d.run, ep: d.episode }); go("next", { run: d.run }); }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="wt-wrap wt-page wt-my">
+    <div className={`wt-wrap wt-page wt-my ${tab === "home" ? "is-home" : "is-sub"}`}>
       <aside className="wt-my-rail">
         <div className="card wt-my-me">
           <span className="wt-my-avatar"><IconUser size={18} /></span>
@@ -457,54 +481,70 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           </div>
         )}
 
+        {/* 폰(시안 1)에서는 묶음마다 카드 한 장 · 줄 끝에 개수와 꺾쇠. 넓은 화면은 묶음 칸(wt-my-list)이
+            display: contents 라 예전처럼 카드 한 장에 줄이 이어진다. */}
         <div className="card rail wt-my-menu">
           <small>{t("웹툰")}</small>
-          <button type="button" className={tab === "works" ? "on" : ""} onClick={() => { setTab("works"); window.scrollTo({ top: 0 }); }}>
-            {t("내 웹툰")} <span className="dim">{runs.length}</span>
-          </button>
-          <button type="button" className={tab === "chars" ? "on" : ""} onClick={() => { setTab("chars"); window.scrollTo({ top: 0 }); }}>
-            {t("내 캐릭터")} <span className="dim">{chars.length}</span>
-          </button>
-          {isAuthenticated && (
-            <>
-              <button type="button" className={tab === "liked" ? "on" : ""} onClick={() => { setTab("liked"); window.scrollTo({ top: 0 }); }}>
-                {t("찜한 웹툰")} <span className="dim">{liked.length}</span>
-              </button>
-              <button type="button" className={tab === "commented" ? "on" : ""} onClick={() => { setTab("commented"); window.scrollTo({ top: 0 }); }}>
-                {t("댓글 단 웹툰")} <span className="dim">{commented.length}</span>
-              </button>
-            </>
-          )}
-          {isAuthenticated && (
-            <>
-              <small>{t("설정")}</small>
-              <button type="button" className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
-                {t("설정")}
-              </button>
-              {/* 휴지통(#157) — 지운 웹툰은 창으로 따로 연다. */}
-              <button type="button" className={`wt-my-trashmenu${tab === "trash" ? " on" : ""}`}
-                      onClick={() => { void loadTrash(); setTab("trash"); window.scrollTo({ top: 0 }); track("trash_open", { where: "mypage" }); }}>
-                {t("휴지통")} <span className="dim">{trash.length + charTrash.length}</span>
-              </button>
-            </>
-          )}
+          <div className="wt-my-list">
+            <button type="button" className={tab === "works" ? "on" : ""} onClick={() => { setTab("works"); window.scrollTo({ top: 0 }); }}>
+              <span className="wt-my-rowname"><IconBook className="wt-my-ico" />{t("내 웹툰")}</span> <span className="dim">{runs.length}</span><IconChevronRight className="wt-my-chev" />
+            </button>
+            <button type="button" className={tab === "chars" ? "on" : ""} onClick={() => { setTab("chars"); window.scrollTo({ top: 0 }); }}>
+              <span className="wt-my-rowname"><IconFace className="wt-my-ico" />{t("내 캐릭터")}</span> <span className="dim">{chars.length}</span><IconChevronRight className="wt-my-chev" />
+            </button>
+            {isAuthenticated && (
+              <>
+                <button type="button" className={tab === "liked" ? "on" : ""} onClick={() => { setTab("liked"); window.scrollTo({ top: 0 }); }}>
+                  <span className="wt-my-rowname"><IconHeart className="wt-my-ico" />{t("찜한 웹툰")}</span> <span className="dim">{liked.length}</span><IconChevronRight className="wt-my-chev" />
+                </button>
+                <button type="button" className={tab === "commented" ? "on" : ""} onClick={() => { setTab("commented"); window.scrollTo({ top: 0 }); }}>
+                  <span className="wt-my-rowname"><IconComment className="wt-my-ico" />{t("댓글 단 웹툰")}</span> <span className="dim">{commented.length}</span><IconChevronRight className="wt-my-chev" />
+                </button>
+              </>
+            )}
+          </div>
+          <small className={isAuthenticated ? undefined : "wt-my-phoneonly"}>{t("설정")}</small>
+          <div className="wt-my-list">
+            {isAuthenticated && (
+              <>
+                <button type="button" className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
+                  <span className="wt-my-rowname"><IconGear className="wt-my-ico" />{t("설정")}</span><IconChevronRight className="wt-my-chev" />
+                </button>
+                {/* 휴지통(#157) — 지운 웹툰은 창으로 따로 연다. */}
+                <button type="button" className={`wt-my-trashmenu${tab === "trash" ? " on" : ""}`}
+                        onClick={() => { void loadTrash(); setTab("trash"); window.scrollTo({ top: 0 }); track("trash_open", { where: "mypage" }); }}>
+                  <span className="wt-my-rowname"><IconTrash className="wt-my-ico" />{t("휴지통")}</span> <span className="dim">{trash.length + charTrash.length}</span><IconChevronRight className="wt-my-chev" />
+                </button>
+              </>
+            )}
+            {/* 언어 — 폰에서만 줄로 보인다. 넓은 화면은 아래 언어 카드 그대로. */}
+            <button type="button" className="wt-my-langrow" onClick={() => setTab("lang")}>
+              <span className="wt-my-rowname"><IconGlobe className="wt-my-ico" />{t("언어")}</span> <span className="dim">{LANGS.find((l) => l.key === lang)?.label}</span><IconChevronRight className="wt-my-chev" />
+            </button>
+          </div>
           <small>{t("계정")}</small>
-          <button type="button" onClick={() => {
-            track("contact_open", { where: "mypage" });
-            setContactEmail(user?.email ?? ""); setContactMessage(""); setContactError("");
-            setContactCategory("WEBTOON"); setContactCompose(false); setContactSent(false); setContactOpen(true);
-          }}>
-            {t("1:1 문의하기")}
-          </button>
-          <button type="button" onClick={() => { track("feedback_open", { where: "mypage" }); go("feedback"); }}>
-            {t("피드백 보내기")}
-            {surveyStatus && !surveyStatus.done && <span className="dim">+{surveyStatus.reward}C</span>}
-          </button>
-          {isAuthenticated && (
-            <button type="button" onClick={() => void signOut()}>{t("로그아웃")}</button>
-          )}
-          <a href={LEGAL_LINKS.terms} target="_blank" rel="noopener noreferrer">{t("이용약관")}</a>
-          <a href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer">{t("개인정보처리방침")}</a>
+          <div className="wt-my-list">
+            <button type="button" onClick={() => {
+              track("contact_open", { where: "mypage" });
+              setContactEmail(user?.email ?? ""); setContactMessage(""); setContactError("");
+              setContactCategory("WEBTOON"); setContactCompose(false); setContactSent(false); setContactOpen(true);
+            }}>
+              <span className="wt-my-rowname"><IconHelp className="wt-my-ico" />{t("1:1 문의하기")}</span><IconChevronRight className="wt-my-chev" />
+            </button>
+            <button type="button" onClick={() => { track("feedback_open", { where: "mypage" }); go("feedback"); }}>
+              <span className="wt-my-rowname"><IconEdit className="wt-my-ico" />{t("피드백 보내기")}</span>
+              {surveyStatus && !surveyStatus.done && <span className="dim">+{surveyStatus.reward}C</span>}<IconChevronRight className="wt-my-chev" />
+            </button>
+            {isAuthenticated && (
+              <button type="button" className="wt-my-signout" onClick={() => void signOut()}>
+                <span className="wt-my-rowname"><IconLogout className="wt-my-ico" />{t("로그아웃")}</span>
+              </button>
+            )}
+          </div>
+          <div className="wt-my-legal">
+            <a href={LEGAL_LINKS.terms} target="_blank" rel="noopener noreferrer">{t("이용약관")}</a>
+            <a href={LEGAL_LINKS.privacy} target="_blank" rel="noopener noreferrer">{t("개인정보처리방침")}</a>
+          </div>
         </div>
 
         <div className="card wt-my-lang">
@@ -514,6 +554,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
       </aside>
 
       <div className="wt-my-main">
+        {/* 폰에서 목록 줄을 눌러 들어온 화면 — 맨 위 「‹ 이름 개수」 줄로 목록에 돌아간다. 넓은 화면엔 안 보인다. */}
+        {tab !== "home" && (
+          <button type="button" className="wt-my-backbar" onClick={() => setTab("home")}>
+            <IconChevronLeft size={22} />
+            <b>{t(TAB_TITLE[tab])}</b>
+            {tab === "works" && <span className="dim">{runs.length}</span>}
+            {tab === "chars" && <span className="dim">{chars.length}</span>}
+            {tab === "liked" && <span className="dim">{liked.length}</span>}
+            {tab === "commented" && <span className="dim">{commented.length}</span>}
+            {tab === "trash" && <span className="dim">{trash.length + charTrash.length}</span>}
+          </button>
+        )}
             {contactOpen && (
               <Dialog className="wt-contact-dialog"
                       title={t(contactCompose ? "이메일 문의" : "무엇을 도와드릴까요?")}
@@ -679,25 +731,9 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
               </button>
             )}
 
+            {allWorks && draftsStrip}
             {!allWorks && <>
-            {(active.length > 0 || seriesDrafts.length > 0) && (
-              /* 만드는 중(#548) — 「최근 본 웹툰」 자리. 표지 한 줄과 같은 크기로, 눌러서 이어 만든다. */
-              <div className="wt-my-strip">
-                <div className="wt-strip">
-                  <b className="wt-strip-title">{t("만드는 중")} <span className="dim wt-my-draftcount">{active.length + seriesDrafts.length}</span></b>
-                  <div className="wt-strip-row">
-                    {active.map((j) => (
-                      <DraftCard key={j.id} job={j} card={activeCards[j.id]}
-                                 onOpen={() => { track("resume_job", { job: j.id, status: j.status }); go("running", { job: j.id }); }} />
-                    ))}
-                    {seriesDrafts.map((d) => (
-                      <SeriesDraftItem key={d.run} draft={d} cover={runs.find((r) => r.run_id === d.run)}
-                                       onOpen={() => { track("resume_series_draft", { run: d.run, ep: d.episode }); go("next", { run: d.run }); }} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+            {draftsStrip}
 
             {isAuthenticated && (
               <div className="wt-my-strip">
@@ -888,6 +924,19 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                          sub={<>{t("{n}개를 휴지통으로 옮겨요.", { n: picked.length })}<br />{t("휴지통에 {n}일간 보관됩니다.", { n: charKeepDays })}</>}
                          confirmLabel={t("삭제")} cancelLabel={t("취소")} busy={removing}
                          error={removeErr} onConfirm={() => void removePicked()} onClose={() => { setAskRemove(false); setRemoveErr(""); }} />
+        )}
+
+        {tab === "lang" && (
+          <>
+            <div className="wt-my-head">
+              <div>
+                <h2>{t("언어")}</h2>
+              </div>
+            </div>
+            <div className="card wt-my-lang">
+              <LangSwitch />
+            </div>
+          </>
         )}
 
         {tab === "settings" && (
