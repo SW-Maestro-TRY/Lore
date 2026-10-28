@@ -194,7 +194,7 @@ export default function AdminFailureDetail({ row, runner, onClose, onChanged }: 
       data-part="failure-overlay"
       role="dialog"
       aria-modal="true"
-      style={{ position: 'fixed', inset: 0, zIndex: 50, overflowY: 'auto', background: 'var(--bg, #fff)', padding: '8px 12px 24px', boxSizing: 'border-box' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 70, overflowY: 'auto', background: 'var(--bg, #fff)', padding: '8px 12px 24px', boxSizing: 'border-box' }}
     >
       {body}
     </div>

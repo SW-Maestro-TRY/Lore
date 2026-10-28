@@ -81,12 +81,16 @@ export default function AdminFailureHourChart({ hours }: { hours: HourBucket[] }
 
   // 자정 점선 + 날짜 라벨(40 이상 떨어지게)
   const days: { x: number; label: string }[] = [];
+  // ★ 자정이 아니라 "날짜가 바뀐 첫 칸" 에 단다 — 6시간 묶음은 UTC 0시에서 시작해 한국 0시 칸이 없다.
   let lastX = -1e9;
+  let lastDate = '';
   g.forEach((b, i) => {
     const k = kst(b.start);
-    const midnight = k.slice(11, 13) === '00' || (unit === 24 && i > 0);
+    const date = k.slice(0, 10);
+    const changed = date !== lastDate;
+    lastDate = date;
     const xx = x0(i);
-    if ((midnight || i === 0) && xx - lastX >= 40 && AXL + plot - xx >= 14) {
+    if (changed && xx - lastX >= 40 && AXL + plot - xx >= 14) {
       days.push({ x: xx, label: `${Number(k.slice(5, 7))}/${Number(k.slice(8, 10))}` });
       lastX = xx;
     }
