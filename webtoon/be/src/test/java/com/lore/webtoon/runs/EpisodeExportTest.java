@@ -26,12 +26,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 내려받는 파일에 <b>LORECOMIC 도장이 실제로 찍히는가</b>.
+ * 내려받는 파일에 <b>LORE 도장이 실제로 찍히는가</b>.
  *
  * 이 검사가 지키는 것은 유입 경로다. 만든 사람이 결과물을 SNS 에 올릴 때
  * 어디서 만든 것인지가 안 남으면, 퍼질수록 우리는 아무것도 못 얻는다.
- * 도장은 <b>조용히 안 찍히기 쉬운</b> 종류의 기능이라(글꼴이 없거나, 루
- * 그림을 못 읽거나) 그림에서 직접 확인한다.
+ * 도장은 <b>조용히 안 찍히기 쉬운</b> 종류의 기능이라(글꼴이 없거나)
+ * 그림에서 직접 확인한다.
  *
  * 눈으로 볼 때는 {@code LORE_STAMP_IN=<그림>} · {@code LORE_STAMP_OUT=<저장할 png>}
  * 환경변수를 주고 돌린다 — 실제 장에 도장을 찍어 저장한다.
@@ -132,7 +132,7 @@ class EpisodeExportTest {
 
         BufferedImage out = exported();
 
-        // 두 장 각자의 오른쪽 아래(폭의 17% 남짓)에 루와 글자가 찍혀 있어야 한다.
+        // 두 장 각자의 오른쪽 아래에 글자와 그림자가 찍혀 있어야 한다.
         assertThat(inked(out, 600, 350, 800, 500, 0xFFFFFF)).as("첫 장 도장").isGreaterThan(1500);
         assertThat(inked(out, 600, 850, 800, 1000, 0xFFFFFF)).as("둘째 장 도장").isGreaterThan(1500);
         // 왼쪽 위는 깨끗하다 — 도장은 구석에만.
@@ -140,13 +140,14 @@ class EpisodeExportTest {
     }
 
     @Test
-    @DisplayName("어두운 장에서도 보인다 — 흰 글자에 짙은 테두리")
+    @DisplayName("어두운 장에서도 보인다 — 흰 글자")
     void 어두운_장에서도() throws IOException {
         sheet(1, 800, 500, Color.BLACK);
 
         BufferedImage out = exported();
 
-        assertThat(inked(out, 600, 350, 800, 500, 0x000000)).as("어두운 장 도장").isGreaterThan(1500);
+        // 검은 장에서는 그림자가 안 보이니 흰 글자만 센다.
+        assertThat(inked(out, 600, 350, 800, 500, 0x000000)).as("어두운 장 도장").isGreaterThan(500);
     }
 
     @Test
