@@ -21,7 +21,7 @@
 import { louArt } from "./louArt";
 import { sceneParts, sceneShort } from "./sceneText";
 import { track } from "./track";
-import { readAllowance } from "./api";
+import { authFetch, readAllowance } from "./api";
 import { QUALITY_INFO } from "./wizardData";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
@@ -218,7 +218,7 @@ export function mountEditor(
     paintSaved("saving");
     let ok = false;
     try {
-      const res = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
+      const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(overlayPayload()) });
       ok = res.ok;
@@ -537,7 +537,7 @@ export function mountEditor(
 
   async function loadSceneTags() {
     try {
-      const cfg = await (await fetch(`${API}/config`)).json();
+      const cfg = await (await authFetch(`${API}/config`)).json();
       sceneTags = (cfg.feedback_tags || {}).scene || [];
     } catch { /* 못 받으면 자유 입력만 남는다 — 다시 그리기 자체는 막지 않는다 */ }
   }
@@ -742,7 +742,7 @@ export function mountEditor(
       has_note: !!body.feedback, result: body.textless ? "textless" : "text" });
     let job;
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API}/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/regen${epq()}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body) });
@@ -763,7 +763,7 @@ export function mountEditor(
     while (true) {
       await new Promise(r => setTimeout(r, 2000));
       let s;
-      try { s = await (await fetch(`${API}/regens/${job.id}`)).json(); }
+      try { s = await (await authFetch(`${API}/regens/${job.id}`)).json(); }
       catch { continue; }                       // 잠깐 끊겨도 다음 번에 이어진다
       if (msg && s.note) msg.innerHTML =
         `${tr("{n}번째 장을 다시 그리는 중…", { n: no })}<br><small class="veil-what">${esc(s.note.slice(0, 90))}</small>`;
@@ -802,7 +802,7 @@ export function mountEditor(
     if (!slot || !RUN_ID) return;
     if (!versions) {
       try {
-        versions = (await (await fetch(
+        versions = (await (await authFetch(
           `${API}/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/versions${epq()}`)).json()).versions;
       } catch { return; }
     }
@@ -826,7 +826,7 @@ export function mountEditor(
       track("regen_revert", { run: RUN_ID, cut: no, n: Number(b.dataset.v) });
       b.disabled = true;
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `${API}/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/revert${epq()}`,
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ version: Number(b.dataset.v) }) });
@@ -1452,7 +1452,7 @@ export function mountEditor(
       if (want === (data.title || "") || saving) { h.textContent = data.title; return; }
       saving = true;
       try {
-        const res = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/title`, {
+        const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/title`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ episode: EPISODE, title: want }),
         });
@@ -1606,12 +1606,12 @@ export function mountEditor(
 
     let runs = null;                    // null = 못 물어봄, [] = 물어봤는데 없음
     try {
-      const mine = (await (await fetch(
+      const mine = (await (await authFetch(
         `${API}/runs?mine=1&uid=${encodeURIComponent(uid)}`)).json()).runs || [];
       // 계정 것은 쿠키로 판단한다. 로그인 안 했으면 빈 목록이라 그냥 넘어간다.
       let account = [];
       try {
-        const res = await fetch("/api/webtoon/v1/my/runs", { credentials: "same-origin" });
+        const res = await authFetch("/api/webtoon/v1/my/runs", { credentials: "same-origin" });
         if (res.ok) {
           const body = await res.json();
           account = Array.isArray(body) ? body : (body.runs || body.data || []);
@@ -1694,13 +1694,13 @@ export function mountEditor(
     const src = RUN_ID ? `${API}/runs/${encodeURIComponent(RUN_ID)}/episode${epq()}`
                        : "/static/samples/mock.json";
     try {
-      const res = await fetch(src);
+      const res = await authFetch(src);
       if (!res.ok) throw new Error(await res.text());
       data = await res.json();
       if (RUN_ID) {
         /* 안전 기준에 걸려 빈 장으로 둔 장(#626) — 그 장은 안내를 얹고 다시 그리기가 무료다. */
         try {
-          const r = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/result`);
+          const r = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/result`);
           if (r.ok) {
             const found = await r.json();
             unsafePages = new Set((found.unsafe_pages || []).map(Number));
@@ -1746,7 +1746,7 @@ export function mountEditor(
     // 작업이 통신 한 번 실패했다고 사라지면 안 된다.
     if (RUN_ID) {
       try {
-        const got = await (await fetch(
+        const got = await (await authFetch(
           `${API}/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`)).json();
         for (const [no, sp] of Object.entries(got.scenes || {})) {
           if (Array.isArray(sp.items)) sc(Number(no)).items = sp.items.map(
@@ -1807,7 +1807,7 @@ export function mountEditor(
       btn.textContent = tr("굽는 중…");
       clearTimeout(pushT);
       try {
-        const res = await fetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/bake${epq()}`,
+        const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/bake${epq()}`,
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(overlayPayload()) });
         const out = await res.json();

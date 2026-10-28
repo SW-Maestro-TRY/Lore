@@ -8,6 +8,7 @@
  * 로그인이 필요한 자리(`/my/...`)만 공용 클라이언트(`@common/api/client`)로
  * 부른다 — 그쪽은 봉투(`{success, data}`)를 벗겨 준다. */
 import { request as appRequest } from "@common/api/client";
+import { getMe } from "@common/auth/api";
 import { translateNow } from "./i18n";
 import "./serverI18n";   // 서버가 보내는 한국어 문구의 사전
 
@@ -90,8 +91,40 @@ export class WebtoonApiError extends Error {
   }
 }
 
+/* ---- 로그인이 끊기지 않게 -------------------------------------------------
+ *
+ * 로그인 쿠키(access)는 30분이면 만료된다. 공용 요청(`@common/api/client`)은 401 을
+ * 받으면 refresh 로 새로 받아 한 번 더 보내는데, 웹툰 요청은 봉투 모양이 달라서 그
+ * 함수를 못 쓰고 fetch 를 바로 불러 왔다. 그래서 편집실·만들기에서 30분쯤 지나면
+ * 멀쩡히 로그인한 사람에게 「로그인이 필요합니다」가 떴다(2026-10-28 사용자 제보).
+ *
+ * **refresh 를 여기서 직접 부르지 않는다.** 서버는 refresh 를 회전시키고, 이미 쓴
+ * refresh 가 다시 오면 탈취로 보고 그 사람의 토큰을 전부 폐기한다 — 공용 쪽과 동시에
+ * 두 번 부르면 곧바로 전 기기 로그아웃이다. 그래서 공용의 `getMe()` 를 불러, 공용 요청의
+ * 한 줄기 갱신(refreshOnce)을 그대로 탄다. 갱신이 되면 원래 요청을 한 번만 다시 보낸다. */
+let renewing: Promise<boolean> | null = null;
+
+function renewSession(): Promise<boolean> {
+  if (!renewing) {
+    renewing = getMe()
+      .then(() => true, () => false)
+      .finally(() => {
+        renewing = null;
+      });
+  }
+  return renewing;
+}
+
+/** fetch 와 같다. 다만 401 이면 로그인을 이어 붙여 보고, 되면 한 번 더 보낸다. */
+export async function authFetch(input: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status !== 401) return res;
+  if (!(await renewSession())) return res;
+  return fetch(input, init);
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(BASE + path, {
+  const res = await authFetch(BASE + path, {
     ...init,
     /* 이 브라우저가 누구인지 늘 같이 보낸다 — 캐릭터는 로그인 없이도 만들
        수 있어서, 게스트가 만든 것은 이 값으로만 자기 것임을 말할 수 있다. */
