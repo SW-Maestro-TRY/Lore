@@ -43,7 +43,7 @@ public class AdminHatchRetryApplier {
      * @param files        CUSTOM: 논리 경로 → 업로드 키(작업 1.7)
      * @param note         러너 메모
      */
-    public record CandidatesRequest(@Size(max = AdminLayerService.MAX_CANDIDATES) List<String> gridKeys,
+    public record RetryCandidatesRequest(@Size(max = AdminLayerService.MAX_CANDIDATES) List<String> gridKeys,
                                     String sheetKey, @Size(max = 1000) String identityText,
                                     Map<String, String> files,
                                     @Size(max = 2000) String note) {
@@ -72,7 +72,7 @@ public class AdminHatchRetryApplier {
 
     // ── 러너 결과 ─────────────────────────────────────────────────────────
 
-    public CandidatesResult hatchCandidates(Long callerId, long retryId, CandidatesRequest body, Instant now) {
+    public CandidatesResult hatchCandidates(Long callerId, long retryId, RetryCandidatesRequest body, Instant now) {
         adminGuard.require(callerId);
         AdminRetry r = retries.findById(retryId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "재시도 요청이 없습니다: " + retryId));

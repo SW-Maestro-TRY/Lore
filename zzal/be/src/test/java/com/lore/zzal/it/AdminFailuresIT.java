@@ -9,7 +9,7 @@ import com.lore.zzal.admin.failures.AdminFailureResponses.FailurePage;
 import com.lore.zzal.admin.failures.AdminFailureResponses.FailureRow;
 import com.lore.zzal.admin.AdminBotToken;
 import com.lore.zzal.admin.retry.AdminHatchRetryApplier;
-import com.lore.zzal.admin.retry.AdminHatchRetryApplier.CandidatesRequest;
+import com.lore.zzal.admin.retry.AdminHatchRetryApplier.RetryCandidatesRequest;
 import com.lore.zzal.admin.retry.AdminRetry;
 import com.lore.zzal.admin.retry.AdminRetryKind;
 import com.lore.zzal.admin.retry.AdminRetryRepository;
@@ -795,7 +795,7 @@ class AdminFailuresIT extends ZzalItSupport {
 
         String grid = newUploadedImageKey(admin);
         assertThatThrownBy(() -> hatchApplier.hatchCandidates(admin, id,
-                new CandidatesRequest(List.of(grid), null, null, null, "늦게 옴"), now.plusSeconds(3)))
+                new RetryCandidatesRequest(List.of(grid), null, null, null, "늦게 옴"), now.plusSeconds(3)))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ADMIN_RETRY_CLOSED));
         assertThat(jdbc.queryForObject("select layer1_candidates from zzal_pet where id = ?", String.class, pet))
                 .isNull();
@@ -809,12 +809,12 @@ class AdminFailuresIT extends ZzalItSupport {
         Long pet = sheetlessEgg();
         RetryView unclaimed = retryService.request(admin, "HATCH", pet, null, now);
         assertThatThrownBy(() -> hatchApplier.hatchCandidates(admin, unclaimed.id(),
-                new CandidatesRequest(List.of(), null, null, null, null), now))
+                new RetryCandidatesRequest(List.of(), null, null, null, null), now))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
 
         retryService.claim(admin, unclaimed.id(), now.plusSeconds(1));
         var result = hatchApplier.hatchCandidates(admin, unclaimed.id(),
-                new CandidatesRequest(List.of(), null, null, null, "격자가 다 깨짐"), now.plusSeconds(2));
+                new RetryCandidatesRequest(List.of(), null, null, null, "격자가 다 깨짐"), now.plusSeconds(2));
         assertThat(result.result()).isEqualTo("NONE");
         AdminRetry row = retries.findById(unclaimed.id()).orElseThrow();
         assertThat(row.getResult()).isEqualTo(AdminRetryResult.NONE);
@@ -858,7 +858,7 @@ class AdminFailuresIT extends ZzalItSupport {
         String sheet = newUploadedImageKey(admin);
 
         var result = hatchApplier.hatchCandidates(admin, id,
-                new CandidatesRequest(List.of(grid), sheet, "(러너 문단)", null, "Codex 1회"), now.plusSeconds(2));
+                new RetryCandidatesRequest(List.of(grid), sheet, "(러너 문단)", null, "Codex 1회"), now.plusSeconds(2));
         assertThat(result.result()).isEqualTo("CANDIDATES");
         assertThat(result.hatch()).hasSize(1);
         String cid = result.hatch().getFirst().candidateId();
@@ -884,5 +884,14 @@ class AdminFailuresIT extends ZzalItSupport {
         assertThat(row.getAppliedBy()).isEqualTo(admin);
         assertThat(row.getAppliedChoice()).isEqualTo(cid);
         assertThat(hatchRows()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("관리자 스위치가 꺼져 있으면 실패 API 는 없다(404)")
+    void controller_adminDisabled_404() throws Exception {
+        setUpPet();
+        var res = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/api/zzal/v1/admin/failures").with(asUser(admin))).andReturn();
+        assertThat(res.getResponse().getStatus()).isEqualTo(404);
     }
 }

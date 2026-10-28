@@ -9,7 +9,7 @@ import com.lore.common.s3.S3Storage;
 import com.lore.zzal.admin.AdminCaller;
 import com.lore.zzal.admin.AdminGuard;
 import com.lore.zzal.admin.failures.AdminFailureQuery;
-import com.lore.zzal.admin.retry.AdminHatchRetryApplier.CandidatesRequest;
+import com.lore.zzal.admin.retry.AdminHatchRetryApplier.RetryCandidatesRequest;
 import com.lore.zzal.admin.retry.AdminHatchRetryApplier.CandidatesResult;
 import com.lore.zzal.attendance.BundleSourcePlan;
 import com.lore.zzal.attendance.CustomBundlePublicationService;
@@ -109,7 +109,7 @@ public class AdminCustomRetryApplier {
 
     // ── 러너 결과 ─────────────────────────────────────────────────────────
 
-    public CandidatesResult customCandidates(Long callerId, long retryId, CandidatesRequest body, Instant now) {
+    public CandidatesResult customCandidates(Long callerId, long retryId, RetryCandidatesRequest body, Instant now) {
         adminGuard.require(callerId);
         AdminRetry r = retries.findById(retryId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "재시도 요청이 없습니다: " + retryId));

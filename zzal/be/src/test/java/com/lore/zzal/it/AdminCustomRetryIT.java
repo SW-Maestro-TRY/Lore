@@ -6,7 +6,7 @@ import com.lore.common.s3.S3Storage;
 import com.lore.zzal.admin.AdminBotToken;
 import com.lore.zzal.admin.failures.AdminFailureQuery;
 import com.lore.zzal.admin.retry.AdminCustomRetryApplier;
-import com.lore.zzal.admin.retry.AdminHatchRetryApplier.CandidatesRequest;
+import com.lore.zzal.admin.retry.AdminHatchRetryApplier.RetryCandidatesRequest;
 import com.lore.zzal.admin.retry.AdminRetry;
 import com.lore.zzal.admin.retry.AdminRetryRepository;
 import com.lore.zzal.admin.retry.AdminRetryResult;
@@ -191,7 +191,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
         Map<String, String> files = files(o[1], PLAN, null, false);
         files.put("../x.webp", upload("x"));
 
-        assertThatThrownBy(() -> applier.customCandidates(admin, id, new CandidatesRequest(null, null, null, files, null), now))
+        assertThatThrownBy(() -> applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, files, null), now))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
         AdminRetry row = retries.findById(id).orElseThrow();
         assertThat(row.getResult()).isNull();
@@ -205,7 +205,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
         long[] o = orphan("CLAIMED", null, PLAN);
         long id = claimed(o[1]);
         var result = applier.customCandidates(admin, id,
-                new CandidatesRequest(null, null, null, files(o[1], PLAN, "00000000-0000-0000-0000-000000000000", false), null),
+                new RetryCandidatesRequest(null, null, null, files(o[1], PLAN, "00000000-0000-0000-0000-000000000000", false), null),
                 now.plusSeconds(2));
         assertThat(result.result()).isEqualTo("NONE");
         AdminRetry row = retries.findById(id).orElseThrow();
@@ -219,7 +219,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
         setUpAdmin();
         long[] o = orphan("CLAIMED", null, PLAN);
         long id = claimed(o[1]);
-        applier.customCandidates(admin, id, new CandidatesRequest(null, null, null, files(o[1], PLAN, null, false), null), now);
+        applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, files(o[1], PLAN, null, false), null), now);
 
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(admin, null,
                 List.of(new SimpleGrantedAuthority("ROLE_USER"), new SimpleGrantedAuthority(AdminBotToken.BOT_AUTHORITY))));
@@ -237,7 +237,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
         long[] o = orphan("CLAIMED", null, PLAN);
         long id = claimed(o[1]);
         var cand = applier.customCandidates(admin, id,
-                new CandidatesRequest(null, null, null, files(o[1], PLAN, null, false), "Codex"), now.plusSeconds(2));
+                new RetryCandidatesRequest(null, null, null, files(o[1], PLAN, null, false), "Codex"), now.plusSeconds(2));
         assertThat(cand.result()).isEqualTo("CANDIDATES");
 
         applier.customPick(admin, id, now.plusSeconds(5));
@@ -270,7 +270,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
         String rid = requestId(o[1], PLAN);
         put("images/zzal/custom/" + rid + "/grid.png", "old-grid"); // 원래 서버 실행이 남긴 격자(덮어써질 자리)
         long id = claimed(o[1]);
-        applier.customCandidates(admin, id, new CandidatesRequest(null, null, null, files(o[1], PLAN, null, false), null), now);
+        applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, files(o[1], PLAN, null, false), null), now);
         var before = jdbc.queryForMap("select state, error_code, claim_token, execution_id, manifest_hash "
                 + "from zzal_custom_bundle_job where id = ?", o[1]);
 
@@ -302,7 +302,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
                 values (?, 1, 'images/zzal/custom/old/1.webp', 'x', 'PASS', 'UNREVIEWED', true) returning id
                 """, Long.class, o[1]);
         long id = claimed(o[1]);
-        applier.customCandidates(admin, id, new CandidatesRequest(null, null, null, files(o[1], PLAN, null, false), null), now);
+        applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, files(o[1], PLAN, null, false), null), now);
         jdbc.update("update zzal_attendance_reward_slot set state = 'GRANTED', asset_id = ?, asset_key = 'k', granted_at = now() "
                 + "where pet_id = ? and slot_key = 'motion-1'", asset, o[0]);
 
@@ -321,7 +321,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
         long[] planless = orphan("PENDING", "PLANNING_IN_PROGRESS", null);
         long id = claimed(planless[1]);
         applier.customCandidates(admin, id,
-                new CandidatesRequest(null, null, null, files(planless[1], PLAN, null, true), null), now);
+                new RetryCandidatesRequest(null, null, null, files(planless[1], PLAN, null, true), null), now);
         applier.customPick(admin, id, now.plusSeconds(5));
         var job = jdbc.queryForMap("select state, source_plan_json, source_plan_hash from zzal_custom_bundle_job where id = ?",
                 planless[1]);
@@ -334,7 +334,7 @@ class AdminCustomRetryIT extends ZzalItSupport {
         String other = "{\"motionPlan\":{\"version\":\"v2\"}}";
         Map<String, String> files = files(planned[1], PLAN, null, false);
         files.put("source-plan.json", upload(other));
-        assertThatThrownBy(() -> applier.customCandidates(admin, id2, new CandidatesRequest(null, null, null, files, null), now))
+        assertThatThrownBy(() -> applier.customCandidates(admin, id2, new RetryCandidatesRequest(null, null, null, files, null), now))
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
         assertThat(new String(other.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8)).isNotEqualTo(PLAN);
     }
