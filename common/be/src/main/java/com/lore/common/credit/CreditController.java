@@ -291,7 +291,24 @@ public class CreditController {
         static Line from(CreditEvent e) {
             return new Line(e.getId(), e.getDelta(), e.getReason().name(),
                     e.getReason().label(), e.getDomain().name(), e.getDomain().label(),
-                    e.getMemo(), e.getCreatedAt());
+                    memoOf(e), e.getCreatedAt());
+        }
+
+        /**
+         * 내역에 보일 한 줄.
+         *
+         * 출석 보상은 처음에 이유의 기본 문구(「활동 보상」)를 메모로 적었다. 지금은 「출석 보상」을
+         * 적지만, 이미 쌓인 줄은 고쳐 쓰지 않고 보여 줄 때만 바꾼다 — 돈에 준하는 기록이라
+         * 옛 줄을 손대지 않는다. 출석 refId({@code attend-…}) 줄만 바꾸므로, 같은 REWARD 를
+         * 쓰는 다른 활동(설문 보상 등)의 내역은 그대로다.
+         */
+        static String memoOf(CreditEvent e) {
+            String memo = e.getMemo();
+            boolean defaultMemo = memo == null || memo.isBlank() || memo.equals(e.getReason().label());
+            if (defaultMemo && CreditAttendanceService.isAttendance(e.getReason(), e.getRefId())) {
+                return CreditAttendanceService.MEMO;
+            }
+            return memo;
         }
     }
 }

@@ -52,6 +52,20 @@ public class CreditAttendanceService {
     /** 큰 보상이 있는 날. 화면이 「다음 큰 보상까지 며칠」을 보여 줄 때 이 날만 센다. */
     private static final List<Integer> MILESTONES = List.of(4, CARD);
 
+    /** 출석 보상의 refId 머리. 뒤에 카드 시작일과 일차가 붙는다 — {@code attend-2026-10-28-d1}. */
+    static final String REF_PREFIX = "attend-";
+
+    /**
+     * 내역에 보일 한 줄. 이유는 다른 활동과 같은 REWARD(「활동 보상」)라, 이 말이 없으면
+     * 사용자가 출석으로 받은 것인지 알아보지 못한다(2026-10-28 운영 확인).
+     */
+    static final String MEMO = "출석 보상";
+
+    /** 출석으로 받은 줄인가. 이유가 아니라 refId 로 가린다 — REWARD 는 다른 활동도 쓴다. */
+    static boolean isAttendance(CreditReason reason, String refId) {
+        return reason == CreditReason.REWARD && refId != null && refId.startsWith(REF_PREFIX);
+    }
+
     private final CreditAttendanceRepository days;
     private final CreditService credits;
     private final List<Reward> rewards;
@@ -105,7 +119,7 @@ public class CreditAttendanceService {
                 .orElseGet(() -> stamp(userId, today));
         LocalDate cardStart = today.minusDays(streak - 1L);
         int granted = credits.grantOnce(userId, amountOf(streak), CreditReason.REWARD,
-                CreditDomain.COMMON, "attend-" + cardStart + "-d" + streak);
+                CreditDomain.COMMON, REF_PREFIX + cardStart + "-d" + streak, MEMO);
         return statusOf(userId, today, granted);
     }
 

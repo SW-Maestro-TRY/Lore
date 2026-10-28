@@ -105,10 +105,23 @@ public class CreditService {
     @Transactional
     public int grantOnce(Long userId, int amount, CreditReason reason,
                          CreditDomain domain, String refId) {
+        return grantOnce(userId, amount, reason, domain, refId, reason.label());
+    }
+
+    /**
+     * 내역에 보일 한 줄까지 정해서 준다.
+     *
+     * 이유(REWARD 등)는 여러 활동이 같이 쓰는 이름이라, 무슨 활동인지는 {@code memo} 가
+     * 말한다 — 예: 출석 보상. 비우면 이유의 기본 문구가 적힌다.
+     */
+    @Transactional
+    public int grantOnce(Long userId, int amount, CreditReason reason,
+                         CreditDomain domain, String refId, String memo) {
         if (amount <= 0) {
             return 0;                       // 0 이면 그 몫을 안 주는 설정이다
         }
-        return ledger.write(userId, amount, reason, domain, refId, reason.label()) ? amount : 0;
+        String line = memo == null || memo.isBlank() ? reason.label() : memo;
+        return ledger.write(userId, amount, reason, domain, refId, line) ? amount : 0;
     }
 
     /**
