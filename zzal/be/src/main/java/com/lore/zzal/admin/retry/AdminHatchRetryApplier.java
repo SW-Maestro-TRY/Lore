@@ -94,12 +94,19 @@ public class AdminHatchRetryApplier {
         }
         String sheetKey = blankToNull(body.sheetKey());
         String identity = blankToNull(body.identityText());
-        if (sheetKey != null) {
-            // 같은 호출자가 발급받은 안 쓴 키만 — 남의 키·이미 쓴 키는 거부.
-            tx.executeWithoutResult(s -> s3Service.consume(callerId, sheetKey, now));
+        // ★ 취소와 경합하지 않게(수정 7) — 굽기 전에 행을 잠가 "등록 중" 표식을 올린다. 취소 · 두 번째 등록은 409.
+        startDelivery(retryId);
+        List<AdminLayerService.Candidate> baked;
+        try {
+            if (sheetKey != null) {
+                // 같은 호출자가 발급받은 안 쓴 키만 — 남의 키·이미 쓴 키는 거부.
+                tx.executeWithoutResult(s -> s3Service.consume(callerId, sheetKey, now));
+            }
+            baked = layerService.candidates(callerId, r.getTargetId(), 1, grids, now);
+        } catch (RuntimeException e) {
+            endDelivery(retryId);
+            throw e;
         }
-
-        List<AdminLayerService.Candidate> baked = layerService.candidates(callerId, r.getTargetId(), 1, grids, now);
 
         List<Map<String, Object>> entries = new ArrayList<>();
         for (AdminLayerService.Candidate c : baked) {
@@ -205,6 +212,22 @@ public class AdminHatchRetryApplier {
     }
 
     // ── 잔손 ──────────────────────────────────────────────────────────────
+
+    private void startDelivery(long retryId) {
+        tx.executeWithoutResult(s -> {
+            AdminRetry row = retries.findByIdForUpdate(retryId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "재시도 요청이 없습니다: " + retryId));
+            requireDeliverable(row);
+            if (row.getAppliedChoice() != null) {
+                throw new BusinessException(ErrorCode.ADMIN_RETRY_CLOSED);
+            }
+            row.markDelivering();
+        });
+    }
+
+    private void endDelivery(long retryId) {
+        tx.executeWithoutResult(s -> retries.findByIdForUpdate(retryId).ifPresent(AdminRetry::clearDelivering));
+    }
 
     /** 러너가 집었고 아직 결과가 없는 행만 결과를 받는다. 취소·이미 결과 있음은 409, 안 집음은 400. */
     private static void requireDeliverable(AdminRetry r) {

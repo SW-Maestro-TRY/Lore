@@ -189,8 +189,8 @@ public class AdminRetryService {
         AdminRetry r = tx.execute(s -> {
             AdminRetry row = retries.findByIdForUpdate(retryId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "재시도 요청이 없습니다: " + retryId));
-            if (!row.isOpen() || row.isApplying()) {
-                // 반영 중이면 취소하지 않는다 — 반영이 끝나거나 실패로 닫힌 뒤에 본다.
+            if (!row.isOpen() || row.isBusy()) {
+                // 반영 중 · 러너 결과 등록 중이면 취소하지 않는다 — 끝나거나 실패로 닫힌 뒤에 본다(수정 1 · 7).
                 throw new BusinessException(ErrorCode.ADMIN_RETRY_CLOSED);
             }
             row.cancel(now);
@@ -210,7 +210,7 @@ public class AdminRetryService {
     /** 러너가 집을 차례. 부를 때마다 러너 확인 시각을 남긴다. 대상이 이미 복구돼 있으면 그 자리에서 닫는다. */
     public List<PendingItem> pending(Long callerId, Instant now) {
         adminGuard.require(callerId);
-        clock.touch(now);
+        touchIfRunner(now);
         List<PendingItem> out = new ArrayList<>();
         for (AdminRetry r : retries.findPending()) {
             if (recovered(r)) {
@@ -230,7 +230,7 @@ public class AdminRetryService {
     /** 러너가 집었다. 이미 집혔거나 닫혔으면 409. */
     public PendingItem claim(Long callerId, long retryId, Instant now) {
         adminGuard.require(callerId);
-        clock.touch(now);
+        touchIfRunner(now);
         AdminRetry r = tx.execute(s -> {
             AdminRetry row = retries.findByIdForUpdate(retryId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "재시도 요청이 없습니다: " + retryId));
@@ -241,6 +241,13 @@ public class AdminRetryService {
             return row;
         });
         return item(r, now);
+    }
+
+    /** 러너 확인 시각은 봇 토큰 호출(맥미니 러너)일 때만 — 사람이 화면에서 본 것은 러너 생존이 아니다(수정 7). */
+    private void touchIfRunner(Instant now) {
+        if (caller.isBot()) {
+            clock.touch(now);
+        }
     }
 
     public Optional<Instant> runnerLastSeen() {

@@ -34,6 +34,8 @@ public class AdminRetry {
     public static final int CHOICE_MAX = 100;
     /** 반영이 진행 중이라는 표식(applied_choice 칸). 결과는 CANDIDATES 그대로 — 두 번째 반영 · 취소를 막는다. */
     public static final String APPLYING = "APPLYING";
+    /** 러너 결과를 등록하는 중이라는 표식(applied_choice 칸). 결과는 아직 null — 취소 · 두 번째 등록을 막는다. */
+    public static final String DELIVERING = "DELIVERING";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -159,6 +161,7 @@ public class AdminRetry {
         this.result = r;
         this.note = clip(note, NOTE_MAX);
         this.candidateKeys = candidates == null ? null : new LinkedHashMap<>(candidates);
+        clearDelivering();
         this.finishedAt = now;
     }
 
@@ -206,6 +209,25 @@ public class AdminRetry {
             throw new IllegalStateException("반영할 수 없는 요청입니다: " + id + " (" + result + "/" + appliedChoice + ")");
         }
         this.appliedChoice = APPLYING;
+    }
+
+    /** 러너 결과 등록 시작 — 집혔고 결과가 없고 아무도 등록 중이 아닐 때만. */
+    public void markDelivering() {
+        if (pickedAt == null || result != null || appliedChoice != null) {
+            throw new IllegalStateException("결과를 받을 수 없는 요청입니다: " + id);
+        }
+        this.appliedChoice = DELIVERING;
+    }
+
+    public void clearDelivering() {
+        if (DELIVERING.equals(appliedChoice)) {
+            this.appliedChoice = null;
+        }
+    }
+
+    /** 반영 중이거나 결과 등록 중 — 취소하지 않는다. */
+    public boolean isBusy() {
+        return isOpen() && (APPLYING.equals(appliedChoice) || DELIVERING.equals(appliedChoice));
     }
 
     public boolean isApplying() {

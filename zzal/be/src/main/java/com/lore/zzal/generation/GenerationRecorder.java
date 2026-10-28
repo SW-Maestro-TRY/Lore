@@ -31,6 +31,9 @@ public class GenerationRecorder {
     @org.springframework.beans.factory.annotation.Autowired
     private org.springframework.beans.factory.ObjectProvider<HatchFailureListener> failureListeners;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
 
     private final GenJobRepository jobRepository;
     private final GenStepRecordRepository stepRepository;
@@ -203,7 +206,14 @@ public class GenerationRecorder {
         }
         Runnable call = () -> failureListeners.forEach(l -> {
             try {
-                l.onHatchFinallyFailed(petId, Instant.now());
+                // ★ afterCommit 안에서는 끝난 트랜잭션에 묶여 있다 — 듣는 쪽 쓰기는 새 트랜잭션에서(수정 7).
+                if (transactionManager != null) {
+                    var t = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+                    t.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                    t.executeWithoutResult(s -> l.onHatchFinallyFailed(petId, Instant.now()));
+                } else {
+                    l.onHatchFinallyFailed(petId, Instant.now());
+                }
             } catch (RuntimeException e) {
                 org.slf4j.LoggerFactory.getLogger(GenerationRecorder.class)
                         .error("부화 실패 후속 처리 실패(실패 기록은 남음) — petId={}", petId, e);

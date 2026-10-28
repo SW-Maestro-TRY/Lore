@@ -133,8 +133,23 @@ public class AdminCustomRetryApplier {
                     "반영할 수 없는 잡 상태입니다(%s/%s)".formatted(job.state(), job.error()));
         }
 
-        // 업로드 키는 이 호출자가 발급받은 안 쓴 키만.
-        tx.executeWithoutResult(s -> files.values().forEach(k -> s3Service.consume(callerId, k, now)));
+        // ★ 취소와 경합하지 않게(수정 7) — 쓰기 전에 행을 잠가 "등록 중" 표식을 올린다.
+        tx.executeWithoutResult(s -> {
+            AdminRetry row = retries.findByIdForUpdate(retryId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "재시도 요청이 없습니다: " + retryId));
+            requireDeliverable(row);
+            if (row.getAppliedChoice() != null) {
+                throw new BusinessException(ErrorCode.ADMIN_RETRY_CLOSED);
+            }
+            row.markDelivering();
+        });
+        try {
+            // 업로드 키는 이 호출자가 발급받은 안 쓴 키만.
+            tx.executeWithoutResult(s -> files.values().forEach(k -> s3Service.consume(callerId, k, now)));
+        } catch (RuntimeException e) {
+            tx.executeWithoutResult(s -> retries.findByIdForUpdate(retryId).ifPresent(AdminRetry::clearDelivering));
+            throw e;
+        }
 
         String mismatch;
         String requestId = null;
@@ -146,6 +161,7 @@ public class AdminCustomRetryApplier {
             manifestSha = AdminFailureQuery.sha256(manifestRaw);
             mismatch = checkManifest(json.readTree(manifestRaw), requestId, files);
         } catch (BusinessException e) {
+            tx.executeWithoutResult(s -> retries.findByIdForUpdate(retryId).ifPresent(AdminRetry::clearDelivering));
             throw e;
         } catch (Exception e) {
             mismatch = "manifest 를 읽지 못함 — " + e.getMessage();

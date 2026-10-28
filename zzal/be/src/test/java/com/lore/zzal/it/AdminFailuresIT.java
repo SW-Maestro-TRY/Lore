@@ -650,8 +650,22 @@ class AdminFailuresIT extends ZzalItSupport {
         assertThat(again.id()).isNotEqualTo(first.id());
     }
 
+    /** 봇 토큰으로 들어온 것처럼(권한 표식) 부른다. */
+    private <T> T asBot(java.util.function.Supplier<T> call) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(admin, null,
+                        List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER"),
+                                new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        com.lore.zzal.admin.AdminBotToken.BOT_AUTHORITY))));
+        try {
+            return call.get();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
     @Test
-    @DisplayName("대기 목록 — 안 집힌 것만, 부를 때마다 러너 확인 시각을 남긴다")
+    @DisplayName("대기 목록 — 안 집힌 것만, 봇(러너)이 부를 때만 러너 확인 시각을 남긴다")
     void pending_returnsOnlyUnpicked_andTouchesClock() {
         setUpPet();
         Long a = failedEgg();
@@ -664,7 +678,11 @@ class AdminFailuresIT extends ZzalItSupport {
         assertThat(claimed.hatch().sheetKey()).isEqualTo("images/zzal/pets/%d/sheet.png".formatted(a));
         assertThat(claimed.hatch().failedStage()).isNull();
 
-        List<PendingItem> pending = retryService.pending(admin, now.plusSeconds(10));
+        // 쿠키 관리자가 본 것은 러너 확인이 아니다(수정 7) — 시각을 안 남긴다
+        assertThat(retryService.pending(admin, now.plusSeconds(8))).extracting(PendingItem::retryId).containsExactly(rb.id());
+        assertThat(retryService.runnerLastSeen()).isEmpty();
+
+        List<PendingItem> pending = asBot(() -> retryService.pending(admin, now.plusSeconds(10)));
         assertThat(pending).extracting(PendingItem::retryId).containsExactly(rb.id());
         assertThat(retryService.runnerLastSeen()).contains(now.plusSeconds(10));
         assertThat(hatchRows().stream().filter(r -> r.id() == a).findFirst().orElseThrow().request())
@@ -972,5 +990,30 @@ class AdminFailuresIT extends ZzalItSupport {
 
         assertThat(customRows()).extracting(FailureRow::id).containsExactly(old);
         assertThat(customRows().getFirst().reasonCode()).isEqualTo("CLAIMED_ORPHAN");
+    }
+
+    // ── 수정 7: 취소와 러너 결과 경합 ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("★ 러너 결과를 등록하는 중(표식)에는 취소가 409, 등록이 실패하면 표식이 풀려 취소할 수 있다")
+    void cancelDuringDelivery_409_thenFreedOnFailure() {
+        setUpPet();
+        Long pet = sheetlessEgg();
+        long id = claimedHatchRetry(pet);
+        jdbc.update("update zzal_admin_retry set applied_choice = 'DELIVERING' where id = ?", id);
+        assertThatThrownBy(() -> retryService.cancel(admin, id, now.plusSeconds(2)))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ADMIN_RETRY_CLOSED));
+        assertThatThrownBy(() -> hatchApplier.hatchCandidates(admin, id,
+                new RetryCandidatesRequest(List.of(newUploadedImageKey(admin)), null, null, null, null), now))
+                .as("다른 등록이 진행 중이면 두 번째 등록도 409")
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ADMIN_RETRY_CLOSED));
+        jdbc.update("update zzal_admin_retry set applied_choice = null where id = ?", id);
+
+        // 남의 키(쓴 적 없는 키)로 등록 → 실패, 표식은 풀린다
+        assertThatThrownBy(() -> hatchApplier.hatchCandidates(admin, id,
+                new RetryCandidatesRequest(List.of("images/zzal/not-mine"), null, null, null, null), now))
+                .isInstanceOf(BusinessException.class);
+        assertThat(retries.findById(id).orElseThrow().getAppliedChoice()).isNull();
+        assertThat(retryService.cancel(admin, id, now.plusSeconds(3)).result()).isEqualTo("CANCELLED");
     }
 }
