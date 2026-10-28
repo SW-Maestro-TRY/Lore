@@ -7,6 +7,9 @@ import com.lore.zzal.admin.failures.AdminFailureQuery;
 import com.lore.zzal.admin.failures.AdminFailureResponses.FailureDetail;
 import com.lore.zzal.admin.failures.AdminFailureResponses.FailurePage;
 import com.lore.zzal.admin.failures.AdminFailureResponses.FailureRow;
+import com.lore.zzal.admin.AdminBotToken;
+import com.lore.zzal.admin.retry.AdminHatchRetryApplier;
+import com.lore.zzal.admin.retry.AdminHatchRetryApplier.CandidatesRequest;
 import com.lore.zzal.admin.retry.AdminRetry;
 import com.lore.zzal.admin.retry.AdminRetryKind;
 import com.lore.zzal.admin.retry.AdminRetryRepository;
@@ -47,6 +50,9 @@ class AdminFailuresIT extends ZzalItSupport {
     @Autowired AdminFailureQuery failures;
     @Autowired AdminFailureDetailService details;
     @Autowired AdminRetryService retryService;
+    @Autowired AdminHatchRetryApplier hatchApplier;
+    @Autowired com.lore.zzal.generation.LayerCandidateBaker baker;
+    @Autowired com.lore.common.s3.S3Storage storage;
     @Autowired PipelineRegistry registry;
 
     private Long admin;
@@ -754,5 +760,129 @@ class AdminFailuresIT extends ZzalItSupport {
         assertThat(jdbc.queryForObject("select attempt from zzal_gen_job where id = ?", Integer.class, v.jobId()))
                 .isZero();
         assertThat(retries.findById(v.id()).orElseThrow().getMemo()).isEqualTo("격자 다시");
+    }
+
+    // ── 작업 1.6: 러너 결과 등록 + 부화 반영 ──────────────────────────────────
+
+    /** 시트 없이 실패한 알(시트부터 실패) — 러너가 시트를 새로 만들어 와야 살린다. */
+    private Long sheetlessEgg() {
+        Long pet = egg("FAILED", "몽이");
+        Long job = hatchJob(pet, 1, "FAILED", "MODERATION_BLOCKED", ago(40), ago(40), ago(30));
+        stepWith(job, 1, "sheet", "FAILED", null, "그림 안전 검사");
+        return pet;
+    }
+
+    private long claimedHatchRetry(Long pet) {
+        RetryView v = retryService.request(admin, "HATCH", pet, null, now);
+        retryService.claim(admin, v.id(), now.plusSeconds(1));
+        return v.id();
+    }
+
+    private void put(String key, String body) throws Exception {
+        java.nio.file.Path tmp = java.nio.file.Files.createTempFile("admin-it-", ".bin");
+        java.nio.file.Files.writeString(tmp, body);
+        storage.upload(key, tmp, "application/octet-stream");
+        java.nio.file.Files.deleteIfExists(tmp);
+    }
+
+    @Test
+    @DisplayName("★ 러너 결과 — 취소된 행이면 409, 1층 후보도 올리지 않는다(리뷰 초점 4)")
+    void hatchCandidates_cancelledRow_409_andNoLayerCandidates() {
+        setUpPet();
+        Long pet = sheetlessEgg();
+        long id = claimedHatchRetry(pet);
+        retryService.cancel(admin, id, now.plusSeconds(2));
+
+        String grid = newUploadedImageKey(admin);
+        assertThatThrownBy(() -> hatchApplier.hatchCandidates(admin, id,
+                new CandidatesRequest(List.of(grid), null, null, null, "늦게 옴"), now.plusSeconds(3)))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ADMIN_RETRY_CLOSED));
+        assertThat(jdbc.queryForObject("select layer1_candidates from zzal_pet where id = ?", String.class, pet))
+                .isNull();
+        assertThat(retries.findById(id).orElseThrow().getResult()).isEqualTo(AdminRetryResult.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("러너 결과 — 격자 0장이면 NONE 으로 닫힌다 · 안 집은 행은 400")
+    void hatchCandidates_emptyGrids_resultNone() {
+        setUpPet();
+        Long pet = sheetlessEgg();
+        RetryView unclaimed = retryService.request(admin, "HATCH", pet, null, now);
+        assertThatThrownBy(() -> hatchApplier.hatchCandidates(admin, unclaimed.id(),
+                new CandidatesRequest(List.of(), null, null, null, null), now))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
+
+        retryService.claim(admin, unclaimed.id(), now.plusSeconds(1));
+        var result = hatchApplier.hatchCandidates(admin, unclaimed.id(),
+                new CandidatesRequest(List.of(), null, null, null, "격자가 다 깨짐"), now.plusSeconds(2));
+        assertThat(result.result()).isEqualTo("NONE");
+        AdminRetry row = retries.findById(unclaimed.id()).orElseThrow();
+        assertThat(row.getResult()).isEqualTo(AdminRetryResult.NONE);
+        assertThat(row.getNote()).isEqualTo("격자가 다 깨짐");
+        assertThat(row.isOpen()).isFalse();
+    }
+
+    @Test
+    @DisplayName("★ 고르기 — 봇 토큰 호출이면 403, 펫은 FAILED 그대로")
+    void hatchPick_byBotToken_403() {
+        setUpPet();
+        Long pet = sheetlessEgg();
+        long id = claimedHatchRetry(pet);
+        transactions.executeWithoutResult(s -> retries.findByIdForUpdate(id).orElseThrow().deliver(
+                AdminRetryResult.CANDIDATES, null,
+                java.util.Map.of("grids", List.of(java.util.Map.of("candidateId", "c-1", "gate", "PASS"))), now));
+
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(admin, null,
+                        List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER"),
+                                new org.springframework.security.core.authority.SimpleGrantedAuthority(
+                                        AdminBotToken.BOT_AUTHORITY))));
+        try {
+            assertThatThrownBy(() -> hatchApplier.hatchPick(admin, id, "c-1", now))
+                    .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.FORBIDDEN));
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+        assertThat(jdbc.queryForObject("select phase from zzal_pet where id = ?", String.class, pet))
+                .isEqualTo("FAILED");
+        assertThat(retries.findById(id).orElseThrow().getResult()).isEqualTo(AdminRetryResult.CANDIDATES);
+    }
+
+    @Test
+    @DisplayName("★ 고르기(쿠키 관리자) — 시트 기록이 없는 알을 러너 시트·문단으로 살린다, 행 APPLIED")
+    void hatchPick_byCookieAdmin_revivesWithRunnerSheet() throws Exception {
+        setUpPet();
+        Long pet = sheetlessEgg();
+        long id = claimedHatchRetry(pet);
+        String grid = newUploadedImageKey(admin);
+        String sheet = newUploadedImageKey(admin);
+
+        var result = hatchApplier.hatchCandidates(admin, id,
+                new CandidatesRequest(List.of(grid), sheet, "(러너 문단)", null, "Codex 1회"), now.plusSeconds(2));
+        assertThat(result.result()).isEqualTo("CANDIDATES");
+        assertThat(result.hatch()).hasSize(1);
+        String cid = result.hatch().getFirst().candidateId();
+        assertThat(result.hatch().getFirst().gate()).isEqualTo("PASS");
+        assertThat(retries.findById(id).orElseThrow().getCandidateKeys()).containsEntry("sheetKey", sheet);
+        assertThat(hatchRows().getFirst().request()).isEqualTo("CANDIDATES");
+
+        // 가짜 후처리는 파일을 안 만든다 — 고를 때 옮길 후보 그림을 메모리 S3 에 놓아 둔다.
+        String prefix = com.lore.zzal.generation.LayerCandidateBaker.prefix(pet, 1, cid);
+        for (String k : baker.keys(1)) {
+            put("%s/%s.webp".formatted(prefix, k), k);
+        }
+        put(prefix + "/anchors.json", "{}");
+
+        var picked = hatchApplier.hatchPick(admin, id, cid, now.plusSeconds(5));
+        assertThat(picked.phase()).isEqualTo("ALIVE");
+        assertThat(jdbc.queryForObject("select sheet_image_key from zzal_pet where id = ?", String.class, pet))
+                .isEqualTo(sheet);
+        assertThat(jdbc.queryForObject("select identity_text from zzal_pet where id = ?", String.class, pet))
+                .isEqualTo("(러너 문단)");
+        AdminRetry row = retries.findById(id).orElseThrow();
+        assertThat(row.getResult()).isEqualTo(AdminRetryResult.APPLIED);
+        assertThat(row.getAppliedBy()).isEqualTo(admin);
+        assertThat(row.getAppliedChoice()).isEqualTo(cid);
+        assertThat(hatchRows()).isEmpty();
     }
 }

@@ -469,6 +469,19 @@ public class AdminLayerService {
     // ── 고르기 ───────────────────────────────────────────────────────────
 
     public Picked pick(Long adminUserId, Long petId, int layer, String candidateId, Instant now) {
+        return pick(adminUserId, petId, layer, candidateId, now, null);
+    }
+
+    /**
+     * 실패한 알을 살릴 때 단계 기록 대신 쓸 재료 — 맥미니 러너가 시트·문단부터 다시 만든 경우.
+     * 둘 다 null 이면 기록에서 꺼낸다(기존 동작). 문단이 비어 있으면 기록의 문단을 쓴다.
+     */
+    public record ReviveMaterial(String sheetKey, String identityText) {
+    }
+
+    /** {@link #pick(Long, Long, int, String, Instant)} + 살릴 때 쓸 재료 덮어쓰기(null 이면 기존 동작). */
+    public Picked pick(Long adminUserId, Long petId, int layer, String candidateId, Instant now,
+                       ReviveMaterial override) {
         adminGuard.require(adminUserId);
         boolean[] scheduleLayer2 = {false};
         Picked picked = tx.execute(s -> {
@@ -504,7 +517,7 @@ public class AdminLayerService {
                 discardLayer2Steps(petId, false);
             } else {
                 if (p.getPhase() == PetPhase.FAILED) {
-                    revive(p, now);
+                    revive(p, now, override);
                 }
                 copyAll(src, dst, baker.keys(1), ".webp");
                 copy(src + "/anchors.json", dst + "/anchors.json", "application/json");
@@ -536,7 +549,7 @@ public class AdminLayerService {
      * 부화에 실패한 알을 1층 후보로 살린다 — 관리자 재굽기와 같은 자리 확인 + 부화 완료와 같은 마무리.
      * 시트·문단은 성공했던 단계 기록에서 꺼낸다(없으면 살릴 수 없다).
      */
-    private void revive(ZzalPet p, Instant now) {
+    private void revive(ZzalPet p, Instant now, ReviveMaterial override) {
         User owner = userRepository.findById(p.getUserId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         long occupied = petRepository.countByUserIdAndPhaseIn(owner.getId(), PetPhase.OCCUPYING_SLOT);
@@ -556,6 +569,12 @@ public class AdminLayerService {
             if (IdentityStep.NAME.equals(r.getName())) {
                 identity = r.getOutputText();
             }
+        }
+        if (override != null && override.sheetKey() != null && !override.sheetKey().isBlank()) {
+            sheet = override.sheetKey();
+        }
+        if (override != null && override.identityText() != null && !override.identityText().isBlank()) {
+            identity = override.identityText();
         }
         if (sheet == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "시트가 없어 살릴 수 없습니다 — 재굽기(rehatch)를 쓰세요");
