@@ -1384,6 +1384,7 @@ export function mountEditor(
       tailed ? `<span class="ib-sep"></span>` +
                tailBtn("left", "◀") + tailBtn("right", "▶") + tailBtn("none", "✕") : "",
       `<span class="ib-sep"></span>`,
+      b("dup", "⧉", tr("복제")),
       b("del", "🗑", tr("삭제"), "is-danger"),
     ].join("");
   }
@@ -1408,7 +1409,14 @@ export function mountEditor(
     const box = layer.getBoundingClientRect();
     const r = el.getBoundingClientRect();
     const above = r.top - box.top > 46;
-    bar.style.left = `${((r.left + r.width / 2 - box.left) / box.width) * 100}%`;
+    /* 줄은 말풍선 가운데 위에 뜨는데, 말풍선이 가장자리에 붙어 있으면 줄이 그림 밖으로
+       나간다. 폰은 단추가 커서(38px) 줄이 그림 폭에 가깝고, 끝 단추(글자 작게·삭제)가
+       화면 밖에 걸릴 수 있다. 줄 전체가 그림 안에 들도록 가운데를 안쪽으로 당긴다 —
+       그림이 줄보다 좁으면 그림 가운데에 둔다. */
+    const half = bar.offsetWidth / 2;
+    let cx = r.left + r.width / 2 - box.left;
+    cx = box.width > half * 2 ? Math.min(box.width - half, Math.max(half, cx)) : box.width / 2;
+    bar.style.left = `${(cx / box.width) * 100}%`;
     bar.style.top = above
       ? `${((r.top - box.top) / box.height) * 100}%`
       : `${((r.bottom - box.top) / box.height) * 100}%`;
@@ -1434,6 +1442,17 @@ export function mountEditor(
     },
     bigger: () => bumpSize(+2),
     smaller: () => bumpSize(-2),
+    /* 복제 — 같은 모양·글·크기를 그대로 하나 더. 원래 것과 딱 겹치면 복제가 됐는지
+       안 보이므로 오른쪽 아래로 조금 비켜 놓고, 새 것을 고른 상태로 둔다(바로 끌어
+       옮길 수 있게). 같은 꼴의 말풍선을 한 장에 여러 개 늘어놓을 때 쓴다(제보 「말풍선 복사」). */
+    dup: () => {
+      const it = findItem(); if (!it) return;
+      const no = sel.sceneNo, st = sc(no);
+      const copy = { ...it, id: `i${++uid}`, x: Math.min(90, it.x + 3), y: Math.min(94, it.y + 4) };
+      st.items.push(copy);
+      sel = { sceneNo: no, id: copy.id };
+      save(); paintItems(no);
+    },
     del: () => {
       const it = findItem(); if (!it) return;
       const st = sc(sel.sceneNo);
