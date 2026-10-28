@@ -36,6 +36,7 @@ class AdminFailureControllerIT extends ZzalItSupport {
     private static final String BASE = "/api/zzal/v1/admin";
 
     @Autowired AdminRunnerClock clock;
+    @Autowired com.lore.zzal.generation.GenerationRecorder recorder;
 
     private final Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
@@ -181,5 +182,16 @@ class AdminFailureControllerIT extends ZzalItSupport {
         assertThat(e.has("rehatchCostUsd")).isTrue();
         assertThat(getJson(BOT, BASE + "/failures/CUSTOM/1/estimate").path("error").path("code").asText())
                 .isEqualTo("INVALID_INPUT");
+    }
+
+    @Test
+    @DisplayName("자동 CLI 꺼짐(기본) — 부화가 끝내 실패해도 요청 행이 생기지 않는다")
+    void auto_disabled_createsNothing() throws Exception {
+        bot();
+        Long pet = failedEgg();
+        jdbc.update("update zzal_pet set phase = 'HATCHING' where id = ?", pet);
+        recorder.markPetFailed(pet);
+        assertThat(jdbc.queryForObject("select phase from zzal_pet where id = ?", String.class, pet)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("select count(*) from zzal_admin_retry", Integer.class)).isZero();
     }
 }

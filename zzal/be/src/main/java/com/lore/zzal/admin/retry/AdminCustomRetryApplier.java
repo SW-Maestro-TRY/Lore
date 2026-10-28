@@ -152,8 +152,18 @@ public class AdminCustomRetryApplier {
         keys.put("files", new LinkedHashMap<>(files));
         keys.put("requestId", requestId);
         keys.put("manifestSha", manifestSha);
-        deliver(retryId, AdminRetryResult.CANDIDATES, note, keys, now);
+        AdminRetry delivered = deliver(retryId, AdminRetryResult.CANDIDATES, note, keys, now);
         log.info("맞춤 재시도 후보 도착 — retry={} job={} requestId={}", retryId, job.id(), requestId);
+        if (delivered.isAuto()) {
+            // 자동 행(결정 7·8) — 사람 없이 같은 반영 길. 실패는 행에 APPLY_FAILED 로 남고 러너에는 결과로 알린다.
+            try {
+                customAutoApply(retries.findById(retryId).orElseThrow(), now);
+                return new CandidatesResult(retryId, AdminRetryResult.APPLIED.name(), List.of(), "PASS", true);
+            } catch (RuntimeException e) {
+                return new CandidatesResult(retryId, AdminRetryResult.APPLY_FAILED.name(), List.of(),
+                        clip(e.getMessage(), NOTE_HEAD), false);
+            }
+        }
         return new CandidatesResult(retryId, AdminRetryResult.CANDIDATES.name(), List.of(), "PASS", false);
     }
 

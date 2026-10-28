@@ -113,9 +113,48 @@ public class AdminHatchRetryApplier {
         keys.put("grids", entries);
         keys.put("sheetKey", sheetKey);
         keys.put("identityText", identity);
+
+        if (r.isAuto()) {
+            return autoApply(callerId, retryId, r.getTargetId(), baked, keys, note, now);
+        }
         deliver(retryId, AdminRetryResult.CANDIDATES, note, keys, now);
         log.info("부화 재시도 후보 도착 — retry={} pet={} 후보 {}장", retryId, r.getTargetId(), baked.size());
         return new CandidatesResult(retryId, AdminRetryResult.CANDIDATES.name(), baked, null, false);
+    }
+
+    /**
+     * 자동 행(결정 7·8) — 게이트를 통과한 첫 후보로 사람 없이 반영한다. 통과가 0장이면 NONE, 알은 FAILED 그대로.
+     * 호출자는 봇 사용자(관리자)라 Guard 를 통과한다. 행은 서버만 만들므로 봇이 자동 반영 길을 열 수는 없다.
+     */
+    private CandidatesResult autoApply(Long callerId, long retryId, long petId, List<AdminLayerService.Candidate> baked,
+                                       Map<String, Object> keys, String note, Instant now) {
+        AdminLayerService.Candidate pass = baked.stream().filter(c -> "PASS".equals(c.gate())).findFirst().orElse(null);
+        if (pass == null) {
+            deliver(retryId, AdminRetryResult.NONE, note == null ? "자동: 게이트 통과 후보 없음" : note, keys, now);
+            log.info("자동 CLI 결과 — 통과 후보 없음 retry={} pet={}", retryId, petId);
+            return new CandidatesResult(retryId, AdminRetryResult.NONE.name(), baked, null, false);
+        }
+        deliver(retryId, AdminRetryResult.CANDIDATES, note, keys, now);
+        var material = new AdminLayerService.ReviveMaterial((String) keys.get("sheetKey"), (String) keys.get("identityText"));
+        try {
+            layerService.pick(callerId, petId, 1, pass.candidateId(), now, material);
+        } catch (RuntimeException e) {
+            String reason = e instanceof BusinessException be ? be.getMessage() : String.valueOf(e);
+            tx.executeWithoutResult(s -> retries.findByIdForUpdate(retryId).ifPresent(row -> {
+                if (row.isOpen()) {
+                    row.applyFailed(reason, now);
+                }
+            }));
+            log.warn("자동 CLI 반영 실패 — retry={} pet={} : {}", retryId, petId, reason);
+            return new CandidatesResult(retryId, AdminRetryResult.APPLY_FAILED.name(), baked, null, false);
+        }
+        tx.executeWithoutResult(s -> retries.findByIdForUpdate(retryId).ifPresent(row -> {
+            if (row.isOpen()) {
+                row.applied(null, pass.candidateId(), now);
+            }
+        }));
+        log.info("자동 CLI 반영 — retry={} pet={} 후보={}", retryId, petId, pass.candidateId());
+        return new CandidatesResult(retryId, AdminRetryResult.APPLIED.name(), baked, null, true);
     }
 
     // ── 고르기 ────────────────────────────────────────────────────────────

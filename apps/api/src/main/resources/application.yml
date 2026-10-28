@@ -338,6 +338,17 @@ app:
       #   · 경로는 /api/zzal/v1/admin/** 에만 걸린다
       bot-token: ${ZZAL_ADMIN_TOKEN:}
       bot-user-id: ${ZZAL_ADMIN_BOT_USER_ID:0}
+      # 서버 시도가 다 실패하면 맥미니 러너로 자동 1회(결정 8). 기본 꺼짐 — 켜기 전에 dev 에서 끝까지 확인한다.
+      #   · 대상당 1회(DB 유일 색인), 이름 없는 알은 만들지 않는다
+      #   · since 이후에 실패한 대상만(비우면 서버 기동 시각) — 켜는 순간 과거 실패가 몰리지 않게
+      auto-cli:
+        enabled: ${ZZAL_ADMIN_AUTO_CLI:false}
+        since: ${ZZAL_ADMIN_AUTO_CLI_SINCE:}
+        custom-scan-minutes: 5
+      # 실패 목록의 유예 — 이보다 짧으면 아직 굽는 중으로 본다
+      failures:
+        hatch-grace-minutes: ${app.zzal.recovery.grace-minutes:12}
+        custom-grace-minutes: 30
 
     # 맥미니(codex 러너) 전용 문 — 사람이 아니라 기계가 부른다.
     #
