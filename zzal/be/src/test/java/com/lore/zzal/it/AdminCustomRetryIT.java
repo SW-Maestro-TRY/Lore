@@ -458,4 +458,72 @@ class AdminCustomRetryIT extends ZzalItSupport {
         applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, Map.of(), "못 만듦"), now.plusSeconds(3));
         assertThat(jdbc.queryForObject("select claim_token from zzal_custom_bundle_job where id = ?", String.class, o[1])).isNull();
     }
+
+    // ── 수정 5: 계획 없는 잡은 재료 장부(reserve)를 거쳐 계획을 써 넣는다 ─────────────────
+
+    private static final String MEMORY_SNAPSHOT = "{\"materialPolicy\":\"CUSTOM_PERSONA_IDENTITY_LONG_TERM_V2\","
+            + "\"memory\":{\"candidates\":[{\"id\":5,\"revision\":1,\"subject\":\"CHARACTER\",\"status\":\"ACTIVE\","
+            + "\"sourceTurnId\":10,\"sourceQuote\":\"좋아하는 공\"}]}}";
+
+    private String memoryPlan() {
+        String provenance = AdminFailureQuery.sha256("10|좋아하는 공");
+        return "{\"version\":1,\"selectedSources\":[{\"factId\":5,\"revision\":1,\"provenanceKey\":\"" + provenance
+                + "\"}],\"motionPlan\":{\"version\":\"v1\"}}";
+    }
+
+    /** files() 와 같되 manifest 에 usedSources 를 싣는다. */
+    private Map<String, String> filesWithUsed(long job, String plan) throws Exception {
+        Map<String, String> files = files(job, plan, null, true);
+        String rid = requestId(job, plan);
+        List<Map<String, Object>> assets = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            String slot = CustomGridPrompt.SLOTS.get(i);
+            assets.add(Map.of("motionOrder", i + 1, "assetKey", "images/zzal/custom/%s/%s.webp".formatted(rid, slot),
+                    "sha256", AdminFailureQuery.sha256("webp-" + slot), "humanReview", "UNREVIEWED", "published", false));
+        }
+        files.put("manifest.json", upload(json.writeValueAsString(Map.of("requestId", rid, "executionId", rid,
+                "assets", assets, "usedSources", List.of(Map.of("factId", 5, "revision", 1))))));
+        return files;
+    }
+
+    @Test
+    @DisplayName("★ 계획 없는 잡 — 반영 때 재료를 예약(reserve)하고 러너 계획 원문을 그대로 쓰며, usedSources 는 USED 로")
+    void planlessJob_reservesSourcesAndMarksUsed() throws Exception {
+        setUpAdmin();
+        publishSucceeds();
+        long[] o = orphan("PENDING", "PLANNING_IN_PROGRESS", null);
+        jdbc.update("update zzal_custom_bundle_job set snapshot_json = ? where id = ?", MEMORY_SNAPSHOT, o[1]);
+        String plan = memoryPlan();
+        long id = claimed(o[1]);
+        var cand = applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, filesWithUsed(o[1], plan), null), now);
+        assertThat(cand.result()).isEqualTo("CANDIDATES");
+
+        applier.customPick(admin, id, now.plusSeconds(5));
+        var job = jdbc.queryForMap("select state, source_plan_json, source_plan_hash from zzal_custom_bundle_job where id = ?", o[1]);
+        assertThat(job.get("state")).isEqualTo("GENERATED");
+        assertThat(job.get("source_plan_json")).isEqualTo(plan);
+        assertThat(job.get("source_plan_hash")).isEqualTo(AdminFailureQuery.sha256(plan));
+        assertThat(jdbc.queryForList("select state from zzal_custom_bundle_source where job_id = ?", String.class, o[1]))
+                .containsExactly("USED");
+    }
+
+    @Test
+    @DisplayName("계획 없는 잡 — 게시가 실패하면 예약한 재료 행과 계획을 지운다(잡은 원래대로)")
+    void planlessJob_publishFails_releasesReservation() throws Exception {
+        setUpAdmin();
+        doThrow(new IllegalStateException("Material receipt mismatch")).when(publication).publish(anyLong(), anyLong(), any());
+        long[] o = orphan("PENDING", "PLANNING_IN_PROGRESS", null);
+        jdbc.update("update zzal_custom_bundle_job set snapshot_json = ? where id = ?", MEMORY_SNAPSHOT, o[1]);
+        String plan = memoryPlan();
+        long id = claimed(o[1]);
+        applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, filesWithUsed(o[1], plan), null), now);
+
+        assertThatThrownBy(() -> applier.customPick(admin, id, now.plusSeconds(5))).isInstanceOf(BusinessException.class);
+        var job = jdbc.queryForMap("select state, error_code, source_plan_json from zzal_custom_bundle_job where id = ?", o[1]);
+        assertThat(job.get("state")).isEqualTo("PENDING");
+        assertThat(job.get("error_code")).isEqualTo("PLANNING_IN_PROGRESS");
+        assertThat(job.get("source_plan_json")).isNull();
+        assertThat(jdbc.queryForObject("select count(*) from zzal_custom_bundle_source where job_id = ?", Integer.class, o[1]))
+                .isZero();
+    }
 }

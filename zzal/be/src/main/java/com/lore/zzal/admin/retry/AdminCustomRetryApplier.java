@@ -326,8 +326,7 @@ public class AdminCustomRetryApplier {
         }
         String claim = current.get("claim_token") != null ? (String) current.get("claim_token") : "admin-retry-" + retryId;
         if (job.plan() == null) {
-            db.update("UPDATE zzal_custom_bundle_job SET source_plan_json = ?, source_plan_hash = ? WHERE id = ?",
-                    plan, AdminFailureQuery.sha256(plan), job.id());
+            reservePlan(job, plan, now);
         }
         db.update("""
                 UPDATE zzal_custom_bundle_job
@@ -346,6 +345,37 @@ public class AdminCustomRetryApplier {
             throw new IllegalStateException("재료 장부 기록 실패: " + e.getMessage(), e);
         }
         return new Snapshot(current, oldAssets, sources, ids);
+    }
+
+    /**
+     * 계획 없는 잡(결정 5 · 수정 5) — 러너 계획의 재료를 기존 재료 장부({@link BundleSourcePlan#reserve})로 예약한 뒤,
+     * 러너가 실제로 쓴 계획 원문을 그대로 남긴다(requestId 가 그 원문의 해시에 묶여 있어서다).
+     * 예약이 만든 selectedSources 와 원문의 selectedSources 가 같아야 한다. PENDING 잡만(reserve 가 확인한다).
+     */
+    private void reservePlan(Job job, String plan, Instant now) {
+        try {
+            JsonNode runner = json.readTree(plan);
+            if (BundleSourcePlan.requiresPlan(job.snapshot())) {
+                List<BundleSourcePlan.Source> selected = new ArrayList<>();
+                for (JsonNode src : runner.path("selectedSources")) {
+                    selected.add(new BundleSourcePlan.Source(src.path("factId").asLong(), src.path("revision").asInt()));
+                }
+                plans.reserve(job.id(), selected, now);
+                String reserved = db.queryForObject("SELECT source_plan_json FROM zzal_custom_bundle_job WHERE id = ?",
+                        String.class, job.id());
+                if (!json.readTree(reserved).path("selectedSources").equals(runner.path("selectedSources"))) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT, "러너 계획의 재료가 예약한 재료와 다릅니다");
+                }
+            } else if (!"PENDING".equals(job.state())) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "계획은 PENDING 잡에만 써 넣습니다");
+            }
+            db.update("UPDATE zzal_custom_bundle_job SET source_plan_json = ?, source_plan_hash = ? WHERE id = ?",
+                    plan, AdminFailureQuery.sha256(plan), job.id());
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("계획 예약 실패: " + e.getMessage(), e);
+        }
     }
 
     private void rollback(long jobId, Snapshot s) {
@@ -371,10 +401,15 @@ public class AdminCustomRetryApplier {
                 WHERE id = ?
                 """, j.get("state"), j.get("error_code"), j.get("claim_token"), j.get("execution_id"),
                 j.get("manifest_hash"), j.get("source_plan_json"), j.get("source_plan_hash"), jobId);
+        // 재료 장부 — 이번에 예약한 행은 지우고, 원래 있던 행은 그대로 되살린다.
+        db.update("DELETE FROM zzal_custom_bundle_source WHERE job_id = ?", jobId);
         for (Map<String, Object> src : s.sources()) {
-            db.update("UPDATE zzal_custom_bundle_source SET state = ?, used_at = ? WHERE job_id = ? AND fact_id = ? "
-                            + "AND fact_revision = ?", src.get("state"), src.get("used_at"), jobId, src.get("fact_id"),
-                    src.get("fact_revision"));
+            db.update("""
+                    INSERT INTO zzal_custom_bundle_source (job_id, pet_id, fact_id, fact_revision, provenance_key, state,
+                                                           selected_at, used_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, src.get("job_id"), src.get("pet_id"), src.get("fact_id"), src.get("fact_revision"),
+                    src.get("provenance_key"), src.get("state"), src.get("selected_at"), src.get("used_at"));
         }
     }
 
