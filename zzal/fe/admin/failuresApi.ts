@@ -4,7 +4,7 @@
 //   (스냅샷 시험 컨텍스트에서 관리자 스위치가 꺼져 있다). 이름은 서버 record 이름을 그대로 쓴다(layerApi.ts 와 같은 규칙).
 // ★ 경로는 호출마다 서버 매핑을 그대로 적는다(api.ts 주석의 404 사고).
 
-import { request } from '@common/api/client';
+import { ApiError, request } from '@common/api/client';
 
 /** 서버 매핑 `GET /api/zzal/v1/admin/failures`. */
 export const FAILURES_PATH = '/api/zzal/v1/admin/failures';
@@ -185,4 +185,18 @@ export function pickRetry(retryId: number, choice: string): Promise<RetryView> {
 
 export function fetchRunner(signal?: AbortSignal): Promise<RunnerView> {
   return request<RunnerView>(RUNNER_PATH, { signal });
+}
+
+/** 실패 응답을 화면 문구로. 409(ADMIN_RETRY_OPEN 등)는 서버 문구 그대로. */
+export function explain(e: unknown, where: string): string {
+  if (e instanceof ApiError) {
+    console.warn('[zzal/admin/work] 요청 실패', { where, status: e.status, code: e.code, message: e.message });
+    if (e.code === 'ADMIN_ONLY') return '관리자 계정이 아닙니다.';
+    if (e.status === 404 && where === FAILURES_PATH) {
+      return `관리자 기능이 꺼져 있거나 주소가 없습니다 (${where}). ZZAL_ADMIN 설정을 확인해 주세요.`;
+    }
+    return e.message;
+  }
+  console.warn('[zzal/admin/work] 요청 실패', { where, error: e });
+  return e instanceof Error ? e.message : '요청을 처리하지 못했습니다.';
 }

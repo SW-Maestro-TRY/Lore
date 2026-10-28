@@ -6,15 +6,18 @@
 // ★ 성공은 숫자로만 — 목록에는 실패만 둔다(결정 1).
 
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError } from '@common/api/client';
 import { DIM, NOTICE, NOTICE_BAD } from './AdminReviewScreen';
 import AdminFailureHourChart from './AdminFailureHourChart';
+import AdminFailureRow from './AdminFailureRow';
+import AdminFailureDetail from './AdminFailureDetail';
 import {
   FAILURES_PATH,
+  explain,
   fetchFailures,
   fetchRunner,
   type FailureDays,
   type FailurePage,
+  type FailureRow,
   type RunnerView,
 } from './failuresApi';
 
@@ -24,18 +27,6 @@ const DAYS: readonly FailureDays[] = [1, 7, 30];
 const RUNNER_POLL_MS = 30_000;
 const BAD = 'rgb(200,70,50)';
 
-export function explain(e: unknown, where: string): string {
-  if (e instanceof ApiError) {
-    console.warn('[zzal/admin/work] 요청 실패', { where, status: e.status, code: e.code, message: e.message });
-    if (e.code === 'ADMIN_ONLY') return '관리자 계정이 아닙니다.';
-    if (e.status === 404 && where === FAILURES_PATH) {
-      return `관리자 기능이 꺼져 있거나 주소가 없습니다 (${where}). ZZAL_ADMIN 설정을 확인해 주세요.`;
-    }
-    return e.message;
-  }
-  console.warn('[zzal/admin/work] 요청 실패', { where, error: e });
-  return e instanceof Error ? e.message : '요청을 처리하지 못했습니다.';
-}
 
 /** 러너 칸 — "n분 전 확인" · 10분 넘으면 빨강 "꺼짐" · 기록 없음. */
 export function RunnerBadge({ runner }: { runner: RunnerView | null }) {
@@ -91,6 +82,7 @@ export default function AdminWorkTab() {
   const [days, setDays] = useState<FailureDays>(7);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const runner = useRunner();
+  const [open, setOpen] = useState<string | null>(null);
 
   const reload = useCallback((d: FailureDays, signal?: AbortSignal) => {
     setLoad((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }));
@@ -143,7 +135,21 @@ export default function AdminWorkTab() {
             <Stat part="stat-custom-fail" label="맞춤 실패" value={load.page.customFailed} bad />
           </div>
           <AdminFailureHourChart hours={load.page.hours} />
-          <p data-part="failure-count" style={{ ...DIM, marginTop: 8 }}>실패 {load.page.rows.length}건</p>
+          <p data-part="failure-count" style={{ ...DIM, marginTop: 8 }}>실패 {load.page.rows.length}건 · 최신순</p>
+          {load.page.rows.length === 0 && <p data-part="failures-empty" style={DIM}>이 기간에 못 받은 결과가 없습니다.</p>}
+          <div data-part="failure-list" style={{ paddingBottom: 48 }}>
+            {load.page.rows.map((r: FailureRow) => {
+              const tag = `${r.kind}-${r.id}-${r.petId}`;
+              return (
+                <div key={tag}>
+                  <AdminFailureRow row={r} open={open === tag} onOpen={() => setOpen(open === tag ? null : tag)} />
+                  {open === tag && (
+                    <AdminFailureDetail row={r} runner={runner} onClose={() => setOpen(null)} onChanged={() => reload(days)} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </>
       )}
     </section>
