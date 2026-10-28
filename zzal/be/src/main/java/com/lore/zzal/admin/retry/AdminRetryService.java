@@ -186,7 +186,8 @@ public class AdminRetryService {
         AdminRetry r = tx.execute(s -> {
             AdminRetry row = retries.findByIdForUpdate(retryId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "재시도 요청이 없습니다: " + retryId));
-            if (!row.isOpen()) {
+            if (!row.isOpen() || row.isApplying()) {
+                // 반영 중이면 취소하지 않는다 — 반영이 끝나거나 실패로 닫힌 뒤에 본다.
                 throw new BusinessException(ErrorCode.ADMIN_RETRY_CLOSED);
             }
             row.cancel(now);

@@ -32,6 +32,8 @@ public class AdminRetry {
     public static final int MEMO_MAX = 500;
     public static final int NOTE_MAX = 2000;
     public static final int CHOICE_MAX = 100;
+    /** 반영이 진행 중이라는 표식(applied_choice 칸). 결과는 CANDIDATES 그대로 — 두 번째 반영 · 취소를 막는다. */
+    public static final String APPLYING = "APPLYING";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -190,9 +192,24 @@ public class AdminRetry {
         requireOpen();
         this.result = AdminRetryResult.APPLY_FAILED;
         this.note = clip(note, NOTE_MAX);
+        if (APPLYING.equals(appliedChoice)) {
+            this.appliedChoice = null;
+        }
         if (finishedAt == null) {
             this.finishedAt = now;
         }
+    }
+
+    /** 반영 시작 — 후보 도착 상태이고 아직 아무도 반영 중이 아닐 때만. */
+    public void markApplying() {
+        if (result != AdminRetryResult.CANDIDATES || appliedChoice != null) {
+            throw new IllegalStateException("반영할 수 없는 요청입니다: " + id + " (" + result + "/" + appliedChoice + ")");
+        }
+        this.appliedChoice = APPLYING;
+    }
+
+    public boolean isApplying() {
+        return APPLYING.equals(appliedChoice) && result == AdminRetryResult.CANDIDATES;
     }
 
     private void requireOpen() {

@@ -351,4 +351,85 @@ class AdminCustomRetryIT extends ZzalItSupport {
                 .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
         assertThat(retries.findById(id).orElseThrow().getResult()).isNull();
     }
+
+    @Test
+    @DisplayName("★ 고르기 동시 두 번 — 두 번째는 409, S3 와 행 상태를 안 바꾼다(첫 번째가 끝까지 반영)")
+    void customPick_concurrentSecond_409_noSideEffects() throws Exception {
+        setUpAdmin();
+        var inPublish = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        doAnswer(inv -> {
+            inPublish.countDown();
+            release.await(30, java.util.concurrent.TimeUnit.SECONDS);
+            long jobId = inv.getArgument(1);
+            jdbc.update("update zzal_custom_bundle_asset set published = true where job_id = ?", jobId);
+            Long pet = jdbc.queryForObject("select pet_id from zzal_custom_bundle_job where id = ?", Long.class, jobId);
+            attendance.grantReady(pet, inv.getArgument(2));
+            return 8;
+        }).when(publication).publish(anyLong(), anyLong(), any());
+        long[] o = orphan("CLAIMED", null, PLAN);
+        long id = claimed(o[1]);
+        applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, files(o[1], PLAN, null, false), null), now);
+
+        var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            var first = pool.submit(() -> { applier.customPick(admin, id, now.plusSeconds(5)); return null; });
+            assertThat(inPublish.await(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var keysBefore = ((ZzalItConfig.InMemoryS3Storage) storage).keys();
+            var rowBefore = jdbc.queryForMap("select result, applied_choice, note from zzal_admin_retry where id = ?", id);
+
+            assertThatThrownBy(() -> applier.customPick(admin, id, now.plusSeconds(6)))
+                    .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ADMIN_RETRY_CLOSED));
+            assertThatThrownBy(() -> retryService.cancel(admin, id, now.plusSeconds(6)))
+                    .as("반영 중에는 취소도 막힌다")
+                    .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.ADMIN_RETRY_CLOSED));
+            assertThat(((ZzalItConfig.InMemoryS3Storage) storage).keys()).isEqualTo(keysBefore);
+            assertThat(jdbc.queryForMap("select result, applied_choice, note from zzal_admin_retry where id = ?", id))
+                    .isEqualTo(rowBefore);
+
+            release.countDown();
+            first.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+        assertThat(retries.findById(id).orElseThrow().getResult()).isEqualTo(AdminRetryResult.APPLIED);
+        assertThat(jdbc.queryForObject("select count(*) from zzal_attendance_reward_slot where pet_id = ? and state = 'GRANTED'",
+                Integer.class, o[0])).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("고르기 — 잡이 반영할 수 없는 상태면 S3 를 쓰기 전에 거부(새 객체 없음 · 복원도 안 돎)")
+    void customPick_checksStateBeforeS3() throws Exception {
+        setUpAdmin();
+        publishSucceeds();
+        long[] o = orphan("CLAIMED", null, PLAN);
+        long id = claimed(o[1]);
+        applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, files(o[1], PLAN, null, false), null), now);
+        jdbc.update("update zzal_custom_bundle_job set state = 'FAILED', error_code = 'CUSTOM_POSTPROCESS_CRASH' where id = ?", o[1]);
+        var keysBefore = ((ZzalItConfig.InMemoryS3Storage) storage).keys();
+
+        assertThatThrownBy(() -> applier.customPick(admin, id, now.plusSeconds(5)))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
+        assertThat(((ZzalItConfig.InMemoryS3Storage) storage).keys()).isEqualTo(keysBefore);
+        assertThat(retries.findById(id).orElseThrow().getResult()).isEqualTo(AdminRetryResult.CANDIDATES);
+        assertThat(retries.findById(id).orElseThrow().getAppliedChoice()).isNull();
+    }
+
+    @Test
+    @DisplayName("고르기 — 후보 등록 뒤 manifest 가 바뀌었으면 거부(등록 때 sha 와 대조)")
+    void customPick_manifestChangedAfterCandidates_rejected() throws Exception {
+        setUpAdmin();
+        publishSucceeds();
+        long[] o = orphan("CLAIMED", null, PLAN);
+        long id = claimed(o[1]);
+        Map<String, String> files = files(o[1], PLAN, null, false);
+        applier.customCandidates(admin, id, new RetryCandidatesRequest(null, null, null, files, null), now);
+        put(files.get("manifest.json"), "{\"tampered\":true}");
+
+        assertThatThrownBy(() -> applier.customPick(admin, id, now.plusSeconds(5)))
+                .satisfies(e -> assertThat(code(e)).isEqualTo(ErrorCode.INVALID_INPUT));
+        assertThat(jdbc.queryForObject("select state from zzal_custom_bundle_job where id = ?", String.class, o[1]))
+                .isEqualTo("CLAIMED");
+    }
 }

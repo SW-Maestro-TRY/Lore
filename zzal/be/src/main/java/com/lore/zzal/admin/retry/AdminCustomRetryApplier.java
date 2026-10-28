@@ -194,39 +194,68 @@ public class AdminCustomRetryApplier {
         if (r.getKind() != AdminRetryKind.CUSTOM) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "맞춤 재시도 요청이 아닙니다: " + r.getId());
         }
-        if (r.getResult() != AdminRetryResult.CANDIDATES) {
+        if (r.getResult() != AdminRetryResult.CANDIDATES || r.getCandidateKeys() == null) {
             throw new BusinessException(ErrorCode.ADMIN_RETRY_CLOSED);
         }
         Map<String, Object> keys = r.getCandidateKeys();
         @SuppressWarnings("unchecked")
         Map<String, String> files = (Map<String, String>) keys.get("files");
         String requestId = (String) keys.get("requestId");
-        Job job = job(r.getTargetId());
-        requireNotGranted(job.id());
+        String manifestRaw;
+        try {
+            manifestRaw = read(files.get(MANIFEST));
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "manifest 를 읽지 못했습니다 — " + e.getMessage());
+        }
+        // ★ 후보 등록 때 본 바로 그 manifest 인가(등록 뒤 업로드 키의 내용이 바뀌었으면 거부, 수정 7).
+        if (!AdminFailureQuery.sha256(manifestRaw).equals(keys.get("manifestSha"))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "후보 등록 뒤 manifest 가 바뀌었습니다");
+        }
+
+        // ★ 1. 잠금 안에서 먼저 본다(수정 1) — 요청 행 → 펫 → 잡 순서로 잠그고, 잡 상태 · 지급 여부를 S3 쓰기 전에 확인한 뒤
+        //   "반영 중" 표식을 올린다. 두 번째 반영 · 취소는 이 표식에 막힌다(409).
+        Job job = tx.execute(s -> {
+            AdminRetry row = retries.findByIdForUpdate(r.getId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "재시도 요청이 없습니다: " + r.getId()));
+            if (row.getResult() != AdminRetryResult.CANDIDATES || row.getAppliedChoice() != null) {
+                throw new BusinessException(ErrorCode.ADMIN_RETRY_CLOSED);
+            }
+            Job locked = job(r.getTargetId());
+            db.queryForList("SELECT id FROM zzal_pet WHERE id = ? FOR UPDATE", locked.petId());
+            Map<String, Object> current = db.queryForMap(
+                    "SELECT state, error_code FROM zzal_custom_bundle_job WHERE id = ? FOR UPDATE", locked.id());
+            if (!AdminFailureQuery.applicable((String) current.get("state"), (String) current.get("error_code"))) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        "반영할 수 없는 잡 상태입니다(%s/%s)".formatted(current.get("state"), current.get("error_code")));
+            }
+            requireNotGranted(locked.id());
+            row.markApplying();
+            return locked;
+        });
 
         String prefix = "images/zzal/custom/" + requestId + "/";
         String backup = BACKUP_PREFIX + requestId + "/retry-" + r.getId() + "/";
         Map<String, Boolean> backedUp = new LinkedHashMap<>();
+        boolean wrote = false;
         Snapshot before = null;
         try {
-            String manifestRaw = read(files.get(MANIFEST));
             JsonNode manifest = json.readTree(manifestRaw);
             String plan = planFor(job, files);
-            // 1. 백업 → 2. 복사
+            // 2. 백업 → 3. 복사
             for (String path : files.keySet()) {
-                if (SOURCE_PLAN.equals(path)) {
-                    continue;
+                if (!SOURCE_PLAN.equals(path)) {
+                    backedUp.put(path, copyIfPresent(prefix + path, backup + path));
                 }
-                backedUp.put(path, copyIfPresent(prefix + path, backup + path));
             }
+            wrote = true;
             for (Map.Entry<String, String> f : files.entrySet()) {
                 if (!SOURCE_PLAN.equals(f.getKey())) {
                     copy(f.getValue(), prefix + f.getKey());
                 }
             }
-            // 3. 한 트랜잭션: 자산 · 잡 · 재료 장부
+            // 4. 한 트랜잭션: 자산 · 잡 · 재료 장부(잡 상태 · 지급 여부를 한 번 더 본다)
             before = tx.execute(s -> write(job, manifest, manifestRaw, plan, requestId, humanReview, r.getId(), now));
-            // 4. 트랜잭션 밖: 기존 게시 검증 전부 + 게시 + 지급
+            // 5. 트랜잭션 밖: 기존 게시 검증 전부 + 게시 + 지급
             publication.publish(job.ownerId(), job.id(), now);
         } catch (Exception e) {
             String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
@@ -234,7 +263,10 @@ public class AdminCustomRetryApplier {
             if (snap != null) {
                 tx.executeWithoutResult(s -> rollback(job.id(), snap));
             }
-            restore(prefix, backup, backedUp);
+            // ★ 이번 호출이 실제로 덮어쓴 경우에만 되돌린다.
+            if (wrote) {
+                restore(prefix, backup, backedUp);
+            }
             tx.executeWithoutResult(s -> retries.findByIdForUpdate(r.getId()).ifPresent(row -> {
                 if (row.isOpen()) {
                     row.applyFailed(clip(reason, NOTE_HEAD), now);
