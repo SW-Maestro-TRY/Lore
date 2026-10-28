@@ -37,4 +37,8 @@ public interface AdminRetryRepository extends JpaRepository<AdminRetry, Long> {
     Optional<AdminRetry> findByIdForUpdate(@Param("id") Long id);
 
     boolean existsByKindAndTargetIdAndAutoTrue(AdminRetryKind kind, Long targetId);
+
+    /** 실패 목록 한 장의 대상들 요청 이력 — 최신 먼저. */
+    List<AdminRetry> findByKindAndTargetIdInOrderByRequestedAtDescIdDesc(AdminRetryKind kind,
+                                                                         java.util.Collection<Long> targetIds);
 }
