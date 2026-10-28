@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.awt.Font;
 import java.awt.font.TextAttribute;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.ToDoubleFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,28 +26,55 @@ class BubbleArtistFontTest {
 
     private static final String KOREAN = "말풍선 한글이 네모로 깨지면 안 돼요";
 
+    /* 글꼴 이름은 영어로 본다 — 한국어 환경에서는 마루부리가 「마루 부리 굵은」으로 나온다. */
+
     /** 줄바꿈 규칙만 보려고 글자마다 10px 로 잰다. */
     private static final ToDoubleFunction<String> TEN = s -> s.length() * 10.0;
 
     @Test
     @DisplayName("말풍선 글꼴은 편집실 화면과 같은 jar 의 LINE Seed KR 이고 한글을 그릴 수 있다")
     void 기본_글꼴() {
-        Font font = new BubbleArtist().faces().get(0);
-        assertThat(font.getFamily()).containsIgnoringCase("LINE Seed");
+        Font font = new BubbleArtist().faces("").get(0);
+        assertThat(font.getFamily(Locale.ENGLISH)).containsIgnoringCase("LINE Seed");
         assertThat(font.canDisplayUpTo(KOREAN)).isEqualTo(-1);
     }
 
     @Test
     @DisplayName("말풍선에 자주 쓰는 기호와 자모도 기본 글꼴에 있다")
     void 기호() {
-        Font font = new BubbleArtist().faces().get(0);
+        Font font = new BubbleArtist().faces("").get(0);
         assertThat(font.canDisplayUpTo("…·「」『』※♥♡★☆~!?ㅋㅎㅠㅜ")).isEqualTo(-1);
+    }
+
+    @Test
+    @DisplayName("고른 글꼴이 먼저 오고 모르는 값은 기본 글꼴이다 — 편집실이 고르는 키와 같다")
+    void 고른_글꼴() {
+        BubbleArtist artist = new BubbleArtist();
+        assertThat(artist.faces("maruburi").get(0).getFamily(Locale.ENGLISH)).containsIgnoringCase("MaruBuri");
+        assertThat(artist.faces("suit").get(0).getFamily(Locale.ENGLISH)).containsIgnoringCase("SUIT");
+        assertThat(artist.faces("jua").get(0).getFamily(Locale.ENGLISH)).containsIgnoringCase("Jua");
+        assertThat(artist.faces("gmarket").get(0).getFamily(Locale.ENGLISH)).containsIgnoringCase("LINE Seed");
+        for (String key : BubbleArtist.FONTS.keySet()) {
+            assertThat(artist.faces(key).get(0).canDisplayUpTo("말풍선 글꼴 고르기")).isEqualTo(-1);
+        }
+    }
+
+    @Test
+    @DisplayName("고른 글꼴에 없는 글자는 기본 글꼴이 그린다 — 주아의 말줄임표")
+    void 넘기기() {
+        List<Font> faces = new BubbleArtist().faces("jua");
+        assertThat(faces.get(0).canDisplay('…')).isFalse();
+        assertThat(faces.get(1).getFamily(Locale.ENGLISH)).containsIgnoringCase("LINE Seed");
+        assertThat(faces.get(1).canDisplay('…')).isTrue();
+        // 넘겨 그린 줄도 폭이 잡힌다(네모 한 칸 폭이 아니라 기본 글꼴의 말줄임표 폭)
+        List<Font> sized = BubbleArtist.sized(faces, 20);
+        assertThat(BubbleArtist.width("잠깐…", sized)).isGreaterThan(BubbleArtist.width("잠깐", sized));
     }
 
     @Test
     @DisplayName("글자 폭은 소수점까지 재고 커닝을 넣는다 — 화면과 같은 폭")
     void 폭() {
-        List<Font> faces = BubbleArtist.sized(new BubbleArtist().faces(), 21.33);
+        List<Font> faces = BubbleArtist.sized(new BubbleArtist().faces(""), 21.33);
         double w = BubbleArtist.width("잠깐… 방금 그거 진짜였어?", faces);
         assertThat(w).isNotEqualTo(Math.rint(w));
         assertThat(faces.get(0).getAttributes().get(TextAttribute.KERNING))

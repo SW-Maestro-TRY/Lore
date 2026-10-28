@@ -169,6 +169,11 @@
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28); white-space: nowrap;
 }
 .wt .wt-ed .item-bar.is-below { transform: translate(-50%, 10px); }
+/* 단추 줄은 그림보다 넓어지지 않고, 넘치면 두 줄로 접는다 — 폰은 단추가 커서(38px) 「글꼴」까지
+   한 줄에 두면 좁은 폰에서 그림 폭을 넘는다. 폭을 max-content 로 두는 것은, 자리(left)를 옮긴
+   만큼 남은 폭으로 접으면 가장자리 말풍선에서 단추가 한 줄에 하나씩 쌓이기 때문이다. */
+.wt .wt-ed .item-bar { width: max-content; max-width: 100%; box-sizing: border-box; flex-wrap: wrap; justify-content: center; }
+.wt .wt-ed .item-bar .ib-font { padding: 0 9px; }
 .wt .wt-ed .item-bar .ib { min-width: 30px; height: 30px; padding: 0 6px; border: 0; border-radius: 8px; background: transparent; color: #fff; font-size: 13px; line-height: 1; cursor: pointer; }
 .wt .wt-ed .item-bar .ib:hover { background: rgba(255, 255, 255, 0.16); }
 .wt .wt-ed .item-bar .ib.is-on { background: var(--sea); color: #fff; }
@@ -181,6 +186,18 @@
    overflow-wrap: break-word — 한 어절이 한 줄보다 길면 글자로 자른다. 없으면 「끄아아아악」 같은
    긴 어절이 풍선 밖으로 삐져나갔다. 굽는 쪽도 같은 자리에서 자른다. */
 .wt .wt-ed .bub { position: relative; z-index: 1; color: #111; text-align: center; padding: 0.55em 0.85em; font-weight: 600; box-sizing: border-box; word-break: keep-all; overflow-wrap: break-word; white-space: pre-wrap; width: fit-content; max-width: 100%; }
+/* 말풍선 글꼴(2026-10-28). 글꼴마다 파일 하나이고, 굵기를 100~900 으로 펼쳐 두어 브라우저가
+   다른 굵기 파일을 고르거나 가짜 굵게를 만들지 않는다. 굽는 쪽(BubbleArtist.FONTS)은 jar 에 든
+   같은 글꼴로 그린다 — 파일이 같아야 글자 폭과 줄바꿈이 같다. 고른 글꼴에 없는 글자(주아의
+   「…」 등)는 기본 글꼴로 넘어가는데, 굽는 쪽도 같은 순서로 넘긴다. */
+@font-face { font-family: "LORE Bubble Base"; src: url("../../assets/fonts/LINESeedKR-Bold.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "LORE Bubble MaruBuri"; src: url("../../assets/fonts/MaruBuri-Bold.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "LORE Bubble SUIT"; src: url("../../assets/fonts/SUIT-Bold.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "LORE Bubble Jua"; src: url("../../assets/fonts/Jua-Regular.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+.wt .wt-ed .bub, .wt .wt-ed .ib-font { font-family: "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed [data-font="maruburi"] { font-family: "LORE Bubble MaruBuri", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed [data-font="suit"] { font-family: "LORE Bubble SUIT", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed [data-font="jua"] { font-family: "LORE Bubble Jua", "LORE Bubble Base", var(--font-ui); }
 .wt .wt-ed .bub-svg { position: absolute; pointer-events: none; overflow: visible; z-index: 0; }
 .wt .wt-ed .bub-svg .bs > * { fill: #fff; stroke: #111; stroke-width: 5; }
 .wt .wt-ed .bub-svg .bs-shout > * { stroke-width: 6; }

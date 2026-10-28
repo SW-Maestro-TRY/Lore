@@ -63,15 +63,28 @@ public class BubbleArtist {
     /**
      * 말풍선 글꼴 — 편집실 화면과 <b>같은 파일</b>인 LINE Seed KR 의 굵은 꼴(OFL, jar 리소스).
      *
-     * 편집실은 말풍선 글을 이 글꼴의 굵은 꼴로 보여 준다(Editor.css 의 .bub 굵기 600 을
-     * final-theme.css 가 Bold 파일로 잇는다). 예전에는 Jua 로 구워서 화면과 내려받은 그림의
-     * 글자 모양이 달랐고, 글자 폭이 다르니 줄이 바뀌는 자리도 달랐다(2026-10-28). 같은
-     * 파일로 그려야 폭과 줄바꿈까지 같다.
+     * 편집실은 말풍선 글을 이 파일로 보여 준다(Editor.css 의 "LORE Bubble Base"). 예전에는
+     * Jua 로 구워서 화면과 내려받은 그림의 글자 모양이 달랐고, 글자 폭이 다르니 줄이 바뀌는
+     * 자리도 달랐다(2026-10-28). 같은 파일로 그려야 폭과 줄바꿈까지 같다. 항목에 고른
+     * 글꼴({@code font})이 없으면 이 글꼴이다.
      *
      * 배포 서버(도커 이미지)에는 한글 시스템 글꼴이 하나도 없다. jar 에 실은 글꼴을 먼저
      * 보므로 어느 환경에서 구워도 같은 글꼴로 나온다.
      */
     private static final String FONT = "webtoon/fonts/LINESeedKR-Bold.ttf";
+
+    /**
+     * 고를 수 있는 말풍선 글꼴. 키는 편집실이 항목에 저장하는 {@code font} 값이고, 파일은
+     * 편집실 화면과 같은 글꼴이다(editorCore.ts 의 BUBBLE_FONTS, Editor.css 의 "LORE Bubble …").
+     * 값이 없거나 모르는 키는 기본 글꼴({@link #FONT})로 읽는다 — 옛 항목은 그대로다.
+     *
+     * 굵기마다 파일을 두지 않고 글꼴마다 파일 하나만 쓴다(주아는 굵기가 하나뿐이다). 화면도
+     * 같은 파일 하나로 모든 굵기를 보여 주므로 외침도 같은 꼴이다.
+     */
+    static final Map<String, String> FONTS = Map.of(
+            "maruburi", "webtoon/fonts/MaruBuri-Bold.ttf",
+            "suit", "webtoon/fonts/SUIT-Bold.ttf",
+            "jua", "webtoon/fonts/Jua-Regular.ttf");
 
     /** jar 글꼴에 없는 글자를 넘겨받을 시스템 글꼴. 하네스(strip.py)가 찾는 곳과 같은 목록이다. */
     private static final String[] SYSTEM_FONTS = {
@@ -167,7 +180,7 @@ public class BubbleArtist {
         String variant = item.path("variant").asText("normal");
         boolean round = !"narration".equals(variant);
         boolean shout = "shout".equals(variant);
-        List<Font> faces = sized(faces(), fs);
+        List<Font> faces = sized(faces(item.path("font").asText("")), fs);
         /* 안쪽 여백 — 화면(Editor.css 의 .bub 0.55em 0.85em, .bub-shout 1.1em 1.2em)과 같다.
            예전에는 외침도 보통 말풍선 여백으로 재서, 외침의 글 폭이 화면보다 넓게 잡혔다. */
         double padX = fs * (shout ? 1.2 : 0.85), padY = fs * (shout ? 1.1 : 0.55);
@@ -401,7 +414,7 @@ public class BubbleArtist {
                 return lou;
             }
         }
-        return text(text, sized(faces(), fs), PAPER, null, 0);
+        return text(text, sized(faces(""), fs), PAPER, null, 0);
     }
 
     /** 루 고래 스티커(#548) — 화면과 같은 이름의 그림(webtoon/ai/assets/lou)을 높이 1.5em 로. */
@@ -443,7 +456,7 @@ public class BubbleArtist {
         double fs = Math.max(8, item.path("size").asDouble(16) * 2 * scale);
         int sw = (int) Math.max(3, fs * 0.13);
         // 굵기는 글꼴 파일 그대로다 — 화면도 굵은 꼴을 그대로 쓰고 가짜 굵게를 만들지 않는다.
-        return text(item.path("text").asText(""), sized(faces(), fs), PAPER, INK, sw);
+        return text(item.path("text").asText(""), sized(faces(""), fs), PAPER, INK, sw);
     }
 
     /** 글자 한 덩어리. {@code stroke} 가 0 이면 테두리 없이 그대로. */
@@ -507,14 +520,23 @@ public class BubbleArtist {
     }
 
     /**
-     * 말풍선 글꼴들(크기 1) — 기본 글꼴(jar), 시스템 글꼴, 자바 기본 글꼴 순이다.
+     * 말풍선 글꼴들(크기 1) — 고른 글꼴, 기본 글꼴(jar), 시스템 글꼴, 자바 기본 글꼴 순이다.
      *
-     * 앞의 글꼴에 없는 글자만 뒤의 글꼴로 그린다({@link #layout}). 화면도 글꼴에 없는 글자는
-     * 다음 글꼴로 넘긴다. <b>글꼴 하나 때문에 굽기가 막히면 안 된다</b> — 아무것도 못 읽으면
-     * 자바 기본 글꼴로라도 그린다.
+     * 앞의 글꼴에 없는 글자만 뒤의 글꼴로 그린다({@link #layout}). 화면도 같은 순서로 넘긴다 —
+     * 주아에 없는 「…」는 화면에서도 구운 그림에서도 기본 글꼴로 나온다. <b>글꼴 하나 때문에
+     * 굽기가 막히면 안 된다</b> — 아무것도 못 읽으면 자바 기본 글꼴로라도 그린다.
+     *
+     * @param key 항목의 {@code font}. 빈 값이나 모르는 키는 기본 글꼴만 쓴다.
      */
-    List<Font> faces() {
+    List<Font> faces(String key) {
         List<Font> out = new ArrayList<>();
+        String chosen = FONTS.get(key);
+        if (chosen != null) {
+            Font f = jarFont(chosen);
+            if (f != null) {
+                out.add(f);
+            }
+        }
         Font jar = jarFont(FONT);
         if (jar != null) {
             out.add(jar);
