@@ -107,6 +107,7 @@ public class AdminHatchRetryApplier {
             e.put("candidateId", c.candidateId());
             e.put("gate", c.gate());
             e.put("previewKey", c.previewKey());
+            e.put("previewKeys", c.previewKeys()); // 화면이 후보 8종을 움직이는 채로 나란히 보이게
             entries.add(e);
         }
         Map<String, Object> keys = new LinkedHashMap<>();

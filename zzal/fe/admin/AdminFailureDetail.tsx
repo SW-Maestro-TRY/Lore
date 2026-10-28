@@ -9,7 +9,20 @@ import { CARD, DIM, GRID, NOTICE, NOTICE_BAD, Picture, THUMB, THUMB_CAP, THUMB_I
 import { MotionSheet } from './AdminLayerTab';
 import AdminCustomSequenceViewer from './AdminCustomSequenceViewer';
 import { REQUEST_LABEL, when } from './AdminFailureRow';
-import { explain, fetchFailureDetail, FAILURES_PATH, type FailureDetail, type FailureRow, type FailureStep, type RunnerView } from './failuresApi';
+import {
+  cancelRetry,
+  explain,
+  fetchEstimate,
+  fetchFailureDetail,
+  FAILURES_PATH,
+  pickRetry,
+  requestRehatch,
+  requestRetry,
+  type FailureDetail,
+  type FailureRow,
+  type FailureStep,
+  type RunnerView,
+} from './failuresApi';
 
 const BAD = 'rgb(200,70,50)';
 
@@ -188,7 +201,177 @@ export default function AdminFailureDetail({ row, runner, onClose, onChanged }: 
   );
 }
 
-/** 재시도 · 취소 · 후보 고르기 — 작업 2.5 에서 채운다. */
-function DetailActions({ row }: { row: FailureRow; detail: FailureDetail; runner: RunnerView | null; onChanged: () => void }) {
-  return <p data-part="request-state" style={{ ...DIM, marginTop: 10 }}>요청: {REQUEST_LABEL[row.request]}</p>;
+type CandidateEntry = { candidateId: string; gate: string; previewKey?: string | null; previewKeys?: Record<string, string> | null };
+
+/** 결과를 기다리는 · 고를 수 있는 최신 요청. */
+function latestOpen(detail: FailureDetail) {
+  return detail.retries.find((r) => r.result == null || r.result === 'CANDIDATES') ?? null;
+}
+
+function money(v: number | null | undefined): string {
+  return v == null ? '알 수 없음' : `$${v.toFixed(2)}`;
+}
+
+/**
+ * 재시도 · 취소 · 후보 고르기(결정 3·4).
+ *
+ * ★ 사용자 화면을 바꾸는 버튼은 "이걸로"(부화) · "이걸로 지급"(맞춤) 둘이다 — 둘 다 확인 창을 한 번 거친다.
+ * ★ 서버에서 굽는 두 길(멈춘 알 "이어서 굽기" · FAILED 알 "서버 재굽기")은 이미지 API 비용이 든다 —
+ *   /estimate 금액을 확인 창에 보여 준 뒤에만 부른다. "맥미니로 재시도"는 과금이 없다.
+ */
+function DetailActions({ row, detail, runner, onChanged }: { row: FailureRow; detail: FailureDetail; runner: RunnerView | null; onChanged: () => void }) {
+  const [memo, setMemo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null);
+  const stuck = row.kind === 'HATCH' && row.reasonCode === 'STUCK';
+  const open = latestOpen(detail);
+  const openId = row.openRetryId ?? open?.id ?? null;
+  const failedNote = detail.retries.find((r) => r.result === 'APPLY_FAILED')?.note ?? null;
+  const candidates = open?.result === 'CANDIDATES' ? open.candidates : null;
+
+  async function run(fn: () => Promise<string | null>) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const done = await fn();
+      if (done) setMsg({ text: done, bad: false });
+      onChanged();
+    } catch (e) {
+      setMsg({ text: explain(e, FAILURES_PATH), bad: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 서버에서 굽는 길 — 예상 비용을 보여 확인을 받는다. 취소하면 아무것도 부르지 않는다. */
+  async function serverBake(kind: 'resume' | 'rehatch') {
+    await run(async () => {
+      const est = await fetchEstimate(row.id);
+      const steps = kind === 'resume' ? est.resumeSteps : est.rehatchSteps;
+      const cost = kind === 'resume' ? est.resumeCostUsd : est.rehatchCostUsd;
+      const title = kind === 'resume' ? '서버에서 이어서 굽기(성공한 단계는 이어받음)' : '서버 재굽기(격자부터 다시)';
+      const unknown = est.unknownSteps.length ? `\n비용 기록 없는 단계: ${est.unknownSteps.join(', ')}` : '';
+      if (!window.confirm(`${title}\n예상 비용 ${money(cost)} — 이미지 API 비용이 듭니다.\n단계: ${steps.join(', ') || '없음'}${unknown}\n진행할까요?`)) {
+        return null;
+      }
+      const v = kind === 'resume' ? await requestRetry(row.kind, row.id, memo.trim()) : await requestRehatch(row.id, memo.trim());
+      return `${kind === 'resume' ? '이어서 굽기' : '재굽기'} 시작 — 잡 ${v.jobId ?? '?'} · 예상 ${money(v.estimatedCostUsd)}`;
+    });
+  }
+
+  return (
+    <div data-part="failure-actions" style={{ marginTop: 12 }}>
+      <p data-part="request-state" style={{ ...DIM, margin: 0 }}>요청: {REQUEST_LABEL[row.request]}</p>
+      {failedNote && <p data-part="apply-failed" style={{ fontSize: 13, color: BAD, margin: '4px 0 0', overflowWrap: 'anywhere' }}>반영 실패: {failedNote}</p>}
+      {msg && <p data-part="action-msg" style={{ ...NOTICE, ...(msg.bad ? NOTICE_BAD : null), marginTop: 6 }}>{msg.text}</p>}
+
+      {candidates && row.kind === 'HATCH' && (
+        <div data-part="hatch-candidates" style={{ marginTop: 8 }}>
+          {((candidates.grids as CandidateEntry[] | undefined) ?? []).map((c) => {
+            const pass = c.gate === 'PASS';
+            const keys = c.previewKeys && Object.keys(c.previewKeys).length ? c.previewKeys : c.previewKey ? { base: c.previewKey } : {};
+            return (
+              <div key={c.candidateId} data-part="failure-candidate" data-gate={c.gate} style={{ ...CARD, marginTop: 6 }}>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>{c.candidateId} · {pass ? '게이트 통과' : `게이트 ${c.gate}`}</div>
+                {Object.keys(keys).length > 0 && <MotionSheet keys={keys} part="candidate-sheet" />}
+                <button
+                  type="button"
+                  data-action="failure-pick"
+                  data-choice={c.candidateId}
+                  disabled={!pass || busy}
+                  onClick={() => {
+                    if (!window.confirm('이 후보로 1층 8종을 올리고 알을 살립니다. 사용자 화면이 바뀝니다.')) return;
+                    void run(async () => { await pickRetry(open!.id, c.candidateId); return '반영했습니다.'; });
+                  }}
+                  style={{ ...BTN, minHeight: 44, marginTop: 6, opacity: pass ? 1 : 0.5 }}
+                >
+                  이걸로
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {candidates && row.kind === 'CUSTOM' && (
+        <div data-part="custom-candidates" style={{ marginTop: 8 }}>
+          <MotionSheet
+            part="custom-candidate-sheet"
+            keys={Object.fromEntries(Object.entries((candidates.files as Record<string, string> | undefined) ?? {})
+              .filter(([p]) => p.endsWith('.webp') && !p.includes('/')).map(([p, k]) => [p.replace(/\.webp$/, ''), k]))}
+          />
+          <button
+            type="button"
+            data-action="failure-pick"
+            data-choice="custom"
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm('이 8종을 사용자에게 지급합니다.')) return;
+              void run(async () => { await pickRetry(open!.id, 'custom'); return '지급했습니다.'; });
+            }}
+            style={{ ...BTN, minHeight: 44, marginTop: 6 }}
+          >
+            이걸로 지급
+          </button>
+        </div>
+      )}
+
+      {!openId && (
+        <>
+          <label style={{ display: 'block', fontSize: 12, marginTop: 8 }}>
+            메모(러너에 같이 갑니다)
+            <textarea
+              data-part="retry-memo"
+              maxLength={500}
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              rows={3}
+              style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 4, padding: 8, fontSize: 13, borderRadius: 6, border: '1px solid rgba(127,127,127,0.35)', background: 'transparent', color: 'inherit' }}
+            />
+          </label>
+          <div style={{ ...DIM, fontSize: 11, textAlign: 'right' }} data-part="memo-left">{500 - memo.length}자 남음</div>
+          {!row.revivable && row.blockedReason && <p data-part="blocked" style={{ fontSize: 12, color: BAD, margin: '4px 0 0' }}>{row.blockedReason}</p>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+            {stuck ? (
+              <button type="button" data-action="failure-resume" disabled={busy || !row.revivable} onClick={() => void serverBake('resume')} style={{ ...BTN, minHeight: 44 }}>
+                서버에서 이어서 굽기(비용 확인)
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-action="failure-retry"
+                disabled={busy || !row.revivable}
+                onClick={() => void run(async () => {
+                  await requestRetry(row.kind, row.id, memo.trim());
+                  return runner?.stale || runner?.lastSeenAt == null
+                    ? '요청은 저장됐고 러너가 켜지면 집습니다.'
+                    : '요청했습니다. 러너가 다음 확인 때 집습니다.';
+                })}
+                style={{ ...BTN, minHeight: 44, opacity: row.revivable ? 1 : 0.5 }}
+              >
+                맥미니로 재시도
+              </button>
+            )}
+            {row.kind === 'HATCH' && !stuck && (
+              <button type="button" data-action="failure-rehatch" disabled={busy} onClick={() => void serverBake('rehatch')} style={{ ...BTN, minHeight: 44 }}>
+                서버 재굽기(비용 확인)
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {openId && (
+        <button
+          type="button"
+          data-action="failure-retry-cancel"
+          disabled={busy}
+          onClick={() => void run(async () => { await cancelRetry(openId); return '요청을 취소했습니다.'; })}
+          style={{ ...BTN, minHeight: 44, marginTop: 8 }}
+        >
+          요청 취소
+        </button>
+      )}
+    </div>
+  );
 }
