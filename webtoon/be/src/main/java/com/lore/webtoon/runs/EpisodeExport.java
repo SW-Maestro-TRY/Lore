@@ -77,9 +77,9 @@ public class EpisodeExport {
     private static final double MARK_PAD = 0.03;
     /** 글자 사이 간격(글자 크기의 몇 배). */
     private static final float MARK_TRACKING = 0.18f;
-    /** 0~1. 그림을 읽는 데 방해가 안 될 만큼만 — 흰 글자는 옅게, 그림자는 더 옅게. */
-    private static final float MARK_ALPHA = 0.55f;
-    private static final float SHADOW_ALPHA = 0.25f;
+    /** 0~1. C 시안(흰 55% · 그림자 25%)은 잘 안 보인다는 평(2026-10-28)으로 올렸다. */
+    private static final float MARK_ALPHA = 0.85f;
+    private static final float SHADOW_ALPHA = 0.45f;
     /** 그림자 번짐(글자 크기의 몇 배). 밝은 장에서도 글자 테두리가 보이게 하는 몫이다. */
     private static final float SHADOW_BLUR = 0.12f;
 
