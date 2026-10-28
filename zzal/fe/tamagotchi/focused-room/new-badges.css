@@ -2,7 +2,7 @@
 .focused-room [data-fr-new]{position:relative}
 .focused-room .fr-new-dot{position:absolute;box-sizing:border-box;border-radius:50%;pointer-events:none}
 /* 27-B: 지름 16(안쪽 12 + 흰 테 2), 주황. 타일 모서리에 걸친다. */
-.focused-room .fr-new-dot--tile{top:-6px;right:-4px;width:16px;height:16px;background:#D9894A;border:2px solid #FFFDF8;box-shadow:0 1px 3px #4a403833;z-index:1}
+.focused-room .fr-new-dot--tile{top:-6px;right:-4px;width:16px;height:16px;background:#D9677F;border:2px solid #FFFDF8;box-shadow:0 1px 3px #4a403833;z-index:1}
 /* 28-D: 지름 16(안쪽 12 + 흰 테 2), 분홍. 메뉴 단추 오른쪽 위에 걸친다. */
 .focused-room .fr-new-dot--menu{top:-5px;right:-3px;width:16px;height:16px;background:#D9677F;border:2px solid #FFFDF8;box-shadow:0 0 0 1px #4a40381a,0 1px 3px #4a403826;z-index:1}
 /* 28-D: 항목 안 오른쪽 끝·세로 가운데, 지름 9, 테 없음. 글자가 점과 겹치지 않게 오른쪽 여백을 늘린다. */
