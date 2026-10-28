@@ -53,7 +53,8 @@ export default function CreditHistory({ onClose }: { onClose: () => void }) {
   }, [lines, tab]);
 
   return (
-    <div className="credit-modal" role="dialog" aria-modal="true" aria-label="크레딧 내역">
+    /* credit-modal--history: 웹툰(어두운 테마)이 이 창만 골라 어둡게 칠하는 손잡이. 충전 창은 흰 판 그대로다. */
+    <div className="credit-modal credit-modal--history" role="dialog" aria-modal="true" aria-label="크레딧 내역">
       {/* 바깥을 눌러도 닫힌다 — 폰에서 제일 자주 쓰는 닫는 법이다. */}
       <button type="button" className="credit-modal-veil" aria-label="닫기" onClick={onClose} />
 
