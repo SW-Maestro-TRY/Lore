@@ -42,7 +42,7 @@ function row(over: Record<string, unknown> = {}) {
 
 function pageBody(rows = [
   row(),
-  row({ id: 180, petId: 180, petName: null, reasonCode: 'STUCK', stage: '멈춤(서버 재시작 추정)', reasonText: '부화 중 멈춤 — 재시도하면 성공한 단계를 이어받아 서버에서 이어서 굽기(예상 비용 표시)', attempts: 2, costUsd: 0.12 }),
+  row({ id: 180, petId: 180, petName: null, reasonCode: 'STUCK', stage: '멈춤(서버 재시작 추정)', reasonText: '부화 중 멈춤 — 기동 복구·주기 복구 대상. 재시도하면 실패로 닫고 맥미니 러너로', attempts: 2, costUsd: 0.12, revivable: false, blockedReason: '이름 짓기 전 실패라 1층 복구로 살릴 수 없음 — 다시 부화(rehatch)는 가능' }),
   row({ kind: 'CUSTOM', id: 12, petId: 52, petName: '린델', reasonCode: 'CLAIMED_ORPHAN', stage: 'CLAIMED', reasonText: '굽기가 집은 뒤 결과 없이 끊김(고아)', attempts: 1, costUsd: null }),
 ]) {
   return {
