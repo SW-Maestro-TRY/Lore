@@ -296,3 +296,20 @@ html[data-wt-header="lift"] body:has(.wt) header[class*="SiteHeader_header"] {
 /* 밝은 그림·말풍선 위의 글은 일부러 흰 판이라 글자를 짙게 둔다 */
 :root .wt .wt-landing-bubble,
 :root .wt .wt-landing-scenebox { color: #17202c; }
+
+/* 마이페이지 「내역」 창(공용 CreditHistory). 이 창은 어디서 열든 흰 판이 되도록 색을 직접 들고 오는데
+ * (common/fe/mypage/mypage.css), 웹툰은 늘 어두운 테마라 흰 판이 혼자 튀었다(2026-10-28 운영 확인).
+ * 웹툰 안에서 열릴 때만 같은 변수를 어두운 값으로 덮는다. 충전 창은 결제 화면이라 그대로 흰 판. */
+.wt .credit-modal--history .credit-modal-box {
+  --bg: var(--bg-2);
+  --text: var(--ink);
+  --text-muted: var(--muted);
+  --border-strong: var(--line-strong);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
+}
+.wt .credit-modal--history .credit-modal-veil { background: rgba(3, 8, 14, .6); }
+/* 고른 탭 · 받은 금액: 공용 보라(#5b2be8)는 어두운 바탕에서 글자가 묻힌다. 웹툰 기본 단추·강조색으로 */
+.wt .credit-modal--history .credit-tab.is-on { border-color: #eceae5; background: #eceae5; color: #101925; }
+.wt .credit-modal--history .credit-line-delta { color: var(--sea-deep); }
+.wt .credit-modal--history .credit-line-delta.is-spent { color: var(--muted); }

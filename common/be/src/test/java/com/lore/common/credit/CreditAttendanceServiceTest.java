@@ -106,6 +106,18 @@ class CreditAttendanceServiceTest {
     }
 
     @Test
+    @DisplayName("출석 보상은 내역에 「출석 보상」으로 적힌다 — 이유는 그대로 REWARD")
+    void 내역_문구() {
+        service(OPENS).claim(ME);
+
+        CreditEvent row = creditRows.get(0);
+        assertThat(row.getReason()).isEqualTo(CreditReason.REWARD);
+        assertThat(row.getMemo()).isEqualTo("출석 보상");
+        assertThat(CreditController.Line.from(row).memo()).isEqualTo("출석 보상");
+        assertThat(CreditController.Line.from(row).label()).isEqualTo("활동 보상");
+    }
+
+    @Test
     @DisplayName("같은 날 여러 번 받아도 한 번만 찍히고 보상도 한 번")
     void 같은_날_두_번() {
         for (int i = 0; i < 3; i++) {

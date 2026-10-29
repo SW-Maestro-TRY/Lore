@@ -53,6 +53,25 @@ class OverlayStoreTest {
     }
 
     @Test
+    @DisplayName("말풍선 글꼴은 고를 수 있는 것만 남기고, 기본 글꼴은 값을 두지 않는다")
+    void 글꼴() throws Exception {
+        JsonNode items = clean("""
+                {"scenes":{"1":{"items":[
+                  {"type":"bubble","text":"마루부리","font":"maruburi"},
+                  {"type":"bubble","text":"대문자","font":" Jua "},
+                  {"type":"bubble","text":"모르는 글꼴","font":"gmarket"},
+                  {"type":"bubble","text":"옛 항목"},
+                  {"type":"sfx","text":"쾅","font":"suit"}]}}}""")
+                .path("scenes").path("1").path("items");
+
+        assertThat(items.get(0).path("font").asText()).isEqualTo("maruburi");
+        assertThat(items.get(1).path("font").asText()).isEqualTo("jua");
+        assertThat(items.get(2).has("font")).isFalse();
+        assertThat(items.get(3).has("font")).isFalse();
+        assertThat(items.get(4).has("font")).isFalse();
+    }
+
+    @Test
     @DisplayName("터무니없는 값은 범위 안으로 깎는다")
     void 범위_밖은_깎는다() throws Exception {
         JsonNode item = clean("""

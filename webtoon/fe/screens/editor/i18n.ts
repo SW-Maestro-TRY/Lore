@@ -165,6 +165,11 @@ const dict: Dict = {
   "맨 앞으로": { en: "Bring to front", ja: "最前面へ", zh: "移到最前" },
   "복제": { en: "Duplicate", ja: "複製", zh: "复制" },
   "삭제": { en: "Delete", ja: "削除", zh: "删除" },
+  "글꼴": { en: "Font", ja: "フォント", zh: "字体" },
+  "기본": { en: "Default", ja: "標準", zh: "默认" },
+  "마루부리": { en: "MaruBuri", ja: "MaruBuri", zh: "MaruBuri" },
+  "주아": { en: "Jua", ja: "Jua", zh: "Jua" },
+  "뒤로": { en: "Back", ja: "戻る", zh: "返回" },
   /* 제목 */
   "샘플입니다 — 제목은 실제 작품에서만 바뀝니다.": { en: "This is a sample — titles can only be changed on real works.", ja: "サンプルです — タイトルは実際の作品でのみ変更できます。", zh: "这是示例 — 只有真实作品才能修改标题。" },
   "저장하지 못했습니다": { en: "Couldn't save.", ja: "保存できませんでした", zh: "无法保存" },
