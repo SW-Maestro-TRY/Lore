@@ -122,6 +122,18 @@ export function mountEditor(
   // 꼬리를 가질 수 있는 말풍선. 나레이션은 상자라서 꼬리가 없고(화자가 없다),
   // 회상은 흐려지는 테두리가 그 자리를 대신한다.
   const TAILED = new Set(["normal", "shout", "whisper", "thought"]);
+  /* 말풍선 글꼴 — key 는 항목의 font 값이고 빈 값이 기본(LINE Seed KR)이다. 굽는 쪽
+     (BubbleArtist.FONTS)과 서버(OverlayStore)가 같은 키를 알고, 글꼴 파일도 같다(Editor.css 의
+     "LORE Bubble …"). 후보는 저장소에 있는 OFL 글꼴만 쓴다(2026-10-28). */
+  const BUBBLE_FONTS = [
+    { key: "", label: "기본" },
+    { key: "maruburi", label: "마루부리" },
+    { key: "suit", label: "SUIT" },
+    { key: "jua", label: "주아" },
+  ];
+  const FONT_KEYS = new Set(BUBBLE_FONTS.map(f => f.key).filter(Boolean));
+  const fontOf = it => (FONT_KEYS.has(it.font) ? it.font : "");
+  const fontAttr = it => (fontOf(it) ? ` data-font="${fontOf(it)}"` : "");
 
   const STICKERS = ["💦", "❤️", "✨", "💢", "❗", "❓", "🌟", "🎵", "⚡", "💀", "😳", "🔥"];
   /* 루 고래 스티커(#548) — 글자 대신 그림. 「lou:파일 이름」으로 저장하고, 굽는 쪽(BubbleArtist)도
@@ -136,6 +148,7 @@ export function mountEditor(
   // gaps: 장 뒤의 여백을 사람이 고친 값 {장 번호: 0~3}. 콘티 값을 덮어쓴다.
   let state = { scenes: {}, gaps: {} };
   let sel = null;          // 선택한 요소 { sceneNo, id }
+  let fontBarFor = null;   // 단추 줄 자리에 글꼴 줄을 연 말풍선 id
   let activeScene = 1;
   let tab = "bubble";
   let uid = Date.now();
@@ -889,7 +902,7 @@ export function mountEditor(
     const inner =
       it.type === "bubble"
         ? `<svg class="bub-svg" aria-hidden="true"></svg>` +
-          `<div class="bub bub-${it.variant}" style="font-size:${it.size}px"${ed}>${esc(it.text)}</div>` +
+          `<div class="bub bub-${it.variant}"${fontAttr(it)} style="font-size:${it.size}px"${ed}>${esc(it.text)}</div>` +
           (TAILED.has(it.variant)
             ? `<div class="handle handle-tail" data-tail-drag title="${tr("꼬리를 끌어 말하는 사람을 가리키세요")}"></div>`
             : "")
@@ -1374,7 +1387,7 @@ export function mountEditor(
     const tailBtn = (v, label) =>
       `<button type="button" class="ib${cur === v ? " is-on" : ""}" data-tail="${v}"` +
       ` title="${tr("꼬리 {label}", { label })}">${label}</button>`;
-    // 글을 고치는 중에는 「완료」 하나만 낸다. 나머지(크기·꼬리·복제·삭제)는
+    // 글을 고치는 중에는 「완료」 하나만 낸다. 나머지(크기·글꼴·꼬리·복제·삭제)는
     // 다 쓰고 나서 할 일이라, 키보드가 화면을 반쯤 덮은 상태에서 같이
     // 늘어놓으면 정작 눌러야 할 것이 안 보인다.
     //
@@ -1386,9 +1399,23 @@ export function mountEditor(
       return b("done", tr("완료"), tr("다 썼습니다 — 이제 옮기거나 크기를 고칠 수 있습니다"),
                "is-done");
     }
+    /* 글꼴 줄 — 단추 줄 자리에 글꼴 이름을 그 글꼴로 늘어놓는다. 줄을 하나 더 띄우면 폰에서
+       그림을 더 가리므로 자리를 바꿔 쓴다. 고르면 바로 바뀌고 줄은 남아 있어서 견줘 보기 쉽다. */
+    if (fontBarFor === it.id) {
+      const cur = fontOf(it);
+      return b("fontBack", "‹", tr("뒤로")) + `<span class="ib-sep"></span>` +
+        BUBBLE_FONTS.map(f =>
+          `<button type="button" class="ib ib-font${cur === f.key ? " is-on" : ""}"` +
+          ` data-font-pick="${f.key}"${f.key ? ` data-font="${f.key}"` : ""}>${tr(f.label)}</button>`).join("");
+    }
+    // 「가」는 지금 글꼴로 보인다 — 무엇을 누르는 단추인지 글자 모양이 말해 준다.
+    const fontBtn = it.type === "bubble"
+      ? `<button type="button" class="ib ib-font" data-act="font"${fontAttr(it)} title="${tr("글꼴")}">가</button>`
+      : "";
     return [
       b("smaller", "ᴀ⁻", tr("글자 작게")),
       b("bigger", "ᴀ⁺", tr("글자 크게")),
+      fontBtn,
       tailed ? `<span class="ib-sep"></span>` +
                tailBtn("left", "◀") + tailBtn("right", "▶") + tailBtn("none", "✕") : "",
       `<span class="ib-sep"></span>`,
@@ -1402,6 +1429,7 @@ export function mountEditor(
   function paintProps() {
     const it = findItem();
     killBar();
+    if (fontBarFor !== it?.id) fontBarFor = null;   // 다른 것을 고르면 글꼴 줄은 닫힌다
     if (!it) return;
     const el = document.querySelector(
       `#scene-${sel.sceneNo} .item[data-id="${sel.id}"]`);
@@ -1416,7 +1444,8 @@ export function mountEditor(
 
     const box = layer.getBoundingClientRect();
     const r = el.getBoundingClientRect();
-    const above = r.top - box.top > 46;
+    // 위에 줄 높이만큼 자리가 있어야 위로 띄운다 — 폰에서 두 줄로 접히면 줄이 더 높다.
+    const above = r.top - box.top > bar.offsetHeight + 10;
     /* 줄은 말풍선 가운데 위에 뜨는데, 말풍선이 가장자리에 붙어 있으면 줄이 그림 밖으로
        나간다. 폰은 단추가 커서(38px) 줄이 그림 폭에 가깝고, 끝 단추(글자 작게·삭제)가
        화면 밖에 걸릴 수 있다. 줄 전체가 그림 안에 들도록 가운데를 안쪽으로 당긴다 —
@@ -1434,6 +1463,8 @@ export function mountEditor(
     bar.addEventListener("click", e => {
       const t = e.target.closest("[data-tail]");
       if (t) return setTail(t.dataset.tail);
+      const f = e.target.closest("[data-font-pick]");
+      if (f) return setFont(f.dataset.fontPick);
       const b = e.target.closest("[data-act]");
       if (b) ACTS[b.dataset.act]?.();
     });
@@ -1450,6 +1481,13 @@ export function mountEditor(
     },
     bigger: () => bumpSize(+2),
     smaller: () => bumpSize(-2),
+    // 글꼴 줄을 열고 닫는다(barHTML). 말풍선을 다시 고르면 저절로 닫힌다(paintProps).
+    font: () => {
+      const it = findItem();
+      if (it?.type !== "bubble") return;
+      fontBarFor = it.id; paintProps();
+    },
+    fontBack: () => { fontBarFor = null; paintProps(); },
     /* 복제 — 같은 모양·글·크기를 그대로 하나 더. 원래 것과 딱 겹치면 복제가 됐는지
        안 보이므로 오른쪽 아래로 조금 비켜 놓고, 새 것을 고른 상태로 둔다(바로 끌어
        옮길 수 있게). 같은 꼴의 말풍선을 한 장에 여러 개 늘어놓을 때 쓴다(제보 「말풍선 복사」). */
@@ -1473,6 +1511,14 @@ export function mountEditor(
   function bumpSize(d) {
     const it = findItem(); if (!it) return;
     it.size = Math.max(6, Math.min(70, it.size + d));
+    save(); paintItems(sel.sceneNo);
+  }
+
+  /* 글꼴 — 기본은 값을 두지 않는다. 값이 없는 옛 항목도 기본 글꼴로 읽히므로 지금 작품이 그대로다. */
+  function setFont(key) {
+    const it = findItem(); if (!it) return;
+    if (FONT_KEYS.has(key)) it.font = key;
+    else delete it.font;
     save(); paintItems(sel.sceneNo);
   }
 
@@ -1903,6 +1949,13 @@ export function mountEditor(
       paintAskQuality();
     });
 
+
+    /* 말풍선 글꼴은 처음 쓰일 때 받는다. 받기 전에는 대신 쓴 글꼴로 풍선 모양을 재서, 받고 나면
+       글과 모양이 안 맞는다(글이 풍선 밖으로 삐져나온다). 글꼴을 받을 때마다 다시 그린다. */
+    on(document.fonts, "loadingdone", () => {
+      for (const s of (data?.scenes || [])) paintShapes(s.no);
+      if (sel) paintProps();
+    });
 
     on(document, "keydown", e => {
       // 확인 창이 열려 있으면 그 창부터 받는다 — 뒤에 있는 선택 해제나 삭제가
