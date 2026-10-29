@@ -20,7 +20,9 @@ import java.util.Set;
  * 떨어뜨린다 — 여기서 세우면 항목 하나가 이상할 때 화 전체를 못 굽는다.
  *
  * 깎는 규칙은 파이썬({@code landing/overlay.py} 의 {@code clean_item})과 같다.
- * 한쪽만 바꾸면 같은 편집실이 어디에 저장하느냐에 따라 다르게 굽힌다.
+ * 한쪽만 바꾸면 같은 편집실이 어디에 저장하느냐에 따라 다르게 굽힌다. 말풍선 글꼴({@code font})만
+ * 여기에만 있다 — 파이썬은 작품 폴더의 overlay.json 을 굽는 옛 길이고, 편집실은 이제 DB 에
+ * 저장한다({@link WebtoonOverlay}).
  */
 @Service
 public class OverlayStore {
@@ -201,6 +203,12 @@ public class OverlayStore {
         out.put("size", clamp(raw.path("size"), 4, 200, 15));
         out.put("rot", clamp(raw.path("rot"), -180, 180, 0));
         out.put("tail", tail);
+        /* 말풍선 글꼴 — 고를 수 있는 것만 남긴다. 기본 글꼴은 값을 두지 않으므로, 값이 없는 옛
+           항목도 지금처럼 기본 글꼴로 굽힌다. */
+        String font = raw.path("font").asText("").trim().toLowerCase();
+        if ("bubble".equals(kind) && BubbleArtist.FONTS.containsKey(font)) {
+            out.put("font", font);
+        }
         /* 꼬리 끝은 사람이 끌어다 놓은 자리다. 풍선 크기에 대한 %(가로·세로)라
            그림 크기가 달라져도 같은 곳을 가리킨다. 안 보내면 옛 규칙(왼쪽/
            오른쪽)에서 만든다 — 예전에 저장한 것이 그대로 열려야 한다. */

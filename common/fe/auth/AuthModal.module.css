@@ -655,3 +655,30 @@
   background: var(--btn-primary-bg);
   color: var(--btn-primary-fg);
 }
+
+/* 웹툰 화면에서 열리면 어두운 판으로 뜬다(2026-10-28 운영 확인).
+ *
+ * 웹툰(.wt)은 늘 어두운 테마인데, 이 창은 body 로 포털을 쏴서 .wt 밖에 그려지므로 웹툰 색을
+ * 물려받지 못하고 흰 판이 됐다. 페이지 안에 .wt 가 있을 때만 이 창이 쓰는 토큰을 어두운 값으로
+ * 덮는다 — 값은 webtoon/fe/final-theme.css 의 .wt 팔레트와 같다. 짤·예고편·조각 화면에는 .wt 가
+ * 없어서 지금 그대로다. */
+:global(body:has(.wt)) .overlay {
+  --scrim: rgba(3, 8, 14, 0.6);
+  --card: #142333;
+  --card-border: #ffffff26;
+  --bg: #101c2a;
+  --surface-2: #1b2939;
+  --surface-hover: #ffffff14;
+  --border: #ffffff1f;
+  --border-strong: #ffffff33;
+  --text: #f3f2ef;
+  --text-muted: #a5b1c0;
+  --text-subtle: #8997a9;
+  --btn-primary-bg: #eceae5;
+  --btn-primary-fg: #101925;
+  --accent-zzal: #e6a393;
+  --accent-zzal-deep: #efb6a7;
+  --danger: #ff9b8f;
+  --danger-tint: rgba(255, 155, 143, 0.12);
+  color-scheme: dark;
+}

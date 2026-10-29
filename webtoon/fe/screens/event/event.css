@@ -34,7 +34,8 @@
   filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff) drop-shadow(0 8px 14px #0006);
 }
 .wt-ev-witch .wt-ev-hat {
-  position: absolute; left: 4%; top: -13%; width: 76%; transform: rotate(-12deg);
+  /* 챙 아래쪽이 정수리 머리카락에 바로 닿게(틈 없이, 이마는 다 보이게). 값은 전부 그림 상자에 대한 % 라 배너 · 이벤트 페이지 · 폰 너비가 같이 맞는다 */
+  position: absolute; left: 20.8%; top: -15%; width: 53.8%; transform-origin: 50% 81.4%; transform: rotate(-6deg);
   filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff);
 }
 
@@ -54,7 +55,7 @@
   clip-path: none; opacity: .38;
 }
 /* 다리를 자르고 크게 — 모자 끝까지 배너 안에 들어온다 */
-.wt-ev-banner .wt-ev-witch { position: absolute; left: 20px; bottom: -100px; height: 180px; z-index: 1; }
+.wt-ev-banner .wt-ev-witch { position: absolute; left: 20px; bottom: -104px; height: 180px; z-index: 1; }
 .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-banner .wt-ev-witch { display: none; }
 .wt-ev-banner-t { position: relative; z-index: 2; flex: 1; min-width: 0; }
 .wt-ev-banner-t strong {
@@ -74,7 +75,7 @@
 @media (max-width: 560px) {
   .wt-ev-banner { padding: 12px 14px 12px 104px; min-height: 104px; }
   .wt-ev-banner::before { clip-path: polygon(0 0, 92px 0, 72px 100%, 0 100%); }
-  .wt-ev-banner .wt-ev-witch { left: 10px; bottom: -92px; height: 166px; }
+  .wt-ev-banner .wt-ev-witch { left: 10px; bottom: -96px; height: 166px; }
   .wt-ev-banner-t strong { font-size: 20px; }
   .wt-ev-banner-t b { font-size: 15px; }
   .wt-ev-banner-t span { display: none; }
@@ -91,9 +92,9 @@
   box-shadow: 0 30px 60px #000a; animation: wt-ev-rise .5s cubic-bezier(.22, 1, .36, 1);
 }
 .wt-ev-pop-ph { position: relative; height: 190px; overflow: hidden; background: radial-gradient(80% 70% at 50% 20%, var(--ev-bg2), var(--ev-bg) 75%); }
-.wt-ev-pop-ph .wt-ev-bust { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); width: 150px; }
+.wt-ev-pop-ph .wt-ev-bust { position: absolute; left: 50%; bottom: -40px; transform: translateX(-50%); width: 150px; }
 .wt-ev-pop-ph .wt-ev-bust img { width: 100%; display: block; filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
-.wt-ev-pop-ph .wt-ev-bust .wt-ev-hat { position: absolute; left: 6%; top: -27%; width: 80%; transform: rotate(9deg); filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
+.wt-ev-pop-ph .wt-ev-bust .wt-ev-hat { position: absolute; left: 9.2%; top: -46.3%; width: 80%; transform-origin: 50% 80.7%; transform: rotate(-2deg); filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
 .wt-ev-pop-ph img.wt-ev-kv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-pop-ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, #14102a 100%); }
 .wt-ev-pop-day {
@@ -167,7 +168,8 @@
 .wt-ev-hero .wt-ev-ov { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, var(--ev-bg) 100%); z-index: 1; }
 .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-hero .wt-ev-ov { background: linear-gradient(180deg, #14102a33 0%, #14102a11 35%, #14102acc 70%, var(--ev-bg) 100%); }
 .wt-ev-hero img.wt-ev-kv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; filter: saturate(.9); }
-.wt-ev-hero .wt-ev-witch { position: absolute; right: 10px; top: 40px; height: 290px; z-index: 1; }
+/* 모자를 정수리 위로 올리면서 끝이 히어로 위에서 잘리지 않게 그림을 조금 내림 */
+.wt-ev-hero .wt-ev-witch { position: absolute; right: 10px; top: 56px; height: 290px; z-index: 1; }
 .wt-ev-hero-t { position: absolute; left: 18px; right: 150px; bottom: 22px; z-index: 3; }
 .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-hero-t { right: 18px; }
 .wt-ev-badge {
@@ -272,7 +274,7 @@
     box-shadow: 0 24px 60px #0006;
   }
   .wt-ev-hero { grid-area: hero; height: clamp(320px, 34vw, 380px); background: radial-gradient(55% 85% at 78% 30%, var(--ev-bg2) 0%, var(--ev-bg) 72%); }
-  .wt-ev-hero .wt-ev-witch { right: clamp(28px, 7vw, 96px); top: 84px; height: clamp(440px, 46vw, 520px); }
+  .wt-ev-hero .wt-ev-witch { right: clamp(28px, 7vw, 96px); top: 100px; height: clamp(440px, 46vw, 520px); }
   .wt-ev-hero-t { left: var(--ev-pad); right: auto; bottom: clamp(28px, 4vw, 44px); max-width: 520px; }
   .wt-ev-hero h1 { font-size: clamp(36px, 4.2vw, 46px); }
   .wt-ev-root[data-theme="MASQUERADE"] .wt-ev-hero h1 { font-size: clamp(34px, 4vw, 44px); }
