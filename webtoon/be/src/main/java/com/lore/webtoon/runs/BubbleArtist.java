@@ -118,6 +118,17 @@ public class BubbleArtist {
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
                 RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
+        /* 직접 그린 것(리터치)은 그림 바로 위 · 말풍선 아래다 — 편집실 화면의 겹 순서와 같다. */
+        JsonNode painted = scene.path("paint").path("strokes");
+        if (painted.size() > 0) {
+            try {
+                g.drawImage(paint(page.getWidth(), page.getHeight(), painted), 0, 0, null);
+            } catch (RuntimeException e) {
+                // 그린 것을 못 그려도 말풍선은 굽는다
+                log.warn("직접 그린 것을 못 그렸습니다", e);
+            }
+        }
+
         /* 편집실이 보던 지면 폭에 대한 배율. 화면에서 720px 로 보며 15px 글자를
            얹었다면, 1024px 그림에서는 그만큼 커져야 같은 자리 같은 크기다. */
         double refW = scene.path("ref_w").asDouble(720.0);
@@ -133,6 +144,69 @@ public class BubbleArtist {
         }
         g.dispose();
         return out;
+    }
+
+    /* ---- 직접 그린 것 ---------------------------------------------------- */
+
+    /**
+     * 그린 선들을 <b>따로 한 겹</b>에 그린다. -> 그림과 같은 크기의 투명한 겹
+     *
+     * 지우개는 이 겹만 지운다(그 자리를 투명하게) — 그래서 밑그림은 지워지지 않는다. 선은 그린 순서대로
+     * 겹친다. 곡선은 화면({@code editorCore.ts strokePath})과 같다: 이웃한 두 점의 가운데를 잇는 2차
+     * 곡선이고, 점이 하나면 동그란 점이다.
+     */
+    static BufferedImage paint(int w, int h, JsonNode strokes) {
+        BufferedImage layer = new BufferedImage(Math.max(1, w), Math.max(1, h), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = layer.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        double u = PaintStore.UNIT;
+        for (JsonNode s : strokes) {
+            JsonNode p = s.path("p");
+            int n = p.size() / 2;
+            if (n < 1) {
+                continue;
+            }
+            boolean erase = "e".equals(s.path("k").asText(""));
+            double width = Math.max(0.5, s.path("w").asDouble(60) / u * w);
+            g.setComposite(erase ? java.awt.AlphaComposite.DstOut : java.awt.AlphaComposite.SrcOver);
+            g.setColor(erase ? Color.BLACK : colorOf(s.path("c").asText("")));
+            double[] xs = new double[n], ys = new double[n];
+            for (int i = 0; i < n; i++) {
+                xs[i] = p.get(2 * i).asDouble() / u * w;
+                ys[i] = p.get(2 * i + 1).asDouble() / u * h;
+            }
+            if (n == 1) {
+                g.fill(new Ellipse2D.Double(xs[0] - width / 2, ys[0] - width / 2, width, width));
+                continue;
+            }
+            Path2D.Double path = new Path2D.Double();
+            path.moveTo(xs[0], ys[0]);
+            if (n == 2) {
+                path.lineTo(xs[1], ys[1]);
+            } else {
+                for (int i = 1; i < n - 1; i++) {
+                    path.quadTo(xs[i], ys[i], (xs[i] + xs[i + 1]) / 2, (ys[i] + ys[i + 1]) / 2);
+                }
+                path.lineTo(xs[n - 1], ys[n - 1]);
+            }
+            g.setStroke(new BasicStroke((float) width, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g.draw(path);
+        }
+        g.dispose();
+        return layer;
+    }
+
+    /** {@code #rrggbb} -> 색. 모르는 값은 먹색. */
+    private static Color colorOf(String hex) {
+        try {
+            if (hex != null && hex.length() == 7 && hex.charAt(0) == '#') {
+                return new Color(Integer.parseInt(hex.substring(1), 16));
+            }
+        } catch (NumberFormatException ignored) {
+            // 아래 먹색
+        }
+        return INK;
     }
 
     /* ---- 하나 그리기 ------------------------------------------------------ */

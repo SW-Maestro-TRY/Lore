@@ -317,6 +317,7 @@ export function mountEditor(
       .map((s, i) => sceneCard(s) + gapBar(s, i === data.scenes.length - 1))
       .join("");
     data.scenes.forEach(s => paintItems(s.no));
+    watchCanvases();
     wireScenes();
     wireGaps();
     // 지난 판은 서버에만 있다 — 목업에는 없다.
@@ -444,6 +445,8 @@ export function mountEditor(
         <!-- width/height 를 박아 자리를 미리 잡는다. 안 그러면 lazy 이미지가
              뜨기 전까지 높이가 0 이라 카드가 납작해졌다가 튄다. -->
         <img src="${rawImg(s)}" alt="${tr("{n}번째 장", { n: s.no })}" width="${s.w}" height="${s.h}" loading="lazy">
+        <!-- 직접 그린 겹(리터치) — 그림 위 · 말풍선 아래. 굽는 쪽(BubbleArtist.paint)과 같은 순서다. -->
+        <canvas class="paint-layer" data-paint aria-hidden="true"></canvas>
         <div class="overlay" data-overlay></div>
         ${unsafePages.has(s.no) ? `<div class="unsafe-note">${tr("이미지 안전 기준에 걸려 비워 둔 장이에요. 장면 설명을 고쳐 다시 그려 주세요.")}${unsafeReasons[String(s.no)] ? ` (${unsafeReasons[String(s.no)]})` : ""}</div>` : ""}
       </div>
@@ -466,6 +469,7 @@ export function mountEditor(
       const no = +el.dataset.scene;
 
       el.addEventListener("pointerdown", () => setActive(no), true);
+      wirePaint(no, el);
 
       // 「N번째 장」배지 — 고르기만 하지 않고 도구까지 바로 연다. 폰에서는
       // 이게 ☰ 도구 단추를 대신한다(화면 아래 단추가 그림에서 멀다). 넓은
@@ -493,6 +497,7 @@ export function mountEditor(
     activeScene = no;
     $$(".scene").forEach(el => el.classList.toggle("is-active", +el.dataset.scene === no));
     $("#activeSceneLabel").textContent = tr("{n}번째 장", { n: no });
+    if (painting) paintToolsState();
   }
 
   /* ---- 지금 장은 화면 가운데를 따라간다 -----------------------------------
@@ -816,7 +821,10 @@ export function mountEditor(
         if (unsafePages.delete(no)) $(".unsafe-note", el)?.remove();   // 빈 장을 다시 그려 냈다(#626)
         bustScene(no);
         paintVersions(no, s.versions);
-        toast(tr("{n}번째 장을 다시 그렸습니다", { n: no }));
+        /* 직접 그린 것은 그대로 남긴다(원본만 바뀐다) — 새 그림에 안 맞으면 사람이 지운다. */
+        toast(strokesOf(no).length
+          ? tr("{n}번째 장을 다시 그렸습니다 · 직접 그린 것은 그대로 남아 있어요", { n: no })
+          : tr("{n}번째 장을 다시 그렸습니다", { n: no }));
         break;
       }
       if (s.status === "error" || s.status === "cancelled") {
@@ -833,6 +841,7 @@ export function mountEditor(
   const sceneBust = {};
   function bustScene(no) {
     sceneBust[no] = Date.now();
+    delete pixelCache[no];          // 스포이드가 옛 그림 색을 읽지 않게
     const img = $(`#scene-${no} [data-wrap] img`);
     if (img) img.src = `${API}/runs/${encodeURIComponent(RUN_ID)}/page/${no}?raw=1&w=1080${epq("&")}&t=${sceneBust[no]}`;
   }
@@ -1075,6 +1084,7 @@ export function mountEditor(
     if (!layer) return;
     layer.innerHTML = sc(no).items.map(itemHTML).join("");
     layer.classList.toggle("is-hidden", !$("#showOverlay").checked);
+    $(`#scene-${no} [data-paint]`)?.classList.toggle("is-hidden", !$("#showOverlay").checked);
     $$(".item", layer).forEach(el => wireItem(no, el));
     paintShapes(no);
     paintProps();
@@ -1273,11 +1283,458 @@ export function mountEditor(
     }
   }
 
+  /* ------------------------------------------------------------------ 직접 그리기 (리터치)
+   *
+   * 장 위에 붓·지우개로 조금 고친다(사용자 피드백 「직접 조금이라도 그림으로 리터치」). 다시 그리기는
+   * 장 전체를 새로 굽고 돈이 들어서, 손가락 하나·눈 밑 점 하나 같은 찐빠를 고칠 길이 없었다.
+   *
+   * ── 무엇이 어디에 남나 ────────────────────────────────────────────────
+   * 그린 것은 **원본 그림과 따로** 장마다 선 목록으로 남는다(sc(no).paint.strokes). 원본은 안 바뀌어서
+   * 되돌리기·다 지우기로 언제든 원래 그림이 나온다. 서버에는 말풍선과 다른 길로 장마다 올린다
+   * (POST /runs/{run}/scenes/{n}/paint, webtoon/be PaintStore) — 선은 점이 많아서, 말풍선 저장에
+   * 섞으면 글 한 자 고칠 때마다 큰 본문이 같이 오간다. 굽기(BubbleArtist.paint)가 그림 위·말풍선
+   * 아래에 합친다 — 화면의 겹 순서(img → canvas → .overlay)와 같다.
+   *
+   * ── 모양 ─────────────────────────────────────────────────────────────
+   * {k:"b"|"e", c:"#rrggbb", w, p:[x,y,x,y,…]} — 자리·굵기는 그림 크기의 1/PAINT_UNIT(x·굵기는 폭,
+   * y 는 높이). 화면 크기와 상관없이 같은 자리다. 지우개(e)는 이 겹만 지운다 — 그림은 원래 안 바뀐다.
+   *
+   * ── 도구 전환 ────────────────────────────────────────────────────────
+   * 서랍의 「그리기」 갈래를 고르면 그리기 모드다. 그동안은 말풍선을 못 잡는다(.overlay 가 누름을
+   * 안 받는다) — 붓질이 말풍선 끌기로 새면 안 된다. 다른 갈래를 고르거나 떠 있는 줄의 「완료」를
+   * 누르면 끝난다. 폰에서 손가락 둘로 끌면 그리지 않고 화면을 내린다. */
+
+  const PAINT_UNIT = 10000;
+  /* 한도 — 서버(PaintStore)와 같아야 한다. 화면이 먼저 멈춰야 서버가 몰래 잘라 내는 일이 없다. */
+  const PAINT_MAX_POINTS = 12000, PAINT_MAX_STROKES = 500, PAINT_MAX_STROKE_POINTS = 4000;
+  const PAINT_SIZES = [25, 60, 140, 320];          // 굵기 — 폭의 0.25% · 0.6% · 1.4% · 3.2%
+  const PAINT_COLORS = ["#111111", "#ffffff", "#8a8a8a", "#f6d7c3", "#e8b598", "#7a4a2a",
+                        "#e5484d", "#f5a524", "#ffd60a", "#30a46c", "#3e63dd", "#8e4ec6"];
+  let painting = false;                 // 그리기 모드인가
+  let paintTool = "brush";              // brush · eraser · picker
+  let paintColor = "#111111";
+  let paintSize = 1;                    // PAINT_SIZES 의 몇 번째
+  const paintUndo = {}, paintRedo = {}; // 장마다 { [no]: [선 목록 사본, …] }
+  const pixelCache = {};                // 스포이드용 밑그림 { [no]: Promise<ImageBitmap|null> }
+  let paintObservers = [];
+
+  try {
+    const got = JSON.parse(localStorage.getItem("lore_editor_paint") || "null");
+    if (got && /^#[0-9a-f]{6}$/.test(got.color)) paintColor = got.color;
+    if (got && Number.isInteger(got.size) && got.size >= 0 && got.size < PAINT_SIZES.length) paintSize = got.size;
+  } catch { /* 비공개 창 */ }
+  function rememberBrush() {
+    try { localStorage.setItem("lore_editor_paint", JSON.stringify({ color: paintColor, size: paintSize })); } catch { /* 무시 */ }
+  }
+
+  function strokesOf(no) {
+    const st = sc(no);
+    if (!st.paint || !Array.isArray(st.paint.strokes)) st.paint = { strokes: [] };
+    return st.paint.strokes;
+  }
+  function pointsOf(strokes) { return strokes.reduce((n, s) => n + (s.p.length >> 1), 0); }
+
+  /* 선 하나의 길 — 이웃한 두 점의 가운데를 잇는 2차 곡선. 굽는 쪽(BubbleArtist.paint)과 같은 식이다. */
+  function strokePath(ctx, s, W, H) {
+    const p = s.p, n = p.length >> 1;
+    const X = i => p[2 * i] / PAINT_UNIT * W, Y = i => p[2 * i + 1] / PAINT_UNIT * H;
+    const lw = Math.max(0.5, s.w / PAINT_UNIT * W);
+    ctx.globalCompositeOperation = s.k === "e" ? "destination-out" : "source-over";
+    ctx.fillStyle = ctx.strokeStyle = s.k === "e" ? "#000" : s.c;
+    ctx.beginPath();
+    if (n === 1) {
+      ctx.arc(X(0), Y(0), lw / 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    ctx.lineWidth = lw; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.moveTo(X(0), Y(0));
+    if (n === 2) ctx.lineTo(X(1), Y(1));
+    else {
+      for (let i = 1; i < n - 1; i++) ctx.quadraticCurveTo(X(i), Y(i), (X(i) + X(i + 1)) / 2, (Y(i) + Y(i + 1)) / 2);
+      ctx.lineTo(X(n - 1), Y(n - 1));
+    }
+    ctx.stroke();
+  }
+
+  /* 겹 크기를 지금 보이는 그림 크기(× 화면 배율)에 맞춘다. 바뀌었으면 true. */
+  function fitCanvas(cv) {
+    const r = cv.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if (cv.width === w && cv.height === h) return false;
+    cv.width = w; cv.height = h;
+    return true;
+  }
+
+  function paintCanvas(no, extra) {
+    const cv = $(`#scene-${no} [data-paint]`);
+    if (!cv) return;
+    fitCanvas(cv);
+    const ctx = cv.getContext("2d");
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    for (const s of strokesOf(no)) strokePath(ctx, s, cv.width, cv.height);
+    if (extra) strokePath(ctx, extra, cv.width, cv.height);
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  /* 그림 크기가 바뀌면(창 크기·단 폭) 겹을 다시 그린다. */
+  function watchCanvases() {
+    paintObservers.forEach(o => o.disconnect());
+    paintObservers = [];
+    for (const s of (data?.scenes || [])) {
+      paintCanvas(s.no);
+      const cv = $(`#scene-${s.no} [data-paint]`);
+      if (!cv || typeof ResizeObserver === "undefined") continue;
+      const ob = new ResizeObserver(() => { if (fitCanvas(cv)) paintCanvas(s.no); });
+      ob.observe(cv);
+      paintObservers.push(ob);
+    }
+  }
+
+  /* ---- 바꾸기 · 되돌리기 ---- */
+
+  function changeStrokes(no, next) {
+    const st = sc(no);
+    (paintUndo[no] = paintUndo[no] || []).push(strokesOf(no).slice());
+    if (paintUndo[no].length > 100) paintUndo[no].shift();
+    paintRedo[no] = [];
+    st.paint = { strokes: next };
+    paintChanged(no);
+  }
+  function undoPaint(no = activeScene) {
+    const u = paintUndo[no];
+    if (!u || !u.length) return;
+    (paintRedo[no] = paintRedo[no] || []).push(strokesOf(no).slice());
+    sc(no).paint = { strokes: u.pop() };
+    paintChanged(no);
+  }
+  function redoPaint(no = activeScene) {
+    const r = paintRedo[no];
+    if (!r || !r.length) return;
+    (paintUndo[no] = paintUndo[no] || []).push(strokesOf(no).slice());
+    sc(no).paint = { strokes: r.pop() };
+    paintChanged(no);
+  }
+  function paintChanged(no) {
+    paintCanvas(no);
+    keepLocal();
+    paintDirty.add(no);
+    pushPaintSoon();
+    paintToolsState();
+  }
+  /* 이 브라우저에 남긴다 — 서버가 잠깐 안 되어도 그린 것이 안 날아가게. 말풍선 저장(save)은 부르지 않는다. */
+  function keepLocal() {
+    try { localStorage.setItem(storeKey(), JSON.stringify(state)); } catch { /* 용량 초과 */ }
+  }
+
+  /* ---- 서버로 올리기 — 장마다, 손을 멈추고 800ms 뒤에 ---- */
+
+  const paintDirty = new Set();
+  let paintT = null, paintPushing = null;
+  function pushPaintSoon() {
+    if (!RUN_ID) return;
+    clearTimeout(paintT);
+    paintT = setTimeout(() => { pushPaintNow(); }, 800);
+  }
+  /* 다 올렸으면 true. 굽기 전에 기다린다 — 안 올라간 선은 구운 그림에 안 나온다. */
+  async function pushPaintNow() {
+    if (!RUN_ID) return true;
+    clearTimeout(paintT);
+    if (paintPushing) { await paintPushing; if (!paintDirty.size) return true; }
+    paintPushing = (async () => {
+      let ok = true;
+      paintSaved("saving");
+      for (const no of [...paintDirty]) {
+        paintDirty.delete(no);
+        try {
+          const res = await authFetch(
+            `${API}/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/paint${epq()}`,
+            { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ v: 1, strokes: strokesOf(no) }) });
+          if (!res.ok) throw new Error(String(res.status));
+        } catch { ok = false; paintDirty.add(no); }
+      }
+      paintSaved(ok ? "idle" : "fail");
+      return ok;
+    })();
+    const ok = await paintPushing;
+    paintPushing = null;
+    return ok;
+  }
+
+  /* ---- 그리기 모드 ---- */
+
+  const PAINT_BAR_ID = "paintBar";
+  function setPaintMode(on) {
+    const root = document.querySelector(".ed");
+    if (!root) return;
+    if (on && !painting) {
+      if (sel) clearSel();
+      killBar();
+      // 「내가 얹은 것 보기」를 꺼 둔 채로 그리면 그린 것이 안 보인다
+      const show = $("#showOverlay");
+      if (show && !show.checked) {
+        show.checked = true;
+        data?.scenes.forEach(s => paintItems(s.no));
+      }
+    }
+    painting = on;
+    root.classList.toggle("is-painting", on);
+    root.dataset.brushTool = on ? paintTool : "";
+    let bar = document.getElementById(PAINT_BAR_ID);
+    if (on && !bar) {
+      bar = document.createElement("div");
+      bar.id = PAINT_BAR_ID;
+      bar.className = "paint-bar";
+      bar.setAttribute("role", "toolbar");
+      bar.setAttribute("aria-label", tr("그리기"));
+      bar.innerHTML = paintBarHTML();
+      // 단 폭 변수(--ed-left-w · --ed-right-w)를 받아 가운데 단 한가운데에 서도록 .ed-body 안에 둔다
+      (root.querySelector(".ed-body") || root).appendChild(bar);
+      bar.addEventListener("click", onPaintToolClick);
+    }
+    if (!on && bar) bar.remove();
+    paintToolsState();
+  }
+  function endPaint() {
+    tab = "bubble";
+    paintDock();
+  }
+
+  const ICONS = {
+    brush: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5 19.5 9.5 10 19c-1.4 1.4-4.3 1.6-6 1 .6-1.7.4-4.2 1.5-5.5z"/><path d="m13 6 5 5"/></svg>`,
+    eraser: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-3.5-3.5a2 2 0 0 1 0-2.8L13.7 4.5a2 2 0 0 1 2.8 0l3 3a2 2 0 0 1 0 2.8L10 20h10"/><path d="m8.5 9.5 6 6"/></svg>`,
+    picker: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>`,
+    undo: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>`,
+    redo: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>`,
+  };
+  const TOOL_NAMES = { brush: "붓", eraser: "지우개", picker: "스포이드" };
+
+  function toolBtn(t, withLabel) {
+    return `<button type="button" class="pt-tool" data-paint-tool="${t}" aria-pressed="false" title="${esc(tr(TOOL_NAMES[t]))}" aria-label="${esc(tr(TOOL_NAMES[t]))}">${ICONS[t]}${withLabel ? `<span>${esc(tr(TOOL_NAMES[t]))}</span>` : ""}</button>`;
+  }
+
+  /* 그림 위에 떠 있는 줄 — 그리기 모드 표시이자, 폰에서 서랍을 닫고도 도구를 바꾸는 자리. */
+  function paintBarHTML() {
+    return toolBtn("brush") + toolBtn("eraser") + toolBtn("picker") +
+      `<span class="pt-sep"></span>` +
+      `<button type="button" class="pt-color" data-paint-act="colors" title="${esc(tr("색"))}" aria-label="${esc(tr("색"))}"><i data-paint-swatch></i></button>` +
+      `<button type="button" class="pt-size" data-paint-act="size" title="${esc(tr("굵기"))}" aria-label="${esc(tr("굵기"))}"><i data-paint-dot></i></button>` +
+      `<button type="button" class="pt-tool" data-paint-act="undo" title="${esc(tr("되돌리기"))}" aria-label="${esc(tr("되돌리기"))}">${ICONS.undo}</button>` +
+      `<span class="pt-sep"></span>` +
+      `<button type="button" class="pt-done" data-paint-act="done">${esc(tr("완료"))}</button>`;
+  }
+
+  /* 서랍 「그리기」 갈래 — 도구 · 색 · 굵기 · 되돌리기 · 이 장 지우기. */
+  function paintPanelHTML() {
+    return `<div class="paint-panel">
+      <div class="pp-row pp-tools">${toolBtn("brush", true)}${toolBtn("eraser", true)}${toolBtn("picker", true)}</div>
+      <p class="pp-lead">${esc(tr("색"))}</p>
+      <div class="pp-colors">${PAINT_COLORS.map(c =>
+        `<button type="button" class="pp-swatch" data-paint-color="${c}" style="--c:${c}" aria-label="${c}" aria-pressed="false"></button>`).join("")}
+        <label class="pp-swatch pp-custom" title="${esc(tr("직접 고르기"))}"><input type="color" data-paint-custom value="${paintColor}" aria-label="${esc(tr("직접 고르기"))}"></label>
+      </div>
+      <p class="pp-lead">${esc(tr("굵기"))}</p>
+      <div class="pp-row pp-sizes">${PAINT_SIZES.map((_, i) =>
+        `<button type="button" class="pp-size" data-paint-size="${i}" aria-pressed="false" aria-label="${esc(tr("굵기"))} ${i + 1}"><i style="--d:${[3, 6, 11, 18][i]}px"></i></button>`).join("")}</div>
+      <div class="pp-row pp-history">
+        <button type="button" class="pp-btn" data-paint-act="undo">${ICONS.undo}<span>${esc(tr("되돌리기"))}</span></button>
+        <button type="button" class="pp-btn" data-paint-act="redo">${ICONS.redo}<span>${esc(tr("다시 하기"))}</span></button>
+      </div>
+      <button type="button" class="pp-btn pp-clear" data-paint-act="clear">${esc(tr("이 장에 그린 것 지우기"))}</button>
+    </div>`;
+  }
+
+  function wirePaintPanel(grid) {
+    grid.querySelector(".paint-panel").addEventListener("click", onPaintToolClick);
+    grid.querySelector("[data-paint-custom]")?.addEventListener("input", e => setPaintColor(e.target.value));
+    paintToolsState();
+  }
+
+  function onPaintToolClick(e) {
+    const t = e.target.closest("[data-paint-tool]");
+    if (t) { setPaintTool(t.dataset.paintTool); return; }
+    const c = e.target.closest("[data-paint-color]");
+    if (c) { setPaintColor(c.dataset.paintColor); if (paintTool !== "brush") setPaintTool("brush"); return; }
+    const z = e.target.closest("[data-paint-size]");
+    if (z) { paintSize = Number(z.dataset.paintSize) || 0; rememberBrush(); paintToolsState(); return; }
+    const a = e.target.closest("[data-paint-act]");
+    if (!a) return;
+    const act = a.dataset.paintAct;
+    if (act === "undo") undoPaint();
+    else if (act === "redo") redoPaint();
+    else if (act === "clear") { if (strokesOf(activeScene).length) changeStrokes(activeScene, []); }
+    else if (act === "done") endPaint();
+    else if (act === "size") { paintSize = (paintSize + 1) % PAINT_SIZES.length; rememberBrush(); paintToolsState(); }
+    else if (act === "colors") setDock(true);    // 폰: 서랍을 열어 색을 고른다
+  }
+
+  function setPaintTool(t) {
+    paintTool = TOOL_NAMES[t] ? t : "brush";
+    const root = document.querySelector(".ed");
+    if (root && painting) root.dataset.brushTool = paintTool;
+    paintToolsState();
+  }
+  function setPaintColor(c) {
+    if (!/^#[0-9a-f]{6}$/i.test(c)) return;
+    paintColor = c.toLowerCase();
+    rememberBrush();
+    paintToolsState();
+  }
+
+  /* 단추들의 눌림 · 색 · 굵기 · 되돌릴 것이 있는지를 지금 값에 맞춘다(떠 있는 줄과 서랍 둘 다). */
+  function paintToolsState() {
+    $$("[data-paint-tool]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.paintTool === paintTool)));
+    $$("[data-paint-color]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.paintColor === paintColor)));
+    $$("[data-paint-size]").forEach(b => b.setAttribute("aria-pressed", String(Number(b.dataset.paintSize) === paintSize)));
+    $$("[data-paint-swatch]").forEach(i => { i.style.background = paintColor; });
+    $$("[data-paint-dot]").forEach(i => { i.style.setProperty("--d", `${[3, 6, 11, 18][paintSize]}px`); });
+    const custom = $("[data-paint-custom]");
+    if (custom && custom.value !== paintColor) custom.value = paintColor;
+    const has = strokesOf(activeScene).length > 0;
+    $$("[data-paint-act=undo]").forEach(b => { b.disabled = !(paintUndo[activeScene] || []).length; });
+    $$("[data-paint-act=redo]").forEach(b => { b.disabled = !(paintRedo[activeScene] || []).length; });
+    $$("[data-paint-act=clear]").forEach(b => { b.disabled = !has; });
+  }
+
+  /* ---- 스포이드 — 그림(과 그 위에 그린 것)에서 색을 고른다 ---- */
+
+  function pixelsOf(no) {
+    if (!pixelCache[no]) {
+      pixelCache[no] = (async () => {
+        try {
+          let blob;
+          if (RUN_ID) {
+            // 같은 출처로 받는다 — 302 너머의 S3 그림은 픽셀을 못 읽는다(webtoon/be PagePixels)
+            const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/page/${no}/pixels?t=${sceneBust[no] || 0}`);
+            if (!res.ok) throw new Error(String(res.status));
+            blob = await res.blob();
+          } else {
+            const img = $(`#scene-${no} [data-wrap] img`);
+            blob = await (await fetch(img.currentSrc || img.src)).blob();
+          }
+          return await createImageBitmap(blob);
+        } catch { return null; }
+      })();
+    }
+    return pixelCache[no];
+  }
+
+  async function pickColor(no, u, v, cv) {
+    // 그린 겹이 덮은 자리면 그 색 — 보이는 대로 고른다
+    try {
+      const ctx = cv.getContext("2d");
+      const d = ctx.getImageData(Math.min(cv.width - 1, Math.floor(u * cv.width)), Math.min(cv.height - 1, Math.floor(v * cv.height)), 1, 1).data;
+      if (d[3] >= 128) return finishPick(d);
+    } catch { /* 아래 그림에서 */ }
+    const bmp = await pixelsOf(no);
+    if (!bmp) {
+      delete pixelCache[no];
+      return toast(tr("이 그림에서 색을 읽지 못했어요"));
+    }
+    const c = document.createElement("canvas");
+    c.width = c.height = 1;
+    const g = c.getContext("2d");
+    g.drawImage(bmp, Math.floor(u * bmp.width), Math.floor(v * bmp.height), 1, 1, 0, 0, 1, 1);
+    finishPick(g.getImageData(0, 0, 1, 1).data);
+  }
+  function finishPick(d) {
+    const hex = "#" + [d[0], d[1], d[2]].map(n => n.toString(16).padStart(2, "0")).join("");
+    setPaintColor(hex);
+    setPaintTool("brush");     // 고른 색으로 바로 칠한다 — 스포이드는 한 번 쓰는 도구다
+  }
+
+  /* ---- 그리기 손놀림 ---- */
+
+  function wirePaint(no, sceneEl) {
+    const cv = $("[data-paint]", sceneEl);
+    if (!cv) return;
+    const touches = new Map();       // 손가락 둘이면 그리지 않고 화면을 내린다
+    let cur = null, panY = null, raf = 0, lastX = 0, lastY = 0;
+
+    const toUnit = (e, r) => [
+      Math.max(0, Math.min(PAINT_UNIT, Math.round((e.clientX - r.left) / r.width * PAINT_UNIT))),
+      Math.max(0, Math.min(PAINT_UNIT, Math.round((e.clientY - r.top) / r.height * PAINT_UNIT))),
+    ];
+    const redraw = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; paintCanvas(no, cur); });
+    };
+    const midY = () => [...touches.values()].reduce((a, t) => a + t.y, 0) / touches.size;
+
+    cv.addEventListener("pointerdown", e => {
+      if (!painting) return;
+      e.preventDefault();
+      if (e.pointerType === "touch") touches.set(e.pointerId, { y: e.clientY });
+      if (touches.size >= 2) {
+        // 두 번째 손가락 — 그리던 선은 버리고 화면 내리기로
+        cur = null; paintCanvas(no);
+        panY = midY();
+        return;
+      }
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const r = cv.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      const [x, y] = toUnit(e, r);
+      if (paintTool === "picker") { pickColor(no, x / PAINT_UNIT, y / PAINT_UNIT, cv); return; }
+      const strokes = strokesOf(no);
+      if (strokes.length >= PAINT_MAX_STROKES || pointsOf(strokes) >= PAINT_MAX_POINTS) {
+        toast(tr("이 장에는 더 그릴 수 없어요 — 되돌리거나 지운 뒤 그려 주세요"));
+        return;
+      }
+      cur = paintTool === "eraser"
+        ? { k: "e", w: PAINT_SIZES[paintSize] * 2, p: [x, y] }        // 지우개는 붓보다 두 배 넓게
+        : { k: "b", c: paintColor, w: PAINT_SIZES[paintSize], p: [x, y] };
+      cur.room = Math.min(PAINT_MAX_STROKE_POINTS, PAINT_MAX_POINTS - pointsOf(strokes));
+      lastX = e.clientX; lastY = e.clientY;
+      try { cv.setPointerCapture(e.pointerId); } catch { /* 안 잡혀도 그린다 */ }
+      redraw();
+    });
+
+    cv.addEventListener("pointermove", e => {
+      if (touches.has(e.pointerId)) touches.get(e.pointerId).y = e.clientY;
+      if (panY != null && touches.size >= 2) {
+        const m = midY();
+        window.scrollBy(0, panY - m);
+        panY = m;
+        return;
+      }
+      if (!cur) return;
+      // 화면에서 1.5px 넘게 움직였을 때만 점을 더한다 — 점이 한도를 빨리 채우지 않게
+      if (Math.hypot(e.clientX - lastX, e.clientY - lastY) < 1.5) return;
+      if ((cur.p.length >> 1) >= cur.room) return;
+      lastX = e.clientX; lastY = e.clientY;
+      const [x, y] = toUnit(e, cv.getBoundingClientRect());
+      cur.p.push(x, y);
+      redraw();
+    });
+
+    const end = e => {
+      touches.delete(e.pointerId);
+      if (touches.size < 2) panY = null;
+      if (!cur) return;
+      const done = cur; cur = null;
+      if (e.type === "pointercancel") { paintCanvas(no); return; }
+      delete done.room;
+      changeStrokes(no, [...strokesOf(no), done]);
+    };
+    cv.addEventListener("pointerup", end);
+    cv.addEventListener("pointercancel", end);
+  }
+
   /* ------------------------------------------------------------------ 도구 패널 */
 
   function paintDock() {
     $$(".dock-tab").forEach(b => b.classList.toggle("is-on", b.dataset.tab === tab));
     const grid = $("#dockGrid");
+    setPaintMode(tab === "paint");
+    if (tab === "paint") {
+      grid.innerHTML = paintPanelHTML();
+      wirePaintPanel(grid);
+      return;
+    }
     if (tab === "bubble") {
       grid.innerHTML = BUBBLES.map(([v, label, sample]) => `
         <button type="button" class="dock-item" data-add="bubble" data-variant="${v}"
@@ -1864,7 +2321,14 @@ export function mountEditor(
         for (const [no, sp] of Object.entries(got.scenes || {})) {
           if (Array.isArray(sp.items)) sc(Number(no)).items = sp.items.map(
             (it, i) => ({ ...it, id: it.id || `s${no}_${i}_${++uid}` }));
+          if (sp.paint && Array.isArray(sp.paint.strokes)) sc(Number(no)).paint = { strokes: sp.paint.strokes };
         }
+        /* 서버에 없는데 이 브라우저에만 그린 것이 있으면(지난번에 못 올렸다) 다시 올린다 —
+           안 올리면 화면에는 보이는데 구운 그림에는 없다. */
+        for (const [no, st] of Object.entries(state.scenes || {})) {
+          if (st?.paint?.strokes?.length && !(got.scenes || {})[no]?.paint) paintDirty.add(Number(no));
+        }
+        if (paintDirty.size) pushPaintSoon();
         state.gaps = state.gaps || {};
         for (const [no, v] of Object.entries(got.gaps || {})) {
           const g = Number(v);
@@ -1922,6 +2386,8 @@ export function mountEditor(
       btn.textContent = tr("굽는 중…");
       clearTimeout(pushT);
       try {
+        /* 직접 그린 것을 먼저 다 올린다 — 굽는 쪽은 서버에 있는 선만 본다. */
+        if (!(await pushPaintNow())) throw new Error(tr("그린 것을 저장하지 못해 굽지 않았어요 — 연결을 확인해 주세요"));
         const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/bake${epq()}`,
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(overlayPayload()) });
@@ -1966,6 +2432,14 @@ export function mountEditor(
         if (e.key === "Escape") { e.preventDefault(); closeAsk(); }
         return;
       }
+      /* 그리기 모드 — 되돌리기·다시 하기, Esc 로 끝낸다. 글을 쓰는 칸 안에서는 안 가로챈다. */
+      if (painting && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "") &&
+          !document.activeElement?.isContentEditable) {
+        const k = e.key.toLowerCase();
+        if ((e.metaKey || e.ctrlKey) && k === "z") { e.preventDefault(); e.shiftKey ? redoPaint() : undoPaint(); return; }
+        if ((e.metaKey || e.ctrlKey) && k === "y") { e.preventDefault(); redoPaint(); return; }
+        if (e.key === "Escape") { e.preventDefault(); endPaint(); return; }
+      }
       if ((e.key === "Delete" || e.key === "Backspace") && sel &&
           !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
         e.preventDefault(); ACTS.del();
@@ -1981,6 +2455,11 @@ export function mountEditor(
   return () => {
     if (followRaf) cancelAnimationFrame(followRaf);
     regenForm.remove();
+    // 그리다 바로 나가도 남게 — 기다리지 않고 보낸다(이 브라우저에도 이미 남아 있다)
+    clearTimeout(paintT);
+    if (paintDirty.size) void pushPaintNow();
+    paintObservers.forEach(o => o.disconnect());
+    document.getElementById("paintBar")?.remove();
     for (const [t, type, fn] of bound) t.removeEventListener(type, fn);
     clearTimeout(pushT);
   };

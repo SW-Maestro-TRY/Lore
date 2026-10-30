@@ -211,6 +211,32 @@ const dict: Dict = {
     ja: "このページは画像の安全基準に引っかかったため空白にしました。露出や性的な部分を変えて場面の説明を直してください。描き直しは無料です。",
     zh: "此页因未通过图片安全标准而留空。请修改场景描述中暴露或色情的部分。重新绘制免费。" },
   "무료": { en: "Free", ja: "無料", zh: "免费" },
+
+  /* ---- 직접 그리기(리터치) ---- */
+  "그리기": { en: "Draw", ja: "描く", zh: "绘制" },
+  "말풍선 · 스티커 · 효과음 · 그리기": { en: "Speech bubbles · stickers · sound effects · drawing", ja: "吹き出し · ステッカー · 効果音 · 描画", zh: "对话气泡 · 贴纸 · 音效 · 绘制" },
+  "붓": { en: "Brush", ja: "筆", zh: "画笔" },
+  "지우개": { en: "Eraser", ja: "消しゴム", zh: "橡皮擦" },
+  "스포이드": { en: "Eyedropper", ja: "スポイト", zh: "吸管" },
+  "색": { en: "Color", ja: "色", zh: "颜色" },
+  "굵기": { en: "Size", ja: "太さ", zh: "粗细" },
+  "되돌리기": { en: "Undo", ja: "元に戻す", zh: "撤销" },
+  "다시 하기": { en: "Redo", ja: "やり直す", zh: "重做" },
+  "직접 고르기": { en: "Custom color", ja: "色を選ぶ", zh: "自选颜色" },
+  "이 장에 그린 것 지우기": { en: "Clear my drawing on this page", ja: "このページに描いたものを消す", zh: "清除在这一页画的内容" },
+  "이 그림에서 색을 읽지 못했어요": { en: "Couldn't read a color from this image", ja: "この絵から色を読み取れませんでした", zh: "无法从这张图读取颜色" },
+  "이 장에는 더 그릴 수 없어요 — 되돌리거나 지운 뒤 그려 주세요": {
+    en: "You can't draw any more on this page — undo or clear some strokes first",
+    ja: "このページにはこれ以上描けません — 元に戻すか消してから描いてください",
+    zh: "这一页不能再画了 — 请先撤销或清除一些笔画" },
+  "{n}번째 장을 다시 그렸습니다 · 직접 그린 것은 그대로 남아 있어요": {
+    en: "Redrew scene {n} · your own drawing is still there",
+    ja: "{n}番目のコマを描き直しました · 自分で描いたものはそのまま残っています",
+    zh: "已重新绘制第 {n} 格 · 你自己画的内容仍然保留" },
+  "그린 것을 저장하지 못해 굽지 않았어요 — 연결을 확인해 주세요": {
+    en: "Couldn't save your drawing, so nothing was exported — check your connection",
+    ja: "描いたものを保存できなかったため書き出していません — 接続を確認してください",
+    zh: "未能保存你画的内容，所以没有导出 — 请检查网络连接" },
 };
 
 registerDict(dict);

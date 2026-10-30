@@ -292,3 +292,78 @@
 .wt .wt-ed-regenq-desc:empty { display: none; }
 .wt .wt-ed-regenq-hint { margin: 0; font-size: 13px; line-height: 1.55; color: var(--sea); }
 .wt .wt-ed-regenq-hint[hidden] { display: none; }
+
+/* ---- 직접 그리기(리터치) -------------------------------------------------------
+   겹 순서: 그림(img) → 그린 겹(canvas) → 말풍선(.overlay). 굽는 쪽(BubbleArtist)도 같은 순서다.
+   그리기 모드(.is-painting)에서는 말풍선이 누름을 안 받고 그린 겹이 받는다 — 붓질이 말풍선 끌기로 새지 않게. */
+.wt .wt-ed .paint-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wt .wt-ed .paint-layer.is-hidden { display: none; }
+.wt .wt-ed.is-painting .overlay { pointer-events: none; }
+.wt .wt-ed.is-painting .paint-layer { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.wt .wt-ed.is-painting[data-brush-tool="picker"] .paint-layer { cursor: copy; }
+.wt .wt-ed.is-painting .scene.is-active .stage-wrap { box-shadow: inset 0 0 0 2px var(--sea); }
+
+.wt .wt-ed-docktabs { flex-wrap: wrap; }
+.wt .wt-ed .dock-tab { padding: 0 10px; }
+
+/* 그림 위에 떠 있는 줄 — 그리기 모드 표시이자 폰에서 서랍을 닫고도 도구를 바꾸는 자리 */
+.wt .wt-ed .paint-bar {
+  position: fixed; z-index: 61;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  left: calc(var(--ed-left-w, 260px) + (100vw - var(--ed-left-w, 260px) - var(--ed-right-w, 260px)) / 2);
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 2px; padding: 5px;
+  background: var(--ink); color: var(--paper); border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(7, 14, 24, 0.35);
+}
+.wt .wt-ed .paint-bar button {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; height: 40px; padding: 0; border: 0; border-radius: 10px;
+  background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.wt .wt-ed .paint-bar button:hover { background: rgba(255, 255, 255, 0.12); }
+.wt .wt-ed .paint-bar button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+.wt .wt-ed .paint-bar button:disabled { opacity: 0.35; cursor: default; background: transparent; }
+.wt .wt-ed .paint-bar button:focus-visible { outline: 2px solid var(--sea); outline-offset: 1px; }
+.wt .wt-ed .paint-bar .pt-sep { width: 1px; height: 22px; margin: 0 4px; background: rgba(255, 255, 255, 0.22); }
+.wt .wt-ed .paint-bar .pt-color i { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); }
+.wt .wt-ed .paint-bar .pt-size i { width: var(--d, 6px); height: var(--d, 6px); border-radius: 50%; background: currentColor; }
+.wt .wt-ed .paint-bar .pt-done { padding: 0 14px; font-size: 15px; font-weight: 700; background: var(--paper); color: var(--ink); }
+.wt .wt-ed .paint-bar .pt-done:hover { background: var(--water-light); }
+
+/* 서랍 「그리기」 갈래 */
+.wt .wt-ed .paint-panel { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; }
+.wt .wt-ed .paint-panel .pp-row { display: flex; gap: 6px; }
+.wt .wt-ed .paint-panel .pp-lead { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: var(--ink); }
+.wt .wt-ed .paint-panel button { font: inherit; cursor: pointer; }
+.wt .wt-ed .paint-panel .pt-tool,
+.wt .wt-ed .paint-panel .pp-btn {
+  flex: 1; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 60px; padding: 8px 4px; border-radius: 10px;
+  border: 1px solid var(--line-strong); background: var(--water-light); color: var(--ink); font-size: 14px;
+}
+.wt .wt-ed .paint-panel .pp-btn { flex-direction: row; min-height: 44px; gap: 6px; }
+.wt .wt-ed .paint-panel .pt-tool[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.wt .wt-ed .paint-panel button:disabled { opacity: 0.4; cursor: default; }
+.wt .wt-ed .paint-panel .pp-clear { flex: none; color: var(--muted); background: transparent; }
+.wt .wt-ed .paint-panel .pp-colors { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.wt .wt-ed .paint-panel .pp-swatch {
+  position: relative; aspect-ratio: 1; width: 100%; padding: 0; border-radius: 50%;
+  border: 1px solid rgba(15, 51, 63, 0.25); background: var(--c);
+}
+.wt .wt-ed .paint-panel .pp-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
+.wt .wt-ed .paint-panel .pp-custom { display: block; cursor: pointer; background: conic-gradient(#e5484d, #ffd60a, #30a46c, #3e63dd, #8e4ec6, #e5484d); }
+.wt .wt-ed .paint-panel .pp-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.wt .wt-ed .paint-panel .pp-size {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; height: 44px;
+  border-radius: 10px; border: 1px solid var(--line-strong); background: var(--water-light); color: var(--ink);
+}
+.wt .wt-ed .paint-panel .pp-size i { width: var(--d); height: var(--d); border-radius: 50%; background: currentColor; }
+.wt .wt-ed .paint-panel .pp-size[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+@media (max-width: 879px) {
+  .wt .wt-ed .paint-bar { left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  /* 그리는 동안은 오른쪽 아래 「도구」 손잡이 대신 떠 있는 줄이 서랍을 연다(색 단추) */
+  .wt .wt-ed.is-painting .wt-ed-dockopen { display: none; }
+  .wt .wt-ed .paint-panel .pp-colors { grid-template-columns: repeat(7, minmax(0, 40px)); }
+}

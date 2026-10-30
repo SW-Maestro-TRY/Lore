@@ -87,6 +87,21 @@ public class RunController {
         this.notes = notes;
     }
 
+    /* 장 위에 직접 그린 것(리터치)과 스포이드용 밑그림. 세터로 받는다 — 생성자에 넣으면 이 클래스를 직접
+       만드는 시험이 모두 바뀐다. 없으면(시험) 그 두 길만 404 다. */
+    private PaintStore paints;
+    private PagePixels pixels;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPaints(PaintStore paints) {
+        this.paints = paints;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPixels(PagePixels pixels) {
+        this.pixels = pixels;
+    }
+
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
                          RegenService regen, AfterRun after, WorkLedger ledger,
@@ -235,6 +250,43 @@ public class RunController {
             safety.checkText("editor-overlay", String.join("\n", texts));
         }
         return Map.of("ok", true, "items", overlays.save(runId, ep, node));
+    }
+
+    /**
+     * 한 장 위에 직접 그린 것(붓 · 지우개 선)을 담는다. <b>그 장을 그릴 때마다 부른다</b>(자동 저장).
+     *
+     * 말풍선 저장과 따로 오간다 — 선은 점이 많아 본문이 크다. 말풍선 저장에 같이 실으면 글 한 자 고칠
+     * 때마다 그 본문이 통째로 오가고, 본문이 커서 막히면 말풍선 저장까지 같이 막힌다. 통째로 덮어쓰고,
+     * 선이 하나도 없으면 지운다. 모양과 한도는 {@link PaintStore}.
+     */
+    @Operation(summary = "직접 그린 것 저장",
+            description = "본문 {\"v\":1,\"strokes\":[{\"k\":\"b|e\",\"c\":\"#rrggbb\",\"w\":60,\"p\":[x,y,…]}]} — 자리·굵기는 그림 크기의 1/10000.")
+    @PostMapping("/{runId}/scenes/{no}/paint")
+    public Map<String, Object> savePaint(@PathVariable String runId, @PathVariable int no,
+                                         @RequestParam(defaultValue = "1") int ep,
+                                         @RequestBody(required = false) Map<String, Object> body) {
+        mustOwn(runId);
+        if (paints == null || no < 1) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "그런 장이 없습니다");
+        }
+        return Map.of("ok", true, "strokes", paints.save(runId, ep, no, asNode(body)));
+    }
+
+    /**
+     * 스포이드가 색을 읽을 밑그림 — 같은 출처로 준다({@link PagePixels}). 편집실에서만 쓰므로 주인만.
+     */
+    @Operation(summary = "스포이드용 밑그림", description = "굽는 그림과 같은 파일. 주인만.")
+    @GetMapping("/{runId}/page/{no}/pixels")
+    public ResponseEntity<byte[]> pagePixels(@PathVariable String runId, @PathVariable int no) {
+        mustOwn(runId);
+        byte[] bytes = pixels == null ? null : pixels.raw(runId, no);
+        if (bytes == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=300")
+                .contentType(MediaType.parseMediaType(PagePixels.typeOf(bytes)))
+                .body(bytes);
     }
 
     /**

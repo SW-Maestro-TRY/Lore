@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -63,12 +64,39 @@ public class OverlayStore {
         this.overlays = overlays;
     }
 
-    /** 이 작품에 얹은 것. 없으면 빈 것 — 화면은 그것을 "아직 안 얹었다" 로 읽는다. */
+    /* 장 위에 직접 그린 것(리터치). 따로 담고 읽을 때만 합친다({@link PaintStore}). 세터로 받는다 —
+       생성자에 넣으면 이 클래스를 직접 만드는 시험이 모두 바뀌고, 없으면 말풍선만 읽는다. */
+    private PaintStore paints;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPaints(PaintStore paints) {
+        this.paints = paints;
+    }
+
+    /**
+     * 이 작품에 얹은 것. 없으면 빈 것 — 화면은 그것을 "아직 안 얹었다" 로 읽는다.
+     *
+     * 장 위에 직접 그린 것이 있으면 그 장에 {@code paint} 로 같이 싣는다. 말풍선이 없는 장이면
+     * {@code items} 없이 {@code paint} 만 단다 — 빈 {@code items} 를 실으면 화면이 그 장을
+     * "말풍선을 다 지웠다" 로 읽고 그대로 되돌려 보낸다.
+     */
     @Transactional(readOnly = true)
     public JsonNode read(String runId, int episode) {
-        return overlays.findByRunIdAndEpisode(runId, episode)
+        JsonNode out = overlays.findByRunIdAndEpisode(runId, episode)
                 .map(one -> parse(one.getDataJson()))
                 .orElseGet(this::empty);
+        if (paints != null && out instanceof ObjectNode root) {
+            Map<Integer, JsonNode> painted = paints.read(runId, episode);
+            if (!painted.isEmpty()) {
+                ObjectNode scenes = root.path("scenes") instanceof ObjectNode got ? got : root.putObject("scenes");
+                painted.forEach((no, paint) -> {
+                    String key = String.valueOf(no);
+                    ObjectNode scene = scenes.path(key) instanceof ObjectNode got ? got : scenes.putObject(key);
+                    scene.set("paint", paint);
+                });
+            }
+        }
+        return out;
     }
 
     /**
