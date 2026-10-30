@@ -13,11 +13,13 @@
  * 그 키를 쓸 도메인을 등록해 두는 것으로 남용을 막는다.
  */
 
-/** 이 작품을 여는 주소. 서버가 아니라 지금 보고 있는 곳 기준이다. */
-export function shareUrl(runId: string, episode = 1): string {
+/** 이 작품을 여는 주소. 서버가 아니라 지금 보고 있는 곳 기준이다.
+ *  `key` 는 「링크 있는 사람만」 작품의 열쇠(#898) — 붙어 있어야 받은 사람이 로그인 없이 연다. */
+export function shareUrl(runId: string, episode = 1, key?: string | null): string {
   const base = typeof window === "undefined" ? "" : window.location.origin;
   const ep = episode > 1 ? `&ep=${episode}` : "";
-  return `${base}/webtoon?run=${encodeURIComponent(runId)}${ep}`;
+  const k = key ? `&k=${encodeURIComponent(key)}` : "";
+  return `${base}/webtoon?run=${encodeURIComponent(runId)}${ep}${k}`;
 }
 
 export interface ShareTarget {

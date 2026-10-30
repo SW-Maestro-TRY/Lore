@@ -121,16 +121,21 @@ public class MyWebtoonController {
         return ApiResponse.ok(service.myRuns(userId));
     }
 
-    @Operation(summary = "공개 / 비공개", description = """
+    @Operation(summary = "공개 범위", description = """
             내 계정에 이어진 브라우저가 만든 작품만 바꿀 수 있다.
 
-            비공개로 내리면 둘러보기에서 빠지고 내 목록에는 그대로 남는다.""")
+            visibility 는 public · link · private 중 하나(#898). 없으면 예전처럼 public(true/false) 을 본다.
+            비공개 · 링크 공개로 내리면 둘러보기에서 빠지고 내 목록에는 그대로 남는다. 링크 공개는 답에 실린
+            share_key 를 주소의 k 로 붙인 사람만 로그인 없이 읽는다. 비공개로 바꾸면 그 열쇠는 버려진다.""")
     @PostMapping("/runs/{runId}/visibility")
     public ApiResponse<VisibilityResult> visibility(@LoginUser Long userId,
                                                     @PathVariable String runId,
                                                     @RequestBody VisibilityRequest request) {
-        return ApiResponse.ok(
-                new VisibilityResult(runId, service.setVisibility(userId, runId, request.isPublic())));
+        String mode = request.visibility() != null && !request.visibility().isBlank()
+                ? request.visibility()
+                : Boolean.FALSE.equals(request.isPublic()) ? WorkVisibility.PRIVATE : WorkVisibility.PUBLIC;
+        MyWebtoonService.Visibility now = service.setVisibility(userId, runId, mode);
+        return ApiResponse.ok(new VisibilityResult(runId, now.isPublic(), now.visibility(), now.shareKey()));
     }
 
     @Operation(summary = "그림 다시 올리기", description = """
@@ -214,15 +219,19 @@ public class MyWebtoonController {
     public record NotifySettingRequest(boolean on) {
     }
 
-    /** @param isPublic 바뀐 뒤의 상태. 화면은 이 값으로 스위치를 맞춘다. */
+    /** @param isPublic 바뀐 뒤 둘러보기에 걸렸나. visibility 는 public · link · private, shareKey 는 링크 공개일 때만. */
     public record VisibilityResult(
             String runId,
-            @com.fasterxml.jackson.annotation.JsonProperty("public") boolean isPublic) {
+            @com.fasterxml.jackson.annotation.JsonProperty("public") boolean isPublic,
+            String visibility,
+            @com.fasterxml.jackson.annotation.JsonProperty("share_key") String shareKey) {
     }
 
-    /** @param isPublic 둘러보기에 거는가. JSON 키는 {@code public} 이다(자바 예약어라 이름만 다름). */
+    /** @param isPublic 예전 화면이 보내는 값(둘러보기에 거는가). JSON 키는 {@code public} 이다(자바 예약어라 이름만 다름).
+     *  @param visibility 새 화면이 보내는 세 단계 — 있으면 이것이 이긴다. */
     public record VisibilityRequest(
-            @com.fasterxml.jackson.annotation.JsonProperty("public") boolean isPublic) {
+            @com.fasterxml.jackson.annotation.JsonProperty("public") Boolean isPublic,
+            String visibility) {
     }
 
     public record LinkRequest(

@@ -173,6 +173,7 @@ public class WorkModeration {
         out.put("run_id", runId);
         out.put("title", titleOf(runId));
         out.put("public", work.isPublic());
+        out.put("visibility", work.visibility());          // public · link · private (#898)
         out.put("trashed", work.isTrashed());
         out.put("example", work.isExample());
         Map<String, Object> note = notes.of(runId);

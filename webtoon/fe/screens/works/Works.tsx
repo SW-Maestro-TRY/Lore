@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  adminSetBrowseRank, browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, setVisibility,
+  adminSetBrowseRank, browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, visibilityOf,
   type RunCard,
 } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
@@ -12,6 +12,7 @@ import { louArt } from "../../lib/louArt";
 import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
 import LikeButton from "../../ui/LikeButton";
+import VisibilityPicker from "../../ui/VisibilityPicker";
 import { STYLE_INFO } from "../../lib/wizardData";
 import FeaturedBanner from "./FeaturedBanner";
 import FilterCombo from "./FilterCombo";
@@ -298,25 +299,6 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, admin, onRank 
 
   const sub = [run.character, ...new Set([run.genre, run.style_label].filter((s): s is string => !!s).map((s) => t(s)))].filter(Boolean).join(" · ");
 
-  /* 공개 스위치 — 서버에 먼저 보내고, 실패하면 되돌린다. */
-  const [pub, setPub] = useState(run.public !== false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const flip = async () => {
-    const want = !pub;
-    track("visibility_change", { run: run.run_id, result: want ? "public" : "private" });
-    setPub(want);
-    setBusy(true);
-    setErr("");
-    try {
-      const out = await setVisibility(run.run_id, want);
-      setPub(out.public);
-    } catch (e) {
-      setPub(!want);
-      setErr((e as Error).message || t("바꾸지 못했어요"));
-    }
-    setBusy(false);
-  };
 
   return (
     <div className="card wt-works-card">
@@ -343,15 +325,12 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, admin, onRank 
             <span className="wt-works-epcount">{t("총 {n}화", { n: eps.length })}</span>
           )}
           {mine && authenticated && (
-            <span className="wt-works-pub">
-              <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
-                      aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
-              {pub ? t("공개") : t("비공개")}
-            </span>
+            /* 공개 범위 세 단계(#898). 관리자가 숨긴 작품은 잠근다(#638). */
+            <VisibilityPicker runId={run.run_id} initial={visibilityOf(run)} where="works" className="wt-works-pub"
+                              locked={run.moderation?.state === "HIDDEN"} />
           )}
         </div>
         {admin && <RankEditor run={run} onRank={onRank} />}
-        {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
       </div>
     </div>
   );

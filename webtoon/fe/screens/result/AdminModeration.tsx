@@ -155,7 +155,7 @@ export default function AdminModeration({ runId, go, onChanged }: {
         <dd>{state.owner ? `${state.owner.email ?? `#${state.owner.user_id}`} · 처리 받은 수 ${state.owner.counts}` : "게스트 작품 — 알릴 방법이 없어요"}</dd>
         <dt>상태</dt>
         <dd>
-          {hidden ? "관리자 비공개" : state.public ? "공개" : "비공개(작가가 내림)"}
+          {hidden ? "관리자 비공개" : state.public ? "공개" : state.visibility === "link" ? "링크 있는 사람만(작가가 설정)" : "비공개(작가가 내림)"}
           {state.moderation?.reason ? ` · 사유: ${state.moderation.reason}` : ""}
         </dd>
       </dl>

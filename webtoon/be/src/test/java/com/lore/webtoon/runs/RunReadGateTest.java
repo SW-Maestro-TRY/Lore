@@ -47,6 +47,7 @@ class RunReadGateTest {
     @AfterEach
     void 치운다() {
         SecurityContextHolder.clearContext();
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
     }
 
     private static void 로그인(long userId) {
@@ -57,7 +58,7 @@ class RunReadGateTest {
     @Test
     @DisplayName("볼 수 없는 사람에게는 결과 · 장 · 내려받기 · 편집실 데이터 모두 404")
     void 남에게는_404() {
-        when(ledger.mayRead("r1", null)).thenReturn(false);
+        when(ledger.mayRead("r1", null, null)).thenReturn(false);
 
         assertThat(controller.result("r1").getStatusCode().value()).isEqualTo(404);
         assertThat(controller.page("r1", 1, 1080, null).getStatusCode().value()).isEqualTo(404);
@@ -71,7 +72,7 @@ class RunReadGateTest {
     @DisplayName("주인이면 열린다")
     void 주인은_열림() {
         로그인(7L);
-        when(ledger.mayRead("r1", 7L)).thenReturn(true);
+        when(ledger.mayRead("r1", 7L, null)).thenReturn(true);
 
         assertThat(controller.result("r1").getStatusCode().value()).isEqualTo(200);
         assertThat(controller.page("r1", 1, 1080, null).getStatusCode().value()).isEqualTo(302);
@@ -81,9 +82,36 @@ class RunReadGateTest {
     @DisplayName("관리자는 남의 비공개 작품도 연다")
     void 관리자는_열림() {
         로그인(1L);
-        when(ledger.mayRead("r1", 1L)).thenReturn(false);
+        when(ledger.mayRead("r1", 1L, null)).thenReturn(false);
         when(admins.isAdmin(1L)).thenReturn(true);
 
         assertThat(controller.result("r1").getStatusCode().value()).isEqualTo(200);
+    }
+
+    private static void 주소에_열쇠(String key) {
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+        request.setParameter("k", key);
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(request));
+    }
+
+    @Test
+    @DisplayName("링크 공개(#898) — 주소의 열쇠를 문지기에 넘겨, 맞으면 로그인 없이 결과와 그림이 열린다")
+    void 링크로_온_사람은_열쇠로_열림() {
+        주소에_열쇠("맞는열쇠");
+        when(ledger.mayRead("r1", null, "맞는열쇠")).thenReturn(true);
+
+        assertThat(controller.result("r1").getStatusCode().value()).isEqualTo(200);
+        assertThat(controller.page("r1", 1, 1080, null).getStatusCode().value()).isEqualTo(302);
+    }
+
+    @Test
+    @DisplayName("열쇠가 틀리면 작품 번호를 알아도 404")
+    void 틀린_열쇠는_404() {
+        주소에_열쇠("틀린열쇠");
+        when(ledger.mayRead("r1", null, "틀린열쇠")).thenReturn(false);
+
+        assertThat(controller.result("r1").getStatusCode().value()).isEqualTo(404);
+        assertThat(controller.page("r1", 1, 1080, null).getStatusCode().value()).isEqualTo(404);
     }
 }
