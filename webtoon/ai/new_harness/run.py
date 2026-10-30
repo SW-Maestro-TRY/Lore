@@ -162,10 +162,9 @@ def normalize(raw: dict) -> dict:
     }
 
 
-# 함께 주인공으로 고를 수 있는 내 캐릭터 수(첫 주인공 빼고). 장 그림 한 장에 붙이는 참조는 넷이 한도라
-# (detailart.CAST_SHEET_LIMIT 주석) 주인공 시트가 둘이면 조연 시트 한 장 + 직전 장 한 장이 남는다.
-# 셋이면 조연 시트 자리가 없어지고, 시트 하나·장마다 참조 하나씩 원가가 더 붙는다.
-CO_MAX = 1
+# 함께 주인공으로 고를 수 있는 내 캐릭터 수(첫 주인공 빼고). 주인공은 넷까지 — 한 편에 세우는 인물 수와 같다.
+# 장 그림 참조 넷 한도는 장마다 그 장면에 나오는 주인공 시트만 붙여 지킨다(detailart.sheet_plan).
+CO_MAX = 3
 
 
 def normalize_co(raw) -> list[dict]:
@@ -1020,7 +1019,27 @@ def save_cast_pick(run_dir: Path, n: int) -> dict:
     return chosen
 
 
-def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> dict | None:
+def persona_paths(run_dir: Path, who: int = 0, char: dict | None = None) -> dict:
+    """페르소나 파일 자리. 0 이면 첫 주인공(persona.json), 1 부터 함께 주인공(personas/<이름>.json)."""
+    if who <= 0:
+        return {"json": run_dir / "persona.json", "prompt": run_dir / "persona_prompt.txt",
+                "raw": run_dir / "persona_raw.txt"}
+    stem = sheet_stem(co_protagonists(char)[who - 1]["name"])
+    folder = run_dir / "personas"
+    return {"json": folder / f"{stem}.json", "prompt": folder / f"{stem}.prompt.txt", "raw": folder / f"{stem}.raw.txt"}
+
+
+def stage_personas(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> None:
+    """함께 주인공마다 주인공 카드 — 첫 주인공 카드와 같은 프롬프트로 한 사람씩(#899). 한 명이면 아무것도 안 한다."""
+    co = co_protagonists(char)
+    if not co:
+        return
+    with ThreadPoolExecutor(max_workers=len(co)) as pool:
+        for f in [pool.submit(stage_persona, run_dir, char, dry_run, lang, i) for i in range(1, len(co) + 1)]:
+            f.result()
+
+
+def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko", who: int = 0) -> dict | None:
     """주인공 페르소나 — 사용자가 적은 캐릭터로 정의한다(#534).
 
     사용자에게 확인받는 용도다(0921 멘토링: 페르소나는 유저에게 입력받거나
@@ -1030,21 +1049,22 @@ def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") ->
 
     다시 지을 때는 있던 것을 그대로 쓴다. 실패하면 없이 간다(예전처럼).
     """
-    path = run_dir / "persona.json"
+    files = persona_paths(run_dir, who, char)
+    path = files["json"]
     if path.exists():
         old = read_json(path)
         if isinstance(old, dict) and str(old.get("name") or "").strip():
             return old
-    # 페르소나는 첫 주인공 한 사람의 카드다 — 함께 주인공인 사람을 같이 주면 두 사람이 한 카드에 섞인다.
-    char = solo(char)
+    # 페르소나는 한 사람의 카드다 — 다른 주인공을 같이 주면 여러 사람이 한 카드에 섞인다.
+    char = solo(char, who)
     lines = [input_block(char).rstrip("\n")]
     story_text = user_story(char)
     if story_text:
         lines += ["", "사용자가 적은 이야기:", story_text]
     prompt = compose("persona_prompt", "\n".join(lines) + "\n", lang=lang)
-    write_text(run_dir / "persona_prompt.txt", prompt)
+    write_text(files["prompt"], prompt)
     if dry_run:
-        log(f"[페르소나] 프롬프트만 썼습니다 -> {run_dir / 'persona_prompt.txt'}")
+        log(f"[페르소나] 프롬프트만 썼습니다 -> {files['prompt']}")
         return None
     call = llm.Call("PERSONA")
     log(f"[페르소나] {call.describe()} 로 주인공 페르소나를 정리합니다…")
@@ -1054,7 +1074,7 @@ def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") ->
         record_error(run_dir, "PERSONA", call.provider, call.model, exc)
         warn(f"주인공 페르소나를 못 만들었습니다 — 없이 갑니다 ({exc})")
         return None
-    write_text(run_dir / "persona_raw.txt", text)
+    write_text(files["raw"], text)
     record(run_dir, meta)
     try:
         obj = story.extract_json(text)
@@ -1307,10 +1327,12 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         # 보여 준다(인물 확인·고르기 화면). 서로 기다릴 이유가 없어 인물과 동시에 부른다.
         # 다시 지을 때는 이미 세운 인물을 그대로 쓴다 — 사람이 본 카드가 바뀌면 안 된다.
         old = read_json(run_dir / "cast.json") if (run_dir / "cast.json").exists() else None
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        with ThreadPoolExecutor(max_workers=3) as pool:
             persona_job = pool.submit(stage_persona, run_dir, char, dry_run, lang)
+            co_job = pool.submit(stage_personas, run_dir, char, dry_run, lang)    # 함께 주인공 카드(#899)
             made = old if isinstance(old, list) and old else stage_cast(run_dir, char, dry_run, lang=lang)
             persona_job.result()
+            co_job.result()
         kind = cast_wait_kind(char, made)
         answer = picked_cast(run_dir)
         if kind and not answer:
@@ -1906,12 +1928,12 @@ def sheet_paths(run_dir: Path, name: str | None = None) -> dict:
     if not name:
         return {"png": run_dir / "sheet.png", "spec": run_dir / "sheet_spec.json",
                 "spec_prompt": run_dir / "sheet_spec_prompt.txt", "prompt": run_dir / "sheet_prompt.txt",
-                "rejected": run_dir / "sheet_spec_rejected.json", "label": "시트"}
+                "rejected": run_dir / "sheet_spec_rejected.json", "label": "시트", "who": ""}
     stem = sheet_stem(name)
     folder = run_dir / "sheets"
     return {"png": folder / f"{stem}.png", "spec": folder / f"{stem}.spec.json",
             "spec_prompt": folder / f"{stem}.spec_prompt.txt", "prompt": folder / f"{stem}.prompt.txt",
-            "rejected": folder / f"{stem}.spec_rejected.json", "label": f"{name} 시트"}
+            "rejected": folder / f"{stem}.spec_rejected.json", "label": f"{name} 시트", "who": name}
 
 
 def each_sheet(run_dir: Path, char: dict, draw) -> None:
@@ -1949,7 +1971,7 @@ def _sheet_with_retry(run_dir: Path, char: dict, paths: dict, attempt) -> None:
         except BaseException as exc:                                  # noqa: BLE001
             cats = failure.refusal_categories(exc)
             if cats is None:
-                failure.write(run_dir, "SHEET", "error", f"{type(exc).__name__}: {exc}")
+                failure.write(run_dir, "SHEET", "error", f"{type(exc).__name__}: {exc}", who=paths["who"])
                 raise
             if n == 1:
                 warn(f"[{label}] 안전 검사에 걸렸습니다({', '.join(cats) or '분류 미상'}) — "
@@ -1959,7 +1981,7 @@ def _sheet_with_retry(run_dir: Path, char: dict, paths: dict, attempt) -> None:
                 safety = failure.safety_note(cats)
                 continue
             failure.write(run_dir, "SHEET_IMAGE", "image_safety",
-                          f"{type(exc).__name__}: {exc}", cats)
+                          f"{type(exc).__name__}: {exc}", cats, who=paths["who"])
             raise SystemExit(f"{label}가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
 
 

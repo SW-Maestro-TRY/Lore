@@ -260,14 +260,16 @@ def persona_lines(p: dict | None) -> list[str]:
 
 # --------------------------------------------------------------------- 단계
 
-def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> dict | None:
-    """주인공 카드. 확인 화면에 보여 주기만 한다(생성에는 안 넣는다, #534 와 같다)."""
-    path = run_dir / "persona.json"
-    char = R.solo(char)     # 주인공 카드는 첫 주인공 한 사람 것 — 함께 주인공인 사람을 같이 주면 한 카드에 섞인다
+def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko", who: int = 0) -> dict | None:
+    """주인공 카드. 확인 화면에 보여 주기만 한다(생성에는 안 넣는다, #534 와 같다).
+    who — 0 이면 첫 주인공(persona.json), 1 부터 함께 주인공(personas/<이름>.json, #899)."""
+    files = R.persona_paths(run_dir, who, char)
+    path = files["json"]
+    char = R.solo(char, who)     # 카드는 한 사람 것 — 다른 주인공을 같이 주면 한 카드에 섞인다
     prompt = R.compose("own/persona_prompt", "\n".join(base_block(char) + content_block(char)) + "\n", lang=lang)
-    R.write_text(run_dir / "persona_prompt.txt", prompt)
+    R.write_text(files["prompt"], prompt)
     if dry_run:
-        log(f"[페르소나] 프롬프트만 썼습니다 -> {run_dir / 'persona_prompt.txt'}")
+        log(f"[페르소나] 프롬프트만 썼습니다 -> {files['prompt']}")
         return None
     call = llm.Call("PERSONA")
     log(f"[페르소나] {call.describe()} 로 주인공 카드를 세웁니다…")
@@ -277,7 +279,7 @@ def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") ->
         R.record_error(run_dir, "PERSONA", call.provider, call.model, exc)
         warn(f"주인공 카드를 못 만들었습니다 — 없이 갑니다 ({exc})")
         return None
-    R.write_text(run_dir / "persona_raw.txt", text)
+    R.write_text(files["raw"], text)
     R.record(run_dir, meta)
     try:
         obj = story.extract_json(text)
@@ -665,8 +667,10 @@ def run_own(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko", sheet: b
         stage_story(run_dir, char, dry_run, lang=lang)
         return
     log("[내 내용으로] 주인공 카드·인물·본문·시트를 동시에 만듭니다…")
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
         jobs = {"persona": pool.submit(stage_persona, run_dir, char, dry_run, lang)}
+        for i in range(1, len(R.co_protagonists(char)) + 1):            # 함께 주인공 카드(#899)
+            jobs[f"persona{i}"] = pool.submit(stage_persona, run_dir, char, dry_run, lang, i)
         if expands_cast(char):
             jobs["story"] = pool.submit(_cast_then_story, run_dir, char, dry_run, lang)
         else:

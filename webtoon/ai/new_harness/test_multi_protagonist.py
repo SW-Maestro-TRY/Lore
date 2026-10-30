@@ -56,10 +56,11 @@ def test_co_is_read_and_capped():
     d = Path(tempfile.mkdtemp())
     path = _char_json(d)
     doc = json.loads(path.read_text(encoding="utf-8"))
-    doc["co"].append({"name": "세 번째", "character": "넘치는 사람"})
+    doc["co"] += [{"name": n, "character": "설명"} for n in ("도경", "리안", "넘침")]
     path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     char = R.read_character(path)
-    assert [c["name"] for c in char["co"]] == ["서진"]           # CO_MAX = 1
+    assert [c["name"] for c in char["co"]] == ["서진", "도경", "리안"]      # 주인공 넷까지(CO_MAX = 3)
+    char["co"] = char["co"][:1]
     assert R.protagonist_names(char) == ["하윤", "서진"]
     assert len(R.all_photos(char)) == 2 and R.all_photos(char)[0].endswith("a.png")
     solo1 = R.solo(char, 1)
@@ -88,6 +89,9 @@ def test_story_prompt_has_both():
     # 페르소나는 첫 주인공 한 사람
     persona = (runs / "t1" / "persona_prompt.txt").read_text(encoding="utf-8")
     assert "하윤" in persona and "우편배달부" not in persona
+    # 함께 주인공도 자기 카드 프롬프트가 따로 있다
+    co_persona = (runs / "t1" / "personas" / "서진.prompt.txt").read_text(encoding="utf-8")
+    assert "우편배달부" in co_persona and "정비공" not in co_persona
 
 
 def test_sheet_dry_run_writes_one_per_protagonist():
@@ -133,6 +137,19 @@ def test_scene_input_and_pages():
     # 조연 시트 자리는 주인공 시트 수만큼 준다(참조 넷 한도)
     assert detailart.cast_sheets_in_scene({"선장": Path("x"), "하윤": Path("y")},
                                           {"what": "하윤 선장"}, detailart.CAST_SHEET_LIMIT - 1) == ["선장"]
+
+
+def test_sheet_plan_per_page():
+    one = {"name": "하윤"}
+    # 한 명이면 예전 그대로 — 첫 주인공 시트 + 조연 둘, 표지는 첫 주인공만
+    assert detailart.sheet_plan(one, {"what": "아무도"}) == ([0], 2)
+    assert detailart.sheet_plan(one, None) == ([0], 0)
+    four = {"name": "하윤", "co": [{"name": n} for n in ("서진", "윤도경", "리안")]}
+    assert detailart.sheet_plan(four, {"what": "서진이 혼자 걷는다"}) == ([1], 2)
+    assert detailart.sheet_plan(four, {"what": "선장이 배를 띄운다"}) == ([0], 2)        # 이름이 없으면 첫 주인공
+    assert detailart.sheet_plan(four, {"what": "도경과 하윤"}) == ([0, 2], 1)            # 성 뺀 이름도 찾는다, 주인공 순서
+    assert detailart.sheet_plan(four, {"what": "하윤 서진 도경 리안 모두"}) == ([0, 1, 2], 0)   # 직전 장 자리를 남기고 셋
+    assert detailart.sheet_plan(four, None) == ([0, 1, 2, 3], 0)                        # 표지는 전원(넷 한도)
 
 
 def test_continuation_carries_co_sheet():
