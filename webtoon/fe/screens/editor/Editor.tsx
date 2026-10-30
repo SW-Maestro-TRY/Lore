@@ -218,6 +218,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
             {/* 비공개 작품은 공유 버튼을 감춘다(#638) */}
             {info?.public !== false && <ShareMenu runId={runId} episode={episode} className="icon-btn" iconOnly />}
             <button type="button" className="btn btn-p wt-ed-bake" id="bakeBtn">{t("이미지로 뽑기")}</button>
+            <button type="button" className="btn btn-w wt-ed-bake wt-ed-plain" id="plainBtn" title={t("내가 얹은 것을 빼고 그림만 내려받습니다")}>{t("그림만 뽑기")}</button>
             <button type="button" className="btn btn-w wt-ed-done" onClick={() => go("result", { run: runId })}>{t("완성본으로")}</button>
           </div>
         </div>

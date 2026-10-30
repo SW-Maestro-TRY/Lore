@@ -13,6 +13,8 @@ const dict: Dict = {
   "내역": { en: "History", ja: "履歴", zh: "明细" },
   "내가 얹은 것 보기": { en: "Show what I added", ja: "自分が載せたものを表示", zh: "显示我添加的内容" },
   "이미지로 뽑기": { en: "Export as image", ja: "画像に書き出す", zh: "导出为图片" },
+  "그림만 뽑기": { en: "Export art only", ja: "絵だけ書き出す", zh: "仅导出图片" },
+  "내가 얹은 것을 빼고 그림만 내려받습니다": { en: "Downloads the art without what you added", ja: "自分が載せたものを除いて絵だけダウンロードします", zh: "不含你添加的内容，只下载图片" },
   "완성본으로": { en: "To the finished work", ja: "完成版へ", zh: "查看完成版" },
   "오늘 무료 {n}편": { en: "{n} free today", ja: "今日の無料 残り{n}話", zh: "今天免费 {n} 话" },
   "오늘 무료 소진 · 로그인하면 이어서": { en: "Today's free ones are used up · sign in to keep going", ja: "今日の無料分は終了 · ログインすると続けられます", zh: "今天的免费次数已用完 · 登录后可继续" },
@@ -202,6 +204,8 @@ const dict: Dict = {
   "다음 장까지 여백": { en: "Gap before next page", ja: "次のページまでの余白", zh: "到下一页的留白" },
 
   /* ---- 안전 기준에 걸려 비워 둔 장(#626) ---- */
+  "{n}쪽 다시 그리기": { en: "Redraw page {n}", ja: "{n}ページを描き直す", zh: "重绘第 {n} 页" },
+  "안전 기준에 걸린 장면입니다. 장면 설명을 수정한 뒤 무료로 다시 그릴 수 있습니다.": { en: "This scene was flagged by the safety filter. Edit the scene description and you can redraw it for free.", ja: "安全基準に引っかかった場面です。場面の説明を直せば無料で描き直せます。", zh: "此场景未通过安全标准。修改场景描述后可以免费重绘。" },
   "이미지 안전 기준에 걸려 비워 둔 장이에요. 장면 설명을 고쳐 다시 그려 주세요.": {
     en: "This page was left blank because it was flagged by the image safety filter. Edit the scene description and redraw it.",
     ja: "画像の安全基準に引っかかったため空白にしたページです。場面の説明を直して描き直してください。",

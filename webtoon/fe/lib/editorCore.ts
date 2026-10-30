@@ -23,6 +23,7 @@ import { sceneParts, sceneShort } from "./sceneText";
 import { track } from "./track";
 import { authFetch, readAllowance } from "./api";
 import { QUALITY_INFO } from "./wizardData";
+import { unsafeWhy } from "./serverI18n";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
@@ -219,9 +220,14 @@ export function mountEditor(
 
   /* 서버 오류의 사람용 문장. 우리 서버는 {error: {code, message}, message} 로 주고, 몇 군데는 {error: "글"} 로
      준다 — 앞의 모양을 그대로 글로 쓰면 「[object Object]」가 떴다(#626). */
-  function errOf(out, fallback) {
+  /* 서버 문구는 한국어로 온다 — 화면 언어로 옮겨 보여 준다(글 검사에 걸린 곳 안내 포함). */
+  function rawErrOf(out) {
     const e = out && out.error;
-    return (typeof e === "string" ? e : e && e.message) || (out && out.message) || fallback;
+    return (typeof e === "string" ? e : e && e.message) || (out && out.message) || "";
+  }
+  function errOf(out, fallback) {
+    const raw = rawErrOf(out);
+    return raw ? tr(raw) : fallback;
   }
 
   async function pushNow() {
@@ -445,7 +451,7 @@ export function mountEditor(
              뜨기 전까지 높이가 0 이라 카드가 납작해졌다가 튄다. -->
         <img src="${rawImg(s)}" alt="${tr("{n}번째 장", { n: s.no })}" width="${s.w}" height="${s.h}" loading="lazy">
         <div class="overlay" data-overlay></div>
-        ${unsafePages.has(s.no) ? `<div class="unsafe-note">${tr("이미지 안전 기준에 걸려 비워 둔 장이에요. 장면 설명을 고쳐 다시 그려 주세요.")}${unsafeReasons[String(s.no)] ? ` (${unsafeReasons[String(s.no)]})` : ""}</div>` : ""}
+        ${unsafePages.has(s.no) ? `<div class="unsafe-note">${tr("이미지 안전 기준에 걸려 비워 둔 장이에요. 장면 설명을 고쳐 다시 그려 주세요.")}${unsafeWhyOf(s.no) ? ` (${esc(unsafeWhyOf(s.no))})` : ""}</div>` : ""}
       </div>
 
       ${sceneNote(s) ? `<p class="scene-note">${esc(sceneShort(sceneNote(s)))}</p>` : ""}
@@ -569,7 +575,9 @@ export function mountEditor(
   let askCtx = null;                 // { no, btn, cost }
 
   let unsafePages = new Set();   // 안전 기준에 걸려 빈 장으로 둔 장 번호(#626)
-  let unsafeReasons = {};        // 그 장마다 걸린 이유(2026-10-27)
+  let unsafeReasons = {};        // 그 장마다 걸린 이유(2026-10-27) — 한국어, 옛 서버용
+  let unsafeKinds = null;        // 같은 이유의 코드(sexual · violence …) — 화면 언어로 옮긴다
+  const unsafeWhyOf = no => unsafeWhy(tr, unsafeKinds ? (unsafeKinds[String(no)] || []) : null, unsafeReasons[String(no)]);
   let runRegenCost = null;       // 이 작품의 한 장 다시 그리기 값(#787). 못 읽으면 계정 기본값을 쓴다
   /* 다시 그리기 화질 고르개 — 작품 화질과 화질마다의 값. 서버가 안 주면(옛 서버·샘플) 고르개를 감춘다. */
   let runQuality = null;
@@ -791,7 +799,7 @@ export function mountEditor(
       if (res.status === 402) {
         /* 크레딧 부족 — 알림 글 대신 화면(Editor.tsx)이 「크레딧 잔액이 부족해요 · 충전하기」를 띄운다(#548). */
         veil.remove(); btn.disabled = false;
-        window.dispatchEvent(new CustomEvent(CREDIT_SHORT_EVENT, { detail: errOf(job, "") }));
+        window.dispatchEvent(new CustomEvent(CREDIT_SHORT_EVENT, { detail: rawErrOf(job) }));
         return;
       }
       if (!res.ok) throw new Error(errOf(job, tr("시작하지 못했습니다")));
@@ -822,7 +830,7 @@ export function mountEditor(
       if (s.status === "error" || s.status === "cancelled") {
         // 실패해도 원래 그림은 서버가 되돌려 놓는다. 화면은 그대로 두면 된다.
         veil.remove();
-        toast(s.error || tr("다시 그리지 못했습니다 — 원래 그림은 그대로입니다"));
+        toast(s.error ? tr(s.error) : tr("다시 그리지 못했습니다 — 원래 그림은 그대로입니다"));
         break;
       }
     }
@@ -1818,6 +1826,7 @@ export function mountEditor(
             const found = await r.json();
             unsafePages = new Set((found.unsafe_pages || []).map(Number));
             unsafeReasons = found.unsafe_reasons || {};
+            unsafeKinds = found.unsafe_kinds || null;
             /* 한 장 다시 그리기 값은 작품의 화질을 따른다(#787) — 너울은 6. 화질을 낮춰 고르면 그 값이다. */
             if (typeof found.regen_cost === "number") runRegenCost = found.regen_cost;
             if (typeof found.quality === "string") runQuality = found.quality;
@@ -1934,6 +1943,19 @@ export function mountEditor(
       } catch (err) { toast(err.message); }
       btn.disabled = false;
       btn.textContent = was;
+    });
+
+    // 그림만 뽑기 — 얹은 것을 빼고 밑그림을 잇는다(LORE 표시는 그대로). 굽지 않는다.
+    // 여백은 얹은 것이 아니라 지면 배치라 따라간다 — 고치던 여백이 아직 안 올라갔으면 먼저 올린다.
+    $("#plainBtn")?.addEventListener("click", async () => {
+      if (!RUN_ID) return toast(tr("샘플에는 구울 그림이 없습니다. 실제 작품을 열어 주세요."));
+      const btn = $("#plainBtn");
+      btn.disabled = true;
+      clearTimeout(pushT);
+      try { await pushNow(); } catch (_) { /* 저장이 막혀도 그림만 받기는 된다 */ }
+      track("download_click", { run: RUN_ID, kind: "episode", plain: true, where: "editor" });
+      pullFile(`${API}/runs/${encodeURIComponent(RUN_ID)}/episode.png?plain=1`, `${RUN_ID}-plain.png`);
+      btn.disabled = false;
     });
 
     // 다시 그리기 확인 창. 바깥을 눌러도 닫힌다 — 실수로 연 것을 닫는 데

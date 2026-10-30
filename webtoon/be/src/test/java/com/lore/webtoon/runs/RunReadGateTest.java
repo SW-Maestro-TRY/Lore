@@ -61,8 +61,8 @@ class RunReadGateTest {
 
         assertThat(controller.result("r1").getStatusCode().value()).isEqualTo(404);
         assertThat(controller.page("r1", 1, 1080, null).getStatusCode().value()).isEqualTo(404);
-        assertThat(controller.episode("r1").getStatusCode().value()).isEqualTo(404);
-        assertThat(controller.pageDownload("r1", 1).getStatusCode().value()).isEqualTo(404);
+        assertThat(controller.episode("r1", (String) null).getStatusCode().value()).isEqualTo(404);
+        assertThat(controller.pageDownload("r1", 1, null).getStatusCode().value()).isEqualTo(404);
         assertThat(controller.episode("r1", 1).getStatusCode().value()).isEqualTo(404);
         verify(runs, never()).result("r1");
     }

@@ -308,6 +308,8 @@ public class RunController {
         found.put("unsafe_pages", regen.unsafePages(runId));
         /* 그 장마다 걸린 이유(선정성·폭력·잔혹 …) — 무엇을 고치면 되는지 알린다(2026-10-27). */
         found.put("unsafe_reasons", regen.unsafeReasons(runId));
+        /* 같은 이유를 코드로 — 화면이 영어·일본어·중국어로 옮긴다. 위 한국어 문장은 옛 화면용으로 남긴다. */
+        found.put("unsafe_kinds", regen.unsafeKinds(runId));
         /* 이 작품의 한 장 다시 그리기 값(#787) — 화질마다 달라서 작품과 같이 준다. */
         found.put("regen_cost", regenCost(runId));
         /* 다시 그리기 창의 화질 고르개 — 작품 화질이 처음 골라져 있고, 낮추면 값도 내려간다. */
@@ -357,9 +359,10 @@ public class RunController {
      * 파일의 성질이지 저장물의 성질이 아니다.
      */
     @Operation(summary = "한 편 내려받기",
-            description = "낱장을 이어 붙이고 LORE 표시를 찍어서 준다.")
+            description = "낱장을 이어 붙이고 LORE 표시를 찍어서 준다. plain=1 이면 편집실에서 얹은 것을 빼고 밑그림으로.")
     @GetMapping(value = "/{runId}/episode.png", produces = MediaType.IMAGE_PNG_VALUE)
-    public ResponseEntity<byte[]> episode(@PathVariable String runId) {
+    public ResponseEntity<byte[]> episode(@PathVariable String runId,
+                                          @RequestParam(required = false) String plain) {
         if (!mayRead(runId)) {
             return hidden();
         }
@@ -367,13 +370,14 @@ public class RunController {
         if (meta == null) {
             return ResponseEntity.notFound().build();
         }
-        byte[] png = export.png(runId);
+        boolean bare = flag(plain);
+        byte[] png = export.png(runId, bare);
         if (png == null) {
             return ResponseEntity.notFound().build();
         }
         // 받는 파일 이름은 LORE_제목_1화.png — 옛 브라우저에는 작품 번호(DownloadName).
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null, episodeOf(meta)))
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null, episodeOf(meta), bare))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
@@ -596,9 +600,10 @@ public class RunController {
      * 붙는다</b>: 낱장으로 나가도 어디서 만든 것인지 남아야 한다.
      */
     @Operation(summary = "컷 하나 내려받기",
-            description = "그 장 하나에 LORE 표시를 찍어서 준다.")
+            description = "그 장 하나에 LORE 표시를 찍어서 준다. plain=1 이면 편집실에서 얹은 것을 빼고 밑그림으로.")
     @GetMapping(value = "/{runId}/page/{no}/download", produces = MediaType.IMAGE_PNG_VALUE)
-    public ResponseEntity<byte[]> pageDownload(@PathVariable String runId, @PathVariable int no) {
+    public ResponseEntity<byte[]> pageDownload(@PathVariable String runId, @PathVariable int no,
+                                               @RequestParam(required = false) String plain) {
         if (!mayRead(runId)) {
             return hidden();
         }
@@ -606,15 +611,21 @@ public class RunController {
         if (meta == null) {
             return ResponseEntity.notFound().build();
         }
-        byte[] png = export.pagePng(runId, no);
+        boolean bare = flag(plain);
+        byte[] png = export.pagePng(runId, no, bare);
         if (png == null) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no, episodeOf(meta)))
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no, episodeOf(meta), bare))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
+    /** 주소의 켜기 값 — 있고 비어 있지 않고 0 이 아니면 켠 것({@link #page} 의 raw 와 같은 규칙). */
+    private static boolean flag(String v) {
+        return v != null && !v.isBlank() && !"0".equals(v) && !"false".equalsIgnoreCase(v);
+    }
+
     private static int episodeOf(Map<String,Object> meta) {
         return meta.get("episode") instanceof Number n ? n.intValue() : 1;
     }
