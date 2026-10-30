@@ -51,6 +51,9 @@ export const GENRE_NOTE: Record<string, string> = {
 export const WIZ_STEPS = ["캐릭터", "이야기 · 장르", "그림체", "그리기 방식"];
 export const WIZ_LAST = 4;
 export const MAX_PHOTOS = 4;
+/** 첫 주인공 말고 함께 고를 수 있는 사람 수(#899). 서버 `JobService.CO_PROTAGONIST_MAX` · 하네스 `run.CO_MAX` 와 같다.
+    장 그림 한 장에 붙는 참조 그림이 넷까지라 주인공 시트 둘이면 조연 시트 한 장 자리만 남는다. */
+export const CO_MAX = 1;
 
 export type WizardMode = "simple" | "expert";
 
@@ -99,6 +102,8 @@ export interface WizardForm {
   /** 「이 캐릭터로 웹툰 만들기」로 들어왔을 때. 서버가 이 번호로 그림을 붙인다 —
    *  브라우저가 그림을 내려받아 다시 올릴 이유가 없다. */
   characterId?: string;
+  /** 함께 주인공으로 고른 내 캐릭터(#899). 첫 주인공은 characterId 그대로, 여기에는 그 밖의 사람만. */
+  coCharacterIds?: string[];
   /** 미리 보여줄 그림 주소. 보내는 값이 아니라 화면에만 쓴다. */
   characterArt?: string;
   name: string;
@@ -129,6 +134,7 @@ export const OWN_STORY_MAX = 20000;
 export const emptyWizardForm = (): WizardForm => ({
   photos: [],
   characterId: undefined,
+  coCharacterIds: [],
   characterArt: undefined,
   name: "",
   character: "",

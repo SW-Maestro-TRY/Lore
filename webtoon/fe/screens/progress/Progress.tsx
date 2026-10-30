@@ -235,8 +235,14 @@ function Crumb({ items }: { items: string[] }) {
    `mock-running` 은 이야기를 짓는 중인 작업(루 로딩), `mock-pick-guest` 는 게스트가 후보 넷 중 고르는
    화면(30초 안내, #851).
    실제 작업 번호와는 겹치지 않는다. */
-const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued", "mock-running", "mock-pick-guest"];
+const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued", "mock-running", "mock-pick-guest", "mock-sheet-duo"];
 function mockScenesJob(id: string): NhJob {
+  /* 주인공 둘(#899) — 시트 확인 자리에서 두 번째 주인공 시트가 첫 시트 아래에 붙는다. 그림은 서버가 없어 그리는 중으로 둔다. */
+  if (id === "mock-sheet-duo") {
+    const base = mockScenesJob("mock-scenes-own");
+    return { ...base, id, status: "awaiting_sheet", stage: "sheet", stage_index: 1, stage_label: "캐릭터 시트 확인",
+             cast_sheets: [], co_sheets: [{ name: "강민수", ready: false }] };
+  }
   /* 게스트의 이야기 고르기 — 서버가 남은 초를 주면 확인 줄에 「{n}초 안에 안 고르면 1번으로」가 뜬다(#851) */
   if (id === "mock-pick-guest") {
     const base = mockScenesJob("mock-scenes");
@@ -676,6 +682,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   /* 조연 시트(#548) — 주인공 시트는 무료, 다른 인물은 한 명에 1크레딧. 장면 확인·이야기 확인 차례에. */
   const castOk = status === "awaiting_scenes" || storyCheck || (ownJob && status === "awaiting_sheet");
   const castSheets = job?.cast_sheets ?? [];
+  const coSheets = job?.co_sheets ?? [];
   const castSheetOf = (name: string) => castSheets.find((c) => c.name === name);
   const [castSheetV, setCastSheetV] = useState(0);
   const [castBusy, setCastBusy] = useState("");
@@ -1041,11 +1048,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         <button type="button" className="primary" disabled={busy || castSel == null} onClick={confirmCast}>{castConfirm ? t("캐릭터 확인 완료") : castButton}</button></>
     );
     if (pane === "sheet-view" && status === "awaiting_sheet") return (
-      <><span>{t("캐릭터 시트 1장")}</span>
+      <><span>{t("캐릭터 시트 {n}장", { n: 1 + coSheets.length })}</span>
         <button type="button" className="primary" disabled={busy} onClick={approveSheet}>{t("이 시트로 계속하기")}</button></>
     );
     if (pane === "sheet") return (
-      <><span>{t("캐릭터 시트 1장")}</span>
+      <><span>{t("캐릭터 시트 {n}장", { n: 1 + coSheets.length })}</span>
         <button type="button" className="primary" disabled={busy} onClick={approveSheet}>{t("이 시트로 계속하기")}</button></>
     );
     if (pane === "sheet-fix") return (
@@ -1174,6 +1181,17 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={sheetImageUrl(job.id, sheetV)} alt={t("캐릭터 시트")} />
                   </button>
+                  {coSheets.map((s) => (
+                    <div key={s.name} className="wt-prog-cosheet">
+                      <h2>{s.name}</h2>
+                      {s.ready ? (
+                        <button type="button" className="sheet-image" onClick={() => setZoom(castSheetImageUrl(job.id, s.name))}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={castSheetImageUrl(job.id, s.name)} alt={t("캐릭터 시트")} />
+                        </button>
+                      ) : <div className="skeleton" style={{ height: 380, borderRadius: 16 }} />}
+                    </div>
+                  ))}
                   <button type="button" className="secondary" disabled={busy} onClick={() => setSheetAsk(true)}>{t("수정 요청")}</button>
                 </div>
               )}
@@ -1678,11 +1696,25 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
               {pane === "sheet-view" && job && (
                 <>
                   <div className="document-heading"><div><span>{t("캐릭터 그리기")}</span><h2>{t("캐릭터 시트")}</h2></div></div>
+                  {coSheets.length > 0 && <b className="wt-prog-sheetname">{job.persona?.name || job.input?.name || t("주인공")}</b>}
                   <button type="button" className="wt-prog-sheet" onClick={() => setZoom(sheetImageUrl(job.id, sheetV))}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={sheetImageUrl(job.id, sheetV)} alt={t("캐릭터 시트")} />
                     <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
                   </button>
+                  {/* 함께 주인공의 시트(#899) — 첫 주인공 시트 바로 아래, 같은 판형으로 */}
+                  {coSheets.map((s) => (
+                    <div key={s.name}>
+                      <b className="wt-prog-sheetname">{s.name}</b>
+                      {s.ready ? (
+                        <button type="button" className="wt-prog-sheet" onClick={() => setZoom(castSheetImageUrl(job.id, s.name))}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={castSheetImageUrl(job.id, s.name)} alt={t("캐릭터 시트")} />
+                          <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
+                        </button>
+                      ) : <div className="skeleton" style={{ height: 380, borderRadius: 16 }} />}
+                    </div>
+                  ))}
                   {(job.sheet_versions ?? 0) > 0 && (
                     <div className="wt-prog-oldsheets">
                       <b>{t("이전 시트")}</b>

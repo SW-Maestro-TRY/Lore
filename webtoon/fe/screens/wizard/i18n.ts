@@ -35,6 +35,8 @@ const dict: Dict = {
 
   /* ---- 1 · 캐릭터 ---- */
   "누가 주인공인가요?": { en: "Who's the main character?", ja: "主人公は誰ですか？", zh: "谁是主角？" },
+  "두 명까지 함께 주인공으로 고를 수 있어요": { en: "You can pick up to two main characters", ja: "主人公は2人まで一緒に選べます", zh: "最多可以选两位主角" },
+  "주인공 {n}": { en: "Main character {n}", ja: "主人公{n}", zh: "主角{n}" },
   "{name}과 함께 갈게요!": { en: "Let's go with {name}!", ja: "{name}と一緒に進めます！", zh: "就和{name}一起吧！" },
   "다른 캐릭터로": { en: "Choose a different character", ja: "別のキャラクターに", zh: "换一个角色" },
   "다른 캐릭터 고르기": { en: "Pick another character", ja: "別のキャラクターを選ぶ", zh: "选择其他角色" },

@@ -313,6 +313,8 @@ export interface NhJob {
   sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
   cast_sheets?: { name: string; ready: boolean }[] | null;
+  /** 함께 주인공의 시트(#899) — 그림은 castSheetImageUrl 자리. 주인공이 한 명이면 없다. */
+  co_sheets?: { name: string; ready: boolean }[] | null;
   pick: number | null;
   /** 게스트가 이야기 고르기에서 앞으로 몇 초 안에 골라야 하나(#851). 화면이 앞에 떠 있는 동안은 묻을 때마다
       다시 채워진다. 로그인했거나 고르는 자리가 아니면 없다 — 끝없이 기다린다. */
@@ -355,6 +357,8 @@ export interface NhCreateRequest {
   agree_ip: boolean;
   checkpoints: boolean;
   character_id?: string;
+  /** 함께 주인공으로 고른 내 캐릭터(#899). 없으면 한 명. */
+  co_character_ids?: string[];
   /** 어느 길로 만드나(#548). */
   mode?: NhMode;
   /** own 길의 「설정 더 적기」 — 인물·세계·지킬 것을 한 칸에 적은 자유 글. 없으면 빈 문자열. */

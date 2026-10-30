@@ -429,3 +429,7 @@
 /* 조연 시트 뽑기 — 값이 적힌 단추를 카드 아래에 꽉 차게(2026-10-26) */
 .wt .wt-prog-castsheet { display: flex; flex-direction: column; }
 .wt .wt-prog-castsheet .wt-prog-castsheet-go { margin-top: auto; align-self: stretch; height: 40px; justify-content: center; font-size: 14px; }
+
+/* 함께 주인공의 시트(#899) — 시트마다 이름을 위에 */
+.wt .wt-prog-sheetname { display: block; margin: 14px 0 8px; font-size: 14px; }
+.wt .wt-prog-cosheet { margin-top: 18px; }
