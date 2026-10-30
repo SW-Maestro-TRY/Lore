@@ -115,4 +115,13 @@ class PaintStoreTest {
         assertThat(got.path("scenes").path("3").path("paint").path("strokes")).hasSize(1);
         assertThat(both.count(got)).isEqualTo(1);    // 「n개 얹음」은 말풍선만 센다
     }
+
+    @Test
+    @DisplayName("편집실 슬라이더의 가장 가는 붓(8)과 가장 굵은 지우개(640)는 깎이지 않는다")
+    void 슬라이더_범위() throws Exception {
+        JsonNode s = store.clean(JSON.readTree("""
+                {"strokes":[{"k":"b","c":"#000000","w":8,"p":[1,1]},{"k":"e","w":640,"p":[2,2]}]}""")).path("strokes");
+        assertThat(s.get(0).path("w").asInt()).isEqualTo(8);
+        assertThat(s.get(1).path("w").asInt()).isEqualTo(640);
+    }
 }

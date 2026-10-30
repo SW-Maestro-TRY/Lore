@@ -327,7 +327,7 @@
 .wt .wt-ed .paint-bar button:focus-visible { outline: 2px solid var(--sea); outline-offset: 1px; }
 .wt .wt-ed .paint-bar .pt-sep { width: 1px; height: 22px; margin: 0 4px; background: rgba(255, 255, 255, 0.22); }
 .wt .wt-ed .paint-bar .pt-color i { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); }
-.wt .wt-ed .paint-bar .pt-size i { width: var(--d, 6px); height: var(--d, 6px); border-radius: 50%; background: currentColor; }
+.wt .wt-ed .paint-bar .pt-size i { width: min(var(--d, 6px), 26px); height: min(var(--d, 6px), 26px); border-radius: 50%; background: currentColor; }
 .wt .wt-ed .paint-bar .pt-done { padding: 0 14px; font-size: 15px; font-weight: 700; background: var(--paper); color: var(--ink); }
 .wt .wt-ed .paint-bar .pt-done:hover { background: var(--water-light); }
 
@@ -354,12 +354,12 @@
 .wt .wt-ed .paint-panel .pp-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
 .wt .wt-ed .paint-panel .pp-custom { display: block; cursor: pointer; background: conic-gradient(#e5484d, #ffd60a, #30a46c, #3e63dd, #8e4ec6, #e5484d); }
 .wt .wt-ed .paint-panel .pp-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
-.wt .wt-ed .paint-panel .pp-size {
-  flex: 1; display: inline-flex; align-items: center; justify-content: center; height: 44px;
+.wt .wt-ed .paint-panel .pp-sizes { align-items: center; gap: 10px; }
+.wt .wt-ed .paint-panel .pp-dotbox {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
   border-radius: 10px; border: 1px solid var(--line-strong); background: var(--water-light); color: var(--ink);
 }
-.wt .wt-ed .paint-panel .pp-size i { width: var(--d); height: var(--d); border-radius: 50%; background: currentColor; }
-.wt .wt-ed .paint-panel .pp-size[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.wt .wt-ed .paint-panel .pp-dotbox i { width: min(var(--d, 4px), 40px); height: min(var(--d, 4px), 40px); border-radius: 50%; background: currentColor; }
 
 @media (max-width: 879px) {
   .wt .wt-ed .paint-bar { left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
@@ -390,4 +390,30 @@
   .wt .wt-ed .paint-bar button { min-width: 36px; }
   .wt .wt-ed .paint-bar .pt-sep { margin: 0 2px; }
   .wt .wt-ed .paint-bar .pt-done { padding: 0 11px; }
+}
+
+/* 굵기 슬라이더 — 서랍과 떠 있는 줄(펼침) 둘 다. 엄지로 잡을 수 있게 손잡이를 크게. */
+.wt .wt-ed [data-paint-range] { flex: 1; min-width: 0; height: 32px; margin: 0; accent-color: var(--sea); cursor: pointer; }
+@media (pointer: coarse) { .wt .wt-ed [data-paint-range] { height: 40px; } }
+.wt .wt-ed .paint-bar .pt-sizewrap { position: relative; display: inline-flex; }
+.wt .wt-ed .paint-bar .pt-pop {
+  position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; width: 240px; padding: 8px 12px;
+  background: var(--ink); color: var(--paper); border-radius: 12px; box-shadow: 0 10px 26px rgba(7, 14, 24, 0.35);
+}
+.wt .wt-ed .paint-bar .pt-pop[hidden] { display: none; }
+.wt .wt-ed .paint-bar .pt-popdot { flex: none; display: block; width: min(var(--d, 4px), 28px); height: min(var(--d, 4px), 28px); border-radius: 50%; background: currentColor; }
+.wt .wt-ed .paint-bar .pt-size[aria-expanded="true"] { background: rgba(255, 255, 255, 0.16); }
+@media (max-width: 879px) { .wt .wt-ed .paint-bar .pt-pop { width: min(260px, calc(100vw - 48px)); } }
+
+/* 붓 동그라미 커서 — 마우스로 그림 위에 올렸을 때 지금 굵기만큼 */
+.wt .wt-ed .paint-cursor {
+  position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none; box-sizing: border-box;
+  border-radius: 50%; border: 1px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
+}
+.wt .wt-ed .paint-cursor.is-eraser { border-style: dashed; }
+.wt .wt-ed .paint-cursor[hidden] { display: none; }
+@media (hover: hover) {
+  .wt .wt-ed.is-painting[data-brush-tool="brush"] .paint-layer,
+  .wt .wt-ed.is-painting[data-brush-tool="eraser"] .paint-layer { cursor: none; }
 }

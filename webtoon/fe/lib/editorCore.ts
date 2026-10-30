@@ -1318,13 +1318,18 @@ export function mountEditor(
   const PAINT_UNIT = 10000;
   /* 한도 — 서버(PaintStore)와 같아야 한다. 화면이 먼저 멈춰야 서버가 몰래 잘라 내는 일이 없다. */
   const PAINT_MAX_POINTS = 12000, PAINT_MAX_STROKES = 500, PAINT_MAX_STROKE_POINTS = 4000;
-  const PAINT_SIZES = [25, 60, 140, 320];          // 굵기 — 폭의 0.25% · 0.6% · 1.4% · 3.2%
+  /* 굵기 — 그림 폭의 0.08%(1024px 그림에서 약 1px) ~ 3.2%. 슬라이더는 로그 눈금이라 가는 쪽을 곱게 고른다
+     (눈·머리카락 잔손질은 1~3px 사이에서 갈린다). 저장되는 값(w)은 예전과 같은 만분율이라 옛 선은 그대로다. */
+  const PAINT_W_MIN = 8, PAINT_W_MAX = 320;
+  const OLD_SIZES = [25, 60, 140, 320];          // 예전 4단 단추 — 이 기기에 남은 고른 값을 옮길 때만 쓴다
+  const wOfSlider = t => Math.round(PAINT_W_MIN * Math.pow(PAINT_W_MAX / PAINT_W_MIN, t / 100));
+  const sliderOfW = w => Math.round(Math.log(w / PAINT_W_MIN) / Math.log(PAINT_W_MAX / PAINT_W_MIN) * 100);
   const PAINT_COLORS = ["#111111", "#ffffff", "#8a8a8a", "#f6d7c3", "#e8b598", "#7a4a2a",
                         "#e5484d", "#f5a524", "#ffd60a", "#30a46c", "#3e63dd", "#8e4ec6"];
   let painting = false;                 // 그리기 모드인가
   let paintTool = "brush";              // brush · eraser · picker
   let paintColor = "#111111";
-  let paintSize = 1;                    // PAINT_SIZES 의 몇 번째
+  let paintW = 60;                      // 붓 굵기(만분율). 지우개는 이것의 두 배
   const paintUndo = {}, paintRedo = {}; // 장마다 { [no]: [선 목록 사본, …] }
   const pixelCache = {};                // 스포이드용 밑그림 { [no]: Promise<ImageBitmap|null> }
   let paintObservers = [];
@@ -1332,10 +1337,11 @@ export function mountEditor(
   try {
     const got = JSON.parse(localStorage.getItem("lore_editor_paint") || "null");
     if (got && /^#[0-9a-f]{6}$/.test(got.color)) paintColor = got.color;
-    if (got && Number.isInteger(got.size) && got.size >= 0 && got.size < PAINT_SIZES.length) paintSize = got.size;
+    if (got && Number.isFinite(got.w)) paintW = Math.max(PAINT_W_MIN, Math.min(PAINT_W_MAX, Math.round(got.w)));
+    else if (got && Number.isInteger(got.size) && OLD_SIZES[got.size]) paintW = OLD_SIZES[got.size];
   } catch { /* 비공개 창 */ }
   function rememberBrush() {
-    try { localStorage.setItem("lore_editor_paint", JSON.stringify({ color: paintColor, size: paintSize })); } catch { /* 무시 */ }
+    try { localStorage.setItem("lore_editor_paint", JSON.stringify({ color: paintColor, w: paintW })); } catch { /* 무시 */ }
   }
 
   function strokesOf(no) {
@@ -1547,8 +1553,10 @@ export function mountEditor(
       // 단 폭 변수(--ed-left-w · --ed-right-w)를 받아 가운데 단 한가운데에 서도록 .ed-body 안에 둔다
       (root.querySelector(".ed-body") || root).appendChild(bar);
       bar.addEventListener("click", onPaintToolClick);
+      bar.addEventListener("input", onPaintRange);
     }
     if (!on && bar) bar.remove();
+    if (!on) hideBrushCursor();
     paintToolsState();
   }
   function endPaint() {
@@ -1576,7 +1584,8 @@ export function mountEditor(
     return toolBtn("brush") + toolBtn("eraser") + toolBtn("text") + toolBtn("picker") +
       `<span class="pt-sep"></span>` +
       `<button type="button" class="pt-color" data-paint-act="colors" title="${esc(tr("색"))}" aria-label="${esc(tr("색"))}"><i data-paint-swatch></i></button>` +
-      `<button type="button" class="pt-size" data-paint-act="size" title="${esc(tr("굵기"))}" aria-label="${esc(tr("굵기"))}"><i data-paint-dot></i></button>` +
+      `<span class="pt-sizewrap"><button type="button" class="pt-size" data-paint-act="size" aria-expanded="false" title="${esc(tr("굵기"))}" aria-label="${esc(tr("굵기"))}"><i data-paint-dot></i></button>` +
+      `<span class="pt-pop" hidden><i class="pt-popdot" data-paint-dot></i><input type="range" min="0" max="100" step="1" data-paint-range aria-label="${esc(tr("굵기"))}"></span></span>` +
       `<button type="button" class="pt-tool" data-paint-act="undo" title="${esc(tr("되돌리기"))}" aria-label="${esc(tr("되돌리기"))}">${ICONS.undo}</button>` +
       `<span class="pt-sep"></span>` +
       `<button type="button" class="pt-done" data-paint-act="done">${esc(tr("완료"))}</button>`;
@@ -1592,8 +1601,7 @@ export function mountEditor(
         <label class="pp-swatch pp-custom" title="${esc(tr("직접 고르기"))}"><input type="color" data-paint-custom value="${paintColor}" aria-label="${esc(tr("직접 고르기"))}"></label>
       </div>
       <p class="pp-lead">${esc(tr("굵기"))}</p>
-      <div class="pp-row pp-sizes">${PAINT_SIZES.map((_, i) =>
-        `<button type="button" class="pp-size" data-paint-size="${i}" aria-pressed="false" aria-label="${esc(tr("굵기"))} ${i + 1}"><i style="--d:${[3, 6, 11, 18][i]}px"></i></button>`).join("")}</div>
+      <div class="pp-row pp-sizes"><span class="pp-dotbox"><i data-paint-dot></i></span><input type="range" min="0" max="100" step="1" data-paint-range aria-label="${esc(tr("굵기"))}"></div>
       <div class="pp-row pp-history">
         <button type="button" class="pp-btn" data-paint-act="undo">${ICONS.undo}<span>${esc(tr("되돌리기"))}</span></button>
         <button type="button" class="pp-btn" data-paint-act="redo">${ICONS.redo}<span>${esc(tr("다시 하기"))}</span></button>
@@ -1602,8 +1610,24 @@ export function mountEditor(
     </div>`;
   }
 
+  function onPaintRange(e) {
+    const r = e.target.closest("[data-paint-range]");
+    if (!r) return;
+    paintW = wOfSlider(Number(r.value));
+    $$("[data-paint-range]").forEach(o => { if (o !== r) o.value = r.value; });
+    rememberBrush();
+    paintToolsState();
+  }
+  /* 이 굵기가 지금 고른 장에서 화면에 몇 px 로 보이나 */
+  function brushPx(w) {
+    const wrap = $(`#scene-${activeScene} [data-wrap]`);
+    const width = wrap ? wrap.getBoundingClientRect().width : 720;
+    return w / PAINT_UNIT * width;
+  }
+
   function wirePaintPanel(grid) {
     grid.querySelector(".paint-panel").addEventListener("click", onPaintToolClick);
+    grid.querySelector(".paint-panel").addEventListener("input", onPaintRange);
     grid.querySelector("[data-paint-custom]")?.addEventListener("input", e => setPaintColor(e.target.value));
     paintToolsState();
   }
@@ -1614,7 +1638,7 @@ export function mountEditor(
     const c = e.target.closest("[data-paint-color]");
     if (c) { setPaintColor(c.dataset.paintColor); if (paintTool === "eraser" || paintTool === "picker") setPaintTool("brush"); return; }
     const z = e.target.closest("[data-paint-size]");
-    if (z) { paintSize = Number(z.dataset.paintSize) || 0; rememberBrush(); paintToolsState(); return; }
+    if (z) return;
     const a = e.target.closest("[data-paint-act]");
     if (!a) return;
     const act = a.dataset.paintAct;
@@ -1622,7 +1646,12 @@ export function mountEditor(
     else if (act === "redo") redoPaint();
     else if (act === "clear") { if (strokesOf(activeScene).length) changeStrokes(activeScene, []); }
     else if (act === "done") endPaint();
-    else if (act === "size") { paintSize = (paintSize + 1) % PAINT_SIZES.length; rememberBrush(); paintToolsState(); }
+    else if (act === "size") {
+      // 떠 있는 줄의 굵기 — 작은 슬라이더를 펼친다(폰에서 서랍을 안 열고 엄지로 고른다)
+      const pop = a.parentElement.querySelector(".pt-pop");
+      pop.hidden = !pop.hidden;
+      a.setAttribute("aria-expanded", String(!pop.hidden));
+    }
     else if (act === "colors") setDock(true);    // 폰: 서랍을 열어 색을 고른다
   }
 
@@ -1653,9 +1682,11 @@ export function mountEditor(
   function paintToolsState() {
     $$("[data-paint-tool]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.paintTool === paintTool)));
     $$("[data-paint-color]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.paintColor === paintColor)));
-    $$("[data-paint-size]").forEach(b => b.setAttribute("aria-pressed", String(Number(b.dataset.paintSize) === paintSize)));
+    $$("[data-paint-range]").forEach(r => { if (document.activeElement !== r) r.value = String(sliderOfW(paintW)); });
     $$("[data-paint-swatch]").forEach(i => { i.style.background = paintColor; });
-    $$("[data-paint-dot]").forEach(i => { i.style.setProperty("--d", `${[3, 6, 11, 18][paintSize]}px`); });
+    // 미리보기 점은 지금 고른 장에서 실제로 그려질 크기다(가장 가는 것도 1px 은 보이게)
+    const shown = brushPx(paintTool === "eraser" ? paintW * 2 : paintW);
+    $$("[data-paint-dot]").forEach(i => { i.style.setProperty("--d", `${Math.max(1, Math.min(40, shown)).toFixed(1)}px`); });
     const custom = $("[data-paint-custom]");
     if (custom && custom.value !== paintColor) custom.value = paintColor;
     const has = strokesOf(activeScene).length > 0;
@@ -1714,6 +1745,24 @@ export function mountEditor(
 
   /* ---- 그리기 손놀림 ---- */
 
+  /* 그림 위에 붓을 올리면(마우스) 지금 굵기만한 동그라미가 따라온다 — 가는 붓이 어디에 닿는지 보이게. */
+  let brushCursor = null;
+  function showBrushCursor(e, cv) {
+    if (!painting || e.pointerType !== "mouse" || (paintTool !== "brush" && paintTool !== "eraser")) return hideBrushCursor();
+    if (!brushCursor) {
+      brushCursor = document.createElement("div");
+      brushCursor.className = "paint-cursor";
+      brushCursor.setAttribute("aria-hidden", "true");
+      (document.querySelector(".ed") || document.body).appendChild(brushCursor);
+    }
+    const d = Math.max(3, (paintTool === "eraser" ? paintW * 2 : paintW) / PAINT_UNIT * cv.getBoundingClientRect().width);
+    brushCursor.style.width = brushCursor.style.height = `${d}px`;
+    brushCursor.style.transform = `translate(${e.clientX - d / 2}px, ${e.clientY - d / 2}px)`;
+    brushCursor.classList.toggle("is-eraser", paintTool === "eraser");
+    brushCursor.hidden = false;
+  }
+  function hideBrushCursor() { if (brushCursor) brushCursor.hidden = true; }
+
   function wirePaint(no, sceneEl) {
     const cv = $("[data-paint]", sceneEl);
     if (!cv) return;
@@ -1756,15 +1805,17 @@ export function mountEditor(
         return;
       }
       cur = paintTool === "eraser"
-        ? { k: "e", w: PAINT_SIZES[paintSize] * 2, p: [x, y] }        // 지우개는 붓보다 두 배 넓게
-        : { k: "b", c: paintColor, w: PAINT_SIZES[paintSize], p: [x, y] };
+        ? { k: "e", w: paintW * 2, p: [x, y] }        // 지우개는 붓보다 두 배 넓게
+        : { k: "b", c: paintColor, w: paintW, p: [x, y] };
       cur.room = Math.min(PAINT_MAX_STROKE_POINTS, PAINT_MAX_POINTS - pointsOf(strokes));
       lastX = e.clientX; lastY = e.clientY;
       try { cv.setPointerCapture(e.pointerId); } catch { /* 안 잡혀도 그린다 */ }
       redraw();
     });
 
+    cv.addEventListener("pointerleave", hideBrushCursor);
     cv.addEventListener("pointermove", e => {
+      showBrushCursor(e, cv);
       if (touches.has(e.pointerId)) touches.get(e.pointerId).y = e.clientY;
       if (panY != null && touches.size >= 2) {
         const m = midY();
@@ -2544,6 +2595,7 @@ export function mountEditor(
     if (paintDirty.size) void pushPaintNow();
     paintObservers.forEach(o => o.disconnect());
     document.getElementById("paintBar")?.remove();
+    brushCursor?.remove();
     for (const [t, type, fn] of bound) t.removeEventListener(type, fn);
     clearTimeout(pushT);
   };
