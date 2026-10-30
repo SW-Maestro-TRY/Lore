@@ -1735,25 +1735,44 @@ public class JobRunner {
         return runId != null && Files.isRegularFile(unsafeMarker(runId, page));
     }
 
-    /** 그림 안전 검사 분류 → 사람이 읽는 말. 모르는 분류는 「안전 기준」. */
-    static String reasonOf(java.util.Collection<String> categories) {
+    /**
+     * 그림 안전 검사 분류 → 이유 종류 코드. 화면이 이 코드로 언어마다 이름을 붙인다 — 한국어 문장을
+     * 내려보내면 영어·일본어·중국어 화면에서 번역할 수가 없다. 모르는 분류만 있으면 빈 목록(「안전 기준」).
+     */
+    static List<String> kindsOf(java.util.Collection<String> categories) {
         java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
         for (String c : categories) {
             String s = c.toLowerCase(java.util.Locale.ROOT);
-            if (s.contains("minor")) out.add("미성년 관련");
-            else if (s.contains("sexual") || s.contains("nudity")) out.add("선정성");
-            else if (s.contains("self-harm") || s.contains("self_harm")) out.add("자해");
-            else if (s.contains("violence") || s.contains("gore")) out.add("폭력·잔혹");
-            else if (s.contains("hate")) out.add("혐오");
-            else if (s.contains("harass")) out.add("괴롭힘");
-            else if (s.contains("illicit") || s.contains("illegal")) out.add("불법 행위");
+            if (s.contains("minor")) out.add("minor");
+            else if (s.contains("sexual") || s.contains("nudity")) out.add("sexual");
+            else if (s.contains("self-harm") || s.contains("self_harm")) out.add("self_harm");
+            else if (s.contains("violence") || s.contains("gore")) out.add("violence");
+            else if (s.contains("hate")) out.add("hate");
+            else if (s.contains("harass")) out.add("harassment");
+            else if (s.contains("illicit") || s.contains("illegal")) out.add("illicit");
         }
-        return out.isEmpty() ? "안전 기준" : String.join("·", out);
+        return List.copyOf(out);
     }
 
-    /** 비워 둔 장마다 걸린 이유(#626 · 2026-10-27). 화면이 쪽 번호 옆에 보여 준다. */
-    public java.util.Map<Integer, String> unsafeReasons(String runId) {
-        java.util.Map<Integer, String> out = new java.util.LinkedHashMap<>();
+    /** 이유 종류 코드 → 한국어 이름. 메일(한국어)과 옛 화면이 읽는다. 화면 사전(serverI18n.ts)에 같은 이름이 있다. */
+    static final java.util.Map<String, String> KIND_KO = java.util.Map.of(
+            "minor", "미성년 관련",
+            "sexual", "선정성",
+            "self_harm", "자해",
+            "violence", "폭력·잔혹",
+            "hate", "혐오",
+            "harassment", "괴롭힘",
+            "illicit", "불법 행위");
+
+    /** 그림 안전 검사 분류 → 사람이 읽는 말. 모르는 분류는 「안전 기준」. */
+    static String reasonOf(java.util.Collection<String> categories) {
+        List<String> kinds = kindsOf(categories);
+        return kinds.isEmpty() ? "안전 기준" : String.join("·", kinds.stream().map(KIND_KO::get).toList());
+    }
+
+    /** 비워 둔 장마다 걸린 분류 원문. 못 읽으면 빈 목록. */
+    private java.util.Map<Integer, List<String>> unsafeCategories(String runId) {
+        java.util.Map<Integer, List<String>> out = new java.util.LinkedHashMap<>();
         for (int page : unsafePages(runId)) {
             List<String> cats = new ArrayList<>();
             try {
@@ -1763,8 +1782,22 @@ public class JobRunner {
             } catch (IOException e) {
                 // 못 읽으면 「안전 기준」
             }
-            out.put(page, reasonOf(cats));
+            out.put(page, cats);
         }
+        return out;
+    }
+
+    /** 비워 둔 장마다 걸린 이유(#626 · 2026-10-27). 한국어 — 메일과 옛 화면용. */
+    public java.util.Map<Integer, String> unsafeReasons(String runId) {
+        java.util.Map<Integer, String> out = new java.util.LinkedHashMap<>();
+        unsafeCategories(runId).forEach((page, cats) -> out.put(page, reasonOf(cats)));
+        return out;
+    }
+
+    /** 비워 둔 장마다 걸린 이유 종류 코드. 화면은 이것으로 언어마다 이름을 붙인다. 빈 목록이면 「안전 기준」. */
+    public java.util.Map<Integer, List<String>> unsafeKinds(String runId) {
+        java.util.Map<Integer, List<String>> out = new java.util.LinkedHashMap<>();
+        unsafeCategories(runId).forEach((page, cats) -> out.put(page, kindsOf(cats)));
         return out;
     }
 
