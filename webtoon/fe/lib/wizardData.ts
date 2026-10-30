@@ -51,9 +51,9 @@ export const GENRE_NOTE: Record<string, string> = {
 export const WIZ_STEPS = ["캐릭터", "이야기 · 장르", "그림체", "그리기 방식"];
 export const WIZ_LAST = 4;
 export const MAX_PHOTOS = 4;
-/** 첫 주인공 말고 함께 고를 수 있는 사람 수(#899). 서버 `JobService.CO_PROTAGONIST_MAX` · 하네스 `run.CO_MAX` 와 같다.
-    장 그림 한 장에 붙는 참조 그림이 넷까지라 주인공 시트 둘이면 조연 시트 한 장 자리만 남는다. */
-export const CO_MAX = 1;
+/** 첫 주인공 말고 함께 고를 수 있는 사람 수(#899) — 주인공은 넷까지. 서버 `JobService.CO_PROTAGONIST_MAX` ·
+    하네스 `run.CO_MAX` 와 같다. 서버가 allowance 의 co_max 로도 알려 주면 그 값을 쓴다. */
+export const CO_MAX = 3;
 
 export type WizardMode = "simple" | "expert";
 

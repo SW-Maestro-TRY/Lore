@@ -235,13 +235,25 @@ function Crumb({ items }: { items: string[] }) {
    `mock-running` 은 이야기를 짓는 중인 작업(루 로딩), `mock-pick-guest` 는 게스트가 후보 넷 중 고르는
    화면(30초 안내, #851).
    실제 작업 번호와는 겹치지 않는다. */
-const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued", "mock-running", "mock-pick-guest", "mock-sheet-duo"];
+const MOCK_IDS = ["mock-scenes", "mock-scenes-own", "mock-story-own", "mock-queued", "mock-running", "mock-pick-guest",
+  "mock-sheet-duo", "mock-scenes-duo"];
+/* 주인공 여럿(#899) — 함께 주인공 셋. 그림은 서버가 없어 안 뜬다. 카드는 실제 작품의 인물 단계 결과 모양 그대로. */
+const MOCK_CO: NonNullable<NhJob["co_sheets"]> = [
+  { name: "강민수", ready: true, versions: 1, description: "연화가 맡은 신인 작가.",
+    persona: { name: "강민수", look: "헝클어진 앞머리에 늘 원고 뭉치를 안고 다닌다", personality: "말수가 적고 마감 앞에서만 대담해진다",
+      situation: "연화가 맡은 신인 작가", voice: "짧게 끊어 말한다", line: "", details: [] } as unknown as NhPersona },
+  { name: "윤채이", ready: true, versions: 0, description: "같은 층 디자이너.",
+    persona: { name: "윤채이", look: "단발에 큰 귀걸이", personality: "", situation: "같은 층 디자이너", voice: "", line: "", details: [] } as unknown as NhPersona },
+  { name: "서도준", ready: false, versions: 0, description: "출판사 대표.", persona: null },
+];
 function mockScenesJob(id: string): NhJob {
-  /* 주인공 둘(#899) — 시트 확인 자리에서 두 번째 주인공 시트가 첫 시트 아래에 붙는다. 그림은 서버가 없어 그리는 중으로 둔다. */
   if (id === "mock-sheet-duo") {
     const base = mockScenesJob("mock-scenes-own");
     return { ...base, id, status: "awaiting_sheet", stage: "sheet", stage_index: 1, stage_label: "캐릭터 시트 확인",
-             cast_sheets: [], co_sheets: [{ name: "강민수", ready: false }] };
+             cast_sheets: [], co_sheets: MOCK_CO };
+  }
+  if (id === "mock-scenes-duo") {
+    return { ...mockScenesJob("mock-scenes-own"), id, cast_sheets: [], co_sheets: MOCK_CO };
   }
   /* 게스트의 이야기 고르기 — 서버가 남은 초를 주면 확인 줄에 「{n}초 안에 안 고르면 1번으로」가 뜬다(#851) */
   if (id === "mock-pick-guest") {
@@ -588,6 +600,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       setJob((j) => {
         if (!j) return j;
         if (who === "hero") return { ...j, persona: j.persona ? { ...j.persona, ...fields } : j.persona };
+        if (who.startsWith("co:")) return { ...j, co_sheets: (j.co_sheets ?? []).map((c) => ("co:" + c.name === who && c.persona ? { ...c, persona: { ...c.persona, ...fields } } : c)) };
         return { ...j, cast: (j.cast ?? []).map((c, i) => (String(i) === who ? { ...c, ...fields } : c)) };
       });
       return;
@@ -727,8 +740,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   /* own 길의 1화 다시 만들기 — 첫 번째는 무료, 그다음부터 1크레딧(#548) */
   const storyPaid = ownJob && (job?.story?.redraws ?? 0) >= 1;
   /* 시트 다시 만들기 — 첫 번째는 무료, 옛 시트가 하나라도 있으면 1크레딧(서버 resheetCost 와 같다). 게스트는 무료 */
-  const sheetPaid = !!job?.notice?.logged_in && (job?.sheet_versions ?? 0) >= 1;
-  const sheetRetryLabel = (base: string) => sheetPaid ? t("{label} -{n} 크레딧", { label: t(base), n: 1 }) : t("{label} · 무료", { label: t(base) });
+  /* 함께 주인공(#899)도 사람마다 같다 — 그 사람의 옛 시트가 있으면 1크레딧 */
+  const sheetPaidFor = (who: string | null) => !!job?.notice?.logged_in
+    && (who ? (job?.co_sheets ?? []).find((c) => c.name === who)?.versions ?? 0 : job?.sheet_versions ?? 0) >= 1;
+  const sheetRetryLabel = (base: string, who: string | null = null) => sheetPaidFor(who) ? t("{label} -{n} 크레딧", { label: t(base), n: 1 }) : t("{label} · 무료", { label: t(base) });
 
   /* 그려진 장이 늘 때마다 그 자리로 스크롤한다 — 전에는 새 장이 그려져도
      화면이 그대로라 "진짜 만들고 있는 게 맞나" 라는 의심으로 이어졌다
@@ -869,6 +884,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const [mineOpen, setMineOpen] = useState(false);
   const [mailOpen, setMailOpen] = useState(false);
   const [sheetAsk, setSheetAsk] = useState(false);
+  /* 시트 조작이 누구 것인가(#899) — null 이면 첫 주인공, 이름이면 그 함께 주인공 */
+  const [sheetWho, setSheetWho] = useState<string | null>(null);
+  const [coNotes, setCoNotes] = useState<Record<string, string>>({});
+  const askSheet = (who: string | null) => { setSheetWho(who); setSheetAsk(true); };
   const [storyEditing, setStoryEditing] = useState(false);
   const [shared, setShared] = useState(false);
   const refundLine = job?.refunded === "credit" ? t("사용된 크레딧은 자동으로 환불되었어요.")
@@ -943,10 +962,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     track("sheet_decide", { job: job.id, result: "approve" });
     void send(() => decideSheet(job.id, "approve"));
   };
-  const retrySheet = () => {
+  const retrySheet = (who: string | null = null, note = sheetNote) => {
     if (!job) return;
-    track("sheet_decide", { job: job.id, result: "retry", has_note: !!sheetNote.trim() });
-    void send(() => decideSheet(job.id, "retry", sheetNote.trim()));
+    track("sheet_decide", { job: job.id, result: "retry", has_note: !!note.trim(), co: !!who });
+    void send(() => decideSheet(job.id, "retry", note.trim(), who));
+    if (who) setCoNotes((m) => ({ ...m, [who]: "" }));
   };
   const pickFixPhotos = async (files: FileList | null) => {
     if (!files) return;
@@ -957,9 +977,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     }
     setFixPhotos(got);
   };
+  /* 안전 기준에 걸린 시트가 함께 주인공 것이면(#899) 그 사람을 고친다 */
+  const fixWho = (job?.co_sheets ?? []).find((c) => c.blocked) ?? null;
+  const fixBase = fixWho ? fixWho.description ?? "" : job?.input?.description ?? "";
   const submitFix = () => {
     if (!job) return;
-    const desc = fixDesc ?? job.input?.description ?? "";
+    const desc = fixDesc ?? fixBase;
     track("sheet_fix", { job: job.id, photos: fixPhotos.length, desc_changed: fixDesc != null, has_note: !!fixNote.trim() });
     void send(async () => {
       let keys: string[] | undefined;
@@ -975,6 +998,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         photos_data: keys ? undefined : (fixPhotos.length ? fixPhotos : undefined),
         character: fixDesc ?? undefined,
         note: fixNote.trim() || undefined,
+        who: fixWho?.name,
       });
       if (desc) setFixDesc(null);
       setFixPhotos([]);
@@ -989,6 +1013,16 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     setSheetPick(null);
     if (isMock) { setSheetV((v) => v + 1); return; }
     void send(async () => { setJob(await restoreSheet(job.id, sheetPick)); setSheetV((v) => v + 1); });
+  };
+  /* 함께 주인공 시트의 옛 판(#899) — 사람마다 고른 판 */
+  const [coPick, setCoPick] = useState<Record<string, number | null>>({});
+  const restoreCoSheet = (who: string) => {
+    const v = coPick[who];
+    if (!job || v == null) return;
+    track("sheet_restore", { job: job.id, v, co: true });
+    setCoPick((m) => ({ ...m, [who]: null }));
+    if (isMock) { setSheetV((x) => x + 1); return; }
+    void send(async () => { setJob(await restoreSheet(job.id, v, who)); setSheetV((x) => x + 1); });
   };
   const retryStory = () => {
     if (!job) return;
@@ -1044,7 +1078,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         <button type="button" className="primary" disabled={busy} onClick={confirmPick}>{t("이대로 진행하기")}</button></>
     );
     if (pane === "cast") return (
-      <><span>{t("{n}명", { n: cast.length + (job.persona ? 1 : 0) })}</span>
+      <><span>{t("{n}명", { n: cast.length + (job.persona ? 1 : 0) + coSheets.filter((s) => s.persona).length })}</span>
         <button type="button" className="primary" disabled={busy || castSel == null} onClick={confirmCast}>{castConfirm ? t("캐릭터 확인 완료") : castButton}</button></>
     );
     if (pane === "sheet-view" && status === "awaiting_sheet") return (
@@ -1181,24 +1215,25 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={sheetImageUrl(job.id, sheetV)} alt={t("캐릭터 시트")} />
                   </button>
+                  <button type="button" className="secondary" disabled={busy} onClick={() => askSheet(null)}>{t("수정 요청")}</button>
                   {coSheets.map((s) => (
                     <div key={s.name} className="wt-prog-cosheet">
                       <h2>{s.name}</h2>
                       {s.ready ? (
-                        <button type="button" className="sheet-image" onClick={() => setZoom(castSheetImageUrl(job.id, s.name))}>
+                        <button type="button" className="sheet-image" onClick={() => setZoom(castSheetImageUrl(job.id, s.name, sheetV))}>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={castSheetImageUrl(job.id, s.name)} alt={t("캐릭터 시트")} />
+                          <img src={castSheetImageUrl(job.id, s.name, sheetV)} alt={t("캐릭터 시트")} />
                         </button>
                       ) : <div className="skeleton" style={{ height: 380, borderRadius: 16 }} />}
+                      <button type="button" className="secondary" disabled={busy || !s.ready} onClick={() => askSheet(s.name)}>{t("수정 요청")}</button>
                     </div>
                   ))}
-                  <button type="button" className="secondary" disabled={busy} onClick={() => setSheetAsk(true)}>{t("수정 요청")}</button>
                 </div>
               )}
 
               {pane === "sheet-fix" && job && (
                 <div className="sheet-view">
-                  <div className="document-heading"><div><span>{t("캐릭터 시트")}</span><h2>{t("캐릭터를 다시 그려 주세요")}</h2></div></div>
+                  <div className="document-heading"><div><span>{fixWho ? fixWho.name : t("캐릭터 시트")}</span><h2>{t("캐릭터를 다시 그려 주세요")}</h2></div></div>
                   {job.error && <p className="wt-prog-fixwhy">{t(job.error)}</p>}
                   <div className="wt-prog-fix">
                     <label className="fieldset">
@@ -1214,7 +1249,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     )}
                     <label className="fieldset">
                       <b>{t("외모·옷차림 설명")}</b>
-                      <textarea className="field" rows={3} value={fixDesc ?? job.input?.description ?? ""}
+                      <textarea className="field" rows={3} value={fixDesc ?? fixBase}
                                 aria-label={t("외모·옷차림 설명")} onChange={(e) => setFixDesc(e.target.value)} />
                     </label>
                     <input className="field" value={fixNote} placeholder={t("이번에 더 바랄 점 · 예: 단정한 정장 차림으로")}
@@ -1240,6 +1275,15 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       )}
                     </article>
                   )}
+                  {/* 함께 주인공의 카드(#899) — 첫 주인공 카드와 같은 모양 */}
+                  {coSheets.filter((s) => s.persona).map((s) => (
+                    <article key={"co-" + s.name} className="character-document">
+                      <div className="document-heading"><div><span>{t("주인공")}</span><h2>{s.persona!.name}</h2></div></div>
+                      {([["look", "외형"], ["personality", "성격"], ["situation", "현재 상황"], ["voice", "말투"], ["line", "대사"]] as const)
+                        .filter(([k]) => (s.persona as unknown as Record<string, string>)[k])
+                        .map(([k, label]) => <section key={k} className="prose-field"><h3>{t(label)}</h3><p>{(s.persona as unknown as Record<string, string>)[k]}</p></section>)}
+                    </article>
+                  ))}
                   {cast.map((c, i) => (
                     <article key={c.name + i} className={`character-document${castConfirm ? "" : " pickable"}${!castConfirm && castSel === i + 1 ? " on" : ""}`}
                              role={castConfirm ? undefined : "button"} tabIndex={castConfirm ? undefined : 0}
@@ -1608,6 +1652,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                           <PersonCard hero title={t("주인공 · {name}", { name: job.persona.name })} person={job.persona as unknown as Record<string, unknown>}
                                       keys={HERO_KEYS} onSave={(f) => savePersonCard("hero", f)} />
                         )}
+                        {coSheets.filter((s) => s.persona).map((s) => (
+                          <PersonCard key={"co-" + s.name} hero title={t("주인공 · {name}", { name: s.persona!.name })} person={s.persona as unknown as Record<string, unknown>}
+                                      keys={HERO_KEYS} onSave={(f) => savePersonCard("co:" + s.name, f)} />
+                        ))}
                         {cast.map((c, i) => (
                           <PersonCard key={c.name + i} title={c.role ? `${c.name} · ${c.role}` : c.name} person={c as unknown as Record<string, unknown>}
                                       keys={CAST_KEYS} onSave={(f) => savePersonCard(String(i), f)} />
@@ -1660,6 +1708,10 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                           <PersonCard hero title={t("주인공 · {name}", { name: job.persona.name })} person={job.persona as unknown as Record<string, unknown>}
                                       keys={HERO_KEYS} onSave={(f) => savePersonCard("hero", f)} />
                         )}
+                        {coSheets.filter((s) => s.persona).map((s) => (
+                          <PersonCard key={"co-" + s.name} hero title={t("주인공 · {name}", { name: s.persona!.name })} person={s.persona as unknown as Record<string, unknown>}
+                                      keys={HERO_KEYS} onSave={(f) => savePersonCard("co:" + s.name, f)} />
+                        ))}
                         {cast.map((c, i) => (
                           <PersonCard key={c.name + i} title={c.role ? `${c.name} · ${c.role}` : c.name} person={c as unknown as Record<string, unknown>}
                                       keys={CAST_KEYS} onSave={(f) => savePersonCard(String(i), f)} />
@@ -1702,19 +1754,6 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                     <img src={sheetImageUrl(job.id, sheetV)} alt={t("캐릭터 시트")} />
                     <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
                   </button>
-                  {/* 함께 주인공의 시트(#899) — 첫 주인공 시트 바로 아래, 같은 판형으로 */}
-                  {coSheets.map((s) => (
-                    <div key={s.name}>
-                      <b className="wt-prog-sheetname">{s.name}</b>
-                      {s.ready ? (
-                        <button type="button" className="wt-prog-sheet" onClick={() => setZoom(castSheetImageUrl(job.id, s.name))}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={castSheetImageUrl(job.id, s.name)} alt={t("캐릭터 시트")} />
-                          <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
-                        </button>
-                      ) : <div className="skeleton" style={{ height: 380, borderRadius: 16 }} />}
-                    </div>
-                  ))}
                   {(job.sheet_versions ?? 0) > 0 && (
                     <div className="wt-prog-oldsheets">
                       <b>{t("이전 시트")}</b>
@@ -1737,18 +1776,60 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                   )}
                   {status === "awaiting_sheet" && (
                     /* 시트 확인 자리 — 전처럼 「수정 요청」 단추가 고칠 점을 적는 창을 연다(2026-10-26) */
-                    <button type="button" className="secondary wt-prog-sheetask" disabled={busy} onClick={() => setSheetAsk(true)}>{t("수정 요청")}</button>
+                    <button type="button" className="secondary wt-prog-sheetask" disabled={busy} onClick={() => askSheet(null)}>{t("수정 요청")}</button>
                   )}
                   {status === "awaiting_scenes" && (
                     /* 장면 확인 동안은 여기서 시트를 다시 만들 수 있다(#548). */
                     <div className="wt-prog-acts">
                       <input className="field" value={sheetNote} placeholder={t("고칠 점을 적고 다시 만들기 · 예: 머리를 더 길게")} aria-label={t("다시 만들기 메모")}
                              onChange={(e) => setSheetNote(e.target.value)} />
-                      <button type="button" className="btn btn-w" disabled={busy} onClick={retrySheet}>
+                      <button type="button" className="btn btn-w" disabled={busy} onClick={() => retrySheet(null)}>
                         <IconRetry size={18} /> {sheetRetryLabel("다시 만들기")}
                       </button>
                     </div>
                   )}
+                  {/* 함께 주인공의 시트(#899) — 첫 주인공 시트와 같은 판형 · 같은 조작(옛 판 되돌리기 · 수정 요청 · 다시 만들기) */}
+                  {coSheets.map((s) => (
+                    <div key={s.name} className="wt-prog-cosheet">
+                      <b className="wt-prog-sheetname">{s.name}</b>
+                      {s.ready ? (
+                        <button type="button" className="wt-prog-sheet" onClick={() => setZoom(castSheetImageUrl(job.id, s.name, sheetV))}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={castSheetImageUrl(job.id, s.name, sheetV)} alt={t("캐릭터 시트")} />
+                          <span className="zoom"><IconZoom size={14} /> {t("눌러서 크게 보기")}</span>
+                        </button>
+                      ) : <div className="skeleton" style={{ height: 380, borderRadius: 16 }} />}
+                      {(s.versions ?? 0) > 0 && (
+                        <div className="wt-prog-oldsheets">
+                          <b>{t("이전 시트")}</b>
+                          <div className="row">
+                            {Array.from({ length: s.versions ?? 0 }, (_, i) => i + 1).map((v) => (
+                              <button key={v} type="button" className={`thumb${coPick[s.name] === v ? " on" : ""}`} aria-pressed={coPick[s.name] === v}
+                                      aria-label={t("이전 시트 {v}", { v })} onClick={() => setCoPick((m) => ({ ...m, [s.name]: m[s.name] === v ? null : v }))}>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={sheetVersionUrl(job.id, v, s.name)} alt="" />
+                              </button>
+                            ))}
+                            <button type="button" className="btn btn-w btn-sm" disabled={busy || coPick[s.name] == null} onClick={() => restoreCoSheet(s.name)}>
+                              {t("이 시트로 되돌리기")}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {status === "awaiting_sheet" && s.ready && (
+                        <button type="button" className="secondary wt-prog-sheetask" disabled={busy} onClick={() => askSheet(s.name)}>{t("수정 요청")}</button>
+                      )}
+                      {status === "awaiting_scenes" && s.ready && (
+                        <div className="wt-prog-acts">
+                          <input className="field" value={coNotes[s.name] ?? ""} placeholder={t("고칠 점을 적고 다시 만들기 · 예: 머리를 더 길게")} aria-label={t("다시 만들기 메모")}
+                                 onChange={(e) => setCoNotes((m) => ({ ...m, [s.name]: e.target.value }))} />
+                          <button type="button" className="btn btn-w" disabled={busy} onClick={() => retrySheet(s.name, coNotes[s.name] ?? "")}>
+                            <IconRetry size={18} /> {sheetRetryLabel("다시 만들기", s.name)}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                   <ErrLine text={actErr} />
                   {cast.length > 0 && (castOk || castSheets.length > 0) && (
                     <>
@@ -1877,12 +1958,12 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
         </Dialog>
       )}
       {sheetAsk && job && (
-        <Dialog title={t("시트 수정 요청")} busy={busy} onClose={() => setSheetAsk(false)}>
+        <Dialog title={sheetWho ? `${t("시트 수정 요청")} · ${sheetWho}` : t("시트 수정 요청")} busy={busy} onClose={() => setSheetAsk(false)}>
           <label className="email-label">{t("수정할 부분")}
             <textarea rows={5} value={sheetNote} placeholder={t("예: 머리를 더 길게")} onChange={(e) => setSheetNote(e.target.value)} />
           </label>
           <div className="actions">
-            <button type="button" className="primary" disabled={busy || !sheetNote.trim()} onClick={() => { setSheetAsk(false); retrySheet(); }}>{sheetRetryLabel("수정 요청")}</button>
+            <button type="button" className="primary" disabled={busy || !sheetNote.trim()} onClick={() => { setSheetAsk(false); retrySheet(sheetWho); }}>{sheetRetryLabel("수정 요청", sheetWho)}</button>
           </div>
         </Dialog>
       )}

@@ -184,6 +184,9 @@ export interface Allowance {
   blocked?: string | null;
   qualities?: { key: string; label: string; credits: number; base_pages?: number; extra_page_credits?: number }[];
   quality_default?: string;
+  /** 함께 주인공 한 사람당 값(조연 시트 값과 같다)과 고를 수 있는 수(#899). */
+  co_sheet_credits?: number;
+  co_max?: number;
 }
 
 export function readAllowance(): Promise<Allowance> {
@@ -313,8 +316,11 @@ export interface NhJob {
   sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
   cast_sheets?: { name: string; ready: boolean }[] | null;
-  /** 함께 주인공의 시트(#899) — 그림은 castSheetImageUrl 자리. 주인공이 한 명이면 없다. */
-  co_sheets?: { name: string; ready: boolean }[] | null;
+  /** 함께 주인공의 시트(#899) — 그림은 castSheetImageUrl 자리. 주인공이 한 명이면 없다.
+      versions: 보관한 옛 판 수 · persona: 그 사람의 주인공 카드 · blocked: 이 사람 시트가 안전 기준에 걸려 멈췄나 ·
+      description: 시트 고치기 칸의 처음 값. */
+  co_sheets?: { name: string; ready: boolean; versions?: number; persona?: NhPersona | null; blocked?: boolean;
+    description?: string }[] | null;
   pick: number | null;
   /** 게스트가 이야기 고르기에서 앞으로 몇 초 안에 골라야 하나(#851). 화면이 앞에 떠 있는 동안은 묻을 때마다
       다시 채워진다. 로그인했거나 고르는 자리가 아니면 없다 — 끝없이 기다린다. */
@@ -406,8 +412,9 @@ export function resumeJob(id: string) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/resume`, {});
 }
 
-export function decideSheet(id: string, decision: "approve" | "retry", note = "") {
-  return post(`/nh/jobs/${encodeURIComponent(id)}/sheet-decision`, note ? { decision, note } : { decision });
+export function decideSheet(id: string, decision: "approve" | "retry", note = "", who?: string | null) {
+  /* who — 함께 주인공의 시트를 다시 만들 때 그 이름(#899). 없으면 첫 주인공. */
+  return post(`/nh/jobs/${encodeURIComponent(id)}/sheet-decision`, { decision, ...(note ? { note } : {}), ...(who ? { who } : {}) });
 }
 
 /** 인물 단계의 답 — 고른 상대 번호(1~), 적은 인물을 확인하고 진행이면 0. */
@@ -458,7 +465,7 @@ export function retryDirections(id: string, note = "") {
 }
 
 /** 걸린 캐릭터 시트를 사진·외모 설명을 바꿔 다시 그린다(#626). 사진은 만들기처럼 S3 로 먼저 올린다. */
-export function fixSheet(id: string, body: { photo_keys?: string[]; photos_data?: string[]; character?: string; note?: string }) {
+export function fixSheet(id: string, body: { photo_keys?: string[]; photos_data?: string[]; character?: string; note?: string; who?: string }) {
   return post<{ ok: boolean }>(`/nh/jobs/${encodeURIComponent(id)}/sheet-fix`, body);
 }
 
@@ -490,12 +497,12 @@ export function sheetImageUrl(jobId: string, v: number | string = ""): string {
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet.png${v ? `?v=${v}` : ""}`;
 }
 /** v 번째 옛 시트 그림(#548). */
-export function sheetVersionUrl(jobId: string, v: number): string {
-  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet-v${v}.png`;
+export function sheetVersionUrl(jobId: string, v: number, who?: string | null): string {
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet-v${v}.png${who ? `?who=${encodeURIComponent(who)}` : ""}`;
 }
-/** v 번째 옛 시트를 현재 시트로 되돌린다(#548). */
-export function restoreSheet(id: string, v: number) {
-  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/sheet-restore`, { v });
+/** v 번째 옛 시트를 현재 시트로 되돌린다(#548). who 가 있으면 그 함께 주인공의 시트(#899). */
+export function restoreSheet(id: string, v: number, who?: string | null) {
+  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/sheet-restore`, who ? { v, who } : { v });
 }
 
 /** 조연 시트 그림(#548). */

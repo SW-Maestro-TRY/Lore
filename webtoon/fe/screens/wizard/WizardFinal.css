@@ -358,3 +358,6 @@
 .wt .wt-wiz-qualityhint { margin: -4px 0 10px; font-size: 12.5px; }
 /* 함께 주인공 안내(#899) — 제목과 카드 줄 사이 */
 .wt .wt-create-characters > .hint { margin: -4px 0 12px; }
+/* 함께 주인공(#899) — 카드의 「+1C」, 마지막 걸음의 합계 줄 */
+.wt .wt-create-plus { position: absolute; bottom: 12px; right: 36px; font-size: 11px; font-weight: 800; line-height: 1; color: var(--sea); }
+.wt .wt-wiz-total { margin: 0 0 10px; font-size: 14px; font-weight: 700; }

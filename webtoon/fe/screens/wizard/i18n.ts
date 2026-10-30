@@ -35,7 +35,9 @@ const dict: Dict = {
 
   /* ---- 1 · 캐릭터 ---- */
   "누가 주인공인가요?": { en: "Who's the main character?", ja: "主人公は誰ですか？", zh: "谁是主角？" },
-  "두 명까지 함께 주인공으로 고를 수 있어요": { en: "You can pick up to two main characters", ja: "主人公は2人まで一緒に選べます", zh: "最多可以选两位主角" },
+  "{n}명까지 · 한 명 더할 때마다 +{c}C": { en: "Up to {n} · +{c}C for each added one", ja: "{n}人まで · 1人追加ごとに+{c}C", zh: "最多 {n} 位 · 每多一位 +{c}C" },
+  "한 편 {a}C + 주인공 추가 {b}C": { en: "Episode {a}C + extra main characters {b}C", ja: "1話 {a}C + 主人公追加 {b}C", zh: "一话 {a}C + 追加主角 {b}C" },
+  "크레딧 잔액이 부족해요 (필요 {need} · 보유 {have})": { en: "Not enough credits (need {need} · have {have})", ja: "クレジットが足りません（必要 {need} · 保有 {have}）", zh: "积分不足（需要 {need} · 持有 {have}）" },
   "주인공 {n}": { en: "Main character {n}", ja: "主人公{n}", zh: "主角{n}" },
   "{name}과 함께 갈게요!": { en: "Let's go with {name}!", ja: "{name}と一緒に進めます！", zh: "就和{name}一起吧！" },
   "다른 캐릭터로": { en: "Choose a different character", ja: "別のキャラクターに", zh: "换一个角色" },
