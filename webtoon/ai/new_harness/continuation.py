@@ -28,6 +28,18 @@ def prepare_input(char, packet):
     merged["description"] = original.get("description") or char.get("description", "")
     merged["genre"] = original.get("genre") or char.get("genre", "")
     merged["photos"] = [str((source / "sheet.png").resolve())]
+    # 함께 주인공인 사람도 앞 화의 자기 시트(sheets/<이름>.png)를 외관으로 쓴다. 시트가 없으면 다음 화를 못 그린다.
+    import run as R
+    co = []
+    for one in R.co_protagonists(original):
+        png = source / "sheets" / f"{R.sheet_stem(one['name'])}.png"
+        if not png.is_file():
+            raise ValueError(f"앞 화에 {one['name']}의 캐릭터 시트가 없습니다")
+        co.append({**one, "photos": [str(png.resolve())]})
+    if co:
+        merged["co"] = co
+    else:
+        merged.pop("co", None)
     return merged
 
 
@@ -63,6 +75,8 @@ def appeared_cast(source):
         return R._same_person(a, b) or R._same_person(b, a)
 
     def is_hero(name):
+        if R.co_protagonists(original):
+            return R.is_protagonist(original, name)
         # 한쪽으로만 본다 — 「한결 엄마」는 주인공 「한결」이 아니다.
         return bool(hero) and R._same_person(name, hero)
 

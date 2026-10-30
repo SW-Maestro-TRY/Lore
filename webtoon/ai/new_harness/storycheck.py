@@ -222,6 +222,20 @@ def character_block(char: dict | None) -> str:
     # 사람이 「어떤 이야기를 볼까요?」에 적은 것 — 있을 때만 붙는다(#457).
     # 없으면 이 칸이 아예 없어서, 프롬프트의 「사용자가 적은 이야기」 절이
     # 볼 것이 없고 예전 판정과 같다.
+    # 함께 주인공인 사람(주인공 여러 명) — 한 사람씩 같은 칸으로. 한 명짜리 작품이면 안 붙는다.
+    co = [c for c in (char.get("co") or []) if isinstance(c, dict) and _text(c.get("name"))]
+    for one in co:
+        lines += ["", f"함께 주인공: {_text(one['name'])}"]
+        if charcard.short(one.get("card") or {}):
+            lines.append(f"고른 캐릭터 카드: {charcard.short(one['card'])}")
+        if _text(one.get("description")):
+            lines.append(f"설명: {_text(one['description'])}")
+        for k, v in (one.get("fields") or {}).items():
+            if _text(v):
+                lines.append(f"- {k}: {_text(v)}")
+    if co:
+        lines += ["", "이 작품의 주인공은 여럿이다. 아래 기준에서 「주인공」은 이 사람들 모두를 가리킨다 — 성격을 "
+                      "지켰는지는 사람마다 자기 설명으로 보고, 한 사람이 사건을 구경만 하면 그것도 문제로 적는다."]
     if _text(char.get("story")):
         lines += ["", "사용자가 적은 이야기:", f"> {_text(char['story'])}"]
     return "\n".join(lines)

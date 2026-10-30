@@ -151,18 +151,60 @@ def cast_of(detail: dict, run_dir: Path) -> list[dict]:
         got = board.get("cast") or []
     # 주인공은 시트로 이미 고정돼 있다 — cast 에 또 있으면 같은 사람을 두 번
     # 적게 되고, 두 설명이 조금이라도 다르면 그림이 흔들린다.
-    hero = ((read_json(run_dir / "input.json") or {}).get("name") or "").strip()
+    inp = read_json(run_dir / "input.json") or {}
     return [c for c in got
             if isinstance(c, dict) and (c.get("name") or "").strip()
-            and (c.get("name") or "").strip() != hero]
+            and not is_protagonist(inp, c.get("name") or "")]
 
 
-def cast_sheets_of(run_dir: Path) -> dict[str, Path]:
-    """뽑아 둔 조연 시트(#548) — {이름: sheets/<이름>.png}. 없으면 빈 dict."""
+def co_of(char: dict | None) -> list[dict]:
+    """함께 주인공인 사람들(input.json 의 co). 한 명짜리 작품이면 []."""
+    return [c for c in ((char or {}).get("co") or [])
+            if isinstance(c, dict) and str(c.get("name") or "").strip()]
+
+
+def protagonist_names(char: dict | None) -> list[str]:
+    names = [str((char or {}).get("name") or "").strip()] + [str(c["name"]).strip() for c in co_of(char)]
+    return [n for n in names if n]
+
+
+def _one_person(a: str, b: str) -> bool:
+    """장면 단계가 이름을 줄여 쓴다(성을 빼거나 앞 낱말만) — 띄어쓰기를 걷고 한쪽이 다른 쪽에 들면 같은 사람."""
+    a, b = re.sub(r"\s+", "", a or ""), re.sub(r"\s+", "", b or "")
+    return bool(a and b) and (a == b or (len(a) >= 2 and a in b) or (len(b) >= 2 and b in a))
+
+
+def is_protagonist(char: dict | None, name: str) -> bool:
+    """주인공 가운데 한 사람인가. 한 명짜리 작품은 예전처럼 이름이 글자 그대로 같을 때만."""
+    name = (name or "").strip()
+    if not co_of(char):
+        return bool(name) and name == str((char or {}).get("name") or "").strip()
+    return any(_one_person(name, h) for h in protagonist_names(char))
+
+
+def sheet_stem(name: str) -> str:
+    """시트 파일 이름 — run.sheet_stem · own.sheet_file_name · 자바(RunArt)와 같은 규칙."""
+    return re.sub(r"[\\/]", "_", (name or "").strip())
+
+
+def co_sheets_of(run_dir: Path, char: dict | None) -> list[tuple[dict, Path, dict | None]]:
+    """함께 주인공인 사람마다 (그 사람, sheets/<이름>.png, 시트 사양). 그림이 없어도 자리는 돌려준다."""
+    out = []
+    for one in co_of(char):
+        stem = sheet_stem(one["name"])
+        out.append((one, run_dir / "sheets" / f"{stem}.png",
+                    read_json(run_dir / "sheets" / f"{stem}.spec.json")))
+    return out
+
+
+def cast_sheets_of(run_dir: Path, char: dict | None = None) -> dict[str, Path]:
+    """뽑아 둔 조연 시트(#548) — {이름: sheets/<이름>.png}. 없으면 빈 dict.
+    함께 주인공인 사람의 시트도 같은 폴더에 있다 — 그건 주인공 시트라 여기서 뺀다."""
     folder = run_dir / "sheets"
     if not folder.is_dir():
         return {}
-    return {p.stem: p for p in sorted(folder.glob("*.png")) if p.stem}
+    co = {sheet_stem(c["name"]) for c in co_of(char)}
+    return {p.stem: p for p in sorted(folder.glob("*.png")) if p.stem and p.stem not in co}
 
 
 # 장 하나에 붙일 조연 시트 상한. 주인공 시트 1 + 조연 2 + 직전 장 1 = 참조 4장.
@@ -170,9 +212,10 @@ def cast_sheets_of(run_dir: Path) -> dict[str, Path]:
 CAST_SHEET_LIMIT = 2
 
 
-def cast_sheets_in_scene(sheets: dict[str, Path], scene: dict) -> list[str]:
-    """이 장면 글에 이름이 나오는 조연만 — 시트가 있는 조연 중에서. 순서는 시트 이름순."""
-    if not sheets:
+def cast_sheets_in_scene(sheets: dict[str, Path], scene: dict, limit: int = CAST_SHEET_LIMIT) -> list[str]:
+    """이 장면 글에 이름이 나오는 조연만 — 시트가 있는 조연 중에서. 순서는 시트 이름순.
+    limit — 주인공 시트가 여럿이면 그만큼 줄여서 받는다(참조 넷 한도)."""
+    if not sheets or limit <= 0:
         return []
     hay = " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends", "user_text"))
     out = []
@@ -180,7 +223,7 @@ def cast_sheets_in_scene(sheets: dict[str, Path], scene: dict) -> list[str]:
         first = name.split()[0] if name.split() else name
         if name in hay or (first and first in hay):
             out.append(name)
-    return out[:CAST_SHEET_LIMIT]
+    return out[:limit]
 
 
 def cast_sheet_block(names: list[str]) -> str:
@@ -193,7 +236,7 @@ def cast_sheet_block(names: list[str]) -> str:
     return "\n".join(lines)
 
 
-def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> str:
+def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=()) -> str:
     """장면마다 **글자까지 같게** 들어가는 인물 고정 앵커.
 
     외모(시트)와 설명(사용자가 적은 원문)은 서로 다른 역할이다 — 시트가 있어도
@@ -218,13 +261,33 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict]) -> s
     if char:
         for k, v in (char.get("fields") or {}).items():
             lines.append(f"- {k}: {v}")
+    # 함께 주인공인 사람(co: [(그 사람, 시트 사양)]) — 첫 주인공과 같은 모양으로 한 사람씩.
+    for one, one_spec in co:
+        one_desc = (one.get("description") or "").strip()
+        one_card = charcard.short(charcard.for_story(one))
+        one_desc = f"{one_card}. {one_desc}" if one_card and one_desc else (one_card or one_desc)
+        if one_spec:
+            lines.append(imageprompt.sheet_line(one_spec))
+            if one_desc:
+                lines.append(f"- 설명: {one_desc}")
+        else:
+            lines.append(f"{one['name']} — {one_desc}" if one_desc else one["name"])
+        for k, v in (one.get("fields") or {}).items():
+            lines.append(f"- {k}: {v}")
     for one in cast:
         lines.append(f"{one['name']} — {(one.get('appearance') or '').strip()}")
     lines = [ln for ln in lines if ln and ln.strip()]
     if not lines:
         return ""
+    if co:
+        names = [str((char or {}).get("name") or "").strip()] + [str(o["name"]).strip() for o, _ in co]
+        head = (f"주인공은 {len(names)}명이다 — {', '.join(names)}. 첨부한 그림 가운데 앞의 {len(names)}장이 "
+                "이 순서대로 각 주인공의 시트다. 사람마다 자기 시트를 그대로 따르고, 두 사람의 얼굴·머리·옷차림을 "
+                "섞거나 바꿔 그리지 않는다. 아래 인물은 이 화 내내 같은 사람으로 그린다. ")
+    else:
+        head = "주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다. "
     return ("## 인물 (외모는 장면이 바뀌어도 그대로다)\n"
-            "주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다. "
+            + head +
             "장면 내용에 「시트와 다른 것」이 적혀 있으면 그 장면에서는 그것이 시트보다 먼저다.\n"
             "설명에 적힌 내용이 지금 장면 상황과 관련 있으면 그 인물의 행동·표정·대사로 "
             "자연스럽게 드러나야 한다. 관련 없으면 억지로 끼워 넣지 않는다.\n"
@@ -249,7 +312,7 @@ def fixed_block(fixed) -> str:
 
 def build_cover_prompt(*, title: str, genre: str, intro: str,
                        char: dict | None, spec: dict | None, cast: list[dict],
-                       style: str, fixed_names=(), lang: str = "ko") -> str:
+                       style: str, fixed_names=(), lang: str = "ko", co=()) -> str:
     """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 프롬프트 파일부터 다르다
     (`prompt/cover_prompt`).
 
@@ -284,7 +347,7 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
 
     return (imageprompt.apply_style_sections(text, style)
             .replace("{style}", imageprompt.load_style(style))
-            .replace("{people}", character_block(char, spec, cast))
+            .replace("{people}", character_block(char, spec, cast, co))
             .replace("{fixed}", fixed_block(fixed_names))
             .replace("{work}", work))
 
@@ -349,7 +412,7 @@ def narration_of(scenes: list[dict], scene_no: int) -> list[str] | None:
 def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None,
                           spec: dict | None, cast: list[dict], *, scene_no: int,
                           has_prev: bool, fixed_names=(), lang: str = "ko", lore: str = "",
-                          cast_sheet_names=(), narration_none: bool = False) -> str:
+                          cast_sheet_names=(), narration_none: bool = False, co=()) -> str:
     """scenes.json(scene_prompt 의 산출물)만으로 씬 하나를 그린다.
 
     narration_none : 나레이션 단계(run.stage_narration)가 따로 돌았으면 참. 지금은 쓰지
@@ -522,7 +585,7 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         scene_instr += ("\n\n첨부한 직전 그림이 바로 앞 장이다 — 인물·공간·"
                         "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
                         "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
-    people = "\n\n".join(b for b in (character_block(char, spec, cast),
+    people = "\n\n".join(b for b in (character_block(char, spec, cast, co),
                                      cast_sheet_block(list(cast_sheet_names)),
                                      fixed_block(fixed_names)) if b)
     return (text
@@ -621,22 +684,21 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
 
     char = read_json(run_dir / "input.json")
     spec = read_json(run_dir / "sheet_spec.json")
-    hero = (char.get("name") or "").strip() if char else ""
     # cast — scene_prompt 가 장면을 쪼개면서 직접 뽑는다(scenes.json 의
     # "등장인물"). 옛 run(story_prompt 가 등장인물을 직접 뽑던 시절)을 위해
     # direction['cast']·board.json 도 순서대로 봐준다.
     cast = [c for c in (scene_data.get("cast") or [])
            if isinstance(c, dict) and (c.get("name") or "").strip()
-           and (c.get("name") or "").strip() != hero]
+           and not is_protagonist(char, c.get("name") or "")]
     if not cast:
         cast = [c for c in (direction.get("cast") or [])
                if isinstance(c, dict) and (c.get("name") or "").strip()
-               and (c.get("name") or "").strip() != hero]
+               and not is_protagonist(char, c.get("name") or "")]
     if not cast:
         board = read_json(run_dir / "board.json") or {}
         cast = [c for c in (board.get("cast") or [])
                if isinstance(c, dict) and (c.get("name") or "").strip()
-               and (c.get("name") or "").strip() != hero]
+               and not is_protagonist(char, c.get("name") or "")]
 
     sheet = run_dir / "sheet.png"
     if not sheet.exists() and not dry_run and not allow_no_sheet:
@@ -644,7 +706,16 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             f"캐릭터 시트가 없습니다: {sheet}\n"
             "        run.py --sheet 로 만들거나, 정말 없이 그리려면 --no-sheet 를 붙이세요.")
     refs_base = [sheet] if sheet.exists() else []
-    cast_sheets = cast_sheets_of(run_dir)          # 조연 시트(#548) — 없으면 빈 dict, 전과 같다
+    # 함께 주인공인 사람의 시트 — 첫 주인공 시트 바로 뒤에 순서대로 붙는다(모든 장 · 표지). 한 명짜리면 [].
+    co = co_sheets_of(run_dir, char)
+    co_missing = [str(png) for _one, png, _spec in co if not png.exists()]
+    if co_missing and not dry_run and not allow_no_sheet:
+        raise SystemExit("함께 주인공인 사람의 시트가 없습니다: " + ", ".join(co_missing)
+                         + "\n        run.py --sheet 로 만들거나, 정말 없이 그리려면 --no-sheet 를 붙이세요.")
+    refs_base += [png for _one, png, _spec in co if png.exists()]
+    co_people = [(one, spec_) for one, _png, spec_ in co]
+    cast_limit = max(0, CAST_SHEET_LIMIT - len(co))
+    cast_sheets = cast_sheets_of(run_dir, char)    # 조연 시트(#548) — 없으면 빈 dict, 전과 같다
     if cast_sheets:
         log(f"[이어그리기] 조연 시트 {len(cast_sheets)}장: {', '.join(cast_sheets)}")
 
@@ -680,7 +751,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         if n_ == 0:
             prompt = build_cover_prompt(title=title, genre=genre, intro=intro,
                                         char=char, spec=spec, cast=cast, style=style,
-                                        fixed_names=fixed_names, lang=lang)
+                                        fixed_names=fixed_names, lang=lang, co=co_people)
         else:
             # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
@@ -690,11 +761,11 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             lore = lorebook.page_block(lorebook.page_entries(
                 lore_world, " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "prev", "ends"))
             )) if lore_world else ""
-            page_cast = cast_sheets_in_scene(cast_sheets, one)
+            page_cast = cast_sheets_in_scene(cast_sheets, one, cast_limit)
             prompt = imageprompt.apply_style_sections(
                 build_continue_prompt(direction, scenes, char, spec, cast,
                                       scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
-                                      lang=lang, lore=lore, cast_sheet_names=page_cast, narration_none=bool(scene_data.get("narration_stage"))),
+                                      lang=lang, lore=lore, cast_sheet_names=page_cast, narration_none=bool(scene_data.get("narration_stage")), co=co_people),
                 style).replace("{style}", imageprompt.load_style(style))
         # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
         # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
@@ -749,7 +820,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
 
         prev_img = page_path(run_dir, page_no - 1)
         # 참조 순서: 주인공 시트 → 이 장면의 조연 시트 → 직전 장. 표지(n_==0)에는 조연 시트를 안 붙인다.
-        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1]) if n_ > 0 else [])]
+        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], cast_limit) if n_ > 0 else [])]
         refs = refs_base + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
         log(f"[{label}] 참조 {len(refs)}장 …")
         meta = None
