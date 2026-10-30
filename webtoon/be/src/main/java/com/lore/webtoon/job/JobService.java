@@ -491,11 +491,18 @@ public class JobService {
         List<String> names = coNamesOf(job.getInputJson(), mapper);
         if (names.isEmpty()) return null;
         List<String> drawn = runner.castSheetsDrawn(job.getRunId());
+        String blockedWho = job.isSheetBlocked() ? runner.failedSheetWho(job.getRunId()) : null;
         List<Map<String, Object>> out = new ArrayList<>();
         for (String name : names) {
             Map<String, Object> one = new LinkedHashMap<>();
             one.put("name", name);
             one.put("ready", drawn.contains(RunArt.castSheetStem(name)));
+            one.put("versions", runArt.sheetVersions(job.getRunId(), name));
+            /* 그 사람의 주인공 카드 — 첫 주인공 카드(persona)와 같은 모양. 아직 없으면 null. */
+            one.put("persona", runner.coPersonaOf(job.getRunId(), name));
+            /* 이 사람 시트가 안전 기준에 걸려 멈췄나 — 화면이 「고치기」를 이 사람으로 연다 */
+            one.put("blocked", name.equals(blockedWho));
+            one.put("description", runner.coDescriptionOf(job.getRunId(), name));
             out.add(one);
         }
         return out;
@@ -767,18 +774,41 @@ public class JobService {
     /** 시트 다시 만들기 값 — 보관한 옛 시트가 없으면(처음 다시 만드는 것) 무료, 있으면 1크레딧. */
     @Transactional(readOnly = true)
     public int resheetCost(String publicId) {
+        return resheetCost(publicId, null);
+    }
+
+    /** who — 함께 주인공 이름(#899). 비었으면 첫 주인공. 사람마다 첫 번째 다시 만들기는 무료다. */
+    @Transactional(readOnly = true)
+    public int resheetCost(String publicId, String who) {
         WebtoonJob job = store.byPublicId(publicId);
-        return job.getRunId() != null && runArt.sheetVersions(job.getRunId()) >= 1 ? 1 : 0;
+        String w = coWho(job, who);
+        return job.getRunId() != null && runArt.sheetVersions(job.getRunId(), w) >= 1 ? 1 : 0;
+    }
+
+    /** who 가 이 작품의 함께 주인공인지 본다. 비었으면 첫 주인공(null). 아니면 거절한다. */
+    String coWho(WebtoonJob job, String who) {
+        if (who == null || who.isBlank()) return null;
+        String w = who.trim();
+        if (!coNamesOf(job.getInputJson(), mapper).contains(w)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이 작품의 주인공이 아닙니다");
+        }
+        return w;
     }
 
     public void retrySheet(String publicId, String note) {
+        retrySheet(publicId, note, null);
+    }
+
+    /** 시트 다시 만들기. who 가 있으면 그 함께 주인공의 시트만 다시 그린다(#899) — 하네스는 이미 있는 시트를 건너뛴다. */
+    public void retrySheet(String publicId, String note, String who) {
         WebtoonJob job = store.byPublicId(publicId);
+        String w = coWho(job, who);
         JobStatus at = job.getStatus();
         /* 장면 확인 자리(#548)에서도 시트를 다시 만들 수 있다. 끝나면 있던 자리로 돌아온다. */
         if (at != JobStatus.AWAITING_SHEET && at != JobStatus.AWAITING_SCENES) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 확인할 차례가 아닙니다");
         }
-        clearSheet(job.getRunId());
+        clearSheet(job.getRunId(), w);
         runner.redrawSheet(job.getId(), note == null ? "" : note.trim(), at);
     }
 
@@ -806,6 +836,7 @@ public class JobService {
         }
         String desc = form == null || form.character() == null ? null : form.character().trim();
         String note = form == null || form.note() == null ? "" : form.note().trim();
+        String who = coWho(job, form == null ? null : form.who());
         safety.checkText("webtoon-sheet-fix", desc, note);
         if (sheetFixesOf(job) >= SHEET_FIX_MAX) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
@@ -817,19 +848,19 @@ public class JobService {
             boolean newPhotos = form != null && ((form.photoKeys() != null && !form.photoKeys().isEmpty())
                     || (form.photosData() != null && !form.photosData().isEmpty()));
             if (newPhotos) {
-                runner.dropPhotos(job.getId());          // 걸린 사진은 바로 지운다
+                if (who == null) runner.dropPhotos(job.getId());          // 걸린 사진은 바로 지운다(첫 주인공 사진)
                 photos = form.photoKeys() != null && !form.photoKeys().isEmpty()
                         ? pullPhotos(dir, form.photoKeys(), userId, guestKey)
                         : savePhotos(dir, form.photosData());
             }
             rewriteForSheetFix(dir.resolve("character.json"), runner.runDir(job.getRunId()).resolve("input.json"),
-                    photos, desc);
+                    photos, desc, who);
             Files.writeString(dir.resolve(SHEET_FIX_FILE), String.valueOf(sheetFixesOf(job) + 1));
         } catch (IOException e) {
             log.error("캐릭터 고치기를 준비하지 못했습니다 (job={})", publicId, e);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "캐릭터를 다시 그리지 못했습니다");
         }
-        clearSheet(job.getRunId());
+        clearSheet(job.getRunId(), who);
         store.sheetUnblocked(job.getId());
         log.info("걸린 캐릭터 시트를 고쳐 다시 그립니다 (job={}, 사진 바꿈={}, 설명 바꿈={})",
                 publicId, form != null && form.photoKeys() != null && !form.photoKeys().isEmpty(), desc != null);
@@ -852,8 +883,31 @@ public class JobService {
      * 그림에 안 들어간다. 안 준 칸(null)은 그대로 둔다.
      */
     @SuppressWarnings("unchecked")
-    private void rewriteForSheetFix(Path characterJson, Path inputJson, List<Path> photos, String desc)
+    private void rewriteForSheetFix(Path characterJson, Path inputJson, List<Path> photos, String desc, String who)
             throws IOException {
+        if (who != null) {
+            /* 함께 주인공(#899) — co 목록에서 그 사람 칸만 고친다. 두 파일 다(서버 입력·하네스 입력). */
+            for (Path file : List.of(characterJson, inputJson)) {
+                if (!Files.isRegularFile(file)) continue;
+                Map<String, Object> doc = mapper.readValue(file.toFile(), LinkedHashMap.class);
+                boolean harness = file.equals(inputJson);
+                if (doc.get("co") instanceof List<?> co) {
+                    for (Object o : co) {
+                        if (o instanceof Map<?, ?> m && who.equals(String.valueOf(m.get("name")).trim())) {
+                            Map<String, Object> one = (Map<String, Object>) m;
+                            if (photos != null && !photos.isEmpty()) {
+                                if (harness) one.put("photos", photos.stream().map(x -> x.toAbsolutePath().toString()).toList());
+                                else one.put("photo", photos.size() == 1 ? photos.get(0).toString()
+                                        : photos.stream().map(Path::toString).toList());
+                            }
+                            if (desc != null) one.put(harness ? "description" : "character", desc);
+                        }
+                    }
+                }
+                mapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), doc);
+            }
+            return;
+        }
         if (Files.isRegularFile(characterJson)) {
             Map<String, Object> doc = mapper.readValue(characterJson.toFile(), LinkedHashMap.class);
             if (photos != null) {
@@ -892,7 +946,12 @@ public class JobService {
                                   @com.fasterxml.jackson.annotation.JsonProperty("photos_data")
                                   @com.fasterxml.jackson.annotation.JsonAlias("photosData") List<String> photosData,
                                   String character,
-                                  String note) {
+                                  String note,
+                                  /* 함께 주인공의 시트를 고칠 때 그 사람 이름(#899). 없으면 첫 주인공. */
+                                  String who) {
+        public SheetFixRequest(List<String> photoKeys, List<String> photosData, String character, String note) {
+            this(photoKeys, photosData, character, note, null);
+        }
     }
 
     /* ---- 장면 초안(#548) ---- */
@@ -1059,15 +1118,21 @@ public class JobService {
 
     /** 보관한 옛 시트 판을 지금 시트로. 지금 것도 보관한 뒤 바꾼다. */
     public void restoreSheet(String publicId, int v) {
+        restoreSheet(publicId, v, null);
+    }
+
+    /** who — 함께 주인공 이름(#899). 비었으면 첫 주인공. */
+    public void restoreSheet(String publicId, int v, String who) {
         WebtoonJob job = store.byPublicId(publicId);
         if (!SHEET_RESTORE_OK.contains(job.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금은 시트를 되돌릴 수 없습니다");
         }
-        if (runArt.sheetVersion(job.getRunId(), v) == null) {
+        String w = coWho(job, who);
+        if (runArt.sheetVersion(job.getRunId(), w, v) == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 시트 판이 없습니다");
         }
         try {
-            runArt.restoreSheet(job.getRunId(), v);
+            runArt.restoreSheet(job.getRunId(), w, v);
         } catch (IOException e) {
             throw new IllegalStateException("시트를 되돌리지 못했습니다", e);
         }
@@ -1104,6 +1169,30 @@ public class JobService {
      * 시트를 다시 그리려면 먼저 치운다. 그림과 사양은 지우지 않고 판으로 보관한다
      * ({@link RunArt#archiveSheet}) — 다시 그린 것이 더 못하면 되돌릴 수 있게. 못 치운 것이 있어도 계속 간다.
      */
+    private void clearSheet(String runId, String who) {
+        if (who == null) {
+            clearSheet(runId);
+            return;
+        }
+        if (runId == null || runId.isBlank()) {
+            return;
+        }
+        Path sheets = runner.runDir(runId).resolve("sheets");
+        try {
+            runArt.archiveSheet(runId, who);
+        } catch (IOException e) {
+            log.warn("옛 시트를 보관하지 못했습니다 — 지우고 갑니다 (run={}, who={})", runId, who, e);
+        }
+        String stem = RunArt.castSheetStem(who);
+        for (String suffix : new String[]{".png", ".spec.json", ".prompt.txt", ".spec_prompt.txt"}) {
+            try {
+                Files.deleteIfExists(sheets.resolve(stem + suffix));
+            } catch (IOException e) {
+                log.warn("시트를 못 지웠습니다 ({}{})", stem, suffix, e);
+            }
+        }
+    }
+
     private void clearSheet(String runId) {
         if (runId == null || runId.isBlank()) {
             return;
@@ -1178,6 +1267,10 @@ public class JobService {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "주인공은 " + (CO_PROTAGONIST_MAX + 1) + "명까지 고를 수 있어요.");
         }
+        if (userId == null) {
+            /* 추가 주인공 시트는 크레딧으로 받는다 — 게스트는 크레딧이 없다. */
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "주인공을 여럿 넣으려면 로그인해 주세요.");
+        }
         if (!notBlank(form.characterId())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "함께 주인공으로 넣으려면 첫 주인공도 내 캐릭터에서 골라 주세요.");
         }
@@ -1189,8 +1282,18 @@ public class JobService {
         return out;
     }
 
-    /** 함께 주인공으로 고를 수 있는 사람 수(첫 주인공 빼고). 하네스 run.CO_MAX 와 같은 값이다. */
-    static final int CO_PROTAGONIST_MAX = 1;
+    /** 함께 주인공으로 고를 수 있는 사람 수(첫 주인공 빼고). 주인공은 넷까지 — 한 편에 세우는 인물 수와 같다.
+        하네스 run.CO_MAX 와 같은 값이다. */
+    public static final int CO_PROTAGONIST_MAX = 3;
+
+    /** 조연 시트 한 장 값 — 함께 주인공의 시트도 한 사람당 이 값을 받는다(#899). 첫 주인공 시트는 한 편 값에 들어 있다. */
+    public static final int CAST_SHEET_CREDITS = 1;
+
+    /** 요청에서 함께 주인공 수 — 빈 칸은 뺀다. 값 계산(만들기 전 잔액 확인)이 쓴다. */
+    public static int coCountOf(CreateRequest form) {
+        return form == null || form.coCharacterIds() == null ? 0
+                : (int) form.coCharacterIds().stream().filter(x -> x != null && !x.isBlank()).count();
+    }
 
     /** 명시한 캐릭터는 현재 이용 권한을 확인한다. 공개 취소/삭제 시 조용히 새 캐릭터로 바꾸지 않는다. */
     private WebtoonCharacter pickedCharacter(String characterId, Long userId, String uid) {

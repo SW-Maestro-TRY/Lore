@@ -74,9 +74,24 @@ class CoProtagonistCreateTest {
         assertThat(captor.getValue().getInputJson()).doesNotContain("co_names");
     }
 
-    @Test void moreThanTwoOrDuplicatesAreRejectedBeforeSaving() {
-        assertThatThrownBy(()->service.create(request(List.of("second","third")),2L,"uid",null))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("2명까지");
+    @Test void upToFourProtagonistsGoToHarness() throws Exception {
+        when(characters.byPublicId(eq("third"),eq(2L),any())).thenReturn(mine("third","도경","검사"));
+        when(characters.byPublicId(eq("fourth"),eq(2L),any())).thenReturn(mine("fourth","리안","기사"));
+        String job=service.create(request(List.of("second","third","fourth")),2L,"uid",null);
+        var input=new ObjectMapper().readTree(dir.resolve(job).resolve("character.json").toFile());
+        assertThat(input.path("co")).hasSize(3);
+        assertThat(input.path("co").get(2).path("photo").asText()).endsWith("charart-co3.png");
+    }
+
+    @Test void guestsCannotAddProtagonists() {
+        assertThatThrownBy(()->service.create(request(List.of("second")),null,"uid",null))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("로그인");
+        verify(jobs,never()).save(any());
+    }
+
+    @Test void moreThanFourOrDuplicatesAreRejectedBeforeSaving() {
+        assertThatThrownBy(()->service.create(request(List.of("second","third","fourth","fifth")),2L,"uid",null))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("4명까지");
         assertThatThrownBy(()->service.create(request(List.of("first")),2L,"uid",null))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("두 번");
         verify(jobs,never()).save(any());
