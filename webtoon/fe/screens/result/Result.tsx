@@ -400,7 +400,7 @@ export default function Result({ runId, go, authenticated = false, page }: { run
     document.getElementById(`wt-zoom-${zoom}`)?.scrollIntoView({ block: "start" });
   }, [zoom, zoomLoaded, above]);
 
-  /* 「링크 있는 사람만」(#898) — 주인은 서버가 준 열쇠, 링크로 온 사람은 주소에서 받은 열쇠로 공유 주소를 만든다. */
+  /* 「링크 공유(일부공개)」(#898) — 주인은 서버가 준 열쇠, 링크로 온 사람은 주소에서 받은 열쇠로 공유 주소를 만든다. */
   const linkKey = data?.share_key || (data?.visibility === "link" ? shareKeyOf(runId) : undefined);
   const canShare = !!data && (data.public !== false || !!linkKey);
 
@@ -549,7 +549,7 @@ export default function Result({ runId, go, authenticated = false, page }: { run
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
                   {/* 비공개 작품은 공유 버튼을 감춘다(#638) — 링크를 받은 사람은 404 를 본다.
-                      링크 공개(#898)는 열쇠를 붙인 주소로 공유한다. */}
+                      링크 공유(#898)는 열쇠를 붙인 주소로 공유한다. */}
                   {canShare && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} shareKey={linkKey} />}
                 </div>
                 {tomorrow && <p className="wt-result-tomorrow">{tomorrow}</p>}

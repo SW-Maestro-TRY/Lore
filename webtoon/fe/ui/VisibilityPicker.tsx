@@ -9,7 +9,7 @@ import "./VisibilityPicker.css";
  * 예전 공개 스위치 자리에 들어간다. 링크 공개일 때만 옆에 「링크 복사」가 붙는다. */
 const dict: Dict = {
   "공개": { en: "Public", ja: "公開", zh: "公开" },
-  "링크 있는 사람만": { en: "Anyone with the link", ja: "リンクを知っている人のみ", zh: "仅限有链接的人" },
+  "링크 공유(일부공개)": { en: "Link sharing (unlisted)", ja: "リンク共有（限定公開）", zh: "链接分享（部分公开）" },
   "비공개": { en: "Private", ja: "非公開", zh: "不公开" },
   "공개 범위": { en: "Visibility", ja: "公開範囲", zh: "公开范围" },
   "관리자 비공개": { en: "Hidden by admin", ja: "管理者が非公開", zh: "管理员设为不公开" },
@@ -22,7 +22,7 @@ registerDict(dict);
 
 const OPTIONS: { value: Visibility; label: string }[] = [
   { value: "public", label: "공개" },
-  { value: "link", label: "링크 있는 사람만" },
+  { value: "link", label: "링크 공유(일부공개)" },
   { value: "private", label: "비공개" },
 ];
 

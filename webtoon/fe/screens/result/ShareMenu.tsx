@@ -27,7 +27,7 @@ export default function ShareMenu({
   iconOnly?: boolean;
   /** 단추 글자. 없으면 「공유」 */
   label?: string;
-  /** 「링크 있는 사람만」 작품의 열쇠(#898). 있으면 공유 주소에 붙는다. */
+  /** 「링크 공유(일부공개)」 작품의 열쇠(#898). 있으면 공유 주소에 붙는다. */
   shareKey?: string | null;
 }) {
   const t = useT();

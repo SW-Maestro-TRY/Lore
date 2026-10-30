@@ -84,7 +84,7 @@ function routeOf(search: URLSearchParams): Route {
   const view = search.get("view");
   const run = search.get("run") || undefined;
   const card = search.get("card") || undefined;
-  /* 「링크 있는 사람만」 작품의 공유 주소(#898)는 `&k=<열쇠>` 가 붙어 온다. 화면이 그 작품을 부르기 전에 기억해
+  /* 「링크 공유(일부공개)」 작품의 공유 주소(#898)는 `&k=<열쇠>` 가 붙어 온다. 화면이 그 작품을 부르기 전에 기억해
      두면 결과 · 그림 · 회차 목록 주소에 같은 열쇠가 붙는다(api.ts withKey). */
   const key = search.get("k");
   if (run && key) rememberShareKey(run, key);

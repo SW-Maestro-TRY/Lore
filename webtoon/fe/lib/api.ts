@@ -592,9 +592,9 @@ export function myBrowserRuns(): Promise<RunCard[]> {
     .then((got) => got.runs || []);
 }
 
-/* ---- 「링크 있는 사람만」 작품의 열쇠(#898) -----------------------------------
+/* ---- 「링크 공유(일부공개)」 작품의 열쇠(#898) -----------------------------------
  *
- * 링크 공개 작품은 작품 번호만으로는 안 열리고, 공유 주소의 `k` 가 실려 와야 연다. 그 작품을 읽는 모든
+ * 링크 공유 작품은 작품 번호만으로는 안 열리고, 공유 주소의 `k` 가 실려 와야 연다. 그 작품을 읽는 모든
  * 주소(결과 · 장 그림 · 표지 · 내려받기 · 회차 목록)에 같은 열쇠를 붙여야 해서 여기 한 곳에서 붙인다 —
  * `<img src>` 에는 머리말을 못 실으므로 주소에 싣는다.
  *
@@ -686,7 +686,7 @@ export interface RunResult {
   public?: boolean;
   /** 공개 범위 세 단계(#898). */
   visibility?: Visibility;
-  /** 링크 공개 작품의 열쇠 — 주인과 관리자에게만 온다. 공유 주소의 k 다. */
+  /** 링크 공유 작품의 열쇠 — 주인과 관리자에게만 온다. 공유 주소의 k 다. */
   share_key?: string;
 }
 
@@ -799,7 +799,7 @@ export function restoreRun(runId: string): Promise<{ runId: string; restored: bo
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/restore`, { method: "POST" });
 }
 
-/** 공개 범위 세 단계(#898). public = 둘러보기에 공개 · link = 링크 있는 사람만 · private = 나만. */
+/** 공개 범위 세 단계(#898). public = 둘러보기에 공개 · link = 링크 공유(일부공개) · private = 나만. */
 export type Visibility = "public" | "link" | "private";
 
 /** 카드 · 결과에 실린 값으로 지금 공개 범위를 읽는다. visibility 가 없는 옛 서버는 public 만 본다. */

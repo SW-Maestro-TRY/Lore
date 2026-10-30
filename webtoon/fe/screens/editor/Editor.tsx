@@ -215,7 +215,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
               {t("내가 얹은 것 보기")}
             </label>
             <p className="ed-saved wt-ed-saved" id="savedNote" data-state="idle" />
-            {/* 비공개 작품은 공유 버튼을 감춘다(#638). 링크 공개(#898)는 열쇠를 붙인 주소로 공유한다. */}
+            {/* 비공개 작품은 공유 버튼을 감춘다(#638). 링크 공유(#898)는 열쇠를 붙인 주소로 공유한다. */}
             {(info?.public !== false || !!info?.share_key) &&
               <ShareMenu runId={runId} episode={episode} className="icon-btn" iconOnly shareKey={info?.share_key} />}
             <button type="button" className="btn btn-p wt-ed-bake" id="bakeBtn">{t("이미지로 뽑기")}</button>

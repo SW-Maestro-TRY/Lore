@@ -1207,7 +1207,7 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
         ))}
       </div>
       <div className="wt-my-workfoot">
-        {/* 공개 범위 세 단계(#898) — 공개 · 링크 있는 사람만 · 비공개. 관리자가 숨긴 작품은 잠근다(#638). */}
+        {/* 공개 범위 세 단계(#898) — 공개 · 링크 공유(일부공개) · 비공개. 관리자가 숨긴 작품은 잠근다(#638). */}
         <VisibilityPicker runId={run.run_id} initial={visibilityOf(run)} locked={hiddenByAdmin} where="mypage"
                           className="wt-my-pub" />
         <span className="wt-my-workacts">
