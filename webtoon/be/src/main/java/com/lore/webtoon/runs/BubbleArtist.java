@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.function.ToDoubleFunction;
 
 /**
- * 편집실에서 얹은 것을 <b>그림에 실제로 그린다</b> — 말풍선 · 스티커 · 효과음.
+ * 편집실에서 얹은 것을 <b>그림에 실제로 그린다</b> — 직접 그린 선 · 말풍선 · 스티커 · 효과음 · 글자.
  *
  * <h2>화면과 같은 모양이어야 한다</h2>
  *
@@ -221,6 +221,7 @@ public class BubbleArtist {
         Tile tile = switch (type) {
             case "bubble" -> bubble(item, boxW, scale, size);
             case "sfx" -> sfx(item, scale);
+            case "text" -> plain(item, boxW, size);
             default -> sticker(item, scale);
         };
         if (tile == null) {
@@ -316,6 +317,41 @@ public class BubbleArtist {
         }
         g.dispose();
         return new Tile(tile, offX, offY);
+    }
+
+    /* ---- 글자만 (말풍선 없이) ----------------------------------------------- */
+
+    /**
+     * 그림 위에 글자만 — 표지판·손글씨를 고쳐 쓰는 자리. 화면의 {@code .txt}(Editor.css: 상자 폭 = 항목
+     * 폭, 안쪽 여백 없음, 가운데 맞춤, 줄 높이 1.35, keep-all · pre-wrap · break-word)와 같은 규칙으로
+     * 줄을 나눈다 — 말풍선과 같은 {@link #wrap} 이다. 색은 항목의 {@code color}.
+     */
+    private Tile plain(JsonNode item, double boxW, double fs) {
+        List<Font> faces = sized(faces(item.path("font").asText("")), fs);
+        List<String> lines = wrap(item.path("text").asText(""), s -> width(s, faces), boxW);
+        double lh = fs * 1.35;
+        int tw = (int) Math.ceil(boxW), th = (int) Math.ceil(lh * lines.size());
+        BufferedImage tile = new BufferedImage(Math.max(1, tw), Math.max(1, th), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = tile.createGraphics();
+        hints(g);
+        g.setColor(colorOf(item.path("color").asText("")));
+        double base = baseline(faces.get(0), lh);
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line.isEmpty()) {
+                continue;
+            }
+            TextLayout tl = layout(line, faces);
+            tl.draw(g, (float) ((boxW - tl.getVisibleAdvance()) / 2.0), (float) (i * lh + base));
+        }
+        g.dispose();
+        return new Tile(tile, 0, 0);
+    }
+
+    /** 그 자리에서 줄을 나눈 결과 — 검사가 화면의 줄과 견준다. */
+    List<String> plainLines(JsonNode item, double boxW, double fs) {
+        List<Font> faces = sized(faces(item.path("font").asText("")), fs);
+        return wrap(item.path("text").asText(""), s -> width(s, faces), boxW);
     }
 
     private static boolean dashed(String variant) {

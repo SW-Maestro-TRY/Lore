@@ -134,6 +134,7 @@ export function mountEditor(
   const FONT_KEYS = new Set(BUBBLE_FONTS.map(f => f.key).filter(Boolean));
   const fontOf = it => (FONT_KEYS.has(it.font) ? it.font : "");
   const fontAttr = it => (fontOf(it) ? ` data-font="${fontOf(it)}"` : "");
+  const textColor = it => (/^#[0-9a-f]{6}$/.test(it.color || "") ? it.color : "#111111");
 
   const STICKERS = ["💦", "❤️", "✨", "💢", "❗", "❓", "🌟", "🎵", "⚡", "💀", "😳", "🔥"];
   /* 루 고래 스티커(#548) — 글자 대신 그림. 「lou:파일 이름」으로 저장하고, 굽는 쪽(BubbleArtist)도
@@ -920,7 +921,10 @@ export function mountEditor(
           ? (isLou(it.text)
             ? `<div class="stk stk-lou" style="font-size:${it.size * 2.2}px"><img src="${louSrc(it.text)}" alt="" draggable="false"></div>`
             : `<div class="stk" style="font-size:${it.size * 2.2}px">${it.text}</div>`)
-          : `<div class="sfx" style="font-size:${it.size * 2}px"${ed}>${esc(it.text)}</div>`;
+          : it.type === "text"
+            /* 글자만(그리기 탭의 글자 도구) — 말풍선 없이. 굽는 쪽(BubbleArtist.plain)과 같은 규칙으로 줄을 나눈다. */
+            ? `<div class="txt"${fontAttr(it)} style="font-size:${it.size}px;color:${textColor(it)}"${ed}>${esc(it.text)}</div>`
+            : `<div class="sfx" style="font-size:${it.size * 2}px"${ed}>${esc(it.text)}</div>`;
     return `<div class="item ${sel && sel.id === it.id ? "sel" : ""}" data-id="${it.id}"
       data-type="${it.type}"
       style="left:${it.x}%; top:${it.y}%; width:${it.w}%; transform:rotate(${it.rot}deg)">
@@ -1060,7 +1064,7 @@ export function mountEditor(
      부르는 자리라, 여기서 항목을 통째로 새로 그리면 끌던 손을 놓치게 된다.
      배수는 itemHTML 이 처음 심는 것과 같아야 한다. */
   function paintFont(el, it) {
-    const t = $(".bub, .stk, .sfx", el);
+    const t = $(".bub, .stk, .sfx, .txt", el);
     if (!t) return;
     const mul = it.type === "sticker" ? 2.2 : it.type === "sfx" ? 2 : 1;
     t.style.fontSize = `${it.size * mul}px`;
@@ -1145,9 +1149,11 @@ export function mountEditor(
        고른 것을 **다시 한 번** 누르면 커서가 선다. 한 번에 바로 서게 하면 옮기려고
        짚었을 뿐인데 글쓰기로 들어가서, 그때부터 끄는 것이 글자 고르기가 된다.
        두 번 누르는 것은 파일 이름을 고칠 때와 같은 규칙이라 배울 것이 없다. */
+    let editBefore = null;
     function enterEdit() {
       if (!text || el.classList.contains("editing")) return;
       el.classList.add("editing");
+      editBefore = el.dataset.type === "text" ? snap(no) : null;
       text.contentEditable = "plaintext-only";
       text.focus();
       const r = document.createRange();
@@ -1168,6 +1174,8 @@ export function mountEditor(
       // 잡으려고 처음 짚었을 뿐인데 글쓰기로 들어가면 안 된다.
       const again = !!(sel && sel.id === id) && !ev.target.classList.contains("handle");
       let moved = false;
+      // 글자(그리기 탭)는 되돌리기가 된다 — 옮기거나 크기·기울기를 바꿨을 때만 남긴다
+      const before = el.dataset.type === "text" ? snap(no) : null;
       ev.preventDefault(); pick();
       const it = sc(no).items.find(i => i.id === id);
       const box = wrap.getBoundingClientRect();
@@ -1245,6 +1253,7 @@ export function mountEditor(
         el.style.left = `${it.x}%`; el.style.top = `${it.y}%`; el.style.width = `${it.w}%`;
       };
       const up = () => {
+        if (before && JSON.stringify(before.texts) !== JSON.stringify(snap(no).texts)) pushHist(no, before);
         el.classList.remove("dragging"); paintShape(el); save(); paintProps();
         // 끌지 않고 그냥 누른 것이면 글을 고치러 들어간다.
         if (again && !moved) enterEdit();
@@ -1269,6 +1278,8 @@ export function mountEditor(
         el.classList.remove("editing");
         text.contentEditable = "false";
         const it = sc(no).items.find(i => i.id === id);
+        if (editBefore && editBefore.texts.find(t => t.id === id)?.text !== text.innerText) pushHist(no, editBefore);
+        editBefore = null;
         // 글을 다 지우면 그 요소는 굽는 쪽에서 버려진다(clean_item). 화면에서만
         // 남아 있으면 구운 뒤에 사라져서 놀란다 — 여기서 같이 지운다.
         if (it && !text.innerText.trim()) {
@@ -1395,27 +1406,69 @@ export function mountEditor(
 
   /* ---- 바꾸기 · 되돌리기 ---- */
 
-  function changeStrokes(no, next) {
-    const st = sc(no);
-    (paintUndo[no] = paintUndo[no] || []).push(strokesOf(no).slice());
+  /* 되돌리기는 이 장의 「그린 선 + 글자」를 한 덩어리로 뜬다 — 그리기 탭에서 한 일은 순서대로 되돌아간다.
+     말풍선·스티커는 여기 안 든다(원래 되돌리기가 없다). */
+  function snap(no) {
+    return {
+      strokes: strokesOf(no).slice(),
+      texts: sc(no).items.filter(i => i.type === "text").map(i => ({ ...i })),
+    };
+  }
+  function pushHist(no, before = snap(no)) {
+    (paintUndo[no] = paintUndo[no] || []).push(before);
     if (paintUndo[no].length > 100) paintUndo[no].shift();
     paintRedo[no] = [];
-    st.paint = { strokes: next };
+    paintToolsState();
+  }
+  function restore(no, to) {
+    const st = sc(no), cur = snap(no);
+    if (JSON.stringify(cur.texts) !== JSON.stringify(to.texts)) {
+      st.items = st.items.filter(i => i.type !== "text").concat(to.texts.map(i => ({ ...i })));
+      if (sel && sel.sceneNo === no && !st.items.some(i => i.id === sel.id)) sel = null;
+      save(); paintItems(no);
+    }
+    if (JSON.stringify(cur.strokes) !== JSON.stringify(to.strokes)) {
+      st.paint = { strokes: to.strokes };
+      paintChanged(no);
+    } else paintToolsState();
+  }
+  function changeStrokes(no, next) {
+    pushHist(no);
+    sc(no).paint = { strokes: next };
     paintChanged(no);
   }
   function undoPaint(no = activeScene) {
     const u = paintUndo[no];
     if (!u || !u.length) return;
-    (paintRedo[no] = paintRedo[no] || []).push(strokesOf(no).slice());
-    sc(no).paint = { strokes: u.pop() };
-    paintChanged(no);
+    (paintRedo[no] = paintRedo[no] || []).push(snap(no));
+    restore(no, u.pop());
   }
   function redoPaint(no = activeScene) {
     const r = paintRedo[no];
     if (!r || !r.length) return;
-    (paintUndo[no] = paintUndo[no] || []).push(strokesOf(no).slice());
-    sc(no).paint = { strokes: r.pop() };
-    paintChanged(no);
+    (paintUndo[no] = paintUndo[no] || []).push(snap(no));
+    restore(no, r.pop());
+  }
+
+  /* 글자 도구 — 짚은 자리에 글자를 놓고 바로 고쳐 쓰게 한다. 놓은 뒤에는 말풍선과 같은 손잡이로
+     옮기고 키우고, 막대(ᴀ⁻ ᴀ⁺ · 가 · 복제 · 삭제)로 크기·글꼴을 바꾼다. 색은 그리기 탭의 색. */
+  function addText(no, u, v) {
+    const st = sc(no);
+    pushHist(no);
+    const w = 36;
+    const it = {
+      id: `i${++uid}`, type: "text", variant: "", text: tr("글자"),
+      x: Math.max(0, Math.min(100 - w, u * 100 - w / 2)), y: Math.max(0, Math.min(96, v * 100 - 2)),
+      w, size: 20, rot: 0, tail: "none", tx: 22, ty: 152, color: paintColor,
+    };
+    st.items.push(it); save();
+    sel = { sceneNo: no, id: it.id };
+    paintItems(no);
+    const el = $(`#scene-${no} .item[data-id="${it.id}"]`);
+    el?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    // 자리표 글을 통째로 골라 둔다 — 바로 치면 바뀐다
+    const t = el && $("[data-edit]", el);
+    if (t) { const r = document.createRange(); r.selectNodeContents(t); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); }
   }
   function paintChanged(no) {
     paintCanvas(no);
@@ -1507,10 +1560,12 @@ export function mountEditor(
     brush: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5 19.5 9.5 10 19c-1.4 1.4-4.3 1.6-6 1 .6-1.7.4-4.2 1.5-5.5z"/><path d="m13 6 5 5"/></svg>`,
     eraser: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-3.5-3.5a2 2 0 0 1 0-2.8L13.7 4.5a2 2 0 0 1 2.8 0l3 3a2 2 0 0 1 0 2.8L10 20h10"/><path d="m8.5 9.5 6 6"/></svg>`,
     picker: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>`,
+    text: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6V4.5h14V6"/><path d="M12 4.5v15"/><path d="M9 19.5h6"/></svg>`,
     undo: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>`,
     redo: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>`,
   };
-  const TOOL_NAMES = { brush: "붓", eraser: "지우개", picker: "스포이드" };
+  const TOOL_NAMES = { brush: "붓", eraser: "지우개", text: "글자", picker: "스포이드" };
+  let toolBeforePick = "brush";
 
   function toolBtn(t, withLabel) {
     return `<button type="button" class="pt-tool" data-paint-tool="${t}" aria-pressed="false" title="${esc(tr(TOOL_NAMES[t]))}" aria-label="${esc(tr(TOOL_NAMES[t]))}">${ICONS[t]}${withLabel ? `<span>${esc(tr(TOOL_NAMES[t]))}</span>` : ""}</button>`;
@@ -1518,7 +1573,7 @@ export function mountEditor(
 
   /* 그림 위에 떠 있는 줄 — 그리기 모드 표시이자, 폰에서 서랍을 닫고도 도구를 바꾸는 자리. */
   function paintBarHTML() {
-    return toolBtn("brush") + toolBtn("eraser") + toolBtn("picker") +
+    return toolBtn("brush") + toolBtn("eraser") + toolBtn("text") + toolBtn("picker") +
       `<span class="pt-sep"></span>` +
       `<button type="button" class="pt-color" data-paint-act="colors" title="${esc(tr("색"))}" aria-label="${esc(tr("색"))}"><i data-paint-swatch></i></button>` +
       `<button type="button" class="pt-size" data-paint-act="size" title="${esc(tr("굵기"))}" aria-label="${esc(tr("굵기"))}"><i data-paint-dot></i></button>` +
@@ -1530,7 +1585,7 @@ export function mountEditor(
   /* 서랍 「그리기」 갈래 — 도구 · 색 · 굵기 · 되돌리기 · 이 장 지우기. */
   function paintPanelHTML() {
     return `<div class="paint-panel">
-      <div class="pp-row pp-tools">${toolBtn("brush", true)}${toolBtn("eraser", true)}${toolBtn("picker", true)}</div>
+      <div class="pp-row pp-tools">${toolBtn("brush", true)}${toolBtn("eraser", true)}${toolBtn("text", true)}${toolBtn("picker", true)}</div>
       <p class="pp-lead">${esc(tr("색"))}</p>
       <div class="pp-colors">${PAINT_COLORS.map(c =>
         `<button type="button" class="pp-swatch" data-paint-color="${c}" style="--c:${c}" aria-label="${c}" aria-pressed="false"></button>`).join("")}
@@ -1557,7 +1612,7 @@ export function mountEditor(
     const t = e.target.closest("[data-paint-tool]");
     if (t) { setPaintTool(t.dataset.paintTool); return; }
     const c = e.target.closest("[data-paint-color]");
-    if (c) { setPaintColor(c.dataset.paintColor); if (paintTool !== "brush") setPaintTool("brush"); return; }
+    if (c) { setPaintColor(c.dataset.paintColor); if (paintTool === "eraser" || paintTool === "picker") setPaintTool("brush"); return; }
     const z = e.target.closest("[data-paint-size]");
     if (z) { paintSize = Number(z.dataset.paintSize) || 0; rememberBrush(); paintToolsState(); return; }
     const a = e.target.closest("[data-paint-act]");
@@ -1572,6 +1627,9 @@ export function mountEditor(
   }
 
   function setPaintTool(t) {
+    if (t === "picker" && paintTool !== "picker") toolBeforePick = paintTool;
+    // 글자를 고른 채로 붓·지우개로 가면 막대가 그림을 가린다 — 고르기를 푼다(스포이드는 그 글자 색을 바꾸러 가는 길이라 둔다)
+    if (t !== "text" && t !== "picker" && sel) clearSel();
     paintTool = TOOL_NAMES[t] ? t : "brush";
     const root = document.querySelector(".ed");
     if (root && painting) root.dataset.brushTool = paintTool;
@@ -1581,6 +1639,13 @@ export function mountEditor(
     if (!/^#[0-9a-f]{6}$/i.test(c)) return;
     paintColor = c.toLowerCase();
     rememberBrush();
+    // 고른 글자가 있으면 그 글자 색도 바꾼다(스포이드로 고른 색 포함)
+    const it = findItem();
+    if (it && it.type === "text" && it.color !== paintColor) {
+      pushHist(sel.sceneNo);
+      it.color = paintColor;
+      save(); paintItems(sel.sceneNo);
+    }
     paintToolsState();
   }
 
@@ -1643,7 +1708,8 @@ export function mountEditor(
   function finishPick(d) {
     const hex = "#" + [d[0], d[1], d[2]].map(n => n.toString(16).padStart(2, "0")).join("");
     setPaintColor(hex);
-    setPaintTool("brush");     // 고른 색으로 바로 칠한다 — 스포이드는 한 번 쓰는 도구다
+    // 스포이드는 한 번 쓰는 도구다 — 고르기 전 도구(붓·글자)로 돌아가 고른 색으로 바로 쓴다
+    setPaintTool(toolBeforePick === "text" ? "text" : "brush");
   }
 
   /* ---- 그리기 손놀림 ---- */
@@ -1652,7 +1718,7 @@ export function mountEditor(
     const cv = $("[data-paint]", sceneEl);
     if (!cv) return;
     const touches = new Map();       // 손가락 둘이면 그리지 않고 화면을 내린다
-    let cur = null, panY = null, raf = 0, lastX = 0, lastY = 0;
+    let cur = null, panY = null, raf = 0, lastX = 0, lastY = 0, placeAt = null;
 
     const toUnit = (e, r) => [
       Math.max(0, Math.min(PAINT_UNIT, Math.round((e.clientX - r.left) / r.width * PAINT_UNIT))),
@@ -1670,7 +1736,7 @@ export function mountEditor(
       if (e.pointerType === "touch") touches.set(e.pointerId, { y: e.clientY });
       if (touches.size >= 2) {
         // 두 번째 손가락 — 그리던 선은 버리고 화면 내리기로
-        cur = null; paintCanvas(no);
+        cur = null; placeAt = null; paintCanvas(no);
         panY = midY();
         return;
       }
@@ -1679,6 +1745,11 @@ export function mountEditor(
       if (!r.width || !r.height) return;
       const [x, y] = toUnit(e, r);
       if (paintTool === "picker") { pickColor(no, x / PAINT_UNIT, y / PAINT_UNIT, cv); return; }
+      if (paintTool === "text") {
+        // 고른 글자가 있으면 이번 누름은 놓기가 아니라 고르기 풀기다(바깥 누름이 풀어 준다)
+        placeAt = sel ? null : { x, y, id: e.pointerId };
+        return;
+      }
       const strokes = strokesOf(no);
       if (strokes.length >= PAINT_MAX_STROKES || pointsOf(strokes) >= PAINT_MAX_POINTS) {
         toast(tr("이 장에는 더 그릴 수 없어요 — 되돌리거나 지운 뒤 그려 주세요"));
@@ -1714,6 +1785,13 @@ export function mountEditor(
     const end = e => {
       touches.delete(e.pointerId);
       if (touches.size < 2) panY = null;
+      /* 글자는 손을 뗄 때 놓는다 — 누르는 순간 글 칸에 커서를 세우면 이어지는 누름 처리가 초점을 도로 가져간다.
+         두 손가락으로 화면을 내린 것이면 놓지 않는다. */
+      if (placeAt && placeAt.id === e.pointerId) {
+        const at = placeAt; placeAt = null;
+        if (e.type === "pointerup" && painting && paintTool === "text") addText(no, at.x / PAINT_UNIT, at.y / PAINT_UNIT);
+        return;
+      }
       if (!cur) return;
       const done = cur; cur = null;
       if (e.type === "pointercancel") { paintCanvas(no); return; }
@@ -1867,7 +1945,7 @@ export function mountEditor(
           ` data-font-pick="${f.key}"${f.key ? ` data-font="${f.key}"` : ""}>${tr(f.label)}</button>`).join("");
     }
     // 「가」는 지금 글꼴로 보인다 — 무엇을 누르는 단추인지 글자 모양이 말해 준다.
-    const fontBtn = it.type === "bubble"
+    const fontBtn = it.type === "bubble" || it.type === "text"
       ? `<button type="button" class="ib ib-font" data-act="font"${fontAttr(it)} title="${tr("글꼴")}">가</button>`
       : "";
     return [
@@ -1942,7 +2020,7 @@ export function mountEditor(
     // 글꼴 줄을 열고 닫는다(barHTML). 말풍선을 다시 고르면 저절로 닫힌다(paintProps).
     font: () => {
       const it = findItem();
-      if (it?.type !== "bubble") return;
+      if (it?.type !== "bubble" && it?.type !== "text") return;
       fontBarFor = it.id; paintProps();
     },
     fontBack: () => { fontBarFor = null; paintProps(); },
@@ -1951,6 +2029,7 @@ export function mountEditor(
        옮길 수 있게). 같은 꼴의 말풍선을 한 장에 여러 개 늘어놓을 때 쓴다(제보 「말풍선 복사」). */
     dup: () => {
       const it = findItem(); if (!it) return;
+      if (it.type === "text") pushHist(sel.sceneNo);
       const no = sel.sceneNo, st = sc(no);
       const copy = { ...it, id: `i${++uid}`, x: Math.min(90, it.x + 3), y: Math.min(94, it.y + 4) };
       st.items.push(copy);
@@ -1959,6 +2038,7 @@ export function mountEditor(
     },
     del: () => {
       const it = findItem(); if (!it) return;
+      if (it.type === "text") pushHist(sel.sceneNo);
       const st = sc(sel.sceneNo);
       st.items = st.items.filter(i => i.id !== it.id);
       const no = sel.sceneNo; sel = null;
@@ -1968,6 +2048,7 @@ export function mountEditor(
 
   function bumpSize(d) {
     const it = findItem(); if (!it) return;
+    if (it.type === "text") pushHist(sel.sceneNo);
     it.size = Math.max(6, Math.min(70, it.size + d));
     save(); paintItems(sel.sceneNo);
   }
@@ -1975,6 +2056,7 @@ export function mountEditor(
   /* 글꼴 — 기본은 값을 두지 않는다. 값이 없는 옛 항목도 기본 글꼴로 읽히므로 지금 작품이 그대로다. */
   function setFont(key) {
     const it = findItem(); if (!it) return;
+    if (it.type === "text") pushHist(sel.sceneNo);
     if (FONT_KEYS.has(key)) it.font = key;
     else delete it.font;
     save(); paintItems(sel.sceneNo);
@@ -2364,7 +2446,9 @@ export function mountEditor(
     on(window, "resize", followScroll);
     on(document, "pointerdown", e => {
       if (!sel) return;
-      if (e.target.closest(".item, .item-bar, .dock-item, #edDock")) return;
+      if (e.target.closest(".item, .item-bar, .dock-item, #edDock, .paint-bar")) return;
+      // 스포이드로 고른 글자의 색을 바꾸는 중이다 — 그림을 짚어도 고른 글자를 놓지 않는다
+      if (painting && paintTool === "picker") return;
       clearSel();
     });
     $("#showOverlay").addEventListener("change", () =>

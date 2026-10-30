@@ -218,6 +218,7 @@ const dict: Dict = {
   "붓": { en: "Brush", ja: "筆", zh: "画笔" },
   "지우개": { en: "Eraser", ja: "消しゴム", zh: "橡皮擦" },
   "스포이드": { en: "Eyedropper", ja: "スポイト", zh: "吸管" },
+  "글자": { en: "Text", ja: "文字", zh: "文字" },
   "색": { en: "Color", ja: "色", zh: "颜色" },
   "굵기": { en: "Size", ja: "太さ", zh: "粗细" },
   "되돌리기": { en: "Undo", ja: "元に戻す", zh: "撤销" },

@@ -30,7 +30,8 @@ public class OverlayStore {
 
     private static final Logger log = LoggerFactory.getLogger(OverlayStore.class);
 
-    static final Set<String> TYPES = Set.of("bubble", "sticker", "sfx");
+    /** 얹는 것의 종류. {@code text} 는 말풍선 없이 그림 위에 놓는 글자(편집실 「그리기」의 글자 도구). */
+    static final Set<String> TYPES = Set.of("bubble", "sticker", "sfx", "text");
     static final List<String> VARIANTS =
             List.of("normal", "shout", "whisper", "thought", "narration", "flash");
     /** 꼬리가 달리는 종류. 나레이션·회상에는 애초에 꼬리가 없다. */
@@ -234,8 +235,13 @@ public class OverlayStore {
         /* 말풍선 글꼴 — 고를 수 있는 것만 남긴다. 기본 글꼴은 값을 두지 않으므로, 값이 없는 옛
            항목도 지금처럼 기본 글꼴로 굽힌다. */
         String font = raw.path("font").asText("").trim().toLowerCase();
-        if ("bubble".equals(kind) && BubbleArtist.FONTS.containsKey(font)) {
+        if (("bubble".equals(kind) || "text".equals(kind)) && BubbleArtist.FONTS.containsKey(font)) {
             out.put("font", font);
+        }
+        /* 글자 색 — 글자 도구만 쓴다. 모르는 값은 먹색. */
+        if ("text".equals(kind)) {
+            String color = raw.path("color").asText("").trim().toLowerCase();
+            out.put("color", color.matches("^#[0-9a-f]{6}$") ? color : "#111111");
         }
         /* 꼬리 끝은 사람이 끌어다 놓은 자리다. 풍선 크기에 대한 %(가로·세로)라
            그림 크기가 달라져도 같은 곳을 가리킨다. 안 보내면 옛 규칙(왼쪽/

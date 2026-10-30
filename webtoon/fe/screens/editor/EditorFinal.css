@@ -367,3 +367,27 @@
   .wt .wt-ed.is-painting .wt-ed-dockopen { display: none; }
   .wt .wt-ed .paint-panel .pp-colors { grid-template-columns: repeat(7, minmax(0, 40px)); }
 }
+
+/* 글자 도구 — 말풍선 없이 그림 위에 글자만. 줄을 나누는 규칙은 말풍선 글(.bub)과 같고 안쪽 여백이 없다.
+   굽는 쪽(BubbleArtist.plain)이 같은 폭 · 같은 줄 높이 · 가운데 맞춤으로 그린다. */
+.wt .wt-ed .txt {
+  width: 100%; box-sizing: border-box; padding: 0; margin: 0;
+  text-align: center; line-height: 1.35; font-weight: 600;
+  word-break: keep-all; overflow-wrap: break-word; white-space: pre-wrap;
+  font-family: "LORE Bubble Base", var(--font-ui);
+}
+.wt .wt-ed .txt[data-font="maruburi"] { font-family: "LORE Bubble MaruBuri", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed .txt[data-font="suit"] { font-family: "LORE Bubble SUIT", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed .txt[data-font="jua"] { font-family: "LORE Bubble Jua", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed .item[data-type="text"]:not(.sel) { outline: 1px dashed transparent; }
+.wt .wt-ed.is-painting[data-brush-tool="text"] .paint-layer { cursor: text; }
+/* 글자 도구일 때만 글자를 잡고 옮긴다. 말풍선은 그대로 안 잡힌다. */
+.wt .wt-ed.is-painting[data-brush-tool="text"] .overlay .item[data-type="text"],
+.wt .wt-ed.is-painting[data-brush-tool="text"] .overlay .item-bar,
+.wt .wt-ed.is-painting[data-brush-tool="picker"] .overlay .item-bar { pointer-events: auto; }
+.wt .wt-ed.is-painting[data-brush-tool="text"] .overlay .item[data-type="text"]:not(.sel) { outline: 1px dashed rgba(255, 255, 255, 0.7); outline-offset: 2px; }
+@media (max-width: 879px) {
+  .wt .wt-ed .paint-bar button { min-width: 36px; }
+  .wt .wt-ed .paint-bar .pt-sep { margin: 0 2px; }
+  .wt .wt-ed .paint-bar .pt-done { padding: 0 11px; }
+}
