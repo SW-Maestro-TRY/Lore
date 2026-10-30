@@ -453,8 +453,8 @@ public class JobRunner {
                     resumeAfterSheet(jobId);
                     return;
                 }
-                store.awaiting(jobId, back,
-                        back == JobStatus.AWAITING_SCENES ? JobStage.PAGES : JobStage.SHEET);
+                store.awaiting(jobId, back, back == JobStatus.AWAITING_SCENES ? JobStage.PAGES
+                        : back == JobStatus.AWAITING_PICK ? JobStage.STORY : JobStage.SHEET);
             } catch (Exception e) {
                 fail(jobId, e);
             }
@@ -691,12 +691,25 @@ public class JobRunner {
     /** 인물 카드에서 고칠 수 있는 칸(#548). 이 밖의 칸은 무시한다. */
     static final List<String> PERSON_FIELDS =
             List.of("name", "role", "look", "personality", "gap", "voice", "line", "tie", "wants");
+    /** 주인공 카드가 늘 받는 칸. 그 밖의 칸(역할·관계 등)은 카드에 이미 있을 때만 — 주인공을 바꿔 조연 카드가 올라온 경우다. */
+    private static final List<String> HERO_FIELDS = List.of("name", "look", "personality", "voice", "line");
+    /** 조연 카드가 늘 받는 칸. 성격은 카드에 이미 있을 때만 — 주인공 자리를 내준 사람이다. */
+    private static final List<String> CAST_FIELDS = List.of("name", "role", "look", "gap", "voice", "line", "tie", "wants");
+
+    /** 인물 카드를 고친 결과 — 이름이 바뀐 조연(조연 시트 줄도 옮긴다), 이야기 글이 바뀌었나. */
+    public record PersonSaved(Map<String, String> renamed, boolean story) {
+        static final PersonSaved NONE = new PersonSaved(Map.of(), false);
+    }
 
     /**
      * 인물 카드 하나를 고친다(#548) — {@code who} 가 "hero" 면 persona.json, 숫자면 cast.json 의
-     * 그 번째(0부터). 보낸 칸만 덮는다. 조연 이름이 바뀌면 이미 뽑은 시트 파일도 새 이름으로 옮긴다.
+     * 그 번째(0부터). 보낸 칸만 덮는다.
+     *
+     * <p>이름이 바뀌면 작품 폴더의 이야기·장면·인물 글 속 이름도 새 이름으로 바꾼다({@link PersonFiles#rename}).
+     * 이름만 바꾸고 글을 두면 장면 나누기·장 그림이 옛 이름과 새 이름을 두 사람으로 읽는다. 주인공이면
+     * {@code input.json} 의 이름도 바꾼다 — 장면·그림이 주인공을 거기서 찾는다.
      */
-    public void savePerson(String runId, String who, Map<String, Object> fields) throws IOException {
+    public PersonSaved savePerson(String runId, String who, Map<String, Object> fields) throws IOException {
         Map<String, Object> clean = new java.util.LinkedHashMap<>();
         for (String k : PERSON_FIELDS) {
             if (fields != null && fields.get(k) != null) {
@@ -709,10 +722,35 @@ public class JobRunner {
             if (persona == null) {
                 throw new IOException("persona.json 이 없습니다");
             }
-            clean.remove("role");
-            persona.putAll(clean);
-            mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("persona.json").toFile(), persona);
-            return;
+            clean.keySet().removeIf(k -> !HERO_FIELDS.contains(k) && !persona.containsKey(k));
+            String oldName = String.valueOf(persona.getOrDefault("name", "")).trim();
+            String newName = String.valueOf(clean.getOrDefault("name", oldName)).trim();
+            if (newName.isEmpty()) {
+                clean.remove("name");
+                newName = oldName;
+            }
+            PersonSaved saved = PersonSaved.NONE;
+            if (!newName.equals(oldName)) {
+                String to = newName;
+                if (castOf(runId).stream().anyMatch(c -> to.equals(String.valueOf(c.get("name")).trim()))) {
+                    throw new IllegalArgumentException("다른 인물과 이름이 같아요");
+                }
+                Map<String, Object> input = inputOf(dir);
+                List<String> olds = new ArrayList<>(List.of(oldName));
+                String typed = String.valueOf(input.getOrDefault("name", "")).trim();
+                if (!typed.isEmpty() && !olds.contains(typed)) {
+                    olds.add(typed);         // 주인공 카드 이름과 처음 적은 이름이 달랐다 — 둘 다 새 이름으로
+                }
+                PersonFiles.Renamed r = PersonFiles.rename(dir, mapper, olds, newName);
+                Map<String, Object> fresh = inputOf(dir);
+                fresh.put("name", newName);
+                mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("input.json").toFile(), fresh);
+                saved = new PersonSaved(r.cast(), r.story());
+            }
+            Map<String, Object> now = personaOf(runId);
+            now.putAll(clean);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("persona.json").toFile(), now);
+            return saved;
         }
         int i;
         try {
@@ -725,20 +763,64 @@ public class JobRunner {
             throw new IllegalArgumentException("그런 인물이 없습니다");
         }
         Map<String, Object> one = new java.util.LinkedHashMap<>(cast.get(i));
-        String oldName = String.valueOf(one.getOrDefault("name", ""));
-        clean.remove("personality");
-        one.putAll(clean);
-        cast.set(i, one);
-        mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("cast.json").toFile(), cast);
-        String newName = String.valueOf(one.getOrDefault("name", ""));
-        if (!newName.isBlank() && !newName.equals(oldName)) {
-            Path sheets = dir.resolve("sheets");
-            Path from = sheets.resolve(RunArt.castSheetStem(oldName) + ".png");
-            Path to = sheets.resolve(RunArt.castSheetStem(newName) + ".png");
-            if (Files.exists(from) && !Files.exists(to)) {
-                Files.move(from, to);
-            }
+        clean.keySet().removeIf(k -> !CAST_FIELDS.contains(k) && !one.containsKey(k));
+        String oldName = String.valueOf(one.getOrDefault("name", "")).trim();
+        String newName = String.valueOf(clean.getOrDefault("name", oldName)).trim();
+        if (newName.isEmpty()) {
+            clean.remove("name");
+            newName = oldName;
         }
+        PersonSaved saved = PersonSaved.NONE;
+        if (!newName.equals(oldName)) {
+            String to = newName;
+            Map<String, Object> persona = personaOf(runId);
+            boolean taken = (persona != null && to.equals(String.valueOf(persona.get("name")).trim()))
+                    || cast.stream().anyMatch(c -> to.equals(String.valueOf(c.get("name")).trim()));
+            if (taken) {
+                throw new IllegalArgumentException("다른 인물과 이름이 같아요");
+            }
+            PersonFiles.Renamed r = PersonFiles.rename(dir, mapper, List.of(oldName), newName);
+            Map<String, String> moved = new java.util.LinkedHashMap<>(r.cast());
+            /* 글 속에서 못 바꾼 경우(이름 뒤에 다른 글자가 붙어 있는 등)에도 이 사람 카드와 시트는 새 이름으로 */
+            List<Map<String, Object>> fresh = new ArrayList<>(castOf(runId));
+            if (i < fresh.size()) {
+                String after = String.valueOf(fresh.get(i).getOrDefault("name", "")).trim();
+                if (!after.equals(newName)) {
+                    PersonFiles.moveCastSheet(dir, after, newName);
+                    moved.remove(oldName);
+                    moved.put(oldName, newName);
+                }
+            }
+            cast = fresh;
+            saved = new PersonSaved(moved, r.story());
+        }
+        Map<String, Object> now = new java.util.LinkedHashMap<>(cast.get(i));
+        now.putAll(clean);
+        cast.set(i, now);
+        mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("cast.json").toFile(), cast);
+        return saved;
+    }
+
+    /**
+     * cast 의 {@code i} 번째 사람을 주인공으로(Tosisusae 피드백). 카드·입력·시트를 두 사람 사이에서 맞바꾼다
+     * ({@link PersonFiles#swapLead}). 새 주인공의 시트가 없으면 {@code true} — 부르는 쪽이 다시 그린다.
+     */
+    public boolean swapLead(String runId, int i) throws IOException {
+        return PersonFiles.swapLead(runDir(runId), mapper, i);
+    }
+
+    /** 이 작품이 연재의 2화 이후인가 — 앞 화에 이미 나온 주인공은 이름·자리를 바꾸지 않는다. */
+    public boolean isContinuation(String runId) {
+        return runId != null && !runId.isBlank() && Files.isRegularFile(runDir(runId).resolve("continuation.json"));
+    }
+
+    private Map<String, Object> inputOf(Path dir) throws IOException {
+        Path file = dir.resolve("input.json");
+        if (!Files.isRegularFile(file)) {
+            return new java.util.LinkedHashMap<>();
+        }
+        return mapper.readValue(file.toFile(),
+                new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, Object>>() { });
     }
 
     /** 사람이 인물 단계에 답했다(#534) — n 번 상대를 골랐거나(1~), 이대로 진행(0). */

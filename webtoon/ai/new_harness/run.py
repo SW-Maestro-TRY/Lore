@@ -1015,6 +1015,9 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
 
 CAST_FIELDS = (("gender", "성별·나이대"), ("look", "생김새·인상"), ("gap", "갭"), ("voice", "말투"),
                ("line", "대표 대사"), ("tie", "주인공과의 얽힘"), ("wants", "원하거나 숨기는 것"))
+# 인물 단계는 이 둘을 안 쓴다. 주인공 자리를 내준 사람(인물 확인의 「주인공 바꾸기」)의 카드에만 있다 —
+# 없으면 줄이 안 생겨서 예전 프롬프트와 같다.
+CAST_FIELDS += (("personality", "성격"), ("situation", "처지·관계·설정"))
 
 
 def _cast_lines(c: dict) -> list[str]:

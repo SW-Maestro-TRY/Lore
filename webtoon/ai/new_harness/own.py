@@ -238,8 +238,11 @@ def persona_lines(p: dict | None) -> list[str]:
     if not p:
         return []
     out = ["", "## 주인공 카드 — 적힌 것으로 세운 것이다", "", f"주인공: {str(p.get('name')).strip()}"]
-    for key, label in (("gender", "성별"), ("look", "생김새·인상"), ("personality", "성격"),
-                       ("situation", "처지·관계·설정"), ("voice", "말투")):
+    # 역할·갭·관계·바라는 것은 주인공 카드에 원래 없다. 인물 확인에서 다른 인물을 주인공으로 바꾸면 그 사람
+    # 카드가 그대로 올라와 이 칸들이 생긴다 — 없으면 줄이 안 생겨서 예전 프롬프트와 같다.
+    for key, label in (("gender", "성별"), ("role", "역할"), ("look", "생김새·인상"), ("personality", "성격"),
+                       ("gap", "갭"), ("situation", "처지·관계·설정"), ("tie", "관계"),
+                       ("wants", "원하거나 숨기는 것"), ("voice", "말투")):
         v = str(p.get(key) or "").strip()
         if v:
             out.append(f"- {label}: {v}")
