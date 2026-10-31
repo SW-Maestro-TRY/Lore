@@ -208,7 +208,10 @@ def story_input(run_dir, char, note=""):
 def stage_story(run_dir, char, dry_run, note="", lang="ko"):
     import run as R
     import llm
-    prompt = R.compose("series/story_prompt", story_input(run_dir, char, note), lang=lang)
+    block = story_input(run_dir, char, note)
+    if R.co_check_line(char):
+        block = block.rstrip("\n") + "\n\n## 다 쓰고 나서 다시 본다\n" + "\n".join(R.co_check_line(char)) + "\n"
+    prompt = R.compose("series/story_prompt", block, lang=lang)
     R.write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
         return None

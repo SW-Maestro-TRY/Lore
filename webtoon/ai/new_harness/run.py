@@ -286,6 +286,15 @@ def co_input_lines(char: dict, *, card_detail: bool = True, has_story: bool = Fa
     return lines
 
 
+def co_check_line(char: dict | None) -> list[str]:
+    """이야기 입력 맨 끝의 점검 한 줄(주인공이 여럿일 때만). 한 명짜리 작품이면 [] — 프롬프트가 글자까지 그대로다.
+
+    입력 앞쪽 기준만으로는 뒤에 나오는 주인공이 빠지기 쉬워서, 모델이 더 세게 듣는 맨 뒤에 다시 둔다."""
+    if not co_protagonists(char):
+        return []
+    return ["- 주인공마다 이번 화에서 자기 행동으로 일을 바꿨는가. 한 사람이라도 그렇지 않으면 다시 짠다."]
+
+
 def co_scene_lines(char: dict | None) -> list[str]:
     """장면·나레이션·검수 입력의 「[캐릭터]」 절에 붙는 함께 주인공인 사람 한 줄씩. 한 명짜리면 []."""
     out = []
@@ -1360,6 +1369,8 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         # 여기서 따로 붙인다(캐릭터 파일을 고치면 다음 시도에도 계속 남는다).
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
                  f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
+    if co_check_line(char):
+        block += "\n\n## 다 쓰고 나서 다시 본다\n" + "\n".join(co_check_line(char))
     prompt = compose("story_prompt_seeded" if seeded else "story_prompt_one" if one else "story_prompt", block, lang=lang)
     write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:

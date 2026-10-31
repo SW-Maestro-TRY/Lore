@@ -94,6 +94,19 @@ def test_story_prompt_has_both():
     assert "우편배달부" in co_persona and "정비공" not in co_persona
 
 
+def test_story_ends_with_check_only_when_several():
+    line = "주인공마다 이번 화에서 자기 행동으로 일을 바꿨는가"
+    d = Path(tempfile.mkdtemp())
+    runs = d / "runs"
+    _run(["--character", str(_char_json(d)), "--run-id", "many", "--one"], runs)
+    prompt = (runs / "many" / "story_prompt.txt").read_text(encoding="utf-8")
+    assert line in prompt.rstrip().splitlines()[-1]             # 맨 끝 줄
+    _run(["--character", str(_char_json(d, co=False)), "--run-id", "single", "--one"], runs)
+    assert line not in (runs / "single" / "story_prompt.txt").read_text(encoding="utf-8")
+    many, single = R.read_character(_char_json(d)), R.read_character(_char_json(d, co=False))
+    assert any(line in x for x in own.check_lines(many)) and not any(line in x for x in own.check_lines(single))
+
+
 def test_sheet_dry_run_writes_one_per_protagonist():
     d = Path(tempfile.mkdtemp())
     runs = d / "runs"
