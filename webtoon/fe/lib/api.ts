@@ -619,6 +619,8 @@ export interface RunResult {
   unsafe_pages?: number[];
   /** 그 장마다 걸린 이유(선정성·폭력·잔혹 …) — 장 번호 → 사람이 읽는 말(2026-10-27) */
   unsafe_reasons?: Record<string, string>;
+  /** 같은 이유를 코드로(sexual · violence …) — 화면이 언어마다 이름을 붙인다. 빈 목록이면 「안전 기준」 */
+  unsafe_kinds?: Record<string, string[]>;
   /** 크레딧이 모자라 아직 안 그린 장 번호들 — 한 편 값은 기본 장 수(base_pages)까지다 */
   pending_pages?: number[];
   /** 남은 장의 장면 한 줄 — 잠긴 장을 웹툰 흐름 안에서 「다음 장면」으로 보여 준다 */
@@ -670,12 +672,13 @@ export function pageUrl(runId: string, no: number, width = 1080, raw = false): s
   return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
 }
 
-export function episodeDownloadUrl(runId: string): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/episode.png`;
+/** 한 편 내려받기. plain 이면 편집실에서 얹은 것을 빼고 밑그림으로(LORE 표시는 그대로). */
+export function episodeDownloadUrl(runId: string, plain = false): string {
+  return `${BASE}/runs/${encodeURIComponent(runId)}/episode.png${plain ? "?plain=1" : ""}`;
 }
 
-export function pageDownloadUrl(runId: string, no: number): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}/download`;
+export function pageDownloadUrl(runId: string, no: number, plain = false): string {
+  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}/download${plain ? "?plain=1" : ""}`;
 }
 
 export function renameRun(runId: string, title: string): Promise<{ title: string }> {

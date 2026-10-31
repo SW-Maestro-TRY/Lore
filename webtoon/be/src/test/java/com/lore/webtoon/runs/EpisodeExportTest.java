@@ -221,4 +221,29 @@ class EpisodeExportTest {
         when(pages.keysOf(anyString())).thenReturn(new LinkedHashMap<>());
         assertThat(export.png("run-1")).isNull();
     }
+    @Test
+    @DisplayName("그림만 받기는 구운 판을 건너뛰고 밑그림을 잇는다 — 도장은 그대로 찍는다")
+    void 그림만_받기() throws IOException {
+        sheet(1, 800, 500, Color.BLACK);
+        // 구운 판(키 "9")은 흰 장 — 보통 받기는 이것을, 그림만 받기는 검은 밑그림을 써야 한다.
+        BufferedImage baked = new BufferedImage(800, 500, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = baked.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, 800, 500);
+        g.dispose();
+        sheets.put(9, baked);
+        when(bakery.keysOf(anyString())).thenReturn(new LinkedHashMap<>(Map.of(1, "9")));
+
+        BufferedImage normal = ImageIO.read(new ByteArrayInputStream(export.png("run-1")));
+        BufferedImage plain = ImageIO.read(new ByteArrayInputStream(export.png("run-1", true)));
+        BufferedImage onePlain = ImageIO.read(new ByteArrayInputStream(export.pagePng("run-1", 1, true)));
+
+        assertThat(normal.getRGB(10, 10) & 0xFFFFFF).isEqualTo(0xFFFFFF);
+        assertThat(plain.getRGB(10, 10) & 0xFFFFFF).isEqualTo(0x000000);
+        assertThat(onePlain.getRGB(10, 10) & 0xFFFFFF).isEqualTo(0x000000);
+        // 오른쪽 아래 구석에 도장이 찍혔다.
+        assertThat(painted(plain, 600, 400, 800, 500, 0x000000)).isTrue();
+        assertThat(painted(onePlain, 600, 400, 800, 500, 0x000000)).isTrue();
+    }
+
 }
