@@ -448,6 +448,21 @@ const dict: Dict = {
   "캐릭터 확인 완료": { en: "Character confirmed", ja: "キャラクター確認完了", zh: "角色确认完成" },
   "캐릭터를 그리고 있어요": { en: "Drawing the character", ja: "キャラクターを描いています", zh: "正在绘制角色" },
   "페이지 연결·인물·대사": { en: "Page flow · Characters · Dialogue", ja: "ページのつながり・人物・セリフ", zh: "页面衔接 · 人物 · 台词" },
+  /* ---- 인물 확인 — 주인공 이름 고치기 · 주인공 바꾸기(Tosisusae 피드백) ---- */
+  "관계": { en: "Relationship", ja: "関係", zh: "关系" },
+  "주인공으로": { en: "Make lead", ja: "主人公にする", zh: "设为主角" },
+  "주인공 바꾸기": { en: "Change the lead", ja: "主人公を変更", zh: "更换主角" },
+  "바꾸기": { en: "Change", ja: "変更", zh: "更换" },
+  "뽑아 둔 {name} 시트가 주인공 시트가 돼요.": { en: "The sheet you made for {name} becomes the lead's sheet.", ja: "作成済みの{name}のシートが主人公のシートになります。", zh: "已生成的 {name} 设定图会成为主角设定图。" },
+  "{name} 시트를 새로 그려요. 크레딧은 들지 않아요.": { en: "We'll draw a new sheet for {name}. No credits needed.", ja: "{name}のシートを新しく描きます。クレジットはかかりません。", zh: "将为 {name} 重新绘制设定图，不消耗积分。" },
+  "{name} 시트는 등장인물 시트로 남아요.": { en: "{name}'s sheet stays as a character sheet.", ja: "{name}のシートは登場人物のシートとして残ります。", zh: "{name} 的设定图会保留为登场人物设定图。" },
+  "이름을 적어 주세요": { en: "Please enter a name", ja: "名前を入力してください", zh: "请输入名字" },
+  "바꾸지 못했어요": { en: "Couldn't change it", ja: "変更できませんでした", zh: "未能更换" },
+  "지금 인물을 고칠 차례가 아닙니다": { en: "Characters can't be edited at this step", ja: "今は人物を直せる段階ではありません", zh: "当前步骤无法修改人物" },
+  "다른 인물과 이름이 같아요": { en: "Another character already has this name", ja: "ほかの人物と名前が同じです", zh: "与其他人物重名" },
+  "연재 중인 작품은 주인공 이름과 주인공을 바꿀 수 없어요": { en: "In a series, the lead and the lead's name can't be changed", ja: "連載中の作品は主人公や主人公の名前を変更できません", zh: "连载作品无法更换主角或修改主角名字" },
+  "캐릭터 시트를 고치는 중에는 주인공을 바꿀 수 없어요": { en: "You can't change the lead while fixing the character sheet", ja: "キャラクターシートを直している間は主人公を変更できません", zh: "修改角色设定图期间无法更换主角" },
+  "시트를 그리는 중이에요. 다 그린 뒤에 바꿔 주세요": { en: "A sheet is still being drawn. Please change it after it's done", ja: "シートを描いているところです。描き終わってから変更してください", zh: "设定图正在绘制中，请在完成后再更换" },
 };
 
 registerDict(dict);

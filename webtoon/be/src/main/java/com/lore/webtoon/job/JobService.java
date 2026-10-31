@@ -868,24 +868,109 @@ public class JobService {
         }
     }
 
-    /** 인물 카드 고치기(#548) — 이야기 확인·장면 확인 자리에서만, own 길만. */
+    /** 인물 카드를 고칠 수 있는 자리(#548) — 이야기 확인 · 시트 확인 · 장면 확인. 그림을 그리기 시작하면 못 고친다. */
+    private static final java.util.Set<JobStatus> PERSON_EDIT_OK = java.util.Set.of(
+            JobStatus.AWAITING_PICK, JobStatus.AWAITING_SHEET, JobStatus.AWAITING_SCENES);
+
+    /**
+     * 인물 카드 고치기(#548) — own 길만, {@link #PERSON_EDIT_OK} 자리에서만.
+     *
+     * <p>{@code fields} 에 {@code lead} 가 오면 그 번째 인물을 주인공으로 바꾼다(Tosisusae 피드백 「주인공을 다른
+     * 인물로 인식하고 고치기 어려워요」). 새 주인공의 시트가 없으면 주인공 시트를 그 사람 생김새로 새로 그리고
+     * 지금 자리로 돌아온다(값은 따로 안 받는다 — 처음 낸 값 안의 주인공 시트다).
+     *
+     * <p>이야기 확인 자리에서는 화면이 아직 안 보낸 본문 고침을 {@code story_title}·{@code story_body} 로 같이
+     * 보낸다. 이름을 바꾸면 본문 속 이름도 바뀌므로, 고친 본문을 먼저 적은 뒤에 바꾼다.
+     */
     public void savePerson(String publicId, String who, Map<String, Object> fields) {
         WebtoonJob job = store.byPublicId(publicId);
-        if (!job.isOwn() || (job.getStatus() != JobStatus.AWAITING_PICK && job.getStatus() != JobStatus.AWAITING_SCENES)) {
+        if (!job.isOwn() || !PERSON_EDIT_OK.contains(job.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "지금 인물을 고칠 차례가 아닙니다");
         }
-        if (fields != null) {
-            for (Object v : fields.values()) {
-                safety.checkText("webtoon-scenes", v == null ? null : v.toString());
+        Map<String, Object> rest = fields == null ? new LinkedHashMap<>() : new LinkedHashMap<>(fields);
+        boolean lead = isTrue(rest.remove("lead"));
+        Object t = rest.remove("story_title");
+        Object b = rest.remove("story_body");
+        String draftTitle = t == null ? null : t.toString();
+        String draftBody = b == null ? null : b.toString();
+        for (Object v : rest.values()) {
+            safety.checkText("webtoon-scenes", v == null ? null : v.toString());
+        }
+        safety.checkText("webtoon-scenes", draftBody, draftTitle);
+        String runId = job.getRunId();
+        boolean heroName = "hero".equals(who) && rest.get("name") != null;
+        if ((lead || heroName) && runner.isContinuation(runId)) {
+            Map<String, Object> persona = runner.personaOf(runId);
+            boolean same = !lead && persona != null
+                    && String.valueOf(persona.get("name")).trim().equals(String.valueOf(rest.get("name")).trim());
+            if (!same) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "연재 중인 작품은 주인공 이름과 주인공을 바꿀 수 없어요");
             }
         }
+        boolean drafted = job.getStatus() == JobStatus.AWAITING_PICK && (notBlank(draftBody) || notBlank(draftTitle));
+        if (drafted) {
+            runner.saveScenes(job.getId(), List.of(), draftBody, draftTitle);
+        }
         try {
-            runner.savePerson(job.getRunId(), who, fields);
+            if (lead) {
+                swapLead(job, who);
+                afterRename(job, new JobRunner.PersonSaved(Map.of(), drafted));
+                return;
+            }
+            JobRunner.PersonSaved saved = runner.savePerson(runId, who, rest);
+            afterRename(job, new JobRunner.PersonSaved(saved.renamed(), saved.story() || drafted));
         } catch (IllegalArgumentException e) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, e.getMessage());
         } catch (java.io.IOException e) {
             throw new IllegalStateException("인물을 적지 못했습니다", e);
         }
+    }
+
+    /** 주인공 바꾸기 — 시트를 그리는 중이거나 걸린 시트를 고치는 중이면 막는다. */
+    private void swapLead(WebtoonJob job, String who) throws java.io.IOException {
+        int i;
+        try {
+            i = Integer.parseInt(who);
+        } catch (NumberFormatException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 인물이 없습니다");
+        }
+        if (job.isSheetBlocked()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "캐릭터 시트를 고치는 중에는 주인공을 바꿀 수 없어요");
+        }
+        if (!runner.castSheetsPending(job.getId()).isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "시트를 그리는 중이에요. 다 그린 뒤에 바꿔 주세요");
+        }
+        boolean needsSheet = runner.swapLead(job.getRunId(), i);
+        log.info("주인공을 바꿨습니다 (job={}, cast={}, 시트 새로 그림={})", job.getPublicId(), i, needsSheet);
+        if (needsSheet) {
+            runner.redrawSheet(job.getId(), "", job.getStatus());
+        }
+    }
+
+    /** 이름이 바뀐 뒤 — 조연 시트 줄의 이름, DB 의 이야기(제목·줄거리)를 작품 폴더에 맞춘다. */
+    private void afterRename(WebtoonJob job, JobRunner.PersonSaved saved) {
+        saved.renamed().forEach((from, to) -> castSheets.findByJobIdOrderByCreatedAtAsc(job.getPublicId()).stream()
+                .filter(row -> row.getName().equals(from))
+                .forEach(row -> {
+                    if (castSheets.existsByJobIdAndName(job.getPublicId(), to)) {
+                        castSheets.delete(row);
+                    } else {
+                        row.rename(to);
+                        castSheets.save(row);
+                    }
+                }));
+        if (saved.story()) {
+            List<Map<String, Object>> fresh = runner.directionsOf(job.getRunId());
+            if (!fresh.isEmpty()) {
+                store.directions(job.getId(), fresh);
+                stories.replace(job.getRunId(), fresh);
+                stories.choose(job.getRunId(), job.getPicked() == null ? 1 : job.getPicked());
+            }
+        }
+    }
+
+    private static boolean isTrue(Object v) {
+        return v != null && (Boolean.TRUE.equals(v) || "true".equalsIgnoreCase(v.toString()) || "1".equals(v.toString()));
     }
 
     /**

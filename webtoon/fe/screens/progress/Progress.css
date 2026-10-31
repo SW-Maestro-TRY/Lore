@@ -365,6 +365,8 @@
 /* 인물 카드 고치기 */
 .wt .wt-prog-cast .row .tools button { color: var(--ink-2, inherit); padding: 4px; border-radius: 6px; }
 .wt .wt-prog-cast.editing { border-color: var(--ink); }
+.wt .wt-prog-cast .row .tools { display: inline-flex; gap: 6px; flex-shrink: 0; }
+.wt .wt-prog-cast .row .tools button.wt-prog-lead { width: auto; padding: 0 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
 .wt .wt-prog-cast textarea.field.wt-prog-grow { width: 100%; min-height: 0; padding: 8px 10px; resize: none; overflow: hidden; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; border-radius: 8px; }
 .wt .wt-prog-cast .acts { display: flex; gap: 8px; justify-content: flex-end; }
 .wt .wt-prog-cast .intro.tie { margin-bottom: 12px; color: var(--ink); }

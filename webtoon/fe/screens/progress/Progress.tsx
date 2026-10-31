@@ -30,7 +30,7 @@ import { IconArrow, IconBack, IconChevronDown, IconChevronLeft, IconChevronRight
 import { MobileTop } from "../../ui/TopNav";
 import LouPlay from "./LouPlay";
 import QueueDialog, { isQueued, markQueueSeen, queueSeen } from "../../ui/QueueDialog";
-import { Dialog } from "../../ui/Dialog";
+import { ConfirmDialog, Dialog } from "../../ui/Dialog";
 import { LouWork } from "../../ui/LouLoading";
 import "./i18n";
 import "./Progress.css";
@@ -151,13 +151,26 @@ function SceneEditor({ text, parts, label, onChange }: {
 
 
 /* 인물 카드(#548) — 읽을 때는 칸만, 연필을 누르면 칸마다 글 칸(소제목은 그대로). */
-const HERO_KEYS: [string, string][] = [["look", "생김새"], ["personality", "성격"], ["voice", "말투"], ["line", "대표 대사"]];
+const HERO_KEYS: [string, string][] = [["name", "이름"], ["look", "생김새"], ["personality", "성격"], ["voice", "말투"], ["line", "대표 대사"]];
 const CAST_KEYS: [string, string][] = [["name", "이름"], ["role", "역할"], ["look", "생김새"], ["tie", "주인공과의 관계"],
   ["gap", "갭"], ["voice", "말투"], ["line", "대표 대사"]];
+/** 주인공을 바꾸면 조연 카드가 주인공 자리로(역할·관계·갭이 따라온다), 옛 주인공 카드가 조연 자리로(성격이 따라온다) 간다.
+ *  카드에 이미 있는 칸만 더해 보여 준다 — 없는 칸을 새로 만들지 않는다. */
+function heroKeys(p: Record<string, unknown>, withName: boolean): [string, string][] {
+  const extra = ([["role", "역할"], ["tie", "관계"], ["gap", "갭"]] as [string, string][]).filter(([k]) => String(p[k] ?? "").trim());
+  return [...HERO_KEYS.filter(([k]) => withName || k !== "name"), ...extra];
+}
+function castKeys(p: Record<string, unknown>): [string, string][] {
+  return String(p.personality ?? "").trim() ? [...CAST_KEYS, ["personality", "성격"]] : CAST_KEYS;
+}
 
-function PersonCard({ title, person, keys, hero, onSave }: {
+function PersonCard({ title, person, keys, hero, onSave, onLead, locked }: {
   title: string; person: Record<string, unknown>; keys: [string, string][]; hero?: boolean;
   onSave: (fields: Record<string, string>) => Promise<void>;
+  /** 있으면 「주인공으로」 단추 — 누르면 확인 창을 연다 */
+  onLead?: () => void;
+  /** 그리기 시작한 뒤처럼 고칠 수 없는 자리 — 단추를 숨긴다 */
+  locked?: boolean;
 }) {
   const t = useT();
   const [editing, setEditing] = useState(false);
@@ -169,17 +182,21 @@ function PersonCard({ title, person, keys, hero, onSave }: {
   const save = async () => {
     const changed = Object.fromEntries(Object.entries(draft).filter(([k, v]) => v !== val(k)));
     if (!Object.keys(changed).length) { setEditing(false); return; }
+    if ("name" in changed && !changed.name.trim()) { setErr(t("이름을 적어 주세요")); return; }
     setBusy(true); setErr("");
     try { await onSave(changed); setEditing(false); }
-    catch (e) { setErr(e instanceof Error ? e.message : t("저장하지 못했어요")); }
+    catch (e) { setErr(t(errText(e, t("저장하지 못했어요")))); }
     finally { setBusy(false); }
   };
   return (
     <div className={`wt-prog-dir plain wt-prog-cast${hero ? " wt-prog-hero" : ""}${editing ? " editing" : ""}`}>
       <div className="row">
         <b>{title}</b>
-        {!editing && (
+        {!editing && !locked && (
           <span className="tools">
+            {onLead && (
+              <button type="button" className="wt-prog-lead" onClick={onLead}>{t("주인공으로")}</button>
+            )}
             <button type="button" aria-label={t("고치기")} title={t("고치기")} onClick={open}>
               <IconEdit size={18} />
             </button>
@@ -204,7 +221,7 @@ function PersonCard({ title, person, keys, hero, onSave }: {
         <>
           {/* 읽을 때는 관계 → (한 줄 띄고) 생김새 → 대사. 말투는 고칠 때만 보인다. */}
           {val("tie") && <span className="muted intro tie">{val("tie")}</span>}
-          {(hero ? ["look", "personality"] : ["look", "gap"]).filter((k) => val(k)).map((k) => (
+          {(hero ? ["look", "personality", "gap"] : ["look", "gap"]).filter((k) => val(k)).map((k) => (
             <span key={k} className="muted intro">{val(k)}</span>
           ))}
           {val("line") && <q className="line">{val("line")}</q>}
@@ -574,10 +591,24 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   }, [sceneDraft, storyDraft, status, flushSave]);
   const editScene = (n: number, text: string) => { dirtyRef.current = true; setSaveState("idle"); setSceneDraft((d) => ({ ...d, [n]: text })); };
   const editStory = (p: Partial<{ title: string; body: string }>) => { dirtyRef.current = true; setSaveState("idle"); setStoryDraft((s) => ({ ...s, ...p })); };
-  /* 인물 카드 고치기(#548) — 저장하면 서버가 persona.json·cast.json 을 고치고 다시 읽어 온다. */
+  /* 인물 카드 고치기(#548) — 저장하면 서버가 persona.json·cast.json 을 고치고 다시 읽어 온다.
+     이름을 바꾸면 서버가 이야기·장면 글 속 이름도 바꾼다 — 그래서 보내기 전에 아직 안 보낸 고침(장면 확인은
+     자동 저장, 이야기 확인은 본문 초안)을 먼저 넘기고, 받은 뒤에는 화면의 초안을 버리고 서버 글로 다시 채운다. */
+  const peopleDraft = async (): Promise<Record<string, string>> => {
+    if (status === "awaiting_scenes") { await flushSave(); return {}; }
+    if (storyCheck && job?.story && (storyDraft.title !== job.story.title || storyDraft.body !== job.story.body)) {
+      return { story_title: storyDraft.title, story_body: storyDraft.body };
+    }
+    return {};
+  };
+  const afterPeople = async () => {
+    dirtyRef.current = false;
+    setSceneDraft({});
+    await pull();
+  };
   const savePersonCard = async (who: string, fields: Record<string, string>) => {
     if (!job) return;
-    track("person_edit", { job: job.id, who });
+    track("person_edit", { job: job.id, who, name: "name" in fields });
     if (isMock) {
       setJob((j) => {
         if (!j) return j;
@@ -586,8 +617,38 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       });
       return;
     }
-    await savePerson(job.id, who, fields);
-    await pull();
+    await savePerson(job.id, who, { ...fields, ...(await peopleDraft()) });
+    await afterPeople();
+  };
+  /* 「이 사람이 주인공」(Tosisusae 피드백) — 확인 창을 거쳐 cast 의 i 번째를 주인공으로. */
+  const [leadAsk, setLeadAsk] = useState<number | null>(null);
+  const [leadBusy, setLeadBusy] = useState(false);
+  const [leadErr, setLeadErr] = useState("");
+  const makeLead = async () => {
+    if (!job || leadAsk == null) return;
+    const i = leadAsk;
+    track("lead_swap", { job: job.id, n: i });
+    setLeadBusy(true); setLeadErr("");
+    try {
+      if (isMock) {
+        setJob((j) => {
+          if (!j?.persona || !j.cast?.[i]) return j;
+          const next = j.cast[i];
+          const cast = j.cast.map((c, k) => (k === i ? ({ ...j.persona, from_input: true } as unknown as NhCast) : c));
+          return { ...j, persona: next as unknown as NhPersona, cast };
+        });
+      } else {
+        await savePerson(job.id, String(i), { lead: "true", ...(await peopleDraft()) });
+        await afterPeople();
+      }
+      setSheetV((v) => v + 1);
+      setCastSheetV((v) => v + 1);
+      setLeadAsk(null);
+    } catch (e) {
+      setLeadErr(t(errText(e, t("바꾸지 못했어요"))));
+    } finally {
+      setLeadBusy(false);
+    }
   };
   /* 장면 판(#548) — 장면마다 지금 보는 판 번호(0 = 가장 오래된 것). 없으면 지금 판. */
   const [sceneVer, setSceneVer] = useState<Record<number, number>>({});
@@ -677,6 +738,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   const castOk = status === "awaiting_scenes" || storyCheck || (ownJob && status === "awaiting_sheet");
   const castSheets = job?.cast_sheets ?? [];
   const castSheetOf = (name: string) => castSheets.find((c) => c.name === name);
+  /* 인물 카드를 고칠 수 있는 자리 — 서버 JobService.PERSON_EDIT_OK 와 같다. 그리기 시작하면 닫힌다.
+     주인공 이름·주인공 바꾸기는 1화에서만(연재는 앞 화에 이미 그 주인공이 나왔다). */
+  const peopleOpen = isMock || (ownJob && !job?.sheet_blocked
+    && (status === "awaiting_pick" || status === "awaiting_sheet" || status === "awaiting_scenes"));
+  const leadOk = peopleOpen && ep === 1;
   const [castSheetV, setCastSheetV] = useState(0);
   const [castBusy, setCastBusy] = useState("");
   const [castErr, setCastErr] = useState("");
@@ -1588,11 +1654,14 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       <div className="wt-prog-dirs">
                         {job.persona && (
                           <PersonCard hero title={t("주인공 · {name}", { name: job.persona.name })} person={job.persona as unknown as Record<string, unknown>}
-                                      keys={HERO_KEYS} onSave={(f) => savePersonCard("hero", f)} />
+                                      keys={heroKeys(job.persona as unknown as Record<string, unknown>, leadOk)} locked={!peopleOpen}
+                                      onSave={(f) => savePersonCard("hero", f)} />
                         )}
                         {cast.map((c, i) => (
                           <PersonCard key={c.name + i} title={c.role ? `${c.name} · ${c.role}` : c.name} person={c as unknown as Record<string, unknown>}
-                                      keys={CAST_KEYS} onSave={(f) => savePersonCard(String(i), f)} />
+                                      keys={castKeys(c as unknown as Record<string, unknown>)} locked={!peopleOpen}
+                                      onLead={leadOk && job.persona ? () => { setLeadErr(""); setLeadAsk(i); } : undefined}
+                                      onSave={(f) => savePersonCard(String(i), f)} />
                         ))}
                       </div>
                     </>
@@ -1640,11 +1709,14 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                       <div className="wt-prog-dirs">
                         {job.persona && (
                           <PersonCard hero title={t("주인공 · {name}", { name: job.persona.name })} person={job.persona as unknown as Record<string, unknown>}
-                                      keys={HERO_KEYS} onSave={(f) => savePersonCard("hero", f)} />
+                                      keys={heroKeys(job.persona as unknown as Record<string, unknown>, leadOk)} locked={!peopleOpen}
+                                      onSave={(f) => savePersonCard("hero", f)} />
                         )}
                         {cast.map((c, i) => (
                           <PersonCard key={c.name + i} title={c.role ? `${c.name} · ${c.role}` : c.name} person={c as unknown as Record<string, unknown>}
-                                      keys={CAST_KEYS} onSave={(f) => savePersonCard(String(i), f)} />
+                                      keys={castKeys(c as unknown as Record<string, unknown>)} locked={!peopleOpen}
+                                      onLead={leadOk && job.persona ? () => { setLeadErr(""); setLeadAsk(i); } : undefined}
+                                      onSave={(f) => savePersonCard(String(i), f)} />
                         ))}
                       </div>
                     </>
@@ -1828,6 +1900,21 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       {mailOpen && job && (
         <Dialog title={t("완료 알림")} onClose={() => setMailOpen(false)}>{mailCard}</Dialog>
       )}
+      {leadAsk != null && job?.persona && cast[leadAsk] && (() => {
+        const from = job.persona.name;
+        const to = cast[leadAsk].name;
+        return (
+          <ConfirmDialog title={t("주인공 바꾸기")} busy={leadBusy} error={leadErr}
+                         confirmLabel={t("바꾸기")} cancelLabel={t("취소")}
+                         onConfirm={() => void makeLead()} onClose={() => setLeadAsk(null)}
+                         sub={<>
+                           <b>{from} → {to}</b><br />
+                           {castSheetOf(to)?.ready ? t("뽑아 둔 {name} 시트가 주인공 시트가 돼요.", { name: to })
+                             : t("{name} 시트를 새로 그려요. 크레딧은 들지 않아요.", { name: to })}<br />
+                           {t("{name} 시트는 등장인물 시트로 남아요.", { name: from })}
+                         </>} />
+        );
+      })()}
       {askCancel && job && (
         <Dialog title={t("생성을 취소할까요?")} busy={busy} onClose={() => setAskCancel(false)}>
           <div className="cancel-work">
