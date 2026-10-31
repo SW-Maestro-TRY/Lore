@@ -674,6 +674,47 @@ public class JobRunner {
         }
     }
 
+    /** 함께 주인공의 주인공 카드(#899) — personas/<이름>.json. 없거나 못 읽으면 {@code null}. */
+    public Map<String, Object> coPersonaOf(String runId, String name) {
+        if (runId == null || runId.isBlank() || name == null || name.isBlank()) {
+            return null;
+        }
+        try {
+            return mapper.readValue(runDir(runId).resolve("personas").resolve(RunArt.castSheetStem(name) + ".json").toFile(),
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** 함께 주인공의 설명(#899) — 작품 폴더 input.json 의 co 에서. 시트 고치기 칸의 처음 값이다. 없으면 빈 문자열. */
+    public String coDescriptionOf(String runId, String name) {
+        if (runId == null || runId.isBlank() || name == null) {
+            return "";
+        }
+        try {
+            for (var one : mapper.readTree(runDir(runId).resolve("input.json").toFile()).path("co")) {
+                if (name.equals(one.path("name").asText("").trim())) return one.path("description").asText("");
+            }
+        } catch (IOException e) {
+            return "";
+        }
+        return "";
+    }
+
+    /** 시트가 걸렸을 때 누구 시트였나(#899) — failure.json 의 who. 첫 주인공이거나 모르면 {@code null}. */
+    public String failedSheetWho(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return null;
+        }
+        try {
+            String who = mapper.readTree(runDir(runId).resolve(JobFailure.FILE).toFile()).path("who").asText("");
+            return who.isBlank() ? null : who.trim();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     /** 세운 인물(cast.json). 화면이 카드로 보여 준다. 없거나 못 읽으면 빈 목록. */
     public List<Map<String, Object>> castOf(String runId) {
         if (runId == null || runId.isBlank()) {
@@ -717,6 +758,19 @@ public class JobRunner {
             }
         }
         Path dir = runDir(runId);
+        if (who != null && who.startsWith("co:")) {
+            /* 함께 주인공의 카드(#899) — 첫 주인공 카드와 같은 칸만 고친다 */
+            String name = who.substring(3).trim();
+            Map<String, Object> persona = coPersonaOf(runId, name);
+            if (persona == null) {
+                throw new IOException("그 주인공의 카드가 없습니다: " + name);
+            }
+            clean.remove("role");
+            persona.putAll(clean);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(
+                    dir.resolve("personas").resolve(RunArt.castSheetStem(name) + ".json").toFile(), persona);
+            return;
+        }
         if ("hero".equals(who)) {
             Map<String, Object> persona = personaOf(runId);
             if (persona == null) {
@@ -2687,6 +2741,11 @@ public class JobRunner {
      * 화면에는 "돌려드렸어요" 가 그대로 떴다. 돌려주는 쪽이 알려 주는 값으로
      * 정한다.
      */
+    /** 함께 주인공 시트 값을 받을 때 쓰는 원장 ref(#899). 한 편 값(ref = 작업 번호)과 따로 돌려준다. */
+    public static String coSheetsRef(String publicId) {
+        return publicId + ":co-sheets";
+    }
+
     Refunded refund(Long jobId) {
         try {
             WebtoonJob job = store.byId(jobId);
@@ -2697,7 +2756,9 @@ public class JobRunner {
                같이 돌려준다 — 못 만들었으니 그만큼 안 그렸다. */
             int back = credits.refund(job.getUserId(), job.getPublicId())
                     + credits.refund(job.getUserId(), job.getPublicId() + ":resume")
-                    + credits.refund(job.getUserId(), extraPagesRef(job));
+                    + credits.refund(job.getUserId(), extraPagesRef(job))
+                    /* 함께 주인공 시트 값(#899) — 만들 때 한 편 값과 따로 받았다 */
+                    + credits.refund(job.getUserId(), coSheetsRef(job.getPublicId()));
             if (back > 0) {
                 return Refunded.CREDIT;
             }

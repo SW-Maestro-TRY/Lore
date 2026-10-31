@@ -103,6 +103,10 @@ def side_role_lines(char: dict) -> list[str]:
     tier = str(card.get("role_tier") or "").strip()
     if tier not in SIDE_TIERS:
         return []
+    # 주인공을 여럿 골랐으면(#899) 사용자가 이 사람들을 중심에 세운 것이다 — 카드의 자리(곁·스쳐감)보다 그 선택이
+    # 먼저다. 이 줄을 같이 두면 「중심 인물은 따로 있다」와 「주인공은 둘이다」가 한 입력에서 서로 반대를 말한다.
+    if R.co_protagonists(char):
+        return []
     role = str(card.get("role") or "").strip()
     who = f"{char['name']}({role})" if role else char["name"]
     return ["", f"## {char['name']}의 자리 — 이야기의 중심 인물은 따로 있다",
@@ -123,7 +127,8 @@ def input_block(char: dict, *, continuation: bool = False, context: str | None =
     lines = ["# 이번 입력", "", f"캐릭터 이름: {char['name']}"]
     if char.get("photos"):
         note = f" ({char['photo_note']})" if char.get("photo_note") else ""
-        lines.append(f"외관: 첨부한 사진 {len(char['photos'])}장을 보라{note}.")
+        lines.append(f"외관: 첨부한 사진 가운데 앞의 {len(char['photos'])}장{note}." if R.co_protagonists(char)
+                     else f"외관: 첨부한 사진 {len(char['photos'])}장을 보라{note}.")
     else:
         lines.append("외관: (사진 없음 — 아래 설명에서 읽는다)")
     card = charcard.for_story(char)
@@ -144,6 +149,8 @@ def input_block(char: dict, *, continuation: bool = False, context: str | None =
     lines += ["", "이 인물의 성격·처지는 위 설명과 아래 적은 것이 전부다. 적히지 않은 성격·과거·"
               "비밀을 더하지 않고, 적힌 성격을 뒤집지 않는다."]
     lines += side_role_lines(char)
+    # 함께 주인공인 사람 — 이 길도 카드는 종·세계만 준다(card_detail=False, 위 카드 줄과 같은 이유).
+    lines += R.co_input_lines(char, card_detail=False)
     lines += ["", f"장르: {char['genre']}" if char.get("genre") else "장르: (없음 — 적은 내용에서 읽는다)"]
     import userbook
     if context is None:
@@ -169,7 +176,8 @@ def check_lines(char: dict) -> list[str]:
     return ["", "## 다 쓰고 나서 다시 본다",
             "- 마지막에 터지는 일은 주인공이 한 행동 때문에 터진다. 상대가 주인공을 붙잡거나 밀어붙이거나 대신 "
             "해 주는 것으로 끝나면 주인공이 끌려간 것이다 — 다시 짠다.",
-            "- 주인공이 원하는 것, 그것을 방해하는 것, 주인공의 반응이 다 있는가. 사건은 하나로 끝나지 않고 이어지는가."]
+            "- 주인공이 원하는 것, 그것을 방해하는 것, 주인공의 반응이 다 있는가. 사건은 하나로 끝나지 않고 이어지는가.",
+            *R.co_check_line(char)]
 
 
 def genre_lines(char: dict) -> list[str]:
@@ -196,6 +204,11 @@ def character_lines(char: dict) -> list[str]:
         lines.append("- 고른 캐릭터 카드: " + " · ".join(bits) + " (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
+    if R.co_protagonists(char):
+        lines += R.co_scene_lines(char)
+        lines += ["", f"이 웹툰의 주인공은 {', '.join(R.protagonist_names(char))}이다. 장면 지시에서 「주인공」은 이 "
+                      "사람들 모두를 가리킨다. 장면마다 누가 무엇을 하는지 사람마다 따로 적고, 각자의 행동·표정은 "
+                      "자기 설명에서 예상되는 범위 안에서만 쓴다."]
     return lines + side_role_lines(char)
 
 
@@ -251,23 +264,26 @@ def persona_lines(p: dict | None) -> list[str]:
 
 # --------------------------------------------------------------------- 단계
 
-def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> dict | None:
-    """주인공 카드. 확인 화면에 보여 주기만 한다(생성에는 안 넣는다, #534 와 같다)."""
-    path = run_dir / "persona.json"
+def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko", who: int = 0) -> dict | None:
+    """주인공 카드. 확인 화면에 보여 주기만 한다(생성에는 안 넣는다, #534 와 같다).
+    who — 0 이면 첫 주인공(persona.json), 1 부터 함께 주인공(personas/<이름>.json, #899)."""
+    files = R.persona_paths(run_dir, who, char)
+    path = files["json"]
+    char = R.solo(char, who)     # 카드는 한 사람 것 — 다른 주인공을 같이 주면 한 카드에 섞인다
     prompt = R.compose("own/persona_prompt", "\n".join(base_block(char) + content_block(char)) + "\n", lang=lang)
-    R.write_text(run_dir / "persona_prompt.txt", prompt)
+    R.write_text(files["prompt"], prompt)
     if dry_run:
-        log(f"[페르소나] 프롬프트만 썼습니다 -> {run_dir / 'persona_prompt.txt'}")
+        log(f"[페르소나] 프롬프트만 썼습니다 -> {files['prompt']}")
         return None
     call = llm.Call("PERSONA")
     log(f"[페르소나] {call.describe()} 로 주인공 카드를 세웁니다…")
     try:
-        text, meta = call(prompt, images=llm.load_images(char.get("photos") or []))
+        text, meta = call(prompt, images=llm.load_images(R.all_photos(char)))
     except BaseException as exc:                                      # noqa: BLE001
         R.record_error(run_dir, "PERSONA", call.provider, call.model, exc)
         warn(f"주인공 카드를 못 만들었습니다 — 없이 갑니다 ({exc})")
         return None
-    R.write_text(run_dir / "persona_raw.txt", text)
+    R.write_text(files["raw"], text)
     R.record(run_dir, meta)
     try:
         obj = story.extract_json(text)
@@ -297,7 +313,7 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
     call = llm.Call("CAST")
     log(f"[인물] {call.describe()} 로 적은 내용의 인물을 읽어냅니다…")
     try:
-        text, meta = call(prompt, images=llm.load_images(char.get("photos") or []))
+        text, meta = call(prompt, images=llm.load_images(R.all_photos(char)))
     except BaseException as exc:                                      # noqa: BLE001
         R.record_error(run_dir, "CAST", call.provider, call.model, exc)
         warn(f"인물을 못 읽어냈습니다 — 인물 없이 갑니다 ({exc})")
@@ -314,6 +330,8 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
     seen: set[str] = set()
     cast = [c for c in cast if not (str(c.get("name")).strip() in seen
                                     or seen.add(str(c.get("name")).strip()))]
+    # 함께 주인공인 사람은 조연이 아니다.
+    cast = [c for c in cast if not R.is_protagonist(char, str(c.get("name")))]
     # 적은 내용이 있으면 적힌 사람만이다. 모델이 더한 사람은 뺀다. 적은 것이 없으면(설정집·설명뿐)
     # 1화에 얽힐 사람을 인물 단계가 세우는 자리라 새로 세운 사람도 남긴다(expands_cast).
     if not expands_cast(char):
@@ -356,7 +374,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: 
     call = llm.Call("STORY")
     log(f"[이야기] {call.describe()} 로 적은 내용을 1화 본문으로 세웁니다…")
     try:
-        text, meta = call(prompt, images=llm.load_images(char.get("photos") or []))
+        text, meta = call(prompt, images=llm.load_images(R.all_photos(char)))
     except BaseException as exc:                                      # noqa: BLE001
         R.record_error(run_dir, "STORY", call.provider, call.model, exc)
         raise
@@ -380,31 +398,18 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: 
 def stage_sheet(run_dir: Path, char: dict, dry_run: bool, note: str = "") -> None:
     """캐릭터 시트. 안전 검사에 걸리면 한 번은 사양부터 다시 쓴다(run.stage_sheet 와 같은 뼈대)."""
     failure.clear(run_dir)
-    missing = [str(p) for p in char["photos"] if not Path(p).is_file()]
+    missing = [str(p) for one in [char, *R.co_protagonists(char)] for p in one["photos"] if not Path(p).is_file()]
     if missing and not dry_run:
         failure.write(run_dir, "SHEET", "photo_missing", "사진 파일이 없습니다: " + ", ".join(missing))
         raise SystemExit("사진 파일이 없습니다: " + ", ".join(missing))
-    safety = ""
-    for attempt in (1, 2):
-        try:
-            _sheet_attempt(run_dir, char, dry_run, note, safety)
-            return
-        except BaseException as exc:                                  # noqa: BLE001
-            cats = failure.refusal_categories(exc)
-            if cats is None:
-                failure.write(run_dir, "SHEET", "error", f"{type(exc).__name__}: {exc}")
-                raise
-            if attempt == 1:
-                warn(f"[시트] 안전 검사에 걸렸습니다({', '.join(cats) or '분류 미상'}) — 사양부터 다시 씁니다")
-                for name in ("sheet.png", "sheet_spec.json"):
-                    (run_dir / name).unlink(missing_ok=True)
-                safety = failure.safety_note(cats)
-                continue
-            failure.write(run_dir, "SHEET_IMAGE", "image_safety", f"{type(exc).__name__}: {exc}", cats)
-            raise SystemExit(f"시트가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
+    # 주인공마다 하나씩(run.each_sheet) — 함께 주인공인 사람은 sheets/<이름>.png.
+    R.each_sheet(run_dir, char, lambda one, paths: R._sheet_with_retry(
+        run_dir, one, paths, lambda safety: _sheet_attempt(run_dir, one, dry_run, note, safety, paths)))
 
 
-def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: str) -> None:
+def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: str,
+                   paths: dict | None = None) -> None:
+    paths = paths or R.sheet_paths(run_dir)
     photos = char["photos"]
     block = input_block(char)
     note = (note or "").strip()
@@ -413,14 +418,14 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: 
     if safety:
         block += "\n\n" + safety
     prompt = R.compose("own/sheet_prompt", block)
-    R.write_text(run_dir / "sheet_spec_prompt.txt", prompt)
+    R.write_text(paths["spec_prompt"], prompt)
 
-    spec_path = run_dir / "sheet_spec.json"
+    spec_path = paths["spec"]
     if spec_path.exists():
         log(f"[시트] 사양이 이미 있습니다 -> {spec_path} (재사용)")
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
     elif dry_run:
-        log(f"[시트] 사양 프롬프트만 썼습니다 -> {run_dir / 'sheet_spec_prompt.txt'}")
+        log(f"[{paths['label']}] 사양 프롬프트만 썼습니다 -> {paths['spec_prompt']}")
         return
     else:
         call = llm.Call("SHEET")
@@ -434,16 +439,16 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: 
         spec = sheetmod.parse_spec(text)
         bad = sheetmod.gate_spec(spec)
         if bad:
-            R.write_json(run_dir / "sheet_spec_rejected.json", spec)
+            R.write_json(paths["rejected"], spec)
             raise SystemExit("시트 사양이 모자랍니다 — 그리기 전에 멈춥니다:\n  - " + "\n  - ".join(bad))
         R.write_json(spec_path, spec)
 
     image_prompt = sheetmod.build_prompt(spec, from_photo=bool(photos))
-    R.write_text(run_dir / "sheet_prompt.txt", image_prompt)
+    R.write_text(paths["prompt"], image_prompt)
     if dry_run:
-        log(f"[시트] 이미지 프롬프트만 썼습니다 -> {run_dir / 'sheet_prompt.txt'}")
+        log(f"[{paths['label']}] 이미지 프롬프트만 썼습니다 -> {paths['prompt']}")
         return
-    out = run_dir / "sheet.png"
+    out = paths["png"]
     if out.exists():
         log(f"[시트] {out} 가 이미 있습니다. 다시 뽑으려면 지우세요.")
         return
@@ -634,7 +639,7 @@ def stage_scenes(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang:
         previous = R.read_json(path) if path.is_file() else []
         by_name = {c.get("name"): c for c in previous if isinstance(c, dict) and c.get("name")}
         for c in parsed.get("cast", []):
-            if isinstance(c, dict) and c.get("name") and c["name"] != char.get("name") and c["name"] not in by_name:
+            if isinstance(c, dict) and c.get("name") and not R.is_protagonist(char, c["name"]) and c["name"] not in by_name:
                 by_name[c["name"]] = {**c, "look": c.get("appearance") or c.get("look") or ""}
         R.write_json(path,list(by_name.values()))
     return parsed
@@ -666,8 +671,10 @@ def run_own(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko", sheet: b
         stage_story(run_dir, char, dry_run, lang=lang)
         return
     log("[내 내용으로] 주인공 카드·인물·본문·시트를 동시에 만듭니다…")
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
         jobs = {"persona": pool.submit(stage_persona, run_dir, char, dry_run, lang)}
+        for i in range(1, len(R.co_protagonists(char)) + 1):            # 함께 주인공 카드(#899)
+            jobs[f"persona{i}"] = pool.submit(stage_persona, run_dir, char, dry_run, lang, i)
         if expands_cast(char):
             jobs["story"] = pool.submit(_cast_then_story, run_dir, char, dry_run, lang)
         else:

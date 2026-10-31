@@ -61,14 +61,15 @@ def safety_note(categories: list[str]) -> str:
 
 
 def write(run_dir: Path, stage: str, code: str, message: str = "",
-          categories: list[str] | None = None) -> None:
-    """실패 이유를 남긴다. 못 남겨도 원래 실패를 가리지 않는다."""
+          categories: list[str] | None = None, who: str = "") -> None:
+    """실패 이유를 남긴다. 못 남겨도 원래 실패를 가리지 않는다.
+
+    who — 함께 주인공의 시트가 걸렸으면 그 사람 이름(#899). 첫 주인공이면 칸을 안 쓴다(예전과 같은 모양)."""
     try:
-        (Path(run_dir) / FILE).write_text(json.dumps({
-            "stage": stage, "code": code,
-            "categories": categories or [],
-            "message": (message or "")[:1000],
-        }, ensure_ascii=False, indent=1), encoding="utf-8")
+        doc = {"stage": stage, "code": code, "categories": categories or [], "message": (message or "")[:1000]}
+        if who:
+            doc["who"] = who
+        (Path(run_dir) / FILE).write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
     except OSError:
         pass
 

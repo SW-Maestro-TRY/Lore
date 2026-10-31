@@ -107,6 +107,9 @@ public class JobController {
            어긋난다. 사람에게 그건 거짓말이다. */
         out.put("qualities", WebtoonQuality.choices());
         out.put("quality_default", WebtoonQuality.DEFAULT_QUALITY);
+        /* 함께 주인공(#899) — 한 사람당 값과 고를 수 있는 수. 화면이 「+1C」와 합계를 적는다. */
+        out.put("co_sheet_credits", JobService.CAST_SHEET_CREDITS);
+        out.put("co_max", JobService.CO_PROTAGONIST_MAX);
         if (me == null) {
             Integer left = guests.freeLeft(request);
             out.put("free_left", left);
@@ -189,8 +192,11 @@ public class JobController {
            값으로 팔면 한 편마다 손해다 — 실제로 그렇게 한 달 가까이 돌았다.
            값은 WebtoonQuality 한 곳만 안다. */
         int need = WebtoonQuality.creditsOf(form.quality());
+        /* 함께 주인공 시트(#899) — 첫 주인공 시트는 한 편 값에 들어 있고, 둘째부터 한 사람당 조연 시트 값. 한 편 값과
+           같이 잔액을 보고, 원장에는 따로 적는다(조연 시트 구매와 메모가 다르다). 실패하면 JobRunner.refund 가 같이 돌려준다. */
+        int coSheets = JobService.coCountOf(form) * JobService.CAST_SHEET_CREDITS;
         if (blocked == null) {
-            blocked = credits.whyBlocked(me, need);
+            blocked = credits.whyBlocked(me, need + coSheets);
             if (blocked != null) {
                 code = 402;                     // 기다려도 안 풀린다 — 충전해야 한다
             }
@@ -217,6 +223,10 @@ public class JobController {
         }
         // 만들어진 뒤에 받는다. 같은 작업으로 두 번 불려도 한 번만 빠진다.
         credits.charge(me, need, id, WebtoonQuality.labelOf(form.quality()));
+        if (coSheets > 0) {
+            credits.charge(me, coSheets, JobRunner.coSheetsRef(id),
+                    "주인공 시트 추가 · " + JobService.coCountOf(form) + "명");
+        }
         queue.remember(id, ahead);
         return ResponseEntity.ok(Map.of("id", id, "queue_position", ahead));
     }
@@ -373,18 +383,23 @@ public class JobController {
             description = "다시 그리기 전의 시트 판(1~sheet_versions)을 지금 시트로 올린다(#548). 지금 것도 보관한 뒤 바꾼다.")
     @PostMapping("/jobs/{id}/sheet-restore")
     public Map<String, Object> restoreSheet(@PathVariable String id, @RequestBody SheetRestoreRequest body) {
-        jobs.restoreSheet(id, body.v());
+        jobs.restoreSheet(id, body.v(), body.who());
         return Map.of("ok", true);
     }
 
-    public record SheetRestoreRequest(int v) {
+    /** who — 함께 주인공의 시트면 그 이름(#899). 없으면 첫 주인공. */
+    public record SheetRestoreRequest(int v, String who) {
+        public SheetRestoreRequest(int v) {
+            this(v, null);
+        }
     }
 
     @Operation(summary = "보관한 옛 시트 판 그림")
     @GetMapping(value = "/jobs/{id}/sheet-v{v}.png", produces = MediaType.IMAGE_PNG_VALUE)
-    public ResponseEntity<byte[]> sheetVersionImage(@PathVariable String id, @PathVariable int v) throws IOException {
+    public ResponseEntity<byte[]> sheetVersionImage(@PathVariable String id, @PathVariable int v,
+                                                    @RequestParam(required = false) String who) throws IOException {
         String runId = jobs.runOf(id);
-        Path src = runId == null ? null : art.sheetVersion(runId, v);
+        Path src = runId == null ? null : (who == null || who.isBlank() ? art.sheetVersion(runId, v) : art.sheetVersion(runId, who, v));
         return src == null
                 ? ResponseEntity.notFound().build()
                 : ResponseEntity.ok(Files.readAllBytes(src));
@@ -454,14 +469,15 @@ public class JobController {
         if ("retry".equalsIgnoreCase(decision)) {
             Long me = CreditGate.currentUser();
             /* 시트 다시 만들기도 첫 번째는 무료, 그다음부터 1크레딧(이야기·장면 다시 뽑기와 같다). 먼저 받고, 못 시작하면 돌려준다. */
-            int cost = me == null ? 0 : jobs.resheetCost(id);
+            String who = body.who() == null || body.who().isBlank() ? null : body.who().trim();
+            int cost = me == null ? 0 : jobs.resheetCost(id, who);
             String ref = id + ":resheet:" + System.currentTimeMillis();
             if (cost > 0) {
                 credits.requireEnough(me, cost);
-                credits.charge(me, cost, ref, "캐릭터 시트 다시 만들기");
+                credits.charge(me, cost, ref, who == null ? "캐릭터 시트 다시 만들기" : "캐릭터 시트 다시 만들기 · " + who);
             }
             try {
-                jobs.retrySheet(id, body.note());
+                jobs.retrySheet(id, body.note(), who);
             } catch (RuntimeException e) {
                 if (cost > 0) credits.refund(me, ref);
                 throw e;
@@ -506,7 +522,10 @@ public class JobController {
     }
 
     /** 본문이 없으면(옛 이름으로 부르면) 그대로 진행으로 본다. */
-    public record SheetDecision(String decision, String note) {
+    public record SheetDecision(String decision, String note, String who) {
+        public SheetDecision(String decision, String note) {
+            this(decision, note, null);
+        }
     }
 
     /**
@@ -524,9 +543,9 @@ public class JobController {
         Long me = CreditGate.currentUser();
         String name = body == null || body.name() == null ? "" : body.name().trim();
         String ref = id + ":cast-sheet:" + name;
-        credits.requireEnough(me, 1);
+        credits.requireEnough(me, JobService.CAST_SHEET_CREDITS);
         jobs.castSheet(id, name, me, () -> credits.refund(me, ref));
-        credits.charge(me, 1, ref, "조연 시트 · " + name);
+        credits.charge(me, JobService.CAST_SHEET_CREDITS, ref, "조연 시트 · " + name);
         return Map.of("ok", true);
     }
 

@@ -383,6 +383,7 @@ const dict: Dict = {
   "{ep}화를 처음부터 끝까지 이어서 보고 있어요": { en: "Reading episode {ep} from start to finish", ja: "第{ep}話を最初から最後まで通して見ています", zh: "正在从头到尾通读第 {ep} 话" },
   "{n}개 장면": { en: "{n} scenes", ja: "{n}場面", zh: "{n} 个场景" },
   "{n}명": { en: "{n} people", ja: "{n}人", zh: "{n} 人" },
+  "캐릭터 시트 {n}장": { en: "{n} character sheet(s)", ja: "キャラクターシート{n}枚", zh: "{n} 张角色设定图" },
   "{n}쪽 보기": { en: "View page {n}", ja: "{n}ページを見る", zh: "查看第 {n} 页" },
   "{n}쪽 크게 보기": { en: "View page {n} larger", ja: "{n}ページを拡大表示", zh: "放大查看第 {n} 页" },
   "{n}쪽을 그리고 있어요": { en: "Drawing page {n}", ja: "{n}ページ目を描いています", zh: "正在绘制第 {n} 页" },

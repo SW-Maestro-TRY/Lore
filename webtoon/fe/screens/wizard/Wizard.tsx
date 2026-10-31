@@ -12,7 +12,7 @@ import {
 import { startJob } from "../../lib/start";
 import DirectSwitch from "../../ui/DirectSwitch";
 import {
-  GENRE_QUICK, OWN_STORY_MAX, QUALITY_INFO, STYLE_INFO,
+  CO_MAX, GENRE_QUICK, OWN_STORY_MAX, QUALITY_INFO, STYLE_INFO,
   emptyWizardForm, type WizardForm, type WizardQuality,
 } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
@@ -41,7 +41,8 @@ function loadDraft(): WizardForm {
     const raw = sessionStorage.getItem(DRAFT_KEY);
     if (!raw) return base;
     const got = JSON.parse(raw) as Partial<WizardForm>;
-    return { ...base, ...got, photos: Array.isArray(got.photos) ? got.photos : [] };
+    return { ...base, ...got, photos: Array.isArray(got.photos) ? got.photos : [],
+      coCharacterIds: Array.isArray(got.coCharacterIds) ? got.coCharacterIds.filter((x) => typeof x === "string") : [] };
   } catch {
     return base;
   }
@@ -270,18 +271,34 @@ export default function Wizard({
     [presetChar, form.characterId],
   );
 
+  const coIds = form.coCharacterIds || [];
   const pickChar = (c: Character) => {
     characterRevision.current++;
     track("cast_pick", { character: c.id, preset: c.builtin, way: c.builtin ? "builtin" : "mine" });
-    patch({
+    setForm((f) => ({ ...f,
       characterId: c.id, characterArt: c.art_url || undefined, photos: [],
       name: c.builtin ? t(c.name) : c.name, character: (c.builtin ? t(c.description || "") : c.description) || "",
-    });
+      coCharacterIds: (f.coCharacterIds || []).filter((id) => id !== c.id),
+    }));
   };
   const unpick = () => {
     characterRevision.current++;
-    patch({ characterId: undefined, characterArt: undefined, name: "", character: "", photos: [] });
+    patch({ characterId: undefined, characterArt: undefined, name: "", character: "", photos: [], coCharacterIds: [] });
     if (presetCharacterId) go("create", { step: 1, mode: own ? "own" : undefined });
+  };
+  /* 줄에서 카드를 누르면(#899) — 아무도 안 골랐으면 첫 주인공, 하나 골랐으면 함께 주인공으로 더한다.
+     둘 다 찼으면 함께 주인공을 바꾼다. 고른 카드를 다시 누르면 뺀다(첫 주인공을 빼면 함께 주인공이 첫 주인공이 된다). */
+  const toggleChar = (c: Character, list: Character[]) => {
+    /* 게스트는 한 명만 — 추가 주인공 시트는 크레딧으로 받는다(서버도 막는다) */
+    if (!form.characterId || (!authenticated && form.characterId !== c.id)) { pickChar(c); return; }
+    if (form.characterId === c.id) {
+      const rest = list.find((x) => coIds.includes(x.id));
+      if (rest) { pickChar(rest); patch({ coCharacterIds: [] }); } else unpick();
+      return;
+    }
+    if (coIds.includes(c.id)) { patch({ coCharacterIds: coIds.filter((id) => id !== c.id) }); return; }
+    track("cast_pick_co", { character: c.id, preset: c.builtin });
+    patch({ coCharacterIds: [...coIds.slice(0, coMax - 1), c.id] });
   };
 
   /* 빠른 시작: 카드 없이 이름·설명만 적어도 넘어간다 — 「다음」에서 캐릭터를 저장해 「내 캐릭터」에 남긴다(2026-10-27). */
@@ -296,6 +313,9 @@ export default function Wizard({
   const genreIsCustom = genreTyping || !!genreCustom;
   /* ---- 4걸음 (own 길은 3걸음에서 시작한다) ---- */
   const [allow, setAllow] = useState<Allowance | null>(null);
+  /* 함께 주인공 수 상한과 한 사람당 값(#899) — 서버가 allowance 로 알려 준다. 받기 전에는 같은 기본값 */
+  const coMax = allow?.co_max ?? CO_MAX;
+  const coCredit = allow?.co_sheet_credits ?? 1;
   const [allowError, setAllowError] = useState("");
   const [allowRetry, setAllowRetry] = useState(0);
   const lastStep = 2;
@@ -312,8 +332,13 @@ export default function Wizard({
     if (q) return q.credits;
     return allow?.credit_cost ?? null;
   };
+  /* 함께 주인공 시트 값(#899) — 첫 주인공 시트는 한 편 값에 들어 있고, 둘째부터 한 사람당 coCredit */
+  const coExtra = form.characterId ? coIds.length * coCredit : 0;
+  const coNeed = (creditsOf(form.quality) ?? 0) + coExtra;
   const blockedReason = allow
     ? allow.blocked || (!allow.logged_in && allow.free_left != null && allow.free_left <= 0 ? allowanceLine(allow) : "")
+      || (allow.logged_in && coExtra > 0 && allow.balance != null && allow.balance < coNeed
+          ? t("크레딧 잔액이 부족해요 (필요 {need} · 보유 {have})", { need: coNeed, have: allow.balance }) : "")
     : "";
   const [starting, setStarting] = useState(false);
   const [startErr, setStartErr] = useState("");
@@ -430,6 +455,7 @@ export default function Wizard({
           <li>{t("LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.")}</li>
         </ul>
       </details>
+      {coExtra > 0 && cost != null && <p className="wt-wiz-total">{t("한 편 {a}C + 주인공 추가 {b}C", { a: cost, b: coExtra })}</p>}
       {blockedReason && <div className="wt-wiz-block">{t(blockedReason)}</div>}
       {own && !authenticated && <div className="wt-wiz-block">{t("로그인하면 내 내용으로 만들 수 있어요")}</div>}
       {allowError && <div className="wt-wiz-allow-error" role="alert"><span>{allowError}</span><button type="button" className="btn btn-w btn-sm" onClick={() => setAllowRetry(x => x + 1)}>{t("다시 확인")}</button></div>}
@@ -451,6 +477,13 @@ export default function Wizard({
   const pickedBuiltin = form.characterId && !shown.some(c=>c.id===form.characterId) ? builtins.find(c=>c.id===form.characterId) : undefined;
   const presetExtra = presetChar && !shown.some(c=>c.id===presetChar.id) && presetChar.id!==pickedBuiltin?.id ? presetChar : undefined;
   const available = [pickedBuiltin,presetExtra,...shown].filter((c):c is Character=>!!c);
+  /* 목록에 없는 함께 주인공(지웠거나 초안에서 온 것)은 뗀다 — 보내면 서버가 「없는 캐릭터」로 막는다 */
+  const coStale = chars !== null && coIds.some((id) => !available.some((c) => c.id === id));
+  useEffect(() => {
+    if (coStale) patch({ coCharacterIds: coIds.filter((id) => available.some((c) => c.id === id)) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coStale]);
+  const order = (id: string) => (form.characterId === id ? 1 : coIds.includes(id) ? 2 + coIds.indexOf(id) : 0);
   const [quickSaving,setQuickSaving]=useState(false);
   const [quickErr,setQuickErr]=useState("");
   const next=async()=>{
@@ -479,7 +512,7 @@ export default function Wizard({
       patch({ characterId: c.id, characterArt: c.art_url || undefined, photos: [], name: c.name, character: c.description || "" });
       setEditingCharacter(null);
     }}/>}
-    {editingCharacter&&!editingCharacter.builtin&&<CharacterEditDialog character={editingCharacter} authenticated={authenticated} onClose={()=>setEditingCharacter(null)} onSaved={c=>{setChars(cs=>cs?.map(x=>x.id===c.id?c:x)||[c]);if(presetChar?.id===c.id)setPresetChar(c);if(form.characterId===c.id)pickChar(c);setEditingCharacter(null);}} onDeleted={()=>{if(form.characterId===editingCharacter.id)unpick();if(presetChar?.id===editingCharacter.id)setPresetChar(null);setChars(cs=>cs?.filter(c=>c.id!==editingCharacter.id)||[]);setEditingCharacter(null);}}/>}
+    {editingCharacter&&!editingCharacter.builtin&&<CharacterEditDialog character={editingCharacter} authenticated={authenticated} onClose={()=>setEditingCharacter(null)} onSaved={c=>{setChars(cs=>cs?.map(x=>x.id===c.id?c:x)||[c]);if(presetChar?.id===c.id)setPresetChar(c);if(form.characterId===c.id)pickChar(c);setEditingCharacter(null);}} onDeleted={()=>{if(form.characterId===editingCharacter.id)unpick();else if(coIds.includes(editingCharacter.id))patch({coCharacterIds:coIds.filter(id=>id!==editingCharacter.id)});if(presetChar?.id===editingCharacter.id)setPresetChar(null);setChars(cs=>cs?.filter(c=>c.id!==editingCharacter.id)||[]);setEditingCharacter(null);}}/>}
     <div className="wt-wrap wt-page">
       <nav className="wt-create-steps" aria-label={t("만들기 단계")}><button type="button" aria-current={step===1?"step":undefined} disabled={loreLocked} onClick={()=>void goStep(1)}><i>1</i>{t("캐릭터 · 이야기")}</button><button type="button" aria-current={step===2?"step":undefined} disabled={!step1Ok||loreLocked} onClick={()=>void goStep(2)}><i>2</i>{t("그림체 · 방식")}</button></nav>
       <h1>{t("웹툰 만들기")}</h1>
@@ -492,10 +525,11 @@ export default function Wizard({
           {quickErr&&<ErrLine text={quickErr}/>}
         </section>}
         <section className="wt-create-characters"><h2>{t(quick&&!form.characterId?"또는 캐릭터 카드를 골라요":"누가 주인공인가요?")}</h2>
+          {authenticated&&form.characterId&&available.length>1&&<p className="dim hint">{t("{n}명까지 · 한 명 더할 때마다 +{c}C",{n:coMax+1,c:coCredit})}</p>}
           <CardRail><button type="button" className="wt-create-new" onClick={()=>go("character-new")}><IconPlus size={26}/><b>{t("새 캐릭터 만들기")}</b></button>
             {legacyCharacter&&!quick&&<div className="wt-create-character"><button type="button" className="wt-create-pick" onClick={()=>setLegacyOpen(true)}>{form.photos[0]?<img src={form.photos[0]} alt=""/>:<span className="wt-create-draft-icon"><IconEdit size={26}/></span>}<b>{form.name||t("이전 캐릭터")}</b><small>{t("저장 전 확인")}</small></button></div>}
-            {chars===null?[0,1].map(i=><div key={i} className="wt-create-character skeleton"/>):available.map(c=><div className={`wt-create-character${form.characterId===c.id?" on":""}`} key={c.id}>
-              <button type="button" className="wt-create-pick" aria-pressed={form.characterId===c.id} onClick={()=>pickChar(c)}>{c.art_url?<img src={c.art_url} alt=""/>:<span className="wt-create-noart" aria-hidden="true">{(c.name||"?").slice(0,1)}</span>}<b>{c.builtin?t(c.name):c.name}</b>{form.characterId===c.id&&<span className="wt-create-selected"><IconCheck size={13}/></span>}</button>
+            {chars===null?[0,1].map(i=><div key={i} className="wt-create-character skeleton"/>):available.map(c=><div className={`wt-create-character${order(c.id)?" on":""}`} key={c.id}>
+              <button type="button" className="wt-create-pick" aria-pressed={!!order(c.id)} onClick={()=>toggleChar(c,available)}>{c.art_url?<img src={c.art_url} alt=""/>:<span className="wt-create-noart" aria-hidden="true">{(c.name||"?").slice(0,1)}</span>}<b>{c.builtin?t(c.name):c.name}</b>{order(c.id)>1&&<span className="wt-create-plus">+{coCredit}C</span>}{!!order(c.id)&&<span className="wt-create-selected">{coIds.length?<span className="wt-create-order" aria-label={t("주인공 {n}",{n:order(c.id)})}>{order(c.id)}</span>:<IconCheck size={13}/>}</span>}</button>
               {/* 예시 캐릭터도 연필을 띄운다 — 고친 것은 저장하지 않고 이번 요청에만 쓴다(2026-10-25) */}
               {((c.mine&&!c.builtin)||c.builtin)&&<button type="button" className="wt-create-pencil" aria-label={t("{name} 수정",{name:c.builtin?t(c.name):c.name})} onClick={()=>setEditingCharacter(c.builtin?{...c,name:form.characterId===c.id&&form.name?form.name:t(c.name),description:form.characterId===c.id?form.character:t(c.description||"")}:c)}><IconEdit size={15}/></button>}
             </div>)}

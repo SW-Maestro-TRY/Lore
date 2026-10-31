@@ -205,6 +205,14 @@ def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
         if who:
             lines.append(f"{who} (주인공) — {desc}" if desc else f"{who} (주인공)")
     lines += spec_lines(spec)
+    # 함께 주인공인 사람(주인공 여러 명) — 시트 사양은 sheets/<이름>.spec.json 에 있어 여기선 설명만 둔다.
+    for one in (char or {}).get("co") or []:
+        if not isinstance(one, dict) or not _text(one.get("name")):
+            continue
+        desc = _text(one.get("description"))
+        card = charcard.short(one.get("card") or {})
+        desc = f"{card}. {desc}" if card and desc else (card or desc)
+        lines.append(f"{one['name']} (주인공) — {desc}" if desc else f"{one['name']} (주인공)")
     for one in cast or []:
         if isinstance(one, dict) and _text(one.get("name")):
             lines.append(f"{one['name']} — {_text(one.get('appearance'))}")
@@ -558,11 +566,12 @@ def review_run(run_dir: Path, only=None, dry_run: bool = False,
         raise SystemExit(f"{run_dir / 'directions.json'} 가 없습니다.")
 
     char = read_json(run_dir / "input.json")
-    hero = _text((char or {}).get("name"))
+    import detailart
     scene_data = read_json(run_dir / "scenes.json") or {}
     scenes = [s for s in (scene_data.get("scenes") or []) if isinstance(s, dict)]
     cast = [c for c in (scene_data.get("cast") or direction.get("cast") or [])
-            if isinstance(c, dict) and _text(c.get("name")) and _text(c.get("name")) != hero]
+            if isinstance(c, dict) and _text(c.get("name"))
+            and not detailart.is_protagonist(char, _text(c.get("name")))]
 
     # 「직전 상태」가 있으면 "앞 장이 어디서 끝났는가" 를 앞 장 검수에서 받아
     # 오지 않는다 — 그리기 전에 scene_prompt 가 이미 정해 둔 값이 기준이다.
