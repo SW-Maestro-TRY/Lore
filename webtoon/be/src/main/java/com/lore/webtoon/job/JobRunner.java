@@ -769,7 +769,7 @@ public class JobRunner {
             persona.putAll(clean);
             mapper.writerWithDefaultPrettyPrinter().writeValue(
                     dir.resolve("personas").resolve(RunArt.castSheetStem(name) + ".json").toFile(), persona);
-            return;
+            return PersonSaved.NONE;
         }
         if ("hero".equals(who)) {
             Map<String, Object> persona = personaOf(runId);
