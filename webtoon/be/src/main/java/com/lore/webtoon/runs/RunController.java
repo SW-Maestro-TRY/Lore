@@ -156,7 +156,10 @@ public class RunController {
      */
     private boolean mayRead(String runId) {
         Long userId = CreditGate.currentUser();
-        return ledger.mayRead(runId, userId) || (userId != null && admins.isAdmin(userId));
+        /* 「링크 있는 사람만」 작품(#898)은 주소의 k 가 맞으면 로그인 없이 읽는다. 그림({@link #page})도 같은 문지기를
+           지나서, 맞으면 잠깐 열리는 주소로 넘겨 준다 — 그림은 비공개 자리에 있어 CloudFront 로는 안 열린다. */
+        return ledger.mayRead(runId, userId, com.lore.webtoon.work.WorkVisibility.requestKey())
+                || (userId != null && admins.isAdmin(userId));
     }
 
     private static <T> ResponseEntity<T> hidden() {
@@ -354,8 +357,18 @@ public class RunController {
                 }
             }
         }
-        /* 남이 열 수 있는 작품인가(#638) — 아니면 화면이 공유 버튼을 감춘다. 링크를 보내도 받은 사람은 404 다. */
+        /* 남이 열 수 있는 작품인가(#638) — 아니면 화면이 공유 버튼을 감춘다. 링크를 보내도 받은 사람은 404 다.
+           링크 공개(#898)는 여기서 false 다 — 둘러보기 · 댓글처럼 「누구나」에 기대는 칸은 링크 공개에서도 닫는다. */
         found.put("public", ledger.isOpen(runId));
+        /* 공개 범위 세 단계와, 주인 · 관리자에게만 링크 열쇠 — 공유 버튼이 열쇠 붙은 주소를 만든다.
+           링크로 온 사람에게는 열쇠를 다시 주지 않는다(이미 주소에 있다). */
+        ledger.find(runId).ifPresent(work -> {
+            found.put("visibility", work.visibility());
+            Long viewer = CreditGate.currentUser();
+            if (work.isLinkOnly() && viewer != null && (ledger.mayChange(runId, viewer) || admins.isAdmin(viewer))) {
+                found.put("share_key", work.getShareKey());
+            }
+        });
         /* 안전 검사에 걸려 빈 장으로 둔 장들(#626) — 화면이 그 자리에 안내를 얹는다. */
         found.put("unsafe_pages", regen.unsafePages(runId));
         /* 그 장마다 걸린 이유(선정성·폭력·잔혹 …) — 무엇을 고치면 되는지 알린다(2026-10-27). */

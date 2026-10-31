@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
-  readSeries, type SeriesInfo, readAllowance, readResult, rememberRecent, renameRun, type Allowance, type RunCard, type RunResult,
+  readSeries, type SeriesInfo, readAllowance, readResult, rememberRecent, renameRun, shareKeyOf, type Allowance, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useT } from "../../lib/i18n";
@@ -403,6 +403,10 @@ export default function Result({ runId, go, authenticated = false, page }: { run
     document.getElementById(`wt-zoom-${zoom}`)?.scrollIntoView({ block: "start" });
   }, [zoom, zoomLoaded, above]);
 
+  /* 「링크 공유(일부공개)」(#898) — 주인은 서버가 준 열쇠, 링크로 온 사람은 주소에서 받은 열쇠로 공유 주소를 만든다. */
+  const linkKey = data?.share_key || (data?.visibility === "link" ? shareKeyOf(runId) : undefined);
+  const canShare = !!data && (data.public !== false || !!linkKey);
+
   return (
     <div className="wt-result wt-result-final">
       {/* 아트보드 MDone 의 위쪽 줄에는 뒤로 가기가 없다 — 제목과 회차뿐이다. */}
@@ -482,9 +486,9 @@ export default function Result({ runId, go, authenticated = false, page }: { run
                   <IconComment size={16} /> {comments ?? 0}
                 </button>
                 {/* 남의 작품은 공유를 찜·댓글 옆에 둔다(2026-10-25). 내 작품은 아래 단추 줄에 있다. */}
-                {!mine && data.public !== false && (
+                {!mine && canShare && (
                   <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character}
-                             className="wt-result-shareinline" label={t("공유하기")} />
+                             className="wt-result-shareinline" label={t("공유하기")} shareKey={linkKey} />
                 )}
               </span>
 
@@ -547,8 +551,9 @@ export default function Result({ runId, go, authenticated = false, page }: { run
                      }}>
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
-                  {/* 비공개 작품은 공유 버튼을 감춘다(#638) — 링크를 받은 사람은 404 를 본다. */}
-                  {data.public !== false && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
+                  {/* 비공개 작품은 공유 버튼을 감춘다(#638) — 링크를 받은 사람은 404 를 본다.
+                      링크 공유(#898)는 열쇠를 붙인 주소로 공유한다. */}
+                  {canShare && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} shareKey={linkKey} />}
                 </div>
                 {tomorrow && <p className="wt-result-tomorrow">{tomorrow}</p>}
                 <div className="wt-result-dlrow">

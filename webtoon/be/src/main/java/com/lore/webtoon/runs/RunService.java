@@ -364,6 +364,8 @@ public class RunService {
         card.put("likes", likes.countByRunId(runId));
         if (withPublic) {
             card.put("public", work.isPublic());
+            /* 공개 범위 세 단계(#898). 링크 열쇠는 싣지 않는다 — 이 목록은 브라우저 uid 만으로도 열리는 길이 있다. */
+            card.put("visibility", work.visibility());
         }
         return card;
     }

@@ -66,7 +66,7 @@ public class AdminCatalog {
     }
 
     /**
-     * 작품 목록. {@code filter}: all · public · private(작가가 비공개) · hidden(관리자 비공개) · removed(관리자 삭제)
+     * 작품 목록. {@code filter}: all · public · link(링크 있는 사람만) · private(작가가 비공개) · hidden(관리자 비공개) · removed(관리자 삭제)
      * · trash(작가가 지움) · guest(로그인 안 하고 만듦). 예시 작품은 빼고 센다 — 예시는 예시 관리에서 본다.
      * {@code q} 는 작가 이메일 · 제목 · 작품 번호 중 하나에 들어 있으면 고른다.
      */
@@ -75,7 +75,8 @@ public class AdminCatalog {
         StringBuilder where = new StringBuilder(" where not w.is_example");
         switch (filter == null ? "all" : filter) {
             case "public" -> where.append(" and w.is_public and w.deleted_at is null and w.moderation is null");
-            case "private" -> where.append(" and not w.is_public and w.deleted_at is null and w.moderation is null");
+            case "private" -> where.append(" and not w.is_public and w.share_key is null and w.deleted_at is null and w.moderation is null");
+            case "link" -> where.append(" and not w.is_public and w.share_key is not null and w.deleted_at is null and w.moderation is null");
             case "hidden" -> where.append(" and w.moderation = 'HIDDEN'");
             case "removed" -> where.append(" and w.moderation = 'REMOVED'");
             case "trash" -> where.append(" and w.deleted_at is not null and w.moderation is null");
@@ -212,7 +213,7 @@ public class AdminCatalog {
         if (w.getDeletedAt() != null) {
             return "trash";
         }
-        return w.isPublic() ? "public" : "private";
+        return w.visibility();                // public · link(링크 있는 사람만, #898) · private
     }
 
     private static Query bind(Query query, boolean search, String q) {

@@ -529,6 +529,8 @@ export interface RunCard {
   page_count: number;
   style_label?: string;
   public?: boolean;
+  /** 공개 범위 세 단계(#898) — 내 목록에만 온다. */
+  visibility?: Visibility;
   /** 찜 수(#247). 서버가 카드마다 붙인다. */
   likes?: number;
   /** 본 사람 수 — 둘러보기 목록에만 온다(조회순 정렬). 연재는 회차를 더한 값. */
@@ -590,8 +592,58 @@ export function myBrowserRuns(): Promise<RunCard[]> {
     .then((got) => got.runs || []);
 }
 
+/* ---- 「링크 공유(일부공개)」 작품의 열쇠(#898) -----------------------------------
+ *
+ * 링크 공유 작품은 작품 번호만으로는 안 열리고, 공유 주소의 `k` 가 실려 와야 연다. 그 작품을 읽는 모든
+ * 주소(결과 · 장 그림 · 표지 · 내려받기 · 회차 목록)에 같은 열쇠를 붙여야 해서 여기 한 곳에서 붙인다 —
+ * `<img src>` 에는 머리말을 못 실으므로 주소에 싣는다.
+ *
+ * 받은 열쇠는 작품 번호마다 이 브라우저에 기억한다(최근 본 작품 표지를 다시 그릴 때도 쓰려고). 못 남겨도
+ * 이번 화면에서는 돈다. */
+const SHARE_KEYS = "wt-share-keys";
+const shareKeys = new Map<string, string>();
+let shareKeysLoaded = false;
+
+function loadShareKeys() {
+  if (shareKeysLoaded || typeof window === "undefined") return;
+  shareKeysLoaded = true;
+  try {
+    const got = JSON.parse(localStorage.getItem(SHARE_KEYS) || "{}") as Record<string, string>;
+    for (const [run, key] of Object.entries(got)) if (typeof key === "string" && key) shareKeys.set(run, key);
+  } catch { /* 저장소가 막혀도 이번 화면은 돈다 */ }
+}
+
+/** 공유 주소로 들어온 열쇠를 기억한다. 주인이 결과에서 받은 열쇠도 여기 넣는다. */
+export function rememberShareKey(runId: string, key: string | null | undefined) {
+  if (!runId || !key) return;
+  loadShareKeys();
+  if (shareKeys.get(runId) === key) return;
+  shareKeys.set(runId, key);
+  try {
+    localStorage.setItem(SHARE_KEYS, JSON.stringify(Object.fromEntries([...shareKeys].slice(-200))));
+  } catch { /* 위와 같다 */ }
+}
+
+/** 비공개로 바꿔 열쇠가 버려졌을 때 — 남은 열쇠로 계속 부르지 않게. */
+export function forgetShareKey(runId: string) {
+  loadShareKeys();
+  if (!shareKeys.delete(runId)) return;
+  try { localStorage.setItem(SHARE_KEYS, JSON.stringify(Object.fromEntries(shareKeys))); } catch { /* 위와 같다 */ }
+}
+
+export function shareKeyOf(runId: string): string | undefined {
+  loadShareKeys();
+  return shareKeys.get(runId);
+}
+
+/** 그 작품의 열쇠가 있으면 주소에 `k` 로 붙인다. */
+function withKey(url: string, runId: string): string {
+  const key = shareKeyOf(runId);
+  return key ? `${url}${url.includes("?") ? "&" : "?"}k=${encodeURIComponent(key)}` : url;
+}
+
 export function coverUrl(runId: string, page: number, episode = 1): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`, runId);
 }
 
 export interface RunResult {
@@ -632,8 +684,12 @@ export interface RunResult {
   drawing_pages?: number[];
   /** 관리자 처리(#638) — 주인과 관리자에게만 온다. */
   moderation?: ModerationNote;
-  /** 남이 열 수 있나(#638). false 면 공유 링크가 받은 사람에게 404 라 공유 버튼을 감춘다. */
+  /** 남이 열 수 있나(#638). false 면 공유 링크가 받은 사람에게 404 라 공유 버튼을 감춘다. 링크 공개도 false. */
   public?: boolean;
+  /** 공개 범위 세 단계(#898). */
+  visibility?: Visibility;
+  /** 링크 공유 작품의 열쇠 — 주인과 관리자에게만 온다. 공유 주소의 k 다. */
+  share_key?: string;
 }
 
 export interface RunInputs {
@@ -647,7 +703,7 @@ export interface RunInputs {
 }
 
 export function readResult(runId: string): Promise<RunResult> {
-  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`);
+  return call<RunResult>(withKey(`/runs/${encodeURIComponent(runId)}/result`, runId));
 }
 
 /** 장 하나를 그리는 일의 진행 — 편집실 다시 그리기와 같은 모양이다. */
@@ -669,16 +725,16 @@ export function pageDrawStatus(id: string): Promise<PageDrawStatus> {
 }
 
 export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`, runId);
 }
 
 /** 한 편 내려받기. plain 이면 편집실에서 얹은 것을 빼고 밑그림으로(LORE 표시는 그대로). */
 export function episodeDownloadUrl(runId: string, plain = false): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/episode.png${plain ? "?plain=1" : ""}`;
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/episode.png${plain ? "?plain=1" : ""}`, runId);
 }
 
 export function pageDownloadUrl(runId: string, no: number, plain = false): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}/download${plain ? "?plain=1" : ""}`;
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${no}/download${plain ? "?plain=1" : ""}`, runId);
 }
 
 export function renameRun(runId: string, title: string): Promise<{ title: string }> {
@@ -746,11 +802,24 @@ export function restoreRun(runId: string): Promise<{ runId: string; restored: bo
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/restore`, { method: "POST" });
 }
 
-export function setVisibility(runId: string, isPublic: boolean) {
-  return appRequest<{ runId: string; public: boolean }>(
+/** 공개 범위 세 단계(#898). public = 둘러보기에 공개 · link = 링크 공유(일부공개) · private = 나만. */
+export type Visibility = "public" | "link" | "private";
+
+/** 카드 · 결과에 실린 값으로 지금 공개 범위를 읽는다. visibility 가 없는 옛 서버는 public 만 본다. */
+export function visibilityOf(run: { visibility?: string; public?: boolean }): Visibility {
+  if (run.visibility === "public" || run.visibility === "link" || run.visibility === "private") return run.visibility;
+  return run.public === false ? "private" : "public";
+}
+
+export function setVisibility(runId: string, visibility: Visibility) {
+  return appRequest<{ runId: string; public: boolean; visibility?: Visibility; share_key?: string | null }>(
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/visibility`,
-    { method: "POST", body: { public: isPublic } },
-  );
+    { method: "POST", body: { visibility, public: visibility === "public" } },
+  ).then((out) => {
+    if (out.share_key) rememberShareKey(runId, out.share_key);
+    else if ((out.visibility ?? visibility) === "private") forgetShareKey(runId);
+    return out;
+  });
 }
 
 /** 웹툰이 다 만들어졌을 때 계정 이메일로 알릴지. 행이 없으면(안 건드렸으면)
@@ -1086,7 +1155,7 @@ export function adminClearSpend(): Promise<AdminSpend> {
 
 export interface AdminPage<T> { rows: T[]; total: number; page: number; pageSize: number }
 
-export type AdminWorkState = "public" | "private" | "hidden" | "removed" | "trash";
+export type AdminWorkState = "public" | "link" | "private" | "hidden" | "removed" | "trash";
 
 export interface AdminWorkRow {
   run_id: string;
@@ -1236,6 +1305,8 @@ export interface ModerationState {
   run_id: string;
   title: string;
   public: boolean;
+  /** 공개 범위 세 단계(#898). 옛 서버는 안 보낸다. */
+  visibility?: Visibility;
   trashed: boolean;
   example: boolean;
   moderation: ModerationNote | null;
@@ -1306,7 +1377,7 @@ export interface SeriesForm {
   checkpoints?: boolean;
 }
 export function readSeries(run: string): Promise<SeriesInfo> {
-  return call(`/series/${encodeURIComponent(run)}`);
+  return call(withKey(`/series/${encodeURIComponent(run)}`, run));
 }
 /** 써 두고 아직 만들지 않은 다음 화 초안 — 마이페이지 「만드는 중」. */
 export interface SeriesDraftCard { run: string; episode: number; title: string; story: string }
