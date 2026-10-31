@@ -20,6 +20,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -246,4 +247,25 @@ class EpisodeExportTest {
         assertThat(painted(onePlain, 600, 400, 800, 500, 0x000000)).isTrue();
     }
 
+
+    @Test
+    @DisplayName("그림만 받기도 직접 그린 선(리터치)은 남긴다 — 고친 그림이 고치기 전으로 돌아가면 안 된다")
+    void 그림만_받기_리터치() throws IOException {
+        sheet(1, 800, 500, Color.BLACK);
+        OverlayStore overlays = mock(OverlayStore.class);
+        when(overlays.gapsOf(anyString(), anyInt())).thenReturn(Map.of());
+        // 가운데를 가로지르는 흰 붓 선
+        var scenes = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                "{\"scenes\":{\"1\":{\"paint\":{\"v\":1,\"strokes\":[{\"k\":\"b\",\"c\":\"#ffffff\",\"w\":400,"
+                        + "\"p\":[1000,5000,9000,5000]}]}}}}");
+        when(overlays.read(anyString(), anyInt())).thenReturn(scenes);
+        export.setOverlays(overlays);
+
+        BufferedImage all = ImageIO.read(new ByteArrayInputStream(export.png("run-1", true)));
+        BufferedImage one = ImageIO.read(new ByteArrayInputStream(export.pagePng("run-1", 1, true)));
+
+        assertThat(all.getRGB(400, 250) & 0xFFFFFF).isEqualTo(0xFFFFFF);
+        assertThat(one.getRGB(400, 250) & 0xFFFFFF).isEqualTo(0xFFFFFF);
+        assertThat(all.getRGB(10, 10) & 0xFFFFFF).isEqualTo(0x000000);    // 선 밖은 밑그림 그대로
+    }
 }

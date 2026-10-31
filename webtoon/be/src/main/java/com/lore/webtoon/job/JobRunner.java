@@ -765,6 +765,12 @@ public class JobRunner {
             if (persona == null) {
                 throw new IOException("그 주인공의 카드가 없습니다: " + name);
             }
+            /* 함께 주인공의 이름은 작품 안에서 안 고친다 — 내 캐릭터에 저장된 이름이 원본이고, 이 이름에 시트·카드·
+               옛 판 파일과 input.json · DB 의 co_names · 다음 화가 다 걸려 있다. 화면도 이름 칸을 안 보여 준다. */
+            if (clean.containsKey("name") && !name.equals(clean.get("name"))) {
+                throw new IllegalArgumentException("함께 주인공의 이름은 여기서 바꿀 수 없어요");
+            }
+            clean.remove("name");
             clean.remove("role");
             persona.putAll(clean);
             mapper.writerWithDefaultPrettyPrinter().writeValue(
@@ -786,7 +792,8 @@ public class JobRunner {
             PersonSaved saved = PersonSaved.NONE;
             if (!newName.equals(oldName)) {
                 String to = newName;
-                if (castOf(runId).stream().anyMatch(c -> to.equals(String.valueOf(c.get("name")).trim()))) {
+                if (castOf(runId).stream().anyMatch(c -> to.equals(String.valueOf(c.get("name")).trim()))
+                        || PersonFiles.coNames(dir, mapper).contains(to)) {
                     throw new IllegalArgumentException("다른 인물과 이름이 같아요");
                 }
                 Map<String, Object> input = inputOf(dir);
@@ -829,7 +836,8 @@ public class JobRunner {
             String to = newName;
             Map<String, Object> persona = personaOf(runId);
             boolean taken = (persona != null && to.equals(String.valueOf(persona.get("name")).trim()))
-                    || cast.stream().anyMatch(c -> to.equals(String.valueOf(c.get("name")).trim()));
+                    || cast.stream().anyMatch(c -> to.equals(String.valueOf(c.get("name")).trim()))
+                    || PersonFiles.coNames(dir, mapper).contains(to);
             if (taken) {
                 throw new IllegalArgumentException("다른 인물과 이름이 같아요");
             }

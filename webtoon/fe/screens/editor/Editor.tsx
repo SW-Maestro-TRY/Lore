@@ -219,7 +219,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
             {(info?.public !== false || !!info?.share_key) &&
               <ShareMenu runId={runId} episode={episode} className="icon-btn" iconOnly shareKey={info?.share_key} />}
             <button type="button" className="btn btn-p wt-ed-bake" id="bakeBtn">{t("이미지로 뽑기")}</button>
-            <button type="button" className="btn btn-w wt-ed-bake wt-ed-plain" id="plainBtn" title={t("내가 얹은 것을 빼고 그림만 내려받습니다")}>{t("그림만 뽑기")}</button>
+            <button type="button" className="btn btn-w wt-ed-bake wt-ed-plain" id="plainBtn" title={t("말풍선·글자를 빼고 그림만 내려받습니다")}>{t("그림만 뽑기")}</button>
             <button type="button" className="btn btn-w wt-ed-done" onClick={() => go("result", { run: runId })}>{t("완성본으로")}</button>
           </div>
         </div>

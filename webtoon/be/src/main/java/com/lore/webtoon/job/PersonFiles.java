@@ -29,6 +29,9 @@ import java.util.Map;
  * 이름을 바꾸면 이 파일들의 글에서 이름을 같이 바꾸고({@link NameSwap}), 주인공을 바꾸면 위 자리를 두
  * 사람 사이에서 맞바꾼다. 화면이 「내가 적은 것」으로 보여 주는 DB 의 {@code input_json} 은 사람이 적은
  * 그대로 둔다.
+ *
+ * <p>함께 주인공(#899)은 이 파일들이 바꾸지 않는다. 그 사람의 이름은 그대로 두고, 그 사람 카드
+ * ({@code personas/*.json}) 글 속에 나오는 다른 인물 이름만 따라간다.
  */
 final class PersonFiles {
 
@@ -64,6 +67,8 @@ final class PersonFiles {
             return new Renamed(Map.of(), false);
         }
         List<String> castBefore = castNames(dir, mapper);
+        /* 이름 치환은 글자로 하므로 함께 주인공 이름까지 건드릴 수 있다(「연화」 → 첫 주인공 「서연화」의 성 뺀 이름) */
+        List<String> coBefore = coNames(dir, mapper);
         boolean story = false;
         for (String name : TEXT_FILES) {
             boolean changed = rewrite(dir.resolve(name), mapper, pairs);
@@ -79,6 +84,8 @@ final class PersonFiles {
                 }
             }
         }
+        restoreCoNames(dir, mapper, coBefore);
+        rewritePersonas(dir, mapper, pairs);
         renameSwappedKeys(dir, mapper, pairs);
         List<String> castAfter = castNames(dir, mapper);
         Map<String, String> moved = new LinkedHashMap<>();
@@ -91,6 +98,62 @@ final class PersonFiles {
             }
         }
         return new Renamed(moved, story);
+    }
+
+    /** 함께 주인공 이름들 — {@code input.json} 의 {@code co}. 한 명짜리 작품이면 빈 목록. */
+    static List<String> coNames(Path dir, ObjectMapper mapper) throws IOException {
+        Path file = dir.resolve("input.json");
+        if (!Files.isRegularFile(file) || !(readMap(file, mapper).get("co") instanceof List<?> co)) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (Object one : co) {
+            if (one instanceof Map<?, ?> m && !str(m.get("name")).isEmpty()) {
+                out.add(str(m.get("name")));
+            }
+        }
+        return out;
+    }
+
+    /** 글 치환이 건드린 함께 주인공 이름을 되돌린다. 자리는 그대로라 번호로 맞춘다. */
+    private static void restoreCoNames(Path dir, ObjectMapper mapper, List<String> before) throws IOException {
+        Path file = dir.resolve("input.json");
+        if (before.isEmpty() || coNames(dir, mapper).equals(before)) {
+            return;
+        }
+        Map<String, Object> input = readMap(file, mapper);
+        if (input.get("co") instanceof List<?> co) {
+            int i = 0;
+            for (Object one : co) {
+                if (one instanceof Map<?, ?> m && !str(m.get("name")).isEmpty() && i < before.size()) {
+                    castMapInPlace(m).put("name", before.get(i++));
+                }
+            }
+            write(file, mapper, input);
+        }
+    }
+
+    /** 함께 주인공 카드 글 속의 이름을 따라 바꾼다. 카드 주인의 이름은 그대로. */
+    private static void rewritePersonas(Path dir, ObjectMapper mapper, List<NameSwap.Pair> pairs) throws IOException {
+        Path personas = dir.resolve("personas");
+        if (!Files.isDirectory(personas)) {
+            return;
+        }
+        try (DirectoryStream<Path> found = Files.newDirectoryStream(personas, "*.json")) {
+            for (Path one : found) {
+                Object own = readMap(one, mapper).get("name");
+                if (rewrite(one, mapper, pairs)) {
+                    Map<String, Object> card = readMap(one, mapper);
+                    card.put("name", own);
+                    write(one, mapper, card);
+                }
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMapInPlace(Map<?, ?> m) {
+        return (Map<String, Object>) m;
     }
 
     /** 맡겨 둔 옛 주인공의 이름이 바뀌었으면 맡긴 칸·시트 폴더 이름도 같이. */

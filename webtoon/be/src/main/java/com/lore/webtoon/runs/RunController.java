@@ -424,7 +424,7 @@ public class RunController {
      * 파일의 성질이지 저장물의 성질이 아니다.
      */
     @Operation(summary = "한 편 내려받기",
-            description = "낱장을 이어 붙이고 LORE 표시를 찍어서 준다. plain=1 이면 편집실에서 얹은 것을 빼고 밑그림으로.")
+            description = "낱장을 이어 붙이고 LORE 표시를 찍어서 준다. plain=1 이면 말풍선·글자를 빼고 밑그림과 직접 그린 선만.")
     @GetMapping(value = "/{runId}/episode.png", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> episode(@PathVariable String runId,
                                           @RequestParam(required = false) String plain) {
@@ -665,7 +665,7 @@ public class RunController {
      * 붙는다</b>: 낱장으로 나가도 어디서 만든 것인지 남아야 한다.
      */
     @Operation(summary = "컷 하나 내려받기",
-            description = "그 장 하나에 LORE 표시를 찍어서 준다. plain=1 이면 편집실에서 얹은 것을 빼고 밑그림으로.")
+            description = "그 장 하나에 LORE 표시를 찍어서 준다. plain=1 이면 말풍선·글자를 빼고 밑그림과 직접 그린 선만.")
     @GetMapping(value = "/{runId}/page/{no}/download", produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> pageDownload(@PathVariable String runId, @PathVariable int no,
                                                @RequestParam(required = false) String plain) {

@@ -14,7 +14,7 @@ const dict: Dict = {
   "내가 얹은 것 보기": { en: "Show what I added", ja: "自分が載せたものを表示", zh: "显示我添加的内容" },
   "이미지로 뽑기": { en: "Export as image", ja: "画像に書き出す", zh: "导出为图片" },
   "그림만 뽑기": { en: "Export art only", ja: "絵だけ書き出す", zh: "仅导出图片" },
-  "내가 얹은 것을 빼고 그림만 내려받습니다": { en: "Downloads the art without what you added", ja: "自分が載せたものを除いて絵だけダウンロードします", zh: "不含你添加的内容，只下载图片" },
+  "말풍선·글자를 빼고 그림만 내려받습니다": { en: "Downloads the art without bubbles or text", ja: "吹き出し・文字を除いて絵だけダウンロードします", zh: "不含对话气泡和文字，只下载图片" },
   "완성본으로": { en: "To the finished work", ja: "完成版へ", zh: "查看完成版" },
   "오늘 무료 {n}편": { en: "{n} free today", ja: "今日の無料 残り{n}話", zh: "今天免费 {n} 话" },
   "오늘 무료 소진 · 로그인하면 이어서": { en: "Today's free ones are used up · sign in to keep going", ja: "今日の無料分は終了 · ログインすると続けられます", zh: "今天的免费次数已用完 · 登录后可继续" },

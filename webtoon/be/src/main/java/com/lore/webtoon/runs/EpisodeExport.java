@@ -64,10 +64,11 @@ import java.util.Map;
  *
  * <h2>그림만 받기</h2>
  *
- * {@code plain} 이면 편집실에서 얹은 것(말풍선·나레이션·스티커)을 구운 판 대신
- * 밑그림을 잇는다. 편집실에서 고친 여백과 LORE 도장은 그대로다 — 도장은 파일이
- * 밖으로 나가는 한 늘 붙고, 여백은 얹은 것이 아니라 지면의 배치다. 그림 모델이
- * 그림 안에 직접 그린 글자는 밑그림의 일부라 이 길로도 빠지지 않는다.
+ * {@code plain} 이면 편집실에서 얹은 것(말풍선·나레이션·글자·스티커)을 구운 판 대신
+ * 밑그림을 잇는다. <b>직접 그린 선(리터치)은 남긴다</b> — 그림의 찐빠를 고친 것이라 그림의
+ * 일부다. 빼면 고친 그림이 고치기 전으로 돌아간다. 편집실에서 고친 여백과 LORE 도장도
+ * 그대로다 — 도장은 파일이 밖으로 나가는 한 늘 붙고, 여백은 얹은 것이 아니라 지면의 배치다.
+ * 그림 모델이 그림 안에 직접 그린 글자는 밑그림의 일부라 이 길로도 빠지지 않는다.
  */
 @Service
 public class EpisodeExport {
@@ -185,7 +186,8 @@ public class EpisodeExport {
         try {
             tmp = Files.createTempFile("lore-page-", ".png");
             storage.download(key, tmp);
-            return ImageIO.read(tmp.toFile());
+            BufferedImage img = ImageIO.read(tmp.toFile());
+            return plain && img != null ? retouched(img, painted(runId).path(String.valueOf(no))) : img;
         } catch (IOException | RuntimeException e) {
             log.warn("장을 못 가져왔습니다 (run={}, 장={})", runId, no, e);
             return null;
@@ -206,6 +208,7 @@ public class EpisodeExport {
     private Map<Integer, BufferedImage> load(String runId, boolean plain) {
         Map<Integer, BufferedImage> out = new java.util.LinkedHashMap<>();
         Map<Integer, String> keys = keysOf(runId, plain);
+        com.fasterxml.jackson.databind.JsonNode scenes = plain ? painted(runId) : null;
         for (Map.Entry<Integer, String> one : keys.entrySet()) {
             Path tmp = null;
             try {
@@ -213,7 +216,7 @@ public class EpisodeExport {
                 storage.download(one.getValue(), tmp);
                 BufferedImage img = ImageIO.read(tmp.toFile());
                 if (img != null) {
-                    out.put(one.getKey(), img);
+                    out.put(one.getKey(), plain ? retouched(img, scenes.path(String.valueOf(one.getKey()))) : img);
                 } else {
                     log.warn("장을 못 읽었습니다 (run={}, 장={})", runId, one.getKey());
                 }
@@ -225,6 +228,31 @@ public class EpisodeExport {
             }
         }
         return out;
+    }
+
+    /** 장마다 얹은 것 — 그림만 받을 때 직접 그린 선을 읽는다. 없으면 빈 노드. 회차는 여백({@link #gapsPx})과 같다. */
+    private com.fasterxml.jackson.databind.JsonNode painted(String runId) {
+        return overlays == null ? com.fasterxml.jackson.databind.node.MissingNode.getInstance()
+                : overlays.read(runId, 1).path("scenes");
+    }
+
+    /** 직접 그린 선만 밑그림에 얹는다. 선이 없으면 그림 그대로. 못 그려도 그림은 나간다. */
+    private static BufferedImage retouched(BufferedImage page, com.fasterxml.jackson.databind.JsonNode scene) {
+        com.fasterxml.jackson.databind.JsonNode strokes = scene.path("paint").path("strokes");
+        if (strokes.isEmpty()) {
+            return page;
+        }
+        try {
+            BufferedImage out = new BufferedImage(page.getWidth(), page.getHeight(), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = out.createGraphics();
+            g.drawImage(page, 0, 0, null);
+            g.drawImage(BubbleArtist.paint(page.getWidth(), page.getHeight(), strokes), 0, 0, null);
+            g.dispose();
+            return out;
+        } catch (RuntimeException e) {
+            log.warn("직접 그린 것을 못 그렸습니다", e);
+            return page;
+        }
     }
 
     /** 장 번호 → 읽을 키. 밑그림 위에 구운 판을 덮는다 — {@code plain} 이면 덮지 않는다. */

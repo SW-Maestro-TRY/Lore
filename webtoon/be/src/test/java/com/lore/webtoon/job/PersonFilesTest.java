@@ -130,4 +130,50 @@ class PersonFilesTest {
     private List<Map<String, Object>> list(String name) throws IOException {
         return mapper.readValue(dir.resolve(name).toFile(), new TypeReference<List<Map<String, Object>>>() { });
     }
+
+    /* ---- 함께 주인공(#899)이 있는 작품 ---- */
+
+    private void 함께_주인공() throws IOException {
+        Map<String, Object> input = new LinkedHashMap<>(mapper.readValue(dir.resolve("input.json").toFile(),
+                new TypeReference<Map<String, Object>>() { }));
+        input.put("co", List.of(new LinkedHashMap<>(Map.of("name", "결", "description", "한결의 쌍둥이."))));
+        put("input.json", input);
+        Files.createDirectories(dir.resolve("personas"));
+        put("personas/결.json", Map.of("name", "결", "situation", "한결과 빵집을 지킨다"));
+        Files.writeString(dir.resolve("sheets/결.png"), "co-sheet");
+    }
+
+    @Test
+    @DisplayName("함께 주인공 목록을 읽는다 — 없으면 빈 목록")
+    void 함께_주인공_이름들() throws IOException {
+        assertThat(PersonFiles.coNames(dir, mapper)).isEmpty();
+        함께_주인공();
+        assertThat(PersonFiles.coNames(dir, mapper)).containsExactly("결");
+    }
+
+    @Test
+    @DisplayName("첫 주인공 이름을 바꿔도 함께 주인공 이름은 그대로고, 그 사람 카드 글 속 이름만 따라온다")
+    void 이름_바꾸기와_함께_주인공() throws IOException {
+        함께_주인공();
+        PersonFiles.rename(dir, mapper, List.of("한결", "결"), "도윤");   // 함께 주인공 이름과 같은 말이 옛 이름에 들어도
+        assertThat(PersonFiles.coNames(dir, mapper)).containsExactly("결");
+        Map<String, Object> card = mapper.readValue(dir.resolve("personas/결.json").toFile(),
+                new TypeReference<Map<String, Object>>() { });
+        assertThat(card.get("name")).isEqualTo("결");
+        assertThat(String.valueOf(card.get("situation"))).contains("도윤").doesNotContain("한결");
+        assertThat(dir.resolve("sheets/결.png")).exists();
+    }
+
+    @Test
+    @DisplayName("주인공을 바꿔도 함께 주인공의 자리·카드·시트는 그대로다")
+    void 주인공_바꾸기와_함께_주인공() throws IOException {
+        함께_주인공();
+        PersonFiles.swapLead(dir, mapper, 0);
+        Map<String, Object> input = mapper.readValue(dir.resolve("input.json").toFile(),
+                new TypeReference<Map<String, Object>>() { });
+        assertThat(input.get("name")).isEqualTo("하윤");
+        assertThat(PersonFiles.coNames(dir, mapper)).containsExactly("결");
+        assertThat(Files.readString(dir.resolve("sheets/결.png"))).isEqualTo("co-sheet");
+        assertThat(dir.resolve("personas/결.json")).exists();
+    }
 }

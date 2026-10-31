@@ -64,7 +64,7 @@ export default function Result({ runId, go, authenticated = false, page }: { run
   const [accountChecked, setAccountChecked] = useState(false);
   /* 아트보드 Done 의 「컷별로 내려받기」 — 켜면 장마다 내려받기 줄이 붙는다. */
   const [perPage, setPerPage] = useState(false);
-  /* 그림만 — 편집실에서 얹은 것(말풍선·나레이션·스티커)을 빼고 받는다. LORE 표시는 그대로. */
+  /* 그림만 — 말풍선·나레이션·글자·스티커를 빼고 받는다. 직접 그린 선(리터치)과 LORE 표시는 그대로. */
   const [plain, setPlain] = useState(false);
   /* 크게 보기 — 장을 누르면 화면 전체에 띄운다. 웹툰 장은 세로로 길어서
      화면에 통째로 맞추면 오히려 작아진다. 폭에 맞추고 세로로 흘린다. */
@@ -563,9 +563,9 @@ export default function Result({ runId, go, authenticated = false, page }: { run
                     {t("컷별로 내려받기")}
                   </label>
                   <label className="wt-result-perpage">
-                    <input type="checkbox" checked={plain} aria-label={t("그림만 (내가 얹은 것 빼고)")}
+                    <input type="checkbox" checked={plain} aria-label={t("그림만 (말풍선·글자 빼고)")}
                            onChange={(e) => { setPlain(e.target.checked); if (e.target.checked) track("download_plain_on", { run: runId }); }} />
-                    {t("그림만 (내가 얹은 것 빼고)")}
+                    {t("그림만 (말풍선·글자 빼고)")}
                   </label>
                 </div>
               </>

@@ -152,6 +152,8 @@ function SceneEditor({ text, parts, label, onChange }: {
 
 /* 인물 카드(#548) — 읽을 때는 칸만, 연필을 누르면 칸마다 글 칸(소제목은 그대로). */
 const HERO_KEYS: [string, string][] = [["name", "이름"], ["look", "생김새"], ["personality", "성격"], ["voice", "말투"], ["line", "대표 대사"]];
+/* 함께 주인공 카드 — 이름은 내 캐릭터에 저장된 것이 원본이라 여기서 안 고친다(서버도 막는다) */
+const CO_KEYS = HERO_KEYS.filter(([k]) => k !== "name");
 const CAST_KEYS: [string, string][] = [["name", "이름"], ["role", "역할"], ["look", "생김새"], ["tie", "주인공과의 관계"],
   ["gap", "갭"], ["voice", "말투"], ["line", "대표 대사"]];
 /** 주인공을 바꾸면 조연 카드가 주인공 자리로(역할·관계·갭이 따라온다), 옛 주인공 카드가 조연 자리로(성격이 따라온다) 간다.
@@ -1721,7 +1723,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                         )}
                         {coSheets.filter((s) => s.persona).map((s) => (
                           <PersonCard key={"co-" + s.name} hero title={t("주인공 · {name}", { name: s.persona!.name })} person={s.persona as unknown as Record<string, unknown>}
-                                      keys={HERO_KEYS} onSave={(f) => savePersonCard("co:" + s.name, f)} />
+                                      keys={CO_KEYS} onSave={(f) => savePersonCard("co:" + s.name, f)} />
                         ))}
                         {cast.map((c, i) => (
                           <PersonCard key={c.name + i} title={c.role ? `${c.name} · ${c.role}` : c.name} person={c as unknown as Record<string, unknown>}
@@ -1780,7 +1782,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
                         )}
                         {coSheets.filter((s) => s.persona).map((s) => (
                           <PersonCard key={"co-" + s.name} hero title={t("주인공 · {name}", { name: s.persona!.name })} person={s.persona as unknown as Record<string, unknown>}
-                                      keys={HERO_KEYS} onSave={(f) => savePersonCard("co:" + s.name, f)} />
+                                      keys={CO_KEYS} onSave={(f) => savePersonCard("co:" + s.name, f)} />
                         ))}
                         {cast.map((c, i) => (
                           <PersonCard key={c.name + i} title={c.role ? `${c.name} · ${c.role}` : c.name} person={c as unknown as Record<string, unknown>}
