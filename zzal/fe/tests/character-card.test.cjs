@@ -36,3 +36,11 @@ test('callMe: slash means more than one',()=>{assert.equal(validateCallMe('언�
 test('callMe: "이름 없이" and "이름없이" are refused',()=>{assert.equal(validateCallMe('이름 없이','주인님'),'nameless');assert.equal(validateCallMe('이름없이',null),'nameless');assert.equal(validateCallMe(' 이름  없이 ',null),'nameless');});
 test('callMe: unchanged vs a new value; null current treats any value as new',()=>{assert.equal(validateCallMe('주인님','주인님'),'unchanged');assert.equal(validateCallMe('언니','주인님'),null);assert.equal(validateCallMe('언니',null),null);});
 test('emoji count follows String.length like the server',()=>{assert.equal(validateName('😀'.repeat(6),'x'),null);assert.equal(validateName('😀'.repeat(7),'x'),'tooLong');});
+test('card art only uses the pet own base image and falls back to a silhouette, never spriteUrl',()=>{
+ const card=fs.readFileSync(path.resolve(__dirname,'../tamagotchi/yeoul/CharacterCard.tsx'),'utf8').replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,''); // code only, comments may name the forbidden path
+ assert.ok(!/spriteUrl|YEOUL_MOTION/.test(card),'no Yeoul fallback image path');
+ assert.match(card,/<CardArt src=\{live\.img\('base'\)\}/);
+ assert.match(card,/const missing=!src\|\|geometry\.failed;/);
+ assert.match(card,/missing\?<svg className="zcc-silhouette" data-card-silhouette/);
+ assert.ok(!/저장했어요/.test(card+fs.readFileSync(path.resolve(__dirname,'../tamagotchi/yeoul/characterCardCopy.ts'),'utf8')),'no save toast copy');
+});
