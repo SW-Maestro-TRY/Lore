@@ -275,7 +275,8 @@ app:
       # 그림 단계(시트·격자 호출 실패, 격자 검사 탈락·후처리 예외로 격자를 버린 경우)를 한 펫에서 몇 번까지 받나
       #   (작업 1.10, 2026-11-01 상훈님 "오늘 개발해서 켜자"). 이 수에 닿으면 max-hatch-attempts 가 남아 있어도
       #   그림 API 를 다시 부르지 않고 실패로 닫는다 — 손님 화면은 기존 실패와 같고, 관리자 자동 CLI
-      #   (admin.auto-cli, 켜져 있으면)가 이어 받는다. 정체성 문단만 실패한 재시도는 세지 않는다. 0 = 끔(옛 동작).
+      #   (admin.auto-cli)가 이어 받는다. ★ 자동 CLI 가 꺼져 있으면 이 상한은 안 걸린다(기존 3회 — 이어 받는 쪽 없이
+      #   손님 기회만 줄이지 않게). 정체성 문단만 실패한 재시도는 세지 않는다. 0 = 끔(옛 동작).
       image-max-attempts: ${ZZAL_IMAGE_MAX_ATTEMPTS:2}
       states:
         v1: base,eat,joy,sad,sick,pet,hello,sleep,eat_rice,eat_snack,sweep,wash,reply,petted,startle,wake_up

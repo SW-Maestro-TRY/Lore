@@ -111,6 +111,17 @@ public class HatchService {
         this.imageMaxAttempts = Math.max(0, imageMaxAttempts);
     }
 
+    /**
+     * 관리자 자동 CLI 가 켜져 있나. ★ 그림 상한은 <b>이어 받는 쪽이 있을 때만</b> 건다 — 꺼진 채 상한만 걸리면
+     * 손님의 세 번째 기회만 없어지고 아무도 살리지 않는다. 꺼져 있으면 상한 판정을 건너뛴다(기존 3회).
+     */
+    private boolean autoCliEnabled;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAutoCliEnabled(@Value("${app.zzal.admin.auto-cli.enabled:false}") boolean autoCliEnabled) {
+        this.autoCliEnabled = autoCliEnabled;
+    }
+
     /** 그림 단계로 치는 단계 이름 — 이 단계가 FAILED 면 다시 하려면 그림 API 를 또 부른다. */
     private static final List<String> IMAGE_STEPS = List.of(
             com.lore.zzal.generation.steps.SheetStep.NAME, GridStep.NAME, PostProcessStep.GRID2);
@@ -173,7 +184,7 @@ public class HatchService {
 
             // ★ 그림 단계가 상한만큼 실패했으면 그림 API 를 다시 부르지 않는다(작업 1.10).
             //   손님 화면은 기존 실패와 같다(FAILED). 자동 CLI 는 markPetFailed 뒤 듣는 쪽이 만든다.
-            if (imageMaxAttempts > 0 && result != null) {
+            if (imageMaxAttempts > 0 && autoCliEnabled && result != null) {
                 long imageFailures = gridDiscards
                         + recorder.countFailedSteps(petId, GenKind.HATCH, imageFromJobId, IMAGE_STEPS);
                 if (imageFailures >= imageMaxAttempts) {

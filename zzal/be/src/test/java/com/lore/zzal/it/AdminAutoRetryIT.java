@@ -210,6 +210,7 @@ class AdminAutoRetryIT extends ZzalItSupport {
         HatchService service = new HatchService(fake, recorder, jobRepository, registry, petRepository,
                 quotaBreaker, blockLog, alerts, 3, motionSeeder);
         service.setImageMaxAttempts(imageMax);
+        service.setAutoCliEnabled(true);
         GenJob first = jobRepository.save(GenJob.start(pet, GenKind.HATCH, 1, hatchService.currentVersion(), Instant.now()));
         service.hatch(first.getId(), pet, hatchService.currentVersion());
         return runs;

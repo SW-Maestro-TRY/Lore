@@ -541,7 +541,25 @@ class HatchRetryTest {
     private HatchService imageCapped(int imageMax) {
         HatchService s = serviceWithLimit(3);
         s.setImageMaxAttempts(imageMax);
+        s.setAutoCliEnabled(true);
         return s;
+    }
+
+    @Test
+    @DisplayName("★★ 자동 CLI 꺼짐이면 그림 상한을 안 건다 — 격자 검사 탈락 두 번 뒤에도 세 번째 판(그림 호출)을 굽는다")
+    void imageCap2_autoCliOff_keepsThirdImageCall() {
+        HatchService s = imageCapped(2);
+        s.setAutoCliEnabled(false);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        s.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).as("이어 받는 쪽이 없으면 기존 3회").hasSize(3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
     }
 
     @Test
