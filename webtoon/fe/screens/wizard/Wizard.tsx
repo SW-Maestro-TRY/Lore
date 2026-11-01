@@ -129,6 +129,13 @@ function CardRail({ small, children }: { small?: boolean; children: React.ReactN
 const TITLE_MAX = 60;
 const SETTINGS_MAX = 8000;
 
+/* 빠른 시작의 빈칸 예시(2026-11-01) — 광고로 온 사람은 자기 캐릭터가 없을 수 있다. 누르면 칸만 채우고, 고쳐 쓸 수 있다. */
+const QUICK_EXAMPLES = [
+  { id: "can", label: "다 마신 캔커피", name: "맥짐", text: "다 마신 캔커피. 먹을 것 앞에서는 의리도 원칙도 없다." },
+  { id: "demon", label: "꼬마 마왕", name: "소율", text: "꼬마 여자아이처럼 생겼지만 사실 마왕이다. 그러나 귀엽다." },
+  { id: "student", label: "지친 대학원생", name: "원기", text: "피곤에 쩌든 안경 쓴 대학원생" },
+] as const;
+
 export default function Wizard({
   step: rawStep, presetCharacterId, go, authenticated, mode, quick, presetStyle,
 }: { step: number; presetCharacterId?: string; go: Go; authenticated: boolean; mode?: "own";
@@ -534,6 +541,7 @@ export default function Wizard({
           <h2>{t("주인공을 한 줄로 적어 주세요")}</h2>
           <label className="wt-wiz-morefield"><span>{t("이름")}<small>{form.name.length} / 60</small></span><input className="field" value={form.name} maxLength={60} disabled={loreLocked||quickSaving} onChange={e=>patch({name:e.target.value})}/></label>
           <label className="wt-wiz-morefield"><span>{t("캐릭터 설명")}<small>{form.character.length.toLocaleString()} / 8,000</small></span><textarea className="field" rows={3} value={form.character} maxLength={8000} disabled={loreLocked||quickSaving} placeholder={t("성격 · 외형 · 상황, 한 줄이면 돼요")} onChange={e=>patch({character:e.target.value})}/></label>
+          {!form.character.trim()&&<div className="wt-wiz-quickchips"><span>{t("뭘 적을지 모르겠다면")}</span>{QUICK_EXAMPLES.map(x=><button type="button" key={x.label} disabled={loreLocked||quickSaving} onClick={()=>{track("quick_example_pick",{pick:x.id});patch({name:form.name.trim()?form.name:t(x.name),character:t(x.text)});}}>{t(x.label)}</button>)}</div>}
           <div className="wt-wiz-quickphoto">
             {quickPhoto&&<img src={quickPhoto} alt={t("넣은 캐릭터 그림")}/>}
             <div>
