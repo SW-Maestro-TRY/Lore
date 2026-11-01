@@ -233,6 +233,7 @@ app:
     #   대부분 게이트 오판·한 장만 깨진 격자라 다시 구우면 되는 실패였다.
     #   ★ 2026-10-27 5 → 3 — 상훈님 "안 되는 거 계속해서 뭐하냐". 10/26 펫 177·179 는 5번 다 TIMEOUT 이었다.
     #   3번 다 실패하면 FAILED + 경보. (2층 max-attempts 는 아래 자기 기본 5 를 그대로 둔다.)
+    #   ★ 그림 단계 실패는 따로 2번까지(아래 hatch.image-max-attempts, 2026-11-01).
     max-hatch-attempts: ${ZZAL_MAX_HATCH_ATTEMPTS:3}
     # 2층(격자 2장) 배경 굽기(#696 — 부화는 1층에서 끝나고 2층은 뒤에서 굽는다).
     layer2:
@@ -271,6 +272,12 @@ app:
     # ★ 쓰는 버전의 목록이 비어 있으면 부팅이 막힌다(설정 이름을 말하는 예외).
     #   목록에 없는 이름을 자르려 하면 후처리가 내려받기 전에 멈춘다.
     hatch:
+      # 그림 단계(시트·격자 호출 실패, 격자 검사 탈락·후처리 예외로 격자를 버린 경우)를 한 펫에서 몇 번까지 받나
+      #   (작업 1.10, 2026-11-01 상훈님 "오늘 개발해서 켜자"). 이 수에 닿으면 max-hatch-attempts 가 남아 있어도
+      #   그림 API 를 다시 부르지 않고 실패로 닫는다 — 손님 화면은 기존 실패와 같고, 관리자 자동 CLI
+      #   (admin.auto-cli)가 이어 받는다. ★ 자동 CLI 가 꺼져 있으면 이 상한은 안 걸린다(기존 3회 — 이어 받는 쪽 없이
+      #   손님 기회만 줄이지 않게). 정체성 문단만 실패한 재시도는 세지 않는다. 0 = 끔(옛 동작).
+      image-max-attempts: ${ZZAL_IMAGE_MAX_ATTEMPTS:2}
       states:
         v1: base,eat,joy,sad,sick,pet,hello,sleep,eat_rice,eat_snack,sweep,wash,reply,petted,startle,wake_up
 

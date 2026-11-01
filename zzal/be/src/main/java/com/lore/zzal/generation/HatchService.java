@@ -97,6 +97,35 @@ public class HatchService {
         this.layer2Service = layer2Service;
     }
 
+    /**
+     * 그림 단계(시트·격자 호출, 격자 검사 탈락) 실패를 한 펫에서 몇 번까지 받나(작업 1.10, 2026-11-01 상훈님 "켜자").
+     * 이 수에 닿으면 전체 상한({@code max-hatch-attempts})이 남아 있어도 <b>그림 API 를 다시 부르지 않고</b> 실패로
+     * 닫는다 — 실패 기록 뒤 관리자 자동 CLI(작업 1.9, 켜져 있으면)가 이어 받는다. 0 = 끔(옛 동작).
+     *
+     * ★ 생성자를 늘리지 않고 따로 받는다 — 시험이 직접 만든 서비스는 0(옛 동작), 스프링 빈은 설정값(기본 2).
+     */
+    private int imageMaxAttempts;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setImageMaxAttempts(@Value("${app.zzal.hatch.image-max-attempts:2}") int imageMaxAttempts) {
+        this.imageMaxAttempts = Math.max(0, imageMaxAttempts);
+    }
+
+    /**
+     * 관리자 자동 CLI 가 켜져 있나. ★ 그림 상한은 <b>이어 받는 쪽이 있을 때만</b> 건다 — 꺼진 채 상한만 걸리면
+     * 손님의 세 번째 기회만 없어지고 아무도 살리지 않는다. 꺼져 있으면 상한 판정을 건너뛴다(기존 3회).
+     */
+    private boolean autoCliEnabled;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAutoCliEnabled(@Value("${app.zzal.admin.auto-cli.enabled:false}") boolean autoCliEnabled) {
+        this.autoCliEnabled = autoCliEnabled;
+    }
+
+    /** 그림 단계로 치는 단계 이름 — 이 단계가 FAILED 면 다시 하려면 그림 API 를 또 부른다. */
+    private static final List<String> IMAGE_STEPS = List.of(
+            com.lore.zzal.generation.steps.SheetStep.NAME, GridStep.NAME, PostProcessStep.GRID2);
+
     @Async("hatchExecutor")
     public void hatch(Long jobId, Long petId, String version) {
         // 시도 차수를 단계에 넘긴다 — 정체성 단계가 차수별로 reasoning_effort 를 고른다(2026-10-27).
@@ -116,7 +145,14 @@ public class HatchService {
         //   옛 실패분에 걸려 한 번도 다시 못 굽는다. 기동 복구는 attempt = 지금까지 수 + 1 로 만들므로 상한이 그대로 지켜진다.
         //   관리자 재굽기 job 은 attempt=0(GenJob.ADMIN_REHATCH_ATTEMPT — 사람 상한 셈에서 빠지는 표식)이라 1 로 읽는다.
         int attempt = Math.max(1, job.getAttempt());
+        // ★ 그림 단계 실패를 셀 범위(작업 1.10). 첫 시도·관리자 재굽기(attempt<=1)면 이 job 부터,
+        //   기동 복구(attempt>1 — 지금까지 전체 job 수 + 1)면 이 펫의 부화 job 전체부터(복구가 세는 방식 그대로).
+        long imageFromJobId = job.getAttempt() > 1 ? 0L : jobId;
+        int gridDiscards = 0;
         while (true) {
+            if (result != null && badGrid(result)) {
+                gridDiscards += 1;
+            }
             // ★★ 바깥이 한도(429)로 막았으면 <b>다시 굽지 않는다</b>.
             //   같은 키로 곧바로 다시 보내면 같은 자리에서 또 막히고, 그 전에 200 을 받은 단계의 값은
             //   이미 나간 뒤다 — 한 번 막힌 것이 그대로 두 배가 된다. 타임아웃·격자 구조 이상은
@@ -144,6 +180,21 @@ public class HatchService {
                 //   방금 그 알을 못 봐서 한 번씩 늦게 알린다(경보는 표를 다시 읽어서 센다).
                 alerts.hatchFinallyFailed(petId, Instant.now());
                 return;
+            }
+
+            // ★ 그림 단계가 상한만큼 실패했으면 그림 API 를 다시 부르지 않는다(작업 1.10).
+            //   손님 화면은 기존 실패와 같다(FAILED). 자동 CLI 는 markPetFailed 뒤 듣는 쪽이 만든다.
+            if (imageMaxAttempts > 0 && autoCliEnabled && result != null) {
+                long imageFailures = gridDiscards
+                        + recorder.countFailedSteps(petId, GenKind.HATCH, imageFromJobId, IMAGE_STEPS);
+                if (imageFailures >= imageMaxAttempts) {
+                    preserveBadGrids(petId, result);
+                    log.warn("그림 단계 실패 {}회(상한 {}) — 그림을 다시 굽지 않고 실패로 닫는다 petId={} 시도={}회",
+                            imageFailures, imageMaxAttempts, petId, attempt);
+                    recorder.markPetFailed(petId);
+                    alerts.hatchFinallyFailed(petId, Instant.now());
+                    return;
+                }
             }
 
             // ★ 거부(MODERATION_BLOCKED)면 문단부터 다시 만든다.
@@ -213,8 +264,7 @@ public class HatchService {
      * @return 못 쓸 격자로 판정된 단계 이름들. 격자 탓이 아니면 빈 목록
      */
     private List<String> preserveBadGrids(Long petId, RunResult result) {
-        boolean bad = result.gridRejected() || (discardOnPostprocessCrash && result.postprocessCrashed());
-        if (!bad) {
+        if (!badGrid(result)) {
             return List.of();
         }
         List<String> targets;
@@ -233,6 +283,11 @@ public class HatchService {
             }
         }
         return targets;
+    }
+
+    /** 격자가 못 쓸 물건이라 다시 하려면 격자를 새로 구워야 하는가(검사 탈락 · 후처리 예외). */
+    private boolean badGrid(RunResult result) {
+        return result.gridRejected() || (discardOnPostprocessCrash && result.postprocessCrashed());
     }
 
     /** 이 알의 주인. 막힘 기록에 누구였는지를 남기려고 본다(없으면 null — 기록은 그래도 남는다). */
