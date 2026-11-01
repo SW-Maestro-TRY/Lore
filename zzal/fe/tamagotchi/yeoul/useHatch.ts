@@ -25,7 +25,7 @@ import { assetUrl } from '../../lib/assets';
 import { MOTION_FALLBACK, YEOUL_MOTION, motionAliases } from '../constants';
 import { BASIC_KEYS, GUESS_HAND_PRELOAD } from './constants';
 import {
-  setBackground, updatePersonaSource, type PersonaUpdate, type TutorialAnswerMeta, answerChat, care, draftPet, getAuthoredPersona, getAlbum, getChat, getHatchProgress, getPet, listPets,
+  setBackground, updatePersonaSource, renamePet, type PersonaUpdate, type TutorialAnswerMeta, answerChat, care, draftPet, getAuthoredPersona, getAlbum, getChat, getHatchProgress, getPet, listPets,
   graduationSeen, rewardsSeen, motionWish, setCharacter, setPersonality, share, sleep as sleepPet, tutorialDone, tutorialSeen, wake as wakePet, callBack as callBackPet,
   type Album, type CareAction, type ChatReply, type ChatState, type ChatSlot, type ChatAnswerIdentity, type CharacterInput,
   type HatchProgress, type PetDetail, type Personality, type CareMotionPlayback,
@@ -294,6 +294,11 @@ export interface Live {
    * 9칸을 다 하기 전에 부르면 409 `ZZAL_TUTORIAL_NOT_FINISHED`.
    */
   updatePersona: (input: PersonaUpdate) => Promise<CareResult>;
+  /**
+   * 캐릭터 이름 바꾸기. 성공하면 펫을 갈아 끼우고 `zzal-persona-updated`를 쏜다 —
+   * 채팅 맥락·장면 대사·첫 만남 발견 대사가 새 이름 시트를 다시 읽게 하려는 것.
+   */
+  rename: (name: string) => Promise<CareResult>;
   finishTutorial: () => Promise<CareResult>;
   /**
    * 튜토리얼 **4칸을 "확인했다" 로 넘긴다** — 성격을 안 골라도 된다(→ `lib/pet.tutorialSeen`).
@@ -414,6 +419,7 @@ const EMPTY: Live = {
   callBack: async () => ({ ok: false, message: null, postcards: null }),
   savePersonality: async () => ({ ok: false, message: null }),
   updatePersona: async () => ({ ok: false, message: null }),
+  rename: async () => ({ ok: false, message: null }),
   finishTutorial: async () => ({ ok: false, message: null }),
   tutorialSeen: async () => ({ ok: false, message: null }),
   markGraduationSeen: async () => {},
@@ -869,6 +875,23 @@ export function useHatchState(): Live {
       return { ok: true, message: null };
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : '설정을 저장하지 못했어요',
+        code: e instanceof ApiError ? e.code : null, status: e instanceof ApiError ? e.status : undefined };
+    }
+  }, [petId, putPet, takeSeq]);
+
+  /** updatePersona와 같은 틀: 세대·펫이 바뀐 뒤의 늦은 응답은 버리고, 성공하면 같은 이벤트를 쏜다. */
+  const rename = useCallback(async (name: string): Promise<CareResult> => {
+    if (!petId) return { ok: false, message: '이름을 저장하지 못했어요' };
+    const identity = petId, generation = session.current, seq = takeSeq();
+    try {
+      const next = await renamePet(identity, name);
+      if (generation !== session.current || petRef.current?.petId !== identity) return { ok: false, message: null };
+      putPet(seq, next);
+      // Identifier only, same as updatePersona: listeners reload the authoritative sheet with the new name.
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('zzal-persona-updated', { detail: { petId: identity } }));
+      return { ok: true, message: null };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : '이름을 저장하지 못했어요',
         code: e instanceof ApiError ? e.code : null, status: e instanceof ApiError ? e.status : undefined };
     }
   }, [petId, putPet, takeSeq]);
@@ -1494,7 +1517,7 @@ export function useHatchState(): Live {
     pendingUpload,
     img, upload, holdUpload, resumeUpload, discardUpload,
     justUnlocked,
-    setChar, watchEarly, doCare, doRest, calling, callBack, savePersonality, updatePersona, finishTutorial, prepareStageSpeech, readStageSpeeches, tutorialSeen: seenTutorial, markGraduationSeen, markRewardsSeen, sendChat, startPlay, pickSide, abandonPlay,
+    setChar, watchEarly, doCare, doRest, calling, callBack, savePersonality, updatePersona, rename, finishTutorial, prepareStageSpeech, readStageSpeeches, tutorialSeen: seenTutorial, markGraduationSeen, markRewardsSeen, sendChat, startPlay, pickSide, abandonPlay,
     changeBackground: async (key: string) => { if (petId != null) { const seq = takeSeq(); putPet(seq, await setBackground(petId, key)); } },
     clearJustUnlocked, noteUnlocked,
     loadAlbum, shareMotion, sendWish, resume, reset, putDetail, refreshPet,
