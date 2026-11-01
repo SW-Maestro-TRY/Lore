@@ -17,7 +17,7 @@ import type { FirstIntro, FirstIntroKey, IntroTopic } from '../tamagotchi/yeoul/
 //   - 게이지 4칸 · 밥 3개 · 돌봄 6종 · 재우기/깨우기 창 · 낮잠 · 함께한 날 · 친밀도 · 채팅 3슬롯 ·
 //     2층 즉시 해금(`justUnlocked`) · 아침 도착(`learnedToday`) · 기능 열림(`features`).
 
-import { API_BASE, request } from './api';
+import { API_BASE, request, type RequestOptions } from './api';
 import type { components, operations } from './api-schema';
 
 /** 지금 어느 단계인가. 프론트의 'none'(아직 아무도 없음)은 서버에 없다 — 그건 행이 없는 것. */
@@ -934,6 +934,19 @@ export interface PersonaSource { legacySource?: LegacyPersonaSource | null; auth
 export interface PersonaUpdate { authoredPersona?: AuthoredPersona; callMe?: string; expectedPersonaHash: string }
 export function updatePersonaSource(petId: number, input: PersonaUpdate): Promise<PetDetail> {
  return request(`${PET_BASE}/${petId}/personality`, { method: 'POST', body: input });
+}
+
+/**
+ * 캐릭터 이름 바꾸기(`PATCH /api/zzal/v1/me/pets/{petId}/name`). 응답은 다른 쓰기와 같은 PetDetail 전체.
+ * 400 `INVALID_INPUT`(빈칸·12자 초과) · 404 `ZZAL_PET_NOT_FOUND` · 409 `ZZAL_PET_NOT_ALIVE` · 409 `ZZAL_TRAVELING`.
+ * ★ 이름은 설정 해시에 안 들어가므로 `expectedPersonaHash`를 보내지 않는다.
+ * ★ 공통 `request`의 method 형식에 PATCH가 없어 `lib/dev.ts`처럼 여기서만 넓힌다(전송은 fetch에 문자열 그대로).
+ */
+// TODO(B7): 서버 A4 커밋 뒤 생성 타입(components['schemas'])으로 교체한다.
+type RenameRequest = { name: string };
+export function renamePet(petId: number, name: string): Promise<PetDetail> {
+  const body: RenameRequest = { name };
+  return request<PetDetail>(`${PET_BASE}/${petId}/name`, { method: 'PATCH' as unknown as RequestOptions['method'], body });
 }
 
 export interface AttendanceRewards {
