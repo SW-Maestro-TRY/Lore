@@ -4897,8 +4897,6 @@
           "name": {
             "description": "새 캐릭터 이름. 최대 12자",
             "example": "바다여울",
-            "maxLength": 12,
-            "minLength": 0,
             "type": "string"
           }
         },
