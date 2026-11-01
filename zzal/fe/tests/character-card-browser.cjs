@@ -79,6 +79,10 @@ const shot=(page,name)=>page.screenshot({path:path.join(shots,`${name}.png`)});
    assert.equal(await page.locator(`${card} [data-card-save]`).isDisabled(),true);
    scenes.error=await measure(page,card);assertLayout(scenes.error,1);await shot(page,`${width}-03-error`);
    // Save: rapid double tap sends one request; header and card agree afterwards; focus returns to the pencil.
+   // Esc while a button inside the editor has focus cancels the edit only; the sheet stays open.
+   await page.locator(`${card} [data-card-cancel]`).focus();await page.keyboard.press('Escape');
+   assert.equal(await page.locator(`${card} [data-card-editor]`).count(),0,'Esc closes the editor');assert.equal(await page.locator('[data-fr-info]').count(),1,'Esc keeps the sheet');
+   await page.locator(`${card} [data-card-edit="name"]`).click();
    await input.fill('바다여울');s.renameDelay=400;const save=page.locator(`${card} [data-card-save]`);
    await save.evaluate(el=>{el.click();el.click();});await page.locator(`${card} [data-card-name]`).waitFor();s.renameDelay=0;
    assert.equal(s.renames.length,1,'one PATCH for a double tap');assert.deepEqual(s.renames[0],{name:'바다여울'});

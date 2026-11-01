@@ -47,8 +47,14 @@ export function pickRepresentativeChips(source: CardSource | null | undefined): 
     used: 0,
   }));
   const picked: string[] = [];
-  // 1차: 칸마다 제 몫만큼.
-  for (const pool of pools) while (pool.used < pool.quota && pool.used < pool.chips.length && picked.length < CHIP_MAX) picked.push(pool.chips[pool.used++]);
+  // 1차: 칸마다 제 몫만큼(다른 칸에 같은 칩이 이미 있으면 건너뛰고 그 칸의 다음 칩).
+  for (const pool of pools) {
+    let took = 0;
+    while (took < pool.quota && pool.used < pool.chips.length && picked.length < CHIP_MAX) {
+      const chip = pool.chips[pool.used++];
+      if (!picked.includes(chip)) { picked.push(chip); took++; }
+    }
+  }
   // 2차: 빈자리를 앞 칸부터 남은 칩으로 채운다(세계가 비면 직업·성격에서 더 가져옴).
   for (const pool of pools) while (picked.length < CHIP_MAX && pool.used < pool.chips.length) {
     const chip = pool.chips[pool.used++];
@@ -74,12 +80,12 @@ export function isNamelessCallMe(value: string): boolean {
   return value.replace(/\s+/g, '') === '이름없이';
 }
 
-/** 호칭 입력 검사. "/"는 여러 개를 한 칸에 적은 것으로 보고 막는다(채팅이 그 글자 그대로 부르게 됨). */
+/** 호칭 입력 검사. "/"·전각 "／"는 여러 개를 한 칸에 적은 것으로 보고 막는다(채팅이 그 글자 그대로 부르게 됨). */
 export function validateCallMe(value: string, current: string | null | undefined): CallMeError | null {
   const v = value.trim();
   if (!v) return 'empty';
   if (v.length > CALL_ME_MAX) return 'tooLong';
-  if (v.includes('/')) return 'multiple';
+  if (v.includes('/') || v.includes('\uFF0F')) return 'multiple';
   if (isNamelessCallMe(v)) return 'nameless';
   if (v === (current ?? '').trim()) return 'unchanged';
   return null;

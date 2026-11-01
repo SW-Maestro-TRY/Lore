@@ -44,3 +44,7 @@ test('card art only uses the pet own base image and falls back to a silhouette, 
  assert.match(card,/missing\?<svg className="zcc-silhouette" data-card-silhouette/);
  assert.ok(!/저장했어요/.test(card+fs.readFileSync(path.resolve(__dirname,'../tamagotchi/yeoul/characterCardCopy.ts'),'utf8')),'no save toast copy');
 });
+test('callMe: full-width slash is refused like "/" (server CallMeInput)',()=>{assert.equal(validateCallMe('언니／오빠','주인님'),'multiple');assert.equal(validateCallMe('이름　없이','주인님'),'nameless');});
+test('chips: a chip repeated across fields is shown once and the field takes its next chip',()=>{
+ assert.deepEqual(plain(pick(src({world:['판타지'],job:['판타지','가게 운영'],persona:['다정함','느긋함']}))),['판타지','가게 운영','다정함','느긋함']);
+});

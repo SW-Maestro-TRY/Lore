@@ -54,11 +54,13 @@ export default function CharacterCard({sample=false,allowConfirm=false,onSaved,o
  const [source,setSource]=useState<PersonaSource|null>(null),[failed,setFailed]=useState(false),[attempt,setAttempt]=useState(0),[settings,setSettings]=useState(false);
  const [editing,setEditing]=useState<Field|null>(null),[draft,setDraft]=useState(''),[serverError,setServerError]=useState(''),[busy,setBusy]=useState(false),[travelNote,setTravelNote]=useState<Field|null>(null);
  const era=useRef(0),lock=useRef(false),mounted=useRef(true),petRef=useRef(petId);petRef.current=petId;
- const input=useRef<HTMLInputElement>(null),pens=useRef<Record<Field,HTMLButtonElement|null>>({name:null,callMe:null}),focusBack=useRef<Field|null>(null);
+ const input=useRef<HTMLInputElement>(null),pens=useRef<Record<Field,HTMLButtonElement|null>>({name:null,callMe:null}),focusBack=useRef<Field|null>(null),refocus=useRef(false);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[]);
  useEffect(()=>{const token=++era.current;setSource(null);setFailed(false);if(!petId||sample)return;void getAuthoredPersona(petId).then(value=>{if(token===era.current)setSource(value)}).catch(()=>{if(token===era.current)setFailed(true)});return()=>{era.current++}},[petId,attempt,sample]);
  useEffect(()=>{setEditing(null);setServerError('');setTravelNote(null);setSettings(false)},[petId]);
  useEffect(()=>{if(!editing)return;const node=input.current;if(!node)return;node.focus({preventScroll:true});const frame=requestAnimationFrame(()=>node.scrollIntoView?.({block:'center'}));return()=>cancelAnimationFrame(frame)},[editing]);
+ // 저장 실패 뒤: 잠금이 풀려 입력칸이 다시 켜진 다음에 포커스를 입력칸으로 돌린다.
+ useEffect(()=>{if(busy||!refocus.current)return;refocus.current=false;input.current?.focus({preventScroll:true})},[busy]);
  useEffect(()=>{if(editing||!focusBack.current)return;const field=focusBack.current;focusBack.current=null;pens.current[field]?.focus({preventScroll:true})},[editing]);
 
  const name=pet?.name??'';
@@ -87,7 +89,7 @@ export default function CharacterCard({sample=false,allowConfirm=false,onSaved,o
   const field=editing;if(!field||lock.current||busy||validation||!petId)return;
   if(field==='callMe'&&!source)return;
   const value=draft.trim(),identity=petId,action=field==='name'?'card_rename':'card_call_me';
-  lock.current=true;setBusy(true);setServerError('');metrics.attempt(action);
+  lock.current=true;setBusy(true);setServerError('');metrics.attempt(action);refocus.current=true;
   try{
    const result=field==='name'?await live.rename(value):await live.updatePersona({callMe:value,expectedPersonaHash:source!.personaSourceHash});
    // Name values never enter telemetry; only fixed codes.
@@ -98,7 +100,7 @@ export default function CharacterCard({sample=false,allowConfirm=false,onSaved,o
      // 호칭은 설정 해시에 들어간다. 새 해시를 받아 두어야 재방문 "이 설정으로 시작하기"가 맞는 해시로 끝난다.
      try{const fresh=await getAuthoredPersona(identity);if(mounted.current&&petRef.current===identity)setSource(fresh)}catch{if(mounted.current)setAttempt(n=>n+1)}
     }
-    if(mounted.current)close(field);return;
+    refocus.current=false;if(mounted.current)close(field);return;
    }
    if(result.code==='ZZAL_TRAVELING'){setServerError(copy.traveling);return}
    if(result.code==='ZZAL_PERSONA_SOURCE_STALE'){
@@ -107,20 +109,20 @@ export default function CharacterCard({sample=false,allowConfirm=false,onSaved,o
    }
    // message null without status = a late response for a replaced pet/session; nothing to show.
    if(result.status==null&&!result.code){setServerError(result.message===null?'':copy.uncertain);return}
-   setServerError(result.message||copy.failed);
+   // 400·404 등: 서버 문구(한국어 고정) 대신 화면 언어의 안내로.
+   setServerError(copy.failed);
   }catch{metrics.result(action,'uncertain',{reason:'network'});if(mounted.current)setServerError(copy.uncertain)}
   finally{lock.current=false;if(mounted.current)setBusy(false)}
  };
  const keys=(event:KeyboardEvent<HTMLInputElement>)=>{
   if(event.nativeEvent.isComposing)return;
   if(event.key==='Enter'){event.preventDefault();void save()}
-  else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancel()}
  };
 
  const pen=(field:Field)=>editable&&<button type="button" ref={node=>{pens.current[field]=node}} className="zcc-pen" data-card-edit={field} aria-label={field==='name'?copy.editName:copy.editCallMe} disabled={busy||(!!editing&&editing!==field&&dirty)||(field==='callMe'&&!source)} onClick={()=>open(field)}><i><Pen/></i></button>;
  const editor=(field:Field)=>{
   const id=`zcc-${field}`,max=field==='name'?NAME_MAX:CALL_ME_MAX,bad=!!errorText;
-  return <div className="zcc-edit" data-card-editor={field} data-bad={bad?'true':undefined}>
+  return <div className="zcc-edit" data-card-editor={field} data-bad={bad?'true':undefined} onKeyDown={event=>{if(event.key!=='Escape'||event.nativeEvent.isComposing)return;event.preventDefault();event.stopPropagation();cancel()}}>
    <label className="zcc-label" htmlFor={id}>{field==='name'?copy.nameLabel:copy.callMeLabel}</label>
    <div className="zcc-field"><input ref={input} id={id} data-card-input={field} autoComplete="off" enterKeyHint="done" maxLength={max} value={draft} disabled={busy} aria-invalid={bad} aria-describedby={`${id}-note`} onChange={event=>{setDraft(event.target.value);setServerError('')}} onKeyDown={keys}/><span className="zcc-count" data-card-count>{draft.length}/{max}</span></div>
    {bad?<p className="zcc-p zcc-err" id={`${id}-note`} role="alert" data-card-error><Alert/><span>{errorText}</span></p>:<p className="zcc-p zcc-hint" id={`${id}-note`}>{field==='name'?copy.nameHint:copy.callMeHint}</p>}
@@ -137,7 +139,7 @@ export default function CharacterCard({sample=false,allowConfirm=false,onSaved,o
    {travelNote==='name'&&<p className="zcc-p zcc-note" role="status" data-card-travel>{copy.traveling}</p>}
    {!sample&&<div className="zcc-callrow">{editing==='callMe'?editor('callMe'):<><span className="zcc-callme"><small>{copy.callMe}</small><span data-card-callme>{source?(deferred?copy.undecided:callMe):failed?'':copy.loading}</span></span>{pen('callMe')}</>}</div>}
    {travelNote==='callMe'&&<p className="zcc-p zcc-note" role="status" data-card-travel>{copy.traveling}</p>}
-   {chips.length>0&&<ul className="zcc-tags" data-card-chips>{chips.map(chip=><li key={chip} className="zcc-chip">{chip}</li>)}</ul>}
+   {chips.length>0&&<ul className="zcc-tags" data-card-chips>{chips.map((chip,i)=><li key={`${chip}:${i}`} className="zcc-chip">{chip}</li>)}</ul>}
   </div></div>
   {sample?<p className="zcc-p zcc-sample">{copy.sample}</p>:<>
    <p className="zcc-p zcc-backhead"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3"/></svg>{copy.back}<span>{copy.backSub}</span></p>
