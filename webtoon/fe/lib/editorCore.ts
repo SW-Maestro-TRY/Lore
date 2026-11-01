@@ -182,11 +182,15 @@ export function mountEditor(
      조용히 넘어가서, 안 올라간 것을 알 방법이 없었다). */
 
   /* 평소에는 아무 말도 안 한다 — 잘 되고 있을 때까지 떠들면 그게 곧 소음이다. */
+  let notMine = false;   // 한 번 막혔으면 남의 작품이다 — 저장할 것이 없는 왕복이 「저장됨」으로 덮지 않게 한다
   function paintSaved(stateName) {
+    if (stateName === "denied") notMine = true;
+    else if (notMine) stateName = "denied";
     const el = document.getElementById("savedNote");
     if (!el) return;
     el.dataset.state = stateName;
     el.textContent = stateName === "saving" ? tr("저장하는 중…")
+                   : stateName === "denied" ? tr("내가 만든 작품만 고칠 수 있습니다")
                    : stateName === "fail" ? tr("저장하지 못했습니다 — 연결을 확인해 주세요 (이 브라우저에는 남아 있습니다)")
                    : stateName === "idle" ? tr("● 저장됨")   // CSS content 에 두면 번역을 못 거친다
                    : "";
@@ -237,11 +241,13 @@ export function mountEditor(
     pushing = true;
     paintSaved("saving");
     let ok = false;
+    let denied = false;
     try {
       const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/overlay${epq()}`,
         { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(overlayPayload()) });
       ok = res.ok;
+      denied = res.status === 403;   // 남의 작품 — 연결 문제가 아니라 다시 올려도 또 막힌다
       if (res.status === 400) {
         /* 말풍선 글이 입력 검사에 걸렸다(#626) — 다시 올려도 또 걸리니 왜 안 되는지 알린다. */
         const out = await res.json().catch(() => ({}));
@@ -251,7 +257,7 @@ export function mountEditor(
     pushing = false;
     // 아직 올릴 것이 남았으면 상태를 "됐다"로 되돌리지 않는다 — 곧 다시 올린다.
     if (pushDirty) { pushDirty = false; pushSoon(); return; }
-    paintSaved(ok ? "idle" : "fail");
+    paintSaved(ok ? "idle" : denied ? "denied" : "fail");
   }
 
   function pushSoon() {
@@ -1499,7 +1505,7 @@ export function mountEditor(
   /* ---- 서버로 올리기 — 장마다, 손을 멈추고 800ms 뒤에 ---- */
 
   const paintDirty = new Set();
-  let paintT = null, paintPushing = null;
+  let paintT = null, paintPushing = null, paintDenied = false;
   function pushPaintSoon() {
     if (!RUN_ID) return;
     clearTimeout(paintT);
@@ -1512,6 +1518,7 @@ export function mountEditor(
     if (paintPushing) { await paintPushing; if (!paintDirty.size) return true; }
     paintPushing = (async () => {
       let ok = true;
+      paintDenied = false;
       paintSaved("saving");
       for (const no of [...paintDirty]) {
         paintDirty.delete(no);
@@ -1520,10 +1527,11 @@ export function mountEditor(
             `${API}/runs/${encodeURIComponent(RUN_ID)}/scenes/${no}/paint${epq()}`,
             { method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ v: 1, strokes: strokesOf(no) }) });
+          if (res.status === 403) paintDenied = true;
           if (!res.ok) throw new Error(String(res.status));
         } catch { ok = false; paintDirty.add(no); }
       }
-      paintSaved(ok ? "idle" : "fail");
+      paintSaved(ok ? "idle" : paintDenied ? "denied" : "fail");
       return ok;
     })();
     const ok = await paintPushing;
@@ -2531,7 +2539,7 @@ export function mountEditor(
       clearTimeout(pushT);
       try {
         /* 직접 그린 것을 먼저 다 올린다 — 굽는 쪽은 서버에 있는 선만 본다. */
-        if (!(await pushPaintNow())) throw new Error(tr("그린 것을 저장하지 못해 굽지 않았어요 — 연결을 확인해 주세요"));
+        if (!(await pushPaintNow())) throw new Error(tr(paintDenied ? "내가 만든 작품만 고칠 수 있습니다" : "그린 것을 저장하지 못해 굽지 않았어요 — 연결을 확인해 주세요"));
         const res = await authFetch(`${API}/runs/${encodeURIComponent(RUN_ID)}/bake${epq()}`,
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(overlayPayload()) });
