@@ -111,17 +111,18 @@ body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"]{
   /* ★ margin:auto 를 끈다 — 공통 창은 가운데 정렬을 그 여백으로 하는데, 우리가 세로로
      쌓으면 그 여백이 머리 띠와 창 사이를 벌려 **두 장으로 읽힌다**(실측 121px 틈). */
   margin:0 auto;
-  /* 넘치면 창 안에서 구른다. 주 버튼은 공통 창이 이미 바닥에 붙여 두어 늘 보인다(공통 창의 sticky). */
-  max-height:min(72dvh, 620px); overflow-y:auto;
+  /* ★ 높이를 따로 자르지 않는다(2026-10-26). 예전 min(72dvh,620px) 캡은 "버튼은 공통 창이 바닥에 붙인다" 고
+     믿었는데 단계형은 그걸 꺼 둬서, 잘린 창 안 아래로 버튼이 숨었다. 이제 오버레이(보이는 영역 높이) 안에서
+     창이 줄고, 폼만 구르며 주 버튼은 폼 바닥에 붙는다. */
+  min-height:0; flex:0 1 auto;
 }
 body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"] h2{ letter-spacing:0; }
-/* ★ 키보드가 오르면(공통 창이 오버레이에 data-keyboard 를 켠다) 머리 띠를 접고 창을 보이는 높이 전부로
-   쓴다(2026-10-08 #690 2차). 키보드 위 300~500px 에 그림 띠(약 80px)까지 얹으면 지금 칸·버튼이
-   밀려난다. 그림 띠는 키보드가 내려가면 다시 나온다. */
-body[data-zzal-auth="1"] div[data-keyboard="1"] .zzal-auth-intro{ display:none; }
-body[data-zzal-auth="1"] div[data-keyboard="1"] > [role="dialog"][aria-modal="true"]{
-  max-height:100%; border-radius:${radius.xl}px;
-}
+/* ★ 머리 띠는 첫 단계(이메일)에만, 그리고 키보드가 내려가 있을 때만(2026-10-26). 키보드 위 200~290px 에
+   그림 띠(약 90px)까지 얹으면 지금 칸·버튼이 밀려난다. 키보드 표시는 <html data-vv-keyboard>(공용 훅). */
+html[data-vv-keyboard] body[data-zzal-auth="1"] .zzal-auth-intro,
+body[data-zzal-auth="1"] div:has(> [role="dialog"][data-step-mode]:not([data-step-mode="email"])) .zzal-auth-intro{ display:none; }
+html[data-vv-keyboard] body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"],
+body[data-zzal-auth="1"] [role="dialog"][data-step-mode]:not([data-step-mode="email"]){ border-radius:${radius.xl}px; }
 
 .zzal-auth-intro{
   width:100%; max-width:420px; margin:0 auto; box-sizing:border-box;

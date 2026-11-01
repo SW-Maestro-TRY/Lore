@@ -91,7 +91,8 @@ class ContextLoadsIT extends ZzalItSupport {
         Method sweep = NightSweep.class.getMethod("sweep");
         Scheduled scheduled = sweep.getAnnotation(Scheduled.class);
         assertThat(scheduled).isNotNull();
-        assertThat(scheduled.cron()).isEqualTo("0 0 23 * * *");
+        // 2026-10-26 시간대 2단계 — 15분 눈금. 한국 펫은 KST 23:00 눈금에 지금까지처럼 한 번 돈다(NightSweep).
+        assertThat(scheduled.cron()).isEqualTo("0 */15 * * * *");
         assertThat(scheduled.zone()).isEqualTo("Asia/Seoul");
         assertThat(nightSweep).isNotNull();
 

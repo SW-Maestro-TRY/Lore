@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code "0 0 23 * * *"} 와 같은지를 재면 표기만 바뀌어도 깨지고, 정작 <b>실제로 몇 시에 도는지</b>는
  * 안 본다. 그래서 파싱해서 <b>다음 실행 시각</b>을 묻는다 — 그게 사용자에게 닿는 값이다.
  */
-@DisplayName("밤 스위프 시각 — 매일 KST 23:00")
+@DisplayName("밤 스위프 시각 — 15분 눈금(시간대마다의 23:00 을 정각에 잡는다)")
 class NightScheduleTest {
 
     private static Scheduled scheduledOnSweep() throws NoSuchMethodException {
@@ -36,53 +36,46 @@ class NightScheduleTest {
     }
 
     @Test
-    @DisplayName("★★ 자동 취침 시각(KST 23:00)에 돈다 — 규칙과 스케줄이 같은 시각을 가리킨다")
-    void runsAtTheAutoSleepHourInSeoul() throws Exception {
+    @DisplayName("★★ KST 23:00 정각에 눈금이 있다 — 한국 펫의 밤은 지금까지와 같은 순간에 돈다")
+    void ticksAtTheAutoSleepHourInSeoul() throws Exception {
         Scheduled scheduled = scheduledOnSweep();
         ZoneId zone = ZoneId.of(scheduled.zone());
         assertThat(zone).isEqualTo(ZzalRules.ZONE);
-
         CronExpression cron = CronExpression.parse(scheduled.cron());
 
-        // 낮 아무 때나 서 있어도 다음 실행은 그날 23:00.
-        ZonedDateTime noon = LocalDate.of(2026, 9, 5).atTime(12, 0).atZone(zone);
-        ZonedDateTime next = cron.next(noon);
+        ZonedDateTime justBefore = LocalDate.of(2026, 9, 5).atTime(22, 59, 59).atZone(zone);
+        ZonedDateTime next = cron.next(justBefore);
         assertThat(next).isNotNull();
-        assertThat(next.toLocalDate()).isEqualTo(LocalDate.of(2026, 9, 5));
-        assertThat(next.toLocalTime())
-                .as("자동 취침과 같은 시각이어야 한다 — 어긋나면 잠들기 전에 굽거나 한참 뒤에 굽는다")
-                .isEqualTo(ZzalRules.AUTO_SLEEP_AT);
+        assertThat(next.toLocalDateTime()).isEqualTo(LocalDate.of(2026, 9, 5).atTime(ZzalRules.AUTO_SLEEP_AT));
     }
 
     @Test
-    @DisplayName("★ 23:00 정각 뒤에는 다음 날 23:00 — 하루에 한 번뿐이다(분·초마다 돌면 돈이 쏟아진다)")
-    void onlyOncePerDay() throws Exception {
+    @DisplayName("★★ 15분 간격 — 한 시간에 네 번, 그보다 촘촘하지 않다(분·초마다 돌면 DB 를 쉴 새 없이 훑는다)")
+    void everyFifteenMinutes() throws Exception {
         Scheduled scheduled = scheduledOnSweep();
         ZoneId zone = ZoneId.of(scheduled.zone());
         CronExpression cron = CronExpression.parse(scheduled.cron());
 
-        ZonedDateTime justAfter = LocalDate.of(2026, 9, 5).atTime(23, 0, 1).atZone(zone);
-        ZonedDateTime next = cron.next(justAfter);
-
-        assertThat(next).isNotNull();
-        assertThat(next.toLocalDate()).isEqualTo(LocalDate.of(2026, 9, 6));
-        assertThat(next.toLocalTime()).isEqualTo(ZzalRules.AUTO_SLEEP_AT);
-    }
-
-    @Test
-    @DisplayName("★ 이레 내리 같은 시각 — 요일·월 자리에 값이 끼면 어떤 날은 통째로 빠진다")
-    void everyDayOfTheWeek() throws Exception {
-        Scheduled scheduled = scheduledOnSweep();
-        ZoneId zone = ZoneId.of(scheduled.zone());
-        CronExpression cron = CronExpression.parse(scheduled.cron());
-
-        ZonedDateTime cursor = LocalDate.of(2026, 9, 5).atTime(0, 0).atZone(zone);
-        for (int day = 0; day < 7; day++) {
+        ZonedDateTime cursor = LocalDate.of(2026, 9, 5).atTime(12, 0).atZone(zone);
+        for (int i = 1; i <= 8; i++) {
             ZonedDateTime next = cron.next(cursor);
             assertThat(next).isNotNull();
-            assertThat(next.toLocalTime()).isEqualTo(ZzalRules.AUTO_SLEEP_AT);
-            assertThat(next.toLocalDate()).isEqualTo(LocalDate.of(2026, 9, 5).plusDays(day));
+            assertThat(java.time.Duration.between(cursor, next)).isEqualTo(java.time.Duration.ofMinutes(15));
             cursor = next;
+        }
+    }
+
+    @Test
+    @DisplayName("★ 정각이 아닌 시간대(콜카타 +5:30·카트만두 +5:45)의 23:00 도 눈금에 걸린다")
+    void halfAndQuarterHourZonesLandOnATick() throws Exception {
+        Scheduled scheduled = scheduledOnSweep();
+        CronExpression cron = CronExpression.parse(scheduled.cron());
+        for (String id : java.util.List.of("Asia/Kolkata", "Asia/Kathmandu", "America/Los_Angeles", "America/St_Johns")) {
+            ZoneId z = ZoneId.of(id);
+            ZonedDateTime localEleven = LocalDate.of(2026, 11, 1).atTime(ZzalRules.AUTO_SLEEP_AT).atZone(z);
+            ZonedDateTime tick = cron.next(localEleven.minusSeconds(1).withZoneSameInstant(ZoneId.of(scheduled.zone())));
+            assertThat(tick).isNotNull();
+            assertThat(tick.toInstant()).as("%s 의 23:00", id).isEqualTo(localEleven.toInstant());
         }
     }
 }

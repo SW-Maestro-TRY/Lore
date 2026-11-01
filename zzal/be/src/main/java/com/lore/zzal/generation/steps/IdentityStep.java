@@ -62,13 +62,52 @@ public class IdentityStep implements GenerationStep {
     /** 이 단계의 시간 제한(초). 설정 {@code app.zzal.openai.text-timeout-seconds}. */
     private final int timeoutSeconds;
 
+    /**
+     * 시도 차수별 reasoning_effort. 0번 칸 = 시도 1. 빈 칸(null) = 보내지 않음(모델 기본 medium).
+     * 목록보다 차수가 크면 마지막 값. 목록이 비면 언제나 안 보낸다.
+     *
+     * ★ 2026-10-27 상훈님 결정 — "안 되는 거 계속해서 뭐하냐". 첫 시도는 지금 품질 그대로(기본),
+     *   실패해 다시 굽게 되면 생각을 줄여(low → minimal) 빨리 끝내게 한다. 10/26 OpenAI 지연 때
+     *   출력 약 1,900토큰 중 약 1,800이 생각 토큰이었고 같은 조건으로 다섯 번 다 90초를 넘겼다.
+     *   ★ "none" 은 쓰지 않는다 — gpt-5(2025-08-07)가 받는 최저값은 minimal 이다.
+     */
+    private final List<String> effortByAttempt;
+
+    /** 테스트·기존 호출용 — 차수 무관하게 effort 를 보내지 않는다(이전 동작). */
+    public IdentityStep(TextClient textClient, PromptLoader prompts, boolean validate, int timeoutSeconds) {
+        this(textClient, prompts, validate, timeoutSeconds, "");
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
     public IdentityStep(TextClient textClient, PromptLoader prompts,
                         @Value("${app.zzal.identity.validate:true}") boolean validate,
-                        @Value("${app.zzal.openai.text-timeout-seconds:90}") int timeoutSeconds) {
+                        @Value("${app.zzal.openai.text-timeout-seconds:90}") int timeoutSeconds,
+                        @Value("${app.zzal.openai.identity-reasoning-effort-by-attempt:,low,minimal}") String effortByAttempt) {
         this.textClient = textClient;
         this.prompts = prompts;
         this.validate = validate;
         this.timeoutSeconds = timeoutSeconds;
+        this.effortByAttempt = parseEffortByAttempt(effortByAttempt);
+    }
+
+    /**
+     * ",low,minimal" → [null, "low", "minimal"]. 잘못된 값은 기동 시 예외(설정 이름 포함).
+     * 전체가 비면(빈 문자열) 빈 목록 = 언제나 안 보냄.
+     */
+    public static List<String> parseEffortByAttempt(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        List<String> out = new java.util.ArrayList<>();
+        for (String item : raw.split(",", -1)) {
+            out.add(com.lore.zzal.generation.client.OpenAiTextClient.normalizeReasoningEffort(item));
+        }
+        return java.util.Collections.unmodifiableList(out);
+    }
+
+    /** 이 차수에 보낼 effort. null = 보내지 않음. */
+    public String effortFor(int attempt) {
+        if (effortByAttempt.isEmpty()) return null;
+        int idx = Math.min(Math.max(1, attempt), effortByAttempt.size()) - 1;
+        return effortByAttempt.get(idx);
     }
 
     /**
@@ -139,7 +178,20 @@ public class IdentityStep implements GenerationStep {
 
         ModelSpec spec = prompts.model(ctx.version(), NAME);
         List<String> refs = List.of(ctx.image(SheetStep.NAME));
-        TextClient.Result r = textClient.generate(prompt, refs, spec);
+        int attempt = ctx.attempt();
+        String effort = effortFor(attempt);
+        String effortLabel = effort == null ? "default" : effort;
+        TextClient.Result r;
+        try {
+            // 기본(effort 없음)은 예전과 똑같은 호출 경로로 간다.
+            r = effort == null ? textClient.generate(prompt, refs, spec) : textClient.generate(prompt, refs, spec, effort);
+        } catch (Exception e) {
+            log.warn("정체성 문단 호출 실패 — petId={} attempt={} effort={} {}: {}",
+                    ctx.petId(), attempt, effortLabel, e.getClass().getSimpleName(), e.getMessage());
+            throw e;
+        }
+        log.info("정체성 문단 받음 — petId={} attempt={} effort={} {}자", ctx.petId(), attempt, effortLabel,
+                r.text() == null ? 0 : r.text().length());
         if (!validate) {
             return StepResult.text(NAME, r.text(), spec.model(), r.costUsd());
         }
@@ -151,8 +203,8 @@ public class IdentityStep implements GenerationStep {
         // 재요청은 하지 않는다(상훈님 2026-10-07 정정) — 바로 빈 문단으로 진행한다.
         // ★ error_code 에 IDENTITY_BLANK 를 넣지 않는 이유 — zzal_gen_step.error_code 에 CHECK 제약
         //   (TIMEOUT · MODERATION_BLOCKED · UNKNOWN)이 있어 넣으면 저장이 터진다. 로그로만 남긴다.
-        log.warn("정체성 문단 거부 — IDENTITY_BLANK, 빈 문단으로 진행 — petId={} 사유={} 앞60자={}",
-                ctx.petId(), reason, head60(r.text()));
+        log.warn("정체성 문단 거부 — IDENTITY_BLANK, 빈 문단으로 진행 — petId={} attempt={} effort={} 사유={} 앞60자={}",
+                ctx.petId(), attempt, effortLabel, reason, head60(r.text()));
         return StepResult.text(NAME, "", spec.model(), r.costUsd());
     }
 

@@ -163,7 +163,7 @@ public class ChatService {
         if (pet.isSleeping() || !continuousChatAvailable(pet)) {
             // Tutorial may read its existing first-meeting session/round, but cannot open ordinary chat or generate.
             if(pet.isFirstMeetingComplete() && pet.getFirstIntroVersion()==4 && pet.hasFirstIntro() && !pet.firstIntroChatAvailable()){
-                var stored=sessions.findByPetIdAndDayOfAndSlot(petId,AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS);
+                var stored=sessions.findByPetIdAndDayOfAndSlot(petId,ChatSessionKeys.hatchDay(pet),ChatSlot.CONTINUOUS);
                 if(stored.isPresent()){
                     var session=stored.get();
                     var saved=view(pet,java.util.List.of(new Row(ChatSlot.CONTINUOUS,session,recentTurns(session),null)),now);
@@ -172,7 +172,7 @@ public class ChatService {
             }
             return view(pet,List.of(),now);
         }
-        LocalDate day = AwakeClock.dateOf(pet.getHatchedAt());
+        LocalDate day = ChatSessionKeys.hatchDay(pet);
         var found = sessions.findByPetIdAndDayOfAndSlot(petId, day, ChatSlot.CONTINUOUS);
         Row row;
         if (found.isPresent()) {
@@ -216,7 +216,7 @@ public class ChatService {
     public void prepareFirstMeetingGreeting(ZzalPet pet, Instant realNow) {
         if (pet.getFirstMeetingState() != com.lore.zzal.pet.persona.FirstMeeting.State.READY_TO_ENTER) return;
         Instant now = pet.now(realNow);
-        LocalDate day = AwakeClock.dateOf(pet.getHatchedAt());
+        LocalDate day = ChatSessionKeys.hatchDay(pet);
         var session = sessions.findByPetIdAndDayOfAndSlot(pet.getId(), day, ChatSlot.CONTINUOUS)
                 .orElseGet(() -> sessions.save(ZzalChatSession.open(pet.getId(), day, ChatSlot.CONTINUOUS,
                         SessionKind.BABY, now, null, now)));
@@ -243,14 +243,14 @@ public class ChatService {
 
     public boolean firstMeetingGreetingRetryAllowed(ZzalPet pet) {
         if (pet.getFirstMeetingState() != com.lore.zzal.pet.persona.FirstMeeting.State.READY_TO_ENTER) return false;
-        return sessions.findByPetIdAndDayOfAndSlot(pet.getId(), AwakeClock.dateOf(pet.getHatchedAt()), ChatSlot.CONTINUOUS)
+        return sessions.findByPetIdAndDayOfAndSlot(pet.getId(), ChatSessionKeys.hatchDay(pet), ChatSlot.CONTINUOUS)
                 .map(s -> s.getFirstLineFailures() < LineChain.BABY_NEUTRAL_AFTER).orElse(true);
     }
 
     /** Persisted first turn only: no model calls, including refresh and failed-generation reads. */
     public String firstMeetingGreeting(ZzalPet pet) {
         if (pet.getHatchedAt() == null) return "";
-        return sessions.findByPetIdAndDayOfAndSlot(pet.getId(), AwakeClock.dateOf(pet.getHatchedAt()), ChatSlot.CONTINUOUS)
+        return sessions.findByPetIdAndDayOfAndSlot(pet.getId(), ChatSessionKeys.hatchDay(pet), ChatSlot.CONTINUOUS)
                 .flatMap(s -> turns.findFirstBySessionIdAndIdx(s.getId(), 0).filter(ZzalChatTurn::isPet))
                 .map(ZzalChatTurn::getLine).orElse("");
     }
@@ -261,7 +261,7 @@ public class ChatService {
         ZzalPet pet=petService.awake(userId,petId,realNow);
         if(!continuousChatAvailable(pet)) return false;
         Instant now=pet.now(realNow);
-        var found=sessions.findByPetIdAndDayOfAndSlot(petId,AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS);
+        var found=sessions.findByPetIdAndDayOfAndSlot(petId,ChatSessionKeys.hatchDay(pet),ChatSlot.CONTINUOUS);
         if(found.isEmpty()||!found.get().isOpen(now)) return false;
         var session=found.get();
         var recent=recentTurns(session);
@@ -290,7 +290,7 @@ public class ChatService {
     public Answered answerContinuousLegacy(Long userId, Long petId, String text, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         if (!continuousChatAvailable(pet)) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
-        var session = sessions.findByPetIdAndDayOfAndSlot(petId, AwakeClock.dateOf(pet.getHatchedAt()), ChatSlot.CONTINUOUS)
+        var session = sessions.findByPetIdAndDayOfAndSlot(petId, ChatSessionKeys.hatchDay(pet), ChatSlot.CONTINUOUS)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
         if (!session.isOpen(pet.now(realNow))) throw new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE);
         return answerRow(userId, pet, new Row(ChatSlot.CONTINUOUS, session, recentTurns(session), null), text, pet.now(realNow));
@@ -325,8 +325,8 @@ public class ChatService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
         List<ZzalChatTurn> ts = recentTurns(session);
         if (slot != ChatSlot.CONTINUOUS) settle(session, ts, now);
-        boolean currentWindow = !slot.daily() || (session.getDayOf().equals(AwakeClock.dateOf(now))
-                && ChatSlot.windowAt(now.atZone(ZzalRules.ZONE).toLocalTime()) == slot);
+        boolean currentWindow = !slot.daily() || (session.getDayOf().equals(AwakeClock.dateOf(now, pet.zone()))
+                && ChatSlot.windowAt(now.atZone(pet.zone()).toLocalTime()) == slot);
         if (!currentWindow || !session.isOpen(now) || session.getRoundCount() != expectedRound) {
             throw new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE);
         }
@@ -336,7 +336,7 @@ public class ChatService {
     /** Discovery has a durable stage row, but deliberately no chat turn before the existing greeting idx0. */
     public ChatContext firstMeetingDiscoveryContext(ZzalPet pet,Instant realNow){
         Instant now=pet.now(realNow);
-        var day=AwakeClock.dateOf(pet.getHatchedAt());
+        var day=ChatSessionKeys.hatchDay(pet);
         var session=sessions.findByPetIdAndDayOfAndSlot(pet.getId(),day,ChatSlot.CONTINUOUS)
             .orElseGet(()->sessions.save(ZzalChatSession.open(pet.getId(),day,ChatSlot.CONTINUOUS,SessionKind.BABY,now,null,now)));
         var plan=new TurnPlan(TurnType.FIRST_MEET,1,false,null,false,ChatSlot.CONTINUOUS);
@@ -349,7 +349,7 @@ public class ChatService {
     public ChatContext tutorialStageContext(ZzalPet pet,com.lore.zzal.chat.prompt.ConversationScene.Step step,
             com.lore.zzal.chat.prompt.ConversationScene.Beat beat,Instant realNow){
         Instant now=pet.now(realNow);
-        var session=sessions.findByPetIdAndDayOfAndSlot(pet.getId(),AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS)
+        var session=sessions.findByPetIdAndDayOfAndSlot(pet.getId(),ChatSessionKeys.hatchDay(pet),ChatSlot.CONTINUOUS)
             .orElseThrow(()->new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
         var options=com.lore.zzal.attendance.CustomChatActions.allowed(customMotionOwnership==null?List.of():customMotionOwnership.owned(pet.getUserId(),pet.getId()));
         var plan=new TurnPlan(TurnType.CONTINUE,session.getRoundCount()+1,false,null,false,ChatSlot.CONTINUOUS);
@@ -509,26 +509,27 @@ public class ChatService {
         Supplier<PersonaSheet> sheet = memo(() -> sheets.build(pet));
         // ★ 튜토리얼 부름(BABY) — 시간이 아니라 순서다. 앞의 두 칸(밥·쓰다듬)을 끝내면 그 자리에서 부른다.
         if (pet.hasFirstIntro() ? pet.firstIntroChatAvailable() : pet.getTutorialStep() >= ZzalRules.TUTORIAL_CHAT_AFTER) {
-            LocalDate babyDay = AwakeClock.dateOf(pet.getHatchedAt());
+            LocalDate babyDay = ChatSessionKeys.hatchDay(pet);
             // ★ 튜토리얼 부름은 만료가 없다 — 시계가 안 돌기 때문이다. 답할 때까지 기다린다.
             Row baby = row(pet, sheet, babyDay, ChatSlot.BABY, pet.getHatchedAt(), null, now);
             // 끝났거나 만료된 BABY 는 부화 당일에만 보인다 — 이후 날의 "오늘의 부름" 에 영구히 끼지 않게(리뷰 반영).
             // ★ 첫 턴 재시도 대기 중인 판은 안 보인다(첫 턴이 없다 — 빈 부름을 띄우지 않는다).
             boolean waiting = baby != null && baby.session() != null && baby.session().isWaitingForFirstLine();
-            if (baby != null && !waiting && (isOpen(baby, now) || AwakeClock.dateOf(now).equals(babyDay))) {
+            if (baby != null && !waiting && (isOpen(baby, now) || AwakeClock.dateOf(now, pet.zone()).equals(AwakeClock.dateOf(pet.getHatchedAt(), pet.zone())))) {
                 out.add(baby);
             }
         }
         if (pet.isInTutorial()) {
             return out;
         }
-        LocalDate day = AwakeClock.dateOf(now);
-        LocalTime clock = now.atZone(ZzalRules.ZONE).toLocalTime();
+        // ★ 부름 창(10/14/19/23시)은 펫 시간대의 벽시계다(2단계). 그날의 열쇠도 펫 시간대 날짜.
+        LocalDate day = AwakeClock.dateOf(now, pet.zone());
+        LocalTime clock = now.atZone(pet.zone()).toLocalTime();
         for (ChatSlot slot : DAILY) {
             if (clock.isBefore(slot.opens())) {
                 continue;                               // 아직 안 열린 창
             }
-            Instant until = day.atTime(slot.closes()).atZone(ZzalRules.ZONE).toInstant();
+            Instant until = day.atTime(slot.closes()).atZone(pet.zone()).toInstant();
             Row r = row(pet, sheet, day, slot, now, until, now);
             if (r != null) {
                 out.add(r);
@@ -721,10 +722,10 @@ public class ChatService {
      * [지금까지](#709) — 오늘 포함 최근 3일의 판 턴 전부(이번 판 포함), 오래된 순. 판마다 며칠 전·어느 부름인지를 붙인다.
      */
     private List<HistoryLine> history(ZzalPet pet, ZzalChatSession current, Instant now) {
-        LocalDate today = AwakeClock.dateOf(now);
-        return memory.recall(pet.getId(), new RecallQuery(now, current.getSlot(), null)).stream()
+        LocalDate today = AwakeClock.dateOf(now, pet.zone());
+        return memory.recall(pet.getId(), new RecallQuery(now, current.getSlot(), null, pet.zone())).stream()
                 .map(m -> new HistoryLine(m.byUser() ? Speaker.USER : Speaker.PET, m.text(),
-                        (int) java.time.temporal.ChronoUnit.DAYS.between(AwakeClock.dateOf(m.at()), today), m.slot(),
+                        (int) java.time.temporal.ChronoUnit.DAYS.between(AwakeClock.dateOf(m.at(), pet.zone()), today), m.slot(),
                         m.sessionId(), java.util.Objects.equals(m.sessionId(), current.getId()),m.sourceTurnId()))
                 .toList();
     }
@@ -747,7 +748,7 @@ public class ChatService {
         List<CallView> calls = rows.stream().map(ChatService::callView).toList();
         // 화면 기억 칩 — 사용자가 한 말 최근 것부터 {@link ZzalRules#CHAT_MEMORY}개.
         List<Memory> recalled = memory.recall(pet.getId(), new RecallQuery(now, pet.getId() != null && rows.stream().anyMatch(r -> r.slot() == ChatSlot.CONTINUOUS)
-                ? ChatSlot.CONTINUOUS : null, null));
+                ? ChatSlot.CONTINUOUS : null, null, pet.zone()));
         List<String> mem = new ArrayList<>();
         for (int i = recalled.size() - 1; i >= 0 && mem.size() < ZzalRules.CHAT_MEMORY; i--) {
             if (recalled.get(i).byUser()) {

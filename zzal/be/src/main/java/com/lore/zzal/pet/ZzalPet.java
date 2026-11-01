@@ -626,6 +626,23 @@ public class ZzalPet {
     @Column
     private Instant lastSeenAt;
 
+    // ── 시간대 (2026-10-26) ────────────────────────────────────────────
+
+    /**
+     * 이 펫의 시간대(IANA 이름). NULL = 아직 관측 못 함 → {@link #zone()} 은 KST.
+     * 생성 때 또는 NULL 인 펫의 첫 요청에서 한 번 적히고 그 뒤로 안 바뀐다({@link PetTimeZones}).
+     */
+    @Column(name = "time_zone", length = PetTimeZones.MAX_LENGTH)
+    private String timeZone;
+
+    /**
+     * 밤 스위프가 이 펫을 마지막으로 돈 밤(그 펫 시간대의 날짜). 같은 밤을 두 번 돌지 않는 <b>펫 단위</b> 멱등.
+     * ★ {@link #lastNightOf} 와 따로 둔다 — 그 칸은 "잠든 밤" 이라 직접 재운 펫(21시)에도 찍히고, 그걸로 막으면
+     *   지금까지 23:00 스위프가 하던 일(재운 펫의 실패 줄 다시 굽기)이 한국 사용자에게서 빠진다.
+     */
+    @Column(name = "last_swept_night_of")
+    private LocalDate lastSweptNightOf;
+
     // ── 성격·꾸미기 (설계 규칙) ────────────────────────────────────────
 
     @Enumerated(EnumType.STRING)
@@ -713,6 +730,49 @@ public class ZzalPet {
         pet.hatchStartedAt = now;
         pet.background = "room";
         return pet;
+    }
+
+    /** {@link #draft(Long, String, Instant)} + 생성 요청의 시간대. 못 읽었으면 NULL 로 남아 다음 요청이 채운다. */
+    public static ZzalPet draft(Long userId, String sourceImageKey, Instant now, java.time.ZoneId zone) {
+        ZzalPet pet = draft(userId, sourceImageKey, now);
+        pet.observeTimeZone(zone);
+        return pet;
+    }
+
+    /**
+     * 시간대를 <b>한 번만</b> 적는다. 이미 적혀 있거나 {@code zone} 이 null 이면 아무것도 안 하고 false.
+     *
+     * ★ 덮어쓰지 않는 이유 — 하루 중간에 바뀌면 23시가 두 번 오거나 안 오고, 날짜로 찾는 기록
+     *   (채팅 세션 {@code dateOf(hatchedAt)}·밤 굽기 {@code night_of}·출석·함께한 날)이 그날 하루 어긋난다.
+     */
+    public boolean observeTimeZone(java.time.ZoneId zone) {
+        if (timeZone != null || zone == null) return false;
+        this.timeZone = zone.getId();
+        return true;
+    }
+
+    /** 규칙에 쓰는 시간대. 아직 관측 못 했으면 KST. */
+    public java.time.ZoneId zone() {
+        return PetTimeZones.effective(timeZone);
+    }
+
+    /** 저장된 값 그대로(NULL 가능). */
+    public String getTimeZone() {
+        return timeZone;
+    }
+
+    public LocalDate getLastSweptNightOf() {
+        return lastSweptNightOf;
+    }
+
+    /** 밤 스위프가 {@code nightOf} 를 돌았는가 — 이미 돌았거나 그 뒤의 밤을 돌았으면 true. */
+    public boolean sweptNight(LocalDate nightOf) {
+        return lastSweptNightOf != null && !lastSweptNightOf.isBefore(nightOf);
+    }
+
+    /** 밤 스위프가 이 펫의 {@code nightOf} 를 끝냈다. 뒤로는 안 간다. */
+    public void markSwept(LocalDate nightOf) {
+        if (!sweptNight(nightOf)) this.lastSweptNightOf = nightOf;
     }
 
     /**
@@ -809,7 +869,7 @@ public class ZzalPet {
         this.lastSeenAt = now;
         // "N일째 함께" — 부화한 날이 1일째(api-v2.md 2절 예시).
         this.daysTogether = 1;
-        this.lastVisitDate = AwakeClock.dateOf(now);
+        this.lastVisitDate = AwakeClock.dateOf(now, zone());
     }
 
     /**
@@ -1000,7 +1060,7 @@ public class ZzalPet {
     public Instant getFirstNightChatEndedAt() { return firstNightChatEndedAt; }
     public boolean firstNightChatGraceEligible(Instant now) {
         return isAlive() && !isSleeping() && !isTraveling() && isFirstIntroEndingPending()
-                && firstNightChatDeadlineAt == null && firstNightChatEndedAt == null && AwakeClock.isNight(now);
+                && firstNightChatDeadlineAt == null && firstNightChatEndedAt == null && AwakeClock.isNight(now, zone());
     }
     public boolean firstNightChatGraceActive(Instant now) {
         return isAlive() && !isSleeping() && !isTraveling() && firstIntroVersion == 4
@@ -1018,12 +1078,14 @@ public class ZzalPet {
         if (firstIntroVersion == 4) {
             settledAt = at;
             if (eligible) {
-                var local = at.atZone(ZzalRules.ZONE);
-                Instant morning = local.toLocalDate().plusDays(local.getHour() >= 7 ? 1 : 0)
-                        .atTime(7, 0).atZone(ZzalRules.ZONE).toInstant();
+                var local = at.atZone(zone());
+                // 첫 밤 채팅 유예의 끝 = 다음 깨우기 창(07:00, 펫 시간대). 숫자 대신 규칙 상수를 쓴다.
+                Instant morning = local.toLocalDate()
+                        .plusDays(local.toLocalTime().isBefore(ZzalRules.WAKE_WINDOW_OPENS) ? 0 : 1)
+                        .atTime(ZzalRules.WAKE_WINDOW_OPENS).atZone(zone()).toInstant();
                 Instant limit = at.plus(java.time.Duration.ofMinutes(30));
                 firstNightChatDeadlineAt = limit.isBefore(morning) ? limit : morning;
-            } else if (!isSleeping() && AwakeClock.isNight(at)) onSleep(at, SleepKind.NIGHT, false);
+            } else if (!isSleeping() && AwakeClock.isNight(at, zone())) onSleep(at, SleepKind.NIGHT, false);
         }
     }
     public void advanceFirstIntro(FirstIntro.Step done) {
@@ -1100,7 +1162,7 @@ public class ZzalPet {
         settledAt = at;
         wokeAt = at;
         // v4 stays awake through review/farewell; its final REVIEW receipt applies current night.
-        if (hasFirstIntro() && firstIntroVersion != 4 && AwakeClock.isNight(at)) onSleep(at, SleepKind.NIGHT, false);
+        if (hasFirstIntro() && firstIntroVersion != 4 && AwakeClock.isNight(at, zone())) onSleep(at, SleepKind.NIGHT, false);
     }
 
     public boolean isSleeping() {
@@ -1157,7 +1219,7 @@ public class ZzalPet {
             return;
         }
 
-        AwakeClock.Walk walk = AwakeClock.walk(clockState(), settledAt, now);
+        AwakeClock.Walk walk = AwakeClock.walk(clockState(), settledAt, now, zone());
         for (AwakeClock.Segment seg : walk.segments()) {
             if (seg.isAwake()) {
                 advanceAwake(seg.from(), seg.to());
@@ -1480,7 +1542,7 @@ public class ZzalPet {
             return;
         }
         // 예고 중이었다면 유예가 지났는지 본다
-        if (!AwakeClock.dateOf(at).isBefore(AwakeClock.dateOf(leaveNoticeAt).plusDays(departDays()))) {
+        if (!AwakeClock.dateOf(at, zone()).isBefore(AwakeClock.dateOf(leaveNoticeAt, zone()).plusDays(departDays()))) {
             tripStartedAt = at;
             leaveNoticeAt = null;
             postcardCount = 0;
@@ -1496,7 +1558,7 @@ public class ZzalPet {
         if (lastVisitDate == null) {
             return false;
         }
-        long absent = java.time.temporal.ChronoUnit.DAYS.between(lastVisitDate, AwakeClock.dateOf(at));
+        long absent = java.time.temporal.ChronoUnit.DAYS.between(lastVisitDate, AwakeClock.dateOf(at, zone()));
         return absent >= noticeDays();
     }
 
@@ -1530,8 +1592,8 @@ public class ZzalPet {
     /** 예고가 켜진 그 밤 기준의 출발 예정 시각(화면 표시용). */
     public Instant departAt() {
         return leaveNoticeAt == null ? null
-                : AwakeClock.dateOf(leaveNoticeAt).plusDays(departDays())
-                        .atTime(ZzalRules.AUTO_WAKE_AT).atZone(ZzalRules.ZONE).toInstant();
+                : AwakeClock.dateOf(leaveNoticeAt, zone()).plusDays(departDays())
+                        .atTime(ZzalRules.AUTO_WAKE_AT).atZone(zone()).toInstant();
     }
 
     public Instant getTripStartedAt() {
@@ -1561,13 +1623,13 @@ public class ZzalPet {
     /** 오늘 엽서를 만들 수 있나 — 여행 중, 하루 한 장, 최대 3장(설계 규칙). */
     public boolean canWritePostcard(Instant now) {
         return isTraveling() && postcardCount < ZzalRules.POSTCARD_MAX
-                && !AwakeClock.dateOf(now).equals(lastPostcardDate);
+                && !AwakeClock.dateOf(now, zone()).equals(lastPostcardDate);
     }
 
     /** 엽서 한 장을 썼다고 표시(실제 저장은 서비스가 — 엔티티는 표를 모른다). */
     public void wrotePostcard(Instant now) {
         postcardCount += 1;
-        lastPostcardDate = AwakeClock.dateOf(now);
+        lastPostcardDate = AwakeClock.dateOf(now, zone());
     }
 
     /**
@@ -1800,7 +1862,7 @@ public class ZzalPet {
                     && napCount < ZzalRules.NAP_MAX ? SleepKind.NAP : null;
         }
         if (firstNightChatGraceActive(now)) return SleepKind.NIGHT;
-        return AwakeClock.inSleepWindow(now) ? SleepKind.NIGHT : null;
+        return AwakeClock.inSleepWindow(now, zone()) ? SleepKind.NIGHT : null;
     }
 
     public boolean canSleep(Instant now) {
@@ -1823,7 +1885,7 @@ public class ZzalPet {
             return false;
         }
         if (hasFirstIntro() && isInTutorial() && sleepKind == SleepKind.NAP) return true;
-        return !now.isBefore(AwakeClock.wakeWindowOpensAt(sleepKind, sleptAt));
+        return !now.isBefore(AwakeClock.wakeWindowOpensAt(sleepKind, sleptAt, zone()));
     }
 
     /** 사용자가 깨운다. 보상 = 친밀도 +10(밤잠만). */
@@ -1835,7 +1897,7 @@ public class ZzalPet {
         // ★ 낮잠에서 깬 순간이 이미 밤(23:00~07:00)이고 아기 60분도 끝났으면 그 자리에서 밤잠에 든다.
         //   안 그러면 "깨어 있음" 으로 답하고 다음 조회에서 잠드는데, 그건 "행동 응답 = 최신 상태" 를 어긴다
         //   (리뷰 재현: 22:35 부화 → 23:30 낮잠 → 23:36 깨우기).
-        if (!isSleeping() && !isInTutorial() && AwakeClock.isNight(now)) {
+        if (!isSleeping() && !isInTutorial() && AwakeClock.isNight(now, zone())) {
             onSleep(now, SleepKind.NIGHT, false);
         }
     }
@@ -1862,7 +1924,7 @@ public class ZzalPet {
                 zeroMissDays += 1;
             }
             lastNightCareMiss = todayCareMiss;      // 밤 큐 판정 재료(리셋 전 스냅샷)
-            lastNightOf = AwakeClock.dateOf(at);
+            lastNightOf = AwakeClock.dateOf(at, zone());
 
             // ★ 조각은 여기서 아무것도 하지 않는다(설계 규칙) — 하루로 끊지 않고 쌓이고,
             //   네 칸이 다 찬 판은 <b>다음 기상</b>에 되돌린다. 잠드는 순간은 그 자리가 아니다.
@@ -2077,7 +2139,7 @@ public class ZzalPet {
         //   남는다(#227 리뷰 상-1 실측 — 30분마다 12번 조회에 컷 2개). 설계 규칙은 <b>부재 중</b>이다.
         //   남은 초(4시간에 못 미친 나머지)도 그 부재와 함께 끝난다 — 다음 부재는 처음부터 센다.
         absenceAwakeSec = 0;
-        LocalDate today = AwakeClock.dateOf(now);
+        LocalDate today = AwakeClock.dateOf(now, zone());
         if (today.equals(lastVisitDate)) {
             return false;
         }
@@ -2433,7 +2495,7 @@ public class ZzalPet {
             this.daysTogether = p.daysTogether();
         }
         if (p.lastVisitDaysAgo() != null) {
-            this.lastVisitDate = AwakeClock.dateOf(t).minusDays(p.lastVisitDaysAgo());
+            this.lastVisitDate = AwakeClock.dateOf(t, zone()).minusDays(p.lastVisitDaysAgo());
         }
         if (p.leaveEnabled() != null) {
             setLeaveEnabled(p.leaveEnabled());

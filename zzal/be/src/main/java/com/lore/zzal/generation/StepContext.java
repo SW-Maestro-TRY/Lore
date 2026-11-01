@@ -20,6 +20,8 @@ public class StepContext {
     private final String outputPrefix;
     private final Map<String, String> images = new HashMap<>();
     private final Map<String, String> texts = new HashMap<>();
+    /** 부화 잡의 몇 번째 시도인가(1부터). 관리자 재굽기(attempt 0)도 1. 정해 주지 않으면 1. */
+    private int attempt = 1;
 
     public StepContext(Long petId, String petName, String note, String version) {
         this(petId, petName, note, version, "images/zzal/pets/%d".formatted(petId));
@@ -76,5 +78,16 @@ public class StepContext {
 
     public String version() {
         return version;
+    }
+
+    /** 시도 차수를 적는다. 1 미만은 1 로 읽는다(GenJob.ADMIN_REHATCH_ATTEMPT = 0). */
+    public StepContext attempt(int attempt) {
+        this.attempt = Math.max(1, attempt);
+        return this;
+    }
+
+    /** 몇 번째 시도인가(1부터). 정체성 단계가 reasoning_effort 를 고르는 데 쓴다. */
+    public int attempt() {
+        return attempt;
     }
 }

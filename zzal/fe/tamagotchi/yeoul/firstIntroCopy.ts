@@ -1,3 +1,4 @@
+import {windowCopy} from '../../lib/windowCopy';
 import type { FirstIntroKey } from './firstIntro';
 import type { ZzalLocale } from '../../lib/locale';
 const EN:Record<FirstIntroKey,string>={
@@ -36,4 +37,8 @@ const JA:Record<FirstIntroKey,string>={
   "REVIEW_SEEN": "使ってみた感想をお聞かせください。送信せずに閉じても大丈夫です。",
   "COMPLETE": ""
 };
-export function introText(key:FirstIntroKey,locale:ZzalLocale,fallback:string){return locale==='en'?EN[key]:locale==='ja'?JA[key]:fallback}
+export function introText(key:FirstIntroKey,locale:ZzalLocale,fallback:string){
+  // 낮잠 칸은 평소 창 시각을 말한다 — 한국 사용자가 아니면 아이의 시간대로(lib/windowCopy.ts). 한국 사용자는 null → 옛 문구.
+  const zoned=key==='NAP_SLEEP'?windowCopy('napSleep',locale):key==='NAP_WAKE'?windowCopy('napWake',locale):null;
+  if(zoned!==null)return zoned;
+  return locale==='en'?EN[key]:locale==='ja'?JA[key]:fallback}

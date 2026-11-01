@@ -55,6 +55,8 @@ import java.util.stream.Collectors;
 @Service
 public class PetService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PetService.class);
+
     private final ZzalPetRepository petRepository;
     private final GenJobRepository jobRepository;
     private final GenStepRecordRepository stepRepository;
@@ -178,7 +180,7 @@ public class PetService {
 
         s3Service.consume(userId, imageKey, now);
 
-        ZzalPet pet = petRepository.save(ZzalPet.draft(userId, imageKey, now));
+        ZzalPet pet = petRepository.save(ZzalPet.draft(userId, imageKey, now, PetTimeZones.fromCurrentRequest().orElse(null)));
         String version = hatchService.currentVersion();
         pet.setHatchPipelineVersion(version);
         GenJob job = jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, version, now));
@@ -370,6 +372,13 @@ public class PetService {
         //   그 시각을 <b>구간의 시작</b>으로 잡아야 그 사이에 있었던 기상을 놓치지 않는다(#234 리뷰 중-1).
         Instant windowStart = pet.getSettledAt() == null ? now : pet.getSettledAt();
         pet.settle(now);
+        // ★ 시간대 첫 관측 — 정산 <b>뒤</b>에 적는다. 지난 구간은 그때 규칙(KST)으로 이미 정산됐고,
+        //   새 시간대는 지금부터만 쓴다(과거를 다시 계산하지 않는다). 적힌 값은 다시 안 바뀐다.
+        PetTimeZones.fromCurrentRequest().ifPresent(zone -> {
+            if (pet.observeTimeZone(zone)) {
+                log.info("펫 시간대 첫 관측 — petId={} zone={}", pet.getId(), zone.getId());
+            }
+        });
         // ★★ 순서가 중요하다 — 부재 장면은 <b>방문 기록 전에</b> 정산해야 한다.
         //   {@code visit} 이 "부재는 여기서 끝" 이라며 부재 시계를 0으로 끊기 때문에,
         //   뒤로 미루면 방금 비운 시간이 통째로 사라진다.

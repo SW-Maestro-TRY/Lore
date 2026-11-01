@@ -414,8 +414,8 @@ public class DevService {
         }
         List<String> notes = new ArrayList<>();
         Instant now = pet.now(real);
-        LocalDate day = AwakeClock.dateOf(now);
-        LocalTime clock = now.atZone(ZzalRules.ZONE).toLocalTime();
+        LocalDate day = AwakeClock.dateOf(now, pet.zone());
+        LocalTime clock = now.atZone(pet.zone()).toLocalTime();
         boolean inWindow = false;
         for (ChatSlot slot : List.of(ChatSlot.MORNING, ChatSlot.NOON, ChatSlot.EVENING)) {
             if (!clock.isBefore(slot.opens()) && clock.isBefore(slot.closes())) {
@@ -431,8 +431,8 @@ public class DevService {
                 }
             }
             Instant target = next != null
-                    ? day.atTime(next).atZone(ZzalRules.ZONE).toInstant()
-                    : day.plusDays(1).atTime(ChatSlot.MORNING.opens()).atZone(ZzalRules.ZONE).toInstant();
+                    ? day.atTime(next).atZone(pet.zone()).toInstant()
+                    : day.plusDays(1).atTime(ChatSlot.MORNING.opens()).atZone(pet.zone()).toInstant();
             pet.setDevClock(target.plusSeconds(60), real);
             petService.devSettle(pet, real, false);
             notes.add("시계를 다음 채팅 창으로 옮겼어요");

@@ -384,6 +384,17 @@ export interface PetDetail {
   serverNow: string;
 
   /**
+   * 이 아이의 시간대(IANA, 예 `America/Los_Angeles`). 날짜·시각을 **보여 줄 때** 쓴다(lib/kst.ts formatInZone).
+   * 아직 관측 못 했으면 서버가 `Asia/Seoul` 을 준다. 옛 서버(칸 없음)면 undefined → 서울.
+   */
+  timeZone?: string;
+  /**
+   * 서버가 창(19·23·07·10시, 부름 10/14/19시)을 재는 시간대. 1단계 서버는 늘 `Asia/Seoul`.
+   * timeZone 과 다르면 창 시각을 timeZone 으로 **바꿔서** 보여 준다(lib/kst.ts ruleHourLabel).
+   */
+  rulesTimeZone?: string;
+
+  /**
    * 이 아이의 **자세별 소품 앵커** 파일 키(예: `images/zzal/pets/23/sets/7/anchors.json`).
    * 화면이 CDN 에서 직접 읽는다 — **판 번호가 경로에 들어가므로 주소가 곧 판**이다.
    *
