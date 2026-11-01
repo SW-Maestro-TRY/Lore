@@ -77,11 +77,10 @@ class RequestContractTest {
         }
 
         @Test
-        @DisplayName("★ 이름 바꾸기 — 1자·12자는 통과, 13자·빈 값·공백뿐은 거절(초안 이름과 같은 상수)")
+        @DisplayName("★ 이름 바꾸기 — 빈 값·공백뿐은 거절. 길이(12자)는 공백을 지운 뒤 서비스가 센다(PetRenameIT)")
         void rename() {
             assertThat(accepted(new PetRequests.Rename("여"))).isTrue();
             assertThat(accepted(new PetRequests.Rename(chars(ZzalRules.NAME_MAX_CHARS)))).isTrue();
-            assertThat(accepted(new PetRequests.Rename(chars(ZzalRules.NAME_MAX_CHARS + 1)))).isFalse();
             assertThat(accepted(new PetRequests.Rename(""))).isFalse();
             assertThat(accepted(new PetRequests.Rename("   "))).isFalse();
             assertThat(accepted(new PetRequests.Rename(null))).isFalse();

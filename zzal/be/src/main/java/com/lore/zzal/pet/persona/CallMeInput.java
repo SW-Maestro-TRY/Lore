@@ -20,13 +20,13 @@ public final class CallMeInput {
     private CallMeInput() {
     }
 
-    /** "/" 가 들어 있거나 "이름 없이"(띄어쓰기 무관)면 400 {@code INVALID_INPUT}. null 은 통과(검사할 값이 없다). */
+    /** "/"·전각 "／" 가 들어 있거나 "이름 없이"(띄어쓰기 무관)면 400 {@code INVALID_INPUT}. null 은 통과(검사할 값이 없다). */
     public static void requireSingle(String callMe) {
         if (callMe == null) return;
         String v = callMe.strip();
-        if (v.contains("/"))
+        if (v.contains("/") || v.contains("\uFF0F"))
             throw new BusinessException(ErrorCode.INVALID_INPUT, "한 가지만 적어 주세요. 예: 언니");
-        if (v.replaceAll("\\s+", "").equals("이름없이"))
+        if (v.replaceAll("(?U)\\s+", "").equals("이름없이"))
             throw new BusinessException(ErrorCode.INVALID_INPUT,
                     "부르는 이름을 적어 주세요. 이름 없이 부르길 원하면 상세 설정에서 건너뛰기를 골라 주세요.");
     }

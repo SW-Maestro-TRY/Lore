@@ -79,11 +79,11 @@ class PersonaEditIT extends ZzalItSupport {
     }
     @Test void multipleOrNoNameAddressIsRejectedAndKeepsStoredAddress()throws Exception{
         var r=room();String h=hash(r);
-        for(String bad:new String[]{"언니/오빠","이름 없이","이름없이"}){
+        for(String bad:new String[]{"언니/오빠","언니／오빠","이름 없이","이름\u3000없이","이름없이"}){
             var result=postAs(r.user,r.path()+"/personality",Map.of("callMe",bad,"expectedPersonaHash",h));
             assertThat(result.getResponse().getStatus()).as("호칭 [%s]",bad).isEqualTo(400);
             assertThat(errorCode(result)).isEqualTo("INVALID_INPUT");
-            assertThat(body(result).path("error").path("message").asText()).contains(bad.contains("/")?"한 가지만":"건너뛰기");
+            assertThat(body(result).path("error").path("message").asText()).contains(bad.contains("/")||bad.contains("／")?"한 가지만":"건너뛰기");
         }
         var p=petRepository.findById(r.pet).orElseThrow();assertThat(p.getCallMe()).isEqualTo("민지");assertThat(p.getCallMeSource()).isEqualTo("EXPLICIT");
         assertThat(hash(r)).isEqualTo(h);

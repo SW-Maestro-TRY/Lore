@@ -116,6 +116,23 @@ class PetRenameIT extends ZzalItSupport {
     }
 
     @Test
+    void leadingSpacePlusTwelveCharsIs200AfterStrip() throws Exception {
+        var r = room();
+        var result = rename(r.user, r.pet, Map.of("name", " " + "나".repeat(12)));
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(storedName(r.pet)).isEqualTo("나".repeat(12));
+    }
+
+    @Test
+    void zeroWidthSpaceOnlyIs400AndKeepsName() throws Exception {
+        var r = room();
+        var result = rename(r.user, r.pet, Map.of("name", "\u200B\u200B"));
+        assertThat(result.getResponse().getStatus()).isEqualTo(400);
+        assertThat(errorCode(result)).isEqualTo("INVALID_INPUT");
+        assertThat(storedName(r.pet)).isEqualTo("여울");
+    }
+
+    @Test
     void sameNameIsNoOp200() throws Exception {
         var r = room();
         var result = rename(r.user, r.pet, Map.of("name", " 여울 "));

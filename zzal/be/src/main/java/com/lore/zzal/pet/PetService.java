@@ -843,7 +843,9 @@ public class PetService {
     public Action rename(Long userId, Long petId, String name, Instant realNow) {
         ZzalPet pet = alive(userId, petId, realNow);
         String next = name == null ? "" : name.strip();
-        if (next.isEmpty())
+        // strip() 이 못 지우는 서식 문자(U+200B 등)·공백만 남은 이름도 빈칸으로 본다.
+        if (next.isEmpty() || next.codePoints().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c)
+                || Character.getType(c) == Character.FORMAT))
             throw new BusinessException(ErrorCode.INVALID_INPUT, "이름을 한 글자 이상 적어 주세요");
         if (next.length() > ZzalRules.NAME_MAX_CHARS)
             throw new BusinessException(ErrorCode.INVALID_INPUT,
