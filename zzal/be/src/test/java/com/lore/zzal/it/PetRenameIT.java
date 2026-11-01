@@ -1,6 +1,15 @@
 package com.lore.zzal.it;
 
+import com.lore.zzal.chat.ChatSessionKeys;
+import com.lore.zzal.chat.ChatSlot;
+import com.lore.zzal.chat.persona.PersonaSheetBuilder;
+import com.lore.zzal.chat.prompt.PromptAssembler;
+import com.lore.zzal.chat.session.SessionKind;
+import com.lore.zzal.chat.session.ZzalChatSession;
+import com.lore.zzal.chat.stage.ZzalStageSpeech;
 import com.lore.zzal.generation.PetNamed;
+import com.lore.zzal.pet.persona.AuthoredPersona;
+import com.lore.zzal.pet.persona.PersonaSourceVersion;
 import com.lore.zzal.pet.Personality;
 import com.lore.zzal.pet.ZzalPet;
 import org.junit.jupiter.api.Test;
@@ -30,6 +39,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class PetRenameIT extends ZzalItSupport {
 
     @Autowired ApplicationEvents events;
+    @Autowired com.lore.zzal.chat.line.FakeChatLineClient lineClient;
+    @Autowired com.lore.zzal.chat.stage.StageSpeechService stageSpeeches;
+    @Autowired com.lore.zzal.chat.stage.StageSpeechTransactions stageRows;
+    @Autowired com.lore.zzal.chat.session.ZzalChatSessionRepository sessions;
 
     record Room(Long user, Long pet) {
         String path() { return "/api/zzal/v1/me/pets/" + pet; }
@@ -158,5 +171,57 @@ class PetRenameIT extends ZzalItSupport {
         var stored = petRepository.findById(r.pet).orElseThrow();
         assertThat(stored.isSleeping()).as("이름을 바꿔도 자는 중 그대로").isTrue();
         assertThat(stored.getName()).isEqualTo("잠꾸러기");
+    }
+
+    // ── A3: 이름 변경의 파급(명세 7절) ─────────────────────────────────────
+
+    @Test
+    void renameKeepsPersonaHashAndReachesSheetAndPrompt() throws Exception {
+        var r = room();
+        String before = getJson(r.user, r.path() + "/persona").path("data").path("personaSourceHash").asText();
+        assertThat(before).isNotBlank();
+        int calls = lineClient.systems.size();
+        assertThat(rename(r.user, r.pet, Map.of("name", "바다")).getResponse().getStatus()).isEqualTo(200);
+        String after = getJson(r.user, r.path() + "/persona").path("data").path("personaSourceHash").asText();
+        assertThat(after).as("이름은 설정 해시에 안 들어간다 — 호칭 저장 해시가 깨지지 않는다").isEqualTo(before);
+        var stored = petRepository.findById(r.pet).orElseThrow();
+        assertThat(PersonaSourceVersion.forEditing(stored)).isEqualTo(before);
+        var sheet = new PersonaSheetBuilder(null).build(stored);
+        assertThat(sheet.name()).isEqualTo("바다");
+        assertThat(PromptAssembler.system(sheet)).contains("'바다'").doesNotContain("'여울'");
+        assertThat(lineClient.systems).as("이름 변경은 모델을 부르지 않는다").hasSize(calls);
+    }
+
+    @Test
+    void renameSupersedesStoredDiscoverySpeechWithoutRegenerating() throws Exception {
+        Long user = newUserId();
+        Instant at = kstToday(10, 0); // 언제 돌려도 깨어 있는 자리
+        Long pet = transactions.execute(tx -> {
+            var p = ZzalPet.draft(user, newUploadedImageKey(user), at);
+            p.character("여울", null, null, "현대 공방", "존댓말", null, at);
+            p.markAlive("sheet", "identity", at);
+            p.recordAuthoredPersona(new AuthoredPersona(1, List.of()));
+            p.beginFirstMeeting();
+            var saved = petRepository.save(p);
+            sessions.save(ZzalChatSession.open(saved.getId(), ChatSessionKeys.hatchDay(saved),
+                    ChatSlot.CONTINUOUS, SessionKind.BABY, at, null, at));
+            return saved.getId();
+        });
+        pinClock(pet, at);
+        lineClient.whenEmpty("{\"line\":\"안녕, 여기가 내 방이야.\",\"motion\":\"hello\"}");
+        var prepared = stageSpeeches.prepareDiscovery(user, pet, Instant.now(), null);
+        assertThat(prepared.status()).isEqualTo(ZzalStageSpeech.Status.READY);
+        assertThat(stageRows.readDiscovery(user, pet).status()).isEqualTo(ZzalStageSpeech.Status.READY);
+        int calls = lineClient.systems.size();
+
+        assertThat(rename(user, pet, Map.of("name", "바다")).getResponse().getStatus()).isEqualTo(200);
+
+        var after = stageRows.readDiscovery(user, pet);
+        assertThat(after.status()).as("시트 해시에 이름이 들어 있어 저장분은 보이지 않게 된다").isEqualTo(ZzalStageSpeech.Status.SUPERSEDED);
+        // 같은 장면 저장분이 있으면 다시 만들지 않는다 — 재요청해도 모델 호출 0.
+        stageSpeeches.prepareDiscovery(user, pet, Instant.now(), null);
+        assertThat(lineClient.systems).as("이름 변경 뒤 추가 모델 호출 0").hasSize(calls);
+        assertThat(jdbc.queryForObject("select count(*) from zzal_stage_speech where pet_id=?", Long.class, pet)).isEqualTo(1L);
+        assertThat(petNamedCount()).isZero();
     }
 }
