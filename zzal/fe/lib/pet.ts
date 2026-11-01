@@ -942,10 +942,8 @@ export function updatePersonaSource(petId: number, input: PersonaUpdate): Promis
  * ★ 이름은 설정 해시에 안 들어가므로 `expectedPersonaHash`를 보내지 않는다.
  * ★ 공통 `request`의 method 형식에 PATCH가 없어 `lib/dev.ts`처럼 여기서만 넓힌다(전송은 fetch에 문자열 그대로).
  */
-// TODO(B7): 서버 A4 커밋 뒤 생성 타입(components['schemas'])으로 교체한다.
-type RenameRequest = { name: string };
 export function renamePet(petId: number, name: string): Promise<PetDetail> {
-  const body: RenameRequest = { name };
+  const body: components['schemas']['Rename'] = { name };
   return request<PetDetail>(`${PET_BASE}/${petId}/name`, { method: 'PATCH' as unknown as RequestOptions['method'], body });
 }
 
