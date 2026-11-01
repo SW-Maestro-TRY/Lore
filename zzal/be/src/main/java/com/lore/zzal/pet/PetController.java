@@ -22,6 +22,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -309,6 +310,28 @@ public class PetController {
         Instant real = Instant.now();
         return ApiResponse.ok(detail(
                 petService.editPersona(userId, petId, request, real), real));
+    }
+
+    @Operation(summary = "캐릭터 이름 변경", description = """
+            살아 있는 캐릭터의 이름을 바꾼다. 앞뒤 공백을 지운 뒤 1~12자여야 한다. 수면 중에도 바꿀 수 있다.
+            같은 이름이면 아무것도 바꾸지 않고 현재 상태를 돌려준다.
+
+            이름은 설정 해시(personaSourceHash)에 들어가지 않으므로 해시를 보내지 않는다.
+            부화 파이프라인을 다시 시작하지 않으며, 지난 채팅·일기 기록은 바뀌지 않는다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경 완료(또는 같은 이름)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "빈 이름·12자 초과(INVALID_INPUT)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "살아 있는 캐릭터가 아님(ZZAL_PET_NOT_ALIVE) · 여행 중(ZZAL_TRAVELING)")})
+    @PatchMapping("/{petId}/name")
+    public ApiResponse<PetResponses.Detail> rename(@LoginUser Long userId,
+                                                   @PathVariable Long petId,
+                                                   @Valid @RequestBody PetRequests.Rename request) {
+        Instant real = Instant.now();
+        return ApiResponse.ok(detail(petService.rename(userId, petId, request.name(), real), real));
     }
 
     @Operation(summary="튜토리얼 확인 또는 장면 대사 준비",description="purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 행동 topic/phase 또는 마무리 topic/scene(ENTRY)을 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.")

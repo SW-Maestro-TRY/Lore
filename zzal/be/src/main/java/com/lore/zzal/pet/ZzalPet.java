@@ -786,6 +786,19 @@ public class ZzalPet {
     }
 
     /**
+     * 살아 있는 펫의 이름을 바꾼다(캐릭터 카드). 값 검사(빈칸·길이·앞뒤 공백)는 서비스가 끝낸 뒤 온다.
+     *
+     * ★ 초안 이름은 {@link #character} 가 맡는다. 여기는 ALIVE 만 받는다 — 부화 중에 이름을 바꾸는 길이
+     *   생기면 부화 파이프라인({@code PetNamed})과 엇갈린다.
+     */
+    public void rename(String name) {
+        if (phase != PetPhase.ALIVE) {
+            throw new IllegalStateException("살아 있는 펫만 이름을 바꿀 수 있다");
+        }
+        this.name = name;
+    }
+
+    /**
      * 초안에 캐릭터 정보를 채운다. <b>여기서 생성이 시작되지는 않는다</b> — 그림을 올리는 순간
      * 이미 시작했고, 이 호출은 이름을 채울 뿐이다.
      *

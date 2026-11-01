@@ -831,6 +831,26 @@ public class PetService {
         return new Action(pet,List.of());
     }
 
+    /**
+     * 이름 바꾸기(캐릭터 카드). 자는 중에도 되고, 여행 중이면 {@link #alive} 가 409 로 막는다.
+     *
+     * <h3>★★ {@code PetNamed} 를 내지 않는다</h3>
+     * 그 이벤트는 부화 파이프라인을 깨우는 신호다({@link #character}). 다시 내면 굽기 쪽이 움직일 수 있다.
+     * 이름은 설정 해시({@code PersonaSourceVersion})에 들어가지 않으므로 해시 맞추기도 없다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action rename(Long userId, Long petId, String name, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        String next = name == null ? "" : name.strip();
+        if (next.isEmpty())
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이름을 한 글자 이상 적어 주세요");
+        if (next.length() > ZzalRules.NAME_MAX_CHARS)
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "%d자까지 적을 수 있어요".formatted(ZzalRules.NAME_MAX_CHARS));
+        if (!next.equals(pet.getName())) pet.rename(next);
+        return new Action(pet, List.of());
+    }
+
     /** 성격·세계관. 언제든, 자는 중에도(설계 규칙 "언제든 변경"). */
     @Transactional(noRollbackFor = BusinessException.class)
     public Action choosePersonality(Long userId, Long petId, java.util.List<Personality> personalities,
