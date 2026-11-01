@@ -3371,6 +3371,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 캐릭터 이름 변경
+         * @description 살아 있는 캐릭터의 이름을 바꾼다. 앞뒤 공백을 지운 뒤 1~12자여야 한다. 수면 중에도 바꿀 수 있다.
+         *     같은 이름이면 아무것도 바꾸지 않고 현재 상태를 돌려준다.
+         *
+         *     이름은 설정 해시(personaSourceHash)에 들어가지 않으므로 해시를 보내지 않는다.
+         *     부화 파이프라인을 다시 시작하지 않으며, 지난 채팅·일기 기록은 바뀌지 않는다.
+         */
+        patch: operations["rename"];
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/persona": {
         parameters: {
             query?: never;
@@ -6213,6 +6237,14 @@ export interface components {
             /** Format: int32 */
             done?: number;
             pages?: number[];
+        };
+        /** @description 캐릭터 이름 변경 요청. 앞뒤 공백은 지우고 저장한다 */
+        Rename: {
+            /**
+             * @description 새 캐릭터 이름. 최대 12자
+             * @example 바다여울
+             */
+            name: string;
         };
         Reply: {
             line?: string;
@@ -11412,6 +11444,59 @@ export interface operations {
                 };
             };
             /** @description 미도착 동작(ZZAL_MOTION_NOT_OPEN) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+        };
+    };
+    rename: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Rename"];
+            };
+        };
+        responses: {
+            /** @description 변경 완료(또는 같은 이름) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+            /** @description 빈 이름·12자 초과(INVALID_INPUT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+            /** @description 살아 있는 캐릭터가 아님(ZZAL_PET_NOT_ALIVE) · 여행 중(ZZAL_TRAVELING) */
             409: {
                 headers: {
                     [name: string]: unknown;
