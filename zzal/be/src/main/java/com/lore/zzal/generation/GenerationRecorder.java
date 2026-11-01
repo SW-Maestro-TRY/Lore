@@ -61,6 +61,12 @@ public class GenerationRecorder {
         return stepRepository.findSucceededByPetAndVersion(petId, kind, version);
     }
 
+    /** 이 펫의 부화 job(id &gt;= fromJobId) 중 이름이 {@code names} 인 단계가 FAILED 로 끝난 수(작업 1.10). */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public long countFailedSteps(Long petId, GenKind kind, Long fromJobId, java.util.Collection<String> names) {
+        return stepRepository.countFailedByPetSince(petId, kind, fromJobId, names);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markJobRunning(Long jobId) {
         jobRepository.findById(jobId).ifPresent(j -> j.markRunning(Instant.now()));
