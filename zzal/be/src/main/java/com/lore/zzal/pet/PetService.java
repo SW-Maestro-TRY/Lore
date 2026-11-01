@@ -817,6 +817,7 @@ public class PetService {
         ZzalPet pet=alive(userId,petId,realNow);
         if (request.callMe()!=null && request.callMe().isBlank())
             throw new BusinessException(ErrorCode.INVALID_INPUT,"부르는 이름을 입력해 주세요");
+        com.lore.zzal.pet.persona.CallMeInput.requireSingle(request.callMe()); // 해시 비교보다 먼저
         if (request.expectedPersonaHash()==null || request.expectedPersonaHash().isBlank())
             throw new BusinessException(ErrorCode.INVALID_INPUT,"현재 설정을 다시 확인해 주세요");
         String current=com.lore.zzal.pet.persona.PersonaSourceVersion.forEditing(pet);
