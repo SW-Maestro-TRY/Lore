@@ -8,7 +8,7 @@ import {personaChipLabel} from './personaChipCopy';
 import {PERSONA_LABEL} from './constants';
 import {interactionMetrics} from '../focused-room/interactionMetrics';
 import PersonaSettingsEditor,{editablePersona} from './PersonaSettingsEditor';
-import {CALL_ME_MAX,CROP_FALLBACK_Y,CROP_HEAD_ROOM,CROP_VISIBLE,NAME_MAX,pickRepresentativeChips,validateCallMe,validateName} from './characterCard';
+import {CALL_ME_MAX,CROP_FALLBACK_Y,CROP_HEAD_ROOM,CROP_VISIBLE,NAME_MAX,pickRepresentativeChips,validateCallMe,validateName} from './characterCardRules';
 import {cardCopy,type CardCopy} from './characterCardCopy';
 import '../focused-room/character-card.css';
 

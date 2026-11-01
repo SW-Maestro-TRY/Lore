@@ -2,8 +2,8 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');const path=require('node:path');const vm=require('node:vm');const ts=require('typescript');
-const file=path.resolve(__dirname,'../tamagotchi/yeoul/characterCard.ts');
-const mod={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:mod,require:()=>{throw Error('characterCard.ts must stay import-free')}});
+const file=path.resolve(__dirname,'../tamagotchi/yeoul/characterCardRules.ts');
+const mod={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:mod,require:()=>{throw Error('characterCardRules.ts must stay import-free')}});
 const {pickRepresentativeChips:pick,validateName,validateCallMe,NAME_MAX,CALL_ME_MAX}=mod;
 const src=(o)=>({authoredPersona:{version:1,fields:['world','job','persona','likes','dislikes','extra'].map(id=>({fieldId:id,chips:o[id]??[],rawText:'',skipped:false}))}});
 const plain=v=>JSON.parse(JSON.stringify(v));

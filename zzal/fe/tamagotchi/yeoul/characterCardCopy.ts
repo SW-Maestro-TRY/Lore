@@ -1,5 +1,5 @@
 import type { ZzalLocale } from '../../lib/locale';
-import { CALL_ME_MAX, NAME_MAX, type CallMeError } from './characterCard';
+import { CALL_ME_MAX, NAME_MAX, type CallMeError } from './characterCardRules';
 
 /** 캐릭터 카드 문구. 시스템 안내 말투(캐릭터 말투 아님). 저장 성공 문구는 두지 않는다. */
 export interface CardCopy {
