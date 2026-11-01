@@ -38,7 +38,8 @@
 .wt .wt-ed-overlaytoggle input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
 .wt .wt-ed-saved { font-size: 12px; color: #0f9e8a; margin: 0; }
 .wt .wt-ed-saved[data-state="saving"] { color: var(--dim); }
-.wt .wt-ed-saved[data-state="fail"] { color: #b3311a; font-weight: 600; }
+.wt .wt-ed-saved[data-state="fail"],
+.wt .wt-ed-saved[data-state="denied"] { color: #b3311a; font-weight: 600; }
 .wt .wt-ed-bake, .wt .wt-ed-done { height: 40px; font-size: 13.5px; padding: 0 18px; }
 
 /* 구운 결과 띠 */

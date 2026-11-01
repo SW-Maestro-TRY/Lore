@@ -174,6 +174,7 @@ const dict: Dict = {
   "뒤로": { en: "Back", ja: "戻る", zh: "返回" },
   /* 제목 */
   "샘플입니다 — 제목은 실제 작품에서만 바뀝니다.": { en: "This is a sample — titles can only be changed on real works.", ja: "サンプルです — タイトルは実際の作品でのみ変更できます。", zh: "这是示例 — 只有真实作品才能修改标题。" },
+  "내가 만든 작품만 고칠 수 있습니다": { en: "You can only edit your own works.", ja: "自分の作品だけ編集できます", zh: "只能修改自己的作品" },
   "저장하지 못했습니다": { en: "Couldn't save.", ja: "保存できませんでした", zh: "无法保存" },
   "제목을 바꿨습니다": { en: "Title changed.", ja: "タイトルを変更しました", zh: "已修改标题" },
   /* 굽기 */
