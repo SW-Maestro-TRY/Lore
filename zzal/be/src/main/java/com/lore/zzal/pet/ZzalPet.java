@@ -414,6 +414,16 @@ public class ZzalPet {
     public com.lore.zzal.attendance.AttendanceRewards getAttendanceRewards(){return attendanceRewards;}
     public void setAttendanceRewards(com.lore.zzal.attendance.AttendanceRewards value){attendanceRewards=value;}
 
+    /** 출석 선물 화면을 마지막으로 연 시각. 그 뒤에 지급된 선물이 "새 선물"(빨간 점)이다. 열어 본 적 없으면 null. */
+    @jakarta.persistence.Column(name="rewards_seen_at")
+    private Instant rewardsSeenAt;
+    public Instant getRewardsSeenAt(){return rewardsSeenAt;}
+    /** 앞으로만 간다 — 늦게 도착한 재시도가 더 이른 시각으로 되감아 이미 본 선물을 다시 "새것"으로 만들지 않게. */
+    public void markRewardsSeen(Instant at){
+        Instant t=at.truncatedTo(ChronoUnit.MICROS);
+        if(rewardsSeenAt==null||t.isAfter(rewardsSeenAt))rewardsSeenAt=t;
+    }
+
 
     /**
      * 밤 장면을 <b>아직 안 만든 잠</b>의 잠든 시각. 잠드는 순간 적어 두고, 다음 정산·조회에서 쓴 뒤 지운다.
@@ -773,6 +783,19 @@ public class ZzalPet {
     /** 밤 스위프가 이 펫의 {@code nightOf} 를 끝냈다. 뒤로는 안 간다. */
     public void markSwept(LocalDate nightOf) {
         if (!sweptNight(nightOf)) this.lastSweptNightOf = nightOf;
+    }
+
+    /**
+     * 살아 있는 펫의 이름을 바꾼다(캐릭터 카드). 값 검사(빈칸·길이·앞뒤 공백)는 서비스가 끝낸 뒤 온다.
+     *
+     * ★ 초안 이름은 {@link #character} 가 맡는다. 여기는 ALIVE 만 받는다 — 부화 중에 이름을 바꾸는 길이
+     *   생기면 부화 파이프라인({@code PetNamed})과 엇갈린다.
+     */
+    public void rename(String name) {
+        if (phase != PetPhase.ALIVE) {
+            throw new IllegalStateException("살아 있는 펫만 이름을 바꿀 수 있다");
+        }
+        this.name = name;
     }
 
     /**

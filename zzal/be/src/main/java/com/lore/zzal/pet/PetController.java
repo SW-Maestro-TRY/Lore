@@ -22,6 +22,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -311,6 +312,28 @@ public class PetController {
                 petService.editPersona(userId, petId, request, real), real));
     }
 
+    @Operation(operationId = "renamePet", summary = "캐릭터 이름 변경", description = """
+            살아 있는 캐릭터의 이름을 바꾼다. 앞뒤 공백을 지운 뒤 1~12자여야 한다. 수면 중에도 바꿀 수 있다.
+            같은 이름이면 아무것도 바꾸지 않고 현재 상태를 돌려준다.
+
+            이름은 설정 해시(personaSourceHash)에 들어가지 않으므로 해시를 보내지 않는다.
+            부화 파이프라인을 다시 시작하지 않으며, 지난 채팅·일기 기록은 바뀌지 않는다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경 완료(또는 같은 이름)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "빈 이름·12자 초과(INVALID_INPUT)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "살아 있는 캐릭터가 아님(ZZAL_PET_NOT_ALIVE) · 여행 중(ZZAL_TRAVELING)")})
+    @PatchMapping("/{petId}/name")
+    public ApiResponse<PetResponses.Detail> renamePet(@LoginUser Long userId,
+                                                   @PathVariable Long petId,
+                                                   @Valid @RequestBody PetRequests.Rename request) {
+        Instant real = Instant.now();
+        return ApiResponse.ok(detail(petService.rename(userId, petId, request.name(), real), real));
+    }
+
     @Operation(summary="튜토리얼 확인 또는 장면 대사 준비",description="purpose 생략/ACKNOWLEDGE는 기존 topic 확인과 Detail 응답을 유지한다. PREPARE_SPEECH는 현재 행동 topic/phase 또는 마무리 topic/scene(ENTRY)을 검증해 저장된 장면 발화 상태를 반환하며 행동/진도/보상을 소비하지 않는다.")
     @ApiResponses({
       @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode="200",description="ACK는 data=Detail, PREPARE_SPEECH는 data={stageSpeech:...}",content=@io.swagger.v3.oas.annotations.media.Content(schema=@io.swagger.v3.oas.annotations.media.Schema(implementation=TutorialSeenSuccessDocumentation.class))),
@@ -398,6 +421,26 @@ public class PetController {
     @PostMapping("/{petId}/graduation-seen")
     public ResponseEntity<Void> graduationSeen(@LoginUser Long userId, @PathVariable Long petId) {
         petService.markGraduationSeen(userId, petId, Instant.now());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "출석 선물 봤음", description = """
+            출석 선물 화면을 열었음을 기록한다. 본문이 없고 **204** 로 답한다.
+
+            상태 조회 응답의 `attendanceRewards.newRewardCount`(와 같은 값인 최상위 `newRewardCount`)는
+            이 시각 뒤에 지급된 선물만 센다. 화면은 이 값이 0보다 크면 메뉴 단추와 「출석」 항목에 빨간 점을 그리고,
+            출석 화면을 열면 이 호출을 보낸 뒤 상태를 다시 읽어 점을 지운다.
+
+            **같은 요청을 몇 번 보내도 결과가 같다** — 시각은 앞으로만 간다. 수면 중·여행 중에도 호출할 수 있다.""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "기록됨(본문 없음)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "로그인이 필요함"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404",
+                    description = "존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND)")})
+    @PostMapping("/{petId}/rewards/seen")
+    public ResponseEntity<Void> rewardsSeen(@LoginUser Long userId, @PathVariable Long petId) {
+        petService.markRewardsSeen(userId, petId, Instant.now());
         return ResponseEntity.noContent().build();
     }
 

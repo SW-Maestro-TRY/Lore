@@ -76,6 +76,15 @@ public final class PetRequests {
         }
     }
 
+    /** 살아 있는 펫의 이름 바꾸기(캐릭터 카드). 초안 이름은 {@link Character} 가 맡는다. */
+    @Schema(name = "PetRename", description = "캐릭터 이름 변경 요청. 앞뒤 공백은 지우고 저장한다")
+    public record Rename(
+
+            // ★ 길이(12자)는 앞뒤 공백을 지운 뒤 서비스가 센다. 여기서 원문 길이로 막으면 " "+12자가 거절된다.
+            @Schema(description = "새 캐릭터 이름. 앞뒤 공백을 지운 뒤 최대 12자", example = "바다여울")
+            @NotBlank String name) {
+    }
+
     @Schema(description = "돌보기 요청. 수행할 행동만 전달하고 수치 변화는 서버가 결정한다")
     public record IntroAction(com.lore.zzal.pet.FirstIntro.Step firstIntroStep) { }
 

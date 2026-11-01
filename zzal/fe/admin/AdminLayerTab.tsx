@@ -88,7 +88,7 @@ const RECOVERY_LABEL: Record<LayerItem['recovery'], string> = {
  * 8상태 시트 — 그 층 8종을 움직이는 채로 4×2 로.
  * 검수 화면의 그림 자리(Picture·THUMB_IMG)를 그대로 쓴다 — 애니메이션 webp 가 첫 프레임에 멈추지 않는다.
  */
-function MotionSheet({ keys, part }: { keys: Record<string, string>; part: string }) {
+export function MotionSheet({ keys, part }: { keys: Record<string, string>; part: string }) {
   const entries = Object.entries(keys);
   return (
     <div data-part={part} data-count={entries.length} style={{ ...GRID, gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 4 }}>

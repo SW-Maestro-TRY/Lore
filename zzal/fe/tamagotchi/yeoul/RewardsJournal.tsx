@@ -49,7 +49,9 @@ export default function RewardsJournal({ onClose }: { onClose: () => void }) {
   }
   async function ack(e:DiaryEntry) {
     if(petId == null || e.readAt || ackPending.current.has(e.id)) return; ackPending.current.add(e.id); setAckError(false);
-    try { const saved=await readDiary(petId,e.id); if(active.current) { setEntry(old=>old?.id===saved.id?saved:old); setPage(old=>old?{...old,unreadCount:0,entries:old.entries.map(x=>x.id===saved.id?saved:x)}:old); } }
+    try { const saved=await readDiary(petId,e.id); if(active.current) { setEntry(old=>old?.id===saved.id?saved:old); setPage(old=>old?{...old,unreadCount:0,entries:old.entries.map(x=>x.id===saved.id?saved:x)}:old); }
+      // 읽음이 남았으니 상태를 다시 읽어 「앨범」·「일지」의 빨간 점(unreadDiaryCount)을 맞춘다.
+      void live.refreshPet(); }
     catch { if(active.current) setAckError(true); } finally { ackPending.current.delete(e.id); }
   }
   // ACK only after the opened body is committed to the visible document.

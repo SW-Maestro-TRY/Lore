@@ -8,8 +8,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MvcResult;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -101,5 +107,52 @@ class AdminRecoveryIT extends ZzalItSupport {
                 .header("X-Admin-Token", TOKEN)).andReturn();
         assertThat(unflag.getResponse().getStatus()).isEqualTo(200);
         assertThat(getJson(bot, LIST).path("data").size()).isZero();
+    }
+
+    @Test
+    @DisplayName("봇 토큰 presign — 맞춤 후보 형식(webp)도 받고, 그 밖(text/html)은 400")
+    void botToken_presignAcceptsWebp() throws Exception {
+        Long made = newUserId();
+        jdbc.update("update users set id = ?, role = 'ADMIN' where id = ?", BOT, made);
+        stubPresigner();
+        for (String type : new String[]{"image/png", "image/webp", "image/gif", "application/json"}) {
+            MvcResult ok = mockMvc.perform(post("/api/zzal/v1/admin/uploads/presign")
+                    .header("X-Admin-Token", TOKEN).contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"contentType\":\"%s\"}".formatted(type))).andReturn();
+            assertThat(ok.getResponse().getStatus()).as(type).isEqualTo(200);
+            assertThat(body(ok).path("data").path("key").asText()).as(type).startsWith("images/zzal/");
+        }
+        MvcResult html = mockMvc.perform(post("/api/zzal/v1/admin/uploads/presign")
+                .header("X-Admin-Token", TOKEN).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"contentType\":\"text/html\"}")).andReturn();
+        assertThat(html.getResponse().getStatus()).isEqualTo(400);
+        assertThat(errorCode(html)).isEqualTo("INVALID_INPUT");
+    }
+
+    @Test
+    @DisplayName("★ 옛 층 pick 은 봇 토큰으로 못 부른다(403) — 쿠키 관리자는 그대로 통과(결정 9)")
+    void botToken_cannotPickLayer() throws Exception {
+        Long made = newUserId();
+        jdbc.update("update users set id = ?, role = 'ADMIN' where id = ?", BOT, made);
+        ZzalPet pet = aliveLayerTwoPet(newUserId());
+        for (int layer : new int[]{1, 2}) {
+            MvcResult bot = mockMvc.perform(post("/api/zzal/v1/admin/pets/%d/layer%d/pick".formatted(pet.getId(), layer))
+                    .header("X-Admin-Token", TOKEN).contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"candidateId\":\"x-1\"}")).andReturn();
+            assertThat(bot.getResponse().getStatus()).as("layer " + layer).isEqualTo(403);
+            assertThat(errorCode(bot)).isEqualTo("FORBIDDEN");
+            // 쿠키 관리자 — 봇 표식이 없으니 서비스까지 간다(후보가 없어 400, 403 이 아님).
+            MvcResult human = postAs(BOT, "/api/zzal/v1/admin/pets/%d/layer%d/pick".formatted(pet.getId(), layer),
+                    java.util.Map.of("candidateId", "x-1"));
+            assertThat(human.getResponse().getStatus()).as("layer " + layer).isNotEqualTo(403);
+        }
+    }
+
+    /** 시험 컨텍스트의 presigner 는 빈 껍데기(mock)라 주소가 null 이다 — 주소 모양만 돌려주게 한다(AWS 로 안 나감). */
+    private void stubPresigner() throws Exception {
+        S3Presigner presigner = context.getBean(S3Presigner.class);
+        PresignedPutObjectRequest presigned = mock(PresignedPutObjectRequest.class);
+        when(presigned.url()).thenReturn(java.net.URI.create("https://presign.invalid/put").toURL());
+        when(presigner.presignPutObject(any(PutObjectPresignRequest.class))).thenReturn(presigned);
     }
 }
