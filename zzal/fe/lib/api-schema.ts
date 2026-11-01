@@ -3392,7 +3392,7 @@ export interface paths {
          *     이름은 설정 해시(personaSourceHash)에 들어가지 않으므로 해시를 보내지 않는다.
          *     부화 파이프라인을 다시 시작하지 않으며, 지난 채팅·일기 기록은 바뀌지 않는다.
          */
-        patch: operations["rename"];
+        patch: operations["renamePet"];
         trace?: never;
     };
     "/api/zzal/v1/me/pets/{petId}/persona": {
@@ -5850,6 +5850,14 @@ export interface components {
              */
             world?: string;
         };
+        /** @description 캐릭터 이름 변경 요청. 앞뒤 공백은 지우고 저장한다 */
+        PetRename: {
+            /**
+             * @description 새 캐릭터 이름. 최대 12자
+             * @example 바다여울
+             */
+            name: string;
+        };
         PhotoPresignRequest: {
             contentType?: string;
         };
@@ -6237,14 +6245,6 @@ export interface components {
             /** Format: int32 */
             done?: number;
             pages?: number[];
-        };
-        /** @description 캐릭터 이름 변경 요청. 앞뒤 공백은 지우고 저장한다 */
-        Rename: {
-            /**
-             * @description 새 캐릭터 이름. 최대 12자
-             * @example 바다여울
-             */
-            name: string;
         };
         Reply: {
             line?: string;
@@ -11454,7 +11454,7 @@ export interface operations {
             };
         };
     };
-    rename: {
+    renamePet: {
         parameters: {
             query?: never;
             header?: never;
@@ -11465,7 +11465,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Rename"];
+                "application/json": components["schemas"]["PetRename"];
             };
         };
         responses: {

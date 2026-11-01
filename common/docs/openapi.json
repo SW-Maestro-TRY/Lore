@@ -4891,6 +4891,22 @@
         },
         "type": "object"
       },
+      "PetRename": {
+        "description": "캐릭터 이름 변경 요청. 앞뒤 공백은 지우고 저장한다",
+        "properties": {
+          "name": {
+            "description": "새 캐릭터 이름. 최대 12자",
+            "example": "바다여울",
+            "maxLength": 12,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "PhotoPresignRequest": {
         "properties": {
           "contentType": {
@@ -5620,22 +5636,6 @@
             "type": "array"
           }
         },
-        "type": "object"
-      },
-      "Rename": {
-        "description": "캐릭터 이름 변경 요청. 앞뒤 공백은 지우고 저장한다",
-        "properties": {
-          "name": {
-            "description": "새 캐릭터 이름. 최대 12자",
-            "example": "바다여울",
-            "maxLength": 12,
-            "minLength": 0,
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
         "type": "object"
       },
       "Reply": {
@@ -14210,7 +14210,7 @@
     "/api/zzal/v1/me/pets/{petId}/name": {
       "patch": {
         "description": "살아 있는 캐릭터의 이름을 바꾼다. 앞뒤 공백을 지운 뒤 1~12자여야 한다. 수면 중에도 바꿀 수 있다.\n같은 이름이면 아무것도 바꾸지 않고 현재 상태를 돌려준다.\n\n이름은 설정 해시(personaSourceHash)에 들어가지 않으므로 해시를 보내지 않는다.\n부화 파이프라인을 다시 시작하지 않으며, 지난 채팅·일기 기록은 바뀌지 않는다.",
-        "operationId": "rename",
+        "operationId": "renamePet",
         "parameters": [
           {
             "in": "path",
@@ -14226,7 +14226,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Rename"
+                "$ref": "#/components/schemas/PetRename"
               }
             }
           },

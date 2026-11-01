@@ -77,7 +77,7 @@ public final class PetRequests {
     }
 
     /** 살아 있는 펫의 이름 바꾸기(캐릭터 카드). 초안 이름은 {@link Character} 가 맡는다. */
-    @Schema(description = "캐릭터 이름 변경 요청. 앞뒤 공백은 지우고 저장한다")
+    @Schema(name = "PetRename", description = "캐릭터 이름 변경 요청. 앞뒤 공백은 지우고 저장한다")
     public record Rename(
 
             @Schema(description = "새 캐릭터 이름. 최대 12자", example = "바다여울")

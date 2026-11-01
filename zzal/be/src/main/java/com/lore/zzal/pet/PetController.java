@@ -312,7 +312,7 @@ public class PetController {
                 petService.editPersona(userId, petId, request, real), real));
     }
 
-    @Operation(summary = "캐릭터 이름 변경", description = """
+    @Operation(operationId = "renamePet", summary = "캐릭터 이름 변경", description = """
             살아 있는 캐릭터의 이름을 바꾼다. 앞뒤 공백을 지운 뒤 1~12자여야 한다. 수면 중에도 바꿀 수 있다.
             같은 이름이면 아무것도 바꾸지 않고 현재 상태를 돌려준다.
 
@@ -327,7 +327,7 @@ public class PetController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
                     description = "살아 있는 캐릭터가 아님(ZZAL_PET_NOT_ALIVE) · 여행 중(ZZAL_TRAVELING)")})
     @PatchMapping("/{petId}/name")
-    public ApiResponse<PetResponses.Detail> rename(@LoginUser Long userId,
+    public ApiResponse<PetResponses.Detail> renamePet(@LoginUser Long userId,
                                                    @PathVariable Long petId,
                                                    @Valid @RequestBody PetRequests.Rename request) {
         Instant real = Instant.now();

@@ -943,7 +943,7 @@ export function updatePersonaSource(petId: number, input: PersonaUpdate): Promis
  * ★ 공통 `request`의 method 형식에 PATCH가 없어 `lib/dev.ts`처럼 여기서만 넓힌다(전송은 fetch에 문자열 그대로).
  */
 export function renamePet(petId: number, name: string): Promise<PetDetail> {
-  const body: components['schemas']['Rename'] = { name };
+  const body: components['schemas']['PetRename'] = { name };
   return request<PetDetail>(`${PET_BASE}/${petId}/name`, { method: 'PATCH' as unknown as RequestOptions['method'], body });
 }
 
