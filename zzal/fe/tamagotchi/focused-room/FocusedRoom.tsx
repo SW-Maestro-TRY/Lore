@@ -29,7 +29,7 @@ import SceneShare from '../yeoul/SceneShare';
 import {useFocusedGeometry} from './useFocusedGeometry';
 import ReturningGuide,{useReturningGuide} from '../announcements/ReturningGuide';
 import {returningCopy} from '../announcements/returningGuideState';
-import PersonaEditor from '../yeoul/PersonaEditor';
+import CharacterCard from '../yeoul/CharacterCard';
 import {NewDot,newBadgeCounts,newBadgeLabel} from './newBadges';
 
 type FocusedLive = Live;
@@ -323,7 +323,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     <FocusedPanels live={live} x={x.panel==='care'?{...x,panel:null}:x} locale={locale} sampleMode={sampleMode}/>
     <FocusedInquiry metrics={interactionMetrics(live,sampleMode,'inquiry')} open={inquiryOpen} onClose={()=>setInquiryOpen(false)} onSeen={()=>void live.refreshPet()} petId={live.petId} locale={locale}/>
     {returning.open&&!settingsOpen&&!traveling&&<ReturningGuide guide={returning} locale={locale} locked={sleeping||traveling} onEdit={editSettings}/>}
-    {settingsOpen&&<div className="returning-settings-cover"><section className="fr-sheet fr-reading-sheet" role="dialog" aria-modal="true" aria-label={returningWords.settings} data-returning-settings onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setSettingsOwner(null)}if(event.key==='Tab'){const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];if(event.shiftKey&&document.activeElement===buttons[0]){event.preventDefault();buttons.at(-1)?.focus()}else if(!event.shiftKey&&document.activeElement===buttons.at(-1)){event.preventDefault();buttons[0]?.focus()}}}}><header><h2>{returningWords.settings}</h2><button type="button" onClick={()=>setSettingsOwner(null)}>{returningWords.close}</button></header><div className="returning-content"><PersonaEditor allowConfirm={returning.pending} onSaved={returnToChat} onClose={()=>setSettingsOwner(null)}/></div></section></div>}
+    {settingsOpen&&<div className="returning-settings-cover"><section className="fr-sheet fr-reading-sheet" role="dialog" aria-modal="true" aria-label={returningWords.settings} data-returning-settings onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setSettingsOwner(null)}if(event.key==='Tab'){const buttons=[...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)')];if(event.shiftKey&&document.activeElement===buttons[0]){event.preventDefault();buttons.at(-1)?.focus()}else if(!event.shiftKey&&document.activeElement===buttons.at(-1)){event.preventDefault();buttons[0]?.focus()}}}}><header><h2>{returningWords.settings}</h2><button type="button" onClick={()=>setSettingsOwner(null)}>{returningWords.close}</button></header><div className="returning-content"><CharacterCard allowConfirm={returning.pending} onSaved={returnToChat} onClose={()=>setSettingsOwner(null)}/></div></section></div>}
     {shareOpen&&<SceneShare metrics={interactionMetrics(live,sampleMode,'scene_share')} stage={scene.current} logoUrl="/zzal-entry/logo-08-transparent.png" onClose={()=>setShareOpen(false)}/>}
   </section>;
 }

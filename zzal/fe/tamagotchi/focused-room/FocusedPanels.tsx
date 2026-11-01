@@ -7,7 +7,7 @@ import {getMyFeedback,submitFeedback,type MyFeedback,type FeedbackTag} from '../
 import {GUESS_HANDS} from '../yeoul/constants';
 import RewardsJournal,{BackgroundRoom} from '../yeoul/RewardsJournal';
 import FocusedAlbum from './FocusedAlbum';
-import PersonaEditor from '../yeoul/PersonaEditor';
+import CharacterCard from '../yeoul/CharacterCard';
 import FocusedCare from './FocusedCare';
 import {assetUrl} from '../../lib/assets';
 import type {ZzalLocale} from '../../lib/locale';
@@ -34,7 +34,7 @@ export function FocusedPanels({live,x,locale,sampleMode=false}:{live:Live;x:Focu
   {panel==='collection-hub'&&<div className="fr-sheet-body fr-collection-hub">{(['collection','journal','background'] as const).map((kind,i)=>{const dot=kind==='journal'?newBadgeCounts(live.pet,sampleMode||x.guided).diary:0;return <button key={kind} data-fr-collection={kind} data-fr-new={dot>0?'diary':undefined} onClick={()=>x.open(kind)}><NewDot place="item" count={dot} locale={locale}/><strong>{[t.album,t.journal,t.background][i]}</strong><span>{(locale==='ko'?['움직이는 모습을 크게 보고 저장하거나 나눠요.','처음 만난 날과 캐릭터의 하루를 읽어요.','받은 배경으로 방을 바꿔요.']:locale==='en'?['View, save, or share their motions.','Read the day you met and their diary.','Choose a received background.']:['動きを大きく見たり、保存・共有します。','出会った日と日記を読みます。','届いた背景で部屋を変えます。'])[i]}</span></button>})}</div>}
   {panel==='collection'&&<FocusedAlbum sample={sampleMode} live={live} locale={locale} diaryDot={newBadgeCounts(live.pet,sampleMode||x.guided).diary} onJournal={()=>x.open('journal')} onBackground={()=>x.open('background')}/>}
   {panel==='journal'&&sampleMode&&<div className="fr-sheet-body"><h3>로미와 만났어요</h3><p>로미와 처음 마주한 순간이에요. 내 캐릭터와의 기록은 알에서 만난 뒤 이어져요.</p></div>}
-  {panel==='info'&&<div className="fr-sheet-body" data-fr-info><h3>{live.pet?.name}</h3>{sampleMode?<p>로미와 먼저 놀아 볼 수 있어요. 내 캐릭터의 설정은 알에서 알려 주세요.</p>:<PersonaEditor/>}</div>}
+  {panel==='info'&&<div className="fr-sheet-body" data-fr-info><CharacterCard sample={sampleMode}/></div>}
   {panel==='help'&&<div className="fr-sheet-body" data-fr-help><h3>{t.care}</h3><p>{t.bathHelp}</p><p>{t.snackHelp}</p><p>{restHelp(locale,false,false)}</p><p>{restHelp(locale,true,false)}</p><h3>{t.album}</h3><p>{locale==='ko'?'받은 동작을 크게 보고 원본 파일로 저장하거나 공유할 수 있어요. 저장하거나 공유하지 않아도 괜찮아요.':locale==='en'?'View received motions, save the original file, or share it. Saving and sharing are optional.':'届いた動きを大きく見たり、元のファイルを保存・共有できます。保存や共有は必須ではありません。'}</p><h3>{t.journal}</h3><p>{locale==='ko'?'처음 태어난 날과 캐릭터가 남긴 기록을 읽어요. 읽은 기록은 날짜별로 남아요.':locale==='en'?'Read the day they were born and their diary. Read entries stay saved by date.':'生まれた日とキャラクターの日記を読めます。読んだ記録は日付ごとに残ります。'}</p><h3>{t.personal}</h3><p>{locale==='ko'?'설정 원문과 나를 부르는 이름을 바꿀 수 있어요. 이미 저장된 과거 인사와 대화 원문은 바뀌지 않아요.':locale==='en'?'Edit the original settings and how they address you. Earlier saved greetings and chats stay unchanged.':'設定の原文とあなたの呼び名を変えられます。保存済みの挨拶や会話は変わりません。'}</p></div>}
 
   {x.error&&<p className="fr-panel-error" role="alert">{x.error}</p>}
