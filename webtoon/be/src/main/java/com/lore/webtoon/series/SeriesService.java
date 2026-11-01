@@ -57,7 +57,8 @@ public class SeriesService {
     private WebtoonJob source(String run, Long user, boolean own) {
         if (own && user == null) throw new BusinessException(ErrorCode.UNAUTHORIZED, "연재를 이어가려면 로그인해 주세요.");
         WebtoonWork work = ledger.find(run).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
-        if (work.isTrashed() || work.isRemovedByAdmin() || !ledger.mayRead(run, user))
+        if (work.isTrashed() || work.isRemovedByAdmin()
+                || !ledger.mayRead(run, user, com.lore.webtoon.work.WorkVisibility.requestKey()))
             throw new BusinessException(ErrorCode.NOT_FOUND);
         if (own && (!ledger.mayChange(run,user) || work.isHiddenByAdmin()))
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 이어 만들 수 있어요.");
@@ -344,6 +345,8 @@ public class SeriesService {
         billing.charge(user,cost,id,WebtoonQuality.labelOf(source.getQuality()));
         queue.remember(id,queue.ahead());
         if (!ledger.isPublic(run)) ledger.setPublicByJob(id,false);
+        /* 링크 공개 작품의 다음 화도 링크 공개로 시작한다(#898). 열쇠는 회차마다 새로 — 1화 링크로 2화가 열리지 않는다. */
+        if (ledger.find(run).map(WebtoonWork::isLinkOnly).orElse(false)) ledger.setLinkOnlyByJob(id);
         return Map.of("id",id);
     }
     /**
@@ -384,7 +387,9 @@ public class SeriesService {
         boolean owner=user!=null && (user.equals(job.getUserId()) || job.getRunId()!=null && ledger.mayChange(job.getRunId(),user));
         if (job.getStatus()==JobStatus.DONE && work.isEmpty()) return;
         if (work.isPresent() && (work.get().isTrashed() || work.get().isRemovedByAdmin())) return;
-        if (!owner && (job.getStatus()!=JobStatus.DONE || work.isEmpty() || !work.get().isPublic())) return;
+        /* 링크로 온 사람(#898)에게는 그 열쇠가 여는 회차만 더 보인다. */
+        boolean byLink = work.isPresent() && ledger.opensByLink(job.getRunId(), com.lore.webtoon.work.WorkVisibility.requestKey());
+        if (!owner && (job.getStatus()!=JobStatus.DONE || work.isEmpty() || !(work.get().isPublic() || byLink))) return;
         var row=new LinkedHashMap<String,Object>();
         row.put("episode",number); row.put("run_id",job.getStatus()==JobStatus.DONE ? job.getRunId() : null);
         if (owner) row.put("job_id",job.getPublicId());

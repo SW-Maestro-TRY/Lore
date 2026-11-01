@@ -22,7 +22,7 @@ import "./EditorFinal.css";
  * 기대하는 대로 두고 겉모습만 Editor.css 로 캔버스에 맞춘다.
  *
  * 엔진이 직접 그리는 것: #worksList(작품 목록) · #scenes(장 카드 전부, 세로) ·
- * #edEpTabs(회차) · #dockGrid(말풍선·스티커·효과음) · #regenAsk(다시 그리기 창) ·
+ * #edEpTabs(회차) · #dockGrid(말풍선·스티커·효과음·그리기 도구) · #paintBar(그리기 모드 줄) · #regenAsk(다시 그리기 창) ·
  * #bakeResult(구운 결과) · 지난 판(.page-versions) · 여백 막대(.scene-gap).
  * React 가 더 그리는 것: 왼쪽 페이지 썸네일, 오른쪽 「다시 그리기」 단(활성 장의
  * 장면 한 줄 + 단추 — 누르면 엔진의 그 장 다시 그리기 단추를 대신 누른다),
@@ -215,9 +215,11 @@ export default function Editor({ runId, go, authStatus = "loading" }:
               {t("내가 얹은 것 보기")}
             </label>
             <p className="ed-saved wt-ed-saved" id="savedNote" data-state="idle" />
-            {/* 비공개 작품은 공유 버튼을 감춘다(#638) */}
-            {info?.public !== false && <ShareMenu runId={runId} episode={episode} className="icon-btn" iconOnly />}
+            {/* 비공개 작품은 공유 버튼을 감춘다(#638). 링크 공유(#898)는 열쇠를 붙인 주소로 공유한다. */}
+            {(info?.public !== false || !!info?.share_key) &&
+              <ShareMenu runId={runId} episode={episode} className="icon-btn" iconOnly shareKey={info?.share_key} />}
             <button type="button" className="btn btn-p wt-ed-bake" id="bakeBtn">{t("이미지로 뽑기")}</button>
+            <button type="button" className="btn btn-w wt-ed-bake wt-ed-plain" id="plainBtn" title={t("말풍선·글자를 빼고 그림만 내려받습니다")}>{t("그림만 뽑기")}</button>
             <button type="button" className="btn btn-w wt-ed-done" onClick={() => go("result", { run: runId })}>{t("완성본으로")}</button>
           </div>
         </div>
@@ -273,13 +275,15 @@ export default function Editor({ runId, go, authStatus = "loading" }:
 
         <div className="wt-ed-resize" role="separator" aria-orientation="vertical" aria-label={t("오른쪽 단 폭 조절")}
              onPointerDown={(e) => startResize(e, "right")} onDoubleClick={() => resetSide("right")} />
-        <aside className="ed-dock wt-ed-dock" id="edDock" aria-label={t("말풍선 · 스티커 · 효과음")}>
+        <aside className="ed-dock wt-ed-dock" id="edDock" aria-label={t("말풍선 · 스티커 · 효과음 · 그리기")}>
           <div className="dock-handle" id="dockHandle" aria-hidden="true" />
           <div className="dock-bar wt-ed-dockbar">
             <div className="dock-tabs wt-ed-docktabs" id="dockTabs">
               <button type="button" className="dock-tab chip is-on" data-tab="bubble">{t("말풍선")}</button>
               <button type="button" className="dock-tab chip" data-tab="sticker">{t("스티커")}</button>
               <button type="button" className="dock-tab chip" data-tab="sfx">{t("효과음")}</button>
+              {/* 장 위에 붓·지우개로 직접 고친다(리터치). 고르는 동안은 그리기 모드 — 말풍선은 안 잡힌다. */}
+              <button type="button" className="dock-tab chip" data-tab="paint">{t("그리기")}</button>
             </div>
             <button type="button" className="dock-fold icon-btn wt-ed-dockfold" id="dockFold"
                     aria-expanded="false" aria-controls="dockBody" aria-label={t("도구 닫기")}><IconClose size={14} /></button>

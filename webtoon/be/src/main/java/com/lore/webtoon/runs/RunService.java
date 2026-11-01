@@ -364,6 +364,8 @@ public class RunService {
         card.put("likes", likes.countByRunId(runId));
         if (withPublic) {
             card.put("public", work.isPublic());
+            /* 공개 범위 세 단계(#898). 링크 열쇠는 싣지 않는다 — 이 목록은 브라우저 uid 만으로도 열리는 길이 있다. */
+            card.put("visibility", work.visibility());
         }
         return card;
     }
@@ -598,7 +600,11 @@ public class RunService {
         }
         try {
             JsonNode root = mapper.readTree(job.getInputJson());
-            return root.path("name").asText("");
+            /* 주인공이 여럿이면(#899) 「A · B」 — 목록·공유 문구가 한 사람 이름만 보이면 다른 사람이 빠진다. */
+            List<String> names = new java.util.ArrayList<>();
+            if (!root.path("name").asText("").isBlank()) names.add(root.path("name").asText().trim());
+            root.path("co_names").forEach(n -> { if (!n.asText("").isBlank()) names.add(n.asText().trim()); });
+            return String.join(" · ", names);
         } catch (Exception e) {          // noqa: 이름 하나 때문에 목록이 통째로 죽으면 안 된다
             log.warn("캐릭터 이름을 못 읽었습니다 (job={})", job.getPublicId(), e);
             return "";

@@ -453,8 +453,8 @@ public class JobRunner {
                     resumeAfterSheet(jobId);
                     return;
                 }
-                store.awaiting(jobId, back,
-                        back == JobStatus.AWAITING_SCENES ? JobStage.PAGES : JobStage.SHEET);
+                store.awaiting(jobId, back, back == JobStatus.AWAITING_SCENES ? JobStage.PAGES
+                        : back == JobStatus.AWAITING_PICK ? JobStage.STORY : JobStage.SHEET);
             } catch (Exception e) {
                 fail(jobId, e);
             }
@@ -674,6 +674,47 @@ public class JobRunner {
         }
     }
 
+    /** 함께 주인공의 주인공 카드(#899) — personas/<이름>.json. 없거나 못 읽으면 {@code null}. */
+    public Map<String, Object> coPersonaOf(String runId, String name) {
+        if (runId == null || runId.isBlank() || name == null || name.isBlank()) {
+            return null;
+        }
+        try {
+            return mapper.readValue(runDir(runId).resolve("personas").resolve(RunArt.castSheetStem(name) + ".json").toFile(),
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** 함께 주인공의 설명(#899) — 작품 폴더 input.json 의 co 에서. 시트 고치기 칸의 처음 값이다. 없으면 빈 문자열. */
+    public String coDescriptionOf(String runId, String name) {
+        if (runId == null || runId.isBlank() || name == null) {
+            return "";
+        }
+        try {
+            for (var one : mapper.readTree(runDir(runId).resolve("input.json").toFile()).path("co")) {
+                if (name.equals(one.path("name").asText("").trim())) return one.path("description").asText("");
+            }
+        } catch (IOException e) {
+            return "";
+        }
+        return "";
+    }
+
+    /** 시트가 걸렸을 때 누구 시트였나(#899) — failure.json 의 who. 첫 주인공이거나 모르면 {@code null}. */
+    public String failedSheetWho(String runId) {
+        if (runId == null || runId.isBlank()) {
+            return null;
+        }
+        try {
+            String who = mapper.readTree(runDir(runId).resolve(JobFailure.FILE).toFile()).path("who").asText("");
+            return who.isBlank() ? null : who.trim();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
     /** 세운 인물(cast.json). 화면이 카드로 보여 준다. 없거나 못 읽으면 빈 목록. */
     public List<Map<String, Object>> castOf(String runId) {
         if (runId == null || runId.isBlank()) {
@@ -691,12 +732,25 @@ public class JobRunner {
     /** 인물 카드에서 고칠 수 있는 칸(#548). 이 밖의 칸은 무시한다. */
     static final List<String> PERSON_FIELDS =
             List.of("name", "role", "look", "personality", "gap", "voice", "line", "tie", "wants");
+    /** 주인공 카드가 늘 받는 칸. 그 밖의 칸(역할·관계 등)은 카드에 이미 있을 때만 — 주인공을 바꿔 조연 카드가 올라온 경우다. */
+    private static final List<String> HERO_FIELDS = List.of("name", "look", "personality", "voice", "line");
+    /** 조연 카드가 늘 받는 칸. 성격은 카드에 이미 있을 때만 — 주인공 자리를 내준 사람이다. */
+    private static final List<String> CAST_FIELDS = List.of("name", "role", "look", "gap", "voice", "line", "tie", "wants");
+
+    /** 인물 카드를 고친 결과 — 이름이 바뀐 조연(조연 시트 줄도 옮긴다), 이야기 글이 바뀌었나. */
+    public record PersonSaved(Map<String, String> renamed, boolean story) {
+        static final PersonSaved NONE = new PersonSaved(Map.of(), false);
+    }
 
     /**
      * 인물 카드 하나를 고친다(#548) — {@code who} 가 "hero" 면 persona.json, 숫자면 cast.json 의
-     * 그 번째(0부터). 보낸 칸만 덮는다. 조연 이름이 바뀌면 이미 뽑은 시트 파일도 새 이름으로 옮긴다.
+     * 그 번째(0부터). 보낸 칸만 덮는다.
+     *
+     * <p>이름이 바뀌면 작품 폴더의 이야기·장면·인물 글 속 이름도 새 이름으로 바꾼다({@link PersonFiles#rename}).
+     * 이름만 바꾸고 글을 두면 장면 나누기·장 그림이 옛 이름과 새 이름을 두 사람으로 읽는다. 주인공이면
+     * {@code input.json} 의 이름도 바꾼다 — 장면·그림이 주인공을 거기서 찾는다.
      */
-    public void savePerson(String runId, String who, Map<String, Object> fields) throws IOException {
+    public PersonSaved savePerson(String runId, String who, Map<String, Object> fields) throws IOException {
         Map<String, Object> clean = new java.util.LinkedHashMap<>();
         for (String k : PERSON_FIELDS) {
             if (fields != null && fields.get(k) != null) {
@@ -704,15 +758,60 @@ public class JobRunner {
             }
         }
         Path dir = runDir(runId);
+        if (who != null && who.startsWith("co:")) {
+            /* 함께 주인공의 카드(#899) — 첫 주인공 카드와 같은 칸만 고친다 */
+            String name = who.substring(3).trim();
+            Map<String, Object> persona = coPersonaOf(runId, name);
+            if (persona == null) {
+                throw new IOException("그 주인공의 카드가 없습니다: " + name);
+            }
+            /* 함께 주인공의 이름은 작품 안에서 안 고친다 — 내 캐릭터에 저장된 이름이 원본이고, 이 이름에 시트·카드·
+               옛 판 파일과 input.json · DB 의 co_names · 다음 화가 다 걸려 있다. 화면도 이름 칸을 안 보여 준다. */
+            if (clean.containsKey("name") && !name.equals(clean.get("name"))) {
+                throw new IllegalArgumentException("함께 주인공의 이름은 여기서 바꿀 수 없어요");
+            }
+            clean.remove("name");
+            clean.remove("role");
+            persona.putAll(clean);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(
+                    dir.resolve("personas").resolve(RunArt.castSheetStem(name) + ".json").toFile(), persona);
+            return PersonSaved.NONE;
+        }
         if ("hero".equals(who)) {
             Map<String, Object> persona = personaOf(runId);
             if (persona == null) {
                 throw new IOException("persona.json 이 없습니다");
             }
-            clean.remove("role");
-            persona.putAll(clean);
-            mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("persona.json").toFile(), persona);
-            return;
+            clean.keySet().removeIf(k -> !HERO_FIELDS.contains(k) && !persona.containsKey(k));
+            String oldName = String.valueOf(persona.getOrDefault("name", "")).trim();
+            String newName = String.valueOf(clean.getOrDefault("name", oldName)).trim();
+            if (newName.isEmpty()) {
+                clean.remove("name");
+                newName = oldName;
+            }
+            PersonSaved saved = PersonSaved.NONE;
+            if (!newName.equals(oldName)) {
+                String to = newName;
+                if (castOf(runId).stream().anyMatch(c -> to.equals(String.valueOf(c.get("name")).trim()))
+                        || PersonFiles.coNames(dir, mapper).contains(to)) {
+                    throw new IllegalArgumentException("다른 인물과 이름이 같아요");
+                }
+                Map<String, Object> input = inputOf(dir);
+                List<String> olds = new ArrayList<>(List.of(oldName));
+                String typed = String.valueOf(input.getOrDefault("name", "")).trim();
+                if (!typed.isEmpty() && !olds.contains(typed)) {
+                    olds.add(typed);         // 주인공 카드 이름과 처음 적은 이름이 달랐다 — 둘 다 새 이름으로
+                }
+                PersonFiles.Renamed r = PersonFiles.rename(dir, mapper, olds, newName);
+                Map<String, Object> fresh = inputOf(dir);
+                fresh.put("name", newName);
+                mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("input.json").toFile(), fresh);
+                saved = new PersonSaved(r.cast(), r.story());
+            }
+            Map<String, Object> now = personaOf(runId);
+            now.putAll(clean);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("persona.json").toFile(), now);
+            return saved;
         }
         int i;
         try {
@@ -725,20 +824,65 @@ public class JobRunner {
             throw new IllegalArgumentException("그런 인물이 없습니다");
         }
         Map<String, Object> one = new java.util.LinkedHashMap<>(cast.get(i));
-        String oldName = String.valueOf(one.getOrDefault("name", ""));
-        clean.remove("personality");
-        one.putAll(clean);
-        cast.set(i, one);
-        mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("cast.json").toFile(), cast);
-        String newName = String.valueOf(one.getOrDefault("name", ""));
-        if (!newName.isBlank() && !newName.equals(oldName)) {
-            Path sheets = dir.resolve("sheets");
-            Path from = sheets.resolve(RunArt.castSheetStem(oldName) + ".png");
-            Path to = sheets.resolve(RunArt.castSheetStem(newName) + ".png");
-            if (Files.exists(from) && !Files.exists(to)) {
-                Files.move(from, to);
-            }
+        clean.keySet().removeIf(k -> !CAST_FIELDS.contains(k) && !one.containsKey(k));
+        String oldName = String.valueOf(one.getOrDefault("name", "")).trim();
+        String newName = String.valueOf(clean.getOrDefault("name", oldName)).trim();
+        if (newName.isEmpty()) {
+            clean.remove("name");
+            newName = oldName;
         }
+        PersonSaved saved = PersonSaved.NONE;
+        if (!newName.equals(oldName)) {
+            String to = newName;
+            Map<String, Object> persona = personaOf(runId);
+            boolean taken = (persona != null && to.equals(String.valueOf(persona.get("name")).trim()))
+                    || cast.stream().anyMatch(c -> to.equals(String.valueOf(c.get("name")).trim()))
+                    || PersonFiles.coNames(dir, mapper).contains(to);
+            if (taken) {
+                throw new IllegalArgumentException("다른 인물과 이름이 같아요");
+            }
+            PersonFiles.Renamed r = PersonFiles.rename(dir, mapper, List.of(oldName), newName);
+            Map<String, String> moved = new java.util.LinkedHashMap<>(r.cast());
+            /* 글 속에서 못 바꾼 경우(이름 뒤에 다른 글자가 붙어 있는 등)에도 이 사람 카드와 시트는 새 이름으로 */
+            List<Map<String, Object>> fresh = new ArrayList<>(castOf(runId));
+            if (i < fresh.size()) {
+                String after = String.valueOf(fresh.get(i).getOrDefault("name", "")).trim();
+                if (!after.equals(newName)) {
+                    PersonFiles.moveCastSheet(dir, after, newName);
+                    moved.remove(oldName);
+                    moved.put(oldName, newName);
+                }
+            }
+            cast = fresh;
+            saved = new PersonSaved(moved, r.story());
+        }
+        Map<String, Object> now = new java.util.LinkedHashMap<>(cast.get(i));
+        now.putAll(clean);
+        cast.set(i, now);
+        mapper.writerWithDefaultPrettyPrinter().writeValue(dir.resolve("cast.json").toFile(), cast);
+        return saved;
+    }
+
+    /**
+     * cast 의 {@code i} 번째 사람을 주인공으로(Tosisusae 피드백). 카드·입력·시트를 두 사람 사이에서 맞바꾼다
+     * ({@link PersonFiles#swapLead}). 새 주인공의 시트가 없으면 {@code true} — 부르는 쪽이 다시 그린다.
+     */
+    public boolean swapLead(String runId, int i) throws IOException {
+        return PersonFiles.swapLead(runDir(runId), mapper, i);
+    }
+
+    /** 이 작품이 연재의 2화 이후인가 — 앞 화에 이미 나온 주인공은 이름·자리를 바꾸지 않는다. */
+    public boolean isContinuation(String runId) {
+        return runId != null && !runId.isBlank() && Files.isRegularFile(runDir(runId).resolve("continuation.json"));
+    }
+
+    private Map<String, Object> inputOf(Path dir) throws IOException {
+        Path file = dir.resolve("input.json");
+        if (!Files.isRegularFile(file)) {
+            return new java.util.LinkedHashMap<>();
+        }
+        return mapper.readValue(file.toFile(),
+                new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, Object>>() { });
     }
 
     /** 사람이 인물 단계에 답했다(#534) — n 번 상대를 골랐거나(1~), 이대로 진행(0). */
@@ -1735,25 +1879,44 @@ public class JobRunner {
         return runId != null && Files.isRegularFile(unsafeMarker(runId, page));
     }
 
-    /** 그림 안전 검사 분류 → 사람이 읽는 말. 모르는 분류는 「안전 기준」. */
-    static String reasonOf(java.util.Collection<String> categories) {
+    /**
+     * 그림 안전 검사 분류 → 이유 종류 코드. 화면이 이 코드로 언어마다 이름을 붙인다 — 한국어 문장을
+     * 내려보내면 영어·일본어·중국어 화면에서 번역할 수가 없다. 모르는 분류만 있으면 빈 목록(「안전 기준」).
+     */
+    static List<String> kindsOf(java.util.Collection<String> categories) {
         java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
         for (String c : categories) {
             String s = c.toLowerCase(java.util.Locale.ROOT);
-            if (s.contains("minor")) out.add("미성년 관련");
-            else if (s.contains("sexual") || s.contains("nudity")) out.add("선정성");
-            else if (s.contains("self-harm") || s.contains("self_harm")) out.add("자해");
-            else if (s.contains("violence") || s.contains("gore")) out.add("폭력·잔혹");
-            else if (s.contains("hate")) out.add("혐오");
-            else if (s.contains("harass")) out.add("괴롭힘");
-            else if (s.contains("illicit") || s.contains("illegal")) out.add("불법 행위");
+            if (s.contains("minor")) out.add("minor");
+            else if (s.contains("sexual") || s.contains("nudity")) out.add("sexual");
+            else if (s.contains("self-harm") || s.contains("self_harm")) out.add("self_harm");
+            else if (s.contains("violence") || s.contains("gore")) out.add("violence");
+            else if (s.contains("hate")) out.add("hate");
+            else if (s.contains("harass")) out.add("harassment");
+            else if (s.contains("illicit") || s.contains("illegal")) out.add("illicit");
         }
-        return out.isEmpty() ? "안전 기준" : String.join("·", out);
+        return List.copyOf(out);
     }
 
-    /** 비워 둔 장마다 걸린 이유(#626 · 2026-10-27). 화면이 쪽 번호 옆에 보여 준다. */
-    public java.util.Map<Integer, String> unsafeReasons(String runId) {
-        java.util.Map<Integer, String> out = new java.util.LinkedHashMap<>();
+    /** 이유 종류 코드 → 한국어 이름. 메일(한국어)과 옛 화면이 읽는다. 화면 사전(serverI18n.ts)에 같은 이름이 있다. */
+    static final java.util.Map<String, String> KIND_KO = java.util.Map.of(
+            "minor", "미성년 관련",
+            "sexual", "선정성",
+            "self_harm", "자해",
+            "violence", "폭력·잔혹",
+            "hate", "혐오",
+            "harassment", "괴롭힘",
+            "illicit", "불법 행위");
+
+    /** 그림 안전 검사 분류 → 사람이 읽는 말. 모르는 분류는 「안전 기준」. */
+    static String reasonOf(java.util.Collection<String> categories) {
+        List<String> kinds = kindsOf(categories);
+        return kinds.isEmpty() ? "안전 기준" : String.join("·", kinds.stream().map(KIND_KO::get).toList());
+    }
+
+    /** 비워 둔 장마다 걸린 분류 원문. 못 읽으면 빈 목록. */
+    private java.util.Map<Integer, List<String>> unsafeCategories(String runId) {
+        java.util.Map<Integer, List<String>> out = new java.util.LinkedHashMap<>();
         for (int page : unsafePages(runId)) {
             List<String> cats = new ArrayList<>();
             try {
@@ -1763,8 +1926,22 @@ public class JobRunner {
             } catch (IOException e) {
                 // 못 읽으면 「안전 기준」
             }
-            out.put(page, reasonOf(cats));
+            out.put(page, cats);
         }
+        return out;
+    }
+
+    /** 비워 둔 장마다 걸린 이유(#626 · 2026-10-27). 한국어 — 메일과 옛 화면용. */
+    public java.util.Map<Integer, String> unsafeReasons(String runId) {
+        java.util.Map<Integer, String> out = new java.util.LinkedHashMap<>();
+        unsafeCategories(runId).forEach((page, cats) -> out.put(page, reasonOf(cats)));
+        return out;
+    }
+
+    /** 비워 둔 장마다 걸린 이유 종류 코드. 화면은 이것으로 언어마다 이름을 붙인다. 빈 목록이면 「안전 기준」. */
+    public java.util.Map<Integer, List<String>> unsafeKinds(String runId) {
+        java.util.Map<Integer, List<String>> out = new java.util.LinkedHashMap<>();
+        unsafeCategories(runId).forEach((page, cats) -> out.put(page, kindsOf(cats)));
         return out;
     }
 
@@ -2572,6 +2749,11 @@ public class JobRunner {
      * 화면에는 "돌려드렸어요" 가 그대로 떴다. 돌려주는 쪽이 알려 주는 값으로
      * 정한다.
      */
+    /** 함께 주인공 시트 값을 받을 때 쓰는 원장 ref(#899). 한 편 값(ref = 작업 번호)과 따로 돌려준다. */
+    public static String coSheetsRef(String publicId) {
+        return publicId + ":co-sheets";
+    }
+
     Refunded refund(Long jobId) {
         try {
             WebtoonJob job = store.byId(jobId);
@@ -2582,7 +2764,9 @@ public class JobRunner {
                같이 돌려준다 — 못 만들었으니 그만큼 안 그렸다. */
             int back = credits.refund(job.getUserId(), job.getPublicId())
                     + credits.refund(job.getUserId(), job.getPublicId() + ":resume")
-                    + credits.refund(job.getUserId(), extraPagesRef(job));
+                    + credits.refund(job.getUserId(), extraPagesRef(job))
+                    /* 함께 주인공 시트 값(#899) — 만들 때 한 편 값과 따로 받았다 */
+                    + credits.refund(job.getUserId(), coSheetsRef(job.getPublicId()));
             if (back > 0) {
                 return Refunded.CREDIT;
             }

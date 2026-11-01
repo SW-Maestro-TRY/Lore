@@ -47,15 +47,17 @@ async function origin(): Promise<string> {
  * 의 기본 메타데이터가 그대로 쓰인다.
  */
 export async function generateMetadata(
-  { searchParams }: { searchParams: Promise<{ run?: string; card?: string }> },
+  { searchParams }: { searchParams: Promise<{ run?: string; card?: string; k?: string }> },
 ): Promise<Metadata> {
-  const { run, card } = await searchParams;
+  const { run, card, k } = await searchParams;
   if (!run) return card ? cardMetadata(card) : {};
 
   const base = await origin();
+  /* 「링크 있는 사람만」 작품(#898)은 공유 주소의 열쇠(k)가 있어야 열린다 — 미리보기도 같은 열쇠로 부른다. */
+  const key = typeof k === "string" && k ? `k=${encodeURIComponent(k)}` : "";
   try {
     const res = await fetch(
-      `${base}/api/webtoon/v1/runs/${encodeURIComponent(run)}/result`,
+      `${base}/api/webtoon/v1/runs/${encodeURIComponent(run)}/result${key ? `?${key}` : ""}`,
       { cache: "no-store" },
     );
     if (!res.ok) return {};
@@ -66,7 +68,7 @@ export async function generateMetadata(
       ? `${data.character.trim()} · ${title}`
       : title;
     // 표지 = 1장. 화면 크기가 아니라 카드용이라 기본 폭(1080)을 그대로 쓴다.
-    const cover = `${base}/api/webtoon/v1/runs/${encodeURIComponent(run)}/page/1`;
+    const cover = `${base}/api/webtoon/v1/runs/${encodeURIComponent(run)}/page/1${key ? `?${key}` : ""}`;
 
     return {
       title: displayTitle,

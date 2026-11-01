@@ -435,6 +435,11 @@ public class RegenService {
         return runner.unsafeReasons(runId);
     }
 
+    /** 그 장마다 걸린 이유 종류 코드(sexual · violence …). 화면이 언어마다 이름을 붙인다. */
+    public java.util.Map<Integer, List<String>> unsafeKinds(String runId) {
+        return runner.unsafeKinds(runId);
+    }
+
     public List<Integer> unsafePages(String runId) {
         return runner.unsafePages(runId);
     }

@@ -23,7 +23,7 @@ import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
   browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myCommented, myLikes, myTrash, readAllowance, recentRuns,
-  readNotifySetting, restoreRun, removeCharacter, characterTrash, restoreCharacter, type TrashCharacter, setNotifySetting, setVisibility, withdrawAccount,
+  readNotifySetting, restoreRun, removeCharacter, characterTrash, restoreCharacter, type TrashCharacter, setNotifySetting, visibilityOf, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
   mySurveyStatus, type SurveyStatus, mySeriesDrafts, type SeriesDraftCard,
 } from "../../lib/api";
@@ -31,6 +31,7 @@ import { activeJobLabel, activeJobTitle } from "../../lib/jobLabel";
 import type { Go } from "../../lib/nav";
 import PushOptIn from "../../ui/PushOptIn";
 import RunStrip from "../../ui/RunStrip";
+import VisibilityPicker from "../../ui/VisibilityPicker";
 import { LANGS, LangSwitch, registerDict, useLang, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { IconBook, IconCheck, IconChevronLeft, IconChevronRight, IconComment, IconEdit, IconFace, IconGear, IconGlobe, IconHeart, IconHelp, IconLogout, IconMail, IconTrash, IconUser } from "../../ui/Icons";
@@ -1168,7 +1169,6 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
   const t = useT();
   /* 관리자가 비공개 처리한 작품(#638) — 공개 스위치를 잠근다. 서버도 다시 공개를 막는다. */
   const hiddenByAdmin = run.moderation?.state === "HIDDEN";
-  const [pub, setPub] = useState(run.public !== false && !hiddenByAdmin);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -1184,24 +1184,6 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
       onDeleted();
     } catch (e) {
       setErr((e as Error).message || t("지우지 못했습니다"));
-      setBusy(false);
-    }
-  };
-
-  /* 서버에 먼저 보내고, 실패하면 되돌린다 — 화면만 바뀌어 있으면 다음에
-     들어왔을 때 값이 달라 보인다. */
-  const flip = async () => {
-    const want = !pub;
-    setBusy(true);
-    setErr("");
-    setPub(want);
-    try {
-      const out = await setVisibility(run.run_id, want);
-      setPub(out.public ?? want);
-    } catch {
-      setPub(!want);
-      setErr(t("바꾸지 못했습니다"));
-    } finally {
       setBusy(false);
     }
   };
@@ -1225,11 +1207,9 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
         ))}
       </div>
       <div className="wt-my-workfoot">
-        <span className="wt-my-pub">
-          <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
-                  aria-label={t("둘러보기에 공개")} disabled={busy || hiddenByAdmin} onClick={() => void flip()}><i /></button>
-          {hiddenByAdmin ? t("관리자 비공개") : pub ? t("공개") : t("비공개")}
-        </span>
+        {/* 공개 범위 세 단계(#898) — 공개 · 링크 공유(일부공개) · 비공개. 관리자가 숨긴 작품은 잠근다(#638). */}
+        <VisibilityPicker runId={run.run_id} initial={visibilityOf(run)} locked={hiddenByAdmin} where="mypage"
+                          className="wt-my-pub" />
         <span className="wt-my-workacts">
           <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
             {t("편집실")}
