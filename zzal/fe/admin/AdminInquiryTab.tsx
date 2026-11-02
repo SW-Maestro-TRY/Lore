@@ -19,10 +19,13 @@ import {
   type AdminInquiryDetail,
   type AdminInquiryRow,
 } from './inquiryApi';
+import { CHIPS as FEEDBACK_CHIPS } from '@zzal/tamagotchi/FeedbackSheet';
 
 const DAYS = 30;
 const MAX_REPLY = 2000;
 const LOCALE_NAME: Record<string, string> = { ko: '한국어', en: '영어', ja: '일본어' };
+// 후기 칩 말은 사용자 후기 창(FeedbackSheet)의 것을 그대로 쓴다. 모르는 코드(옛 칩)는 코드 그대로.
+const TAG_LABEL: Record<string, string> = Object.fromEntries(FEEDBACK_CHIPS.map(c => [c.tag, c.label]));
 
 function explain(e: unknown, where: string): string {
   if (e instanceof ApiError) {
@@ -74,7 +77,7 @@ function FeedbackLine({ f, showPet }: { f: AdminFeedbackRow; showPet?: boolean }
     <div data-part="feedback-row" style={{ padding: '8px 0', borderTop: '1px solid rgba(127,127,127,0.18)', minWidth: 0 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 13 }}>
         <Stars rating={f.rating} /> <b>{f.rating}</b>
-        {f.tags.map(tag => <span key={tag} style={CHIP}>{tag}</span>)}
+        {f.tags.map(tag => <span key={tag} title={tag} style={CHIP}>{TAG_LABEL[tag] ?? tag}</span>)}
         <span style={{ ...DIM, marginLeft: 'auto' }}>{showPet ? `${f.petName ?? '(지운 펫)'} · 사용자 #${f.userId} · ` : ''}{when(f.createdAt)}</span>
       </div>
       {f.text ? <p style={{ margin: '4px 0 0', fontSize: 13, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{f.text}</p> : null}
