@@ -71,14 +71,16 @@ public class PetController {
         return PetResponses.Detail.from(pet, stepLabel, pet.now(real), catalog,
                 // ★ 2층 READY 를 이 조회에서 처음 봤으면 그때 열린 동작이 실린다(#696). 평소엔 빈 목록이다.
                 petService.motionRows(pet.getId()), pet.takeLayer2JustUnlocked(), false, petService.scenes(pet.getId()),
-                petService.pieces(pet.getId()));
+                petService.pieces(pet.getId()))
+                .withUnreadInquiryReplyCount(petService.unreadInquiryReplyCount(pet.getUserId()));
     }
 
     private PetResponses.Detail detail(PetService.Action action, Instant real) {
         ZzalPet pet = action.pet();
         return PetResponses.Detail.from(pet, null, pet.now(real), catalog,
                 petService.motionRows(pet.getId()), action.justUnlocked(), action.justHealed(),
-                petService.scenes(pet.getId()), petService.pieces(pet.getId()), action.motionPlayback());
+                petService.scenes(pet.getId()), petService.pieces(pet.getId()), action.motionPlayback())
+                .withUnreadInquiryReplyCount(petService.unreadInquiryReplyCount(pet.getUserId()));
     }
 
     @Operation(summary = "이미지 등록", description = """

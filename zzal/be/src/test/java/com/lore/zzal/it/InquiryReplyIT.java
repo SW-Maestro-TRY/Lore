@@ -121,6 +121,26 @@ class InquiryReplyIT extends ZzalItSupport {
     }
 
     @Test
+    @DisplayName("★★ 여행 중이어도 답장 점이 뜬다 — 문의는 계정 것이라 출석 정보와 무관(dev 11/02)")
+    void travelingPetStillShowsReplyDot() throws Exception {
+        Long admin = admin();
+        Long owner = newUserId();
+        ZzalPet pet = aliveLayerTwoPet(owner);
+        long id = submit(owner, pet.getId(), "여행 간 동안 물어봐요", null);
+        transactions.executeWithoutResult(tx -> org.springframework.test.util.ReflectionTestUtils.setField(
+                petRepository.findByIdForUpdate(pet.getId()).orElseThrow(), "tripStartedAt", java.time.Instant.now()));
+        assertThat(postAs(admin, ADMIN + "/" + id + "/reply", Map.of("text", "답장이에요")).getResponse().getStatus()).isEqualTo(200);
+
+        JsonNode detail = getJson(owner, "/api/zzal/v1/me/pets/" + pet.getId()).path("data");
+        assertThat(detail.path("trip").isObject()).as("여행 중이어야 이 시험이 의미가 있다").isTrue();
+        assertThat(detail.path("unreadInquiryReplyCount").asInt(-1)).isEqualTo(1);
+        assertThat(detail.has("accountUnreadInquiryReplyCount")).as("내부 칸은 응답에 안 나간다").isFalse();
+
+        assertThat(postAs(owner, ME + "/" + id + "/seen", null).getResponse().getStatus()).isEqualTo(204);
+        assertThat(unread(owner, pet.getId())).isZero();
+    }
+
+    @Test
     @DisplayName("★ 남의 문의는 seen·더 물어보기 모두 404, 내 목록에 안 나온다 / 비관리자 403 / 봇 토큰 403")
     void isolationAndGuards() throws Exception {
         admin();
