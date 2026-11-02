@@ -650,7 +650,7 @@ def parse_directions(md: str) -> list[dict]:
         # 모델이 「소개: 글」처럼 한 줄에 붙여 쓰는 경우도 같은 모양으로 읽는다.
         body = re.sub(rf"^({S}(?:소개|본문){S}[:：]){S}(\S.*)$", r"\1\n\2", body, flags=re.M)
         intro = _labeled(body, INTRO_LABEL_RE, [BODY_LABEL_RE])
-        body_text = _labeled(body, BODY_LABEL_RE, [])
+        body_text = _labeled(body, BODY_LABEL_RE, [INTRO_LABEL_RE])
         out.append({
             "n": int(m.group(1)),
             "title": m.group(2).strip().strip("<>").strip(),
