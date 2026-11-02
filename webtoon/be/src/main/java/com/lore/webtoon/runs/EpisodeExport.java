@@ -61,6 +61,14 @@ import java.util.Map;
  * 배포 서버에는 저장소 폴더도 글꼴도 없다. 시스템 글꼴에 기대면 서버에서는
  * 기본 글꼴로 떨어진다. 그래서 글꼴은 {@code webtoon/fonts/}(OFL 의 SUIT)에서
  * 읽는다. 못 읽어도 내려받기는 돼야 한다 — 글꼴 하나 때문에 막히면 안 된다.
+ *
+ * <h2>그림만 받기</h2>
+ *
+ * {@code plain} 이면 편집실에서 얹은 것(말풍선·나레이션·글자·스티커)을 구운 판 대신
+ * 밑그림을 잇는다. <b>직접 그린 선(리터치)은 남긴다</b> — 그림의 찐빠를 고친 것이라 그림의
+ * 일부다. 빼면 고친 그림이 고치기 전으로 돌아간다. 편집실에서 고친 여백과 LORE 도장도
+ * 그대로다 — 도장은 파일이 밖으로 나가는 한 늘 붙고, 여백은 얹은 것이 아니라 지면의 배치다.
+ * 그림 모델이 그림 안에 직접 그린 글자는 밑그림의 일부라 이 길로도 빠지지 않는다.
  */
 @Service
 public class EpisodeExport {
@@ -116,7 +124,12 @@ public class EpisodeExport {
 
     /** 이 작품 한 편. 그림이 없으면 {@code null} — 부르는 쪽이 404 를 낸다. */
     public byte[] png(String runId) {
-        Map<Integer, BufferedImage> loaded = load(runId);
+        return png(runId, false);
+    }
+
+    /** {@code plain} 이면 얹은 것을 빼고 밑그림으로(머리말 「그림만 받기」). */
+    public byte[] png(String runId, boolean plain) {
+        Map<Integer, BufferedImage> loaded = load(runId, plain);
         if (loaded.isEmpty()) {
             return null;
         }
@@ -140,7 +153,12 @@ public class EpisodeExport {
      * {@code null}.
      */
     public byte[] pagePng(String runId, int no) {
-        BufferedImage sheet = loadOne(runId, no);
+        return pagePng(runId, no, false);
+    }
+
+    /** {@code plain} 이면 그 장의 밑그림으로. */
+    public byte[] pagePng(String runId, int no, boolean plain) {
+        BufferedImage sheet = loadOne(runId, no, plain);
         if (sheet == null) {
             return null;
         }
@@ -158,11 +176,9 @@ public class EpisodeExport {
         }
     }
 
-    /** 이 장 하나. {@link #load} 와 같은 자리(구운 것 우선)에서 하나만 읽는다. */
-    private BufferedImage loadOne(String runId, int no) {
-        Map<Integer, String> keys = new java.util.LinkedHashMap<>(pages.keysOf(runId));
-        keys.putAll(bakery.keysOf(runId));
-        String key = keys.get(no);
+    /** 이 장 하나. {@link #load} 와 같은 자리(구운 것 우선, plain 이면 밑그림)에서 하나만 읽는다. */
+    private BufferedImage loadOne(String runId, int no, boolean plain) {
+        String key = keysOf(runId, plain).get(no);
         if (key == null) {
             return null;
         }
@@ -170,7 +186,8 @@ public class EpisodeExport {
         try {
             tmp = Files.createTempFile("lore-page-", ".png");
             storage.download(key, tmp);
-            return ImageIO.read(tmp.toFile());
+            BufferedImage img = ImageIO.read(tmp.toFile());
+            return plain && img != null ? retouched(img, painted(runId).path(String.valueOf(no))) : img;
         } catch (IOException | RuntimeException e) {
             log.warn("장을 못 가져왔습니다 (run={}, 장={})", runId, no, e);
             return null;
@@ -188,10 +205,10 @@ public class EpisodeExport {
      * 것이 가장 알아채기 어려운 실패다 — 화면에서 본 것과 받은 파일이 다르면
      * 사람은 자기가 저장을 안 한 줄 안다.
      */
-    private Map<Integer, BufferedImage> load(String runId) {
+    private Map<Integer, BufferedImage> load(String runId, boolean plain) {
         Map<Integer, BufferedImage> out = new java.util.LinkedHashMap<>();
-        Map<Integer, String> keys = new java.util.LinkedHashMap<>(pages.keysOf(runId));
-        keys.putAll(bakery.keysOf(runId));
+        Map<Integer, String> keys = keysOf(runId, plain);
+        com.fasterxml.jackson.databind.JsonNode scenes = plain ? painted(runId) : null;
         for (Map.Entry<Integer, String> one : keys.entrySet()) {
             Path tmp = null;
             try {
@@ -199,7 +216,7 @@ public class EpisodeExport {
                 storage.download(one.getValue(), tmp);
                 BufferedImage img = ImageIO.read(tmp.toFile());
                 if (img != null) {
-                    out.put(one.getKey(), img);
+                    out.put(one.getKey(), plain ? retouched(img, scenes.path(String.valueOf(one.getKey()))) : img);
                 } else {
                     log.warn("장을 못 읽었습니다 (run={}, 장={})", runId, one.getKey());
                 }
@@ -211,6 +228,40 @@ public class EpisodeExport {
             }
         }
         return out;
+    }
+
+    /** 장마다 얹은 것 — 그림만 받을 때 직접 그린 선을 읽는다. 없으면 빈 노드. 회차는 여백({@link #gapsPx})과 같다. */
+    private com.fasterxml.jackson.databind.JsonNode painted(String runId) {
+        return overlays == null ? com.fasterxml.jackson.databind.node.MissingNode.getInstance()
+                : overlays.read(runId, 1).path("scenes");
+    }
+
+    /** 직접 그린 선만 밑그림에 얹는다. 선이 없으면 그림 그대로. 못 그려도 그림은 나간다. */
+    private static BufferedImage retouched(BufferedImage page, com.fasterxml.jackson.databind.JsonNode scene) {
+        com.fasterxml.jackson.databind.JsonNode strokes = scene.path("paint").path("strokes");
+        if (strokes.isEmpty()) {
+            return page;
+        }
+        try {
+            BufferedImage out = new BufferedImage(page.getWidth(), page.getHeight(), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = out.createGraphics();
+            g.drawImage(page, 0, 0, null);
+            g.drawImage(BubbleArtist.paint(page.getWidth(), page.getHeight(), strokes), 0, 0, null);
+            g.dispose();
+            return out;
+        } catch (RuntimeException e) {
+            log.warn("직접 그린 것을 못 그렸습니다", e);
+            return page;
+        }
+    }
+
+    /** 장 번호 → 읽을 키. 밑그림 위에 구운 판을 덮는다 — {@code plain} 이면 덮지 않는다. */
+    private Map<Integer, String> keysOf(String runId, boolean plain) {
+        Map<Integer, String> keys = new java.util.LinkedHashMap<>(pages.keysOf(runId));
+        if (!plain) {
+            keys.putAll(bakery.keysOf(runId));
+        }
+        return keys;
     }
 
     private static void deleteQuietly(Path p) {

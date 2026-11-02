@@ -73,7 +73,7 @@ public class BakeService {
     /**
      * 이 작품을 통째로 굽는다. -> 구운 장 수
      *
-     * 얹은 것이 <b>하나도 없는 장은 안 굽는다</b> — 구울 것이 없는데 파일만 한
+     * 얹은 것(말풍선 · 직접 그린 것)이 <b>하나도 없는 장은 안 굽는다</b> — 구울 것이 없는데 파일만 한
      * 벌 더 만들면 S3 만 무거워지고, 보는 쪽은 어차피 원본과 같은 그림을 본다.
      * 전에 구웠는데 이번에 다 지운 장은 구운 줄을 지운다.
      */
@@ -85,7 +85,9 @@ public class BakeService {
         for (Map.Entry<Integer, String> page : keys.entrySet()) {
             int no = page.getKey();
             JsonNode scene = data.path("scenes").path(String.valueOf(no));
-            if (scene.path("items").isEmpty()) {
+            /* 말풍선도 직접 그린 것(paint)도 없는 장만 건너뛴다 — 그린 것만 있는 장도 구워야 내려받은
+               파일에 나온다. */
+            if (scene.path("items").isEmpty() && scene.path("paint").path("strokes").isEmpty()) {
                 dropBaked(runId, no);
                 continue;
             }

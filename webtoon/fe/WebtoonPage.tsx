@@ -22,7 +22,7 @@ import { useAuth } from "@common/auth/useAuth";
 import "./webtoon.css";
 
 import { hrefOf, type Go, type View } from "./lib/nav";
-import { linkThisBrowser } from "./lib/api";
+import { linkThisBrowser, rememberShareKey } from "./lib/api";
 import { installAutoTrack, navCause, screenProps, setView, takeDepth, track } from "./lib/track";
 import { metaTrack } from "./lib/metaPixel";
 import { LangProvider, useLang } from "./lib/i18n";
@@ -84,6 +84,10 @@ function routeOf(search: URLSearchParams): Route {
   const view = search.get("view");
   const run = search.get("run") || undefined;
   const card = search.get("card") || undefined;
+  /* 「링크 공유(일부공개)」 작품의 공유 주소(#898)는 `&k=<열쇠>` 가 붙어 온다. 화면이 그 작품을 부르기 전에 기억해
+     두면 결과 · 그림 · 회차 목록 주소에 같은 열쇠가 붙는다(api.ts withKey). */
+  const key = search.get("k");
+  if (run && key) rememberShareKey(run, key);
   /* 아이디어부터 길은 다섯 걸음(캐릭터 · 시작 · 이야기 · 그림체 · 방식), 내 내용 길은 넷 — 위자드가 길에 맞게 다시 자른다(#548). */
   const step = Math.min(5, Math.max(1, Number(search.get("step") || 1) || 1));
   const base = {

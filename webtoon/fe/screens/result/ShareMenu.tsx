@@ -17,6 +17,7 @@ export default function ShareMenu({
   className = "btn btn-w",
   iconOnly = false,
   label,
+  shareKey,
 }: {
   runId: string;
   episode?: number;
@@ -26,6 +27,8 @@ export default function ShareMenu({
   iconOnly?: boolean;
   /** 단추 글자. 없으면 「공유」 */
   label?: string;
+  /** 「링크 공유(일부공개)」 작품의 열쇠(#898). 있으면 공유 주소에 붙는다. */
+  shareKey?: string | null;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -37,7 +40,7 @@ export default function ShareMenu({
     return () => window.clearTimeout(t);
   }, [said]);
 
-  const url = shareUrl(runId, episode);
+  const url = shareUrl(runId, episode, shareKey);
   const text = title ? (character ? `${character} · ${title}` : title) : t("LORE 로 만든 웹툰");
 
   /* 폰의 공유 화면은 사용자가 닫아도 「됐다」고 돌려준다(share.ts). 그래서 공유가

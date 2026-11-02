@@ -161,4 +161,19 @@ class OverlayStoreTest {
         org.assertj.core.api.Assertions.assertThat(store.gapsOf("run-1", 1))
                 .containsEntry(1, OverlayStore.COVER_GAP_STEP);
     }
+
+    @Test
+    @DisplayName("글자 도구 항목은 색과 글꼴을 남기고, 모르는 색은 먹색으로")
+    void 글자_항목() throws Exception {
+        JsonNode items = clean("""
+                {"scenes":{"1":{"items":[
+                  {"type":"text","text":"빵집","color":"#3E63DD","font":"jua"},
+                  {"type":"text","text":"간판","color":"blue","font":"없는꼴"}]}}}""").path("scenes").path("1").path("items");
+
+        assertThat(items).hasSize(2);
+        assertThat(items.get(0).path("color").asText()).isEqualTo("#3e63dd");
+        assertThat(items.get(0).path("font").asText()).isEqualTo("jua");
+        assertThat(items.get(1).path("color").asText()).isEqualTo("#111111");
+        assertThat(items.get(1).has("font")).isFalse();
+    }
 }

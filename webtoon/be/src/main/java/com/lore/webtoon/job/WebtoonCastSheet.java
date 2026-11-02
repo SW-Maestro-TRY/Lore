@@ -58,6 +58,11 @@ public class WebtoonCastSheet {
         return name;
     }
 
+    /** 인물 카드에서 이름을 고쳤을 때 — 같은 사람의 시트다. */
+    public void rename(String to) {
+        this.name = to;
+    }
+
     public String getS3Key() {
         return s3Key;
     }

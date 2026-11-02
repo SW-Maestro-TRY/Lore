@@ -148,7 +148,7 @@ def test_cast_expands_when_nothing_written():
             prompts.append((self.stage, prompt))
             if self.stage == "CAST":
                 return cast_answer, {"calls": []}
-            return "## 방향 1 — 제목\n장르: 판타지\n\n소개:\n소개.\n\n본문:\n본문.\n", {"calls": []}
+            return "## 방향 1 — 달빛 시장\n장르: 판타지\n\n소개:\n소개.\n\n본문:\n본문.\n", {"calls": []}
 
     real, real_record = own.llm.Call, R.record
     own.llm.Call, R.record = FakeCall, (lambda run_dir, meta: None)
