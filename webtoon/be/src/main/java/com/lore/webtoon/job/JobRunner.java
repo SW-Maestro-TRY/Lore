@@ -563,12 +563,11 @@ public class JobRunner {
                 return -1;
             }
         }));
-        /* 「바로 만들기」(사람이 안 고른다) + 줄거리 빈칸이면 후보 넷 대신 하나만 짓는다 — 고를 사람이
-           없는데 넷을 짓고 검수해 하나를 버리지 않는다(2026-10-24). 하네스가 run 폴더에 남겨 인물 고르기
-           뒤·다시 만들기도 하나로 간다. */
+        /* 줄거리가 비었으면 후보 넷 대신 하나만 짓는다. 사용자에게 이야기 후보를 고르게 하지 않는다
+           (2026-11-03 결정). 하네스가 run 폴더에 남겨 인물 고르기 뒤·다시 만들기도 하나로 간다. */
         List<String> storyArgs = new ArrayList<>(List.of("--run-id", runId,
                 "--character", jobDir.resolve("character.json").toString()));
-        if (!job.isCheckpoints() && storyBlank(character)) {
+        if (storyBlank(character)) {
             storyArgs.add("--one");
         }
         int code = callHarness(jobId, job, storyArgs);
@@ -621,11 +620,12 @@ public class JobRunner {
         // 제목도 줄거리도 못 읽는다 — 그 폴더는 작업대지 창고가 아니다.
         stories.save(runId, directions);
 
-        if (job.isCheckpoints()) {
+        /* 이미 후보 넷으로 만들어진 작업만 사람을 기다린다. 후보가 하나면 고를 것이 없다. */
+        if (job.isCheckpoints() && directions.size() > 1) {
             store.awaiting(jobId, JobStatus.AWAITING_PICK, JobStage.STORY);
             return;                                 // 사람이 고를 때까지 멈춘다
         }
-        // 「빠르게 결과부터」 — 서버가 고른다. 규칙은 사람이 볼 때와 같다.
+        // 고를 사람이 없거나 후보가 하나다 — 서버가 고른다. 규칙은 사람이 볼 때와 같다.
         int picked = autoPick(runId, directions.size());
         store.pick(jobId, picked);
         stories.choose(runId, picked);
