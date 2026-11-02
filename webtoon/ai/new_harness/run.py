@@ -481,6 +481,32 @@ def story_input_block(char: dict, run_dir: Path | None = None) -> str:
     return "\n".join(lines) + "\n"
 
 
+def one_input_block(char: dict) -> str:
+    """이야기 1개 길의 입력. 세계·주인공·설명만 넣고 규칙은 넣지 않는다(2026-11-03)."""
+    lines = ["[세계]", char.get("genre") or "정해지지 않음"]
+    books = (char.get("lorebook") or {}).get("books") or []
+    for book in books:
+        if book.get("fixed_settings"):
+            lines.append(book["fixed_settings"])
+        lines += [f"- {x.get('title')}: {x.get('content')}" for x in (book.get("entries") or [])
+                  if isinstance(x, dict) and x.get("title")]
+    if not books:
+        world = world_text_for(char.get("genre") or "")
+        if world:
+            lines.append(world)
+    for one in [char, *co_protagonists(char)]:
+        lines += ["", "[주인공]", one.get("name") or "", "", "[캐릭터 설명]"]
+        card = one.get("card")
+        if card and charcard.short(card):
+            lines.append(charcard.short(card))
+        if one.get("description"):
+            lines.append(one["description"])
+        lines += [f"- {k}: {v}" for k, v in (one.get("fields") or {}).items()]
+    if char.get("settings"):
+        lines += ["", "[추가 설정]", char["settings"]]
+    return "\n".join(lines) + "\n"
+
+
 def load_prompt(name: str) -> str:
     path = PROMPT_DIR / name
     if not path.exists():
@@ -613,6 +639,11 @@ def parse_directions(md: str) -> list[dict]:
     `scenes`·`cast` 는 옛 형식(### 하위 절)을 쓰던 run 과의 호환을 위해
     남겨 둔다 — 지금 형식에는 없으니 비어 있는 게 정상이다.
     """
+    if not DIRECTION_RE.search(md):
+        # 이야기 1개 길은 「방향」 머리글 없이 「제목:」 줄로 시작한다.
+        got = re.search(rf"^{S}제목{S}[:：]{S}(.*?){S}$", md, re.M)
+        title = got.group(1) if got else ""
+        md = "## 방향 1 — " + title + "\n" + (md[:got.start()] + md[got.end():] if got else md)
     marks = list(DIRECTION_RE.finditer(md))
     out = []
     for i, m in enumerate(marks):
@@ -621,8 +652,10 @@ def parse_directions(md: str) -> list[dict]:
         sec = _sections(body)
         genre_m = GENRE_RE.search(body.split("###")[0])
         genre = genre_m.group(1).strip() if genre_m else ""
+        # 모델이 「소개: 글」처럼 한 줄에 붙여 쓰는 경우도 같은 모양으로 읽는다.
+        body = re.sub(rf"^({S}(?:소개|본문){S}[:：]){S}(\S.*)$", r"\1\n\2", body, flags=re.M)
         intro = _labeled(body, INTRO_LABEL_RE, [BODY_LABEL_RE])
-        body_text = _labeled(body, BODY_LABEL_RE, [])
+        body_text = _labeled(body, BODY_LABEL_RE, [INTRO_LABEL_RE])
         out.append({
             "n": int(m.group(1)),
             "title": m.group(2).strip().strip("<>").strip(),
@@ -1400,7 +1433,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     if seeded:
         block = seeded_input_block(char).rstrip("\n")
     elif one:
-        block = story_input_block(char, run_dir).rstrip("\n") + one_event_block(run_dir)
+        block = one_input_block(char).rstrip("\n") + one_event_block(run_dir)
     else:
         block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
     # 인물을 먼저 뽑고 거기에 사건을 붙인다(#532·#534). 줄거리를 적은 경우도
@@ -1417,7 +1450,10 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         with ThreadPoolExecutor(max_workers=3) as pool:
             persona_job = pool.submit(stage_persona, run_dir, char, dry_run, lang)
             co_job = pool.submit(stage_personas, run_dir, char, dry_run, lang)    # 함께 주인공 카드(#899)
-            made = old if isinstance(old, list) and old else stage_cast(run_dir, char, dry_run, lang=lang)
+            # 이야기 1개 길은 로맨스의 상대 고르기가 있을 때만 인물을 먼저 세운다.
+            need_cast = not one or is_romance(char)
+            made = old if isinstance(old, list) and old else (
+                stage_cast(run_dir, char, dry_run, lang=lang) if need_cast else [])
             persona_job.result()
             co_job.result()
         kind = cast_wait_kind(char, made)

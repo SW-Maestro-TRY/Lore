@@ -216,9 +216,7 @@ def image_default(provider: str) -> str:
 #
 # **주인공 페르소나(PERSONA)도 gpt-5.1 이다(#534).** 사용자가 적은 캐릭터로
 # 주인공 페르소나를 정의한다. 이게 틀리면 뒤의 인물·이야기가 모두 틀린 캐릭터로 간다.
-# **이야기(STORY)는 gpt-6.1-sol 이다(2026-11-03).** 같은 입력으로 gpt-5.1 과 비교했을 때 문장이
-# 짧고 앞뒤가 이어졌다. 1개당 약 75초로 gpt-5.1 보다 1분쯤 느리다.
-STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-6.1-sol",
+STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
                         ("CAST", "openai"): "gpt-5.1",
                         ("PERSONA", "openai"): "gpt-5.1",
                         ("SCENE", "openai"): "gpt-5.1",

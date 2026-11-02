@@ -1412,6 +1412,12 @@ public class JobService {
     }
 
     /** 명시한 캐릭터는 현재 이용 권한을 확인한다. 공개 취소/삭제 시 조용히 새 캐릭터로 바꾸지 않는다. */
+    /** 고른 캐릭터의 이름. 내 것이 아니면 byPublicId 가 막는다. */
+    public String characterName(String characterId, Long userId, String uid) {
+        WebtoonCharacter picked = pickedCharacter(characterId, userId, uid);
+        return picked == null ? null : picked.getName();
+    }
+
     private WebtoonCharacter pickedCharacter(String characterId, Long userId, String uid) {
         if (characterId == null || characterId.isBlank()) {
             return null;
