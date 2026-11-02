@@ -2135,7 +2135,8 @@ def direction_of(run_dir: Path) -> dict | None:
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
-                       note: str = "", lang: str = "ko") -> None:
+                       note: str = "", lang: str = "ko",
+                       cover_first: bool = False) -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
 
@@ -2165,7 +2166,7 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
 
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
-                                   note=note, lang=lang,
+                                   note=note, lang=lang, cover_first=cover_first,
                                    on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
@@ -2250,6 +2251,8 @@ def main(argv=None) -> int:
     p.add_argument("--restory", action="store_true",
                    help="기존 run 에서 이야기 후보 4개를 다시 만든다 (방향 고르기 "
                         "화면에서 '다시 만들기' — --note 와 같이 쓸 수 있다)")
+    p.add_argument("--cover-first", action="store_true",
+                   help="장면을 나누기 전에 표지만 먼저 그린다. --detail-pages --page 1 과 함께 쓴다")
     p.add_argument("--page", type=int, action="append", default=[],
                    help="그 번호 페이지만 다시 (여러 번 가능)")
     p.add_argument("--no-sheet", action="store_true",
@@ -2414,6 +2417,7 @@ def main(argv=None) -> int:
             stage_scenes(run_dir, char, direction, args.dry_run, lang=args.lang)
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
+                               cover_first=args.cover_first,
                                allow_no_sheet=args.no_sheet,
                                review=False if args.no_page_review else None,
                                note=args.note, lang=args.lang)
