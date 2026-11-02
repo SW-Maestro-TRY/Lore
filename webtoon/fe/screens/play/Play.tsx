@@ -2,7 +2,7 @@
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
 import { useEffect, useMemo, useState } from "react";
-import { cancelJob, listCharacters, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
+import { cancelJob, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare } from "../../ui/Icons";
@@ -74,7 +74,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
 }
 
 /* 5 내 캐릭터 — 2개까지는 칸, 3개 이상은 세로 목록. 둘 다 연필로 수정 */
-function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go: Go; authenticated: boolean }) {
+function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEvent; go: Go; authenticated: boolean; preset?: string }) {
   const t = useT();
   const { lang } = useLang();
   const [chars, setChars] = useState<Character[] | null>(null);
@@ -96,12 +96,25 @@ function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go:
       setBusy(false);
     }
   };
-  const load = () => listCharacters().then((l) => {
-    const mine = l.characters.filter((c) => c.mine && c.status === "ready");
-    setChars(mine); setSel((s) => s && mine.some((c) => c.id === s) ? s : mine[0]?.id);
-  }).catch(() => setChars([]));
+  /* 내 캐릭터가 없으면 예시 캐릭터를 보여 준다(만들기 화면과 같은 기준). 방금 고른 캐릭터는 앞에 세운다. */
+  const load = async () => {
+    try {
+      const l = await listCharacters();
+      const ready = l.characters.filter((c) => c.status === "ready");
+      const mine = ready.filter((c) => c.mine && !c.builtin);
+      let shown = mine.length ? mine : ready.filter((c) => c.builtin);
+      if (preset && !shown.some((c) => c.id === preset)) {
+        const picked = ready.find((c) => c.id === preset) ?? await readCharacter(preset).catch(() => null);
+        if (picked) shown = [picked, ...shown];
+      }
+      setChars(shown);
+      setSel((s) => s && shown.some((c) => c.id === s) ? s : shown.some((c) => c.id === preset) ? preset : shown[0]?.id);
+    } catch { setChars([]); }
+  };
   useEffect(() => { void load(); }, []);
   const cur = chars?.find((c) => c.id === sel);
+  const nameOf = (c: Character) => c.builtin ? t(c.name) : c.name;
+  const descOf = (c: Character) => c.builtin ? t(c.description || "") : c.description;
   const Pen = ({ c, cls }: { c: Character; cls: string }) => (
     <span role="button" tabIndex={0} className={cls} aria-label={t("수정")}
       onClick={(ev) => { ev.stopPropagation(); setEdit(c); }}
@@ -115,13 +128,13 @@ function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go:
       <h1>{t("누구를 넣을까요?")}</h1>
       {chars === null ? <div className="pl-skel" /> : chars.length >= 3 ? (
         <div className="pl-many">
-          <button type="button" className="cr add" onClick={() => go("character-new")}><i><IconPlus /></i><b>{t("새 캐릭터 만들기")}</b></button>
+          <button type="button" className="cr add" onClick={() => go("character-new", { world: w.id, ep: e.id })}><i><IconPlus /></i><b>{t("새 캐릭터 만들기")}</b></button>
           {chars.map((c) => (
             <button type="button" key={c.id} className={`cr${c.id === sel ? " on" : ""}`} onClick={() => setSel(c.id)}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {c.art_url ? <img src={c.art_url} alt="" /> : <i />}
-              <span className="t"><b>{c.name}</b><em>{c.description}</em></span>
-              <Pen c={c} cls="ed" />
+              <span className="t"><b>{nameOf(c)}</b><em>{descOf(c)}</em></span>
+              {!c.builtin && <Pen c={c} cls="ed" />}
             </button>
           ))}
         </div>
@@ -131,17 +144,17 @@ function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go:
             {chars.map((c) => (
               <button type="button" key={c.id} className={`pl-tile${c.id === sel ? " on" : ""}`} onClick={() => setSel(c.id)}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <span className="sq">{c.art_url && <img src={c.art_url} alt="" />}<Pen c={c} cls="ed" /></span>
-                <span>{c.name}</span>
+                <span className="sq">{c.art_url && <img src={c.art_url} alt="" />}{!c.builtin && <Pen c={c} cls="ed" />}</span>
+                <span>{nameOf(c)}</span>
               </button>
             ))}
-            <button type="button" className="pl-tile pl-add" onClick={() => go("character-new")}><span className="sq"><IconPlus /></span><span>{t("새 캐릭터 만들기")}</span></button>
+            <button type="button" className="pl-tile pl-add" onClick={() => go("character-new", { world: w.id, ep: e.id })}><span className="sq"><IconPlus /></span><span>{t("새 캐릭터 만들기")}</span></button>
           </div>
-          {cur && <p className="pl-desc"><small>{cur.name} · {t("설명")}</small>{cur.description}</p>}
+          {cur && <p className="pl-desc"><small>{nameOf(cur)} · {t("설명")}</small>{descOf(cur)}</p>}
         </>
       )}
       {cur && <label className="pl-chk"><input type="checkbox" checked={ok} onChange={(v) => setOk(v.target.checked)} />{t("업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다")}</label>}
-      {cur && <button type="button" className="pl-btn" disabled={!ok || busy} onClick={begin}>{t("{name} 넣기", { name: cur.name })}</button>}
+      {cur && <button type="button" className="pl-btn" disabled={!ok || busy} onClick={begin}>{t("{name} 넣기", { name: nameOf(cur) })}</button>}
       {err && <p className="pl-err">{err}</p>}
             {edit && <CharacterEditDialog character={edit} authenticated={authenticated} onSaved={() => { setEdit(null); void load(); }} onDeleted={() => { setEdit(null); void load(); }} onClose={() => setEdit(null)} />}
     </div>
@@ -235,7 +248,7 @@ function Comic({ worlds, w, e, run, go }: { worlds: PlayWorld[]; w: PlayWorld; e
   );
 }
 
-export default function Play({ go, authenticated, world, ep, stage, job, run }: { go: Go; authenticated: boolean; world?: string; ep?: string; stage?: "char" | "making" | "done"; job?: string; run?: string }) {
+export default function Play({ go, authenticated, world, ep, stage, job, run, character }: { go: Go; authenticated: boolean; world?: string; ep?: string; stage?: "char" | "making" | "done"; job?: string; run?: string; character?: string }) {
   const t = useT();
   const phone = usePhone();
   const [worlds, setWorlds] = useState<PlayWorld[] | null>(null);
@@ -246,7 +259,7 @@ export default function Play({ go, authenticated, world, ep, stage, job, run }: 
   let found: { world: PlayWorld; event: PlayEvent } | undefined;
   for (const v of worlds) { const hit = v.events.find((x) => x.id === ep); if (hit) found = { world: v, event: hit }; }
   const w = found?.world || worlds.find((v) => v.id === world);
-  if (found && stage === "char") return <div className="pl"><PickChar w={found.world} e={found.event} go={go} authenticated={authenticated} /></div>;
+  if (found && stage === "char") return <div className="pl"><PickChar w={found.world} e={found.event} go={go} authenticated={authenticated} preset={character} /></div>;
   if (found && stage === "making") return <div className="pl"><Making w={found.world} e={found.event} job={job} go={go} /></div>;
   if (found && stage === "done") return <div className="pl"><Comic worlds={worlds} w={found.world} e={found.event} run={run} go={go} /></div>;
   if (found) return <div className="pl">{!phone && <Worlds go={go} worlds={worlds} world={world} />}<EventView w={found.world} e={found.event} go={go} /></div>;
