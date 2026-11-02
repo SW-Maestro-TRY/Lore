@@ -189,6 +189,9 @@ public class JobRunner {
     private final ConcurrentHashMap<Long, ConcurrentHashMap<String, java.util.concurrent.Future<Path>>> castSheetsAhead =
             new ConcurrentHashMap<>();
 
+    /** 장면을 나누기 전에 먼저 띄운 표지. 이야기가 정해지면 바로 그려 사용자가 일찍 본다. */
+    private final ConcurrentHashMap<Long, java.util.concurrent.Future<?>> coverFirst =
+            new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, java.util.concurrent.Future<Integer>> sheetAhead =
             new ConcurrentHashMap<>();
 
@@ -1698,6 +1701,7 @@ public class JobRunner {
            만든다) — 그래서 이 걸음 없이는 `pageCount()`가 항상 0으로 읽혀
            `drawPages()`가 매번 순차 경로로만 빠졌다(2026-09-16 실측: 실제
            job에서 "3장씩 동시에"가 한 번도 안 탄 것을 확인). */
+        startCoverFirst(jobId, job);         // 표지는 장면이 필요 없다. 장면을 기다리지 않고 먼저 그린다
         ensureScenes(jobId, job);
 
         drawPages(jobId, job, paidPages(job, pageCount(job)));
@@ -1765,8 +1769,39 @@ public class JobRunner {
      * 안 탔다 — 실측으로 확인(2026-09-16, 첫 실사용 job이 계속 순차로만
      * 돌았다). 지금은 `ensureScenes()`가 그 자리를 대신한다.
      */
+    /**
+     * 표지만 먼저 그린다. 장면이 이미 있으면 다른 장과 함께 그리면 되므로 띄우지 않는다.
+     * 실패해도 이 작업을 멈추지 않는다. {@link #drawPages}가 표지를 다시 그린다.
+     */
+    private void startCoverFirst(Long jobId, WebtoonJob job) {
+        if (pageWorkers <= 1 || pageCount(job) > 0 || pageDrawn(job.getRunId(), 1)) {
+            return;
+        }
+        progress.startedPage(jobId, 1);
+        coverFirst.put(jobId, paint.submit(() -> {
+            try {
+                if (cancelled.contains(jobId)) {
+                    return;
+                }
+                int code = callHarness(jobId, job, List.of("--run-id", job.getRunId(),
+                        "--detail-pages", "--page", "1", "--cover-first"));
+                if (code == 0) {
+                    progress.drewPage(jobId, 1, 1);
+                } else {
+                    log.warn("표지를 먼저 그리지 못했습니다. 장면과 함께 다시 그립니다 (job={})", jobId);
+                }
+            } catch (Exception e) {              // noqa: 아래 줄에서 다시 그린다
+                log.warn("표지를 먼저 그리지 못했습니다 (job={})", jobId, e);
+            }
+        }));
+    }
+
     private void drawPages(Long jobId, WebtoonJob job, int pages) throws Exception {
+        java.util.concurrent.Future<?> cover = coverFirst.remove(jobId);
         if (pages <= 1 || pageWorkers <= 1) {
+            if (cover != null) {
+                cover.get();
+            }
             drawInOneProcess(jobId, job, pages);
             return;
         }
@@ -1785,7 +1820,7 @@ public class JobRunner {
         List<java.util.concurrent.Future<?>> waiting = new ArrayList<>();
         for (int n = 1; n <= pages; n++) {
             final int page = n;
-            waiting.add(paint.submit(() -> {
+            Runnable drawOne = () -> {
                 /* 이미 어긋났으면 시작하지 않는다 — 한 장이 실패했는데 남은
                    장을 계속 그리면 어차피 못 쓸 화에 그림 값만 더 나간다. 안전 검사에
                    걸린 장이 너무 많아도(살려 완성할 수 없으니) 멈춘다. */
@@ -1816,7 +1851,25 @@ public class JobRunner {
                 } catch (Exception e) {         // noqa: 여기서 새면 기다리는 쪽이 영원히 기다린다
                     failed.compareAndSet(null, e);
                 }
-            }));
+            };
+            if (page == 1 && cover != null) {
+                /* 먼저 띄운 표지가 끝난 뒤에 본다. 다 그렸으면 그대로 쓰고, 안전 검사에 걸렸으면
+                   다시 그리지 않고, 다른 이유로 실패했으면 여기서 다시 그린다. */
+                waiting.add(side.submit(() -> {
+                    try {
+                        cover.get();
+                        if (Files.isRegularFile(unsafeMarker(job.getRunId(), 1))) {
+                            unsafe.add(1);
+                            return;
+                        }
+                        paint.submit(drawOne).get();
+                    } catch (Exception e) {     // noqa: 여기서 새면 기다리는 쪽이 영원히 기다린다
+                        failed.compareAndSet(null, e);
+                    }
+                }));
+            } else {
+                waiting.add(paint.submit(drawOne));
+            }
         }
         for (java.util.concurrent.Future<?> one : waiting) {
             one.get();                          // 다 끝나야 이어 붙일 수 있다
@@ -2644,6 +2697,7 @@ public class JobRunner {
         String why = found.sheetFixMessage();
         log.warn("캐릭터 시트가 안전 검사에 걸려 고쳐 주기를 기다립니다 (job={}, 분류={})", jobId, found.categories());
         sheetAhead.remove(jobId);
+        coverFirst.remove(jobId);
         store.sheetBlocked(jobId, why, found);
         progress.say(jobId, why);
         notice.needsFix(jobId, why);
