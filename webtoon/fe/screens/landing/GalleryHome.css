@@ -606,3 +606,17 @@
   .wt .wt-cta.my-top { align-items: start; }
   .wt .wt-cta.my-top .wt-cta-in { margin-top: 0; padding-top: var(--mypad, 12%); }
 }
+
+/* 내 캐릭터를 넣어 볼 세계 */
+.wt .wt-play-row { margin-top: 28px; }
+.wt .wt-play-row-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+.wt .wt-play-row-h h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.wt .wt-play-row-h button { padding: 0; background: none; border: 0; font-size: 13px; color: var(--dim); cursor: pointer; }
+.wt .wt-play-row-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.wt .wt-play-row-list button { display: flex; flex-direction: column; gap: 4px; padding: 0 0 12px; overflow: hidden; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); text-align: left; cursor: pointer; }
+.wt .wt-play-row-list img { width: 100%; aspect-ratio: 16/10; object-fit: cover; object-position: center 22%; }
+.wt .wt-play-row-list b { padding: 6px 12px 0; font-size: 14px; }
+.wt .wt-play-row-list small { padding: 0 12px; font-size: 12px; line-height: 1.4; color: var(--dim); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+@media (max-width: 767px) {
+  .wt .wt-play-row-list { grid-template-columns: 1fr 1fr; gap: 8px; }
+}

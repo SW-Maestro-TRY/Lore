@@ -7,6 +7,7 @@ import "./GalleryHome.css";
 import IntroReel from "./IntroReel";
 import CtaBand from "./CtaBand";
 import { EventBanner } from "../event/EventBits";
+import { loadWorlds, type PlayWorld } from "../play/playData";
 const asset = (path: string) => `/static/gallery/${path}`;
 /* 「다른 장르의 웹툰」 — 예시 작품에서 장르가 겹치지 않게 여덟 편. 표지는 각 작품 1쪽 */
 const works = [
@@ -105,6 +106,8 @@ export default function GalleryHome({
   const [reasons, setReasons] = useState<string[]>(["표정이 안 맞아요"]);
   const [note, setNote] = useState("무대 문 앞이라 조금 더 긴장한 표정으로");
   const [redraw, setRedraw] = useState<"before" | "busy" | "after">("before");
+  const [worlds, setWorlds] = useState<PlayWorld[]>([]);
+  useEffect(() => { void loadWorlds().then(setWorlds).catch(() => {}); }, []);
   const [faqCat, setFaqCat] = useState<"주요" | FaqCat>("주요");
   const faqShown = faqCat === "주요" ? faqs.filter((f) => f.top) : faqs.filter((f) => f.cat === faqCat);
   useEffect(() => {
@@ -129,19 +132,19 @@ export default function GalleryHome({
               alt={t("웹툰 속 캐릭터")}
             />
             <div className="wt-gallery-copy">
-              <span>{t("AI 웹툰 스튜디오")}</span>
+              <span>{t("LORE · AI 개인 IP 창작 플랫폼")}</span>
               <h1>
-                {t("내 캐릭터로")}
+                {t("내 캐릭터가")}
                 <br />
-                {t("웹툰 만들기")}
+                {t("살아 움직이는 이야기")}
               </h1>
-              <p className="wt-gallery-sub">{t("캐릭터를 넣으면, 그 캐릭터가 주인공인 웹툰이 나와요.")}</p>
+              <p className="wt-gallery-sub">{t("내 캐릭터로 새로운 이야기를 경험하고, 웹툰을 만들어 보세요.")}</p>
               <div className="wt-gallery-cta">
-                <button className="btn btn-p" onClick={() => start("hero")}>
-                  {t("웹툰 만들기")}
+                <button className="btn btn-p" onClick={() => { track("landing_cta", { where: "hero_play" }); go("play"); }}>
+                  {t("세계관 체험하기")}
                 </button>
-                <button className="btn btn-w" onClick={() => go("works")}>
-                  {t("웹툰 둘러보기")}
+                <button className="btn btn-w" onClick={() => start("hero")}>
+                  {t("웹툰 만들기")}
                 </button>
               </div>
             </div>
@@ -161,6 +164,20 @@ export default function GalleryHome({
             </button>
           ))}
         </section>
+        {worlds.length > 0 && <section className="wt-play-row">
+          <div className="wt-play-row-h">
+            <h2>{t("내 캐릭터를 넣어 볼 세계")}</h2>
+            <button type="button" onClick={() => go("play")}>{t("전부 보기")} ›</button>
+          </div>
+          <div className="wt-play-row-list">
+            {worlds.map((w) => (
+              <button type="button" key={w.id} onClick={() => go("play", { world: w.id })}>
+                <b>{t(w.name)}</b>
+                <small>{t(w.one)}</small>
+              </button>
+            ))}
+          </div>
+        </section>}
         <IntroReel />
         <section className="wt-gallery-section">
           <div className="wt-gallery-heading">
