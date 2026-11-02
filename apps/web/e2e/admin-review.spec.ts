@@ -104,7 +104,8 @@ async function stubImages(page: Page): Promise<void> {
 
 async function open(page: Page): Promise<void> {
   await stubImages(page);
-  await page.goto('/zzal/admin', { waitUntil: 'domcontentloaded' });
+  // 기본 탭이 "작업"이 됐다 — 검수 화면은 해시로 연다.
+  await page.goto('/zzal/admin#review', { waitUntil: 'domcontentloaded' });
 }
 
 test.describe('관리자 검수 화면', () => {

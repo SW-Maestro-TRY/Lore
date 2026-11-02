@@ -77,6 +77,16 @@ class RequestContractTest {
         }
 
         @Test
+        @DisplayName("★ 이름 바꾸기 — 빈 값·공백뿐은 거절. 길이(12자)는 공백을 지운 뒤 서비스가 센다(PetRenameIT)")
+        void rename() {
+            assertThat(accepted(new PetRequests.Rename("여"))).isTrue();
+            assertThat(accepted(new PetRequests.Rename(chars(ZzalRules.NAME_MAX_CHARS)))).isTrue();
+            assertThat(accepted(new PetRequests.Rename(""))).isFalse();
+            assertThat(accepted(new PetRequests.Rename("   "))).isFalse();
+            assertThat(accepted(new PetRequests.Rename(null))).isFalse();
+        }
+
+        @Test
         @DisplayName("★ 그림 키 — 300자는 통과, 301자·빈 값은 거절")
         void imageKey() {
             assertThat(accepted(new PetRequests.Draft("a".repeat(300)))).isTrue();
