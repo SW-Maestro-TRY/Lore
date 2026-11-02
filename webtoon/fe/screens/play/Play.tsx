@@ -129,13 +129,13 @@ function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go:
         <>
           <div className="pl-tiles">
             {chars.map((c) => (
-              <button type="button" key={c.id} className={`tile${c.id === sel ? " on" : ""}`} onClick={() => setSel(c.id)}>
+              <button type="button" key={c.id} className={`pl-tile${c.id === sel ? " on" : ""}`} onClick={() => setSel(c.id)}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <span className="sq">{c.art_url && <img src={c.art_url} alt="" />}<Pen c={c} cls="ed" /></span>
                 <span>{c.name}</span>
               </button>
             ))}
-            <button type="button" className="tile add" onClick={() => go("character-new")}><span className="sq"><IconPlus /></span><span>{t("새 캐릭터 만들기")}</span></button>
+            <button type="button" className="pl-tile pl-add" onClick={() => go("character-new")}><span className="sq"><IconPlus /></span><span>{t("새 캐릭터 만들기")}</span></button>
           </div>
           {cur && <p className="pl-desc"><small>{cur.name} · {t("설명")}</small>{cur.description}</p>}
         </>
