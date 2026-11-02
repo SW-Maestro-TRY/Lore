@@ -14,6 +14,9 @@
  *   /webtoon?view=mypage           마이페이지
  *   /webtoon?view=event            출석 이벤트 (할로윈 · 가면무도회, #862)
  *   /webtoon?view=feedback         피드백 보내기 (예전 주소 view=mypage&tab=feedback 도 여기로)
+ *   /webtoon?view=play             세계관 체험 — 세계·사건 고르기(&world=<id>), 사건 보기(&ep=<id>), 캐릭터(&stage=char), 만드는 중(&stage=making), 만화(&stage=done)
+ *   /webtoon?view=make             만들기 고르기 (웹툰 만들기 / 세계관 만들기)
+ *   /webtoon?view=world-new        세계관 만들기
  *   /webtoon?view=admin            관리자 대시보드 — 개요 · 작품(&tab=works) · 캐릭터(&tab=characters) (관리자만, #779)
  *   /webtoon?view=admin-examples   예시 작품 관리 (관리자만, #619)
  *   /webtoon?view=admin-works      작품 관리 — 처리 기록 · 관리자 휴지통 (관리자만, #638)
@@ -23,7 +26,7 @@
  * 기댄다. 상태만 바꾸면 뒤로가기가 웹툰 탭을 통째로 빠져나간다. */
 
 export type View =
-  | "landing" | "entry" | "create" | "running" | "result" | "editor" | "next" | "works"
+  | "play" | "make" | "world-new" | "landing" | "entry" | "create" | "running" | "result" | "editor" | "next" | "works"
   | "character-new" | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "event" | "admin" | "admin-examples" | "admin-works" | "admin-payments";
 
 export interface GoParams {
@@ -40,6 +43,10 @@ export interface GoParams {
   page?: number;
   /** 만들기 1걸음의 빠른 시작(2026-10-27) — 광고로 온 사람은 카드 고르기 대신 이름·설명 두 칸부터. */
   quick?: boolean;
+  /** 세계관 체험의 세계 · 사건 · 걸음. */
+  world?: string;
+  ep?: string;
+  stage?: "char" | "making" | "done";
   /** 2걸음 그림체 기본값 — 광고 작품의 그림체를 넘긴다(바꿀 수 있다). STYLE_INFO 의 키. */
   style?: string;
 }
@@ -61,6 +68,9 @@ export function hrefOf(view: View, p: GoParams = {}): string {
   if (p.mode) q.set("mode", p.mode);
   if (p.quick) q.set("quick", "1");
   if (p.style) q.set("style", p.style);
+  if (p.world) q.set("world", p.world);
+  if (p.ep) q.set("ep", p.ep);
+  if (p.stage) q.set("stage", p.stage);
   return `/webtoon?${q}`;
 }
 
