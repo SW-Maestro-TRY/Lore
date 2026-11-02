@@ -137,7 +137,11 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     /* 본문이 JSON 이 아닐 수 있다 */
   }
   if (!res.ok) {
-    throw new WebtoonApiError(reasonOf(body) || `요청이 실패했습니다 (${res.status})`, res.status);
+    /* 서버까지 못 간 403 은 본문이 없다(방화벽). 숫자만 보여 주면 무엇을 해야 할지 알 수 없다. */
+    const fallback = res.status === 403
+      ? "보안 검사에 막혀 보내지 못했습니다. 글을 조금 줄이거나 특수 기호를 빼고 다시 시도해 주세요"
+      : `요청이 실패했습니다 (${res.status})`;
+    throw new WebtoonApiError(reasonOf(body) || fallback, res.status);
   }
   return body as T;
 }
