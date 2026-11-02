@@ -3,6 +3,13 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "LORE · AI 개인 IP 창작 플랫폼": { en: "LORE · AI personal IP creation platform", ja: "LORE · AI個人IP創作プラットフォーム", zh: "LORE · AI 个人 IP 创作平台" },
+  "내 캐릭터가": { en: "A story where", ja: "自分のキャラが", zh: "我的角色" },
+  "살아 움직이는 이야기": { en: "your character comes alive", ja: "生き生きと動く物語", zh: "活起来的故事" },
+  "내 캐릭터로 새로운 이야기를 경험하고, 웹툰을 만들어 보세요.": { en: "Experience new stories with your character, and make webtoons.", ja: "自分のキャラで新しい物語を体験し、ウェブトゥーンを作ってみましょう。", zh: "用我的角色体验新故事，并制作漫画。" },
+  "세계관 체험하기": { en: "Try a world", ja: "世界観を体験する", zh: "体验世界观" },
+  "내 캐릭터를 넣어 볼 세계": { en: "Worlds for your character", ja: "キャラを入れてみる世界", zh: "放入我的角色的世界" },
+  "전부 보기": { en: "See all", ja: "すべて見る", zh: "查看全部" },
   /* ---- 입구 — 만들고 싶은 내용이 있나요?(#548) ---- */
   "무엇을 만들고 싶나요?": { en: "What would you like to make?", ja: "何を作りたいですか？", zh: "想做什么？" },
   "아이디어부터 시작할게요": { en: "Start from an idea", ja: "アイデアから始める", zh: "从灵感开始" },
