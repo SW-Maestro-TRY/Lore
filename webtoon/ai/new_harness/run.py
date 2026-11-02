@@ -639,6 +639,11 @@ def parse_directions(md: str) -> list[dict]:
     `scenes`·`cast` 는 옛 형식(### 하위 절)을 쓰던 run 과의 호환을 위해
     남겨 둔다 — 지금 형식에는 없으니 비어 있는 게 정상이다.
     """
+    if not DIRECTION_RE.search(md):
+        # 이야기 1개 길은 「방향」 머리글 없이 「제목:」 줄로 시작한다.
+        got = re.search(rf"^{S}제목{S}[:：]{S}(.*?){S}$", md, re.M)
+        title = got.group(1) if got else ""
+        md = "## 방향 1 — " + title + "\n" + (md[:got.start()] + md[got.end():] if got else md)
     marks = list(DIRECTION_RE.finditer(md))
     out = []
     for i, m in enumerate(marks):
