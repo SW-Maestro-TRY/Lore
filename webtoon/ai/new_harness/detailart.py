@@ -681,7 +681,7 @@ def note_block(note: str) -> str:
 def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                   allow_no_sheet: bool = False, on_page=None,
                   review: bool | None = None, note: str = "",
-                  lang: str = "ko") -> list[dict]:
+                  lang: str = "ko", cover_first: bool = False) -> list[dict]:
     """이어그리기 — **지금의 최종 방식.** 구체화(detail.json)·콘티(board.json)·
     컷 대본을 전부 건너뛰고, story 단계(방향 후보) 산출물만으로 그린다.
 
@@ -707,6 +707,9 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     온다: 검수는 이야기가 어긋난 것을 잡는 장치이고, 사람은 그 판정까지
     보고 나서 다시 그리라고 한 것이라 사람 쪽이 더 최근이다.
 
+    cover_first : 장면을 나누기 전에 표지만 먼저 그린다. 표지는 제목·소개·시트로 그리므로
+    장면이 없어도 된다. scenes.json 이 없어도 멈추지 않고, only=[1] 과 함께 쓴다.
+
     검수를 그리기 **전**이 아니라 **후**에 두는 이유는, 컷을 미리 정해 주는
     순간 연출이 지시를 옮기기만 해서 평평해지기 때문이다 — 그래서 자유롭게
     그리게 두고, 나온 그림이 이야기와 어긋났을 때만 되돌린다.
@@ -726,7 +729,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     # (직전 상태·끝나는 상태가 장면마다 이미 있다 — run.py --scenes 로 만든다).
     scene_data = read_json(run_dir / "scenes.json") or {}
     scenes = [s for s in (scene_data.get("scenes") or []) if isinstance(s, dict)]
-    if not scenes:
+    if not scenes and not cover_first:
         raise SystemExit(f"{run_dir / 'scenes.json'} 가 없습니다. "
                         "run.py --pick <번호> --scenes 를 먼저 돌리세요.")
 

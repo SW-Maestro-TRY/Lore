@@ -377,6 +377,15 @@ export interface NhCreateRequest {
   title?: string;
 }
 
+export function listPlayWorlds<T>(): Promise<{ worlds: T[] }> {
+  return call("/play/worlds");
+}
+
+/** 세계관 체험 시작. 실패하면 서버 문구 그대로 WebtoonApiError 로 던진다(402 · 429 · 400). */
+export function startPlayRun(body: { world_id: string; event_id: string; character_id: string; agree_ip: boolean; language: string }): Promise<{ id: string; queue_position?: number }> {
+  return post("/play/runs", { ...body, uid: getUid() });
+}
+
 export function createJob(form: NhCreateRequest): Promise<{ id: string; credit_balance?: number }> {
   return post("/nh/create", { ...form, uid: getUid() });
 }
