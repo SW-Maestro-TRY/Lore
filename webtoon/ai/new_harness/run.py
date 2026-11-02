@@ -2124,8 +2124,12 @@ def direction_of(run_dir: Path) -> dict | None:
     if not path.exists():
         return None
     directions = json.loads(path.read_text(encoding="utf-8"))
-    return (next((d for d in directions if d.get("n") == pick.get("n")), None)
-            or (directions[0] if directions else None))
+    chosen = (next((d for d in directions if d.get("n") == pick.get("n")), None)
+              or (directions[0] if directions else None))
+    # 완성본에서 고친 제목은 서버 DB 에만 있다. 다시 그리기가 넘겨 주는 값이 파일의 처음 제목보다 먼저다 —
+    # 안 그러면 표지에 옛 제목을 그리고, 표지 검수도 옛 제목에 맞춰 되돌린다.
+    title = (os.environ.get("NH_TITLE") or "").strip()
+    return {**chosen, "title": title} if chosen and title else chosen
 
 
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,

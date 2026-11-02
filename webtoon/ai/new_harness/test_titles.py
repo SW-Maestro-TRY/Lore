@@ -2,6 +2,7 @@
 
     python3 test_titles.py
 """
+import os
 import tempfile
 from pathlib import Path
 
@@ -20,6 +21,20 @@ def test_placeholder_is_missing():
 def test_parse_drops_angle_brackets_the_model_copied():
     md = "## 방향 1 — <달빛 시장의 약속>\n장르: 판타지\n\n소개:\n소개.\n\n본문:\n본문.\n"
     assert R.parse_directions(md)[0]["title"] == "달빛 시장의 약속"
+
+
+def test_edited_title_wins_when_redrawing():
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        R.write_json(d / "directions.json", [{"n": 1, "title": "제목", "genre": "판타지"}])
+        R.write_json(d / "pick.json", {"n": 1})
+        assert R.direction_of(d)["title"] == "제목"
+        os.environ["NH_TITLE"] = "고친 제목"
+        try:
+            assert R.direction_of(d)["title"] == "고친 제목"
+            assert R.direction_of(d)["genre"] == "판타지"
+        finally:
+            del os.environ["NH_TITLE"]
 
 
 def _with_call(reply):
@@ -75,6 +90,7 @@ def test_failure_leaves_blank_and_keeps_going():
 if __name__ == "__main__":
     test_placeholder_is_missing()
     test_parse_drops_angle_brackets_the_model_copied()
+    test_edited_title_wins_when_redrawing()
     test_fills_only_placeholder()
     test_failure_leaves_blank_and_keeps_going()
     print("ok")
