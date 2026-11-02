@@ -541,6 +541,11 @@ public class WebtoonJob {
         return picked;
     }
 
+    /** 인물 확인에서 주인공을 고치면 목록·공유·다음 화가 읽는 입력의 이름도 맞춘다. */
+    public void updateInputJson(String inputJson) {
+        this.inputJson = inputJson;
+    }
+
     public String getInputJson() {
         return inputJson;
     }
