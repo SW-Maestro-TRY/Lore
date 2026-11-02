@@ -172,6 +172,7 @@ export default function GalleryHome({
           <div className="wt-play-row-list">
             {worlds.map((w) => (
               <button type="button" key={w.id} onClick={() => go("play", { world: w.id })}>
+                {w.cover_url && <img src={w.cover_url} alt="" />}
                 <b>{t(w.name)}</b>
                 <small>{t(w.one)}</small>
               </button>

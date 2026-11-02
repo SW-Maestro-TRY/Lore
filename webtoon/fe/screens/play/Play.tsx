@@ -13,6 +13,16 @@ import { loadWorlds, startPlay, type PlayEvent, type PlayWorld } from "./playDat
 import "./i18n";
 import "./Play.css";
 
+function EventCard({ e, onClick }: { e: PlayEvent; onClick: () => void }) {
+  const t = useT();
+  return (
+    <button type="button" className={`pl-ev${e.image_url ? " pic" : ""}`} onClick={onClick}>
+      {e.image_url && <span className="im" style={{ backgroundImage: `url(${e.image_url})` }} />}
+      <span className="tx"><small>{e.no}</small><b>{t(e.title)}</b><em>{t(e.line || e.situation)}</em></span>
+    </button>
+  );
+}
+
 /* 2 세계관 · 3 사건 고르기 — 세계 칩 + 사건 카드 */
 function Worlds({ go, worlds, world }: { go: Go; worlds: PlayWorld[]; world?: string }) {
   const t = useT();
@@ -28,12 +38,10 @@ function Worlds({ go, worlds, world }: { go: Go; worlds: PlayWorld[]; world?: st
           {worlds.map((w) => <button type="button" key={w.id} className={sel === w.id ? "on" : ""} onClick={() => setSel(w.id)}>{t(w.name)}</button>)}
         </div>
       )}
-      {one && <div className="pl-world"><b>{t(one.name)}</b><p>{t(one.one)}</p></div>}
+      {one && <div className="pl-world">{one.cover_url && <span className="im" style={{ backgroundImage: `url(${one.cover_url})` }} />}<div><b>{t(one.name)}</b><p>{t(one.one)}</p></div></div>}
       <div className="pl-grid">
         {list.map(({ w, e }) => (
-          <button type="button" className="pl-ev" key={e.id} onClick={() => go("play", { world: w.id, ep: e.id })}>
-            <b>{t(e.title)}</b><em>{t(e.text)}</em>
-          </button>
+          <EventCard key={e.id} e={e} onClick={() => go("play", { world: w.id, ep: e.id })} />
         ))}
       </div>
     </div>
@@ -49,13 +57,16 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
       <div className="pl-modal" role="dialog" aria-modal="true" aria-label={t(e.title)}>
         <div className="scroll">
           <button type="button" className="x" aria-label={t("닫기")} onClick={close}><IconClose /></button>
+          {e.image_url && <div className="hero" style={{ backgroundImage: `url(${e.image_url})` }} />}
           <div className="body">
-            <p className="meta"><b>{t(w.name)}</b></p>
+            <p className="meta"><b>{t(w.name)}</b> · {e.no}</p>
             <h2>{t(e.title)}</h2>
-            <p className="sit">{t(e.text)}</p>
+            {e.line && e.line !== e.situation && <p className="ln">{t(e.line)}</p>}
+            <p className="sit">{t(e.situation)}</p>
+            {w.cast.length > 0 && <><span className="lab">{t("등장인물")}</span><div className="cast">{w.cast.map((p) => <span key={p.name}>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</span>)}</div></>}
           </div>
         </div>
-        <div className="foot"><button type="button" className="pl-btn" onClick={() => go("play", { world: w.id, ep: e.id, stage: "char" })}>{t("내 캐릭터 넣기")}</button></div>
+        <div className="foot"><b>{t(w.spot)}</b><button type="button" className="pl-btn" onClick={() => go("play", { world: w.id, ep: e.id, stage: "char" })}>{t("내 캐릭터 넣기")}</button></div>
       </div>
     </div>
   );
@@ -72,11 +83,10 @@ function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go:
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const begin = async () => {
-    const c = chars?.find((v) => v.id === sel);
-    if (!c || busy) return;
+    if (!sel || busy) return;
     setBusy(true); setErr("");
     try {
-      const r = await startPlay(w, e, c, lang);
+      const r = await startPlay({ world_id: w.id, event_id: e.id, character_id: sel, agree_ip: ok, language: lang });
       go("play", { world: w.id, ep: e.id, stage: "making", job: r.id });
     } catch { setErr(t("시작하지 못했어요. 다시 눌러 주세요.")); setBusy(false); }
   };
@@ -91,7 +101,7 @@ function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go:
       onClick={(ev) => { ev.stopPropagation(); setEdit(c); }}
       onKeyDown={(ev) => { if (ev.key === "Enter") { ev.stopPropagation(); setEdit(c); } }}><IconEdit /></span>
   );
-  const ctx = <p className="pl-ctx">{t(w.name)} · <b>{t(e.title)}</b></p>;
+  const ctx = <p className="pl-ctx">{t(w.name)} · {t(e.title)} · <b>{t(w.spot)}</b></p>;
   return (
     <div className="pl-who">
       <button type="button" className="pl-back" onClick={() => go("play", { world: w.id, ep: e.id })}>‹ {t(e.title)}</button>
@@ -203,7 +213,7 @@ function Comic({ worlds, w, e, run, go }: { worlds: PlayWorld[]; w: PlayWorld; e
         {rest.length > 0 && (
           <section><h2>{t("다른 사건")}</h2>
             <div className="pl-grid">{rest.map((v) => (
-              <button type="button" className="pl-ev" key={v.id} onClick={() => go("play", { world: w.id, ep: v.id })}><b>{t(v.title)}</b><em>{t(v.text)}</em></button>
+              <EventCard key={v.id} e={v} onClick={() => go("play", { world: w.id, ep: v.id })} />
             ))}</div>
           </section>
         )}

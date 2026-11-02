@@ -4,28 +4,17 @@ import { useState } from "react";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconPlus } from "../../ui/Icons";
-import { saveWorld } from "./playData";
 import "./i18n";
 import "./Play.css";
 
-export default function WorldNew({ go, authenticated }: { go: Go; authenticated: boolean }) {
+export default function WorldNew({ go }: { go: Go }) {
+  /* 저장 API 는 다음 작업이다(DB 추가 필요) — 그때까지 저장 단추를 막아 둔다. */
   const t = useT();
   const [name, setName] = useState("");
   const [one, setOne] = useState("");
   const [rule, setRule] = useState("");
   const [cast, setCast] = useState([{ name: "", role: "" }]);
   const [events, setEvents] = useState([{ title: "", situation: "" }]);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const ready = name.trim() && one.trim() && events.some((e) => e.title.trim() && e.situation.trim());
-  const save = async () => {
-    setBusy(true); setErr("");
-    try {
-      const r = await saveWorld({ name: name.trim(), one: one.trim(), rule: rule.trim(),
-        cast: cast.filter((c) => c.name.trim()), events: events.filter((e) => e.title.trim() && e.situation.trim()) });
-      go("play", { world: r.id });
-    } catch { setErr(t("저장하지 못했어요. 다시 눌러 주세요.")); setBusy(false); }
-  };
   return (
     <div className="pl"><div className="pl-form">
       <button type="button" className="pl-back" onClick={() => go("make")}>‹ {t("만들기")}</button>
@@ -53,9 +42,7 @@ export default function WorldNew({ go, authenticated }: { go: Go; authenticated:
           </div>))}
         <button type="button" className="more" onClick={() => setEvents([...events, { title: "", situation: "" }])}><IconPlus />{t("사건 추가")}</button>
       </div>
-      {err && <p className="pl-err">{err}</p>}
-      {!authenticated && <p className="pl-err">{t("로그인하면 세계관을 저장할 수 있어요")}</p>}
-      <button type="button" className="pl-btn" disabled={!ready || busy || !authenticated} onClick={save}>{t("저장")}</button>
+      <button type="button" className="pl-btn" disabled>{t("저장")}</button>
     </div></div>
   );
 }
