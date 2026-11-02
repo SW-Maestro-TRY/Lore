@@ -228,6 +228,7 @@ def stage_story(run_dir, char, dry_run, note="", lang="ko"):
         raise ValueError("다음 화 본문을 읽지 못했습니다")
     d = directions[0]
     d["n"] = 1
+    R.fill_titles(run_dir, [d], lang)
     d["genre"] = d.get("genre") or char.get("genre", "")
     R.write_json(run_dir / "directions.json", [d])
     R.write_json(run_dir / "pick.json", {"n": 1, "title": d.get("title", ""), "genre": d["genre"]})
