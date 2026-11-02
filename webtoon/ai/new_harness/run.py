@@ -481,6 +481,32 @@ def story_input_block(char: dict, run_dir: Path | None = None) -> str:
     return "\n".join(lines) + "\n"
 
 
+def one_input_block(char: dict) -> str:
+    """이야기 1개 길의 입력. 세계·주인공·설명만 넣고 규칙은 넣지 않는다(2026-11-03)."""
+    lines = ["[세계]", char.get("genre") or "정해지지 않음"]
+    books = (char.get("lorebook") or {}).get("books") or []
+    for book in books:
+        if book.get("fixed_settings"):
+            lines.append(book["fixed_settings"])
+        lines += [f"- {x.get('title')}: {x.get('content')}" for x in (book.get("entries") or [])
+                  if isinstance(x, dict) and x.get("title")]
+    if not books:
+        world = world_text_for(char.get("genre") or "")
+        if world:
+            lines.append(world)
+    for one in [char, *co_protagonists(char)]:
+        lines += ["", "[주인공]", one.get("name") or "", "", "[캐릭터 설명]"]
+        card = one.get("card")
+        if card and charcard.short(card):
+            lines.append(charcard.short(card))
+        if one.get("description"):
+            lines.append(one["description"])
+        lines += [f"- {k}: {v}" for k, v in (one.get("fields") or {}).items()]
+    if char.get("settings"):
+        lines += ["", "[추가 설정]", char["settings"]]
+    return "\n".join(lines) + "\n"
+
+
 def load_prompt(name: str) -> str:
     path = PROMPT_DIR / name
     if not path.exists():
@@ -613,6 +639,11 @@ def parse_directions(md: str) -> list[dict]:
     `scenes`·`cast` 는 옛 형식(### 하위 절)을 쓰던 run 과의 호환을 위해
     남겨 둔다 — 지금 형식에는 없으니 비어 있는 게 정상이다.
     """
+    if not DIRECTION_RE.search(md):
+        # 이야기 1개 길은 「방향」 머리글 없이 「제목:」 줄로 시작한다.
+        got = re.search(rf"^{S}제목{S}[:：]{S}(.*?){S}$", md, re.M)
+        title = got.group(1) if got else ""
+        md = "## 방향 1 — " + title + "\n" + (md[:got.start()] + md[got.end():] if got else md)
     marks = list(DIRECTION_RE.finditer(md))
     out = []
     for i, m in enumerate(marks):
@@ -621,8 +652,10 @@ def parse_directions(md: str) -> list[dict]:
         sec = _sections(body)
         genre_m = GENRE_RE.search(body.split("###")[0])
         genre = genre_m.group(1).strip() if genre_m else ""
+        # 모델이 「소개: 글」처럼 한 줄에 붙여 쓰는 경우도 같은 모양으로 읽는다.
+        body = re.sub(rf"^({S}(?:소개|본문){S}[:：]){S}(\S.*)$", r"\1\n\2", body, flags=re.M)
         intro = _labeled(body, INTRO_LABEL_RE, [BODY_LABEL_RE])
-        body_text = _labeled(body, BODY_LABEL_RE, [])
+        body_text = _labeled(body, BODY_LABEL_RE, [INTRO_LABEL_RE])
         out.append({
             "n": int(m.group(1)),
             "title": m.group(2).strip().strip("<>").strip(),
@@ -894,6 +927,25 @@ def axes_enabled() -> bool:
     return str(llm.env("NH_STORY_AXES") or "1").strip().lower() in ("1", "on", "true", "yes")
 
 
+def events_enabled() -> bool:
+    """방향마다 사건 낱말을 하나씩 배정하는가. 기본 꺼짐. 켜려면 `NH_STORY_EVENTS=1`."""
+    return (llm.env("NH_STORY_EVENTS") or "0").strip().lower() in ("1", "on", "true", "yes")
+
+
+def one_event_block(run_dir: Path) -> str:
+    """이야기 하나만 만드는 길에 사건 낱말 하나를 준다. 끄면 빈 글."""
+    events = samples.pick_events(1) if events_enabled() else []
+    if not events:
+        return ""
+    write_json(run_dir / "axes.json", {"방향별_사건": events})
+    log(f"  사건: {events[0]}")
+    return ("\n\n## 이번 이야기의 중심 사건\n\n"
+            f"중심 사건: {events[0]}\n\n"
+            "이 사건은 이 이야기에서 실제로 벌어지는 중심 사건이다. 주인공이 이 세계에서 겪는 "
+            "구체적인 일로 옮겨서 쓰고, 사건 낱말을 제목, 소개, 본문에 그대로 적지 않는다. "
+            "주인공의 성격을 이 낱말에 맞춰 바꾸지 않고, 입력에 없는 가족이나 과거를 붙이지 않는다.")
+
+
 def has_character_traits(char: dict) -> bool:
     """사용자가 성격을 정할 거리를 줬는가 — 설명 · 항목 · 고른 카드 중 하나라도."""
     return bool(char.get("description") or char.get("fields") or char.get("card"))
@@ -926,6 +978,9 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     axes_list = _distinct_axes(char["genre"], axes) if (axes and use_axes) else []
     structures = _distinct_structures(char["genre"], structure) if (structure and use_axes) else []
     engines = _pick_engines()
+    # 사건은 축과 달리 사용자가 설명을 적었어도 붙인다. 축이 샜던 곳이 소개라서
+    # 낱말을 글에 그대로 쓰지 말라는 말을 블록에 함께 둔다.
+    events = samples.pick_events(DIRECTIONS_PER_RUN) if events_enabled() else []
 
     # 세계별 재미 재료(#502). 축·엔진과 같은 층이 아니다 — 축은 '어디에 서 있는가',
     # 재료는 '이 세계에서 무엇이 벌어질 수 있는가'다. 사용자가 성격을 적었어도 붙는다
@@ -952,9 +1007,11 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
                    {"축": axes, "구조": structure, "축_사용": use_axes,
                     "엔진_사용": engines_enabled(),
                     "방향별_축": axes_list, "방향별_구조": structures,
-                    "방향별_엔진": engines})
-    for i in range(max(len(axes_list), len(structures), len(engines), len(lore_list))):
+                    "방향별_엔진": engines, "방향별_사건": events})
+    for i in range(max(len(axes_list), len(structures), len(engines), len(lore_list), len(events))):
         bits = []
+        if i < len(events):
+            bits.append(f"사건: {events[i]}")
         if i < len(lore_list) and lore_list[i]:
             bits.append("재료: " + "·".join(e["name"] for e in lore_list[i]))
         if i < len(engines):
@@ -968,7 +1025,7 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     if use_axes and (axes or structure) and not fresh:
         log("  (최근 생성물과 조합이 겹칩니다 — 고를 수 있는 폭이 좁습니다)")
 
-    count = max(len(axes_list), len(structures), len(engines), len(lore_list))
+    count = max(len(axes_list), len(structures), len(engines), len(lore_list), len(events))
     if not count:
         return ""
     head = "## 방향별 「문제가 옮겨 가는 길」" \
@@ -1002,10 +1059,15 @@ def story_variety_block(run_dir: Path, char: dict) -> str:
     parts += ["", "**값은 판과 처지에 건다. 주인공의 성격으로 옮기지 않는다.** 톤은 "
               "이야기의 분위기이고, 주인공 위치와 모순은 주인공이 놓인 처지다. "
               "주인공이 어떤 사람인지는 사용자가 적은 설명만 정한다."]
+    if events:
+        parts += ["", "**방향마다 배정된 사건은 이 이야기에서 실제로 벌어지는 중심 사건이다.** 주인공이 "
+                  "이 세계에서 겪는 구체적인 일로 옮겨서 쓰고, 사건 낱말을 제목, 소개, 본문에 그대로 "
+                  "적지 않는다. 주인공의 성격을 이 낱말에 맞춰 바꾸지 않는다."]
     if lore_list:
         parts += ["", lorebook.STORY_HEAD]
     for i in range(count):
         blocks = [txt for txt in (
+            (f"중심 사건: {events[i]}" if i < len(events) else ""),
             ("\n".join(lorebook.story_lines(lore_list[i])) if i < len(lore_list) else ""),
             _engine_block(engines[i]) if i < len(engines) else "",
             samples.axes_block(axes_list[i]) if i < len(axes_list) else "",
@@ -1371,7 +1433,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     if seeded:
         block = seeded_input_block(char).rstrip("\n")
     elif one:
-        block = story_input_block(char, run_dir).rstrip("\n")
+        block = one_input_block(char).rstrip("\n") + one_event_block(run_dir)
     else:
         block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
     # 인물을 먼저 뽑고 거기에 사건을 붙인다(#532·#534). 줄거리를 적은 경우도
@@ -1388,7 +1450,10 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         with ThreadPoolExecutor(max_workers=3) as pool:
             persona_job = pool.submit(stage_persona, run_dir, char, dry_run, lang)
             co_job = pool.submit(stage_personas, run_dir, char, dry_run, lang)    # 함께 주인공 카드(#899)
-            made = old if isinstance(old, list) and old else stage_cast(run_dir, char, dry_run, lang=lang)
+            # 이야기 1개 길은 로맨스의 상대 고르기가 있을 때만 인물을 먼저 세운다.
+            need_cast = not one or is_romance(char)
+            made = old if isinstance(old, list) and old else (
+                stage_cast(run_dir, char, dry_run, lang=lang) if need_cast else [])
             persona_job.result()
             co_job.result()
         kind = cast_wait_kind(char, made)
@@ -2135,7 +2200,8 @@ def direction_of(run_dir: Path) -> dict | None:
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
-                       note: str = "", lang: str = "ko") -> None:
+                       note: str = "", lang: str = "ko",
+                       cover_first: bool = False) -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
 
@@ -2165,7 +2231,7 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
 
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
-                                   note=note, lang=lang,
+                                   note=note, lang=lang, cover_first=cover_first,
                                    on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
@@ -2250,6 +2316,8 @@ def main(argv=None) -> int:
     p.add_argument("--restory", action="store_true",
                    help="기존 run 에서 이야기 후보 4개를 다시 만든다 (방향 고르기 "
                         "화면에서 '다시 만들기' — --note 와 같이 쓸 수 있다)")
+    p.add_argument("--cover-first", action="store_true",
+                   help="장면을 나누기 전에 표지만 먼저 그린다. --detail-pages --page 1 과 함께 쓴다")
     p.add_argument("--page", type=int, action="append", default=[],
                    help="그 번호 페이지만 다시 (여러 번 가능)")
     p.add_argument("--no-sheet", action="store_true",
@@ -2414,6 +2482,7 @@ def main(argv=None) -> int:
             stage_scenes(run_dir, char, direction, args.dry_run, lang=args.lang)
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
+                               cover_first=args.cover_first,
                                allow_no_sheet=args.no_sheet,
                                review=False if args.no_page_review else None,
                                note=args.note, lang=args.lang)

@@ -28,6 +28,10 @@ import { metaTrack } from "./lib/metaPixel";
 import { LangProvider, useLang } from "./lib/i18n";
 import { syncPush } from "./lib/push";
 import Landing from "./screens/landing/Landing";
+import Play from "./screens/play/Play";
+import MakeChoice from "./screens/play/MakeChoice";
+import WorldNew from "./screens/play/WorldNew";
+import MobileTabs from "./ui/MobileTabs";
 import Entry from "./screens/landing/Entry";
 import Wizard from "./screens/wizard/Wizard";
 import Progress from "./screens/progress/Progress";
@@ -77,6 +81,10 @@ interface Route {
   /** 만들기 빠른 시작 · 그림체 기본값(2026-10-27, 광고 랜딩이 보낸다). */
   quick?: boolean;
   style?: string;
+  /** 세계관 체험. */
+  world?: string;
+  ep?: string;
+  stage?: "char" | "making" | "done";
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -101,6 +109,9 @@ function routeOf(search: URLSearchParams): Route {
     page: Math.max(0, Number(search.get("page") || 0) || 0) || undefined,
     quick: search.get("quick") === "1" || undefined,
     style: search.get("style") || undefined,
+    world: search.get("world") || undefined,
+    ep: search.get("ep") || undefined,
+    stage: (["char", "making", "done"] as const).find((v) => v === search.get("stage")),
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
@@ -108,7 +119,7 @@ function routeOf(search: URLSearchParams): Route {
   if (view === "card" && base.id) return { view: "card", ...base };
   /* 피드백이 마이페이지 창이던 때의 주소 — 다시 온 사람 안내 메일 등에 남아 있을 수 있다. */
   if (view === "mypage" && search.get("tab") === "feedback") return { view: "feedback", ...base };
-  if (view && ["entry", "create", "works", "character-new", "characters", "try", "mypage", "feedback", "event", "admin", "admin-examples", "admin-works", "admin-payments"].includes(view)) {
+  if (view && ["play", "make", "world-new", "entry", "create", "works", "character-new", "characters", "try", "mypage", "feedback", "event", "admin", "admin-examples", "admin-works", "admin-payments"].includes(view)) {
     return { view: view as View, ...base };
   }
   if (run) return { view: "result", ...base };
@@ -179,7 +190,7 @@ function WebtoonScreens() {
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
-  }, [route.view, route.step, route.id, route.run, route.job]);
+  }, [route.view, route.step, route.id, route.run, route.job, route.world, route.ep, route.stage]);
 
   /* 화면마다 얼마나 머물렀나 — 화면이 바뀔 때와 페이지를 떠날 때 앞 화면의 시간을 남긴다.
      ★ 아래 page_view 효과보다 앞에 둔다. 효과는 적힌 순서로 돌아서, 뒤에 두면 setView 가
@@ -258,6 +269,9 @@ function WebtoonScreens() {
     <div ref={rootRef} className="wt" onContextMenu={guardImage} onDragStart={guardImage}>
       <DevNav />
       {route.view === "landing" && <Landing go={go} />}
+      {route.view === "play" && <Play go={go} authenticated={authenticated} world={route.world} ep={route.ep} stage={route.stage} job={route.job} run={route.run} />}
+      {route.view === "make" && <MakeChoice go={go} />}
+      {route.view === "world-new" && <WorldNew go={go} />}
       {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
         <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated}
@@ -291,6 +305,7 @@ function WebtoonScreens() {
       <AttendancePopup authenticated={authenticated} view={route.view} go={go} />
       {/* 만드는 중이면 어느 화면에서든 돌아갈 동그라미(#507) */}
       <RunningBubble view={route.view} runId={route.run} go={go} />
+      <MobileTabs view={route.view} stage={route.stage} go={go} />
     </div>
   );
 }

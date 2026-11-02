@@ -150,7 +150,7 @@ PROVIDERS = {
         "base_url_var": "OPENAI_BASE_URL",
         "default_model": "gpt-4.1",
         # 추론 계열은 temperature 를 받지 않는다 (기본값 1 고정).
-        "no_temperature": ("o1", "o3", "o4", "gpt-5"),
+        "no_temperature": ("o1", "o3", "o4", "gpt-5", "gpt-6"),
     },
     # OpenRouter 를 거쳐 같은 OpenAI 모델을 부른다. 주소만 다르고 요청 모양은
     # OpenAI 와 같아서 글은 OpenAIBackend 를 그대로 빌린다. 모델 이름에
@@ -161,7 +161,7 @@ PROVIDERS = {
         "judge_var": "OPENROUTER_JUDGE_MODEL",
         "base_url_var": "OPENROUTER_BASE_URL",
         "default_model": "openai/gpt-4.1",
-        "no_temperature": ("openai/o1", "openai/o3", "openai/o4", "openai/gpt-5"),
+        "no_temperature": ("openai/o1", "openai/o3", "openai/o4", "openai/gpt-5", "openai/gpt-6"),
     },
     "anthropic": {
         "key_var": "ANTHROPIC_API_KEY",

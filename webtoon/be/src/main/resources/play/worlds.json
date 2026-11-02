@@ -1,0 +1,97 @@
+{
+  "worlds": [
+    {
+      "id": "zombie",
+      "name": "좀비 아포칼립스",
+      "genre": "좀비 아포칼립스",
+      "one": "좀비 바이러스가 퍼지고 몇 달이 지난 세계. 정부와 군대는 무너졌고, 살아남은 사람들은 작은 무리로 흩어져 산다.",
+      "cover_url": "/static/play/zombie-family.jpg",
+      "spot": "살아남은 사람",
+      "cast": [],
+      "events": [
+        {
+          "id": "hidden-family",
+          "no": "EP 01",
+          "title": "숨겨 둔 가족",
+          "line": "주인공은 좀비가 된 가족을 몰래 숨겨 놓고 키우고 있다.",
+          "situation": "주인공은 좀비가 된 가족을 몰래 숨겨 놓고 키우고 있다.",
+          "image_url": "/static/play/zombie-family.jpg",
+          "tried": 0
+        },
+        {
+          "id": "virus-maker",
+          "no": "EP 02",
+          "title": "바이러스의 범인",
+          "line": "주인공은 이 좀비 바이러스를 만든 범인이다.",
+          "situation": "주인공은 이 좀비 바이러스를 만든 범인이다.",
+          "image_url": "/static/play/zombie-virus.jpg",
+          "tried": 0
+        },
+        {
+          "id": "unbitten",
+          "no": "EP 03",
+          "title": "안 무는 좀비",
+          "line": "주인공은 평범한 시민인데 좀비들이 주인공을 안 문다.",
+          "situation": "주인공은 평범한 시민인데 좀비들이 주인공을 안 문다.",
+          "image_url": null,
+          "tried": 0
+        }
+      ],
+      "lorebook": {
+        "confirmed": true,
+        "books": [
+          {
+            "name": "좀비 아포칼립스",
+            "source": "experience",
+            "confirmed": true,
+            "fixed_settings": "좀비 바이러스가 퍼지고 몇 달이 지난 세계. 정부와 군대는 무너졌고, 살아남은 사람들은 작은 무리로 흩어져 산다.",
+            "entries": [
+              {
+                "title": "감염",
+                "content": "좀비에게 물리면 하루 안에 좀비가 된다.",
+                "kind": "world",
+                "always": true
+              },
+              {
+                "title": "감각",
+                "content": "좀비는 소리와 냄새를 따라온다.",
+                "kind": "world",
+                "always": true
+              },
+              {
+                "title": "약점",
+                "content": "머리를 부숴야 쓰러진다.",
+                "kind": "world",
+                "always": true
+              },
+              {
+                "title": "치료제",
+                "content": "치료제는 아직 없다.",
+                "kind": "world",
+                "always": true
+              },
+              {
+                "title": "물자",
+                "content": "전기와 통신이 끊겼고, 먹을 것과 약이 가장 귀하다.",
+                "kind": "world",
+                "always": true
+              },
+              {
+                "title": "시작",
+                "content": "바이러스가 어디서 시작됐는지 아는 사람은 없다.",
+                "kind": "world",
+                "always": true
+              },
+              {
+                "title": "기억",
+                "content": "좀비에게 기억이 남아 있는지는 아무도 모른다.",
+                "kind": "world",
+                "always": true
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
