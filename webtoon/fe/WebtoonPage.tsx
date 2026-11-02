@@ -271,7 +271,7 @@ function WebtoonScreens() {
       {route.view === "landing" && <Landing go={go} />}
       {route.view === "play" && <Play go={go} authenticated={authenticated} world={route.world} ep={route.ep} stage={route.stage} job={route.job} run={route.run} />}
       {route.view === "make" && <MakeChoice go={go} />}
-      {route.view === "world-new" && <WorldNew go={go} authenticated={authenticated} />}
+      {route.view === "world-new" && <WorldNew go={go} />}
       {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
         <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated}

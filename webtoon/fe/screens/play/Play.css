@@ -242,3 +242,18 @@
   .wt .pl-modal .body { padding: 20px 16px; }
   .wt .pl-modal .foot .pl-btn { width: 100%; }
 }
+
+.wt .pl-ev { padding: 0; min-height: 0; }
+.wt .pl-ev .tx { display: flex; flex-direction: column; gap: 6px; padding: 16px; }
+.wt .pl-ev.pic .im { aspect-ratio: 16/10; background-position: center 20%; background-size: cover; }
+.wt .pl-ev small { color: var(--pl-coral); }
+.wt .pl-world { display: flex; gap: 16px; align-items: center; }
+.wt .pl-world .im { flex: none; width: 96px; aspect-ratio: 3/4; border-radius: 8px; background-size: cover; background-position: top; }
+.wt .pl-modal .hero { aspect-ratio: 16/9; background-size: cover; background-position: center 20%; }
+.wt .pl-modal .hero:after { display: none; }
+.wt .pl-modal .ln { margin: 10px 0 0; font-size: 16px; font-weight: 700; }
+.wt .pl-modal .x { z-index: 3; }
+.wt .wt-play-row-list button { padding: 0 0 12px; min-height: 0; }
+.wt .wt-play-row-list button:not(:has(img)) { padding-top: 14px; }
+.wt .wt-play-row-list b, .wt .wt-play-row-list small { padding-left: 12px; padding-right: 12px; }
+@media (max-width: 767px) { .wt .pl-modal .x { display: flex; } .wt .pl-modal .hero { aspect-ratio: 16/10; } .wt .pl-grid { grid-template-columns: 1fr; } }
