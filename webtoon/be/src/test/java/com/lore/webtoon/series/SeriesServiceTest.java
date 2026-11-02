@@ -42,7 +42,7 @@ class SeriesServiceTest {
         var work=mock(WebtoonWork.class);
         when(work.getJobId()).thenReturn("job1"); when(work.isPublic()).thenReturn(true);
         when(ledger.find("run1")).thenReturn(Optional.of(work));
-        when(ledger.mayRead(eq("run1"),any())).thenReturn(true);
+        when(ledger.mayRead(eq("run1"),any(),any())).thenReturn(true);
         when(ledger.mayChange("run1",7L)).thenReturn(true);
         when(ledger.isPublic("run1")).thenReturn(true);
         when(jobs.findByPublicId("job1")).thenReturn(Optional.of(source));
@@ -200,7 +200,7 @@ class SeriesServiceTest {
             var done=WebtoonJob.seeded(id,"browser",run,"romance_fantasy","{}",Instant.now());
             when(jobs.findByPublicId(id)).thenReturn(Optional.of(done));when(jobs.lockByPublicId(id)).thenReturn(Optional.of(done));
             var work=mock(WebtoonWork.class);when(work.getJobId()).thenReturn(id);when(work.isPublic()).thenReturn(true);
-            when(ledger.find(run)).thenReturn(Optional.of(work));when(ledger.mayRead(eq(run),any())).thenReturn(true);
+            when(ledger.find(run)).thenReturn(Optional.of(work));when(ledger.mayRead(eq(run),any(),any())).thenReturn(true);
             when(ledger.mayChange(run,7L)).thenReturn(true);when(ledger.isPublic(run)).thenReturn(true);
             when(stories.scenesOf(run)).thenReturn(List.of(n+"화 완료 사건"));when(art.dir(run)).thenReturn(dir);
             assertThatThrownBy(()->service.draft(before,7L)).hasMessageContaining("이미 이어 만든");
@@ -230,7 +230,7 @@ class SeriesServiceTest {
         var other=WebtoonJob.seeded("other-job","browser","other-run","romance_fantasy",source.getInputJson(),Instant.now());
         var work=mock(WebtoonWork.class);when(work.getJobId()).thenReturn("other-job");when(work.isPublic()).thenReturn(true);
         when(ledger.find("other-run")).thenReturn(Optional.of(work));
-        when(ledger.mayRead(eq("other-run"),any())).thenReturn(true);
+        when(ledger.mayRead(eq("other-run"),any(),any())).thenReturn(true);
         when(ledger.mayChange("other-run",7L)).thenReturn(true);
         when(jobs.findByPublicId("other-job")).thenReturn(Optional.of(other));
         when(stories.scenesOf("other-run")).thenReturn(List.of("별개 이야기의 결말"));

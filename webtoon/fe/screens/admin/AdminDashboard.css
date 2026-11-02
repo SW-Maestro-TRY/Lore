@@ -48,6 +48,7 @@
 .wt .wt-dash-item > .wt-dash-state { position: absolute; top: 16px; left: 16px; }
 .wt .wt-dash-state { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(15, 51, 63, 0.18); }
 .wt .wt-dash-state.is-private { background: var(--ink); color: #fff; }
+.wt .wt-dash-state.is-link { background: #2f6f8f; color: #fff; }
 .wt .wt-dash-state.is-hidden { background: #a1732e; color: #fff; }
 .wt .wt-dash-state.is-removed, .wt .wt-dash-state.is-trash { background: #b23a2e; color: #fff; }
 

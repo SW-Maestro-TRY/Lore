@@ -113,7 +113,12 @@ public record JobView(
         int episode,
         /* 서버 재시작으로 끊겨 「이어서 만들기」를 할 수 있나, 그때 받는 크레딧(돌려준 값만큼, 아니면 0) */
         boolean resumable,
-        int resume_cost) {
+        int resume_cost,
+        /**
+         * 함께 주인공인 사람의 시트(#899) — {name, ready}. 그림은 조연 시트와 같은 자리
+         * ({@code GET /jobs/{id}/cast-sheet/{name}.png})에 있다. 주인공이 한 명이면 {@code null}.
+         */
+        List<Map<String, Object>> co_sheets) {
 
     /**
      * @param total      0 이면 아직 몇 장인지 모른다 — 그때는 통째로 안 보낸다.
@@ -170,6 +175,20 @@ public record JobView(
                       String stageLabel, JobQueue.Spot spot,
                       String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages, int episode,
                       Art diskArt, int resumeCost, Integer pickSecondsLeft) {
+        return of(job, now, directions, cast, castKind, persona, scenes, story, sheetReady, sheetVersions, castSheets,
+                input, styleLabel, stageLabel, spot, notifyEmail, eta, sheetFixLeft, unsafePages, episode, diskArt,
+                resumeCost, pickSecondsLeft, null);
+    }
+
+    static JobView of(WebtoonJob job, JobProgress.Snapshot now,
+                      List<Map<String, Object>> directions, List<Map<String, Object>> cast,
+                      String castKind, Map<String, Object> persona,
+                      List<Map<String, Object>> scenes, Map<String, Object> story, boolean sheetReady,
+                      int sheetVersions, List<Map<String, Object>> castSheets, Map<String, Object> input,
+                      String styleLabel,
+                      String stageLabel, JobQueue.Spot spot,
+                      String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages, int episode,
+                      Art diskArt, int resumeCost, Integer pickSecondsLeft, List<Map<String, Object>> coSheets) {
         int stageIndex = job.getStage().order();
         if (eta == null) {
             eta = JobEta.of(job, now, 1, spot == null ? 0 : spot.seconds(), Instant.now());
@@ -220,6 +239,7 @@ public record JobView(
                 unsafePages == null ? List.of() : unsafePages,
                 episode,
                 job.isResumable(),
-                resumeCost);
+                resumeCost,
+                coSheets);
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -29,7 +30,8 @@ public class OverlayStore {
 
     private static final Logger log = LoggerFactory.getLogger(OverlayStore.class);
 
-    static final Set<String> TYPES = Set.of("bubble", "sticker", "sfx");
+    /** 얹는 것의 종류. {@code text} 는 말풍선 없이 그림 위에 놓는 글자(편집실 「그리기」의 글자 도구). */
+    static final Set<String> TYPES = Set.of("bubble", "sticker", "sfx", "text");
     static final List<String> VARIANTS =
             List.of("normal", "shout", "whisper", "thought", "narration", "flash");
     /** 꼬리가 달리는 종류. 나레이션·회상에는 애초에 꼬리가 없다. */
@@ -63,12 +65,39 @@ public class OverlayStore {
         this.overlays = overlays;
     }
 
-    /** 이 작품에 얹은 것. 없으면 빈 것 — 화면은 그것을 "아직 안 얹었다" 로 읽는다. */
+    /* 장 위에 직접 그린 것(리터치). 따로 담고 읽을 때만 합친다({@link PaintStore}). 세터로 받는다 —
+       생성자에 넣으면 이 클래스를 직접 만드는 시험이 모두 바뀌고, 없으면 말풍선만 읽는다. */
+    private PaintStore paints;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPaints(PaintStore paints) {
+        this.paints = paints;
+    }
+
+    /**
+     * 이 작품에 얹은 것. 없으면 빈 것 — 화면은 그것을 "아직 안 얹었다" 로 읽는다.
+     *
+     * 장 위에 직접 그린 것이 있으면 그 장에 {@code paint} 로 같이 싣는다. 말풍선이 없는 장이면
+     * {@code items} 없이 {@code paint} 만 단다 — 빈 {@code items} 를 실으면 화면이 그 장을
+     * "말풍선을 다 지웠다" 로 읽고 그대로 되돌려 보낸다.
+     */
     @Transactional(readOnly = true)
     public JsonNode read(String runId, int episode) {
-        return overlays.findByRunIdAndEpisode(runId, episode)
+        JsonNode out = overlays.findByRunIdAndEpisode(runId, episode)
                 .map(one -> parse(one.getDataJson()))
                 .orElseGet(this::empty);
+        if (paints != null && out instanceof ObjectNode root) {
+            Map<Integer, JsonNode> painted = paints.read(runId, episode);
+            if (!painted.isEmpty()) {
+                ObjectNode scenes = root.path("scenes") instanceof ObjectNode got ? got : root.putObject("scenes");
+                painted.forEach((no, paint) -> {
+                    String key = String.valueOf(no);
+                    ObjectNode scene = scenes.path(key) instanceof ObjectNode got ? got : scenes.putObject(key);
+                    scene.set("paint", paint);
+                });
+            }
+        }
+        return out;
     }
 
     /**
@@ -206,8 +235,13 @@ public class OverlayStore {
         /* 말풍선 글꼴 — 고를 수 있는 것만 남긴다. 기본 글꼴은 값을 두지 않으므로, 값이 없는 옛
            항목도 지금처럼 기본 글꼴로 굽힌다. */
         String font = raw.path("font").asText("").trim().toLowerCase();
-        if ("bubble".equals(kind) && BubbleArtist.FONTS.containsKey(font)) {
+        if (("bubble".equals(kind) || "text".equals(kind)) && BubbleArtist.FONTS.containsKey(font)) {
             out.put("font", font);
+        }
+        /* 글자 색 — 글자 도구만 쓴다. 모르는 값은 먹색. */
+        if ("text".equals(kind)) {
+            String color = raw.path("color").asText("").trim().toLowerCase();
+            out.put("color", color.matches("^#[0-9a-f]{6}$") ? color : "#111111");
         }
         /* 꼬리 끝은 사람이 끌어다 놓은 자리다. 풍선 크기에 대한 %(가로·세로)라
            그림 크기가 달라져도 같은 곳을 가리킨다. 안 보내면 옛 규칙(왼쪽/

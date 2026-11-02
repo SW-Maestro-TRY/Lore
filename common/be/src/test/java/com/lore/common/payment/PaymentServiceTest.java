@@ -90,12 +90,12 @@ class PaymentServiceTest {
     void 주문_열기() {
         PaymentOrder o = 주문을_연다(CreditPackage.MINI);
 
-        assertThat(o.getCredits()).isEqualTo(15);
-        assertThat(o.getAmount()).isEqualTo(4_900);
+        assertThat(o.getCredits()).isEqualTo(20);
+        assertThat(o.getAmount()).isEqualTo(5_900);
         assertThat(o.getStatus()).isEqualTo(PaymentStatus.READY);
         assertThat(o.getMulNo()).isEqualTo("MUL-1");
         verify(payApp).payRequest(eq(new PayAppClient.PayRequest(
-                o.getOrderNo(), "LORE 크레딧 15C", 4_900, "01012345678", "lore-7",
+                o.getOrderNo(), "LORE 크레딧 20C", 5_900, "01012345678", "lore-7",
                 "https://dev.lorecomic.com/api/v1/payments/payapp/feedback",
                 "https://dev.lorecomic.com/pay/done")));
     }
