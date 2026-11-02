@@ -95,8 +95,28 @@ function patternsOf(): Pattern[] {
   return out;
 }
 
+/* 서버가 정해진 조각을 이어 만든 문구(「…다시 시도해 주세요. 걸린 곳: 「이야기」 칸 「…」 · 이유: …」)는
+ * 자리 맞추기로는 못 옮긴다 — 잡힌 칸 이름·이유도 번역해야 해서다. 그런 문구는 조각을 나눠 옮기는
+ * 함수를 따로 올린다. 정확히 맞는 키도, 자리 맞추기도 안 될 때만 부른다. 못 옮기면 null. */
+export type Composer = (src: string, tr: (s: string) => string, lang: Exclude<Lang, "ko">) => string | null;
+const composers: Composer[] = [];
+
+export function registerComposer(fn: Composer): void {
+  if (!composers.includes(fn)) composers.push(fn);
+}
+
 function lookup(lang: Lang, src: string): string {
   if (lang === "ko") return src;
+  const direct = lookupDict(lang, src);
+  if (direct !== null) return direct;
+  for (const c of composers) {
+    const out = c(src, (s) => lookupDict(lang, s) ?? s, lang);
+    if (out !== null) return out;
+  }
+  return src;
+}
+
+function lookupDict(lang: Exclude<Lang, "ko">, src: string): string | null {
   for (let i = registry.length - 1; i >= 0; i--) {
     const hit = registry[i][src]?.[lang];
     if (hit) return hit;
@@ -110,7 +130,7 @@ function lookup(lang: Lang, src: string): string {
     p.names.forEach((n, i) => { vars[n] = m[i + 1]; });
     return fill(target, vars);
   }
-  return src;
+  return null;
 }
 
 /* 지금 화면 언어. 훅을 못 쓰는 자리(api 의 오류 문구, DOM 을 직접 그리는 코드)가

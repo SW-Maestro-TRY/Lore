@@ -41,7 +41,7 @@ public class CreditService {
        바꿨다. 다시 켜려면 lore.credit.daily 에 값을 넣는다. */
     @Autowired
     public CreditService(CreditEventRepository events, CreditLedger ledger,
-                         @Value("${lore.credit.welcome:15}") int welcome,
+                         @Value("${lore.credit.welcome:20}") int welcome,
                          @Value("${lore.credit.daily:0}") int daily) {
         this(events, ledger, welcome, daily, Clock.system(ZONE));
     }

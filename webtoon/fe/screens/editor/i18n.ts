@@ -13,6 +13,8 @@ const dict: Dict = {
   "내역": { en: "History", ja: "履歴", zh: "明细" },
   "내가 얹은 것 보기": { en: "Show what I added", ja: "自分が載せたものを表示", zh: "显示我添加的内容" },
   "이미지로 뽑기": { en: "Export as image", ja: "画像に書き出す", zh: "导出为图片" },
+  "그림만 뽑기": { en: "Export art only", ja: "絵だけ書き出す", zh: "仅导出图片" },
+  "말풍선·글자를 빼고 그림만 내려받습니다": { en: "Downloads the art without bubbles or text", ja: "吹き出し・文字を除いて絵だけダウンロードします", zh: "不含对话气泡和文字，只下载图片" },
   "완성본으로": { en: "To the finished work", ja: "完成版へ", zh: "查看完成版" },
   "오늘 무료 {n}편": { en: "{n} free today", ja: "今日の無料 残り{n}話", zh: "今天免费 {n} 话" },
   "오늘 무료 소진 · 로그인하면 이어서": { en: "Today's free ones are used up · sign in to keep going", ja: "今日の無料分は終了 · ログインすると続けられます", zh: "今天的免费次数已用完 · 登录后可继续" },
@@ -172,6 +174,7 @@ const dict: Dict = {
   "뒤로": { en: "Back", ja: "戻る", zh: "返回" },
   /* 제목 */
   "샘플입니다 — 제목은 실제 작품에서만 바뀝니다.": { en: "This is a sample — titles can only be changed on real works.", ja: "サンプルです — タイトルは実際の作品でのみ変更できます。", zh: "这是示例 — 只有真实作品才能修改标题。" },
+  "내가 만든 작품만 고칠 수 있습니다": { en: "You can only edit your own works.", ja: "自分の作品だけ編集できます", zh: "只能修改自己的作品" },
   "저장하지 못했습니다": { en: "Couldn't save.", ja: "保存できませんでした", zh: "无法保存" },
   "제목을 바꿨습니다": { en: "Title changed.", ja: "タイトルを変更しました", zh: "已修改标题" },
   /* 굽기 */
@@ -202,6 +205,8 @@ const dict: Dict = {
   "다음 장까지 여백": { en: "Gap before next page", ja: "次のページまでの余白", zh: "到下一页的留白" },
 
   /* ---- 안전 기준에 걸려 비워 둔 장(#626) ---- */
+  "{n}쪽 다시 그리기": { en: "Redraw page {n}", ja: "{n}ページを描き直す", zh: "重绘第 {n} 页" },
+  "안전 기준에 걸린 장면입니다. 장면 설명을 수정한 뒤 무료로 다시 그릴 수 있습니다.": { en: "This scene was flagged by the safety filter. Edit the scene description and you can redraw it for free.", ja: "安全基準に引っかかった場面です。場面の説明を直せば無料で描き直せます。", zh: "此场景未通过安全标准。修改场景描述后可以免费重绘。" },
   "이미지 안전 기준에 걸려 비워 둔 장이에요. 장면 설명을 고쳐 다시 그려 주세요.": {
     en: "This page was left blank because it was flagged by the image safety filter. Edit the scene description and redraw it.",
     ja: "画像の安全基準に引っかかったため空白にしたページです。場面の説明を直して描き直してください。",
@@ -211,6 +216,33 @@ const dict: Dict = {
     ja: "このページは画像の安全基準に引っかかったため空白にしました。露出や性的な部分を変えて場面の説明を直してください。描き直しは無料です。",
     zh: "此页因未通过图片安全标准而留空。请修改场景描述中暴露或色情的部分。重新绘制免费。" },
   "무료": { en: "Free", ja: "無料", zh: "免费" },
+
+  /* ---- 직접 그리기(리터치) ---- */
+  "그리기": { en: "Draw", ja: "描く", zh: "绘制" },
+  "말풍선 · 스티커 · 효과음 · 그리기": { en: "Speech bubbles · stickers · sound effects · drawing", ja: "吹き出し · ステッカー · 効果音 · 描画", zh: "对话气泡 · 贴纸 · 音效 · 绘制" },
+  "붓": { en: "Brush", ja: "筆", zh: "画笔" },
+  "지우개": { en: "Eraser", ja: "消しゴム", zh: "橡皮擦" },
+  "스포이드": { en: "Eyedropper", ja: "スポイト", zh: "吸管" },
+  "글자": { en: "Text", ja: "文字", zh: "文字" },
+  "색": { en: "Color", ja: "色", zh: "颜色" },
+  "굵기": { en: "Size", ja: "太さ", zh: "粗细" },
+  "되돌리기": { en: "Undo", ja: "元に戻す", zh: "撤销" },
+  "다시 하기": { en: "Redo", ja: "やり直す", zh: "重做" },
+  "직접 고르기": { en: "Custom color", ja: "色を選ぶ", zh: "自选颜色" },
+  "이 장에 그린 것 지우기": { en: "Clear my drawing on this page", ja: "このページに描いたものを消す", zh: "清除在这一页画的内容" },
+  "이 그림에서 색을 읽지 못했어요": { en: "Couldn't read a color from this image", ja: "この絵から色を読み取れませんでした", zh: "无法从这张图读取颜色" },
+  "이 장에는 더 그릴 수 없어요 — 되돌리거나 지운 뒤 그려 주세요": {
+    en: "You can't draw any more on this page — undo or clear some strokes first",
+    ja: "このページにはこれ以上描けません — 元に戻すか消してから描いてください",
+    zh: "这一页不能再画了 — 请先撤销或清除一些笔画" },
+  "{n}번째 장을 다시 그렸습니다 · 직접 그린 것은 그대로 남아 있어요": {
+    en: "Redrew scene {n} · your own drawing is still there",
+    ja: "{n}番目のコマを描き直しました · 自分で描いたものはそのまま残っています",
+    zh: "已重新绘制第 {n} 格 · 你自己画的内容仍然保留" },
+  "그린 것을 저장하지 못해 굽지 않았어요 — 연결을 확인해 주세요": {
+    en: "Couldn't save your drawing, so nothing was exported — check your connection",
+    ja: "描いたものを保存できなかったため書き出していません — 接続を確認してください",
+    zh: "未能保存你画的内容，所以没有导出 — 请检查网络连接" },
 };
 
 registerDict(dict);

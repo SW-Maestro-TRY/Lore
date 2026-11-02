@@ -174,4 +174,27 @@ class SafetyGuardTest {
         assertThat(c.ready()).isFalse();
         assertThatThrownBy(() -> c.moderate("x")).isInstanceOf(ModerationClient.ModerationUnavailable.class);
     }
+
+    @Test
+    @DisplayName("걸린 곳 안내의 조각(안내·이유 종류)이 화면 사전에 다 있다 — 없으면 다른 언어 화면에 한국어가 그대로 나온다")
+    void 화면_사전에_조각이_있다() throws java.io.IOException {
+        java.nio.file.Path dict = null;
+        for (java.nio.file.Path up = java.nio.file.Path.of("").toAbsolutePath(); up != null; up = up.getParent()) {
+            java.nio.file.Path cand = up.resolve("webtoon/fe/lib/serverI18n.ts");
+            if (java.nio.file.Files.isRegularFile(cand)) {
+                dict = cand;
+                break;
+            }
+        }
+        org.junit.jupiter.api.Assumptions.assumeTrue(dict != null, "화면 사전을 못 찾음");
+        String ts = java.nio.file.Files.readString(dict);
+        assertThat(ts).contains("\"" + SafetyGuard.MESSAGE + "\"");
+        for (String kind : SafetyGuard.KIND.values()) {
+            assertThat(ts).as("이유 종류 「%s」", kind).contains("\"" + kind + "\":");
+        }
+        // 조각을 잇는 말 — messageFor 와 화면(safetyBlocked)이 같은 말로 자른다.
+        String sample = SafetyGuard.messageFor(new SafetyGuard.Spot("이야기", "문장", List.of("sexual")));
+        assertThat(sample).isEqualTo(SafetyGuard.MESSAGE + " 걸린 곳: 「이야기」 칸 「문장」 · 이유: 선정적인 표현");
+        assertThat(ts).contains("\" 걸린 곳: \"").contains("\" · 이유: \"").contains("\"적은 내용\"");
+    }
 }

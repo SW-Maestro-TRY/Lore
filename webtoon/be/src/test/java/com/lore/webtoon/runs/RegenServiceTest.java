@@ -48,6 +48,7 @@ class RegenServiceTest {
     private JobRunner runner;
     private com.lore.webtoon.job.AfterRun after;
     private com.lore.webtoon.credit.CreditGate credits;
+    private com.lore.webtoon.story.StoryStore stories;
     private RegenService service;
 
     @BeforeEach
@@ -79,8 +80,10 @@ class RegenServiceTest {
 
         after = mock(com.lore.webtoon.job.AfterRun.class);
         credits = mock(com.lore.webtoon.credit.CreditGate.class);
+        stories = mock(com.lore.webtoon.story.StoryStore.class);
+        when(stories.chosenOf("run-1")).thenReturn(java.util.Optional.empty());
         service = new RegenService(regens, pages, bakery, harness, uploader, runner,
-                mock(com.lore.webtoon.job.RunFiles.class), after, credits);
+                mock(com.lore.webtoon.job.RunFiles.class), after, credits, stories);
     }
 
     private void 페이지파일(int no, byte[] content) throws IOException {
@@ -171,6 +174,23 @@ class RegenServiceTest {
         시작("", null, null);
         큐를_바로_돌린다();
         assertThat(env.getValue().get("OPENAI_IMAGE_QUALITY")).isEqualTo("high");
+    }
+
+    @Test
+    @DisplayName("완성본에서 고친 제목을 하네스에 넘겨 표지에 옛 제목을 다시 그리지 않는다")
+    void 고친_제목을_넘긴다() throws Exception {
+        var story = mock(com.lore.webtoon.story.WebtoonStory.class);
+        when(story.displayTitle()).thenReturn("고친 제목");
+        when(stories.chosenOf("run-1")).thenReturn(java.util.Optional.of(story));
+        페이지파일(1, "옛 그림".getBytes());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> env = ArgumentCaptor.forClass(Map.class);
+        when(harness.run(any(), any(), env.capture(), any())).thenReturn(0);
+
+        시작("", "surf", null);
+        큐를_바로_돌린다();
+
+        assertThat(env.getValue().get("NH_TITLE")).isEqualTo("고친 제목");
     }
 
     @Test

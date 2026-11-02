@@ -36,6 +36,7 @@ export async function startJob(form: WizardForm, authenticated: boolean, lang: L
     photos_data: keys ? [] : form.photos,
     photo_keys: keys,
     character_id: form.characterId,
+    co_character_ids: form.characterId && form.coCharacterIds?.length ? form.coCharacterIds : undefined,
     agree_ip: form.agreeIp,
     /* 「바로 만들기」를 끄면(expert) 이야기·캐릭터·장면 확인에서 멈춘다. own 길도 켤 수 있다(2026-10-26). */
     checkpoints: form.mode === "expert",
