@@ -154,4 +154,84 @@ class WorkAccessTest {
                 .isEqualTo("images/webtoon/abc.jpg");
         assertThat(Optional.ofNullable(PrivateArt.moved(null, true))).isEmpty();
     }
+
+    /* ---- 링크 있는 사람만(#898) ---------------------------------------------- */
+
+    @Test
+    @DisplayName("링크 공개 — 열쇠가 맞으면 로그인 없이 보고, 작품 번호만으로는 못 본다")
+    void 링크_공개는_열쇠로만() {
+        작품("run-링크", "uid-a", true);
+        ledger.setVisibility("run-링크", WorkVisibility.LINK);
+        String key = ledger.find("run-링크").orElseThrow().getShareKey();
+
+        assertThat(key).isNotBlank().hasSizeGreaterThanOrEqualTo(32);
+        assertThat(ledger.isPublic("run-링크")).isFalse();          // 둘러보기 · 추천 · 남의 목록에서 빠진다
+        assertThat(ledger.isOpen("run-링크")).isFalse();            // 그림도 비공개 자리에 둔다
+        assertThat(ledger.visibilityOf("run-링크")).isEqualTo(WorkVisibility.LINK);
+
+        assertThat(ledger.mayRead("run-링크", null)).isFalse();
+        assertThat(ledger.mayRead("run-링크", 남, null)).isFalse();
+        assertThat(ledger.mayRead("run-링크", null, "run-링크")).isFalse();
+        assertThat(ledger.mayRead("run-링크", null, key + "x")).isFalse();
+        assertThat(ledger.mayRead("run-링크", null, key)).isTrue();
+        assertThat(ledger.mayRead("run-링크", 남, key)).isTrue();
+    }
+
+    @Test
+    @DisplayName("비공개 작품은 열쇠 낱말을 붙여도 안 열린다 — 열쇠가 아예 없다")
+    void 비공개는_열쇠로도_안_열림() {
+        작품("run-비공개", "uid-a", false);
+
+        assertThat(ledger.find("run-비공개").orElseThrow().getShareKey()).isNull();
+        assertThat(ledger.mayRead("run-비공개", null, "아무거나")).isFalse();
+        assertThat(ledger.visibilityOf("run-비공개")).isEqualTo(WorkVisibility.PRIVATE);
+    }
+
+    @Test
+    @DisplayName("링크 공개에서 비공개로 바꾸면 열쇠를 버린다 — 이미 보낸 링크도 닫히고, 다시 링크 공개면 새 열쇠")
+    void 비공개로_내리면_링크가_닫힌다() {
+        작품("run-링크", "uid-a", false);
+        ledger.setVisibility("run-링크", WorkVisibility.LINK);
+        String first = ledger.find("run-링크").orElseThrow().getShareKey();
+
+        ledger.setVisibility("run-링크", WorkVisibility.PRIVATE);
+        assertThat(ledger.mayRead("run-링크", null, first)).isFalse();
+
+        ledger.setVisibility("run-링크", WorkVisibility.LINK);
+        String second = ledger.find("run-링크").orElseThrow().getShareKey();
+        assertThat(second).isNotEqualTo(first);
+        assertThat(ledger.mayRead("run-링크", null, first)).isFalse();
+        assertThat(ledger.mayRead("run-링크", null, second)).isTrue();
+    }
+
+    @Test
+    @DisplayName("공개로 올렸다가 다시 링크 공개로 내려도 보낸 링크는 그대로 산다")
+    void 공개를_거쳐도_같은_열쇠() {
+        작품("run-링크", "uid-a", false);
+        ledger.setVisibility("run-링크", WorkVisibility.LINK);
+        String key = ledger.find("run-링크").orElseThrow().getShareKey();
+
+        ledger.setVisibility("run-링크", WorkVisibility.PUBLIC);
+        assertThat(ledger.visibilityOf("run-링크")).isEqualTo(WorkVisibility.PUBLIC);
+        assertThat(ledger.mayRead("run-링크", null)).isTrue();
+
+        ledger.setVisibility("run-링크", WorkVisibility.LINK);
+        assertThat(ledger.find("run-링크").orElseThrow().getShareKey()).isEqualTo(key);
+    }
+
+    @Test
+    @DisplayName("휴지통 · 관리자 처리 중인 링크 공개 작품은 열쇠가 맞아도 닫는다")
+    void 휴지통과_관리자_처리는_링크도_닫는다() {
+        WebtoonWork w = 작품("run-링크", "uid-a", false);
+        ledger.setVisibility("run-링크", WorkVisibility.LINK);
+        String key = w.getShareKey();
+
+        w.trash(Instant.now());
+        assertThat(ledger.mayRead("run-링크", null, key)).isFalse();
+        w.untrash();
+        assertThat(ledger.mayRead("run-링크", null, key)).isTrue();
+
+        w.moderate(WorkModeration.HIDDEN, "사유", Instant.now());
+        assertThat(ledger.mayRead("run-링크", null, key)).isFalse();
+    }
 }

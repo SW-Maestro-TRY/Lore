@@ -147,7 +147,7 @@ class MyWebtoonServiceTest {
 
         assertThat(service.setVisibility(7L, "r1", false)).isFalse();
 
-        verify(ledger).setPublic("r1", false);
+        verify(ledger).setVisibility("r1", WorkVisibility.PRIVATE);
         /* 안 옮기면 비공개로 내려도 CloudFront 가 계속 내준다 — 스위치가
            거짓말을 하는 셈이다. 그래서 이 한 줄이 빠지는 것을 여기서 잡는다. */
         verify(pageStore).moveAll("r1", false);
@@ -162,7 +162,7 @@ class MyWebtoonServiceTest {
         /* 이미 DB 는 바뀌었고 목록에서도 내려가 있다. 남은 것은 "주소를 아는
            사람에게 아직 열린다" 이고, 그건 크게 로그로 남기고 다시 시도할 일이다. */
         assertThat(service.setVisibility(7L, "r1", false)).isFalse();
-        verify(ledger).setPublic("r1", false);
+        verify(ledger).setVisibility("r1", WorkVisibility.PRIVATE);
     }
 
     @Test
@@ -176,9 +176,50 @@ class MyWebtoonServiceTest {
 
         assertThatThrownBy(() -> service.setVisibility(7L, "r1", true))
                 .isInstanceOf(BusinessException.class);
-        verify(ledger, never()).setPublic(anyString(), anyBoolean());
+        verify(ledger, never()).setVisibility(anyString(), anyString());
 
         assertThat(service.setVisibility(7L, "r1", false)).isFalse();
+    }
+
+    @Test
+    @DisplayName("링크 공개(#898) — 표에 link 로 적고, 그림은 비공개 자리로 옮기고, 열쇠를 돌려준다")
+    void 링크_공개는_그림을_비공개_자리로() {
+        when(ledger.mayChange("r1", 7L)).thenReturn(true);
+        WebtoonWork w = WebtoonWork.started("job-r1", 7L, "uid", java.time.Instant.now());
+        w.learnRun("r1");
+        w.setPublic(false);
+        w.setShareKey("열쇠");
+        when(ledger.setVisibility("r1", WorkVisibility.LINK)).thenReturn(java.util.Optional.of(w));
+
+        MyWebtoonService.Visibility out = service.setVisibility(7L, "r1", "link");
+
+        assertThat(out.visibility()).isEqualTo(WorkVisibility.LINK);
+        assertThat(out.shareKey()).isEqualTo("열쇠");
+        assertThat(out.isPublic()).isFalse();
+        /* 공개 자리에 남으면 그림 주소만으로 CloudFront 가 열쇠 없이 내준다. */
+        verify(pageStore).moveAll("r1", false);
+    }
+
+    @Test
+    @DisplayName("관리자가 비공개 처리한 작품은 링크 공개로도 못 연다")
+    void 관리자_비공개는_링크도_못함() {
+        when(ledger.mayChange("r1", 7L)).thenReturn(true);
+        WebtoonWork w = WebtoonWork.started("job-r1", 7L, "uid", java.time.Instant.now());
+        w.learnRun("r1");
+        w.moderate(WorkModeration.HIDDEN, "사유", java.time.Instant.now());
+        when(ledger.find("r1")).thenReturn(java.util.Optional.of(w));
+
+        assertThatThrownBy(() -> service.setVisibility(7L, "r1", "link"))
+                .isInstanceOf(BusinessException.class);
+        verify(ledger, never()).setVisibility(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("모르는 공개 범위 낱말은 받지 않는다")
+    void 모르는_낱말은_거절() {
+        assertThatThrownBy(() -> service.setVisibility(7L, "r1", "friends"))
+                .isInstanceOf(BusinessException.class);
+        verify(ledger, never()).setVisibility(anyString(), anyString());
     }
 
     @Test
@@ -188,7 +229,7 @@ class MyWebtoonServiceTest {
 
         assertThatThrownBy(() -> service.setVisibility(7L, "남의것", true))
                 .isInstanceOf(BusinessException.class);
-        verify(ledger, never()).setPublic(anyString(), anyBoolean());
+        verify(ledger, never()).setVisibility(anyString(), anyString());
         verify(pageStore, never()).moveAll(anyString(), anyBoolean());
     }
 

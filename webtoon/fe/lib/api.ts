@@ -184,6 +184,9 @@ export interface Allowance {
   blocked?: string | null;
   qualities?: { key: string; label: string; credits: number; base_pages?: number; extra_page_credits?: number }[];
   quality_default?: string;
+  /** 함께 주인공 한 사람당 값(조연 시트 값과 같다)과 고를 수 있는 수(#899). */
+  co_sheet_credits?: number;
+  co_max?: number;
 }
 
 export function readAllowance(): Promise<Allowance> {
@@ -313,6 +316,11 @@ export interface NhJob {
   sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
   cast_sheets?: { name: string; ready: boolean }[] | null;
+  /** 함께 주인공의 시트(#899) — 그림은 castSheetImageUrl 자리. 주인공이 한 명이면 없다.
+      versions: 보관한 옛 판 수 · persona: 그 사람의 주인공 카드 · blocked: 이 사람 시트가 안전 기준에 걸려 멈췄나 ·
+      description: 시트 고치기 칸의 처음 값. */
+  co_sheets?: { name: string; ready: boolean; versions?: number; persona?: NhPersona | null; blocked?: boolean;
+    description?: string }[] | null;
   pick: number | null;
   /** 게스트가 이야기 고르기에서 앞으로 몇 초 안에 골라야 하나(#851). 화면이 앞에 떠 있는 동안은 묻을 때마다
       다시 채워진다. 로그인했거나 고르는 자리가 아니면 없다 — 끝없이 기다린다. */
@@ -355,6 +363,8 @@ export interface NhCreateRequest {
   agree_ip: boolean;
   checkpoints: boolean;
   character_id?: string;
+  /** 함께 주인공으로 고른 내 캐릭터(#899). 없으면 한 명. */
+  co_character_ids?: string[];
   /** 어느 길로 만드나(#548). */
   mode?: NhMode;
   /** own 길의 「설정 더 적기」 — 인물·세계·지킬 것을 한 칸에 적은 자유 글. 없으면 빈 문자열. */
@@ -402,8 +412,9 @@ export function resumeJob(id: string) {
   return post(`/nh/jobs/${encodeURIComponent(id)}/resume`, {});
 }
 
-export function decideSheet(id: string, decision: "approve" | "retry", note = "") {
-  return post(`/nh/jobs/${encodeURIComponent(id)}/sheet-decision`, note ? { decision, note } : { decision });
+export function decideSheet(id: string, decision: "approve" | "retry", note = "", who?: string | null) {
+  /* who — 함께 주인공의 시트를 다시 만들 때 그 이름(#899). 없으면 첫 주인공. */
+  return post(`/nh/jobs/${encodeURIComponent(id)}/sheet-decision`, { decision, ...(note ? { note } : {}), ...(who ? { who } : {}) });
 }
 
 /** 인물 단계의 답 — 고른 상대 번호(1~), 적은 인물을 확인하고 진행이면 0. */
@@ -454,7 +465,7 @@ export function retryDirections(id: string, note = "") {
 }
 
 /** 걸린 캐릭터 시트를 사진·외모 설명을 바꿔 다시 그린다(#626). 사진은 만들기처럼 S3 로 먼저 올린다. */
-export function fixSheet(id: string, body: { photo_keys?: string[]; photos_data?: string[]; character?: string; note?: string }) {
+export function fixSheet(id: string, body: { photo_keys?: string[]; photos_data?: string[]; character?: string; note?: string; who?: string }) {
   return post<{ ok: boolean }>(`/nh/jobs/${encodeURIComponent(id)}/sheet-fix`, body);
 }
 
@@ -486,12 +497,12 @@ export function sheetImageUrl(jobId: string, v: number | string = ""): string {
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet.png${v ? `?v=${v}` : ""}`;
 }
 /** v 번째 옛 시트 그림(#548). */
-export function sheetVersionUrl(jobId: string, v: number): string {
-  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet-v${v}.png`;
+export function sheetVersionUrl(jobId: string, v: number, who?: string | null): string {
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet-v${v}.png${who ? `?who=${encodeURIComponent(who)}` : ""}`;
 }
-/** v 번째 옛 시트를 현재 시트로 되돌린다(#548). */
-export function restoreSheet(id: string, v: number) {
-  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/sheet-restore`, { v });
+/** v 번째 옛 시트를 현재 시트로 되돌린다(#548). who 가 있으면 그 함께 주인공의 시트(#899). */
+export function restoreSheet(id: string, v: number, who?: string | null) {
+  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/sheet-restore`, who ? { v, who } : { v });
 }
 
 /** 조연 시트 그림(#548). */
@@ -529,6 +540,8 @@ export interface RunCard {
   page_count: number;
   style_label?: string;
   public?: boolean;
+  /** 공개 범위 세 단계(#898) — 내 목록에만 온다. */
+  visibility?: Visibility;
   /** 찜 수(#247). 서버가 카드마다 붙인다. */
   likes?: number;
   /** 본 사람 수 — 둘러보기 목록에만 온다(조회순 정렬). 연재는 회차를 더한 값. */
@@ -590,8 +603,58 @@ export function myBrowserRuns(): Promise<RunCard[]> {
     .then((got) => got.runs || []);
 }
 
+/* ---- 「링크 공유(일부공개)」 작품의 열쇠(#898) -----------------------------------
+ *
+ * 링크 공유 작품은 작품 번호만으로는 안 열리고, 공유 주소의 `k` 가 실려 와야 연다. 그 작품을 읽는 모든
+ * 주소(결과 · 장 그림 · 표지 · 내려받기 · 회차 목록)에 같은 열쇠를 붙여야 해서 여기 한 곳에서 붙인다 —
+ * `<img src>` 에는 머리말을 못 실으므로 주소에 싣는다.
+ *
+ * 받은 열쇠는 작품 번호마다 이 브라우저에 기억한다(최근 본 작품 표지를 다시 그릴 때도 쓰려고). 못 남겨도
+ * 이번 화면에서는 돈다. */
+const SHARE_KEYS = "wt-share-keys";
+const shareKeys = new Map<string, string>();
+let shareKeysLoaded = false;
+
+function loadShareKeys() {
+  if (shareKeysLoaded || typeof window === "undefined") return;
+  shareKeysLoaded = true;
+  try {
+    const got = JSON.parse(localStorage.getItem(SHARE_KEYS) || "{}") as Record<string, string>;
+    for (const [run, key] of Object.entries(got)) if (typeof key === "string" && key) shareKeys.set(run, key);
+  } catch { /* 저장소가 막혀도 이번 화면은 돈다 */ }
+}
+
+/** 공유 주소로 들어온 열쇠를 기억한다. 주인이 결과에서 받은 열쇠도 여기 넣는다. */
+export function rememberShareKey(runId: string, key: string | null | undefined) {
+  if (!runId || !key) return;
+  loadShareKeys();
+  if (shareKeys.get(runId) === key) return;
+  shareKeys.set(runId, key);
+  try {
+    localStorage.setItem(SHARE_KEYS, JSON.stringify(Object.fromEntries([...shareKeys].slice(-200))));
+  } catch { /* 위와 같다 */ }
+}
+
+/** 비공개로 바꿔 열쇠가 버려졌을 때 — 남은 열쇠로 계속 부르지 않게. */
+export function forgetShareKey(runId: string) {
+  loadShareKeys();
+  if (!shareKeys.delete(runId)) return;
+  try { localStorage.setItem(SHARE_KEYS, JSON.stringify(Object.fromEntries(shareKeys))); } catch { /* 위와 같다 */ }
+}
+
+export function shareKeyOf(runId: string): string | undefined {
+  loadShareKeys();
+  return shareKeys.get(runId);
+}
+
+/** 그 작품의 열쇠가 있으면 주소에 `k` 로 붙인다. */
+function withKey(url: string, runId: string): string {
+  const key = shareKeyOf(runId);
+  return key ? `${url}${url.includes("?") ? "&" : "?"}k=${encodeURIComponent(key)}` : url;
+}
+
 export function coverUrl(runId: string, page: number, episode = 1): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`, runId);
 }
 
 export interface RunResult {
@@ -617,6 +680,10 @@ export interface RunResult {
   inputs?: RunInputs;
   /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 그 장마다 걸린 이유(선정성·폭력·잔혹 …) — 장 번호 → 사람이 읽는 말(2026-10-27) */
+  unsafe_reasons?: Record<string, string>;
+  /** 같은 이유를 코드로(sexual · violence …) — 화면이 언어마다 이름을 붙인다. 빈 목록이면 「안전 기준」 */
+  unsafe_kinds?: Record<string, string[]>;
   /** 크레딧이 모자라 아직 안 그린 장 번호들 — 한 편 값은 기본 장 수(base_pages)까지다 */
   pending_pages?: number[];
   /** 남은 장의 장면 한 줄 — 잠긴 장을 웹툰 흐름 안에서 「다음 장면」으로 보여 준다 */
@@ -628,8 +695,12 @@ export interface RunResult {
   drawing_pages?: number[];
   /** 관리자 처리(#638) — 주인과 관리자에게만 온다. */
   moderation?: ModerationNote;
-  /** 남이 열 수 있나(#638). false 면 공유 링크가 받은 사람에게 404 라 공유 버튼을 감춘다. */
+  /** 남이 열 수 있나(#638). false 면 공유 링크가 받은 사람에게 404 라 공유 버튼을 감춘다. 링크 공개도 false. */
   public?: boolean;
+  /** 공개 범위 세 단계(#898). */
+  visibility?: Visibility;
+  /** 링크 공유 작품의 열쇠 — 주인과 관리자에게만 온다. 공유 주소의 k 다. */
+  share_key?: string;
 }
 
 export interface RunInputs {
@@ -643,7 +714,7 @@ export interface RunInputs {
 }
 
 export function readResult(runId: string): Promise<RunResult> {
-  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`);
+  return call<RunResult>(withKey(`/runs/${encodeURIComponent(runId)}/result`, runId));
 }
 
 /** 장 하나를 그리는 일의 진행 — 편집실 다시 그리기와 같은 모양이다. */
@@ -665,15 +736,16 @@ export function pageDrawStatus(id: string): Promise<PageDrawStatus> {
 }
 
 export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`, runId);
 }
 
-export function episodeDownloadUrl(runId: string): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/episode.png`;
+/** 한 편 내려받기. plain 이면 편집실에서 얹은 것을 빼고 밑그림으로(LORE 표시는 그대로). */
+export function episodeDownloadUrl(runId: string, plain = false): string {
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/episode.png${plain ? "?plain=1" : ""}`, runId);
 }
 
-export function pageDownloadUrl(runId: string, no: number): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}/download`;
+export function pageDownloadUrl(runId: string, no: number, plain = false): string {
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${no}/download${plain ? "?plain=1" : ""}`, runId);
 }
 
 export function renameRun(runId: string, title: string): Promise<{ title: string }> {
@@ -741,11 +813,24 @@ export function restoreRun(runId: string): Promise<{ runId: string; restored: bo
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/restore`, { method: "POST" });
 }
 
-export function setVisibility(runId: string, isPublic: boolean) {
-  return appRequest<{ runId: string; public: boolean }>(
+/** 공개 범위 세 단계(#898). public = 둘러보기에 공개 · link = 링크 공유(일부공개) · private = 나만. */
+export type Visibility = "public" | "link" | "private";
+
+/** 카드 · 결과에 실린 값으로 지금 공개 범위를 읽는다. visibility 가 없는 옛 서버는 public 만 본다. */
+export function visibilityOf(run: { visibility?: string; public?: boolean }): Visibility {
+  if (run.visibility === "public" || run.visibility === "link" || run.visibility === "private") return run.visibility;
+  return run.public === false ? "private" : "public";
+}
+
+export function setVisibility(runId: string, visibility: Visibility) {
+  return appRequest<{ runId: string; public: boolean; visibility?: Visibility; share_key?: string | null }>(
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/visibility`,
-    { method: "POST", body: { public: isPublic } },
-  );
+    { method: "POST", body: { visibility, public: visibility === "public" } },
+  ).then((out) => {
+    if (out.share_key) rememberShareKey(runId, out.share_key);
+    else if ((out.visibility ?? visibility) === "private") forgetShareKey(runId);
+    return out;
+  });
 }
 
 /** 웹툰이 다 만들어졌을 때 계정 이메일로 알릴지. 행이 없으면(안 건드렸으면)
@@ -1081,7 +1166,7 @@ export function adminClearSpend(): Promise<AdminSpend> {
 
 export interface AdminPage<T> { rows: T[]; total: number; page: number; pageSize: number }
 
-export type AdminWorkState = "public" | "private" | "hidden" | "removed" | "trash";
+export type AdminWorkState = "public" | "link" | "private" | "hidden" | "removed" | "trash";
 
 export interface AdminWorkRow {
   run_id: string;
@@ -1231,6 +1316,8 @@ export interface ModerationState {
   run_id: string;
   title: string;
   public: boolean;
+  /** 공개 범위 세 단계(#898). 옛 서버는 안 보낸다. */
+  visibility?: Visibility;
   trashed: boolean;
   example: boolean;
   moderation: ModerationNote | null;
@@ -1301,7 +1388,7 @@ export interface SeriesForm {
   checkpoints?: boolean;
 }
 export function readSeries(run: string): Promise<SeriesInfo> {
-  return call(`/series/${encodeURIComponent(run)}`);
+  return call(withKey(`/series/${encodeURIComponent(run)}`, run));
 }
 /** 써 두고 아직 만들지 않은 다음 화 초안 — 마이페이지 「만드는 중」. */
 export interface SeriesDraftCard { run: string; episode: number; title: string; story: string }

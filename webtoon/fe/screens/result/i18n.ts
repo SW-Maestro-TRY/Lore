@@ -132,6 +132,7 @@ const dict: Dict = {
   "포스타입": { en: "Postype", ja: "Postype", zh: "Postype" },
   "링크 복사": { en: "Copy link", ja: "リンクをコピー", zh: "复制链接" },
   "컷별로 내려받기": { en: "Download each page", ja: "コマごとにダウンロード", zh: "逐页下载" },
+  "그림만 (말풍선·글자 빼고)": { en: "Art only (no bubbles or text)", ja: "絵だけ（吹き出し・文字なし）", zh: "仅图片（不含对话气泡和文字）" },
   "넣은 설정이 간 곳": { en: "Where your input went", ja: "入れた設定の行き先", zh: "你的设定去了哪里" },
   "이름": { en: "Name", ja: "名前", zh: "名字" },
   "장르": { en: "Genre", ja: "ジャンル", zh: "类型" },

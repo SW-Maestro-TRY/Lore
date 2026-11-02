@@ -63,6 +63,80 @@ public class RunArt {
      * 사양(sheet_spec.json)도 같은 번호로 같이 둔다 — 그림만 되살리고 사양이 다르면 장 그림이
      * 다른 사람을 그린다. 판 번호는 보관한 순서다. 지금 시트는 번호가 없다(sheet.png). */
 
+    /* ---- 함께 주인공의 시트(#899) ----
+     *
+     * 첫 주인공 시트와 같은 조작(다시 만들기 · 판 보관 · 되돌리기)을 한다. 지금 시트는 sheets/<이름>.png ·
+     * sheets/<이름>.spec.json(조연 시트 자리 — 하네스·연재 승계가 그대로 찾는다), 보관한 판은
+     * sheets/versions/<이름>.vN.png · .spec.vN.json 이다. 판을 sheets/ 바로 아래 두면 하네스가 그것을
+     * 조연 시트로 읽는다(sheets/*.png 를 다 조연으로 본다). who 가 비었으면 첫 주인공이다. */
+
+    private record SheetFiles(Path png, Path spec, Path versions, String prefix) {
+        Path versionPng(int v) { return versions.resolve(prefix + ".v" + v + ".png"); }
+        Path versionSpec(int v) { return versions.resolve(prefix + (prefix.equals("sheet") ? "_spec" : ".spec") + ".v" + v + ".json"); }
+    }
+
+    private SheetFiles files(String runId, String who) {
+        Path d = dir(runId);
+        if (who == null || who.isBlank()) {
+            return new SheetFiles(d.resolve("sheet.png"), d.resolve("sheet_spec.json"), d, "sheet");
+        }
+        String stem = castSheetStem(who);
+        Path sheets = d.resolve("sheets");
+        return new SheetFiles(sheets.resolve(stem + ".png"), sheets.resolve(stem + ".spec.json"),
+                sheets.resolve("versions"), stem);
+    }
+
+    /** 이 사람의 지금 시트. who 가 비었으면 첫 주인공. 없으면 {@code null}. */
+    public Path sheet(String runId, String who) {
+        return exists(files(runId, who).png());
+    }
+
+    public int sheetVersions(String runId, String who) {
+        if (runId == null || runId.isBlank()) {
+            return 0;
+        }
+        SheetFiles f = files(runId, who);
+        if (!Files.isDirectory(f.versions())) {
+            return 0;
+        }
+        String pattern = java.util.regex.Pattern.quote(f.prefix()) + "\\.v\\d+\\.png";
+        try (var found = Files.list(f.versions())) {
+            return (int) found.map(p -> p.getFileName().toString()).filter(n -> n.matches(pattern)).count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    public Path sheetVersion(String runId, String who, int v) {
+        return v < 1 ? null : exists(files(runId, who).versionPng(v));
+    }
+
+    public int archiveSheet(String runId, String who) throws IOException {
+        SheetFiles f = files(runId, who);
+        if (!Files.isRegularFile(f.png())) {
+            return 0;
+        }
+        Files.createDirectories(f.versions());
+        int v = sheetVersions(runId, who) + 1;
+        Files.move(f.png(), f.versionPng(v));
+        if (Files.isRegularFile(f.spec())) {
+            Files.move(f.spec(), f.versionSpec(v));
+        }
+        return v;
+    }
+
+    public void restoreSheet(String runId, String who, int v) throws IOException {
+        SheetFiles f = files(runId, who);
+        if (!Files.isRegularFile(f.versionPng(v))) {
+            throw new IOException("그런 판이 없습니다: " + v);
+        }
+        archiveSheet(runId, who);
+        Files.copy(f.versionPng(v), f.png());
+        if (Files.isRegularFile(f.versionSpec(v))) {
+            Files.copy(f.versionSpec(v), f.spec(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
     /** 보관해 둔 시트 판 수. 지금 시트는 세지 않는다. */
     public int sheetVersions(String runId) {
         /* 시작 직후 30~40초는 run_id 가 아직 비어 있는데, 그동안에도 화면이 진행 상태를 묻는다.

@@ -250,10 +250,10 @@ const dict: Dict = {
 
   /* ---- 자주 묻는 질문 본문 — GalleryHome 의 faqs (2026-10-26 개편 · 출석 #863) ---- */
   "LORE는 무료로 이용할 수 있나요?": { en: "Can I use LORE for free?", ja: "LOREは無料で使えますか？", zh: "LORE 可以免费使用吗？" },
-  "네. 가입하면 웹툰 한 편을 만들 수 있는 15크레딧을 드리고, 출석하면 매일 2크레딧(4일째 5 · 7일째 10크레딧)을 더 드려요. 일주일 다 오면 25크레딧이에요. 가입하지 않아도 하루 2편까지 만들어 볼 수 있어요.": {
-    en: "Yes. When you sign up you get 15 credits, enough for one webtoon episode, and checking in gives you 2 more credits every day (5 on day 4 and 10 on day 7). Check in all week and that's 25 credits. Even without signing up, you can make up to 2 episodes a day.",
-    ja: "はい。登録するとウェブトゥーン1話を作れる15クレジットを差し上げ、出席すると毎日2クレジット（4日目は5・7日目は10クレジット）をさらに差し上げます。1週間すべて出席すると25クレジットです。登録しなくても1日2話まで作ってみられます。",
-    zh: "可以。注册即送可制作一话漫画的 15 积分，每天签到还能再领 2 积分（第 4 天 5 积分 · 第 7 天 10 积分）。一周全部签到共 25 积分。不注册也能每天最多制作 2 话。",
+  "네. 가입하면 웹툰 한 편을 만들 수 있는 20크레딧을 드리고, 출석하면 매일 2크레딧(4일째 5 · 7일째 10크레딧)을 더 드려요. 일주일 다 오면 25크레딧이에요. 가입하지 않아도 하루 2편까지 만들어 볼 수 있어요.": {
+    en: "Yes. When you sign up you get 20 credits, enough for one webtoon episode, and checking in gives you 2 more credits every day (5 on day 4 and 10 on day 7). Check in all week and that's 25 credits. Even without signing up, you can make up to 2 episodes a day.",
+    ja: "はい。登録するとウェブトゥーン1話を作れる20クレジットを差し上げ、出席すると毎日2クレジット（4日目は5・7日目は10クレジット）をさらに差し上げます。1週間すべて出席すると25クレジットです。登録しなくても1日2話まで作ってみられます。",
+    zh: "可以。注册即送可制作一话漫画的 20 积分，每天签到还能再领 2 积分（第 4 天 5 积分 · 第 7 天 10 积分）。一周全部签到共 25 积分。不注册也能每天最多制作 2 话。",
   },
 
   "웹툰 한 편을 만드는 데 얼마나 걸리나요?": { en: "How long does it take to make one episode?", ja: "ウェブトゥーン1話を作るのにどれくらいかかりますか？", zh: "制作一话漫画需要多久？" },
@@ -278,10 +278,10 @@ const dict: Dict = {
   },
 
   "크레딧은 언제 차감되나요?": { en: "When are credits deducted?", ja: "クレジットはいつ差し引かれますか？", zh: "积分什么时候扣除？" },
-  "웹툰 만들기를 시작할 때 차감돼요. 한 편에 15크레딧(너울은 30크레딧), 장면 다시 그리기는 3크레딧(너울은 6크레딧)이고, 8장을 넘는 장은 한 장에 2크레딧(너울은 6크레딧)이에요. 무료로 받은 크레딧부터 먼저 쓰여요.": {
-    en: "They're deducted when you start making a webtoon. One episode is 15 credits (30 for Swell), redrawing a scene is 3 credits (6 for Swell), and each page beyond 8 is 2 credits (6 for Swell). Free credits are used first.",
-    ja: "ウェブトゥーンの制作を始めたときに差し引かれます。1話15クレジット（うねりは30クレジット）、場面の描き直しは3クレジット（うねりは6クレジット）、8枚を超えるページは1枚2クレジット（うねりは6クレジット）です。無料でもらったクレジットから先に使われます。",
-    zh: "开始制作漫画时扣除。一话 15 积分（涌浪为 30 积分），重画一个场景 3 积分（涌浪为 6 积分），超过 8 页的部分每页 2 积分（涌浪为 6 积分）。会优先使用免费获得的积分。",
+  "웹툰 만들기를 시작할 때 차감돼요. 한 편에 20크레딧(너울은 30크레딧), 장면 다시 그리기는 3크레딧(너울은 6크레딧)이고, 8장을 넘는 장은 한 장에 2크레딧(너울은 6크레딧)이에요. 무료로 받은 크레딧부터 먼저 쓰여요.": {
+    en: "They're deducted when you start making a webtoon. One episode is 20 credits (30 for Swell), redrawing a scene is 3 credits (6 for Swell), and each page beyond 8 is 2 credits (6 for Swell). Free credits are used first.",
+    ja: "ウェブトゥーンの制作を始めたときに差し引かれます。1話20クレジット（うねりは30クレジット）、場面の描き直しは3クレジット（うねりは6クレジット）、8枚を超えるページは1枚2クレジット（うねりは6クレジット）です。無料でもらったクレジットから先に使われます。",
+    zh: "开始制作漫画时扣除。一话 20 积分（涌浪为 30 积分），重画一个场景 3 积分（涌浪为 6 积分），超过 8 页的部分每页 2 积分（涌浪为 6 积分）。会优先使用免费获得的积分。",
   },
 
   "생성에 실패하면 크레딧은 어떻게 되나요?": { en: "What happens to my credits if generation fails?", ja: "生成に失敗したらクレジットはどうなりますか？", zh: "生成失败的话积分怎么办？" },

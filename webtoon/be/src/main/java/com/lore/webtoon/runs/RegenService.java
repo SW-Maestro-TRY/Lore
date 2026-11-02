@@ -76,11 +76,14 @@ public class RegenService {
     private final RunFiles files;
     /** 다시 그리기도 그림 값이 나간다 — 원가 장부에 적는다(#444). */
     private final com.lore.webtoon.job.AfterRun after;
+    private final com.lore.webtoon.story.StoryStore stories;
 
     public RegenService(PageRegenRepository regens, PageStore pages, BakeService bakery,
                         HarnessProcess harness, PageUploader uploader, JobRunner runner,
                         RunFiles files, com.lore.webtoon.job.AfterRun after,
-                        com.lore.webtoon.credit.CreditGate credits) {
+                        com.lore.webtoon.credit.CreditGate credits,
+                        com.lore.webtoon.story.StoryStore stories) {
+        this.stories = stories;
         this.credits = credits;
         this.regens = regens;
         this.pages = pages;
@@ -330,6 +333,11 @@ public class RegenService {
             env.put("OPENAI_IMAGE_QUALITY",
                     com.lore.webtoon.job.WebtoonQuality.harnessValue(quality));
 
+            /* 완성본에서 고친 제목은 DB 에만 있다. 넘기지 않으면 표지에 처음 제목을 다시 그린다. */
+            stories.chosenOf(runId).map(com.lore.webtoon.story.WebtoonStory::displayTitle)
+                    .filter(t -> t != null && !t.isBlank())
+                    .ifPresent(t -> env.put("NH_TITLE", t));
+
             /* 다시 그리기는 취소 대상이 아니라 번호를 안 준다 — 작업이 아니라
                편집실에서 한 장을 고치는 일이고, 멈추는 길이 따로 없다. */
             int code = harness.run(null, args, env, line -> { });
@@ -431,6 +439,15 @@ public class RegenService {
     /* ---- 안전 검사로 비워 둔 장(#626) ---- */
 
     /** 안전 검사에 걸려 빈 장으로 둔 장 번호들. 결과 화면·편집실이 안내를 띄운다. */
+    public java.util.Map<Integer, String> unsafeReasons(String runId) {
+        return runner.unsafeReasons(runId);
+    }
+
+    /** 그 장마다 걸린 이유 종류 코드(sexual · violence …). 화면이 언어마다 이름을 붙인다. */
+    public java.util.Map<Integer, List<String>> unsafeKinds(String runId) {
+        return runner.unsafeKinds(runId);
+    }
+
     public List<Integer> unsafePages(String runId) {
         return runner.unsafePages(runId);
     }

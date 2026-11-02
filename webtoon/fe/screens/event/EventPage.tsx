@@ -113,7 +113,7 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
           <h2>{th.ev2Title}</h2>
           <div className="wt-ev-ev2">
             <div className="n">+15<small>크레딧</small></div>
-            <div><b>가입하면 바로 15크레딧</b><span>웹툰 한 편을 만들 수 있는 양 · 가입 즉시 지급</span></div>
+            <div><b>가입하면 바로 20크레딧</b><span>웹툰 한 편을 만들 수 있는 양 · 가입 즉시 지급</span></div>
           </div>
         </section>
 

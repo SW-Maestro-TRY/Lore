@@ -125,6 +125,8 @@ def read_character(path: Path) -> dict:
         "title": doc.get("title"),
         # 「1화에서 보여줄 것」 — 적은 내용 가운데 이번 화에 넣을 부분. 없을 수 있다.
         "episode": doc.get("episode"),
+        # 함께 주인공인 내 캐릭터(주인공 여러 명). 없으면 예전과 같다 — 한 명짜리 run 은 한 글자도 안 바뀐다.
+        "co": doc.get("co"),
     })
 
 
@@ -156,7 +158,153 @@ def normalize(raw: dict) -> dict:
         "settings": str(raw.get("settings") or "").strip(),
         "title": str(raw.get("title") or "").strip(),
         "episode": str(raw.get("episode") or "").strip(),
+        **({"co": co} if (co := normalize_co(raw.get("co"))) else {}),
     }
+
+
+# 함께 주인공으로 고를 수 있는 내 캐릭터 수(첫 주인공 빼고). 주인공은 넷까지 — 한 편에 세우는 인물 수와 같다.
+# 장 그림 참조 넷 한도는 장마다 그 장면에 나오는 주인공 시트만 붙여 지킨다(detailart.sheet_plan).
+CO_MAX = 3
+
+
+def normalize_co(raw) -> list[dict]:
+    """함께 주인공인 인물들 — `character.json` 의 `co`(서버가 보낸 모양)나 `input.json` 의 `co`(정리한 모양).
+
+    한 사람은 첫 주인공과 같은 칸을 가진다(name · description · fields · photos · photo_note · card).
+    설정집·장르·줄거리는 작품에 하나라 첫 주인공 쪽에만 있다. 이름이 없는 사람은 버린다.
+    """
+    out = []
+    for one in raw if isinstance(raw, list) else []:
+        if not isinstance(one, dict):
+            continue
+        name = str(one.get("name") or "").strip()
+        if not name:
+            continue
+        photo = one.get("photos", one.get("photo"))
+        photos = [photo] if isinstance(photo, str) else list(photo or [])
+        fields = one.get("fields") if isinstance(one.get("fields"), dict) else {}
+        kept = []
+        for ph in photos:
+            path = Path(str(ph))
+            if path.exists():
+                kept.append(str(path.resolve()))
+            else:
+                warn(f"사진을 찾지 못했습니다: {path}")
+        out.append({
+            "name": name,
+            "description": str(one.get("description") or one.get("character") or "").strip(),
+            "fields": {k: str(v).strip() for k, v in fields.items() if str(v or "").strip()},
+            "photos": kept,
+            "photo_note": str(one.get("photo_note") or "").strip(),
+            "card": charcard.normalize(one.get("card")),
+        })
+    return out[:CO_MAX]
+
+
+def co_protagonists(char: dict | None) -> list[dict]:
+    """함께 주인공인 인물들. 한 명짜리 작품이면 []."""
+    return [c for c in ((char or {}).get("co") or []) if isinstance(c, dict) and str(c.get("name") or "").strip()]
+
+
+def protagonist_names(char: dict | None) -> list[str]:
+    """주인공 이름 전부 — 첫 주인공이 먼저. 조연 목록에서 주인공을 걸러 낼 때 쓴다."""
+    names = [str((char or {}).get("name") or "").strip()]
+    names += [str(c["name"]).strip() for c in co_protagonists(char)]
+    return [n for n in names if n]
+
+
+def is_protagonist(char: dict | None, name: str) -> bool:
+    """이 이름이 주인공 가운데 한 사람인가. 장면 단계가 줄여 쓴 이름(성 뺀 이름)도 같은 사람으로 본다."""
+    name = str(name or "").strip()
+    return bool(name) and any(name == h or _same_person(name, h) or _same_person(h, name)
+                              for h in protagonist_names(char))
+
+
+def all_photos(char: dict) -> list[str]:
+    """글 호출에 붙일 사진 — 첫 주인공 사진 다음에 함께 주인공인 사람의 사진. 한 명이면 예전과 같다."""
+    return list(char.get("photos") or []) + [p for c in co_protagonists(char) for p in (c.get("photos") or [])]
+
+
+def solo(char: dict, who: int = 0) -> dict:
+    """주인공 한 사람만 남긴 입력. 0 이면 첫 주인공, 1 부터는 함께 주인공인 사람.
+
+    시트·페르소나처럼 한 사람을 따로 보는 단계가 쓴다. 장르·설정집·줄거리 같은 작품 칸은 그대로 둔다.
+    """
+    base = {k: v for k, v in char.items() if k != "co"}
+    if who <= 0:
+        return base
+    one = co_protagonists(char)[who - 1]
+    return {**base, **{k: one.get(k) for k in ("name", "description", "fields", "photos", "photo_note", "card")},
+            "fields": dict(one.get("fields") or {}), "card": dict(one.get("card") or {})}
+
+
+def co_input_lines(char: dict, *, card_detail: bool = True, has_story: bool = False) -> list[str]:
+    """이야기·인물 단계 입력에 붙는 「함께 주인공인 인물」. 한 명짜리 작품이면 [].
+
+    프롬프트 본문은 모두 「주인공」을 한 사람처럼 부른다. 프롬프트를 둘로 나누지 않고, 입력에서 그 말이 두
+    사람을 다 가리킨다고 정해 준다 — 한 명짜리 작품은 프롬프트가 그대로라 결과가 안 바뀐다.
+    """
+    co = co_protagonists(char)
+    if not co:
+        return []
+    names = protagonist_names(char)
+    first_n = len(char.get("photos") or [])
+    lines = ["", f"## 함께 주인공인 인물 — 이 웹툰의 주인공은 {len(names)}명이다",
+             f"사용자는 {', '.join(names)}을(를) 함께 주인공으로 골랐다. 이 프롬프트와 입력에서 「주인공」은 "
+             "이 사람들 모두를 가리킨다."]
+    offset = first_n
+    for one in co:
+        lines += ["", f"캐릭터 이름: {one['name']}"]
+        n = len(one.get("photos") or [])
+        note = f" ({one['photo_note']})" if one.get("photo_note") else ""
+        if n:
+            lines.append(f"외관: 첨부한 사진 가운데 {offset + 1}번째부터 {offset + n}번째까지 {n}장{note}.")
+        else:
+            lines.append("외관: (사진 없음 — 아래 설명에서 읽는다)")
+        offset += n
+        card = charcard.for_story(one if not char.get("lorebook") else {**one, "lorebook": char["lorebook"]})
+        if card and card_detail:
+            lines += ["", *charcard.block(card, has_story=has_story)]
+        elif card and charcard.short(card):
+            lines.append(f"고른 캐릭터 카드: {charcard.short(card)}")
+        if one.get("description") or one.get("fields"):
+            lines += ["", "설명:"]
+            if one.get("description"):
+                lines.append(one["description"])
+            lines += [f"- {k}: {v}" for k, v in (one.get("fields") or {}).items()]
+        else:
+            lines += ["", "설명: (없음)"]
+    lines += ["", "### 주인공이 여럿일 때의 기준",
+              "- 주인공마다 이 화의 사건에서 자기 행동으로 일을 바꾼다. 한 사람이 다른 사람의 사건을 구경하거나 "
+              "돕기만 하면 그 사람은 주인공이 아니다 — 다시 짠다.",
+              "- 성격·말투·처지는 사람마다 자기 설명이 전부다. 한 사람에게 적힌 성격을 다른 사람에게 옮기거나 두 "
+              "사람을 같은 성격으로 섞지 않는다. 판정: 두 사람의 대사와 행동을 바꿔 넣으면 어색해지는가.",
+              "- 두 사람의 관계가 설명에 적혀 있으면 그대로 따른다. 적혀 있지 않으면 이 판에서 두 사람이 얽히는 "
+              "까닭을 사건으로 세우되, 설명에 없는 감정·과거·비밀을 붙여 관계를 정하지 않는다.",
+              "- 앞에 적힌 이야기 규칙(주인공이 원하는 것, 막는 것, 그 반응, 마지막 순간에 주인공이 그 자리에 "
+              "있다)은 주인공 모두에게 걸린다."]
+    return lines
+
+
+def co_check_line(char: dict | None) -> list[str]:
+    """이야기 입력 맨 끝의 점검 한 줄(주인공이 여럿일 때만). 한 명짜리 작품이면 [] — 프롬프트가 글자까지 그대로다.
+
+    입력 앞쪽 기준만으로는 뒤에 나오는 주인공이 빠지기 쉬워서, 모델이 더 세게 듣는 맨 뒤에 다시 둔다."""
+    if not co_protagonists(char):
+        return []
+    return ["- 주인공마다 이번 화에서 자기 행동으로 일을 바꿨는가. 한 사람이라도 그렇지 않으면 다시 짠다."]
+
+
+def co_scene_lines(char: dict | None) -> list[str]:
+    """장면·나레이션·검수 입력의 「[캐릭터]」 절에 붙는 함께 주인공인 사람 한 줄씩. 한 명짜리면 []."""
+    out = []
+    for one in co_protagonists(char):
+        out.append(f"{one['name']} (함께 주인공) — {one.get('description') or ''}".rstrip(" —"))
+        card = charcard.short(charcard.for_story(one))
+        if card:
+            out.append(f"- 고른 캐릭터 카드: {card} (원래 설명과 다르면 카드를 따른다)")
+        out += [f"- {k}: {v}" for k, v in (one.get("fields") or {}).items()]
+    return out
 
 
 def gate_input(char: dict) -> list[str]:
@@ -167,6 +315,11 @@ def gate_input(char: dict) -> list[str]:
     if (not char["photos"] and not char["description"] and not char["fields"]
             and not char.get("card")):
         bad.append("외관이 없습니다 — 사진이나 설명 중 하나는 있어야 합니다.")
+    for one in co_protagonists(char):
+        if not one["photos"] and not one["description"] and not one["fields"] and not one.get("card"):
+            bad.append(f"{one['name']}의 외관이 없습니다 — 사진이나 설명 중 하나는 있어야 합니다.")
+    if len(set(protagonist_names(char))) != len(protagonist_names(char)):
+        bad.append("주인공 이름이 겹칩니다 — 함께 주인공인 사람은 이름이 달라야 합니다.")
     return bad
 
 
@@ -211,7 +364,9 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
     if char["photos"]:
         n = len(char["photos"])
         note = f" ({char['photo_note']})" if char["photo_note"] else ""
-        lines.append(f"외관: 첨부한 사진 {n}장을 보라{note}.")
+        # 주인공이 여럿이면 사진이 이어 붙는다(all_photos) — 누구 사진이 몇 장째인지 적는다.
+        lines.append(f"외관: 첨부한 사진 가운데 앞의 {n}장{note}." if co_protagonists(char)
+                     else f"외관: 첨부한 사진 {n}장을 보라{note}.")
     else:
         lines.append("외관: (사진 없음 — 아래 설명에서 읽는다)")
 
@@ -230,6 +385,7 @@ def input_block(char: dict, *, with_genre: bool = True) -> str:
         lines += ["", *TRAIT_RULES]
     else:
         lines += ["", "설명: (없음 — 네가 정한다)"]
+    lines += co_input_lines(char, has_story=bool(user_story(char)))
 
     if with_genre:
         lines += ["", f"장르: {char['genre']}" if char["genre"]
@@ -469,7 +625,7 @@ def parse_directions(md: str) -> list[dict]:
         body_text = _labeled(body, BODY_LABEL_RE, [])
         out.append({
             "n": int(m.group(1)),
-            "title": m.group(2).strip(),
+            "title": m.group(2).strip().strip("<>").strip(),
             "genre": genre,
             "intro": intro,
             "body": body_text,
@@ -480,6 +636,52 @@ def parse_directions(md: str) -> list[dict]:
             "raw": (m.group(0) + body).strip(),
         })
     return out
+
+
+# 모델이 출력 형식의 자리 표시를 그대로 베끼면 작품 이름과 표지 글자가 「제목」이 된다
+# (2026-11-02 gpt-5.1 전환 뒤 운영 첫 작품, 같은 지시문으로 2/2 재현).
+PLACEHOLDER_TITLES = {
+    "제목", "소제목", "이번화소제목", "타이틀", "title", "subtitle",
+    "タイトル", "サブタイトル", "标题", "副标题",
+    "이이야기에지어붙인제목", "이번화에지어붙인소제목", "지은제목",
+}
+
+
+def title_missing(title) -> bool:
+    """제목이 비었거나 자리 표시를 베낀 것인가."""
+    key = re.sub(r"[\s*_#<>()\[\]「」『』\"'“”‘’]", "", str(title or "")).lower()
+    return not key or key in PLACEHOLDER_TITLES
+
+
+def fill_titles(run_dir: Path, directions: list[dict], lang: str = "ko") -> None:
+    """제목이 없는 후보에 제목만 따로 지어 준다. 이야기를 다시 쓰지는 않는다.
+
+    이미 값을 치른 이야기를 제목 하나 때문에 버리지 않게, 실패해도 작업을 멈추지 않고
+    제목을 비워 둔다. 비어 있으면 표지에 「제목」이 그려지지 않는다.
+    """
+    for d in directions:
+        if not title_missing(d.get("title")):
+            continue
+        d["title"] = ""
+        story_text = "\n\n".join(str(d.get(k) or "") for k in ("intro", "body") if d.get(k))
+        if not story_text:
+            warn(f"방향 {d.get('n')} 에 제목을 지을 글이 없습니다.")
+            continue
+        call = llm.Call("STORY")
+        log(f"[제목] {call.describe()} 로 제목만 짓습니다…")
+        try:
+            text, meta = call(compose("title_prompt", f"## 이야기\n{story_text}\n", lang=lang))
+        except Exception as exc:                                      # noqa: BLE001
+            record_error(run_dir, "STORY", call.provider, call.model, exc)
+            warn(f"방향 {d.get('n')} 의 제목을 짓지 못했습니다: {exc}")
+            continue
+        record(run_dir, meta)
+        lines = [line.strip() for line in str(text).splitlines() if line.strip()]
+        title = re.sub(r"^#+\s*", "", lines[0]).strip("\"'“”‘’「」『』*") if lines else ""
+        if title_missing(title):
+            warn(f"방향 {d.get('n')} 의 제목을 받지 못했습니다.")
+            continue
+        d["title"] = title
 
 
 def _num(value, default: int) -> int:
@@ -872,7 +1074,27 @@ def save_cast_pick(run_dir: Path, n: int) -> dict:
     return chosen
 
 
-def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> dict | None:
+def persona_paths(run_dir: Path, who: int = 0, char: dict | None = None) -> dict:
+    """페르소나 파일 자리. 0 이면 첫 주인공(persona.json), 1 부터 함께 주인공(personas/<이름>.json)."""
+    if who <= 0:
+        return {"json": run_dir / "persona.json", "prompt": run_dir / "persona_prompt.txt",
+                "raw": run_dir / "persona_raw.txt"}
+    stem = sheet_stem(co_protagonists(char)[who - 1]["name"])
+    folder = run_dir / "personas"
+    return {"json": folder / f"{stem}.json", "prompt": folder / f"{stem}.prompt.txt", "raw": folder / f"{stem}.raw.txt"}
+
+
+def stage_personas(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> None:
+    """함께 주인공마다 주인공 카드 — 첫 주인공 카드와 같은 프롬프트로 한 사람씩(#899). 한 명이면 아무것도 안 한다."""
+    co = co_protagonists(char)
+    if not co:
+        return
+    with ThreadPoolExecutor(max_workers=len(co)) as pool:
+        for f in [pool.submit(stage_persona, run_dir, char, dry_run, lang, i) for i in range(1, len(co) + 1)]:
+            f.result()
+
+
+def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko", who: int = 0) -> dict | None:
     """주인공 페르소나 — 사용자가 적은 캐릭터로 정의한다(#534).
 
     사용자에게 확인받는 용도다(0921 멘토링: 페르소나는 유저에게 입력받거나
@@ -882,19 +1104,22 @@ def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") ->
 
     다시 지을 때는 있던 것을 그대로 쓴다. 실패하면 없이 간다(예전처럼).
     """
-    path = run_dir / "persona.json"
+    files = persona_paths(run_dir, who, char)
+    path = files["json"]
     if path.exists():
         old = read_json(path)
         if isinstance(old, dict) and str(old.get("name") or "").strip():
             return old
+    # 페르소나는 한 사람의 카드다 — 다른 주인공을 같이 주면 여러 사람이 한 카드에 섞인다.
+    char = solo(char, who)
     lines = [input_block(char).rstrip("\n")]
     story_text = user_story(char)
     if story_text:
         lines += ["", "사용자가 적은 이야기:", story_text]
     prompt = compose("persona_prompt", "\n".join(lines) + "\n", lang=lang)
-    write_text(run_dir / "persona_prompt.txt", prompt)
+    write_text(files["prompt"], prompt)
     if dry_run:
-        log(f"[페르소나] 프롬프트만 썼습니다 -> {run_dir / 'persona_prompt.txt'}")
+        log(f"[페르소나] 프롬프트만 썼습니다 -> {files['prompt']}")
         return None
     call = llm.Call("PERSONA")
     log(f"[페르소나] {call.describe()} 로 주인공 페르소나를 정리합니다…")
@@ -904,7 +1129,7 @@ def stage_persona(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") ->
         record_error(run_dir, "PERSONA", call.provider, call.model, exc)
         warn(f"주인공 페르소나를 못 만들었습니다 — 없이 갑니다 ({exc})")
         return None
-    write_text(run_dir / "persona_raw.txt", text)
+    write_text(files["raw"], text)
     record(run_dir, meta)
     try:
         obj = story.extract_json(text)
@@ -982,7 +1207,7 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
     log(f"[인물] {call.describe()} 로 주인공과 얽힐 인물을 세웁니다…")
     try:
         # 사진을 같이 준다 — 주인공의 성별을 보고 로맨스 상대를 정한다(cast_prompt).
-        text, meta = call(prompt, images=llm.load_images(char.get("photos") or []))
+        text, meta = call(prompt, images=llm.load_images(all_photos(char)))
     except Exception as exc:                                          # noqa: BLE001
         record_error(run_dir, "CAST", call.provider, call.model, exc)
         warn(f"인물을 못 만들었습니다 — 인물 없이 이야기로 갑니다 ({exc})")
@@ -996,6 +1221,8 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
     except Exception as exc:                                          # noqa: BLE001
         warn(f"인물 응답을 못 읽었습니다 — 인물 없이 이야기로 갑니다 ({exc})")
         return []
+    # 함께 주인공인 사람은 조연이 아니다 — 인물 단계가 그 사람을 인물로 다시 세웠으면 뺀다.
+    cast = [c for c in cast if not is_protagonist(char, str(c.get("name")))]
     # 같은 사람이 두 번 나오면 하나만 둔다 — 보여 주는 화면에 같은 카드가 겹친다.
     seen: set[str] = set()
     cast = [c for c in cast if not (str(c.get("name")).strip() in seen
@@ -1015,6 +1242,9 @@ def stage_cast(run_dir: Path, char: dict, dry_run: bool, lang: str = "ko") -> li
 
 CAST_FIELDS = (("gender", "성별·나이대"), ("look", "생김새·인상"), ("gap", "갭"), ("voice", "말투"),
                ("line", "대표 대사"), ("tie", "주인공과의 얽힘"), ("wants", "원하거나 숨기는 것"))
+# 인물 단계는 이 둘을 안 쓴다. 주인공 자리를 내준 사람(인물 확인의 「주인공 바꾸기」)의 카드에만 있다 —
+# 없으면 줄이 안 생겨서 예전 프롬프트와 같다.
+CAST_FIELDS += (("personality", "성격"), ("situation", "처지·관계·설정"))
 
 
 def _cast_lines(c: dict) -> list[str]:
@@ -1080,7 +1310,7 @@ def _story_in_two(run_dir: Path, char: dict, prompt: str, cast: list[dict]) -> l
         other = ", ".join(f"방향 {k}은 {names[k-1]}" for k in (c, d) if k - 1 < len(names))
         return (prompt + "\n\n## 이번 호출에서 만들 것\n"
                 f"이번 호출은 **방향 {a}와 방향 {b} 두 개만** 만든다. 번호도 그대로 "
-                f"「## 방향 {a} — 제목」「## 방향 {b} — 제목」으로 쓴다. 위에서 「4개」「넷」이라고 "
+                f"「## 방향 {a} — <지은 제목>」「## 방향 {b} — <지은 제목>」으로 쓴다. 위에서 「4개」「넷」이라고 "
                 "한 곳은 이번 호출에서는 이 두 개를 가리킨다. 나머지 두 방향은 다른 호출이 "
                 f"만든다({other}이 상대다) — 그 둘과 판이 겹치지 않게 한다. 넷에 나눠 쓸 몫을 "
                 "이 두 후보에 다 쓴다 — 특히 받은 상대 인물의 인상과 말이 소개와 본문에 살아 있게 한다.\n")
@@ -1093,7 +1323,7 @@ def _story_in_two(run_dir: Path, char: dict, prompt: str, cast: list[dict]) -> l
         call = llm.Call("STORY")
         log(f"[이야기 {i}/2] {call.describe()} 로 후보 2개를 만듭니다…")
         try:
-            return call(pr, images=llm.load_images(char["photos"]))
+            return call(pr, images=llm.load_images(all_photos(char)))
         except Exception as exc:                                      # noqa: BLE001
             record_error(run_dir, "STORY", call.provider, call.model, exc)
             raise
@@ -1155,10 +1385,12 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         # 보여 준다(인물 확인·고르기 화면). 서로 기다릴 이유가 없어 인물과 동시에 부른다.
         # 다시 지을 때는 이미 세운 인물을 그대로 쓴다 — 사람이 본 카드가 바뀌면 안 된다.
         old = read_json(run_dir / "cast.json") if (run_dir / "cast.json").exists() else None
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        with ThreadPoolExecutor(max_workers=3) as pool:
             persona_job = pool.submit(stage_persona, run_dir, char, dry_run, lang)
+            co_job = pool.submit(stage_personas, run_dir, char, dry_run, lang)    # 함께 주인공 카드(#899)
             made = old if isinstance(old, list) and old else stage_cast(run_dir, char, dry_run, lang=lang)
             persona_job.result()
+            co_job.result()
         kind = cast_wait_kind(char, made)
         answer = picked_cast(run_dir)
         if kind and not answer:
@@ -1186,6 +1418,8 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         # 여기서 따로 붙인다(캐릭터 파일을 고치면 다음 시도에도 계속 남는다).
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 " \
                  f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
+    if co_check_line(char):
+        block += "\n\n## 다 쓰고 나서 다시 본다\n" + "\n".join(co_check_line(char))
     prompt = compose("story_prompt_seeded" if seeded else "story_prompt_one" if one else "story_prompt", block, lang=lang)
     write_text(run_dir / "story_prompt.txt", prompt)
     if dry_run:
@@ -1198,7 +1432,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         call = llm.Call("STORY")
         log(f"[이야기] {call.describe()} 로 {'이야기 하나를' if one else '후보 4개를'} 만듭니다…")
         try:
-            text, meta = call(prompt, images=llm.load_images(char["photos"]))
+            text, meta = call(prompt, images=llm.load_images(all_photos(char)))
         except BaseException as exc:                                  # noqa: BLE001 — SystemExit 도 남긴다(#531)
             record_error(run_dir, "STORY", call.provider, call.model, exc)
             raise
@@ -1206,6 +1440,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         record(run_dir, meta)
         directions = parse_directions(text)
     directions = directions[:1] if one else shuffle_directions(directions)
+    fill_titles(run_dir, directions, lang)
     for d in directions:
         n = d.get("n")
         if cast and isinstance(n, int) and n > 0:
@@ -1451,7 +1686,7 @@ def _same_person(scene_name: str, cast_name: str) -> bool:
     return bool(words) and all(w in whole for w in words)
 
 
-def story_cast(run_dir: Path | None, direction: dict, hero: str = "") -> list[dict]:
+def story_cast(run_dir: Path | None, direction: dict, hero: str | dict = "") -> list[dict]:
     """인물 단계(cast.json)가 세운 인물 가운데 고른 이야기에 실제로 나오는 사람.
 
     장면 단계는 이 화의 조연 외모를 「등장인물」 칸에서 처음부터 다시 지었다 — 인물 단계가
@@ -1470,7 +1705,12 @@ def story_cast(run_dir: Path | None, direction: dict, hero: str = "") -> list[di
     for c in cast:
         name = str((c or {}).get("name") or "").strip()
         look = str((c or {}).get("look") or "").strip()
-        if not name or not look or (hero and (_same_person(hero, name) or _same_person(name, hero))):
+        if not name or not look:
+            continue
+        if isinstance(hero, dict):
+            if is_protagonist(hero, name):      # 주인공이 여럿이면 누구도 조연 생김새로 덮지 않는다
+                continue
+        elif hero and (_same_person(hero, name) or _same_person(name, hero)):
             continue
         words = [w for w in re.split(r"[\s·]+", name) if len(w) >= 2]
         words += [w[1:] for w in words if len(w) == 3]      # 성을 뺀 이름(백설화 → 설화)
@@ -1518,7 +1758,12 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
         lines.append(f"- 고른 캐릭터 카드: {charcard.short(charcard.for_story(char))} (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
-    pinned = story_cast(run_dir, direction, char.get("name") or "")
+    if co_protagonists(char):
+        lines += co_scene_lines(char)
+        lines += ["", f"이 웹툰의 주인공은 {', '.join(protagonist_names(char))}이다. 장면 지시에서 「주인공」은 이 "
+                      "사람들 모두를 가리킨다. 장면마다 누가 무엇을 하는지 사람마다 따로 적고, 각자의 행동·표정은 "
+                      "자기 설명에서 예상되는 범위 안에서만 쓴다."]
+    pinned = story_cast(run_dir, direction, char if co_protagonists(char) else (char.get("name") or ""))
     if pinned:
         lines += ["", "[이 이야기의 인물 — 생김새가 이미 정해졌다]",
                   "아래 사람들은 앞 단계에서 생김새까지 정해졌다. 장면 서술과 「등장인물」에 "
@@ -1642,7 +1887,7 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     write_text(run_dir / "scene.md", text)
     record(run_dir, meta)
 
-    parsed = pin_cast_looks(parse_scenes(text), story_cast(run_dir, direction, (char or {}).get("name") or ""))
+    parsed = pin_cast_looks(parse_scenes(text), story_cast(run_dir, direction, char if co_protagonists(char) else (char or {}).get("name") or ""))
     if len(parsed["scenes"]) < 3:
         warn(f"장면을 {len(parsed['scenes'])}개만 읽었습니다 (3개 이상이어야 합니다). "
              f"원문은 {run_dir / 'scene.md'} 에 그대로 있습니다.")
@@ -1671,6 +1916,7 @@ def narration_input_block(char: dict | None, direction: dict, scene_text: str) -
         mine.append(f"{char.get('name') or ''} — {char.get('description') or ''}".strip(" —"))
         for k, v in (char.get("fields") or {}).items():
             mine.append(f"- {k}: {v}")
+        mine += co_scene_lines(char)
     return "\n".join(["# 이야기 본문 — 앞 단계에서 정해진 것", "", direction.get("title", ""), "", body,
                       "", "# 장면 (나레이션을 뺀 것)", "", scenes.strip(),
                       "", "# 사용자가 적은 것 — 독자가 볼 글이 아니다, 옮겨 적지 않는다", "",
@@ -1723,35 +1969,86 @@ def stage_sheet(run_dir: Path, char: dict, dry_run: bool,
     어떤 사진·설명이 문제였는지 알린다.
     """
     failure.clear(run_dir)
-    missing = [str(p) for p in char["photos"] if not Path(p).is_file()]
+    missing = [str(p) for one in [char, *co_protagonists(char)] for p in one["photos"] if not Path(p).is_file()]
     if missing and not dry_run:
         failure.write(run_dir, "SHEET", "photo_missing", "사진 파일이 없습니다: " + ", ".join(missing))
         raise SystemExit("사진 파일이 없습니다: " + ", ".join(missing))
+    each_sheet(run_dir, char, lambda one, paths: _sheet_with_retry(
+        run_dir, one, paths, lambda safety: _sheet_attempt(run_dir, one, dry_run, spec_only, note, safety, paths)))
 
+
+def sheet_stem(name: str) -> str:
+    """시트 파일 이름 — 경로 구분자만 바꾼다. 조연 시트(own.sheet_file_name)·자바(RunArt)와 같은 규칙."""
+    return re.sub(r"[\\/]", "_", (name or "").strip())
+
+
+def sheet_paths(run_dir: Path, name: str | None = None) -> dict:
+    """시트 하나가 쓰는 파일들. 이름이 없으면 첫 주인공(run 폴더 바로 아래 sheet.png),
+    있으면 함께 주인공인 사람 — 조연 시트와 같은 자리(sheets/<이름>.png)라 장 그림·연재 승계·자바가
+    시트를 찾는 길을 그대로 쓴다."""
+    if not name:
+        return {"png": run_dir / "sheet.png", "spec": run_dir / "sheet_spec.json",
+                "spec_prompt": run_dir / "sheet_spec_prompt.txt", "prompt": run_dir / "sheet_prompt.txt",
+                "rejected": run_dir / "sheet_spec_rejected.json", "label": "시트", "who": ""}
+    stem = sheet_stem(name)
+    folder = run_dir / "sheets"
+    return {"png": folder / f"{stem}.png", "spec": folder / f"{stem}.spec.json",
+            "spec_prompt": folder / f"{stem}.spec_prompt.txt", "prompt": folder / f"{stem}.prompt.txt",
+            "rejected": folder / f"{stem}.spec_rejected.json", "label": f"{name} 시트", "who": name}
+
+
+def each_sheet(run_dir: Path, char: dict, draw) -> None:
+    """주인공마다 시트를 하나씩 — 첫 주인공은 sheet.png, 함께 주인공인 사람은 sheets/<이름>.png.
+
+    한 명짜리 작품은 예전처럼 첫 주인공 시트만 그린다. 여럿이면 동시에 그린다(서로 기다릴 이유가 없다).
+    하나라도 실패하면 그 예외를 올린다 — 시트 없이 그리면 그 사람이 장마다 다른 얼굴이 된다.
+    """
+    jobs = [(solo(char), sheet_paths(run_dir))]
+    jobs += [(solo(char, i), sheet_paths(run_dir, one["name"])) for i, one in enumerate(co_protagonists(char), 1)]
+    if len(jobs) == 1:
+        draw(*jobs[0])
+        return
+    (run_dir / "sheets").mkdir(parents=True, exist_ok=True)
+    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        futs = [pool.submit(draw, one, paths) for one, paths in jobs]
+        errors = []
+        for f in futs:
+            try:
+                f.result()
+            except BaseException as exc:                              # noqa: BLE001
+                errors.append(exc)
+    if errors:
+        raise errors[0]
+
+
+def _sheet_with_retry(run_dir: Path, char: dict, paths: dict, attempt) -> None:
+    """시트 하나 — 안전 검사에 걸리면 한 번은 걸린 분류를 피해 사양부터 다시 쓴다(#531)."""
     safety = ""
-    for attempt in (1, 2):
+    label = paths["label"]
+    for n in (1, 2):
         try:
-            _sheet_attempt(run_dir, char, dry_run, spec_only, note, safety)
+            attempt(safety)
             return
         except BaseException as exc:                                  # noqa: BLE001
             cats = failure.refusal_categories(exc)
             if cats is None:
-                failure.write(run_dir, "SHEET", "error", f"{type(exc).__name__}: {exc}")
+                failure.write(run_dir, "SHEET", "error", f"{type(exc).__name__}: {exc}", who=paths["who"])
                 raise
-            if attempt == 1:
-                warn(f"[시트] 안전 검사에 걸렸습니다({', '.join(cats) or '분류 미상'}) — "
+            if n == 1:
+                warn(f"[{label}] 안전 검사에 걸렸습니다({', '.join(cats) or '분류 미상'}) — "
                      "걸린 분류를 피해 사양부터 한 번 다시 씁니다")
-                for name in ("sheet.png", "sheet_spec.json"):
-                    (run_dir / name).unlink(missing_ok=True)
+                for key in ("png", "spec"):
+                    paths[key].unlink(missing_ok=True)
                 safety = failure.safety_note(cats)
                 continue
             failure.write(run_dir, "SHEET_IMAGE", "image_safety",
-                          f"{type(exc).__name__}: {exc}", cats)
-            raise SystemExit(f"시트가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
+                          f"{type(exc).__name__}: {exc}", cats, who=paths["who"])
+            raise SystemExit(f"{label}가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
 
 
 def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
-                   note: str, safety: str) -> None:
+                   note: str, safety: str, paths: dict | None = None) -> None:
+    paths = paths or sheet_paths(run_dir)
     photos = char["photos"]
     block = input_block(char)
     note = (note or "").strip()
@@ -1763,14 +2060,14 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
     if safety:
         block += "\n\n" + safety
     prompt = compose("sheet_prompt", block)
-    write_text(run_dir / "sheet_spec_prompt.txt", prompt)
+    write_text(paths["spec_prompt"], prompt)
 
-    spec_path = run_dir / "sheet_spec.json"
+    spec_path = paths["spec"]
     if spec_path.exists():
         log(f"[시트] 사양이 이미 있습니다 -> {spec_path} (재사용)")
         spec = json.loads(spec_path.read_text(encoding="utf-8"))
     elif dry_run:
-        log(f"[시트] 사양 프롬프트만 썼습니다 -> {run_dir / 'sheet_spec_prompt.txt'}")
+        log(f"[{paths['label']}] 사양 프롬프트만 썼습니다 -> {paths['spec_prompt']}")
         return
     else:
         call = llm.Call("SHEET")
@@ -1784,21 +2081,21 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
         spec = sheetmod.parse_spec(text)
         bad = sheetmod.gate_spec(spec)
         if bad:
-            write_json(run_dir / "sheet_spec_rejected.json", spec)
+            write_json(paths["rejected"], spec)
             raise SystemExit("시트 사양이 모자랍니다 — 그리기 전에 멈춥니다:\n  - "
                              + "\n  - ".join(bad))
         write_json(spec_path, spec)
 
     image_prompt = sheetmod.build_prompt(spec, from_photo=bool(photos))
-    write_text(run_dir / "sheet_prompt.txt", image_prompt)
+    write_text(paths["prompt"], image_prompt)
     if spec_only:
         log(f"[시트] 사양까지만 했습니다. 그림은 안 그렸습니다 -> {spec_path}")
         return
     if dry_run:
-        log(f"[시트] 이미지 프롬프트만 썼습니다 -> {run_dir / 'sheet_prompt.txt'}")
+        log(f"[{paths['label']}] 이미지 프롬프트만 썼습니다 -> {paths['prompt']}")
         return
 
-    out = run_dir / "sheet.png"
+    out = paths["png"]
     if out.exists():
         log(f"[시트] {out} 가 이미 있습니다. 다시 뽑으려면 지우세요.")
         return
@@ -1827,8 +2124,12 @@ def direction_of(run_dir: Path) -> dict | None:
     if not path.exists():
         return None
     directions = json.loads(path.read_text(encoding="utf-8"))
-    return (next((d for d in directions if d.get("n") == pick.get("n")), None)
-            or (directions[0] if directions else None))
+    chosen = (next((d for d in directions if d.get("n") == pick.get("n")), None)
+              or (directions[0] if directions else None))
+    # 완성본에서 고친 제목은 서버 DB 에만 있다. 다시 그리기가 넘겨 주는 값이 파일의 처음 제목보다 먼저다 —
+    # 안 그러면 표지에 옛 제목을 그리고, 표지 검수도 옛 제목에 맞춰 되돌린다.
+    title = (os.environ.get("NH_TITLE") or "").strip()
+    return {**chosen, "title": title} if chosen and title else chosen
 
 
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,

@@ -122,9 +122,31 @@ public class WorkLedger {
      */
     @Transactional(readOnly = true)
     public boolean mayRead(String runId, Long userId) {
+        return mayRead(runId, userId, null);
+    }
+
+    /**
+     * 위와 같고, 주소에 실려 온 열쇠도 본다(#898) — 「링크 있는 사람만」 작품은 열쇠가 맞으면 로그인 없이 읽는다.
+     *
+     * 열쇠로 여는 것은 <b>지금도 링크 공개인 작품만</b>이다. 휴지통에 들었거나 관리자가 숨긴 · 지운 작품은 열쇠가
+     * 맞아도 닫는다 — 숨김을 풀면 is_public 이 처리 전 값으로 돌아오고 열쇠는 남아 있으므로 링크도 다시 산다.
+     */
+    @Transactional(readOnly = true)
+    public boolean mayRead(String runId, Long userId, String key) {
         return works.findFirstByRunId(runId)
-                .map(work -> work.isPublic() || isOwner(work, userId))
+                .map(work -> work.isPublic() || isOwner(work, userId) || opensByLink(work, key))
                 .orElse(true);
+    }
+
+    private static boolean opensByLink(WebtoonWork work, String key) {
+        return work.isLinkOnly() && !work.isTrashed() && work.getModeration() == null
+                && WorkVisibility.matches(work.getShareKey(), key);
+    }
+
+    /** 이 열쇠가 이 작품을 여는가 — 연재 회차 목록이 링크로 온 사람에게 그 회차를 보여 줄 때 쓴다. */
+    @Transactional(readOnly = true)
+    public boolean opensByLink(String runId, String key) {
+        return key != null && works.findFirstByRunId(runId).map(w -> opensByLink(w, key)).orElse(false);
     }
 
     /** 이 작품을 이 사람이 공개/비공개로 바꿔도 되나. */
@@ -179,6 +201,51 @@ public class WorkLedger {
     @Transactional(readOnly = true)
     public java.util.Optional<WebtoonWork> find(String runId) {
         return works.findFirstByRunId(runId);
+    }
+
+    /**
+     * 공개 범위를 세 단계 중 하나로 적는다(#898). -> 바뀐 뒤의 작품. 없는 작품이면 비어 있다.
+     *
+     * <ul>
+     *   <li>공개 — is_public 만 켠다. 열쇠는 남긴다(다시 링크 공개로 내려도 보낸 링크가 산다).</li>
+     *   <li>링크 공개 — is_public 을 끄고, 열쇠가 없으면 새로 만든다.</li>
+     *   <li>비공개 — is_public 을 끄고 열쇠를 버린다. 이미 보낸 링크도 닫힌다.</li>
+     * </ul>
+     */
+    @Transactional
+    public java.util.Optional<WebtoonWork> setVisibility(String runId, String mode) {
+        return works.findFirstByRunId(runId).map(work -> {
+            apply(work, mode);
+            return works.save(work);
+        });
+    }
+
+    private static void apply(WebtoonWork work, String mode) {
+        switch (mode) {
+            case WorkVisibility.PUBLIC -> work.setPublic(true);
+            case WorkVisibility.LINK -> {
+                work.setPublic(false);
+                if (work.getShareKey() == null || work.getShareKey().isBlank()) {
+                    work.setShareKey(WorkVisibility.newKey());
+                }
+            }
+            default -> {
+                work.setPublic(false);
+                work.setShareKey(null);
+            }
+        }
+    }
+
+    /** 공개 범위 한 낱말 — 모르는 작품은 공개(옛 작품, {@link #isPublic} 과 같은 기본값). */
+    @Transactional(readOnly = true)
+    public String visibilityOf(String runId) {
+        return works.findFirstByRunId(runId).map(WebtoonWork::visibility).orElse(WorkVisibility.PUBLIC);
+    }
+
+    /** 다음 화가 앞 화의 링크 공개를 이어받는다(#898) — 열쇠는 회차마다 따로 만든다. */
+    @Transactional
+    public void setLinkOnlyByJob(String jobId) {
+        works.findByJobId(jobId).ifPresent(work -> { apply(work, WorkVisibility.LINK); works.save(work); });
     }
 
     /** 다음 화는 앞 화의 비공개 상태를 이어받는다. */

@@ -267,12 +267,12 @@ function Pager({ page, total, size, setPage }: { page: number; total: number; si
 /* ---- 작품 ------------------------------------------------------------------ */
 
 const WORK_FILTERS: [string, string][] = [
-  ["all", "전체"], ["public", "공개"], ["private", "비공개"], ["hidden", "관리자 비공개"],
+  ["all", "전체"], ["public", "공개"], ["link", "링크 공유(일부공개)"], ["private", "비공개"], ["hidden", "관리자 비공개"],
   ["removed", "관리자 삭제"], ["trash", "작가 휴지통"], ["guest", "로그인 안 함"],
 ];
 
 const STATE_TEXT: Record<AdminWorkState, string> = {
-  public: "공개", private: "비공개", hidden: "관리자 비공개", removed: "관리자 삭제", trash: "작가 휴지통",
+  public: "공개", link: "링크 공유(일부공개)", private: "비공개", hidden: "관리자 비공개", removed: "관리자 삭제", trash: "작가 휴지통",
 };
 
 function Works({ go }: { go: Go }) {

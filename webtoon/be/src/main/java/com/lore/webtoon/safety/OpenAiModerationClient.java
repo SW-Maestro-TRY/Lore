@@ -82,17 +82,60 @@ public class OpenAiModerationClient implements ModerationClient {
         }
     }
 
-    Verdict parse(String body) throws ModerationUnavailable {
+    /** 여러 글을 한 번의 요청으로 묻는다 — moderation 은 input 에 배열을 받고 같은 순서로 results 를 돌려준다. */
+    @Override
+    public java.util.List<Verdict> moderateAll(java.util.List<String> texts) throws ModerationUnavailable {
+        if (texts.isEmpty()) {
+            return java.util.List.of();
+        }
+        if (!ready()) {
+            throw new ModerationUnavailable("WEBTOON_API_KEY 가 없어 검사를 못 합니다", null);
+        }
         try {
-            JsonNode r = json.readTree(body).path("results").path(0);
-            if (r.isMissingNode()) {
-                throw new ModerationUnavailable("moderation 응답에 results 가 없음: " + head(body), null);
+            String body = json.writeValueAsString(Map.of("model", MODEL, "input", texts));
+            HttpRequest req = HttpRequest.newBuilder(URI.create(ENDPOINT))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .timeout(timeout)
+                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                    .build();
+            HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (res.statusCode() / 100 != 2) {
+                throw new ModerationUnavailable("moderation HTTP " + res.statusCode() + ": " + head(res.body()), null);
             }
-            Map<String, Boolean> cats = new LinkedHashMap<>();
-            r.path("categories").fields().forEachRemaining(f -> cats.put(f.getKey(), f.getValue().asBoolean(false)));
-            Map<String, Double> scores = new LinkedHashMap<>();
-            r.path("category_scores").fields().forEachRemaining(f -> scores.put(f.getKey(), f.getValue().asDouble(0)));
-            return new Verdict(r.path("flagged").asBoolean(false), cats, scores);
+            java.util.List<Verdict> out = parseAll(res.body());
+            if (out.size() != texts.size()) {
+                throw new ModerationUnavailable("moderation 결과 수가 다름: " + out.size() + " / " + texts.size(), null);
+            }
+            return out;
+        } catch (IOException e) {
+            throw new ModerationUnavailable("moderation 통신 실패", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ModerationUnavailable("moderation 중단", e);
+        }
+    }
+
+    Verdict parse(String body) throws ModerationUnavailable {
+        java.util.List<Verdict> all = parseAll(body);
+        if (all.isEmpty()) {
+            throw new ModerationUnavailable("moderation 응답에 results 가 없음: " + head(body), null);
+        }
+        return all.get(0);
+    }
+
+    java.util.List<Verdict> parseAll(String body) throws ModerationUnavailable {
+        try {
+            JsonNode results = json.readTree(body).path("results");
+            java.util.List<Verdict> out = new java.util.ArrayList<>();
+            for (JsonNode r : results) {
+                Map<String, Boolean> cats = new LinkedHashMap<>();
+                r.path("categories").fields().forEachRemaining(f -> cats.put(f.getKey(), f.getValue().asBoolean(false)));
+                Map<String, Double> scores = new LinkedHashMap<>();
+                r.path("category_scores").fields().forEachRemaining(f -> scores.put(f.getKey(), f.getValue().asDouble(0)));
+                out.add(new Verdict(r.path("flagged").asBoolean(false), cats, scores));
+            }
+            return out;
         } catch (IOException e) {
             throw new ModerationUnavailable("moderation 응답을 못 읽음", e);
         }

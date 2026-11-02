@@ -37,12 +37,70 @@ class SafetyGuardTest {
     }
 
     @Test
-    @DisplayName("막는 분류에 걸리면 400 과 정해진 한 줄")
+    @DisplayName("막는 분류에 걸리면 400 — 정해진 안내가 앞에 그대로 있다(화면 번역 키)")
     void blockedCategoryThrows() {
         SafetyGuard g = new SafetyGuard(answering(flagged("sexual/minors")), true, false);
         assertThatThrownBy(() -> g.checkText("t", "…"))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage(SafetyGuard.MESSAGE);
+                .hasMessageStartingWith(SafetyGuard.MESSAGE)
+                .hasMessageContaining("이유: 미성년자를 성적으로 다루는 표현");
+    }
+
+    @Test
+    @DisplayName("걸리면 어느 칸의 어느 문장인지 알려 준다 — 걸린 칸만, 걸린 문장만")
+    void locatesFieldAndSentence() {
+        ModerationClient byWord = text -> text.contains("문제") ? flagged("violence/graphic") : ModerationClient.Verdict.clean();
+        SafetyGuard g = new SafetyGuard(byWord, true, false);
+        assertThatThrownBy(() -> g.checkFields("t",
+                SafetyGuard.Field.of("이름", "몽이"),
+                SafetyGuard.Field.of("이야기", "평범하게 시작한다. 여기가 문제의 문장이다! 그리고 끝난다.")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageStartingWith(SafetyGuard.MESSAGE)
+                .hasMessageContaining("걸린 곳: 「이야기」 칸 「여기가 문제의 문장이다!」")
+                .hasMessageContaining("이유: 잔혹한 폭력 묘사")
+                .hasMessageNotContaining("몽이")
+                .hasMessageNotContaining("평범하게");
+    }
+
+    @Test
+    @DisplayName("금지어에 걸리면 그 말이 든 칸과 문장을 알려 준다 — 금지어 목록은 안 보인다")
+    void bannedWordSpot() {
+        SafetyGuard g = new SafetyGuard(answering(ModerationClient.Verdict.clean()), true, false);
+        assertThatThrownBy(() -> g.checkFields("t",
+                SafetyGuard.Field.of("캐릭터 설명", "밝은 성격이다."),
+                SafetyGuard.Field.of("추가 설정", "첫 문장. 둘이 성관계를 맺는 장면을 넣어 줘.")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("「추가 설정」 칸 「둘이 성관계를 맺는 장면을 넣어 줘.」")
+                .hasMessageContaining("이유: 선정적인 표현")
+                .hasMessageNotContaining("첫 문장");
+    }
+
+    @Test
+    @DisplayName("깨끗한 글은 전처럼 한 번만 묻는다 — 자리를 찾는 물음은 걸렸을 때만")
+    void cleanAsksOnce() {
+        java.util.concurrent.atomic.AtomicInteger asked = new java.util.concurrent.atomic.AtomicInteger();
+        SafetyGuard g = new SafetyGuard(text -> { asked.incrementAndGet(); return ModerationClient.Verdict.clean(); }, true, false);
+        g.checkFields("t", SafetyGuard.Field.of("이름", "몽이"), SafetyGuard.Field.of("이야기", "한 문장. 두 문장."));
+        assertThat(asked.get()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("문장 나누기 — 마침표·물음표·느낌표·줄바꿈")
+    void splitsSentences() {
+        assertThat(SafetyGuard.sentences("하나다. 둘이야? 셋!\n넷"))
+                .containsExactly("하나다.", "둘이야?", "셋!", "넷");
+    }
+
+    @Test
+    @DisplayName("OpenAI 응답의 results 여러 개를 같은 순서로 읽는다")
+    void parsesManyResults() throws Exception {
+        OpenAiModerationClient c = new OpenAiModerationClient("k", 8);
+        List<ModerationClient.Verdict> vs = c.parseAll("""
+                {"results":[{"flagged":false,"categories":{"sexual":false}},
+                            {"flagged":true,"categories":{"sexual":true}}]}""");
+        assertThat(vs).hasSize(2);
+        assertThat(SafetyGuard.hits(vs.get(0))).isEmpty();
+        assertThat(SafetyGuard.hits(vs.get(1))).containsExactly("sexual");
     }
 
     @Test
@@ -115,5 +173,28 @@ class SafetyGuardTest {
         OpenAiModerationClient c = new OpenAiModerationClient("", 8);
         assertThat(c.ready()).isFalse();
         assertThatThrownBy(() -> c.moderate("x")).isInstanceOf(ModerationClient.ModerationUnavailable.class);
+    }
+
+    @Test
+    @DisplayName("걸린 곳 안내의 조각(안내·이유 종류)이 화면 사전에 다 있다 — 없으면 다른 언어 화면에 한국어가 그대로 나온다")
+    void 화면_사전에_조각이_있다() throws java.io.IOException {
+        java.nio.file.Path dict = null;
+        for (java.nio.file.Path up = java.nio.file.Path.of("").toAbsolutePath(); up != null; up = up.getParent()) {
+            java.nio.file.Path cand = up.resolve("webtoon/fe/lib/serverI18n.ts");
+            if (java.nio.file.Files.isRegularFile(cand)) {
+                dict = cand;
+                break;
+            }
+        }
+        org.junit.jupiter.api.Assumptions.assumeTrue(dict != null, "화면 사전을 못 찾음");
+        String ts = java.nio.file.Files.readString(dict);
+        assertThat(ts).contains("\"" + SafetyGuard.MESSAGE + "\"");
+        for (String kind : SafetyGuard.KIND.values()) {
+            assertThat(ts).as("이유 종류 「%s」", kind).contains("\"" + kind + "\":");
+        }
+        // 조각을 잇는 말 — messageFor 와 화면(safetyBlocked)이 같은 말로 자른다.
+        String sample = SafetyGuard.messageFor(new SafetyGuard.Spot("이야기", "문장", List.of("sexual")));
+        assertThat(sample).isEqualTo(SafetyGuard.MESSAGE + " 걸린 곳: 「이야기」 칸 「문장」 · 이유: 선정적인 표현");
+        assertThat(ts).contains("\" 걸린 곳: \"").contains("\" · 이유: \"").contains("\"적은 내용\"");
     }
 }

@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   browseRuns, coverUrl, episodeDownloadUrl, isMyRun, likedAmong, myAccountRuns, pageDownloadUrl, pageUrl,
-  readSeries, type SeriesInfo, readAllowance, readResult, rememberRecent, renameRun, type Allowance, type RunCard, type RunResult,
+  readSeries, type SeriesInfo, readAllowance, readResult, rememberRecent, renameRun, shareKeyOf, type Allowance, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useT } from "../../lib/i18n";
+import { unsafeWhy } from "../../lib/serverI18n";
 import { track } from "../../lib/track";
 import { metaTrack, metaTrackCustom } from "../../lib/metaPixel";
 import type { Go } from "../../lib/nav";
@@ -63,6 +64,8 @@ export default function Result({ runId, go, authenticated = false, page }: { run
   const [accountChecked, setAccountChecked] = useState(false);
   /* 아트보드 Done 의 「컷별로 내려받기」 — 켜면 장마다 내려받기 줄이 붙는다. */
   const [perPage, setPerPage] = useState(false);
+  /* 그림만 — 말풍선·나레이션·글자·스티커를 빼고 받는다. 직접 그린 선(리터치)과 LORE 표시는 그대로. */
+  const [plain, setPlain] = useState(false);
   /* 크게 보기 — 장을 누르면 화면 전체에 띄운다. 웹툰 장은 세로로 길어서
      화면에 통째로 맞추면 오히려 작아진다. 폭에 맞추고 세로로 흘린다. */
   const [zoom, setZoom] = useState<number | null>(null);
@@ -365,8 +368,8 @@ export default function Result({ runId, go, authenticated = false, page }: { run
     data.pages.forEach((pg, i) => {
       setTimeout(() => {
         const a = document.createElement("a");
-        a.href = pageDownloadUrl(runId, pg.no);
-        a.download = `${runId}-${pg.no}.png`;
+        a.href = pageDownloadUrl(runId, pg.no, plain);
+        a.download = `${runId}-${pg.no}${plain ? "-plain" : ""}.png`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -399,6 +402,10 @@ export default function Result({ runId, go, authenticated = false, page }: { run
     if (zoom == null || zoomLoaded < above) return;
     document.getElementById(`wt-zoom-${zoom}`)?.scrollIntoView({ block: "start" });
   }, [zoom, zoomLoaded, above]);
+
+  /* 「링크 공유(일부공개)」(#898) — 주인은 서버가 준 열쇠, 링크로 온 사람은 주소에서 받은 열쇠로 공유 주소를 만든다. */
+  const linkKey = data?.share_key || (data?.visibility === "link" ? shareKeyOf(runId) : undefined);
+  const canShare = !!data && (data.public !== false || !!linkKey);
 
   return (
     <div className="wt-result wt-result-final">
@@ -479,9 +486,9 @@ export default function Result({ runId, go, authenticated = false, page }: { run
                   <IconComment size={16} /> {comments ?? 0}
                 </button>
                 {/* 남의 작품은 공유를 찜·댓글 옆에 둔다(2026-10-25). 내 작품은 아래 단추 줄에 있다. */}
-                {!mine && data.public !== false && (
+                {!mine && canShare && (
                   <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character}
-                             className="wt-result-shareinline" label={t("공유하기")} />
+                             className="wt-result-shareinline" label={t("공유하기")} shareKey={linkKey} />
                 )}
               </span>
 
@@ -532,20 +539,21 @@ export default function Result({ runId, go, authenticated = false, page }: { run
                   <button type="button" className="btn btn-w" onClick={() => { track("editor_open", { run: runId, where: "result" }); go("editor", { run: runId }); }}>
                     <IconEdit size={18} /> {t("편집실")}
                   </button>
-                  <a className="btn btn-w" href={episodeDownloadUrl(runId)} download
+                  <a className="btn btn-w" href={episodeDownloadUrl(runId, plain)} download
                      onClick={(e) => {
                        if (perPage) {
                          e.preventDefault();
                          downloadEachPage();
-                         track("download_click", { run: runId, kind: "page_all" });
+                         track("download_click", { run: runId, kind: "page_all", plain });
                        } else {
-                         track("download_click", { run: runId, kind: "episode" });
+                         track("download_click", { run: runId, kind: "episode", plain });
                        }
                      }}>
                     <IconDownload size={18} /> {t("내려받기")}
                   </a>
-                  {/* 비공개 작품은 공유 버튼을 감춘다(#638) — 링크를 받은 사람은 404 를 본다. */}
-                  {data.public !== false && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} />}
+                  {/* 비공개 작품은 공유 버튼을 감춘다(#638) — 링크를 받은 사람은 404 를 본다.
+                      링크 공유(#898)는 열쇠를 붙인 주소로 공유한다. */}
+                  {canShare && <ShareMenu runId={runId} episode={ep} title={data.title} character={data.character} shareKey={linkKey} />}
                 </div>
                 {tomorrow && <p className="wt-result-tomorrow">{tomorrow}</p>}
                 <div className="wt-result-dlrow">
@@ -553,6 +561,11 @@ export default function Result({ runId, go, authenticated = false, page }: { run
                     <input type="checkbox" checked={perPage} aria-label={t("컷별로 내려받기")}
                            onChange={(e) => { setPerPage(e.target.checked); if (e.target.checked) track("download_per_page_open", { run: runId }); }} />
                     {t("컷별로 내려받기")}
+                  </label>
+                  <label className="wt-result-perpage">
+                    <input type="checkbox" checked={plain} aria-label={t("그림만 (말풍선·글자 빼고)")}
+                           onChange={(e) => { setPlain(e.target.checked); if (e.target.checked) track("download_plain_on", { run: runId }); }} />
+                    {t("그림만 (말풍선·글자 빼고)")}
                   </label>
                 </div>
               </>
@@ -598,7 +611,10 @@ export default function Result({ runId, go, authenticated = false, page }: { run
               /* 안전 기준에 걸려 빈 장으로 완성됐다(#626) — 어디를 어떻게 고치면 되는지 */
               <div className="wt-result-unsafe" role="status">
                 <p>{t("{pages} 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 편집실에서 그 장면 설명을 고쳐 다시 그려 주세요. 빈 장 다시 그리기는 무료예요.",
-                  { pages: (data.unsafe_pages ?? []).map((n) => t("{n}쪽", { n })).join(", ") })}</p>
+                  { pages: (data.unsafe_pages ?? []).map((n) => {
+                    const why = unsafeWhy(t, data.unsafe_kinds?.[String(n)], data.unsafe_reasons?.[String(n)]);
+                    return t("{n}쪽", { n }) + (why ? ` (${why})` : "");
+                  }).join(", ") })}</p>
                 <button type="button" className="btn btn-p btn-sm"
                         onClick={() => { track("editor_open", { run: runId, where: "result_unsafe" }); go("editor", { run: runId }); }}>
                   <IconEdit size={16} /> {t("편집실에서 다시 그리기")}
@@ -637,8 +653,8 @@ export default function Result({ runId, go, authenticated = false, page }: { run
                       <span className="wt-result-blank">{t("이 장면은 이미지 안전 기준에 걸려 아직 그리지 못했어요")}</span>
                     )}
                     {mine && perPage && (
-                      <a className="wt-result-pgdl" href={pageDownloadUrl(runId, pg.no)} download
-                         onClick={() => track("download_click", { run: runId, kind: "page", page: pg.no })}>
+                      <a className="wt-result-pgdl" href={pageDownloadUrl(runId, pg.no, plain)} download
+                         onClick={() => track("download_click", { run: runId, kind: "page", page: pg.no, plain })}>
                         <IconDownload size={14} /> {t("이 장 내려받기")}
                       </a>
                     )}
