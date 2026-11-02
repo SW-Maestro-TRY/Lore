@@ -6,9 +6,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Go } from "../../lib/nav";
 import {
-  WebtoonApiError, allowanceLine, listCharacters, listLorebooks, notifyByEmail, readAllowance, readCharacter, saveOriginalCharacter,
+  WebtoonApiError, allowanceLine, listCharacters, listLorebooks, notifyByEmail, readAllowance, readCharacter, saveOriginalCharacter, uploadDataUrlsAsGuest,
   type Allowance, type Character, type LoreBook,
 } from "../../lib/api";
+import { uploadDataUrls } from "@common/api/uploads";
+import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { startJob } from "../../lib/start";
 import DirectSwitch from "../../ui/DirectSwitch";
 import {
@@ -126,6 +128,13 @@ function CardRail({ small, children }: { small?: boolean; children: React.ReactN
 
 const TITLE_MAX = 60;
 const SETTINGS_MAX = 8000;
+
+/* 빠른 시작의 빈칸 예시(2026-11-01) — 광고로 온 사람은 자기 캐릭터가 없을 수 있다. 누르면 칸만 채우고, 고쳐 쓸 수 있다. */
+const QUICK_EXAMPLES = [
+  { id: "can", label: "다 마신 캔커피", name: "맥짐", text: "다 마신 캔커피. 먹을 것 앞에서는 의리도 원칙도 없다." },
+  { id: "demon", label: "꼬마 마왕", name: "소율", text: "꼬마 여자아이처럼 생겼지만 사실 마왕이다. 그러나 귀엽다." },
+  { id: "student", label: "지친 대학원생", name: "원기", text: "피곤에 쩌든 안경 쓴 대학원생" },
+] as const;
 
 export default function Wizard({
   step: rawStep, presetCharacterId, go, authenticated, mode, quick, presetStyle,
@@ -486,14 +495,25 @@ export default function Wizard({
   const order = (id: string) => (form.characterId === id ? 1 : coIds.includes(id) ? 2 + coIds.indexOf(id) : 0);
   const [quickSaving,setQuickSaving]=useState(false);
   const [quickErr,setQuickErr]=useState("");
+  /* 빠른 시작의 캐릭터 그림(선택, 2026-11-01) — AI 로 뽑아 둔 그림 한 장을 바로 넣는 길. 넣으면 카드 그림이 되고, 안 넣으면 첫 작품의 시트로 채워진다. */
+  const [quickPhoto,setQuickPhoto]=useState("");
+  const [quickReading,setQuickReading]=useState(false);
+  const quickFile=useRef<HTMLInputElement>(null);
+  const pickQuickPhoto=async(f:File)=>{
+    setQuickReading(true);setQuickErr("");
+    try{setQuickPhoto(await readPhoto(f));}
+    catch(e){setQuickErr(errText(e,t("이미지를 읽지 못했습니다")));}
+    finally{setQuickReading(false);}
+  };
   const next=async()=>{
     track("story_input",{genre:form.genre||"",edited:genreIsCustom,name_len:form.story.length,mode:"quick"});
     if(quickTyped){
       /* 이름·설명만 적고 넘어가는 길(2026-10-27) — 캐릭터를 먼저 저장해 「내 캐릭터」에 남긴다. 그림은 첫 작품의 시트로 채워진다. */
       setQuickSaving(true);setQuickErr("");
       try{
-        const c=await saveOriginalCharacter({name:form.name.trim(),description:form.character.trim(),photo_keys:[]});
-        track("quick_character_saved",{character:c.id,logged_in:authenticated});
+        const photo_keys=!quickPhoto?[]:authenticated?await uploadDataUrls([quickPhoto],"webtoon"):await uploadDataUrlsAsGuest([quickPhoto]);
+        const c=await saveOriginalCharacter({name:form.name.trim(),description:form.character.trim(),photo_keys});
+        track("quick_character_saved",{character:c.id,logged_in:authenticated,has_photo:!!quickPhoto});
         setChars(cs=>[c,...(cs||[]).filter(x=>x.id!==c.id)]);
         pickChar(c);
         go("create",{step:2,character:c.id,mode:own?"own":undefined,quick:true});
@@ -521,7 +541,16 @@ export default function Wizard({
           <h2>{t("주인공을 한 줄로 적어 주세요")}</h2>
           <label className="wt-wiz-morefield"><span>{t("이름")}<small>{form.name.length} / 60</small></span><input className="field" value={form.name} maxLength={60} disabled={loreLocked||quickSaving} onChange={e=>patch({name:e.target.value})}/></label>
           <label className="wt-wiz-morefield"><span>{t("캐릭터 설명")}<small>{form.character.length.toLocaleString()} / 8,000</small></span><textarea className="field" rows={3} value={form.character} maxLength={8000} disabled={loreLocked||quickSaving} placeholder={t("성격 · 외형 · 상황, 한 줄이면 돼요")} onChange={e=>patch({character:e.target.value})}/></label>
-          <p className="dim hint">{t("적은 캐릭터는 내 캐릭터에 남고, 그림은 첫 웹툰의 캐릭터 시트로 채워져요. 사진이 있으면 아래 「새 캐릭터 만들기」에서 올려요.")}</p>
+          {!form.character.trim()&&<div className="wt-wiz-quickchips"><span>{t("뭘 적을지 모르겠다면")}</span>{QUICK_EXAMPLES.map(x=><button type="button" key={x.label} disabled={loreLocked||quickSaving} onClick={()=>{track("quick_example_pick",{pick:x.id});patch({name:form.name.trim()?form.name:t(x.name),character:t(x.text)});}}>{t(x.label)}</button>)}</div>}
+          <div className="wt-wiz-quickphoto">
+            {quickPhoto&&<img src={quickPhoto} alt={t("넣은 캐릭터 그림")}/>}
+            <div>
+              <button type="button" className="btn btn-w btn-sm" disabled={loreLocked||quickSaving||quickReading} onClick={()=>quickFile.current?.click()}>{quickReading?<span className="spin"/>:<IconPlus size={15}/>}{t(quickPhoto?"그림 바꾸기":"캐릭터 그림 넣기")}</button>
+              {quickPhoto?<button type="button" className="btn-ghost" disabled={quickSaving} onClick={()=>setQuickPhoto("")}>{t("그림 빼기")}</button>:<small>{t("선택")}</small>}
+            </div>
+            <input ref={quickFile} type="file" hidden accept={PHOTO_ACCEPT} aria-label={t("캐릭터 그림 넣기")} onChange={e=>{const f=e.target.files?.[0];e.target.value="";if(f)void pickQuickPhoto(f);}}/>
+          </div>
+          <p className="dim hint">{t("적은 캐릭터는 내 캐릭터에 남아요. 그림을 안 넣으면 첫 웹툰의 캐릭터 시트로 채워져요.")}</p>
           {quickErr&&<ErrLine text={quickErr}/>}
         </section>}
         <section className="wt-create-characters"><h2>{t(quick&&!form.characterId?"또는 캐릭터 카드를 골라요":"누가 주인공인가요?")}</h2>

@@ -91,6 +91,12 @@ h1 span{display:block}
 var endSeen=false;if('IntersectionObserver' in window){new IntersectionObserver(function(es){es.forEach(function(e){endSeen=e.isIntersecting;upd();})},{threshold:.15}).observe(end);}
 function upd(){var past=hero.getBoundingClientRect().bottom<0;s.classList.toggle('on',past&&!endSeen);}
 window.addEventListener('scroll',upd,{passive:true});upd();
+/* 광고 주소의 utm 을 만들기 단추까지 이어 주고, 랜딩 방문을 남긴다 — 이게 없으면 소재·세트별 성과를 못 가른다 */
+var u=new URLSearchParams(location.search),keys=['utm_source','utm_medium','utm_campaign','utm_content'];
+if(u.get('utm_source')){document.querySelectorAll('a[href]').forEach(function(a){try{var l=new URL(a.href,location.href);if(l.search.indexOf('utm_')<0)return;keys.forEach(function(k){if(u.get(k))l.searchParams.set(k,u.get(k));});a.href=l.href;}catch(e){}});}
+try{var id=localStorage.getItem('lore_uid');if(!id){id='u'+Date.now().toString(36)+Math.random().toString(36).slice(2,10);localStorage.setItem('lore_uid',id);}
+var src=u.get('utm_source')?keys.map(function(k){return u.get(k)||'';}).join('/'):undefined;
+fetch('/api/webtoon/v1/events',{method:'POST',keepalive:true,credentials:'include',headers:{'Content-Type':'application/json','X-Lore-Uid':id},body:JSON.stringify({uid:id,source:src,ref:document.referrer||undefined,events:[{name:'lp_view',ts:Date.now(),view:'lp',props:{target:location.pathname.split('/').filter(Boolean).pop()||''}}]})}).catch(function(){});}catch(e){}
 /* 장면 광고: ?page=N 이면 광고에서 본 장부터 — 그림을 다 받게 하고 두 번 내린다(앞 장 높이가 늦게 잡힌다) */
 var m=/[?&]page=(\d+)/.exec(location.search);if(m){var el=document.getElementById('p'+m[1]);if(el){document.querySelectorAll('.pages img').forEach(function(i){i.loading='eager';});
 var go=function(){el.scrollIntoView({block:'start'});};go();setTimeout(go,700);setTimeout(go,1800);}}})();
