@@ -404,18 +404,26 @@ export function CharacterEditDialog(props: {
 export default function OriginalCharacter({
   go,
   authenticated,
+  world,
+  ep,
 }: {
   go: Go;
   authenticated: boolean;
+  world?: string;
+  ep?: string;
 }) {
   const t = useT();
+  /* 세계관 체험에서 왔으면 그 사건의 캐릭터 고르기로 돌아간다. 아니면 만들기 1걸음으로 간다. */
+  const back = (character?: string) => world && ep
+    ? go("play", { world, ep, stage: "char", character })
+    : go("create", { step: 1, character });
   /* 예시 캐릭터 — 내 캐릭터가 있으면 만들기 1걸음 줄에 안 나와서 여기서도 고를 수 있게 둔다.
      고르면 만들기 1걸음으로 돌아가 그 캐릭터가 골라져 있다(저장하지 않는다). */
   const [pickingBuiltin, setPickingBuiltin] = useState(false);
   return (
     <section className="wt-wrap wt-page wt-original-page">
       {pickingBuiltin && <BuiltinPicker onClose={() => setPickingBuiltin(false)}
-        onPick={(c) => go("create", { step: 1, character: c.id })} />}
+        onPick={(c) => back(c.id)} />}
       <div className="wt-original-heading">
         <h1>{t("새 캐릭터 만들기")}</h1>
         <div className="wt-original-heading-actions">
@@ -429,8 +437,8 @@ export default function OriginalCharacter({
       </div>
       <CharacterForm
         authenticated={authenticated}
-        onClose={() => go("create", { step: 1 })}
-        onSaved={(c) => go("create", { step: 1, character: c.id })}
+        onClose={() => back()}
+        onSaved={(c) => back(c.id)}
       />
     </section>
   );
