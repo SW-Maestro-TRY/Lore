@@ -715,6 +715,10 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     directions = read_json(run_dir / "directions.json") or []
     n = pick.get("n")
     direction = next((d for d in directions if d.get("n") == n), None) or (directions[0] if directions else {})
+    # 완성본에서 고친 제목은 서버 DB 에만 있다. 다시 그리기가 넘긴 값이 파일의 처음 제목보다 먼저다.
+    edited_title = (os.environ.get("NH_TITLE") or "").strip()
+    if direction and edited_title:
+        direction = {**direction, "title": edited_title}
     if not direction:
         raise SystemExit(f"{run_dir / 'directions.json'} 가 없습니다. 이야기 단계를 먼저 돌리세요.")
 
