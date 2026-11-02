@@ -534,4 +534,131 @@ class HatchRetryTest {
         verify(runner, times(1)).run(anyLong(), any(), any(), any());
         verify(recorder, never()).markPetFailed(anyLong());
     }
+
+    // ── 작업 1.10 그림 단계 상한(2026-11-01 켬) ───────────────────────────────────────
+
+    /** 운영 기본(전체 3 · 그림 n)으로 만든 서비스. */
+    private HatchService imageCapped(int imageMax) {
+        HatchService s = serviceWithLimit(3);
+        s.setImageMaxAttempts(imageMax);
+        s.setAutoCliEnabled(true);
+        return s;
+    }
+
+    @Test
+    @DisplayName("★★ 자동 CLI 꺼짐이면 그림 상한을 안 건다 — 격자 검사 탈락 두 번 뒤에도 세 번째 판(그림 호출)을 굽는다")
+    void imageCap2_autoCliOff_keepsThirdImageCall() {
+        HatchService s = imageCapped(2);
+        s.setAutoCliEnabled(false);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        s.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).as("이어 받는 쪽이 없으면 기존 3회").hasSize(3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★★ 그림 상한 2 — 격자 검사 탈락 두 번이면 세 번째 판(그림 호출)을 안 굽고 FAILED, 격자는 보존")
+    void imageCap2_stopsAfterSecondGridRejection() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs.stream().map(GenJob::getAttempt).toList()).as("세 번째 job 이 생기면 그림 API 를 또 부른다")
+                .containsExactly(1, 2);
+        verify(runner, times(2)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★★ 그림 상한 2 — 격자 단계 호출이 두 번 FAILED(표에서 셈)면 세 번째 판 없이 FAILED")
+    void imageCap2_stopsAfterTwoFailedGridSteps() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        runnerAlwaysFails(GenErrorCode.TIMEOUT);
+        // 판마다 격자 단계가 FAILED 로 남았다고 친다 — 지금까지 돈 판 수 = 실패한 격자 행 수
+        when(recorder.countFailedSteps(eq(PET), eq(GenKind.HATCH), eq(job.getId()), any()))
+                .thenAnswer(inv -> (long) jobs.size());
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(2);
+        verify(runner, times(2)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★ 정체성 문단만 실패한 재시도는 그림 실패로 안 센다 — 전체 상한 3 그대로")
+    void identityFailure_notCountedAsImage() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        runnerAlwaysFails(GenErrorCode.UNKNOWN);
+        when(recorder.countFailedSteps(anyLong(), any(), anyLong(), any())).thenReturn(0L);
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★ 그림 실패 한 번 + 시간 초과(후처리) 한 번은 상한 2 에 안 닿는다 — 세 번째 판을 굽는다")
+    void oneImageFailureThenTimeout_keepsGoing() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenReturn(RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN))
+                .thenAnswer(inv -> RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.TIMEOUT));
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("★ 그림 상한 0 = 끔 — 검사 탈락이 계속돼도 전체 상한 3 까지 굽는다(옛 동작)")
+    void imageCap0_keepsThreeAttempts() {
+        HatchService off = imageCapped(0);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        off.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+        verify(recorder, never()).countFailedSteps(anyLong(), any(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("★ 기동 복구(attempt>1)는 이 펫의 부화 job 전체부터 센다 — 복구가 시도 수를 세는 방식과 같다")
+    void recoveryCountsFromAllJobs() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(1);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        runnerAlwaysFails(GenErrorCode.TIMEOUT);
+        // 복구 전 판 하나 + 이번 판 하나가 격자 단계에서 FAILED
+        when(recorder.countFailedSteps(eq(PET), eq(GenKind.HATCH), eq(0L), any())).thenReturn(2L);
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).as("복구 판(attempt 2) 하나로 끝난다").hasSize(1);
+        verify(runner, times(1)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
 }

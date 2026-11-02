@@ -37,6 +37,19 @@ public interface GenStepRecordRepository extends JpaRepository<GenStepRecord, Lo
                                                      @Param("version") String version);
 
     /**
+     * 이 펫의 부화 job 들(id &gt;= {@code fromJobId}) 중 <b>그림 단계</b>가 FAILED 로 끝난 수(작업 1.10 이미지 상한).
+     *
+     * ★ 이름으로 센다 — 시트·격자 호출이 실패하면 그 단계 행이 FAILED 로 남는다. 격자 검사 탈락은 후처리 단계에서
+     *   나므로 여기 안 잡힌다(그 몫은 {@code HatchService} 가 한 번의 부화 안에서 따로 센다).
+     */
+    @Query("select count(s) from GenStepRecord s where s.jobId in "
+            + "(select j.id from GenJob j where j.petId = :petId and j.kind = :kind and j.id >= :fromJobId) "
+            + "and s.status = com.lore.zzal.generation.GenStatus.FAILED and s.name in :names")
+    long countFailedByPetSince(@Param("petId") Long petId, @Param("kind") GenKind kind,
+                               @Param("fromJobId") Long fromJobId,
+                               @Param("names") java.util.Collection<String> names);
+
+    /**
      * 이 <b>모션</b>이 지금까지 어느 시도에서든 성공시킨 단계들.
      *
      * ★★ 모션에는 위의 펫 단위 조회를 쓰면 안 된다. 한 펫이 모션을 12개 배우는데

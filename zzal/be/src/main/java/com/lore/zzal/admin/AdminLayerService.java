@@ -243,7 +243,7 @@ public class AdminLayerService {
      * 보존된 격자 키 — {@code rejected/} 아래 그 층의 것({@code -grid.png}·{@code -grid2.png}).
      * ★ 보존 키는 DB 에 안 남는다(RejectedGridArchive 주석) — S3 를 직접 훑는다. 실패해도 목록은 나간다.
      */
-    private List<String> rejectedKeys(Long petId, int layer) {
+    public List<String> rejectedKeys(Long petId, int layer) {
         String suffix = layer == 1 ? "-grid.png" : "-grid2.png";
         try {
             return s3Client.listObjectsV2(ListObjectsV2Request.builder()
@@ -358,11 +358,19 @@ public class AdminLayerService {
 
     // ── 업로드 주소 ──────────────────────────────────────────────────────
 
-    /** 후보 격자를 올릴 presign(#702). 관리자 줄에 있어 봇 토큰으로도 부른다. png 만. */
+    /** presign 허용 형식 — 순서는 오류 문구에 그대로 나온다. */
+    static final List<String> PRESIGN_TYPES = List.of("image/png", "image/webp", "image/gif", "application/json");
+
+    /**
+     * 후보 파일을 올릴 presign(#702). 관리자 줄에 있어 봇 토큰으로도 부른다.
+     * 1·2층 격자(png)와 맞춤 후보 세트(webp·gif·json)를 받는다. 1·2층 candidates 는 여전히 격자 png 만
+     * 후처리 게이트를 통과한다 — 형식을 넓혀도 층 후보로 쓸 수 있는 것은 바뀌지 않는다.
+     */
     public S3Service.PresignedUpload presign(Long adminUserId, String contentType) {
         adminGuard.require(adminUserId);
-        if (!"image/png".equals(contentType)) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "후보 격자는 image/png 만 받습니다");
+        if (contentType == null || !PRESIGN_TYPES.contains(contentType)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "후보 파일은 %s 만 받습니다".formatted(String.join(", ", PRESIGN_TYPES)));
         }
         return s3Service.createUploadUrl(adminUserId, "zzal", contentType);
     }
@@ -461,6 +469,19 @@ public class AdminLayerService {
     // ── 고르기 ───────────────────────────────────────────────────────────
 
     public Picked pick(Long adminUserId, Long petId, int layer, String candidateId, Instant now) {
+        return pick(adminUserId, petId, layer, candidateId, now, null);
+    }
+
+    /**
+     * 실패한 알을 살릴 때 단계 기록 대신 쓸 재료 — 맥미니 러너가 시트·문단부터 다시 만든 경우.
+     * 둘 다 null 이면 기록에서 꺼낸다(기존 동작). 문단이 비어 있으면 기록의 문단을 쓴다.
+     */
+    public record ReviveMaterial(String sheetKey, String identityText) {
+    }
+
+    /** {@link #pick(Long, Long, int, String, Instant)} + 살릴 때 쓸 재료 덮어쓰기(null 이면 기존 동작). */
+    public Picked pick(Long adminUserId, Long petId, int layer, String candidateId, Instant now,
+                       ReviveMaterial override) {
         adminGuard.require(adminUserId);
         boolean[] scheduleLayer2 = {false};
         Picked picked = tx.execute(s -> {
@@ -496,7 +517,7 @@ public class AdminLayerService {
                 discardLayer2Steps(petId, false);
             } else {
                 if (p.getPhase() == PetPhase.FAILED) {
-                    revive(p, now);
+                    revive(p, now, override);
                 }
                 copyAll(src, dst, baker.keys(1), ".webp");
                 copy(src + "/anchors.json", dst + "/anchors.json", "application/json");
@@ -528,7 +549,7 @@ public class AdminLayerService {
      * 부화에 실패한 알을 1층 후보로 살린다 — 관리자 재굽기와 같은 자리 확인 + 부화 완료와 같은 마무리.
      * 시트·문단은 성공했던 단계 기록에서 꺼낸다(없으면 살릴 수 없다).
      */
-    private void revive(ZzalPet p, Instant now) {
+    private void revive(ZzalPet p, Instant now, ReviveMaterial override) {
         User owner = userRepository.findById(p.getUserId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         long occupied = petRepository.countByUserIdAndPhaseIn(owner.getId(), PetPhase.OCCUPYING_SLOT);
@@ -548,6 +569,12 @@ public class AdminLayerService {
             if (IdentityStep.NAME.equals(r.getName())) {
                 identity = r.getOutputText();
             }
+        }
+        if (override != null && override.sheetKey() != null && !override.sheetKey().isBlank()) {
+            sheet = override.sheetKey();
+        }
+        if (override != null && override.identityText() != null && !override.identityText().isBlank()) {
+            identity = override.identityText();
         }
         if (sheet == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "시트가 없어 살릴 수 없습니다 — 재굽기(rehatch)를 쓰세요");

@@ -1,0 +1,54 @@
+/* 캐릭터 카드(C 수집 카드형). 목업 ux/39-char-info-shots/src/mock.html?v=C 값을 옮겼다.
+   .focused-room button(0,1,1)·.returning-content p(0,1,1)를 이기도록 규칙은 .zcc .x(0,2,0)로 쓴다. */
+.zcc{--zcc-ink:#4A4038;--zcc-paper:#FFFDF8;--zcc-accent:#9C4232;--zcc-accent-ink:#FFF6F2;--zcc-sub:#6B5E52;--zcc-err:#923F31;--zcc-line2:#DED3C6;--zcc-line3:#E1D8CD;--zcc-btn:#F8F2E7;--zcc-btn-line:#C5B49F;--zcc-hand:var(--font-gaegu),'Gaegu','Gowun Dodum',cursive;color:var(--zcc-ink);min-width:0;word-break:keep-all;overflow-wrap:anywhere}
+.zcc *{box-sizing:border-box}
+.zcc .zcc-p{margin:0}
+.zcc .zcc-card{position:relative;border-radius:18px;padding:8px;background:linear-gradient(160deg,#F6E3D6,#EAD2C0);border:1px solid #C9A893;box-shadow:0 6px 14px #4a40381f}
+.zcc .zcc-inner{border-radius:12px;border:1px solid #D9BBA6;background:var(--zcc-paper);padding:10px 12px 12px;min-width:0}
+.zcc .zcc-top{display:flex;justify-content:space-between;align-items:center;gap:8px;font:700 15px/1 var(--zcc-hand);color:#8A6450}
+.zcc .zcc-art{position:relative;overflow:hidden;margin:8px 0 10px;height:150px;border-radius:10px;background:repeating-linear-gradient(45deg,#F3EBE1 0 10px,#EFE3D6 10px 20px);border:1px solid var(--zcc-line2)}
+.zcc .zcc-art img{display:block;pointer-events:none;user-select:none}
+.zcc .zcc-silhouette{position:absolute;left:50%;bottom:0;width:120px;height:120px;transform:translateX(-50%);fill:#D9C8B8}
+.zcc .zcc-plate{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed #D9BBA6;padding-top:6px;min-width:0}
+.zcc .zcc-name{font:700 30px/1.1 var(--zcc-hand);min-width:0;overflow-wrap:anywhere}
+.zcc .zcc-callrow{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;min-width:0}
+.zcc .zcc-callme{min-width:0}
+.zcc .zcc-callme small{display:block;font-size:11px;color:var(--zcc-sub);line-height:1.3}
+.zcc .zcc-tags{display:flex;flex-wrap:wrap;list-style:none;margin:6px 0 0;padding:0;min-width:0}
+.zcc .zcc-chip{display:inline-flex;align-items:center;max-width:100%;min-height:26px;padding:2px 10px;border-radius:999px;background:#FBEAE3;border:1px solid #D7B6A7;font-size:13px;line-height:1.3;margin:0 5px 5px 0}
+.zcc .zcc-note{font-size:12px;line-height:1.5;color:var(--zcc-sub);margin:2px 0 4px}
+.zcc .zcc-pen{width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:0;border-radius:50%;background:transparent;display:grid;place-items:center;flex-shrink:0;color:var(--zcc-sub);cursor:pointer}
+.zcc .zcc-pen i{width:32px;height:32px;border-radius:50%;background:var(--zcc-btn);border:1px solid #D9CDBE;display:grid;place-items:center}
+.zcc .zcc-pen svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.zcc .zcc-pen:disabled{opacity:.45;cursor:default}
+.zcc .zcc-btn{font:inherit;color:inherit;min-width:44px;min-height:44px;border:1px solid var(--zcc-btn-line);border-radius:13px;padding:8px 12px;background:var(--zcc-btn);cursor:pointer;touch-action:manipulation}
+.zcc .zcc-btn:disabled{opacity:.5;cursor:default}
+.zcc .zcc-pen:focus-visible,.zcc .zcc-btn:focus-visible{outline:2px solid var(--zcc-accent);outline-offset:3px}
+.zcc .zcc-edit{display:flex;flex-direction:column;gap:6px;width:100%;min-width:0;padding:4px 0 2px}
+.zcc .zcc-label{display:block;font-size:13px;color:var(--zcc-sub)}
+.zcc .zcc-field{position:relative;display:flex;align-items:center}
+.zcc .zcc-field input{width:100%;min-width:0;min-height:48px;padding:10px 58px 10px 12px;border:1px solid var(--zcc-btn-line);border-radius:14px;background:var(--zcc-paper);font:16px var(--font-gowun),'Gowun Dodum',sans-serif;color:var(--zcc-ink)}
+.zcc .zcc-field input:focus{outline:2px solid var(--zcc-accent);outline-offset:2px}
+.zcc .zcc-count{position:absolute;right:12px;font-size:13px;color:var(--zcc-sub);font-variant-numeric:tabular-nums;pointer-events:none}
+.zcc .zcc-edit[data-bad=true] .zcc-field input{border-color:var(--zcc-err);outline-color:var(--zcc-err);background:#FFF7F4}
+.zcc .zcc-edit[data-bad=true] .zcc-count{color:var(--zcc-err);font-weight:700}
+.zcc .zcc-hint{font-size:12px;line-height:1.5;color:var(--zcc-sub)}
+.zcc .zcc-err{font-size:12px;line-height:1.5;color:var(--zcc-err);display:flex;gap:5px;align-items:flex-start}
+.zcc .zcc-err svg{width:14px;height:14px;flex-shrink:0;margin-top:2px;fill:none;stroke:currentColor;stroke-width:1.8}
+.zcc .zcc-actions{display:flex;gap:8px;margin-top:2px}
+.zcc .zcc-actions .zcc-btn{flex:1;min-width:0}
+.zcc .zcc-actions .zcc-save{background:var(--zcc-accent);border-color:var(--zcc-accent);color:var(--zcc-accent-ink);font-weight:700}
+.zcc .zcc-backhead{display:flex;align-items:center;gap:6px;margin:16px 2px 8px;font-size:14px;font-weight:700}
+.zcc .zcc-backhead svg{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7}
+.zcc .zcc-backhead span{font-weight:400;font-size:12px;color:var(--zcc-sub);margin-left:auto}
+.zcc .zcc-back{border:1px solid var(--zcc-line3);border-radius:14px;background:var(--zcc-paper);padding:4px 12px;margin:0}
+.zcc .zcc-loading{padding:12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-size:14px}
+.zcc .zcc-legacy{font-size:13px;color:var(--zcc-sub);margin:0 2px 8px}
+.zcc .zcc-row{display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px;padding:9px 0;border-bottom:1px solid #EEE6DC;font-size:14px}
+.zcc .zcc-row:last-child{border-bottom:0}
+.zcc .zcc-row dt{color:var(--zcc-sub);font-size:13px}
+.zcc .zcc-row dd{margin:0;white-space:pre-wrap;min-width:0}
+.zcc .zcc-row dd[data-empty=true]{color:var(--zcc-sub)}
+.zcc .zcc-primary{display:block;width:100%;margin:12px 0 0;min-height:48px;border-color:var(--zcc-accent);border-radius:14px;background:var(--zcc-accent);color:var(--zcc-accent-ink);font-size:16px;font-weight:700}
+.zcc .zcc-sample{margin:12px 2px 0;font-size:14px}
+@media(max-width:340px){.zcc .zcc-inner{padding:8px 10px 10px}.zcc .zcc-art{height:130px}.zcc .zcc-name{font-size:27px}.zcc .zcc-row{grid-template-columns:72px minmax(0,1fr)}}

@@ -122,6 +122,8 @@ public enum ErrorCode {
     ZZAL_FEEDBACK_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 후기를 남겼어요"),
 
     ZZAL_INQUIRY_CONFLICT(HttpStatus.CONFLICT, "같은 문의 요청 번호에 다른 내용이 담겨 있어요"),
+    ZZAL_INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "문의를 찾을 수 없어요"),
+    ZZAL_INQUIRY_ALREADY_REPLIED(HttpStatus.CONFLICT, "이미 답장한 문의예요"),
 
     // 동작 요청 (zzal)
     // ★ 429 가 아니라 409 다 — 이 서비스의 하루 상한은 전부 409 + 전용 코드로 답해 왔고
@@ -141,6 +143,9 @@ public enum ErrorCode {
     // ★ 404 가 아니라 403 을 준다 — 관리자 화면의 존재 자체는 비밀이 아니고,
     //   404 로 감추면 권한 설정을 빠뜨렸을 때 "주소가 틀렸나" 로 헤매게 된다.
     ADMIN_ONLY(HttpStatus.FORBIDDEN, "관리자만 볼 수 있어요"),
+    ADMIN_RETRY_OPEN(HttpStatus.CONFLICT, "이미 열린 재시도 요청이 있어요. 취소한 뒤 다시 누르세요"),
+    ADMIN_RETRY_CLOSED(HttpStatus.CONFLICT, "이미 집혔거나 끝난 재시도 요청이에요"),
+    ADMIN_RETRY_ALREADY_GRANTED(HttpStatus.CONFLICT, "이미 사용자에게 지급된 세트라 바꿀 수 없어요"),
 
     // 복선 카드 (piece-maker) — 2026-09-22. 카드 API 셋(GET /api/piece-maker/v1/public/cards/**)이 쓴다.
     // ★ 회차(chapter)의 400 만 코드를 따로 둔다 — 화면은 이 코드를 보면 저장해 둔 "판정 기준" 회차를 되돌린다.

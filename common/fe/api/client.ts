@@ -181,7 +181,7 @@ function deviceTimeZone(): string | null {
 }
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** 그대로 JSON 으로 직렬화해 보낸다. 없으면 본문 없이 보낸다. */
   body?: unknown;
   /** 화면이 떠날 때 호출을 끊기 위한 것. 폴링·언마운트에서 쓴다. */

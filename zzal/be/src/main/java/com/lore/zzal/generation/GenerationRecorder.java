@@ -27,6 +27,13 @@ public class GenerationRecorder {
     @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.generation.client.PersistentProviderUsageRecorder metrics;
 
+    /** 부화 최종 실패를 듣는 쪽(관리자 자동 CLI). 없으면 아무 일도 없다 — 시험이 직접 만들 때도 null 이다. */
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.beans.factory.ObjectProvider<HatchFailureListener> failureListeners;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
 
     private final GenJobRepository jobRepository;
     private final GenStepRecordRepository stepRepository;
@@ -52,6 +59,12 @@ public class GenerationRecorder {
     /** 같은 버전의 성공 단계만 이어받는다(#218 리뷰 — 옛 산출물을 새 버전 컨텍스트로 재사용하지 않게). */
     public List<GenStepRecord> loadSucceeded(Long petId, GenKind kind, String version) {
         return stepRepository.findSucceededByPetAndVersion(petId, kind, version);
+    }
+
+    /** 이 펫의 부화 job(id &gt;= fromJobId) 중 이름이 {@code names} 인 단계가 FAILED 로 끝난 수(작업 1.10). */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public long countFailedSteps(Long petId, GenKind kind, Long fromJobId, java.util.Collection<String> names) {
+        return stepRepository.countFailedByPetSince(petId, kind, fromJobId, names);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -186,5 +199,42 @@ public class GenerationRecorder {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markPetFailed(Long petId) {
         petRepository.findById(petId).ifPresent(p -> p.markHatchFailed());
+        notifyFailed(petId);
+    }
+
+    /**
+     * 실패가 <b>커밋된 뒤</b> 듣는 쪽을 부른다. 듣는 쪽 예외는 삼키고 남긴다 — 실패 기록이 먼저다.
+     * (같은 트랜잭션에서 부르면 듣는 쪽의 SQL 오류가 실패 기록까지 되돌린다.)
+     */
+    private void notifyFailed(Long petId) {
+        if (failureListeners == null) {
+            return;
+        }
+        Runnable call = () -> failureListeners.forEach(l -> {
+            try {
+                // ★ afterCommit 안에서는 끝난 트랜잭션에 묶여 있다 — 듣는 쪽 쓰기는 새 트랜잭션에서(수정 7).
+                if (transactionManager != null) {
+                    var t = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+                    t.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                    t.executeWithoutResult(s -> l.onHatchFinallyFailed(petId, Instant.now()));
+                } else {
+                    l.onHatchFinallyFailed(petId, Instant.now());
+                }
+            } catch (RuntimeException e) {
+                org.slf4j.LoggerFactory.getLogger(GenerationRecorder.class)
+                        .error("부화 실패 후속 처리 실패(실패 기록은 남음) — petId={}", petId, e);
+            }
+        });
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            call.run();
+                        }
+                    });
+        } else {
+            call.run();
+        }
     }
 }
