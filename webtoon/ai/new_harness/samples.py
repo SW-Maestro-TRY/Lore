@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent
 SAMPLE_DIR = ROOT / "samples"
 AXES_FILE = SAMPLE_DIR / "variation_axes.json"
 STRUCTURE_FILE = SAMPLE_DIR / "story_structures.json"
+EVENTS_FILE = SAMPLE_DIR / "story_events.json"
 
 # 장르 키 → (파일, 사람이 읽는 이름). --genre 값이 이 키다.
 #
@@ -410,6 +411,18 @@ def load_structures() -> dict:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def pick_events(n: int, rng=None) -> list:
+    """story_events.json 에서 서로 다른 사건 n 개. 없거나 깨졌으면 빈 목록."""
+    try:
+        data = json.loads(EVENTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    events = data.get("사건") if isinstance(data, dict) else None
+    if not isinstance(events, list) or len(events) < n:
+        return []
+    return (rng or random).sample(events, n)
 
 
 def structure_names() -> list:
