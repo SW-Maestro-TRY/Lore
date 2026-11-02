@@ -19,7 +19,14 @@ public class CustomPlanningService {
   boolean owned=Boolean.TRUE.equals(claim.execute(status->db.update("UPDATE zzal_custom_bundle_job SET error_code='PLANNING_IN_PROGRESS' WHERE id=? AND state='PENDING' AND source_plan_json IS NULL AND error_code IS NULL",jobId)==1));
   if(!owned)throw new IllegalStateException("PLANNING_ALREADY_CLAIMED");
   try{
-  var plan=new CustomMotionPlanner().plan((String)row.get("snapshot_json"),reservations.unavailableEpisodes(((Number)row.get("pet_id")).longValue()),author);
+  long petId=((Number)row.get("pet_id")).longValue();
+  String language=db.query("SELECT diary_language FROM zzal_pet WHERE id=?",(r,n)->r.getString(1),petId).stream().findFirst().orElse(null);
+  CustomMotionPlan plan;
+  try{plan=new CustomMotionPlanner().plan((String)row.get("snapshot_json"),reservations.unavailableEpisodes(petId),CustomMotionPlanner.language(language),author);}
+  catch(CustomMotionPlanner.LanguageMismatch rejected){
+   // Known, deterministic rejection (not an uncertain result): nothing is reserved. The claim becomes a
+   // named failure so an explicit replan can clear it; polling still never replays a paid author call.
+   claim.execute(status->db.update("UPDATE zzal_custom_bundle_job SET error_code='PLAN_LANGUAGE_MISMATCH' WHERE id=? AND error_code='PLANNING_IN_PROGRESS'",jobId));throw rejected;}
   // Race with another job is rejected by the reservation unique constraint, never silently replanned.
   reservations.reserveMotionPlan(jobId,plan,now);
   db.update("UPDATE zzal_custom_bundle_job SET error_code=NULL WHERE id=? AND error_code='PLANNING_IN_PROGRESS'",jobId);return plan;

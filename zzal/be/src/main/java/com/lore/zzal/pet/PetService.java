@@ -76,6 +76,14 @@ public class PetService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.attendance.AttendanceService attendanceService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.lore.zzal.inquiry.InquiryRepository inquiryRepository;
+
+    /** 계정의 미확인 답장 수 — 출석 정보와 따로 센다(여행 중이면 출석 정보가 안 붙는다). */
+    public int unreadInquiryReplyCount(Long userId) {
+        return inquiryRepository == null ? 0 : inquiryRepository.unreadReplyCount(userId);
+    }
+
     private CareMotionRotationService careMotionRotationService;
     /** Existing constructor callers remain compatible; production wiring is required. */
     @org.springframework.beans.factory.annotation.Autowired
@@ -817,6 +825,7 @@ public class PetService {
         ZzalPet pet=alive(userId,petId,realNow);
         if (request.callMe()!=null && request.callMe().isBlank())
             throw new BusinessException(ErrorCode.INVALID_INPUT,"부르는 이름을 입력해 주세요");
+        com.lore.zzal.pet.persona.CallMeInput.requireSingle(request.callMe()); // 해시 비교보다 먼저
         if (request.expectedPersonaHash()==null || request.expectedPersonaHash().isBlank())
             throw new BusinessException(ErrorCode.INVALID_INPUT,"현재 설정을 다시 확인해 주세요");
         String current=com.lore.zzal.pet.persona.PersonaSourceVersion.forEditing(pet);
@@ -829,6 +838,28 @@ public class PetService {
         if (request.authoredPersona()!=null) pet.recordAuthoredPersona(request.authoredPersona());
         if (request.callMe()!=null) pet.rememberExplicitCallMe(request.callMe());
         return new Action(pet,List.of());
+    }
+
+    /**
+     * 이름 바꾸기(캐릭터 카드). 자는 중에도 되고, 여행 중이면 {@link #alive} 가 409 로 막는다.
+     *
+     * <h3>★★ {@code PetNamed} 를 내지 않는다</h3>
+     * 그 이벤트는 부화 파이프라인을 깨우는 신호다({@link #character}). 다시 내면 굽기 쪽이 움직일 수 있다.
+     * 이름은 설정 해시({@code PersonaSourceVersion})에 들어가지 않으므로 해시 맞추기도 없다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action rename(Long userId, Long petId, String name, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        String next = name == null ? "" : name.strip();
+        // strip() 이 못 지우는 서식 문자(U+200B 등)·공백만 남은 이름도 빈칸으로 본다.
+        if (next.isEmpty() || next.codePoints().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c)
+                || Character.getType(c) == Character.FORMAT))
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이름을 한 글자 이상 적어 주세요");
+        if (next.length() > ZzalRules.NAME_MAX_CHARS)
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "%d자까지 적을 수 있어요".formatted(ZzalRules.NAME_MAX_CHARS));
+        if (!next.equals(pet.getName())) pet.rename(next);
+        return new Action(pet, List.of());
     }
 
     /** 성격·세계관. 언제든, 자는 중에도(설계 규칙 "언제든 변경"). */
@@ -907,6 +938,19 @@ public class PetService {
     public void markGraduationSeen(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
         pet.markGraduationSeen(pet.now(realNow));
+    }
+
+    /**
+     * 출석 선물 화면을 열었다고 적는다 — 그 시각까지 지급된 선물은 더 이상 "새 선물"(빨간 점)이 아니다.
+     *
+     * ★ 졸업 축하와 같은 이유로 수면·여행 중에도 받는다. 아이를 돌보는 호출이 아니라 화면이 무엇을
+     *   보여 줬는지 적는 호출이다. 시각은 펫 시계(pet.now)로 — 지급 시각(granted_at)과 같은 시계라야 비교가 맞는다.
+     */
+    @Transactional
+    public void markRewardsSeen(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (attendanceService != null) attendanceService.markRewardsSeen(pet, pet.now(realNow));
+        else pet.markRewardsSeen(pet.now(realNow));
     }
 
     /** 배경 바꾸기 — 2층 4종이 열린 뒤(설계 규칙). 값은 검증하지 않는다(해석 6). */

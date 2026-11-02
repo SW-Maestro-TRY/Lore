@@ -55,7 +55,7 @@ const MAX_TEXT = 500;
  *   (2) 움직임이 자연스러운가 두 축을 양쪽으로 두고, 나머지 둘로 기다림과 다음 요구를 받는다.
  *   구 랜딩의 대사·컷 구성은 웹툰의 칸이라 여기에 없다.
  */
-const CHIPS: { tag: FeedbackTag; label: string }[] = [
+export const CHIPS: { tag: FeedbackTag; label: string }[] = [
   { tag: 'LOOKS_SAME', label: '내 그림 그대로예요' },
   { tag: 'MOTION_GOOD', label: '움직임이 자연스러워요' },
   { tag: 'LOOKS_OFF', label: '캐릭터가 안 닮았어요' },
