@@ -21,9 +21,9 @@ public class PlayCatalog {
 
     private final List<Map<String, Object>> worlds;
 
-    public PlayCatalog(ObjectMapper json) {
+    public PlayCatalog() {
         try (InputStream in = new ClassPathResource(FILE).getInputStream()) {
-            Map<String, List<Map<String, Object>>> doc = json.readValue(in, new TypeReference<>() {});
+            Map<String, List<Map<String, Object>>> doc = new ObjectMapper().readValue(in, new TypeReference<>() {});
             this.worlds = List.copyOf(doc.get("worlds"));
         } catch (IOException e) {
             throw new UncheckedIOException(FILE + " 을 읽지 못했습니다", e);
