@@ -2,10 +2,11 @@
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
 import { useEffect, useMemo, useState } from "react";
-import { cancelJob, listCharacters, startPlayRun, WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
+import { cancelJob, listCharacters, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare } from "../../ui/Icons";
+import CreditShort, { isCreditShort } from "../../ui/CreditShort";
 import { CharacterEditDialog } from "../character/OriginalCharacter";
 import "../character/i18n";
 import { usePhone } from "../landing/usePhone";
@@ -79,7 +80,7 @@ function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go:
   const [chars, setChars] = useState<Character[] | null>(null);
   const [sel, setSel] = useState<string>();
   const [ok, setOk] = useState(false);
-  const [needCredit, setNeedCredit] = useState(false);
+  const [short, setShort] = useState<unknown>(null);
   const [edit, setEdit] = useState<Character | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -90,7 +91,7 @@ function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go:
       const r = await startPlayRun({ world_id: w.id, event_id: e.id, character_id: sel, agree_ip: ok, language: lang });
       go("play", { world: w.id, ep: e.id, stage: "making", job: r.id });
     } catch (x) {
-      setNeedCredit(x instanceof WebtoonApiError && x.status === 402);
+      setShort(isCreditShort(x) ? x : null);
       setErr(x instanceof Error && x.message ? x.message : t("시작하지 못했어요. 다시 눌러 주세요."));
       setBusy(false);
     }
@@ -142,8 +143,7 @@ function PickChar({ w, e, go, authenticated }: { w: PlayWorld; e: PlayEvent; go:
       {cur && <label className="pl-chk"><input type="checkbox" checked={ok} onChange={(v) => setOk(v.target.checked)} />{t("업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다")}</label>}
       {cur && <button type="button" className="pl-btn" disabled={!ok || busy} onClick={begin}>{t("{name} 넣기", { name: cur.name })}</button>}
       {err && <p className="pl-err">{err}</p>}
-      {needCredit && <button type="button" className="lnk" onClick={() => go("mypage")}>{t("크레딧 충전하기")}</button>}
-      {edit && <CharacterEditDialog character={edit} authenticated={authenticated} onSaved={() => { setEdit(null); void load(); }} onDeleted={() => { setEdit(null); void load(); }} onClose={() => setEdit(null)} />}
+            {edit && <CharacterEditDialog character={edit} authenticated={authenticated} onSaved={() => { setEdit(null); void load(); }} onDeleted={() => { setEdit(null); void load(); }} onClose={() => setEdit(null)} />}
     </div>
   );
 }
