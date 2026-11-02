@@ -1060,6 +1060,7 @@ public class JobService {
 
     /** 이름이 바뀐 뒤 — 조연 시트 줄의 이름, DB 의 이야기(제목·줄거리)를 작품 폴더에 맞춘다. */
     private void afterRename(WebtoonJob job, JobRunner.PersonSaved saved) {
+        syncLeadName(job);
         saved.renamed().forEach((from, to) -> castSheets.findByJobIdOrderByCreatedAtAsc(job.getPublicId()).stream()
                 .filter(row -> row.getName().equals(from))
                 .forEach(row -> {
@@ -1077,6 +1078,36 @@ public class JobService {
                 stories.replace(job.getRunId(), fresh);
                 stories.choose(job.getRunId(), job.getPicked() == null ? 1 : job.getPicked());
             }
+        }
+    }
+
+    /** 작품 폴더의 주인공 이름을 DB 입력에 맞춘다. 목록·공유 문구와 다음 화는 DB 입력의 이름을 읽는다. */
+    private void syncLeadName(WebtoonJob job) {
+        Map<String, Object> persona = runner.personaOf(job.getRunId());
+        String name = persona == null ? "" : String.valueOf(persona.getOrDefault("name", "")).trim();
+        String updated = withLeadName(job.getInputJson(), name);
+        if (updated != null) {
+            job.updateInputJson(updated);
+            jobs.save(job);
+        }
+    }
+
+    /** 이름이 달라졌으면 고친 입력을, 그대로거나 읽을 수 없으면 {@code null} 을 돌려준다. */
+    static String withLeadName(String inputJson, String name) {
+        if (inputJson == null || inputJson.isBlank() || name == null || name.isBlank()) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
+            var root = json.readTree(inputJson);
+            if (!(root instanceof com.fasterxml.jackson.databind.node.ObjectNode node)
+                    || name.equals(node.path("name").asText("").trim())) {
+                return null;
+            }
+            node.put("name", name);
+            return json.writeValueAsString(node);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return null;
         }
     }
 
