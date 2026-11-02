@@ -388,6 +388,8 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: 
     title = str(char.get("title") or "").strip()
     if title:
         d["title"] = title                      # 사용자가 적은 제목이 먼저다
+    else:
+        R.fill_titles(run_dir, [d], lang)
     if not d.get("genre"):
         d["genre"] = char.get("genre") or ""
     R.write_json(run_dir / "directions.json", [d])

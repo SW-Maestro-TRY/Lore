@@ -33,6 +33,9 @@ export const metadata: Metadata = {
   title: "Lore — 우리만의 캐릭터로 노는 만화 플랫폼",
   description:
     "사진 한 장에서 캐릭터를 뽑고, 그 캐릭터로 4컷 · 예고편 · 웹툰까지 이어서 만듭니다.",
+  // AdSense 사이트 소유권 확인용 공개 식별자. 광고 스크립트나 자동 광고를 켜지 않고
+  // <meta name="google-adsense-account" ...>만 각 페이지의 <head>에 출력한다.
+  other: { "google-adsense-account": "ca-pub-8534472857343524" },
   // 홈 화면 바로가기(#599). manifest 는 app/manifest.ts, 아이폰 홈 화면 아이콘은
   // app/apple-icon.png 가 맡는다. appleWebApp 이 있어야 아이폰에서 주소창 없는 앱으로
   // 열리고, 그래야 웹푸시를 받을 수 있다.

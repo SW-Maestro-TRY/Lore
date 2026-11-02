@@ -257,6 +257,7 @@ group by 1 order by 1;
 
 | 이벤트 | 언제 | 주요 값 |
 |---|---|---|
+| `lp_view` | 광고 전용 랜딩(`/lp/<소재>`)을 열었을 때. 정적 페이지가 직접 보낸다 | `target`: 소재 이름. 행의 `source` 에 광고 주소의 utm 이 담긴다 |
 | `session_start` | 한 탭에서 웹툰 화면을 처음 열 때 (`WebtoonPage.tsx`) | `kind`: new · returning(이 브라우저가 전에 왔었나), `target`(들어온 화면), `logged_in`, `vw`·`vh`(화면 폭·높이 px), `touch`(터치 기기인가) |
 | `page_view` | 화면이 바뀔 때마다 (만들기는 걸음마다) | `view` 칸에 화면 이름, `step`(만들기 화면만), `run`, `logged_in`, `how`·`via`(어떻게 왔나 — 아래 표) |
 | `page_leave` | 화면을 떠날 때 (다른 화면으로 가거나 페이지를 닫을 때) | `target`(떠난 화면), `ms`(머문 시간, 탭이 뒤로 가 있던 시간 포함), `depth_pct`(그 화면을 어디까지 내려 봤나 %), `how`·`via`(어떻게 갔나) |

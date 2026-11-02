@@ -625,7 +625,7 @@ def parse_directions(md: str) -> list[dict]:
         body_text = _labeled(body, BODY_LABEL_RE, [])
         out.append({
             "n": int(m.group(1)),
-            "title": m.group(2).strip(),
+            "title": m.group(2).strip().strip("<>").strip(),
             "genre": genre,
             "intro": intro,
             "body": body_text,
@@ -636,6 +636,52 @@ def parse_directions(md: str) -> list[dict]:
             "raw": (m.group(0) + body).strip(),
         })
     return out
+
+
+# 모델이 출력 형식의 자리 표시를 그대로 베끼면 작품 이름과 표지 글자가 「제목」이 된다
+# (2026-11-02 gpt-5.1 전환 뒤 운영 첫 작품, 같은 지시문으로 2/2 재현).
+PLACEHOLDER_TITLES = {
+    "제목", "소제목", "이번화소제목", "타이틀", "title", "subtitle",
+    "タイトル", "サブタイトル", "标题", "副标题",
+    "이이야기에지어붙인제목", "이번화에지어붙인소제목", "지은제목",
+}
+
+
+def title_missing(title) -> bool:
+    """제목이 비었거나 자리 표시를 베낀 것인가."""
+    key = re.sub(r"[\s*_#<>()\[\]「」『』\"'“”‘’]", "", str(title or "")).lower()
+    return not key or key in PLACEHOLDER_TITLES
+
+
+def fill_titles(run_dir: Path, directions: list[dict], lang: str = "ko") -> None:
+    """제목이 없는 후보에 제목만 따로 지어 준다. 이야기를 다시 쓰지는 않는다.
+
+    이미 값을 치른 이야기를 제목 하나 때문에 버리지 않게, 실패해도 작업을 멈추지 않고
+    제목을 비워 둔다. 비어 있으면 표지에 「제목」이 그려지지 않는다.
+    """
+    for d in directions:
+        if not title_missing(d.get("title")):
+            continue
+        d["title"] = ""
+        story_text = "\n\n".join(str(d.get(k) or "") for k in ("intro", "body") if d.get(k))
+        if not story_text:
+            warn(f"방향 {d.get('n')} 에 제목을 지을 글이 없습니다.")
+            continue
+        call = llm.Call("STORY")
+        log(f"[제목] {call.describe()} 로 제목만 짓습니다…")
+        try:
+            text, meta = call(compose("title_prompt", f"## 이야기\n{story_text}\n", lang=lang))
+        except Exception as exc:                                      # noqa: BLE001
+            record_error(run_dir, "STORY", call.provider, call.model, exc)
+            warn(f"방향 {d.get('n')} 의 제목을 짓지 못했습니다: {exc}")
+            continue
+        record(run_dir, meta)
+        lines = [line.strip() for line in str(text).splitlines() if line.strip()]
+        title = re.sub(r"^#+\s*", "", lines[0]).strip("\"'“”‘’「」『』*") if lines else ""
+        if title_missing(title):
+            warn(f"방향 {d.get('n')} 의 제목을 받지 못했습니다.")
+            continue
+        d["title"] = title
 
 
 def _num(value, default: int) -> int:
@@ -1264,7 +1310,7 @@ def _story_in_two(run_dir: Path, char: dict, prompt: str, cast: list[dict]) -> l
         other = ", ".join(f"방향 {k}은 {names[k-1]}" for k in (c, d) if k - 1 < len(names))
         return (prompt + "\n\n## 이번 호출에서 만들 것\n"
                 f"이번 호출은 **방향 {a}와 방향 {b} 두 개만** 만든다. 번호도 그대로 "
-                f"「## 방향 {a} — 제목」「## 방향 {b} — 제목」으로 쓴다. 위에서 「4개」「넷」이라고 "
+                f"「## 방향 {a} — <지은 제목>」「## 방향 {b} — <지은 제목>」으로 쓴다. 위에서 「4개」「넷」이라고 "
                 "한 곳은 이번 호출에서는 이 두 개를 가리킨다. 나머지 두 방향은 다른 호출이 "
                 f"만든다({other}이 상대다) — 그 둘과 판이 겹치지 않게 한다. 넷에 나눠 쓸 몫을 "
                 "이 두 후보에 다 쓴다 — 특히 받은 상대 인물의 인상과 말이 소개와 본문에 살아 있게 한다.\n")
@@ -1394,6 +1440,7 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
         record(run_dir, meta)
         directions = parse_directions(text)
     directions = directions[:1] if one else shuffle_directions(directions)
+    fill_titles(run_dir, directions, lang)
     for d in directions:
         n = d.get("n")
         if cast and isinstance(n, int) and n > 0:
@@ -2077,8 +2124,12 @@ def direction_of(run_dir: Path) -> dict | None:
     if not path.exists():
         return None
     directions = json.loads(path.read_text(encoding="utf-8"))
-    return (next((d for d in directions if d.get("n") == pick.get("n")), None)
-            or (directions[0] if directions else None))
+    chosen = (next((d for d in directions if d.get("n") == pick.get("n")), None)
+              or (directions[0] if directions else None))
+    # 완성본에서 고친 제목은 서버 DB 에만 있다. 다시 그리기가 넘겨 주는 값이 파일의 처음 제목보다 먼저다 —
+    # 안 그러면 표지에 옛 제목을 그리고, 표지 검수도 옛 제목에 맞춰 되돌린다.
+    title = (os.environ.get("NH_TITLE") or "").strip()
+    return {**chosen, "title": title} if chosen and title else chosen
 
 
 def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
