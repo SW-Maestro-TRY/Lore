@@ -11,6 +11,7 @@ import { registerComposer, registerDict, type Dict } from "./i18n";
 const dict: Dict = {
   /* ---- 부르기 공통 (lib/api.ts · lib/photoFile.ts) ---- */
   "요청이 실패했습니다 ({n})": { en: "The request failed ({n})", ja: "リクエストに失敗しました（{n}）", zh: "请求失败（{n}）" },
+  "보안 검사에 막혀 보내지 못했습니다. 글을 조금 줄이거나 특수 기호를 빼고 다시 시도해 주세요": { en: "A security check blocked this request. Please shorten the text or remove special symbols and try again.", ja: "セキュリティチェックで送信できませんでした。文章を短くするか、特殊記号を除いてもう一度お試しください。", zh: "请求被安全检查拦截。请缩短文字或去掉特殊符号后重试。" },
   "사진을 올리지 못했습니다 ({n})": { en: "Couldn't upload the photo ({n})", ja: "写真をアップロードできませんでした（{n}）", zh: "照片上传失败（{n}）" },
   "이 브라우저가 못 여는 사진입니다. JPG 나 PNG 로 바꿔서 올려 주세요": { en: "This browser can't open that photo. Please convert it to JPG or PNG and upload again.", ja: "このブラウザでは開けない写真です。JPGかPNGに変換してアップロードしてください", zh: "此浏览器无法打开这张照片，请转换为 JPG 或 PNG 后再上传" },
   "오늘 무료 {n}편": { en: "{n} free today", ja: "今日の無料 {n}本", zh: "今日免费 {n} 部" },

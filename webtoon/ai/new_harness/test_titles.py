@@ -6,6 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import detailart
 import llm
 import run as R
 
@@ -35,6 +36,23 @@ def test_edited_title_wins_when_redrawing():
             assert R.direction_of(d)["genre"] == "판타지"
         finally:
             del os.environ["NH_TITLE"]
+
+
+def test_edited_title_reaches_cover_prompt():
+    """다시 그리기가 실제로 타는 길(draw_continue)의 표지 프롬프트에 고친 제목이 실린다."""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        R.write_json(d / "directions.json", [{"n": 1, "title": "제목", "genre": "판타지", "intro": "소개"}])
+        R.write_json(d / "pick.json", {"n": 1})
+        R.write_json(d / "input.json", {"name": "미나"})
+        R.write_json(d / "scenes.json", {"scenes": [{"n": 1, "text": "장면"}], "plot": "줄거리"})
+        os.environ["NH_TITLE"] = "고친 제목"
+        try:
+            detailart.draw_continue(d, dry_run=True, only=[1], allow_no_sheet=True, review=False)
+        finally:
+            del os.environ["NH_TITLE"]
+        text = "\n".join(f.read_text(encoding="utf-8") for f in d.rglob("*.txt"))
+        assert "제목(이 글자 그대로 그린다): 고친 제목" in text, text[:400]
 
 
 def _with_call(reply):
@@ -91,6 +109,7 @@ if __name__ == "__main__":
     test_placeholder_is_missing()
     test_parse_drops_angle_brackets_the_model_copied()
     test_edited_title_wins_when_redrawing()
+    test_edited_title_reaches_cover_prompt()
     test_fills_only_placeholder()
     test_failure_leaves_blank_and_keeps_going()
     print("ok")
