@@ -269,7 +269,7 @@ function WebtoonScreens() {
     <div ref={rootRef} className="wt" onContextMenu={guardImage} onDragStart={guardImage}>
       <DevNav />
       {route.view === "landing" && <Landing go={go} />}
-      {route.view === "play" && <Play go={go} authenticated={authenticated} world={route.world} ep={route.ep} stage={route.stage} job={route.job} run={route.run} />}
+      {route.view === "play" && <Play go={go} authenticated={authenticated} world={route.world} ep={route.ep} stage={route.stage} job={route.job} run={route.run} character={route.character} />}
       {route.view === "make" && <MakeChoice go={go} />}
       {route.view === "world-new" && <WorldNew go={go} />}
       {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
@@ -285,7 +285,7 @@ function WebtoonScreens() {
       {route.view === "next" && route.run && <NextEpisodePage key={route.run} runId={route.run} go={go} authenticated={authenticated} />}
       {route.view === "works" && <Works go={go} authenticated={authenticated} />}
       {route.view === "characters" && <CharList go={go} />}
-      {route.view === "character-new" && <OriginalCharacter go={go} authenticated={authenticated} />}
+      {route.view === "character-new" && <OriginalCharacter go={go} authenticated={authenticated} world={route.world} ep={route.ep} />}
       {route.view === "try" && <Photo go={go} authenticated={authenticated} />}
       {route.view === "card" && route.id && (
         <PhotoResult id={route.id} shared={false} go={go} authenticated={authenticated} />
