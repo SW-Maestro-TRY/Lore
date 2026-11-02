@@ -408,17 +408,26 @@ public final class PetResponses {
             @Schema(description = """
                     서버가 창(재우기 19시·자동 취침 23시·깨우기 7시·자동 기상 10시·부름 10/14/19시)을 계산하는 시간대.
                     화면은 창 시각을 이 시간대로 읽고 timeZone 으로 바꿔 보여 준다. 둘이 같으면 바꿀 것이 없다""",
-                    example = "Asia/Seoul") String rulesTimeZone) {
+                    example = "Asia/Seoul") String rulesTimeZone,
+            @com.fasterxml.jackson.annotation.JsonIgnore @Schema(hidden=true) Integer accountUnreadInquiryReplyCount) {
         public Detail(Long petId, String name, String note, String phase, boolean ready, String step, Long elapsedSeconds, String deathReason, Instant hatchStartedAt, Instant hatchedAt, Instant serverNow, Clock clock, Integer daysTogether, Gauges gauges, Food food, String mood, Sick sick, boolean justHealed, Intimacy intimacy, Today today, Pieces pieces, boolean goodDay, String baking, List<Motion> motions, List<Integer> justUnlocked, boolean sceneNew, List<Learned> learnedToday, FirstGift firstGift, ChatSummary chatSummary, Scenes scenes, String personality, String world, String tone, String genre, String background, String anchorsKey, Features features, Leaving leaving, Trip trip, Tutorial tutorial, Instant graduationSeenAt, com.lore.zzal.pet.FirstIntro.State firstIntro, com.lore.zzal.attendance.AttendanceRewards attendanceRewards, FirstNightChatGrace firstNightChatGrace, com.lore.zzal.pet.CareMotionPlayback motionPlayback) {
-            this(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, null, null, null);
+            this(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, null, null, null, null);
         }
         public Detail withCareReceipt(com.lore.zzal.pet.receipt.CareReceipt value) {
-            return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, value, timeZone, rulesTimeZone);
+            return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, value, timeZone, rulesTimeZone, accountUnreadInquiryReplyCount);
         }
 
         /** 시간대 두 칸을 채운 사본. {@link #from} 의 모든 갈래가 이것을 지난다. */
         public Detail withTimeZones(String zone, String rulesZone) {
-            return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, careReceipt, zone, rulesZone);
+            return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, careReceipt, zone, rulesZone, accountUnreadInquiryReplyCount);
+        }
+
+        /**
+         * 계정의 미확인 답장 수를 채운 사본. 문의는 계정 것이라 펫이 여행 중·떠남이어도 점이 떠야 한다 —
+         * 출석 정보(attendanceRewards)는 여행 중엔 안 붙으므로 거기에만 기대면 0 이 나간다(dev 11/02).
+         */
+        public Detail withUnreadInquiryReplyCount(int count) {
+            return new Detail(petId, name, note, phase, ready, step, elapsedSeconds, deathReason, hatchStartedAt, hatchedAt, serverNow, clock, daysTogether, gauges, food, mood, sick, justHealed, intimacy, today, pieces, goodDay, baking, motions, justUnlocked, sceneNew, learnedToday, firstGift, chatSummary, scenes, personality, world, tone, genre, background, anchorsKey, features, leaving, trip, tutorial, graduationSeenAt, firstIntro, attendanceRewards, firstNightChatGrace, motionPlayback, careReceipt, timeZone, rulesTimeZone, count);
         }
 
         /** 규칙 시간대 — 2단계부터 서버 규칙이 펫 시간대를 쓴다. 표시 시간대와 같다. */
@@ -439,8 +448,11 @@ public final class PetResponses {
         public int unreadDiaryCount(){return attendanceRewards==null?0:attendanceRewards.unreadDiaryCount();}
 
         @com.fasterxml.jackson.annotation.JsonProperty("unreadInquiryReplyCount")
-        @Schema(description="attendanceRewards.unreadInquiryReplyCount 와 같다 — 아직 안 본 운영팀 답장 수(계정 기준). 출석 정보가 없으면 0",requiredMode=Schema.RequiredMode.NOT_REQUIRED)
-        public int unreadInquiryReplyCount(){return attendanceRewards==null?0:attendanceRewards.unreadInquiryReplyCount();}
+        @Schema(description="아직 안 본 운영팀 답장 수(계정 기준). 펫 상태(여행 중 등)와 무관하게 계정에서 센다",requiredMode=Schema.RequiredMode.NOT_REQUIRED)
+        public int unreadInquiryReplyCount(){
+            if(accountUnreadInquiryReplyCount!=null) return accountUnreadInquiryReplyCount;
+            return attendanceRewards==null?0:attendanceRewards.unreadInquiryReplyCount();
+        }
 
 
         /**

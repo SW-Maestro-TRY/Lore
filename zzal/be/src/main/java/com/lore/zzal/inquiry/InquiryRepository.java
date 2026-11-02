@@ -61,6 +61,14 @@ public class InquiryRepository {
                 + " ORDER BY created_at, id", ROW, owner);
     }
 
+    /** 아직 안 본 운영팀 답장 수(계정 기준). 펫 응답의 빨간 점이 이것을 쓴다. */
+    public int unreadReplyCount(Long owner) {
+        if (owner == null) return 0;
+        Integer n = db.queryForObject("SELECT count(*) FROM zzal_inquiry WHERE user_id=? AND reply_text IS NOT NULL AND reply_seen_at IS NULL",
+                Integer.class, owner);
+        return n == null ? 0 : n;
+    }
+
     /** 본인 문의의 답장을 봤다고 적는다. 남의 것이거나 답장이 없거나 이미 봤으면 아무것도 안 바뀐다. */
     public int markSeen(long id, Long owner, Instant now) {
         return db.update("UPDATE zzal_inquiry SET reply_seen_at=? WHERE id=? AND user_id=? AND reply_text IS NOT NULL AND reply_seen_at IS NULL",

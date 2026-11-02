@@ -76,6 +76,14 @@ public class PetService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.attendance.AttendanceService attendanceService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.lore.zzal.inquiry.InquiryRepository inquiryRepository;
+
+    /** 계정의 미확인 답장 수 — 출석 정보와 따로 센다(여행 중이면 출석 정보가 안 붙는다). */
+    public int unreadInquiryReplyCount(Long userId) {
+        return inquiryRepository == null ? 0 : inquiryRepository.unreadReplyCount(userId);
+    }
+
     private CareMotionRotationService careMotionRotationService;
     /** Existing constructor callers remain compatible; production wiring is required. */
     @org.springframework.beans.factory.annotation.Autowired
