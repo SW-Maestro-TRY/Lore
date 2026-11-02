@@ -6,7 +6,7 @@ import type {ZzalLocale} from '../../lib/locale';
 import {RomiChatExample} from '../focused-room/RomiChatExample';
 import {ENDING_STORY} from '../focused-room/useTutorialEnding';
 import {endingFallbackLine} from '../focused-room/focusedCopy';
-import {returningCopy,returningGuideAutomatic,returningGuideKey} from './returningGuideState';
+import {browserStorage,deferReturningGuide,returningCopy,returningGuideAutomatic,returningGuideKey,returningGuideLaterToday} from './returningGuideState';
 import {AnnouncementDialog,useAnnouncementsOpen} from './AnnouncementsGate';
 import {RETURNING_UPDATE} from './announcements';
 import {API_BASE,request} from '@common/api/client';
@@ -18,7 +18,12 @@ type Position={key:string;step:number;open:boolean;busy:boolean;failed:boolean;l
 /** Server-owned account/version progress. Never mutates the original tutorial or attendance. */
 export function useReturningGuide(pet:PetDetail|null|undefined,sample:boolean){
  const auth=useAuth(),key=!sample&&auth.user&&pet?returningGuideKey(auth.user.userId,pet.petId):'';
- const automatic=!!key&&returningGuideAutomatic(pet),identity=useRef(key);identity.current=key;
+ // A traveling pet can only be brought back by 「부르기」 under this modal, and the server rejects settings saves
+ // during a trip (409 ZZAL_TRAVELING). Defer the guide for the whole page visit once a trip is seen; it returns next visit.
+ const tripSeen=useRef(new Set<string>());if(key&&pet?.trip)tripSeen.current.add(key);
+ const [laterKey,setLaterKey]=useState('');
+ const later=!!key&&(laterKey===key||returningGuideLaterToday(browserStorage(),key));
+ const automatic=!!key&&returningGuideAutomatic(pet)&&!tripSeen.current.has(key)&&!later,identity=useRef(key);identity.current=key;
  const [position,setPosition]=useState<Position>({key:'',step:0,open:false,busy:false,failed:false,loaded:false});
  const metrics=useRef(interactionMetrics({pet:pet??null},sample,'returning_guide'));
  metrics.current=interactionMetrics({pet:pet??null},sample,'returning_guide');
@@ -27,7 +32,8 @@ export function useReturningGuide(pet:PetDetail|null|undefined,sample:boolean){
  const apply=(value:GuideStatus)=>setPosition({key,step:value.step,open:value.eligible&&!value.completed,busy:false,failed:false,loaded:true});
  const reload=async()=>{if(!automatic||auth.isLoading)return;setPosition(previous=>({key,step:previous.key===key?previous.step:0,open:true,busy:true,failed:false,loaded:previous.key===key&&previous.loaded}));try{const value=valid(await request<GuideStatus>(path));if(identity.current===key)apply(value)}catch{if(identity.current===key)setPosition(previous=>({...previous,busy:false,failed:true}))}};
  useLayoutEffect(()=>{if(!automatic){setPosition({key,step:0,open:false,busy:false,failed:false,loaded:false});return}void reload()},[key,automatic,auth.isLoading]);
- const current=position.key===key?position:{key,step:0,open:automatic,busy:true,failed:false,loaded:false};
+ const held=position.key===key?position:{key,step:0,open:automatic,busy:true,failed:false,loaded:false};
+ const current={...held,open:automatic&&held.open};
  useEffect(()=>{if(current.open&&!current.busy&&!current.failed)metrics.current.shown(`returning_step_${current.step}`)},[current.key,current.open,current.step,current.busy,current.failed]);
  const lock=useRef(false);
  const update=async(step:number,complete=false,expectedPersonaHash?:string)=>{
@@ -36,7 +42,7 @@ export function useReturningGuide(pet:PetDetail|null|undefined,sample:boolean){
   catch(error){if(identity.current===key)setPosition(previous=>({...previous,busy:false,failed:true}));if(complete)throw error;return false}
   finally{lock.current=false}
  };
- return {...current,eligible:automatic,pending:current.open,retry:reload,next:()=>{metrics.current.attempt('returning_next');void update(Math.min(5,current.step+1))},back:()=>{metrics.current.attempt('returning_previous');setPosition(previous=>({...previous,step:Math.max(0,previous.step-1)}))},complete:(hash:string)=>update(5,true,hash)};
+ return {...current,eligible:automatic,pending:current.open,retry:reload,next:()=>{metrics.current.attempt('returning_next');void update(Math.min(5,current.step+1))},back:()=>{metrics.current.attempt('returning_previous');setPosition(previous=>({...previous,step:Math.max(0,previous.step-1)}))},complete:(hash:string)=>update(5,true,hash),later:()=>{if(!key)return;metrics.current.attempt('returning_later');deferReturningGuide(browserStorage(),key);setLaterKey(key)}};
 }
 
 /** Native modal keeps focus and prevents accidental care actions beneath the guide. */
@@ -65,7 +71,7 @@ export default function ReturningGuide({guide,locale,locked,onEdit}:{guide:Retur
   </div>
   <footer>
    {guide.step>1&&!guide.failed&&<button type="button" data-returning-back onClick={guide.back}>{w.back}</button>}
-   {guide.failed?<button type="button" data-returning-retry onClick={()=>void guide.retry()}>{w.retry}</button>:guide.step<5?<button type="button" className="returning-primary" data-returning-next disabled={guide.busy||example&&!ready} onClick={guide.next}>{w.next}</button>:<button type="button" className="returning-primary" data-returning-edit disabled={guide.busy} onClick={onEdit}>{w.edit}</button>}
+   {guide.failed?<button type="button" data-returning-retry onClick={()=>void guide.retry()}>{w.retry}</button>:guide.step<5?<button type="button" className="returning-primary" data-returning-next disabled={guide.busy||example&&!ready} onClick={guide.next}>{w.next}</button>:<><button type="button" data-returning-later disabled={guide.busy} onClick={guide.later}>{w.later}</button><button type="button" className="returning-primary" data-returning-edit disabled={guide.busy} onClick={onEdit}>{w.edit}</button></>}
   </footer>
  </ReturningDialog>;
 }

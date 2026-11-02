@@ -6,7 +6,12 @@
 
 .overlay {
   position: fixed;
-  inset: 0;
+  /* 보이는 영역(visualViewport)에 겹친다 — 키보드가 오르면 사파리가 보이는 영역만 줄여 위로 민다.
+   * 숫자는 common/fe/viewport/useVisualViewport.ts 가 <html> 에 심는다(창이 열린 동안). 없으면 화면 전체. */
+  top: var(--vvt, 0px);
+  left: var(--vvl, 0px);
+  width: var(--vvw, 100%);
+  height: var(--vvh, 100%);
   z-index: 200; /* 헤더(60)보다 확실히 위. */
   background: var(--scrim);
   display: flex;
@@ -527,11 +532,52 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 단계형은 굴릴 것이 없으니 주 버튼을 바닥에 붙일(sticky) 까닭도 없다. 붙여 두면 버튼 위로 깔던
- * 카드색 띠(box-shadow)가 바로 위 오류 상자 아랫단을 덮었다(320×308 실측 2px). */
+/* 단계형도 주 버튼은 폼 스크롤 바닥에 붙인다(2026-10-26) — 작은 화면·약관 단계·키보드 상태에서 창 높이가
+ * 모자라면 버튼이 창 안 아래로 숨었다(320×460 약관 58px). 띠는 얇게 둔다. */
 .stepMode .submit {
-  position: static;
-  box-shadow: none;
+  box-shadow: 0 -8px 0 var(--card);
+}
+
+/* 지금 단계가 안 채워졌으면 흐리게 — 누를 수는 있다(누르면 칸으로 데려간다). */
+.stepMode .submit[data-ready="false"] {
+  opacity: 0.6;
+}
+
+/* 비밀번호 규칙 줄: 채우면 체크, 8자 전에 "다음" 을 누르면 강조. */
+.hint[data-state="ok"] {
+  color: var(--accent-zzal-deep);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hint[data-state="blocked"] {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* 폰: 탭 두 칸 대신 한 줄 "이미 계정이 있어요 · 로그인". */
+.switchLine {
+  margin: 2px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+
+.switchLink {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 /* 폰에서 처음 열 때 포커스를 받는 창 자체(AuthModal.tsx). 칸이 아니라 창이라 테두리 링은 안 그린다. */
@@ -540,34 +586,26 @@
 }
 
 /* ── 폰 키보드: 위 시트(2026-10-08 #690 2차) ────────────────────────────────
- * 글자 칸에 포커스가 들어오면(=키보드가 오른다) 오버레이에 data-sheet="top" 이 붙는다(AuthModal.tsx).
+ * 키보드가 떠 있으면 <html data-vv-keyboard> 가 붙는다(common/fe/viewport/useVisualViewport.ts, 2026-10-26).
  * 시트를 바닥에서 떼어 **보이는 영역 맨 위**에 붙인다 — 키보드는 언제나 아래에서 오르므로, 키보드를
  * 숫자로 알리지 않는 인앱 WebView 에서도 위에 붙은 시트는 가려지지 않는다.
  * 여울 겉옷(body[data-zzal-auth])도 같이 받는다 — 그쪽은 세로로 쌓는 배치라 justify 도 위로 민다.
  * 특이도: 바닥 시트 규칙(:global(body:not(...)) .overlay = 0,2,1)보다 높게, 뒤에 둔다. */
-:global(body) .overlay[data-sheet="top"] {
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 0;
-}
+@media (max-width: 480px) {
+  :global(html[data-vv-keyboard] body) .overlay {
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 0;
+  }
 
-.overlay[data-sheet="top"] .dialog {
-  margin: 0 auto;
-  max-width: none;
-  border-radius: 0 0 18px 18px;
-  /* 위는 노치·상태 표시줄 몫(사파리 화면 안이면 0), 아래는 키보드와 닿는 자리라 홈 인디케이터 몫이 없다. */
-  padding-top: max(8px, env(safe-area-inset-top));
-  padding-bottom: 12px;
-}
-
-/* 진단(?authdebug=1). 상훈님이 폰에서 읽어 주실 숫자 — 창 맨 아래 흐름 안에 둔다(버튼을 덮지 않게). */
-.debug {
-  display: block;
-  margin-top: 6px;
-  font: 600 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--text-subtle);
-  word-break: break-all;
-  pointer-events: none;
+  :global(html[data-vv-keyboard]) .overlay .dialog {
+    margin: 0 auto;
+    max-width: none;
+    border-radius: 0 0 18px 18px;
+    /* 위는 노치·상태 표시줄 몫(사파리 화면 안이면 0), 아래는 키보드와 닿는 자리라 홈 인디케이터 몫이 없다. */
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: 12px;
+  }
 }
 
 /* 입력이 있는 채 뒤로가기(H6) — "닫을까요?" 한 줄 확인. 오류와 같은 자리 위계, 색은 중립. */

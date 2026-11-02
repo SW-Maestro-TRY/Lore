@@ -1,0 +1,30 @@
+/* zzal 셸 — 보이는 영역 위에 붙는 상자(2026-10-26).
+ *
+ * 사파리·인스타 인앱은 키보드가 오르면 레이아웃 높이는 그대로 두고 보이는 영역만 줄여 위로 민다.
+ * 100dvh 는 이걸 모른다. 셸을 fixed 로 두고 높이·위치를 보이는 영역 숫자(--vvh·--vvt,
+ * common/fe/viewport/useVisualViewport.ts)로 맞추면, 밀려도 상자가 보이는 영역에 그대로 붙는다.
+ * 문서 자체는 높이가 헤더뿐이라 굴러갈 것이 없다(body overflow:hidden, tamagotchi.css).
+ * 숫자가 들어오기 전(첫 그림)은 100dvh 로 시작한다. */
+.tama-fullscreen {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--tama-header-h, 0px);
+  height: calc(var(--vvh, 100dvh) - var(--tama-header-h, 0px));
+  transform: translateY(var(--vvt, 0px));
+}
+
+/* 폰에서 채팅을 치는 동안: 공용 헤더·방 머리를 덮고, 아래 판은 입력 줄만 남긴다. */
+@media (pointer: coarse) {
+  .tama-fullscreen:has(.fr-composer input:focus) {
+    top: 0;
+    height: var(--vvh, 100dvh);
+    z-index: 65; /* 공용 헤더(60) 위 */
+  }
+  .tama-fullscreen .focused-room:has(.fr-composer input:focus) .fr-header {
+    display: none;
+  }
+  .tama-fullscreen .focused-room:has(.fr-composer input:focus) .fr-dock > :not(.fr-composer) {
+    display: none;
+  }
+}

@@ -59,7 +59,7 @@ export const BATH_PER_DAY = 1;
 /** 어느 게이지든 바닥으로 깨어 있는 6시간 → 케어 미스 +1(숨은 수치, 화면엔 안 내려옴). §4·§16 */
 export const CARE_MISS_ZERO_MS = 6 * HOUR;
 
-// ── §2 시계(KST 고정) ─────────────────────────────────────────────────────
+// ── §2 시계(규칙 시간대 벽시계 — PetDetail.rulesTimeZone, 1단계는 KST) ───────────
 
 /** 재우기 창 19:00~23:00, 23:00 자동 취침. §2 */
 export const SLEEP_WINDOW = { from: 19, to: 23 } as const;

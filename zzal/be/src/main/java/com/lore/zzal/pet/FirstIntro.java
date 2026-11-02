@@ -36,6 +36,6 @@ public final class FirstIntro {
         return new State(version,at,key,steps.subList(0,at),
                 at<index(version,Step.REVIEW_SEEN),key==Step.REVIEW_SEEN,
                 at>=index(version,Step.REVIEW_SEEN),pet.getSleepKind()==SleepKind.NAP,
-                version != 4 && pet.isInTutorial() && AwakeClock.isNight(now));
+                version != 4 && pet.isInTutorial() && AwakeClock.isNight(now, pet.zone()));
     }
 }

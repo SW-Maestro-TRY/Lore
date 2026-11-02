@@ -174,10 +174,11 @@ export default function Yeoul(_props: SkinProps & { focusedRoom?: boolean }) {
           open={s.authOpen}
           onClose={actions.closeAuth}
           initialTab={s.authTab}
-          // ★ **로그인일 때만** 문을 연다. develop 의 AuthModal 은 가입에서도 이 손잡이를 부르는데
-          //   (창을 안 닫고 로그인 탭으로 옮기려고), 그걸 그대로 받으면 가입만 한 사람이
-          //   로그인도 안 한 채 올리기 칸으로 넘어간다 — 실측으로 그랬다(2026-09-09).
-          onSuccess={(how) => { if (how === 'login') actions.passAuth(how); }}
+          // ★ 로그인·가입 둘 다 문을 연다(2026-10-27). 서버가 가입 때 로그인과 같은 쿠키를 주고(#690),
+          //   창은 내 정보(/users/me)로 로그인 상태를 확인한 뒤에만 onSuccess("signup") 을 부른다.
+          //   확인에 실패하면 onSuccess 없이 로그인 단계로 남는다. 예전(2026-09-09)에는 가입이
+          //   로그인이 아니어서 가입만 한 사람이 올리기 칸으로 넘어갔기 때문에 'login' 만 받았다.
+          onSuccess={(how) => { if (how === 'login' || how === 'signup') actions.passAuth(how); }}
         />
         {/* ★ 공통 가입 창을 **여울의 결로 감싸는 겉옷**(2026-09-21 A-01~A-04).
             창 자체는 안 고친다 — piece-maker·webtoon 과 같이 쓰는 공통 부품이라 팀원 화면이 같이 바뀐다.

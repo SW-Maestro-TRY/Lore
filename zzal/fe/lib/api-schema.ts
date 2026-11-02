@@ -3498,6 +3498,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 캐릭터 이름 변경
+         * @description 살아 있는 캐릭터의 이름을 바꾼다. 앞뒤 공백을 지운 뒤 1~12자여야 한다. 수면 중에도 바꿀 수 있다.
+         *     같은 이름이면 아무것도 바꾸지 않고 현재 상태를 돌려준다.
+         *
+         *     이름은 설정 해시(personaSourceHash)에 들어가지 않으므로 해시를 보내지 않는다.
+         *     부화 파이프라인을 다시 시작하지 않으며, 지난 채팅·일기 기록은 바뀌지 않는다.
+         */
+        patch: operations["renamePet"];
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/persona": {
         parameters: {
             query?: never;
@@ -3562,6 +3586,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/zzal/v1/me/pets/{petId}/rewards/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 출석 선물 봤음
+         * @description 출석 선물 화면을 열었음을 기록한다. 본문이 없고 **204** 로 답한다.
+         *
+         *     상태 조회 응답의 `attendanceRewards.newRewardCount`(와 같은 값인 최상위 `newRewardCount`)는
+         *     이 시각 뒤에 지급된 선물만 센다. 화면은 이 값이 0보다 크면 메뉴 단추와 「출석」 항목에 빨간 점을 그리고,
+         *     출석 화면을 열면 이 호출을 보낸 뒤 상태를 다시 읽어 점을 지운다.
+         *
+         *     **같은 요청을 몇 번 보내도 결과가 같다** — 시각은 앞으로만 간다. 수면 중·여행 중에도 호출할 수 있다.
+         */
+        post: operations["rewardsSeen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/zzal/v1/me/pets/{petId}/share": {
         parameters: {
             query?: never;
@@ -3600,7 +3650,7 @@ export interface paths {
         put?: never;
         /**
          * 재우기
-         * @description KST 19:00~23:00 구간에 수행한다. 23:00 까지 수행하지 않으면 자동으로 수면 상태가 되며,
+         * @description 캐릭터 시간대(rulesTimeZone)의 19:00~23:00 구간에 수행한다. 23:00 까지 수행하지 않으면 자동으로 수면 상태가 되며,
          *     자동 취침에는 보상이 없다. 수동 취침은 행복 +1, 친밀도 +10 을 부여한다.
          *
          *     수면 중에는 게이지 감소가 멈추고 재고만 충전된다. 야간 취침은 하루의 경계이며
@@ -3674,7 +3724,7 @@ export interface paths {
         put?: never;
         /**
          * 깨우기
-         * @description KST 07:00~10:00 구간에 수행한다. 10:00 까지 수행하지 않으면 자동으로 기상 처리되며,
+         * @description 캐릭터 시간대(rulesTimeZone)의 07:00~10:00 구간에 수행한다. 10:00 까지 수행하지 않으면 자동으로 기상 처리되며,
          *     이 경우 overslept 가 true 로 표시되고 보상이 없다. 수동 기상은 친밀도 +10 을 부여한다.
          *
          *     튜토리얼 낮잠은 시간 제약 없이 즉시 기상할 수 있으며 보상은 없다.
@@ -4720,8 +4770,18 @@ export interface components {
                 /** Format: int32 */
                 eligibleUnfulfilledCount?: number;
                 firstBundleState?: string;
+                /**
+                 * Format: int32
+                 * @description 출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수(처음 받은 기본 배경 제외). 0보다 크면 화면이 빨간 점을 그린다. POST /{petId}/rewards/seen 이 0으로 돌린다
+                 */
+                newRewardCount?: number;
                 ownedRewards?: components["schemas"]["OwnedReward"][];
                 programVersion?: string;
+                /**
+                 * Format: int32
+                 * @description 아직 안 읽은 일지 수. GET /{petId}/diary 의 unreadCount 와 같은 기준(READY·read_at 없음)
+                 */
+                unreadDiaryCount?: number;
             } | null;
             background?: string;
             /**
@@ -4842,6 +4902,11 @@ export interface components {
             } | null;
             motions?: components["schemas"]["Motion"][];
             name?: string;
+            /**
+             * Format: int32
+             * @description attendanceRewards.newRewardCount 와 같다 — 출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수. 출석 정보가 없으면 0
+             */
+            newRewardCount?: number;
             note?: string | null;
             personality?: string | null;
             /** Format: int64 */
@@ -4865,6 +4930,12 @@ export interface components {
             /** @description 부화 완료 여부 */
             ready?: boolean;
             /**
+             * @description 서버가 창(재우기 19시·자동 취침 23시·깨우기 7시·자동 기상 10시·부름 10/14/19시)을 계산하는 시간대.
+             *     화면은 창 시각을 이 시간대로 읽고 timeZone 으로 바꿔 보여 준다. 둘이 같으면 바꿀 것이 없다
+             * @example Asia/Seoul
+             */
+            rulesTimeZone?: string;
+            /**
              * @description 이번 조회에서 새 장면이 기록되었는지 여부. 재방문 첫 화면이 1회 표시하는 데 사용한다.
              *     다음 조회부터는 false 다
              */
@@ -4882,6 +4953,12 @@ export interface components {
             } | null;
             /** @description 현재 수행 중인 생성 단계. 부화 중에만 채워진다 */
             step?: string | null;
+            /**
+             * @description 이 캐릭터의 시간대(IANA 이름, 예 America/Los_Angeles). 화면이 날짜·시각을 보여 줄 때 쓴다.
+             *     아직 관측하지 못했으면 Asia/Seoul. 생성 때 또는 첫 요청의 X-Zzal-Tz 헤더로 한 번 정해지고 바뀌지 않는다
+             * @example Asia/Seoul
+             */
+            timeZone?: string;
             today?: components["schemas"]["ZzalToday"];
             /** @description 말투. 대사 톤에만 쓰이고 그림 생성에는 들어가지 않는다 */
             tone?: string | null;
@@ -4896,6 +4973,11 @@ export interface components {
              *     진행은 시간이 아니라 순서로 관리하므로 시각 정보는 포함하지 않는다
              */
             tutorial?: components["schemas"]["Tutorial"] | null;
+            /**
+             * Format: int32
+             * @description attendanceRewards.unreadDiaryCount 와 같다 — 안 읽은 일지 수. 출석 정보가 없으면 0
+             */
+            unreadDiaryCount?: number;
             world?: string | null;
         };
         /** @description 굽기 시작 결과 */
@@ -5971,6 +6053,14 @@ export interface components {
              * @example 구름 위 마을에 사는 고양이
              */
             world?: string;
+        };
+        /** @description 캐릭터 이름 변경 요청. 앞뒤 공백은 지우고 저장한다 */
+        PetRename: {
+            /**
+             * @description 새 캐릭터 이름. 최대 12자
+             * @example 바다여울
+             */
+            name: string;
         };
         PhotoPresignRequest: {
             contentType?: string;
@@ -11737,6 +11827,59 @@ export interface operations {
             };
         };
     };
+    renamePet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PetRename"];
+            };
+        };
+        responses: {
+            /** @description 변경 완료(또는 같은 이름) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+            /** @description 빈 이름·12자 초과(INVALID_INPUT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+            /** @description 살아 있는 캐릭터가 아님(ZZAL_PET_NOT_ALIVE) · 여행 중(ZZAL_TRAVELING) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseDetail"];
+                };
+            };
+        };
+    };
     persona: {
         parameters: {
             query?: never;
@@ -11830,6 +11973,40 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseZzalReturningGuideState"];
                 };
+            };
+        };
+    };
+    rewardsSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                petId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 기록됨(본문 없음) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 로그인이 필요함 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 존재하지 않거나 소유자가 다른 캐릭터(ZZAL_PET_NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

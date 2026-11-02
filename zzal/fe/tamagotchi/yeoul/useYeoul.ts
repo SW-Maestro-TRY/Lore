@@ -13,6 +13,7 @@ import { FIRST_INTRO_STEPS, FIRST_INTRO_KEYS } from './firstIntro';
 import { introText } from './firstIntroCopy';
 import { useZzalLocale } from '../../lib/locale';
 import { uiText } from '../../lib/uiCopy';
+import { localHourMinute } from '../../lib/kst';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ALBUM, CHAR_GROUPS, CHAT_CLOSE, CHAT_CLOSE_HOLD_MS, CHAT_HINTS, CHAT_MAX_ROUNDS, CHAT_QUICK, CHAT_REPLY, FRAME_KEYS, LANDING_COPY, LINE,
@@ -613,8 +614,8 @@ function nextCallHint(nextAt: string | null): string {
   if (!nextAt) return '오늘 부름은 다 끝났어요';
   const t = new Date(nextAt);
   if (Number.isNaN(t.getTime())) return '다음 부름을 기다려요';
-  const h = t.getHours();
-  const m = t.getMinutes();
+  // ★ 기기 시간대가 아니라 **아이의 시간대**로 읽는다(lib/kst.ts 머리 규칙). 서버 시각을 그 벽시계로 옮길 뿐이다.
+  const { hour: h, minute: m } = localHourMinute(t.getTime());
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h < 12 ? '오전' : '오후'} ${h12}시${m ? ` ${m}분` : ''}쯤 다시 불러요`;
 }

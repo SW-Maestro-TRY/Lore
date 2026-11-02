@@ -384,6 +384,17 @@ export interface PetDetail {
   serverNow: string;
 
   /**
+   * 이 아이의 시간대(IANA, 예 `America/Los_Angeles`). 날짜·시각을 **보여 줄 때** 쓴다(lib/kst.ts formatInZone).
+   * 아직 관측 못 했으면 서버가 `Asia/Seoul` 을 준다. 옛 서버(칸 없음)면 undefined → 서울.
+   */
+  timeZone?: string;
+  /**
+   * 서버가 창(19·23·07·10시, 부름 10/14/19시)을 재는 시간대. 1단계 서버는 늘 `Asia/Seoul`.
+   * timeZone 과 다르면 창 시각을 timeZone 으로 **바꿔서** 보여 준다(lib/kst.ts ruleHourLabel).
+   */
+  rulesTimeZone?: string;
+
+  /**
    * 이 아이의 **자세별 소품 앵커** 파일 키(예: `images/zzal/pets/23/sets/7/anchors.json`).
    * 화면이 CDN 에서 직접 읽는다 — **판 번호가 경로에 들어가므로 주소가 곧 판**이다.
    *
@@ -458,6 +469,12 @@ export interface PetDetail {
    *   조이지 않으면 위 `!= null` 판정이 타입상 죽은 가지로 읽힌다.
    */
   graduationSeenAt?: components['schemas']['Detail']['graduationSeenAt'] | null;
+  /** 출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수 — 0보다 크면 메뉴·「출석」에 빨간 점. 배포 전 서버면 안 온다(=0). */
+  newRewardCount?: components['schemas']['Detail']['newRewardCount'];
+  /** 안 읽은 일지 수 — 0보다 크면 「앨범」·「일지」에 빨간 점. 배포 전 서버면 안 온다(=0). */
+  unreadDiaryCount?: components['schemas']['Detail']['unreadDiaryCount'];
+  /** 아직 안 본 운영팀 답장 수(계정 기준) — 0보다 크면 메뉴·「문의하기」에 점. 배포 전 서버면 안 온다(=0). 손으로 쓴 칸(api-schema 미갱신). */
+  unreadInquiryReplyCount?: number;
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */
@@ -820,6 +837,16 @@ export function graduationSeen(
   return request<void>(`${PET_BASE}/${petId}/graduation-seen`, { method: 'POST' });
 }
 
+/**
+ * 출석 선물 화면을 열었다고 남긴다 — 그 뒤 상태 조회의 `newRewardCount` 가 0이 된다.
+ * ★ 졸업 축하(`graduationSeen`)와 같은 모양 — 본문 없는 204, 멱등, 응답을 파싱하지 않는다.
+ */
+export function rewardsSeen(
+  petId: operations['rewardsSeen']['parameters']['path']['petId'],
+): Promise<void> {
+  return request<void>(`${PET_BASE}/${petId}/rewards/seen`, { method: 'POST' });
+}
+
 /** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */
 export function setPersonality(petId: number, personality: Personality, world?: string): Promise<PetDetail> {
   return request<PetDetail>(`${PET_BASE}/${petId}/personality`, {
@@ -907,6 +934,16 @@ export interface PersonaSource { legacySource?: LegacyPersonaSource | null; auth
 export interface PersonaUpdate { authoredPersona?: AuthoredPersona; callMe?: string; expectedPersonaHash: string }
 export function updatePersonaSource(petId: number, input: PersonaUpdate): Promise<PetDetail> {
  return request(`${PET_BASE}/${petId}/personality`, { method: 'POST', body: input });
+}
+
+/**
+ * 캐릭터 이름 바꾸기(`PATCH /api/zzal/v1/me/pets/{petId}/name`). 응답은 다른 쓰기와 같은 PetDetail 전체.
+ * 400 `INVALID_INPUT`(빈칸·12자 초과) · 404 `ZZAL_PET_NOT_FOUND` · 409 `ZZAL_PET_NOT_ALIVE` · 409 `ZZAL_TRAVELING`.
+ * ★ 이름은 설정 해시에 안 들어가므로 `expectedPersonaHash`를 보내지 않는다.
+ */
+export function renamePet(petId: number, name: string): Promise<PetDetail> {
+  const body: components['schemas']['PetRename'] = { name };
+  return request<PetDetail>(`${PET_BASE}/${petId}/name`, { method: 'PATCH', body });
 }
 
 export interface AttendanceRewards {

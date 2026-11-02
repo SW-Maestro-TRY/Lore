@@ -5,6 +5,7 @@ import { getChatHistory, getLegacyChatHistory, type ChatHistoryTurn, type Legacy
 import { C, radius, TAP_MIN } from './ui';
 import {useUiText} from '../../lib/uiCopy';
 import {useZzalLocale} from '../../lib/locale';
+import { formatInZone } from '../../lib/kst';
 
 /** 원문은 펼칠 때 읽는다. 대화 전송/모델 생성과 분리된 읽기 전용 이력. */
 export function ChatHistory({ petId }: { petId: number }) {
@@ -50,7 +51,7 @@ export function ChatHistory({ petId }: { petId: number }) {
     finally { clearTimeout(deadline); inFlight.current = false; if (alive.current) setLoading(false); }
   };
   const button = { minHeight: TAP_MIN, padding: '8px 12px', border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, color: C.ink, background: C.paper, fontSize: 14, cursor: 'pointer' };
-  const line = (key: string, who: string, text: string, at: string | null) => <p key={key} style={{ margin: '10px 0', lineHeight: 1.5, overflowWrap: 'anywhere' }}><strong>{tr(who)}</strong>{at && <time dateTime={at} style={{ marginLeft: 8, fontSize: 12 }}>{new Date(at).toLocaleString(locale==='en'?'en-US':locale==='ja'?'ja-JP':'ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>}<br />{text}</p>;
+  const line = (key: string, who: string, text: string, at: string | null) => <p key={key} style={{ margin: '10px 0', lineHeight: 1.5, overflowWrap: 'anywhere' }}><strong>{tr(who)}</strong>{at && <time dateTime={at} style={{ marginLeft: 8, fontSize: 12 }}>{formatInZone(at, locale==='en'?'en-US':locale==='ja'?'ja-JP':'ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>}<br />{text}</p>;
   const next = legacy ? oldCursor : cursor;
   return <div data-part="chat-history" style={{ width: '100%', color: C.ink, fontSize: 14 }}>
     <button type="button" aria-haspopup="dialog" aria-expanded={open} style={button} onClick={() => { setOpen(!open); if (!open && cursor === undefined && !legacy) void load(false); }}>{tr(open?'지난 대화 접기':'지난 대화 보기')}</button>

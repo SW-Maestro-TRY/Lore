@@ -11,6 +11,7 @@ import './compact-menu.css';
 import LanguageSelector from '../../LanguageSelector';
 import { useOpenAnnouncements } from '../announcements/AnnouncementsGate';
 import { useZzalLocale } from '../../lib/locale';
+import { getDisplayZone } from '../../lib/kst';
 import { CHAT_MAX_CHARS } from '../rules';
 import { FLOOR_DIRT_ASSETS } from '../floorDirtAssets';
 import { useFocusedAnalytics } from './useFocusedAnalytics';
@@ -28,7 +29,8 @@ import SceneShare from '../yeoul/SceneShare';
 import {useFocusedGeometry} from './useFocusedGeometry';
 import ReturningGuide,{useReturningGuide} from '../announcements/ReturningGuide';
 import {returningCopy} from '../announcements/returningGuideState';
-import PersonaEditor from '../yeoul/PersonaEditor';
+import CharacterCard from '../yeoul/CharacterCard';
+import {NewDot,newBadgeCounts,newBadgeLabel} from './newBadges';
 
 type FocusedLive = Live;
 const blocks: Record<string, string> = {
@@ -39,7 +41,7 @@ const blocks: Record<string, string> = {
 };
 const dateTime = (value: string,locale:string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' });
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: getDisplayZone() });
 };
 
 /** The service root owns useHatchState. This view never creates presence/polling/UUID owners. */
@@ -121,12 +123,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     const measure=()=>{const bounds=node.getBoundingClientRect(),parent=room.getBoundingClientRect();const next={left:bounds.left-parent.left,top:bounds.top-parent.top,width:bounds.width,height:bounds.height};setDockBudget(previous=>Object.keys(next).every(key=>previous[key as keyof typeof next]===next[key as keyof typeof next])?previous:next)};
     measure();const observer=new ResizeObserver(measure);observer.observe(node);observer.observe(room);return()=>observer.disconnect();
   },[x.panel,x.guided,locale]);
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    const fit = () => { host.current?.style.setProperty('--fr-viewport', `${viewport?.height ?? window.innerHeight}px`); };
-    fit(); viewport?.addEventListener('resize', fit);
-    return () => viewport?.removeEventListener('resize', fit);
-  }, []);
+  // 키보드 높이는 셸이 맡는다(zzal/fe/tamagotchi/shell.css · common/fe/viewport/useVisualViewport.ts).
   useEffect(() => {
     if (drawer === 'menu') menuPanel.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
     else if (drawer === 'history') closeButton.current?.focus({ preventScroll: true });
@@ -155,6 +152,13 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
   const latestPet = [...turns].reverse().find(turn => turn.speaker === 'PET');
   const activeReply = reply?.petId === live.petId && reply.sessionId === (snapshot?.chat?.session?.id ?? null) && (!latestPet || latestPet.idx <= reply.idx) ? reply.line : null;
   const roomBlocked=snapshot ? snapshot.blocked : 'loading';
+  // ★ 새 일지·새 선물 점 — 수는 서버가 센다. 샘플 방·튜토리얼 안내 중에는 0.
+  const badges=newBadgeCounts(pet,sampleMode||x.guided);
+  const badgeTotal=badges.rewards+badges.diary+badges.inquiry;
+  // 메뉴 단추의 점 = 메뉴 안에 새것이 있다(출석 선물 + 운영팀 답장).
+  const menuNew=badges.rewards+badges.inquiry;
+  const badgeSeen=useRef<{petId:number|null;total:number}>({petId:null,total:0});
+  useEffect(()=>{const id=live.petId??null,prev=badgeSeen.current.petId===id?badgeSeen.current.total:0;badgeSeen.current={petId:id,total:badgeTotal};if(badgeTotal>0&&prev===0)interaction.shown('new_badge');},[live.petId,badgeTotal]);
   const line=(x.guided||x.panel==='game')?x.speech:!roomBlocked?(snapshot?.stageSpeech?.line||activeReply||null):null;
   const speechLeft = left + alphaRight + 8;
   const speechWidth = size.width - speechLeft - 12 >= 100 ? Math.min(230, size.width - speechLeft - 12) : size.width - 24;
@@ -252,7 +256,7 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     </div>
     <header className="fr-header">
       <div><h1>{pet?.name || '방'}</h1><p>{pet?.daysTogether != null ? locale==='ko'?`함께한 지 ${pet.daysTogether}일`:locale==='en'?`${pet.daysTogether} days together`:`一緒に${pet.daysTogether}日` : ''}</p></div>
-      <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" disabled={x.farewell} onClick={() => { input.current?.blur(); returnFocus.current=null; setDrawer(current=>current==='menu'?null:'menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={t.menu} aria-haspopup="dialog" aria-controls={drawer === 'menu' ? menuId : undefined} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg></button></div>
+      <div className="fr-header-tools"><button ref={menuButton} className="fr-icon-button" disabled={x.farewell} onClick={() => { input.current?.blur(); returnFocus.current=null; setDrawer(current=>current==='menu'?null:'menu'); }} data-fr-target={x.currentTarget==='attendance-menu'&&!drawer?'true':undefined} aria-label={menuNew>0?`${t.menu} · ${newBadgeLabel(locale,menuNew)}`:t.menu} data-fr-new={menuNew>0?'menu':undefined} aria-haspopup="dialog" aria-controls={drawer === 'menu' ? menuId : undefined} aria-expanded={drawer === 'menu'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" /></svg>{menuNew>0&&<span className="fr-new-dot fr-new-dot--menu" data-fr-new-dot data-fr-new-place="menu" aria-hidden="true"/>}</button></div>
     </header>
     {!traveling && !sleeping && line && <SpeechBubble key={`${live.petId}:${line}`} wideAbove={x.key==='FINISH_NOTICE'||x.farewell} line={line} bounds={{left:left+alphaLeft,right:left+alphaRight,top:top+geometry.top*geometry.height*scale,bottom:foot}} budget={speechBudget} previous={locale==='ko'?'이전':locale==='en'?'Previous':'前へ'} next={t.next} style={{ left: speechWidth === size.width - 24 ? 12 : speechLeft, top: speechTop, width: speechWidth }} />}
     {x.farewell&&isRomiMotionPhase(x.storyPhase)&&<RomiChatExample phase={x.storyPhase} locale={locale} onReady={setExampleReady}/>}
@@ -300,12 +304,12 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
     }}>
       {drawer === 'history' && <header><h2>{t.history}</h2><button ref={closeButton} onClick={closeDrawer}>{t.back}</button></header>}
       {drawer === 'menu' ? <><nav className="fr-menu-links">
-        <button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}</button>
+        <button data-fr-action="attendance-menu" data-fr-target={x.currentTarget==='attendance-menu'?'true':undefined} data-fr-new={badges.rewards>0?'rewards':undefined} onClick={()=>{setDrawer(null);x.open('attendance')}}>{t.attendance}<NewDot place="item" count={badges.rewards} locale={locale}/></button>
         <button data-fr-action="info-menu" onClick={()=>{setDrawer(null);x.open('info')}}>{locale==='ko'?'캐릭터 정보':t.personal}</button>
         {openAnnouncements&&<button data-fr-action="announcements-menu" onClick={()=>{setDrawer(null);openAnnouncements?.(menuButton.current)}}>{locale==='ko'?'공지사항':locale==='en'?'Announcements':'お知らせ'}</button>}
         {!sampleMode&&<button data-fr-action="feedback-menu" onClick={()=>{setDrawer(null);x.open('review')}}>{locale==='ko'?'후기':locale==='en'?'Feedback':'感想'}</button>}
         <button data-fr-action="scene-menu" onClick={()=>{setDrawer(null);interaction.attempt('scene_open');setShareOpen(true)}}>{locale==='ko'?'공유':locale==='en'?'Share':'共有'}</button>
-        {!sampleMode&&<button data-fr-action="inquiry-menu" onClick={()=>{setDrawer(null);x.close();interaction.attempt('inquiry_open');setInquiryOpen(true)}}>{locale==='ko'?'문의하기':locale==='en'?'Contact us':'お問い合わせ'}</button>}
+        {!sampleMode&&<button data-fr-action="inquiry-menu" data-fr-new={badges.inquiry>0?'inquiry':undefined} onClick={()=>{setDrawer(null);x.close();interaction.attempt('inquiry_open');setInquiryOpen(true)}}>{locale==='ko'?'문의하기':locale==='en'?'Contact us':'お問い合わせ'}<NewDot place="item" count={badges.inquiry} locale={locale}/></button>}
       </nav><div className="fr-languages"><LanguageSelector/></div></> : <div className="fr-history">
         <div className="fr-history-tabs"><button aria-disabled={snapshot?.historyLoading} aria-pressed={!legacy} onClick={() => { if(snapshot?.historyLoading)return; setLegacy(false); void bridgeRef.current?.history(false); }}>{t.current}</button><button aria-disabled={snapshot?.historyLoading} aria-pressed={legacy} onClick={() => { if(snapshot?.historyLoading)return; setLegacy(true); void bridgeRef.current?.history(true); }}>{t.legacyHistory}</button></div>
         {snapshot?.historyLoading && <p role="status">{t.loading}</p>}
@@ -317,9 +321,9 @@ export function FocusedRoomView({ live, bridgeFactory = createProductRoomChatBri
       </div>}
     </div>}
     <FocusedPanels live={live} x={x.panel==='care'?{...x,panel:null}:x} locale={locale} sampleMode={sampleMode}/>
-    <FocusedInquiry metrics={interactionMetrics(live,sampleMode,'inquiry')} open={inquiryOpen} onClose={()=>setInquiryOpen(false)} petId={live.petId} locale={locale}/>
-    {returning.open&&!settingsOpen&&<ReturningGuide guide={returning} locale={locale} locked={sleeping||traveling} onEdit={editSettings}/>}
-    {settingsOpen&&<div className="returning-settings-cover"><section className="fr-sheet fr-reading-sheet" role="dialog" aria-modal="true" aria-label={returningWords.settings} data-returning-settings onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setSettingsOwner(null)}if(event.key==='Tab'){const buttons=[...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];if(event.shiftKey&&document.activeElement===buttons[0]){event.preventDefault();buttons.at(-1)?.focus()}else if(!event.shiftKey&&document.activeElement===buttons.at(-1)){event.preventDefault();buttons[0]?.focus()}}}}><header><h2>{returningWords.settings}</h2><button type="button" onClick={()=>setSettingsOwner(null)}>{returningWords.close}</button></header><div className="returning-content"><PersonaEditor allowConfirm={returning.pending} onSaved={returnToChat} onClose={()=>setSettingsOwner(null)}/></div></section></div>}
+    <FocusedInquiry metrics={interactionMetrics(live,sampleMode,'inquiry')} open={inquiryOpen} onClose={()=>setInquiryOpen(false)} onSeen={()=>void live.refreshPet()} petId={live.petId} locale={locale}/>
+    {returning.open&&!settingsOpen&&!traveling&&<ReturningGuide guide={returning} locale={locale} locked={sleeping||traveling} onEdit={editSettings}/>}
+    {settingsOpen&&<div className="returning-settings-cover"><section className="fr-sheet fr-reading-sheet" role="dialog" aria-modal="true" aria-label={returningWords.settings} data-returning-settings onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();setSettingsOwner(null)}if(event.key==='Tab'){const buttons=[...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)')];if(event.shiftKey&&document.activeElement===buttons[0]){event.preventDefault();buttons.at(-1)?.focus()}else if(!event.shiftKey&&document.activeElement===buttons.at(-1)){event.preventDefault();buttons[0]?.focus()}}}}><header><h2>{returningWords.settings}</h2><button type="button" onClick={()=>setSettingsOwner(null)}>{returningWords.close}</button></header><div className="returning-content"><CharacterCard allowConfirm={returning.pending} onSaved={returnToChat} onClose={()=>setSettingsOwner(null)}/></div></section></div>}
     {shareOpen&&<SceneShare metrics={interactionMetrics(live,sampleMode,'scene_share')} stage={scene.current} logoUrl="/zzal-entry/logo-08-transparent.png" onClose={()=>setShareOpen(false)}/>}
   </section>;
 }

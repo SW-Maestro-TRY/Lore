@@ -55,6 +55,8 @@ import java.util.stream.Collectors;
 @Service
 public class PetService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PetService.class);
+
     private final ZzalPetRepository petRepository;
     private final GenJobRepository jobRepository;
     private final GenStepRecordRepository stepRepository;
@@ -178,7 +180,7 @@ public class PetService {
 
         s3Service.consume(userId, imageKey, now);
 
-        ZzalPet pet = petRepository.save(ZzalPet.draft(userId, imageKey, now));
+        ZzalPet pet = petRepository.save(ZzalPet.draft(userId, imageKey, now, PetTimeZones.fromCurrentRequest().orElse(null)));
         String version = hatchService.currentVersion();
         pet.setHatchPipelineVersion(version);
         GenJob job = jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, version, now));
@@ -370,6 +372,13 @@ public class PetService {
         //   그 시각을 <b>구간의 시작</b>으로 잡아야 그 사이에 있었던 기상을 놓치지 않는다(#234 리뷰 중-1).
         Instant windowStart = pet.getSettledAt() == null ? now : pet.getSettledAt();
         pet.settle(now);
+        // ★ 시간대 첫 관측 — 정산 <b>뒤</b>에 적는다. 지난 구간은 그때 규칙(KST)으로 이미 정산됐고,
+        //   새 시간대는 지금부터만 쓴다(과거를 다시 계산하지 않는다). 적힌 값은 다시 안 바뀐다.
+        PetTimeZones.fromCurrentRequest().ifPresent(zone -> {
+            if (pet.observeTimeZone(zone)) {
+                log.info("펫 시간대 첫 관측 — petId={} zone={}", pet.getId(), zone.getId());
+            }
+        });
         // ★★ 순서가 중요하다 — 부재 장면은 <b>방문 기록 전에</b> 정산해야 한다.
         //   {@code visit} 이 "부재는 여기서 끝" 이라며 부재 시계를 0으로 끊기 때문에,
         //   뒤로 미루면 방금 비운 시간이 통째로 사라진다.
@@ -808,6 +817,7 @@ public class PetService {
         ZzalPet pet=alive(userId,petId,realNow);
         if (request.callMe()!=null && request.callMe().isBlank())
             throw new BusinessException(ErrorCode.INVALID_INPUT,"부르는 이름을 입력해 주세요");
+        com.lore.zzal.pet.persona.CallMeInput.requireSingle(request.callMe()); // 해시 비교보다 먼저
         if (request.expectedPersonaHash()==null || request.expectedPersonaHash().isBlank())
             throw new BusinessException(ErrorCode.INVALID_INPUT,"현재 설정을 다시 확인해 주세요");
         String current=com.lore.zzal.pet.persona.PersonaSourceVersion.forEditing(pet);
@@ -820,6 +830,28 @@ public class PetService {
         if (request.authoredPersona()!=null) pet.recordAuthoredPersona(request.authoredPersona());
         if (request.callMe()!=null) pet.rememberExplicitCallMe(request.callMe());
         return new Action(pet,List.of());
+    }
+
+    /**
+     * 이름 바꾸기(캐릭터 카드). 자는 중에도 되고, 여행 중이면 {@link #alive} 가 409 로 막는다.
+     *
+     * <h3>★★ {@code PetNamed} 를 내지 않는다</h3>
+     * 그 이벤트는 부화 파이프라인을 깨우는 신호다({@link #character}). 다시 내면 굽기 쪽이 움직일 수 있다.
+     * 이름은 설정 해시({@code PersonaSourceVersion})에 들어가지 않으므로 해시 맞추기도 없다.
+     */
+    @Transactional(noRollbackFor = BusinessException.class)
+    public Action rename(Long userId, Long petId, String name, Instant realNow) {
+        ZzalPet pet = alive(userId, petId, realNow);
+        String next = name == null ? "" : name.strip();
+        // strip() 이 못 지우는 서식 문자(U+200B 등)·공백만 남은 이름도 빈칸으로 본다.
+        if (next.isEmpty() || next.codePoints().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c)
+                || Character.getType(c) == Character.FORMAT))
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이름을 한 글자 이상 적어 주세요");
+        if (next.length() > ZzalRules.NAME_MAX_CHARS)
+            throw new BusinessException(ErrorCode.INVALID_INPUT,
+                    "%d자까지 적을 수 있어요".formatted(ZzalRules.NAME_MAX_CHARS));
+        if (!next.equals(pet.getName())) pet.rename(next);
+        return new Action(pet, List.of());
     }
 
     /** 성격·세계관. 언제든, 자는 중에도(설계 규칙 "언제든 변경"). */
@@ -898,6 +930,19 @@ public class PetService {
     public void markGraduationSeen(Long userId, Long petId, Instant realNow) {
         ZzalPet pet = findMine(userId, petId);
         pet.markGraduationSeen(pet.now(realNow));
+    }
+
+    /**
+     * 출석 선물 화면을 열었다고 적는다 — 그 시각까지 지급된 선물은 더 이상 "새 선물"(빨간 점)이 아니다.
+     *
+     * ★ 졸업 축하와 같은 이유로 수면·여행 중에도 받는다. 아이를 돌보는 호출이 아니라 화면이 무엇을
+     *   보여 줬는지 적는 호출이다. 시각은 펫 시계(pet.now)로 — 지급 시각(granted_at)과 같은 시계라야 비교가 맞는다.
+     */
+    @Transactional
+    public void markRewardsSeen(Long userId, Long petId, Instant realNow) {
+        ZzalPet pet = findMine(userId, petId);
+        if (attendanceService != null) attendanceService.markRewardsSeen(pet, pet.now(realNow));
+        else pet.markRewardsSeen(pet.now(realNow));
     }
 
     /** 배경 바꾸기 — 2층 4종이 열린 뒤(설계 규칙). 값은 검증하지 않는다(해석 6). */

@@ -51,7 +51,7 @@ public class StageSpeechTransactions {
   var existing=rows.findByPetIdAndIntroVersion(petId,4);
   boolean careCached=existing.stream().anyMatch(r->!discovery(r.step()));
   if(careCached&&(!TutorialEndingSpeech.supports(requested)||existing.stream().anyMatch(r->TutorialEndingSpeech.supports(r.step()))))return new Batch(List.of());
-  var session=sessions.findByPetIdAndDayOfAndSlot(petId,AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS)
+  var session=sessions.findByPetIdAndDayOfAndSlot(petId,com.lore.zzal.chat.ChatSessionKeys.hatchDay(pet),ChatSlot.CONTINUOUS)
     .orElseThrow(()->new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
   var scenes=new ArrayList<ConversationScene>();
   scenes.add(new ConversationScene(ConversationScene.Phase.TUTORIAL_STAGE,requested,phase));
@@ -93,7 +93,7 @@ public class StageSpeechTransactions {
   if(found.isEmpty()){
    if(!validPosition(pet,step,phase))throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
    var context=chat.tutorialStageContext(pet,step,phase,now);String snapshot=json.writeValueAsString(context);
-   var session=sessions.findByPetIdAndDayOfAndSlot(petId,AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS).orElseThrow(()->new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
+   var session=sessions.findByPetIdAndDayOfAndSlot(petId,com.lore.zzal.chat.ChatSessionKeys.hatchDay(pet),ChatSlot.CONTINUOUS).orElseThrow(()->new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
    var unavailable=rows.saveAndFlush(new ZzalStageSpeech(owner,petId,4,step,phase,position(pet,step),session.getId(),snapshot,sha(snapshot),revision(pet),now));
    unavailable.complete(unavailable.token(),ZzalStageSpeech.Status.FAILED,null,"FALLBACK",null,null,null,"batch_unavailable",now);
    return stageView(pet,unavailable);
@@ -120,7 +120,7 @@ public class StageSpeechTransactions {
   var existing=rows.findByPetIdAndIntroVersionAndStepAndPhase(petId,4,step,phase);
   if(existing.isPresent()){var row=existing.get();return new Claim(false,row.id(),row.token(),null,discovery(step)?row.view(visible(pet,row)):stageView(pet,row));}
   var context=discovery(step)?chat.firstMeetingDiscoveryContext(pet,realNow):chat.tutorialStageContext(pet,step,phase,realNow);
-  var session=sessions.findByPetIdAndDayOfAndSlot(petId,AwakeClock.dateOf(pet.getHatchedAt()),ChatSlot.CONTINUOUS)
+  var session=sessions.findByPetIdAndDayOfAndSlot(petId,com.lore.zzal.chat.ChatSessionKeys.hatchDay(pet),ChatSlot.CONTINUOUS)
     .orElseThrow(()->new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
   String snapshot=json.writeValueAsString(context);
   var row=rows.saveAndFlush(new ZzalStageSpeech(owner,petId,4,step,phase,position(pet,step),session.getId(),snapshot,sha(snapshot),revision(pet,step),realNow));

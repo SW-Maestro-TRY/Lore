@@ -110,6 +110,8 @@ dependencies {
     implementation 'org.flywaydb:flyway-database-postgresql'
 
     implementation 'software.amazon.awssdk:s3'
+    // CloudFront 캐시 무효화(관리자 맞춤 재시도 반영이 같은 키를 덮어쓴 뒤). 배포 ID 가 없으면 안 부른다.
+    implementation 'software.amazon.awssdk:cloudfront'
     // ★ SSO 라이브러리는 **배포물에 넣지 않는다** — 서버(EC2)는 IAM 역할로 자격증명을
     //   얻으므로 쓸 일이 없고, 로컬 편의를 위해 서버 배포물에 코드를 더할 이유가 없다.
     //

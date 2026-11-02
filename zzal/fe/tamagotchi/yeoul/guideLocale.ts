@@ -1,3 +1,4 @@
+import {windowCopy} from '../../lib/windowCopy';
 import {guideCopy,guideTopics,type GuideTopic}from './guideTopics';
 import type{ZzalLocale}from '../../lib/locale';
 type GuideCopy={ [K in keyof typeof guideCopy]:string };
@@ -53,4 +54,4 @@ diary:["この子の日記", "アルバム → 日記", "サービスを離れ�
 feedback:["感想を送る", "部屋の感想ボタン", "使ってみた感想やご意見を送れます。送信しない場合は、そのまま閉じても大丈夫です。"],
 recovery:['接続が切れた・表示が遅い','各機能のエラー案内','お世話や保存の結果が不明なときは、最新の状態と確認ボタンを先に見てください。繰り返し押す前に結果を確かめましょう。画像の読み込みと会話の送信には、それぞれの案内があります。']
 };
-export function localizedGuide(locale:ZzalLocale){const map=locale==='en'?TOPICS_EN:TOPICS_JA;return{copy:locale==='ko'?guideCopy:locale==='en'?EN:JA,topics:guideTopics.map(t=>{const v=map[t.id];return locale==='ko'||!v?t:{id:t.id,title:v[0],where:v[1],body:v[2]}as GuideTopic})}}
+export function localizedGuide(locale:ZzalLocale){const map=locale==='en'?TOPICS_EN:TOPICS_JA;return{copy:locale==='ko'?guideCopy:locale==='en'?EN:JA,topics:guideTopics.map(t=>{const v=map[t.id];const base=locale==='ko'||!v?t:{id:t.id,title:v[0],where:v[1],body:v[2]}as GuideTopic;const zoned=t.id==='sleep'?windowCopy('guideSleep',locale):null;return zoned===null?base:{...base,body:zoned}as GuideTopic})}}
