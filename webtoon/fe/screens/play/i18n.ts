@@ -64,5 +64,6 @@ const dict: Dict = {
   "사건으로 돌아가기": { en: "Back to the event", ja: "事件に戻る", zh: "返回事件" },
   "세계관을 불러오지 못했어요": { en: "Couldn't load worlds", ja: "世界観を読み込めませんでした", zh: "无法加载世界观" },
   "다른 사건": { en: "Other events", ja: "他の事件", zh: "其他事件" },
+  "크레딧 충전하기": { en: "Get credits", ja: "クレジットをチャージ", zh: "充值积分" },
 };
 registerDict(dict);
