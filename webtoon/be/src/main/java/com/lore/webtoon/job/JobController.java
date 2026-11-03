@@ -68,11 +68,14 @@ public class JobController {
     private final CreditGate credits;
     private final S3Service uploads;
     private final com.lore.webtoon.character.CharacterOwner owner;
+    private final com.lore.common.user.UserRepository users;
 
     public JobController(JobService jobs, JobQueue queue, RunArt art, SpendGuard guard,
                          GuestGate guests, CreditGate credits, S3Service uploads,
-                         com.lore.webtoon.character.CharacterOwner owner) {
+                         com.lore.webtoon.character.CharacterOwner owner,
+                         com.lore.common.user.UserRepository users) {
         this.owner = owner;
+        this.users = users;
         this.jobs = jobs;
         this.queue = queue;
         this.art = art;
@@ -141,7 +144,9 @@ public class JobController {
     @PostMapping("/photo-presign")
     public S3Service.PresignedUpload photoPresign(HttpServletRequest request,
                                                    @RequestBody PhotoPresignRequest form) {
-        if (CreditGate.currentUser() != null) {
+        Long me = CreditGate.currentUser();
+        // 토큰은 있는데 그 계정이 이 DB 에 없으면(다른 환경의 쿠키가 남은 경우) 게스트로 본다 — 사람은 로그인한 적이 없다.
+        if (me != null && users.existsById(me)) {
             // 로그인한 사람은 팀 공용 presign(/api/v1/uploads/presign)을 쓴다 —
             // 거기 티켓이 계정에 묶여 더 오래(계정이 있는 한) 추적·회수된다.
             // 화면이 로그인 상태를 놓쳤을 때(토큰은 있는데 /me 가 실패한 경우 등) 사람에게 보이는 글이다 —
