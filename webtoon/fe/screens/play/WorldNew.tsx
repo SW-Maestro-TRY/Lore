@@ -6,7 +6,7 @@
  * - 「AI로 채우기」는 POST /play/worlds/make — 빈 칸과 예시 캐릭터 둘을 서버가 지어 준다. 한 번 지은 뒤엔 「다시 만들기」.
  * - 「올리기」는 POST /play/worlds(이미 id 가 있으면 PUT). 서버 길은 lore-23 의 feature/world-create.
  * - 장르 칩은 운영 웹툰 만들기와 같은 목록(GENRE_QUICK) + 직접 입력.
- * - PC · 폰 모두 두 걸음(1 설정 · 등장인물, 2 사건). 폰은 한 줄로 쌓인다(네 걸음 · 아래 판은 복잡하다는 하은 지적으로 뺌).
+ * - PC 는 두 걸음(1 설정 · 등장인물, 2 사건), 폰은 세 걸음(1 설정, 2 등장인물, 3 사건) — 하은 11/03.
  * - 적는 대로 이 브라우저에 자동 저장한다(사진 포함 — 긴 변 900px jpeg). 다른 화면에 다녀와도 그대로다.
  * - 예시 캐릭터는 사건마다 등장인물처럼 그 자리에서 사진 · 이름 · 설정으로 만든다(최대 둘). 서버가 사진 그대로 캐릭터로 만든다.
  * - 사진은 data URL 로 서버에 보낸다(창고에 올려 주소로 돌려준다). */
@@ -16,6 +16,7 @@ import { GENRE_QUICK } from "../../lib/wizardData";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconEdit, IconPlus } from "../../ui/Icons";
+import { usePhone } from "../landing/usePhone";
 import { makeWorld, saveWorld, type WorldDraft, type DraftPerson as Person, type DraftEvent as Ev } from "./playData";
 import "../wizard/i18n";
 import "./i18n";
@@ -280,6 +281,11 @@ function Desk({ go }: { go: Go }) {
   const books = useBooks();
   const { ok, busy, err, publish } = usePublish(d, clear, go);
   const [step, setStep] = useState(0);
+  const phone = usePhone();
+  /* 폰은 설정과 등장인물을 나눈다 */
+  const names = phone ? [t("설정"), t("등장인물"), t("사건")] : [t("설정 · 등장인물"), t("사건")];
+  const evStep = names.length - 1;
+  const s1ok = !!d.name.trim() && !!d.one.trim();
   const [person, setPerson] = useState<Person | null>(null);
   const [ev, setEv] = useState<Ev | null>(null);
   const putPerson = (p: Person) => { set({ cast: d.cast.some((x) => x.id === p.id) ? d.cast.map((x) => x.id === p.id ? p : x) : [...d.cast, p] }); setPerson(null); };
@@ -296,19 +302,19 @@ function Desk({ go }: { go: Go }) {
   return (
     <div className="pl-wrap wn">
       <div className="pl-mtop">
-        <button type="button" className="back" onClick={() => (step ? setStep(0) : go("make"))}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 5l-7 7 7 7" /></svg>{step ? t("설정 · 등장인물") : t("만들기")}</button>
-        <b>{t("세계관 만들기")}</b><span className="r">{step + 1} / 2</span>
+        <button type="button" className="back" onClick={() => (step ? setStep(step - 1) : go("make"))}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 5l-7 7 7 7" /></svg>{step ? names[step - 1] : t("만들기")}</button>
+        <b>{t("세계관 만들기")}</b><span className="r">{step + 1} / {names.length}</span>
       </div>
       <div className="wn-head">
         <div className="pl-crumb"><button type="button" onClick={() => go("make")}>{t("만들기")}</button><i>›</i><b>{d.name || t("새 세계관")}</b></div>
         <div className="wn-tools"><FromBook d={d} setD={(x) => { setD(x); }} books={books} go={go} /><AiFill d={d} setD={setD} /></div>
       </div>
-      <div className="wn-steps">{[t("설정 · 등장인물"), t("사건")].map((n, i) => (
+      <div className="wn-steps">{names.map((n, i) => (
         <button type="button" key={n} className={i < step ? "done" : i === step ? "on" : ""} onClick={() => setStep(i)}><i>{i < step ? "✓" : i + 1}</i>{n}</button>
       ))}</div>
-      {step === 0 ? (
+      {step < evStep ? (
       <div className="wn-s1">
-        <div className="wn-s1-l">
+        {(!phone || step === 0) && <div className="wn-s1-l">
           <PickPic className={`wn-cover${d.cover ? "" : " add"}`} onPick={(cover) => set({ cover })}>
             {d.cover ? <><span className="im" style={{ backgroundImage: `url(${d.cover})` }} /><span className="pl-btn sm tool">{t("바꾸기")}</span></> : <><i><IconPlus /></i>{t("표지 올리기")}</>}
           </PickPic>
@@ -316,8 +322,9 @@ function Desk({ go }: { go: Go }) {
           <Genre d={d} set={set} />
           <textarea className="wn-one" rows={2} placeholder={t("한 줄 소개")} aria-label={t("한 줄 소개")} value={d.one} maxLength={160} onChange={(e) => set({ one: e.target.value })} />
           <label className="wn-lab"><span className="lab">{t("세계 규칙")}</span><textarea className="wn-one" rows={6} value={d.rule} maxLength={2000} onChange={(e) => set({ rule: e.target.value })} /></label>
-        </div>
-        <div className="wn-s1-r">
+          {phone && <div className="wn-bar"><button type="button" className="pl-btn" disabled={!s1ok} onClick={() => { keep(); setStep(1); }}>{t("다음 · {name}", { name: t("등장인물") })}</button></div>}
+        </div>}
+        {(!phone || step === 1) && <div className="wn-s1-r">
           <h2 className="pl-h1">{t("등장인물")}</h2>
           <div className="wn-cast">
             {d.cast.map((p) => person?.id === p.id ? (
@@ -332,10 +339,11 @@ function Desk({ go }: { go: Go }) {
               : <button type="button" className="wn-dash wn-card-add" onClick={() => setPerson(newPerson())}><IconPlus />{t("등장인물")}</button>}
           </div>
           <div className="wn-bar">
+            {phone && <button type="button" className="pl-btn wn-w" onClick={() => setStep(0)}>{t("이전")}</button>}
             <span className="wn-saved">{saved ? t("저장됨") : ""}</span>
-            <button type="button" className="pl-btn" disabled={!d.name.trim() || !d.one.trim()} onClick={() => { keep(); setStep(1); }}>{t("다음 · {name}", { name: t("사건") })}</button>
+            <button type="button" className="pl-btn" disabled={!s1ok} onClick={() => { keep(); setStep(evStep); }}>{t("다음 · {name}", { name: t("사건") })}</button>
           </div>
-        </div>
+        </div>}
       </div>
       ) : (
         <div className="pl-sec wn-s2">
@@ -346,7 +354,7 @@ function Desk({ go }: { go: Go }) {
           {ev && !d.events.some((x) => x.id === ev.id) && <EventForm key={ev.id} e={ev} no={epNo(d.events.length)} cast={d.cast} onLive={(x) => { live.current = x; }} onDone={putEvent} onCancel={() => setEv(null)} />}
           <button type="button" className="wn-dash tall" onClick={addEvent}><IconPlus />{t("사건 추가")}</button>
           <div className="wn-bar">
-            <button type="button" className="pl-btn wn-w" onClick={() => setStep(0)}>{t("이전")}</button>
+            <button type="button" className="pl-btn wn-w" onClick={() => setStep(evStep - 1)}>{t("이전")}</button>
             <div className="wn-seg"><button type="button" className={d.visibility === "public" ? "on" : ""} onClick={() => set({ visibility: "public" })}>{t("모두에게")}</button><button type="button" className={d.visibility === "private" ? "on" : ""} onClick={() => set({ visibility: "private" })}>{t("나만")}</button></div>
             <span className="wn-saved">{saved ? t("저장됨") : ""}</span>
             <button type="button" className="pl-btn" disabled={!ok || busy} onClick={publish}>{t("세계관 올리기")}</button>
