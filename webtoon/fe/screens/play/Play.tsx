@@ -10,7 +10,7 @@ import CreditShort, { isCreditShort } from "../../ui/CreditShort";
 import { CharacterEditDialog } from "../character/OriginalCharacter";
 import "../character/i18n";
 import { usePhone } from "../landing/usePhone";
-import { loadWorlds, type PlayEvent, type PlayWorld } from "./playData";
+import { loadWorlds, type PlayEvent, type PlayPerson, type PlayWorld } from "./playData";
 import "./i18n";
 import "./Play.css";
 
@@ -29,6 +29,24 @@ function MTop({ back, onBack, title, right }: { back?: string; onBack?: () => vo
 function Pic({ src, className }: { src: string | null | undefined; className?: string }) {
   // eslint-disable-next-line @next/next/no-img-element
   return src ? <img className={className} src={src} alt="" /> : <span className={`pl-noimg ${className || ""}`} />;
+}
+
+/* 등장인물 자세히 — 카드를 누르면 큰 사진 · 이름 · 역할 · 설정 전부 */
+function CastView({ p, onClose }: { p: PlayPerson; onClose: () => void }) {
+  const t = useT();
+  return (
+    <div className="pl-castview" onClick={(ev) => { if (ev.target === ev.currentTarget) onClose(); }}>
+      <div className="box" role="dialog" aria-modal="true" aria-label={t(p.name)}>
+        <button type="button" className="x" aria-label={t("닫기")} onClick={onClose}><IconClose /></button>
+        <span className="ph" style={p.face_url ? { backgroundImage: `url(${p.face_url})` } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</span>
+        <div className="tx">
+          <b>{t(p.name)}</b>
+          {p.role && <em>{t(p.role)}</em>}
+          {p.desc && <p>{t(p.desc)}</p>}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* 2 세계관 고르기 — 세계관 카드만(표지 · 이름 · 장르 · 한 줄). 누르면 3 그 세계 안 사건 목록 */
@@ -56,6 +74,7 @@ function Worlds({ go, worlds }: { go: Go; worlds: PlayWorld[] }) {
 /* 3 사건 고르기 — 세계 안. 왼쪽 표지 · 소개 · 등장인물, 오른쪽 사건 줄 목록 */
 function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
   const t = useT();
+  const [who, setWho] = useState<PlayPerson | null>(null);
   return (
     <div className="pl-wrap">
       <MTop back={t("세계관")} onBack={() => go("play")} title={t(w.name)} />
@@ -72,7 +91,7 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
             <div className="who">
               <span className="lab">{t("등장인물")}</span>
               <div className="pl-cast2">{w.cast.map((p) => (
-                <span key={p.name}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i><span><b>{t(p.name)}</b>{(p.role || p.desc) && <small>{t(p.role || p.desc || "")}</small>}</span></span>
+                <button type="button" key={p.name} onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i><span><b>{t(p.name)}</b>{(p.role || p.desc) && <small>{t(p.role || p.desc || "")}</small>}</span></button>
               ))}</div>
             </div>
           )}
@@ -88,6 +107,7 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
           ))}
         </div>
       </div>
+      {who && <CastView p={who} onClose={() => setWho(null)} />}
     </div>
   );
 }
@@ -95,6 +115,7 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
 /* 4 사건 보기 — PC 는 3번 위 팝업, 폰은 전체 화면(아래에 자리 이름 + 단추 줄) */
 function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const t = useT();
+  const [who, setWho] = useState<PlayPerson | null>(null);
   const close = () => go("play", { world: w.id });
   const put = () => go("play", { world: w.id, ep: e.id, stage: "char" });
   return (
@@ -117,7 +138,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
               <p className="sit">{t(e.situation)}</p>
               {w.cast.length > 0 && (
                 <div><p className="k">{t("등장인물")}</p>
-                  <div className="cast">{w.cast.map((p) => <span key={p.name} className="pl-pill"><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</span>)}</div>
+                  <div className="cast">{w.cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
                 </div>
               )}
             </div>
@@ -126,6 +147,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
         </div>
         <div className="mfoot"><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>
       </div>
+      {who && <CastView p={who} onClose={() => setWho(null)} />}
     </div>
   );
 }
