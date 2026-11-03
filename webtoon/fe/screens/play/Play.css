@@ -463,3 +463,17 @@
 }
 /* 좀비 세계 표지는 가로 그림 — 세로 칸에서는 왼쪽 인물이 보이게 */
 .wt .pl-wside .cov[src*="zombie-world"] { object-position: 22% center; }
+
+/* 2 세계관 고르기 — 세계관 카드 */
+.wt .pl-worlds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.wt .pl-wcard { position: relative; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 14px; border: 1px solid var(--line); background: var(--card); text-align: left; }
+.wt .pl-wcard:hover { border-color: var(--line-strong); }
+.wt .pl-wcard > img, .wt .pl-wcard > .pl-noimg { width: 100%; aspect-ratio: 16/10; object-fit: cover; object-position: center 35%; }
+.wt .pl-wcard .b { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px 16px; }
+.wt .pl-wcard .num { font-size: 11px; font-weight: 700; color: var(--pl-coral); letter-spacing: .06em; }
+.wt .pl-wcard b { font-size: 18px; color: #fff; }
+.wt .pl-wcard .ln { font-size: 13.5px; line-height: 1.55; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+@media (max-width: 767px) {
+  .wt .pl-worlds { grid-template-columns: 1fr; gap: 12px; }
+  .wt .pl-wcard b { font-size: 17px; }
+}

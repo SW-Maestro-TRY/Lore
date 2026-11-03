@@ -31,33 +31,19 @@ function Pic({ src, className }: { src: string | null | undefined; className?: s
   return src ? <img className={className} src={src} alt="" /> : <span className={`pl-noimg ${className || ""}`} />;
 }
 
-/* 사건 카드 — 넓은 첫 카드(왼쪽 그림 · 오른쪽 글)와 작은 카드. 폰에서는 글이 그림 위에 얹힌다 */
-function EventCard({ w, e, wide, full, onClick }: { w: PlayWorld; e: PlayEvent; wide?: boolean; full?: boolean; onClick: () => void }) {
-  const t = useT();
-  return (
-    <button type="button" className={`pl-event${wide ? " wide" : ""}${full ? " full" : ""}`} onClick={onClick}>
-      <Pic src={e.image_url} />
-      <span className="b"><span className="num">{t(w.name)} · {e.no}</span><b>{t(e.title)}</b><span className="ln">{t(e.situation)}</span></span>
-    </button>
-  );
-}
-
-/* 2 세계관 고르기 — 세계 칩 + 모든 사건(넓은 1 + 작은 카드). 칩을 누르면 3 그 세계 안으로 */
+/* 2 세계관 고르기 — 세계관 카드만(표지 · 이름 · 장르 · 한 줄). 누르면 3 그 세계 안 사건 목록 */
 function Worlds({ go, worlds }: { go: Go; worlds: PlayWorld[] }) {
   const t = useT();
-  const list = worlds.flatMap((w) => w.events.map((e) => ({ w, e })));
   return (
     <div className="pl-wrap">
       <MTop back={t("처음")} onBack={() => go("landing")} title={t("세계관")} />
       <h1 className="pl-h1">{t("어디에 넣어 볼까요?")}</h1>
-      <div className="pl-chips">
-        <button type="button" className="on">{t("전체")}</button>
-        {worlds.map((w) => <button type="button" key={w.id} onClick={() => go("play", { world: w.id })}>{t(w.name)}</button>)}
-      </div>
-      <div className="pl-events">
-        {list.map(({ w, e }, i) => (
-          <EventCard key={e.id} w={w} e={e} wide={i === 0} full={i > 0 && i === list.length - 1 && (list.length - 1) % 2 === 1}
-            onClick={() => go("play", { world: w.id, ep: e.id })} />
+      <div className="pl-worlds">
+        {worlds.map((w) => (
+          <button type="button" key={w.id} className="pl-wcard" onClick={() => go("play", { world: w.id })}>
+            <Pic src={w.cover_url} />
+            <span className="b">{w.genre && <span className="num">{t(w.genre)}</span>}<b>{t(w.name)}</b><span className="ln">{t(w.one)}</span></span>
+          </button>
         ))}
       </div>
     </div>
