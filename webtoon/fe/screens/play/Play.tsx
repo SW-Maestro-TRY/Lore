@@ -117,6 +117,16 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
           ))}
         </div>
       </div>
+      {/* 폰 — 사건이 먼저, 등장인물은 아래에 작게 한 줄(옆으로 넘김) */}
+      {w.cast.length > 0 && (
+        <div className="pl-cast-m"><span className="lab">{t("등장인물")}</span>
+          <div className="row">{w.cast.map((p) => (
+            <button type="button" key={p.name} onClick={() => setWho(p)}>
+              <i style={p.face_url ? { backgroundImage: `url(${p.face_url})` } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i><b>{t(p.name)}</b>
+            </button>
+          ))}</div>
+        </div>
+      )}
       {who && <CastView p={who} onClose={() => setWho(null)} />}
     </div>
   );
