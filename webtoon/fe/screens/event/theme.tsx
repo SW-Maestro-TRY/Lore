@@ -181,7 +181,7 @@ export const THEMES: Record<ThemeKey, EventTheme> = {
     heroTitle: <>가면무도회에<br />7일 출석하면<br /><em>웹툰 한 편</em></>,
     period: "2026.11.04(수)부터 상시",
     ev1Title: "일곱 밤의 가면",
-    ev1Desc: "매일 2크레딧, 4일째 5크레딧, 7일째 10크레딧 — 일주일이면 25크레딧, AI 웹툰 한 편.",
+    ev1Desc: "매일 들어오면 가면 하나 = 2크레딧. 4번째 밤엔 5크레딧, 7번째 밤엔 초대장 10크레딧 — 일주일이면 25크레딧, 웹툰 한 편.",
     ev2Title: "무도회 첫 입장",
     inviteTitle: "무도회에 함께 올 손님",
     inviteStep: ["손님이 가입", "손님의 첫 웹툰"],
