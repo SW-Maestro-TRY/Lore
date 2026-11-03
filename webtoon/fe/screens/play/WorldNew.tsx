@@ -28,7 +28,7 @@ const MAX_EXAMPLES = 2;
 /* 사진은 미리 보기용 주소라 임시 저장에는 글만 남긴다 */
 const strip = (d: Draft): Draft => ({ ...d, cover: undefined, cast: d.cast.map((p) => ({ ...p, face: undefined })), events: d.events.map((e) => ({ ...e, image: undefined })) });
 const newPerson = (): Person => ({ id: uid(), name: "", role: "", desc: "" });
-const newEvent = (): Ev => ({ id: uid(), title: "", line: "", situation: "", place: "", spot: "", cast: [] });
+const newEvent = (): Ev => ({ id: uid(), title: "", line: "", situation: "", place: "", spot: "", cast: [], examples: [] });
 
 /* 설정집 → 세계관 칸. 세계 규칙은 고정 설정 + 세계 항목, 등장인물은 인물 항목 */
 function fromBook(b: LoreBook, d: Draft): Draft {
@@ -134,7 +134,7 @@ function PersonForm({ p, onDone, onCancel, onDelete }: { p: Person; onDone: (p: 
   );
 }
 
-function EventForm({ e, no, cast, onDone, onCancel, onDelete }: { e: Ev; no: string; cast: Person[]; onDone: (e: Ev) => void; onCancel: () => void; onDelete?: () => void }) {
+function EventForm({ e, no, cast, chars, go, onDone, onCancel, onDelete }: { e: Ev; no: string; cast: Person[]; chars: Character[]; go: Go; onDone: (e: Ev) => void; onCancel: () => void; onDelete?: () => void }) {
   const t = useT();
   const [v, setV] = useState(e);
   return (
@@ -158,6 +158,9 @@ function EventForm({ e, no, cast, onDone, onCancel, onDelete }: { e: Ev; no: str
             })}</div>
           </div>
         )}
+        <div><span className="lab">{t("예시 캐릭터")}</span>
+          <Examples ids={v.examples || []} onChange={(examples) => setV({ ...v, examples })} chars={chars} go={go} />
+        </div>
         <div className="acts">
           {onDelete && <button type="button" className="wn-del" onClick={onDelete}>{t("삭제")}</button>}
           <button type="button" className="pl-btn wn-w sm" onClick={onCancel}>{t("취소")}</button>
@@ -179,18 +182,18 @@ function EventRow({ e, no, onEdit }: { e: Ev; no: string; onEdit: () => void }) 
   );
 }
 
-/* 예시 캐릭터 — 내 캐릭터에서 최대 둘. 없으면 새로 만들러 간다 */
-function Examples({ d, set, chars, go }: { d: Draft; set: (p: Partial<Draft>) => void; chars: Character[]; go: Go }) {
+/* 예시 캐릭터 — 사건마다 따로, 내 캐릭터에서 최대 둘. 없으면 새로 만들러 간다 */
+function Examples({ ids, onChange, chars, go }: { ids: string[]; onChange: (ids: string[]) => void; chars: Character[]; go: Go }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   /* AI 가 새로 그린 예시는 아직 그리는 중일 수 있어 내 목록에 없으면 따로 읽는다 */
   const [extra, setExtra] = useState<Character[]>([]);
   useEffect(() => {
-    const miss = d.examples.filter((id) => !chars.some((c) => c.id === id) && !extra.some((c) => c.id === id));
+    const miss = ids.filter((id) => !chars.some((c) => c.id === id) && !extra.some((c) => c.id === id));
     if (miss.length) void Promise.all(miss.map((id) => readCharacter(id).catch(() => null))).then((l) => setExtra((o) => [...o, ...(l.filter(Boolean) as Character[])]));
-  }, [d.examples.join(","), chars.length]);
-  const picked = d.examples.map((id) => chars.find((c) => c.id === id) || extra.find((c) => c.id === id)).filter(Boolean) as Character[];
-  const toggle = (id: string) => set({ examples: d.examples.includes(id) ? d.examples.filter((x) => x !== id) : [...d.examples, id].slice(-MAX_EXAMPLES) });
+  }, [ids.join(","), chars.length]);
+  const picked = ids.map((id) => chars.find((c) => c.id === id) || extra.find((c) => c.id === id)).filter(Boolean) as Character[];
+  const toggle = (id: string) => onChange(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id].slice(-MAX_EXAMPLES));
   return (
     <div className="wn-ex">
       <div className="tiles">
@@ -205,7 +208,7 @@ function Examples({ d, set, chars, go }: { d: Draft; set: (p: Partial<Draft>) =>
       {open && (
         <div className="pick">
           {chars.map((c) => (
-            <button type="button" key={c.id} className={d.examples.includes(c.id) ? "on" : ""} onClick={() => { toggle(c.id); if (d.examples.length + 1 >= MAX_EXAMPLES) setOpen(false); }}>
+            <button type="button" key={c.id} className={ids.includes(c.id) ? "on" : ""} onClick={() => { toggle(c.id); if (ids.length + 1 >= MAX_EXAMPLES) setOpen(false); }}>
               <Face name={c.name} src={c.art_url} size={40} /><span><b>{c.name}</b><small>{c.description}</small></span>
             </button>
           ))}
@@ -295,16 +298,14 @@ function Desk({ go }: { go: Go }) {
               ? <PersonForm p={person} onDone={putPerson} onCancel={() => setPerson(null)} />
               : <button type="button" className="wn-dash round" onClick={() => setPerson(newPerson())}><IconPlus />{t("등장인물")}</button>}
           </div>
-          <span className="lab">{t("예시 캐릭터")}</span>
-          <Examples d={d} set={set} chars={chars} go={go} />
         </aside>
         <div className="pl-sec">
           <h2 className="pl-h1">{t("사건")}</h2>
           {d.events.map((e, i) => ev?.id === e.id
-            ? <EventForm key={e.id} e={e} no={epNo(i)} cast={d.cast} onDone={putEvent} onCancel={() => setEv(null)} onDelete={() => { set({ events: d.events.filter((x) => x.id !== e.id) }); setEv(null); }} />
+            ? <EventForm key={e.id} e={e} no={epNo(i)} cast={d.cast} chars={chars} go={go} onDone={putEvent} onCancel={() => setEv(null)} onDelete={() => { set({ events: d.events.filter((x) => x.id !== e.id) }); setEv(null); }} />
             : <EventRow key={e.id} e={e} no={epNo(i)} onEdit={() => setEv(e)} />)}
           {ev && !d.events.some((x) => x.id === ev.id)
-            ? <EventForm e={ev} no={epNo(d.events.length)} cast={d.cast} onDone={putEvent} onCancel={() => setEv(null)} />
+            ? <EventForm e={ev} no={epNo(d.events.length)} cast={d.cast} chars={chars} go={go} onDone={putEvent} onCancel={() => setEv(null)} />
             : <button type="button" className="wn-dash tall" onClick={() => setEv(newEvent())}><IconPlus />{t("사건 추가")}</button>}
           <div className="wn-bar">
             <div className="wn-seg"><button type="button" className={d.visibility === "public" ? "on" : ""} onClick={() => set({ visibility: "public" })}>{t("모두에게")}</button><button type="button" className={d.visibility === "private" ? "on" : ""} onClick={() => set({ visibility: "private" })}>{t("나만")}</button></div>
@@ -362,8 +363,6 @@ function Steps({ go }: { go: Go }) {
             </button>
           ))}
           <button type="button" className="wn-dash" onClick={() => setPerson(newPerson())}><IconPlus />{t("등장인물 추가")}</button>
-          <span className="lab" style={{ marginTop: 8 }}>{t("예시 캐릭터")}</span>
-          <Examples d={d} set={set} chars={chars} go={go} />
         </>)}
         {step === 2 && (<>
           <h1 className="pl-h1">{t("어떤 사건이 있나요?")}</h1>
@@ -396,7 +395,7 @@ function Steps({ go }: { go: Go }) {
             <div className="hd"><b>{person ? t("등장인물") : t("사건")}</b><button type="button" aria-label={t("닫기")} onClick={() => { setPerson(null); setEv(null); }}><IconClose /></button></div>
             {person && <PersonForm p={person} onDone={putPerson} onCancel={() => setPerson(null)}
               onDelete={d.cast.some((x) => x.id === person.id) ? () => { set({ cast: d.cast.filter((x) => x.id !== person.id) }); setPerson(null); } : undefined} />}
-            {ev && <EventForm e={ev} no={evNo(ev)} cast={d.cast} onDone={putEvent} onCancel={() => setEv(null)}
+            {ev && <EventForm e={ev} no={evNo(ev)} cast={d.cast} chars={chars} go={go} onDone={putEvent} onCancel={() => setEv(null)}
               onDelete={d.events.some((x) => x.id === ev.id) ? () => { set({ events: d.events.filter((x) => x.id !== ev.id) }); setEv(null); } : undefined} />}
           </div>
         </div>

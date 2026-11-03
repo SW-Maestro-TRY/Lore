@@ -177,22 +177,23 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
         if (picked) shown = [picked, ...shown];
       }
       setChars(shown);
-      setSel((s) => s && (shown.some((c) => c.id === s) || !!w.examples?.includes(s)) ? s : shown.some((c) => c.id === preset) ? preset : shown[0]?.id);
+      setSel((s) => s && (shown.some((c) => c.id === s) || !!(e.examples?.length ? e.examples : w.examples)?.includes(s)) ? s : shown.some((c) => c.id === preset) ? preset : shown[0]?.id);
     } catch { setChars([]); }
   };
   useEffect(() => { void load(); }, []);
   /* 세계를 만든 사람이 정한 예시 캐릭터(최대 둘)가 있으면 그것부터. 「+ 내 캐릭터」를 누르면 내 캐릭터 목록으로 */
   const [examples, setExamples] = useState<Character[]>([]);
-  const [mode, setMode] = useState<"ex" | "mine">(w.examples?.length && !preset ? "ex" : "mine");
+  const exIds = e.examples?.length ? e.examples : w.examples || [];
+  const [mode, setMode] = useState<"ex" | "mine">(exIds.length && !preset ? "ex" : "mine");
   useEffect(() => {
-    if (!w.examples?.length) return;
-    void Promise.all(w.examples.slice(0, 2).map((id) => readCharacter(id).catch(() => null))).then((l) => {
+    if (!exIds.length) return;
+    void Promise.all(exIds.slice(0, 2).map((id) => readCharacter(id).catch(() => null))).then((l) => {
       const ok = l.filter((c): c is Character => !!c && c.status === "ready");
       setExamples(ok);
       if (!ok.length) setMode("mine");
       else if (mode === "ex") setSel(ok[0].id);
     });
-  }, [w.id]);
+  }, [e.id]);
   const pool = mode === "ex" ? examples : chars;
   const cur = pool?.find((c) => c.id === sel);
   const nameOf = (c: Character) => c.builtin ? t(c.name) : c.name;
