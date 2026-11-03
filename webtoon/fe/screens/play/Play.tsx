@@ -198,7 +198,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   );
   /* 내 캐릭터라면? — 이 화면의 할 일. PC 는 오른쪽 상자, 폰은 상황 글 바로 아래 */
   const mine = (
-    <div className="mine"><b>{t("내 캐릭터라면?")}</b>
+    <div className="mine">
       <button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터로 이야기 만들기")}</button>
     </div>
   );

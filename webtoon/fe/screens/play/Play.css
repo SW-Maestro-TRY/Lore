@@ -781,3 +781,4 @@
   .wt .pl-modal .mine-m { display: block; }
   .wt .pl-modal .stories .list { grid-template-columns: 1fr; }
 }
+.wt .pl-modal .mine { padding: 14px; }
