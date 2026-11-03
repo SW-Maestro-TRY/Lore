@@ -639,3 +639,30 @@
 /* 홈 세계 줄은 한 줄만 — PC 네 칸, 폰은 넓은 칸 하나 + 두 칸. 나머지는 「전부 보기」 */
 @media (min-width: 768px) { .wt .wt-play-row-list button:nth-child(n + 5) { display: none; } }
 @media (max-width: 767px) { .wt .wt-play-row-list button:nth-child(n + 4) { display: none; } }
+
+/* 홈 소개 — 세계관 체험(PC E안: 글 + 세계 포스터 줄 / 폰 D안: 체험 · 웹툰 두 카드) */
+.wt .wt-pintro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 28px; align-items: center; padding-top: 120px; }
+.wt .wt-pintro-copy { padding-left: 48px; display: flex; flex-direction: column; align-items: flex-start; }
+.wt .wt-pintro .wt-gallery-heading h2 { font-size: 46px; line-height: 1.18; letter-spacing: -0.04em; }
+.wt .wt-pintro .wt-gallery-heading > span { font-size: 13px; }
+.wt .wt-pintro .btn { min-width: 210px; height: 49px; }
+.wt .wt-pintro-posters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.wt .wt-pintro-posters button { position: relative; aspect-ratio: 3/4.2; padding: 0; overflow: hidden; border: 0; border-radius: 12px; background: #0b0f15; cursor: pointer; text-align: left; }
+.wt .wt-pintro-posters img, .wt .wt-pintro-posters span { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wt .wt-pintro-posters button:after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 50%, rgba(6, 16, 31, .9)); }
+.wt .wt-pintro-posters b { position: absolute; z-index: 1; left: 10px; right: 8px; bottom: 9px; font-size: 13px; line-height: 1.3; color: #fff; }
+.wt .wt-pcards { display: none; }
+@media (max-width: 767px) {
+  .wt .wt-pintro, .wt .wt-intro { display: none; }
+  .wt .wt-pcards { display: flex; flex-direction: column; gap: 12px; padding-top: 48px; }
+  .wt .wt-pcards > h2 { font-size: 24px; letter-spacing: -0.03em; margin: 0 0 4px; }
+  .wt .wt-pcard { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: var(--card, #141c28); border: 1px solid var(--line); }
+  .wt .wt-pcard .k { font-size: 12px; font-weight: 700; color: #7fd6c2; }
+  .wt .wt-pcard .t { font-size: 20px; }
+  .wt .wt-pcard img { width: 100%; height: 150px; object-fit: cover; object-position: center 25%; border-radius: 12px; }
+  .wt .wt-pcard img.page { object-position: center top; background: #fff; }
+  .wt .wt-pcard ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .wt .wt-pcard li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .wt .wt-pcard li i { width: 24px; height: 24px; flex: none; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font-style: normal; font-size: 11.5px; font-weight: 700; color: #7fd6c2; }
+  .wt .wt-pcard .btn { width: 100%; height: 46px; }
+}

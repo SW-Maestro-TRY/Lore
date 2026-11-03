@@ -3,6 +3,16 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "내 캐릭터를": { en: "Put your character", ja: "自分のキャラを", zh: "把我的角色" },
+  "다른 세계에 넣어 보기": { en: "into another world", ja: "別の世界に入れてみる", zh: "放进另一个世界" },
+  "세계와 사건을 고르고 캐릭터를 넣으면,": { en: "Pick a world and an event, add your character,", ja: "世界と事件を選んでキャラを入れると、", zh: "选好世界和事件放入角色，" },
+  "그 캐릭터가 겪는 장면이 만화로 나와요.": { en: "and see what they go through as a comic.", ja: "そのキャラが体験する場面がマンガになります。", zh: "角色经历的场景就会变成漫画。" },
+  "내 캐릭터로 할 수 있는 것": { en: "What you can do with your character", ja: "自分のキャラでできること", zh: "用我的角色可以做的事" },
+  "세계관 체험": { en: "World play", ja: "世界観体験", zh: "世界观体验" },
+  "내가 주인공인 웹툰": { en: "A webtoon starring you", ja: "自分が主人公のウェブトゥーン", zh: "我当主角的漫画" },
+  "세계 고르기": { en: "Pick a world", ja: "世界を選ぶ", zh: "选择世界" },
+  "사건 고르기": { en: "Pick an event", ja: "事件を選ぶ", zh: "选择事件" },
+  "내 캐릭터 넣기": { en: "Add my character", ja: "自分のキャラを入れる", zh: "放入我的角色" },
   "LORE · AI 개인 IP 창작 플랫폼": { en: "LORE · AI personal IP creation platform", ja: "LORE · AI個人IP創作プラットフォーム", zh: "LORE · AI 个人 IP 创作平台" },
   "내 캐릭터가": { en: "A story where", ja: "自分のキャラが", zh: "我的角色" },
   "살아 움직이는 이야기": { en: "your character comes alive", ja: "生き生きと動く物語", zh: "活起来的故事" },
