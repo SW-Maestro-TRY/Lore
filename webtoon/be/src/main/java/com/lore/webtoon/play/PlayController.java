@@ -86,8 +86,13 @@ public class PlayController {
             description = "운영자가 정한 세계 뒤에 사용자가 올린 세계가 붙는다. 로그인했으면 내가 만든 올리기 전 세계도 붙는다.")
     @GetMapping("/worlds")
     public Map<String, Object> worlds() {
-        List<Map<String, Object>> all = new ArrayList<>(catalog.worlds().stream().map(this::shown).toList());
-        all.addAll(made.listed(CreditGate.currentUser()));
+        Long user = CreditGate.currentUser();
+        List<Map<String, Object>> all = new ArrayList<>();
+        for (Map<String, Object> w : catalog.worlds()) {                 // 관리자가 고친 운영 세계는 그 편집본으로
+            Map<String, Object> edited = made.overrideView(String.valueOf(w.get("id")), user);
+            all.add(edited != null ? edited : shown(w));
+        }
+        all.addAll(made.listed(user));
         return Map.of("worlds", all);
     }
 
@@ -162,7 +167,8 @@ public class PlayController {
     @PostMapping("/runs")
     public ResponseEntity<Map<String, Object>> start(HttpServletRequest request, @RequestBody RunRequest form) {
         Long user = CreditGate.currentUser();
-        Map<String, Object> world = catalog.world(form.worldId());
+        boolean edited = made.overridden(form.worldId());
+        Map<String, Object> world = edited ? made.playable(form.worldId(), user) : catalog.world(form.worldId());
         if (world == null && form.worldId() != null) {
             world = made.playable(form.worldId(), user);
         }
@@ -176,7 +182,7 @@ public class PlayController {
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> lorebook = (Map<String, Object>) world.get("lorebook");
-        String situation = catalog.world(form.worldId()) != null
+        String situation = !edited && catalog.world(form.worldId()) != null
                 ? catalogSituation(world, event, name)
                 : PlayWorldService.situation(event, Map.of());
         ResponseEntity<Map<String, Object>> started = jobs.create(request, new JobService.CreateRequest(

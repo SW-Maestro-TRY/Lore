@@ -35,16 +35,21 @@ public class PlayPeople implements ApplicationRunner {
 
     private final PlayCatalog catalog;
     private final CharacterService characters;
+    private final PlayWorldRepository edited;
 
-    public PlayPeople(PlayCatalog catalog, CharacterService characters) {
+    public PlayPeople(PlayCatalog catalog, CharacterService characters, PlayWorldRepository edited) {
         this.catalog = catalog;
         this.characters = characters;
+        this.edited = edited;
     }
 
     @Override
     public void run(ApplicationArguments args) {
         for (Map<String, Object> world : catalog.worlds()) {
             String worldId = String.valueOf(world.get("id"));
+            if (edited.existsById(worldId)) {
+                continue;                       // 관리자가 고친 세계 — 예시 인물은 편집본이 맡는다(파일 값으로 되돌리지 않는다)
+            }
             for (Object e : PlayWorldService.list(world.get("events"))) {
                 if (!(e instanceof Map<?, ?> event)) {
                     continue;

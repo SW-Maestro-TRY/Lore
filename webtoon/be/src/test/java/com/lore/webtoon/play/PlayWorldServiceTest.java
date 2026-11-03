@@ -50,7 +50,9 @@ class PlayWorldServiceTest {
     final SafetyGuard safety = mock(SafetyGuard.class);
     final SpendGuard guard = mock(SpendGuard.class);
     final UsageService usage = mock(UsageService.class);
-    final PlayWorldService service = new PlayWorldService(rows, books, characters, harness, safety, guard, usage, 5);
+    final com.lore.webtoon.Admins admins = mock(com.lore.webtoon.Admins.class);
+    final PlayWorldService service = new PlayWorldService(rows, books, characters, harness, safety, guard, usage,
+            new PlayCatalog(), admins, 5);
     final Map<String, PlayWorld> store = new LinkedHashMap<>();
     final ObjectMapper json = new ObjectMapper();
 
@@ -83,6 +85,7 @@ class PlayWorldServiceTest {
     private WebtoonCharacter mine(String id, Long owner) {
         WebtoonCharacter c = WebtoonCharacter.described(id, owner, null, "인물 " + id, "설명", Instant.now());
         when(characters.ownedBy(id, owner)).thenReturn(c);
+        when(characters.usableIn(eq(id), eq(owner), any())).thenReturn(c);
         return c;
     }
 
@@ -201,6 +204,7 @@ class PlayWorldServiceTest {
                             c.getArgument(3), c.getArgument(4), true, Instant.now());
                     one.drewArt(c.getArgument(5), com.lore.webtoon.character.CharacterSource.PHOTO, Instant.now());
                     when(characters.ownedBy(one.getPublicId(), 7L)).thenReturn(one);
+                    when(characters.usableIn(eq(one.getPublicId()), eq(7L), any())).thenReturn(one);
                     when(characters.artUrl(one)).thenReturn(c.getArgument(5) == null ? null : "/" + c.getArgument(5));
                     return one;
                 });
@@ -233,6 +237,34 @@ class PlayWorldServiceTest {
         assertThat(view2.get("cover_url")).isEqualTo("/img/k-cover");
         assertThat(((Map<?, ?>) ((List<?>) view2.get("events")).get(0)).get("image_url")).isEqualTo("/img/k-ep");
         verify(characters).putPlayPerson(eq(cid), eq(7L), eq(id), eq("가람"), anyString(), org.mockito.ArgumentMatchers.isNull(), eq(true));
+    }
+
+    @Test
+    void 운영_세계는_관리자만_고치고_고친_뒤에는_그_편집본을_쓴다() {
+        when(rows.existsById(anyString())).thenAnswer(c -> store.containsKey((String) c.getArgument(0)));
+        Map<String, Object> b = body("private", List.of());
+        b.put("cover_url", "/static/play/zombie-world.jpg");
+        assertThatThrownBy(() -> service.save("zombie", 7L, b)).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("관리자");
+        when(admins.isAdmin(7L)).thenReturn(true);
+        Map<String, Object> view = service.save("zombie", 7L, b);
+        assertThat(view.get("id")).isEqualTo("zombie");
+        assertThat(store.get("zombie").status).isEqualTo(PlayWorld.PUBLISHED);      // 운영 세계는 늘 올라가 있다
+        assertThat(view.get("cover_url")).isEqualTo("/static/play/zombie-world.jpg"); // 정적 그림은 주소 그대로
+        assertThat(service.overridden("zombie")).isTrue();
+        assertThat(service.overrideView("zombie", null)).containsEntry("name", "잿빛 항구");
+        assertThat(service.listed(7L)).isEmpty();                                     // 사용자 세계 목록엔 안 섞인다
+    }
+
+    @Test
+    void 안_고친_운영_세계는_만들기_화면_모양으로_불러온다() {
+        when(rows.existsById(anyString())).thenReturn(false);
+        when(admins.isAdmin(7L)).thenReturn(true);
+        Map<String, Object> view = service.read("zombie", 7L);
+        assertThat(view).containsEntry("operator", true).containsEntry("mine", true);
+        assertThat((String) view.get("rule")).isNotBlank();
+        assertThat(view.get("events")).asList().isNotEmpty();
+        assertThat(service.read("zombie", 8L)).containsEntry("mine", false);
     }
 
     @Test

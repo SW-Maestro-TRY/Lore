@@ -733,6 +733,19 @@ public class CharacterService {
                 .orElse(null);
     }
 
+    /** 이 세계의 예시로 쓸 수 있는 캐릭터 — 그 사람이 만든 것이거나 그 세계에 딸린 것. 아니면 {@code null}. */
+    @Transactional(readOnly = true)
+    public WebtoonCharacter usableIn(String publicId, Long ownerId, String world) {
+        if (publicId == null) {
+            return null;
+        }
+        return characters.findByPublicId(publicId)
+                .filter(one -> !one.isTrashed())
+                .filter(one -> ownerId != null && ownerId.equals(one.getOwnerId())
+                        || world != null && world.equals(one.getPlayWorld()))
+                .orElse(null);
+    }
+
     /** 세계를 올리거나 내릴 때 — 그 세계의 예시 캐릭터를 누구나 고를 수 있게 열거나 닫는다. */
     @Transactional
     public void showInPlay(Collection<String> publicIds, Collection<String> shown) {

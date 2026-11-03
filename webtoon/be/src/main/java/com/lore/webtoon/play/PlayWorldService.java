@@ -67,13 +67,18 @@ public class PlayWorldService {
     private final SafetyGuard safety;
     private final SpendGuard guard;
     private final UsageService usage;
+    private final PlayCatalog catalog;
+    private final com.lore.webtoon.Admins admins;
     private final int daily;
     private final Semaphore slots = new Semaphore(2);
     private final ObjectMapper json = new ObjectMapper();
 
     public PlayWorldService(PlayWorldRepository rows, PrivateLorebookService books, CharacterService characters,
                             HarnessProcess harness, SafetyGuard safety, SpendGuard guard, UsageService usage,
+                            PlayCatalog catalog, com.lore.webtoon.Admins admins,
                             @Value("${lore.webtoon.play.world-per-day:5}") int daily) {
+        this.catalog = catalog;
+        this.admins = admins;
         this.rows = rows;
         this.books = books;
         this.characters = characters;
@@ -99,7 +104,28 @@ public class PlayWorldService {
         return user;
     }
 
+    /** 운영 세계(play/worlds.json) id 인가. 그 id 로 저장한 행은 파일을 덮어쓰는 관리자 편집본이다. */
+    public boolean operator(String id) {
+        return id != null && catalog.world(id) != null;
+    }
+
+    /** 운영 세계를 관리자가 고친 행이 있는가. */
+    @Transactional(readOnly = true)
+    public boolean overridden(String id) {
+        return operator(id) && rows.existsById(id);
+    }
+
+    private boolean admin(Long user) {
+        return user != null && admins.isAdmin(user);
+    }
+
     private PlayWorld owned(String id, Long user) {
+        if (operator(id)) {
+            if (!admin(requireUser(user))) {
+                throw new BusinessException(ErrorCode.FORBIDDEN, "운영 세계는 관리자만 고칠 수 있어요.");
+            }
+            return rows.findById(id).orElseGet(() -> new PlayWorld(id, user, Instant.now()));
+        }
         return rows.findByIdAndOwnerId(id, requireUser(user))
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 세계관이 없어요."));
     }
@@ -122,10 +148,13 @@ public class PlayWorldService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "이 세계관을 AI 가 채우고 있어요. 다 채운 뒤 저장해 주세요.");
         }
         Map<String, Object> doc = cleanDoc(raw, row.id);
+        if (operator(row.id)) {
+            doc.put("visibility", "public");                     // 운영 세계는 늘 올라가 있다
+        }
         boolean pub = "public".equals(doc.get("visibility"));
         check(doc);
         attachImages(doc, read(row.docJson), owner, row.id, pub);
-        checkAllExamples(doc, owner);
+        checkAllExamples(doc, owner, row.id);
         if (pub && (text(doc.get("name"), 40).isEmpty() || list(doc.get("events")).isEmpty())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "세계 이름과 사건을 하나 이상 적어 주세요.");
         }
@@ -188,7 +217,8 @@ public class PlayWorldService {
                     p.put("id", pid);
                 }
                 String face = storeOrNull(p, owner, "face", true);     // 없으면 전 사진 그대로(글만 있던 사람은 글만)
-                String cid = personId(worldId, pid);
+                WebtoonCharacter given = characters.usableIn(text(p.get("character_id"), 40), null, worldId);
+                String cid = given != null ? given.getPublicId() : personId(worldId, pid);   // 운영 세계에 심어 둔 사람은 그대로
                 String role = text(p.get("role"), 60);
                 String desc = text(p.get("desc"), 600);
                 WebtoonCharacter c = characters.putPlayPerson(cid, owner, worldId, text(p.get("name"), 30),
@@ -218,9 +248,22 @@ public class PlayWorldService {
     /** 그림 칸 하나 — 새 그림이면 올린 키, 지금 그림을 둔다면 전 키, 아니면 빈 값. 입력 칸은 지운다. */
     private String art(Map<String, Object> m, String before, Long owner, String name, boolean face) {
         String fresh = storeOrNull(m, owner, name, face);
-        boolean keep = m.get(name + "_url") instanceof String s && !s.isBlank() || m.get(name + "_art") instanceof String a && !a.isBlank();
+        String url = m.get(name + "_url") instanceof String s ? s.trim() : "";
+        boolean keep = !url.isEmpty() || m.get(name + "_art") instanceof String a && !a.isBlank();
         strip(m, name);
-        return fresh != null ? fresh : keep ? before : "";
+        if (fresh != null) {
+            return fresh;
+        }
+        if (keep && before.isEmpty() && url.startsWith("/static/")) {
+            return url;                                        // 운영 세계 그림(화면 쪽 정적 파일)은 주소 그대로 둔다
+        }
+        return keep ? before : "";
+    }
+
+    /** 저장한 그림 값의 주소 — 창고 키면 주소로 바꾸고, 정적 파일 주소면 그대로. */
+    private String urlOf(Object stored) {
+        String v = text(stored, 600);
+        return v.startsWith("/static/") ? v : characters.imageUrl(v);
     }
 
     private String storeOrNull(Map<String, Object> m, Long owner, String name, boolean face) {
@@ -270,11 +313,11 @@ public class PlayWorldService {
     }
 
     /** 예시 캐릭터는 내가 만든 캐릭터만, 둘까지. 남의 것·없는 것은 조용히 뺀다. */
-    private List<String> checkExamples(List<?> raw, Long owner) {
+    private List<String> checkExamples(List<?> raw, Long owner, String world) {
         List<String> out = new ArrayList<>();
         for (Object x : raw) {
             String id = text(x, 40);
-            if (!id.isEmpty() && !out.contains(id) && out.size() < MAX_EXAMPLES && characters.ownedBy(id, owner) != null) {
+            if (!id.isEmpty() && !out.contains(id) && out.size() < MAX_EXAMPLES && characters.usableIn(id, owner, world) != null) {
                 out.add(id);
             }
         }
@@ -283,11 +326,11 @@ public class PlayWorldService {
 
     /** 세계의 예시와 사건마다의 예시를 내 캐릭터만 남게 거른다. */
     @SuppressWarnings("unchecked")
-    private void checkAllExamples(Map<String, Object> doc, Long owner) {
-        doc.put("examples", checkExamples(list(doc.get("examples")), owner));
+    private void checkAllExamples(Map<String, Object> doc, Long owner, String world) {
+        doc.put("examples", checkExamples(list(doc.get("examples")), owner, world));
         for (Object e : list(doc.get("events"))) {
             Map<String, Object> ev = (Map<String, Object>) e;
-            ev.put("examples", checkExamples(list(ev.get("examples")), owner));
+            ev.put("examples", checkExamples(list(ev.get("examples")), owner, world));
         }
     }
 
@@ -364,7 +407,7 @@ public class PlayWorldService {
                 throw new BusinessException(ErrorCode.INVALID_INPUT, "오늘 세계관 AI 채우기 횟수를 모두 사용했어요. 직접 적어 저장할 수 있어요.");
             }
             attachImages(draft, read(row.docJson), owner, row.id, row.published());
-            checkAllExamples(draft, owner);
+            checkAllExamples(draft, owner, row.id);
             String lang = WebtoonLanguage.normalize(form.language());
             Map<String, Object> previous = row.madeAt == null ? null : read(row.docJson);
             Map<String, Object> input = new LinkedHashMap<>();
@@ -572,6 +615,10 @@ public class PlayWorldService {
         if (PlayWorld.RUNNING.equals(row.making)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "이 세계관을 만들고 있어요. 다 만든 뒤 지워 주세요.");
         }
+        if (operator(id)) {                                     // 관리자 편집본을 지우면 파일 그대로로 돌아간다
+            rows.delete(row);
+            return;
+        }
         Set<String> touched = allExamples(read(row.docJson));
         characters.dropPlayExamples(id, null);
         rows.delete(row);
@@ -583,6 +630,9 @@ public class PlayWorldService {
 
     @Transactional
     public Map<String, Object> read(String id, Long user) {
+        if (operator(id) && !rows.existsById(id)) {
+            return catalogView(id, user);
+        }
         PlayWorld row = rows.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 세계관이 없어요."));
         boolean mine = user != null && user.equals(row.ownerId);
         if (!mine && !row.published()) {
@@ -594,6 +644,101 @@ public class PlayWorldService {
         return view(row, user);
     }
 
+    /** 관리자가 고친 운영 세계 — 있으면 목록에 파일 대신 이것을 낸다. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> overrideView(String id, Long user) {
+        return operator(id) ? rows.findById(id).map(row -> view(row, user)).orElse(null) : null;
+    }
+
+    /**
+     * 아직 안 고친 운영 세계를 만들기 화면 모양으로 — 관리자가 「세계관 편집」으로 불러온다. 설정집(고정 설정 · 항목)은
+     * 세계 규칙 글로, 등장인물 id 는 이름으로, 사건 예시 인물은 서버가 심어 둔 캐릭터(character_id)와 함께 준다.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> catalogView(String id, Long user) {
+        Map<String, Object> w = catalog.world(id);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", id);
+        out.put("name", text(w.get("name"), 40));
+        out.put("genre", text(w.get("genre"), 40));
+        out.put("one", text(w.get("one"), 300));
+        List<String> rule = new ArrayList<>();
+        Object lore = w.get("lorebook");
+        for (Object b : lore instanceof Map<?, ?> m ? list(m.get("books")) : List.of()) {
+            if (b instanceof Map<?, ?> book) {
+                String fixed = text(book.get("fixed_settings"), 4000);
+                if (!fixed.isEmpty()) {
+                    rule.add(fixed);
+                }
+                for (Object e : list(book.get("entries"))) {
+                    if (e instanceof Map<?, ?> en && !text(en.get("content"), 2000).isEmpty()) {
+                        rule.add(text(en.get("title"), 100) + ": " + text(en.get("content"), 2000));
+                    }
+                }
+            }
+        }
+        out.put("rule", String.join("\n", rule));
+        out.put("spot", text(w.get("spot"), 60));
+        List<Map<String, Object>> cast = new ArrayList<>();
+        for (Object c : list(w.get("cast"))) {
+            if (c instanceof Map<?, ?> p) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", text(p.get("name"), 30));
+                m.put("name", text(p.get("name"), 30));
+                m.put("role", text(p.get("role"), 60));
+                m.put("desc", text(p.get("desc"), 600));
+                m.put("face_url", p.get("face_url"));
+                cast.add(m);
+            }
+        }
+        out.put("cast", cast);
+        List<Map<String, Object>> events = new ArrayList<>();
+        List<Map<String, Object>> known = new ArrayList<>();
+        for (Object e : list(w.get("events"))) {
+            if (!(e instanceof Map<?, ?> v)) {
+                continue;
+            }
+            Map<String, Object> m = new LinkedHashMap<>();
+            v.forEach((k, val) -> m.put(String.valueOf(k), val));
+            String eventId = text(v.get("id"), 80);
+            List<Map<String, Object>> people = new ArrayList<>();
+            List<String> examples = new ArrayList<>();
+            for (Object x : list(v.get("example_people"))) {
+                if (x instanceof Map<?, ?> person) {
+                    String name = text(person.get("name"), 30);
+                    WebtoonCharacter c = characters.usableIn(PlayPeople.idOf(id, eventId, name), null, id);
+                    Map<String, Object> q = new LinkedHashMap<>();
+                    q.put("id", name);
+                    q.put("name", name);
+                    q.put("role", "");
+                    q.put("desc", PlayPeople.description(person));
+                    q.put("face_url", c != null ? characters.artUrl(c) : person.get("face_url"));
+                    if (c != null) {
+                        q.put("character_id", c.getPublicId());
+                        examples.add(c.getPublicId());
+                        known.add(Map.of("id", c.getPublicId(), "name", c.getName(),
+                                "description", c.getDescription() == null ? "" : c.getDescription(),
+                                "art_url", String.valueOf(characters.artUrl(c)), "status", c.getStatus().name().toLowerCase()));
+                    }
+                    people.add(q);
+                }
+            }
+            m.remove("example_people");
+            m.put("example_people", people);
+            m.put("examples", examples);
+            m.put("cast", PlayWorldService.ids(v.get("cast")));
+            events.add(m);
+        }
+        out.put("events", events);
+        out.put("examples", List.of());
+        out.put("example_characters", known);
+        out.put("cover_url", w.get("cover_url"));
+        out.put("mine", admin(user));
+        out.put("operator", true);
+        out.put("visibility", "public");
+        return out;
+    }
+
     @Transactional
     public List<Map<String, Object>> mine(Long user) {
         if (user == null) {
@@ -601,6 +746,9 @@ public class PlayWorldService {
         }
         List<Map<String, Object>> out = new ArrayList<>();
         for (PlayWorld row : rows.findAllByOwnerIdOrderByUpdatedAtDesc(user)) {
+            if (operator(row.id)) {
+                continue;
+            }
             settle(row);
             out.add(view(row, user));
         }
@@ -613,13 +761,13 @@ public class PlayWorldService {
         List<Map<String, Object>> out = new ArrayList<>();
         if (user != null) {
             for (PlayWorld row : rows.findAllByOwnerIdOrderByUpdatedAtDesc(user)) {
-                if (!list(read(row.docJson).get("events")).isEmpty()) {
+                if (!operator(row.id) && !list(read(row.docJson).get("events")).isEmpty()) {
                     out.add(view(row, user));
                 }
             }
         }
         for (PlayWorld row : rows.findAllByStatusOrderByPublishedAtDesc(PlayWorld.PUBLISHED)) {
-            if (user == null || !user.equals(row.ownerId)) {
+            if (!operator(row.id) && (user == null || !user.equals(row.ownerId))) {
                 out.add(view(row, user));
             }
         }
@@ -685,7 +833,7 @@ public class PlayWorldService {
     // ───────────────────────── 모양 ─────────────────────────
 
     private Map<String, Object> view(PlayWorld row, Long user) {
-        boolean mine = user != null && user.equals(row.ownerId);
+        boolean mine = user != null && user.equals(row.ownerId) || operator(row.id) && admin(user);
         Map<String, Object> doc = read(row.docJson);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", row.id);
@@ -700,7 +848,7 @@ public class PlayWorldService {
             if (c instanceof Map<?, ?> v) {
                 Map<String, Object> m = new LinkedHashMap<>();
                 v.forEach((k, val) -> m.put(String.valueOf(k), val));
-                m.put("face_url", characters.imageUrl(text(m.remove("face_art"), 600)));
+                m.put("face_url", urlOf(m.remove("face_art")));
                 cast.add(m);
             }
         }
@@ -708,7 +856,7 @@ public class PlayWorldService {
         Map<String, Map<String, Object>> known = new LinkedHashMap<>();   // 보여 줄 수 있는 예시 캐릭터
         String cover = null;
         for (String cid : allExamples(doc)) {
-            WebtoonCharacter c = characters.ownedBy(cid, row.ownerId);
+            WebtoonCharacter c = characters.usableIn(cid, row.ownerId, row.id);
             if (c == null || !mine && c.getStatus() != CharacterStatus.READY) {
                 continue;
             }
@@ -733,7 +881,7 @@ public class PlayWorldService {
                 Map<String, Object> m = new LinkedHashMap<>();
                 v.forEach((k, val) -> m.put(String.valueOf(k), val));
                 m.put("examples", ids(v.get("examples")).stream().filter(known::containsKey).toList());
-                String image = characters.imageUrl(text(m.remove("image_art"), 600));
+                String image = urlOf(m.remove("image_art"));
                 if (image != null) {
                     m.put("image_url", image);
                 }
@@ -757,9 +905,10 @@ public class PlayWorldService {
         out.put("events", shownEvents);
         out.put("examples", ids(doc.get("examples")).stream().filter(known::containsKey).toList());
         out.put("example_characters", new ArrayList<>(known.values()));
-        String coverArt = characters.imageUrl(text(doc.get("cover_art"), 600));
+        String coverArt = urlOf(doc.get("cover_art"));
         out.put("cover_url", coverArt != null ? coverArt : cover);
         out.put("mine", mine);
+        out.put("operator", operator(row.id));
         out.put("visibility", row.published() ? "public" : "private");
         if (mine) {
             out.put("lorebook_id", text(doc.get("lorebook_id"), 40));
