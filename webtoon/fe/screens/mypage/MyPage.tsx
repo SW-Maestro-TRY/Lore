@@ -35,7 +35,7 @@ import VisibilityPicker from "../../ui/VisibilityPicker";
 import { LANGS, LangSwitch, registerDict, useLang, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { inviteSummary, type InviteSummary } from "../../lib/invite";
-import { IconBook, IconCheck, IconChevronLeft, IconChevronRight, IconComment, IconEdit, IconFace, IconGear, IconGlobe, IconHeart, IconHelp, IconLogout, IconMail, IconTrash, IconUser } from "../../ui/Icons";
+import { IconBook, IconCheck, IconChevronLeft, IconChevronRight, IconComment, IconEdit, IconFace, IconGear, IconGift, IconGlobe, IconHeart, IconHelp, IconLogout, IconMail, IconTrash, IconUser } from "../../ui/Icons";
 import { CharacterEditDialog } from "../character/OriginalCharacter";
 import { InstagramMark, KakaoTalkMark, XMark } from "../../ui/BrandMarks";
 import { ConfirmDialog, Dialog } from "../../ui/Dialog";
@@ -61,10 +61,8 @@ registerDict({
   "사유: {reason}": { en: "Reason: {reason}", ja: "理由: {reason}", zh: "原因：{reason}" },
   "로그인 안 함": { en: "Not signed in", ja: "未ログイン", zh: "未登录" },
   "크레딧": { en: "Credits", ja: "クレジット", zh: "点数" },
-  "친구 초대": { en: "Invite friends", ja: "友だち招待", zh: "邀请好友" },
-  "가입 +{a}C · 첫 웹툰 +{b}C": { en: "Sign-up +{a}C · First webtoon +{b}C", ja: "登録 +{a}C · 初ウェブトゥーン +{b}C", zh: "注册 +{a}C · 首部漫画 +{b}C" },
-  "받은 크레딧": { en: "Earned", ja: "獲得", zh: "已获得" },
-  "이벤트 보기": { en: "See event", ja: "イベントを見る", zh: "查看活动" },
+  "이벤트": { en: "EVENTS", ja: "イベント", zh: "活动" },
+  "출석 · 친구 초대": { en: "Check-in · Invite friends", ja: "出席 · 友だち招待", zh: "签到 · 邀请好友" },
   "한 편 {n} C": { en: "{n} C per episode", ja: "1話 {n} C", zh: "每话 {n} C" },
   "계정": { en: "ACCOUNT", ja: "アカウント", zh: "账号" },
   "내 체험": { en: "My plays", ja: "マイ体験", zh: "我的体验" },
@@ -496,19 +494,21 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
           </div>
         )}
 
-        {/* 친구 초대 — 규칙 한 줄과 받은 크레딧만. 링크 보내기·내 숫자는 이벤트 페이지(EVENT 2)에 있다 */}
-        {isAuthenticated && invite && (
-          <button type="button" className="card wt-my-invite" onClick={() => { track("invite_event_open", { where: "mypage" }); go("event"); }}>
-            <span className="dim">{t("친구 초대")}</span>
-            <b>{t("가입 +{a}C · 첫 웹툰 +{b}C", { a: invite.signupCredits, b: invite.completeCredits })}</b>
-            <span className="wt-my-invite-earn">{t("받은 크레딧")} <b>{invite.earned}C</b></span>
-            <span className="wt-my-invite-go">{t("이벤트 보기")} ›</span>
-          </button>
-        )}
-
         {/* 폰(시안 1)에서는 묶음마다 카드 한 장 · 줄 끝에 개수와 꺾쇠. 넓은 화면은 묶음 칸(wt-my-list)이
             display: contents 라 예전처럼 카드 한 장에 줄이 이어진다. */}
         <div className="card rail wt-my-menu">
+          {/* 이벤트 — 출석·친구 초대는 이벤트 페이지에 있다. 다른 줄과 같은 모양으로, 끝에는 초대로 받은 크레딧 */}
+          {isAuthenticated && invite && (
+            <>
+              <small>{t("이벤트")}</small>
+              <div className="wt-my-list">
+                <button type="button" onClick={() => { track("invite_event_open", { where: "mypage" }); go("event"); }}>
+                  <span className="wt-my-rowname"><IconGift className="wt-my-ico" />{t("출석 · 친구 초대")}</span>
+                  {invite.earned > 0 && <span className="dim">+{invite.earned}C</span>}<IconChevronRight className="wt-my-chev" />
+                </button>
+              </div>
+            </>
+          )}
           <small>{t("웹툰")}</small>
           <div className="wt-my-list">
             <button type="button" className={tab === "works" ? "on" : ""} onClick={() => { setTab("works"); window.scrollTo({ top: 0 }); }}>
