@@ -595,3 +595,26 @@
   .wt .wt-browse-list button { flex: 0 0 34%; scroll-snap-align: start; }
   .wt .wt-browse-list button:nth-child(n + 7) { display: flex; }
 }
+
+/* 폰 — 시안 mobile.html 홈: 세계 줄은 넓은 칸 하나 + 두 칸, 웹툰 둘러보기는 두 칸. 글은 그림 위에 얹는다 */
+@media (max-width: 767px) {
+  .wt .wt-gallery-copy h1 { font-size: 28px; margin: 12px 0 18px; }
+  .wt .wt-gallery-cta { align-items: stretch; }
+  .wt .wt-gallery-cta .btn { width: 100%; }
+  .wt .wt-gallery-hero { grid-template-rows: auto; }
+  .wt .wt-gallery-main { min-height: 360px; }
+  .wt .wt-play-row-list, .wt .wt-browse-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; padding: 0; overflow: visible; }
+  .wt .wt-play-row-list button, .wt .wt-browse-list button, .wt .wt-play-row-list button:not(:has(img)) {
+    position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; height: 132px; padding: 10px 12px; overflow: hidden;
+    border-radius: 16px; border: 1px solid var(--line); background: var(--card); color: #fff;
+  }
+  .wt .wt-play-row-list button:first-child { grid-column: 1 / 3; height: 150px; }
+  .wt .wt-play-row-list img, .wt .wt-browse-list img { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover; object-position: top; border-radius: 0; }
+  .wt .wt-play-row-list button:before, .wt .wt-browse-list button:before { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 35%, rgba(15, 20, 28, .55) 60%, rgba(15, 20, 28, .92)); }
+  .wt .wt-play-row-list b, .wt .wt-play-row-list small, .wt .wt-browse-list b, .wt .wt-browse-list span { position: relative; z-index: 1; margin: 0; padding: 0; }
+  .wt .wt-play-row-list b, .wt .wt-browse-list b { font-size: 14px; line-height: 1.3; -webkit-line-clamp: 1; }
+  .wt .wt-play-row-list button:first-child b { font-size: 17px; }
+  .wt .wt-play-row-list small, .wt .wt-browse-list span { font-size: 11.5px; color: var(--muted); -webkit-line-clamp: 1; }
+  .wt .wt-browse-list button { flex: none; }
+  .wt .wt-browse-list button:nth-child(n + 5) { display: none; }
+}
