@@ -376,37 +376,6 @@
 .wt .wt-gallery-faq summary::after { content: "+"; font-weight: 400; font-size: 20px; line-height: 1; opacity: 0.6; transition: transform 0.2s; }
 .wt .wt-gallery-faq details[open] summary::after { transform: rotate(45deg); }
 .wt .wt-gallery-faq p { padding: 0 2px 16px; font-size: 14px; line-height: 1.75; color: var(--muted); max-width: 62ch; }
-.wt .wt-gallery-works {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-.wt .wt-gallery-works button {
-  border: 0;
-  background: none;
-  color: var(--ink);
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-  min-width: 0;
-}
-.wt .wt-gallery-works img {
-  width: 100%;
-  aspect-ratio: 3/4;
-  object-fit: cover;
-  object-position: top;
-  border-radius: 12px;
-}
-.wt .wt-gallery-works b {
-  display: block;
-  font-size: 13px;
-  line-height: 1.6;
-  margin-top: 12px;
-}
-.wt .wt-gallery-works span {
-  font-size: 11px;
-  color: var(--muted);
-}
 .wt .wt-gallery-bottom {
   margin: 64px 0 48px;
   background: #142337;
@@ -430,14 +399,17 @@
   .wt .wt-gallery-inner {
     padding: 16px 20px 0;
   }
+  /* 폰은 첫 칸 하나만 — 옆 세 칸(세계관 · 웹툰 장면)은 아래 두 줄이 대신한다 */
   .wt .wt-gallery-hero {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 420px 180px 210px;
-    gap: 8px;
+    grid-template-columns: 1fr;
+    grid-template-rows: 420px;
   }
   .wt .wt-gallery-main {
-    grid-column: span 2;
     grid-row: auto;
+  }
+  .wt .wt-gallery-panel,
+  .wt .wt-gallery-cover {
+    display: none;
   }
   .wt .wt-gallery-copy {
     padding: 25px;
@@ -481,10 +453,6 @@
     width: auto; height: 0; transform: none;
   }
   .wt .wt-gallery-faq .faq-cats button[aria-selected="true"]::before { height: 2px; }
-  .wt .wt-gallery-works {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px 12px;
-  }
   .wt .wt-gallery-bottom {
     flex-direction: column;
     text-align: center;
@@ -499,15 +467,6 @@
     max-width: 280px;
   }
 }
-
-/* 다른 장르의 웹툰 — 네 편이 한꺼번에 오른쪽에서 밀려 들어온다(책장 넘기듯, 칸마다 살짝 늦게) */
-.wt .wt-gallery-works { overflow: hidden; }
-.wt .wt-gallery-works.turn button { animation: wt-gallery-turn 0.7s cubic-bezier(.2,.7,.2,1) both; }
-.wt .wt-gallery-works.turn button:nth-child(2) { animation-delay: .05s; }
-.wt .wt-gallery-works.turn button:nth-child(3) { animation-delay: .1s; }
-.wt .wt-gallery-works.turn button:nth-child(4) { animation-delay: .15s; }
-@keyframes wt-gallery-turn { from { opacity: 0; transform: translateX(48px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .wt .wt-gallery-works.turn button { animation: none; } }
 
 /* 서비스 소개(E안) — 왼쪽 폰, 오른쪽 글. 폰 화면에서는 글이 위, 폰이 가운데 */
 /* PC — 다른 구역처럼 폭을 꽉 채운다: 왼쪽 절반 글, 오른쪽 절반은 은은한 판 위 가운데에 폰 */
@@ -620,3 +579,111 @@
 @media (max-width: 767px) {
   .wt .wt-play-row-list { grid-template-columns: 1fr 1fr; gap: 8px; }
 }
+
+/* 웹툰 둘러보기 — PC 는 한 줄 여섯 칸 격자, 폰은 옆으로 넘기는 한 줄 */
+.wt .wt-browse-row { margin-top: 36px; }
+.wt .wt-browse-list { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-browse-list button { display: flex; flex-direction: column; justify-content: flex-start; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
+.wt .wt-browse-list button:nth-child(n + 7) { display: none; }
+.wt .wt-browse-list img { display: block; width: 100%; aspect-ratio: 3/4; object-fit: cover; object-position: top; border-radius: 10px; }
+.wt .wt-browse-list b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 8px; font-size: 13px; line-height: 1.45; }
+.wt .wt-browse-list span { display: block; margin-top: 2px; font-size: 11px; color: var(--dim); }
+@media (max-width: 767px) {
+  .wt .wt-browse-row { margin-top: 28px; }
+  .wt .wt-browse-list { display: flex; gap: 10px; margin: 0 -20px; padding: 0 20px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 20px; scrollbar-width: none; }
+  .wt .wt-browse-list::-webkit-scrollbar { display: none; }
+  .wt .wt-browse-list button { flex: 0 0 34%; scroll-snap-align: start; }
+  .wt .wt-browse-list button:nth-child(n + 7) { display: flex; }
+}
+
+/* 폰 — 시안 mobile.html 홈: 세계 줄은 넓은 칸 하나 + 두 칸, 웹툰 둘러보기는 두 칸. 글은 그림 위에 얹는다 */
+@media (max-width: 767px) {
+  .wt .wt-gallery-copy h1 { font-size: 28px; margin: 12px 0 18px; }
+  .wt .wt-gallery-cta { align-items: stretch; }
+  .wt .wt-gallery-cta .btn { width: 100%; }
+  .wt .wt-gallery-hero { grid-template-rows: auto; }
+  .wt .wt-gallery-main { min-height: 360px; }
+  .wt .wt-play-row-list, .wt .wt-browse-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; padding: 0; overflow: visible; }
+  .wt .wt-play-row-list button, .wt .wt-browse-list button, .wt .wt-play-row-list button:not(:has(img)) {
+    position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; height: 132px; padding: 10px 12px; overflow: hidden;
+    border-radius: 16px; border: 1px solid var(--line); background: var(--card); color: #fff;
+  }
+  .wt .wt-play-row-list button:first-child { grid-column: 1 / 3; height: 150px; }
+  .wt .wt-play-row-list img, .wt .wt-browse-list img { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover; object-position: top; border-radius: 0; }
+  .wt .wt-play-row-list button:before, .wt .wt-browse-list button:before { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 35%, rgba(15, 20, 28, .55) 60%, rgba(15, 20, 28, .92)); }
+  .wt .wt-play-row-list b, .wt .wt-play-row-list small, .wt .wt-browse-list b, .wt .wt-browse-list span { position: relative; z-index: 1; margin: 0; padding: 0; }
+  .wt .wt-play-row-list b, .wt .wt-browse-list b { font-size: 14px; line-height: 1.3; -webkit-line-clamp: 1; }
+  .wt .wt-play-row-list button:first-child b { font-size: 17px; }
+  .wt .wt-play-row-list small, .wt .wt-browse-list span { font-size: 11.5px; color: var(--muted); -webkit-line-clamp: 1; }
+  .wt .wt-browse-list button { flex: none; }
+  .wt .wt-browse-list button:nth-child(n + 5) { display: none; }
+}
+
+/* 세계 줄 · 웹툰 둘러보기 머리 — 시안처럼 작은 민트 이름표(.num) + 오른쪽 「전부 보기 ›」 */
+.wt .wt-play-row-h h2 { font-size: 12px; font-weight: 700; color: #7fd6c2; letter-spacing: .08em; }
+.wt .wt-play-row-h button { font-size: 13px; }
+@media (max-width: 767px) {
+  .wt .wt-play-row-h h2 { font-size: 11px; }
+  .wt .wt-play-row-h button { font-size: 12px; }
+  .wt .wt-play-row { margin-top: 18px; }
+}
+/* 폰 첫 칸 — 시안처럼 글 높이만큼만(그림은 뒤에 깐다). 전에는 420px 고정이라 세계 줄이 첫 화면 밖으로 밀렸다 */
+@media (max-width: 767px) {
+  .wt .wt-gallery-main { min-height: 0; }
+  .wt .wt-gallery-main > img { position: absolute; inset: 0; }
+  .wt .wt-gallery-copy { position: relative; padding: 40px 18px 18px; }
+  .wt .wt-gallery-copy h1 { font-size: 26px; margin: 10px 0 12px; }
+  .wt .wt-gallery-sub { margin: 0 0 16px; font-size: 13px; }
+  .wt .wt-gallery-cta .btn { height: 44px; }
+}
+/* 홈 세계 줄은 한 줄만 — PC 네 칸, 폰은 넓은 칸 하나 + 두 칸. 나머지는 「전부 보기」 */
+@media (min-width: 768px) { .wt .wt-play-row-list button:nth-child(n + 5) { display: none; } }
+@media (max-width: 767px) { .wt .wt-play-row-list button:nth-child(n + 4) { display: none; } }
+
+/* 홈 소개 — 세계관 체험(PC E안: 글 + 세계 포스터 줄 / 폰 D안: 체험 · 웹툰 두 카드) */
+.wt .wt-pintro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 28px; align-items: center; padding-top: 120px; }
+.wt .wt-pintro-copy { padding-left: 48px; display: flex; flex-direction: column; align-items: flex-start; }
+.wt .wt-pintro .wt-gallery-heading h2 { font-size: 46px; line-height: 1.18; letter-spacing: -0.04em; }
+.wt .wt-pintro .wt-gallery-heading > span { font-size: 13px; }
+.wt .wt-pintro .btn { min-width: 210px; height: 49px; }
+.wt .wt-pintro-posters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.wt .wt-pintro-posters button { position: relative; aspect-ratio: 3/4.2; padding: 0; overflow: hidden; border: 0; border-radius: 12px; background: #0b0f15; cursor: pointer; text-align: left; }
+.wt .wt-pintro-posters img, .wt .wt-pintro-posters span { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wt .wt-pintro-posters button:after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 50%, rgba(6, 16, 31, .9)); }
+.wt .wt-pintro-posters b { position: absolute; z-index: 1; left: 10px; right: 8px; bottom: 9px; font-size: 13px; line-height: 1.3; color: #fff; }
+.wt .wt-pcards { display: none; }
+@media (max-width: 767px) {
+  .wt .wt-pintro, .wt .wt-intro { display: none; }
+  .wt .wt-pcards { display: flex; flex-direction: column; gap: 12px; padding-top: 48px; }
+  .wt .wt-pcards > h2 { font-size: 24px; letter-spacing: -0.03em; margin: 0 0 4px; }
+  .wt .wt-pcard { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: var(--card, #141c28); border: 1px solid var(--line); }
+  .wt .wt-pcard .k { font-size: 12px; font-weight: 700; color: #7fd6c2; }
+  .wt .wt-pcard .t { font-size: 20px; }
+  .wt .wt-pcard img { width: 100%; height: 150px; object-fit: cover; object-position: center 25%; border-radius: 12px; }
+  .wt .wt-pcard img.page { object-position: center top; background: #fff; }
+  .wt .wt-pcard ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .wt .wt-pcard li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .wt .wt-pcard li i { width: 24px; height: 24px; flex: none; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font-style: normal; font-size: 11.5px; font-weight: 700; color: #7fd6c2; }
+  .wt .wt-pcard .btn { width: 100%; height: 46px; }
+}
+@media (max-width: 767px) {
+  .wt .wt-pcard .reel { height: 260px; overflow-y: auto; border-radius: 12px; background: #fff; scrollbar-width: none; overscroll-behavior: contain; }
+  .wt .wt-pcard .reel::-webkit-scrollbar { display: none; }
+  .wt .wt-pcard .reel img { display: block; width: 100%; height: auto; border-radius: 0; object-fit: initial; }
+}
+/* 폰 웹툰 둘러보기 — 두 줄 격자 대신 옆으로 넘기는 한 줄(하은 11/03), 표지는 세로로 */
+@media (max-width: 767px) {
+  .wt .wt-browse-list { display: flex; gap: 10px; margin: 0 -20px; padding: 0 20px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 20px; scrollbar-width: none; }
+  .wt .wt-browse-list::-webkit-scrollbar { display: none; }
+  .wt .wt-browse-list button, .wt .wt-browse-list button:nth-child(n + 5) { display: flex; flex: 0 0 38%; height: auto; aspect-ratio: 3/4; scroll-snap-align: start; }
+}
+/* 표지에 제목 글씨가 그려져 있어 글을 얹으면 겹친다 — 폰도 PC 처럼 표지 아래에 제목 */
+@media (max-width: 767px) {
+  .wt .wt-browse-list button, .wt .wt-browse-list button:nth-child(n + 5) { flex-direction: column; justify-content: flex-start; aspect-ratio: auto; height: auto; padding: 0; overflow: visible; border: 0; border-radius: 0; background: none; }
+  .wt .wt-browse-list button:before { display: none; }
+  .wt .wt-browse-list img { position: static; width: 100%; height: auto; aspect-ratio: 3/4; border-radius: 12px; }
+  .wt .wt-browse-list b { margin-top: 8px; font-size: 13px; color: var(--ink); -webkit-line-clamp: 2; }
+  .wt .wt-browse-list span { color: var(--dim); }
+}
+/* 「새로운 세계를 경험하기」가 줄바꿈돼 세 줄이 되던 것 — 두 줄 그대로 */
+.wt .wt-pintro .wt-gallery-heading h2 { font-size: 40px; white-space: nowrap; }

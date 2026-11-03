@@ -125,6 +125,8 @@ def read_character(path: Path) -> dict:
         "title": doc.get("title"),
         # 「1화에서 보여줄 것」 — 적은 내용 가운데 이번 화에 넣을 부분. 없을 수 있다.
         "episode": doc.get("episode"),
+        # 세계관 체험(/play/runs)으로 시작했는가 — settings 가 「이번 사건」이다. 없으면 예전과 같다.
+        "play": doc.get("play"),
         # 함께 주인공인 내 캐릭터(주인공 여러 명). 없으면 예전과 같다 — 한 명짜리 run 은 한 글자도 안 바뀐다.
         "co": doc.get("co"),
     })
@@ -158,6 +160,7 @@ def normalize(raw: dict) -> dict:
         "settings": str(raw.get("settings") or "").strip(),
         "title": str(raw.get("title") or "").strip(),
         "episode": str(raw.get("episode") or "").strip(),
+        **({"play": True} if raw.get("play") is True else {}),
         **({"co": co} if (co := normalize_co(raw.get("co"))) else {}),
     }
 
@@ -503,8 +506,17 @@ def one_input_block(char: dict) -> str:
             lines.append(one["description"])
         lines += [f"- {k}: {v}" for k, v in (one.get("fields") or {}).items()]
     if char.get("settings"):
-        lines += ["", "[추가 설정]", char["settings"]]
+        # 세계관 체험이면 적힌 글은 설정이 아니라 주인공이 놓인 사건이다.
+        lines += ["", "[이번 사건]" if char.get("play") else "[추가 설정]", char["settings"]]
     return "\n".join(lines) + "\n"
+
+
+def play_goal_block(char: dict) -> str:
+    """세계관 체험의 목표 — 사건 속에서 이 캐릭터가 자기 성격대로 고르고 움직이는 것이 이야기의 중심이다.
+    체험이 아니면 빈 글이라 예전 길은 한 글자도 안 바뀐다."""
+    if not char.get("play") or not char.get("settings"):
+        return ""
+    return load_prompt("play_goal")
 
 
 def load_prompt(name: str) -> str:
@@ -932,9 +944,10 @@ def events_enabled() -> bool:
     return (llm.env("NH_STORY_EVENTS") or "0").strip().lower() in ("1", "on", "true", "yes")
 
 
-def one_event_block(run_dir: Path) -> str:
-    """이야기 하나만 만드는 길에 사건 낱말 하나를 준다. 끄면 빈 글."""
-    events = samples.pick_events(1) if events_enabled() else []
+def one_event_block(run_dir: Path, char: dict | None = None) -> str:
+    """이야기 하나만 만드는 길에 사건 낱말 하나를 준다. 끄면 빈 글.
+    세계관 체험은 사건이 이미 정해져 있어 낱말을 주지 않는다 — 둘이 부딪힌다."""
+    events = samples.pick_events(1) if events_enabled() and not (char or {}).get("play") else []
     if not events:
         return ""
     write_json(run_dir / "axes.json", {"방향별_사건": events})
@@ -1433,7 +1446,9 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     if seeded:
         block = seeded_input_block(char).rstrip("\n")
     elif one:
-        block = one_input_block(char).rstrip("\n") + one_event_block(run_dir)
+        goal = play_goal_block(char)
+        block = (one_input_block(char).rstrip("\n") + (f"\n\n{goal}" if goal else "")
+                 + one_event_block(run_dir, char))
     else:
         block = story_input_block(char, run_dir).rstrip("\n") + "\n" + story_variety_block(run_dir, char)
     # 인물을 먼저 뽑고 거기에 사건을 붙인다(#532·#534). 줄거리를 적은 경우도
@@ -2295,7 +2310,9 @@ def main(argv=None) -> int:
     p.add_argument("--continuation", type=Path, help="서버가 확인한 연재 기억 사본")
     p.add_argument("--series-digest", type=Path,
                    help="끝난 회차를 읽어 연재 설정집(고정 설정·항목·진행 상태)을 정리한다. --out 에 쓴다")
-    p.add_argument("--out", type=Path, help="--series-digest 결과를 쓸 곳")
+    p.add_argument("--world-make", type=Path,
+                   help="세계관 만들기: 적은 칸과 참고 설정집으로 세계·사건·예시 주인공을 짓는다. --out 에 쓴다")
+    p.add_argument("--out", type=Path, help="--series-digest · --world-make 결과를 쓸 곳")
     p.add_argument("--own", action="store_true",
                    help="「만들고 싶은 내용이 있어요」(#548): 적은 내용으로 주인공 카드·인물·본문·시트를 "
                         "동시에 만든다. 후보·고르기 없음. 장면은 --own-scenes 로 따로")
@@ -2349,6 +2366,13 @@ def main(argv=None) -> int:
         if not args.out:
             raise SystemExit("--series-digest 에는 --out 이 필요합니다")
         continuation.stage_digest(args.series_digest, args.out, args.dry_run, lang=args.lang)
+        return 0
+
+    if args.world_make:
+        import worldmake
+        if not args.out:
+            raise SystemExit("--world-make 에는 --out 이 필요합니다")
+        worldmake.make(args.world_make, args.out, args.dry_run, lang=args.lang)
         return 0
 
     if args.plan:

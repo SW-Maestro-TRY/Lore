@@ -46,7 +46,7 @@ export interface GoParams {
   /** 세계관 체험의 세계 · 사건 · 걸음. */
   world?: string;
   ep?: string;
-  stage?: "char" | "making" | "done";
+  stage?: "char" | "making" | "done" | "stories";
   /** 2걸음 그림체 기본값 — 광고 작품의 그림체를 넘긴다(바꿀 수 있다). STYLE_INFO 의 키. */
   style?: string;
 }
