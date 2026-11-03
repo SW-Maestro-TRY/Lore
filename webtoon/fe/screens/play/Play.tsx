@@ -138,6 +138,8 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const [who, setWho] = useState<PlayPerson | null>(null);
   const close = () => go("play", { world: w.id });
   const put = () => go("play", { world: w.id, ep: e.id, stage: "char" });
+  /* 이 사건에 나오는 인물만 — 만든 사람이 사건마다 고른 것(이름이나 id). 고른 기록이 아예 없으면(옛 자료) 세계 전체 */
+  const cast = e.cast ? w.cast.filter((p) => e.cast!.includes(p.name) || (!!p.id && e.cast!.includes(p.id))) : w.cast;
   /* 이 사건의 예시 캐릭터 — 단추 위에 얼굴과 이름. 누르면 내 캐릭터 화면(예시가 먼저 나온다) */
   const people = e.example_people || [];
   const examples = people.length > 0 && (
@@ -170,9 +172,9 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
               <div className="meta"><b>{t(w.name)}</b>{e.place && <> · {t(e.place)}</>}</div>
               <p className="sit">{t(e.situation)}</p>
               {examples && <div className="exs-m">{examples}</div>}
-              {w.cast.length > 0 && (
+              {cast.length > 0 && (
                 <div><p className="k">{t("등장인물")}</p>
-                  <div className="cast">{w.cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
+                  <div className="cast">{cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
                 </div>
               )}
             </div>
