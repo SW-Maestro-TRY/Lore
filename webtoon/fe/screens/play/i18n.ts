@@ -130,5 +130,6 @@ const dict: Dict = {
   "무료": { en: "Free", ja: "無料", zh: "免费" },
   "숨겨 둔 가족": { en: "The Hidden Family", ja: "隠した家族", zh: "藏起来的家人" },
   "바이러스의 범인": { en: "The Virus Maker", ja: "ウイルスの犯人", zh: "病毒的元凶" },
+  "설정 · 등장인물": { en: "Setting · Characters", ja: "設定 · 登場人物", zh: "设定 · 人物" },
 };
 registerDict(dict);

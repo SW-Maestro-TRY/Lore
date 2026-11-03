@@ -2,6 +2,7 @@
  * 그림이 없는 사건(image_url null)도 있다. tried 는 아직 집계 전이라 화면에 안 쓴다.
  * 사건마다 examples — 세계를 만든 사람이 그 사건에 정한 예시 캐릭터 id(최대 2). 체험의 「누구를 넣을까요?」 첫 칸에 나온다.
  * 세계의 examples 는 옛 모양(사건에 없을 때만 쓴다). */
+import { uploadDataUrls } from "@common/api/uploads";
 import { listPlayWorlds, makePlayWorld, readPlayWorld, savePlayWorld, WebtoonApiError } from "../../lib/api";
 
 export interface PlayEvent { id: string; no: string; title: string; line: string; situation: string; image_url: string | null; tried: number; place?: string; spot?: string; examples?: string[]; example_people?: { name: string; age?: number; desc: string; relation?: string; face_url?: string }[] }
@@ -10,8 +11,8 @@ export interface PlayWorld { id: string; name: string; genre: string; one: strin
 
 /* 세계관 만들기의 글 — 저장 API(POST /play/worlds)에 그대로 보낸다 */
 export interface DraftPerson { id: string; name: string; role: string; desc: string; face?: string }
-export interface DraftEvent { id: string; title: string; line: string; situation: string; place: string; spot: string; cast: string[]; examples: string[]; image?: string }
-export interface WorldDraft { id?: string; name: string; genre: string; one: string; rule: string; cast: DraftPerson[]; events: DraftEvent[]; examples: string[]; visibility: "public" | "private"; lorebook_id?: string }
+export interface DraftEvent { id: string; title: string; line: string; situation: string; place: string; spot: string; cast: string[]; examples: string[]; example_people?: DraftPerson[]; image?: string }
+export interface WorldDraft { id?: string; cover?: string; name: string; genre: string; one: string; rule: string; cast: DraftPerson[]; events: DraftEvent[]; examples: string[]; visibility: "public" | "private"; lorebook_id?: string }
 
 /* 서버에 저장 길이 아직 없을 때(404 · 405) 만든 세계를 이 브라우저에 둔다. 서버가 생기면 그쪽이 먼저다. */
 const LOCAL = "lore-my-worlds";
@@ -32,9 +33,28 @@ export const loadWorlds = () => listPlayWorlds<PlayWorld>().then((r) => {
   return [...r.worlds, ...readLocal().filter((w) => !have.has(w.id))];
 });
 
+/* 사진(data URL)은 공용 presign 으로 창고에 먼저 올리고 키만 보낸다 — 큰 본문 POST 는 dev · staging · 운영 WAF 가 막는다.
+ * 올리기가 안 되는 곳(로컬에 창고가 없을 때)은 data URL 을 그대로 보낸다. 서버는 둘 다 받는다(lore-23). */
+async function pic(u?: string): Promise<{ key?: string; url?: string }> {
+  if (!u || !u.startsWith("data:")) return {};
+  try { const [key] = await uploadDataUrls([u], "webtoon"); return key ? { key } : { url: u }; } catch { return { url: u }; }
+}
+async function withKeys(d: WorldDraft) {
+  const c = await pic(d.cover);
+  const face = async (p: DraftPerson) => { const f = await pic(p.face); return { ...p, face: f.url, face_key: f.key }; };
+  return {
+    ...d, cover: c.url, cover_key: c.key,
+    cast: await Promise.all(d.cast.map(face)),
+    events: await Promise.all(d.events.map(async (e) => {
+      const im = await pic(e.image);
+      return { ...e, image: im.url, image_key: im.key, example_people: await Promise.all((e.example_people || []).map(face)) };
+    })),
+  };
+}
+
 export async function saveWorld(d: WorldDraft): Promise<string> {
   try {
-    const r = await savePlayWorld(d, d.id);
+    const r = await savePlayWorld(await withKeys(d), d.id);
     return r.id;
   } catch (x) {
     if (!(x instanceof WebtoonApiError) || (x.status !== 404 && x.status !== 405)) throw x;

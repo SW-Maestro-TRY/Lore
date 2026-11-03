@@ -37,7 +37,10 @@ function Worlds({ go, worlds }: { go: Go; worlds: PlayWorld[] }) {
   return (
     <div className="pl-wrap">
       <MTop back={t("처음")} onBack={() => go("landing")} title={t("세계관")} />
-      <h1 className="pl-h1">{t("어디에 넣어 볼까요?")}</h1>
+      <div className="pl-whead">
+        <h1 className="pl-h1">{t("어디에 넣어 볼까요?")}</h1>
+        <button type="button" className="pl-btn wn-w sm" onClick={() => go("world-new")}><IconPlus />{t("세계관 만들기")}</button>
+      </div>
       <div className="pl-worlds">
         {worlds.map((w) => (
           <button type="button" key={w.id} className="pl-wcard" onClick={() => go("play", { world: w.id })}>
