@@ -92,7 +92,7 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
   return (
     <div className="pl-wrap">
       <MTop back={t("세계관")} onBack={() => go("play")} title={t(w.name)} />
-      <div className="pl-whead">
+      <div className="pl-whead in">
         <div className="pl-crumb"><button type="button" onClick={() => go("play")}>{t("세계관")}</button><i>›</i><b>{t(w.name)}</b></div>
         {canEdit && <button type="button" className="pl-btn wn-w sm" onClick={() => go("world-new", { world: w.id })}><IconEdit />{t("세계관 편집")}</button>}
       </div>
@@ -201,8 +201,6 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
               <h2>{t(e.title)}</h2>
               {e.line && <p className="one">{t(e.line)}</p>}
             </div>
-            {/* 폰 — 할 일 단추는 사건 그림 오른쪽 아래(하은 11/03) */}
-            <button type="button" className="pl-btn hero-go" onClick={put}>{t("내 캐릭터로 이야기 만들기")}</button>
           </div>
           <div className="cols">
             <div className="l">
