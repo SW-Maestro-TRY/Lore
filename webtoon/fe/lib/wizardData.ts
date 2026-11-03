@@ -96,6 +96,24 @@ export const QUALITY_INFO: {
 
 export const QUALITY_DEFAULT: WizardQuality = "surf";
 
+/* 화질 견본 — 화질별로 실제 그린 작품의 표지를 그림만 보이게 잘라 쓴다(2026-11-03, 윤지환 멘토링 「차이를 그림으로」).
+ *
+ * 같은 장면은 아니다(물결·너울로 그린 같은 장면이 저장소에 없다). 그래서 셋 다 인물 위주로 같은 비율(4:3)로
+ * 잘라 비교가 쉽게 했다. 화질은 webtoon_job.quality(운영) · run 의 quality.txt 로 확인한 것만 쓴다.
+ * 그림은 webtoon/fe/static/gallery/quality/ 에 두고(images.md — sync-landing.sh 가 /static/gallery 로 옮긴다)
+ * 주소만 여기에 적는다. 셋을 다 갖췄을 때만 화면에 띄운다(하나라도 비면 아무것도 안 그린다). */
+export const QUALITY_SAMPLE: Partial<Record<WizardQuality, string>> = {
+  wave: "/static/gallery/quality/wave.jpg",   // 「신전이 고른 죄인」(20261026T131102-d81183, wave) 표지
+  surf: "/static/gallery/quality/surf.jpg",   // 「대기실 밖에서는」(20260919T125314-423cf5, surf) 표지
+  swell: "/static/gallery/quality/swell.jpg", // 「도시의 히어로 핑크가루」(20261018T133719-c46a5b, swell) 표지
+};
+
+/** 세 화질 견본이 다 있을 때만 그 주소들. */
+export function qualitySamples(): Record<WizardQuality, string> | null {
+  const all = QUALITY_INFO.every((q) => !!QUALITY_SAMPLE[q.key]);
+  return all ? (QUALITY_SAMPLE as Record<WizardQuality, string>) : null;
+}
+
 export interface WizardForm {
   lorebook?: import("./api").LoreBook | null;
   photos: string[]; // data URL

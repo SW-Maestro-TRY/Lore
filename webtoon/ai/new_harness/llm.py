@@ -75,7 +75,7 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "SCENE", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
                "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "COVER_REVIEW", "CAST", "PERSONA",
-               "FULL_REVIEW", "CAST_SHEET", "NARRATION")
+               "FULL_REVIEW", "CAST_SHEET", "NARRATION", "WORLD_MAKE")
 IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE", "CAST_SHEET_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
@@ -336,6 +336,7 @@ STAGE_LABEL = {
     "CUTSCRIPT_FIX": "컷 대본 픽스 (독자 검수·자기수정)",
     "BOARD": "콘티",
     "SHEET": "시트 사양",
+    "WORLD_MAKE": "세계관 만들기 — 세계·사건 셋·예시 주인공 둘 (세계관 체험)",
     "SHEET_IMAGE": "시트 그림",
     "CAST_SHEET": "조연 시트 사양 (글로 적힌 생김새만으로, 크레딧 1)",
     "CAST_SHEET_IMAGE": "조연 시트 그림",

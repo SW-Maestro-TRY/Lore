@@ -14,7 +14,7 @@ import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { startJob } from "../../lib/start";
 import DirectSwitch from "../../ui/DirectSwitch";
 import {
-  CO_MAX, GENRE_QUICK, OWN_STORY_MAX, QUALITY_INFO, STYLE_INFO,
+  CO_MAX, GENRE_QUICK, OWN_STORY_MAX, QUALITY_INFO, STYLE_INFO, qualitySamples,
   emptyWizardForm, type WizardForm, type WizardQuality,
 } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
@@ -422,6 +422,7 @@ export default function Wizard({
   /* ---- 폰 위쪽 줄 ---- */
 
   /* 촘촘함 고르기 — quick 길은 4걸음, own 길은 3걸음(그림체 아래)에 같은 것이 뜬다. */
+  const samples = qualitySamples();
   const qualityPicker = (
     <div className="wt-wiz-qs">
       {QUALITY_INFO.map((q) => {
@@ -429,6 +430,8 @@ export default function Wizard({
         return (
           <button key={q.key} type="button" className={`wt-wiz-q${form.quality === q.key ? " on" : ""}`}
                   onClick={() => patch({ quality: q.key })}>
+            {/* 같은 장면을 화질만 바꿔 그린 한 칸 — 셋이 다 있을 때만(wizardData QUALITY_SAMPLE) */}
+            {samples && <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t(q.label)} loading="lazy" decoding="async" />}
             <div className="row">
               <b>{t(q.label)}</b>
               <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : t("{n}크레딧", { n: c })}</i>

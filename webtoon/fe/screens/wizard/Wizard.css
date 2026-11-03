@@ -124,6 +124,7 @@
   background: var(--bg); border: 1px solid rgba(15, 51, 63, 0.12); cursor: pointer; font-family: inherit; text-align: left;
 }
 .wt .wt-wiz-q.on { border: 2px solid var(--ink); }
+.wt .wt-wiz-q-sample { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: center top; border-radius: 8px; background: var(--line); }
 .wt .wt-wiz-q .row { display: flex; justify-content: space-between; align-items: baseline; }
 .wt .wt-wiz-q .row b { font-size: 22px; }
 .wt .wt-wiz-q .row i { font-style: normal; font-size: 13px; font-weight: 700; color: var(--gold); }

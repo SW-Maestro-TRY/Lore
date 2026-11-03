@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { readResult, setVisibility, shareKeyOf, type Visibility } from "../lib/api";
-import { copyLink, shareUrl } from "../lib/share";
+import { copyLink, shareUrl, withShareUtm } from "../lib/share";
 import { registerDict, useT, type Dict } from "../lib/i18n";
 import { track } from "../lib/track";
 import "./VisibilityPicker.css";
@@ -78,7 +78,7 @@ export default function VisibilityPicker({
     if (!key) {
       try { key = (await readResult(runId)).share_key; } catch { key = undefined; }
     }
-    const ok = !!key && await copyLink(shareUrl(runId, 1, key));
+    const ok = !!key && await copyLink(withShareUtm(shareUrl(runId, 1, key), "copy", "webtoon"));
     track("share_click", { run: runId, ep: 1, target: "copy", where });
     setNote(ok ? t("링크를 복사했어요") : t("복사하지 못했어요"));
   };

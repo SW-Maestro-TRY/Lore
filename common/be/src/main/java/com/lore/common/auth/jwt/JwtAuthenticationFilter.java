@@ -32,9 +32,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     public static final String ACCESS_COOKIE = "access_token";
 
     private final JwtProvider jwtProvider;
+    /**
+     * 계정 저장소는 있을 때만 쓴다. 화면 단위 시험(@WebMvcTest)처럼 JPA 저장소를 안 띄우는
+     * 설정에서도 필터가 만들어져야 해서, 바로 받지 않고 찾을 수 있으면 쓰는 꼴로 받는다.
+     */
+    private final org.springframework.beans.factory.ObjectProvider<com.lore.common.user.UserRepository> users;
 
-    public JwtAuthenticationFilter(JwtProvider jwtProvider) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public JwtAuthenticationFilter(JwtProvider jwtProvider,
+                                   org.springframework.beans.factory.ObjectProvider<com.lore.common.user.UserRepository> users) {
         this.jwtProvider = jwtProvider;
+        this.users = users;
+    }
+
+    /** 계정 확인 없이 토큰만 보는 옛 모양 — 다른 서비스의 시험 설정이 쓴다. */
+    public JwtAuthenticationFilter(JwtProvider jwtProvider) {
+        this(jwtProvider, null);
+    }
+
+    private boolean accountExists(Long userId) {
+        var repo = users == null ? null : users.getIfAvailable();
+        return repo == null || repo.existsById(userId);
     }
 
     @Override
@@ -42,6 +60,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain chain) throws ServletException, IOException {
         extractToken(request)
                 .flatMap(jwtProvider::parseUserId)
+                // 토큰의 계정이 이 DB 에 없으면(지워진 계정 · 다른 환경에서 남은 쿠키) 로그인으로 치지 않는다.
+                // 그대로 두면 화면은 비로그인(/me 404)인데 서버는 로그인으로 보아 게스트 길이 전부 막힌다(2026-11-03).
+                .filter(this::accountExists)
                 .ifPresent(userId -> {
                     var auth = new UsernamePasswordAuthenticationToken(
                             userId, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));

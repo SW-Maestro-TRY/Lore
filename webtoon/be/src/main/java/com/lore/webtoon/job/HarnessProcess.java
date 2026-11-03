@@ -252,6 +252,16 @@ public class HarnessProcess {
         return waitWithTimeout(p,reader,90,"설정 정리가 오래 걸려 중단했습니다.");
     }
 
+    /** 세계관 만들기 — 적은 칸과 참고 설정집으로 세계·사건·예시 주인공을 짓는다. 결과는 {@code dir/result.json}. */
+    public int worldMake(Path dir, String lang) throws IOException, InterruptedException {
+        ProcessBuilder pb = new ProcessBuilder(python, "-u", "run.py", "--world-make", dir.resolve("input.json").toString(),
+                "--out", dir.resolve("result.json").toString(), "--lang", lang);
+        pb.directory(harnessDir.toFile()); pb.redirectErrorStream(true);
+        Process p = pb.start();
+        Thread reader = streamLines(p.getInputStream(), line -> log.info("[세계관 만들기] {}", line), "세계관 만들기 출력을 읽다 끊겼습니다");
+        return waitWithTimeout(p, reader, 180, "세계관 만들기가 너무 오래 걸려 중단했습니다.");
+    }
+
     /** 끝난 회차를 읽어 연재 설정집을 정리한다(다음 화 버튼). 결과는 {@code dir/result.json}. */
     public int seriesDigest(Path dir, String lang) throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(python, "-u", "run.py", "--series-digest", dir.resolve("packet.json").toString(),
