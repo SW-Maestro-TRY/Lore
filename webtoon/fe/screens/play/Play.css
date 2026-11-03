@@ -504,3 +504,24 @@
 /* 사진 없는 예시 인물 — 흰 칸 대신 이름 첫 글자 */
 .wt .pl-tiles .sq.noart { background: var(--pl-card3); }
 .wt .pl-tiles .sq.noart b { font-size: 44px; font-weight: 800; color: var(--pl-apricot); }
+/* 세계관 만들기 폰 — PC 와 같은 두 걸음을 한 줄로 */
+@media (max-width: 767px) {
+  .wt .wn .wn-head { flex-direction: column; align-items: stretch; gap: 10px; }
+  .wt .wn .wn-head .pl-crumb { display: none; }
+  .wt .wn-tools { flex-wrap: nowrap; }
+  .wt .wn-tools > * { flex: 1; }
+  .wt .wn-tools .pl-btn { width: 100%; }
+  .wt .wn-s1 { grid-template-columns: 1fr; gap: 22px; }
+  .wt .wn-s1-l .wn-cover { width: 140px; }
+  .wt .wn .wn-name { font-size: 20px; }
+  .wt .wn-s1-r .pl-h1, .wt .wn-s2 .pl-h1 { font-size: 20px; }
+  .wt .wn-eform { grid-template-columns: 1fr; padding: 12px; gap: 12px; }
+  .wt .wn-row { grid-template-columns: 96px 1fr auto; gap: 10px; padding: 8px; align-items: start; }
+  .wt .wn-row .im { width: 96px; height: 72px; aspect-ratio: auto; border-radius: 8px; }
+  .wt .wn-row b { font-size: 14.5px; }
+  .wt .wn-row .hook { font-size: 12px; }
+  .wt .wn-bar { flex-wrap: wrap; position: sticky; bottom: 72px; z-index: 2; margin: 6px -16px 0; padding: 10px 16px; border-top: 1px solid var(--line); background: var(--paper); }
+  .wt .wn-bar .pl-btn:last-child { flex: 1; }
+  .wt .wn-bar .wn-seg { margin-right: 0; }
+  .wt .wn-p { padding: 10px; gap: 12px; }
+}

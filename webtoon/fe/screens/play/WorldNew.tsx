@@ -6,7 +6,7 @@
  * - 「AI로 채우기」는 POST /play/worlds/make — 빈 칸과 예시 캐릭터 둘을 서버가 지어 준다. 한 번 지은 뒤엔 「다시 만들기」.
  * - 「올리기」는 POST /play/worlds(이미 id 가 있으면 PUT). 서버 길은 lore-23 의 feature/world-create.
  * - 장르 칩은 운영 웹툰 만들기와 같은 목록(GENRE_QUICK) + 직접 입력.
- * - PC 는 두 걸음(1 설정 · 등장인물, 2 사건), 폰은 네 걸음.
+ * - PC · 폰 모두 두 걸음(1 설정 · 등장인물, 2 사건). 폰은 한 줄로 쌓인다(네 걸음 · 아래 판은 복잡하다는 하은 지적으로 뺌).
  * - 적는 대로 이 브라우저에 자동 저장한다(사진 포함 — 긴 변 900px jpeg). 다른 화면에 다녀와도 그대로다.
  * - 예시 캐릭터는 사건마다 등장인물처럼 그 자리에서 사진 · 이름 · 설정으로 만든다(최대 둘). 서버가 사진 그대로 캐릭터로 만든다.
  * - 사진은 data URL 로 서버에 보낸다(창고에 올려 주소로 돌려준다). */
@@ -16,7 +16,6 @@ import { GENRE_QUICK } from "../../lib/wizardData";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconEdit, IconPlus } from "../../ui/Icons";
-import { usePhone } from "../landing/usePhone";
 import { makeWorld, saveWorld, type WorldDraft, type DraftPerson as Person, type DraftEvent as Ev } from "./playData";
 import "../wizard/i18n";
 import "./i18n";
@@ -289,6 +288,10 @@ function Desk({ go }: { go: Go }) {
   };
   return (
     <div className="pl-wrap wn">
+      <div className="pl-mtop">
+        <button type="button" className="back" onClick={() => (step ? setStep(0) : go("make"))}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 5l-7 7 7 7" /></svg>{step ? t("설정 · 등장인물") : t("만들기")}</button>
+        <b>{t("세계관 만들기")}</b><span className="r">{step + 1} / 2</span>
+      </div>
       <div className="wn-head">
         <div className="pl-crumb"><button type="button" onClick={() => go("make")}>{t("만들기")}</button><i>›</i><b>{d.name || t("새 세계관")}</b></div>
         <div className="wn-tools"><FromBook d={d} setD={(x) => { setD(x); }} books={books} go={go} /><AiFill d={d} setD={setD} /></div>
@@ -348,92 +351,7 @@ function Desk({ go }: { go: Go }) {
   );
 }
 
-/* ---------- 폰 — 네 걸음 ---------- */
-function Steps({ go }: { go: Go }) {
-  const t = useT();
-  const { d, set, setD, keep, saved, clear } = useDraft();
-  const books = useBooks();
-  const { ok, busy, err, publish } = usePublish(d, clear, go);
-  const [step, setStep] = useState(0);
-  const [person, setPerson] = useState<Person | null>(null);
-  const [ev, setEv] = useState<Ev | null>(null);
-  const names = [t("세계"), t("인물"), t("사건"), t("확인")];
-  const back = () => (step ? setStep(step - 1) : go("make"));
-  const putPerson = (p: Person) => { set({ cast: d.cast.some((x) => x.id === p.id) ? d.cast.map((x) => x.id === p.id ? p : x) : [...d.cast, p] }); setPerson(null); };
-  const putEvent = (e: Ev) => { set({ events: d.events.some((x) => x.id === e.id) ? d.events.map((x) => x.id === e.id ? e : x) : [...d.events, e] }); setEv(null); };
-  const evNo = (e: Ev) => { const i = d.events.findIndex((x) => x.id === e.id); return epNo(i < 0 ? d.events.length : i); };
-  const can = step === 0 ? !!d.name.trim() && !!d.one.trim() : step === 2 ? d.events.length > 0 : true;
-  return (
-    <div className="wn-m">
-      <div className="pl-mtop">
-        <button type="button" className="back" onClick={back}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 5l-7 7 7 7" /></svg>{step ? names[step - 1] : t("만들기")}</button>
-        <b>{t("세계관 만들기")}</b><span className="r">{step + 1} / 4</span>
-      </div>
-      <div className="wn-body">
-        <div className="wn-steps">{names.map((n, i) => <span key={n} className={i < step ? "done" : i === step ? "on" : ""}><i>{i < step ? "✓" : i + 1}</i>{n}</span>)}</div>
-        {step === 0 && (<>
-          <h1 className="pl-h1">{t("어떤 세계인가요?")}</h1>
-          <div className="wn-tools"><FromBook d={d} setD={setD} books={books} go={go} /><AiFill d={d} setD={setD} /></div>
-          <div className="wn-m-top">
-            <PickPic className={`wn-cover${d.cover ? "" : " add"}`} onPick={(cover) => set({ cover })}>
-              {d.cover ? <span className="im" style={{ backgroundImage: `url(${d.cover})` }} /> : <><i><IconPlus /></i>{t("표지")}</>}
-            </PickPic>
-            <label><span className="lab">{t("세계 이름")}</span><input className="wn-in" value={d.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} /></label>
-          </div>
-          <div><span className="lab">{t("장르")}</span><Genre d={d} set={set} /></div>
-          <label><span className="lab">{t("한 줄 소개")}</span><input className="wn-in" value={d.one} maxLength={160} onChange={(e) => set({ one: e.target.value })} /></label>
-          <label><span className="lab">{t("세계 규칙")}</span><textarea className="wn-in" rows={4} value={d.rule} maxLength={2000} onChange={(e) => set({ rule: e.target.value })} /></label>
-        </>)}
-        {step === 1 && (<>
-          <h1 className="pl-h1">{t("이 세계에 누가 있나요?")}</h1>
-          {d.cast.map((p) => (
-            <button type="button" key={p.id} className="wn-li" onClick={() => setPerson(p)}>
-              <Face name={p.name} src={p.face} size={48} /><span><b>{p.name}</b><small>{[p.role, p.desc].filter(Boolean).join(" · ")}</small></span><span className="pen"><IconEdit /></span>
-            </button>
-          ))}
-          <button type="button" className="wn-dash" onClick={() => setPerson(newPerson())}><IconPlus />{t("등장인물 추가")}</button>
-        </>)}
-        {step === 2 && (<>
-          <h1 className="pl-h1">{t("어떤 사건이 있나요?")}</h1>
-          {d.events.map((e, i) => <EventRow key={e.id} e={e} no={epNo(i)} onEdit={() => setEv(e)} />)}
-          <button type="button" className="wn-dash" onClick={() => setEv(newEvent())}><IconPlus />{t("사건 추가")}</button>
-        </>)}
-        {step === 3 && (<>
-          <div className="wn-sum">
-            {d.cover ? <span className="im" style={{ backgroundImage: `url(${d.cover})` }} /> : <span className="im none" />}
-            <div><b>{d.name}</b><p>{d.one}</p><div className="faces">{d.cast.map((p) => <Face key={p.id} name={p.name} src={p.face} size={30} />)}</div></div>
-          </div>
-          <div className="pl-listh"><b>{t("사건")}</b></div>
-          {d.events.map((e, i) => <EventRow key={e.id} e={e} no={epNo(i)} onEdit={() => { setStep(2); setEv(e); }} />)}
-          <div><span className="lab">{t("공개")}</span>
-            <div className="wn-seg"><button type="button" className={d.visibility === "public" ? "on" : ""} onClick={() => set({ visibility: "public" })}>{t("모두에게")}</button><button type="button" className={d.visibility === "private" ? "on" : ""} onClick={() => set({ visibility: "private" })}>{t("나만")}</button></div>
-          </div>
-          {err && <p className="pl-err">{err}</p>}
-        </>)}
-      </div>
-      <div className="wn-foot">
-        {step > 0 ? <button type="button" className="pl-btn wn-w" onClick={back}>{t("이전")}</button> : <button type="button" className="pl-btn wn-w" onClick={keep}>{saved ? t("저장됨") : t("임시 저장")}</button>}
-        {step < 3
-          ? <button type="button" className="pl-btn" disabled={!can} onClick={() => { keep(); setStep(step + 1); }}>{t("다음 · {name}", { name: names[step + 1] })}</button>
-          : <button type="button" className="pl-btn" disabled={!ok || busy} onClick={publish}>{t("세계관 올리기")}</button>}
-      </div>
-      {(person || ev) && (
-        <div className="wn-layer" onClick={(x) => { if (x.target === x.currentTarget) { setPerson(null); setEv(null); } }}>
-          <div className="wn-sheet">
-            <span className="grip" />
-            <div className="hd"><b>{person ? t("등장인물") : t("사건")}</b><button type="button" aria-label={t("닫기")} onClick={() => { setPerson(null); setEv(null); }}><IconClose /></button></div>
-            {person && <PersonForm p={person} onDone={putPerson} onCancel={() => setPerson(null)}
-              onDelete={d.cast.some((x) => x.id === person.id) ? () => { set({ cast: d.cast.filter((x) => x.id !== person.id) }); setPerson(null); } : undefined} />}
-            {ev && <EventForm e={ev} no={evNo(ev)} cast={d.cast} onDone={putEvent} onCancel={() => setEv(null)}
-              onDelete={d.events.some((x) => x.id === ev.id) ? () => { set({ events: d.events.filter((x) => x.id !== ev.id) }); setEv(null); } : undefined} />}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
+/* PC · 폰 같은 두 걸음 — 폰은 한 줄로 쌓이고 위에 얇은 줄(이전 · 제목)이 붙는다 */
 export default function WorldNew({ go }: { go: Go }) {
-  const phone = usePhone();
-  return <div className="pl">{phone ? <Steps go={go} /> : <Desk go={go} />}</div>;
+  return <div className="pl"><Desk go={go} /></div>;
 }
