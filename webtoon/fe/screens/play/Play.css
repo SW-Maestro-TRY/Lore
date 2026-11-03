@@ -819,3 +819,5 @@
   .wt .pl-wside p { font-size: 13.5px; line-height: 1.55; color: #e6e9ee; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
 }
 @media (max-width: 767px) { .wt .pl-whead.in { display: none; } .wt .pl-wside { top: 0; } }
+/* 폰 만화 화면 — 얇은 윗줄이 세계 · 사건 제목을 이미 보여 주므로 머리글의 같은 줄은 숨긴다(하은 11/03 「제목이 두 개」) */
+@media (max-width: 767px) { .wt .pl-comic .head small { display: none; } }
