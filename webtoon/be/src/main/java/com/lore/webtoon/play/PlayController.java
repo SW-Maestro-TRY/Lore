@@ -47,16 +47,35 @@ public class PlayController {
             description = "운영자가 정한 세계 뒤에 사용자가 올린 세계가 붙는다. 로그인했으면 내가 만든 올리기 전 세계도 붙는다.")
     @GetMapping("/worlds")
     public Map<String, Object> worlds() {
-        List<Map<String, Object>> all = new ArrayList<>(catalog.worlds().stream().map(PlayController::shown).toList());
+        List<Map<String, Object>> all = new ArrayList<>(catalog.worlds().stream().map(this::shown).toList());
         all.addAll(made.listed(CreditGate.currentUser()));
         return Map.of("worlds", all);
     }
 
-    /** 운영자 세계를 화면에 줄 때 — 설정집은 시작할 때 서버가 붙이므로 빼고, 예시 주인공 칸은 비워 둔다. */
-    private static Map<String, Object> shown(Map<String, Object> world) {
+    /**
+     * 운영자 세계를 화면에 줄 때 — 설정집은 시작할 때 서버가 붙이므로 빼고, 사건마다 예시 캐릭터 id 를 붙인다
+     * (example_people 중 사진이 있는 사람, {@link PlayPeople}).
+     */
+    private Map<String, Object> shown(Map<String, Object> world) {
         Map<String, Object> out = new LinkedHashMap<>(world);
         out.remove("lorebook");
         out.putIfAbsent("examples", List.of());
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (Object e : PlayWorldService.list(world.get("events"))) {
+            if (e instanceof Map<?, ?> v) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                v.forEach((k, val) -> m.put(String.valueOf(k), val));
+                List<String> ids = new ArrayList<>(PlayWorldService.ids(v.get("examples")));
+                catalog.examples(String.valueOf(v.get("id"))).forEach(id -> {
+                    if (!ids.contains(id)) {
+                        ids.add(id);
+                    }
+                });
+                m.put("examples", ids);
+                events.add(m);
+            }
+        }
+        out.put("events", events);
         return out;
     }
 

@@ -600,6 +600,32 @@ public class CharacterService {
         return saved;
     }
 
+    /**
+     * 운영 세계(play/worlds.json)의 사건 예시 인물을 캐릭터로 심는다 — 주인 없이, 그 세계에 넣어 볼 때만 열린다
+     * (play_public). 기본 제공(BUILTIN)과 달리 캐릭터 목록에는 안 나온다. 그림은 받은 사진 한 장이고, 시트는
+     * 체험을 시작하면 다른 캐릭터와 같이 그 사진으로 그린다.
+     *
+     * <p>같은 id 가 이미 있으면 이름·설명만 맞추고, 그림이 비었을 때만 올린다. 서버가 뜰 때마다 불려도 같다.
+     */
+    @Transactional
+    public WebtoonCharacter seedPlayPerson(String publicId, String world, String name, String description, byte[] image) {
+        Instant now = Instant.now(clock);
+        WebtoonCharacter one = characters.findByPublicId(publicId).orElse(null);
+        if (one == null) {
+            one = WebtoonCharacter.playExample(publicId, null, world, name, description, true, now);
+        } else if (!name.equals(one.getName()) || !description.equals(one.getDescription())) {
+            one.rename(name, description, now);
+        }
+        if ((one.getArtKey() == null || one.getArtKey().isBlank()) && image != null && art.ready()) {
+            String key = art.upload(shrunk(image), "image/jpeg", true);
+            if (key != null) {
+                one.drewArt(key, CharacterSource.PHOTO, now);
+            }
+        }
+        one.showInPlay(true, now);
+        return characters.save(one);
+    }
+
     /** 세계관 만들기가 이 세계에 그려 준 예시 캐릭터 — 만든 순서대로. */
     @Transactional(readOnly = true)
     public List<WebtoonCharacter> playDrawn(String world) {
