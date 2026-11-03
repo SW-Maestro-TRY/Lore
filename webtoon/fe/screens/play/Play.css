@@ -575,3 +575,18 @@
   .wt .pl-castview .tx { padding-top: 0; }
   .wt .pl-castview b { font-size: 20px; }
 }
+.wt .wn-exhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.wt .wn-exhead .lab { margin: 0; }
+.wt .wn-plus { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border-radius: 50%; border: 1px solid var(--line-strong); background: transparent; color: #fff !important; }
+.wt .wn-plus svg { width: 16px; height: 16px; }
+@media (max-width: 767px) {
+  .wt .wn-cast .wn-card-add { aspect-ratio: auto; min-height: 56px; flex-direction: row; grid-column: 1 / -1; }
+}
+/* 폰 아래 줄 — 떠 있는 줄이 글을 가려서 흐름 안에 두고, 공개 범위는 한 줄 위로 */
+@media (max-width: 767px) {
+  .wt .wn-bar { position: static; margin: 10px 0 0; padding: 12px 0 0; background: none; }
+  .wt .wn-bar .wn-seg { order: -1; width: 100%; }
+  .wt .wn-bar .wn-seg button { flex: 1; }
+  .wt .wn-bar .wn-saved { display: none; }
+  .wt .wn-bar .pl-btn.wn-w { flex: 0 0 88px; padding: 0; }
+}

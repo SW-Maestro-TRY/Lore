@@ -184,7 +184,7 @@ function EventForm({ e, no, cast, onDone, onCancel, onDelete, onLive }: { e: Ev;
             })}</div>
           </div>
         )}
-        <div><span className="lab">{t("예시 캐릭터")}</span>
+        <div>
           <ExamplePeople list={v.example_people || []} onChange={(example_people) => setV({ ...v, example_people })} />
         </div>
         <div className="acts">
@@ -213,15 +213,22 @@ function ExamplePeople({ list, onChange }: { list: Person[]; onChange: (l: Perso
   const t = useT();
   const [open, setOpen] = useState<Person | null>(null);
   const put = (p: Person) => { onChange(list.some((x) => x.id === p.id) ? list.map((x) => x.id === p.id ? p : x) : [...list, p]); setOpen(null); };
+  const canAdd = list.length < MAX_EXAMPLES && !(open && !list.some((x) => x.id === open.id));
   return (
+    <>
+    {/* 한 명이라도 있으면 큰 추가 칸 대신 이름표 오른쪽 위의 작은 + */}
+    <div className="wn-exhead"><span className="lab">{t("예시 캐릭터")}</span>
+      {list.length > 0 && canAdd && <button type="button" className="wn-plus" aria-label={t("예시 캐릭터")} onClick={() => setOpen(newPerson())}><IconPlus /></button>}
+    </div>
     <div className="wn-cast">
       {list.map((p) => open?.id === p.id
         ? <PersonForm key={p.id} p={p} onDone={put} onCancel={() => setOpen(null)} onDelete={() => { onChange(list.filter((x) => x.id !== p.id)); setOpen(null); }} />
         : <button type="button" key={p.id} className="wn-p" onClick={() => setOpen(p)}><span className="ph" style={p.face ? { backgroundImage: `url(${p.face})` } : undefined}>{!p.face && p.name.slice(0, 1)}</span><b>{p.name}</b>{p.role && <em>{p.role}</em>}<span className="pen"><IconEdit /></span></button>)}
       {open && !list.some((x) => x.id === open.id)
         ? <PersonForm p={open} onDone={put} onCancel={() => setOpen(null)} />
-        : list.length < MAX_EXAMPLES && <button type="button" className="wn-dash wn-card-add" onClick={() => setOpen(newPerson())}><IconPlus />{t("예시 캐릭터")}</button>}
+        : list.length === 0 && <button type="button" className="wn-dash wn-card-add" onClick={() => setOpen(newPerson())}><IconPlus />{t("예시 캐릭터")}</button>}
     </div>
+    </>
   );
 }
 
