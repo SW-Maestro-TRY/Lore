@@ -94,6 +94,7 @@ export function CharacterForm({
   onClose,
   onBusyChange,
   localOnly = false,
+  hideCard = false,
 }: {
   character?: Character;
   initialDraft?: { name: string; description: string; image: string };
@@ -104,6 +105,8 @@ export function CharacterForm({
   onBusyChange?: (value: boolean) => void;
   /** 예시 캐릭터 — 고친 것을 저장하지 않고 이번 웹툰 요청에만 쓴다(2026-10-25). 그림은 못 바꾼다. */
   localOnly?: boolean;
+  /** 세계관 체험 — 웹툰 만들기용 카드 칸(세계관 · 운명 · 대사 …)은 감춘다. 값은 그대로 둔다. */
+  hideCard?: boolean;
 }) {
   const t = useT(),
     file = useRef<HTMLInputElement>(null);
@@ -287,7 +290,7 @@ export function CharacterForm({
               </label>
             </div>
           </div>
-          {cardMode && (
+          {cardMode && !hideCard && (
             <div className="wt-original-card">
               <div className="wt-original-card-head">
                 <h3>{t("카드 내용")}</h3>
@@ -389,6 +392,7 @@ export function CharacterEditDialog(props: {
   character: Character;
   authenticated: boolean;
   localOnly?: boolean;
+  hideCard?: boolean;
   onSaved: (c: Character) => void;
   onDeleted: () => void;
   onClose: () => void;
