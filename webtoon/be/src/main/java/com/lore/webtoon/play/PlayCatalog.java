@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -32,6 +33,17 @@ public class PlayCatalog {
 
     public List<Map<String, Object>> worlds() {
         return worlds;
+    }
+
+    /** 사건마다 고를 수 있는 예시 캐릭터 id — 서버가 뜰 때 {@link PlayPeople} 가 example_people 로 채운다. */
+    private final Map<String, List<String>> examples = new ConcurrentHashMap<>();
+
+    void examples(String eventId, List<String> ids) {
+        examples.put(eventId, List.copyOf(ids));
+    }
+
+    public List<String> examples(String eventId) {
+        return examples.getOrDefault(eventId, List.of());
     }
 
     public Map<String, Object> world(String id) {
