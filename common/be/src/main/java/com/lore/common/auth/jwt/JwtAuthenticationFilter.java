@@ -34,9 +34,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtProvider jwtProvider;
     private final com.lore.common.user.UserRepository users;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public JwtAuthenticationFilter(JwtProvider jwtProvider, com.lore.common.user.UserRepository users) {
         this.jwtProvider = jwtProvider;
         this.users = users;
+    }
+
+    /** 계정 확인 없이 토큰만 보는 옛 모양 — 다른 서비스의 시험 설정이 쓴다. */
+    public JwtAuthenticationFilter(JwtProvider jwtProvider) {
+        this(jwtProvider, null);
     }
 
     @Override
@@ -46,7 +52,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .flatMap(jwtProvider::parseUserId)
                 // 토큰의 계정이 이 DB 에 없으면(지워진 계정 · 다른 환경에서 남은 쿠키) 로그인으로 치지 않는다.
                 // 그대로 두면 화면은 비로그인(/me 404)인데 서버는 로그인으로 보아 게스트 길이 전부 막힌다(2026-11-03).
-                .filter(users::existsById)
+                .filter(userId -> users == null || users.existsById(userId))
                 .ifPresent(userId -> {
                     var auth = new UsernamePasswordAuthenticationToken(
                             userId, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
