@@ -1586,6 +1586,9 @@ public class JobService {
         doc.put("title", blank(form.title()));
         doc.put("episode", blank(form.episode()));
         doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
+        if (Boolean.TRUE.equals(form.play())) {
+            doc.put("play", true);                         // 세계관 체험 — settings 가 「이번 사건」이다
+        }
         if (useCard) {
             doc.put("card", cardOf(picked));
         }
@@ -1662,6 +1665,9 @@ public class JobService {
         doc.put("title", blank(form.title()));
         doc.put("episode", blank(form.episode()));
         doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
+        if (Boolean.TRUE.equals(form.play())) {
+            doc.put("play", true);
+        }
         doc.put("style", blank(form.style()));
         doc.put("fields", form.fields() == null ? Map.of() : form.fields());
         int photoCount = form.photosData() == null ? 0 : form.photosData().size();
@@ -1744,7 +1750,13 @@ public class JobService {
                                 /* 함께 주인공으로 고른 내 캐릭터(#899). 첫 주인공은 character_id 그대로이고,
                                    여기에는 그 밖의 사람만 온다. 없으면 예전처럼 한 명이다. */
                                 @JsonProperty("co_character_ids") @JsonAlias("coCharacterIds")
-                                List<String> coCharacterIds) {
+                                List<String> coCharacterIds,
+                                /* 세계관 체험(/play/runs)으로 시작했는가(2026-11-03). 참이면 하네스가 settings 를
+                                   「이번 사건」으로 읽고, 이 캐릭터가 그 사건에서 어떻게 행동하는지를 이야기의 중심으로 둔다. */
+                                Boolean play) {
+        public CreateRequest(String name,String character,String genre,String story,String style,Map<String,String> fields,List<String> photosData,List<String> photoKeys,Boolean agreeIp,Boolean checkpoints,String uid,String characterId,String photoNote,String quality,String language,String mode,String settings,String title,String episode,Map<String,Object> lorebook,List<String> coCharacterIds) {
+            this(name,character,genre,story,style,fields,photosData,photoKeys,agreeIp,checkpoints,uid,characterId,photoNote,quality,language,mode,settings,title,episode,lorebook,coCharacterIds,null);
+        }
         public CreateRequest(String name,String character,String genre,String story,String style,Map<String,String> fields,List<String> photosData,List<String> photoKeys,Boolean agreeIp,Boolean checkpoints,String uid,String characterId,String photoNote,String quality,String language,String mode,String settings,String title,String episode) {
             this(name,character,genre,story,style,fields,photosData,photoKeys,agreeIp,checkpoints,uid,characterId,photoNote,quality,language,mode,settings,title,episode,null,null);
         }

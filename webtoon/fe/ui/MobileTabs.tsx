@@ -10,11 +10,11 @@ const HomeIcon = () => (
     <path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" />
   </svg>
 );
-const SHOWN: View[] = ["landing", "play", "make", "works", "characters", "mypage"];
+const SHOWN: View[] = ["landing", "play", "make", "world-new", "works", "characters", "mypage"];
 
 export default function MobileTabs({ view, stage, go }: { view: View; stage?: string; go: Go }) {
   const t = useT();
-  if (!SHOWN.includes(view) || stage === "making") return null;
+  if (!SHOWN.includes(view)) return null;
   const tab = (id: View, label: string, icon: React.ReactNode, onClick: () => void) => (
     <button type="button" className={view === id ? "on" : ""} onClick={onClick}>{icon}<span>{t(label)}</span></button>
   );

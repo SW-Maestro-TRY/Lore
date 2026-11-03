@@ -48,13 +48,13 @@ export default function IntroReel() {
       <div className="wt-intro-copy">
         <div className="wt-gallery-heading">
           <span>{t("LORE 웹툰")}</span>
-          <h2>{t("내 캐릭터가 주인공인")}<br />{t("웹툰 1화")}</h2>
+          <h2>{t("내 캐릭터가 주인공인")}<br />{t("웹툰 만들기")}</h2>
         </div>
-        <p className="wt-intro-sub">{t("캐릭터와 하고 싶은 이야기를 넣으면,")}<br />{t("그 캐릭터로 그린 웹툰이 나와요.")}</p>
+        <p className="wt-intro-sub">{t("캐릭터와 원하는 이야기를 입력하면,")}<br />{t("내 캐릭터가 주인공인 웹툰 1화가 완성돼요.")}</p>
         <ol className="wt-intro-steps">
-          <li><span>1</span><div><b>{t("캐릭터 넣기")}</b><small>{t("사진이나 설정, 내가 만든 캐릭터")}</small></div></li>
-          <li><span>2</span><div><b>{t("이야기 적기")}</b><small>{t("하고 싶은 장면이나 줄거리")}</small></div></li>
-          <li><span>3</span><div><b>{t("장면 확인하고 그리기")}</b><small>{t("그리기 전에 장면을 고칠 수 있어요")}</small></div></li>
+          <li><span>1</span><div><b>{t("캐릭터 넣기")}</b><small>{t("사진이나 설정으로 캐릭터 등록")}</small></div></li>
+          <li><span>2</span><div><b>{t("이야기 적기")}</b><small>{t("만들고 싶은 이야기나 장면 입력")}</small></div></li>
+          <li><span>3</span><div><b>{t("장면 확인하고 그리기")}</b><small>{t("장면을 확인하고 수정한 뒤 웹툰 완성")}</small></div></li>
         </ol>
       </div>
       <div className="wt-intro-stage">
