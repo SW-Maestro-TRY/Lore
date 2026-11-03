@@ -710,3 +710,10 @@
   .wt .pl-modal .made .row button { flex: 0 0 240px; }
 }
 .wt .pl-whead .pl-btn svg { width: 15px; height: 15px; margin-right: 4px; }
+/* 폰 「이 사건에서 만든 만화」 — 옆으로 잘리던 카드 대신 화면 폭 세로 목록(PC 와 같은 줄 카드) */
+@media (max-width: 767px) {
+  .wt .pl-modal .made .row { flex-direction: column; overflow: visible; margin: 0; padding: 0; }
+  .wt .pl-modal .made .row button { flex: none; width: 100%; grid-template-columns: 64px minmax(0, 1fr); }
+  .wt .pl-modal .made img, .wt .pl-modal .made .pl-noimg { width: 64px; }
+  .wt .pl-modal .made .tx b { font-size: 15px; }
+}
