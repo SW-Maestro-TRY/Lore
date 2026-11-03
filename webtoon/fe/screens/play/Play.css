@@ -651,3 +651,10 @@
 .wt .pl-whead > .pl-btn { flex: none; }
 .wt .wn-ai .pl-err { color: var(--muted); }
 .wt .pl-modal .ov .one { margin: 0; font-size: 15px; line-height: 1.5; color: #e6e9ee; text-shadow: 0 1px 8px rgba(0, 0, 0, .6); }
+/* 세계 안 사건 줄 — PC 에서 세로로 크게(그림 200px 4:3 · 상황 세 줄) */
+@media (min-width: 768px) {
+  .wt .pl-eprow { grid-template-columns: 200px minmax(0, 1fr); gap: 22px; padding: 18px; }
+  .wt .pl-eprow > img, .wt .pl-eprow > .pl-noimg { width: 200px; aspect-ratio: 4/3; border-radius: 12px; }
+  .wt .pl-eprow b { font-size: 19px; }
+  .wt .pl-eprow .hook { font-size: 14px; line-height: 1.6; -webkit-line-clamp: 3; margin-top: 6px; }
+}
