@@ -35,12 +35,51 @@ public class PlayController {
     private final PlayWorldService made;
     private final JobController jobs;
     private final JobService service;
+    private final PlayRuns played;
+    private final com.lore.webtoon.character.CharacterOwner owner;
 
-    public PlayController(PlayCatalog catalog, PlayWorldService made, JobController jobs, JobService service) {
+    public PlayController(PlayCatalog catalog, PlayWorldService made, JobController jobs, JobService service,
+                          PlayRuns played, com.lore.webtoon.character.CharacterOwner owner) {
         this.catalog = catalog;
         this.made = made;
         this.jobs = jobs;
         this.service = service;
+        this.played = played;
+        this.owner = owner;
+    }
+
+    @Operation(summary = "내가 체험한 만화", description = "/play/runs 로 시작해 그림까지 나온 작품. 로그인이면 계정과 이어진 브라우저, "
+            + "아니면 X-Lore-Uid 브라우저. 카드는 둘러보기와 같은 모양에 world_id · world_name · event_id · event_title 이 붙는다.")
+    @GetMapping("/runs/mine")
+    public Map<String, Object> myRuns(@org.springframework.web.bind.annotation.RequestHeader(value = "X-Lore-Uid", required = false) String uid) {
+        Long user = CreditGate.currentUser();
+        return Map.of("runs", named(played.mine(user, owner.uidsOf(user, uid))));
+    }
+
+    @Operation(summary = "이 사건으로 만든 만화", description = "공개 작품만(비공개 · 링크 공개 · 관리자 처리된 것은 뺀다).")
+    @GetMapping("/events/{eventId}/runs")
+    public Map<String, Object> eventRuns(@PathVariable String eventId) {
+        return Map.of("runs", named(played.ofEvent(eventId)));
+    }
+
+    /** 카드에 세계 · 사건 이름을 붙인다. 운영 세계면 파일에서, 사용자 세계면 DB 에서. */
+    private List<Map<String, Object>> named(List<Map<String, Object>> cards) {
+        Long user = CreditGate.currentUser();
+        Map<String, Map<String, Object>> worlds = new java.util.HashMap<>();
+        for (Map<String, Object> card : cards) {
+            String wid = String.valueOf(card.get("world_id"));
+            Map<String, Object> w = worlds.computeIfAbsent(wid, k -> {
+                Map<String, Object> found = catalog.world(k);
+                if (found == null) {
+                    found = made.playable(k, user);
+                }
+                return found == null ? Map.of() : found;
+            });
+            card.put("world_name", w.getOrDefault("name", ""));
+            Map<String, Object> ev = w.isEmpty() ? null : catalog.event(w, String.valueOf(card.get("event_id")));
+            card.put("event_title", ev == null ? "" : ev.getOrDefault("title", ""));
+        }
+        return cards;
     }
 
     @Operation(summary = "세계관 체험의 세계와 사건 목록",
@@ -137,10 +176,47 @@ public class PlayController {
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> lorebook = (Map<String, Object>) world.get("lorebook");
-        return jobs.create(request, new JobService.CreateRequest(
+        String situation = catalog.world(form.worldId()) != null
+                ? catalogSituation(world, event, name)
+                : PlayWorldService.situation(event, Map.of());
+        ResponseEntity<Map<String, Object>> started = jobs.create(request, new JobService.CreateRequest(
                 name, null, (String) world.get("genre"), null, form.style(), null, null, null,
                 form.agreeIp(), false, form.uid(), form.characterId(), null, form.quality(), form.language(),
-                null, PlayWorldService.situation(event, Map.of()), null, null, lorebook, (List<String>) null));
+                null, situation, null, null, lorebook, (List<String>) null));
+        if (started.getBody() != null && started.getBody().get("id") instanceof String jobId) {
+            played.mark(jobId, form.worldId(), form.eventId());
+        }
+        return started;
+    }
+
+    /**
+     * 운영 세계 사건의 상황 — 장소, 그리고 하은이 사건마다 고른 인물(events[].cast: 이름)의 역할 · 설정을 붙인다.
+     * 운영 세계의 설정집(worlds.json lorebook)에는 인물이 없어서, 고른 인물을 상황에 직접 적어야 이야기가 그 인물을
+     * 그 모습대로 쓴다. 사건에 안 고른 인물과 주인공으로 넣은 사람은 적지 않는다.
+     */
+    static String catalogSituation(Map<String, Object> world, Map<String, Object> event, String protagonist) {
+        String base = PlayWorldService.situation(event, Map.of());
+        List<String> picked = PlayWorldService.ids(event.get("cast")).stream()
+                .filter(n -> !n.equals(protagonist)).toList();                 // 주인공으로 고른 사람은 또 적지 않는다
+        if (picked.isEmpty()) {
+            return base;
+        }
+        StringBuilder s = new StringBuilder(base).append("\n이 사건에 나오는 인물:");
+        for (String name : picked) {
+            Map<?, ?> who = PlayWorldService.list(world.get("cast")).stream()
+                    .filter(c -> c instanceof Map<?, ?> m && name.equals(PlayWorldService.text(m.get("name"), 60)))
+                    .map(c -> (Map<?, ?>) c).findFirst().orElse(Map.of());
+            String role = PlayWorldService.text(who.get("role"), 60);
+            String desc = PlayWorldService.text(who.get("desc"), 600);
+            s.append("\n- ").append(name);
+            if (!role.isEmpty()) {
+                s.append(" (").append(role).append(")");
+            }
+            if (!desc.isEmpty()) {
+                s.append(": ").append(desc);
+            }
+        }
+        return s.toString();
     }
 
     public record RunRequest(String uid,
