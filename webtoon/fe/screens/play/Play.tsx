@@ -37,7 +37,7 @@ function EventCard({ w, e, wide, full, onClick }: { w: PlayWorld; e: PlayEvent; 
   return (
     <button type="button" className={`pl-event${wide ? " wide" : ""}${full ? " full" : ""}`} onClick={onClick}>
       <Pic src={e.image_url} />
-      <span className="b"><span className="num">{t(w.name)} · {e.no}</span><b>{t(e.title)}</b><span className="ln">{t(e.line || e.situation)}</span></span>
+      <span className="b"><span className="num">{t(w.name)} · {e.no}</span><b>{t(e.title)}</b><span className="ln">{t(e.situation)}</span></span>
     </button>
   );
 }
@@ -94,7 +94,7 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
           {w.events.map((e) => (
             <button type="button" key={e.id} className="pl-eprow" onClick={() => go("play", { world: w.id, ep: e.id })}>
               <Pic src={e.image_url} />
-              <span className="mid"><span className="no">{e.no}</span><b>{t(e.title)}</b><span className="hook">{t(e.line || e.situation)}</span></span>
+              <span className="mid"><span className="no">{e.no}</span><b>{t(e.title)}</b><span className="hook">{t(e.situation)}</span></span>
             </button>
           ))}
         </div>
@@ -108,7 +108,6 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const t = useT();
   const close = () => go("play", { world: w.id });
   const put = () => go("play", { world: w.id, ep: e.id, stage: "char" });
-  const quote = e.line && e.line !== e.situation;
   return (
     <div className="pl-layer" onClick={(ev) => { if (ev.target === ev.currentTarget) close(); }}>
       <div className="pl-modal" role="dialog" aria-modal="true" aria-label={t(e.title)}>
@@ -119,8 +118,8 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
             <span className="shade" />
             <button type="button" className="x" aria-label={t("닫기")} onClick={close}><IconClose /></button>
             <div className="ov">
-              <span className="epl">{quote ? `${e.no} · ${t(e.title)}` : e.no}</span>
-              <h2>{quote ? t(e.line) : t(e.title)}</h2>
+              <span className="epl">{e.no}</span>
+              <h2>{t(e.title)}</h2>
             </div>
           </div>
           <div className="cols">
@@ -133,10 +132,10 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
                 </div>
               )}
             </div>
-            <div className="r"><div className="spot"><b>{t(e.spot || w.spot)}</b><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div></div>
+            <div className="r"><div className="spot"><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div></div>
           </div>
         </div>
-        <div className="mfoot"><b>{t(e.spot || w.spot)}</b><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>
+        <div className="mfoot"><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>
       </div>
     </div>
   );
@@ -203,7 +202,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
       onClick={(ev) => { ev.stopPropagation(); setEdit(c); }}
       onKeyDown={(ev) => { if (ev.key === "Enter") { ev.stopPropagation(); setEdit(c); } }}><IconEdit /></span>
   );
-  const ctx = <p className="pl-ctx">{t(w.name)}<i />{e.no} {t(e.title)}<i /><b>{t(e.spot || w.spot)}</b></p>;
+  const ctx = <p className="pl-ctx">{t(w.name)}<i /><b>{e.no} {t(e.title)}</b></p>;
   return (
     <div className="pl-who">
       <MTop back={e.no} onBack={() => go("play", { world: w.id, ep: e.id })} title={t("내 캐릭터")} />

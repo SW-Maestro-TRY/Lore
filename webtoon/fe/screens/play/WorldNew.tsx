@@ -134,9 +134,11 @@ function PersonForm({ p, onDone, onCancel, onDelete }: { p: Person; onDone: (p: 
   );
 }
 
-function EventForm({ e, no, cast, chars, go, onDone, onCancel, onDelete }: { e: Ev; no: string; cast: Person[]; chars: Character[]; go: Go; onDone: (e: Ev) => void; onCancel: () => void; onDelete?: () => void }) {
+function EventForm({ e, no, cast, chars, go, onDone, onCancel, onDelete, onLive }: { e: Ev; no: string; cast: Person[]; chars: Character[]; go: Go; onDone: (e: Ev) => void; onCancel: () => void; onDelete?: () => void; onLive?: (e: Ev) => void }) {
   const t = useT();
-  const [v, setV] = useState(e);
+  const [v, setV0] = useState(e);
+  /* 고치는 대로 밖에도 알린다 — 열어 둔 채 「사건 추가」를 눌러도 적은 것이 남게 */
+  const setV = (n: Ev) => { setV0(n); onLive?.(n); };
   return (
     <div className="wn-eform">
       <PickPic className={`wn-pic${v.image ? "" : " add"}`} onPick={(image) => setV({ ...v, image })}>
@@ -144,12 +146,8 @@ function EventForm({ e, no, cast, chars, go, onDone, onCancel, onDelete }: { e: 
       </PickPic>
       <div className="in">
         <div className="two"><span className="no">{no}</span><input placeholder={t("사건 제목")} aria-label={t("사건 제목")} value={v.title} maxLength={60} onChange={(x) => setV({ ...v, title: x.target.value })} /></div>
-        <input placeholder={t("대사 한 줄")} aria-label={t("대사 한 줄")} value={v.line} maxLength={120} onChange={(x) => setV({ ...v, line: x.target.value })} />
-        <textarea rows={3} placeholder={t("상황")} aria-label={t("상황")} value={v.situation} maxLength={600} onChange={(x) => setV({ ...v, situation: x.target.value })} />
-        <div className="two">
-          <input placeholder={t("장소")} aria-label={t("장소")} value={v.place} maxLength={40} onChange={(x) => setV({ ...v, place: x.target.value })} />
-          <input placeholder={t("내 캐릭터 자리")} aria-label={t("내 캐릭터 자리")} value={v.spot} maxLength={40} onChange={(x) => setV({ ...v, spot: x.target.value })} />
-        </div>
+        <textarea rows={6} placeholder={t("상황")} aria-label={t("상황")} value={v.situation} maxLength={2000} onChange={(x) => setV({ ...v, situation: x.target.value })} />
+        <input placeholder={t("장소")} aria-label={t("장소")} value={v.place} maxLength={80} onChange={(x) => setV({ ...v, place: x.target.value })} />
         {cast.length > 0 && (
           <div><span className="lab">{t("이 사건에 나오는 인물")}</span>
             <div className="wn-chips">{cast.map((p) => {
@@ -164,7 +162,7 @@ function EventForm({ e, no, cast, chars, go, onDone, onCancel, onDelete }: { e: 
         <div className="acts">
           {onDelete && <button type="button" className="wn-del" onClick={onDelete}>{t("삭제")}</button>}
           <button type="button" className="pl-btn wn-w sm" onClick={onCancel}>{t("취소")}</button>
-          <button type="button" className="pl-btn sm" disabled={!v.title.trim() || !v.situation.trim()} onClick={() => onDone(v)}>{t("완료")}</button>
+          <button type="button" className="pl-btn sm" disabled={!v.title.trim()} onClick={() => onDone(v)}>{t("완료")}</button>
         </div>
       </div>
     </div>
@@ -176,7 +174,7 @@ function EventRow({ e, no, onEdit }: { e: Ev; no: string; onEdit: () => void }) 
   return (
     <button type="button" className="wn-row" onClick={onEdit}>
       {e.image ? <span className="im" style={{ backgroundImage: `url(${e.image})` }} /> : <span className="im none" />}
-      <span className="mid"><span className="no">{no}</span><b>{e.title}</b><span className="hook">{[e.line || e.situation, e.spot && `${t("자리")} ${e.spot}`].filter(Boolean).join(" · ")}</span></span>
+      <span className="mid"><span className="no">{no}</span><b>{e.title}</b><span className="hook">{[e.place, e.situation].filter(Boolean).join(" · ")}</span></span>
       <span className="pen"><IconEdit /></span>
     </button>
   );
@@ -270,6 +268,15 @@ function Desk({ go }: { go: Go }) {
   const [ev, setEv] = useState<Ev | null>(null);
   const putPerson = (p: Person) => { set({ cast: d.cast.some((x) => x.id === p.id) ? d.cast.map((x) => x.id === p.id ? p : x) : [...d.cast, p] }); setPerson(null); };
   const putEvent = (e: Ev) => { set({ events: d.events.some((x) => x.id === e.id) ? d.events.map((x) => x.id === e.id ? e : x) : [...d.events, e] }); setEv(null); };
+  /* 사건 추가 — 열어 둔 사건이 있으면 제목이 있을 때 그대로 넣고 새 칸을 연다 */
+  const live = useRef<Ev | null>(null);
+  const addEvent = () => {
+    const cur = live.current;
+    if (ev && cur && cur.id === ev.id && cur.title.trim()) set({ events: d.events.some((x) => x.id === cur.id) ? d.events.map((x) => x.id === cur.id ? cur : x) : [...d.events, cur] });
+    const n = newEvent();
+    live.current = n;
+    setEv(n);
+  };
   return (
     <div className="pl-wrap wn">
       <div className="wn-head">
@@ -302,11 +309,10 @@ function Desk({ go }: { go: Go }) {
         <div className="pl-sec">
           <h2 className="pl-h1">{t("사건")}</h2>
           {d.events.map((e, i) => ev?.id === e.id
-            ? <EventForm key={e.id} e={e} no={epNo(i)} cast={d.cast} chars={chars} go={go} onDone={putEvent} onCancel={() => setEv(null)} onDelete={() => { set({ events: d.events.filter((x) => x.id !== e.id) }); setEv(null); }} />
+            ? <EventForm key={e.id} e={e} no={epNo(i)} cast={d.cast} chars={chars} go={go} onLive={(x) => { live.current = x; }} onDone={putEvent} onCancel={() => setEv(null)} onDelete={() => { set({ events: d.events.filter((x) => x.id !== e.id) }); setEv(null); }} />
             : <EventRow key={e.id} e={e} no={epNo(i)} onEdit={() => setEv(e)} />)}
-          {ev && !d.events.some((x) => x.id === ev.id)
-            ? <EventForm e={ev} no={epNo(d.events.length)} cast={d.cast} chars={chars} go={go} onDone={putEvent} onCancel={() => setEv(null)} />
-            : <button type="button" className="wn-dash tall" onClick={() => setEv(newEvent())}><IconPlus />{t("사건 추가")}</button>}
+          {ev && !d.events.some((x) => x.id === ev.id) && <EventForm key={ev.id} e={ev} no={epNo(d.events.length)} cast={d.cast} chars={chars} go={go} onLive={(x) => { live.current = x; }} onDone={putEvent} onCancel={() => setEv(null)} />}
+          <button type="button" className="wn-dash tall" onClick={addEvent}><IconPlus />{t("사건 추가")}</button>
           <div className="wn-bar">
             <div className="wn-seg"><button type="button" className={d.visibility === "public" ? "on" : ""} onClick={() => set({ visibility: "public" })}>{t("모두에게")}</button><button type="button" className={d.visibility === "private" ? "on" : ""} onClick={() => set({ visibility: "private" })}>{t("나만")}</button></div>
             <button type="button" className="pl-btn wn-w" onClick={keep}>{saved ? t("저장됨") : t("임시 저장")}</button>

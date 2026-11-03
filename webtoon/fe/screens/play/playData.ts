@@ -45,7 +45,7 @@ export async function saveWorld(d: WorldDraft): Promise<string> {
 }
 
 /* AI 로 채우기 · 다시 만들기 — 서버가 다 지을 때까지 3초마다 본다. 돌려받은 세계를 만들기 글 모양으로 바꿔 준다. */
-type ServerWorld = Omit<PlayWorld, "cast" | "events"> & { making?: string; visibility?: "public" | "private"; lorebook_id?: string;
+type ServerWorld = Omit<PlayWorld, "cast" | "events"> & { making?: string; error?: string; visibility?: "public" | "private"; lorebook_id?: string;
   cast: (PlayPerson & { id?: string })[]; events: (PlayEvent & { cast?: string[] })[] };
 export async function makeWorld(d: WorldDraft, onTick?: () => void): Promise<WorldDraft> {
   const r = await makePlayWorld({ id: d.id, draft: d, lorebook_id: d.lorebook_id });
@@ -53,6 +53,7 @@ export async function makeWorld(d: WorldDraft, onTick?: () => void): Promise<Wor
     await new Promise((ok) => setTimeout(ok, 3000));
     onTick?.();
     const w = await readPlayWorld<ServerWorld>(r.id).catch(() => null);
+    if (w?.making === "error") throw new Error(w.error || "");
     if (w && w.making !== "running") return fromServer(w, d);
   }
 }

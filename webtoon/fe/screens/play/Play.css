@@ -419,3 +419,11 @@
 .wt .wn-ai { display: flex; flex-direction: column; gap: 4px; }
 .wt .wn-ai .pl-err { margin: 0; font-size: 12px; }
 .wt .wn-genre { display: flex; flex-direction: column; gap: 8px; }
+/* 사건 글은 여러 문단 — 줄바꿈을 살리고, 카드에서는 두 줄까지 */
+.wt .pl-modal .sit { white-space: pre-line; }
+.wt .pl-event .ln, .wt .pl-eprow .hook, .wt .wn-row .hook { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wt .pl-event.wide .ln { -webkit-line-clamp: 4; }
+.wt .pl-modal .mfoot .pl-btn { flex: 1; }
+@media (max-width: 767px) { .wt .pl-event .ln { display: none; } .wt .pl-event.wide .ln { display: -webkit-box; -webkit-line-clamp: 2; } }
+/* PC 표지 — 왼쪽 칸 가득 채우면 너무 커서 작게 */
+.wt .wn-side .wn-cover { width: 180px; }
