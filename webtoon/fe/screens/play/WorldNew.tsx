@@ -11,7 +11,7 @@
  * - 예시 캐릭터는 사건마다 등장인물처럼 그 자리에서 사진 · 이름 · 설정으로 만든다(최대 둘). 서버가 사진 그대로 캐릭터로 만든다.
  * - 사진은 data URL 로 서버에 보낸다(창고에 올려 주소로 돌려준다). */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { listLorebooks, readPlayWorld, type LoreBook } from "../../lib/api";
+import { listLorebooks, listPlayWorlds, readPlayWorld, type LoreBook } from "../../lib/api";
 import { GENRE_QUICK } from "../../lib/wizardData";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
@@ -54,7 +54,11 @@ function useDraft(editId?: string) {
     let local: Draft | null = null;
     try { const raw = localStorage.getItem(KEY); if (raw) local = { ...empty, ...JSON.parse(raw) }; } catch { /* 저장소가 막힌 브라우저 */ }
     if (local) { setD(local); return; }
-    if (editId) void readPlayWorld<ServerWorld>(editId).then((w) => setD({ ...fromServer(w, empty), id: w.id })).catch(() => setLoadErr("이 세계관을 불러오지 못했어요"));
+    /* 한 세계 읽기(/play/worlds/{id})가 운영 세계를 안 주면 목록에서 찾는다 */
+    if (editId) void readPlayWorld<ServerWorld>(editId)
+      .catch(() => listPlayWorlds<ServerWorld>().then((r) => { const w = r.worlds.find((x) => x.id === editId); if (!w) throw new Error(); return w; }))
+      .then((w) => setD({ ...fromServer(w, empty), id: w.id, cover: w.cover_url || undefined }))
+      .catch(() => setLoadErr("이 세계관을 불러오지 못했어요"));
   }, [KEY]);
   const loaded = useRef(false);
   useEffect(() => { loaded.current = true; }, []);
