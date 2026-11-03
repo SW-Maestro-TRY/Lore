@@ -799,8 +799,16 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
 
     made = []
     one = {}
+    # 세계관 체험(input.json play=true)은 표지를 안 그린다(하은 2026-11-03) — 제목이 사건 그 자체라 표지가
+    # 할 일이 없고 그림 값만 든다. 번호는 그대로(1 = 표지 자리)이고 1장을 건너뛴다. 체험이 아니면 예전과 같다.
+    skip_cover = bool((char or {}).get("play"))
+    if skip_cover and cover_first:
+        log("[이어그리기] 세계관 체험 — 표지는 그리지 않습니다")
+        return made
     for n_ in range(0, len(scenes) + 1):  # 0 = 표지, 1..len(scenes) = 씬
         page_no = n_ + 1
+        if n_ == 0 and skip_cover:
+            continue
         if n_ == 0:
             prompt = build_cover_prompt(title=title, genre=genre, intro=intro,
                                         char=char, spec=spec, cast=cast, style=style,
