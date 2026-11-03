@@ -102,6 +102,8 @@ public class WebtoonPurge implements UserDataPurge {
         n += rows.deleteNotifySettings(userId);
         n += rows.deletePushSubscriptions(userId);
         n += rows.deleteAttendReminds(userId);
+        n += rows.deleteInvites(userId);        // 초대한 줄·초대받은 줄 둘 다. 받은 크레딧은 장부에 그대로(돈에 준하는 기록)
+        n += rows.deleteInviteCode(userId);
         return n;
     }
 

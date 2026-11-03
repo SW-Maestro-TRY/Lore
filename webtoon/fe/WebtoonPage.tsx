@@ -23,6 +23,7 @@ import "./webtoon.css";
 
 import { hrefOf, type Go, type View } from "./lib/nav";
 import { linkThisBrowser, rememberShareKey } from "./lib/api";
+import { claimInvite, rememberInviteRef } from "./lib/invite";
 import { installAutoTrack, navCause, screenProps, setView, takeDepth, track } from "./lib/track";
 import { metaTrack } from "./lib/metaPixel";
 import { LangProvider, useLang } from "./lib/i18n";
@@ -162,8 +163,12 @@ function WebtoonScreens() {
   }, []);
 
   const { status: authStatus } = useAuth();
+  /* 초대 링크(?ref=)로 왔으면 코드를 기억해 둔다 — 이 브라우저에서 가입이 끝난 뒤 보낸다(lib/invite.ts). */
+  useEffect(() => rememberInviteRef(), []);
   useEffect(() => {
-    if (authStatus === "authenticated") void linkThisBrowser().catch(() => {});
+    if (authStatus !== "authenticated") return;
+    void linkThisBrowser().catch(() => {});
+    void claimInvite();
   }, [authStatus]);
   const authenticated = authStatus === "authenticated";
   /* 기록은 로그인 확인이 끝난 뒤부터. ★ 아래 효과들은 이 값(한 번만 바뀜)에만 기대고

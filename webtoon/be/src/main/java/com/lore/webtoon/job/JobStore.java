@@ -3,6 +3,7 @@ package com.lore.webtoon.job;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.webtoon.push.JobPush;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -149,11 +150,22 @@ public class JobStore {
         });
     }
 
+    /** 완성 직후 덤으로 할 일(친구 초대 보상 등). 스프링이 모아 넣고, 테스트의 {@code new JobStore} 에서는 비어 있다. */
+    private List<JobDoneListener> onDone = List.of();
+
+    @Autowired(required = false)
+    public void setOnDone(List<JobDoneListener> listeners) {
+        this.onDone = listeners == null ? List.of() : List.copyOf(listeners);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void done(Long id) {
         jobs.findById(id).ifPresent(job -> {
             job.moveTo(JobStatus.DONE, JobStage.BIND, Instant.now());
             jobs.save(job);
+            for (JobDoneListener l : onDone) {
+                l.onDone(job);
+            }
         });
     }
 

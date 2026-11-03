@@ -120,6 +120,15 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Query("delete from AttendRemind r where r.userId = :userId")
     int deleteAttendReminds(@Param("userId") Long userId);
 
+    /** 친구 초대 — 내가 초대한 줄과 초대받은 줄 둘 다. 상대 쪽 집계에서도 이 사람이 빠진다. */
+    @Modifying
+    @Query("delete from Invite i where i.inviterId = :userId or i.inviteeId = :userId")
+    int deleteInvites(@Param("userId") Long userId);
+
+    @Modifying
+    @Query("delete from InviteCode c where c.userId = :userId")
+    int deleteInviteCode(@Param("userId") Long userId);
+
     @Modifying
     @Query("delete from SeriesDraft d where d.ownerId = :userId")
     int deleteSeriesDrafts(@Param("userId") Long userId);
