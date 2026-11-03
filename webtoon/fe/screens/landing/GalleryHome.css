@@ -677,3 +677,11 @@
   .wt .wt-browse-list::-webkit-scrollbar { display: none; }
   .wt .wt-browse-list button, .wt .wt-browse-list button:nth-child(n + 5) { display: flex; flex: 0 0 38%; height: auto; aspect-ratio: 3/4; scroll-snap-align: start; }
 }
+/* 표지에 제목 글씨가 그려져 있어 글을 얹으면 겹친다 — 폰도 PC 처럼 표지 아래에 제목 */
+@media (max-width: 767px) {
+  .wt .wt-browse-list button, .wt .wt-browse-list button:nth-child(n + 5) { flex-direction: column; justify-content: flex-start; aspect-ratio: auto; height: auto; padding: 0; overflow: visible; border: 0; border-radius: 0; background: none; }
+  .wt .wt-browse-list button:before { display: none; }
+  .wt .wt-browse-list img { position: static; width: 100%; height: auto; aspect-ratio: 3/4; border-radius: 12px; }
+  .wt .wt-browse-list b { margin-top: 8px; font-size: 13px; color: var(--ink); -webkit-line-clamp: 2; }
+  .wt .wt-browse-list span { color: var(--dim); }
+}
