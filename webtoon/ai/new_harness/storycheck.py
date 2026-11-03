@@ -209,8 +209,9 @@ def character_block(char: dict | None) -> str:
     if _text(char.get("name")):
         lines.append(f"이름: {_text(char['name'])}")
     # 고른 캐릭터 카드(#458) — 카드와 원래 설명이 다르면 카드가 그 인물이다.
-    if charcard.short(char.get("card") or {}):
-        lines.append(f"고른 캐릭터 카드: {charcard.short(char['card'])}")
+    # 설정집을 붙인 작품(세계관 체험 포함)은 카드의 옛 세계 · 반전을 빼고 본다 — 이야기 단계와 같은 기준.
+    if charcard.short(charcard.for_story(char)):
+        lines.append(f"고른 캐릭터 카드: {charcard.short(charcard.for_story(char))}")
     if _text(char.get("description")):
         lines.append(f"{'사용자가 처음 적은 설명' if char.get('card') else '설명'}: "
                      f"{_text(char['description'])}")
@@ -226,8 +227,9 @@ def character_block(char: dict | None) -> str:
     co = [c for c in (char.get("co") or []) if isinstance(c, dict) and _text(c.get("name"))]
     for one in co:
         lines += ["", f"함께 주인공: {_text(one['name'])}"]
-        if charcard.short(one.get("card") or {}):
-            lines.append(f"고른 캐릭터 카드: {charcard.short(one['card'])}")
+        one_card = charcard.short(charcard.for_story({**one, "lorebook": char.get("lorebook")}))
+        if one_card:
+            lines.append(f"고른 캐릭터 카드: {one_card}")
         if _text(one.get("description")):
             lines.append(f"설명: {_text(one['description'])}")
         for k, v in (one.get("fields") or {}).items():

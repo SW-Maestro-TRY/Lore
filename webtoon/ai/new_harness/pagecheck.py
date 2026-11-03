@@ -200,7 +200,7 @@ def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
     if char:
         who = _text(char.get("name"))
         desc = _text(char.get("description"))
-        card = charcard.short(char.get("card") or {})     # #458 — detailart 와 같은 한 줄
+        card = charcard.short(charcard.for_story(char))     # #458 — detailart 와 같은 한 줄(설정집 작품은 카드의 옛 세계를 뺀다)
         desc = f"{card}. {desc}" if card and desc else (card or desc)
         if who:
             lines.append(f"{who} (주인공) — {desc}" if desc else f"{who} (주인공)")
@@ -210,7 +210,7 @@ def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
         if not isinstance(one, dict) or not _text(one.get("name")):
             continue
         desc = _text(one.get("description"))
-        card = charcard.short(one.get("card") or {})
+        card = charcard.short(charcard.for_story({**one, "lorebook": char.get("lorebook")}))
         desc = f"{card}. {desc}" if card and desc else (card or desc)
         lines.append(f"{one['name']} (주인공) — {desc}" if desc else f"{one['name']} (주인공)")
     for one in cast or []:
