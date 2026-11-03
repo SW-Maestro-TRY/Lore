@@ -78,9 +78,13 @@ public interface WebtoonCharacterRepository extends JpaRepository<WebtoonCharact
            select count(c) from WebtoonCharacter c
             where (c.ownerId = :userId or c.browserUid in :uids)
               and c.source <> com.lore.webtoon.character.CharacterSource.UPLOAD
+              and c.playWorld is null
               and c.createdAt >= :since
            """)
     long madeSince(@Param("userId") Long userId,
                    @Param("uids") Collection<String> uids,
                    @Param("since") Instant since);
+
+    /** 세계관 만들기의 예시 주인공 — 만든 순서대로. */
+    List<WebtoonCharacter> findByPlayWorldOrderByIdAsc(String playWorld);
 }

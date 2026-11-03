@@ -2295,7 +2295,9 @@ def main(argv=None) -> int:
     p.add_argument("--continuation", type=Path, help="서버가 확인한 연재 기억 사본")
     p.add_argument("--series-digest", type=Path,
                    help="끝난 회차를 읽어 연재 설정집(고정 설정·항목·진행 상태)을 정리한다. --out 에 쓴다")
-    p.add_argument("--out", type=Path, help="--series-digest 결과를 쓸 곳")
+    p.add_argument("--world-make", type=Path,
+                   help="세계관 만들기: 적은 칸과 참고 설정집으로 세계·사건·예시 주인공을 짓는다. --out 에 쓴다")
+    p.add_argument("--out", type=Path, help="--series-digest · --world-make 결과를 쓸 곳")
     p.add_argument("--own", action="store_true",
                    help="「만들고 싶은 내용이 있어요」(#548): 적은 내용으로 주인공 카드·인물·본문·시트를 "
                         "동시에 만든다. 후보·고르기 없음. 장면은 --own-scenes 로 따로")
@@ -2349,6 +2351,13 @@ def main(argv=None) -> int:
         if not args.out:
             raise SystemExit("--series-digest 에는 --out 이 필요합니다")
         continuation.stage_digest(args.series_digest, args.out, args.dry_run, lang=args.lang)
+        return 0
+
+    if args.world_make:
+        import worldmake
+        if not args.out:
+            raise SystemExit("--world-make 에는 --out 이 필요합니다")
+        worldmake.make(args.world_make, args.out, args.dry_run, lang=args.lang)
         return 0
 
     if args.plan:

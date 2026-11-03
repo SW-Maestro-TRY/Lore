@@ -205,7 +205,8 @@ public class CharacterService {
         WebtoonCharacter one = characters.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다"));
         /* 휴지통에 든 캐릭터는 없는 것으로 본다 — 웹툰 만들기에도 못 고른다. 되살리기는 CharacterTrash 가 따로 찾는다. */
-        if (one.isTrashed() || !one.isBuiltin() && !one.isCommunityPublic() && !one.madeBy(userId, uids)) {
+        if (one.isTrashed() || !one.isBuiltin() && !one.isCommunityPublic() && !one.isPlayPublic()
+                && !one.madeBy(userId, uids)) {
             // 있는 것을 "권한 없음" 으로 알리면 남의 번호를 하나씩 찔러 볼 수 있다.
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다");
         }
@@ -559,6 +560,89 @@ public class CharacterService {
                     dir));
         }
         return saved;
+    }
+
+    /**
+     * 세계관 만들기의 예시 주인공을 그린다(2026-11-03). 세계를 지은 글이 이름·설명을 정했고, 그림은 캐릭터
+     * 만들기와 같은 줄·같은 하네스(character.py)로 그린다. 크레딧·하루 무료 몫은 안 쓴다 — 세계 만들기
+     * 횟수가 따로 센다({@code PlayWorldService}). 돈 상한은 세계 만들기가 시작 전에 봤다.
+     *
+     * @param shown 세계가 이미 올라가 있으면 참 — 다 그리는 대로 그 세계에 보인다
+     */
+    @Transactional
+    public WebtoonCharacter drawPlayExample(Long ownerId, String world, String name, String description,
+                                            boolean shown, String language) {
+        if (!maker.ready()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "지금은 캐릭터를 만들 수 없습니다");
+        }
+        String publicId = UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+        Path dir = workDir.resolve(publicId);
+        try {
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "캐릭터를 만들지 못했습니다");
+        }
+        String called = name == null ? "" : name.trim();
+        WebtoonCharacter saved = characters.save(WebtoonCharacter.playExample(publicId, ownerId, world,
+                called.isEmpty() ? "이름 없는 캐릭터" : called, description, shown, Instant.now(clock)));
+        Long id = saved.getId();
+        Runnable job = () -> draw(id, called, description, List.of(), null, null, language, dir);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    line.submit(job);
+                }
+            });
+        } else {
+            line.submit(job);
+        }
+        return saved;
+    }
+
+    /** 세계관 만들기가 이 세계에 그려 준 예시 캐릭터 — 만든 순서대로. */
+    @Transactional(readOnly = true)
+    public List<WebtoonCharacter> playDrawn(String world) {
+        return characters.findByPlayWorldOrderByIdAsc(world);
+    }
+
+    /** 이 사람이 만든 캐릭터면 그것, 아니면 {@code null}. 세계의 예시 캐릭터로 고를 수 있는지 볼 때 쓴다. */
+    @Transactional(readOnly = true)
+    public WebtoonCharacter ownedBy(String publicId, Long ownerId) {
+        if (publicId == null || ownerId == null) {
+            return null;
+        }
+        return characters.findByPublicId(publicId)
+                .filter(one -> !one.isTrashed() && ownerId.equals(one.getOwnerId()))
+                .orElse(null);
+    }
+
+    /** 세계를 올리거나 내릴 때 — 그 세계의 예시 캐릭터를 누구나 고를 수 있게 열거나 닫는다. */
+    @Transactional
+    public void showInPlay(Collection<String> publicIds, Collection<String> shown) {
+        Instant now = Instant.now(clock);
+        for (String id : publicIds) {
+            characters.findByPublicId(id).ifPresent(one -> {
+                boolean on = shown.contains(id);
+                if (one.isPlayPublic() != on || on) {
+                    one.showInPlay(on, now);
+                    characters.save(one);
+                }
+            });
+        }
+    }
+
+    /**
+     * 세계관 만들기가 그려 준 예시 캐릭터를 없앤다 — 다시 만들 때 사용자가 안 남긴 것, 세계를 지울 때 전부.
+     * 그 캐릭터로 이미 만든 웹툰은 그림을 S3 에 따로 갖고 있어 그대로 남는다(휴지통 영구 삭제와 같다).
+     *
+     * @param publicId 하나만 지울 때. {@code null} 이면 그 세계가 그려 준 것 전부
+     */
+    @Transactional
+    public void dropPlayExamples(String world, String publicId) {
+        characters.findByPlayWorldOrderByIdAsc(world).stream()
+                .filter(one -> publicId == null || publicId.equals(one.getPublicId()))
+                .forEach(this::purge);
     }
 
     /** 뒤에서 그린다. 여기서 죽어도 줄이 멈추면 안 된다. */

@@ -187,6 +187,16 @@ public class WebtoonCharacter {
     private Instant reuseAgreedAt;
     public boolean isCommunityPublic() { return communityPublic && !communityBlocked && status == CharacterStatus.READY; }
     public boolean isCommunityBlocked() { return communityBlocked; }
+
+    /** 세계관 만들기가 그려 준 예시 캐릭터면 그 세계(webtoon_play_world.id). 다시 만들면 같이 지운다. */
+    @Column(name="play_world", length=40)
+    private String playWorld;
+    /** 올라가 있는 세계의 예시 캐릭터인 동안 참 — 누구나 그 세계에 넣어 볼 수 있다(내 캐릭터를 예시로 골랐어도). */
+    @Column(name="play_public", nullable=false, columnDefinition="boolean not null default false")
+    private boolean playPublic;
+    public String getPlayWorld() { return playWorld; }
+    public boolean isPlayPublic() { return playPublic && deletedAt == null && status == CharacterStatus.READY; }
+    public void showInPlay(boolean value, Instant at) { this.playPublic = value; this.updatedAt = at; }
     public void publishForReuse(boolean value, Long owner, Instant at) {
         if(value) { this.ownerId=owner; this.reuseAgreedAt=at; }
         this.communityPublic=value; this.updatedAt=at;
@@ -222,6 +232,16 @@ public class WebtoonCharacter {
                                              String name, String description, Instant at) {
         return new WebtoonCharacter(publicId, ownerId, browserUid, name, description,
                 CharacterSource.PROMPT, CharacterStatus.READY, at);
+    }
+
+    /** 세계관 만들기의 예시 주인공. 세계를 만든 사람이 주인이고, 그리기 시작한 상태로 만든다. */
+    public static WebtoonCharacter playExample(String publicId, Long ownerId, String world, String name,
+                                               String description, boolean shown, Instant at) {
+        WebtoonCharacter one = new WebtoonCharacter(publicId, ownerId, null, name, description,
+                CharacterSource.PROMPT, CharacterStatus.DRAWING, at);
+        one.playWorld = world;
+        one.playPublic = shown;
+        return one;
     }
 
     /** 기본 제공. 주인이 없다 — 누구나 골라 쓴다. */
