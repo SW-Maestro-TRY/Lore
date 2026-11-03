@@ -219,6 +219,19 @@ public class JobRunner {
         this.opsAlert = opsAlert;
     }
 
+    /**
+     * 사진 속 옷을 세계에 맞출지 — {@code keep}(기본, 사진 옷 그대로) · {@code world}(세계에 어울리는지
+     * 판단하고 안 어울리면 그 세계 옷으로 다시 짓는다). 하네스의 {@code run.OUTFIT_MODES} 가 정본이다.
+     * 사람이 고르는 값이 아니라 서버마다 켜고 끄는 스위치라 설정({@code lore.webtoon.outfit})으로 받는다.
+     * 생성자를 늘리지 않으려고 따로 받는다.
+     */
+    private String outfit = "keep";
+
+    @Value("${lore.webtoon.outfit:keep}")
+    void setOutfit(String outfit) {
+        this.outfit = outfit == null || outfit.isBlank() ? "keep" : outfit.trim();
+    }
+
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
                      StoryStore stories, AfterRun after, WorkLedger works,
                      CreditGate credits, GuestGate guests, JobNotice notice,
@@ -2445,6 +2458,8 @@ public class JobRunner {
         /* 어느 언어로. run.py 가 --lang 을 안 받으면 이 값을 본다(lang.py 참고).
            옛 작업(language 컬럼이 비어 있음)은 WebtoonLanguage.normalize 가 ko 로 돌린다. */
         env.put("NH_LANG", WebtoonLanguage.normalize(job.getLanguage()));
+        /* 옷을 세계에 맞출지. 모르는 값이면 하네스가 keep 으로 돈다. */
+        env.put("NH_OUTFIT", outfit);
         // NH_RUNS_DIR 은 HarnessProcess 가 띄우는 모든 파이썬에 한자리에서 넣는다.
         return env;
     }

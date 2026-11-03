@@ -59,7 +59,22 @@ def parse_spec(text: str) -> dict:
         "color_palette": {k: str(palette.get(k) or "").strip() for k in PALETTE_KEYS},
         "expression_set": [str(e).strip() for e in (obj.get("expression_set") or [])
                            if str(e or "").strip()],
+        # 옷을 세계에 맞췄을 때만(run.OUTFIT_MODES 의 world) 있다. 없으면 키를 안 써서 예전 사양과 같다.
+        **({"outfit": outfit} if (outfit := _outfit(obj.get("outfit"))) else {}),
     }
+
+
+def _outfit(raw) -> dict:
+    """사양 단계가 남긴 옷 판단. fits 가 참·거짓으로 안 왔으면 판단이 없는 것으로 본다."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("fits"), bool):
+        return {}
+    return {"photo": str(raw.get("photo") or "").strip(), "fits": raw["fits"],
+            "why": str(raw.get("why") or "").strip(), "worn": str(raw.get("worn") or "").strip()}
+
+
+def outfit_changed(spec: dict) -> bool:
+    """사진 옷을 이 세계 옷으로 바꿔 지은 사양인가."""
+    return (spec.get("outfit") or {}).get("fits") is False
 
 
 def gate_spec(spec: dict) -> list[str]:
@@ -148,7 +163,23 @@ def build_prompt(spec: dict, style: str = None, from_photo: bool = False) -> str
 
     parts = [COMMON_EN, ""]
 
-    if from_photo:
+    if from_photo and outfit_changed(spec):
+        # 옷은 이 세계에 맞춰 새로 지었다 — 「사진 옷을 그대로」를 그대로 두면 사양과 지시가 싸운다.
+        parts += [
+            "This sheet is built from a reference photo. Reproduce the face, body type, "
+            "hairstyle, hair color, eye color and apparent age of the source as faithfully "
+            "as possible — do not turn this into a different-looking person and do not "
+            "\"beautify\" away distinguishing features. The same person must read as the "
+            "same person in every region of this sheet.",
+            "The outfit is NOT the one from the source photo. It was redesigned for the "
+            "world this character lives in. Draw exactly the outfit written under "
+            "CHARACTER and in the design details below, and nothing from any other outfit.",
+            "Anything not visible in the source photo (e.g. hair hidden from view) may be "
+            "filled in only in a way that stays consistent with what is visible, and must "
+            "be labeled \"[supplemented design]\" next to that region.",
+            "",
+        ]
+    elif from_photo:
         parts += [
             "This sheet is built from a reference photo. Reproduce the face, body type, "
             "hairstyle, hair color, eye color, apparent age, outfit and material texture "

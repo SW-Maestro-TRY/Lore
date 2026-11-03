@@ -419,7 +419,7 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: 
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
     if safety:
         block += "\n\n" + safety
-    prompt = R.compose("own/sheet_prompt", block)
+    prompt = R.compose("own/sheet_prompt", R.spec_block(char, block))
     R.write_text(paths["spec_prompt"], prompt)
 
     spec_path = paths["spec"]
@@ -430,19 +430,8 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: 
         log(f"[{paths['label']}] 사양 프롬프트만 썼습니다 -> {paths['spec_prompt']}")
         return
     else:
-        call = llm.Call("SHEET")
-        log(f"[시트] {call.describe()} 로 사양을 적습니다…")
-        try:
-            text, meta = call(prompt, images=llm.load_images(photos), temperature=0.4)
-        except BaseException as exc:                                  # noqa: BLE001
-            R.record_error(run_dir, "SHEET", call.provider, call.model, exc)
-            raise
-        R.record(run_dir, meta)
-        spec = sheetmod.parse_spec(text)
-        bad = sheetmod.gate_spec(spec)
-        if bad:
-            R.write_json(paths["rejected"], spec)
-            raise SystemExit("시트 사양이 모자랍니다 — 그리기 전에 멈춥니다:\n  - " + "\n  - ".join(bad))
+        # 사양 쓰기·옷 검수(outfit=world)는 기본 길과 같은 것을 쓴다(run.make_spec).
+        spec = R.make_spec(run_dir, char, prompt, paths)
         R.write_json(spec_path, spec)
 
     image_prompt = sheetmod.build_prompt(spec, from_photo=bool(photos))

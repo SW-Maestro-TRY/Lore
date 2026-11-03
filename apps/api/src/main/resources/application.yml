@@ -128,6 +128,9 @@ lore:
   webtoon:
     python:
       direct: ${LORE_WEBTOON_PYTHON_DIRECT:true}
+    # 사진 속 옷을 세계에 맞출지(new_harness/run.py 의 OUTFIT_MODES).
+    # keep = 사진 옷 그대로(지금까지와 같다) · world = 세계에 어울리는지 판단하고 안 어울리면 그 세계 옷으로.
+    outfit: ${LORE_WEBTOON_OUTFIT:keep}
 
   # 메일의 보낸사람. 비우면 SMTP 계정(spring.mail.username)으로 나간다.
   # ★ 그 Gmail 계정의 「다른 주소에서 메일 보내기」에 등록·인증된 주소여야 한다(EmailService).

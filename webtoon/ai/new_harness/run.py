@@ -127,6 +127,8 @@ def read_character(path: Path) -> dict:
         "episode": doc.get("episode"),
         # 함께 주인공인 내 캐릭터(주인공 여러 명). 없으면 예전과 같다 — 한 명짜리 run 은 한 글자도 안 바뀐다.
         "co": doc.get("co"),
+        # 사진 속 옷을 세계에 맞출지(OUTFIT_MODES). 없으면 NH_OUTFIT, 그것도 없으면 keep.
+        "outfit": doc.get("outfit"),
     })
 
 
@@ -159,6 +161,8 @@ def normalize(raw: dict) -> dict:
         "title": str(raw.get("title") or "").strip(),
         "episode": str(raw.get("episode") or "").strip(),
         **({"co": co} if (co := normalize_co(raw.get("co"))) else {}),
+        # 안 적었으면 키를 안 쓴다 — 예전 input.json 과 한 글자도 안 다르다.
+        **({"outfit": o} if (o := str(raw.get("outfit") or "").strip().lower()) else {}),
     }
 
 
@@ -2054,12 +2058,14 @@ def sheet_paths(run_dir: Path, name: str | None = None) -> dict:
     if not name:
         return {"png": run_dir / "sheet.png", "spec": run_dir / "sheet_spec.json",
                 "spec_prompt": run_dir / "sheet_spec_prompt.txt", "prompt": run_dir / "sheet_prompt.txt",
-                "rejected": run_dir / "sheet_spec_rejected.json", "label": "시트", "who": ""}
+                "rejected": run_dir / "sheet_spec_rejected.json", "outfit": run_dir / "sheet_outfit.json",
+                "label": "시트", "who": ""}
     stem = sheet_stem(name)
     folder = run_dir / "sheets"
     return {"png": folder / f"{stem}.png", "spec": folder / f"{stem}.spec.json",
             "spec_prompt": folder / f"{stem}.spec_prompt.txt", "prompt": folder / f"{stem}.prompt.txt",
-            "rejected": folder / f"{stem}.spec_rejected.json", "label": f"{name} 시트", "who": name}
+            "rejected": folder / f"{stem}.spec_rejected.json", "outfit": folder / f"{stem}.outfit.json",
+            "label": f"{name} 시트", "who": name}
 
 
 def each_sheet(run_dir: Path, char: dict, draw) -> None:
@@ -2111,6 +2117,104 @@ def _sheet_with_retry(run_dir: Path, char: dict, paths: dict, attempt) -> None:
             raise SystemExit(f"{label}가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
 
 
+# 사진 속 옷을 세계에 맞출지. 세계관 체험에서 사진(캐릭터 그림)의 옷을 그대로 베껴서, 로판 세계에
+# 현대옷을 입은 주인공이 나왔다 — 시트 사양 단계가 세계를 보고도 「사진에 보이는 것을 바꾸지 마라」를 따랐다.
+#   keep  — 사진 옷 그대로. 지금까지와 같다(기본값).
+#   world — 사양 단계가 사진 옷이 이 세계에 어울리는지 먼저 판단하고, 안 어울리면 이 세계에서 입을 옷으로
+#           다시 짓는다(얼굴·머리·체형은 그대로, 옷의 주요 색과 눈에 띄는 특징은 옮긴다). 그다음 옷 검수
+#           (OUTFIT_CHECK)가 사양 글만 보고 한 번 더 판단하고, 어긋나면 사양을 한 번 다시 쓴다.
+# 입력(character.json 의 outfit)이 먼저, 없으면 NH_OUTFIT, 그것도 없으면 keep.
+# 사진이 없거나 장르·설정집이 없으면 맞출 세계도 베낄 옷도 없어 keep 과 같다.
+OUTFIT_MODES = ("keep", "world")
+
+
+def outfit_mode(char: dict) -> str:
+    mode = str(char.get("outfit") or llm.env("NH_OUTFIT") or "keep").strip().lower()
+    if mode not in OUTFIT_MODES:
+        warn(f"[시트] 옷 옵션 '{mode}' 를 모릅니다 — keep 으로 갑니다 ({' / '.join(OUTFIT_MODES)})")
+        return "keep"
+    books = (char.get("lorebook") or {}).get("books") if isinstance(char.get("lorebook"), dict) else None
+    if mode == "world" and not (char.get("photos") and (char.get("genre") or books)):
+        return "keep"
+    return mode
+
+
+def spec_block(char: dict, block: str) -> str:
+    """시트 사양 입력. outfit=world 면 옷을 세계에 맞추라는 칸이 뒤에 붙는다. keep 이면 그대로다."""
+    if outfit_mode(char) != "world":
+        return block
+    return block + "\n\n" + load_prompt("sheet_outfit_world")
+
+
+def _spec_once(run_dir: Path, prompt: str, photos: list, paths: dict) -> dict:
+    """시트 사양 한 번. 모자라면 그리기 전에 멈춘다."""
+    call = llm.Call("SHEET")
+    log(f"[시트] {call.describe()} 로 사양을 적습니다…")
+    try:
+        text, meta = call(prompt, images=llm.load_images(photos), temperature=0.4)
+    except BaseException as exc:                                      # noqa: BLE001 — SystemExit 도 남긴다(#531)
+        record_error(run_dir, "SHEET", call.provider, call.model, exc)
+        raise
+    record(run_dir, meta)
+    spec = sheetmod.parse_spec(text)
+    bad = sheetmod.gate_spec(spec)
+    if bad:
+        write_json(paths["rejected"], spec)
+        raise SystemExit("시트 사양이 모자랍니다 — 그리기 전에 멈춥니다:\n  - "
+                         + "\n  - ".join(bad))
+    return spec
+
+
+def outfit_check(run_dir: Path, char: dict, spec: dict) -> dict | None:
+    """시트 사양의 옷이 이 세계에 어울리는지 따로 본다. 실패하면 None — 이것 때문에 만들기를 멈추지 않는다."""
+    palette = spec.get("color_palette") or {}
+    shown = {"appearance_en": spec.get("appearance_en", ""),
+             "design_details": spec.get("design_details", []),
+             "props": spec.get("props", []),
+             "outfit_colors": {k: palette.get(k, "") for k in ("outfit_main", "outfit_sub", "accent")},
+             "outfit": (spec.get("outfit") or {}).get("worn", "")}
+    block = input_block(char) + "\n## 시트 사양\n" + json.dumps(shown, ensure_ascii=False, indent=2) + "\n"
+    call = llm.Call("OUTFIT_CHECK")
+    log(f"[시트] {call.describe()} 로 옷이 세계에 맞는지 봅니다…")
+    try:
+        text, meta = call(compose("outfit_check_prompt", block), temperature=0.0)
+    except Exception as exc:                                          # noqa: BLE001
+        record_error(run_dir, "OUTFIT_CHECK", call.provider, call.model, exc)
+        warn(f"[시트] 옷 검수를 못 했습니다 — 사양 그대로 갑니다: {exc}")
+        return None
+    record(run_dir, meta)
+    obj = story.extract_json(text)
+    if not isinstance(obj, dict) or not isinstance(obj.get("fits"), bool):
+        warn("[시트] 옷 검수 답을 못 읽었습니다 — 사양 그대로 갑니다")
+        return None
+    return {"fits": obj["fits"], "wrong": str(obj.get("wrong") or "").strip(),
+            "fix": str(obj.get("fix") or "").strip()}
+
+
+def make_spec(run_dir: Path, char: dict, prompt: str, paths: dict) -> dict:
+    """시트 사양을 쓴다. outfit=world 면 옷 검수를 거치고, 어긋나면 한 번만 다시 쓴다.
+
+    두 번째도 어긋나면 그대로 간다 — 옷 하나로 만들기를 멈추면 돈과 시간만 버린다.
+    무엇을 판단했는지는 sheet_outfit.json 에 남긴다(사양의 판단 · 검수 두 번까지).
+    """
+    photos = char["photos"]
+    spec = _spec_once(run_dir, prompt, photos, paths)
+    if outfit_mode(char) != "world":
+        return spec
+    first = outfit_check(run_dir, char, spec)
+    record_ = {"mode": "world", "first": {"outfit": spec.get("outfit"), "check": first}}
+    if first is not None and not first["fits"]:
+        warn(f"[시트] 옷이 세계와 어긋납니다 — 사양을 한 번 다시 씁니다: {first['wrong']}")
+        again = (prompt + "\n\n## 앞서 쓴 사양의 옷이 이 세계와 어긋났다\n"
+                 f"옷 검수가 짚은 것: {first['wrong']}\n고칠 방향: {first['fix']}\n"
+                 "옷을 이 세계에 맞게 고쳐 사양 전체를 다시 쓴다. 옷 말고는 바꾸지 않는다.")
+        write_text(paths["spec_prompt"].with_name(paths["spec_prompt"].stem + ".2.txt"), again)
+        spec = _spec_once(run_dir, again, photos, paths)
+        record_["second"] = {"outfit": spec.get("outfit"), "check": outfit_check(run_dir, char, spec)}
+    write_json(paths["outfit"], record_)
+    return spec
+
+
 def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
                    note: str, safety: str, paths: dict | None = None) -> None:
     paths = paths or sheet_paths(run_dir)
@@ -2124,7 +2228,7 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
                  f"요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
     if safety:
         block += "\n\n" + safety
-    prompt = compose("sheet_prompt", block)
+    prompt = compose("sheet_prompt", spec_block(char, block))
     write_text(paths["spec_prompt"], prompt)
 
     spec_path = paths["spec"]
@@ -2135,20 +2239,7 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
         log(f"[{paths['label']}] 사양 프롬프트만 썼습니다 -> {paths['spec_prompt']}")
         return
     else:
-        call = llm.Call("SHEET")
-        log(f"[시트] {call.describe()} 로 사양을 적습니다…")
-        try:
-            text, meta = call(prompt, images=llm.load_images(photos), temperature=0.4)
-        except BaseException as exc:                                  # noqa: BLE001 — SystemExit 도 남긴다(#531)
-            record_error(run_dir, "SHEET", call.provider, call.model, exc)
-            raise
-        record(run_dir, meta)
-        spec = sheetmod.parse_spec(text)
-        bad = sheetmod.gate_spec(spec)
-        if bad:
-            write_json(paths["rejected"], spec)
-            raise SystemExit("시트 사양이 모자랍니다 — 그리기 전에 멈춥니다:\n  - "
-                             + "\n  - ".join(bad))
+        spec = make_spec(run_dir, char, prompt, paths)
         write_json(spec_path, spec)
 
     image_prompt = sheetmod.build_prompt(spec, from_photo=bool(photos))
