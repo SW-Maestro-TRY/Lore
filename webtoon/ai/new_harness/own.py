@@ -430,7 +430,7 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: 
         log(f"[{paths['label']}] 사양 프롬프트만 썼습니다 -> {paths['spec_prompt']}")
         return
     else:
-        # 사양 쓰기·옷 검수(outfit=world)는 기본 길과 같은 것을 쓴다(run.make_spec).
+        # 사양 쓰기(옷 판단 포함, outfit=world)는 기본 길과 같은 것을 쓴다(run.make_spec).
         spec = R.make_spec(run_dir, char, prompt, paths)
         R.write_json(spec_path, spec)
 

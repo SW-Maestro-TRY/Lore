@@ -2121,8 +2121,8 @@ def _sheet_with_retry(run_dir: Path, char: dict, paths: dict, attempt) -> None:
 # 현대옷을 입은 주인공이 나왔다 — 시트 사양 단계가 세계를 보고도 「사진에 보이는 것을 바꾸지 마라」를 따랐다.
 #   keep  — 사진 옷 그대로. 지금까지와 같다(기본값).
 #   world — 사양 단계가 사진 옷이 이 세계에 어울리는지 먼저 판단하고, 안 어울리면 이 세계에서 입을 옷으로
-#           다시 짓는다(얼굴·머리·체형은 그대로, 옷의 주요 색과 눈에 띄는 특징은 옮긴다). 그다음 옷 검수
-#           (OUTFIT_CHECK)가 사양 글만 보고 한 번 더 판단하고, 어긋나면 사양을 한 번 다시 쓴다.
+#           다시 짓는다(얼굴·머리·체형은 그대로, 옷의 주요 색과 눈에 띄는 특징은 옮긴다). 따로 부르는
+#           옷 검수는 없다 — 사양 단계 한 번 안에서 판단하고 짓는다.
 # 입력(character.json 의 outfit)이 먼저, 없으면 NH_OUTFIT, 그것도 없으면 keep.
 # 사진이 없거나 장르·설정집이 없으면 맞출 세계도 베낄 옷도 없어 keep 과 같다.
 OUTFIT_MODES = ("keep", "world")
@@ -2165,53 +2165,14 @@ def _spec_once(run_dir: Path, prompt: str, photos: list, paths: dict) -> dict:
     return spec
 
 
-def outfit_check(run_dir: Path, char: dict, spec: dict) -> dict | None:
-    """시트 사양의 옷이 이 세계에 어울리는지 따로 본다. 실패하면 None — 이것 때문에 만들기를 멈추지 않는다."""
-    palette = spec.get("color_palette") or {}
-    shown = {"appearance_en": spec.get("appearance_en", ""),
-             "design_details": spec.get("design_details", []),
-             "props": spec.get("props", []),
-             "outfit_colors": {k: palette.get(k, "") for k in ("outfit_main", "outfit_sub", "accent")},
-             "outfit": (spec.get("outfit") or {}).get("worn", "")}
-    block = input_block(char) + "\n## 시트 사양\n" + json.dumps(shown, ensure_ascii=False, indent=2) + "\n"
-    call = llm.Call("OUTFIT_CHECK")
-    log(f"[시트] {call.describe()} 로 옷이 세계에 맞는지 봅니다…")
-    try:
-        text, meta = call(compose("outfit_check_prompt", block), temperature=0.0)
-    except Exception as exc:                                          # noqa: BLE001
-        record_error(run_dir, "OUTFIT_CHECK", call.provider, call.model, exc)
-        warn(f"[시트] 옷 검수를 못 했습니다 — 사양 그대로 갑니다: {exc}")
-        return None
-    record(run_dir, meta)
-    obj = story.extract_json(text)
-    if not isinstance(obj, dict) or not isinstance(obj.get("fits"), bool):
-        warn("[시트] 옷 검수 답을 못 읽었습니다 — 사양 그대로 갑니다")
-        return None
-    return {"fits": obj["fits"], "wrong": str(obj.get("wrong") or "").strip(),
-            "fix": str(obj.get("fix") or "").strip()}
-
-
 def make_spec(run_dir: Path, char: dict, prompt: str, paths: dict) -> dict:
-    """시트 사양을 쓴다. outfit=world 면 옷 검수를 거치고, 어긋나면 한 번만 다시 쓴다.
+    """시트 사양을 쓴다. 옷 판단은 따로 부르지 않고 사양 단계가 쓰면서 한다(outfit=world).
 
-    두 번째도 어긋나면 그대로 간다 — 옷 하나로 만들기를 멈추면 돈과 시간만 버린다.
-    무엇을 판단했는지는 sheet_outfit.json 에 남긴다(사양의 판단 · 검수 두 번까지).
+    사양이 내린 판단(사진 옷 · 어울리는지 · 이유 · 입는 옷)은 sheet_outfit.json 에 남긴다.
     """
-    photos = char["photos"]
-    spec = _spec_once(run_dir, prompt, photos, paths)
-    if outfit_mode(char) != "world":
-        return spec
-    first = outfit_check(run_dir, char, spec)
-    record_ = {"mode": "world", "first": {"outfit": spec.get("outfit"), "check": first}}
-    if first is not None and not first["fits"]:
-        warn(f"[시트] 옷이 세계와 어긋납니다 — 사양을 한 번 다시 씁니다: {first['wrong']}")
-        again = (prompt + "\n\n## 앞서 쓴 사양의 옷이 이 세계와 어긋났다\n"
-                 f"옷 검수가 짚은 것: {first['wrong']}\n고칠 방향: {first['fix']}\n"
-                 "옷을 이 세계에 맞게 고쳐 사양 전체를 다시 쓴다. 옷 말고는 바꾸지 않는다.")
-        write_text(paths["spec_prompt"].with_name(paths["spec_prompt"].stem + ".2.txt"), again)
-        spec = _spec_once(run_dir, again, photos, paths)
-        record_["second"] = {"outfit": spec.get("outfit"), "check": outfit_check(run_dir, char, spec)}
-    write_json(paths["outfit"], record_)
+    spec = _spec_once(run_dir, prompt, char["photos"], paths)
+    if outfit_mode(char) == "world":
+        write_json(paths["outfit"], {"mode": "world", "outfit": spec.get("outfit")})
     return spec
 
 

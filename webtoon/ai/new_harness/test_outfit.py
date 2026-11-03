@@ -97,78 +97,45 @@ def test_sheet_prompt_drops_photo_outfit_only_when_changed():
     assert "NOT the one from the source photo" in changed and "outfit and material texture" not in changed
 
 
-def _fake(monkey_specs, checks):
-    calls = {"spec": 0, "check": 0, "prompts": []}
-    old = (R._spec_once, R.outfit_check)
+def _fake(specs):
+    calls = {"spec": 0}
+    old = R._spec_once
 
     def spec_once(run_dir, prompt, photos, paths):
-        calls["prompts"].append(prompt)
         calls["spec"] += 1
-        return monkey_specs[calls["spec"] - 1]
+        return specs[calls["spec"] - 1]
 
-    def check(run_dir, char, spec):
-        calls["check"] += 1
-        return checks[calls["check"] - 1]
-
-    R._spec_once, R.outfit_check = spec_once, check
+    R._spec_once = spec_once
     return calls, old
 
 
-def _restore(old):
-    R._spec_once, R.outfit_check = old
-
-
-def test_keep_calls_spec_once_without_check():
+def test_keep_calls_spec_once_without_record():
     _env(None)
     d = Path(tempfile.mkdtemp())
-    calls, old = _fake([_spec()], [])
+    calls, old = _fake([_spec()])
     try:
         R.make_spec(d, _char(), "프롬프트", R.sheet_paths(d))
     finally:
-        _restore(old)
-    assert calls["spec"] == 1 and calls["check"] == 0
+        R._spec_once = old
+    assert calls["spec"] == 1
     assert not (d / "sheet_outfit.json").exists()
 
 
-def test_world_rewrites_once_when_check_fails():
+def test_world_judges_in_spec_once_and_records():
+    """옷 판단은 사양 한 번 안에서 — 따로 부르는 검수도, 다시 쓰기도 없다."""
     _env(None)
     d = Path(tempfile.mkdtemp())
-    bad = {"fits": False, "wrong": "청바지", "fix": "모직 바지"}
-    good = {"fits": True, "wrong": "", "fix": ""}
-    calls, old = _fake([_spec(fits=False), _spec(fits=False)], [bad, good])
+    calls, old = _fake([_spec(fits=False)])
     try:
         R.make_spec(d, _char(outfit="world"), "프롬프트", R.sheet_paths(d))
     finally:
-        _restore(old)
-    assert calls["spec"] == 2 and calls["check"] == 2
-    assert "청바지" in calls["prompts"][1] and "모직 바지" in calls["prompts"][1]
-    saved = R.read_json(d / "sheet_outfit.json")
-    assert saved["first"]["check"] == bad and saved["second"]["check"] == good
-    assert (d / "sheet_spec_prompt.2.txt").exists()
-
-
-def test_world_stops_after_one_rewrite():
-    _env(None)
-    d = Path(tempfile.mkdtemp())
-    bad = {"fits": False, "wrong": "청바지", "fix": "모직 바지"}
-    calls, old = _fake([_spec(fits=False), _spec(fits=False)], [bad, bad])
-    try:
-        R.make_spec(d, _char(outfit="world"), "프롬프트", R.sheet_paths(d))
-    finally:
-        _restore(old)
-    assert calls["spec"] == 2 and calls["check"] == 2
-
-
-def test_world_passes_when_check_fails_to_answer():
-    _env(None)
-    d = Path(tempfile.mkdtemp())
-    calls, old = _fake([_spec(fits=True)], [None])
-    try:
-        R.make_spec(d, _char(outfit="world"), "프롬프트", R.sheet_paths(d))
-    finally:
-        _restore(old)
+        R._spec_once = old
     assert calls["spec"] == 1
-    assert R.read_json(d / "sheet_outfit.json")["first"]["check"] is None
+    saved = R.read_json(d / "sheet_outfit.json")
+    assert saved["mode"] == "world" and saved["outfit"]["fits"] is False
+    assert saved["outfit"]["worn"] == "긴 모직 코트"
+    assert not (d / "sheet_spec_prompt.2.txt").exists()
+    assert not hasattr(R, "outfit_check")
 
 
 def test_dry_run_prompts_carry_world_block():
