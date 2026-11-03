@@ -9,6 +9,9 @@ import java.time.Duration;
 public class DiaryModelConfiguration {
     @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder;
+    /** OpenAI 기본 주소(비면 실제 주소). dev 벤치마크 흉내 서버용 — {@link com.lore.zzal.generation.client.OpenAiBaseUrl}. */
+    @Value("${app.zzal.openai.base-url:}")
+    private String openAiBaseUrl;
     private com.lore.zzal.generation.client.ProviderUsageRecorder usage() {
         return usageRecorder == null ? com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP : usageRecorder.forFeature("diary");
     }
@@ -24,6 +27,6 @@ public class DiaryModelConfiguration {
             @Value("${zzal.diary.timeout-ms:15000}")long timeoutMs,
             @Value("${zzal.diary.max-completion-tokens:}")Integer maxCompletionTokens){
         if(apiKey==null||apiKey.isBlank())throw new IllegalStateException("Diary explicitly enabled but existing ZZAL_OPENAI_API_KEY is missing");
-        return new ChatLineDiaryModel(new OpenAiChatLineClient(apiKey,effort,maxCompletionTokens,usage()),model,Duration.ofMillis(timeoutMs));
+        return new ChatLineDiaryModel(new OpenAiChatLineClient(apiKey,effort,maxCompletionTokens,usage(),openAiBaseUrl),model,Duration.ofMillis(timeoutMs));
     }
 }

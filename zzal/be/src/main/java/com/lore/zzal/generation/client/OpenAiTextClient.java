@@ -33,7 +33,7 @@ import java.util.List;
 public class OpenAiTextClient implements TextClient {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiTextClient.class);
-    private static final String ENDPOINT = "https://api.openai.com/v1/chat/completions";
+    private static final String PATH = "/v1/chat/completions";
 
     /**
      * gpt-5 텍스트 단가 (USD per 1M) — 2026-09-02 공식 가격표 확인.
@@ -65,9 +65,13 @@ public class OpenAiTextClient implements TextClient {
         this(storage, apiKey, maxCompletionTokens, ProviderUsageRecorder.NO_OP);
     }
     public OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
+        this(storage, apiKey, maxCompletionTokens, recorder, null);
+    }
+    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. */
+    public OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,ProviderUsageRecorder recorder,String baseUrl) {
         this(storage, apiKey, maxCompletionTokens, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(20)).followRedirects(HttpClient.Redirect.NEVER).build(),
-                URI.create(ENDPOINT), Duration.ofSeconds(120),recorder);
+                OpenAiBaseUrl.endpoint(baseUrl, PATH), Duration.ofSeconds(120),recorder);
     }
 
     OpenAiTextClient(S3Storage storage, String apiKey, Integer maxCompletionTokens,

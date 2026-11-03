@@ -24,8 +24,9 @@ public class StageSpeechBatchGenerator {
             @Value("${app.zzal.openai.api-key:}") String key,
             @Value("${app.zzal.chat.model:gpt-5.6-luna}") String model,
             @Value("${app.zzal.chat.reasoning-effort:none}") String effort,
-            com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder) {
-        this(enabled && key != null && !key.isBlank() ? new OpenAiChatLineClient(key, effort, 3200, usageRecorder.forFeature("tutorial_batch")) : null,
+            com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder,
+            @Value("${app.zzal.openai.base-url:}") String openAiBaseUrl) {
+        this(enabled && key != null && !key.isBlank() ? new OpenAiChatLineClient(key, effort, 3200, usageRecorder.forFeature("tutorial_batch"), openAiBaseUrl) : null,
                 model, Duration.ofSeconds(12));
     }
 
