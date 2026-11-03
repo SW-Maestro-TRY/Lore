@@ -618,3 +618,21 @@
   .wt .wt-browse-list button { flex: none; }
   .wt .wt-browse-list button:nth-child(n + 5) { display: none; }
 }
+
+/* 세계 줄 · 웹툰 둘러보기 머리 — 시안처럼 작은 민트 이름표(.num) + 오른쪽 「전부 보기 ›」 */
+.wt .wt-play-row-h h2 { font-size: 12px; font-weight: 700; color: #7fd6c2; letter-spacing: .08em; }
+.wt .wt-play-row-h button { font-size: 13px; }
+@media (max-width: 767px) {
+  .wt .wt-play-row-h h2 { font-size: 11px; }
+  .wt .wt-play-row-h button { font-size: 12px; }
+  .wt .wt-play-row { margin-top: 18px; }
+}
+/* 폰 첫 칸 — 시안처럼 글 높이만큼만(그림은 뒤에 깐다). 전에는 420px 고정이라 세계 줄이 첫 화면 밖으로 밀렸다 */
+@media (max-width: 767px) {
+  .wt .wt-gallery-main { min-height: 0; }
+  .wt .wt-gallery-main > img { position: absolute; inset: 0; }
+  .wt .wt-gallery-copy { position: relative; padding: 40px 18px 18px; }
+  .wt .wt-gallery-copy h1 { font-size: 26px; margin: 10px 0 12px; }
+  .wt .wt-gallery-sub { margin: 0 0 16px; font-size: 13px; }
+  .wt .wt-gallery-cta .btn { height: 44px; }
+}
