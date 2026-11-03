@@ -22,7 +22,7 @@ import PayNotReady from "../../ui/PayNotReady";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myCommented, myLikes, myTrash, readAllowance, recentRuns,
+  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myCommented, myLikes, myPlayRuns, type PlayRunCard, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, removeCharacter, characterTrash, restoreCharacter, type TrashCharacter, setNotifySetting, visibilityOf, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
   mySurveyStatus, type SurveyStatus, mySeriesDrafts, type SeriesDraftCard,
@@ -62,6 +62,9 @@ registerDict({
   "크레딧": { en: "Credits", ja: "クレジット", zh: "点数" },
   "한 편 {n} C": { en: "{n} C per episode", ja: "1話 {n} C", zh: "每话 {n} C" },
   "계정": { en: "ACCOUNT", ja: "アカウント", zh: "账号" },
+  "내 체험": { en: "My plays", ja: "マイ体験", zh: "我的体验" },
+  "아직 체험한 만화가 없어요.": { en: "No plays yet.", ja: "まだ体験したマンガはありません。", zh: "还没有体验过的漫画。" },
+  "세계관 체험하기": { en: "Try a world", ja: "世界観を体験する", zh: "体验世界观" },
   "내 웹툰": { en: "My webtoons", ja: "マイウェブトゥーン", zh: "我的漫画" },
   "모두 보기": { en: "See all", ja: "すべて見る", zh: "查看全部" },
   "새 캐릭터 만들기": { en: "New character", ja: "新しいキャラクター", zh: "新建角色" },
@@ -195,7 +198,7 @@ registerDict({
 });
 
 const TAB_TITLE = {
-  works: "내 웹툰", chars: "내 캐릭터", liked: "찜한 웹툰", commented: "댓글 단 웹툰", settings: "설정", trash: "휴지통", lang: "언어",
+  works: "내 웹툰", chars: "내 캐릭터", plays: "내 체험", liked: "찜한 웹툰", commented: "댓글 단 웹툰", settings: "설정", trash: "휴지통", lang: "언어",
 } as const;
 
 export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "settings" | "contact" }) {
@@ -208,7 +211,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
      구조(@common/mypage/MyPage 의 Section)로 옮겨도 된다. */
   /* home = 마이페이지 첫 화면(웹툰 몇 개 · 만드는 중 · 찜 · 내 캐릭터). 왼쪽 「웹툰」 묶음의 네 칸
      (내 웹툰 · 내 캐릭터 · 찜한 웹툰 · 댓글 단 웹툰)은 각각 전부 펼친 목록이다 — 웹툰이 많아져도 첫 화면은 그대로. */
-  const [tab, setTab] = useState<"home" | "works" | "chars" | "liked" | "commented" | "settings" | "trash" | "lang">(initialTab === "settings" ? "settings" : "home");
+  const [tab, setTab] = useState<"home" | "works" | "chars" | "plays" | "liked" | "commented" | "settings" | "trash" | "lang">(initialTab === "settings" ? "settings" : "home");
   const allWorks = tab === "works";
   /* 왼쪽 메뉴로 화면을 바꾸면 맨 위부터 — 그리고 나서 높이가 바뀌어도 위에서 시작한다 */
   useEffect(() => {
@@ -258,6 +261,9 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   /* 최근 본 것(브라우저)과 찜한 것(계정) — #247. 최근 본 것은 둘러보기 목록에서 카드를 찾아 쓴다. */
   const [recent, setRecent] = useState<RunCard[]>([]);
   const [liked, setLiked] = useState<RunCard[]>([]);
+  /* 세계관 체험으로 만든 만화 — 서버 길(/play/runs/mine)이 없으면 빈 목록 */
+  const [plays, setPlays] = useState<PlayRunCard[]>([]);
+  useEffect(() => { myPlayRuns().then((r) => setPlays(r.runs || [])).catch(() => setPlays([])); }, []);
   useEffect(() => {
     const ids = recentRuns();
     if (ids.length === 0) { setRecent([]); return; }
@@ -493,6 +499,9 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             <button type="button" className={tab === "chars" ? "on" : ""} onClick={() => { setTab("chars"); window.scrollTo({ top: 0 }); }}>
               <span className="wt-my-rowname"><IconFace className="wt-my-ico" />{t("내 캐릭터")}</span> <span className="dim">{chars.length}</span><IconChevronRight className="wt-my-chev" />
             </button>
+            <button type="button" className={tab === "plays" ? "on" : ""} onClick={() => { setTab("plays"); window.scrollTo({ top: 0 }); }}>
+              <span className="wt-my-rowname"><IconBook className="wt-my-ico" />{t("내 체험")}</span> <span className="dim">{plays.length}</span><IconChevronRight className="wt-my-chev" />
+            </button>
             {isAuthenticated && (
               <>
                 <button type="button" className={tab === "liked" ? "on" : ""} onClick={() => { setTab("liked"); window.scrollTo({ top: 0 }); }}>
@@ -563,6 +572,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             {tab === "works" && <span className="dim">{runs.length}</span>}
             {tab === "chars" && <span className="dim">{chars.length}</span>}
             {tab === "liked" && <span className="dim">{liked.length}</span>}
+            {tab === "plays" && <span className="dim">{plays.length}</span>}
             {tab === "commented" && <span className="dim">{commented.length}</span>}
             {tab === "trash" && <span className="dim">{trash.length + charTrash.length}</span>}
           </button>
@@ -804,6 +814,39 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                 </div>
               )}
             </section>
+          </>
+        )}
+
+        {tab === "plays" && (
+          /* 내 체험 — 세계관 체험으로 만든 만화. 누르면 체험 만화 화면(아래로 다음 사건이 이어진다) */
+          <>
+            <div className="wt-my-head">
+              <div><h2>{t("내 체험")} <span className="dim wt-my-count">{plays.length}</span></h2></div>
+              <div className="wt-my-headacts"><button type="button" className="btn btn-w" onClick={() => go("play")}>{t("세계관 체험하기")}</button></div>
+            </div>
+            {plays.length === 0 ? (
+              <div className="wt-my-empty">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={louArt("empty")} alt="" aria-hidden="true" />
+                <b>{t("아직 체험한 만화가 없어요.")}</b>
+              </div>
+            ) : (
+              <div className="wt-my-grid">
+                {plays.map((r) => (
+                  <button type="button" key={r.run_id} className="card wt-my-work wt-my-runcard"
+                          onClick={() => go("play", { world: r.world_id, ep: r.event_id, stage: "done", run: r.run_id })}>
+                    <span className="wt-my-cover">
+                      {r.cover_page ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" />
+                      ) : <span className="wt-my-charnoimg" aria-hidden="true" />}
+                    </span>
+                    <b>{r.event_title || r.title}</b>
+                    <span className="muted">{[r.world_name, r.character].filter(Boolean).join(" · ")}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         )}
 

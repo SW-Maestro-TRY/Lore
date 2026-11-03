@@ -1,6 +1,6 @@
 package com.lore.webtoon.play;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import com.lore.webtoon.lorebook.LoreBook;
@@ -17,7 +17,12 @@ class PlayCatalogTest {
         assertFalse(worlds.isEmpty());
         for (var world : worlds) {
             var book = LoreBook.clean((Map<String, Object>) world.get("lorebook"), true);
-            assertEquals(7, ((List<?>) book.get("entries")).size());
+            // 운영 세계는 항목을 나눠 둔 것(좀비 7개)도, 고정 설정 글 하나로 둔 것(하은이 만든 arcana · edelia)도 있다
+            Object fixed = ((List<Map<String, Object>>) book.getOrDefault("books", List.of(book))).stream()
+                    .map(b -> b.get("fixed_settings")).filter(v -> v instanceof String x && !x.isBlank()).findFirst().orElse(book.get("fixed_settings"));
+            boolean hasEntries = !((List<?>) book.getOrDefault("entries", List.of())).isEmpty();
+            boolean hasFixed = fixed instanceof String f && !f.isBlank();
+            assertTrue(hasEntries || hasFixed, world.get("id") + " 설정집이 비었다");
             assertFalse(((List<?>) world.get("events")).isEmpty());
         }
     }

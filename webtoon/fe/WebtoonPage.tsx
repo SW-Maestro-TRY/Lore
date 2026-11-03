@@ -84,7 +84,7 @@ interface Route {
   /** 세계관 체험. */
   world?: string;
   ep?: string;
-  stage?: "char" | "making" | "done";
+  stage?: "char" | "making" | "done" | "stories";
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -111,7 +111,7 @@ function routeOf(search: URLSearchParams): Route {
     style: search.get("style") || undefined,
     world: search.get("world") || undefined,
     ep: search.get("ep") || undefined,
-    stage: (["char", "making", "done"] as const).find((v) => v === search.get("stage")),
+    stage: (["char", "making", "done", "stories"] as const).find((v) => v === search.get("stage")),
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
@@ -271,7 +271,7 @@ function WebtoonScreens() {
       {route.view === "landing" && <Landing go={go} />}
       {route.view === "play" && <Play go={go} authenticated={authenticated} world={route.world} ep={route.ep} stage={route.stage} job={route.job} run={route.run} character={route.character} />}
       {route.view === "make" && <MakeChoice go={go} />}
-      {route.view === "world-new" && <WorldNew go={go} />}
+      {route.view === "world-new" && <WorldNew go={go} world={route.world} />}
       {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
         <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated}
