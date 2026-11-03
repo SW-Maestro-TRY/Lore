@@ -10,7 +10,7 @@ export interface PlayPerson { id?: string; name: string; role?: string; desc?: s
 export interface PlayWorld { id: string; name: string; genre: string; one: string; cover_url: string | null; spot: string; cast: PlayPerson[]; events: PlayEvent[]; examples?: string[]; mine?: boolean; rule?: string }
 
 /* 세계관 만들기의 글 — 저장 API(POST /play/worlds)에 그대로 보낸다 */
-export interface DraftPerson { id: string; name: string; role: string; desc: string; face?: string }
+export interface DraftPerson { id: string; name: string; role: string; desc: string; face?: string; character_id?: string }
 export interface DraftEvent { id: string; title: string; line: string; situation: string; place: string; spot: string; cast: string[]; examples: string[]; example_people?: DraftPerson[]; image?: string }
 export interface WorldDraft { id?: string; cover?: string; name: string; genre: string; one: string; rule: string; cast: DraftPerson[]; events: DraftEvent[]; examples: string[]; visibility: "public" | "private"; lorebook_id?: string }
 
@@ -85,6 +85,6 @@ export function fromServer(w: ServerWorld, d: WorldDraft): WorldDraft {
     visibility: w.visibility || d.visibility, lorebook_id: w.lorebook_id || d.lorebook_id, examples: w.examples || d.examples, cast,
     /* 운영 세계는 사건 인물을 이름으로 적어 둔다 — 고치는 칸은 인물 id 로 고르니 이름을 id 로 바꾼다 */
     events: (w.events || []).map((e) => ({ id: e.id, title: e.title, line: e.line || "", situation: e.situation || "", place: e.place || "", spot: e.spot || "", cast: (e.cast || []).map((c) => cast.find((p) => p.name === c)?.id || c), examples: e.examples || [], image: e.image_url || undefined,
-      example_people: (e.example_people || []).map((x) => ({ id: x.id || x.name, name: x.name, role: x.role || "", desc: x.desc || "", face: x.face_url || undefined })) })),
+      example_people: (e.example_people || []).map((x) => ({ id: x.id || x.name, name: x.name, role: x.role || "", desc: x.desc || "", face: x.face_url || undefined, character_id: x.character_id })) })),
   };
 }
