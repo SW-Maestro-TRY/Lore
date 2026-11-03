@@ -128,7 +128,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
               <p className="sit">{t(e.situation)}</p>
               {w.cast.length > 0 && (
                 <div><p className="k">{t("등장인물")}</p>
-                  <div className="cast">{w.cast.map((p) => <span key={p.name} className="pill"><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</span>)}</div>
+                  <div className="cast">{w.cast.map((p) => <span key={p.name} className="pl-pill"><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</span>)}</div>
                 </div>
               )}
             </div>
