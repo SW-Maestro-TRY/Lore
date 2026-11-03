@@ -188,7 +188,7 @@ public class PlayController {
         ResponseEntity<Map<String, Object>> started = jobs.create(request, new JobService.CreateRequest(
                 name, null, (String) world.get("genre"), null, form.style(), null, null, null,
                 form.agreeIp(), false, form.uid(), form.characterId(), null, form.quality(), form.language(),
-                null, situation, null, null, lorebook, (List<String>) null));
+                null, situation, null, null, lorebook, (List<String>) null, true));
         if (started.getBody() != null && started.getBody().get("id") instanceof String jobId) {
             played.mark(jobId, form.worldId(), form.eventId());
         }
