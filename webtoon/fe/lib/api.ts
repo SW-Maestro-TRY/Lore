@@ -381,6 +381,17 @@ export function listPlayWorlds<T>(): Promise<{ worlds: T[] }> {
   return call("/play/worlds");
 }
 
+/** 세계관 체험으로 만든 만화 — 일반 작품 카드에 어느 세계 · 사건이었는지가 붙는다. */
+export type PlayRunCard = RunCard & { world_id: string; world_name: string; event_id: string; event_title: string };
+/** 내가 체험한 만화(최근 순). 게스트는 브라우저 번호(uid)로 찾는다. */
+export function myPlayRuns(): Promise<{ runs: PlayRunCard[] }> {
+  return call("/play/runs/mine");
+}
+/** 이 사건에서 다른 사람들이 만든 만화(공개 · 완성된 것만). */
+export function eventPlayRuns(eventId: string): Promise<{ runs: PlayRunCard[] }> {
+  return call(`/play/events/${encodeURIComponent(eventId)}/runs`);
+}
+
 /** 세계관 만들기 · AI 로 채우기 — 바로 { id, making:"running" } 을 주고 뒤에서 짓는다. id 를 넣으면 다시 만들기.
  *  빈 칸이 채워지고 examples 에 새로 그린 캐릭터 둘이 들어간다. 끝났는지는 readPlayWorld 의 making 이 "idle" 인지로 본다. */
 export function makePlayWorld(body: { id?: string; draft: object; lorebook_id?: string; note?: string }): Promise<{ id: string; making: string }> {

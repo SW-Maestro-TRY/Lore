@@ -2,7 +2,7 @@
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
 import { useEffect, useState } from "react";
-import { cancelJob, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
+import { cancelJob, coverUrl, eventPlayRuns, type PlayRunCard, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare } from "../../ui/Icons";
@@ -136,6 +136,9 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
 function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const t = useT();
   const [who, setWho] = useState<PlayPerson | null>(null);
+  /* 이 사건에서 다른 사람들이 만든 만화 — 서버 길이 없거나 아직 없으면 줄 자체를 안 그린다 */
+  const [made, setMade] = useState<PlayRunCard[]>([]);
+  useEffect(() => { eventPlayRuns(e.id).then((r) => setMade(r.runs || [])).catch(() => setMade([])); }, [e.id]);
   const close = () => go("play", { world: w.id });
   const put = () => go("play", { world: w.id, ep: e.id, stage: "char" });
   /* 이 사건에 나오는 인물만 — 만든 사람이 사건마다 고른 것(이름이나 id). 고른 기록이 아예 없으면(옛 자료) 세계 전체 */
@@ -175,6 +178,17 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
               {cast.length > 0 && (
                 <div><p className="k">{t("등장인물")}</p>
                   <div className="cast">{cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
+                </div>
+              )}
+              {made.length > 0 && (
+                <div className="made"><p className="k">{t("이 사건에서 만든 만화")}</p>
+                  <div className="row">{made.map((r) => (
+                    <button type="button" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
+                      <b>{r.character}</b>
+                    </button>
+                  ))}</div>
                 </div>
               )}
             </div>
