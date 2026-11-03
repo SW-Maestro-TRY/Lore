@@ -129,6 +129,11 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Query("delete from InviteCode c where c.userId = :userId")
     int deleteInviteCode(@Param("userId") Long userId);
 
+    /** API 호출 기록(2026-11-03) — 요청 본문에 이 사람이 적은 글이 있다. */
+    @Modifying
+    @Query("delete from ApiLog a where a.userId = :userId")
+    int deleteApiLogs(@Param("userId") Long userId);
+
     @Modifying
     @Query("delete from SeriesDraft d where d.ownerId = :userId")
     int deleteSeriesDrafts(@Param("userId") Long userId);
