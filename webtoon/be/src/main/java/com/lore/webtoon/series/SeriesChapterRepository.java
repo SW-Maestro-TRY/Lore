@@ -10,4 +10,6 @@ public interface SeriesChapterRepository extends JpaRepository<SeriesChapter, St
     int lockSeriesCredit(@org.springframework.data.repository.query.Param("owner") Long owner);
     List<SeriesChapter> findByRootJobOrderByEpisodeNumberAsc(String rootJob);
     Optional<SeriesChapter> findByRootJobAndRequestToken(String rootJob, String token);
+    /** 이 화에서 이어 만든 다음 화가 있나 — 출석 알림이 이미 만든 화를 또 알리지 않게(AttendRemindService). */
+    boolean existsBySourceJob(String sourceJob);
 }

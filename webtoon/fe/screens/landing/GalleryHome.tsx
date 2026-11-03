@@ -1,15 +1,16 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Go } from "../../lib/nav";
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import "./GalleryHome.css";
 import IntroReel from "./IntroReel";
+import PlayIntro from "./PlayIntro";
 import CtaBand from "./CtaBand";
 import { EventBanner } from "../event/EventBits";
 import { loadWorlds, type PlayWorld } from "../play/playData";
 const asset = (path: string) => `/static/gallery/${path}`;
-/* 「다른 장르의 웹툰」 — 예시 작품에서 장르가 겹치지 않게 여덟 편. 표지는 각 작품 1쪽 */
+/* 「웹툰 둘러보기」 줄 — 예시 작품에서 장르가 겹치지 않게 여덟 편. 표지는 각 작품 1쪽 */
 const works = [
   { id: "20261003T213320-5297d4", title: "가면을 쓰고 온 옛 약혼자", genre: "로맨스 판타지", cover: "covers/ex-20261003T213320-5297d4.jpg" },
   { id: "20260926T132032-278bf7", title: "이름을 빌린 검", genre: "무협", cover: "covers/ex-20260926T132032-278bf7.jpg" },
@@ -20,10 +21,9 @@ const works = [
   { id: "20261003T133334-b5ccce", title: "카페 사장에게는 비밀이 많다", genre: "현대 느와르", cover: "covers/ex-20261003T133334-b5ccce.jpg" },
   { id: "20261012T065511-71abb3", title: "용사 갱신 시험에 끼어든 마왕", genre: "판타지", cover: "covers/ex-20261012T065511-71abb3.jpg" },
 ];
-/* 첫 칸 옆 세 칸 — 위 넓은 칸 하나, 아래 세로 칸 둘 */
-const heroTiles = [
-  { img: "hero/masked-face.jpg", pos: "center top", run: works[0].id, title: works[0].title, genre: works[0].genre, alt: "가면을 쓴 옛 약혼자의 얼굴 컷" },
-  /* 아래 두 칸은 예시 작품에서 — 하나는 예쁜 그림, 하나는 전투씬 */
+/* 첫 칸 옆 세 칸 — 위 넓은 칸은 세계관(서버의 첫 세계), 아래 세로 칸 둘은 예시 웹툰 장면.
+ * 웹툰만 있으면 세계관 체험이 첫 화면에서 안 보인다(하은, 2026-11-03). 폰에서는 세 칸 모두 숨긴다. */
+const heroWebtoons = [
   { img: "hero/rose-moon.jpg", pos: "30% center", run: "20260919T153128-5f3882", title: "[그림자 위의 장미]", genre: "로맨스 판타지", alt: "달빛 아래 은발 영애가 편지를 든 컷" },
   { img: "hero/mage-battle.jpg", pos: "30% center", run: "20260922T175955-6d4a46", title: "마법사의 하루는 반복된다", genre: "판타지 · 전투", alt: "마법진 위에서 마법을 쏘는 마법사 컷" },
 ];
@@ -80,28 +80,6 @@ export default function GalleryHome({
 }) {
   const t = useT();
   const [sceneAt, setSceneAt] = useState(0);
-  /* 「다른 장르의 웹툰」 — 여덟 편 중 네 편만 보이고, 몇 초마다 네 편이 한꺼번에 옆으로 넘어간다.
-   * 넘어갈 때는 지금 안 보이던 네 편을 섞어서 보여 준다(하나씩 바뀌면 정신없다는 피드백). */
-  const SHOWN = 4;
-  const [shown, setShown] = useState<number[]>(() => [0, 1, 2, 3]);
-  const [turn, setTurn] = useState(0);
-  const holdRef = useRef(false);
-  const shownRef = useRef<number[]>([0, 1, 2, 3]);
-  useEffect(() => {
-    const mix = (a: number[]) => [...a].sort(() => Math.random() - 0.5);
-    // 처음 네 편도 섞는다(서버 렌더와 어긋나지 않게 화면에 붙은 뒤에)
-    shownRef.current = mix(works.map((_, i) => i)).slice(0, SHOWN);
-    setShown(shownRef.current);
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const h = window.setInterval(() => {
-      if (holdRef.current || document.hidden) return;
-      const rest = works.map((_, i) => i).filter((i) => !shownRef.current.includes(i));
-      shownRef.current = mix(rest.length >= SHOWN ? rest : works.map((_, i) => i)).slice(0, SHOWN);
-      setShown(shownRef.current);
-      setTurn((n) => n + 1);
-    }, 6000);
-    return () => window.clearInterval(h);
-  }, []);
   // 다시 그리기 예시 — 실제로 그리지 않고, 시안처럼 「그리는 중」 뒤 예시 컷으로 바꿔 보여 준다
   const [reasons, setReasons] = useState<string[]>(["표정이 안 맞아요"]);
   const [note, setNote] = useState("무대 문 앞이라 조금 더 긴장한 표정으로");
@@ -149,13 +127,21 @@ export default function GalleryHome({
               </div>
             </div>
           </div>
-          {/* 확정 시안 — 옆 세 칸은 표지가 아니라 실제 웹툰 장면 */}
-          {heroTiles.map((tile, i) => (
-            <button
-              key={tile.img}
-              className={i === 0 ? "wt-gallery-panel" : "wt-gallery-cover"}
-              onClick={() => go("result", { run: tile.run })}
-            >
+          {/* 옆 세 칸 — 위는 세계관, 아래 둘은 실제 웹툰 장면 */}
+          <button
+            className="wt-gallery-panel wt-gallery-world"
+            onClick={() => go("play", worlds[0] ? { world: worlds[0].id } : {})}
+          >
+            {worlds[0]?.cover_url && <img src={worlds[0].cover_url} alt="" style={{ objectPosition: "center 30%" }} />}
+            {worlds[0] && (
+              <span>
+                {t(worlds[0].name)}
+                <small>{t("세계관 체험")}</small>
+              </span>
+            )}
+          </button>
+          {heroWebtoons.map((tile) => (
+            <button key={tile.img} className="wt-gallery-cover" onClick={() => go("result", { run: tile.run })}>
               <img src={asset(tile.img)} alt={t(tile.alt)} style={{ objectPosition: tile.pos }} />
               <span>
                 {tile.title}
@@ -179,6 +165,22 @@ export default function GalleryHome({
             ))}
           </div>
         </section>}
+        <section className="wt-play-row wt-browse-row">
+          <div className="wt-play-row-h">
+            <h2>{t("웹툰 둘러보기")}</h2>
+            <button type="button" onClick={() => go("works")}>{t("전부 보기")} ›</button>
+          </div>
+          <div className="wt-browse-list">
+            {works.map((w) => (
+              <button type="button" key={w.id} onClick={() => go("result", { run: w.id })}>
+                <img src={asset(w.cover)} alt="" />
+                <b>{w.title}</b>
+                <span>{t(w.genre)}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+        <PlayIntro go={go} worlds={worlds} />
         <IntroReel />
         <section className="wt-gallery-section">
           <div className="wt-gallery-heading">
@@ -283,21 +285,6 @@ export default function GalleryHome({
                 </button>
               </div>
             </div>
-          </div>
-        </section>
-        <section className="wt-gallery-section">
-          <div className="wt-gallery-heading">
-            <h2>{t("다른 장르의 웹툰")}</h2>
-          </div>
-          <div className={`wt-gallery-works${turn ? " turn" : ""}`} key={turn}
-               onMouseEnter={() => { holdRef.current = true; }} onMouseLeave={() => { holdRef.current = false; }}>
-            {shown.map((i) => works[i]).map((w) => (
-              <button key={w.id} onClick={() => go("result", { run: w.id })}>
-                <img src={asset(w.cover)} alt="" />
-                <b>{w.title}</b>
-                <span>{w.genre}</span>
-              </button>
-            ))}
           </div>
         </section>
         <CtaBand onStart={() => start("bottom")} />

@@ -3,11 +3,32 @@ import { useEffect, useState } from "react";
 import "./DevNav.css";
 
 /* 개발용 화면 바로가기 — 오른쪽 아래 「DEV」 단추를 누르면 웹툰의 모든 화면과 진행 단계 목록이 뜬다.
- * `next dev`(NODE_ENV=development)에서만 그려지고, 빌드(운영·dev 서버 배포)에는 나오지 않는다.
+ * `next dev`(NODE_ENV=development)와 dev 서버(dev.lorecomic.com)에서만 그려진다. 스테이징 · 운영에는 안 나온다.
  * 진행 단계 주소(fixture-…)는 로컬 검증 서버(qa/fixture-api.py, 4391)가 떠 있을 때만 내용이 보인다. */
 const RUN = "20261003T213320-5297d4"; // 그림까지 다 있는 예시 작품 「가면을 쓰고 온 옛 약혼자」
 
+/* 세계관 체험 바로가기 — 세계 · 사건 · 캐릭터는 dev 서버 자료(좀비 아포칼립스 · 몽이). 만드는 중은 서버 없이 흉내만,
+ * 만화는 예시 작품 장을 빌려 보여 준다. */
+const PLAY = "/webtoon?view=play";
+const PLAY_EP = `${PLAY}&world=zombie&ep=hidden-family`;
+const MONGI = "a34c504b9c7846d0ba2f";
+
 const GROUPS: { title: string; items: [string, string][] }[] = [
+  {
+    title: "세계관 체험 (서버·과금 없이)",
+    items: [
+      ["2 세계관 고르기", PLAY],
+      ["3 사건 고르기 · 세계 안", `${PLAY}&world=zombie`],
+      ["4 사건 보기", PLAY_EP],
+      ["4 사건 보기 · 그림 없음", `${PLAY}&world=zombie&ep=unbitten`],
+      ["5 내 캐릭터", `${PLAY_EP}&stage=char`],
+      ["6 만드는 중", `${PLAY_EP}&stage=making&job=mock-play&character=${MONGI}`],
+      ["6 만드는 중 → 만화로 넘어감", `${PLAY_EP}&stage=making&job=mock-play-done&character=${MONGI}`],
+      ["7 만화", `${PLAY_EP}&stage=done&run=${RUN}&character=${MONGI}`],
+      ["만들기 고르기", "/webtoon?view=make"],
+      ["세계관 만들기", "/webtoon?view=world-new"],
+    ],
+  },
   /* 맨 위 — 아래 묶음들이 길어서 스크롤해야 보였다(2026-10-26) */
   {
     title: "루 로딩 (서버·과금 없이)",
@@ -74,7 +95,9 @@ export default function DevNav() {
     window.addEventListener("keydown", esc);
     return () => { window.removeEventListener("popstate", read); window.removeEventListener("keydown", esc); };
   }, []);
-  if (process.env.NODE_ENV !== "development") return null;
+  const [devHost, setDevHost] = useState(false);
+  useEffect(() => { setDevHost(location.hostname === "dev.lorecomic.com"); }, []);
+  if (process.env.NODE_ENV !== "development" && !devHost) return null;
   return (
     <div className="wt-devnav">
       {open && (

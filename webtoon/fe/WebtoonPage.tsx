@@ -23,6 +23,7 @@ import "./webtoon.css";
 
 import { hrefOf, type Go, type View } from "./lib/nav";
 import { linkThisBrowser, rememberShareKey } from "./lib/api";
+import { claimInvite, rememberInviteRef } from "./lib/invite";
 import { installAutoTrack, navCause, screenProps, setView, takeDepth, track } from "./lib/track";
 import { metaTrack } from "./lib/metaPixel";
 import { LangProvider, useLang } from "./lib/i18n";
@@ -84,7 +85,7 @@ interface Route {
   /** 세계관 체험. */
   world?: string;
   ep?: string;
-  stage?: "char" | "making" | "done";
+  stage?: "char" | "making" | "done" | "stories";
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -111,7 +112,7 @@ function routeOf(search: URLSearchParams): Route {
     style: search.get("style") || undefined,
     world: search.get("world") || undefined,
     ep: search.get("ep") || undefined,
-    stage: (["char", "making", "done"] as const).find((v) => v === search.get("stage")),
+    stage: (["char", "making", "done", "stories"] as const).find((v) => v === search.get("stage")),
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };
@@ -162,8 +163,12 @@ function WebtoonScreens() {
   }, []);
 
   const { status: authStatus } = useAuth();
+  /* 초대 링크(?ref=)로 왔으면 코드를 기억해 둔다 — 이 브라우저에서 가입이 끝난 뒤 보낸다(lib/invite.ts). */
+  useEffect(() => rememberInviteRef(), []);
   useEffect(() => {
-    if (authStatus === "authenticated") void linkThisBrowser().catch(() => {});
+    if (authStatus !== "authenticated") return;
+    void linkThisBrowser().catch(() => {});
+    void claimInvite();
   }, [authStatus]);
   const authenticated = authStatus === "authenticated";
   /* 기록은 로그인 확인이 끝난 뒤부터. ★ 아래 효과들은 이 값(한 번만 바뀜)에만 기대고
@@ -271,7 +276,7 @@ function WebtoonScreens() {
       {route.view === "landing" && <Landing go={go} />}
       {route.view === "play" && <Play go={go} authenticated={authenticated} world={route.world} ep={route.ep} stage={route.stage} job={route.job} run={route.run} character={route.character} />}
       {route.view === "make" && <MakeChoice go={go} />}
-      {route.view === "world-new" && <WorldNew go={go} />}
+      {route.view === "world-new" && <WorldNew go={go} world={route.world} />}
       {route.view === "entry" && <Entry go={go} authenticated={authenticated} />}
       {route.view === "create" && (
         <Wizard step={route.step} presetCharacterId={route.character} go={go} authenticated={authenticated}

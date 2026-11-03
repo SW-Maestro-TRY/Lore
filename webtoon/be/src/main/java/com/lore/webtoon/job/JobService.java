@@ -1549,6 +1549,16 @@ public class JobService {
         return blank(character);
     }
 
+    /* 세계관 체험(2026-11-03) — 다른 세계의 사건에 넣는 것이라, 설명 칸이 빈 카드 캐릭터에 카드로 지어 주는
+       설정 글(원래 세계 · 역할 · 반전)은 쓰지 않는다. 사람이 적은 설명이 있으면 그것, 없으면 종만 남긴다.
+       하네스가 이야기 · 검수 단계에서 카드의 세계 · 반전 · 운명 · 대사를 빼는 것(charcard.for_story)과 같은 기준이다. */
+    private String playCharacterText(String sent, WebtoonCharacter picked) {
+        if (notBlank(sent)) return blank(sent);
+        if (picked == null) return "";
+        if (notBlank(picked.getDescription())) return blank(picked.getDescription());
+        return usesCard(picked) ? blank(picked.getSpecies()) : blank(picked.settingsText());
+    }
+
     private static boolean usesCard(WebtoonCharacter picked) {
         return picked != null
                 && picked.getSource() != com.lore.webtoon.character.CharacterSource.UPLOAD
@@ -1560,7 +1570,8 @@ public class JobService {
                                 List<Path> coArt) throws IOException {
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("name", blank(form.name()));
-        doc.put("character", characterText(form.character(), picked));
+        doc.put("character", Boolean.TRUE.equals(form.play())
+                ? playCharacterText(form.character(), picked) : characterText(form.character(), picked));
         Map<String, String> fields = new LinkedHashMap<>();
         if (form.fields() != null) {
             form.fields().forEach((k, v) -> {
@@ -1586,6 +1597,9 @@ public class JobService {
         doc.put("title", blank(form.title()));
         doc.put("episode", blank(form.episode()));
         doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
+        if (Boolean.TRUE.equals(form.play())) {
+            doc.put("play", true);                         // 세계관 체험 — settings 가 「이번 사건」이다
+        }
         if (useCard) {
             doc.put("card", cardOf(picked));
         }
@@ -1602,7 +1616,7 @@ public class JobService {
                 WebtoonCharacter one = coPicked.get(i);
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("name", blank(one.getName()));
-                m.put("character", characterText(null, one));
+                m.put("character", Boolean.TRUE.equals(form.play()) ? playCharacterText(null, one) : characterText(null, one));
                 if (usesCard(one)) m.put("card", cardOf(one));
                 Path art = i < coArt.size() ? coArt.get(i) : null;
                 if (art != null) m.put("photo", art.toString());
@@ -1662,6 +1676,9 @@ public class JobService {
         doc.put("title", blank(form.title()));
         doc.put("episode", blank(form.episode()));
         doc.put("mode", "own".equalsIgnoreCase(form.mode()) ? "own" : "quick");
+        if (Boolean.TRUE.equals(form.play())) {
+            doc.put("play", true);
+        }
         doc.put("style", blank(form.style()));
         doc.put("fields", form.fields() == null ? Map.of() : form.fields());
         int photoCount = form.photosData() == null ? 0 : form.photosData().size();
@@ -1744,7 +1761,13 @@ public class JobService {
                                 /* 함께 주인공으로 고른 내 캐릭터(#899). 첫 주인공은 character_id 그대로이고,
                                    여기에는 그 밖의 사람만 온다. 없으면 예전처럼 한 명이다. */
                                 @JsonProperty("co_character_ids") @JsonAlias("coCharacterIds")
-                                List<String> coCharacterIds) {
+                                List<String> coCharacterIds,
+                                /* 세계관 체험(/play/runs)으로 시작했는가(2026-11-03). 참이면 하네스가 settings 를
+                                   「이번 사건」으로 읽고, 이 캐릭터가 그 사건에서 어떻게 행동하는지를 이야기의 중심으로 둔다. */
+                                Boolean play) {
+        public CreateRequest(String name,String character,String genre,String story,String style,Map<String,String> fields,List<String> photosData,List<String> photoKeys,Boolean agreeIp,Boolean checkpoints,String uid,String characterId,String photoNote,String quality,String language,String mode,String settings,String title,String episode,Map<String,Object> lorebook,List<String> coCharacterIds) {
+            this(name,character,genre,story,style,fields,photosData,photoKeys,agreeIp,checkpoints,uid,characterId,photoNote,quality,language,mode,settings,title,episode,lorebook,coCharacterIds,null);
+        }
         public CreateRequest(String name,String character,String genre,String story,String style,Map<String,String> fields,List<String> photosData,List<String> photoKeys,Boolean agreeIp,Boolean checkpoints,String uid,String characterId,String photoNote,String quality,String language,String mode,String settings,String title,String episode) {
             this(name,character,genre,story,style,fields,photosData,photoKeys,agreeIp,checkpoints,uid,characterId,photoNote,quality,language,mode,settings,title,episode,null,null);
         }
