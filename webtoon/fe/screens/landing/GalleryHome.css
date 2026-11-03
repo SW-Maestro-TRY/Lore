@@ -636,3 +636,6 @@
   .wt .wt-gallery-sub { margin: 0 0 16px; font-size: 13px; }
   .wt .wt-gallery-cta .btn { height: 44px; }
 }
+/* 홈 세계 줄은 한 줄만 — PC 네 칸, 폰은 넓은 칸 하나 + 두 칸. 나머지는 「전부 보기」 */
+@media (min-width: 768px) { .wt .wt-play-row-list button:nth-child(n + 5) { display: none; } }
+@media (max-width: 767px) { .wt .wt-play-row-list button:nth-child(n + 4) { display: none; } }
