@@ -203,7 +203,7 @@ function EventRow({ e, no, onEdit }: { e: Ev; no: string; onEdit: () => void }) 
   return (
     <button type="button" className="wn-row" onClick={onEdit}>
       {e.image ? <span className="im" style={{ backgroundImage: `url(${e.image})` }} /> : <span className="im none" />}
-      <span className="mid"><span className="no">{no}</span><b>{e.title}</b><span className="hook">{[e.place, e.situation].filter(Boolean).join(" · ")}</span></span>
+      <span className="mid"><span className="no">{no}</span><b>{e.title}</b>{e.place && <span className="place">{e.place}</span>}<span className="hook">{e.situation}</span></span>
       <span className="pen"><IconEdit /></span>
     </button>
   );

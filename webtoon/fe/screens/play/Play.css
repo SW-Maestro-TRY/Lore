@@ -592,3 +592,7 @@
 }
 .wt .wn-evhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .wt .wn-evhead .pl-btn svg { width: 15px; height: 15px; margin-right: 4px; }
+/* PC 사건 걸음 — 왼쪽에 몰리던 900px 칸을 화면 폭 그대로, 장소는 상황과 섞지 않고 따로 한 줄 */
+.wt .wn-s2 { max-width: none; }
+.wt .wn-row .place { display: block; margin-top: 3px; font-size: 12.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt .wn-row .hook { margin-top: 4px; }
