@@ -11,19 +11,19 @@
  * - 예시 캐릭터는 사건마다 등장인물처럼 그 자리에서 사진 · 이름 · 설정으로 만든다(최대 둘). 서버가 사진 그대로 캐릭터로 만든다.
  * - 사진은 data URL 로 서버에 보낸다(창고에 올려 주소로 돌려준다). */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { listLorebooks, type LoreBook } from "../../lib/api";
+import { listLorebooks, readPlayWorld, type LoreBook } from "../../lib/api";
 import { GENRE_QUICK } from "../../lib/wizardData";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconEdit, IconPlus } from "../../ui/Icons";
 import { usePhone } from "../landing/usePhone";
-import { makeWorld, saveWorld, type WorldDraft, type DraftPerson as Person, type DraftEvent as Ev } from "./playData";
+import { fromServer, makeWorld, saveWorld, type ServerWorld, type WorldDraft, type DraftPerson as Person, type DraftEvent as Ev } from "./playData";
 import "../wizard/i18n";
 import "./i18n";
 import "./Play.css";
 
 type Draft = WorldDraft & { cover?: string };
-const KEY = "lore-world-draft";
+const DRAFT_KEY = "lore-world-draft";
 const empty: Draft = { name: "", genre: "", one: "", rule: "", cast: [], events: [], examples: [], visibility: "public" };
 const uid = () => Math.random().toString(36).slice(2, 10);
 const epNo = (i: number) => `EP ${String(i + 1).padStart(2, "0")}`;
@@ -44,12 +44,18 @@ function fromBook(b: LoreBook, d: Draft): Draft {
   return { ...d, name: b.name || d.name, rule: rule || d.rule, lorebook_id: b.library_id || b.id };
 }
 
-function useDraft() {
+/* 편집(editId)이면 서버의 그 세계를 불러와 칸을 채우고, 고치던 글은 그 세계 전용 칸에 따로 남긴다(새로 만들던 글과 안 섞이게) */
+function useDraft(editId?: string) {
   const [d, setD] = useState<Draft>(empty);
   const [saved, setSaved] = useState(false);
+  const [loadErr, setLoadErr] = useState("");
+  const KEY = editId ? `${DRAFT_KEY}:${editId}` : DRAFT_KEY;
   useEffect(() => {
-    try { const raw = localStorage.getItem(KEY); if (raw) setD({ ...empty, ...JSON.parse(raw) }); } catch { /* 저장소가 막힌 브라우저 */ }
-  }, []);
+    let local: Draft | null = null;
+    try { const raw = localStorage.getItem(KEY); if (raw) local = { ...empty, ...JSON.parse(raw) }; } catch { /* 저장소가 막힌 브라우저 */ }
+    if (local) { setD(local); return; }
+    if (editId) void readPlayWorld<ServerWorld>(editId).then((w) => setD({ ...fromServer(w, empty), id: w.id })).catch(() => setLoadErr("이 세계관을 불러오지 못했어요"));
+  }, [KEY]);
   const loaded = useRef(false);
   useEffect(() => { loaded.current = true; }, []);
   const write = (x: Draft) => {
@@ -65,7 +71,7 @@ function useDraft() {
   const set = (p: Partial<Draft>) => { setD((o) => ({ ...o, ...p })); setSaved(false); };
   const keep = () => { if (write(d)) setSaved(true); };
   const clear = () => { try { localStorage.removeItem(KEY); } catch { /* 저장소가 막힌 브라우저 */ } };
-  return { d, set, setD, keep, saved, clear };
+  return { d, set, setD, keep, saved, clear, loadErr };
 }
 
 /* 장르 — 운영 만들기와 같은 칩 + 직접 입력 */
@@ -279,9 +285,9 @@ function usePublish(d: Draft, clear: () => void, go: Go) {
 }
 
 /* ---------- PC — 두 걸음: 1 설정 · 등장인물, 2 사건 ---------- */
-function Desk({ go }: { go: Go }) {
+function Desk({ go, editId }: { go: Go; editId?: string }) {
   const t = useT();
-  const { d, set, setD, keep, saved, clear } = useDraft();
+  const { d, set, setD, keep, saved, clear, loadErr } = useDraft(editId);
   const books = useBooks();
   const { ok, busy, err, publish } = usePublish(d, clear, go);
   const [step, setStep] = useState(0);
@@ -311,10 +317,11 @@ function Desk({ go }: { go: Go }) {
     <div className="pl-wrap wn">
       <div className="pl-mtop">
         <button type="button" className="back" onClick={() => (step ? setStep(step - 1) : go("make"))}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 5l-7 7 7 7" /></svg>{step ? names[step - 1] : t("만들기")}</button>
-        <b>{t("세계관 만들기")}</b><span className="r">{step + 1} / {names.length}</span>
+        <b>{editId ? t("세계관 편집") : t("세계관 만들기")}</b><span className="r">{step + 1} / {names.length}</span>
       </div>
       <div className="wn-head">
         <div className="pl-crumb"><button type="button" onClick={() => go("make")}>{t("만들기")}</button><i>›</i><b>{d.name || t("새 세계관")}</b></div>
+        {loadErr && <span className="pl-err">{t(loadErr)}</span>}
         <div className="wn-tools"><FromBook d={d} setD={(x) => { setD(x); }} books={books} go={go} /><AiFill d={d} setD={setD} /></div>
       </div>
       <div className="wn-steps">{names.map((n, i) => (
@@ -364,7 +371,7 @@ function Desk({ go }: { go: Go }) {
             <button type="button" className="pl-btn wn-w" onClick={() => setStep(evStep - 1)}>{t("이전")}</button>
             <div className="wn-seg"><button type="button" className={d.visibility === "public" ? "on" : ""} onClick={() => set({ visibility: "public" })}>{t("모두에게")}</button><button type="button" className={d.visibility === "private" ? "on" : ""} onClick={() => set({ visibility: "private" })}>{t("나만")}</button></div>
             <span className="wn-saved">{saved ? t("저장됨") : ""}</span>
-            <button type="button" className="pl-btn" disabled={!ok || busy} onClick={publish}>{t("세계관 올리기")}</button>
+            <button type="button" className="pl-btn" disabled={!ok || busy} onClick={publish}>{editId ? t("고친 내용 저장") : t("세계관 올리기")}</button>
           </div>
           {err && <p className="pl-err">{err}</p>}
         </div>
@@ -374,6 +381,6 @@ function Desk({ go }: { go: Go }) {
 }
 
 /* PC · 폰 같은 두 걸음 — 폰은 한 줄로 쌓이고 위에 얇은 줄(이전 · 제목)이 붙는다 */
-export default function WorldNew({ go }: { go: Go }) {
-  return <div className="pl"><Desk go={go} /></div>;
+export default function WorldNew({ go, world }: { go: Go; world?: string }) {
+  return <div className="pl"><Desk key={world || "new"} go={go} editId={world} /></div>;
 }

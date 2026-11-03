@@ -3,6 +3,7 @@
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
 import { useEffect, useState } from "react";
 import { cancelJob, coverUrl, eventPlayRuns, type PlayRunCard, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
+import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare } from "../../ui/Icons";
@@ -84,11 +85,17 @@ function Worlds({ go, worlds }: { go: Go; worlds: PlayWorld[] }) {
 /* 3 사건 고르기 — 세계 안. 왼쪽 표지 · 소개 · 등장인물, 오른쪽 사건 줄 목록 */
 function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
   const t = useT();
+  /* 내가 만든 세계 · 관리자는 운영 세계도 고칠 수 있다 */
+  const { status, user } = useAuth();
+  const canEdit = !!w.mine || (status === "authenticated" && user?.role === "ADMIN");
   const [who, setWho] = useState<PlayPerson | null>(null);
   return (
     <div className="pl-wrap">
       <MTop back={t("세계관")} onBack={() => go("play")} title={t(w.name)} />
-      <div className="pl-crumb"><button type="button" onClick={() => go("play")}>{t("세계관")}</button><i>›</i><b>{t(w.name)}</b></div>
+      <div className="pl-whead">
+        <div className="pl-crumb"><button type="button" onClick={() => go("play")}>{t("세계관")}</button><i>›</i><b>{t(w.name)}</b></div>
+        {canEdit && <button type="button" className="pl-btn wn-w sm" onClick={() => go("world-new", { world: w.id })}><IconEdit />{t("세계관 편집")}</button>}
+      </div>
       <h1 className="pl-wttl">{t(w.name)}</h1>
       <div className="pl-w2">
         <aside className="pl-wside">

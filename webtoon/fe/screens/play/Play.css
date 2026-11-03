@@ -709,3 +709,4 @@
   .wt .pl-modal .made .row { display: flex; flex-direction: row; overflow-x: auto; max-height: none; }
   .wt .pl-modal .made .row button { flex: 0 0 240px; }
 }
+.wt .pl-whead .pl-btn svg { width: 15px; height: 15px; margin-right: 4px; }

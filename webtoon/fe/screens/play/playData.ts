@@ -58,7 +58,7 @@ export async function saveWorld(d: WorldDraft): Promise<string> {
     const r = await savePlayWorld(await withKeys(d), d.id);
     return r.id;
   } catch (x) {
-    if (!(x instanceof WebtoonApiError) || (x.status !== 404 && x.status !== 405)) throw x;
+    if (d.id || !(x instanceof WebtoonApiError) || (x.status !== 404 && x.status !== 405)) throw x;
     const id = `my-${Math.random().toString(36).slice(2, 10)}`;
     try { localStorage.setItem(LOCAL, JSON.stringify([...readLocal(), toWorld(id, d)])); } catch { /* 저장소가 막힌 브라우저 */ }
     return id;
@@ -66,7 +66,7 @@ export async function saveWorld(d: WorldDraft): Promise<string> {
 }
 
 /* AI 로 채우기 · 다시 만들기 — 서버가 다 지을 때까지 3초마다 본다. 돌려받은 세계를 만들기 글 모양으로 바꿔 준다. */
-type ServerWorld = Omit<PlayWorld, "cast" | "events"> & { making?: string; error?: string; visibility?: "public" | "private"; lorebook_id?: string;
+export type ServerWorld = Omit<PlayWorld, "cast" | "events"> & { making?: string; error?: string; visibility?: "public" | "private"; lorebook_id?: string;
   cast: (PlayPerson & { id?: string })[]; events: (PlayEvent & { cast?: string[] })[] };
 export async function makeWorld(d: WorldDraft, onTick?: () => void): Promise<WorldDraft> {
   const r = await makePlayWorld({ id: d.id, draft: d, lorebook_id: d.lorebook_id });
@@ -78,12 +78,13 @@ export async function makeWorld(d: WorldDraft, onTick?: () => void): Promise<Wor
     if (w && w.making !== "running") return fromServer(w, d);
   }
 }
-function fromServer(w: ServerWorld, d: WorldDraft): WorldDraft {
+export function fromServer(w: ServerWorld, d: WorldDraft): WorldDraft {
   const cast = (w.cast || []).map((p, i) => ({ id: p.id || `c${i + 1}`, name: p.name, role: p.role || "", desc: p.desc || "", face: p.face_url || undefined }));
   return {
     ...d, id: w.id, cover: w.cover_url || d.cover, name: w.name || d.name, genre: w.genre || d.genre, one: w.one || d.one, rule: w.rule || d.rule,
     visibility: w.visibility || d.visibility, lorebook_id: w.lorebook_id || d.lorebook_id, examples: w.examples || d.examples, cast,
-    events: (w.events || []).map((e) => ({ id: e.id, title: e.title, line: e.line || "", situation: e.situation || "", place: e.place || "", spot: e.spot || "", cast: e.cast || [], examples: e.examples || [], image: e.image_url || undefined,
+    /* 운영 세계는 사건 인물을 이름으로 적어 둔다 — 고치는 칸은 인물 id 로 고르니 이름을 id 로 바꾼다 */
+    events: (w.events || []).map((e) => ({ id: e.id, title: e.title, line: e.line || "", situation: e.situation || "", place: e.place || "", spot: e.spot || "", cast: (e.cast || []).map((c) => cast.find((p) => p.name === c)?.id || c), examples: e.examples || [], image: e.image_url || undefined,
       example_people: (e.example_people || []).map((x) => ({ id: x.id || x.name, name: x.name, role: x.role || "", desc: x.desc || "", face: x.face_url || undefined })) })),
   };
 }
