@@ -590,3 +590,5 @@
   .wt .wn-bar .wn-saved { display: none; }
   .wt .wn-bar .pl-btn.wn-w { flex: 0 0 88px; padding: 0; }
 }
+.wt .wn-evhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wt .wn-evhead .pl-btn svg { width: 15px; height: 15px; margin-right: 4px; }

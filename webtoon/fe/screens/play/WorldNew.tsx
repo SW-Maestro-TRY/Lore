@@ -292,6 +292,10 @@ function Desk({ go }: { go: Go }) {
   const putEvent = (e: Ev) => { set({ events: d.events.some((x) => x.id === e.id) ? d.events.map((x) => x.id === e.id ? e : x) : [...d.events, e] }); setEv(null); };
   /* 사건 추가 — 열어 둔 사건이 있으면 제목이 있을 때 그대로 넣고 새 칸을 연다 */
   const live = useRef<Ev | null>(null);
+  /* 사건 걸음에 처음 들어오면(사건 0개) 단추를 안 눌러도 빈 사건 칸이 열려 있게 */
+  useEffect(() => {
+    if (step === evStep && d.events.length === 0 && !ev) { const n = newEvent(); live.current = n; setEv(n); }
+  }, [step, evStep, d.events.length]);
   const addEvent = () => {
     const cur = live.current;
     if (ev && cur && cur.id === ev.id && cur.title.trim()) set({ events: d.events.some((x) => x.id === cur.id) ? d.events.map((x) => x.id === cur.id ? cur : x) : [...d.events, cur] });
@@ -347,12 +351,11 @@ function Desk({ go }: { go: Go }) {
       </div>
       ) : (
         <div className="pl-sec wn-s2">
-          <h2 className="pl-h1">{t("사건")}</h2>
+          <div className="wn-evhead"><h2 className="pl-h1">{t("사건")}</h2><button type="button" className="pl-btn wn-w sm" onClick={addEvent}><IconPlus />{t("사건 추가")}</button></div>
           {d.events.map((e, i) => ev?.id === e.id
             ? <EventForm key={e.id} e={e} no={epNo(i)} cast={d.cast} onLive={(x) => { live.current = x; }} onDone={putEvent} onCancel={() => setEv(null)} onDelete={() => { set({ events: d.events.filter((x) => x.id !== e.id) }); setEv(null); }} />
             : <EventRow key={e.id} e={e} no={epNo(i)} onEdit={() => setEv(e)} />)}
           {ev && !d.events.some((x) => x.id === ev.id) && <EventForm key={ev.id} e={ev} no={epNo(d.events.length)} cast={d.cast} onLive={(x) => { live.current = x; }} onDone={putEvent} onCancel={() => setEv(null)} />}
-          <button type="button" className="wn-dash tall" onClick={addEvent}><IconPlus />{t("사건 추가")}</button>
           <div className="wn-bar">
             <button type="button" className="pl-btn wn-w" onClick={() => setStep(evStep - 1)}>{t("이전")}</button>
             <div className="wn-seg"><button type="button" className={d.visibility === "public" ? "on" : ""} onClick={() => set({ visibility: "public" })}>{t("모두에게")}</button><button type="button" className={d.visibility === "private" ? "on" : ""} onClick={() => set({ visibility: "private" })}>{t("나만")}</button></div>
