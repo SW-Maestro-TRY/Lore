@@ -137,5 +137,6 @@ const dict: Dict = {
   "세계관 편집": { en: "Edit world", ja: "世界観を編集", zh: "编辑世界观" },
   "고친 내용 저장": { en: "Save changes", ja: "変更を保存", zh: "保存修改" },
   "이 세계관을 불러오지 못했어요": { en: "Couldn't load this world", ja: "この世界観を読み込めませんでした", zh: "无法加载该世界观" },
+  "{n}편": { en: "{n}", ja: "{n}話", zh: "{n} 篇" },
 };
 registerDict(dict);

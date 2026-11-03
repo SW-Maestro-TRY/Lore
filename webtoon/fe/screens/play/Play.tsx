@@ -164,18 +164,34 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const cast = e.cast ? w.cast.filter((p) => e.cast!.includes(p.name) || (!!p.id && e.cast!.includes(p.id))) : w.cast;
   /* 이 사건의 예시 캐릭터 — 단추 위에 얼굴과 이름. 누르면 내 캐릭터 화면(예시가 먼저 나온다) */
   const people = e.example_people || [];
-  /* 이 사건에서 만든 만화 — 위로 올려 늘 보이게(없으면 비었다는 한 줄). PC 는 넣기 단추 아래, 폰은 상황 글 위 */
+  /* 이 사건에서 만든 만화 — 늘어나도 자리를 더 먹지 않게 한 줄로 접는다(겹친 표지 · 편수 ›).
+   * 누르면 전부 펼친 판이 뜬다. 없으면 빈 한 줄. */
+  const [allMade, setAllMade] = useState(false);
+  const openRun = (run: string) => go("play", { world: w.id, ep: e.id, stage: "done", run });
+  const cover = (r: (typeof made)[number]) => r.cover_src || (r.cover_page ? coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1) : "");
   const madeBlock = (
-    <div className="made"><p className="k">{t("이 사건에서 만든 만화")}</p>
-      {made.length === 0 ? <p className="none">{t("아직 이 사건에서 만든 만화가 없어요")}</p> : (
-        <div className="row">{made.map((r) => (
-          <button type="button" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
+    <div className="made">
+      {made.length === 0 ? <><p className="k">{t("이 사건에서 만든 만화")}</p><p className="none">{t("아직 이 사건에서 만든 만화가 없어요")}</p></> : (
+        <button type="button" className="fold" onClick={() => setAllMade(true)}>
+          <span className="stack">{made.slice(0, 3).map((r) => <i key={r.run_id} style={{ backgroundImage: `url(${cover(r)})` }} />)}</span>
+          <span className="tx"><b>{t("이 사건에서 만든 만화")}</b><small>{t("{n}편", { n: made.length })}</small></span>
+          <span className="chev">›</span>
+        </button>
+      )}
+    </div>
+  );
+  const madeSheet = allMade && (
+    <div className="pl-madesheet" onClick={(x) => { if (x.target === x.currentTarget) setAllMade(false); }}>
+      <div className="box" role="dialog" aria-modal="true" aria-label={t("이 사건에서 만든 만화")}>
+        <div className="hd"><b>{t("이 사건에서 만든 만화")} <span>{made.length}</span></b><button type="button" aria-label={t("닫기")} onClick={() => setAllMade(false)}><IconClose /></button></div>
+        <div className="list">{made.map((r) => (
+          <button type="button" key={r.run_id} onClick={() => openRun(r.run_id)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {r.cover_src ? <img src={r.cover_src} alt="" loading="lazy" /> : r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
+            {cover(r) ? <img src={cover(r)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
             <span className="tx"><b>{r.title || t(e.title)}</b><small>{r.character}</small></span>
           </button>
         ))}</div>
-      )}
+      </div>
     </div>
   );
   const examples = people.length > 0 && (
@@ -221,6 +237,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
         <div className="mfoot"><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>
       </div>
       {who && <CastView p={who} onClose={() => setWho(null)} />}
+      {madeSheet}
     </div>
   );
 }
