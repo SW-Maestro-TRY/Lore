@@ -59,16 +59,15 @@ function Worlds({ go, worlds }: { go: Go; worlds: PlayWorld[] }) {
   return (
     <div className="pl-wrap">
       <MTop back={t("처음")} onBack={() => go("landing")} title={t("세계관")} />
+      <h1 className="pl-h1">{t("어디에 넣어 볼까요?")}</h1>
+      {/* 칩 줄 오른쪽 끝에 세계관 만들기(하은 11/03 — 제목 줄이 아니라 한 줄 아래) */}
       <div className="pl-whead">
-        <h1 className="pl-h1">{t("어디에 넣어 볼까요?")}</h1>
-        <button type="button" className="pl-btn wn-w sm" onClick={() => go("world-new")}><IconPlus />{t("세계관 만들기")}</button>
-      </div>
-      {genres.length > 1 && (
-        <div className="pl-chips">
+        <div className="pl-chips">{genres.length > 1 && <>
           <button type="button" className={genre ? "" : "on"} onClick={() => setGenre("")}>{t("전체")}</button>
           {genres.map((g) => <button type="button" key={g} className={genre === g ? "on" : ""} onClick={() => setGenre(g)}>{t(g)}</button>)}
-        </div>
-      )}
+        </>}</div>
+        <button type="button" className="pl-btn wn-w sm" onClick={() => go("world-new")}><IconPlus />{t("세계관 만들기")}</button>
+      </div>
       <div className="pl-events">
         {list.map((w, i) => (
           <button type="button" key={w.id} className={`pl-event${i === 0 ? " wide" : ""}${i > 0 && i === list.length - 1 && (list.length - 1) % 2 === 1 ? " full" : ""}`}
@@ -129,6 +128,18 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const [who, setWho] = useState<PlayPerson | null>(null);
   const close = () => go("play", { world: w.id });
   const put = () => go("play", { world: w.id, ep: e.id, stage: "char" });
+  /* 이 사건의 예시 캐릭터 — 단추 위에 얼굴과 이름. 누르면 내 캐릭터 화면(예시가 먼저 나온다) */
+  const people = e.example_people || [];
+  const examples = people.length > 0 && (
+    <div className="exs"><p className="k">{t("예시 캐릭터")}</p>
+      <div className="exl">{people.map((x) => (
+        <button type="button" key={x.name} onClick={put}>
+          <i style={x.face_url ? { backgroundImage: `url(${x.face_url})` } : undefined}>{!x.face_url && t(x.name).slice(0, 1)}</i>
+          <span><b>{t(x.name)}</b>{x.role && <small>{t(x.role)}</small>}</span>
+        </button>
+      ))}</div>
+    </div>
+  );
   return (
     <div className="pl-layer" onClick={(ev) => { if (ev.target === ev.currentTarget) close(); }}>
       <div className="pl-modal" role="dialog" aria-modal="true" aria-label={t(e.title)}>
@@ -147,13 +158,14 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
             <div className="l">
               <div className="meta"><b>{t(w.name)}</b>{e.place && <> · {t(e.place)}</>}</div>
               <p className="sit">{t(e.situation)}</p>
+              {examples && <div className="exs-m">{examples}</div>}
               {w.cast.length > 0 && (
                 <div><p className="k">{t("등장인물")}</p>
                   <div className="cast">{w.cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
                 </div>
               )}
             </div>
-            <div className="r"><div className="spot"><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div></div>
+            <div className="r"><div className="spot">{examples}<button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div></div>
           </div>
         </div>
         <div className="mfoot"><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>

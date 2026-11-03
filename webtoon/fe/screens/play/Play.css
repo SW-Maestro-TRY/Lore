@@ -632,3 +632,20 @@
   .wt .wn-cast .wn-p .pen { width: 28px; height: 28px; top: 6px; right: 6px; }
   .wt .wn-cast .wn-p .pen svg { width: 13px; height: 13px; }
 }
+/* 사건 보기 — 내 캐릭터 넣기 위 예시 캐릭터 */
+.wt .pl-modal .exs .k { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--pl-apricot); }
+.wt .pl-modal .exl { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+.wt .pl-modal .exl button { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--pl-card2); text-align: left; }
+.wt .pl-modal .exl button:hover { border-color: var(--line-strong); }
+.wt .pl-modal .exl i { flex: none; display: grid; place-items: center; width: 48px; height: 64px; border-radius: 8px; background: var(--pl-card3) center top / cover no-repeat; color: var(--pl-apricot); font-weight: 800; }
+.wt .pl-modal .exl span { min-width: 0; }
+.wt .pl-modal .exl b { display: block; font-size: 14px; color: #fff; }
+.wt .pl-modal .exl small { display: block; font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt .pl-modal .exs-m { display: none; }
+@media (max-width: 767px) {
+  .wt .pl-modal .exs-m { display: block; }
+  .wt .pl-modal .exl { flex-direction: row; overflow-x: auto; }
+  .wt .pl-modal .exl button { flex: 0 0 auto; padding-right: 12px; }
+}
+.wt .pl-whead .pl-chips { flex: 1; min-width: 0; }
+.wt .pl-whead > .pl-btn { flex: none; }
