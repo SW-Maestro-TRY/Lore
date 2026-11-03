@@ -111,6 +111,7 @@ public class AttendRemindService {
         out.put("on", on);
         out.put("run", on ? row.getRunId() : null);
         out.put("episode", on ? row.getEpisode() : null);
+        out.put("cost", on ? row.getCost() : null);
         out.put("push", push.enabled());
         out.put("device", userId != null && push.hasDevice(userId));
         return out;

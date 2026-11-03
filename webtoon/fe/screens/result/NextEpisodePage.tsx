@@ -287,7 +287,7 @@ export default function NextEpisodePage({runId, authenticated, go}: {
     {/* 크레딧이 모자라면 만들기 단추 대신 두 갈래(충전 · 출석)를 띄운다(2026-11-03). 충전 창 안에 결제 form 이
         있어서 이 페이지의 form 밖에 둔다 — form 안에 두면 form 이 겹치고, 결제 제출이 만들기 제출로 번진다. */}
     {authenticated && data && forkOn && <div className="wt-series-actions wt-series-fork-row">
-      <SeriesFork run={runId} episode={data.episode} cost={data.credit_cost} balance={data.balance} onBalance={() => void refreshBalance()} />
+      <SeriesFork run={runId} episode={data.episode} cost={data.credit_cost} balance={data.balance} onBalance={() => void refreshBalance()} go={go} />
     </div>}
   </div>;
 }

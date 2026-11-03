@@ -5,6 +5,9 @@
  * 「내 캐릭터로 웹툰 만들기」가 만들기로 간다. 로그인 안 했으면 받기 대신 로그인으로 보낸다. */
 import { useEffect, useState } from "react";
 import type { Attendance } from "@common/api/credits";
+import { creditBalance } from "@common/api/credits";
+import { readAttendRemind, type AttendRemindState } from "../../lib/api";
+import { daysToAfford } from "../../lib/attendPlan";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
 import { EventFonts, Witch } from "./EventBits";
@@ -23,6 +26,17 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
   const [toast, setToast] = useState<string | null>(null);
   const [fin, setFin] = useState(false);
   const th: EventTheme = THEMES[card?.theme ?? guessTheme()];
+  /* 다음 화 화면에서 「출석으로 모으기」를 고른 사람 — 그 화까지 며칠인지 한 줄(2026-11-03) */
+  const [remind, setRemind] = useState<AttendRemindState | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
+  useEffect(() => {
+    if (!authenticated) return;
+    readAttendRemind().then(setRemind).catch(() => {});
+  }, [authenticated]);
+  useEffect(() => {
+    if (!authenticated) return;
+    creditBalance().then((b) => setBalance(b.balance)).catch(() => {});
+  }, [authenticated, card?.claimed]);
 
   useEffect(() => { track("event_page_view", { theme: th.key, signed_in: authenticated }); }, [th.key, authenticated]);
   useEffect(() => {
@@ -78,6 +92,13 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
             <span className="wt-ev-eyebrow">{th.eyebrow}</span>
             <h1>{th.heroTitle}</h1>
             <div className="wt-ev-period"><b>참여 기간</b><span>{th.period}</span> · <span>LORE 회원 전원</span></div>
+            {(() => {
+              if (!remind?.on || remind.episode == null || remind.cost == null || balance == null || !remind.run) return null;
+              const left = daysToAfford(balance, remind.cost ?? 0, card);
+              if (left == null) return null;
+              return <button type="button" className="wt-ev-remind" onClick={() => go("next", { run: remind.run! })}>
+                {left === 0 ? `${remind.episode}화 만들 수 있어요` : `${remind.episode}화까지 ${left}일`}</button>;
+            })()}
           </div>
         </div>
 

@@ -297,6 +297,7 @@ group by 1 order by 1;
 | `charge_open` | 충전 창을 엶 | `where`: mypage · credit_short(크레딧 부족 안내) · series_fork(다음 화 두 갈래) |
 | `series_fork_view` | 다음 화 화면에서 크레딧이 모자라 두 갈래(충전 · 출석)가 보임(2026-11-03) | `run`, `ep`, `cost`, `balance`, `n`(출석만으로 며칠 뒤 모이나, 0 이면 오늘 · 모르면 -1) |
 | `series_fork_pick` | 두 갈래 중 하나를 누름 — 클릭률의 분자 | `pick`: charge · attend, `run`, `ep`, `n` |
+| `series_fork_event` | 알림이 걸린 뒤 다음 화 화면의 「출석 이벤트 · D일 뒤 N화」를 눌러 이벤트 페이지로 감 | `run`, `ep`, `n` |
 | `series_remind_on` · `series_remind_off` | 출석을 고르고 알림을 걸었음 · 껐음(AttendRemindService). 이 기기 푸시 권한 창의 답은 따로 `notify_ask_push`(`where`: series_fork, `result`) | `run`, `ep`, `how`: ask(권한을 물었음) · known(이미 정해져 있었음) |
 | `charge_submit` | 충전 창의 「N원 결제하기」를 누름. 결제가 아직 안 열렸어도 남는다 — 관리자 개요의 「결제하기를 누른 사람」 | `where`, `pick`(상품 코드), `cost`(원), `count`(크레딧), `ok`(그때 결제가 열려 있었나) |
 | `feedback_view` · `feedback_submit` · `feedback_skip` | 설문이 뜸 · 보냄 · 건너뜀 (#471, [validation.md](validation.md)). 답 자체는 `webtoon_feedback` 표에 있다 | `where`: result · mypage, `run`, `count`(문항 수), `ok`(보상을 받았나) |

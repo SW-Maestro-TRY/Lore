@@ -1449,7 +1449,7 @@ export function createNextEpisode(run: string, form: SeriesForm): Promise<{id: s
 }
 
 /** 「출석으로 모아서 다음 화 만들기」 알림(2026-11-03). push 는 서버가 푸시를 보낼 수 있나, device 는 이 계정에 구독한 기기가 있나. */
-export interface AttendRemindState { on: boolean; run: string | null; episode: number | null; push: boolean; device: boolean }
+export interface AttendRemindState { on: boolean; run: string | null; episode: number | null; cost: number | null; push: boolean; device: boolean }
 export function readAttendRemind(): Promise<AttendRemindState> {
   return call("/attend-remind");
 }

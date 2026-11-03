@@ -16,6 +16,7 @@ import CreditCharge from "@common/mypage/CreditCharge";
 import { attendRemindOff, attendRemindOn, readAttendRemind, type AttendRemindState } from "../../lib/api";
 import { daysToAfford } from "../../lib/attendPlan";
 import { registerDict, useLang, useT } from "../../lib/i18n";
+import type { Go } from "../../lib/nav";
 import { enablePush, pushState } from "../../lib/push";
 import { track } from "../../lib/track";
 import PayNotReady from "../../ui/PayNotReady";
@@ -27,15 +28,15 @@ registerDict({
   "출석으로 모아서 {d}일 뒤 만들기": { en: "Collect by checking in, make it in {d} days", ja: "出席で貯めて{d}日後に作る", zh: "签到攒积分，{d}天后制作" },
   "오늘 출석하고 {n}화 만들기": { en: "Check in today and make episode {n}", ja: "今日出席して第{n}話を作る", zh: "今天签到并制作第{n}话" },
   "{n}화를 만들 수 있어요": { en: "You can make episode {n}", ja: "第{n}話を作れます", zh: "可以制作第{n}话了" },
-  "{d}일 뒤 · 매일 낮 12시 출석 알림": { en: "In {d} days · check-in reminder daily at noon", ja: "{d}日後 · 毎日正午に出席通知", zh: "{d}天后 · 每天中午签到提醒" },
+  "출석 이벤트 · {d}일 뒤 {n}화": { en: "Check-in event · episode {n} in {d} days", ja: "出席イベント · {d}日後に第{n}話", zh: "签到活动 · {d}天后第{n}话" },
   "오늘 출석 +{n}C": { en: "Check in today +{n}C", ja: "今日の出席 +{n}C", zh: "今日签到 +{n}C" },
   "알림 끄기": { en: "Turn off reminders", ja: "通知をオフ", zh: "关闭提醒" },
   "크레딧 잔액이 부족해요": { en: "Not enough credits", ja: "クレジット残高が足りません", zh: "积分余额不足" },
   "필요 {n} · 보유 {m}": { en: "need {n} · have {m}", ja: "必要 {n} · 所持 {m}", zh: "需要 {n} · 持有 {m}" },
 });
 
-export default function SeriesFork({ run, episode, cost, balance, onBalance }: {
-  run: string; episode: number; cost: number; balance: number;
+export default function SeriesFork({ run, episode, cost, balance, onBalance, go }: {
+  run: string; episode: number; cost: number; balance: number; go: Go;
   /** 충전·출석으로 잔액이 바뀌었을 수 있다 — 부른 쪽이 다시 읽는다. */
   onBalance: () => void;
 }) {
@@ -87,6 +88,8 @@ export default function SeriesFork({ run, episode, cost, balance, onBalance }: {
       track("series_remind_on", { run, ep: episode, how: asking ? "ask" : "known" });
       /* 권한 창의 답은 사람이 누를 때 온다(안 누르면 안 온다) — notify_ask_push 와 같은 이름으로 남긴다 */
       void pushing.then((push) => track("notify_ask_push", { result: push, where: "series_fork" }));
+      /* 도장 카드가 바로 보이게 출석 이벤트 페이지로. 돌아오면 이 자리에 알림 줄이 남아 있다. */
+      go("event");
     } catch {
       /* 알림을 못 걸어도 출석은 받았을 수 있다 */
       onBalance();
@@ -119,8 +122,9 @@ export default function SeriesFork({ run, episode, cost, balance, onBalance }: {
       </div>
       {remindHere && (
         <div className="wt-series-fork-remind" role="status">
-          <span>{days === 0 ? t("{n}화를 만들 수 있어요", { n: episode })
-            : t("{d}일 뒤 · 매일 낮 12시 출석 알림", { d: days ?? 0 })}</span>
+          {days === 0 ? <span>{t("{n}화를 만들 수 있어요", { n: episode })}</span>
+            : <button type="button" className="wt-series-fork-link" onClick={() => { track("series_fork_event", { run, ep: episode, n: days ?? -1 }); go("event"); }}>
+                {t("출석 이벤트 · {d}일 뒤 {n}화", { d: days ?? 0, n: episode })}</button>}
           {card && !card.claimed && (
             <button type="button" className="btn btn-w btn-sm" disabled={claiming}
                     onClick={() => void claim().then(() => onBalance())}>{t("오늘 출석 +{n}C", { n: card.reward })}</button>

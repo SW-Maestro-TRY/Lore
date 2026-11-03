@@ -351,3 +351,5 @@
   .wt-ev-banner-t strong { font-size: 16px; }
   .wt-ev-banner-t b { font-size: 12.5px; }
 }
+/* 다음 화 화면에서 출석으로 모으기를 고른 사람의 한 줄 — 누르면 그 화로 */
+.wt-ev-remind { display:inline-block; margin-top:10px; padding:8px 14px; border:1px solid rgba(255,255,255,.35); border-radius:999px; background:rgba(0,0,0,.25); color:inherit; font:inherit; font-weight:700; font-size:15px; cursor:pointer; }
