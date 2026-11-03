@@ -84,7 +84,7 @@ interface Route {
   /** 세계관 체험. */
   world?: string;
   ep?: string;
-  stage?: "char" | "making" | "done";
+  stage?: "char" | "making" | "done" | "stories";
 }
 
 /* 주소 → 화면. `?run=` 만 있으면 완성본(공유 링크), `?card=` 만 있으면 공유된 카드. */
@@ -111,7 +111,7 @@ function routeOf(search: URLSearchParams): Route {
     style: search.get("style") || undefined,
     world: search.get("world") || undefined,
     ep: search.get("ep") || undefined,
-    stage: (["char", "making", "done"] as const).find((v) => v === search.get("stage")),
+    stage: (["char", "making", "done", "stories"] as const).find((v) => v === search.get("stage")),
   };
   if (view === "running" && base.job) return { view: "running", ...base };
   if (view === "editor" && run) return { view: "editor", ...base };

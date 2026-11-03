@@ -790,3 +790,22 @@
 .wt .pl-modal .r .stories .sc img, .wt .pl-modal .r .stories .sc .pl-noimg { width: 52px; }
 @media (max-width: 767px) { .wt .pl-modal .stories-m { display: block; } }
 .wt .pl-modal .r .stories { margin-top: 20px; }
+/* 폰 사건 보기 — 단추를 그림 오른쪽 아래로, 본문 속 단추 상자는 숨김 */
+.wt .pl-modal .hero-go { display: none; }
+@media (max-width: 767px) {
+  .wt .pl-modal .hero-go { display: inline-flex; position: absolute; z-index: 2; right: 12px; bottom: 12px; height: 40px; padding: 0 16px; font-size: 13.5px; box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
+  .wt .pl-modal .hero .ov { bottom: 64px; }
+  .wt .pl-modal .mine-m { display: none; }
+}
+/* 캐릭터별 이야기 전체 */
+.wt .pl-stories .hd { display: flex; align-items: baseline; gap: 10px; }
+.wt .pl-stories .hd small { font-size: 14px; color: var(--dim); }
+.wt .pl-stories .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+.wt .pl-stories .grid button { display: flex; flex-direction: column; gap: 4px; padding: 0; background: none; border: 0; text-align: left; }
+.wt .pl-stories .grid img, .wt .pl-stories .grid .pl-noimg { width: 100%; aspect-ratio: 3/4; object-fit: cover; object-position: top; border-radius: 12px; margin-bottom: 4px; }
+.wt .pl-stories .grid b { font-size: 14.5px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt .pl-stories .grid small { font-size: 12.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 767px) {
+  .wt .pl-stories .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .wt .pl-stories .hd { flex-direction: column; gap: 2px; }
+}

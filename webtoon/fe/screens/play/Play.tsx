@@ -164,7 +164,6 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const cast = e.cast ? w.cast.filter((p) => e.cast!.includes(p.name) || (!!p.id && e.cast!.includes(p.id))) : w.cast;
   /* 캐릭터별 이야기 — 같은 사건에 서로 다른 캐릭터가 들어가 만든 만화(예시 캐릭터 것도 여기에). 없으면 구역을 숨긴다.
    * 앞의 둘만 카드로, 나머지는 「전체 보기」 판에서. */
-  const [allMade, setAllMade] = useState(false);
   const openRun = (run: string) => go("play", { world: w.id, ep: e.id, stage: "done", run });
   const cover = (r: (typeof made)[number]) => r.cover_src || (r.cover_page ? coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1) : "");
   const storyCard = (r: (typeof made)[number]) => (
@@ -178,22 +177,8 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const stories = made.length > 0 && (
     <div className="stories">
       <div className="hd"><div><b>{t("캐릭터별 이야기")}</b><small>{t("같은 사건, 서로 다른 이야기")}</small></div>
-        {made.length > 2 && <button type="button" className="all" onClick={() => setAllMade(true)}>{t("전체 보기")} ›</button>}</div>
+        {made.length > 2 && <button type="button" className="all" onClick={() => go("play", { world: w.id, ep: e.id, stage: "stories" })}>{t("전체 보기")} ›</button>}</div>
       <div className="list">{made.slice(0, 2).map(storyCard)}</div>
-    </div>
-  );
-  const madeSheet = allMade && (
-    <div className="pl-madesheet" onClick={(x) => { if (x.target === x.currentTarget) setAllMade(false); }}>
-      <div className="box" role="dialog" aria-modal="true" aria-label={t("캐릭터별 이야기")}>
-        <div className="hd"><b>{t("캐릭터별 이야기")} <span>{made.length}</span></b><button type="button" aria-label={t("닫기")} onClick={() => setAllMade(false)}><IconClose /></button></div>
-        <div className="list">{made.map((r) => (
-          <button type="button" key={r.run_id} onClick={() => openRun(r.run_id)}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {cover(r) ? <img src={cover(r)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
-            <span className="tx"><b>{r.character}</b><small>{r.title}</small></span>
-          </button>
-        ))}</div>
-      </div>
     </div>
   );
   /* 내 캐릭터라면? — 이 화면의 할 일. PC 는 오른쪽 상자, 폰은 상황 글 바로 아래 */
@@ -216,6 +201,8 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
               <h2>{t(e.title)}</h2>
               {e.line && <p className="one">{t(e.line)}</p>}
             </div>
+            {/* 폰 — 할 일 단추는 사건 그림 오른쪽 아래(하은 11/03) */}
+            <button type="button" className="pl-btn hero-go" onClick={put}>{t("내 캐릭터로 이야기 만들기")}</button>
           </div>
           <div className="cols">
             <div className="l">
@@ -234,7 +221,6 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
         </div>
       </div>
       {who && <CastView p={who} onClose={() => setWho(null)} />}
-      {madeSheet}
     </div>
   );
 }
@@ -365,6 +351,30 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
 
 /* 6 만드는 중 — 운영 진행 화면 모양(캐릭터 그림 · 루 한 줄 · 막대 · 단계 넷). 다 되면 바로 만화로 넘어간다.
  * job 이 mock-play 로 시작하면 서버 없이 흉내만 낸다(개발 화면 바로가기용). */
+/* 캐릭터별 이야기 전체 — 같은 사건에 서로 다른 캐릭터가 들어가 만든 만화 전부 */
+function Stories({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
+  const t = useT();
+  const [made, setMade] = useState<PlayRunCard[] | null>(null);
+  useEffect(() => { eventPlayRuns(e.id).then((r) => setMade(r.runs || [])).catch(() => setMade([])); }, [e.id]);
+  const back = () => go("play", { world: w.id, ep: e.id });
+  return (
+    <div className="pl-wrap pl-stories">
+      <MTop back={e.no} onBack={back} title={t("캐릭터별 이야기")} />
+      <div className="pl-crumb"><button type="button" onClick={() => go("play", { world: w.id })}>{t(w.name)}</button><i>›</i><button type="button" onClick={back}>{e.no} {t(e.title)}</button><i>›</i><b>{t("캐릭터별 이야기")}</b></div>
+      <div className="hd"><h1 className="pl-h1">{t("캐릭터별 이야기")}</h1><small>{t("같은 사건, 서로 다른 이야기")}</small></div>
+      {made === null ? <div className="pl-skel" /> : (
+        <div className="grid">{made.map((r) => (
+          <button type="button" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
+            <b>{t("{name}의 이야기", { name: r.character })}</b><small>{r.title}</small>
+          </button>
+        ))}</div>
+      )}
+    </div>
+  );
+}
+
 /* 이름 뒤 받침에 맞는 조사 — 「이현이라면 · 몽이라면」 */
 const hasBatchim = (name: string) => { const c = name.trim().slice(-1).charCodeAt(0); return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0; };
 const ira = (name: string) => `${name}${hasBatchim(name) ? "이라면" : "라면"}`;
@@ -529,7 +539,7 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
   );
 }
 
-export default function Play({ go, authenticated, world, ep, stage, job, run, character }: { go: Go; authenticated: boolean; world?: string; ep?: string; stage?: "char" | "making" | "done"; job?: string; run?: string; character?: string }) {
+export default function Play({ go, authenticated, world, ep, stage, job, run, character }: { go: Go; authenticated: boolean; world?: string; ep?: string; stage?: "char" | "making" | "done" | "stories"; job?: string; run?: string; character?: string }) {
   const t = useT();
   const phone = usePhone();
   const [worlds, setWorlds] = useState<PlayWorld[] | null>(null);
@@ -542,6 +552,7 @@ export default function Play({ go, authenticated, world, ep, stage, job, run, ch
   const w = found?.world || worlds.find((v) => v.id === world);
   if (found && stage === "char") return <div className="pl"><PickChar w={found.world} e={found.event} go={go} authenticated={authenticated} preset={character} /></div>;
   if (found && stage === "making") return <div className="pl"><Making w={found.world} e={found.event} job={job} character={character} go={go} /></div>;
+  if (found && stage === "stories") return <div className="pl"><Stories w={found.world} e={found.event} go={go} /></div>;
   if (found && stage === "done") return <div className="pl"><Comic worlds={worlds} w={found.world} e={found.event} run={run} character={character} go={go} /></div>;
   if (found) return <div className="pl">{!phone && <WorldDetail w={found.world} go={go} />}<EventView w={found.world} e={found.event} go={go} /></div>;
   if (w) return <div className="pl"><WorldDetail w={w} go={go} /></div>;
