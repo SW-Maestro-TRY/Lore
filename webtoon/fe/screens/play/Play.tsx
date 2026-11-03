@@ -83,7 +83,7 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
             <div className="who">
               <span className="lab">{t("등장인물")}</span>
               <div className="pl-cast2">{w.cast.map((p) => (
-                <span key={p.name}><i>{t(p.name).slice(0, 1)}</i><span><b>{t(p.name)}</b>{p.role && <small>{t(p.role)}</small>}</span></span>
+                <span key={p.name}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i><span><b>{t(p.name)}</b>{(p.role || p.desc) && <small>{t(p.role || p.desc || "")}</small>}</span></span>
               ))}</div>
             </div>
           )}
@@ -125,7 +125,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
           </div>
           <div className="cols">
             <div className="l">
-              <div className="meta"><b>{t(w.name)}</b></div>
+              <div className="meta"><b>{t(w.name)}</b>{e.place && <> · {t(e.place)}</>}</div>
               <p className="sit">{t(e.situation)}</p>
               {w.cast.length > 0 && (
                 <div><p className="k">{t("등장인물")}</p>
@@ -133,10 +133,10 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
                 </div>
               )}
             </div>
-            <div className="r"><div className="spot"><b>{t(w.spot)}</b><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div></div>
+            <div className="r"><div className="spot"><b>{t(e.spot || w.spot)}</b><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div></div>
           </div>
         </div>
-        <div className="mfoot"><b>{t(w.spot)}</b><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>
+        <div className="mfoot"><b>{t(e.spot || w.spot)}</b><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>
       </div>
     </div>
   );
@@ -177,11 +177,24 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
         if (picked) shown = [picked, ...shown];
       }
       setChars(shown);
-      setSel((s) => s && shown.some((c) => c.id === s) ? s : shown.some((c) => c.id === preset) ? preset : shown[0]?.id);
+      setSel((s) => s && (shown.some((c) => c.id === s) || !!w.examples?.includes(s)) ? s : shown.some((c) => c.id === preset) ? preset : shown[0]?.id);
     } catch { setChars([]); }
   };
   useEffect(() => { void load(); }, []);
-  const cur = chars?.find((c) => c.id === sel);
+  /* 세계를 만든 사람이 정한 예시 캐릭터(최대 둘)가 있으면 그것부터. 「+ 내 캐릭터」를 누르면 내 캐릭터 목록으로 */
+  const [examples, setExamples] = useState<Character[]>([]);
+  const [mode, setMode] = useState<"ex" | "mine">(w.examples?.length && !preset ? "ex" : "mine");
+  useEffect(() => {
+    if (!w.examples?.length) return;
+    void Promise.all(w.examples.slice(0, 2).map((id) => readCharacter(id).catch(() => null))).then((l) => {
+      const ok = l.filter((c): c is Character => !!c && c.status === "ready");
+      setExamples(ok);
+      if (!ok.length) setMode("mine");
+      else if (mode === "ex") setSel(ok[0].id);
+    });
+  }, [w.id]);
+  const pool = mode === "ex" ? examples : chars;
+  const cur = pool?.find((c) => c.id === sel);
   const nameOf = (c: Character) => c.builtin ? t(c.name) : c.name;
   const descOf = (c: Character) => c.builtin ? t(c.description || "") : c.description;
   const Pen = ({ c, cls }: { c: Character; cls: string }) => (
@@ -189,13 +202,27 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
       onClick={(ev) => { ev.stopPropagation(); setEdit(c); }}
       onKeyDown={(ev) => { if (ev.key === "Enter") { ev.stopPropagation(); setEdit(c); } }}><IconEdit /></span>
   );
-  const ctx = <p className="pl-ctx">{t(w.name)}<i />{e.no} {t(e.title)}<i /><b>{t(w.spot)}</b></p>;
+  const ctx = <p className="pl-ctx">{t(w.name)}<i />{e.no} {t(e.title)}<i /><b>{t(e.spot || w.spot)}</b></p>;
   return (
     <div className="pl-who">
       <MTop back={e.no} onBack={() => go("play", { world: w.id, ep: e.id })} title={t("내 캐릭터")} />
       {ctx}
       <h1>{t("누구를 넣을까요?")}</h1>
-      {chars === null ? <div className="pl-skel" /> : chars.length >= 3 ? (
+      {mode === "ex" ? (
+        <>
+          <div className="pl-tiles">
+            {examples.map((c) => (
+              <button type="button" key={c.id} className={`pl-tile${c.id === sel ? " on" : ""}`} onClick={() => setSel(c.id)}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <span className="sq">{c.art_url && <img src={c.art_url} alt="" />}</span>
+                <span>{nameOf(c)}</span>
+              </button>
+            ))}
+            <button type="button" className="pl-tile pl-add" onClick={() => { setMode("mine"); setSel(chars?.[0]?.id); }}><span className="sq"><IconPlus /></span><span>{t("내 캐릭터")}</span></button>
+          </div>
+          {cur && <p className="pl-desc"><small>{nameOf(cur)} · {t("설명")}</small>{descOf(cur)}</p>}
+        </>
+      ) : chars === null ? <div className="pl-skel" /> : chars.length >= 3 ? (
         <div className="pl-many">
           <button type="button" className="cr add" onClick={() => go("character-new", { world: w.id, ep: e.id })}><i><IconPlus /></i><b>{t("새 캐릭터 만들기")}</b></button>
           {chars.map((c) => (

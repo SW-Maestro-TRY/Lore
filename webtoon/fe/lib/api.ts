@@ -381,6 +381,13 @@ export function listPlayWorlds<T>(): Promise<{ worlds: T[] }> {
   return call("/play/worlds");
 }
 
+/** 세계관 만들기 — 만든 사람이 정한 세계 · 등장인물 · 사건 · 예시 캐릭터를 올린다(로그인 필요). */
+export function savePlayWorld(body: object, id?: string): Promise<{ id: string }> {
+  return call(id ? `/play/worlds/${encodeURIComponent(id)}` : "/play/worlds", {
+    method: id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+}
+
 /** 세계관 체험 시작. 실패하면 서버 문구 그대로 WebtoonApiError 로 던진다(402 · 429 · 400). */
 export function startPlayRun(body: { world_id: string; event_id: string; character_id: string; agree_ip: boolean; language: string }): Promise<{ id: string; queue_position?: number }> {
   return post("/play/runs", { ...body, uid: getUid() });
