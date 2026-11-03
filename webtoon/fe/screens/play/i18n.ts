@@ -122,5 +122,13 @@ const dict: Dict = {
   "이전": { en: "Back", ja: "戻る", zh: "上一步" },
   "다음 · {name}": { en: "Next · {name}", ja: "次へ · {name}", zh: "下一步 · {name}" },
   "세계": { en: "World", ja: "世界", zh: "世界" },
+  "무엇을 만들까요?": { en: "What will you make?", ja: "何を作りますか？", zh: "要创作什么？" },
+  "그림체": { en: "Art style", ja: "絵柄", zh: "画风" },
+  "웹툰 한 편": { en: "One webtoon", ja: "ウェブトゥーン1話", zh: "一篇漫画" },
+  "약 6~15분": { en: "About 6–15 min", ja: "約6〜15分", zh: "约 6~15 分钟" },
+  "시작": { en: "Start", ja: "スタート", zh: "开始" },
+  "무료": { en: "Free", ja: "無料", zh: "免费" },
+  "숨겨 둔 가족": { en: "The Hidden Family", ja: "隠した家族", zh: "藏起来的家人" },
+  "바이러스의 범인": { en: "The Virus Maker", ja: "ウイルスの犯人", zh: "病毒的元凶" },
 };
 registerDict(dict);

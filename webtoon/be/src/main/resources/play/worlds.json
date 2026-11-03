@@ -5,7 +5,7 @@
       "name": "좀비 아포칼립스",
       "genre": "좀비 아포칼립스",
       "one": "좀비 바이러스가 퍼지고 몇 달이 지난 세계. 정부와 군대는 무너졌고, 살아남은 사람들은 작은 무리로 흩어져 산다.",
-      "cover_url": "/static/play/zombie-family.jpg",
+      "cover_url": "/static/play/zombie-world.jpg",
       "spot": "살아남은 사람",
       "cast": [],
       "events": [
@@ -23,7 +23,8 @@
               "name": "이현",
               "age": 28,
               "desc": "전직 소방관. 무뚝뚝하지만 정이 많고, 가족을 위해서라면 위험도 감수한다.",
-              "relation": "좀비가 된 어머니, 아내, 딸을 숨기고 있다."
+              "relation": "좀비가 된 어머니, 아내, 딸을 숨기고 있다.",
+              "face_url": "/static/play/zombie-ex-leehyun.jpg"
             }
           ]
         },
