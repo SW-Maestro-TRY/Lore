@@ -671,3 +671,9 @@
   .wt .wt-pcard .reel::-webkit-scrollbar { display: none; }
   .wt .wt-pcard .reel img { display: block; width: 100%; height: auto; border-radius: 0; object-fit: initial; }
 }
+/* 폰 웹툰 둘러보기 — 두 줄 격자 대신 옆으로 넘기는 한 줄(하은 11/03), 표지는 세로로 */
+@media (max-width: 767px) {
+  .wt .wt-browse-list { display: flex; gap: 10px; margin: 0 -20px; padding: 0 20px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 20px; scrollbar-width: none; }
+  .wt .wt-browse-list::-webkit-scrollbar { display: none; }
+  .wt .wt-browse-list button, .wt .wt-browse-list button:nth-child(n + 5) { display: flex; flex: 0 0 38%; height: auto; aspect-ratio: 3/4; scroll-snap-align: start; }
+}
