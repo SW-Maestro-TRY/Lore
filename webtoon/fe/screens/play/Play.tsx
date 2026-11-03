@@ -112,7 +112,7 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
           {w.events.map((e) => (
             <button type="button" key={e.id} className="pl-eprow" onClick={() => go("play", { world: w.id, ep: e.id })}>
               <Pic src={e.image_url} />
-              <span className="mid"><span className="no">{e.no}</span><b>{t(e.title)}</b><span className="hook">{t(e.situation)}</span></span>
+              <span className="mid"><span className="no">{e.no}</span><b>{t(e.title)}</b><span className="hook">{t(e.line || e.situation)}</span></span>
             </button>
           ))}
         </div>
@@ -152,6 +152,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
             <div className="ov">
               <span className="epl">{e.no}</span>
               <h2>{t(e.title)}</h2>
+              {e.line && <p className="one">{t(e.line)}</p>}
             </div>
           </div>
           <div className="cols">

@@ -650,3 +650,4 @@
 .wt .pl-whead .pl-chips { flex: 1; min-width: 0; }
 .wt .pl-whead > .pl-btn { flex: none; }
 .wt .wn-ai .pl-err { color: var(--muted); }
+.wt .pl-modal .ov .one { margin: 0; font-size: 15px; line-height: 1.5; color: #e6e9ee; text-shadow: 0 1px 8px rgba(0, 0, 0, .6); }

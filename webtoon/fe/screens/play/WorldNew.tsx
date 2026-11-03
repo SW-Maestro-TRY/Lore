@@ -36,13 +36,12 @@ const strip = (d: Draft): Draft => ({ ...d, cover: undefined, cast: d.cast.map((
 const newPerson = (): Person => ({ id: uid(), name: "", role: "", desc: "" });
 const newEvent = (): Ev => ({ id: uid(), title: "", line: "", situation: "", place: "", spot: "", cast: [], examples: [], example_people: [] });
 
-/* 설정집 → 세계관 칸. 세계 규칙은 고정 설정 + 세계 항목, 등장인물은 인물 항목 */
+/* 설정집 → 세계관 칸(하은 11/03): 설정집 제목은 세계 이름으로, 안의 항목은 전부(고정 설정 포함) 세계 규칙으로 */
 function fromBook(b: LoreBook, d: Draft): Draft {
   const books = b.books?.length ? b.books : [b];
   const entries = books.flatMap((x) => x.entries || []).filter((x) => x.enabled !== false);
-  const rule = [...books.map((x) => x.fixed_settings).filter(Boolean), ...entries.filter((x) => x.kind !== "character").map((x) => `${x.title}: ${x.content}`)].join("\n");
-  const cast = entries.filter((x) => x.kind === "character").map((x) => ({ id: uid(), name: x.title, role: "", desc: x.content }));
-  return { ...d, name: d.name || b.name, rule: rule || d.rule, cast: cast.length ? cast : d.cast, lorebook_id: b.library_id || b.id };
+  const rule = [...books.map((x) => x.fixed_settings).filter(Boolean), ...entries.map((x) => `${x.title}: ${x.content}`)].join("\n");
+  return { ...d, name: b.name || d.name, rule: rule || d.rule, lorebook_id: b.library_id || b.id };
 }
 
 function useDraft() {
@@ -179,6 +178,7 @@ function EventForm({ e, no, cast, onDone, onCancel, onDelete, onLive }: { e: Ev;
       </PickPic>
       <div className="in">
         <div className="two"><span className="no">{no}</span><input placeholder={t("사건 제목")} aria-label={t("사건 제목")} value={v.title} maxLength={60} onChange={(x) => setV({ ...v, title: x.target.value })} /></div>
+        <input placeholder={t("한 줄 소개")} aria-label={t("한 줄 소개")} value={v.line} maxLength={120} onChange={(x) => setV({ ...v, line: x.target.value })} />
         <textarea rows={6} placeholder={t("상황")} aria-label={t("상황")} value={v.situation} maxLength={2000} onChange={(x) => setV({ ...v, situation: x.target.value })} />
         <input placeholder={t("장소")} aria-label={t("장소")} value={v.place} maxLength={80} onChange={(x) => setV({ ...v, place: x.target.value })} />
         {cast.length > 0 && (
@@ -207,7 +207,7 @@ function EventRow({ e, no, onEdit }: { e: Ev; no: string; onEdit: () => void }) 
   return (
     <button type="button" className="wn-row" onClick={onEdit}>
       {e.image ? <span className="im" style={{ backgroundImage: `url(${e.image})` }} /> : <span className="im none" />}
-      <span className="mid"><span className="no">{no}</span><b>{e.title}</b>{e.place && <span className="place">{e.place}</span>}<span className="hook">{e.situation}</span></span>
+      <span className="mid"><span className="no">{no}</span><b>{e.title}</b>{e.place && <span className="place">{e.place}</span>}<span className="hook">{e.line || e.situation}</span></span>
       <span className="pen"><IconEdit /></span>
     </button>
   );
