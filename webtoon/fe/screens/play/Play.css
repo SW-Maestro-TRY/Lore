@@ -649,3 +649,4 @@
 }
 .wt .pl-whead .pl-chips { flex: 1; min-width: 0; }
 .wt .pl-whead > .pl-btn { flex: none; }
+.wt .wn-ai .pl-err { color: var(--muted); }

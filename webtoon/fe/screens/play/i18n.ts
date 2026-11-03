@@ -131,5 +131,6 @@ const dict: Dict = {
   "숨겨 둔 가족": { en: "The Hidden Family", ja: "隠した家族", zh: "藏起来的家人" },
   "바이러스의 범인": { en: "The Virus Maker", ja: "ウイルスの犯人", zh: "病毒的元凶" },
   "설정 · 등장인물": { en: "Setting · Characters", ja: "設定 · 登場人物", zh: "设定 · 人物" },
+  "아직 구현 중이에요": { en: "Coming soon", ja: "まだ準備中です", zh: "功能开发中" },
 };
 registerDict(dict);

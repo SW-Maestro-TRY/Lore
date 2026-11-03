@@ -28,6 +28,8 @@ const empty: Draft = { name: "", genre: "", one: "", rule: "", cast: [], events:
 const uid = () => Math.random().toString(36).slice(2, 10);
 const epNo = (i: number) => `EP ${String(i + 1).padStart(2, "0")}`;
 const MAX_EXAMPLES = 2;
+/* AI로 채우기 — 서버 길(/play/worlds/make)은 있지만 모델 호출 · 그림 비용을 아직 확인 못 해 닫아 둔다 */
+const AI_FILL_ON = false;
 /* 저장소가 차면 사진을 빼고 글만이라도 남긴다 */
 const strip = (d: Draft): Draft => ({ ...d, cover: undefined, cast: d.cast.map((p) => ({ ...p, face: undefined })),
   events: d.events.map((e) => ({ ...e, image: undefined, example_people: (e.example_people || []).map((x) => ({ ...x, face: undefined })) })) });
@@ -89,6 +91,8 @@ function AiFill({ d, setD }: { d: Draft; setD: (d: Draft) => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const run = async () => {
+    /* 11/03 하은: 아직 실제로 돌려 보지 않은 기능이라 누르면 안내만 한다. 열 때는 이 줄을 지운다. */
+    if (!AI_FILL_ON) { setErr(t("아직 구현 중이에요")); return; }
     if (busy) return;
     setBusy(true); setErr("");
     try { setD({ ...(await makeWorld(strip(d))), cover: d.cover }); }
