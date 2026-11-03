@@ -350,6 +350,112 @@ public class CharacterService {
         if (safety != null) safety.checkText("character-import", name, description);
     }
 
+    /** 헤더만 읽어 크기를 제한한 뒤 JPG·PNG 인지 검사하고 MIME 을 돌려준다. 바이트는 바꾸지 않는다. */
+    private static String imageMime(byte[] bytes) throws IOException {
+        try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+            var readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) throw new BusinessException(ErrorCode.INVALID_INPUT, "JPG 또는 PNG 이미지를 선택해 주세요");
+            var reader = readers.next();
+            try {
+                reader.setInput(input);
+                long pixels = (long) reader.getWidth(0) * reader.getHeight(0);
+                String format = reader.getFormatName().toLowerCase();
+                if (pixels <= 0 || pixels > 40_000_000 || !(format.equals("png") || format.equals("jpeg") || format.equals("jpg"))) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT, "4천만 화소 이하 JPG 또는 PNG 이미지를 선택해 주세요");
+                }
+                reader.read(0); // 제한 확인 후 실제로 열리는지 검사. 저장할 원본 바이트는 변경하지 않는다.
+                return format.equals("png") ? "image/png" : "image/jpeg";
+            } finally { reader.dispose(); }
+        }
+    }
+
+    /**
+     * 세계관 만들기의 그림 한 장(표지 · 등장인물 얼굴 · 사건 그림 · 예시 인물 사진)을 공개 자리에 올리고 키를 돌려준다.
+     * presign 으로 먼저 올린 키(로그인 사용자 공용 presign — dev·운영의 WAF 가 큰 본문을 막으므로 실제 서버는 이 길)나
+     * data URL 둘 중 하나. 둘 다 비면 {@code null}. 인물 사진은 캐릭터 그림처럼 줄여서 올린다.
+     */
+    public String storeWorldImage(Long userId, String dataUrl, String presignKey, boolean face) {
+        boolean byKey = presignKey != null && !presignKey.isBlank();
+        boolean byData = dataUrl != null && dataUrl.startsWith("data:");
+        if (!byKey && !byData) {
+            return null;
+        }
+        Path temp = null;
+        try {
+            byte[] bytes;
+            if (byKey) {
+                Files.createDirectories(workDir);
+                temp = Files.createTempDirectory(workDir, "world-");
+                bytes = Files.readAllBytes(pullPhotos(temp, List.of(presignKey), userId, null).getFirst());
+            } else {
+                if (dataUrl.length() > MAX_PHOTO_BYTES * 4 / 3 + 128) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT, "그림은 6MB까지 올릴 수 있어요");
+                }
+                try {
+                    bytes = Base64.getDecoder().decode(dataUrl.substring(dataUrl.indexOf(',') + 1));
+                } catch (IllegalArgumentException e) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT, "그림을 읽지 못했어요");
+                }
+            }
+            String mime = imageMime(bytes);
+            String key = face ? art.upload(shrunk(bytes), "image/jpeg", true) : art.upload(bytes, mime, true);
+            if (key == null) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "그림을 저장하지 못했어요. 다시 시도해 주세요");
+            }
+            return key;
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그림을 읽지 못했어요");
+        } finally {
+            if (temp != null) {
+                try (var paths = Files.walk(temp)) {
+                    paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                } catch (IOException ignored) {
+                    // 임시 폴더 — 못 지워도 다음 정리 때 지운다
+                }
+            }
+        }
+    }
+
+    /** 그림 키의 주소 — {@link #artUrl} 과 같은 규칙(공개 자리는 상대경로, 로컬·비공개는 잠깐 열리는 주소). */
+    @Transactional(readOnly = true)
+    public String imageUrl(String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        if (!PrivateArt.isPrivate(key) && !presignLocally) {
+            return "/" + key;
+        }
+        return art.ready() ? art.temporaryUrl(key) : null;
+    }
+
+    /**
+     * 사용자가 만든 세계의 예시 인물을 캐릭터로 둔다 — 그 자리에서 넣은 사진 · 이름 · 설정 그대로(생성 호출 없음).
+     * 같은 id 면 이름 · 설정을 맞추고, 새 사진이 왔을 때만 그림을 바꾼다. 사진이 없으면 글만으로 고를 수 있는
+     * 캐릭터가 되고, 시트는 체험할 때 그 글로 그린다.
+     */
+    @Transactional
+    public WebtoonCharacter putPlayPerson(String publicId, Long ownerId, String world, String name, String description,
+                                          String artKey, boolean shown) {
+        Instant now = Instant.now(clock);
+        WebtoonCharacter one = characters.findByPublicId(publicId).orElse(null);
+        if (one != null && !world.equals(one.getPlayWorld())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "예시 인물을 저장하지 못했어요.");
+        }
+        if (one == null) {
+            one = WebtoonCharacter.playExample(publicId, ownerId, world, name, description, shown, now);
+            one.drewArt(artKey, artKey == null ? CharacterSource.PROMPT : CharacterSource.PHOTO, now);
+        } else {
+            if (!name.equals(one.getName()) || !description.equals(one.getDescription())) {
+                one.rename(name, description, now);
+            }
+            if (artKey != null) {
+                one.drewArt(artKey, CharacterSource.PHOTO, now);
+            }
+        }
+        one.showInPlay(shown, now);
+        return characters.save(one);
+    }
+
     private String storeOriginal(Long userId, String guestKey, List<String> photos, List<String> keys) {
         List<String> data = photos == null ? List.of() : photos;
         List<String> refs = keys == null ? List.of() : keys;
@@ -373,23 +479,7 @@ public class CharacterService {
                 catch (IllegalArgumentException e) { throw new BusinessException(ErrorCode.INVALID_INPUT, "이미지를 읽지 못했습니다"); }
                 if (bytes.length > MAX_PHOTO_BYTES) throw new BusinessException(ErrorCode.INVALID_INPUT, "이미지는 6MB까지 올릴 수 있습니다");
             }
-            // 헤더만 읽어 크기를 제한한 뒤 이미지 포맷을 검증한다. 원본 바이트는 보존한다.
-            String mime;
-            try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
-                var readers = ImageIO.getImageReaders(input);
-                if (!readers.hasNext()) throw new BusinessException(ErrorCode.INVALID_INPUT, "JPG 또는 PNG 이미지를 선택해 주세요");
-                var reader = readers.next();
-                try {
-                    reader.setInput(input);
-                    long pixels = (long) reader.getWidth(0) * reader.getHeight(0);
-                    String format = reader.getFormatName().toLowerCase();
-                    if (pixels <= 0 || pixels > 40_000_000 || !(format.equals("png") || format.equals("jpeg") || format.equals("jpg"))) {
-                        throw new BusinessException(ErrorCode.INVALID_INPUT, "4천만 화소 이하 JPG 또는 PNG 이미지를 선택해 주세요");
-                    }
-                    reader.read(0); // 제한 확인 후 실제로 열리는지 검사. 저장할 원본 바이트는 변경하지 않는다.
-                    mime = format.equals("png") ? "image/png" : "image/jpeg";
-                } finally { reader.dispose(); }
-            }
+            String mime = imageMime(bytes);
             String key = art.upload(bytes, mime, false);
             if (key == null) throw new BusinessException(ErrorCode.INTERNAL_ERROR, "이미지를 저장하지 못했습니다. 다시 시도해 주세요");
             return key;

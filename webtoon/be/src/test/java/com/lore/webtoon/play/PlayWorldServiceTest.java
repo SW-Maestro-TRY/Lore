@@ -182,8 +182,65 @@ class PlayWorldServiceTest {
         assertThat(((Map<?, ?>) events.get(1)).get("examples")).isEqualTo(List.of("new2", "new3"));
         assertThat(((Map<?, ?>) events.get(0)).get("cast")).isEqualTo(List.of("a1"));
         verify(characters, times(3)).drawPlayExample(eq(7L), eq(a), anyString(), anyString(), anyBoolean(), anyString());
-        verify(characters).dropPlayExamples(a, "old");
+        verify(characters, org.mockito.Mockito.atLeastOnce()).dropPlayExamples(a, "old");
         verify(rows).reserve(eq(7L), any(), eq(5));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 그_자리에서_넣은_예시_인물은_사진_그대로_캐릭터가_되고_그림은_다시_저장해도_남는다() {
+        when(characters.storeWorldImage(eq(7L), any(), anyString(), anyBoolean()))
+                .thenAnswer(c -> "img/" + c.getArgument(2));
+        when(characters.imageUrl(anyString())).thenAnswer(c -> {
+            String k = c.getArgument(0);
+            return k == null || k.isBlank() ? null : "/" + k;
+        });
+        when(characters.putPlayPerson(anyString(), eq(7L), anyString(), anyString(), anyString(), any(), anyBoolean()))
+                .thenAnswer(c -> {
+                    WebtoonCharacter one = WebtoonCharacter.playExample(c.getArgument(0), 7L, c.getArgument(2),
+                            c.getArgument(3), c.getArgument(4), true, Instant.now());
+                    one.drewArt(c.getArgument(5), com.lore.webtoon.character.CharacterSource.PHOTO, Instant.now());
+                    when(characters.ownedBy(one.getPublicId(), 7L)).thenReturn(one);
+                    when(characters.artUrl(one)).thenReturn(c.getArgument(5) == null ? null : "/" + c.getArgument(5));
+                    return one;
+                });
+        Map<String, Object> b = body("public", List.of());
+        b.put("cover_key", "k-cover");
+        b.put("events", List.of(Map.of("id", "x", "title", "꺼진 등대", "situation", "주인공이 등대에 남았다.",
+                "image_key", "k-ep",
+                "example_people", List.of(Map.of("id", "p1", "name", "가람", "role", "등대지기", "desc", "말이 없다",
+                        "face_key", "k-face", "face", "data:image/jpeg;base64,AAAA")))));
+        Map<String, Object> view = service.save(null, 7L, b);
+        String id = (String) view.get("id");
+        assertThat(view.get("cover_url")).isEqualTo("/img/k-cover");
+        Map<String, Object> ev = (Map<String, Object>) ((List<?>) view.get("events")).get(0);
+        assertThat(ev.get("image_url")).isEqualTo("/img/k-ep");
+        String cid = PlayWorldService.personId(id, "p1");
+        assertThat(ev.get("examples")).isEqualTo(List.of(cid));
+        Map<String, Object> person = (Map<String, Object>) ((List<?>) ev.get("example_people")).get(0);
+        assertThat(person).containsEntry("character_id", cid).containsEntry("face_url", "/img/k-face").doesNotContainKey("face");
+        verify(characters).putPlayPerson(eq(cid), eq(7L), eq(id), eq("가람"), eq("등대지기. 말이 없다"), eq("img/k-face"), eq(true));
+        assertThat(store.get(id).docJson).doesNotContain("base64");          // 그림은 창고 키로만 남는다
+
+        // 다시 저장 — 새 그림 없이 지금 주소만 오면 전 그림을 그대로 둔다
+        Map<String, Object> again = body("public", List.of());
+        again.put("cover_url", "/img/k-cover");
+        again.put("events", List.of(Map.of("id", ev.get("id"), "title", "꺼진 등대", "situation", "주인공이 등대에 남았다.",
+                "image_url", "/img/k-ep",
+                "example_people", List.of(Map.of("id", "p1", "name", "가람", "role", "등대지기", "desc", "말이 없다",
+                        "face_url", "/img/k-face")))));
+        Map<String, Object> view2 = service.save(id, 7L, again);
+        assertThat(view2.get("cover_url")).isEqualTo("/img/k-cover");
+        assertThat(((Map<?, ?>) ((List<?>) view2.get("events")).get(0)).get("image_url")).isEqualTo("/img/k-ep");
+        verify(characters).putPlayPerson(eq(cid), eq(7L), eq(id), eq("가람"), anyString(), org.mockito.ArgumentMatchers.isNull(), eq(true));
+    }
+
+    @Test
+    void 안전_검사에는_그림을_보내지_않는다() {
+        Object clean = PlayWorldService.withoutPictures(Map.of("name", "n", "cover", "data:xx",
+                "events", List.of(Map.of("situation", "s", "image", "data:yy",
+                        "example_people", List.of(Map.of("name", "가", "face", "data:zz"))))));
+        assertThat(clean.toString()).doesNotContain("data:").contains("가").contains("s");
     }
 
     @Test
