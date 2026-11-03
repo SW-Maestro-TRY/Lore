@@ -6,7 +6,9 @@ import { createNextEpisode, linkThisBrowser, readSeriesDraft, saveSeriesDraft, s
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { track } from "../../lib/track";
-import { ErrLine, errText } from "../../ui/CreditShort";
+import { ErrLine, errText, isCreditShort } from "../../ui/CreditShort";
+import { creditBalance } from "@common/api/credits";
+import SeriesFork from "./SeriesFork";
 import { IconChevronLeft, IconEdit, IconMinus } from "../../ui/Icons";
 import LouLoading from "../../ui/LouLoading";
 import DirectSwitch from "../../ui/DirectSwitch";
@@ -33,6 +35,8 @@ export default function NextEpisodePage({runId, authenticated, go}: {
   const [retry, setRetry] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  /* 만들기를 눌렀는데 서버가 크레딧이 모자란다고 했다(402) — 그 사이 잔액이 바뀐 경우. 두 갈래를 띄운다. */
+  const [short, setShort] = useState(false);
   const token = useRef("");
   const submitting = useRef(false);
 
@@ -169,10 +173,19 @@ export default function NextEpisodePage({runId, authenticated, go}: {
         setData(d=>d?{...d,revision:result.revision}:d); setSaved(true); setDirty(false);
         track("series_memory_save",{run:runId,ep:data.episode});
       }
-    } catch (e) { setError(errText(e,t("저장하지 못했습니다"))); }
+    } catch (e) {
+      if (generate && isCreditShort(e)) { setShort(true); void refreshBalance(); }
+      else setError(errText(e,t("저장하지 못했습니다")));
+    }
     finally { submitting.current=false; setBusy(false); }
   };
 
+  /* 충전·출석 뒤 잔액만 다시 읽는다 — 초안을 다시 읽으면 적던 글이 덮인다. */
+  const refreshBalance = async () => {
+    try { const b = await creditBalance(); setData(d => d ? {...d, balance: b.balance} : d); if (data && b.balance >= data.credit_cost) setShort(false); }
+    catch { /* 그대로 둔다 */ }
+  };
+  const forkOn = !!data && !data.blocked && (short || data.balance < data.credit_cost);
   const back = () => {
     if (busy) return;
     if (dirty && !window.confirm(t("저장하지 않은 변경 사항이 있어요. 나갈까요?"))) return;
@@ -267,9 +280,14 @@ export default function NextEpisodePage({runId, authenticated, go}: {
       {error && <div role="alert"><ErrLine text={error}/></div>}
       <div className="wt-series-actions">
         <span className="wt-series-autosave" role="status">{dirty ? (preparing ? t("정리가 끝나면 저장돼요") : t("저장 중…")) : saved ? t("자동 저장됨") : ""}</span>
-        <button type="submit" className="btn btn-p" disabled={busy || preparing || (!data.progress.length && !data.progress_state.trim()) || !!data.blocked}>
-          {busy ? t("처리 중…") : <>{t("{n}화 만들기",{n:data.episode})} <span className="wt-series-price">-{t("{n} 크레딧",{n:data.credit_cost})}</span></>}</button>
+        {!forkOn && <button type="submit" className="btn btn-p" disabled={busy || preparing || (!data.progress.length && !data.progress_state.trim()) || !!data.blocked}>
+          {busy ? t("처리 중…") : <>{t("{n}화 만들기",{n:data.episode})} <span className="wt-series-price">-{t("{n} 크레딧",{n:data.credit_cost})}</span></>}</button>}
       </div>
     </form>}
+    {/* 크레딧이 모자라면 만들기 단추 대신 두 갈래(충전 · 출석)를 띄운다(2026-11-03). 충전 창 안에 결제 form 이
+        있어서 이 페이지의 form 밖에 둔다 — form 안에 두면 form 이 겹치고, 결제 제출이 만들기 제출로 번진다. */}
+    {authenticated && data && forkOn && <div className="wt-series-actions wt-series-fork-row">
+      <SeriesFork run={runId} episode={data.episode} cost={data.credit_cost} balance={data.balance} onBalance={() => void refreshBalance()} />
+    </div>}
   </div>;
 }

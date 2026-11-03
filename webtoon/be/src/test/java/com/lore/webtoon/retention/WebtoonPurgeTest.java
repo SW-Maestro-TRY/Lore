@@ -128,6 +128,7 @@ class WebtoonPurgeTest {
         verify(rows).deleteBrowserLinks(USER);
         verify(rows).deleteNotifySettings(USER);
         verify(rows).deletePushSubscriptions(USER);
+        verify(rows).deleteAttendReminds(USER);
         // 지울 키가 없으면 S3 를 부르지 않는다.
         verify(storage, never()).delete(anyList());
     }

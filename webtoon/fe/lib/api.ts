@@ -1448,6 +1448,18 @@ export function createNextEpisode(run: string, form: SeriesForm): Promise<{id: s
   return post(`/series/${encodeURIComponent(run)}/next`, {...form, uid: getUid()});
 }
 
+/** 「출석으로 모아서 다음 화 만들기」 알림(2026-11-03). push 는 서버가 푸시를 보낼 수 있나, device 는 이 계정에 구독한 기기가 있나. */
+export interface AttendRemindState { on: boolean; run: string | null; episode: number | null; push: boolean; device: boolean }
+export function readAttendRemind(): Promise<AttendRemindState> {
+  return call("/attend-remind");
+}
+export function attendRemindOn(run: string, episode: number, cost: number): Promise<AttendRemindState> {
+  return post("/attend-remind", { run, episode, cost });
+}
+export function attendRemindOff(): Promise<AttendRemindState> {
+  return call("/attend-remind", { method: "DELETE" });
+}
+
 export interface LoreEntry {id?:string;title:string;content:string;kind:string;keys:string[];always:boolean;enabled:boolean;evidence?:string;}
 export interface LoreBook {library_id?:string;library_owner?:number;books?:LoreBook[];id?:string;name:string;source:string;fixed_settings:string;progress_state:string;entries:LoreEntry[];progress?:LoreProgress[];confirmed:boolean;}
 /** 진행 상태 한 줄. key 가 항목 id 면 그 항목을 「→ 지금:」으로 덮어쓴다(2층 로어북). */

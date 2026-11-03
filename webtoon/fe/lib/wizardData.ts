@@ -96,6 +96,20 @@ export const QUALITY_INFO: {
 
 export const QUALITY_DEFAULT: WizardQuality = "surf";
 
+/* 화질 견본 — 같은 장면 한 칸을 화질만 바꿔 그린 그림(2026-11-03, 윤지환 멘토링 「차이를 그림으로」).
+ *
+ * 셋이 같은 장면이어야 차이가 보인다. 다른 작품 그림을 섞으면 그림체·장면 차이를 화질 차이로
+ * 읽게 되니, 셋을 다 갖췄을 때만 화면에 띄운다(하나라도 비면 아무것도 안 그린다).
+ * 그림은 webtoon/fe/static/gallery/quality/ 에 두고(images.md — sync-landing.sh 가 /static/gallery 로
+ * 옮긴다) 주소만 여기에 적는다. 지금은 비어 있다 — 9/13 실측 때 물결·너울로 그린 run 은 남아 있지 않다. */
+export const QUALITY_SAMPLE: Partial<Record<WizardQuality, string>> = {};
+
+/** 세 화질 견본이 다 있을 때만 그 주소들. */
+export function qualitySamples(): Record<WizardQuality, string> | null {
+  const all = QUALITY_INFO.every((q) => !!QUALITY_SAMPLE[q.key]);
+  return all ? (QUALITY_SAMPLE as Record<WizardQuality, string>) : null;
+}
+
 export interface WizardForm {
   lorebook?: import("./api").LoreBook | null;
   photos: string[]; // data URL
