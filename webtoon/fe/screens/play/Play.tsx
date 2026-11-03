@@ -456,7 +456,7 @@ function Making({ w, e, job, character, go }: { w: PlayWorld; e: PlayEvent; job?
         <div key={b} className={i < phase ? "done" : i === phase ? "on" : ""}><b>{b}{i < phase ? " ✓" : ""}</b><span>{s}</span></div>
       ))}</div>
       <div className="acts">
-        <button type="button" className="lnk" onClick={() => go("works")}>{t("기다리는 동안 웹툰 보기")}</button>
+        <button type="button" className="lnk" onClick={() => go("works")}>{t("웹툰 보러 가기")}</button>
         <button type="button" className="lnk" onClick={() => { if (job && !mock) void cancelJob(job).catch(() => {}); back(); }}>{t("만들기 중단")}</button>
       </div>
     </div>

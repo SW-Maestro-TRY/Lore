@@ -68,11 +68,14 @@ public class JobController {
     private final CreditGate credits;
     private final S3Service uploads;
     private final com.lore.webtoon.character.CharacterOwner owner;
+    private final com.lore.common.user.UserRepository users;
 
     public JobController(JobService jobs, JobQueue queue, RunArt art, SpendGuard guard,
                          GuestGate guests, CreditGate credits, S3Service uploads,
-                         com.lore.webtoon.character.CharacterOwner owner) {
+                         com.lore.webtoon.character.CharacterOwner owner,
+                         com.lore.common.user.UserRepository users) {
         this.owner = owner;
+        this.users = users;
         this.jobs = jobs;
         this.queue = queue;
         this.art = art;
@@ -141,15 +144,18 @@ public class JobController {
     @PostMapping("/photo-presign")
     public S3Service.PresignedUpload photoPresign(HttpServletRequest request,
                                                    @RequestBody PhotoPresignRequest form) {
-        if (CreditGate.currentUser() != null) {
+        Long me = CreditGate.currentUser();
+        // 토큰은 있는데 그 계정이 이 DB 에 없으면(다른 환경의 쿠키가 남은 경우) 게스트로 본다 — 사람은 로그인한 적이 없다.
+        if (me != null && users.existsById(me)) {
             // 로그인한 사람은 팀 공용 presign(/api/v1/uploads/presign)을 쓴다 —
             // 거기 티켓이 계정에 묶여 더 오래(계정이 있는 한) 추적·회수된다.
-            throw new BusinessException(ErrorCode.INVALID_INPUT,
-                    "로그인한 사람은 /api/v1/uploads/presign 을 쓰세요");
+            // 화면이 로그인 상태를 놓쳤을 때(토큰은 있는데 /me 가 실패한 경우 등) 사람에게 보이는 글이다 —
+            // 주소 같은 개발자 메모를 적지 않는다(2026-11-03 하은 지적). 화면은 이 코드를 보고 로그인용 올리기로 다시 간다.
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "사진을 올리지 못했어요. 다시 시도해 주세요");
         }
-        String guestKey = guests.keyOf(request);
+        String guestKey = me == null ? guests.keyOf(request) : guests.keyOfAsGuest(request);
         if (guestKey == null) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "게스트 열쇠를 만들 수 없습니다");
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금은 사진을 올릴 수 없어요. 잠시 뒤 다시 시도해 주세요");
         }
         return uploads.createUploadUrlForGuest(guestKey, "webtoon", form.contentType());
     }

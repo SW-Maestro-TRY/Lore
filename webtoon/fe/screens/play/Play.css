@@ -140,7 +140,9 @@
 .wt .pl-making .phase b { display: block; margin-bottom: 2px; font-size: 14px; color: #fff; }
 .wt .pl-making .phase .on { border-color: var(--pl-apricot); }
 .wt .pl-making .phase .done b { color: var(--pl-mint); }
-.wt .pl-making .acts { display: flex; justify-content: space-between; }
+.wt .pl-making .acts { display: flex; justify-content: space-between; gap: 12px; }
+/* 「기다리는 동안 웹툰 보기」 · 「만들기 중단」은 글자 링크가 아니라 단추(하은 11/03) */
+.wt .pl-making .acts .lnk { display: inline-flex; align-items: center; justify-content: center; height: 46px; padding: 0 20px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--pl-card2); color: #fff !important; font-size: 14px; font-weight: 700; text-decoration: none; }
 .wt .pl-making .card .pl-btn { align-self: flex-start; margin-top: 6px; }
 
 /* 7 만화 */
@@ -246,8 +248,8 @@
   .wt .pl-making .card { padding: 24px 16px; }
   .wt .pl-making .face { width: 96px; height: 96px; border-radius: 20px; }
   .wt .pl-making h2 { font-size: 16px; }
-  .wt .pl-making .phase { grid-template-columns: repeat(4, auto); justify-content: start; gap: 6px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
-  .wt .pl-making .phase div { height: 24px; padding: 0 9px; border: 0; border-radius: 7px; background: var(--pl-card3); display: inline-flex; align-items: center; }
+  .wt .pl-making .phase { grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+  .wt .pl-making .phase div { height: 28px; padding: 0 6px; border: 0; border-radius: 7px; background: var(--pl-card3); display: inline-flex; align-items: center; justify-content: center; }
   .wt .pl-making .phase b { margin: 0; font-size: 11px; color: var(--ink); }
   .wt .pl-making .phase span { display: none; }
   .wt .pl-making .phase .on { background: var(--pl-btn); }
@@ -255,7 +257,8 @@
   .wt .pl-making .phase .done { background: rgba(127, 214, 194, .18); }
   .wt .pl-making .phase .done b { color: var(--pl-mint); }
   .wt .pl-making .acts { justify-content: flex-start; gap: 8px; flex-wrap: wrap; }
-  .wt .pl-making .acts .lnk { height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-strong); font-size: 12.5px; }
+  .wt .pl-making .acts { gap: 8px; }
+  .wt .pl-making .acts .lnk { flex: 1; height: 44px; font-size: 14px; }
   /* 7 만화 */
   .wt .pl-comic .pl-mtop { margin: 0; }
   .wt .pl-comic .head { padding: 12px 16px; }
