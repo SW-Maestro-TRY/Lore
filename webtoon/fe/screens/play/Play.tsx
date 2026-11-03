@@ -145,6 +145,20 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const cast = e.cast ? w.cast.filter((p) => e.cast!.includes(p.name) || (!!p.id && e.cast!.includes(p.id))) : w.cast;
   /* 이 사건의 예시 캐릭터 — 단추 위에 얼굴과 이름. 누르면 내 캐릭터 화면(예시가 먼저 나온다) */
   const people = e.example_people || [];
+  /* 이 사건에서 만든 만화 — 위로 올려 늘 보이게(없으면 비었다는 한 줄). PC 는 넣기 단추 아래, 폰은 상황 글 위 */
+  const madeBlock = (
+    <div className="made"><p className="k">{t("이 사건에서 만든 만화")}</p>
+      {made.length === 0 ? <p className="none">{t("아직 이 사건에서 만든 만화가 없어요")}</p> : (
+        <div className="row">{made.map((r) => (
+          <button type="button" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
+            <b>{r.character}</b>
+          </button>
+        ))}</div>
+      )}
+    </div>
+  );
   const examples = people.length > 0 && (
     <div className="exs"><p className="k">{t("예시 캐릭터")}</p>
       <div className="exl">{people.map((x) => (
@@ -173,6 +187,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
           <div className="cols">
             <div className="l">
               <div className="meta"><b>{t(w.name)}</b>{e.place && <> · {t(e.place)}</>}</div>
+              <div className="made-m">{madeBlock}</div>
               <p className="sit">{t(e.situation)}</p>
               {examples && <div className="exs-m">{examples}</div>}
               {cast.length > 0 && (
@@ -180,19 +195,8 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
                   <div className="cast">{cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
                 </div>
               )}
-              {made.length > 0 && (
-                <div className="made"><p className="k">{t("이 사건에서 만든 만화")}</p>
-                  <div className="row">{made.map((r) => (
-                    <button type="button" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
-                      <b>{r.character}</b>
-                    </button>
-                  ))}</div>
-                </div>
-              )}
             </div>
-            <div className="r"><div className="spot">{examples}<button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div></div>
+            <div className="r"><div className="spot">{examples}<button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>{madeBlock}</div>
           </div>
         </div>
         <div className="mfoot"><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>

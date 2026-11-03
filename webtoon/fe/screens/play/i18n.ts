@@ -132,5 +132,7 @@ const dict: Dict = {
   "바이러스의 범인": { en: "The Virus Maker", ja: "ウイルスの犯人", zh: "病毒的元凶" },
   "설정 · 등장인물": { en: "Setting · Characters", ja: "設定 · 登場人物", zh: "设定 · 人物" },
   "아직 구현 중이에요": { en: "Coming soon", ja: "まだ準備中です", zh: "功能开发中" },
+  "이 사건에서 만든 만화": { en: "Comics from this event", ja: "この事件で作られたマンガ", zh: "这个事件做出的漫画" },
+  "아직 이 사건에서 만든 만화가 없어요": { en: "No comics from this event yet", ja: "この事件のマンガはまだありません", zh: "这个事件还没有漫画" },
 };
 registerDict(dict);
