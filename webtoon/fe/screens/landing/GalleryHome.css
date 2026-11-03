@@ -666,3 +666,8 @@
   .wt .wt-pcard li i { width: 24px; height: 24px; flex: none; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font-style: normal; font-size: 11.5px; font-weight: 700; color: #7fd6c2; }
   .wt .wt-pcard .btn { width: 100%; height: 46px; }
 }
+@media (max-width: 767px) {
+  .wt .wt-pcard .reel { height: 260px; overflow-y: auto; border-radius: 12px; background: #fff; scrollbar-width: none; overscroll-behavior: contain; }
+  .wt .wt-pcard .reel::-webkit-scrollbar { display: none; }
+  .wt .wt-pcard .reel img { display: block; width: 100%; height: auto; border-radius: 0; object-fit: initial; }
+}
