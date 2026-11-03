@@ -501,3 +501,6 @@
 .wt .wn-p em { display: block; margin-top: 2px; font-style: normal; font-size: 13px; font-weight: 600; color: var(--pl-apricot); }
 .wt .wn-p small { margin-top: 4px; font-size: 13px; line-height: 1.5; color: var(--muted); white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .wt .wn-p .pen { margin-top: 2px; }
+/* 사진 없는 예시 인물 — 흰 칸 대신 이름 첫 글자 */
+.wt .pl-tiles .sq.noart { background: var(--pl-card3); }
+.wt .pl-tiles .sq.noart b { font-size: 44px; font-weight: 800; color: var(--pl-apricot); }

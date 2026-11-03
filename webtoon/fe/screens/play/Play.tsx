@@ -211,7 +211,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
             {examples.map((c) => (
               <button type="button" key={c.id} className={`pl-tile${c.id === sel ? " on" : ""}`} onClick={() => setSel(c.id)}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <span className="sq">{c.art_url && <img src={c.art_url} alt="" />}</span>
+                <span className={`sq${c.art_url ? "" : " noart"}`}>{c.art_url ? <img src={c.art_url} alt="" /> : <b>{nameOf(c).slice(0, 1)}</b>}</span>
                 <span>{nameOf(c)}</span>
               </button>
             ))}

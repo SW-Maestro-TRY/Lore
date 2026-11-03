@@ -5,7 +5,7 @@
 import { uploadDataUrls } from "@common/api/uploads";
 import { listPlayWorlds, makePlayWorld, readPlayWorld, savePlayWorld, WebtoonApiError } from "../../lib/api";
 
-export interface PlayEvent { id: string; no: string; title: string; line: string; situation: string; image_url: string | null; tried: number; place?: string; spot?: string; examples?: string[]; example_people?: { name: string; age?: number; desc: string; relation?: string; face_url?: string }[] }
+export interface PlayEvent { id: string; no: string; title: string; line: string; situation: string; image_url: string | null; tried: number; place?: string; spot?: string; examples?: string[]; example_people?: { id?: string; name: string; role?: string; age?: number; desc: string; relation?: string; face_url?: string; character_id?: string }[] }
 export interface PlayPerson { name: string; role?: string; desc?: string; face_url?: string | null }
 export interface PlayWorld { id: string; name: string; genre: string; one: string; cover_url: string | null; spot: string; cast: PlayPerson[]; events: PlayEvent[]; examples?: string[]; mine?: boolean; rule?: string }
 
@@ -35,19 +35,20 @@ export const loadWorlds = () => listPlayWorlds<PlayWorld>().then((r) => {
 
 /* 사진(data URL)은 공용 presign 으로 창고에 먼저 올리고 키만 보낸다 — 큰 본문 POST 는 dev · staging · 운영 WAF 가 막는다.
  * 올리기가 안 되는 곳(로컬에 창고가 없을 때)은 data URL 을 그대로 보낸다. 서버는 둘 다 받는다(lore-23). */
-async function pic(u?: string): Promise<{ key?: string; url?: string }> {
-  if (!u || !u.startsWith("data:")) return {};
+async function pic(u?: string): Promise<{ key?: string; url?: string; kept?: string }> {
+  if (!u) return {};
+  if (!u.startsWith("data:")) return { kept: u }; // 서버가 준 그림 주소 — 그대로 다시 보내야 그림이 남는다
   try { const [key] = await uploadDataUrls([u], "webtoon"); return key ? { key } : { url: u }; } catch { return { url: u }; }
 }
 async function withKeys(d: WorldDraft) {
   const c = await pic(d.cover);
-  const face = async (p: DraftPerson) => { const f = await pic(p.face); return { ...p, face: f.url, face_key: f.key }; };
+  const face = async (p: DraftPerson) => { const f = await pic(p.face); return { ...p, face: f.url, face_key: f.key, face_url: f.kept }; };
   return {
-    ...d, cover: c.url, cover_key: c.key,
+    ...d, cover: c.url, cover_key: c.key, cover_url: c.kept,
     cast: await Promise.all(d.cast.map(face)),
     events: await Promise.all(d.events.map(async (e) => {
       const im = await pic(e.image);
-      return { ...e, image: im.url, image_key: im.key, example_people: await Promise.all((e.example_people || []).map(face)) };
+      return { ...e, image: im.url, image_key: im.key, image_url: im.kept, example_people: await Promise.all((e.example_people || []).map(face)) };
     })),
   };
 }
@@ -80,8 +81,9 @@ export async function makeWorld(d: WorldDraft, onTick?: () => void): Promise<Wor
 function fromServer(w: ServerWorld, d: WorldDraft): WorldDraft {
   const cast = (w.cast || []).map((p, i) => ({ id: p.id || `c${i + 1}`, name: p.name, role: p.role || "", desc: p.desc || "", face: p.face_url || undefined }));
   return {
-    ...d, id: w.id, name: w.name || d.name, genre: w.genre || d.genre, one: w.one || d.one, rule: w.rule || d.rule,
+    ...d, id: w.id, cover: w.cover_url || d.cover, name: w.name || d.name, genre: w.genre || d.genre, one: w.one || d.one, rule: w.rule || d.rule,
     visibility: w.visibility || d.visibility, lorebook_id: w.lorebook_id || d.lorebook_id, examples: w.examples || d.examples, cast,
-    events: (w.events || []).map((e) => ({ id: e.id, title: e.title, line: e.line || "", situation: e.situation || "", place: e.place || "", spot: e.spot || "", cast: e.cast || [], examples: e.examples || [], image: e.image_url || undefined })),
+    events: (w.events || []).map((e) => ({ id: e.id, title: e.title, line: e.line || "", situation: e.situation || "", place: e.place || "", spot: e.spot || "", cast: e.cast || [], examples: e.examples || [], image: e.image_url || undefined,
+      example_people: (e.example_people || []).map((x) => ({ id: x.id || x.name, name: x.name, role: x.role || "", desc: x.desc || "", face: x.face_url || undefined })) })),
   };
 }
