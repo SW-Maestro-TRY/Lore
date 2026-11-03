@@ -745,3 +745,12 @@
 }
 /* 폰 — 오른쪽 자리 상자(예시 캐릭터 + 넣기 단추)는 숨긴다. 예시는 상황 글 아래 한 번, 단추는 아래 줄에. 뒤에 붙인 .r flex 가 숨김을 덮어쓰고 있었다 */
 @media (max-width: 767px) { .wt .pl-modal .r { display: none; } }
+/* 폰 얇은 줄 — 왼쪽 · 오른쪽 칸을 같은 폭으로 둬서 제목이 늘 가운데(이전 단추가 길면 제목이 오른쪽으로 밀렸다) */
+@media (max-width: 767px) {
+  .wt .pl-mtop { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; }
+  .wt .pl-mtop > :first-child { justify-self: start; min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .wt .pl-mtop > b { justify-self: center; max-width: 52vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: center; }
+  .wt .pl-mtop .r { justify-self: end; min-width: 0; }
+  /* 얇은 줄과 같은 내용을 한 번 더 말하던 빵부스러기는 폰에서 숨김 */
+  .wt .pl-crumb { display: none; }
+}
