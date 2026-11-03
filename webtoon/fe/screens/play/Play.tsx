@@ -146,6 +146,8 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
   const t = useT();
   const { lang } = useLang();
   const [chars, setChars] = useState<Character[] | null>(null);
+  /* 「+ 내 캐릭터」를 누르면 예시가 아니라 정말 내 캐릭터만 — 없으면 새 캐릭터 만들기 칸만 남는다 */
+  const [mineOnly, setMineOnly] = useState<Character[]>([]);
   const [sel, setSel] = useState<string>();
   const [ok, setOk] = useState(false);
   const [short, setShort] = useState<unknown>(null);
@@ -176,6 +178,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
         if (picked) shown = [picked, ...shown];
       }
       setChars(shown);
+      setMineOnly(mine);
       setSel((s) => s && (shown.some((c) => c.id === s) || s.startsWith("example:") || !!(e.examples?.length ? e.examples : w.examples)?.includes(s)) ? s : shown.some((c) => c.id === preset) ? preset : shown[0]?.id);
     } catch { setChars([]); }
   };
@@ -223,7 +226,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
                 <span>{nameOf(c)}</span>
               </button>
             ))}
-            <button type="button" className="pl-tile pl-add" onClick={() => { setMode("mine"); setSel(chars?.[0]?.id); }}><span className="sq"><IconPlus /></span><span>{t("내 캐릭터")}</span></button>
+            <button type="button" className="pl-tile pl-add" onClick={() => { setMode("mine"); setChars(mineOnly); setSel(mineOnly[0]?.id); }}><span className="sq"><IconPlus /></span><span>{t("내 캐릭터")}</span></button>
           </div>
           {cur && <p className="pl-desc"><small>{nameOf(cur)} · {t("설명")}</small>{descOf(cur)}</p>}
         </>
