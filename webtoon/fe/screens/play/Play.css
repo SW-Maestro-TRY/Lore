@@ -610,3 +610,25 @@
   .wt .wn-row .place { font-size: 13px; margin-top: 4px; }
   .wt .wn-row .hook { font-size: 14px; line-height: 1.6; -webkit-line-clamp: 3; margin-top: 6px; }
 }
+/* 사건 줄이 화면 밖으로 밀리던 것 — 가운데 칸이 긴 장소 글에 늘어나지 않게 */
+.wt .wn-row { grid-template-columns: 150px minmax(0, 1fr) auto; }
+.wt .wn-row .mid { min-width: 0; }
+@media (min-width: 768px) { .wt .wn-row { grid-template-columns: 200px minmax(0, 1fr) auto; } }
+@media (max-width: 767px) {
+  .wt .wn-row { grid-template-columns: 88px minmax(0, 1fr) 32px; gap: 10px; }
+  .wt .wn-row .im { width: 88px; height: 88px; }
+  .wt .wn-row b { font-size: 14.5px; line-height: 1.35; }
+  .wt .wn-row .pen { width: 32px; height: 32px; }
+  /* 세계 안 화면용 규칙(.pl-sec .pl-h1 숨김)이 여기 「사건」 제목까지 숨기던 것 */
+  .wt .wn-s2 .pl-h1 { display: block; }
+}
+/* 폰 등장인물 사진 카드 — 두 줄에서 세 줄로, 글씨도 조금 작게 */
+@media (max-width: 767px) {
+  .wt .wn-cast { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .wt .wn-cast .wn-p { padding-bottom: 8px; border-radius: 12px; }
+  .wt .wn-cast .wn-p .ph { font-size: 28px; }
+  .wt .wn-cast .wn-p b { padding: 5px 8px 0; font-size: 13px; line-height: 1.3; }
+  .wt .wn-cast .wn-p em { padding: 0 8px; font-size: 11px; }
+  .wt .wn-cast .wn-p .pen { width: 28px; height: 28px; top: 6px; right: 6px; }
+  .wt .wn-cast .wn-p .pen svg { width: 13px; height: 13px; }
+}
