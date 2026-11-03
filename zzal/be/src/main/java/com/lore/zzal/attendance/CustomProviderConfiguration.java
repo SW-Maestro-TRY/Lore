@@ -26,7 +26,8 @@ public class CustomProviderConfiguration {
   var planner = new CustomPlannerTextClient(
       new com.lore.zzal.chat.line.OpenAiChatLineClient(required(env,"app.zzal.openai.api-key"),
           env.getProperty("app.zzal.custom.planner-reasoning-effort","none"),
-          env.getProperty("app.zzal.custom.planner-max-completion-tokens",Integer.class,6144), usage()),
+          env.getProperty("app.zzal.custom.planner-max-completion-tokens",Integer.class,6144), usage(),
+          env.getProperty("app.zzal.openai.base-url","")),
       java.time.Duration.ofSeconds(env.getProperty("app.zzal.custom.planner-timeout-seconds",Integer.class,90)));
   return new RealCustomBundleService(planning,worker,executor,planner,plannerModel,java.util.Objects.requireNonNull(publication,"Production custom publisher required"));
  }

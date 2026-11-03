@@ -46,6 +46,10 @@ public class ChatLineConfig {
     @Value("${app.zzal.chat.max-completion-tokens:#{null}}")
     private Integer maxCompletionTokens;
 
+    /** OpenAI 기본 주소(비면 실제 주소). dev 벤치마크 흉내 서버용 — {@link com.lore.zzal.generation.client.OpenAiBaseUrl}. */
+    @Value("${app.zzal.openai.base-url:}")
+    private String openAiBaseUrl;
+
     @Value("${app.zzal.chat.max-attempts:2}")
     private int maxAttempts = 2;
 
@@ -77,7 +81,7 @@ public class ChatLineConfig {
         if (maxCompletionTokens != null && maxCompletionTokens <= 0) throw new IllegalArgumentException("app.zzal.chat.max-completion-tokens must be positive");
         if (firstMeetingTimeoutMs <= 0) throw new IllegalArgumentException("app.zzal.chat.first-meeting-timeout-ms must be positive");
         log.info("채팅 대사 LLM 켜짐 — {} · {}ms", model, timeoutMs);
-        LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort, maxCompletionTokens, usage()), model,
+        LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort, maxCompletionTokens, usage(), openAiBaseUrl), model,
                 Duration.ofMillis(timeoutMs), Duration.ofMillis(firstMeetingTimeoutMs), systems);
         return new LineChain(gen, events, maxAttempts);
     }

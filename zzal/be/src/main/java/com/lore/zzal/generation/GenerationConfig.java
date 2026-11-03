@@ -64,6 +64,10 @@ public class GenerationConfig {
     @Value("${app.zzal.generation.flaky.mode:moderation}")
     private String flakyMode;
 
+    /** OpenAI 기본 주소(비면 실제 주소). dev 벤치마크 흉내 서버용 — {@link com.lore.zzal.generation.client.OpenAiBaseUrl}. */
+    @Value("${app.zzal.openai.base-url:}")
+    private String openAiBaseUrl;
+
     @Bean
     public ImageClient imageClient(@Value("${app.zzal.generation.real:false}") boolean real,
                                    @Value("${app.zzal.generation.fake-delay-ms:4000}") int delay,
@@ -75,7 +79,7 @@ public class GenerationConfig {
         if (fixture) com.lore.zzal.generation.client.LocalFixturePostProcessor.requireLocal(env);
         if (real) {
             requireKey(apiKey);
-            return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds, usage());
+            return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds, usage(), openAiBaseUrl);
         }
         ImageClient base = new FakeImageClient(delay, fakeGridKey);
         if (fixture) {
@@ -104,7 +108,7 @@ public class GenerationConfig {
                                  S3Storage storage) {
         if (real) {
             requireKey(apiKey);
-            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens, usage());
+            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens, usage(), openAiBaseUrl);
         }
         return new FakeTextClient(delay / 3);
     }

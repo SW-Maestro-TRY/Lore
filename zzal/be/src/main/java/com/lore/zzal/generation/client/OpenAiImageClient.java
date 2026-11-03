@@ -36,7 +36,7 @@ import java.util.UUID;
 public class OpenAiImageClient implements ImageClient {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiImageClient.class);
-    private static final String ENDPOINT = "https://api.openai.com/v1/images/edits";
+    private static final String PATH = "/v1/images/edits";
 
     /**
      * gpt-image-2 토큰 단가 (USD per 1M) — 2026-09-02 공식 가격표 재확인.
@@ -61,8 +61,12 @@ public class OpenAiImageClient implements ImageClient {
         this(storage,apiKey,timeoutSeconds,ProviderUsageRecorder.NO_OP);
     }
     public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds, ProviderUsageRecorder recorder) {
+        this(storage,apiKey,timeoutSeconds,recorder,null);
+    }
+    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. */
+    public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds, ProviderUsageRecorder recorder, String baseUrl) {
         this(storage,apiKey,timeoutSeconds,HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
-                .followRedirects(HttpClient.Redirect.NEVER).build(),URI.create(ENDPOINT),recorder);
+                .followRedirects(HttpClient.Redirect.NEVER).build(),OpenAiBaseUrl.endpoint(baseUrl, PATH),recorder);
     }
     OpenAiImageClient(S3Storage storage,String apiKey,int timeoutSeconds,HttpClient http,URI endpoint,ProviderUsageRecorder recorder){
         this.storage=storage;this.apiKey=apiKey;this.timeoutSeconds=timeoutSeconds;

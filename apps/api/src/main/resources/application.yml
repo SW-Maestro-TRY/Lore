@@ -509,6 +509,9 @@ app:
       # ★ 절대 커밋하지 않는다. 로컬은 ~/.claude/.env, 서버는 /etc/lore/lore.env 에서 주입.
       #   환경별로 다른 키를 쓴다 — 섞으면 dev 가 실험 한도를 먹고 원가 산정이 흐려진다.
       api-key: ${ZZAL_OPENAI_API_KEY:}
+      # OpenAI 기본 주소. 그림·문단·대사 클라이언트가 같이 읽는다. 운영은 기본값 그대로(LORE_ENV=prod 에서 바꾸면 기동 실패).
+      #   dev 벤치마크에서만 흉내 서버(과금 0) 주소로 바꾼다 — 계획서 P0-2.
+      base-url: ${ZZAL_OPENAI_BASE_URL:https://api.openai.com}
       # 이미지 요청 한 번의 응답 대기 상한(초). 시트·부화 격자·심화 행동 격자가 같은 클라이언트를 쓴다.
       #   ★ 2026-10-07 180 → 90 — 운영 10/6 실측 격자 최대 50초·시트 최대 57초. 걸린 요청은 끊고 다시 굽는다.
       image-timeout-seconds: ${ZZAL_OPENAI_IMAGE_TIMEOUT_SECONDS:90}

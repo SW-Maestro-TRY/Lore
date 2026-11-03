@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
 public class OpenAiChatLineClient implements ChatLineClient {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiChatLineClient.class);
-    private static final String ENDPOINT = "https://api.openai.com/v1/chat/completions";
+    private static final String PATH = "/v1/chat/completions";
     private static final BigDecimal MILLION = new BigDecimal("1000000");
 
     /** {입력, 출력} USD / 1M 토큰. */
@@ -67,7 +67,12 @@ public class OpenAiChatLineClient implements ChatLineClient {
         this(apiKey,reasoningEffort,maxCompletionTokens,ProviderUsageRecorder.NO_OP);
     }
     public OpenAiChatLineClient(String apiKey,String reasoningEffort,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
-        this(apiKey, reasoningEffort, defaultHttp(), URI.create(ENDPOINT), maxCompletionTokens,recorder);
+        this(apiKey, reasoningEffort, maxCompletionTokens, recorder, null);
+    }
+    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. */
+    public OpenAiChatLineClient(String apiKey,String reasoningEffort,Integer maxCompletionTokens,ProviderUsageRecorder recorder,String baseUrl) {
+        this(apiKey, reasoningEffort, defaultHttp(),
+                com.lore.zzal.generation.client.OpenAiBaseUrl.endpoint(baseUrl, PATH), maxCompletionTokens,recorder);
     }
 
     /** Package-only HTTP seam for loopback contract tests; production endpoint is fixed. */
