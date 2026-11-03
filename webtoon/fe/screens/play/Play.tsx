@@ -222,14 +222,14 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
               <div className="meta"><b>{t(w.name)}</b>{e.place && <> · {t(e.place)}</>}</div>
               <p className="sit">{t(e.situation)}</p>
               <div className="mine-m">{mine}</div>
-              {stories}
+              {stories && <div className="stories-m">{stories}</div>}
               {cast.length > 0 && (
                 <div><p className="k">{t("등장인물")}</p>
                   <div className="cast">{cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
                 </div>
               )}
             </div>
-            <div className="r">{mine}</div>
+            <div className="r">{mine}{stories}</div>
           </div>
         </div>
       </div>

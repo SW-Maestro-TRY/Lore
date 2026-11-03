@@ -782,3 +782,10 @@
   .wt .pl-modal .stories .list { grid-template-columns: 1fr; }
 }
 .wt .pl-modal .mine { padding: 14px; }
+/* 캐릭터별 이야기 — PC 는 오른쪽(단추 아래), 폰은 단추 아래 본문 흐름 */
+.wt .pl-modal .stories-m { display: none; }
+.wt .pl-modal .r .stories { padding-top: 0; border-top: 0; }
+.wt .pl-modal .r .stories .list { grid-template-columns: 1fr; }
+.wt .pl-modal .r .stories .sc { grid-template-columns: 52px minmax(0, 1fr) auto; }
+.wt .pl-modal .r .stories .sc img, .wt .pl-modal .r .stories .sc .pl-noimg { width: 52px; }
+@media (max-width: 767px) { .wt .pl-modal .stories-m { display: block; } }
