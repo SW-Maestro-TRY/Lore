@@ -49,9 +49,13 @@ function CastView({ p, onClose }: { p: PlayPerson; onClose: () => void }) {
   );
 }
 
-/* 2 세계관 고르기 — 세계관 카드만(표지 · 이름 · 장르 · 한 줄). 누르면 3 그 세계 안 사건 목록 */
+/* 2 세계관 고르기 — 시안 틀 그대로(위 칩 · 넓은 첫 카드 + 작은 카드, 폰은 그림 위 글), 사건 대신 세계관을 넣는다.
+ * 칩은 장르. 카드를 누르면 3 그 세계 안 사건 목록. */
 function Worlds({ go, worlds }: { go: Go; worlds: PlayWorld[] }) {
   const t = useT();
+  const [genre, setGenre] = useState("");
+  const genres = [...new Set(worlds.map((w) => w.genre).filter(Boolean))];
+  const list = genre ? worlds.filter((w) => w.genre === genre) : worlds;
   return (
     <div className="pl-wrap">
       <MTop back={t("처음")} onBack={() => go("landing")} title={t("세계관")} />
@@ -59,9 +63,16 @@ function Worlds({ go, worlds }: { go: Go; worlds: PlayWorld[] }) {
         <h1 className="pl-h1">{t("어디에 넣어 볼까요?")}</h1>
         <button type="button" className="pl-btn wn-w sm" onClick={() => go("world-new")}><IconPlus />{t("세계관 만들기")}</button>
       </div>
-      <div className="pl-worlds">
-        {worlds.map((w) => (
-          <button type="button" key={w.id} className="pl-wcard" onClick={() => go("play", { world: w.id })}>
+      {genres.length > 1 && (
+        <div className="pl-chips">
+          <button type="button" className={genre ? "" : "on"} onClick={() => setGenre("")}>{t("전체")}</button>
+          {genres.map((g) => <button type="button" key={g} className={genre === g ? "on" : ""} onClick={() => setGenre(g)}>{t(g)}</button>)}
+        </div>
+      )}
+      <div className="pl-events">
+        {list.map((w, i) => (
+          <button type="button" key={w.id} className={`pl-event${i === 0 ? " wide" : ""}${i > 0 && i === list.length - 1 && (list.length - 1) % 2 === 1 ? " full" : ""}`}
+            onClick={() => go("play", { world: w.id })}>
             <Pic src={w.cover_url} />
             <span className="b">{w.genre && <span className="num">{t(w.genre)}</span>}<b>{t(w.name)}</b><span className="ln">{t(w.one)}</span></span>
           </button>
