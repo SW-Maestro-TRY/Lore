@@ -114,6 +114,11 @@ export interface EventTheme {
   ev1Title: string;
   ev1Desc: string;
   ev2Title: string;
+  /** 친구 초대(2026-11-03) — 제목과, 친구 쪽 보상 두 걸음(가입 · 첫 웹툰)을 테마 말로 */
+  inviteTitle: string;
+  inviteStep: [string, string];
+  /** 초대 섹션의 그림 — 할로윈은 사탕, 가면무도회는 초대장 */
+  inviteIcon: React.ReactNode;
   bannerLine: string;
   bannerSub: string;
   bannerGo: string;
@@ -148,6 +153,9 @@ export const THEMES: Record<ThemeKey, EventTheme> = {
     ev1Title: "7일 사탕 바구니",
     ev1Desc: "매일 2크레딧, 4일째 5크레딧, 7일째 10크레딧 — 일주일이면 25크레딧, AI 웹툰 한 편.",
     ev2Title: "할로윈 주간 가입 선물",
+    inviteTitle: "사탕 파티에 친구 부르기",
+    inviteStep: ["친구가 가입", "친구의 첫 웹툰"],
+    inviteIcon: <Candy color="#ff5d8f" />,
     bannerLine: "사탕 대신 크레딧 받아 가세요",
     bannerSub: "10.28 – 11.03 · 7일 출석하면 웹툰 한 편",
     bannerGo: "사탕 받기",
@@ -175,6 +183,9 @@ export const THEMES: Record<ThemeKey, EventTheme> = {
     ev1Title: "일곱 밤의 가면",
     ev1Desc: "매일 2크레딧, 4일째 5크레딧, 7일째 10크레딧 — 일주일이면 25크레딧, AI 웹툰 한 편.",
     ev2Title: "무도회 첫 입장",
+    inviteTitle: "무도회에 함께 올 손님",
+    inviteStep: ["손님이 가입", "손님의 첫 웹툰"],
+    inviteIcon: <Invite />,
     bannerLine: "가면무도회에 7일 출석하면 웹툰 한 편",
     bannerSub: "매일 가면 하나 · 일주일이면 25크레딧",
     bannerGo: "초대장 받기",

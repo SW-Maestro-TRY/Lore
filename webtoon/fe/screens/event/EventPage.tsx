@@ -8,7 +8,9 @@ import type { Attendance } from "@common/api/credits";
 import { creditBalance } from "@common/api/credits";
 import { readAttendRemind, type AttendRemindState } from "../../lib/api";
 import { daysToAfford } from "../../lib/attendPlan";
+import { inviteLink, inviteSummary, type InviteSummary } from "../../lib/invite";
 import type { Go } from "../../lib/nav";
+import { copyLink, shareNative } from "../../lib/share";
 import { track } from "../../lib/track";
 import { EventFonts, Witch } from "./EventBits";
 import { THEMES, type EventTheme } from "./theme";
@@ -37,6 +39,27 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
     if (!authenticated) return;
     creditBalance().then((b) => setBalance(b.balance)).catch(() => {});
   }, [authenticated, card?.claimed]);
+  /* 친구 초대(EVENT 2) — 내 코드 · 가입한 친구 · 첫 웹툰까지 간 친구 · 받은 크레딧. 로그인한 사람만 읽는다 */
+  const [invite, setInvite] = useState<InviteSummary | null>(null);
+  const [inviteSaid, setInviteSaid] = useState<string | null>(null);
+  useEffect(() => {
+    if (!authenticated) return;
+    inviteSummary().then(setInvite).catch(() => {});
+  }, [authenticated]);
+  useEffect(() => {
+    if (!inviteSaid) return;
+    const id = window.setTimeout(() => setInviteSaid(null), 2000);
+    return () => window.clearTimeout(id);
+  }, [inviteSaid]);
+  const sendInvite = async () => {
+    if (!invite) return;
+    const url = inviteLink(invite.code);
+    /* 폰은 자기 공유 화면을 띄운다. PC(없음)는 복사한다. 어느 쪽이든 복사는 해 둔다 */
+    const native = await shareNative(url, "LORE 친구 초대");
+    track("invite_link_copy", { where: "event", target: native ? "native" : "copy" });
+    const copied = await copyLink(url);
+    if (!native) setInviteSaid(copied ? "링크를 복사했어요" : "복사하지 못했어요");
+  };
 
   useEffect(() => { track("event_page_view", { theme: th.key, signed_in: authenticated }); }, [th.key, authenticated]);
   useEffect(() => {
@@ -92,13 +115,6 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
             <span className="wt-ev-eyebrow">{th.eyebrow}</span>
             <h1>{th.heroTitle}</h1>
             <div className="wt-ev-period"><b>참여 기간</b><span>{th.period}</span> · <span>LORE 회원 전원</span></div>
-            {(() => {
-              if (!remind?.on || remind.episode == null || remind.cost == null || balance == null || !remind.run) return null;
-              const left = daysToAfford(balance, remind.cost ?? 0, card);
-              if (left == null) return null;
-              return <button type="button" className="wt-ev-remind" onClick={() => go("next", { run: remind.run! })}>
-                {left === 0 ? `${remind.episode}화 만들 수 있어요` : `${remind.episode}화까지 ${left}일`}</button>;
-            })()}
           </div>
         </div>
 
@@ -106,6 +122,27 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
           <span className="wt-ev-pill">EVENT 1</span>
           <h2>{th.ev1Title}</h2>
           <p className="wt-ev-s">{th.ev1Desc}</p>
+          {/* 다음 화 화면에서 「출석으로 모으기」를 고른 사람 — 그 화까지 얼마나 모였나(2026-11-03).
+              막대는 지금 잔액 / 그 화 크레딧. 다 모이면 막대가 차고 단추가 「이어 만들기」가 된다 */}
+          {(() => {
+            if (!remind?.on || remind.episode == null || remind.cost == null || balance == null || !remind.run) return null;
+            const left = daysToAfford(balance, remind.cost, card);
+            if (left == null) return null;
+            const pct = Math.min(100, Math.round((balance / remind.cost) * 100));
+            const run = remind.run;
+            return (
+              <div className={`wt-ev-goal${left === 0 ? " ready" : ""}`} role="group" aria-label={`${remind.episode}화 모으기`}>
+                <div className="wt-ev-goal-t">
+                  <b>{left === 0 ? `${remind.episode}화 만들 수 있어요` : `${remind.episode}화까지 ${left}일`}</b>
+                  <span>{balance} / {remind.cost}C</span>
+                </div>
+                <div className="wt-ev-goal-bar"><i style={{ width: `${pct}%` }} /></div>
+                <button type="button" className="wt-ev-goal-go" onClick={() => { track("event_goal_click", { ep: remind.episode, n: left }); go("next", { run }); }}>
+                  {left === 0 ? `${remind.episode}화 이어 만들기` : `${remind.episode}화 보기`}
+                </button>
+              </div>
+            );
+          })()}
           <div className="wt-ev-strip">
             {[1, 2, 3, 4, 5, 6, 7].map((d) => {
               const got = d <= stamped;
@@ -129,11 +166,54 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
           {error && <p className="wt-ev-err">{error}</p>}
         </section>
 
-        <section className="wt-ev-sec ev2">
+        {/* 친구 초대(2026-11-03) — 친구가 가입하면 10C, 그 친구가 첫 웹툰을 완성하면 10C 더. 한 달 10명까지.
+            숫자는 서버 값(InviteSummary)을 그대로 쓴다. 로그인 전에는 기본값으로 규칙만 보이고 단추는 로그인으로 */}
+        <section className="wt-ev-sec invite">
           <span className="wt-ev-pill">EVENT 2</span>
+          <h2>{th.inviteTitle}</h2>
+          <p className="wt-ev-s">친구가 가입하면 {invite?.signupCredits ?? 10}크레딧, 첫 웹툰을 완성하면 {invite?.completeCredits ?? 10}크레딧 더 — 한 달 {invite?.monthlyCap ?? 10}명까지.</p>
+          <div className="wt-ev-inv">
+            <div className="wt-ev-inv-steps">
+              <div className="wt-ev-inv-step">
+                <span className="wt-ev-inv-ic">{th.inviteIcon}</span>
+                <b>{th.inviteStep[0]}</b>
+                <em>+{invite?.signupCredits ?? 10}C</em>
+              </div>
+              <span className="wt-ev-inv-arrow" aria-hidden="true">→</span>
+              <div className="wt-ev-inv-step">
+                <span className="wt-ev-inv-ic">{th.finIcon}</span>
+                <b>{th.inviteStep[1]}</b>
+                <em>+{invite?.completeCredits ?? 10}C</em>
+              </div>
+            </div>
+            <div className="wt-ev-inv-nums">
+              <div><b>{invite?.joined ?? 0}</b><span>가입한 친구</span></div>
+              <div><b>{invite?.completed ?? 0}</b><span>첫 웹툰 완성</span></div>
+              <div className="earn"><b>{invite?.earned ?? 0}<small>C</small></b><span>받은 크레딧</span></div>
+            </div>
+            {authenticated && invite ? (
+              <>
+                <div className="wt-ev-inv-link">
+                  <code>{inviteLink(invite.code).replace(/^https?:\/\//, "").replace(/&utm_.*$/, "")}</code>
+                  <button type="button" onClick={() => void sendInvite()}>{inviteSaid ?? "초대 링크 보내기"}</button>
+                </div>
+                {invite.monthlyLeft < invite.monthlyCap && (
+                  <small className="wt-ev-inv-left">이번 달 {invite.monthlyLeft}명 남음</small>
+                )}
+              </>
+            ) : (
+              <button type="button" className="wt-ev-inv-login" onClick={() => { track("event_login_click", { theme: th.key, where: "invite" }); go("mypage"); }}>
+                로그인하고 초대 링크 받기
+              </button>
+            )}
+          </div>
+        </section>
+
+        <section className="wt-ev-sec ev2">
+          <span className="wt-ev-pill">EVENT 3</span>
           <h2>{th.ev2Title}</h2>
           <div className="wt-ev-ev2">
-            <div className="n">+15<small>크레딧</small></div>
+            <div className="n">+20<small>크레딧</small></div>
             <div><b>가입하면 바로 20크레딧</b><span>웹툰 한 편을 만들 수 있는 양 · 가입 즉시 지급</span></div>
           </div>
         </section>
@@ -145,7 +225,8 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
             <li><i>1</i>LORE에 로그인</li>
             <li><i>2</i>{th.howStep2}</li>
             <li><i>3</i>{th.howStep3}</li>
-            <li><i>4</i>받은 크레딧으로 내 캐릭터 웹툰 만들기</li>
+            <li><i>4</i>친구에게 초대 링크 보내기 · 가입 10 · 첫 웹툰 10크레딧</li>
+            <li><i>5</i>받은 크레딧으로 내 캐릭터 웹툰 만들기</li>
           </ol>
         </section>
 
@@ -155,6 +236,7 @@ export default function EventPage({ go, authenticated }: { go: Go; authenticated
             <li>· 로그인한 회원만 참여할 수 있어요.</li>
             <li>· 하루라도 쉬면 1일째부터 다시 시작해요. 날짜는 한국 시간 자정에 바뀌어요.</li>
             <li>· 받은 크레딧은 무료 크레딧이라 쓸 때 먼저 빠지고, 환불되지 않아요.</li>
+            <li>· 친구 초대 보상은 초대 링크로 들어와 새로 가입한 계정만 세고, 한 달에 10명까지예요. 본인 계정·같은 기기 가입은 세지 않아요.</li>
             <li>· 부정한 방법으로 받은 크레딧은 회수할 수 있어요.</li>
             <li>· 이벤트 내용은 사정에 따라 바뀔 수 있어요.</li>
           </ul>

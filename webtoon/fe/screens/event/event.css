@@ -351,5 +351,69 @@
   .wt-ev-banner-t strong { font-size: 16px; }
   .wt-ev-banner-t b { font-size: 12.5px; }
 }
-/* 다음 화 화면에서 출석으로 모으기를 고른 사람의 한 줄 — 누르면 그 화로 */
-.wt-ev-remind { display:inline-block; margin-top:10px; padding:8px 14px; border:1px solid rgba(255,255,255,.35); border-radius:999px; background:rgba(0,0,0,.25); color:inherit; font:inherit; font-weight:700; font-size:15px; cursor:pointer; }
+/* ── 다음 화 모으기(EVENT 1 안) — 「출석으로 모으기」를 고른 사람에게만. 막대 = 잔액 / 그 화 크레딧 ── */
+.wt-ev-goal {
+  margin-top: 16px; border-radius: 14px; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px;
+  align-items: center; background: #ffffff0d; border: 1px solid #ffffff22;
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-goal { border-color: #e9c46a33; }
+.wt-ev-goal.ready { background: linear-gradient(135deg, #ff7b2e33, #ffd16622); border-color: var(--ev-acc); }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-goal.ready { background: linear-gradient(135deg, #e9c46a22, #a0304f33); }
+.wt-ev-goal-t { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.wt-ev-goal-t b { font-size: 15px; font-weight: 900; }
+.wt-ev-goal-t span { font-size: 12.5px; font-weight: 800; color: var(--ev-pop); white-space: nowrap; }
+.wt-ev-goal-bar { grid-column: 1; height: 8px; border-radius: 99px; background: #00000040; overflow: hidden; }
+.wt-ev-goal-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--ev-acc), var(--ev-pop)); transition: width .4s cubic-bezier(.22, 1, .36, 1); }
+.wt-ev-goal-go {
+  grid-column: 2; grid-row: 1 / span 2; height: 40px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--ev-pop); cursor: pointer;
+  background: transparent; color: var(--ev-pop); font-size: 13.5px; font-weight: 900; white-space: nowrap;
+}
+.wt-ev-goal.ready .wt-ev-goal-go { background: var(--ev-pop); color: var(--ev-on-pop); border-color: transparent; }
+
+/* ── EVENT 2 친구 초대 ─────────────────────────────── */
+.wt-ev-inv { margin-top: 14px; border-radius: 18px; padding: 16px; display: grid; gap: 14px; background: #ffffff0d; border: 2px dashed #ffffff22; }
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-inv { background: #ffffff0a; border: 1px solid #e9c46a33; }
+/* 보상 두 걸음 — 친구가 가입 → 친구의 첫 웹툰 */
+.wt-ev-inv-steps { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.wt-ev-inv-step {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px 10px; border-radius: 14px; text-align: center;
+  background: #ffffff0a;
+}
+.wt-ev-root[data-theme="MASQUERADE"] .wt-ev-inv-step { outline: 1px solid #e9c46a33; }
+.wt-ev-inv-ic { width: 44px; height: 36px; display: grid; place-items: center; }
+.wt-ev-inv-step b { font-size: 12.5px; font-weight: 800; opacity: .85; }
+.wt-ev-inv-step em { font-style: normal; font-size: 18px; font-weight: 900; color: var(--ev-pop); line-height: 1; }
+.wt-ev-inv-arrow { font-size: 20px; font-weight: 900; opacity: .5; }
+/* 내 숫자 세 칸 */
+.wt-ev-inv-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.wt-ev-inv-nums > div { border-radius: 12px; padding: 10px 6px 8px; text-align: center; background: #00000030; display: flex; flex-direction: column; gap: 2px; }
+.wt-ev-inv-nums b { font-size: 22px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.wt-ev-inv-nums b small { font-size: 13px; margin-left: 1px; }
+.wt-ev-inv-nums span { font-size: 11px; font-weight: 700; opacity: .7; }
+.wt-ev-inv-nums .earn b { color: var(--ev-pop); }
+/* 링크 한 줄 + 보내기 */
+.wt-ev-inv-link { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.wt-ev-inv-link code {
+  flex: 1; min-width: 0; display: flex; align-items: center; padding: 0 12px; border-radius: 12px; background: #00000040;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .9;
+}
+.wt-ev-inv-link button {
+  flex: none; height: 44px; padding: 0 16px; border-radius: 12px; border: 0; cursor: pointer;
+  background: var(--ev-pop); color: var(--ev-on-pop); font-size: 14px; font-weight: 900; white-space: nowrap;
+}
+.wt-ev-inv-left { font-size: 11.5px; font-weight: 700; opacity: .7; margin-top: -6px; }
+.wt-ev-inv-login {
+  display: block; width: 100%; height: 48px; border-radius: 12px; border: 1px solid var(--ev-pop); cursor: pointer;
+  background: transparent; color: var(--ev-pop); font-size: 15px; font-weight: 900;
+}
+@media (min-width: 768px) {
+  .wt-ev-page { grid-template-areas: "hero hero" "ev1 ev1" "invite invite" "ev2 how" "notice notice"; }
+  .wt-ev-sec.ev1 { grid-template-areas: "pill cta" "h2 cta" "desc cta" "goal goal" "strip strip" "err err"; }
+  .wt-ev-sec.ev1 > .wt-ev-goal { grid-area: goal; margin-top: 18px; }
+  .wt-ev-sec.invite { grid-area: invite; padding: 36px var(--ev-pad) 0; }
+  /* 넓으면 두 걸음 · 숫자 · 링크를 한 판에 — 왼쪽 걸음, 오른쪽 숫자, 아래 링크 */
+  .wt-ev-inv { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 20px; gap: 16px 24px; }
+  .wt-ev-inv-link, .wt-ev-inv-login, .wt-ev-inv-left { grid-column: 1 / -1; }
+  .wt-ev-inv-nums b { font-size: 26px; }
+  .wt-ev-inv-step em { font-size: 20px; }
+}

@@ -17,12 +17,16 @@
 .wt .wt-my-credit > b span { font-size: 13px; font-weight: 400; }
 .wt .wt-my-creditacts { display: flex; gap: 6px; margin-top: 4px; }
 .wt .wt-my-creditacts .btn { flex: 1 1 0; }
-/* 친구 초대 — 크레딧 카드 아래 한 장 */
-.wt .wt-my-invite { gap: 8px; }
-.wt .wt-my-invite > .dim { font-size: 12px; }
-.wt .wt-my-invite > b { font-size: 14px; }
-.wt .wt-my-invite-stats { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--dim); }
-.wt .wt-my-invite-stats b { color: var(--ink); font-size: 13px; margin-left: 2px; }
+/* 친구 초대 — 크레딧 카드 아래 작은 카드 하나. 누르면 이벤트 페이지(EVENT 2)로 */
+.wt .wt-my-invite {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "dim dim" "rule rule" "earn go";
+  gap: 2px 12px; align-items: center; text-align: left; cursor: pointer; font: inherit; color: inherit;
+}
+.wt .wt-my-invite > .dim { grid-area: dim; font-size: 12px; }
+.wt .wt-my-invite > b { grid-area: rule; font-size: 14px; }
+.wt .wt-my-invite-earn { grid-area: earn; font-size: 12px; color: var(--dim); }
+.wt .wt-my-invite-earn b { color: var(--ink); font-size: 13px; margin-left: 2px; }
+.wt .wt-my-invite-go { grid-area: go; font-size: 13px; font-weight: 700; color: var(--dim); white-space: nowrap; }
 .wt .wt-my-menu { gap: 2px; padding: 8px; }
 .wt .wt-my-menu .dim { font-size: 12px; }
 /* 폰 목록(시안 1)에만 쓰는 것들 — 넓은 화면에선 묶음 칸이 없는 셈이라 예전 한 장짜리 메뉴 그대로 */
