@@ -85,6 +85,20 @@ function hasEditableCard(c?: Character): boolean {
   return !!c?.card && !c.builtin && c.source !== "upload" && c.source !== "replaced_upload";
 }
 
+/** 사진 올리기 — 화면이 아는 로그인 상태로 먼저 가고, 서버가 반대로 보면(토큰은 있는데 화면은 비로그인) 다른 길로 한 번 더.
+    서버 DB 에 없는 계정의 토큰이 브라우저에 남아 있을 때 화면과 서버의 판단이 갈려 저장이 막혔다(2026-11-03). */
+async function uploadPhoto(photo: string, authenticated: boolean): Promise<string[]> {
+  try {
+    return authenticated ? await uploadDataUrls([photo], "webtoon") : await uploadDataUrlsAsGuest([photo]);
+  } catch (e) {
+    try {
+      return authenticated ? await uploadDataUrlsAsGuest([photo]) : await uploadDataUrls([photo], "webtoon");
+    } catch {
+      throw e;
+    }
+  }
+}
+
 export function CharacterForm({
   character,
   initialDraft,
@@ -94,6 +108,7 @@ export function CharacterForm({
   onClose,
   onBusyChange,
   localOnly = false,
+  hideCard = false,
 }: {
   character?: Character;
   initialDraft?: { name: string; description: string; image: string };
@@ -104,6 +119,8 @@ export function CharacterForm({
   onBusyChange?: (value: boolean) => void;
   /** 예시 캐릭터 — 고친 것을 저장하지 않고 이번 웹툰 요청에만 쓴다(2026-10-25). 그림은 못 바꾼다. */
   localOnly?: boolean;
+  /** 세계관 체험 — 웹툰 만들기용 카드 칸(세계관 · 운명 · 대사 …)은 감춘다. 값은 그대로 둔다. */
+  hideCard?: boolean;
 }) {
   const t = useT(),
     file = useRef<HTMLInputElement>(null);
@@ -163,9 +180,7 @@ export function CharacterForm({
             {
               name: name.trim(),
               description,
-              photo_keys: authenticated
-                ? await uploadDataUrls([photo], "webtoon")
-                : await uploadDataUrlsAsGuest([photo]),
+              photo_keys: await uploadPhoto(photo, authenticated),
             },
             character?.id,
           )
@@ -287,7 +302,7 @@ export function CharacterForm({
               </label>
             </div>
           </div>
-          {cardMode && (
+          {cardMode && !hideCard && (
             <div className="wt-original-card">
               <div className="wt-original-card-head">
                 <h3>{t("카드 내용")}</h3>
@@ -389,6 +404,7 @@ export function CharacterEditDialog(props: {
   character: Character;
   authenticated: boolean;
   localOnly?: boolean;
+  hideCard?: boolean;
   onSaved: (c: Character) => void;
   onDeleted: () => void;
   onClose: () => void;

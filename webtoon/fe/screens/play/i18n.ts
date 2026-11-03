@@ -19,7 +19,7 @@ const dict: Dict = {
   "{name} 넣기": { en: "Add {name}", ja: "{name}を入れる", zh: "放入{name}" },
   "다 그렸어요": { en: "All drawn", ja: "描き終わりました", zh: "画好了" },
   "만화 보기": { en: "Read comic", ja: "マンガを見る", zh: "看漫画" },
-  "기다리는 동안 웹툰 보기": { en: "Browse webtoons while you wait", ja: "待つ間にウェブトゥーンを見る", zh: "等待时看漫画" },
+  "웹툰 보러 가기": { en: "Browse webtoons", ja: "ウェブトゥーンを見に行く", zh: "去看漫画" },
   "만들기 중단": { en: "Stop", ja: "作成を中止", zh: "停止制作" },
   "좋아요": { en: "Like", ja: "いいね", zh: "点赞" },
   "댓글": { en: "Comments", ja: "コメント", zh: "评论" },

@@ -21,7 +21,8 @@ class CoProtagonistChargeTest {
     JobController controller;
     @BeforeEach void setup() {
         controller=new JobController(jobs,queue,mock(RunArt.class),guard,mock(GuestGate.class),credits,
-                mock(S3Service.class),mock(com.lore.webtoon.character.CharacterOwner.class));
+                mock(S3Service.class),mock(com.lore.webtoon.character.CharacterOwner.class),
+                mock(com.lore.common.user.UserRepository.class));
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(7L,null,List.of()));
         when(jobs.create(any(),eq(7L),any(),any())).thenReturn("job-1");
     }
