@@ -95,6 +95,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean com.lore.webtoon.job.NotifySettingService notifySettingService;
     @MockitoBean com.lore.webtoon.work.RunTrash runTrash;
     @MockitoBean com.lore.webtoon.character.CharacterOwner characterOwner;
+    @MockitoBean com.lore.common.user.UserRepository userRepository;   // 게스트 사진 올리기의 계정 확인(#930)
 
     @Test
     @DisplayName("「내」 것을 다루는 주소는 로그인이 있어야 한다")
