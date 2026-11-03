@@ -128,7 +128,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
               <p className="sit">{t(e.situation)}</p>
               {w.cast.length > 0 && (
                 <div><p className="k">{t("등장인물")}</p>
-                  <div className="cast">{w.cast.map((p) => <span key={p.name} className="pill"><i>{t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</span>)}</div>
+                  <div className="cast">{w.cast.map((p) => <span key={p.name} className="pill"><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</span>)}</div>
                 </div>
               )}
             </div>
@@ -176,16 +176,21 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
         if (picked) shown = [picked, ...shown];
       }
       setChars(shown);
-      setSel((s) => s && (shown.some((c) => c.id === s) || !!(e.examples?.length ? e.examples : w.examples)?.includes(s)) ? s : shown.some((c) => c.id === preset) ? preset : shown[0]?.id);
+      setSel((s) => s && (shown.some((c) => c.id === s) || s.startsWith("example:") || !!(e.examples?.length ? e.examples : w.examples)?.includes(s)) ? s : shown.some((c) => c.id === preset) ? preset : shown[0]?.id);
     } catch { setChars([]); }
   };
   useEffect(() => { void load(); }, []);
   /* 세계를 만든 사람이 정한 예시 캐릭터(최대 둘)가 있으면 그것부터. 「+ 내 캐릭터」를 누르면 내 캐릭터 목록으로 */
   const [examples, setExamples] = useState<Character[]>([]);
   const exIds = e.examples?.length ? e.examples : w.examples || [];
-  const [mode, setMode] = useState<"ex" | "mine">(exIds.length && !preset ? "ex" : "mine");
+  /* 사건에 캐릭터로 만든 예시가 아직 없으면 운영 자료의 예시 주인공(사진 · 설정)을 보여 준다 — 캐릭터로 만들어지면 그쪽이 먼저 */
+  const people: Character[] = exIds.length ? [] : (e.example_people || []).map((x) => ({
+    id: `example:${e.id}:${x.name}`, name: x.name, description: [x.desc, x.relation].filter(Boolean).join(" "), art_url: x.face_url || null,
+    source: "builtin", status: "ready", error: null, builtin: true, mine: false, created_at: "",
+  }));
+  const [mode, setMode] = useState<"ex" | "mine">((exIds.length || people.length) && !preset ? "ex" : "mine");
   useEffect(() => {
-    if (!exIds.length) return;
+    if (!exIds.length) { if (people.length) { setExamples(people); setSel((s) => s || people[0].id); } return; }
     void Promise.all(exIds.slice(0, 2).map((id) => readCharacter(id).catch(() => null))).then((l) => {
       const ok = l.filter((c): c is Character => !!c && c.status === "ready");
       setExamples(ok);

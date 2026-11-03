@@ -7,7 +7,26 @@
       "one": "좀비 바이러스가 퍼지고 몇 달이 지난 세계. 정부와 군대는 무너졌고, 살아남은 사람들은 작은 무리로 흩어져 산다.",
       "cover_url": "/static/play/zombie-world.jpg",
       "spot": "살아남은 사람",
-      "cast": [],
+      "cast": [
+        {
+          "name": "이현",
+          "role": "전직 소방관",
+          "desc": "28세. 전직 소방관. 무뚝뚝하지만 정이 많고, 가족을 위해서라면 위험도 감수한다. 좀비가 된 어머니, 아내, 딸을 숨기고 있다.",
+          "face_url": "/static/play/zombie-ex-leehyun.jpg"
+        },
+        {
+          "name": "서윤",
+          "role": "전직 바이러스 연구원",
+          "desc": "30세. 전직 바이러스 연구원. 현재는 헌책방을 혼자 지킨다. 묻는 말에는 답하지만 먼저 묻는 법이 없다. 바이러스 개발에 관여했고 연구 기록 일부를 가지고 있다.",
+          "face_url": "/static/play/zombie-ex-seoyun.jpg"
+        },
+        {
+          "name": "도윤",
+          "role": "겁이 많지만 낙천적인 생존자",
+          "desc": "19세. 겁이 많지만 낙천적인 생존자. 위험한 상황에서도 농담을 던진다. 좀비에게 물린 적이 있지만 감염되지 않았다는 비밀이 있다.",
+          "face_url": "/static/play/zombie-ex-doyun.jpg"
+        }
+      ],
       "events": [
         {
           "id": "hidden-family",

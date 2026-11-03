@@ -4,7 +4,7 @@
  * 세계의 examples 는 옛 모양(사건에 없을 때만 쓴다). */
 import { listPlayWorlds, makePlayWorld, readPlayWorld, savePlayWorld, WebtoonApiError } from "../../lib/api";
 
-export interface PlayEvent { id: string; no: string; title: string; line: string; situation: string; image_url: string | null; tried: number; place?: string; spot?: string; examples?: string[] }
+export interface PlayEvent { id: string; no: string; title: string; line: string; situation: string; image_url: string | null; tried: number; place?: string; spot?: string; examples?: string[]; example_people?: { name: string; age?: number; desc: string; relation?: string; face_url?: string }[] }
 export interface PlayPerson { name: string; role?: string; desc?: string; face_url?: string | null }
 export interface PlayWorld { id: string; name: string; genre: string; one: string; cover_url: string | null; spot: string; cast: PlayPerson[]; events: PlayEvent[]; examples?: string[]; mine?: boolean; rule?: string }
 
