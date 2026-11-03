@@ -685,3 +685,5 @@
   .wt .wt-browse-list b { margin-top: 8px; font-size: 13px; color: var(--ink); -webkit-line-clamp: 2; }
   .wt .wt-browse-list span { color: var(--dim); }
 }
+/* 「새로운 세계를 경험하기」가 줄바꿈돼 세 줄이 되던 것 — 두 줄 그대로 */
+.wt .wt-pintro .wt-gallery-heading h2 { font-size: 40px; white-space: nowrap; }
