@@ -22,6 +22,14 @@ export function shareUrl(runId: string, episode = 1, key?: string | null): strin
   return `${base}/webtoon?run=${encodeURIComponent(runId)}${ep}${k}`;
 }
 
+/** 공유 주소에 유입 출처를 단다 — 광고·SNS 링크와 같은 모양(utm_source/medium/content)이라
+ *  받은 사람이 들어오면 첫 방문 기록에 `share/<어디로>/<무엇을>` 으로 남는다(track.ts utmLine).
+ *  `via` 는 눌린 공유칸(x·line·kakao·copy·native…), `what` 은 보낸 것(webtoon·card). */
+export function withShareUtm(url: string, via: string, what: string): string {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}utm_source=share&utm_medium=${encodeURIComponent(via)}&utm_content=${encodeURIComponent(what)}`;
+}
+
 export interface ShareTarget {
   key: string;
   label: string;
