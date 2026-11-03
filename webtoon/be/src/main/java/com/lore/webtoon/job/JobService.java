@@ -1549,6 +1549,16 @@ public class JobService {
         return blank(character);
     }
 
+    /* 세계관 체험(2026-11-03) — 다른 세계의 사건에 넣는 것이라, 설명 칸이 빈 카드 캐릭터에 카드로 지어 주는
+       설정 글(원래 세계 · 역할 · 반전)은 쓰지 않는다. 사람이 적은 설명이 있으면 그것, 없으면 종만 남긴다.
+       하네스가 이야기 · 검수 단계에서 카드의 세계 · 반전 · 운명 · 대사를 빼는 것(charcard.for_story)과 같은 기준이다. */
+    private String playCharacterText(String sent, WebtoonCharacter picked) {
+        if (notBlank(sent)) return blank(sent);
+        if (picked == null) return "";
+        if (notBlank(picked.getDescription())) return blank(picked.getDescription());
+        return usesCard(picked) ? blank(picked.getSpecies()) : blank(picked.settingsText());
+    }
+
     private static boolean usesCard(WebtoonCharacter picked) {
         return picked != null
                 && picked.getSource() != com.lore.webtoon.character.CharacterSource.UPLOAD
@@ -1560,7 +1570,8 @@ public class JobService {
                                 List<Path> coArt) throws IOException {
         Map<String, Object> doc = new LinkedHashMap<>();
         doc.put("name", blank(form.name()));
-        doc.put("character", characterText(form.character(), picked));
+        doc.put("character", Boolean.TRUE.equals(form.play())
+                ? playCharacterText(form.character(), picked) : characterText(form.character(), picked));
         Map<String, String> fields = new LinkedHashMap<>();
         if (form.fields() != null) {
             form.fields().forEach((k, v) -> {
@@ -1605,7 +1616,7 @@ public class JobService {
                 WebtoonCharacter one = coPicked.get(i);
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("name", blank(one.getName()));
-                m.put("character", characterText(null, one));
+                m.put("character", Boolean.TRUE.equals(form.play()) ? playCharacterText(null, one) : characterText(null, one));
                 if (usesCard(one)) m.put("card", cardOf(one));
                 Path art = i < coArt.size() ? coArt.get(i) : null;
                 if (art != null) m.put("photo", art.toString());
