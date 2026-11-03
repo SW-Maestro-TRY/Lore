@@ -153,9 +153,9 @@ public class JobController {
             // 주소 같은 개발자 메모를 적지 않는다(2026-11-03 하은 지적). 화면은 이 코드를 보고 로그인용 올리기로 다시 간다.
             throw new BusinessException(ErrorCode.INVALID_INPUT, "사진을 올리지 못했어요. 다시 시도해 주세요");
         }
-        String guestKey = guests.keyOf(request);
+        String guestKey = me == null ? guests.keyOf(request) : guests.keyOfAsGuest(request);
         if (guestKey == null) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "게스트 열쇠를 만들 수 없습니다");
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "지금은 사진을 올릴 수 없어요. 잠시 뒤 다시 시도해 주세요");
         }
         return uploads.createUploadUrlForGuest(guestKey, "webtoon", form.contentType());
     }
