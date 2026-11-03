@@ -165,7 +165,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
           <button type="button" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {r.cover_src ? <img src={r.cover_src} alt="" loading="lazy" /> : r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
-            <b>{r.character}</b>
+            <span className="tx"><b>{r.title || t(e.title)}</b><small>{r.character}</small></span>
           </button>
         ))}</div>
       )}

@@ -697,3 +697,15 @@
 .wt .pl-modal .r .made img, .wt .pl-modal .r .made .pl-noimg { width: 100%; }
 .wt .pl-modal .made b { font-size: 11.5px; }
 @media (max-width: 767px) { .wt .pl-modal .made-m { margin: 4px 0; } }
+/* 이 사건에서 만든 만화 — 작은 표지 격자 대신 표지 + 제목 + 캐릭터 줄 목록(한 편이어도 어색하지 않게) */
+.wt .pl-modal .r .made .row { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+.wt .pl-modal .made .row button { flex: none; display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: center; width: 100%; padding: 6px; border-radius: 12px; border: 1px solid var(--line); background: var(--pl-card2); }
+.wt .pl-modal .made .row button:hover { border-color: var(--line-strong); }
+.wt .pl-modal .r .made img, .wt .pl-modal .r .made .pl-noimg, .wt .pl-modal .made img, .wt .pl-modal .made .pl-noimg { width: 72px; aspect-ratio: 3/4; border-radius: 8px; object-fit: cover; object-position: top; }
+.wt .pl-modal .made .tx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.wt .pl-modal .made .tx b { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; }
+.wt .pl-modal .made .tx small { font-size: 12.5px; color: var(--pl-apricot); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 767px) {
+  .wt .pl-modal .made .row { display: flex; flex-direction: row; overflow-x: auto; max-height: none; }
+  .wt .pl-modal .made .row button { flex: 0 0 240px; }
+}
