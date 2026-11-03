@@ -85,6 +85,20 @@ function hasEditableCard(c?: Character): boolean {
   return !!c?.card && !c.builtin && c.source !== "upload" && c.source !== "replaced_upload";
 }
 
+/** 사진 올리기 — 화면이 아는 로그인 상태로 먼저 가고, 서버가 반대로 보면(토큰은 있는데 화면은 비로그인) 다른 길로 한 번 더.
+    서버 DB 에 없는 계정의 토큰이 브라우저에 남아 있을 때 화면과 서버의 판단이 갈려 저장이 막혔다(2026-11-03). */
+async function uploadPhoto(photo: string, authenticated: boolean): Promise<string[]> {
+  try {
+    return authenticated ? await uploadDataUrls([photo], "webtoon") : await uploadDataUrlsAsGuest([photo]);
+  } catch (e) {
+    try {
+      return authenticated ? await uploadDataUrlsAsGuest([photo]) : await uploadDataUrls([photo], "webtoon");
+    } catch {
+      throw e;
+    }
+  }
+}
+
 export function CharacterForm({
   character,
   initialDraft,
@@ -166,9 +180,7 @@ export function CharacterForm({
             {
               name: name.trim(),
               description,
-              photo_keys: authenticated
-                ? await uploadDataUrls([photo], "webtoon")
-                : await uploadDataUrlsAsGuest([photo]),
+              photo_keys: await uploadPhoto(photo, authenticated),
             },
             character?.id,
           )
