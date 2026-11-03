@@ -1874,6 +1874,11 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
             run_dir, int(direction.get("n") or 0), direction.get("body") or direction.get("raw", "")))
     import userbook
     lines.append(userbook.block(char, direction.get("body", ""), "scene"))
+    # 세계관 체험(2026-11-03) — 장면 단계도 사건 원문을 본다. 이야기 단계는 사건을 한 문단으로
+    # 줄여 쓰기 때문에 사건에 적힌 말(몬스터의 한마디 등)이 간접 서술로 바뀌고, 장면 단계는 그
+    # 요약만 받아 말을 아예 지웠다(dev 20261103T112956: 「주인님」이 울부짖음으로). 체험이 아니면 빈 글.
+    if char.get("play") and char.get("settings"):
+        lines += ["", "[이번 사건]", char["settings"], "", play_goal_block(char)]
     return "\n".join(lines) + "\n"
 
 
