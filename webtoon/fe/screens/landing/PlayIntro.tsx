@@ -52,9 +52,9 @@ export default function PlayIntro({ go, worlds }: { go: Go; worlds: PlayWorld[] 
         <div className="wt-pintro-copy">
           <div className="wt-gallery-heading">
             <span>{t("세계관 체험")}</span>
-            <h2>{t("내 캐릭터를")}<br />{t("다른 세계에 넣어 보기")}</h2>
+            <h2>{t("내 캐릭터로")}<br />{t("새로운 세계를 경험하기")}</h2>
           </div>
-          <p className="wt-intro-sub">{t("세계와 사건을 고르고 캐릭터를 넣으면,")}<br />{t("그 캐릭터가 겪는 장면이 만화로 나와요.")}</p>
+          <p className="wt-intro-sub">{t("세계와 사건을 고르고 내 캐릭터를 넣으면,")}<br />{t("캐릭터의 성격과 설정에 따라 이야기가 펼쳐져요.")}</p>
           <button type="button" className="btn btn-p" onClick={() => play("intro_play")}>{t("세계관 체험하기")}</button>
         </div>
         <div className="wt-pintro-posters">

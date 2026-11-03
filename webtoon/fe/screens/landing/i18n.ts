@@ -3,6 +3,14 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "새로운 세계를 경험하기": { en: "experience a new world", ja: "新しい世界を体験する", zh: "体验新的世界" },
+  "세계와 사건을 고르고 내 캐릭터를 넣으면,": { en: "Pick a world and an event, add your character,", ja: "世界と事件を選んで自分のキャラを入れると、", zh: "选好世界和事件放入我的角色，" },
+  "캐릭터의 성격과 설정에 따라 이야기가 펼쳐져요.": { en: "and a story unfolds from its personality and settings.", ja: "キャラの性格と設定に沿って物語が広がります。", zh: "故事会按角色的性格和设定展开。" },
+  "캐릭터와 원하는 이야기를 입력하면,": { en: "Enter a character and the story you want,", ja: "キャラと作りたい物語を入力すると、", zh: "输入角色和想要的故事，" },
+  "내 캐릭터가 주인공인 웹툰 1화가 완성돼요.": { en: "and episode 1 starring your character is done.", ja: "自分のキャラが主人公のウェブトゥーン1話が完成します。", zh: "就会完成我的角色当主角的漫画第1话。" },
+  "사진이나 설정으로 캐릭터 등록": { en: "Add a character from a photo or settings", ja: "写真や設定でキャラを登録", zh: "用照片或设定登记角色" },
+  "만들고 싶은 이야기나 장면 입력": { en: "Enter the story or scene you want", ja: "作りたい物語や場面を入力", zh: "输入想做的故事或场景" },
+  "장면을 확인하고 수정한 뒤 웹툰 완성": { en: "Check and edit the scenes, then finish", ja: "場面を確認・修正してウェブトゥーン完成", zh: "确认并修改场景后完成漫画" },
   "내 캐릭터를": { en: "Put your character", ja: "自分のキャラを", zh: "把我的角色" },
   "다른 세계에 넣어 보기": { en: "into another world", ja: "別の世界に入れてみる", zh: "放进另一个世界" },
   "세계와 사건을 고르고 캐릭터를 넣으면,": { en: "Pick a world and an event, add your character,", ja: "世界と事件を選んでキャラを入れると、", zh: "选好世界和事件放入角色，" },
