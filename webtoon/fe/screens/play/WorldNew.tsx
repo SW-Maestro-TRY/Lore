@@ -357,7 +357,7 @@ function Steps({ go }: { go: Go }) {
             </PickPic>
             <label><span className="lab">{t("세계 이름")}</span><input className="wn-in" value={d.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} /></label>
           </div>
-          <div><span className="lab">{t("장르")}</span><Genre d={d} set={set} scroll /></div>
+          <div><span className="lab">{t("장르")}</span><Genre d={d} set={set} /></div>
           <label><span className="lab">{t("한 줄 소개")}</span><input className="wn-in" value={d.one} maxLength={160} onChange={(e) => set({ one: e.target.value })} /></label>
           <label><span className="lab">{t("세계 규칙")}</span><textarea className="wn-in" rows={4} value={d.rule} maxLength={2000} onChange={(e) => set({ rule: e.target.value })} /></label>
         </>)}
