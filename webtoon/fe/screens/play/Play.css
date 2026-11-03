@@ -809,3 +809,14 @@
   .wt .pl-stories .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .wt .pl-stories .hd { flex-direction: column; gap: 2px; }
 }
+/* 폰 세계 안 — 표지를 크게 깔고 이름 · 소개를 그림 위에(하은 11/03) */
+@media (max-width: 767px) {
+  .wt .pl-wttl { display: none; }
+  .wt .pl-wside { display: block; position: relative; padding: 0; overflow: hidden; border: 0; border-radius: 16px; background: #0b0f15; }
+  .wt .pl-wside .cov { width: 100%; aspect-ratio: 4/3; border-radius: 0; object-position: center 30%; }
+  .wt .pl-wside .cov[src*="zombie-world"] { object-position: 30% center; }
+  .wt .pl-wside:after { content: ""; position: absolute; left: 0; right: 0; top: 0; aspect-ratio: 4/3; background: linear-gradient(180deg, rgba(15, 20, 28, 0) 35%, rgba(15, 20, 28, .92)); pointer-events: none; }
+  .wt .pl-wside .tx { position: absolute; z-index: 1; left: 16px; right: 16px; top: 0; aspect-ratio: 4/3 auto; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding-bottom: 14px; width: auto; }
+  .wt .pl-wside .t { display: block; font-size: 24px; text-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
+  .wt .pl-wside p { font-size: 13.5px; line-height: 1.55; color: #e6e9ee; text-shadow: 0 1px 6px rgba(0, 0, 0, .6); }
+}
