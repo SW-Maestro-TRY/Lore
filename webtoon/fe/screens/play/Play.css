@@ -754,3 +754,7 @@
   /* 얇은 줄과 같은 내용을 한 번 더 말하던 빵부스러기는 폰에서 숨김 */
   .wt .pl-crumb { display: none; }
 }
+/* 만화 머리 — 넣은 캐릭터 */
+.wt .pl-comic .head .cast-in { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; height: 30px; padding: 0 12px 0 4px; border-radius: 999px; background: var(--pl-card2); border: 1px solid var(--line); }
+.wt .pl-comic .head .cast-in i { width: 24px; height: 24px; border-radius: 50%; background: var(--pl-card3) center top / cover no-repeat; }
+.wt .pl-comic .head .cast-in b { font-size: 13px; color: #fff; }

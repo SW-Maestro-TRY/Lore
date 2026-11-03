@@ -138,5 +138,9 @@ const dict: Dict = {
   "고친 내용 저장": { en: "Save changes", ja: "変更を保存", zh: "保存修改" },
   "이 세계관을 불러오지 못했어요": { en: "Couldn't load this world", ja: "この世界観を読み込めませんでした", zh: "无法加载该世界观" },
   "{n}편": { en: "{n}", ja: "{n}話", zh: "{n} 篇" },
+  "{who} 「{ev}」에서 어떻게 할지 보고 있어요": { en: "Seeing what {who} would do in “{ev}”", ja: "{who}なら「{ev}」でどうするか見ています", zh: "正在看{who}在「{ev}」里会怎么做" },
+  "{who} 움직인 장면을 그리고 있어요": { en: "Drawing the scenes {who} acted in", ja: "{who}が動いた場面を描いています", zh: "正在画{who}行动的场景" },
+  "다 그린 장면을 살펴보고 있어요": { en: "Checking the finished scenes", ja: "描き終えた場面を確認しています", zh: "正在检查画好的场景" },
+  "같은 사건, 다른 캐릭터": { en: "Same event, other characters", ja: "同じ事件、別のキャラ", zh: "同一事件，其他角色" },
 };
 registerDict(dict);

@@ -368,6 +368,10 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
 
 /* 6 만드는 중 — 운영 진행 화면 모양(캐릭터 그림 · 루 한 줄 · 막대 · 단계 넷). 다 되면 바로 만화로 넘어간다.
  * job 이 mock-play 로 시작하면 서버 없이 흉내만 낸다(개발 화면 바로가기용). */
+/* 이름 뒤 받침에 맞는 조사 — 「이현이라면 · 몽이라면」 */
+const hasBatchim = (name: string) => { const c = name.trim().slice(-1).charCodeAt(0); return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0; };
+const ira = (name: string) => `${name}${hasBatchim(name) ? "이라면" : "라면"}`;
+const iga = (name: string) => `${name}${hasBatchim(name) ? "이" : "가"}`;
 const MOCK_RUN = "20261003T213320-5297d4"; // 개발 바로가기에서 만화 화면에 띄울 예시 작품
 function Making({ w, e, job, character, go }: { w: PlayWorld; e: PlayEvent; job?: string; character?: string; go: Go }) {
   const t = useT();
@@ -434,8 +438,11 @@ function Making({ w, e, job, character, go }: { w: PlayWorld; e: PlayEvent; job?
       <div className="card main">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {who?.art_url ? <img className="face" src={who.art_url} alt="" /> : <span className="face" />}
-        <h2>{say || t("루가 이야기를 쓰고 있어요")}</h2>
-        <p className="genre-line">{t(w.name)} · {t(e.title)}</p>
+        {/* 체험은 「이 캐릭터라면 이 사건에서 어떻게 할까」를 짓는 중이라는 게 보이게 — 서버의 일반 진행 문구 대신 */}
+        <h2>{name ? (phase === 0 ? t("{who} 「{ev}」에서 어떻게 할지 보고 있어요", { who: ira(name), ev: t(e.title) })
+          : phase === 1 ? t("{who} 움직인 장면을 그리고 있어요", { who: iga(name) })
+          : t("다 그린 장면을 살펴보고 있어요")) : (say || t("루가 이야기를 쓰고 있어요"))}</h2>
+        <p className="genre-line">{t(w.name)} · {e.no} {t(e.title)}</p>
         <p className="hint">{t("백그라운드에서 작업 중이라 나갔다 들어와도 작업이 이어져요.")}</p>
         <div className="bar"><i style={{ width: `${pct}%` }} /></div>
         <p className="hint">{left ? t("{pct}% · 약 {n}분 남았어요", { pct, n: left }) : `${pct}%`}</p>
@@ -463,11 +470,16 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
   const rest = w.events.filter((v) => v.id !== e.id && v.id !== next?.id);
   const other = worlds.filter((v) => v.id !== w.id);
   const name = who ? (who.builtin ? t(who.name) : who.name) : "";
+  /* 같은 사건에 다른 캐릭터를 넣은 만화 — 「얘라서 이렇게 됐다」를 나란히 보게 */
+  const [others, setOthers] = useState<PlayRunCard[]>([]);
+  useEffect(() => { eventPlayRuns(e.id).then((r) => setOthers((r.runs || []).filter((x) => x.run_id !== run))).catch(() => setOthers([])); }, [e.id, run]);
   return (
     <div className="pl-comic">
       <MTop back={t(w.name)} onBack={() => go("play", { world: w.id })} title={t(e.title)} right={name ? `${name} · ${e.no}` : e.no} />
       <div className="head">
-        <div><small>{t(w.name)} · {e.no}</small><h1>{t(e.title)}</h1></div>
+        <div><small>{t(w.name)} · {e.no} {t(e.title)}</small><h1>{result?.title || t(e.title)}</h1>
+          {name && <span className="cast-in">{who?.art_url && <i style={{ backgroundImage: `url(${who.art_url})` }} />}<b>{name}</b></span>}
+        </div>
         <div className="acts">
           <button type="button" aria-label={t("좋아요")}><IconHeart /> {result?.likes ?? 0}</button>
           <button type="button" aria-label={t("댓글")}><IconComment /> 0</button>
@@ -481,6 +493,15 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
         {result ? result.pages.map((p) => <img key={p.no} src={pageUrl(run!, p.no)} alt="" />) : <div className="pl-skel" />}
       </div>
       <div className="after">
+        {others.length > 0 && (
+          <section><h2>{t("같은 사건, 다른 캐릭터")}</h2>
+            <div className="row">{others.map((r) => (
+              <button type="button" className="wc" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
+                {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" /> : <span className="pl-noimg" />}<b>{r.character}</b>
+              </button>
+            ))}</div>
+          </section>
+        )}
         {next && (
           <button type="button" className="nx" onClick={() => go("play", { world: w.id, ep: next.id, stage: "char", character })}>
             <Pic src={next.image_url} />
