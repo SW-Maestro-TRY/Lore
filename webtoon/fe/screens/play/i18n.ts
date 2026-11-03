@@ -142,5 +142,11 @@ const dict: Dict = {
   "{who} 움직인 장면을 그리고 있어요": { en: "Drawing the scenes {who} acted in", ja: "{who}が動いた場面を描いています", zh: "正在画{who}行动的场景" },
   "다 그린 장면을 살펴보고 있어요": { en: "Checking the finished scenes", ja: "描き終えた場面を確認しています", zh: "正在检查画好的场景" },
   "같은 사건, 다른 캐릭터": { en: "Same event, other characters", ja: "同じ事件、別のキャラ", zh: "同一事件，其他角色" },
+  "캐릭터별 이야기": { en: "Stories by character", ja: "キャラ別の物語", zh: "按角色的故事" },
+  "같은 사건, 서로 다른 이야기": { en: "Same event, different stories", ja: "同じ事件、違う物語", zh: "同一事件，不同故事" },
+  "내 캐릭터라면?": { en: "What would yours do?", ja: "自分のキャラなら？", zh: "如果是我的角色？" },
+  "내 캐릭터로 이야기 만들기": { en: "Make a story with my character", ja: "自分のキャラで物語を作る", zh: "用我的角色做故事" },
+  "{name}의 이야기": { en: "{name}'s story", ja: "{name}の物語", zh: "{name}的故事" },
+  "전체 보기": { en: "See all", ja: "すべて見る", zh: "查看全部" },
 };
 registerDict(dict);

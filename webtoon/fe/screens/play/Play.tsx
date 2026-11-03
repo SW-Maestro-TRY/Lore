@@ -162,46 +162,44 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const put = () => go("play", { world: w.id, ep: e.id, stage: "char" });
   /* 이 사건에 나오는 인물만 — 만든 사람이 사건마다 고른 것(이름이나 id). 고른 기록이 아예 없으면(옛 자료) 세계 전체 */
   const cast = e.cast ? w.cast.filter((p) => e.cast!.includes(p.name) || (!!p.id && e.cast!.includes(p.id))) : w.cast;
-  /* 이 사건의 예시 캐릭터 — 단추 위에 얼굴과 이름. 누르면 내 캐릭터 화면(예시가 먼저 나온다) */
-  const people = e.example_people || [];
-  /* 이 사건에서 만든 만화 — 늘어나도 자리를 더 먹지 않게 한 줄로 접는다(겹친 표지 · 편수 ›).
-   * 누르면 전부 펼친 판이 뜬다. 없으면 빈 한 줄. */
+  /* 캐릭터별 이야기 — 같은 사건에 서로 다른 캐릭터가 들어가 만든 만화(예시 캐릭터 것도 여기에). 없으면 구역을 숨긴다.
+   * 앞의 둘만 카드로, 나머지는 「전체 보기」 판에서. */
   const [allMade, setAllMade] = useState(false);
   const openRun = (run: string) => go("play", { world: w.id, ep: e.id, stage: "done", run });
   const cover = (r: (typeof made)[number]) => r.cover_src || (r.cover_page ? coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1) : "");
-  const madeBlock = (
-    <div className="made">
-      {made.length === 0 ? <><p className="k">{t("이 사건에서 만든 만화")}</p><p className="none">{t("아직 이 사건에서 만든 만화가 없어요")}</p></> : (
-        <button type="button" className="fold" onClick={() => setAllMade(true)}>
-          <span className="stack">{made.slice(0, 3).map((r) => <i key={r.run_id} style={{ backgroundImage: `url(${cover(r)})` }} />)}</span>
-          <span className="tx"><b>{t("이 사건에서 만든 만화")}</b><small>{t("{n}편", { n: made.length })}</small></span>
-          <span className="chev">›</span>
-        </button>
-      )}
+  const storyCard = (r: (typeof made)[number]) => (
+    <button type="button" key={r.run_id} className="sc" onClick={() => openRun(r.run_id)}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {cover(r) ? <img src={cover(r)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
+      <span className="tx"><b>{t("{name}의 이야기", { name: r.character })}</b><small>{r.title}</small></span>
+      <span className="chev">›</span>
+    </button>
+  );
+  const stories = made.length > 0 && (
+    <div className="stories">
+      <div className="hd"><div><b>{t("캐릭터별 이야기")}</b><small>{t("같은 사건, 서로 다른 이야기")}</small></div>
+        {made.length > 2 && <button type="button" className="all" onClick={() => setAllMade(true)}>{t("전체 보기")} ›</button>}</div>
+      <div className="list">{made.slice(0, 2).map(storyCard)}</div>
     </div>
   );
   const madeSheet = allMade && (
     <div className="pl-madesheet" onClick={(x) => { if (x.target === x.currentTarget) setAllMade(false); }}>
-      <div className="box" role="dialog" aria-modal="true" aria-label={t("이 사건에서 만든 만화")}>
-        <div className="hd"><b>{t("이 사건에서 만든 만화")} <span>{made.length}</span></b><button type="button" aria-label={t("닫기")} onClick={() => setAllMade(false)}><IconClose /></button></div>
+      <div className="box" role="dialog" aria-modal="true" aria-label={t("캐릭터별 이야기")}>
+        <div className="hd"><b>{t("캐릭터별 이야기")} <span>{made.length}</span></b><button type="button" aria-label={t("닫기")} onClick={() => setAllMade(false)}><IconClose /></button></div>
         <div className="list">{made.map((r) => (
           <button type="button" key={r.run_id} onClick={() => openRun(r.run_id)}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {cover(r) ? <img src={cover(r)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
-            <span className="tx"><b>{r.title || t(e.title)}</b><small>{r.character}</small></span>
+            <span className="tx"><b>{r.character}</b><small>{r.title}</small></span>
           </button>
         ))}</div>
       </div>
     </div>
   );
-  const examples = people.length > 0 && (
-    <div className="exs"><p className="k">{t("예시 캐릭터")}</p>
-      <div className="exl">{people.map((x) => (
-        <button type="button" key={x.name} onClick={put}>
-          <i style={x.face_url ? { backgroundImage: `url(${x.face_url})` } : undefined}>{!x.face_url && t(x.name).slice(0, 1)}</i>
-          <span><b>{t(x.name)}</b>{x.role && <small>{t(x.role)}</small>}</span>
-        </button>
-      ))}</div>
+  /* 내 캐릭터라면? — 이 화면의 할 일. PC 는 오른쪽 상자, 폰은 상황 글 바로 아래 */
+  const mine = (
+    <div className="mine"><b>{t("내 캐릭터라면?")}</b>
+      <button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터로 이야기 만들기")}</button>
     </div>
   );
   return (
@@ -222,19 +220,18 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
           <div className="cols">
             <div className="l">
               <div className="meta"><b>{t(w.name)}</b>{e.place && <> · {t(e.place)}</>}</div>
-              <div className="made-m">{madeBlock}</div>
               <p className="sit">{t(e.situation)}</p>
-              {examples && <div className="exs-m">{examples}</div>}
+              <div className="mine-m">{mine}</div>
+              {stories}
               {cast.length > 0 && (
                 <div><p className="k">{t("등장인물")}</p>
                   <div className="cast">{cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
                 </div>
               )}
             </div>
-            <div className="r"><div className="spot">{examples}<button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>{madeBlock}</div>
+            <div className="r">{mine}</div>
           </div>
         </div>
-        <div className="mfoot"><button type="button" className="pl-btn" onClick={put}>{t("내 캐릭터 넣기")}</button></div>
       </div>
       {who && <CastView p={who} onClose={() => setWho(null)} />}
       {madeSheet}
@@ -494,7 +491,7 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
       </div>
       <div className="after">
         {others.length > 0 && (
-          <section><h2>{t("같은 사건, 다른 캐릭터")}</h2>
+          <section><h2>{t("캐릭터별 이야기")}</h2>
             <div className="row">{others.map((r) => (
               <button type="button" className="wc" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
                 {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" /> : <span className="pl-noimg" />}<b>{r.character}</b>
