@@ -495,3 +495,9 @@
 .wt .pl-whead { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 @media (max-width: 767px) { .wt .pl-whead .pl-btn { display: none; } }
 .wt .pl-whead .pl-btn svg { width: 15px; height: 15px; margin-right: 4px; }
+/* 등장인물 · 예시 캐릭터 줄 — 얼굴 크게, 역할 한 줄 + 설정 두 줄 */
+.wt .wn-p { align-items: flex-start; gap: 14px; padding: 12px 12px 12px 12px; border-radius: 14px; }
+.wt .wn-p b { font-size: 16px; }
+.wt .wn-p em { display: block; margin-top: 2px; font-style: normal; font-size: 13px; font-weight: 600; color: var(--pl-apricot); }
+.wt .wn-p small { margin-top: 4px; font-size: 13px; line-height: 1.5; color: var(--muted); white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wt .wn-p .pen { margin-top: 2px; }
