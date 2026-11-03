@@ -104,6 +104,7 @@ public class WebtoonPurge implements UserDataPurge {
         n += rows.deleteAttendReminds(userId);
         n += rows.deleteInvites(userId);        // 초대한 줄·초대받은 줄 둘 다. 받은 크레딧은 장부에 그대로(돈에 준하는 기록)
         n += rows.deleteInviteCode(userId);
+        n += rows.deleteApiLogs(userId);        // API 호출 기록 — 요청 본문에 이 사람이 적은 글이 있다
         return n;
     }
 

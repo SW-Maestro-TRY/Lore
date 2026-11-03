@@ -89,6 +89,14 @@ public class PlayWorldService {
         this.daily = Math.max(0, daily);
     }
 
+    /** 뒤에서 도는 AI 채우기를 한 줄씩 남긴다(걸린 시간 · 성공 · 실패 이유 · 비용 기록 번호). 없으면 안 남긴다. */
+    private com.lore.webtoon.ops.ApiLogWriter apiLog;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setApiLog(com.lore.webtoon.ops.ApiLogWriter apiLog) {
+        this.apiLog = apiLog;
+    }
+
     /** AI 로 채우기 요청. {@code id} 가 있으면 그 세계를 다시 만든다. {@code draft} 는 저장 본문과 같은 모양. */
     public record MakeForm(String id, Map<String, Object> draft, String lorebook_id, String note, String language) {
     }
@@ -447,6 +455,9 @@ public class PlayWorldService {
     private void perform(String id, Long owner, Map<String, Object> draft, List<Map<String, Object>> picked,
                          String note, Map<String, Object> previous, String lang) {
         Path dir = null;
+        long started = System.currentTimeMillis();
+        String costRun = "world-make-" + id + "-" + started;
+        String failure = null;
         try {
             dir = Files.createTempDirectory("lore-world-");
             Map<String, Object> input = new LinkedHashMap<>();
@@ -504,6 +515,7 @@ public class PlayWorldService {
             rows.save(row);
         } catch (Exception e) {
             log.warn("세계관을 만들지 못했습니다: {}", id, e);
+            failure = e.getClass().getSimpleName() + ": " + e.getMessage();
             rows.findById(id).ifPresent(row -> {
                 row.making = PlayWorld.ERROR;
                 row.error = e instanceof BusinessException b && b.getMessage() != null
@@ -515,7 +527,7 @@ public class PlayWorldService {
         } finally {
             if (dir != null) {
                 try {
-                    usage.ingestMetaFile("world-make-" + id + "-" + System.currentTimeMillis(), dir.resolve("meta.json"));
+                    usage.ingestMetaFile(costRun, dir.resolve("meta.json"));
                 } catch (Exception error) {
                     log.warn("세계관 만들기 원가를 적지 못했습니다: {}", id, error);
                 }
@@ -525,6 +537,14 @@ public class PlayWorldService {
                     }
                 } catch (Exception error) {
                     log.warn("세계관 만들기 임시 폴더를 못 치웠습니다: {}", id, error);
+                }
+            }
+            if (apiLog != null) {
+                try {
+                    apiLog.write(com.lore.webtoon.ops.ApiLog.task("WORLD_MAKE", "play/worlds/" + id, owner,
+                            System.currentTimeMillis() - started, failure == null, failure, costRun));
+                } catch (RuntimeException ignored) {
+                    // 기록 실패는 만들기에 영향을 주지 않는다
                 }
             }
             slots.release();
