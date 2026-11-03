@@ -600,6 +600,16 @@ public class JobRunner {
         afterStory(jobId, job, runId);
     }
 
+    /** 세계관 체험 작업인가 — run 의 input.json(play=true). 못 읽으면 아니다(예전과 같다). */
+    private boolean isPlay(WebtoonJob job) {
+        Path file = runsDir.resolve(job.getRunId()).resolve("input.json");
+        try {
+            return Files.isRegularFile(file) && mapper.readTree(file.toFile()).path("play").asBoolean(false);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /** character.json 의 줄거리가 비었나. 못 읽으면 비지 않은 것으로 본다(예전처럼 넷을 짓는다). */
     private boolean storyBlank(Path character) {
         try {
@@ -1774,7 +1784,7 @@ public class JobRunner {
      * 실패해도 이 작업을 멈추지 않는다. {@link #drawPages}가 표지를 다시 그린다.
      */
     private void startCoverFirst(Long jobId, WebtoonJob job) {
-        if (pageWorkers <= 1 || pageCount(job) > 0 || pageDrawn(job.getRunId(), 1)) {
+        if (pageWorkers <= 1 || pageCount(job) > 0 || pageDrawn(job.getRunId(), 1) || isPlay(job)) {
             return;
         }
         progress.startedPage(jobId, 1);
@@ -1798,6 +1808,8 @@ public class JobRunner {
 
     private void drawPages(Long jobId, WebtoonJob job, int pages) throws Exception {
         java.util.concurrent.Future<?> cover = coverFirst.remove(jobId);
+        /* 세계관 체험은 표지(1장)를 안 그린다(2026-11-03). 번호는 그대로 두고 1장만 건너뛴다 — 하네스도 같은 기준. */
+        final int firstPage = isPlay(job) ? 2 : 1;
         if (pages <= 1 || pageWorkers <= 1) {
             if (cover != null) {
                 cover.get();
@@ -1811,14 +1823,14 @@ public class JobRunner {
                 new java.util.concurrent.atomic.AtomicInteger();
         java.util.concurrent.atomic.AtomicReference<Exception> failed =
                 new java.util.concurrent.atomic.AtomicReference<>();
-        progress.drew(jobId, 0, pages);
+        progress.drew(jobId, 0, pages - (firstPage - 1));
 
         /* 안전 검사에 두 번 연속 걸린 장(#626). 다른 실패와 달리 남은 장은 계속 그린다 — 한두 장이면
            그 장만 비워 두고 완성해서 사람이 편집실에서 장면을 고쳐 다시 그리게 한다. */
         java.util.Set<Integer> unsafe = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
         List<java.util.concurrent.Future<?>> waiting = new ArrayList<>();
-        for (int n = 1; n <= pages; n++) {
+        for (int n = firstPage; n <= pages; n++) {
             final int page = n;
             Runnable drawOne = () -> {
                 /* 이미 어긋났으면 시작하지 않는다 — 한 장이 실패했는데 남은
@@ -1831,7 +1843,7 @@ public class JobRunner {
                     if (pageDrawn(job.getRunId(), page)) {
                         /* 이미 그린 장 — 서버가 다시 떠서 이어 그리는 중이다. 그림 값을 두 번 내지 않는다. */
                         drawn.incrementAndGet();
-                        progress.drewPage(jobId, page, pages);
+                        progress.drewPage(jobId, page, pages - (firstPage - 1));
                         return;
                     }
                     progress.startedPage(jobId, page);
@@ -1847,7 +1859,7 @@ public class JobRunner {
                         throw harnessFailed(job.getRunId(), page + "번째 장을 그리지 못했습니다");
                     }
                     drawn.incrementAndGet();
-                    progress.drewPage(jobId, page, pages);
+                    progress.drewPage(jobId, page, pages - (firstPage - 1));
                 } catch (Exception e) {         // noqa: 여기서 새면 기다리는 쪽이 영원히 기다린다
                     failed.compareAndSet(null, e);
                 }
