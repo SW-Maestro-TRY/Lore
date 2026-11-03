@@ -789,3 +789,4 @@
 .wt .pl-modal .r .stories .sc { grid-template-columns: 52px minmax(0, 1fr) auto; }
 .wt .pl-modal .r .stories .sc img, .wt .pl-modal .r .stories .sc .pl-noimg { width: 52px; }
 @media (max-width: 767px) { .wt .pl-modal .stories-m { display: block; } }
+.wt .pl-modal .r .stories { margin-top: 20px; }
