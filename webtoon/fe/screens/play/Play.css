@@ -415,3 +415,7 @@
 @media (max-width: 767px) {
   .wt .wn-eform { grid-template-columns: 1fr; }
 }
+.wt .wn-tools { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.wt .wn-ai { display: flex; flex-direction: column; gap: 4px; }
+.wt .wn-ai .pl-err { margin: 0; font-size: 12px; }
+.wt .wn-genre { display: flex; flex-direction: column; gap: 8px; }

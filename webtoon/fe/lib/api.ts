@@ -381,6 +381,15 @@ export function listPlayWorlds<T>(): Promise<{ worlds: T[] }> {
   return call("/play/worlds");
 }
 
+/** 세계관 만들기 · AI 로 채우기 — 바로 { id, making:"running" } 을 주고 뒤에서 짓는다. id 를 넣으면 다시 만들기.
+ *  빈 칸이 채워지고 examples 에 새로 그린 캐릭터 둘이 들어간다. 끝났는지는 readPlayWorld 의 making 이 "idle" 인지로 본다. */
+export function makePlayWorld(body: { id?: string; draft: object; lorebook_id?: string; note?: string }): Promise<{ id: string; making: string }> {
+  return post("/play/worlds/make", body);
+}
+export function readPlayWorld<T>(id: string): Promise<T> {
+  return call(`/play/worlds/${encodeURIComponent(id)}`);
+}
+
 /** 세계관 만들기 — 만든 사람이 정한 세계 · 등장인물 · 사건 · 예시 캐릭터를 올린다(로그인 필요). */
 export function savePlayWorld(body: object, id?: string): Promise<{ id: string }> {
   return call(id ? `/play/worlds/${encodeURIComponent(id)}` : "/play/worlds", {

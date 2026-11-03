@@ -3,21 +3,24 @@
  * 시안: haeun/브랜드-UX-2026-11-02/시안-세계관만들기/index.html.
  * - 등장인물(사건에 같이 나오는 인물)과 예시 캐릭터(체험하는 사람이 바로 넣어 볼 캐릭터, 최대 2)는 만드는 사람이 정한다.
  * - 내 설정집에서 가져와 채울 수 있고, 다시 가져오면 덮어쓴다.
- * - 「올리기」는 POST /play/worlds. 서버에 그 길이 없으면(404) 이 브라우저에만 남긴다(playData.saveWorld).
+ * - 「AI로 채우기」는 POST /play/worlds/make — 빈 칸과 예시 캐릭터 둘을 서버가 지어 준다. 한 번 지은 뒤엔 「다시 만들기」.
+ * - 「올리기」는 POST /play/worlds(이미 id 가 있으면 PUT). 서버 길은 lore-23 의 feature/world-create.
+ * - 장르 칩은 운영 웹툰 만들기와 같은 목록(GENRE_QUICK) + 직접 입력.
  * 사진은 올리기 API 가 생길 때까지 이 화면에서 미리 보기만 한다. */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { listCharacters, listLorebooks, type Character, type LoreBook } from "../../lib/api";
+import { listCharacters, listLorebooks, readCharacter, type Character, type LoreBook } from "../../lib/api";
+import { GENRE_QUICK } from "../../lib/wizardData";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconEdit, IconPlus } from "../../ui/Icons";
 import { usePhone } from "../landing/usePhone";
-import { saveWorld, type WorldDraft, type DraftPerson as Person, type DraftEvent as Ev } from "./playData";
+import { makeWorld, saveWorld, type WorldDraft, type DraftPerson as Person, type DraftEvent as Ev } from "./playData";
+import "../wizard/i18n";
 import "./i18n";
 import "./Play.css";
 
 type Draft = WorldDraft & { cover?: string };
 const KEY = "lore-world-draft";
-const GENRES = ["로맨스 판타지", "판타지", "학원", "현대", "무협", "아포칼립스"];
 const empty: Draft = { name: "", genre: "", one: "", rule: "", cast: [], events: [], examples: [], visibility: "public" };
 const uid = () => Math.random().toString(36).slice(2, 10);
 const epNo = (i: number) => `EP ${String(i + 1).padStart(2, "0")}`;
@@ -46,6 +49,42 @@ function useDraft() {
   const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(strip(d))); setSaved(true); } catch { /* 저장소가 막힌 브라우저 */ } };
   const clear = () => { try { localStorage.removeItem(KEY); } catch { /* 저장소가 막힌 브라우저 */ } };
   return { d, set, setD, keep, saved, clear };
+}
+
+/* 장르 — 운영 만들기와 같은 칩 + 직접 입력 */
+function Genre({ d, set, scroll }: { d: Draft; set: (p: Partial<Draft>) => void; scroll?: boolean }) {
+  const t = useT();
+  const [typing, setTyping] = useState(false);
+  const custom = typing || (!!d.genre && !GENRE_QUICK.includes(d.genre));
+  return (
+    <div className="wn-genre">
+      <div className={`wn-chips${scroll ? " scroll" : ""}`}>
+        {GENRE_QUICK.map((g) => <button type="button" key={g} className={d.genre === g && !typing ? "on" : ""} onClick={() => { setTyping(false); set({ genre: d.genre === g ? "" : g }); }}>{t(g)}</button>)}
+        <button type="button" className={custom ? "on" : ""} onClick={() => { setTyping(true); if (GENRE_QUICK.includes(d.genre)) set({ genre: "" }); }}>{t("직접 입력")}</button>
+      </div>
+      {custom && <input className="wn-in" aria-label={t("장르 직접 입력")} value={d.genre} maxLength={30} onChange={(e) => set({ genre: e.target.value })} />}
+    </div>
+  );
+}
+
+/* AI 로 채우기 · 다시 만들기 — 적어 둔 칸은 두고 빈 칸 · 예시 캐릭터 둘을 서버가 짓는다 */
+function AiFill({ d, setD }: { d: Draft; setD: (d: Draft) => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const run = async () => {
+    if (busy) return;
+    setBusy(true); setErr("");
+    try { setD({ ...(await makeWorld(strip(d))), cover: d.cover }); }
+    catch (x) { setErr(x instanceof Error && x.message ? x.message : t("만들지 못했어요")); }
+    setBusy(false);
+  };
+  return (
+    <div className="wn-ai">
+      <button type="button" className="pl-btn wn-w sm" disabled={busy} onClick={run}>{busy ? t("AI가 채우는 중") : d.id ? t("다시 만들기") : t("AI로 채우기")}</button>
+      {err && <span className="pl-err">{err}</span>}
+    </div>
+  );
 }
 
 /* 내 캐릭터 · 내 설정집 — 예시 캐릭터 고르기와 설정집 가져오기에 쓴다 */
@@ -144,7 +183,13 @@ function EventRow({ e, no, onEdit }: { e: Ev; no: string; onEdit: () => void }) 
 function Examples({ d, set, chars, go }: { d: Draft; set: (p: Partial<Draft>) => void; chars: Character[]; go: Go }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const picked = d.examples.map((id) => chars.find((c) => c.id === id)).filter(Boolean) as Character[];
+  /* AI 가 새로 그린 예시는 아직 그리는 중일 수 있어 내 목록에 없으면 따로 읽는다 */
+  const [extra, setExtra] = useState<Character[]>([]);
+  useEffect(() => {
+    const miss = d.examples.filter((id) => !chars.some((c) => c.id === id) && !extra.some((c) => c.id === id));
+    if (miss.length) void Promise.all(miss.map((id) => readCharacter(id).catch(() => null))).then((l) => setExtra((o) => [...o, ...(l.filter(Boolean) as Character[])]));
+  }, [d.examples.join(","), chars.length]);
+  const picked = d.examples.map((id) => chars.find((c) => c.id === id) || extra.find((c) => c.id === id)).filter(Boolean) as Character[];
   const toggle = (id: string) => set({ examples: d.examples.includes(id) ? d.examples.filter((x) => x !== id) : [...d.examples, id].slice(-MAX_EXAMPLES) });
   return (
     <div className="wn-ex">
@@ -226,7 +271,7 @@ function Desk({ go }: { go: Go }) {
     <div className="pl-wrap wn">
       <div className="wn-head">
         <div className="pl-crumb"><button type="button" onClick={() => go("make")}>{t("만들기")}</button><i>›</i><b>{d.name || t("새 세계관")}</b></div>
-        <FromBook d={d} setD={(x) => { setD(x); }} books={books} go={go} />
+        <div className="wn-tools"><FromBook d={d} setD={(x) => { setD(x); }} books={books} go={go} /><AiFill d={d} setD={setD} /></div>
       </div>
       <div className="pl-w2">
         <aside className="pl-wside wn-side">
@@ -234,7 +279,7 @@ function Desk({ go }: { go: Go }) {
             {d.cover ? <><span className="im" style={{ backgroundImage: `url(${d.cover})` }} /><span className="pl-btn sm tool">{t("바꾸기")}</span></> : <><i><IconPlus /></i>{t("표지 올리기")}</>}
           </PickPic>
           <input className="wn-name" placeholder={t("세계 이름")} aria-label={t("세계 이름")} value={d.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} />
-          <div className="wn-chips">{GENRES.map((g) => <button type="button" key={g} className={d.genre === g ? "on" : ""} onClick={() => set({ genre: d.genre === g ? "" : g })}>{t(g)}</button>)}</div>
+          <Genre d={d} set={set} />
           <textarea className="wn-one" rows={2} placeholder={t("한 줄 소개")} aria-label={t("한 줄 소개")} value={d.one} maxLength={160} onChange={(e) => set({ one: e.target.value })} />
           <label className="wn-lab"><span className="lab">{t("세계 규칙")}</span><textarea className="wn-one" rows={4} value={d.rule} maxLength={2000} onChange={(e) => set({ rule: e.target.value })} /></label>
           <span className="lab">{t("등장인물")}</span>
@@ -298,14 +343,14 @@ function Steps({ go }: { go: Go }) {
         <div className="wn-steps">{names.map((n, i) => <span key={n} className={i < step ? "done" : i === step ? "on" : ""}><i>{i < step ? "✓" : i + 1}</i>{n}</span>)}</div>
         {step === 0 && (<>
           <h1 className="pl-h1">{t("어떤 세계인가요?")}</h1>
-          <FromBook d={d} setD={setD} books={books} go={go} />
+          <div className="wn-tools"><FromBook d={d} setD={setD} books={books} go={go} /><AiFill d={d} setD={setD} /></div>
           <div className="wn-m-top">
             <PickPic className={`wn-cover${d.cover ? "" : " add"}`} onPick={(cover) => set({ cover })}>
               {d.cover ? <span className="im" style={{ backgroundImage: `url(${d.cover})` }} /> : <><i><IconPlus /></i>{t("표지")}</>}
             </PickPic>
             <label><span className="lab">{t("세계 이름")}</span><input className="wn-in" value={d.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} /></label>
           </div>
-          <div><span className="lab">{t("장르")}</span><div className="wn-chips scroll">{GENRES.map((g) => <button type="button" key={g} className={d.genre === g ? "on" : ""} onClick={() => set({ genre: d.genre === g ? "" : g })}>{t(g)}</button>)}</div></div>
+          <div><span className="lab">{t("장르")}</span><Genre d={d} set={set} scroll /></div>
           <label><span className="lab">{t("한 줄 소개")}</span><input className="wn-in" value={d.one} maxLength={160} onChange={(e) => set({ one: e.target.value })} /></label>
           <label><span className="lab">{t("세계 규칙")}</span><textarea className="wn-in" rows={4} value={d.rule} maxLength={2000} onChange={(e) => set({ rule: e.target.value })} /></label>
         </>)}
