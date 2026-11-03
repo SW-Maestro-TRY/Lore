@@ -376,37 +376,6 @@
 .wt .wt-gallery-faq summary::after { content: "+"; font-weight: 400; font-size: 20px; line-height: 1; opacity: 0.6; transition: transform 0.2s; }
 .wt .wt-gallery-faq details[open] summary::after { transform: rotate(45deg); }
 .wt .wt-gallery-faq p { padding: 0 2px 16px; font-size: 14px; line-height: 1.75; color: var(--muted); max-width: 62ch; }
-.wt .wt-gallery-works {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-.wt .wt-gallery-works button {
-  border: 0;
-  background: none;
-  color: var(--ink);
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-  min-width: 0;
-}
-.wt .wt-gallery-works img {
-  width: 100%;
-  aspect-ratio: 3/4;
-  object-fit: cover;
-  object-position: top;
-  border-radius: 12px;
-}
-.wt .wt-gallery-works b {
-  display: block;
-  font-size: 13px;
-  line-height: 1.6;
-  margin-top: 12px;
-}
-.wt .wt-gallery-works span {
-  font-size: 11px;
-  color: var(--muted);
-}
 .wt .wt-gallery-bottom {
   margin: 64px 0 48px;
   background: #142337;
@@ -430,14 +399,17 @@
   .wt .wt-gallery-inner {
     padding: 16px 20px 0;
   }
+  /* 폰은 첫 칸 하나만 — 옆 세 칸(세계관 · 웹툰 장면)은 아래 두 줄이 대신한다 */
   .wt .wt-gallery-hero {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 420px 180px 210px;
-    gap: 8px;
+    grid-template-columns: 1fr;
+    grid-template-rows: 420px;
   }
   .wt .wt-gallery-main {
-    grid-column: span 2;
     grid-row: auto;
+  }
+  .wt .wt-gallery-panel,
+  .wt .wt-gallery-cover {
+    display: none;
   }
   .wt .wt-gallery-copy {
     padding: 25px;
@@ -481,10 +453,6 @@
     width: auto; height: 0; transform: none;
   }
   .wt .wt-gallery-faq .faq-cats button[aria-selected="true"]::before { height: 2px; }
-  .wt .wt-gallery-works {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px 12px;
-  }
   .wt .wt-gallery-bottom {
     flex-direction: column;
     text-align: center;
@@ -499,15 +467,6 @@
     max-width: 280px;
   }
 }
-
-/* 다른 장르의 웹툰 — 네 편이 한꺼번에 오른쪽에서 밀려 들어온다(책장 넘기듯, 칸마다 살짝 늦게) */
-.wt .wt-gallery-works { overflow: hidden; }
-.wt .wt-gallery-works.turn button { animation: wt-gallery-turn 0.7s cubic-bezier(.2,.7,.2,1) both; }
-.wt .wt-gallery-works.turn button:nth-child(2) { animation-delay: .05s; }
-.wt .wt-gallery-works.turn button:nth-child(3) { animation-delay: .1s; }
-.wt .wt-gallery-works.turn button:nth-child(4) { animation-delay: .15s; }
-@keyframes wt-gallery-turn { from { opacity: 0; transform: translateX(48px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .wt .wt-gallery-works.turn button { animation: none; } }
 
 /* 서비스 소개(E안) — 왼쪽 폰, 오른쪽 글. 폰 화면에서는 글이 위, 폰이 가운데 */
 /* PC — 다른 구역처럼 폭을 꽉 채운다: 왼쪽 절반 글, 오른쪽 절반은 은은한 판 위 가운데에 폰 */
@@ -619,4 +578,20 @@
 .wt .wt-play-row-list small { padding: 0 12px; font-size: 12px; line-height: 1.4; color: var(--dim); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 @media (max-width: 767px) {
   .wt .wt-play-row-list { grid-template-columns: 1fr 1fr; gap: 8px; }
+}
+
+/* 웹툰 둘러보기 — PC 는 한 줄 여섯 칸 격자, 폰은 옆으로 넘기는 한 줄 */
+.wt .wt-browse-row { margin-top: 36px; }
+.wt .wt-browse-list { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-browse-list button { display: flex; flex-direction: column; justify-content: flex-start; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
+.wt .wt-browse-list button:nth-child(n + 7) { display: none; }
+.wt .wt-browse-list img { display: block; width: 100%; aspect-ratio: 3/4; object-fit: cover; object-position: top; border-radius: 10px; }
+.wt .wt-browse-list b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin-top: 8px; font-size: 13px; line-height: 1.45; }
+.wt .wt-browse-list span { display: block; margin-top: 2px; font-size: 11px; color: var(--dim); }
+@media (max-width: 767px) {
+  .wt .wt-browse-row { margin-top: 28px; }
+  .wt .wt-browse-list { display: flex; gap: 10px; margin: 0 -20px; padding: 0 20px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 20px; scrollbar-width: none; }
+  .wt .wt-browse-list::-webkit-scrollbar { display: none; }
+  .wt .wt-browse-list button { flex: 0 0 34%; scroll-snap-align: start; }
+  .wt .wt-browse-list button:nth-child(n + 7) { display: flex; }
 }
