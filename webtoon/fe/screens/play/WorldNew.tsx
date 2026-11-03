@@ -217,10 +217,10 @@ function ExamplePeople({ list, onChange }: { list: Person[]; onChange: (l: Perso
     <div className="wn-cast">
       {list.map((p) => open?.id === p.id
         ? <PersonForm key={p.id} p={p} onDone={put} onCancel={() => setOpen(null)} onDelete={() => { onChange(list.filter((x) => x.id !== p.id)); setOpen(null); }} />
-        : <button type="button" key={p.id} className="wn-p" onClick={() => setOpen(p)}><Face name={p.name} src={p.face} size={64} /><span><b>{p.name}</b>{p.role && <em>{p.role}</em>}<small>{p.desc}</small></span><span className="pen"><IconEdit /></span></button>)}
+        : <button type="button" key={p.id} className="wn-p" onClick={() => setOpen(p)}><span className="ph" style={p.face ? { backgroundImage: `url(${p.face})` } : undefined}>{!p.face && p.name.slice(0, 1)}</span><b>{p.name}</b>{p.role && <em>{p.role}</em>}<span className="pen"><IconEdit /></span></button>)}
       {open && !list.some((x) => x.id === open.id)
         ? <PersonForm p={open} onDone={put} onCancel={() => setOpen(null)} />
-        : list.length < MAX_EXAMPLES && <button type="button" className="wn-dash round" onClick={() => setOpen(newPerson())}><IconPlus />{t("예시 캐릭터")}</button>}
+        : list.length < MAX_EXAMPLES && <button type="button" className="wn-dash wn-card-add" onClick={() => setOpen(newPerson())}><IconPlus />{t("예시 캐릭터")}</button>}
     </div>
   );
 }
@@ -317,12 +317,12 @@ function Desk({ go }: { go: Go }) {
               <PersonForm key={p.id} p={p} onDone={putPerson} onCancel={() => setPerson(null)} onDelete={() => { set({ cast: d.cast.filter((x) => x.id !== p.id), events: d.events.map((e) => ({ ...e, cast: e.cast.filter((x) => x !== p.id) })) }); setPerson(null); }} />
             ) : (
               <button type="button" key={p.id} className="wn-p" onClick={() => setPerson(p)}>
-                <Face name={p.name} src={p.face} size={64} /><span><b>{p.name}</b>{p.role && <em>{p.role}</em>}<small>{p.desc}</small></span><span className="pen"><IconEdit /></span>
+                <span className="ph" style={p.face ? { backgroundImage: `url(${p.face})` } : undefined}>{!p.face && p.name.slice(0, 1)}</span><b>{p.name}</b>{p.role && <em>{p.role}</em>}<span className="pen"><IconEdit /></span>
               </button>
             ))}
             {person && !d.cast.some((x) => x.id === person.id)
               ? <PersonForm p={person} onDone={putPerson} onCancel={() => setPerson(null)} />
-              : <button type="button" className="wn-dash round" onClick={() => setPerson(newPerson())}><IconPlus />{t("등장인물")}</button>}
+              : <button type="button" className="wn-dash wn-card-add" onClick={() => setPerson(newPerson())}><IconPlus />{t("등장인물")}</button>}
           </div>
           <div className="wn-bar">
             <span className="wn-saved">{saved ? t("저장됨") : ""}</span>
