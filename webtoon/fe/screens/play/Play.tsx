@@ -132,13 +132,25 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
   );
 }
 
+const DEMO_MADE = [
+  ["20261003T213320-5297d4", "리셰트", "covers/ex-20261003T213320-5297d4.jpg"],
+  ["20260926T132032-278bf7", "서하윤", "covers/ex-20260926T132032-278bf7.jpg"],
+  ["20260919T125314-423cf5", "세이엘", "covers/ex-20260919T125314-423cf5.jpg"],
+  ["20261003T133334-b5ccce", "한결", "covers/ex-20261003T133334-b5ccce.jpg"],
+].map(([run_id, character, cover]) => ({ run_id, character, cover_src: `/static/gallery/${cover}`, title: "", genre: "", episodes: [1],
+  world_id: "", world_name: "", event_id: "", event_title: "" })) as unknown as (PlayRunCard & { cover_src?: string })[];
+
 /* 4 사건 보기 — PC 는 3번 위 팝업, 폰은 전체 화면(아래에 자리 이름 + 단추 줄) */
 function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const t = useT();
   const [who, setWho] = useState<PlayPerson | null>(null);
   /* 이 사건에서 다른 사람들이 만든 만화 — 서버 길이 없거나 아직 없으면 줄 자체를 안 그린다 */
-  const [made, setMade] = useState<PlayRunCard[]>([]);
-  useEffect(() => { eventPlayRuns(e.id).then((r) => setMade(r.runs || [])).catch(() => setMade([])); }, [e.id]);
+  const [made, setMade] = useState<(PlayRunCard & { cover_src?: string })[]>([]);
+  useEffect(() => {
+    /* 개발 화면 바로가기용 — ?made=demo 면 예시 작품 표지로 「있을 때」 모습을 보여 준다(로컬 · dev 만) */
+    if (typeof window !== "undefined" && new URLSearchParams(location.search).get("made") === "demo") { setMade(DEMO_MADE); return; }
+    eventPlayRuns(e.id).then((r) => setMade(r.runs || [])).catch(() => setMade([]));
+  }, [e.id]);
   const close = () => go("play", { world: w.id });
   const put = () => go("play", { world: w.id, ep: e.id, stage: "char" });
   /* 이 사건에 나오는 인물만 — 만든 사람이 사건마다 고른 것(이름이나 id). 고른 기록이 아예 없으면(옛 자료) 세계 전체 */
@@ -152,7 +164,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
         <div className="row">{made.map((r) => (
           <button type="button" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
+            {r.cover_src ? <img src={r.cover_src} alt="" loading="lazy" /> : r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
             <b>{r.character}</b>
           </button>
         ))}</div>
