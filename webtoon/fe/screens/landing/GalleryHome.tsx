@@ -6,11 +6,10 @@ import { track } from "../../lib/track";
 import "./GalleryHome.css";
 import IntroReel from "./IntroReel";
 import PlayIntro from "./PlayIntro";
-import PlayRunsRow from "./PlayRunsRow";
 import CtaBand from "./CtaBand";
 import { EventBanner } from "../event/EventBits";
 import { loadWorlds, type PlayWorld } from "../play/playData";
-import { browseRuns, cardImageUrl, coverUrl, type RunCard } from "../../lib/api";
+import { browseRuns, coverUrl, type RunCard } from "../../lib/api";
 import { byPopular } from "../works/popular";
 import { genreBucket } from "../works/genreBucket";
 const asset = (path: string) => `/static/gallery/${path}`;
@@ -102,7 +101,7 @@ export default function GalleryHome({
           id: r.run_id,
           title: r.title || r.character,
           genre: genreBucket(r.genre) || r.genre || "",
-          cover: cardImageUrl(r) || coverUrl(r.run_id, r.cover_page!, r.cover_episode || (r.episodes || [])[0] || 1),
+          cover: coverUrl(r.run_id, r.cover_page!, r.cover_episode || (r.episodes || [])[0] || 1),
         }));
         if (alive) setPopular(top.length ? top : fallbackWorks.map((w) => ({ ...w, cover: asset(w.cover) })));
       })
@@ -205,7 +204,6 @@ export default function GalleryHome({
             ))}
           </div>
         </section>
-        <PlayRunsRow go={go} worlds={worlds} />
         <PlayIntro go={go} worlds={worlds} />
         <IntroReel />
         <section className="wt-gallery-section">

@@ -68,21 +68,6 @@ public class PlayRuns {
         return cards(rows, true);
     }
 
-    /**
-     * 최근 체험 만화 — 공개된 것만, 최근 순. {@code worldId} 를 주면 그 세계 것만. 홈의 「세계관 체험 만화」 칸과
-     * 세계 안 사건별 선반이 쓴다(2026-11-04). 일반 둘러보기에는 체험 만화가 안 섞이므로 여기가 그 자리다.
-     */
-    @Transactional(readOnly = true)
-    public List<Map<String, Object>> recent(String worldId) {
-        boolean one = worldId != null && !worldId.isBlank();
-        List<Map<String, Object>> rows = sql.queryForList("""
-                select public_id, play_world, play_event from webtoon_job
-                 where play_event is not null %s
-                 order by created_at desc limit %d""".formatted(one ? "and play_world = :w" : "", LIMIT),
-                new MapSqlParameterSource().addValue("w", one ? worldId : ""));
-        return cards(rows, true);
-    }
-
     private List<Map<String, Object>> cards(List<Map<String, Object>> rows, boolean publicOnly) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> row : rows) {

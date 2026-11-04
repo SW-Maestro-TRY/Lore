@@ -1,6 +1,6 @@
 "use client";
 
-import { cardImageUrl, coverUrl, type RunCard } from "../lib/api";
+import { coverUrl, type RunCard } from "../lib/api";
 import { useT } from "../lib/i18n";
 import "./RunStrip.css";
 
@@ -22,7 +22,7 @@ export default function RunStrip({ title, runs, onOpen }: {
                   aria-label={r.title || t("제목 없음")}>
             {r.cover_page ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={cardImageUrl(r) || coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" />
+              <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" />
             ) : (
               <span className="wt-strip-nocover" aria-hidden="true" />
             )}
