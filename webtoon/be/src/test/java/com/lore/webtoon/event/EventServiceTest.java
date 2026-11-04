@@ -81,6 +81,18 @@ class EventServiceTest {
     }
 
     @Test
+    @DisplayName("세계관 체험의 세계·사건 id 를 남긴다")
+    void keepsPlayKeys() {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("where", "char");
+        props.put("world", "arcana");
+        props.put("event", "arcana-ep1");
+
+        assertThat(EventService.cleanProps(props))
+                .isEqualTo("{\"where\":\"char\",\"world\":\"arcana\",\"event\":\"arcana-ep1\"}");
+    }
+
+    @Test
     @DisplayName("남는 값이 없으면 props 는 비운다")
     void emptyPropsBecomeNull() {
         assertThat(EventService.cleanProps(Map.of("email", "a@b.c"))).isNull();

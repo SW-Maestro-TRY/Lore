@@ -70,6 +70,8 @@ public class EventService {
             "step", "quality", "style", "mode", "preset", "lang",
             // 만들기 선택값 — 라벨만, 글은 아님(#665)
             "path", "way", "world", "genre", "pick", "to", "field", "source",
+            // 세계관 체험의 사건 id(play_event.id — 운영 사건은 arcana-ep1 꼴, 사용자 세계는 무작위 기호)
+            "event",
             // 가리키는 것 (작품·작업·캐릭터 id, 몇 번째)
             "run", "job", "character", "n", "ep", "cut", "page",
             // 수·시간·돈 · 길이 · 깊이 — 사람이 쓴 글 그 자체는 안 담고 길이만(#665)
