@@ -2,7 +2,7 @@
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
 import { useEffect, useState } from "react";
-import { cancelJob, thumbUrl, eventPlayRuns, recentPlayRuns, type PlayRunCard, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
+import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
@@ -27,10 +27,17 @@ function MTop({ back, onBack, title, right }: { back?: string; onBack?: () => vo
 }
 
 /* 사건 그림 — 그림이 없는 사건은 다른 사건 그림을 빌리지 않고 빈 판으로 둔다 */
-function Pic({ src, className }: { src: string | null | undefined; className?: string }) {
+function Pic({ src, className, style }: { src: string | null | undefined; className?: string; style?: React.CSSProperties }) {
   // eslint-disable-next-line @next/next/no-img-element
-  return src ? <img className={className} src={src} alt="" /> : <span className={`pl-noimg ${className || ""}`} />;
+  return src ? <img className={className} src={src} alt="" style={style} /> : <span className={`pl-noimg ${className || ""}`} />;
 }
+
+/* 납작한 띠(7:2)로 자를 때 얼굴이 잘리는 운영 사건 그림만 세로 기준을 따로 준다(2026-11-04, 15장 확인). 나머지는 CSS 기본 30% */
+const BAND_FOCUS: Record<string, string> = { "zombie-ep1": "15%", "zombie-ep2": "40%", "arcana-ep3": "8%", "edelia-ep1": "0%", "edelia-ep2": "8%", "gatebreaker-ep1": "8%" };
+const bandFocus = (src?: string | null): React.CSSProperties | undefined => {
+  const name = src?.split("/").pop()?.replace(/\.[a-z]+$/i, "");
+  return name && BAND_FOCUS[name] ? { objectPosition: `center ${BAND_FOCUS[name]}` } : undefined;
+};
 
 /* 등장인물 자세히 — 카드를 누르면 큰 사진 · 이름 · 역할 · 설정 전부 */
 function CastView({ p, onClose }: { p: PlayPerson; onClose: () => void }) {
@@ -89,17 +96,6 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
   const { status, user } = useAuth();
   const canEdit = !!w.mine || (status === "authenticated" && user?.role === "ADMIN");
   const [who, setWho] = useState<PlayPerson | null>(null);
-  /* 사건마다 그 사건으로 만든 만화(공개) — 사건 카드 옆에 선반으로 붙는다(2026-11-04) */
-  const [made, setMade] = useState<Record<string, PlayRunCard[]>>({});
-  useEffect(() => {
-    let alive = true;
-    recentPlayRuns(w.id).then((r) => {
-      const by: Record<string, PlayRunCard[]> = {};
-      for (const run of r.runs || []) (by[run.event_id] ||= []).push(run);
-      if (alive) setMade(by);
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, [w.id]);
   return (
     <div className="pl-wrap">
       <MTop back={t("세계관")} onBack={() => go("play")} title={t(w.name)} />
@@ -127,33 +123,12 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
         <div className="pl-sec">
           <h2 className="pl-h1">{t("어느 사건에 넣어 볼까요?")}</h2>
           <div className="pl-listh"><b>{t("사건")}</b></div>
-          {w.events.map((e) => {
-            const runs = made[e.id] || [];
-            return (
-              <div key={e.id} className={`pl-shelf${runs.length ? " has" : ""}`}>
-                <button type="button" className="pl-eprow" onClick={() => go("play", { world: w.id, ep: e.id })}>
-                  <Pic src={e.image_url} />
-                  <span className="mid"><span className="no">{e.no}</span><b>{t(e.title)}</b><span className="hook">{t(e.line || e.situation)}</span></span>
-                </button>
-                {runs.length > 0 && (
-                  <div className="pl-shelf-runs">
-                    {runs.map((r) => (
-                      <button type="button" key={r.run_id} className="run" onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={thumbUrl(r.run_id)} alt="" loading="lazy" />
-                        <b>{r.title || t("{name}의 이야기", { name: r.character })}</b>
-                        <small><em>{r.character}</em> {t("주인공")}</small>
-                      </button>
-                    ))}
-                    <button type="button" className="mine" style={{ gridColumn: `span ${(3 - (runs.length % 3)) % 3 || 1}` }}
-                            onClick={() => go("play", { world: w.id, ep: e.id, stage: "char" })}>
-                      <i><IconPlus /></i>{t("내 캐릭터로")}
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {w.events.map((e) => (
+            <button type="button" key={e.id} className="pl-eprow" onClick={() => go("play", { world: w.id, ep: e.id })}>
+              <Pic src={e.image_url} />
+              <span className="mid"><span className="no">{e.no}</span><b>{t(e.title)}</b><span className="hook">{t(e.line || e.situation)}</span></span>
+            </button>
+          ))}
         </div>
       </div>
       {/* 폰 — 사건이 먼저, 등장인물은 아래에 작게 한 줄(옆으로 넘김) */}
@@ -176,7 +151,11 @@ const DEMO_MADE = [
   ["20260926T132032-278bf7", "서하윤", "covers/ex-20260926T132032-278bf7.jpg"],
   ["20260919T125314-423cf5", "세이엘", "covers/ex-20260919T125314-423cf5.jpg"],
   ["20261003T133334-b5ccce", "한결", "covers/ex-20261003T133334-b5ccce.jpg"],
-].map(([run_id, character, cover]) => ({ run_id, character, cover_src: `/static/gallery/${cover}`, title: "", genre: "", episodes: [1],
+  ["20260930T202722-95952b", "도윤", "covers/ex-20260930T202722-95952b.jpg"],
+  ["20260930T223006-456ff0", "유리", "covers/ex-20260930T223006-456ff0.jpg"],
+  ["20261001T220531-92a2c1", "카엘", "covers/ex-20261001T220531-92a2c1.jpg"],
+  ["20261012T065511-71abb3", "몽이", "covers/ex-20261012T065511-71abb3.jpg"],
+].map(([run_id, character, cover]) => ({ run_id, character, cover_src: `/static/gallery/${cover}`, title: "", genre: "", episodes: [1], page_count: 5,
   world_id: "", world_name: "", event_id: "", event_title: "" })) as unknown as (PlayRunCard & { cover_src?: string })[];
 
 /* 4 사건 보기 — PC 는 3번 위 팝업, 폰은 전체 화면(아래에 자리 이름 + 단추 줄) */
@@ -195,22 +174,29 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   /* 이 사건에 나오는 인물만 — 만든 사람이 사건마다 고른 것(이름이나 id). 고른 기록이 아예 없으면(옛 자료) 세계 전체 */
   const cast = e.cast ? w.cast.filter((p) => e.cast!.includes(p.name) || (!!p.id && e.cast!.includes(p.id))) : w.cast;
   /* 캐릭터별 이야기 — 같은 사건에 서로 다른 캐릭터가 들어가 만든 만화(예시 캐릭터 것도 여기에). 없으면 구역을 숨긴다.
-   * 앞의 둘만 카드로, 나머지는 「전체 보기」 판에서. */
+   * 다섯 편까지 카드로, 나머지는 「더 둘러보기」 판에서. */
   const openRun = (run: string) => go("play", { world: w.id, ep: e.id, stage: "done", run });
   const cover = (r: (typeof made)[number]) => r.cover_src || (r.cover_page ? thumbUrl(r.run_id) : "");
+  /* 캐릭터별 이야기 — 사건 아래에 넓게, 만화마다 잘라 낸 한 장면을 카드로(2026-11-04, 시안 A). 다섯 편까지, 넘치면 「더 둘러보기」 */
   const storyCard = (r: (typeof made)[number]) => (
     <button type="button" key={r.run_id} className="sc" onClick={() => openRun(r.run_id)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {cover(r) ? <img src={cover(r)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
-      <span className="tx"><b>{t("{name}의 이야기", { name: r.character })}</b><small>{r.title}</small></span>
-      <span className="chev">›</span>
+      <b>{r.title || t("{name}의 이야기", { name: r.character })}</b>
+      <small><em>{r.character}</em></small>
     </button>
   );
   const stories = made.length > 0 && (
     <div className="stories">
       <div className="hd"><div><b>{t("캐릭터별 이야기")}</b><small>{t("같은 사건, 서로 다른 이야기")}</small></div>
-        {made.length > 2 && <button type="button" className="all" onClick={() => go("play", { world: w.id, ep: e.id, stage: "stories" })}>{t("전체 보기")} ›</button>}</div>
-      <div className="list">{made.slice(0, 2).map(storyCard)}</div>
+        {made.length > 5 && <button type="button" className="all" onClick={() => go("play", { world: w.id, ep: e.id, stage: "stories" })}>{t("더 둘러보기")} ›</button>}</div>
+      <div className="grid">{made.slice(0, 5).map(storyCard)}</div>
+    </div>
+  );
+  /* 등장인물 — PC 는 오른쪽 단추 아래, 폰은 본문 흐름(2026-11-04) */
+  const castBlock = cast.length > 0 && (
+    <div><p className="k">{t("등장인물")}</p>
+      <div className="cast">{cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
     </div>
   );
   /* 내 캐릭터라면? — 이 화면의 할 일. PC 는 오른쪽 상자, 폰은 상황 글 바로 아래 */
@@ -238,16 +224,13 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
             <div className="l">
               <div className="meta"><b>{t(w.name)}</b>{e.place && <> · {t(e.place)}</>}</div>
               <p className="sit">{t(e.situation)}</p>
+              {castBlock && <div className="cast-l">{castBlock}</div>}
               <div className="mine-m">{mine}</div>
               {stories && <div className="stories-m">{stories}</div>}
-              {cast.length > 0 && (
-                <div><p className="k">{t("등장인물")}</p>
-                  <div className="cast">{cast.map((p) => <button type="button" key={p.name} className="pl-pill" onClick={() => setWho(p)}><i style={p.face_url ? { backgroundImage: `url(${p.face_url})`, backgroundSize: "cover", backgroundPosition: "center top" } : undefined}>{!p.face_url && t(p.name).slice(0, 1)}</i>{t(p.name)}{p.role && <small>{t(p.role)}</small>}</button>)}</div>
-                </div>
-              )}
             </div>
-            <div className="r">{mine}{stories}</div>
+            <div className="r">{mine}{castBlock && <div className="cast-r">{castBlock}</div>}</div>
           </div>
+          {stories && <div className="stories-pc">{stories}</div>}
         </div>
       </div>
       {who && <CastView p={who} onClose={() => setWho(null)} />}
@@ -381,25 +364,57 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
 
 /* 6 만드는 중 — 운영 진행 화면 모양(캐릭터 그림 · 루 한 줄 · 막대 · 단계 넷). 다 되면 바로 만화로 넘어간다.
  * job 이 mock-play 로 시작하면 서버 없이 흉내만 낸다(개발 화면 바로가기용). */
-/* 캐릭터별 이야기 전체 — 같은 사건에 서로 다른 캐릭터가 들어가 만든 만화 전부 */
+/* 캐릭터별 이야기 더 둘러보기 — PC 는 시안 A(사건 그림 + 만화들 + 「내 캐릭터로」), 폰은 시안 C 폰(2026-11-04 하은) */
 function Stories({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const t = useT();
-  const [made, setMade] = useState<PlayRunCard[] | null>(null);
-  useEffect(() => { eventPlayRuns(e.id).then((r) => setMade(r.runs || [])).catch(() => setMade([])); }, [e.id]);
+  const [made, setMade] = useState<(PlayRunCard & { cover_src?: string })[] | null>(null);
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(location.search).get("made") === "demo") { setMade(DEMO_MADE); return; }
+    eventPlayRuns(e.id).then((r) => setMade(r.runs || [])).catch(() => setMade([]));
+  }, [e.id]);
   const back = () => go("play", { world: w.id, ep: e.id });
+  const put = () => go("play", { world: w.id, ep: e.id, stage: "char" });
+  const cover = (r: PlayRunCard & { cover_src?: string }) => r.cover_src || thumbUrl(r.run_id);
   return (
     <div className="pl-wrap pl-stories">
       <MTop back={e.no} onBack={back} title={t("캐릭터별 이야기")} />
       <div className="pl-crumb"><button type="button" onClick={() => go("play", { world: w.id })}>{t(w.name)}</button><i>›</i><button type="button" onClick={back}>{e.no} {t(e.title)}</button><i>›</i><b>{t("캐릭터별 이야기")}</b></div>
       <div className="hd"><h1 className="pl-h1">{t("캐릭터별 이야기")}</h1><small>{t("같은 사건, 서로 다른 이야기")}</small></div>
       {made === null ? <div className="pl-skel" /> : (
-        <div className="grid">{made.map((r) => (
-          <button type="button" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={thumbUrl(r.run_id)} alt="" loading="lazy" />
-            <b>{t("{name}의 이야기", { name: r.character })}</b><small>{r.title}</small>
+        <div className="shelf">
+          <button type="button" className={`ev${e.image_url ? "" : " noimg"}`} aria-label={t(e.title)} onClick={back}>
+            <Pic src={e.image_url} style={bandFocus(e.image_url)} />
+            <span className="ov"><small>{t(w.name)}</small><b>{t(e.title)}</b><span className="chip">{e.no} · {t("만화 {n}편", { n: made.length })}</span></span>
           </button>
-        ))}</div>
+          <div className="runs">
+            {made.map((r) => (
+              <button type="button" key={r.run_id} className="run" onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={cover(r)} alt="" loading="lazy" />
+                <b>{r.title || t("{name}의 이야기", { name: r.character })}</b>
+                <small><em>{r.character}</em></small>
+              </button>
+            ))}
+            <button type="button" className="more" onClick={put}><i>+</i>{t("내 캐릭터로")}</button>
+          </div>
+        </div>
+      )}
+      {/* 폰 — 시안 C 폰: 사건 그림 위에 「내 캐릭터로 만들기」, 아래 두 칸 카드(이름 · 장 수 · 컷 · 제목) */}
+      {made !== null && (
+        <div className="board">
+          <div className={`cev${e.image_url ? "" : " noimg"}`}>
+            <Pic src={e.image_url} style={bandFocus(e.image_url)} />
+            <span className="ov"><small>{t(w.name)} · {e.no}</small><b>{t(e.title)}</b><button type="button" className="go" onClick={put}>{t("내 캐릭터로 만들기")}</button></span>
+          </div>
+          {made.length > 0 && <div className="pair">{made.map((r) => (
+            <button type="button" key={r.run_id} className="crun" onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
+              <span className="nm"><b>{r.character}</b>{r.page_count > 0 && <span className="chip">{t("{n}장", { n: r.page_count })}</span>}</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={cover(r)} alt="" loading="lazy" />
+              <span className="tt">{r.title || t("{name}의 이야기", { name: r.character })}</span>
+            </button>
+          ))}</div>}
+        </div>
       )}
     </div>
   );

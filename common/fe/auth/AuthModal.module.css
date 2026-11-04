@@ -62,15 +62,15 @@
 
 .close {
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: transparent;
   color: var(--text-subtle);
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   cursor: pointer;
   transition: background-color 150ms ease, color 150ms ease;
