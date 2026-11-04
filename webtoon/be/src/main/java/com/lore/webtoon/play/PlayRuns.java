@@ -27,11 +27,13 @@ public class PlayRuns {
     private final NamedParameterJdbcTemplate sql;
     private final WebtoonWorkRepository works;
     private final RunService runs;
+    private final PlayBranch branches;
 
-    public PlayRuns(NamedParameterJdbcTemplate sql, WebtoonWorkRepository works, RunService runs) {
+    public PlayRuns(NamedParameterJdbcTemplate sql, WebtoonWorkRepository works, RunService runs, PlayBranch branches) {
         this.sql = sql;
         this.works = works;
         this.runs = runs;
+        this.branches = branches;
     }
 
     /** 체험으로 시작한 작업에 세계 · 사건을 적는다. */
@@ -101,6 +103,10 @@ public class PlayRuns {
             m.put("run_id", work.getRunId());                       // 연재로 묶여도 이 화를 연다
             m.put("world_id", row.get("play_world"));
             m.put("event_id", row.get("play_event"));
+            Map<String, Object> branch = branches.of(work.getRunId());     // 원래 전개와 갈라진 곳 — 없으면 안 싣는다
+            if (branch != null) {
+                m.put("branch", branch);
+            }
             out.add(m);
         }
         return out;
