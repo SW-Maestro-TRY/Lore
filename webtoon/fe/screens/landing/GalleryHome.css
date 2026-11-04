@@ -687,3 +687,6 @@
 }
 /* 「새로운 세계를 경험하기」가 줄바꿈돼 세 줄이 되던 것 — 두 줄 그대로 */
 .wt .wt-pintro .wt-gallery-heading h2 { font-size: 40px; white-space: nowrap; }
+/* 홈 「웹툰 둘러보기」 줄 — 인기순 목록을 받는 동안의 빈 표지 자리(2026-11-04) */
+.wt .wt-browse-list .wt-browse-ph { display: block; width: 100%; aspect-ratio: 3/4; border-radius: 10px; background: var(--card); }
+.wt .wt-browse-list button:disabled { cursor: default; }
