@@ -149,5 +149,17 @@ const dict: Dict = {
   "내 캐릭터로 이야기 만들기": { en: "Make a story with my character", ja: "自分のキャラで物語を作る", zh: "用我的角色做故事" },
   "{name}의 이야기": { en: "{name}'s story", ja: "{name}の物語", zh: "{name}的故事" },
   "전체 보기": { en: "See all", ja: "すべて見る", zh: "查看全部" },
+  "캐릭터별 결말": { en: "Endings by character", ja: "キャラ別の結末", zh: "按角色的结局" },
+  "원래 결말": { en: "Original ending", ja: "元の結末", zh: "原本的结局" },
+  "원래": { en: "Original", ja: "元", zh: "原本" },
+  "원래는": { en: "Originally", ja: "元は", zh: "原本" },
+  "왜": { en: "Why", ja: "なぜ", zh: "为什么" },
+  "끝": { en: "Ending", ja: "結末", zh: "结局" },
+  "여기서 원래와 갈라짐": { en: "This is where it split from the original", ja: "ここで元の展開と分かれた", zh: "从这里与原本分岔" },
+  "이 사건은 원래 이렇게 흘러간다": { en: "How this event originally goes", ja: "この事件は本来こう進む", zh: "这个事件原本是这样发展的" },
+  "그다음": { en: "Then", ja: "その後", zh: "接下来" },
+  "다른 주인공들이 고른 길": { en: "Paths other leads took", ja: "他の主人公が選んだ道", zh: "其他主角选择的路" },
+  "{n}명": { en: "{n}", ja: "{n}人", zh: "{n}人" },
+  "더 둘러보기": { en: "Browse more", ja: "もっと見る", zh: "浏览更多" },
 };
 registerDict(dict);

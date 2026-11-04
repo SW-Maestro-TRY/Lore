@@ -44,10 +44,12 @@ def test_normalize_keeps_play_only_when_true():
 
 
 def test_canon_is_split_from_situation_and_joins_goal():
-    raw = {**BASE, "play": True, "settings": "주인공이 결투에 불려 나간다.\n장소: 광장\n\n[원래 전개]\n1. 불려 나간다\n2. 진다"}
+    raw = {**BASE, "play": True, "settings": "주인공이 결투에 불려 나간다.\n장소: 광장\n\n[원래 전개]\n1. 불려 나간다\n2. 진다"
+           "\n[원래 결말] 결투에서 진다\n[갈래]\n- 결투에서 진다\n- 결투를 거절한다"}
     char = R.normalize(raw)
     assert char["settings"] == "주인공이 결투에 불려 나간다.\n장소: 광장"
     assert char["canon"] == ["불려 나간다", "진다"]
+    assert char["canon_end"] == "결투에서 진다" and char["groups"] == ["결투에서 진다", "결투를 거절한다"]
     block = R.one_input_block(char)
     assert "[원래 전개]" not in block and "진다" not in block      # 독자가 볼 사건에는 안 들어간다
     goal = R.play_goal_block(char)
@@ -64,11 +66,27 @@ def test_no_canon_keeps_old_goal():
 
 def test_branch_prompt_dry_run_has_canon_and_story():
     d = Path(tempfile.mkdtemp())
-    char = R.normalize({**BASE, "play": True, "settings": "상황\n[원래 전개]\n1. 가\n2. 나"})
-    assert R.stage_branch(d, char, {"title": "제목", "body": "본문 글"}, dry_run=True) is None
+    char = R.normalize({**BASE, "play": True, "settings": "상황\n[원래 전개]\n1. 가\n2. 나\n[원래 결말] 나로 끝\n[갈래]\n- 나로 끝"})
+    scenes = [{"what": "첫 장면"}, {"what": "둘째 장면"}]
+    assert R.stage_branch(d, char, {"title": "제목", "body": "본문 글"}, dry_run=True, scenes=scenes) is None
     prompt = (d / "branch_prompt.txt").read_text(encoding="utf-8")
     assert "1. 가\n2. 나" in prompt and "본문 글" in prompt and "말수가 적다" in prompt
+    assert "[원래 결말 이름]\n나로 끝" in prompt and "- 나로 끝" in prompt and "장면 2: 둘째 장면" in prompt
     assert R.stage_branch(d, R.normalize({**BASE, "play": True}), {"body": "x"}, dry_run=True) is None
+
+
+def test_branch_input_file_gives_canon_to_old_runs():
+    d = Path(tempfile.mkdtemp())
+    R.write_json(d / "branch_input.json", {"canon": ["가", "나"], "canon_end": "끝", "groups": ["끝"]})
+    got = R.branch_char(d, R.normalize({**BASE, "play": True}))
+    assert got["canon"] == ["가", "나"] and got["canon_end"] == "끝" and got["groups"] == ["끝"]
+
+
+def test_clean_branch_clamps_and_defaults_group():
+    out = R.clean_branch({"at": 9, "scene": "2", "label": " 거절한다 ", "group": ""}, 4, 3, "진다")
+    assert out["at"] == 4 and out["scene"] == 2 and out["label"] == "거절한다" and out["group"] == "거절한다"
+    same = R.clean_branch({"at": 0, "scene": 0, "label": "x", "group": "다른 이름"}, 4, 3, "진다")
+    assert same["group"] == "진다"           # 안 갈렸으면 원래 결말 갈래
 
 
 if __name__ == "__main__":

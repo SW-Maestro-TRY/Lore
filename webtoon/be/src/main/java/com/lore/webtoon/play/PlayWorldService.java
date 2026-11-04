@@ -603,6 +603,7 @@ public class PlayWorldService {
                 m.put("line", v.get("line"));
                 m.put("situation", v.get("situation"));
                 m.put("canon", canon(v.get("canon") != null ? v.get("canon") : had.get("canon")));
+                m.put("canon_end", text(v.get("canon_end") != null ? v.get("canon_end") : had.get("canon_end"), 60));
                 m.put("place", v.get("place"));
                 m.put("spot", had.get("spot") == null ? "" : had.get("spot"));   // 자리는 사용자가 적었을 때만
                 m.put("cast", had.get("cast") == null ? List.of() : had.get("cast"));
@@ -845,6 +846,14 @@ public class PlayWorldService {
      * 상황은 독자가 볼 사건으로, 원래 전개는 이야기가 갈라져 나올 기준으로 쓴다(2026-11-04). 없으면 상황 그대로.
      */
     static String withCanon(String situation, Map<?, ?> event) {
+        return withCanon(situation, event, List.of());
+    }
+
+    /**
+     * 위와 같고, 원래 결말 이름과 이 사건의 다른 만화들이 이미 묶인 갈래 이름을 더한다. 하네스의 갈림 정리가
+     * 새 만화를 그 갈래 가운데 하나로 넣거나 새 갈래를 짓는다(같은 선택끼리 화면에서 한 묶음으로 보인다).
+     */
+    static String withCanon(String situation, Map<?, ?> event, List<String> groups) {
         List<String> canon = canon(event.get("canon"));
         if (canon.isEmpty()) {
             return situation;
@@ -852,6 +861,24 @@ public class PlayWorldService {
         StringBuilder s = new StringBuilder(situation).append("\n\n[원래 전개]");
         for (int i = 0; i < canon.size(); i++) {
             s.append("\n").append(i + 1).append(". ").append(canon.get(i));
+        }
+        String end = text(event.get("canon_end"), 60);
+        if (!end.isEmpty()) {
+            s.append("\n[원래 결말] ").append(end);
+        }
+        List<String> named = new ArrayList<>();
+        if (!end.isEmpty()) {
+            named.add(end);
+        }
+        for (String g : groups) {
+            String t = text(g, 60);
+            if (!t.isEmpty() && !named.contains(t)) {
+                named.add(t);
+            }
+        }
+        if (!named.isEmpty()) {
+            s.append("\n[갈래]");
+            named.forEach(g -> s.append("\n- ").append(g));
         }
         return s.toString();
     }
@@ -1097,6 +1124,7 @@ public class PlayWorldService {
             ev.put("line", line.isEmpty() ? situation.lines().findFirst().orElse("") : line);
             ev.put("situation", situation);
             ev.put("canon", canon(v.get("canon")));
+            ev.put("canon_end", text(v.get("canon_end"), 60));
             ev.put("place", text(v.get("place"), 60));
             ev.put("spot", text(v.get("spot"), 60));
             ev.put("cast", who);
