@@ -2,7 +2,7 @@
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
 import { useEffect, useState } from "react";
-import { cancelJob, coverUrl, eventPlayRuns, type PlayRunCard, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
+import { cancelJob, thumbUrl, eventPlayRuns, recentPlayRuns, type PlayRunCard, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
@@ -89,6 +89,17 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
   const { status, user } = useAuth();
   const canEdit = !!w.mine || (status === "authenticated" && user?.role === "ADMIN");
   const [who, setWho] = useState<PlayPerson | null>(null);
+  /* 사건마다 그 사건으로 만든 만화(공개) — 사건 카드 옆에 선반으로 붙는다(2026-11-04) */
+  const [made, setMade] = useState<Record<string, PlayRunCard[]>>({});
+  useEffect(() => {
+    let alive = true;
+    recentPlayRuns(w.id).then((r) => {
+      const by: Record<string, PlayRunCard[]> = {};
+      for (const run of r.runs || []) (by[run.event_id] ||= []).push(run);
+      if (alive) setMade(by);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [w.id]);
   return (
     <div className="pl-wrap">
       <MTop back={t("세계관")} onBack={() => go("play")} title={t(w.name)} />
@@ -116,12 +127,33 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
         <div className="pl-sec">
           <h2 className="pl-h1">{t("어느 사건에 넣어 볼까요?")}</h2>
           <div className="pl-listh"><b>{t("사건")}</b></div>
-          {w.events.map((e) => (
-            <button type="button" key={e.id} className="pl-eprow" onClick={() => go("play", { world: w.id, ep: e.id })}>
-              <Pic src={e.image_url} />
-              <span className="mid"><span className="no">{e.no}</span><b>{t(e.title)}</b><span className="hook">{t(e.line || e.situation)}</span></span>
-            </button>
-          ))}
+          {w.events.map((e) => {
+            const runs = made[e.id] || [];
+            return (
+              <div key={e.id} className={`pl-shelf${runs.length ? " has" : ""}`}>
+                <button type="button" className="pl-eprow" onClick={() => go("play", { world: w.id, ep: e.id })}>
+                  <Pic src={e.image_url} />
+                  <span className="mid"><span className="no">{e.no}</span><b>{t(e.title)}</b><span className="hook">{t(e.line || e.situation)}</span></span>
+                </button>
+                {runs.length > 0 && (
+                  <div className="pl-shelf-runs">
+                    {runs.map((r) => (
+                      <button type="button" key={r.run_id} className="run" onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={thumbUrl(r.run_id)} alt="" loading="lazy" />
+                        <b>{r.title || t("{name}의 이야기", { name: r.character })}</b>
+                        <small><em>{r.character}</em> {t("주인공")}</small>
+                      </button>
+                    ))}
+                    <button type="button" className="mine" style={{ gridColumn: `span ${(3 - (runs.length % 3)) % 3 || 1}` }}
+                            onClick={() => go("play", { world: w.id, ep: e.id, stage: "char" })}>
+                      <i><IconPlus /></i>{t("내 캐릭터로")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
       {/* 폰 — 사건이 먼저, 등장인물은 아래에 작게 한 줄(옆으로 넘김) */}
@@ -165,7 +197,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   /* 캐릭터별 이야기 — 같은 사건에 서로 다른 캐릭터가 들어가 만든 만화(예시 캐릭터 것도 여기에). 없으면 구역을 숨긴다.
    * 앞의 둘만 카드로, 나머지는 「전체 보기」 판에서. */
   const openRun = (run: string) => go("play", { world: w.id, ep: e.id, stage: "done", run });
-  const cover = (r: (typeof made)[number]) => r.cover_src || (r.cover_page ? coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1) : "");
+  const cover = (r: (typeof made)[number]) => r.cover_src || (r.cover_page ? thumbUrl(r.run_id) : "");
   const storyCard = (r: (typeof made)[number]) => (
     <button type="button" key={r.run_id} className="sc" onClick={() => openRun(r.run_id)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -364,7 +396,7 @@ function Stories({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
         <div className="grid">{made.map((r) => (
           <button type="button" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
+            <img src={thumbUrl(r.run_id)} alt="" loading="lazy" />
             <b>{t("{name}의 이야기", { name: r.character })}</b><small>{r.title}</small>
           </button>
         ))}</div>
@@ -502,7 +534,7 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
           <section><h2>{t("캐릭터별 이야기")}</h2>
             <div className="row">{others.map((r) => (
               <button type="button" className="wc" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
-                {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" /> : <span className="pl-noimg" />}<b>{r.character}</b>
+                <img src={thumbUrl(r.run_id)} alt="" /><b>{r.character}</b>
               </button>
             ))}</div>
           </section>
