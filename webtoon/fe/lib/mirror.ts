@@ -9,8 +9,8 @@
  *   NEXT_PUBLIC_GA4_ID 가 있을 때)도 측정 ID 도 공용 `common/fe/analytics.ts` 의 거울과 같다.
  *   send_to 로 GA4 에만 보내고 구글 광고 계정에는 안 보낸다.
  * - 앰플리튜드 — /webtoon 레이아웃이 initAll 로 켠 클라이언트에, 지금은 첫 연결 확인용 `landing_cta` 하나만
- *   보낸다(나머지는 앰플리튜드 자동 수집이 담당). 키가 없으면 initAll 이 안 돌아 아무것도 안 나간다.
- *   운영 키를 넣기 전에 개인정보처리방침(제7조 위탁 · 제13조 쿠키)을 먼저 게시한다.
+ *   보낸다(나머지는 앰플리튜드 자동 수집이 담당). 운영 호스트이거나 NEXT_PUBLIC_AMPLITUDE_API_KEY 가 있을 때만.
+ *   개인정보처리방침 제7조 · 제13조(2026-11-05 개정)에 올라 있다.
  * - `navigator.webdriver` 가 참인 자동 브라우저에서는 어느 쪽에도 안 보낸다.
  *
  * 값은 `track.ts` 가 이미 거른 것(영문 기호 · 숫자 · 참거짓)만 받는다. 사람이 쓴 글은 여기까지 오지 않는다. */
@@ -40,7 +40,9 @@ function ga4(name: string, props?: Record<string, Value>): void {
 }
 
 function amplitude(name: string): void {
-  if (!process.env.NEXT_PUBLIC_AMPLITUDE_API_KEY || !AMPLITUDE_EVENTS.has(name)) return;
+  // 켜는 규칙은 apps/web/app/(domains)/webtoon/amplitude.tsx 의 amplitudeKey() 와 같다(환경변수, 없으면 운영 호스트).
+  const on = !!process.env.NEXT_PUBLIC_AMPLITUDE_API_KEY || PROD_HOSTS.includes(location.hostname);
+  if (!on || !AMPLITUDE_EVENTS.has(name)) return;
   ampTrack(name);
 }
 
