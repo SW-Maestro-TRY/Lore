@@ -221,7 +221,8 @@ STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
                         ("PERSONA", "openai"): "gpt-5.1",
                         ("SCENE", "openai"): "gpt-5.1",
                         ("NARRATION", "openai"): "gpt-5.1",
-                        ("FULL_REVIEW", "openai"): "gpt-5.1"}
+                        ("FULL_REVIEW", "openai"): "gpt-5.1",
+                        ("BRANCH", "openai"): "gpt-5.1"}          # 세계관 체험 갈림 정리 — 기본값(4.1)이면 이름이 어색했다(2026-11-04)
 # OpenRouter 로 부를 때도 같은 모델이다. 이름 앞에 회사 이름만 붙는다.
 STAGE_DEFAULT_MODELS.update({(stage, "openrouter"): f"openai/{name}"
                              for (stage, _), name in list(STAGE_DEFAULT_MODELS.items())})
