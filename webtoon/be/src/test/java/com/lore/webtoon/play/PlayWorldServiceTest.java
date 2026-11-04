@@ -283,4 +283,12 @@ class PlayWorldServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("횟수");
         verify(harness, never()).worldMake(any(), anyString());
     }
+
+    @org.junit.jupiter.api.Test
+    void 원래_전개는_상황_뒤에_번호를_달아_붙는다() {
+        java.util.Map<String, Object> event = java.util.Map.of("canon", java.util.List.of("숨긴다", " ", "들킨다"));
+        org.assertj.core.api.Assertions.assertThat(PlayWorldService.withCanon("상황", event))
+                .isEqualTo("상황\n\n[원래 전개]\n1. 숨긴다\n2. 들킨다");
+        org.assertj.core.api.Assertions.assertThat(PlayWorldService.withCanon("상황", java.util.Map.of())).isEqualTo("상황");
+    }
 }
