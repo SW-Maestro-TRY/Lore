@@ -172,12 +172,17 @@ public class RunService {
         Map<String, Map<String, Object>> rootCards = new java.util.HashMap<>();
         /* 인기순 자리(관리자가 정함) — 카드를 낸 작품의 값을 카드 번호로 모아 뒤에서 싣는다. */
         Map<String, Integer> rankOf = new java.util.HashMap<>();
+        /* 세계관 체험 만화는 웹툰 목록에 안 섞는다 — 체험 화면이 사건마다 따로 보여 준다(2026-11-04). */
+        java.util.Set<String> playJobs = new java.util.HashSet<>(jobs.findPlayJobIds());
         for (WebtoonWork one : works.onGallery()) {
-            if (one.isTrashed()) {
+            if (one.isTrashed() || playJobs.contains(one.getJobId())) {
                 continue;
             }
             WebtoonJob job = jobs.findByPublicId(one.getJobId()).orElse(null);
             String rootJob = rootJobOf(job);
+            if (rootJob != null && playJobs.contains(rootJob)) {
+                continue;                                    // 체험 만화의 다음 화도 같이 뺀다
+            }
             WebtoonWork root = rootJob == null ? null
                     : rootJob.equals(one.getJobId()) ? one
                     : works.findByJobId(rootJob)
