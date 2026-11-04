@@ -1220,6 +1220,8 @@ export interface AdminSourceRow {
   utmCampaign: string;
   utmContent: string;
   visitors: number;
+  /** 입력 · 고르기 · 만들기처럼 보기 말고 무언가를 한 사람 — 광고 검토용 자동 접속은 여기 안 잡힌다 */
+  engaged: number;
   createStarted: number;
   loggedIn: number;
   /** 작업이 끝난 브라우저 수 · 끝난 작업 수 */
