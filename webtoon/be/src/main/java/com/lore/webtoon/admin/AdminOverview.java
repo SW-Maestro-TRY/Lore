@@ -263,6 +263,7 @@ public class AdminOverview {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("day", day);
             m.put("visitors", v[0]);
+            m.put("engaged", v[5]);
             m.put("createStarted", v[1]);
             m.put("jobsDone", v[2]);
             out.add(m);
@@ -284,9 +285,23 @@ public class AdminOverview {
      *
      * <h2>무엇을 세나</h2>
      *
-     * 기간 안에 그 출처 사람이 들어온 수 · 만들기를 시작한 수 · 로그인한 수 · 작업이 끝난 수.
+     * 기간 안에 그 출처 사람이 들어온 수 · 행동한 수({@link #PASSIVE} 밖의 기록을 남긴 수) · 만들기를 시작한 수 ·
+     * 로그인한 수 · 작업이 끝난 수.
      * 로그인 전후로 같은 브라우저를 한 사람으로 묶으려고 계정이 아니라 브라우저로 센다.
      */
+    /**
+     * 「보기만 한」 기록 — 이것만 남긴 브라우저는 행동한 사람으로 안 센다.
+     *
+     * 광고를 게시하거나 고친 직후 메타가 광고 주소를 자동으로 열어 검토한다(2026-11-04 운영 기록: 광고가 멈춰
+     * 있던 15분 동안 광고 16개 모두에 4~8명씩, 그중 12명은 맨 위 메뉴 링크 넷을 하나씩 다 누름). 그런 접속은
+     * 페이지 보기 · 링크 클릭 · 탭 전환만 남기고, 입력 · 고르기 · 만들기는 남기지 않는다. 그래서 「들어온 사람」
+     * 옆에 이 목록 밖의 기록을 하나라도 남긴 사람을 따로 센다. 새 기록 이름은 기본으로 「행동」에 들어간다.
+     */
+    static final String PASSIVE = String.join(", ",
+            "'session_start'", "'page_view'", "'page_leave'", "'tab_hidden'", "'tab_back'", "'visibility_change'",
+            "'lp_view'", "'ui_click'", "'read_end'", "'event_popup_view'", "'event_page_view'", "'feedback_prompt_view'",
+            "'api_error'", "'api_slow'", "'ui_error'", "'js_error'", "'job_status'");
+
     @Transactional(readOnly = true)
     public Map<String, Object> sources(LocalDate fromDate, LocalDate toDate, Who who) {
         Instant from = fromDate.atStartOfDay(KST).toInstant();
@@ -304,12 +319,12 @@ public class AdminOverview {
                 select coalesce(s.source, '') as source,
                        count(distinct e.uid) filter (where e.name = 'session_start'),
                        count(distinct e.uid) filter (where e.name = 'create_started'),
-                       count(distinct e.uid) filter (where e.name = 'auth_done')
+                       count(distinct e.uid) filter (where e.name = 'auth_done'),
+                       count(distinct e.uid) filter (where e.name not in (%s))
                 from webtoon_event e
                 left join src s on s.uid = e.uid
-                where e.name in ('session_start', 'create_started', 'auth_done')
-                  and e.occurred_at >= :from and e.occurred_at < :to and e.uid is not null
-                """ + eventCut(who) + " group by 1")
+                where e.occurred_at >= :from and e.occurred_at < :to and e.uid is not null
+                """.formatted(PASSIVE) + eventCut(who) + " group by 1")
                 .setParameter("from", from).setParameter("to", to).getResultList();
         @SuppressWarnings("unchecked")
         List<Object[]> done = em.createNativeQuery(INNER + src + """
@@ -322,13 +337,14 @@ public class AdminOverview {
 
         Map<String, long[]> by = new LinkedHashMap<>();
         for (Object[] r : ev) {
-            long[] v = by.computeIfAbsent((String) r[0], k -> new long[5]);
+            long[] v = by.computeIfAbsent((String) r[0], k -> new long[6]);
             v[0] = num(r[1]);
             v[1] = num(r[2]);
             v[2] = num(r[3]);
+            v[5] = num(r[4]);
         }
         for (Object[] r : done) {
-            long[] v = by.computeIfAbsent((String) r[0], k -> new long[5]);
+            long[] v = by.computeIfAbsent((String) r[0], k -> new long[6]);
             v[3] = num(r[1]);
             v[4] = num(r[2]);
         }

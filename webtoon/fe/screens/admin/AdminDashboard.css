@@ -80,5 +80,5 @@
 
 /* 유입 출처 표 — 칸이 많아 좁은 화면에서는 표만 옆으로 민다 */
 .wt-dash-scroll { overflow-x: auto; }
-.wt-dash-sources { min-width: 640px; }
+.wt-dash-sources { min-width: 720px; }
 .wt-dash-sources td:nth-child(n+5), .wt-dash-sources th:nth-child(n+5) { text-align: right; font-variant-numeric: tabular-nums; }
