@@ -1,7 +1,7 @@
 "use client";
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
@@ -160,6 +160,32 @@ const DEMO_MADE = [
   world_id: "", world_name: "", event_id: "", event_title: "" })) as unknown as (PlayRunCard & { cover_src?: string })[];
 
 /* 4 사건 보기 — PC 는 3번 위 팝업, 폰은 전체 화면(아래에 자리 이름 + 단추 줄) */
+/* 「세아는 / 이현은」 — 이름 끝 받침에 맞춰 은·는. 한글이 아니면 이름만 */
+function topic(name: string): string {
+  const c = name.charCodeAt(name.length - 1);
+  if (!(c >= 0xac00 && c <= 0xd7a3)) return name;
+  return name + ((c - 0xac00) % 28 ? "은" : "는");
+}
+
+/* 옆으로 넘기는 카드 줄과 아래 점 — 지금 보이는 카드의 점이 길어진다 */
+function SnapRow({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState(0);
+  const [n, setN] = useState(0);
+  useEffect(() => { setN(ref.current ? ref.current.children.length : 0); });
+  const onScroll = () => {
+    const el = ref.current; const first = el?.children[0] as HTMLElement | undefined;
+    if (!el || !first) return;
+    setAt(Math.round(el.scrollLeft / (first.getBoundingClientRect().width + 10)));
+  };
+  return (
+    <>
+      <div className="row" ref={ref} onScroll={onScroll}>{children}</div>
+      {n > 1 && <div className="dots">{Array.from({ length: n }, (_, i) => <i key={i} className={i === at ? "on" : ""} />)}</div>}
+    </>
+  );
+}
+
 function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const t = useT();
   const [who, setWho] = useState<PlayPerson | null>(null);
@@ -178,20 +204,34 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
    * 다섯 편까지 카드로, 나머지는 「더 둘러보기」 판에서. */
   const openRun = (run: string) => go("play", { world: w.id, ep: e.id, stage: "done", run });
   const cover = (r: (typeof made)[number]) => r.cover_src || (r.cover_page ? thumbUrl(r.run_id) : "");
-  /* 캐릭터별 이야기 — 사건 아래에 넓게, 만화마다 잘라 낸 한 장면을 카드로(2026-11-04, 시안 A). 다섯 편까지, 넘치면 「더 둘러보기」 */
-  const storyCard = (r: (typeof made)[number]) => (
-    <button type="button" key={r.run_id} className="sc" onClick={() => openRun(r.run_id)}>
+  /* 캐릭터별 결말 — 첫 카드는 사건의 원래 결말, 그다음부터 만화마다 그 주인공이 고른 결말(2026-11-04, 체험 갈림 최종 시안).
+   * PC 는 카드 위에 장면 사진, 폰은 글만. 갈림 정리 전의 옛 작품은 제목만. 여섯 편부터 「더 둘러보기」. */
+  const canonEnd = e.canon && e.canon.length > 0 ? e.canon[e.canon.length - 1] : "";
+  const endCard = (r: (typeof made)[number]) => (
+    <button type="button" key={r.run_id} className="ec" onClick={() => openRun(r.run_id)}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {cover(r) ? <img src={cover(r)} alt="" loading="lazy" /> : <span className="pl-noimg" />}
-      <b>{r.title || t("{name}의 이야기", { name: r.character })}</b>
-      <small><em>{r.character}</em></small>
+      <span className="th">{cover(r) ? <img src={cover(r)} alt="" loading="lazy" /> : <span className="pl-noimg" />}</span>
+      <span className="who"><i style={cover(r) ? { backgroundImage: `url(${cover(r)})` } : undefined}>{!cover(r) && r.character.slice(0, 1)}</i>{r.character}</span>
+      <b>{r.branch?.label || r.title || t("{name}의 이야기", { name: r.character })}</b>
+      {r.branch?.end && <small>{r.branch.end}</small>}
+      <span className="go">{t("만화 보기")} ›</span>
     </button>
   );
   const stories = made.length > 0 && (
-    <div className="stories">
-      <div className="hd"><div><b>{t("캐릭터별 이야기")}</b><small>{t("같은 사건, 서로 다른 이야기")}</small></div>
+    <div className="stories ends">
+      <div className="hd"><div><b>{t("캐릭터별 결말")}</b><small>{t("같은 사건, 서로 다른 이야기")}</small></div>
         {made.length > 5 && <button type="button" className="all" onClick={() => go("play", { world: w.id, ep: e.id, stage: "stories" })}>{t("더 둘러보기")} ›</button>}</div>
-      <div className="grid">{made.slice(0, 5).map(storyCard)}</div>
+      <SnapRow>
+        {canonEnd && (
+          <div className="ec orig">
+            <span className="th"><Pic src={e.image_url} /></span>
+            <span className="who"><i>{t("원")}</i>{t("원래 결말")}</span>
+            <b>{e.canon_end ? t(e.canon_end) : t("원래 결말")}</b>
+            <small>{t(canonEnd)}</small>
+          </div>
+        )}
+        {made.map(endCard)}
+      </SnapRow>
     </div>
   );
   /* 등장인물 — PC 는 오른쪽 단추 아래, 폰은 본문 흐름(2026-11-04) */
@@ -533,6 +573,28 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
   /* 같은 사건에 다른 캐릭터를 넣은 만화 — 「얘라서 이렇게 됐다」를 나란히 보게 */
   const [others, setOthers] = useState<PlayRunCard[]>([]);
   useEffect(() => { eventPlayRuns(e.id).then((r) => setOthers((r.runs || []).filter((x) => x.run_id !== run))).catch(() => setOthers([])); }, [e.id, run]);
+  /* 원래 전개와 갈라진 곳 — 갈라진 장 위의 띠는 한 번 눌러 보면 다시 안 뜬다(작품마다 기억) */
+  const branch = result?.branch;
+  const seenKey = `pl-branch-seen:${run || ""}`;
+  const [seen, setSeen] = useState(false);
+  useEffect(() => { try { setSeen(localStorage.getItem(seenKey) === "1"); } catch { setSeen(false); } }, [seenKey]);
+  const [sheet, setSheet] = useState(false);
+  const openSheet = () => { setSheet(true); setSeen(true); try { localStorage.setItem(seenKey, "1"); } catch { /* 저장 못 해도 이번엔 닫힌다 */ } };
+  const who2 = name || result?.character || "";
+  const myPic = who?.art_url || (run ? thumbUrl(run) : "");
+  const lines = branch?.canon_lines?.length ? branch.canon_lines : (e.canon || []);
+  const endName = branch?.canon_end || e.canon_end || "";
+  /* 갈래 묶음 — 이 만화와 같은 사건의 다른 만화들이 고른 길. 원래 결말 갈래가 맨 위 */
+  const groups = (() => {
+    const all = [...(branch ? [{ name: who2, group: branch.group, me: true, pic: myPic }] : []),
+      ...others.filter((r) => r.branch?.group).map((r) => ({ name: r.character, group: r.branch!.group, me: false, pic: r.cover_page ? thumbUrl(r.run_id) : "" }))];
+    const map = new Map<string, { name: string; me: boolean; pic: string }[]>();
+    for (const x of all) { if (!map.has(x.group)) map.set(x.group, []); map.get(x.group)!.push(x); }
+    if (endName && !map.has(endName)) map.set(endName, []);       // 원래 결말 갈래는 아무도 안 골랐어도 맨 위에 선다(시안)
+    const rows = [...map.entries()].map(([g, people]) => ({ g, people, orig: !!endName && g === endName }));
+    rows.sort((a, b) => (a.orig === b.orig ? b.people.length - a.people.length : a.orig ? -1 : 1));
+    return { rows, total: all.length };
+  })();
   return (
     <div className="pl-comic">
       <MTop back={t(w.name)} onBack={() => go("play", { world: w.id })} title={t(e.title)} right={name ? `${name} · ${e.no}` : e.no} />
@@ -550,16 +612,36 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
       </div>
       <div className="pages">
         {/* eslint-disable @next/next/no-img-element */}
-        {result ? result.pages.map((p) => <img key={p.no} src={pageUrl(run!, p.no)} alt="" />) : <div className="pl-skel" />}
+        {result ? result.pages.map((p) => (
+          <div className="pg" key={p.no}>
+            <img src={pageUrl(run!, p.no)} alt="" />
+            {branch && branch.page === p.no && !seen && (
+              <button type="button" className="split" onClick={openSheet}><span className="pulse" />{t("여기서 원래와 갈라짐")}<span className="r">›</span></button>
+            )}
+          </div>
+        )) : <div className="pl-skel" />}
       </div>
       <div className="after">
-        {others.length > 0 && (
-          <section><h2>{t("캐릭터별 이야기")}</h2>
-            <div className="row">{others.map((r) => (
-              <button type="button" className="wc" key={r.run_id} onClick={() => { track("play_next", { where: "other_run", world: w.id, event: e.id, run: r.run_id }); go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id }); }}>
-                <img src={thumbUrl(r.run_id)} alt="" /><b>{r.character}</b>
-              </button>
-            ))}</div>
+        {branch && lines.length > 0 && (
+          <section className="flow-s"><h2>{t("이 사건은 원래 이렇게 흘러간다")}</h2>
+            <div className="flow">
+              {lines.slice(0, -1).map((line, i) => <div className="fs" key={i}><span className="n">{i + 1}</span><p>{t(line)}</p></div>)}
+              <div className="fs fork"><span className="n">{t("그다음")}</span>
+                <div className="tcs">
+                  <div className="tc self"><span className="w"><i style={myPic ? { backgroundImage: `url(${myPic})` } : undefined}>{!myPic && who2.slice(0, 1)}</i>{who2}</span><b>{branch.label}</b><p>{branch.end}</p></div>
+                  <div className="tc orig"><span className="w"><i>{t("원")}</i>{t("원래")}</span><b>{endName ? t(endName) : t("원래 결말")}</b><p>{t(lines[lines.length - 1])}</p></div>
+                </div>
+              </div>
+            </div>
+            <div className="gap" />
+            <h2>{t("다른 주인공들이 고른 길")}<small>{t("{n}명", { n: String(groups.total) })}</small></h2>
+            {groups.rows.map((row) => (
+              <div className={`bk${row.orig ? " orig" : ""}`} key={row.g}>
+                <div className="t"><b>{row.g}</b>{row.orig && <span className="otag">{t("원래")}</span>}<span className="cnt">{t("{n}명", { n: String(row.people.length) })}</span></div>
+                <div className="bar"><i style={{ width: `${Math.round((row.people.length / Math.max(1, groups.total)) * 100)}%` }} /></div>
+                <div className="faces">{row.people.map((x, i) => <span key={i} className={x.me ? "self" : ""}><i style={x.pic ? { backgroundImage: `url(${x.pic})` } : undefined}>{!x.pic && x.name.slice(0, 1)}</i>{x.name}</span>)}</div>
+              </div>
+            ))}
           </section>
         )}
         {next && (
@@ -588,6 +670,19 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
           </section>
         )}
       </div>
+      {branch && sheet && (
+        <div className="pl-split-sheet" onClick={(ev) => { if (ev.target === ev.currentTarget) setSheet(false); }}>
+          <div className="box">
+            <div className="grab" />
+            <div className="cmp">
+              <span className="k">{t("원래는")}</span><span>{branch.canon}</span>
+              <span className="k">{topic(who2)}</span><span className="cm-me">{branch.this}</span>
+              {branch.why && <><span className="k">{t("왜")}</span><span className="cm-why">{branch.why}</span></>}
+            </div>
+            <button type="button" className="pl-btn" onClick={() => setSheet(false)}>{t("닫기")}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
