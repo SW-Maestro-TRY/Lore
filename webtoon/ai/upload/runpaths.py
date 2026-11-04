@@ -20,6 +20,7 @@ import 한다. 그래서 그림 파일 경로 하나를 얻으려고 웹서버�
 from __future__ import annotations
 
 import json
+import re
 import os
 import sys
 from pathlib import Path
@@ -82,8 +83,16 @@ def page_numbers(run_id: str) -> list[int]:
     scenes = [x for x in ((chosen or {}).get("scenes") or []) if str(x or "").strip()]
     if scenes:
         return list(range(1, len(scenes) + 2))          # 표지 + 장면들
-    files = sorted((d / "pages").glob("page*.png")) if (d / "pages").exists() else []
-    return list(range(1, len(files) + 1))
+    # 지금 이야기 후보는 scenes 를 비워 두고, 장면은 고른 뒤 scenes.json 에 따로 적힌다 — 그 수로 센다.
+    scene_doc = _read_json_safe(d, "scenes.json")
+    split = [x for x in (scene_doc.get("scenes") or []) if x] if isinstance(scene_doc, dict) else []
+    if split:
+        return list(range(1, len(split) + 2))           # 표지 + 장면들
+    # 파일 **번호**의 가장 큰 값까지 센다 — 파일 수로 세면 중간 장이 없을 때(세계관 체험은 표지를 안 그린다)
+    # 마지막 장이 목록에서 밀려 나간다(2026-11-04 운영 「쇠사슬 소리」 4장이 안 올라감).
+    nums = [int(m.group(1)) for f in ((d / "pages").glob("page*.png") if (d / "pages").exists() else [])
+            if (m := re.match(r"^page(\d+)\.png$", f.name))]
+    return list(range(1, max(nums) + 1)) if nums else []
 
 
 def unit_image(run_id: str, no: int) -> Path | None:

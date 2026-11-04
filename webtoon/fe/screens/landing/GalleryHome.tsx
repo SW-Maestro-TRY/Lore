@@ -9,9 +9,14 @@ import PlayIntro from "./PlayIntro";
 import CtaBand from "./CtaBand";
 import { EventBanner } from "../event/EventBits";
 import { loadWorlds, type PlayWorld } from "../play/playData";
+import { browseRuns, coverUrl, type RunCard } from "../../lib/api";
+import { byPopular } from "../works/popular";
+import { genreBucket } from "../works/genreBucket";
 const asset = (path: string) => `/static/gallery/${path}`;
-/* 「웹툰 둘러보기」 줄 — 예시 작품에서 장르가 겹치지 않게 여덟 편. 표지는 각 작품 1쪽 */
-const works = [
+/* 「웹툰 둘러보기」 줄 — 둘러보기 인기순(관리자가 정한 자리 → 조회순) 위 여덟 편. 하은이 둘러보기에서 자리를
+ * 매일 바꾸므로 홈도 그 순서를 따른다(2026-11-04). 아래 여덟 편은 목록을 못 받았을 때만 쓴다(예시 작품, 표지는 1쪽). */
+const BROWSE_ROW = 8;
+const fallbackWorks = [
   { id: "20261003T213320-5297d4", title: "가면을 쓰고 온 옛 약혼자", genre: "로맨스 판타지", cover: "covers/ex-20261003T213320-5297d4.jpg" },
   { id: "20260926T132032-278bf7", title: "이름을 빌린 검", genre: "무협", cover: "covers/ex-20260926T132032-278bf7.jpg" },
   { id: "20260930T223006-456ff0", title: "마왕성 공략 라이브, 한 번뿐인 시청자", genre: "게임 판타지", cover: "covers/ex-20260930T223006-456ff0.jpg" },
@@ -86,6 +91,23 @@ export default function GalleryHome({
   const [redraw, setRedraw] = useState<"before" | "busy" | "after">("before");
   const [worlds, setWorlds] = useState<PlayWorld[]>([]);
   useEffect(() => { void loadWorlds().then(setWorlds).catch(() => {}); }, []);
+  /* null = 받는 중(빈 칸 자리만), 못 받으면 예시 여덟 편 */
+  const [popular, setPopular] = useState<{ id: string; title: string; genre: string; cover: string }[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    browseRuns()
+      .then((runs: RunCard[]) => {
+        const top = runs.filter((r) => r.cover_page).sort(byPopular).slice(0, BROWSE_ROW).map((r) => ({
+          id: r.run_id,
+          title: r.title || r.character,
+          genre: genreBucket(r.genre) || r.genre || "",
+          cover: coverUrl(r.run_id, r.cover_page!, r.cover_episode || (r.episodes || [])[0] || 1),
+        }));
+        if (alive) setPopular(top.length ? top : fallbackWorks.map((w) => ({ ...w, cover: asset(w.cover) })));
+      })
+      .catch(() => { if (alive) setPopular(fallbackWorks.map((w) => ({ ...w, cover: asset(w.cover) }))); });
+    return () => { alive = false; };
+  }, []);
   const [faqCat, setFaqCat] = useState<"주요" | FaqCat>("주요");
   const faqShown = faqCat === "주요" ? faqs.filter((f) => f.top) : faqs.filter((f) => f.cat === faqCat);
   useEffect(() => {
@@ -171,12 +193,14 @@ export default function GalleryHome({
             <button type="button" onClick={() => go("works")}>{t("전부 보기")} ›</button>
           </div>
           <div className="wt-browse-list">
-            {works.map((w) => (
+            {popular ? popular.map((w) => (
               <button type="button" key={w.id} onClick={() => go("result", { run: w.id })}>
-                <img src={asset(w.cover)} alt="" />
+                <img src={w.cover} alt="" />
                 <b>{w.title}</b>
                 <span>{t(w.genre)}</span>
               </button>
+            )) : Array.from({ length: BROWSE_ROW }, (_, i) => (
+              <button type="button" key={i} disabled aria-hidden="true"><i className="wt-browse-ph" /></button>
             ))}
           </div>
         </section>
