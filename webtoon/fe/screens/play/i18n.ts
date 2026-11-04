@@ -58,6 +58,7 @@ const dict: Dict = {
   "저장": { en: "Save", ja: "保存", zh: "保存" },
   "저장하지 못했어요. 다시 눌러 주세요.": { en: "Couldn't save. Please try again.", ja: "保存できませんでした。もう一度押してください。", zh: "保存失败，请再试一次。" },
   "시작하지 못했어요. 다시 눌러 주세요.": { en: "Couldn't start. Please try again.", ja: "開始できませんでした。もう一度押してください。", zh: "无法开始，请再试一次。" },
+  "로그인": { en: "Log in", ja: "ログイン", zh: "登录" },
   "로그인하면 세계관을 저장할 수 있어요": { en: "Sign in to save your world", ja: "ログインすると世界観を保存できます", zh: "登录后可保存世界观" },
   "만들지 못했어요": { en: "Couldn't make it", ja: "作れませんでした", zh: "制作失败" },
   "크레딧은 돌려드렸어요.": { en: "Your credits were refunded.", ja: "クレジットは返却しました。", zh: "积分已退还。" },

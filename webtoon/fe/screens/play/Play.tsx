@@ -8,6 +8,7 @@ import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare } from "../../ui/Icons";
 import CreditShort, { isCreditShort } from "../../ui/CreditShort";
+import { track } from "../../lib/track";
 import { CharacterEditDialog } from "../character/OriginalCharacter";
 import "../character/i18n";
 import { usePhone } from "../landing/usePhone";
@@ -251,13 +252,20 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
   const [edit, setEdit] = useState<Character | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  /* 어떤 캐릭터를 넣었나 — 세계가 정한 예시 · 운영 자료의 예시 주인공 · 기본 견본 · 내 캐릭터. id 는 예시 주인공처럼 한글이 섞이면 안 남는다 */
+  const kindOfSel = () => !sel ? undefined : sel.startsWith("example:") ? "example_person" : mode === "ex" ? "example"
+    : pool?.find((c) => c.id === sel)?.builtin ? "builtin" : "mine";
   const begin = async () => {
     if (!sel || busy) return;
     setBusy(true); setErr("");
+    const base = { world: w.id, event: e.id, kind: kindOfSel(), character: sel, logged_in: authenticated };
+    track("play_start", base);
     try {
       const r = await startPlayRun({ world_id: w.id, event_id: e.id, character_id: sel, agree_ip: ok, language: lang });
+      track("play_started", { ...base, job: r.id });
       go("play", { world: w.id, ep: e.id, stage: "making", job: r.id, character: sel });
     } catch (x) {
+      track("play_failed", { ...base, status: (x as WebtoonApiError | null)?.status ?? 0, reason: isCreditShort(x) ? "credit_short" : "other" });
       setShort(isCreditShort(x) ? x : null);
       setErr(x instanceof Error && x.message ? x.message : t("시작하지 못했어요. 다시 눌러 주세요."));
       setBusy(false);
@@ -323,13 +331,13 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
                 <span>{nameOf(c)}</span>
               </button>
             ))}
-            <button type="button" className="pl-tile pl-add" onClick={() => { setMode("mine"); setChars(mineOnly); setSel(mineOnly[0]?.id); }}><span className="sq"><IconPlus /></span><span>{t("내 캐릭터")}</span></button>
+            <button type="button" className="pl-tile pl-add" onClick={() => { track("play_char_mine", { world: w.id, event: e.id, count: mineOnly.length, logged_in: authenticated }); setMode("mine"); setChars(mineOnly); setSel(mineOnly[0]?.id); }}><span className="sq"><IconPlus /></span><span>{t("내 캐릭터")}</span></button>
           </div>
           {cur && <p className="pl-desc"><small>{nameOf(cur)} · {t("설명")}</small>{descOf(cur)}</p>}
         </>
       ) : chars === null ? <div className="pl-skel" /> : chars.length >= 3 ? (
         <div className="pl-many">
-          <button type="button" className="cr add" onClick={() => go("character-new", { world: w.id, ep: e.id })}><i><IconPlus /></i><b>{t("새 캐릭터 만들기")}</b></button>
+          <button type="button" className="cr add" onClick={() => { track("play_char_new", { world: w.id, event: e.id, where: "list", logged_in: authenticated }); go("character-new", { world: w.id, ep: e.id }); }}><i><IconPlus /></i><b>{t("새 캐릭터 만들기")}</b></button>
           {chars.map((c) => (
             <button type="button" key={c.id} className={`cr${c.id === sel ? " on" : ""}`} onClick={() => setSel(c.id)}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -349,7 +357,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
                 <span>{nameOf(c)}</span>
               </button>
             ))}
-            <button type="button" className="pl-tile pl-add" onClick={() => go("character-new", { world: w.id, ep: e.id })}><span className="sq"><IconPlus /></span><span>{t("새 캐릭터 만들기")}</span></button>
+            <button type="button" className="pl-tile pl-add" onClick={() => { track("play_char_new", { world: w.id, event: e.id, where: "tiles", logged_in: authenticated }); go("character-new", { world: w.id, ep: e.id }); }}><span className="sq"><IconPlus /></span><span>{t("새 캐릭터 만들기")}</span></button>
           </div>
           {cur && <p className="pl-desc"><small>{nameOf(cur)} · {t("설명")}</small>{descOf(cur)}</p>}
         </>
@@ -456,8 +464,8 @@ function Making({ w, e, job, character, go }: { w: PlayWorld; e: PlayEvent; job?
       try {
         const j = await readJob(job, { watching: true });
         if (!alive) return;
-        if (j.status === "done") { finish(j.run_id || undefined); return; }
-        if (j.status === "error") { setFailed(true); return; }
+        if (j.status === "done") { track("play_job_status", { world: w.id, event: e.id, job, status: "done", run: j.run_id || undefined }); finish(j.run_id || undefined); return; }
+        if (j.status === "error") { track("play_job_status", { world: w.id, event: e.id, job, status: "error" }); setFailed(true); return; }
         setPct(Math.max(4, Math.min(99, j.pct || 4)));
         setSay(j.say || "");
         setLeft(j.minutes_left ?? null);
@@ -504,7 +512,7 @@ function Making({ w, e, job, character, go }: { w: PlayWorld; e: PlayEvent; job?
       ))}</div>
       <div className="acts">
         <button type="button" className="lnk" onClick={() => go("works")}>{t("웹툰 보러 가기")}</button>
-        <button type="button" className="lnk" onClick={() => { if (job && !mock) void cancelJob(job).catch(() => {}); back(); }}>{t("만들기 중단")}</button>
+        <button type="button" className="lnk" onClick={() => { track("play_cancel", { world: w.id, event: e.id, job, status: phase === 0 ? "story" : phase === 1 ? "art" : "review" }); if (job && !mock) void cancelJob(job).catch(() => {}); back(); }}>{t("만들기 중단")}</button>
       </div>
     </div>
   );
@@ -548,14 +556,14 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
         {others.length > 0 && (
           <section><h2>{t("캐릭터별 이야기")}</h2>
             <div className="row">{others.map((r) => (
-              <button type="button" className="wc" key={r.run_id} onClick={() => go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id })}>
+              <button type="button" className="wc" key={r.run_id} onClick={() => { track("play_next", { where: "other_run", world: w.id, event: e.id, run: r.run_id }); go("play", { world: w.id, ep: e.id, stage: "done", run: r.run_id }); }}>
                 <img src={thumbUrl(r.run_id)} alt="" /><b>{r.character}</b>
               </button>
             ))}</div>
           </section>
         )}
         {next && (
-          <button type="button" className="nx" onClick={() => go("play", { world: w.id, ep: next.id, stage: "char", character })}>
+          <button type="button" className="nx" onClick={() => { track("play_next", { where: "next_event", world: w.id, event: next.id }); go("play", { world: w.id, ep: next.id, stage: "char", character }); }}>
             <Pic src={next.image_url} />
             <span className="tx"><small>{t("다음 사건")} · {next.no}</small><b>{t(next.title)}</b>
               <span className="pl-btn">{name ? t("{name} 넣기", { name }) : t("내 캐릭터 넣기")}</span></span>
@@ -564,7 +572,7 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
         {rest.length > 0 && (
           <section><h2>{t("{name}의 다른 사건", { name: t(w.name) })}</h2>
             <div className="row">{rest.map((v) => (
-              <button type="button" className="cd" key={v.id} onClick={() => go("play", { world: w.id, ep: v.id })}>
+              <button type="button" className="cd" key={v.id} onClick={() => { track("play_next", { where: "same_world", world: w.id, event: v.id }); go("play", { world: w.id, ep: v.id }); }}>
                 <Pic src={v.image_url} className="im" /><small>{v.no}</small><b>{t(v.title)}</b>
               </button>
             ))}</div>
@@ -573,7 +581,7 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
         {other.length > 0 && (
           <section><h2>{t("다른 세계")}</h2>
             <div className="row">{other.map((v) => (
-              <button type="button" className="wc" key={v.id} onClick={() => go("play", { world: v.id })}>
+              <button type="button" className="wc" key={v.id} onClick={() => { track("play_next", { where: "other_world", world: v.id }); go("play", { world: v.id }); }}>
                 <Pic src={v.cover_url} /><b>{t(v.name)}</b>
               </button>
             ))}</div>
@@ -590,6 +598,16 @@ export default function Play({ go, authenticated, world, ep, stage, job, run, ch
   const [worlds, setWorlds] = useState<PlayWorld[] | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => { void loadWorlds().then(setWorlds).catch(() => setFailed(true)); }, []);
+  /* 체험 안에서 세계 → 사건 → 캐릭터 → 만드는 중 → 만화로 옮겨도 화면 이름(view=play)은 그대로라 page_view 가 안 남는다.
+     그래서 한 칸씩 따로 남긴다 — 광고별 「세계를 열었나 · 사건까지 갔나 · 넣었나」의 분모와 분자. */
+  useEffect(() => {
+    if (failed) { track("play_view", { where: "load_failed" }); return; }
+    if (!worlds) return;
+    const hit = ep ? worlds.find((v) => v.events.some((x) => x.id === ep)) : undefined;
+    const where = hit ? (stage || "event") : worlds.some((v) => v.id === world) ? "world" : "worlds";
+    track("play_view", { where, world: hit?.id || world, event: hit ? ep : undefined, run, job, count: worlds.length, logged_in: authenticated });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [worlds, failed, world, ep, stage, run]);
   if (failed) return <div className="pl"><div className="pl-wrap"><h1 className="pl-h1">{t("세계관을 불러오지 못했어요")}</h1></div></div>;
   if (!worlds) return <div className="pl"><div className="pl-wrap"><div className="pl-skel" /></div></div>;
   let found: { world: PlayWorld; event: PlayEvent } | undefined;
