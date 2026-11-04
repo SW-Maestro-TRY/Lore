@@ -717,7 +717,7 @@ export default function Result({ runId, go, authenticated = false, page }: { run
         <div className="wt-result-zoom" role="dialog" aria-modal="true" aria-label={t("크게 보기")}
              onClick={() => setZoom(null)}>
           <button type="button" className="icon-btn" aria-label={t("닫기")}
-                  onClick={() => setZoom(null)}><IconClose size={18} /></button>
+                  onClick={() => setZoom(null)}><IconClose size={22} /></button>
           {/* 한 장씩이 아니라 한 편을 통째로 — 누른 장으로 먼저 내려가고,
               거기서부터 쭉 내리면서 읽는다. */}
           <div className="wt-result-zoom-scroll" onClick={(e) => e.stopPropagation()}>
