@@ -392,6 +392,11 @@ export function eventPlayRuns(eventId: string): Promise<{ runs: PlayRunCard[] }>
   return call(`/play/events/${encodeURIComponent(eventId)}/runs`);
 }
 
+/** 최근 체험 만화(공개 · 완성된 것, 최근 순). world 를 주면 그 세계 것만 — 홈 칸과 세계 안 사건별 선반. */
+export function recentPlayRuns(world?: string): Promise<{ runs: PlayRunCard[] }> {
+  return call(`/play/runs${world ? `?world=${encodeURIComponent(world)}` : ""}`);
+}
+
 /** 세계관 만들기 · AI 로 채우기 — 바로 { id, making:"running" } 을 주고 뒤에서 짓는다. id 를 넣으면 다시 만들기.
  *  빈 칸이 채워지고 examples 에 새로 그린 캐릭터 둘이 들어간다. 끝났는지는 readPlayWorld 의 making 이 "idle" 인지로 본다. */
 export function makePlayWorld(body: { id?: string; draft: object; lorebook_id?: string; note?: string }): Promise<{ id: string; making: string }> {
