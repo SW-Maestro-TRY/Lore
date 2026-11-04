@@ -387,11 +387,16 @@ public class RunService {
      * 장면을 모르면(옛 작품) 빈 목록이다.
      */
     static List<Integer> pendingPages(List<Integer> drawn, List<String> scenes) {
+        return pendingPages(drawn, scenes, false);
+    }
+
+    /** @param play 세계관 체험이면 표지(1장)를 안 그리므로 안 그린 장으로 치지 않는다(2026-11-03 부터). */
+    static List<Integer> pendingPages(List<Integer> drawn, List<String> scenes, boolean play) {
         List<Integer> out = new ArrayList<>();
         if (scenes == null || scenes.isEmpty()) {
             return out;
         }
-        for (int no = 1; no <= scenes.size() + 1; no++) {
+        for (int no = play ? 2 : 1; no <= scenes.size() + 1; no++) {
             if (!drawn.contains(no)) {
                 out.add(no);
             }
@@ -402,7 +407,21 @@ public class RunService {
     /** 이 작품에서 아직 안 그린 장 번호. 이어 그리기가 본다. */
     @Transactional(readOnly = true)
     public List<Integer> pendingPages(String runId) {
-        return pendingPages(pages.pageNumbersOf(runId), stories.scenesOf(runId));
+        WebtoonJob job = works.findFirstByRunId(runId)
+                .flatMap(w -> jobs.findByPublicId(w.getJobId())).orElse(null);
+        return pendingPages(pages.pageNumbersOf(runId), stories.scenesOf(runId), isPlay(job));
+    }
+
+    /** 세계관 체험으로 만든 작품인가 — 작업 입력의 play. 못 읽으면 아니다. */
+    boolean isPlay(WebtoonJob job) {
+        if (job == null || job.getInputJson() == null || job.getInputJson().isBlank()) {
+            return false;
+        }
+        try {
+            return mapper.readTree(job.getInputJson()).path("play").asBoolean(false);
+        } catch (Exception e) {              // noqa: 못 읽으면 예전처럼
+            return false;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -449,7 +468,7 @@ public class RunService {
         /* 그리기로 한 장 수(표지 + 장면 수)와 실제로 그린 장 수. 한 편 값은 기본 장 수까지라, 크레딧이
            모자라면 뒤 장을 안 그린 채 완성한다 — 그 장 번호와 한 장 값을 같이 줘서 화면이 「이어 그리기」를
            띄운다. 「미리보기」(preview)는 여전히 없다 — 공유·공개는 그린 장만으로 그대로 한다. */
-        List<Integer> pending = pendingPages(numbers, scenes);
+        List<Integer> pending = pendingPages(numbers, scenes, isPlay(job));
         out.put("planned_pages", numbers.size() + pending.size());
         out.put("pending_pages", pending);
         /* 잠긴 장도 웹툰 흐름 안에서 「다음 장면」으로 보이게 — 그린 장의 caption 과 같은 장면 한 줄이다 */

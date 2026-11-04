@@ -411,5 +411,9 @@ class RunServiceTest {
         assertThat(RunService.pendingPages(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), scenes)).isEmpty();
         // 장면을 모르는 옛 작품은 이어 그릴 것이 없다
         assertThat(RunService.pendingPages(List.of(1, 2, 3), List.of())).isEmpty();
+        // 세계관 체험은 표지를 안 그린다 — 1장은 안 그린 장이 아니고, 빠진 마지막 장만 남는다
+        assertThat(RunService.pendingPages(List.of(2, 3), List.of("a", "b", "c"), true)).containsExactly(4);
+        assertThat(RunService.pendingPages(List.of(2, 3, 4), List.of("a", "b", "c"), true)).isEmpty();
+        assertThat(RunService.pendingPages(List.of(2, 3, 4), List.of("a", "b", "c"), false)).containsExactly(1);
     }
 }
