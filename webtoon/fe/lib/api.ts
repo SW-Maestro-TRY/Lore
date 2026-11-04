@@ -1212,6 +1212,26 @@ export function adminOverview(from: string, to: string, who: AdminWho): Promise<
   return call<AdminOverview>(`/admin/dash/overview?${q}`);
 }
 
+/** 유입 출처 한 줄 — utm 을 source/medium/campaign/content 로 나눈 것. 출처가 없으면 source 가 빈 문자열 */
+export interface AdminSourceRow {
+  source: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent: string;
+  visitors: number;
+  createStarted: number;
+  loggedIn: number;
+  /** 작업이 끝난 브라우저 수 · 끝난 작업 수 */
+  makersDone: number;
+  jobsDone: number;
+}
+
+export function adminSources(from: string, to: string, who: AdminWho): Promise<{ rows: AdminSourceRow[] }> {
+  const q = new URLSearchParams({ from, to, who });
+  return call<{ rows: AdminSourceRow[] }>(`/admin/dash/sources?${q}`);
+}
+
 /* ---- 오늘 생성 상한(#617) — 관리자만. 서버를 다시 띄우지 않고 오늘(한국 자정까지)만 바꾼다 ---------- */
 
 export interface AdminSpendPair { krw: number; runs: number }

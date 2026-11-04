@@ -70,6 +70,28 @@ public class AdminDashboardController {
         return overview.overview(fromDate, toDate, whoOf(who));
     }
 
+    @Operation(summary = "유입 출처",
+            description = "utm(source/medium/campaign/content)별 들어온 사람 · 만들기 시작 · 로그인 · 완성. 브라우저마다 가장 처음 출처로 묶는다. "
+                    + "범위 · who 는 개요와 같다.")
+    @GetMapping("/sources")
+    public Map<String, Object> sources(@RequestParam(required = false) String from,
+                                       @RequestParam(required = false) String to,
+                                       @RequestParam(required = false) String who) {
+        requireAdmin();
+        LocalDate today = LocalDate.now(AdminOverview.KST);
+        LocalDate toDate = parse(to, today);
+        LocalDate fromDate = parse(from, toDate.minusDays(6));
+        if (toDate.isBefore(fromDate)) {
+            LocalDate t = fromDate;
+            fromDate = toDate;
+            toDate = t;
+        }
+        if (fromDate.plusDays(MAX_DAYS).isBefore(toDate)) {
+            fromDate = toDate.minusDays(MAX_DAYS);
+        }
+        return overview.sources(fromDate, toDate, whoOf(who));
+    }
+
     @Operation(summary = "작품 목록", description = "비공개 · 관리자 처리 · 휴지통까지. filter = all · public · private · hidden · removed · trash · guest")
     @GetMapping("/works")
     public Map<String, Object> works(@RequestParam(required = false) String filter,
