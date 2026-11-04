@@ -15,7 +15,11 @@ export function Amplitude() {
     initAll(key, {
       serverZone: 'US',
       analytics: { autocapture: true },
-      sessionReplay: { sampleRate: 1 },
+      // 화면 녹화는 글자를 전부 가린다 — 기본(medium)은 입력칸만 가리고 화면에 보이는 글은 그대로 담아서,
+      // 이용자가 쓴 캐릭터 설명 · 이야기가 앰플리튜드로 넘어간다. 개인정보처리방침 제6조 6항
+      // 「이용자가 쓴 글은 보내지 않는다」와 어긋나지 않게 conservative 로 둔다. 앰플리튜드 화면의
+      // 원격 설정이 이 값을 덮을 수 있으니 거기서 낮추지 않는다.
+      sessionReplay: { sampleRate: 1, privacyConfig: { defaultMaskLevel: 'conservative' } },
     });
   }, []);
   return null;
