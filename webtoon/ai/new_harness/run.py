@@ -534,14 +534,14 @@ def canon_lines(canon: list[str]) -> str:
 
 def play_goal_block(char: dict) -> str:
     """세계관 체험의 목표 — 사건 속에서 이 캐릭터가 자기 성격대로 고르고 움직이는 것이 이야기의 중심이다.
-    사건에 원래 전개가 있으면 그것과 갈라지는 이야기를 쓰게 한다(2026-11-04, 스네 미팅 「원본과 갈라진 지점」).
-    체험이 아니면 빈 글이라 예전 길은 한 글자도 안 바뀐다. 원래 전개가 없는 사건도 예전 그대로다."""
+    체험이 아니면 빈 글이라 예전 길은 한 글자도 안 바뀐다.
+
+    사건의 원래 전개(canon)는 **여기 넣지 않는다.** 이야기에 기준을 주면 캐릭터대로 가는 대신 일부러
+    달라지려 해서 결말이 세지고 어두워졌다(2026-11-04 글 시험, 사용자 지적). 원래와 달라지는 것은 캐릭터가
+    자기 가치관대로 움직인 결과여야 한다. 원래 전개는 다 쓴 뒤 견주는 데(stage_branch)와 화면에만 쓴다."""
     if not char.get("play") or not char.get("settings"):
         return ""
-    goal = load_prompt("play_goal")
-    if char.get("canon"):
-        goal = goal.rstrip("\n") + "\n\n" + load_prompt("play_canon").replace("{canon}", canon_lines(char["canon"]))
-    return goal
+    return load_prompt("play_goal")
 
 
 def load_prompt(name: str) -> str:
