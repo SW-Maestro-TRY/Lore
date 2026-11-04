@@ -392,6 +392,11 @@ export function eventPlayRuns(eventId: string): Promise<{ runs: PlayRunCard[] }>
   return call(`/play/events/${encodeURIComponent(eventId)}/runs`);
 }
 
+/** 최근 체험 만화(공개 · 완성된 것, 최근 순). world 를 주면 그 세계 것만 — 홈 칸과 세계 안 사건별 선반. */
+export function recentPlayRuns(world?: string): Promise<{ runs: PlayRunCard[] }> {
+  return call(`/play/runs${world ? `?world=${encodeURIComponent(world)}` : ""}`);
+}
+
 /** 세계관 만들기 · AI 로 채우기 — 바로 { id, making:"running" } 을 주고 뒤에서 짓는다. id 를 넣으면 다시 만들기.
  *  빈 칸이 채워지고 examples 에 새로 그린 캐릭터 둘이 들어간다. 끝났는지는 readPlayWorld 의 making 이 "idle" 인지로 본다. */
 export function makePlayWorld(body: { id?: string; draft: object; lorebook_id?: string; note?: string }): Promise<{ id: string; making: string }> {
@@ -592,6 +597,8 @@ export interface RunCard {
   liked?: boolean;
   /** 관리자 처리(#638) — 내 목록 · 휴지통에서만 온다. */
   moderation?: ModerationNote;
+  /** 잘라 둔 썸네일이 있다 — 카드는 표지 대신 thumbUrl 을 쓴다(2026-11-04). */
+  thumb?: boolean;
 }
 
 /** 관리자 처리 한 칸(#638). state 가 없으면 경고만 받은 작품이다. */
@@ -691,6 +698,33 @@ export function shareKeyOf(runId: string): string | undefined {
 function withKey(url: string, runId: string): string {
   const key = shareKeyOf(runId);
   return key ? `${url}${url.includes("?") ? "&" : "?"}k=${encodeURIComponent(key)}` : url;
+}
+
+/* ---- 카드 썸네일(2026-11-04) -------------------------------------------------
+ * 장 그림에서 잘라 낸 한 장면. 서버가 기본으로 가장 큰 컷을 자르고, 주인이 바꿀 수 있다. 아직 없으면 서버가
+ * 첫 장 그림으로 넘겨 주고 뒤에서 만든다. 바꾼 뒤에는 같은 주소가 새 그림을 가리키도록 v 를 붙인다. */
+const thumbVersion = new Map<string, number>();
+export function thumbUrl(runId: string): string {
+  const v = thumbVersion.get(runId);
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/thumb${v ? `?v=${v}` : ""}`, runId);
+}
+/** 카드 그림 — 썸네일이 있으면 썸네일, 없으면 표지(첫 장). */
+export function cardImageUrl(r: { run_id: string; cover_page?: number; cover_episode?: number; thumb?: boolean }): string | null {
+  if (r.thumb) return thumbUrl(r.run_id);
+  return r.cover_page ? coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1) : null;
+}
+export interface ThumbBox { page: number; x: number; y: number; w: number; h: number }
+/** 지금 썸네일 자리와 고를 수 있는 장 번호. 주인 · 관리자만. */
+export function readThumb(runId: string): Promise<{ pages: number[]; by_owner?: boolean } & Partial<ThumbBox>> {
+  return call(`/my/runs/${encodeURIComponent(runId)}/thumb`);
+}
+export async function saveThumb(runId: string, box: ThumbBox): Promise<void> {
+  await call(`/my/runs/${encodeURIComponent(runId)}/thumb`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(box) });
+  thumbVersion.set(runId, Date.now());
+}
+export async function resetThumb(runId: string): Promise<void> {
+  await call(`/my/runs/${encodeURIComponent(runId)}/thumb`, { method: "DELETE" });
+  thumbVersion.set(runId, Date.now());
 }
 
 export function coverUrl(runId: string, page: number, episode = 1): string {
