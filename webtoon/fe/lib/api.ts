@@ -381,8 +381,17 @@ export function listPlayWorlds<T>(): Promise<{ worlds: T[] }> {
   return call("/play/worlds");
 }
 
+/**
+ * 세계관 체험 만화가 사건의 원래 전개와 갈라진 곳(2026-11-04, 서버 PlayBranch). 갈림 정리 전의 옛 작품엔 없다.
+ * page 는 갈라진 장면이 그려진 장 번호(0 이면 안 갈림), group 은 같은 선택끼리 묶는 갈래 이름.
+ */
+export interface PlayBranch {
+  at: number; scene: number; page: number;
+  canon: string; this: string; why: string; end: string; label: string; group: string;
+  canon_end: string; canon_lines: string[];
+}
 /** 세계관 체험으로 만든 만화 — 일반 작품 카드에 어느 세계 · 사건이었는지가 붙는다. */
-export type PlayRunCard = RunCard & { world_id: string; world_name: string; event_id: string; event_title: string };
+export type PlayRunCard = RunCard & { world_id: string; world_name: string; event_id: string; event_title: string; branch?: PlayBranch };
 /** 내가 체험한 만화(최근 순). 게스트는 브라우저 번호(uid)로 찾는다. */
 export function myPlayRuns(): Promise<{ runs: PlayRunCard[] }> {
   return call("/play/runs/mine");
@@ -390,6 +399,11 @@ export function myPlayRuns(): Promise<{ runs: PlayRunCard[] }> {
 /** 이 사건에서 다른 사람들이 만든 만화(공개 · 완성된 것만). */
 export function eventPlayRuns(eventId: string): Promise<{ runs: PlayRunCard[] }> {
   return call(`/play/events/${encodeURIComponent(eventId)}/runs`);
+}
+
+/** 최근 체험 만화(공개 · 완성된 것, 최근 순). world 를 주면 그 세계 것만 — 홈 칸과 세계 안 사건별 선반. */
+export function recentPlayRuns(world?: string): Promise<{ runs: PlayRunCard[] }> {
+  return call(`/play/runs${world ? `?world=${encodeURIComponent(world)}` : ""}`);
 }
 
 /** 세계관 만들기 · AI 로 채우기 — 바로 { id, making:"running" } 을 주고 뒤에서 짓는다. id 를 넣으면 다시 만들기.
@@ -592,6 +606,8 @@ export interface RunCard {
   liked?: boolean;
   /** 관리자 처리(#638) — 내 목록 · 휴지통에서만 온다. */
   moderation?: ModerationNote;
+  /** 잘라 둔 썸네일이 있다 — 카드는 표지 대신 thumbUrl 을 쓴다(2026-11-04). */
+  thumb?: boolean;
 }
 
 /** 관리자 처리 한 칸(#638). state 가 없으면 경고만 받은 작품이다. */
@@ -693,6 +709,33 @@ function withKey(url: string, runId: string): string {
   return key ? `${url}${url.includes("?") ? "&" : "?"}k=${encodeURIComponent(key)}` : url;
 }
 
+/* ---- 카드 썸네일(2026-11-04) -------------------------------------------------
+ * 장 그림에서 잘라 낸 한 장면. 서버가 기본으로 가장 큰 컷을 자르고, 주인이 바꿀 수 있다. 아직 없으면 서버가
+ * 첫 장 그림으로 넘겨 주고 뒤에서 만든다. 바꾼 뒤에는 같은 주소가 새 그림을 가리키도록 v 를 붙인다. */
+const thumbVersion = new Map<string, number>();
+export function thumbUrl(runId: string): string {
+  const v = thumbVersion.get(runId);
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/thumb${v ? `?v=${v}` : ""}`, runId);
+}
+/** 카드 그림 — 썸네일이 있으면 썸네일, 없으면 표지(첫 장). */
+export function cardImageUrl(r: { run_id: string; cover_page?: number; cover_episode?: number; thumb?: boolean }): string | null {
+  if (r.thumb) return thumbUrl(r.run_id);
+  return r.cover_page ? coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1) : null;
+}
+export interface ThumbBox { page: number; x: number; y: number; w: number; h: number }
+/** 지금 썸네일 자리와 고를 수 있는 장 번호. 주인 · 관리자만. */
+export function readThumb(runId: string): Promise<{ pages: number[]; by_owner?: boolean } & Partial<ThumbBox>> {
+  return call(`/my/runs/${encodeURIComponent(runId)}/thumb`);
+}
+export async function saveThumb(runId: string, box: ThumbBox): Promise<void> {
+  await call(`/my/runs/${encodeURIComponent(runId)}/thumb`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(box) });
+  thumbVersion.set(runId, Date.now());
+}
+export async function resetThumb(runId: string): Promise<void> {
+  await call(`/my/runs/${encodeURIComponent(runId)}/thumb`, { method: "DELETE" });
+  thumbVersion.set(runId, Date.now());
+}
+
 export function coverUrl(runId: string, page: number, episode = 1): string {
   return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`, runId);
 }
@@ -716,6 +759,8 @@ export interface RunResult {
   preview: boolean;
   /** 둘러보기에 심어 둔 예시 작품 — 내 것이 아니어도 내려받을 수 있다. */
   example?: boolean;
+  /** 세계관 체험 만화면 원래 전개와 갈라진 곳(갈림 정리를 했을 때만) */
+  branch?: PlayBranch;
   /** 관리자가 열 때만 온다(#329, #428) — 만들 때 넣은 설정. */
   inputs?: RunInputs;
   /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
@@ -1167,6 +1212,28 @@ export function adminOverview(from: string, to: string, who: AdminWho): Promise<
   return call<AdminOverview>(`/admin/dash/overview?${q}`);
 }
 
+/** 유입 출처 한 줄 — utm 을 source/medium/campaign/content 로 나눈 것. 출처가 없으면 source 가 빈 문자열 */
+export interface AdminSourceRow {
+  source: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent: string;
+  visitors: number;
+  /** 입력 · 고르기 · 만들기처럼 보기 말고 무언가를 한 사람 — 광고 검토용 자동 접속은 여기 안 잡힌다 */
+  engaged: number;
+  createStarted: number;
+  loggedIn: number;
+  /** 작업이 끝난 브라우저 수 · 끝난 작업 수 */
+  makersDone: number;
+  jobsDone: number;
+}
+
+export function adminSources(from: string, to: string, who: AdminWho): Promise<{ rows: AdminSourceRow[] }> {
+  const q = new URLSearchParams({ from, to, who });
+  return call<{ rows: AdminSourceRow[] }>(`/admin/dash/sources?${q}`);
+}
+
 /* ---- 오늘 생성 상한(#617) — 관리자만. 서버를 다시 띄우지 않고 오늘(한국 자정까지)만 바꾼다 ---------- */
 
 export interface AdminSpendPair { krw: number; runs: number }
@@ -1288,7 +1355,8 @@ export function adminExamples(): Promise<{ examples: AdminExampleRow[] }> {
 
 /** 번들 하나를 올린다. 운영·staging 은 WAF 가 큰 본문을 막으므로 S3 로 직접 올리고 키로 심는다.
  *  S3 로 못 올리면(로컬 창고의 CORS 등) 본문으로 바로 올린다 — 로컬 · dev 는 이 길도 된다. */
-export async function adminImportBundle(file: File, dryRun: boolean): Promise<AdminImportResult> {
+/** visible=false 면 비공개로 심는다(그림도 안 열리는 자리). 나중에 예시 목록의 공개 스위치로 연다. */
+export async function adminImportBundle(file: File, dryRun: boolean, visible = true): Promise<AdminImportResult> {
   let put: Response | null = null;
   let key = "";
   try {
@@ -1299,9 +1367,9 @@ export async function adminImportBundle(file: File, dryRun: boolean): Promise<Ad
     put = null;
   }
   if (put && put.ok) {
-    return post<AdminImportResult>("/admin/examples/import-key", { key, dryRun });
+    return post<AdminImportResult>("/admin/examples/import-key", { key, dryRun, public: visible });
   }
-  return call<AdminImportResult>(`/admin/examples/import?dryRun=${dryRun}`, {
+  return call<AdminImportResult>(`/admin/examples/import?dryRun=${dryRun}&public=${visible}`, {
     method: "POST",
     headers: { "Content-Type": "application/zip" },
     body: file,

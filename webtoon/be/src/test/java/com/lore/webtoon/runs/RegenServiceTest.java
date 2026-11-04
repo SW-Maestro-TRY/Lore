@@ -207,7 +207,7 @@ class RegenServiceTest {
         큐를_바로_돌린다();
 
         assertThat(service.statusOf(id).get("status")).isEqualTo("done");
-        verify(credits, never()).refund(any(), anyString());   // 잘 그렸으면 받은 값은 그대로다
+        verify(credits, never()).refund(any(), anyString(), anyString());   // 잘 그렸으면 받은 값은 그대로다
         assertThat(service.versionsOf("run-1", 1)).hasSize(1);
         // 지운 파일이 옛 그림이었는지 — 판본으로 옮겨졌는지 내용으로 확인한다.
         Path v1 = runsDir.resolve("run-1/pages/versions/page01.v1.png");
@@ -227,7 +227,7 @@ class RegenServiceTest {
 
         Map<String, Object> status = service.statusOf(id);
         assertThat(status.get("status")).isEqualTo("error");
-        verify(credits).refund(7L, "regen:run-1:1:" + id);   // 실패하면 받은 크레딧을 돌려준다(#626)
+        verify(credits).refund(7L, "regen:run-1:1:" + id, "다시 그리지 못한 장 돌려드림");   // 실패하면 받은 크레딧을 돌려준다(#626)
         assertThat(status.get("error")).isEqualTo("다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
         // 실패해도 지금 그림은 판본으로 이미 떠 뒀다 — 그 자체는 해롭지 않다.
         assertThat(service.versionsOf("run-1", 1)).hasSize(1);
@@ -258,11 +258,11 @@ class RegenServiceTest {
         running.move(RegenStatus.RUNNING, java.time.Instant.now());
         PageRegen queued = regens.findById(free).orElseThrow();
         when(regens.findByStatusIn(any())).thenReturn(List.of(running, queued));
-        when(credits.refund(7L, "regen:run-1:1:" + paid)).thenReturn(3);
+        when(credits.refund(7L, "regen:run-1:1:" + paid, "다시 그리지 못한 장 돌려드림")).thenReturn(3);
 
         service.buryInterrupted();
 
-        verify(credits).refund(7L, "regen:run-1:1:" + paid);
+        verify(credits).refund(7L, "regen:run-1:1:" + paid, "다시 그리지 못한 장 돌려드림");
         assertThat(service.statusOf(paid).get("status")).isEqualTo("error");
         assertThat(service.statusOf(paid).get("error")).isEqualTo(RegenService.INTERRUPTED + " — 크레딧은 돌려드렸어요");
         assertThat(service.statusOf(free).get("status")).isEqualTo("error");

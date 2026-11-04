@@ -2061,7 +2061,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
       {zoom && (
         <div className="wt-prog-zoom" onClick={() => setZoom(null)} role="dialog" aria-label={t("크게 보기")}>
-          <button type="button" className="icon-btn" aria-label={t("닫기")} onClick={() => setZoom(null)}><IconClose size={18} /></button>
+          <button type="button" className="icon-btn" aria-label={t("닫기")} onClick={() => setZoom(null)}><IconClose size={22} /></button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={zoom} alt="" onClick={(e) => e.stopPropagation()} />
         </div>

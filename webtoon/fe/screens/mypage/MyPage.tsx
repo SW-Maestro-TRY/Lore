@@ -22,7 +22,7 @@ import PayNotReady from "../../ui/PayNotReady";
 import CreditHistory from "@common/mypage/CreditHistory";
 import { LEGAL_LINKS, CONTACT_CHANNEL } from "@common/links";
 import {
-  browseRuns, coverUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myCommented, myLikes, myPlayRuns, type PlayRunCard, myTrash, readAllowance, recentRuns,
+  browseRuns, cardImageUrl, coverUrl, thumbUrl, deleteRun, forgetMyRun, listCharacters, myAccountRuns, myActiveJobs, myBrowserRuns, sheetImageUrl, sendWebtoonContact, type WebtoonContactCategory, type NhActiveCard, myCommented, myLikes, myPlayRuns, type PlayRunCard, myTrash, readAllowance, recentRuns,
   readNotifySetting, restoreRun, removeCharacter, characterTrash, restoreCharacter, type TrashCharacter, setNotifySetting, visibilityOf, withdrawAccount,
   type Allowance, type Character, type NhJob, type RunCard, type TrashCard,
   mySurveyStatus, type SurveyStatus, mySeriesDrafts, type SeriesDraftCard,
@@ -32,6 +32,7 @@ import type { Go } from "../../lib/nav";
 import PushOptIn from "../../ui/PushOptIn";
 import RunStrip from "../../ui/RunStrip";
 import VisibilityPicker from "../../ui/VisibilityPicker";
+import ThumbEditor from "../../ui/ThumbEditor";
 import { LANGS, LangSwitch, registerDict, useLang, useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { inviteSummary, type InviteSummary } from "../../lib/invite";
@@ -215,6 +216,9 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
   /* home = 마이페이지 첫 화면(웹툰 몇 개 · 만드는 중 · 찜 · 내 캐릭터). 왼쪽 「웹툰」 묶음의 네 칸
      (내 웹툰 · 내 캐릭터 · 찜한 웹툰 · 댓글 단 웹툰)은 각각 전부 펼친 목록이다 — 웹툰이 많아져도 첫 화면은 그대로. */
   const [tab, setTab] = useState<"home" | "works" | "chars" | "plays" | "liked" | "commented" | "settings" | "trash" | "lang">(initialTab === "settings" ? "settings" : "home");
+  /* 썸네일 바꾸기 창(2026-11-04) — 고른 작품 번호. 저장하면 thumbTick 으로 카드 그림을 다시 받는다 */
+  const [thumbRun, setThumbRun] = useState<string | null>(null);
+  const [thumbTick, setThumbTick] = useState(0);
   const allWorks = tab === "works";
   /* 왼쪽 메뉴로 화면을 바꾸면 맨 위부터 — 그리고 나서 높이가 바뀌어도 위에서 시작한다 */
   useEffect(() => {
@@ -476,6 +480,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
 
   return (
     <div className={`wt-wrap wt-page wt-my ${tab === "home" ? "is-home" : "is-sub"}`}>
+      {thumbRun && <ThumbEditor runId={thumbRun} onClose={() => setThumbRun(null)} onSaved={() => setThumbTick((n) => n + 1)} />}
       <aside className="wt-my-rail">
         <div className="card wt-my-me">
           <span className="wt-my-avatar"><IconUser size={18} /></span>
@@ -851,17 +856,18 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
             ) : (
               <div className="wt-my-grid">
                 {plays.map((r) => (
-                  <button type="button" key={r.run_id} className="card wt-my-work wt-my-runcard"
-                          onClick={() => go("play", { world: r.world_id, ep: r.event_id, stage: "done", run: r.run_id })}>
-                    <span className="wt-my-cover">
-                      {r.cover_page ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" />
-                      ) : <span className="wt-my-charnoimg" aria-hidden="true" />}
-                    </span>
-                    <b>{r.event_title || r.title}</b>
-                    <span className="muted">{[r.world_name, r.character].filter(Boolean).join(" · ")}</span>
-                  </button>
+                  <div key={r.run_id} className="wt-my-thumbwrap">
+                    <button type="button" className="card wt-my-work wt-my-runcard"
+                            onClick={() => go("play", { world: r.world_id, ep: r.event_id, stage: "done", run: r.run_id })}>
+                      <span className="wt-my-cover">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img key={thumbTick} src={thumbUrl(r.run_id)} alt="" loading="lazy" />
+                      </span>
+                      <b>{r.event_title || r.title}</b>
+                      <span className="muted">{[r.world_name, r.character].filter(Boolean).join(" · ")}</span>
+                    </button>
+                    <button type="button" className="wt-my-thumbbtn" onClick={() => setThumbRun(r.run_id)}>{t("썸네일")}</button>
+                  </div>
                 ))}
               </div>
             )}
@@ -893,7 +899,7 @@ export default function MyPage({ go, initialTab }: { go: Go; initialTab?: "setti
                     <span className="wt-my-cover">
                       {r.cover_page ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" />
+                        <img src={cardImageUrl(r) || coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" />
                       ) : <span className="wt-my-charnoimg" aria-hidden="true" />}
                     </span>
                     <b>{r.title || t("제목 없음")}</b>
@@ -1227,6 +1233,8 @@ function ago(iso: string | null | undefined, t: (s: string, p?: Record<string, s
 }
 
 function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keepDays: number; onDeleted: () => void }) {
+  const [thumbOpen, setThumbOpen] = useState(false);
+  const [thumbTick, setThumbTick] = useState(0);
   const t = useT();
   /* 관리자가 비공개 처리한 작품(#638) — 공개 스위치를 잠근다. 서버도 다시 공개를 막는다. */
   const hiddenByAdmin = run.moderation?.state === "HIDDEN";
@@ -1258,7 +1266,7 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
     <div className="card wt-my-work">
         <button type="button" className="wt-my-cover" onClick={() => open()} aria-label={run.title || t("제목 없음")}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={coverUrl(run.run_id, run.cover_page ?? 1, run.cover_episode ?? 1)} alt="" />
+        <img key={thumbTick} src={cardImageUrl(run) || coverUrl(run.run_id, run.cover_page ?? 1, run.cover_episode ?? 1)} alt="" />
       </button>
       <b>{run.title || t("제목 없음")}</b>
       <span className="muted">{[run.character, run.genre && t(run.genre)].filter(Boolean).join(" · ")}</span>
@@ -1274,6 +1282,9 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
         <span className="wt-my-workacts">
           <button type="button" className="btn btn-w wt-my-edit" onClick={() => go("editor", { run: run.run_id })}>
             {t("편집실")}
+          </button>
+          <button type="button" className="btn btn-w wt-my-edit" onClick={() => setThumbOpen(true)}>
+            {t("썸네일")}
           </button>
           <button type="button" className="btn wt-my-edit wt-my-delete" disabled={busy} onClick={() => setConfirming(true)}>
             {t("삭제")}
@@ -1294,6 +1305,7 @@ function WorkCard({ run, go, keepDays, onDeleted }: { run: RunCard; go: Go; keep
                        error={err} onConfirm={() => void remove()} onClose={() => { setConfirming(false); setErr(""); }} />
       )}
       {err && <span className="wt-my-err">{err}</span>}
+      {thumbOpen && <ThumbEditor runId={run.run_id} onClose={() => setThumbOpen(false)} onSaved={() => { run.thumb = true; setThumbTick((n) => n + 1); }} />}
     </div>
   );
 }

@@ -211,6 +211,18 @@ class RunServiceTest {
     }
 
     @Test
+    @DisplayName("세계관 체험으로 만든 만화는 둘러보기에 안 섞는다")
+    void 체험_만화는_뺀다() {
+        WebtoonWork play = 작품("run-1", true);
+        WebtoonWork webtoon = 작품("run-2", true);
+        when(works.onGallery()).thenReturn(List.of(play, webtoon));
+        when(jobs.findPlayJobIds()).thenReturn(List.of("job-run-1"));
+        when(pages.pageNumbersOf("run-2")).thenReturn(List.of(1, 2));
+
+        assertThat(runs.browse()).extracting(c -> c.get("run_id")).containsExactly("run-2");
+    }
+
+    @Test
     @DisplayName("그림이 한 장도 없는 작품은 목록에서 뺀다 — 눌러도 빈 화면이 열린다")
     void 그림_없는_것은_뺀다() {
         WebtoonWork work = 작품("run-1", true);
@@ -399,5 +411,9 @@ class RunServiceTest {
         assertThat(RunService.pendingPages(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), scenes)).isEmpty();
         // 장면을 모르는 옛 작품은 이어 그릴 것이 없다
         assertThat(RunService.pendingPages(List.of(1, 2, 3), List.of())).isEmpty();
+        // 세계관 체험은 표지를 안 그린다 — 1장은 안 그린 장이 아니고, 빠진 마지막 장만 남는다
+        assertThat(RunService.pendingPages(List.of(2, 3), List.of("a", "b", "c"), true)).containsExactly(4);
+        assertThat(RunService.pendingPages(List.of(2, 3, 4), List.of("a", "b", "c"), true)).isEmpty();
+        assertThat(RunService.pendingPages(List.of(2, 3, 4), List.of("a", "b", "c"), false)).containsExactly(1);
     }
 }

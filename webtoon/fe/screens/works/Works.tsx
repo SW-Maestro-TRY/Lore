@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  adminSetBrowseRank, browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, visibilityOf,
+  adminSetBrowseRank, browseRuns, coverUrl, thumbUrl, isMyRun, likedAmong, myAccountRuns, visibilityOf,
   type RunCard,
 } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
@@ -17,6 +17,7 @@ import { STYLE_INFO } from "../../lib/wizardData";
 import FeaturedBanner from "./FeaturedBanner";
 import FilterCombo from "./FilterCombo";
 import { GENRE_ORDER, genreBucket } from "./genreBucket";
+import { byLatest, byPopular, byViews } from "./popular";
 import "../wizard/i18n";
 import "./i18n";
 import "./Works.css";
@@ -136,19 +137,11 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     let list = base;
     if (style) list = list.filter((r) => r.style_label === style);
     if (genre) list = list.filter((r) => genreBucket(r.genre) === genre);
-    const latest = (a: RunCard, b: RunCard) => b.run_id.localeCompare(a.run_id);
-    const byViews = (a: RunCard, b: RunCard) => (b.views || 0) - (a.views || 0) || latest(a, b);
     const by: Record<SortKey, (a: RunCard, b: RunCard) => number> = {
-      popular: (a, b) => {
-        const ra = a.rank ?? null, rb = b.rank ?? null;
-        if (ra != null && rb != null) return ra - rb || byViews(a, b);
-        if (ra != null) return -1;
-        if (rb != null) return 1;
-        return byViews(a, b);
-      },
-      views: (a, b) => (b.views || 0) - (a.views || 0) || latest(a, b),
-      likes: (a, b) => (b.likes || 0) - (a.likes || 0) || latest(a, b),
-      newest: latest,
+      popular: byPopular,
+      views: byViews,
+      likes: (a, b) => (b.likes || 0) - (a.likes || 0) || byLatest(a, b),
+      newest: byLatest,
       oldest: (a, b) => a.run_id.localeCompare(b.run_id),
     };
     return [...list].sort(by[sort]);
@@ -305,7 +298,7 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, admin, onRank 
       <button type="button" className="wt-works-cover" onClick={() => open()} aria-label={t("{title} 열기", { title: run.title || run.run_id })}>
         {run.cover_page ? (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt={run.title || ""} />
+          <img src={run.thumb ? thumbUrl(run.run_id) : coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt={run.title || ""} />
         ) : (
           <span className="wt-works-nocover" aria-hidden="true" />
         )}

@@ -222,7 +222,7 @@
 .wt .wt-result-zoom-scroll > div:first-child img { border-radius: 12px 12px 0 0; }
 .wt .wt-result-zoom-scroll > div:last-child img { border-radius: 0 0 12px 12px; }
 .wt .wt-result-zoom-scroll > div:only-child img { border-radius: 12px; }
-.wt .wt-result-zoom .icon-btn { position: fixed; top: 20px; right: 20px; z-index: 1; }
+.wt .wt-result-zoom .icon-btn { position: fixed; top: 20px; right: 20px; z-index: 1; width: 44px; height: 44px; }
 .wt .wt-result-peek { cursor: zoom-in; }
 @media (max-width: 767px) {
   .wt .wt-result-zoom { padding: 16px 8px; }

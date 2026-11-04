@@ -45,7 +45,7 @@ export function Dialog({ title, sub, onClose, busy, wide, className, onBack, bac
     <div className="wt-dialog" onClick={() => { if (!busy) onClose(); }}>
       <div ref={box} className={`wt-dialog-box${wide ? " wide" : ""}${className ? ` ${className}` : ""}`} role="dialog" aria-modal="true"
            aria-labelledby={title ? id : undefined} onClick={(e) => e.stopPropagation()}>
-        <div className="wt-dialog-heading">{(onBack || title) && <div className="wt-dialog-titlewrap">{onBack && <button type="button" className="wt-dialog-back" aria-label={backLabel || t("뒤로")} disabled={busy} onClick={onBack}><span aria-hidden="true">‹</span></button>}{title && <h2 id={id}>{title}</h2>}</div>}<button type="button" className="wt-dialog-close" aria-label={t("닫기")} disabled={busy} onClick={onClose}><IconClose size={18}/></button></div>
+        <div className="wt-dialog-heading">{(onBack || title) && <div className="wt-dialog-titlewrap">{onBack && <button type="button" className="wt-dialog-back" aria-label={backLabel || t("뒤로")} disabled={busy} onClick={onBack}><span aria-hidden="true">‹</span></button>}{title && <h2 id={id}>{title}</h2>}</div>}<button type="button" className="wt-dialog-close" aria-label={t("닫기")} disabled={busy} onClick={onClose}><IconClose size={22}/></button></div>
         {sub && <p className="wt-dialog-sub">{sub}</p>}
         {children}
       </div>

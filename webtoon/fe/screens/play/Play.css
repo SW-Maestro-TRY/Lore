@@ -63,8 +63,8 @@
 .wt .pl-modal .hero > img, .wt .pl-modal .hero > .pl-noimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; }
 .wt .pl-modal .hero.noimg { aspect-ratio: auto; height: 200px; }
 .wt .pl-modal .shade { position: absolute; inset: 0; background: linear-gradient(0deg, #181f2a 0%, rgba(24, 31, 42, .86) 22%, rgba(24, 31, 42, 0) 52%); }
-.wt .pl-modal .x { position: absolute; z-index: 2; top: 16px; right: 16px; width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #181f2a; color: #fff !important; }
-.wt .pl-modal .x svg { width: 18px; height: 18px; }
+.wt .pl-modal .x { position: absolute; z-index: 2; top: 16px; right: 16px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #181f2a; color: #fff !important; }
+.wt .pl-modal .x svg { width: 22px; height: 22px; }
 .wt .pl-modal .ov { position: absolute; left: 32px; right: 90px; bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
 .wt .pl-modal .epl { font-size: 13px; font-weight: 700; color: var(--pl-apricot); letter-spacing: .04em; }
 .wt .pl-modal .ov h2 { margin: 0; font-size: 26px; line-height: 1.3; font-weight: 800; color: #fff; letter-spacing: -.02em; text-shadow: 0 2px 14px rgba(0, 0, 0, .5); }
@@ -571,8 +571,8 @@
 .wt .pl-castview b { font-size: 24px; font-weight: 800; color: #fff; }
 .wt .pl-castview em { font-style: normal; font-size: 14px; font-weight: 700; color: var(--pl-apricot); }
 .wt .pl-castview p { margin: 8px 0 0; font-size: 15px; line-height: 1.75; color: var(--ink); white-space: pre-line; }
-.wt .pl-castview .x { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #0f141ccc; color: #fff !important; z-index: 1; }
-.wt .pl-castview .x svg { width: 18px; height: 18px; }
+.wt .pl-castview .x { position: absolute; top: 12px; right: 12px; width: 42px; height: 42px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #0f141ccc; color: #fff !important; z-index: 1; }
+.wt .pl-castview .x svg { width: 22px; height: 22px; }
 @media (max-width: 767px) {
   .wt .pl-castview { inset: 0; align-items: end; padding: 0; z-index: 90; }
   .wt .pl-castview .box { grid-template-columns: 1fr; gap: 14px; width: 100%; max-height: 88vh; border-radius: 20px 20px 0 0; padding: 16px 16px 24px; }
@@ -795,17 +795,48 @@
 .wt .pl-modal .r .stories .sc img, .wt .pl-modal .r .stories .sc .pl-noimg { width: 52px; }
 @media (max-width: 767px) { .wt .pl-modal .stories-m { display: block; } }
 .wt .pl-modal .r .stories { margin-top: 20px; }
-/* 캐릭터별 이야기 전체 */
-.wt .pl-stories .hd { display: flex; align-items: baseline; gap: 10px; }
+/* 캐릭터별 이야기 더 둘러보기 — 시안 A(haeun/체험만화-2026-11-04 「A. 사건별 선반」) 치수 그대로 */
+.wt .pl-stories { container-type: inline-size; }
+.wt .pl-stories .hd { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
 .wt .pl-stories .hd small { font-size: 14px; color: var(--dim); }
-.wt .pl-stories .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
-.wt .pl-stories .grid button { display: flex; flex-direction: column; gap: 4px; padding: 0; background: none; border: 0; text-align: left; }
-.wt .pl-stories .grid img, .wt .pl-stories .grid .pl-noimg { width: 100%; aspect-ratio: 3/4; object-fit: cover; object-position: top; border-radius: 12px; margin-bottom: 4px; }
-.wt .pl-stories .grid b { font-size: 14.5px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.wt .pl-stories .grid small { font-size: 12.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 767px) {
-  .wt .pl-stories .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .wt .pl-stories .hd { flex-direction: column; gap: 2px; }
+/* 사건 그림은 위에 가로 띠, 그 아래 작은 만화 카드들(시안 A 화면 그대로) */
+.wt .pl-stories .shelf { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+/* 사건 그림은 3:2 — 7:2 로 납작하게 두되 얼굴이 남게 위쪽 30% 기준(사건 그림 15장 확인, 5:2 는 너무 크다는 하은 11/04) */
+.wt .pl-stories .ev { position: relative; display: block; width: 100%; aspect-ratio: 7 / 2; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: var(--card); text-align: left; }
+.wt .pl-stories .ev img, .wt .pl-stories .ev .pl-noimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; }
+.wt .pl-stories .ev::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 35%, #0a1320e6); }
+.wt .pl-stories .ev .ov { position: absolute; left: 18px; right: 18px; bottom: 16px; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; }
+.wt .pl-stories .ev .ov small, .wt .pl-stories .cev .ov small { font-size: 12.5px; font-weight: 600; color: var(--pl-mint); letter-spacing: .04em; }
+.wt .pl-stories .ev .ov b { margin: 4px 0 10px; font-size: 22px; line-height: 1.25; color: #fff; }
+.wt .pl-stories .chip { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 13px; white-space: nowrap; background: #7fd6c21f; color: var(--pl-mint); }
+.wt .pl-stories .runs { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; align-content: start; }
+.wt .pl-stories .run { display: block; min-width: 0; padding: 0; background: none; border: 0; text-align: left; }
+.wt .pl-stories .run img { display: block; width: 100%; aspect-ratio: 4/5; object-fit: cover; object-position: center top; border-radius: 10px; }
+.wt .pl-stories .run b { display: block; margin-top: 8px; font-size: 13px; line-height: 1.35; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt .pl-stories .run small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--dim); }
+.wt .pl-stories .run small em { font-style: normal; color: var(--sea); }
+.wt .pl-stories .more { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; aspect-ratio: 4/5; padding: 0; border-radius: 10px; border: 1px dashed var(--line-strong); background: none; color: var(--ink) !important; font-size: 13px; }
+.wt .pl-stories .more i { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--sea); color: #101c2a; font-style: normal; font-weight: 800; }
+@media (max-width: 767px) { .wt .pl-stories .hd { flex-direction: column; gap: 2px; margin-bottom: 12px; } }
+/* 폰 — 시안 C 폰 치수 그대로 */
+.wt .pl-stories .board { display: none; }
+.wt .pl-stories .cev { position: relative; min-height: 150px; border-radius: 16px; overflow: hidden; background: var(--card); }
+.wt .pl-stories .cev img, .wt .pl-stories .cev .pl-noimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; }
+.wt .pl-stories .cev::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 20%, #0a1320e6); }
+.wt .pl-stories .cev .ov { position: absolute; left: 16px; right: 16px; bottom: 14px; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; }
+.wt .pl-stories .cev .ov b { margin: 2px 0 8px; font-size: 17px; line-height: 1.25; color: #fff; }
+.wt .pl-stories .cev .go { display: inline-flex; height: 36px; align-items: center; padding: 0 14px; border: 0; border-radius: 999px; background: var(--ink); color: #101c2a !important; font-size: 13px; font-weight: 700; }
+.wt .pl-stories .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.wt .pl-stories .crun { display: flex; flex-direction: column; min-width: 0; padding: 0; border-radius: 16px; overflow: hidden; background: var(--card); border: 1px solid var(--line); text-align: left; }
+.wt .pl-stories .crun .nm { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.wt .pl-stories .crun .nm b { min-width: 0; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt .pl-stories .crun .nm b em { font-style: normal; color: var(--dim); font-size: 12px; font-weight: 500; margin-left: 4px; }
+.wt .pl-stories .crun .chip { flex: none; background: #ffffff14; color: var(--muted); }
+.wt .pl-stories .crun img { display: block; width: 100%; height: 140px; object-fit: cover; object-position: center top; }
+.wt .pl-stories .crun .tt { padding: 8px 12px 10px; font-size: 13px; font-weight: 700; line-height: 1.35; color: var(--ink); }
+@container (max-width: 560px) {
+  .wt .pl-stories .shelf { display: none; }
+  .wt .pl-stories .board { display: block; }
 }
 /* 폰 세계 안 — 표지를 크게 깔고 이름 · 소개를 그림 위에(하은 11/03) */
 @media (max-width: 767px) {
@@ -821,3 +852,115 @@
 @media (max-width: 767px) { .wt .pl-whead.in { display: none; } .wt .pl-wside { top: 0; } }
 /* 폰 만화 화면 — 얇은 윗줄이 세계 · 사건 제목을 이미 보여 주므로 머리글의 같은 줄은 숨긴다(하은 11/03 「제목이 두 개」) */
 @media (max-width: 767px) { .wt .pl-comic .head small { display: none; } }
+
+/* 사건 보기 창의 캐릭터별 이야기 — 사건 아래에 넓게, 잘라 낸 한 장면 카드 다섯 장까지(2026-11-04, 시안 A).
+ * 예전 오른쪽 칸의 작은 줄 목록을 대신한다. 폰은 단추 아래 본문 흐름에 두 줄. */
+.wt .pl-modal .stories-pc { padding: 0 32px 30px; }
+.wt .pl-modal .stories-pc .stories { padding-top: 20px; }
+.wt .pl-modal .stories .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.wt .pl-modal .stories .sc { display: flex; flex-direction: column; align-items: stretch; gap: 0; min-width: 0; padding: 0; border: 0; background: none; text-align: left; cursor: pointer; color: var(--ink); }
+.wt .pl-modal .stories .sc img, .wt .pl-modal .stories .sc .pl-noimg { display: block; width: 100%; aspect-ratio: 4/5; object-fit: cover; object-position: center; border-radius: 12px; background: var(--water); }
+.wt .pl-modal .stories .sc b { display: block; margin-top: 8px; font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt .pl-modal .stories .sc small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--dim); }
+.wt .pl-modal .stories .sc small em { font-style: normal; color: var(--sea); }
+.wt .pl-modal .stories .sc:hover img { filter: brightness(1.08); }
+@media (max-width: 767px) {
+  .wt .pl-modal .stories-pc { display: none; }
+  /* 폰 — 작은 카드 한 줄, 옆으로 넘긴다 */
+  .wt .pl-modal .stories .grid { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+  .wt .pl-modal .stories .grid::-webkit-scrollbar { display: none; }
+  .wt .pl-modal .stories .sc { flex: 0 0 112px; }
+  .wt .pl-modal .stories .sc img, .wt .pl-modal .stories .sc .pl-noimg { border-radius: 10px; }
+  .wt .pl-modal .stories .sc b { margin-top: 6px; font-size: 12.5px; }
+  .wt .pl-modal .stories .sc small { font-size: 11px; }
+  .wt .pl-modal .stories .hd b { font-size: 15px; }
+  .wt .pl-modal .stories .hd small { font-size: 12px; }
+}
+
+/* 사건 보기 창의 등장인물 — PC 는 오른쪽 「내 캐릭터로 이야기 만들기」 아래 세 칸, 폰은 본문 흐름 그대로(2026-11-04) */
+.wt .pl-modal .cast-l { display: none; }
+.wt .pl-modal .r .cast-r .cast { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 767px) {
+  .wt .pl-modal .cast-l { display: block; }
+}
+
+
+/* 체험 갈림 — 사건 창 「캐릭터별 결말」 카드 넘기기(2026-11-04 최종 시안). 첫 카드는 원래 결말(점선).
+ * PC 는 카드 위에 장면 사진, 폰은 글만. */
+.wt .pl-modal .ends .row { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 4px; }
+.wt .pl-modal .ends .row::-webkit-scrollbar { display: none; }
+.wt .pl-modal .ends .hd { margin-bottom: 10px; }
+.wt .pl-modal .ec { flex: 0 0 214px; scroll-snap-align: start; display: flex; flex-direction: column; padding: 0; overflow: hidden; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--pl-card2); text-align: left; color: var(--ink); cursor: pointer; }
+.wt .pl-modal .ec.orig { background: transparent; border-style: dashed; cursor: default; }
+.wt .pl-modal .ec .th { display: block; aspect-ratio: 16/10; overflow: hidden; border-bottom: 1px solid var(--line); background: var(--water); }
+.wt .pl-modal .ec .th img, .wt .pl-modal .ec .th .pl-noimg { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.wt .pl-modal .ec .who { display: flex; align-items: center; gap: 8px; padding: 12px 14px 0; font-size: 14px; font-weight: 700; color: #fff; }
+.wt .pl-modal .ec .who i { background-size: cover; background-position: center; width: 30px; height: 30px; flex: 0 0 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background-color: var(--pl-card3); color: var(--pl-apricot); font-size: 12px; font-weight: 700; font-style: normal; }
+.wt .pl-modal .ec.orig .who i { background: transparent; border: 1.5px dashed #556072; color: #8a93a3; }
+.wt .pl-modal .ec b { margin: 10px 14px 0; font-size: 18px; font-weight: 800; line-height: 1.3; color: #fff; white-space: normal; }
+.wt .pl-modal .ec.orig b { color: #cfd4dc; }
+.wt .pl-modal .ec small { flex: 1; margin: 5px 14px 0; font-size: 13px; line-height: 1.55; color: #cfd4dc; }
+.wt .pl-modal .ec .go { margin: 10px 14px 13px; font-size: 12.5px; color: var(--muted); }
+.wt .pl-modal .ec.orig small { margin-bottom: 13px; }
+.wt .pl-modal .ends .dots { display: flex; gap: 5px; justify-content: center; margin-top: 10px; }
+.wt .pl-modal .ends .dots i { width: 6px; height: 6px; border-radius: 3px; background: #3a4454; transition: width .2s, background .2s; }
+.wt .pl-modal .ends .dots i.on { width: 18px; background: var(--pl-btn); }
+@media (max-width: 767px) {
+  .wt .pl-modal .ends .row { margin: 0 -16px; padding: 0 16px 4px; }
+  .wt .pl-modal .ec { flex-basis: 258px; scroll-snap-align: center; }
+  .wt .pl-modal .ec .th { display: none; }
+}
+
+/* 체험 갈림 — 만화 화면. 갈라진 장 위의 가로 띠(한 번 보면 사라짐), 아래쪽 원래 흐름 · 갈래 묶음, 비교 시트 */
+.wt .pl-comic .pages .pg { position: relative; }
+.wt .pl-comic .split { position: absolute; left: 12px; right: 12px; top: 14px; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--pl-coral); background: rgba(15, 20, 28, .94); color: #fff !important; font-size: 14.5px; font-weight: 800; text-align: left; box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
+.wt .pl-comic .split .r { margin-left: auto; font-weight: 400; color: var(--muted); }
+.wt .pl-comic .pulse { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; background: var(--pl-coral); animation: pl-pulse 1.6s infinite; }
+@keyframes pl-pulse { 0% { box-shadow: 0 0 0 0 rgba(242, 124, 87, .6); } 70% { box-shadow: 0 0 0 8px rgba(242, 124, 87, 0); } 100% { box-shadow: 0 0 0 0 rgba(242, 124, 87, 0); } }
+.wt .pl-comic h2 small { margin-left: 8px; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.wt .pl-comic .flow { position: relative; padding-left: 24px; }
+.wt .pl-comic .flow:before { content: ""; position: absolute; left: 7px; top: 10px; bottom: 30px; width: 2px; background: #33405a; }
+.wt .pl-comic .fs { position: relative; margin-bottom: 12px; }
+.wt .pl-comic .fs:before { content: ""; position: absolute; left: -22px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--paper); border: 2px solid #556072; }
+.wt .pl-comic .fs .n { font-size: 11.5px; font-weight: 700; color: var(--dim); }
+.wt .pl-comic .fs p { margin: 1px 0 0; font-size: 14px; line-height: 1.6; color: #dfe3e8; }
+.wt .pl-comic .fs.fork:before { background: var(--pl-coral); border-color: var(--pl-coral); }
+.wt .pl-comic .fs.fork .n { color: var(--pl-coral); }
+.wt .pl-comic .tcs { display: flex; gap: 12px; margin-top: 8px; }
+.wt .pl-comic .tc { flex: 0 1 220px; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--pl-card2); }
+.wt .pl-comic .tc.self { border-color: var(--pl-coral); }
+.wt .pl-comic .tc.orig { background: transparent; border-style: dashed; }
+.wt .pl-comic .tc .w { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: #fff; }
+.wt .pl-comic .tc .w i, .wt .pl-comic .faces i { background-size: cover; background-position: center top; width: 24px; height: 24px; flex: 0 0 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background-color: var(--pl-card3); color: var(--pl-apricot); font-size: 10.5px; font-weight: 700; font-style: normal; }
+.wt .pl-comic .tc.orig .w i { background: transparent; border: 1.5px dashed #556072; color: #8a93a3; }
+.wt .pl-comic .tc b { display: block; margin-top: 8px; font-size: 16px; font-weight: 800; line-height: 1.3; color: #fff; }
+.wt .pl-comic .tc.orig b { color: #cfd4dc; }
+.wt .pl-comic .tc p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; color: #cfd4dc; }
+.wt .pl-comic .gap { height: 18px; }
+.wt .pl-comic .bk { margin-bottom: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--pl-card2); }
+.wt .pl-comic .bk.orig { background: transparent; border-style: dashed; }
+.wt .pl-comic .bk .t { display: flex; align-items: center; gap: 8px; }
+.wt .pl-comic .bk .t b { font-size: 14.5px; color: #fff; }
+.wt .pl-comic .bk .otag { padding: 1px 7px; border-radius: 6px; background: #232b38; font-size: 11.5px; font-weight: 700; color: #9aa3b2; }
+.wt .pl-comic .bk .cnt { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+.wt .pl-comic .bk .bar { height: 5px; margin: 8px 0 9px; overflow: hidden; border-radius: 3px; background: #2a3342; }
+.wt .pl-comic .bk .bar i { display: block; height: 100%; border-radius: 3px; background: var(--pl-coral); }
+.wt .pl-comic .bk.orig .bar i { background: #7d8798; }
+.wt .pl-comic .faces { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt .pl-comic .faces span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px; background: #232b38; font-size: 12.5px; color: #cfd4dc; }
+.wt .pl-comic .faces span.self { outline: 1.5px solid var(--pl-coral); }
+.wt .pl-split-sheet { position: fixed; inset: 0; z-index: 85; display: flex; align-items: flex-end; justify-content: center; background: rgba(5, 8, 12, .55); }
+.wt .pl-split-sheet .box { width: 720px; max-width: 100%; padding: 10px 20px 22px; border-radius: 20px 20px 0 0; border: 1px solid var(--line-strong); border-bottom: 0; background: #141a23; }
+.wt .pl-split-sheet .grab { width: 40px; height: 4px; margin: 0 auto 14px; border-radius: 2px; background: #3a4454; }
+.wt .pl-split-sheet .cmp > span { display: block; margin: 0; padding: 0; background: none; border: 0; width: auto; height: auto; text-align: left; }
+.wt .pl-split-sheet .cmp { display: grid; grid-template-columns: 62px 1fr; gap: 7px 12px; font-size: 14px; line-height: 1.55; color: var(--ink); }
+.wt .pl-split-sheet .cmp .k { padding-top: 2px; font-size: 12px; color: var(--dim); }
+.wt .pl-split-sheet .cmp .cm-me { font-weight: 700; color: #fff; }
+.wt .pl-split-sheet .cmp .cm-why { font-size: 13px; color: var(--muted); }
+.wt .pl-split-sheet .pl-btn { width: 100%; height: 44px; margin-top: 16px; background: var(--pl-card3); color: #fff !important; }
+@media (max-width: 767px) {
+  .wt .pl-comic .tc { flex-basis: 190px; }
+  .wt .pl-split-sheet .box { padding: 10px 16px calc(18px + env(safe-area-inset-bottom)); }
+}
+/* 결말 카드 줄이 왼쪽 칸 너비를 밀어내지 않게(폰에서 사건 글이 오른쪽으로 잘리던 것) */
+.wt .pl-modal .cols > .l, .wt .pl-modal .stories-m, .wt .pl-modal .stories-pc, .wt .pl-modal .ends { min-width: 0; }

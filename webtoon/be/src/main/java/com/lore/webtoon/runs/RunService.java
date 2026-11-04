@@ -69,6 +69,10 @@ public class RunService {
     public void setOverlays(OverlayStore overlays) { this.overlays = overlays; }
     @org.springframework.beans.factory.annotation.Autowired
     public void setSeries(com.lore.webtoon.series.SeriesChapterRepository series) { this.series=series; }
+    private RunThumbs thumbs;
+    /* 잘라 둔 썸네일이 있으면 카드에 표시한다(2026-11-04). 검사에서 손으로 만들 때는 없어도 된다. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setThumbs(RunThumbs thumbs) { this.thumbs = thumbs; }
     private RunViews views;
     /* 둘러보기 조회순(2026-10-26). 검사에서 손으로 만들 때는 없어도 된다(조회수 0). */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -144,6 +148,14 @@ public class RunService {
     }
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /** 세계관 체험 만화의 원래 전개와 갈라진 곳(2026-11-04). 갈림 정리가 있는 작품에만 붙는다 — 테스트처럼 없으면 안 붙인다. */
+    private com.lore.webtoon.play.PlayBranch branches;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setBranches(com.lore.webtoon.play.PlayBranch branches) {
+        this.branches = branches;
+    }
+
     public RunService(WebtoonWorkRepository works, WebtoonJobRepository jobs,
                       StoryStore stories, PageStore pages, RunLikeRepository likes) {
         this.works = works;
@@ -172,12 +184,17 @@ public class RunService {
         Map<String, Map<String, Object>> rootCards = new java.util.HashMap<>();
         /* 인기순 자리(관리자가 정함) — 카드를 낸 작품의 값을 카드 번호로 모아 뒤에서 싣는다. */
         Map<String, Integer> rankOf = new java.util.HashMap<>();
+        /* 세계관 체험 만화는 웹툰 목록에 안 섞는다 — 체험 화면이 사건마다 따로 보여 준다(2026-11-04). */
+        java.util.Set<String> playJobs = new java.util.HashSet<>(jobs.findPlayJobIds());
         for (WebtoonWork one : works.onGallery()) {
-            if (one.isTrashed()) {
+            if (one.isTrashed() || playJobs.contains(one.getJobId())) {
                 continue;
             }
             WebtoonJob job = jobs.findByPublicId(one.getJobId()).orElse(null);
             String rootJob = rootJobOf(job);
+            if (rootJob != null && playJobs.contains(rootJob)) {
+                continue;                                    // 체험 만화의 다음 화도 같이 뺀다
+            }
             WebtoonWork root = rootJob == null ? null
                     : rootJob.equals(one.getJobId()) ? one
                     : works.findByJobId(rootJob)
@@ -358,6 +375,9 @@ public class RunService {
         card.put("episode", episodeOf(job));
         card.put("cover_episode", 1);
         card.put("cover_page", numbers.getFirst());
+        if (thumbs != null && thumbs.has(runId)) {
+            card.put("thumb", true);                      // 화면은 표지 대신 /runs/{id}/thumb 를 쓴다
+        }
         card.put("page_count", numbers.size());
         card.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
         // 찜 수(#247). 「내가 찜했나」는 로그인이 있어야 알 수 있어 부르는 쪽이 따로 붙인다.
@@ -382,11 +402,16 @@ public class RunService {
      * 장면을 모르면(옛 작품) 빈 목록이다.
      */
     static List<Integer> pendingPages(List<Integer> drawn, List<String> scenes) {
+        return pendingPages(drawn, scenes, false);
+    }
+
+    /** @param play 세계관 체험이면 표지(1장)를 안 그리므로 안 그린 장으로 치지 않는다(2026-11-03 부터). */
+    static List<Integer> pendingPages(List<Integer> drawn, List<String> scenes, boolean play) {
         List<Integer> out = new ArrayList<>();
         if (scenes == null || scenes.isEmpty()) {
             return out;
         }
-        for (int no = 1; no <= scenes.size() + 1; no++) {
+        for (int no = play ? 2 : 1; no <= scenes.size() + 1; no++) {
             if (!drawn.contains(no)) {
                 out.add(no);
             }
@@ -397,7 +422,21 @@ public class RunService {
     /** 이 작품에서 아직 안 그린 장 번호. 이어 그리기가 본다. */
     @Transactional(readOnly = true)
     public List<Integer> pendingPages(String runId) {
-        return pendingPages(pages.pageNumbersOf(runId), stories.scenesOf(runId));
+        WebtoonJob job = works.findFirstByRunId(runId)
+                .flatMap(w -> jobs.findByPublicId(w.getJobId())).orElse(null);
+        return pendingPages(pages.pageNumbersOf(runId), stories.scenesOf(runId), isPlay(job));
+    }
+
+    /** 세계관 체험으로 만든 작품인가 — 작업 입력의 play. 못 읽으면 아니다. */
+    boolean isPlay(WebtoonJob job) {
+        if (job == null || job.getInputJson() == null || job.getInputJson().isBlank()) {
+            return false;
+        }
+        try {
+            return mapper.readTree(job.getInputJson()).path("play").asBoolean(false);
+        } catch (Exception e) {              // noqa: 못 읽으면 예전처럼
+            return false;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -436,6 +475,14 @@ public class RunService {
         out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
         out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));
+        /* 갈림 정리(branch.json)는 체험 만화에만 생긴다 — 작업 입력의 play 표시는 보지 않는다. 예시 번들로 심은
+           체험 만화는 그 표시 없이 들어왔다(로컬 · 운영 예시 「십 분 늦은 약속」 등). */
+        if (branches != null) {
+            Map<String, Object> branch = branches.of(runId);
+            if (branch != null) {
+                out.put("branch", branch);
+            }
+        }
         out.put("episode", episodeOf(job));
         /* 이 회차의 찜 수 — 둘러보기는 연재를 1화 카드로 묶어서 2화 이후의 수를 거기서 못 얻는다 */
         out.put("likes", likes.countByRunId(runId));
@@ -444,7 +491,7 @@ public class RunService {
         /* 그리기로 한 장 수(표지 + 장면 수)와 실제로 그린 장 수. 한 편 값은 기본 장 수까지라, 크레딧이
            모자라면 뒤 장을 안 그린 채 완성한다 — 그 장 번호와 한 장 값을 같이 줘서 화면이 「이어 그리기」를
            띄운다. 「미리보기」(preview)는 여전히 없다 — 공유·공개는 그린 장만으로 그대로 한다. */
-        List<Integer> pending = pendingPages(numbers, scenes);
+        List<Integer> pending = pendingPages(numbers, scenes, isPlay(job));
         out.put("planned_pages", numbers.size() + pending.size());
         out.put("pending_pages", pending);
         /* 잠긴 장도 웹툰 흐름 안에서 「다음 장면」으로 보이게 — 그린 장의 caption 과 같은 장면 한 줄이다 */

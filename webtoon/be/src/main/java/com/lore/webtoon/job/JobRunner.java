@@ -2116,7 +2116,7 @@ public class JobRunner {
     private void drawInOneProcess(Long jobId, WebtoonJob job, int pages) throws Exception {
         List<String> args = new ArrayList<>(List.of("--run-id", job.getRunId(), "--detail-pages"));
         if (pages > 0 && pages < pageCount(job)) {
-            for (int n = 1; n <= pages; n++) {
+            for (int n = isPlay(job) ? 2 : 1; n <= pages; n++) {     // 체험은 표지(1장)를 안 그린다
                 args.add("--page");
                 args.add(String.valueOf(n));
             }

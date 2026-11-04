@@ -62,6 +62,12 @@ public class PlayController {
         return Map.of("runs", named(played.ofEvent(eventId)));
     }
 
+    @Operation(summary = "최근 체험 만화", description = "공개 작품만, 최근 순. world 를 주면 그 세계 것만.")
+    @GetMapping("/runs")
+    public Map<String, Object> recentRuns(@org.springframework.web.bind.annotation.RequestParam(required = false) String world) {
+        return Map.of("runs", named(played.recent(world)));
+    }
+
     /** 카드에 세계 · 사건 이름을 붙인다. 운영 세계면 파일에서, 사용자 세계면 DB 에서. */
     private List<Map<String, Object>> named(List<Map<String, Object>> cards) {
         Long user = CreditGate.currentUser();
@@ -185,6 +191,7 @@ public class PlayController {
         String situation = !edited && catalog.world(form.worldId()) != null
                 ? catalogSituation(world, event, name)
                 : PlayWorldService.situation(event, Map.of());
+        situation = PlayWorldService.withCanon(situation, event, played.groupsOf(form.eventId()));
         ResponseEntity<Map<String, Object>> started = jobs.create(request, new JobService.CreateRequest(
                 name, null, (String) world.get("genre"), null, form.style(), null, null, null,
                 form.agreeIp(), false, form.uid(), form.characterId(), null, form.quality(), form.language(),
