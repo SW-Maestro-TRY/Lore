@@ -147,6 +147,10 @@ def normalize(raw: dict) -> dict:
             warn(f"사진을 찾지 못했습니다: {path}")
             continue
         photos.append(str(path.resolve()))
+    # 세계관 체험의 사건은 「원래 전개」를 뒤에 달고 온다(PlayController). 상황과 갈라 둔다 — 원래 전개는
+    # 독자가 볼 사건이 아니라 이 이야기가 갈라져 나올 기준이다. 체험이 아니거나 원래 전개가 없으면 예전 그대로.
+    situation, canon, canon_end, groups = split_canon(str(raw.get("settings") or "").strip()) \
+        if raw.get("play") is True else (str(raw.get("settings") or "").strip(), [], "", [])
     return {
         "name": str(raw.get("name") or "").strip(),
         "description": str(raw.get("description") or "").strip(),
@@ -157,10 +161,13 @@ def normalize(raw: dict) -> dict:
         "story": str(raw.get("story") or "").strip(),
         "card": card,
         "lorebook": raw.get("lorebook") if isinstance(raw.get("lorebook"), dict) else {},
-        "settings": str(raw.get("settings") or "").strip(),
+        "settings": situation,
         "title": str(raw.get("title") or "").strip(),
         "episode": str(raw.get("episode") or "").strip(),
         **({"play": True} if raw.get("play") is True else {}),
+        **({"canon": canon} if canon else {}),
+        **({"canon_end": canon_end} if canon and canon_end else {}),
+        **({"groups": groups} if canon and groups else {}),
         **({"co": co} if (co := normalize_co(raw.get("co"))) else {}),
     }
 
@@ -511,9 +518,49 @@ def one_input_block(char: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+CANON_MARK = "[원래 전개]"
+CANON_END_MARK = "[원래 결말]"
+GROUPS_MARK = "[갈래]"
+
+
+def split_canon(settings: str) -> tuple[str, list[str], str, list[str]]:
+    """「상황 … [원래 전개] 1. … [원래 결말] 이름 [갈래] - …」 -> (상황, 원래 전개 줄들, 원래 결말 이름, 갈래들).
+
+    서버(PlayWorldService.withCanon)가 체험 사건 뒤에 단다. 표시가 없으면 (그대로, [], "", [])."""
+    head, mark, tail = (settings or "").partition(CANON_MARK)
+    if not mark:
+        return (settings or "").strip(), [], "", []
+    canon: list[str] = []
+    groups: list[str] = []
+    end = ""
+    into = canon
+    for raw in tail.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith(CANON_END_MARK):
+            end = line[len(CANON_END_MARK):].strip()
+            continue
+        if line == GROUPS_MARK:
+            into = groups
+            continue
+        item = re.sub(r"^\s*(?:\d+[.)]|[-·•])\s*", "", line).strip()
+        if item:
+            into.append(item)
+    return head.strip(), canon, end, groups
+
+
+def canon_lines(canon: list[str]) -> str:
+    return "\n".join(f"{i}. {line}" for i, line in enumerate(canon, 1))
+
+
 def play_goal_block(char: dict) -> str:
     """세계관 체험의 목표 — 사건 속에서 이 캐릭터가 자기 성격대로 고르고 움직이는 것이 이야기의 중심이다.
-    체험이 아니면 빈 글이라 예전 길은 한 글자도 안 바뀐다."""
+    체험이 아니면 빈 글이라 예전 길은 한 글자도 안 바뀐다.
+
+    사건의 원래 전개(canon)는 **여기 넣지 않는다.** 이야기에 기준을 주면 캐릭터대로 가는 대신 일부러
+    달라지려 해서 결말이 세지고 어두워졌다(2026-11-04 글 시험, 사용자 지적). 원래와 달라지는 것은 캐릭터가
+    자기 가치관대로 움직인 결과여야 한다. 원래 전개는 다 쓴 뒤 견주는 데(stage_branch)와 화면에만 쓴다."""
     if not char.get("play") or not char.get("settings"):
         return ""
     return load_prompt("play_goal")
@@ -1549,6 +1596,93 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "",
     return directions
 
 
+BRANCH_KEYS = ("at", "canon", "this", "why", "end", "label", "scene", "group")
+BRANCH_INPUT = "branch_input.json"
+
+
+def branch_char(run_dir: Path, char: dict) -> dict:
+    """갈림 정리에 쓸 원래 전개 · 원래 결말 이름 · 갈래. 옛 작품(원래 전개가 생기기 전)은 서버가
+    `branch_input.json` 에 적어 넣고 `--branch` 로 부른다. 있으면 그것이 먼저다."""
+    path = run_dir / BRANCH_INPUT
+    if not path.exists():
+        return char
+    got = read_json(path) or {}
+    out = dict(char)
+    for k in ("canon", "canon_end", "groups"):
+        if got.get(k):
+            out[k] = got[k]
+    return out
+
+
+def stage_branch(run_dir: Path, char: dict, direction: dict, dry_run: bool,
+                 scenes: list[dict] | None = None) -> dict | None:
+    """세계관 체험 — 이 이야기가 사건의 원래 전개와 어디서 어떻게 갈라졌는가(branch.json).
+
+    이야기를 쓴 호출이 스스로 적게 하지 않고 따로 읽는다. 쓴 쪽은 자기가 갈라졌다고 말하기 쉽다.
+    화면이 「원래는 … / 이 주인공은 …」, 갈라진 장의 띠, 같은 사건의 갈래 묶음으로 보여 준다.
+    실패하면 없이 간다 — 만화는 그대로 나온다."""
+    char = branch_char(run_dir, char)
+    canon = char.get("canon") or []
+    if not canon:
+        return None
+    end = char.get("canon_end") or ""
+    groups = [g for g in (char.get("groups") or []) if g]
+    lines = ["[원래 전개]", canon_lines(canon)]
+    if end:
+        lines += ["", "[원래 결말 이름]", end]
+    lines += ["", "[이미 있는 갈래]", "\n".join(f"- {g}" for g in groups) if groups else "없음"]
+    lines += ["", "[주인공]", char.get("name") or "", "", "[캐릭터 설명]", char.get("description") or "",
+              "", "[이번 이야기]", f"제목: {direction.get('title') or ''}",
+              str(direction.get("body") or direction.get("raw") or "")]
+    if scenes:
+        lines += ["", "[장면]"] + [f"장면 {i}: {sc.get('what') or ''}" for i, sc in enumerate(scenes, 1)]
+    prompt = compose("play_branch", "\n".join(lines) + "\n")
+    write_text(run_dir / "branch_prompt.txt", prompt)
+    if dry_run:
+        log(f"[갈림] 프롬프트만 썼습니다 -> {run_dir / 'branch_prompt.txt'}")
+        return None
+    call = llm.Call("BRANCH")
+    log(f"[갈림] {call.describe()} 로 원래 전개와 갈라진 곳을 정리합니다…")
+    try:
+        text, meta = call(prompt)
+    except Exception as exc:                                          # noqa: BLE001
+        record_error(run_dir, "BRANCH", call.provider, call.model, exc)
+        warn(f"갈라진 곳을 정리하지 못했습니다 — 없이 갑니다 ({exc})")
+        return None
+    write_text(run_dir / "branch_raw.txt", text)
+    record(run_dir, meta)
+    try:
+        obj = story.extract_json(text)
+    except Exception as exc:                                          # noqa: BLE001
+        warn(f"갈림 응답을 못 읽었습니다 — 없이 갑니다 ({exc})")
+        return None
+    if not isinstance(obj, dict):
+        return None
+    out = clean_branch(obj, len(canon), len(scenes or []), end)
+    out["canon_lines"] = list(canon)
+    out["canon_end"] = end
+    write_json(run_dir / "branch.json", out)
+    return out
+
+
+def clean_branch(obj: dict, canon_n: int, scene_n: int, canon_end: str) -> dict:
+    """모델 답 -> 화면이 믿고 쓸 모양. 번호는 범위 안으로, 글은 앞뒤 공백 없이.
+    갈리지 않았으면(at=0) 갈래는 원래 결말 이름이다."""
+    out = {k: obj.get(k) for k in BRANCH_KEYS}
+    for k, top in (("at", canon_n), ("scene", scene_n)):
+        try:
+            out[k] = max(0, min(top, int(out.get(k) or 0)))
+        except (TypeError, ValueError):
+            out[k] = 0
+    for k in ("canon", "this", "why", "end", "label", "group"):
+        out[k] = str(out.get(k) or "").strip()
+    if out["at"] == 0 and canon_end:
+        out["group"] = canon_end
+    if not out["group"]:
+        out["group"] = out["label"]
+    return out
+
+
 def show_directions(directions: list[dict]) -> None:
     for d in directions:
         genre = f"  [{d['genre']}]" if d["genre"] else ""
@@ -1979,6 +2113,9 @@ def stage_scenes(run_dir: Path, char: dict, direction: dict, dry_run: bool,
     if parsed["scenes"] and narration_stage_enabled():
         parsed = stage_narration(run_dir, char, direction, parsed, lang=lang)
     write_json(run_dir / "scenes.json", parsed)
+    # 세계관 체험 — 장면까지 나온 뒤에 원래 전개와 견준다(어느 장면에서 갈라졌는지까지 알 수 있다).
+    if char.get("play") and char.get("canon") and parsed.get("scenes"):
+        stage_branch(run_dir, char, direction, dry_run=False, scenes=parsed["scenes"])
     return parsed
 
 
@@ -2357,6 +2494,8 @@ def main(argv=None) -> int:
     p.add_argument("--full-review", action="store_true",
                    help="이미 그린 화를 처음부터 끝까지 읽어 검수만 한다 "
                         "(다시 그리지 않는다. full_review.json 만 쓴다)")
+    p.add_argument("--branch", action="store_true",
+                   help="세계관 체험 — 다 만든 작품을 원래 전개와 다시 견준다(branch.json). 옛 작품은 서버가 branch_input.json 을 둔다")
     p.add_argument("--dry-run", action="store_true", help="프롬프트만 쓰고 호출하지 않는다")
     p.add_argument("--note", default="", help="다시 만들기에서 이번 시도에만 추가로 "
                                               "반영할 요청 (이야기·시트 단계에서 씀)")
@@ -2476,7 +2615,7 @@ def main(argv=None) -> int:
     if (args.story_review or args.story_diff or args.full_review
             or args.sheet or args.sheet_spec or args.detail_pages
             or args.page or args.sheet_from or args.pick_save or args.restory
-            or args.scenes or args.cast_pick is not None):
+            or args.scenes or args.branch or args.cast_pick is not None):
         if args.cast_pick is not None:
             save_cast_pick(run_dir, args.cast_pick)
         if args.restory or args.cast_pick is not None:
@@ -2509,6 +2648,10 @@ def main(argv=None) -> int:
         if args.scenes:
             direction = picked_direction(run_dir, args.pick)
             stage_scenes(run_dir, char, direction, args.dry_run, lang=args.lang)
+        if args.branch:
+            direction = picked_direction(run_dir, args.pick)
+            done = read_json(run_dir / "scenes.json") if (run_dir / "scenes.json").exists() else {}
+            stage_branch(run_dir, char, direction, args.dry_run, scenes=(done or {}).get("scenes") or [])
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
                                cover_first=args.cover_first,

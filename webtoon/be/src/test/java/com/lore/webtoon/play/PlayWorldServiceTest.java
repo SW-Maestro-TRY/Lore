@@ -283,4 +283,19 @@ class PlayWorldServiceTest {
                 .isInstanceOf(BusinessException.class).hasMessageContaining("횟수");
         verify(harness, never()).worldMake(any(), anyString());
     }
+
+    @org.junit.jupiter.api.Test
+    void 원래_전개는_상황_뒤에_번호를_달아_붙는다() {
+        java.util.Map<String, Object> event = java.util.Map.of("canon", java.util.List.of("숨긴다", " ", "들킨다"));
+        org.assertj.core.api.Assertions.assertThat(PlayWorldService.withCanon("상황", event))
+                .isEqualTo("상황\n\n[원래 전개]\n1. 숨긴다\n2. 들킨다");
+        org.assertj.core.api.Assertions.assertThat(PlayWorldService.withCanon("상황", java.util.Map.of())).isEqualTo("상황");
+    }
+
+    @org.junit.jupiter.api.Test
+    void 원래_결말_이름과_갈래가_원래_전개_뒤에_붙는다() {
+        java.util.Map<String, Object> event = java.util.Map.of("canon", java.util.List.of("숨긴다", "들킨다"), "canon_end", "다시 숨긴다");
+        org.assertj.core.api.Assertions.assertThat(PlayWorldService.withCanon("상황", event, java.util.List.of("털어놓는다", "다시 숨긴다", " ")))
+                .isEqualTo("상황\n\n[원래 전개]\n1. 숨긴다\n2. 들킨다\n[원래 결말] 다시 숨긴다\n[갈래]\n- 다시 숨긴다\n- 털어놓는다");
+    }
 }

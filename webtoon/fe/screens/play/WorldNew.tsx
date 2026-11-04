@@ -11,7 +11,10 @@
  * - 예시 캐릭터는 사건마다 등장인물처럼 그 자리에서 사진 · 이름 · 설정으로 만든다(최대 둘). 서버가 사진 그대로 캐릭터로 만든다.
  * - 사진은 data URL 로 서버에 보낸다(창고에 올려 주소로 돌려준다). */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { listLorebooks, listPlayWorlds, readPlayWorld, type LoreBook } from "../../lib/api";
+import AuthModal from "@common/auth/AuthModal";
+import { useAuth } from "@common/auth/useAuth";
+import { listLorebooks, listPlayWorlds, readPlayWorld, WebtoonApiError, type LoreBook } from "../../lib/api";
+import { track } from "../../lib/track";
 import { GENRE_QUICK } from "../../lib/wizardData";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
@@ -101,11 +104,12 @@ function AiFill({ d, setD }: { d: Draft; setD: (d: Draft) => void }) {
   const [err, setErr] = useState("");
   const run = async () => {
     /* 11/03 하은: 아직 실제로 돌려 보지 않은 기능이라 누르면 안내만 한다. 열 때는 이 줄을 지운다. */
-    if (!AI_FILL_ON) { setErr(t("아직 구현 중이에요")); return; }
+    if (!AI_FILL_ON) { track("world_ai_fill", { result: "closed" }); setErr(t("아직 구현 중이에요")); return; }
     if (busy) return;
     setBusy(true); setErr("");
-    try { setD({ ...(await makeWorld(strip(d))), cover: d.cover }); }
-    catch (x) { setErr(x instanceof Error && x.message ? x.message : t("만들지 못했어요")); }
+    track("world_ai_fill", { result: "start", mode: d.id ? "edit" : "new" });
+    try { setD({ ...(await makeWorld(strip(d))), cover: d.cover }); track("world_ai_fill", { result: "done" }); }
+    catch (x) { track("world_ai_fill", { result: "error", status: x instanceof WebtoonApiError ? x.status : 0 }); setErr(x instanceof Error && x.message ? x.message : t("만들지 못했어요")); }
     setBusy(false);
   };
   return (
@@ -259,7 +263,7 @@ function FromBook({ d, setD, books, go }: { d: Draft; setD: (d: Draft) => void; 
           {books === null ? <span className="hint">…</span> : books.length === 0
             ? <button type="button" className="wn-dash" onClick={() => go("mypage")}>{t("설정집 만들기")}</button>
             : books.map((b) => (
-              <button type="button" key={b.library_id || b.id || b.name} className={(b.library_id || b.id) === d.lorebook_id ? "on" : ""} onClick={() => { setD(fromBook(b, d)); setOpen(false); }}>
+              <button type="button" key={b.library_id || b.id || b.name} className={(b.library_id || b.id) === d.lorebook_id ? "on" : ""} onClick={() => { track("world_book_import", { count: books.length }); setD(fromBook(b, d)); setOpen(false); }}>
                 <span><b>{b.name}</b><small>{(b.fixed_settings || "").slice(0, 60)}</small></span>
               </button>
             ))}
@@ -270,22 +274,38 @@ function FromBook({ d, setD, books, go }: { d: Draft; setD: (d: Draft) => void; 
 }
 
 function usePublish(d: Draft, clear: () => void, go: Go) {
+  const { status } = useAuth();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  /* 로그인 안 한 채 올리면 서버가 401 을 준다 — 서버 문구 옆에 로그인 단추를 같이 띄운다(초안은 이 브라우저에 그대로 남는다) */
+  const [needLogin, setNeedLogin] = useState(false);
   const ok = !!d.name.trim() && !!d.one.trim() && d.events.length > 0;
+  /* 세는 값 — 무엇을 얼마나 채웠는지만(글은 안 남긴다) */
+  const shape = () => ({ mode: d.id ? "edit" : "new", count: d.events.length, n: d.cast.length,
+    has_photo: !!d.cover, logged_in: status === "authenticated", result: d.visibility });
   const publish = async () => {
     if (!ok || busy) return;
-    setBusy(true); setErr("");
+    setBusy(true); setErr(""); setNeedLogin(false);
+    track("world_publish", shape());
     try {
       const id = await saveWorld(d);
+      /* 서버 길이 없을 때(404·405)는 이 브라우저에만 담고 my- 로 시작하는 id 를 돌려준다 */
+      track("world_published", { ...shape(), world: id, kind: id.startsWith("my-") ? "local" : "server" });
       clear();
       go("play", { world: id });
     } catch (x) {
+      const code = x instanceof WebtoonApiError ? x.status : 0;
+      const login = code === 401;
+      track("world_publish_failed", { ...shape(), status: code, reason: login ? "need_login" : "other" });
+      if (login) track("login_prompt", { where: "world_publish" });
+      setNeedLogin(login);
       setErr(x instanceof Error && x.message ? x.message : "");
       setBusy(false);
     }
   };
-  return { ok, busy, err, publish };
+  /* 로그인하고 돌아오면 단추를 거둔다 — 다시 「세계관 올리기」를 누르면 된다 */
+  useEffect(() => { if (status === "authenticated") setNeedLogin(false); }, [status]);
+  return { ok, busy, err, needLogin, publish };
 }
 
 /* ---------- PC — 두 걸음: 1 설정 · 등장인물, 2 사건 ---------- */
@@ -293,17 +313,20 @@ function Desk({ go, editId }: { go: Go; editId?: string }) {
   const t = useT();
   const { d, set, setD, keep, saved, clear, loadErr } = useDraft(editId);
   const books = useBooks();
-  const { ok, busy, err, publish } = usePublish(d, clear, go);
+  const { ok, busy, err, needLogin, publish } = usePublish(d, clear, go);
+  const [auth, setAuth] = useState(false);
   const [step, setStep] = useState(0);
   const phone = usePhone();
   /* 폰은 설정과 등장인물을 나눈다 */
   const names = phone ? [t("설정"), t("등장인물"), t("사건")] : [t("설정 · 등장인물"), t("사건")];
   const evStep = names.length - 1;
   const s1ok = !!d.name.trim() && !!d.one.trim();
+  /* 몇 번째 걸음까지 왔나 — 화면 주소가 안 바뀌어서 page_view 로는 안 보인다 */
+  useEffect(() => { track("world_new_step", { step: step + 1, count: names.length, mode: editId ? "edit" : "new" }); }, [step, names.length]);
   const [person, setPerson] = useState<Person | null>(null);
   const [ev, setEv] = useState<Ev | null>(null);
-  const putPerson = (p: Person) => { set({ cast: d.cast.some((x) => x.id === p.id) ? d.cast.map((x) => x.id === p.id ? p : x) : [...d.cast, p] }); setPerson(null); };
-  const putEvent = (e: Ev) => { set({ events: d.events.some((x) => x.id === e.id) ? d.events.map((x) => x.id === e.id ? e : x) : [...d.events, e] }); setEv(null); };
+  const putPerson = (p: Person) => { if (!d.cast.some((x) => x.id === p.id)) track("world_part_add", { kind: "cast", count: d.cast.length + 1 }); set({ cast: d.cast.some((x) => x.id === p.id) ? d.cast.map((x) => x.id === p.id ? p : x) : [...d.cast, p] }); setPerson(null); };
+  const putEvent = (e: Ev) => { if (!d.events.some((x) => x.id === e.id)) track("world_part_add", { kind: "event", count: d.events.length + 1 }); set({ events: d.events.some((x) => x.id === e.id) ? d.events.map((x) => x.id === e.id ? e : x) : [...d.events, e] }); setEv(null); };
   /* 사건 추가 — 열어 둔 사건이 있으면 제목이 있을 때 그대로 넣고 새 칸을 연다 */
   const live = useRef<Ev | null>(null);
   /* 사건 걸음에 처음 들어오면(사건 0개) 단추를 안 눌러도 빈 사건 칸이 열려 있게 */
@@ -312,6 +335,7 @@ function Desk({ go, editId }: { go: Go; editId?: string }) {
   }, [step, evStep, d.events.length]);
   const addEvent = () => {
     const cur = live.current;
+    if (ev && cur && cur.id === ev.id && cur.title.trim() && !d.events.some((x) => x.id === cur.id)) track("world_part_add", { kind: "event", count: d.events.length + 1 });
     if (ev && cur && cur.id === ev.id && cur.title.trim()) set({ events: d.events.some((x) => x.id === cur.id) ? d.events.map((x) => x.id === cur.id ? cur : x) : [...d.events, cur] });
     const n = newEvent();
     live.current = n;
@@ -334,7 +358,7 @@ function Desk({ go, editId }: { go: Go; editId?: string }) {
       {step < evStep ? (
       <div className="wn-s1">
         {(!phone || step === 0) && <div className="wn-s1-l">
-          <PickPic className={`wn-cover${d.cover ? "" : " add"}`} onPick={(cover) => set({ cover })}>
+          <PickPic className={`wn-cover${d.cover ? "" : " add"}`} onPick={(cover) => { track("world_part_add", { kind: "cover" }); set({ cover }); }}>
             {d.cover ? <><span className="im" style={{ backgroundImage: `url(${d.cover})` }} /><span className="pl-btn sm tool">{t("바꾸기")}</span></> : <><i><IconPlus /></i>{t("표지 올리기")}</>}
           </PickPic>
           <input className="wn-name" placeholder={t("세계 이름")} aria-label={t("세계 이름")} value={d.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} />
@@ -378,8 +402,12 @@ function Desk({ go, editId }: { go: Go; editId?: string }) {
             <button type="button" className="pl-btn" disabled={!ok || busy} onClick={publish}>{editId ? t("고친 내용 저장") : t("세계관 올리기")}</button>
           </div>
           {err && <p className="pl-err">{err}</p>}
+          {needLogin && <div className="wn-bar"><button type="button" className="pl-btn" onClick={() => { track("world_login_click", { where: "world_publish" }); setAuth(true); }}>{t("로그인")}</button></div>}
         </div>
       )}
+      {/* 늘 붙여 두고 open 만 바꾼다(머리 줄 로그인과 같은 방식). 열린 채로 새로 붙이면 개발 모드에서 효과가 두 번 돌며
+          자기가 쌓은 기록 칸을 걷어 바로 닫혔다 */}
+      <AuthModal open={auth} onClose={() => setAuth(false)} />
     </div>
   );
 }

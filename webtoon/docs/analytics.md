@@ -280,7 +280,7 @@ group by 1 order by 1;
 | `page_view` | 화면이 바뀔 때마다 (만들기는 걸음마다) | `view` 칸에 화면 이름, `step`(만들기 화면만), `run`, `logged_in`, `how`·`via`(어떻게 왔나 — 아래 표) |
 | `page_leave` | 화면을 떠날 때 (다른 화면으로 가거나 페이지를 닫을 때) | `target`(떠난 화면), `ms`(머문 시간, 탭이 뒤로 가 있던 시간 포함), `depth_pct`(그 화면을 어디까지 내려 봤나 %), `how`·`via`(어떻게 갔나) |
 | `auth_done` | 이 방문 중에 로그인 안 한 상태에서 로그인 상태가 됨 | `target`(그때 보던 화면) |
-| `login_prompt` | 로그인이 필요한 문턱을 봄 | `where`: editor · character_limit |
+| `login_prompt` | 로그인이 필요한 문턱을 봄 | `where`: editor · character_limit · world_publish |
 | `landing_cta` | 첫 화면의 시작 단추 | `where`: hero · bottom · need_create · need_try · works_all |
 | `create_blocked` | 마지막 걸음에서 막힘이 보일 때 | `reason`: blocked · free_used, `logged_in`, `free_left` |
 | `create_start` | 「웹툰 만들기」를 누름 | `quality`, `style`, `mode`, `count`(사진 수), `character`, `has_desc`, `has_note`, `preset`(장르를 목록에서 골랐나), `cost`, `free_left`, `logged_in` |
@@ -321,6 +321,16 @@ group by 1 order by 1;
 | `feedback_view` · `feedback_submit` · `feedback_skip` | 설문이 뜸 · 보냄 · 건너뜀 (#471, [validation.md](validation.md)). 답 자체는 `webtoon_feedback` 표에 있다 | `where`: result · mypage, `run`, `count`(문항 수), `ok`(보상을 받았나) |
 | `feedback_open` | 마이페이지 「피드백 보내기」를 엶 | `where` |
 | `feedback_prompt_view` · `feedback_prompt_click` | 다시 온 사람 안내가 뜸 · 「설문하러 가기」를 누름 | `where`(그때 보던 화면) |
+| `play_view` | 세계관 체험(`view=play`) 안에서 칸이 바뀔 때마다. 주소의 world · ep · stage 만 바뀌어 `page_view` 가 안 남기 때문에 따로 둔다(2026-11-04) | `where`: worlds(세계 목록) · world(사건 목록) · event(사건 보기) · char(캐릭터 고르기) · making · done(만화) · stories · load_failed, `world`, `event`(사건 id), `run`, `job`, `count`(세계 수), `logged_in` |
+| `play_char_mine` · `play_char_new` | 캐릭터 고르기에서 「+ 내 캐릭터」를 누름 · 「새 캐릭터 만들기」로 감 | `world`, `event`, `count`(내 캐릭터 수), `where`: list · tiles, `logged_in` |
+| `play_start` · `play_started` · `play_failed` | 「○○ 넣기」를 누름 · 서버가 받음 · 못 받음. 체험 한 판의 실제 결과는 `webtoon_job` 이 정본 | `world`, `event`, `kind`: example(세계가 정한 예시) · example_person(사건 자료의 예시 주인공) · builtin · mine, `character`(id 가 기호일 때만), `job`, `status`(HTTP), `reason`: credit_short · other, `logged_in` |
+| `play_job_status` · `play_cancel` | 만드는 화면이 끝(done · error)을 봄 · 만들기 중단 | `world`, `event`, `job`, `run`, `status`(중단은 그때 단계 story · art · review) |
+| `play_next` | 만화 아래에서 다음으로 감 | `where`: next_event · same_world · other_world · other_run, `world`, `event`, `run` |
+| `world_new_step` | 세계관 만들기 걸음을 엶(처음 들어올 때 포함) | `step`, `count`(전체 걸음 수 — PC 2 · 폰 3), `mode`: new · edit |
+| `world_part_add` | 세계에 표지 · 등장인물 · 사건을 새로 넣음 | `kind`: cover · cast · event, `count`(넣은 뒤 수) |
+| `world_ai_fill` · `world_book_import` | 「AI로 채우기」(지금은 닫혀 있어 `result=closed`) · 설정집 가져오기 | `result`: closed · start · done · error, `status`, `count`(설정집 수) |
+| `world_publish` · `world_published` · `world_publish_failed` | 「세계관 올리기」를 누름 · 올라감 · 못 올림 | `mode`, `count`(사건 수), `n`(등장인물 수), `has_photo`(표지), `result`: public · private, `logged_in`, `world`, `kind`: server · local(서버 길이 없어 이 브라우저에만), `status`, `reason`: need_login · other |
+| `world_login_click` | 올리기가 로그인으로 막힌 뒤 뜬 「로그인」 단추를 누름. 막힌 순간엔 `login_prompt`(`where`: world_publish)도 남는다 | `where`: world_publish |
 
 ### 자동 기록 (`lib/track.ts` 「자동 기록」)
 
@@ -585,3 +595,15 @@ select count(distinct uid) filter (where name = 'page_view' and view = 'sharedCa
 from webtoon_event
 where occurred_at > now() - interval '30 days';
 ```
+
+## 외부 도구 거울 (#966)
+
+웹툰 `track()` 은 우리 표(`webtoon_event`)에 남기면서 같은 이름 · 같은 값을 외부 도구에도 보낸다(`webtoon/fe/lib/mirror.ts`).
+우리 표가 기준이고 외부 도구는 대조용이다.
+
+- GA4 `G-YTH2YN6019` — 루트 레이아웃이 gtag 를 켜는 운영 호스트에서만. 공용 `common/fe/analytics.ts` 거울과 같은 규칙
+- 앰플리튜드 — 빌드 환경변수 `NEXT_PUBLIC_AMPLITUDE_API_KEY` 가 있을 때만. 키를 넣기 전에 개인정보처리방침(제7조 · 제13조)을 먼저 게시한다
+- `navigator.webdriver` 가 참인 자동 브라우저는 어느 쪽에도 안 보낸다
+
+우리 표에는 광고 검토용 자동 접속도 「들어온 사람」으로 남는다(2026-11-04: 광고 게시 직후 광고마다 4~8건, 입력 · 고르기 기록 0).
+관리자 「유입 출처」 표의 「행동한 사람」 칸이 그것을 가른다(`AdminOverview.PASSIVE`).

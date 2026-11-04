@@ -340,7 +340,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
           <div className="modal-box wt-ch-survey-box" role="dialog" aria-modal="true"
                aria-labelledby="wt-ch-survey-title" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="icon-btn wt-ch-survey-x" aria-label={t("닫기")}
-                    onClick={() => setSurvey(null)}><IconClose size={18} /></button>
+                    onClick={() => setSurvey(null)}><IconClose size={22} /></button>
             {survey === "ask" ? (
               <>
                 <h2 id="wt-ch-survey-title">{t("캐릭터가 다른 종으로 나와서 당황하셨나요?")}</h2>

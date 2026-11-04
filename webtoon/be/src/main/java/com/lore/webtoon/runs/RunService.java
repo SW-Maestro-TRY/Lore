@@ -148,6 +148,14 @@ public class RunService {
     }
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /** 세계관 체험 만화의 원래 전개와 갈라진 곳(2026-11-04). 갈림 정리가 있는 작품에만 붙는다 — 테스트처럼 없으면 안 붙인다. */
+    private com.lore.webtoon.play.PlayBranch branches;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setBranches(com.lore.webtoon.play.PlayBranch branches) {
+        this.branches = branches;
+    }
+
     public RunService(WebtoonWorkRepository works, WebtoonJobRepository jobs,
                       StoryStore stories, PageStore pages, RunLikeRepository likes) {
         this.works = works;
@@ -467,6 +475,14 @@ public class RunService {
         out.put("genre", chosen.map(WebtoonStory::getGenre).orElse(""));
         out.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
         out.put("logline", chosen.map(WebtoonStory::displayPlot).orElse(""));
+        /* 갈림 정리(branch.json)는 체험 만화에만 생긴다 — 작업 입력의 play 표시는 보지 않는다. 예시 번들로 심은
+           체험 만화는 그 표시 없이 들어왔다(로컬 · 운영 예시 「십 분 늦은 약속」 등). */
+        if (branches != null) {
+            Map<String, Object> branch = branches.of(runId);
+            if (branch != null) {
+                out.put("branch", branch);
+            }
+        }
         out.put("episode", episodeOf(job));
         /* 이 회차의 찜 수 — 둘러보기는 연재를 1화 카드로 묶어서 2화 이후의 수를 거기서 못 얻는다 */
         out.put("likes", likes.countByRunId(runId));

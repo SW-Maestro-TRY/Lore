@@ -99,7 +99,7 @@
 .wt .wt-lore-dialog { font-size:16px; }
 .wt .wt-lore-dialog .wt-lore-panelhead, .wt .wt-lore-help .wt-lore-panelhead { align-items:center; }
 .wt .wt-lore-dialog .wt-lore-panelhead h3 { font-size:22px; line-height:1.3; }
-.wt .wt-lore-close { flex-shrink:0; width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; padding:0;
+.wt .wt-lore-close { flex-shrink:0; width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; padding:0;
   border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--ink); cursor:pointer; }
 .wt .wt-lore-close:hover:not(:disabled) { border-color:var(--muted); }
 .wt .wt-lore-close:disabled { opacity:.4; cursor:default; }

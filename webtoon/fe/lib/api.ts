@@ -381,8 +381,17 @@ export function listPlayWorlds<T>(): Promise<{ worlds: T[] }> {
   return call("/play/worlds");
 }
 
+/**
+ * 세계관 체험 만화가 사건의 원래 전개와 갈라진 곳(2026-11-04, 서버 PlayBranch). 갈림 정리 전의 옛 작품엔 없다.
+ * page 는 갈라진 장면이 그려진 장 번호(0 이면 안 갈림), group 은 같은 선택끼리 묶는 갈래 이름.
+ */
+export interface PlayBranch {
+  at: number; scene: number; page: number;
+  canon: string; this: string; why: string; end: string; label: string; group: string;
+  canon_end: string; canon_lines: string[];
+}
 /** 세계관 체험으로 만든 만화 — 일반 작품 카드에 어느 세계 · 사건이었는지가 붙는다. */
-export type PlayRunCard = RunCard & { world_id: string; world_name: string; event_id: string; event_title: string };
+export type PlayRunCard = RunCard & { world_id: string; world_name: string; event_id: string; event_title: string; branch?: PlayBranch };
 /** 내가 체험한 만화(최근 순). 게스트는 브라우저 번호(uid)로 찾는다. */
 export function myPlayRuns(): Promise<{ runs: PlayRunCard[] }> {
   return call("/play/runs/mine");
@@ -750,6 +759,8 @@ export interface RunResult {
   preview: boolean;
   /** 둘러보기에 심어 둔 예시 작품 — 내 것이 아니어도 내려받을 수 있다. */
   example?: boolean;
+  /** 세계관 체험 만화면 원래 전개와 갈라진 곳(갈림 정리를 했을 때만) */
+  branch?: PlayBranch;
   /** 관리자가 열 때만 온다(#329, #428) — 만들 때 넣은 설정. */
   inputs?: RunInputs;
   /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
@@ -1199,6 +1210,28 @@ export interface AdminOverview {
 export function adminOverview(from: string, to: string, who: AdminWho): Promise<AdminOverview> {
   const q = new URLSearchParams({ from, to, who });
   return call<AdminOverview>(`/admin/dash/overview?${q}`);
+}
+
+/** 유입 출처 한 줄 — utm 을 source/medium/campaign/content 로 나눈 것. 출처가 없으면 source 가 빈 문자열 */
+export interface AdminSourceRow {
+  source: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent: string;
+  visitors: number;
+  /** 입력 · 고르기 · 만들기처럼 보기 말고 무언가를 한 사람 — 광고 검토용 자동 접속은 여기 안 잡힌다 */
+  engaged: number;
+  createStarted: number;
+  loggedIn: number;
+  /** 작업이 끝난 브라우저 수 · 끝난 작업 수 */
+  makersDone: number;
+  jobsDone: number;
+}
+
+export function adminSources(from: string, to: string, who: AdminWho): Promise<{ rows: AdminSourceRow[] }> {
+  const q = new URLSearchParams({ from, to, who });
+  return call<{ rows: AdminSourceRow[] }>(`/admin/dash/sources?${q}`);
 }
 
 /* ---- 오늘 생성 상한(#617) — 관리자만. 서버를 다시 띄우지 않고 오늘(한국 자정까지)만 바꾼다 ---------- */

@@ -5,7 +5,7 @@
 import { uploadDataUrls } from "@common/api/uploads";
 import { listPlayWorlds, makePlayWorld, readPlayWorld, savePlayWorld, WebtoonApiError } from "../../lib/api";
 
-export interface PlayEvent { id: string; no: string; title: string; line: string; situation: string; image_url: string | null; tried: number; place?: string; spot?: string; cast?: string[]; examples?: string[]; example_people?: { id?: string; name: string; role?: string; age?: number; desc: string; relation?: string; face_url?: string; character_id?: string }[] }
+export interface PlayEvent { id: string; no: string; title: string; line: string; situation: string; image_url: string | null; tried: number; canon?: string[]; canon_end?: string; place?: string; spot?: string; cast?: string[]; examples?: string[]; example_people?: { id?: string; name: string; role?: string; age?: number; desc: string; relation?: string; face_url?: string; character_id?: string }[] }
 export interface PlayPerson { id?: string; name: string; role?: string; desc?: string; face_url?: string | null }
 export interface PlayWorld { id: string; name: string; genre: string; one: string; cover_url: string | null; spot: string; cast: PlayPerson[]; events: PlayEvent[]; examples?: string[]; mine?: boolean; rule?: string }
 

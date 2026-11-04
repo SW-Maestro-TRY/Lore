@@ -263,10 +263,114 @@ public class AdminOverview {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("day", day);
             m.put("visitors", v[0]);
+            m.put("engaged", v[5]);
             m.put("createStarted", v[1]);
             m.put("jobsDone", v[2]);
             out.add(m);
         });
+        return out;
+    }
+
+    /**
+     * 유입 출처별 사람 수 — 광고 · SNS 링크의 utm 을 줄로 나눠 「어디서 들어와 어디까지 갔나」를 본다.
+     *
+     * <h2>출처를 어떻게 정하나</h2>
+     *
+     * 화면은 방문의 첫 묶음에만 출처를 싣는다({@code track.ts} origin). 한 브라우저({@code uid})에 출처가 여러
+     * 번 남았으면 <b>가장 처음 것</b>을 그 사람의 출처로 본다 — 광고로 처음 들어온 사람이 다음 날 북마크로
+     * 다시 와도 광고 몫으로 센다. 출처가 한 번도 없으면 「직접 · 모름」이다.
+     *
+     * 줄은 {@code source/medium/campaign/content} 를 그대로 쓴다(메타 광고는 source 가 meta-fb · meta-ig ·
+     * meta-an … 처럼 플랫폼까지 담는다). 화면이 나눠 보여 준다.
+     *
+     * <h2>무엇을 세나</h2>
+     *
+     * 기간 안에 그 출처 사람이 들어온 수 · 행동한 수({@link #PASSIVE} 밖의 기록을 남긴 수) · 만들기를 시작한 수 ·
+     * 로그인한 수 · 작업이 끝난 수.
+     * 로그인 전후로 같은 브라우저를 한 사람으로 묶으려고 계정이 아니라 브라우저로 센다.
+     */
+    /**
+     * 「보기만 한」 기록 — 이것만 남긴 브라우저는 행동한 사람으로 안 센다.
+     *
+     * 광고를 게시하거나 고친 직후 메타가 광고 주소를 자동으로 열어 검토한다(2026-11-04 운영 기록: 광고가 멈춰
+     * 있던 15분 동안 광고 16개 모두에 4~8명씩, 그중 12명은 맨 위 메뉴 링크 넷을 하나씩 다 누름). 그런 접속은
+     * 페이지 보기 · 링크 클릭 · 탭 전환만 남기고, 입력 · 고르기 · 만들기는 남기지 않는다. 그래서 「들어온 사람」
+     * 옆에 이 목록 밖의 기록을 하나라도 남긴 사람을 따로 센다. 새 기록 이름은 기본으로 「행동」에 들어간다.
+     */
+    static final String PASSIVE = String.join(", ",
+            "'session_start'", "'page_view'", "'page_leave'", "'tab_hidden'", "'tab_back'", "'visibility_change'",
+            "'lp_view'", "'ui_click'", "'read_end'", "'event_popup_view'", "'event_page_view'", "'feedback_prompt_view'",
+            "'api_error'", "'api_slow'", "'ui_error'", "'js_error'", "'job_status'");
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> sources(LocalDate fromDate, LocalDate toDate, Who who) {
+        Instant from = fromDate.atStartOfDay(KST).toInstant();
+        Instant to = toDate.plusDays(1).atStartOfDay(KST).toInstant();
+        String src = """
+                , src as (
+                  select distinct on (x.uid) x.uid, x.source
+                  from webtoon_event x
+                  where x.source is not null and x.source <> '' and x.uid is not null
+                  order by x.uid, x.occurred_at
+                )
+                """;
+        @SuppressWarnings("unchecked")
+        List<Object[]> ev = em.createNativeQuery(INNER + src + """
+                select coalesce(s.source, '') as source,
+                       count(distinct e.uid) filter (where e.name = 'session_start'),
+                       count(distinct e.uid) filter (where e.name = 'create_started'),
+                       count(distinct e.uid) filter (where e.name = 'auth_done'),
+                       count(distinct e.uid) filter (where e.name not in (%s))
+                from webtoon_event e
+                left join src s on s.uid = e.uid
+                where e.occurred_at >= :from and e.occurred_at < :to and e.uid is not null
+                """.formatted(PASSIVE) + eventCut(who) + " group by 1")
+                .setParameter("from", from).setParameter("to", to).getResultList();
+        @SuppressWarnings("unchecked")
+        List<Object[]> done = em.createNativeQuery(INNER + src + """
+                select coalesce(s.source, '') as source, count(distinct j.browser_uid), count(*)
+                from webtoon_job j
+                left join src s on s.uid = j.browser_uid
+                where j.status = 'DONE' and j.created_at >= :from and j.created_at < :to
+                """ + jobCut(who) + " group by 1")
+                .setParameter("from", from).setParameter("to", to).getResultList();
+
+        Map<String, long[]> by = new LinkedHashMap<>();
+        for (Object[] r : ev) {
+            long[] v = by.computeIfAbsent((String) r[0], k -> new long[6]);
+            v[0] = num(r[1]);
+            v[1] = num(r[2]);
+            v[2] = num(r[3]);
+            v[5] = num(r[4]);
+        }
+        for (Object[] r : done) {
+            long[] v = by.computeIfAbsent((String) r[0], k -> new long[6]);
+            v[3] = num(r[1]);
+            v[4] = num(r[2]);
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        by.forEach((source, v) -> {
+            String[] p = (source + "///").split("/", -1);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("source", source);
+            m.put("utmSource", p[0]);
+            m.put("utmMedium", p[1]);
+            m.put("utmCampaign", p[2]);
+            m.put("utmContent", p[3]);
+            m.put("visitors", v[0]);
+            m.put("createStarted", v[1]);
+            m.put("loggedIn", v[2]);
+            m.put("makersDone", v[3]);
+            m.put("jobsDone", v[4]);
+            rows.add(m);
+        });
+        rows.sort((a, b) -> Long.compare((long) b.get("visitors"), (long) a.get("visitors")));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("from", fromDate.toString());
+        out.put("to", toDate.toString());
+        out.put("who", who.name().toLowerCase());
+        out.put("rows", rows);
         return out;
     }
 

@@ -122,7 +122,7 @@ export default function LorebookAttach({value,onChange,story,authenticated,onPen
   </div></Dialog>}
   {open&&<dialog ref={dialog} className="wt-lore-dialog" aria-label={t("설정집")} onCancel={e=>{e.preventDefault();if(!busy&&!saving)close();}}><div className="wt-lore-panel" ref={panel}>
    <div className="wt-lore-panelhead"><div><h3>{working?(editMode&&aiMode?t("AI로 설정집 만들기"):working.name||t("새 설정집")):t("설정집")}</h3></div>
-    <button type="button" className="wt-lore-close" aria-label={t("설정집 닫기")} title={t("닫기")} disabled={busy||saving} onClick={close}><IconClose size={20}/></button></div>
+    <button type="button" className="wt-lore-close" aria-label={t("설정집 닫기")} title={t("닫기")} disabled={busy||saving} onClick={close}><IconClose size={24}/></button></div>
    {busy&&!(editMode&&aiMode)&&<p role="status">{t("설정 추출 중…")}</p>}
    {!working?<>
     <button type="button" className="wt-lore-newtop" disabled={busy} onClick={startNew}><span aria-hidden="true">+</span><b>{t("새 설정집 작성")}</b></button>

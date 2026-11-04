@@ -690,36 +690,3 @@
 /* 홈 「웹툰 둘러보기」 줄 — 인기순 목록을 받는 동안의 빈 표지 자리(2026-11-04) */
 .wt .wt-browse-list .wt-browse-ph { display: block; width: 100%; aspect-ratio: 3/4; border-radius: 10px; background: var(--card); }
 .wt .wt-browse-list button:disabled { cursor: default; }
-
-/* 홈 「세계관 체험 만화」 칸 — 세계 탭 · 사건 그림 · 다른 주인공 둘(2026-11-04, 시안 C) */
-.wt .wt-prun { margin-top: 36px; }
-.wt .wt-prun-tabs { display: flex; gap: 6px; margin: 0 0 14px; overflow-x: auto; scrollbar-width: none; }
-.wt .wt-prun-tabs::-webkit-scrollbar { display: none; }
-.wt .wt-prun-tabs button { flex: none; height: 32px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: none; color: var(--muted); font-size: 13px; cursor: pointer; }
-.wt .wt-prun-tabs button.on { background: var(--ink); border-color: var(--ink); color: #101c2a; font-weight: 700; }
-.wt .wt-prun-board { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 2fr); gap: 16px; }
-.wt .wt-prun-event { position: relative; min-height: 360px; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: var(--water); cursor: pointer; }
-.wt .wt-prun-event img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.wt .wt-prun-event:after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 70%, #0a1320d0); pointer-events: none; }
-.wt .wt-prun-event .none { position: absolute; left: 18px; right: 18px; top: 18px; text-align: left; }
-.wt .wt-prun-event .none small { display: block; font-size: 11px; color: #7fd6c2; letter-spacing: .06em; }
-.wt .wt-prun-event .none b { display: block; margin-top: 4px; font-size: 20px; color: #fff; }
-.wt .wt-prun-event .go { position: absolute; left: 18px; bottom: 18px; z-index: 1; display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 999px; background: var(--ink); color: #101c2a; font-size: 13px; font-weight: 700; }
-.wt .wt-prun-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start; }
-.wt .wt-prun-run { display: flex; flex-direction: column; min-width: 0; padding: 0; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: var(--bg-2); color: var(--ink); text-align: left; cursor: pointer; }
-.wt .wt-prun-run .who { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
-.wt .wt-prun-run .who b { font-size: 16px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wt .wt-prun-run .who b em { margin-left: 4px; font-style: normal; font-size: 12px; font-weight: 500; color: var(--dim); }
-.wt .wt-prun-run .who i { flex: none; height: 22px; padding: 0 8px; border-radius: 999px; background: #ffffff14; color: var(--muted); font-size: 11px; font-style: normal; line-height: 22px; }
-.wt .wt-prun-run img, .wt .wt-prun-run .none { display: block; width: 100%; height: 260px; object-fit: cover; object-position: center; background: var(--water); }
-.wt .wt-prun-run .ttl { padding: 12px 14px 14px; font-size: 14px; font-weight: 700; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (max-width: 767px) {
-  .wt .wt-prun { margin-top: 28px; }
-  .wt .wt-prun-board { grid-template-columns: 1fr; gap: 10px; }
-  .wt .wt-prun-event { min-height: 150px; }
-  .wt .wt-prun-pair { gap: 10px; }
-  .wt .wt-prun-run .who { padding: 10px 12px; }
-  .wt .wt-prun-run .who b { font-size: 14px; }
-  .wt .wt-prun-run img, .wt .wt-prun-run .none { height: 170px; }
-  .wt .wt-prun-run .ttl { padding: 10px 12px 12px; font-size: 13px; }
-}
