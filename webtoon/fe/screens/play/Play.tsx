@@ -590,6 +590,7 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
       ...others.filter((r) => r.branch?.group).map((r) => ({ name: r.character, group: r.branch!.group, me: false, pic: r.cover_page ? thumbUrl(r.run_id) : "" }))];
     const map = new Map<string, { name: string; me: boolean; pic: string }[]>();
     for (const x of all) { if (!map.has(x.group)) map.set(x.group, []); map.get(x.group)!.push(x); }
+    if (endName && !map.has(endName)) map.set(endName, []);       // 원래 결말 갈래는 아무도 안 골랐어도 맨 위에 선다(시안)
     const rows = [...map.entries()].map(([g, people]) => ({ g, people, orig: !!endName && g === endName }));
     rows.sort((a, b) => (a.orig === b.orig ? b.people.length - a.people.length : a.orig ? -1 : 1));
     return { rows, total: all.length };
@@ -627,7 +628,7 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
               {lines.slice(0, -1).map((line, i) => <div className="fs" key={i}><span className="n">{i + 1}</span><p>{t(line)}</p></div>)}
               <div className="fs fork"><span className="n">{t("그다음")}</span>
                 <div className="tcs">
-                  <div className="tc me"><span className="w"><i style={myPic ? { backgroundImage: `url(${myPic})` } : undefined}>{!myPic && who2.slice(0, 1)}</i>{who2}</span><b>{branch.label}</b><p>{branch.end}</p></div>
+                  <div className="tc self"><span className="w"><i style={myPic ? { backgroundImage: `url(${myPic})` } : undefined}>{!myPic && who2.slice(0, 1)}</i>{who2}</span><b>{branch.label}</b><p>{branch.end}</p></div>
                   <div className="tc orig"><span className="w"><i>{t("원")}</i>{t("원래")}</span><b>{endName ? t(endName) : t("원래 결말")}</b><p>{t(lines[lines.length - 1])}</p></div>
                 </div>
               </div>
@@ -636,9 +637,9 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
             <h2>{t("다른 주인공들이 고른 길")}<small>{t("{n}명", { n: String(groups.total) })}</small></h2>
             {groups.rows.map((row) => (
               <div className={`bk${row.orig ? " orig" : ""}`} key={row.g}>
-                <div className="t"><b>{row.g}</b>{row.orig && <span className="chip">{t("원래")}</span>}<span className="cnt">{t("{n}명", { n: String(row.people.length) })}</span></div>
+                <div className="t"><b>{row.g}</b>{row.orig && <span className="otag">{t("원래")}</span>}<span className="cnt">{t("{n}명", { n: String(row.people.length) })}</span></div>
                 <div className="bar"><i style={{ width: `${Math.round((row.people.length / Math.max(1, groups.total)) * 100)}%` }} /></div>
-                <div className="faces">{row.people.map((x, i) => <span key={i} className={x.me ? "me" : ""}><i style={x.pic ? { backgroundImage: `url(${x.pic})` } : undefined}>{!x.pic && x.name.slice(0, 1)}</i>{x.name}</span>)}</div>
+                <div className="faces">{row.people.map((x, i) => <span key={i} className={x.me ? "self" : ""}><i style={x.pic ? { backgroundImage: `url(${x.pic})` } : undefined}>{!x.pic && x.name.slice(0, 1)}</i>{x.name}</span>)}</div>
               </div>
             ))}
           </section>
@@ -675,8 +676,8 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
             <div className="grab" />
             <div className="cmp">
               <span className="k">{t("원래는")}</span><span>{branch.canon}</span>
-              <span className="k">{topic(who2)}</span><span className="me">{branch.this}</span>
-              {branch.why && <><span className="k">{t("왜")}</span><span className="why">{branch.why}</span></>}
+              <span className="k">{topic(who2)}</span><span className="cm-me">{branch.this}</span>
+              {branch.why && <><span className="k">{t("왜")}</span><span className="cm-why">{branch.why}</span></>}
             </div>
             <button type="button" className="pl-btn" onClick={() => setSheet(false)}>{t("닫기")}</button>
           </div>
