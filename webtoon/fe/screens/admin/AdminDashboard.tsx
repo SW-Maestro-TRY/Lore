@@ -14,8 +14,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@common/auth/useAuth";
 import {
-  adminCharacter, adminCharacterList, adminOverview, adminWorkList, WebtoonApiError,
-  type AdminCharacterDetail, type AdminCharacterRow, type AdminOverview, type AdminPage, type AdminWho,
+  adminCharacter, adminCharacterList, adminOverview, adminSources, adminWorkList, WebtoonApiError,
+  type AdminCharacterDetail, type AdminCharacterRow, type AdminOverview, type AdminPage, type AdminSourceRow, type AdminWho,
   type AdminWorkRow, type AdminWorkState,
 } from "../../lib/api";
 import type { Go } from "../../lib/nav";
@@ -102,13 +102,16 @@ function Overview() {
   const [to, setTo] = useState(today);
   const [who, setWho] = useState<AdminWho>("external");
   const [data, setData] = useState<AdminOverview | null>(null);
+  const [sources, setSources] = useState<AdminSourceRow[] | null>(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await adminOverview(from, to, who));
+      const [o, src] = await Promise.all([adminOverview(from, to, who), adminSources(from, to, who)]);
+      setData(o);
+      setSources(src.rows);
       setErr("");
     } catch (e) {
       setErr(errText(e));
@@ -175,6 +178,34 @@ function Overview() {
               ))}
             </div>
           </section>
+
+          {sources && (
+            <section className="card wt-adm-card">
+              <h2>유입 출처</h2>
+              <div className="wt-dash-scroll">
+                <table className="wt-adm-table wt-dash-sources">
+                  <thead>
+                    <tr><th>출처</th><th>매체</th><th>캠페인</th><th>소재</th><th>들어온 사람</th><th>행동한 사람</th><th>만들기 시작</th><th>로그인</th><th>완성</th></tr>
+                  </thead>
+                  <tbody>
+                    {sources.map((r) => (
+                      <tr key={r.source || "-"}>
+                        <td>{r.source ? r.utmSource || "–" : "직접 · 모름"}</td>
+                        <td>{r.utmMedium || "–"}</td>
+                        <td>{r.utmCampaign || "–"}</td>
+                        <td>{r.utmContent || "–"}</td>
+                        <td>{r.visitors}</td>
+                        <td>{r.engaged}</td>
+                        <td>{r.createStarted}</td>
+                        <td>{r.loggedIn}</td>
+                        <td>{r.makersDone}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <section className="card wt-adm-card">
             <h2>날마다</h2>
