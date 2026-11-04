@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { coverUrl, recentPlayRuns, type PlayRunCard } from "../../lib/api";
+import { recentPlayRuns, thumbUrl, type PlayRunCard } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import type { PlayWorld } from "../play/playData";
@@ -63,7 +63,7 @@ export default function PlayRunsRow({ go, worlds }: { go: Go; worlds: PlayWorld[
             <button type="button" key={r.run_id} className="wt-prun-run" onClick={() => go("play", { world: world.id, ep: event.id, stage: "done", run: r.run_id })}>
               <span className="who"><b>{r.character}<em>{t("주인공")}</em></b>{r.page_count > 0 && <i>{t("{n}장", { n: r.page_count })}</i>}</span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              {r.cover_page ? <img src={coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1)} alt="" loading="lazy" /> : <span className="none" />}
+              <img src={thumbUrl(r.run_id)} alt="" loading="lazy" />
               <span className="ttl">{r.title}</span>
             </button>
           ))}

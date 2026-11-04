@@ -69,6 +69,10 @@ public class RunService {
     public void setOverlays(OverlayStore overlays) { this.overlays = overlays; }
     @org.springframework.beans.factory.annotation.Autowired
     public void setSeries(com.lore.webtoon.series.SeriesChapterRepository series) { this.series=series; }
+    private RunThumbs thumbs;
+    /* 잘라 둔 썸네일이 있으면 카드에 표시한다(2026-11-04). 검사에서 손으로 만들 때는 없어도 된다. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setThumbs(RunThumbs thumbs) { this.thumbs = thumbs; }
     private RunViews views;
     /* 둘러보기 조회순(2026-10-26). 검사에서 손으로 만들 때는 없어도 된다(조회수 0). */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -363,6 +367,9 @@ public class RunService {
         card.put("episode", episodeOf(job));
         card.put("cover_episode", 1);
         card.put("cover_page", numbers.getFirst());
+        if (thumbs != null && thumbs.has(runId)) {
+            card.put("thumb", true);                      // 화면은 표지 대신 /runs/{id}/thumb 를 쓴다
+        }
         card.put("page_count", numbers.size());
         card.put("style_label", job == null ? "" : WebtoonStyles.labelOf(job.getStyle()));
         // 찜 수(#247). 「내가 찜했나」는 로그인이 있어야 알 수 있어 부르는 쪽이 따로 붙인다.

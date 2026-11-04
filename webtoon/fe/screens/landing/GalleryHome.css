@@ -711,7 +711,7 @@
 .wt .wt-prun-run .who b { font-size: 16px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wt .wt-prun-run .who b em { margin-left: 4px; font-style: normal; font-size: 12px; font-weight: 500; color: var(--dim); }
 .wt .wt-prun-run .who i { flex: none; height: 22px; padding: 0 8px; border-radius: 999px; background: #ffffff14; color: var(--muted); font-size: 11px; font-style: normal; line-height: 22px; }
-.wt .wt-prun-run img, .wt .wt-prun-run .none { display: block; width: 100%; height: 260px; object-fit: cover; object-position: top; background: var(--water); }
+.wt .wt-prun-run img, .wt .wt-prun-run .none { display: block; width: 100%; height: 260px; object-fit: cover; object-position: center; background: var(--water); }
 .wt .wt-prun-run .ttl { padding: 12px 14px 14px; font-size: 14px; font-weight: 700; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 767px) {
   .wt .wt-prun { margin-top: 28px; }
