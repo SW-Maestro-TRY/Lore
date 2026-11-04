@@ -51,7 +51,7 @@ def test_canon_is_split_from_situation_and_joins_goal():
     block = R.one_input_block(char)
     assert "[원래 전개]" not in block and "진다" not in block      # 독자가 볼 사건에는 안 들어간다
     goal = R.play_goal_block(char)
-    assert "## 원래 전개" in goal and "1. 불려 나간다\n2. 진다" in goal
+    assert "원래 전개" not in goal and "진다" not in goal     # 이야기에는 기준을 주지 않는다 — 견주는 데만 쓴다
 
 
 def test_no_canon_keeps_old_goal():
