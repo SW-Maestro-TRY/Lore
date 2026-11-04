@@ -6,7 +6,6 @@ import { track } from "../../lib/track";
 import "./GalleryHome.css";
 import IntroReel from "./IntroReel";
 import PlayIntro from "./PlayIntro";
-import PlayRunsRow from "./PlayRunsRow";
 import CtaBand from "./CtaBand";
 import { EventBanner } from "../event/EventBits";
 import { loadWorlds, type PlayWorld } from "../play/playData";
@@ -205,7 +204,6 @@ export default function GalleryHome({
             ))}
           </div>
         </section>
-        <PlayRunsRow go={go} worlds={worlds} />
         <PlayIntro go={go} worlds={worlds} />
         <IntroReel />
         <section className="wt-gallery-section">
