@@ -526,7 +526,9 @@ public class RegenService {
         if (one.getPaidBy() == null || one.getPaidRef() == null) {
             return 0;
         }
-        return credits.refund(one.getPaidBy(), one.getPaidRef());
+        String ref = one.getPaidRef();
+        return credits.refund(one.getPaidBy(), ref,
+                ref.startsWith("pages:") ? "이어 그리지 못한 장 돌려드림" : "다시 그리지 못한 장 돌려드림");
     }
 
     static final String INTERRUPTED = "서버가 다시 시작되어 그리지 못했어요";
