@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  adminSetBrowseRank, browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, visibilityOf,
+  adminSetBrowseRank, browseRuns, coverUrl, thumbUrl, isMyRun, likedAmong, myAccountRuns, visibilityOf,
   type RunCard,
 } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
@@ -298,7 +298,7 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked, admin, onRank 
       <button type="button" className="wt-works-cover" onClick={() => open()} aria-label={t("{title} 열기", { title: run.title || run.run_id })}>
         {run.cover_page ? (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt={run.title || ""} />
+          <img src={run.thumb ? thumbUrl(run.run_id) : coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt={run.title || ""} />
         ) : (
           <span className="wt-works-nocover" aria-hidden="true" />
         )}
