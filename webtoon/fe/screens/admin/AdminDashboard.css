@@ -77,3 +77,8 @@
 
 /* 캐릭터 상세는 글이 길어서 확인 창보다 넓게 연다 */
 .wt .wt-dialog-box:has(.wt-dash-char) { width: min(880px, calc(100vw - 32px)); max-width: none; }
+
+/* 유입 출처 표 — 칸이 많아 좁은 화면에서는 표만 옆으로 민다 */
+.wt-dash-scroll { overflow-x: auto; }
+.wt-dash-sources { min-width: 640px; }
+.wt-dash-sources td:nth-child(n+5), .wt-dash-sources th:nth-child(n+5) { text-align: right; font-variant-numeric: tabular-nums; }
