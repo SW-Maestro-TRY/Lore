@@ -185,7 +185,7 @@ function Overview() {
               <div className="wt-dash-scroll">
                 <table className="wt-adm-table wt-dash-sources">
                   <thead>
-                    <tr><th>출처</th><th>매체</th><th>캠페인</th><th>소재</th><th>들어온 사람</th><th>만들기 시작</th><th>로그인</th><th>완성</th></tr>
+                    <tr><th>출처</th><th>매체</th><th>캠페인</th><th>소재</th><th>들어온 사람</th><th>행동한 사람</th><th>만들기 시작</th><th>로그인</th><th>완성</th></tr>
                   </thead>
                   <tbody>
                     {sources.map((r) => (
@@ -195,6 +195,7 @@ function Overview() {
                         <td>{r.utmCampaign || "–"}</td>
                         <td>{r.utmContent || "–"}</td>
                         <td>{r.visitors}</td>
+                        <td>{r.engaged}</td>
                         <td>{r.createStarted}</td>
                         <td>{r.loggedIn}</td>
                         <td>{r.makersDone}</td>
