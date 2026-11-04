@@ -928,7 +928,7 @@
 .wt .pl-comic .fs.fork .n { color: var(--pl-coral); }
 .wt .pl-comic .tcs { display: flex; gap: 12px; margin-top: 8px; }
 .wt .pl-comic .tc { flex: 0 1 220px; min-width: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--pl-card2); }
-.wt .pl-comic .tc.me { border-color: var(--pl-coral); }
+.wt .pl-comic .tc.self { border-color: var(--pl-coral); }
 .wt .pl-comic .tc.orig { background: transparent; border-style: dashed; }
 .wt .pl-comic .tc .w { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: #fff; }
 .wt .pl-comic .tc .w i, .wt .pl-comic .faces i { background-size: cover; background-position: center top; width: 24px; height: 24px; flex: 0 0 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background-color: var(--pl-card3); color: var(--pl-apricot); font-size: 10.5px; font-weight: 700; font-style: normal; }
@@ -941,23 +941,26 @@
 .wt .pl-comic .bk.orig { background: transparent; border-style: dashed; }
 .wt .pl-comic .bk .t { display: flex; align-items: center; gap: 8px; }
 .wt .pl-comic .bk .t b { font-size: 14.5px; color: #fff; }
-.wt .pl-comic .bk .chip { padding: 1px 7px; border-radius: 6px; background: #232b38; font-size: 11.5px; font-weight: 700; color: #9aa3b2; }
+.wt .pl-comic .bk .otag { padding: 1px 7px; border-radius: 6px; background: #232b38; font-size: 11.5px; font-weight: 700; color: #9aa3b2; }
 .wt .pl-comic .bk .cnt { margin-left: auto; font-size: 12.5px; color: var(--muted); }
 .wt .pl-comic .bk .bar { height: 5px; margin: 8px 0 9px; overflow: hidden; border-radius: 3px; background: #2a3342; }
 .wt .pl-comic .bk .bar i { display: block; height: 100%; border-radius: 3px; background: var(--pl-coral); }
 .wt .pl-comic .bk.orig .bar i { background: #7d8798; }
 .wt .pl-comic .faces { display: flex; flex-wrap: wrap; gap: 6px; }
 .wt .pl-comic .faces span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px; background: #232b38; font-size: 12.5px; color: #cfd4dc; }
-.wt .pl-comic .faces span.me { outline: 1.5px solid var(--pl-coral); }
+.wt .pl-comic .faces span.self { outline: 1.5px solid var(--pl-coral); }
 .wt .pl-split-sheet { position: fixed; inset: 0; z-index: 85; display: flex; align-items: flex-end; justify-content: center; background: rgba(5, 8, 12, .55); }
 .wt .pl-split-sheet .box { width: 720px; max-width: 100%; padding: 10px 20px 22px; border-radius: 20px 20px 0 0; border: 1px solid var(--line-strong); border-bottom: 0; background: #141a23; }
 .wt .pl-split-sheet .grab { width: 40px; height: 4px; margin: 0 auto 14px; border-radius: 2px; background: #3a4454; }
+.wt .pl-split-sheet .cmp > span { display: block; margin: 0; padding: 0; background: none; border: 0; width: auto; height: auto; text-align: left; }
 .wt .pl-split-sheet .cmp { display: grid; grid-template-columns: 62px 1fr; gap: 7px 12px; font-size: 14px; line-height: 1.55; color: var(--ink); }
 .wt .pl-split-sheet .cmp .k { padding-top: 2px; font-size: 12px; color: var(--dim); }
-.wt .pl-split-sheet .cmp .me { font-weight: 700; color: #fff; }
-.wt .pl-split-sheet .cmp .why { font-size: 13px; color: var(--muted); }
+.wt .pl-split-sheet .cmp .cm-me { font-weight: 700; color: #fff; }
+.wt .pl-split-sheet .cmp .cm-why { font-size: 13px; color: var(--muted); }
 .wt .pl-split-sheet .pl-btn { width: 100%; height: 44px; margin-top: 16px; background: var(--pl-card3); color: #fff !important; }
 @media (max-width: 767px) {
   .wt .pl-comic .tc { flex-basis: 190px; }
   .wt .pl-split-sheet .box { padding: 10px 16px calc(18px + env(safe-area-inset-bottom)); }
 }
+/* 결말 카드 줄이 왼쪽 칸 너비를 밀어내지 않게(폰에서 사건 글이 오른쪽으로 잘리던 것) */
+.wt .pl-modal .cols > .l, .wt .pl-modal .stories-m, .wt .pl-modal .stories-pc, .wt .pl-modal .ends { min-width: 0; }
