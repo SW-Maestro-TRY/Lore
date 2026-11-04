@@ -85,6 +85,15 @@ public class ExampleImporter {
      * @param dryRun 참이면 아무것도 쓰지 않고 심을 수 있는지만 본다
      */
     public Result importBundle(ExampleBundle bundle, boolean dryRun) {
+        return importBundle(bundle, dryRun, true);
+    }
+
+    /**
+     * @param dryRun  참이면 아무것도 쓰지 않고 심을 수 있는지만 본다
+     * @param visible 거짓이면 비공개로 심는다 — 그림도 안 열리는 자리에 올리고, 둘러보기 · 사건 화면에 안 뜬다.
+     *                관리자가 나중에 예시 관리 화면의 공개 스위치로 연다.
+     */
+    public Result importBundle(ExampleBundle bundle, boolean dryRun, boolean visible) {
         ExampleBundle.Manifest m = bundle.manifest();
         String runId = m.runId();
         int pageCount = (int) bundle.pages().stream().map(ExampleBundle.Page::pageNo).distinct().count();
@@ -104,10 +113,10 @@ public class ExampleImporter {
             return new Result(runId, m.title(), Status.EXISTS, pageCount, restored);
         }
 
-        /* 1. 그림을 이 환경의 창고에 올린다. 공개 자리 — 예시는 누구나 본다. */
+        /* 1. 그림을 이 환경의 창고에 올린다. 공개로 심으면 공개 자리, 비공개로 심으면 안 열리는 자리. */
         List<PageStore.Upload> uploads = new ArrayList<>();
         for (ExampleBundle.Page page : bundle.pages()) {
-            String key = art.upload(page.bytes(), "image/jpeg", true);
+            String key = art.upload(page.bytes(), "image/jpeg", visible);
             if (key == null || key.isBlank()) {
                 throw new IllegalStateException("예시 그림을 올리지 못했습니다: " + runId + " p" + page.pageNo());
             }
@@ -150,12 +159,12 @@ public class ExampleImporter {
         }
         ledger.started(jobId, null, SEED_UID);
         ledger.learnedRun(jobId, runId, null);
-        ledger.setPublic(runId, true);
+        ledger.setPublic(runId, visible);
         ledger.markExample(runId, true, null);
 
         /* 4. 맨 마지막 — 「이미 심었다」 표시. */
-        pages.record(runId, uploads, true);
-        log.info("예시 작품을 심었습니다 (run={}, 제목={}, 그림 {}장)", runId, m.title(), uploads.size());
+        pages.record(runId, uploads, visible);
+        log.info("예시 작품을 심었습니다 (run={}, 제목={}, 그림 {}장, 공개={})", runId, m.title(), uploads.size(), visible);
         return new Result(runId, m.title(), Status.PLANTED, pageCount, restored);
     }
 

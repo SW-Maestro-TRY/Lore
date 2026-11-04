@@ -1288,7 +1288,8 @@ export function adminExamples(): Promise<{ examples: AdminExampleRow[] }> {
 
 /** 번들 하나를 올린다. 운영·staging 은 WAF 가 큰 본문을 막으므로 S3 로 직접 올리고 키로 심는다.
  *  S3 로 못 올리면(로컬 창고의 CORS 등) 본문으로 바로 올린다 — 로컬 · dev 는 이 길도 된다. */
-export async function adminImportBundle(file: File, dryRun: boolean): Promise<AdminImportResult> {
+/** visible=false 면 비공개로 심는다(그림도 안 열리는 자리). 나중에 예시 목록의 공개 스위치로 연다. */
+export async function adminImportBundle(file: File, dryRun: boolean, visible = true): Promise<AdminImportResult> {
   let put: Response | null = null;
   let key = "";
   try {
@@ -1299,9 +1300,9 @@ export async function adminImportBundle(file: File, dryRun: boolean): Promise<Ad
     put = null;
   }
   if (put && put.ok) {
-    return post<AdminImportResult>("/admin/examples/import-key", { key, dryRun });
+    return post<AdminImportResult>("/admin/examples/import-key", { key, dryRun, public: visible });
   }
-  return call<AdminImportResult>(`/admin/examples/import?dryRun=${dryRun}`, {
+  return call<AdminImportResult>(`/admin/examples/import?dryRun=${dryRun}&public=${visible}`, {
     method: "POST",
     headers: { "Content-Type": "application/zip" },
     body: file,

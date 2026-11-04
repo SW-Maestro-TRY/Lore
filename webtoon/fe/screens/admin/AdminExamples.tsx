@@ -5,7 +5,7 @@
  *
  * 예시 작품은 저장소에 두지 않고 번들(zip)로 각 환경에 올린다(#614 · #616). 이 화면은 그 관리자 API 의 얼굴이다.
  *
- * - 올리기: 번들 여러 개를 한 번에. 운영·staging 은 CloudFront 앞단 WAF 가 큰 본문을 막아서 S3 로 직접 올리고
+ * - 올리기: 번들 여러 개를 한 번에. 「비공개로 심기」를 켜면 비공개로 심고, 목록의 공개 스위치로 나중에 연다. 운영·staging 은 CloudFront 앞단 WAF 가 큰 본문을 막아서 S3 로 직접 올리고
  *   서버가 키로 읽는다(`adminImportBundle`). 「검사만」을 켜면 아무것도 안 쓰고 심을 수 있는지만 본다.
  * - 목록: 표지 · 제목 · 쪽 · 공개 · 순서 · 번들 내보내기 · 내리기(예시 해제 + 비공개, 작품은 안 지움).
  * - 같은 환경에서 만든 작품은 그림을 옮길 필요 없이 작품 번호로 예시 지정.
@@ -52,6 +52,7 @@ export default function AdminExamples({ go }: { go: Go }) {
   /* ---- 올리기 ---- */
   const [files, setFiles] = useState<File[]>([]);
   const [dryRun, setDryRun] = useState(true);
+  const [hidden, setHidden] = useState(false);
   const [lines, setLines] = useState<UploadLine[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -65,7 +66,7 @@ export default function AdminExamples({ go }: { go: Go }) {
       next[i] = { ...next[i], state: "busy", text: dryRun ? "검사하는 중" : "올리는 중" };
       setLines([...next]);
       try {
-        const got = await adminImportBundle(files[i], dryRun);
+        const got = await adminImportBundle(files[i], dryRun, !hidden);
         next[i] = { ...next[i], state: "ok", text: `${STATUS_TEXT[got.status] ?? got.status} · ${got.title} · ${got.pages}쪽` };
       } catch (e) {
         next[i] = { ...next[i], state: "err", text: e instanceof Error ? e.message : "실패했어요" };
@@ -123,6 +124,10 @@ export default function AdminExamples({ go }: { go: Go }) {
           <label className="wt-adm-check">
             <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
             검사만 하기(아무것도 안 씀)
+          </label>
+          <label className="wt-adm-check">
+            <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
+            비공개로 심기
           </label>
           <button type="button" className="btn btn-p btn-sm" disabled={!files.length || uploading} onClick={() => void upload()}>
             {uploading ? "진행 중…" : dryRun ? `${files.length}개 검사` : `${files.length}개 올리기`}
