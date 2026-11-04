@@ -170,12 +170,19 @@ public class CreditGate {
      *         아니라 돌려줬는지를 말해야 한다
      */
     public int refund(Long userId, String jobId) {
+        return refund(userId, jobId, "만들기를 시작하지 못했습니다");
+    }
+
+    /**
+     * 내역에 남길 한 줄을 지정해서 돌려준다. 장 하나를 못 그려 돌려줄 때 「만들기를 시작하지 못했습니다」로 적히면,
+     * 받은 사람은 무엇을 돌려받았는지 모른다(2026-11-04 문의).
+     */
+    public int refund(Long userId, String jobId, String memo) {
         if (userId == null || jobId == null || jobId.isBlank()) {
             return 0;
         }
         try {
-            return credits.refund(userId, CreditDomain.WEBTOON, jobId,
-                                  "만들기를 시작하지 못했습니다");
+            return credits.refund(userId, CreditDomain.WEBTOON, jobId, memo);
         } catch (RuntimeException e) {
             log.error("크레딧을 못 돌려줬습니다 (user={}, job={})", userId, jobId, e);
             return 0;
