@@ -15,14 +15,14 @@ import org.springframework.stereotype.Component;
 
 /**
  * 세계관 체험 만화가 사건의 원래 전개와 어디서 갈라졌는가(2026-11-04). 하네스가 이야기를 쓴 뒤 따로 읽어
- * 작품 폴더에 {@code branch.json} 으로 남긴다(run.py stage_branch). 결과 화면과 사건의 「캐릭터별 이야기」
- * 카드가 「원래는 … / 이 주인공은 …」으로 보여 준다. 원래 전개가 없던 사건 · 예전 작품은 파일이 없어 {@code null}.
+ * 작품 폴더에 {@code branch.json} 으로 남긴다(run.py stage_branch). 사건 창의 「캐릭터별 결말」 카드, 만화의 갈라진 장 띠
+ * 와 비교, 만화 아래 갈래 묶음이 쓴다. 원래 전개가 없던 사건 · 갈림 정리 전의 옛 작품은 파일이 없어 {@code null}.
  */
 @Component
 public class PlayBranch {
 
     private static final Logger log = LoggerFactory.getLogger(PlayBranch.class);
-    private static final List<String> TEXT = List.of("canon", "this", "why", "end", "label");
+    private static final List<String> TEXT = List.of("canon", "this", "why", "end", "label", "group", "canon_end");
 
     private final HarnessProcess harness;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -45,6 +45,9 @@ public class PlayBranch {
             Map<String, Object> raw = mapper.readValue(file.toFile(), new TypeReference<>() {});
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("at", raw.get("at") instanceof Number n ? n.intValue() : 0);
+            int scene = raw.get("scene") instanceof Number n ? n.intValue() : 0;
+            out.put("scene", scene);
+            out.put("page", scene > 0 ? scene + 1 : 0);      // 체험은 표지(1장)를 안 그려서 장면 n 이 n+1 장이다
             for (String k : TEXT) {
                 out.put(k, raw.get(k) == null ? "" : String.valueOf(raw.get(k)));
             }

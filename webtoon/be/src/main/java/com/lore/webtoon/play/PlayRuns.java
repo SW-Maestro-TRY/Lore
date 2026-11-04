@@ -71,6 +71,30 @@ public class PlayRuns {
     }
 
     /**
+     * 이 사건의 만화들이 이미 묶인 갈래 이름 — 공개 · 비공개 가리지 않고, 많이 묶인 순. 새 체험이 시작될 때 하네스에
+     * 넘겨, 같은 선택을 한 만화가 같은 이름으로 묶이게 한다(갈래 이름일 뿐 작품 내용은 넘기지 않는다).
+     */
+    @Transactional(readOnly = true)
+    public List<String> groupsOf(String eventId) {
+        if (eventId == null || eventId.isBlank()) {
+            return List.of();
+        }
+        List<Map<String, Object>> rows = sql.queryForList("""
+                select w.run_id from webtoon_job j join webtoon_work w on w.job_id = j.public_id
+                 where j.play_event = :e and w.run_id is not null and w.deleted_at is null
+                 order by j.created_at desc limit %d""".formatted(LIMIT),
+                new MapSqlParameterSource().addValue("e", eventId));
+        Map<String, Integer> count = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> b = branches.of(String.valueOf(row.get("run_id")));
+            if (b != null && b.get("group") instanceof String g && !g.isBlank()) {
+                count.merge(g, 1, Integer::sum);
+            }
+        }
+        return count.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue()).map(Map.Entry::getKey).toList();
+    }
+
+    /**
      * 최근 체험 만화 — 공개된 것만, 최근 순. {@code worldId} 를 주면 그 세계 것만. 홈의 「세계관 체험 만화」 칸과
      * 세계 안 사건별 선반이 쓴다(2026-11-04). 일반 둘러보기에는 체험 만화가 안 섞이므로 여기가 그 자리다.
      */
