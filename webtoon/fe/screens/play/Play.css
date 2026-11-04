@@ -831,11 +831,11 @@
 .wt .pl-shelf.has > .pl-eprow .hook { font-size: 13px; line-height: 1.5; -webkit-line-clamp: 2; margin-top: 4px; }
 .wt .pl-shelf-runs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-content: start; }
 .wt .pl-shelf-runs button { display: flex; flex-direction: column; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
-.wt .pl-shelf-runs .run img, .wt .pl-shelf-runs .run .pl-noimg { display: block; width: 100%; aspect-ratio: 4/5; object-fit: cover; object-position: top; border-radius: 10px; background: var(--water); }
+.wt .pl-shelf-runs .run img, .wt .pl-shelf-runs .run .pl-noimg { display: block; width: 100%; aspect-ratio: 4/5; object-fit: cover; object-position: center; border-radius: 10px; background: var(--water); }
 .wt .pl-shelf-runs .run b { display: block; margin-top: 8px; font-size: 13px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; }
 .wt .pl-shelf-runs .run small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--dim); }
 .wt .pl-shelf-runs .run small em { font-style: normal; color: var(--sea); }
-.wt .pl-shelf-runs .mine { justify-content: center; align-items: center; gap: 8px; aspect-ratio: 4/5; border: 1px dashed var(--line-strong); border-radius: 10px; font-size: 13px; }
+.wt .pl-shelf-runs .mine { justify-content: center; align-items: center; gap: 8px; min-height: 100%; border: 1px dashed var(--line-strong); border-radius: 10px; font-size: 13px; }
 .wt .pl-shelf-runs .mine i { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--sea); color: #101c2a; }
 .wt .pl-shelf-runs .mine i svg { width: 16px; height: 16px; }
 @media (max-width: 767px) {
