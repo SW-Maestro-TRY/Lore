@@ -585,3 +585,15 @@ select count(distinct uid) filter (where name = 'page_view' and view = 'sharedCa
 from webtoon_event
 where occurred_at > now() - interval '30 days';
 ```
+
+## 외부 도구 거울 (#966)
+
+웹툰 `track()` 은 우리 표(`webtoon_event`)에 남기면서 같은 이름 · 같은 값을 외부 도구에도 보낸다(`webtoon/fe/lib/mirror.ts`).
+우리 표가 기준이고 외부 도구는 대조용이다.
+
+- GA4 `G-YTH2YN6019` — 루트 레이아웃이 gtag 를 켜는 운영 호스트에서만. 공용 `common/fe/analytics.ts` 거울과 같은 규칙
+- 앰플리튜드 — 빌드 환경변수 `NEXT_PUBLIC_AMPLITUDE_API_KEY` 가 있을 때만. 키를 넣기 전에 개인정보처리방침(제7조 · 제13조)을 먼저 게시한다
+- `navigator.webdriver` 가 참인 자동 브라우저는 어느 쪽에도 안 보낸다
+
+우리 표에는 광고 검토용 자동 접속도 「들어온 사람」으로 남는다(2026-11-04: 광고 게시 직후 광고마다 4~8건, 입력 · 고르기 기록 0).
+관리자 「유입 출처」 표의 「행동한 사람」 칸이 그것을 가른다(`AdminOverview.PASSIVE`).

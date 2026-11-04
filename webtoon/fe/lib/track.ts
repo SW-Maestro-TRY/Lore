@@ -19,6 +19,7 @@
  * 실어서 브라우저 번호(uid)를 본문에 넣는다. */
 import { BASE, getUid } from "./api";
 import { englishOf, knownEnglishOf } from "./i18n";
+import { mirror } from "./mirror";
 
 type Value = string | number | boolean;
 export type Props = Record<string, Value | null | undefined>;
@@ -61,7 +62,9 @@ export function track(name: string, props?: Props): void {
   if (typeof window === "undefined") return;
   try {
     bind();
-    queue.push({ name, ts: Date.now(), view: currentView, props: clean(props) });
+    const cleaned = clean(props);
+    queue.push({ name, ts: Date.now(), view: currentView, props: cleaned });
+    mirror(name, currentView ? { ...cleaned, view: currentView } : cleaned);
     /* ★ 떠나는 중이면 바로 보낸다. pagehide 리스너는 등록 순서대로 불리는데, 이 파일의
        리스너가 화면 것보다 먼저 등록돼 있어서, 화면이 pagehide 에서 남긴 줄(page_leave)은
        이미 큐를 비운 뒤에 들어와 그대로 사라졌다(로컬에서 실제로 그랬다). visibilitychange
