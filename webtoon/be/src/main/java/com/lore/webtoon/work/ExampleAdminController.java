@@ -100,7 +100,8 @@ public class ExampleAdminController {
     @Operation(summary = "번들 올리기(본문)", description = "요청 본문이 번들 zip 이다. dryRun=true 면 검사만 한다. 운영은 upload-url 길을 쓴다.")
     @PostMapping(value = "/import", consumes = {"application/zip", "application/octet-stream"})
     public ExampleImporter.Result importBody(HttpServletRequest request,
-                                             @RequestParam(defaultValue = "false") boolean dryRun) throws IOException {
+                                             @RequestParam(defaultValue = "false") boolean dryRun,
+                                             @RequestParam(name = "public", defaultValue = "true") boolean visible) throws IOException {
         Long me = requireAdmin();
         if (request.getContentLengthLong() > MAX_UPLOAD_BYTES) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
@@ -109,7 +110,7 @@ public class ExampleAdminController {
         Path tmp = Files.createTempFile("example-bundle-", ".zip");
         try {
             copyBounded(request.getInputStream(), tmp, MAX_UPLOAD_BYTES);
-            return run(me, tmp, dryRun, "body");
+            return run(me, tmp, dryRun, visible, "body");
         } finally {
             Files.deleteIfExists(tmp);
         }
@@ -137,7 +138,7 @@ public class ExampleAdminController {
             if (Files.size(tmp) > MAX_UPLOAD_BYTES) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT, "번들이 너무 큽니다");
             }
-            return run(me, tmp, Boolean.TRUE.equals(body.dryRun()), "s3");
+            return run(me, tmp, Boolean.TRUE.equals(body.dryRun()), !Boolean.FALSE.equals(body.visible()), "s3");
         } finally {
             Files.deleteIfExists(tmp);
             try {
@@ -176,11 +177,11 @@ public class ExampleAdminController {
         return admin.takeDown(runId);
     }
 
-    private ExampleImporter.Result run(Long admin, Path zip, boolean dryRun, String via) throws IOException {
+    private ExampleImporter.Result run(Long admin, Path zip, boolean dryRun, boolean visible, String via) throws IOException {
         ExampleBundle bundle = ExampleBundles.fromZip(zip);
-        ExampleImporter.Result result = importer.importBundle(bundle, dryRun);
-        log.info("예시 번들을 올렸습니다 (admin={}, via={}, run={}, 상태={}, dryRun={})",
-                admin, via, result.runId(), result.status(), dryRun);
+        ExampleImporter.Result result = importer.importBundle(bundle, dryRun, visible);
+        log.info("예시 번들을 올렸습니다 (admin={}, via={}, run={}, 상태={}, dryRun={}, 공개={})",
+                admin, via, result.runId(), result.status(), dryRun, visible);
         return result;
     }
 
@@ -201,7 +202,11 @@ public class ExampleAdminController {
     }
 
     /** {@code dryRun} 은 {@code Boolean} 이다 — 새 Jackson 은 기본값 없는 {@code boolean} 칸이 빠진 요청을 거절한다. */
-    public record KeyRequest(String key, Boolean dryRun) {
+    /** @param visible 거짓이면 비공개로 심는다. 안 보내면 공개. */
+    public record KeyRequest(String key, Boolean dryRun, @JsonProperty("public") Boolean visible) {
+        public KeyRequest(String key, Boolean dryRun) {
+            this(key, dryRun, null);
+        }
     }
 
     /** {@code public} 는 자바 예약어라 {@code visible} 로 받는다. */
