@@ -169,11 +169,13 @@ class RegenServiceTest {
         시작("", "surf", null);
         큐를_바로_돌린다();
         assertThat(env.getValue().get("OPENAI_IMAGE_QUALITY")).isEqualTo("medium");
+        assertThat(env.getValue().get("PAGE_IMAGE_MODEL")).isEqualTo("gpt-image-2.5-flare");
 
         org.mockito.Mockito.clearInvocations(runner);
         시작("", null, null);
         큐를_바로_돌린다();
         assertThat(env.getValue().get("OPENAI_IMAGE_QUALITY")).isEqualTo("high");
+        assertThat(env.getValue().get("PAGE_IMAGE_MODEL")).isEqualTo("gpt-image-2");
     }
 
     @Test

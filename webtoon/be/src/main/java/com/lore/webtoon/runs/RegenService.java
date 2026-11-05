@@ -332,6 +332,9 @@ public class RegenService {
             String quality = one.getQuality() == null ? qualityOf(runId) : one.getQuality();
             env.put("OPENAI_IMAGE_QUALITY",
                     com.lore.webtoon.job.WebtoonQuality.harnessValue(quality));
+            env.put("PAGE_IMAGE_MODEL", one.getQuality() == null
+                    ? com.lore.webtoon.job.WebtoonQuality.pageImageModelOf(runner.runDir(runId))
+                    : com.lore.webtoon.job.WebtoonQuality.pageImageModel(quality));
 
             /* 완성본에서 고친 제목은 DB 에만 있다. 넘기지 않으면 표지에 처음 제목을 다시 그린다. */
             stories.chosenOf(runId).map(com.lore.webtoon.story.WebtoonStory::displayTitle)
