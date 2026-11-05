@@ -336,6 +336,12 @@ export default function Wizard({
       .catch(() => { if (active) setAllowError(t("크레딧 정보를 불러오지 못했어요. 다시 확인해 주세요.")); });
     return () => { active = false; };
   }, [step, lastStep, allowRetry, authenticated, t]);
+  useEffect(() => {
+    const remaining = Date.parse("2026-11-15T15:00:00Z") - Date.now();
+    if (remaining <= 0) return;
+    const timer = window.setTimeout(() => setAllowRetry(n => n + 1), remaining + 100);
+    return () => window.clearTimeout(timer);
+  }, []);
   const creditsOf = (key: WizardQuality) => {
     const q = allow?.qualities?.find((x) => x.key === key);
     if (q) return q.credits;
@@ -428,13 +434,12 @@ export default function Wizard({
       {QUALITY_INFO.map((q) => {
         const c = creditsOf(q.key);
         const regular = allow?.qualities?.find((x) => x.key === q.key)?.regular_credits;
-        const sale = q.key === "swell" ? "파격 세일" : "세일";
         return (
           <button key={q.key} type="button" className={`wt-wiz-q${form.quality === q.key ? " on" : ""}`}
                   onClick={() => patch({ quality: q.key })}>
             {samples && <div className="wt-wiz-q-art">
               <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />
-              {c != null && regular != null && regular > c && <span className={`wt-wiz-q-sticker wt-wiz-q-sticker-${q.key}`}><span>{t(sale)}</span><b>{c}C</b></span>}
+              {c != null && regular != null && regular > c && <span className={`wt-wiz-q-sticker wt-wiz-q-sticker-${q.key}`}><span>{t("오픈 세일중")}</span><b>11.06 ~ 11.15</b></span>}
             </div>}
             {samples && <small className="wt-wiz-q-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <div className="row">

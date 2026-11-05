@@ -3,6 +3,9 @@ package com.lore.webtoon.job;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Map;
 
 /**
@@ -75,7 +78,7 @@ public final class WebtoonQuality {
      * 2,351원에 약 1,150원(결제액의 28%)이 남아, 가입 크레딧으로 나가는 첫 무료 한 편을 회수하려면 한 사람당
      * 약 8,300원을 받아야 했다. 20(5,400원)이면 약 2,320원(43%)이 남고 그 금액이 약 5,500원으로 내려간다.
      *
-     * 2026-11-06 오픈 세일은 파도 15, 너울 20. 위 계산은 할인 전 가격의 과거 근거다.
+     * 2026-11-06~15 오픈 세일은 파도 15, 너울 20. 위 계산은 할인 전 가격의 과거 근거다.
      * (크레딧 숫자 자체는 아직 검증 전 목업이다. 대외에 판매가로 말하지 않는다.)
      */
     private static final Map<String, Integer> CREDITS = Map.of(
@@ -83,10 +86,15 @@ public final class WebtoonQuality {
             "surf",  15,
             "swell", 20);
 
-    /** 오픈 세일 전 가격. 화면의 취소선 표시용이며 차감에는 쓰지 않는다. */
+    /** 오픈 세일 전 가격. 세일 기간 뒤에는 실제 차감에도 쓴다. */
     private static final Map<String, Integer> REGULAR_CREDITS = Map.of(
             "surf", 20,
             "swell", 30);
+
+    /** 2026 오픈 세일 기간. 종료일은 한국 시간 11월 15일 하루를 포함한다. */
+    private static final ZoneId SALE_ZONE = ZoneId.of("Asia/Seoul");
+    private static final LocalDate SALE_START = LocalDate.of(2026, 11, 6);
+    private static final LocalDate SALE_END_EXCLUSIVE = LocalDate.of(2026, 11, 16);
 
     /**
      * 편집실에서 한 장을 다시 그리는 크레딧. 작품을 만든 화질을 따른다(#787).
@@ -191,7 +199,20 @@ public final class WebtoonQuality {
 
     /** 이 화질로 한 편 만들 때 드는 크레딧. */
     public static int creditsOf(String key) {
-        return CREDITS.getOrDefault(normalize(key), CREDITS.get(DEFAULT_QUALITY));
+        return creditsOfAt(key, Instant.now());
+    }
+
+    static int creditsOfAt(String key, Instant now) {
+        String quality = normalize(key);
+        if (!saleActiveAt(now) && REGULAR_CREDITS.containsKey(quality)) {
+            return REGULAR_CREDITS.get(quality);
+        }
+        return CREDITS.getOrDefault(quality, CREDITS.get(DEFAULT_QUALITY));
+    }
+
+    static boolean saleActiveAt(Instant now) {
+        LocalDate date = now.atZone(SALE_ZONE).toLocalDate();
+        return !date.isBefore(SALE_START) && date.isBefore(SALE_END_EXCLUSIVE);
     }
 
     public static int playCreditsOf(String key) {
@@ -223,11 +244,12 @@ public final class WebtoonQuality {
 
     /** 화면이 고르개를 그릴 때 쓰는 목록. 순서가 곧 화면 순서다. */
     public static java.util.List<Map<String, Object>> choices() {
+        Instant now = Instant.now();
         return java.util.List.of("surf", "swell").stream()
                 .map(k -> Map.<String, Object>of(
                         "key", k,
                         "label", labelOf(k),
-                        "credits", creditsOf(k),
+                        "credits", creditsOfAt(k, now),
                         "regular_credits", REGULAR_CREDITS.get(k),
                         "base_pages", BASE_PAGES,
                         "extra_page_credits", extraPageCreditsOf(k)))

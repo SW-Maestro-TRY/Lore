@@ -304,6 +304,12 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
       .catch(() => { if (active) setAllowError(true); });
     return () => { active = false; };
   }, [authenticated, allowRetry]);
+  useEffect(() => {
+    const remaining = Date.parse("2026-11-15T15:00:00Z") - Date.now();
+    if (remaining <= 0) return;
+    const timer = window.setTimeout(() => setAllowRetry(n => n + 1), remaining + 100);
+    return () => window.clearTimeout(timer);
+  }, []);
   const choice = allow?.qualities?.find((q) => q.key === quality);
   const previews = qualitySamples();
   const blocked = !!allow?.blocked || (!allow?.logged_in && allow?.free_left != null && allow.free_left <= 0)
@@ -423,14 +429,15 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
         <div className="choices">{QUALITY_INFO.map((q) => {
           const price = allow?.qualities?.find((x) => x.key === q.key);
           const cost = price?.credits;
-          const sale = q.key === "swell" ? "파격 세일" : "세일";
+          const regular = price?.regular_credits;
+          const onSale = regular != null && cost != null && regular > cost;
           return <button key={q.key} type="button" className={quality === q.key ? "on" : ""}
             aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
-            {allow?.logged_in && price?.regular_credits != null && cost != null && <span className={`sale-mark sale-mark-${q.key}`}><span>{t(sale)}</span><b>{cost}C</b></span>}
+            {allow?.logged_in && onSale && <span className={`sale-mark sale-mark-${q.key}`}><span>{t("오픈 세일중")}</span><b>11.06 ~ 11.15</b></span>}
             {previews && <img src={previews[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />}
             {previews && <small className="sample-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
-            <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : <>{price?.regular_credits != null && <del>{t("{n}크레딧", { n: price.regular_credits })}</del>}{t("{n}크레딧", { n: cost })}</> : t("오늘 무료 생성")}</em>
+            <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : <>{onSale && regular != null && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: cost })}</> : t("오늘 무료 생성")}</em>
           </button>;
         })}</div>
         {allow?.logged_in && choice && <small>{t("보유 {n}크레딧", { n: allow.balance ?? 0 })}</small>}
