@@ -51,8 +51,8 @@ class CoProtagonistChargeTest {
         var playForm = new JobService.CreateRequest("하윤","정비공","","","frost",null,null,null,true,true,
                 "uid","first",null,"surf","ko","quick","","","",null,null,true);
         controller.createPlay(new MockHttpServletRequest(), playForm);
-        verify(credits).whyBlocked(7L, 10);
-        verify(credits).charge(7L, 10, "job-1", "세계관 사건 · 파도");
+        verify(credits).whyBlocked(7L, 15);
+        verify(credits).charge(7L, 15, "job-1", "세계관 사건 · 파도");
 
         clearInvocations(credits, jobs);
         controller.create(new MockHttpServletRequest(), playForm);

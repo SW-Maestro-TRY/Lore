@@ -61,10 +61,10 @@ class WebtoonQualityTest {
         assertThat(WebtoonQuality.creditsOf("wave")).isEqualTo(20);
         assertThat(WebtoonQuality.creditsOf("surf")).isEqualTo(20);
         assertThat(WebtoonQuality.creditsOf("swell")).isEqualTo(30);
-        assertThat(WebtoonQuality.playCreditsOf("surf")).isEqualTo(10);
-        assertThat(WebtoonQuality.playCreditsOf("swell")).isEqualTo(20);
+        assertThat(WebtoonQuality.playCreditsOf("surf")).isEqualTo(15);
+        assertThat(WebtoonQuality.playCreditsOf("swell")).isEqualTo(25);
         assertThat(WebtoonQuality.playChoices()).extracting(m -> m.get("credits"))
-                .containsExactly(10, 20);
+                .containsExactly(15, 25);
         assertThat(WebtoonQuality.playChoices()).extracting(m -> m.get("regular_credits"))
                 .containsExactly(20, 30);
     }
