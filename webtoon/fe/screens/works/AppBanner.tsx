@@ -18,10 +18,10 @@ import "./AppBanner.css";
 type Part = "home" | "read" | "app";
 interface Pose { x: number; y: number; rx: number; ry: number; rz: number; s: number; p: number }
 /** x 는 폰 칸 가운데에서 왼쪽 끝까지(px), y 는 위에서(px). 폰은 216×448 로 그려 s 로 줄인다. p 는 원근 거리. */
-const POSE: Record<Part, Pose> = {
-  home: { x: -175, y: -76, rx: 10, ry: 24, rz: -18, s: 0.6, p: 900 },
-  read: { x: -40, y: -62, rx: 10, ry: -28, rz: 16, s: 0.56, p: 900 },
-  app: { x: -30, y: 112, rx: 0, ry: 18, rz: -8, s: 1, p: 700 },
+const POSE: Record<Part, Pose> = { // 2026-11-06 조정 모드에서 직접 맞춘 값
+  home: { x: -205, y: -44, rx: 10, ry: 24, rz: -22, s: 0.85, p: 810 },
+  read: { x: -46, y: -44, rx: 10, ry: -28, rz: 14, s: 0.8, p: 810 },
+  app: { x: -43, y: 104, rx: 0, ry: 18, rz: 1, s: 1.11, p: 700 },
 };
 const styleOf = (q: Pose): CSSProperties => ({
   left: `calc(50% + ${q.x}px)`, top: q.y,
