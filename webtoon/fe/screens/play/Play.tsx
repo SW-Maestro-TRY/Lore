@@ -433,17 +433,13 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
           const onSale = regular != null && cost != null && regular > cost;
           return <button key={q.key} type="button" className={quality === q.key ? "on" : ""}
             aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
-            {allow?.logged_in && onSale && <span className={`sale-mark sale-mark-${q.key}`}><span>{t("오픈 세일중")}</span><b>11.06 ~ 11.15</b></span>}
             {previews && <img src={previews[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />}
             {previews && <small className="sample-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
             <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : <>{onSale && regular != null && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: cost })}</> : t("오늘 무료 생성")}</em>
+            {allow?.logged_in && onSale && <small className="sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
           </button>;
         })}</div>
-        {allow?.logged_in && choice && <small>{t("보유 {n}크레딧", { n: allow.balance ?? 0 })}</small>}
-        {!allow?.logged_in && allow?.free_left != null && <small>{t("오늘 무료 {n}편 남음", { n: allow.free_left })}</small>}
-        {allow?.logged_in && choice?.base_pages && choice.extra_page_credits && <small>{t("{base}장까지 포함 · 추가 장면은 장당 {per}크레딧", { base: choice.base_pages, per: choice.extra_page_credits })}</small>}
-        {!allow?.logged_in && choice?.base_pages && <small>{t("무료 생성은 {base}장까지예요.", { base: choice.base_pages })}</small>}
         {allowError && <small role="alert">{t("크레딧 정보를 불러오지 못했어요.")} <button type="button" onClick={() => setAllowRetry((n) => n + 1)}>{t("다시 확인")}</button></small>}
         {blocked && <small role="alert">{allow?.blocked || (allow?.logged_in ? t("크레딧이 부족해요.") : t("오늘 무료 횟수를 모두 사용했어요."))}</small>}
       </div>}
