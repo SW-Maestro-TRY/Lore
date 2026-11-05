@@ -8,7 +8,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@common/auth/useAuth";
 import { joinAppWaitlist } from "../lib/api";
-import { registerDict, useT } from "../lib/i18n";
+import { registerDict, useLang, useT } from "../lib/i18n";
 import { canInstall, isIos, onInstallChange, promptInstall } from "../lib/push";
 import { track } from "../lib/track";
 import { Dialog } from "./Dialog";
@@ -50,6 +50,7 @@ function iosMajorMinor(): [number, number] | null {
 
 export default function AppInstallDialog({ device: initial, where, onClose }: { device: AppDevice; where: string; onClose: () => void }) {
   const t = useT();
+  const { lang } = useLang();
   const { user } = useAuth();
   const [email, setEmail] = useState("");
   const [err, setErr] = useState(false);
@@ -74,7 +75,7 @@ export default function AppInstallDialog({ device: initial, where, onClose }: { 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { setErr(true); return; }
     setErr(false); setBusy(true);
     try {
-      await joinAppWaitlist(v, where);
+      await joinAppWaitlist(v, where, device, lang);
       track("app_waitlist_join", { where, device, logged_in: !!user });
       setDone(v);
     } catch {

@@ -115,6 +115,11 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Query("delete from PushSubscription s where s.userId = :userId")
     int deletePushSubscriptions(@Param("userId") Long userId);
 
+    /** 앱 출시 알림 신청(#981) — 이메일이 들어 있다. */
+    @Modifying
+    @Query("delete from AppWaitlist w where w.userId = :userId")
+    int deleteAppWaitlist(@Param("userId") Long userId);
+
     /** 「출석으로 모아서 다음 화 만들기」 알림(2026-11-03). */
     @Modifying
     @Query("delete from AttendRemind r where r.userId = :userId")
