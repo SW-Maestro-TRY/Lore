@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,6 +57,31 @@ class UsageMetaFileTest {
         assertThat(rows).extracting(UsageRecord::getCachedTokens).containsExactly(64L, 0L);
         assertThat(rows).extracting(UsageRecord::getStage).containsExactly("SHEET", "SHEET_IMAGE");
         assertThat(rows.get(0).getCalledAt()).isEqualTo(Instant.parse("2026-09-26T04:20:32Z"));
+    }
+
+    @Test
+    @DisplayName("이미지 호출은 usage가 null이어도 cost의 실제 토큰을 장부에 쌓는다")
+    void 이미지_토큰을_쌓는다() throws Exception {
+        Files.writeString(dir.resolve("meta.json"), """
+                {"run_id":"rabbit","calls":[
+                  {"stage":"PAGE_IMAGE","provider":"openai","model":"gpt-image-2.5-flare",
+                   "at":"2026-11-05T12:00:00+09:00","usage":null,
+                   "cost":{"tokens_in":11913,"tokens_out":343,"tokens_cached":128,
+                           "total":0.079071,"total_krw":111,"cost_basis":"tokens"}}
+                ]} """);
+        when(repo.existsByRunIdAndSeq(anyString(), anyInt())).thenReturn(false);
+
+        assertThat(service.ingestMetaFile("rabbit", dir.resolve("meta.json"))).isEqualTo(1);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<UsageRecord>> got = ArgumentCaptor.forClass(List.class);
+        verify(repo).saveAll(got.capture());
+        UsageRecord row = got.getValue().get(0);
+        assertThat(ReflectionTestUtils.getField(row, "inputTokens")).isEqualTo(11913L);
+        assertThat(ReflectionTestUtils.getField(row, "outputTokens")).isEqualTo(343L);
+        assertThat(row.getCachedTokens()).isEqualTo(128);
+        assertThat(row.getCostUsd()).isEqualTo(0.079071);
+        assertThat(ReflectionTestUtils.getField(row, "costBasis")).isEqualTo("tokens");
     }
 
     @Test

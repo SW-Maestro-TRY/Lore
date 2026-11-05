@@ -11,6 +11,7 @@ import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconEdit, IconMenu } from "../../ui/Icons";
 import ShareMenu from "../result/ShareMenu";
+import AuthModal from "@common/auth/AuthModal";
 import "./i18n";
 import "./Editor.css";
 import "./EditorFinal.css";
@@ -55,6 +56,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
   /* 양쪽 단 폭(#548) — 경계를 끌어 넓히고 좁힌다. 두 번 누르면 기본 폭. 이 기기에 기억한다. */
   const SIDE_DEFAULT = { left: 260, right: 260 };
   const [sideW, setSideW] = useState(SIDE_DEFAULT);
+  const [authOpen, setAuthOpen] = useState(false);
   useEffect(() => {
     try {
       const got = JSON.parse(localStorage.getItem("lore_editor_sides") || "null");
@@ -183,11 +185,12 @@ export default function Editor({ runId, go, authStatus = "loading" }:
     return (
       <div className="wt-wrap wt-page wt-ed-gate">
         <h2>{t("편집실은 로그인하고 쓸 수 있어요")}</h2>
-        <p className="muted">{t("로그인하면 이 브라우저로 만든 작품도 그대로 따라옵니다. 위쪽 로그인 단추를 눌러 주세요.")}</p>
+        <p className="muted">{t("로그인하면 이 브라우저로 만든 작품도 그대로 따라옵니다.")}</p>
         <div className="wt-ed-gate-acts">
           <button type="button" className="btn btn-w" onClick={() => go("result", { run: runId })}>{t("완성본 보기")}</button>
-          <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
+          <button type="button" className="btn btn-p" onClick={() => setAuthOpen(true)}>{t("로그인")}</button>
         </div>
+        <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
       </div>
     );
   }

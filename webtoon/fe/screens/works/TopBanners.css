@@ -1,0 +1,13 @@
+.wt .wt-topb { position: relative; margin: 4px 0 24px; }
+.wt .wt-topb-track { display: grid; }
+.wt .wt-topb-slide { grid-area: 1 / 1; opacity: 0; visibility: hidden; transition: opacity .45s ease, visibility 0s linear .45s; }
+.wt .wt-topb-slide.on { opacity: 1; visibility: visible; transition: opacity .45s ease; }
+.wt .wt-topb-slide > * { height: 100%; }
+.wt .wt-topb .wt-featured { margin: 0; }
+.wt .wt-topb-dots { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 6px; z-index: 3; }
+.wt .wt-topb-dots button { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 4px; background: rgba(242, 245, 248, .35); cursor: pointer; transition: width .2s; }
+.wt .wt-topb-dots button.on { width: 20px; background: #f2f5f8; }
+@media (max-width: 767px) { .wt .wt-topb { margin: 0 0 18px; } }
+@media (prefers-reduced-motion: reduce) { .wt .wt-topb-slide, .wt .wt-topb-slide.on { transition: none; } }
+/* 앱 띠가 더 높아 대표작 띠도 같은 높이로 늘어난다 — 그림이 칸을 채우게 */
+@media (min-width: 768px) { .wt .wt-topb .wt-featured-art { max-height: 300px; } }

@@ -1,0 +1,7 @@
+.wt .wt-dialog-box.wt-install-invite { width: min(400px, 100%); }
+.wt .wt-install-invite .wt-dialog-heading { margin-bottom: 14px; }
+.wt .wt-install-invite .wt-dialog-heading h2 { font-size: 19px; word-break: keep-all; }
+.wt .wt-install-invite-body { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 12px; }
+.wt .wt-install-invite-body img { flex: none; width: 48px; height: 48px; border-radius: 12px; }
+.wt .wt-install-invite-body p { margin: 0; font-size: 15px; line-height: 1.5; font-weight: 600; word-break: keep-all; }
+.wt .wt-install-invite .wt-dialog-actions { margin-top: 14px; }

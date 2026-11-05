@@ -421,6 +421,7 @@ const dict: Dict = {
   },
   "바로 웹툰을 만들고 싶어요": { en: "I want to make a webtoon right away", ja: "すぐウェブトゥーンを作りたい", zh: "我想直接做漫画" },
   "남은 무료 {n}": { en: "{n} free left", ja: "無料残り {n}", zh: "剩余免费 {n}" },
+  "무료": { en: "Free", ja: "無料", zh: "免费" },
   "내가 가진 캐릭터, 최애, 이미지, 설정으로 바로 웹툰을 만들어요.": {
     en: "Start from a character you already have: a fave, an image, or a bit of lore.",
     ja: "手持ちのキャラクター、推し、画像、設定から、すぐにウェブトゥーンを作ります。",

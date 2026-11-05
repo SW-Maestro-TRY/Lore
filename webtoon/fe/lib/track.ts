@@ -508,6 +508,10 @@ export function screenProps(): Props {
   }
 }
 
+function onAppInstalled(): void {
+  track("app_installed", { where: "webtoon", kind: "browser" });
+}
+
 /** 웹툰 화면이 떠 있는 동안 자동 기록을 켠다. 돌려준 함수로 끈다. */
 export function installAutoTrack(): () => void {
   if (typeof window === "undefined") return () => {};
@@ -526,6 +530,15 @@ export function installAutoTrack(): () => void {
        page_leave 가 찍힌 뒤에야 불려 뒤로 가기가 직전 클릭으로 잘못 찍혔다(로컬에서 실제로). */
     window.addEventListener("popstate", onHistory, true);
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("appinstalled", onAppInstalled);
+    try {
+      const standalone = window.matchMedia?.("(display-mode: standalone)").matches
+        || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+      if (standalone && !sessionStorage.getItem("lore_app_standalone_open")) {
+        sessionStorage.setItem("lore_app_standalone_open", "1");
+        track("app_open_standalone", { where: "webtoon" });
+      }
+    } catch { /* 저장소가 막혀도 다른 행동 기록은 계속한다 */ }
     observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true,
       attributeFilter: ["hidden", "class", "style"] });
     wrapFetch();
@@ -545,6 +558,7 @@ export function installAutoTrack(): () => void {
     window.removeEventListener("unhandledrejection", onRejection);
     window.removeEventListener("popstate", onHistory, true);
     window.removeEventListener("scroll", onScroll);
+    window.removeEventListener("appinstalled", onAppInstalled);
     observer.disconnect();
     if (realFetch) {
       window.fetch = realFetch;

@@ -298,6 +298,9 @@ group by 1 order by 1;
 | **`remix_cta_click`** | 남의 작품 완성본에서 만들기로 넘어가는 단추(#669, #750) | `where`: end_card(마지막 장 아래 바다색 영역) · link_bar(UTM 을 달고 바로 들어온 사람에게만 뜨는 제목 아래 줄) · next_note(「다음화 보기」 준비 중 창), `source`(보던 작품 run), `logged_in`, `free_left`(게스트 남은 무료 편수) |
 | `quick_character_saved` | 빠른 시작(광고 랜딩 → `quick=1`)에서 이름·설명만 적고 「다음」을 눌러 캐릭터가 저장됨(2026-10-27). 그림은 첫 작품의 시트로 채워진다 | `character`, `logged_in` |
 | `read_end` | 완성본을 끝까지 내림 (작품당 한 번) | `run`, `mine`, `ep`, `page` |
+| `play_leave` | 세계관 체험 안의 한 칸(worlds · world · event · char · making · done · stories)을 떠남 — 그 칸에 머문 시간. 다음 칸으로 옮기면 how=move, 창을 닫으면 close | `where`, `world`, `event`, `ms`, `how` |
+| `app_banner_view` · `app_banner_click` · `app_install_dialog_view` · `app_waitlist_join` · `app_install_guide` · `app_install_prompt` | 둘러보기 맨 위 앱 설치 띠(#981) — 띠가 처음 보임(한 화면에 한 번) · 띠를 누름(`where`: banner 는 띠 아무 곳, button 은 Android·iPhone 단추) · 출시 알림 창이 열림 · 이메일 신청 · 창 안 기기 탭 바꿈 · 안드로이드 「바로 추가하기」 | `where`, `device`(ios · android), `logged_in` |
+| `signup_offer_view` · `signup_offer_click` · `signup_offer_dismiss` | 오늘 무료 몫을 다 쓴 비회원이 가입 안내를 봄 · 가입/로그인을 누름 · 닫음. 완독 때는 작품당 한 번, 만들기 단추를 누르면 매번 | `where`: result_read_end · reading_end · end_card · link_bar 등 단추 자리, `run` |
 | `share_click` | 완성본 공유 | `target`: native · menu · kakao · x · line · postype · copy |
 | `download_click` · `download_per_page_open` | 내려받기 | `kind`: episode · page, `page` |
 | `editor_open` · `sibling_open` | 편집실 · 같은 캐릭터의 다른 편 | `run` |
@@ -325,12 +328,34 @@ group by 1 order by 1;
 | `play_char_mine` · `play_char_new` | 캐릭터 고르기에서 「+ 내 캐릭터」를 누름 · 「새 캐릭터 만들기」로 감 | `world`, `event`, `count`(내 캐릭터 수), `where`: list · tiles, `logged_in` |
 | `play_start` · `play_started` · `play_failed` | 「○○ 넣기」를 누름 · 서버가 받음 · 못 받음. 체험 한 판의 실제 결과는 `webtoon_job` 이 정본 | `world`, `event`, `kind`: example(세계가 정한 예시) · example_person(사건 자료의 예시 주인공) · builtin · mine, `character`(id 가 기호일 때만), `job`, `status`(HTTP), `reason`: credit_short · other, `logged_in` |
 | `play_job_status` · `play_cancel` | 만드는 화면이 끝(done · error)을 봄 · 만들기 중단 | `world`, `event`, `job`, `run`, `status`(중단은 그때 단계 story · art · review) |
+| `install_invite_shown` | 일반 웹툰·세계관 체험 생성 중 설치 안내가 5초 뒤 실제로 뜸. 한 탭 세션에 한 번 | `where`: progress · play, `job` |
+| `install_invite_click` | 안내의 주요 단추를 누름 | `where`, `job`, `kind`: prompt(브라우저 설치 창) · guide(수동 안내) |
+| `install_guide_view` · `install_invite_dismissed` | 수동 추가 방법을 봄 · 안내를 닫음 | `where`, `job`, `kind`: ios · mobile · desktop(방법) / invite · guide(닫은 위치) |
+| `install_prompt_choice` | 브라우저 설치 창에서 선택. 수락은 설치 완료를 뜻하지 않음 | `where`, `job`, `result`: accepted · dismissed |
+| `app_installed` | 브라우저의 `appinstalled` 이벤트가 발생함. 해당 이벤트를 지원하는 브라우저의 설치 확인 | `where`: webtoon, `kind`: browser |
+| `app_open_standalone` | 설치형 창에서 웹툰을 엶. 탭 세션당 한 번. iOS 등에서 설치 사용의 간접 신호 | `where`: webtoon |
 | `play_next` | 만화 아래에서 다음으로 감 | `where`: next_event · same_world · other_world · other_run, `world`, `event`, `run` |
 | `world_new_step` | 세계관 만들기 걸음을 엶(처음 들어올 때 포함) | `step`, `count`(전체 걸음 수 — PC 2 · 폰 3), `mode`: new · edit |
 | `world_part_add` | 세계에 표지 · 등장인물 · 사건을 새로 넣음 | `kind`: cover · cast · event, `count`(넣은 뒤 수) |
 | `world_ai_fill` · `world_book_import` | 「AI로 채우기」(지금은 닫혀 있어 `result=closed`) · 설정집 가져오기 | `result`: closed · start · done · error, `status`, `count`(설정집 수) |
 | `world_publish` · `world_published` · `world_publish_failed` | 「세계관 올리기」를 누름 · 올라감 · 못 올림 | `mode`, `count`(사건 수), `n`(등장인물 수), `has_photo`(표지), `result`: public · private, `logged_in`, `world`, `kind`: server · local(서버 길이 없어 이 브라우저에만), `status`, `reason`: need_login · other |
 | `world_login_click` | 올리기가 로그인으로 막힌 뒤 뜬 「로그인」 단추를 누름. 막힌 순간엔 `login_prompt`(`where`: world_publish)도 남는다 | `where`: world_publish |
+
+### 홈 화면 추가 안내 집계
+
+`app_installed`는 브라우저가 설치 완료를 알려 준 건수만 셉니다. iOS의 수동 추가 완료는
+브라우저가 알려 주지 않아 정확히 셀 수 없고, `app_open_standalone`은 설치형 창에서
+웹툰을 실제로 연 브라우저 수로 따로 봅니다. `install_invite_click`이나
+`install_prompt_choice(result=accepted)`를 설치 완료로 합산하지 않습니다.
+
+```sql
+select name, count(*) as events, count(distinct uid) as browsers
+from webtoon_event
+where name in ('install_invite_shown', 'install_invite_click',
+  'install_prompt_choice', 'app_installed', 'app_open_standalone')
+  and occurred_at >= now() - interval '7 days'
+group by name order by name;
+```
 
 ### 자동 기록 (`lib/track.ts` 「자동 기록」)
 

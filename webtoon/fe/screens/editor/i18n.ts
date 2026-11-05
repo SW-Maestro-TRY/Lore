@@ -196,6 +196,8 @@ const dict: Dict = {
   "위 <b>작품</b>에서 다른 작품을 골라 보세요.": { en: "Pick another work from <b>Works</b> above.", ja: "上の<b>作品</b>から別の作品を選んでください。", zh: "请在上方的<b>作品</b>中选择其他作品。" },
   "편집실은 로그인하고 쓸 수 있어요": { en: "Sign in to use the editor", ja: "編集室はログインしてから使えます", zh: "登录后才能使用编辑室" },
   "로그인하면 이 브라우저로 만든 작품도 그대로 따라옵니다. 위쪽 로그인 단추를 눌러 주세요.": { en: "Signing in brings over what you made in this browser. Use the sign-in button above.", ja: "ログインすると、このブラウザで作った作品もそのまま引き継がれます。上のログインボタンを押してください。", zh: "登录后，你在这个浏览器里创作的作品也会一起带过来。请点击上方的登录按钮。" },
+  "로그인하면 이 브라우저로 만든 작품도 그대로 따라옵니다.": { en: "Signing in brings over what you made in this browser.", ja: "ログインすると、このブラウザで作った作品もそのまま引き継がれます。", zh: "登录后，你在这个浏览器里创作的作品也会一起带过来。" },
+  "로그인": { en: "Log in", ja: "ログイン", zh: "登录" },
   "완성본 보기": { en: "View the finished episode", ja: "完成版を見る", zh: "查看成品" },
   "둘러보기": { en: "Browse", ja: "見てまわる", zh: "浏览" },
   "내역을 불러오지 못했습니다.": { en: "Couldn't load the history.", ja: "履歴を読み込めませんでした。", zh: "无法加载记录。" },

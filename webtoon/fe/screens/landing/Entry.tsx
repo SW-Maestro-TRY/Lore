@@ -24,16 +24,19 @@ const COVER_B = "/static/entry/character.jpg";
 const FALLBACK_A = "/static/samples/onboarding-page.jpg";
 const FALLBACK_B = "/static/samples/ex-romance-2.jpg";
 
-export default function Entry({ go }: { go: Go; authenticated?: boolean }) {
+export default function Entry({ go, authenticated = false }: { go: Go; authenticated?: boolean }) {
   const t = useT();
   const phone = usePhone();
   /* 카드마다 남은 무료 횟수 — 왼쪽 카드는 웹툰 만들기(허용량), 오른쪽 카드는
      캐릭터 만들기(캐릭터 목록)가 각자 다른 자원이라 API 도 둘로 나뉜다. */
   const [createFree, setCreateFree] = useState<number | null>(null);
+  const [createChecked, setCreateChecked] = useState(false);
   const [charFree, setCharFree] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
-    api.readAllowance().then((a) => { if (alive) setCreateFree(a.free_left ?? null); }).catch(() => {});
+    api.readAllowance().then((a) => { if (alive) setCreateFree(a.blocked ? 0 : a.free_left ?? null); })
+      .catch(() => { if (alive) setCreateFree(null); })
+      .finally(() => { if (alive) setCreateChecked(true); });
     api.listCharacters().then((r) => { if (alive) setCharFree(r.free_left ?? null); }).catch(() => {});
     return () => { alive = false; };
   }, []);
@@ -54,7 +57,8 @@ export default function Entry({ go }: { go: Go; authenticated?: boolean }) {
         <a href={hrefOf("create", { step: 1 })} className="wt-entry-card on" onClick={to(() => { track("entry_pick", { pick: "webtoon" }); go("create", { step: 1 }); })}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="wt-entry-bg" src={phone ? COVER_A_PHONE : COVER_A} alt="" onError={onImgError(FALLBACK_A)} />
-          {createFree != null && <span className="wt-entry-free">{t("남은 무료 {n}", { n: createFree })}</span>}
+          {!authenticated && (!createChecked || (createFree != null && createFree > 0)) &&
+            <span className="wt-entry-free">{t("무료")}</span>}
           <div className="wt-entry-body">
             <span className="wt-entry-big">{t("웹툰 만들기")}</span>
             <span className="wt-entry-desc">{t("캐릭터와 스토리로 웹툰 1화를 생성해보아요")}</span>

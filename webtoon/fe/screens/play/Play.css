@@ -114,6 +114,30 @@
 .wt .pl-many .ed { border: 1px solid var(--line-strong); background: none; }
 .wt .pl-many .add > i { width: 44px; height: 44px; border-radius: 50%; background: var(--water); display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .wt .pl-many .add svg { width: 20px; height: 20px; }
+.wt .pl-quality { width: min(100%, 560px); margin-top: 24px; text-align: left; }
+.wt .pl-quality > b { display: block; margin-bottom: 10px; font-size: 15px; color: #fff; }
+.wt .pl-quality .choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.wt .pl-quality .choices .choice { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--card); color: #fff; text-align: left; }
+.wt .pl-quality .choices .choice.on { border-color: var(--pl-coral); background: var(--pl-card3); }
+.wt .pl-quality .choices .preview { position: relative; width: 100%; align-self: center; padding: 0; border: 0; border-radius: 7px; background: none; cursor: zoom-in; }
+.wt .pl-quality .choices .preview img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 7px; background: #fff; }
+.wt .pl-quality .choices .preview .zoom { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: rgba(5, 14, 27, .78); color: #fff; }
+.wt .pl-quality .choices .pick { display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.wt .pl-quality .choices .preview:focus-visible, .wt .pl-quality .choices .pick:focus-visible { outline: 2px solid var(--pl-mint); outline-offset: 3px; }
+.wt .pl-quality .choices .sample-style { align-self: center; margin: 0 0 4px; color: var(--muted); font-size: 12px; }
+@media (max-width: 767px) {
+  .wt .pl-quality .choices button > span { font-size: 11px; }
+}
+.wt .pl-quality .choices strong { font-size: 16px; }
+.wt .pl-quality .choices span { font-size: 12px; line-height: 1.45; color: var(--muted); }
+.wt .pl-quality .choices em { margin-top: 5px; font-size: 13px; font-style: normal; font-weight: 700; color: var(--pl-apricot); }
+.wt .pl-quality .choices em del { margin-right: 6px; color: var(--muted); font-weight: 400; }
+.wt .pl-quality .choices .sale-note { margin-top: auto; padding-top: 5px; color: var(--pl-apricot); font-size: 14px; line-height: 1.3; font-weight: 600; }
+@media (max-width: 767px) { .wt .pl-quality .choices .sale-note { font-size: 11px; } }
+.wt .pl-quality small { display: block; margin-top: 8px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.wt .pl-quality > .free-left { color: var(--pl-apricot); font-weight: 600; }
+.wt .pl-quality small[role="alert"] { color: var(--pl-coral); }
+.wt .pl-quality small button { padding: 0; border: 0; background: none; color: #fff; text-decoration: underline; cursor: pointer; }
 .wt .pl-chk { display: flex; align-items: center; gap: 10px; margin: 22px 0 18px; font-size: 13.5px; color: var(--muted); text-align: left; }
 .wt .pl-chk input { width: 18px; height: 18px; accent-color: var(--pl-mint); }
 .wt .pl-who .pl-btn { min-width: 240px; height: 52px; }
