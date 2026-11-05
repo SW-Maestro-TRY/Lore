@@ -1,45 +1,60 @@
 /* LORE 앱 설치 띠 — 대표작 띠(.wt-featured)와 같은 자리·높이에 번갈아 보인다. 테마를 따르지 않는다.
-   PC: 왼쪽 글 + 오른쪽 폰 두 대. 폰(767px 이하): 가운데 정렬, 폰 그림 없음. */
+   PC: 왼쪽 글 + 오른쪽 폰 두 대(폰 모양·각도만 와디즈 「글로벌 앱 출시」 배너를 따름). 폰(767px 이하): 가운데 정렬, 폰 그림 없음.
+   띠 어디를 눌러도 창이 열린다. */
 .wt .wt-appb {
-  --ab-ink: #f2f5f8; --ab-muted: #a3adbb; --ab-gold: #e7c27d; --ab-mint: #6fe3cb;
-  position: relative; display: grid; grid-template-columns: 1fr minmax(320px, 46%); height: 100%; min-height: 220px;
-  border-radius: 14px; overflow: hidden; color: var(--ab-ink); isolation: isolate;
+  --ab-ink: #f2f5f8; --ab-gold: #e7c27d; --ab-mint: #6fe3cb;
+  position: relative; display: grid; grid-template-columns: 1fr minmax(360px, 50%); height: 100%; min-height: 300px;
+  border-radius: 14px; overflow: hidden; color: var(--ab-ink); isolation: isolate; cursor: pointer;
   background:
     radial-gradient(50% 110% at 76% 70%, rgba(150, 120, 220, .28) 0%, rgba(90, 80, 170, .12) 45%, rgba(13, 17, 25, 0) 75%),
     linear-gradient(110deg, #0d1119 0%, #111829 60%, #1a2140 100%);
 }
-.wt .wt-appb h2 { margin: 0; color: var(--ab-ink); font-size: clamp(26px, 2.6vw, 34px); font-weight: 900; letter-spacing: -.03em; word-break: keep-all; }
-.wt .wt-appb .copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 10px; padding: 24px 20px 24px 32px; }
+.wt .wt-appb:focus-visible { outline: 2px solid var(--ab-mint); outline-offset: 3px; }
+.wt .wt-appb h2 { margin: 0; color: var(--ab-ink); font-size: clamp(28px, 2.8vw, 36px); font-weight: 900; letter-spacing: -.03em; word-break: keep-all; }
+.wt .wt-appb .copy { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 12px; padding: 24px 20px 24px 40px; }
 .wt .wt-appb .copy .icon { display: none; }
-.wt .wt-appb .kicker { display: inline-flex; align-items: center; gap: 9px; font-size: 10.5px; font-weight: 700; letter-spacing: .18em; color: var(--ab-mint); }
+.wt .wt-appb .kicker { display: inline-flex; align-items: center; gap: 9px; font-size: 11px; font-weight: 700; letter-spacing: .18em; color: var(--ab-mint); }
 .wt .wt-appb .kicker i { width: 6px; height: 6px; border-radius: 50%; background: var(--ab-mint); }
-.wt .wt-appb p { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+.wt .wt-appb p { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 16px; font-weight: 700; }
 .wt .wt-appb p b { padding: 3px 8px; border-radius: 6px; background: var(--ab-gold); color: #151c28; font-size: 12px; font-weight: 900; }
 .wt .wt-appb .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.wt .wt-appb .btns .wt-os-mark { width: 18px; height: 18px; }
 .wt .wt-appb .btns button {
-  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 10px;
+  display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 26px; border-radius: 12px;
   border: 1px solid rgba(242, 245, 248, .16); background: #0b0f17; color: var(--ab-ink);
-  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+  font: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
 }
 .wt .wt-appb .btns button:hover { background: #151b26; }
 .wt .wt-appb .btns button:focus-visible { outline: 2px solid var(--ab-mint); outline-offset: 2px; }
 
-/* 폰 두 대 — 실물 같은 기기를 비스듬히 세운다. 뒤 오른쪽(웹툰 보기)이 크고 높게, 앞 왼쪽(웹툰 홈)이 작고 낮게.
+/* 폰 두 대 — 입체로 돌려 세워 왼쪽 옆면 두께가 보인다. 뒤 오른쪽(웹툰 보기)이 크고 높게, 앞 왼쪽(웹툰 홈)이 작고 낮게.
    띠 아래로 잘려 나간다. */
-.wt .wt-appb { min-height: 300px; }
-.wt .wt-appb .phones { position: relative; z-index: 1; min-height: 0; overflow: hidden; perspective: 1400px; }
+.wt .wt-appb .phones { position: relative; z-index: 1; min-height: 0; }
 .wt .wt-appb .phone {
-  position: absolute; padding: 5px; border-radius: 40px;
-  background: linear-gradient(140deg, #5b6069 0%, #23262c 22%, #121418 55%, #3a3e46 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), 0 34px 60px rgba(0, 0, 0, .6), 0 8px 18px rgba(0, 0, 0, .35);
-  transform-style: preserve-3d;
+  position: absolute; padding: 4px; border-radius: 38px; background: #1b1d21;
+}
+/* 앞 왼쪽 웹툰 홈 — 거의 정면, 살짝만 돌린다. 왼쪽 옆면이 조금 보인다 */
+.wt .wt-appb .phone.home {
+  transform: perspective(1200px) rotateY(14deg) rotateX(3deg) rotateZ(-4deg);
+  box-shadow:
+    inset 0 0 0 1.5px #5a5e66,
+    -1px 1px 0 #6b6f77, -2px 2px 0 #55595f, -3px 3px 0 #464a50, -4px 4px 0 #3a3d42,
+    -14px 30px 50px rgba(0, 0, 0, .6);
+}
+/* 뒤 오른쪽 웹툰 보기 — 왼쪽을 보도록 크게 돌려 세운다. 오른쪽 옆면 두께가 보인다 */
+.wt .wt-appb .phone.read {
+  transform: perspective(900px) rotateY(-34deg) rotateX(6deg) rotateZ(7deg);
+  box-shadow:
+    inset 0 0 0 1.5px #5a5e66,
+    1px 1px 0 #6b6f77, 2px 2px 0 #55595f, 3px 3px 0 #464a50, 4px 4px 0 #3a3d42, 5px 5px 0 #303236, 6px 6px 0 #26282b, 7px 7px 0 #202226,
+    20px 34px 50px rgba(0, 0, 0, .55);
 }
 .wt .wt-appb .phone::before, .wt .wt-appb .phone::after { /* 옆 단추 */
-  content: ""; position: absolute; width: 3px; border-radius: 2px; background: linear-gradient(90deg, #2a2d33, #5b6069);
+  content: ""; position: absolute; width: 4px; border-radius: 2px; background: #3a3d42;
 }
-.wt .wt-appb .phone::before { left: -3px; top: 92px; height: 34px; box-shadow: 0 46px 0 #3a3e46; }
-.wt .wt-appb .phone::after { right: -3px; top: 120px; height: 56px; }
-.wt .wt-appb .screen { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 35px; border: 4px solid #000; background: #0d1119; }
+.wt .wt-appb .phone::before { left: -9px; top: 96px; height: 36px; box-shadow: 0 48px 0 #3a3d42; }
+.wt .wt-appb .phone::after { right: -3px; top: 124px; height: 60px; }
+.wt .wt-appb .screen { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 34px; border: 4px solid #000; background: #0d1119; }
 .wt .wt-appb .status {
   position: relative; display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 20px 0 24px;
   background: #0d1119; color: #fff;
@@ -48,8 +63,14 @@
 .wt .wt-appb .status .island { position: absolute; left: 50%; top: 7px; width: 34%; height: 17px; transform: translateX(-50%); border-radius: 10px; background: #000; }
 .wt .wt-appb .status .batt { width: 20px; height: 9px; border-radius: 3px; border: 1.5px solid rgba(255, 255, 255, .85); background: linear-gradient(90deg, #fff 70%, transparent 70%) content-box; padding: 1px; }
 .wt .wt-appb .screen img { display: block; width: 100%; height: auto; }
-.wt .wt-appb .phone.read { left: calc(50% - 50px); top: 22px; width: 214px; height: 444px; transform: rotateY(-16deg) rotateZ(9deg); }
-.wt .wt-appb .phone.home { left: calc(50% - 230px); top: 92px; width: 184px; height: 382px; transform: rotateY(-16deg) rotateZ(9deg); z-index: 2; }
+.wt .wt-appb .phone.home { left: calc(50% - 250px); top: 34px; width: 216px; height: 448px; z-index: 2; }
+.wt .wt-appb .phone.read { left: calc(50% + 0px); top: 46px; width: 210px; height: 436px; }
+/* 두 폰 사이에 걸친 앱 아이콘 */
+.wt .wt-appb .app {
+  position: absolute; z-index: 3; left: calc(50% - 44px); top: 150px; width: 98px; height: 98px; border-radius: 24px;
+  transform: perspective(700px) rotateY(-18deg) rotateZ(5deg);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .22), -3px 3px 0 #2a2d33, -14px 22px 34px rgba(0, 0, 0, .55);
+}
 
 @media (max-width: 767px) {
   .wt .wt-appb {
@@ -63,5 +84,5 @@
   .wt .wt-appb p { margin: 0 0 6px; color: var(--ab-gold); font-size: 15px; }
   .wt .wt-appb p b { display: none; }
   .wt .wt-appb .btns { justify-content: center; }
-  .wt .wt-appb .btns button { height: 42px; padding: 0 16px; font-size: 13.5px; }
+  .wt .wt-appb .btns button { height: 42px; padding: 0 16px; font-size: 13.5px; background: #0b0f17; border: 1px solid rgba(242, 245, 248, .16); }
 }
