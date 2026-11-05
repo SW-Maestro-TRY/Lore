@@ -17,6 +17,8 @@ export default function TopBanners() {
   const t = useT();
   const [cur, setCur] = useState(0);
   const [hold, setHold] = useState(false);
+  /* 조정 모드에서는 넘기지 않는다 */
+  const [pin, setPin] = useState(false);
   const [dialog, setDialog] = useState<AppDevice | null>(null);
   const touchX = useRef<number | null>(null);
 
@@ -25,13 +27,14 @@ export default function TopBanners() {
       const q = new URLSearchParams(location.search);
       const s = q.get("banner");
       if (s === "app") setCur(1);
+      if (q.get("appedit") === "1") { setCur(1); setHold(true); setPin(true); }
     } catch { /* 기본값 */ }
   }, []);
   useEffect(() => {
-    if (hold || dialog) return;
+    if (hold || pin || dialog) return;
     const id = window.setTimeout(() => setCur((c) => (c + 1) % SLIDES), 7000);
     return () => window.clearTimeout(id);
-  }, [cur, hold, dialog]);
+  }, [cur, hold, pin, dialog]);
 
   return (
     <section className="wt-topb" aria-roledescription="carousel"
