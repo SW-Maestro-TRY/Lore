@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -59,16 +62,34 @@ class WebtoonQualityTest {
     @DisplayName("너울만 더 받는다 — 원가가 2.4배라 같은 값이면 한 편마다 손해다")
     void 너울만_비싸다() {
         assertThat(WebtoonQuality.creditsOf("wave")).isEqualTo(20);
-        assertThat(WebtoonQuality.creditsOf("surf")).isEqualTo(15);
-        assertThat(WebtoonQuality.creditsOf("swell")).isEqualTo(20);
-        assertThat(WebtoonQuality.playCreditsOf("surf")).isEqualTo(15);
-        assertThat(WebtoonQuality.playCreditsOf("swell")).isEqualTo(20);
+        assertThat(WebtoonQuality.playCreditsOf("surf")).isEqualTo(WebtoonQuality.creditsOf("surf"));
+        assertThat(WebtoonQuality.playCreditsOf("swell")).isEqualTo(WebtoonQuality.creditsOf("swell"));
         assertThat(WebtoonQuality.playChoices()).extracting(m -> m.get("credits"))
-                .containsExactly(15, 20);
+                .containsExactly(WebtoonQuality.creditsOf("surf"), WebtoonQuality.creditsOf("swell"));
         assertThat(WebtoonQuality.playChoices()).extracting(m -> m.get("regular_credits"))
                 .containsExactly(20, 30);
         assertThat(WebtoonQuality.choices()).extracting(m -> m.get("regular_credits"))
                 .containsExactly(20, 30);
+    }
+
+    private static Instant seoul(int day, int hour, int minute) {
+        return LocalDateTime.of(2026, 11, day, hour, minute)
+                .atZone(ZoneId.of("Asia/Seoul")).toInstant();
+    }
+
+    @Test
+    @DisplayName("오픈 세일은 한국 시간 11월 6일부터 15일까지 두 생성 화면에 적용된다")
+    void 오픈_세일_기간() {
+        assertThat(WebtoonQuality.saleActiveAt(seoul(5, 23, 59))).isFalse();
+        assertThat(WebtoonQuality.saleActiveAt(seoul(6, 0, 0))).isTrue();
+        assertThat(WebtoonQuality.saleActiveAt(seoul(15, 23, 59))).isTrue();
+        assertThat(WebtoonQuality.saleActiveAt(seoul(16, 0, 0))).isFalse();
+        assertThat(WebtoonQuality.creditsOfAt("surf", seoul(5, 23, 59))).isEqualTo(20);
+        assertThat(WebtoonQuality.creditsOfAt("swell", seoul(5, 23, 59))).isEqualTo(30);
+        assertThat(WebtoonQuality.creditsOfAt("surf", seoul(6, 0, 0))).isEqualTo(15);
+        assertThat(WebtoonQuality.creditsOfAt("swell", seoul(15, 23, 59))).isEqualTo(20);
+        assertThat(WebtoonQuality.creditsOfAt("surf", seoul(16, 0, 0))).isEqualTo(20);
+        assertThat(WebtoonQuality.creditsOfAt("swell", seoul(16, 0, 0))).isEqualTo(30);
     }
 
     @Test
@@ -101,7 +122,7 @@ class WebtoonQualityTest {
         }
         assertThat(WebtoonQuality.normalize(null)).isEqualTo(WebtoonQuality.DEFAULT_QUALITY);
         // 기본으로 돌아갔으면 값도 기본값이어야 한다 — 0원이 되면 공짜로 만들어진다.
-        assertThat(WebtoonQuality.creditsOf(null)).isEqualTo(15);
+        assertThat(WebtoonQuality.creditsOf(null)).isEqualTo(WebtoonQuality.creditsOf("surf"));
     }
 
     @Test
