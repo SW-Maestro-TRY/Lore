@@ -122,17 +122,20 @@
 .wt .pl-quality .choices button:focus-visible { outline: 2px solid var(--pl-mint); outline-offset: 2px; }
 .wt .pl-quality .choices img { display: block; width: min(84%, 210px); aspect-ratio: 2 / 3; object-fit: contain; align-self: center; border-radius: 7px; background: #fff; }
 .wt .pl-quality .choices .sample-style { align-self: center; margin: 0 0 4px; color: var(--muted); font-size: 12px; }
-.wt .pl-quality .choices .sale-mark { position: absolute; z-index: 1; top: -9px; right: -12px; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 96px; height: 96px; transform: rotate(45deg); clip-path: polygon(50% 0%, 59% 8%, 71% 3%, 76% 15%, 89% 16%, 90% 29%, 100% 36%, 94% 49%, 100% 61%, 89% 69%, 88% 83%, 75% 84%, 69% 97%, 57% 92%, 48% 100%, 39% 91%, 26% 97%, 21% 85%, 8% 82%, 9% 69%, 0% 61%, 6% 49%, 0% 36%, 10% 29%, 11% 16%, 24% 15%, 29% 3%, 41% 8%); background: #f4c46d; color: #35251b; text-align: center; pointer-events: none; filter: drop-shadow(0 4px 5px #0005); }
-.wt .pl-quality .choices .sale-mark::after { content: ""; position: absolute; inset: 13px; border: 1px dashed #35251b88; border-radius: 50%; }
+.wt .pl-quality .choices .sale-mark { position: absolute; z-index: 1; top: -40px; right: -40px; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 96px; height: 96px; transform: rotate(20deg); clip-path: polygon(50% 0%, 59% 8%, 71% 3%, 76% 15%, 89% 16%, 90% 29%, 100% 36%, 94% 49%, 100% 61%, 89% 69%, 88% 83%, 75% 84%, 69% 97%, 57% 92%, 48% 100%, 39% 91%, 26% 97%, 21% 85%, 8% 82%, 9% 69%, 0% 61%, 6% 49%, 0% 36%, 10% 29%, 11% 16%, 24% 15%, 29% 3%, 41% 8%); background: #f4c46d; color: #35251b; text-align: center; pointer-events: none; filter: drop-shadow(0 4px 5px #0005); }
+.wt .pl-quality .choices .sale-mark::after { content: ""; position: absolute; inset: 18px; border: 1px dashed #35251b88; border-radius: 50%; }
 .wt .pl-quality .choices .sale-mark-swell { background: #ff6855; color: #351c24; }
 .wt .pl-quality .choices .sale-mark span { position: relative; z-index: 1; color: inherit; font-size: 12px; line-height: 1.1; font-weight: 900; }
 .wt .pl-quality .choices .sale-mark b { position: relative; z-index: 1; font-size: 23px; line-height: 1.1; }
 @media (max-width: 767px) {
-  .wt .pl-quality .choices .sale-mark { top: -6px; right: -7px; width: 76px; height: 76px; }
-  .wt .pl-quality .choices .sale-mark::after { inset: 10px; }
+  .wt .pl-quality .choices .sale-mark { top: -36px; right: -36px; width: 76px; height: 76px; }
+  .wt .pl-quality .choices .sale-mark::after { inset: 14px; }
   .wt .pl-quality .choices .sale-mark span { font-size: 10px; }
   .wt .pl-quality .choices .sale-mark b { font-size: 19px; }
   .wt .pl-quality .choices button > span { font-size: 11px; }
+}
+@media (max-width: 420px) {
+  .wt .pl-quality .choices .sale-mark-swell { right: -23px; }
 }
 .wt .pl-quality .choices strong { font-size: 16px; }
 .wt .pl-quality .choices span { font-size: 12px; line-height: 1.45; color: var(--muted); }
