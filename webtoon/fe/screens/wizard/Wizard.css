@@ -127,7 +127,6 @@
 .wt .wt-wiz-q-art { position: relative; width: min(84%, 250px); align-self: center; }
 .wt .wt-wiz-q-sample { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: contain; border-radius: 8px; background: var(--line); }
 .wt .wt-wiz-q-sticker { position: absolute; z-index: 1; top: -53px; right: -55px; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 110px; height: 110px; transform: rotate(20deg); clip-path: polygon(50% 0%, 59% 8%, 71% 3%, 76% 15%, 89% 16%, 90% 29%, 100% 36%, 94% 49%, 100% 61%, 89% 69%, 88% 83%, 75% 84%, 69% 97%, 57% 92%, 48% 100%, 39% 91%, 26% 97%, 21% 85%, 8% 82%, 9% 69%, 0% 61%, 6% 49%, 0% 36%, 10% 29%, 11% 16%, 24% 15%, 29% 3%, 41% 8%); background: #f4c46d; color: #35251b; text-align: center; pointer-events: none; filter: drop-shadow(0 4px 5px #0005); }
-.wt .wt-wiz-q-sticker::after { content: ""; position: absolute; inset: 21px; border: 1px dashed #35251b88; border-radius: 50%; }
 .wt .wt-wiz-q-sticker-swell { background: #ff6855; color: #351c24; }
 .wt .wt-wiz-q-sticker span { position: relative; z-index: 1; font-size: 14px; line-height: 1.1; font-weight: 900; }
 .wt .wt-wiz-q-sticker b { position: relative; z-index: 1; font-size: 26px; line-height: 1.15; }
@@ -220,7 +219,6 @@
   .wt .wt-wiz-q { padding: 12px 10px; border-radius: 14px; gap: 4px; }
   .wt .wt-wiz-q-art { width: min(100%, 150px); }
   .wt .wt-wiz-q-sticker { top: -40px; right: -40px; width: 76px; height: 76px; }
-  .wt .wt-wiz-q-sticker::after { inset: 14px; }
   .wt .wt-wiz-q-sticker span { font-size: 10px; }
   .wt .wt-wiz-q-sticker b { font-size: 19px; }
   .wt .wt-wiz-q .row b { font-size: 17px; }
