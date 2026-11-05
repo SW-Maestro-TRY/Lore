@@ -90,9 +90,15 @@ export const QUALITY_INFO: {
 
 export const QUALITY_DEFAULT: WizardQuality = "surf";
 
-/** 기존 견본은 모두 GPT Image 2 작품이다. Flare 견본이 생길 때까지 숨긴다. */
+/** 「토끼 귀가 떨린 날」 아르카나 마법학교 page02. 같은 장면의 실제 모델 결과. */
+const QUALITY_SAMPLE: Record<WizardQuality, string> = {
+  wave: "/static/gallery/quality/wave.jpg", // 옛 작업 호환용. 새 선택지에는 표시하지 않는다.
+  surf: "/static/gallery/quality/arcana-page02-flare.png",
+  swell: "/static/gallery/quality/arcana-page02-gpt-image-2.jpg",
+};
+
 export function qualitySamples(): Record<WizardQuality, string> | null {
-  return null;
+  return QUALITY_SAMPLE;
 }
 
 export interface WizardForm {

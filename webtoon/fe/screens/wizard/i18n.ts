@@ -166,6 +166,8 @@ const dict: Dict = {
   "굵고 단순한 선으로 가볍게 표현해요.": { en: "Bold, simple lines with a light touch.", ja: "太くシンプルな線で軽やかに表現します。", zh: "用粗而简洁的线条轻快呈现。" },
   "배경과 소품은 필요한 만큼만 담아요.": { en: "Backgrounds and props only as needed.", ja: "背景と小物は必要な分だけ描きます。", zh: "背景与道具只画必要的部分。" },
   "파도": { en: "Wave", ja: "波", zh: "波浪" },
+  "아르카나 마법학교 page02 · {mode} 예시": { en: "Arcana Magic School page 02 · {mode} sample", ja: "アルカナ魔法学校 2ページ · {mode}の例", zh: "阿尔卡纳魔法学校第 2 页 · {mode} 示例" },
+  "예시 그림체 · 로맨스 판타지": { en: "Sample art style · Romance fantasy", ja: "サンプル画風 · ロマンスファンタジー", zh: "示例画风 · 浪漫奇幻" },
   "약 8분 · 빠른 기본 생성": { en: "About 8 min · Faster default", ja: "約8分 · 速い標準生成", zh: "约 8 分钟 · 更快的默认生成" },
   "약 8분 · 자연스러운 디테일": { en: "About 8 min · Natural detail", ja: "約8分 · 自然なディテール", zh: "约 8 分钟 · 自然细节" },
   "인물과 배경을 가장 자연스럽게 표현해요.": { en: "Characters and backgrounds at their most natural.", ja: "人物と背景を最も自然に表現します。", zh: "人物与背景最自然的呈现。" },
