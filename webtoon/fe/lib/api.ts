@@ -186,7 +186,7 @@ export interface Allowance {
   free_per_day?: number;
   balance?: number;
   blocked?: string | null;
-  qualities?: { key: string; label: string; credits: number; base_pages?: number; extra_page_credits?: number }[];
+  qualities?: { key: string; label: string; credits: number; regular_credits?: number; base_pages?: number; extra_page_credits?: number }[];
   quality_default?: string;
   /** 함께 주인공 한 사람당 값(조연 시트 값과 같다)과 고를 수 있는 수(#899). */
   co_sheet_credits?: number;
@@ -195,6 +195,10 @@ export interface Allowance {
 
 export function readAllowance(): Promise<Allowance> {
   return call<Allowance>("/nh/allowance");
+}
+
+export function readPlayAllowance(): Promise<Allowance> {
+  return call<Allowance>("/play/allowance");
 }
 
 /** 딱지 한 줄. 적을 것이 없으면 빈 문자열. */

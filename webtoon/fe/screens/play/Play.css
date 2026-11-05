@@ -125,6 +125,8 @@
 .wt .pl-quality .choices strong { font-size: 16px; }
 .wt .pl-quality .choices span { font-size: 12px; line-height: 1.45; color: var(--muted); }
 .wt .pl-quality .choices em { margin-top: 5px; font-size: 13px; font-style: normal; font-weight: 700; color: var(--pl-apricot); }
+.wt .pl-quality .choices em del { margin-right: 6px; color: var(--muted); font-weight: 400; }
+.wt .pl-quality .choices em .open-discount { margin-right: 6px; color: var(--pl-apricot); font-size: 12px; font-weight: 700; }
 .wt .pl-quality small { display: block; margin-top: 8px; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .wt .pl-quality small[role="alert"] { color: var(--pl-coral); }
 .wt .pl-quality small button { padding: 0; border: 0; background: none; color: #fff; text-decoration: underline; cursor: pointer; }
