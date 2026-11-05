@@ -48,7 +48,7 @@ public class PlayController {
         this.owner = owner;
     }
 
-    @Operation(summary = "세계관 사건 생성 크레딧", description = "오픈 할인 적용가와 일반 웹툰 값을 함께 돌려준다.")
+    @Operation(summary = "세계관 사건 생성 크레딧", description = "오픈 세일 적용가와 할인 전 값을 함께 돌려준다.")
     @GetMapping("/allowance")
     public Map<String, Object> allowance(HttpServletRequest request) {
         return jobs.playAllowance(request);

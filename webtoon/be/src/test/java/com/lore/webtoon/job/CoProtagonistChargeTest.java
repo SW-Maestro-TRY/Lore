@@ -47,7 +47,7 @@ class CoProtagonistChargeTest {
         verify(credits,never()).charge(anyLong(),anyInt(),eq("job-1:co-sheets"),any());
     }
 
-    @Test void playRouteChargesOpeningPriceButCreateRouteDoesNotTrustPlayField() {
+    @Test void playAndCreateRoutesChargeTheSameOpeningPrice() {
         var playForm = new JobService.CreateRequest("하윤","정비공","","","frost",null,null,null,true,true,
                 "uid","first",null,"surf","ko","quick","","","",null,null,true);
         controller.createPlay(new MockHttpServletRequest(), playForm);
@@ -56,8 +56,8 @@ class CoProtagonistChargeTest {
 
         clearInvocations(credits, jobs);
         controller.create(new MockHttpServletRequest(), playForm);
-        verify(credits).whyBlocked(7L, 20);
-        verify(credits).charge(7L, 20, "job-1", "파도");
+        verify(credits).whyBlocked(7L, 15);
+        verify(credits).charge(7L, 15, "job-1", "파도");
     }
 
     @Test void playRouteChargesSwellSalePrice() {
