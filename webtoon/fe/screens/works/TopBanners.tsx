@@ -3,11 +3,11 @@
 /* 둘러보기 맨 위 띠 — 대표작(슈퍼 세컨드브레인)과 LORE 앱 설치를 번갈아 보인다(2026-11-06).
  * 두 장을 같은 칸에 겹쳐 두고 보이는 장만 바꾼다 — 높이는 큰 쪽에 맞는다.
  * 7초마다 넘기고, 마우스를 올리거나 창이 열려 있으면 멈춘다. 폰은 옆으로 밀어 넘긴다.
- * 주소에 ?banner=app 이면 앱 띠부터 보인다. */
+ * 주소에 ?banner=app 이면 앱 띠부터 보인다. 폰 배치 시안은 ?appart=1~4. */
 import { useEffect, useRef, useState } from "react";
 import { useT } from "../../lib/i18n";
 import AppInstallDialog, { type AppDevice } from "../../ui/AppInstallDialog";
-import AppBanner from "./AppBanner";
+import AppBanner, { type AppBannerArt } from "./AppBanner";
 import FeaturedBanner from "./FeaturedBanner";
 import "./TopBanners.css";
 
@@ -18,6 +18,7 @@ export default function TopBanners() {
   const [cur, setCur] = useState(0);
   const [hold, setHold] = useState(false);
   const [dialog, setDialog] = useState<AppDevice | null>(null);
+  const [art, setArt] = useState<AppBannerArt>(1);
   const touchX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -25,6 +26,8 @@ export default function TopBanners() {
       const q = new URLSearchParams(location.search);
       const s = q.get("banner");
       if (s === "app") setCur(1);
+      const a = Number(q.get("appart"));
+      if (a === 1 || a === 2 || a === 3 || a === 4) setArt(a);
     } catch { /* 기본값 */ }
   }, []);
   useEffect(() => {
@@ -45,7 +48,7 @@ export default function TopBanners() {
              }}>
       <div className="wt-topb-track">
         <div className={`wt-topb-slide${cur === 0 ? " on" : ""}`} aria-hidden={cur !== 0} inert={cur !== 0 ? true : undefined}><FeaturedBanner /></div>
-        <div className={`wt-topb-slide${cur === 1 ? " on" : ""}`} aria-hidden={cur !== 1} inert={cur !== 1 ? true : undefined}><AppBanner onOpen={setDialog} /></div>
+        <div className={`wt-topb-slide${cur === 1 ? " on" : ""}`} aria-hidden={cur !== 1} inert={cur !== 1 ? true : undefined}><AppBanner art={art} onOpen={setDialog} /></div>
       </div>
       <div className="wt-topb-dots">
         {Array.from({ length: SLIDES }, (_, i) => (

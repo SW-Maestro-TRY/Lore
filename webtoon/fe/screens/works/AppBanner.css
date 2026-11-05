@@ -24,18 +24,36 @@
 .wt .wt-appb .btns button:hover { background: #151b26; }
 .wt .wt-appb .btns button:focus-visible { outline: 2px solid var(--ab-mint); outline-offset: 2px; }
 
-/* 폰 한 대 — 똑바로 서서 띠 아래로 잘려 나간다. 화면은 실제 LORE 모바일 첫 화면 캡처. */
+/* 폰 두 대 — 둘러보기 탭(browse) · 웹툰 보기(read). 화면은 실제 모바일 화면 캡처. 띠 밖으로 잘려 나간다. */
 .wt .wt-appb .phones { position: relative; z-index: 1; min-height: 0; overflow: hidden; }
 .wt .wt-appb .phone {
-  position: absolute; top: 26px; left: 50%; transform: translateX(-50%); width: 196px; height: 380px; overflow: hidden;
-  border: 7px solid #07090d; border-radius: 34px; background: #0d1119;
-  box-shadow: 0 0 0 1.5px #2c3342, 0 30px 60px rgba(0, 0, 0, .55), 0 0 80px rgba(150, 120, 220, .18);
+  position: absolute; width: 172px; height: 344px; overflow: hidden;
+  border: 6px solid #07090d; border-radius: 30px; background: #0d1119;
+  box-shadow: 0 0 0 1.5px #2c3342, 0 26px 50px rgba(0, 0, 0, .55);
 }
 .wt .wt-appb .phone::before { /* 다이내믹 아일랜드 */
-  content: ""; position: absolute; top: 8px; left: 50%; z-index: 2; width: 64px; height: 18px;
-  transform: translateX(-50%); border-radius: 10px; background: #07090d;
+  content: ""; position: absolute; top: 7px; left: 50%; z-index: 2; width: 52px; height: 15px;
+  transform: translateX(-50%); border-radius: 9px; background: #07090d;
 }
-.wt .wt-appb .phone img { display: block; width: 100%; height: auto; padding-top: 30px; background: #0d1119; }
+.wt .wt-appb .phone img { display: block; width: 100%; height: auto; padding-top: 26px; background: #0d1119; }
+
+/* 1 — 나란히, 같은 쪽으로 살짝 기울이고 오른쪽을 조금 낮춘다 */
+.wt .wt-appb-art1 .phone { transform: rotate(-7deg); }
+.wt .wt-appb-art1 .browse { left: calc(50% - 190px); top: 30px; }
+.wt .wt-appb-art1 .read { left: calc(50% + 10px); top: 56px; }
+
+/* 2 — 부채꼴로 겹친다. 뒤 둘러보기는 왼쪽으로, 앞 웹툰 보기는 오른쪽으로 */
+.wt .wt-appb-art2 .browse { left: calc(50% - 160px); top: 40px; transform: rotate(-10deg); }
+.wt .wt-appb-art2 .read { left: calc(50% - 30px); top: 24px; transform: rotate(7deg); z-index: 2; }
+
+/* 3 — 원근: 앞 웹툰 보기는 크게 똑바로, 뒤 둘러보기는 작게 기울여 비켜 선다 */
+.wt .wt-appb-art3 .read { left: calc(50% - 130px); top: 22px; width: 186px; height: 372px; transform: rotate(-4deg); z-index: 2; }
+.wt .wt-appb-art3 .browse { left: calc(50% + 20px); top: 52px; transform: rotate(9deg) scale(.88); filter: brightness(.82); }
+
+/* 4 — 크게, 많이 기울여 위아래로 띠 밖까지 걸친다 */
+.wt .wt-appb-art4 .phone { width: 200px; height: 400px; border-radius: 34px; transform: rotate(16deg); }
+.wt .wt-appb-art4 .browse { left: calc(50% - 170px); top: -40px; }
+.wt .wt-appb-art4 .read { left: calc(50% + 40px); top: -6px; }
 
 @media (max-width: 767px) {
   .wt .wt-appb {
