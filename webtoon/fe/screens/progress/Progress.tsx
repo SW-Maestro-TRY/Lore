@@ -23,6 +23,7 @@ import { QUALITY_INFO, STYLE_INFO, STYLE_KEY_OF_HARNESS } from "../../lib/wizard
 import { louArt, louStage } from "../../lib/louArt";
 import { useT } from "../../lib/i18n";
 import PushOptIn from "../../ui/PushOptIn";
+import InstallInvite from "../../ui/InstallInvite";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { unwatchJob, watchJob } from "../../lib/watchJob";
@@ -1197,6 +1198,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
   return (
     <div className="wt-prog wt-progx">
+      <InstallInvite active={!!job && (pane === "play" || pane === "queued" || pane === "working" || pane === "drawing" || pane === "review")} where="progress" job={jobId} />
       <div className="real-layout">
         <aside className="progress-rail">
           <div className="rail-heading">
