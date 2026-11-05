@@ -82,6 +82,11 @@ public final class WebtoonQuality {
             "surf",  20,
             "swell", 30);
 
+    /** 세계관 사건 오픈 할인. 일반 웹툰 한 편 값과 별도로 유지한다. */
+    private static final Map<String, Integer> PLAY_CREDITS = Map.of(
+            "surf", 10,
+            "swell", 20);
+
     /**
      * 편집실에서 한 장을 다시 그리는 크레딧. 작품을 만든 화질을 따른다(#787).
      *
@@ -188,6 +193,10 @@ public final class WebtoonQuality {
         return CREDITS.getOrDefault(normalize(key), CREDITS.get(DEFAULT_QUALITY));
     }
 
+    public static int playCreditsOf(String key) {
+        return PLAY_CREDITS.getOrDefault(normalize(key), PLAY_CREDITS.get(DEFAULT_QUALITY));
+    }
+
     /** 이 화질로 만든 작품의 한 장을 다시 그릴 때 드는 크레딧. */
     public static int regenCreditsOf(String key) {
         return REGEN_CREDITS.getOrDefault(normalize(key), REGEN_CREDITS.get(DEFAULT_QUALITY));
@@ -218,6 +227,19 @@ public final class WebtoonQuality {
                         "key", k,
                         "label", labelOf(k),
                         "credits", creditsOf(k),
+                        "base_pages", BASE_PAGES,
+                        "extra_page_credits", extraPageCreditsOf(k)))
+                .toList();
+    }
+
+    /** 세계관 사건 화면의 값과 할인 전 일반 웹툰 값. 실제 차감은 playCreditsOf 를 쓴다. */
+    public static java.util.List<Map<String, Object>> playChoices() {
+        return java.util.List.of("surf", "swell").stream()
+                .map(k -> Map.<String, Object>of(
+                        "key", k,
+                        "label", labelOf(k),
+                        "credits", playCreditsOf(k),
+                        "regular_credits", creditsOf(k),
                         "base_pages", BASE_PAGES,
                         "extra_page_credits", extraPageCreditsOf(k)))
                 .toList();
