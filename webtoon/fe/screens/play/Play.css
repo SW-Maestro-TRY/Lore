@@ -122,14 +122,14 @@
 .wt .pl-quality .choices button:focus-visible { outline: 2px solid var(--pl-mint); outline-offset: 2px; }
 .wt .pl-quality .choices img { display: block; width: min(84%, 210px); aspect-ratio: 2 / 3; object-fit: contain; align-self: center; border-radius: 7px; background: #fff; }
 .wt .pl-quality .choices .sample-style { align-self: center; margin: 0 0 4px; color: var(--muted); font-size: 12px; }
-.wt .pl-quality .choices .sale-mark { box-sizing: border-box; position: absolute; z-index: 1; top: -18px; right: 16px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px; width: 96px; height: 92px; padding-top: 23px; transform: rotate(3deg); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 85%, 0 100%); background: #f4c46d; color: #35251b; text-align: center; pointer-events: none; filter: drop-shadow(0 4px 5px #0005); }
+.wt .pl-quality .choices .sale-mark { box-sizing: border-box; position: absolute; z-index: 1; top: -28px; right: -18px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px; width: 120px; height: 108px; padding-top: 25px; transform: rotate(3deg); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 85%, 0 100%); background: #f4c46d; color: #35251b; text-align: center; pointer-events: none; filter: drop-shadow(0 4px 5px #0005); }
 .wt .pl-quality .choices .sale-mark-swell { background: #ff6855; color: #351c24; }
-.wt .pl-quality .choices .sale-mark span { color: inherit; font-size: 11px; line-height: 1.2; font-weight: 900; white-space: nowrap; }
-.wt .pl-quality .choices .sale-mark b { font-size: 11px; line-height: 1.2; font-weight: 800; white-space: nowrap; }
+.wt .pl-quality .choices .sale-mark span { color: inherit; font-size: 16px; line-height: 1.2; font-weight: 900; white-space: nowrap; }
+.wt .pl-quality .choices .sale-mark b { font-size: 14px; line-height: 1.2; font-weight: 800; white-space: nowrap; }
 @media (max-width: 767px) {
-  .wt .pl-quality .choices .sale-mark { top: -16px; right: 8px; width: 92px; height: 82px; padding-top: 17px; }
-  .wt .pl-quality .choices .sale-mark span { font-size: 11px; }
-  .wt .pl-quality .choices .sale-mark b { font-size: 10px; }
+  .wt .pl-quality .choices .sale-mark { top: -25px; right: -10px; width: 112px; height: 102px; padding-top: 21px; }
+  .wt .pl-quality .choices .sale-mark span { font-size: 15px; }
+  .wt .pl-quality .choices .sale-mark b { font-size: 13px; }
   .wt .pl-quality .choices button > span { font-size: 11px; }
 }
 .wt .pl-quality .choices strong { font-size: 16px; }
