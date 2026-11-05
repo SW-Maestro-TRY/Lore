@@ -205,7 +205,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const openRun = (run: string) => go("play", { world: w.id, ep: e.id, stage: "done", run });
   const cover = (r: (typeof made)[number]) => r.cover_src || (r.cover_page ? thumbUrl(r.run_id) : "");
   /* 캐릭터별 결말 — 첫 카드는 사건의 원래 결말, 그다음부터 만화마다 그 주인공이 고른 결말(2026-11-04, 체험 갈림 최종 시안).
-   * PC 는 카드 위에 장면 사진, 폰은 글만. 갈림 정리 전의 옛 작품은 제목만. 여섯 편부터 「더 둘러보기」. */
+   * PC 는 카드 위에 장면 사진, 폰은 글만. 갈림 정리 전의 옛 작품은 제목만. 「더 둘러보기」는 편수와 상관없이 늘 둔다(최종 시안, 11/05 하은). */
   const canonEnd = e.canon && e.canon.length > 0 ? e.canon[e.canon.length - 1] : "";
   const endCard = (r: (typeof made)[number]) => (
     <button type="button" key={r.run_id} className="ec" onClick={() => openRun(r.run_id)}>
@@ -220,7 +220,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const stories = made.length > 0 && (
     <div className="stories ends">
       <div className="hd"><div><b>{t("캐릭터별 결말")}</b><small>{t("같은 사건, 서로 다른 이야기")}</small></div>
-        {made.length > 5 && <button type="button" className="all" onClick={() => go("play", { world: w.id, ep: e.id, stage: "stories" })}>{t("더 둘러보기")} ›</button>}</div>
+        <button type="button" className="all" onClick={() => go("play", { world: w.id, ep: e.id, stage: "stories" })}>{t("더 둘러보기")} ›</button></div>
       <SnapRow>
         {canonEnd && (
           <div className="ec orig">
