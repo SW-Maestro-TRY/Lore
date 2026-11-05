@@ -5,7 +5,7 @@
  * 위: 앱은 아직 준비 중 — 이메일을 남기면 출시날 50크레딧.
  * 아래: 지금 바로 쓸 수 있는 「홈 화면에 추가」를 기기·버전별로 안내한다.
  */
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "@common/auth/useAuth";
 import { joinAppWaitlist } from "../lib/api";
 import { registerDict, useLang, useT } from "../lib/i18n";
@@ -63,6 +63,13 @@ export default function AppInstallDialog({ device: initial, where, onClose }: { 
   useEffect(() => {
     if (user?.email) setEmail((v) => v || user.email);
   }, [user?.email]);
+  /* 창이 열린 횟수 — 한 번 열 때 한 줄만(개발 모드의 두 번 실행에도) */
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (viewed.current) return;
+    viewed.current = true;
+    track("app_install_dialog_view", { where, device: initial, logged_in: !!user });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     setIos(iosMajorMinor());
     setInstallable(canInstall());
