@@ -33,22 +33,16 @@
 .wt .wt-appb .phone {
   position: absolute; padding: 4px; border-radius: 38px; background: #1b1d21;
 }
-/* 앞 왼쪽 웹툰 홈 — 거의 정면, 살짝만 돌린다. 왼쪽 옆면이 조금 보인다 */
-.wt .wt-appb .phone.home {
-  transform: perspective(1200px) rotateY(14deg) rotateX(3deg) rotateZ(-4deg);
+/* 문피아 「크리에이터 작가앱 오픈」 배너 그대로: 두 폰이 같은 각도로 시계 방향으로 기울고,
+   앞 폰(웹툰 홈)이 위로 높이 서서 뒤 폰(웹툰 보기)의 왼쪽을 가린다. 앱 아이콘은 앞 폰 오른쪽에 걸쳐 둘 위에 놓인다. */
+.wt .wt-appb .phone {
+  transform: perspective(1400px) rotateY(-10deg) rotateX(8deg) rotateZ(11deg);
   box-shadow:
     inset 0 0 0 1.5px #5a5e66,
-    -1px 1px 0 #6b6f77, -2px 2px 0 #55595f, -3px 3px 0 #464a50, -4px 4px 0 #3a3d42,
-    -14px 30px 50px rgba(0, 0, 0, .6);
+    -1px 1px 0 #6b6f77, -2px 2px 0 #55595f, -3px 3px 0 #464a50, -4px 4px 0 #3a3d42, -5px 5px 0 #303236,
+    -16px 30px 46px rgba(0, 0, 0, .6);
 }
-/* 뒤 오른쪽 웹툰 보기 — 왼쪽을 보도록 크게 돌려 세운다. 오른쪽 옆면 두께가 보인다 */
-.wt .wt-appb .phone.read {
-  transform: perspective(900px) rotateY(-34deg) rotateX(6deg) rotateZ(7deg);
-  box-shadow:
-    inset 0 0 0 1.5px #5a5e66,
-    1px 1px 0 #6b6f77, 2px 2px 0 #55595f, 3px 3px 0 #464a50, 4px 4px 0 #3a3d42, 5px 5px 0 #303236, 6px 6px 0 #26282b, 7px 7px 0 #202226,
-    20px 34px 50px rgba(0, 0, 0, .55);
-}
+.wt .wt-appb .phone.read { filter: brightness(.9); }
 .wt .wt-appb .phone::before, .wt .wt-appb .phone::after { /* 옆 단추 */
   content: ""; position: absolute; width: 4px; border-radius: 2px; background: #3a3d42;
 }
@@ -63,13 +57,13 @@
 .wt .wt-appb .status .island { position: absolute; left: 50%; top: 7px; width: 34%; height: 17px; transform: translateX(-50%); border-radius: 10px; background: #000; }
 .wt .wt-appb .status .batt { width: 20px; height: 9px; border-radius: 3px; border: 1.5px solid rgba(255, 255, 255, .85); background: linear-gradient(90deg, #fff 70%, transparent 70%) content-box; padding: 1px; }
 .wt .wt-appb .screen img { display: block; width: 100%; height: auto; }
-.wt .wt-appb .phone.home { left: calc(50% - 250px); top: 34px; width: 216px; height: 448px; z-index: 2; }
-.wt .wt-appb .phone.read { left: calc(50% + 0px); top: 46px; width: 210px; height: 436px; }
-/* 두 폰 사이에 걸친 앱 아이콘 */
+.wt .wt-appb .phone.home { left: calc(50% - 175px); top: 18px; width: 206px; height: 428px; z-index: 2; }
+.wt .wt-appb .phone.read { left: calc(50% - 10px); top: 66px; width: 196px; height: 408px; z-index: 1; }
+/* 앞 폰 오른쪽 가장자리에 걸친 앱 아이콘 */
 .wt .wt-appb .app {
-  position: absolute; z-index: 3; left: calc(50% - 44px); top: 150px; width: 98px; height: 98px; border-radius: 24px;
-  transform: perspective(700px) rotateY(-18deg) rotateZ(5deg);
-  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .22), -3px 3px 0 #2a2d33, -14px 22px 34px rgba(0, 0, 0, .55);
+  position: absolute; z-index: 3; left: calc(50% - 30px); top: 104px; width: 84px; height: 84px; border-radius: 20px;
+  transform: rotateZ(11deg);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .25), -3px 3px 0 #2a2d33, -12px 20px 30px rgba(0, 0, 0, .55);
 }
 
 @media (max-width: 767px) {
