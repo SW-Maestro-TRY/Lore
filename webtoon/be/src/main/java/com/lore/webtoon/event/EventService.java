@@ -84,7 +84,12 @@ public class EventService {
             "has_photo", "has_name", "has_desc", "has_note", "has_email",
             // 자동 기록(track.ts) — 어떻게 왔다 갔나 · 누른 것 · 입력 칸 글자 수 · 오류 · 화면 크기.
             // via·error 는 사전에 있는 화면 문구나 개발자가 붙인 이름에서만 온다(사람이 쓴 글 아님).
-            "how", "via", "len", "disabled", "error", "vw", "vh", "touch");
+            "how", "via", "len", "disabled", "error", "vw", "vh", "touch",
+            // 화면이 보내던 값인데 이 목록에 없어 버려지던 것(2026-11-06 대조). 전부 기호·숫자·참거짓이다.
+            // 사람이 쓴 글일 수 있는 name(인물 이름) · who(인물 이름) · email 은 일부러 넣지 않는다.
+            "action", "ahead", "auto", "channel", "co", "day", "desc_changed", "direct",
+            "edited_body", "edited_title", "example", "left", "look", "on", "own", "pending",
+            "photos", "plain", "signed_in", "started", "v");
 
     /** 화면 시계가 말이 되는 범위. 벗어나면 받은 시각으로 대신한다. */
     private static final Duration TS_PAST = Duration.ofDays(2);
