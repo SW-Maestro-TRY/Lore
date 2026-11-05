@@ -430,8 +430,8 @@ export default function Wizard({
         return (
           <button key={q.key} type="button" className={`wt-wiz-q${form.quality === q.key ? " on" : ""}`}
                   onClick={() => patch({ quality: q.key })}>
-            {/* 같은 장면을 화질만 바꿔 그린 한 칸 — 셋이 다 있을 때만(wizardData QUALITY_SAMPLE) */}
-            {samples && <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t(q.label)} loading="lazy" decoding="async" />}
+            {samples && <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />}
+            {samples && <small className="wt-wiz-q-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <div className="row">
               <b>{t(q.label)}</b>
               <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : t("{n}크레딧", { n: c })}</i>

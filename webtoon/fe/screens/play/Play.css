@@ -120,6 +120,8 @@
 .wt .pl-quality .choices button { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--card); color: #fff; text-align: left; cursor: pointer; }
 .wt .pl-quality .choices button.on { border-color: var(--pl-coral); background: var(--pl-card3); }
 .wt .pl-quality .choices button:focus-visible { outline: 2px solid var(--pl-mint); outline-offset: 2px; }
+.wt .pl-quality .choices img { display: block; width: min(84%, 210px); aspect-ratio: 2 / 3; object-fit: contain; align-self: center; border-radius: 7px; background: #fff; }
+.wt .pl-quality .choices .sample-style { align-self: center; margin: 0 0 4px; color: var(--muted); font-size: 12px; }
 .wt .pl-quality .choices strong { font-size: 16px; }
 .wt .pl-quality .choices span { font-size: 12px; line-height: 1.45; color: var(--muted); }
 .wt .pl-quality .choices em { margin-top: 5px; font-size: 13px; font-style: normal; font-weight: 700; color: var(--pl-apricot); }
