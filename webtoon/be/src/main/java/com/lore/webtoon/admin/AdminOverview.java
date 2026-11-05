@@ -263,7 +263,6 @@ public class AdminOverview {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("day", day);
             m.put("visitors", v[0]);
-            m.put("engaged", v[5]);
             m.put("createStarted", v[1]);
             m.put("jobsDone", v[2]);
             out.add(m);
@@ -358,6 +357,7 @@ public class AdminOverview {
             m.put("utmCampaign", p[2]);
             m.put("utmContent", p[3]);
             m.put("visitors", v[0]);
+            m.put("engaged", v[5]);
             m.put("createStarted", v[1]);
             m.put("loggedIn", v[2]);
             m.put("makersDone", v[3]);
