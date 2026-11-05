@@ -122,11 +122,11 @@
 .wt .pl-quality .choices button:focus-visible { outline: 2px solid var(--pl-mint); outline-offset: 2px; }
 .wt .pl-quality .choices img { display: block; width: min(84%, 210px); aspect-ratio: 2 / 3; object-fit: contain; align-self: center; border-radius: 7px; background: #fff; }
 .wt .pl-quality .choices .sample-style { align-self: center; margin: 0 0 4px; color: var(--muted); font-size: 12px; }
-.wt .pl-quality .choices .sale-mark { position: absolute; z-index: 1; top: 4px; right: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 82px; height: 82px; transform: rotate(13deg); clip-path: polygon(50% 0%, 59% 8%, 71% 3%, 76% 15%, 89% 16%, 90% 29%, 100% 36%, 94% 49%, 100% 61%, 89% 69%, 88% 83%, 75% 84%, 69% 97%, 57% 92%, 48% 100%, 39% 91%, 26% 97%, 21% 85%, 8% 82%, 9% 69%, 0% 61%, 6% 49%, 0% 36%, 10% 29%, 11% 16%, 24% 15%, 29% 3%, 41% 8%); background: #f4c46d; color: #35251b; text-align: center; pointer-events: none; filter: drop-shadow(0 4px 5px #0005); }
-.wt .pl-quality .choices .sale-mark::after { content: ""; position: absolute; inset: 11px; border: 1px dashed #35251b88; border-radius: 50%; }
-.wt .pl-quality .choices .sale-mark-swell { background: #ff795a; color: #351c24; }
-.wt .pl-quality .choices .sale-mark span { position: relative; z-index: 1; color: inherit; font-size: 11px; line-height: 1.1; font-weight: 900; }
-.wt .pl-quality .choices .sale-mark b { position: relative; z-index: 1; font-size: 20px; line-height: 1.1; }
+.wt .pl-quality .choices .sale-mark { box-sizing: border-box; position: absolute; z-index: 1; top: 4px; right: 4px; display: flex; align-items: center; justify-content: center; width: 78px; height: 78px; background: #ef4444; color: #fff; font-size: 19px; line-height: 1; font-weight: 900; letter-spacing: -.04em; text-align: center; pointer-events: none; clip-path: polygon(50% 0%, 57.8% 15.9%, 71.7% 5%, 71.8% 22.6%, 89.1% 18.8%, 81.5% 34.8%, 98.7% 38.9%, 85% 50%, 98.7% 61.1%, 81.5% 65.2%, 89.1% 81.2%, 71.8% 77.4%, 71.7% 95%, 57.8% 84.1%, 50% 100%, 42.2% 84.1%, 28.3% 95%, 28.2% 77.4%, 10.9% 81.2%, 18.5% 65.2%, 1.3% 61.1%, 15% 50%, 1.3% 38.9%, 18.5% 34.8%, 10.9% 18.8%, 28.2% 22.6%, 28.3% 5%, 42.2% 15.9%); }
+@media (max-width: 767px) {
+  .wt .pl-quality .choices .sale-mark { width: 58px; height: 58px; font-size: 14px; }
+  .wt .pl-quality .choices button > span { font-size: 11px; }
+}
 .wt .pl-quality .choices strong { font-size: 16px; }
 .wt .pl-quality .choices span { font-size: 12px; line-height: 1.45; color: var(--muted); }
 .wt .pl-quality .choices em { margin-top: 5px; font-size: 13px; font-style: normal; font-weight: 700; color: var(--pl-apricot); }
