@@ -120,13 +120,16 @@
 .wt .wt-wiz-qs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
 .wt .wt-wiz-q {
   text-decoration: none; color: var(--ink); display: flex; flex-direction: column; gap: 7px; padding: 18px 20px; border-radius: 16px;
-  background: var(--bg); border: 1px solid rgba(15, 51, 63, 0.12); cursor: pointer; font-family: inherit; text-align: left;
+  background: var(--bg); border: 1px solid rgba(15, 51, 63, 0.12); font-family: inherit; text-align: left;
 }
 .wt .wt-wiz-q.on { border: 2px solid var(--ink); }
-.wt .wt-wiz-q-art { width: min(84%, 210px); align-self: center; }
+.wt .wt-wiz-q-art { position: relative; display: block; width: min(84%, 210px); align-self: center; padding: 0; border: 0; border-radius: 8px; background: none; cursor: zoom-in; }
+.wt .wt-wiz-q-art:focus-visible, .wt .wt-wiz-q-select:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 .wt .wt-wiz-q-sample { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: contain; border-radius: 8px; background: var(--line); }
+.wt .wt-wiz-q-zoom { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: rgba(5, 14, 27, .78); color: #fff; }
+.wt .wt-wiz-q-select { display: flex; flex: 1; flex-direction: column; gap: 7px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .wt .wt-wiz-q-style { align-self: center; color: var(--muted); font-size: 12px; }
-.wt .wt-wiz-q .row { display: flex; justify-content: space-between; align-items: baseline; }
+.wt .wt-wiz-q .row { display: flex; justify-content: space-between; align-items: baseline; width: 100%; }
 .wt .wt-wiz-q .row b { font-size: 22px; }
 .wt .wt-wiz-q .row i { display: inline-flex; align-items: baseline; gap: 7px; font-style: normal; font-size: 13px; font-weight: 700; color: var(--gold); }
 .wt .wt-wiz-q .row i del { color: var(--muted); font-size: 12px; font-weight: 400; }
@@ -213,6 +216,7 @@
   .wt .wt-wiz-qs, .wt .wt-wiz-modes { grid-template-columns: 1fr; gap: 10px; }
   .wt .wt-wiz-qs { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
   .wt .wt-wiz-q { padding: 12px 10px; border-radius: 14px; gap: 4px; }
+  .wt .wt-wiz-q-select { gap: 4px; }
   .wt .wt-wiz-q-art { width: min(100%, 150px); }
   .wt .wt-wiz-q-sale-note { font-size: 11px; }
   .wt .wt-wiz-q .row b { font-size: 17px; }

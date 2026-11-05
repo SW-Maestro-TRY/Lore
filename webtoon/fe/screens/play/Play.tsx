@@ -6,7 +6,8 @@ import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, r
 import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
-import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare } from "../../ui/Icons";
+import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare, IconZoom } from "../../ui/Icons";
+import QualitySampleZoom from "../../ui/QualitySampleZoom";
 import CreditShort, { isCreditShort } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { CharacterEditDialog } from "../character/OriginalCharacter";
@@ -295,6 +296,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [quality, setQuality] = useState<WizardQuality>("surf");
+  const [previewQuality, setPreviewQuality] = useState<WizardQuality | null>(null);
   const [allow, setAllow] = useState<Allowance | null>(null);
   const [allowError, setAllowError] = useState(false);
   const [allowRetry, setAllowRetry] = useState(0);
@@ -380,6 +382,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
   const ctx = <p className="pl-ctx">{t(w.name)}<i /><b>{e.no} {t(e.title)}</b></p>;
   return (
     <div className="pl-who">
+      {previewQuality && previews && <QualitySampleZoom src={previews[previewQuality]} label={t(QUALITY_INFO.find(q => q.key === previewQuality)?.label || "")} onClose={() => setPreviewQuality(null)} />}
       <MTop back={e.no} onBack={() => go("play", { world: w.id, ep: e.id })} title={t("내 캐릭터")} />
       {ctx}
       <h1>{t("누구를 넣을까요?")}</h1>
@@ -431,14 +434,18 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
           const cost = price?.credits;
           const regular = price?.regular_credits;
           const onSale = regular != null && cost != null && regular > cost;
-          return <button key={q.key} type="button" className={quality === q.key ? "on" : ""}
-            aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
-            {previews && <img src={previews[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />}
-            {previews && <small className="sample-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
-            <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
-            <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : <>{onSale && regular != null && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: cost })}</> : t("오늘 무료 생성")}</em>
-            {allow?.logged_in && onSale && <small className="sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
-          </button>;
+          return <div key={q.key} className={`choice${quality === q.key ? " on" : ""}`}>
+            {previews && <button type="button" className="preview" aria-label={t("{mode} 예시 그림 크게 보기", { mode: t(q.label) })} onClick={() => setPreviewQuality(q.key)}>
+              <img src={previews[q.key]} alt="" loading="lazy" decoding="async" />
+              <span className="zoom" aria-hidden="true"><IconZoom size={17} /></span>
+            </button>}
+            <button type="button" className="pick" aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
+              {previews && <small className="sample-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
+              <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
+              <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : <>{onSale && regular != null && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: cost })}</> : t("오늘 무료 생성")}</em>
+              {allow?.logged_in && onSale && <small className="sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
+            </button>
+          </div>;
         })}</div>
         {allowError && <small role="alert">{t("크레딧 정보를 불러오지 못했어요.")} <button type="button" onClick={() => setAllowRetry((n) => n + 1)}>{t("다시 확인")}</button></small>}
         {blocked && <small role="alert">{allow?.blocked || (allow?.logged_in ? t("크레딧이 부족해요.") : t("오늘 무료 횟수를 모두 사용했어요."))}</small>}

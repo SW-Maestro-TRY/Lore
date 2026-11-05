@@ -117,10 +117,13 @@
 .wt .pl-quality { width: min(100%, 560px); margin-top: 24px; text-align: left; }
 .wt .pl-quality > b { display: block; margin-bottom: 10px; font-size: 15px; color: #fff; }
 .wt .pl-quality .choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.wt .pl-quality .choices button { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--card); color: #fff; text-align: left; cursor: pointer; }
-.wt .pl-quality .choices button.on { border-color: var(--pl-coral); background: var(--pl-card3); }
-.wt .pl-quality .choices button:focus-visible { outline: 2px solid var(--pl-mint); outline-offset: 2px; }
-.wt .pl-quality .choices img { display: block; width: min(84%, 210px); aspect-ratio: 2 / 3; object-fit: contain; align-self: center; border-radius: 7px; background: #fff; }
+.wt .pl-quality .choices .choice { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--card); color: #fff; text-align: left; }
+.wt .pl-quality .choices .choice.on { border-color: var(--pl-coral); background: var(--pl-card3); }
+.wt .pl-quality .choices .preview { position: relative; width: min(84%, 210px); align-self: center; padding: 0; border: 0; border-radius: 7px; background: none; cursor: zoom-in; }
+.wt .pl-quality .choices .preview img { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: contain; border-radius: 7px; background: #fff; }
+.wt .pl-quality .choices .preview .zoom { position: absolute; right: 8px; bottom: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: rgba(5, 14, 27, .78); color: #fff; }
+.wt .pl-quality .choices .pick { display: flex; flex: 1; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.wt .pl-quality .choices .preview:focus-visible, .wt .pl-quality .choices .pick:focus-visible { outline: 2px solid var(--pl-mint); outline-offset: 3px; }
 .wt .pl-quality .choices .sample-style { align-self: center; margin: 0 0 4px; color: var(--muted); font-size: 12px; }
 @media (max-width: 767px) {
   .wt .pl-quality .choices button > span { font-size: 11px; }
