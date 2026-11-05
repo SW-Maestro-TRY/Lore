@@ -1,0 +1,88 @@
+/* LORE 앱 설치 띠 — 대표작 띠(.wt-featured)와 같은 자리·높이에 번갈아 보인다. 테마를 따르지 않는다. */
+.wt .wt-appb {
+  --ab-ink: #f2f5f8; --ab-muted: #a3adbb; --ab-gold: #e7c27d; --ab-mint: #6fe3cb;
+  position: relative; height: 100%; min-height: 220px; border-radius: 14px; overflow: hidden; color: var(--ab-ink);
+}
+.wt .wt-appb h2 { margin: 0; color: var(--ab-ink); letter-spacing: -.03em; word-break: keep-all; }
+.wt .wt-appb-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.wt .wt-appb-btns button {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 10px;
+  border: 1px solid rgba(242, 245, 248, .16); background: #0b0f17; color: var(--ab-ink);
+  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.wt .wt-appb-btns button:hover { background: #151b26; }
+.wt .wt-appb-btns button:focus-visible { outline: 2px solid var(--ab-mint); outline-offset: 2px; }
+.wt .wt-appb .kicker { display: inline-flex; align-items: center; gap: 9px; font-size: 10.5px; font-weight: 700; letter-spacing: .18em; color: var(--ab-mint); }
+.wt .wt-appb .kicker i { width: 6px; height: 6px; border-radius: 50%; background: var(--ab-mint); }
+
+/* a — 가운데 정렬. 참고 이미지(스토리네이션 설치 띠)의 구성을 어두운 화면에 맞춤 */
+.wt .wt-appb-a {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 28px 20px; text-align: center;
+  background: radial-gradient(120% 140% at 50% 0%, #2a2f5c 0%, #171b33 45%, #0d1119 100%);
+}
+.wt .wt-appb-a .icon { width: 48px; height: 48px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, .35); }
+.wt .wt-appb-a h2 { font-size: 26px; font-weight: 800; }
+.wt .wt-appb-a p { margin: 0 0 6px; color: var(--ab-gold); font-size: 15px; font-weight: 700; }
+.wt .wt-appb-a .wt-appb-btns { justify-content: center; }
+
+/* b — 왼쪽 글, 오른쪽 폰 홈 화면에 놓인 LORE 아이콘 */
+.wt .wt-appb-b {
+  display: grid; grid-template-columns: 1fr minmax(220px, 40%); align-items: center;
+  background: linear-gradient(110deg, #0d1119 0%, #121a2b 55%, #1d2a44 100%);
+}
+.wt .wt-appb-b .copy { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 24px 20px 24px 32px; }
+.wt .wt-appb-b h2 { font-size: clamp(26px, 2.6vw, 34px); font-weight: 900; }
+.wt .wt-appb-b p { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+.wt .wt-appb-b p b { padding: 3px 8px; border-radius: 6px; background: var(--ab-gold); color: #151c28; font-size: 12px; font-weight: 900; }
+.wt .wt-appb-b .phone {
+  align-self: end; justify-self: center; width: 168px; height: 200px; margin-top: 20px; padding: 9px 9px 0;
+  border-radius: 30px 30px 0 0; background: #05070c; border: 1px solid rgba(242, 245, 248, .14); border-bottom: 0;
+}
+.wt .wt-appb-b .screen { height: 100%; padding: 12px 14px 0; border-radius: 22px 22px 0 0; background: linear-gradient(160deg, #3b3f78, #8a5a8e 70%, #e09a7a); }
+.wt .wt-appb-b .clock { display: block; text-align: center; font-size: 11px; font-weight: 700; margin-bottom: 12px; }
+.wt .wt-appb-b .apps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 8px; }
+.wt .wt-appb-b .apps i { aspect-ratio: 1; border-radius: 9px; background: rgba(255, 255, 255, .22); }
+.wt .wt-appb-b .apps .lore { grid-column: 4; grid-row: 3; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.wt .wt-appb-b .apps .lore img { width: 100%; aspect-ratio: 1; border-radius: 9px; box-shadow: 0 0 0 2px var(--ab-gold), 0 6px 14px rgba(0, 0, 0, .4); }
+.wt .wt-appb-b .apps .lore small { font-size: 8.5px; font-weight: 700; }
+
+/* c — 50크레딧 동전을 앞세운 가로 띠 */
+.wt .wt-appb-c {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 28px; padding: 28px 36px;
+  background: linear-gradient(100deg, #1b1610 0%, #0d1119 55%, #0d1119 100%);
+}
+.wt .wt-appb-c .coin {
+  display: grid; place-content: center; justify-items: center; width: 132px; height: 132px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f6dca3, #d9a957 60%, #b07f34); color: #2b1d08;
+  box-shadow: inset 0 0 0 6px rgba(255, 255, 255, .22), 0 10px 30px rgba(217, 169, 87, .25);
+}
+.wt .wt-appb-c .coin b { font-size: 46px; font-weight: 900; line-height: 1; letter-spacing: -.04em; }
+.wt .wt-appb-c .coin small { font-size: 10px; font-weight: 800; letter-spacing: .2em; }
+.wt .wt-appb-c .copy { display: flex; flex-direction: column; gap: 10px; }
+.wt .wt-appb-c .kicker { color: var(--ab-gold); }
+.wt .wt-appb-c h2 { font-size: clamp(24px, 2.5vw, 32px); font-weight: 900; }
+.wt .wt-appb-c .wt-appb-btns { flex-direction: column; }
+.wt .wt-appb-c .wt-appb-btns button { justify-content: center; min-width: 150px; }
+
+@media (max-width: 767px) {
+  .wt .wt-appb { border-radius: 12px; }
+  .wt .wt-appb-a { padding: 24px 16px; gap: 8px; }
+  .wt .wt-appb-a h2 { font-size: 22px; }
+  .wt .wt-appb-b { grid-template-columns: 1fr 112px; }
+  .wt .wt-appb-b .copy { padding: 20px 4px 20px 16px; gap: 8px; }
+  .wt .wt-appb-b h2 { font-size: 22px; }
+  .wt .wt-appb-b p { font-size: 13px; gap: 8px; }
+  .wt .wt-appb-b .phone { width: 104px; height: 150px; padding: 6px 6px 0; border-radius: 20px 20px 0 0; }
+  .wt .wt-appb-b .screen { padding: 10px 8px 0; border-radius: 15px 15px 0 0; }
+  .wt .wt-appb-b .apps { gap: 7px 5px; }
+  .wt .wt-appb-b .apps i, .wt .wt-appb-b .apps .lore img { border-radius: 6px; }
+  .wt .wt-appb-b .wt-appb-btns { flex-direction: column; align-self: stretch; }
+  .wt .wt-appb-c { grid-template-columns: auto 1fr; gap: 14px 16px; padding: 20px 16px; }
+  .wt .wt-appb-c .coin { width: 84px; height: 84px; }
+  .wt .wt-appb-c .coin b { font-size: 30px; }
+  .wt .wt-appb-c .coin small { font-size: 7.5px; }
+  .wt .wt-appb-c h2 { font-size: 21px; }
+  .wt .wt-appb-c .wt-appb-btns { grid-column: 1 / -1; flex-direction: row; }
+  .wt .wt-appb-c .wt-appb-btns button { flex: 1; min-width: 0; }
+  .wt .wt-appb-btns button { height: 42px; padding: 0 14px; font-size: 13.5px; }
+}

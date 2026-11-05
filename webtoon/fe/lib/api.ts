@@ -547,6 +547,18 @@ export function pushUnsubscribe(endpoint: string): Promise<{ ok: boolean }> {
   return post("/push/unsubscribe", { endpoint });
 }
 
+/** 앱 출시 알림 신청(출시날 50크레딧). 서버 주소가 아직 없어 이 브라우저에만 적는 임시(mock) 구현이다.
+ *  서버를 붙이기 전에는 운영에 내보내지 않는다 — 받은 이메일이 어디에도 남지 않는다. */
+export async function joinAppWaitlist(email: string, where: string): Promise<{ ok: boolean }> {
+  try {
+    const list = JSON.parse(localStorage.getItem("lore_app_waitlist_mock") || "[]") as unknown[];
+    list.push({ email, where, uid: getUid(), at: new Date().toISOString() });
+    localStorage.setItem("lore_app_waitlist_mock", JSON.stringify(list.slice(-20)));
+  } catch { /* 저장 못 해도 화면은 진행 */ }
+  await new Promise((r) => setTimeout(r, 400));
+  return { ok: true };
+}
+
 export function notifyByEmail(id: string, email: string): Promise<{ email: string | null }> {
   return post(`/nh/jobs/${encodeURIComponent(id)}/notify`, { email });
 }
