@@ -18,7 +18,7 @@ import { loadWorlds, type PlayEvent, type PlayPerson, type PlayWorld } from "./p
 import "../wizard/i18n";
 import "./i18n";
 import "./Play.css";
-import { QUALITY_INFO, qualitySamples, type WizardQuality } from "../../lib/wizardData";
+import { QUALITY_INFO, worldPlayQualitySamples, WORLD_PLAY_QUALITY_THUMB, type WizardQuality } from "../../lib/wizardData";
 
 /* 모바일에서만 보이는 얇은 줄 — 이전 · 제목 · 오른쪽 글(시안 mobile.html 의 .mtop). PC 에서는 CSS 가 숨긴다. */
 function MTop({ back, onBack, title, right }: { back?: string; onBack?: () => void; title: string; right?: string }) {
@@ -314,7 +314,8 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
     return () => window.clearTimeout(timer);
   }, []);
   const choice = allow?.qualities?.find((q) => q.key === quality);
-  const previews = qualitySamples();
+  const previews = worldPlayQualitySamples();
+  const guestFree = !authenticated && !allowError && (!allow || (!allow.logged_in && !allow.blocked && (allow.free_left ?? 0) > 0));
   const blocked = !!allow?.blocked || (!allow?.logged_in && allow?.free_left != null && allow.free_left <= 0)
     || (!!allow?.logged_in && choice != null && allow.balance != null && allow.balance < choice.credits);
   /* 어떤 캐릭터를 넣었나 — 세계가 정한 예시 · 운영 자료의 예시 주인공 · 기본 견본 · 내 캐릭터. id 는 예시 주인공처럼 한글이 섞이면 안 남는다 */
@@ -383,7 +384,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
   const ctx = <p className="pl-ctx">{t(w.name)}<i /><b>{e.no} {t(e.title)}</b></p>;
   return (
     <div className="pl-who">
-      {previewQuality && previews && <QualitySampleZoom src={previews[previewQuality]} label={t(QUALITY_INFO.find(q => q.key === previewQuality)?.label || "")} onClose={() => setPreviewQuality(null)} />}
+      {previewQuality && previews && <QualitySampleZoom src={previews[previewQuality]} label={t(QUALITY_INFO.find(q => q.key === previewQuality)?.label || "")} sample="school" onClose={() => setPreviewQuality(null)} />}
       <MTop back={e.no} onBack={() => go("play", { world: w.id, ep: e.id })} title={t("내 캐릭터")} />
       {ctx}
       <h1>{t("누구를 넣을까요?")}</h1>
@@ -437,17 +438,18 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
           const onSale = regular != null && cost != null && regular > cost;
           return <div key={q.key} className={`choice${quality === q.key ? " on" : ""}`}>
             {previews && <button type="button" className="preview" aria-label={t("{mode} 예시 그림 크게 보기", { mode: t(q.label) })} onClick={() => setPreviewQuality(q.key)}>
-              <img src={previews[q.key]} alt="" loading="lazy" decoding="async" />
+              <img src={WORLD_PLAY_QUALITY_THUMB[q.key]} alt="" loading="lazy" decoding="async" />
               <span className="zoom" aria-hidden="true"><IconZoom size={17} /></span>
             </button>}
             <button type="button" className="pick" aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
-              {previews && <small className="sample-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
+              {previews && <small className="sample-style">{t("예시 그림체 · 일반 웹툰")}</small>}
               <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
-              <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : <>{onSale && regular != null && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: cost })}</> : t("오늘 무료 생성")}</em>
-              {allow?.logged_in && onSale && <small className="sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
+              <em>{guestFree ? t("무료 이벤트 중!") : cost == null ? t("크레딧 확인 중") : <>{onSale && regular != null && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: cost })}</>}</em>
+              {!guestFree && allow?.logged_in && onSale && <small className="sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
             </button>
           </div>;
         })}</div>
+        {guestFree && allow?.free_left != null && <small className="free-left">{t("남은 무료 횟수 {n}회", { n: allow.free_left })}</small>}
         {allowError && <small role="alert">{t("크레딧 정보를 불러오지 못했어요.")} <button type="button" onClick={() => setAllowRetry((n) => n + 1)}>{t("다시 확인")}</button></small>}
         {blocked && <small role="alert">{allow?.blocked || (allow?.logged_in ? t("크레딧이 부족해요.") : t("오늘 무료 횟수를 모두 사용했어요."))}</small>}
       </div>}
