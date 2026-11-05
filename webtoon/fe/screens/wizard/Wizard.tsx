@@ -440,24 +440,17 @@ export default function Wizard({
             {samples && <div className="wt-wiz-q-art">
               <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />
             </div>}
-            {samples && c != null && regular != null && regular > c && <span className={`wt-wiz-q-sticker wt-wiz-q-sticker-${q.key}`}><span>{t("오픈 세일중")}</span><b>11.06 ~ 11.15</b></span>}
             {samples && <small className="wt-wiz-q-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <div className="row">
               <b>{t(q.label)}</b>
               <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : <>{regular != null && regular > c && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: c })}</>}</i>
             </div>
+            {c != null && regular != null && regular > c && <small className="wt-wiz-q-sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
             <span className="lede">{t(q.lede)}</span>
             <span className="muted desc">{q.desc.map((d) => t(d)).join(" ")}</span>
           </button>
         );
       })}
-      {(() => {
-        /* 한 편 값은 기본 장 수까지 — 넘는 장은 그리기 직전에 장마다 받고, 모자라면 앞 장까지만 먼저 그린다 */
-        const q = allow?.qualities?.find((x) => x.key === form.quality);
-        return q?.base_pages && q.extra_page_credits ? (
-          <p className="muted wt-wiz-qnote">{t("한 편은 {base}장까지예요. 이야기가 길어 장면이 더 많으면 한 장에 {per}크레딧이 더 들고, 크레딧이 모자라면 {base}장까지 먼저 그린 뒤 나머지는 나중에 이어 그릴 수 있어요.", { base: q.base_pages, per: q.extra_page_credits })}</p>
-        ) : null;
-      })()}
     </div>
   );
 
