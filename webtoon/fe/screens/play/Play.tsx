@@ -426,7 +426,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
           const sale = q.key === "swell" ? "파격 세일" : "세일";
           return <button key={q.key} type="button" className={quality === q.key ? "on" : ""}
             aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
-            {allow?.logged_in && price?.regular_credits != null && cost != null && <span className={`sale-mark sale-mark-${q.key}`}><span>{t(sale)}</span><b>{cost}C</b></span>}
+            {allow?.logged_in && price?.regular_credits != null && cost != null && <span className={`sale-mark sale-mark-${q.key}`} aria-label={t(sale)}>SALE</span>}
             {previews && <img src={previews[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />}
             {previews && <small className="sample-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
