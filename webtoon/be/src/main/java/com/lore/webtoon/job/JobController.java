@@ -102,7 +102,7 @@ public class JobController {
         Long me = CreditGate.currentUser();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("logged_in", me != null);
-        out.put("credit_cost", credits.cost());
+        out.put("credit_cost", WebtoonQuality.creditsOf(WebtoonQuality.DEFAULT_QUALITY));
         // 편집실 단추가 값을 적으려고 쓴다 — 화면에 박아 두면 서버 설정과 어긋난다.
         out.put("regen_cost", credits.regenCost());
         /* 화질 셋과 각각의 값. **화면이 여기서 받아 간다** — 같은 표를 화면에도
@@ -125,7 +125,7 @@ public class JobController {
         return out;
     }
 
-    /** 세계관 사건에서 실제로 받을 할인 값. 일반 웹툰 allowance 는 그대로 둔다. */
+    /** 세계관 사건 화면도 일반 웹툰과 같은 오픈 세일 값을 받는다. */
     public Map<String, Object> playAllowance(HttpServletRequest request) {
         Map<String, Object> out = allowance(request);
         out.put("qualities", WebtoonQuality.playChoices());
@@ -180,7 +180,7 @@ public class JobController {
         return createInternal(request, form, false);
     }
 
-    /** 검증된 /play/runs 경로에서만 부른다. 본문 play 값만으로 할인하지 않는다. */
+    /** 검증된 /play/runs 경로에서만 부른다. 본문 play 값만으로 사건 경로가 되지 않는다. */
     public ResponseEntity<Map<String, Object>> createPlay(HttpServletRequest request, JobService.CreateRequest form) {
         return createInternal(request, form, true);
     }

@@ -427,14 +427,19 @@ export default function Wizard({
     <div className="wt-wiz-qs">
       {QUALITY_INFO.map((q) => {
         const c = creditsOf(q.key);
+        const regular = allow?.qualities?.find((x) => x.key === q.key)?.regular_credits;
+        const sale = q.key === "swell" ? "파격 세일" : "세일";
         return (
           <button key={q.key} type="button" className={`wt-wiz-q${form.quality === q.key ? " on" : ""}`}
                   onClick={() => patch({ quality: q.key })}>
-            {samples && <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />}
+            {samples && <div className="wt-wiz-q-art">
+              <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />
+              {c != null && regular != null && regular > c && <span className={`wt-wiz-q-sticker wt-wiz-q-sticker-${q.key}`}><span>{t(sale)}</span><b>{c}C</b></span>}
+            </div>}
             {samples && <small className="wt-wiz-q-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <div className="row">
               <b>{t(q.label)}</b>
-              <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : t("{n}크레딧", { n: c })}</i>
+              <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : <>{regular != null && regular > c && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: c })}</>}</i>
             </div>
             <span className="lede">{t(q.lede)}</span>
             <span className="muted desc">{q.desc.map((d) => t(d)).join(" ")}</span>
