@@ -2,20 +2,31 @@
 
 /* 둘러보기 맨 위 띠의 두 번째 장 — LORE 앱 설치하기(2026-11-06).
  * 앱은 아직 없다. 단추를 누르면 출시 알림(50크레딧) + 지금 쓸 수 있는 홈 화면 추가 안내 창이 열린다.
- * 시안 비교 뒤 결정(2026-11-06): PC 는 왼쪽 글 + 오른쪽 비스듬한 폰 두 대(둘러보기 탭 · 웹툰 보기 화면 캡처, 배치 시안 art 1~4),
+ * 시안 비교 뒤 결정(2026-11-06): PC 는 왼쪽 글 + 오른쪽 비스듬한 실물 같은 폰 두 대(웹툰 홈 · 웹툰 보기 캡처, 참고: 와디즈 글로벌 앱 출시 배너),
  * 폰은 가운데 정렬(아이콘 · 제목 · 50크레딧 · 단추). 같은 마크업을 CSS 로 바꿔 보인다. */
 import { useT } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import { AndroidMark, AppleMark, type AppDevice } from "../../ui/AppInstallDialog";
 import "./AppBanner.css";
 
-export type AppBannerArt = 1 | 2 | 3 | 4;
+/** 실제 폰처럼 — 금속 테두리 · 옆 단추 · 상태 줄(시각 · 다이내믹 아일랜드 · 배터리) */
+function Phone({ className, src }: { className: string; src: string }) {
+  return (
+    <div className={`phone ${className}`}>
+      <div className="screen">
+        <span className="status"><b>9:41</b><i className="island" /><i className="batt" /></span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" />
+      </div>
+    </div>
+  );
+}
 
-export default function AppBanner({ art = 1, onOpen }: { art?: AppBannerArt; onOpen: (d: AppDevice) => void }) {
+export default function AppBanner({ onOpen }: { onOpen: (d: AppDevice) => void }) {
   const t = useT();
   const open = (d: AppDevice) => { track("app_banner_click", { device: d }); onOpen(d); };
   return (
-    <div className={`wt-appb wt-appb-art${art}`}>
+    <div className="wt-appb">
       <div className="copy">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="icon" src="/icons/icon-192.png" alt="" />
@@ -27,16 +38,10 @@ export default function AppBanner({ art = 1, onOpen }: { art?: AppBannerArt; onO
           <button type="button" onClick={() => open("ios")}><AppleMark />iPhone</button>
         </div>
       </div>
-      {/* 폰 두 대 — 둘러보기 탭과 웹툰 보는 화면(실제 화면 캡처). 배치 시안은 art 1~4 */}
+      {/* 폰 두 대 — 앞 왼쪽은 웹툰 홈, 뒤 오른쪽은 웹툰 보기(컷을 확대). 실제 화면 캡처. 띠 아래로 잘려 나간다 */}
       <div className="phones" aria-hidden="true">
-        <div className="phone browse">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/static/gallery/app-phone-browse.jpg" alt="" />
-        </div>
-        <div className="phone read">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/static/gallery/app-phone-read.jpg" alt="" />
-        </div>
+        <Phone className="read" src="/static/gallery/app-phone-read.jpg" />
+        <Phone className="home" src="/static/gallery/app-phone-home.jpg" />
       </div>
     </div>
   );
