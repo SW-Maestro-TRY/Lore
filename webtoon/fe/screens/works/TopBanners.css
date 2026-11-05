@@ -9,3 +9,5 @@
 .wt .wt-topb-dots button.on { width: 20px; background: #f2f5f8; }
 @media (max-width: 767px) { .wt .wt-topb { margin: 0 0 18px; } }
 @media (prefers-reduced-motion: reduce) { .wt .wt-topb-slide, .wt .wt-topb-slide.on { transition: none; } }
+/* 앱 띠가 더 높아 대표작 띠도 같은 높이로 늘어난다 — 그림이 칸을 채우게 */
+@media (min-width: 768px) { .wt .wt-topb .wt-featured-art { max-height: 300px; } }
