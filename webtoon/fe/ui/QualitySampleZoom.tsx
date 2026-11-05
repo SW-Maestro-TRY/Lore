@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useT } from "../lib/i18n";
 import "./QualitySampleZoom.css";
 
-export default function QualitySampleZoom({ src, label, onClose }: { src: string; label: string; onClose: () => void }) {
+export default function QualitySampleZoom({ src, label, sample = "arcana", onClose }: { src: string; label: string; sample?: "arcana" | "school"; onClose: () => void }) {
   const t = useT();
   const overlay = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
@@ -31,6 +31,6 @@ export default function QualitySampleZoom({ src, label, onClose }: { src: string
   }, [portalTarget]);
   return portalTarget ? createPortal(<div ref={overlay} className="wt-quality-sample-zoom" role="dialog" aria-modal="true" aria-label={t("크게 보기")} tabIndex={-1} onClick={onClose}>
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={src} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: label })} />
+    <img src={src} alt={t(sample === "school" ? "밤에 노래하는 학교 4페이지 · {mode} 예시" : "아르카나 마법학교 page02 · {mode} 예시", { mode: label })} />
   </div>, portalTarget) : null;
 }

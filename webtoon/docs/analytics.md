@@ -298,6 +298,7 @@ group by 1 order by 1;
 | **`remix_cta_click`** | 남의 작품 완성본에서 만들기로 넘어가는 단추(#669, #750) | `where`: end_card(마지막 장 아래 바다색 영역) · link_bar(UTM 을 달고 바로 들어온 사람에게만 뜨는 제목 아래 줄) · next_note(「다음화 보기」 준비 중 창), `source`(보던 작품 run), `logged_in`, `free_left`(게스트 남은 무료 편수) |
 | `quick_character_saved` | 빠른 시작(광고 랜딩 → `quick=1`)에서 이름·설명만 적고 「다음」을 눌러 캐릭터가 저장됨(2026-10-27). 그림은 첫 작품의 시트로 채워진다 | `character`, `logged_in` |
 | `read_end` | 완성본을 끝까지 내림 (작품당 한 번) | `run`, `mine`, `ep`, `page` |
+| `signup_offer_view` · `signup_offer_click` · `signup_offer_dismiss` | 오늘 무료 몫을 다 쓴 비회원이 가입 안내를 봄 · 가입/로그인을 누름 · 닫음. 완독 때는 작품당 한 번, 만들기 단추를 누르면 매번 | `where`: result_read_end · reading_end · end_card · link_bar 등 단추 자리, `run` |
 | `share_click` | 완성본 공유 | `target`: native · menu · kakao · x · line · postype · copy |
 | `download_click` · `download_per_page_open` | 내려받기 | `kind`: episode · page, `page` |
 | `editor_open` · `sibling_open` | 편집실 · 같은 캐릭터의 다른 편 | `run` |

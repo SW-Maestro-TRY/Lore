@@ -5,6 +5,13 @@ const dict: Dict = {
   "{n}화 만들기": { en: "Make episode {n}", ja: "第{n}話を作る", zh: "制作第 {n} 话" },
   "이어서 다음 화를 만들어요": { en: "Continue with the next episode", ja: "続きの話を作ります", zh: "继续制作下一话" },
   /* ---- Result ---- */
+  "오늘 무료 횟수를 다 썼어요": { en: "You've used today's free creations", ja: "今日の無料回数を使い切りました", zh: "今天的免费次数已用完" },
+  "회원가입하면 20크레딧": { en: "Sign up for 20 credits", ja: "会員登録で20クレジット", zh: "注册即得20积分" },
+  "가입하고 바로 한 편 더 만들 수 있어요": { en: "Sign up and make another episode right away", ja: "登録してすぐにもう1話作れます", zh: "注册后马上再做一话" },
+  "회원가입·로그인": { en: "Sign up or sign in", ja: "会員登録・ログイン", zh: "注册或登录" },
+  "나중에": { en: "Later", ja: "あとで", zh: "稍后" },
+  "무료": { en: "Free", ja: "無料", zh: "免费" },
+  "무료로 웹툰 만들기": { en: "Make a webtoon for free", ja: "無料でウェブトゥーンを作る", zh: "免费制作漫画" },
   /* ---- 크레딧이 모자라 남겨 둔 뒷장면(PendingPages) ---- */
   "크레딧이 모자라요!": { en: "Not enough credits!", ja: "クレジットが足りません！", zh: "积分不够！" },
   "출석 이벤트로 크레딧을 받으면 이어서 그릴 수 있어요.": {

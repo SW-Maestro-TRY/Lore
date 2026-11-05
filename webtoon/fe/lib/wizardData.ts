@@ -90,7 +90,7 @@ export const QUALITY_INFO: {
 
 export const QUALITY_DEFAULT: WizardQuality = "surf";
 
-/** 「토끼 귀가 떨린 날」 아르카나 마법학교 page02. 같은 장면의 실제 모델 결과. */
+/** 일반 웹툰 만들기: 「토끼 귀가 떨린 날」 아르카나 page02, 로판 그림체의 동일 장면 비교. */
 const QUALITY_SAMPLE: Record<WizardQuality, string> = {
   wave: "/static/gallery/quality/wave.jpg", // 옛 작업 호환용. 새 선택지에는 표시하지 않는다.
   surf: "/static/gallery/quality/arcana-page02-flare.png",
@@ -100,6 +100,27 @@ const QUALITY_SAMPLE: Record<WizardQuality, string> = {
 export function qualitySamples(): Record<WizardQuality, string> | null {
   return QUALITY_SAMPLE;
 }
+
+/** 세계관 체험: 「밤에 노래하는 학교」 1화 page04, 일반 웹툰 그림체의 동일 장면 비교. */
+export function worldPlayQualitySamples(): Record<WizardQuality, string> {
+  return {
+    wave: QUALITY_SAMPLE.wave,
+    surf: "/static/gallery/quality/school-corridor-page04-flare.png",
+    swell: "/static/gallery/quality/school-corridor-page04-gpt-image-2.png",
+  };
+}
+
+/** 카드에 작게 보이는 같은 장면 얼굴 컷. 그림체를 나란히 비교하고, 누르면 위의 페이지 전체가 열린다. */
+export const QUALITY_THUMB: Record<WizardQuality, string> = {
+  wave: QUALITY_SAMPLE.wave,
+  surf: "/static/gallery/quality/arcana-page02-flare-face.jpg",
+  swell: "/static/gallery/quality/arcana-page02-gpt-image-2-face.jpg",
+};
+export const WORLD_PLAY_QUALITY_THUMB: Record<WizardQuality, string> = {
+  wave: QUALITY_SAMPLE.wave,
+  surf: "/static/gallery/quality/school-corridor-page04-flare-face.jpg",
+  swell: "/static/gallery/quality/school-corridor-page04-gpt-image-2-face.jpg",
+};
 
 export interface WizardForm {
   lorebook?: import("./api").LoreBook | null;

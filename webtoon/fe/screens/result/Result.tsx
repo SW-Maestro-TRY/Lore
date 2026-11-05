@@ -6,6 +6,7 @@ import {
   readSeries, type SeriesInfo, readAllowance, readResult, rememberRecent, renameRun, shareKeyOf, type Allowance, type RunCard, type RunResult,
 } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
+import AuthModal from "@common/auth/AuthModal";
 import { useT } from "../../lib/i18n";
 import { unsafeWhy } from "../../lib/serverI18n";
 import { track } from "../../lib/track";
@@ -14,6 +15,7 @@ import type { Go } from "../../lib/nav";
 import { IconChevronRight, IconChevronUp, IconClose, IconComment, IconDownload, IconEdit, IconMenu, IconPlus } from "../../ui/Icons";
 import { commentCount } from "../../lib/community";
 import { Crumb, MobileTop } from "../../ui/TopNav";
+import { Dialog } from "../../ui/Dialog";
 import ShareMenu from "./ShareMenu";
 import RunStrip from "../../ui/RunStrip";
 import LikeButton from "../../ui/LikeButton";
@@ -82,7 +84,7 @@ export default function Result({ runId, go, authenticated = false, page }: { run
     readSeries(runId).then(s=>{if(alive)setSeries(s);}).catch(()=>{if(alive)setSeriesError(true);});
     return ()=>{alive=false;};
   },[runId,authenticated,seriesTick]);
-  useEffect(() => { setNextNote(false); setEpOpen(false); setCover(null); setOwnedByAccount(false); }, [runId]);
+  useEffect(() => { setNextNote(false); setEpOpen(false); setCover(null); setOwnedByAccount(false); setSignupOffer(null); setSignupOfferSeenThisView(false); setSignupOfferAlreadySeen(false); }, [runId]);
   /* 「이런 웹툰은 어때요」(#248) — 같은 장르 최신 넷, 없으면 그냥 최신 넷. 점수 없음. */
   const [suggested, setSuggested] = useState<RunCard[]>([]);
   const [liked, setLiked] = useState(false);
@@ -97,6 +99,11 @@ export default function Result({ runId, go, authenticated = false, page }: { run
   }, [runId]);
   /* 끝까지 읽었나 — 읽은 뒤에만 짧은 설문(#471)을 띄운다. */
   const [readEnd, setReadEnd] = useState(false);
+  /* 가입 안내를 띄운 자리(완독·만들기 버튼). null 이면 닫힘 */
+  const [signupOffer, setSignupOffer] = useState<string | null>(null);
+  const [signupAuth, setSignupAuth] = useState(false);
+  const [signupOfferSeenThisView, setSignupOfferSeenThisView] = useState(false);
+  const [signupOfferAlreadySeen, setSignupOfferAlreadySeen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -184,13 +191,18 @@ export default function Result({ runId, go, authenticated = false, page }: { run
      여기가 광고로 온 사람의 첫 화면이다. 로그인 없이도 오늘 몇 편 무료인지는 서버가
      정한다(GuestGate) — 화면에 숫자를 박지 않는다. */
   const [allow, setAllow] = useState<Allowance | null>(null);
+  const [allowChecked, setAllowChecked] = useState(false);
   useEffect(() => {
     /* 내 작품에서도 읽는다(2026-10-27) — 「다음 편 만들기」 아래에 오늘 남은 무료 몫·내일 몫을 적는다. */
     let alive = true;
-    readAllowance().then((a) => { if (alive) setAllow(a); }).catch(() => {});
+    setAllowChecked(false);
+    readAllowance().then((a) => { if (alive) setAllow(a); }).catch(() => {})
+      .finally(() => { if (alive) setAllowChecked(true); });
     return () => { alive = false; };
   }, [mine, authenticated]);
   const freeLeft = allow && !allow.logged_in && !allow.blocked ? allow.free_left ?? 0 : 0;
+  /* 비회원이 오늘 무료 몫을 다 쓴 상태 — 가입 안내는 이때만 띄운다. 서버 전체 마감(blocked)은 가입해도 못 만들어 뺀다. */
+  const guestOut = !authenticated && !!allow && !allow.logged_in && !allow.blocked && (allow.free_left ?? 0) <= 0;
   const endCopy = END_COPY;
   /* 내 작품의 「다음 편 만들기」 아래 한 줄 — 돌아올 이유(2026-10-27). 게스트 몫은 00시에 다시 채워진다(GuestGate).
      로그인한 사람은 잔액만 적는다(매일 무료 크레딧은 10/27 폐지 결정 — 출석 이벤트가 들어오면 그 문구로). */
@@ -230,6 +242,7 @@ export default function Result({ runId, go, authenticated = false, page }: { run
     } catch { /* 없음 */ }
   }, []);
   const startMaking = (where: string) => {
+    if (guestOut) { openSignupOffer(where); return; }
     track("remix_cta_click", { source: runId, where, logged_in: authenticated, free_left: freeLeft || undefined });
     metaTrackCustom("MakeClick", { where });
     go("create", { step: 1 });
@@ -326,6 +339,7 @@ export default function Result({ runId, go, authenticated = false, page }: { run
     const next = series?.chapters.find(c => c.episode > ep);
     if (next?.run_id) { go("result", {run:next.run_id}); return; }
     if (next?.job_id) { go("running", {job:next.job_id}); return; }
+    if (mine && guestOut) { openSignupOffer(where); return; }
     if (mine) { go("next", {run: runId}); return; }
     setNextNote(true);
   };
@@ -360,6 +374,29 @@ export default function Result({ runId, go, authenticated = false, page }: { run
       if (frame) cancelAnimationFrame(frame);
     };
   }, [data, runId, mine, ep]);
+
+  /* 무료 몫을 다 쓴 비회원에게만 가입 안내를 띄운다 — 내 작품을 끝까지 읽었을 때(작품마다 한 번),
+     그리고 만들기·다음 편 버튼을 눌렀을 때. 무료가 남았으면 띄우지 않는다. 공개 작품 감상자의 완독은 제외. */
+  function openSignupOffer(where: string) {
+    setSignupOffer(where);
+    track("signup_offer_view", { where, run: runId });
+  }
+  useEffect(() => {
+    if (!data || !mine || authenticated || !readEnd || readEndSent.current !== runId || !allowChecked || !guestOut) return;
+    const key = `lore_signup_after_read:${runId}`;
+    try {
+      if (localStorage.getItem(key)) { setSignupOfferAlreadySeen(true); return; }
+      localStorage.setItem(key, "1");
+    } catch { /* 저장이 막혀도 현재 화면에서는 한 번만 띄운다. */ }
+    setSignupOfferSeenThisView(true);
+    openSignupOffer("result_read_end");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, mine, authenticated, readEnd, runId, allowChecked, guestOut]);
+
+  const closeSignupOffer = () => {
+    track("signup_offer_dismiss", { where: signupOffer, run: runId });
+    setSignupOffer(null);
+  };
 
   /* 「컷별로 내려받기」를 켜고 메인 내려받기를 누르면, 합친 파일 대신 장마다
      따로 내려받는다. 한꺼번에 열면 브라우저가 일부를 막아서 간격을 둔다. */
@@ -499,10 +536,11 @@ export default function Result({ runId, go, authenticated = false, page }: { run
                     <small>{allow?.blocked ? t("오늘은 만들기가 마감됐어요 · 내일 00시에 다시 열려요")
                       : freeLeft > 0 ? t("가입 없이 무료 {n}편 · 한 편 약 8분", { n: freeLeft })
                       : allow && !allow.logged_in ? t("오늘 무료 몫을 다 썼어요 · 로그인하면 이어서")
+                      : !authenticated && !allowChecked ? t("무료")
                       : t("한 편 약 8분")}</small>
                   </span>
                   <button type="button" className="btn btn-p" onClick={() => startMaking("link_bar")}>
-                    {t("내 캐릭터로 웹툰 만들기")}
+                    {t(!authenticated && (freeLeft > 0 || !allowChecked) ? "무료로 웹툰 만들기" : "내 캐릭터로 웹툰 만들기")}
                   </button>
                 </div>
               )}
@@ -675,7 +713,8 @@ export default function Result({ runId, go, authenticated = false, page }: { run
               </EpisodeCommunity>
             ) : <div className="wt-reader-endnav"><button className="btn btn-w" onClick={()=>{ setEpOpen(true); requestAnimationFrame(()=>document.getElementById("wt-eplist-top")?.scrollIntoView({behavior:"smooth",block:"start"})); }}>{t("회차 목록")}</button>{mine&&<button className="btn btn-p" onClick={()=>nextEpisode("reading_end")}>{t("다음 편 만들기")}</button>}</div>}
 
-            {mine && readEnd && <ResultSurvey key={runId} runId={runId} authenticated={authenticated} go={go} />}
+            {mine && readEnd && !signupOfferSeenThisView && (authenticated || (allowChecked && (!guestOut || signupOfferAlreadySeen))) &&
+              <ResultSurvey key={runId} runId={runId} authenticated={authenticated} go={go} />}
 
             {suggested.length > 0 && (
               <div className="wt-result-suggest">
@@ -742,6 +781,24 @@ export default function Result({ runId, go, authenticated = false, page }: { run
           </div>
         </div>
       )}
+
+      {signupOffer && !authenticated && (
+        <Dialog title={t("오늘 무료 횟수를 다 썼어요")} className="wt-signup-offer" onClose={closeSignupOffer}>
+          <div className="wt-signup-offer-gift">
+            <b>20</b>
+            <span><strong>{t("회원가입하면 20크레딧")}</strong><small>{t("가입하고 바로 한 편 더 만들 수 있어요")}</small></span>
+          </div>
+          <div className="wt-dialog-actions">
+            <button type="button" className="btn btn-w" onClick={closeSignupOffer}>{t("나중에")}</button>
+            <button type="button" className="btn btn-p" onClick={() => {
+              track("signup_offer_click", { where: signupOffer, run: runId });
+              setSignupOffer(null);
+              setSignupAuth(true);
+            }}>{t("회원가입·로그인")}</button>
+          </div>
+        </Dialog>
+      )}
+      <AuthModal open={signupAuth && !authenticated} initialTab="signup" onClose={() => setSignupAuth(false)} />
 
       {data && mine && (
         <div className="mfoot">

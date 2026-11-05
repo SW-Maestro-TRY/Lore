@@ -14,7 +14,7 @@ import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { startJob } from "../../lib/start";
 import DirectSwitch from "../../ui/DirectSwitch";
 import {
-  CO_MAX, GENRE_QUICK, OWN_STORY_MAX, QUALITY_INFO, STYLE_INFO, qualitySamples,
+  CO_MAX, GENRE_QUICK, OWN_STORY_MAX, QUALITY_INFO, STYLE_INFO, qualitySamples, QUALITY_THUMB,
   emptyWizardForm, type WizardForm, type WizardQuality,
 } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
@@ -348,6 +348,7 @@ export default function Wizard({
     if (q) return q.credits;
     return allow?.credit_cost ?? null;
   };
+  const guestFree = !authenticated && !allowError && (!allow || (!allow.logged_in && !allow.blocked && (allow.free_left ?? 0) > 0));
   /* 함께 주인공 시트 값(#899) — 첫 주인공 시트는 한 편 값에 들어 있고, 둘째부터 한 사람당 coCredit */
   const coExtra = form.characterId ? coIds.length * coCredit : 0;
   const coNeed = (creditsOf(form.quality) ?? 0) + coExtra;
@@ -439,18 +440,21 @@ export default function Wizard({
         return (
           <div key={q.key} className={`wt-wiz-q${form.quality === q.key ? " on" : ""}`}>
             {samples && <button type="button" className="wt-wiz-q-art" aria-label={t("{mode} 예시 그림 크게 보기", { mode: t(q.label) })} onClick={() => setPreviewQuality(q.key)}>
-              <img className="wt-wiz-q-sample" src={samples[q.key]} alt="" loading="lazy" decoding="async" />
+              <img className="wt-wiz-q-sample" src={QUALITY_THUMB[q.key]} alt="" loading="lazy" decoding="async" />
               <span className="wt-wiz-q-zoom" aria-hidden="true"><IconZoom size={17} /></span>
             </button>}
             <button type="button" className="wt-wiz-q-select" aria-pressed={form.quality === q.key} onClick={() => patch({ quality: q.key })}>
               {samples && <small className="wt-wiz-q-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
               <span className="row">
                 <b>{t(q.label)}</b>
-                <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : <>{regular != null && regular > c && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: c })}</>}</i>
+                <i>{guestFree
+                  ? t("무료 이벤트 중!")
+                  : c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} />
+                  : <>{regular != null && regular > c && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: c })}</>}</i>
               </span>
               <span className="lede">{t(q.lede)}</span>
               <span className="muted desc">{q.desc.map((d) => t(d)).join(" ")}</span>
-              {c != null && regular != null && regular > c && <small className="wt-wiz-q-sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
+              {c != null && regular != null && regular > c && !guestFree && <small className="wt-wiz-q-sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
             </button>
           </div>
         );
@@ -589,7 +593,7 @@ export default function Wizard({
         <div className="wt-create-footer"><button type="button" className="btn btn-p" disabled={!step1Ok||loreLocked||quickSaving||!!form.lorebook&&!form.lorebook.confirmed} onClick={()=>void next()}>{quickSaving?t("캐릭터 저장 중…"):t("다음")}</button></div>
       </div>:<div className="wt-create-content wt-create-options">
         <section><h2>{t("그림체")}</h2><div className="wt-wiz-styles">{STYLE_INFO.map(([key,label])=><button type="button" key={key} className={`wt-wiz-style${form.style===key?" on":""}`} aria-pressed={form.style===key} onClick={()=>{track("style_pick",{style:key});patch({style:key});}}><img src={STYLE_THUMB[key]||`/static/samples/ex-${key}-1.jpg`} alt=""/><b>{t(label)}</b>{form.style===key&&<CheckMark/>}</button>)}</div></section>
-        <section><h2>{t("그리기 방식")}</h2><p className="dim hint wt-wiz-qualityhint">{t("시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.")}</p>{qualityPicker}</section>
+        <section><h2>{t("그리기 방식")}</h2><p className="dim hint wt-wiz-qualityhint">{t("시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.")}</p>{qualityPicker}{guestFree && allow?.free_left != null && <small className="wt-wiz-free-left">{t("남은 무료 횟수 {n}회", { n: allow.free_left })}</small>}</section>
         {/* 두 길 모두 「바로 만들기」 하나로 고른다(2026-10-26) — 내 이야기 길도 확인 없이 끝까지 갈 수 있다. */}
         <section><h2>{t("생성 방식")}</h2><DirectSwitch on={viewMode==="simple"} onChange={on=>usesOwnStory?patch({ownDirect:on}):pickMode(on?"simple":"expert")}/></section>
         {sidePanel}
