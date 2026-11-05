@@ -132,10 +132,10 @@ public class UsageService {
                     one.path("stage").asText(""),
                     one.path("provider").asText(""),
                     one.path("model").asText(""),
-                    used.path("input").asLong(0),
-                    used.path("output").asLong(0),
-                    // 글 호출은 cache_read, 그림 호출(cost.cost_fields)은 tokens_cached 로 적는다
-                    used.path("cache_read").asLong(used.path("tokens_cached").asLong(0)),
+                    // 글은 usage, 그림은 cost.cost_fields 에 표준 토큰을 남긴다.
+                    used.path("input").asLong(cost.path("tokens_in").asLong(0)),
+                    used.path("output").asLong(cost.path("tokens_out").asLong(0)),
+                    used.path("cache_read").asLong(cost.path("tokens_cached").asLong(0)),
                     cost.path("total").asDouble(0),
                     cost.path("total_krw").asLong(0),
                     cost.path("cost_basis").asText(null),
