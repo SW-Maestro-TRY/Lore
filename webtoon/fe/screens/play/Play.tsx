@@ -13,9 +13,10 @@ import { CharacterEditDialog } from "../character/OriginalCharacter";
 import "../character/i18n";
 import { usePhone } from "../landing/usePhone";
 import { loadWorlds, type PlayEvent, type PlayPerson, type PlayWorld } from "./playData";
+import "../wizard/i18n";
 import "./i18n";
 import "./Play.css";
-import { QUALITY_INFO, type WizardQuality } from "../../lib/wizardData";
+import { QUALITY_INFO, qualitySamples, type WizardQuality } from "../../lib/wizardData";
 
 /* 모바일에서만 보이는 얇은 줄 — 이전 · 제목 · 오른쪽 글(시안 mobile.html 의 .mtop). PC 에서는 CSS 가 숨긴다. */
 function MTop({ back, onBack, title, right }: { back?: string; onBack?: () => void; title: string; right?: string }) {
@@ -304,6 +305,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
     return () => { active = false; };
   }, [authenticated, allowRetry]);
   const choice = allow?.qualities?.find((q) => q.key === quality);
+  const previews = qualitySamples();
   const blocked = !!allow?.blocked || (!allow?.logged_in && allow?.free_left != null && allow.free_left <= 0)
     || (!!allow?.logged_in && choice != null && allow.balance != null && allow.balance < choice.credits);
   /* 어떤 캐릭터를 넣었나 — 세계가 정한 예시 · 운영 자료의 예시 주인공 · 기본 견본 · 내 캐릭터. id 는 예시 주인공처럼 한글이 섞이면 안 남는다 */
@@ -422,6 +424,8 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
           const cost = allow?.qualities?.find((x) => x.key === q.key)?.credits;
           return <button key={q.key} type="button" className={quality === q.key ? "on" : ""}
             aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
+            {previews && <img src={previews[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />}
+            {previews && <small className="sample-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
             <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : t("{n}크레딧", { n: cost }) : t("오늘 무료 생성")}</em>
           </button>;
