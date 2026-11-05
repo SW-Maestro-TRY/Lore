@@ -8,6 +8,7 @@ import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare, IconZoom } from "../../ui/Icons";
 import QualitySampleZoom from "../../ui/QualitySampleZoom";
+import InstallInvite from "../../ui/InstallInvite";
 import CreditShort, { isCreditShort } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { CharacterEditDialog } from "../character/OriginalCharacter";
@@ -581,6 +582,7 @@ function Making({ w, e, job, character, go }: { w: PlayWorld; e: PlayEvent; job?
   ];
   return (
     <div className="pl-making">
+      <InstallInvite active={!!job} where="play" job={job} />
       <MTop title={t("만드는 중")} right={name} />
       <div className="steps"><span className="done"><i>✓</i>{name || t("캐릭터")}</span><span className="on"><i>2</i>{t("만들기")}</span></div>
       <div className="card main">

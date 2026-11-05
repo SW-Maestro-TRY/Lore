@@ -325,12 +325,34 @@ group by 1 order by 1;
 | `play_char_mine` · `play_char_new` | 캐릭터 고르기에서 「+ 내 캐릭터」를 누름 · 「새 캐릭터 만들기」로 감 | `world`, `event`, `count`(내 캐릭터 수), `where`: list · tiles, `logged_in` |
 | `play_start` · `play_started` · `play_failed` | 「○○ 넣기」를 누름 · 서버가 받음 · 못 받음. 체험 한 판의 실제 결과는 `webtoon_job` 이 정본 | `world`, `event`, `kind`: example(세계가 정한 예시) · example_person(사건 자료의 예시 주인공) · builtin · mine, `character`(id 가 기호일 때만), `job`, `status`(HTTP), `reason`: credit_short · other, `logged_in` |
 | `play_job_status` · `play_cancel` | 만드는 화면이 끝(done · error)을 봄 · 만들기 중단 | `world`, `event`, `job`, `run`, `status`(중단은 그때 단계 story · art · review) |
+| `install_invite_shown` | 일반 웹툰·세계관 체험 생성 중 설치 안내가 5초 뒤 실제로 뜸. 한 탭 세션에 한 번 | `where`: progress · play, `job` |
+| `install_invite_click` | 안내의 주요 단추를 누름 | `where`, `job`, `kind`: prompt(브라우저 설치 창) · guide(수동 안내) |
+| `install_guide_view` · `install_invite_dismissed` | 수동 추가 방법을 봄 · 안내를 닫음 | `where`, `job`, `kind`: ios · mobile · desktop(방법) / invite · guide(닫은 위치) |
+| `install_prompt_choice` | 브라우저 설치 창에서 선택. 수락은 설치 완료를 뜻하지 않음 | `where`, `job`, `result`: accepted · dismissed |
+| `app_installed` | 브라우저의 `appinstalled` 이벤트가 발생함. 해당 이벤트를 지원하는 브라우저의 설치 확인 | `where`: webtoon, `kind`: browser |
+| `app_open_standalone` | 설치형 창에서 웹툰을 엶. 탭 세션당 한 번. iOS 등에서 설치 사용의 간접 신호 | `where`: webtoon |
 | `play_next` | 만화 아래에서 다음으로 감 | `where`: next_event · same_world · other_world · other_run, `world`, `event`, `run` |
 | `world_new_step` | 세계관 만들기 걸음을 엶(처음 들어올 때 포함) | `step`, `count`(전체 걸음 수 — PC 2 · 폰 3), `mode`: new · edit |
 | `world_part_add` | 세계에 표지 · 등장인물 · 사건을 새로 넣음 | `kind`: cover · cast · event, `count`(넣은 뒤 수) |
 | `world_ai_fill` · `world_book_import` | 「AI로 채우기」(지금은 닫혀 있어 `result=closed`) · 설정집 가져오기 | `result`: closed · start · done · error, `status`, `count`(설정집 수) |
 | `world_publish` · `world_published` · `world_publish_failed` | 「세계관 올리기」를 누름 · 올라감 · 못 올림 | `mode`, `count`(사건 수), `n`(등장인물 수), `has_photo`(표지), `result`: public · private, `logged_in`, `world`, `kind`: server · local(서버 길이 없어 이 브라우저에만), `status`, `reason`: need_login · other |
 | `world_login_click` | 올리기가 로그인으로 막힌 뒤 뜬 「로그인」 단추를 누름. 막힌 순간엔 `login_prompt`(`where`: world_publish)도 남는다 | `where`: world_publish |
+
+### 홈 화면 추가 안내 집계
+
+`app_installed`는 브라우저가 설치 완료를 알려 준 건수만 셉니다. iOS의 수동 추가 완료는
+브라우저가 알려 주지 않아 정확히 셀 수 없고, `app_open_standalone`은 설치형 창에서
+웹툰을 실제로 연 브라우저 수로 따로 봅니다. `install_invite_click`이나
+`install_prompt_choice(result=accepted)`를 설치 완료로 합산하지 않습니다.
+
+```sql
+select name, count(*) as events, count(distinct uid) as browsers
+from webtoon_event
+where name in ('install_invite_shown', 'install_invite_click',
+  'install_prompt_choice', 'app_installed', 'app_open_standalone')
+  and occurred_at >= now() - interval '7 days'
+group by name order by name;
+```
 
 ### 자동 기록 (`lib/track.ts` 「자동 기록」)
 

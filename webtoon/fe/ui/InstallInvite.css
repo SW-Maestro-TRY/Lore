@@ -1,0 +1,17 @@
+.wt .wt-dialog-box.wt-install-invite { width: min(420px, 100%); }
+.wt .wt-install-invite .wt-dialog-heading { margin-bottom: 4px; }
+.wt .wt-install-invite-body { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.wt .wt-install-invite-body img { width: 56px; height: 56px; border-radius: 14px; }
+.wt .wt-install-invite-body p { font-size: 15px; line-height: 1.5; font-weight: 600; }
+.wt .wt-install-invite-body small { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.wt .wt-install-invite-body .wt-install-invite-guide { font-size: 14px; line-height: 1.6; }
+.wt .wt-install-invite-status { color: var(--muted); font-size: 12px; }
+.wt .wt-install-invite-actions { display: flex; gap: 8px; margin-top: 14px; }
+.wt .wt-install-invite-actions button { flex: 1; min-height: 44px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.wt .wt-install-invite-actions .primary { background: var(--coral, #e9a693); color: #151c28; border: 1px solid transparent; }
+.wt .wt-install-invite-actions .secondary { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+.wt .wt-install-invite-actions button:disabled { opacity: .55; cursor: default; }
+@media (max-width: 767px) {
+  .wt .wt-dialog-box.wt-install-invite { padding: 20px 18px 18px; }
+  .wt .wt-install-invite-body p { font-size: 14px; }
+}
