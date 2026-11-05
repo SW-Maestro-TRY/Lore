@@ -2,7 +2,7 @@
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, readAllowance, readCharacter, startPlayRun, type Allowance, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
+import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, readPlayAllowance, readCharacter, startPlayRun, type Allowance, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
@@ -300,7 +300,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
   const [allowRetry, setAllowRetry] = useState(0);
   useEffect(() => {
     let active = true;
-    readAllowance().then((value) => { if (active) { setAllow(value); setAllowError(false); } })
+    readPlayAllowance().then((value) => { if (active) { setAllow(value); setAllowError(false); } })
       .catch(() => { if (active) setAllowError(true); });
     return () => { active = false; };
   }, [authenticated, allowRetry]);
@@ -421,13 +421,14 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
       {cur && <div className="pl-quality" role="group" aria-label={t("그리기 방식")}>
         <b>{t("그리기 방식")}</b>
         <div className="choices">{QUALITY_INFO.map((q) => {
-          const cost = allow?.qualities?.find((x) => x.key === q.key)?.credits;
+          const price = allow?.qualities?.find((x) => x.key === q.key);
+          const cost = price?.credits;
           return <button key={q.key} type="button" className={quality === q.key ? "on" : ""}
             aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
             {previews && <img src={previews[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />}
             {previews && <small className="sample-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
-            <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : t("{n}크레딧", { n: cost }) : t("오늘 무료 생성")}</em>
+            <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : <>{price?.regular_credits != null && <del>{t("{n}크레딧", { n: price.regular_credits })}</del>}<span className="open-discount">{t("오픈 할인")}</span>{t("{n}크레딧", { n: cost })}</> : t("오늘 무료 생성")}</em>
           </button>;
         })}</div>
         {allow?.logged_in && choice && <small>{t("보유 {n}크레딧", { n: allow.balance ?? 0 })}</small>}

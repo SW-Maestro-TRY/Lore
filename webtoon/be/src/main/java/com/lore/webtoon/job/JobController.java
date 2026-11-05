@@ -125,6 +125,14 @@ public class JobController {
         return out;
     }
 
+    /** 세계관 사건에서 실제로 받을 할인 값. 일반 웹툰 allowance 는 그대로 둔다. */
+    public Map<String, Object> playAllowance(HttpServletRequest request) {
+        Map<String, Object> out = allowance(request);
+        out.put("qualities", WebtoonQuality.playChoices());
+        out.put("credit_cost", WebtoonQuality.playCreditsOf(WebtoonQuality.DEFAULT_QUALITY));
+        return out;
+    }
+
     /**
      * 게스트(비로그인)용 사진 업로드 주소 발급.
      *
@@ -169,6 +177,16 @@ public class JobController {
     @PostMapping("/create")
     public ResponseEntity<Map<String, Object>> create(HttpServletRequest request,
                                                       @RequestBody JobService.CreateRequest form) {
+        return createInternal(request, form, false);
+    }
+
+    /** 검증된 /play/runs 경로에서만 부른다. 본문 play 값만으로 할인하지 않는다. */
+    public ResponseEntity<Map<String, Object>> createPlay(HttpServletRequest request, JobService.CreateRequest form) {
+        return createInternal(request, form, true);
+    }
+
+    private ResponseEntity<Map<String, Object>> createInternal(HttpServletRequest request,
+                                                              JobService.CreateRequest form, boolean play) {
         Long me = CreditGate.currentUser();
 
         /* **여기도 문지기가 서야 한다.**
@@ -197,7 +215,7 @@ public class JobController {
         /* **고른 화질만큼 받는다.** 너울(high)은 원가가 파도의 2.4배라 같은
            값으로 팔면 한 편마다 손해다 — 실제로 그렇게 한 달 가까이 돌았다.
            값은 WebtoonQuality 한 곳만 안다. */
-        int need = WebtoonQuality.creditsOf(form.quality());
+        int need = play ? WebtoonQuality.playCreditsOf(form.quality()) : WebtoonQuality.creditsOf(form.quality());
         /* 함께 주인공 시트(#899) — 첫 주인공 시트는 한 편 값에 들어 있고, 둘째부터 한 사람당 조연 시트 값. 한 편 값과
            같이 잔액을 보고, 원장에는 따로 적는다(조연 시트 구매와 메모가 다르다). 실패하면 JobRunner.refund 가 같이 돌려준다. */
         int coSheets = JobService.coCountOf(form) * JobService.CAST_SHEET_CREDITS;
@@ -228,7 +246,7 @@ public class JobController {
             throw e;
         }
         // 만들어진 뒤에 받는다. 같은 작업으로 두 번 불려도 한 번만 빠진다.
-        credits.charge(me, need, id, WebtoonQuality.labelOf(form.quality()));
+        credits.charge(me, need, id, (play ? "세계관 사건 · " : "") + WebtoonQuality.labelOf(form.quality()));
         if (coSheets > 0) {
             credits.charge(me, coSheets, JobRunner.coSheetsRef(id),
                     "주인공 시트 추가 · " + JobService.coCountOf(form) + "명");
