@@ -129,23 +129,38 @@ def _pick(stage: str, suffix: str, fallbacks: tuple) -> tuple[str, str]:
 DEFAULT_PROVIDER = "openai"
 
 
-# **검수는 gemini 가 한다(2026-10-26).** 이야기 검수 · 장 검수 · 표지 검수 · 화 전체 검수 넷.
-# 글을 짓는 쪽(OpenAI)과 다른 모델이 읽어야 같은 버릇을 같이 놓치지 않는다는 판단이다.
+# **검수는 OpenRouter 의 google/gemini-3.5-flash 가 한다(2026-11-05).** 이야기 검수 · 장 검수 ·
+# 표지 검수 · 화 전체 검수 넷. 글을 짓는 쪽(OpenAI)과 다른 회사 모델이 읽어야 같은 버릇을 같이
+# 놓치지 않는다.
+#
+# 근거 — 완성작 13편의 한 장에 정답을 아는 결함(제자리 · 건너뜀 · 되돌아감, 화 전체는 같은 장 반복)을
+# 심고 같은 입력을 두 모델에 보였다(OpenRouter, 156회, haeun/검수모델-실험-2026-11-05).
+#   장 검수 결함 검출  gpt-4.1 22/37(59%)  →  gemini-3.5-flash 36/39(92%)
+#   결함 종류까지 맞힘  8/37(22%)  →  29/39(74%)
+#   화 전체 반복 지적   gpt-5.1 5/13(38%)  →  13/13(100%)
+# 대신 멀쩡한 장을 다시 그리라고 하는 일은 2/13 → 6/13 으로 늘었다. 다시 그리기는 장마다
+# 횟수 상한(MAX_PAGE_REDRAWS)이 있어 비용이 묶인다.
+#
+# **10/26 에 gemini(직접 API)로 정해 두었지만 운영에서는 한 번도 돌지 않았다.** 운영 · staging
+# 설정에 gemini 키가 없어서 아래 「키가 없으면 건너뛴다」가 조용히 OpenAI 로 돌렸다(11/05 운영
+# webtoon_usage 로 확인). 실험과 같은 길(OpenRouter)로 바꾼 것은 운영에 이미 OpenRouter 키가
+# 있고(장면 단계가 쓴다) 비교가 그 길로 되었기 때문이다.
 #
 # 순서: `<단계>_PROVIDER` > 이 표 > `NH_PROVIDER` · `PROVIDER` > DEFAULT_PROVIDER.
 # 이 표가 전체 설정(NH_PROVIDER)보다 앞이다 — dev 박스는 NH_PROVIDER=openai 를 적어 두고
 # 있어서(infra/dev/env.example) 뒤에 두면 검수가 영영 안 넘어간다.
 #
-# **gemini 키가 없으면 이 표를 건너뛴다.** 서버에 키(HAEUN_GEMINI_API_KEY)를 넣기
-# 전에 배포돼도 검수 단계에서 키 없음으로 만들기 전체가 죽지 않고, 전처럼 돈다.
+# **키가 없으면 이 표를 건너뛴다.** OpenRouter 키가 없는 환경에서도 검수 단계가 키 없음으로
+# 만들기 전체를 죽이지 않고 NH_PROVIDER 로 돈다. 대신 조용히 넘어가지 않게 plan() 이 어디서
+# 왔는지 찍는다.
 #
 # **장면(SCENE)은 OpenRouter 의 google/gemini-3.8-flash 다(2026-10-27).** 같은 이야기 5개를 두 모델로 나눠
 # 보니 gemini 가 장면을 중심 사건 하나씩으로 묶고 마지막을 가장 큰 일이 터진 순간에서 멈췄다. gpt-5.1 은
 # 한 사건을 두세 장으로 쪼개고 이동만 하는 장을 따로 두었다(haeun/story-lab-2026-10-27/scene). 값은 1/4.
 # 비교는 전부 OpenRouter 로 했으므로 운영도 그 길 그대로다 — Gemini 직접 API 는 시험하지 않았다.
 # OpenRouter 키가 없으면 전처럼 NH_PROVIDER(운영은 openai) 의 gpt-5.1 로 돈다.
-STAGE_DEFAULT_PROVIDERS = {"STORY_REVIEW": "gemini", "PAGE_REVIEW": "gemini",
-                           "COVER_REVIEW": "gemini", "FULL_REVIEW": "gemini",
+STAGE_DEFAULT_PROVIDERS = {"STORY_REVIEW": "openrouter", "PAGE_REVIEW": "openrouter",
+                           "COVER_REVIEW": "openrouter", "FULL_REVIEW": "openrouter",
                            "SCENE": "openrouter"}
 
 
@@ -228,6 +243,9 @@ STAGE_DEFAULT_MODELS.update({(stage, "openrouter"): f"openai/{name}"
                              for (stage, _), name in list(STAGE_DEFAULT_MODELS.items())})
 # 장면만 예외 — 위 비교에 쓴 모델 그대로(STAGE_DEFAULT_PROVIDERS 의 SCENE 참고).
 STAGE_DEFAULT_MODELS[("SCENE", "openrouter")] = "google/gemini-3.8-flash"
+# 검수 넷도 예외 — 위 실험에 쓴 모델 그대로(STAGE_DEFAULT_PROVIDERS 의 검수 참고).
+for _review in ("STORY_REVIEW", "PAGE_REVIEW", "COVER_REVIEW", "FULL_REVIEW"):
+    STAGE_DEFAULT_MODELS[(_review, "openrouter")] = "google/gemini-3.5-flash"
 
 
 def model_for(stage: str, provider: str) -> str:
@@ -355,7 +373,7 @@ def plan() -> list[dict]:
         provider = provider_for(stage)
         _, pfrom = _pick(stage, "PROVIDER", ())
         if not pfrom and _stage_default_provider(stage):
-            pfrom = "검수는 gemini (llm.py STAGE_DEFAULT_PROVIDERS)"
+            pfrom = "코드가 정한 단계 기본값 (llm.py STAGE_DEFAULT_PROVIDERS)"
         if not pfrom:
             _, pfrom = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
         _, mfrom = _pick(stage, "MODEL",
