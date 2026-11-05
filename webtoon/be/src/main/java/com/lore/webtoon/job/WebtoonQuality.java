@@ -84,8 +84,8 @@ public final class WebtoonQuality {
 
     /** 세계관 사건 오픈 할인. 일반 웹툰 한 편 값과 별도로 유지한다. */
     private static final Map<String, Integer> PLAY_CREDITS = Map.of(
-            "surf", 10,
-            "swell", 20);
+            "surf", 15,
+            "swell", 25);
 
     /**
      * 편집실에서 한 장을 다시 그리는 크레딧. 작품을 만든 화질을 따른다(#787).
