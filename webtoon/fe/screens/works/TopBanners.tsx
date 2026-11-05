@@ -3,11 +3,11 @@
 /* 둘러보기 맨 위 띠 — 대표작(슈퍼 세컨드브레인)과 LORE 앱 설치를 번갈아 보인다(2026-11-06).
  * 두 장을 같은 칸에 겹쳐 두고 보이는 장만 바꾼다 — 높이는 큰 쪽에 맞는다.
  * 7초마다 넘기고, 마우스를 올리거나 창이 열려 있으면 멈춘다. 폰은 옆으로 밀어 넘긴다.
- * 앱 띠 시안은 주소에 ?appbanner=a|b|c 로 바꿔 본다(기본 a). */
+ * 주소에 ?banner=app 이면 앱 띠부터 보인다. */
 import { useEffect, useRef, useState } from "react";
 import { useT } from "../../lib/i18n";
 import AppInstallDialog, { type AppDevice } from "../../ui/AppInstallDialog";
-import AppBanner, { type AppBannerVariant } from "./AppBanner";
+import AppBanner from "./AppBanner";
 import FeaturedBanner from "./FeaturedBanner";
 import "./TopBanners.css";
 
@@ -17,15 +17,12 @@ export default function TopBanners() {
   const t = useT();
   const [cur, setCur] = useState(0);
   const [hold, setHold] = useState(false);
-  const [variant, setVariant] = useState<AppBannerVariant>("a");
   const [dialog, setDialog] = useState<AppDevice | null>(null);
   const touchX = useRef<number | null>(null);
 
   useEffect(() => {
     try {
       const q = new URLSearchParams(location.search);
-      const v = q.get("appbanner");
-      if (v === "a" || v === "b" || v === "c") setVariant(v);
       const s = q.get("banner");
       if (s === "app") setCur(1);
     } catch { /* 기본값 */ }
@@ -48,14 +45,14 @@ export default function TopBanners() {
              }}>
       <div className="wt-topb-track">
         <div className={`wt-topb-slide${cur === 0 ? " on" : ""}`} aria-hidden={cur !== 0} inert={cur !== 0 ? true : undefined}><FeaturedBanner /></div>
-        <div className={`wt-topb-slide${cur === 1 ? " on" : ""}`} aria-hidden={cur !== 1} inert={cur !== 1 ? true : undefined}><AppBanner variant={variant} onOpen={setDialog} /></div>
+        <div className={`wt-topb-slide${cur === 1 ? " on" : ""}`} aria-hidden={cur !== 1} inert={cur !== 1 ? true : undefined}><AppBanner onOpen={setDialog} /></div>
       </div>
       <div className="wt-topb-dots">
         {Array.from({ length: SLIDES }, (_, i) => (
           <button key={i} type="button" className={cur === i ? "on" : ""} aria-label={t("{n}번째 띠", { n: i + 1 })} aria-current={cur === i} onClick={() => setCur(i)} />
         ))}
       </div>
-      {dialog && <AppInstallDialog device={dialog} where={`works_banner_${variant}`} onClose={() => setDialog(null)} />}
+      {dialog && <AppInstallDialog device={dialog} where="works_banner" onClose={() => setDialog(null)} />}
     </section>
   );
 }
