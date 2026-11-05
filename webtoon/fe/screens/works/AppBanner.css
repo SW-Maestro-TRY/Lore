@@ -33,16 +33,25 @@
 .wt .wt-appb .phone {
   position: absolute; padding: 4px; border-radius: 38px; background: #1b1d21;
 }
-/* 문피아 「크리에이터 작가앱 오픈」 배너 그대로: 두 폰이 같은 각도로 시계 방향으로 기울고,
-   앞 폰(웹툰 홈)이 위로 높이 서서 뒤 폰(웹툰 보기)의 왼쪽을 가린다. 앱 아이콘은 앞 폰 오른쪽에 걸쳐 둘 위에 놓인다. */
-.wt .wt-appb .phone {
-  transform: perspective(1400px) rotateY(-10deg) rotateX(8deg) rotateZ(11deg);
+/* 문피아 「크리에이터 작가앱 오픈」 배너 그대로(화면으로 대조): 폰 두 대가 통째로 보이고, 아래쪽이 모이는 ∧ 모양.
+   앞 왼쪽 웹툰 홈은 윗부분이 왼쪽으로 기울고 오른쪽을 향해 왼쪽 옆면이 보인다.
+   뒤 오른쪽 웹툰 보기는 윗부분이 오른쪽으로 기울고 왼쪽을 향해 오른쪽 옆면이 보인다. 앞 폰이 뒤 폰 아래쪽을 가린다.
+   폰은 큰 크기(216×448)로 그린 뒤 줄여서(scale) 안쪽 모양 비율을 지킨다. */
+.wt .wt-appb .phone.home {
+  transform: perspective(900px) rotateX(10deg) rotateY(24deg) rotateZ(-18deg) scale(.6);
   box-shadow:
     inset 0 0 0 1.5px #5a5e66,
-    -1px 1px 0 #6b6f77, -2px 2px 0 #55595f, -3px 3px 0 #464a50, -4px 4px 0 #3a3d42, -5px 5px 0 #303236,
+    -1px 1px 0 #6b6f77, -2px 2px 0 #55595f, -3px 3px 0 #464a50, -4px 4px 0 #3a3d42, -5px 5px 0 #303236, -6px 6px 0 #26282b,
     -16px 30px 46px rgba(0, 0, 0, .6);
 }
-.wt .wt-appb .phone.read { filter: brightness(.9); }
+.wt .wt-appb .phone.read {
+  filter: brightness(.9);
+  transform: perspective(900px) rotateX(10deg) rotateY(-28deg) rotateZ(16deg) scale(.56);
+  box-shadow:
+    inset 0 0 0 1.5px #5a5e66,
+    1px 1px 0 #6b6f77, 2px 2px 0 #55595f, 3px 3px 0 #464a50, 4px 4px 0 #3a3d42, 5px 5px 0 #303236, 6px 6px 0 #26282b,
+    16px 30px 46px rgba(0, 0, 0, .6);
+}
 .wt .wt-appb .phone::before, .wt .wt-appb .phone::after { /* 옆 단추 */
   content: ""; position: absolute; width: 4px; border-radius: 2px; background: #3a3d42;
 }
@@ -57,13 +66,13 @@
 .wt .wt-appb .status .island { position: absolute; left: 50%; top: 7px; width: 34%; height: 17px; transform: translateX(-50%); border-radius: 10px; background: #000; }
 .wt .wt-appb .status .batt { width: 20px; height: 9px; border-radius: 3px; border: 1.5px solid rgba(255, 255, 255, .85); background: linear-gradient(90deg, #fff 70%, transparent 70%) content-box; padding: 1px; }
 .wt .wt-appb .screen img { display: block; width: 100%; height: auto; }
-.wt .wt-appb .phone.home { left: calc(50% - 175px); top: 18px; width: 206px; height: 428px; z-index: 2; }
-.wt .wt-appb .phone.read { left: calc(50% - 10px); top: 66px; width: 196px; height: 408px; z-index: 1; }
-/* 앞 폰 오른쪽 가장자리에 걸친 앱 아이콘 */
+.wt .wt-appb .phone.home { left: calc(50% - 175px); top: -76px; width: 216px; height: 448px; z-index: 2; }
+.wt .wt-appb .phone.read { left: calc(50% - 40px); top: -62px; width: 216px; height: 448px; z-index: 1; }
+/* 앞 폰 오른쪽 가장자리 가운데에 걸친 앱 아이콘 */
 .wt .wt-appb .app {
-  position: absolute; z-index: 3; left: calc(50% - 30px); top: 104px; width: 84px; height: 84px; border-radius: 20px;
-  transform: rotateZ(11deg);
-  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .25), -3px 3px 0 #2a2d33, -12px 20px 30px rgba(0, 0, 0, .55);
+  position: absolute; z-index: 3; left: calc(50% - 30px); top: 112px; width: 66px; height: 66px; border-radius: 16px;
+  transform: perspective(700px) rotateY(18deg) rotateZ(-8deg);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .25), -3px 3px 0 #2a2d33, -10px 16px 26px rgba(0, 0, 0, .55);
 }
 
 @media (max-width: 767px) {
@@ -80,3 +89,21 @@
   .wt .wt-appb .btns { justify-content: center; }
   .wt .wt-appb .btns button { height: 42px; padding: 0 16px; font-size: 13.5px; background: #0b0f17; border: 1px solid rgba(242, 245, 248, .16); }
 }
+
+/* 조정 모드(?appedit=1) — 폰·아이콘을 끌어 옮기고 막대로 돌린다 */
+.wt .wt-appb.editing { cursor: default; }
+.wt .wt-appb.editing .phone, .wt .wt-appb.editing .app { cursor: grab; touch-action: none; user-select: none; }
+.wt .wt-appb.editing .sel { outline: 2px dashed #6fe3cb; outline-offset: 4px; }
+.wt-appb-tune {
+  position: fixed; right: 16px; bottom: 16px; z-index: 2147483000; font-family: system-ui, sans-serif; display: flex; flex-direction: column; gap: 8px; width: 280px; padding: 14px;
+  border-radius: 12px; background: #0b0f17; border: 1px solid rgba(242, 245, 248, .2); color: #f2f5f8; font-size: 12.5px; cursor: default;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+}
+.wt-appb-tune .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.wt-appb-tune button { height: 30px; border-radius: 7px; border: 1px solid rgba(242, 245, 248, .2); background: none; color: inherit; font: inherit; cursor: pointer; }
+.wt-appb-tune button.on, .wt-appb-tune button.p { background: #f2f5f8; color: #101925; font-weight: 700; }
+.wt-appb-tune label { display: flex; flex-direction: column; gap: 2px; }
+.wt-appb-tune label span { display: flex; justify-content: space-between; color: #a3adbb; }
+.wt-appb-tune label b { color: #f2f5f8; }
+.wt-appb-tune small { color: #a3adbb; }
+.wt-appb-tune .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
