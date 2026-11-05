@@ -75,17 +75,18 @@ public final class WebtoonQuality {
      * 2,351원에 약 1,150원(결제액의 28%)이 남아, 가입 크레딧으로 나가는 첫 무료 한 편을 회수하려면 한 사람당
      * 약 8,300원을 받아야 했다. 20(5,400원)이면 약 2,320원(43%)이 남고 그 금액이 약 5,500원으로 내려간다.
      *
+     * 2026-11-06 오픈 세일은 파도 15, 너울 20. 위 계산은 할인 전 가격의 과거 근거다.
      * (크레딧 숫자 자체는 아직 검증 전 목업이다. 대외에 판매가로 말하지 않는다.)
      */
     private static final Map<String, Integer> CREDITS = Map.of(
             "wave",  20,
-            "surf",  20,
-            "swell", 30);
-
-    /** 세계관 사건 오픈 할인. 일반 웹툰 한 편 값과 별도로 유지한다. */
-    private static final Map<String, Integer> PLAY_CREDITS = Map.of(
-            "surf", 15,
+            "surf",  15,
             "swell", 20);
+
+    /** 오픈 세일 전 가격. 화면의 취소선 표시용이며 차감에는 쓰지 않는다. */
+    private static final Map<String, Integer> REGULAR_CREDITS = Map.of(
+            "surf", 20,
+            "swell", 30);
 
     /**
      * 편집실에서 한 장을 다시 그리는 크레딧. 작품을 만든 화질을 따른다(#787).
@@ -194,7 +195,7 @@ public final class WebtoonQuality {
     }
 
     public static int playCreditsOf(String key) {
-        return PLAY_CREDITS.getOrDefault(normalize(key), PLAY_CREDITS.get(DEFAULT_QUALITY));
+        return creditsOf(key);
     }
 
     /** 이 화질로 만든 작품의 한 장을 다시 그릴 때 드는 크레딧. */
@@ -227,21 +228,14 @@ public final class WebtoonQuality {
                         "key", k,
                         "label", labelOf(k),
                         "credits", creditsOf(k),
+                        "regular_credits", REGULAR_CREDITS.get(k),
                         "base_pages", BASE_PAGES,
                         "extra_page_credits", extraPageCreditsOf(k)))
                 .toList();
     }
 
-    /** 세계관 사건 화면의 값과 할인 전 일반 웹툰 값. 실제 차감은 playCreditsOf 를 쓴다. */
+    /** 세계관 사건도 웹툰 만들기와 같은 오픈 세일 가격을 쓴다. */
     public static java.util.List<Map<String, Object>> playChoices() {
-        return java.util.List.of("surf", "swell").stream()
-                .map(k -> Map.<String, Object>of(
-                        "key", k,
-                        "label", labelOf(k),
-                        "credits", playCreditsOf(k),
-                        "regular_credits", creditsOf(k),
-                        "base_pages", BASE_PAGES,
-                        "extra_page_credits", extraPageCreditsOf(k)))
-                .toList();
+        return choices();
     }
 }

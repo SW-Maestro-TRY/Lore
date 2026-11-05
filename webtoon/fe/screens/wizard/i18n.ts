@@ -161,6 +161,8 @@ const dict: Dict = {
   "{time} · 앞에 사람이 있으면 더 걸려요": { en: "{time} · longer if others are ahead", ja: "{time} · 前に人がいるとさらにかかります", zh: "{time} · 前面有人会更久" },
 
   /* 화질 (lib/wizardData QUALITY_INFO) — lede 의 " · " 는 앞부분만 잘라 쓰므로 유지 */
+  "세일": { en: "Sale", ja: "セール", zh: "优惠" },
+  "파격 세일": { en: "Special sale", ja: "特別セール", zh: "特惠" },
   "물결": { en: "Ripple", ja: "さざ波", zh: "涟漪" },
   "약 6분 · 가장 빠른 생성": { en: "About 6 min · Fastest", ja: "約6分 · 最速", zh: "约 6 分钟 · 最快" },
   "굵고 단순한 선으로 가볍게 표현해요.": { en: "Bold, simple lines with a light touch.", ja: "太くシンプルな線で軽やかに表現します。", zh: "用粗而简洁的线条轻快呈现。" },

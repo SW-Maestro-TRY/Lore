@@ -59,13 +59,15 @@ class WebtoonQualityTest {
     @DisplayName("너울만 더 받는다 — 원가가 2.4배라 같은 값이면 한 편마다 손해다")
     void 너울만_비싸다() {
         assertThat(WebtoonQuality.creditsOf("wave")).isEqualTo(20);
-        assertThat(WebtoonQuality.creditsOf("surf")).isEqualTo(20);
-        assertThat(WebtoonQuality.creditsOf("swell")).isEqualTo(30);
+        assertThat(WebtoonQuality.creditsOf("surf")).isEqualTo(15);
+        assertThat(WebtoonQuality.creditsOf("swell")).isEqualTo(20);
         assertThat(WebtoonQuality.playCreditsOf("surf")).isEqualTo(15);
         assertThat(WebtoonQuality.playCreditsOf("swell")).isEqualTo(20);
         assertThat(WebtoonQuality.playChoices()).extracting(m -> m.get("credits"))
                 .containsExactly(15, 20);
         assertThat(WebtoonQuality.playChoices()).extracting(m -> m.get("regular_credits"))
+                .containsExactly(20, 30);
+        assertThat(WebtoonQuality.choices()).extracting(m -> m.get("regular_credits"))
                 .containsExactly(20, 30);
     }
 
@@ -99,7 +101,7 @@ class WebtoonQualityTest {
         }
         assertThat(WebtoonQuality.normalize(null)).isEqualTo(WebtoonQuality.DEFAULT_QUALITY);
         // 기본으로 돌아갔으면 값도 기본값이어야 한다 — 0원이 되면 공짜로 만들어진다.
-        assertThat(WebtoonQuality.creditsOf(null)).isEqualTo(20);
+        assertThat(WebtoonQuality.creditsOf(null)).isEqualTo(15);
     }
 
     @Test
