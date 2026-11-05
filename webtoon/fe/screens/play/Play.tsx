@@ -2,7 +2,7 @@
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
+import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, readAllowance, readCharacter, startPlayRun, type Allowance, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
@@ -15,6 +15,7 @@ import { usePhone } from "../landing/usePhone";
 import { loadWorlds, type PlayEvent, type PlayPerson, type PlayWorld } from "./playData";
 import "./i18n";
 import "./Play.css";
+import { QUALITY_INFO, type WizardQuality } from "../../lib/wizardData";
 
 /* 모바일에서만 보이는 얇은 줄 — 이전 · 제목 · 오른쪽 글(시안 mobile.html 의 .mtop). PC 에서는 CSS 가 숨긴다. */
 function MTop({ back, onBack, title, right }: { back?: string; onBack?: () => void; title: string; right?: string }) {
@@ -292,6 +293,19 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
   const [edit, setEdit] = useState<Character | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [quality, setQuality] = useState<WizardQuality>("surf");
+  const [allow, setAllow] = useState<Allowance | null>(null);
+  const [allowError, setAllowError] = useState(false);
+  const [allowRetry, setAllowRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    readAllowance().then((value) => { if (active) { setAllow(value); setAllowError(false); } })
+      .catch(() => { if (active) setAllowError(true); });
+    return () => { active = false; };
+  }, [authenticated, allowRetry]);
+  const choice = allow?.qualities?.find((q) => q.key === quality);
+  const blocked = !!allow?.blocked || (!allow?.logged_in && allow?.free_left != null && allow.free_left <= 0)
+    || (!!allow?.logged_in && choice != null && allow.balance != null && allow.balance < choice.credits);
   /* 어떤 캐릭터를 넣었나 — 세계가 정한 예시 · 운영 자료의 예시 주인공 · 기본 견본 · 내 캐릭터. id 는 예시 주인공처럼 한글이 섞이면 안 남는다 */
   const kindOfSel = () => !sel ? undefined : sel.startsWith("example:") ? "example_person" : mode === "ex" ? "example"
     : pool?.find((c) => c.id === sel)?.builtin ? "builtin" : "mine";
@@ -301,7 +315,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
     const base = { world: w.id, event: e.id, kind: kindOfSel(), character: sel, logged_in: authenticated };
     track("play_start", base);
     try {
-      const r = await startPlayRun({ world_id: w.id, event_id: e.id, character_id: sel, agree_ip: ok, language: lang });
+      const r = await startPlayRun({ world_id: w.id, event_id: e.id, character_id: sel, agree_ip: ok, quality, language: lang });
       track("play_started", { ...base, job: r.id });
       go("play", { world: w.id, ep: e.id, stage: "making", job: r.id, character: sel });
     } catch (x) {
@@ -402,8 +416,25 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
           {cur && <p className="pl-desc"><small>{nameOf(cur)} · {t("설명")}</small>{descOf(cur)}</p>}
         </>
       )}
+      {cur && <div className="pl-quality" role="group" aria-label={t("그리기 방식")}>
+        <b>{t("그리기 방식")}</b>
+        <div className="choices">{QUALITY_INFO.map((q) => {
+          const cost = allow?.qualities?.find((x) => x.key === q.key)?.credits;
+          return <button key={q.key} type="button" className={quality === q.key ? "on" : ""}
+            aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
+            <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
+            <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : t("{n}크레딧", { n: cost }) : t("오늘 무료 생성")}</em>
+          </button>;
+        })}</div>
+        {allow?.logged_in && choice && <small>{t("보유 {n}크레딧", { n: allow.balance ?? 0 })}</small>}
+        {!allow?.logged_in && allow?.free_left != null && <small>{t("오늘 무료 {n}편 남음", { n: allow.free_left })}</small>}
+        {allow?.logged_in && choice?.base_pages && choice.extra_page_credits && <small>{t("{base}장까지 포함 · 추가 장면은 장당 {per}크레딧", { base: choice.base_pages, per: choice.extra_page_credits })}</small>}
+        {!allow?.logged_in && choice?.base_pages && <small>{t("무료 생성은 {base}장까지예요.", { base: choice.base_pages })}</small>}
+        {allowError && <small role="alert">{t("크레딧 정보를 불러오지 못했어요.")} <button type="button" onClick={() => setAllowRetry((n) => n + 1)}>{t("다시 확인")}</button></small>}
+        {blocked && <small role="alert">{allow?.blocked || (allow?.logged_in ? t("크레딧이 부족해요.") : t("오늘 무료 횟수를 모두 사용했어요."))}</small>}
+      </div>}
       {cur && <label className="pl-chk"><input type="checkbox" checked={ok} onChange={(v) => setOk(v.target.checked)} />{t("업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다")}</label>}
-      {cur && <button type="button" className="pl-btn" disabled={!ok || busy} onClick={begin}>{t("{name} 넣기", { name: nameOf(cur) })}</button>}
+      {cur && <button type="button" className="pl-btn" disabled={!ok || busy || !allow || !choice || blocked} onClick={begin}>{t("{name} 넣기", { name: nameOf(cur) })}</button>}
       {err && <p className="pl-err">{err}</p>}
             {edit && <CharacterEditDialog character={edit} authenticated={authenticated} hideCard onSaved={() => { setEdit(null); void load(); }} onDeleted={() => { setEdit(null); void load(); }} onClose={() => setEdit(null)} />}
     </div>

@@ -1,13 +1,16 @@
 package com.lore.webtoon.job;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
 /**
- * 얼마나 촘촘히 그릴 것인가 — 사람이 고르는 셋.
+ * 얼마나 촘촘히 그릴 것인가 — 새 작품은 파도·너울 중에서 고른다.
  *
  * <h2>왜 고르게 하나 — 실측</h2>
  *
- * 같은 작품을 화질만 바꿔 세 번 그려 봤다(2026-09-13).
+ * 아래는 모델 변경 전, 같은 작품을 GPT Image 2 화질만 바꿔 그린 과거 기록이다(2026-09-13).
  *
  * <pre>
  *   물결(low)     출력 158토큰    한 장  77원   19.5초    6장   432원
@@ -159,6 +162,22 @@ public final class WebtoonQuality {
         return HARNESS.getOrDefault(normalize(key), "medium");
     }
 
+    /** 본편 장 그림 모델. 물결은 새 선택지에서 빠졌지만 옛 작업에는 기존 모델을 쓴다. */
+    public static String pageImageModel(String key) {
+        return "surf".equals(normalize(key)) ? "gpt-image-2.5-flare" : "gpt-image-2";
+    }
+
+    /** 새 작품에는 모델을 기록한다. 표시가 없는 옛 작품은 기존 GPT Image 2로 이어 그린다. */
+    public static String pageImageModelOf(Path runDir) {
+        try {
+            String model = Files.readString(runDir.resolve("page_model.txt")).strip();
+            if (model.equals("gpt-image-2.5-flare") || model.equals("gpt-image-2")) return model;
+        } catch (IOException ignored) {
+            // 전환 전 작품에는 이 파일이 없다.
+        }
+        return "gpt-image-2";
+    }
+
     /** 사람에게 보일 딱지. */
     public static String labelOf(String key) {
         return LABEL.getOrDefault(normalize(key), "");
@@ -184,7 +203,7 @@ public final class WebtoonQuality {
 
     /** 편집실 다시 그리기 창의 화질 고르개. 화질마다 한 장 다시 그리는 값. 순서가 곧 화면 순서다. */
     public static java.util.List<Map<String, Object>> regenChoices() {
-        return java.util.List.of("wave", "surf", "swell").stream()
+        return java.util.List.of("surf", "swell").stream()
                 .map(k -> Map.<String, Object>of(
                         "key", k,
                         "label", labelOf(k),
@@ -194,7 +213,7 @@ public final class WebtoonQuality {
 
     /** 화면이 고르개를 그릴 때 쓰는 목록. 순서가 곧 화면 순서다. */
     public static java.util.List<Map<String, Object>> choices() {
-        return java.util.List.of("wave", "surf", "swell").stream()
+        return java.util.List.of("surf", "swell").stream()
                 .map(k -> Map.<String, Object>of(
                         "key", k,
                         "label", labelOf(k),

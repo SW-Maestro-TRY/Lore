@@ -423,7 +423,7 @@ export function savePlayWorld(body: object, id?: string): Promise<{ id: string }
 }
 
 /** 세계관 체험 시작. 실패하면 서버 문구 그대로 WebtoonApiError 로 던진다(402 · 429 · 400). */
-export function startPlayRun(body: { world_id: string; event_id: string; character_id: string; agree_ip: boolean; language: string }): Promise<{ id: string; queue_position?: number }> {
+export function startPlayRun(body: { world_id: string; event_id: string; character_id: string; agree_ip: boolean; quality: string; language: string }): Promise<{ id: string; queue_position?: number }> {
   return post("/play/runs", { ...body, uid: getUid() });
 }
 
