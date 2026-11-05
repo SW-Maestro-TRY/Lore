@@ -5,6 +5,7 @@
  * 7초마다 넘기고, 마우스를 올리거나 창이 열려 있으면 멈춘다. 폰은 옆으로 밀어 넘긴다.
  * 주소에 ?banner=app 이면 앱 띠부터 보인다. */
 import { useEffect, useRef, useState } from "react";
+import { track } from "../../lib/track";
 import { useT } from "../../lib/i18n";
 import AppInstallDialog, { type AppDevice } from "../../ui/AppInstallDialog";
 import AppBanner from "./AppBanner";
@@ -30,6 +31,11 @@ export default function TopBanners() {
       if (q.get("appedit") === "1") { setCur(1); setHold(true); setPin(true); }
     } catch { /* 기본값 */ }
   }, []);
+  /* 앱 설치 띠가 처음 보인 때 한 번 센다(#981) — 누른 횟수와 나눠 누름률을 본다 */
+  const appSeen = useRef(false);
+  useEffect(() => {
+    if (cur === 1 && !appSeen.current) { appSeen.current = true; track("app_banner_view", { where: "works_banner" }); }
+  }, [cur]);
   useEffect(() => {
     if (hold || pin || dialog) return;
     const id = window.setTimeout(() => setCur((c) => (c + 1) % SLIDES), 7000);

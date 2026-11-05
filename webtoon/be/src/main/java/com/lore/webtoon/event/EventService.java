@@ -68,6 +68,8 @@ public class EventService {
             "where", "target", "kind", "tab", "pane", "filter", "reason", "status", "result",
             // 만들기 설정
             "step", "quality", "style", "mode", "preset", "lang",
+            // 기기 탭(ios · android) — 앱 설치 띠·출시 알림 창(#981)
+            "device",
             // 만들기 선택값 — 라벨만, 글은 아님(#665)
             "path", "way", "world", "genre", "pick", "to", "field", "source",
             // 세계관 체험의 사건 id(play_event.id — 운영 사건은 arcana-ep1 꼴, 사용자 세계는 무작위 기호)
