@@ -434,7 +434,7 @@ export default function Wizard({
                   onClick={() => patch({ quality: q.key })}>
             {samples && <div className="wt-wiz-q-art">
               <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />
-              {c != null && regular != null && regular > c && <span className={`wt-wiz-q-sticker wt-wiz-q-sticker-${q.key}`}><span>{t(sale)}</span><b>{c}C</b></span>}
+              {c != null && regular != null && regular > c && <span className={`wt-wiz-q-sticker wt-wiz-q-sticker-${q.key}`} aria-label={t(sale)}>SALE</span>}
             </div>}
             {samples && <small className="wt-wiz-q-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <div className="row">
