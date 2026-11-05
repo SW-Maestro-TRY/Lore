@@ -753,6 +753,14 @@ export default function Play({ go, authenticated, world, ep, stage, job, run, ch
     const hit = ep ? worlds.find((v) => v.events.some((x) => x.id === ep)) : undefined;
     const where = hit ? (stage || "event") : worlds.some((v) => v.id === world) ? "world" : "worlds";
     track("play_view", { where, world: hit?.id || world, event: hit ? ep : undefined, run, job, count: worlds.length, logged_in: authenticated });
+    /* 그 칸에 얼마나 머물렀나 — 다음 칸으로 옮기거나 체험을 떠날 때 남긴다(page_leave 는 체험 전체 시간만 안다) */
+    const at = Date.now();
+    const props = { where, world: hit?.id || world, event: hit ? ep : undefined };
+    let sent = false;
+    const leave = (how: string) => { if (sent) return; sent = true; track("play_leave", { ...props, ms: Date.now() - at, how }); };
+    const onHide = () => leave("close");
+    window.addEventListener("pagehide", onHide);
+    return () => { window.removeEventListener("pagehide", onHide); leave("move"); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worlds, failed, world, ep, stage, run]);
   if (failed) return <div className="pl"><div className="pl-wrap"><h1 className="pl-h1">{t("세계관을 불러오지 못했어요")}</h1></div></div>;
