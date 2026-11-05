@@ -2450,10 +2450,13 @@ public class JobRunner {
     private Map<String, String> env(WebtoonJob job) {
         Map<String, String> env = new HashMap<>();
         env.put("NH_STYLE", job.getStyle());
-        /* 사람이 고른 화질. 그림체와 <b>같은 성격</b>이라 같이 넘긴다 —
+        /* 사람이 고른 화질과 모델. 그림체와 <b>같은 성격</b>이라 같이 넘긴다 —
            요청마다 다른 값이므로 코드 기본값으로는 못 정한다.
            안 넘어가면 하네스가 자기 기본값(medium)으로 그린다. */
         env.put("OPENAI_IMAGE_QUALITY", WebtoonQuality.harnessValue(job.getQuality()));
+        env.put("PAGE_IMAGE_MODEL", job.getRunId() == null
+                ? WebtoonQuality.pageImageModel(job.getQuality())
+                : WebtoonQuality.pageImageModelOf(runsDir.resolve(job.getRunId())));
         /* 어느 언어로. run.py 가 --lang 을 안 받으면 이 값을 본다(lang.py 참고).
            옛 작업(language 컬럼이 비어 있음)은 WebtoonLanguage.normalize 가 ko 로 돌린다. */
         env.put("NH_LANG", WebtoonLanguage.normalize(job.getLanguage()));
@@ -2492,8 +2495,12 @@ public class JobRunner {
      */
     private void writeQuality(String runId, String quality) {
         try {
-            Files.writeString(runsDir.resolve(runId).resolve("quality.txt"),
-                    WebtoonQuality.normalize(quality));
+            Path dir = runsDir.resolve(runId);
+            Path qualityFile = dir.resolve("quality.txt");
+            if (!Files.exists(qualityFile)) {
+                Files.writeString(dir.resolve("page_model.txt"), WebtoonQuality.pageImageModel(quality));
+            }
+            Files.writeString(qualityFile, WebtoonQuality.normalize(quality));
         } catch (IOException e) {
             log.warn("화질을 남기지 못했습니다 (run={}, quality={})", runId, quality, e);
         }

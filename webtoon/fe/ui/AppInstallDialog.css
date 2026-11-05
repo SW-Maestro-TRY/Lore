@@ -1,0 +1,43 @@
+/* 앱 출시 알림 + 홈 화면 추가 안내 창 */
+.wt .wt-dialog-box.wt-appdl { width: min(440px, 100%); }
+.wt .wt-appdl .wt-dialog-heading { margin-bottom: 6px; }
+.wt .wt-appdl .wt-dialog-heading h2 { font-size: 20px; word-break: keep-all; }
+.wt .wt-appdl-offer { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 15px; line-height: 1.45; font-weight: 600; word-break: keep-all; }
+.wt .wt-appdl-offer b {
+  display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%;
+  background: var(--gold); color: #151c28; font-size: 13px; font-weight: 900; letter-spacing: -.02em;
+}
+.wt .wt-appdl-form { display: flex; gap: 8px; margin-top: 12px; }
+.wt .wt-appdl-form .field { flex: 1; min-width: 0; height: 46px; }
+.wt .wt-appdl-form .btn { flex: none; height: 46px; padding: 0 18px; font-size: 14px; }
+.wt .wt-appdl-form .btn.btn-p { color: #101925; }
+.wt .wt-appdl-done small { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; font-weight: 400; }
+.wt .wt-appdl-err { margin: 0; color: var(--gold); font-size: 12.5px; }
+.wt .wt-appdl-done { margin: 12px 0 0; padding: 12px 14px; border-radius: 10px; background: rgba(111, 227, 203, .1); color: #6fe3cb; font-size: 14px; font-weight: 600; word-break: keep-all; }
+
+.wt .wt-appdl-home { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-strong); }
+.wt .wt-appdl-home h3 { margin: 0 0 10px; font-size: 15px; font-weight: 700; }
+.wt .wt-appdl-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, .05); }
+.wt .wt-appdl-tabs button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; border: 0; border-radius: 9px;
+  background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.wt .wt-appdl-tabs button.on { background: var(--ink); color: #101925; }
+.wt .wt-appdl-now { width: 100%; height: 42px; margin-top: 10px; font-size: 14px; }
+.wt .wt-appdl-steps { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wt .wt-appdl-steps li { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 11px 12px; border: 1px solid var(--line-strong); border-radius: 10px; }
+.wt .wt-appdl-steps li.mine { border-color: var(--gold); }
+.wt .wt-appdl-steps .ver { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.wt .wt-appdl-steps .ver em { align-self: flex-start; padding: 1px 6px; border-radius: 4px; background: var(--gold); color: #151c28; font-size: 10.5px; font-style: normal; }
+.wt .wt-appdl-steps .how { display: flex; flex-direction: column; gap: 3px; font-size: 13.5px; line-height: 1.5; word-break: keep-all; }
+.wt .wt-appdl-steps .how small { color: var(--muted); font-size: 12px; }
+@media (max-width: 767px) {
+  .wt .wt-appdl-steps li { grid-template-columns: 1fr; gap: 4px; }
+  .wt .wt-appdl-steps .ver { flex-direction: row; align-items: center; gap: 6px; }
+}
+.wt .wt-os-mark { flex: none; }
+@media (max-width: 767px) {
+  .wt .wt-dialog-box.wt-appdl { padding: 20px 16px 16px; }
+  .wt .wt-appdl .wt-dialog-heading h2 { font-size: 17.5px; }
+  .wt .wt-appdl-offer { font-size: 14px; }
+}

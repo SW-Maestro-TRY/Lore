@@ -102,7 +102,7 @@ public class JobController {
         Long me = CreditGate.currentUser();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("logged_in", me != null);
-        out.put("credit_cost", credits.cost());
+        out.put("credit_cost", WebtoonQuality.creditsOf(WebtoonQuality.DEFAULT_QUALITY));
         // 편집실 단추가 값을 적으려고 쓴다 — 화면에 박아 두면 서버 설정과 어긋난다.
         out.put("regen_cost", credits.regenCost());
         /* 화질 셋과 각각의 값. **화면이 여기서 받아 간다** — 같은 표를 화면에도
@@ -122,6 +122,14 @@ public class JobController {
         }
         // 오늘 전체 몫이 찼으면 로그인해도 못 만든다 — 그 말을 먼저 해야 한다.
         out.put("blocked", guard.whyBlocked());
+        return out;
+    }
+
+    /** 세계관 사건 화면도 일반 웹툰과 같은 오픈 세일 값을 받는다. */
+    public Map<String, Object> playAllowance(HttpServletRequest request) {
+        Map<String, Object> out = allowance(request);
+        out.put("qualities", WebtoonQuality.playChoices());
+        out.put("credit_cost", WebtoonQuality.playCreditsOf(WebtoonQuality.DEFAULT_QUALITY));
         return out;
     }
 
@@ -169,6 +177,16 @@ public class JobController {
     @PostMapping("/create")
     public ResponseEntity<Map<String, Object>> create(HttpServletRequest request,
                                                       @RequestBody JobService.CreateRequest form) {
+        return createInternal(request, form, false);
+    }
+
+    /** 검증된 /play/runs 경로에서만 부른다. 본문 play 값만으로 사건 경로가 되지 않는다. */
+    public ResponseEntity<Map<String, Object>> createPlay(HttpServletRequest request, JobService.CreateRequest form) {
+        return createInternal(request, form, true);
+    }
+
+    private ResponseEntity<Map<String, Object>> createInternal(HttpServletRequest request,
+                                                              JobService.CreateRequest form, boolean play) {
         Long me = CreditGate.currentUser();
 
         /* **여기도 문지기가 서야 한다.**
@@ -197,7 +215,7 @@ public class JobController {
         /* **고른 화질만큼 받는다.** 너울(high)은 원가가 파도의 2.4배라 같은
            값으로 팔면 한 편마다 손해다 — 실제로 그렇게 한 달 가까이 돌았다.
            값은 WebtoonQuality 한 곳만 안다. */
-        int need = WebtoonQuality.creditsOf(form.quality());
+        int need = play ? WebtoonQuality.playCreditsOf(form.quality()) : WebtoonQuality.creditsOf(form.quality());
         /* 함께 주인공 시트(#899) — 첫 주인공 시트는 한 편 값에 들어 있고, 둘째부터 한 사람당 조연 시트 값. 한 편 값과
            같이 잔액을 보고, 원장에는 따로 적는다(조연 시트 구매와 메모가 다르다). 실패하면 JobRunner.refund 가 같이 돌려준다. */
         int coSheets = JobService.coCountOf(form) * JobService.CAST_SHEET_CREDITS;
@@ -228,7 +246,7 @@ public class JobController {
             throw e;
         }
         // 만들어진 뒤에 받는다. 같은 작업으로 두 번 불려도 한 번만 빠진다.
-        credits.charge(me, need, id, WebtoonQuality.labelOf(form.quality()));
+        credits.charge(me, need, id, (play ? "세계관 사건 · " : "") + WebtoonQuality.labelOf(form.quality()));
         if (coSheets > 0) {
             credits.charge(me, coSheets, JobRunner.coSheetsRef(id),
                     "주인공 시트 추가 · " + JobService.coCountOf(form) + "명");

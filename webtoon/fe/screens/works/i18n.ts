@@ -79,6 +79,11 @@ const dict: Dict = {
   "취소": { en: "Cancel", ja: "キャンセル", zh: "取消" },
   /* ---- 빠졌던 번역 ---- */
   "웹툰 둘러보기": { en: "Browse webtoons", ja: "ウェブトゥーンを見て回る", zh: "浏览漫画" },
+  /* ---- 앱 설치 띠(2026-11-06) ---- */
+  "LORE 앱 설치하기": { en: "Get the LORE app", ja: "LOREアプリをインストール", zh: "安装 LORE 应用" },
+  "출시 알림 신청하면 50크레딧": { en: "Sign up for launch news, get 50 credits", ja: "リリース通知の登録で50クレジット", zh: "订阅上线通知送50积分" },
+  "앱 출시 알림 받고 50크레딧": { en: "Get launch news and 50 credits", ja: "アプリのリリース通知で50クレジット", zh: "接收上线通知领50积分" },
+  "{n}번째 띠": { en: "Banner {n}", ja: "{n}番目のバナー", zh: "第 {n} 个横幅" },
 };
 
 registerDict(dict);

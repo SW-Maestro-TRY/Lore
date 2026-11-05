@@ -47,6 +47,27 @@ class CoProtagonistChargeTest {
         verify(credits,never()).charge(anyLong(),anyInt(),eq("job-1:co-sheets"),any());
     }
 
+    @Test void playAndCreateRoutesChargeTheSameOpeningPrice() {
+        var playForm = new JobService.CreateRequest("하윤","정비공","","","frost",null,null,null,true,true,
+                "uid","first",null,"surf","ko","quick","","","",null,null,true);
+        controller.createPlay(new MockHttpServletRequest(), playForm);
+        verify(credits).whyBlocked(7L, 15);
+        verify(credits).charge(7L, 15, "job-1", "세계관 사건 · 파도");
+
+        clearInvocations(credits, jobs);
+        controller.create(new MockHttpServletRequest(), playForm);
+        verify(credits).whyBlocked(7L, 15);
+        verify(credits).charge(7L, 15, "job-1", "파도");
+    }
+
+    @Test void playRouteChargesSwellSalePrice() {
+        var form = new JobService.CreateRequest("하윤","정비공","","","frost",null,null,null,true,true,
+                "uid","first",null,"swell","ko","quick","","","",null,null,true);
+        controller.createPlay(new MockHttpServletRequest(), form);
+        verify(credits).whyBlocked(7L, 20);
+        verify(credits).charge(7L, 20, "job-1", "세계관 사건 · 너울");
+    }
+
     @Test void notEnoughForTheAddedSheetsBlocksBeforeCreating() {
         int need=WebtoonQuality.creditsOf("surf")+3*JobService.CAST_SHEET_CREDITS;
         when(credits.whyBlocked(7L,need)).thenReturn("크레딧 잔액이 부족해요");

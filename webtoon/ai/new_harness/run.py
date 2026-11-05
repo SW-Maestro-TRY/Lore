@@ -1972,6 +1972,22 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
         lines.append(f"- 고른 캐릭터 카드: {charcard.short(charcard.for_story(char))} (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
+    # 장면 단계가 시트의 색을 모르면 본문에 없던 드레스 색을 새로 지어낸다.
+    # 그 look 이 다음 그림 단계에서 "시트보다 먼저"로 전달되어 실제 시트를
+    # 매 장 첨부해도 색이 바뀐다(2026-11-06 클로에: 분홍 시트 → 청색 장면).
+    if run_dir is not None:
+        sheet_spec = read_json(run_dir / "sheet_spec.json") or {}
+        details = [str(x).strip() for x in (sheet_spec.get("design_details") or []) if str(x).strip()]
+        props = [str(x).strip() for x in (sheet_spec.get("props") or []) if str(x).strip()]
+        palette = sheet_spec.get("color_palette") or {}
+        if details or props or palette:
+            lines += ["", "[주인공 캐릭터 시트 — 외형과 복장의 기준]",
+                      "본문에서 옷을 갈아입거나 덧입는 일이 명시되지 않았다면 아래 시트의 복장과 색을 유지한다. "
+                      "조명·오염·손상은 적되 다른 색 옷으로 바꾸지 않는다. 의도적인 변화만 「겉모습·소지품·동행」에 적는다."]
+            lines += [f"- {x}" for x in details]
+            lines += [f"- 소지품: {x}" for x in props]
+            if palette.get("outfit_main"):
+                lines.append(f"- 기본 의상 색: {palette['outfit_main']}")
     if co_protagonists(char):
         lines += co_scene_lines(char)
         lines += ["", f"이 웹툰의 주인공은 {', '.join(protagonist_names(char))}이다. 장면 지시에서 「주인공」은 이 "

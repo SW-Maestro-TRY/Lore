@@ -14,7 +14,7 @@ import { PHOTO_ACCEPT, readPhoto } from "../../lib/photoFile";
 import { startJob } from "../../lib/start";
 import DirectSwitch from "../../ui/DirectSwitch";
 import {
-  CO_MAX, GENRE_QUICK, OWN_STORY_MAX, QUALITY_INFO, STYLE_INFO, qualitySamples,
+  CO_MAX, GENRE_QUICK, OWN_STORY_MAX, QUALITY_INFO, STYLE_INFO, qualitySamples, QUALITY_THUMB,
   emptyWizardForm, type WizardForm, type WizardQuality,
 } from "../../lib/wizardData";
 import { STYLE_THUMB } from "../../lib/styleThumbs";
@@ -22,8 +22,9 @@ import { useLang, useT } from "../../lib/i18n";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { metaTrack } from "../../lib/metaPixel";
-import { IconCheck, IconChevronLeft, IconEdit, IconPlus } from "../../ui/Icons";
+import { IconCheck, IconChevronLeft, IconEdit, IconPlus, IconZoom } from "../../ui/Icons";
 import NotifyAsk, { shouldAskNotify } from "../../ui/NotifyAsk";
+import QualitySampleZoom from "../../ui/QualitySampleZoom";
 import "./i18n";
 import "./Wizard.css";
 import {CharacterEditDialog,CharacterForm} from "../character/OriginalCharacter";
@@ -336,11 +337,18 @@ export default function Wizard({
       .catch(() => { if (active) setAllowError(t("크레딧 정보를 불러오지 못했어요. 다시 확인해 주세요.")); });
     return () => { active = false; };
   }, [step, lastStep, allowRetry, authenticated, t]);
+  useEffect(() => {
+    const remaining = Date.parse("2026-11-15T15:00:00Z") - Date.now();
+    if (remaining <= 0) return;
+    const timer = window.setTimeout(() => setAllowRetry(n => n + 1), remaining + 100);
+    return () => window.clearTimeout(timer);
+  }, []);
   const creditsOf = (key: WizardQuality) => {
     const q = allow?.qualities?.find((x) => x.key === key);
     if (q) return q.credits;
     return allow?.credit_cost ?? null;
   };
+  const guestFree = !authenticated && !allowError && (!allow || (!allow.logged_in && !allow.blocked && (allow.free_left ?? 0) > 0));
   /* 함께 주인공 시트 값(#899) — 첫 주인공 시트는 한 편 값에 들어 있고, 둘째부터 한 사람당 coCredit */
   const coExtra = form.characterId ? coIds.length * coCredit : 0;
   const coNeed = (creditsOf(form.quality) ?? 0) + coExtra;
@@ -415,7 +423,7 @@ export default function Wizard({
     }
   };
 
-  const quality = QUALITY_INFO.find((q) => q.key === form.quality) ?? QUALITY_INFO[1];
+  const quality = QUALITY_INFO.find((q) => q.key === form.quality) ?? QUALITY_INFO[0];
   const cost = creditsOf(form.quality);
   const qualityTime = t(quality.lede).split(" · ")[0];
 
@@ -423,31 +431,34 @@ export default function Wizard({
 
   /* 촘촘함 고르기 — quick 길은 4걸음, own 길은 3걸음(그림체 아래)에 같은 것이 뜬다. */
   const samples = qualitySamples();
+  const [previewQuality, setPreviewQuality] = useState<WizardQuality | null>(null);
   const qualityPicker = (
     <div className="wt-wiz-qs">
       {QUALITY_INFO.map((q) => {
         const c = creditsOf(q.key);
+        const regular = allow?.qualities?.find((x) => x.key === q.key)?.regular_credits;
         return (
-          <button key={q.key} type="button" className={`wt-wiz-q${form.quality === q.key ? " on" : ""}`}
-                  onClick={() => patch({ quality: q.key })}>
-            {/* 같은 장면을 화질만 바꿔 그린 한 칸 — 셋이 다 있을 때만(wizardData QUALITY_SAMPLE) */}
-            {samples && <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t(q.label)} loading="lazy" decoding="async" />}
-            <div className="row">
-              <b>{t(q.label)}</b>
-              <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : t("{n}크레딧", { n: c })}</i>
-            </div>
-            <span className="lede">{t(q.lede)}</span>
-            <span className="muted desc">{q.desc.map((d) => t(d)).join(" ")}</span>
-          </button>
+          <div key={q.key} className={`wt-wiz-q${form.quality === q.key ? " on" : ""}`}>
+            {samples && <button type="button" className="wt-wiz-q-art" aria-label={t("{mode} 예시 그림 크게 보기", { mode: t(q.label) })} onClick={() => setPreviewQuality(q.key)}>
+              <img className="wt-wiz-q-sample" src={QUALITY_THUMB[q.key]} alt="" loading="lazy" decoding="async" />
+              <span className="wt-wiz-q-zoom" aria-hidden="true"><IconZoom size={17} /></span>
+            </button>}
+            <button type="button" className="wt-wiz-q-select" aria-pressed={form.quality === q.key} onClick={() => patch({ quality: q.key })}>
+              {samples && <small className="wt-wiz-q-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
+              <span className="row">
+                <b>{t(q.label)}</b>
+                <i>{guestFree
+                  ? t("무료 이벤트 중!")
+                  : c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} />
+                  : <>{regular != null && regular > c && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: c })}</>}</i>
+              </span>
+              <span className="lede">{t(q.lede)}</span>
+              <span className="muted desc">{q.desc.map((d) => t(d)).join(" ")}</span>
+              {c != null && regular != null && regular > c && !guestFree && <small className="wt-wiz-q-sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
+            </button>
+          </div>
         );
       })}
-      {(() => {
-        /* 한 편 값은 기본 장 수까지 — 넘는 장은 그리기 직전에 장마다 받고, 모자라면 앞 장까지만 먼저 그린다 */
-        const q = allow?.qualities?.find((x) => x.key === form.quality);
-        return q?.base_pages && q.extra_page_credits ? (
-          <p className="muted wt-wiz-qnote">{t("한 편은 {base}장까지예요. 이야기가 길어 장면이 더 많으면 한 장에 {per}크레딧이 더 들고, 크레딧이 모자라면 {base}장까지 먼저 그린 뒤 나머지는 나중에 이어 그릴 수 있어요.", { base: q.base_pages, per: q.extra_page_credits })}</p>
-        ) : null;
-      })()}
     </div>
   );
 
@@ -527,6 +538,7 @@ export default function Wizard({
     void goStep(2);
   };
   return <div className="wt-wiz wt-wiz-final">
+    {previewQuality && samples && <QualitySampleZoom src={samples[previewQuality]} label={t(QUALITY_INFO.find(q => q.key === previewQuality)?.label || "")} onClose={() => setPreviewQuality(null)} />}
     {legacyOpen&&<Dialog wide title={t("이전 캐릭터 저장")} busy={legacyBusy} onClose={()=>setLegacyOpen(false)}><CharacterForm initialDraft={{name:form.name,description:form.character,image:form.photos[0]||""}} authenticated={authenticated} onBusyChange={setLegacyBusy} onClose={()=>setLegacyOpen(false)} onSaved={c=>{setChars(cs=>[c,...(cs||[])]);pickChar(c);setLegacyOpen(false);}}/></Dialog>}
     {asking&&<NotifyAsk time={qualityTime} onStart={mail=>void begin(mail)} onClose={()=>setAsking(false)}/>}
     {editingCharacter?.builtin&&<CharacterEditDialog localOnly character={editingCharacter} authenticated={authenticated} onClose={()=>setEditingCharacter(null)} onDeleted={()=>setEditingCharacter(null)} onSaved={c=>{
@@ -581,7 +593,7 @@ export default function Wizard({
         <div className="wt-create-footer"><button type="button" className="btn btn-p" disabled={!step1Ok||loreLocked||quickSaving||!!form.lorebook&&!form.lorebook.confirmed} onClick={()=>void next()}>{quickSaving?t("캐릭터 저장 중…"):t("다음")}</button></div>
       </div>:<div className="wt-create-content wt-create-options">
         <section><h2>{t("그림체")}</h2><div className="wt-wiz-styles">{STYLE_INFO.map(([key,label])=><button type="button" key={key} className={`wt-wiz-style${form.style===key?" on":""}`} aria-pressed={form.style===key} onClick={()=>{track("style_pick",{style:key});patch({style:key});}}><img src={STYLE_THUMB[key]||`/static/samples/ex-${key}-1.jpg`} alt=""/><b>{t(label)}</b>{form.style===key&&<CheckMark/>}</button>)}</div></section>
-        <section><h2>{t("그리기 방식")}</h2><p className="dim hint wt-wiz-qualityhint">{t("시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.")}</p>{qualityPicker}</section>
+        <section><h2>{t("그리기 방식")}</h2><p className="dim hint wt-wiz-qualityhint">{t("시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.")}</p>{qualityPicker}{guestFree && allow?.free_left != null && <small className="wt-wiz-free-left">{t("남은 무료 횟수 {n}회", { n: allow.free_left })}</small>}</section>
         {/* 두 길 모두 「바로 만들기」 하나로 고른다(2026-10-26) — 내 이야기 길도 확인 없이 끝까지 갈 수 있다. */}
         <section><h2>{t("생성 방식")}</h2><DirectSwitch on={viewMode==="simple"} onChange={on=>usesOwnStory?patch({ownDirect:on}):pickMode(on?"simple":"expert")}/></section>
         {sidePanel}
