@@ -423,12 +423,14 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
         <div className="choices">{QUALITY_INFO.map((q) => {
           const price = allow?.qualities?.find((x) => x.key === q.key);
           const cost = price?.credits;
+          const sale = q.key === "swell" ? "파격 세일" : "세일";
           return <button key={q.key} type="button" className={quality === q.key ? "on" : ""}
             aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
+            {allow?.logged_in && price?.regular_credits != null && <span className={`sale-mark sale-mark-${q.key}`}>{t(sale)}</span>}
             {previews && <img src={previews[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />}
             {previews && <small className="sample-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
             <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
-            <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : <>{price?.regular_credits != null && <del>{t("{n}크레딧", { n: price.regular_credits })}</del>}<span className="open-discount">{t("오픈 할인")}</span>{t("{n}크레딧", { n: cost })}</> : t("오늘 무료 생성")}</em>
+            <em>{allow?.logged_in ? cost == null ? t("크레딧 확인 중") : <>{price?.regular_credits != null && <del>{t("{n}크레딧", { n: price.regular_credits })}</del>}{t("{n}크레딧", { n: cost })}</> : t("오늘 무료 생성")}</em>
           </button>;
         })}</div>
         {allow?.logged_in && choice && <small>{t("보유 {n}크레딧", { n: allow.balance ?? 0 })}</small>}
