@@ -111,6 +111,14 @@
   font-size: 13px;
   color: var(--muted);
 }
+.wt .wt-signup-offer .wt-dialog-heading { margin-bottom: 14px; }
+.wt .wt-signup-offer .wt-dialog-heading h2 { font-size: 19px; word-break: keep-all; }
+.wt .wt-signup-offer-gift { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--card, rgba(255,255,255,.04)); }
+.wt .wt-signup-offer-gift > b { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--gold); color: #151c28; font-size: 18px; font-weight: 800; }
+.wt .wt-signup-offer-gift > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.wt .wt-signup-offer-gift strong { font-size: 16px; font-weight: 700; }
+.wt .wt-signup-offer-gift small { color: var(--muted); font-size: 13px; line-height: 1.45; word-break: keep-all; }
+.wt .wt-signup-offer .wt-dialog-actions { margin-top: 14px; }
 .wt .wt-reader-create {
   display: grid;
   /* 표지를 키웠다(2026-10-25) — 170px 이면 무슨 작품인지 안 보인다는 피드백 */

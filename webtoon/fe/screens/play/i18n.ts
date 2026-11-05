@@ -24,6 +24,8 @@ const dict: Dict = {
   "파격 세일": { en: "Special sale", ja: "特別セール", zh: "特惠" },
   "보유 {n}크레딧": { en: "Balance: {n} credits", ja: "残高: {n}クレジット", zh: "余额：{n} 积分" },
   "오늘 무료 생성": { en: "Today's free generation", ja: "今日の無料生成", zh: "今日免费生成" },
+  "무료 이벤트 중!": { en: "Free event now!", ja: "無料イベント開催中！", zh: "免费活动进行中！" },
+  "남은 무료 횟수 {n}회": { en: "{n} free creations left", ja: "無料作成の残り {n} 回", zh: "剩余免费次数 {n} 次" },
   "오늘 무료 {n}편 남음": { en: "{n} free episode(s) left today", ja: "今日の無料枠は残り{n}話", zh: "今天还可免费生成 {n} 话" },
   "{base}장까지 포함 · 추가 장면은 장당 {per}크레딧": { en: "Includes up to {base} pages · {per} credits per extra page", ja: "{base}ページまで含む · 追加は1ページ{per}クレジット", zh: "包含最多 {base} 页 · 每增加一页 {per} 积分" },
   "무료 생성은 {base}장까지예요.": { en: "Free generation includes up to {base} pages.", ja: "無料生成は{base}ページまでです。", zh: "免费生成最多包含 {base} 页。" },
