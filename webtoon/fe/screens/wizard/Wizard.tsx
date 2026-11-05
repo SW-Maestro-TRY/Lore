@@ -445,9 +445,9 @@ export default function Wizard({
               <b>{t(q.label)}</b>
               <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : <>{regular != null && regular > c && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: c })}</>}</i>
             </div>
-            {c != null && regular != null && regular > c && <small className="wt-wiz-q-sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
             <span className="lede">{t(q.lede)}</span>
             <span className="muted desc">{q.desc.map((d) => t(d)).join(" ")}</span>
+            {c != null && regular != null && regular > c && <small className="wt-wiz-q-sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
           </button>
         );
       })}

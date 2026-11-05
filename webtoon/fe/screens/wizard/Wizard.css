@@ -130,7 +130,7 @@
 .wt .wt-wiz-q .row b { font-size: 22px; }
 .wt .wt-wiz-q .row i { display: inline-flex; align-items: baseline; gap: 7px; font-style: normal; font-size: 13px; font-weight: 700; color: var(--gold); }
 .wt .wt-wiz-q .row i del { color: var(--muted); font-size: 12px; font-weight: 400; }
-.wt .wt-wiz-q-sale-note { display: block; color: var(--gold); font-size: 12px; line-height: 1.3; font-weight: 600; }
+.wt .wt-wiz-q-sale-note { display: block; margin-top: auto; padding-top: 4px; color: var(--gold); font-size: 12px; line-height: 1.3; font-weight: 600; }
 .wt .wt-wiz-q .lede { font-size: 14px; font-weight: 600; }
 .wt .wt-wiz-q .desc { font-size: 13.5px; line-height: 1.55; }
 .wt .wt-wiz-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
