@@ -33,10 +33,26 @@ class WebtoonQualityTest {
     }
 
     @Test
-    @DisplayName("셋 다 있고 순서가 물결 · 파도 · 너울이다")
-    void 셋이_순서대로다() {
+    @DisplayName("새 선택지는 파도 · 너울이고 물결은 옛 작업에서만 쓴다")
+    void 두_선택지() {
         assertThat(WebtoonQuality.choices()).extracting(m -> m.get("label"))
-                .containsExactly("물결", "파도", "너울");
+                .containsExactly("파도", "너울");
+        assertThat(WebtoonQuality.pageImageModel("surf")).isEqualTo("gpt-image-2.5-flare");
+        assertThat(WebtoonQuality.pageImageModel("swell")).isEqualTo("gpt-image-2");
+        assertThat(WebtoonQuality.pageImageModel("wave")).isEqualTo("gpt-image-2");
+    }
+
+    @Test
+    void 옛_작품은_기존_모델로_다시_그린다() throws Exception {
+        Path run = Files.createTempDirectory("old-page-model-");
+        try {
+            assertThat(WebtoonQuality.pageImageModelOf(run)).isEqualTo("gpt-image-2");
+            Files.writeString(run.resolve("page_model.txt"), "gpt-image-2.5-flare");
+            assertThat(WebtoonQuality.pageImageModelOf(run)).isEqualTo("gpt-image-2.5-flare");
+        } finally {
+            Files.deleteIfExists(run.resolve("page_model.txt"));
+            Files.deleteIfExists(run);
+        }
     }
 
     @Test

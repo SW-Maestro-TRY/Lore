@@ -415,7 +415,7 @@ export default function Wizard({
     }
   };
 
-  const quality = QUALITY_INFO.find((q) => q.key === form.quality) ?? QUALITY_INFO[1];
+  const quality = QUALITY_INFO.find((q) => q.key === form.quality) ?? QUALITY_INFO[0];
   const cost = creditsOf(form.quality);
   const qualityTime = t(quality.lede).split(" · ")[0];
 
