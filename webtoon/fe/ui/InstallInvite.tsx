@@ -10,16 +10,12 @@ import "./InstallInvite.css";
 registerDict({
   "LORE를 홈 화면에 추가해요": { en: "Add LORE to your Home Screen", ja: "LOREをホーム画面に追加", zh: "将 LORE 添加到主屏幕" },
   "만드는 동안 추가해두면 다음에 바로 열 수 있어요.": { en: "Add it while your comic is being made, then open it instantly next time.", ja: "制作を待つ間に追加すると、次からすぐ開けます。", zh: "制作期间添加，下次就能直接打开。" },
-  "앱스토어 설치 없이 웹사이트를 앱처럼 열어요.": { en: "Open the website like an app, without an app store download.", ja: "ストアからのダウンロードなしで、サイトをアプリのように開けます。", zh: "无需应用商店下载，也能像应用一样打开网站。" },
   "홈 화면에 추가": { en: "Add to Home Screen", ja: "ホーム画面に追加", zh: "添加到主屏幕" },
   "추가 방법 보기": { en: "Show me how", ja: "追加方法を見る", zh: "查看添加方法" },
   "나중에": { en: "Later", ja: "あとで", zh: "稍后" },
+  "공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요.": { en: "Tap Share, then Add to Home Screen.", ja: "共有をタップし、「ホーム画面に追加」を選んでください。", zh: "点击分享，然后选择“添加到主屏幕”。" },
+  "브라우저 메뉴(⋮)에서 ‘홈 화면에 추가’를 선택하세요.": { en: "In your browser menu (⋮), choose Add to Home Screen.", ja: "ブラウザのメニュー（⋮）から「ホーム画面に追加」を選んでください。", zh: "在浏览器菜单（⋮）中选择“添加到主屏幕”。" },
   "알겠어요": { en: "Got it", ja: "わかりました", zh: "知道了" },
-  "웹툰은 계속 만들어지고 있어요.": { en: "Your comic keeps generating in the background.", ja: "漫画の制作はそのまま続きます。", zh: "漫画仍在后台继续制作。" },
-  "Safari에서 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요.": { en: "In Safari, tap Share, then Add to Home Screen.", ja: "Safariで共有をタップし、「ホーム画面に追加」を選んでください。", zh: "在 Safari 中点击分享，然后选择“添加到主屏幕”。" },
-  "Safari에서 이 페이지를 연 뒤 공유 → ‘홈 화면에 추가’를 선택하세요.": { en: "Open this page in Safari, then choose Share → Add to Home Screen.", ja: "このページをSafariで開き、共有 →「ホーム画面に追加」を選んでください。", zh: "先在 Safari 中打开此页面，再选择分享 →“添加到主屏幕”。" },
-  "브라우저 메뉴(⋮)에서 ‘홈 화면에 추가’ 또는 ‘앱 설치’를 선택하세요.": { en: "In your browser menu (⋮), choose Add to Home Screen or Install app.", ja: "ブラウザのメニュー（⋮）から「ホーム画面に追加」または「アプリをインストール」を選んでください。", zh: "在浏览器菜单（⋮）中选择“添加到主屏幕”或“安装应用”。" },
-  "브라우저 메뉴에서 ‘앱 설치’를 선택하세요.": { en: "Choose Install app from your browser menu.", ja: "ブラウザのメニューから「アプリをインストール」を選んでください。", zh: "在浏览器菜单中选择“安装应用”。" },
 });
 
 const SEEN_KEY = "lore_install_invite_seen_v1";
@@ -31,14 +27,12 @@ export default function InstallInvite({ active, where, job }: { active: boolean;
   const [installable, setInstallable] = useState(false);
   const [ios, setIos] = useState(false);
   const [mobile, setMobile] = useState(false);
-  const [safari, setSafari] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setInstallable(canInstall());
     setIos(isIos());
     setMobile(window.matchMedia("(max-width: 767px)").matches);
-    setSafari(/Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent));
     const off = onInstallChange(() => setInstallable(canInstall()));
     const installed = () => setOpen(false);
     window.addEventListener("appinstalled", installed);
@@ -47,7 +41,8 @@ export default function InstallInvite({ active, where, job }: { active: boolean;
 
   useEffect(() => {
     if (!active) { setOpen(false); return; }
-    if (isStandalone()) return;
+    /* 홈 화면은 폰·태블릿에만 있다 — PC 에서는 띄우지 않는다 */
+    if (isStandalone() || !(isIos() || window.matchMedia("(pointer: coarse)").matches)) return;
     try { if (sessionStorage.getItem(SEEN_KEY)) return; } catch { /* 저장을 못 해도 안내는 가능 */ }
     const timer = window.setTimeout(() => {
       if (isStandalone()) return;
@@ -82,23 +77,20 @@ export default function InstallInvite({ active, where, job }: { active: boolean;
   };
 
   if (!open || !active) return null;
+  /* iOS 16.4 부터는 Safari 가 아닌 브라우저도 공유 메뉴에서 홈 화면에 추가할 수 있다 */
   const instructions = ios
-    ? t(safari ? "Safari에서 공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요." : "Safari에서 이 페이지를 연 뒤 공유 → ‘홈 화면에 추가’를 선택하세요.")
-    : t(mobile ? "브라우저 메뉴(⋮)에서 ‘홈 화면에 추가’ 또는 ‘앱 설치’를 선택하세요." : "브라우저 메뉴에서 ‘앱 설치’를 선택하세요.");
+    ? t("공유 버튼을 누른 뒤 ‘홈 화면에 추가’를 선택하세요.")
+    : t("브라우저 메뉴(⋮)에서 ‘홈 화면에 추가’를 선택하세요.");
   return <Dialog title={t("LORE를 홈 화면에 추가해요")} onClose={dismiss} busy={busy} className="wt-install-invite">
     <div className="wt-install-invite-body">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/icons/icon-192.png" alt="" />
-      {guide ? <p className="wt-install-invite-guide">{instructions}</p> : <>
-        <p>{t("만드는 동안 추가해두면 다음에 바로 열 수 있어요.")}</p>
-        <small>{t("앱스토어 설치 없이 웹사이트를 앱처럼 열어요.")}</small>
-      </>}
-      <span className="wt-install-invite-status">{t("웹툰은 계속 만들어지고 있어요.")}</span>
+      <p>{guide ? instructions : t("만드는 동안 추가해두면 다음에 바로 열 수 있어요.")}</p>
     </div>
-    <div className="wt-install-invite-actions">
-      {guide ? <button type="button" className="primary" onClick={dismiss}>{t("알겠어요")}</button> : <>
-        <button type="button" className="secondary" onClick={dismiss}>{t("나중에")}</button>
-        <button type="button" className="primary" disabled={busy} onClick={() => void choose()}>{t(installable ? "홈 화면에 추가" : "추가 방법 보기")}</button>
+    <div className="wt-dialog-actions">
+      {guide ? <button type="button" className="btn btn-p" onClick={dismiss}>{t("알겠어요")}</button> : <>
+        <button type="button" className="btn btn-w" onClick={dismiss}>{t("나중에")}</button>
+        <button type="button" className="btn btn-p" disabled={busy} onClick={() => void choose()}>{t(installable ? "홈 화면에 추가" : "추가 방법 보기")}</button>
       </>}
     </div>
   </Dialog>;
