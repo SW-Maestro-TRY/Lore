@@ -22,8 +22,9 @@ import { useLang, useT } from "../../lib/i18n";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { metaTrack } from "../../lib/metaPixel";
-import { IconCheck, IconChevronLeft, IconEdit, IconPlus } from "../../ui/Icons";
+import { IconCheck, IconChevronLeft, IconEdit, IconPlus, IconZoom } from "../../ui/Icons";
 import NotifyAsk, { shouldAskNotify } from "../../ui/NotifyAsk";
+import QualitySampleZoom from "../../ui/QualitySampleZoom";
 import "./i18n";
 import "./Wizard.css";
 import {CharacterEditDialog,CharacterForm} from "../character/OriginalCharacter";
@@ -429,26 +430,29 @@ export default function Wizard({
 
   /* 촘촘함 고르기 — quick 길은 4걸음, own 길은 3걸음(그림체 아래)에 같은 것이 뜬다. */
   const samples = qualitySamples();
+  const [previewQuality, setPreviewQuality] = useState<WizardQuality | null>(null);
   const qualityPicker = (
     <div className="wt-wiz-qs">
       {QUALITY_INFO.map((q) => {
         const c = creditsOf(q.key);
         const regular = allow?.qualities?.find((x) => x.key === q.key)?.regular_credits;
         return (
-          <button key={q.key} type="button" className={`wt-wiz-q${form.quality === q.key ? " on" : ""}`}
-                  onClick={() => patch({ quality: q.key })}>
-            {samples && <div className="wt-wiz-q-art">
-              <img className="wt-wiz-q-sample" src={samples[q.key]} alt={t("아르카나 마법학교 page02 · {mode} 예시", { mode: t(q.label) })} loading="lazy" decoding="async" />
-            </div>}
-            {samples && <small className="wt-wiz-q-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
-            <div className="row">
-              <b>{t(q.label)}</b>
-              <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : <>{regular != null && regular > c && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: c })}</>}</i>
-            </div>
-            <span className="lede">{t(q.lede)}</span>
-            <span className="muted desc">{q.desc.map((d) => t(d)).join(" ")}</span>
-            {c != null && regular != null && regular > c && <small className="wt-wiz-q-sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
-          </button>
+          <div key={q.key} className={`wt-wiz-q${form.quality === q.key ? " on" : ""}`}>
+            {samples && <button type="button" className="wt-wiz-q-art" aria-label={t("{mode} 예시 그림 크게 보기", { mode: t(q.label) })} onClick={() => setPreviewQuality(q.key)}>
+              <img className="wt-wiz-q-sample" src={samples[q.key]} alt="" loading="lazy" decoding="async" />
+              <span className="wt-wiz-q-zoom" aria-hidden="true"><IconZoom size={17} /></span>
+            </button>}
+            <button type="button" className="wt-wiz-q-select" aria-pressed={form.quality === q.key} onClick={() => patch({ quality: q.key })}>
+              {samples && <small className="wt-wiz-q-style">{t("예시 그림체 · 로맨스 판타지")}</small>}
+              <span className="row">
+                <b>{t(q.label)}</b>
+                <i>{c == null ? <span className="skeleton" style={{ display: "inline-block", width: 48, height: 14, borderRadius: 4 }} /> : <>{regular != null && regular > c && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: c })}</>}</i>
+              </span>
+              <span className="lede">{t(q.lede)}</span>
+              <span className="muted desc">{q.desc.map((d) => t(d)).join(" ")}</span>
+              {c != null && regular != null && regular > c && <small className="wt-wiz-q-sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
+            </button>
+          </div>
         );
       })}
     </div>
@@ -530,6 +534,7 @@ export default function Wizard({
     void goStep(2);
   };
   return <div className="wt-wiz wt-wiz-final">
+    {previewQuality && samples && <QualitySampleZoom src={samples[previewQuality]} label={t(QUALITY_INFO.find(q => q.key === previewQuality)?.label || "")} onClose={() => setPreviewQuality(null)} />}
     {legacyOpen&&<Dialog wide title={t("이전 캐릭터 저장")} busy={legacyBusy} onClose={()=>setLegacyOpen(false)}><CharacterForm initialDraft={{name:form.name,description:form.character,image:form.photos[0]||""}} authenticated={authenticated} onBusyChange={setLegacyBusy} onClose={()=>setLegacyOpen(false)} onSaved={c=>{setChars(cs=>[c,...(cs||[])]);pickChar(c);setLegacyOpen(false);}}/></Dialog>}
     {asking&&<NotifyAsk time={qualityTime} onStart={mail=>void begin(mail)} onClose={()=>setAsking(false)}/>}
     {editingCharacter?.builtin&&<CharacterEditDialog localOnly character={editingCharacter} authenticated={authenticated} onClose={()=>setEditingCharacter(null)} onDeleted={()=>setEditingCharacter(null)} onSaved={c=>{
