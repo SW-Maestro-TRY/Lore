@@ -383,7 +383,7 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
         lines.append(f"제목은 {name}다. 한국어나 다른 언어로 옮기지 않고 위에 적힌 "
                      f"{name} 글자를 그대로 쓴다.")
     if genre:
-        lines.append(f"장르: {genre}")
+        lines.append(f"장르(분위기만 잡는다 — 그림 안에 글자로 쓰지 않는다): {genre}")
     if intro:
         lines += ["", "이 작품 소개 (이 안의 사건을 그리는 것이 아니다 — 주인공이 "
                       "어떤 처지인지 읽어 내는 데만 쓴다):", intro]
